@@ -1965,12 +1965,17 @@ func (a *appModel) submitIssueTask(rt *runtimeClient, configured bool, contactID
 	}
 	wireContext := taskContextInputs(context)
 	if workTools {
-		configuredTools, err := a.issueToolEnsureWorkSession(rt, sessionID, issueToolWorkGuidance, createdSession)
+		ensured, err := a.issueToolEnsureWorkSession(rt, sessionID, issueToolWorkGuidance, createdSession)
 		if err != nil {
 			a.failIssueSubmit(contactID, issueID, err, false)
 			return
 		}
-		if configuredTools {
+		roleGuidanceAppended := false
+		if input, ok := issueToolRoleGuidanceInput(ensured.TaskGuidance); ok {
+			wireContext = append(wireContext, input)
+			roleGuidanceAppended = true
+		}
+		if ensured.Ready {
 			var scope *IssueToolScope
 			var scopeErr error
 			a.runOnUI(func() {
@@ -1978,7 +1983,7 @@ func (a *appModel) submitIssueTask(rt *runtimeClient, configured bool, contactID
 					scopeErr = errors.New("app is shutting down")
 					return
 				}
-				scope, scopeErr = a.issueToolNewWorkScope(contactID, issueID, executionID, sessionID)
+				scope, scopeErr = a.issueToolNewWorkScope(contactID, issueID, executionID, sessionID, roleGuidanceAppended)
 				if scopeErr != nil {
 					return
 				}
@@ -2338,13 +2343,18 @@ func (a *appModel) submitTask(rt *runtimeClient, configured bool, contactID, ses
 		}
 	}
 	wireContext := taskContextInputs(context)
+	roleGuidanceAppended := false
 	if issueTools {
-		configuredTools, err := a.issueToolEnsureConversationSession(rt, sessionID, issueToolConversationGuidance, createdSession)
+		ensured, err := a.issueToolEnsureConversationSession(rt, sessionID, issueToolConversationGuidance, createdSession)
 		if err != nil {
 			a.failSubmit(contactID, err, false)
 			return
 		}
-		issueTools = configuredTools
+		issueTools = ensured.Ready
+		if input, ok := issueToolRoleGuidanceInput(ensured.TaskGuidance); ok {
+			wireContext = append(wireContext, input)
+			roleGuidanceAppended = true
+		}
 	}
 	if issueTools {
 		var scope *IssueToolScope
@@ -2354,7 +2364,7 @@ func (a *appModel) submitTask(rt *runtimeClient, configured bool, contactID, ses
 				scopeErr = errors.New("app is shutting down")
 				return
 			}
-			scope, scopeErr = a.issueToolNewScope(contactID, sessionID, turnID)
+			scope, scopeErr = a.issueToolNewScope(contactID, sessionID, turnID, roleGuidanceAppended)
 		})
 		if scopeErr != nil {
 			a.failSubmit(contactID, fmt.Errorf("prepare issue tool scope: %w", scopeErr), false)
