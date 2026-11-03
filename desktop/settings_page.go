@@ -211,9 +211,21 @@ func (a *appModel) connectionApplied() bool {
 	return a.rt != nil && a.runtimeStatus == runtimeStateReady && a.connectionEffective != nil
 }
 
+func (a *appModel) settingsLandingTab() string {
+	switch a.connectionViewState() {
+	case connectionViewSaved, connectionViewSetup:
+		return settingsTabConnection
+	case connectionViewNotConnected:
+		if a.connectionConfigurationBlocked() {
+			return settingsTabConnection
+		}
+	}
+	return settingsTabAppearance
+}
+
 func (a *appModel) settingsPage(c *ui.Context, t *ui.Theme) {
 	if a.settingsTab == "" {
-		a.settingsTab = settingsTabAppearance
+		a.settingsTab = a.settingsLandingTab()
 	}
 	if a.settingsContactID == "" {
 		a.settingsContactID = a.selectedContact().ID

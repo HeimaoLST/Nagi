@@ -29,5 +29,17 @@
   "copyActionLabel": "复制",
   "copiedReceivedOutput": "已复制收到的输出",
   "copied": "已复制",
-  "copyFailed": "复制失败：{error}"
+  "copyFailed": "复制失败：{error}",
+  "connectionStatusSetupNeeded": "需要设置",
+  "connectionStatusNotConnected": "未连接",
+  "connectionStatusSavedAwaitingApply": "已保存 — 应用后连接",
+  "connectionStatusApplying": "正在应用连接…",
+  "connectionStatusConnecting": "正在连接…",
+  "connectionRecoverySetupHint": "完成连接设置后即可启动运行时。",
+  "connectionRecoverySavedHint": "已保存的连接正在等待应用。",
+  "connectionRecoveryNotConnectedHint": "运行时未连接。请检查连接设置。",
+  "connectionRecoveryApplyingHint": "正在等待连接就绪。",
+  "connectionRecoveryOpenSettings": "打开连接设置",
+  "connectionRecoveryManagedTitle": "已保存的连接无法启动。",
+  "connectionRecoveryManagedHint": "请修正连接设置，然后保存并应用。"
 }

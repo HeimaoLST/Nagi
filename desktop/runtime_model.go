@@ -446,15 +446,27 @@ func (a *appModel) applyRuntimeExit(err error) {
 		}
 		a.runtimeHint = "Restart Saki and reload history. Accepted work may be unconfirmed; no automatic retry."
 	} else {
+		legacyEnv := !a.connectionManaged && a.connectionEffective == nil && a.connectionSaved == nil
+		managed := a.connectionManaged || a.connectionEffective != nil || a.connectionSaved != nil
 		switch {
-		case strings.Contains(diagnostic, "API_KEY is not set"):
+		case legacyEnv && strings.Contains(diagnostic, "API_KEY is not set"):
 			a.runtimeStage = "Runtime configuration"
 			a.runtimeErr = "API_KEY is not set."
 			a.runtimeHint = "Set API_KEY in the environment or in " + a.workDir + "/.env, then restart Saki."
-		case strings.Contains(diagnostic, ".env exists but could not be parsed"):
+		case legacyEnv && strings.Contains(diagnostic, ".env exists but could not be parsed"):
 			a.runtimeStage = "Runtime configuration"
 			a.runtimeErr = ".env could not be parsed."
 			a.runtimeHint = "Fix or replace the .env file in " + a.workDir + ", then restart Saki."
+		case managed:
+			a.runtimeStage = "Connection configuration"
+			if diagnostic != "" {
+				a.runtimeErr = diagnostic
+			} else if err != nil {
+				a.runtimeErr = a.redactConnectionText(err.Error())
+			} else {
+				a.runtimeErr = ""
+			}
+			a.runtimeHint = ""
 		default:
 			a.runtimeStage = "Runtime startup"
 			a.runtimeHint = "Check the helper path and the startup diagnostic, then restart Saki."
@@ -1780,6 +1792,52 @@ func (a *appModel) liveText(ct *contact, taskID, itemID string) *message {
 		ct.Unread++
 	}
 	return m
+}
+
+type connectionViewState int
+
+const (
+	connectionViewHealthy connectionViewState = iota
+	connectionViewApplying
+	connectionViewConnecting
+	connectionViewSaved
+	connectionViewSetup
+	connectionViewNotConnected
+)
+
+func (a *appModel) runtimeAvailableForView() bool {
+	return a.demo || (a.rt != nil && a.runtimeStatus == runtimeStateReady)
+}
+
+func (a *appModel) connectionViewState() connectionViewState {
+	if a.demo {
+		return connectionViewHealthy
+	}
+	if a.connectionApplying {
+		return connectionViewApplying
+	}
+	if a.rt != nil && a.runtimeStatus == runtimeStateReady {
+		return connectionViewHealthy
+	}
+	if a.rt != nil && a.runtimeStatus == runtimeStateStarting {
+		return connectionViewConnecting
+	}
+	if a.connectionSaved != nil && (a.connectionEffective == nil || *a.connectionSaved != *a.connectionEffective) {
+		return connectionViewSaved
+	}
+	if a.connectionForm != nil && !a.connectionForm.HasSaved && !a.connectionLegacy && a.connectionSaved == nil {
+		return connectionViewSetup
+	}
+	return connectionViewNotConnected
+}
+
+func (a *appModel) connectionConfigurationBlocked() bool {
+	switch a.connectionViewState() {
+	case connectionViewSaved, connectionViewSetup, connectionViewNotConnected:
+		return true
+	default:
+		return false
+	}
 }
 
 func (a *appModel) canSend(ct *contact) string {

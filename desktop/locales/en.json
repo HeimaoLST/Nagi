@@ -131,5 +131,53 @@
         "example": "clipboard unavailable"
       }
     }
+  },
+  "connectionStatusSetupNeeded": "Setup needed",
+  "@connectionStatusSetupNeeded": {
+    "description": "The header status when the runtime has no connection yet."
+  },
+  "connectionStatusNotConnected": "Not connected",
+  "@connectionStatusNotConnected": {
+    "description": "The header status when the runtime is unavailable or failed."
+  },
+  "connectionStatusSavedAwaitingApply": "Saved — apply to connect",
+  "@connectionStatusSavedAwaitingApply": {
+    "description": "The header status when a saved connection has not been applied."
+  },
+  "connectionStatusApplying": "Applying connection…",
+  "@connectionStatusApplying": {
+    "description": "The header status while a saved connection is being applied."
+  },
+  "connectionStatusConnecting": "Connecting…",
+  "@connectionStatusConnecting": {
+    "description": "The header status while the runtime is starting."
+  },
+  "connectionRecoverySetupHint": "Complete the connection settings to start the runtime.",
+  "@connectionRecoverySetupHint": {
+    "description": "The recovery hint for a first-use setup with no connection."
+  },
+  "connectionRecoverySavedHint": "The saved connection is waiting to be applied.",
+  "@connectionRecoverySavedHint": {
+    "description": "The recovery hint when a saved connection is not applied."
+  },
+  "connectionRecoveryNotConnectedHint": "The runtime is not connected. Review the connection settings.",
+  "@connectionRecoveryNotConnectedHint": {
+    "description": "The recovery hint when the runtime failed or exited."
+  },
+  "connectionRecoveryApplyingHint": "Wait for the connection to become ready.",
+  "@connectionRecoveryApplyingHint": {
+    "description": "The hint while a connection is being applied."
+  },
+  "connectionRecoveryOpenSettings": "Open connection settings",
+  "@connectionRecoveryOpenSettings": {
+    "description": "The recovery action that opens editable connection settings."
+  },
+  "connectionRecoveryManagedTitle": "The saved connection could not start.",
+  "@connectionRecoveryManagedTitle": {
+    "description": "The recovery title for a managed saved connection that could not start."
+  },
+  "connectionRecoveryManagedHint": "Fix Connection settings, then save and apply.",
+  "@connectionRecoveryManagedHint": {
+    "description": "The recovery hint for a managed saved connection that could not start."
   }
 }
