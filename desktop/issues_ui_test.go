@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+
+	"saki/desktop/locales"
 )
 
 func TestIssueWorkCardAndComposerStopLabelsAreSeparate(t *testing.T) {
@@ -63,8 +65,16 @@ func TestRailShowsIssueWorkAttentionWithoutChatUnread(t *testing.T) {
 	a.windowWidth = 1040
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	if !tr.HasText("Attention") {
-		t.Fatalf("rail did not surface issue-work failure: %v", tr.Texts())
+	want := locales.In("en").TaskRailAttention(issue.Goal)
+	if _, ok := tr.Find(want); !ok {
+		t.Fatalf("rail did not surface typed issue-work summary %q: %v", want, tr.Texts())
+	}
+	if err := tr.Click(want); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if ct.issueNavigation().DetailID != issue.ID || !a.workspaceOpen {
+		t.Fatalf("rail summary did not target issue: detail=%q open=%v", ct.issueNavigation().DetailID, a.workspaceOpen)
 	}
 	if ct.Unread != 2 {
 		t.Fatalf("issue-work notice changed chat unread: %d", ct.Unread)
@@ -229,8 +239,10 @@ func TestRailShowsActiveIssueWorkCount(t *testing.T) {
 	a.windowWidth = 1040
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	if !tr.HasText("1 work") {
-		t.Fatalf("rail did not show active work count: %v", tr.Texts())
+	wantCount := locales.In("en").TaskActiveCount(1)
+	wantSummary := locales.In("en").TaskRailInProgress(issue.Goal)
+	if !tr.HasText(wantCount) || !tr.HasText(wantSummary) {
+		t.Fatalf("rail did not show typed active count %q / summary %q: %v", wantCount, wantSummary, tr.Texts())
 	}
 	if ct.Unread != 0 {
 		t.Fatalf("active work count changed chat unread: %d", ct.Unread)
