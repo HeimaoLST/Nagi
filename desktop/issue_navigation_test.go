@@ -621,6 +621,87 @@ func TestIssuePrimaryActionsAndPersistentLifecycle(t *testing.T) {
 	}
 }
 
+func TestPrimaryReadReturnFocusConsumesExactResultOwner(t *testing.T) {
+	a, ct := workspaceTestApp(t)
+	a.windowWidth = 1040
+	a.rt = nil
+	issue := &productIssue{ID: "issue-primary-read", ContactID: ct.ID, Goal: "Primary readable result",
+		Status: issueStatusCompleted, Evidence: "user completed",
+		Executions: []*issueExecution{{ID: "run-primary-read", TaskID: "task-primary-read", Status: issueExecutionCompleted}},
+		Work: issueWorkSession{Loaded: true, Messages: []*message{{
+			Kind: msgContact, TaskID: "task-primary-read", Text: "readable primary result"}}}}
+	ct.Issues = []*productIssue{issue}
+	ct.SelectedIssueID = issue.ID
+	openIssueDetailForTest(a, ct, issue.ID)
+	tr := ui.NewTester(a.view, 1040, 720)
+	tr.Frame()
+
+	openRead := func() {
+		t.Helper()
+		if err := tr.Click("Read latest result"); err != nil {
+			t.Fatal(err)
+		}
+		tr.Frame()
+		if !a.issueResult.Open || a.issueResult.OwnerContactID != ct.ID ||
+			a.issueResult.IssueID != issue.ID || a.issueResult.ExecutionID != "run-primary-read" || !a.issueResult.ReturnLatest {
+			t.Fatalf("primary Read owner/result = %+v", a.issueResult)
+		}
+	}
+	assertReturned := func(label string) {
+		t.Helper()
+		tr.Frame()
+		if !tr.Focused("Read latest result") {
+			t.Fatalf("%s did not regain focus: pending=%v texts=%v", label, a.issueResult.ReturnFocusPending, tr.Texts())
+		}
+		if a.issueResult.ReturnFocusPending {
+			t.Fatalf("%s left ReturnFocusPending set", label)
+		}
+	}
+
+	openRead()
+	if err := tr.Click("Close results"); err != nil {
+		t.Fatal(err)
+	}
+	assertReturned("Back")
+
+	openRead()
+	tr.Key(0, ui.KeyEscape)
+	assertReturned("Escape")
+
+	// Move focus off Read before checking mismatches. These are visible renders
+	// of the primary Read branch; a mismatch must leave the exact pending owner/
+	// issue/execution/latest intent untouched and must not consume it.
+	if err := tr.Click("More issue actions"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	cases := []struct {
+		name   string
+		mutate func()
+	}{
+		{name: "owner", mutate: func() { a.issueResult.OwnerContactID = "other-contact" }},
+		{name: "issue", mutate: func() { a.issueResult.IssueID = "other-issue" }},
+		{name: "execution", mutate: func() { a.issueResult.ExecutionID = "other-execution" }},
+	}
+	for _, tc := range cases {
+		t.Run("mismatch-"+tc.name, func(t *testing.T) {
+			a.issueResult.ReturnFocusPending = true
+			a.issueResult.OwnerContactID = ct.ID
+			a.issueResult.IssueID = issue.ID
+			a.issueResult.ExecutionID = "run-primary-read"
+			a.issueResult.ReturnLatest = true
+			tc.mutate()
+			tr.Frame()
+			if !tr.HasText("Read latest result") {
+				t.Fatalf("primary Read not rendered for mismatch %s: %v", tc.name, tr.Texts())
+			}
+			if !a.issueResult.ReturnFocusPending {
+				t.Fatalf("mismatch %s consumed ReturnFocusPending", tc.name)
+			}
+		})
+	}
+}
+
 func TestNarrowChatRunsBackUsesVisibleLayerAndKeepsHiddenDetail(t *testing.T) {
 	a, ct := workspaceTestApp(t)
 	a.windowWidth = 720
@@ -689,19 +770,19 @@ func TestIssueHasReadableResultRequiresActualOutput(t *testing.T) {
 	issue := &productIssue{ID: "issue-readable", Work: issueWorkSession{Messages: []*message{{Kind: msgContact, TaskID: "task-message", Text: "readable"}}}}
 	ct.Issues = []*productIssue{issue}
 	completed := &issueExecution{TaskID: "task-message", Status: issueExecutionCompleted}
-	if !issueHasReadableResult(ct, issue, completed) {
+	if !issueHasReadableResult(ct, completed) {
 		t.Fatal("completed assistant message should be readable")
 	}
 	completed = &issueExecution{TaskID: "task-output", Status: issueExecutionCompleted}
 	ct.Works[1].Tools = []*workTool{{Finished: true, Output: "file content"}}
-	if !issueHasReadableResult(ct, issue, completed) {
+	if !issueHasReadableResult(ct, completed) {
 		t.Fatal("finished tool output should be readable")
 	}
 	ct.Works[2].Tools = []*workTool{{Finished: false, Output: "not final"}}
-	if issueHasReadableResult(ct, issue, &issueExecution{TaskID: "task-unfinished", Status: issueExecutionCompleted}) {
+	if issueHasReadableResult(ct, &issueExecution{TaskID: "task-unfinished", Status: issueExecutionCompleted}) {
 		t.Fatal("unfinished tool output must not become a primary result")
 	}
-	if issueHasReadableResult(ct, issue, &issueExecution{TaskID: "task-failed", Status: issueExecutionFailed, Detail: "failed detail"}) {
+	if issueHasReadableResult(ct, &issueExecution{TaskID: "task-failed", Status: issueExecutionFailed, Detail: "failed detail"}) {
 		t.Fatal("failure detail alone must not become a primary result")
 	}
 }

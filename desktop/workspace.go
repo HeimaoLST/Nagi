@@ -690,11 +690,7 @@ func latestIssueExecution(issue *productIssue) *issueExecution {
 	return nil
 }
 
-func workPrimaryButton(c *ui.Context, t *ui.Theme, label string) ui.Element {
-	return ui.Button(c, label).FontSize(typeAction).FontWeight(500).MinHeight(32).Padding(6, 10)
-}
-
-func issueHasReadableResult(ct *contact, issue *productIssue, execution *issueExecution) bool {
+func issueHasReadableResult(ct *contact, execution *issueExecution) bool {
 	if execution == nil || execution.Status != issueExecutionCompleted {
 		return false
 	}
@@ -718,7 +714,7 @@ func (a *appModel) issuePrimaryAction(c *ui.Context, t *ui.Theme, ct *contact, i
 	editable := !issue.Archived && issue.Status != issueStatusCompleted && issue.Status != issueStatusCanceled
 	if issue.openQuestion() != nil && editable {
 		ui.Row(c).Wrap().Gap(6).AlignItems(ui.Center).Children(func() {
-			workPrimaryButton(c, t, msgs.WorkAnswer()).OnClick(func() { a.openIssueSupplementForm(issue.ID) })
+			secondaryButton(c, msgs.WorkAnswer()).FontWeight(500).OnClick(func() { a.openIssueSupplementForm(issue.ID) })
 		})
 		return "answer"
 	}
@@ -744,7 +740,7 @@ func (a *appModel) issuePrimaryAction(c *ui.Context, t *ui.Theme, ct *contact, i
 				}
 			}
 			ui.Row(c).Wrap().Gap(6).AlignItems(ui.Center).Children(func() {
-				workPrimaryButton(c, t, label).OnClick(func() {
+				secondaryButton(c, label).FontWeight(500).OnClick(func() {
 					if !a.runIssue(issue.ID) {
 						a.issueActionError = a.issueFormError
 					}
@@ -753,9 +749,15 @@ func (a *appModel) issuePrimaryAction(c *ui.Context, t *ui.Theme, ct *contact, i
 			return "continue"
 		}
 	}
-	if latest := latestIssueExecution(issue); issueHasReadableResult(ct, issue, latest) {
+	if latest := latestIssueExecution(issue); issueHasReadableResult(ct, latest) {
 		ui.Row(c).Wrap().Gap(6).AlignItems(ui.Center).Children(func() {
-			workPrimaryButton(c, t, msgs.WorkReadResult()).OnClick(func() { a.openIssueResultFromLatest(issue.ID, latest.ID) })
+			read := secondaryButton(c, msgs.WorkReadResult()).FontWeight(500).OnClick(func() {
+				a.openIssueResultFromLatest(issue.ID, latest.ID)
+			})
+			if a.issueResultShouldFocus(issue.ID, latest.ID, true) {
+				read.Focus()
+				a.consumeIssueResultReturnFocus()
+			}
 		})
 		return "read"
 	}
@@ -765,7 +767,7 @@ func (a *appModel) issuePrimaryAction(c *ui.Context, t *ui.Theme, ct *contact, i
 	return ""
 }
 
-func (a *appModel) issueLifecycleActions(c *ui.Context, t *ui.Theme, ct *contact, issue *productIssue) {
+func (a *appModel) issueLifecycleActions(c *ui.Context, t *ui.Theme, issue *productIssue) {
 	msgs := locales.In(c.Locale())
 	if issue.Archived {
 		ui.Row(c).Wrap().Gap(6).Children(func() {
@@ -837,7 +839,7 @@ func (a *appModel) issueCard(c *ui.Context, t *ui.Theme, ct *contact, issue *pro
 			ui.Text(c, "This execution ended; the issue remains open.").FontSize(typeAction).LineHeight(1.4).TextColor(t.TextMuted)
 		}
 		a.issueRequirementSummary(c, t, issue)
-		a.issueLifecycleActions(c, t, ct, issue)
+		a.issueLifecycleActions(c, t, issue)
 		label := "More issue actions"
 		if expanded {
 			label = "Hide issue actions"
