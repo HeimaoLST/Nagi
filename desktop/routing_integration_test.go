@@ -44,7 +44,7 @@ func startRoutingHarnessWithHandler(t *testing.T, binary string, handler http.Ha
 	}
 	pump := newUIPump(t, app)
 	h := &guiHarness{app: app, pump: pump, root: root}
-	app.startRuntime()
+	pump.do(func() { app.startRuntime() })
 	pump.wait(func() bool {
 		return app.runtimeStatus == runtimeStateReady && app.runtimeCapabilitiesLoaded &&
 			app.runtimeMaxActiveTasks == maxTasks
