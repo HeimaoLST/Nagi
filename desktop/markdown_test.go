@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/markdown"
@@ -784,5 +785,252 @@ func TestMarkdownLinkElementPreservesOnLinkAndIgnoresUnopenableDestinations(t *t
 				t.Fatalf("pending destination opened %v", got)
 			}
 		})
+	}
+}
+
+func messageReaderTestView(source *string, bubble *markdownMessageBubble, dark *bool) func(*ui.Context) {
+	return func(c *ui.Context) {
+		c.SetTheme(resolveWorkbenchTheme(*dark).Theme)
+		markdownReader(c, *source, markdownReaderOptions{PlainText: true, CopyLabel: "Copy message", MessageBubble: bubble})
+	}
+}
+
+func TestMessageReaderExternalCopyStaysOutsideShortBubble(t *testing.T) {
+	source := "一句话中文消息。"
+	var body ui.Handle
+	var copyHandle ui.Handle
+	bubble := &markdownMessageBubble{Background: ui.RGB(230, 240, 235), PaddingX: 12, PaddingY: 8, Radius: 12, BodyHandle: &body}
+	dark := false
+	var bodyRect ui.Rect
+	tr := ui.NewTester(func(c *ui.Context) {
+		c.SetTheme(resolveWorkbenchTheme(dark).Theme)
+		markdownReader(c, source, markdownReaderOptions{CopyLabel: "Copy message", CopyHandle: &copyHandle, MessageBubble: bubble})
+		bodyRect = body.Bounds(c)
+	}, 340, 300)
+	tr.Frame()
+	tr.Frame()
+	button, ok := tr.Find("Copy message")
+	if !ok {
+		t.Fatalf("message copy missing: %v", tr.Texts())
+	}
+	text, ok := tr.Find(source)
+	if !ok {
+		t.Fatalf("message text missing: %v", tr.Texts())
+	}
+	if button.W != 32 || button.H != 32 {
+		t.Fatalf("message copy target = %+v, want 32x32", button)
+	}
+	if button.X < bodyRect.X+bodyRect.W-0.5 {
+		t.Fatalf("copy is inside the painted bubble: body=%+v copy=%+v", bodyRect, button)
+	}
+	if bodyRect.H > text.H+16+1 {
+		t.Fatalf("copy inflated short bubble height: body=%+v text=%+v", bodyRect, text)
+	}
+	if bodyRect.W > text.W+24+1 {
+		t.Fatalf("short bubble stretched beyond its text: body=%+v text=%+v", bodyRect, text)
+	}
+	if text.X < bodyRect.X || text.X+text.W > bodyRect.X+bodyRect.W+0.5 {
+		t.Fatalf("text escaped bubble: body=%+v text=%+v", bodyRect, text)
+	}
+}
+
+func TestMessageReaderAssistantCopyVisibleAndUserRevealPaths(t *testing.T) {
+	source := "用户消息复制入口。"
+	dark := false
+	assistant := &markdownMessageBubble{Background: ui.RGB(230, 240, 235), PaddingX: 12, PaddingY: 8, Radius: 12}
+	tr := ui.NewTester(messageReaderTestView(&source, assistant, &dark), 340, 240)
+	tr.Frame()
+	button, ok := tr.Find("Copy message")
+	if !ok {
+		t.Fatalf("assistant copy missing: %v", tr.Texts())
+	}
+	if !readerRegionHasInk(tr.Image(), button) {
+		t.Fatal("assistant copy is not visible at rest")
+	}
+
+	user := &markdownMessageBubble{Background: ui.RGB(220, 230, 250), PaddingX: 12, PaddingY: 8, Radius: 12, ContextualCopy: true}
+	tr = ui.NewTester(messageReaderTestView(&source, user, &dark), 340, 240)
+	tr.SetFocused(true)
+	tr.Frame()
+	button, ok = tr.Find("Copy message")
+	if !ok {
+		t.Fatalf("user copy missing: %v", tr.Texts())
+	}
+	if readerRegionHasInk(tr.Image(), button) {
+		t.Fatal("user copy is visible without hover or message focus")
+	}
+	text, _ := tr.Find(source)
+	tr.Move(text.X+text.W/2, text.Y+text.H/2)
+	tr.Frame()
+	if !readerRegionHasInk(tr.Image(), button) {
+		t.Fatal("hover did not reveal user copy")
+	}
+	tr.Move(1, 1)
+	tr.Frame()
+	for i := 0; i < 20 && !tr.Focused("Copy message"); i++ {
+		tr.Key(0, ui.KeyTab)
+		tr.Frame()
+	}
+	if !tr.Focused("Copy message") {
+		t.Fatalf("user copy is not keyboard reachable: %v", tr.Texts())
+	}
+	if !readerRegionHasInk(tr.Image(), button) {
+		t.Fatal("keyboard focus left user copy transparent")
+	}
+	if err := tr.RightClick(source); err != nil {
+		t.Fatal(err)
+	}
+	if !containsString(tr.Menu(), "Copy message") {
+		t.Fatalf("user message context menu = %v", tr.Menu())
+	}
+	if err := tr.ChooseMenuItem("Copy message"); err != nil {
+		t.Fatal(err)
+	}
+	if got := tr.Clipboard(); got != source {
+		t.Fatalf("context-menu copy = %q, want %q", got, source)
+	}
+}
+
+func TestMessageReaderKeepsRawSourceAndCodeCopy(t *testing.T) {
+	source := "正文 **原文**\n\n```go\nfunc main() {}\n```\n"
+	dark := false
+	bubble := &markdownMessageBubble{Background: ui.RGB(230, 240, 235), PaddingX: 12, PaddingY: 8, Radius: 12}
+	tr := ui.NewTester(func(c *ui.Context) {
+		c.SetTheme(resolveWorkbenchTheme(dark).Theme)
+		markdownReader(c, source, markdownReaderOptions{CopyLabel: "Copy message", MessageBubble: bubble})
+	}, 420, 360)
+	tr.Frame()
+	if err := tr.Click("Copy message"); err != nil {
+		t.Fatal(err)
+	}
+	if got := tr.Clipboard(); got != source {
+		t.Fatalf("message copy = %q, want raw %q", got, source)
+	}
+	if err := tr.Click("Copy code"); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := tr.Clipboard(), "func main() {}\n"; got != want {
+		t.Fatalf("code copy = %q, want %q", got, want)
+	}
+}
+
+func TestMessageReaderLongContentFitsNarrowExternalGutter(t *testing.T) {
+	source := readerFourColumnSource + "\n```go\n" + strings.Repeat("long-code-token-", 20) + "\n```\n"
+	dark := false
+	bubble := &markdownMessageBubble{Background: ui.RGB(230, 240, 235), PaddingX: 12, PaddingY: 8, Radius: 12}
+	tr := ui.NewTester(func(c *ui.Context) {
+		c.SetTheme(resolveWorkbenchTheme(dark).Theme)
+		markdownReader(c, source, markdownReaderOptions{CopyLabel: "Copy message", MessageBubble: bubble})
+	}, 340, 900)
+	tr.Frame()
+	for _, label := range []string{"Copy message", "中文长内容需要换行显示", strings.Repeat("abcdefghij", 12), strings.Repeat("long-code-token-", 20)} {
+		bounds, ok := tr.Find(label)
+		if !ok {
+			t.Fatalf("narrow message content %q missing: %v", label, tr.Texts())
+		}
+		if bounds.X < 0 || bounds.X+bounds.W > 340 {
+			t.Fatalf("narrow message content %q overflows: %+v", label, bounds)
+		}
+	}
+}
+
+func TestMessageReaderCopyAlignsWithHeaderFirstLine(t *testing.T) {
+	source := "历史消息正文"
+	var body, headerHandle ui.Handle
+	var buttonHandle ui.Handle
+	bubble := &markdownMessageBubble{
+		Background: ui.RGB(230, 240, 235), PaddingX: 12, PaddingY: 8, Radius: 12,
+		BodyHandle: &body,
+		Header: func(c *ui.Context) {
+			ui.Text(c, "Saki  12:00").FontSize(12).LineHeight(1.4).Bind(&headerHandle)
+		},
+	}
+	dark := false
+	var bodyRect, headerRect ui.Rect
+	tr := ui.NewTester(func(c *ui.Context) {
+		c.SetTheme(resolveWorkbenchTheme(dark).Theme)
+		markdownReader(c, source, markdownReaderOptions{CopyLabel: "Copy message", CopyHandle: &buttonHandle, MessageBubble: bubble})
+		bodyRect = body.Bounds(c)
+		headerRect = headerHandle.Bounds(c)
+	}, 340, 220)
+	tr.Frame()
+	button, ok := tr.Find("Copy message")
+	if !ok {
+		t.Fatalf("copy missing: %v", tr.Texts())
+	}
+	if headerRect.H <= 0 {
+		t.Fatal("header missing")
+	}
+	if button.Y < bodyRect.Y-0.5 || button.Y > headerRect.Y+1 {
+		t.Fatalf("copy does not align with first bubble line: body=%+v header=%+v copy=%+v", bodyRect, headerRect, button)
+	}
+}
+
+func TestMessageReaderUserContextMenuUsesFreshControlledTime(t *testing.T) {
+	source := "原始消息用于右键复制。"
+	fail := true
+	calls := 0
+	var copied []string
+	options := markdownReaderOptions{
+		PlainText: true, CopyLabel: "Copy message",
+		CopyText: func(text string) error {
+			calls++
+			copied = append(copied, text)
+			if fail {
+				return errors.New("clipboard unavailable")
+			}
+			return nil
+		},
+		MessageBubble: &markdownMessageBubble{Background: ui.RGB(220, 230, 250), PaddingX: 12, PaddingY: 8, Radius: 12, ContextualCopy: true},
+	}
+	dark := false
+	tr := ui.NewTester(func(c *ui.Context) {
+		c.SetTheme(resolveWorkbenchTheme(dark).Theme)
+		markdownReader(c, source, options)
+	}, 340, 240)
+	tr.Frame()
+	textBefore, _ := tr.Find(source)
+	buttonBefore, _ := tr.Find("Copy message")
+	tr.Advance(5 * time.Second)
+	if err := tr.RightClick(source); err != nil {
+		t.Fatal(err)
+	}
+	if !containsString(tr.Menu(), "Copy message") {
+		t.Fatalf("context menu = %v", tr.Menu())
+	}
+	if err := tr.ChooseMenuItem("Copy message"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if calls != 1 || len(copied) != 1 || copied[0] != source {
+		t.Fatalf("first context copy calls=%d copied=%q", calls, copied)
+	}
+	revealCopyTooltip(t, tr, "Copy message")
+	button, ok := tr.Find("Copy message")
+	if !ok || !readerRegionHasInk(tr.Image(), button) || !tr.HasText("Copy failed: clipboard unavailable") {
+		t.Fatalf("failure feedback expired or missing after a prior clock advance: %v", tr.Texts())
+	}
+	if text, _ := tr.Find(source); text != textBefore || button != buttonBefore {
+		t.Fatalf("failure feedback shifted content: text %+v -> %+v button %+v -> %+v", textBefore, text, buttonBefore, button)
+	}
+	fail = false
+	tr.Advance(time.Second)
+	if err := tr.RightClick(source); err != nil {
+		t.Fatal(err)
+	}
+	if err := tr.ChooseMenuItem("Copy message"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if calls != 2 || len(copied) != 2 || copied[1] != source {
+		t.Fatalf("retry context copy calls=%d copied=%q", calls, copied)
+	}
+	revealCopyTooltip(t, tr, "Copy message")
+	button, ok = tr.Find("Copy message")
+	if !ok || !readerRegionHasInk(tr.Image(), button) || !tr.HasText("Copied") {
+		t.Fatalf("success feedback missing after retry: %v", tr.Texts())
+	}
+	if text, _ := tr.Find(source); text != textBefore || button != buttonBefore {
+		t.Fatalf("success feedback shifted content: text %+v -> %+v button %+v -> %+v", textBefore, text, buttonBefore, button)
 	}
 }

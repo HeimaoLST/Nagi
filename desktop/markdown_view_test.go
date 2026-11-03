@@ -538,4 +538,28 @@ func TestIntegratedMarkdownPreview(t *testing.T) {
 			}
 		}
 	}
+	for _, locale := range []string{"en", "zh-Hans"} {
+		for _, dark := range []bool{false, true} {
+			theme := "light"
+			if dark {
+				theme = "dark"
+			}
+			a, ct := workspaceTestApp(t)
+			a.rt = &runtimeClient{}
+			a.windowWidth = 960
+			a.workspaceOpen = false
+			ct.Messages = []*message{
+				{ID: 1, Kind: msgUser, Text: "一句话用户消息，复制入口在气泡外。"},
+				{ID: 2, Kind: msgContact, Text: md},
+			}
+			tr := ui.NewTester(a.view, 960, 640)
+			tr.SetLocale(locale)
+			tr.SetDark(dark)
+			tr.Frame()
+			ct.list.ScrollTo(0, ui.Start)
+			tr.Frame()
+			writePreviewPNG(t, filepath.Join(dir,
+				fmt.Sprintf("message-affordance-%s-%s-960x640.png", locale, theme)), tr.Image())
+		}
+	}
 }

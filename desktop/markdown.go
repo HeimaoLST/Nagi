@@ -35,6 +35,9 @@ type markdownReaderOptions struct {
 	// Theme overrides the Markdown foreground roles, as the workspace
 	// surface requires.
 	Theme *markdown.Theme
+	// MessageBubble places the source copy in an external gutter and paints
+	// the reader on a bubble surface. Nil keeps the compact reader layout.
+	MessageBubble *markdownMessageBubble
 	// LinkScope is stable identity for this Markdown document; LinkFocus is
 	// the app-owned FocusBind field for its inline links. Both are optional.
 	LinkScope string
@@ -58,6 +61,17 @@ const (
 	readerCopiedFor     = 2 * time.Second
 	readerCopyFailedFor = 4 * time.Second
 )
+
+type markdownMessageBubble struct {
+	Background     ui.Color
+	PaddingX       float32
+	PaddingY       float32
+	Radius         float32
+	ContextualCopy bool
+	Header         func(*ui.Context)
+	Footer         func(*ui.Context)
+	BodyHandle     *ui.Handle
+}
 
 type markdownReaderState struct {
 	opts markdown.Options
@@ -102,7 +116,12 @@ func (f *readerCopyFeedback) show(now time.Time) (visible, failed bool) {
 //		CopyLabel: "Copy message",
 //	})
 func markdownReader(c *ui.Context, source string, options markdownReaderOptions) ui.Element {
-	root := ui.Column(c).AlignSelf(ui.Stretch)
+	var root ui.Element
+	if options.MessageBubble == nil {
+		root = ui.Column(c).AlignSelf(ui.Stretch).LineHeight(1.5)
+	} else {
+		root = ui.Row(c).AlignItems(ui.Start).Gap(4).Shrink(1).LineHeight(1.5)
+	}
 	st := ui.Local(root, markdownReaderStateKey{}, func() markdownReaderState {
 		return markdownReaderState{codeFeedback: map[int]*readerCopyFeedback{}}
 	})
@@ -146,18 +165,56 @@ func markdownReader(c *ui.Context, source string, options markdownReaderOptions)
 		label = locales.In(c.Locale()).CopyMessageLabel()
 	}
 
+	drawBody := func(c *ui.Context) {
+		switch {
+		case options.PlainText:
+			text := ui.Text(c, source).Selectable().LineHeight(1.5)
+			if options.MessageBubble != nil && options.MessageBubble.ContextualCopy {
+				text.ContextMenu(func(m *ui.Menu) {
+					if m.Item(label).Chosen() {
+						st.copySource(c, c.Now(), source, &st.sourceFeedback)
+					}
+					m.Separator()
+					m.EditItems()
+				})
+			}
+		case options.Streaming:
+			markdown.Stream(c, source, &st.opts)
+		default:
+			markdown.View(c, source, &st.opts)
+		}
+	}
+	if options.MessageBubble == nil {
+		root.Children(func() {
+			st.sourceCopyButton(c, c.Now(), label, func() string { return source }, &st.sourceFeedback, options.CopyHandle, false, nil)
+			ui.Column(c).Padding(0, 32, 0, 0).Children(func() { drawBody(c) })
+		})
+		return root
+	}
+	bubble := options.MessageBubble
 	root.Children(func() {
-		st.sourceCopyButton(c, c.Now(), label, func() string { return source }, &st.sourceFeedback, options.CopyHandle)
-		ui.Column(c).Padding(0, 32, 0, 0).Children(func() {
-			switch {
-			case options.PlainText:
-				ui.Text(c, source).Selectable()
-			case options.Streaming:
-				markdown.Stream(c, source, &st.opts)
-			default:
-				markdown.View(c, source, &st.opts)
+		body := ui.Column(c).Grow(1).MinWidth(0).Padding(bubble.PaddingY, bubble.PaddingX).
+			Radius(bubble.Radius).Background(bubble.Background).Gap(4)
+		if bubble.BodyHandle != nil {
+			body.Bind(bubble.BodyHandle)
+		}
+		body.Children(func() {
+			if bubble.Header != nil {
+				bubble.Header(c)
+			}
+			drawBody(c)
+			if bubble.Footer != nil {
+				bubble.Footer(c)
 			}
 		})
+		reveal := func() bool {
+			if !bubble.ContextualCopy {
+				return true
+			}
+			visible, _ := st.sourceFeedback.show(c.Now())
+			return root.Hovered() || root.FocusWithin() || visible
+		}
+		st.sourceCopyButton(c, c.Now(), label, func() string { return source }, &st.sourceFeedback, options.CopyHandle, true, reveal)
 	})
 	return root
 }
@@ -277,7 +334,7 @@ func (st *markdownReaderState) codeFeedbackFor(index int) *readerCopyFeedback {
 	return fb
 }
 
-func (st *markdownReaderState) sourceCopyButton(c *ui.Context, now time.Time, accessible string, text func() string, fb *readerCopyFeedback, handle *ui.Handle) ui.Element {
+func (st *markdownReaderState) sourceCopyButton(c *ui.Context, now time.Time, accessible string, text func() string, fb *readerCopyFeedback, handle *ui.Handle, outside bool, reveal func() bool) ui.Element {
 	feedbackVisible, failed := fb.show(now)
 	btn := ui.Button(c, "").Label(accessible)
 	if handle != nil {
@@ -285,7 +342,10 @@ func (st *markdownReaderState) sourceCopyButton(c *ui.Context, now time.Time, ac
 	}
 	theme := c.Theme()
 	btn.Key("source-copy").Size(32, 32).Padding(0).Gap(0).Radius(6).
-		Background(ui.Transparent).BorderWidth(0).Absolute().Top(0).Right(0)
+		Background(ui.Transparent).BorderWidth(0)
+	if !outside {
+		btn.Absolute().Top(0).Right(0)
+	}
 	if btn.Pressed() {
 		btn.Background(theme.SurfacePressed)
 	} else if btn.Hovered() {
@@ -304,22 +364,29 @@ func (st *markdownReaderState) sourceCopyButton(c *ui.Context, now time.Time, ac
 		}
 	}
 	appTooltip(c, btn, tooltip)
-	btn.Children(func() {
-		ui.Icon(c, icon).Size(16, 16).TextColor(color)
-	})
+	showIcon := reveal == nil || reveal() || btn.Hovered() || btn.FocusVisible()
+	if showIcon {
+		btn.Children(func() {
+			ui.Icon(c, icon).Size(16, 16).TextColor(color)
+		})
+	}
 	if btn.Clicked() {
-		fb.at = now
-		fb.err = st.performCopy(c, text())
-		if st.onCopyResult != nil {
-			st.onCopyResult(fb.err)
-		}
-		if fb.err != nil {
-			c.After(readerCopyFailedFor)
-		} else {
-			c.After(readerCopiedFor)
-		}
+		st.copySource(c, now, text(), fb)
 	}
 	return btn
+}
+
+func (st *markdownReaderState) copySource(c *ui.Context, now time.Time, text string, fb *readerCopyFeedback) {
+	fb.at = now
+	fb.err = st.performCopy(c, text)
+	if st.onCopyResult != nil {
+		st.onCopyResult(fb.err)
+	}
+	if fb.err != nil {
+		c.After(readerCopyFailedFor)
+	} else {
+		c.After(readerCopiedFor)
+	}
 }
 
 func (st *markdownReaderState) copyButton(c *ui.Context, now time.Time, accessible, idle string, text func() string, fb *readerCopyFeedback, th markdown.Theme, handle *ui.Handle) ui.Element {
@@ -355,16 +422,7 @@ func (st *markdownReaderState) copyButton(c *ui.Context, now time.Time, accessib
 			ui.Icon(c, icon).Size(16, 16).TextColor(color)
 		})
 		if btn.Clicked() {
-			fb.at = now
-			fb.err = st.performCopy(c, text())
-			if st.onCopyResult != nil {
-				st.onCopyResult(fb.err)
-			}
-			if fb.err != nil {
-				c.After(readerCopyFailedFor)
-			} else {
-				c.After(readerCopiedFor)
-			}
+			st.copySource(c, now, text(), fb)
 		}
 	})
 	return row
@@ -397,6 +455,8 @@ func normalizedMarkdownTheme(override *markdown.Theme) *markdown.Theme {
 		th = *override
 	}
 	th.FontSize = typeBody
+	th.LineHeight = 1.5
+	th.CodeLineHeight = 1.5
 	headingSizes := [6]float32{16, 14, 14, 14, 14, 14}
 	for i := range th.Headings {
 		th.Headings[i].Size = headingSizes[i] / th.FontSize
@@ -423,6 +483,9 @@ func markdownReaderTheme(c *ui.Context, override *markdown.Theme) markdown.Theme
 	}
 	if override.FontSize != 0 {
 		th.FontSize = override.FontSize
+	}
+	if override.LineHeight != 0 {
+		th.LineHeight = override.LineHeight
 	}
 	if override.Text != (markdown.Color{}) {
 		th.Text = override.Text
