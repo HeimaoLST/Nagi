@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	"github.com/egoist/mygo/ui"
+
+	"saki/desktop/locales"
 )
 
 type connectionDraft struct {
@@ -18,18 +20,21 @@ type connectionSettings struct {
 	Errors        map[string]string
 	Status        string
 	Error         string
+	ErrorDetail   string
 	ReloadBlocked string
 	Busy          bool
 	HasSaved      bool
+	SavedPending  bool
 	LimitsOpen    bool
 	focusField    string
 }
 
 type connectionSettingsActions struct {
-	Save    func(connectionConfig)
-	Apply   func()
-	Test    func(connectionConfig)
-	Discard func()
+	Save         func(connectionConfig)
+	SaveAndApply func(connectionConfig)
+	Apply        func()
+	Test         func(connectionConfig)
+	Discard      func()
 }
 
 func newConnectionSettings(config *connectionConfig, workDir string) *connectionSettings {
@@ -60,6 +65,7 @@ func (s *connectionSettings) ResetDraft() {
 	s.Draft = s.initial
 	s.Errors = nil
 	s.Error = ""
+	s.ErrorDetail = ""
 	s.Status = ""
 	s.ReloadBlocked = ""
 	s.focusField = "Endpoint"
@@ -95,6 +101,7 @@ func (s *connectionSettings) validated() (connectionConfig, bool) {
 		s.LimitsOpen = true
 	}
 	s.Error = ""
+	s.ErrorDetail = ""
 	if len(s.Errors) > 0 {
 		s.Error = "Check the highlighted fields. Your changes are still here."
 		for _, key := range []string{"API", "Endpoint", "APIKey", "Model", "ContextTokens", "OutputTokens", "WorkingDirectory", "MaxActiveTasks"} {
@@ -111,8 +118,11 @@ func (s *connectionSettings) validated() (connectionConfig, bool) {
 // The host owns persistence, process lifetime and UI-thread updates. Rendering
 // and editing this form never starts a model request or writes configuration.
 func (s *connectionSettings) view(c *ui.Context, t *ui.Theme, actions connectionSettingsActions) {
+	msgs := locales.In(c.Locale())
 	ui.Column(c).FillWidth().AlignItems(ui.Start).Gap(24).Children(func() {
-		if s.Error != "" {
+		if s.ErrorDetail != "" {
+			ui.Text(c, msgs.ConnectionSaveFailed(s.ErrorDetail)).FontSize(typeBody).LineHeight(1.5).TextColor(t.Danger)
+		} else if s.Error != "" {
 			ui.Text(c, s.Error).FontSize(typeBody).LineHeight(1.5).TextColor(t.Danger)
 		}
 		ui.Column(c).FillWidth().Gap(16).Children(func() {
@@ -171,12 +181,28 @@ func (s *connectionSettings) view(c *ui.Context, t *ui.Theme, actions connection
 		})
 		ui.Column(c).FillWidth().Gap(8).Children(func() {
 			ui.Row(c).Gap(8).Wrap().Children(func() {
-				ui.PrimaryButton(c, "Save configuration").Label("Save configuration").FontSize(typeAction).MinHeight(32).Disabled(s.Busy).OnClick(func() {
-					if config, ok := s.validated(); ok && actions.Save != nil {
-						actions.Save(config)
+				if s.SavedPending && !s.Dirty() {
+					ui.PrimaryButton(c, "Apply saved").Label("Apply saved").FontSize(typeAction).MinHeight(32).Disabled(s.Busy || s.ReloadBlocked != "").OnClick(actions.Apply)
+					secondaryButton(c, "Save configuration").Label("Save configuration").FontSize(typeAction).MinHeight(32).Disabled(s.Busy).OnClick(func() {
+						if config, ok := s.validated(); ok && actions.Save != nil {
+							actions.Save(config)
+						}
+					})
+				} else {
+					ui.PrimaryButton(c, msgs.ConnectionSaveAndApply()).Label(msgs.ConnectionSaveAndApply()).FontSize(typeAction).MinHeight(32).Disabled(s.Busy).OnClick(func() {
+						if config, ok := s.validated(); ok && actions.SaveAndApply != nil {
+							actions.SaveAndApply(config)
+						}
+					})
+					secondaryButton(c, "Save configuration").Label("Save configuration").FontSize(typeAction).MinHeight(32).Disabled(s.Busy).OnClick(func() {
+						if config, ok := s.validated(); ok && actions.Save != nil {
+							actions.Save(config)
+						}
+					})
+					if s.HasSaved {
+						secondaryButton(c, "Apply saved").Disabled(s.Busy || s.ReloadBlocked != "").OnClick(actions.Apply)
 					}
-				})
-				secondaryButton(c, "Apply saved").Disabled(s.Busy || !s.HasSaved || s.ReloadBlocked != "").OnClick(actions.Apply)
+				}
 				if s.Dirty() && actions.Discard != nil {
 					secondaryButton(c, "Discard changes").Disabled(s.Busy).OnClick(actions.Discard)
 				}

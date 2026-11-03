@@ -142,13 +142,22 @@ func (a *appModel) ensureConnectionForm() {
 
 func (a *appModel) connectionActions() connectionSettingsActions {
 	return connectionSettingsActions{
-		Save:  a.saveConnection,
-		Apply: a.applyConnection,
-		Test:  a.testConnection,
+		Save:         a.saveConnection,
+		SaveAndApply: a.saveAndApplyConnection,
+		Apply:        a.applyConnection,
+		Test:         a.testConnection,
 	}
 }
 
 func (a *appModel) saveConnection(config connectionConfig) {
+	a.saveConnectionWithApply(config, false)
+}
+
+func (a *appModel) saveAndApplyConnection(config connectionConfig) {
+	a.saveConnectionWithApply(config, true)
+}
+
+func (a *appModel) saveConnectionWithApply(config connectionConfig, applyAfterSave bool) {
 	a.ensureConnectionForm()
 	form := a.connectionForm
 	if form.Busy || a.shutdownStarted {
@@ -163,6 +172,8 @@ func (a *appModel) saveConnection(config connectionConfig) {
 	storePath := a.storePath
 	form.Busy = true
 	form.Error = ""
+	form.ErrorDetail = ""
+	form.ReloadBlocked = ""
 	form.Status = "Saving configuration…"
 	a.connectionSaveInFlight = true
 	go func() {
@@ -172,7 +183,8 @@ func (a *appModel) saveConnection(config connectionConfig) {
 				a.connectionSaveInFlight = false
 				form.Busy = false
 				form.Status = ""
-				form.Error = "Could not save configuration. Your changes are still here."
+				form.ErrorDetail = a.connectionSafeMessage(err)
+				form.Error = form.ErrorDetail
 				if a.shutdownStarted {
 					a.finishShutdown()
 				}
@@ -189,17 +201,25 @@ func (a *appModel) saveConnection(config connectionConfig) {
 			a.connectionSaved = &config
 			a.connectionForm.HasSaved = true
 			a.connectionForm.initial = a.connectionForm.Draft
-			a.connectionForm.Status = "Saved. Apply saved to use this connection."
+			a.connectionForm.Status = ""
 			if a.connectionApplied() && *a.connectionEffective == config {
 				a.connectionForm.Status = "Saved. This configuration is already applied."
 			}
 			a.connectionForm.Error = ""
+			a.connectionForm.ErrorDetail = ""
 			if err != nil {
 				a.connectionForm.Error = "Configuration was saved, but the local contact store could not be created: " + a.redactConnectionText(err.Error())
 			} else if store != nil {
 				a.workDir = config.WorkingDirectory
 				a.startupDetailsOpen = false
 				applyStoreSelection(a, store)
+			}
+			if applyAfterSave && !a.shutdownStarted {
+				if reason := a.connectionReloadBlocked(); reason != "" {
+					form.ReloadBlocked = reason
+				} else {
+					a.applyConnection()
+				}
 			}
 			if a.shutdownStarted {
 				a.finishShutdown()
@@ -260,11 +280,14 @@ func (a *appModel) applyConnection() {
 	}
 	if reason := a.connectionReloadBlocked(); reason != "" {
 		form.ReloadBlocked = reason
+		form.Error = ""
+		form.ErrorDetail = ""
 		form.Busy = false
 		return
 	}
 	form.ReloadBlocked = ""
 	form.Error = ""
+	form.ErrorDetail = ""
 	form.Busy = true
 	form.Status = "Checking the saved connection…"
 	a.connectionApplying = true
@@ -435,6 +458,7 @@ func (a *appModel) testConnection(config connectionConfig) {
 		a.runtimeBinary = binary
 	}
 	if binary == "" {
+		form.ErrorDetail = ""
 		form.Error = "Runtime helper not found. " + a.runtimeHelperHint()
 		return
 	}
@@ -443,6 +467,7 @@ func (a *appModel) testConnection(config connectionConfig) {
 	a.connectionTestCancel = cancel
 	form.Busy = true
 	form.Error = ""
+	form.ErrorDetail = ""
 	form.Status = "Testing connection and model…"
 	go func() {
 		result, err := probeConnection(ctx, binary, config, os.Environ(), os.TempDir())

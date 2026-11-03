@@ -72,4 +72,5 @@ func TestPreviewStartupDiagnostics(t *testing.T) {
 	tr := ui.NewTester(a.view, 1600, 900)
 	tr.Frame()
 	writePreviewPNG(t, filepath.Join(dir, "headless-light-g1-configuration-details-1600x900.png"), tr.Image())
+	writeConnectionRecoveryPreviews(t, dir)
 }

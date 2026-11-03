@@ -453,3 +453,225 @@ func CopyFailed(error string) string { return In(i18n.Locale()).CopyFailed(error
 func (msgs Messages) CopyFailed(error string) string {
 	return Catalog.Format(msgs.locale, "copyFailed", map[string]any{"error": error})
 }
+
+// ConnectionStatusSetupNeeded says "Setup needed"
+// in the language the app shows.
+//
+// The header status when the runtime has no connection yet.
+func ConnectionStatusSetupNeeded() string { return In(i18n.Locale()).ConnectionStatusSetupNeeded() }
+
+// ConnectionStatusSetupNeeded says "Setup needed"
+// in the language of msgs.
+//
+// The header status when the runtime has no connection yet.
+func (msgs Messages) ConnectionStatusSetupNeeded() string {
+	return Catalog.Format(msgs.locale, "connectionStatusSetupNeeded", nil)
+}
+
+// ConnectionStatusNotConnected says "Not connected"
+// in the language the app shows.
+//
+// The header status when the runtime is unavailable or failed.
+func ConnectionStatusNotConnected() string { return In(i18n.Locale()).ConnectionStatusNotConnected() }
+
+// ConnectionStatusNotConnected says "Not connected"
+// in the language of msgs.
+//
+// The header status when the runtime is unavailable or failed.
+func (msgs Messages) ConnectionStatusNotConnected() string {
+	return Catalog.Format(msgs.locale, "connectionStatusNotConnected", nil)
+}
+
+// ConnectionStatusSavedAwaitingApply says "Saved — apply to connect"
+// in the language the app shows.
+//
+// The header status when a saved connection has not been applied.
+func ConnectionStatusSavedAwaitingApply() string {
+	return In(i18n.Locale()).ConnectionStatusSavedAwaitingApply()
+}
+
+// ConnectionStatusSavedAwaitingApply says "Saved — apply to connect"
+// in the language of msgs.
+//
+// The header status when a saved connection has not been applied.
+func (msgs Messages) ConnectionStatusSavedAwaitingApply() string {
+	return Catalog.Format(msgs.locale, "connectionStatusSavedAwaitingApply", nil)
+}
+
+// ConnectionStatusApplying says "Applying connection…"
+// in the language the app shows.
+//
+// The header status while a saved connection is being applied.
+func ConnectionStatusApplying() string { return In(i18n.Locale()).ConnectionStatusApplying() }
+
+// ConnectionStatusApplying says "Applying connection…"
+// in the language of msgs.
+//
+// The header status while a saved connection is being applied.
+func (msgs Messages) ConnectionStatusApplying() string {
+	return Catalog.Format(msgs.locale, "connectionStatusApplying", nil)
+}
+
+// ConnectionStatusConnecting says "Connecting…"
+// in the language the app shows.
+//
+// The header status while the runtime is starting.
+func ConnectionStatusConnecting() string { return In(i18n.Locale()).ConnectionStatusConnecting() }
+
+// ConnectionStatusConnecting says "Connecting…"
+// in the language of msgs.
+//
+// The header status while the runtime is starting.
+func (msgs Messages) ConnectionStatusConnecting() string {
+	return Catalog.Format(msgs.locale, "connectionStatusConnecting", nil)
+}
+
+// ConnectionRecoverySetupHint says "Complete the connection settings to start the runtime."
+// in the language the app shows.
+//
+// The recovery hint for a first-use setup with no connection.
+func ConnectionRecoverySetupHint() string { return In(i18n.Locale()).ConnectionRecoverySetupHint() }
+
+// ConnectionRecoverySetupHint says "Complete the connection settings to start the runtime."
+// in the language of msgs.
+//
+// The recovery hint for a first-use setup with no connection.
+func (msgs Messages) ConnectionRecoverySetupHint() string {
+	return Catalog.Format(msgs.locale, "connectionRecoverySetupHint", nil)
+}
+
+// ConnectionRecoverySavedHint says "The saved connection is waiting to be applied."
+// in the language the app shows.
+//
+// The recovery hint when a saved connection is not applied.
+func ConnectionRecoverySavedHint() string { return In(i18n.Locale()).ConnectionRecoverySavedHint() }
+
+// ConnectionRecoverySavedHint says "The saved connection is waiting to be applied."
+// in the language of msgs.
+//
+// The recovery hint when a saved connection is not applied.
+func (msgs Messages) ConnectionRecoverySavedHint() string {
+	return Catalog.Format(msgs.locale, "connectionRecoverySavedHint", nil)
+}
+
+// ConnectionRecoveryNotConnectedHint says "The runtime is not connected. Review the connection settings."
+// in the language the app shows.
+//
+// The recovery hint when the runtime failed or exited.
+func ConnectionRecoveryNotConnectedHint() string {
+	return In(i18n.Locale()).ConnectionRecoveryNotConnectedHint()
+}
+
+// ConnectionRecoveryNotConnectedHint says "The runtime is not connected. Review the connection settings."
+// in the language of msgs.
+//
+// The recovery hint when the runtime failed or exited.
+func (msgs Messages) ConnectionRecoveryNotConnectedHint() string {
+	return Catalog.Format(msgs.locale, "connectionRecoveryNotConnectedHint", nil)
+}
+
+// ConnectionRecoveryApplyingHint says "Wait for the connection to become ready."
+// in the language the app shows.
+//
+// The hint while a connection is being applied.
+func ConnectionRecoveryApplyingHint() string {
+	return In(i18n.Locale()).ConnectionRecoveryApplyingHint()
+}
+
+// ConnectionRecoveryApplyingHint says "Wait for the connection to become ready."
+// in the language of msgs.
+//
+// The hint while a connection is being applied.
+func (msgs Messages) ConnectionRecoveryApplyingHint() string {
+	return Catalog.Format(msgs.locale, "connectionRecoveryApplyingHint", nil)
+}
+
+// ConnectionRecoveryOpenSettings says "Open connection settings"
+// in the language the app shows.
+//
+// The recovery action that opens editable connection settings.
+func ConnectionRecoveryOpenSettings() string {
+	return In(i18n.Locale()).ConnectionRecoveryOpenSettings()
+}
+
+// ConnectionRecoveryOpenSettings says "Open connection settings"
+// in the language of msgs.
+//
+// The recovery action that opens editable connection settings.
+func (msgs Messages) ConnectionRecoveryOpenSettings() string {
+	return Catalog.Format(msgs.locale, "connectionRecoveryOpenSettings", nil)
+}
+
+// ConnectionRecoveryManagedTitle says "The saved connection could not start."
+// in the language the app shows.
+//
+// The recovery title for a managed saved connection that could not start.
+func ConnectionRecoveryManagedTitle() string {
+	return In(i18n.Locale()).ConnectionRecoveryManagedTitle()
+}
+
+// ConnectionRecoveryManagedTitle says "The saved connection could not start."
+// in the language of msgs.
+//
+// The recovery title for a managed saved connection that could not start.
+func (msgs Messages) ConnectionRecoveryManagedTitle() string {
+	return Catalog.Format(msgs.locale, "connectionRecoveryManagedTitle", nil)
+}
+
+// ConnectionRecoveryManagedHint says "Fix Connection settings, then save and apply."
+// in the language the app shows.
+//
+// The recovery hint for a managed saved connection that could not start.
+func ConnectionRecoveryManagedHint() string { return In(i18n.Locale()).ConnectionRecoveryManagedHint() }
+
+// ConnectionRecoveryManagedHint says "Fix Connection settings, then save and apply."
+// in the language of msgs.
+//
+// The recovery hint for a managed saved connection that could not start.
+func (msgs Messages) ConnectionRecoveryManagedHint() string {
+	return Catalog.Format(msgs.locale, "connectionRecoveryManagedHint", nil)
+}
+
+// ConnectionSaveAndApply says "Save and apply"
+// in the language the app shows.
+//
+// The primary action that saves the connection and applies it when safe.
+func ConnectionSaveAndApply() string { return In(i18n.Locale()).ConnectionSaveAndApply() }
+
+// ConnectionSaveAndApply says "Save and apply"
+// in the language of msgs.
+//
+// The primary action that saves the connection and applies it when safe.
+func (msgs Messages) ConnectionSaveAndApply() string {
+	return Catalog.Format(msgs.locale, "connectionSaveAndApply", nil)
+}
+
+// ConnectionRecoveryConnectingHint says "Wait for the runtime to connect."
+// in the language the app shows.
+//
+// The hint while the runtime is starting.
+func ConnectionRecoveryConnectingHint() string {
+	return In(i18n.Locale()).ConnectionRecoveryConnectingHint()
+}
+
+// ConnectionRecoveryConnectingHint says "Wait for the runtime to connect."
+// in the language of msgs.
+//
+// The hint while the runtime is starting.
+func (msgs Messages) ConnectionRecoveryConnectingHint() string {
+	return Catalog.Format(msgs.locale, "connectionRecoveryConnectingHint", nil)
+}
+
+// ConnectionSaveFailed says "Could not save configuration: {error}"
+// in the language the app shows.
+//
+// The save failure summary with the safe underlying cause.
+func ConnectionSaveFailed(error string) string { return In(i18n.Locale()).ConnectionSaveFailed(error) }
+
+// ConnectionSaveFailed says "Could not save configuration: {error}"
+// in the language of msgs.
+//
+// The save failure summary with the safe underlying cause.
+func (msgs Messages) ConnectionSaveFailed(error string) string {
+	return Catalog.Format(msgs.locale, "connectionSaveFailed", map[string]any{"error": error})
+}
