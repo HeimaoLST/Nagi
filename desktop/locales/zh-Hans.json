@@ -41,5 +41,8 @@
   "connectionRecoveryApplyingHint": "正在等待连接就绪。",
   "connectionRecoveryOpenSettings": "打开连接设置",
   "connectionRecoveryManagedTitle": "已保存的连接无法启动。",
-  "connectionRecoveryManagedHint": "请修正连接设置，然后保存并应用。"
+  "connectionRecoveryManagedHint": "请修正连接设置，然后保存并应用。",
+  "connectionSaveAndApply": "保存并应用",
+  "connectionRecoveryConnectingHint": "正在等待运行时连接。",
+  "connectionSaveFailed": "无法保存配置：{error}"
 }

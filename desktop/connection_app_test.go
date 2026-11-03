@@ -3,7 +3,11 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
+
+	"github.com/egoist/mygo/ui"
 )
 
 func isolateConnectionApp(t *testing.T, root, binary string) {
@@ -67,10 +71,21 @@ func TestConnectionStoreCreationFailureCanBeRepaired(t *testing.T) {
 	if err := os.Remove(guiStorePath()); err != nil {
 		t.Fatal(err)
 	}
-	saveAppConnection(t, h, config)
+	var clickErr error
+	h.pump.do(func() {
+		h.app.connectionForm.Draft = newConnectionSettings(&config, config.WorkingDirectory).Draft
+		h.app.openSettingsTab(settingsTabConnection, settingsSourceRail)
+		tr := ui.NewTester(h.app.view, 1040, 720)
+		tr.Frame()
+		clickErr = clickSettingsAction(tr, "Save configuration")
+	})
+	if clickErr != nil {
+		t.Fatal(clickErr)
+	}
+	h.pump.wait(func() bool { return !h.app.connectionForm.Busy })
 	h.pump.do(func() {
 		if h.app.store == nil || h.app.connectionReloadBlocked() != "" {
-			t.Error("Save did not recover after repairing the contact store path")
+			t.Errorf("GUI Save did not recover: storeNil=%v blocked=%q formErr=%q", h.app.store == nil, h.app.connectionReloadBlocked(), h.app.connectionForm.Error)
 		}
 	})
 }
@@ -130,4 +145,98 @@ func TestConnectionInvalidSavedSourceRemainsRepairable(t *testing.T) {
 	if a.rt != nil || !a.settingsOpen || a.settingsTab != settingsTabConnection {
 		t.Fatalf("invalid GUI configuration did not open the repair page: rt=%v open=%v tab=%q", a.rt, a.settingsOpen, a.settingsTab)
 	}
+}
+
+func TestConnectionSaveAndApplySaveFailureDoesNotApply(t *testing.T) {
+	root := t.TempDir()
+	isolateConnectionApp(t, root, "")
+	h := openConnectionHarness(t)
+	config := testConnectionConfig(t)
+	blocked := filepath.Join(root, "blocked")
+	if err := os.Mkdir(blocked, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(blocked, 0o700) })
+	h.pump.do(func() {
+		h.app.connectionPath = filepath.Join(blocked, "connection.json")
+		h.app.connectionForm.Draft = newConnectionSettings(&config, config.WorkingDirectory).Draft
+		h.app.saveAndApplyConnection(config)
+	})
+	h.pump.wait(func() bool { return !h.app.connectionForm.Busy })
+	var saved *connectionConfig
+	var applying bool
+	var rt *runtimeClient
+	var formError, errorDetail, draftModel, status string
+	var reloadBlocked string
+	h.pump.do(func() {
+		saved, applying, rt = h.app.connectionSaved, h.app.connectionApplying, h.app.rt
+		formError, errorDetail, draftModel = h.app.connectionForm.Error, h.app.connectionForm.ErrorDetail, h.app.connectionForm.Draft.Model
+		status, reloadBlocked = h.app.connectionForm.Status, h.app.connectionForm.ReloadBlocked
+	})
+	if saved != nil || applying || rt != nil {
+		t.Fatal("save failure reached apply or committed saved state")
+	}
+	if formError == "" || errorDetail == "" || !strings.Contains(errorDetail, "permission") && !strings.Contains(errorDetail, "operation not permitted") {
+		t.Fatalf("save failure detail = error:%q detail:%q", formError, errorDetail)
+	}
+	if draftModel != config.Model {
+		t.Fatal("save failure lost the edited draft")
+	}
+	if status != "" || reloadBlocked != "" {
+		t.Fatalf("save failure duplicated state: status=%q blocked=%q", status, reloadBlocked)
+	}
+	h.shutdown(t)
+}
+
+func TestConnectionApplyFailureRetryOnlyAppliesWithoutRewriting(t *testing.T) {
+	root := t.TempDir()
+	missing := filepath.Join(root, "missing-Saki-runtime")
+	isolateConnectionApp(t, root, missing)
+	h := openConnectionHarness(t)
+	config := testConnectionConfig(t)
+	saveAppConnection(t, h, config)
+	path := connectionConfigPath(guiStorePath())
+	oldTime := time.Unix(1700000000, 0)
+	if err := os.Chtimes(path, oldTime, oldTime); err != nil {
+		t.Fatal(err)
+	}
+	var clickErr error
+	h.pump.do(func() {
+		h.app.connectionForm.Draft = newConnectionSettings(&config, config.WorkingDirectory).Draft
+		h.app.openSettingsTab(settingsTabConnection, settingsSourceRail)
+		tr := ui.NewTester(h.app.view, 1040, 720)
+		tr.Frame()
+		clickErr = clickSettingsAction(tr, "Apply saved")
+	})
+	if clickErr != nil {
+		t.Fatal(clickErr)
+	}
+	h.pump.wait(func() bool { return !h.app.connectionForm.Busy })
+	if !strings.Contains(h.app.connectionForm.Error, "Could not start the new runtime") {
+		t.Fatalf("apply failure = %q", h.app.connectionForm.Error)
+	}
+	h.pump.do(func() {
+		tr := ui.NewTester(h.app.view, 1040, 720)
+		tr.Frame()
+		clickErr = clickSettingsAction(tr, "Apply saved")
+	})
+	if clickErr != nil {
+		t.Fatal(clickErr)
+	}
+	h.pump.wait(func() bool { return !h.app.connectionForm.Busy })
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !info.ModTime().Equal(oldTime) {
+		t.Fatalf("Retry Apply rewrote connection.json: %s", info.ModTime())
+	}
+	var saved *connectionConfig
+	var applying bool
+	var rt *runtimeClient
+	h.pump.do(func() { saved, applying, rt = h.app.connectionSaved, h.app.connectionApplying, h.app.rt })
+	if saved == nil || applying || rt != nil {
+		t.Fatal("retry apply changed saved/runtime state unexpectedly")
+	}
+	h.shutdown(t)
 }

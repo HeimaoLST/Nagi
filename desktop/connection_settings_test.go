@@ -129,3 +129,45 @@ func TestPreviewConnectionSettings(t *testing.T) {
 		}
 	}
 }
+
+func TestConnectionSettingsSaveAndApplyPrimaryAndRetryApply(t *testing.T) {
+	config := testConnectionConfig(t)
+	s := newConnectionSettings(&config, config.WorkingDirectory)
+	saveOnly, saveApply, applied := 0, 0, 0
+	tr := connectionSettingsTester(s, connectionSettingsActions{
+		Save:         func(connectionConfig) { saveOnly++ },
+		SaveAndApply: func(connectionConfig) { saveApply++ },
+		Apply:        func() { applied++ },
+	}, 580, 1600)
+	tr.Frame()
+	if err := tr.Click("Save and apply"); err != nil {
+		t.Fatal(err)
+	}
+	if saveApply != 1 || saveOnly != 0 || applied != 0 {
+		t.Fatalf("save and apply action = saveOnly:%d saveApply:%d apply:%d", saveOnly, saveApply, applied)
+	}
+	s.HasSaved = true
+	s.SavedPending = true
+	tr.Frame()
+	if err := tr.Click("Apply saved"); err != nil {
+		t.Fatal(err)
+	}
+	if applied != 1 || saveOnly != 0 || saveApply != 1 {
+		t.Fatalf("retry apply action = saveOnly:%d saveApply:%d apply:%d", saveOnly, saveApply, applied)
+	}
+}
+
+func TestConnectionSettingsSaveFailureUsesLocalizedDetail(t *testing.T) {
+	s := newConnectionSettings(nil, "/tmp")
+	s.ErrorDetail = "permission denied"
+	tr := connectionSettingsTester(s, connectionSettingsActions{}, 580, 800)
+	tr.Frame()
+	if !tr.HasText("Could not save configuration: permission denied") || tr.HasText("Could not save configuration. Your changes are still here.") {
+		t.Fatalf("save failure did not use typed detail: %v", tr.Texts())
+	}
+	tr.SetLocale("zh-Hans")
+	tr.Frame()
+	if !tr.HasText("无法保存配置：permission denied") {
+		t.Fatalf("zh save failure detail missing: %v", tr.Texts())
+	}
+}

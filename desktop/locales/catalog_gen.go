@@ -631,3 +631,47 @@ func ConnectionRecoveryManagedHint() string { return In(i18n.Locale()).Connectio
 func (msgs Messages) ConnectionRecoveryManagedHint() string {
 	return Catalog.Format(msgs.locale, "connectionRecoveryManagedHint", nil)
 }
+
+// ConnectionSaveAndApply says "Save and apply"
+// in the language the app shows.
+//
+// The primary action that saves the connection and applies it when safe.
+func ConnectionSaveAndApply() string { return In(i18n.Locale()).ConnectionSaveAndApply() }
+
+// ConnectionSaveAndApply says "Save and apply"
+// in the language of msgs.
+//
+// The primary action that saves the connection and applies it when safe.
+func (msgs Messages) ConnectionSaveAndApply() string {
+	return Catalog.Format(msgs.locale, "connectionSaveAndApply", nil)
+}
+
+// ConnectionRecoveryConnectingHint says "Wait for the runtime to connect."
+// in the language the app shows.
+//
+// The hint while the runtime is starting.
+func ConnectionRecoveryConnectingHint() string {
+	return In(i18n.Locale()).ConnectionRecoveryConnectingHint()
+}
+
+// ConnectionRecoveryConnectingHint says "Wait for the runtime to connect."
+// in the language of msgs.
+//
+// The hint while the runtime is starting.
+func (msgs Messages) ConnectionRecoveryConnectingHint() string {
+	return Catalog.Format(msgs.locale, "connectionRecoveryConnectingHint", nil)
+}
+
+// ConnectionSaveFailed says "Could not save configuration: {error}"
+// in the language the app shows.
+//
+// The save failure summary with the safe underlying cause.
+func ConnectionSaveFailed(error string) string { return In(i18n.Locale()).ConnectionSaveFailed(error) }
+
+// ConnectionSaveFailed says "Could not save configuration: {error}"
+// in the language of msgs.
+//
+// The save failure summary with the safe underlying cause.
+func (msgs Messages) ConnectionSaveFailed(error string) string {
+	return Catalog.Format(msgs.locale, "connectionSaveFailed", map[string]any{"error": error})
+}

@@ -139,6 +139,17 @@ func TestConnectionRecoveryStatusAndOneClickSettings(t *testing.T) {
 			wantButton: true,
 		},
 		{
+			name: "starting with saved connection",
+			setup: func(a *appModel, _ *contact) {
+				a.rt = &runtimeClient{}
+				a.runtimeStatus = runtimeStateStarting
+				a.connectionSaved = &config
+			},
+			wantHeader: "Connecting…",
+			wantHint:   "Wait for the runtime to connect.",
+			wantButton: false,
+		},
+		{
 			name: "applying",
 			setup: func(a *appModel, _ *contact) {
 				a.connectionApplying = true
@@ -275,5 +286,26 @@ func writeConnectionRecoveryPreviews(t *testing.T, dir string) {
 		tr.SetLocale(locale)
 		tr.Frame()
 		writePreviewPNG(t, filepath.Join(dir, fmt.Sprintf("connection-recovery-%s-960x640.png", locale)), tr.Image())
+	}
+}
+
+func TestConnectionRecoveryEmptyDraftKeepsHigherPriorityReason(t *testing.T) {
+	a, ct := workspaceTestApp(t)
+	a.runtimeStatus = runtimeStateFailed
+	a.runtimeStage = "Connection configuration"
+	a.ensureConnectionForm()
+	a.connectionForm.HasSaved = false
+	ct.Archived = true
+	tr := ui.NewTester(a.view, 1040, 720)
+	tr.Frame()
+	if !tr.HasText("This contact is archived. Restore it before sending a message.") {
+		t.Fatalf("archived reason missing from composer: %v", tr.Texts())
+	}
+	ct.Archived = false
+	a.shutdownStarted = true
+	tr = ui.NewTester(a.view, 1040, 720)
+	tr.Frame()
+	if !tr.HasText("The app is shutting down.") {
+		t.Fatalf("shutdown reason missing from composer: %v", tr.Texts())
 	}
 }

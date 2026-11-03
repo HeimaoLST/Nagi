@@ -178,7 +178,7 @@ func TestAppearanceSwitchKeepsComposerFocusAndActiveTask(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	a := &appModel{store: store, storePath: path, appearanceMode: appearanceSystem}
+	a := &appModel{store: store, storePath: path, appearanceMode: appearanceSystem, rt: &runtimeClient{}, runtimeStatus: runtimeStateReady}
 	applyStoreSelection(a, store)
 	ct := a.selectedContact()
 	ct.Draft = "focus and task survive"
@@ -303,7 +303,7 @@ func TestAppearancePanelSwitchesModeAndKeepsCurrentDraft(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	a := &appModel{store: store, storePath: path, appearanceMode: appearanceSystem}
+	a := &appModel{store: store, storePath: path, appearanceMode: appearanceSystem, rt: &runtimeClient{}, runtimeStatus: runtimeStateReady}
 	applyStoreSelection(a, store)
 	ct := a.selectedContact()
 	const draftBeforeAppearance = "draft stays while appearance changes"

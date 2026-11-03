@@ -212,13 +212,8 @@ func (a *appModel) connectionApplied() bool {
 }
 
 func (a *appModel) settingsLandingTab() string {
-	switch a.connectionViewState() {
-	case connectionViewSaved, connectionViewSetup:
+	if a.connectionConfigurationBlocked() {
 		return settingsTabConnection
-	case connectionViewNotConnected:
-		if a.connectionConfigurationBlocked() {
-			return settingsTabConnection
-		}
 	}
 	return settingsTabAppearance
 }
@@ -383,6 +378,7 @@ func (a *appModel) settingsConnectionContent(c *ui.Context, t *ui.Theme) {
 			ui.Text(c, "Saved configuration is awaiting Apply.").FontSize(typeAction).LineHeight(1.5).TextColor(t.Warning)
 		}
 		form.ReloadBlocked = a.connectionReloadBlocked()
+		form.SavedPending = a.connectionSavedPending()
 		actions := a.connectionActions()
 		actions.Discard = func() { form.ResetDraft() }
 		form.view(c, t, actions)

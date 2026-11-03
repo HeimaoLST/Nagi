@@ -179,5 +179,23 @@
   "connectionRecoveryManagedHint": "Fix Connection settings, then save and apply.",
   "@connectionRecoveryManagedHint": {
     "description": "The recovery hint for a managed saved connection that could not start."
+  },
+  "connectionSaveAndApply": "Save and apply",
+  "@connectionSaveAndApply": {
+    "description": "The primary action that saves the connection and applies it when safe."
+  },
+  "connectionRecoveryConnectingHint": "Wait for the runtime to connect.",
+  "@connectionRecoveryConnectingHint": {
+    "description": "The hint while the runtime is starting."
+  },
+  "connectionSaveFailed": "Could not save configuration: {error}",
+  "@connectionSaveFailed": {
+    "description": "The save failure summary with the safe underlying cause.",
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "permission denied"
+      }
+    }
   }
 }

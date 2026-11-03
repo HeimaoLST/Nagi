@@ -158,8 +158,8 @@ func TestCapacityNoticeHiddenBeforeRuntimeReady(t *testing.T) {
 		if tr.HasText("capacity is not loaded") || strings.Contains(strings.Join(tr.Texts(), "\n"), "Retry capacity") {
 			t.Fatalf("unconfigured composer showed a capacity notice: %v", tr.Texts())
 		}
-		if !tr.HasText(startupError) || !tr.HasText("Configuration details") {
-			t.Fatalf("unconfigured composer lost startup recovery controls: %v", tr.Texts())
+		if !tr.HasText("Setup needed") || !tr.HasText("Open connection settings") || !tr.HasText("Configuration details") {
+			t.Fatalf("unconfigured composer lost recovery controls: %v", tr.Texts())
 		}
 		if previewDir != "" {
 			theme := "light"
@@ -174,8 +174,8 @@ func TestCapacityNoticeHiddenBeforeRuntimeReady(t *testing.T) {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if !a.settingsOpen || a.settingsTab != settingsTabAdvanced || !tr.HasText("Startup & configuration") {
-		t.Fatalf("Configuration details did not open Advanced: open=%v tab=%q texts=%v", a.settingsOpen, a.settingsTab, tr.Texts())
+	if !a.settingsOpen || a.settingsTab != settingsTabAdvanced || !tr.HasText("Startup & configuration") || !tr.HasText(startupError) {
+		t.Fatalf("Configuration details did not open raw Advanced diagnostics: open=%v tab=%q texts=%v", a.settingsOpen, a.settingsTab, tr.Texts())
 	}
 	a.closeSettings()
 

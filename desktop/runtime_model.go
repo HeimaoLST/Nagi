@@ -446,14 +446,13 @@ func (a *appModel) applyRuntimeExit(err error) {
 		}
 		a.runtimeHint = "Restart Saki and reload history. Accepted work may be unconfirmed; no automatic retry."
 	} else {
-		legacyEnv := !a.connectionManaged && a.connectionEffective == nil && a.connectionSaved == nil
 		managed := a.connectionManaged || a.connectionEffective != nil || a.connectionSaved != nil
 		switch {
-		case legacyEnv && strings.Contains(diagnostic, "API_KEY is not set"):
+		case !managed && strings.Contains(diagnostic, "API_KEY is not set"):
 			a.runtimeStage = "Runtime configuration"
 			a.runtimeErr = "API_KEY is not set."
 			a.runtimeHint = "Set API_KEY in the environment or in " + a.workDir + "/.env, then restart Saki."
-		case legacyEnv && strings.Contains(diagnostic, ".env exists but could not be parsed"):
+		case !managed && strings.Contains(diagnostic, ".env exists but could not be parsed"):
 			a.runtimeStage = "Runtime configuration"
 			a.runtimeErr = ".env could not be parsed."
 			a.runtimeHint = "Fix or replace the .env file in " + a.workDir + ", then restart Saki."

@@ -424,7 +424,7 @@ func (a *appModel) connectionRecoveryNotice(c *ui.Context, t *ui.Theme, state co
 			ui.Text(c, a.runtimeHint).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
 		}
 		ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
-			ui.PrimaryButton(c, msgs.ConnectionRecoveryOpenSettings()).Label(msgs.ConnectionRecoveryOpenSettings()).FontSize(typeAction).MinHeight(32).OnClick(func() { a.openConfiguration() })
+			secondaryButton(c, msgs.ConnectionRecoveryOpenSettings()).MinHeight(32).OnClick(func() { a.openConfiguration() })
 			secondaryButton(c, "Configuration details").OnClick(func() { a.openAdvancedSettings() })
 		})
 	})
@@ -972,24 +972,30 @@ func (a *appModel) composer(c *ui.Context, t *ui.Theme) {
 				}
 				if sendReason != "" && strings.TrimSpace(ct.Draft) == "" && (!a.runtimeAvailableForView() || a.connectionViewState() == connectionViewApplying) {
 					msgs := locales.In(c.Locale())
-					hint := msgs.ConnectionRecoverySetupHint()
-					switch a.connectionViewState() {
-					case connectionViewSaved:
-						hint = msgs.ConnectionRecoverySavedHint()
-					case connectionViewNotConnected:
-						hint = msgs.ConnectionRecoveryNotConnectedHint()
-						if a.runtimeStage == "Connection configuration" && (a.connectionEffective != nil || a.connectionSaved != nil || a.connectionManaged) {
-							hint = msgs.ConnectionRecoveryManagedHint()
+					if a.shutdownStarted || ct.Archived {
+						ui.Text(c, sendReason).FontSize(typeBody).LineHeight(1.5).TextColor(t.TextMuted)
+					} else {
+						hint := msgs.ConnectionRecoverySetupHint()
+						switch a.connectionViewState() {
+						case connectionViewSaved:
+							hint = msgs.ConnectionRecoverySavedHint()
+						case connectionViewNotConnected:
+							hint = msgs.ConnectionRecoveryNotConnectedHint()
+							if a.runtimeStage == "Connection configuration" && (a.connectionEffective != nil || a.connectionSaved != nil || a.connectionManaged) {
+								hint = msgs.ConnectionRecoveryManagedHint()
+							}
+						case connectionViewApplying:
+							hint = msgs.ConnectionRecoveryApplyingHint()
+						case connectionViewConnecting:
+							hint = msgs.ConnectionRecoveryConnectingHint()
 						}
-					case connectionViewApplying:
-						hint = msgs.ConnectionRecoveryApplyingHint()
+						ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
+							ui.Text(c, hint).FontSize(typeBody).LineHeight(1.5).TextColor(t.TextMuted).Grow(1)
+							if a.connectionConfigurationBlocked() {
+								secondaryButton(c, msgs.ConnectionRecoveryOpenSettings()).OnClick(func() { a.openConfiguration() })
+							}
+						})
 					}
-					ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
-						ui.Text(c, hint).FontSize(typeBody).LineHeight(1.5).TextColor(t.TextMuted).Grow(1)
-						if a.connectionConfigurationBlocked() {
-							secondaryButton(c, msgs.ConnectionRecoveryOpenSettings()).OnClick(func() { a.openConfiguration() })
-						}
-					})
 				}
 				switch {
 				case ct.SendState == sendSubmitting:

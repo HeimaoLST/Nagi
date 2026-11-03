@@ -709,3 +709,113 @@ func waitCallbacksForQuit(t *testing.T, h *guiHarness, callbacks <-chan func()) 
 		}
 	}
 }
+
+func TestConnectionGUISaveAndApplyStartsValidatedRuntime(t *testing.T) {
+	binary := requireRuntimeBinary(t)
+	isolateConnectionApp(t, t.TempDir(), binary)
+	h := openConnectionHarness(t)
+	config := testConnectionConfig(t)
+	h.pump.do(func() {
+		h.app.connectionForm.Draft = newConnectionSettings(&config, config.WorkingDirectory).Draft
+		h.app.saveAndApplyConnection(config)
+	})
+	h.pump.wait(func() bool {
+		return !h.app.connectionForm.Busy && !h.app.connectionApplying &&
+			h.app.runtimeStatus == runtimeStateReady && h.app.connectionEffective != nil && h.app.rt != nil
+	})
+	var savedPreserved, effectivePreserved bool
+	h.pump.do(func() {
+		saved, effective := h.app.connectionSaved, h.app.connectionEffective
+		savedPreserved = saved != nil && *saved == config
+		effectivePreserved = effective != nil && *effective == config
+	})
+	if !savedPreserved || !effectivePreserved {
+		t.Fatal("save-and-apply did not preserve the saved/effective connection")
+	}
+	h.shutdown(t)
+}
+
+func TestConnectionGUISaveAndApplyRechecksActivityBeforeFinalSaveCallback(t *testing.T) {
+	binary := requireRuntimeBinary(t)
+	isolateConnectionApp(t, t.TempDir(), binary)
+	h := openConnectionHarness(t)
+	base := testConnectionConfig(t)
+	saveAppConnection(t, h, base)
+	applyAppConnection(t, h)
+	var oldRT *runtimeClient
+	h.pump.do(func() { oldRT = h.app.rt })
+	h.pump.do(func() {}) // drain callbacks already queued by Apply/restore
+	edited := base
+	edited.Model = "edited-after-save"
+	callbacks := make(chan func(), 16)
+	var originalHook func(func())
+	h.pump.do(func() {
+		originalHook = h.app.getUIHook()
+		h.app.setUIHook(func(fn func()) { callbacks <- fn })
+		h.app.connectionForm.Draft = newConnectionSettings(&edited, "").Draft
+		h.app.saveAndApplyConnection(edited)
+	})
+	t.Cleanup(func() {
+		if originalHook != nil && !h.closed {
+			h.pump.do(func() {
+				h.app.setUIHook(originalHook)
+				ct := h.app.selectedContact()
+				ct.ActiveTaskID = ""
+				ct.SendState = sendIdle
+				h.app.modelOpActive = false
+			})
+		}
+	})
+	var busy bool
+	h.pump.do(func() { busy = h.app.connectionForm.Busy })
+	if !busy {
+		t.Fatal("save did not enter in-flight state before activity was introduced")
+	}
+	h.pump.do(func() {
+		ct := h.app.selectedContact()
+		ct.ActiveTaskID = "active-during-save"
+		ct.SendState = sendAccepted
+	})
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		var saved *connectionConfig
+		h.pump.do(func() { saved = h.app.connectionSaved })
+		if saved != nil && saved.Model == edited.Model {
+			break
+		}
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			t.Fatal("save final UI callback did not complete")
+		}
+		select {
+		case callback := <-callbacks:
+			h.pump.do(callback)
+		case <-time.After(remaining):
+			t.Fatal("save callback was not delivered")
+		}
+	}
+	var applying bool
+	var rt *runtimeClient
+	var saved *connectionConfig
+	var blocked string
+	h.pump.do(func() {
+		applying, rt, saved, blocked = h.app.connectionApplying, h.app.rt, h.app.connectionSaved, h.app.connectionForm.ReloadBlocked
+	})
+	if applying || rt != oldRT {
+		t.Fatal("save-then-apply replaced the healthy runtime while new activity was present")
+	}
+	if !strings.Contains(blocked, "Wait for all conversation and issue work to finish") {
+		t.Fatalf("active-task guard did not block Apply: %q", blocked)
+	}
+	if saved == nil || saved.Model != edited.Model {
+		t.Fatal("successful save was not retained for later Apply")
+	}
+	h.pump.do(func() {
+		h.app.setUIHook(originalHook)
+		ct := h.app.selectedContact()
+		ct.ActiveTaskID = ""
+		ct.SendState = sendIdle
+		h.app.modelOpActive = false
+	})
+	h.shutdown(t)
+}
