@@ -240,6 +240,33 @@ func TestPreviewIssueStates(t *testing.T) {
 		write("issue-unknown", 320, 640, dark)
 	}
 	writeIssueWorkStatusLocalePreviews(t, dir)
+	writeIssueWorkPanelLocalePreviews(t, dir)
+}
+
+func writeIssueWorkPanelLocalePreviews(t *testing.T, dir string) {
+	scenes := []string{"issue-overview", "issue-detail", "issue-question", "issue-completed", "issue-working", "issue-archive"}
+	sizes := []struct {
+		width, height int
+	}{{1040, 720}, {720, 640}}
+	for _, locale := range []string{"en", "zh-Hans"} {
+		for _, dark := range []bool{false, true} {
+			theme := "light"
+			if dark {
+				theme = "dark"
+			}
+			for _, size := range sizes {
+				for _, scene := range scenes {
+					a := issuePreviewApp(scene)
+					a.windowWidth = size.width
+					tr := ui.NewTester(a.view, size.width, size.height)
+					tr.SetLocale(locale)
+					tr.SetDark(dark)
+					tr.Frame()
+					writePreviewPNG(t, filepath.Join(dir, fmt.Sprintf("headless-workpanel-%s-%s-%s-%dx%d.png", locale, theme, scene, size.width, size.height)), tr.Image())
+				}
+			}
+		}
+	}
 }
 
 func writeIssueWorkStatusLocalePreviews(t *testing.T, dir string) {

@@ -21,7 +21,7 @@ func TestThreePaneBreakpointsAndToggles(t *testing.T) {
 	a, _ := workspaceTestApp(t)
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	if !tr.HasText("No issues in Unfinished.") || !tr.HasText("Conversation work") {
+	if !tr.HasText("No issues in Unfinished.") || !tr.HasText("Chat runs") {
 		t.Fatal("new work panel should show the issue overview and local work entry")
 	}
 	if r, ok := tr.Find("No issues in Unfinished."); !ok || r.X < 620 {
@@ -46,7 +46,7 @@ func TestThreePaneBreakpointsAndToggles(t *testing.T) {
 		t.Fatal("Contacts did not reopen the rail")
 	}
 
-	if err := tr.Click("Close work"); err != nil {
+	if err := tr.Click("Close workspace"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
@@ -57,14 +57,14 @@ func TestThreePaneBreakpointsAndToggles(t *testing.T) {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if !tr.HasText("No issues in Unfinished.") || !tr.Focused("Close work") {
-		t.Fatal("opening work should show it and focus Close work")
+	if !tr.HasText("No issues in Unfinished.") || !tr.Focused("Close workspace") {
+		t.Fatal("opening work should show it and focus Close workspace")
 	}
 
 	a.windowWidth = 960
 	tr960 := ui.NewTester(a.view, 960, 640)
 	tr960.Frame()
-	if !a.workOverlay() || !tr960.HasText("Back") {
+	if !a.workOverlay() || !tr960.HasText("Back to chat") {
 		t.Fatal("960 should use the non-modal detail page when the default columns do not fit")
 	}
 	a.windowWidth = 1380
@@ -80,10 +80,10 @@ func TestThreePaneBreakpointsAndToggles(t *testing.T) {
 	a.windowWidth = 900
 	trNarrow := ui.NewTester(a.view, 900, 640)
 	trNarrow.Frame()
-	if !trNarrow.HasText("Back") {
+	if !trNarrow.HasText("Back to chat") {
 		t.Fatal("narrow work detail should be an application page")
 	}
-	if err := trNarrow.Click("Close work"); err != nil {
+	if err := trNarrow.Click("Back to chat"); err != nil {
 		t.Fatal(err)
 	}
 	trNarrow.Frame()
@@ -255,7 +255,7 @@ func TestWorkModalEscapeReturnsFocusToEntry(t *testing.T) {
 	a.windowWidth = 900
 	tr := ui.NewTester(a.view, 900, 640)
 	tr.Frame()
-	if !tr.HasText("Back") {
+	if !tr.HasText("Back to chat") {
 		t.Fatal("narrow work page missing")
 	}
 	tr.Key(0, ui.KeyEscape)
@@ -367,7 +367,7 @@ func TestSettingsPageEscapeDoesNotLeavePageAndBackReturnsToThreePane(t *testing.
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if a.settingsOpen || !tr.Focused("Settings") || !tr.HasText("Issues") {
+	if a.settingsOpen || !tr.Focused("Settings") || !tr.HasText("Tasks") {
 		t.Fatal("Back did not return to the three-pane work view with entry focus")
 	}
 }
