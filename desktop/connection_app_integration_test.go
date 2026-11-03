@@ -744,7 +744,9 @@ func TestConnectionGUISaveAndApplyRechecksActivityBeforeFinalSaveCallback(t *tes
 	applyAppConnection(t, h)
 	var oldRT *runtimeClient
 	h.pump.do(func() { oldRT = h.app.rt })
-	h.pump.do(func() {}) // drain callbacks already queued by Apply/restore
+	h.pump.wait(func() bool {
+		return h.app.metadataInFlight == 0 && h.app.runtimeBuiltinToolsLoaded && !h.app.runtimeBuiltinToolsLoading
+	})
 	edited := base
 	edited.Model = "edited-after-save"
 	callbacks := make(chan func(), 16)
