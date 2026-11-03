@@ -69,7 +69,14 @@ func issuePreviewApp(scene string) *appModel {
 		runtimeCapabilitiesLoaded: true, runtimeMaxActiveTasks: 2,
 	}
 	switch scene {
-	case "issue-working":
+	case "issue-working", "issue-question", "closed-work":
+		// Isolate the selected issue's single status: the other synthetic issue
+		// is terminal with an old failed Run and must not win the contact notice.
+		ct.Issues[1].Status = issueStatusCompleted
+		ct.Issues[1].Evidence = "Older Run remains visible as history; the Task is Done."
+	}
+	switch scene {
+	case "issue-working", "closed-work":
 		ct.Issues[0].Work.ActiveTaskID = "task-2"
 		ct.Issues[0].Work.LastTaskID = "task-2"
 		ct.Issues[0].Work.SendState = sendAccepted
@@ -149,10 +156,20 @@ func issuePreviewApp(scene string) *appModel {
 			RequirementsRevision: issue.RequirementsRevision, SourceTaskID: "task-preview", SourceScopeRef: "scope-preview", SourceTurnID: "turn-preview",
 			State: issueQuestionOpen, CreatedAt: 1,
 		}}
+	case "issue-interrupted":
+		ct.Issues[1].Status = issueStatusInProgress
+		ct.SelectedIssueID = "issue-2"
+		ct.Issues[1].Executions[0].Status = issueExecutionInterrupted
+		ct.Issues[1].Executions[0].Detail = "Interrupted before a terminal result was recorded."
+		ct.Works[2].State = workInterrupted
 	case "issue-unknown":
 		ct.Issues[1].Executions[0] = &issueExecution{ID: "exec-3", SessionID: "issue-preview-work-2", Prompt: "Verify restart continuation", Status: issueExecutionUnknown, Detail: "No trusted Runtime task history was found for this execution; manually inspect or confirm not dispatched."}
 		ct.SelectedIssueID = "issue-2"
 		ct.Works = ct.Works[:1]
+	}
+	if scene == "closed-work" {
+		ct.Messages = nil
+		ct.Revealed = nil
 	}
 	nav := ct.issueNavigation()
 	if scene != "issue-overview" && scene != "issue-form" {
@@ -161,6 +178,9 @@ func issuePreviewApp(scene string) *appModel {
 	if scene == "issue-back" {
 		nav.DetailID = ct.SelectedIssueID
 		a.backToIssueOverview()
+	}
+	if scene == "closed-work" {
+		a.workspaceOpen = false
 	}
 	return a
 }
@@ -218,6 +238,33 @@ func TestPreviewIssueStates(t *testing.T) {
 		write("issue-long", 1380, 900, dark)
 		write("issue-long", 320, 900, dark)
 		write("issue-unknown", 320, 640, dark)
+	}
+	writeIssueWorkStatusLocalePreviews(t, dir)
+}
+
+func writeIssueWorkStatusLocalePreviews(t *testing.T, dir string) {
+	scenes := []string{"issue-overview", "issue-question", "issue-working", "issue-interrupted", "closed-work"}
+	sizes := []struct {
+		width, height int
+	}{{960, 640}, {1040, 720}}
+	for _, locale := range []string{"en", "zh-Hans"} {
+		for _, dark := range []bool{false, true} {
+			theme := "light"
+			if dark {
+				theme = "dark"
+			}
+			for _, size := range sizes {
+				for _, scene := range scenes {
+					a := issuePreviewApp(scene)
+					a.windowWidth = size.width
+					tr := ui.NewTester(a.view, size.width, size.height)
+					tr.SetLocale(locale)
+					tr.SetDark(dark)
+					tr.Frame()
+					writePreviewPNG(t, filepath.Join(dir, fmt.Sprintf("headless-status-%s-%s-%s-%dx%d.png", locale, theme, scene, size.width, size.height)), tr.Image())
+				}
+			}
+		}
 	}
 }
 

@@ -409,6 +409,99 @@ func TestIssueNarrowPageHasNoBackdropAndBackKeepsNavigation(t *testing.T) {
 	}
 }
 
+func TestIssueWorkStatusSingleAttentionTargetAcrossEntryAndToggle(t *testing.T) {
+	a, ct := workspaceTestApp(t)
+	a.windowWidth = 1040
+	a.workspaceOpen = false
+	ct.Draft = "draft survives status entry"
+	waiting := &productIssue{ID: "issue-status-waiting", ContactID: ct.ID, Goal: "Waiting issue", Status: issueStatusInProgress,
+		Questions: []*issueQuestion{{Ref: "q-status", Text: "answer", State: issueQuestionOpen}}}
+	attention := &productIssue{ID: "issue-status-attention", ContactID: ct.ID, Goal: "Attention issue", Status: issueStatusInProgress,
+		Executions: []*issueExecution{{ID: "run-status-attention", Status: issueExecutionFailed, Detail: "attention reason"}}}
+	active := &productIssue{ID: "issue-status-active", ContactID: ct.ID, Goal: "Active issue", Status: issueStatusInProgress,
+		Work: issueWorkSession{Loaded: true, ActiveTaskID: "run-status-active", SendState: sendAccepted}}
+	ct.Issues = []*productIssue{waiting, attention, active}
+	notice := a.issueWorkNotice(ct)
+	if notice.IssueID != attention.ID || notice.AttentionCount != 1 || notice.WaitingCount != 1 || notice.ActiveCount != 1 {
+		t.Fatalf("single status target = %+v", notice)
+	}
+	tr := ui.NewTester(a.view, 1040, 720)
+	tr.Frame()
+	if !tr.HasText("3") || !tr.HasText("!") {
+		t.Fatalf("header count/attention marker missing: %v", tr.Texts())
+	}
+	if !tr.HasText("Needs attention: Attention issue") {
+		t.Fatalf("rail summary missing target: %v", tr.Texts())
+	}
+	if err := tr.Click("Needs attention: Attention issue"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	nav := ct.issueNavigation()
+	if !a.workspaceOpen || nav.DetailID != attention.ID || ct.SelectedIssueID != attention.ID ||
+		ct.Draft != "draft survives status entry" {
+		t.Fatalf("summary opened wrong target: open=%v detail=%q selected=%q draft=%q", a.workspaceOpen, nav.DetailID, ct.SelectedIssueID, ct.Draft)
+	}
+	if err := tr.Click("Work"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if a.workspaceOpen {
+		t.Fatal("Work toggle did not close an already-open work panel")
+	}
+	// A later status change with the panel closed must not auto-open it.
+	attention.Executions[0].AttentionSeenStatus = issueExecutionFailed
+	attention.Status = issueStatusInProgress
+	tr.Frame()
+	if a.workspaceOpen || ct.Draft != "draft survives status entry" {
+		t.Fatalf("closed Work auto-opened after status change: open=%v draft=%q", a.workspaceOpen, ct.Draft)
+	}
+	attention.Executions[0].AttentionSeenStatus = ""
+	tr.Frame()
+	if err := tr.Click("Work"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if !a.workspaceOpen || nav.DetailID != attention.ID || ct.Draft != "draft survives status entry" {
+		t.Fatalf("Work toggle off->on did not open attention target: open=%v detail=%q draft=%q", a.workspaceOpen, nav.DetailID, ct.Draft)
+	}
+}
+
+func TestClosedChatWaitingOrInterruptedShowsTaskFactAndView(t *testing.T) {
+	caseRun := func(t *testing.T, interrupted bool) {
+		a, ct := workspaceTestApp(t)
+		a.windowWidth = 1040
+		a.workspaceOpen = false
+		ct.Messages = nil
+		issue := &productIssue{ID: "issue-closed-work", ContactID: ct.ID, Goal: "Closed chat task", Status: issueStatusInProgress}
+		wantFact := "Closed chat task is waiting for you"
+		if interrupted {
+			issue.Status = issueStatusNeedsAttention
+			issue.Executions = []*issueExecution{{ID: "run-interrupted", Status: issueExecutionInterrupted, Detail: "interrupted reason"}}
+			wantFact = "Closed chat task needs attention"
+		} else {
+			issue.Questions = []*issueQuestion{{Ref: "q-closed", Text: "answer", State: issueQuestionOpen}}
+		}
+		ct.Issues = []*productIssue{issue}
+		tr := ui.NewTester(a.view, 1040, 720)
+		tr.Frame()
+		if a.workspaceOpen || len(ct.Messages) != 0 || !tr.HasText("View task") || !tr.HasText(wantFact) ||
+			tr.HasText("Start a conversation") {
+			t.Fatalf("closed chat %s fact/view/state = open=%v messages=%d texts=%v",
+				map[bool]string{true: "interrupted", false: "waiting"}[interrupted], a.workspaceOpen, len(ct.Messages), tr.Texts())
+		}
+		if err := tr.Click("View task"); err != nil {
+			t.Fatal(err)
+		}
+		tr.Frame()
+		if !a.workspaceOpen || ct.issueNavigation().DetailID != issue.ID || ct.SelectedIssueID != issue.ID || len(ct.Messages) != 0 {
+			t.Fatalf("View task did not open issue: open=%v detail=%q selected=%q messages=%d", a.workspaceOpen, ct.issueNavigation().DetailID, ct.SelectedIssueID, len(ct.Messages))
+		}
+	}
+	t.Run("waiting", func(t *testing.T) { caseRun(t, false) })
+	t.Run("interrupted", func(t *testing.T) { caseRun(t, true) })
+}
+
 func TestIssueBackFocusesDisplayedDetailNotBackgroundSelection(t *testing.T) {
 	a, ct := workspaceTestApp(t)
 	a.windowWidth = 1040
@@ -447,15 +540,16 @@ func TestIssueBackFocusesDisplayedDetailNotBackgroundSelection(t *testing.T) {
 
 func TestIssueOverviewRecentUsesLatestExecutionNotOlderToolWork(t *testing.T) {
 	for _, tc := range []struct {
-		name   string
-		status string
-		taskID string
-		want   string
+		name       string
+		status     string
+		taskID     string
+		wantStatus string
+		wantRun    string
 	}{
-		{"unknown-empty-task", issueExecutionUnknown, "", "Result unknown"},
-		{"pending-empty-task", issueExecutionPending, "", "Prepared, not dispatched"},
-		{"unknown-trusted-task", issueExecutionUnknown, "task-latest", "Result unknown"},
-		{"failed-trusted-task", issueExecutionFailed, "task-latest", "Execution failed"},
+		{"unknown-empty-task", issueExecutionUnknown, "", "Needs attention", "Run result unknown"},
+		{"pending-empty-task", issueExecutionPending, "", "In progress", "Run prepared, not dispatched"},
+		{"unknown-trusted-task", issueExecutionUnknown, "task-latest", "Needs attention", "Run result unknown"},
+		{"failed-trusted-task", issueExecutionFailed, "task-latest", "Needs attention", "Run failed"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			a, ct := workspaceTestApp(t)
@@ -475,8 +569,8 @@ func TestIssueOverviewRecentUsesLatestExecutionNotOlderToolWork(t *testing.T) {
 			}
 			tr := ui.NewTester(a.view, 1040, 720)
 			tr.Frame()
-			if !tr.HasText(tc.want) {
-				t.Fatalf("latest %s row = %v, want %q", tc.status, tr.Texts(), tc.want)
+			if !tr.HasText(tc.wantStatus) || !tr.HasText(tc.wantRun) {
+				t.Fatalf("latest %s row = %v, want status %q and run %q", tc.status, tr.Texts(), tc.wantStatus, tc.wantRun)
 			}
 			if tr.HasText("Last action: read") || tr.HasText("Last action: write") || tr.HasText("Execution completed") {
 				t.Fatalf("terminal/uncertain latest was masked by work/tool: %v", tr.Texts())

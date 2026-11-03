@@ -238,6 +238,30 @@ func TestIssueAttentionClearsAfterViewingFailedExecutionDetail(t *testing.T) {
 	}
 }
 
+func TestIssueInterruptedDetailUsesProjectedAttentionStatus(t *testing.T) {
+	a, ct := workspaceTestApp(t)
+	a.rt = &runtimeClient{}
+	a.store = &contactStore{path: filepath.Join(t.TempDir(), "contacts.json")}
+	issue := &productIssue{
+		ID: "issue-interrupted-detail", ContactID: ct.ID, Goal: "Interrupted detail status", Status: issueStatusInProgress,
+		WorkSessionID: "work-interrupted-detail", Work: issueWorkSession{Loaded: true},
+		Executions: []*issueExecution{{ID: "run-interrupted-detail", SessionID: "work-interrupted-detail", TaskID: "task-interrupted-detail",
+			Status: issueExecutionInterrupted, Detail: "interrupted before terminal result"}},
+	}
+	ct.Issues = []*productIssue{issue}
+	ct.Works = []*workItem{{TaskID: "task-interrupted-detail", State: workInterrupted, Detail: "interrupted before terminal result"}}
+	ct.SelectedIssueID = issue.ID
+	openIssueDetailForTest(a, ct, issue.ID)
+	tr := ui.NewTester(a.view, 1040, 720)
+	tr.Frame()
+	if !tr.HasText("Needs attention") || tr.HasText("In progress") {
+		t.Fatalf("interrupted detail primary status = %v", tr.Texts())
+	}
+	if !tr.HasText("Execution interrupted") {
+		t.Fatalf("interrupted detail lost the Run fact: %v", tr.Texts())
+	}
+}
+
 func TestIssueAttentionViewRequiresMatchingReasonAndResultPageConfirms(t *testing.T) {
 	a, ct := workspaceTestApp(t)
 	a.rt = nil

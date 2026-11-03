@@ -197,5 +197,113 @@
         "example": "permission denied"
       }
     }
+  },
+  "taskStatusArchived": "Archived",
+  "@taskStatusArchived": {
+    "description": "Nagi taskStatusArchived UI copy."
+  },
+  "taskStatusCompleted": "Done",
+  "@taskStatusCompleted": {
+    "description": "Nagi taskStatusCompleted UI copy."
+  },
+  "taskStatusCanceled": "Canceled",
+  "@taskStatusCanceled": {
+    "description": "Nagi taskStatusCanceled UI copy."
+  },
+  "taskStatusNeedsAttention": "Needs attention",
+  "@taskStatusNeedsAttention": {
+    "description": "Nagi taskStatusNeedsAttention UI copy."
+  },
+  "taskStatusWaiting": "Waiting for you",
+  "@taskStatusWaiting": {
+    "description": "Nagi taskStatusWaiting UI copy."
+  },
+  "taskStatusInProgress": "In progress",
+  "@taskStatusInProgress": {
+    "description": "Nagi taskStatusInProgress UI copy."
+  },
+  "taskStatusNotStarted": "Not started",
+  "@taskStatusNotStarted": {
+    "description": "Nagi taskStatusNotStarted UI copy."
+  },
+  "taskRunNeedsAttention": "Run needs attention",
+  "@taskRunNeedsAttention": {
+    "description": "Nagi taskRunNeedsAttention UI copy."
+  },
+  "taskRailAttention": "Needs attention: {name}",
+  "@taskRailAttention": {
+    "description": "Nagi taskRailAttention UI copy."
+  },
+  "taskRailWaiting": "Waiting for you: {name}",
+  "@taskRailWaiting": {
+    "description": "Nagi taskRailWaiting UI copy."
+  },
+  "taskRailInProgress": "In progress: {name}",
+  "@taskRailInProgress": {
+    "description": "Nagi taskRailInProgress UI copy."
+  },
+  "taskView": "View task",
+  "@taskView": {
+    "description": "Nagi taskView UI copy."
+  },
+  "taskActiveCount": "{count, plural, one {# active task} other {# active tasks}}",
+  "@taskActiveCount": {
+    "description": "Nagi taskActiveCount UI copy."
+  },
+  "workEntryLabel": "Work",
+  "@workEntryLabel": {
+    "description": "Nagi workEntryLabel UI copy."
+  },
+  "workEntrySummary": "{total, plural, =0 {No open tasks} one {# open task} other {# open tasks}}; {attention, plural, =0 {no tasks need attention} one {# task needs attention} other {# tasks need attention}}; {waiting, plural, =0 {none waiting} one {# waiting} other {# waiting}}; {active, plural, =0 {none in progress} one {# in progress} other {# in progress}}",
+  "@workEntrySummary": {
+    "description": "Nagi workEntrySummary UI copy."
+  },
+  "emptyTaskAttention": "{name} needs attention",
+  "@emptyTaskAttention": {
+    "description": "Nagi emptyTaskAttention UI copy."
+  },
+  "emptyTaskWaiting": "{name} is waiting for you",
+  "@emptyTaskWaiting": {
+    "description": "Nagi emptyTaskWaiting UI copy."
+  },
+  "emptyTaskInProgress": "{name} is in progress",
+  "@emptyTaskInProgress": {
+    "description": "Nagi emptyTaskInProgress UI copy."
+  },
+  "taskRunFailed": "Run failed",
+  "@taskRunFailed": {
+    "description": "Nagi taskRunFailed UI copy."
+  },
+  "taskRunInterrupted": "Run interrupted",
+  "@taskRunInterrupted": {
+    "description": "Nagi taskRunInterrupted UI copy."
+  },
+  "taskRunUnknown": "Run result unknown",
+  "@taskRunUnknown": {
+    "description": "Nagi taskRunUnknown UI copy."
+  },
+  "taskRunCompleted": "Run completed",
+  "@taskRunCompleted": {
+    "description": "Nagi taskRunCompleted UI copy."
+  },
+  "taskRunRunning": "Run in progress",
+  "@taskRunRunning": {
+    "description": "Nagi taskRunRunning UI copy."
+  },
+  "taskRunAccepted": "Run accepted",
+  "@taskRunAccepted": {
+    "description": "Nagi taskRunAccepted UI copy."
+  },
+  "taskRunPending": "Run prepared, not dispatched",
+  "@taskRunPending": {
+    "description": "Nagi taskRunPending UI copy."
+  },
+  "taskRunNotDispatched": "Run not dispatched",
+  "@taskRunNotDispatched": {
+    "description": "Nagi taskRunNotDispatched UI copy."
+  },
+  "taskRunRejected": "Run rejected",
+  "@taskRunRejected": {
+    "description": "Nagi taskRunRejected UI copy."
   }
 }

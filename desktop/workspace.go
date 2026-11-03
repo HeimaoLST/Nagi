@@ -364,6 +364,65 @@ func (a *appModel) issueOverviewView(c *ui.Context, t *ui.Theme, ct *contact, na
 	}
 }
 
+func issueRunLabel(msgs locales.Messages, status string) string {
+	switch status {
+	case issueExecutionFailed:
+		return msgs.TaskRunFailed()
+	case issueExecutionInterrupted:
+		return msgs.TaskRunInterrupted()
+	case issueExecutionUnknown:
+		return msgs.TaskRunUnknown()
+	case issueExecutionCompleted:
+		return msgs.TaskRunCompleted()
+	case issueExecutionRunning:
+		return msgs.TaskRunRunning()
+	case issueExecutionAccepted:
+		return msgs.TaskRunAccepted()
+	case issueExecutionPending:
+		return msgs.TaskRunPending()
+	case issueExecutionNotDispatched:
+		return msgs.TaskRunNotDispatched()
+	case issueExecutionRejected:
+		return msgs.TaskRunRejected()
+	default:
+		return ""
+	}
+}
+
+func issueDisplayLabel(msgs locales.Messages, display issueDisplayStatus) string {
+	if display.Archived {
+		return msgs.TaskStatusArchived()
+	}
+	switch display.Status {
+	case issueStatusCompleted:
+		return msgs.TaskStatusCompleted()
+	case issueStatusCanceled:
+		return msgs.TaskStatusCanceled()
+	case issueStatusNeedsAttention:
+		return msgs.TaskStatusNeedsAttention()
+	case issueStatusWaitingUser:
+		return msgs.TaskStatusWaiting()
+	case issueStatusInProgress:
+		return msgs.TaskStatusInProgress()
+	case issueStatusNotStarted:
+		return msgs.TaskStatusNotStarted()
+	default:
+		return msgs.TaskStatusNotStarted()
+	}
+}
+
+func issueDisplayColor(t *ui.Theme, display issueDisplayStatus) ui.Color {
+	if display.Archived || display.Status == issueStatusCanceled || display.Status == issueStatusNotStarted {
+		return t.TextMuted
+	}
+	switch display.Status {
+	case issueStatusNeedsAttention, issueStatusWaitingUser:
+		return t.Warning
+	default:
+		return t.Success
+	}
+}
+
 func (a *appModel) issueOverviewRow(c *ui.Context, t *ui.Theme, ct *contact, issue *productIssue) {
 	if issue == nil {
 		return
@@ -387,13 +446,25 @@ func (a *appModel) issueOverviewRow(c *ui.Context, t *ui.Theme, ct *contact, iss
 				ui.Text(c, issue.Goal).FontSize(typeAction).FontWeight(goalWeight).LineHeight(1.35).MaxLines(2).TextColor(t.Text).Grow(1)
 				ui.Text(c, "›").FontSize(16).TextColor(t.TextMuted)
 			})
-			recent := issueOverviewRecent(ct, issue)
-			managed := issueOverviewManagedLabel(issue)
-			ui.Text(c, recent).FontSize(12).LineHeight(1.4).MaxLines(1).TextColor(t.TextMuted)
-			if managed != recent {
-				ui.Row(c).AlignItems(ui.Center).Gap(6).Children(func() {
-					ui.Text(c, managed).FontSize(12).TextColor(a.issueStatusColor(t, issue))
-				})
+			msgs := locales.In(c.Locale())
+			display := issueDisplayStatusFor(issue)
+			statusColor := issueDisplayColor(t, display)
+			ui.Row(c).AlignItems(ui.Center).Gap(6).Children(func() {
+				ui.Text(c, "●").FontSize(12).TextColor(statusColor)
+				ui.Text(c, issueDisplayLabel(msgs, display)).FontSize(12).LineHeight(1.4).MaxLines(1).TextColor(statusColor)
+			})
+			if latest := latestIssueExecution(issue); latest != nil {
+				runLabel := issueRunLabel(msgs, latest.Status)
+				sameCompleted := display.Status == issueStatusCompleted && latest.Status == issueExecutionCompleted
+				sameActive := display.Status == issueStatusInProgress && display.Active &&
+					(latest.Status == issueExecutionAccepted || latest.Status == issueExecutionRunning)
+				if runLabel != "" && !sameCompleted && !sameActive {
+					runColor := t.TextMuted
+					if issueExecutionNeedsAttention(latest.Status) {
+						runColor = t.Warning
+					}
+					ui.Text(c, runLabel).FontSize(12).LineHeight(1.4).MaxLines(1).TextColor(runColor)
+				}
 			}
 		})
 	})
@@ -483,7 +554,8 @@ func (a *appModel) issueDetailView(c *ui.Context, t *ui.Theme, ct *contact, issu
 			if active {
 				ui.Text(c, "Current run: "+workStateLabel(work)).FontSize(12).LineHeight(1.4).MaxLines(2).TextColor(a.workStateColor(work.State))
 			}
-			ui.Text(c, issueStatusLabel(issue)).FontSize(12).FontWeight(500).TextColor(a.issueStatusColor(t, issue))
+			display := issueDisplayStatusFor(issue)
+			ui.Text(c, issueDisplayLabel(locales.In(c.Locale()), display)).FontSize(12).FontWeight(500).TextColor(issueDisplayColor(t, display))
 			if issue.Status == issueStatusCompleted {
 				ui.Text(c, "Marked by user: "+issueEvidenceText(issue)).FontSize(12).LineHeight(1.4).TextColor(t.TextMuted).MaxLines(3)
 			}
@@ -1034,20 +1106,7 @@ func (a *appModel) issueList(c *ui.Context, t *ui.Theme, ct *contact) {
 }
 
 func (a *appModel) issueStatusColor(t *ui.Theme, issue *productIssue) ui.Color {
-	if issue == nil {
-		return t.TextMuted
-	}
-	if issue.Archived {
-		return t.TextMuted
-	}
-	switch issue.Status {
-	case issueStatusNeedsAttention, issueStatusWaitingUser:
-		return t.Warning
-	case issueStatusCompleted, issueStatusInProgress:
-		return t.Success
-	default:
-		return t.TextMuted
-	}
+	return issueDisplayColor(t, issueDisplayStatusFor(issue))
 }
 
 func requirementStateLabel(state string) string {

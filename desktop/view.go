@@ -292,6 +292,28 @@ func (a *appModel) contactScopeSelect(c *ui.Context) {
 	}
 }
 
+func (a *appModel) openIssueTarget(issueID string) {
+	ct := a.selectedContact()
+	if ct == nil || issueID == "" || ct.issueByID(issueID) == nil {
+		return
+	}
+	a.selectIssue(issueID)
+	a.setWorkspaceOpen(true)
+}
+
+func (a *appModel) openIssueFromRail(index int, issueID string) {
+	if index < 0 || index >= len(a.contacts) || issueID == "" {
+		return
+	}
+	ownerID := a.contacts[index].ID
+	a.selectContact(index)
+	ct := a.selectedContact()
+	if ct == nil || ct.ID != ownerID {
+		return
+	}
+	a.openIssueTarget(issueID)
+}
+
 func (a *appModel) railRow(c *ui.Context, t *ui.Theme, i int) {
 	ct := a.contacts[i]
 	row := ui.ButtonBase(c).Label("Contact " + ct.Name).Gap(8).Padding(6).MinHeight(44).Radius(8).AlignItems(ui.Start).Background(ui.Transparent).BorderWidth(0)
@@ -309,26 +331,34 @@ func (a *appModel) railRow(c *ui.Context, t *ui.Theme, i int) {
 				}
 				ui.Text(c, ct.Name).FontSize(typeRailName).FontWeight(nameWeight).TextColor(t.Text)
 				ui.Spacer(c)
-				if workCount := issueWorkActiveCount(ct); workCount > 0 {
-					ui.Text(c, fmt.Sprintf("%d work", workCount)).FontSize(12).TextColor(t.TextMuted)
+				msgs := locales.In(c.Locale())
+				notice := a.issueWorkNotice(ct)
+				if notice.ActiveCount > 0 {
+					ui.Text(c, msgs.TaskActiveCount(notice.ActiveCount)).FontSize(12).TextColor(t.TextMuted)
 				}
 				if ct.Unread > 0 {
 					ui.Text(c, fmt.Sprintf("%d", ct.Unread)).FontSize(12).TextColor(t.Warning)
 				}
 			})
+			msgs := locales.In(c.Locale())
+			notice := a.issueWorkNotice(ct)
 			line := a.snippet(ct)
 			color := t.TextMuted
-			notice := a.issueWorkNotice(ct)
-			if notice.Text != "" {
-				line = "Issue running"
-				if notice.Attention {
-					line = "Attention"
-					color = t.Warning
-				} else {
-					color = t.Success
-				}
-			}
-			if ct.Status != statusReady && notice.Text == "" {
+			targetID := ""
+			switch {
+			case notice.Attention:
+				line = msgs.TaskRailAttention(notice.IssueName)
+				color = t.Warning
+				targetID = notice.IssueID
+			case notice.Waiting:
+				line = msgs.TaskRailWaiting(notice.IssueName)
+				color = t.Warning
+				targetID = notice.IssueID
+			case notice.Active:
+				line = msgs.TaskRailInProgress(notice.IssueName)
+				color = t.Success
+				targetID = notice.IssueID
+			case ct.Status != statusReady:
 				status := a.statusLabel(ct)
 				detail := strings.TrimSpace(line)
 				if detail == status {
@@ -344,7 +374,17 @@ func (a *appModel) railRow(c *ui.Context, t *ui.Theme, i int) {
 				}
 				color = a.statusColor(t, ct.Status)
 			}
-			ui.Text(c, line).FontSize(typeRailSummary).LineHeight(1.2).MaxLines(1).TextColor(color)
+			if targetID != "" {
+				summary := ui.Button(c, "").Label(line).FontSize(typeRailSummary).LineHeight(1.2).
+					MinHeight(32).Padding(2, 6).FillWidth().Justify(ui.Start)
+				summary.OnClick(func() { a.openIssueFromRail(i, targetID) })
+				summary.Description(line)
+				summary.Children(func() {
+					ui.Text(c, line).FontSize(typeRailSummary).LineHeight(1.2).MaxLines(1).TextColor(color)
+				})
+			} else {
+				ui.Text(c, line).FontSize(typeRailSummary).LineHeight(1.2).MaxLines(1).TextColor(color)
+			}
 		})
 	})
 }
@@ -424,7 +464,7 @@ func (a *appModel) connectionRecoveryNotice(c *ui.Context, t *ui.Theme, state co
 			ui.Text(c, a.runtimeHint).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
 		}
 		ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
-			secondaryButton(c, msgs.ConnectionRecoveryOpenSettings()).MinHeight(32).OnClick(func() { a.openConfiguration() })
+			secondaryButton(c, msgs.ConnectionRecoveryOpenSettings()).Label(msgs.ConnectionRecoveryOpenSettings()).MinHeight(32).OnClick(func() { a.openConfiguration() })
 			secondaryButton(c, "Configuration details").OnClick(func() { a.openAdvancedSettings() })
 		})
 	})
@@ -490,23 +530,21 @@ func (a *appModel) main(c *ui.Context, t *ui.Theme) {
 	})
 }
 
-func (a *appModel) workEntryStatus(ct *contact) (string, bool) {
+func (a *appModel) workEntryStatus(ct *contact, msgs locales.Messages) (string, bool) {
 	if ct == nil {
 		return "", false
 	}
-	if notice := a.issueWorkNotice(ct); notice.Text != "" {
-		if notice.Attention {
-			return "Work needs attention", true
-		}
-		return "Work running", false
+	notice := a.issueWorkNotice(ct)
+	switch {
+	case notice.Attention:
+		return msgs.TaskStatusNeedsAttention(), true
+	case notice.Waiting:
+		return msgs.TaskStatusWaiting(), true
+	case notice.Active:
+		return msgs.TaskStatusInProgress(), false
+	default:
+		return "", false
 	}
-	if ct.activeWork() != nil || ct.Status == statusWorking {
-		return "Work running", false
-	}
-	if ct.Status == statusAttention {
-		return "Work needs attention", true
-	}
-	return "", false
 }
 
 func (a *appModel) header(c *ui.Context, t *ui.Theme) {
@@ -525,7 +563,7 @@ func (a *appModel) header(c *ui.Context, t *ui.Theme) {
 				ui.Spacer(c)
 				a.navigationToolbar(c, t)
 			})
-			if status, attention := a.workEntryStatus(ct); status != "" && !a.workspaceOpen {
+			if status, attention := a.workEntryStatus(ct, locales.In(c.Locale())); status != "" && !a.workspaceOpen {
 				color := t.Success
 				if attention {
 					color = t.Warning
@@ -753,6 +791,24 @@ func (a *appModel) emptyState(c *ui.Context, t *ui.Theme) {
 			if a.runtimeStatus != runtimeStateReady {
 				ui.Text(c, "Runtime is not ready; history cannot be read yet.").FontSize(14).LineHeight(1.5).TextColor(t.Warning)
 			}
+			return
+		}
+		msgs := locales.In(c.Locale())
+		notice := a.issueWorkNotice(ct)
+		fact := ""
+		switch {
+		case notice.Attention:
+			fact = msgs.EmptyTaskAttention(notice.IssueName)
+		case notice.Waiting:
+			fact = msgs.EmptyTaskWaiting(notice.IssueName)
+		case notice.Active:
+			fact = msgs.EmptyTaskInProgress(notice.IssueName)
+		}
+		if fact != "" {
+			ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
+				ui.Text(c, fact).FontSize(typeBody).LineHeight(1.5).TextColor(t.Text).Grow(1)
+				secondaryButton(c, msgs.TaskView()).OnClick(func() { a.openIssueTarget(notice.IssueID) })
+			})
 			return
 		}
 		ui.Text(c, "No messages yet").FontSize(typePageTitle).FontWeight(500).TextColor(t.Text)
@@ -992,7 +1048,7 @@ func (a *appModel) composer(c *ui.Context, t *ui.Theme) {
 						ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
 							ui.Text(c, hint).FontSize(typeBody).LineHeight(1.5).TextColor(t.TextMuted).Grow(1)
 							if a.connectionConfigurationBlocked() {
-								secondaryButton(c, msgs.ConnectionRecoveryOpenSettings()).OnClick(func() { a.openConfiguration() })
+								secondaryButton(c, msgs.ConnectionRecoveryOpenSettings()).Label(msgs.ConnectionRecoveryOpenSettings()).OnClick(func() { a.openConfiguration() })
 							}
 						})
 					}

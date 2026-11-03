@@ -902,7 +902,7 @@ func issueAttention(issue *productIssue) (bool, string) {
 	}
 	// An accepted task can retain its active mapping when clearing the accepted
 	// context or receipt fails; that current send error remains actionable.
-	if issue.Work.SendState != sendUnknown && issueWorkIsActive(issue) && issue.Work.SendError != "" {
+	if issueWorkIsActive(issue) && issue.Work.SendError != "" {
 		return true, issue.Work.SendError
 	}
 	explicit := issue.Status == issueStatusNeedsAttention
@@ -1078,8 +1078,17 @@ func (ct *contact) issueForTask(taskID string) (*productIssue, *issueExecution) 
 func issueWorkActiveCount(ct *contact) int {
 	count := 0
 	for _, issue := range ct.Issues {
-		if issue != nil && issue.ContactID == ct.ID && !issueManagementTerminal(issue) &&
-			issueDisplayStatusFor(issue).Active {
+		if issue != nil && issue.ContactID == ct.ID && !issueManagementTerminal(issue) && issueWorkIsActive(issue) {
+			count++
+		}
+	}
+	return count
+}
+
+func issueOpenCount(ct *contact) int {
+	count := 0
+	for _, issue := range ct.Issues {
+		if issue != nil && issue.ContactID == ct.ID && !issueManagementTerminal(issue) {
 			count++
 		}
 	}
