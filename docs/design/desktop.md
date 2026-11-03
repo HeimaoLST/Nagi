@@ -787,6 +787,12 @@ type resolvedTheme struct {
 
 旧 native、已绑定 schema-2 且目标工具已就绪的会话仅在 Runtime 明确返回 `continuation_not_supported`、其自带配置读回成功且完整 effective config（session/revision/system prompt/tools/aliases/connection 等）与更新前完全一致、且唯一差异是可精确识别的已发布应用 role 时，才走兼容接续：保持原 system/profile/tool selection/session/connection/history 与旧 journal 前缀，不写 config 升级；仅在本次 task.send 的既有 named caller_context 中附加一份当前 role guidance，每 task 至多一份。该低层输入不是 system 配置升级，不承诺与 system 同优先级，不计入用户附件或补充 ledger；历史投影仅在该 verified scope 同 save 记录本轮确实追加应用项的来源事实时，隐藏紧邻的一份应用项；旧/未知来源与用户同名同形材料保留。其它错误、schema refresh、缺工具、读回失败、混合 prompt 或真实工具/别名/连接变化仍按原路径拒绝。新会话和非 native 会话继续使用既有 system guidance 路径；本范围不扩到 schema-1/未绑定 legacy。B-r7 原始失败与真实模型改稿仍未复验，本段不改变该边界，也不表示完整 154 或 MVP 已通过。
 
+## #276 工作状态投影与工作入口（实现事实，2026-11-03）
+
+代码来源：本分支 `agent/gui/276-work-status-projection`；N1 固定 `f20e4b6`，N2 以本 PR286 固定候选为准。GUI 只读消费既有 issue Status、execution/AttentionSeenStatus、Work flags 与 presentation state；不在 Runtime/store 写回，不改变连接与联系人会话 Ready 状态。单一投影先保留 Archived/Completed/Canceled 管理终态，再按未终结事项的 Attention（含 118 未看策略与显式 needs_attention）→ Waiting（含无 Run 的既有 waiting 路径）→ 真实 Working/In progress → Not started 排序；旧失败只在真实不同事实时作为 Run 补充，不覆盖主态，未知派发仍走原核查。
+
+联系人摘要、页头 Work 入口与事项行共用同一投影和 typed catalog：摘要显示真实事项名并可显式打开 IssueID；页头 badge 计相关未归档未终结事项，attention 另有非颜色标志，tooltip/AX 给出完整 total/attention/waiting/active 数量，0 时不出现孤立 0；Work toggle 已打开时再次点击关闭，仅关闭态点击才按 attention/waiting 目标打开。空聊天有真实工作/等待/attention 时显示事实与 View，不伪造消息；事项行显示一个语义色主状态，Run 仅在不同事实时补充。所有新增可见文案/AX/tooltip 走 `locales` 的 en/zh-Hans catalog；headless 预览覆盖 960×640/1040×720、明暗、en/zh 的 overview/question/working/interrupted/closed-work。原生/用户验收未由本段宣称。
+
 ## #182 可读事项工作台与恢复边界（实现事实，2026-10-27）
 
 代码来源：`agent/gui/182-readable-workspace`，从 QA 基线 `7a6b9b1` 开出；当前增量实现源 `ad8998930bc5dc55a543b2d1cc450dc9640953a1`（前序 `003df7a`、`7f37afc` 的完整矩阵证据是历史候选，不自动覆盖此增量）。本节只描述本轮工作台可读性修复，不代表 #156 全 MVP、原生包或在线模型验收通过。

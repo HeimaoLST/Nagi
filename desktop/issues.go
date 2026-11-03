@@ -875,71 +875,184 @@ func (a *appModel) confirmIssueExecutionNotDispatched(issueID, executionID strin
 	return true
 }
 
-// issueWorkNotice is a model-derived, non-unread summary for issue work. It
-// keeps work visible when the workspace is hidden and keeps attention states
-// discoverable even when the work produced no chat message. It never changes
-// contact.ActiveTaskID or conversation status.
-type issueWorkNotice struct {
-	Text      string
+// issueDisplayStatus is the single read-only display projection for an issue.
+type issueDisplayStatus struct {
+	Status    string
+	Label     string
+	Reason    string
 	Attention bool
-	IssueID   string
+	Waiting   bool
+	Active    bool
+	Archived  bool
+}
+
+func issueWorkIsActive(issue *productIssue) bool {
+	return issue != nil && issue.Work.SendState != sendUnknown &&
+		(issue.Work.ActiveTaskID != "" || issue.Work.SendState == sendSubmitting || issue.Work.SendState == sendAccepted)
+}
+
+func issueManagementTerminal(issue *productIssue) bool {
+	return issue != nil && (issue.Archived ||
+		issue.Status == issueStatusCompleted || issue.Status == issueStatusCanceled)
+}
+
+func issueAttention(issue *productIssue) (bool, string) {
+	if issue == nil {
+		return false, ""
+	}
+	// An accepted task can retain its active mapping when clearing the accepted
+	// context or receipt fails; that current send error remains actionable.
+	if issueWorkIsActive(issue) && issue.Work.SendError != "" {
+		return true, issue.Work.SendError
+	}
+	explicit := issue.Status == issueStatusNeedsAttention
+	unseen := false
+	unseenDetail := ""
+	for index := len(issue.Executions) - 1; index >= 0; index-- {
+		execution := issue.Executions[index]
+		if execution == nil || !issueExecutionNeedsAttention(execution.Status) ||
+			execution.AttentionSeenStatus == execution.Status {
+			continue
+		}
+		unseen = true
+		if unseenDetail == "" && execution.Detail != "" {
+			unseenDetail = execution.Detail
+		}
+	}
+	unknownDispatch := false
+	if issue.Work.SendState == sendUnknown {
+		execution := (*issueExecution)(nil)
+		if id := issue.Work.pendingExecutionID; id != "" {
+			for _, candidate := range issue.Executions {
+				if candidate != nil && candidate.ID == id {
+					execution = candidate
+					break
+				}
+			}
+		}
+		if execution == nil {
+			taskID := issue.Work.ActiveTaskID
+			if taskID == "" {
+				taskID = issue.Work.LastTaskID
+			}
+			execution = executionForTask(issue, taskID)
+		}
+		unknownDispatch = execution == nil || execution.AttentionSeenStatus == "" ||
+			(execution.AttentionSeenStatus != execution.Status && issueExecutionNeedsAttention(execution.Status))
+	}
+	if !explicit && !unseen && !unknownDispatch {
+		return false, ""
+	}
+	if unseenDetail != "" {
+		return true, unseenDetail
+	}
+	if issue.Work.SendError != "" && (unknownDispatch || explicit) {
+		return true, issue.Work.SendError
+	}
+	return true, ""
+}
+
+func issueDisplayStatusFor(issue *productIssue) issueDisplayStatus {
+	if issue == nil {
+		return issueDisplayStatus{Label: "Unknown"}
+	}
+	status := normalizeIssueStatus(issue.Status, issue.Executions)
+	if issue.Archived {
+		return issueDisplayStatus{Status: status, Label: "Archived", Archived: true}
+	}
+	switch status {
+	case issueStatusCompleted, issueStatusCanceled:
+		return issueDisplayStatus{Status: status, Label: issueStatusLabel(issue)}
+	}
+	attention, attentionReason := issueAttention(issue)
+	if attention {
+		return issueDisplayStatus{
+			Status: issueStatusNeedsAttention, Label: "Needs attention",
+			Reason: attentionReason, Attention: true, Active: issueWorkIsActive(issue),
+		}
+	}
+	if issue.openQuestion() != nil || status == issueStatusWaitingUser {
+		return issueDisplayStatus{
+			Status: issueStatusWaitingUser, Label: "Waiting for you", Waiting: true,
+			Active: issueWorkIsActive(issue),
+		}
+	}
+	if issueWorkIsActive(issue) {
+		return issueDisplayStatus{Status: issueStatusInProgress, Label: "In progress", Active: true}
+	}
+	if status == issueStatusInProgress {
+		return issueDisplayStatus{Status: issueStatusInProgress, Label: "In progress"}
+	}
+	return issueDisplayStatus{Status: issueStatusNotStarted, Label: "Not started"}
+}
+
+type issueWorkNotice struct {
+	Text           string
+	Attention      bool
+	Waiting        bool
+	Active         bool
+	IssueID        string
+	IssueName      string
+	AttentionCount int
+	WaitingCount   int
+	ActiveCount    int
 }
 
 func (a *appModel) issueWorkNotice(ct *contact) issueWorkNotice {
-	fallback := issueWorkNotice{}
+	type candidate struct {
+		text      string
+		issueID   string
+		issueName string
+		attention bool
+		waiting   bool
+		active    bool
+	}
+	var attentionCandidate, waitingCandidate, activeCandidate *candidate
+	notice := issueWorkNotice{}
 	for _, issue := range ct.Issues {
-		active := issue.Work.ActiveTaskID != "" || issue.Work.SendState == sendSubmitting ||
-			issue.Work.SendState == sendAccepted
-		if active || issue.Work.SendState == sendUnknown {
-			text := "Issue work active: " + issue.Goal
-			attention := issue.Work.SendError != "" || issue.Work.SendState == sendUnknown
-			if attention && issue.Work.SendState == sendUnknown {
-				execution := (*issueExecution)(nil)
-				if id := issue.Work.pendingExecutionID; id != "" {
-					for _, candidate := range issue.Executions {
-						if candidate != nil && candidate.ID == id {
-							execution = candidate
-							break
-						}
-					}
+		if issue == nil || issue.ContactID != ct.ID || issueManagementTerminal(issue) {
+			continue
+		}
+		display := issueDisplayStatusFor(issue)
+		if display.Attention {
+			notice.AttentionCount++
+			if attentionCandidate == nil {
+				text := "Issue work needs attention: " + issue.Goal
+				if display.Reason != "" {
+					text += " — " + truncate(display.Reason, 180)
 				}
-				if execution == nil {
-					taskID := issue.Work.ActiveTaskID
-					if taskID == "" {
-						taskID = issue.Work.LastTaskID
-					}
-					execution = executionForTask(issue, taskID)
-				}
-				if execution != nil && execution.AttentionSeenStatus != "" &&
-					(execution.AttentionSeenStatus == execution.Status || !issueExecutionNeedsAttention(execution.Status)) {
-					attention = false
-				}
-			}
-			if attention {
-				text = "Issue work needs attention: " + issue.Goal
-				if issue.Work.SendError != "" {
-					text += " — " + truncate(issue.Work.SendError, 180)
-				}
-				return issueWorkNotice{Text: text, Attention: true, IssueID: issue.ID}
-			}
-			if issue.Work.SendState != sendUnknown && fallback.Text == "" {
-				fallback = issueWorkNotice{Text: text, IssueID: issue.ID}
+				attentionCandidate = &candidate{text: text, issueID: issue.ID, issueName: issue.Goal, attention: true, active: display.Active}
 			}
 		}
-		for index := len(issue.Executions) - 1; index >= 0; index-- {
-			execution := issue.Executions[index]
-			if execution == nil || !issueExecutionNeedsAttention(execution.Status) ||
-				execution.AttentionSeenStatus == execution.Status {
-				continue
+		if display.Waiting {
+			notice.WaitingCount++
+			if waitingCandidate == nil {
+				waitingCandidate = &candidate{text: "Issue waiting for your answer: " + issue.Goal, issueID: issue.ID, issueName: issue.Goal, waiting: true, active: display.Active}
 			}
-			text := "Issue work needs attention: " + issue.Goal
-			if execution.Detail != "" {
-				text += " — " + truncate(execution.Detail, 180)
+		}
+		if display.Active {
+			notice.ActiveCount++
+			if activeCandidate == nil {
+				activeCandidate = &candidate{text: "Issue work active: " + issue.Goal, issueID: issue.ID, issueName: issue.Goal, active: true}
 			}
-			return issueWorkNotice{Text: text, Attention: true, IssueID: issue.ID}
 		}
 	}
-	return fallback
+	winner := attentionCandidate
+	if winner == nil {
+		winner = waitingCandidate
+	}
+	if winner == nil {
+		winner = activeCandidate
+	}
+	if winner != nil {
+		notice.Text = winner.text
+		notice.IssueID = winner.issueID
+		notice.IssueName = winner.issueName
+		notice.Attention = winner.attention
+		notice.Waiting = winner.waiting
+		notice.Active = winner.active
+	}
+	return notice
 }
 
 func issueExecutionNeedsAttention(status string) bool {
@@ -965,7 +1078,17 @@ func (ct *contact) issueForTask(taskID string) (*productIssue, *issueExecution) 
 func issueWorkActiveCount(ct *contact) int {
 	count := 0
 	for _, issue := range ct.Issues {
-		if issue.Work.ActiveTaskID != "" || issue.Work.SendState == sendSubmitting || issue.Work.SendState == sendAccepted {
+		if issue != nil && issue.ContactID == ct.ID && !issueManagementTerminal(issue) && issueWorkIsActive(issue) {
+			count++
+		}
+	}
+	return count
+}
+
+func issueOpenCount(ct *contact) int {
+	count := 0
+	for _, issue := range ct.Issues {
+		if issue != nil && issue.ContactID == ct.ID && !issueManagementTerminal(issue) {
 			count++
 		}
 	}

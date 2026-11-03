@@ -184,7 +184,7 @@ func TestIssueAttentionClearsAfterViewingFailedExecutionDetail(t *testing.T) {
 	a.runtimeMaxActiveTasks = 2
 	const detail = "provider failed after dispatch"
 	issue := &productIssue{
-		ID: "i-attention", ContactID: ct.ID, Goal: "failed work", Status: issueStatusNeedsAttention,
+		ID: "i-attention", ContactID: ct.ID, Goal: "failed work", Status: issueStatusInProgress,
 		RequirementsRevision: 1, Requirements: parseIssueRequirements("keep the failure facts"),
 		WorkSessionID: "work-attention", Work: issueWorkSession{Loaded: true},
 		Executions: []*issueExecution{{
@@ -238,20 +238,44 @@ func TestIssueAttentionClearsAfterViewingFailedExecutionDetail(t *testing.T) {
 	}
 }
 
+func TestIssueInterruptedDetailUsesProjectedAttentionStatus(t *testing.T) {
+	a, ct := workspaceTestApp(t)
+	a.rt = &runtimeClient{}
+	a.store = &contactStore{path: filepath.Join(t.TempDir(), "contacts.json")}
+	issue := &productIssue{
+		ID: "issue-interrupted-detail", ContactID: ct.ID, Goal: "Interrupted detail status", Status: issueStatusInProgress,
+		WorkSessionID: "work-interrupted-detail", Work: issueWorkSession{Loaded: true},
+		Executions: []*issueExecution{{ID: "run-interrupted-detail", SessionID: "work-interrupted-detail", TaskID: "task-interrupted-detail",
+			Status: issueExecutionInterrupted, Detail: "interrupted before terminal result"}},
+	}
+	ct.Issues = []*productIssue{issue}
+	ct.Works = []*workItem{{TaskID: "task-interrupted-detail", State: workInterrupted, Detail: "interrupted before terminal result"}}
+	ct.SelectedIssueID = issue.ID
+	openIssueDetailForTest(a, ct, issue.ID)
+	tr := ui.NewTester(a.view, 1040, 720)
+	tr.Frame()
+	if !tr.HasText("Needs attention") || tr.HasText("In progress") {
+		t.Fatalf("interrupted detail primary status = %v", tr.Texts())
+	}
+	if !tr.HasText("Execution interrupted") {
+		t.Fatalf("interrupted detail lost the Run fact: %v", tr.Texts())
+	}
+}
+
 func TestIssueAttentionViewRequiresMatchingReasonAndResultPageConfirms(t *testing.T) {
 	a, ct := workspaceTestApp(t)
 	a.rt = nil
 	a.store = &contactStore{path: filepath.Join(t.TempDir(), "contacts.json")}
 	const reasonA = "A failed after dispatch"
 	issueA := &productIssue{
-		ID: "i-attention-a", ContactID: ct.ID, Goal: "A failed work", Status: issueStatusNeedsAttention,
+		ID: "i-attention-a", ContactID: ct.ID, Goal: "A failed work", Status: issueStatusInProgress,
 		WorkSessionID: "work-a", Work: issueWorkSession{Loaded: true},
 		Executions: []*issueExecution{{
 			ID: "e-attention-a", SessionID: "work-a", TaskID: "task-a", Status: issueExecutionFailed, Detail: reasonA,
 		}},
 	}
 	issueB := &productIssue{
-		ID: "i-attention-b", ContactID: ct.ID, Goal: "B failed work", Status: issueStatusNeedsAttention,
+		ID: "i-attention-b", ContactID: ct.ID, Goal: "B failed work", Status: issueStatusInProgress,
 		WorkSessionID: "work-b", Work: issueWorkSession{Loaded: true},
 		Executions: []*issueExecution{{
 			ID: "e-attention-b", SessionID: "work-b", TaskID: "task-b", Status: issueExecutionFailed, Detail: "B failed after dispatch",
@@ -314,7 +338,7 @@ func TestIssueAttentionViewRequiresMatchingReasonAndResultPageConfirms(t *testin
 	if notice := a.issueWorkNotice(ct); notice.Attention || notice.Text != "" {
 		t.Fatalf("B confirmation did not clear B: %+v", notice)
 	}
-	if issueA.Status != issueStatusNeedsAttention || issueB.Status != issueStatusNeedsAttention ||
+	if issueA.Status != issueStatusInProgress || issueB.Status != issueStatusInProgress ||
 		issueA.Executions[0].Status != issueExecutionFailed || issueB.Executions[0].Status != issueExecutionFailed ||
 		issueA.Executions[0].Detail != reasonA || ct.Unread != 2 {
 		t.Fatalf("viewing changed retained facts: A=%+v B=%+v unread=%d", issueA.Executions[0], issueB.Executions[0], ct.Unread)
@@ -322,7 +346,7 @@ func TestIssueAttentionViewRequiresMatchingReasonAndResultPageConfirms(t *testin
 
 	other := &contact{ID: "i-attention-other-contact", Name: "Other", Loaded: true}
 	otherIssue := &productIssue{ID: "i-attention-other", ContactID: other.ID, Goal: "other contact failure",
-		Status: issueStatusNeedsAttention, WorkSessionID: "work-other", Work: issueWorkSession{Loaded: true},
+		Status: issueStatusInProgress, WorkSessionID: "work-other", Work: issueWorkSession{Loaded: true},
 		Executions: []*issueExecution{{ID: "e-attention-other", SessionID: "work-other", TaskID: "task-other",
 			Status: issueExecutionFailed, Detail: "other contact unseen"}}}
 	other.Issues = []*productIssue{otherIssue}
@@ -343,7 +367,7 @@ func TestIssueAttentionResultPageConfirmsNoTaskNoDetailExecution(t *testing.T) {
 	a.rt = nil
 	a.store = &contactStore{path: filepath.Join(t.TempDir(), "contacts.json")}
 	issue := &productIssue{
-		ID: "i-no-task", ContactID: ct.ID, Goal: "no task unknown", Status: issueStatusNeedsAttention,
+		ID: "i-no-task", ContactID: ct.ID, Goal: "no task unknown", Status: issueStatusInProgress,
 		WorkSessionID: "work-no-task", Work: issueWorkSession{Loaded: true},
 		Executions: []*issueExecution{{
 			ID: "e-no-task", Status: issueExecutionUnknown,
@@ -373,7 +397,7 @@ func TestIssueAttentionResultPageConfirmsNoTaskNoDetailExecution(t *testing.T) {
 	if notice := a.issueWorkNotice(ct); notice.Attention || notice.Text != "" {
 		t.Fatalf("no-task result entry did not clear attention: %+v", notice)
 	}
-	if issue.Status != issueStatusNeedsAttention || issue.Executions[0].Status != issueExecutionUnknown || ct.Unread != 2 {
+	if issue.Status != issueStatusInProgress || issue.Executions[0].Status != issueExecutionUnknown || ct.Unread != 2 {
 		t.Fatalf("no-task result entry changed retained facts: %+v status=%q unread=%d", issue.Executions[0], issue.Status, ct.Unread)
 	}
 
@@ -400,7 +424,7 @@ func TestIssueAttentionResultPageConfirmsNoTaskNoDetailExecution(t *testing.T) {
 	if notice := a.issueWorkNotice(ct); notice.Attention || notice.Text != "" {
 		t.Fatalf("active reload left the displayed failure in attention: %+v", notice)
 	}
-	if issue.Status != issueStatusNeedsAttention || issue.Executions[0].Status != issueExecutionFailed ||
+	if issue.Status != issueStatusInProgress || issue.Executions[0].Status != issueExecutionFailed ||
 		issue.Executions[0].Detail != "new no-task failure" || ct.Unread != 2 {
 		t.Fatalf("active reload changed retained facts: %+v status=%q unread=%d",
 			issue.Executions[0], issue.Status, ct.Unread)
@@ -466,7 +490,7 @@ func TestIssueAttentionPendingSeenStillShowsOlderException(t *testing.T) {
 	older := &issueExecution{ID: "e-older-visible", TaskID: "task-older", Status: issueExecutionFailed, Detail: "older unseen failure"}
 	latest := &issueExecution{ID: "e-pending-visible", Status: issueExecutionUnknown}
 	issue := &productIssue{
-		ID: "i-pending-visible", ContactID: ct.ID, Goal: "pending then older", Status: issueStatusNeedsAttention,
+		ID: "i-pending-visible", ContactID: ct.ID, Goal: "pending then older", Status: issueStatusInProgress,
 		WorkSessionID: "work-pending", Work: issueWorkSession{Loaded: true, SendState: sendUnknown,
 			SendError: "delivery not confirmed", pendingExecutionID: latest.ID},
 		Executions: []*issueExecution{older, latest},
@@ -499,7 +523,7 @@ func TestIssueAttentionTracksStatusReplayAndNewExecution(t *testing.T) {
 	a.store = &contactStore{path: filepath.Join(t.TempDir(), "contacts.json")}
 	const initialDetail = "delivery was not confirmed"
 	issue := &productIssue{
-		ID: "i-attention-status", ContactID: ct.ID, Goal: "unknown then failed", Status: issueStatusNeedsAttention,
+		ID: "i-attention-status", ContactID: ct.ID, Goal: "unknown then failed", Status: issueStatusInProgress,
 		WorkSessionID: "work-status", Work: issueWorkSession{Loaded: true, LastTaskID: "task-status",
 			SendState: sendUnknown, SendError: initialDetail},
 		Executions: []*issueExecution{{
@@ -560,6 +584,20 @@ func TestIssueAttentionTracksStatusReplayAndNewExecution(t *testing.T) {
 			Status: "failed", Error: &reason}},
 	}
 	a.applyIssueWorkHistory(ct, issue, records, "failed")
+	if issue.Status != issueStatusNeedsAttention {
+		t.Fatalf("failed history did not preserve explicit needs_attention: %+v", issue)
+	}
+	display := issueDisplayStatusFor(issue)
+	notice := a.issueWorkNotice(ct)
+	if !display.Attention || display.Status != issueStatusNeedsAttention ||
+		!notice.Attention || notice.IssueID != issue.ID {
+		t.Fatalf("seen run hid history-derived explicit attention: display=%+v notice=%+v", display, notice)
+	}
+	if issue.Status != issueStatusNeedsAttention || execution.AttentionSeenStatus != issueExecutionFailed {
+		t.Fatalf("history attention rewrote persistent facts: issue=%q seen=%q", issue.Status, execution.AttentionSeenStatus)
+	}
+	// Now isolate Run-level seen replay from the explicit issue status.
+	issue.Status = issueStatusInProgress
 	work = workFor(ct, "task-status")
 	tr.Frame()
 	if execution.Status != issueExecutionFailed || !strings.Contains(execution.Detail, reason) ||
@@ -590,7 +628,7 @@ func TestIssueAttentionTracksStatusReplayAndNewExecution(t *testing.T) {
 	if notice := a.issueWorkNotice(ct); !notice.Attention || notice.IssueID != issue.ID || next.AttentionSeenStatus != "" {
 		t.Fatalf("new execution did not raise attention: %+v next=%+v", notice, next)
 	}
-	if issue.Status != issueStatusNeedsAttention || ct.Unread != 3 {
+	if issue.Status != issueStatusInProgress || ct.Unread != 3 {
 		t.Fatalf("attention tracking changed issue status/unread: status=%q unread=%d", issue.Status, ct.Unread)
 	}
 }
@@ -601,7 +639,7 @@ func TestIssueAttentionExpiredResultCallbackDoesNotConfirm(t *testing.T) {
 		Status: issueExecutionFailed, Detail: "already seen failure", AttentionSeenStatus: issueExecutionFailed}
 	expired := &issueExecution{ID: "e-expired", SessionID: "work-expired", TaskID: "task-expired",
 		Status: issueExecutionFailed, Detail: "expired failure"}
-	issue := &productIssue{ID: "i-expired", ContactID: ct.ID, Goal: "expired callback", Status: issueStatusNeedsAttention,
+	issue := &productIssue{ID: "i-expired", ContactID: ct.ID, Goal: "expired callback", Status: issueStatusInProgress,
 		WorkSessionID: "work-expired", Work: issueWorkSession{Loaded: true},
 		Executions: []*issueExecution{seen, expired}}
 	ct.Issues = []*productIssue{issue}
@@ -631,7 +669,7 @@ func TestIssueAttentionSeenPersistsAndSaveFailureStaysUnseen(t *testing.T) {
 	a := &appModel{store: store, runtimeStatus: runtimeStateReady, workspaceOpen: true, windowWidth: 1040, scrollTo: -1,
 		contacts: []*contact{ct}, selected: 0}
 	const detail = "persisted failure"
-	issue := &productIssue{ID: "i-persist-attention", ContactID: ct.ID, Goal: "persist seen", Status: issueStatusNeedsAttention,
+	issue := &productIssue{ID: "i-persist-attention", ContactID: ct.ID, Goal: "persist seen", Status: issueStatusInProgress,
 		WorkSessionID: "work-persist", Work: issueWorkSession{Loaded: true},
 		Executions: []*issueExecution{{ID: "e-persist-attention", SessionID: "work-persist", TaskID: "task-persist",
 			Status: issueExecutionFailed, Detail: detail}}}
@@ -667,7 +705,7 @@ func TestIssueAttentionSeenPersistsAndSaveFailureStaysUnseen(t *testing.T) {
 	a2, ct2 := workspaceTestApp(t)
 	a2.store = &contactStore{path: filepath.Join(badParent, "contacts.json")}
 	const badDetail = "save failure reason"
-	issue2 := &productIssue{ID: "i-save-failure", ContactID: ct2.ID, Goal: "save failure", Status: issueStatusNeedsAttention,
+	issue2 := &productIssue{ID: "i-save-failure", ContactID: ct2.ID, Goal: "save failure", Status: issueStatusInProgress,
 		WorkSessionID: "work-save-failure", Work: issueWorkSession{Loaded: true},
 		Executions: []*issueExecution{{ID: "e-save-failure", SessionID: "work-save-failure", TaskID: "task-save-failure",
 			Status: issueExecutionFailed, Detail: badDetail}}}
@@ -700,7 +738,7 @@ func TestIssueAttentionSeenPersistsAndSaveFailureStaysUnseen(t *testing.T) {
 			a2.issueResult.Open, a2.localSaveErr, tr2.Texts())
 	}
 	if issue2.Executions[0].AttentionSeenStatus != "" || issue2.Executions[0].Status != issueExecutionFailed ||
-		issue2.Executions[0].Detail != badDetail || issue2.Status != issueStatusNeedsAttention {
+		issue2.Executions[0].Detail != badDetail || issue2.Status != issueStatusInProgress {
 		t.Fatalf("result save failure changed facts or did not roll back: issue=%+v", issue2)
 	}
 	page := a2.issueResult
@@ -718,7 +756,7 @@ func TestIssueAttentionSeenPersistsAndSaveFailureStaysUnseen(t *testing.T) {
 	}
 	tr2.Frame()
 	if issue2.Executions[0].AttentionSeenStatus != "" || issue2.Executions[0].Status != issueExecutionFailed ||
-		issue2.Executions[0].Detail != badDetail || issue2.Status != issueStatusNeedsAttention {
+		issue2.Executions[0].Detail != badDetail || issue2.Status != issueStatusInProgress {
 		t.Fatalf("reload after save failure did not preserve rollback/facts: %+v", issue2)
 	}
 	if a2.localSaveErr == "" || !strings.Contains(strings.Join(tr2.Texts(), "\n"), a2.localSaveErr) {

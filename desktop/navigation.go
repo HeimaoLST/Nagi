@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/egoist/mygo/ui"
@@ -162,10 +163,66 @@ func (a *appModel) navigationToolbar(c *ui.Context, t *ui.Theme) {
 				a.toggleRail()
 			}
 		}
-		a.navigationToggle(c, t, detailWork, "Work", "Work details", navWorkIcon, &a.focusWorkspace)
+		a.navigationWorkEntry(c, t)
 		a.navigationToggle(c, t, detailHistory, "History", "Conversation history", navHistoryIcon, &a.focusHistory)
 		a.navigationToggle(c, t, detailProfile, "Contact profile", "Contact profile summary", navProfileIcon, &a.focusContactProfile)
 	}).Label("Workspace details")
+}
+
+func (a *appModel) navigationWorkEntry(c *ui.Context, t *ui.Theme) {
+	ct := a.selectedContact()
+	msgs := locales.In(c.Locale())
+	notice := a.issueWorkNotice(ct)
+	total := issueOpenCount(ct)
+	targetID := ""
+	if notice.Attention || notice.Waiting {
+		targetID = notice.IssueID
+	}
+	on := a.detailIs(detailWork)
+	summary := msgs.WorkEntrySummary(total, notice.AttentionCount, notice.WaitingCount, notice.ActiveCount)
+	toggle := appTooltip(c, ui.Toggle(c, &on, "").Label(msgs.WorkEntryLabel()), summary).
+		MinWidth(44).Height(32).Padding(2, 4)
+	toggle.Children(func() {
+		color := t.TextMuted
+		if on {
+			color = t.AccentText
+		}
+		if total > 0 {
+			ui.Row(c).AlignItems(ui.Center).Gap(2).Children(func() {
+				ui.Icon(c, navWorkIcon).Width(18).Height(18).TextColor(color)
+				markColor := t.Warning
+				countColor := t.TextMuted
+				if on {
+					markColor = t.AccentText
+					countColor = t.AccentText
+				}
+				if notice.AttentionCount > 0 {
+					ui.Text(c, "!").FontSize(12).FontWeight(600).TextColor(markColor)
+				}
+				ui.Text(c, fmt.Sprintf("%d", total)).FontSize(12).TextColor(countColor)
+			})
+		} else {
+			ui.Icon(c, navWorkIcon).Width(18).Height(18).TextColor(color)
+		}
+	})
+	if on {
+		toggle.Selected(true)
+	}
+	if a.focusWorkspace {
+		toggle.Focus()
+		a.focusWorkspace = false
+	}
+	if toggle.Changed() {
+		if !on {
+			a.closeDetail()
+			return
+		}
+		if targetID != "" {
+			a.openIssueTarget(targetID)
+			return
+		}
+		a.toggleDetail(detailWork)
+	}
 }
 
 func (a *appModel) navigationToggle(c *ui.Context, t *ui.Theme, kind detailKind, label, tooltip string, icon *ui.SVG, focus *bool) {

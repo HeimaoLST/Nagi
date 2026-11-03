@@ -225,13 +225,13 @@ func TestClosedWorkEntryShowsRealWorkStatus(t *testing.T) {
 	ct.Status = statusWorking
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	if !tr.HasText("Work running") || len(ct.Messages) != 0 {
-		t.Fatalf("running hint = %v messages=%d", tr.Texts(), len(ct.Messages))
+	if !tr.HasText("Working") || len(ct.Messages) != 0 || issueOpenCount(ct) != 0 || a.issueWorkNotice(ct).ActiveCount != 0 {
+		t.Fatalf("contact working hint = %v messages=%d open=%d", tr.Texts(), len(ct.Messages), issueOpenCount(ct))
 	}
 	ct.Status = statusAttention
 	tr.Frame()
-	if !tr.HasText("Work needs attention") || len(ct.Messages) != 0 {
-		t.Fatalf("attention hint = %v messages=%d", tr.Texts(), len(ct.Messages))
+	if !tr.HasText("Needs attention") || len(ct.Messages) != 0 || issueOpenCount(ct) != 0 || a.issueWorkNotice(ct).AttentionCount != 0 {
+		t.Fatalf("contact attention hint = %v messages=%d open=%d", tr.Texts(), len(ct.Messages), issueOpenCount(ct))
 	}
 }
 

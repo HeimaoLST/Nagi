@@ -675,3 +675,383 @@ func ConnectionSaveFailed(error string) string { return In(i18n.Locale()).Connec
 func (msgs Messages) ConnectionSaveFailed(error string) string {
 	return Catalog.Format(msgs.locale, "connectionSaveFailed", map[string]any{"error": error})
 }
+
+// TaskStatusArchived says "Archived"
+// in the language the app shows.
+//
+// Nagi taskStatusArchived UI copy.
+func TaskStatusArchived() string { return In(i18n.Locale()).TaskStatusArchived() }
+
+// TaskStatusArchived says "Archived"
+// in the language of msgs.
+//
+// Nagi taskStatusArchived UI copy.
+func (msgs Messages) TaskStatusArchived() string {
+	return Catalog.Format(msgs.locale, "taskStatusArchived", nil)
+}
+
+// TaskStatusCompleted says "Done"
+// in the language the app shows.
+//
+// Nagi taskStatusCompleted UI copy.
+func TaskStatusCompleted() string { return In(i18n.Locale()).TaskStatusCompleted() }
+
+// TaskStatusCompleted says "Done"
+// in the language of msgs.
+//
+// Nagi taskStatusCompleted UI copy.
+func (msgs Messages) TaskStatusCompleted() string {
+	return Catalog.Format(msgs.locale, "taskStatusCompleted", nil)
+}
+
+// TaskStatusCanceled says "Canceled"
+// in the language the app shows.
+//
+// Nagi taskStatusCanceled UI copy.
+func TaskStatusCanceled() string { return In(i18n.Locale()).TaskStatusCanceled() }
+
+// TaskStatusCanceled says "Canceled"
+// in the language of msgs.
+//
+// Nagi taskStatusCanceled UI copy.
+func (msgs Messages) TaskStatusCanceled() string {
+	return Catalog.Format(msgs.locale, "taskStatusCanceled", nil)
+}
+
+// TaskStatusNeedsAttention says "Needs attention"
+// in the language the app shows.
+//
+// Nagi taskStatusNeedsAttention UI copy.
+func TaskStatusNeedsAttention() string { return In(i18n.Locale()).TaskStatusNeedsAttention() }
+
+// TaskStatusNeedsAttention says "Needs attention"
+// in the language of msgs.
+//
+// Nagi taskStatusNeedsAttention UI copy.
+func (msgs Messages) TaskStatusNeedsAttention() string {
+	return Catalog.Format(msgs.locale, "taskStatusNeedsAttention", nil)
+}
+
+// TaskStatusWaiting says "Waiting for you"
+// in the language the app shows.
+//
+// Nagi taskStatusWaiting UI copy.
+func TaskStatusWaiting() string { return In(i18n.Locale()).TaskStatusWaiting() }
+
+// TaskStatusWaiting says "Waiting for you"
+// in the language of msgs.
+//
+// Nagi taskStatusWaiting UI copy.
+func (msgs Messages) TaskStatusWaiting() string {
+	return Catalog.Format(msgs.locale, "taskStatusWaiting", nil)
+}
+
+// TaskStatusInProgress says "In progress"
+// in the language the app shows.
+//
+// Nagi taskStatusInProgress UI copy.
+func TaskStatusInProgress() string { return In(i18n.Locale()).TaskStatusInProgress() }
+
+// TaskStatusInProgress says "In progress"
+// in the language of msgs.
+//
+// Nagi taskStatusInProgress UI copy.
+func (msgs Messages) TaskStatusInProgress() string {
+	return Catalog.Format(msgs.locale, "taskStatusInProgress", nil)
+}
+
+// TaskStatusNotStarted says "Not started"
+// in the language the app shows.
+//
+// Nagi taskStatusNotStarted UI copy.
+func TaskStatusNotStarted() string { return In(i18n.Locale()).TaskStatusNotStarted() }
+
+// TaskStatusNotStarted says "Not started"
+// in the language of msgs.
+//
+// Nagi taskStatusNotStarted UI copy.
+func (msgs Messages) TaskStatusNotStarted() string {
+	return Catalog.Format(msgs.locale, "taskStatusNotStarted", nil)
+}
+
+// TaskRunNeedsAttention says "Run needs attention"
+// in the language the app shows.
+//
+// Nagi taskRunNeedsAttention UI copy.
+func TaskRunNeedsAttention() string { return In(i18n.Locale()).TaskRunNeedsAttention() }
+
+// TaskRunNeedsAttention says "Run needs attention"
+// in the language of msgs.
+//
+// Nagi taskRunNeedsAttention UI copy.
+func (msgs Messages) TaskRunNeedsAttention() string {
+	return Catalog.Format(msgs.locale, "taskRunNeedsAttention", nil)
+}
+
+// TaskRailAttention says "Needs attention\n{name}"
+// in the language the app shows.
+//
+// Nagi taskRailAttention UI copy.
+func TaskRailAttention(name string) string { return In(i18n.Locale()).TaskRailAttention(name) }
+
+// TaskRailAttention says "Needs attention\n{name}"
+// in the language of msgs.
+//
+// Nagi taskRailAttention UI copy.
+func (msgs Messages) TaskRailAttention(name string) string {
+	return Catalog.Format(msgs.locale, "taskRailAttention", map[string]any{"name": name})
+}
+
+// TaskRailWaiting says "Waiting for you\n{name}"
+// in the language the app shows.
+//
+// Nagi taskRailWaiting UI copy.
+func TaskRailWaiting(name string) string { return In(i18n.Locale()).TaskRailWaiting(name) }
+
+// TaskRailWaiting says "Waiting for you\n{name}"
+// in the language of msgs.
+//
+// Nagi taskRailWaiting UI copy.
+func (msgs Messages) TaskRailWaiting(name string) string {
+	return Catalog.Format(msgs.locale, "taskRailWaiting", map[string]any{"name": name})
+}
+
+// TaskRailInProgress says "In progress\n{name}"
+// in the language the app shows.
+//
+// Nagi taskRailInProgress UI copy.
+func TaskRailInProgress(name string) string { return In(i18n.Locale()).TaskRailInProgress(name) }
+
+// TaskRailInProgress says "In progress\n{name}"
+// in the language of msgs.
+//
+// Nagi taskRailInProgress UI copy.
+func (msgs Messages) TaskRailInProgress(name string) string {
+	return Catalog.Format(msgs.locale, "taskRailInProgress", map[string]any{"name": name})
+}
+
+// TaskView says "View task"
+// in the language the app shows.
+//
+// Nagi taskView UI copy.
+func TaskView() string { return In(i18n.Locale()).TaskView() }
+
+// TaskView says "View task"
+// in the language of msgs.
+//
+// Nagi taskView UI copy.
+func (msgs Messages) TaskView() string {
+	return Catalog.Format(msgs.locale, "taskView", nil)
+}
+
+// TaskActiveCount says "{count, plural, one {# active task} other {# active tasks}}"
+// in the language the app shows.
+//
+// Nagi taskActiveCount UI copy.
+func TaskActiveCount(count int) string { return In(i18n.Locale()).TaskActiveCount(count) }
+
+// TaskActiveCount says "{count, plural, one {# active task} other {# active tasks}}"
+// in the language of msgs.
+//
+// Nagi taskActiveCount UI copy.
+func (msgs Messages) TaskActiveCount(count int) string {
+	return Catalog.Format(msgs.locale, "taskActiveCount", map[string]any{"count": count})
+}
+
+// WorkEntryLabel says "Work"
+// in the language the app shows.
+//
+// Nagi workEntryLabel UI copy.
+func WorkEntryLabel() string { return In(i18n.Locale()).WorkEntryLabel() }
+
+// WorkEntryLabel says "Work"
+// in the language of msgs.
+//
+// Nagi workEntryLabel UI copy.
+func (msgs Messages) WorkEntryLabel() string {
+	return Catalog.Format(msgs.locale, "workEntryLabel", nil)
+}
+
+// WorkEntrySummary says "{total, plural, =0 {No open tasks} one {# open task} other {# open tasks}}; {attention, plural, =0 {no tasks need att…"
+// in the language the app shows.
+//
+// Nagi workEntrySummary UI copy.
+func WorkEntrySummary(total int, attention int, waiting int, active int) string {
+	return In(i18n.Locale()).WorkEntrySummary(total, attention, waiting, active)
+}
+
+// WorkEntrySummary says "{total, plural, =0 {No open tasks} one {# open task} other {# open tasks}}; {attention, plural, =0 {no tasks need att…"
+// in the language of msgs.
+//
+// Nagi workEntrySummary UI copy.
+func (msgs Messages) WorkEntrySummary(total int, attention int, waiting int, active int) string {
+	return Catalog.Format(msgs.locale, "workEntrySummary", map[string]any{"total": total, "attention": attention, "waiting": waiting, "active": active})
+}
+
+// EmptyTaskAttention says "{name} needs attention"
+// in the language the app shows.
+//
+// Nagi emptyTaskAttention UI copy.
+func EmptyTaskAttention(name string) string { return In(i18n.Locale()).EmptyTaskAttention(name) }
+
+// EmptyTaskAttention says "{name} needs attention"
+// in the language of msgs.
+//
+// Nagi emptyTaskAttention UI copy.
+func (msgs Messages) EmptyTaskAttention(name string) string {
+	return Catalog.Format(msgs.locale, "emptyTaskAttention", map[string]any{"name": name})
+}
+
+// EmptyTaskWaiting says "{name} is waiting for you"
+// in the language the app shows.
+//
+// Nagi emptyTaskWaiting UI copy.
+func EmptyTaskWaiting(name string) string { return In(i18n.Locale()).EmptyTaskWaiting(name) }
+
+// EmptyTaskWaiting says "{name} is waiting for you"
+// in the language of msgs.
+//
+// Nagi emptyTaskWaiting UI copy.
+func (msgs Messages) EmptyTaskWaiting(name string) string {
+	return Catalog.Format(msgs.locale, "emptyTaskWaiting", map[string]any{"name": name})
+}
+
+// EmptyTaskInProgress says "{name} is in progress"
+// in the language the app shows.
+//
+// Nagi emptyTaskInProgress UI copy.
+func EmptyTaskInProgress(name string) string { return In(i18n.Locale()).EmptyTaskInProgress(name) }
+
+// EmptyTaskInProgress says "{name} is in progress"
+// in the language of msgs.
+//
+// Nagi emptyTaskInProgress UI copy.
+func (msgs Messages) EmptyTaskInProgress(name string) string {
+	return Catalog.Format(msgs.locale, "emptyTaskInProgress", map[string]any{"name": name})
+}
+
+// TaskRunFailed says "Run failed"
+// in the language the app shows.
+//
+// Nagi taskRunFailed UI copy.
+func TaskRunFailed() string { return In(i18n.Locale()).TaskRunFailed() }
+
+// TaskRunFailed says "Run failed"
+// in the language of msgs.
+//
+// Nagi taskRunFailed UI copy.
+func (msgs Messages) TaskRunFailed() string {
+	return Catalog.Format(msgs.locale, "taskRunFailed", nil)
+}
+
+// TaskRunInterrupted says "Run interrupted"
+// in the language the app shows.
+//
+// Nagi taskRunInterrupted UI copy.
+func TaskRunInterrupted() string { return In(i18n.Locale()).TaskRunInterrupted() }
+
+// TaskRunInterrupted says "Run interrupted"
+// in the language of msgs.
+//
+// Nagi taskRunInterrupted UI copy.
+func (msgs Messages) TaskRunInterrupted() string {
+	return Catalog.Format(msgs.locale, "taskRunInterrupted", nil)
+}
+
+// TaskRunUnknown says "Run result unknown"
+// in the language the app shows.
+//
+// Nagi taskRunUnknown UI copy.
+func TaskRunUnknown() string { return In(i18n.Locale()).TaskRunUnknown() }
+
+// TaskRunUnknown says "Run result unknown"
+// in the language of msgs.
+//
+// Nagi taskRunUnknown UI copy.
+func (msgs Messages) TaskRunUnknown() string {
+	return Catalog.Format(msgs.locale, "taskRunUnknown", nil)
+}
+
+// TaskRunCompleted says "Run completed"
+// in the language the app shows.
+//
+// Nagi taskRunCompleted UI copy.
+func TaskRunCompleted() string { return In(i18n.Locale()).TaskRunCompleted() }
+
+// TaskRunCompleted says "Run completed"
+// in the language of msgs.
+//
+// Nagi taskRunCompleted UI copy.
+func (msgs Messages) TaskRunCompleted() string {
+	return Catalog.Format(msgs.locale, "taskRunCompleted", nil)
+}
+
+// TaskRunRunning says "Run in progress"
+// in the language the app shows.
+//
+// Nagi taskRunRunning UI copy.
+func TaskRunRunning() string { return In(i18n.Locale()).TaskRunRunning() }
+
+// TaskRunRunning says "Run in progress"
+// in the language of msgs.
+//
+// Nagi taskRunRunning UI copy.
+func (msgs Messages) TaskRunRunning() string {
+	return Catalog.Format(msgs.locale, "taskRunRunning", nil)
+}
+
+// TaskRunAccepted says "Run accepted"
+// in the language the app shows.
+//
+// Nagi taskRunAccepted UI copy.
+func TaskRunAccepted() string { return In(i18n.Locale()).TaskRunAccepted() }
+
+// TaskRunAccepted says "Run accepted"
+// in the language of msgs.
+//
+// Nagi taskRunAccepted UI copy.
+func (msgs Messages) TaskRunAccepted() string {
+	return Catalog.Format(msgs.locale, "taskRunAccepted", nil)
+}
+
+// TaskRunPending says "Run prepared, not dispatched"
+// in the language the app shows.
+//
+// Nagi taskRunPending UI copy.
+func TaskRunPending() string { return In(i18n.Locale()).TaskRunPending() }
+
+// TaskRunPending says "Run prepared, not dispatched"
+// in the language of msgs.
+//
+// Nagi taskRunPending UI copy.
+func (msgs Messages) TaskRunPending() string {
+	return Catalog.Format(msgs.locale, "taskRunPending", nil)
+}
+
+// TaskRunNotDispatched says "Run not dispatched"
+// in the language the app shows.
+//
+// Nagi taskRunNotDispatched UI copy.
+func TaskRunNotDispatched() string { return In(i18n.Locale()).TaskRunNotDispatched() }
+
+// TaskRunNotDispatched says "Run not dispatched"
+// in the language of msgs.
+//
+// Nagi taskRunNotDispatched UI copy.
+func (msgs Messages) TaskRunNotDispatched() string {
+	return Catalog.Format(msgs.locale, "taskRunNotDispatched", nil)
+}
+
+// TaskRunRejected says "Run rejected"
+// in the language the app shows.
+//
+// Nagi taskRunRejected UI copy.
+func TaskRunRejected() string { return In(i18n.Locale()).TaskRunRejected() }
+
+// TaskRunRejected says "Run rejected"
+// in the language of msgs.
+//
+// Nagi taskRunRejected UI copy.
+func (msgs Messages) TaskRunRejected() string {
+	return Catalog.Format(msgs.locale, "taskRunRejected", nil)
+}
