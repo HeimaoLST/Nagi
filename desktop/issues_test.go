@@ -547,6 +547,231 @@ func TestIssueWorkNoticeKeepsUnseenOlderExceptionAfterSuccess(t *testing.T) {
 	}
 }
 
+func TestIssueSeenUnknownWithActiveTaskIDDoesNotReAttention(t *testing.T) {
+	ct := &contact{ID: "contact-seen-active-unknown", Name: "Seen Unknown", Loaded: true}
+	execution := &issueExecution{
+		ID: "run-seen-active-unknown", TaskID: "task-seen-active-unknown",
+		Status: issueExecutionUnknown, Detail: "unknown already seen",
+		AttentionSeenStatus: issueExecutionUnknown,
+	}
+	issue := &productIssue{
+		ID: "issue-seen-active-unknown", ContactID: ct.ID, Goal: "seen unknown with active mapping",
+		Status: issueStatusInProgress,
+		Work: issueWorkSession{Loaded: true, ActiveTaskID: "task-seen-active-unknown", LastTaskID: "task-seen-active-unknown",
+			SendState: sendUnknown, SendError: "delivery not confirmed"},
+		Executions: []*issueExecution{execution},
+	}
+	ct.Issues = []*productIssue{issue}
+	display := issueDisplayStatusFor(issue)
+	if display.Attention {
+		t.Fatalf("seen unknown with retained ActiveTaskID re-raised attention: %+v", display)
+	}
+	notice := (&appModel{}).issueWorkNotice(ct)
+	if notice.Attention || notice.Text != "" {
+		t.Fatalf("seen unknown with retained ActiveTaskID re-raised notice: %+v", notice)
+	}
+	if issue.Work.ActiveTaskID != "task-seen-active-unknown" || issue.Work.SendState != sendUnknown ||
+		execution.AttentionSeenStatus != issueExecutionUnknown || execution.Status != issueExecutionUnknown {
+		t.Fatalf("seen unknown state was rewritten: work=%+v run=%+v", issue.Work, execution)
+	}
+}
+
+func TestIssueActiveAcceptedSendFailureStaysAttention(t *testing.T) {
+	a, ct := taskContextApp(t)
+	issue := &productIssue{
+		ID: "issue-accepted-save-failure", ContactID: ct.ID, Goal: "accepted context failure",
+		Status: issueStatusInProgress, WorkSessionID: "work-accepted-save-failure",
+		RequirementsRevision: 1,
+	}
+	ct.Issues = []*productIssue{issue}
+	ct.SelectedIssueID = issue.ID
+	if err := a.addIssueSupplement(ct, issue.ID, "accepted supplement"); err != nil {
+		t.Fatal(err)
+	}
+	execution := &issueExecution{
+		ID: "run-accepted-save-failure", SessionID: issue.WorkSessionID,
+		Prompt: "accepted prompt", Status: issueExecutionPending, RequirementsRevision: 1,
+	}
+	issue.Executions = []*issueExecution{execution}
+	issue.Work.SendState = sendSubmitting
+	issue.Work.pendingExecutionID = execution.ID
+	target := issueSupplementTargetFor(ct, issue)
+	if _, err := issue.Supplements.PrepareDispatch(target, execution, a.persist); err != nil {
+		t.Fatal(err)
+	}
+	// Force the accepted supplement receipt save to fail after the real Runtime
+	// acceptance is already represented in memory.
+	a.store = &contactStore{path: t.TempDir()}
+	a.acceptIssueTask(ct, issue, execution, "accepted prompt", runtimeSendResult{
+		TaskID: "task-accepted-save-failure", MessageID: "message-accepted-save-failure",
+	})
+	if issue.Work.ActiveTaskID != "task-accepted-save-failure" || issue.Work.SendState != sendAccepted ||
+		issue.Work.SendError == "" || execution.Status != issueExecutionAccepted ||
+		issue.Status != issueStatusInProgress {
+		t.Fatalf("accepted supplement failure state = work=%+v execution=%+v issue=%q",
+			issue.Work, execution, issue.Status)
+	}
+	display := issueDisplayStatusFor(issue)
+	if !display.Attention || !display.Active || display.Reason != issue.Work.SendError ||
+		display.Status != issueStatusNeedsAttention {
+		t.Fatalf("accepted supplement failure projection = %+v", display)
+	}
+	notice := a.issueWorkNotice(ct)
+	if !notice.Attention || notice.IssueID != issue.ID || !strings.Contains(notice.Text, issue.Work.SendError) {
+		t.Fatalf("accepted supplement failure notice = %+v", notice)
+	}
+	if issue.Work.ActiveTaskID != "task-accepted-save-failure" || issue.Work.SendState != sendAccepted ||
+		execution.Status != issueExecutionAccepted || strings.Contains(issue.Work.SendError, "unknown") {
+		t.Fatalf("accepted supplement failure was misclassified as unknown/success: issue=%+v execution=%+v", issue.Work, execution)
+	}
+}
+
+func TestIssueDisplayProjectionUsesExistingFacts(t *testing.T) {
+	ct := &contact{ID: "contact-projection", Name: "Projection", Loaded: true}
+	completed := &productIssue{ID: "issue-completed", ContactID: ct.ID, Goal: "completed goal", Status: issueStatusCompleted,
+		Executions: []*issueExecution{{ID: "run-completed-old", Status: issueExecutionFailed, Detail: "old failure"}}}
+	canceled := &productIssue{ID: "issue-canceled", ContactID: ct.ID, Goal: "canceled goal", Status: issueStatusCanceled,
+		Executions: []*issueExecution{{ID: "run-canceled-old", Status: issueExecutionUnknown, Detail: "old unknown"}}}
+	archived := &productIssue{ID: "issue-archived", ContactID: ct.ID, Goal: "archived goal", Status: issueStatusInProgress, Archived: true,
+		Work: issueWorkSession{Loaded: true, ActiveTaskID: "run-archived-active", SendState: sendAccepted}}
+	waiting := &productIssue{ID: "issue-waiting", ContactID: ct.ID, Goal: "waiting goal", Status: issueStatusInProgress,
+		Questions: []*issueQuestion{{Ref: "q-waiting", Text: "answer this", State: issueQuestionOpen}}}
+	attention := &productIssue{ID: "issue-attention", ContactID: ct.ID, Goal: "attention goal", Status: issueStatusInProgress,
+		Executions: []*issueExecution{{ID: "run-attention", Status: issueExecutionFailed, Detail: "unseen failure"}}}
+	active := &productIssue{ID: "issue-active", ContactID: ct.ID, Goal: "active goal", Status: issueStatusInProgress,
+		Work: issueWorkSession{Loaded: true, ActiveTaskID: "run-active", SendState: sendAccepted}}
+	ct.Issues = []*productIssue{completed, canceled, archived, waiting, attention, active}
+	notice := (&appModel{}).issueWorkNotice(ct)
+	if got := issueDisplayStatusFor(completed).Label; got != "Completed" {
+		t.Fatalf("completed label = %q", got)
+	}
+	if got := issueDisplayStatusFor(canceled).Label; got != "Canceled" {
+		t.Fatalf("canceled label = %q", got)
+	}
+	if got := issueDisplayStatusFor(archived); got.Label != "Archived" || got.Attention || got.Waiting || got.Active {
+		t.Fatalf("archived projection = %+v", got)
+	}
+	if got := issueDisplayStatusFor(waiting); got.Label != issueStatusLabel(&productIssue{Status: issueStatusWaitingUser}) || !got.Waiting {
+		t.Fatalf("waiting projection = %+v", got)
+	}
+	if got := issueDisplayStatusFor(attention); got.Label != "Needs attention" || !got.Attention {
+		t.Fatalf("attention projection = %+v", got)
+	}
+	if got := issueDisplayStatusFor(active); got.Label != "In progress" || got.Status != issueStatusInProgress || !got.Active {
+		t.Fatalf("active projection = %+v", got)
+	}
+	if notice.AttentionCount != 1 || notice.WaitingCount != 1 || notice.ActiveCount != 1 ||
+		!notice.Attention || notice.IssueID != attention.ID || notice.IssueName != attention.Goal {
+		t.Fatalf("notice aggregation = %+v", notice)
+	}
+}
+
+func TestIssueExplicitNeedsAttentionSurvivesSeenRun(t *testing.T) {
+	ct := &contact{ID: "contact-explicit-attention", Name: "Explicit", Loaded: true}
+	execution := &issueExecution{ID: "run-explicit", Status: issueExecutionFailed, Detail: "seen failure", AttentionSeenStatus: issueExecutionFailed}
+	issue := &productIssue{ID: "issue-explicit", ContactID: ct.ID, Goal: "explicit attention", Status: issueStatusNeedsAttention,
+		Work: issueWorkSession{Loaded: true}, Executions: []*issueExecution{execution}}
+	ct.Issues = []*productIssue{issue}
+	display := issueDisplayStatusFor(issue)
+	if !display.Attention || display.Label != "Needs attention" {
+		t.Fatalf("explicit needs_attention was cleared by a seen run: %+v", display)
+	}
+	notice := (&appModel{}).issueWorkNotice(ct)
+	if !notice.Attention || notice.AttentionCount != 1 || notice.IssueID != issue.ID {
+		t.Fatalf("explicit needs_attention was cleared from aggregation: %+v", notice)
+	}
+	if issue.Status != issueStatusNeedsAttention || execution.AttentionSeenStatus != issueExecutionFailed {
+		t.Fatalf("seen field or persistent status was rewritten: issue=%+v run=%+v", issue, execution)
+	}
+}
+
+func TestIssueWorkNoticeBaselineTerminalAndWaiting(t *testing.T) {
+	ct := &contact{ID: "contact-baseline", Name: "Baseline", Loaded: true}
+	completed := &productIssue{ID: "issue-baseline-completed", ContactID: ct.ID, Goal: "completed old",
+		Status: issueStatusCompleted, Executions: []*issueExecution{{ID: "run-baseline-old", Status: issueExecutionFailed, Detail: "old failure"}}}
+	archived := &productIssue{ID: "issue-baseline-archived", ContactID: ct.ID, Goal: "archived active",
+		Status: issueStatusInProgress, Archived: true, Work: issueWorkSession{Loaded: true, ActiveTaskID: "run-baseline-active", SendState: sendAccepted}}
+	waiting := &productIssue{ID: "issue-baseline-waiting", ContactID: ct.ID, Goal: "waiting without run",
+		Status: issueStatusInProgress, Questions: []*issueQuestion{{Ref: "question-baseline", Text: "please answer", State: issueQuestionOpen}}}
+	ct.Issues = []*productIssue{completed, archived, waiting}
+	notice := (&appModel{}).issueWorkNotice(ct)
+	if notice.Attention || notice.Text == "" || notice.IssueID != waiting.ID ||
+		!strings.Contains(notice.Text, waiting.Goal) {
+		t.Fatalf("baseline notice = %+v, want waiting candidate", notice)
+	}
+	if got := issueWorkActiveCount(ct); got != 0 {
+		t.Fatalf("terminal/archived active count = %d, want 0", got)
+	}
+}
+
+func TestIssueWorkNoticeWinnerScopeAndActive(t *testing.T) {
+	ct := &contact{ID: "contact-winner", Name: "Winner", Loaded: true}
+	attention := &productIssue{ID: "issue-winner-attention", ContactID: ct.ID, Goal: "attention active",
+		Status: issueStatusInProgress, Work: issueWorkSession{Loaded: true, ActiveTaskID: "run-winner-attention", SendState: sendAccepted},
+		Executions: []*issueExecution{{ID: "run-winner-attention", Status: issueExecutionFailed, Detail: "attention reason"}}}
+	waiting := &productIssue{ID: "issue-winner-waiting", ContactID: ct.ID, Goal: "waiting no run",
+		Status: issueStatusInProgress, Questions: []*issueQuestion{{Ref: "question-winner", Text: "answer", State: issueQuestionOpen}}}
+	active := &productIssue{ID: "issue-winner-active", ContactID: ct.ID, Goal: "active only",
+		Status: issueStatusInProgress, Work: issueWorkSession{Loaded: true, ActiveTaskID: "run-winner-active", SendState: sendAccepted}}
+	otherContact := &productIssue{ID: "issue-other-contact", ContactID: "other-contact", Goal: "other failure",
+		Status: issueStatusInProgress, Executions: []*issueExecution{{ID: "run-other", Status: issueExecutionFailed, Detail: "other reason"}}}
+	ct.Issues = []*productIssue{attention, waiting, active, otherContact}
+	notice := (&appModel{}).issueWorkNotice(ct)
+	if !notice.Attention || notice.Waiting || !notice.Active ||
+		notice.IssueID != attention.ID || notice.IssueName != attention.Goal ||
+		!strings.Contains(notice.Text, attention.Goal) || !strings.Contains(notice.Text, "attention reason") {
+		t.Fatalf("attention winner = %+v", notice)
+	}
+	if notice.AttentionCount != 1 || notice.WaitingCount != 1 || notice.ActiveCount != 2 {
+		t.Fatalf("winner counts = %+v", notice)
+	}
+	if got := issueWorkActiveCount(ct); got != 2 {
+		t.Fatalf("active count scope = %d, want 2", got)
+	}
+
+	ct.Issues = []*productIssue{waiting, active}
+	notice = (&appModel{}).issueWorkNotice(ct)
+	if notice.Attention || !notice.Waiting || notice.Active ||
+		notice.IssueID != waiting.ID || notice.IssueName != waiting.Goal ||
+		!strings.Contains(notice.Text, waiting.Goal) {
+		t.Fatalf("waiting winner = %+v", notice)
+	}
+	if notice.WaitingCount != 1 || notice.ActiveCount != 1 {
+		t.Fatalf("waiting winner counts = %+v", notice)
+	}
+
+	inProgress := &productIssue{ID: "issue-in-progress", ContactID: ct.ID, Goal: "in progress no run", Status: issueStatusInProgress}
+	display := issueDisplayStatusFor(inProgress)
+	if display.Status != issueStatusInProgress || display.Label != "In progress" || display.Active {
+		t.Fatalf("in-progress without run = %+v", display)
+	}
+	ct.Issues = []*productIssue{inProgress}
+	if got := issueWorkActiveCount(ct); got != 0 {
+		t.Fatalf("in-progress without active count = %d", got)
+	}
+	notStartedActive := &productIssue{ID: "issue-not-started-active", ContactID: ct.ID, Goal: "not started active",
+		Status: issueStatusNotStarted, Work: issueWorkSession{Loaded: true, ActiveTaskID: "run-not-started-active", SendState: sendAccepted}}
+	display = issueDisplayStatusFor(notStartedActive)
+	if display.Status != issueStatusInProgress || display.Label != "In progress" || !display.Active {
+		t.Fatalf("not-started with active work = %+v", display)
+	}
+	ct.Issues = []*productIssue{notStartedActive}
+	if got := issueWorkActiveCount(ct); got != 1 {
+		t.Fatalf("not-started active count = %d", got)
+	}
+	if notice := (&appModel{}).issueWorkNotice(ct); !notice.Active || notice.Attention || notice.Waiting ||
+		notice.IssueID != notStartedActive.ID || !strings.Contains(notice.Text, notStartedActive.Goal) {
+		t.Fatalf("not-started active notice = %+v", notice)
+	}
+
+	unknown := &productIssue{ID: "issue-unknown", ContactID: ct.ID, Goal: "unknown dispatch", Status: issueStatusInProgress,
+		Work: issueWorkSession{Loaded: true, SendState: sendUnknown, SendError: "delivery not confirmed"}}
+	display = issueDisplayStatusFor(unknown)
+	if !display.Attention || display.Status != issueStatusNeedsAttention || display.Reason != "delivery not confirmed" {
+		t.Fatalf("unknown dispatch projection = %+v", display)
+	}
+}
+
 func TestIssueAttentionLegacyStoreDefaultsUnseen(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "contacts.json")
 	legacy := storedState{
