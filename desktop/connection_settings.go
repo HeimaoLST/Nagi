@@ -183,7 +183,7 @@ func (s *connectionSettings) view(c *ui.Context, t *ui.Theme, actions connection
 			ui.Row(c).Gap(8).Wrap().Children(func() {
 				if s.SavedPending && !s.Dirty() {
 					ui.PrimaryButton(c, "Apply saved").Label("Apply saved").FontSize(typeAction).MinHeight(32).Disabled(s.Busy || s.ReloadBlocked != "").OnClick(actions.Apply)
-					secondaryButton(c, "Save configuration").FontSize(typeAction).MinHeight(32).Disabled(s.Busy).OnClick(func() {
+					secondaryButton(c, "Save configuration").Label("Save configuration").FontSize(typeAction).MinHeight(32).Disabled(s.Busy).OnClick(func() {
 						if config, ok := s.validated(); ok && actions.Save != nil {
 							actions.Save(config)
 						}
@@ -194,7 +194,7 @@ func (s *connectionSettings) view(c *ui.Context, t *ui.Theme, actions connection
 							actions.SaveAndApply(config)
 						}
 					})
-					secondaryButton(c, "Save configuration").FontSize(typeAction).MinHeight(32).Disabled(s.Busy).OnClick(func() {
+					secondaryButton(c, "Save configuration").Label("Save configuration").FontSize(typeAction).MinHeight(32).Disabled(s.Busy).OnClick(func() {
 						if config, ok := s.validated(); ok && actions.Save != nil {
 							actions.Save(config)
 						}
