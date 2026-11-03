@@ -14,6 +14,7 @@ import (
 
 func TestSettingsPageReplacesWorkbenchAndRoutesEntries(t *testing.T) {
 	a, ct := workspaceTestApp(t)
+	a.rt = &runtimeClient{}
 	ct.Draft = "keep the conversation draft"
 	a.windowWidth = 1040
 	tr := ui.NewTester(a.view, 1040, 720)
@@ -24,6 +25,9 @@ func TestSettingsPageReplacesWorkbenchAndRoutesEntries(t *testing.T) {
 	tr.Frame()
 	if !a.settingsOpen || a.settingsTab != settingsTabAppearance {
 		t.Fatalf("settings page = open=%v tab=%q", a.settingsOpen, a.settingsTab)
+	}
+	if !tr.Focused("← Back to workbench") {
+		t.Fatalf("settings page did not focus Back to workbench: %v", tr.Texts())
 	}
 	if a.settingsScroll.Y != 0 {
 		t.Fatalf("settings page opened scrolled: %v", a.settingsScroll.Y)
@@ -37,9 +41,6 @@ func TestSettingsPageReplacesWorkbenchAndRoutesEntries(t *testing.T) {
 		if !tr.HasText(want) {
 			t.Fatalf("settings page missing %q: %v", want, tr.Texts())
 		}
-	}
-	if !tr.Focused("← Back to workbench") {
-		t.Fatalf("settings page did not focus Back to workbench: %v", tr.Texts())
 	}
 	if err := tr.Click("Connection & model"); err != nil {
 		t.Fatal(err)
@@ -1366,5 +1367,19 @@ func TestHistoryCloseReopenKeepsCloseFocusAfterLinkFocus(t *testing.T) {
 	}
 	if !tr.Focused("Close history") {
 		t.Fatalf("reopened history lost its default close focus: %v", tr.Texts())
+	}
+}
+
+func TestSettingsPendingBannerSurvivesDistinctTestStatus(t *testing.T) {
+	a, _ := workspaceTestApp(t)
+	config := testConnectionConfig(t)
+	a.connectionSaved = &config
+	a.connectionForm = newConnectionSettings(&config, config.WorkingDirectory)
+	a.connectionForm.Status = "Connection test completed: fixture"
+	a.openSettingsTab(settingsTabConnection, settingsSourceRail)
+	tr := ui.NewTester(a.view, 1040, 720)
+	tr.Frame()
+	if !tr.HasText("Saved configuration is awaiting Apply.") || !tr.HasText("Connection test completed: fixture") {
+		t.Fatalf("pending fact was lost behind distinct test status: %v", tr.Texts())
 	}
 }

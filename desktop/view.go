@@ -253,7 +253,7 @@ func (a *appModel) rail(c *ui.Context, t *ui.Theme) {
 				ui.Icon(c, railSettingsIcon).Width(16).Height(16).TextColor(t.TextMuted)
 				ui.Text(c, settingsLabel).FontSize(typeAction).TextColor(t.Text)
 			})
-			settings.OnClick(func() { a.openSettingsTab(settingsTabAppearance, settingsSourceRail) })
+			settings.OnClick(func() { a.openSettingsTab(a.settingsLandingTab(), settingsSourceRail) })
 			if a.focusSettings {
 				settings.Focus()
 				a.focusSettings = false
@@ -371,13 +371,81 @@ func (a *appModel) statusColor(t *ui.Theme, s contactStatus) ui.Color {
 
 // ---------- main column ----------
 
+func (a *appModel) headerStatusLabel(ct *contact, msgs locales.Messages) string {
+	if ct != nil && (ct.Status == statusWorking || ct.Status == statusAttention) {
+		return a.statusLabel(ct)
+	}
+	switch a.connectionViewState() {
+	case connectionViewApplying:
+		return msgs.ConnectionStatusApplying()
+	case connectionViewConnecting:
+		return msgs.ConnectionStatusConnecting()
+	case connectionViewSaved:
+		return msgs.ConnectionStatusSavedAwaitingApply()
+	case connectionViewSetup:
+		return msgs.ConnectionStatusSetupNeeded()
+	case connectionViewNotConnected:
+		return msgs.ConnectionStatusNotConnected()
+	default:
+		return a.statusLabel(ct)
+	}
+}
+
+func (a *appModel) headerStatusColor(t *ui.Theme, ct *contact) ui.Color {
+	if ct != nil && (ct.Status == statusWorking || ct.Status == statusAttention) {
+		return a.statusColor(t, ct.Status)
+	}
+	switch a.connectionViewState() {
+	case connectionViewSaved, connectionViewSetup, connectionViewNotConnected:
+		return t.Warning
+	default:
+		return a.statusColor(t, ct.Status)
+	}
+}
+
+func (a *appModel) connectionRecoveryNotice(c *ui.Context, t *ui.Theme, state connectionViewState) {
+	msgs := locales.In(c.Locale())
+	title, hint := msgs.ConnectionStatusSetupNeeded(), msgs.ConnectionRecoverySetupHint()
+	switch state {
+	case connectionViewSaved:
+		title, hint = msgs.ConnectionStatusSavedAwaitingApply(), msgs.ConnectionRecoverySavedHint()
+	case connectionViewNotConnected:
+		title, hint = msgs.ConnectionStatusNotConnected(), msgs.ConnectionRecoveryNotConnectedHint()
+		if a.runtimeStage == "Connection configuration" && (a.connectionEffective != nil || a.connectionSaved != nil || a.connectionManaged) {
+			title, hint = msgs.ConnectionRecoveryManagedTitle(), msgs.ConnectionRecoveryManagedHint()
+		}
+	}
+	ui.Column(c).Padding(8, 16).Gap(3).Children(func() {
+		ui.Text(c, title).FontSize(14).LineHeight(1.5).TextColor(t.Warning)
+		if hint != "" {
+			ui.Text(c, hint).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+		}
+		if state == connectionViewNotConnected && a.runtimeHint != "" {
+			ui.Text(c, a.runtimeHint).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+		}
+		ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
+			secondaryButton(c, msgs.ConnectionRecoveryOpenSettings()).MinHeight(32).OnClick(func() { a.openConfiguration() })
+			secondaryButton(c, "Configuration details").OnClick(func() { a.openAdvancedSettings() })
+		})
+	})
+}
+
 func (a *appModel) main(c *ui.Context, t *ui.Theme) {
 	ct := a.selectedContact()
 	ui.Column(c).Grow(1).FillHeight().Background(a.workTheme.Reading).Children(func() {
 		if !a.demo {
+			state := a.connectionViewState()
 			switch {
 			case a.runtimeStatus == runtimeStateDraining:
 				ui.Text(c, "Draining the runtime…").FontSize(14).Padding(8, 16).TextColor(t.TextMuted)
+			case state == connectionViewApplying:
+				msgs := locales.In(c.Locale())
+				ui.Column(c).Padding(8, 16).Gap(2).Children(func() {
+					ui.Text(c, msgs.ConnectionStatusApplying()).FontSize(14).LineHeight(1.5).TextColor(t.Warning)
+					ui.Text(c, msgs.ConnectionRecoverySavedHint()).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+				})
+			case a.connectionConfigurationBlocked():
+				a.connectionRecoveryNotice(c, t, state)
 			case a.runtimeErr != "":
 				label := a.runtimeStage
 				if label == "" {
@@ -450,7 +518,7 @@ func (a *appModel) header(c *ui.Context, t *ui.Theme) {
 				ui.Column(c).MinWidth(0).Shrink(1).Gap(1).Children(func() {
 					ui.Text(c, ct.Name).FontSize(typeContactTitle).FontWeight(500).TextColor(t.Text).MaxLines(2)
 					ui.Row(c).AlignItems(ui.Center).Gap(4).Children(func() {
-						ui.Text(c, a.statusLabel(ct)).FontSize(12).LineHeight(1.35).TextColor(a.statusColor(t, ct.Status))
+						ui.Text(c, a.headerStatusLabel(ct, locales.In(c.Locale()))).FontSize(12).LineHeight(1.35).TextColor(a.headerStatusColor(t, ct))
 						ui.Text(c, ct.Role).FontSize(12).LineHeight(1.35).MaxLines(1).TextColor(t.TextMuted)
 					})
 				})
@@ -901,6 +969,33 @@ func (a *appModel) composer(c *ui.Context, t *ui.Theme) {
 				}
 				if sendReason != "" && strings.TrimSpace(ct.Draft) != "" {
 					ui.Text(c, sendReason).FontSize(typeBody).LineHeight(1.5).TextColor(t.TextMuted)
+				}
+				if sendReason != "" && strings.TrimSpace(ct.Draft) == "" && (!a.runtimeAvailableForView() || a.connectionViewState() == connectionViewApplying) {
+					msgs := locales.In(c.Locale())
+					if a.shutdownStarted || ct.Archived {
+						ui.Text(c, sendReason).FontSize(typeBody).LineHeight(1.5).TextColor(t.TextMuted)
+					} else {
+						hint := msgs.ConnectionRecoverySetupHint()
+						switch a.connectionViewState() {
+						case connectionViewSaved:
+							hint = msgs.ConnectionRecoverySavedHint()
+						case connectionViewNotConnected:
+							hint = msgs.ConnectionRecoveryNotConnectedHint()
+							if a.runtimeStage == "Connection configuration" && (a.connectionEffective != nil || a.connectionSaved != nil || a.connectionManaged) {
+								hint = msgs.ConnectionRecoveryManagedHint()
+							}
+						case connectionViewApplying:
+							hint = msgs.ConnectionRecoveryApplyingHint()
+						case connectionViewConnecting:
+							hint = msgs.ConnectionRecoveryConnectingHint()
+						}
+						ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
+							ui.Text(c, hint).FontSize(typeBody).LineHeight(1.5).TextColor(t.TextMuted).Grow(1)
+							if a.connectionConfigurationBlocked() {
+								secondaryButton(c, msgs.ConnectionRecoveryOpenSettings()).OnClick(func() { a.openConfiguration() })
+							}
+						})
+					}
 				}
 				switch {
 				case ct.SendState == sendSubmitting:

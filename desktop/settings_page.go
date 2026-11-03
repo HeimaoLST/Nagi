@@ -211,9 +211,16 @@ func (a *appModel) connectionApplied() bool {
 	return a.rt != nil && a.runtimeStatus == runtimeStateReady && a.connectionEffective != nil
 }
 
+func (a *appModel) settingsLandingTab() string {
+	if a.connectionConfigurationBlocked() {
+		return settingsTabConnection
+	}
+	return settingsTabAppearance
+}
+
 func (a *appModel) settingsPage(c *ui.Context, t *ui.Theme) {
 	if a.settingsTab == "" {
-		a.settingsTab = settingsTabAppearance
+		a.settingsTab = a.settingsLandingTab()
 	}
 	if a.settingsContactID == "" {
 		a.settingsContactID = a.selectedContact().ID
@@ -371,6 +378,7 @@ func (a *appModel) settingsConnectionContent(c *ui.Context, t *ui.Theme) {
 			ui.Text(c, "Saved configuration is awaiting Apply.").FontSize(typeAction).LineHeight(1.5).TextColor(t.Warning)
 		}
 		form.ReloadBlocked = a.connectionReloadBlocked()
+		form.SavedPending = a.connectionSavedPending()
 		actions := a.connectionActions()
 		actions.Discard = func() { form.ResetDraft() }
 		form.view(c, t, actions)

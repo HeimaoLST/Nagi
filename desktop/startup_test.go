@@ -596,3 +596,35 @@ func withoutEnv(env []string, name string) []string {
 	}
 	return out
 }
+
+func TestRuntimeExitConfigurationHintsRespectConnectionMode(t *testing.T) {
+	legacy := &appModel{
+		runtimeStatus:    runtimeStateStarting,
+		connectionLegacy: true,
+		workDir:          "/tmp/saki-275-legacy",
+		rt:               &runtimeClient{stderr: []string{"Error: API_KEY is not set (checked the environment and an optional .env file)"}},
+	}
+	legacy.applyRuntimeExit(errors.New("exit status 1"))
+	if !strings.Contains(legacy.runtimeHint, "Set API_KEY") || !strings.Contains(legacy.runtimeHint, ".env") {
+		t.Fatalf("legacy hint = %q", legacy.runtimeHint)
+	}
+
+	config := testConnectionConfig(t)
+	managed := &appModel{
+		runtimeStatus:       runtimeStateStarting,
+		connectionSaved:     &config,
+		connectionEffective: &config,
+		workDir:             "/tmp/saki-275-managed",
+		rt:                  &runtimeClient{stderr: []string{"Error: API_KEY is not set (checked the environment and an optional .env file)"}},
+	}
+	managed.applyRuntimeExit(errors.New("exit status 1"))
+	if managed.runtimeStage != "Connection configuration" {
+		t.Fatalf("managed stage = %q", managed.runtimeStage)
+	}
+	if !strings.Contains(managed.runtimeErr, "API_KEY is not set") {
+		t.Fatalf("managed raw diagnostic was lost: %q", managed.runtimeErr)
+	}
+	if managed.runtimeHint != "" {
+		t.Fatalf("managed stored hint should stay empty for localized rendering: %q", managed.runtimeHint)
+	}
+}
