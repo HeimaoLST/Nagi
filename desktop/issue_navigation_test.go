@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo/ui"
+
+	"saki/desktop/locales"
 )
 
 // openIssueDetailForTest is the explicit UI-equivalent action used by older
@@ -430,10 +432,11 @@ func TestIssueWorkStatusSingleAttentionTargetAcrossEntryAndToggle(t *testing.T) 
 	if !tr.HasText("3") || !tr.HasText("!") {
 		t.Fatalf("header count/attention marker missing: %v", tr.Texts())
 	}
-	if !tr.HasText("Needs attention: Attention issue") {
+	wantSummary := locales.In("en").TaskRailAttention(attention.Goal)
+	if !tr.HasText(wantSummary) {
 		t.Fatalf("rail summary missing target: %v", tr.Texts())
 	}
-	if err := tr.Click("Needs attention: Attention issue"); err != nil {
+	if err := tr.Click(wantSummary); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()

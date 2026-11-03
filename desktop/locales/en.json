@@ -230,15 +230,15 @@
   "@taskRunNeedsAttention": {
     "description": "Nagi taskRunNeedsAttention UI copy."
   },
-  "taskRailAttention": "Needs attention: {name}",
+  "taskRailAttention": "Needs attention\n{name}",
   "@taskRailAttention": {
     "description": "Nagi taskRailAttention UI copy."
   },
-  "taskRailWaiting": "Waiting for you: {name}",
+  "taskRailWaiting": "Waiting for you\n{name}",
   "@taskRailWaiting": {
     "description": "Nagi taskRailWaiting UI copy."
   },
-  "taskRailInProgress": "In progress: {name}",
+  "taskRailInProgress": "In progress\n{name}",
   "@taskRailInProgress": {
     "description": "Nagi taskRailInProgress UI copy."
   },

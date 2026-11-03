@@ -377,10 +377,10 @@ func (a *appModel) railRow(c *ui.Context, t *ui.Theme, i int) {
 			if targetID != "" {
 				summary := ui.Button(c, "").Label(line).FontSize(typeRailSummary).LineHeight(1.2).
 					MinHeight(32).Padding(2, 6).FillWidth().Justify(ui.Start)
+				summary = appTooltip(c, summary, line)
 				summary.OnClick(func() { a.openIssueFromRail(i, targetID) })
-				summary.Description(line)
 				summary.Children(func() {
-					ui.Text(c, line).FontSize(typeRailSummary).LineHeight(1.2).MaxLines(1).TextColor(color)
+					ui.Text(c, line).FontSize(typeRailSummary).LineHeight(1.2).MaxLines(2).TextColor(color)
 				})
 			} else {
 				ui.Text(c, line).FontSize(typeRailSummary).LineHeight(1.2).MaxLines(1).TextColor(color)

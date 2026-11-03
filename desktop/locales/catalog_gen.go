@@ -788,13 +788,13 @@ func (msgs Messages) TaskRunNeedsAttention() string {
 	return Catalog.Format(msgs.locale, "taskRunNeedsAttention", nil)
 }
 
-// TaskRailAttention says "Needs attention: {name}"
+// TaskRailAttention says "Needs attention\n{name}"
 // in the language the app shows.
 //
 // Nagi taskRailAttention UI copy.
 func TaskRailAttention(name string) string { return In(i18n.Locale()).TaskRailAttention(name) }
 
-// TaskRailAttention says "Needs attention: {name}"
+// TaskRailAttention says "Needs attention\n{name}"
 // in the language of msgs.
 //
 // Nagi taskRailAttention UI copy.
@@ -802,13 +802,13 @@ func (msgs Messages) TaskRailAttention(name string) string {
 	return Catalog.Format(msgs.locale, "taskRailAttention", map[string]any{"name": name})
 }
 
-// TaskRailWaiting says "Waiting for you: {name}"
+// TaskRailWaiting says "Waiting for you\n{name}"
 // in the language the app shows.
 //
 // Nagi taskRailWaiting UI copy.
 func TaskRailWaiting(name string) string { return In(i18n.Locale()).TaskRailWaiting(name) }
 
-// TaskRailWaiting says "Waiting for you: {name}"
+// TaskRailWaiting says "Waiting for you\n{name}"
 // in the language of msgs.
 //
 // Nagi taskRailWaiting UI copy.
@@ -816,13 +816,13 @@ func (msgs Messages) TaskRailWaiting(name string) string {
 	return Catalog.Format(msgs.locale, "taskRailWaiting", map[string]any{"name": name})
 }
 
-// TaskRailInProgress says "In progress: {name}"
+// TaskRailInProgress says "In progress\n{name}"
 // in the language the app shows.
 //
 // Nagi taskRailInProgress UI copy.
 func TaskRailInProgress(name string) string { return In(i18n.Locale()).TaskRailInProgress(name) }
 
-// TaskRailInProgress says "In progress: {name}"
+// TaskRailInProgress says "In progress\n{name}"
 // in the language of msgs.
 //
 // Nagi taskRailInProgress UI copy.
