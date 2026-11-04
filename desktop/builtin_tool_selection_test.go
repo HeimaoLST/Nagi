@@ -226,7 +226,7 @@ func TestContactProfileBuiltinSaveFailureKeepsDraft(t *testing.T) {
 	if editor.Draft.BuiltinTools == nil || len(*editor.Draft.BuiltinTools) != 1 || (*editor.Draft.BuiltinTools)[0] != "read" {
 		t.Fatalf("save failure lost selection draft: %v", editor.Draft.BuiltinTools)
 	}
-	if !strings.Contains(editor.Error, "Could not save") {
+	if editor.Error != profileNoticeErrorSave {
 		t.Fatalf("save failure error = %q", editor.Error)
 	}
 }

@@ -8,6 +8,8 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+
+	"saki/desktop/locales"
 )
 
 type contactStatus int
@@ -188,26 +190,27 @@ type appModel struct {
 	historyScroll        ui.ScrollState
 	historyFullScroll    ui.ScrollState
 
-	contactProfile           *contactProfileEditor
-	contactProfileID         string
-	contactSearch            string
-	contactScope             string
-	contactScopeChoice       string
-	contactHistory           *contactHistoryResult
-	contactHistoryFull       *contactHistoryFull
-	contactHistoryBusy       bool
-	contactHistoryDetailBusy bool
-	contactHistoryError      string
-	contactHistoryGen        int
-	contactHistoryDetailGen  int
-	contactHistoryInFlight   int
-	resultInFlight           int
-	submissionInFlight       int
-	metadataInFlight         int
+	contactProfile            *contactProfileEditor
+	contactProfileID          string
+	contactSearch             string
+	contactScope              string
+	contactHistory            *contactHistoryResult
+	contactHistoryFull        *contactHistoryFull
+	contactHistoryBusy        bool
+	contactHistoryDetailBusy  bool
+	contactHistoryError       string
+	contactHistoryErrorDetail string
+	contactHistoryGen         int
+	contactHistoryDetailGen   int
+	contactHistoryInFlight    int
+	resultInFlight            int
+	submissionInFlight        int
+	metadataInFlight          int
 
 	appearanceMode     string
 	languageMode       string
 	languageModeLoaded bool
+	uiLocale           string
 	appearanceStatus   string
 	appearanceError    string
 	systemDark         bool
@@ -218,7 +221,6 @@ type appModel struct {
 	issueFormOpen                 bool
 	issueDetailOpen               map[string]bool
 	issueFormEditingID            string
-	issueFilterChoice             string
 	issueGoal                     string
 	issueRequirements             string
 	issueFormError                string
@@ -500,12 +502,12 @@ func (a *appModel) selectContact(i int) {
 	}
 }
 
-func (a *appModel) snippet(c *contact) string {
+func (a *appModel) snippet(c *contact, msgs locales.Messages) string {
 	if c.Status == statusWorking && c.Work != "" {
 		return c.Work
 	}
 	if !a.demo && c.SessionID != "" && !c.Loaded {
-		return "History not loaded"
+		return msgs.HistoryNotLoadedCompact()
 	}
 	for i := len(c.Messages) - 1; i >= 0; i-- {
 		m := c.Messages[i]
@@ -516,27 +518,26 @@ func (a *appModel) snippet(c *contact) string {
 		if text == "" {
 			continue
 		}
-		prefix := ""
-		if m.Kind == msgUser {
-			prefix = "You: "
-		}
 		runes := []rune(text)
 		if len(runes) > 36 {
 			text = strings.TrimSpace(string(runes[:35])) + "…"
 		}
-		return prefix + text
+		if m.Kind == msgUser {
+			return msgs.SnippetUser(text)
+		}
+		return text
 	}
-	return "No messages yet"
+	return msgs.EmptyNoMessages()
 }
 
-func (a *appModel) statusLabel(c *contact) string {
+func (a *appModel) statusLabel(c *contact, msgs locales.Messages) string {
 	switch c.Status {
 	case statusWorking:
-		return "Working"
+		return msgs.StatusWorking()
 	case statusAttention:
-		return "Needs attention"
+		return msgs.StatusNeedsAttention()
 	default:
-		return "Ready"
+		return msgs.StatusReady()
 	}
 }
 
@@ -554,7 +555,7 @@ func (a *appModel) addDefaultContact() {
 	a.defaultContactN++
 	c := &contact{
 		ID:        fmt.Sprintf("contact-%d", a.seq),
-		Name:      fmt.Sprintf("New contact %d", a.defaultContactN),
+		Name:      locales.In(a.uiLocale).NewContactName(a.defaultContactN),
 		Role:      "Assistant",
 		Status:    statusReady,
 		WorkLabel: "Preparing a reply",

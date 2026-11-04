@@ -40,28 +40,6 @@ func normalizeIssueFilter(filter string) string {
 	}
 }
 
-func issueFilterChoiceLabel(filter string) string {
-	switch normalizeIssueFilter(filter) {
-	case issueFilterCompleted:
-		return "Completed"
-	case issueFilterAll:
-		return "All"
-	default:
-		return "Unfinished"
-	}
-}
-
-func issueFilterFromChoice(label string) string {
-	switch label {
-	case "Completed":
-		return issueFilterCompleted
-	case "All":
-		return issueFilterAll
-	default:
-		return issueFilterUnfinished
-	}
-}
-
 func issueFilterDescription(filter string) string {
 	switch normalizeIssueFilter(filter) {
 	case issueFilterCompleted:

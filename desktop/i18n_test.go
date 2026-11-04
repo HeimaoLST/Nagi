@@ -98,6 +98,26 @@ func TestGeneralLanguageUsesStableValuesAndPreservesState(t *testing.T) {
 		ct.Draft != "keep the conversation draft" {
 		t.Fatalf("Chinese render changed state: mode=%q tab=%q draft=%q", a.languageMode, a.settingsTab, ct.Draft)
 	}
+	// Explicit Simplified Chinese and System have the same effective language
+	// here; choosing System must still switch the stored mode and apply the
+	// empty tag rather than staying on the explicit choice.
+	if err := tr.Click("简体中文"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if len(applied) != 3 || applied[2] != "zh-Hans" || a.languageMode != "zh-Hans" {
+		t.Fatalf("explicit Chinese action = applied=%v mode=%q", applied, a.languageMode)
+	}
+	if err := tr.Click("系统（简体中文）"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if len(applied) != 4 || applied[3] != "" || a.languageMode != "" {
+		t.Fatalf("System with the same effective language = applied=%v mode=%q", applied, a.languageMode)
+	}
+	if !tr.HasText("系统（简体中文）") || ct.Draft != "keep the conversation draft" {
+		t.Fatalf("System choice lost its selected language or draft: %v", tr.Texts())
+	}
 }
 
 func TestLanguageSwitchKeepsNonzeroSettingsScrollAndActualFocus(t *testing.T) {
@@ -228,7 +248,7 @@ func TestUIStringsFollowTesterLocaleAndKeepDraftAndFocus(t *testing.T) {
 	if ct.Draft != "keep the conversation draft" {
 		t.Fatalf("locale change rebuilt the conversation draft: %q", ct.Draft)
 	}
-	if !tr.Focused("Contact name") {
+	if !tr.Focused("联系人名称") {
 		t.Fatalf("locale change lost field focus: %v", tr.Texts())
 	}
 	if _, active := tr.TextCaret(); !active {
@@ -491,4 +511,78 @@ func sortedMessageKeys(m map[string]string) []string {
 	}
 	slices.Sort(keys)
 	return keys
+}
+
+func TestShellHistoryAndNewContactFollowLocale(t *testing.T) {
+	a, ct := workspaceTestApp(t)
+	ct.Draft = "keep the draft"
+	a.appearanceStatus = appearanceStatusApplied
+	a.openSettingsTab(settingsTabAppearance, settingsSourceRail)
+	tr := ui.NewTester(a.view, 1040, 720)
+	tr.SetLocale("en")
+	tr.Frame()
+	if !tr.HasText("Applied.") {
+		t.Fatalf("English appearance notice missing: %v", tr.Texts())
+	}
+	tr.SetLocale("zh-Hans")
+	tr.Frame()
+	if !tr.HasText("已应用。") {
+		t.Fatalf("stored appearance notice did not re-localize: %v", tr.Texts())
+	}
+	if !tr.HasText("连接与模型") || !tr.HasText("外观") || !tr.HasText("语言") {
+		t.Fatalf("Chinese settings shell missing: %v", tr.Texts())
+	}
+	a.closeSettings()
+	a.openHistory()
+	tr.Frame()
+	if !tr.HasText("历史：Saki") || !tr.HasText("关闭历史") {
+		t.Fatalf("Chinese history shell missing: %v", tr.Texts())
+	}
+	fullEntry := historyEntry{ID: "h-full", Date: "10月30日", From: "contact", Text: "完整历史原文，保持原样。"}
+	ct.History = append(ct.History, fullEntry)
+	a.openHistoryEntryFull(fullEntry)
+	tr.Frame()
+	if !tr.HasText("联系人。10月30日。s1") || !tr.HasText(fullEntry.Text) {
+		t.Fatalf("Chinese full history speaker or raw text missing: %v", tr.Texts())
+	}
+	a.closeContactHistoryFull()
+	tr.Frame()
+	ownEntry := historyEntry{ID: "h-own", Date: "10月31日", From: "me", Text: "我的原始消息。"}
+	ct.History = append(ct.History, ownEntry)
+	a.openHistoryEntryFull(ownEntry)
+	tr.Frame()
+	if !tr.HasText("你。10月31日。s1") || !tr.HasText(ownEntry.Text) {
+		t.Fatalf("Chinese full history own speaker or raw text missing: %v", tr.Texts())
+	}
+	a.closeContactHistoryFull()
+	tr.Frame()
+	a.closeDetail()
+	a.openContactProfile(ct.ID)
+	tr.Frame()
+	if !tr.HasText("联系人资料") || !tr.HasText("用途") || !tr.HasText("指令") ||
+		!tr.HasText("工作目录") || !tr.HasText("编辑完整资料") {
+		t.Fatalf("Chinese contact profile missing: %v", tr.Texts())
+	}
+	a.closeDetail()
+	tr.Frame()
+	if !tr.HasText("联系人") || !tr.HasText("Saki 的输入框") || !tr.HasText("还没有消息") {
+		t.Fatalf("Chinese workbench shell missing: %v", tr.Texts())
+	}
+	if ct.Draft != "keep the draft" {
+		t.Fatalf("locale frame changed the draft: %q", ct.Draft)
+	}
+
+	demo := testApp(t)
+	demoTr := ui.NewTester(demo.view, 1040, 720)
+	demoTr.SetLocale("zh-Hans")
+	demoTr.Frame()
+	demo.addDefaultContact()
+	demoTr.Frame()
+	last := demo.contacts[len(demo.contacts)-1]
+	if last.Name != "新联系人 1" {
+		t.Fatalf("new contact name = %q, want the frame language", last.Name)
+	}
+	if demo.contacts[0].Name != "Saki" {
+		t.Fatalf("existing contact name was rewritten: %q", demo.contacts[0].Name)
+	}
 }

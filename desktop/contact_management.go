@@ -1,11 +1,57 @@
 package main
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/egoist/mygo/ui"
+
+	"saki/desktop/locales"
 )
+
+// Contact management and saved-context notices are stored by kind and said
+// again at render time in the current language.
+const (
+	archiveNoticeAlready = "archive-already"
+	archiveNoticeUnknown = "archive-unknown"
+	archiveNoticeActive  = "archive-active"
+	archiveNoticeStore   = "archive-store"
+	archiveNoticeSave    = "archive-save"
+	archiveNoticeSaved   = "archive-saved"
+	restoreNoticeStore   = "restore-store"
+	restoreNoticeSave    = "restore-save"
+	restoreNoticeSaved   = "restore-saved"
+
+	historyNoticeMissingQuery = "history-missing-query"
+	historyNoticeRuntime      = "history-runtime"
+	historyNoticePartial      = "history-partial"
+	historyNoticeNotSaved     = "history-not-saved"
+	historyNoticeReadFailed   = "history-read-failed"
+	historyNoticeMoved        = "history-moved"
+)
+
+func contactHistoryNoticeText(msgs locales.Messages, notice, detail string) string {
+	text := ""
+	switch notice {
+	case historyNoticeMissingQuery:
+		text = msgs.HistorySearchMissingQuery()
+	case historyNoticeRuntime:
+		text = msgs.HistorySearchUnavailable()
+	case historyNoticePartial:
+		text = msgs.HistorySearchPartial()
+	case historyNoticeNotSaved:
+		text = msgs.HistoryMessageNotSaved()
+	case historyNoticeReadFailed:
+		text = msgs.HistoryReadFailed()
+	case historyNoticeMoved:
+		text = msgs.HistoryMessageMoved()
+	default:
+		text = notice
+	}
+	if detail != "" {
+		text += " " + detail
+	}
+	return text
+}
 
 type contactHistoryFull struct {
 	Origin    string
@@ -88,14 +134,14 @@ func (a *appModel) contactActivity(ct *contact) (active, unknown bool) {
 
 func (a *appModel) contactArchiveBlocked(ct *contact) string {
 	if ct.Archived {
-		return "This contact is already archived."
+		return archiveNoticeAlready
 	}
 	active, unknown := a.contactActivity(ct)
 	if unknown {
-		return "Work is still unresolved. Reload to confirm its status before archiving."
+		return archiveNoticeUnknown
 	}
 	if active {
-		return "Active work must finish or stop before archiving this contact."
+		return archiveNoticeActive
 	}
 	return ""
 }
@@ -118,13 +164,13 @@ func (a *appModel) saveContactProfileDraftFor(contactID string, draft profileDra
 	if !a.demo && a.store == nil {
 		if editor != nil {
 			editor.Draft = entered
-			editor.SetError("Could not save this profile: the local contact store is unavailable.")
+			editor.SetError(profileNoticeErrorStore)
 		}
 		return false
 	}
 	if ct.Archived {
 		if editor != nil {
-			editor.SetError("Restore this contact before saving its profile.")
+			editor.SetError(profileNoticeArchived)
 		}
 		return false
 	}
@@ -138,7 +184,7 @@ func (a *appModel) saveContactProfileDraftFor(contactID string, draft profileDra
 		}
 		if ct.SessionID == "" {
 			if editor != nil {
-				editor.SetError("There is no current conversation to leave.")
+				editor.SetError(profileNoticeNoConversation)
 			}
 			return false
 		}
@@ -214,17 +260,17 @@ func (a *appModel) saveContactProfileDraftFor(contactID string, draft profileDra
 		}
 		if editor != nil {
 			editor.Draft = entered
-			editor.SetError("Could not save this profile. Your changes are still here.")
+			editor.SetError(profileNoticeErrorSave)
 		}
 		return false
 	}
 	if editor != nil {
 		editor.SetProfile(draft)
 		editor.HasConversation = ct.SessionID != ""
-		editor.Status = "Profile saved. New conversations and new issue work sessions use these defaults; existing work is unchanged."
+		editor.Status = profileNoticeSavedDefaults
 		if startNew {
 			editor.HasConversation = false
-			editor.Status = "Profile saved. The next message starts a new conversation with these defaults."
+			editor.Status = profileNoticeSavedNextMessage
 		}
 	}
 	return true
@@ -237,7 +283,7 @@ func (a *appModel) archiveContact(contactID string) bool {
 	}
 	if !a.demo && a.store == nil {
 		if editor := a.profileEditorFor(contactID); editor != nil {
-			editor.SetError("Could not archive this contact: the local contact store is unavailable.")
+			editor.SetError(archiveNoticeStore)
 		}
 		return false
 	}
@@ -260,13 +306,13 @@ func (a *appModel) archiveContact(contactID string) bool {
 			a.store.state = oldState
 		}
 		if editor := a.profileEditorFor(contactID); editor != nil {
-			editor.SetError("Could not archive this contact. Its previous state is unchanged.")
+			editor.SetError(archiveNoticeSave)
 		}
 		return false
 	}
 	if editor := a.profileEditorFor(contactID); editor != nil {
 		editor.Archived = true
-		editor.Status = "Contact archived. Sending and new issue runs are disabled; history and issue data are retained."
+		editor.Status = archiveNoticeSaved
 	}
 	if a.selectedContact().ID == contactID {
 		a.contactScope = "archived"
@@ -281,7 +327,7 @@ func (a *appModel) restoreContact(contactID string) bool {
 	}
 	if !a.demo && a.store == nil {
 		if editor := a.profileEditorFor(contactID); editor != nil {
-			editor.SetError("Could not restore this contact: the local contact store is unavailable.")
+			editor.SetError(restoreNoticeStore)
 		}
 		return false
 	}
@@ -298,13 +344,13 @@ func (a *appModel) restoreContact(contactID string) bool {
 			a.store.state = oldState
 		}
 		if editor := a.profileEditorFor(contactID); editor != nil {
-			editor.SetError("Could not restore this contact. Its archived state is unchanged.")
+			editor.SetError(restoreNoticeSave)
 		}
 		return false
 	}
 	if editor := a.profileEditorFor(contactID); editor != nil {
 		editor.Archived = false
-		editor.Status = "Contact restored."
+		editor.Status = restoreNoticeSaved
 	}
 	if a.selectedContact().ID == contactID {
 		a.contactScope = "active"
@@ -406,11 +452,13 @@ func (a *appModel) searchContactHistoryAsync(query string) {
 	ct := a.selectedContact()
 	query = strings.TrimSpace(query)
 	if query == "" {
-		a.contactHistoryError = "Enter a phrase to search saved contexts."
+		a.contactHistoryError = historyNoticeMissingQuery
+		a.contactHistoryErrorDetail = ""
 		return
 	}
 	if ct == nil || a.rt == nil || a.runtimeStatus != runtimeStateReady {
-		a.contactHistoryError = "Saved-context search is unavailable until the runtime is ready."
+		a.contactHistoryError = historyNoticeRuntime
+		a.contactHistoryErrorDetail = ""
 		return
 	}
 	a.contactHistoryGen++
@@ -424,6 +472,7 @@ func (a *appModel) searchContactHistoryAsync(query string) {
 	a.contactHistoryDetailBusy = false
 	a.contactHistoryFull = nil
 	a.contactHistoryError = ""
+	a.contactHistoryErrorDetail = ""
 	a.historyAsyncStarted()
 	go func() {
 		result := a.searchContactHistory(rt, sessionIDs, query, scopeIndex)
@@ -435,7 +484,8 @@ func (a *appModel) searchContactHistoryAsync(query string) {
 			a.contactHistory = &result
 			a.contactHistoryBusy = false
 			if len(result.Failures) > 0 {
-				a.contactHistoryError = "Some saved contexts could not be read."
+				a.contactHistoryError = historyNoticePartial
+				a.contactHistoryErrorDetail = ""
 			}
 		})
 	}()
@@ -447,7 +497,8 @@ func (a *appModel) openContactHistoryMatch(match contactHistoryMatch) bool {
 	}
 	ct := a.selectedContact()
 	if ct == nil || a.rt == nil || a.runtimeStatus != runtimeStateReady {
-		a.contactHistoryError = "Saved-context search is unavailable until the runtime is ready."
+		a.contactHistoryError = historyNoticeRuntime
+		a.contactHistoryErrorDetail = ""
 		return false
 	}
 	inScope := false
@@ -458,7 +509,8 @@ func (a *appModel) openContactHistoryMatch(match contactHistoryMatch) bool {
 		}
 	}
 	if !inScope {
-		a.contactHistoryError = "That message is not part of this contact's saved contexts."
+		a.contactHistoryError = historyNoticeNotSaved
+		a.contactHistoryErrorDetail = ""
 		return false
 	}
 	contactID := ct.ID
@@ -470,13 +522,14 @@ func (a *appModel) openContactHistoryMatch(match contactHistoryMatch) bool {
 	a.contactHistoryDetailBusy = true
 	a.contactHistoryFull = nil
 	a.contactHistoryError = ""
+	a.contactHistoryErrorDetail = ""
 	a.historyAsyncStarted()
 	go func() {
 		records, _, err := a.historyAllFor(rt, match.SessionID)
 		var full *contactHistoryFull
 		errorText := ""
 		if err != nil {
-			errorText = "Could not read this saved context."
+			errorText = historyNoticeReadFailed
 		} else {
 			for _, entry := range parseHistoryWithIssueToolScopeFilter(match.SessionID, records, nil, scopeIndex).entries {
 				if entry.ID == match.EntryID {
@@ -488,7 +541,7 @@ func (a *appModel) openContactHistoryMatch(match contactHistoryMatch) bool {
 				}
 			}
 			if full == nil {
-				errorText = "The saved message moved or is no longer available."
+				errorText = historyNoticeMoved
 			}
 		}
 		a.updateUI(func() {
@@ -518,10 +571,11 @@ func (a *appModel) applyContactHistoryFull(rt *runtimeClient, runtimeGeneration 
 	}
 	a.contactHistoryDetailBusy = false
 	if errorText != "" {
+		a.contactHistoryError = errorText
 		if readErr != nil {
-			a.contactHistoryError = errorText + " " + a.connectionRuntimeMessage(readErr)
+			a.contactHistoryErrorDetail = a.connectionRuntimeMessage(readErr)
 		} else {
-			a.contactHistoryError = errorText
+			a.contactHistoryErrorDetail = ""
 		}
 		return
 	}
@@ -541,18 +595,4 @@ func (a *appModel) openHistoryEntryFull(e historyEntry) {
 	}
 	a.historyFullScroll = ui.ScrollState{}
 	a.focusHistoryFullBack = true
-}
-
-func (a *appModel) contactHistorySummary() string {
-	if a.contactHistory == nil {
-		return ""
-	}
-	summary := fmt.Sprintf("%d saved matches", len(a.contactHistory.Matches))
-	if a.contactHistory.Limited {
-		summary += " (limit reached)"
-	}
-	if len(a.contactHistory.Failures) > 0 {
-		summary += fmt.Sprintf("; %d contexts unavailable", len(a.contactHistory.Failures))
-	}
-	return summary
 }

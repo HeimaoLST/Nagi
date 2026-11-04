@@ -10,6 +10,8 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo/ui"
+
+	"saki/desktop/locales"
 )
 
 func TestViewRendersBothThemes(t *testing.T) {
@@ -876,7 +878,7 @@ func TestResponsiveComposerAt960WithLoadedSession(t *testing.T) {
 	if send.X < model.X+model.W {
 		t.Fatalf("960 Send overlaps model: send=%+v model=%+v", send, model)
 	}
-	head, tail := a.conversationModelDisplayParts(ct)
+	head, tail := a.conversationModelDisplayParts(locales.In("en"), ct)
 	visibleModel := head
 	if tail != "" {
 		visibleModel = tail
@@ -938,7 +940,7 @@ func TestComposerKeepsModelScopeAndPrimaryActionAtNarrowCenter(t *testing.T) {
 	if scope.X < model.X || scope.X+scope.W > model.X+model.W {
 		t.Fatalf("model scope is outside its chip: scope=%+v model=%+v", scope, model)
 	}
-	head, tail := a.conversationModelDisplayParts(ct)
+	head, tail := a.conversationModelDisplayParts(locales.In("en"), ct)
 	visibleModel := head
 	if tail != "" {
 		visibleModel = tail
@@ -1051,7 +1053,7 @@ func TestPreviewComposerTypography(t *testing.T) {
 			} else {
 				visible("Send")
 			}
-			head, tail := a.conversationModelDisplayParts(ct)
+			head, tail := a.conversationModelDisplayParts(locales.In("en"), ct)
 			if !tr.HasText(head) || (tail != "" && !tr.HasText(tail)) {
 				t.Fatalf("%s: actual model label missing: %v", sc.name, tr.Texts())
 			}
@@ -1073,7 +1075,7 @@ func TestPreviewComposerTypography(t *testing.T) {
 				if !ok || scope.X < model.X || scope.X+scope.W > model.X+model.W {
 					t.Fatalf("%s: model scope outside model button: scope=%+v ok=%v model=%+v", sc.name, scope, ok, model)
 				}
-				head, tail := a.conversationModelDisplayParts(ct)
+				head, tail := a.conversationModelDisplayParts(locales.In("en"), ct)
 				actualLabel := head
 				if tail != "" {
 					actualLabel = tail

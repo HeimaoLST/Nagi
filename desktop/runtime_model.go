@@ -13,6 +13,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"saki/desktop/locales"
 )
 
 const (
@@ -2735,7 +2737,7 @@ func (a *appModel) addRuntimeContact() {
 	}
 	c := &contact{
 		ID:        newContactID(),
-		Name:      fmt.Sprintf("New contact %d", len(a.contacts)+1),
+		Name:      locales.In(a.uiLocale).NewContactName(len(a.contacts) + 1),
 		Role:      "Assistant",
 		Status:    statusReady,
 		WorkLabel: "Preparing a reply",
@@ -2807,7 +2809,7 @@ func (a *appModel) persist() error {
 	}
 	if a.appearanceError != "" {
 		a.appearanceError = ""
-		a.appearanceStatus = "Applied and saved for the workbench."
+		a.appearanceStatus = appearanceStatusSaved
 	}
 	return nil
 }

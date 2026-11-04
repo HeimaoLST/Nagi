@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+
+	"saki/desktop/locales"
 )
 
 func TestSettingsPageReplacesWorkbenchAndRoutesEntries(t *testing.T) {
@@ -215,10 +217,10 @@ func TestSettingsContactPickerFollowsEditingIdentityAfterReturnToA(t *testing.T)
 	a.contacts = append(a.contacts, bContact)
 	a.openSettingsTab(settingsTabContact, settingsSourceRail)
 	a.settingsContactID = bContact.ID
-	a.settingsPickerChoice = a.settingsContactChoice(bContact)
+	a.settingsPickerChoice = a.settingsContactChoice(locales.In("en"), bContact)
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	if !strings.Contains(strings.Join(tr.Texts(), "\n"), a.settingsContactChoice(bContact)) {
+	if !strings.Contains(strings.Join(tr.Texts(), "\n"), a.settingsContactChoice(locales.In("en"), bContact)) {
 		t.Fatalf("picker/title did not show B: %v", tr.Texts())
 	}
 	a.closeSettings()
@@ -231,14 +233,14 @@ func TestSettingsContactPickerFollowsEditingIdentityAfterReturnToA(t *testing.T)
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if a.settingsContactID != aContact.ID || a.settingsPickerChoice != a.settingsContactChoice(aContact) {
-		t.Fatalf("A profile entry kept B picker: id=%q choice=%q want=%q", a.settingsContactID, a.settingsPickerChoice, a.settingsContactChoice(aContact))
+	if a.settingsContactID != aContact.ID || a.settingsPickerChoice != a.settingsContactChoice(locales.In("en"), aContact) {
+		t.Fatalf("A profile entry kept B picker: id=%q choice=%q want=%q", a.settingsContactID, a.settingsPickerChoice, a.settingsContactChoice(locales.In("en"), aContact))
 	}
 	texts := strings.Join(tr.Texts(), "\n")
-	if !strings.Contains(texts, "Contact profile: "+a.settingsContactChoice(aContact)) {
+	if !strings.Contains(texts, "Contact profile: "+a.settingsContactChoice(locales.In("en"), aContact)) {
 		t.Fatalf("A profile title/picker mismatch: %v", tr.Texts())
 	}
-	if a.settingsContactChoice(aContact) == a.settingsContactChoice(bContact) {
+	if a.settingsContactChoice(locales.In("en"), aContact) == a.settingsContactChoice(locales.In("en"), bContact) {
 		t.Fatal("same-name contacts did not get distinct readable labels")
 	}
 }
@@ -324,7 +326,7 @@ func TestSettingsContactPickerLongListReachesSelectedLastOption(t *testing.T) {
 	first, last := a.contacts[0], a.contacts[len(a.contacts)-1]
 	a.openSettingsTab(settingsTabContact, settingsSourceRail)
 	a.settingsContactID = first.ID
-	a.settingsPickerChoice = a.settingsContactChoice(first)
+	a.settingsPickerChoice = a.settingsContactChoice(locales.In("en"), first)
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
 	if a.settingsContactID != first.ID {
@@ -341,17 +343,17 @@ func TestSettingsContactPickerLongListReachesSelectedLastOption(t *testing.T) {
 	tr.Frame()
 	tr.Key(0, ui.KeyEnter)
 	tr.Frame()
-	if a.settingsContactID != last.ID || a.settingsPickerChoice != a.settingsContactChoice(last) {
+	if a.settingsContactID != last.ID || a.settingsPickerChoice != a.settingsContactChoice(locales.In("en"), last) {
 		t.Fatalf("long picker keyboard chose %q/%q, want last %q", a.settingsContactID, a.settingsPickerChoice, last.ID)
 	}
-	if tr.HasText(a.settingsContactChoice(a.contacts[len(a.contacts)-2])) {
+	if tr.HasText(a.settingsContactChoice(locales.In("en"), a.contacts[len(a.contacts)-2])) {
 		t.Fatalf("picker popup remained open after Enter: %v", tr.Texts())
 	}
 	// Down from the closed trigger proves the trigger kept focus; it must
 	// reopen the real popup rather than being lost after Enter.
 	tr.Key(0, ui.KeyDown)
 	tr.Frame()
-	if !tr.HasText(a.settingsContactChoice(a.contacts[len(a.contacts)-2])) {
+	if !tr.HasText(a.settingsContactChoice(locales.In("en"), a.contacts[len(a.contacts)-2])) {
 		t.Fatalf("picker trigger did not retain keyboard focus after Enter: %v", tr.Texts())
 	}
 	tr.Key(0, ui.KeyEscape)
@@ -366,7 +368,7 @@ func TestSettingsContactPickerDisambiguatesSameLastIDDigitsAndSavesB(t *testing.
 	bContact := &contact{ID: "contact-bbbb1111", Name: "Saki", Role: "Assistant", Status: statusReady, Workspace: t.TempDir()}
 	a := &appModel{store: store, storePath: store.path, contacts: []*contact{aContact, bContact}, selected: 0, scrollTo: -1, windowWidth: 1040}
 	a.openSettingsTab(settingsTabContact, settingsSourceRail)
-	if a.settingsContactChoice(aContact) == a.settingsContactChoice(bContact) {
+	if a.settingsContactChoice(locales.In("en"), aContact) == a.settingsContactChoice(locales.In("en"), bContact) {
 		t.Fatal("same-name contacts did not get distinct labels")
 	}
 	tr := ui.NewTester(a.view, 1040, 720)
@@ -377,11 +379,11 @@ func TestSettingsContactPickerDisambiguatesSameLastIDDigitsAndSavesB(t *testing.
 	if !tr.HasText("Edit contact") {
 		t.Fatalf("contact picker label prefix missing: %v", tr.Texts())
 	}
-	if _, ok := tr.Find(a.settingsContactChoice(aContact)); !ok {
+	if _, ok := tr.Find(a.settingsContactChoice(locales.In("en"), aContact)); !ok {
 		t.Fatalf("contact picker current choice missing: %v", tr.Texts())
 	}
 	showPreviewTooltip(t, tr, "Edit contact")
-	if full := "Edit contact: " + a.settingsContactChoice(aContact); !tr.HasText(full) {
+	if full := "Edit contact: " + a.settingsContactChoice(locales.In("en"), aContact); !tr.HasText(full) {
 		t.Fatalf("contact picker full tooltip/AX missing %q: %v", full, tr.Texts())
 	}
 	tr.Move(1, 1)
@@ -390,7 +392,7 @@ func TestSettingsContactPickerDisambiguatesSameLastIDDigitsAndSavesB(t *testing.
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if err := tr.Click(a.settingsContactChoice(bContact)); err != nil {
+	if err := tr.Click(a.settingsContactChoice(locales.In("en"), bContact)); err != nil {
 		t.Fatalf("picker B option: %v; texts=%v", err, tr.Texts())
 	}
 	tr.Frame()

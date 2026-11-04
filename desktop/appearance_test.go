@@ -4,10 +4,11 @@ import (
 	"math"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
+
+	"saki/desktop/locales"
 )
 
 func TestAppearanceModeResolutionUsesDarkTheme(t *testing.T) {
@@ -215,7 +216,7 @@ func TestAppearanceFailedSaveKeepsModeAndRetryClearsWarning(t *testing.T) {
 	if a.appearanceMode != appearanceDark {
 		t.Fatalf("failed save reverted mode = %q", a.appearanceMode)
 	}
-	if !strings.Contains(a.appearanceError, "Applied but not saved") {
+	if a.appearanceError != appearanceStatusSaveFailed {
 		t.Fatalf("failed save warning = %q", a.appearanceError)
 	}
 	if a.selectedContact().Draft != "draft-keep" {
@@ -254,7 +255,7 @@ func TestContactScopeSelectAndComposerModelEntry(t *testing.T) {
 	a.connectionEffective = &connectionConfig{Model: "model-default"}
 	tr = ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	head, tail := a.conversationModelDisplayParts(a.contacts[0])
+	head, tail := a.conversationModelDisplayParts(locales.In("en"), a.contacts[0])
 	if !tr.HasText(head) || !tr.HasText(tail) {
 		t.Fatalf("unbound conversation default is not explicit: %q", tr.Texts())
 	}

@@ -58,10 +58,6 @@
   "@settingsAdvanced": {
     "description": "The Advanced category in Settings."
   },
-  "settingsAppearanceHint": "Changes apply immediately.",
-  "@settingsAppearanceHint": {
-    "description": "The hint below the Appearance heading."
-  },
   "settingsGeneral": "General",
   "@settingsGeneral": {
     "description": "The General settings category."
@@ -96,10 +92,6 @@
       }
     }
   },
-  "languageSystemHint": "Follows the macOS preferred language.",
-  "@languageSystemHint": {
-    "description": "Explains that System follows the macOS preferred language."
-  },
   "languageChinese": "简体中文",
   "@languageChinese": {
     "description": "The Simplified Chinese language name."
@@ -108,7 +100,7 @@
   "@languageEnglish": {
     "description": "The English language name."
   },
-  "languageHint": "Changes apply immediately.",
+  "languageHint": "Some system windows use the new language after restarting.",
   "@languageHint": {
     "description": "The hint below the Language heading."
   },
@@ -547,5 +539,411 @@
   "readerHideSourceRawLabel": "Hide source & raw record",
   "@readerHideSourceRawLabel": {
     "description": "The action hiding the source and raw record for a result."
+  },
+  "railHide": "Hide",
+  "railHideContactsTooltip": "Hide contacts",
+  "railWindowActions": "Window actions",
+  "railContactsTitle": "Contacts",
+  "railContactListActions": "Contact list actions",
+  "railContactSearchPlaceholder": "Name or purpose",
+  "railNoContactsMatch": "No contacts match this scope and search.",
+  "contactScopeLabel": "Contact scope",
+  "navShowContactsTooltip": "Show contacts",
+  "navHistory": "History",
+  "navConversationHistoryTooltip": "Conversation history",
+  "navContactProfile": "Contact profile",
+  "navContactProfileTooltip": "Contact profile summary",
+  "navWorkspaceDetails": "Workspace details",
+  "backToLatest": "Back to latest",
+  "configurationDetails": "Configuration details",
+  "runtimeDraining": "Draining the runtime…",
+  "runtimeConnecting": "Connecting to runtime…",
+  "runtimeLabel": "Runtime",
+  "archiveNotice": "Archived contact: sending and new issue runs are disabled. History, drafts and issue data are retained.",
+  "restoreContactAction": "Restore contact",
+  "contactProfileAction": "Contact profile",
+  "emptyNoMessages": "No messages yet",
+  "emptyConversationStart": "Start a conversation with {name}.",
+  "@emptyConversationStart": {
+    "description": "The empty-state hint for a contact without messages.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "emptyConversationDraft": "Start typing below to talk with {name}.",
+  "@emptyConversationDraft": {
+    "description": "The empty-state hint while a new conversation can be typed.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "historyNotLoadedTitle": "Conversation history is not loaded",
+  "historyNotLoadedHint": "This contact already has a session, but its history has not been read yet; it is not shown as empty.",
+  "historyRuntimeNotReady": "Runtime is not ready; history cannot be read yet.",
+  "connectionMismatchSummary": "Connection unavailable or changed. Review connection settings, or start a new conversation from the profile.",
+  "connectionSettingsAction": "Connection settings",
+  "detailsAction": "Details",
+  "hideAction": "Hide",
+  "hideDetailsAction": "Hide details",
+  "locatedInHistory": "Located in history",
+  "earlierMessagesCount": "{count, plural, one {# earlier message} other {# earlier messages}}",
+  "lookedUpEarlier": "Looked up earlier conversations",
+  "openSources": "Open sources",
+  "tryAgain": "Try again",
+  "retried": "Retried",
+  "speakerYou": "You",
+  "sourcesTitle": "Sources",
+  "backAction": "← Back",
+  "closeSources": "Close sources",
+  "backFromSources": "Back from sources",
+  "fullSavedMessage": "Full saved message",
+  "closeFullMessage": "Close full message",
+  "backToHistoryTooltip": "Back to History",
+  "backToHistoryVisible": "← Back to history",
+  "sessionModelTitle": "Session model",
+  "closeSessionModel": "Close session model",
+  "taskContextTitle": "Task context",
+  "closeTaskContext": "Close task context",
+  "backLabel": "Back",
+  "backFromAux": "Back from {title}",
+  "conversationBadge": "Conversation",
+  "conversationModelLabel": "Conversation model",
+  "conversationModelTooltip": "Conversation model: {summary}",
+  "modelNotLoaded": "Model not loaded",
+  "modelNotSet": "Model not set",
+  "connectionDefaultNotConfigured": "Connection default not configured",
+  "sessionModelSummary": "Session: {model}",
+  "sessionModelNotLoaded": "Session model not loaded",
+  "connectionDefaultModel": "Connection default: {model}",
+  "modelDetailsScroll": "Model details",
+  "taskContextDetailsScroll": "Task context details",
+  "composerLabel": "Composer for {name}",
+  "composerPlaceholder": "Message {name}",
+  "taskContextCount": "{count, plural, =0 {Task context} one {Task context: #} other {Task context: #}}",
+  "@taskContextCount": {
+    "description": "The composer Task context button with its item count.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "composerTools": "Composer tools",
+  "stopConversation": "Stop conversation",
+  "stopConversationTooltip": "Stop this conversation",
+  "sendAction": "Send",
+  "sendTooltip": "Send message. Enter to send; Shift + Enter for a new line.",
+  "capacityUnknown": "Runtime task capacity is not loaded; using the conservative single-slot behavior.",
+  "retryCapacity": "Retry capacity",
+  "sendingState": "Sending…",
+  "sendAcceptedState": "Accepted; waiting for the runtime to start.",
+  "sendUnknownState": "Delivery not confirmed. Reload to verify before sending again.",
+  "sendDisconnectedState": "Runtime disconnected; restart Nagi to check the task and history.",
+  "reloadAction": "Reload",
+  "historyTitle": "History: {name}",
+  "@historyTitle": {
+    "description": "The History heading for a contact.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "closeHistory": "Close history",
+  "backFromHistory": "Back from History",
+  "historySearchScopeHint": "Searching only {name}'s conversation history. Messages from other contacts are never included.",
+  "@historySearchScopeHint": {
+    "description": "Explains that History searches only this contact.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "historyNotLoadedShort": "History is not loaded yet; existing records are not shown as absent.",
+  "historySearchPlaceholder": "Search {name}'s history",
+  "@historySearchPlaceholder": {
+    "description": "The History search field placeholder.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "searchSavedContexts": "Search saved contexts",
+  "searchingSavedContexts": "Searching saved contexts…",
+  "savedContextUnavailable": "Saved context unavailable: {session}",
+  "@savedContextUnavailable": {
+    "description": "A saved context that could not be read.",
+    "placeholders": {
+      "session": {
+        "type": "String"
+      }
+    }
+  },
+  "viewFullMessage": "View full message",
+  "openingFullSavedMessage": "Opening the full saved message…",
+  "noSavedMessages": "No saved messages in {name}'s loaded history.",
+  "@noSavedMessages": {
+    "description": "The empty saved-context result for a contact.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "noMatchingMessages": "No messages in {name}'s loaded history match “{query}”.",
+  "@noMatchingMessages": {
+    "description": "The no-match saved-context result.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "query": {
+        "type": "String"
+      }
+    }
+  },
+  "contextCount": "{count, plural, one {Context: # item} other {Context: # items}}",
+  "readFullMessage": "Read full message",
+  "viewInConversation": "View in conversation",
+  "savedContextMatch": "{date}: saved context {session}",
+  "@savedContextMatch": {
+    "description": "A saved-context search match heading.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      },
+      "session": {
+        "type": "String"
+      }
+    }
+  },
+  "historySummary": "{matches, plural, =0 {No saved matches} one {# saved match} other {# saved matches}}{limited, plural, =0 {} other { (limit reached)}}{failures, plural, =0 {} other {; # contexts unavailable}}",
+  "@historySummary": {
+    "description": "The saved-context search summary.",
+    "placeholders": {
+      "matches": {
+        "type": "int"
+      },
+      "limited": {
+        "type": "int"
+      },
+      "failures": {
+        "type": "int"
+      }
+    }
+  },
+  "sourcesSummary": "{count, plural, one {# earlier message from {name}'s history, cited in this reply.} other {# earlier messages from {name}'s history, cited in this reply.}}",
+  "@sourcesSummary": {
+    "description": "The sources page summary.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "historySearchMissingQuery": "Enter a phrase to search saved contexts.",
+  "historySearchUnavailable": "Saved-context search is unavailable until the runtime is ready.",
+  "historySearchPartial": "Some saved contexts could not be read.",
+  "historyMessageNotSaved": "That message is not part of this contact's saved contexts.",
+  "historyReadFailed": "Could not read this saved context.",
+  "historyMessageMoved": "The saved message moved or is no longer available.",
+  "profilePurpose": "Purpose",
+  "profileNoPurpose": "No purpose recorded.",
+  "profileInstructions": "Instructions",
+  "profileNoInstructions": "No instructions recorded.",
+  "profileWorkspace": "Workspace",
+  "profileWorkspaceInherited": "Inherited from the connection default",
+  "profileConversation": "Conversation",
+  "profileNoSession": "No conversation session yet.",
+  "profileSession": "Conversation session {session}",
+  "profileSessionNotLoaded": "Conversation session {session}: history not loaded",
+  "profileActivity": "Activity",
+  "profileNoActivity": "No active work.",
+  "profileActivityUnknown": "Work status is unresolved; reload before changing or archiving.",
+  "profileActivityActive": "Work is active for this contact.",
+  "profileEditFull": "Edit full profile",
+  "profileClose": "Close profile",
+  "profileBackTooltip": "Back from Contact profile",
+  "profileArchivedNotice": "Archived contact. Existing history, drafts and issue data remain available.",
+  "statusWorking": "Working",
+  "statusNeedsAttention": "Needs attention",
+  "statusReady": "Ready",
+  "settingsAdvancedIntro": "Read-only Runtime and startup diagnostics. Open connection settings to repair configuration.",
+  "settingsStartupSection": "Startup & configuration",
+  "settingsShowRuntimeDetails": "Show runtime, paths and session",
+  "settingsHideRuntimeDetails": "Hide runtime, paths and session",
+  "settingsOpenConnection": "Open connection & model",
+  "connectionCurrent": "Current: {summary}",
+  "connectionKeptOnFailure": "The current connection remains in use; this attempt did not replace it.",
+  "connectionNoneApplied": "No connection is currently applied.",
+  "connectionUnsavedForm": "Unsaved form changes.",
+  "connectionSavedAwaitingApply": "Saved configuration is awaiting Apply.",
+  "settingsNoContactToEdit": "No contact is available to edit.",
+  "settingsUnsavedChanges": "Unsaved changes.",
+  "settingsBuiltinLegacyError": "Built-in tool selection requires a managed Nagi connection; this Runtime uses legacy environment configuration.",
+  "settingsBuiltinManagedError": "Save and Apply a managed Nagi connection before customizing built-in tools.",
+  "settingsBuiltinNotReady": "Built-in tools are available after Runtime is ready.",
+  "settingsRetrySave": "Retry save",
+  "appearanceStatusApplied": "Applied.",
+  "appearanceStatusPreview": "Applied for this preview; the fixture is not persisted.",
+  "appearanceStatusSaved": "Applied and saved.",
+  "appearanceStatusSaveFailed": "Applied but not saved. Retry save to try again.",
+  "profileSaveIntro": "Saving updates this contact's name. Other settings apply when a conversation or issue work session is first created; existing sessions keep their configuration.",
+  "profileArchivedBadge": "Archived",
+  "fieldName": "Name",
+  "fieldNameAccessible": "Contact name",
+  "fieldNamePlaceholder": "Name",
+  "fieldPurposeAccessible": "Contact purpose",
+  "fieldInstructionsAccessible": "Contact instructions",
+  "fieldWorkspacePlaceholder": "/absolute/path/to/workspace (empty uses default)",
+  "fieldWorkspaceAccessible": "Contact workspace",
+  "profileWorkspaceHint": "Leave Workspace empty to use the applied default directory.",
+  "profileBuiltinTools": "Built-in tools",
+  "profileBuiltinLoading": "Loading built-in tools from Runtime…",
+  "profileBuiltinNotLoaded": "Built-in tools have not been loaded from Runtime yet.",
+  "profileBuiltinRetry": "Retry built-in tools",
+  "profileBuiltinUseDefaults": "Use host defaults",
+  "profileBuiltinUseDefaultsTooltip": "Use the built-in tools supplied by Runtime's host default.",
+  "profileBuiltinNone": "No built-in tools are enabled. Nagi issue tools remain available for their own workflows.",
+  "profileSaveAndNew": "Save and start new conversation",
+  "profileDiscard": "Discard changes",
+  "profileContactManagement": "Contact management",
+  "profileRestore": "Restore",
+  "profileArchive": "Archive",
+  "profileSaving": "Saving…",
+  "validationNameRequired": "Enter a contact name.",
+  "validationWorkspaceAbsolute": "Workspace must be an absolute path, or empty to use the applied default.",
+  "validationWorkspaceDirectory": "Workspace must be an existing directory.",
+  "profileErrorBusy": "Saving is already in progress.",
+  "profileErrorArchived": "Restore this contact before saving its profile.",
+  "profileErrorNoConversation": "A new conversation can be started only when an existing conversation exists.",
+  "profileReasonArchived": "This contact is archived. Restore it before editing or starting new work.",
+  "profileReasonUnknown": "Work is still unresolved. Reload to confirm its status before archiving or starting a new conversation.",
+  "profileReasonActive": "Active work must finish or stop before archiving or starting a new conversation.",
+  "profileErrorStoreUnavailable": "Could not save this profile: the local contact store is unavailable.",
+  "profileErrorSaveFailed": "Could not save this profile. Your changes are still here.",
+  "profileSavedDefaults": "Profile saved. New conversations and new issue work sessions use these defaults; existing work is unchanged.",
+  "profileSavedNextMessage": "Profile saved. The next message starts a new conversation with these defaults.",
+  "archiveErrorUnknown": "Work is still unresolved. Reload to confirm its status before archiving.",
+  "archiveErrorActive": "Active work must finish or stop before archiving this contact.",
+  "archiveErrorAlready": "This contact is already archived.",
+  "archiveErrorStore": "Could not archive this contact: the local contact store is unavailable.",
+  "archiveErrorSave": "Could not archive this contact. Its previous state is unchanged.",
+  "archiveSaved": "Contact archived. Sending and new issue runs are disabled; history and issue data are retained.",
+  "restoreErrorStore": "Could not restore this contact: the local contact store is unavailable.",
+  "restoreErrorSave": "Could not restore this contact. Its archived state is unchanged.",
+  "restoreSaved": "Contact restored.",
+  "newContactName": "New contact {number}",
+  "@newContactName": {
+    "description": "The default name of a newly added contact.",
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  },
+  "contactChoiceDuplicate": "{name} ({number})",
+  "@contactChoiceDuplicate": {
+    "description": "A contact picker label disambiguated by its position.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "number": {
+        "type": "int"
+      }
+    }
+  },
+  "runtimeNotStartedLocalStore": "Runtime: not started (local contact store unavailable)",
+  "runtimeLocalStoreUnavailable": "Local contact store: unavailable; the runtime was not started.",
+  "runtimeStatusLine": "Runtime: {status}",
+  "runtimeStatusNotLoaded": "unknown",
+  "runtimeStatusConnectionOnly": "{status} (connection only)",
+  "runtimeHelperNotStartedLocalStore": "not started; fix the local contact store first",
+  "runtimeHelperNotFound": "not found (expected next to Saki as Saki-runtime, or set SAKI_RUNTIME_BIN)",
+  "runtimeHelperNotApplied": "not started yet; apply the saved connection to check the helper",
+  "runtimeHelperNotChecked": "not checked yet; configure and apply a connection first",
+  "runtimeHelperLine": "Helper: {helper}",
+  "runtimeStoreLine": "Store: {path}",
+  "runtimeSessionDirLine": "Session directory: {path}",
+  "runtimeWorkDirLine": "GUI work directory: {path}",
+  "runtimeContactWorkspaceLine": "Contact workspace: {path}",
+  "runtimeSessionLine": "Session: {session}: state: {state}",
+  "runtimeSessionAPILine": "Session API: {api}",
+  "runtimeAPIConnectedLine": "Runtime API (connected): {api}; no session API loaded",
+  "runtimeSessionAPIUnknown": "Session API: unknown until the runtime session is loaded",
+  "runtimeSessionModelLine": "Session model: {model}",
+  "runtimeConnectionManagedNote": "Connection settings are managed by Nagi; the runtime reads its endpoint, model and key from that saved connection.",
+  "runtimeHostConfigNote": "Host configuration: API_KEY is required; SAKI_API, SAKI_BASE_URL and SAKI_MODEL have runtime defaults. Set them in the environment or in the GUI work directory's .env; values stay hidden.",
+  "runtimeValueNotConfigured": "not configured",
+  "runtimeValueUnknown": "unknown",
+  "runtimeSessionNotCreated": "not created until the first message",
+  "runtimeSessionModelUnknown": "unknown until the session is loaded",
+  "runtimeSourceMessage": "{source}: {detail}",
+  "runtimeStageLabel": "{stage}: {detail}",
+  "@runtimeStageLabel": {
+    "description": "A runtime diagnostic prefixed by its stage.",
+    "placeholders": {
+      "stage": {
+        "type": "String"
+      },
+      "detail": {
+        "type": "String"
+      }
+    }
+  },
+  "historyNotLoadedCompact": "History not loaded",
+  "snippetUser": "You: {text}",
+  "statusDetail": "{status}: {detail}",
+  "@snippetUser": {
+    "description": "A rail snippet of the user's message.",
+    "placeholders": {
+      "text": {
+        "type": "String"
+      }
+    }
+  },
+  "@statusDetail": {
+    "description": "A contact status with its detail.",
+    "placeholders": {
+      "status": {
+        "type": "String"
+      },
+      "detail": {
+        "type": "String"
+      }
+    }
+  },
+  "conversationMessagesLabel": "Conversation messages",
+  "@conversationMessagesLabel": {
+    "description": "The accessible name of the conversation message list."
+  },
+  "speakerContact": "Contact",
+  "@speakerContact": {
+    "description": "The contact as the speaker of a full saved history message."
+  },
+  "historyMessageMeta": "{speaker}. {date}. {session}",
+  "@historyMessageMeta": {
+    "description": "The speaker, date and session above a full saved history message.",
+    "placeholders": {
+      "speaker": {
+        "type": "String"
+      },
+      "date": {
+        "type": "String"
+      },
+      "session": {
+        "type": "String"
+      }
+    }
   }
 }

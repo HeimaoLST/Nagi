@@ -3,12 +3,24 @@ package main
 import (
 	"errors"
 	"strings"
+
+	"saki/desktop/locales"
 )
 
 const (
 	appearanceSystem = "system"
 	appearanceLight  = "light"
 	appearanceDark   = "dark"
+)
+
+// Appearance feedback is stored by kind, never as a rendered sentence, so a
+// language switch re-localizes feedback that is already on screen.
+const (
+	appearanceStatusNone       = ""
+	appearanceStatusApplied    = "applied"
+	appearanceStatusPreview    = "preview"
+	appearanceStatusSaved      = "saved"
+	appearanceStatusSaveFailed = "save-failed"
 )
 
 // normalizeAppearanceMode treats every absent or unknown stored value as the
@@ -58,7 +70,7 @@ func appearanceModeFromIndex(index int) string {
 }
 
 func (a *appModel) openAppearance() {
-	a.appearanceStatus = ""
+	a.appearanceStatus = appearanceStatusNone
 	a.openSettingsTab(settingsTabAppearance, settingsSourceRail)
 }
 
@@ -75,10 +87,10 @@ func (a *appModel) setAppearanceMode(mode string) {
 		return
 	}
 	a.appearanceMode = mode
-	a.appearanceStatus = "Applied."
+	a.appearanceStatus = appearanceStatusApplied
 	a.appearanceError = ""
 	if a.demo {
-		a.appearanceStatus = "Applied for this preview; the fixture is not persisted."
+		a.appearanceStatus = appearanceStatusPreview
 		return
 	}
 	a.saveAppearance()
@@ -88,17 +100,17 @@ func (a *appModel) setAppearanceMode(mode string) {
 // has no store yet, it lazily writes the current contacts (including draft and
 // ID) through persist; it does not start Runtime or create a preference file.
 func (a *appModel) saveAppearance() {
-	a.appearanceStatus = ""
+	a.appearanceStatus = appearanceStatusNone
 	a.appearanceError = ""
 	if err := a.ensureAppearanceStore(); err != nil {
-		a.appearanceError = "Applied but not saved. Retry save to try again."
+		a.appearanceError = appearanceStatusSaveFailed
 		return
 	}
 	if err := a.persist(); err != nil {
-		a.appearanceError = "Applied but not saved. Retry save to try again."
+		a.appearanceError = appearanceStatusSaveFailed
 		return
 	}
-	a.appearanceStatus = "Applied and saved."
+	a.appearanceStatus = appearanceStatusSaved
 }
 
 func (a *appModel) ensureAppearanceStore() error {
@@ -117,6 +129,21 @@ func (a *appModel) ensureAppearanceStore() error {
 	return nil
 }
 
+func appearanceStatusLabel(msgs locales.Messages, status string) string {
+	switch status {
+	case appearanceStatusApplied:
+		return msgs.AppearanceStatusApplied()
+	case appearanceStatusPreview:
+		return msgs.AppearanceStatusPreview()
+	case appearanceStatusSaved:
+		return msgs.AppearanceStatusSaved()
+	case appearanceStatusSaveFailed:
+		return msgs.AppearanceStatusSaveFailed()
+	default:
+		return ""
+	}
+}
+
 func (a *appModel) connectionDefaultModel() string {
 	for _, config := range []*connectionConfig{a.connectionEffective, a.connectionSaved} {
 		if config != nil && strings.TrimSpace(config.Model) != "" {
@@ -126,20 +153,20 @@ func (a *appModel) connectionDefaultModel() string {
 	return ""
 }
 
-func (a *appModel) conversationModelDisplayParts(ct *contact) (head, tail string) {
+func (a *appModel) conversationModelDisplayParts(msgs locales.Messages, ct *contact) (head, tail string) {
 	full := ""
 	if ct != nil {
 		if model := strings.TrimSpace(ct.SessionModel); model != "" {
 			full = model
 		} else if ct.SessionID != "" {
-			return "Model not loaded", ""
+			return msgs.ModelNotLoaded(), ""
 		}
 	}
 	if full == "" {
 		full = a.connectionDefaultModel()
 	}
 	if full == "" {
-		return "Model not set", ""
+		return msgs.ModelNotSet(), ""
 	}
 	return splitModelTail(full, 8)
 }
@@ -152,18 +179,18 @@ func splitModelTail(full string, tailRunes int) (head, tail string) {
 	return string(runes[:len(runes)-tailRunes]), string(runes[len(runes)-tailRunes:])
 }
 
-func (a *appModel) conversationModelSummary(ct *contact) string {
+func (a *appModel) conversationModelSummary(msgs locales.Messages, ct *contact) string {
 	if ct == nil {
-		return "Connection default not configured"
+		return msgs.ConnectionDefaultNotConfigured()
 	}
 	if ct.SessionID != "" {
 		if strings.TrimSpace(ct.SessionModel) != "" {
-			return "Session: " + strings.TrimSpace(ct.SessionModel)
+			return msgs.SessionModelSummary(strings.TrimSpace(ct.SessionModel))
 		}
-		return "Session model not loaded"
+		return msgs.SessionModelNotLoaded()
 	}
 	if model := a.connectionDefaultModel(); model != "" {
-		return "Connection default: " + model
+		return msgs.ConnectionDefaultModel(model)
 	}
-	return "Connection default not configured"
+	return msgs.ConnectionDefaultNotConfigured()
 }

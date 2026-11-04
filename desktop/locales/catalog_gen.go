@@ -216,20 +216,6 @@ func (msgs Messages) SettingsNavigationLabel() string {
 	return Catalog.Format(msgs.locale, "settingsNavigationLabel", nil)
 }
 
-// SettingsAppearanceHint says "Changes apply immediately."
-// in the language the app shows.
-//
-// The hint below the Appearance heading.
-func SettingsAppearanceHint() string { return In(i18n.Locale()).SettingsAppearanceHint() }
-
-// SettingsAppearanceHint says "Changes apply immediately."
-// in the language of msgs.
-//
-// The hint below the Appearance heading.
-func (msgs Messages) SettingsAppearanceHint() string {
-	return Catalog.Format(msgs.locale, "settingsAppearanceHint", nil)
-}
-
 // SettingsGeneral says "General"
 // in the language the app shows.
 //
@@ -328,20 +314,6 @@ func (msgs Messages) LanguageSystem(language string) string {
 	return Catalog.Format(msgs.locale, "languageSystem", map[string]any{"language": language})
 }
 
-// LanguageSystemHint says "Follows the macOS preferred language."
-// in the language the app shows.
-//
-// Explains that System follows the macOS preferred language.
-func LanguageSystemHint() string { return In(i18n.Locale()).LanguageSystemHint() }
-
-// LanguageSystemHint says "Follows the macOS preferred language."
-// in the language of msgs.
-//
-// Explains that System follows the macOS preferred language.
-func (msgs Messages) LanguageSystemHint() string {
-	return Catalog.Format(msgs.locale, "languageSystemHint", nil)
-}
-
 // LanguageChinese says "简体中文"
 // in the language the app shows.
 //
@@ -370,13 +342,13 @@ func (msgs Messages) LanguageEnglish() string {
 	return Catalog.Format(msgs.locale, "languageEnglish", nil)
 }
 
-// LanguageHint says "Changes apply immediately."
+// LanguageHint says "Some system windows use the new language after restarting."
 // in the language the app shows.
 //
 // The hint below the Language heading.
 func LanguageHint() string { return In(i18n.Locale()).LanguageHint() }
 
-// LanguageHint says "Changes apply immediately."
+// LanguageHint says "Some system windows use the new language after restarting."
 // in the language of msgs.
 //
 // The hint below the Language heading.
@@ -1884,4 +1856,2394 @@ func ReaderHideSourceRawLabel() string { return In(i18n.Locale()).ReaderHideSour
 // The action hiding the source and raw record for a result.
 func (msgs Messages) ReaderHideSourceRawLabel() string {
 	return Catalog.Format(msgs.locale, "readerHideSourceRawLabel", nil)
+}
+
+// RailHide says "Hide"
+// in the language the app shows.
+func RailHide() string { return In(i18n.Locale()).RailHide() }
+
+// RailHide says "Hide"
+// in the language of msgs.
+func (msgs Messages) RailHide() string {
+	return Catalog.Format(msgs.locale, "railHide", nil)
+}
+
+// RailHideContactsTooltip says "Hide contacts"
+// in the language the app shows.
+func RailHideContactsTooltip() string { return In(i18n.Locale()).RailHideContactsTooltip() }
+
+// RailHideContactsTooltip says "Hide contacts"
+// in the language of msgs.
+func (msgs Messages) RailHideContactsTooltip() string {
+	return Catalog.Format(msgs.locale, "railHideContactsTooltip", nil)
+}
+
+// RailWindowActions says "Window actions"
+// in the language the app shows.
+func RailWindowActions() string { return In(i18n.Locale()).RailWindowActions() }
+
+// RailWindowActions says "Window actions"
+// in the language of msgs.
+func (msgs Messages) RailWindowActions() string {
+	return Catalog.Format(msgs.locale, "railWindowActions", nil)
+}
+
+// RailContactsTitle says "Contacts"
+// in the language the app shows.
+func RailContactsTitle() string { return In(i18n.Locale()).RailContactsTitle() }
+
+// RailContactsTitle says "Contacts"
+// in the language of msgs.
+func (msgs Messages) RailContactsTitle() string {
+	return Catalog.Format(msgs.locale, "railContactsTitle", nil)
+}
+
+// RailContactListActions says "Contact list actions"
+// in the language the app shows.
+func RailContactListActions() string { return In(i18n.Locale()).RailContactListActions() }
+
+// RailContactListActions says "Contact list actions"
+// in the language of msgs.
+func (msgs Messages) RailContactListActions() string {
+	return Catalog.Format(msgs.locale, "railContactListActions", nil)
+}
+
+// RailContactSearchPlaceholder says "Name or purpose"
+// in the language the app shows.
+func RailContactSearchPlaceholder() string { return In(i18n.Locale()).RailContactSearchPlaceholder() }
+
+// RailContactSearchPlaceholder says "Name or purpose"
+// in the language of msgs.
+func (msgs Messages) RailContactSearchPlaceholder() string {
+	return Catalog.Format(msgs.locale, "railContactSearchPlaceholder", nil)
+}
+
+// RailNoContactsMatch says "No contacts match this scope and search."
+// in the language the app shows.
+func RailNoContactsMatch() string { return In(i18n.Locale()).RailNoContactsMatch() }
+
+// RailNoContactsMatch says "No contacts match this scope and search."
+// in the language of msgs.
+func (msgs Messages) RailNoContactsMatch() string {
+	return Catalog.Format(msgs.locale, "railNoContactsMatch", nil)
+}
+
+// ContactScopeLabel says "Contact scope"
+// in the language the app shows.
+func ContactScopeLabel() string { return In(i18n.Locale()).ContactScopeLabel() }
+
+// ContactScopeLabel says "Contact scope"
+// in the language of msgs.
+func (msgs Messages) ContactScopeLabel() string {
+	return Catalog.Format(msgs.locale, "contactScopeLabel", nil)
+}
+
+// NavShowContactsTooltip says "Show contacts"
+// in the language the app shows.
+func NavShowContactsTooltip() string { return In(i18n.Locale()).NavShowContactsTooltip() }
+
+// NavShowContactsTooltip says "Show contacts"
+// in the language of msgs.
+func (msgs Messages) NavShowContactsTooltip() string {
+	return Catalog.Format(msgs.locale, "navShowContactsTooltip", nil)
+}
+
+// NavHistory says "History"
+// in the language the app shows.
+func NavHistory() string { return In(i18n.Locale()).NavHistory() }
+
+// NavHistory says "History"
+// in the language of msgs.
+func (msgs Messages) NavHistory() string {
+	return Catalog.Format(msgs.locale, "navHistory", nil)
+}
+
+// NavConversationHistoryTooltip says "Conversation history"
+// in the language the app shows.
+func NavConversationHistoryTooltip() string { return In(i18n.Locale()).NavConversationHistoryTooltip() }
+
+// NavConversationHistoryTooltip says "Conversation history"
+// in the language of msgs.
+func (msgs Messages) NavConversationHistoryTooltip() string {
+	return Catalog.Format(msgs.locale, "navConversationHistoryTooltip", nil)
+}
+
+// NavContactProfile says "Contact profile"
+// in the language the app shows.
+func NavContactProfile() string { return In(i18n.Locale()).NavContactProfile() }
+
+// NavContactProfile says "Contact profile"
+// in the language of msgs.
+func (msgs Messages) NavContactProfile() string {
+	return Catalog.Format(msgs.locale, "navContactProfile", nil)
+}
+
+// NavContactProfileTooltip says "Contact profile summary"
+// in the language the app shows.
+func NavContactProfileTooltip() string { return In(i18n.Locale()).NavContactProfileTooltip() }
+
+// NavContactProfileTooltip says "Contact profile summary"
+// in the language of msgs.
+func (msgs Messages) NavContactProfileTooltip() string {
+	return Catalog.Format(msgs.locale, "navContactProfileTooltip", nil)
+}
+
+// NavWorkspaceDetails says "Workspace details"
+// in the language the app shows.
+func NavWorkspaceDetails() string { return In(i18n.Locale()).NavWorkspaceDetails() }
+
+// NavWorkspaceDetails says "Workspace details"
+// in the language of msgs.
+func (msgs Messages) NavWorkspaceDetails() string {
+	return Catalog.Format(msgs.locale, "navWorkspaceDetails", nil)
+}
+
+// BackToLatest says "Back to latest"
+// in the language the app shows.
+func BackToLatest() string { return In(i18n.Locale()).BackToLatest() }
+
+// BackToLatest says "Back to latest"
+// in the language of msgs.
+func (msgs Messages) BackToLatest() string {
+	return Catalog.Format(msgs.locale, "backToLatest", nil)
+}
+
+// ConfigurationDetails says "Configuration details"
+// in the language the app shows.
+func ConfigurationDetails() string { return In(i18n.Locale()).ConfigurationDetails() }
+
+// ConfigurationDetails says "Configuration details"
+// in the language of msgs.
+func (msgs Messages) ConfigurationDetails() string {
+	return Catalog.Format(msgs.locale, "configurationDetails", nil)
+}
+
+// RuntimeDraining says "Draining the runtime…"
+// in the language the app shows.
+func RuntimeDraining() string { return In(i18n.Locale()).RuntimeDraining() }
+
+// RuntimeDraining says "Draining the runtime…"
+// in the language of msgs.
+func (msgs Messages) RuntimeDraining() string {
+	return Catalog.Format(msgs.locale, "runtimeDraining", nil)
+}
+
+// RuntimeConnecting says "Connecting to runtime…"
+// in the language the app shows.
+func RuntimeConnecting() string { return In(i18n.Locale()).RuntimeConnecting() }
+
+// RuntimeConnecting says "Connecting to runtime…"
+// in the language of msgs.
+func (msgs Messages) RuntimeConnecting() string {
+	return Catalog.Format(msgs.locale, "runtimeConnecting", nil)
+}
+
+// RuntimeLabel says "Runtime"
+// in the language the app shows.
+func RuntimeLabel() string { return In(i18n.Locale()).RuntimeLabel() }
+
+// RuntimeLabel says "Runtime"
+// in the language of msgs.
+func (msgs Messages) RuntimeLabel() string {
+	return Catalog.Format(msgs.locale, "runtimeLabel", nil)
+}
+
+// ArchiveNotice says "Archived contact: sending and new issue runs are disabled. History, drafts and issue data are retained."
+// in the language the app shows.
+func ArchiveNotice() string { return In(i18n.Locale()).ArchiveNotice() }
+
+// ArchiveNotice says "Archived contact: sending and new issue runs are disabled. History, drafts and issue data are retained."
+// in the language of msgs.
+func (msgs Messages) ArchiveNotice() string {
+	return Catalog.Format(msgs.locale, "archiveNotice", nil)
+}
+
+// RestoreContactAction says "Restore contact"
+// in the language the app shows.
+func RestoreContactAction() string { return In(i18n.Locale()).RestoreContactAction() }
+
+// RestoreContactAction says "Restore contact"
+// in the language of msgs.
+func (msgs Messages) RestoreContactAction() string {
+	return Catalog.Format(msgs.locale, "restoreContactAction", nil)
+}
+
+// ContactProfileAction says "Contact profile"
+// in the language the app shows.
+func ContactProfileAction() string { return In(i18n.Locale()).ContactProfileAction() }
+
+// ContactProfileAction says "Contact profile"
+// in the language of msgs.
+func (msgs Messages) ContactProfileAction() string {
+	return Catalog.Format(msgs.locale, "contactProfileAction", nil)
+}
+
+// EmptyNoMessages says "No messages yet"
+// in the language the app shows.
+func EmptyNoMessages() string { return In(i18n.Locale()).EmptyNoMessages() }
+
+// EmptyNoMessages says "No messages yet"
+// in the language of msgs.
+func (msgs Messages) EmptyNoMessages() string {
+	return Catalog.Format(msgs.locale, "emptyNoMessages", nil)
+}
+
+// EmptyConversationStart says "Start a conversation with {name}."
+// in the language the app shows.
+//
+// The empty-state hint for a contact without messages.
+func EmptyConversationStart(name string) string {
+	return In(i18n.Locale()).EmptyConversationStart(name)
+}
+
+// EmptyConversationStart says "Start a conversation with {name}."
+// in the language of msgs.
+//
+// The empty-state hint for a contact without messages.
+func (msgs Messages) EmptyConversationStart(name string) string {
+	return Catalog.Format(msgs.locale, "emptyConversationStart", map[string]any{"name": name})
+}
+
+// EmptyConversationDraft says "Start typing below to talk with {name}."
+// in the language the app shows.
+//
+// The empty-state hint while a new conversation can be typed.
+func EmptyConversationDraft(name string) string {
+	return In(i18n.Locale()).EmptyConversationDraft(name)
+}
+
+// EmptyConversationDraft says "Start typing below to talk with {name}."
+// in the language of msgs.
+//
+// The empty-state hint while a new conversation can be typed.
+func (msgs Messages) EmptyConversationDraft(name string) string {
+	return Catalog.Format(msgs.locale, "emptyConversationDraft", map[string]any{"name": name})
+}
+
+// HistoryNotLoadedTitle says "Conversation history is not loaded"
+// in the language the app shows.
+func HistoryNotLoadedTitle() string { return In(i18n.Locale()).HistoryNotLoadedTitle() }
+
+// HistoryNotLoadedTitle says "Conversation history is not loaded"
+// in the language of msgs.
+func (msgs Messages) HistoryNotLoadedTitle() string {
+	return Catalog.Format(msgs.locale, "historyNotLoadedTitle", nil)
+}
+
+// HistoryNotLoadedHint says "This contact already has a session, but its history has not been read yet; it is not shown as empty."
+// in the language the app shows.
+func HistoryNotLoadedHint() string { return In(i18n.Locale()).HistoryNotLoadedHint() }
+
+// HistoryNotLoadedHint says "This contact already has a session, but its history has not been read yet; it is not shown as empty."
+// in the language of msgs.
+func (msgs Messages) HistoryNotLoadedHint() string {
+	return Catalog.Format(msgs.locale, "historyNotLoadedHint", nil)
+}
+
+// HistoryRuntimeNotReady says "Runtime is not ready; history cannot be read yet."
+// in the language the app shows.
+func HistoryRuntimeNotReady() string { return In(i18n.Locale()).HistoryRuntimeNotReady() }
+
+// HistoryRuntimeNotReady says "Runtime is not ready; history cannot be read yet."
+// in the language of msgs.
+func (msgs Messages) HistoryRuntimeNotReady() string {
+	return Catalog.Format(msgs.locale, "historyRuntimeNotReady", nil)
+}
+
+// ConnectionMismatchSummary says "Connection unavailable or changed. Review connection settings, or start a new conversation from the profile."
+// in the language the app shows.
+func ConnectionMismatchSummary() string { return In(i18n.Locale()).ConnectionMismatchSummary() }
+
+// ConnectionMismatchSummary says "Connection unavailable or changed. Review connection settings, or start a new conversation from the profile."
+// in the language of msgs.
+func (msgs Messages) ConnectionMismatchSummary() string {
+	return Catalog.Format(msgs.locale, "connectionMismatchSummary", nil)
+}
+
+// ConnectionSettingsAction says "Connection settings"
+// in the language the app shows.
+func ConnectionSettingsAction() string { return In(i18n.Locale()).ConnectionSettingsAction() }
+
+// ConnectionSettingsAction says "Connection settings"
+// in the language of msgs.
+func (msgs Messages) ConnectionSettingsAction() string {
+	return Catalog.Format(msgs.locale, "connectionSettingsAction", nil)
+}
+
+// DetailsAction says "Details"
+// in the language the app shows.
+func DetailsAction() string { return In(i18n.Locale()).DetailsAction() }
+
+// DetailsAction says "Details"
+// in the language of msgs.
+func (msgs Messages) DetailsAction() string {
+	return Catalog.Format(msgs.locale, "detailsAction", nil)
+}
+
+// HideAction says "Hide"
+// in the language the app shows.
+func HideAction() string { return In(i18n.Locale()).HideAction() }
+
+// HideAction says "Hide"
+// in the language of msgs.
+func (msgs Messages) HideAction() string {
+	return Catalog.Format(msgs.locale, "hideAction", nil)
+}
+
+// HideDetailsAction says "Hide details"
+// in the language the app shows.
+func HideDetailsAction() string { return In(i18n.Locale()).HideDetailsAction() }
+
+// HideDetailsAction says "Hide details"
+// in the language of msgs.
+func (msgs Messages) HideDetailsAction() string {
+	return Catalog.Format(msgs.locale, "hideDetailsAction", nil)
+}
+
+// LocatedInHistory says "Located in history"
+// in the language the app shows.
+func LocatedInHistory() string { return In(i18n.Locale()).LocatedInHistory() }
+
+// LocatedInHistory says "Located in history"
+// in the language of msgs.
+func (msgs Messages) LocatedInHistory() string {
+	return Catalog.Format(msgs.locale, "locatedInHistory", nil)
+}
+
+// EarlierMessagesCount says "{count, plural, one {# earlier message} other {# earlier messages}}"
+// in the language the app shows.
+func EarlierMessagesCount(count int) string { return In(i18n.Locale()).EarlierMessagesCount(count) }
+
+// EarlierMessagesCount says "{count, plural, one {# earlier message} other {# earlier messages}}"
+// in the language of msgs.
+func (msgs Messages) EarlierMessagesCount(count int) string {
+	return Catalog.Format(msgs.locale, "earlierMessagesCount", map[string]any{"count": count})
+}
+
+// LookedUpEarlier says "Looked up earlier conversations"
+// in the language the app shows.
+func LookedUpEarlier() string { return In(i18n.Locale()).LookedUpEarlier() }
+
+// LookedUpEarlier says "Looked up earlier conversations"
+// in the language of msgs.
+func (msgs Messages) LookedUpEarlier() string {
+	return Catalog.Format(msgs.locale, "lookedUpEarlier", nil)
+}
+
+// OpenSources says "Open sources"
+// in the language the app shows.
+func OpenSources() string { return In(i18n.Locale()).OpenSources() }
+
+// OpenSources says "Open sources"
+// in the language of msgs.
+func (msgs Messages) OpenSources() string {
+	return Catalog.Format(msgs.locale, "openSources", nil)
+}
+
+// TryAgain says "Try again"
+// in the language the app shows.
+func TryAgain() string { return In(i18n.Locale()).TryAgain() }
+
+// TryAgain says "Try again"
+// in the language of msgs.
+func (msgs Messages) TryAgain() string {
+	return Catalog.Format(msgs.locale, "tryAgain", nil)
+}
+
+// Retried says "Retried"
+// in the language the app shows.
+func Retried() string { return In(i18n.Locale()).Retried() }
+
+// Retried says "Retried"
+// in the language of msgs.
+func (msgs Messages) Retried() string {
+	return Catalog.Format(msgs.locale, "retried", nil)
+}
+
+// SpeakerYou says "You"
+// in the language the app shows.
+func SpeakerYou() string { return In(i18n.Locale()).SpeakerYou() }
+
+// SpeakerYou says "You"
+// in the language of msgs.
+func (msgs Messages) SpeakerYou() string {
+	return Catalog.Format(msgs.locale, "speakerYou", nil)
+}
+
+// SourcesTitle says "Sources"
+// in the language the app shows.
+func SourcesTitle() string { return In(i18n.Locale()).SourcesTitle() }
+
+// SourcesTitle says "Sources"
+// in the language of msgs.
+func (msgs Messages) SourcesTitle() string {
+	return Catalog.Format(msgs.locale, "sourcesTitle", nil)
+}
+
+// BackAction says "← Back"
+// in the language the app shows.
+func BackAction() string { return In(i18n.Locale()).BackAction() }
+
+// BackAction says "← Back"
+// in the language of msgs.
+func (msgs Messages) BackAction() string {
+	return Catalog.Format(msgs.locale, "backAction", nil)
+}
+
+// CloseSources says "Close sources"
+// in the language the app shows.
+func CloseSources() string { return In(i18n.Locale()).CloseSources() }
+
+// CloseSources says "Close sources"
+// in the language of msgs.
+func (msgs Messages) CloseSources() string {
+	return Catalog.Format(msgs.locale, "closeSources", nil)
+}
+
+// BackFromSources says "Back from sources"
+// in the language the app shows.
+func BackFromSources() string { return In(i18n.Locale()).BackFromSources() }
+
+// BackFromSources says "Back from sources"
+// in the language of msgs.
+func (msgs Messages) BackFromSources() string {
+	return Catalog.Format(msgs.locale, "backFromSources", nil)
+}
+
+// FullSavedMessage says "Full saved message"
+// in the language the app shows.
+func FullSavedMessage() string { return In(i18n.Locale()).FullSavedMessage() }
+
+// FullSavedMessage says "Full saved message"
+// in the language of msgs.
+func (msgs Messages) FullSavedMessage() string {
+	return Catalog.Format(msgs.locale, "fullSavedMessage", nil)
+}
+
+// CloseFullMessage says "Close full message"
+// in the language the app shows.
+func CloseFullMessage() string { return In(i18n.Locale()).CloseFullMessage() }
+
+// CloseFullMessage says "Close full message"
+// in the language of msgs.
+func (msgs Messages) CloseFullMessage() string {
+	return Catalog.Format(msgs.locale, "closeFullMessage", nil)
+}
+
+// BackToHistoryTooltip says "Back to History"
+// in the language the app shows.
+func BackToHistoryTooltip() string { return In(i18n.Locale()).BackToHistoryTooltip() }
+
+// BackToHistoryTooltip says "Back to History"
+// in the language of msgs.
+func (msgs Messages) BackToHistoryTooltip() string {
+	return Catalog.Format(msgs.locale, "backToHistoryTooltip", nil)
+}
+
+// BackToHistoryVisible says "← Back to history"
+// in the language the app shows.
+func BackToHistoryVisible() string { return In(i18n.Locale()).BackToHistoryVisible() }
+
+// BackToHistoryVisible says "← Back to history"
+// in the language of msgs.
+func (msgs Messages) BackToHistoryVisible() string {
+	return Catalog.Format(msgs.locale, "backToHistoryVisible", nil)
+}
+
+// SessionModelTitle says "Session model"
+// in the language the app shows.
+func SessionModelTitle() string { return In(i18n.Locale()).SessionModelTitle() }
+
+// SessionModelTitle says "Session model"
+// in the language of msgs.
+func (msgs Messages) SessionModelTitle() string {
+	return Catalog.Format(msgs.locale, "sessionModelTitle", nil)
+}
+
+// CloseSessionModel says "Close session model"
+// in the language the app shows.
+func CloseSessionModel() string { return In(i18n.Locale()).CloseSessionModel() }
+
+// CloseSessionModel says "Close session model"
+// in the language of msgs.
+func (msgs Messages) CloseSessionModel() string {
+	return Catalog.Format(msgs.locale, "closeSessionModel", nil)
+}
+
+// TaskContextTitle says "Task context"
+// in the language the app shows.
+func TaskContextTitle() string { return In(i18n.Locale()).TaskContextTitle() }
+
+// TaskContextTitle says "Task context"
+// in the language of msgs.
+func (msgs Messages) TaskContextTitle() string {
+	return Catalog.Format(msgs.locale, "taskContextTitle", nil)
+}
+
+// CloseTaskContext says "Close task context"
+// in the language the app shows.
+func CloseTaskContext() string { return In(i18n.Locale()).CloseTaskContext() }
+
+// CloseTaskContext says "Close task context"
+// in the language of msgs.
+func (msgs Messages) CloseTaskContext() string {
+	return Catalog.Format(msgs.locale, "closeTaskContext", nil)
+}
+
+// BackLabel says "Back"
+// in the language the app shows.
+func BackLabel() string { return In(i18n.Locale()).BackLabel() }
+
+// BackLabel says "Back"
+// in the language of msgs.
+func (msgs Messages) BackLabel() string {
+	return Catalog.Format(msgs.locale, "backLabel", nil)
+}
+
+// BackFromAux says "Back from {title}"
+// in the language the app shows.
+func BackFromAux(title string) string { return In(i18n.Locale()).BackFromAux(title) }
+
+// BackFromAux says "Back from {title}"
+// in the language of msgs.
+func (msgs Messages) BackFromAux(title string) string {
+	return Catalog.Format(msgs.locale, "backFromAux", map[string]any{"title": title})
+}
+
+// ConversationBadge says "Conversation"
+// in the language the app shows.
+func ConversationBadge() string { return In(i18n.Locale()).ConversationBadge() }
+
+// ConversationBadge says "Conversation"
+// in the language of msgs.
+func (msgs Messages) ConversationBadge() string {
+	return Catalog.Format(msgs.locale, "conversationBadge", nil)
+}
+
+// ConversationModelLabel says "Conversation model"
+// in the language the app shows.
+func ConversationModelLabel() string { return In(i18n.Locale()).ConversationModelLabel() }
+
+// ConversationModelLabel says "Conversation model"
+// in the language of msgs.
+func (msgs Messages) ConversationModelLabel() string {
+	return Catalog.Format(msgs.locale, "conversationModelLabel", nil)
+}
+
+// ConversationModelTooltip says "Conversation model: {summary}"
+// in the language the app shows.
+func ConversationModelTooltip(summary string) string {
+	return In(i18n.Locale()).ConversationModelTooltip(summary)
+}
+
+// ConversationModelTooltip says "Conversation model: {summary}"
+// in the language of msgs.
+func (msgs Messages) ConversationModelTooltip(summary string) string {
+	return Catalog.Format(msgs.locale, "conversationModelTooltip", map[string]any{"summary": summary})
+}
+
+// ModelNotLoaded says "Model not loaded"
+// in the language the app shows.
+func ModelNotLoaded() string { return In(i18n.Locale()).ModelNotLoaded() }
+
+// ModelNotLoaded says "Model not loaded"
+// in the language of msgs.
+func (msgs Messages) ModelNotLoaded() string {
+	return Catalog.Format(msgs.locale, "modelNotLoaded", nil)
+}
+
+// ModelNotSet says "Model not set"
+// in the language the app shows.
+func ModelNotSet() string { return In(i18n.Locale()).ModelNotSet() }
+
+// ModelNotSet says "Model not set"
+// in the language of msgs.
+func (msgs Messages) ModelNotSet() string {
+	return Catalog.Format(msgs.locale, "modelNotSet", nil)
+}
+
+// ConnectionDefaultNotConfigured says "Connection default not configured"
+// in the language the app shows.
+func ConnectionDefaultNotConfigured() string {
+	return In(i18n.Locale()).ConnectionDefaultNotConfigured()
+}
+
+// ConnectionDefaultNotConfigured says "Connection default not configured"
+// in the language of msgs.
+func (msgs Messages) ConnectionDefaultNotConfigured() string {
+	return Catalog.Format(msgs.locale, "connectionDefaultNotConfigured", nil)
+}
+
+// SessionModelSummary says "Session: {model}"
+// in the language the app shows.
+func SessionModelSummary(model string) string { return In(i18n.Locale()).SessionModelSummary(model) }
+
+// SessionModelSummary says "Session: {model}"
+// in the language of msgs.
+func (msgs Messages) SessionModelSummary(model string) string {
+	return Catalog.Format(msgs.locale, "sessionModelSummary", map[string]any{"model": model})
+}
+
+// SessionModelNotLoaded says "Session model not loaded"
+// in the language the app shows.
+func SessionModelNotLoaded() string { return In(i18n.Locale()).SessionModelNotLoaded() }
+
+// SessionModelNotLoaded says "Session model not loaded"
+// in the language of msgs.
+func (msgs Messages) SessionModelNotLoaded() string {
+	return Catalog.Format(msgs.locale, "sessionModelNotLoaded", nil)
+}
+
+// ConnectionDefaultModel says "Connection default: {model}"
+// in the language the app shows.
+func ConnectionDefaultModel(model string) string {
+	return In(i18n.Locale()).ConnectionDefaultModel(model)
+}
+
+// ConnectionDefaultModel says "Connection default: {model}"
+// in the language of msgs.
+func (msgs Messages) ConnectionDefaultModel(model string) string {
+	return Catalog.Format(msgs.locale, "connectionDefaultModel", map[string]any{"model": model})
+}
+
+// ModelDetailsScroll says "Model details"
+// in the language the app shows.
+func ModelDetailsScroll() string { return In(i18n.Locale()).ModelDetailsScroll() }
+
+// ModelDetailsScroll says "Model details"
+// in the language of msgs.
+func (msgs Messages) ModelDetailsScroll() string {
+	return Catalog.Format(msgs.locale, "modelDetailsScroll", nil)
+}
+
+// TaskContextDetailsScroll says "Task context details"
+// in the language the app shows.
+func TaskContextDetailsScroll() string { return In(i18n.Locale()).TaskContextDetailsScroll() }
+
+// TaskContextDetailsScroll says "Task context details"
+// in the language of msgs.
+func (msgs Messages) TaskContextDetailsScroll() string {
+	return Catalog.Format(msgs.locale, "taskContextDetailsScroll", nil)
+}
+
+// ComposerLabel says "Composer for {name}"
+// in the language the app shows.
+func ComposerLabel(name string) string { return In(i18n.Locale()).ComposerLabel(name) }
+
+// ComposerLabel says "Composer for {name}"
+// in the language of msgs.
+func (msgs Messages) ComposerLabel(name string) string {
+	return Catalog.Format(msgs.locale, "composerLabel", map[string]any{"name": name})
+}
+
+// ComposerPlaceholder says "Message {name}"
+// in the language the app shows.
+func ComposerPlaceholder(name string) string { return In(i18n.Locale()).ComposerPlaceholder(name) }
+
+// ComposerPlaceholder says "Message {name}"
+// in the language of msgs.
+func (msgs Messages) ComposerPlaceholder(name string) string {
+	return Catalog.Format(msgs.locale, "composerPlaceholder", map[string]any{"name": name})
+}
+
+// TaskContextCount says "{count, plural, =0 {Task context} one {Task context: #} other {Task context: #}}"
+// in the language the app shows.
+//
+// The composer Task context button with its item count.
+func TaskContextCount(count int) string { return In(i18n.Locale()).TaskContextCount(count) }
+
+// TaskContextCount says "{count, plural, =0 {Task context} one {Task context: #} other {Task context: #}}"
+// in the language of msgs.
+//
+// The composer Task context button with its item count.
+func (msgs Messages) TaskContextCount(count int) string {
+	return Catalog.Format(msgs.locale, "taskContextCount", map[string]any{"count": count})
+}
+
+// ComposerTools says "Composer tools"
+// in the language the app shows.
+func ComposerTools() string { return In(i18n.Locale()).ComposerTools() }
+
+// ComposerTools says "Composer tools"
+// in the language of msgs.
+func (msgs Messages) ComposerTools() string {
+	return Catalog.Format(msgs.locale, "composerTools", nil)
+}
+
+// StopConversation says "Stop conversation"
+// in the language the app shows.
+func StopConversation() string { return In(i18n.Locale()).StopConversation() }
+
+// StopConversation says "Stop conversation"
+// in the language of msgs.
+func (msgs Messages) StopConversation() string {
+	return Catalog.Format(msgs.locale, "stopConversation", nil)
+}
+
+// StopConversationTooltip says "Stop this conversation"
+// in the language the app shows.
+func StopConversationTooltip() string { return In(i18n.Locale()).StopConversationTooltip() }
+
+// StopConversationTooltip says "Stop this conversation"
+// in the language of msgs.
+func (msgs Messages) StopConversationTooltip() string {
+	return Catalog.Format(msgs.locale, "stopConversationTooltip", nil)
+}
+
+// SendAction says "Send"
+// in the language the app shows.
+func SendAction() string { return In(i18n.Locale()).SendAction() }
+
+// SendAction says "Send"
+// in the language of msgs.
+func (msgs Messages) SendAction() string {
+	return Catalog.Format(msgs.locale, "sendAction", nil)
+}
+
+// SendTooltip says "Send message. Enter to send; Shift + Enter for a new line."
+// in the language the app shows.
+func SendTooltip() string { return In(i18n.Locale()).SendTooltip() }
+
+// SendTooltip says "Send message. Enter to send; Shift + Enter for a new line."
+// in the language of msgs.
+func (msgs Messages) SendTooltip() string {
+	return Catalog.Format(msgs.locale, "sendTooltip", nil)
+}
+
+// CapacityUnknown says "Runtime task capacity is not loaded; using the conservative single-slot behavior."
+// in the language the app shows.
+func CapacityUnknown() string { return In(i18n.Locale()).CapacityUnknown() }
+
+// CapacityUnknown says "Runtime task capacity is not loaded; using the conservative single-slot behavior."
+// in the language of msgs.
+func (msgs Messages) CapacityUnknown() string {
+	return Catalog.Format(msgs.locale, "capacityUnknown", nil)
+}
+
+// RetryCapacity says "Retry capacity"
+// in the language the app shows.
+func RetryCapacity() string { return In(i18n.Locale()).RetryCapacity() }
+
+// RetryCapacity says "Retry capacity"
+// in the language of msgs.
+func (msgs Messages) RetryCapacity() string {
+	return Catalog.Format(msgs.locale, "retryCapacity", nil)
+}
+
+// SendingState says "Sending…"
+// in the language the app shows.
+func SendingState() string { return In(i18n.Locale()).SendingState() }
+
+// SendingState says "Sending…"
+// in the language of msgs.
+func (msgs Messages) SendingState() string {
+	return Catalog.Format(msgs.locale, "sendingState", nil)
+}
+
+// SendAcceptedState says "Accepted; waiting for the runtime to start."
+// in the language the app shows.
+func SendAcceptedState() string { return In(i18n.Locale()).SendAcceptedState() }
+
+// SendAcceptedState says "Accepted; waiting for the runtime to start."
+// in the language of msgs.
+func (msgs Messages) SendAcceptedState() string {
+	return Catalog.Format(msgs.locale, "sendAcceptedState", nil)
+}
+
+// SendUnknownState says "Delivery not confirmed. Reload to verify before sending again."
+// in the language the app shows.
+func SendUnknownState() string { return In(i18n.Locale()).SendUnknownState() }
+
+// SendUnknownState says "Delivery not confirmed. Reload to verify before sending again."
+// in the language of msgs.
+func (msgs Messages) SendUnknownState() string {
+	return Catalog.Format(msgs.locale, "sendUnknownState", nil)
+}
+
+// SendDisconnectedState says "Runtime disconnected; restart Nagi to check the task and history."
+// in the language the app shows.
+func SendDisconnectedState() string { return In(i18n.Locale()).SendDisconnectedState() }
+
+// SendDisconnectedState says "Runtime disconnected; restart Nagi to check the task and history."
+// in the language of msgs.
+func (msgs Messages) SendDisconnectedState() string {
+	return Catalog.Format(msgs.locale, "sendDisconnectedState", nil)
+}
+
+// ReloadAction says "Reload"
+// in the language the app shows.
+func ReloadAction() string { return In(i18n.Locale()).ReloadAction() }
+
+// ReloadAction says "Reload"
+// in the language of msgs.
+func (msgs Messages) ReloadAction() string {
+	return Catalog.Format(msgs.locale, "reloadAction", nil)
+}
+
+// HistoryTitle says "History: {name}"
+// in the language the app shows.
+//
+// The History heading for a contact.
+func HistoryTitle(name string) string { return In(i18n.Locale()).HistoryTitle(name) }
+
+// HistoryTitle says "History: {name}"
+// in the language of msgs.
+//
+// The History heading for a contact.
+func (msgs Messages) HistoryTitle(name string) string {
+	return Catalog.Format(msgs.locale, "historyTitle", map[string]any{"name": name})
+}
+
+// CloseHistory says "Close history"
+// in the language the app shows.
+func CloseHistory() string { return In(i18n.Locale()).CloseHistory() }
+
+// CloseHistory says "Close history"
+// in the language of msgs.
+func (msgs Messages) CloseHistory() string {
+	return Catalog.Format(msgs.locale, "closeHistory", nil)
+}
+
+// BackFromHistory says "Back from History"
+// in the language the app shows.
+func BackFromHistory() string { return In(i18n.Locale()).BackFromHistory() }
+
+// BackFromHistory says "Back from History"
+// in the language of msgs.
+func (msgs Messages) BackFromHistory() string {
+	return Catalog.Format(msgs.locale, "backFromHistory", nil)
+}
+
+// HistorySearchScopeHint says "Searching only {name}'s conversation history. Messages from other contacts are never included."
+// in the language the app shows.
+//
+// Explains that History searches only this contact.
+func HistorySearchScopeHint(name string) string {
+	return In(i18n.Locale()).HistorySearchScopeHint(name)
+}
+
+// HistorySearchScopeHint says "Searching only {name}'s conversation history. Messages from other contacts are never included."
+// in the language of msgs.
+//
+// Explains that History searches only this contact.
+func (msgs Messages) HistorySearchScopeHint(name string) string {
+	return Catalog.Format(msgs.locale, "historySearchScopeHint", map[string]any{"name": name})
+}
+
+// HistoryNotLoadedShort says "History is not loaded yet; existing records are not shown as absent."
+// in the language the app shows.
+func HistoryNotLoadedShort() string { return In(i18n.Locale()).HistoryNotLoadedShort() }
+
+// HistoryNotLoadedShort says "History is not loaded yet; existing records are not shown as absent."
+// in the language of msgs.
+func (msgs Messages) HistoryNotLoadedShort() string {
+	return Catalog.Format(msgs.locale, "historyNotLoadedShort", nil)
+}
+
+// HistorySearchPlaceholder says "Search {name}'s history"
+// in the language the app shows.
+//
+// The History search field placeholder.
+func HistorySearchPlaceholder(name string) string {
+	return In(i18n.Locale()).HistorySearchPlaceholder(name)
+}
+
+// HistorySearchPlaceholder says "Search {name}'s history"
+// in the language of msgs.
+//
+// The History search field placeholder.
+func (msgs Messages) HistorySearchPlaceholder(name string) string {
+	return Catalog.Format(msgs.locale, "historySearchPlaceholder", map[string]any{"name": name})
+}
+
+// SearchSavedContexts says "Search saved contexts"
+// in the language the app shows.
+func SearchSavedContexts() string { return In(i18n.Locale()).SearchSavedContexts() }
+
+// SearchSavedContexts says "Search saved contexts"
+// in the language of msgs.
+func (msgs Messages) SearchSavedContexts() string {
+	return Catalog.Format(msgs.locale, "searchSavedContexts", nil)
+}
+
+// SearchingSavedContexts says "Searching saved contexts…"
+// in the language the app shows.
+func SearchingSavedContexts() string { return In(i18n.Locale()).SearchingSavedContexts() }
+
+// SearchingSavedContexts says "Searching saved contexts…"
+// in the language of msgs.
+func (msgs Messages) SearchingSavedContexts() string {
+	return Catalog.Format(msgs.locale, "searchingSavedContexts", nil)
+}
+
+// SavedContextUnavailable says "Saved context unavailable: {session}"
+// in the language the app shows.
+//
+// A saved context that could not be read.
+func SavedContextUnavailable(session string) string {
+	return In(i18n.Locale()).SavedContextUnavailable(session)
+}
+
+// SavedContextUnavailable says "Saved context unavailable: {session}"
+// in the language of msgs.
+//
+// A saved context that could not be read.
+func (msgs Messages) SavedContextUnavailable(session string) string {
+	return Catalog.Format(msgs.locale, "savedContextUnavailable", map[string]any{"session": session})
+}
+
+// ViewFullMessage says "View full message"
+// in the language the app shows.
+func ViewFullMessage() string { return In(i18n.Locale()).ViewFullMessage() }
+
+// ViewFullMessage says "View full message"
+// in the language of msgs.
+func (msgs Messages) ViewFullMessage() string {
+	return Catalog.Format(msgs.locale, "viewFullMessage", nil)
+}
+
+// OpeningFullSavedMessage says "Opening the full saved message…"
+// in the language the app shows.
+func OpeningFullSavedMessage() string { return In(i18n.Locale()).OpeningFullSavedMessage() }
+
+// OpeningFullSavedMessage says "Opening the full saved message…"
+// in the language of msgs.
+func (msgs Messages) OpeningFullSavedMessage() string {
+	return Catalog.Format(msgs.locale, "openingFullSavedMessage", nil)
+}
+
+// NoSavedMessages says "No saved messages in {name}'s loaded history."
+// in the language the app shows.
+//
+// The empty saved-context result for a contact.
+func NoSavedMessages(name string) string { return In(i18n.Locale()).NoSavedMessages(name) }
+
+// NoSavedMessages says "No saved messages in {name}'s loaded history."
+// in the language of msgs.
+//
+// The empty saved-context result for a contact.
+func (msgs Messages) NoSavedMessages(name string) string {
+	return Catalog.Format(msgs.locale, "noSavedMessages", map[string]any{"name": name})
+}
+
+// NoMatchingMessages says "No messages in {name}'s loaded history match “{query}”."
+// in the language the app shows.
+//
+// The no-match saved-context result.
+func NoMatchingMessages(name string, query string) string {
+	return In(i18n.Locale()).NoMatchingMessages(name, query)
+}
+
+// NoMatchingMessages says "No messages in {name}'s loaded history match “{query}”."
+// in the language of msgs.
+//
+// The no-match saved-context result.
+func (msgs Messages) NoMatchingMessages(name string, query string) string {
+	return Catalog.Format(msgs.locale, "noMatchingMessages", map[string]any{"name": name, "query": query})
+}
+
+// ContextCount says "{count, plural, one {Context: # item} other {Context: # items}}"
+// in the language the app shows.
+func ContextCount(count int) string { return In(i18n.Locale()).ContextCount(count) }
+
+// ContextCount says "{count, plural, one {Context: # item} other {Context: # items}}"
+// in the language of msgs.
+func (msgs Messages) ContextCount(count int) string {
+	return Catalog.Format(msgs.locale, "contextCount", map[string]any{"count": count})
+}
+
+// ReadFullMessage says "Read full message"
+// in the language the app shows.
+func ReadFullMessage() string { return In(i18n.Locale()).ReadFullMessage() }
+
+// ReadFullMessage says "Read full message"
+// in the language of msgs.
+func (msgs Messages) ReadFullMessage() string {
+	return Catalog.Format(msgs.locale, "readFullMessage", nil)
+}
+
+// ViewInConversation says "View in conversation"
+// in the language the app shows.
+func ViewInConversation() string { return In(i18n.Locale()).ViewInConversation() }
+
+// ViewInConversation says "View in conversation"
+// in the language of msgs.
+func (msgs Messages) ViewInConversation() string {
+	return Catalog.Format(msgs.locale, "viewInConversation", nil)
+}
+
+// SavedContextMatch says "{date}: saved context {session}"
+// in the language the app shows.
+//
+// A saved-context search match heading.
+func SavedContextMatch(date string, session string) string {
+	return In(i18n.Locale()).SavedContextMatch(date, session)
+}
+
+// SavedContextMatch says "{date}: saved context {session}"
+// in the language of msgs.
+//
+// A saved-context search match heading.
+func (msgs Messages) SavedContextMatch(date string, session string) string {
+	return Catalog.Format(msgs.locale, "savedContextMatch", map[string]any{"date": date, "session": session})
+}
+
+// HistorySummary says "{matches, plural, =0 {No saved matches} one {# saved match} other {# saved matches}}{limited, plural, =0 {} other { (…"
+// in the language the app shows.
+//
+// The saved-context search summary.
+func HistorySummary(matches int, limited int, failures int) string {
+	return In(i18n.Locale()).HistorySummary(matches, limited, failures)
+}
+
+// HistorySummary says "{matches, plural, =0 {No saved matches} one {# saved match} other {# saved matches}}{limited, plural, =0 {} other { (…"
+// in the language of msgs.
+//
+// The saved-context search summary.
+func (msgs Messages) HistorySummary(matches int, limited int, failures int) string {
+	return Catalog.Format(msgs.locale, "historySummary", map[string]any{"matches": matches, "limited": limited, "failures": failures})
+}
+
+// SourcesSummary says "{count, plural, one {# earlier message from {name}'s history, cited in this reply.} other {# earlier messages from {n…"
+// in the language the app shows.
+//
+// The sources page summary.
+func SourcesSummary(count int, name string) string {
+	return In(i18n.Locale()).SourcesSummary(count, name)
+}
+
+// SourcesSummary says "{count, plural, one {# earlier message from {name}'s history, cited in this reply.} other {# earlier messages from {n…"
+// in the language of msgs.
+//
+// The sources page summary.
+func (msgs Messages) SourcesSummary(count int, name string) string {
+	return Catalog.Format(msgs.locale, "sourcesSummary", map[string]any{"count": count, "name": name})
+}
+
+// HistorySearchMissingQuery says "Enter a phrase to search saved contexts."
+// in the language the app shows.
+func HistorySearchMissingQuery() string { return In(i18n.Locale()).HistorySearchMissingQuery() }
+
+// HistorySearchMissingQuery says "Enter a phrase to search saved contexts."
+// in the language of msgs.
+func (msgs Messages) HistorySearchMissingQuery() string {
+	return Catalog.Format(msgs.locale, "historySearchMissingQuery", nil)
+}
+
+// HistorySearchUnavailable says "Saved-context search is unavailable until the runtime is ready."
+// in the language the app shows.
+func HistorySearchUnavailable() string { return In(i18n.Locale()).HistorySearchUnavailable() }
+
+// HistorySearchUnavailable says "Saved-context search is unavailable until the runtime is ready."
+// in the language of msgs.
+func (msgs Messages) HistorySearchUnavailable() string {
+	return Catalog.Format(msgs.locale, "historySearchUnavailable", nil)
+}
+
+// HistorySearchPartial says "Some saved contexts could not be read."
+// in the language the app shows.
+func HistorySearchPartial() string { return In(i18n.Locale()).HistorySearchPartial() }
+
+// HistorySearchPartial says "Some saved contexts could not be read."
+// in the language of msgs.
+func (msgs Messages) HistorySearchPartial() string {
+	return Catalog.Format(msgs.locale, "historySearchPartial", nil)
+}
+
+// HistoryMessageNotSaved says "That message is not part of this contact's saved contexts."
+// in the language the app shows.
+func HistoryMessageNotSaved() string { return In(i18n.Locale()).HistoryMessageNotSaved() }
+
+// HistoryMessageNotSaved says "That message is not part of this contact's saved contexts."
+// in the language of msgs.
+func (msgs Messages) HistoryMessageNotSaved() string {
+	return Catalog.Format(msgs.locale, "historyMessageNotSaved", nil)
+}
+
+// HistoryReadFailed says "Could not read this saved context."
+// in the language the app shows.
+func HistoryReadFailed() string { return In(i18n.Locale()).HistoryReadFailed() }
+
+// HistoryReadFailed says "Could not read this saved context."
+// in the language of msgs.
+func (msgs Messages) HistoryReadFailed() string {
+	return Catalog.Format(msgs.locale, "historyReadFailed", nil)
+}
+
+// HistoryMessageMoved says "The saved message moved or is no longer available."
+// in the language the app shows.
+func HistoryMessageMoved() string { return In(i18n.Locale()).HistoryMessageMoved() }
+
+// HistoryMessageMoved says "The saved message moved or is no longer available."
+// in the language of msgs.
+func (msgs Messages) HistoryMessageMoved() string {
+	return Catalog.Format(msgs.locale, "historyMessageMoved", nil)
+}
+
+// ProfilePurpose says "Purpose"
+// in the language the app shows.
+func ProfilePurpose() string { return In(i18n.Locale()).ProfilePurpose() }
+
+// ProfilePurpose says "Purpose"
+// in the language of msgs.
+func (msgs Messages) ProfilePurpose() string {
+	return Catalog.Format(msgs.locale, "profilePurpose", nil)
+}
+
+// ProfileNoPurpose says "No purpose recorded."
+// in the language the app shows.
+func ProfileNoPurpose() string { return In(i18n.Locale()).ProfileNoPurpose() }
+
+// ProfileNoPurpose says "No purpose recorded."
+// in the language of msgs.
+func (msgs Messages) ProfileNoPurpose() string {
+	return Catalog.Format(msgs.locale, "profileNoPurpose", nil)
+}
+
+// ProfileInstructions says "Instructions"
+// in the language the app shows.
+func ProfileInstructions() string { return In(i18n.Locale()).ProfileInstructions() }
+
+// ProfileInstructions says "Instructions"
+// in the language of msgs.
+func (msgs Messages) ProfileInstructions() string {
+	return Catalog.Format(msgs.locale, "profileInstructions", nil)
+}
+
+// ProfileNoInstructions says "No instructions recorded."
+// in the language the app shows.
+func ProfileNoInstructions() string { return In(i18n.Locale()).ProfileNoInstructions() }
+
+// ProfileNoInstructions says "No instructions recorded."
+// in the language of msgs.
+func (msgs Messages) ProfileNoInstructions() string {
+	return Catalog.Format(msgs.locale, "profileNoInstructions", nil)
+}
+
+// ProfileWorkspace says "Workspace"
+// in the language the app shows.
+func ProfileWorkspace() string { return In(i18n.Locale()).ProfileWorkspace() }
+
+// ProfileWorkspace says "Workspace"
+// in the language of msgs.
+func (msgs Messages) ProfileWorkspace() string {
+	return Catalog.Format(msgs.locale, "profileWorkspace", nil)
+}
+
+// ProfileWorkspaceInherited says "Inherited from the connection default"
+// in the language the app shows.
+func ProfileWorkspaceInherited() string { return In(i18n.Locale()).ProfileWorkspaceInherited() }
+
+// ProfileWorkspaceInherited says "Inherited from the connection default"
+// in the language of msgs.
+func (msgs Messages) ProfileWorkspaceInherited() string {
+	return Catalog.Format(msgs.locale, "profileWorkspaceInherited", nil)
+}
+
+// ProfileConversation says "Conversation"
+// in the language the app shows.
+func ProfileConversation() string { return In(i18n.Locale()).ProfileConversation() }
+
+// ProfileConversation says "Conversation"
+// in the language of msgs.
+func (msgs Messages) ProfileConversation() string {
+	return Catalog.Format(msgs.locale, "profileConversation", nil)
+}
+
+// ProfileNoSession says "No conversation session yet."
+// in the language the app shows.
+func ProfileNoSession() string { return In(i18n.Locale()).ProfileNoSession() }
+
+// ProfileNoSession says "No conversation session yet."
+// in the language of msgs.
+func (msgs Messages) ProfileNoSession() string {
+	return Catalog.Format(msgs.locale, "profileNoSession", nil)
+}
+
+// ProfileSession says "Conversation session {session}"
+// in the language the app shows.
+func ProfileSession(session string) string { return In(i18n.Locale()).ProfileSession(session) }
+
+// ProfileSession says "Conversation session {session}"
+// in the language of msgs.
+func (msgs Messages) ProfileSession(session string) string {
+	return Catalog.Format(msgs.locale, "profileSession", map[string]any{"session": session})
+}
+
+// ProfileSessionNotLoaded says "Conversation session {session}: history not loaded"
+// in the language the app shows.
+func ProfileSessionNotLoaded(session string) string {
+	return In(i18n.Locale()).ProfileSessionNotLoaded(session)
+}
+
+// ProfileSessionNotLoaded says "Conversation session {session}: history not loaded"
+// in the language of msgs.
+func (msgs Messages) ProfileSessionNotLoaded(session string) string {
+	return Catalog.Format(msgs.locale, "profileSessionNotLoaded", map[string]any{"session": session})
+}
+
+// ProfileActivity says "Activity"
+// in the language the app shows.
+func ProfileActivity() string { return In(i18n.Locale()).ProfileActivity() }
+
+// ProfileActivity says "Activity"
+// in the language of msgs.
+func (msgs Messages) ProfileActivity() string {
+	return Catalog.Format(msgs.locale, "profileActivity", nil)
+}
+
+// ProfileNoActivity says "No active work."
+// in the language the app shows.
+func ProfileNoActivity() string { return In(i18n.Locale()).ProfileNoActivity() }
+
+// ProfileNoActivity says "No active work."
+// in the language of msgs.
+func (msgs Messages) ProfileNoActivity() string {
+	return Catalog.Format(msgs.locale, "profileNoActivity", nil)
+}
+
+// ProfileActivityUnknown says "Work status is unresolved; reload before changing or archiving."
+// in the language the app shows.
+func ProfileActivityUnknown() string { return In(i18n.Locale()).ProfileActivityUnknown() }
+
+// ProfileActivityUnknown says "Work status is unresolved; reload before changing or archiving."
+// in the language of msgs.
+func (msgs Messages) ProfileActivityUnknown() string {
+	return Catalog.Format(msgs.locale, "profileActivityUnknown", nil)
+}
+
+// ProfileActivityActive says "Work is active for this contact."
+// in the language the app shows.
+func ProfileActivityActive() string { return In(i18n.Locale()).ProfileActivityActive() }
+
+// ProfileActivityActive says "Work is active for this contact."
+// in the language of msgs.
+func (msgs Messages) ProfileActivityActive() string {
+	return Catalog.Format(msgs.locale, "profileActivityActive", nil)
+}
+
+// ProfileEditFull says "Edit full profile"
+// in the language the app shows.
+func ProfileEditFull() string { return In(i18n.Locale()).ProfileEditFull() }
+
+// ProfileEditFull says "Edit full profile"
+// in the language of msgs.
+func (msgs Messages) ProfileEditFull() string {
+	return Catalog.Format(msgs.locale, "profileEditFull", nil)
+}
+
+// ProfileClose says "Close profile"
+// in the language the app shows.
+func ProfileClose() string { return In(i18n.Locale()).ProfileClose() }
+
+// ProfileClose says "Close profile"
+// in the language of msgs.
+func (msgs Messages) ProfileClose() string {
+	return Catalog.Format(msgs.locale, "profileClose", nil)
+}
+
+// ProfileBackTooltip says "Back from Contact profile"
+// in the language the app shows.
+func ProfileBackTooltip() string { return In(i18n.Locale()).ProfileBackTooltip() }
+
+// ProfileBackTooltip says "Back from Contact profile"
+// in the language of msgs.
+func (msgs Messages) ProfileBackTooltip() string {
+	return Catalog.Format(msgs.locale, "profileBackTooltip", nil)
+}
+
+// ProfileArchivedNotice says "Archived contact. Existing history, drafts and issue data remain available."
+// in the language the app shows.
+func ProfileArchivedNotice() string { return In(i18n.Locale()).ProfileArchivedNotice() }
+
+// ProfileArchivedNotice says "Archived contact. Existing history, drafts and issue data remain available."
+// in the language of msgs.
+func (msgs Messages) ProfileArchivedNotice() string {
+	return Catalog.Format(msgs.locale, "profileArchivedNotice", nil)
+}
+
+// StatusWorking says "Working"
+// in the language the app shows.
+func StatusWorking() string { return In(i18n.Locale()).StatusWorking() }
+
+// StatusWorking says "Working"
+// in the language of msgs.
+func (msgs Messages) StatusWorking() string {
+	return Catalog.Format(msgs.locale, "statusWorking", nil)
+}
+
+// StatusNeedsAttention says "Needs attention"
+// in the language the app shows.
+func StatusNeedsAttention() string { return In(i18n.Locale()).StatusNeedsAttention() }
+
+// StatusNeedsAttention says "Needs attention"
+// in the language of msgs.
+func (msgs Messages) StatusNeedsAttention() string {
+	return Catalog.Format(msgs.locale, "statusNeedsAttention", nil)
+}
+
+// StatusReady says "Ready"
+// in the language the app shows.
+func StatusReady() string { return In(i18n.Locale()).StatusReady() }
+
+// StatusReady says "Ready"
+// in the language of msgs.
+func (msgs Messages) StatusReady() string {
+	return Catalog.Format(msgs.locale, "statusReady", nil)
+}
+
+// SettingsAdvancedIntro says "Read-only Runtime and startup diagnostics. Open connection settings to repair configuration."
+// in the language the app shows.
+func SettingsAdvancedIntro() string { return In(i18n.Locale()).SettingsAdvancedIntro() }
+
+// SettingsAdvancedIntro says "Read-only Runtime and startup diagnostics. Open connection settings to repair configuration."
+// in the language of msgs.
+func (msgs Messages) SettingsAdvancedIntro() string {
+	return Catalog.Format(msgs.locale, "settingsAdvancedIntro", nil)
+}
+
+// SettingsStartupSection says "Startup & configuration"
+// in the language the app shows.
+func SettingsStartupSection() string { return In(i18n.Locale()).SettingsStartupSection() }
+
+// SettingsStartupSection says "Startup & configuration"
+// in the language of msgs.
+func (msgs Messages) SettingsStartupSection() string {
+	return Catalog.Format(msgs.locale, "settingsStartupSection", nil)
+}
+
+// SettingsShowRuntimeDetails says "Show runtime, paths and session"
+// in the language the app shows.
+func SettingsShowRuntimeDetails() string { return In(i18n.Locale()).SettingsShowRuntimeDetails() }
+
+// SettingsShowRuntimeDetails says "Show runtime, paths and session"
+// in the language of msgs.
+func (msgs Messages) SettingsShowRuntimeDetails() string {
+	return Catalog.Format(msgs.locale, "settingsShowRuntimeDetails", nil)
+}
+
+// SettingsHideRuntimeDetails says "Hide runtime, paths and session"
+// in the language the app shows.
+func SettingsHideRuntimeDetails() string { return In(i18n.Locale()).SettingsHideRuntimeDetails() }
+
+// SettingsHideRuntimeDetails says "Hide runtime, paths and session"
+// in the language of msgs.
+func (msgs Messages) SettingsHideRuntimeDetails() string {
+	return Catalog.Format(msgs.locale, "settingsHideRuntimeDetails", nil)
+}
+
+// SettingsOpenConnection says "Open connection & model"
+// in the language the app shows.
+func SettingsOpenConnection() string { return In(i18n.Locale()).SettingsOpenConnection() }
+
+// SettingsOpenConnection says "Open connection & model"
+// in the language of msgs.
+func (msgs Messages) SettingsOpenConnection() string {
+	return Catalog.Format(msgs.locale, "settingsOpenConnection", nil)
+}
+
+// ConnectionCurrent says "Current: {summary}"
+// in the language the app shows.
+func ConnectionCurrent(summary string) string { return In(i18n.Locale()).ConnectionCurrent(summary) }
+
+// ConnectionCurrent says "Current: {summary}"
+// in the language of msgs.
+func (msgs Messages) ConnectionCurrent(summary string) string {
+	return Catalog.Format(msgs.locale, "connectionCurrent", map[string]any{"summary": summary})
+}
+
+// ConnectionKeptOnFailure says "The current connection remains in use; this attempt did not replace it."
+// in the language the app shows.
+func ConnectionKeptOnFailure() string { return In(i18n.Locale()).ConnectionKeptOnFailure() }
+
+// ConnectionKeptOnFailure says "The current connection remains in use; this attempt did not replace it."
+// in the language of msgs.
+func (msgs Messages) ConnectionKeptOnFailure() string {
+	return Catalog.Format(msgs.locale, "connectionKeptOnFailure", nil)
+}
+
+// ConnectionNoneApplied says "No connection is currently applied."
+// in the language the app shows.
+func ConnectionNoneApplied() string { return In(i18n.Locale()).ConnectionNoneApplied() }
+
+// ConnectionNoneApplied says "No connection is currently applied."
+// in the language of msgs.
+func (msgs Messages) ConnectionNoneApplied() string {
+	return Catalog.Format(msgs.locale, "connectionNoneApplied", nil)
+}
+
+// ConnectionUnsavedForm says "Unsaved form changes."
+// in the language the app shows.
+func ConnectionUnsavedForm() string { return In(i18n.Locale()).ConnectionUnsavedForm() }
+
+// ConnectionUnsavedForm says "Unsaved form changes."
+// in the language of msgs.
+func (msgs Messages) ConnectionUnsavedForm() string {
+	return Catalog.Format(msgs.locale, "connectionUnsavedForm", nil)
+}
+
+// ConnectionSavedAwaitingApply says "Saved configuration is awaiting Apply."
+// in the language the app shows.
+func ConnectionSavedAwaitingApply() string { return In(i18n.Locale()).ConnectionSavedAwaitingApply() }
+
+// ConnectionSavedAwaitingApply says "Saved configuration is awaiting Apply."
+// in the language of msgs.
+func (msgs Messages) ConnectionSavedAwaitingApply() string {
+	return Catalog.Format(msgs.locale, "connectionSavedAwaitingApply", nil)
+}
+
+// SettingsNoContactToEdit says "No contact is available to edit."
+// in the language the app shows.
+func SettingsNoContactToEdit() string { return In(i18n.Locale()).SettingsNoContactToEdit() }
+
+// SettingsNoContactToEdit says "No contact is available to edit."
+// in the language of msgs.
+func (msgs Messages) SettingsNoContactToEdit() string {
+	return Catalog.Format(msgs.locale, "settingsNoContactToEdit", nil)
+}
+
+// SettingsUnsavedChanges says "Unsaved changes."
+// in the language the app shows.
+func SettingsUnsavedChanges() string { return In(i18n.Locale()).SettingsUnsavedChanges() }
+
+// SettingsUnsavedChanges says "Unsaved changes."
+// in the language of msgs.
+func (msgs Messages) SettingsUnsavedChanges() string {
+	return Catalog.Format(msgs.locale, "settingsUnsavedChanges", nil)
+}
+
+// SettingsBuiltinLegacyError says "Built-in tool selection requires a managed Nagi connection; this Runtime uses legacy environment configuration."
+// in the language the app shows.
+func SettingsBuiltinLegacyError() string { return In(i18n.Locale()).SettingsBuiltinLegacyError() }
+
+// SettingsBuiltinLegacyError says "Built-in tool selection requires a managed Nagi connection; this Runtime uses legacy environment configuration."
+// in the language of msgs.
+func (msgs Messages) SettingsBuiltinLegacyError() string {
+	return Catalog.Format(msgs.locale, "settingsBuiltinLegacyError", nil)
+}
+
+// SettingsBuiltinManagedError says "Save and Apply a managed Nagi connection before customizing built-in tools."
+// in the language the app shows.
+func SettingsBuiltinManagedError() string { return In(i18n.Locale()).SettingsBuiltinManagedError() }
+
+// SettingsBuiltinManagedError says "Save and Apply a managed Nagi connection before customizing built-in tools."
+// in the language of msgs.
+func (msgs Messages) SettingsBuiltinManagedError() string {
+	return Catalog.Format(msgs.locale, "settingsBuiltinManagedError", nil)
+}
+
+// SettingsBuiltinNotReady says "Built-in tools are available after Runtime is ready."
+// in the language the app shows.
+func SettingsBuiltinNotReady() string { return In(i18n.Locale()).SettingsBuiltinNotReady() }
+
+// SettingsBuiltinNotReady says "Built-in tools are available after Runtime is ready."
+// in the language of msgs.
+func (msgs Messages) SettingsBuiltinNotReady() string {
+	return Catalog.Format(msgs.locale, "settingsBuiltinNotReady", nil)
+}
+
+// SettingsRetrySave says "Retry save"
+// in the language the app shows.
+func SettingsRetrySave() string { return In(i18n.Locale()).SettingsRetrySave() }
+
+// SettingsRetrySave says "Retry save"
+// in the language of msgs.
+func (msgs Messages) SettingsRetrySave() string {
+	return Catalog.Format(msgs.locale, "settingsRetrySave", nil)
+}
+
+// AppearanceStatusApplied says "Applied."
+// in the language the app shows.
+func AppearanceStatusApplied() string { return In(i18n.Locale()).AppearanceStatusApplied() }
+
+// AppearanceStatusApplied says "Applied."
+// in the language of msgs.
+func (msgs Messages) AppearanceStatusApplied() string {
+	return Catalog.Format(msgs.locale, "appearanceStatusApplied", nil)
+}
+
+// AppearanceStatusPreview says "Applied for this preview; the fixture is not persisted."
+// in the language the app shows.
+func AppearanceStatusPreview() string { return In(i18n.Locale()).AppearanceStatusPreview() }
+
+// AppearanceStatusPreview says "Applied for this preview; the fixture is not persisted."
+// in the language of msgs.
+func (msgs Messages) AppearanceStatusPreview() string {
+	return Catalog.Format(msgs.locale, "appearanceStatusPreview", nil)
+}
+
+// AppearanceStatusSaved says "Applied and saved."
+// in the language the app shows.
+func AppearanceStatusSaved() string { return In(i18n.Locale()).AppearanceStatusSaved() }
+
+// AppearanceStatusSaved says "Applied and saved."
+// in the language of msgs.
+func (msgs Messages) AppearanceStatusSaved() string {
+	return Catalog.Format(msgs.locale, "appearanceStatusSaved", nil)
+}
+
+// AppearanceStatusSaveFailed says "Applied but not saved. Retry save to try again."
+// in the language the app shows.
+func AppearanceStatusSaveFailed() string { return In(i18n.Locale()).AppearanceStatusSaveFailed() }
+
+// AppearanceStatusSaveFailed says "Applied but not saved. Retry save to try again."
+// in the language of msgs.
+func (msgs Messages) AppearanceStatusSaveFailed() string {
+	return Catalog.Format(msgs.locale, "appearanceStatusSaveFailed", nil)
+}
+
+// ProfileSaveIntro says "Saving updates this contact's name. Other settings apply when a conversation or issue work session is first created; …"
+// in the language the app shows.
+func ProfileSaveIntro() string { return In(i18n.Locale()).ProfileSaveIntro() }
+
+// ProfileSaveIntro says "Saving updates this contact's name. Other settings apply when a conversation or issue work session is first created; …"
+// in the language of msgs.
+func (msgs Messages) ProfileSaveIntro() string {
+	return Catalog.Format(msgs.locale, "profileSaveIntro", nil)
+}
+
+// ProfileArchivedBadge says "Archived"
+// in the language the app shows.
+func ProfileArchivedBadge() string { return In(i18n.Locale()).ProfileArchivedBadge() }
+
+// ProfileArchivedBadge says "Archived"
+// in the language of msgs.
+func (msgs Messages) ProfileArchivedBadge() string {
+	return Catalog.Format(msgs.locale, "profileArchivedBadge", nil)
+}
+
+// FieldName says "Name"
+// in the language the app shows.
+func FieldName() string { return In(i18n.Locale()).FieldName() }
+
+// FieldName says "Name"
+// in the language of msgs.
+func (msgs Messages) FieldName() string {
+	return Catalog.Format(msgs.locale, "fieldName", nil)
+}
+
+// FieldNameAccessible says "Contact name"
+// in the language the app shows.
+func FieldNameAccessible() string { return In(i18n.Locale()).FieldNameAccessible() }
+
+// FieldNameAccessible says "Contact name"
+// in the language of msgs.
+func (msgs Messages) FieldNameAccessible() string {
+	return Catalog.Format(msgs.locale, "fieldNameAccessible", nil)
+}
+
+// FieldNamePlaceholder says "Name"
+// in the language the app shows.
+func FieldNamePlaceholder() string { return In(i18n.Locale()).FieldNamePlaceholder() }
+
+// FieldNamePlaceholder says "Name"
+// in the language of msgs.
+func (msgs Messages) FieldNamePlaceholder() string {
+	return Catalog.Format(msgs.locale, "fieldNamePlaceholder", nil)
+}
+
+// FieldPurposeAccessible says "Contact purpose"
+// in the language the app shows.
+func FieldPurposeAccessible() string { return In(i18n.Locale()).FieldPurposeAccessible() }
+
+// FieldPurposeAccessible says "Contact purpose"
+// in the language of msgs.
+func (msgs Messages) FieldPurposeAccessible() string {
+	return Catalog.Format(msgs.locale, "fieldPurposeAccessible", nil)
+}
+
+// FieldInstructionsAccessible says "Contact instructions"
+// in the language the app shows.
+func FieldInstructionsAccessible() string { return In(i18n.Locale()).FieldInstructionsAccessible() }
+
+// FieldInstructionsAccessible says "Contact instructions"
+// in the language of msgs.
+func (msgs Messages) FieldInstructionsAccessible() string {
+	return Catalog.Format(msgs.locale, "fieldInstructionsAccessible", nil)
+}
+
+// FieldWorkspacePlaceholder says "/absolute/path/to/workspace (empty uses default)"
+// in the language the app shows.
+func FieldWorkspacePlaceholder() string { return In(i18n.Locale()).FieldWorkspacePlaceholder() }
+
+// FieldWorkspacePlaceholder says "/absolute/path/to/workspace (empty uses default)"
+// in the language of msgs.
+func (msgs Messages) FieldWorkspacePlaceholder() string {
+	return Catalog.Format(msgs.locale, "fieldWorkspacePlaceholder", nil)
+}
+
+// FieldWorkspaceAccessible says "Contact workspace"
+// in the language the app shows.
+func FieldWorkspaceAccessible() string { return In(i18n.Locale()).FieldWorkspaceAccessible() }
+
+// FieldWorkspaceAccessible says "Contact workspace"
+// in the language of msgs.
+func (msgs Messages) FieldWorkspaceAccessible() string {
+	return Catalog.Format(msgs.locale, "fieldWorkspaceAccessible", nil)
+}
+
+// ProfileWorkspaceHint says "Leave Workspace empty to use the applied default directory."
+// in the language the app shows.
+func ProfileWorkspaceHint() string { return In(i18n.Locale()).ProfileWorkspaceHint() }
+
+// ProfileWorkspaceHint says "Leave Workspace empty to use the applied default directory."
+// in the language of msgs.
+func (msgs Messages) ProfileWorkspaceHint() string {
+	return Catalog.Format(msgs.locale, "profileWorkspaceHint", nil)
+}
+
+// ProfileBuiltinTools says "Built-in tools"
+// in the language the app shows.
+func ProfileBuiltinTools() string { return In(i18n.Locale()).ProfileBuiltinTools() }
+
+// ProfileBuiltinTools says "Built-in tools"
+// in the language of msgs.
+func (msgs Messages) ProfileBuiltinTools() string {
+	return Catalog.Format(msgs.locale, "profileBuiltinTools", nil)
+}
+
+// ProfileBuiltinLoading says "Loading built-in tools from Runtime…"
+// in the language the app shows.
+func ProfileBuiltinLoading() string { return In(i18n.Locale()).ProfileBuiltinLoading() }
+
+// ProfileBuiltinLoading says "Loading built-in tools from Runtime…"
+// in the language of msgs.
+func (msgs Messages) ProfileBuiltinLoading() string {
+	return Catalog.Format(msgs.locale, "profileBuiltinLoading", nil)
+}
+
+// ProfileBuiltinNotLoaded says "Built-in tools have not been loaded from Runtime yet."
+// in the language the app shows.
+func ProfileBuiltinNotLoaded() string { return In(i18n.Locale()).ProfileBuiltinNotLoaded() }
+
+// ProfileBuiltinNotLoaded says "Built-in tools have not been loaded from Runtime yet."
+// in the language of msgs.
+func (msgs Messages) ProfileBuiltinNotLoaded() string {
+	return Catalog.Format(msgs.locale, "profileBuiltinNotLoaded", nil)
+}
+
+// ProfileBuiltinRetry says "Retry built-in tools"
+// in the language the app shows.
+func ProfileBuiltinRetry() string { return In(i18n.Locale()).ProfileBuiltinRetry() }
+
+// ProfileBuiltinRetry says "Retry built-in tools"
+// in the language of msgs.
+func (msgs Messages) ProfileBuiltinRetry() string {
+	return Catalog.Format(msgs.locale, "profileBuiltinRetry", nil)
+}
+
+// ProfileBuiltinUseDefaults says "Use host defaults"
+// in the language the app shows.
+func ProfileBuiltinUseDefaults() string { return In(i18n.Locale()).ProfileBuiltinUseDefaults() }
+
+// ProfileBuiltinUseDefaults says "Use host defaults"
+// in the language of msgs.
+func (msgs Messages) ProfileBuiltinUseDefaults() string {
+	return Catalog.Format(msgs.locale, "profileBuiltinUseDefaults", nil)
+}
+
+// ProfileBuiltinUseDefaultsTooltip says "Use the built-in tools supplied by Runtime's host default."
+// in the language the app shows.
+func ProfileBuiltinUseDefaultsTooltip() string {
+	return In(i18n.Locale()).ProfileBuiltinUseDefaultsTooltip()
+}
+
+// ProfileBuiltinUseDefaultsTooltip says "Use the built-in tools supplied by Runtime's host default."
+// in the language of msgs.
+func (msgs Messages) ProfileBuiltinUseDefaultsTooltip() string {
+	return Catalog.Format(msgs.locale, "profileBuiltinUseDefaultsTooltip", nil)
+}
+
+// ProfileBuiltinNone says "No built-in tools are enabled. Nagi issue tools remain available for their own workflows."
+// in the language the app shows.
+func ProfileBuiltinNone() string { return In(i18n.Locale()).ProfileBuiltinNone() }
+
+// ProfileBuiltinNone says "No built-in tools are enabled. Nagi issue tools remain available for their own workflows."
+// in the language of msgs.
+func (msgs Messages) ProfileBuiltinNone() string {
+	return Catalog.Format(msgs.locale, "profileBuiltinNone", nil)
+}
+
+// ProfileSaveAndNew says "Save and start new conversation"
+// in the language the app shows.
+func ProfileSaveAndNew() string { return In(i18n.Locale()).ProfileSaveAndNew() }
+
+// ProfileSaveAndNew says "Save and start new conversation"
+// in the language of msgs.
+func (msgs Messages) ProfileSaveAndNew() string {
+	return Catalog.Format(msgs.locale, "profileSaveAndNew", nil)
+}
+
+// ProfileDiscard says "Discard changes"
+// in the language the app shows.
+func ProfileDiscard() string { return In(i18n.Locale()).ProfileDiscard() }
+
+// ProfileDiscard says "Discard changes"
+// in the language of msgs.
+func (msgs Messages) ProfileDiscard() string {
+	return Catalog.Format(msgs.locale, "profileDiscard", nil)
+}
+
+// ProfileContactManagement says "Contact management"
+// in the language the app shows.
+func ProfileContactManagement() string { return In(i18n.Locale()).ProfileContactManagement() }
+
+// ProfileContactManagement says "Contact management"
+// in the language of msgs.
+func (msgs Messages) ProfileContactManagement() string {
+	return Catalog.Format(msgs.locale, "profileContactManagement", nil)
+}
+
+// ProfileRestore says "Restore"
+// in the language the app shows.
+func ProfileRestore() string { return In(i18n.Locale()).ProfileRestore() }
+
+// ProfileRestore says "Restore"
+// in the language of msgs.
+func (msgs Messages) ProfileRestore() string {
+	return Catalog.Format(msgs.locale, "profileRestore", nil)
+}
+
+// ProfileArchive says "Archive"
+// in the language the app shows.
+func ProfileArchive() string { return In(i18n.Locale()).ProfileArchive() }
+
+// ProfileArchive says "Archive"
+// in the language of msgs.
+func (msgs Messages) ProfileArchive() string {
+	return Catalog.Format(msgs.locale, "profileArchive", nil)
+}
+
+// ProfileSaving says "Saving…"
+// in the language the app shows.
+func ProfileSaving() string { return In(i18n.Locale()).ProfileSaving() }
+
+// ProfileSaving says "Saving…"
+// in the language of msgs.
+func (msgs Messages) ProfileSaving() string {
+	return Catalog.Format(msgs.locale, "profileSaving", nil)
+}
+
+// ValidationNameRequired says "Enter a contact name."
+// in the language the app shows.
+func ValidationNameRequired() string { return In(i18n.Locale()).ValidationNameRequired() }
+
+// ValidationNameRequired says "Enter a contact name."
+// in the language of msgs.
+func (msgs Messages) ValidationNameRequired() string {
+	return Catalog.Format(msgs.locale, "validationNameRequired", nil)
+}
+
+// ValidationWorkspaceAbsolute says "Workspace must be an absolute path, or empty to use the applied default."
+// in the language the app shows.
+func ValidationWorkspaceAbsolute() string { return In(i18n.Locale()).ValidationWorkspaceAbsolute() }
+
+// ValidationWorkspaceAbsolute says "Workspace must be an absolute path, or empty to use the applied default."
+// in the language of msgs.
+func (msgs Messages) ValidationWorkspaceAbsolute() string {
+	return Catalog.Format(msgs.locale, "validationWorkspaceAbsolute", nil)
+}
+
+// ValidationWorkspaceDirectory says "Workspace must be an existing directory."
+// in the language the app shows.
+func ValidationWorkspaceDirectory() string { return In(i18n.Locale()).ValidationWorkspaceDirectory() }
+
+// ValidationWorkspaceDirectory says "Workspace must be an existing directory."
+// in the language of msgs.
+func (msgs Messages) ValidationWorkspaceDirectory() string {
+	return Catalog.Format(msgs.locale, "validationWorkspaceDirectory", nil)
+}
+
+// ProfileErrorBusy says "Saving is already in progress."
+// in the language the app shows.
+func ProfileErrorBusy() string { return In(i18n.Locale()).ProfileErrorBusy() }
+
+// ProfileErrorBusy says "Saving is already in progress."
+// in the language of msgs.
+func (msgs Messages) ProfileErrorBusy() string {
+	return Catalog.Format(msgs.locale, "profileErrorBusy", nil)
+}
+
+// ProfileErrorArchived says "Restore this contact before saving its profile."
+// in the language the app shows.
+func ProfileErrorArchived() string { return In(i18n.Locale()).ProfileErrorArchived() }
+
+// ProfileErrorArchived says "Restore this contact before saving its profile."
+// in the language of msgs.
+func (msgs Messages) ProfileErrorArchived() string {
+	return Catalog.Format(msgs.locale, "profileErrorArchived", nil)
+}
+
+// ProfileErrorNoConversation says "A new conversation can be started only when an existing conversation exists."
+// in the language the app shows.
+func ProfileErrorNoConversation() string { return In(i18n.Locale()).ProfileErrorNoConversation() }
+
+// ProfileErrorNoConversation says "A new conversation can be started only when an existing conversation exists."
+// in the language of msgs.
+func (msgs Messages) ProfileErrorNoConversation() string {
+	return Catalog.Format(msgs.locale, "profileErrorNoConversation", nil)
+}
+
+// ProfileReasonArchived says "This contact is archived. Restore it before editing or starting new work."
+// in the language the app shows.
+func ProfileReasonArchived() string { return In(i18n.Locale()).ProfileReasonArchived() }
+
+// ProfileReasonArchived says "This contact is archived. Restore it before editing or starting new work."
+// in the language of msgs.
+func (msgs Messages) ProfileReasonArchived() string {
+	return Catalog.Format(msgs.locale, "profileReasonArchived", nil)
+}
+
+// ProfileReasonUnknown says "Work is still unresolved. Reload to confirm its status before archiving or starting a new conversation."
+// in the language the app shows.
+func ProfileReasonUnknown() string { return In(i18n.Locale()).ProfileReasonUnknown() }
+
+// ProfileReasonUnknown says "Work is still unresolved. Reload to confirm its status before archiving or starting a new conversation."
+// in the language of msgs.
+func (msgs Messages) ProfileReasonUnknown() string {
+	return Catalog.Format(msgs.locale, "profileReasonUnknown", nil)
+}
+
+// ProfileReasonActive says "Active work must finish or stop before archiving or starting a new conversation."
+// in the language the app shows.
+func ProfileReasonActive() string { return In(i18n.Locale()).ProfileReasonActive() }
+
+// ProfileReasonActive says "Active work must finish or stop before archiving or starting a new conversation."
+// in the language of msgs.
+func (msgs Messages) ProfileReasonActive() string {
+	return Catalog.Format(msgs.locale, "profileReasonActive", nil)
+}
+
+// ProfileErrorStoreUnavailable says "Could not save this profile: the local contact store is unavailable."
+// in the language the app shows.
+func ProfileErrorStoreUnavailable() string { return In(i18n.Locale()).ProfileErrorStoreUnavailable() }
+
+// ProfileErrorStoreUnavailable says "Could not save this profile: the local contact store is unavailable."
+// in the language of msgs.
+func (msgs Messages) ProfileErrorStoreUnavailable() string {
+	return Catalog.Format(msgs.locale, "profileErrorStoreUnavailable", nil)
+}
+
+// ProfileErrorSaveFailed says "Could not save this profile. Your changes are still here."
+// in the language the app shows.
+func ProfileErrorSaveFailed() string { return In(i18n.Locale()).ProfileErrorSaveFailed() }
+
+// ProfileErrorSaveFailed says "Could not save this profile. Your changes are still here."
+// in the language of msgs.
+func (msgs Messages) ProfileErrorSaveFailed() string {
+	return Catalog.Format(msgs.locale, "profileErrorSaveFailed", nil)
+}
+
+// ProfileSavedDefaults says "Profile saved. New conversations and new issue work sessions use these defaults; existing work is unchanged."
+// in the language the app shows.
+func ProfileSavedDefaults() string { return In(i18n.Locale()).ProfileSavedDefaults() }
+
+// ProfileSavedDefaults says "Profile saved. New conversations and new issue work sessions use these defaults; existing work is unchanged."
+// in the language of msgs.
+func (msgs Messages) ProfileSavedDefaults() string {
+	return Catalog.Format(msgs.locale, "profileSavedDefaults", nil)
+}
+
+// ProfileSavedNextMessage says "Profile saved. The next message starts a new conversation with these defaults."
+// in the language the app shows.
+func ProfileSavedNextMessage() string { return In(i18n.Locale()).ProfileSavedNextMessage() }
+
+// ProfileSavedNextMessage says "Profile saved. The next message starts a new conversation with these defaults."
+// in the language of msgs.
+func (msgs Messages) ProfileSavedNextMessage() string {
+	return Catalog.Format(msgs.locale, "profileSavedNextMessage", nil)
+}
+
+// ArchiveErrorUnknown says "Work is still unresolved. Reload to confirm its status before archiving."
+// in the language the app shows.
+func ArchiveErrorUnknown() string { return In(i18n.Locale()).ArchiveErrorUnknown() }
+
+// ArchiveErrorUnknown says "Work is still unresolved. Reload to confirm its status before archiving."
+// in the language of msgs.
+func (msgs Messages) ArchiveErrorUnknown() string {
+	return Catalog.Format(msgs.locale, "archiveErrorUnknown", nil)
+}
+
+// ArchiveErrorActive says "Active work must finish or stop before archiving this contact."
+// in the language the app shows.
+func ArchiveErrorActive() string { return In(i18n.Locale()).ArchiveErrorActive() }
+
+// ArchiveErrorActive says "Active work must finish or stop before archiving this contact."
+// in the language of msgs.
+func (msgs Messages) ArchiveErrorActive() string {
+	return Catalog.Format(msgs.locale, "archiveErrorActive", nil)
+}
+
+// ArchiveErrorAlready says "This contact is already archived."
+// in the language the app shows.
+func ArchiveErrorAlready() string { return In(i18n.Locale()).ArchiveErrorAlready() }
+
+// ArchiveErrorAlready says "This contact is already archived."
+// in the language of msgs.
+func (msgs Messages) ArchiveErrorAlready() string {
+	return Catalog.Format(msgs.locale, "archiveErrorAlready", nil)
+}
+
+// ArchiveErrorStore says "Could not archive this contact: the local contact store is unavailable."
+// in the language the app shows.
+func ArchiveErrorStore() string { return In(i18n.Locale()).ArchiveErrorStore() }
+
+// ArchiveErrorStore says "Could not archive this contact: the local contact store is unavailable."
+// in the language of msgs.
+func (msgs Messages) ArchiveErrorStore() string {
+	return Catalog.Format(msgs.locale, "archiveErrorStore", nil)
+}
+
+// ArchiveErrorSave says "Could not archive this contact. Its previous state is unchanged."
+// in the language the app shows.
+func ArchiveErrorSave() string { return In(i18n.Locale()).ArchiveErrorSave() }
+
+// ArchiveErrorSave says "Could not archive this contact. Its previous state is unchanged."
+// in the language of msgs.
+func (msgs Messages) ArchiveErrorSave() string {
+	return Catalog.Format(msgs.locale, "archiveErrorSave", nil)
+}
+
+// ArchiveSaved says "Contact archived. Sending and new issue runs are disabled; history and issue data are retained."
+// in the language the app shows.
+func ArchiveSaved() string { return In(i18n.Locale()).ArchiveSaved() }
+
+// ArchiveSaved says "Contact archived. Sending and new issue runs are disabled; history and issue data are retained."
+// in the language of msgs.
+func (msgs Messages) ArchiveSaved() string {
+	return Catalog.Format(msgs.locale, "archiveSaved", nil)
+}
+
+// RestoreErrorStore says "Could not restore this contact: the local contact store is unavailable."
+// in the language the app shows.
+func RestoreErrorStore() string { return In(i18n.Locale()).RestoreErrorStore() }
+
+// RestoreErrorStore says "Could not restore this contact: the local contact store is unavailable."
+// in the language of msgs.
+func (msgs Messages) RestoreErrorStore() string {
+	return Catalog.Format(msgs.locale, "restoreErrorStore", nil)
+}
+
+// RestoreErrorSave says "Could not restore this contact. Its archived state is unchanged."
+// in the language the app shows.
+func RestoreErrorSave() string { return In(i18n.Locale()).RestoreErrorSave() }
+
+// RestoreErrorSave says "Could not restore this contact. Its archived state is unchanged."
+// in the language of msgs.
+func (msgs Messages) RestoreErrorSave() string {
+	return Catalog.Format(msgs.locale, "restoreErrorSave", nil)
+}
+
+// RestoreSaved says "Contact restored."
+// in the language the app shows.
+func RestoreSaved() string { return In(i18n.Locale()).RestoreSaved() }
+
+// RestoreSaved says "Contact restored."
+// in the language of msgs.
+func (msgs Messages) RestoreSaved() string {
+	return Catalog.Format(msgs.locale, "restoreSaved", nil)
+}
+
+// NewContactName says "New contact {number}"
+// in the language the app shows.
+//
+// The default name of a newly added contact.
+func NewContactName(number int) string { return In(i18n.Locale()).NewContactName(number) }
+
+// NewContactName says "New contact {number}"
+// in the language of msgs.
+//
+// The default name of a newly added contact.
+func (msgs Messages) NewContactName(number int) string {
+	return Catalog.Format(msgs.locale, "newContactName", map[string]any{"number": number})
+}
+
+// ContactChoiceDuplicate says "{name} ({number})"
+// in the language the app shows.
+//
+// A contact picker label disambiguated by its position.
+func ContactChoiceDuplicate(name string, number int) string {
+	return In(i18n.Locale()).ContactChoiceDuplicate(name, number)
+}
+
+// ContactChoiceDuplicate says "{name} ({number})"
+// in the language of msgs.
+//
+// A contact picker label disambiguated by its position.
+func (msgs Messages) ContactChoiceDuplicate(name string, number int) string {
+	return Catalog.Format(msgs.locale, "contactChoiceDuplicate", map[string]any{"name": name, "number": number})
+}
+
+// RuntimeNotStartedLocalStore says "Runtime: not started (local contact store unavailable)"
+// in the language the app shows.
+func RuntimeNotStartedLocalStore() string { return In(i18n.Locale()).RuntimeNotStartedLocalStore() }
+
+// RuntimeNotStartedLocalStore says "Runtime: not started (local contact store unavailable)"
+// in the language of msgs.
+func (msgs Messages) RuntimeNotStartedLocalStore() string {
+	return Catalog.Format(msgs.locale, "runtimeNotStartedLocalStore", nil)
+}
+
+// RuntimeLocalStoreUnavailable says "Local contact store: unavailable; the runtime was not started."
+// in the language the app shows.
+func RuntimeLocalStoreUnavailable() string { return In(i18n.Locale()).RuntimeLocalStoreUnavailable() }
+
+// RuntimeLocalStoreUnavailable says "Local contact store: unavailable; the runtime was not started."
+// in the language of msgs.
+func (msgs Messages) RuntimeLocalStoreUnavailable() string {
+	return Catalog.Format(msgs.locale, "runtimeLocalStoreUnavailable", nil)
+}
+
+// RuntimeStatusLine says "Runtime: {status}"
+// in the language the app shows.
+func RuntimeStatusLine(status string) string { return In(i18n.Locale()).RuntimeStatusLine(status) }
+
+// RuntimeStatusLine says "Runtime: {status}"
+// in the language of msgs.
+func (msgs Messages) RuntimeStatusLine(status string) string {
+	return Catalog.Format(msgs.locale, "runtimeStatusLine", map[string]any{"status": status})
+}
+
+// RuntimeStatusNotLoaded says "unknown"
+// in the language the app shows.
+func RuntimeStatusNotLoaded() string { return In(i18n.Locale()).RuntimeStatusNotLoaded() }
+
+// RuntimeStatusNotLoaded says "unknown"
+// in the language of msgs.
+func (msgs Messages) RuntimeStatusNotLoaded() string {
+	return Catalog.Format(msgs.locale, "runtimeStatusNotLoaded", nil)
+}
+
+// RuntimeStatusConnectionOnly says "{status} (connection only)"
+// in the language the app shows.
+func RuntimeStatusConnectionOnly(status string) string {
+	return In(i18n.Locale()).RuntimeStatusConnectionOnly(status)
+}
+
+// RuntimeStatusConnectionOnly says "{status} (connection only)"
+// in the language of msgs.
+func (msgs Messages) RuntimeStatusConnectionOnly(status string) string {
+	return Catalog.Format(msgs.locale, "runtimeStatusConnectionOnly", map[string]any{"status": status})
+}
+
+// RuntimeHelperNotStartedLocalStore says "not started; fix the local contact store first"
+// in the language the app shows.
+func RuntimeHelperNotStartedLocalStore() string {
+	return In(i18n.Locale()).RuntimeHelperNotStartedLocalStore()
+}
+
+// RuntimeHelperNotStartedLocalStore says "not started; fix the local contact store first"
+// in the language of msgs.
+func (msgs Messages) RuntimeHelperNotStartedLocalStore() string {
+	return Catalog.Format(msgs.locale, "runtimeHelperNotStartedLocalStore", nil)
+}
+
+// RuntimeHelperNotFound says "not found (expected next to Saki as Saki-runtime, or set SAKI_RUNTIME_BIN)"
+// in the language the app shows.
+func RuntimeHelperNotFound() string { return In(i18n.Locale()).RuntimeHelperNotFound() }
+
+// RuntimeHelperNotFound says "not found (expected next to Saki as Saki-runtime, or set SAKI_RUNTIME_BIN)"
+// in the language of msgs.
+func (msgs Messages) RuntimeHelperNotFound() string {
+	return Catalog.Format(msgs.locale, "runtimeHelperNotFound", nil)
+}
+
+// RuntimeHelperNotApplied says "not started yet; apply the saved connection to check the helper"
+// in the language the app shows.
+func RuntimeHelperNotApplied() string { return In(i18n.Locale()).RuntimeHelperNotApplied() }
+
+// RuntimeHelperNotApplied says "not started yet; apply the saved connection to check the helper"
+// in the language of msgs.
+func (msgs Messages) RuntimeHelperNotApplied() string {
+	return Catalog.Format(msgs.locale, "runtimeHelperNotApplied", nil)
+}
+
+// RuntimeHelperNotChecked says "not checked yet; configure and apply a connection first"
+// in the language the app shows.
+func RuntimeHelperNotChecked() string { return In(i18n.Locale()).RuntimeHelperNotChecked() }
+
+// RuntimeHelperNotChecked says "not checked yet; configure and apply a connection first"
+// in the language of msgs.
+func (msgs Messages) RuntimeHelperNotChecked() string {
+	return Catalog.Format(msgs.locale, "runtimeHelperNotChecked", nil)
+}
+
+// RuntimeHelperLine says "Helper: {helper}"
+// in the language the app shows.
+func RuntimeHelperLine(helper string) string { return In(i18n.Locale()).RuntimeHelperLine(helper) }
+
+// RuntimeHelperLine says "Helper: {helper}"
+// in the language of msgs.
+func (msgs Messages) RuntimeHelperLine(helper string) string {
+	return Catalog.Format(msgs.locale, "runtimeHelperLine", map[string]any{"helper": helper})
+}
+
+// RuntimeStoreLine says "Store: {path}"
+// in the language the app shows.
+func RuntimeStoreLine(path string) string { return In(i18n.Locale()).RuntimeStoreLine(path) }
+
+// RuntimeStoreLine says "Store: {path}"
+// in the language of msgs.
+func (msgs Messages) RuntimeStoreLine(path string) string {
+	return Catalog.Format(msgs.locale, "runtimeStoreLine", map[string]any{"path": path})
+}
+
+// RuntimeSessionDirLine says "Session directory: {path}"
+// in the language the app shows.
+func RuntimeSessionDirLine(path string) string { return In(i18n.Locale()).RuntimeSessionDirLine(path) }
+
+// RuntimeSessionDirLine says "Session directory: {path}"
+// in the language of msgs.
+func (msgs Messages) RuntimeSessionDirLine(path string) string {
+	return Catalog.Format(msgs.locale, "runtimeSessionDirLine", map[string]any{"path": path})
+}
+
+// RuntimeWorkDirLine says "GUI work directory: {path}"
+// in the language the app shows.
+func RuntimeWorkDirLine(path string) string { return In(i18n.Locale()).RuntimeWorkDirLine(path) }
+
+// RuntimeWorkDirLine says "GUI work directory: {path}"
+// in the language of msgs.
+func (msgs Messages) RuntimeWorkDirLine(path string) string {
+	return Catalog.Format(msgs.locale, "runtimeWorkDirLine", map[string]any{"path": path})
+}
+
+// RuntimeContactWorkspaceLine says "Contact workspace: {path}"
+// in the language the app shows.
+func RuntimeContactWorkspaceLine(path string) string {
+	return In(i18n.Locale()).RuntimeContactWorkspaceLine(path)
+}
+
+// RuntimeContactWorkspaceLine says "Contact workspace: {path}"
+// in the language of msgs.
+func (msgs Messages) RuntimeContactWorkspaceLine(path string) string {
+	return Catalog.Format(msgs.locale, "runtimeContactWorkspaceLine", map[string]any{"path": path})
+}
+
+// RuntimeSessionLine says "Session: {session}: state: {state}"
+// in the language the app shows.
+func RuntimeSessionLine(session string, state string) string {
+	return In(i18n.Locale()).RuntimeSessionLine(session, state)
+}
+
+// RuntimeSessionLine says "Session: {session}: state: {state}"
+// in the language of msgs.
+func (msgs Messages) RuntimeSessionLine(session string, state string) string {
+	return Catalog.Format(msgs.locale, "runtimeSessionLine", map[string]any{"session": session, "state": state})
+}
+
+// RuntimeSessionAPILine says "Session API: {api}"
+// in the language the app shows.
+func RuntimeSessionAPILine(api string) string { return In(i18n.Locale()).RuntimeSessionAPILine(api) }
+
+// RuntimeSessionAPILine says "Session API: {api}"
+// in the language of msgs.
+func (msgs Messages) RuntimeSessionAPILine(api string) string {
+	return Catalog.Format(msgs.locale, "runtimeSessionAPILine", map[string]any{"api": api})
+}
+
+// RuntimeAPIConnectedLine says "Runtime API (connected): {api}; no session API loaded"
+// in the language the app shows.
+func RuntimeAPIConnectedLine(api string) string {
+	return In(i18n.Locale()).RuntimeAPIConnectedLine(api)
+}
+
+// RuntimeAPIConnectedLine says "Runtime API (connected): {api}; no session API loaded"
+// in the language of msgs.
+func (msgs Messages) RuntimeAPIConnectedLine(api string) string {
+	return Catalog.Format(msgs.locale, "runtimeAPIConnectedLine", map[string]any{"api": api})
+}
+
+// RuntimeSessionAPIUnknown says "Session API: unknown until the runtime session is loaded"
+// in the language the app shows.
+func RuntimeSessionAPIUnknown() string { return In(i18n.Locale()).RuntimeSessionAPIUnknown() }
+
+// RuntimeSessionAPIUnknown says "Session API: unknown until the runtime session is loaded"
+// in the language of msgs.
+func (msgs Messages) RuntimeSessionAPIUnknown() string {
+	return Catalog.Format(msgs.locale, "runtimeSessionAPIUnknown", nil)
+}
+
+// RuntimeSessionModelLine says "Session model: {model}"
+// in the language the app shows.
+func RuntimeSessionModelLine(model string) string {
+	return In(i18n.Locale()).RuntimeSessionModelLine(model)
+}
+
+// RuntimeSessionModelLine says "Session model: {model}"
+// in the language of msgs.
+func (msgs Messages) RuntimeSessionModelLine(model string) string {
+	return Catalog.Format(msgs.locale, "runtimeSessionModelLine", map[string]any{"model": model})
+}
+
+// RuntimeConnectionManagedNote says "Connection settings are managed by Nagi; the runtime reads its endpoint, model and key from that saved connection."
+// in the language the app shows.
+func RuntimeConnectionManagedNote() string { return In(i18n.Locale()).RuntimeConnectionManagedNote() }
+
+// RuntimeConnectionManagedNote says "Connection settings are managed by Nagi; the runtime reads its endpoint, model and key from that saved connection."
+// in the language of msgs.
+func (msgs Messages) RuntimeConnectionManagedNote() string {
+	return Catalog.Format(msgs.locale, "runtimeConnectionManagedNote", nil)
+}
+
+// RuntimeHostConfigNote says "Host configuration: API_KEY is required; SAKI_API, SAKI_BASE_URL and SAKI_MODEL have runtime defaults. Set them in th…"
+// in the language the app shows.
+func RuntimeHostConfigNote() string { return In(i18n.Locale()).RuntimeHostConfigNote() }
+
+// RuntimeHostConfigNote says "Host configuration: API_KEY is required; SAKI_API, SAKI_BASE_URL and SAKI_MODEL have runtime defaults. Set them in th…"
+// in the language of msgs.
+func (msgs Messages) RuntimeHostConfigNote() string {
+	return Catalog.Format(msgs.locale, "runtimeHostConfigNote", nil)
+}
+
+// RuntimeValueNotConfigured says "not configured"
+// in the language the app shows.
+func RuntimeValueNotConfigured() string { return In(i18n.Locale()).RuntimeValueNotConfigured() }
+
+// RuntimeValueNotConfigured says "not configured"
+// in the language of msgs.
+func (msgs Messages) RuntimeValueNotConfigured() string {
+	return Catalog.Format(msgs.locale, "runtimeValueNotConfigured", nil)
+}
+
+// RuntimeValueUnknown says "unknown"
+// in the language the app shows.
+func RuntimeValueUnknown() string { return In(i18n.Locale()).RuntimeValueUnknown() }
+
+// RuntimeValueUnknown says "unknown"
+// in the language of msgs.
+func (msgs Messages) RuntimeValueUnknown() string {
+	return Catalog.Format(msgs.locale, "runtimeValueUnknown", nil)
+}
+
+// RuntimeSessionNotCreated says "not created until the first message"
+// in the language the app shows.
+func RuntimeSessionNotCreated() string { return In(i18n.Locale()).RuntimeSessionNotCreated() }
+
+// RuntimeSessionNotCreated says "not created until the first message"
+// in the language of msgs.
+func (msgs Messages) RuntimeSessionNotCreated() string {
+	return Catalog.Format(msgs.locale, "runtimeSessionNotCreated", nil)
+}
+
+// RuntimeSessionModelUnknown says "unknown until the session is loaded"
+// in the language the app shows.
+func RuntimeSessionModelUnknown() string { return In(i18n.Locale()).RuntimeSessionModelUnknown() }
+
+// RuntimeSessionModelUnknown says "unknown until the session is loaded"
+// in the language of msgs.
+func (msgs Messages) RuntimeSessionModelUnknown() string {
+	return Catalog.Format(msgs.locale, "runtimeSessionModelUnknown", nil)
+}
+
+// RuntimeSourceMessage says "{source}: {detail}"
+// in the language the app shows.
+func RuntimeSourceMessage(source string, detail string) string {
+	return In(i18n.Locale()).RuntimeSourceMessage(source, detail)
+}
+
+// RuntimeSourceMessage says "{source}: {detail}"
+// in the language of msgs.
+func (msgs Messages) RuntimeSourceMessage(source string, detail string) string {
+	return Catalog.Format(msgs.locale, "runtimeSourceMessage", map[string]any{"source": source, "detail": detail})
+}
+
+// RuntimeStageLabel says "{stage}: {detail}"
+// in the language the app shows.
+//
+// A runtime diagnostic prefixed by its stage.
+func RuntimeStageLabel(stage string, detail string) string {
+	return In(i18n.Locale()).RuntimeStageLabel(stage, detail)
+}
+
+// RuntimeStageLabel says "{stage}: {detail}"
+// in the language of msgs.
+//
+// A runtime diagnostic prefixed by its stage.
+func (msgs Messages) RuntimeStageLabel(stage string, detail string) string {
+	return Catalog.Format(msgs.locale, "runtimeStageLabel", map[string]any{"stage": stage, "detail": detail})
+}
+
+// HistoryNotLoadedCompact says "History not loaded"
+// in the language the app shows.
+func HistoryNotLoadedCompact() string { return In(i18n.Locale()).HistoryNotLoadedCompact() }
+
+// HistoryNotLoadedCompact says "History not loaded"
+// in the language of msgs.
+func (msgs Messages) HistoryNotLoadedCompact() string {
+	return Catalog.Format(msgs.locale, "historyNotLoadedCompact", nil)
+}
+
+// SnippetUser says "You: {text}"
+// in the language the app shows.
+//
+// A rail snippet of the user's message.
+func SnippetUser(text string) string { return In(i18n.Locale()).SnippetUser(text) }
+
+// SnippetUser says "You: {text}"
+// in the language of msgs.
+//
+// A rail snippet of the user's message.
+func (msgs Messages) SnippetUser(text string) string {
+	return Catalog.Format(msgs.locale, "snippetUser", map[string]any{"text": text})
+}
+
+// StatusDetail says "{status}: {detail}"
+// in the language the app shows.
+//
+// A contact status with its detail.
+func StatusDetail(status string, detail string) string {
+	return In(i18n.Locale()).StatusDetail(status, detail)
+}
+
+// StatusDetail says "{status}: {detail}"
+// in the language of msgs.
+//
+// A contact status with its detail.
+func (msgs Messages) StatusDetail(status string, detail string) string {
+	return Catalog.Format(msgs.locale, "statusDetail", map[string]any{"status": status, "detail": detail})
+}
+
+// ConversationMessagesLabel says "Conversation messages"
+// in the language the app shows.
+//
+// The accessible name of the conversation message list.
+func ConversationMessagesLabel() string { return In(i18n.Locale()).ConversationMessagesLabel() }
+
+// ConversationMessagesLabel says "Conversation messages"
+// in the language of msgs.
+//
+// The accessible name of the conversation message list.
+func (msgs Messages) ConversationMessagesLabel() string {
+	return Catalog.Format(msgs.locale, "conversationMessagesLabel", nil)
+}
+
+// SpeakerContact says "Contact"
+// in the language the app shows.
+//
+// The contact as the speaker of a full saved history message.
+func SpeakerContact() string { return In(i18n.Locale()).SpeakerContact() }
+
+// SpeakerContact says "Contact"
+// in the language of msgs.
+//
+// The contact as the speaker of a full saved history message.
+func (msgs Messages) SpeakerContact() string {
+	return Catalog.Format(msgs.locale, "speakerContact", nil)
+}
+
+// HistoryMessageMeta says "{speaker}. {date}. {session}"
+// in the language the app shows.
+//
+// The speaker, date and session above a full saved history message.
+func HistoryMessageMeta(speaker string, date string, session string) string {
+	return In(i18n.Locale()).HistoryMessageMeta(speaker, date, session)
+}
+
+// HistoryMessageMeta says "{speaker}. {date}. {session}"
+// in the language of msgs.
+//
+// The speaker, date and session above a full saved history message.
+func (msgs Messages) HistoryMessageMeta(speaker string, date string, session string) string {
+	return Catalog.Format(msgs.locale, "historyMessageMeta", map[string]any{"speaker": speaker, "date": date, "session": session})
 }

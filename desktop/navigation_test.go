@@ -397,7 +397,7 @@ func TestSourcesPageBackReturnsToOriginatingControl(t *testing.T) {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if a.aux != "" || a.mainPageActive() || !tr.Focused("1 earlier messages") {
+	if a.aux != "" || a.mainPageActive() || !tr.Focused("1 earlier message") {
 		t.Fatalf("sources Back = aux=%q focused=%v", a.aux, tr.Focused("1 earlier messages"))
 	}
 }

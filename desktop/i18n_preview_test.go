@@ -53,6 +53,28 @@ func TestPreviewI18nSelectedSlice(t *testing.T) {
 	tr.SetLocale("zh-Hans")
 	tr.Frame()
 	writePreviewPNG(t, filepath.Join(dir, "settings-zh-Hans-light-960x640.png"), tr.Image())
+
+	history, first := workspaceTestApp(t)
+	first.History = []historyEntry{
+		{ID: "h1", Date: "10月30日", From: "contact", Text: "这是一段足够长的中文历史内容，用来检查右侧历史列表的换行、密度与按钮是否完整。"},
+	}
+	history.openHistory()
+	historyTr := ui.NewTester(history.view, 1040, 720)
+	historyTr.SetLocale("zh-Hans")
+	historyTr.Frame()
+	writePreviewPNG(t, filepath.Join(dir, "history-zh-Hans-light-1040x720.png"), historyTr.Image())
+
+	fullApp, fullContact := workspaceTestApp(t)
+	fullEntry := historyEntry{ID: "h-full", Date: "10月30日", From: "contact", Text: "完整历史原文，保持原样，不做任何翻译。"}
+	fullContact.History = []historyEntry{fullEntry}
+	fullApp.openHistoryEntryFull(fullEntry)
+	fullTr := ui.NewTester(fullApp.view, 1040, 720)
+	fullTr.SetLocale("zh-Hans")
+	fullTr.Frame()
+	writePreviewPNG(t, filepath.Join(dir, "history-full-zh-Hans-light-1040x720.png"), fullTr.Image())
+	fullTr.SetLocale("en")
+	fullTr.Frame()
+	writePreviewPNG(t, filepath.Join(dir, "history-full-en-light-1040x720.png"), fullTr.Image())
 }
 
 func showPreviewTooltip(t *testing.T, tr *ui.Tester, label string) {

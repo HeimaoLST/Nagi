@@ -13,7 +13,6 @@
   "settingsContactTitle": "联系人资料：{name}",
   "settingsAdvanced": "高级",
   "settingsNavigationLabel": "设置导航",
-  "settingsAppearanceHint": "更改立即生效。",
   "settingsGeneral": "通用",
   "settingsLanguage": "语言",
   "appearanceSystem": "系统",
@@ -21,12 +20,11 @@
   "appearanceDark": "深色",
   "appearanceMode": "外观模式",
   "languageSystem": "系统（{language}）",
-  "languageSystemHint": "跟随 macOS 首选语言。",
   "languageChinese": "简体中文",
   "languageEnglish": "English",
-  "languageHint": "更改立即生效。",
+  "languageHint": "部分系统窗口会在重启后使用新语言。",
   "copyMessageLabel": "复制消息",
-  "copySavedMessageLabel": "复制已保存消息",
+  "copySavedMessageLabel": "复制完整历史消息",
   "copyHistoryMessageLabel": "复制历史消息",
   "copySourceMessageLabel": "复制来源消息",
   "copyContextTextLabel": "复制资料文本",
@@ -130,5 +128,372 @@
   "readerOpenFileLabel": "打开文件",
   "readerShowInFinderLabel": "在 Finder 中显示",
   "readerSourceRawLabel": "源码与原始记录",
-  "readerHideSourceRawLabel": "隐藏源码与原始记录"
+  "readerHideSourceRawLabel": "隐藏源码与原始记录",
+  "railHide": "隐藏",
+  "railHideContactsTooltip": "隐藏联系人",
+  "railWindowActions": "窗口操作",
+  "railContactsTitle": "联系人",
+  "railContactListActions": "联系人列表操作",
+  "railContactSearchPlaceholder": "姓名或用途",
+  "railNoContactsMatch": "当前范围与搜索没有匹配的联系人。",
+  "contactScopeLabel": "联系人范围",
+  "navShowContactsTooltip": "显示联系人",
+  "navHistory": "历史",
+  "navConversationHistoryTooltip": "对话历史",
+  "navContactProfile": "联系人资料",
+  "navContactProfileTooltip": "联系人资料摘要",
+  "navWorkspaceDetails": "工作区详情",
+  "backToLatest": "回到最新",
+  "configurationDetails": "配置详情",
+  "runtimeDraining": "正在停止运行时…",
+  "runtimeConnecting": "正在连接运行时…",
+  "runtimeLabel": "运行时",
+  "archiveNotice": "已归档联系人：发送和新建事项执行已停用。历史、草稿和事项数据仍保留。",
+  "restoreContactAction": "恢复联系人",
+  "contactProfileAction": "联系人资料",
+  "emptyNoMessages": "还没有消息",
+  "emptyConversationStart": "与 {name} 开始对话。",
+  "@emptyConversationStart": {
+    "description": "The empty-state hint for a contact without messages.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "emptyConversationDraft": "在下方输入，与 {name} 对话。",
+  "@emptyConversationDraft": {
+    "description": "The empty-state hint while a new conversation can be typed.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "historyNotLoadedTitle": "对话历史尚未加载",
+  "historyNotLoadedHint": "此联系人已有会话，但历史尚未读取；不会显示为空。",
+  "historyRuntimeNotReady": "运行时尚未就绪；暂时无法读取历史。",
+  "connectionMismatchSummary": "连接不可用或已更改。请检查连接设置，或从资料页开始新对话。",
+  "connectionSettingsAction": "连接设置",
+  "detailsAction": "详情",
+  "hideAction": "隐藏",
+  "hideDetailsAction": "隐藏详情",
+  "locatedInHistory": "已定位到历史",
+  "earlierMessagesCount": "{count, plural, other {# 条早期消息}}",
+  "lookedUpEarlier": "查阅了早期对话",
+  "openSources": "打开来源",
+  "tryAgain": "重试",
+  "retried": "已重试",
+  "speakerYou": "你",
+  "sourcesTitle": "来源",
+  "backAction": "← 返回",
+  "closeSources": "关闭来源",
+  "backFromSources": "从来源返回",
+  "fullSavedMessage": "完整历史消息",
+  "closeFullMessage": "关闭完整历史消息",
+  "backToHistoryTooltip": "返回历史",
+  "backToHistoryVisible": "← 返回历史",
+  "sessionModelTitle": "会话模型",
+  "closeSessionModel": "关闭会话模型",
+  "taskContextTitle": "资料",
+  "closeTaskContext": "关闭资料",
+  "backLabel": "返回",
+  "backFromAux": "从{title}返回",
+  "conversationBadge": "对话",
+  "conversationModelLabel": "对话模型",
+  "conversationModelTooltip": "对话模型：{summary}",
+  "modelNotLoaded": "模型未加载",
+  "modelNotSet": "未设置模型",
+  "connectionDefaultNotConfigured": "未配置连接默认值",
+  "sessionModelSummary": "会话：{model}",
+  "sessionModelNotLoaded": "会话模型未加载",
+  "connectionDefaultModel": "连接默认：{model}",
+  "modelDetailsScroll": "模型详情",
+  "taskContextDetailsScroll": "资料详情",
+  "composerLabel": "{name} 的输入框",
+  "composerPlaceholder": "发消息给 {name}",
+  "taskContextCount": "{count, plural, =0 {资料} other {资料：#}}",
+  "@taskContextCount": {
+    "description": "The composer Task context button with its item count.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "composerTools": "输入工具",
+  "stopConversation": "停止对话",
+  "stopConversationTooltip": "停止此对话",
+  "sendAction": "发送",
+  "sendTooltip": "发送消息。Enter 发送；Shift + Enter 换行。",
+  "capacityUnknown": "运行时任务容量尚未加载；将使用保守的单任务行为。",
+  "retryCapacity": "重试容量",
+  "sendingState": "正在发送…",
+  "sendAcceptedState": "已接受；等待运行时启动。",
+  "sendUnknownState": "发送未确认。再次发送前请重新加载确认。",
+  "sendDisconnectedState": "运行时已断开；请重启 Nagi 检查任务与历史。",
+  "reloadAction": "重新加载",
+  "historyTitle": "历史：{name}",
+  "@historyTitle": {
+    "description": "The History heading for a contact.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "closeHistory": "关闭历史",
+  "backFromHistory": "从历史返回",
+  "historySearchScopeHint": "仅搜索 {name} 的对话历史。其他联系人的消息不会包含在内。",
+  "@historySearchScopeHint": {
+    "description": "Explains that History searches only this contact.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "historyNotLoadedShort": "历史尚未加载；现有记录不会显示为不存在。",
+  "historySearchPlaceholder": "搜索 {name} 的历史",
+  "@historySearchPlaceholder": {
+    "description": "The History search field placeholder.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "searchSavedContexts": "搜索历史会话",
+  "searchingSavedContexts": "正在搜索历史会话…",
+  "savedContextUnavailable": "历史会话不可用：{session}",
+  "@savedContextUnavailable": {
+    "description": "A saved context that could not be read.",
+    "placeholders": {
+      "session": {
+        "type": "String"
+      }
+    }
+  },
+  "viewFullMessage": "查看完整消息",
+  "openingFullSavedMessage": "正在打开完整历史消息…",
+  "noSavedMessages": "{name} 已加载的历史中没有历史消息。",
+  "@noSavedMessages": {
+    "description": "The empty saved-context result for a contact.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "noMatchingMessages": "{name} 已加载的历史中没有与“{query}”匹配的消息。",
+  "@noMatchingMessages": {
+    "description": "The no-match saved-context result.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "query": {
+        "type": "String"
+      }
+    }
+  },
+  "contextCount": "{count, plural, other {资料：# 项}}",
+  "readFullMessage": "阅读完整消息",
+  "viewInConversation": "在对话中查看",
+  "savedContextMatch": "{date}：历史会话 {session}",
+  "@savedContextMatch": {
+    "description": "A saved-context search match heading.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      },
+      "session": {
+        "type": "String"
+      }
+    }
+  },
+  "historySummary": "{matches, plural, =0 {没有匹配记录} other {找到 # 条记录}}{limited, plural, =0 {} other {（已达上限）}}{failures, plural, =0 {} other {；# 个会话不可用}}",
+  "@historySummary": {
+    "description": "The saved-context search summary.",
+    "placeholders": {
+      "matches": {
+        "type": "int"
+      },
+      "limited": {
+        "type": "int"
+      },
+      "failures": {
+        "type": "int"
+      }
+    }
+  },
+  "sourcesSummary": "{count, plural, other {# 条来自 {name} 历史的早期消息，被此回复引用。}}",
+  "@sourcesSummary": {
+    "description": "The sources page summary.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "historySearchMissingQuery": "请输入要搜索历史会话的词组。",
+  "historySearchUnavailable": "运行时就绪后才能搜索历史会话。",
+  "historySearchPartial": "部分历史会话无法读取。",
+  "historyMessageNotSaved": "该消息不属于此联系人的历史会话。",
+  "historyReadFailed": "无法读取此历史消息。",
+  "historyMessageMoved": "该历史消息已移动或不再可用。",
+  "profilePurpose": "用途",
+  "profileNoPurpose": "未记录用途。",
+  "profileInstructions": "指令",
+  "profileNoInstructions": "未记录指示。",
+  "profileWorkspace": "工作目录",
+  "profileWorkspaceInherited": "继承自连接默认值",
+  "profileConversation": "对话",
+  "profileNoSession": "还没有对话会话。",
+  "profileSession": "对话会话 {session}",
+  "profileSessionNotLoaded": "对话会话 {session}：历史未加载",
+  "profileActivity": "活动",
+  "profileNoActivity": "没有进行中的事项。",
+  "profileActivityUnknown": "事项状态未确定；更改或归档前请重新加载。",
+  "profileActivityActive": "此联系人有进行中的事项。",
+  "profileEditFull": "编辑完整资料",
+  "profileClose": "关闭资料",
+  "profileBackTooltip": "从联系人资料返回",
+  "profileArchivedNotice": "已归档联系人。现有历史、草稿和事项数据仍可用。",
+  "statusWorking": "工作中",
+  "statusNeedsAttention": "需处理",
+  "statusReady": "就绪",
+  "settingsAdvancedIntro": "只读的运行时与启动诊断。打开连接设置可修复配置。",
+  "settingsStartupSection": "启动与配置",
+  "settingsShowRuntimeDetails": "显示运行时、路径和会话",
+  "settingsHideRuntimeDetails": "隐藏运行时、路径和会话",
+  "settingsOpenConnection": "打开连接与模型",
+  "connectionCurrent": "当前：{summary}",
+  "connectionKeptOnFailure": "当前连接仍在使用；本次尝试未替换它。",
+  "connectionNoneApplied": "当前没有已应用的连接。",
+  "connectionUnsavedForm": "表单有未保存的更改。",
+  "connectionSavedAwaitingApply": "已保存配置等待应用。",
+  "settingsNoContactToEdit": "没有可编辑的联系人。",
+  "settingsUnsavedChanges": "有未保存的更改。",
+  "settingsBuiltinLegacyError": "内置工具选择需要受管理的 Nagi 连接；此运行时使用旧版环境配置。",
+  "settingsBuiltinManagedError": "自定义内置工具前，请保存并应用受管理的 Nagi 连接。",
+  "settingsBuiltinNotReady": "运行时就绪后即可使用内置工具。",
+  "settingsRetrySave": "重试保存",
+  "appearanceStatusApplied": "已应用。",
+  "appearanceStatusPreview": "已为此预览应用；示例数据不会持久化。",
+  "appearanceStatusSaved": "已应用并保存。",
+  "appearanceStatusSaveFailed": "已应用但未保存。重试保存可再次尝试。",
+  "profileSaveIntro": "保存会更新此联系人的名称。其他设置在新对话或事项工作会话首次创建时应用；现有会话保持其配置。",
+  "profileArchivedBadge": "已归档",
+  "fieldName": "姓名",
+  "fieldNameAccessible": "联系人名称",
+  "fieldNamePlaceholder": "姓名",
+  "fieldPurposeAccessible": "联系人用途",
+  "fieldInstructionsAccessible": "联系人指示",
+  "fieldWorkspacePlaceholder": "/absolute/path/to/workspace（留空使用默认）",
+  "fieldWorkspaceAccessible": "联系人工作目录",
+  "profileWorkspaceHint": "工作目录留空即可使用已应用的默认目录。",
+  "profileBuiltinTools": "内置工具",
+  "profileBuiltinLoading": "正在从运行时加载内置工具…",
+  "profileBuiltinNotLoaded": "尚未从运行时加载内置工具。",
+  "profileBuiltinRetry": "重试内置工具",
+  "profileBuiltinUseDefaults": "使用宿主默认值",
+  "profileBuiltinUseDefaultsTooltip": "使用运行时宿主默认提供的内置工具。",
+  "profileBuiltinNone": "没有启用内置工具。Nagi 事项工具仍可用于各自的工作流。",
+  "profileSaveAndNew": "保存并开始新对话",
+  "profileDiscard": "放弃更改",
+  "profileContactManagement": "联系人管理",
+  "profileRestore": "恢复",
+  "profileArchive": "归档",
+  "profileSaving": "正在保存…",
+  "validationNameRequired": "请输入联系人姓名。",
+  "validationWorkspaceAbsolute": "工作目录必须是绝对路径，或留空使用已应用的默认值。",
+  "validationWorkspaceDirectory": "工作目录必须是已有目录。",
+  "profileErrorBusy": "已在保存中。",
+  "profileErrorArchived": "保存资料前请先恢复此联系人。",
+  "profileErrorNoConversation": "只有存在现有对话时才能开始新对话。",
+  "profileReasonArchived": "此联系人已归档。编辑或开始新工作前请先恢复。",
+  "profileReasonUnknown": "事项仍未确定。归档或开始新对话前，请重新加载确认状态。",
+  "profileReasonActive": "归档或开始新对话前，进行中的事项必须完成或停止。",
+  "profileErrorStoreUnavailable": "无法保存此资料：本地联系人存储不可用。",
+  "profileErrorSaveFailed": "无法保存此资料。你的更改仍在这里。",
+  "profileSavedDefaults": "资料已保存。新对话和新事项工作会话将使用这些默认值；现有工作不变。",
+  "profileSavedNextMessage": "资料已保存。下一条消息将使用这些默认值开始新对话。",
+  "archiveErrorUnknown": "事项仍未确定。归档前请重新加载确认状态。",
+  "archiveErrorActive": "归档此联系人前，进行中的事项必须完成或停止。",
+  "archiveErrorAlready": "此联系人已归档。",
+  "archiveErrorStore": "无法归档此联系人：本地联系人存储不可用。",
+  "archiveErrorSave": "无法归档此联系人。其先前状态保持不变。",
+  "archiveSaved": "联系人已归档。发送和新建事项执行已停用；历史与事项数据仍保留。",
+  "restoreErrorStore": "无法恢复此联系人：本地联系人存储不可用。",
+  "restoreErrorSave": "无法恢复此联系人。其归档状态保持不变。",
+  "restoreSaved": "联系人已恢复。",
+  "newContactName": "新联系人 {number}",
+  "@newContactName": {
+    "description": "The default name of a newly added contact.",
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  },
+  "contactChoiceDuplicate": "{name}（{number}）",
+  "@contactChoiceDuplicate": {
+    "description": "A contact picker label disambiguated by its position.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "number": {
+        "type": "int"
+      }
+    }
+  },
+  "runtimeNotStartedLocalStore": "运行时：未启动（本地联系人存储不可用）",
+  "runtimeLocalStoreUnavailable": "本地联系人存储不可用；运行时未启动。",
+  "runtimeStatusLine": "运行时：{status}",
+  "runtimeStatusNotLoaded": "未知",
+  "runtimeStatusConnectionOnly": "{status}（仅连接）",
+  "runtimeHelperNotStartedLocalStore": "未启动；请先修复本地联系人存储",
+  "runtimeHelperNotFound": "未找到（应在 Saki 旁为 Saki-runtime，或设置 SAKI_RUNTIME_BIN）",
+  "runtimeHelperNotApplied": "尚未启动；应用已保存的连接以检查 helper",
+  "runtimeHelperNotChecked": "尚未检查；请先配置并应用连接",
+  "runtimeHelperLine": "辅助进程：{helper}",
+  "runtimeStoreLine": "存储：{path}",
+  "runtimeSessionDirLine": "会话目录：{path}",
+  "runtimeWorkDirLine": "GUI 工作目录：{path}",
+  "runtimeContactWorkspaceLine": "联系人工作目录：{path}",
+  "runtimeSessionLine": "会话：{session}：状态：{state}",
+  "runtimeSessionAPILine": "会话 API：{api}",
+  "runtimeAPIConnectedLine": "运行时 API（已连接）：{api}；未加载会话 API",
+  "runtimeSessionAPIUnknown": "会话 API：运行时会话加载前未知",
+  "runtimeSessionModelLine": "会话模型：{model}",
+  "runtimeConnectionManagedNote": "连接设置由 Nagi 管理；运行时从该已保存连接读取端点、模型和密钥。",
+  "runtimeHostConfigNote": "宿主配置：需要 API_KEY；SAKI_API、SAKI_BASE_URL 和 SAKI_MODEL 有运行时默认值。请在环境或 GUI 工作目录的 .env 中设置；值保持隐藏。",
+  "runtimeValueNotConfigured": "未配置",
+  "runtimeValueUnknown": "未知",
+  "runtimeSessionNotCreated": "首条消息后创建",
+  "runtimeSessionModelUnknown": "会话加载前未知",
+  "runtimeSourceMessage": "{source}：{detail}",
+  "runtimeStageLabel": "{stage}：{detail}",
+  "@runtimeStageLabel": {
+    "description": "A runtime diagnostic prefixed by its stage.",
+    "placeholders": {
+      "stage": {
+        "type": "String"
+      },
+      "detail": {
+        "type": "String"
+      }
+    }
+  },
+  "historyNotLoadedCompact": "历史未加载",
+  "snippetUser": "你：{text}",
+  "statusDetail": "{status}：{detail}",
+  "conversationMessagesLabel": "对话消息",
+  "speakerContact": "联系人",
+  "historyMessageMeta": "{speaker}。{date}。{session}"
 }
