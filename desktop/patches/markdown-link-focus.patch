@@ -7,13 +7,13 @@
 +	// anchor or link validation behavior. block and inline are the link's
 +	// parsed block and inline indices in this document.
 +	LinkElement func(c *ui.Context, block, inline int, dest string, element ui.Element)
-@@ -448 +454 @@
+@@ -464 +470 @@
 -		st.link(c, &in, func() { ui.RichText(c, pc.spans...) })
 +		st.link(c, block, pc.link, &in, func() { ui.RichText(c, pc.spans...) })
-@@ -453 +459 @@
+@@ -469 +475 @@
 -func (st *viewState) link(c *ui.Context, in *parser.Inline, children func()) {
 +func (st *viewState) link(c *ui.Context, block, inline int, in *parser.Inline, children func()) {
-@@ -481,0 +488,3 @@
+@@ -497,0 +504,3 @@
 +	if st.o.LinkElement != nil {
 +		st.o.LinkElement(c, block, inline, dest, l)
 +	}
