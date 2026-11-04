@@ -375,7 +375,7 @@ func TestHistoryModalPreservesWorkAndReturnsFocus(t *testing.T) {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if err := tr.Click("View in conversation"); err != nil {
+	if err := tr.Click("View in chat"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
@@ -470,7 +470,7 @@ func TestUnloadedSessionDoesNotClaimEmptyHistory(t *testing.T) {
 	if tr.HasText("No messages yet") || tr.HasText("No current work") {
 		t.Fatalf("unloaded session was presented as truly empty: %v", tr.Texts())
 	}
-	for _, want := range []string{"Conversation history is not loaded", "Session history is not loaded", "Runtime is not ready"} {
+	for _, want := range []string{"Chat history is not loaded", "Session history is not loaded", "Runtime is not ready"} {
 		if !tr.HasText(want) {
 			t.Errorf("unloaded state missing %q", want)
 		}

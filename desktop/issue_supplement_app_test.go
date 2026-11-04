@@ -219,12 +219,12 @@ func TestIssueSupplementUITesterPreviewCopyAndSaveFailure(t *testing.T) {
 	tr := ui.NewTester(a.view, 1040, 1600)
 	tr.Frame()
 	expandIssueDetails(t, tr)
-	if err := tr.Click("Add supplement"); err != nil {
+	if err := tr.Click("Add follow-up"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
 	*a.issueSupplementDraft(issueID) = "exact supplement text\n第二行"
-	if err := tr.Click("Save supplement"); err != nil {
+	if err := tr.Click("Save follow-up"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
@@ -235,20 +235,20 @@ func TestIssueSupplementUITesterPreviewCopyAndSaveFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if err := tr.Click("Copy supplement text"); err != nil {
+	if err := tr.Click("Copy follow-up text"); err != nil {
 		t.Fatal(err)
 	}
 	if got := tr.Clipboard(); got != "exact supplement text\n第二行" {
 		t.Fatalf("supplement copy = %q", got)
 	}
-	if err := tr.Click("Add supplement"); err != nil {
+	if err := tr.Click("Add follow-up"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
 	*a.issueSupplementDraft(issueID) = "must survive save failure"
 	oldStore := a.store.path
 	a.store.path = t.TempDir()
-	if err := tr.Click("Save supplement"); err != nil {
+	if err := tr.Click("Save follow-up"); err != nil {
 		t.Fatal(err)
 	}
 	a.store.path = oldStore
@@ -270,7 +270,7 @@ func TestIssueSupplementOwnerDraftsStayIsolatedAcrossContactSwitch(t *testing.T)
 	tr := ui.NewTester(a.view, 1040, 1600)
 	tr.Frame()
 	expandIssueDetails(t, tr)
-	if err := tr.Click("Add supplement"); err != nil {
+	if err := tr.Click("Add follow-up"); err != nil {
 		t.Fatal(err)
 	}
 	a.windowWidth = 1040

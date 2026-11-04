@@ -354,7 +354,7 @@ func TestIssueDetailTopRowFitsNarrowWorkPanel(t *testing.T) {
 	tr.Frame()
 	panel := float32(1180) - a.workWidth() - paneSeparatorWidth
 	back, backOK := tr.Find("Back to tasks")
-	stop, stopOK := tr.Find("Stop issue task")
+	stop, stopOK := tr.Find("Stop task")
 	if !backOK || !stopOK || back.W <= 0 || stop.W <= 0 || back.X < panel || stop.X+stop.W > 1180 ||
 		back.X+back.W > stop.X {
 		t.Fatalf("narrow top row = panel=%v back=%+v/%v stop=%+v/%v", panel, back, backOK, stop, stopOK)
@@ -373,7 +373,7 @@ func TestIssueStoppingDetailDisablesStopLabel(t *testing.T) {
 	openIssueDetailForTest(a, ct, issue.ID)
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	if !tr.HasText("Stopping issue…") || tr.HasText("Stop issue task") {
+	if !tr.HasText("Stopping…") || tr.HasText("Stop task") {
 		t.Fatalf("stopping detail = %v", tr.Texts())
 	}
 }
@@ -498,7 +498,7 @@ func TestClosedChatWaitingOrInterruptedShowsTaskFactAndView(t *testing.T) {
 		tr := ui.NewTester(a.view, 1040, 720)
 		tr.Frame()
 		if a.workspaceOpen || len(ct.Messages) != 0 || !tr.HasText("View task") || !tr.HasText(wantFact) ||
-			tr.HasText("Start a conversation") {
+			tr.HasText("Start a chat") {
 			t.Fatalf("closed chat %s fact/view/state = open=%v messages=%d texts=%v",
 				map[bool]string{true: "interrupted", false: "waiting"}[interrupted], a.workspaceOpen, len(ct.Messages), tr.Texts())
 		}

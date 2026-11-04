@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"strconv"
 	"strings"
 
@@ -577,9 +576,9 @@ func (a *appModel) issueDetailView(c *ui.Context, t *ui.Theme, ct *contact, issu
 				}
 				ui.Spacer(c)
 				if active {
-					label := "Stop issue task"
+					label := locales.In(c.Locale()).WorkStopIssueTask()
 					if work.State == workStopping {
-						label = "Stopping issue…"
+						label = locales.In(c.Locale()).WorkStoppingIssue()
 					}
 					stop := secondaryButton(c, label).TextColor(t.Warning).OnClick(func() {
 						a.cancelWorkTask(ct, work.TaskID)
@@ -741,11 +740,12 @@ func (ct *contact) resultTextForExecution(execution *issueExecution) string {
 
 func (a *appModel) issueResultContext(c *ui.Context, t *ui.Theme, issue *productIssue, work *workItem) {
 	index, _ := issueExecutionForTask(issue, work.TaskID)
-	label := "result"
+	msgs := locales.In(c.Locale())
+	text := msgs.IssueRunResultSummary(strconv.Itoa(index+1), issue.Goal)
 	if work.State == workAccepted || work.State == workRunning || work.State == workStopping {
-		label = "in progress"
+		text = msgs.IssueRunInProgressSummary(strconv.Itoa(index+1), issue.Goal)
 	}
-	ui.Text(c, fmt.Sprintf("Run %d %s: %s", index+1, label, issue.Goal)).FontSize(typeAction).FontWeight(500).TextColor(t.TextMuted).MaxLines(2)
+	ui.Text(c, text).FontSize(typeAction).FontWeight(500).TextColor(t.TextMuted).MaxLines(2)
 }
 
 func latestIssueExecution(issue *productIssue) *issueExecution {
@@ -1105,6 +1105,7 @@ func (a *appModel) issueExecutions(c *ui.Context, t *ui.Theme, ct *contact, issu
 	if len(issue.Executions) == 0 {
 		return
 	}
+	msgs := locales.In(c.Locale())
 	ui.Text(c, locales.In(c.Locale()).IssueExecutionHistory()).FontSize(typeGroupTitle).FontWeight(500).TextColor(t.TextMuted)
 	for index, execution := range issue.Executions {
 		if execution == nil {
@@ -1120,14 +1121,14 @@ func (a *appModel) issueExecutions(c *ui.Context, t *ui.Theme, ct *contact, issu
 			})
 			contextCount := len(executionTaskContextItems(ct, issue, execution))
 			if execution.Prompt != "" || contextCount > 0 {
-				label := "Show sent snapshot"
+				label := msgs.IssueShowSentSnapshot()
 				if contextCount > 0 {
-					label = fmt.Sprintf("Sent task context: %d", contextCount)
+					label = msgs.IssueSentContextCount(contextCount)
 					if execution.ContextExpanded {
-						label = "Hide sent task context"
+						label = msgs.IssueHideSentContext()
 					}
 				} else if execution.ContextExpanded {
-					label = "Hide sent snapshot"
+					label = msgs.IssueHideSentSnapshot()
 				}
 				secondaryButton(c, label).OnClick(func() {
 					execution.ContextExpanded = !execution.ContextExpanded
@@ -1159,13 +1160,13 @@ func (a *appModel) issueExecutions(c *ui.Context, t *ui.Theme, ct *contact, issu
 				})
 			}
 			ui.Column(c).AlignItems(ui.Start).Gap(6).Children(func() {
-				resultButton := secondaryButton(c, fmt.Sprintf("Open result: run %d", index+1)).OnClick(func() { a.openIssueResult(issue.ID, execution.ID) })
+				resultButton := secondaryButton(c, msgs.IssueOpenResultRun(strconv.Itoa(index+1))).OnClick(func() { a.openIssueResult(issue.ID, execution.ID) })
 				if a.issueResultShouldFocus(issue.ID, execution.ID, false) {
 					resultButton.Focus()
 					a.consumeIssueResultReturnFocus()
 				}
 				if w != nil {
-					secondaryButton(c, fmt.Sprintf("View execution: run %d", index+1)).OnClick(func() { a.showIssueWork(issue.ID, execution.TaskID) })
+					secondaryButton(c, msgs.IssueViewExecutionRun(strconv.Itoa(index+1))).OnClick(func() { a.showIssueWork(issue.ID, execution.TaskID) })
 				}
 			})
 		})
@@ -1177,11 +1178,9 @@ func (a *appModel) issueActions(c *ui.Context, t *ui.Theme, ct *contact, issue *
 		return
 	}
 	if editable {
+		msgs := locales.In(c.Locale())
 		taskContextButton := func() {
-			label := "Task context"
-			if count := issue.Context.count(); count > 0 {
-				label = fmt.Sprintf("Task context: %d", count)
-			}
+			label := msgs.TaskContextCount(issue.Context.count())
 			button := secondaryButton(c, label).OnClick(func() { a.openIssueTaskContext(issue.ID) })
 			if a.focusIssueContext {
 				button.Focus()
@@ -1189,9 +1188,11 @@ func (a *appModel) issueActions(c *ui.Context, t *ui.Theme, ct *contact, issue *
 			}
 		}
 		addSupplementButton := func() {
-			label := "Add supplement"
-			if issue.Supplements != nil && (issue.Supplements.pendingCount() > 0 || len(issue.Supplements.Batches) > 0) {
-				label = fmt.Sprintf("Supplements: %d", issue.Supplements.pendingCount()+len(issue.Supplements.Batches))
+			label := msgs.SupplementAdd()
+			if issue.Supplements != nil {
+				if count := issue.Supplements.pendingCount() + len(issue.Supplements.Batches); count > 0 {
+					label = msgs.SupplementActionCount(count)
+				}
 			}
 			secondaryButton(c, label).OnClick(func() { a.openIssueSupplementForm(issue.ID) })
 		}

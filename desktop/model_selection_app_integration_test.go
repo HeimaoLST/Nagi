@@ -178,7 +178,7 @@ func TestModelSelectionGUIActualTargetsAndRestart(t *testing.T) {
 			conversation := sendConnectionConversation(t, h, "Remember this original conversation", "model fixture answer")
 			var contactID string
 			h.pump.do(func() { contactID = h.app.selectedContact().ID })
-			openModelPanel(t, h, "Conversation model")
+			openModelPanel(t, h, "Chat model")
 			h.pump.do(func() {
 				if h.app.modelForm.Target.Config.SessionID != conversation || h.app.modelForm.Effective.Config.EffectiveConfig.Model != "model-A" {
 					t.Error("conversation entry did not display its Runtime configuration")
@@ -216,7 +216,7 @@ func TestModelSelectionGUIActualTargetsAndRestart(t *testing.T) {
 				t.Error(err)
 				return
 			}
-			openModelPanel(t, h, "Issue model")
+			openModelPanel(t, h, "Task model")
 			h.pump.do(func() {
 				if h.app.modelForm.Target.Config.SessionID != workSession || h.app.modelForm.Effective.Config.EffectiveConfig.Model != "model-A" {
 					t.Error("issue model inherited the conversation selection")
@@ -252,7 +252,7 @@ func TestModelSelectionGUIActualTargetsAndRestart(t *testing.T) {
 				}
 			})
 			sendConnectionConversation(t, restarted, "Use the restored conversation model", "model fixture answer")
-			openModelPanel(t, restarted, "Conversation model")
+			openModelPanel(t, restarted, "Chat model")
 			updateModelGUI(t, restarted, "model-A")
 			clickModelAction(t, restarted, "Cancel")
 			sendConnectionConversation(t, restarted, "Return to A", "model fixture answer")
@@ -290,14 +290,14 @@ func TestModelSelectionGUIRefusalConflictAndCancelPreserveHistory(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	openModelPanel(t, h, "Conversation model")
+	openModelPanel(t, h, "Chat model")
 	h.pump.do(func() { h.app.modelForm.Draft.Model = "canceled-model" })
 	clickModelAction(t, h, "Cancel")
 	actual, err := rt.connectionConfig(sessionID)
 	if err != nil || actual.ConfigRevision != initial.ConfigRevision || actual.EffectiveConfig.Model != "model-A" {
 		t.Fatal("Cancel submitted a model update")
 	}
-	openModelPanel(t, h, "Conversation model")
+	openModelPanel(t, h, "Chat model")
 	h.pump.do(func() {
 		h.app.modelForm.Draft.Model = "invalid-model"
 		h.app.modelForm.Draft.ContextTokens = "2000"
@@ -362,7 +362,7 @@ func TestModelSelectionGUILostReplyAndQuitWaitForReadback(t *testing.T) {
 	provider := &modelProviderFixture{}
 	h := openModelGUI(t, proxy, connectionAPIResponses, provider)
 	sessionID := sendConnectionConversation(t, h, "Keep the original history", "model fixture answer")
-	openModelPanel(t, h, "Conversation model")
+	openModelPanel(t, h, "Chat model")
 	h.pump.do(func() { h.app.modelForm.Draft.Model = "model-B" })
 	clickModelAction(t, h, "Update model")
 	h.pump.do(func() {
@@ -383,7 +383,7 @@ func TestModelSelectionGUILostReplyAndQuitWaitForReadback(t *testing.T) {
 	}
 	clickModelAction(t, h, "Cancel")
 	sendConnectionConversation(t, h, "Use the confirmed model", "model fixture answer")
-	openModelPanel(t, h, "Conversation model")
+	openModelPanel(t, h, "Chat model")
 	manual := make(chan func(), 16)
 	quit := make(chan struct{}, 1)
 	h.pump.do(func() {
@@ -433,7 +433,7 @@ func TestModelSelectionGUIReadbackFailureStaysUnknownAfterClosingPanel(t *testin
 	proxy, countPath := modelGUIProxy(t, requireRuntimeBinary(t), "fail_readback")
 	h := openModelGUI(t, proxy, connectionAPIResponses, &modelProviderFixture{})
 	sendConnectionConversation(t, h, "Retain this context", "model fixture answer")
-	openModelPanel(t, h, "Conversation model")
+	openModelPanel(t, h, "Chat model")
 	h.pump.do(func() { h.app.modelForm.Draft.Model = "model-B" })
 	clickModelAction(t, h, "Update model")
 	h.pump.waitTimeout(func() bool { return !h.app.modelForm.Busy }, 30*time.Second)
@@ -448,7 +448,7 @@ func TestModelSelectionGUIReadbackFailureStaysUnknownAfterClosingPanel(t *testin
 			t.Error("closing the panel silently cleared an unknown model update")
 		}
 	})
-	openModelPanel(t, h, "Conversation model")
+	openModelPanel(t, h, "Chat model")
 	h.pump.do(func() {
 		if h.app.modelForm.Effective.Config.EffectiveConfig.Model != "model-B" || h.app.selectedContact().SessionModel != "model-B" || h.app.canSend(h.app.selectedContact()) != "" {
 			t.Error("successful re-read did not restore the actual model and task admission")
@@ -464,7 +464,7 @@ func TestModelSelectionGUIHelperApplyClearsOldRecoveryState(t *testing.T) {
 	proxy, _ := modelGUIProxy(t, requireRuntimeBinary(t), "commit_unknown")
 	h := openModelGUI(t, proxy, connectionAPIResponses, &modelProviderFixture{})
 	sessionID := sendConnectionConversation(t, h, "Keep this history when replacing the helper", "model fixture answer")
-	openModelPanel(t, h, "Conversation model")
+	openModelPanel(t, h, "Chat model")
 	h.pump.do(func() { h.app.modelForm.Draft.Model = "model-B" })
 	clickModelAction(t, h, "Update model")
 	h.pump.wait(func() bool { return !h.app.modelForm.Busy })
@@ -494,7 +494,7 @@ func TestModelSelectionGUICommitUnknownRequiresExplicitRecovery(t *testing.T) {
 	provider := &modelProviderFixture{}
 	h := openModelGUI(t, proxy, connectionAPIResponses, provider)
 	sessionID := sendConnectionConversation(t, h, "Retain history during recovery", "model fixture answer")
-	openModelPanel(t, h, "Conversation model")
+	openModelPanel(t, h, "Chat model")
 	h.pump.do(func() { h.app.modelForm.Draft.Model = "model-B" })
 	clickModelAction(t, h, "Update model")
 	h.pump.wait(func() bool { return !h.app.modelForm.Busy })
@@ -588,7 +588,7 @@ func TestModelSelectionGUIReleasedIssueUpdateWaitsForRelease(t *testing.T) {
 	t.Setenv("SAKI_MODEL_PROXY_LOAD_COUNT", loadPath)
 	h := openModelGUI(t, proxy, connectionAPIResponses, &modelProviderFixture{})
 	issueID, _ := runReleasedIssue(t, h)
-	openModelPanel(t, h, "Issue model")
+	openModelPanel(t, h, "Task model")
 	updateModelGUI(t, h, "work-model-B")
 	for _, path := range []string{updatePath, loadPath} {
 		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
@@ -670,7 +670,7 @@ func TestModelSelectionGUIReleasedIssueLoadFailureDoesNotUpdate(t *testing.T) {
 	provider := &modelProviderFixture{}
 	h := openModelGUI(t, proxy, connectionAPIResponses, provider)
 	issueID, _ := runReleasedIssue(t, h)
-	openModelPanel(t, h, "Issue model")
+	openModelPanel(t, h, "Task model")
 	for _, path := range []string{updatePath, loadPath} {
 		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 			t.Fatal(err)
@@ -685,8 +685,10 @@ func TestModelSelectionGUIReleasedIssueLoadFailureDoesNotUpdate(t *testing.T) {
 	h.pump.do(func() {
 		form := h.app.modelForm
 		issue := h.app.selectedContact().issueByID(issueID)
-		if form.Unconfirmed || !strings.Contains(form.Error, "Could not load this released work session") || form.Effective.Config.EffectiveConfig.Model != "model-A" {
-			t.Errorf("load failure = unknown=%v error=%q effective=%q", form.Unconfirmed, form.Error, form.Effective.Config.EffectiveConfig.Model)
+		if form.Unconfirmed || form.Error != modelErrorReleasedLoad ||
+			!strings.Contains(form.ErrorDetail, "io_error: controlled session.load failure") ||
+			form.Effective.Config.EffectiveConfig.Model != "model-A" {
+			t.Errorf("load failure = unknown=%v kind=%q detail=%q effective=%q", form.Unconfirmed, form.Error, form.ErrorDetail, form.Effective.Config.EffectiveConfig.Model)
 		}
 		if !issue.Work.Released || issue.Work.Releasing {
 			t.Errorf("load failure lost release state: released=%v releasing=%v", issue.Work.Released, issue.Work.Releasing)
@@ -733,7 +735,7 @@ func TestModelSelectionGUIReleasedIssueStaleCompletionKeepsBookkeepingAndFormSep
 				otherID = other.ID
 				other.Draft = "keep-other-draft"
 			})
-			openModelPanel(t, h, "Issue model")
+			openModelPanel(t, h, "Task model")
 			originalForm := h.app.modelForm
 			h.pump.do(func() {
 				h.app.modelForm.Draft.Model = "work-model-B"

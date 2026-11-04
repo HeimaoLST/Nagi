@@ -619,7 +619,7 @@ func TestConnectionAndModelFeedbackFollowLocale(t *testing.T) {
 	tr.SetLocale("en")
 	tr.Frame()
 	if !tr.HasText("Applied. New work uses this connection.") ||
-		!tr.HasText("Wait for all conversation and issue work to finish before applying a new connection.") ||
+		!tr.HasText("Wait for all chat and task work to finish before applying a new connection.") ||
 		!tr.HasText("Enter an absolute http(s) URL with a host.") {
 		t.Fatalf("English connection feedback missing: %v", tr.Texts())
 	}
@@ -786,7 +786,7 @@ func TestIssueWorkLabelsFollowLocaleAndKeepTargets(t *testing.T) {
 	a.issueDetailOpen = map[string]bool{issue.ID: true}
 	tr.SetLocale("zh-Hans")
 	tr.Frame()
-	if !tr.HasText("运行历史") || !tr.HasText("要求") || !tr.HasText(issue.Goal) {
+	if !tr.HasText("执行历史") || !tr.HasText("要求") || !tr.HasText(issue.Goal) {
 		t.Fatalf("Chinese issue detail labels or raw goal missing: %v", tr.Texts())
 	}
 	if nav.DetailID != issue.ID || nav.Filter != issueFilterAll || ct.Issues[0].Goal != issue.Goal {
@@ -809,7 +809,7 @@ func TestIssueWorkLabelsFollowLocaleAndKeepTargets(t *testing.T) {
 	}
 	tr.SetLocale("en")
 	tr.Frame()
-	if !tr.HasText("Run history") || tr.HasText("运行历史") {
+	if !tr.HasText("Run history") || tr.HasText("执行历史") {
 		t.Fatalf("English issue detail did not return: %v", tr.Texts())
 	}
 }
@@ -859,7 +859,7 @@ func TestTaskContextAndResultLabelsFollowLocale(t *testing.T) {
 	resultTr := issueResultPanelTester(state, issueResultPanelActions{}, 1040, 720, false)
 	resultTr.SetLocale("zh-Hans")
 	resultTr.Frame()
-	if !resultTr.HasText("运行结果") || !resultTr.HasText("报告的文件") || !resultTr.HasText("读取文件 →") ||
+	if !resultTr.HasText("执行结果") || !resultTr.HasText("报告的文件") || !resultTr.HasText("读取文件 →") ||
 		!resultTr.HasText("Recorded result body.") || !resultTr.HasText("/tmp/result.md") {
 		t.Fatalf("Chinese result labels or raw content missing: %v", resultTr.Texts())
 	}
@@ -1074,5 +1074,311 @@ func TestMissingQuestionPageFollowsLocale(t *testing.T) {
 	tr.Frame()
 	if !tr.HasText("The waiting question is unavailable.") || !tr.HasText("The question text was not recorded.") {
 		t.Fatalf("English missing-question page missing: %v", tr.Texts())
+	}
+}
+
+func TestOverviewScrollAndRealTargetsSurviveLocaleSwitch(t *testing.T) {
+	a := issuePreviewApp("issue-overview")
+	a.windowWidth = 1040
+	ct := a.selectedContact()
+	issue := ct.Issues[0]
+	const (
+		rawGoal        = "Preserve the original overview goal across the language switch"
+		rawRequirement = "Keep the stored requirement preview unchanged"
+		rawContextName = "Raw context note"
+		rawContextText = "Raw context body that must stay untranslated."
+		rawFollowUp    = "Raw follow-up text that must stay untranslated."
+	)
+	issue.Goal = rawGoal
+	issue.Requirements = parseIssueRequirements(rawRequirement)
+	if _, err := issue.Context.AddSnippet(rawContextName, rawContextText); err != nil {
+		t.Fatal(err)
+	}
+	ledger := newIssueSupplementLedger()
+	if _, err := ledger.Add(issueSupplementTargetFor(ct, issue), rawFollowUp, func() error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	issue.Supplements = ledger
+	ct.SelectedIssueID = ""
+	ct.Draft = "keep the overview conversation draft"
+	nav := ct.issueNavigation()
+	nav.DetailID = ""
+	nav.Filter = issueFilterAll
+	nav.OverviewScroll.Y = 0
+	for index := 0; index < 24; index++ {
+		ct.Issues = append(ct.Issues, &productIssue{
+			ID:        fmt.Sprintf("issue-overview-%02d", index),
+			ContactID: ct.ID, Status: issueStatusInProgress,
+			Goal:          fmt.Sprintf("Overview row %02d keeps its own stable target", index+1),
+			Requirements:  parseIssueRequirements("Do not change this row's target."),
+			WorkSessionID: "issue-preview-overview", RequirementsRevision: 1,
+		})
+	}
+	a.setWorkspaceOpen(true)
+	tr := ui.NewTester(a.view, 1040, 720)
+	tr.SetLocale("en")
+	tr.Frame()
+	if !tr.HasText("New task") || !tr.HasText("All") || !tr.HasText(rawGoal) {
+		t.Fatalf("English overview scene missing: %v", tr.Texts())
+	}
+	detailX := float32(a.layoutWidth()) - a.effectiveDetailWidth()/2
+	tr.Scroll(detailX, 300, 0, 300)
+	tr.Frame()
+	firstY := nav.OverviewScroll.Y
+	if firstY <= 0 {
+		t.Fatalf("overview did not scroll inside the detail pane: %v", firstY)
+	}
+	tr.Scroll(detailX, 300, 0, 120)
+	tr.Frame()
+	middleY := nav.OverviewScroll.Y
+	if middleY <= firstY {
+		t.Fatalf("overview scroll is at its maximum, not a middle position: %v -> %v", firstY, middleY)
+	}
+
+	tr.SetLocale("zh-Hans")
+	tr.Frame()
+	if !tr.HasText("新建事项") || !tr.HasText("未完成") || !tr.HasText("已完成") || !tr.HasText("全部") {
+		t.Fatalf("Chinese overview labels missing: %v", tr.Texts())
+	}
+	if nav.OverviewScroll.Y != middleY || nav.Filter != issueFilterAll || ct.SelectedIssueID != "" || nav.DetailID != "" || a.selectedContact() != ct {
+		t.Fatalf("locale switch changed overview target/scroll: scroll=%v/%v filter=%q selected=%q detail=%q", middleY, nav.OverviewScroll.Y, nav.Filter, ct.SelectedIssueID, nav.DetailID)
+	}
+	if issue.Goal != rawGoal || issueRequirementsText(issue) != rawRequirement {
+		t.Fatalf("locale switch changed stored goal/requirements: %q / %q", issue.Goal, issueRequirementsText(issue))
+	}
+	if items := issue.Context.snapshot(); len(items) != 1 || items[0].Name != rawContextName || items[0].Text != rawContextText {
+		t.Fatalf("locale switch changed the stored context: %+v", items)
+	}
+	if got := issue.Supplements.pendingText(issueSupplementTargetFor(ct, issue)); got != rawFollowUp {
+		t.Fatalf("locale switch changed the stored follow-up: %q", got)
+	}
+
+	tr.SetLocale("en")
+	tr.Frame()
+	if nav.OverviewScroll.Y != middleY || nav.Filter != issueFilterAll || ct.SelectedIssueID != "" || nav.DetailID != "" {
+		t.Fatalf("switching back changed overview target/scroll: scroll=%v/%v filter=%q selected=%q detail=%q", middleY, nav.OverviewScroll.Y, nav.Filter, ct.SelectedIssueID, nav.DetailID)
+	}
+	if !tr.HasText("New task") || !tr.HasText("All") {
+		t.Fatalf("English overview labels did not return: %v", tr.Texts())
+	}
+
+	// The real detail target still owns the preserved raw material after the
+	// overview interaction.
+	openIssueDetailForTest(a, ct, issue.ID)
+	a.issueDetailOpen = map[string]bool{issue.ID: true}
+	a.issueSupplementFormID = issue.ID
+	*a.issueSupplementDraft(issue.ID) = "keep the follow-up form draft"
+	issue.Context.openSnippetForm()
+	issue.Context.formName = "keep the context form name"
+	issue.Context.formText = "keep the context form text"
+	tr.Frame()
+	if !tr.HasText(rawGoal) || !tr.HasText(rawRequirement) {
+		t.Fatalf("opened detail lost raw goal/requirements: %v", tr.Texts())
+	}
+	if a.issueSupplementDraft(issue.ID) == nil || *a.issueSupplementDraft(issue.ID) != "keep the follow-up form draft" ||
+		!issue.Context.formOpen || issue.Context.formName != "keep the context form name" || issue.Context.formText != "keep the context form text" {
+		t.Fatalf("detail drafts were not initialized: follow-up=%q context=%v/%q/%q", *a.issueSupplementDraft(issue.ID), issue.Context.formOpen, issue.Context.formName, issue.Context.formText)
+	}
+	tr.SetLocale("zh-Hans")
+	tr.Frame()
+	if *a.issueSupplementDraft(issue.ID) != "keep the follow-up form draft" ||
+		issue.Context.formName != "keep the context form name" || issue.Context.formText != "keep the context form text" || !issue.Context.formOpen {
+		t.Fatal("locale switch changed the detail form drafts")
+	}
+}
+
+func TestChatDetailAndReaderScrollSurviveLocaleSwitch(t *testing.T) {
+	a := issuePreviewApp("issue-detail")
+	a.windowWidth = 1040
+	ct := a.selectedContact()
+	issue := ct.Issues[0]
+	var requirements strings.Builder
+	for index := 0; index < 30; index++ {
+		fmt.Fprintf(&requirements, "Keep requirement line %02d visible and stable across language changes.\n", index+1)
+	}
+	issue.Requirements = parseIssueRequirements(requirements.String())
+	ct.Draft = "keep the chat draft"
+	ct.SelectedIssueID = issue.ID
+	nav := ct.issueNavigation()
+	nav.Filter = issueFilterAll
+	nav.DetailID = issue.ID
+	for index := 0; index < 40; index++ {
+		ct.Messages = append(ct.Messages, &message{
+			Key:  fmt.Sprintf("scroll-message-%02d", index),
+			Kind: msgContact,
+			Text: fmt.Sprintf("Visible chat message %02d that keeps its rendered row while the language changes.", index+1),
+		})
+	}
+	cfg := connectionConfig{Version: 1, API: connectionAPIChatCompletions, Endpoint: "https://provider.example.invalid/v1/very/long/endpoint", APIKey: "fixture", Model: "fixture-provider-model", ContextTokens: 131072, OutputTokens: 8192, WorkingDirectory: t.TempDir(), MaxActiveTasks: 2}
+	a.connectionForm = newConnectionSettings(&cfg, cfg.WorkingDirectory)
+	a.connectionSaved = &cfg
+	a.connectionEffective = &cfg
+	a.workspaceOpen = true
+	tr := ui.NewTester(a.view, 1040, 720)
+	tr.SetLocale("en")
+	tr.Frame()
+	chatX := float32(0)
+	if a.avatarRailActive() {
+		chatX = avatarRailWidth + paneSeparatorWidth
+	}
+	chatX += a.centerPaneWidth / 2
+	tr.Scroll(chatX, 300, 0, -600)
+	tr.Frame()
+	first, last := ct.list.Visible()
+	if first <= 0 || last <= first {
+		t.Fatalf("chat did not scroll to a middle region: first=%d last=%d", first, last)
+	}
+	anchorKey := ct.Messages[first].Key
+	anchorText := ct.Messages[first].Text
+	if !tr.HasText(anchorText) {
+		t.Fatalf("chat anchor row is not visible: %q", anchorText)
+	}
+	detailX := float32(a.layoutWidth()) - a.effectiveDetailWidth()/2
+	tr.Scroll(detailX, 350, 0, 300)
+	tr.Frame()
+	detailY := nav.DetailScroll.Y
+	if detailY <= 0 {
+		t.Fatalf("detail did not scroll inside the detail pane: %v", detailY)
+	}
+	if !tr.HasText("Requirements") {
+		t.Fatalf("English detail scene missing: %v", tr.Texts())
+	}
+
+	tr.SetLocale("zh-Hans")
+	tr.Frame()
+	nextFirst, nextLast := ct.list.Visible()
+	if nextFirst != first || nextLast != last || ct.Messages[nextFirst].Key != anchorKey || !tr.HasText(anchorText) {
+		t.Fatalf("locale switch moved the chat anchor: first=%d->%d last=%d->%d key=%q", first, nextFirst, last, nextLast, anchorKey)
+	}
+	if nav.DetailScroll.Y != detailY || nav.DetailID != issue.ID || nav.Filter != issueFilterAll || ct.SelectedIssueID != issue.ID || ct.Draft != "keep the chat draft" {
+		t.Fatalf("locale switch changed detail target/scroll: y=%v/%v detail=%q filter=%q selected=%q draft=%q", detailY, nav.DetailScroll.Y, nav.DetailID, nav.Filter, ct.SelectedIssueID, ct.Draft)
+	}
+	if a.connectionForm.Draft.Endpoint != cfg.Endpoint || a.connectionForm.Draft.Model != cfg.Model || a.connectionSaved.Model != cfg.Model || a.connectionEffective.Endpoint != cfg.Endpoint {
+		t.Fatalf("locale switch changed stable connection values: %+v", a.connectionForm.Draft)
+	}
+	if !tr.HasText("要求") || !tr.HasText("回到最新") {
+		t.Fatalf("Chinese detail/chat labels missing: %v", tr.Texts())
+	}
+
+	tr.SetLocale("en")
+	tr.Frame()
+	nextFirst, nextLast = ct.list.Visible()
+	if nextFirst != first || ct.Messages[nextFirst].Key != anchorKey || !tr.HasText(anchorText) || nav.DetailScroll.Y != detailY {
+		t.Fatalf("switching back moved the chat/detail scroll: first=%d last=%d y=%v", nextFirst, nextLast, nav.DetailScroll.Y)
+	}
+	if !tr.HasText("Requirements") || !tr.HasText("Back to latest") {
+		t.Fatalf("English detail/chat labels did not return: %v", tr.Texts())
+	}
+
+	execution := issue.Executions[0]
+	file := issueResultFile{ExecutionID: execution.ID, SessionID: execution.SessionID, TaskID: execution.TaskID, MessageID: execution.MessageID, CallID: "call-final-reader", ToolName: "write", Path: "/tmp/final-reader.txt", WorkingDirectory: "/tmp", RawResult: `{"path":"/tmp/final-reader.txt","bytes_written":1}`}
+	key := issueResultFileKey(file)
+	longPreview := strings.Repeat("A long saved file line that must scroll independently in the reader.\n", 120)
+	a.aux = "issue-result"
+	a.issueResult = issueResultPage{
+		Open: true, OwnerContactID: ct.ID, IssueID: issue.ID, ExecutionID: execution.ID,
+		Panel: issueResultPanelState{
+			RunNumber: 1, RunStatus: issueExecutionCompleted, Files: []issueResultFile{file},
+			Inspection: &issueResultFileInspection{Exists: true, Regular: true, Preview: longPreview},
+			InspectFor: key, ReaderKey: key,
+		},
+	}
+	tr.Frame()
+	tr.Scroll(520, 400, 0, 1200)
+	tr.Frame()
+	readerY := a.issueResult.Panel.ReaderScroll.Y
+	if readerY <= 0 {
+		t.Fatalf("reader did not scroll: %v", readerY)
+	}
+	if !tr.HasText("Check again") || !tr.HasText("← Back to results") {
+		t.Fatalf("English reader scene missing: %v", tr.Texts())
+	}
+	tr.SetLocale("zh-Hans")
+	tr.Frame()
+	if a.issueResult.Panel.ReaderScroll.Y != readerY || !tr.HasText("再次检查") || !tr.HasText("← 返回结果") || !tr.HasText("当前文件：内容可能与此执行不同") {
+		t.Fatalf("locale switch changed the reader: y=%v label=%v", a.issueResult.Panel.ReaderScroll.Y, tr.Texts())
+	}
+	tr.SetLocale("en")
+	tr.Frame()
+	if a.issueResult.Panel.ReaderScroll.Y != readerY || !tr.HasText("Check again") || !tr.HasText("← Back to results") {
+		t.Fatalf("switching back changed the reader: y=%v", a.issueResult.Panel.ReaderScroll.Y)
+	}
+}
+
+func TestSelectedTextSurvivesLocaleSwitchInContactField(t *testing.T) {
+	a, ct := workspaceTestApp(t)
+	other := &contact{ID: "contact-b", Name: "B contact", Role: "Assistant", Status: statusReady, Loaded: true, Workspace: t.TempDir()}
+	a.contacts = append(a.contacts, other)
+	a.ensureSettingsProfileEditor(ct.ID).Draft.Purpose = "keep A purpose"
+	a.ensureSettingsProfileEditor(ct.ID).Draft.Instructions = "keep A instructions"
+	a.ensureSettingsProfileEditor(other.ID).Draft.Purpose = "keep B purpose"
+	ct.Draft = "keep conversation draft"
+	issue := &productIssue{ID: "issue-select", ContactID: ct.ID, Goal: "keep raw goal", Status: issueStatusInProgress,
+		RequirementsRevision: 1, Requirements: parseIssueRequirements("keep raw requirement"),
+		WorkSessionID: "work-select", Work: issueWorkSession{Loaded: true}, Supplements: newIssueSupplementLedger()}
+	ct.Issues = []*productIssue{issue}
+	ct.SelectedIssueID = issue.ID
+	issue.Context.openSnippetForm()
+	issue.Context.formName = "keep context form name"
+	issue.Context.formText = "keep context form text"
+	a.issueSupplementFormID = issue.ID
+	*a.issueSupplementDraft(issue.ID) = "keep follow-up form draft"
+	a.openSettingsTab(settingsTabContact, settingsSourceRail)
+	a.settingsContactID = ct.ID
+	tr := ui.NewTester(a.view, 1040, 720)
+	tr.SetLocale("en")
+	tr.Frame()
+	if !tr.HasText("Contact purpose") || a.settingsContactEditor().Draft.Purpose != "keep A purpose" {
+		t.Fatalf("contact profile purpose is not visible: %v", tr.Texts())
+	}
+	if err := tr.Click("Contact name"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if !tr.Focused("Contact name") {
+		t.Fatalf("contact name field did not take focus: %v", tr.Texts())
+	}
+	if _, active := tr.TextCaret(); !active {
+		t.Fatal("contact name field has no text caret")
+	}
+	originalName := ct.Name
+	tr.Key(ui.Cmd, ui.KeyA)
+	tr.Command("copy")
+	if got := tr.Clipboard(); got != originalName {
+		t.Fatalf("Cmd+A did not select the contact name: clipboard=%q want=%q", got, originalName)
+	}
+	tr.SetLocale("zh-Hans")
+	tr.Frame()
+	tr.Type("替换")
+	tr.Frame()
+	if got := a.settingsContactEditor().Draft.Name; got != "替换" {
+		t.Fatalf("typing after the locale switch did not replace the selection: %q", got)
+	}
+	if ct.Name != originalName {
+		t.Fatalf("typing into the profile draft changed the saved contact: %q", ct.Name)
+	}
+	tr.SetLocale("en")
+	tr.Frame()
+	if !tr.Focused("Contact name") {
+		t.Fatalf("switching back lost the contact field focus: %v", tr.Texts())
+	}
+	if _, active := tr.TextCaret(); !active {
+		t.Fatal("switching back lost the text caret")
+	}
+	if a.settingsContactEditor().Draft.Name != "替换" || a.settingsContactID != ct.ID || a.settingsTab != settingsTabContact {
+		t.Fatalf("selection/focus repair changed target or draft: name=%q contact=%q tab=%q", a.settingsContactEditor().Draft.Name, a.settingsContactID, a.settingsTab)
+	}
+	if a.ensureSettingsProfileEditor(ct.ID).Draft.Purpose != "keep A purpose" || a.ensureSettingsProfileEditor(ct.ID).Draft.Instructions != "keep A instructions" ||
+		a.ensureSettingsProfileEditor(other.ID).Draft.Purpose != "keep B purpose" {
+		t.Fatal("locale switch changed A/B profile drafts")
+	}
+	if ct.Draft != "keep conversation draft" {
+		t.Fatalf("locale switch changed the conversation draft: %q", ct.Draft)
+	}
+	if *a.issueSupplementDraft(issue.ID) != "keep follow-up form draft" {
+		t.Fatalf("locale switch changed the follow-up draft: %q", *a.issueSupplementDraft(issue.ID))
+	}
+	if !issue.Context.formOpen || issue.Context.formName != "keep context form name" || issue.Context.formText != "keep context form text" {
+		t.Fatalf("locale switch changed the context form draft: open=%v name=%q text=%q", issue.Context.formOpen, issue.Context.formName, issue.Context.formText)
 	}
 }

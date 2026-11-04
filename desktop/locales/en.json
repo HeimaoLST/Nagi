@@ -128,7 +128,7 @@
   "@copyReceivedOutputLabel": {
     "description": "The accessible name of the copy control for received tool output."
   },
-  "copySupplementTextLabel": "Copy supplement text",
+  "copySupplementTextLabel": "Copy follow-up text",
   "@copySupplementTextLabel": {
     "description": "The accessible name of the copy control for supplement text."
   },
@@ -488,7 +488,7 @@
   "@contactSaveChanges": {
     "description": "The action saving contact profile changes."
   },
-  "issueSupplementSave": "Save supplement",
+  "issueSupplementSave": "Save follow-up",
   "@issueSupplementSave": {
     "description": "The action saving an issue supplement."
   },
@@ -550,7 +550,7 @@
   "contactScopeLabel": "Contact scope",
   "navShowContactsTooltip": "Show contacts",
   "navHistory": "History",
-  "navConversationHistoryTooltip": "Conversation history",
+  "navConversationHistoryTooltip": "Chat history",
   "navContactProfile": "Contact profile",
   "navContactProfileTooltip": "Contact profile summary",
   "navWorkspaceDetails": "Workspace details",
@@ -563,7 +563,7 @@
   "restoreContactAction": "Restore contact",
   "contactProfileAction": "Contact profile",
   "emptyNoMessages": "No messages yet",
-  "emptyConversationStart": "Start a conversation with {name}.",
+  "emptyConversationStart": "Start a chat with {name}.",
   "@emptyConversationStart": {
     "description": "The empty-state hint for a contact without messages.",
     "placeholders": {
@@ -581,17 +581,17 @@
       }
     }
   },
-  "historyNotLoadedTitle": "Conversation history is not loaded",
+  "historyNotLoadedTitle": "Chat history is not loaded",
   "historyNotLoadedHint": "This contact already has a session, but its history has not been read yet; it is not shown as empty.",
   "historyRuntimeNotReady": "Runtime is not ready; history cannot be read yet.",
-  "connectionMismatchSummary": "Connection unavailable or changed. Review connection settings, or start a new conversation from the profile.",
+  "connectionMismatchSummary": "Connection unavailable or changed. Review connection settings, or start a new chat from the profile.",
   "connectionSettingsAction": "Connection settings",
   "detailsAction": "Details",
   "hideAction": "Hide",
   "hideDetailsAction": "Hide details",
   "locatedInHistory": "Located in history",
   "earlierMessagesCount": "{count, plural, one {# earlier message} other {# earlier messages}}",
-  "lookedUpEarlier": "Looked up earlier conversations",
+  "lookedUpEarlier": "Looked up earlier chats",
   "openSources": "Open sources",
   "tryAgain": "Try again",
   "retried": "Retried",
@@ -610,9 +610,9 @@
   "closeTaskContext": "Close task context",
   "backLabel": "Back",
   "backFromAux": "Back from {title}",
-  "conversationBadge": "Conversation",
-  "conversationModelLabel": "Conversation model",
-  "conversationModelTooltip": "Conversation model: {summary}",
+  "conversationBadge": "Chat",
+  "conversationModelLabel": "Chat model",
+  "conversationModelTooltip": "Chat model: {summary}",
   "modelNotLoaded": "Model not loaded",
   "modelNotSet": "Model not set",
   "connectionDefaultNotConfigured": "Connection default not configured",
@@ -633,8 +633,8 @@
     }
   },
   "composerTools": "Composer tools",
-  "stopConversation": "Stop conversation",
-  "stopConversationTooltip": "Stop this conversation",
+  "stopConversation": "Stop chat",
+  "stopConversationTooltip": "Stop this chat",
   "sendAction": "Send",
   "sendTooltip": "Send message. Enter to send; Shift + Enter for a new line.",
   "capacityUnknown": "Runtime task capacity is not loaded; using the conservative single-slot behavior.",
@@ -655,7 +655,7 @@
   },
   "closeHistory": "Close history",
   "backFromHistory": "Back from History",
-  "historySearchScopeHint": "Searching only {name}'s conversation history. Messages from other contacts are never included.",
+  "historySearchScopeHint": "Searching only {name}'s chat history. Messages from other contacts are never included.",
   "@historySearchScopeHint": {
     "description": "Explains that History searches only this contact.",
     "placeholders": {
@@ -710,7 +710,7 @@
   },
   "contextCount": "{count, plural, one {Context: # item} other {Context: # items}}",
   "readFullMessage": "Read full message",
-  "viewInConversation": "View in conversation",
+  "viewInConversation": "View in chat",
   "savedContextMatch": "{date}: saved context {session}",
   "@savedContextMatch": {
     "description": "A saved-context search match heading.",
@@ -723,7 +723,7 @@
       }
     }
   },
-  "historySummary": "{matches, plural, =0 {No saved matches} one {# saved match} other {# saved matches}}{limited, plural, =0 {} one { (limit reached)} other { (limit reached)}}{failures, plural, =0 {} one {; # conversation unavailable} other {; # conversations unavailable}}",
+  "historySummary": "{matches, plural, =0 {No saved matches} one {# saved match} other {# saved matches}}{limited, plural, =0 {} one { (limit reached)} other { (limit reached)}}{failures, plural, =0 {} one {; # chat unavailable} other {; # chats unavailable}}",
   "@historySummary": {
     "description": "The saved-context search summary.",
     "placeholders": {
@@ -762,10 +762,10 @@
   "profileNoInstructions": "No instructions recorded.",
   "profileWorkspace": "Workspace",
   "profileWorkspaceInherited": "Inherited from the connection default",
-  "profileConversation": "Conversation",
-  "profileNoSession": "No conversation session yet.",
-  "profileSession": "Conversation session {session}",
-  "profileSessionNotLoaded": "Conversation session {session}: history not loaded",
+  "profileConversation": "Chat",
+  "profileNoSession": "No chat session yet.",
+  "profileSession": "Chat session {session}",
+  "profileSessionNotLoaded": "Chat session {session}: history not loaded",
   "profileActivity": "Activity",
   "profileNoActivity": "No active work.",
   "profileActivityUnknown": "Work status is unresolved; reload before changing or archiving.",
@@ -797,7 +797,7 @@
   "appearanceStatusPreview": "Applied for this preview; the fixture is not persisted.",
   "appearanceStatusSaved": "Applied and saved.",
   "appearanceStatusSaveFailed": "Applied but not saved. Retry save to try again.",
-  "profileSaveIntro": "Saving updates this contact's name. Other settings apply when a conversation or task work session is first created; existing sessions keep their configuration.",
+  "profileSaveIntro": "Saving updates this contact's name. Other settings apply when a chat or task work session is first created; existing sessions keep their configuration.",
   "profileArchivedBadge": "Archived",
   "fieldName": "Name",
   "fieldNameAccessible": "Contact name",
@@ -814,7 +814,7 @@
   "profileBuiltinUseDefaults": "Use host defaults",
   "profileBuiltinUseDefaultsTooltip": "Use the built-in tools supplied by Runtime's host default.",
   "profileBuiltinNone": "No built-in tools are enabled. Nagi task tools remain available for their own workflows.",
-  "profileSaveAndNew": "Save and start new conversation",
+  "profileSaveAndNew": "Save and start new chat",
   "profileDiscard": "Discard changes",
   "profileContactManagement": "Contact management",
   "profileRestore": "Restore",
@@ -825,14 +825,14 @@
   "validationWorkspaceDirectory": "Workspace must be an existing directory.",
   "profileErrorBusy": "Saving is already in progress.",
   "profileErrorArchived": "Restore this contact before saving its profile.",
-  "profileErrorNoConversation": "A new conversation can be started only when an existing conversation exists.",
+  "profileErrorNoConversation": "A new chat can be started only when an existing chat exists.",
   "profileReasonArchived": "This contact is archived. Restore it before editing or starting new work.",
-  "profileReasonUnknown": "Work is still unresolved. Reload to confirm its status before archiving or starting a new conversation.",
-  "profileReasonActive": "Active work must finish or stop before archiving or starting a new conversation.",
+  "profileReasonUnknown": "Work is still unresolved. Reload to confirm its status before archiving or starting a new chat.",
+  "profileReasonActive": "Active work must finish or stop before archiving or starting a new chat.",
   "profileErrorStoreUnavailable": "Could not save this profile: the local contact store is unavailable.",
   "profileErrorSaveFailed": "Could not save this profile. Your changes are still here.",
-  "profileSavedDefaults": "Profile saved. New conversations and new task work sessions use these defaults; existing work is unchanged.",
-  "profileSavedNextMessage": "Profile saved. The next message starts a new conversation with these defaults.",
+  "profileSavedDefaults": "Profile saved. New chats and new task work sessions use these defaults; existing work is unchanged.",
+  "profileSavedNextMessage": "Profile saved. The next message starts a new chat with these defaults.",
   "archiveErrorUnknown": "Work is still unresolved. Reload to confirm its status before archiving.",
   "archiveErrorActive": "Active work must finish or stop before archiving this contact.",
   "archiveErrorAlready": "This contact is already archived.",
@@ -923,7 +923,7 @@
       }
     }
   },
-  "conversationMessagesLabel": "Conversation messages",
+  "conversationMessagesLabel": "Chat messages",
   "@conversationMessagesLabel": {
     "description": "The accessible name of the conversation message list."
   },
@@ -1008,8 +1008,8 @@
   "connectionBlockedShutdown": "The app is shutting down.",
   "connectionBlockedNoSaved": "Save a valid connection configuration first.",
   "connectionBlockedStore": "The local contact store is unavailable. Fix its file or permissions, then save again.",
-  "connectionBlockedActiveWork": "Wait for all conversation and task work to finish before applying a new connection.",
-  "connectionBlockedUntrustedIssue": "An task run has no trusted terminal state; reload or reconcile it before applying a new connection.",
+  "connectionBlockedActiveWork": "Wait for all chat and task work to finish before applying a new connection.",
+  "connectionBlockedUntrustedIssue": "A task run has no trusted terminal state; reload or reconcile it before applying a new connection.",
   "canSendShutdown": "The app is shutting down.",
   "canSendArchived": "This contact is archived. Restore it before sending a message.",
   "canSendApplying": "Connection settings are being applied; wait for the new helper to become ready.",
@@ -1019,14 +1019,14 @@
   "canSendModelUpdating": "The session model is being updated; this session cannot accept a new task yet.",
   "canSendHistoryLoading": "This contact is still loading its history.",
   "canSendBusy": "This contact is busy.",
-  "canSendSingleSlot": "The single runtime slot is in use; retry after the conversation or work task finishes.",
+  "canSendSingleSlot": "The single runtime slot is in use; retry after the chat or work task finishes.",
   "canSendCapacity": "Runtime task capacity is full; retry after a task finishes.",
   "canSendAnotherContact": "Another contact is working; wait for its task to finish before sending here.",
   "canStartArchived": "This contact is archived. Restore it before starting task work.",
   "canStartIssueActive": "This task already has an active run.",
   "canStartIssueReleasing": "This task's work session is still being released; retry after it completes.",
   "canStartIssueHistoryLoading": "This task's work history is still loading.",
-  "canStartWorkCapacity": "Work capacity is full; one runtime slot is reserved for conversation.",
+  "canStartWorkCapacity": "Work capacity is full; one runtime slot is reserved for chat.",
   "startupHintFixConnection": "Fix the saved values in Connection settings, then save and apply.",
   "startupHintEnterConnection": "Enter a connection, model and working directory, then save and apply.",
   "startupHintFixThenApply": "Fix Connection settings, then save and apply.",
@@ -1073,7 +1073,7 @@
   "modelCatalogMore": "Showing {shown, number} of {total, plural, one {# catalog entry} other {# catalog entries}}; refine Filter to see more.",
   "modelNoCatalog": "No Runtime catalog entries are available; enter explicit limits.",
   "modelTargetIssueWork": "Task work",
-  "modelTargetConversation": "Conversation",
+  "modelTargetConversation": "Chat",
   "modelTargetSession": "Session",
   "modelTargetValue": "{kind}: {label}",
   "modelSourceCatalog": "Runtime catalog",
@@ -1166,7 +1166,7 @@
   "workUnavailableTitle": "Work is unavailable while Runtime is not ready",
   "workUnavailableHint": "No work is shown until the Runtime connection is ready; this is not a claim that no work exists.",
   "workNoCurrent": "No current work",
-  "workNoCurrentHint": "Work will appear here when {name} starts a task. Tool activity and results stay out of the conversation.",
+  "workNoCurrentHint": "Work will appear here when {name} starts a task. Tool activity and results stay out of the chat.",
   "workActivity": "Activity",
   "workNoToolActivity": "No tool activity yet.",
   "workEarlierActivity": "Earlier activity",
@@ -1196,7 +1196,7 @@
   "issueExecutionInterruptedDetail": "Run interrupted; inspect the run details for the recorded terminal state.",
   "issueExecutionUnknownDetail": "The terminal state is unknown; inspect the run details before continuing.",
   "issueEndedOpen": "This run finished; the task remains open.",
-  "issueRecoveryAvailable": "Recovery is available for an run without a trusted terminal state.",
+  "issueRecoveryAvailable": "Recovery is available for a run without a trusted terminal state.",
   "issuePreviousEvidence": "Previous completion evidence: {evidence}",
   "issueMoreActions": "More task actions",
   "issueHideActions": "Hide task actions",
@@ -1319,17 +1319,17 @@
   "supplementSavedPending": "Waiting to send",
   "supplementClosePreview": "Close preview",
   "supplementPreviewFull": "Preview full text",
-  "supplementAdd": "Add supplement",
-  "supplementAddLabel": "Add supplement",
+  "supplementAdd": "Add follow-up",
+  "supplementAddLabel": "Add follow-up",
   "supplementCancel": "Cancel",
-  "supplementFormLabel": "Add supplement to this task",
-  "supplementFormPlaceholder": "Supplementary target, requirement, or correction",
-  "supplementSaveDisclaimer": "Saving a supplement is not a model-acceptance or requirement-satisfaction receipt.",
+  "supplementFormLabel": "Add follow-up to this task",
+  "supplementFormPlaceholder": "Follow-up target, requirement, or correction",
+  "supplementSaveDisclaimer": "Saving a follow-up is not a model-acceptance or requirement-satisfaction receipt.",
   "supplementStopAuto": "Stop auto",
   "supplementResumeAuto": "Resume auto",
   "supplementReceiptFailed": "Local receipt save failed: {detail}",
   "supplementSubmitted": "Sent to run {execution}, Runtime task {task}.",
-  "supplementRetry": "Retry supplement",
+  "supplementRetry": "Retry follow-up",
   "supplementNeedsCheck": "Needs delivery check; this is not a completion claim.",
   "supplementCheck": "Check run",
   "supplementShowRecent": "Show recent batches",
@@ -1341,10 +1341,10 @@
   "taskContextErrNotTextDetail": "The file is not UTF-8 text: {detail}",
   "markdownCodeGroup": "Code",
   "markdownTableGroup": "Table, wrapped plain text",
-  "taskContextOwnerConversation": "Conversation: {name}",
+  "taskContextOwnerConversation": "Chat: {name}",
   "taskContextOwnerIssue": "Task: {goal}",
-  "supplementTitle": "Supplements",
-  "supplementTitlePending": "{count, plural, one {Supplements: # pending} other {Supplements: # pending}}",
+  "supplementTitle": "Follow-ups",
+  "supplementTitlePending": "{count, plural, one {Follow-ups: # pending} other {Follow-ups: # pending}}",
   "supplementCurrentTarget": "Current target: revision {revision}. {goal}",
   "supplementReceived": "received r{revision}: {text}",
   "supplementHiddenBatches": "{count, plural, one {# earlier batch hidden from this card; the run list remains the original input record.} other {# earlier batches hidden from this card; the run list remains the original input record.}}",
@@ -1391,15 +1391,15 @@
   "issueNoticeViewSaveFailed": "Could not save that this run was viewed: {detail}",
   "issueNoticeSaveIssueFailed": "Could not save this task: {detail}",
   "issueNoticeExecutionSaveFailed": "Could not save the task run: {detail}",
-  "issueNoticeSupplementRetrySaveFailed": "Could not save the retry intent; the old supplement receipt was left unchanged.",
-  "issueNoticeSupplementRestoreFailed": "Could not save restored supplement integrity state: {detail}",
-  "issueNoticeSupplementBatchActive": "A supplement batch is already {state} for this task.",
+  "issueNoticeSupplementRetrySaveFailed": "Could not save the retry intent; the old follow-up receipt was left unchanged.",
+  "issueNoticeSupplementRestoreFailed": "Could not save restored follow-up integrity state: {detail}",
+  "issueNoticeSupplementBatchActive": "A follow-up batch is already {state} for this task.",
   "issueBlockNoIssue": "Task not found.",
   "issueBlockArchived": "Restore this archived task before starting work.",
   "issueBlockQuestion": "Answer the waiting question before continuing this task.",
   "issueBlockCompleted": "Reopen this task before starting another run.",
   "issueBlockCanceled": "Reopen this task before starting another run.",
-  "issueBlockExecution": "An run is still active or has no trusted terminal state; reload before running this task again.",
+  "issueBlockExecution": "A run is still active or has no trusted terminal state; reload before running this task again.",
   "resultInspectMissing": "No file exists at the reported path; it may have been moved or deleted.",
   "resultInspectFailed": "Could not inspect the reported path: {detail}",
   "resultInspectNotRegular": "The reported path is no longer a regular file.",
@@ -1412,8 +1412,8 @@
   "issueNoticeFormSwitch": "Finish or cancel the current task form before switching contacts.",
   "issueNoticeSupplementAutoStop": "Could not save the automatic-continuation stop.",
   "issueNoticeSupplementAutoResume": "Could not save the automatic-continuation resume.",
-  "issueNoticeSupplementRetry": "Could not retry this supplement.",
-  "issueNoticeSupplementCheck": "Could not check this supplement run.",
+  "issueNoticeSupplementRetry": "Could not retry this follow-up.",
+  "issueNoticeSupplementCheck": "Could not check this follow-up run.",
   "resultLoadNoSession": "This run has no recorded Runtime session/task; results cannot be inspected.",
   "resultLoadRuntimeNotReady": "Runtime is not ready; reopen this result after history is available.",
   "resultLoadOwnerMissing": "The task owner is no longer available; reload cannot continue.",
@@ -1442,15 +1442,15 @@
   "issueSendArchived": "This contact is archived. Restore it before starting task work.",
   "issueSendApplying": "Connection settings are being applied; wait for the new helper to become ready.",
   "issueSendRuntimeNotReady": "Runtime is not ready.",
-  "issueSendReceiptFailed": "Runtime accepted this supplement, but its local receipt could not be saved; reload before sending again.",
-  "issueSendReceiptSaveFailed": "Could not save the supplement acceptance: {detail}",
-  "issueSendAssociation": "The supplement dispatch association was not in a recordable state; reload before sending again.",
+  "issueSendReceiptFailed": "Runtime accepted this follow-up, but its local receipt could not be saved; reload before sending again.",
+  "issueSendReceiptSaveFailed": "Could not save the follow-up acceptance: {detail}",
+  "issueSendAssociation": "The follow-up dispatch association was not in a recordable state; reload before sending again.",
   "issueSendTaskAssociation": "Task accepted, but its task association could not be saved; reload before retrying.",
   "issueSendDraftNotCleared": "Task accepted, but its sent context could not be cleared from the next-run draft; reload before sending again.",
   "issueSendAcceptedCancel": "The accepted task could not be cancelled; do not retry it automatically.",
   "issueSendWaitingRuntime": "Waiting for runtime availability: {detail}",
-  "issueSendSupplementDelivery": "Supplement delivery not confirmed ({detail}). Reload to check before sending again.",
-  "issueSendAutoStopMemory": "Supplement automation was stopped in memory; its intent could not be saved. Reload before relying on automatic continuation.",
+  "issueSendSupplementDelivery": "Follow-up delivery not confirmed ({detail}). Reload to check before sending again.",
+  "issueSendAutoStopMemory": "Follow-up automation was stopped in memory; its intent could not be saved. Reload before relying on automatic continuation.",
   "issueSendCancelRequested": "Cancellation requested",
   "issueSendCancelling": "Cancelling; waiting for the runtime to stop.",
   "issueSendAlreadyFinished": "The task already finished; waiting for its final state.",
@@ -1475,6 +1475,46 @@
   "toolOutputTimedOutExit": "Timed out (exit {code})",
   "toolOutputFailedExit": "Failed (exit {code})",
   "toolOutputStructured": "Structured output received; open Details for the exact record.",
-  "issueSendHistoryReceiptFailed": "Runtime accepted this supplement, but the history-verified receipt could not be saved: {detail}",
-  "issueSendReleaseToolFailed": "Could not release the idle work tool process: {detail}"
+  "issueSendHistoryReceiptFailed": "Runtime accepted this follow-up, but the history-verified receipt could not be saved: {detail}",
+  "issueSendReleaseToolFailed": "Could not release the idle work tool process: {detail}",
+  "issueRunResultSummary": "Run {run} result: {goal}",
+  "@issueRunResultSummary": {
+    "description": "The heading of a run's recorded result on the task work card."
+  },
+  "issueRunInProgressSummary": "Run {run} in progress: {goal}",
+  "@issueRunInProgressSummary": {
+    "description": "The heading of a run that is still in progress on the task work card."
+  },
+  "issueShowSentSnapshot": "Show sent snapshot",
+  "@issueShowSentSnapshot": {
+    "description": "The action showing the captured prompt of a run."
+  },
+  "issueHideSentSnapshot": "Hide sent snapshot",
+  "@issueHideSentSnapshot": {
+    "description": "The action hiding the captured prompt of a run."
+  },
+  "issueSentContextCount": "{count, plural, one {Sent task context: #} other {Sent task context: #}}",
+  "@issueSentContextCount": {
+    "description": "The action showing a run's captured caller context with its item count."
+  },
+  "issueHideSentContext": "Hide sent task context",
+  "@issueHideSentContext": {
+    "description": "The action hiding a run's captured caller context."
+  },
+  "issueOpenResultRun": "Open result: run {run}",
+  "@issueOpenResultRun": {
+    "description": "The action opening one run's recorded result; the run number is an argument."
+  },
+  "issueViewExecutionRun": "View run {run}",
+  "@issueViewExecutionRun": {
+    "description": "The action opening one run's work card; the run number is an argument."
+  },
+  "supplementActionCount": "{count, plural, one {Follow-up: #} other {Follow-ups: #}}",
+  "@supplementActionCount": {
+    "description": "The task action opening follow-ups with the current follow-up and batch count."
+  },
+  "resultFileRowLabel": "Read file {index}: {name}",
+  "@resultFileRowLabel": {
+    "description": "The accessible name of one reported result file; its index and file name are arguments."
+  }
 }

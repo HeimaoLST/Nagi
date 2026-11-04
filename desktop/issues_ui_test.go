@@ -30,7 +30,7 @@ func TestIssueWorkCardAndComposerStopLabelsAreSeparate(t *testing.T) {
 	a.windowWidth = 1040
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	if !tr.HasText("Stop issue task") || !tr.HasText("Stop conversation") {
+	if !tr.HasText("Stop task") || !tr.HasText("Stop chat") {
 		t.Fatalf("separate stop labels missing: %v", tr.Texts())
 	}
 	if !tr.HasText("Working") {

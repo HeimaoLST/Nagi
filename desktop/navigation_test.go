@@ -369,10 +369,10 @@ func TestStopConversationKeepsVisibleTextAndModelScope(t *testing.T) {
 	ct.ActiveTaskID = "task-live"
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	if !tr.HasText("Stop conversation") || !tr.HasText("Conversation") || !tr.HasText("gpt-fixture") {
+	if !tr.HasText("Stop chat") || !tr.HasText("Chat") || !tr.HasText("gpt-fixture") {
 		t.Fatalf("stop/model scope missing: %v", tr.Texts())
 	}
-	rect, ok := tr.Find("Stop conversation")
+	rect, ok := tr.Find("Stop chat")
 	if !ok || rect.W < 80 || rect.H < 32 {
 		t.Fatalf("stop control geometry = %+v/%v", rect, ok)
 	}
@@ -513,8 +513,8 @@ func TestIssueModelPageBackReturnsToItsIssueButton(t *testing.T) {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if a.aux != "" || !a.detailIs(detailWork) || !tr.Focused("Issue model") {
-		t.Fatalf("issue model Back = aux=%q detail=%q focused=%v", a.aux, a.activeDetail(), tr.Focused("Issue model"))
+	if a.aux != "" || !a.detailIs(detailWork) || !tr.Focused("Task model") {
+		t.Fatalf("issue model Back = aux=%q detail=%q focused=%v", a.aux, a.activeDetail(), tr.Focused("Task model"))
 	}
 }
 

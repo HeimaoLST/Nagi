@@ -435,7 +435,7 @@ func TestSettingsConnectionApplyAvailabilityFollowsCurrentWork(t *testing.T) {
 	a.openSettingsTab(settingsTabConnection, settingsSourceRail)
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	if a.connectionForm.ReloadBlocked == "" || !tr.HasText("Wait for all conversation and issue work to finish before applying a new connection.") {
+	if a.connectionForm.ReloadBlocked == "" || !tr.HasText("Wait for all chat and task work to finish before applying a new connection.") {
 		t.Fatalf("active work did not block Apply: %q / %v", a.connectionForm.ReloadBlocked, tr.Texts())
 	}
 	ct.ActiveTaskID = ""
@@ -444,7 +444,7 @@ func TestSettingsConnectionApplyAvailabilityFollowsCurrentWork(t *testing.T) {
 	if a.connectionForm.ReloadBlocked != "" {
 		t.Fatalf("Apply did not recover after work completed: %q", a.connectionForm.ReloadBlocked)
 	}
-	if tr.HasText("Wait for all conversation and issue work to finish before applying a new connection.") {
+	if tr.HasText("Wait for all chat and task work to finish before applying a new connection.") {
 		t.Fatal("stale Apply block remained after work completed")
 	}
 }

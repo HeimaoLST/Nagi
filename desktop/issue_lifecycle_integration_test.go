@@ -427,7 +427,7 @@ func TestArchivedActiveIssueStillBlocksApply(t *testing.T) {
 	if reason != connBlockedActiveWork {
 		t.Fatalf("archived active issue was missed by Apply protection: %q", reason)
 	}
-	if got := connectionBlockedText(locales.In("en"), reason); got != "Wait for all conversation and task work to finish before applying a new connection." {
+	if got := connectionBlockedText(locales.In("en"), reason); got != "Wait for all chat and task work to finish before applying a new connection." {
 		t.Fatalf("active-work recovery copy = %q", got)
 	}
 	if got := connectionBlockedText(locales.In("zh-Hans"), reason); got != "请等待所有对话和事项工作结束后再应用新连接。" {

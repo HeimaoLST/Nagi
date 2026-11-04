@@ -20,7 +20,7 @@ func appReadingTestApp(t *testing.T) (*appModel, *contact) {
 
 func scrollToVisibleControl(tr *ui.Tester, label string, dy float32) bool {
 	composer, composerOK := tr.Find("Composer for Saki")
-	messages, messagesOK := tr.Find("Conversation messages")
+	messages, messagesOK := tr.Find("Chat messages")
 	if !composerOK || !messagesOK || composer.W <= 0 || composer.H <= 0 ||
 		messages.W <= 0 || messages.H <= 0 {
 		return false

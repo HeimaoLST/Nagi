@@ -105,7 +105,7 @@ func TestContactProfileActiveAndUnknownWorkLimitOnlyNewAndArchive(t *testing.T) 
 	if saved != 1 {
 		t.Fatal("profile save was blocked by active work")
 	}
-	if err := tr.Click("Save and start new conversation"); err != nil {
+	if err := tr.Click("Save and start new chat"); err != nil {
 		t.Fatal(err)
 	}
 	if err := tr.Click("Archive"); err != nil {
@@ -125,7 +125,7 @@ func TestContactProfileActiveAndUnknownWorkLimitOnlyNewAndArchive(t *testing.T) 
 	if _, ok := editor.Request(true); ok || editor.Error == "" {
 		t.Fatal("Request accepted save-and-new while work was unknown")
 	}
-	if err := tr.Click("Save and start new conversation"); err != nil {
+	if err := tr.Click("Save and start new chat"); err != nil {
 		t.Fatal(err)
 	}
 	if err := tr.Click("Archive"); err != nil {

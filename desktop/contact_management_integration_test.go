@@ -49,7 +49,7 @@ func saveContactManagementProfile(t *testing.T, h *guiHarness, draft profileDraf
 	})
 	action := "Save changes"
 	if startNew {
-		action = "Save and start new conversation"
+		action = "Save and start new chat"
 	}
 	clickContactManagementAction(t, h, action)
 	var problem string
@@ -377,7 +377,7 @@ func TestContactManagementGUISaveFailureArchiveRestoreAndRestart(t *testing.T) {
 		h.app.openSettings()
 		h.app.contactProfile.Draft = profileDraft{Name: "Must roll back", Purpose: "unsaved purpose", Workspace: original.Workspace}
 	})
-	clickContactManagementAction(t, h, "Save and start new conversation")
+	clickContactManagementAction(t, h, "Save and start new chat")
 	h.pump.do(func() {
 		ct := h.app.selectedContact()
 		stateAfter, _ := json.Marshal(h.app.store.state)

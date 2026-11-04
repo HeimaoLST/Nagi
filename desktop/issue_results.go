@@ -8,7 +8,6 @@ package main
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"io/fs"
 	"os"
@@ -536,7 +535,7 @@ func issueResultFileRow(c *ui.Context, th *ui.Theme, state *issueResultPanelStat
 	key := issueResultFileKey(file)
 	handle := state.fileHandle(key)
 	row := ui.ButtonBase(c).
-		Label(fmt.Sprintf("Read file %d: %s", index+1, filepath.Base(file.Path))).
+		Label(locales.In(c.Locale()).ResultFileRowLabel(strconv.Itoa(index+1), filepath.Base(file.Path))).
 		AlignSelf(ui.Stretch).MinWidth(0).Padding(10).Radius(th.Radius).Border(0.5, th.Border).Gap(4).Bind(handle)
 	if state.Selected == key {
 		row.Background(th.SurfaceHover)

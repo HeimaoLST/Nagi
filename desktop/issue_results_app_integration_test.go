@@ -1008,7 +1008,7 @@ func TestIssueResultNavigationEntryAndReturnWideNarrow(t *testing.T) {
 				t.Fatalf("width %d expand run records: %v", width, err)
 			}
 		}
-		if err := issueResultClickAt(h, width, 720, "View run: run 1"); err != nil {
+		if err := issueResultClickAt(h, width, 720, "View run 1"); err != nil {
 			t.Fatalf("width %d select run for observable work identity: %v", width, err)
 		}
 		if err := issueResultTesterRunAt(h, width, 720, func(tr *ui.Tester) error {

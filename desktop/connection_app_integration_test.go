@@ -15,6 +15,8 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+
+	"saki/desktop/locales"
 )
 
 func openConnectionHarness(t *testing.T) *guiHarness {
@@ -391,7 +393,9 @@ func TestConnectionGUIFailedTestCanBeCorrectedWithoutSaving(t *testing.T) {
 	})
 	h.pump.wait(func() bool { return !h.app.connectionForm.Busy })
 	h.pump.do(func() {
-		if h.app.connectionForm.Error == "" || strings.Contains(h.app.connectionForm.Error, config.APIKey) {
+		form := h.app.connectionForm
+		text := connectionErrorText(locales.In("en"), form.Error, form.ErrorDetail)
+		if form.Error == "" || strings.Contains(text, config.APIKey) || strings.Contains(form.ErrorDetail, config.APIKey) {
 			t.Error("failed Test did not show a key-free, correctable error")
 		}
 		if h.app.connectionForm.Draft.APIKey != config.APIKey {
@@ -405,7 +409,7 @@ func TestConnectionGUIFailedTestCanBeCorrectedWithoutSaving(t *testing.T) {
 	})
 	h.pump.wait(func() bool { return !h.app.connectionForm.Busy })
 	h.pump.do(func() {
-		if h.app.connectionForm.Error != "" || !strings.Contains(h.app.connectionForm.Status, "test completed") {
+		if h.app.connectionForm.Error != "" || h.app.connectionForm.Status != connStatusTestCompleted {
 			t.Error("corrected Test did not succeed")
 		}
 		if h.app.connectionSaved != nil || h.app.connectionEffective != nil || h.app.rt != nil {
@@ -809,7 +813,7 @@ func TestConnectionGUISaveAndApplyRechecksActivityBeforeFinalSaveCallback(t *tes
 	if applying || rt != oldRT {
 		t.Fatal("save-then-apply replaced the healthy runtime while new activity was present")
 	}
-	if !strings.Contains(blocked, "Wait for all conversation and issue work to finish") {
+	if blocked != connBlockedActiveWork {
 		t.Fatalf("active-task guard did not block Apply: %q", blocked)
 	}
 	if saved == nil || saved.Model != edited.Model {

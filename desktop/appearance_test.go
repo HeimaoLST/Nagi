@@ -259,10 +259,10 @@ func TestContactScopeSelectAndComposerModelEntry(t *testing.T) {
 	if !tr.HasText(head) || !tr.HasText(tail) {
 		t.Fatalf("unbound conversation default is not explicit: %q", tr.Texts())
 	}
-	if tr.HasText("Issue model") {
+	if tr.HasText("Task model") {
 		t.Fatal("issue model entry leaked into the conversation composer")
 	}
-	if err := tr.Click("Conversation model"); err != nil {
+	if err := tr.Click("Chat model"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()

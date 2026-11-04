@@ -744,7 +744,7 @@ func TestComposerModelAndTaskContextStayInlineAndReturnFocus(t *testing.T) {
 	}
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	if err := tr.Click("Conversation model"); err != nil {
+	if err := tr.Click("Chat model"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
@@ -758,15 +758,15 @@ func TestComposerModelAndTaskContextStayInlineAndReturnFocus(t *testing.T) {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if a.aux != "" || a.composerPanel != "" || !tr.Focused("Conversation model") {
-		t.Fatalf("model close = aux=%q panel=%q focused=%v", a.aux, a.composerPanel, tr.Focused("Conversation model"))
+	if a.aux != "" || a.composerPanel != "" || !tr.Focused("Chat model") {
+		t.Fatalf("model close = aux=%q panel=%q focused=%v", a.aux, a.composerPanel, tr.Focused("Chat model"))
 	}
 
 	if err := tr.Click("Task context: 2"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if a.aux != "task-context" || !a.composerInlineAux() || !tr.HasText("Conversation: Saki") || !tr.HasText("资料一") {
+	if a.aux != "task-context" || !a.composerInlineAux() || !tr.HasText("Chat: Saki") || !tr.HasText("资料一") {
 		t.Fatalf("inline context = aux=%q panel=%q texts=%v", a.aux, a.composerPanel, tr.Texts())
 	}
 	if err := tr.Click("Close task context"); err != nil {
@@ -798,7 +798,7 @@ func TestComposerModelAndTaskContextStayInlineAndReturnFocus(t *testing.T) {
 			}
 			tr.Frame()
 			reject.set(a)
-			if err := tr.Click("Conversation model"); err != nil {
+			if err := tr.Click("Chat model"); err != nil {
 				t.Fatal(err)
 			}
 			tr.Frame()
@@ -806,7 +806,7 @@ func TestComposerModelAndTaskContextStayInlineAndReturnFocus(t *testing.T) {
 				t.Fatalf("rejected model open changed owner: aux=%q panel=%q inline=%v texts=%v", a.aux, a.composerPanel, a.composerInlineAux(), tr.Texts())
 			}
 			reject.clear(a)
-			if err := tr.Click("Conversation model"); err != nil {
+			if err := tr.Click("Chat model"); err != nil {
 				t.Fatal(err)
 			}
 			tr.Frame()
@@ -818,7 +818,7 @@ func TestComposerModelAndTaskContextStayInlineAndReturnFocus(t *testing.T) {
 
 	// Switching contacts while the inline model entry is open must drop the
 	// owner-specific panel rather than leaving it attached to the new target.
-	if err := tr.Click("Conversation model"); err != nil {
+	if err := tr.Click("Chat model"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
@@ -871,8 +871,8 @@ func TestResponsiveComposerAt960WithLoadedSession(t *testing.T) {
 		}
 		return r
 	}
-	model := within("Conversation model")
-	within("Conversation")
+	model := within("Chat model")
+	within("Chat")
 	within(contextLabelForTest(1))
 	send := within("Send")
 	if send.X < model.X+model.W {
@@ -886,7 +886,7 @@ func TestResponsiveComposerAt960WithLoadedSession(t *testing.T) {
 	if visibleModel == "" || !tr.HasText(visibleModel) {
 		t.Fatalf("960 visible model suffix %q missing: %v", visibleModel, tr.Texts())
 	}
-	showPreviewTooltip(t, tr, "Conversation model")
+	showPreviewTooltip(t, tr, "Chat model")
 	if !tr.HasText(ct.SessionModel) {
 		t.Fatalf("960 model tooltip missing full ID: %v", tr.Texts())
 	}
@@ -900,8 +900,8 @@ func TestResponsiveComposerAt960WithLoadedSession(t *testing.T) {
 	if !ok || composer.W-4 < 440 {
 		t.Fatalf("960 Stop composer=%+v ok=%v content=%g", composer, ok, composer.W-4)
 	}
-	stop := within("Stop conversation")
-	model = within("Conversation model")
+	stop := within("Stop chat")
+	model = within("Chat model")
 	if stop.X < model.X+model.W || tr.HasText("Send") {
 		t.Fatalf("960 Stop geometry = stop=%+v model=%+v texts=%v", stop, model, tr.Texts())
 	}
@@ -935,8 +935,8 @@ func TestComposerKeepsModelScopeAndPrimaryActionAtNarrowCenter(t *testing.T) {
 		}
 		return r
 	}
-	model := withinComposer("Conversation model")
-	scope := withinComposer("Conversation")
+	model := withinComposer("Chat model")
+	scope := withinComposer("Chat")
 	if scope.X < model.X || scope.X+scope.W > model.X+model.W {
 		t.Fatalf("model scope is outside its chip: scope=%+v model=%+v", scope, model)
 	}
@@ -966,13 +966,13 @@ func TestComposerKeepsModelScopeAndPrimaryActionAtNarrowCenter(t *testing.T) {
 		t.Fatalf("composer bounds missing after stop switch: %+v ok=%v", composer, ok)
 	}
 	left, right = composer.X, composer.X+composer.W
-	model = withinComposer("Conversation model")
-	stop := withinComposer("Stop conversation")
+	model = withinComposer("Chat model")
+	stop := withinComposer("Stop chat")
 	if stop.X < model.X+model.W {
 		t.Fatalf("stop action overlaps the model chip: stop=%+v model=%+v", stop, model)
 	}
 	if tr.HasText("Send") {
-		t.Fatal("running conversation kept the Send action instead of Stop conversation")
+		t.Fatal("running conversation kept the Send action instead of Stop chat")
 	}
 
 	// The same view shows the real send guard reason when the model recovery
@@ -1047,9 +1047,9 @@ func TestPreviewComposerTypography(t *testing.T) {
 			}
 			visible("Composer for Saki")
 			visible(contextLabelForTest(sc.context))
-			visible("Conversation model")
+			visible("Chat model")
 			if sc.active {
-				visible("Stop conversation")
+				visible("Stop chat")
 			} else {
 				visible("Send")
 			}
@@ -1060,9 +1060,9 @@ func TestPreviewComposerTypography(t *testing.T) {
 			if sc.active && sc.width == 720 {
 				composer := visible("Composer for Saki")
 				context := visible(contextLabelForTest(sc.context))
-				model := visible("Conversation model")
-				stop := visible("Stop conversation")
-				if !tr.HasText("Stop conversation") {
+				model := visible("Chat model")
+				stop := visible("Stop chat")
+				if !tr.HasText("Stop chat") {
 					t.Fatalf("%s: Stop text was hidden: %v", sc.name, tr.Texts())
 				}
 				if context.X+context.W > model.X || model.X+model.W > stop.X ||
@@ -1071,7 +1071,7 @@ func TestPreviewComposerTypography(t *testing.T) {
 					t.Fatalf("%s: composer controls overlap/overflow composer=%+v context=%+v model=%+v stop=%+v",
 						sc.name, composer, context, model, stop)
 				}
-				scope, ok := tr.Find("Conversation")
+				scope, ok := tr.Find("Chat")
 				if !ok || scope.X < model.X || scope.X+scope.W > model.X+model.W {
 					t.Fatalf("%s: model scope outside model button: scope=%+v ok=%v model=%+v", sc.name, scope, ok, model)
 				}
@@ -1194,13 +1194,13 @@ func TestComposerModelTooltipKeepsFullActualID(t *testing.T) {
 	ct.SessionModel = prefix + "omega"
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	showPreviewTooltip(t, tr, "Conversation model")
+	showPreviewTooltip(t, tr, "Chat model")
 	if !tr.HasText(ct.SessionModel) || tr.HasText(prefix+"alpha") {
 		t.Fatalf("loaded session model tooltip = %v", tr.Texts())
 	}
 	ct.SessionModel = ""
 	tr.Frame()
-	showPreviewTooltip(t, tr, "Conversation model")
+	showPreviewTooltip(t, tr, "Chat model")
 	if !tr.HasText("Session model not loaded") || tr.HasText(prefix+"alpha") {
 		t.Fatalf("unloaded session fell back to connection default: %v", tr.Texts())
 	}
@@ -1217,7 +1217,7 @@ func TestComposerModelsKeepActualSuffixAt720And960(t *testing.T) {
 			ct.SessionModel = model
 			tr := ui.NewTester(a.view, width, 640)
 			tr.Frame()
-			modelRect, ok := tr.Find("Conversation model")
+			modelRect, ok := tr.Find("Chat model")
 			if !ok || modelRect.W <= 0 {
 				t.Fatalf("%d %q: model control missing: %+v", width, model, modelRect)
 			}
