@@ -216,7 +216,7 @@ func TestResponsiveWorkbenchGeometryFirstSlice(t *testing.T) {
 				} else {
 					t.Fatal("Close workspace missing from open detail")
 				}
-				if empty, ok := tr.Find("No issues in Unfinished."); ok {
+				if empty, ok := tr.Find("No tasks in Not done."); ok {
 					t.Logf("empty rect=%+v", empty)
 				}
 				if tc.width == 960 && tc.left == 280 && tc.right == 440 {

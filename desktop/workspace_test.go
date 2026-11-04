@@ -26,10 +26,10 @@ func TestThreePaneBreakpointsAndToggles(t *testing.T) {
 	a.windowWidth = 1180
 	tr := ui.NewTester(a.view, 1180, 720)
 	tr.Frame()
-	if !tr.HasText("No issues in Unfinished.") || !tr.HasText("Chat runs") {
+	if !tr.HasText("No tasks in Not done.") || !tr.HasText("Chat runs") {
 		t.Fatal("new work panel should show the issue overview and local work entry")
 	}
-	if r, ok := tr.Find("No issues in Unfinished."); !ok || r.X < 800 {
+	if r, ok := tr.Find("No tasks in Not done."); !ok || r.X < 800 {
 		t.Fatalf("full-rail work overview x = %v, want >= 800", r.X)
 	}
 
@@ -55,14 +55,14 @@ func TestThreePaneBreakpointsAndToggles(t *testing.T) {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if tr.HasText("No issues in Unfinished.") || !tr.Focused("Work") {
+	if tr.HasText("No tasks in Not done.") || !tr.Focused("Work") {
 		t.Fatal("closing work should hide it and return focus to Work")
 	}
 	if err := tr.Click("Work"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if !tr.HasText("No issues in Unfinished.") || !tr.Focused("Close workspace") {
+	if !tr.HasText("No tasks in Not done.") || !tr.Focused("Close workspace") {
 		t.Fatal("opening work should show it and focus Close workspace")
 	}
 
@@ -78,7 +78,7 @@ func TestThreePaneBreakpointsAndToggles(t *testing.T) {
 	if a.workOverlay() {
 		t.Fatal("1380 should keep the work panel as a third column")
 	}
-	if r, ok := trWide.Find("No issues in Unfinished."); !ok || r.X < 1000 {
+	if r, ok := trWide.Find("No tasks in Not done."); !ok || r.X < 1000 {
 		t.Fatalf("wide work overview x = %v, want >= 1000", r.X)
 	}
 
@@ -126,7 +126,7 @@ func TestIssueOverviewContentHasPanelInset(t *testing.T) {
 				}
 				check("Task filter")
 				if empty {
-					check("No issues in Unfinished.")
+					check("No tasks in Not done.")
 				} else {
 					check("overview row inset")
 				}

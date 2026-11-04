@@ -33,7 +33,7 @@ func TestIssueWorkCardAndComposerStopLabelsAreSeparate(t *testing.T) {
 	if !tr.HasText("Stop task") || !tr.HasText("Stop chat") {
 		t.Fatalf("separate stop labels missing: %v", tr.Texts())
 	}
-	if !tr.HasText("Working") {
+	if !tr.HasText("Running") {
 		t.Fatal("issue work state was not visible in detail")
 	}
 }

@@ -821,7 +821,7 @@ func TestNarrowWorkKeepsNewIssueAction(t *testing.T) {
 		t.Fatalf("narrow Work lost creation action: %v", err)
 	}
 	tr.Frame()
-	if !a.issueFormOpen || !tr.HasText("Issue goal") {
+	if !a.issueFormOpen || !tr.HasText("Task goal") {
 		t.Fatalf("New task did not open the existing form: open=%v texts=%v", a.issueFormOpen, tr.Texts())
 	}
 }

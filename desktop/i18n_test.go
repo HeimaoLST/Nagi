@@ -753,7 +753,7 @@ func TestIssueWorkLabelsFollowLocaleAndKeepTargets(t *testing.T) {
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.SetLocale("en")
 	tr.Frame()
-	if !tr.HasText("New task") || !tr.HasText("No issues in All issues.") && !tr.HasText(issue.Goal) {
+	if !tr.HasText("New task") || !tr.HasText("No tasks in All tasks.") && !tr.HasText(issue.Goal) {
 		t.Fatalf("English issue work labels missing: %v", tr.Texts())
 	}
 	tr.Scroll(300, 300, 0, 600)

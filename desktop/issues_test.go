@@ -203,18 +203,18 @@ func TestIssueFormCreatesExplicitItemWithoutTouchingComposer(t *testing.T) {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if !tr.Focused("Issue goal") {
+	if !tr.Focused("Task goal") {
 		t.Fatal("opening the issue form did not focus Goal")
 	}
-	if err := tr.Click("Issue goal"); err != nil {
+	if err := tr.Click("Task goal"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Type("Implement login")
-	if err := tr.Click("Issue requirements"); err != nil {
+	if err := tr.Click("Task requirements"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Type("Must use SMS.")
-	if err := tr.Click("Save issue"); err != nil {
+	if err := tr.Click("Save task"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()

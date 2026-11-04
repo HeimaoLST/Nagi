@@ -424,8 +424,8 @@ func TestPreviewI18nFinalMatrix(t *testing.T) {
 				a.runtimeStatus = runtimeStateFailed
 				a.runtimeStage = "Runtime helper"
 				a.runtimeErrKind = runtimeNoticeHelperMissing
-				a.runtimeHintKind = startupHintHelperPath
-				a.runtimeHintArgs = []string{"/Users/you/Applications/Nagi.app/Contents/MacOS/Saki-runtime, /usr/local/bin/Saki-runtime"}
+				a.runtimeHintKind = startupHintHelperInstall
+				a.runtimeHintArgs = []string{"/Applications/Nagi.app/Contents/MacOS/Saki-runtime, /usr/local/bin/Saki-runtime"}
 				a.runtimeBinary = "/Applications/Nagi.app/Contents/MacOS/Saki-runtime"
 				a.storePath = "/Users/you/Library/Application Support/Saki/contacts.json"
 				a.sessionDir = "/Users/you/Library/Application Support/Saki/sessions"
@@ -434,7 +434,7 @@ func TestPreviewI18nFinalMatrix(t *testing.T) {
 				return a
 			},
 			want: func(msgs locales.Messages) []string {
-				return []string{msgs.SettingsAdvanced(), msgs.SettingsAdvancedIntro(), msgs.SettingsHideRuntimeDetails(), msgs.RuntimeStageRuntimeHelper()}
+				return []string{msgs.SettingsAdvanced(), msgs.SettingsAdvancedIntro(), msgs.SettingsHideRuntimeDetails(), msgs.RuntimeStageRuntimeHelper(), msgs.StartupHintHelperInstall("/Applications/Nagi.app/Contents/MacOS/Saki-runtime, /usr/local/bin/Saki-runtime")}
 			},
 			fit: settingsFit,
 		},

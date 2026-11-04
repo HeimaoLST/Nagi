@@ -545,7 +545,7 @@ func TestLiveTaskStatesRenderWithoutWaitingConflict(t *testing.T) {
 	if ct.SendState != sendIdle || ct.ActiveTaskID != "" {
 		t.Fatalf("finished state = %+v", ct)
 	}
-	if !tr.HasText("Completed") || len(ct.Messages) != 1 {
+	if !tr.HasText("Finished") || len(ct.Messages) != 1 {
 		t.Fatalf("completed work/messages = %+v / %+v", ct.Works, ct.Messages)
 	}
 	if tr.HasText("Accepted; waiting for the runtime to start.") || tr.HasText("Working") {

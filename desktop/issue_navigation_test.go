@@ -61,11 +61,11 @@ func TestIssueOverviewDefaultsToRowsAndOneFilter(t *testing.T) {
 			t.Fatalf("overview rendered detail/out-of-filter content %q: %v", notWant, tr.Texts())
 		}
 	}
-	if err := tr.Click("Unfinished"); err != nil {
+	if err := tr.Click("Not done"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if err := tr.Click("Completed"); err != nil {
+	if err := tr.Click("Done"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
@@ -73,7 +73,7 @@ func TestIssueOverviewDefaultsToRowsAndOneFilter(t *testing.T) {
 		tr.HasText("active goal") || tr.HasText("canceled goal") {
 		t.Fatalf("completed projection = filter=%q texts=%v", ct.issueNavigation().Filter, tr.Texts())
 	}
-	if err := tr.Click("Completed"); err != nil {
+	if err := tr.Click("Done"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
@@ -282,7 +282,7 @@ func TestIssueCompletedExecutionDoesNotImplyWholeDone(t *testing.T) {
 	if issue.Status != issueStatusInProgress || issue.Requirements[0].State != requirementUnverified {
 		t.Fatalf("execution terminal changed issue/requirement: %q / %q", issue.Status, issue.Requirements[0].State)
 	}
-	if !tr.HasText("This execution ended; the issue remains open.") || !tr.HasText("Unverified") {
+	if !tr.HasText("This run finished; the task remains open.") || !tr.HasText("Unverified") {
 		t.Fatalf("partial completed execution was not explained: %v", tr.Texts())
 	}
 }
@@ -531,7 +531,7 @@ func TestIssuePrimaryActionsAndPersistentLifecycle(t *testing.T) {
 			name: "continue",
 			issue: &productIssue{ID: "issue-action-continue", Goal: "Continue action", Status: issueStatusInProgress,
 				Executions: []*issueExecution{{ID: "run-continue", Status: issueExecutionCompleted}}},
-			wantPrimary: "Continue task", wantLife: "Mark complete",
+			wantPrimary: "Continue task", wantLife: "Mark done",
 		},
 		{
 			name: "question-attention",
@@ -844,7 +844,7 @@ func TestIssueBackFocusesDisplayedDetailNotBackgroundSelection(t *testing.T) {
 	if ct.SelectedIssueID != background.ID {
 		t.Fatalf("persistent selection changed on Back: %q", ct.SelectedIssueID)
 	}
-	if !tr.Focused("Issue A displayed issue") {
+	if !tr.Focused(locales.In("en").IssueRowLabel("A displayed issue")) {
 		t.Fatalf("Back did not focus displayed A row: %v", tr.Texts())
 	}
 	if ct.Draft != "draft stays" {
@@ -861,7 +861,7 @@ func TestIssueOverviewRecentUsesLatestExecutionNotOlderToolWork(t *testing.T) {
 		wantRun    string
 	}{
 		{"unknown-empty-task", issueExecutionUnknown, "", "Needs attention", "Run result unknown"},
-		{"pending-empty-task", issueExecutionPending, "", "In progress", "Run prepared, not dispatched"},
+		{"pending-empty-task", issueExecutionPending, "", "In progress", "Waiting to start"},
 		{"unknown-trusted-task", issueExecutionUnknown, "task-latest", "Needs attention", "Run result unknown"},
 		{"failed-trusted-task", issueExecutionFailed, "task-latest", "Needs attention", "Run failed"},
 	} {

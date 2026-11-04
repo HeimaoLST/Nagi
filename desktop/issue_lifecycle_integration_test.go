@@ -181,7 +181,7 @@ func TestIssueUITargetsLifecycleActions(t *testing.T) {
 		}
 	}
 	expandIssueDetails(t, tr)
-	for _, want := range []string{"Satisfied", "Unmet", "Unverified", "Mark waiting", "Cancel task", "Archive", "Mark complete"} {
+	for _, want := range []string{"Met", "Not met", "Unverified", "Mark waiting", "Cancel task", "Archive", "Mark done"} {
 		if !tr.HasText(want) {
 			t.Errorf("lifecycle details UI missing %q: %v", want, tr.Texts())
 		}
@@ -237,17 +237,17 @@ func TestIssueUIEditPrefillsRequirementsAndSavesRevision(t *testing.T) {
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
 	expandIssueDetails(t, tr)
-	if err := tr.Click("Edit issue"); err != nil {
+	if err := tr.Click("Edit task"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if !tr.HasText("Edit issue") || a.issueFormEditingID != issue.ID || a.issueGoal != "old goal" ||
+	if !tr.HasText("Edit task") || a.issueFormEditingID != issue.ID || a.issueGoal != "old goal" ||
 		a.issueRequirements != "old requirement" {
 		t.Fatalf("edit form prefill = %q / %q", a.issueGoal, a.issueRequirements)
 	}
 	a.issueGoal = "new goal"
 	a.issueRequirements = "old requirement\nnew requirement"
-	if err := tr.Click("Save issue"); err != nil {
+	if err := tr.Click("Save task"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
@@ -461,7 +461,7 @@ func TestIssueUICompleteAndReopenActions(t *testing.T) {
 	expandIssueDetails(t, tr)
 	completion := a.completionDraft(issue)
 	*completion = "user verified the saved result"
-	if err := tr.Click("Mark complete"); err != nil {
+	if err := tr.Click("Mark done"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
@@ -498,7 +498,7 @@ func TestIssueUIRequirementEvidenceActionPersists(t *testing.T) {
 	requirement := issue.Requirements[0]
 	draft := a.requirementDraft(requirement)
 	*draft = "checked by the user"
-	clickAfterBoundedScroll(t, tr, "Satisfied", 1040, 720)
+	clickAfterBoundedScroll(t, tr, "Met", 1040, 720)
 	tr.Frame()
 	if requirement.State != requirementSatisfied || requirement.Evidence != "checked by the user" {
 		t.Fatalf("requirement UI evidence = %+v", requirement)
@@ -518,18 +518,18 @@ func TestIssueUIStatusFilterSelection(t *testing.T) {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if err := tr.Click("Unfinished"); err != nil {
+	if err := tr.Click("Not done"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if err := tr.Click("Completed"); err != nil {
+	if err := tr.Click("Done"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
 	if ct.issueNavigation().Filter != issueFilterCompleted {
 		t.Fatalf("status filter = %q", ct.issueNavigation().Filter)
 	}
-	if !tr.HasText("filtered issue") || !tr.HasText("Completed") {
+	if !tr.HasText("filtered issue") || !tr.HasText("Done") {
 		t.Fatalf("completed filter did not list issue: %v", tr.Texts())
 	}
 }
