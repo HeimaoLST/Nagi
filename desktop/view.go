@@ -310,7 +310,7 @@ func (a *appModel) contactScopeSelect(c *ui.Context) {
 	msgs := locales.In(c.Locale())
 	index := contactScopeIndex(a.contactScope)
 	choice := segmentedSelection(c, &index, msgs.ContactScopeActive(), msgs.ContactScopeArchived(), msgs.ContactScopeAll()).
-		Label("Contact scope").FontSize(typeAction).Height(32).FillWidth()
+		Label("Contact scope").FontSize(typeAction).FillWidth()
 	if choice.Changed() {
 		a.setContactScope(contactScopeFromIndex(index))
 	}
@@ -933,12 +933,21 @@ func (a *appModel) composerModelButton(c *ui.Context, t *ui.Theme, ct *contact) 
 	button := appTooltip(c, ui.Button(c, "").Label("Conversation model").
 		MinHeight(32).Height(32).MinWidth(0).MaxWidth(230).Shrink(1).Padding(4, 8),
 		"Conversation model: "+summary)
+	head, tail := a.conversationModelDisplayParts(ct)
 	button.Children(func() {
-		ui.Row(c).AlignItems(ui.Center).Gap(3).Children(func() {
+		ui.Row(c).Grow(1).MinWidth(0).AlignItems(ui.Center).Gap(3).Children(func() {
 			ui.Text(c, "Conversation").FontSize(typeMeta).LineHeight(1.3).
-				MaxLines(1).TextColor(t.TextMuted)
-			ui.Text(c, a.conversationModelShortName(ct)).FontSize(typeAction).FontWeight(500).
-				MaxLines(1).TextColor(t.Text)
+				MaxLines(1).Shrink(0).TextColor(t.TextMuted)
+			ui.Row(c).Grow(1).MinWidth(0).AlignItems(ui.Center).Gap(0).Children(func() {
+				if head != "" {
+					ui.Text(c, head).FontSize(typeAction).FontWeight(500).
+						Grow(1).Shrink(1).MinWidth(0).MaxLines(1).Ellipsis("…").TextColor(t.Text)
+				}
+				if tail != "" {
+					ui.Text(c, tail).FontSize(typeAction).FontWeight(500).
+						MaxLines(1).Shrink(0).TextColor(t.Text)
+				}
+			})
 		})
 	})
 	return button

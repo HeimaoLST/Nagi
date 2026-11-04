@@ -90,6 +90,33 @@ func TestConnectionSettingsValidationKeepsDraftAndFocus(t *testing.T) {
 	}
 }
 
+func TestConnectionProtocolSegmentedKeepsDraftAndBusyGate(t *testing.T) {
+	config := testConnectionConfig(t)
+	config.API = connectionAPIChatCompletions
+	s := newConnectionSettings(&config, "")
+	tr := connectionSettingsTester(s, connectionSettingsActions{}, 580, 1600)
+	tr.Frame()
+	if !tr.HasText("Protocol") || !tr.HasText("Chat completions") || !tr.HasText("Responses") {
+		t.Fatalf("protocol choices missing: %v", tr.Texts())
+	}
+	if err := tr.Click("Responses"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if s.Draft.API != connectionAPIResponses {
+		t.Fatalf("protocol draft = %q, want Responses", s.Draft.API)
+	}
+	s.Busy = true
+	tr.Frame()
+	if err := tr.Click("Chat completions"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if s.Draft.API != connectionAPIResponses {
+		t.Fatalf("busy protocol changed draft to %q", s.Draft.API)
+	}
+}
+
 func TestPreviewConnectionSettings(t *testing.T) {
 	dir := os.Getenv("SAKI_PREVIEW_DIR")
 	if dir == "" {

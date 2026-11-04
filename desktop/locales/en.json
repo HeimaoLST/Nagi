@@ -453,5 +453,41 @@
   "taskContextSaveChanges": "Save changes",
   "@taskContextSaveChanges": {
     "description": "The action saving task context changes."
+  },
+  "editContactLabel": "Edit contact",
+  "@editContactLabel": {
+    "description": "The label and accessible name of the contact picker in Settings."
+  },
+  "protocolLabel": "Protocol",
+  "@protocolLabel": {
+    "description": "The label of the connection protocol selection."
+  },
+  "protocolChatCompletionsLabel": "Chat completions",
+  "@protocolChatCompletionsLabel": {
+    "description": "The Chat completions protocol option."
+  },
+  "protocolResponsesLabel": "Responses",
+  "@protocolResponsesLabel": {
+    "description": "The Responses protocol option."
+  },
+  "readerCheckAgainLabel": "Check again",
+  "@readerCheckAgainLabel": {
+    "description": "The action rechecking the current result file."
+  },
+  "readerOpenFileLabel": "Open file",
+  "@readerOpenFileLabel": {
+    "description": "The action opening the current result file."
+  },
+  "readerShowInFinderLabel": "Show in Finder",
+  "@readerShowInFinderLabel": {
+    "description": "The action revealing the current result file in Finder."
+  },
+  "readerSourceRawLabel": "Source & raw record",
+  "@readerSourceRawLabel": {
+    "description": "The action showing the source and raw record for a result."
+  },
+  "readerHideSourceRawLabel": "Hide source & raw record",
+  "@readerHideSourceRawLabel": {
+    "description": "The action hiding the source and raw record for a result."
   }
 }

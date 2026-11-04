@@ -254,7 +254,8 @@ func TestContactScopeSelectAndComposerModelEntry(t *testing.T) {
 	a.connectionEffective = &connectionConfig{Model: "model-default"}
 	tr = ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	if !tr.HasText("model-default") {
+	head, tail := a.conversationModelDisplayParts(a.contacts[0])
+	if !tr.HasText(head) || !tr.HasText(tail) {
 		t.Fatalf("unbound conversation default is not explicit: %q", tr.Texts())
 	}
 	if tr.HasText("Issue model") {
@@ -400,21 +401,29 @@ func TestAppearanceRetrySaveUIAndRuntimeErrorOwnership(t *testing.T) {
 	}
 }
 
-func TestConversationModelShortNameKeepsDistinguishingTail(t *testing.T) {
-	a, ct := workspaceTestApp(t)
-	ct.SessionID = "s1"
-	ct.SessionModel = "provider/" + strings.Repeat("shared-prefix-", 4) + "alpha"
-	alphaShort := a.conversationModelShortName(ct)
-	if !strings.Contains(alphaShort, "…") || !strings.HasSuffix(alphaShort, "alpha") {
-		t.Fatalf("short model = %q", alphaShort)
+func TestSegmentedSelectionKeepsTargetAndKeyboard(t *testing.T) {
+	selected := 0
+	tr := ui.NewTester(func(c *ui.Context) {
+		segmentedSelection(c, &selected, "One", "Two", "Three").Label("Choice")
+	}, 400, 200)
+	tr.SetFocused(true)
+	tr.Frame()
+	for _, label := range []string{"One", "Two", "Three"} {
+		bounds, ok := tr.Find(label)
+		if !ok || bounds.W <= 0 || bounds.H < 32 {
+			t.Fatalf("segment %q geometry = %+v ok=%v", label, bounds, ok)
+		}
 	}
-	ct.SessionModel = "provider/" + strings.Repeat("shared-prefix-", 4) + "omega"
-	omegaShort := a.conversationModelShortName(ct)
-	if alphaShort == omegaShort || !strings.HasSuffix(omegaShort, "omega") {
-		t.Fatalf("short models not distinguishable: alpha=%q omega=%q", alphaShort, omegaShort)
+	for i := 0; i < 8 && !tr.Focused("One"); i++ {
+		tr.Key(0, ui.KeyTab)
+		tr.Frame()
 	}
-	summary := a.conversationModelSummary(ct)
-	if !strings.Contains(summary, strings.Repeat("shared-prefix-", 4)+"omega") {
-		t.Fatalf("summary lost full model id: %q", summary)
+	if !tr.Focused("One") {
+		t.Fatalf("segmented control is not keyboard reachable: %v", tr.Texts())
+	}
+	tr.Key(0, ui.KeyRight)
+	tr.Frame()
+	if selected != 1 {
+		t.Fatalf("Right selected %d, want 1", selected)
 	}
 }

@@ -1577,3 +1577,129 @@ func TaskContextSaveChanges() string { return In(i18n.Locale()).TaskContextSaveC
 func (msgs Messages) TaskContextSaveChanges() string {
 	return Catalog.Format(msgs.locale, "taskContextSaveChanges", nil)
 }
+
+// EditContactLabel says "Edit contact"
+// in the language the app shows.
+//
+// The label and accessible name of the contact picker in Settings.
+func EditContactLabel() string { return In(i18n.Locale()).EditContactLabel() }
+
+// EditContactLabel says "Edit contact"
+// in the language of msgs.
+//
+// The label and accessible name of the contact picker in Settings.
+func (msgs Messages) EditContactLabel() string {
+	return Catalog.Format(msgs.locale, "editContactLabel", nil)
+}
+
+// ProtocolLabel says "Protocol"
+// in the language the app shows.
+//
+// The label of the connection protocol selection.
+func ProtocolLabel() string { return In(i18n.Locale()).ProtocolLabel() }
+
+// ProtocolLabel says "Protocol"
+// in the language of msgs.
+//
+// The label of the connection protocol selection.
+func (msgs Messages) ProtocolLabel() string {
+	return Catalog.Format(msgs.locale, "protocolLabel", nil)
+}
+
+// ProtocolChatCompletionsLabel says "Chat completions"
+// in the language the app shows.
+//
+// The Chat completions protocol option.
+func ProtocolChatCompletionsLabel() string { return In(i18n.Locale()).ProtocolChatCompletionsLabel() }
+
+// ProtocolChatCompletionsLabel says "Chat completions"
+// in the language of msgs.
+//
+// The Chat completions protocol option.
+func (msgs Messages) ProtocolChatCompletionsLabel() string {
+	return Catalog.Format(msgs.locale, "protocolChatCompletionsLabel", nil)
+}
+
+// ProtocolResponsesLabel says "Responses"
+// in the language the app shows.
+//
+// The Responses protocol option.
+func ProtocolResponsesLabel() string { return In(i18n.Locale()).ProtocolResponsesLabel() }
+
+// ProtocolResponsesLabel says "Responses"
+// in the language of msgs.
+//
+// The Responses protocol option.
+func (msgs Messages) ProtocolResponsesLabel() string {
+	return Catalog.Format(msgs.locale, "protocolResponsesLabel", nil)
+}
+
+// ReaderCheckAgainLabel says "Check again"
+// in the language the app shows.
+//
+// The action rechecking the current result file.
+func ReaderCheckAgainLabel() string { return In(i18n.Locale()).ReaderCheckAgainLabel() }
+
+// ReaderCheckAgainLabel says "Check again"
+// in the language of msgs.
+//
+// The action rechecking the current result file.
+func (msgs Messages) ReaderCheckAgainLabel() string {
+	return Catalog.Format(msgs.locale, "readerCheckAgainLabel", nil)
+}
+
+// ReaderOpenFileLabel says "Open file"
+// in the language the app shows.
+//
+// The action opening the current result file.
+func ReaderOpenFileLabel() string { return In(i18n.Locale()).ReaderOpenFileLabel() }
+
+// ReaderOpenFileLabel says "Open file"
+// in the language of msgs.
+//
+// The action opening the current result file.
+func (msgs Messages) ReaderOpenFileLabel() string {
+	return Catalog.Format(msgs.locale, "readerOpenFileLabel", nil)
+}
+
+// ReaderShowInFinderLabel says "Show in Finder"
+// in the language the app shows.
+//
+// The action revealing the current result file in Finder.
+func ReaderShowInFinderLabel() string { return In(i18n.Locale()).ReaderShowInFinderLabel() }
+
+// ReaderShowInFinderLabel says "Show in Finder"
+// in the language of msgs.
+//
+// The action revealing the current result file in Finder.
+func (msgs Messages) ReaderShowInFinderLabel() string {
+	return Catalog.Format(msgs.locale, "readerShowInFinderLabel", nil)
+}
+
+// ReaderSourceRawLabel says "Source & raw record"
+// in the language the app shows.
+//
+// The action showing the source and raw record for a result.
+func ReaderSourceRawLabel() string { return In(i18n.Locale()).ReaderSourceRawLabel() }
+
+// ReaderSourceRawLabel says "Source & raw record"
+// in the language of msgs.
+//
+// The action showing the source and raw record for a result.
+func (msgs Messages) ReaderSourceRawLabel() string {
+	return Catalog.Format(msgs.locale, "readerSourceRawLabel", nil)
+}
+
+// ReaderHideSourceRawLabel says "Hide source & raw record"
+// in the language the app shows.
+//
+// The action hiding the source and raw record for a result.
+func ReaderHideSourceRawLabel() string { return In(i18n.Locale()).ReaderHideSourceRawLabel() }
+
+// ReaderHideSourceRawLabel says "Hide source & raw record"
+// in the language of msgs.
+//
+// The action hiding the source and raw record for a result.
+func (msgs Messages) ReaderHideSourceRawLabel() string {
+	return Catalog.Format(msgs.locale, "readerHideSourceRawLabel", nil)
+}

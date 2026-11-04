@@ -128,32 +128,30 @@ func (a *appModel) connectionDefaultModel() string {
 	return ""
 }
 
-func middleEllipsis(text string, limit int) string {
-	runes := []rune(strings.TrimSpace(text))
-	if limit < 1 || len(runes) <= limit {
-		return string(runes)
-	}
-	if limit == 1 {
-		return "…"
-	}
-	head := (limit - 1) / 2
-	tail := limit - 1 - head
-	return string(runes[:head]) + "…" + string(runes[len(runes)-tail:])
-}
-
-func (a *appModel) conversationModelShortName(ct *contact) string {
+func (a *appModel) conversationModelDisplayParts(ct *contact) (head, tail string) {
+	full := ""
 	if ct != nil {
 		if model := strings.TrimSpace(ct.SessionModel); model != "" {
-			return middleEllipsis(model, 22)
-		}
-		if ct.SessionID != "" {
-			return "Model not loaded"
+			full = model
+		} else if ct.SessionID != "" {
+			return "Model not loaded", ""
 		}
 	}
-	if model := a.connectionDefaultModel(); model != "" {
-		return middleEllipsis(model, 22)
+	if full == "" {
+		full = a.connectionDefaultModel()
 	}
-	return "Model not set"
+	if full == "" {
+		return "Model not set", ""
+	}
+	return splitModelTail(full, 8)
+}
+
+func splitModelTail(full string, tailRunes int) (head, tail string) {
+	runes := []rune(full)
+	if tailRunes < 1 || len(runes) <= tailRunes {
+		return full, ""
+	}
+	return string(runes[:len(runes)-tailRunes]), string(runes[len(runes)-tailRunes:])
 }
 
 func (a *appModel) conversationModelSummary(ct *contact) string {

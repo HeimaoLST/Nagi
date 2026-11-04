@@ -548,7 +548,7 @@ func issueResultReaderPage(c *ui.Context, th *ui.Theme, state *issueResultPanelS
 }
 
 func issueResultReaderAction(c *ui.Context, th *ui.Theme, label string) ui.Element {
-	button := ui.Button(c, label).FontSize(typeAction).MinHeight(32).Padding(4, 8).
+	button := ui.Button(c, label).Label(label).FontSize(typeAction).MinHeight(32).Padding(4, 8).
 		Background(th.Surface).BorderWidth(0).TextColor(th.Text)
 	if button.Pressed() {
 		button.Background(th.SurfacePressed)
@@ -563,26 +563,27 @@ func issueResultReaderAction(c *ui.Context, th *ui.Theme, label string) ui.Eleme
 
 func issueResultReaderActions(c *ui.Context, th *ui.Theme, state *issueResultPanelState, actions issueResultPanelActions, file issueResultFile) {
 	key := issueResultFileKey(file)
+	msgs := locales.In(c.Locale())
 	var inspection *issueResultFileInspection
 	if state.InspectFor == key {
 		inspection = state.Inspection
 	}
 	ui.Row(c).Wrap().Gap(6).AlignItems(ui.Center).Children(func() {
 		if actions.CheckFile != nil {
-			issueResultReaderAction(c, th, "Check again").Bind(&state.ReaderCheckHandle).OnClick(func() { actions.CheckFile(file) })
+			issueResultReaderAction(c, th, msgs.ReaderCheckAgainLabel()).Bind(&state.ReaderCheckHandle).OnClick(func() { actions.CheckFile(file) })
 		}
 		if inspection != nil && inspection.Exists && inspection.Regular {
 			if actions.OpenFile != nil {
-				issueResultReaderAction(c, th, "Open file").Bind(&state.ReaderOpenHandle).OnClick(func() { actions.OpenFile(file) })
+				issueResultReaderAction(c, th, msgs.ReaderOpenFileLabel()).Bind(&state.ReaderOpenHandle).OnClick(func() { actions.OpenFile(file) })
 			}
 			if actions.RevealFile != nil {
-				issueResultReaderAction(c, th, "Show in Finder").Bind(&state.ReaderRevealHandle).OnClick(func() { actions.RevealFile(file) })
+				issueResultReaderAction(c, th, msgs.ReaderShowInFinderLabel()).Bind(&state.ReaderRevealHandle).OnClick(func() { actions.RevealFile(file) })
 			}
 		}
 		if actions.ToggleSource != nil {
-			label := "Source & raw record"
+			label := msgs.ReaderSourceRawLabel()
 			if state.SourceFor == key {
-				label = "Hide source & raw record"
+				label = msgs.ReaderHideSourceRawLabel()
 			}
 			issueResultReaderAction(c, th, label).Bind(&state.ReaderSourceHandle).OnClick(func() { actions.ToggleSource(key) })
 		}

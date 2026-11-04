@@ -349,7 +349,7 @@ func (a *appModel) workspaceContent(c *ui.Context, t *ui.Theme, narrow bool) {
 			tab = 1
 		}
 		tabs := segmentedSelection(c, &tab, msgs.WorkTasksTab(), msgs.WorkChatRunsTab()).Label(msgs.WorkTabs()).
-			FontSize(typeAction).Height(32).MaxWidth(360).FillWidth()
+			FontSize(typeAction).MaxWidth(360).FillWidth()
 		if nav.FocusConversation {
 			tabs.Focus()
 			nav.FocusConversation = false
@@ -398,7 +398,7 @@ func (a *appModel) issueOverviewView(c *ui.Context, t *ui.Theme, ct *contact, na
 		msgs := locales.In(c.Locale())
 		filterIndex := issueFilterIndex(nav.Filter)
 		filter := segmentedSelection(c, &filterIndex, msgs.IssueFilterUnfinished(), msgs.IssueFilterCompleted(), msgs.IssueFilterAll()).
-			Label("Issue filter").FontSize(typeAction).Height(32).MaxWidth(360).FillWidth()
+			Label("Issue filter").FontSize(typeAction).MaxWidth(360).FillWidth()
 		if filter.Changed() {
 			a.setIssueFilter(ct, issueFilterFromIndex(filterIndex))
 			nav = ct.issueNavigation()

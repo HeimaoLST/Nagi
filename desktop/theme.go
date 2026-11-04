@@ -107,11 +107,11 @@ func resolveWorkbenchTheme(dark bool) workbenchTheme {
 func segmentedSelection(c *ui.Context, selected *int, labels ...string) ui.Element {
 	t := c.Theme()
 	parts := ui.SegmentedBase(c, selected, len(labels))
-	track := parts.Track.Height(32).Padding(t.Space(0.5)).Gap(t.Space(0.5)).
+	track := parts.Track.MinHeight(32).AlignItems(ui.Stretch).Padding(t.Space(0.5)).Gap(t.Space(0.5)).
 		Radius(t.Radius).Background(t.Surface).Border(1, t.Border)
 	track.Children(func() {
 		for i, label := range labels {
-			segment := parts.Segment(i).MinHeight(32).Padding(t.Space(1), t.Space(2)).
+			segment := parts.Segment(i).Label(label).MinHeight(32).Padding(t.Space(1), t.Space(2)).
 				Radius(t.Radius).Background(ui.Transparent).BorderWidth(0).TextColor(t.TextMuted)
 			if i == *selected {
 				segment.Background(t.Selection).TextColor(t.Text)
@@ -132,11 +132,29 @@ func segmentedSelection(c *ui.Context, selected *int, labels ...string) ui.Eleme
 	return track
 }
 
+// selectionButtonState gives a secondary button a Selection/Text selected
+// face while preserving explicit hover, pressed and focus feedback.
+func selectionButtonState(c *ui.Context, button ui.Element, selected bool) {
+	t := c.Theme()
+	if selected {
+		button.Background(t.Selection).TextColor(t.Text)
+	}
+	if button.Pressed() {
+		button.Background(t.SurfacePressed)
+	} else if button.Hovered() {
+		button.Background(t.SurfaceHover)
+	}
+	if button.Focused() {
+		button.BorderWidth(1).BorderColor(t.Focus)
+	}
+}
+
 // selectWithoutChevron uses MyGo's official SelectBase so dropdown triggers
 // show the current value and keep keyboard/a11y behavior without the framework's
 // decorative chevron or elevated popup shadow.
 func selectWithoutChevron(c *ui.Context, selected *string, options []string, label string) ui.Element {
 	t := c.Theme()
+	full := label + ": " + *selected
 	sel := ui.SelectBase(c, selected)
 	trigger := sel.Trigger.Label(label).FontSize(typeAction).MinHeight(32).FillWidth().
 		Justify(ui.Start).Padding(t.Space(1.5), t.Space(2.5)).Radius(t.Radius).
@@ -150,7 +168,11 @@ func selectWithoutChevron(c *ui.Context, selected *string, options []string, lab
 		trigger.BorderColor(t.Focus)
 	}
 	trigger.Children(func() {
-		ui.Text(c, *selected).FontSize(typeAction).SingleLine().TextColor(t.Text)
+		ui.Row(c).FillWidth().MinWidth(0).AlignItems(ui.Center).Gap(6).Children(func() {
+			ui.Text(c, label).FontSize(typeMeta).MaxLines(1).Shrink(0).TextColor(t.TextMuted)
+			ui.Text(c, *selected).FontSize(typeAction).MaxLines(1).Grow(1).Shrink(1).MinWidth(0).
+				Ellipsis("…").TextColor(t.Text)
+		})
 	})
 	sel.Popup(func(panel ui.Element) {
 		panel.Padding(t.Space(1)).Radius(t.Radius).Background(t.Background).Border(0.5, t.Border)
@@ -159,16 +181,16 @@ func selectWithoutChevron(c *ui.Context, selected *string, options []string, lab
 				item := sel.Item(option).Padding(t.Space(1.5), t.Space(2.5)).Radius(t.Space(1))
 				switch {
 				case item.Highlighted():
-					item.Background(t.Accent).TextColor(t.AccentText)
+					item.Background(t.Selection).TextColor(t.Text)
 				case option == *selected:
-					item.Background(t.Surface)
+					item.Background(t.Selection).TextColor(t.Text)
 				}
 				item.Children(func() { ui.Text(c, option).FontSize(typeAction).SingleLine() })
 			}
 		})
 	})
 	trigger.OnChange(func() { trigger.Focus() })
-	return trigger
+	return appTooltip(c, trigger, full)
 }
 
 // appTooltip keeps MyGo's official tooltip controller but gives product tips
@@ -194,5 +216,5 @@ func appTooltip(c *ui.Context, anchor ui.Element, text string) ui.Element {
 // reserved for the main action. Do not set Background on this control: MyGo's
 // styleButton only supplies hover/pressed while its default face is intact.
 func secondaryButton(c *ui.Context, label string) ui.Element {
-	return ui.Button(c, label).FontSize(typeAction).FontWeight(400).MinHeight(32).Padding(6, 10)
+	return ui.Button(c, label).Label(label).FontSize(typeAction).FontWeight(400).MinHeight(32).Padding(6, 10)
 }

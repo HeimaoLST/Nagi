@@ -108,5 +108,14 @@
   "issueSupplementSave": "保存补充",
   "taskContextSaveSnippet": "保存资料片段",
   "taskContextSaveFile": "保存文件",
-  "taskContextSaveChanges": "保存更改"
+  "taskContextSaveChanges": "保存更改",
+  "editContactLabel": "编辑联系人",
+  "protocolLabel": "协议",
+  "protocolChatCompletionsLabel": "Chat completions",
+  "protocolResponsesLabel": "Responses",
+  "readerCheckAgainLabel": "再次检查",
+  "readerOpenFileLabel": "打开文件",
+  "readerShowInFinderLabel": "在 Finder 中显示",
+  "readerSourceRawLabel": "源码与原始记录",
+  "readerHideSourceRawLabel": "隐藏源码与原始记录"
 }

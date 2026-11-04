@@ -1441,6 +1441,18 @@ func issueResultAppPreview(scene string, width int) *appModel {
 	return a
 }
 
+func TestIssueResultReaderActionsFollowLocale(t *testing.T) {
+	app := issueResultAppPreview("markdown", 1040)
+	tr := ui.NewTester(app.view, 1040, 900)
+	tr.SetLocale("zh-Hans")
+	tr.Frame()
+	for _, want := range []string{"再次检查", "打开文件", "在 Finder 中显示", "源码与原始记录"} {
+		if !tr.HasText(want) {
+			t.Fatalf("localized reader action %q missing: %v", want, tr.Texts())
+		}
+	}
+}
+
 func TestIssueResultAppPreviewsAlwaysWriteHeadlessPNGs(t *testing.T) {
 	dir := os.Getenv("SAKI_PREVIEW_DIR")
 	if dir == "" {
@@ -1493,7 +1505,7 @@ func TestIssueResultAppPreviewsAlwaysWriteHeadlessPNGs(t *testing.T) {
 			}
 		}
 		readerWant := map[string][]string{
-			"markdown":   {"中文结果", "名称", "完成"},
+			"markdown":   {"中文结果", "名称", "完成", "Check again", "Open file", "Show in Finder", "Source & raw record", "Copy current file"},
 			"plain":      {"# 这不是标题", "| 不是 | 表格 |"},
 			"missing":    {"No file exists at the reported path"},
 			"readerror":  {"permission denied"},

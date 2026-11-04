@@ -127,16 +127,16 @@ func (s *connectionSettings) view(c *ui.Context, t *ui.Theme, actions connection
 		}
 		ui.Column(c).FillWidth().Gap(16).Children(func() {
 			ui.Column(c).FillWidth().Gap(4).Children(func() {
-				ui.Text(c, "Protocol").FontSize(typeAction).FontWeight(500).TextColor(t.Text)
-				ui.Row(c).Gap(6).Wrap().Children(func() {
-					for _, choice := range []struct{ label, value string }{{"Chat completions", "openai-chat-completions"}, {"Responses", "openai-responses"}} {
-						choice := choice
-						button := secondaryButton(c, choice.label).Disabled(s.Busy).OnClick(func() { s.Draft.API = choice.value })
-						if s.Draft.API == choice.value {
-							button.Background(t.Selection).TextColor(t.Text)
-						}
-					}
-				})
+				ui.Text(c, msgs.ProtocolLabel()).FontSize(typeAction).FontWeight(500).TextColor(t.Text)
+				apiIndex := 0
+				if s.Draft.API == connectionAPIResponses {
+					apiIndex = 1
+				}
+				protocol := segmentedSelection(c, &apiIndex, msgs.ProtocolChatCompletionsLabel(), msgs.ProtocolResponsesLabel()).
+					Label(msgs.ProtocolLabel()).Disabled(s.Busy)
+				if protocol.Changed() {
+					s.Draft.API = []string{connectionAPIChatCompletions, connectionAPIResponses}[apiIndex]
+				}
 				if s.Errors["API"] != "" {
 					ui.Text(c, s.Errors["API"]).FontSize(typeBody).LineHeight(1.5).TextColor(t.Danger)
 				}
