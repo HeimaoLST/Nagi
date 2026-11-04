@@ -9,6 +9,8 @@ import (
 	"strings"
 
 	"github.com/egoist/mygo/ui"
+
+	"saki/desktop/locales"
 )
 
 type modelSelectionTarget struct {
@@ -375,13 +377,9 @@ func (s *modelSelection) view(c *ui.Context, t *ui.Theme, actions modelSelection
 		ui.Text(c, "Catalog entries supply capacity only; they do not prove that the provider endpoint supports a model.").FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
 		ui.Row(c).Gap(6).Children(func() {
 			catalogButton := secondaryButton(c, "Use Runtime catalog").Disabled(s.Busy || len(s.Catalog.Models) == 0).OnClick(func() { s.SelectCapacityMode(modelCapacityCatalog) })
-			if s.Draft.CapacityMode == modelCapacityCatalog {
-				catalogButton.BorderWidth(2).BorderColor(t.Accent)
-			}
+			selectionButtonState(c, catalogButton, s.Draft.CapacityMode == modelCapacityCatalog)
 			explicitButton := secondaryButton(c, "Set explicit limits").Disabled(s.Busy).OnClick(func() { s.SelectCapacityMode(modelCapacityExplicit) })
-			if s.Draft.CapacityMode != modelCapacityCatalog {
-				explicitButton.BorderWidth(2).BorderColor(t.Accent)
-			}
+			selectionButtonState(c, explicitButton, s.Draft.CapacityMode != modelCapacityCatalog)
 		})
 		if s.Draft.CapacityMode == modelCapacityCatalog {
 			ui.Text(c, "Capacity comes from the selected Runtime catalog entry. Endpoint/model availability is not implied.").FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
@@ -398,7 +396,7 @@ func (s *modelSelection) view(c *ui.Context, t *ui.Theme, actions modelSelection
 					actions.Refresh(s.Target)
 				}
 			})
-			ui.PrimaryButton(c, "Update model").FontSize(typeAction).Disabled(s.Busy || s.Unconfirmed).OnClick(func() {
+			secondaryButton(c, locales.In(c.Locale()).ModelUpdateModel()).Disabled(s.Busy || s.Unconfirmed).OnClick(func() {
 				if request, ok := s.Request(); ok && actions.Update != nil {
 					actions.Update(request)
 				}
@@ -419,9 +417,7 @@ func (s *modelSelection) view(c *ui.Context, t *ui.Theme, actions modelSelection
 			for _, entry := range configured {
 				entry := entry
 				button := secondaryButton(c, entry.Model+": context "+strconv.Itoa(entry.Compaction.ContextTokens)).Disabled(s.Busy).OnClick(func() { s.SelectConfiguredModel(entry.Model) })
-				if s.Draft.Model == entry.Model && s.Draft.CapacityMode == modelCapacityExplicit {
-					button.BorderWidth(2).BorderColor(t.Accent)
-				}
+				selectionButtonState(c, button, s.Draft.Model == entry.Model && s.Draft.CapacityMode == modelCapacityExplicit)
 			}
 			if len(configured) < len(s.Catalog.ConfiguredModels) {
 				ui.Text(c, fmt.Sprintf("Showing %d of %d configured models; refine Filter to see more.", len(configured), len(s.Catalog.ConfiguredModels))).FontSize(14).TextColor(t.TextMuted)
@@ -437,9 +433,7 @@ func (s *modelSelection) view(c *ui.Context, t *ui.Theme, actions modelSelection
 					label = entry.CatalogID
 				}
 				button := secondaryButton(c, label+": context "+strconv.Itoa(entry.Limits.Context)).Disabled(s.Busy).OnClick(func() { s.SelectCatalogID(entry.CatalogID) })
-				if s.Draft.CatalogID != "" && s.Draft.CatalogID == entry.CatalogID {
-					button.BorderWidth(2).BorderColor(t.Accent)
-				}
+				selectionButtonState(c, button, s.Draft.CatalogID != "" && s.Draft.CatalogID == entry.CatalogID)
 			}
 			if len(catalog) < len(s.Catalog.Models) {
 				ui.Text(c, fmt.Sprintf("Showing %d of %d catalog entries; refine Filter to see more.", len(catalog), len(s.Catalog.Models))).FontSize(14).TextColor(t.TextMuted)

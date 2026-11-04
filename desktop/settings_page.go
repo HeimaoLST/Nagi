@@ -245,7 +245,7 @@ func (a *appModel) settingsSidebar(c *ui.Context, t *ui.Theme, narrow bool) {
 	if narrow {
 		width = 0
 	}
-	column := ui.Column(c).Gap(12).Padding(16).Background(a.workTheme.Rail)
+	column := ui.Column(c).Gap(12).Padding(16).Background(a.workTheme.Rail).AlignItems(ui.Start)
 	if narrow {
 		column.FillWidth()
 	} else {
@@ -269,7 +269,7 @@ func (a *appModel) settingsSidebar(c *ui.Context, t *ui.Theme, narrow bool) {
 		nav := func(label, tab string) {
 			selected := a.settingsTab == tab
 			button := ui.ButtonBase(c).Label(label).FontSize(typeAction).MinHeight(32).
-				Padding(4, 8).Background(ui.Transparent).BorderWidth(0).
+				Padding(4, 8).Justify(ui.Start).Background(ui.Transparent).BorderWidth(0).
 				TextColor(t.TextMuted).FontWeight(400)
 			if !narrow {
 				button.FillWidth()
@@ -344,7 +344,7 @@ func (a *appModel) settingsAppearanceContent(c *ui.Context, t *ui.Theme) {
 	case appearanceDark:
 		selected = 2
 	}
-	appearance := ui.Segmented(c, &selected, "System", "Light", "Dark").Label("Appearance mode").FontSize(typeAction).Height(32)
+	appearance := segmentedSelection(c, &selected, "System", "Light", "Dark").Label("Appearance mode").FontSize(typeAction)
 	if appearance.Changed() {
 		a.setAppearanceMode([]string{appearanceSystem, appearanceLight, appearanceDark}[selected])
 	}
@@ -403,7 +403,7 @@ func (a *appModel) settingsContactContent(c *ui.Context, t *ui.Theme) {
 	if a.settingsPickerChoice == "" || !containsString(choices, a.settingsPickerChoice) {
 		a.settingsPickerChoice = want
 	}
-	picker := selectWithoutChevron(c, &a.settingsPickerChoice, choices, "Edit contact")
+	picker := selectWithoutChevron(c, &a.settingsPickerChoice, choices, msgs.EditContactLabel())
 	if picker.Changed() {
 		for _, contact := range a.contacts {
 			if contact != nil && a.settingsContactChoice(contact) == a.settingsPickerChoice {

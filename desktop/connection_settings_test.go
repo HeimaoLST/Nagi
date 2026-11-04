@@ -90,6 +90,33 @@ func TestConnectionSettingsValidationKeepsDraftAndFocus(t *testing.T) {
 	}
 }
 
+func TestConnectionProtocolSegmentedKeepsDraftAndBusyGate(t *testing.T) {
+	config := testConnectionConfig(t)
+	config.API = connectionAPIChatCompletions
+	s := newConnectionSettings(&config, "")
+	tr := connectionSettingsTester(s, connectionSettingsActions{}, 580, 1600)
+	tr.Frame()
+	if !tr.HasText("Protocol") || !tr.HasText("Chat completions") || !tr.HasText("Responses") {
+		t.Fatalf("protocol choices missing: %v", tr.Texts())
+	}
+	if err := tr.Click("Responses"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if s.Draft.API != connectionAPIResponses {
+		t.Fatalf("protocol draft = %q, want Responses", s.Draft.API)
+	}
+	s.Busy = true
+	tr.Frame()
+	if err := tr.Click("Chat completions"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if s.Draft.API != connectionAPIResponses {
+		t.Fatalf("busy protocol changed draft to %q", s.Draft.API)
+	}
+}
+
 func TestPreviewConnectionSettings(t *testing.T) {
 	dir := os.Getenv("SAKI_PREVIEW_DIR")
 	if dir == "" {
@@ -140,6 +167,9 @@ func TestConnectionSettingsSaveAndApplyPrimaryAndRetryApply(t *testing.T) {
 		Apply:        func() { applied++ },
 	}, 580, 1600)
 	tr.Frame()
+	if r, ok := tr.Find("Save and apply"); !ok || r.H < 32 {
+		t.Fatalf("save-and-apply target = %+v/%v", r, ok)
+	}
 	if err := tr.Click("Save and apply"); err != nil {
 		t.Fatal(err)
 	}
@@ -149,6 +179,9 @@ func TestConnectionSettingsSaveAndApplyPrimaryAndRetryApply(t *testing.T) {
 	s.HasSaved = true
 	s.SavedPending = true
 	tr.Frame()
+	if r, ok := tr.Find("Apply saved"); !ok || r.H < 32 {
+		t.Fatalf("retry-apply target = %+v/%v", r, ok)
+	}
 	if err := tr.Click("Apply saved"); err != nil {
 		t.Fatal(err)
 	}

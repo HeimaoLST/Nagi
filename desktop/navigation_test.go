@@ -591,6 +591,22 @@ func TestPreviewNavigation219(t *testing.T) {
 				writePreviewPNG(t, filepath.Join(dir, fmt.Sprintf("navigation-%s-%s-%d.png", kind, theme, width)), tr.Image())
 			}
 
+			if width == 1040 {
+				a, ct := navigationPreviewApp(t)
+				a.windowWidth = width
+				a.workspaceOpen = false
+				a.detail = ""
+				ct.Issues[0].Status = issueStatusNeedsAttention
+				a.openDetail(detailWork)
+				tr := ui.NewTester(a.view, width, height)
+				tr.SetDark(dark)
+				tr.Frame()
+				if !a.detailIs(detailWork) || !tr.HasText("!") {
+					t.Fatalf("attention nav preview lacks selected Work marker: %v", tr.Texts())
+				}
+				writePreviewPNG(t, filepath.Join(dir, fmt.Sprintf("navigation-attention-%s-%d.png", theme, width)), tr.Image())
+			}
+
 			a, ct := navigationPreviewApp(t)
 			a.windowWidth = width
 			file := issueResultPanelFixtureFile("preview", "/tmp/workspace/preview-result.md", `{"path":"/tmp/workspace/preview-result.md","bytes_written":1}`)

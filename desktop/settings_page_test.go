@@ -374,6 +374,18 @@ func TestSettingsContactPickerDisambiguatesSameLastIDDigitsAndSavesB(t *testing.
 	if texts := strings.Join(tr.Texts(), "\n"); strings.Contains(texts, aContact.ID) || strings.Contains(texts, bContact.ID) {
 		t.Fatalf("contact picker exposed raw IDs: %v", tr.Texts())
 	}
+	if !tr.HasText("Edit contact") {
+		t.Fatalf("contact picker label prefix missing: %v", tr.Texts())
+	}
+	if _, ok := tr.Find(a.settingsContactChoice(aContact)); !ok {
+		t.Fatalf("contact picker current choice missing: %v", tr.Texts())
+	}
+	showPreviewTooltip(t, tr, "Edit contact")
+	if full := "Edit contact: " + a.settingsContactChoice(aContact); !tr.HasText(full) {
+		t.Fatalf("contact picker full tooltip/AX missing %q: %v", full, tr.Texts())
+	}
+	tr.Move(1, 1)
+	tr.Frame()
 	if err := tr.Click("Edit contact"); err != nil {
 		t.Fatal(err)
 	}

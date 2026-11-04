@@ -515,8 +515,8 @@ func (h *guiHarness) shutdownSnapshot() shutdownDiagnostic {
 	var b strings.Builder
 	fmt.Fprintf(&b, "shutdown_started=%v quit_ready=%v drain_started=%v runtime_status=%q rt_nil=%v connection_launch_present=%v\n",
 		a.shutdownStarted, a.quitReady, a.shutdownDrainStarted, a.runtimeStatus, a.rt == nil, a.connectionLaunch != nil)
-	fmt.Fprintf(&b, "gates.connection_save_in_flight=%v connection_applying=%v connection_testing=%v model_op_active=%v contact_history_in_flight=%d result_in_flight=%d submission_in_flight=%d issue_tool_release_in_flight=%d\n",
-		a.connectionSaveInFlight, a.connectionApplying, a.connectionTesting, a.modelOpActive, a.contactHistoryInFlight, a.resultInFlight, a.submissionInFlight, a.issueToolReleaseInFlight)
+	fmt.Fprintf(&b, "gates.connection_save_in_flight=%v connection_applying=%v connection_testing=%v model_op_active=%v contact_history_in_flight=%d result_in_flight=%d submission_in_flight=%d metadata_in_flight=%d issue_tool_release_in_flight=%d\n",
+		a.connectionSaveInFlight, a.connectionApplying, a.connectionTesting, a.modelOpActive, a.contactHistoryInFlight, a.resultInFlight, a.submissionInFlight, a.metadataInFlight, a.issueToolReleaseInFlight)
 	b.WriteString(runtimeClientShutdownDiagnostic(a.rt))
 	b.WriteString("\n")
 	b.WriteString(issueToolServerShutdownDiagnostic(a.issueToolServer))

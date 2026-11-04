@@ -186,19 +186,17 @@ func (a *appModel) navigationWorkEntry(c *ui.Context, t *ui.Theme) {
 	toggle.Children(func() {
 		color := t.TextMuted
 		if on {
-			color = t.AccentText
+			color = t.Text
 		}
 		if total > 0 {
 			ui.Row(c).AlignItems(ui.Center).Gap(2).Children(func() {
 				ui.Icon(c, navWorkIcon).Width(18).Height(18).TextColor(color)
-				markColor := t.Warning
 				countColor := t.TextMuted
 				if on {
-					markColor = t.AccentText
-					countColor = t.AccentText
+					countColor = t.Text
 				}
 				if notice.AttentionCount > 0 {
-					ui.Text(c, "!").FontSize(12).FontWeight(600).TextColor(markColor)
+					ui.Text(c, "!").FontSize(12).FontWeight(600).TextColor(t.Warning)
 				}
 				ui.Text(c, fmt.Sprintf("%d", total)).FontSize(12).TextColor(countColor)
 			})
@@ -208,6 +206,7 @@ func (a *appModel) navigationWorkEntry(c *ui.Context, t *ui.Theme) {
 	})
 	if on {
 		toggle.Selected(true)
+		selectionButtonState(c, toggle, true)
 	}
 	if a.focusWorkspace {
 		toggle.Focus()
@@ -234,12 +233,13 @@ func (a *appModel) navigationToggle(c *ui.Context, t *ui.Theme, kind detailKind,
 	toggle.Children(func() {
 		color := t.TextMuted
 		if active {
-			color = t.AccentText
+			color = t.Text
 		}
 		ui.Icon(c, icon).Width(18).Height(18).TextColor(color)
 	})
 	if active {
 		toggle.Selected(true)
+		selectionButtonState(c, toggle, true)
 	}
 	if focus != nil && *focus {
 		toggle.Focus()

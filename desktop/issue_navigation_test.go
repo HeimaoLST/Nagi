@@ -77,9 +77,9 @@ func TestIssueOverviewDefaultsToRowsAndOneFilter(t *testing.T) {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if err := tr.Click("All"); err != nil {
-		t.Fatal(err)
-	}
+	// 278 R2: "All" is also a contact-scope segment. From the focused
+	// Completed issue filter, keyboard Right selects the issue All segment.
+	tr.Key(0, ui.KeyRight)
 	tr.Frame()
 	if ct.issueNavigation().Filter != issueFilterAll || !tr.HasText("canceled goal") || !tr.HasText("archived goal") {
 		t.Fatalf("all projection = filter=%q texts=%v", ct.issueNavigation().Filter, tr.Texts())

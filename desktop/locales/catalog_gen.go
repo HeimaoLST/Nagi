@@ -1353,3 +1353,353 @@ func WorkTask() string { return In(i18n.Locale()).WorkTask() }
 func (msgs Messages) WorkTask() string {
 	return Catalog.Format(msgs.locale, "workTask", nil)
 }
+
+// ContactScopeActive says "Active"
+// in the language the app shows.
+//
+// The Active contact scope.
+func ContactScopeActive() string { return In(i18n.Locale()).ContactScopeActive() }
+
+// ContactScopeActive says "Active"
+// in the language of msgs.
+//
+// The Active contact scope.
+func (msgs Messages) ContactScopeActive() string {
+	return Catalog.Format(msgs.locale, "contactScopeActive", nil)
+}
+
+// ContactScopeArchived says "Archived"
+// in the language the app shows.
+//
+// The Archived contact scope.
+func ContactScopeArchived() string { return In(i18n.Locale()).ContactScopeArchived() }
+
+// ContactScopeArchived says "Archived"
+// in the language of msgs.
+//
+// The Archived contact scope.
+func (msgs Messages) ContactScopeArchived() string {
+	return Catalog.Format(msgs.locale, "contactScopeArchived", nil)
+}
+
+// ContactScopeAll says "All"
+// in the language the app shows.
+//
+// The All contact scope.
+func ContactScopeAll() string { return In(i18n.Locale()).ContactScopeAll() }
+
+// ContactScopeAll says "All"
+// in the language of msgs.
+//
+// The All contact scope.
+func (msgs Messages) ContactScopeAll() string {
+	return Catalog.Format(msgs.locale, "contactScopeAll", nil)
+}
+
+// IssueFilterUnfinished says "Unfinished"
+// in the language the app shows.
+//
+// The Unfinished issue filter.
+func IssueFilterUnfinished() string { return In(i18n.Locale()).IssueFilterUnfinished() }
+
+// IssueFilterUnfinished says "Unfinished"
+// in the language of msgs.
+//
+// The Unfinished issue filter.
+func (msgs Messages) IssueFilterUnfinished() string {
+	return Catalog.Format(msgs.locale, "issueFilterUnfinished", nil)
+}
+
+// IssueFilterCompleted says "Completed"
+// in the language the app shows.
+//
+// The Completed issue filter.
+func IssueFilterCompleted() string { return In(i18n.Locale()).IssueFilterCompleted() }
+
+// IssueFilterCompleted says "Completed"
+// in the language of msgs.
+//
+// The Completed issue filter.
+func (msgs Messages) IssueFilterCompleted() string {
+	return Catalog.Format(msgs.locale, "issueFilterCompleted", nil)
+}
+
+// IssueFilterAll says "All"
+// in the language the app shows.
+//
+// The All issue filter.
+func IssueFilterAll() string { return In(i18n.Locale()).IssueFilterAll() }
+
+// IssueFilterAll says "All"
+// in the language of msgs.
+//
+// The All issue filter.
+func (msgs Messages) IssueFilterAll() string {
+	return Catalog.Format(msgs.locale, "issueFilterAll", nil)
+}
+
+// SearchContacts says "Search contacts"
+// in the language the app shows.
+//
+// The contact search field label.
+func SearchContacts() string { return In(i18n.Locale()).SearchContacts() }
+
+// SearchContacts says "Search contacts"
+// in the language of msgs.
+//
+// The contact search field label.
+func (msgs Messages) SearchContacts() string {
+	return Catalog.Format(msgs.locale, "searchContacts", nil)
+}
+
+// ConnectionApplySaved says "Apply saved"
+// in the language the app shows.
+//
+// The action applying the saved connection.
+func ConnectionApplySaved() string { return In(i18n.Locale()).ConnectionApplySaved() }
+
+// ConnectionApplySaved says "Apply saved"
+// in the language of msgs.
+//
+// The action applying the saved connection.
+func (msgs Messages) ConnectionApplySaved() string {
+	return Catalog.Format(msgs.locale, "connectionApplySaved", nil)
+}
+
+// ConnectionSaveConfiguration says "Save configuration"
+// in the language the app shows.
+//
+// The action saving connection settings without applying.
+func ConnectionSaveConfiguration() string { return In(i18n.Locale()).ConnectionSaveConfiguration() }
+
+// ConnectionSaveConfiguration says "Save configuration"
+// in the language of msgs.
+//
+// The action saving connection settings without applying.
+func (msgs Messages) ConnectionSaveConfiguration() string {
+	return Catalog.Format(msgs.locale, "connectionSaveConfiguration", nil)
+}
+
+// ModelUpdateModel says "Update model"
+// in the language the app shows.
+//
+// The action updating the selected session model.
+func ModelUpdateModel() string { return In(i18n.Locale()).ModelUpdateModel() }
+
+// ModelUpdateModel says "Update model"
+// in the language of msgs.
+//
+// The action updating the selected session model.
+func (msgs Messages) ModelUpdateModel() string {
+	return Catalog.Format(msgs.locale, "modelUpdateModel", nil)
+}
+
+// WorkSaveIssue says "Save issue"
+// in the language the app shows.
+//
+// The action saving the issue form.
+func WorkSaveIssue() string { return In(i18n.Locale()).WorkSaveIssue() }
+
+// WorkSaveIssue says "Save issue"
+// in the language of msgs.
+//
+// The action saving the issue form.
+func (msgs Messages) WorkSaveIssue() string {
+	return Catalog.Format(msgs.locale, "workSaveIssue", nil)
+}
+
+// ContactSaveChanges says "Save changes"
+// in the language the app shows.
+//
+// The action saving contact profile changes.
+func ContactSaveChanges() string { return In(i18n.Locale()).ContactSaveChanges() }
+
+// ContactSaveChanges says "Save changes"
+// in the language of msgs.
+//
+// The action saving contact profile changes.
+func (msgs Messages) ContactSaveChanges() string {
+	return Catalog.Format(msgs.locale, "contactSaveChanges", nil)
+}
+
+// IssueSupplementSave says "Save supplement"
+// in the language the app shows.
+//
+// The action saving an issue supplement.
+func IssueSupplementSave() string { return In(i18n.Locale()).IssueSupplementSave() }
+
+// IssueSupplementSave says "Save supplement"
+// in the language of msgs.
+//
+// The action saving an issue supplement.
+func (msgs Messages) IssueSupplementSave() string {
+	return Catalog.Format(msgs.locale, "issueSupplementSave", nil)
+}
+
+// TaskContextSaveSnippet says "Save snippet"
+// in the language the app shows.
+//
+// The action saving a task context snippet.
+func TaskContextSaveSnippet() string { return In(i18n.Locale()).TaskContextSaveSnippet() }
+
+// TaskContextSaveSnippet says "Save snippet"
+// in the language of msgs.
+//
+// The action saving a task context snippet.
+func (msgs Messages) TaskContextSaveSnippet() string {
+	return Catalog.Format(msgs.locale, "taskContextSaveSnippet", nil)
+}
+
+// TaskContextSaveFile says "Save file"
+// in the language the app shows.
+//
+// The action saving a task context file.
+func TaskContextSaveFile() string { return In(i18n.Locale()).TaskContextSaveFile() }
+
+// TaskContextSaveFile says "Save file"
+// in the language of msgs.
+//
+// The action saving a task context file.
+func (msgs Messages) TaskContextSaveFile() string {
+	return Catalog.Format(msgs.locale, "taskContextSaveFile", nil)
+}
+
+// TaskContextSaveChanges says "Save changes"
+// in the language the app shows.
+//
+// The action saving task context changes.
+func TaskContextSaveChanges() string { return In(i18n.Locale()).TaskContextSaveChanges() }
+
+// TaskContextSaveChanges says "Save changes"
+// in the language of msgs.
+//
+// The action saving task context changes.
+func (msgs Messages) TaskContextSaveChanges() string {
+	return Catalog.Format(msgs.locale, "taskContextSaveChanges", nil)
+}
+
+// EditContactLabel says "Edit contact"
+// in the language the app shows.
+//
+// The label and accessible name of the contact picker in Settings.
+func EditContactLabel() string { return In(i18n.Locale()).EditContactLabel() }
+
+// EditContactLabel says "Edit contact"
+// in the language of msgs.
+//
+// The label and accessible name of the contact picker in Settings.
+func (msgs Messages) EditContactLabel() string {
+	return Catalog.Format(msgs.locale, "editContactLabel", nil)
+}
+
+// ProtocolLabel says "Protocol"
+// in the language the app shows.
+//
+// The label of the connection protocol selection.
+func ProtocolLabel() string { return In(i18n.Locale()).ProtocolLabel() }
+
+// ProtocolLabel says "Protocol"
+// in the language of msgs.
+//
+// The label of the connection protocol selection.
+func (msgs Messages) ProtocolLabel() string {
+	return Catalog.Format(msgs.locale, "protocolLabel", nil)
+}
+
+// ProtocolChatCompletionsLabel says "Chat completions"
+// in the language the app shows.
+//
+// The Chat completions protocol option.
+func ProtocolChatCompletionsLabel() string { return In(i18n.Locale()).ProtocolChatCompletionsLabel() }
+
+// ProtocolChatCompletionsLabel says "Chat completions"
+// in the language of msgs.
+//
+// The Chat completions protocol option.
+func (msgs Messages) ProtocolChatCompletionsLabel() string {
+	return Catalog.Format(msgs.locale, "protocolChatCompletionsLabel", nil)
+}
+
+// ProtocolResponsesLabel says "Responses"
+// in the language the app shows.
+//
+// The Responses protocol option.
+func ProtocolResponsesLabel() string { return In(i18n.Locale()).ProtocolResponsesLabel() }
+
+// ProtocolResponsesLabel says "Responses"
+// in the language of msgs.
+//
+// The Responses protocol option.
+func (msgs Messages) ProtocolResponsesLabel() string {
+	return Catalog.Format(msgs.locale, "protocolResponsesLabel", nil)
+}
+
+// ReaderCheckAgainLabel says "Check again"
+// in the language the app shows.
+//
+// The action rechecking the current result file.
+func ReaderCheckAgainLabel() string { return In(i18n.Locale()).ReaderCheckAgainLabel() }
+
+// ReaderCheckAgainLabel says "Check again"
+// in the language of msgs.
+//
+// The action rechecking the current result file.
+func (msgs Messages) ReaderCheckAgainLabel() string {
+	return Catalog.Format(msgs.locale, "readerCheckAgainLabel", nil)
+}
+
+// ReaderOpenFileLabel says "Open file"
+// in the language the app shows.
+//
+// The action opening the current result file.
+func ReaderOpenFileLabel() string { return In(i18n.Locale()).ReaderOpenFileLabel() }
+
+// ReaderOpenFileLabel says "Open file"
+// in the language of msgs.
+//
+// The action opening the current result file.
+func (msgs Messages) ReaderOpenFileLabel() string {
+	return Catalog.Format(msgs.locale, "readerOpenFileLabel", nil)
+}
+
+// ReaderShowInFinderLabel says "Show in Finder"
+// in the language the app shows.
+//
+// The action revealing the current result file in Finder.
+func ReaderShowInFinderLabel() string { return In(i18n.Locale()).ReaderShowInFinderLabel() }
+
+// ReaderShowInFinderLabel says "Show in Finder"
+// in the language of msgs.
+//
+// The action revealing the current result file in Finder.
+func (msgs Messages) ReaderShowInFinderLabel() string {
+	return Catalog.Format(msgs.locale, "readerShowInFinderLabel", nil)
+}
+
+// ReaderSourceRawLabel says "Source & raw record"
+// in the language the app shows.
+//
+// The action showing the source and raw record for a result.
+func ReaderSourceRawLabel() string { return In(i18n.Locale()).ReaderSourceRawLabel() }
+
+// ReaderSourceRawLabel says "Source & raw record"
+// in the language of msgs.
+//
+// The action showing the source and raw record for a result.
+func (msgs Messages) ReaderSourceRawLabel() string {
+	return Catalog.Format(msgs.locale, "readerSourceRawLabel", nil)
+}
+
+// ReaderHideSourceRawLabel says "Hide source & raw record"
+// in the language the app shows.
+//
+// The action hiding the source and raw record for a result.
+func ReaderHideSourceRawLabel() string { return In(i18n.Locale()).ReaderHideSourceRawLabel() }
+
+// ReaderHideSourceRawLabel says "Hide source & raw record"
+// in the language of msgs.
+//
+// The action hiding the source and raw record for a result.
+func (msgs Messages) ReaderHideSourceRawLabel() string {
+	return Catalog.Format(msgs.locale, "readerHideSourceRawLabel", nil)
+}

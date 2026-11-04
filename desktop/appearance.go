@@ -128,19 +128,30 @@ func (a *appModel) connectionDefaultModel() string {
 	return ""
 }
 
-func (a *appModel) conversationModelShortName(ct *contact) string {
+func (a *appModel) conversationModelDisplayParts(ct *contact) (head, tail string) {
+	full := ""
 	if ct != nil {
 		if model := strings.TrimSpace(ct.SessionModel); model != "" {
-			return truncate(model, 22)
-		}
-		if ct.SessionID != "" {
-			return "Model not loaded"
+			full = model
+		} else if ct.SessionID != "" {
+			return "Model not loaded", ""
 		}
 	}
-	if model := a.connectionDefaultModel(); model != "" {
-		return truncate(model, 22)
+	if full == "" {
+		full = a.connectionDefaultModel()
 	}
-	return "Model not set"
+	if full == "" {
+		return "Model not set", ""
+	}
+	return splitModelTail(full, 8)
+}
+
+func splitModelTail(full string, tailRunes int) (head, tail string) {
+	runes := []rune(full)
+	if tailRunes < 1 || len(runes) <= tailRunes*2 {
+		return full, ""
+	}
+	return string(runes[:len(runes)-tailRunes]), string(runes[len(runes)-tailRunes:])
 }
 
 func (a *appModel) conversationModelSummary(ct *contact) string {
@@ -149,12 +160,12 @@ func (a *appModel) conversationModelSummary(ct *contact) string {
 	}
 	if ct.SessionID != "" {
 		if strings.TrimSpace(ct.SessionModel) != "" {
-			return "Session: " + truncate(ct.SessionModel, 42)
+			return "Session: " + strings.TrimSpace(ct.SessionModel)
 		}
 		return "Session model not loaded"
 	}
 	if model := a.connectionDefaultModel(); model != "" {
-		return "Connection default: " + truncate(model, 42)
+		return "Connection default: " + model
 	}
 	return "Connection default not configured"
 }

@@ -6,6 +6,7 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -871,9 +872,13 @@ func TestComposerKeepsModelScopeAndPrimaryActionAtNarrowCenter(t *testing.T) {
 	if scope.X < model.X || scope.X+scope.W > model.X+model.W {
 		t.Fatalf("model scope is outside its chip: scope=%+v model=%+v", scope, model)
 	}
-	short := a.conversationModelShortName(ct)
-	if short == "" || !tr.HasText(short) {
-		t.Fatalf("short model name %q missing: %v", short, tr.Texts())
+	head, tail := a.conversationModelDisplayParts(ct)
+	visibleModel := head
+	if tail != "" {
+		visibleModel = tail
+	}
+	if visibleModel == "" || !tr.HasText(visibleModel) {
+		t.Fatalf("model text %q missing: %v", visibleModel, tr.Texts())
 	}
 	send := withinComposer("Send")
 	if send.X < model.X+model.W {
@@ -980,7 +985,8 @@ func TestPreviewComposerTypography(t *testing.T) {
 			} else {
 				visible("Send")
 			}
-			if !tr.HasText("deepseek/deepseek-chat") {
+			head, tail := a.conversationModelDisplayParts(ct)
+			if !tr.HasText(head) || (tail != "" && !tr.HasText(tail)) {
 				t.Fatalf("%s: actual model label missing: %v", sc.name, tr.Texts())
 			}
 			if sc.active && sc.width == 720 {
@@ -1001,7 +1007,12 @@ func TestPreviewComposerTypography(t *testing.T) {
 				if !ok || scope.X < model.X || scope.X+scope.W > model.X+model.W {
 					t.Fatalf("%s: model scope outside model button: scope=%+v ok=%v model=%+v", sc.name, scope, ok, model)
 				}
-				actual, ok := tr.Find(a.conversationModelShortName(ct))
+				head, tail := a.conversationModelDisplayParts(ct)
+				actualLabel := head
+				if tail != "" {
+					actualLabel = tail
+				}
+				actual, ok := tr.Find(actualLabel)
 				if !ok || actual.X < model.X || actual.X+actual.W > model.X+model.W {
 					t.Fatalf("%s: model text outside model button: actual=%+v ok=%v model=%+v", sc.name, actual, ok, model)
 				}
@@ -1015,6 +1026,33 @@ func TestPreviewComposerTypography(t *testing.T) {
 			}
 		}
 	}
+	longPrefix := "provider/" + strings.Repeat("shared-prefix-", 4)
+	for _, width := range []int{720, 960} {
+		for _, dark := range []bool{false, true} {
+			for _, suffix := range []string{"alpha", "omega"} {
+				a := testApp(t)
+				a.windowWidth = width
+				a.workspaceOpen = false
+				a.runtimeStatus = runtimeStateReady
+				a.runtimeCapabilitiesLoaded = true
+				a.runtimeMaxActiveTasks = 2
+				ct := a.selectedContact()
+				ct.SessionID = "composer-preview-session"
+				ct.SessionModel = longPrefix + suffix
+				tr := ui.NewTester(a.view, width, 640)
+				tr.SetDark(dark)
+				tr.Frame()
+				if !tr.HasText(suffix) {
+					t.Fatalf("%d %s: distinguishing model tail missing: %v", width, suffix, tr.Texts())
+				}
+				theme := "light"
+				if dark {
+					theme = "dark"
+				}
+				writePreviewPNG(t, filepath.Join(dir, fmt.Sprintf("headless-composer-long-model-%s-%dx640-%s.png", suffix, width, theme)), tr.Image())
+			}
+		}
+	}
 }
 
 func contextLabelForTest(count int) string {
@@ -1022,4 +1060,106 @@ func contextLabelForTest(count int) string {
 		return fmt.Sprintf("Task context: %d", count)
 	}
 	return "Task context"
+}
+
+func TestComposerZeroContextKeepsIconWithoutZeroText(t *testing.T) {
+	a, ct := appReadingTestApp(t)
+	if ct.SessionID == "" || ct.Context.count() != 0 {
+		t.Fatal("fixture needs a session with zero draft context")
+	}
+	tr := ui.NewTester(a.view, 1040, 720)
+	tr.SetFocused(true)
+	tr.Frame()
+	if tr.HasText("Task context: 0") {
+		t.Fatalf("zero context rendered an independent zero label: %v", tr.Texts())
+	}
+	if zero, ok := tr.Find("0"); ok {
+		t.Fatalf("zero context rendered an independent zero: %+v texts=%v", zero, tr.Texts())
+	}
+	button, ok := tr.Find("Task context")
+	if !ok || button.W < 32 || button.H < 32 {
+		t.Fatalf("zero-context control missing or under 32px: %+v ok=%v", button, ok)
+	}
+	for i := 0; i < 24 && !tr.Focused("Task context"); i++ {
+		tr.Key(0, ui.KeyTab)
+		tr.Frame()
+	}
+	if !tr.Focused("Task context") {
+		t.Fatalf("zero-context control is not keyboard reachable: %v", tr.Texts())
+	}
+	tr.Key(0, ui.KeyEnter)
+	tr.Frame()
+	if a.aux != "task-context" || !a.composerInlineAux() {
+		t.Fatalf("keyboard did not open task context: aux=%q panel=%q", a.aux, a.composerPanel)
+	}
+	if err := tr.Click("Close task context"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if !tr.Focused("Task context") {
+		t.Fatalf("task context did not restore keyboard focus: %v", tr.Texts())
+	}
+	ct.Messages = append(ct.Messages, &message{
+		Key: "live-session-context", Kind: msgUser, Text: "session prompt",
+		Context: []taskContextItem{{Name: "Session doc", Text: "session-scoped context"}},
+	})
+	ct.History = append(ct.History, historyEntry{
+		ID: "history-session-context", Date: "Today", From: "me", Text: "history prompt",
+		Context: []taskContextItem{{Name: "History doc", Text: "history-scoped context"}},
+	})
+	tr.Frame()
+	if zero, ok := tr.Find("0"); ok {
+		t.Fatalf("session/history context rendered as draft zero: %+v texts=%v", zero, tr.Texts())
+	}
+	ct.Context.items = []taskContextItem{{ID: "c1", Name: "资料", Text: "已有会话不计入草稿"}}
+	tr.Frame()
+	if !tr.HasText("Task context: 1") {
+		t.Fatalf("non-zero context count missing: %v", tr.Texts())
+	}
+}
+
+func TestComposerModelTooltipKeepsFullActualID(t *testing.T) {
+	a, ct := appReadingTestApp(t)
+	prefix := "provider/" + strings.Repeat("shared-prefix-", 4)
+	a.connectionEffective = &connectionConfig{Model: prefix + "alpha"}
+	ct.SessionID = "s1"
+	ct.SessionModel = prefix + "omega"
+	tr := ui.NewTester(a.view, 1040, 720)
+	tr.Frame()
+	showPreviewTooltip(t, tr, "Conversation model")
+	if !tr.HasText(ct.SessionModel) || tr.HasText(prefix+"alpha") {
+		t.Fatalf("loaded session model tooltip = %v", tr.Texts())
+	}
+	ct.SessionModel = ""
+	tr.Frame()
+	showPreviewTooltip(t, tr, "Conversation model")
+	if !tr.HasText("Session model not loaded") || tr.HasText(prefix+"alpha") {
+		t.Fatalf("unloaded session fell back to connection default: %v", tr.Texts())
+	}
+}
+
+func TestComposerModelsKeepActualSuffixAt720And960(t *testing.T) {
+	prefix := "provider/" + strings.Repeat("shared-prefix-", 4)
+	models := []string{prefix + "alpha", prefix + "omega", "deepseek/deepseek-chat"}
+	for _, width := range []int{720, 960} {
+		for _, model := range models {
+			a, ct := appReadingTestApp(t)
+			a.windowWidth = width
+			ct.SessionID = "s1"
+			ct.SessionModel = model
+			tr := ui.NewTester(a.view, width, 640)
+			tr.Frame()
+			modelRect, ok := tr.Find("Conversation model")
+			if !ok || modelRect.W <= 0 {
+				t.Fatalf("%d %q: model control missing: %+v", width, model, modelRect)
+			}
+			runes := []rune(model)
+			tail := string(runes[len(runes)-8:])
+			tailRect, ok := tr.Find(tail)
+			if !ok || tailRect.W <= 0 || tailRect.X < modelRect.X || tailRect.X+tailRect.W > modelRect.X+modelRect.W {
+				t.Fatalf("%d %q: actual suffix %q missing/outside model control: tail=%+v ok=%v model=%+v texts=%v",
+					width, model, tail, tailRect, ok, modelRect, tr.Texts())
+			}
+		}
+	}
 }
