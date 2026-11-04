@@ -330,7 +330,37 @@ func (a *appModel) avatarRailRow(c *ui.Context, t *ui.Theme, i int) {
 	}
 	row = appTooltip(c, row, tip)
 	row.OnClick(func() { a.selectContact(i) })
-	row.Children(func() { a.avatarTile(c, t, 28) })
+	row.Children(func() {
+		a.avatarTile(c, t, 28)
+		if glyph, count, color := a.avatarRailMarker(ct); glyph != "" {
+			text := glyph
+			if count > 0 {
+				text = fmt.Sprintf("%s%d", glyph, count)
+			}
+			ui.Text(c, text).
+				FontSize(typeMeta).FontWeight(500).TextColor(color).
+				Background(t.Surface).Padding(1, 3).Radius(4).SingleLine().
+				Absolute().Right(0).Bottom(0).IgnoreInput(true)
+		}
+	})
+}
+
+func (a *appModel) avatarRailMarker(ct *contact) (string, int, ui.Color) {
+	notice := a.issueWorkNotice(ct)
+	switch {
+	case notice.AttentionCount > 0:
+		return "!", notice.AttentionCount, a.workTheme.Theme.Warning
+	case notice.WaitingCount > 0:
+		return "◷", notice.WaitingCount, a.workTheme.Theme.Warning
+	case notice.ActiveCount > 0:
+		return "▶", notice.ActiveCount, a.workTheme.Theme.Success
+	case ct.Status == statusWorking:
+		return "▶", 0, a.workTheme.Theme.Success
+	case ct.Status == statusAttention:
+		return "!", 0, a.workTheme.Theme.Warning
+	default:
+		return "", 0, a.workTheme.Theme.TextMuted
+	}
 }
 
 func contactScopeChoiceLabel(scope string) string {

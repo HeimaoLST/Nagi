@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -240,11 +241,46 @@ func TestResponsiveWorkbenchGeometryFirstSlice(t *testing.T) {
 	}
 }
 
+func TestPreviewAvatarStatusMarkers(t *testing.T) {
+	dir := os.Getenv("SAKI_PREVIEW_DIR")
+	if dir == "" {
+		t.Skip("set SAKI_PREVIEW_DIR to write avatar marker previews")
+	}
+	if err := loadAvatar(); err != nil {
+		t.Fatal(err)
+	}
+	for _, dark := range []bool{false, true} {
+		theme := "light"
+		if dark {
+			theme = "dark"
+		}
+		a, saki := workspaceTestApp(t)
+		a.windowWidth = 960
+		a.workspaceOpen = true
+		saki.Status = statusWorking
+		waiting := &contact{ID: "contact-waiting", Name: "Waiting", Role: "Assistant", Status: statusReady, Loaded: true}
+		waiting.Issues = []*productIssue{{ID: "issue-waiting", ContactID: waiting.ID, Goal: "waiting task",
+			Status: issueStatusWaitingUser, Questions: []*issueQuestion{{Ref: "wait-q", Text: "answer", State: issueQuestionOpen}}}}
+		attention := &contact{ID: "contact-attention", Name: "Attention", Role: "Assistant", Status: statusReady, Loaded: true}
+		attention.Issues = []*productIssue{{ID: "issue-attention", ContactID: attention.ID, Goal: "attention task",
+			Status: issueStatusNeedsAttention}}
+		active := &contact{ID: "contact-active", Name: "Active", Role: "Assistant", Status: statusWorking, Loaded: true}
+		active.Issues = []*productIssue{{ID: "issue-active", ContactID: active.ID, Goal: "active task",
+			Status: issueStatusInProgress, Work: issueWorkSession{Loaded: true, ActiveTaskID: "active-task", SendState: sendAccepted}}}
+		a.contacts = append(a.contacts, waiting, attention, active)
+		tr := ui.NewTester(a.view, 960, 640)
+		tr.SetDark(dark)
+		tr.Frame()
+		writePreviewPNG(t, filepath.Join(dir, "avatar-status-"+theme+"-960x640.png"), tr.Image())
+	}
+}
+
 func TestResponsiveAvatarRailKeyboardAndStatus(t *testing.T) {
 	a, saki := workspaceTestApp(t)
 	a.windowWidth = 960
 	a.workspaceOpen = true
 	saki.Status = statusWorking
+	saki.Unread = 7
 	waiting := &contact{ID: "contact-waiting", Name: "Waiting", Role: "Assistant", Status: statusReady, Loaded: true}
 	waiting.Issues = []*productIssue{{ID: "issue-waiting", ContactID: waiting.ID, Goal: "waiting task",
 		Status: issueStatusWaitingUser, Questions: []*issueQuestion{{Ref: "wait-q", Text: "answer", State: issueQuestionOpen}}}}
@@ -257,6 +293,24 @@ func TestResponsiveAvatarRailKeyboardAndStatus(t *testing.T) {
 	a.contacts = append(a.contacts, waiting, attention, active)
 	tr := ui.NewTester(a.view, 960, 640)
 	tr.Frame()
+	for _, marker := range []string{"▶", "▶1", "◷1", "!1"} {
+		if !tr.HasText(marker) {
+			t.Fatalf("static avatar marker %q missing: %v", marker, tr.Texts())
+		}
+	}
+	if tr.HasText("▶7") {
+		t.Fatalf("unread count was mixed into issue marker: %v", tr.Texts())
+	}
+	if glyph, count, _ := a.avatarRailMarker(saki); glyph != "▶" || count != 0 {
+		t.Fatalf("conversation-working marker = %q/%d, want glyph-only", glyph, count)
+	}
+	if glyph, count, _ := a.avatarRailMarker(active); glyph != "▶" || count != 1 {
+		t.Fatalf("real one-issue active marker = %q/%d, want ▶1", glyph, count)
+	}
+	idle := &contact{ID: "contact-idle", Name: "Idle", Status: statusReady}
+	if glyph, count, _ := a.avatarRailMarker(idle); count != 0 || glyph != "" {
+		t.Fatalf("idle avatar marker = %q/%d", glyph, count)
+	}
 	for _, label := range []string{locales.In("en").AvatarAddContact(), locales.In("en").AvatarContactLabel("Saki"), locales.In("en").AvatarContactLabel("Waiting"), locales.In("en").AvatarContactLabel("Attention"), locales.In("en").AvatarContactLabel("Active"), "Settings"} {
 		if r, ok := tr.Find(label); !ok || r.X < 0 || r.X+r.W > avatarRailWidth {
 			t.Fatalf("avatar rail control %q rect=%+v ok=%v", label, r, ok)
