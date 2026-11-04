@@ -230,7 +230,7 @@ func (a *appModel) saveContactProfileDraftFor(contactID string, draft profileDra
 		ct.ActiveTaskID = ""
 		ct.LastTaskID = ""
 		ct.SendState = sendIdle
-		ct.SendError = ""
+		ct.clearSendError()
 		ct.SubmittedDraft = ""
 		ct.SubmittedRev = 0
 		ct.pendingSend = nil

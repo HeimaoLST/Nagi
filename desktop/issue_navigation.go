@@ -55,17 +55,6 @@ func issueFilterText(msgs locales.Messages, filter string) string {
 	}
 }
 
-func issueFilterDescription(filter string) string {
-	switch normalizeIssueFilter(filter) {
-	case issueFilterCompleted:
-		return "Completed"
-	case issueFilterAll:
-		return "All issues"
-	default:
-		return "Unfinished"
-	}
-}
-
 func (a *appModel) setIssueFilter(ct *contact, filter string) {
 	nav := ct.issueNavigation()
 	if nav == nil {

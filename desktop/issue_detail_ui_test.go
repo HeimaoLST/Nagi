@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo/ui"
+
+	"saki/desktop/locales"
 )
 
 func TestIssueDetailDefaultsToResultAndKeepsSecondaryDetailsCollapsed(t *testing.T) {
@@ -39,7 +41,7 @@ func TestIssueDetailDefaultsToResultAndKeepsSecondaryDetailsCollapsed(t *testing
 	a.windowWidth = 1040
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	for _, want := range []string{"Latest execution", "readable result body", "Requirements", "Continue task", "More issue actions"} {
+	for _, want := range []string{"Latest run", "readable result body", "Requirements", "Continue task", "More task actions"} {
 		if !tr.HasText(want) {
 			t.Fatalf("default issue detail missing %q: %v", want, tr.Texts())
 		}
@@ -48,14 +50,14 @@ func TestIssueDetailDefaultsToResultAndKeepsSecondaryDetailsCollapsed(t *testing
 		t.Fatalf("secondary execution details visible by default: %v", tr.Texts())
 	}
 	goal, _ := tr.Find("prepare the readable summary")
-	latest, _ := tr.Find("Latest execution")
+	latest, _ := tr.Find("Latest run")
 	requirements, _ := tr.Find("Requirements")
 	primary, _ := tr.Find("Continue task")
-	more, _ := tr.Find("More issue actions")
+	more, _ := tr.Find("More task actions")
 	if !(goal.Y < primary.Y && primary.Y < latest.Y && latest.Y < requirements.Y && requirements.Y < more.Y) {
 		t.Fatalf("default issue detail order = goal %.1f primary %.1f latest %.1f requirements %.1f more %.1f", goal.Y, primary.Y, latest.Y, requirements.Y, more.Y)
 	}
-	if err := tr.Click("More issue actions"); err != nil {
+	if err := tr.Click("More task actions"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
@@ -821,7 +823,7 @@ func TestIssueSupplementAt720ScrollsToSaveAndKeepsOwnerDraft(t *testing.T) {
 	issue := ct.selectedIssue()
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	if err := tr.Click("More issue actions"); err != nil {
+	if err := tr.Click("More task actions"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
@@ -852,7 +854,7 @@ func TestIssueExecutionContextExpandsAndCopiesAt720(t *testing.T) {
 	openIssueDetailForTest(a, ct, issue.ID)
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	if err := tr.Click("More issue actions"); err != nil {
+	if err := tr.Click("More task actions"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
@@ -897,7 +899,7 @@ func TestIssueLatestExecutionShowsNonSuccessStatesAndToolOnly(t *testing.T) {
 			issue.Work.Messages = []*message{{Key: "old-success", Kind: msgContact, TaskID: "old-task", Text: "old success"}}
 			tr := ui.NewTester(a.view, 1040, 720)
 			tr.Frame()
-			if !tr.HasText("Latest execution") || !tr.HasText(tc.label) {
+			if !tr.HasText("Latest run") || !tr.HasText(tc.label) {
 				t.Fatalf("latest status %q not visible: %v", tc.label, tr.Texts())
 			}
 			if tc.detail != "" && !tr.HasText(tc.detail) {
@@ -913,7 +915,7 @@ func TestIssueLatestExecutionShowsNonSuccessStatesAndToolOnly(t *testing.T) {
 				tr.HasText("terminal state is unknown")) {
 				t.Fatalf("interrupted execution was described as unknown: %v", tr.Texts())
 			}
-			if err := tr.Click("More issue actions"); err != nil {
+			if err := tr.Click("More task actions"); err != nil {
 				t.Fatal(err)
 			}
 			tr.Frame()
@@ -1098,10 +1100,10 @@ func TestIssueExecutionHistoryLayoutKeepsHeaderRevisionAndActionsDistinct(t *tes
 				t.Errorf("Execution history bounds=%+v panelX=%.1f width=%d", history, panelX, tc.width)
 			}
 			for index, execution := range issue.Executions {
-				headerText := "Execution " + fmt.Sprint(index+1) + ": " + issueExecutionLabel(execution)
+				headerText := locales.In("en").IssueRunHeader(fmt.Sprint(index+1), issueExecutionText(locales.In("en"), execution.Status))
 				revisionText := "revision " + fmt.Sprint(execution.RequirementsRevision)
 				openText := "Open result: run " + fmt.Sprint(index+1)
-				viewText := "View execution: run " + fmt.Sprint(index+1)
+				viewText := "View run: run " + fmt.Sprint(index+1)
 				header, revision, open, view := issueHistoryFindCard(t, tr, headerText, revisionText, openText, viewText,
 					panelX, float32(tc.width), float32(tc.height))
 				if dir := os.Getenv("SAKI_PREVIEW_DIR"); dir != "" {

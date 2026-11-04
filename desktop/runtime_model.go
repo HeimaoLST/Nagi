@@ -548,7 +548,7 @@ func (a *appModel) protocolFailed(message string) {
 			ct.SessionState = "unknown"
 			ct.SendState = sendUnknown
 			ct.Status = statusAttention
-			ct.SendError = "Protocol failure; delivery not confirmed. Reload before sending again."
+			ct.setSendError("Protocol failure; delivery not confirmed. Reload before sending again.", "send-protocol", "")
 		}
 		for _, issue := range ct.Issues {
 			if issue.Work.SendState == sendSubmitting || issue.Work.ActiveTaskID != "" || issue.Work.SendState == sendUnknown {
@@ -558,7 +558,7 @@ func (a *appModel) protocolFailed(message string) {
 				}
 				issue.Work.SessionState = "unknown"
 				issue.Work.SendState = sendUnknown
-				issue.Work.SendError = "Protocol failure; delivery not confirmed. Reload before sending again."
+				issue.Work.setSendError("Protocol failure; delivery not confirmed. Reload before sending again.", "send-protocol", "")
 				if execution := ct.executionByTask(issue.Work.ActiveTaskID); execution != nil {
 					execution.Status = issueExecutionUnknown
 					execution.Detail = issue.Work.SendError
@@ -580,8 +580,8 @@ func (a *appModel) clearActiveTasksAfterExit() {
 			ct.SessionState = "unknown"
 			ct.SendState = sendUnknown
 			ct.Status = statusAttention
-			ct.StatusDetail = "Connection lost before the task finished; reload to verify."
-			ct.SendError = "Delivery/result not confirmed. Reload before sending again."
+			ct.setStatusDetail("Connection lost before the task finished; reload to verify.", "status-connection-lost")
+			ct.setSendError("Delivery/result not confirmed. Reload before sending again.", "send-delivery", "")
 		}
 		for _, issue := range ct.Issues {
 			if issue.Work.ActiveTaskID == "" && issue.Work.SendState == sendIdle {
@@ -589,7 +589,7 @@ func (a *appModel) clearActiveTasksAfterExit() {
 			}
 			issue.Work.SessionState = "unknown"
 			issue.Work.SendState = sendUnknown
-			issue.Work.SendError = "Delivery/result not confirmed. Reload before sending again."
+			issue.Work.setSendError("Delivery/result not confirmed. Reload before sending again.", "send-delivery", "")
 			if w := workFor(ct, issue.Work.ActiveTaskID); w != nil {
 				w.State = workUnknown
 				w.Detail = "Connection lost before the task finished; reload to verify."
@@ -930,7 +930,8 @@ func (a *appModel) restoreSession(rt *runtimeClient, generation int, contactID, 
 			ct.LastTaskID = session.ActiveTask.TaskID
 			ct.SendState = sendAccepted
 			ct.Status = statusWorking
-			ct.Work = "Resuming"
+			ct.Work = workNoticeResuming
+			ct.WorkArg = ""
 			if w := a.ensureWork(ct, session.ActiveTask.TaskID, session.ActiveTask.MessageID); w != nil {
 				w.State = workRunning
 			}
@@ -938,7 +939,7 @@ func (a *appModel) restoreSession(rt *runtimeClient, generation int, contactID, 
 		if err != nil {
 			ct.LoadErr = a.connectionRuntimeMessage(err)
 			ct.Status = statusAttention
-			ct.StatusDetail = ct.LoadErr
+			ct.setStatusDetail(ct.LoadErr, "")
 			return
 		}
 		if ct.ActiveTaskID != "" {
@@ -949,7 +950,7 @@ func (a *appModel) restoreSession(rt *runtimeClient, generation int, contactID, 
 		if session.ActiveTask != nil {
 			if w := a.ensureWork(ct, session.ActiveTask.TaskID, session.ActiveTask.MessageID); w != nil {
 				w.State = workRunning
-				ct.Work = a.workActivitySummary(ct)
+				ct.Work, ct.WorkArg = a.workActivitySummary(ct)
 			}
 		}
 	})
@@ -971,7 +972,7 @@ func (a *appModel) restoreContactReadOnly(rt *runtimeClient, generation int, con
 		ct.LoadErr = a.connectionRuntimeMessage(loadErr)
 		ct.Unavailable = ct.LoadErr
 		ct.Status = statusAttention
-		ct.StatusDetail = ct.LoadErr
+		ct.setStatusDetail(ct.LoadErr, "")
 		if configErr == nil {
 			ct.SessionModel = config.EffectiveConfig.Model
 			ct.SessionAPI = config.EffectiveConfig.API
@@ -981,7 +982,7 @@ func (a *appModel) restoreContactReadOnly(rt *runtimeClient, generation int, con
 			a.applyHistory(ct, pages, status)
 			ct.Loaded = false
 			ct.Status = statusAttention
-			ct.StatusDetail = ct.LoadErr
+			ct.setStatusDetail(ct.LoadErr, "")
 			ct.Unavailable = ct.LoadErr
 		} else {
 			ct.LoadErr += "; history unavailable: " + a.connectionRuntimeMessage(historyErr)
@@ -1014,7 +1015,7 @@ func (a *appModel) restoreIssueWork(rt *runtimeClient, generation int, contactID
 		issue.Work.SessionState = session.State
 		if err != nil {
 			issue.Work.LoadErr = a.connectionRuntimeMessage(err)
-			issue.Work.SendError = issue.Work.LoadErr
+			issue.Work.setSendError(issue.Work.LoadErr, "", "")
 			return
 		}
 		a.applyIssueWorkHistory(ct, issue, pages, status)
@@ -1037,7 +1038,7 @@ func (a *appModel) restoreIssueWork(rt *runtimeClient, generation int, contactID
 		}
 		issue.Work.ActiveTaskID = ""
 		issue.Work.SendState = sendIdle
-		issue.Work.SendError = ""
+		issue.Work.clearSendError()
 		a.maybeAutoContinueAllIssues()
 	})
 }
@@ -1059,11 +1060,11 @@ func (a *appModel) restoreIssueReadOnly(rt *runtimeClient, generation int, conta
 		}
 		issue.Work.Loaded = false
 		issue.Work.LoadErr = a.connectionRuntimeMessage(loadErr)
-		issue.Work.SendError = issue.Work.LoadErr
+		issue.Work.setSendError(issue.Work.LoadErr, "", "")
 		if historyErr == nil {
 			a.applyIssueWorkHistory(ct, issue, pages, status)
 			issue.Work.Loaded = false
-			issue.Work.SendError = issue.Work.LoadErr
+			issue.Work.setSendError(issue.Work.LoadErr, "", "")
 		} else {
 			issue.Work.LoadErr += "; history unavailable: " + a.connectionRuntimeMessage(historyErr)
 		}
@@ -1112,7 +1113,7 @@ func (a *appModel) reloadIssueWork(rt *runtimeClient, runtimeGeneration int, con
 		}
 		if err != nil {
 			issue.Work.LoadErr = a.connectionRuntimeMessage(err)
-			issue.Work.SendError = issue.Work.LoadErr
+			issue.Work.setSendError(issue.Work.LoadErr, "", "")
 			return
 		}
 		issue.Work.SessionState = session.State
@@ -1124,7 +1125,7 @@ func (a *appModel) reloadIssueWork(rt *runtimeClient, runtimeGeneration int, con
 			issue.Work.ActiveTaskID = session.ActiveTask.TaskID
 			issue.Work.LastTaskID = session.ActiveTask.TaskID
 			issue.Work.SendState = sendAccepted
-			issue.Work.SendError = ""
+			issue.Work.clearSendError()
 			if w := a.ensureWork(ct, session.ActiveTask.TaskID, session.ActiveTask.MessageID); w != nil {
 				w.State = workRunning
 			}
@@ -1138,7 +1139,7 @@ func (a *appModel) reloadIssueWork(rt *runtimeClient, runtimeGeneration int, con
 		}
 		issue.Work.ActiveTaskID = ""
 		issue.Work.SendState = sendIdle
-		issue.Work.SendError = ""
+		issue.Work.clearSendError()
 		issue.Work.LoadErr = ""
 		a.maybeAutoContinueAllIssues()
 	})
@@ -1183,7 +1184,7 @@ func (a *appModel) applyReload(contactID, sessionID string, gen int, session run
 	}
 	if err != nil {
 		ct.LoadErr = a.connectionRuntimeMessage(err)
-		ct.SendError = ct.LoadErr
+		ct.setSendError(ct.LoadErr, "", "")
 		return
 	}
 	ct.SessionState = session.State
@@ -1200,8 +1201,9 @@ func (a *appModel) applyReload(contactID, sessionID string, gen int, session run
 		ct.LastTaskID = session.ActiveTask.TaskID
 		ct.SendState = sendAccepted
 		ct.Status = statusWorking
-		ct.Work = "Running"
-		ct.SendError = ""
+		ct.Work = workNoticeRunning
+		ct.WorkArg = ""
+		ct.clearSendError()
 		if w := a.ensureWork(ct, session.ActiveTask.TaskID, session.ActiveTask.MessageID); w != nil {
 			w.State = workRunning
 		}
@@ -1219,8 +1221,8 @@ func (a *appModel) applyReload(contactID, sessionID string, gen int, session run
 		ct.ActiveTaskID = ""
 		ct.SendState = sendUnknown
 		ct.Status = statusAttention
-		ct.SendError = taskContextUncertainSendError
-		ct.StatusDetail = ct.SendError
+		ct.setSendError(taskContextUncertainSendError, "send-uncertain", "")
+		ct.setStatusDetail(ct.SendError, ct.SendErrorKind)
 		ct.LoadErr = ""
 		return
 	}
@@ -1232,11 +1234,11 @@ func (a *appModel) applyReload(contactID, sessionID string, gen int, session run
 			ct.LoadErr = "Could not save the history-reload state: " + err.Error()
 			return
 		}
-		ct.StatusDetail = "History reloaded; no retry was sent. Inspect the recorded messages before explicitly sending or removing retained task context."
+		ct.setStatusDetail("History reloaded; no retry was sent. Inspect the recorded messages before explicitly sending or removing retained task context.", "status-history-reloaded")
 	}
 	ct.ActiveTaskID = ""
 	ct.SendState = sendIdle
-	ct.SendError = ""
+	ct.clearSendError()
 	ct.LoadErr = ""
 }
 
@@ -1483,9 +1485,9 @@ func (a *appModel) applyHistory(ct *contact, records []historyRecord, status str
 	ct.HistoryDirty = false
 	ct.Loaded = true
 	ct.Status = statusFromString(status)
-	ct.StatusDetail = projection.detail
+	ct.setStatusDetail(projection.detail, "")
 	if ct.Status == statusAttention && ct.StatusDetail == "" {
-		ct.StatusDetail = "Previous task did not complete."
+		ct.setStatusDetail("Previous task did not complete.", "status-previous-incomplete")
 	}
 	if len(projection.works) > 0 {
 		ct.LastTaskID = projection.works[len(projection.works)-1].TaskID
@@ -1494,9 +1496,10 @@ func (a *appModel) applyHistory(ct *contact, records []historyRecord, status str
 		if w.State == workUnknown || w.State == workAccepted {
 			w.State = workRunning
 		}
-		ct.Work = a.workActivitySummary(ct)
+		ct.Work, ct.WorkArg = a.workActivitySummary(ct)
 	} else {
 		ct.Work = ""
+		ct.WorkArg = ""
 	}
 }
 
@@ -1715,7 +1718,7 @@ func (a *appModel) applyIssueEvent(ct *contact, issue *productIssue, event runti
 		issue.Work.LastTaskID = event.TaskID
 		issue.Work.SendState = sendAccepted
 		issue.Work.SessionState = "running"
-		issue.Work.SendError = ""
+		issue.Work.clearSendError()
 		if w := a.ensureWork(ct, event.TaskID, event.MessageID); w != nil {
 			w.State = workRunning
 		}
@@ -1765,7 +1768,7 @@ func (a *appModel) applyIssueEvent(ct *contact, issue *productIssue, event runti
 		issue.Work.LastTaskID = event.TaskID
 		issue.Work.ActiveTaskID = ""
 		issue.Work.SendState = sendIdle
-		issue.Work.SendError = ""
+		issue.Work.clearSendError()
 		issue.Work.SessionState = "unknown"
 		issue.Work.HistoryDirty = true
 		issue.Work.historyGen++
@@ -1832,8 +1835,9 @@ func (a *appModel) applyEvent(ct *contact, event runtimeEventEnvelope) {
 		ct.SendState = sendAccepted
 		ct.SessionState = "running"
 		ct.Status = statusWorking
-		ct.Work = "Starting"
-		ct.SendError = ""
+		ct.Work = workNoticeStarting
+		ct.WorkArg = ""
+		ct.clearSendError()
 		if w := a.ensureWork(ct, event.TaskID, event.MessageID); w != nil {
 			w.State = workRunning
 		}
@@ -1843,22 +1847,27 @@ func (a *appModel) applyEvent(ct *contact, event runtimeEventEnvelope) {
 		}
 	case "model_request_started":
 		if payload.Purpose == "compaction" {
-			ct.Work = "Compacting context"
+			ct.Work = workNoticeCompacting
+			ct.WorkArg = ""
 		} else {
-			ct.Work = "Waiting for model"
+			ct.Work = workNoticeWaitingModel
+			ct.WorkArg = ""
 		}
 	case "reasoning_delta":
-		ct.Work = "Thinking"
+		ct.Work = workNoticeThinking
+		ct.WorkArg = ""
 	case "response_text_delta":
 		item := a.liveText(ct, event.TaskID, payload.ItemID)
 		item.Text += payload.Delta
 		item.Streaming = true
-		ct.Work = "Writing"
+		ct.Work = workNoticeWriting
+		ct.WorkArg = ""
 	case "response_text":
 		item := a.liveText(ct, event.TaskID, payload.ItemID)
 		item.Text = payload.Text
 		item.Streaming = false
-		ct.Work = "Writing"
+		ct.Work = workNoticeWriting
+		ct.WorkArg = ""
 	case "tool_started":
 		w := a.ensureWork(ct, event.TaskID, event.MessageID)
 		if w == nil {
@@ -1871,7 +1880,8 @@ func (a *appModel) applyEvent(ct *contact, event runtimeEventEnvelope) {
 		call.Name = payload.Name
 		call.Args = payload.Arguments
 		call.Started = true
-		ct.Work = "Running " + payload.Name
+		ct.Work = workNoticeRunningTool
+		ct.WorkArg = payload.Name
 	case "tool_finished":
 		w := a.ensureWork(ct, event.TaskID, event.MessageID)
 		if w == nil {
@@ -1884,7 +1894,8 @@ func (a *appModel) applyEvent(ct *contact, event runtimeEventEnvelope) {
 		call.Name = payload.Name
 		call.Output = outputText(payload.Output)
 		call.Finished = true
-		ct.Work = "Waiting for model"
+		ct.Work = workNoticeWaitingModel
+		ct.WorkArg = ""
 	case "task_finished":
 		if ct.ActiveTaskID != "" && event.TaskID != ct.ActiveTaskID {
 			return
@@ -1895,15 +1906,16 @@ func (a *appModel) applyEvent(ct *contact, event runtimeEventEnvelope) {
 		ct.LastTaskID = event.TaskID
 		ct.ActiveTaskID = ""
 		ct.SendState = sendIdle
-		ct.SendError = ""
+		ct.clearSendError()
 		ct.Work = ""
+		ct.WorkArg = ""
 		ct.HistoryDirty = true
 		ct.historyGen++
 		ct.SessionState = "unknown"
 		ct.Status = statusFromString(payload.Status)
-		ct.StatusDetail = a.connectionTaskFinishedDetail(payload)
+		ct.setStatusDetail(a.connectionTaskFinishedDetail(payload), "")
 		if ct.Status == statusAttention && ct.StatusDetail == "" {
-			ct.StatusDetail = "Previous task did not complete."
+			ct.setStatusDetail("Previous task did not complete.", "status-previous-incomplete")
 		}
 		if w := workFor(ct, event.TaskID); w != nil {
 			w.State = workStateFromTask(payload.Status)
@@ -2057,6 +2069,47 @@ const (
 	blockWorkCapacity        = "work-capacity"
 )
 
+func sendBlockRaw(reason string) string {
+	switch reason {
+	case blockShutdown:
+		return "The app is shutting down."
+	case blockArchivedSend:
+		return "This contact is archived. Restore it before sending a message."
+	case blockApplying:
+		return "Connection settings are being applied; wait for the new helper to become ready."
+	case blockRuntimeNotReady:
+		return "Runtime is not ready."
+	case blockModelReload:
+		return "Session configuration is unconfirmed; Reload the session before sending."
+	case blockModelRefresh:
+		return "Session configuration is unconfirmed; Refresh before sending."
+	case blockModelUpdating:
+		return "The session model is being updated; this session cannot accept a new task yet."
+	case blockHistoryLoading:
+		return "This contact is still loading its history."
+	case blockBusy:
+		return "This contact is busy."
+	case blockSingleSlot:
+		return "The single runtime slot is in use; retry after the conversation or work task finishes."
+	case blockCapacity:
+		return "Runtime task capacity is full; retry after a task finishes."
+	case blockAnotherContact:
+		return "Another contact is working; wait for its task to finish before sending here."
+	case blockArchivedIssue:
+		return "This contact is archived. Restore it before starting issue work."
+	case blockIssueActive:
+		return "This issue already has an active execution."
+	case blockIssueReleasing:
+		return "This issue's work session is still being released; retry after it completes."
+	case blockIssueHistoryLoading:
+		return "This issue's work history is still loading."
+	case blockWorkCapacity:
+		return "Work capacity is full; one runtime slot is reserved for conversation."
+	default:
+		return reason
+	}
+}
+
 func sendBlockText(msgs locales.Messages, reason string) string {
 	switch reason {
 	case blockShutdown:
@@ -2174,23 +2227,23 @@ func (a *appModel) canStartIssue(ct *contact, issue *productIssue) string {
 
 func (a *appModel) startIssueTask(ct *contact, issue *productIssue, execution *issueExecution, prompt string) bool {
 	if a.shutdownStarted {
-		issue.Work.SendError = "The app is shutting down."
+		issue.Work.setSendError("The app is shutting down.", "shutdown", "")
 		return false
 	}
 	if ct.Archived {
-		issue.Work.SendError = "This contact is archived. Restore it before starting issue work."
+		issue.Work.setSendError("This contact is archived. Restore it before starting issue work.", "archived-issue", "")
 		return false
 	}
 	if a.connectionApplying {
-		issue.Work.SendError = "Connection settings are being applied; wait for the new helper to become ready."
+		issue.Work.setSendError("Connection settings are being applied; wait for the new helper to become ready.", "applying", "")
 		return false
 	}
 	if status := a.modelSessionStatus(issue.WorkSessionID); status != "" {
-		issue.Work.SendError = status
+		issue.Work.setSendError(sendBlockRaw(status), status, "")
 		return false
 	}
 	if a.rt == nil || a.runtimeStatus != runtimeStateReady {
-		issue.Work.SendError = "Runtime is not ready."
+		issue.Work.setSendError("Runtime is not ready.", "runtime-not-ready", "")
 		return false
 	}
 	// Capture immutable session inputs on the UI thread. The worker must not
@@ -2364,7 +2417,7 @@ func (a *appModel) acceptIssueTask(ct *contact, issue *productIssue, execution *
 	issue.Work.ActiveTaskID = result.TaskID
 	issue.Work.LastTaskID = result.TaskID
 	issue.Work.SendState = sendAccepted
-	issue.Work.SendError = ""
+	issue.Work.clearSendError()
 	if execution != nil {
 		execution.SessionID = issue.WorkSessionID
 		execution.TaskID = result.TaskID
@@ -2401,16 +2454,16 @@ func (a *appModel) acceptIssueTask(ct *contact, issue *productIssue, execution *
 		switch {
 		case accepted && err == nil:
 			acceptedSaved = true
-			issue.Work.SendError = ""
+			issue.Work.clearSendError()
 		case accepted && err != nil:
 			issue.Context.items = previousContext
-			issue.Work.SendError = "Runtime accepted this supplement, but its local receipt could not be saved; reload before sending again."
+			issue.Work.setSendError("Runtime accepted this supplement, but its local receipt could not be saved; reload before sending again.", "supplement-receipt-failed", "")
 		case err != nil:
 			issue.Context.items = previousContext
-			issue.Work.SendError = "Could not save the supplement acceptance: " + err.Error()
+			issue.Work.setSendError("Could not save the supplement acceptance: "+err.Error(), "supplement-receipt-save-failed", err.Error())
 		default:
 			issue.Context.items = previousContext
-			issue.Work.SendError = "The supplement dispatch association was not in a recordable state; reload before sending again."
+			issue.Work.setSendError("The supplement dispatch association was not in a recordable state; reload before sending again.", "supplement-association", "")
 			_ = a.persist()
 		}
 	} else {
@@ -2422,7 +2475,7 @@ func (a *appModel) acceptIssueTask(ct *contact, issue *productIssue, execution *
 				execution.Status = issueExecutionUnknown
 				execution.Detail = "Task was accepted, but its work-session association could not be saved: " + err.Error()
 			}
-			issue.Work.SendError = "Task accepted, but its issue association could not be saved; reload before retrying."
+			issue.Work.setSendError("Task accepted, but its issue association could not be saved; reload before retrying.", "send-issue-association", "")
 		} else {
 			acceptedSaved = true
 		}
@@ -2435,7 +2488,7 @@ func (a *appModel) acceptIssueTask(ct *contact, issue *productIssue, execution *
 				if issue.Supplements != nil {
 					issue.Supplements.AutoContinue = false
 				}
-				issue.Work.SendError = "Task accepted, but its sent context could not be cleared from the next-run draft; reload before sending again."
+				issue.Work.setSendError("Task accepted, but its sent context could not be cleared from the next-run draft; reload before sending again.", "send-draft-not-cleared", "")
 			}
 		}
 	}
@@ -2448,7 +2501,7 @@ func (a *appModel) acceptIssueTask(ct *contact, issue *productIssue, execution *
 		if a.cancelIssueFor(ct, issue.ID) {
 			issue.Work.cancelAfterAccept = false
 		} else {
-			issue.Work.SendError = "The accepted task could not be cancelled; do not retry it automatically."
+			issue.Work.setSendError("The accepted task could not be cancelled; do not retry it automatically.", "send-accepted-cancel", "")
 		}
 	}
 	if execution != nil && execution.ToolOperationID != "" {
@@ -2503,7 +2556,7 @@ func (a *appModel) failIssueSubmit(contactID, issueID string, err error, submitt
 		switch {
 		case taskAdmissionDeferred(err):
 			issue.Work.SendState = sendIdle
-			issue.Work.SendError = "Waiting for runtime availability: " + detail
+			issue.Work.setSendError("Waiting for runtime availability: "+detail, "waiting-runtime", detail)
 			if execution != nil {
 				execution.Status = issueExecutionNotDispatched
 				execution.Detail = issue.Work.SendError
@@ -2524,7 +2577,7 @@ func (a *appModel) failIssueSubmit(contactID, issueID string, err error, submitt
 				issue.UpdatedAt = nowMillis()
 			}
 			issue.Work.SendState = sendIdle
-			issue.Work.SendError = detail
+			issue.Work.setSendError(detail, "", "")
 			if execution != nil {
 				execution.Status = issueExecutionRejected
 				execution.Detail = detail
@@ -2545,7 +2598,7 @@ func (a *appModel) failIssueSubmit(contactID, issueID string, err error, submitt
 				issue.UpdatedAt = nowMillis()
 			}
 			issue.Work.SendState = sendUnknown
-			issue.Work.SendError = "Supplement delivery not confirmed (" + detail + "). Reload to check before sending again."
+			issue.Work.setSendError("Supplement delivery not confirmed ("+detail+"). Reload to check before sending again.", "supplement-delivery", detail)
 			if execution != nil {
 				execution.Status = issueExecutionUnknown
 				execution.Detail = issue.Work.SendError
@@ -2566,7 +2619,7 @@ func (a *appModel) failIssueSubmit(contactID, issueID string, err error, submitt
 				issue.UpdatedAt = nowMillis()
 			}
 			issue.Work.SendState = sendIdle
-			issue.Work.SendError = detail
+			issue.Work.setSendError(detail, "", "")
 			if execution != nil {
 				execution.Status = issueExecutionNotDispatched
 				execution.Detail = detail
@@ -2588,7 +2641,7 @@ func (a *appModel) sendRuntime(ct *contact, text string) bool {
 
 func (a *appModel) sendRuntimeForIssue(ct *contact, text, issueExecutionID string) bool {
 	if reason := a.canSend(ct); reason != "" {
-		ct.SendError = reason
+		ct.setSendError(sendBlockRaw(reason), reason, "")
 		// A rejected send must not consume or replace an in-flight issue
 		// association; only an admitted dispatch may change it.
 		return false
@@ -2606,10 +2659,10 @@ func (a *appModel) sendRuntimeForIssue(ct *contact, text, issueExecutionID strin
 	ct.SubmittedRev = ct.draftRev
 	ct.pendingSend = &pendingSend{Draft: text, Context: cloneTaskContextItems(submittedContext), State: "submitting"}
 	ct.SendState = sendSubmitting
-	ct.SendError = ""
+	ct.clearSendError()
 	if err := a.persist(); err != nil {
 		ct.SendState = sendIdle
-		ct.SendError = "Could not save this contact; the message was not sent. " + err.Error()
+		ct.setSendError("Could not save this contact; the message was not sent. "+err.Error(), "send-contact-save", err.Error())
 		ct.pendingIssueExecution = previousExecution
 		ct.pendingSend = nil
 		return false
@@ -2733,7 +2786,7 @@ func (a *appModel) acceptTask(ct *contact, text string, result runtimeSendResult
 	ct.ActiveTaskID = result.TaskID
 	ct.LastTaskID = result.TaskID
 	ct.SendState = sendAccepted
-	ct.SendError = ""
+	ct.clearSendError()
 	a.issueToolBindTask(scopeRef, result.TaskID)
 	issueSend := ct.pendingIssueExecution != ""
 	if w := a.ensureWork(ct, result.TaskID, result.MessageID); w != nil {
@@ -2773,7 +2826,7 @@ func (a *appModel) acceptTask(ct *contact, text string, result runtimeSendResult
 		if ct.pendingSend != nil {
 			ct.pendingSend.State = "unknown"
 		}
-		ct.SendError = "Task accepted, but its issue association could not be saved; reload before retrying."
+		ct.setSendError("Task accepted, but its issue association could not be saved; reload before retrying.", "send-issue-association", "")
 	} else {
 		needSave := ct.pendingSend != nil
 		ct.pendingSend = nil
@@ -2784,7 +2837,7 @@ func (a *appModel) acceptTask(ct *contact, text string, result runtimeSendResult
 		if needSave {
 			if err := a.persist(); err != nil {
 				ct.Context.items = previous
-				ct.SendError = "Task accepted, but its sent context could not be cleared from the next-message draft; reload before sending again."
+				ct.setSendError("Task accepted, but its sent context could not be cleared from the next-message draft; reload before sending again.", "send-draft-not-cleared", "")
 			}
 		}
 	}
@@ -2801,19 +2854,20 @@ func (a *appModel) failSubmit(contactID string, err error, submitted bool) {
 		if confirmedReject(err) {
 			ct.pendingSend = nil
 			ct.SendState = sendIdle
-			ct.SendError = a.connectionRuntimeMessage(err)
+			ct.setSendError(a.connectionRuntimeMessage(err), "", "")
 			a.updatePendingIssueExecution(ct, issueExecutionRejected, ct.SendError)
 			_ = a.persist()
 			return
 		}
-		ct.SendError = a.connectionRuntimeMessage(err)
+		ct.setSendError(a.connectionRuntimeMessage(err), "", "")
 		if submitted {
 			if ct.pendingSend == nil {
 				ct.pendingSend = &pendingSend{Draft: ct.SubmittedDraft, Context: nil, State: "unknown"}
 			}
 			ct.pendingSend.State = "unknown"
 			ct.SendState = sendUnknown
-			ct.SendError = "Delivery not confirmed (" + ct.SendError + "). Reload to check before sending again."
+			detail := ct.SendError
+			ct.setSendError("Delivery not confirmed ("+detail+"). Reload to check before sending again.", "", "")
 			a.updatePendingIssueExecution(ct, issueExecutionUnknown, ct.SendError)
 			_ = a.persist()
 			return
@@ -2845,7 +2899,7 @@ func (a *appModel) cancelSelected() {
 		}
 		ct.StopRequestedTasks[taskID] = true
 	}
-	ct.SendError = "Cancellation requested"
+	ct.setSendError("Cancellation requested", "send-cancelled", "")
 	rt := a.rt
 	go func() {
 		status, err := rt.cancelTask(sessionID, taskID)
@@ -2876,7 +2930,7 @@ func (a *appModel) cancelIssueFor(ct *contact, issueID string) bool {
 		if !ledger.StopAutoContinue(active, a.persist) {
 			// A local intent-save failure must not erase the real Stop request.
 			ledger.AutoContinue = false
-			issue.Work.SendError = "Supplement automation was stopped in memory; its intent could not be saved. Reload before relying on automatic continuation."
+			issue.Work.setSendError("Supplement automation was stopped in memory; its intent could not be saved. Reload before relying on automatic continuation.", "auto-stop-memory", "")
 		}
 	}
 	taskID, sessionID := issue.Work.ActiveTaskID, issue.WorkSessionID
@@ -2888,7 +2942,7 @@ func (a *appModel) cancelIssueFor(ct *contact, issueID string) bool {
 		issue.Work.StopRequestedTasks = map[string]bool{}
 	}
 	issue.Work.StopRequestedTasks[taskID] = true
-	issue.Work.SendError = "Cancellation requested"
+	issue.Work.setSendError("Cancellation requested", "send-cancelled", "")
 	go func() {
 		status, err := a.rt.cancelTask(sessionID, taskID)
 		a.updateUI(func() { a.applyIssueCancelResult(ct.ID, issueID, taskID, status, err) })
@@ -2910,7 +2964,7 @@ func (a *appModel) applyIssueCancelResult(contactID, issueID, taskID, status str
 			if w := workFor(ct, taskID); w != nil && w.State == workStopping {
 				w.State = workRunning
 			}
-			issue.Work.SendError = "Cancel failed: " + a.connectionRuntimeMessage(err)
+			issue.Work.setSendError("Cancel failed: "+a.connectionRuntimeMessage(err), "send-cancel-failed", a.connectionRuntimeMessage(err))
 		}
 		return
 	}
@@ -2923,9 +2977,9 @@ func (a *appModel) applyIssueCancelResult(contactID, issueID, taskID, status str
 			w.State = workStopping
 			w.StopRequested = true
 		}
-		issue.Work.SendError = "Cancelling; waiting for the runtime to stop."
+		issue.Work.setSendError("Cancelling; waiting for the runtime to stop.", "send-cancelling", "")
 	case "not_running":
-		issue.Work.SendError = "The task already finished; waiting for its final state."
+		issue.Work.setSendError("The task already finished; waiting for its final state.", "send-already-finished", "")
 	}
 }
 
@@ -2939,7 +2993,7 @@ func (a *appModel) applyCancelResult(contactID, taskID, status string, err error
 			if w := ct.activeWork(); w != nil && w.State == workStopping {
 				w.State = workRunning
 			}
-			ct.SendError = "Cancel failed: " + a.connectionRuntimeMessage(err)
+			ct.setSendError("Cancel failed: "+a.connectionRuntimeMessage(err), "send-cancel-failed", a.connectionRuntimeMessage(err))
 		}
 		return
 	}
@@ -2958,7 +3012,7 @@ func (a *appModel) applyCancelResult(contactID, taskID, status string, err error
 			}
 			ct.StopRequestedTasks[taskID] = true
 		}
-		ct.SendError = "Cancelling; waiting for the runtime to stop."
+		ct.setSendError("Cancelling; waiting for the runtime to stop.", "send-cancelling", "")
 	case "already_requested":
 		if w := ct.activeWork(); w != nil {
 			w.State = workStopping
@@ -2968,16 +3022,16 @@ func (a *appModel) applyCancelResult(contactID, taskID, status string, err error
 			}
 			ct.StopRequestedTasks[taskID] = true
 		}
-		ct.SendError = "Cancellation already requested."
+		ct.setSendError("Cancellation already requested.", "send-cancel-already", "")
 	case "not_running":
-		ct.SendError = "The task already finished; waiting for its final state."
+		ct.setSendError("The task already finished; waiting for its final state.", "send-already-finished", "")
 	}
 }
 
 func (a *appModel) reloadSelected() {
 	ct := a.selectedContact()
 	if a.rt == nil || a.runtimeStatus != runtimeStateReady {
-		ct.SendError = "Runtime disconnected; restart Saki to reload history."
+		ct.setSendError("Runtime disconnected; restart Saki to reload history.", "send-reload-disconnected", "")
 		return
 	}
 	if ct.SessionID != "" {

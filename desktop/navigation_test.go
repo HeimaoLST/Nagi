@@ -629,7 +629,7 @@ func TestPreviewNavigation219(t *testing.T) {
 						if !tr.HasText("整理发布证据与未完成事项") || !tr.HasText("Requirements") {
 							t.Fatalf("work preview lacks real issue content: %v", tr.Texts())
 						}
-					} else if !tr.HasText("New issue") || !tr.HasText("Issue filter") || !tr.HasText("Chat runs") {
+					} else if !tr.HasText("New task") || !tr.HasText("Task filter") || !tr.HasText("Chat runs") {
 						t.Fatalf("narrow work preview lost creation/overview content: %v", tr.Texts())
 					}
 				case detailHistory:
@@ -813,16 +813,16 @@ func TestNarrowWorkKeepsNewIssueAction(t *testing.T) {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	rect, ok := tr.Find("New issue")
+	rect, ok := tr.Find("New task")
 	if !ok || rect.W <= 0 || rect.H <= 0 || rect.X < 0 || rect.Y < 0 || rect.X+rect.W > 720 || rect.Y+rect.H > 640 {
-		t.Fatalf("narrow Work New issue = %+v/%v; texts=%v", rect, ok, tr.Texts())
+		t.Fatalf("narrow Work New task = %+v/%v; texts=%v", rect, ok, tr.Texts())
 	}
-	if err := tr.Click("New issue"); err != nil {
+	if err := tr.Click("New task"); err != nil {
 		t.Fatalf("narrow Work lost creation action: %v", err)
 	}
 	tr.Frame()
 	if !a.issueFormOpen || !tr.HasText("Issue goal") {
-		t.Fatalf("New issue did not open the existing form: open=%v texts=%v", a.issueFormOpen, tr.Texts())
+		t.Fatalf("New task did not open the existing form: open=%v texts=%v", a.issueFormOpen, tr.Texts())
 	}
 }
 

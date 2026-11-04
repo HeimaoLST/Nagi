@@ -139,7 +139,7 @@ func runReleasedIssue(t *testing.T, h *guiHarness) (issueID, workSession string)
 		issue := h.app.selectedContact().issueByID(issueID)
 		return issue != nil && issue.Work.Released && !issue.Work.Releasing && !issue.Work.ReleasePending
 	}, 10*time.Second)
-	if err := issueResultClick(h, "More issue actions"); err != nil {
+	if err := issueResultClick(h, "More task actions"); err != nil {
 		t.Fatal(err)
 	}
 	return issueID, workSession
@@ -212,7 +212,7 @@ func TestModelSelectionGUIActualTargetsAndRestart(t *testing.T) {
 					t.Error("work and conversation shared an execution context")
 				}
 			})
-			if err := issueResultClick(h, "More issue actions"); err != nil {
+			if err := issueResultClick(h, "More task actions"); err != nil {
 				t.Error(err)
 				return
 			}

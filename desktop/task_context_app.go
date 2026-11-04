@@ -46,8 +46,8 @@ func (a *appModel) loadStoredTaskContexts(store *contactStore) {
 				ct.pendingSend.State = "unknown"
 				ct.SendState = sendUnknown
 				ct.Status = statusAttention
-				ct.SendError = taskContextUncertainSendError
-				ct.StatusDetail = ct.SendError
+				ct.setSendError(taskContextUncertainSendError, "send-uncertain", "")
+				ct.setStatusDetail(ct.SendError, ct.SendErrorKind)
 			}
 		}
 	}
@@ -87,7 +87,7 @@ func (a *appModel) openIssueTaskContext(issueID string) {
 
 func (a *appModel) taskContextPanel(c *ui.Context, t *ui.Theme) {
 	ct := a.selectedContact()
-	owner := "Conversation: " + ct.Name
+	owner := locales.In(c.Locale()).TaskContextOwnerConversation(ct.Name)
 	target := &ct.Context
 	if a.taskContextIssueID != "" {
 		issue := ct.issueByID(a.taskContextIssueID)
@@ -96,7 +96,7 @@ func (a *appModel) taskContextPanel(c *ui.Context, t *ui.Theme) {
 			ui.Button(c, locales.In(c.Locale()).TaskContextClose()).FontSize(12).OnClick(func() { a.closeAux() })
 			return
 		}
-		owner = "Issue: " + issue.Goal
+		owner = locales.In(c.Locale()).TaskContextOwnerIssue(issue.Goal)
 		target = &issue.Context
 	}
 	ui.Row(c).AlignItems(ui.Center).Children(func() {

@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/egoist/mygo/ui"
@@ -231,32 +232,6 @@ func workStateText(msgs locales.Messages, w *workItem) string {
 	}
 }
 
-func workStateLabel(w *workItem) string {
-	if w.State == workInterrupted && w.StopRequested {
-		return "Stopped: interrupted"
-	}
-	return workBaseStateLabel(w.State)
-}
-
-func workBaseStateLabel(state workState) string {
-	switch state {
-	case workAccepted:
-		return "Accepted"
-	case workRunning:
-		return "Working"
-	case workStopping:
-		return "Stopping…"
-	case workCompleted:
-		return "Completed"
-	case workFailed:
-		return "Failed"
-	case workInterrupted:
-		return "Interrupted"
-	default:
-		return "Result unknown"
-	}
-}
-
 func (a *appModel) workStateColor(state workState) ui.Color {
 	switch state {
 	case workStopping, workFailed, workInterrupted, workUnknown:
@@ -371,7 +346,7 @@ func (a *appModel) workspaceContent(c *ui.Context, t *ui.Theme, narrow bool) {
 			a.issueFormOpen = true
 			a.issueGoal = ""
 			a.issueRequirements = ""
-			a.issueFormError = ""
+			a.clearIssueFormNotice()
 			a.focusIssueGoal = true
 		})
 		if a.focusIssueNew {
@@ -630,7 +605,7 @@ func (a *appModel) issueDetailView(c *ui.Context, t *ui.Theme, ct *contact, issu
 				ui.Text(c, issueDisplayLabel(locales.In(c.Locale()), display)).FontSize(12).FontWeight(500).TextColor(issueDisplayColor(t, display))
 			}
 			if issue.Status == issueStatusCompleted {
-				ui.Text(c, locales.In(c.Locale()).IssueMarkedByUser(issueEvidenceText(issue))).FontSize(12).LineHeight(1.4).TextColor(t.TextMuted).MaxLines(3)
+				ui.Text(c, locales.In(c.Locale()).IssueMarkedByUser(issueEvidenceText(locales.In(c.Locale()), issue))).FontSize(12).LineHeight(1.4).TextColor(t.TextMuted).MaxLines(3)
 			}
 			if a.issueFormOpen && a.issueFormEditingID != "" {
 				a.issueFormView(c, t)
@@ -697,7 +672,11 @@ func (a *appModel) issueFormView(c *ui.Context, t *ui.Theme) {
 		ui.Text(c, locales.In(c.Locale()).IssueFormRequirements()).FontSize(typeAction).FontWeight(500).TextColor(t.Text)
 		ui.TextArea(c, &a.issueRequirements).Label(locales.In(c.Locale()).IssueFormRequirementsLabel()).FontSize(14).Placeholder(locales.In(c.Locale()).IssueFormRequirementsPlaceholder()).Height(72)
 		if a.issueFormError != "" {
-			ui.Text(c, a.issueFormError).FontSize(14).LineHeight(1.5).TextColor(t.Danger)
+			text := a.issueFormError
+			if a.issueFormNotice != "" {
+				text = issueNoticeText(locales.In(c.Locale()), a.issueFormNotice, a.issueFormNoticeDetail)
+			}
+			ui.Text(c, text).FontSize(14).LineHeight(1.5).TextColor(t.Danger)
 		}
 		ui.Row(c).Gap(8).Children(func() {
 			secondaryButton(c, locales.In(c.Locale()).WorkSaveIssue()).OnClick(func() { a.saveIssueForm() })
@@ -803,7 +782,11 @@ func issueHasReadableResult(ct *contact, execution *issueExecution) bool {
 func (a *appModel) issuePrimaryAction(c *ui.Context, t *ui.Theme, ct *contact, issue *productIssue) string {
 	msgs := locales.In(c.Locale())
 	editable := !issue.Archived && issue.Status != issueStatusCompleted && issue.Status != issueStatusCanceled
-	if issue.openQuestion() != nil && editable {
+	if question := issue.openQuestion(); question != nil && editable {
+		if strings.TrimSpace(question.Text) == "" {
+			secondaryButton(c, msgs.IssueReloadTask()).OnClick(func() { a.reloadIssueWorkByID(ct.ID, issue.ID) })
+			return "question-missing"
+		}
 		ui.Row(c).Wrap().Gap(6).AlignItems(ui.Center).Children(func() {
 			secondaryButton(c, msgs.WorkAnswer()).FontWeight(500).OnClick(func() { a.openIssueSupplementForm(issue.ID) })
 		})
@@ -833,7 +816,7 @@ func (a *appModel) issuePrimaryAction(c *ui.Context, t *ui.Theme, ct *contact, i
 			ui.Row(c).Wrap().Gap(6).AlignItems(ui.Center).Children(func() {
 				secondaryButton(c, label).FontWeight(500).OnClick(func() {
 					if !a.runIssue(issue.ID) {
-						a.issueActionError = a.issueFormError
+						a.setIssueActionNotice(a.issueFormError, a.issueFormNotice, a.issueFormNoticeDetail)
 					}
 				})
 			})
@@ -864,7 +847,7 @@ func (a *appModel) issueLifecycleActions(c *ui.Context, t *ui.Theme, issue *prod
 		ui.Row(c).Wrap().Gap(6).Children(func() {
 			secondaryButton(c, msgs.WorkRestore()).OnClick(func() {
 				if !a.restoreIssue(issue.ID) {
-					a.issueActionError = "Could not restore this issue."
+					a.setIssueActionNotice("Could not restore this issue.", "restore-failed", "")
 				}
 			})
 		})
@@ -876,7 +859,7 @@ func (a *appModel) issueLifecycleActions(c *ui.Context, t *ui.Theme, issue *prod
 			ui.Row(c).Wrap().Gap(6).Children(func() {
 				secondaryButton(c, msgs.WorkReopen()).OnClick(func() {
 					if !a.reopenIssue(issue.ID) {
-						a.issueActionError = "Could not reopen this issue."
+						a.setIssueActionNotice("Could not reopen this issue.", "reopen-failed", "")
 					}
 				})
 			})
@@ -888,7 +871,7 @@ func (a *appModel) issueLifecycleActions(c *ui.Context, t *ui.Theme, issue *prod
 	ui.Row(c).Wrap().AlignItems(ui.Center).Gap(6).Children(func() {
 		secondaryButton(c, msgs.WorkCancel()).TextColor(t.Warning).OnClick(func() {
 			if !a.cancelIssueProduct(issue.ID) {
-				a.issueActionError = "Could not cancel this issue; its state was not changed."
+				a.setIssueActionNotice("Could not cancel this issue; its state was not changed.", "cancel-failed", "")
 			}
 		})
 	})
@@ -899,7 +882,7 @@ func (a *appModel) issueLifecycleActions(c *ui.Context, t *ui.Theme, issue *prod
 			ui.TextInput(c, draft).Label(msgs.WorkCompletionEvidence()).FontSize(14).Placeholder(msgs.WorkCompletionEvidencePlaceholder()).Grow(1)
 			secondaryButton(c, msgs.WorkComplete()).OnClick(func() {
 				if !a.completeIssue(issue.ID, *draft) {
-					a.issueActionError = "Could not complete this issue."
+					a.setIssueActionNotice("Could not complete this issue.", "complete-failed", "")
 				}
 			})
 		})
@@ -915,16 +898,33 @@ func (a *appModel) issueCard(c *ui.Context, t *ui.Theme, ct *contact, issue *pro
 			ui.Text(c, issue.Goal).FontSize(typePageTitle).FontWeight(500).LineHeight(1.5).TextColor(t.Text)
 		})
 		if a.issueActionError != "" {
-			ui.Text(c, a.issueActionError).FontSize(14).LineHeight(1.5).TextColor(t.Warning)
+			text := a.issueActionError
+			if a.issueActionNotice != "" {
+				text = issueNoticeText(locales.In(c.Locale()), a.issueActionNotice, a.issueActionNoticeDetail)
+			}
+			ui.Text(c, text).FontSize(14).LineHeight(1.5).TextColor(t.Warning)
 		}
 		if question := issue.openQuestion(); question != nil {
 			display := issueDisplayStatusFor(issue)
 			ui.Column(c).Padding(8).Radius(8).Background(t.Surface).Gap(3).Children(func() {
 				ui.Text(c, issueDisplayLabel(locales.In(c.Locale()), display)).FontSize(typeAction).FontWeight(500).TextColor(issueDisplayColor(t, display))
-				ui.Text(c, question.Text).FontSize(14).LineHeight(1.5).TextColor(t.Text)
+				if strings.TrimSpace(question.Text) == "" {
+					ui.Text(c, msgs.QuestionUnavailableTitle()).FontSize(14).LineHeight(1.5).TextColor(t.Text)
+					ui.Text(c, msgs.QuestionUnavailableHint()).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+					secondaryButton(c, msgs.IssueReloadTask()).OnClick(func() { a.reloadIssueWorkByID(ct.ID, issue.ID) })
+				} else {
+					ui.Text(c, question.Text).FontSize(14).LineHeight(1.5).TextColor(t.Text)
+				}
 			})
 		}
 		primaryKind := a.issuePrimaryAction(c, t, ct, issue)
+		if issue.Work.SendError != "" {
+			text := issue.Work.SendError
+			if issue.Work.SendErrorKind != "" {
+				text = contactNoticeText(locales.In(c.Locale()), issue.Work.SendErrorKind, issue.Work.SendErrorDetail)
+			}
+			ui.Text(c, text).FontSize(14).LineHeight(1.5).TextColor(t.Warning)
+		}
 		a.issueLatestResult(c, t, ct, issue, primaryKind != "read")
 		if latest := latestIssueExecution(issue); latest != nil && latest.Status == issueExecutionCompleted &&
 			issue.Status != issueStatusCompleted && issue.Status != issueStatusCanceled && issueHasRemainingRequirements(issue) {
@@ -960,7 +960,7 @@ func (a *appModel) issueCard(c *ui.Context, t *ui.Theme, ct *contact, issue *pro
 				}
 			})
 			a.issueActions(c, t, ct, issue, editable)
-			evidence := issueEvidenceText(issue)
+			evidence := issueEvidenceText(locales.In(c.Locale()), issue)
 			if issue.Evidence != "" && issue.Status != issueStatusCompleted {
 				evidence = msgs.IssuePreviousEvidence(issue.Evidence)
 			}
@@ -1048,7 +1048,7 @@ func (a *appModel) issueLatestResult(c *ui.Context, t *ui.Theme, ct *contact, is
 func (a *appModel) issueRequirementSummary(c *ui.Context, t *ui.Theme, issue *productIssue) {
 	if len(issue.Requirements) == 0 {
 		ui.Text(c, locales.In(c.Locale()).IssueRequirements()).FontSize(typeGroupTitle).FontWeight(500).TextColor(t.TextMuted)
-		ui.Text(c, "No requirements recorded.").FontSize(14).TextColor(t.TextMuted)
+		ui.Text(c, locales.In(c.Locale()).IssueNoRequirements()).FontSize(14).TextColor(t.TextMuted)
 		return
 	}
 	ui.Text(c, locales.In(c.Locale()).IssueRequirements()).FontSize(typeGroupTitle).FontWeight(500).TextColor(t.TextMuted)
@@ -1089,7 +1089,7 @@ func (a *appModel) issueRequirementEvidence(c *ui.Context, t *ui.Theme, ct *cont
 						action := action
 						secondaryButton(c, action.label).TextColor(action.color).OnClick(func() {
 							if !a.setIssueRequirementState(issue.ID, requirement.ID, action.state, *draft) {
-								a.issueActionError = "Could not save the requirement state."
+								a.setIssueActionNotice("Could not save the requirement state.", "requirement-save-failed", "")
 							}
 						})
 					}
@@ -1113,9 +1113,9 @@ func (a *appModel) issueExecutions(c *ui.Context, t *ui.Theme, ct *contact, issu
 		w := workFor(ct, execution.TaskID)
 		ui.Column(c).Padding(8).Radius(8).Background(t.Surface).Gap(4).Children(func() {
 			ui.Column(c).Gap(2).Children(func() {
-				ui.Text(c, fmt.Sprintf("Execution %d: %s", index+1, issueExecutionLabel(execution))).FontSize(14).TextColor(t.TextMuted)
+				ui.Text(c, locales.In(c.Locale()).IssueRunHeader(strconv.Itoa(index+1), issueExecutionText(locales.In(c.Locale()), execution.Status))).FontSize(14).TextColor(t.TextMuted)
 				if execution.RequirementsRevision > 0 {
-					ui.Text(c, fmt.Sprintf("revision %d", execution.RequirementsRevision)).FontSize(14).TextColor(t.TextMuted)
+					ui.Text(c, locales.In(c.Locale()).IssueRunRevision(strconv.Itoa(execution.RequirementsRevision))).FontSize(14).TextColor(t.TextMuted)
 				}
 			})
 			contextCount := len(executionTaskContextItems(ct, issue, execution))
@@ -1146,13 +1146,13 @@ func (a *appModel) issueExecutions(c *ui.Context, t *ui.Theme, ct *contact, issu
 				ui.Row(c).Gap(6).Children(func() {
 					secondaryButton(c, locales.In(c.Locale()).IssueCheckExecution()).OnClick(func() {
 						if !a.reconcileIssueExecution(issue.ID, execution.ID) {
-							a.issueActionError = execution.Detail
+							a.setIssueActionNotice(execution.Detail, "", "")
 						}
 					})
 					if execution.TaskID == "" && issue.Work.ActiveTaskID == "" && issue.Work.SendState == sendIdle {
 						secondaryButton(c, locales.In(c.Locale()).IssueConfirmNotDispatched()).OnClick(func() {
 							if !a.confirmIssueExecutionNotDispatched(issue.ID, execution.ID) {
-								a.issueActionError = "Could not confirm this execution."
+								a.setIssueActionNotice("Could not confirm this execution.", "confirm-failed", "")
 							}
 						})
 					}
@@ -1202,13 +1202,13 @@ func (a *appModel) issueActions(c *ui.Context, t *ui.Theme, ct *contact, issue *
 			if issue.Status == issueStatusWaitingUser || issue.Status == issueStatusNeedsAttention {
 				secondaryButton(c, locales.In(c.Locale()).IssueResume()).OnClick(func() {
 					if !a.resumeIssue(issue.ID) {
-						a.issueActionError = "Could not resume this issue."
+						a.setIssueActionNotice("Could not resume this issue.", "resume-failed", "")
 					}
 				})
 			} else if issue.Work.ActiveTaskID == "" && issue.Work.SendState == sendIdle {
 				secondaryButton(c, locales.In(c.Locale()).IssueMarkWaiting()).OnClick(func() {
 					if !a.markIssueWaiting(issue.ID) {
-						a.issueActionError = "Could not mark this issue waiting."
+						a.setIssueActionNotice("Could not mark this issue waiting.", "wait-failed", "")
 					}
 				})
 			}
@@ -1224,7 +1224,7 @@ func (a *appModel) issueActions(c *ui.Context, t *ui.Theme, ct *contact, issue *
 	ui.Row(c).Wrap().AlignItems(ui.Center).Gap(6).Children(func() {
 		secondaryButton(c, locales.In(c.Locale()).IssueArchive()).OnClick(func() {
 			if !a.archiveIssue(issue.ID) {
-				a.issueActionError = "Could not archive this issue."
+				a.setIssueActionNotice("Could not archive this issue.", "archive-failed", "")
 			}
 		})
 	})
@@ -1294,14 +1294,14 @@ func (a *appModel) workCard(c *ui.Context, t *ui.Theme, w *workItem, isCurrent, 
 			ui.Text(c, workStateText(msgs, w)).FontSize(typeAction).FontWeight(500).TextColor(a.workStateColor(w.State))
 			ui.Spacer(c)
 			if isCurrent && (w.State == workAccepted || w.State == workRunning || w.State == workStopping) {
-				label := "Stop task"
+				label := msgs.WorkStopTask()
 				if issueWork {
-					label = "Stop issue task"
+					label = msgs.WorkStopIssueTask()
 				}
 				if w.State == workStopping {
-					label = "Stopping…"
+					label = msgs.WorkStoppingTask()
 					if issueWork {
-						label = "Stopping issue…"
+						label = msgs.WorkStoppingIssue()
 					}
 				}
 				stop := secondaryButton(c, label).FontWeight(500).OnClick(func() {
@@ -1323,9 +1323,9 @@ func (a *appModel) workCard(c *ui.Context, t *ui.Theme, w *workItem, isCurrent, 
 			last := w.Tools[len(w.Tools)-1]
 			action := last.Name
 			if last.Finished {
-				action = "Last action: " + action
+				action = msgs.WorkLastAction(action)
 			} else {
-				action = "Running " + action
+				action = msgs.WorkRunningAction(action)
 			}
 			ui.Text(c, action).FontSize(14).LineHeight(1.5).TextColor(a.workTheme.WorkMuted)
 		}
@@ -1360,23 +1360,23 @@ func (a *appModel) toolCalls(c *ui.Context, t *ui.Theme, tools []*workTool) {
 			ui.Row(c).AlignItems(ui.Center).Gap(6).Children(func() {
 				ui.Text(c, toolTitleFor(call.Name, call.Args)).FontSize(14).LineHeight(1.5).TextColor(t.Text)
 				ui.Spacer(c)
-				state := "Running"
+				state := locales.In(c.Locale()).WorkToolRunningState()
 				if call.Finished {
-					state = "Finished"
+					state = locales.In(c.Locale()).WorkToolFinishedState()
 				}
 				ui.Text(c, state).FontSize(14).TextColor(t.TextMuted)
 			})
 			if call.Output != "" {
-				summary := toolOutputSummary(call.Output)
+				summary := toolOutputSummary(locales.In(c.Locale()), call.Output)
 				if summary != "" {
 					// Keep long output (including unbroken JSON/paths) in its
 					// own full-width line so it cannot push the actions out of
 					// the card.
 					ui.Text(c, locales.In(c.Locale()).WorkPreview(summary)).FontSize(14).LineHeight(1.5).MaxLines(4).TextColor(t.TextMuted)
 				}
-				label := "Details"
+				label := locales.In(c.Locale()).WorkDetails()
 				if call.Expanded {
-					label = "Hide"
+					label = locales.In(c.Locale()).WorkHide()
 				}
 				ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
 					if !call.Expanded {
@@ -1419,21 +1419,108 @@ func toolTitleFor(name, args string) string {
 	return name + ": " + truncate(args, 70)
 }
 
-func (a *appModel) workActivitySummary(ct *contact) string {
+const (
+	workNoticeResuming                = "resuming"
+	workNoticeRunning                 = "running"
+	workNoticeStarting                = "starting"
+	workNoticeCompacting              = "compacting"
+	workNoticeWaitingModel            = "waiting-model"
+	workNoticeThinking                = "thinking"
+	workNoticeWriting                 = "writing"
+	workNoticeRunningTool             = "running-tool"
+	workNoticeLastAction              = "last-action"
+	workNoticeStateAccepted           = "state-accepted"
+	workNoticeStateRunning            = "state-running"
+	workNoticeStateStopping           = "state-stopping"
+	workNoticeStateCompleted          = "state-completed"
+	workNoticeStateFailed             = "state-failed"
+	workNoticeStateInterrupted        = "state-interrupted"
+	workNoticeStateStoppedInterrupted = "state-stopped-interrupted"
+	workNoticeStateUnknown            = "state-unknown"
+)
+
+func workNoticeForWork(w *workItem) string {
+	if w.State == workInterrupted && w.StopRequested {
+		return workNoticeStateStoppedInterrupted
+	}
+	return workNoticeForState(w.State)
+}
+
+func workNoticeForState(state workState) string {
+	switch state {
+	case workAccepted:
+		return workNoticeStateAccepted
+	case workRunning:
+		return workNoticeStateRunning
+	case workStopping:
+		return workNoticeStateStopping
+	case workCompleted:
+		return workNoticeStateCompleted
+	case workFailed:
+		return workNoticeStateFailed
+	case workInterrupted:
+		return workNoticeStateInterrupted
+	default:
+		return workNoticeStateUnknown
+	}
+}
+
+func workNoticeText(msgs locales.Messages, kind, arg string) string {
+	switch kind {
+	case workNoticeResuming:
+		return msgs.WorkStatusResuming()
+	case workNoticeRunning:
+		return msgs.WorkStatusRunning()
+	case workNoticeStarting:
+		return msgs.WorkStatusStarting()
+	case workNoticeCompacting:
+		return msgs.WorkStatusCompacting()
+	case workNoticeWaitingModel:
+		return msgs.WorkStatusWaitingModel()
+	case workNoticeThinking:
+		return msgs.WorkStatusThinking()
+	case workNoticeWriting:
+		return msgs.WorkStatusWriting()
+	case workNoticeRunningTool:
+		return msgs.WorkRunningAction(arg)
+	case workNoticeLastAction:
+		return msgs.WorkLastAction(arg)
+	case workNoticeStateAccepted:
+		return msgs.WorkStateAccepted()
+	case workNoticeStateRunning:
+		return msgs.WorkStateWorking()
+	case workNoticeStateStopping:
+		return msgs.WorkStateStopping()
+	case workNoticeStateCompleted:
+		return msgs.WorkStateCompleted()
+	case workNoticeStateFailed:
+		return msgs.WorkStateFailed()
+	case workNoticeStateInterrupted:
+		return msgs.WorkStateInterrupted()
+	case workNoticeStateStoppedInterrupted:
+		return msgs.WorkStateStoppedInterrupted()
+	case workNoticeStateUnknown:
+		return msgs.WorkStateUnknown()
+	default:
+		return kind
+	}
+}
+
+func (a *appModel) workActivitySummary(ct *contact) (string, string) {
 	if w := ct.activeWork(); w != nil {
 		if len(w.Tools) > 0 {
 			last := w.Tools[len(w.Tools)-1]
 			if !last.Finished {
-				return "Running " + last.Name
+				return workNoticeRunningTool, last.Name
 			}
-			return "Last action: " + last.Name
+			return workNoticeLastAction, last.Name
 		}
-		return workStateLabel(w)
+		return workNoticeForWork(w), ""
 	}
 	if w := ct.recentWork(); w != nil {
-		return workStateLabel(w)
+		return workNoticeForWork(w), ""
 	}
-	return ""
+	return "", ""
 }
 
 func executionHasUnknownRecovery(issue *productIssue) bool {

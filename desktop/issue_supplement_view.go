@@ -30,9 +30,9 @@ func (a *appModel) issueSupplementSection(c *ui.Context, t *ui.Theme, ct *contac
 	if pending == 0 && len(batches) == 0 && !formOpen {
 		return
 	}
-	title := "Supplements"
+	title := msgs.SupplementTitle()
 	if pending > 0 {
-		title = fmt.Sprintf("Supplements: %d pending", pending)
+		title = msgs.SupplementTitlePending(pending)
 	}
 	ui.Text(c, title).FontSize(typeAction).FontWeight(500).TextColor(t.Text)
 	if auto {
@@ -40,7 +40,7 @@ func (a *appModel) issueSupplementSection(c *ui.Context, t *ui.Theme, ct *contac
 	} else {
 		ui.Text(c, msgs.SupplementAutoStopped()).FontSize(14).TextColor(t.Warning)
 	}
-	ui.Text(c, fmt.Sprintf("Current target: revision %d. %s", issue.RequirementsRevision, truncate(issue.Goal, 100))).
+	ui.Text(c, msgs.SupplementCurrentTarget(fmt.Sprint(issue.RequirementsRevision), truncate(issue.Goal, 100))).
 		FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
 	if ledger != nil {
 		if active := ledger.activeBatch(target); active != nil {
@@ -78,7 +78,7 @@ func (a *appModel) issueSupplementSection(c *ui.Context, t *ui.Theme, ct *contac
 			for _, item := range pendingItems {
 				item := item
 				ui.Column(c).Padding(6).Radius(6).Background(t.Surface).Gap(2).Children(func() {
-					ui.Text(c, fmt.Sprintf("received r%d: %s", item.RequirementsRevision, truncate(item.Text, 180))).
+					ui.Text(c, msgs.SupplementReceived(fmt.Sprint(item.RequirementsRevision), truncate(item.Text, 180))).
 						FontSize(14).LineHeight(1.5).TextColor(t.Text)
 					if a.issueSupplementPreviewID == item.ID {
 						ui.Row(c).Children(func() {
@@ -127,13 +127,13 @@ func (a *appModel) issueSupplementSection(c *ui.Context, t *ui.Theme, ct *contac
 			if auto {
 				secondaryButton(c, msgs.SupplementStopAuto()).TextColor(t.Warning).OnClick(func() {
 					if !a.setIssueSupplementAuto(ct, issue.ID, false) {
-						a.issueActionError = "Could not save the automatic-continuation stop."
+						a.setIssueActionNotice("Could not save the automatic-continuation stop.", "supplement-auto-stop-failed", "")
 					}
 				})
 			} else if pending > 0 {
 				secondaryButton(c, msgs.SupplementResumeAuto()).OnClick(func() {
 					if !a.setIssueSupplementAuto(ct, issue.ID, true) {
-						a.issueActionError = "Could not save the automatic-continuation resume."
+						a.setIssueActionNotice("Could not save the automatic-continuation resume.", "supplement-auto-resume-failed", "")
 					}
 				})
 			}
@@ -145,7 +145,7 @@ func (a *appModel) issueSupplementSection(c *ui.Context, t *ui.Theme, ct *contac
 			start = len(batches) - 6
 		}
 		if start > 0 {
-			ui.Text(c, fmt.Sprintf("%d earlier batches hidden from this card; the execution list remains the original input record.", start)).
+			ui.Text(c, msgs.SupplementHiddenBatches(start)).
 				FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
 		}
 		for _, batch := range batches[start:] {
@@ -155,15 +155,15 @@ func (a *appModel) issueSupplementSection(c *ui.Context, t *ui.Theme, ct *contac
 			batch := batch
 			ui.Column(c).Padding(7).Radius(7).Background(t.Surface).Gap(2).Children(func() {
 				ui.Row(c).AlignItems(ui.Center).Children(func() {
-					ui.Text(c, issueSupplementBatchLabel(batch)).FontSize(typeAction).FontWeight(500).TextColor(t.TextMuted)
+					ui.Text(c, issueSupplementBatchLabel(msgs, batch)).FontSize(typeAction).FontWeight(500).TextColor(t.TextMuted)
 					ui.Spacer(c)
-					ui.Text(c, fmt.Sprintf("target r%d", batch.Target.RequirementsRevision)).
+					ui.Text(c, msgs.SupplementTargetRevision(fmt.Sprint(batch.Target.RequirementsRevision))).
 						FontSize(14).TextColor(t.TextMuted)
 				})
 				for _, item := range batch.Snapshot {
 					item := item
 					ui.Column(c).Gap(1).Children(func() {
-						ui.Text(c, fmt.Sprintf("received r%d: %s", item.RequirementsRevision, truncate(item.Text, 180))).
+						ui.Text(c, msgs.SupplementReceived(fmt.Sprint(item.RequirementsRevision), truncate(item.Text, 180))).
 							FontSize(14).LineHeight(1.5).TextColor(t.Text)
 						if a.issueSupplementPreviewID == item.ID {
 							secondaryButton(c, msgs.SupplementClosePreview()).OnClick(func() { a.issueSupplementPreviewID = "" })
@@ -185,7 +185,7 @@ func (a *appModel) issueSupplementSection(c *ui.Context, t *ui.Theme, ct *contac
 					secondaryButton(c, msgs.SupplementRetry()).OnClick(func() {
 						if !a.retryIssueSupplementBatch(ct, issue, batch) {
 							if a.issueActionError == "" {
-								a.issueActionError = "Could not retry this supplement."
+								a.setIssueActionNotice("Could not retry this supplement.", "supplement-retry-failed", "")
 							}
 						}
 					})
@@ -196,7 +196,7 @@ func (a *appModel) issueSupplementSection(c *ui.Context, t *ui.Theme, ct *contac
 						executionID := batch.ExecutionID
 						secondaryButton(c, msgs.SupplementCheck()).OnClick(func() {
 							if !a.reconcileIssueExecution(issue.ID, executionID) {
-								a.issueActionError = "Could not check this supplement execution."
+								a.setIssueActionNotice("Could not check this supplement execution.", "supplement-check-failed", "")
 							}
 						})
 					}
@@ -220,21 +220,25 @@ func shortExecutionID(id string) string {
 	return id[:18] + "…"
 }
 
-func issueSupplementBatchLabel(batch *issueSupplementBatch) string {
-	switch batch.State {
+func supplementBatchStateLabel(msgs locales.Messages, state string) string {
+	switch state {
 	case supplementBatchDispatching:
-		return "Batch dispatching: receipt pending"
+		return msgs.SupplementBatchDispatching()
 	case supplementBatchAccepted:
-		return "Batch accepted by execution"
+		return msgs.SupplementBatchAccepted()
 	case supplementBatchRejected:
-		return "Batch rejected"
+		return msgs.SupplementBatchRejected()
 	case supplementBatchNotDispatched:
-		return "Batch not dispatched"
+		return msgs.SupplementBatchNotDispatched()
 	case supplementBatchUnknown:
-		return "Batch unknown: check execution"
+		return msgs.SupplementBatchUnknown()
 	case supplementBatchCanceled:
-		return "Batch canceled / superseded"
+		return msgs.SupplementBatchCanceled()
 	default:
-		return "Batch " + batch.State
+		return msgs.SupplementBatchGeneric(state)
 	}
+}
+
+func issueSupplementBatchLabel(msgs locales.Messages, batch *issueSupplementBatch) string {
+	return supplementBatchStateLabel(msgs, batch.State)
 }

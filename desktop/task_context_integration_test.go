@@ -759,7 +759,7 @@ func TestTaskContextIssueSentSnapshotPageCopyBeforeAndAfterRestart(t *testing.T)
 	h.pump.do(func() {
 		tr := ui.NewTester(h.app.view, 1040, 720)
 		tr.Frame()
-		if clickErr = clickAfterBoundedScrollInPump(tr, "More issue actions", 1040, 720); clickErr != nil {
+		if clickErr = clickAfterBoundedScrollInPump(tr, "More task actions", 1040, 720); clickErr != nil {
 			return
 		}
 		tr.Frame()
@@ -808,7 +808,7 @@ func TestTaskContextIssueSentSnapshotPageCopyBeforeAndAfterRestart(t *testing.T)
 			return
 		}
 		tr2.Frame()
-		if restartClickErr = clickAfterBoundedScrollInPump(tr2, "More issue actions", 1040, 720); restartClickErr != nil {
+		if restartClickErr = clickAfterBoundedScrollInPump(tr2, "More task actions", 1040, 720); restartClickErr != nil {
 			return
 		}
 		tr2.Frame()

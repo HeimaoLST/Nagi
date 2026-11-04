@@ -8,11 +8,13 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+
+	"saki/desktop/locales"
 )
 
 func expandIssueDetails(t *testing.T, tr *ui.Tester) {
 	t.Helper()
-	if err := tr.Click("More issue actions"); err != nil {
+	if err := tr.Click("More task actions"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
@@ -422,8 +424,14 @@ func TestArchivedActiveIssueStillBlocksApply(t *testing.T) {
 	a.rt = &runtimeClient{}
 	a.store = &contactStore{path: filepath.Join(t.TempDir(), "contacts.json")}
 	reason := a.connectionReloadBlocked()
-	if !strings.Contains(reason, "Wait for all conversation and issue work") {
+	if reason != connBlockedActiveWork {
 		t.Fatalf("archived active issue was missed by Apply protection: %q", reason)
+	}
+	if got := connectionBlockedText(locales.In("en"), reason); got != "Wait for all conversation and task work to finish before applying a new connection." {
+		t.Fatalf("active-work recovery copy = %q", got)
+	}
+	if got := connectionBlockedText(locales.In("zh-Hans"), reason); got != "请等待所有对话和事项工作结束后再应用新连接。" {
+		t.Fatalf("active-work zh recovery copy = %q", got)
 	}
 }
 

@@ -26,6 +26,8 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+
+	"saki/desktop/locales"
 )
 
 type providerFixture struct {
@@ -971,7 +973,7 @@ func TestGUIAppStopSurvivesHistoryReload(t *testing.T) {
 	var label string
 	h.pump.do(func() {
 		if w := h.app.contacts[0].recentWork(); w != nil {
-			label = workStateLabel(w)
+			label = workStateText(locales.In("en"), w)
 		}
 	})
 	if !strings.Contains(label, "Stopped") {
@@ -991,12 +993,12 @@ func TestGUIAppStopSurvivesHistoryReload(t *testing.T) {
 	h2.snapshot(func() {
 		ct := h2.app.contacts[0]
 		w := ct.recentWork()
-		if w == nil || workStateLabel(w) != "Interrupted" {
+		if w == nil || workStateText(locales.In("en"), w) != "Interrupted" {
 			t.Fatalf("restart stop reason was invented: work=%+v label=%q", w, func() string {
 				if w == nil {
 					return ""
 				}
-				return workStateLabel(w)
+				return workStateText(locales.In("en"), w)
 			}())
 		}
 		if ct.Draft != "later-stop-draft" {
@@ -1109,8 +1111,8 @@ func TestGUIAppIssueExecutionsPersistAndRestart(t *testing.T) {
 	if issue.Status != issueStatusInProgress {
 		t.Fatalf("runtime completion changed issue status: %q", issue.Status)
 	}
-	if !strings.Contains(issueEvidenceText(issue), "Completion not verified") {
-		t.Fatalf("completion evidence = %q", issueEvidenceText(issue))
+	if !strings.Contains(issueEvidenceText(locales.In("en"), issue), "Completion not verified") {
+		t.Fatalf("completion evidence = %q", issueEvidenceText(locales.In("en"), issue))
 	}
 	if draftAfterRun != prompt {
 		t.Fatalf("issue run consumed a composer draft equal to its prompt: %q", draftAfterRun)

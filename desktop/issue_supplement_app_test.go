@@ -115,7 +115,7 @@ func TestIssueSupplementConfirmNotDispatchedSaveFailureRestoresAllWorkState(t *t
 	execution := &issueExecution{ID: "execution-confirm-fail", Status: issueExecutionUnknown, Detail: "unknown"}
 	issue.Executions = append(issue.Executions, execution)
 	issue.Work.SendState = sendUnknown
-	issue.Work.SendError = "unknown delivery"
+	issue.Work.setSendError("unknown delivery", "send-uncertain", "unknown detail")
 	issue.Work.pendingExecutionID = execution.ID
 	issue.Status = issueStatusNeedsAttention
 	oldAuto := issue.Supplements.AutoContinue
@@ -129,9 +129,19 @@ func TestIssueSupplementConfirmNotDispatchedSaveFailureRestoresAllWorkState(t *t
 	a.store.path = oldStore
 	if ok || execution.Status != issueExecutionUnknown || execution.Detail != "unknown" ||
 		issue.Work.SendState != sendUnknown || issue.Work.SendError != "unknown delivery" ||
+		issue.Work.SendErrorKind != "send-uncertain" || issue.Work.SendErrorDetail != "unknown detail" ||
 		issue.Work.pendingExecutionID != execution.ID || issue.Supplements.AutoContinue != oldAuto {
-		t.Fatalf("failed confirm changed state: ok=%v execution=%+v work=%v/%q/%q auto=%v",
-			ok, execution, issue.Work.SendState, issue.Work.SendError, issue.Work.pendingExecutionID, issue.Supplements.AutoContinue)
+		t.Fatalf("failed confirm changed state: ok=%v execution=%+v work=%v/%q/%q/%q auto=%v",
+			ok, execution, issue.Work.SendState, issue.Work.SendError, issue.Work.SendErrorKind,
+			issue.Work.SendErrorDetail, issue.Supplements.AutoContinue)
+	}
+	openIssueDetailForTest(a, ct, issue.ID)
+	a.setWorkspaceOpen(true)
+	r := ui.NewTester(a.view, 1040, 720)
+	r.SetLocale("zh-Hans")
+	r.Frame()
+	if !r.HasText("先前的消息可能已发送；重启前交付未确认。请重新加载历史核实。不会自动重试。") {
+		t.Fatalf("confirm rollback lost the localized work notice: %v", r.Texts())
 	}
 }
 
@@ -297,7 +307,7 @@ func TestIssueSupplementUnknownActionIsExposedWithoutFakeRecovery(t *testing.T) 
 	tr := ui.NewTester(a.view, 1040, 1600)
 	tr.Frame()
 	expandIssueDetails(t, tr)
-	if err := tr.Click("Check execution"); err != nil {
+	if err := tr.Click("Check run"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()

@@ -941,13 +941,14 @@ type resolvedTheme struct {
 
 <a id="nagi-language-281"></a>
 
-## #281 语言与 Nagi 可见品牌（候选实现事实与待验，2026-11-04）
+## #281 语言与 Nagi 可见品牌（候选实现事实与待验，2026-11-05）
 
 本节记录 `agent/gui/281-nagi-i18n-r3` 的模块事实，范围由 [完整 r3](https://github.com/HeimaoLST/Saki/issues/281#issuecomment-6631308418) 定义；当前组合包含 #279 几何、#295 生命周期 fixture 与 #297 CI 预算。I1 的局部中英接入不是完整交付；本候选仍以 [PR #299](https://github.com/HeimaoLST/Saki/pull/299) 的精确源、门禁和后续验收为准，不宣称已进入 dev 或完成 #273/#156 真人验收。
 
 - **单一语言来源**：复用 `desktop/mygo.json`、`locales/doc.go`、`en.json` / `zh-Hans.json` 和官方 `mygo generate` 的 typed catalog，逐帧使用 `locales.In(c.Locale())`。没有另一个 i18n 库、全局 locale provider 或 GUI locale 文件。`locale_darwin.go` 只读与 MyGo 相同的 current-application / current-user / any-host 自有 `AppleLanguages`；偏好缺失表示 System，已有 tag 表示显式选择，不能比较有效语言与首选语言来猜模式。写入仅调用公开 `App.SetLocale`，System 传空 tag；保留 `CGO_ENABLED=0` 路径。
 - **General 与状态保持**：沿用稳定 `appearance` route 展示 General / 通用，其内为外观与语言。仅提供 System（显示当前有效语言）、简体中文、English，业务值固定为空 tag、`zh-Hans`、`en`；控件译文不作为模型、API 或筛选 ID。模式镜像只属于当前 UI，重开 General 从唯一偏好源再读；显式 Hans 切 System 即使有效语言未变，也更新模式。语言切换不重建联系人、表单或 Runtime 会话，不主动 Save/Apply/Test/发送。新联系人默认名只在创建时取当帧语言，已保存名称、默认联系人 Saki、Purpose/Instructions/Draft、用户与 Agent 内容不重写。
-- **联系人选择的身份**：设置内联系人 picker 的官方 `SelectBase` value 直接使用唯一 `settingsContactID`，本地化 label 仅用于 trigger/item/tooltip/公开 `Value(display)`；不以显示名反查身份，也不维护另一份 picker ID 镜像。同名与“甲（1）”等合法名称可以显示相同 label，键盘选择和保存仍按各自 ContactID；raw ID 不作显示值。三联系人 Hans End/Enter 原错选 A 的 RED、修复后只保存 C 的 GREEN，以及 A/B 草稿、返回和长列表行为已有定向证据。公开 Tester 无 AX 树 getter，本轮未独立读取 native AX，不把视觉 Texts 当作完整 AX 验收。
+- **联系人选择的身份**：设置内联系人 picker 的官方 `SelectBase` value 直接使用唯一 `settingsContactID`，本地化 label 仅用于 trigger/item/tooltip/公开 `Value(display)`；不以显示名反查身份，也不维护另一份 picker ID 镜像。同名与“甲（1）”等合法名称可以显示相同 label，键盘选择和保存仍按各自 ContactID；raw ID 不作显示值。三联系人 Hans End/Enter 原错选 A 的 RED、修复后只保存 C 的 GREEN，以及 A/B 草稿、返回和长列表行为已有定向证据；同一用例重新打开真实联系人 store，核对三个稳定 ID、仅 C 改名、A/B 的原 Purpose 未变且 C 的 Purpose 正确保存。公开 Tester 无 AX 树 getter，本轮未独立读取 native AX，不把视觉 Texts 当作完整 AX 验收。
+- **术语与提示生命周期**：普通界面遵循[工作台术语及状态表](desktop-workbench.md#术语定稿)，使用 Task / Run / Tasks / Chat runs；事项 Done、执行 Finished、要求 Met / Not met、补充 Received / Waiting to send / Sent / Needs check 各自保留原业务事实。不新增持久状态，不把 Run 结束判作事项完成；表外的 Not dispatched / Rejected / Stopping 仍准确表示未递交、拒绝或正在停止。发送、取消、连接中断与本地保存失败沿原 handler 保存原始诊断，界面用有限的提示类型及原始参数在当前 locale 投影；替换、清除及失败回滚同时更新提示元数据，避免旧提示复现。原始工具响应、回执、协议名、枚举、用户和 Agent 内容保留原词；这些边界不以界面术语批量替换。
 - **说明与系统文本**：语言下仅说明“部分系统窗口会在重启后使用新语言。” / “Some system windows use the new language after restarting.”。MyGo 应用 UI 与框架角色菜单沿官方实时语言路径更新；AppKit/WebKit 自身文本的下一次启动限制另行保留。不添加重启按钮或自动重启，不通过重启刷新页面。
 - **可见品牌与数据**：`main.go` 在 helper CLI 早返回之后、`Run` 之前设置应用名 Nagi，主窗口标题与 rail 品牌为 Nagi；打包脚本的 `CFBundleDisplayName`、`CFBundleName` 与 manifest 产品/显示字段一致。`Saki.app` / `Saki.app.zip`、`CFBundleExecutable=Saki`、`dev.saki.desktop`、`SAKI_*`、`Saki-runtime` 及内部 Go/Rust 标识不改。联系人与会话仍从显式 Saki 数据路径读取；当前应用无框架 `App.Path(UserData/Cache/Logs)` 消费，不为品牌创建迁移或复制目录。Finder/Dock/原生菜单的实际显示仍需同一准确候选包验收。
 - **SDK 与补丁**：候选固定官方 MyGo `v0.7.4`，沿 `scripts/gui-go.py` 的临时模块/校验 hash 入口保留 Split release、Editor selection release 与 Markdown LinkElement 观察三份补丁；Editor/Markdown 按该 tag 实际行位重定基，不增加临时 nil guard或私有框架 fork。没有改 Runtime 协议、核心执行循环或存储格式。

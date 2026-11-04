@@ -470,9 +470,6 @@ func (a *appModel) railRow(c *ui.Context, t *ui.Theme, i int) {
 				if detail == status {
 					detail = ""
 				}
-				if strings.HasPrefix(detail, "Running ") {
-					detail = strings.TrimPrefix(detail, "Running ")
-				}
 				if detail == "" {
 					line = status
 				} else {
@@ -786,7 +783,7 @@ func (a *appModel) message(c *ui.Context, t *ui.Theme, ct *contact, m *message) 
 	case msgActivity:
 		if m.ToolName != "" || m.ToolOutput != "" {
 			title := toolTitleFor(m.ToolName, m.ToolArgs)
-			summary := toolOutputSummary(m.ToolOutput)
+			summary := toolOutputSummary(msgs, m.ToolOutput)
 			if m.Expanded {
 				summary = truncate(m.ToolOutput, 2000)
 			}
@@ -1054,6 +1051,68 @@ func (a *appModel) composerInlinePanel(c *ui.Context, t *ui.Theme) {
 	})
 }
 
+func contactNoticeText(msgs locales.Messages, kind, detail string) string {
+	switch kind {
+	case "send-protocol":
+		return msgs.SendNoticeProtocol()
+	case "send-delivery":
+		return msgs.SendNoticeDelivery()
+	case "send-cancelled":
+		return msgs.SendNoticeCancelled()
+	case "send-previous-incomplete", "status-previous-incomplete":
+		return msgs.SendNoticePreviousIncomplete()
+	case "status-history-reloaded":
+		return msgs.SendNoticeHistoryReloaded()
+	case "send-uncertain":
+		return msgs.SendNoticeUncertain()
+	case "send-issue-association":
+		return msgs.SendNoticeIssueAssociation()
+	case "send-draft-not-cleared":
+		return msgs.SendNoticeDraftNotCleared()
+	case "send-delivery-unknown":
+		return msgs.SendNoticeDeliveryUnknown(detail)
+	case "send-contact-save":
+		return msgs.SendNoticeContactSave(detail)
+	case "send-cancel-failed":
+		return msgs.IssueSendCancelFailed(detail)
+	case "send-cancelling":
+		return msgs.IssueSendCancelling()
+	case "send-cancel-already":
+		return msgs.IssueSendCancelAlready()
+	case "send-already-finished":
+		return msgs.IssueSendAlreadyFinished()
+	case "send-reload-disconnected":
+		return msgs.IssueSendReloadDisconnected()
+	case "supplement-receipt-failed":
+		return msgs.IssueSendReceiptFailed()
+	case "supplement-receipt-save-failed":
+		return msgs.IssueSendReceiptSaveFailed(detail)
+	case "supplement-association":
+		return msgs.IssueSendAssociation()
+	case "waiting-runtime":
+		return msgs.IssueSendWaitingRuntime(detail)
+	case "supplement-delivery":
+		return msgs.IssueSendSupplementDelivery(detail)
+	case "auto-stop-memory":
+		return msgs.IssueSendAutoStopMemory()
+	case "release-tool-failed":
+		return msgs.IssueSendReleaseToolFailed(detail)
+	case "supplement-history-receipt-failed":
+		return msgs.IssueSendHistoryReceiptFailed(detail)
+	case "answer-stopping":
+		return msgs.IssueSendAnswerStopping()
+	case "send-accepted-cancel":
+		return msgs.IssueSendAcceptedCancel()
+	case "status-connection-lost":
+		return msgs.SendNoticeConnectionLost()
+	default:
+		if text := sendBlockText(msgs, kind); text != kind {
+			return text
+		}
+		return kind
+	}
+}
+
 func (a *appModel) composer(c *ui.Context, t *ui.Theme) {
 	ct := a.selectedContact()
 	msgs := locales.In(c.Locale())
@@ -1192,7 +1251,11 @@ func (a *appModel) composer(c *ui.Context, t *ui.Theme) {
 				}
 				if ct.SendError != "" && !a.connectionSendFailureKnown(ct) {
 					ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
-						ui.Text(c, ct.SendError).FontSize(typeBody).LineHeight(1.5).TextColor(t.Warning)
+						sendText := ct.SendError
+						if ct.SendErrorKind != "" {
+							sendText = contactNoticeText(locales.In(c.Locale()), ct.SendErrorKind, ct.SendErrorDetail)
+						}
+						ui.Text(c, sendText).FontSize(typeBody).LineHeight(1.5).TextColor(t.Warning)
 						if (ct.SendState == sendUnknown || ct.SendError != "") && a.runtimeStatus == runtimeStateReady && a.rt != nil {
 							if secondaryButton(c, msgs.ReloadAction()).Clicked() {
 								a.reloadSelected()
@@ -1201,7 +1264,11 @@ func (a *appModel) composer(c *ui.Context, t *ui.Theme) {
 					})
 				}
 				if ct.StatusDetail != "" {
-					ui.Text(c, ct.StatusDetail).FontSize(typeBody).LineHeight(1.5).TextColor(t.Warning)
+					statusText := ct.StatusDetail
+					if ct.StatusDetailKind != "" {
+						statusText = contactNoticeText(locales.In(c.Locale()), ct.StatusDetailKind, "")
+					}
+					ui.Text(c, statusText).FontSize(typeBody).LineHeight(1.5).TextColor(t.Warning)
 				}
 			}
 		})
@@ -1422,7 +1489,7 @@ func valueOr(value, fallback string) string {
 	return value
 }
 
-func toolOutputSummary(output string) string {
+func toolOutputSummary(msgs locales.Messages, output string) string {
 	if strings.TrimSpace(output) == "" {
 		return ""
 	}
@@ -1439,20 +1506,20 @@ func toolOutputSummary(output string) string {
 	}
 	prefix := ""
 	if text, ok := value["error"].(string); ok && strings.TrimSpace(text) != "" {
-		prefix = "Failed: " + truncate(text, 120)
+		prefix = msgs.ToolOutputFailed(truncate(text, 120))
 	}
 	code, hasCode := value["exit_code"].(float64)
 	timedOut, _ := value["timed_out"].(bool)
 	switch {
 	case timedOut && hasCode && code != 0:
-		prefix = fmt.Sprintf("Timed out (exit %g)", code)
+		prefix = msgs.ToolOutputTimedOutExit(fmt.Sprintf("%g", code))
 	case timedOut:
-		prefix = "Timed out"
+		prefix = msgs.ToolOutputTimedOut()
 	case hasCode && code != 0:
 		if prefix == "" {
-			prefix = fmt.Sprintf("Failed (exit %g)", code)
+			prefix = msgs.ToolOutputFailedExit(fmt.Sprintf("%g", code))
 		} else {
-			prefix += fmt.Sprintf(" (exit %g)", code)
+			prefix += " (" + fmt.Sprintf("%g", code) + ")"
 		}
 	}
 	if prefix != "" {
@@ -1467,7 +1534,7 @@ func toolOutputSummary(output string) string {
 	// Structured tool results such as write/edit receipts have no readable
 	// assistant body. Keep the exact record in Details/Copy, but do not present
 	// raw JSON as a result preview.
-	return "Structured output received; open Details for the exact record."
+	return msgs.ToolOutputStructured()
 }
 
 func truncate(text string, max int) string {

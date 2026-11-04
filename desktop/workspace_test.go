@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo/ui"
+
+	"saki/desktop/locales"
 )
 
 func workspaceTestApp(t *testing.T) (*appModel, *contact) {
@@ -122,7 +124,7 @@ func TestIssueOverviewContentHasPanelInset(t *testing.T) {
 					}
 					t.Logf("%s width=%d panelX=%.1f rect=%+v ok=%v", label, width, panelX, r, ok)
 				}
-				check("Issue filter")
+				check("Task filter")
 				if empty {
 					check("No issues in Unfinished.")
 				} else {
@@ -236,8 +238,14 @@ func TestLateAndStopEventsDoNotCrossTasks(t *testing.T) {
 	if w.State != workInterrupted || ct.ActiveTaskID != "" {
 		t.Fatalf("stop terminal = work %q active %q", w.State, ct.ActiveTaskID)
 	}
-	if got := workStateLabel(w); !strings.Contains(got, "Stopped") || !strings.Contains(got, "interrupted") {
+	if got := workStateText(locales.In("en"), w); got != "Stopped" {
 		t.Fatalf("stop terminal label = %q", got)
+	}
+	if got := workNoticeText(locales.In("en"), workNoticeForWork(w), ""); got != "Stopped" {
+		t.Fatalf("stop terminal notice = %q", got)
+	}
+	if got := workNoticeText(locales.In("en"), workNoticeForWork(&workItem{State: workInterrupted}), ""); got != "Interrupted" {
+		t.Fatalf("plain interrupted notice = %q", got)
 	}
 
 	ct.ActiveTaskID = "t2"
@@ -251,8 +259,8 @@ func TestLateAndStopEventsDoNotCrossTasks(t *testing.T) {
 	if len(w.Tools) != 0 || len(w2.Tools) != 0 {
 		t.Fatal("late event from old task polluted another work item")
 	}
-	if !strings.Contains(ct.Work, "Running") && ct.Work != "" {
-		t.Fatalf("unexpected work summary: %q", ct.Work)
+	if ct.Work != "" && !strings.Contains(workNoticeText(locales.In("en"), ct.Work, ct.WorkArg), "Running") {
+		t.Fatalf("unexpected work summary: %q/%q", ct.Work, ct.WorkArg)
 	}
 	beforeMessages := len(ct.Messages)
 	a.applyEvent(ct, runtimeEventEnvelope{

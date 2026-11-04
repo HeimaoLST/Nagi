@@ -25,6 +25,7 @@ type issueResultPage struct {
 	checkSeq           int
 	Loading            bool
 	LoadError          string
+	LoadErrorDetail    string
 	Notice             string
 	Panel              issueResultPanelState
 	ReturnLatest       bool
@@ -99,16 +100,19 @@ func (a *appModel) startIssueResultLoad() {
 	page := &a.issueResult
 	if page.SessionID == "" || page.TaskID == "" {
 		page.Loading = false
-		page.LoadError = "This execution has no recorded Runtime session/task; results cannot be inspected."
+		page.LoadError = "load-no-session"
+		page.LoadErrorDetail = ""
 		return
 	}
 	if a.rt == nil || a.runtimeStatus != runtimeStateReady || a.shutdownStarted {
 		page.Loading = false
-		page.LoadError = "Runtime is not ready; reopen this result after history is available."
+		page.LoadError = "load-runtime-not-ready"
+		page.LoadErrorDetail = ""
 		return
 	}
 	page.Loading = true
 	page.LoadError = ""
+	page.LoadErrorDetail = ""
 	page.Notice = ""
 	rt, runtimeGeneration := a.rt, a.connectionGeneration
 	a.issueResultAsyncStarted()
@@ -123,7 +127,8 @@ func (a *appModel) reloadIssueResult(generation int) {
 	}
 	ct := a.contactByID(page.OwnerContactID)
 	if ct == nil {
-		page.LoadError = "The issue owner is no longer available; reload cannot continue."
+		page.LoadError = "load-owner-missing"
+		page.LoadErrorDetail = ""
 		return
 	}
 	if ct != a.selectedContact() {
@@ -131,7 +136,8 @@ func (a *appModel) reloadIssueResult(generation int) {
 	}
 	issue, execution := ct.executionByID(page.ExecutionID)
 	if issue == nil || execution == nil || issue.ID != page.IssueID {
-		page.LoadError = "This execution is no longer attached to the issue; reload cannot continue."
+		page.LoadError = "load-detached"
+		page.LoadErrorDetail = ""
 		return
 	}
 	runIndex := 0
@@ -159,6 +165,7 @@ func (a *appModel) reloadIssueResult(generation int) {
 	page.Panel.Action = issueResultFileAction{}
 	page.Generation++
 	page.LoadError = ""
+	page.LoadErrorDetail = ""
 	page.Notice = ""
 	a.startIssueResultLoad()
 	if issueExecutionNeedsAttention(execution.Status) {
@@ -170,7 +177,7 @@ func (a *appModel) loadIssueResult(rt *runtimeClient, runtimeGeneration, generat
 	contactID, issueID, executionID, sessionID, taskID, messageID string) {
 	history, historyErr := a.historyAllForSession(rt, sessionID)
 	if historyErr != nil {
-		message := "Execution history is unavailable: " + a.connectionRuntimeMessage(historyErr)
+		message := "Run history is unavailable: " + a.connectionRuntimeMessage(historyErr)
 		a.updateUI(func() {
 			defer a.issueResultAsyncFinished()
 			a.applyIssueResultError(rt, runtimeGeneration, generation, contactID, issueID, executionID, sessionID, taskID, message)
@@ -195,7 +202,7 @@ func (a *appModel) loadIssueResult(rt *runtimeClient, runtimeGeneration, generat
 	response := strings.Join(issueResultResponseSegments(history, taskID), "\n\n")
 	notice := ""
 	if workingDirectory == "" {
-		notice = "Runtime session working directory is unavailable; file paths are shown as reported."
+		notice = "notice-working-dir"
 	}
 	a.updateUI(func() {
 		defer a.issueResultAsyncFinished()
@@ -222,7 +229,8 @@ func (a *appModel) applyIssueResultError(rt *runtimeClient, runtimeGeneration, g
 		return
 	}
 	page.Loading = false
-	page.LoadError = message
+	page.LoadError = "load-failed"
+	page.LoadErrorDetail = message
 }
 
 func (a *appModel) applyIssueResultLoaded(rt *runtimeClient, runtimeGeneration, generation int,
@@ -236,8 +244,9 @@ func (a *appModel) applyIssueResultLoaded(rt *runtimeClient, runtimeGeneration, 
 	page.Notice = notice
 	page.Panel.Response = response
 	page.Panel.Files = derived.Files
-	if derived.Unavailable != "" {
-		page.LoadError = derived.Unavailable
+	if derived.UnavailableKind != "" {
+		page.LoadError = derived.UnavailableKind
+		page.LoadErrorDetail = ""
 	}
 }
 
@@ -268,6 +277,7 @@ func (a *appModel) cancelIssueResultView() {
 	a.issueResult.Open = false
 	a.issueResult.Loading = false
 	a.issueResult.LoadError = ""
+	a.issueResult.LoadErrorDetail = ""
 	a.issueResult.Notice = ""
 	a.issueResult.ReturnFocusPending = false
 	a.issueResult.Panel = issueResultPanelState{}
@@ -329,7 +339,7 @@ func (a *appModel) issueResultPanelView(c *ui.Context, t *ui.Theme) {
 			ui.Text(c, locales.In(c.Locale()).ResultLoadingHistory()).FontSize(14).TextColor(t.TextMuted)
 		}
 		if page.LoadError != "" {
-			ui.Text(c, page.LoadError).FontSize(14).LineHeight(1.5).TextColor(t.Warning)
+			ui.Text(c, issueResultPageText(locales.In(c.Locale()), page.LoadError, page.LoadErrorDetail)).FontSize(14).LineHeight(1.5).TextColor(t.Warning)
 		}
 		return
 	}
@@ -337,10 +347,10 @@ func (a *appModel) issueResultPanelView(c *ui.Context, t *ui.Theme) {
 		ui.Text(c, locales.In(c.Locale()).ResultReloadingSnapshot()).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
 	}
 	if page.LoadError != "" {
-		ui.Text(c, page.LoadError).FontSize(14).LineHeight(1.5).TextColor(t.Warning)
+		ui.Text(c, issueResultPageText(locales.In(c.Locale()), page.LoadError, page.LoadErrorDetail)).FontSize(14).LineHeight(1.5).TextColor(t.Warning)
 	}
 	if page.Notice != "" {
-		ui.Text(c, page.Notice).FontSize(14).LineHeight(1.5).TextColor(t.Warning)
+		ui.Text(c, issueResultPageText(locales.In(c.Locale()), page.Notice, "")).FontSize(14).LineHeight(1.5).TextColor(t.Warning)
 	}
 	issueResultPanel(c, &page.Panel, a.issueResultPanelActions(page.Generation))
 }

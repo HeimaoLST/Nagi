@@ -56,7 +56,7 @@ func TestIssueOverviewDefaultsToRowsAndOneFilter(t *testing.T) {
 			t.Fatalf("unfinished overview missing %q: %v", want, tr.Texts())
 		}
 	}
-	for _, notWant := range []string{"completed goal", "canceled goal", "archived goal", "Latest execution", "More issue actions"} {
+	for _, notWant := range []string{"completed goal", "canceled goal", "archived goal", "Latest run", "More task actions"} {
 		if tr.HasText(notWant) {
 			t.Fatalf("overview rendered detail/out-of-filter content %q: %v", notWant, tr.Texts())
 		}
@@ -671,7 +671,7 @@ func TestPrimaryReadReturnFocusConsumesExactResultOwner(t *testing.T) {
 	// Move focus off Read before checking mismatches. These are visible renders
 	// of the primary Read branch; a mismatch must leave the exact pending owner/
 	// issue/execution/latest intent untouched and must not consume it.
-	if err := tr.Click("More issue actions"); err != nil {
+	if err := tr.Click("More task actions"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
@@ -886,7 +886,7 @@ func TestIssueOverviewRecentUsesLatestExecutionNotOlderToolWork(t *testing.T) {
 			if !tr.HasText(tc.wantStatus) || !tr.HasText(tc.wantRun) {
 				t.Fatalf("latest %s row = %v, want status %q and run %q", tc.status, tr.Texts(), tc.wantStatus, tc.wantRun)
 			}
-			if tr.HasText("Last action: read") || tr.HasText("Last action: write") || tr.HasText("Execution completed") {
+			if tr.HasText("Last action: read") || tr.HasText("Last action: write") || tr.HasText("Finished") {
 				t.Fatalf("terminal/uncertain latest was masked by work/tool: %v", tr.Texts())
 			}
 		})

@@ -307,7 +307,7 @@ func TestIssueResultPageRuntimeIntegration(t *testing.T) {
 	if err := issueResultClick(h, "Issue Ship visible results"); err != nil {
 		t.Fatal(err)
 	}
-	if err := issueResultClick(h, "More issue actions"); err != nil {
+	if err := issueResultClick(h, "More task actions"); err != nil {
 		t.Fatal(err)
 	}
 	if err := issueResultClick(h, "Open result: run 1"); err != nil {
@@ -371,7 +371,7 @@ func TestIssueResultPageRuntimeIntegration(t *testing.T) {
 	}
 	h.pump.wait(func() bool {
 		inspection := h.app.issueResult.Panel.Inspection
-		return !h.app.issueResult.Panel.Checking && inspection != nil && inspection.Notice == "" && inspection.Preview == "second\n"
+		return !h.app.issueResult.Panel.Checking && inspection != nil && inspection.NoticeKind == "" && inspection.Preview == "second\n"
 	})
 	issueResultRequireTexts(t, h, "Current file", "second")
 	if got, err := issueResultClickCopy(h, "Copy current file"); err != nil {
@@ -405,7 +405,7 @@ func TestIssueResultPageRuntimeIntegration(t *testing.T) {
 	}
 	h.pump.wait(func() bool {
 		action := h.app.issueResult.Panel.Action
-		return h.app.issueResult.Panel.ActionFor == openKey && action.Err != ""
+		return h.app.issueResult.Panel.ActionFor == openKey && action.ErrKind != ""
 	})
 	if openCalls.Load() != 1 || revealCalls.Load() != 0 || openPath != files[0].Path {
 		t.Fatalf("Open called wrong OS action: open=%d reveal=%d path=%q want=%q", openCalls.Load(), revealCalls.Load(), openPath, files[0].Path)
@@ -434,7 +434,7 @@ func TestIssueResultPageRuntimeIntegration(t *testing.T) {
 	}
 	h.pump.wait(func() bool {
 		page := h.app.issueResult
-		return page.Panel.ActionFor == openKey && page.Panel.Action.Err == ""
+		return page.Panel.ActionFor == openKey && page.Panel.Action.ErrKind == ""
 	})
 	if openCalls.Load() != 2 || revealCalls.Load() != 0 || openPath != files[0].Path {
 		t.Fatalf("second Open called wrong OS action: open=%d reveal=%d path=%q", openCalls.Load(), revealCalls.Load(), openPath)
@@ -448,7 +448,7 @@ func TestIssueResultPageRuntimeIntegration(t *testing.T) {
 	}
 	h.pump.wait(func() bool {
 		action := h.app.issueResult.Panel.Action
-		return h.app.issueResult.Panel.ActionFor == openKey && strings.Contains(action.Err, "injected reveal failure")
+		return h.app.issueResult.Panel.ActionFor == openKey && strings.Contains(action.ErrDetail, "injected reveal failure")
 	})
 	if revealCalls.Load() != 1 || openCalls.Load() != 2 || revealPath != files[0].Path {
 		t.Fatalf("Reveal called wrong OS action: open=%d reveal=%d path=%q want=%q", openCalls.Load(), revealCalls.Load(), revealPath, files[0].Path)
@@ -466,7 +466,7 @@ func TestIssueResultPageRuntimeIntegration(t *testing.T) {
 	}
 	h.pump.wait(func() bool {
 		page := h.app.issueResult
-		return page.Panel.ActionFor == openKey && page.Panel.Action.Err == ""
+		return page.Panel.ActionFor == openKey && page.Panel.Action.ErrKind == ""
 	})
 	if revealCalls.Load() != 2 || openCalls.Load() != 2 || revealPath != files[0].Path {
 		t.Fatalf("second Reveal called wrong OS action: open=%d reveal=%d path=%q", openCalls.Load(), revealCalls.Load(), revealPath)
@@ -1004,11 +1004,11 @@ func TestIssueResultNavigationEntryAndReturnWideNarrow(t *testing.T) {
 		var actionsOpen bool
 		h.pump.do(func() { actionsOpen = h.app.issueDetailOpen[issueID] })
 		if !actionsOpen {
-			if err := issueResultClickAt(h, width, 720, "More issue actions"); err != nil {
+			if err := issueResultClickAt(h, width, 720, "More task actions"); err != nil {
 				t.Fatalf("width %d expand run records: %v", width, err)
 			}
 		}
-		if err := issueResultClickAt(h, width, 720, "View execution: run 1"); err != nil {
+		if err := issueResultClickAt(h, width, 720, "View run: run 1"); err != nil {
 			t.Fatalf("width %d select run for observable work identity: %v", width, err)
 		}
 		if err := issueResultTesterRunAt(h, width, 720, func(tr *ui.Tester) error {
@@ -1407,15 +1407,15 @@ func issueResultAppPreview(scene string, width int) *appModel {
 		missingFile := issueResultPanelFixtureFile("missing", "/Users/you/Workspace/Saki/missing.md", `{"path":"/Users/you/Workspace/Saki/missing.md","bytes_written":12}`)
 		setReader(missingFile, issueResultFileInspection{
 			Path: missingFile.Path, WorkingDirectory: missingFile.WorkingDirectory,
-			Notice: "No file exists at the reported path; it may have been moved or deleted.",
+			NoticeKind: resultNoticeMissing,
 		})
 		page.Panel.ActionFor = issueResultFileKey(missingFile)
-		page.Panel.Action = issueResultFileAction{Path: missingFile.Path, Err: "Could not open the current file: no handler"}
+		page.Panel.Action = issueResultFileAction{Path: missingFile.Path, ErrKind: resultActionOpen, ErrDetail: "no handler"}
 	case "readerror":
 		readErrorFile := issueResultPanelFixtureFile("readerror", "/Users/you/Workspace/Saki/readerror.md", `{"path":"/Users/you/Workspace/Saki/readerror.md","bytes_written":12}`)
 		setReader(readErrorFile, issueResultFileInspection{
 			Path: readErrorFile.Path, WorkingDirectory: readErrorFile.WorkingDirectory, Exists: true, Regular: true,
-			ReadError: "Could not read the current file: permission denied",
+			ReadErrorKind: resultNoticeRead, ReadErrorDetail: "permission denied",
 		})
 	case "source":
 		inspection := issueResultFileInspection{

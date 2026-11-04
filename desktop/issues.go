@@ -108,6 +108,8 @@ type issueWorkSession struct {
 	LastTaskID         string
 	SendState          sendState
 	SendError          string
+	SendErrorKind      string
+	SendErrorDetail    string
 	SessionState       string
 	Messages           []*message
 	UnlinkedTools      []*workTool
@@ -377,7 +379,39 @@ func issuePrompt(issue *productIssue) string {
 
 // createIssue persists an explicit product item and its original requirements.
 // It does not dispatch any Runtime work; dispatch is a separate Run action.
+func (a *appModel) setIssueFormNotice(raw, notice, detail string) {
+	a.issueFormError = raw
+	a.issueFormNotice = notice
+	a.issueFormNoticeDetail = detail
+}
+
+func (a *appModel) clearIssueFormNotice() {
+	a.issueFormError = ""
+	a.issueFormNotice = ""
+	a.issueFormNoticeDetail = ""
+}
+
+func (a *appModel) setIssueActionNotice(raw, notice, detail string) {
+	a.issueActionError = raw
+	a.issueActionNotice = notice
+	a.issueActionNoticeDetail = detail
+}
+
+func (a *appModel) clearIssueActionNotice() {
+	a.issueActionError = ""
+	a.issueActionNotice = ""
+	a.issueActionNoticeDetail = ""
+}
+
+// createIssue persists an explicit product item and its original requirements.
+// It does not dispatch any Runtime work; dispatch is a separate Run action.
+
 func (a *appModel) createIssue(goal, requirements string) bool {
+	if strings.TrimSpace(goal) == "" {
+		a.setIssueFormNotice("Enter an issue goal.", "enter-goal", "")
+		a.issueFormOpen = true
+		return false
+	}
 	ct := a.selectedContact()
 	previousSelected := ct.SelectedIssueID
 	item, err := a.createIssueForWithSave(ct, goal, requirements, func(item *productIssue) error {
@@ -389,13 +423,13 @@ func (a *appModel) createIssue(goal, requirements string) bool {
 		return nil
 	})
 	if err != nil {
-		a.issueFormError = err.Error()
+		a.setIssueFormNotice(err.Error(), "save-issue-failed", err.Error())
 		// Keep the user's goal/requirements and form visible so they can retry.
 		a.issueFormOpen = true
 		return false
 	}
 	a.issueFormOpen = false
-	a.issueFormError = ""
+	a.clearIssueFormNotice()
 	a.issueGoal = ""
 	a.issueRequirements = ""
 	a.focusIssueNew = true
@@ -459,11 +493,113 @@ func issueHasRemainingRequirements(issue *productIssue) bool {
 
 // issueEvidenceText is a factual summary only. It does not turn a completed
 // Runtime task into a completed product item or infer deliverable files.
-func issueEvidenceText(issue *productIssue) string {
+const (
+	issueBlockNoIssue   = "no-issue"
+	issueBlockArchived  = "archived"
+	issueBlockQuestion  = "question"
+	issueBlockCompleted = "completed"
+	issueBlockCanceled  = "canceled"
+	issueBlockExecution = "execution-untrusted"
+)
+
+func issueBlockRaw(code string) string {
+	switch code {
+	case issueBlockNoIssue:
+		return "Issue not found."
+	case issueBlockArchived:
+		return "Restore this archived issue before starting work."
+	case issueBlockQuestion:
+		return "Answer the waiting question before continuing this issue."
+	case issueBlockCompleted:
+		return "Reopen this completed issue before starting another execution."
+	case issueBlockCanceled:
+		return "Reopen this canceled issue before starting another execution."
+	case issueBlockExecution:
+		return "An execution is still active or has no trusted terminal state; reload before running this issue again."
+	default:
+		return sendBlockRaw(code)
+	}
+}
+
+func issueNoticeText(msgs locales.Messages, notice, detail string) string {
+	switch notice {
+	case issueBlockNoIssue:
+		return msgs.IssueBlockNoIssue()
+	case issueBlockArchived:
+		return msgs.IssueBlockArchived()
+	case issueBlockQuestion:
+		return msgs.IssueBlockQuestion()
+	case issueBlockCompleted:
+		return msgs.IssueBlockCompleted()
+	case issueBlockCanceled:
+		return msgs.IssueBlockCanceled()
+	case issueBlockExecution:
+		return msgs.IssueBlockExecution()
+	case "contact-missing":
+		return msgs.IssueNoticeContactMissing()
+	case "issue-missing":
+		return msgs.IssueNoticeIssueMissing()
+	case "no-goal":
+		return msgs.IssueNoticeNoGoal()
+	case "enter-goal":
+		return msgs.IssueNoticeEnterGoal()
+	case "archived-edit":
+		return msgs.IssueNoticeArchivedEdit()
+	case "terminal-edit":
+		return msgs.IssueNoticeTerminalEdit()
+	case "restore-failed":
+		return msgs.IssueNoticeRestoreFailed()
+	case "reopen-failed":
+		return msgs.IssueNoticeReopenFailed()
+	case "cancel-failed":
+		return msgs.IssueNoticeCancelFailed()
+	case "complete-failed":
+		return msgs.IssueNoticeCompleteFailed()
+	case "requirement-save-failed":
+		return msgs.IssueNoticeRequirementSaveFailed()
+	case "confirm-failed":
+		return msgs.IssueNoticeConfirmFailed()
+	case "resume-failed":
+		return msgs.IssueNoticeResumeFailed()
+	case "wait-failed":
+		return msgs.IssueNoticeWaitFailed()
+	case "archive-failed":
+		return msgs.IssueNoticeArchiveFailed()
+	case "view-save-failed":
+		return msgs.IssueNoticeViewSaveFailed(detail)
+	case "save-issue-failed":
+		return msgs.IssueNoticeSaveIssueFailed(detail)
+	case "execution-save-failed":
+		return msgs.IssueNoticeExecutionSaveFailed(detail)
+	case "supplement-retry-save-failed":
+		return msgs.IssueNoticeSupplementRetrySaveFailed()
+	case "supplement-restore-failed":
+		return msgs.IssueNoticeSupplementRestoreFailed(detail)
+	case "supplement-batch-active":
+		return msgs.IssueNoticeSupplementBatchActive(supplementBatchStateLabel(msgs, detail))
+	case "form-switch":
+		return msgs.IssueNoticeFormSwitch()
+	case "supplement-auto-stop-failed":
+		return msgs.IssueNoticeSupplementAutoStop()
+	case "supplement-auto-resume-failed":
+		return msgs.IssueNoticeSupplementAutoResume()
+	case "supplement-retry-failed":
+		return msgs.IssueNoticeSupplementRetry()
+	case "supplement-check-failed":
+		return msgs.IssueNoticeSupplementCheck()
+	default:
+		return notice
+	}
+}
+
+// issueEvidenceText is a factual summary only. It does not turn a completed
+// Runtime task into a completed product item or infer deliverable files.
+
+func issueEvidenceText(msgs locales.Messages, issue *productIssue) string {
 	if strings.TrimSpace(issue.Evidence) != "" {
 		return issue.Evidence
 	}
-	return "Completion not verified."
+	return msgs.IssueEvidenceUnverified()
 }
 
 func issueExecutionText(msgs locales.Messages, status string) string {
@@ -488,29 +624,6 @@ func issueExecutionText(msgs locales.Messages, status string) string {
 		return msgs.IssueExecutionUnknown()
 	default:
 		return status
-	}
-}
-
-func issueExecutionLabel(execution *issueExecution) string {
-	switch execution.Status {
-	case issueExecutionPending:
-		return "Prepared, not dispatched"
-	case issueExecutionNotDispatched:
-		return "Not dispatched"
-	case issueExecutionRejected:
-		return "Rejected"
-	case issueExecutionAccepted:
-		return "Accepted"
-	case issueExecutionRunning:
-		return "Running"
-	case issueExecutionCompleted:
-		return "Execution completed"
-	case issueExecutionFailed:
-		return "Execution failed"
-	case issueExecutionInterrupted:
-		return "Execution interrupted"
-	default:
-		return "Result unknown"
 	}
 }
 
@@ -598,9 +711,9 @@ func (a *appModel) runIssueFor(ct *contact, issueID string) bool {
 	issue := issueForContact(ct, issueID)
 	if issue == nil {
 		if ct == nil {
-			a.issueFormError = "Contact not found."
+			a.setIssueFormNotice("Contact not found.", "contact-missing", "")
 		} else {
-			a.issueFormError = "Issue not found for this contact."
+			a.setIssueFormNotice("Issue not found for this contact.", "issue-missing", "")
 		}
 		return false
 	}
@@ -624,24 +737,24 @@ func (a *appModel) issueRunCaptured(ct *contact, issue *productIssue) bool {
 
 func (a *appModel) issueRunCapturedWithOperation(ct *contact, issue *productIssue, operationID string) bool {
 	if ct == nil || issue == nil {
-		a.issueFormError = "Issue not found for this contact."
+		a.setIssueFormNotice("Issue not found for this contact.", "issue-missing", "")
 		return false
 	}
 	if reason := issueLifecycleStartBlocked(issue); reason != "" {
-		a.issueFormError = reason
+		a.setIssueFormNotice(issueBlockRaw(reason), reason, "")
 		return false
 	}
 	if reason := issueRunBlocked(issue); reason != "" {
-		a.issueFormError = reason
+		a.setIssueFormNotice(issueBlockRaw(reason), reason, "")
 		return false
 	}
 	if reason := a.canStartIssue(ct, issue); reason != "" {
-		a.issueFormError = reason
-		issue.Work.SendError = reason
+		a.setIssueFormNotice(issueBlockRaw(reason), reason, "")
+		issue.Work.setSendError(sendBlockRaw(reason), reason, "")
 		return false
 	}
 	if strings.TrimSpace(issuePrompt(issue)) == "" {
-		a.issueFormError = "This issue has no goal to run."
+		a.setIssueFormNotice("This issue has no goal to run.", "no-goal", "")
 		return false
 	}
 	return a.startIssueRunWithOperation(ct, issue, operationID)
@@ -661,7 +774,7 @@ func (a *appModel) selectIssue(issueID string) {
 	nav.FocusBack = false
 	ct.SelectedIssueID = issueID
 	ct.SelectedWorkTaskID = ""
-	a.issueActionError = ""
+	a.clearIssueActionNotice()
 }
 
 func (a *appModel) showIssueWork(issueID, taskID string) {
@@ -710,7 +823,7 @@ func (a *appModel) confirmIssueExecutionSeen(ct *contact, issue *productIssue, e
 	found.AttentionSeenStatus = found.Status
 	if err := a.persist(); err != nil {
 		found.AttentionSeenStatus = previous
-		a.issueActionError = "Could not save that this execution was viewed: " + err.Error()
+		a.setIssueActionNotice("Could not save that this execution was viewed: "+err.Error(), "view-save-failed", err.Error())
 		return false
 	}
 	return true
@@ -758,7 +871,7 @@ func unresolvedExecution(execution *issueExecution) bool {
 func issueRunBlocked(issue *productIssue) string {
 	for _, execution := range issue.Executions {
 		if unresolvedExecution(execution) {
-			return "An execution is still active or has no trusted terminal state; reload before running this issue again."
+			return issueBlockExecution
 		}
 	}
 	return ""
@@ -814,7 +927,7 @@ func (a *appModel) checkIssueExecution(rt *runtimeClient, contactID, issueID, ex
 			if issue.Work.ActiveTaskID == taskID {
 				issue.Work.ActiveTaskID = ""
 				issue.Work.SendState = sendIdle
-				issue.Work.SendError = ""
+				issue.Work.clearSendError()
 			}
 			if w := workFor(ct, taskID); w != nil {
 				w.State = workStateFromTask(state.Status)
@@ -832,7 +945,7 @@ func (a *appModel) checkIssueExecution(rt *runtimeClient, contactID, issueID, ex
 				issue.Work.ActiveTaskID = taskID
 				issue.Work.LastTaskID = taskID
 				issue.Work.SendState = sendAccepted
-				issue.Work.SendError = ""
+				issue.Work.clearSendError()
 			}
 			if w := a.ensureWork(ct, taskID, execution.MessageID); w != nil {
 				if state.Status == "running" {
@@ -872,6 +985,7 @@ func (a *appModel) confirmIssueExecutionNotDispatched(issueID, executionID strin
 	}
 	oldExecutionStatus, oldExecutionDetail := execution.Status, execution.Detail
 	oldWorkState, oldWorkError, oldWorkPending := issue.Work.SendState, issue.Work.SendError, issue.Work.pendingExecutionID
+	oldWorkErrorKind, oldWorkErrorDetail := issue.Work.SendErrorKind, issue.Work.SendErrorDetail
 	oldAuto := false
 	if issue.Supplements != nil {
 		oldAuto = issue.Supplements.AutoContinue
@@ -880,7 +994,7 @@ func (a *appModel) confirmIssueExecutionNotDispatched(issueID, executionID strin
 	execution.Status = issueExecutionNotDispatched
 	execution.Detail = "User confirmed that no task was dispatched; the execution remains available for an explicit retry."
 	issue.Work.SendState = sendIdle
-	issue.Work.SendError = ""
+	issue.Work.clearSendError()
 	issue.Work.pendingExecutionID = ""
 	batch := issueSupplementBatchForExecution(issue, execution.ID)
 	saved := true
@@ -893,7 +1007,8 @@ func (a *appModel) confirmIssueExecutionNotDispatched(issueID, executionID strin
 	}
 	if !saved {
 		execution.Status, execution.Detail = oldExecutionStatus, oldExecutionDetail
-		issue.Work.SendState, issue.Work.SendError, issue.Work.pendingExecutionID = oldWorkState, oldWorkError, oldWorkPending
+		issue.Work.SendState, issue.Work.pendingExecutionID = oldWorkState, oldWorkPending
+		issue.Work.setSendError(oldWorkError, oldWorkErrorKind, oldWorkErrorDetail)
 		if issue.Supplements != nil {
 			issue.Supplements.AutoContinue = oldAuto
 		}

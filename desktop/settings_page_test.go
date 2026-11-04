@@ -1468,4 +1468,22 @@ func TestSettingsContactPickerSameLabelSelectsStableID(t *testing.T) {
 	if aContact.Name != "甲" || bContact.Name != "甲" || cContact.Name != "Only C" {
 		t.Fatalf("save scope changed A=%q B=%q C=%q", aContact.Name, bContact.Name, cContact.Name)
 	}
+	stored, err := openContactStore(store.path, aContact.Workspace)
+	if err != nil {
+		t.Fatal(err)
+	}
+	storedByID := map[string]storedContact{}
+	for _, item := range stored.state.Contacts {
+		storedByID[item.ID] = item
+	}
+	if len(storedByID) != 3 || storedByID[aContact.ID].Name != "甲" ||
+		storedByID[bContact.ID].Name != "甲" || storedByID[cContact.ID].Name != "Only C" {
+		t.Fatalf("saved contact set/names = %+v", storedByID)
+	}
+	if storedByID[aContact.ID].Purpose != aContact.Purpose || storedByID[bContact.ID].Purpose != bContact.Purpose {
+		t.Fatalf("unsaved A/B profile purposes leaked into the store: %+v", storedByID)
+	}
+	if storedByID[cContact.ID].Purpose != "draft C" {
+		t.Fatalf("saved C purpose = %q, want draft C", storedByID[cContact.ID].Purpose)
+	}
 }

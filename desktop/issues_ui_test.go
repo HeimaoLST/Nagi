@@ -91,7 +91,7 @@ func TestIssueRecoveryControlsRenderForUnknownExecution(t *testing.T) {
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
 	expandIssueDetails(t, tr)
-	if !tr.HasText("Check execution") || !tr.HasText("Confirm not dispatched") {
+	if !tr.HasText("Check run") || !tr.HasText("Confirm not dispatched") {
 		t.Fatalf("recovery controls missing: %v", tr.Texts())
 	}
 }
@@ -159,9 +159,12 @@ func TestCapacityNoticeHiddenBeforeRuntimeReady(t *testing.T) {
 	}
 
 	a.closeSettings()
-	startupError := a.runtimeErr
+	startupError := a.runtimeErrorDisplay(locales.In("en"))
 	if startupError == "" {
 		t.Fatal("unconfigured first launch lost its real startup error")
+	}
+	if !strings.Contains(startupError, "Connection settings are required") {
+		t.Fatalf("unconfigured first launch error = %q", startupError)
 	}
 	for _, dark := range []bool{false, true} {
 		tr := render(dark)

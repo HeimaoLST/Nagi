@@ -106,12 +106,12 @@ func TestCreateIssueRequiresGoalAndPersistsBeforeAnyRun(t *testing.T) {
 
 func TestIssueEvidenceDoesNotInferCompletion(t *testing.T) {
 	issue := &productIssue{ID: "i1", Goal: "draft", Requirements: parseIssueRequirements("needs approval")}
-	text := issueEvidenceText(issue)
+	text := issueEvidenceText(locales.In("en"), issue)
 	if !strings.Contains(text, "Completion not verified") {
 		t.Fatalf("evidence text = %q", text)
 	}
 	issue.Evidence = "user supplied: reviewer approved"
-	if got := issueEvidenceText(issue); got != issue.Evidence {
+	if got := issueEvidenceText(locales.In("en"), issue); got != issue.Evidence {
 		t.Fatalf("explicit evidence changed: %q", got)
 	}
 }
@@ -199,7 +199,7 @@ func TestIssueFormCreatesExplicitItemWithoutTouchingComposer(t *testing.T) {
 	ct.Draft = "ordinary composer draft"
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	if err := tr.Click("New issue"); err != nil {
+	if err := tr.Click("New task"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
@@ -355,7 +355,7 @@ func TestIssueResultAttributionFollowsSelectedIssue(t *testing.T) {
 	if w := ct.issueWork(ct.Issues[1]); w == nil || w.TaskID != "t2" {
 		t.Fatalf("second selected issue chose unrelated work: %+v", w)
 	}
-	if !tr.HasText("Current response (execution still running): second result") {
+	if !tr.HasText("Current response (run still running): second result") {
 		t.Fatal("selecting the second issue did not switch result attribution")
 	}
 }
@@ -389,7 +389,7 @@ func TestIssueFormCancelReturnsFocusToNewIssue(t *testing.T) {
 	a.workspaceOpen = true
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	if err := tr.Click("New issue"); err != nil {
+	if err := tr.Click("New task"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
@@ -397,7 +397,7 @@ func TestIssueFormCancelReturnsFocusToNewIssue(t *testing.T) {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if a.issueFormOpen || !tr.Focused("New issue") {
+	if a.issueFormOpen || !tr.Focused("New task") {
 		t.Fatal("cancel did not close the issue form and return focus")
 	}
 }

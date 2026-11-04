@@ -101,6 +101,7 @@ type contact struct {
 	Status                contactStatus
 	Unread                int
 	Work                  string
+	WorkArg               string
 	WorkLabel             string
 	Messages              []*message
 	History               []historyEntry
@@ -131,12 +132,15 @@ type contact struct {
 	LastTaskID        string
 	SendState         sendState
 	SendError         string
+	SendErrorKind     string
+	SendErrorDetail   string
 	SubmittedDraft    string
 	SubmittedRev      int
 	pendingSend       *pendingSend
 	draftRev          int
 	HistoryDirty      bool
 	StatusDetail      string
+	StatusDetailKind  string
 	SessionWorkingDir string
 	SessionModel      string
 	SessionAPI        string
@@ -224,10 +228,14 @@ type appModel struct {
 	issueGoal                     string
 	issueRequirements             string
 	issueFormError                string
+	issueFormNotice               string
+	issueFormNoticeDetail         string
 	taskContextIssueID            string
 	focusIssueGoal                bool
 	focusIssueNew                 bool
 	issueActionError              string
+	issueActionNotice             string
+	issueActionNoticeDetail       string
 	issueRequirementDrafts        map[string]*string
 	issueCompletionDrafts         map[string]*string
 	issueSupplementDrafts         map[string]*string
@@ -467,11 +475,11 @@ func (a *appModel) leaveIssueFormForSwitch() bool {
 		return true
 	}
 	if strings.TrimSpace(a.issueGoal) != "" || strings.TrimSpace(a.issueRequirements) != "" {
-		a.issueFormError = "Finish or cancel the current issue form before switching contacts."
+		a.setIssueFormNotice("Finish or cancel the current issue form before switching contacts.", "form-switch", "")
 		return false
 	}
 	a.issueFormOpen = false
-	a.issueFormError = ""
+	a.clearIssueFormNotice()
 	return true
 }
 
@@ -508,7 +516,7 @@ func (a *appModel) selectContact(i int) {
 
 func (a *appModel) snippet(c *contact, msgs locales.Messages) string {
 	if c.Status == statusWorking && c.Work != "" {
-		return c.Work
+		return workNoticeText(msgs, c.Work, c.WorkArg)
 	}
 	if !a.demo && c.SessionID != "" && !c.Loaded {
 		return msgs.HistoryNotLoadedCompact()
@@ -822,6 +830,29 @@ func (a *appModel) send(ct *contact, text string) bool {
 	})
 	return true
 }
+
+func (ct *contact) setSendError(raw, kind, detail string) {
+	ct.SendError = raw
+	ct.SendErrorKind = kind
+	ct.SendErrorDetail = detail
+}
+
+func (ct *contact) clearSendError() { ct.setSendError("", "", "") }
+
+func (ct *contact) setStatusDetail(raw, kind string) {
+	ct.StatusDetail = raw
+	ct.StatusDetailKind = kind
+}
+
+func (ct *contact) clearStatusDetail() { ct.setStatusDetail("", "") }
+
+func (w *issueWorkSession) setSendError(raw, kind, detail string) {
+	w.SendError = raw
+	w.SendErrorKind = kind
+	w.SendErrorDetail = detail
+}
+
+func (w *issueWorkSession) clearSendError() { w.setSendError("", "", "") }
 
 func (a *appModel) sendCurrent() bool {
 	ct := a.selectedContact()

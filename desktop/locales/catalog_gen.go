@@ -1126,13 +1126,13 @@ func (msgs Messages) TaskRunUnknown() string {
 	return Catalog.Format(msgs.locale, "taskRunUnknown", nil)
 }
 
-// TaskRunCompleted says "Run completed"
+// TaskRunCompleted says "Run finished"
 // in the language the app shows.
 //
 // Nagi taskRunCompleted UI copy.
 func TaskRunCompleted() string { return In(i18n.Locale()).TaskRunCompleted() }
 
-// TaskRunCompleted says "Run completed"
+// TaskRunCompleted says "Run finished"
 // in the language of msgs.
 //
 // Nagi taskRunCompleted UI copy.
@@ -1140,13 +1140,13 @@ func (msgs Messages) TaskRunCompleted() string {
 	return Catalog.Format(msgs.locale, "taskRunCompleted", nil)
 }
 
-// TaskRunRunning says "Run in progress"
+// TaskRunRunning says "Running"
 // in the language the app shows.
 //
 // Nagi taskRunRunning UI copy.
 func TaskRunRunning() string { return In(i18n.Locale()).TaskRunRunning() }
 
-// TaskRunRunning says "Run in progress"
+// TaskRunRunning says "Running"
 // in the language of msgs.
 //
 // Nagi taskRunRunning UI copy.
@@ -1154,13 +1154,13 @@ func (msgs Messages) TaskRunRunning() string {
 	return Catalog.Format(msgs.locale, "taskRunRunning", nil)
 }
 
-// TaskRunAccepted says "Run accepted"
+// TaskRunAccepted says "Waiting to start"
 // in the language the app shows.
 //
 // Nagi taskRunAccepted UI copy.
 func TaskRunAccepted() string { return In(i18n.Locale()).TaskRunAccepted() }
 
-// TaskRunAccepted says "Run accepted"
+// TaskRunAccepted says "Waiting to start"
 // in the language of msgs.
 //
 // Nagi taskRunAccepted UI copy.
@@ -1168,13 +1168,13 @@ func (msgs Messages) TaskRunAccepted() string {
 	return Catalog.Format(msgs.locale, "taskRunAccepted", nil)
 }
 
-// TaskRunPending says "Run prepared, not dispatched"
+// TaskRunPending says "Waiting to start"
 // in the language the app shows.
 //
 // Nagi taskRunPending UI copy.
 func TaskRunPending() string { return In(i18n.Locale()).TaskRunPending() }
 
-// TaskRunPending says "Run prepared, not dispatched"
+// TaskRunPending says "Waiting to start"
 // in the language of msgs.
 //
 // Nagi taskRunPending UI copy.
@@ -1364,13 +1364,13 @@ func (msgs Messages) WorkReadResult() string {
 	return Catalog.Format(msgs.locale, "workReadResult", nil)
 }
 
-// WorkComplete says "Mark complete"
+// WorkComplete says "Mark done"
 // in the language the app shows.
 //
 // Nagi workComplete UI copy.
 func WorkComplete() string { return In(i18n.Locale()).WorkComplete() }
 
-// WorkComplete says "Mark complete"
+// WorkComplete says "Mark done"
 // in the language of msgs.
 //
 // Nagi workComplete UI copy.
@@ -1478,7 +1478,7 @@ func (msgs Messages) WorkCompletionEvidence() string {
 	return Catalog.Format(msgs.locale, "workCompletionEvidence", nil)
 }
 
-// WorkCompletionEvidencePlaceholder says "What proves this task is complete?"
+// WorkCompletionEvidencePlaceholder says "What proves this task is done?"
 // in the language the app shows.
 //
 // Nagi workCompletionEvidencePlaceholder UI copy.
@@ -1486,7 +1486,7 @@ func WorkCompletionEvidencePlaceholder() string {
 	return In(i18n.Locale()).WorkCompletionEvidencePlaceholder()
 }
 
-// WorkCompletionEvidencePlaceholder says "What proves this task is complete?"
+// WorkCompletionEvidencePlaceholder says "What proves this task is done?"
 // in the language of msgs.
 //
 // Nagi workCompletionEvidencePlaceholder UI copy.
@@ -1550,13 +1550,13 @@ func (msgs Messages) ContactScopeAll() string {
 	return Catalog.Format(msgs.locale, "contactScopeAll", nil)
 }
 
-// IssueFilterUnfinished says "Unfinished"
+// IssueFilterUnfinished says "Not done"
 // in the language the app shows.
 //
 // The Unfinished issue filter.
 func IssueFilterUnfinished() string { return In(i18n.Locale()).IssueFilterUnfinished() }
 
-// IssueFilterUnfinished says "Unfinished"
+// IssueFilterUnfinished says "Not done"
 // in the language of msgs.
 //
 // The Unfinished issue filter.
@@ -1564,13 +1564,13 @@ func (msgs Messages) IssueFilterUnfinished() string {
 	return Catalog.Format(msgs.locale, "issueFilterUnfinished", nil)
 }
 
-// IssueFilterCompleted says "Completed"
+// IssueFilterCompleted says "Done"
 // in the language the app shows.
 //
 // The Completed issue filter.
 func IssueFilterCompleted() string { return In(i18n.Locale()).IssueFilterCompleted() }
 
-// IssueFilterCompleted says "Completed"
+// IssueFilterCompleted says "Done"
 // in the language of msgs.
 //
 // The Completed issue filter.
@@ -1648,13 +1648,13 @@ func (msgs Messages) ModelUpdateModel() string {
 	return Catalog.Format(msgs.locale, "modelUpdateModel", nil)
 }
 
-// WorkSaveIssue says "Save issue"
+// WorkSaveIssue says "Save task"
 // in the language the app shows.
 //
 // The action saving the issue form.
 func WorkSaveIssue() string { return In(i18n.Locale()).WorkSaveIssue() }
 
-// WorkSaveIssue says "Save issue"
+// WorkSaveIssue says "Save task"
 // in the language of msgs.
 //
 // The action saving the issue form.
@@ -2048,11 +2048,11 @@ func (msgs Messages) RuntimeLabel() string {
 	return Catalog.Format(msgs.locale, "runtimeLabel", nil)
 }
 
-// ArchiveNotice says "Archived contact: sending and new issue runs are disabled. History, drafts and issue data are retained."
+// ArchiveNotice says "Archived contact: sending and new task runs are disabled. History, drafts and task data are retained."
 // in the language the app shows.
 func ArchiveNotice() string { return In(i18n.Locale()).ArchiveNotice() }
 
-// ArchiveNotice says "Archived contact: sending and new issue runs are disabled. History, drafts and issue data are retained."
+// ArchiveNotice says "Archived contact: sending and new task runs are disabled. History, drafts and task data are retained."
 // in the language of msgs.
 func (msgs Messages) ArchiveNotice() string {
 	return Catalog.Format(msgs.locale, "archiveNotice", nil)
@@ -3152,11 +3152,11 @@ func (msgs Messages) ProfileBackTooltip() string {
 	return Catalog.Format(msgs.locale, "profileBackTooltip", nil)
 }
 
-// ProfileArchivedNotice says "Archived contact. Existing history, drafts and issue data remain available."
+// ProfileArchivedNotice says "Archived contact. Existing history, drafts and task data remain available."
 // in the language the app shows.
 func ProfileArchivedNotice() string { return In(i18n.Locale()).ProfileArchivedNotice() }
 
-// ProfileArchivedNotice says "Archived contact. Existing history, drafts and issue data remain available."
+// ProfileArchivedNotice says "Archived contact. Existing history, drafts and task data remain available."
 // in the language of msgs.
 func (msgs Messages) ProfileArchivedNotice() string {
 	return Catalog.Format(msgs.locale, "profileArchivedNotice", nil)
@@ -3392,11 +3392,11 @@ func (msgs Messages) AppearanceStatusSaveFailed() string {
 	return Catalog.Format(msgs.locale, "appearanceStatusSaveFailed", nil)
 }
 
-// ProfileSaveIntro says "Saving updates this contact's name. Other settings apply when a conversation or issue work session is first created; …"
+// ProfileSaveIntro says "Saving updates this contact's name. Other settings apply when a conversation or task work session is first created; e…"
 // in the language the app shows.
 func ProfileSaveIntro() string { return In(i18n.Locale()).ProfileSaveIntro() }
 
-// ProfileSaveIntro says "Saving updates this contact's name. Other settings apply when a conversation or issue work session is first created; …"
+// ProfileSaveIntro says "Saving updates this contact's name. Other settings apply when a conversation or task work session is first created; e…"
 // in the language of msgs.
 func (msgs Messages) ProfileSaveIntro() string {
 	return Catalog.Format(msgs.locale, "profileSaveIntro", nil)
@@ -3554,11 +3554,11 @@ func (msgs Messages) ProfileBuiltinUseDefaultsTooltip() string {
 	return Catalog.Format(msgs.locale, "profileBuiltinUseDefaultsTooltip", nil)
 }
 
-// ProfileBuiltinNone says "No built-in tools are enabled. Nagi issue tools remain available for their own workflows."
+// ProfileBuiltinNone says "No built-in tools are enabled. Nagi task tools remain available for their own workflows."
 // in the language the app shows.
 func ProfileBuiltinNone() string { return In(i18n.Locale()).ProfileBuiltinNone() }
 
-// ProfileBuiltinNone says "No built-in tools are enabled. Nagi issue tools remain available for their own workflows."
+// ProfileBuiltinNone says "No built-in tools are enabled. Nagi task tools remain available for their own workflows."
 // in the language of msgs.
 func (msgs Messages) ProfileBuiltinNone() string {
 	return Catalog.Format(msgs.locale, "profileBuiltinNone", nil)
@@ -3734,11 +3734,11 @@ func (msgs Messages) ProfileErrorSaveFailed() string {
 	return Catalog.Format(msgs.locale, "profileErrorSaveFailed", nil)
 }
 
-// ProfileSavedDefaults says "Profile saved. New conversations and new issue work sessions use these defaults; existing work is unchanged."
+// ProfileSavedDefaults says "Profile saved. New conversations and new task work sessions use these defaults; existing work is unchanged."
 // in the language the app shows.
 func ProfileSavedDefaults() string { return In(i18n.Locale()).ProfileSavedDefaults() }
 
-// ProfileSavedDefaults says "Profile saved. New conversations and new issue work sessions use these defaults; existing work is unchanged."
+// ProfileSavedDefaults says "Profile saved. New conversations and new task work sessions use these defaults; existing work is unchanged."
 // in the language of msgs.
 func (msgs Messages) ProfileSavedDefaults() string {
 	return Catalog.Format(msgs.locale, "profileSavedDefaults", nil)
@@ -3804,11 +3804,11 @@ func (msgs Messages) ArchiveErrorSave() string {
 	return Catalog.Format(msgs.locale, "archiveErrorSave", nil)
 }
 
-// ArchiveSaved says "Contact archived. Sending and new issue runs are disabled; history and issue data are retained."
+// ArchiveSaved says "Contact archived. Sending and new task runs are disabled; history and task data are retained."
 // in the language the app shows.
 func ArchiveSaved() string { return In(i18n.Locale()).ArchiveSaved() }
 
-// ArchiveSaved says "Contact archived. Sending and new issue runs are disabled; history and issue data are retained."
+// ArchiveSaved says "Contact archived. Sending and new task runs are disabled; history and task data are retained."
 // in the language of msgs.
 func (msgs Messages) ArchiveSaved() string {
 	return Catalog.Format(msgs.locale, "archiveSaved", nil)
@@ -4900,23 +4900,23 @@ func (msgs Messages) ConnectionBlockedStore() string {
 	return Catalog.Format(msgs.locale, "connectionBlockedStore", nil)
 }
 
-// ConnectionBlockedActiveWork says "Wait for all conversation and issue work to finish before applying a new connection."
+// ConnectionBlockedActiveWork says "Wait for all conversation and task work to finish before applying a new connection."
 // in the language the app shows.
 func ConnectionBlockedActiveWork() string { return In(i18n.Locale()).ConnectionBlockedActiveWork() }
 
-// ConnectionBlockedActiveWork says "Wait for all conversation and issue work to finish before applying a new connection."
+// ConnectionBlockedActiveWork says "Wait for all conversation and task work to finish before applying a new connection."
 // in the language of msgs.
 func (msgs Messages) ConnectionBlockedActiveWork() string {
 	return Catalog.Format(msgs.locale, "connectionBlockedActiveWork", nil)
 }
 
-// ConnectionBlockedUntrustedIssue says "An issue execution has no trusted terminal state; reload or reconcile it before applying a new connection."
+// ConnectionBlockedUntrustedIssue says "An task run has no trusted terminal state; reload or reconcile it before applying a new connection."
 // in the language the app shows.
 func ConnectionBlockedUntrustedIssue() string {
 	return In(i18n.Locale()).ConnectionBlockedUntrustedIssue()
 }
 
-// ConnectionBlockedUntrustedIssue says "An issue execution has no trusted terminal state; reload or reconcile it before applying a new connection."
+// ConnectionBlockedUntrustedIssue says "An task run has no trusted terminal state; reload or reconcile it before applying a new connection."
 // in the language of msgs.
 func (msgs Messages) ConnectionBlockedUntrustedIssue() string {
 	return Catalog.Format(msgs.locale, "connectionBlockedUntrustedIssue", nil)
@@ -5042,41 +5042,41 @@ func (msgs Messages) CanSendAnotherContact() string {
 	return Catalog.Format(msgs.locale, "canSendAnotherContact", nil)
 }
 
-// CanStartArchived says "This contact is archived. Restore it before starting issue work."
+// CanStartArchived says "This contact is archived. Restore it before starting task work."
 // in the language the app shows.
 func CanStartArchived() string { return In(i18n.Locale()).CanStartArchived() }
 
-// CanStartArchived says "This contact is archived. Restore it before starting issue work."
+// CanStartArchived says "This contact is archived. Restore it before starting task work."
 // in the language of msgs.
 func (msgs Messages) CanStartArchived() string {
 	return Catalog.Format(msgs.locale, "canStartArchived", nil)
 }
 
-// CanStartIssueActive says "This issue already has an active execution."
+// CanStartIssueActive says "This task already has an active run."
 // in the language the app shows.
 func CanStartIssueActive() string { return In(i18n.Locale()).CanStartIssueActive() }
 
-// CanStartIssueActive says "This issue already has an active execution."
+// CanStartIssueActive says "This task already has an active run."
 // in the language of msgs.
 func (msgs Messages) CanStartIssueActive() string {
 	return Catalog.Format(msgs.locale, "canStartIssueActive", nil)
 }
 
-// CanStartIssueReleasing says "This issue's work session is still being released; retry after it completes."
+// CanStartIssueReleasing says "This task's work session is still being released; retry after it completes."
 // in the language the app shows.
 func CanStartIssueReleasing() string { return In(i18n.Locale()).CanStartIssueReleasing() }
 
-// CanStartIssueReleasing says "This issue's work session is still being released; retry after it completes."
+// CanStartIssueReleasing says "This task's work session is still being released; retry after it completes."
 // in the language of msgs.
 func (msgs Messages) CanStartIssueReleasing() string {
 	return Catalog.Format(msgs.locale, "canStartIssueReleasing", nil)
 }
 
-// CanStartIssueHistoryLoading says "This issue's work history is still loading."
+// CanStartIssueHistoryLoading says "This task's work history is still loading."
 // in the language the app shows.
 func CanStartIssueHistoryLoading() string { return In(i18n.Locale()).CanStartIssueHistoryLoading() }
 
-// CanStartIssueHistoryLoading says "This issue's work history is still loading."
+// CanStartIssueHistoryLoading says "This task's work history is still loading."
 // in the language of msgs.
 func (msgs Messages) CanStartIssueHistoryLoading() string {
 	return Catalog.Format(msgs.locale, "canStartIssueHistoryLoading", nil)
@@ -5562,11 +5562,11 @@ func (msgs Messages) ModelNoCatalog() string {
 	return Catalog.Format(msgs.locale, "modelNoCatalog", nil)
 }
 
-// ModelTargetIssueWork says "Issue work"
+// ModelTargetIssueWork says "Task work"
 // in the language the app shows.
 func ModelTargetIssueWork() string { return In(i18n.Locale()).ModelTargetIssueWork() }
 
-// ModelTargetIssueWork says "Issue work"
+// ModelTargetIssueWork says "Task work"
 // in the language of msgs.
 func (msgs Messages) ModelTargetIssueWork() string {
 	return Catalog.Format(msgs.locale, "modelTargetIssueWork", nil)
@@ -6246,13 +6246,13 @@ func (msgs Messages) RuntimeErrorStoreSave(detail string) string {
 	return Catalog.Format(msgs.locale, "runtimeErrorStoreSave", map[string]any{"detail": detail})
 }
 
-// RuntimeErrorIssueToolShutdown says "Issue tool service shutdown: {detail}"
+// RuntimeErrorIssueToolShutdown says "Task tool service shutdown: {detail}"
 // in the language the app shows.
 func RuntimeErrorIssueToolShutdown(detail string) string {
 	return In(i18n.Locale()).RuntimeErrorIssueToolShutdown(detail)
 }
 
-// RuntimeErrorIssueToolShutdown says "Issue tool service shutdown: {detail}"
+// RuntimeErrorIssueToolShutdown says "Task tool service shutdown: {detail}"
 // in the language of msgs.
 func (msgs Messages) RuntimeErrorIssueToolShutdown(detail string) string {
 	return Catalog.Format(msgs.locale, "runtimeErrorIssueToolShutdown", map[string]any{"detail": detail})
@@ -6396,21 +6396,21 @@ func (msgs Messages) ModelValidationContextGreater() string {
 	return Catalog.Format(msgs.locale, "modelValidationContextGreater", nil)
 }
 
-// WorkStateAccepted says "Accepted"
+// WorkStateAccepted says "Waiting to start"
 // in the language the app shows.
 func WorkStateAccepted() string { return In(i18n.Locale()).WorkStateAccepted() }
 
-// WorkStateAccepted says "Accepted"
+// WorkStateAccepted says "Waiting to start"
 // in the language of msgs.
 func (msgs Messages) WorkStateAccepted() string {
 	return Catalog.Format(msgs.locale, "workStateAccepted", nil)
 }
 
-// WorkStateWorking says "Working"
+// WorkStateWorking says "Running"
 // in the language the app shows.
 func WorkStateWorking() string { return In(i18n.Locale()).WorkStateWorking() }
 
-// WorkStateWorking says "Working"
+// WorkStateWorking says "Running"
 // in the language of msgs.
 func (msgs Messages) WorkStateWorking() string {
 	return Catalog.Format(msgs.locale, "workStateWorking", nil)
@@ -6426,11 +6426,11 @@ func (msgs Messages) WorkStateStopping() string {
 	return Catalog.Format(msgs.locale, "workStateStopping", nil)
 }
 
-// WorkStateCompleted says "Completed"
+// WorkStateCompleted says "Finished"
 // in the language the app shows.
 func WorkStateCompleted() string { return In(i18n.Locale()).WorkStateCompleted() }
 
-// WorkStateCompleted says "Completed"
+// WorkStateCompleted says "Finished"
 // in the language of msgs.
 func (msgs Messages) WorkStateCompleted() string {
 	return Catalog.Format(msgs.locale, "workStateCompleted", nil)
@@ -6466,11 +6466,11 @@ func (msgs Messages) WorkStateUnknown() string {
 	return Catalog.Format(msgs.locale, "workStateUnknown", nil)
 }
 
-// WorkStateStoppedInterrupted says "Stopped: interrupted"
+// WorkStateStoppedInterrupted says "Stopped"
 // in the language the app shows.
 func WorkStateStoppedInterrupted() string { return In(i18n.Locale()).WorkStateStoppedInterrupted() }
 
-// WorkStateStoppedInterrupted says "Stopped: interrupted"
+// WorkStateStoppedInterrupted says "Stopped"
 // in the language of msgs.
 func (msgs Messages) WorkStateStoppedInterrupted() string {
 	return Catalog.Format(msgs.locale, "workStateStoppedInterrupted", nil)
@@ -6606,11 +6606,11 @@ func (msgs Messages) WorkToolRunning() string {
 	return Catalog.Format(msgs.locale, "workToolRunning", nil)
 }
 
-// IssueExecutionPending says "Prepared, not dispatched"
+// IssueExecutionPending says "Waiting to start"
 // in the language the app shows.
 func IssueExecutionPending() string { return In(i18n.Locale()).IssueExecutionPending() }
 
-// IssueExecutionPending says "Prepared, not dispatched"
+// IssueExecutionPending says "Waiting to start"
 // in the language of msgs.
 func (msgs Messages) IssueExecutionPending() string {
 	return Catalog.Format(msgs.locale, "issueExecutionPending", nil)
@@ -6636,11 +6636,11 @@ func (msgs Messages) IssueExecutionRejected() string {
 	return Catalog.Format(msgs.locale, "issueExecutionRejected", nil)
 }
 
-// IssueExecutionAccepted says "Accepted"
+// IssueExecutionAccepted says "Waiting to start"
 // in the language the app shows.
 func IssueExecutionAccepted() string { return In(i18n.Locale()).IssueExecutionAccepted() }
 
-// IssueExecutionAccepted says "Accepted"
+// IssueExecutionAccepted says "Waiting to start"
 // in the language of msgs.
 func (msgs Messages) IssueExecutionAccepted() string {
 	return Catalog.Format(msgs.locale, "issueExecutionAccepted", nil)
@@ -6656,31 +6656,31 @@ func (msgs Messages) IssueExecutionRunning() string {
 	return Catalog.Format(msgs.locale, "issueExecutionRunning", nil)
 }
 
-// IssueExecutionCompleted says "Execution completed"
+// IssueExecutionCompleted says "Finished"
 // in the language the app shows.
 func IssueExecutionCompleted() string { return In(i18n.Locale()).IssueExecutionCompleted() }
 
-// IssueExecutionCompleted says "Execution completed"
+// IssueExecutionCompleted says "Finished"
 // in the language of msgs.
 func (msgs Messages) IssueExecutionCompleted() string {
 	return Catalog.Format(msgs.locale, "issueExecutionCompleted", nil)
 }
 
-// IssueExecutionFailed says "Execution failed"
+// IssueExecutionFailed says "Failed"
 // in the language the app shows.
 func IssueExecutionFailed() string { return In(i18n.Locale()).IssueExecutionFailed() }
 
-// IssueExecutionFailed says "Execution failed"
+// IssueExecutionFailed says "Failed"
 // in the language of msgs.
 func (msgs Messages) IssueExecutionFailed() string {
 	return Catalog.Format(msgs.locale, "issueExecutionFailed", nil)
 }
 
-// IssueExecutionInterrupted says "Execution interrupted"
+// IssueExecutionInterrupted says "Interrupted"
 // in the language the app shows.
 func IssueExecutionInterrupted() string { return In(i18n.Locale()).IssueExecutionInterrupted() }
 
-// IssueExecutionInterrupted says "Execution interrupted"
+// IssueExecutionInterrupted says "Interrupted"
 // in the language of msgs.
 func (msgs Messages) IssueExecutionInterrupted() string {
 	return Catalog.Format(msgs.locale, "issueExecutionInterrupted", nil)
@@ -6696,61 +6696,61 @@ func (msgs Messages) IssueExecutionUnknown() string {
 	return Catalog.Format(msgs.locale, "issueExecutionUnknown", nil)
 }
 
-// IssueNoExecution says "No execution yet"
+// IssueNoExecution says "No runs yet"
 // in the language the app shows.
 func IssueNoExecution() string { return In(i18n.Locale()).IssueNoExecution() }
 
-// IssueNoExecution says "No execution yet"
+// IssueNoExecution says "No runs yet"
 // in the language of msgs.
 func (msgs Messages) IssueNoExecution() string {
 	return Catalog.Format(msgs.locale, "issueNoExecution", nil)
 }
 
-// IssueLatestExecution says "Latest execution"
+// IssueLatestExecution says "Latest run"
 // in the language the app shows.
 func IssueLatestExecution() string { return In(i18n.Locale()).IssueLatestExecution() }
 
-// IssueLatestExecution says "Latest execution"
+// IssueLatestExecution says "Latest run"
 // in the language of msgs.
 func (msgs Messages) IssueLatestExecution() string {
 	return Catalog.Format(msgs.locale, "issueLatestExecution", nil)
 }
 
-// IssueNoResultRunning says "No result yet; this execution is still running."
+// IssueNoResultRunning says "No result yet; this run is still running."
 // in the language the app shows.
 func IssueNoResultRunning() string { return In(i18n.Locale()).IssueNoResultRunning() }
 
-// IssueNoResultRunning says "No result yet; this execution is still running."
+// IssueNoResultRunning says "No result yet; this run is still running."
 // in the language of msgs.
 func (msgs Messages) IssueNoResultRunning() string {
 	return Catalog.Format(msgs.locale, "issueNoResultRunning", nil)
 }
 
-// IssueCurrentResponse says "Current response (execution still running): {text}"
+// IssueCurrentResponse says "Current response (run still running): {text}"
 // in the language the app shows.
 func IssueCurrentResponse(text string) string { return In(i18n.Locale()).IssueCurrentResponse(text) }
 
-// IssueCurrentResponse says "Current response (execution still running): {text}"
+// IssueCurrentResponse says "Current response (run still running): {text}"
 // in the language of msgs.
 func (msgs Messages) IssueCurrentResponse(text string) string {
 	return Catalog.Format(msgs.locale, "issueCurrentResponse", map[string]any{"text": text})
 }
 
-// IssueNoAssistantTools says "No assistant message was recorded; open the execution to inspect tool output."
+// IssueNoAssistantTools says "No assistant message was recorded; open the run to inspect tool output."
 // in the language the app shows.
 func IssueNoAssistantTools() string { return In(i18n.Locale()).IssueNoAssistantTools() }
 
-// IssueNoAssistantTools says "No assistant message was recorded; open the execution to inspect tool output."
+// IssueNoAssistantTools says "No assistant message was recorded; open the run to inspect tool output."
 // in the language of msgs.
 func (msgs Messages) IssueNoAssistantTools() string {
 	return Catalog.Format(msgs.locale, "issueNoAssistantTools", nil)
 }
 
-// IssueNoAssistant says "No assistant message was recorded for this execution."
+// IssueNoAssistant says "No assistant message was recorded for this run."
 // in the language the app shows.
 func IssueNoAssistant() string { return In(i18n.Locale()).IssueNoAssistant() }
 
-// IssueNoAssistant says "No assistant message was recorded for this execution."
+// IssueNoAssistant says "No assistant message was recorded for this run."
 // in the language of msgs.
 func (msgs Messages) IssueNoAssistant() string {
 	return Catalog.Format(msgs.locale, "issueNoAssistant", nil)
@@ -6786,63 +6786,63 @@ func (msgs Messages) IssueNoTaskDispatched() string {
 	return Catalog.Format(msgs.locale, "issueNoTaskDispatched", nil)
 }
 
-// IssueExecutionRejectedDetail says "The execution was rejected."
+// IssueExecutionRejectedDetail says "The run was rejected."
 // in the language the app shows.
 func IssueExecutionRejectedDetail() string { return In(i18n.Locale()).IssueExecutionRejectedDetail() }
 
-// IssueExecutionRejectedDetail says "The execution was rejected."
+// IssueExecutionRejectedDetail says "The run was rejected."
 // in the language of msgs.
 func (msgs Messages) IssueExecutionRejectedDetail() string {
 	return Catalog.Format(msgs.locale, "issueExecutionRejectedDetail", nil)
 }
 
-// IssueExecutionFailedDetail says "Execution failed; inspect the execution details for the recorded reason."
+// IssueExecutionFailedDetail says "Run failed; inspect the run details for the recorded reason."
 // in the language the app shows.
 func IssueExecutionFailedDetail() string { return In(i18n.Locale()).IssueExecutionFailedDetail() }
 
-// IssueExecutionFailedDetail says "Execution failed; inspect the execution details for the recorded reason."
+// IssueExecutionFailedDetail says "Run failed; inspect the run details for the recorded reason."
 // in the language of msgs.
 func (msgs Messages) IssueExecutionFailedDetail() string {
 	return Catalog.Format(msgs.locale, "issueExecutionFailedDetail", nil)
 }
 
-// IssueExecutionInterruptedDetail says "Execution interrupted; inspect the execution details for the recorded terminal state."
+// IssueExecutionInterruptedDetail says "Run interrupted; inspect the run details for the recorded terminal state."
 // in the language the app shows.
 func IssueExecutionInterruptedDetail() string {
 	return In(i18n.Locale()).IssueExecutionInterruptedDetail()
 }
 
-// IssueExecutionInterruptedDetail says "Execution interrupted; inspect the execution details for the recorded terminal state."
+// IssueExecutionInterruptedDetail says "Run interrupted; inspect the run details for the recorded terminal state."
 // in the language of msgs.
 func (msgs Messages) IssueExecutionInterruptedDetail() string {
 	return Catalog.Format(msgs.locale, "issueExecutionInterruptedDetail", nil)
 }
 
-// IssueExecutionUnknownDetail says "The terminal state is unknown; inspect the execution details before continuing."
+// IssueExecutionUnknownDetail says "The terminal state is unknown; inspect the run details before continuing."
 // in the language the app shows.
 func IssueExecutionUnknownDetail() string { return In(i18n.Locale()).IssueExecutionUnknownDetail() }
 
-// IssueExecutionUnknownDetail says "The terminal state is unknown; inspect the execution details before continuing."
+// IssueExecutionUnknownDetail says "The terminal state is unknown; inspect the run details before continuing."
 // in the language of msgs.
 func (msgs Messages) IssueExecutionUnknownDetail() string {
 	return Catalog.Format(msgs.locale, "issueExecutionUnknownDetail", nil)
 }
 
-// IssueEndedOpen says "This execution ended; the issue remains open."
+// IssueEndedOpen says "This run finished; the task remains open."
 // in the language the app shows.
 func IssueEndedOpen() string { return In(i18n.Locale()).IssueEndedOpen() }
 
-// IssueEndedOpen says "This execution ended; the issue remains open."
+// IssueEndedOpen says "This run finished; the task remains open."
 // in the language of msgs.
 func (msgs Messages) IssueEndedOpen() string {
 	return Catalog.Format(msgs.locale, "issueEndedOpen", nil)
 }
 
-// IssueRecoveryAvailable says "Recovery is available for an execution without a trusted terminal state."
+// IssueRecoveryAvailable says "Recovery is available for an run without a trusted terminal state."
 // in the language the app shows.
 func IssueRecoveryAvailable() string { return In(i18n.Locale()).IssueRecoveryAvailable() }
 
-// IssueRecoveryAvailable says "Recovery is available for an execution without a trusted terminal state."
+// IssueRecoveryAvailable says "Recovery is available for an run without a trusted terminal state."
 // in the language of msgs.
 func (msgs Messages) IssueRecoveryAvailable() string {
 	return Catalog.Format(msgs.locale, "issueRecoveryAvailable", nil)
@@ -6860,61 +6860,61 @@ func (msgs Messages) IssuePreviousEvidence(evidence string) string {
 	return Catalog.Format(msgs.locale, "issuePreviousEvidence", map[string]any{"evidence": evidence})
 }
 
-// IssueMoreActions says "More issue actions"
+// IssueMoreActions says "More task actions"
 // in the language the app shows.
 func IssueMoreActions() string { return In(i18n.Locale()).IssueMoreActions() }
 
-// IssueMoreActions says "More issue actions"
+// IssueMoreActions says "More task actions"
 // in the language of msgs.
 func (msgs Messages) IssueMoreActions() string {
 	return Catalog.Format(msgs.locale, "issueMoreActions", nil)
 }
 
-// IssueHideActions says "Hide issue actions"
+// IssueHideActions says "Hide task actions"
 // in the language the app shows.
 func IssueHideActions() string { return In(i18n.Locale()).IssueHideActions() }
 
-// IssueHideActions says "Hide issue actions"
+// IssueHideActions says "Hide task actions"
 // in the language of msgs.
 func (msgs Messages) IssueHideActions() string {
 	return Catalog.Format(msgs.locale, "issueHideActions", nil)
 }
 
-// IssueEdit says "Edit issue"
+// IssueEdit says "Edit task"
 // in the language the app shows.
 func IssueEdit() string { return In(i18n.Locale()).IssueEdit() }
 
-// IssueEdit says "Edit issue"
+// IssueEdit says "Edit task"
 // in the language of msgs.
 func (msgs Messages) IssueEdit() string {
 	return Catalog.Format(msgs.locale, "issueEdit", nil)
 }
 
-// IssueModel says "Issue model"
+// IssueModel says "Task model"
 // in the language the app shows.
 func IssueModel() string { return In(i18n.Locale()).IssueModel() }
 
-// IssueModel says "Issue model"
+// IssueModel says "Task model"
 // in the language of msgs.
 func (msgs Messages) IssueModel() string {
 	return Catalog.Format(msgs.locale, "issueModel", nil)
 }
 
-// IssueViewExecution says "View execution"
+// IssueViewExecution says "View run"
 // in the language the app shows.
 func IssueViewExecution() string { return In(i18n.Locale()).IssueViewExecution() }
 
-// IssueViewExecution says "View execution"
+// IssueViewExecution says "View run"
 // in the language of msgs.
 func (msgs Messages) IssueViewExecution() string {
 	return Catalog.Format(msgs.locale, "issueViewExecution", nil)
 }
 
-// IssueBackToIssue says "Back to issue"
+// IssueBackToIssue says "Back to task"
 // in the language the app shows.
 func IssueBackToIssue() string { return In(i18n.Locale()).IssueBackToIssue() }
 
-// IssueBackToIssue says "Back to issue"
+// IssueBackToIssue says "Back to task"
 // in the language of msgs.
 func (msgs Messages) IssueBackToIssue() string {
 	return Catalog.Format(msgs.locale, "issueBackToIssue", nil)
@@ -6940,11 +6940,11 @@ func (msgs Messages) IssueMarkedByUser(text string) string {
 	return Catalog.Format(msgs.locale, "issueMarkedByUser", map[string]any{"text": text})
 }
 
-// IssueRowLabel says "Issue {goal}"
+// IssueRowLabel says "Task {goal}"
 // in the language the app shows.
 func IssueRowLabel(goal string) string { return In(i18n.Locale()).IssueRowLabel(goal) }
 
-// IssueRowLabel says "Issue {goal}"
+// IssueRowLabel says "Task {goal}"
 // in the language of msgs.
 func (msgs Messages) IssueRowLabel(goal string) string {
 	return Catalog.Format(msgs.locale, "issueRowLabel", map[string]any{"goal": goal})
@@ -6960,21 +6960,21 @@ func (msgs Messages) IssueFormGoal() string {
 	return Catalog.Format(msgs.locale, "issueFormGoal", nil)
 }
 
-// IssueFormGoalLabel says "Issue goal"
+// IssueFormGoalLabel says "Task goal"
 // in the language the app shows.
 func IssueFormGoalLabel() string { return In(i18n.Locale()).IssueFormGoalLabel() }
 
-// IssueFormGoalLabel says "Issue goal"
+// IssueFormGoalLabel says "Task goal"
 // in the language of msgs.
 func (msgs Messages) IssueFormGoalLabel() string {
 	return Catalog.Format(msgs.locale, "issueFormGoalLabel", nil)
 }
 
-// IssueFormGoalPlaceholder says "What should this issue accomplish?"
+// IssueFormGoalPlaceholder says "What should this task accomplish?"
 // in the language the app shows.
 func IssueFormGoalPlaceholder() string { return In(i18n.Locale()).IssueFormGoalPlaceholder() }
 
-// IssueFormGoalPlaceholder says "What should this issue accomplish?"
+// IssueFormGoalPlaceholder says "What should this task accomplish?"
 // in the language of msgs.
 func (msgs Messages) IssueFormGoalPlaceholder() string {
 	return Catalog.Format(msgs.locale, "issueFormGoalPlaceholder", nil)
@@ -6990,11 +6990,11 @@ func (msgs Messages) IssueFormRequirements() string {
 	return Catalog.Format(msgs.locale, "issueFormRequirements", nil)
 }
 
-// IssueFormRequirementsLabel says "Issue requirements"
+// IssueFormRequirementsLabel says "Task requirements"
 // in the language the app shows.
 func IssueFormRequirementsLabel() string { return In(i18n.Locale()).IssueFormRequirementsLabel() }
 
-// IssueFormRequirementsLabel says "Issue requirements"
+// IssueFormRequirementsLabel says "Task requirements"
 // in the language of msgs.
 func (msgs Messages) IssueFormRequirementsLabel() string {
 	return Catalog.Format(msgs.locale, "issueFormRequirementsLabel", nil)
@@ -7012,41 +7012,41 @@ func (msgs Messages) IssueFormRequirementsPlaceholder() string {
 	return Catalog.Format(msgs.locale, "issueFormRequirementsPlaceholder", nil)
 }
 
-// IssueNewIssue says "New issue"
+// IssueNewIssue says "New task"
 // in the language the app shows.
 func IssueNewIssue() string { return In(i18n.Locale()).IssueNewIssue() }
 
-// IssueNewIssue says "New issue"
+// IssueNewIssue says "New task"
 // in the language of msgs.
 func (msgs Messages) IssueNewIssue() string {
 	return Catalog.Format(msgs.locale, "issueNewIssue", nil)
 }
 
-// IssueFilterLabel says "Issue filter"
+// IssueFilterLabel says "Task filter"
 // in the language the app shows.
 func IssueFilterLabel() string { return In(i18n.Locale()).IssueFilterLabel() }
 
-// IssueFilterLabel says "Issue filter"
+// IssueFilterLabel says "Task filter"
 // in the language of msgs.
 func (msgs Messages) IssueFilterLabel() string {
 	return Catalog.Format(msgs.locale, "issueFilterLabel", nil)
 }
 
-// IssueNoIssuesIn says "No issues in {filter}."
+// IssueNoIssuesIn says "No tasks in {filter}."
 // in the language the app shows.
 func IssueNoIssuesIn(filter string) string { return In(i18n.Locale()).IssueNoIssuesIn(filter) }
 
-// IssueNoIssuesIn says "No issues in {filter}."
+// IssueNoIssuesIn says "No tasks in {filter}."
 // in the language of msgs.
 func (msgs Messages) IssueNoIssuesIn(filter string) string {
 	return Catalog.Format(msgs.locale, "issueNoIssuesIn", map[string]any{"filter": filter})
 }
 
-// IssueFilterAllDescription says "All issues"
+// IssueFilterAllDescription says "All tasks"
 // in the language the app shows.
 func IssueFilterAllDescription() string { return In(i18n.Locale()).IssueFilterAllDescription() }
 
-// IssueFilterAllDescription says "All issues"
+// IssueFilterAllDescription says "All tasks"
 // in the language of msgs.
 func (msgs Messages) IssueFilterAllDescription() string {
 	return Catalog.Format(msgs.locale, "issueFilterAllDescription", nil)
@@ -7116,11 +7116,11 @@ func (msgs Messages) IssueEvidencePrefix(evidence string) string {
 	return Catalog.Format(msgs.locale, "issueEvidencePrefix", map[string]any{"evidence": evidence})
 }
 
-// IssueExecutionHistory says "Execution history"
+// IssueExecutionHistory says "Run history"
 // in the language the app shows.
 func IssueExecutionHistory() string { return In(i18n.Locale()).IssueExecutionHistory() }
 
-// IssueExecutionHistory says "Execution history"
+// IssueExecutionHistory says "Run history"
 // in the language of msgs.
 func (msgs Messages) IssueExecutionHistory() string {
 	return Catalog.Format(msgs.locale, "issueExecutionHistory", nil)
@@ -7136,11 +7136,11 @@ func (msgs Messages) IssueSentSnapshot(text string) string {
 	return Catalog.Format(msgs.locale, "issueSentSnapshot", map[string]any{"text": text})
 }
 
-// IssueCheckExecution says "Check execution"
+// IssueCheckExecution says "Check run"
 // in the language the app shows.
 func IssueCheckExecution() string { return In(i18n.Locale()).IssueCheckExecution() }
 
-// IssueCheckExecution says "Check execution"
+// IssueCheckExecution says "Check run"
 // in the language of msgs.
 func (msgs Messages) IssueCheckExecution() string {
 	return Catalog.Format(msgs.locale, "issueCheckExecution", nil)
@@ -7186,63 +7186,63 @@ func (msgs Messages) IssueArchive() string {
 	return Catalog.Format(msgs.locale, "issueArchive", nil)
 }
 
-// IssueNoticeAttention says "Issue work needs attention: {goal}"
+// IssueNoticeAttention says "Task work needs attention: {goal}"
 // in the language the app shows.
 func IssueNoticeAttention(goal string) string { return In(i18n.Locale()).IssueNoticeAttention(goal) }
 
-// IssueNoticeAttention says "Issue work needs attention: {goal}"
+// IssueNoticeAttention says "Task work needs attention: {goal}"
 // in the language of msgs.
 func (msgs Messages) IssueNoticeAttention(goal string) string {
 	return Catalog.Format(msgs.locale, "issueNoticeAttention", map[string]any{"goal": goal})
 }
 
-// IssueNoticeAttentionReason says "Issue work needs attention: {goal} — {reason}"
+// IssueNoticeAttentionReason says "Task work needs attention: {goal} — {reason}"
 // in the language the app shows.
 func IssueNoticeAttentionReason(goal string, reason string) string {
 	return In(i18n.Locale()).IssueNoticeAttentionReason(goal, reason)
 }
 
-// IssueNoticeAttentionReason says "Issue work needs attention: {goal} — {reason}"
+// IssueNoticeAttentionReason says "Task work needs attention: {goal} — {reason}"
 // in the language of msgs.
 func (msgs Messages) IssueNoticeAttentionReason(goal string, reason string) string {
 	return Catalog.Format(msgs.locale, "issueNoticeAttentionReason", map[string]any{"goal": goal, "reason": reason})
 }
 
-// IssueNoticeWaiting says "Issue waiting for your answer: {goal}"
+// IssueNoticeWaiting says "Task waiting for your answer: {goal}"
 // in the language the app shows.
 func IssueNoticeWaiting(goal string) string { return In(i18n.Locale()).IssueNoticeWaiting(goal) }
 
-// IssueNoticeWaiting says "Issue waiting for your answer: {goal}"
+// IssueNoticeWaiting says "Task waiting for your answer: {goal}"
 // in the language of msgs.
 func (msgs Messages) IssueNoticeWaiting(goal string) string {
 	return Catalog.Format(msgs.locale, "issueNoticeWaiting", map[string]any{"goal": goal})
 }
 
-// IssueNoticeActive says "Issue work active: {goal}"
+// IssueNoticeActive says "Task work active: {goal}"
 // in the language the app shows.
 func IssueNoticeActive(goal string) string { return In(i18n.Locale()).IssueNoticeActive(goal) }
 
-// IssueNoticeActive says "Issue work active: {goal}"
+// IssueNoticeActive says "Task work active: {goal}"
 // in the language of msgs.
 func (msgs Messages) IssueNoticeActive(goal string) string {
 	return Catalog.Format(msgs.locale, "issueNoticeActive", map[string]any{"goal": goal})
 }
 
-// IssueRequirementSatisfied says "Satisfied"
+// IssueRequirementSatisfied says "Met"
 // in the language the app shows.
 func IssueRequirementSatisfied() string { return In(i18n.Locale()).IssueRequirementSatisfied() }
 
-// IssueRequirementSatisfied says "Satisfied"
+// IssueRequirementSatisfied says "Met"
 // in the language of msgs.
 func (msgs Messages) IssueRequirementSatisfied() string {
 	return Catalog.Format(msgs.locale, "issueRequirementSatisfied", nil)
 }
 
-// IssueRequirementUnmet says "Unmet"
+// IssueRequirementUnmet says "Not met"
 // in the language the app shows.
 func IssueRequirementUnmet() string { return In(i18n.Locale()).IssueRequirementUnmet() }
 
-// IssueRequirementUnmet says "Unmet"
+// IssueRequirementUnmet says "Not met"
 // in the language of msgs.
 func (msgs Messages) IssueRequirementUnmet() string {
 	return Catalog.Format(msgs.locale, "issueRequirementUnmet", nil)
@@ -7450,11 +7450,11 @@ func (msgs Messages) ResultCallLine(id string) string {
 	return Catalog.Format(msgs.locale, "resultCallLine", map[string]any{"id": id})
 }
 
-// ResultLoadingHistory says "Loading execution history from Runtime…"
+// ResultLoadingHistory says "Loading run history from Runtime…"
 // in the language the app shows.
 func ResultLoadingHistory() string { return In(i18n.Locale()).ResultLoadingHistory() }
 
-// ResultLoadingHistory says "Loading execution history from Runtime…"
+// ResultLoadingHistory says "Loading run history from Runtime…"
 // in the language of msgs.
 func (msgs Messages) ResultLoadingHistory() string {
 	return Catalog.Format(msgs.locale, "resultLoadingHistory", nil)
@@ -7520,11 +7520,11 @@ func (msgs Messages) ResultReloadResult() string {
 	return Catalog.Format(msgs.locale, "resultReloadResult", nil)
 }
 
-// ResultNoDetailRecorded says "No execution detail was recorded for this run."
+// ResultNoDetailRecorded says "No run detail was recorded for this run."
 // in the language the app shows.
 func ResultNoDetailRecorded() string { return In(i18n.Locale()).ResultNoDetailRecorded() }
 
-// ResultNoDetailRecorded says "No execution detail was recorded for this run."
+// ResultNoDetailRecorded says "No run detail was recorded for this run."
 // in the language of msgs.
 func (msgs Messages) ResultNoDetailRecorded() string {
 	return Catalog.Format(msgs.locale, "resultNoDetailRecorded", nil)
@@ -7970,11 +7970,11 @@ func (msgs Messages) TaskContextErrNoSource() string {
 	return Catalog.Format(msgs.locale, "taskContextErrNoSource", nil)
 }
 
-// TaskContextIssueUnavailable says "This issue is no longer available."
+// TaskContextIssueUnavailable says "This task is no longer available."
 // in the language the app shows.
 func TaskContextIssueUnavailable() string { return In(i18n.Locale()).TaskContextIssueUnavailable() }
 
-// TaskContextIssueUnavailable says "This issue is no longer available."
+// TaskContextIssueUnavailable says "This task is no longer available."
 // in the language of msgs.
 func (msgs Messages) TaskContextIssueUnavailable() string {
 	return Catalog.Format(msgs.locale, "taskContextIssueUnavailable", nil)
@@ -8020,21 +8020,21 @@ func (msgs Messages) SupplementDispatching() string {
 	return Catalog.Format(msgs.locale, "supplementDispatching", nil)
 }
 
-// SupplementUnknown says "Delivery is unknown; check the execution. Nothing will be resent automatically."
+// SupplementUnknown says "Delivery is unknown; check the run. Nothing will be resent automatically."
 // in the language the app shows.
 func SupplementUnknown() string { return In(i18n.Locale()).SupplementUnknown() }
 
-// SupplementUnknown says "Delivery is unknown; check the execution. Nothing will be resent automatically."
+// SupplementUnknown says "Delivery is unknown; check the run. Nothing will be resent automatically."
 // in the language of msgs.
 func (msgs Messages) SupplementUnknown() string {
 	return Catalog.Format(msgs.locale, "supplementUnknown", nil)
 }
 
-// SupplementNoExecution says "No execution yet. Use Start with supplement to authorize the first run."
+// SupplementNoExecution says "No run yet. Use Start with follow-up to authorize the first run."
 // in the language the app shows.
 func SupplementNoExecution() string { return In(i18n.Locale()).SupplementNoExecution() }
 
-// SupplementNoExecution says "No execution yet. Use Start with supplement to authorize the first run."
+// SupplementNoExecution says "No run yet. Use Start with follow-up to authorize the first run."
 // in the language of msgs.
 func (msgs Messages) SupplementNoExecution() string {
 	return Catalog.Format(msgs.locale, "supplementNoExecution", nil)
@@ -8060,11 +8060,11 @@ func (msgs Messages) SupplementPendingPreserved() string {
 	return Catalog.Format(msgs.locale, "supplementPendingPreserved", nil)
 }
 
-// SupplementSavedPending says "Saved pending supplements"
+// SupplementSavedPending says "Waiting to send"
 // in the language the app shows.
 func SupplementSavedPending() string { return In(i18n.Locale()).SupplementSavedPending() }
 
-// SupplementSavedPending says "Saved pending supplements"
+// SupplementSavedPending says "Waiting to send"
 // in the language of msgs.
 func (msgs Messages) SupplementSavedPending() string {
 	return Catalog.Format(msgs.locale, "supplementSavedPending", nil)
@@ -8120,11 +8120,11 @@ func (msgs Messages) SupplementCancel() string {
 	return Catalog.Format(msgs.locale, "supplementCancel", nil)
 }
 
-// SupplementFormLabel says "Add supplement to this issue"
+// SupplementFormLabel says "Add supplement to this task"
 // in the language the app shows.
 func SupplementFormLabel() string { return In(i18n.Locale()).SupplementFormLabel() }
 
-// SupplementFormLabel says "Add supplement to this issue"
+// SupplementFormLabel says "Add supplement to this task"
 // in the language of msgs.
 func (msgs Messages) SupplementFormLabel() string {
 	return Catalog.Format(msgs.locale, "supplementFormLabel", nil)
@@ -8182,13 +8182,13 @@ func (msgs Messages) SupplementReceiptFailed(detail string) string {
 	return Catalog.Format(msgs.locale, "supplementReceiptFailed", map[string]any{"detail": detail})
 }
 
-// SupplementSubmitted says "Submitted to Runtime execution {execution}, task {task}."
+// SupplementSubmitted says "Sent to run {execution}, Runtime task {task}."
 // in the language the app shows.
 func SupplementSubmitted(execution string, task string) string {
 	return In(i18n.Locale()).SupplementSubmitted(execution, task)
 }
 
-// SupplementSubmitted says "Submitted to Runtime execution {execution}, task {task}."
+// SupplementSubmitted says "Sent to run {execution}, Runtime task {task}."
 // in the language of msgs.
 func (msgs Messages) SupplementSubmitted(execution string, task string) string {
 	return Catalog.Format(msgs.locale, "supplementSubmitted", map[string]any{"execution": execution, "task": task})
@@ -8214,11 +8214,11 @@ func (msgs Messages) SupplementNeedsCheck() string {
 	return Catalog.Format(msgs.locale, "supplementNeedsCheck", nil)
 }
 
-// SupplementCheck says "Check execution"
+// SupplementCheck says "Check run"
 // in the language the app shows.
 func SupplementCheck() string { return In(i18n.Locale()).SupplementCheck() }
 
-// SupplementCheck says "Check execution"
+// SupplementCheck says "Check run"
 // in the language of msgs.
 func (msgs Messages) SupplementCheck() string {
 	return Catalog.Format(msgs.locale, "supplementCheck", nil)
@@ -8302,4 +8302,1434 @@ func TaskContextErrNotTextDetail(detail string) string {
 // in the language of msgs.
 func (msgs Messages) TaskContextErrNotTextDetail(detail string) string {
 	return Catalog.Format(msgs.locale, "taskContextErrNotTextDetail", map[string]any{"detail": detail})
+}
+
+// MarkdownCodeGroup says "Code"
+// in the language the app shows.
+func MarkdownCodeGroup() string { return In(i18n.Locale()).MarkdownCodeGroup() }
+
+// MarkdownCodeGroup says "Code"
+// in the language of msgs.
+func (msgs Messages) MarkdownCodeGroup() string {
+	return Catalog.Format(msgs.locale, "markdownCodeGroup", nil)
+}
+
+// MarkdownTableGroup says "Table, wrapped plain text"
+// in the language the app shows.
+func MarkdownTableGroup() string { return In(i18n.Locale()).MarkdownTableGroup() }
+
+// MarkdownTableGroup says "Table, wrapped plain text"
+// in the language of msgs.
+func (msgs Messages) MarkdownTableGroup() string {
+	return Catalog.Format(msgs.locale, "markdownTableGroup", nil)
+}
+
+// TaskContextOwnerConversation says "Conversation: {name}"
+// in the language the app shows.
+func TaskContextOwnerConversation(name string) string {
+	return In(i18n.Locale()).TaskContextOwnerConversation(name)
+}
+
+// TaskContextOwnerConversation says "Conversation: {name}"
+// in the language of msgs.
+func (msgs Messages) TaskContextOwnerConversation(name string) string {
+	return Catalog.Format(msgs.locale, "taskContextOwnerConversation", map[string]any{"name": name})
+}
+
+// TaskContextOwnerIssue says "Task: {goal}"
+// in the language the app shows.
+func TaskContextOwnerIssue(goal string) string { return In(i18n.Locale()).TaskContextOwnerIssue(goal) }
+
+// TaskContextOwnerIssue says "Task: {goal}"
+// in the language of msgs.
+func (msgs Messages) TaskContextOwnerIssue(goal string) string {
+	return Catalog.Format(msgs.locale, "taskContextOwnerIssue", map[string]any{"goal": goal})
+}
+
+// SupplementTitle says "Supplements"
+// in the language the app shows.
+func SupplementTitle() string { return In(i18n.Locale()).SupplementTitle() }
+
+// SupplementTitle says "Supplements"
+// in the language of msgs.
+func (msgs Messages) SupplementTitle() string {
+	return Catalog.Format(msgs.locale, "supplementTitle", nil)
+}
+
+// SupplementTitlePending says "{count, plural, one {Supplements: # pending} other {Supplements: # pending}}"
+// in the language the app shows.
+func SupplementTitlePending(count int) string { return In(i18n.Locale()).SupplementTitlePending(count) }
+
+// SupplementTitlePending says "{count, plural, one {Supplements: # pending} other {Supplements: # pending}}"
+// in the language of msgs.
+func (msgs Messages) SupplementTitlePending(count int) string {
+	return Catalog.Format(msgs.locale, "supplementTitlePending", map[string]any{"count": count})
+}
+
+// SupplementCurrentTarget says "Current target: revision {revision}. {goal}"
+// in the language the app shows.
+func SupplementCurrentTarget(revision string, goal string) string {
+	return In(i18n.Locale()).SupplementCurrentTarget(revision, goal)
+}
+
+// SupplementCurrentTarget says "Current target: revision {revision}. {goal}"
+// in the language of msgs.
+func (msgs Messages) SupplementCurrentTarget(revision string, goal string) string {
+	return Catalog.Format(msgs.locale, "supplementCurrentTarget", map[string]any{"revision": revision, "goal": goal})
+}
+
+// SupplementReceived says "received r{revision}: {text}"
+// in the language the app shows.
+func SupplementReceived(revision string, text string) string {
+	return In(i18n.Locale()).SupplementReceived(revision, text)
+}
+
+// SupplementReceived says "received r{revision}: {text}"
+// in the language of msgs.
+func (msgs Messages) SupplementReceived(revision string, text string) string {
+	return Catalog.Format(msgs.locale, "supplementReceived", map[string]any{"revision": revision, "text": text})
+}
+
+// SupplementHiddenBatches says "{count, plural, one {# earlier batch hidden from this card; the run list remains the original input record.} other {#…"
+// in the language the app shows.
+func SupplementHiddenBatches(count int) string {
+	return In(i18n.Locale()).SupplementHiddenBatches(count)
+}
+
+// SupplementHiddenBatches says "{count, plural, one {# earlier batch hidden from this card; the run list remains the original input record.} other {#…"
+// in the language of msgs.
+func (msgs Messages) SupplementHiddenBatches(count int) string {
+	return Catalog.Format(msgs.locale, "supplementHiddenBatches", map[string]any{"count": count})
+}
+
+// SupplementTargetRevision says "target r{revision}"
+// in the language the app shows.
+func SupplementTargetRevision(revision string) string {
+	return In(i18n.Locale()).SupplementTargetRevision(revision)
+}
+
+// SupplementTargetRevision says "target r{revision}"
+// in the language of msgs.
+func (msgs Messages) SupplementTargetRevision(revision string) string {
+	return Catalog.Format(msgs.locale, "supplementTargetRevision", map[string]any{"revision": revision})
+}
+
+// SupplementBatchDispatching says "Sent"
+// in the language the app shows.
+func SupplementBatchDispatching() string { return In(i18n.Locale()).SupplementBatchDispatching() }
+
+// SupplementBatchDispatching says "Sent"
+// in the language of msgs.
+func (msgs Messages) SupplementBatchDispatching() string {
+	return Catalog.Format(msgs.locale, "supplementBatchDispatching", nil)
+}
+
+// SupplementBatchAccepted says "Received"
+// in the language the app shows.
+func SupplementBatchAccepted() string { return In(i18n.Locale()).SupplementBatchAccepted() }
+
+// SupplementBatchAccepted says "Received"
+// in the language of msgs.
+func (msgs Messages) SupplementBatchAccepted() string {
+	return Catalog.Format(msgs.locale, "supplementBatchAccepted", nil)
+}
+
+// SupplementBatchRejected says "Batch rejected"
+// in the language the app shows.
+func SupplementBatchRejected() string { return In(i18n.Locale()).SupplementBatchRejected() }
+
+// SupplementBatchRejected says "Batch rejected"
+// in the language of msgs.
+func (msgs Messages) SupplementBatchRejected() string {
+	return Catalog.Format(msgs.locale, "supplementBatchRejected", nil)
+}
+
+// SupplementBatchNotDispatched says "Batch not dispatched"
+// in the language the app shows.
+func SupplementBatchNotDispatched() string { return In(i18n.Locale()).SupplementBatchNotDispatched() }
+
+// SupplementBatchNotDispatched says "Batch not dispatched"
+// in the language of msgs.
+func (msgs Messages) SupplementBatchNotDispatched() string {
+	return Catalog.Format(msgs.locale, "supplementBatchNotDispatched", nil)
+}
+
+// SupplementBatchUnknown says "Needs check"
+// in the language the app shows.
+func SupplementBatchUnknown() string { return In(i18n.Locale()).SupplementBatchUnknown() }
+
+// SupplementBatchUnknown says "Needs check"
+// in the language of msgs.
+func (msgs Messages) SupplementBatchUnknown() string {
+	return Catalog.Format(msgs.locale, "supplementBatchUnknown", nil)
+}
+
+// SupplementBatchCanceled says "Batch canceled / superseded"
+// in the language the app shows.
+func SupplementBatchCanceled() string { return In(i18n.Locale()).SupplementBatchCanceled() }
+
+// SupplementBatchCanceled says "Batch canceled / superseded"
+// in the language of msgs.
+func (msgs Messages) SupplementBatchCanceled() string {
+	return Catalog.Format(msgs.locale, "supplementBatchCanceled", nil)
+}
+
+// SupplementBatchGeneric says "Batch {state}"
+// in the language the app shows.
+func SupplementBatchGeneric(state string) string {
+	return In(i18n.Locale()).SupplementBatchGeneric(state)
+}
+
+// SupplementBatchGeneric says "Batch {state}"
+// in the language of msgs.
+func (msgs Messages) SupplementBatchGeneric(state string) string {
+	return Catalog.Format(msgs.locale, "supplementBatchGeneric", map[string]any{"state": state})
+}
+
+// WorkStopTask says "Stop task"
+// in the language the app shows.
+func WorkStopTask() string { return In(i18n.Locale()).WorkStopTask() }
+
+// WorkStopTask says "Stop task"
+// in the language of msgs.
+func (msgs Messages) WorkStopTask() string {
+	return Catalog.Format(msgs.locale, "workStopTask", nil)
+}
+
+// WorkStopIssueTask says "Stop task"
+// in the language the app shows.
+func WorkStopIssueTask() string { return In(i18n.Locale()).WorkStopIssueTask() }
+
+// WorkStopIssueTask says "Stop task"
+// in the language of msgs.
+func (msgs Messages) WorkStopIssueTask() string {
+	return Catalog.Format(msgs.locale, "workStopIssueTask", nil)
+}
+
+// WorkStoppingTask says "Stopping…"
+// in the language the app shows.
+func WorkStoppingTask() string { return In(i18n.Locale()).WorkStoppingTask() }
+
+// WorkStoppingTask says "Stopping…"
+// in the language of msgs.
+func (msgs Messages) WorkStoppingTask() string {
+	return Catalog.Format(msgs.locale, "workStoppingTask", nil)
+}
+
+// WorkStoppingIssue says "Stopping…"
+// in the language the app shows.
+func WorkStoppingIssue() string { return In(i18n.Locale()).WorkStoppingIssue() }
+
+// WorkStoppingIssue says "Stopping…"
+// in the language of msgs.
+func (msgs Messages) WorkStoppingIssue() string {
+	return Catalog.Format(msgs.locale, "workStoppingIssue", nil)
+}
+
+// WorkLastAction says "Last action: {tool}"
+// in the language the app shows.
+func WorkLastAction(tool string) string { return In(i18n.Locale()).WorkLastAction(tool) }
+
+// WorkLastAction says "Last action: {tool}"
+// in the language of msgs.
+func (msgs Messages) WorkLastAction(tool string) string {
+	return Catalog.Format(msgs.locale, "workLastAction", map[string]any{"tool": tool})
+}
+
+// WorkRunningAction says "Running {tool}"
+// in the language the app shows.
+func WorkRunningAction(tool string) string { return In(i18n.Locale()).WorkRunningAction(tool) }
+
+// WorkRunningAction says "Running {tool}"
+// in the language of msgs.
+func (msgs Messages) WorkRunningAction(tool string) string {
+	return Catalog.Format(msgs.locale, "workRunningAction", map[string]any{"tool": tool})
+}
+
+// WorkToolRunningState says "Running"
+// in the language the app shows.
+func WorkToolRunningState() string { return In(i18n.Locale()).WorkToolRunningState() }
+
+// WorkToolRunningState says "Running"
+// in the language of msgs.
+func (msgs Messages) WorkToolRunningState() string {
+	return Catalog.Format(msgs.locale, "workToolRunningState", nil)
+}
+
+// WorkToolFinishedState says "Finished"
+// in the language the app shows.
+func WorkToolFinishedState() string { return In(i18n.Locale()).WorkToolFinishedState() }
+
+// WorkToolFinishedState says "Finished"
+// in the language of msgs.
+func (msgs Messages) WorkToolFinishedState() string {
+	return Catalog.Format(msgs.locale, "workToolFinishedState", nil)
+}
+
+// WorkDetails says "Details"
+// in the language the app shows.
+func WorkDetails() string { return In(i18n.Locale()).WorkDetails() }
+
+// WorkDetails says "Details"
+// in the language of msgs.
+func (msgs Messages) WorkDetails() string {
+	return Catalog.Format(msgs.locale, "workDetails", nil)
+}
+
+// WorkHide says "Hide"
+// in the language the app shows.
+func WorkHide() string { return In(i18n.Locale()).WorkHide() }
+
+// WorkHide says "Hide"
+// in the language of msgs.
+func (msgs Messages) WorkHide() string {
+	return Catalog.Format(msgs.locale, "workHide", nil)
+}
+
+// WorkStatusResuming says "Resuming"
+// in the language the app shows.
+func WorkStatusResuming() string { return In(i18n.Locale()).WorkStatusResuming() }
+
+// WorkStatusResuming says "Resuming"
+// in the language of msgs.
+func (msgs Messages) WorkStatusResuming() string {
+	return Catalog.Format(msgs.locale, "workStatusResuming", nil)
+}
+
+// WorkStatusRunning says "Running"
+// in the language the app shows.
+func WorkStatusRunning() string { return In(i18n.Locale()).WorkStatusRunning() }
+
+// WorkStatusRunning says "Running"
+// in the language of msgs.
+func (msgs Messages) WorkStatusRunning() string {
+	return Catalog.Format(msgs.locale, "workStatusRunning", nil)
+}
+
+// WorkStatusStarting says "Starting"
+// in the language the app shows.
+func WorkStatusStarting() string { return In(i18n.Locale()).WorkStatusStarting() }
+
+// WorkStatusStarting says "Starting"
+// in the language of msgs.
+func (msgs Messages) WorkStatusStarting() string {
+	return Catalog.Format(msgs.locale, "workStatusStarting", nil)
+}
+
+// WorkStatusCompacting says "Compacting context"
+// in the language the app shows.
+func WorkStatusCompacting() string { return In(i18n.Locale()).WorkStatusCompacting() }
+
+// WorkStatusCompacting says "Compacting context"
+// in the language of msgs.
+func (msgs Messages) WorkStatusCompacting() string {
+	return Catalog.Format(msgs.locale, "workStatusCompacting", nil)
+}
+
+// WorkStatusWaitingModel says "Waiting for model"
+// in the language the app shows.
+func WorkStatusWaitingModel() string { return In(i18n.Locale()).WorkStatusWaitingModel() }
+
+// WorkStatusWaitingModel says "Waiting for model"
+// in the language of msgs.
+func (msgs Messages) WorkStatusWaitingModel() string {
+	return Catalog.Format(msgs.locale, "workStatusWaitingModel", nil)
+}
+
+// WorkStatusThinking says "Thinking"
+// in the language the app shows.
+func WorkStatusThinking() string { return In(i18n.Locale()).WorkStatusThinking() }
+
+// WorkStatusThinking says "Thinking"
+// in the language of msgs.
+func (msgs Messages) WorkStatusThinking() string {
+	return Catalog.Format(msgs.locale, "workStatusThinking", nil)
+}
+
+// WorkStatusWriting says "Writing"
+// in the language the app shows.
+func WorkStatusWriting() string { return In(i18n.Locale()).WorkStatusWriting() }
+
+// WorkStatusWriting says "Writing"
+// in the language of msgs.
+func (msgs Messages) WorkStatusWriting() string {
+	return Catalog.Format(msgs.locale, "workStatusWriting", nil)
+}
+
+// IssueNoticeContactMissing says "Contact not found."
+// in the language the app shows.
+func IssueNoticeContactMissing() string { return In(i18n.Locale()).IssueNoticeContactMissing() }
+
+// IssueNoticeContactMissing says "Contact not found."
+// in the language of msgs.
+func (msgs Messages) IssueNoticeContactMissing() string {
+	return Catalog.Format(msgs.locale, "issueNoticeContactMissing", nil)
+}
+
+// IssueNoticeIssueMissing says "Task not found for this contact."
+// in the language the app shows.
+func IssueNoticeIssueMissing() string { return In(i18n.Locale()).IssueNoticeIssueMissing() }
+
+// IssueNoticeIssueMissing says "Task not found for this contact."
+// in the language of msgs.
+func (msgs Messages) IssueNoticeIssueMissing() string {
+	return Catalog.Format(msgs.locale, "issueNoticeIssueMissing", nil)
+}
+
+// IssueNoticeNoGoal says "This task has no goal to run."
+// in the language the app shows.
+func IssueNoticeNoGoal() string { return In(i18n.Locale()).IssueNoticeNoGoal() }
+
+// IssueNoticeNoGoal says "This task has no goal to run."
+// in the language of msgs.
+func (msgs Messages) IssueNoticeNoGoal() string {
+	return Catalog.Format(msgs.locale, "issueNoticeNoGoal", nil)
+}
+
+// IssueNoticeEnterGoal says "Enter a task goal."
+// in the language the app shows.
+func IssueNoticeEnterGoal() string { return In(i18n.Locale()).IssueNoticeEnterGoal() }
+
+// IssueNoticeEnterGoal says "Enter a task goal."
+// in the language of msgs.
+func (msgs Messages) IssueNoticeEnterGoal() string {
+	return Catalog.Format(msgs.locale, "issueNoticeEnterGoal", nil)
+}
+
+// IssueNoticeArchivedEdit says "Restore this archived task before editing it."
+// in the language the app shows.
+func IssueNoticeArchivedEdit() string { return In(i18n.Locale()).IssueNoticeArchivedEdit() }
+
+// IssueNoticeArchivedEdit says "Restore this archived task before editing it."
+// in the language of msgs.
+func (msgs Messages) IssueNoticeArchivedEdit() string {
+	return Catalog.Format(msgs.locale, "issueNoticeArchivedEdit", nil)
+}
+
+// IssueNoticeTerminalEdit says "Reopen this task before editing a done or canceled item."
+// in the language the app shows.
+func IssueNoticeTerminalEdit() string { return In(i18n.Locale()).IssueNoticeTerminalEdit() }
+
+// IssueNoticeTerminalEdit says "Reopen this task before editing a done or canceled item."
+// in the language of msgs.
+func (msgs Messages) IssueNoticeTerminalEdit() string {
+	return Catalog.Format(msgs.locale, "issueNoticeTerminalEdit", nil)
+}
+
+// IssueNoticeRestoreFailed says "Could not restore this task."
+// in the language the app shows.
+func IssueNoticeRestoreFailed() string { return In(i18n.Locale()).IssueNoticeRestoreFailed() }
+
+// IssueNoticeRestoreFailed says "Could not restore this task."
+// in the language of msgs.
+func (msgs Messages) IssueNoticeRestoreFailed() string {
+	return Catalog.Format(msgs.locale, "issueNoticeRestoreFailed", nil)
+}
+
+// IssueNoticeReopenFailed says "Could not reopen this task."
+// in the language the app shows.
+func IssueNoticeReopenFailed() string { return In(i18n.Locale()).IssueNoticeReopenFailed() }
+
+// IssueNoticeReopenFailed says "Could not reopen this task."
+// in the language of msgs.
+func (msgs Messages) IssueNoticeReopenFailed() string {
+	return Catalog.Format(msgs.locale, "issueNoticeReopenFailed", nil)
+}
+
+// IssueNoticeCancelFailed says "Could not cancel this task; its state was not changed."
+// in the language the app shows.
+func IssueNoticeCancelFailed() string { return In(i18n.Locale()).IssueNoticeCancelFailed() }
+
+// IssueNoticeCancelFailed says "Could not cancel this task; its state was not changed."
+// in the language of msgs.
+func (msgs Messages) IssueNoticeCancelFailed() string {
+	return Catalog.Format(msgs.locale, "issueNoticeCancelFailed", nil)
+}
+
+// IssueNoticeCompleteFailed says "Could not complete this task."
+// in the language the app shows.
+func IssueNoticeCompleteFailed() string { return In(i18n.Locale()).IssueNoticeCompleteFailed() }
+
+// IssueNoticeCompleteFailed says "Could not complete this task."
+// in the language of msgs.
+func (msgs Messages) IssueNoticeCompleteFailed() string {
+	return Catalog.Format(msgs.locale, "issueNoticeCompleteFailed", nil)
+}
+
+// IssueNoticeRequirementSaveFailed says "Could not save the requirement state."
+// in the language the app shows.
+func IssueNoticeRequirementSaveFailed() string {
+	return In(i18n.Locale()).IssueNoticeRequirementSaveFailed()
+}
+
+// IssueNoticeRequirementSaveFailed says "Could not save the requirement state."
+// in the language of msgs.
+func (msgs Messages) IssueNoticeRequirementSaveFailed() string {
+	return Catalog.Format(msgs.locale, "issueNoticeRequirementSaveFailed", nil)
+}
+
+// IssueNoticeConfirmFailed says "Could not confirm this run."
+// in the language the app shows.
+func IssueNoticeConfirmFailed() string { return In(i18n.Locale()).IssueNoticeConfirmFailed() }
+
+// IssueNoticeConfirmFailed says "Could not confirm this run."
+// in the language of msgs.
+func (msgs Messages) IssueNoticeConfirmFailed() string {
+	return Catalog.Format(msgs.locale, "issueNoticeConfirmFailed", nil)
+}
+
+// IssueNoticeResumeFailed says "Could not resume this task."
+// in the language the app shows.
+func IssueNoticeResumeFailed() string { return In(i18n.Locale()).IssueNoticeResumeFailed() }
+
+// IssueNoticeResumeFailed says "Could not resume this task."
+// in the language of msgs.
+func (msgs Messages) IssueNoticeResumeFailed() string {
+	return Catalog.Format(msgs.locale, "issueNoticeResumeFailed", nil)
+}
+
+// IssueNoticeWaitFailed says "Could not mark this task waiting."
+// in the language the app shows.
+func IssueNoticeWaitFailed() string { return In(i18n.Locale()).IssueNoticeWaitFailed() }
+
+// IssueNoticeWaitFailed says "Could not mark this task waiting."
+// in the language of msgs.
+func (msgs Messages) IssueNoticeWaitFailed() string {
+	return Catalog.Format(msgs.locale, "issueNoticeWaitFailed", nil)
+}
+
+// IssueNoticeArchiveFailed says "Could not archive this task."
+// in the language the app shows.
+func IssueNoticeArchiveFailed() string { return In(i18n.Locale()).IssueNoticeArchiveFailed() }
+
+// IssueNoticeArchiveFailed says "Could not archive this task."
+// in the language of msgs.
+func (msgs Messages) IssueNoticeArchiveFailed() string {
+	return Catalog.Format(msgs.locale, "issueNoticeArchiveFailed", nil)
+}
+
+// IssueNoticeViewSaveFailed says "Could not save that this run was viewed: {detail}"
+// in the language the app shows.
+func IssueNoticeViewSaveFailed(detail string) string {
+	return In(i18n.Locale()).IssueNoticeViewSaveFailed(detail)
+}
+
+// IssueNoticeViewSaveFailed says "Could not save that this run was viewed: {detail}"
+// in the language of msgs.
+func (msgs Messages) IssueNoticeViewSaveFailed(detail string) string {
+	return Catalog.Format(msgs.locale, "issueNoticeViewSaveFailed", map[string]any{"detail": detail})
+}
+
+// IssueNoticeSaveIssueFailed says "Could not save this task: {detail}"
+// in the language the app shows.
+func IssueNoticeSaveIssueFailed(detail string) string {
+	return In(i18n.Locale()).IssueNoticeSaveIssueFailed(detail)
+}
+
+// IssueNoticeSaveIssueFailed says "Could not save this task: {detail}"
+// in the language of msgs.
+func (msgs Messages) IssueNoticeSaveIssueFailed(detail string) string {
+	return Catalog.Format(msgs.locale, "issueNoticeSaveIssueFailed", map[string]any{"detail": detail})
+}
+
+// IssueNoticeExecutionSaveFailed says "Could not save the task run: {detail}"
+// in the language the app shows.
+func IssueNoticeExecutionSaveFailed(detail string) string {
+	return In(i18n.Locale()).IssueNoticeExecutionSaveFailed(detail)
+}
+
+// IssueNoticeExecutionSaveFailed says "Could not save the task run: {detail}"
+// in the language of msgs.
+func (msgs Messages) IssueNoticeExecutionSaveFailed(detail string) string {
+	return Catalog.Format(msgs.locale, "issueNoticeExecutionSaveFailed", map[string]any{"detail": detail})
+}
+
+// IssueNoticeSupplementRetrySaveFailed says "Could not save the retry intent; the old supplement receipt was left unchanged."
+// in the language the app shows.
+func IssueNoticeSupplementRetrySaveFailed() string {
+	return In(i18n.Locale()).IssueNoticeSupplementRetrySaveFailed()
+}
+
+// IssueNoticeSupplementRetrySaveFailed says "Could not save the retry intent; the old supplement receipt was left unchanged."
+// in the language of msgs.
+func (msgs Messages) IssueNoticeSupplementRetrySaveFailed() string {
+	return Catalog.Format(msgs.locale, "issueNoticeSupplementRetrySaveFailed", nil)
+}
+
+// IssueNoticeSupplementRestoreFailed says "Could not save restored supplement integrity state: {detail}"
+// in the language the app shows.
+func IssueNoticeSupplementRestoreFailed(detail string) string {
+	return In(i18n.Locale()).IssueNoticeSupplementRestoreFailed(detail)
+}
+
+// IssueNoticeSupplementRestoreFailed says "Could not save restored supplement integrity state: {detail}"
+// in the language of msgs.
+func (msgs Messages) IssueNoticeSupplementRestoreFailed(detail string) string {
+	return Catalog.Format(msgs.locale, "issueNoticeSupplementRestoreFailed", map[string]any{"detail": detail})
+}
+
+// IssueNoticeSupplementBatchActive says "A supplement batch is already {state} for this task."
+// in the language the app shows.
+func IssueNoticeSupplementBatchActive(state string) string {
+	return In(i18n.Locale()).IssueNoticeSupplementBatchActive(state)
+}
+
+// IssueNoticeSupplementBatchActive says "A supplement batch is already {state} for this task."
+// in the language of msgs.
+func (msgs Messages) IssueNoticeSupplementBatchActive(state string) string {
+	return Catalog.Format(msgs.locale, "issueNoticeSupplementBatchActive", map[string]any{"state": state})
+}
+
+// IssueBlockNoIssue says "Task not found."
+// in the language the app shows.
+func IssueBlockNoIssue() string { return In(i18n.Locale()).IssueBlockNoIssue() }
+
+// IssueBlockNoIssue says "Task not found."
+// in the language of msgs.
+func (msgs Messages) IssueBlockNoIssue() string {
+	return Catalog.Format(msgs.locale, "issueBlockNoIssue", nil)
+}
+
+// IssueBlockArchived says "Restore this archived task before starting work."
+// in the language the app shows.
+func IssueBlockArchived() string { return In(i18n.Locale()).IssueBlockArchived() }
+
+// IssueBlockArchived says "Restore this archived task before starting work."
+// in the language of msgs.
+func (msgs Messages) IssueBlockArchived() string {
+	return Catalog.Format(msgs.locale, "issueBlockArchived", nil)
+}
+
+// IssueBlockQuestion says "Answer the waiting question before continuing this task."
+// in the language the app shows.
+func IssueBlockQuestion() string { return In(i18n.Locale()).IssueBlockQuestion() }
+
+// IssueBlockQuestion says "Answer the waiting question before continuing this task."
+// in the language of msgs.
+func (msgs Messages) IssueBlockQuestion() string {
+	return Catalog.Format(msgs.locale, "issueBlockQuestion", nil)
+}
+
+// IssueBlockCompleted says "Reopen this task before starting another run."
+// in the language the app shows.
+func IssueBlockCompleted() string { return In(i18n.Locale()).IssueBlockCompleted() }
+
+// IssueBlockCompleted says "Reopen this task before starting another run."
+// in the language of msgs.
+func (msgs Messages) IssueBlockCompleted() string {
+	return Catalog.Format(msgs.locale, "issueBlockCompleted", nil)
+}
+
+// IssueBlockCanceled says "Reopen this task before starting another run."
+// in the language the app shows.
+func IssueBlockCanceled() string { return In(i18n.Locale()).IssueBlockCanceled() }
+
+// IssueBlockCanceled says "Reopen this task before starting another run."
+// in the language of msgs.
+func (msgs Messages) IssueBlockCanceled() string {
+	return Catalog.Format(msgs.locale, "issueBlockCanceled", nil)
+}
+
+// IssueBlockExecution says "An run is still active or has no trusted terminal state; reload before running this task again."
+// in the language the app shows.
+func IssueBlockExecution() string { return In(i18n.Locale()).IssueBlockExecution() }
+
+// IssueBlockExecution says "An run is still active or has no trusted terminal state; reload before running this task again."
+// in the language of msgs.
+func (msgs Messages) IssueBlockExecution() string {
+	return Catalog.Format(msgs.locale, "issueBlockExecution", nil)
+}
+
+// ResultInspectMissing says "No file exists at the reported path; it may have been moved or deleted."
+// in the language the app shows.
+func ResultInspectMissing() string { return In(i18n.Locale()).ResultInspectMissing() }
+
+// ResultInspectMissing says "No file exists at the reported path; it may have been moved or deleted."
+// in the language of msgs.
+func (msgs Messages) ResultInspectMissing() string {
+	return Catalog.Format(msgs.locale, "resultInspectMissing", nil)
+}
+
+// ResultInspectFailed says "Could not inspect the reported path: {detail}"
+// in the language the app shows.
+func ResultInspectFailed(detail string) string { return In(i18n.Locale()).ResultInspectFailed(detail) }
+
+// ResultInspectFailed says "Could not inspect the reported path: {detail}"
+// in the language of msgs.
+func (msgs Messages) ResultInspectFailed(detail string) string {
+	return Catalog.Format(msgs.locale, "resultInspectFailed", map[string]any{"detail": detail})
+}
+
+// ResultInspectNotRegular says "The reported path is no longer a regular file."
+// in the language the app shows.
+func ResultInspectNotRegular() string { return In(i18n.Locale()).ResultInspectNotRegular() }
+
+// ResultInspectNotRegular says "The reported path is no longer a regular file."
+// in the language of msgs.
+func (msgs Messages) ResultInspectNotRegular() string {
+	return Catalog.Format(msgs.locale, "resultInspectNotRegular", nil)
+}
+
+// ResultInspectTooLarge says "Current file is {size} bytes; the preview limit is {limit} bytes. Open the file to inspect it in full."
+// in the language the app shows.
+func ResultInspectTooLarge(size string, limit string) string {
+	return In(i18n.Locale()).ResultInspectTooLarge(size, limit)
+}
+
+// ResultInspectTooLarge says "Current file is {size} bytes; the preview limit is {limit} bytes. Open the file to inspect it in full."
+// in the language of msgs.
+func (msgs Messages) ResultInspectTooLarge(size string, limit string) string {
+	return Catalog.Format(msgs.locale, "resultInspectTooLarge", map[string]any{"size": size, "limit": limit})
+}
+
+// ResultInspectGrew says "Current file grew beyond the {limit}-byte preview limit. Open the file to inspect it in full."
+// in the language the app shows.
+func ResultInspectGrew(limit string) string { return In(i18n.Locale()).ResultInspectGrew(limit) }
+
+// ResultInspectGrew says "Current file grew beyond the {limit}-byte preview limit. Open the file to inspect it in full."
+// in the language of msgs.
+func (msgs Messages) ResultInspectGrew(limit string) string {
+	return Catalog.Format(msgs.locale, "resultInspectGrew", map[string]any{"limit": limit})
+}
+
+// ResultInspectNotUTF8 says "The current file is not UTF-8 text; open it with the system application."
+// in the language the app shows.
+func ResultInspectNotUTF8() string { return In(i18n.Locale()).ResultInspectNotUTF8() }
+
+// ResultInspectNotUTF8 says "The current file is not UTF-8 text; open it with the system application."
+// in the language of msgs.
+func (msgs Messages) ResultInspectNotUTF8() string {
+	return Catalog.Format(msgs.locale, "resultInspectNotUTF8", nil)
+}
+
+// ResultReadFailed says "Could not read the current file: {detail}"
+// in the language the app shows.
+func ResultReadFailed(detail string) string { return In(i18n.Locale()).ResultReadFailed(detail) }
+
+// ResultReadFailed says "Could not read the current file: {detail}"
+// in the language of msgs.
+func (msgs Messages) ResultReadFailed(detail string) string {
+	return Catalog.Format(msgs.locale, "resultReadFailed", map[string]any{"detail": detail})
+}
+
+// ResultOpenFailed says "Could not open the current file: {detail}"
+// in the language the app shows.
+func ResultOpenFailed(detail string) string { return In(i18n.Locale()).ResultOpenFailed(detail) }
+
+// ResultOpenFailed says "Could not open the current file: {detail}"
+// in the language of msgs.
+func (msgs Messages) ResultOpenFailed(detail string) string {
+	return Catalog.Format(msgs.locale, "resultOpenFailed", map[string]any{"detail": detail})
+}
+
+// ResultRevealFailed says "Could not reveal the current file: {detail}"
+// in the language the app shows.
+func ResultRevealFailed(detail string) string { return In(i18n.Locale()).ResultRevealFailed(detail) }
+
+// ResultRevealFailed says "Could not reveal the current file: {detail}"
+// in the language of msgs.
+func (msgs Messages) ResultRevealFailed(detail string) string {
+	return Catalog.Format(msgs.locale, "resultRevealFailed", map[string]any{"detail": detail})
+}
+
+// IssueNoticeFormSwitch says "Finish or cancel the current task form before switching contacts."
+// in the language the app shows.
+func IssueNoticeFormSwitch() string { return In(i18n.Locale()).IssueNoticeFormSwitch() }
+
+// IssueNoticeFormSwitch says "Finish or cancel the current task form before switching contacts."
+// in the language of msgs.
+func (msgs Messages) IssueNoticeFormSwitch() string {
+	return Catalog.Format(msgs.locale, "issueNoticeFormSwitch", nil)
+}
+
+// IssueNoticeSupplementAutoStop says "Could not save the automatic-continuation stop."
+// in the language the app shows.
+func IssueNoticeSupplementAutoStop() string { return In(i18n.Locale()).IssueNoticeSupplementAutoStop() }
+
+// IssueNoticeSupplementAutoStop says "Could not save the automatic-continuation stop."
+// in the language of msgs.
+func (msgs Messages) IssueNoticeSupplementAutoStop() string {
+	return Catalog.Format(msgs.locale, "issueNoticeSupplementAutoStop", nil)
+}
+
+// IssueNoticeSupplementAutoResume says "Could not save the automatic-continuation resume."
+// in the language the app shows.
+func IssueNoticeSupplementAutoResume() string {
+	return In(i18n.Locale()).IssueNoticeSupplementAutoResume()
+}
+
+// IssueNoticeSupplementAutoResume says "Could not save the automatic-continuation resume."
+// in the language of msgs.
+func (msgs Messages) IssueNoticeSupplementAutoResume() string {
+	return Catalog.Format(msgs.locale, "issueNoticeSupplementAutoResume", nil)
+}
+
+// IssueNoticeSupplementRetry says "Could not retry this supplement."
+// in the language the app shows.
+func IssueNoticeSupplementRetry() string { return In(i18n.Locale()).IssueNoticeSupplementRetry() }
+
+// IssueNoticeSupplementRetry says "Could not retry this supplement."
+// in the language of msgs.
+func (msgs Messages) IssueNoticeSupplementRetry() string {
+	return Catalog.Format(msgs.locale, "issueNoticeSupplementRetry", nil)
+}
+
+// IssueNoticeSupplementCheck says "Could not check this supplement run."
+// in the language the app shows.
+func IssueNoticeSupplementCheck() string { return In(i18n.Locale()).IssueNoticeSupplementCheck() }
+
+// IssueNoticeSupplementCheck says "Could not check this supplement run."
+// in the language of msgs.
+func (msgs Messages) IssueNoticeSupplementCheck() string {
+	return Catalog.Format(msgs.locale, "issueNoticeSupplementCheck", nil)
+}
+
+// ResultLoadNoSession says "This run has no recorded Runtime session/task; results cannot be inspected."
+// in the language the app shows.
+func ResultLoadNoSession() string { return In(i18n.Locale()).ResultLoadNoSession() }
+
+// ResultLoadNoSession says "This run has no recorded Runtime session/task; results cannot be inspected."
+// in the language of msgs.
+func (msgs Messages) ResultLoadNoSession() string {
+	return Catalog.Format(msgs.locale, "resultLoadNoSession", nil)
+}
+
+// ResultLoadRuntimeNotReady says "Runtime is not ready; reopen this result after history is available."
+// in the language the app shows.
+func ResultLoadRuntimeNotReady() string { return In(i18n.Locale()).ResultLoadRuntimeNotReady() }
+
+// ResultLoadRuntimeNotReady says "Runtime is not ready; reopen this result after history is available."
+// in the language of msgs.
+func (msgs Messages) ResultLoadRuntimeNotReady() string {
+	return Catalog.Format(msgs.locale, "resultLoadRuntimeNotReady", nil)
+}
+
+// ResultLoadOwnerMissing says "The task owner is no longer available; reload cannot continue."
+// in the language the app shows.
+func ResultLoadOwnerMissing() string { return In(i18n.Locale()).ResultLoadOwnerMissing() }
+
+// ResultLoadOwnerMissing says "The task owner is no longer available; reload cannot continue."
+// in the language of msgs.
+func (msgs Messages) ResultLoadOwnerMissing() string {
+	return Catalog.Format(msgs.locale, "resultLoadOwnerMissing", nil)
+}
+
+// ResultLoadDetached says "This run is no longer attached to the task; reload cannot continue."
+// in the language the app shows.
+func ResultLoadDetached() string { return In(i18n.Locale()).ResultLoadDetached() }
+
+// ResultLoadDetached says "This run is no longer attached to the task; reload cannot continue."
+// in the language of msgs.
+func (msgs Messages) ResultLoadDetached() string {
+	return Catalog.Format(msgs.locale, "resultLoadDetached", nil)
+}
+
+// ResultLoadFailed says "Could not load this result: {detail}"
+// in the language the app shows.
+func ResultLoadFailed(detail string) string { return In(i18n.Locale()).ResultLoadFailed(detail) }
+
+// ResultLoadFailed says "Could not load this result: {detail}"
+// in the language of msgs.
+func (msgs Messages) ResultLoadFailed(detail string) string {
+	return Catalog.Format(msgs.locale, "resultLoadFailed", map[string]any{"detail": detail})
+}
+
+// ResultNoticeWorkingDirMissing says "Runtime session working directory is unavailable; file paths are shown as reported."
+// in the language the app shows.
+func ResultNoticeWorkingDirMissing() string { return In(i18n.Locale()).ResultNoticeWorkingDirMissing() }
+
+// ResultNoticeWorkingDirMissing says "Runtime session working directory is unavailable; file paths are shown as reported."
+// in the language of msgs.
+func (msgs Messages) ResultNoticeWorkingDirMissing() string {
+	return Catalog.Format(msgs.locale, "resultNoticeWorkingDirMissing", nil)
+}
+
+// ResultDeriveNoSession says "Run has no recorded Runtime session; results cannot be inspected."
+// in the language the app shows.
+func ResultDeriveNoSession() string { return In(i18n.Locale()).ResultDeriveNoSession() }
+
+// ResultDeriveNoSession says "Run has no recorded Runtime session; results cannot be inspected."
+// in the language of msgs.
+func (msgs Messages) ResultDeriveNoSession() string {
+	return Catalog.Format(msgs.locale, "resultDeriveNoSession", nil)
+}
+
+// ResultDeriveSessionMismatch says "Runtime history belongs to a different session; results cannot be inspected."
+// in the language the app shows.
+func ResultDeriveSessionMismatch() string { return In(i18n.Locale()).ResultDeriveSessionMismatch() }
+
+// ResultDeriveSessionMismatch says "Runtime history belongs to a different session; results cannot be inspected."
+// in the language of msgs.
+func (msgs Messages) ResultDeriveSessionMismatch() string {
+	return Catalog.Format(msgs.locale, "resultDeriveSessionMismatch", nil)
+}
+
+// ResultDeriveNoTask says "Run has no recorded Runtime task; results cannot be inspected."
+// in the language the app shows.
+func ResultDeriveNoTask() string { return In(i18n.Locale()).ResultDeriveNoTask() }
+
+// ResultDeriveNoTask says "Run has no recorded Runtime task; results cannot be inspected."
+// in the language of msgs.
+func (msgs Messages) ResultDeriveNoTask() string {
+	return Catalog.Format(msgs.locale, "resultDeriveNoTask", nil)
+}
+
+// ResultDeriveTaskMissing says "Runtime history does not contain the run's task; the session may be unavailable or legacy."
+// in the language the app shows.
+func ResultDeriveTaskMissing() string { return In(i18n.Locale()).ResultDeriveTaskMissing() }
+
+// ResultDeriveTaskMissing says "Runtime history does not contain the run's task; the session may be unavailable or legacy."
+// in the language of msgs.
+func (msgs Messages) ResultDeriveTaskMissing() string {
+	return Catalog.Format(msgs.locale, "resultDeriveTaskMissing", nil)
+}
+
+// ResultDeriveMessageMissing says "Runtime history does not record the supplied run message."
+// in the language the app shows.
+func ResultDeriveMessageMissing() string { return In(i18n.Locale()).ResultDeriveMessageMissing() }
+
+// ResultDeriveMessageMissing says "Runtime history does not record the supplied run message."
+// in the language of msgs.
+func (msgs Messages) ResultDeriveMessageMissing() string {
+	return Catalog.Format(msgs.locale, "resultDeriveMessageMissing", nil)
+}
+
+// SendNoticeProtocol says "Protocol failure; delivery not confirmed. Reload before sending again."
+// in the language the app shows.
+func SendNoticeProtocol() string { return In(i18n.Locale()).SendNoticeProtocol() }
+
+// SendNoticeProtocol says "Protocol failure; delivery not confirmed. Reload before sending again."
+// in the language of msgs.
+func (msgs Messages) SendNoticeProtocol() string {
+	return Catalog.Format(msgs.locale, "sendNoticeProtocol", nil)
+}
+
+// SendNoticeDelivery says "Delivery/result not confirmed. Reload before sending again."
+// in the language the app shows.
+func SendNoticeDelivery() string { return In(i18n.Locale()).SendNoticeDelivery() }
+
+// SendNoticeDelivery says "Delivery/result not confirmed. Reload before sending again."
+// in the language of msgs.
+func (msgs Messages) SendNoticeDelivery() string {
+	return Catalog.Format(msgs.locale, "sendNoticeDelivery", nil)
+}
+
+// SendNoticeCancelled says "Cancellation requested"
+// in the language the app shows.
+func SendNoticeCancelled() string { return In(i18n.Locale()).SendNoticeCancelled() }
+
+// SendNoticeCancelled says "Cancellation requested"
+// in the language of msgs.
+func (msgs Messages) SendNoticeCancelled() string {
+	return Catalog.Format(msgs.locale, "sendNoticeCancelled", nil)
+}
+
+// SendNoticePreviousIncomplete says "Previous task did not complete."
+// in the language the app shows.
+func SendNoticePreviousIncomplete() string { return In(i18n.Locale()).SendNoticePreviousIncomplete() }
+
+// SendNoticePreviousIncomplete says "Previous task did not complete."
+// in the language of msgs.
+func (msgs Messages) SendNoticePreviousIncomplete() string {
+	return Catalog.Format(msgs.locale, "sendNoticePreviousIncomplete", nil)
+}
+
+// SendNoticeHistoryReloaded says "History reloaded; no retry was sent. Inspect the recorded messages before explicitly sending or removing retained tas…"
+// in the language the app shows.
+func SendNoticeHistoryReloaded() string { return In(i18n.Locale()).SendNoticeHistoryReloaded() }
+
+// SendNoticeHistoryReloaded says "History reloaded; no retry was sent. Inspect the recorded messages before explicitly sending or removing retained tas…"
+// in the language of msgs.
+func (msgs Messages) SendNoticeHistoryReloaded() string {
+	return Catalog.Format(msgs.locale, "sendNoticeHistoryReloaded", nil)
+}
+
+// SendNoticeUncertain says "A previous message may have been sent; delivery was not confirmed before restart. Reload history to verify. No automa…"
+// in the language the app shows.
+func SendNoticeUncertain() string { return In(i18n.Locale()).SendNoticeUncertain() }
+
+// SendNoticeUncertain says "A previous message may have been sent; delivery was not confirmed before restart. Reload history to verify. No automa…"
+// in the language of msgs.
+func (msgs Messages) SendNoticeUncertain() string {
+	return Catalog.Format(msgs.locale, "sendNoticeUncertain", nil)
+}
+
+// SendNoticeIssueAssociation says "Task accepted, but its task association could not be saved; reload before retrying."
+// in the language the app shows.
+func SendNoticeIssueAssociation() string { return In(i18n.Locale()).SendNoticeIssueAssociation() }
+
+// SendNoticeIssueAssociation says "Task accepted, but its task association could not be saved; reload before retrying."
+// in the language of msgs.
+func (msgs Messages) SendNoticeIssueAssociation() string {
+	return Catalog.Format(msgs.locale, "sendNoticeIssueAssociation", nil)
+}
+
+// SendNoticeDraftNotCleared says "Task accepted, but its sent context could not be cleared from the next-message draft; reload before sending again."
+// in the language the app shows.
+func SendNoticeDraftNotCleared() string { return In(i18n.Locale()).SendNoticeDraftNotCleared() }
+
+// SendNoticeDraftNotCleared says "Task accepted, but its sent context could not be cleared from the next-message draft; reload before sending again."
+// in the language of msgs.
+func (msgs Messages) SendNoticeDraftNotCleared() string {
+	return Catalog.Format(msgs.locale, "sendNoticeDraftNotCleared", nil)
+}
+
+// SendNoticeDeliveryUnknown says "Delivery not confirmed ({detail}). Reload to check before sending again."
+// in the language the app shows.
+func SendNoticeDeliveryUnknown(detail string) string {
+	return In(i18n.Locale()).SendNoticeDeliveryUnknown(detail)
+}
+
+// SendNoticeDeliveryUnknown says "Delivery not confirmed ({detail}). Reload to check before sending again."
+// in the language of msgs.
+func (msgs Messages) SendNoticeDeliveryUnknown(detail string) string {
+	return Catalog.Format(msgs.locale, "sendNoticeDeliveryUnknown", map[string]any{"detail": detail})
+}
+
+// SendNoticeContactSave says "Could not save this contact; the message was not sent. {detail}"
+// in the language the app shows.
+func SendNoticeContactSave(detail string) string {
+	return In(i18n.Locale()).SendNoticeContactSave(detail)
+}
+
+// SendNoticeContactSave says "Could not save this contact; the message was not sent. {detail}"
+// in the language of msgs.
+func (msgs Messages) SendNoticeContactSave(detail string) string {
+	return Catalog.Format(msgs.locale, "sendNoticeContactSave", map[string]any{"detail": detail})
+}
+
+// SendNoticeConnectionLost says "Connection lost before the task finished; reload to verify."
+// in the language the app shows.
+func SendNoticeConnectionLost() string { return In(i18n.Locale()).SendNoticeConnectionLost() }
+
+// SendNoticeConnectionLost says "Connection lost before the task finished; reload to verify."
+// in the language of msgs.
+func (msgs Messages) SendNoticeConnectionLost() string {
+	return Catalog.Format(msgs.locale, "sendNoticeConnectionLost", nil)
+}
+
+// IssueSendProtocol says "Protocol failure; delivery not confirmed. Reload before sending again."
+// in the language the app shows.
+func IssueSendProtocol() string { return In(i18n.Locale()).IssueSendProtocol() }
+
+// IssueSendProtocol says "Protocol failure; delivery not confirmed. Reload before sending again."
+// in the language of msgs.
+func (msgs Messages) IssueSendProtocol() string {
+	return Catalog.Format(msgs.locale, "issueSendProtocol", nil)
+}
+
+// IssueSendDelivery says "Delivery/result not confirmed. Reload before sending again."
+// in the language the app shows.
+func IssueSendDelivery() string { return In(i18n.Locale()).IssueSendDelivery() }
+
+// IssueSendDelivery says "Delivery/result not confirmed. Reload before sending again."
+// in the language of msgs.
+func (msgs Messages) IssueSendDelivery() string {
+	return Catalog.Format(msgs.locale, "issueSendDelivery", nil)
+}
+
+// IssueSendShutdown says "The app is shutting down."
+// in the language the app shows.
+func IssueSendShutdown() string { return In(i18n.Locale()).IssueSendShutdown() }
+
+// IssueSendShutdown says "The app is shutting down."
+// in the language of msgs.
+func (msgs Messages) IssueSendShutdown() string {
+	return Catalog.Format(msgs.locale, "issueSendShutdown", nil)
+}
+
+// IssueSendArchived says "This contact is archived. Restore it before starting task work."
+// in the language the app shows.
+func IssueSendArchived() string { return In(i18n.Locale()).IssueSendArchived() }
+
+// IssueSendArchived says "This contact is archived. Restore it before starting task work."
+// in the language of msgs.
+func (msgs Messages) IssueSendArchived() string {
+	return Catalog.Format(msgs.locale, "issueSendArchived", nil)
+}
+
+// IssueSendApplying says "Connection settings are being applied; wait for the new helper to become ready."
+// in the language the app shows.
+func IssueSendApplying() string { return In(i18n.Locale()).IssueSendApplying() }
+
+// IssueSendApplying says "Connection settings are being applied; wait for the new helper to become ready."
+// in the language of msgs.
+func (msgs Messages) IssueSendApplying() string {
+	return Catalog.Format(msgs.locale, "issueSendApplying", nil)
+}
+
+// IssueSendRuntimeNotReady says "Runtime is not ready."
+// in the language the app shows.
+func IssueSendRuntimeNotReady() string { return In(i18n.Locale()).IssueSendRuntimeNotReady() }
+
+// IssueSendRuntimeNotReady says "Runtime is not ready."
+// in the language of msgs.
+func (msgs Messages) IssueSendRuntimeNotReady() string {
+	return Catalog.Format(msgs.locale, "issueSendRuntimeNotReady", nil)
+}
+
+// IssueSendReceiptFailed says "Runtime accepted this supplement, but its local receipt could not be saved; reload before sending again."
+// in the language the app shows.
+func IssueSendReceiptFailed() string { return In(i18n.Locale()).IssueSendReceiptFailed() }
+
+// IssueSendReceiptFailed says "Runtime accepted this supplement, but its local receipt could not be saved; reload before sending again."
+// in the language of msgs.
+func (msgs Messages) IssueSendReceiptFailed() string {
+	return Catalog.Format(msgs.locale, "issueSendReceiptFailed", nil)
+}
+
+// IssueSendReceiptSaveFailed says "Could not save the supplement acceptance: {detail}"
+// in the language the app shows.
+func IssueSendReceiptSaveFailed(detail string) string {
+	return In(i18n.Locale()).IssueSendReceiptSaveFailed(detail)
+}
+
+// IssueSendReceiptSaveFailed says "Could not save the supplement acceptance: {detail}"
+// in the language of msgs.
+func (msgs Messages) IssueSendReceiptSaveFailed(detail string) string {
+	return Catalog.Format(msgs.locale, "issueSendReceiptSaveFailed", map[string]any{"detail": detail})
+}
+
+// IssueSendAssociation says "The supplement dispatch association was not in a recordable state; reload before sending again."
+// in the language the app shows.
+func IssueSendAssociation() string { return In(i18n.Locale()).IssueSendAssociation() }
+
+// IssueSendAssociation says "The supplement dispatch association was not in a recordable state; reload before sending again."
+// in the language of msgs.
+func (msgs Messages) IssueSendAssociation() string {
+	return Catalog.Format(msgs.locale, "issueSendAssociation", nil)
+}
+
+// IssueSendTaskAssociation says "Task accepted, but its task association could not be saved; reload before retrying."
+// in the language the app shows.
+func IssueSendTaskAssociation() string { return In(i18n.Locale()).IssueSendTaskAssociation() }
+
+// IssueSendTaskAssociation says "Task accepted, but its task association could not be saved; reload before retrying."
+// in the language of msgs.
+func (msgs Messages) IssueSendTaskAssociation() string {
+	return Catalog.Format(msgs.locale, "issueSendTaskAssociation", nil)
+}
+
+// IssueSendDraftNotCleared says "Task accepted, but its sent context could not be cleared from the next-run draft; reload before sending again."
+// in the language the app shows.
+func IssueSendDraftNotCleared() string { return In(i18n.Locale()).IssueSendDraftNotCleared() }
+
+// IssueSendDraftNotCleared says "Task accepted, but its sent context could not be cleared from the next-run draft; reload before sending again."
+// in the language of msgs.
+func (msgs Messages) IssueSendDraftNotCleared() string {
+	return Catalog.Format(msgs.locale, "issueSendDraftNotCleared", nil)
+}
+
+// IssueSendAcceptedCancel says "The accepted task could not be cancelled; do not retry it automatically."
+// in the language the app shows.
+func IssueSendAcceptedCancel() string { return In(i18n.Locale()).IssueSendAcceptedCancel() }
+
+// IssueSendAcceptedCancel says "The accepted task could not be cancelled; do not retry it automatically."
+// in the language of msgs.
+func (msgs Messages) IssueSendAcceptedCancel() string {
+	return Catalog.Format(msgs.locale, "issueSendAcceptedCancel", nil)
+}
+
+// IssueSendWaitingRuntime says "Waiting for runtime availability: {detail}"
+// in the language the app shows.
+func IssueSendWaitingRuntime(detail string) string {
+	return In(i18n.Locale()).IssueSendWaitingRuntime(detail)
+}
+
+// IssueSendWaitingRuntime says "Waiting for runtime availability: {detail}"
+// in the language of msgs.
+func (msgs Messages) IssueSendWaitingRuntime(detail string) string {
+	return Catalog.Format(msgs.locale, "issueSendWaitingRuntime", map[string]any{"detail": detail})
+}
+
+// IssueSendSupplementDelivery says "Supplement delivery not confirmed ({detail}). Reload to check before sending again."
+// in the language the app shows.
+func IssueSendSupplementDelivery(detail string) string {
+	return In(i18n.Locale()).IssueSendSupplementDelivery(detail)
+}
+
+// IssueSendSupplementDelivery says "Supplement delivery not confirmed ({detail}). Reload to check before sending again."
+// in the language of msgs.
+func (msgs Messages) IssueSendSupplementDelivery(detail string) string {
+	return Catalog.Format(msgs.locale, "issueSendSupplementDelivery", map[string]any{"detail": detail})
+}
+
+// IssueSendAutoStopMemory says "Supplement automation was stopped in memory; its intent could not be saved. Reload before relying on automatic contin…"
+// in the language the app shows.
+func IssueSendAutoStopMemory() string { return In(i18n.Locale()).IssueSendAutoStopMemory() }
+
+// IssueSendAutoStopMemory says "Supplement automation was stopped in memory; its intent could not be saved. Reload before relying on automatic contin…"
+// in the language of msgs.
+func (msgs Messages) IssueSendAutoStopMemory() string {
+	return Catalog.Format(msgs.locale, "issueSendAutoStopMemory", nil)
+}
+
+// IssueSendCancelRequested says "Cancellation requested"
+// in the language the app shows.
+func IssueSendCancelRequested() string { return In(i18n.Locale()).IssueSendCancelRequested() }
+
+// IssueSendCancelRequested says "Cancellation requested"
+// in the language of msgs.
+func (msgs Messages) IssueSendCancelRequested() string {
+	return Catalog.Format(msgs.locale, "issueSendCancelRequested", nil)
+}
+
+// IssueSendCancelling says "Cancelling; waiting for the runtime to stop."
+// in the language the app shows.
+func IssueSendCancelling() string { return In(i18n.Locale()).IssueSendCancelling() }
+
+// IssueSendCancelling says "Cancelling; waiting for the runtime to stop."
+// in the language of msgs.
+func (msgs Messages) IssueSendCancelling() string {
+	return Catalog.Format(msgs.locale, "issueSendCancelling", nil)
+}
+
+// IssueSendAlreadyFinished says "The task already finished; waiting for its final state."
+// in the language the app shows.
+func IssueSendAlreadyFinished() string { return In(i18n.Locale()).IssueSendAlreadyFinished() }
+
+// IssueSendAlreadyFinished says "The task already finished; waiting for its final state."
+// in the language of msgs.
+func (msgs Messages) IssueSendAlreadyFinished() string {
+	return Catalog.Format(msgs.locale, "issueSendAlreadyFinished", nil)
+}
+
+// IssueSendCancelAlready says "Cancellation already requested."
+// in the language the app shows.
+func IssueSendCancelAlready() string { return In(i18n.Locale()).IssueSendCancelAlready() }
+
+// IssueSendCancelAlready says "Cancellation already requested."
+// in the language of msgs.
+func (msgs Messages) IssueSendCancelAlready() string {
+	return Catalog.Format(msgs.locale, "issueSendCancelAlready", nil)
+}
+
+// IssueSendCancelFailed says "Cancel failed: {detail}"
+// in the language the app shows.
+func IssueSendCancelFailed(detail string) string {
+	return In(i18n.Locale()).IssueSendCancelFailed(detail)
+}
+
+// IssueSendCancelFailed says "Cancel failed: {detail}"
+// in the language of msgs.
+func (msgs Messages) IssueSendCancelFailed(detail string) string {
+	return Catalog.Format(msgs.locale, "issueSendCancelFailed", map[string]any{"detail": detail})
+}
+
+// IssueSendReloadDisconnected says "Runtime disconnected; restart Nagi to reload history."
+// in the language the app shows.
+func IssueSendReloadDisconnected() string { return In(i18n.Locale()).IssueSendReloadDisconnected() }
+
+// IssueSendReloadDisconnected says "Runtime disconnected; restart Nagi to reload history."
+// in the language of msgs.
+func (msgs Messages) IssueSendReloadDisconnected() string {
+	return Catalog.Format(msgs.locale, "issueSendReloadDisconnected", nil)
+}
+
+// IssueSendUncertain says "A previous message may have been sent; delivery was not confirmed before restart. Reload history to verify. No automa…"
+// in the language the app shows.
+func IssueSendUncertain() string { return In(i18n.Locale()).IssueSendUncertain() }
+
+// IssueSendUncertain says "A previous message may have been sent; delivery was not confirmed before restart. Reload history to verify. No automa…"
+// in the language of msgs.
+func (msgs Messages) IssueSendUncertain() string {
+	return Catalog.Format(msgs.locale, "issueSendUncertain", nil)
+}
+
+// IssueSendAnswerStopping says "Waiting for your answer; stopping the current run."
+// in the language the app shows.
+func IssueSendAnswerStopping() string { return In(i18n.Locale()).IssueSendAnswerStopping() }
+
+// IssueSendAnswerStopping says "Waiting for your answer; stopping the current run."
+// in the language of msgs.
+func (msgs Messages) IssueSendAnswerStopping() string {
+	return Catalog.Format(msgs.locale, "issueSendAnswerStopping", nil)
+}
+
+// WorkStateRunning says "Running"
+// in the language the app shows.
+func WorkStateRunning() string { return In(i18n.Locale()).WorkStateRunning() }
+
+// WorkStateRunning says "Running"
+// in the language of msgs.
+func (msgs Messages) WorkStateRunning() string {
+	return Catalog.Format(msgs.locale, "workStateRunning", nil)
+}
+
+// IssueRunHeader says "Run {number}: {status}"
+// in the language the app shows.
+func IssueRunHeader(number string, status string) string {
+	return In(i18n.Locale()).IssueRunHeader(number, status)
+}
+
+// IssueRunHeader says "Run {number}: {status}"
+// in the language of msgs.
+func (msgs Messages) IssueRunHeader(number string, status string) string {
+	return Catalog.Format(msgs.locale, "issueRunHeader", map[string]any{"number": number, "status": status})
+}
+
+// IssueRunRevision says "revision {number}"
+// in the language the app shows.
+func IssueRunRevision(number string) string { return In(i18n.Locale()).IssueRunRevision(number) }
+
+// IssueRunRevision says "revision {number}"
+// in the language of msgs.
+func (msgs Messages) IssueRunRevision(number string) string {
+	return Catalog.Format(msgs.locale, "issueRunRevision", map[string]any{"number": number})
+}
+
+// IssueEvidenceUnverified says "Completion not verified."
+// in the language the app shows.
+func IssueEvidenceUnverified() string { return In(i18n.Locale()).IssueEvidenceUnverified() }
+
+// IssueEvidenceUnverified says "Completion not verified."
+// in the language of msgs.
+func (msgs Messages) IssueEvidenceUnverified() string {
+	return Catalog.Format(msgs.locale, "issueEvidenceUnverified", nil)
+}
+
+// SupplementPendingStatus says "Waiting to send"
+// in the language the app shows.
+func SupplementPendingStatus() string { return In(i18n.Locale()).SupplementPendingStatus() }
+
+// SupplementPendingStatus says "Waiting to send"
+// in the language of msgs.
+func (msgs Messages) SupplementPendingStatus() string {
+	return Catalog.Format(msgs.locale, "supplementPendingStatus", nil)
+}
+
+// SupplementReceivedStatus says "Received"
+// in the language the app shows.
+func SupplementReceivedStatus() string { return In(i18n.Locale()).SupplementReceivedStatus() }
+
+// SupplementReceivedStatus says "Received"
+// in the language of msgs.
+func (msgs Messages) SupplementReceivedStatus() string {
+	return Catalog.Format(msgs.locale, "supplementReceivedStatus", nil)
+}
+
+// SupplementSentStatus says "Sent"
+// in the language the app shows.
+func SupplementSentStatus() string { return In(i18n.Locale()).SupplementSentStatus() }
+
+// SupplementSentStatus says "Sent"
+// in the language of msgs.
+func (msgs Messages) SupplementSentStatus() string {
+	return Catalog.Format(msgs.locale, "supplementSentStatus", nil)
+}
+
+// SupplementNeedsCheckStatus says "Needs check"
+// in the language the app shows.
+func SupplementNeedsCheckStatus() string { return In(i18n.Locale()).SupplementNeedsCheckStatus() }
+
+// SupplementNeedsCheckStatus says "Needs check"
+// in the language of msgs.
+func (msgs Messages) SupplementNeedsCheckStatus() string {
+	return Catalog.Format(msgs.locale, "supplementNeedsCheckStatus", nil)
+}
+
+// QuestionUnavailableTitle says "The waiting question is unavailable."
+// in the language the app shows.
+func QuestionUnavailableTitle() string { return In(i18n.Locale()).QuestionUnavailableTitle() }
+
+// QuestionUnavailableTitle says "The waiting question is unavailable."
+// in the language of msgs.
+func (msgs Messages) QuestionUnavailableTitle() string {
+	return Catalog.Format(msgs.locale, "questionUnavailableTitle", nil)
+}
+
+// QuestionUnavailableHint says "Reload this task before answering. The question text was not recorded."
+// in the language the app shows.
+func QuestionUnavailableHint() string { return In(i18n.Locale()).QuestionUnavailableHint() }
+
+// QuestionUnavailableHint says "Reload this task before answering. The question text was not recorded."
+// in the language of msgs.
+func (msgs Messages) QuestionUnavailableHint() string {
+	return Catalog.Format(msgs.locale, "questionUnavailableHint", nil)
+}
+
+// IssueReloadTask says "Reload task"
+// in the language the app shows.
+func IssueReloadTask() string { return In(i18n.Locale()).IssueReloadTask() }
+
+// IssueReloadTask says "Reload task"
+// in the language of msgs.
+func (msgs Messages) IssueReloadTask() string {
+	return Catalog.Format(msgs.locale, "issueReloadTask", nil)
+}
+
+// ToolOutputFailed says "Failed: {detail}"
+// in the language the app shows.
+func ToolOutputFailed(detail string) string { return In(i18n.Locale()).ToolOutputFailed(detail) }
+
+// ToolOutputFailed says "Failed: {detail}"
+// in the language of msgs.
+func (msgs Messages) ToolOutputFailed(detail string) string {
+	return Catalog.Format(msgs.locale, "toolOutputFailed", map[string]any{"detail": detail})
+}
+
+// ToolOutputTimedOut says "Timed out"
+// in the language the app shows.
+func ToolOutputTimedOut() string { return In(i18n.Locale()).ToolOutputTimedOut() }
+
+// ToolOutputTimedOut says "Timed out"
+// in the language of msgs.
+func (msgs Messages) ToolOutputTimedOut() string {
+	return Catalog.Format(msgs.locale, "toolOutputTimedOut", nil)
+}
+
+// ToolOutputTimedOutExit says "Timed out (exit {code})"
+// in the language the app shows.
+func ToolOutputTimedOutExit(code string) string {
+	return In(i18n.Locale()).ToolOutputTimedOutExit(code)
+}
+
+// ToolOutputTimedOutExit says "Timed out (exit {code})"
+// in the language of msgs.
+func (msgs Messages) ToolOutputTimedOutExit(code string) string {
+	return Catalog.Format(msgs.locale, "toolOutputTimedOutExit", map[string]any{"code": code})
+}
+
+// ToolOutputFailedExit says "Failed (exit {code})"
+// in the language the app shows.
+func ToolOutputFailedExit(code string) string { return In(i18n.Locale()).ToolOutputFailedExit(code) }
+
+// ToolOutputFailedExit says "Failed (exit {code})"
+// in the language of msgs.
+func (msgs Messages) ToolOutputFailedExit(code string) string {
+	return Catalog.Format(msgs.locale, "toolOutputFailedExit", map[string]any{"code": code})
+}
+
+// ToolOutputStructured says "Structured output received; open Details for the exact record."
+// in the language the app shows.
+func ToolOutputStructured() string { return In(i18n.Locale()).ToolOutputStructured() }
+
+// ToolOutputStructured says "Structured output received; open Details for the exact record."
+// in the language of msgs.
+func (msgs Messages) ToolOutputStructured() string {
+	return Catalog.Format(msgs.locale, "toolOutputStructured", nil)
+}
+
+// IssueSendHistoryReceiptFailed says "Runtime accepted this supplement, but the history-verified receipt could not be saved: {detail}"
+// in the language the app shows.
+func IssueSendHistoryReceiptFailed(detail string) string {
+	return In(i18n.Locale()).IssueSendHistoryReceiptFailed(detail)
+}
+
+// IssueSendHistoryReceiptFailed says "Runtime accepted this supplement, but the history-verified receipt could not be saved: {detail}"
+// in the language of msgs.
+func (msgs Messages) IssueSendHistoryReceiptFailed(detail string) string {
+	return Catalog.Format(msgs.locale, "issueSendHistoryReceiptFailed", map[string]any{"detail": detail})
+}
+
+// IssueSendReleaseToolFailed says "Could not release the idle work tool process: {detail}"
+// in the language the app shows.
+func IssueSendReleaseToolFailed(detail string) string {
+	return In(i18n.Locale()).IssueSendReleaseToolFailed(detail)
+}
+
+// IssueSendReleaseToolFailed says "Could not release the idle work tool process: {detail}"
+// in the language of msgs.
+func (msgs Messages) IssueSendReleaseToolFailed(detail string) string {
+	return Catalog.Format(msgs.locale, "issueSendReleaseToolFailed", map[string]any{"detail": detail})
 }

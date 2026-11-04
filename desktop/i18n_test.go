@@ -134,7 +134,7 @@ func TestLanguageSwitchKeepsNonzeroSettingsScrollAndActualFocus(t *testing.T) {
 	if !tr.Focused("API endpoint") {
 		t.Fatalf("API endpoint did not take focus: %v", tr.Texts())
 	}
-	tr.Scroll(520, 400, 0, 2000)
+	tr.Scroll(520, 400, 0, 100)
 	tr.Frame()
 	scrollBefore := a.settingsScroll.Y
 	if scrollBefore <= 0 {
@@ -143,10 +143,24 @@ func TestLanguageSwitchKeepsNonzeroSettingsScrollAndActualFocus(t *testing.T) {
 	tr.SetLocale("zh-Hans")
 	tr.Frame()
 	if a.settingsScroll.Y != scrollBefore || a.settingsTab != settingsTabConnection {
-		t.Fatalf("language switch changed scroll/category: scroll=%v/%v tab=%q", scrollBefore, a.settingsScroll.Y, a.settingsTab)
+		t.Fatalf("language switch changed middle scroll/category: scroll=%v/%v tab=%q", scrollBefore, a.settingsScroll.Y, a.settingsTab)
 	}
+	if !tr.Focused("API 端点") {
+		t.Fatalf("language switch lost actual Chinese focus: %v", tr.Texts())
+	}
+	tr.SetLocale("en")
+	tr.Frame()
 	if !tr.Focused("API endpoint") {
-		t.Fatalf("language switch lost actual focus: %v", tr.Texts())
+		t.Fatalf("switching back lost the same input focus: %v", tr.Texts())
+	}
+	if a.settingsScroll.Y != scrollBefore || a.settingsTab != settingsTabConnection {
+		t.Fatalf("switching back changed middle scroll/category: scroll=%v/%v tab=%q", scrollBefore, a.settingsScroll.Y, a.settingsTab)
+	}
+	if a.connectionForm.Draft.Endpoint != config.Endpoint {
+		t.Fatalf("language switch changed the API draft: %q", a.connectionForm.Draft.Endpoint)
+	}
+	if _, active := tr.TextCaret(); !active {
+		t.Fatal("switching back lost the text caret")
 	}
 }
 
@@ -739,7 +753,7 @@ func TestIssueWorkLabelsFollowLocaleAndKeepTargets(t *testing.T) {
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.SetLocale("en")
 	tr.Frame()
-	if !tr.HasText("New issue") || !tr.HasText("No issues in All issues.") && !tr.HasText(issue.Goal) {
+	if !tr.HasText("New task") || !tr.HasText("No issues in All issues.") && !tr.HasText(issue.Goal) {
 		t.Fatalf("English issue work labels missing: %v", tr.Texts())
 	}
 	tr.Scroll(300, 300, 0, 600)
@@ -772,15 +786,30 @@ func TestIssueWorkLabelsFollowLocaleAndKeepTargets(t *testing.T) {
 	a.issueDetailOpen = map[string]bool{issue.ID: true}
 	tr.SetLocale("zh-Hans")
 	tr.Frame()
-	if !tr.HasText("执行历史") || !tr.HasText("要求") || !tr.HasText(issue.Goal) {
+	if !tr.HasText("运行历史") || !tr.HasText("要求") || !tr.HasText(issue.Goal) {
 		t.Fatalf("Chinese issue detail labels or raw goal missing: %v", tr.Texts())
 	}
 	if nav.DetailID != issue.ID || nav.Filter != issueFilterAll || ct.Issues[0].Goal != issue.Goal {
 		t.Fatalf("locale switch changed the issue target or stored goal: %+v", nav)
 	}
+	workApp, workContact := workspaceTestApp(t)
+	workApp.workspaceOpen = false
+	workContact.Status = statusWorking
+	workContact.Work, workContact.WorkArg = workNoticeRunningTool, "read"
+	workTr := ui.NewTester(workApp.view, 1040, 720)
+	workTr.SetLocale("zh-Hans")
+	workTr.Frame()
+	if !workTr.HasText("正在运行 read") {
+		t.Fatalf("Chinese work progress missing: %v", workTr.Texts())
+	}
+	workTr.SetLocale("en")
+	workTr.Frame()
+	if !workTr.HasText("Running read") {
+		t.Fatalf("English work progress did not return: %v", workTr.Texts())
+	}
 	tr.SetLocale("en")
 	tr.Frame()
-	if !tr.HasText("Execution history") || tr.HasText("执行历史") {
+	if !tr.HasText("Run history") || tr.HasText("运行历史") {
 		t.Fatalf("English issue detail did not return: %v", tr.Texts())
 	}
 }
@@ -838,5 +867,212 @@ func TestTaskContextAndResultLabelsFollowLocale(t *testing.T) {
 	resultTr.Frame()
 	if !resultTr.HasText("Run results") || !resultTr.HasText("Reported files") || !resultTr.HasText("Read file →") {
 		t.Fatalf("English result labels did not return: %v", resultTr.Texts())
+	}
+}
+
+func TestIssueFormNoticeFollowsLocaleAndClearsOnSuccess(t *testing.T) {
+	a := issuePreviewApp("expanded")
+	a.windowWidth = 1040
+	a.selectedContact().issueNavigation().DetailID = ""
+	a.issueDetailOpen = nil
+	a.openNewIssueForm()
+	a.issueGoal = ""
+	a.saveIssueForm()
+	tr := ui.NewTester(a.view, 1040, 720)
+	tr.SetLocale("zh-Hans")
+	tr.Frame()
+	if !tr.HasText("请输入事项目标。") || tr.HasText("Enter a task goal.") {
+		t.Fatalf("Chinese issue form notice missing: %v", tr.Texts())
+	}
+	if a.issueFormNotice != "enter-goal" || a.issueFormError != "Enter an issue goal." {
+		t.Fatalf("issue form notice state = %q/%q", a.issueFormNotice, a.issueFormError)
+	}
+	tr.SetLocale("en")
+	tr.Frame()
+	if !tr.HasText("Enter a task goal.") || a.issueFormError != "Enter an issue goal." {
+		t.Fatalf("English form notice or raw tool error changed: %v / %q", tr.Texts(), a.issueFormError)
+	}
+	a.issueGoal = "Locale form success"
+	a.saveIssueForm()
+	tr.Frame()
+	if tr.HasText("Enter a task goal.") || a.issueFormNotice != "" || a.issueFormError != "" {
+		t.Fatalf("success did not clear the issue notice: %v", tr.Texts())
+	}
+	blocked := filepath.Join(t.TempDir(), "not-a-directory")
+	if err := os.WriteFile(blocked, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	a.store = &contactStore{path: filepath.Join(blocked, "contacts.json")}
+	a.openNewIssueForm()
+	a.issueGoal = "Target that cannot be saved"
+	a.saveIssueForm()
+	if a.issueFormError == "" || a.issueFormNotice != "save-issue-failed" ||
+		!strings.Contains(a.issueFormError, "not a directory") {
+		t.Fatalf("next raw failure lost its raw bytes or kind: %q / %q", a.issueFormNotice, a.issueFormError)
+	}
+	rendered := issueNoticeText(locales.In("zh-Hans"), a.issueFormNotice, a.issueFormNoticeDetail)
+	if !strings.Contains(rendered, "无法保存此事项：") || strings.Contains(rendered, "请输入事项目标") {
+		t.Fatalf("next raw failure renderer kept the old notice: %q", rendered)
+	}
+	a.store = nil
+	a.cancelIssueForm()
+	tr.SetLocale("en")
+	tr.Frame()
+	if tr.HasText("Enter a task goal.") {
+		t.Fatalf("language switch revived the cleared notice: %v", tr.Texts())
+	}
+	found := false
+	for _, issue := range a.selectedContact().Issues {
+		if issue.Goal == "Locale form success" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("successful form did not create the raw goal")
+	}
+}
+
+func TestIssueFormSwitchNoticeReplacesOldAndClears(t *testing.T) {
+	a := issuePreviewApp("expanded")
+	a.windowWidth = 1040
+	a.selectedContact().issueNavigation().DetailID = ""
+	a.issueDetailOpen = nil
+	a.openNewIssueForm()
+	a.issueGoal = ""
+	a.saveIssueForm()
+	if a.issueFormNotice != "enter-goal" {
+		t.Fatalf("initial notice = %q", a.issueFormNotice)
+	}
+	a.issueGoal = "keep this draft"
+	if a.leaveIssueFormForSwitch() {
+		t.Fatal("form switch was accepted with a draft")
+	}
+	if a.issueFormNotice != "form-switch" || a.issueFormError != "Finish or cancel the current issue form before switching contacts." {
+		t.Fatalf("switch notice = %q / %q", a.issueFormNotice, a.issueFormError)
+	}
+	rendered := issueNoticeText(locales.In("zh-Hans"), a.issueFormNotice, a.issueFormNoticeDetail)
+	if !strings.Contains(rendered, "切换联系人前请完成或取消当前事项表单。") || strings.Contains(rendered, "请输入事项目标") {
+		t.Fatalf("switch notice renderer = %q", rendered)
+	}
+	a.issueGoal = ""
+	a.issueRequirements = ""
+	if !a.leaveIssueFormForSwitch() {
+		t.Fatal("empty form did not leave")
+	}
+	if a.issueFormError != "" || a.issueFormNotice != "" || a.issueFormNoticeDetail != "" {
+		t.Fatalf("leave did not clear the form notice: %q/%q/%q", a.issueFormError, a.issueFormNotice, a.issueFormNoticeDetail)
+	}
+}
+
+func TestSendAndStatusNoticesFollowLocaleWithoutChangingRaw(t *testing.T) {
+	a, ct := workspaceTestApp(t)
+	ct.ActiveTaskID = "t1"
+	ct.SendState = sendAccepted
+	ct.Status = statusWorking
+	if w := a.ensureWork(ct, "t1", "m1"); w != nil {
+		w.State = workRunning
+	}
+	a.clearActiveTasksAfterExit()
+	if ct.StatusDetailKind != "status-connection-lost" || ct.SendErrorKind != "send-delivery" {
+		t.Fatalf("exit kinds = %q / %q", ct.StatusDetailKind, ct.SendErrorKind)
+	}
+	tr := ui.NewTester(a.view, 1040, 720)
+	tr.SetLocale("en")
+	tr.Frame()
+	if !tr.HasText(ct.SendError) || !tr.HasText(ct.StatusDetail) {
+		t.Fatalf("English send/status notices missing: %v", tr.Texts())
+	}
+	tr.SetLocale("zh-Hans")
+	tr.Frame()
+	if !tr.HasText("交付/结果未确认。再次发送前请重新加载。") ||
+		!tr.HasText("任务完成前连接已断开；请重新加载核实。") {
+		t.Fatalf("Chinese send/status notices missing: %v", tr.Texts())
+	}
+	if ct.SendError != "Delivery/result not confirmed. Reload before sending again." ||
+		ct.StatusDetail != "Connection lost before the task finished; reload to verify." {
+		t.Fatal("locale switch changed the canonical send/status raw bytes")
+	}
+}
+
+func TestCancelFailureNoticeReplacesRequestAndClears(t *testing.T) {
+	a, ct := workspaceTestApp(t)
+	ct.ActiveTaskID = "t1"
+	ct.SendState = sendAccepted
+	ct.setSendError("Cancellation requested", "send-cancelled", "")
+	a.applyCancelResult(ct.ID, "t1", "requested", errors.New("backend down"))
+	if ct.SendErrorKind != "send-cancel-failed" || ct.SendErrorDetail != "backend down" {
+		t.Fatalf("cancel failure = %q / %q", ct.SendErrorKind, ct.SendErrorDetail)
+	}
+	tr := ui.NewTester(a.view, 1040, 720)
+	tr.SetLocale("zh-Hans")
+	tr.Frame()
+	if !tr.HasText("取消失败：backend down") || tr.HasText("已请求取消") {
+		t.Fatalf("Chinese cancel failure missing or stale: %v", tr.Texts())
+	}
+	tr.SetLocale("en")
+	tr.Frame()
+	if !tr.HasText("Cancel failed: backend down") || tr.HasText("Cancellation requested") {
+		t.Fatalf("English cancel failure missing or stale: %v", tr.Texts())
+	}
+	ct.setSendError("raw provider 500", "", "")
+	tr.Frame()
+	if !tr.HasText("raw provider 500") || tr.HasText("Cancel failed: backend down") {
+		t.Fatalf("next raw failure revived the old kind: %v", tr.Texts())
+	}
+	ct.clearSendError()
+	tr.SetLocale("zh-Hans")
+	tr.Frame()
+	tr.SetLocale("en")
+	tr.Frame()
+	if tr.HasText("raw provider 500") || tr.HasText("Cancel failed: backend down") {
+		t.Fatalf("cleared send notice revived: %v", tr.Texts())
+	}
+}
+
+func TestGuardedActionsKeepCanonicalRawAndKind(t *testing.T) {
+	a, ct := workspaceTestApp(t)
+	ct.Archived = true
+	if a.sendRuntimeForIssue(ct, "blocked", "") {
+		t.Fatal("archived send was accepted")
+	}
+	if ct.SendError != "This contact is archived. Restore it before sending a message." || ct.SendErrorKind != blockArchivedSend {
+		t.Fatalf("send guard raw/kind = %q / %q", ct.SendError, ct.SendErrorKind)
+	}
+	issue := &productIssue{ID: "issue-guard", ContactID: ct.ID, Goal: "guard", Status: issueStatusInProgress}
+	ct.Issues = []*productIssue{issue}
+	ct.SelectedIssueID = issue.ID
+	if a.issueRunCapturedWithOperation(ct, issue, "") {
+		t.Fatal("archived issue run was accepted")
+	}
+	if issue.Work.SendError != "This contact is archived. Restore it before starting issue work." || issue.Work.SendErrorKind != blockArchivedIssue {
+		t.Fatalf("issue guard raw/kind = %q / %q", issue.Work.SendError, issue.Work.SendErrorKind)
+	}
+	if a.issueFormError != "This contact is archived. Restore it before starting issue work." || a.issueFormNotice != blockArchivedIssue {
+		t.Fatalf("issue form guard raw/kind = %q / %q", a.issueFormError, a.issueFormNotice)
+	}
+}
+
+func TestMissingQuestionPageFollowsLocale(t *testing.T) {
+	a, ct := workspaceTestApp(t)
+	issue := &productIssue{
+		ID: "issue-question", ContactID: ct.ID, Goal: "raw goal", Status: issueStatusWaitingUser,
+		Questions: []*issueQuestion{{Ref: "q-1", Text: "", State: issueQuestionOpen}},
+	}
+	ct.Issues = []*productIssue{issue}
+	ct.SelectedIssueID = issue.ID
+	ct.issueNavigation().DetailID = issue.ID
+	a.issueDetailOpen = map[string]bool{issue.ID: true}
+	a.setWorkspaceOpen(true)
+	tr := ui.NewTester(a.view, 1040, 720)
+	tr.SetLocale("zh-Hans")
+	tr.Frame()
+	if !tr.HasText("等待中的问题不可用。") || !tr.HasText("回答前请重新加载此事项。问题文本没有记录。") ||
+		!tr.HasText("重新加载事项") || tr.HasText("Answer question") {
+		t.Fatalf("Chinese missing-question page missing or answer still offered: %v", tr.Texts())
+	}
+	tr.SetLocale("en")
+	tr.Frame()
+	if !tr.HasText("The waiting question is unavailable.") || !tr.HasText("The question text was not recorded.") {
+		t.Fatalf("English missing-question page missing: %v", tr.Texts())
 	}
 }

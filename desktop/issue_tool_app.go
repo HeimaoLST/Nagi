@@ -330,7 +330,7 @@ func (a *appModel) releaseIssueWorkSession(ct *contact, issue *productIssue) {
 			owner.Work.Releasing = false
 			owner.Work.ReleasePending = false
 			if err != nil {
-				owner.Work.SendError = "Could not release idle work tool process: " + a.connectionRuntimeMessage(err)
+				owner.Work.setSendError("Could not release idle work tool process: "+a.connectionRuntimeMessage(err), "release-tool-failed", a.connectionRuntimeMessage(err))
 			} else {
 				owner.Work.Released = true
 				owner.Work.Loaded = true
@@ -1118,8 +1118,8 @@ func (a *appModel) issueToolHandleGet(_ context.Context, raw json.RawMessage) (i
 	}
 	source.WorkingDirectory = workingDirectory
 	derived := deriveIssueResultFiles(source, history)
-	if derived.Unavailable != "" {
-		detail.ResultUnavailable = derived.Unavailable
+	if derived.UnavailableKind != "" {
+		detail.ResultUnavailable = issueResultUnavailableRaw(derived.UnavailableKind)
 	} else {
 		detail.ResultFileCount = len(derived.Files)
 		if len(derived.Files) > issueToolResultFilesLimit {
@@ -1974,7 +1974,7 @@ func (a *appModel) requestIssueWaitStop(ct *contact, issue *productIssue, execut
 		w.State = workStopping
 		w.StopRequested = true
 	}
-	issue.Work.SendError = "Waiting for your answer; stopping the current execution."
+	issue.Work.setSendError("Waiting for your answer; stopping the current execution.", "answer-stopping", "")
 	rt, generation := a.rt, a.connectionGeneration
 	go func() {
 		status, err := rt.cancelTask(sessionID, taskID)

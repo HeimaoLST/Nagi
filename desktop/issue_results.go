@@ -56,8 +56,8 @@ type issueResultFile struct {
 }
 
 type issueResultDerivation struct {
-	Files       []issueResultFile
-	Unavailable string
+	Files           []issueResultFile
+	UnavailableKind string
 }
 
 // deriveIssueResultFiles reads only the supplied Runtime history response. The
@@ -66,13 +66,13 @@ type issueResultDerivation struct {
 // latest work item.
 func deriveIssueResultFiles(source issueResultSource, history runtimeHistory) issueResultDerivation {
 	if source.SessionID == "" {
-		return issueResultDerivation{Unavailable: "Execution has no recorded Runtime session; results cannot be inspected."}
+		return issueResultDerivation{UnavailableKind: "no-session"}
 	}
 	if source.SessionID != history.SessionID {
-		return issueResultDerivation{Unavailable: "Runtime history belongs to a different session; results cannot be inspected."}
+		return issueResultDerivation{UnavailableKind: "session-mismatch"}
 	}
 	if source.TaskID == "" {
-		return issueResultDerivation{Unavailable: "Execution has no recorded Runtime task; results cannot be inspected."}
+		return issueResultDerivation{UnavailableKind: "no-task"}
 	}
 
 	projection := parseHistory(history.SessionID, history.Records, nil)
@@ -109,10 +109,10 @@ func deriveIssueResultFiles(source issueResultSource, history runtimeHistory) is
 		}
 	}
 	if !foundTask {
-		return issueResultDerivation{Unavailable: "Runtime history does not contain the execution's task; the session may be unavailable or legacy."}
+		return issueResultDerivation{UnavailableKind: "task-missing"}
 	}
 	if messageMismatch {
-		return issueResultDerivation{Unavailable: "Runtime history does not record the supplied execution message."}
+		return issueResultDerivation{UnavailableKind: "message-missing"}
 	}
 	return issueResultDerivation{Files: files}
 }
@@ -166,8 +166,10 @@ type issueResultFileInspection struct {
 	Regular          bool
 	Size             int64
 	Preview          string
-	Notice           string
-	ReadError        string
+	NoticeKind       string
+	NoticeDetail     string
+	ReadErrorKind    string
+	ReadErrorDetail  string
 }
 
 // inspectIssueResultFile reports the current file at the reported path. It does
@@ -177,40 +179,40 @@ func inspectIssueResultFile(file issueResultFile) issueResultFileInspection {
 	handle, err := os.OpenFile(file.Path, os.O_RDONLY|syscall.O_NONBLOCK, 0)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
-			inspection.Notice = "No file exists at the reported path; it may have been moved or deleted."
+			inspection.NoticeKind, inspection.NoticeDetail = resultNoticeMissing, ""
 		} else {
-			inspection.Notice = "Could not inspect the reported path: " + err.Error()
+			inspection.NoticeKind, inspection.NoticeDetail = resultNoticeInspect, err.Error()
 		}
 		return inspection
 	}
 	defer handle.Close()
 	info, err := handle.Stat()
 	if err != nil {
-		inspection.Notice = "Could not inspect the reported path: " + err.Error()
+		inspection.NoticeKind, inspection.NoticeDetail = resultNoticeInspect, err.Error()
 		return inspection
 	}
 	inspection.Exists = true
 	inspection.Size = info.Size()
 	if !info.Mode().IsRegular() {
-		inspection.Notice = "The reported path is no longer a regular file."
+		inspection.NoticeKind = resultNoticeRegular
 		return inspection
 	}
 	inspection.Regular = true
 	if info.Size() > issueResultPreviewLimit {
-		inspection.Notice = fmt.Sprintf("Current file is %d bytes; the preview limit is %d bytes. Open the file to inspect it in full.", info.Size(), issueResultPreviewLimit)
+		inspection.NoticeKind = resultNoticeTooLarge
 		return inspection
 	}
 	data, err := io.ReadAll(io.LimitReader(handle, issueResultPreviewLimit+1))
 	if err != nil {
-		inspection.ReadError = "Could not read the current file: " + err.Error()
+		inspection.ReadErrorKind, inspection.ReadErrorDetail = resultNoticeRead, err.Error()
 		return inspection
 	}
 	if len(data) > issueResultPreviewLimit {
-		inspection.Notice = fmt.Sprintf("Current file grew beyond the %d-byte preview limit. Open the file to inspect it in full.", issueResultPreviewLimit)
+		inspection.NoticeKind = resultNoticeGrew
 		return inspection
 	}
 	if !utf8.Valid(data) {
-		inspection.Notice = "The current file is not UTF-8 text; open it with the system application."
+		inspection.NoticeKind = resultNoticeNotUTF8
 		return inspection
 	}
 	inspection.Preview = string(data)
@@ -218,34 +220,126 @@ func inspectIssueResultFile(file issueResultFile) issueResultFileInspection {
 }
 
 type issueResultFileAction struct {
-	Path   string
-	Err    string
-	Notice string
+	Path         string
+	ErrKind      string
+	ErrDetail    string
+	NoticeKind   string
+	NoticeDetail string
 }
 
-func currentIssueResultPath(path string) string {
+const (
+	resultNoticeMissing  = "missing"
+	resultNoticeInspect  = "inspect-failed"
+	resultNoticeRegular  = "not-regular"
+	resultNoticeTooLarge = "too-large"
+	resultNoticeGrew     = "grew"
+	resultNoticeNotUTF8  = "not-utf8"
+	resultNoticeRead     = "read-failed"
+	resultActionOpen     = "open-failed"
+	resultActionReveal   = "reveal-failed"
+)
+
+func issueResultNoticeText(msgs locales.Messages, kind, detail string) string {
+	switch kind {
+	case resultNoticeMissing:
+		return msgs.ResultInspectMissing()
+	case resultNoticeInspect:
+		return msgs.ResultInspectFailed(detail)
+	case resultNoticeRegular:
+		return msgs.ResultInspectNotRegular()
+	case resultNoticeNotUTF8:
+		return msgs.ResultInspectNotUTF8()
+	case resultNoticeRead:
+		return msgs.ResultReadFailed(detail)
+	case resultActionOpen:
+		return msgs.ResultOpenFailed(detail)
+	case resultActionReveal:
+		return msgs.ResultRevealFailed(detail)
+	default:
+		return kind
+	}
+}
+
+func issueResultUnavailableRaw(kind string) string {
+	switch kind {
+	case "no-session":
+		return "Execution has no recorded Runtime session; results cannot be inspected."
+	case "session-mismatch":
+		return "Runtime history belongs to a different session; results cannot be inspected."
+	case "no-task":
+		return "Execution has no recorded Runtime task; results cannot be inspected."
+	case "task-missing":
+		return "Runtime history does not contain the execution's task; the session may be unavailable or legacy."
+	case "message-missing":
+		return "Runtime history does not record the supplied execution message."
+	default:
+		return ""
+	}
+}
+
+func issueResultPageText(msgs locales.Messages, kind, detail string) string {
+	switch kind {
+	case "load-no-session":
+		return msgs.ResultLoadNoSession()
+	case "load-runtime-not-ready":
+		return msgs.ResultLoadRuntimeNotReady()
+	case "load-owner-missing":
+		return msgs.ResultLoadOwnerMissing()
+	case "load-detached":
+		return msgs.ResultLoadDetached()
+	case "load-failed":
+		return msgs.ResultLoadFailed(detail)
+	case "notice-working-dir":
+		return msgs.ResultNoticeWorkingDirMissing()
+	case "no-session":
+		return msgs.ResultDeriveNoSession()
+	case "session-mismatch":
+		return msgs.ResultDeriveSessionMismatch()
+	case "no-task":
+		return msgs.ResultDeriveNoTask()
+	case "task-missing":
+		return msgs.ResultDeriveTaskMissing()
+	case "message-missing":
+		return msgs.ResultDeriveMessageMissing()
+	default:
+		return kind
+	}
+}
+
+func issueResultInspectionNoticeText(msgs locales.Messages, inspection issueResultFileInspection) string {
+	switch inspection.NoticeKind {
+	case resultNoticeTooLarge:
+		return msgs.ResultInspectTooLarge(strconv.FormatInt(inspection.Size, 10), strconv.Itoa(issueResultPreviewLimit))
+	case resultNoticeGrew:
+		return msgs.ResultInspectGrew(strconv.Itoa(issueResultPreviewLimit))
+	default:
+		return issueResultNoticeText(msgs, inspection.NoticeKind, inspection.NoticeDetail)
+	}
+}
+
+func currentIssueResultPath(path string) (string, string) {
 	info, err := os.Stat(path)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
-			return "No file exists at the reported path; it may have been moved or deleted."
+			return resultNoticeMissing, ""
 		}
-		return "Could not inspect the reported path: " + err.Error()
+		return resultNoticeInspect, err.Error()
 	}
 	if !info.Mode().IsRegular() {
-		return "The reported path is not a regular file."
+		return resultNoticeRegular, ""
 	}
-	return ""
+	return "", ""
 }
 
 // requestOpenIssueResultFile checks the current path before invoking the injected
 // opener. open is mygo.Shell.OpenPath in the application; tests inject a
 // recorder so a missing or non-regular path proves the opener was not called.
 func requestOpenIssueResultFile(file issueResultFile, open func(string) error) issueResultFileAction {
-	if notice := currentIssueResultPath(file.Path); notice != "" {
-		return issueResultFileAction{Path: file.Path, Notice: notice}
+	if kind, detail := currentIssueResultPath(file.Path); kind != "" {
+		return issueResultFileAction{Path: file.Path, NoticeKind: kind, NoticeDetail: detail}
 	}
 	if err := open(file.Path); err != nil {
-		return issueResultFileAction{Path: file.Path, Err: "Could not open the current file: " + err.Error()}
+		return issueResultFileAction{Path: file.Path, ErrKind: resultActionOpen, ErrDetail: err.Error()}
 	}
 	return issueResultFileAction{Path: file.Path}
 }
@@ -254,11 +348,11 @@ func requestOpenIssueResultFile(file issueResultFile, open func(string) error) i
 // The non-macOS API reports no outcome, so callers must not toast success for
 // it; only an explicit error is shown as failure.
 func requestRevealIssueResultFile(file issueResultFile, reveal func(string) error) issueResultFileAction {
-	if notice := currentIssueResultPath(file.Path); notice != "" {
-		return issueResultFileAction{Path: file.Path, Notice: notice}
+	if kind, detail := currentIssueResultPath(file.Path); kind != "" {
+		return issueResultFileAction{Path: file.Path, NoticeKind: kind, NoticeDetail: detail}
 	}
 	if err := reveal(file.Path); err != nil {
-		return issueResultFileAction{Path: file.Path, Err: "Could not reveal the current file: " + err.Error()}
+		return issueResultFileAction{Path: file.Path, ErrKind: resultActionReveal, ErrDetail: err.Error()}
 	}
 	return issueResultFileAction{Path: file.Path}
 }
@@ -590,10 +684,10 @@ func issueResultReaderActions(c *ui.Context, th *ui.Theme, state *issueResultPan
 			issueResultReaderAction(c, th, label).Bind(&state.ReaderSourceHandle).OnClick(func() { actions.ToggleSource(key) })
 		}
 	})
-	if state.ActionFor == key && state.Action.Err != "" {
-		ui.Text(c, state.Action.Err).FontSize(typeAction).LineHeight(1.4).TextColor(th.Danger)
-	} else if state.ActionFor == key && state.Action.Notice != "" {
-		ui.Text(c, state.Action.Notice).FontSize(typeAction).LineHeight(1.4).TextColor(th.Warning)
+	if state.ActionFor == key && state.Action.ErrKind != "" {
+		ui.Text(c, issueResultNoticeText(locales.In(c.Locale()), state.Action.ErrKind, state.Action.ErrDetail)).FontSize(typeAction).LineHeight(1.4).TextColor(th.Danger)
+	} else if state.ActionFor == key && state.Action.NoticeKind != "" {
+		ui.Text(c, issueResultNoticeText(locales.In(c.Locale()), state.Action.NoticeKind, state.Action.NoticeDetail)).FontSize(typeAction).LineHeight(1.4).TextColor(th.Warning)
 	}
 }
 
@@ -611,13 +705,13 @@ func issueResultReaderPreview(c *ui.Context, th *ui.Theme, state *issueResultPan
 		}
 		return
 	}
-	if inspection.Notice != "" {
-		ui.Text(c, inspection.Notice).FontSize(14).LineHeight(1.5).TextColor(th.Warning)
+	if inspection.NoticeKind != "" {
+		ui.Text(c, issueResultInspectionNoticeText(locales.In(c.Locale()), *inspection)).FontSize(14).LineHeight(1.5).TextColor(th.Warning)
 	}
-	if inspection.ReadError != "" {
-		ui.Text(c, inspection.ReadError).FontSize(14).LineHeight(1.5).TextColor(th.Danger)
+	if inspection.ReadErrorKind != "" {
+		ui.Text(c, issueResultNoticeText(locales.In(c.Locale()), inspection.ReadErrorKind, inspection.ReadErrorDetail)).FontSize(14).LineHeight(1.5).TextColor(th.Danger)
 	}
-	if !inspection.Exists || !inspection.Regular || inspection.Notice != "" || inspection.ReadError != "" {
+	if !inspection.Exists || !inspection.Regular || inspection.NoticeKind != "" || inspection.ReadErrorKind != "" {
 		return
 	}
 	if inspection.Preview == "" {

@@ -233,7 +233,7 @@ func markdownReaderCodeBlock(c *ui.Context, b *markdown.CodeBlockView, st *markd
 		AlignSelf(ui.Stretch).
 		Clip().
 		Key("code-" + strconv.Itoa(b.Index))
-	box.Role(ui.RoleGroup).Label("Code")
+	box.Role(ui.RoleGroup).Label(locales.In(c.Locale()).MarkdownCodeGroup())
 	box.Children(func() {
 		head := ui.Row(c).AlignItems(ui.Center).Padding(em(0.35), em(0.4), 0, em(th.CodeBlockPadding)).Key("code-head")
 		head.Children(func() {
@@ -273,7 +273,7 @@ func markdownReaderTable(c *ui.Context, d *parser.Document, i int, th markdown.T
 	padX, padY := th.TableCellPadding[0]*th.FontSize, th.TableCellPadding[1]*th.FontSize
 	wrap := ui.Column(c).AlignSelf(ui.Stretch)
 	wrap.Children(func() {
-		table := ui.Column(c).AlignSelf(ui.Stretch).Border(1, th.TableBorder).Radius(th.FontSize * 0.3).Clip().Role(ui.RoleTable).Label("Table, wrapped plain text")
+		table := ui.Column(c).AlignSelf(ui.Stretch).Border(1, th.TableBorder).Radius(th.FontSize * 0.3).Clip().Role(ui.RoleTable).Label(locales.In(c.Locale()).MarkdownTableGroup())
 		table.Children(func() {
 			n := 0
 			for r := range d.Children(i) {
