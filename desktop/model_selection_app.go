@@ -10,6 +10,8 @@ import (
 	"strings"
 
 	"github.com/egoist/mygo/ui"
+
+	"saki/desktop/locales"
 )
 
 type modelRecoveryState int
@@ -129,19 +131,20 @@ func (a *appModel) openSessionModel(sessionID, kind, label string) bool {
 	}
 	a.modelPanelMessage = ""
 	a.modelPanelError = ""
+	a.modelPanelErrorDetail = ""
 	a.modelForm = nil
 	a.modelOpenToken++
 	openToken := a.modelOpenToken
 	if strings.TrimSpace(sessionID) == "" {
-		a.modelPanelMessage = "This context has no Runtime session yet. New work uses the model from Connection settings; after the first task creates a session you can switch it independently."
+		a.modelPanelMessage = modelPanelMessageNoSession
 		return true
 	}
 	if a.rt == nil || a.runtimeStatus != runtimeStateReady {
-		a.modelPanelError = "Runtime is not ready; the session model cannot be read."
+		a.modelPanelError = modelPanelErrorRuntimeNotReady
 		return true
 	}
 	rt, generation := a.rt, a.connectionGeneration
-	a.modelPanelMessage = "Reading the session model from Runtime…"
+	a.modelPanelMessage = modelPanelMessageReading
 	go func() {
 		config, err := rt.connectionConfig(sessionID)
 		if err != nil {
@@ -150,7 +153,8 @@ func (a *appModel) openSessionModel(sessionID, kind, label string) bool {
 					return
 				}
 				a.modelPanelMessage = ""
-				a.modelPanelError = "Could not read this session's Runtime configuration: " + a.connectionRuntimeMessage(err)
+				a.modelPanelError = modelPanelErrorReadFailed
+				a.modelPanelErrorDetail = a.connectionRuntimeMessage(err)
 			})
 			return
 		}
@@ -162,10 +166,10 @@ func (a *appModel) openSessionModel(sessionID, kind, label string) bool {
 			target := modelSelectionTarget{Kind: kind, Label: label, Config: config}
 			form := newModelSelection(target, catalog)
 			if catalogErr != nil {
-				form.SetStatus("Runtime catalog could not be loaded; explicit limits are available.")
+				form.SetStatus(modelStatusCatalogUnavailable)
 			}
 			if a.modelTargetNeedsReload(sessionID) {
-				form.SetUnconfirmed("This session's configuration is quarantined. Reload the session before changing the model.")
+				form.SetUnconfirmed(modelUnconfirmedQuarantined, "")
 			} else {
 				a.setModelRecovery(sessionID, 0)
 				a.updateModelContactDisplay(sessionID, config.EffectiveConfig.Model)
@@ -173,6 +177,7 @@ func (a *appModel) openSessionModel(sessionID, kind, label string) bool {
 			a.modelForm = form
 			a.modelPanelMessage = ""
 			a.modelPanelError = ""
+			a.modelPanelErrorDetail = ""
 		})
 	}()
 	return true
@@ -188,7 +193,7 @@ func (a *appModel) refreshSessionModel(target modelSelectionTarget) {
 		return
 	}
 	rt, generation := a.rt, a.connectionGeneration
-	form.SetBusy(true, "Reading Runtime configuration…")
+	form.SetBusy(true, modelStatusReadingConfig)
 	go func() {
 		config, err := rt.connectionConfig(sessionID)
 		if err != nil {
@@ -199,7 +204,7 @@ func (a *appModel) refreshSessionModel(target modelSelectionTarget) {
 				if !a.modelTargetNeedsReload(sessionID) {
 					a.setModelRecovery(sessionID, modelRecoveryNeedsRefresh)
 				}
-				form.SetUnconfirmed("Runtime did not confirm this session's configuration. Refresh to read it again.")
+				form.SetUnconfirmed(modelUnconfirmedNotConfirmed, "")
 			})
 			return
 		}
@@ -213,14 +218,14 @@ func (a *appModel) refreshSessionModel(target modelSelectionTarget) {
 				form.SetCatalog(catalog)
 			}
 			if a.modelTargetNeedsReload(sessionID) {
-				form.SetUnconfirmed("Configuration was read back, but this session still needs an explicit Reload before new tasks.")
+				form.SetUnconfirmed(modelUnconfirmedNeedsReload, "")
 			} else {
 				a.setModelRecovery(sessionID, 0)
 				a.updateModelContactDisplay(sessionID, config.EffectiveConfig.Model)
 				if catalogErr != nil {
-					form.SetBusy(false, "Configuration refreshed; Runtime catalog could not be loaded.")
+					form.SetBusy(false, modelStatusRefreshedNoCatalog)
 				} else {
-					form.SetBusy(false, "Runtime configuration refreshed.")
+					form.SetBusy(false, modelStatusRefreshed)
 				}
 			}
 		})
@@ -237,23 +242,23 @@ func (a *appModel) updateSessionModel(request modelSelectionRequest) {
 		return
 	}
 	if a.rt == nil || a.runtimeStatus != runtimeStateReady {
-		form.SetError("Runtime is not ready; the model was not updated.")
+		form.SetErrorKind(modelErrorRuntimeNotReady, "")
 		return
 	}
 	switch a.modelRecoveryFor(sessionID) {
 	case modelRecoveryNeedsReload:
-		form.SetUnconfirmed("This session needs an explicit Reload before another model update.")
+		form.SetUnconfirmed(modelUnconfirmedNeedReloadUpdate, "")
 		return
 	case modelRecoveryNeedsRefresh:
-		form.SetUnconfirmed("Refresh the Runtime configuration before another model update.")
+		form.SetUnconfirmed(modelUnconfirmedNeedRefreshUpdate, "")
 		return
 	}
 	if form.Unconfirmed {
-		form.SetError("Refresh the Runtime configuration before updating the model.")
+		form.SetErrorKind(modelErrorRefreshBefore, "")
 		return
 	}
 	if a.modelTargetBusy(sessionID) {
-		form.SetError("This session is busy. Wait for its current task to finish before changing the model.")
+		form.SetErrorKind(modelErrorBusy, "")
 		return
 	}
 	contactID, issueID := a.modelOwner(sessionID)
@@ -263,7 +268,7 @@ func (a *appModel) updateSessionModel(request modelSelectionRequest) {
 	}
 	rt, generation := a.rt, a.connectionGeneration
 	revision := request.Target.Config.ConfigRevision
-	form.SetBusy(true, "Updating the session model…")
+	form.SetBusy(true, modelStatusUpdating)
 	a.modelOpActive = true
 	a.modelOpSessionID = sessionID
 	go func() {
@@ -303,10 +308,10 @@ func (a *appModel) updateSessionModel(request modelSelectionRequest) {
 			}
 			if loadErr != nil {
 				form.SetBusy(false, "")
-				form.SetError("Could not load this released work session before updating the model: " + a.connectionRuntimeMessage(loadErr))
+				form.SetErrorKind(modelErrorReleasedLoad, a.connectionRuntimeMessage(loadErr))
 			} else if err == nil {
 				form.SetResult(updated.runtimeConnectionConfig)
-				form.SetStatus("Model updated. The next task on this session uses it; history is unchanged.")
+				form.SetStatus(modelStatusUpdated)
 				a.updateModelContactDisplay(sessionID, updated.EffectiveConfig.Model)
 			} else {
 				a.applyModelUpdateFailure(form, sessionID, updated, err)
@@ -337,12 +342,12 @@ func (a *appModel) applyModelUpdateFailure(form *modelSelection, sessionID strin
 		if updated.ReadbackError == nil {
 			form.SetEffective(updated.runtimeConnectionConfig)
 		}
-		form.SetUnconfirmed("Configuration commit is unconfirmed. Reload the session before sending another task. The original error was: " + message)
+		form.SetUnconfirmed(modelUnconfirmedCommit, message)
 		return
 	}
 	if updated.ReadbackError != nil {
 		a.setModelRecovery(sessionID, modelRecoveryNeedsRefresh)
-		form.SetUnconfirmed("Runtime did not confirm the current configuration. Refresh to read it again. The update error was: " + message)
+		form.SetUnconfirmed(modelUnconfirmedReadback, message)
 		return
 	}
 	a.setModelRecovery(sessionID, 0)
@@ -369,7 +374,7 @@ func (a *appModel) reloadModelSession() {
 	}
 	rt, generation := a.rt, a.connectionGeneration
 	contactID, issueID := a.modelOwner(sessionID)
-	form.SetBusy(true, "Reloading the session…")
+	form.SetBusy(true, modelStatusReloading)
 	a.modelOpActive = true
 	a.modelOpSessionID = sessionID
 	go func() {
@@ -394,11 +399,11 @@ func (a *appModel) reloadModelSession() {
 				return
 			}
 			if err != nil {
-				form.SetUnconfirmed("Session reload failed; the session remains quarantined. " + a.connectionRuntimeMessage(err))
+				form.SetUnconfirmed(modelUnconfirmedReloadFailed, a.connectionRuntimeMessage(err))
 			} else {
 				a.setModelRecovery(sessionID, 0)
 				form.SetEffective(config)
-				form.SetBusy(false, "Session reloaded. The next task uses the read-back model.")
+				form.SetBusy(false, modelStatusReloaded)
 				a.updateModelContactDisplay(sessionID, config.EffectiveConfig.Model)
 				if issueID != "" {
 					if ct := a.contactByID(contactID); ct != nil {
@@ -422,10 +427,11 @@ func (a *appModel) reloadModelSession() {
 }
 
 func (a *appModel) modelPanel(c *ui.Context, t *ui.Theme) {
+	msgs := locales.In(c.Locale())
 	if a.modelForm != nil {
 		if a.modelTargetNeedsReload(a.modelForm.Target.Config.SessionID) {
-			secondaryButton(c, "Reload session").Disabled(a.modelOpActive).OnClick(func() { a.reloadModelSession() })
-			ui.Text(c, "Configuration commit is unconfirmed. Reload is required before this session can accept another task; Refresh only re-reads config.").FontSize(14).LineHeight(1.5).TextColor(t.Warning)
+			secondaryButton(c, msgs.ModelReloadAction()).Disabled(a.modelOpActive).OnClick(func() { a.reloadModelSession() })
+			ui.Text(c, msgs.ModelUnconfirmedBanner()).FontSize(14).LineHeight(1.5).TextColor(t.Warning)
 		}
 		a.modelForm.view(c, t, modelSelectionActions{
 			Refresh: a.refreshSessionModel,
@@ -433,25 +439,27 @@ func (a *appModel) modelPanel(c *ui.Context, t *ui.Theme) {
 			Cancel:  a.closeAux,
 		})
 	} else if a.modelPanelError != "" {
-		ui.Text(c, "Session model").FontSize(16).FontWeight(500).TextColor(t.Text)
-		ui.Text(c, a.modelPanelError).FontSize(14).LineHeight(1.5).TextColor(t.Danger)
-		secondaryButton(c, "Close").OnClick(func() { a.closeAux() })
+		ui.Text(c, msgs.ModelSessionTitle()).FontSize(16).FontWeight(500).TextColor(t.Text)
+		errorText := modelPanelErrorText(msgs, a.modelPanelError, a.modelPanelErrorDetail)
+		ui.Text(c, errorText).FontSize(14).LineHeight(1.5).TextColor(t.Danger)
+		secondaryButton(c, msgs.ModelClose()).OnClick(func() { a.closeAux() })
 	} else {
-		ui.Text(c, "Session model").FontSize(16).FontWeight(500).TextColor(t.Text)
-		ui.Text(c, valueOr(a.modelPanelMessage, "Reading session model…")).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
-		secondaryButton(c, "Close").OnClick(func() { a.closeAux() })
+		ui.Text(c, msgs.ModelSessionTitle()).FontSize(16).FontWeight(500).TextColor(t.Text)
+		message := valueOr(modelPanelMessageText(msgs, a.modelPanelMessage), msgs.ModelDefaultReading())
+		ui.Text(c, message).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+		secondaryButton(c, msgs.ModelClose()).OnClick(func() { a.closeAux() })
 	}
 }
 
 func (a *appModel) modelSessionStatus(sessionID string) string {
 	switch a.modelRecoveryFor(sessionID) {
 	case modelRecoveryNeedsReload:
-		return "Session configuration is unconfirmed; Reload the session before sending."
+		return blockModelReload
 	case modelRecoveryNeedsRefresh:
-		return "Session configuration is unconfirmed; Refresh before sending."
+		return blockModelRefresh
 	}
 	if a.modelOpActive && a.modelOpSessionID == sessionID {
-		return "The session model is being updated; this session cannot accept a new task yet."
+		return blockModelUpdating
 	}
 	return ""
 }

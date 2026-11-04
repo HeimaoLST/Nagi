@@ -53,7 +53,7 @@ func (a *appModel) issueSupplementSection(c *ui.Context, t *ui.Theme, ct *contac
 			}
 		} else if pending > 0 && auto {
 			if reason := a.canStartIssue(ct, issue); reason != "" {
-				ui.Text(c, "Waiting: "+reason).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+				ui.Text(c, locales.In(c.Locale()).WaitingReason(sendBlockText(locales.In(c.Locale()), reason))).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
 			} else if len(issue.Executions) == 0 {
 				ui.Text(c, "No execution yet. Use Start with supplement to authorize the first run.").
 					FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)

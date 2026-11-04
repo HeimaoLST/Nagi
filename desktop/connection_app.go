@@ -174,7 +174,7 @@ func (a *appModel) saveConnectionWithApply(config connectionConfig, applyAfterSa
 	form.Error = ""
 	form.ErrorDetail = ""
 	form.ReloadBlocked = ""
-	form.Status = "Saving configuration…"
+	form.Status = connStatusSaving
 	a.connectionSaveInFlight = true
 	go func() {
 		err := saveConnectionConfig(path, config)
@@ -203,12 +203,13 @@ func (a *appModel) saveConnectionWithApply(config connectionConfig, applyAfterSa
 			a.connectionForm.initial = a.connectionForm.Draft
 			a.connectionForm.Status = ""
 			if a.connectionApplied() && *a.connectionEffective == config {
-				a.connectionForm.Status = "Saved. This configuration is already applied."
+				a.connectionForm.Status = connStatusSavedApplied
 			}
 			a.connectionForm.Error = ""
 			a.connectionForm.ErrorDetail = ""
 			if err != nil {
-				a.connectionForm.Error = "Configuration was saved, but the local contact store could not be created: " + a.redactConnectionText(err.Error())
+				a.connectionForm.Error = connStatusSavedStoreFailed
+				a.connectionForm.ErrorDetail = a.redactConnectionText(err.Error())
 			} else if store != nil {
 				a.workDir = config.WorkingDirectory
 				a.startupDetailsOpen = false
@@ -242,30 +243,30 @@ func runtimeHasExited(rt *runtimeClient) bool {
 
 func (a *appModel) connectionReloadBlocked() string {
 	if a.modelOpActive {
-		return "Wait for the in-flight session model operation to finish before applying a new connection."
+		return connBlockedModelOp
 	}
 	if a.connectionApplying {
-		return "A new connection is already being applied."
+		return connBlockedApplying
 	}
 	if a.shutdownStarted {
-		return "The app is shutting down."
+		return connBlockedShutdown
 	}
 	if a.connectionSaved == nil {
-		return "Save a valid connection configuration first."
+		return connBlockedNoSaved
 	}
 	if a.store == nil {
-		return "The local contact store is unavailable. Fix its file or permissions, then save again."
+		return connBlockedStore
 	}
 	if runtimeHasExited(a.rt) {
 		return ""
 	}
 	if a.activeTaskCount() > 0 {
-		return "Wait for all conversation and issue work to finish before applying a new connection."
+		return connBlockedActiveWork
 	}
 	for _, ct := range a.contacts {
 		for _, issue := range ct.Issues {
 			if reason := issueRunBlocked(issue); reason != "" {
-				return "An issue execution has no trusted terminal state; reload or reconcile it before applying a new connection."
+				return connBlockedUntrustedIssue
 			}
 		}
 	}
@@ -289,24 +290,24 @@ func (a *appModel) applyConnection() {
 	form.Error = ""
 	form.ErrorDetail = ""
 	form.Busy = true
-	form.Status = "Checking the saved connection…"
+	form.Status = connStatusChecking
 	a.connectionApplying = true
 	oldRT := a.rt
 	oldLaunch := a.connectionLaunch
 	path := a.connectionPath
 	sessionDir := a.sessionDir
-	helperHint := a.runtimeHelperHint()
 	gen := a.connectionGeneration + 1
-	go a.applyConnectionWorker(gen, path, sessionDir, helperHint, oldRT, oldLaunch, a.issueToolLaunchSource())
+	go a.applyConnectionWorker(gen, path, sessionDir, oldRT, oldLaunch, a.issueToolLaunchSource())
 }
 
-func (a *appModel) applyConnectionWorker(gen int, path, sessionDir, helperHint string, oldRT *runtimeClient, oldLaunch *connectionLaunch, toolSource *runtimeToolSource) {
-	fail := func(message string) {
+func (a *appModel) applyConnectionWorker(gen int, path, sessionDir string, oldRT *runtimeClient, oldLaunch *connectionLaunch, toolSource *runtimeToolSource) {
+	fail := func(kind, detail string) {
 		a.updateUI(func() {
 			a.connectionApplying = false
 			a.connectionForm.Busy = false
 			a.connectionForm.Status = ""
-			a.connectionForm.Error = a.redactConnectionText(message)
+			a.connectionForm.Error = kind
+			a.connectionForm.ErrorDetail = a.redactConnectionText(detail)
 			if a.shutdownStarted {
 				a.finishShutdown()
 			}
@@ -314,7 +315,7 @@ func (a *appModel) applyConnectionWorker(gen int, path, sessionDir, helperHint s
 	}
 	config, err := loadConnectionConfig(path)
 	if err != nil {
-		fail("Could not apply saved configuration: " + err.Error())
+		fail(connErrorApplyConfig, err.Error())
 		return
 	}
 	binary := findRuntimeBinary()
@@ -325,12 +326,12 @@ func (a *appModel) applyConnectionWorker(gen int, path, sessionDir, helperHint s
 		}
 	})
 	if binary == "" {
-		fail("Runtime helper not found. " + helperHint)
+		fail(connErrorHelperMissing, "")
 		return
 	}
 	launch, err := prepareConnectionLaunchWithTools(config, os.Environ(), sessionDir, os.TempDir(), toolSource)
 	if err != nil {
-		fail("Could not prepare the saved connection: " + err.Error())
+		fail(connErrorPrepare, err.Error())
 		return
 	}
 	ready := make(chan runtimeReady, 1)
@@ -340,7 +341,7 @@ func (a *appModel) applyConnectionWorker(gen int, path, sessionDir, helperHint s
 	})
 	if err != nil {
 		launch.Cleanup()
-		fail("Could not start the new runtime: " + err.Error())
+		fail(connErrorStart, err.Error())
 		return
 	}
 	var readyValue runtimeReady
@@ -348,25 +349,25 @@ func (a *appModel) applyConnectionWorker(gen int, path, sessionDir, helperHint s
 	case readyValue = <-ready:
 	case <-rt.done:
 		launch.Cleanup()
-		fail("The new runtime exited before it was ready; the previous connection was kept.")
+		fail(connErrorExitedBeforeReady, "")
 		return
 	case <-time.After(runtimeControlTimeout):
 		_ = rt.shutdown()
 		launch.Cleanup()
-		fail("The new runtime did not become ready; the previous connection was kept.")
+		fail(connErrorNotReady, "")
 		return
 	}
 	connections, err := rt.connections()
 	if err != nil || len(connections) != 1 || connections[0].ID != connectionID {
 		_ = rt.shutdown()
 		launch.Cleanup()
-		fail("The new runtime did not expose the saved connection; the previous connection was kept.")
+		fail(connErrorNotExposed, "")
 		return
 	}
 	select {
 	case <-rt.done:
 		launch.Cleanup()
-		fail("The new runtime exited while validating the saved connection; the previous connection was kept.")
+		fail(connErrorExitedWhileChecking, "")
 		return
 	default:
 	}
@@ -391,8 +392,11 @@ func (a *appModel) applyConnectionWorker(gen int, path, sessionDir, helperHint s
 		a.runtimeAPI = readyValue.API
 		a.runtimeHandshake = true
 		a.runtimeErr = ""
+		a.runtimeErrKind = ""
 		a.runtimeStage = ""
 		a.runtimeHint = ""
+		a.runtimeHintKind = ""
+		a.runtimeHintArgs = nil
 		a.connectionForm.Error = ""
 		a.connectionForm.ReloadBlocked = ""
 		a.runtimeCapabilitiesLoaded = false
@@ -405,7 +409,7 @@ func (a *appModel) applyConnectionWorker(gen int, path, sessionDir, helperHint s
 	})
 	if !installed {
 		launch.Cleanup()
-		fail("The new runtime exited during validation; the previous connection was kept.")
+		fail(connErrorExitedDuringInstall, "")
 		return
 	}
 	if oldRT != nil {
@@ -418,10 +422,11 @@ func (a *appModel) applyConnectionWorker(gen int, path, sessionDir, helperHint s
 		a.connectionApplying = false
 		a.connectionForm.Busy = false
 		if a.runtimeStatus != runtimeStateReady {
-			a.connectionForm.Error = a.runtimeErr
+			a.connectionForm.Error = connErrorApplyConfig
+			a.connectionForm.ErrorDetail = a.runtimeErr
 			a.connectionForm.Status = ""
 		} else {
-			a.connectionForm.Status = "Applied. New work uses this connection."
+			a.connectionForm.Status = connStatusApplied
 		}
 		if !a.shutdownStarted && a.runtimeStatus == runtimeStateReady {
 			a.restoreContacts(rt, gen)
@@ -458,8 +463,8 @@ func (a *appModel) testConnection(config connectionConfig) {
 		a.runtimeBinary = binary
 	}
 	if binary == "" {
+		form.Error = connErrorHelperMissing
 		form.ErrorDetail = ""
-		form.Error = "Runtime helper not found. " + a.runtimeHelperHint()
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
@@ -468,7 +473,7 @@ func (a *appModel) testConnection(config connectionConfig) {
 	form.Busy = true
 	form.Error = ""
 	form.ErrorDetail = ""
-	form.Status = "Testing connection and model…"
+	form.Status = connStatusTesting
 	go func() {
 		result, err := probeConnection(ctx, binary, config, os.Environ(), os.TempDir())
 		cancel()
@@ -482,13 +487,14 @@ func (a *appModel) testConnection(config connectionConfig) {
 			}
 			if err != nil {
 				form.Status = ""
-				form.Error = "Connection test failed: " + a.connectionSafeMessage(err)
+				form.Error = connErrorTestFailed
+				form.ErrorDetail = a.connectionSafeMessage(err)
 				return
 			}
-			form.Status = fmt.Sprintf("Connection test completed: %s, %s, context %d / output %d",
-				result.Config.EffectiveConfig.Model, result.Connection.Endpoint,
-				result.Config.EffectiveConfig.Compaction.ContextTokens,
-				result.Config.EffectiveConfig.Compaction.OutputTokens)
+			form.Status = connStatusTestCompleted
+			form.StatusArgs = []string{result.Config.EffectiveConfig.Model, result.Connection.Endpoint,
+				fmt.Sprintf("%d", result.Config.EffectiveConfig.Compaction.ContextTokens),
+				fmt.Sprintf("%d", result.Config.EffectiveConfig.Compaction.OutputTokens)}
 			form.Error = ""
 		})
 	}()
@@ -523,8 +529,11 @@ func (a *appModel) handleRuntimeReady(gen int, ready runtimeReady) {
 	}
 	a.runtimeStatus = runtimeStateReady
 	a.runtimeErr = ""
+	a.runtimeErrKind = ""
 	a.runtimeStage = ""
 	a.runtimeHint = ""
+	a.runtimeHintKind = ""
+	a.runtimeHintArgs = nil
 	a.runtimeAPI = ready.API
 	a.runtimeHandshake = true
 	a.restoreContacts(a.rt, gen)
@@ -681,7 +690,8 @@ func (a *appModel) finishShutdown() {
 			a.updateUI(func() {
 				a.quitReady = true
 				if err != nil {
-					a.runtimeErr = "Issue tool service shutdown: " + a.connectionSafeMessage(err)
+					a.runtimeErrKind = runtimeNoticeIssueToolShutdown
+					a.runtimeErr = a.connectionSafeMessage(err)
 				}
 				if a.requestQuit != nil {
 					a.requestQuit()
@@ -693,6 +703,7 @@ func (a *appModel) finishShutdown() {
 	a.shutdownDrainStarted = true
 	a.runtimeStatus = runtimeStateDraining
 	a.runtimeErr = ""
+	a.runtimeErrKind = ""
 	rt := a.rt
 	launch := a.connectionLaunch
 	go func() {
@@ -704,10 +715,12 @@ func (a *appModel) finishShutdown() {
 		a.updateUI(func() {
 			a.quitReady = true
 			if err != nil {
-				a.runtimeErr = "Runtime shutdown: " + a.connectionSafeMessage(err)
+				a.runtimeErrKind = runtimeNoticeRuntimeShutdown
+				a.runtimeErr = a.connectionSafeMessage(err)
 			}
 			if toolErr != nil {
-				a.runtimeErr = "Issue tool service shutdown: " + a.connectionSafeMessage(toolErr)
+				a.runtimeErrKind = runtimeNoticeIssueToolShutdown
+				a.runtimeErr = a.connectionSafeMessage(toolErr)
 			}
 			if a.requestQuit != nil {
 				a.requestQuit()

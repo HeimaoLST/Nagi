@@ -558,7 +558,7 @@ func TestLiveSendUnknownAfterDisconnectSaysRestart(t *testing.T) {
 	a := &appModel{demo: false, runtimeStatus: runtimeStateExited, scrollTo: -1, contacts: []*contact{ct}}
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	if !tr.HasText("restart Saki") {
+	if !tr.HasText("restart Nagi") {
 		t.Fatal("disconnected sendUnknown should tell the user to restart")
 	}
 	if tr.HasText("Reload to verify") {

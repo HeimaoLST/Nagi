@@ -4247,3 +4247,2151 @@ func HistoryMessageMeta(speaker string, date string, session string) string {
 func (msgs Messages) HistoryMessageMeta(speaker string, date string, session string) string {
 	return Catalog.Format(msgs.locale, "historyMessageMeta", map[string]any{"speaker": speaker, "date": date, "session": session})
 }
+
+// ConnectionFieldEndpoint says "API endpoint"
+// in the language the app shows.
+func ConnectionFieldEndpoint() string { return In(i18n.Locale()).ConnectionFieldEndpoint() }
+
+// ConnectionFieldEndpoint says "API endpoint"
+// in the language of msgs.
+func (msgs Messages) ConnectionFieldEndpoint() string {
+	return Catalog.Format(msgs.locale, "connectionFieldEndpoint", nil)
+}
+
+// ConnectionEndpointPlaceholder says "https://api.example.com/v1"
+// in the language the app shows.
+func ConnectionEndpointPlaceholder() string { return In(i18n.Locale()).ConnectionEndpointPlaceholder() }
+
+// ConnectionEndpointPlaceholder says "https://api.example.com/v1"
+// in the language of msgs.
+func (msgs Messages) ConnectionEndpointPlaceholder() string {
+	return Catalog.Format(msgs.locale, "connectionEndpointPlaceholder", nil)
+}
+
+// ConnectionEndpointHint says "Use the API base URL. Nagi adds the protocol path."
+// in the language the app shows.
+func ConnectionEndpointHint() string { return In(i18n.Locale()).ConnectionEndpointHint() }
+
+// ConnectionEndpointHint says "Use the API base URL. Nagi adds the protocol path."
+// in the language of msgs.
+func (msgs Messages) ConnectionEndpointHint() string {
+	return Catalog.Format(msgs.locale, "connectionEndpointHint", nil)
+}
+
+// ConnectionFieldAPIKey says "API key"
+// in the language the app shows.
+func ConnectionFieldAPIKey() string { return In(i18n.Locale()).ConnectionFieldAPIKey() }
+
+// ConnectionFieldAPIKey says "API key"
+// in the language of msgs.
+func (msgs Messages) ConnectionFieldAPIKey() string {
+	return Catalog.Format(msgs.locale, "connectionFieldAPIKey", nil)
+}
+
+// ConnectionAPIKeyPlaceholder says "Paste your API key"
+// in the language the app shows.
+func ConnectionAPIKeyPlaceholder() string { return In(i18n.Locale()).ConnectionAPIKeyPlaceholder() }
+
+// ConnectionAPIKeyPlaceholder says "Paste your API key"
+// in the language of msgs.
+func (msgs Messages) ConnectionAPIKeyPlaceholder() string {
+	return Catalog.Format(msgs.locale, "connectionAPIKeyPlaceholder", nil)
+}
+
+// ConnectionAPIKeyHint says "Saved in a private local file without encryption; not added to contact settings or model prompts."
+// in the language the app shows.
+func ConnectionAPIKeyHint() string { return In(i18n.Locale()).ConnectionAPIKeyHint() }
+
+// ConnectionAPIKeyHint says "Saved in a private local file without encryption; not added to contact settings or model prompts."
+// in the language of msgs.
+func (msgs Messages) ConnectionAPIKeyHint() string {
+	return Catalog.Format(msgs.locale, "connectionAPIKeyHint", nil)
+}
+
+// ConnectionFieldModel says "Default model"
+// in the language the app shows.
+func ConnectionFieldModel() string { return In(i18n.Locale()).ConnectionFieldModel() }
+
+// ConnectionFieldModel says "Default model"
+// in the language of msgs.
+func (msgs Messages) ConnectionFieldModel() string {
+	return Catalog.Format(msgs.locale, "connectionFieldModel", nil)
+}
+
+// ConnectionModelPlaceholder says "Provider model ID"
+// in the language the app shows.
+func ConnectionModelPlaceholder() string { return In(i18n.Locale()).ConnectionModelPlaceholder() }
+
+// ConnectionModelPlaceholder says "Provider model ID"
+// in the language of msgs.
+func (msgs Messages) ConnectionModelPlaceholder() string {
+	return Catalog.Format(msgs.locale, "connectionModelPlaceholder", nil)
+}
+
+// ConnectionCapacityDisclosure says "Capacity disclosure"
+// in the language the app shows.
+func ConnectionCapacityDisclosure() string { return In(i18n.Locale()).ConnectionCapacityDisclosure() }
+
+// ConnectionCapacityDisclosure says "Capacity disclosure"
+// in the language of msgs.
+func (msgs Messages) ConnectionCapacityDisclosure() string {
+	return Catalog.Format(msgs.locale, "connectionCapacityDisclosure", nil)
+}
+
+// ConnectionCapacityShow says "Capacity & execution limits"
+// in the language the app shows.
+func ConnectionCapacityShow() string { return In(i18n.Locale()).ConnectionCapacityShow() }
+
+// ConnectionCapacityShow says "Capacity & execution limits"
+// in the language of msgs.
+func (msgs Messages) ConnectionCapacityShow() string {
+	return Catalog.Format(msgs.locale, "connectionCapacityShow", nil)
+}
+
+// ConnectionCapacityShowTooltip says "Show capacity and execution limits"
+// in the language the app shows.
+func ConnectionCapacityShowTooltip() string { return In(i18n.Locale()).ConnectionCapacityShowTooltip() }
+
+// ConnectionCapacityShowTooltip says "Show capacity and execution limits"
+// in the language of msgs.
+func (msgs Messages) ConnectionCapacityShowTooltip() string {
+	return Catalog.Format(msgs.locale, "connectionCapacityShowTooltip", nil)
+}
+
+// ConnectionCapacityHide says "Hide capacity & execution limits"
+// in the language the app shows.
+func ConnectionCapacityHide() string { return In(i18n.Locale()).ConnectionCapacityHide() }
+
+// ConnectionCapacityHide says "Hide capacity & execution limits"
+// in the language of msgs.
+func (msgs Messages) ConnectionCapacityHide() string {
+	return Catalog.Format(msgs.locale, "connectionCapacityHide", nil)
+}
+
+// ConnectionCapacityHideTooltip says "Hide capacity and execution limits"
+// in the language the app shows.
+func ConnectionCapacityHideTooltip() string { return In(i18n.Locale()).ConnectionCapacityHideTooltip() }
+
+// ConnectionCapacityHideTooltip says "Hide capacity and execution limits"
+// in the language of msgs.
+func (msgs Messages) ConnectionCapacityHideTooltip() string {
+	return Catalog.Format(msgs.locale, "connectionCapacityHideTooltip", nil)
+}
+
+// ConnectionLimitsHint says "Enter limits supported by this model; they are not inferred from its name."
+// in the language the app shows.
+func ConnectionLimitsHint() string { return In(i18n.Locale()).ConnectionLimitsHint() }
+
+// ConnectionLimitsHint says "Enter limits supported by this model; they are not inferred from its name."
+// in the language of msgs.
+func (msgs Messages) ConnectionLimitsHint() string {
+	return Catalog.Format(msgs.locale, "connectionLimitsHint", nil)
+}
+
+// ConnectionFieldContextTokens says "Context tokens"
+// in the language the app shows.
+func ConnectionFieldContextTokens() string { return In(i18n.Locale()).ConnectionFieldContextTokens() }
+
+// ConnectionFieldContextTokens says "Context tokens"
+// in the language of msgs.
+func (msgs Messages) ConnectionFieldContextTokens() string {
+	return Catalog.Format(msgs.locale, "connectionFieldContextTokens", nil)
+}
+
+// ConnectionFieldOutputTokens says "Output tokens"
+// in the language the app shows.
+func ConnectionFieldOutputTokens() string { return In(i18n.Locale()).ConnectionFieldOutputTokens() }
+
+// ConnectionFieldOutputTokens says "Output tokens"
+// in the language of msgs.
+func (msgs Messages) ConnectionFieldOutputTokens() string {
+	return Catalog.Format(msgs.locale, "connectionFieldOutputTokens", nil)
+}
+
+// ConnectionFieldMaxActiveTasks says "Maximum active tasks"
+// in the language the app shows.
+func ConnectionFieldMaxActiveTasks() string { return In(i18n.Locale()).ConnectionFieldMaxActiveTasks() }
+
+// ConnectionFieldMaxActiveTasks says "Maximum active tasks"
+// in the language of msgs.
+func (msgs Messages) ConnectionFieldMaxActiveTasks() string {
+	return Catalog.Format(msgs.locale, "connectionFieldMaxActiveTasks", nil)
+}
+
+// ConnectionFieldWorkingDirectory says "Default working directory"
+// in the language the app shows.
+func ConnectionFieldWorkingDirectory() string {
+	return In(i18n.Locale()).ConnectionFieldWorkingDirectory()
+}
+
+// ConnectionFieldWorkingDirectory says "Default working directory"
+// in the language of msgs.
+func (msgs Messages) ConnectionFieldWorkingDirectory() string {
+	return Catalog.Format(msgs.locale, "connectionFieldWorkingDirectory", nil)
+}
+
+// ConnectionWorkingDirectoryPlaceholder says "/absolute/path/to/project"
+// in the language the app shows.
+func ConnectionWorkingDirectoryPlaceholder() string {
+	return In(i18n.Locale()).ConnectionWorkingDirectoryPlaceholder()
+}
+
+// ConnectionWorkingDirectoryPlaceholder says "/absolute/path/to/project"
+// in the language of msgs.
+func (msgs Messages) ConnectionWorkingDirectoryPlaceholder() string {
+	return Catalog.Format(msgs.locale, "connectionWorkingDirectoryPlaceholder", nil)
+}
+
+// ConnectionWorkingDirectoryHint says "New work uses these defaults; existing sessions keep their model, limits and working directory."
+// in the language the app shows.
+func ConnectionWorkingDirectoryHint() string {
+	return In(i18n.Locale()).ConnectionWorkingDirectoryHint()
+}
+
+// ConnectionWorkingDirectoryHint says "New work uses these defaults; existing sessions keep their model, limits and working directory."
+// in the language of msgs.
+func (msgs Messages) ConnectionWorkingDirectoryHint() string {
+	return Catalog.Format(msgs.locale, "connectionWorkingDirectoryHint", nil)
+}
+
+// ConnectionDiscard says "Discard changes"
+// in the language the app shows.
+func ConnectionDiscard() string { return In(i18n.Locale()).ConnectionDiscard() }
+
+// ConnectionDiscard says "Discard changes"
+// in the language of msgs.
+func (msgs Messages) ConnectionDiscard() string {
+	return Catalog.Format(msgs.locale, "connectionDiscard", nil)
+}
+
+// ConnectionSaveDoesNotInterrupt says "Save does not interrupt work. Apply saved after all work finishes."
+// in the language the app shows.
+func ConnectionSaveDoesNotInterrupt() string {
+	return In(i18n.Locale()).ConnectionSaveDoesNotInterrupt()
+}
+
+// ConnectionSaveDoesNotInterrupt says "Save does not interrupt work. Apply saved after all work finishes."
+// in the language of msgs.
+func (msgs Messages) ConnectionSaveDoesNotInterrupt() string {
+	return Catalog.Format(msgs.locale, "connectionSaveDoesNotInterrupt", nil)
+}
+
+// ConnectionTestAction says "Test connection and model"
+// in the language the app shows.
+func ConnectionTestAction() string { return In(i18n.Locale()).ConnectionTestAction() }
+
+// ConnectionTestAction says "Test connection and model"
+// in the language of msgs.
+func (msgs Messages) ConnectionTestAction() string {
+	return Catalog.Format(msgs.locale, "connectionTestAction", nil)
+}
+
+// ConnectionTestHint says "Tests the values above and may incur provider charges. It does not save or apply; Save and Apply do not test model ac…"
+// in the language the app shows.
+func ConnectionTestHint() string { return In(i18n.Locale()).ConnectionTestHint() }
+
+// ConnectionTestHint says "Tests the values above and may incur provider charges. It does not save or apply; Save and Apply do not test model ac…"
+// in the language of msgs.
+func (msgs Messages) ConnectionTestHint() string {
+	return Catalog.Format(msgs.locale, "connectionTestHint", nil)
+}
+
+// ConnectionCheckFields says "Check the highlighted fields. Your changes are still here."
+// in the language the app shows.
+func ConnectionCheckFields() string { return In(i18n.Locale()).ConnectionCheckFields() }
+
+// ConnectionCheckFields says "Check the highlighted fields. Your changes are still here."
+// in the language of msgs.
+func (msgs Messages) ConnectionCheckFields() string {
+	return Catalog.Format(msgs.locale, "connectionCheckFields", nil)
+}
+
+// ValidationAPI says "Choose a supported protocol."
+// in the language the app shows.
+func ValidationAPI() string { return In(i18n.Locale()).ValidationAPI() }
+
+// ValidationAPI says "Choose a supported protocol."
+// in the language of msgs.
+func (msgs Messages) ValidationAPI() string {
+	return Catalog.Format(msgs.locale, "validationAPI", nil)
+}
+
+// ValidationRequired says "This field is required."
+// in the language the app shows.
+func ValidationRequired() string { return In(i18n.Locale()).ValidationRequired() }
+
+// ValidationRequired says "This field is required."
+// in the language of msgs.
+func (msgs Messages) ValidationRequired() string {
+	return Catalog.Format(msgs.locale, "validationRequired", nil)
+}
+
+// ValidationEndpointWhitespace says "Remove surrounding whitespace."
+// in the language the app shows.
+func ValidationEndpointWhitespace() string { return In(i18n.Locale()).ValidationEndpointWhitespace() }
+
+// ValidationEndpointWhitespace says "Remove surrounding whitespace."
+// in the language of msgs.
+func (msgs Messages) ValidationEndpointWhitespace() string {
+	return Catalog.Format(msgs.locale, "validationEndpointWhitespace", nil)
+}
+
+// ValidationEndpointURL says "Enter an absolute http(s) URL with a host."
+// in the language the app shows.
+func ValidationEndpointURL() string { return In(i18n.Locale()).ValidationEndpointURL() }
+
+// ValidationEndpointURL says "Enter an absolute http(s) URL with a host."
+// in the language of msgs.
+func (msgs Messages) ValidationEndpointURL() string {
+	return Catalog.Format(msgs.locale, "validationEndpointURL", nil)
+}
+
+// ValidationEndpointUserinfo says "Remove the username or password from the URL."
+// in the language the app shows.
+func ValidationEndpointUserinfo() string { return In(i18n.Locale()).ValidationEndpointUserinfo() }
+
+// ValidationEndpointUserinfo says "Remove the username or password from the URL."
+// in the language of msgs.
+func (msgs Messages) ValidationEndpointUserinfo() string {
+	return Catalog.Format(msgs.locale, "validationEndpointUserinfo", nil)
+}
+
+// ValidationEndpointQuery says "Remove the query string."
+// in the language the app shows.
+func ValidationEndpointQuery() string { return In(i18n.Locale()).ValidationEndpointQuery() }
+
+// ValidationEndpointQuery says "Remove the query string."
+// in the language of msgs.
+func (msgs Messages) ValidationEndpointQuery() string {
+	return Catalog.Format(msgs.locale, "validationEndpointQuery", nil)
+}
+
+// ValidationEndpointFragment says "Remove the fragment."
+// in the language the app shows.
+func ValidationEndpointFragment() string { return In(i18n.Locale()).ValidationEndpointFragment() }
+
+// ValidationEndpointFragment says "Remove the fragment."
+// in the language of msgs.
+func (msgs Messages) ValidationEndpointFragment() string {
+	return Catalog.Format(msgs.locale, "validationEndpointFragment", nil)
+}
+
+// ValidationWorkspaceAbsolutePath says "Enter an absolute path."
+// in the language the app shows.
+func ValidationWorkspaceAbsolutePath() string {
+	return In(i18n.Locale()).ValidationWorkspaceAbsolutePath()
+}
+
+// ValidationWorkspaceAbsolutePath says "Enter an absolute path."
+// in the language of msgs.
+func (msgs Messages) ValidationWorkspaceAbsolutePath() string {
+	return Catalog.Format(msgs.locale, "validationWorkspaceAbsolutePath", nil)
+}
+
+// ValidationWorkspaceDirectoryExists says "The directory must exist."
+// in the language the app shows.
+func ValidationWorkspaceDirectoryExists() string {
+	return In(i18n.Locale()).ValidationWorkspaceDirectoryExists()
+}
+
+// ValidationWorkspaceDirectoryExists says "The directory must exist."
+// in the language of msgs.
+func (msgs Messages) ValidationWorkspaceDirectoryExists() string {
+	return Catalog.Format(msgs.locale, "validationWorkspaceDirectoryExists", nil)
+}
+
+// ValidationPositive says "Enter a whole number greater than zero."
+// in the language the app shows.
+func ValidationPositive() string { return In(i18n.Locale()).ValidationPositive() }
+
+// ValidationPositive says "Enter a whole number greater than zero."
+// in the language of msgs.
+func (msgs Messages) ValidationPositive() string {
+	return Catalog.Format(msgs.locale, "validationPositive", nil)
+}
+
+// ValidationLessThanContext says "Output tokens must be less than context tokens."
+// in the language the app shows.
+func ValidationLessThanContext() string { return In(i18n.Locale()).ValidationLessThanContext() }
+
+// ValidationLessThanContext says "Output tokens must be less than context tokens."
+// in the language of msgs.
+func (msgs Messages) ValidationLessThanContext() string {
+	return Catalog.Format(msgs.locale, "validationLessThanContext", nil)
+}
+
+// ValidationContextGap says "Context tokens must leave at least 4 tokens after output tokens."
+// in the language the app shows.
+func ValidationContextGap() string { return In(i18n.Locale()).ValidationContextGap() }
+
+// ValidationContextGap says "Context tokens must leave at least 4 tokens after output tokens."
+// in the language of msgs.
+func (msgs Messages) ValidationContextGap() string {
+	return Catalog.Format(msgs.locale, "validationContextGap", nil)
+}
+
+// ValidationVersion says "Configuration version must be 1."
+// in the language the app shows.
+func ValidationVersion() string { return In(i18n.Locale()).ValidationVersion() }
+
+// ValidationVersion says "Configuration version must be 1."
+// in the language of msgs.
+func (msgs Messages) ValidationVersion() string {
+	return Catalog.Format(msgs.locale, "validationVersion", nil)
+}
+
+// ValidationNumeric says "Enter a positive whole number."
+// in the language the app shows.
+func ValidationNumeric() string { return In(i18n.Locale()).ValidationNumeric() }
+
+// ValidationNumeric says "Enter a positive whole number."
+// in the language of msgs.
+func (msgs Messages) ValidationNumeric() string {
+	return Catalog.Format(msgs.locale, "validationNumeric", nil)
+}
+
+// ConnectionStatusSaving says "Saving configuration…"
+// in the language the app shows.
+func ConnectionStatusSaving() string { return In(i18n.Locale()).ConnectionStatusSaving() }
+
+// ConnectionStatusSaving says "Saving configuration…"
+// in the language of msgs.
+func (msgs Messages) ConnectionStatusSaving() string {
+	return Catalog.Format(msgs.locale, "connectionStatusSaving", nil)
+}
+
+// ConnectionStatusSavedApplied says "Saved. This configuration is already applied."
+// in the language the app shows.
+func ConnectionStatusSavedApplied() string { return In(i18n.Locale()).ConnectionStatusSavedApplied() }
+
+// ConnectionStatusSavedApplied says "Saved. This configuration is already applied."
+// in the language of msgs.
+func (msgs Messages) ConnectionStatusSavedApplied() string {
+	return Catalog.Format(msgs.locale, "connectionStatusSavedApplied", nil)
+}
+
+// ConnectionStatusCheckingSaved says "Checking the saved connection…"
+// in the language the app shows.
+func ConnectionStatusCheckingSaved() string { return In(i18n.Locale()).ConnectionStatusCheckingSaved() }
+
+// ConnectionStatusCheckingSaved says "Checking the saved connection…"
+// in the language of msgs.
+func (msgs Messages) ConnectionStatusCheckingSaved() string {
+	return Catalog.Format(msgs.locale, "connectionStatusCheckingSaved", nil)
+}
+
+// ConnectionStatusApplied says "Applied. New work uses this connection."
+// in the language the app shows.
+func ConnectionStatusApplied() string { return In(i18n.Locale()).ConnectionStatusApplied() }
+
+// ConnectionStatusApplied says "Applied. New work uses this connection."
+// in the language of msgs.
+func (msgs Messages) ConnectionStatusApplied() string {
+	return Catalog.Format(msgs.locale, "connectionStatusApplied", nil)
+}
+
+// ConnectionStatusTesting says "Testing connection and model…"
+// in the language the app shows.
+func ConnectionStatusTesting() string { return In(i18n.Locale()).ConnectionStatusTesting() }
+
+// ConnectionStatusTesting says "Testing connection and model…"
+// in the language of msgs.
+func (msgs Messages) ConnectionStatusTesting() string {
+	return Catalog.Format(msgs.locale, "connectionStatusTesting", nil)
+}
+
+// ConnectionStatusTestCompleted says "Connection test completed: {model}, {endpoint}, context {context} / output {output}"
+// in the language the app shows.
+func ConnectionStatusTestCompleted(model string, endpoint string, context string, output string) string {
+	return In(i18n.Locale()).ConnectionStatusTestCompleted(model, endpoint, context, output)
+}
+
+// ConnectionStatusTestCompleted says "Connection test completed: {model}, {endpoint}, context {context} / output {output}"
+// in the language of msgs.
+func (msgs Messages) ConnectionStatusTestCompleted(model string, endpoint string, context string, output string) string {
+	return Catalog.Format(msgs.locale, "connectionStatusTestCompleted", map[string]any{"model": model, "endpoint": endpoint, "context": context, "output": output})
+}
+
+// ConnectionStatusSavedStoreFailed says "Configuration was saved, but the local contact store could not be created: {error}"
+// in the language the app shows.
+func ConnectionStatusSavedStoreFailed(error string) string {
+	return In(i18n.Locale()).ConnectionStatusSavedStoreFailed(error)
+}
+
+// ConnectionStatusSavedStoreFailed says "Configuration was saved, but the local contact store could not be created: {error}"
+// in the language of msgs.
+func (msgs Messages) ConnectionStatusSavedStoreFailed(error string) string {
+	return Catalog.Format(msgs.locale, "connectionStatusSavedStoreFailed", map[string]any{"error": error})
+}
+
+// ConnectionErrorTestFailed says "Connection test failed: {error}"
+// in the language the app shows.
+func ConnectionErrorTestFailed(error string) string {
+	return In(i18n.Locale()).ConnectionErrorTestFailed(error)
+}
+
+// ConnectionErrorTestFailed says "Connection test failed: {error}"
+// in the language of msgs.
+func (msgs Messages) ConnectionErrorTestFailed(error string) string {
+	return Catalog.Format(msgs.locale, "connectionErrorTestFailed", map[string]any{"error": error})
+}
+
+// ConnectionErrorApplyConfig says "Could not apply saved configuration: {error}"
+// in the language the app shows.
+func ConnectionErrorApplyConfig(error string) string {
+	return In(i18n.Locale()).ConnectionErrorApplyConfig(error)
+}
+
+// ConnectionErrorApplyConfig says "Could not apply saved configuration: {error}"
+// in the language of msgs.
+func (msgs Messages) ConnectionErrorApplyConfig(error string) string {
+	return Catalog.Format(msgs.locale, "connectionErrorApplyConfig", map[string]any{"error": error})
+}
+
+// ConnectionErrorHelperMissing says "Runtime helper not found. {hint}"
+// in the language the app shows.
+func ConnectionErrorHelperMissing(hint string) string {
+	return In(i18n.Locale()).ConnectionErrorHelperMissing(hint)
+}
+
+// ConnectionErrorHelperMissing says "Runtime helper not found. {hint}"
+// in the language of msgs.
+func (msgs Messages) ConnectionErrorHelperMissing(hint string) string {
+	return Catalog.Format(msgs.locale, "connectionErrorHelperMissing", map[string]any{"hint": hint})
+}
+
+// ConnectionErrorPrepare says "Could not prepare the saved connection: {error}"
+// in the language the app shows.
+func ConnectionErrorPrepare(error string) string {
+	return In(i18n.Locale()).ConnectionErrorPrepare(error)
+}
+
+// ConnectionErrorPrepare says "Could not prepare the saved connection: {error}"
+// in the language of msgs.
+func (msgs Messages) ConnectionErrorPrepare(error string) string {
+	return Catalog.Format(msgs.locale, "connectionErrorPrepare", map[string]any{"error": error})
+}
+
+// ConnectionErrorStart says "Could not start the new runtime: {error}"
+// in the language the app shows.
+func ConnectionErrorStart(error string) string { return In(i18n.Locale()).ConnectionErrorStart(error) }
+
+// ConnectionErrorStart says "Could not start the new runtime: {error}"
+// in the language of msgs.
+func (msgs Messages) ConnectionErrorStart(error string) string {
+	return Catalog.Format(msgs.locale, "connectionErrorStart", map[string]any{"error": error})
+}
+
+// ConnectionErrorExitedBeforeReady says "The new runtime exited before it was ready; the previous connection was kept."
+// in the language the app shows.
+func ConnectionErrorExitedBeforeReady() string {
+	return In(i18n.Locale()).ConnectionErrorExitedBeforeReady()
+}
+
+// ConnectionErrorExitedBeforeReady says "The new runtime exited before it was ready; the previous connection was kept."
+// in the language of msgs.
+func (msgs Messages) ConnectionErrorExitedBeforeReady() string {
+	return Catalog.Format(msgs.locale, "connectionErrorExitedBeforeReady", nil)
+}
+
+// ConnectionErrorNotReady says "The new runtime did not become ready; the previous connection was kept."
+// in the language the app shows.
+func ConnectionErrorNotReady() string { return In(i18n.Locale()).ConnectionErrorNotReady() }
+
+// ConnectionErrorNotReady says "The new runtime did not become ready; the previous connection was kept."
+// in the language of msgs.
+func (msgs Messages) ConnectionErrorNotReady() string {
+	return Catalog.Format(msgs.locale, "connectionErrorNotReady", nil)
+}
+
+// ConnectionErrorNotExposed says "The new runtime did not expose the saved connection; the previous connection was kept."
+// in the language the app shows.
+func ConnectionErrorNotExposed() string { return In(i18n.Locale()).ConnectionErrorNotExposed() }
+
+// ConnectionErrorNotExposed says "The new runtime did not expose the saved connection; the previous connection was kept."
+// in the language of msgs.
+func (msgs Messages) ConnectionErrorNotExposed() string {
+	return Catalog.Format(msgs.locale, "connectionErrorNotExposed", nil)
+}
+
+// ConnectionErrorExitedWhileValidating says "The new runtime exited while validating the saved connection; the previous connection was kept."
+// in the language the app shows.
+func ConnectionErrorExitedWhileValidating() string {
+	return In(i18n.Locale()).ConnectionErrorExitedWhileValidating()
+}
+
+// ConnectionErrorExitedWhileValidating says "The new runtime exited while validating the saved connection; the previous connection was kept."
+// in the language of msgs.
+func (msgs Messages) ConnectionErrorExitedWhileValidating() string {
+	return Catalog.Format(msgs.locale, "connectionErrorExitedWhileValidating", nil)
+}
+
+// ConnectionErrorExitedDuringValidation says "The new runtime exited during validation; the previous connection was kept."
+// in the language the app shows.
+func ConnectionErrorExitedDuringValidation() string {
+	return In(i18n.Locale()).ConnectionErrorExitedDuringValidation()
+}
+
+// ConnectionErrorExitedDuringValidation says "The new runtime exited during validation; the previous connection was kept."
+// in the language of msgs.
+func (msgs Messages) ConnectionErrorExitedDuringValidation() string {
+	return Catalog.Format(msgs.locale, "connectionErrorExitedDuringValidation", nil)
+}
+
+// ConnectionErrorSavedNeedsRepair says "Saved connection settings need repair. Check the values and save again."
+// in the language the app shows.
+func ConnectionErrorSavedNeedsRepair() string {
+	return In(i18n.Locale()).ConnectionErrorSavedNeedsRepair()
+}
+
+// ConnectionErrorSavedNeedsRepair says "Saved connection settings need repair. Check the values and save again."
+// in the language of msgs.
+func (msgs Messages) ConnectionErrorSavedNeedsRepair() string {
+	return Catalog.Format(msgs.locale, "connectionErrorSavedNeedsRepair", nil)
+}
+
+// ConnectionBlockedModelOp says "Wait for the in-flight session model operation to finish before applying a new connection."
+// in the language the app shows.
+func ConnectionBlockedModelOp() string { return In(i18n.Locale()).ConnectionBlockedModelOp() }
+
+// ConnectionBlockedModelOp says "Wait for the in-flight session model operation to finish before applying a new connection."
+// in the language of msgs.
+func (msgs Messages) ConnectionBlockedModelOp() string {
+	return Catalog.Format(msgs.locale, "connectionBlockedModelOp", nil)
+}
+
+// ConnectionBlockedApplying says "A new connection is already being applied."
+// in the language the app shows.
+func ConnectionBlockedApplying() string { return In(i18n.Locale()).ConnectionBlockedApplying() }
+
+// ConnectionBlockedApplying says "A new connection is already being applied."
+// in the language of msgs.
+func (msgs Messages) ConnectionBlockedApplying() string {
+	return Catalog.Format(msgs.locale, "connectionBlockedApplying", nil)
+}
+
+// ConnectionBlockedShutdown says "The app is shutting down."
+// in the language the app shows.
+func ConnectionBlockedShutdown() string { return In(i18n.Locale()).ConnectionBlockedShutdown() }
+
+// ConnectionBlockedShutdown says "The app is shutting down."
+// in the language of msgs.
+func (msgs Messages) ConnectionBlockedShutdown() string {
+	return Catalog.Format(msgs.locale, "connectionBlockedShutdown", nil)
+}
+
+// ConnectionBlockedNoSaved says "Save a valid connection configuration first."
+// in the language the app shows.
+func ConnectionBlockedNoSaved() string { return In(i18n.Locale()).ConnectionBlockedNoSaved() }
+
+// ConnectionBlockedNoSaved says "Save a valid connection configuration first."
+// in the language of msgs.
+func (msgs Messages) ConnectionBlockedNoSaved() string {
+	return Catalog.Format(msgs.locale, "connectionBlockedNoSaved", nil)
+}
+
+// ConnectionBlockedStore says "The local contact store is unavailable. Fix its file or permissions, then save again."
+// in the language the app shows.
+func ConnectionBlockedStore() string { return In(i18n.Locale()).ConnectionBlockedStore() }
+
+// ConnectionBlockedStore says "The local contact store is unavailable. Fix its file or permissions, then save again."
+// in the language of msgs.
+func (msgs Messages) ConnectionBlockedStore() string {
+	return Catalog.Format(msgs.locale, "connectionBlockedStore", nil)
+}
+
+// ConnectionBlockedActiveWork says "Wait for all conversation and issue work to finish before applying a new connection."
+// in the language the app shows.
+func ConnectionBlockedActiveWork() string { return In(i18n.Locale()).ConnectionBlockedActiveWork() }
+
+// ConnectionBlockedActiveWork says "Wait for all conversation and issue work to finish before applying a new connection."
+// in the language of msgs.
+func (msgs Messages) ConnectionBlockedActiveWork() string {
+	return Catalog.Format(msgs.locale, "connectionBlockedActiveWork", nil)
+}
+
+// ConnectionBlockedUntrustedIssue says "An issue execution has no trusted terminal state; reload or reconcile it before applying a new connection."
+// in the language the app shows.
+func ConnectionBlockedUntrustedIssue() string {
+	return In(i18n.Locale()).ConnectionBlockedUntrustedIssue()
+}
+
+// ConnectionBlockedUntrustedIssue says "An issue execution has no trusted terminal state; reload or reconcile it before applying a new connection."
+// in the language of msgs.
+func (msgs Messages) ConnectionBlockedUntrustedIssue() string {
+	return Catalog.Format(msgs.locale, "connectionBlockedUntrustedIssue", nil)
+}
+
+// CanSendShutdown says "The app is shutting down."
+// in the language the app shows.
+func CanSendShutdown() string { return In(i18n.Locale()).CanSendShutdown() }
+
+// CanSendShutdown says "The app is shutting down."
+// in the language of msgs.
+func (msgs Messages) CanSendShutdown() string {
+	return Catalog.Format(msgs.locale, "canSendShutdown", nil)
+}
+
+// CanSendArchived says "This contact is archived. Restore it before sending a message."
+// in the language the app shows.
+func CanSendArchived() string { return In(i18n.Locale()).CanSendArchived() }
+
+// CanSendArchived says "This contact is archived. Restore it before sending a message."
+// in the language of msgs.
+func (msgs Messages) CanSendArchived() string {
+	return Catalog.Format(msgs.locale, "canSendArchived", nil)
+}
+
+// CanSendApplying says "Connection settings are being applied; wait for the new helper to become ready."
+// in the language the app shows.
+func CanSendApplying() string { return In(i18n.Locale()).CanSendApplying() }
+
+// CanSendApplying says "Connection settings are being applied; wait for the new helper to become ready."
+// in the language of msgs.
+func (msgs Messages) CanSendApplying() string {
+	return Catalog.Format(msgs.locale, "canSendApplying", nil)
+}
+
+// CanSendRuntimeNotReady says "Runtime is not ready."
+// in the language the app shows.
+func CanSendRuntimeNotReady() string { return In(i18n.Locale()).CanSendRuntimeNotReady() }
+
+// CanSendRuntimeNotReady says "Runtime is not ready."
+// in the language of msgs.
+func (msgs Messages) CanSendRuntimeNotReady() string {
+	return Catalog.Format(msgs.locale, "canSendRuntimeNotReady", nil)
+}
+
+// CanSendModelReload says "Session configuration is unconfirmed; Reload the session before sending."
+// in the language the app shows.
+func CanSendModelReload() string { return In(i18n.Locale()).CanSendModelReload() }
+
+// CanSendModelReload says "Session configuration is unconfirmed; Reload the session before sending."
+// in the language of msgs.
+func (msgs Messages) CanSendModelReload() string {
+	return Catalog.Format(msgs.locale, "canSendModelReload", nil)
+}
+
+// CanSendModelRefresh says "Session configuration is unconfirmed; Refresh before sending."
+// in the language the app shows.
+func CanSendModelRefresh() string { return In(i18n.Locale()).CanSendModelRefresh() }
+
+// CanSendModelRefresh says "Session configuration is unconfirmed; Refresh before sending."
+// in the language of msgs.
+func (msgs Messages) CanSendModelRefresh() string {
+	return Catalog.Format(msgs.locale, "canSendModelRefresh", nil)
+}
+
+// CanSendModelUpdating says "The session model is being updated; this session cannot accept a new task yet."
+// in the language the app shows.
+func CanSendModelUpdating() string { return In(i18n.Locale()).CanSendModelUpdating() }
+
+// CanSendModelUpdating says "The session model is being updated; this session cannot accept a new task yet."
+// in the language of msgs.
+func (msgs Messages) CanSendModelUpdating() string {
+	return Catalog.Format(msgs.locale, "canSendModelUpdating", nil)
+}
+
+// CanSendHistoryLoading says "This contact is still loading its history."
+// in the language the app shows.
+func CanSendHistoryLoading() string { return In(i18n.Locale()).CanSendHistoryLoading() }
+
+// CanSendHistoryLoading says "This contact is still loading its history."
+// in the language of msgs.
+func (msgs Messages) CanSendHistoryLoading() string {
+	return Catalog.Format(msgs.locale, "canSendHistoryLoading", nil)
+}
+
+// CanSendBusy says "This contact is busy."
+// in the language the app shows.
+func CanSendBusy() string { return In(i18n.Locale()).CanSendBusy() }
+
+// CanSendBusy says "This contact is busy."
+// in the language of msgs.
+func (msgs Messages) CanSendBusy() string {
+	return Catalog.Format(msgs.locale, "canSendBusy", nil)
+}
+
+// CanSendSingleSlot says "The single runtime slot is in use; retry after the conversation or work task finishes."
+// in the language the app shows.
+func CanSendSingleSlot() string { return In(i18n.Locale()).CanSendSingleSlot() }
+
+// CanSendSingleSlot says "The single runtime slot is in use; retry after the conversation or work task finishes."
+// in the language of msgs.
+func (msgs Messages) CanSendSingleSlot() string {
+	return Catalog.Format(msgs.locale, "canSendSingleSlot", nil)
+}
+
+// CanSendCapacity says "Runtime task capacity is full; retry after a task finishes."
+// in the language the app shows.
+func CanSendCapacity() string { return In(i18n.Locale()).CanSendCapacity() }
+
+// CanSendCapacity says "Runtime task capacity is full; retry after a task finishes."
+// in the language of msgs.
+func (msgs Messages) CanSendCapacity() string {
+	return Catalog.Format(msgs.locale, "canSendCapacity", nil)
+}
+
+// CanSendAnotherContact says "Another contact is working; wait for its task to finish before sending here."
+// in the language the app shows.
+func CanSendAnotherContact() string { return In(i18n.Locale()).CanSendAnotherContact() }
+
+// CanSendAnotherContact says "Another contact is working; wait for its task to finish before sending here."
+// in the language of msgs.
+func (msgs Messages) CanSendAnotherContact() string {
+	return Catalog.Format(msgs.locale, "canSendAnotherContact", nil)
+}
+
+// CanStartArchived says "This contact is archived. Restore it before starting issue work."
+// in the language the app shows.
+func CanStartArchived() string { return In(i18n.Locale()).CanStartArchived() }
+
+// CanStartArchived says "This contact is archived. Restore it before starting issue work."
+// in the language of msgs.
+func (msgs Messages) CanStartArchived() string {
+	return Catalog.Format(msgs.locale, "canStartArchived", nil)
+}
+
+// CanStartIssueActive says "This issue already has an active execution."
+// in the language the app shows.
+func CanStartIssueActive() string { return In(i18n.Locale()).CanStartIssueActive() }
+
+// CanStartIssueActive says "This issue already has an active execution."
+// in the language of msgs.
+func (msgs Messages) CanStartIssueActive() string {
+	return Catalog.Format(msgs.locale, "canStartIssueActive", nil)
+}
+
+// CanStartIssueReleasing says "This issue's work session is still being released; retry after it completes."
+// in the language the app shows.
+func CanStartIssueReleasing() string { return In(i18n.Locale()).CanStartIssueReleasing() }
+
+// CanStartIssueReleasing says "This issue's work session is still being released; retry after it completes."
+// in the language of msgs.
+func (msgs Messages) CanStartIssueReleasing() string {
+	return Catalog.Format(msgs.locale, "canStartIssueReleasing", nil)
+}
+
+// CanStartIssueHistoryLoading says "This issue's work history is still loading."
+// in the language the app shows.
+func CanStartIssueHistoryLoading() string { return In(i18n.Locale()).CanStartIssueHistoryLoading() }
+
+// CanStartIssueHistoryLoading says "This issue's work history is still loading."
+// in the language of msgs.
+func (msgs Messages) CanStartIssueHistoryLoading() string {
+	return Catalog.Format(msgs.locale, "canStartIssueHistoryLoading", nil)
+}
+
+// CanStartWorkCapacity says "Work capacity is full; one runtime slot is reserved for conversation."
+// in the language the app shows.
+func CanStartWorkCapacity() string { return In(i18n.Locale()).CanStartWorkCapacity() }
+
+// CanStartWorkCapacity says "Work capacity is full; one runtime slot is reserved for conversation."
+// in the language of msgs.
+func (msgs Messages) CanStartWorkCapacity() string {
+	return Catalog.Format(msgs.locale, "canStartWorkCapacity", nil)
+}
+
+// StartupHintFixConnection says "Fix the saved values in Connection settings, then save and apply."
+// in the language the app shows.
+func StartupHintFixConnection() string { return In(i18n.Locale()).StartupHintFixConnection() }
+
+// StartupHintFixConnection says "Fix the saved values in Connection settings, then save and apply."
+// in the language of msgs.
+func (msgs Messages) StartupHintFixConnection() string {
+	return Catalog.Format(msgs.locale, "startupHintFixConnection", nil)
+}
+
+// StartupHintEnterConnection says "Enter a connection, model and working directory, then save and apply."
+// in the language the app shows.
+func StartupHintEnterConnection() string { return In(i18n.Locale()).StartupHintEnterConnection() }
+
+// StartupHintEnterConnection says "Enter a connection, model and working directory, then save and apply."
+// in the language of msgs.
+func (msgs Messages) StartupHintEnterConnection() string {
+	return Catalog.Format(msgs.locale, "startupHintEnterConnection", nil)
+}
+
+// StartupHintFixThenApply says "Fix Connection settings, then save and apply."
+// in the language the app shows.
+func StartupHintFixThenApply() string { return In(i18n.Locale()).StartupHintFixThenApply() }
+
+// StartupHintFixThenApply says "Fix Connection settings, then save and apply."
+// in the language of msgs.
+func (msgs Messages) StartupHintFixThenApply() string {
+	return Catalog.Format(msgs.locale, "startupHintFixThenApply", nil)
+}
+
+// StartupHintHelperPath says "Check the helper path and permissions at {path}, then try Apply saved."
+// in the language the app shows.
+func StartupHintHelperPath(path string) string { return In(i18n.Locale()).StartupHintHelperPath(path) }
+
+// StartupHintHelperPath says "Check the helper path and permissions at {path}, then try Apply saved."
+// in the language of msgs.
+func (msgs Messages) StartupHintHelperPath(path string) string {
+	return Catalog.Format(msgs.locale, "startupHintHelperPath", map[string]any{"path": path})
+}
+
+// StartupHintHelperPathStart says "Check the helper path and the startup diagnostic, then restart Nagi."
+// in the language the app shows.
+func StartupHintHelperPathStart() string { return In(i18n.Locale()).StartupHintHelperPathStart() }
+
+// StartupHintHelperPathStart says "Check the helper path and the startup diagnostic, then restart Nagi."
+// in the language of msgs.
+func (msgs Messages) StartupHintHelperPathStart() string {
+	return Catalog.Format(msgs.locale, "startupHintHelperPathStart", nil)
+}
+
+// StartupHintRestartUnconfirmed says "Restart Nagi; delivery or result may be unconfirmed. No automatic retry."
+// in the language the app shows.
+func StartupHintRestartUnconfirmed() string { return In(i18n.Locale()).StartupHintRestartUnconfirmed() }
+
+// StartupHintRestartUnconfirmed says "Restart Nagi; delivery or result may be unconfirmed. No automatic retry."
+// in the language of msgs.
+func (msgs Messages) StartupHintRestartUnconfirmed() string {
+	return Catalog.Format(msgs.locale, "startupHintRestartUnconfirmed", nil)
+}
+
+// StartupHintRestartReload says "Restart Nagi and reload history. Accepted work may be unconfirmed; no automatic retry."
+// in the language the app shows.
+func StartupHintRestartReload() string { return In(i18n.Locale()).StartupHintRestartReload() }
+
+// StartupHintRestartReload says "Restart Nagi and reload history. Accepted work may be unconfirmed; no automatic retry."
+// in the language of msgs.
+func (msgs Messages) StartupHintRestartReload() string {
+	return Catalog.Format(msgs.locale, "startupHintRestartReload", nil)
+}
+
+// StartupHintSetAPIKey says "Set API_KEY in the environment or in {path}/.env, then restart Nagi."
+// in the language the app shows.
+func StartupHintSetAPIKey(path string) string { return In(i18n.Locale()).StartupHintSetAPIKey(path) }
+
+// StartupHintSetAPIKey says "Set API_KEY in the environment or in {path}/.env, then restart Nagi."
+// in the language of msgs.
+func (msgs Messages) StartupHintSetAPIKey(path string) string {
+	return Catalog.Format(msgs.locale, "startupHintSetAPIKey", map[string]any{"path": path})
+}
+
+// StartupHintFixEnv says "Fix or replace the .env file in {path}, then restart Nagi."
+// in the language the app shows.
+func StartupHintFixEnv(path string) string { return In(i18n.Locale()).StartupHintFixEnv(path) }
+
+// StartupHintFixEnv says "Fix or replace the .env file in {path}, then restart Nagi."
+// in the language of msgs.
+func (msgs Messages) StartupHintFixEnv(path string) string {
+	return Catalog.Format(msgs.locale, "startupHintFixEnv", map[string]any{"path": path})
+}
+
+// StartupHintExistingStore says "Nagi left the existing file untouched and did not create a replacement store. Fix the file or its permissions at {pat…"
+// in the language the app shows.
+func StartupHintExistingStore(path string) string {
+	return In(i18n.Locale()).StartupHintExistingStore(path)
+}
+
+// StartupHintExistingStore says "Nagi left the existing file untouched and did not create a replacement store. Fix the file or its permissions at {pat…"
+// in the language of msgs.
+func (msgs Messages) StartupHintExistingStore(path string) string {
+	return Catalog.Format(msgs.locale, "startupHintExistingStore", map[string]any{"path": path})
+}
+
+// StartupHintHelperInstall says "Place Saki-runtime next to the Saki executable (expected: {candidates}) or set SAKI_RUNTIME_BIN, then restart Nagi."
+// in the language the app shows.
+func StartupHintHelperInstall(candidates string) string {
+	return In(i18n.Locale()).StartupHintHelperInstall(candidates)
+}
+
+// StartupHintHelperInstall says "Place Saki-runtime next to the Saki executable (expected: {candidates}) or set SAKI_RUNTIME_BIN, then restart Nagi."
+// in the language of msgs.
+func (msgs Messages) StartupHintHelperInstall(candidates string) string {
+	return Catalog.Format(msgs.locale, "startupHintHelperInstall", map[string]any{"candidates": candidates})
+}
+
+// StartupHintHelperInstallNoList says "Place Saki-runtime next to the Saki executable or set SAKI_RUNTIME_BIN, then restart Nagi."
+// in the language the app shows.
+func StartupHintHelperInstallNoList() string {
+	return In(i18n.Locale()).StartupHintHelperInstallNoList()
+}
+
+// StartupHintHelperInstallNoList says "Place Saki-runtime next to the Saki executable or set SAKI_RUNTIME_BIN, then restart Nagi."
+// in the language of msgs.
+func (msgs Messages) StartupHintHelperInstallNoList() string {
+	return Catalog.Format(msgs.locale, "startupHintHelperInstallNoList", nil)
+}
+
+// ModelSessionTitle says "Session model"
+// in the language the app shows.
+func ModelSessionTitle() string { return In(i18n.Locale()).ModelSessionTitle() }
+
+// ModelSessionTitle says "Session model"
+// in the language of msgs.
+func (msgs Messages) ModelSessionTitle() string {
+	return Catalog.Format(msgs.locale, "modelSessionTitle", nil)
+}
+
+// ModelCancel says "Cancel"
+// in the language the app shows.
+func ModelCancel() string { return In(i18n.Locale()).ModelCancel() }
+
+// ModelCancel says "Cancel"
+// in the language of msgs.
+func (msgs Messages) ModelCancel() string {
+	return Catalog.Format(msgs.locale, "modelCancel", nil)
+}
+
+// ModelTargetLabel says "Target: {target}"
+// in the language the app shows.
+func ModelTargetLabel(target string) string { return In(i18n.Locale()).ModelTargetLabel(target) }
+
+// ModelTargetLabel says "Target: {target}"
+// in the language of msgs.
+func (msgs Messages) ModelTargetLabel(target string) string {
+	return Catalog.Format(msgs.locale, "modelTargetLabel", map[string]any{"target": target})
+}
+
+// ModelSessionLine says "Session: {session}"
+// in the language the app shows.
+func ModelSessionLine(session string) string { return In(i18n.Locale()).ModelSessionLine(session) }
+
+// ModelSessionLine says "Session: {session}"
+// in the language of msgs.
+func (msgs Messages) ModelSessionLine(session string) string {
+	return Catalog.Format(msgs.locale, "modelSessionLine", map[string]any{"session": session})
+}
+
+// ModelConnectionLine says "Connection: {connection}"
+// in the language the app shows.
+func ModelConnectionLine(connection string) string {
+	return In(i18n.Locale()).ModelConnectionLine(connection)
+}
+
+// ModelConnectionLine says "Connection: {connection}"
+// in the language of msgs.
+func (msgs Messages) ModelConnectionLine(connection string) string {
+	return Catalog.Format(msgs.locale, "modelConnectionLine", map[string]any{"connection": connection})
+}
+
+// ModelEffectiveModel says "Effective model: {model}"
+// in the language the app shows.
+func ModelEffectiveModel(model string) string { return In(i18n.Locale()).ModelEffectiveModel(model) }
+
+// ModelEffectiveModel says "Effective model: {model}"
+// in the language of msgs.
+func (msgs Messages) ModelEffectiveModel(model string) string {
+	return Catalog.Format(msgs.locale, "modelEffectiveModel", map[string]any{"model": model})
+}
+
+// ModelLastReadModel says "Last read model: {model}"
+// in the language the app shows.
+func ModelLastReadModel(model string) string { return In(i18n.Locale()).ModelLastReadModel(model) }
+
+// ModelLastReadModel says "Last read model: {model}"
+// in the language of msgs.
+func (msgs Messages) ModelLastReadModel(model string) string {
+	return Catalog.Format(msgs.locale, "modelLastReadModel", map[string]any{"model": model})
+}
+
+// ModelEffectiveLimits says "Effective limits: context {context} / output {output}, {source}, revision {revision}"
+// in the language the app shows.
+func ModelEffectiveLimits(context string, output string, source string, revision string) string {
+	return In(i18n.Locale()).ModelEffectiveLimits(context, output, source, revision)
+}
+
+// ModelEffectiveLimits says "Effective limits: context {context} / output {output}, {source}, revision {revision}"
+// in the language of msgs.
+func (msgs Messages) ModelEffectiveLimits(context string, output string, source string, revision string) string {
+	return Catalog.Format(msgs.locale, "modelEffectiveLimits", map[string]any{"context": context, "output": output, "source": source, "revision": revision})
+}
+
+// ModelLastReadLimits says "Last read limits: context {context} / output {output}, {source}, revision {revision}"
+// in the language the app shows.
+func ModelLastReadLimits(context string, output string, source string, revision string) string {
+	return In(i18n.Locale()).ModelLastReadLimits(context, output, source, revision)
+}
+
+// ModelLastReadLimits says "Last read limits: context {context} / output {output}, {source}, revision {revision}"
+// in the language of msgs.
+func (msgs Messages) ModelLastReadLimits(context string, output string, source string, revision string) string {
+	return Catalog.Format(msgs.locale, "modelLastReadLimits", map[string]any{"context": context, "output": output, "source": source, "revision": revision})
+}
+
+// ModelEffectiveTools says "Effective built-in tools: {tools}"
+// in the language the app shows.
+func ModelEffectiveTools(tools string) string { return In(i18n.Locale()).ModelEffectiveTools(tools) }
+
+// ModelEffectiveTools says "Effective built-in tools: {tools}"
+// in the language of msgs.
+func (msgs Messages) ModelEffectiveTools(tools string) string {
+	return Catalog.Format(msgs.locale, "modelEffectiveTools", map[string]any{"tools": tools})
+}
+
+// ModelLastReadTools says "Last read built-in tools: {tools}"
+// in the language the app shows.
+func ModelLastReadTools(tools string) string { return In(i18n.Locale()).ModelLastReadTools(tools) }
+
+// ModelLastReadTools says "Last read built-in tools: {tools}"
+// in the language of msgs.
+func (msgs Messages) ModelLastReadTools(tools string) string {
+	return Catalog.Format(msgs.locale, "modelLastReadTools", map[string]any{"tools": tools})
+}
+
+// ModelUnconfirmedHint says "Runtime has not confirmed the current configuration; these are the last read values. Refresh is available."
+// in the language the app shows.
+func ModelUnconfirmedHint() string { return In(i18n.Locale()).ModelUnconfirmedHint() }
+
+// ModelUnconfirmedHint says "Runtime has not confirmed the current configuration; these are the last read values. Refresh is available."
+// in the language of msgs.
+func (msgs Messages) ModelUnconfirmedHint() string {
+	return Catalog.Format(msgs.locale, "modelUnconfirmedHint", nil)
+}
+
+// ModelProviderID says "Provider model ID"
+// in the language the app shows.
+func ModelProviderID() string { return In(i18n.Locale()).ModelProviderID() }
+
+// ModelProviderID says "Provider model ID"
+// in the language of msgs.
+func (msgs Messages) ModelProviderID() string {
+	return Catalog.Format(msgs.locale, "modelProviderID", nil)
+}
+
+// ModelCatalogHint says "Catalog entries supply capacity only; they do not prove that the provider endpoint supports a model."
+// in the language the app shows.
+func ModelCatalogHint() string { return In(i18n.Locale()).ModelCatalogHint() }
+
+// ModelCatalogHint says "Catalog entries supply capacity only; they do not prove that the provider endpoint supports a model."
+// in the language of msgs.
+func (msgs Messages) ModelCatalogHint() string {
+	return Catalog.Format(msgs.locale, "modelCatalogHint", nil)
+}
+
+// ModelUseCatalog says "Use Runtime catalog"
+// in the language the app shows.
+func ModelUseCatalog() string { return In(i18n.Locale()).ModelUseCatalog() }
+
+// ModelUseCatalog says "Use Runtime catalog"
+// in the language of msgs.
+func (msgs Messages) ModelUseCatalog() string {
+	return Catalog.Format(msgs.locale, "modelUseCatalog", nil)
+}
+
+// ModelExplicitLimits says "Set explicit limits"
+// in the language the app shows.
+func ModelExplicitLimits() string { return In(i18n.Locale()).ModelExplicitLimits() }
+
+// ModelExplicitLimits says "Set explicit limits"
+// in the language of msgs.
+func (msgs Messages) ModelExplicitLimits() string {
+	return Catalog.Format(msgs.locale, "modelExplicitLimits", nil)
+}
+
+// ModelCatalogCapacityHint says "Capacity comes from the selected Runtime catalog entry. Endpoint/model availability is not implied."
+// in the language the app shows.
+func ModelCatalogCapacityHint() string { return In(i18n.Locale()).ModelCatalogCapacityHint() }
+
+// ModelCatalogCapacityHint says "Capacity comes from the selected Runtime catalog entry. Endpoint/model availability is not implied."
+// in the language of msgs.
+func (msgs Messages) ModelCatalogCapacityHint() string {
+	return Catalog.Format(msgs.locale, "modelCatalogCapacityHint", nil)
+}
+
+// ModelContextTokens says "Context tokens"
+// in the language the app shows.
+func ModelContextTokens() string { return In(i18n.Locale()).ModelContextTokens() }
+
+// ModelContextTokens says "Context tokens"
+// in the language of msgs.
+func (msgs Messages) ModelContextTokens() string {
+	return Catalog.Format(msgs.locale, "modelContextTokens", nil)
+}
+
+// ModelOutputTokens says "Output tokens"
+// in the language the app shows.
+func ModelOutputTokens() string { return In(i18n.Locale()).ModelOutputTokens() }
+
+// ModelOutputTokens says "Output tokens"
+// in the language of msgs.
+func (msgs Messages) ModelOutputTokens() string {
+	return Catalog.Format(msgs.locale, "modelOutputTokens", nil)
+}
+
+// ModelCompactionHint says "Other compaction strategy values are preserved from the effective config."
+// in the language the app shows.
+func ModelCompactionHint() string { return In(i18n.Locale()).ModelCompactionHint() }
+
+// ModelCompactionHint says "Other compaction strategy values are preserved from the effective config."
+// in the language of msgs.
+func (msgs Messages) ModelCompactionHint() string {
+	return Catalog.Format(msgs.locale, "modelCompactionHint", nil)
+}
+
+// ModelRefresh says "Refresh"
+// in the language the app shows.
+func ModelRefresh() string { return In(i18n.Locale()).ModelRefresh() }
+
+// ModelRefresh says "Refresh"
+// in the language of msgs.
+func (msgs Messages) ModelRefresh() string {
+	return Catalog.Format(msgs.locale, "modelRefresh", nil)
+}
+
+// ModelWaiting says "Waiting for Runtime…"
+// in the language the app shows.
+func ModelWaiting() string { return In(i18n.Locale()).ModelWaiting() }
+
+// ModelWaiting says "Waiting for Runtime…"
+// in the language of msgs.
+func (msgs Messages) ModelWaiting() string {
+	return Catalog.Format(msgs.locale, "modelWaiting", nil)
+}
+
+// ModelFilterCandidates says "Filter candidates"
+// in the language the app shows.
+func ModelFilterCandidates() string { return In(i18n.Locale()).ModelFilterCandidates() }
+
+// ModelFilterCandidates says "Filter candidates"
+// in the language of msgs.
+func (msgs Messages) ModelFilterCandidates() string {
+	return Catalog.Format(msgs.locale, "modelFilterCandidates", nil)
+}
+
+// ModelFilter says "Filter"
+// in the language the app shows.
+func ModelFilter() string { return In(i18n.Locale()).ModelFilter() }
+
+// ModelFilter says "Filter"
+// in the language of msgs.
+func (msgs Messages) ModelFilter() string {
+	return Catalog.Format(msgs.locale, "modelFilter", nil)
+}
+
+// ModelFilterPlaceholder says "Model or catalog ID"
+// in the language the app shows.
+func ModelFilterPlaceholder() string { return In(i18n.Locale()).ModelFilterPlaceholder() }
+
+// ModelFilterPlaceholder says "Model or catalog ID"
+// in the language of msgs.
+func (msgs Messages) ModelFilterPlaceholder() string {
+	return Catalog.Format(msgs.locale, "modelFilterPlaceholder", nil)
+}
+
+// ModelConfiguredModels says "Configured models"
+// in the language the app shows.
+func ModelConfiguredModels() string { return In(i18n.Locale()).ModelConfiguredModels() }
+
+// ModelConfiguredModels says "Configured models"
+// in the language of msgs.
+func (msgs Messages) ModelConfiguredModels() string {
+	return Catalog.Format(msgs.locale, "modelConfiguredModels", nil)
+}
+
+// ModelConfiguredHint says "Host-provided declarations, not verified availability."
+// in the language the app shows.
+func ModelConfiguredHint() string { return In(i18n.Locale()).ModelConfiguredHint() }
+
+// ModelConfiguredHint says "Host-provided declarations, not verified availability."
+// in the language of msgs.
+func (msgs Messages) ModelConfiguredHint() string {
+	return Catalog.Format(msgs.locale, "modelConfiguredHint", nil)
+}
+
+// ModelConfiguredChoice says "{model}: context {context}"
+// in the language the app shows.
+func ModelConfiguredChoice(model string, context string) string {
+	return In(i18n.Locale()).ModelConfiguredChoice(model, context)
+}
+
+// ModelConfiguredChoice says "{model}: context {context}"
+// in the language of msgs.
+func (msgs Messages) ModelConfiguredChoice(model string, context string) string {
+	return Catalog.Format(msgs.locale, "modelConfiguredChoice", map[string]any{"model": model, "context": context})
+}
+
+// ModelConfiguredMore says "Showing {shown} of {total} configured models; refine Filter to see more."
+// in the language the app shows.
+func ModelConfiguredMore(shown string, total string) string {
+	return In(i18n.Locale()).ModelConfiguredMore(shown, total)
+}
+
+// ModelConfiguredMore says "Showing {shown} of {total} configured models; refine Filter to see more."
+// in the language of msgs.
+func (msgs Messages) ModelConfiguredMore(shown string, total string) string {
+	return Catalog.Format(msgs.locale, "modelConfiguredMore", map[string]any{"shown": shown, "total": total})
+}
+
+// ModelCatalogCapacity says "Runtime catalog capacity"
+// in the language the app shows.
+func ModelCatalogCapacity() string { return In(i18n.Locale()).ModelCatalogCapacity() }
+
+// ModelCatalogCapacity says "Runtime catalog capacity"
+// in the language of msgs.
+func (msgs Messages) ModelCatalogCapacity() string {
+	return Catalog.Format(msgs.locale, "modelCatalogCapacity", nil)
+}
+
+// ModelCatalogChoice says "{name}: context {context}"
+// in the language the app shows.
+func ModelCatalogChoice(name string, context string) string {
+	return In(i18n.Locale()).ModelCatalogChoice(name, context)
+}
+
+// ModelCatalogChoice says "{name}: context {context}"
+// in the language of msgs.
+func (msgs Messages) ModelCatalogChoice(name string, context string) string {
+	return Catalog.Format(msgs.locale, "modelCatalogChoice", map[string]any{"name": name, "context": context})
+}
+
+// ModelCatalogMore says "Showing {shown} of {total} catalog entries; refine Filter to see more."
+// in the language the app shows.
+func ModelCatalogMore(shown string, total string) string {
+	return In(i18n.Locale()).ModelCatalogMore(shown, total)
+}
+
+// ModelCatalogMore says "Showing {shown} of {total} catalog entries; refine Filter to see more."
+// in the language of msgs.
+func (msgs Messages) ModelCatalogMore(shown string, total string) string {
+	return Catalog.Format(msgs.locale, "modelCatalogMore", map[string]any{"shown": shown, "total": total})
+}
+
+// ModelNoCatalog says "No Runtime catalog entries are available; enter explicit limits."
+// in the language the app shows.
+func ModelNoCatalog() string { return In(i18n.Locale()).ModelNoCatalog() }
+
+// ModelNoCatalog says "No Runtime catalog entries are available; enter explicit limits."
+// in the language of msgs.
+func (msgs Messages) ModelNoCatalog() string {
+	return Catalog.Format(msgs.locale, "modelNoCatalog", nil)
+}
+
+// ModelTargetIssueWork says "Issue work"
+// in the language the app shows.
+func ModelTargetIssueWork() string { return In(i18n.Locale()).ModelTargetIssueWork() }
+
+// ModelTargetIssueWork says "Issue work"
+// in the language of msgs.
+func (msgs Messages) ModelTargetIssueWork() string {
+	return Catalog.Format(msgs.locale, "modelTargetIssueWork", nil)
+}
+
+// ModelTargetConversation says "Conversation"
+// in the language the app shows.
+func ModelTargetConversation() string { return In(i18n.Locale()).ModelTargetConversation() }
+
+// ModelTargetConversation says "Conversation"
+// in the language of msgs.
+func (msgs Messages) ModelTargetConversation() string {
+	return Catalog.Format(msgs.locale, "modelTargetConversation", nil)
+}
+
+// ModelTargetSession says "Session"
+// in the language the app shows.
+func ModelTargetSession() string { return In(i18n.Locale()).ModelTargetSession() }
+
+// ModelTargetSession says "Session"
+// in the language of msgs.
+func (msgs Messages) ModelTargetSession() string {
+	return Catalog.Format(msgs.locale, "modelTargetSession", nil)
+}
+
+// ModelTargetValue says "{kind}: {label}"
+// in the language the app shows.
+func ModelTargetValue(kind string, label string) string {
+	return In(i18n.Locale()).ModelTargetValue(kind, label)
+}
+
+// ModelTargetValue says "{kind}: {label}"
+// in the language of msgs.
+func (msgs Messages) ModelTargetValue(kind string, label string) string {
+	return Catalog.Format(msgs.locale, "modelTargetValue", map[string]any{"kind": kind, "label": label})
+}
+
+// ModelSourceCatalog says "Runtime catalog"
+// in the language the app shows.
+func ModelSourceCatalog() string { return In(i18n.Locale()).ModelSourceCatalog() }
+
+// ModelSourceCatalog says "Runtime catalog"
+// in the language of msgs.
+func (msgs Messages) ModelSourceCatalog() string {
+	return Catalog.Format(msgs.locale, "modelSourceCatalog", nil)
+}
+
+// ModelSourceExplicit says "explicit limits"
+// in the language the app shows.
+func ModelSourceExplicit() string { return In(i18n.Locale()).ModelSourceExplicit() }
+
+// ModelSourceExplicit says "explicit limits"
+// in the language of msgs.
+func (msgs Messages) ModelSourceExplicit() string {
+	return Catalog.Format(msgs.locale, "modelSourceExplicit", nil)
+}
+
+// ModelSourceStored says "stored"
+// in the language the app shows.
+func ModelSourceStored() string { return In(i18n.Locale()).ModelSourceStored() }
+
+// ModelSourceStored says "stored"
+// in the language of msgs.
+func (msgs Messages) ModelSourceStored() string {
+	return Catalog.Format(msgs.locale, "modelSourceStored", nil)
+}
+
+// ModelSourceUnknown says "unknown source"
+// in the language the app shows.
+func ModelSourceUnknown() string { return In(i18n.Locale()).ModelSourceUnknown() }
+
+// ModelSourceUnknown says "unknown source"
+// in the language of msgs.
+func (msgs Messages) ModelSourceUnknown() string {
+	return Catalog.Format(msgs.locale, "modelSourceUnknown", nil)
+}
+
+// ModelUnknown says "unknown"
+// in the language the app shows.
+func ModelUnknown() string { return In(i18n.Locale()).ModelUnknown() }
+
+// ModelUnknown says "unknown"
+// in the language of msgs.
+func (msgs Messages) ModelUnknown() string {
+	return Catalog.Format(msgs.locale, "modelUnknown", nil)
+}
+
+// ModelNotCreated says "not created"
+// in the language the app shows.
+func ModelNotCreated() string { return In(i18n.Locale()).ModelNotCreated() }
+
+// ModelNotCreated says "not created"
+// in the language of msgs.
+func (msgs Messages) ModelNotCreated() string {
+	return Catalog.Format(msgs.locale, "modelNotCreated", nil)
+}
+
+// ModelNoSession says "This context has no Runtime session yet. New work uses the model from Connection settings; after the first task creat…"
+// in the language the app shows.
+func ModelNoSession() string { return In(i18n.Locale()).ModelNoSession() }
+
+// ModelNoSession says "This context has no Runtime session yet. New work uses the model from Connection settings; after the first task creat…"
+// in the language of msgs.
+func (msgs Messages) ModelNoSession() string {
+	return Catalog.Format(msgs.locale, "modelNoSession", nil)
+}
+
+// ModelRuntimeNotReadyRead says "Runtime is not ready; the session model cannot be read."
+// in the language the app shows.
+func ModelRuntimeNotReadyRead() string { return In(i18n.Locale()).ModelRuntimeNotReadyRead() }
+
+// ModelRuntimeNotReadyRead says "Runtime is not ready; the session model cannot be read."
+// in the language of msgs.
+func (msgs Messages) ModelRuntimeNotReadyRead() string {
+	return Catalog.Format(msgs.locale, "modelRuntimeNotReadyRead", nil)
+}
+
+// ModelReading says "Reading the session model from Runtime…"
+// in the language the app shows.
+func ModelReading() string { return In(i18n.Locale()).ModelReading() }
+
+// ModelReading says "Reading the session model from Runtime…"
+// in the language of msgs.
+func (msgs Messages) ModelReading() string {
+	return Catalog.Format(msgs.locale, "modelReading", nil)
+}
+
+// ModelReadFailed says "Could not read this session's Runtime configuration: {error}"
+// in the language the app shows.
+func ModelReadFailed(error string) string { return In(i18n.Locale()).ModelReadFailed(error) }
+
+// ModelReadFailed says "Could not read this session's Runtime configuration: {error}"
+// in the language of msgs.
+func (msgs Messages) ModelReadFailed(error string) string {
+	return Catalog.Format(msgs.locale, "modelReadFailed", map[string]any{"error": error})
+}
+
+// ModelCatalogNotLoaded says "Runtime catalog could not be loaded; explicit limits are available."
+// in the language the app shows.
+func ModelCatalogNotLoaded() string { return In(i18n.Locale()).ModelCatalogNotLoaded() }
+
+// ModelCatalogNotLoaded says "Runtime catalog could not be loaded; explicit limits are available."
+// in the language of msgs.
+func (msgs Messages) ModelCatalogNotLoaded() string {
+	return Catalog.Format(msgs.locale, "modelCatalogNotLoaded", nil)
+}
+
+// ModelQuarantined says "This session's configuration is quarantined. Reload the session before changing the model."
+// in the language the app shows.
+func ModelQuarantined() string { return In(i18n.Locale()).ModelQuarantined() }
+
+// ModelQuarantined says "This session's configuration is quarantined. Reload the session before changing the model."
+// in the language of msgs.
+func (msgs Messages) ModelQuarantined() string {
+	return Catalog.Format(msgs.locale, "modelQuarantined", nil)
+}
+
+// ModelNotConfirmed says "Runtime did not confirm this session's configuration. Refresh to read it again."
+// in the language the app shows.
+func ModelNotConfirmed() string { return In(i18n.Locale()).ModelNotConfirmed() }
+
+// ModelNotConfirmed says "Runtime did not confirm this session's configuration. Refresh to read it again."
+// in the language of msgs.
+func (msgs Messages) ModelNotConfirmed() string {
+	return Catalog.Format(msgs.locale, "modelNotConfirmed", nil)
+}
+
+// ModelNeedsExplicitReload says "Configuration was read back, but this session still needs an explicit Reload before new tasks."
+// in the language the app shows.
+func ModelNeedsExplicitReload() string { return In(i18n.Locale()).ModelNeedsExplicitReload() }
+
+// ModelNeedsExplicitReload says "Configuration was read back, but this session still needs an explicit Reload before new tasks."
+// in the language of msgs.
+func (msgs Messages) ModelNeedsExplicitReload() string {
+	return Catalog.Format(msgs.locale, "modelNeedsExplicitReload", nil)
+}
+
+// ModelRefreshedNoCatalog says "Configuration refreshed; Runtime catalog could not be loaded."
+// in the language the app shows.
+func ModelRefreshedNoCatalog() string { return In(i18n.Locale()).ModelRefreshedNoCatalog() }
+
+// ModelRefreshedNoCatalog says "Configuration refreshed; Runtime catalog could not be loaded."
+// in the language of msgs.
+func (msgs Messages) ModelRefreshedNoCatalog() string {
+	return Catalog.Format(msgs.locale, "modelRefreshedNoCatalog", nil)
+}
+
+// ModelRefreshed says "Runtime configuration refreshed."
+// in the language the app shows.
+func ModelRefreshed() string { return In(i18n.Locale()).ModelRefreshed() }
+
+// ModelRefreshed says "Runtime configuration refreshed."
+// in the language of msgs.
+func (msgs Messages) ModelRefreshed() string {
+	return Catalog.Format(msgs.locale, "modelRefreshed", nil)
+}
+
+// ModelNotReadyUpdate says "Runtime is not ready; the model was not updated."
+// in the language the app shows.
+func ModelNotReadyUpdate() string { return In(i18n.Locale()).ModelNotReadyUpdate() }
+
+// ModelNotReadyUpdate says "Runtime is not ready; the model was not updated."
+// in the language of msgs.
+func (msgs Messages) ModelNotReadyUpdate() string {
+	return Catalog.Format(msgs.locale, "modelNotReadyUpdate", nil)
+}
+
+// ModelNeedReloadUpdate says "This session needs an explicit Reload before another model update."
+// in the language the app shows.
+func ModelNeedReloadUpdate() string { return In(i18n.Locale()).ModelNeedReloadUpdate() }
+
+// ModelNeedReloadUpdate says "This session needs an explicit Reload before another model update."
+// in the language of msgs.
+func (msgs Messages) ModelNeedReloadUpdate() string {
+	return Catalog.Format(msgs.locale, "modelNeedReloadUpdate", nil)
+}
+
+// ModelNeedRefreshUpdate says "Refresh the Runtime configuration before another model update."
+// in the language the app shows.
+func ModelNeedRefreshUpdate() string { return In(i18n.Locale()).ModelNeedRefreshUpdate() }
+
+// ModelNeedRefreshUpdate says "Refresh the Runtime configuration before another model update."
+// in the language of msgs.
+func (msgs Messages) ModelNeedRefreshUpdate() string {
+	return Catalog.Format(msgs.locale, "modelNeedRefreshUpdate", nil)
+}
+
+// ModelRefreshBeforeUpdate says "Refresh the Runtime configuration before updating the model."
+// in the language the app shows.
+func ModelRefreshBeforeUpdate() string { return In(i18n.Locale()).ModelRefreshBeforeUpdate() }
+
+// ModelRefreshBeforeUpdate says "Refresh the Runtime configuration before updating the model."
+// in the language of msgs.
+func (msgs Messages) ModelRefreshBeforeUpdate() string {
+	return Catalog.Format(msgs.locale, "modelRefreshBeforeUpdate", nil)
+}
+
+// ModelBusy says "This session is busy. Wait for its current task to finish before changing the model."
+// in the language the app shows.
+func ModelBusy() string { return In(i18n.Locale()).ModelBusy() }
+
+// ModelBusy says "This session is busy. Wait for its current task to finish before changing the model."
+// in the language of msgs.
+func (msgs Messages) ModelBusy() string {
+	return Catalog.Format(msgs.locale, "modelBusy", nil)
+}
+
+// ModelUpdating says "Updating the session model…"
+// in the language the app shows.
+func ModelUpdating() string { return In(i18n.Locale()).ModelUpdating() }
+
+// ModelUpdating says "Updating the session model…"
+// in the language of msgs.
+func (msgs Messages) ModelUpdating() string {
+	return Catalog.Format(msgs.locale, "modelUpdating", nil)
+}
+
+// ModelLoadReleasedFailed says "Could not load this released work session before updating the model: {error}"
+// in the language the app shows.
+func ModelLoadReleasedFailed(error string) string {
+	return In(i18n.Locale()).ModelLoadReleasedFailed(error)
+}
+
+// ModelLoadReleasedFailed says "Could not load this released work session before updating the model: {error}"
+// in the language of msgs.
+func (msgs Messages) ModelLoadReleasedFailed(error string) string {
+	return Catalog.Format(msgs.locale, "modelLoadReleasedFailed", map[string]any{"error": error})
+}
+
+// ModelUpdated says "Model updated. The next task on this session uses it; history is unchanged."
+// in the language the app shows.
+func ModelUpdated() string { return In(i18n.Locale()).ModelUpdated() }
+
+// ModelUpdated says "Model updated. The next task on this session uses it; history is unchanged."
+// in the language of msgs.
+func (msgs Messages) ModelUpdated() string {
+	return Catalog.Format(msgs.locale, "modelUpdated", nil)
+}
+
+// ModelConfigApplied says "Model configuration applied."
+// in the language the app shows.
+func ModelConfigApplied() string { return In(i18n.Locale()).ModelConfigApplied() }
+
+// ModelConfigApplied says "Model configuration applied."
+// in the language of msgs.
+func (msgs Messages) ModelConfigApplied() string {
+	return Catalog.Format(msgs.locale, "modelConfigApplied", nil)
+}
+
+// ModelCommitUnconfirmed says "Configuration commit is unconfirmed. Reload the session before sending another task. The original error was: {error}"
+// in the language the app shows.
+func ModelCommitUnconfirmed(error string) string {
+	return In(i18n.Locale()).ModelCommitUnconfirmed(error)
+}
+
+// ModelCommitUnconfirmed says "Configuration commit is unconfirmed. Reload the session before sending another task. The original error was: {error}"
+// in the language of msgs.
+func (msgs Messages) ModelCommitUnconfirmed(error string) string {
+	return Catalog.Format(msgs.locale, "modelCommitUnconfirmed", map[string]any{"error": error})
+}
+
+// ModelReadbackUnconfirmed says "Runtime did not confirm the current configuration. Refresh to read it again. The update error was: {error}"
+// in the language the app shows.
+func ModelReadbackUnconfirmed(error string) string {
+	return In(i18n.Locale()).ModelReadbackUnconfirmed(error)
+}
+
+// ModelReadbackUnconfirmed says "Runtime did not confirm the current configuration. Refresh to read it again. The update error was: {error}"
+// in the language of msgs.
+func (msgs Messages) ModelReadbackUnconfirmed(error string) string {
+	return Catalog.Format(msgs.locale, "modelReadbackUnconfirmed", map[string]any{"error": error})
+}
+
+// ModelReloading says "Reloading the session…"
+// in the language the app shows.
+func ModelReloading() string { return In(i18n.Locale()).ModelReloading() }
+
+// ModelReloading says "Reloading the session…"
+// in the language of msgs.
+func (msgs Messages) ModelReloading() string {
+	return Catalog.Format(msgs.locale, "modelReloading", nil)
+}
+
+// ModelReloadFailed says "Session reload failed; the session remains quarantined. {error}"
+// in the language the app shows.
+func ModelReloadFailed(error string) string { return In(i18n.Locale()).ModelReloadFailed(error) }
+
+// ModelReloadFailed says "Session reload failed; the session remains quarantined. {error}"
+// in the language of msgs.
+func (msgs Messages) ModelReloadFailed(error string) string {
+	return Catalog.Format(msgs.locale, "modelReloadFailed", map[string]any{"error": error})
+}
+
+// ModelReloaded says "Session reloaded. The next task uses the read-back model."
+// in the language the app shows.
+func ModelReloaded() string { return In(i18n.Locale()).ModelReloaded() }
+
+// ModelReloaded says "Session reloaded. The next task uses the read-back model."
+// in the language of msgs.
+func (msgs Messages) ModelReloaded() string {
+	return Catalog.Format(msgs.locale, "modelReloaded", nil)
+}
+
+// ModelReloadAction says "Reload session"
+// in the language the app shows.
+func ModelReloadAction() string { return In(i18n.Locale()).ModelReloadAction() }
+
+// ModelReloadAction says "Reload session"
+// in the language of msgs.
+func (msgs Messages) ModelReloadAction() string {
+	return Catalog.Format(msgs.locale, "modelReloadAction", nil)
+}
+
+// ModelUnconfirmedBanner says "Configuration commit is unconfirmed. Reload is required before this session can accept another task; Refresh only re-…"
+// in the language the app shows.
+func ModelUnconfirmedBanner() string { return In(i18n.Locale()).ModelUnconfirmedBanner() }
+
+// ModelUnconfirmedBanner says "Configuration commit is unconfirmed. Reload is required before this session can accept another task; Refresh only re-…"
+// in the language of msgs.
+func (msgs Messages) ModelUnconfirmedBanner() string {
+	return Catalog.Format(msgs.locale, "modelUnconfirmedBanner", nil)
+}
+
+// ModelClose says "Close"
+// in the language the app shows.
+func ModelClose() string { return In(i18n.Locale()).ModelClose() }
+
+// ModelClose says "Close"
+// in the language of msgs.
+func (msgs Messages) ModelClose() string {
+	return Catalog.Format(msgs.locale, "modelClose", nil)
+}
+
+// ModelDefaultReading says "Reading session model…"
+// in the language the app shows.
+func ModelDefaultReading() string { return In(i18n.Locale()).ModelDefaultReading() }
+
+// ModelDefaultReading says "Reading session model…"
+// in the language of msgs.
+func (msgs Messages) ModelDefaultReading() string {
+	return Catalog.Format(msgs.locale, "modelDefaultReading", nil)
+}
+
+// BuiltinNone says "none"
+// in the language the app shows.
+func BuiltinNone() string { return In(i18n.Locale()).BuiltinNone() }
+
+// BuiltinNone says "none"
+// in the language of msgs.
+func (msgs Messages) BuiltinNone() string {
+	return Catalog.Format(msgs.locale, "builtinNone", nil)
+}
+
+// BuiltinListUnavailable says "The built-in tool list is not available from Runtime yet. Retry before changing the selection."
+// in the language the app shows.
+func BuiltinListUnavailable() string { return In(i18n.Locale()).BuiltinListUnavailable() }
+
+// BuiltinListUnavailable says "The built-in tool list is not available from Runtime yet. Retry before changing the selection."
+// in the language of msgs.
+func (msgs Messages) BuiltinListUnavailable() string {
+	return Catalog.Format(msgs.locale, "builtinListUnavailable", nil)
+}
+
+// BuiltinToolUnavailable says "Built-in tool {name} is not available from Runtime."
+// in the language the app shows.
+func BuiltinToolUnavailable(name string) string {
+	return In(i18n.Locale()).BuiltinToolUnavailable(name)
+}
+
+// BuiltinToolUnavailable says "Built-in tool {name} is not available from Runtime."
+// in the language of msgs.
+func (msgs Messages) BuiltinToolUnavailable(name string) string {
+	return Catalog.Format(msgs.locale, "builtinToolUnavailable", map[string]any{"name": name})
+}
+
+// WaitingReason says "Waiting: {reason}"
+// in the language the app shows.
+func WaitingReason(reason string) string { return In(i18n.Locale()).WaitingReason(reason) }
+
+// WaitingReason says "Waiting: {reason}"
+// in the language of msgs.
+func (msgs Messages) WaitingReason(reason string) string {
+	return Catalog.Format(msgs.locale, "waitingReason", map[string]any{"reason": reason})
+}
+
+// ModelReadingConfig says "Reading Runtime configuration…"
+// in the language the app shows.
+func ModelReadingConfig() string { return In(i18n.Locale()).ModelReadingConfig() }
+
+// ModelReadingConfig says "Reading Runtime configuration…"
+// in the language of msgs.
+func (msgs Messages) ModelReadingConfig() string {
+	return Catalog.Format(msgs.locale, "modelReadingConfig", nil)
+}
+
+// ModelStatusReadback says "Runtime configuration read back."
+// in the language the app shows.
+func ModelStatusReadback() string { return In(i18n.Locale()).ModelStatusReadback() }
+
+// ModelStatusReadback says "Runtime configuration read back."
+// in the language of msgs.
+func (msgs Messages) ModelStatusReadback() string {
+	return Catalog.Format(msgs.locale, "modelStatusReadback", nil)
+}
+
+// RuntimeStageLocalStore says "Local contact store"
+// in the language the app shows.
+func RuntimeStageLocalStore() string { return In(i18n.Locale()).RuntimeStageLocalStore() }
+
+// RuntimeStageLocalStore says "Local contact store"
+// in the language of msgs.
+func (msgs Messages) RuntimeStageLocalStore() string {
+	return Catalog.Format(msgs.locale, "runtimeStageLocalStore", nil)
+}
+
+// RuntimeStageConnectionConfiguration says "Connection configuration"
+// in the language the app shows.
+func RuntimeStageConnectionConfiguration() string {
+	return In(i18n.Locale()).RuntimeStageConnectionConfiguration()
+}
+
+// RuntimeStageConnectionConfiguration says "Connection configuration"
+// in the language of msgs.
+func (msgs Messages) RuntimeStageConnectionConfiguration() string {
+	return Catalog.Format(msgs.locale, "runtimeStageConnectionConfiguration", nil)
+}
+
+// RuntimeStageRuntimeHelper says "Runtime helper"
+// in the language the app shows.
+func RuntimeStageRuntimeHelper() string { return In(i18n.Locale()).RuntimeStageRuntimeHelper() }
+
+// RuntimeStageRuntimeHelper says "Runtime helper"
+// in the language of msgs.
+func (msgs Messages) RuntimeStageRuntimeHelper() string {
+	return Catalog.Format(msgs.locale, "runtimeStageRuntimeHelper", nil)
+}
+
+// RuntimeStageRuntimeStart says "Runtime start"
+// in the language the app shows.
+func RuntimeStageRuntimeStart() string { return In(i18n.Locale()).RuntimeStageRuntimeStart() }
+
+// RuntimeStageRuntimeStart says "Runtime start"
+// in the language of msgs.
+func (msgs Messages) RuntimeStageRuntimeStart() string {
+	return Catalog.Format(msgs.locale, "runtimeStageRuntimeStart", nil)
+}
+
+// RuntimeStageRuntimeProtocol says "Runtime protocol"
+// in the language the app shows.
+func RuntimeStageRuntimeProtocol() string { return In(i18n.Locale()).RuntimeStageRuntimeProtocol() }
+
+// RuntimeStageRuntimeProtocol says "Runtime protocol"
+// in the language of msgs.
+func (msgs Messages) RuntimeStageRuntimeProtocol() string {
+	return Catalog.Format(msgs.locale, "runtimeStageRuntimeProtocol", nil)
+}
+
+// RuntimeStageRuntimeConnection says "Runtime connection"
+// in the language the app shows.
+func RuntimeStageRuntimeConnection() string { return In(i18n.Locale()).RuntimeStageRuntimeConnection() }
+
+// RuntimeStageRuntimeConnection says "Runtime connection"
+// in the language of msgs.
+func (msgs Messages) RuntimeStageRuntimeConnection() string {
+	return Catalog.Format(msgs.locale, "runtimeStageRuntimeConnection", nil)
+}
+
+// RuntimeStageRuntimeConfiguration says "Runtime configuration"
+// in the language the app shows.
+func RuntimeStageRuntimeConfiguration() string {
+	return In(i18n.Locale()).RuntimeStageRuntimeConfiguration()
+}
+
+// RuntimeStageRuntimeConfiguration says "Runtime configuration"
+// in the language of msgs.
+func (msgs Messages) RuntimeStageRuntimeConfiguration() string {
+	return Catalog.Format(msgs.locale, "runtimeStageRuntimeConfiguration", nil)
+}
+
+// RuntimeStageRuntimeStartup says "Runtime startup"
+// in the language the app shows.
+func RuntimeStageRuntimeStartup() string { return In(i18n.Locale()).RuntimeStageRuntimeStartup() }
+
+// RuntimeStageRuntimeStartup says "Runtime startup"
+// in the language of msgs.
+func (msgs Messages) RuntimeStageRuntimeStartup() string {
+	return Catalog.Format(msgs.locale, "runtimeStageRuntimeStartup", nil)
+}
+
+// RuntimeStageRuntimeLabel says "Runtime"
+// in the language the app shows.
+func RuntimeStageRuntimeLabel() string { return In(i18n.Locale()).RuntimeStageRuntimeLabel() }
+
+// RuntimeStageRuntimeLabel says "Runtime"
+// in the language of msgs.
+func (msgs Messages) RuntimeStageRuntimeLabel() string {
+	return Catalog.Format(msgs.locale, "runtimeStageRuntimeLabel", nil)
+}
+
+// RuntimeErrorSavedNeedsRepair says "Saved connection settings need repair."
+// in the language the app shows.
+func RuntimeErrorSavedNeedsRepair() string { return In(i18n.Locale()).RuntimeErrorSavedNeedsRepair() }
+
+// RuntimeErrorSavedNeedsRepair says "Saved connection settings need repair."
+// in the language of msgs.
+func (msgs Messages) RuntimeErrorSavedNeedsRepair() string {
+	return Catalog.Format(msgs.locale, "runtimeErrorSavedNeedsRepair", nil)
+}
+
+// RuntimeErrorConnectionRequired says "Connection settings are required before the runtime can start."
+// in the language the app shows.
+func RuntimeErrorConnectionRequired() string {
+	return In(i18n.Locale()).RuntimeErrorConnectionRequired()
+}
+
+// RuntimeErrorConnectionRequired says "Connection settings are required before the runtime can start."
+// in the language of msgs.
+func (msgs Messages) RuntimeErrorConnectionRequired() string {
+	return Catalog.Format(msgs.locale, "runtimeErrorConnectionRequired", nil)
+}
+
+// RuntimeErrorHelperMissing says "Runtime helper not found."
+// in the language the app shows.
+func RuntimeErrorHelperMissing() string { return In(i18n.Locale()).RuntimeErrorHelperMissing() }
+
+// RuntimeErrorHelperMissing says "Runtime helper not found."
+// in the language of msgs.
+func (msgs Messages) RuntimeErrorHelperMissing() string {
+	return Catalog.Format(msgs.locale, "runtimeErrorHelperMissing", nil)
+}
+
+// RuntimeErrorPrepare says "Could not prepare the saved connection: {detail}"
+// in the language the app shows.
+func RuntimeErrorPrepare(detail string) string { return In(i18n.Locale()).RuntimeErrorPrepare(detail) }
+
+// RuntimeErrorPrepare says "Could not prepare the saved connection: {detail}"
+// in the language of msgs.
+func (msgs Messages) RuntimeErrorPrepare(detail string) string {
+	return Catalog.Format(msgs.locale, "runtimeErrorPrepare", map[string]any{"detail": detail})
+}
+
+// RuntimeErrorStart says "Could not start runtime: {detail}"
+// in the language the app shows.
+func RuntimeErrorStart(detail string) string { return In(i18n.Locale()).RuntimeErrorStart(detail) }
+
+// RuntimeErrorStart says "Could not start runtime: {detail}"
+// in the language of msgs.
+func (msgs Messages) RuntimeErrorStart(detail string) string {
+	return Catalog.Format(msgs.locale, "runtimeErrorStart", map[string]any{"detail": detail})
+}
+
+// RuntimeErrorProtocol says "Runtime protocol error: {detail}"
+// in the language the app shows.
+func RuntimeErrorProtocol(detail string) string {
+	return In(i18n.Locale()).RuntimeErrorProtocol(detail)
+}
+
+// RuntimeErrorProtocol says "Runtime protocol error: {detail}"
+// in the language of msgs.
+func (msgs Messages) RuntimeErrorProtocol(detail string) string {
+	return Catalog.Format(msgs.locale, "runtimeErrorProtocol", map[string]any{"detail": detail})
+}
+
+// RuntimeErrorConnectionLost says "Runtime connection lost"
+// in the language the app shows.
+func RuntimeErrorConnectionLost() string { return In(i18n.Locale()).RuntimeErrorConnectionLost() }
+
+// RuntimeErrorConnectionLost says "Runtime connection lost"
+// in the language of msgs.
+func (msgs Messages) RuntimeErrorConnectionLost() string {
+	return Catalog.Format(msgs.locale, "runtimeErrorConnectionLost", nil)
+}
+
+// RuntimeErrorConnectionLostDetail says "Runtime connection lost: {detail}"
+// in the language the app shows.
+func RuntimeErrorConnectionLostDetail(detail string) string {
+	return In(i18n.Locale()).RuntimeErrorConnectionLostDetail(detail)
+}
+
+// RuntimeErrorConnectionLostDetail says "Runtime connection lost: {detail}"
+// in the language of msgs.
+func (msgs Messages) RuntimeErrorConnectionLostDetail(detail string) string {
+	return Catalog.Format(msgs.locale, "runtimeErrorConnectionLostDetail", map[string]any{"detail": detail})
+}
+
+// RuntimeErrorAPIKey says "API_KEY is not set."
+// in the language the app shows.
+func RuntimeErrorAPIKey() string { return In(i18n.Locale()).RuntimeErrorAPIKey() }
+
+// RuntimeErrorAPIKey says "API_KEY is not set."
+// in the language of msgs.
+func (msgs Messages) RuntimeErrorAPIKey() string {
+	return Catalog.Format(msgs.locale, "runtimeErrorAPIKey", nil)
+}
+
+// RuntimeErrorEnvParse says ".env could not be parsed."
+// in the language the app shows.
+func RuntimeErrorEnvParse() string { return In(i18n.Locale()).RuntimeErrorEnvParse() }
+
+// RuntimeErrorEnvParse says ".env could not be parsed."
+// in the language of msgs.
+func (msgs Messages) RuntimeErrorEnvParse() string {
+	return Catalog.Format(msgs.locale, "runtimeErrorEnvParse", nil)
+}
+
+// RuntimeErrorExitedBeforeReady says "Runtime exited before ready"
+// in the language the app shows.
+func RuntimeErrorExitedBeforeReady() string { return In(i18n.Locale()).RuntimeErrorExitedBeforeReady() }
+
+// RuntimeErrorExitedBeforeReady says "Runtime exited before ready"
+// in the language of msgs.
+func (msgs Messages) RuntimeErrorExitedBeforeReady() string {
+	return Catalog.Format(msgs.locale, "runtimeErrorExitedBeforeReady", nil)
+}
+
+// RuntimeErrorExitedBeforeReadyDetail says "Runtime exited before ready: {detail}"
+// in the language the app shows.
+func RuntimeErrorExitedBeforeReadyDetail(detail string) string {
+	return In(i18n.Locale()).RuntimeErrorExitedBeforeReadyDetail(detail)
+}
+
+// RuntimeErrorExitedBeforeReadyDetail says "Runtime exited before ready: {detail}"
+// in the language of msgs.
+func (msgs Messages) RuntimeErrorExitedBeforeReadyDetail(detail string) string {
+	return Catalog.Format(msgs.locale, "runtimeErrorExitedBeforeReadyDetail", map[string]any{"detail": detail})
+}
+
+// RuntimeErrorStoreSave says "Could not save contacts: {detail}"
+// in the language the app shows.
+func RuntimeErrorStoreSave(detail string) string {
+	return In(i18n.Locale()).RuntimeErrorStoreSave(detail)
+}
+
+// RuntimeErrorStoreSave says "Could not save contacts: {detail}"
+// in the language of msgs.
+func (msgs Messages) RuntimeErrorStoreSave(detail string) string {
+	return Catalog.Format(msgs.locale, "runtimeErrorStoreSave", map[string]any{"detail": detail})
+}
+
+// RuntimeErrorIssueToolShutdown says "Issue tool service shutdown: {detail}"
+// in the language the app shows.
+func RuntimeErrorIssueToolShutdown(detail string) string {
+	return In(i18n.Locale()).RuntimeErrorIssueToolShutdown(detail)
+}
+
+// RuntimeErrorIssueToolShutdown says "Issue tool service shutdown: {detail}"
+// in the language of msgs.
+func (msgs Messages) RuntimeErrorIssueToolShutdown(detail string) string {
+	return Catalog.Format(msgs.locale, "runtimeErrorIssueToolShutdown", map[string]any{"detail": detail})
+}
+
+// RuntimeErrorRuntimeShutdown says "Runtime shutdown: {detail}"
+// in the language the app shows.
+func RuntimeErrorRuntimeShutdown(detail string) string {
+	return In(i18n.Locale()).RuntimeErrorRuntimeShutdown(detail)
+}
+
+// RuntimeErrorRuntimeShutdown says "Runtime shutdown: {detail}"
+// in the language of msgs.
+func (msgs Messages) RuntimeErrorRuntimeShutdown(detail string) string {
+	return Catalog.Format(msgs.locale, "runtimeErrorRuntimeShutdown", map[string]any{"detail": detail})
+}
+
+// RuntimeStatusStarting says "Starting"
+// in the language the app shows.
+func RuntimeStatusStarting() string { return In(i18n.Locale()).RuntimeStatusStarting() }
+
+// RuntimeStatusStarting says "Starting"
+// in the language of msgs.
+func (msgs Messages) RuntimeStatusStarting() string {
+	return Catalog.Format(msgs.locale, "runtimeStatusStarting", nil)
+}
+
+// RuntimeStatusReady says "Ready"
+// in the language the app shows.
+func RuntimeStatusReady() string { return In(i18n.Locale()).RuntimeStatusReady() }
+
+// RuntimeStatusReady says "Ready"
+// in the language of msgs.
+func (msgs Messages) RuntimeStatusReady() string {
+	return Catalog.Format(msgs.locale, "runtimeStatusReady", nil)
+}
+
+// RuntimeStatusFailed says "Failed"
+// in the language the app shows.
+func RuntimeStatusFailed() string { return In(i18n.Locale()).RuntimeStatusFailed() }
+
+// RuntimeStatusFailed says "Failed"
+// in the language of msgs.
+func (msgs Messages) RuntimeStatusFailed() string {
+	return Catalog.Format(msgs.locale, "runtimeStatusFailed", nil)
+}
+
+// RuntimeStatusExited says "Exited"
+// in the language the app shows.
+func RuntimeStatusExited() string { return In(i18n.Locale()).RuntimeStatusExited() }
+
+// RuntimeStatusExited says "Exited"
+// in the language of msgs.
+func (msgs Messages) RuntimeStatusExited() string {
+	return Catalog.Format(msgs.locale, "runtimeStatusExited", nil)
+}
+
+// RuntimeStatusDraining says "Stopping"
+// in the language the app shows.
+func RuntimeStatusDraining() string { return In(i18n.Locale()).RuntimeStatusDraining() }
+
+// RuntimeStatusDraining says "Stopping"
+// in the language of msgs.
+func (msgs Messages) RuntimeStatusDraining() string {
+	return Catalog.Format(msgs.locale, "runtimeStatusDraining", nil)
+}
+
+// ModelValidationUnconfirmed says "Refresh the Runtime configuration before updating the model. The current effective value is not confirmed."
+// in the language the app shows.
+func ModelValidationUnconfirmed() string { return In(i18n.Locale()).ModelValidationUnconfirmed() }
+
+// ModelValidationUnconfirmed says "Refresh the Runtime configuration before updating the model. The current effective value is not confirmed."
+// in the language of msgs.
+func (msgs Messages) ModelValidationUnconfirmed() string {
+	return Catalog.Format(msgs.locale, "modelValidationUnconfirmed", nil)
+}
+
+// ModelValidationModelRequired says "Enter the provider model ID."
+// in the language the app shows.
+func ModelValidationModelRequired() string { return In(i18n.Locale()).ModelValidationModelRequired() }
+
+// ModelValidationModelRequired says "Enter the provider model ID."
+// in the language of msgs.
+func (msgs Messages) ModelValidationModelRequired() string {
+	return Catalog.Format(msgs.locale, "modelValidationModelRequired", nil)
+}
+
+// ModelValidationSessionRequired says "Choose a session target first."
+// in the language the app shows.
+func ModelValidationSessionRequired() string {
+	return In(i18n.Locale()).ModelValidationSessionRequired()
+}
+
+// ModelValidationSessionRequired says "Choose a session target first."
+// in the language of msgs.
+func (msgs Messages) ModelValidationSessionRequired() string {
+	return Catalog.Format(msgs.locale, "modelValidationSessionRequired", nil)
+}
+
+// ModelValidationCatalogRequired says "Choose a Runtime catalog entry or set explicit limits."
+// in the language the app shows.
+func ModelValidationCatalogRequired() string {
+	return In(i18n.Locale()).ModelValidationCatalogRequired()
+}
+
+// ModelValidationCatalogRequired says "Choose a Runtime catalog entry or set explicit limits."
+// in the language of msgs.
+func (msgs Messages) ModelValidationCatalogRequired() string {
+	return Catalog.Format(msgs.locale, "modelValidationCatalogRequired", nil)
+}
+
+// ModelValidationContextPositive says "Context tokens must be a positive whole number."
+// in the language the app shows.
+func ModelValidationContextPositive() string {
+	return In(i18n.Locale()).ModelValidationContextPositive()
+}
+
+// ModelValidationContextPositive says "Context tokens must be a positive whole number."
+// in the language of msgs.
+func (msgs Messages) ModelValidationContextPositive() string {
+	return Catalog.Format(msgs.locale, "modelValidationContextPositive", nil)
+}
+
+// ModelValidationOutputPositive says "Output tokens must be a positive whole number."
+// in the language the app shows.
+func ModelValidationOutputPositive() string { return In(i18n.Locale()).ModelValidationOutputPositive() }
+
+// ModelValidationOutputPositive says "Output tokens must be a positive whole number."
+// in the language of msgs.
+func (msgs Messages) ModelValidationOutputPositive() string {
+	return Catalog.Format(msgs.locale, "modelValidationOutputPositive", nil)
+}
+
+// ModelValidationContextGreater says "Context tokens must be greater than output tokens."
+// in the language the app shows.
+func ModelValidationContextGreater() string { return In(i18n.Locale()).ModelValidationContextGreater() }
+
+// ModelValidationContextGreater says "Context tokens must be greater than output tokens."
+// in the language of msgs.
+func (msgs Messages) ModelValidationContextGreater() string {
+	return Catalog.Format(msgs.locale, "modelValidationContextGreater", nil)
+}

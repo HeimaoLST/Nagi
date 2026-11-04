@@ -566,8 +566,8 @@ func (a *appModel) connectionRecoveryNotice(c *ui.Context, t *ui.Theme, state co
 		if hint != "" {
 			ui.Text(c, hint).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
 		}
-		if state == connectionViewNotConnected && a.runtimeHint != "" {
-			ui.Text(c, a.runtimeHint).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+		if state == connectionViewNotConnected && a.runtimeHintDisplay(msgs) != "" {
+			ui.Text(c, a.runtimeHintDisplay(msgs)).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
 		}
 		ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
 			secondaryButton(c, msgs.ConnectionRecoveryOpenSettings()).Label(msgs.ConnectionRecoveryOpenSettings()).MinHeight(32).OnClick(func() { a.openConfiguration() })
@@ -592,15 +592,12 @@ func (a *appModel) main(c *ui.Context, t *ui.Theme) {
 				})
 			case a.connectionConfigurationBlocked():
 				a.connectionRecoveryNotice(c, t, state)
-			case a.runtimeErr != "":
-				label := a.runtimeStage
-				if label == "" {
-					label = msgs.RuntimeLabel()
-				}
+			case a.hasRuntimeError():
+				label := a.runtimeStageDisplay(msgs)
 				ui.Column(c).Padding(8, 16).Gap(2).Children(func() {
-					ui.Text(c, msgs.RuntimeStageLabel(label, a.runtimeErr)).FontSize(14).LineHeight(1.5).TextColor(t.Danger)
-					if a.runtimeHint != "" {
-						ui.Text(c, a.runtimeHint).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+					ui.Text(c, msgs.RuntimeStageLabel(label, a.runtimeErrorDisplay(msgs))).FontSize(14).LineHeight(1.5).TextColor(t.Danger)
+					if a.runtimeHintDisplay(msgs) != "" {
+						ui.Text(c, a.runtimeHintDisplay(msgs)).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
 					}
 					ui.Row(c).Children(func() {
 						details := secondaryButton(c, msgs.ConfigurationDetails())
@@ -1152,12 +1149,12 @@ func (a *appModel) composer(c *ui.Context, t *ui.Theme) {
 					})
 				}
 				if sendReason != "" && strings.TrimSpace(ct.Draft) != "" {
-					ui.Text(c, sendReason).FontSize(typeBody).LineHeight(1.5).TextColor(t.TextMuted)
+					ui.Text(c, sendBlockText(msgs, sendReason)).FontSize(typeBody).LineHeight(1.5).TextColor(t.TextMuted)
 				}
 				if sendReason != "" && strings.TrimSpace(ct.Draft) == "" && (!a.runtimeAvailableForView() || a.connectionViewState() == connectionViewApplying) {
 					msgs := locales.In(c.Locale())
 					if a.shutdownStarted || ct.Archived {
-						ui.Text(c, sendReason).FontSize(typeBody).LineHeight(1.5).TextColor(t.TextMuted)
+						ui.Text(c, sendBlockText(msgs, sendReason)).FontSize(typeBody).LineHeight(1.5).TextColor(t.TextMuted)
 					} else {
 						hint := msgs.ConnectionRecoverySetupHint()
 						switch a.connectionViewState() {
@@ -1362,25 +1359,14 @@ func (a *appModel) runtimePanel(c *ui.Context, t *ui.Theme, ct *contact) {
 		ui.Text(c, msgs.RuntimeLocalStoreUnavailable()).FontSize(14).LineHeight(1.5).TextColor(t.Danger)
 		ui.Text(c, msgs.RuntimeNotStartedLocalStore()).FontSize(14).LineHeight(1.5).TextColor(t.Text)
 	} else {
-		status := a.runtimeStatus
-		if status == "" {
-			status = msgs.RuntimeStatusNotLoaded()
-		}
-		status = msgs.RuntimeStatusLine(status)
-		if a.runtimeStatus == runtimeStateReady {
-			status = msgs.RuntimeStatusConnectionOnly(status)
-		}
+		status := msgs.RuntimeStatusLine(a.runtimeStatusText(msgs))
 		ui.Text(c, status).FontSize(14).LineHeight(1.5).TextColor(t.Text)
 	}
-	if a.runtimeErr != "" {
-		label := a.runtimeStage
-		if label == "" {
-			label = msgs.RuntimeLabel()
-		}
-		ui.Text(c, msgs.RuntimeStageLabel(label, a.runtimeErr)).FontSize(14).LineHeight(1.5).TextColor(t.Danger)
+	if a.hasRuntimeError() {
+		ui.Text(c, msgs.RuntimeStageLabel(a.runtimeStageDisplay(msgs), a.runtimeErrorDisplay(msgs))).FontSize(14).LineHeight(1.5).TextColor(t.Danger)
 	}
-	if a.runtimeHint != "" {
-		ui.Text(c, a.runtimeHint).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+	if a.runtimeHintDisplay(msgs) != "" {
+		ui.Text(c, a.runtimeHintDisplay(msgs)).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
 	}
 	helper := a.runtimeBinary
 	if helper == "" {

@@ -586,3 +586,143 @@ func TestShellHistoryAndNewContactFollowLocale(t *testing.T) {
 		t.Fatalf("existing contact name was rewritten: %q", demo.contacts[0].Name)
 	}
 }
+
+func TestConnectionAndModelFeedbackFollowLocale(t *testing.T) {
+	a, ct := workspaceTestApp(t)
+	config := connectionConfig{Version: 1, API: connectionAPIChatCompletions, Endpoint: "https://provider.example.invalid/v1", APIKey: "fixture", Model: "fixture", ContextTokens: 131072, OutputTokens: 8192, WorkingDirectory: t.TempDir(), MaxActiveTasks: 2}
+	a.connectionForm = newConnectionSettings(&config, config.WorkingDirectory)
+	a.connectionSaved = &config
+	a.connectionEffective = &config
+	a.rt = &runtimeClient{}
+	a.store = &contactStore{path: filepath.Join(t.TempDir(), "contacts.json")}
+	a.runtimeStatus = runtimeStateReady
+	a.connectionForm.Status = connStatusApplied
+	a.connectionForm.Errors = map[string]string{"Endpoint": connectionValidationEndpointURL}
+	ct.ActiveTaskID = "active-task"
+	ct.SendState = sendAccepted
+	a.openSettingsTab(settingsTabConnection, settingsSourceRail)
+	tr := ui.NewTester(a.view, 1040, 720)
+	tr.SetLocale("en")
+	tr.Frame()
+	if !tr.HasText("Applied. New work uses this connection.") ||
+		!tr.HasText("Wait for all conversation and issue work to finish before applying a new connection.") ||
+		!tr.HasText("Enter an absolute http(s) URL with a host.") {
+		t.Fatalf("English connection feedback missing: %v", tr.Texts())
+	}
+	tr.SetLocale("zh-Hans")
+	tr.Frame()
+	if !tr.HasText("已应用。新工作使用此连接。") ||
+		!tr.HasText("请等待所有对话和事项工作结束后再应用新连接。") ||
+		!tr.HasText("请输入带主机的绝对 http(s) URL。") {
+		t.Fatalf("Chinese connection feedback missing: %v", tr.Texts())
+	}
+	if a.connectionForm.Draft.Endpoint != config.Endpoint {
+		t.Fatalf("locale switch changed the connection draft: %q", a.connectionForm.Draft.Endpoint)
+	}
+
+	model, _ := workspaceTestApp(t)
+	model.modelForm = newModelSelection(selectionTarget(), selectionCatalog())
+	model.aux = "model"
+	modelTr := ui.NewTester(model.view, 1040, 720)
+	modelTr.SetLocale("zh-Hans")
+	modelTr.Frame()
+	if !modelTr.HasText("会话模型") || !modelTr.HasText("提供方模型 ID") ||
+		!modelTr.HasText("刷新") || !modelTr.HasText("使用运行时目录") {
+		t.Fatalf("Chinese model panel labels missing: %v", modelTr.Texts())
+	}
+	modelTr.SetLocale("en")
+	modelTr.Frame()
+	if !modelTr.HasText("Session model") || !modelTr.HasText("Provider model ID") ||
+		!modelTr.HasText("Refresh") || !modelTr.HasText("Use Runtime catalog") {
+		t.Fatalf("English model panel labels did not return: %v", modelTr.Texts())
+	}
+
+	form := model.modelForm
+	form.Draft.Model = ""
+	if _, ok := form.Request(); ok {
+		t.Fatal("empty model ID was accepted")
+	}
+	modelTr.SetLocale("zh-Hans")
+	modelTr.Frame()
+	if !modelTr.HasText("请输入提供方模型 ID。") || modelTr.HasText("Enter the provider model ID.") {
+		t.Fatalf("Chinese model-required validation missing: %v", modelTr.Texts())
+	}
+	form.Draft.Model = "provider-model"
+	form.Draft.CapacityMode = modelCapacityExplicit
+	form.Draft.ContextTokens, form.Draft.OutputTokens = "0", "10"
+	form.Request()
+	modelTr.Frame()
+	if !modelTr.HasText("上下文 token 数必须是正整数。") {
+		t.Fatalf("Chinese context validation missing: %v", modelTr.Texts())
+	}
+	form.Draft.ContextTokens, form.Draft.OutputTokens = "10", "0"
+	form.Request()
+	modelTr.Frame()
+	if !modelTr.HasText("输出 token 数必须是正整数。") {
+		t.Fatalf("Chinese output validation missing: %v", modelTr.Texts())
+	}
+	form.Draft.ContextTokens, form.Draft.OutputTokens = "10", "20"
+	form.Request()
+	modelTr.Frame()
+	if !modelTr.HasText("上下文 token 数必须大于输出 token 数。") {
+		t.Fatalf("Chinese context order validation missing: %v", modelTr.Texts())
+	}
+	form.Draft.CapacityMode = modelCapacityCatalog
+	form.Draft.CatalogID = ""
+	form.Request()
+	modelTr.Frame()
+	if !modelTr.HasText("请选择运行时目录条目或设置显式限制。") {
+		t.Fatalf("Chinese catalog validation missing: %v", modelTr.Texts())
+	}
+	targetSession := form.Target.Config.SessionID
+	form.Draft.CapacityMode = modelCapacityExplicit
+	form.Draft.ContextTokens, form.Draft.OutputTokens = "131072", "8192"
+	form.Target.Config.SessionID = ""
+	form.Request()
+	modelTr.Frame()
+	if !modelTr.HasText("请先选择会话目标。") {
+		t.Fatalf("Chinese session-target validation missing: %v", modelTr.Texts())
+	}
+	form.Target.Config.SessionID = targetSession
+	form.Unconfirmed = true
+	form.Request()
+	modelTr.Frame()
+	if !modelTr.HasText("更新模型前请刷新运行时配置。当前生效值尚未确认。") {
+		t.Fatalf("Chinese unconfirmed validation missing: %v", modelTr.Texts())
+	}
+}
+
+func TestRuntimeStartupFeedbackFollowsLocale(t *testing.T) {
+	a, _ := workspaceTestApp(t)
+	a.runtimeStatus = runtimeStateFailed
+	a.runtimeStage = "Connection configuration"
+	a.runtimeErrKind = runtimeNoticeConnectionRequired
+	a.runtimeErr = ""
+	a.runtimeHintKind = startupHintEnterConnection
+	a.openAdvancedSettings()
+	tr := ui.NewTester(a.view, 1040, 720)
+	tr.SetLocale("en")
+	tr.Frame()
+	if !tr.HasText("Runtime: Failed") ||
+		!tr.HasText("Connection configuration: Connection settings are required before the runtime can start.") ||
+		!tr.HasText("Enter a connection, model and working directory, then save and apply.") {
+		t.Fatalf("English runtime startup feedback missing: %v", tr.Texts())
+	}
+	tr.SetLocale("zh-Hans")
+	tr.Frame()
+	if !tr.HasText("运行时：失败") ||
+		!tr.HasText("连接配置：启动运行时前需要连接设置。") ||
+		!tr.HasText("请输入连接、模型和工作目录，然后保存并应用。") {
+		t.Fatalf("Chinese runtime startup feedback missing: %v", tr.Texts())
+	}
+
+	a.runtimeStage = "Runtime helper"
+	a.runtimeErrKind = runtimeNoticeHelperMissing
+	a.runtimeHintKind = startupHintHelperInstall
+	a.runtimeHintArgs = []string{"/Applications/Saki.app/Contents/MacOS/Saki-runtime, /usr/local/bin/Saki-runtime"}
+	tr.Frame()
+	if !tr.HasText("运行时辅助进程：未找到运行时辅助进程。") ||
+		!tr.HasText("请将 Saki-runtime 放在 Saki 可执行文件旁（预期：/Applications/Saki.app/Contents/MacOS/Saki-runtime, /usr/local/bin/Saki-runtime），或设置 SAKI_RUNTIME_BIN，然后重启 Nagi。") {
+		t.Fatalf("Chinese helper feedback missing: %v", tr.Texts())
+	}
+}

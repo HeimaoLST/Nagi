@@ -830,7 +830,7 @@ func (a *appModel) issuePrimaryAction(c *ui.Context, t *ui.Theme, ct *contact, i
 		return "read"
 	}
 	if startReason != "" {
-		ui.Text(c, msgs.WorkNextActionUnavailable(startReason)).FontSize(12).LineHeight(1.4).TextColor(t.TextMuted).MaxLines(2)
+		ui.Text(c, msgs.WorkNextActionUnavailable(sendBlockText(msgs, startReason))).FontSize(12).LineHeight(1.4).TextColor(t.TextMuted).MaxLines(2)
 	}
 	return ""
 }

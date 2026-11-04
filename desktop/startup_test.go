@@ -11,7 +11,14 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+
+	"saki/desktop/locales"
 )
+
+func runtimeFeedback(a *appModel) (string, string) {
+	msgs := locales.In("en")
+	return a.runtimeErrorDisplay(msgs), a.runtimeHintDisplay(msgs)
+}
 
 func TestRuntimeHelperMissingHasConfigHint(t *testing.T) {
 	a := &appModel{store: &contactStore{}, runtimeStatus: runtimeStateStarting, workDir: t.TempDir()}
@@ -21,12 +28,13 @@ func TestRuntimeHelperMissingHasConfigHint(t *testing.T) {
 	if a.runtimeStage != "Runtime helper" {
 		t.Fatalf("stage = %q, want Runtime helper", a.runtimeStage)
 	}
+	_, hint := runtimeFeedback(a)
 	for _, want := range []string{"Saki-runtime", "SAKI_RUNTIME_BIN"} {
-		if !strings.Contains(a.runtimeHint, want) {
-			t.Fatalf("hint = %q, missing %q", a.runtimeHint, want)
+		if !strings.Contains(hint, want) {
+			t.Fatalf("hint = %q, missing %q", hint, want)
 		}
 	}
-	if a.runtimeErr == "" {
+	if !a.hasRuntimeError() {
 		t.Fatal("missing helper should set a visible error")
 	}
 }
@@ -39,8 +47,8 @@ func TestRuntimeExecFailureHasStartHint(t *testing.T) {
 	if a.runtimeStage != "Runtime start" {
 		t.Fatalf("stage = %q, want Runtime start", a.runtimeStage)
 	}
-	if !strings.Contains(a.runtimeHint, missing) {
-		t.Fatalf("hint = %q, want helper path", a.runtimeHint)
+	if _, hint := runtimeFeedback(a); !strings.Contains(hint, missing) {
+		t.Fatalf("hint = %q, want helper path", hint)
 	}
 	if a.runtimeBinary != missing {
 		t.Fatalf("runtimeBinary = %q", a.runtimeBinary)
@@ -57,8 +65,9 @@ func TestRuntimeExitClassifiesConfigAndRedacts(t *testing.T) {
 	if a.runtimeStage != "Runtime configuration" {
 		t.Fatalf("stage = %q", a.runtimeStage)
 	}
-	if !strings.Contains(a.runtimeErr, "API_KEY is not set") || !strings.Contains(a.runtimeHint, "Set API_KEY") {
-		t.Fatalf("err=%q hint=%q", a.runtimeErr, a.runtimeHint)
+	errText, hintText := runtimeFeedback(a)
+	if !strings.Contains(errText, "API_KEY is not set") || !strings.Contains(hintText, "Set API_KEY") {
+		t.Fatalf("err=%q hint=%q", errText, hintText)
 	}
 
 	b := &appModel{
@@ -67,13 +76,14 @@ func TestRuntimeExitClassifiesConfigAndRedacts(t *testing.T) {
 		rt:            &runtimeClient{stderr: []string{"Authorization: Bearer sk-sentinel-112"}},
 	}
 	b.applyRuntimeExit(errors.New("exit status 1"))
-	for _, value := range []string{b.runtimeErr, b.runtimeHint} {
+	errText, hintText = runtimeFeedback(b)
+	for _, value := range []string{errText, hintText} {
 		if strings.Contains(value, "sk-sentinel-112") {
 			t.Fatalf("secret leaked in %q", value)
 		}
 	}
-	if !strings.Contains(b.runtimeErr, "[redacted]") {
-		t.Fatalf("unknown diagnostic was not bounded/redacted: %q", b.runtimeErr)
+	if !strings.Contains(errText, "[redacted]") {
+		t.Fatalf("unknown diagnostic was not bounded/redacted: %q", errText)
 	}
 
 	c := &appModel{
@@ -84,8 +94,8 @@ func TestRuntimeExitClassifiesConfigAndRedacts(t *testing.T) {
 		}},
 	}
 	c.applyRuntimeExit(errors.New("exit status 1"))
-	if c.runtimeStage != "Runtime connection" || !strings.Contains(c.runtimeHint, "Restart Saki") {
-		t.Fatalf("stage=%q hint=%q", c.runtimeStage, c.runtimeHint)
+	if _, cHint := runtimeFeedback(c); c.runtimeStage != "Runtime connection" || !strings.Contains(cHint, "Restart Nagi") {
+		t.Fatalf("stage=%q hint=%q", c.runtimeStage, cHint)
 	}
 	if c.contacts[0].ActiveTaskID != "" || c.contacts[0].SendState != sendUnknown {
 		t.Fatalf("active task state = %+v", c.contacts[0])
@@ -146,9 +156,10 @@ func TestUnavailableStoreFallbackKeepsPathsAndFile(t *testing.T) {
 	if !strings.Contains(a.runtimeErr, storePath) || a.contacts[0].Unavailable != err.Error() {
 		t.Fatalf("original store error was not preserved: runtimeErr=%q unavailable=%q", a.runtimeErr, a.contacts[0].Unavailable)
 	}
+	_, fallbackHint := runtimeFeedback(a)
 	for _, want := range []string{storePath, "untouched", "did not create a replacement store", "Drafts cannot be persisted"} {
-		if !strings.Contains(a.runtimeHint, want) {
-			t.Errorf("hint = %q, missing %q", a.runtimeHint, want)
+		if !strings.Contains(fallbackHint, want) {
+			t.Errorf("hint = %q, missing %q", fallbackHint, want)
 		}
 	}
 
@@ -411,8 +422,9 @@ func TestProtocolFailureExitClearsActiveTaskAndKeepsDraft(t *testing.T) {
 	a.protocolFailed("unsupported runtime protocol version 2")
 	a.applyRuntimeExit(errors.New("exit status 1"))
 
-	if a.runtimeStage != "Runtime protocol" || !strings.Contains(a.runtimeErr, "unsupported runtime protocol version 2") {
-		t.Fatalf("protocol diagnosis overwritten: stage=%q err=%q", a.runtimeStage, a.runtimeErr)
+	protocolErr, _ := runtimeFeedback(a)
+	if a.runtimeStage != "Runtime protocol" || !strings.Contains(protocolErr, "unsupported runtime protocol version 2") {
+		t.Fatalf("protocol diagnosis overwritten: stage=%q err=%q", a.runtimeStage, protocolErr)
 	}
 	if a.runtimeStatus != runtimeStateExited || ct.ActiveTaskID != "" {
 		t.Fatalf("protocol exit did not clear active task: status=%q contact=%+v", a.runtimeStatus, ct)
@@ -426,8 +438,8 @@ func TestProtocolFailureExitClearsActiveTaskAndKeepsDraft(t *testing.T) {
 	if !strings.Contains(ct.SendError, "Delivery/result not confirmed") || !strings.Contains(ct.StatusDetail, "reload to verify") {
 		t.Fatalf("protocol exit lost unknown-result cleanup: %+v", ct)
 	}
-	if strings.Contains(a.runtimeHint, "API_KEY") {
-		t.Fatalf("protocol exit fell back to configuration hint: %q", a.runtimeHint)
+	if _, protocolHint := runtimeFeedback(a); strings.Contains(protocolHint, "API_KEY") {
+		t.Fatalf("protocol exit fell back to configuration hint: %q", protocolHint)
 	}
 }
 
@@ -460,8 +472,9 @@ func TestRuntimeExitUnknownBeforeReadyIsStartup(t *testing.T) {
 	if a.runtimeStage != "Runtime startup" {
 		t.Fatalf("stage = %q, want Runtime startup", a.runtimeStage)
 	}
-	if !strings.Contains(a.runtimeErr, "exited before ready") || strings.Contains(a.runtimeHint, "API_KEY") {
-		t.Fatalf("unknown startup classified as configuration: err=%q hint=%q", a.runtimeErr, a.runtimeHint)
+	errText, hintText := runtimeFeedback(a)
+	if !strings.Contains(errText, "exited before ready") || strings.Contains(hintText, "API_KEY") {
+		t.Fatalf("unknown startup classified as configuration: err=%q hint=%q", errText, hintText)
 	}
 }
 
@@ -605,8 +618,8 @@ func TestRuntimeExitConfigurationHintsRespectConnectionMode(t *testing.T) {
 		rt:               &runtimeClient{stderr: []string{"Error: API_KEY is not set (checked the environment and an optional .env file)"}},
 	}
 	legacy.applyRuntimeExit(errors.New("exit status 1"))
-	if !strings.Contains(legacy.runtimeHint, "Set API_KEY") || !strings.Contains(legacy.runtimeHint, ".env") {
-		t.Fatalf("legacy hint = %q", legacy.runtimeHint)
+	if _, legacyHint := runtimeFeedback(legacy); !strings.Contains(legacyHint, "Set API_KEY") || !strings.Contains(legacyHint, ".env") {
+		t.Fatalf("legacy hint = %q", legacyHint)
 	}
 
 	config := testConnectionConfig(t)

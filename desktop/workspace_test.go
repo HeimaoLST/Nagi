@@ -442,7 +442,7 @@ func TestSingleExecutionSlotBlocksOtherContact(t *testing.T) {
 	a.rt = &runtimeClient{}
 	a.runtimeStatus = runtimeStateReady
 	reason := a.canSend(other)
-	if !strings.Contains(reason, "Another contact is working") {
+	if reason != blockAnotherContact {
 		t.Fatalf("second contact reason = %q", reason)
 	}
 	if other.Draft != "" || ct.ActiveTaskID != "t1" {

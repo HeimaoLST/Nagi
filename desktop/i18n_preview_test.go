@@ -75,6 +75,35 @@ func TestPreviewI18nSelectedSlice(t *testing.T) {
 	fullTr.SetLocale("en")
 	fullTr.Frame()
 	writePreviewPNG(t, filepath.Join(dir, "history-full-en-light-1040x720.png"), fullTr.Image())
+
+	cfg := connectionConfig{Version: 1, API: connectionAPIChatCompletions, Endpoint: "https://provider.example.invalid/v1", APIKey: "fixture", Model: "fixture", ContextTokens: 131072, OutputTokens: 8192, WorkingDirectory: t.TempDir(), MaxActiveTasks: 2}
+	conn, _ := workspaceTestApp(t)
+	conn.connectionForm = newConnectionSettings(&cfg, cfg.WorkingDirectory)
+	conn.connectionForm.Status = connStatusApplied
+	conn.openSettingsTab(settingsTabConnection, settingsSourceRail)
+	connTr := ui.NewTester(conn.view, 1040, 720)
+	connTr.SetLocale("zh-Hans")
+	connTr.Frame()
+	writePreviewPNG(t, filepath.Join(dir, "connection-zh-Hans-light-1040x720.png"), connTr.Image())
+
+	model, _ := workspaceTestApp(t)
+	model.modelForm = newModelSelection(selectionTarget(), selectionCatalog())
+	model.aux = "model"
+	modelTr := ui.NewTester(model.view, 1040, 720)
+	modelTr.SetLocale("zh-Hans")
+	modelTr.Frame()
+	writePreviewPNG(t, filepath.Join(dir, "model-zh-Hans-light-1040x720.png"), modelTr.Image())
+
+	runtimeApp, _ := workspaceTestApp(t)
+	runtimeApp.runtimeStatus = runtimeStateFailed
+	runtimeApp.runtimeStage = "Connection configuration"
+	runtimeApp.runtimeErrKind = runtimeNoticeConnectionRequired
+	runtimeApp.runtimeHintKind = startupHintEnterConnection
+	runtimeApp.openAdvancedSettings()
+	runtimeTr := ui.NewTester(runtimeApp.view, 1040, 720)
+	runtimeTr.SetLocale("zh-Hans")
+	runtimeTr.Frame()
+	writePreviewPNG(t, filepath.Join(dir, "runtime-startup-zh-Hans-light-1040x720.png"), runtimeTr.Image())
 }
 
 func showPreviewTooltip(t *testing.T, tr *ui.Tester, label string) {
@@ -87,4 +116,32 @@ func showPreviewTooltip(t *testing.T, tr *ui.Tester, label string) {
 	tr.Move(r.X+r.W/2, r.Y+r.H/2)
 	tr.Advance(700 * time.Millisecond)
 	tr.Frame()
+}
+
+func TestPreviewModelValidationAndHelperBrand(t *testing.T) {
+	dir := os.Getenv("SAKI_PREVIEW_DIR")
+	if dir == "" {
+		t.Skip("set SAKI_PREVIEW_DIR for the model validation and helper brand previews")
+	}
+	model, _ := workspaceTestApp(t)
+	model.modelForm = newModelSelection(selectionTarget(), selectionCatalog())
+	model.modelForm.Draft.Model = ""
+	model.modelForm.Request()
+	model.aux = "model"
+	modelTr := ui.NewTester(model.view, 1040, 720)
+	modelTr.SetLocale("zh-Hans")
+	modelTr.Frame()
+	writePreviewPNG(t, filepath.Join(dir, "model-validation-zh-Hans-light-1040x720.png"), modelTr.Image())
+
+	helper, _ := workspaceTestApp(t)
+	helper.runtimeStatus = runtimeStateFailed
+	helper.runtimeStage = "Runtime helper"
+	helper.runtimeErrKind = runtimeNoticeHelperMissing
+	helper.runtimeHintKind = startupHintHelperInstall
+	helper.runtimeHintArgs = []string{"/Applications/Saki.app/Contents/MacOS/Saki-runtime, /usr/local/bin/Saki-runtime"}
+	helper.openAdvancedSettings()
+	helperTr := ui.NewTester(helper.view, 1040, 720)
+	helperTr.SetLocale("zh-Hans")
+	helperTr.Frame()
+	writePreviewPNG(t, filepath.Join(dir, "runtime-helper-zh-Hans-light-1040x720.png"), helperTr.Image())
 }

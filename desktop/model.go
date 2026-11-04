@@ -217,6 +217,7 @@ type appModel struct {
 	storeInitAllowed   bool
 	localSaveErr       string
 	localSavePrevErr   string
+	localSavePrevKind  string
 
 	issueFormOpen                 bool
 	issueDetailOpen               map[string]bool
@@ -242,8 +243,11 @@ type appModel struct {
 	rt                         *runtimeClient
 	runtimeStatus              string
 	runtimeErr                 string
+	runtimeErrKind             string
 	runtimeStage               string
 	runtimeHint                string
+	runtimeHintKind            string
+	runtimeHintArgs            []string
 	runtimeBinary              string
 	runtimeHelperChecked       bool
 	runtimeAPI                 string
@@ -301,14 +305,15 @@ type appModel struct {
 	issueToolRefresh         map[string]issueToolRefreshMark
 	issueToolReleaseInFlight int
 
-	modelForm         *modelSelection
-	modelPanelKind    string
-	modelOpenToken    int
-	modelPanelMessage string
-	modelPanelError   string
-	modelOpActive     bool
-	modelOpSessionID  string
-	modelRecovery     map[string]modelRecoveryState
+	modelForm             *modelSelection
+	modelPanelKind        string
+	modelOpenToken        int
+	modelPanelMessage     string
+	modelPanelError       string
+	modelPanelErrorDetail string
+	modelOpActive         bool
+	modelOpSessionID      string
+	modelRecovery         map[string]modelRecoveryState
 
 	// Layout is a GUI-wide preference, not a contact or runtime fact. Widths
 	// are persisted in the contact store; windowWidth is only the current
@@ -610,6 +615,7 @@ func (a *appModel) closeAux() {
 		a.modelForm = nil
 		a.modelPanelMessage = ""
 		a.modelPanelError = ""
+		a.modelPanelErrorDetail = ""
 		if wasModelKind == "work" {
 			a.focusIssueModel = true
 		}

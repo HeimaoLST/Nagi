@@ -39,16 +39,19 @@ type modelSelectionActions struct {
 }
 
 type modelSelection struct {
-	Target      modelSelectionTarget
-	Effective   modelSelectionTarget
-	Catalog     runtimeModelCatalog
-	Draft       modelSelectionDraft
-	Filter      string
-	Unconfirmed bool
-	Busy        bool
-	Error       string
-	Status      string
-	focusField  string
+	Target            modelSelectionTarget
+	Effective         modelSelectionTarget
+	Catalog           runtimeModelCatalog
+	Draft             modelSelectionDraft
+	Filter            string
+	Unconfirmed       bool
+	Busy              bool
+	Error             string
+	ErrorDetail       string
+	Status            string
+	UnconfirmedKind   string
+	UnconfirmedDetail string
+	focusField        string
 }
 
 const (
@@ -87,6 +90,7 @@ func (s *modelSelection) ResetDraft() {
 		s.Draft.CapacityMode = modelCapacityCatalog
 	}
 	s.Error = ""
+	s.ErrorDetail = ""
 	s.Status = ""
 	s.focusField = "Model"
 }
@@ -99,6 +103,11 @@ func (s *modelSelection) SetTarget(target modelSelectionTarget) {
 	if changedTarget {
 		s.Filter = ""
 		s.Unconfirmed = false
+		s.UnconfirmedKind = ""
+		s.UnconfirmedDetail = ""
+		s.Error = ""
+		s.ErrorDetail = ""
+		s.Status = ""
 	}
 	if changedTarget || !wasDirty {
 		s.ResetDraft()
@@ -120,8 +129,11 @@ func (s *modelSelection) SetEffective(config runtimeConnectionConfig) {
 		s.ResetDraft()
 	}
 	s.Unconfirmed = false
+	s.UnconfirmedKind = ""
+	s.UnconfirmedDetail = ""
 	s.Error = ""
-	s.Status = "Runtime configuration read back."
+	s.ErrorDetail = ""
+	s.Status = modelStatusReadback
 }
 
 // SetResult applies a confirmed config update and discards the draft.
@@ -130,23 +142,29 @@ func (s *modelSelection) SetResult(config runtimeConnectionConfig) {
 	s.Effective.Config = config
 	s.Busy = false
 	s.Unconfirmed = false
+	s.UnconfirmedKind = ""
+	s.UnconfirmedDetail = ""
 	s.ResetDraft()
-	s.Status = "Model configuration applied."
+	s.Status = modelStatusApplied
 }
 
-func (s *modelSelection) SetUnconfirmed(message string) {
+func (s *modelSelection) SetUnconfirmed(kind, detail string) {
 	s.Unconfirmed = true
 	s.Busy = false
 	s.Error = ""
-	if strings.TrimSpace(message) == "" {
-		message = "Runtime did not confirm the current configuration. Refresh to read it again."
-	}
-	s.Status = message
+	s.ErrorDetail = ""
+	s.Status = ""
+	s.UnconfirmedKind = kind
+	s.UnconfirmedDetail = detail
 }
 
 func (s *modelSelection) SetBusy(busy bool, status string) {
 	s.Busy = busy
 	s.Status = status
+	if busy {
+		s.Error = ""
+		s.ErrorDetail = ""
+	}
 	if !busy {
 		s.focusField = "Model"
 	}
@@ -155,10 +173,19 @@ func (s *modelSelection) SetBusy(busy bool, status string) {
 func (s *modelSelection) SetError(message string) {
 	s.Busy = false
 	s.Error = message
+	s.ErrorDetail = ""
+}
+
+func (s *modelSelection) SetErrorKind(kind, detail string) {
+	s.Busy = false
+	s.Error = kind
+	s.ErrorDetail = detail
 }
 
 func (s *modelSelection) SetStatus(message string) {
 	s.Status = message
+	s.Error = ""
+	s.ErrorDetail = ""
 }
 
 func (s *modelSelection) dirty() bool {
@@ -214,17 +241,17 @@ func (s *modelSelection) SelectCapacityMode(mode string) {
 
 func (s *modelSelection) Request() (modelSelectionRequest, bool) {
 	if s.Unconfirmed {
-		s.Error = "Refresh the Runtime configuration before updating the model. The current effective value is not confirmed."
+		s.Error = modelValidationUnconfirmedKind
 		return modelSelectionRequest{}, false
 	}
 	modelID := strings.TrimSpace(s.Draft.Model)
 	if modelID == "" {
-		s.Error = "Enter the provider model ID."
+		s.Error = modelValidationModelKind
 		s.focusField = "Model"
 		return modelSelectionRequest{}, false
 	}
 	if s.Target.Config.SessionID == "" {
-		s.Error = "Choose a session target first."
+		s.Error = modelValidationSessionKind
 		return modelSelectionRequest{}, false
 	}
 	request := modelSelectionRequest{
@@ -235,23 +262,23 @@ func (s *modelSelection) Request() (modelSelectionRequest, bool) {
 	case modelCapacityCatalog:
 		catalogID := strings.TrimSpace(s.Draft.CatalogID)
 		if catalogID == "" {
-			s.Error = "Choose a Runtime catalog entry or set explicit limits."
+			s.Error = modelValidationCatalogKind
 			return modelSelectionRequest{}, false
 		}
 		request.Patch.CatalogID = catalogID
 	default:
 		contextTokens, err := positiveInt(s.Draft.ContextTokens)
 		if err != nil {
-			s.Error = "Context tokens must be a positive whole number."
+			s.Error = modelValidationContextKind
 			return modelSelectionRequest{}, false
 		}
 		outputTokens, err := positiveInt(s.Draft.OutputTokens)
 		if err != nil {
-			s.Error = "Output tokens must be a positive whole number."
+			s.Error = modelValidationOutputKind
 			return modelSelectionRequest{}, false
 		}
 		if contextTokens <= outputTokens {
-			s.Error = "Context tokens must be greater than output tokens."
+			s.Error = modelValidationGreaterKind
 			return modelSelectionRequest{}, false
 		}
 		compaction := s.effectiveCompaction()
@@ -325,73 +352,76 @@ func (s *modelSelection) SelectConfiguredModel(model string) {
 }
 
 func (s *modelSelection) view(c *ui.Context, t *ui.Theme, actions modelSelectionActions) {
+	msgs := locales.In(c.Locale())
 	effective := s.Effective.Config.EffectiveConfig
 	compaction := effective.Compaction
 	ui.Column(c).Gap(10).Children(func() {
 		ui.Row(c).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, "Session model").FontSize(typePageTitle).FontWeight(500).TextColor(t.Text)
+			ui.Text(c, msgs.ModelSessionTitle()).FontSize(typePageTitle).FontWeight(500).TextColor(t.Text)
 			ui.Spacer(c)
-			secondaryButton(c, "Cancel").Disabled(s.Busy).OnClick(func() {
+			secondaryButton(c, msgs.ModelCancel()).Disabled(s.Busy).OnClick(func() {
 				s.ResetDraft()
 				if actions.Cancel != nil {
 					actions.Cancel()
 				}
 			})
 		})
-		ui.Text(c, "Target: "+s.targetLabel()).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
-		ui.Text(c, "Session: "+valueOr(s.Target.Config.SessionID, "not created")).FontSize(14).TextColor(t.TextMuted)
+		ui.Text(c, msgs.ModelTargetLabel(s.targetLabel(msgs))).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+		ui.Text(c, msgs.ModelSessionLine(valueOr(s.Target.Config.SessionID, msgs.ModelNotCreated()))).FontSize(14).TextColor(t.TextMuted)
 		if id := connectionIdentity(effective.ConnectionID); id != "" {
-			ui.Text(c, "Connection: "+id).FontSize(14).TextColor(t.TextMuted)
+			ui.Text(c, msgs.ModelConnectionLine(id)).FontSize(14).TextColor(t.TextMuted)
 		}
-		modelLabel := "Effective model: "
-		limitsLabel := "Effective limits: "
+		modelLine := msgs.ModelEffectiveModel(valueOr(effective.Model, msgs.ModelUnknown()))
+		limitsPrefix := msgs.ModelEffectiveLimits
 		if s.Unconfirmed {
-			modelLabel = "Last read model: "
-			limitsLabel = "Last read limits: "
+			modelLine = msgs.ModelLastReadModel(valueOr(effective.Model, msgs.ModelUnknown()))
+			limitsPrefix = msgs.ModelLastReadLimits
 		}
-		ui.Text(c, modelLabel+valueOr(effective.Model, "unknown")).FontSize(typeAction).FontWeight(500).TextColor(t.Text)
-		source := capacitySourceLabel(s.Effective)
+		ui.Text(c, modelLine).FontSize(typeAction).FontWeight(500).TextColor(t.Text)
+		source := capacitySourceLabel(msgs, s.Effective)
 		if catalogID := s.effectiveCatalogID(); catalogID != "" {
 			source += " (" + catalogID + ")"
 		}
-		ui.Text(c, fmt.Sprintf("%scontext %d / output %d, %s, revision %d",
-			limitsLabel, compaction.ContextTokens, compaction.OutputTokens, source, s.Target.Config.ConfigRevision)).
+		ui.Text(c, limitsPrefix(strconv.Itoa(compaction.ContextTokens), strconv.Itoa(compaction.OutputTokens), source, strconv.FormatUint(s.Target.Config.ConfigRevision, 10))).
 			FontSize(14).TextColor(t.TextMuted)
-		toolsLabel := "Effective built-in tools: "
+		toolsLine := msgs.ModelEffectiveTools(valueOr(builtinToolSelectionLabel(effective.ToolSelection.Builtin), msgs.BuiltinNone()))
 		if s.Unconfirmed {
-			toolsLabel = "Last read built-in tools: "
+			toolsLine = msgs.ModelLastReadTools(valueOr(builtinToolSelectionLabel(effective.ToolSelection.Builtin), msgs.BuiltinNone()))
 		}
-		ui.Text(c, toolsLabel+builtinToolSelectionLabel(effective.ToolSelection.Builtin)).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+		ui.Text(c, toolsLine).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
 		if s.Unconfirmed {
-			ui.Text(c, "Runtime has not confirmed the current configuration; these are the last read values. Refresh is available.").FontSize(14).LineHeight(1.5).TextColor(t.Warning)
+			ui.Text(c, msgs.ModelUnconfirmedHint()).FontSize(14).LineHeight(1.5).TextColor(t.Warning)
 		}
 		if s.Error != "" {
-			ui.Text(c, s.Error).FontSize(14).LineHeight(1.5).TextColor(t.Danger)
+			ui.Text(c, modelErrorText(msgs, s.Error, s.ErrorDetail)).FontSize(14).LineHeight(1.5).TextColor(t.Danger)
 		}
-		ui.Text(c, "Provider model ID").FontSize(typeAction).FontWeight(500).TextColor(t.Text)
-		input := ui.TextInput(c, &s.Draft.Model).Label("Provider model ID").FontSize(14).Placeholder("Provider model ID").Disabled(s.Busy)
+		if s.UnconfirmedKind != "" {
+			ui.Text(c, modelUnconfirmedText(msgs, s.UnconfirmedKind, s.UnconfirmedDetail)).FontSize(14).LineHeight(1.5).TextColor(t.Warning)
+		}
+		ui.Text(c, msgs.ModelProviderID()).FontSize(typeAction).FontWeight(500).TextColor(t.Text)
+		input := ui.TextInput(c, &s.Draft.Model).Label(msgs.ModelProviderID()).FontSize(14).Placeholder(msgs.ModelProviderID()).Disabled(s.Busy)
 		if s.focusField == "Model" {
 			input.Focus()
 			s.focusField = ""
 		}
-		ui.Text(c, "Catalog entries supply capacity only; they do not prove that the provider endpoint supports a model.").FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+		ui.Text(c, msgs.ModelCatalogHint()).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
 		ui.Row(c).Gap(6).Children(func() {
-			catalogButton := secondaryButton(c, "Use Runtime catalog").Disabled(s.Busy || len(s.Catalog.Models) == 0).OnClick(func() { s.SelectCapacityMode(modelCapacityCatalog) })
+			catalogButton := secondaryButton(c, msgs.ModelUseCatalog()).Disabled(s.Busy || len(s.Catalog.Models) == 0).OnClick(func() { s.SelectCapacityMode(modelCapacityCatalog) })
 			selectionButtonState(c, catalogButton, s.Draft.CapacityMode == modelCapacityCatalog)
-			explicitButton := secondaryButton(c, "Set explicit limits").Disabled(s.Busy).OnClick(func() { s.SelectCapacityMode(modelCapacityExplicit) })
+			explicitButton := secondaryButton(c, msgs.ModelExplicitLimits()).Disabled(s.Busy).OnClick(func() { s.SelectCapacityMode(modelCapacityExplicit) })
 			selectionButtonState(c, explicitButton, s.Draft.CapacityMode != modelCapacityCatalog)
 		})
 		if s.Draft.CapacityMode == modelCapacityCatalog {
-			ui.Text(c, "Capacity comes from the selected Runtime catalog entry. Endpoint/model availability is not implied.").FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+			ui.Text(c, msgs.ModelCatalogCapacityHint()).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
 		} else {
-			ui.Text(c, "Context tokens").FontSize(typeAction).FontWeight(500).TextColor(t.Text)
-			ui.TextInput(c, &s.Draft.ContextTokens).Label("Context tokens").FontSize(14).Placeholder("131072").Disabled(s.Busy)
-			ui.Text(c, "Output tokens").FontSize(typeAction).FontWeight(500).TextColor(t.Text)
-			ui.TextInput(c, &s.Draft.OutputTokens).Label("Output tokens").FontSize(14).Placeholder("8192").Disabled(s.Busy)
-			ui.Text(c, "Other compaction strategy values are preserved from the effective config.").FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+			ui.Text(c, msgs.ModelContextTokens()).FontSize(typeAction).FontWeight(500).TextColor(t.Text)
+			ui.TextInput(c, &s.Draft.ContextTokens).Label(msgs.ModelContextTokens()).FontSize(14).Placeholder("131072").Disabled(s.Busy)
+			ui.Text(c, msgs.ModelOutputTokens()).FontSize(typeAction).FontWeight(500).TextColor(t.Text)
+			ui.TextInput(c, &s.Draft.OutputTokens).Label(msgs.ModelOutputTokens()).FontSize(14).Placeholder("8192").Disabled(s.Busy)
+			ui.Text(c, msgs.ModelCompactionHint()).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
 		}
 		ui.Row(c).Gap(8).Children(func() {
-			secondaryButton(c, "Refresh").Disabled(s.Busy).OnClick(func() {
+			secondaryButton(c, msgs.ModelRefresh()).Disabled(s.Busy).OnClick(func() {
 				if actions.Refresh != nil {
 					actions.Refresh(s.Target)
 				}
@@ -403,70 +433,213 @@ func (s *modelSelection) view(c *ui.Context, t *ui.Theme, actions modelSelection
 			})
 		})
 		if s.Busy {
-			ui.Text(c, "Waiting for Runtime…").FontSize(14).TextColor(t.TextMuted)
+			ui.Text(c, msgs.ModelWaiting()).FontSize(14).TextColor(t.TextMuted)
 		}
 		if s.Status != "" {
-			ui.Text(c, s.Status).FontSize(14).LineHeight(1.5).TextColor(t.Text)
+			ui.Text(c, modelStatusText(msgs, s.Status)).FontSize(14).LineHeight(1.5).TextColor(t.Text)
 		}
-		ui.Text(c, "Filter candidates").FontSize(typeAction).FontWeight(500).TextColor(t.Text)
-		ui.TextInput(c, &s.Filter).Label("Filter").FontSize(14).Placeholder("Model or catalog ID").Disabled(s.Busy)
+		ui.Text(c, msgs.ModelFilterCandidates()).FontSize(typeAction).FontWeight(500).TextColor(t.Text)
+		ui.TextInput(c, &s.Filter).Label(msgs.ModelFilter()).FontSize(14).Placeholder(msgs.ModelFilterPlaceholder()).Disabled(s.Busy)
 		configured := s.visibleConfiguredModels()
 		if len(configured) > 0 {
-			ui.Text(c, "Configured models").FontSize(typeAction).FontWeight(500).TextColor(t.Text)
-			ui.Text(c, "Host-provided declarations, not verified availability.").FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+			ui.Text(c, msgs.ModelConfiguredModels()).FontSize(typeAction).FontWeight(500).TextColor(t.Text)
+			ui.Text(c, msgs.ModelConfiguredHint()).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
 			for _, entry := range configured {
 				entry := entry
-				button := secondaryButton(c, entry.Model+": context "+strconv.Itoa(entry.Compaction.ContextTokens)).Disabled(s.Busy).OnClick(func() { s.SelectConfiguredModel(entry.Model) })
+				button := secondaryButton(c, msgs.ModelConfiguredChoice(entry.Model, strconv.Itoa(entry.Compaction.ContextTokens))).Disabled(s.Busy).OnClick(func() { s.SelectConfiguredModel(entry.Model) })
 				selectionButtonState(c, button, s.Draft.Model == entry.Model && s.Draft.CapacityMode == modelCapacityExplicit)
 			}
 			if len(configured) < len(s.Catalog.ConfiguredModels) {
-				ui.Text(c, fmt.Sprintf("Showing %d of %d configured models; refine Filter to see more.", len(configured), len(s.Catalog.ConfiguredModels))).FontSize(14).TextColor(t.TextMuted)
+				ui.Text(c, msgs.ModelConfiguredMore(strconv.Itoa(len(configured)), strconv.Itoa(len(s.Catalog.ConfiguredModels)))).FontSize(14).TextColor(t.TextMuted)
 			}
 		}
 		catalog := s.visibleCatalogModels()
 		if len(catalog) > 0 {
-			ui.Text(c, "Runtime catalog capacity").FontSize(typeAction).FontWeight(500).TextColor(t.Text)
+			ui.Text(c, msgs.ModelCatalogCapacity()).FontSize(typeAction).FontWeight(500).TextColor(t.Text)
 			for _, entry := range catalog {
 				entry := entry
 				label := entry.Name
 				if label == "" {
 					label = entry.CatalogID
 				}
-				button := secondaryButton(c, label+": context "+strconv.Itoa(entry.Limits.Context)).Disabled(s.Busy).OnClick(func() { s.SelectCatalogID(entry.CatalogID) })
+				button := secondaryButton(c, msgs.ModelCatalogChoice(label, strconv.Itoa(entry.Limits.Context))).Disabled(s.Busy).OnClick(func() { s.SelectCatalogID(entry.CatalogID) })
 				selectionButtonState(c, button, s.Draft.CatalogID != "" && s.Draft.CatalogID == entry.CatalogID)
 			}
 			if len(catalog) < len(s.Catalog.Models) {
-				ui.Text(c, fmt.Sprintf("Showing %d of %d catalog entries; refine Filter to see more.", len(catalog), len(s.Catalog.Models))).FontSize(14).TextColor(t.TextMuted)
+				ui.Text(c, msgs.ModelCatalogMore(strconv.Itoa(len(catalog)), strconv.Itoa(len(s.Catalog.Models)))).FontSize(14).TextColor(t.TextMuted)
 			}
 		} else if len(s.Catalog.Models) == 0 {
-			ui.Text(c, "No Runtime catalog entries are available; enter explicit limits.").FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+			ui.Text(c, msgs.ModelNoCatalog()).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
 		}
 	})
 }
 
-func (s *modelSelection) targetLabel() string {
+const (
+	modelStatusCatalogUnavailable     = "catalog-unavailable"
+	modelStatusRefreshedNoCatalog     = "refreshed-no-catalog"
+	modelStatusRefreshed              = "refreshed"
+	modelStatusUpdated                = "updated"
+	modelStatusApplied                = "applied"
+	modelStatusReadingConfig          = "reading-config"
+	modelStatusUpdating               = "updating"
+	modelStatusReloading              = "reloading"
+	modelStatusReloaded               = "reloaded"
+	modelStatusReadback               = "readback"
+	modelUnconfirmedQuarantined       = "quarantined"
+	modelUnconfirmedNotConfirmed      = "not-confirmed"
+	modelUnconfirmedNeedsReload       = "needs-reload"
+	modelUnconfirmedCommit            = "commit"
+	modelUnconfirmedReadback          = "readback"
+	modelUnconfirmedReloadFailed      = "reload-failed"
+	modelErrorRuntimeNotReady         = "runtime-not-ready"
+	modelErrorNeedReload              = "need-reload"
+	modelErrorNeedRefresh             = "need-refresh"
+	modelErrorRefreshBefore           = "refresh-before"
+	modelErrorBusy                    = "busy"
+	modelErrorReleasedLoad            = "released-load"
+	modelValidationUnconfirmedKind    = "validation-unconfirmed"
+	modelValidationModelKind          = "validation-model-required"
+	modelValidationSessionKind        = "validation-session-required"
+	modelValidationCatalogKind        = "validation-catalog-required"
+	modelValidationContextKind        = "validation-context-positive"
+	modelValidationOutputKind         = "validation-output-positive"
+	modelValidationGreaterKind        = "validation-context-greater"
+	modelUnconfirmedNeedReloadUpdate  = "need-reload-update"
+	modelUnconfirmedNeedRefreshUpdate = "need-refresh-update"
+	modelPanelMessageNoSession        = "no-session"
+	modelPanelMessageReading          = "reading"
+	modelPanelErrorRuntimeNotReady    = "runtime-not-ready"
+	modelPanelErrorReadFailed         = "read-failed"
+)
+
+func modelStatusText(msgs locales.Messages, kind string) string {
+	switch kind {
+	case modelStatusCatalogUnavailable:
+		return msgs.ModelCatalogNotLoaded()
+	case modelStatusRefreshedNoCatalog:
+		return msgs.ModelRefreshedNoCatalog()
+	case modelStatusRefreshed:
+		return msgs.ModelRefreshed()
+	case modelStatusUpdated:
+		return msgs.ModelUpdated()
+	case modelStatusApplied:
+		return msgs.ModelConfigApplied()
+	case modelStatusReadingConfig:
+		return msgs.ModelReadingConfig()
+	case modelStatusUpdating:
+		return msgs.ModelUpdating()
+	case modelStatusReloading:
+		return msgs.ModelReloading()
+	case modelStatusReloaded:
+		return msgs.ModelReloaded()
+	case modelStatusReadback:
+		return msgs.ModelStatusReadback()
+	default:
+		return kind
+	}
+}
+
+func modelUnconfirmedText(msgs locales.Messages, kind, detail string) string {
+	switch kind {
+	case modelUnconfirmedQuarantined:
+		return msgs.ModelQuarantined()
+	case modelUnconfirmedNotConfirmed:
+		return msgs.ModelNotConfirmed()
+	case modelUnconfirmedNeedsReload:
+		return msgs.ModelNeedsExplicitReload()
+	case modelUnconfirmedCommit:
+		return msgs.ModelCommitUnconfirmed(detail)
+	case modelUnconfirmedReadback:
+		return msgs.ModelReadbackUnconfirmed(detail)
+	case modelUnconfirmedReloadFailed:
+		return msgs.ModelReloadFailed(detail)
+	case modelUnconfirmedNeedReloadUpdate:
+		return msgs.ModelNeedReloadUpdate()
+	case modelUnconfirmedNeedRefreshUpdate:
+		return msgs.ModelNeedRefreshUpdate()
+	default:
+		return kind
+	}
+}
+
+func modelErrorText(msgs locales.Messages, kind, detail string) string {
+	switch kind {
+	case modelErrorRuntimeNotReady:
+		return msgs.ModelNotReadyUpdate()
+	case modelErrorNeedReload:
+		return msgs.ModelNeedReloadUpdate()
+	case modelErrorNeedRefresh:
+		return msgs.ModelNeedRefreshUpdate()
+	case modelErrorRefreshBefore:
+		return msgs.ModelRefreshBeforeUpdate()
+	case modelErrorBusy:
+		return msgs.ModelBusy()
+	case modelErrorReleasedLoad:
+		return msgs.ModelLoadReleasedFailed(detail)
+	case modelValidationUnconfirmedKind:
+		return msgs.ModelValidationUnconfirmed()
+	case modelValidationModelKind:
+		return msgs.ModelValidationModelRequired()
+	case modelValidationSessionKind:
+		return msgs.ModelValidationSessionRequired()
+	case modelValidationCatalogKind:
+		return msgs.ModelValidationCatalogRequired()
+	case modelValidationContextKind:
+		return msgs.ModelValidationContextPositive()
+	case modelValidationOutputKind:
+		return msgs.ModelValidationOutputPositive()
+	case modelValidationGreaterKind:
+		return msgs.ModelValidationContextGreater()
+	default:
+		return kind
+	}
+}
+
+func modelPanelMessageText(msgs locales.Messages, kind string) string {
+	switch kind {
+	case modelPanelMessageNoSession:
+		return msgs.ModelNoSession()
+	case modelPanelMessageReading:
+		return msgs.ModelReading()
+	default:
+		return kind
+	}
+}
+
+func modelPanelErrorText(msgs locales.Messages, kind, detail string) string {
+	switch kind {
+	case modelPanelErrorRuntimeNotReady:
+		return msgs.ModelRuntimeNotReadyRead()
+	case modelPanelErrorReadFailed:
+		return msgs.ModelReadFailed(detail)
+	default:
+		return kind
+	}
+}
+
+func (s *modelSelection) targetLabel(msgs locales.Messages) string {
 	kind := s.Target.Kind
 	switch kind {
 	case "work", "issue":
-		kind = "Issue work"
+		kind = msgs.ModelTargetIssueWork()
 	case "conversation":
-		kind = "Conversation"
+		kind = msgs.ModelTargetConversation()
 	default:
-		kind = valueOr(kind, "Session")
+		kind = valueOr(kind, msgs.ModelTargetSession())
 	}
-	return kind + ": " + valueOr(s.Target.Label, s.Target.Config.SessionID)
+	return msgs.ModelTargetValue(kind, valueOr(s.Target.Label, s.Target.Config.SessionID))
 }
 
-func capacitySourceLabel(target modelSelectionTarget) string {
+func capacitySourceLabel(msgs locales.Messages, target modelSelectionTarget) string {
 	switch target.Config.EffectiveConfig.CapacitySource.Kind {
 	case "catalog":
-		return "Runtime catalog"
+		return msgs.ModelSourceCatalog()
 	case "explicit":
-		return "explicit limits"
+		return msgs.ModelSourceExplicit()
 	case "stored":
-		return "stored"
+		return msgs.ModelSourceStored()
 	default:
-		return valueOr(target.Config.EffectiveConfig.CapacitySource.Kind, "unknown source")
+		return valueOr(target.Config.EffectiveConfig.CapacitySource.Kind, msgs.ModelSourceUnknown())
 	}
 }
 
