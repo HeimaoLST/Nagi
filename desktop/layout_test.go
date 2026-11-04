@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"path/filepath"
 	"testing"
 
@@ -150,6 +151,83 @@ func TestLayoutDragClampsBothEdgesAndKeepsCenterWidest(t *testing.T) {
 	}
 }
 
+func TestResponsiveWorkbenchGeometryFirstSlice(t *testing.T) {
+	for _, tc := range []struct {
+		width       int
+		left, right float32
+		wantAvatar  bool
+		wantPage    bool
+	}{
+		{width: 899, left: 200, right: 340, wantPage: true},
+		{width: 900, left: 200, right: 440, wantAvatar: true},
+		{width: 960, left: 200, right: 340, wantAvatar: true},
+		{width: 960, left: 280, right: 440, wantAvatar: true},
+		{width: 1179, left: 280, right: 440, wantAvatar: true},
+		{width: 1180, left: 200, right: 340},
+		{width: 1180, left: 280, right: 440},
+	} {
+		t.Run(fmt.Sprintf("%d/%g-%g", tc.width, tc.left, tc.right), func(t *testing.T) {
+			a, ct := workspaceTestApp(t)
+			a.windowWidth = tc.width
+			a.leftPaneWidth = tc.left
+			a.rightPaneWidth = tc.right
+			a.workspaceOpen = true
+			tr := ui.NewTester(a.view, tc.width, 640)
+			tr.Frame()
+			t.Logf("width=%d left=%g right=%g overlay=%v avatar=%v page=%v effectiveRail=%g effectiveDetail=%g center=%g",
+				tc.width, tc.left, tc.right, a.workOverlay(), a.avatarRailActive(), a.detailPageActive(),
+				a.effectiveRailWidth(), a.effectiveDetailWidth(), a.centerPaneWidth)
+			if a.workOverlay() != tc.wantPage || a.avatarRailActive() != tc.wantAvatar || a.detailPageActive() != tc.wantPage {
+				t.Fatalf("mode mismatch width=%d", tc.width)
+			}
+			if !tc.wantPage {
+				composer, ok := tr.Find("Composer for Saki")
+				if !ok || composer.W <= 0 {
+					t.Fatalf("composer missing at %d: %+v/%v", tc.width, composer, ok)
+				}
+				t.Logf("composer rect=%+v textareaW=%g contentW=%g", composer, composer.W, composer.W-4)
+				mainStart := float32(0)
+				if a.avatarRailActive() {
+					mainStart = avatarRailWidth + paneSeparatorWidth
+					avatar, avatarOK := tr.Find("Contact Saki")
+					if !avatarOK || avatar.W <= 0 || avatar.X < 0 || avatar.X+avatar.W > avatarRailWidth {
+						t.Fatalf("avatar button rect=%+v ok=%v", avatar, avatarOK)
+					}
+				} else {
+					mainStart = a.effectiveRailWidth() + paneSeparatorWidth
+				}
+				if composer.X < mainStart || composer.X+composer.W > mainStart+a.centerPaneWidth {
+					t.Fatalf("composer outside center: rect=%+v mainStart=%g center=%g", composer, mainStart, a.centerPaneWidth)
+				}
+				if close, ok := tr.Find("Close workspace"); ok {
+					t.Logf("close rect=%+v", close)
+					if close.W <= 0 || close.H <= 0 || close.X < 0 || close.X+close.W > float32(tc.width) {
+						t.Fatalf("close workspace outside window: %+v", close)
+					}
+				} else {
+					t.Fatal("Close workspace missing from open detail")
+				}
+				if empty, ok := tr.Find("No issues in Unfinished."); ok {
+					t.Logf("empty rect=%+v", empty)
+				}
+				if tc.width == 960 && tc.left == 280 && tc.right == 440 {
+					if composer.W-4 < 440 {
+						t.Fatalf("960 max pref editable content=%g, want >=440", composer.W-4)
+					}
+					focusComposer(t, tr, "Composer for Saki")
+					tr.Type("responsive draft")
+					tr.Frame()
+					if ct.Draft != "responsive draft" {
+						t.Fatalf("960 composer did not accept typing: draft=%q", ct.Draft)
+					}
+				}
+			} else if tr.HasText("Composer for Saki") {
+				t.Fatal("composer mounted on 899 detail page")
+			}
+		})
+	}
+}
+
 func TestLayoutPreferenceIsNotOverwrittenByNarrowViewport(t *testing.T) {
 	a, _ := layoutAppAt(t, 1380)
 	a.leftPaneWidth = 280
@@ -162,8 +240,9 @@ func TestLayoutPreferenceIsNotOverwrittenByNarrowViewport(t *testing.T) {
 	a.windowWidth = 960
 	tr.SetSize(960, 640)
 	tr.Frame()
-	if !a.workOverlay() {
-		t.Fatal("960 should use the work overlay when the columns do not fit")
+	if a.workOverlay() || !a.avatarRailActive() || a.effectiveDetailWidth() != 410 || a.centerPaneWidth != 492 {
+		t.Fatalf("960 avatar geometry = overlay=%v avatar=%v detail=%v center=%v",
+			a.workOverlay(), a.avatarRailActive(), a.effectiveDetailWidth(), a.centerPaneWidth)
 	}
 	if a.railWidth() != 280 || a.workWidth() != 440 {
 		t.Fatalf("narrow viewport rewrote preference: left=%v right=%v", a.railWidth(), a.workWidth())
@@ -176,8 +255,8 @@ func TestLayoutPreferenceIsNotOverwrittenByNarrowViewport(t *testing.T) {
 	}
 }
 
-func TestLayoutOverlayAt960And720ClosesWithEscape(t *testing.T) {
-	for _, width := range []int{960, 720} {
+func TestLayoutOverlayBelow900ClosesWithEscape(t *testing.T) {
+	for _, width := range []int{899, 720} {
 		a, _ := layoutAppAt(t, width)
 		tr := ui.NewTester(a.view, width, 640)
 		tr.Frame()

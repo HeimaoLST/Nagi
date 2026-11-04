@@ -21,13 +21,14 @@ func workspaceTestApp(t *testing.T) (*appModel, *contact) {
 
 func TestThreePaneBreakpointsAndToggles(t *testing.T) {
 	a, _ := workspaceTestApp(t)
-	tr := ui.NewTester(a.view, 1040, 720)
+	a.windowWidth = 1180
+	tr := ui.NewTester(a.view, 1180, 720)
 	tr.Frame()
 	if !tr.HasText("No issues in Unfinished.") || !tr.HasText("Chat runs") {
 		t.Fatal("new work panel should show the issue overview and local work entry")
 	}
-	if r, ok := tr.Find("No issues in Unfinished."); !ok || r.X < 620 {
-		t.Fatalf("compact work overview x = %v, want >= 620", r.X)
+	if r, ok := tr.Find("No issues in Unfinished."); !ok || r.X < 800 {
+		t.Fatalf("full-rail work overview x = %v, want >= 800", r.X)
 	}
 
 	if err := tr.Click("Hide"); err != nil {
@@ -66,8 +67,8 @@ func TestThreePaneBreakpointsAndToggles(t *testing.T) {
 	a.windowWidth = 960
 	tr960 := ui.NewTester(a.view, 960, 640)
 	tr960.Frame()
-	if !a.workOverlay() || !tr960.HasText("Back to chat") {
-		t.Fatal("960 should use the non-modal detail page when the default columns do not fit")
+	if a.workOverlay() || !a.avatarRailActive() || !tr960.HasText("Close workspace") {
+		t.Fatal("960 should use the avatar rail with the detail as a column")
 	}
 	a.windowWidth = 1380
 	trWide := ui.NewTester(a.view, 1380, 900)
@@ -82,15 +83,15 @@ func TestThreePaneBreakpointsAndToggles(t *testing.T) {
 	a.windowWidth = 900
 	trNarrow := ui.NewTester(a.view, 900, 640)
 	trNarrow.Frame()
-	if !trNarrow.HasText("Back to chat") {
-		t.Fatal("narrow work detail should be an application page")
+	if a.workOverlay() || !a.avatarRailActive() || !trNarrow.HasText("Close workspace") {
+		t.Fatal("900 should use the avatar rail, not the full page")
 	}
-	if err := trNarrow.Click("Back to chat"); err != nil {
+	if err := trNarrow.Click("Close workspace"); err != nil {
 		t.Fatal(err)
 	}
 	trNarrow.Frame()
 	if a.workspaceOpen || !trNarrow.Focused("Work") {
-		t.Fatal("narrow detail page did not close to the Work entry")
+		t.Fatal("avatar detail close did not return to the Work entry")
 	}
 }
 

@@ -262,6 +262,53 @@ func (a *appModel) rail(c *ui.Context, t *ui.Theme) {
 	})
 }
 
+func (a *appModel) avatarRail(c *ui.Context, t *ui.Theme) {
+	ui.Column(c).Width(avatarRailWidth).Shrink(0).FillHeight().Padding(4).Gap(4).Background(a.workTheme.Rail).Children(func() {
+		add := appTooltip(c, ui.Button(c, "").Label("Add contact").
+			MinWidth(32).MinHeight(32).Width(32).Height(32).Padding(0).Justify(ui.Center), "Add contact")
+		add.Children(func() { ui.Icon(c, railAddIcon).Width(18).Height(18).TextColor(t.TextMuted) })
+		add.OnClick(func() { a.addDefaultContact() })
+		visible := a.visibleContactIndices()
+		if len(visible) == 0 {
+			ui.Spacer(c).Grow(1)
+		} else {
+			ui.Scroll(c).Grow(1).Children(func() {
+				for _, i := range visible {
+					a.avatarRailRow(c, t, i)
+				}
+			})
+		}
+		settingsLabel := locales.In(c.Locale()).SettingsTitle()
+		settings := appTooltip(c, ui.Button(c, "").Label(settingsLabel).
+			MinWidth(32).MinHeight(32).Width(32).Height(32).Padding(0).Justify(ui.Center),
+			locales.In(c.Locale()).SettingsOpenTooltip())
+		settings.Children(func() { ui.Icon(c, railSettingsIcon).Width(16).Height(16).TextColor(t.TextMuted) })
+		settings.OnClick(func() { a.openSettingsTab(a.settingsLandingTab(), settingsSourceRail) })
+		if a.focusSettings {
+			settings.Focus()
+			a.focusSettings = false
+		}
+	})
+}
+
+func (a *appModel) avatarRailRow(c *ui.Context, t *ui.Theme, i int) {
+	ct := a.contacts[i]
+	line := a.snippet(ct)
+	tip := ct.Name
+	if line != "" {
+		tip += "\n" + line
+	}
+	row := ui.ButtonBase(c).Label("Contact " + ct.Name).Selected(i == a.selected).
+		Width(48).Height(44).Padding(4).Radius(8).Justify(ui.Center).
+		Background(ui.Transparent).BorderWidth(0)
+	if i == a.selected {
+		row.Background(t.SurfaceHover)
+	}
+	row = appTooltip(c, row, tip)
+	row.OnClick(func() { a.selectContact(i) })
+	row.Children(func() { a.avatarTile(c, t, 28) })
+}
+
 func contactScopeChoiceLabel(scope string) string {
 	switch scope {
 	case "archived":
@@ -658,7 +705,7 @@ func (a *appModel) chat(c *ui.Context, t *ui.Theme) {
 			})
 		}
 		ui.Row(c).Key("composer").Justify(ui.Center).Children(func() {
-			ui.Column(c).WidthPercent(86).MaxWidth(760).Children(func() {
+			ui.Column(c).FillWidth().MaxWidth(760).Children(func() {
 				a.composer(c, t)
 			})
 		})
@@ -978,7 +1025,7 @@ func (a *appModel) composerInlinePanel(c *ui.Context, t *ui.Theme) {
 
 func (a *appModel) composer(c *ui.Context, t *ui.Theme) {
 	ct := a.selectedContact()
-	ui.Column(c).FillWidth().Padding(8, 0).Gap(4).Children(func() {
+	ui.Column(c).FillWidth().Padding(8, 12).Gap(4).Children(func() {
 		ui.Column(c).FillWidth().Padding(8, 12).Radius(12).Background(a.workTheme.Well).Gap(4).Children(func() {
 			input := ui.TextArea(c, &ct.Draft).Bind(&a.composerHandle).Label("Composer for "+ct.Name).
 				FontSize(typeBody).LineHeight(1.5).Lines(2, 6).MinHeight(0).
