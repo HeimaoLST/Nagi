@@ -167,6 +167,11 @@ func issuePreviewApp(scene string) *appModel {
 		ct.SelectedIssueID = "issue-2"
 		ct.Works = ct.Works[:1]
 	}
+	if scene == "issue-empty" {
+		ct.Issues = nil
+		ct.SelectedIssueID = ""
+		ct.Works = nil
+	}
 	if scene == "closed-work" {
 		ct.Messages = nil
 		ct.Revealed = nil
@@ -241,6 +246,32 @@ func TestPreviewIssueStates(t *testing.T) {
 	}
 	writeIssueWorkStatusLocalePreviews(t, dir)
 	writeIssueWorkPanelLocalePreviews(t, dir)
+}
+
+func writeIssueOverviewInsetPreviews(t *testing.T, dir string) {
+	if err := loadAvatar(); err != nil {
+		t.Fatal(err)
+	}
+	for _, dark := range []bool{false, true} {
+		theme := "light"
+		if dark {
+			theme = "dark"
+		}
+		for _, width := range []int{1040, 720} {
+			height := 640
+			if width == 1040 {
+				height = 720
+			}
+			for _, scene := range []string{"issue-overview", "issue-empty"} {
+				a := issuePreviewApp(scene)
+				a.windowWidth = width
+				tr := ui.NewTester(a.view, width, height)
+				tr.SetDark(dark)
+				tr.Frame()
+				writePreviewPNG(t, filepath.Join(dir, fmt.Sprintf("headless-r5-%s-%s-%dx%d.png", theme, scene, width, height)), tr.Image())
+			}
+		}
+	}
 }
 
 func writeIssueWorkPanelLocalePreviews(t *testing.T, dir string) {

@@ -372,15 +372,17 @@ func (a *appModel) issueOverviewView(c *ui.Context, t *ui.Theme, ct *contact, na
 	if a.issueFormOpen {
 		a.issueFormView(c, t)
 	}
-	a.issueFilterChoice = issueFilterChoiceLabel(nav.Filter)
-	filter := selectWithoutChevron(c, &a.issueFilterChoice, []string{"Unfinished", "Completed", "All"}, "Issue filter")
-	if filter.Changed() {
-		a.setIssueFilter(ct, issueFilterFromChoice(a.issueFilterChoice))
-		nav = ct.issueNavigation()
-	}
-	ui.Scroll(c).Grow(1).FillWidth().TrackScroll(&nav.OverviewScroll).Children(func() {
-		ui.Column(c).Gap(3).Children(func() {
-			a.issueList(c, t, ct)
+	ui.Column(c).FillWidth().Grow(1).Padding(12).Gap(8).Children(func() {
+		a.issueFilterChoice = issueFilterChoiceLabel(nav.Filter)
+		filter := selectWithoutChevron(c, &a.issueFilterChoice, []string{"Unfinished", "Completed", "All"}, "Issue filter")
+		if filter.Changed() {
+			a.setIssueFilter(ct, issueFilterFromChoice(a.issueFilterChoice))
+			nav = ct.issueNavigation()
+		}
+		ui.Scroll(c).Grow(1).FillWidth().TrackScroll(&nav.OverviewScroll).Children(func() {
+			ui.Column(c).Gap(3).Children(func() {
+				a.issueList(c, t, ct)
+			})
 		})
 	})
 }
@@ -1222,7 +1224,7 @@ func (a *appModel) workCard(c *ui.Context, t *ui.Theme, w *workItem, isCurrent, 
 			}
 		})
 		if w.Prompt != "" {
-			ui.Text(c, w.Prompt).FontSize(typeBody).LineHeight(1.6).MaxLines(4).TextColor(a.workTheme.WorkText)
+			ui.Text(c, w.Prompt).FontSize(typeBody).LineHeight(1.5).MaxLines(4).TextColor(a.workTheme.WorkText)
 		}
 		if len(w.Tools) > 0 {
 			last := w.Tools[len(w.Tools)-1]

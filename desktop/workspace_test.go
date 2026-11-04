@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+	"os"
 	"strings"
 	"testing"
 
@@ -89,6 +91,47 @@ func TestThreePaneBreakpointsAndToggles(t *testing.T) {
 	trNarrow.Frame()
 	if a.workspaceOpen || !trNarrow.Focused("Work") {
 		t.Fatal("narrow detail page did not close to the Work entry")
+	}
+}
+
+func TestIssueOverviewContentHasPanelInset(t *testing.T) {
+	for _, width := range []int{1040, 720} {
+		for _, empty := range []bool{true, false} {
+			name := fmt.Sprintf("%d/empty=%v", width, empty)
+			t.Run(name, func(t *testing.T) {
+				a, ct := workspaceTestApp(t)
+				a.windowWidth = width
+				if !empty {
+					issue := &productIssue{ID: "i-overview-inset", ContactID: ct.ID, Goal: "overview row inset",
+						Status: issueStatusInProgress}
+					ct.Issues = []*productIssue{issue}
+					ct.SelectedIssueID = issue.ID
+				}
+				tr := ui.NewTester(a.view, width, 720)
+				tr.Frame()
+				panelX := float32(width) - a.workWidth() - paneSeparatorWidth
+				if a.detailPageActive() {
+					panelX = 0
+				}
+				check := func(label string) {
+					t.Helper()
+					r, ok := tr.Find(label)
+					if !ok || r.W <= 0 || r.H <= 0 || r.X < panelX+12 || r.X+r.W > float32(width)-12 {
+						t.Errorf("%s rect=%+v ok=%v panelX=%.1f width=%d", label, r, ok, panelX, width)
+					}
+					t.Logf("%s width=%d panelX=%.1f rect=%+v ok=%v", label, width, panelX, r, ok)
+				}
+				check("Issue filter")
+				if empty {
+					check("No issues in Unfinished.")
+				} else {
+					check("overview row inset")
+				}
+			})
+		}
+	}
+	if dir := os.Getenv("SAKI_PREVIEW_DIR"); dir != "" {
+		writeIssueOverviewInsetPreviews(t, dir)
 	}
 }
 
