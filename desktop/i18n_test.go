@@ -17,6 +17,148 @@ import (
 	"saki/desktop/locales"
 )
 
+func TestLanguageModeReopensFromInjectedSource(t *testing.T) {
+	a, _ := workspaceTestApp(t)
+	oldRead := loadLanguageMode
+	defer func() { loadLanguageMode = oldRead }()
+	calls := 0
+	loadLanguageMode = func() string {
+		calls++
+		if calls == 1 {
+			return "zh-Hans"
+		}
+		return "en"
+	}
+	a.languageMode = "zh-CN"
+	a.languageModeLoaded = true
+	a.openSettingsTab(settingsTabAppearance, settingsSourceRail)
+	if a.languageModeLoaded {
+		t.Fatal("opening General kept the old loaded language mode")
+	}
+	a.ensureLanguageMode()
+	if calls != 1 || a.languageMode != "zh-Hans" {
+		t.Fatalf("first General load = calls=%d mode=%q", calls, a.languageMode)
+	}
+	a.closeSettings()
+	a.openSettingsTab(settingsTabAppearance, settingsSourceRail)
+	a.ensureLanguageMode()
+	if calls != 2 || a.languageMode != "en" {
+		t.Fatalf("reopened General load = calls=%d mode=%q", calls, a.languageMode)
+	}
+}
+
+func TestGeneralLanguageUsesStableValuesAndPreservesState(t *testing.T) {
+	a, ct := workspaceTestApp(t)
+	ct.Draft = "keep the conversation draft"
+	a.openSettingsTab(settingsTabAppearance, settingsSourceRail)
+	a.settingsScroll.Y = 37
+	a.languageMode = ""
+	a.languageModeLoaded = true
+
+	oldApply := applyAppLocale
+	defer func() { applyAppLocale = oldApply }()
+	var applied []string
+	applyAppLocale = func(tag string) { applied = append(applied, tag) }
+
+	tr := ui.NewTester(a.view, 1040, 720)
+	tr.SetLocale("en")
+	tr.Frame()
+	if !tr.HasText("General") || !tr.HasText("Appearance") || !tr.HasText("Language") ||
+		!tr.HasText("System (English)") || !tr.HasText("English") || !tr.HasText("简体中文") {
+		t.Fatalf("General/Language labels missing: %v", tr.Texts())
+	}
+	if err := tr.Click("English"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if len(applied) != 1 || applied[0] != "en" || a.languageMode != "en" {
+		t.Fatalf("English action = applied=%v mode=%q", applied, a.languageMode)
+	}
+	if a.settingsTab != settingsTabAppearance || ct.Draft != "keep the conversation draft" {
+		t.Fatalf("English action reset UI state: tab=%q draft=%q", a.settingsTab, ct.Draft)
+	}
+	if err := tr.Click("System (English)"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if len(applied) != 2 || applied[1] != "" || a.languageMode != "" {
+		t.Fatalf("System action = applied=%v mode=%q", applied, a.languageMode)
+	}
+	if ct.Draft != "keep the conversation draft" {
+		t.Fatalf("System action reset UI state: draft=%q", ct.Draft)
+	}
+
+	tr.SetLocale("zh-Hans")
+	tr.Frame()
+	if !tr.HasText("通用") || !tr.HasText("外观") || !tr.HasText("语言") ||
+		!tr.HasText("系统（简体中文）") || !tr.HasText("简体中文") || !tr.HasText("English") {
+		t.Fatalf("Chinese General/Language labels missing: %v", tr.Texts())
+	}
+	if a.languageMode != "" || a.settingsTab != settingsTabAppearance ||
+		ct.Draft != "keep the conversation draft" {
+		t.Fatalf("Chinese render changed state: mode=%q tab=%q draft=%q", a.languageMode, a.settingsTab, ct.Draft)
+	}
+}
+
+func TestLanguageSwitchKeepsNonzeroSettingsScrollAndActualFocus(t *testing.T) {
+	a, _ := workspaceTestApp(t)
+	config := connectionConfig{Version: 1, API: connectionAPIChatCompletions, Endpoint: "https://provider.example.invalid/v1/very/long/endpoint", APIKey: "fixture", Model: "fixture", ContextTokens: 1000, OutputTokens: 100, WorkingDirectory: t.TempDir(), MaxActiveTasks: 2}
+	a.connectionForm = newConnectionSettings(&config, config.WorkingDirectory)
+	a.connectionSaved = &config
+	a.connectionEffective = &config
+	a.connectionForm.Error = strings.Repeat("A long form error that scrolls the settings page. ", 12)
+	a.openSettingsTab(settingsTabConnection, settingsSourceRail)
+	a.connectionForm.focusField = "Endpoint"
+	tr := ui.NewTester(a.view, 1040, 720)
+	tr.Frame()
+	if !tr.Focused("API endpoint") {
+		t.Fatalf("API endpoint did not take focus: %v", tr.Texts())
+	}
+	tr.Scroll(520, 400, 0, 2000)
+	tr.Frame()
+	scrollBefore := a.settingsScroll.Y
+	if scrollBefore <= 0 {
+		t.Fatalf("settings page did not scroll: %v", scrollBefore)
+	}
+	tr.SetLocale("zh-Hans")
+	tr.Frame()
+	if a.settingsScroll.Y != scrollBefore || a.settingsTab != settingsTabConnection {
+		t.Fatalf("language switch changed scroll/category: scroll=%v/%v tab=%q", scrollBefore, a.settingsScroll.Y, a.settingsTab)
+	}
+	if !tr.Focused("API endpoint") {
+		t.Fatalf("language switch lost actual focus: %v", tr.Texts())
+	}
+}
+
+func TestLanguageModeReadUsesInjectedSource(t *testing.T) {
+	oldRead := loadLanguageMode
+	defer func() { loadLanguageMode = oldRead }()
+	loadLanguageMode = func() string { return "zh-Hans" }
+	a := &appModel{}
+	a.ensureLanguageMode()
+	if a.languageMode != "zh-Hans" || !a.languageModeLoaded {
+		t.Fatalf("injected language mode = %q loaded=%v", a.languageMode, a.languageModeLoaded)
+	}
+	b := &appModel{}
+	loadLanguageMode = func() string { return "zh-CN" }
+	b.ensureLanguageMode()
+	if b.languageMode != "zh-CN" {
+		t.Fatalf("unsupported explicit tag was discarded: %q", b.languageMode)
+	}
+	if got := languageModeIndex("zh-CN"); got != 1 {
+		t.Fatalf("zh-CN maps to %d, want Hans", got)
+	}
+	if got := languageModeIndex("zh-SG"); got != 1 {
+		t.Fatalf("zh-SG maps to %d, want Hans", got)
+	}
+	if got := languageModeIndex("zh-Hant"); got != 2 {
+		t.Fatalf("zh-Hant maps to %d, want English fallback", got)
+	}
+	if got := languageModeIndex("fr"); got != 2 {
+		t.Fatalf("fr maps to %d, want English fallback", got)
+	}
+}
+
 func TestCatalogLanguageMatchingAndFallback(t *testing.T) {
 	supported := []string{"en", "zh-Hans"}
 	for _, preferred := range []string{"zh-Hans", "zh-CN", "zh-SG"} {

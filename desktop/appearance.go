@@ -35,22 +35,22 @@ func resolveAppearanceDark(mode string, systemDark bool) bool {
 	}
 }
 
-func appearanceModeLabel(mode string) string {
+func appearanceModeIndex(mode string) int {
 	switch normalizeAppearanceMode(mode) {
 	case appearanceLight:
-		return "Light"
+		return 1
 	case appearanceDark:
-		return "Dark"
+		return 2
 	default:
-		return "System"
+		return 0
 	}
 }
 
-func appearanceModeFromLabel(label string) string {
-	switch strings.TrimSpace(label) {
-	case "Light":
+func appearanceModeFromIndex(index int) string {
+	switch index {
+	case 1:
 		return appearanceLight
-	case "Dark":
+	case 2:
 		return appearanceDark
 	default:
 		return appearanceSystem
@@ -69,14 +69,12 @@ func (a *appModel) openAppearance() {
 func (a *appModel) setAppearanceMode(mode string) {
 	mode = normalizeAppearanceMode(mode)
 	if a.appearanceMode == mode {
-		a.appearanceChoice = appearanceModeLabel(mode)
 		if a.appearanceError != "" {
 			a.saveAppearance()
 		}
 		return
 	}
 	a.appearanceMode = mode
-	a.appearanceChoice = appearanceModeLabel(mode)
 	a.appearanceStatus = "Applied."
 	a.appearanceError = ""
 	if a.demo {

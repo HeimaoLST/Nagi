@@ -205,14 +205,15 @@ type appModel struct {
 	submissionInFlight       int
 	metadataInFlight         int
 
-	appearanceMode   string
-	appearanceChoice string
-	appearanceStatus string
-	appearanceError  string
-	systemDark       bool
-	storeInitAllowed bool
-	localSaveErr     string
-	localSavePrevErr string
+	appearanceMode     string
+	languageMode       string
+	languageModeLoaded bool
+	appearanceStatus   string
+	appearanceError    string
+	systemDark         bool
+	storeInitAllowed   bool
+	localSaveErr       string
+	localSavePrevErr   string
 
 	issueFormOpen                 bool
 	issueDetailOpen               map[string]bool

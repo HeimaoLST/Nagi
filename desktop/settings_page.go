@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/i18n"
 	"github.com/egoist/mygo/ui"
 
 	"saki/desktop/locales"
@@ -26,6 +28,46 @@ const (
 	settingsSourceAux           = "aux"
 	settingsSourceLink          = "link"
 )
+
+var applyAppLocale = mygo.App.SetLocale
+var loadLanguageMode = readSavedLanguageTag
+
+func normalizeLanguageMode(mode string) string {
+	return strings.TrimSpace(mode)
+}
+
+func languageModeIndex(mode string) int {
+	mode = strings.TrimSpace(mode)
+	if mode == "" {
+		return 0
+	}
+	if i18n.Match([]string{mode}, []string{"zh-Hans", "en"}) == "zh-Hans" {
+		return 1
+	}
+	return 2
+}
+
+func languageSelfName(msgs locales.Messages, locale string) string {
+	if locale == "zh-Hans" {
+		return msgs.LanguageChinese()
+	}
+	return msgs.LanguageEnglish()
+}
+
+func (a *appModel) ensureLanguageMode() {
+	if a.languageModeLoaded {
+		return
+	}
+	a.languageMode = normalizeLanguageMode(loadLanguageMode())
+	a.languageModeLoaded = true
+}
+
+func (a *appModel) setLanguageMode(mode string) {
+	mode = normalizeLanguageMode(mode)
+	applyAppLocale(mode)
+	a.languageMode = mode
+	a.languageModeLoaded = true
+}
 
 func (a *appModel) ensureSettingsProfileEditor(contactID string) *contactProfileEditor {
 	ct := a.contactByID(contactID)
@@ -95,6 +137,9 @@ func (a *appModel) openSettingsTab(tab, source string) {
 	}
 	a.settingsOpen = true
 	a.settingsTab = tab
+	if tab == settingsTabAppearance {
+		a.languageModeLoaded = false
+	}
 	if tab == settingsTabAdvanced {
 		a.startupDetailsOpen = true
 	}
@@ -294,14 +339,14 @@ func (a *appModel) settingsSidebar(c *ui.Context, t *ui.Theme, narrow bool) {
 		}
 		if narrow {
 			ui.Row(c).Gap(4).Wrap().Children(func() {
-				nav(msgs.SettingsAppearance(), settingsTabAppearance)
+				nav(msgs.SettingsGeneral(), settingsTabAppearance)
 				nav(msgs.SettingsConnection(), settingsTabConnection)
 				nav(msgs.SettingsContact(), settingsTabContact)
 				nav(msgs.SettingsAdvanced(), settingsTabAdvanced)
 			})
 		} else {
 			ui.Column(c).Gap(4).Children(func() {
-				nav(msgs.SettingsAppearance(), settingsTabAppearance)
+				nav(msgs.SettingsGeneral(), settingsTabAppearance)
 				nav(msgs.SettingsConnection(), settingsTabConnection)
 				nav(msgs.SettingsContact(), settingsTabContact)
 				nav(msgs.SettingsAdvanced(), settingsTabAdvanced)
@@ -335,18 +380,14 @@ func (a *appModel) settingsMain(c *ui.Context, t *ui.Theme, narrow bool) {
 
 func (a *appModel) settingsAppearanceContent(c *ui.Context, t *ui.Theme) {
 	msgs := locales.In(c.Locale())
-	ui.Text(c, msgs.SettingsAppearance()).FontSize(typePageTitle).FontWeight(500).TextColor(t.Text)
+	a.ensureLanguageMode()
+	ui.Text(c, msgs.SettingsGeneral()).FontSize(typePageTitle).FontWeight(500).TextColor(t.Text)
+	ui.Text(c, msgs.SettingsAppearance()).FontSize(typeGroupTitle).FontWeight(500).TextColor(t.TextMuted)
 	ui.Text(c, msgs.SettingsAppearanceHint()).FontSize(typeMeta).LineHeight(1.5).TextColor(t.TextMuted)
-	selected := 0
-	switch normalizeAppearanceMode(a.appearanceMode) {
-	case appearanceLight:
-		selected = 1
-	case appearanceDark:
-		selected = 2
-	}
-	appearance := segmentedSelection(c, &selected, "System", "Light", "Dark").Label("Appearance mode").FontSize(typeAction)
+	selected := appearanceModeIndex(a.appearanceMode)
+	appearance := segmentedSelection(c, &selected, msgs.AppearanceSystem(), msgs.AppearanceLight(), msgs.AppearanceDark()).Label(msgs.AppearanceMode()).FontSize(typeAction)
 	if appearance.Changed() {
-		a.setAppearanceMode([]string{appearanceSystem, appearanceLight, appearanceDark}[selected])
+		a.setAppearanceMode(appearanceModeFromIndex(selected))
 	}
 	if a.appearanceStatus != "" {
 		ui.Text(c, a.appearanceStatus).FontSize(typeAction).TextColor(t.Success)
@@ -355,6 +396,19 @@ func (a *appModel) settingsAppearanceContent(c *ui.Context, t *ui.Theme) {
 		ui.Text(c, a.appearanceError).FontSize(typeBody).LineHeight(1.5).TextColor(t.Danger)
 		secondaryButton(c, "Retry save").OnClick(func() { a.saveAppearance() })
 	}
+	ui.Text(c, msgs.SettingsLanguage()).FontSize(typeGroupTitle).FontWeight(500).TextColor(t.TextMuted)
+	ui.Text(c, msgs.LanguageSystemHint()).FontSize(typeMeta).LineHeight(1.5).TextColor(t.TextMuted)
+	languageModes := []string{"", "zh-Hans", "en"}
+	languageSelected := languageModeIndex(a.languageMode)
+	language := segmentedSelection(c, &languageSelected,
+		msgs.LanguageSystem(languageSelfName(msgs, c.Locale())),
+		msgs.LanguageChinese(),
+		msgs.LanguageEnglish(),
+	).Label(msgs.SettingsLanguage()).FontSize(typeAction)
+	if language.Changed() {
+		a.setLanguageMode(languageModes[languageSelected])
+	}
+	ui.Text(c, msgs.LanguageHint()).FontSize(typeMeta).LineHeight(1.5).TextColor(t.TextMuted)
 }
 
 func (a *appModel) settingsConnectionContent(c *ui.Context, t *ui.Theme) {

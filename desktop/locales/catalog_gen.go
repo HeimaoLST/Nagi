@@ -230,6 +230,160 @@ func (msgs Messages) SettingsAppearanceHint() string {
 	return Catalog.Format(msgs.locale, "settingsAppearanceHint", nil)
 }
 
+// SettingsGeneral says "General"
+// in the language the app shows.
+//
+// The General settings category.
+func SettingsGeneral() string { return In(i18n.Locale()).SettingsGeneral() }
+
+// SettingsGeneral says "General"
+// in the language of msgs.
+//
+// The General settings category.
+func (msgs Messages) SettingsGeneral() string {
+	return Catalog.Format(msgs.locale, "settingsGeneral", nil)
+}
+
+// SettingsLanguage says "Language"
+// in the language the app shows.
+//
+// The Language section in General settings.
+func SettingsLanguage() string { return In(i18n.Locale()).SettingsLanguage() }
+
+// SettingsLanguage says "Language"
+// in the language of msgs.
+//
+// The Language section in General settings.
+func (msgs Messages) SettingsLanguage() string {
+	return Catalog.Format(msgs.locale, "settingsLanguage", nil)
+}
+
+// AppearanceSystem says "System"
+// in the language the app shows.
+//
+// The System appearance mode.
+func AppearanceSystem() string { return In(i18n.Locale()).AppearanceSystem() }
+
+// AppearanceSystem says "System"
+// in the language of msgs.
+//
+// The System appearance mode.
+func (msgs Messages) AppearanceSystem() string {
+	return Catalog.Format(msgs.locale, "appearanceSystem", nil)
+}
+
+// AppearanceLight says "Light"
+// in the language the app shows.
+//
+// The Light appearance mode.
+func AppearanceLight() string { return In(i18n.Locale()).AppearanceLight() }
+
+// AppearanceLight says "Light"
+// in the language of msgs.
+//
+// The Light appearance mode.
+func (msgs Messages) AppearanceLight() string {
+	return Catalog.Format(msgs.locale, "appearanceLight", nil)
+}
+
+// AppearanceDark says "Dark"
+// in the language the app shows.
+//
+// The Dark appearance mode.
+func AppearanceDark() string { return In(i18n.Locale()).AppearanceDark() }
+
+// AppearanceDark says "Dark"
+// in the language of msgs.
+//
+// The Dark appearance mode.
+func (msgs Messages) AppearanceDark() string {
+	return Catalog.Format(msgs.locale, "appearanceDark", nil)
+}
+
+// AppearanceMode says "Appearance mode"
+// in the language the app shows.
+//
+// The accessible name of the appearance mode selector.
+func AppearanceMode() string { return In(i18n.Locale()).AppearanceMode() }
+
+// AppearanceMode says "Appearance mode"
+// in the language of msgs.
+//
+// The accessible name of the appearance mode selector.
+func (msgs Messages) AppearanceMode() string {
+	return Catalog.Format(msgs.locale, "appearanceMode", nil)
+}
+
+// LanguageSystem says "System ({language})"
+// in the language the app shows.
+//
+// The System language mode, with the effective language.
+func LanguageSystem(language string) string { return In(i18n.Locale()).LanguageSystem(language) }
+
+// LanguageSystem says "System ({language})"
+// in the language of msgs.
+//
+// The System language mode, with the effective language.
+func (msgs Messages) LanguageSystem(language string) string {
+	return Catalog.Format(msgs.locale, "languageSystem", map[string]any{"language": language})
+}
+
+// LanguageSystemHint says "Follows the macOS preferred language."
+// in the language the app shows.
+//
+// Explains that System follows the macOS preferred language.
+func LanguageSystemHint() string { return In(i18n.Locale()).LanguageSystemHint() }
+
+// LanguageSystemHint says "Follows the macOS preferred language."
+// in the language of msgs.
+//
+// Explains that System follows the macOS preferred language.
+func (msgs Messages) LanguageSystemHint() string {
+	return Catalog.Format(msgs.locale, "languageSystemHint", nil)
+}
+
+// LanguageChinese says "简体中文"
+// in the language the app shows.
+//
+// The Simplified Chinese language name.
+func LanguageChinese() string { return In(i18n.Locale()).LanguageChinese() }
+
+// LanguageChinese says "简体中文"
+// in the language of msgs.
+//
+// The Simplified Chinese language name.
+func (msgs Messages) LanguageChinese() string {
+	return Catalog.Format(msgs.locale, "languageChinese", nil)
+}
+
+// LanguageEnglish says "English"
+// in the language the app shows.
+//
+// The English language name.
+func LanguageEnglish() string { return In(i18n.Locale()).LanguageEnglish() }
+
+// LanguageEnglish says "English"
+// in the language of msgs.
+//
+// The English language name.
+func (msgs Messages) LanguageEnglish() string {
+	return Catalog.Format(msgs.locale, "languageEnglish", nil)
+}
+
+// LanguageHint says "Changes apply immediately."
+// in the language the app shows.
+//
+// The hint below the Language heading.
+func LanguageHint() string { return In(i18n.Locale()).LanguageHint() }
+
+// LanguageHint says "Changes apply immediately."
+// in the language of msgs.
+//
+// The hint below the Language heading.
+func (msgs Messages) LanguageHint() string {
+	return Catalog.Format(msgs.locale, "languageHint", nil)
+}
+
 // CopyMessageLabel says "Copy message"
 // in the language the app shows.
 //
