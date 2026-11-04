@@ -171,3 +171,31 @@ func TestPreviewIssueWorkLocalized(t *testing.T) {
 	detailTr.Frame()
 	writePreviewPNG(t, filepath.Join(dir, "issue-detail-zh-Hans-light-1040x720.png"), detailTr.Image())
 }
+
+func TestPreviewPhase5bLocalized(t *testing.T) {
+	dir := os.Getenv("SAKI_PREVIEW_DIR")
+	if dir == "" {
+		t.Skip("set SAKI_PREVIEW_DIR for the localized context/result previews")
+	}
+	tc := &taskContext{}
+	if _, err := tc.AddSnippet("Release notes", "Line one"); err != nil {
+		t.Fatal(err)
+	}
+	tc.openSnippetForm()
+	tc.formName = ""
+	tc.formError = errTaskContextName
+	contextTr := taskContextTester(tc, false)
+	contextTr.SetLocale("zh-Hans")
+	contextTr.Frame()
+	writePreviewPNG(t, filepath.Join(dir, "task-context-error-zh-Hans-light-1040x720.png"), contextTr.Image())
+
+	state := &issueResultPanelState{
+		RunNumber: 1, RunGoal: "Ship results", RunStatus: issueExecutionCompleted,
+		Response: "Recorded result body.",
+		Files:    []issueResultFile{{Path: "/tmp/result.md", WorkingDirectory: "/tmp", ToolName: "write", CallID: "call-1"}},
+	}
+	resultTr := issueResultPanelTester(state, issueResultPanelActions{}, 1040, 720, false)
+	resultTr.SetLocale("zh-Hans")
+	resultTr.Frame()
+	writePreviewPNG(t, filepath.Join(dir, "result-panel-zh-Hans-light-1040x720.png"), resultTr.Image())
+}

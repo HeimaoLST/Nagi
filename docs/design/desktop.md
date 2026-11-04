@@ -11,7 +11,7 @@
 更新日期：2026-11-04。当前唯一设计规范由 #216 维护：[Desktop workbench](desktop-workbench.md)。候选实现与合入状态以 PR 和 dev 为准。本地实现的候选事实见下方 [#219 节](#detail-navigation-219)。本文件不再把旧 #90/#130 的“所有次动作有底面”“右侧覆盖抽屉”等当作当前规范，那些内容只保留为历史实现记录，避免双标准。
 
 - **规范边界**：内容优先、输入集中在 composer、低频工具可发现、长内容主区阅读、右侧非模态详情、窄窗应用内页面与明确返回，均以 #216 为准；实现只引用该规范，不在本文件另立一套数值或组件规则。
-- **组件与文案**：复用当前固定 MyGo 稳定版和现有 theme 角色；不允许为单个任务另造兼容框架。实际版本、控件 API、palette 与必要偏离以 #98/#218 的实现事实及 #216 规范为准。
+- **组件与文案**：复用当前固定 MyGo 稳定版和现有 theme 角色；不允许为单个任务另造兼容框架。实际版本、控件 API、palette 与必要偏离以 #281/#218 的候选实现事实及 #216 规范为准；#98 保留其升级阶段记录。
 - **Disabled 与原因**：沿 MyGo 官方 disabled 语义和默认 opacity，不为候选 4.5 对比度加 patch，也不改禁用行为。浅色约 2.94:1、深色约 4.33:1 记录为当前适配事实，不列为本轮必过门槛；真实禁用/AX 保留，必要原因、当前有效模型和失败/容量信息必须在相邻可读文字中可见，不能只藏在不可聚焦 tooltip。
 - **历史约束**：本文早期 #90/#130 的字号、覆盖抽屉、所有次动作底面等具体数值和布局仍可作为历史证据，但不再约束当前实现。发现与 #216 冲突时，按 #216 记录偏离并更新对应实现事实。
 
@@ -499,7 +499,7 @@ type resolvedTheme struct {
 
 ### 依赖快照与上游差异（只读核对，不作为冻结政策）
 
-- 历史快照：本设计早期版本曾依赖 `github.com/egoist/mygo v0.4.9-0.20261014025635-fea932a7a2a9`。2026-10-30 #98 曾升级到官方 `v0.7.3`（tag commit `6f28d7bb07b31177cf218e51586f6a5e99b38016`，Go 1.27.3）；2026-11-04 #281 候选进一步使用 `v0.7.4`，当前语言、可见品牌和补丁边界见 **#281 语言与 Nagi 可见品牌**。#98 节保留该轮历史验证。
+- 历史快照：本设计早期版本曾依赖 `github.com/egoist/mygo v0.4.9-0.20261014025635-fea932a7a2a9`。2026-10-30 #98 曾升级到官方 `v0.7.3`（tag commit `6f28d7bb07b31177cf218e51586f6a5e99b38016`，Go 1.27.3）；2026-11-04 #281 候选进一步使用 `v0.7.4`，当前语言、可见品牌和补丁边界见 [#281 语言与 Nagi 可见品牌](#nagi-language-281)。#98 节保留该轮历史验证。
 - 旧核对记录（已被 #98 取代）：早期曾只读核对 main commit `163d50e2acc1b5361d29bc6d26a8a0e11ebdb847`（解析为 `v0.5.6-0.20261020115920-163d50e2acc1`）；该记录不代表当前依赖。
 - 已核对差异：
   - `ui.Theme` 字段、`Context.Theme/SetTheme`、`ui.Preferences`、`mygo.Theme.SetSource/Source/IsDark/OnUpdated` 的语义未变。
@@ -939,12 +939,15 @@ type resolvedTheme struct {
 新增 `issue_detail_ui_test.go` 用例在 1040×720 默认 340、1040×720 最小 280、720×640 overlay 三种实际工作栏宽度的明暗主题下，用有界滚动把整张执行卡带入可读区域，同一 frame 校验标题/revision 有明确分隔且不越界、两个结果操作完整可见且不重叠；每张卡实际点击 `Open result` 核对对应 execution ID，并通过既有 `Close results` 检查返回层与入口焦点。图片复用现有 `SAKI_PREVIEW_DIR` 分 before/after 外部目录生成，旧实现保存几何 RED，修复后 GREEN。这些是 `ui.Tester` headless 结果，不是原生窗口、输入法或完整发布验收；before/after PNG、日志和 SHA 证据在 `/private/tmp/saki-gui-214/`。
 
 
+<a id="nagi-language-281"></a>
+
 ## #281 语言与 Nagi 可见品牌（候选实现事实与待验，2026-11-04）
 
 本节记录 `agent/gui/281-nagi-i18n-r3` 的模块事实，范围由 [完整 r3](https://github.com/HeimaoLST/Saki/issues/281#issuecomment-6631308418) 定义；当前组合包含 #279 几何、#295 生命周期 fixture 与 #297 CI 预算。I1 的局部中英接入不是完整交付；本候选仍以 [PR #299](https://github.com/HeimaoLST/Saki/pull/299) 的精确源、门禁和后续验收为准，不宣称已进入 dev 或完成 #273/#156 真人验收。
 
 - **单一语言来源**：复用 `desktop/mygo.json`、`locales/doc.go`、`en.json` / `zh-Hans.json` 和官方 `mygo generate` 的 typed catalog，逐帧使用 `locales.In(c.Locale())`。没有另一个 i18n 库、全局 locale provider 或 GUI locale 文件。`locale_darwin.go` 只读与 MyGo 相同的 current-application / current-user / any-host 自有 `AppleLanguages`；偏好缺失表示 System，已有 tag 表示显式选择，不能比较有效语言与首选语言来猜模式。写入仅调用公开 `App.SetLocale`，System 传空 tag；保留 `CGO_ENABLED=0` 路径。
 - **General 与状态保持**：沿用稳定 `appearance` route 展示 General / 通用，其内为外观与语言。仅提供 System（显示当前有效语言）、简体中文、English，业务值固定为空 tag、`zh-Hans`、`en`；控件译文不作为模型、API 或筛选 ID。模式镜像只属于当前 UI，重开 General 从唯一偏好源再读；显式 Hans 切 System 即使有效语言未变，也更新模式。语言切换不重建联系人、表单或 Runtime 会话，不主动 Save/Apply/Test/发送。新联系人默认名只在创建时取当帧语言，已保存名称、默认联系人 Saki、Purpose/Instructions/Draft、用户与 Agent 内容不重写。
+- **联系人选择的身份**：设置内联系人 picker 的官方 `SelectBase` value 直接使用唯一 `settingsContactID`，本地化 label 仅用于 trigger/item/tooltip/公开 `Value(display)`；不以显示名反查身份，也不维护另一份 picker ID 镜像。同名与“甲（1）”等合法名称可以显示相同 label，键盘选择和保存仍按各自 ContactID；raw ID 不作显示值。三联系人 Hans End/Enter 原错选 A 的 RED、修复后只保存 C 的 GREEN，以及 A/B 草稿、返回和长列表行为已有定向证据。公开 Tester 无 AX 树 getter，本轮未独立读取 native AX，不把视觉 Texts 当作完整 AX 验收。
 - **说明与系统文本**：语言下仅说明“部分系统窗口会在重启后使用新语言。” / “Some system windows use the new language after restarting.”。MyGo 应用 UI 与框架角色菜单沿官方实时语言路径更新；AppKit/WebKit 自身文本的下一次启动限制另行保留。不添加重启按钮或自动重启，不通过重启刷新页面。
 - **可见品牌与数据**：`main.go` 在 helper CLI 早返回之后、`Run` 之前设置应用名 Nagi，主窗口标题与 rail 品牌为 Nagi；打包脚本的 `CFBundleDisplayName`、`CFBundleName` 与 manifest 产品/显示字段一致。`Saki.app` / `Saki.app.zip`、`CFBundleExecutable=Saki`、`dev.saki.desktop`、`SAKI_*`、`Saki-runtime` 及内部 Go/Rust 标识不改。联系人与会话仍从显式 Saki 数据路径读取；当前应用无框架 `App.Path(UserData/Cache/Logs)` 消费，不为品牌创建迁移或复制目录。Finder/Dock/原生菜单的实际显示仍需同一准确候选包验收。
 - **SDK 与补丁**：候选固定官方 MyGo `v0.7.4`，沿 `scripts/gui-go.py` 的临时模块/校验 hash 入口保留 Split release、Editor selection release 与 Markdown LinkElement 观察三份补丁；Editor/Markdown 按该 tag 实际行位重定基，不增加临时 nil guard或私有框架 fork。没有改 Runtime 协议、核心执行循环或存储格式。

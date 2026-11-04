@@ -1342,7 +1342,7 @@ func TestIssueResultPageReloadErrorKeepsReadableBody(t *testing.T) {
 		LoadError: "Execution history is unavailable: injected",
 		Notice:    "Runtime session working directory is unavailable; file paths are shown as reported.",
 		Panel: issueResultPanelState{
-			RunLabel: "Run 2: Reload error", RunStatus: "Completed",
+			RunNumber: 2, RunGoal: "Reload error", RunStatus: issueExecutionCompleted,
 			Response: "previous readable body\n", Files: []issueResultFile{file},
 		},
 	}
@@ -1366,7 +1366,7 @@ func issueResultAppPreview(scene string, width int) *appModel {
 		Open: true, OwnerContactID: ct.ID, IssueID: ct.SelectedIssueID, ExecutionID: "exec-preview",
 		SessionID: "session-preview", TaskID: "task-preview", MessageID: "msg-preview", Generation: 1,
 		Panel: issueResultPanelState{
-			RunLabel: "Run 2: Ship visible results", RunStatus: "Completed",
+			RunNumber: 2, RunGoal: "Ship visible results", RunStatus: issueExecutionCompleted,
 			Response: "# Recorded output\n\nResult body with `code`.\n\n```go\nfunc main() {}\n```\n",
 			Files:    []issueResultFile{file},
 		},
@@ -1434,7 +1434,8 @@ func issueResultAppPreview(scene string, width int) *appModel {
 		})
 	case "multiple":
 		second := issueResultPanelFixtureFile("preview-two", file.Path, `{"path":"/Users/you/Workspace/Saki/report.txt","applied":1}`)
-		page.Panel.RunLabel = "Run 3: Ship visible results"
+		page.Panel.RunNumber = 3
+		page.Panel.RunGoal = "Ship visible results"
 		page.Panel.Files = []issueResultFile{file, second}
 	}
 	a.issueResult = page
@@ -1550,7 +1551,7 @@ func TestIssueResultPageReloadDuringCheckDrainsStaleCallback(t *testing.T) {
 		Open: true, OwnerContactID: ct.ID, IssueID: issue.ID, ExecutionID: execution.ID,
 		SessionID: "old-session", TaskID: "old-task", MessageID: "old-message", Generation: 1,
 		Panel: issueResultPanelState{
-			RunLabel: "Run 1: old label", RunStatus: "Running",
+			RunNumber: 1, RunGoal: "old label", RunStatus: issueExecutionRunning,
 			Files: []issueResultFile{file}, Selected: key, InspectFor: key,
 		},
 	}
@@ -1574,7 +1575,7 @@ func TestIssueResultPageReloadDuringCheckDrainsStaleCallback(t *testing.T) {
 		page := app.issueResult
 		checking = page.Panel.Checking
 		sessionID, taskID, messageID = page.SessionID, page.TaskID, page.MessageID
-		status, runLabel, loadError = page.Panel.RunStatus, page.Panel.RunLabel, page.LoadError
+		status, runLabel, loadError = page.Panel.RunStatus, page.Panel.RunGoal, page.LoadError
 	})
 	if checking {
 		t.Fatal("reload left an in-flight Check marked as checking")
@@ -1582,7 +1583,7 @@ func TestIssueResultPageReloadDuringCheckDrainsStaleCallback(t *testing.T) {
 	if sessionID != "new-session" || taskID != "new-task" || messageID != "new-message" {
 		t.Fatalf("reload kept stale execution identity: %s/%s/%s", sessionID, taskID, messageID)
 	}
-	if status != issueExecutionLabel(execution) || runLabel != "Run 1: reload while checking" {
+	if status != execution.Status || runLabel != "reload while checking" {
 		t.Fatalf("reload kept stale run label/status: %q / %q", runLabel, status)
 	}
 	if loadError == "" {

@@ -15,6 +15,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	goruntime "runtime"
+	"strconv"
 	"strings"
 	"syscall"
 	"unicode/utf8"
@@ -281,7 +282,8 @@ func requestRevealIssueResultWithSystem(path string) error {
 // local reading mode (ReaderKey) and renders matching results on the next
 // frame. It contains no file I/O, task dispatch or persistence.
 type issueResultPanelState struct {
-	RunLabel           string
+	RunNumber          int
+	RunGoal            string
 	RunStatus          string
 	RunDetail          string
 	Response           string
@@ -365,11 +367,11 @@ func issueResultPanel(c *ui.Context, state *issueResultPanelState, actions issue
 		})
 	}
 	root.Children(func() {
-		if state.RunLabel != "" {
-			ui.Text(c, state.RunLabel).FontSize(14).TextColor(th.TextMuted)
+		if state.RunGoal != "" {
+			ui.Text(c, locales.In(c.Locale()).ResultRunLabel(strconv.Itoa(state.RunNumber), state.RunGoal)).FontSize(14).TextColor(th.TextMuted)
 		}
 		if state.RunStatus != "" {
-			ui.Text(c, state.RunStatus).FontSize(typeAction).FontWeight(500).TextColor(th.TextMuted)
+			ui.Text(c, issueExecutionText(locales.In(c.Locale()), state.RunStatus)).FontSize(typeAction).FontWeight(500).TextColor(th.TextMuted)
 		}
 		if state.RunDetail != "" {
 			ui.Text(c, state.RunDetail).FontSize(14).LineHeight(1.5).TextColor(th.Warning)
@@ -377,9 +379,9 @@ func issueResultPanel(c *ui.Context, state *issueResultPanelState, actions issue
 
 		result := ui.Column(c).AlignSelf(ui.Stretch).MinWidth(0).Padding(12).Radius(th.Radius).Background(th.Surface).Gap(8)
 		result.Children(func() {
-			ui.Text(c, "Result").FontSize(typeAction).FontWeight(500).TextColor(th.Text)
+			ui.Text(c, locales.In(c.Locale()).ResultHeading()).FontSize(typeAction).FontWeight(500).TextColor(th.Text)
 			if state.Response == "" {
-				ui.Text(c, "No assistant response was recorded for this run.").FontSize(14).LineHeight(1.5).TextColor(th.TextMuted)
+				ui.Text(c, locales.In(c.Locale()).ResultNoAssistant()).FontSize(14).LineHeight(1.5).TextColor(th.TextMuted)
 				return
 			}
 			markdownReader(c, state.Response, markdownReaderOptions{
@@ -395,9 +397,9 @@ func issueResultPanel(c *ui.Context, state *issueResultPanelState, actions issue
 		})
 
 		ui.Column(c).AlignSelf(ui.Stretch).MinWidth(0).Gap(8).Children(func() {
-			ui.Text(c, "Reported files").FontSize(typeAction).FontWeight(500).TextColor(th.Text)
+			ui.Text(c, locales.In(c.Locale()).ResultReportedFiles()).FontSize(typeAction).FontWeight(500).TextColor(th.Text)
 			if len(state.Files) == 0 {
-				ui.Text(c, "No files were reported for this run.").FontSize(14).LineHeight(1.5).TextColor(th.TextMuted)
+				ui.Text(c, locales.In(c.Locale()).ResultNoFiles()).FontSize(14).LineHeight(1.5).TextColor(th.TextMuted)
 				return
 			}
 			for index, file := range state.Files {
@@ -448,11 +450,11 @@ func issueResultFileRow(c *ui.Context, th *ui.Theme, state *issueResultPanelStat
 	row.Children(func() {
 		ui.Row(c).Wrap().AlignItems(ui.Center).Gap(8).Children(func() {
 			ui.Text(c, filepath.Base(file.Path)).FontSize(typeAction).FontWeight(500).TextColor(th.Text).MaxLines(2).Grow(1)
-			ui.Text(c, "Read file →").FontSize(typeAction).FontWeight(500).TextColor(th.TextMuted)
+			ui.Text(c, locales.In(c.Locale()).ResultReadFile()).FontSize(typeAction).FontWeight(500).TextColor(th.TextMuted)
 		})
 		ui.Text(c, file.Path).FontSize(14).TextColor(th.TextMuted).MaxLines(2)
-		ui.Text(c, "Working directory: "+file.WorkingDirectory).FontSize(typeAction).TextColor(th.TextMuted).MaxLines(2)
-		ui.Text(c, "Reported by "+file.ToolName).FontSize(typeAction).TextColor(th.TextMuted).MaxLines(2)
+		ui.Text(c, locales.In(c.Locale()).ResultWorkingDirectory(file.WorkingDirectory)).FontSize(typeAction).TextColor(th.TextMuted).MaxLines(2)
+		ui.Text(c, locales.In(c.Locale()).ResultReportedBy(file.ToolName)).FontSize(typeAction).TextColor(th.TextMuted).MaxLines(2)
 	})
 	if state.ReaderReturnKey == key {
 		row.Focus()
@@ -516,7 +518,7 @@ func issueResultReaderPage(c *ui.Context, th *ui.Theme, state *issueResultPanelS
 	}
 	root.Children(func() {
 		ui.Row(c).Padding(16, 16).AlignItems(ui.Center).Gap(8).Children(func() {
-			back := appTooltip(c, secondaryButton(c, "← Back to results").Label("Close reading"), "Back to results").Bind(&state.ReaderCloseHandle).OnClick(closeReader)
+			back := appTooltip(c, secondaryButton(c, locales.In(c.Locale()).ResultBackResults()).Label(locales.In(c.Locale()).ResultCloseReading()), locales.In(c.Locale()).ResultBackToResultsTooltip()).Bind(&state.ReaderCloseHandle).OnClick(closeReader)
 			if state.FocusReader {
 				back.Focus()
 				state.FocusReader = false
@@ -532,7 +534,7 @@ func issueResultReaderPage(c *ui.Context, th *ui.Theme, state *issueResultPanelS
 					CopyHandle: &state.CopyPathHandle,
 				})
 				issueResultReaderActions(c, th, state, actions, file)
-				ui.Text(c, "Current file: content may differ from this run").FontSize(typeAction).TextColor(th.TextMuted)
+				ui.Text(c, locales.In(c.Locale()).ResultCurrentFileDiff()).FontSize(typeAction).TextColor(th.TextMuted)
 				issueResultReaderPreview(c, th, state, actions, file, issueResultFileKey(file))
 				if state.SourceFor == issueResultFileKey(file) {
 					issueResultSourceView(c, th, state, actions, file)
@@ -601,11 +603,11 @@ func issueResultReaderPreview(c *ui.Context, th *ui.Theme, state *issueResultPan
 		inspection = state.Inspection
 	}
 	if state.Checking && state.InspectFor == key {
-		ui.Text(c, "Checking the current file…").FontSize(14).TextColor(th.TextMuted)
+		ui.Text(c, locales.In(c.Locale()).ResultCheckingFile()).FontSize(14).TextColor(th.TextMuted)
 	}
 	if inspection == nil {
 		if !state.Checking {
-			ui.Text(c, "Check the current file at this path to preview it.").FontSize(14).TextColor(th.TextMuted)
+			ui.Text(c, locales.In(c.Locale()).ResultCheckCurrentFile()).FontSize(14).TextColor(th.TextMuted)
 		}
 		return
 	}
@@ -619,7 +621,7 @@ func issueResultReaderPreview(c *ui.Context, th *ui.Theme, state *issueResultPan
 		return
 	}
 	if inspection.Preview == "" {
-		ui.Text(c, "Empty file (0 bytes).").FontSize(14).LineHeight(1.5).TextColor(th.TextMuted)
+		ui.Text(c, locales.In(c.Locale()).ResultEmptyFile()).FontSize(14).LineHeight(1.5).TextColor(th.TextMuted)
 	}
 	markdownReader(c, inspection.Preview, markdownReaderOptions{
 		PlainText:       !issueResultMarkdownFile(file.Path),
@@ -637,12 +639,12 @@ func issueResultReaderPreview(c *ui.Context, th *ui.Theme, state *issueResultPan
 func issueResultSourceView(c *ui.Context, th *ui.Theme, state *issueResultPanelState, actions issueResultPanelActions, file issueResultFile) {
 	source := ui.Column(c).AlignSelf(ui.Stretch).MinWidth(0).Gap(4)
 	source.Children(func() {
-		ui.Text(c, "Source & raw record").FontSize(typeAction).FontWeight(500).TextColor(th.Text)
-		ui.Text(c, "Working directory: "+file.WorkingDirectory).FontSize(typeAction).TextColor(th.TextMuted).MaxLines(2)
-		ui.Text(c, "Session: "+file.SessionID).FontSize(typeAction).TextColor(th.TextMuted).MaxLines(2)
-		ui.Text(c, "Task: "+file.TaskID).FontSize(typeAction).TextColor(th.TextMuted).MaxLines(2)
-		ui.Text(c, "Message: "+file.MessageID).FontSize(typeAction).TextColor(th.TextMuted).MaxLines(2)
-		ui.Text(c, "Call: "+file.CallID).FontSize(typeAction).TextColor(th.TextMuted).MaxLines(2)
+		ui.Text(c, locales.In(c.Locale()).ResultSourceRaw()).FontSize(typeAction).FontWeight(500).TextColor(th.Text)
+		ui.Text(c, locales.In(c.Locale()).ResultWorkingDirectory(file.WorkingDirectory)).FontSize(typeAction).TextColor(th.TextMuted).MaxLines(2)
+		ui.Text(c, locales.In(c.Locale()).ResultSessionLine(file.SessionID)).FontSize(typeAction).TextColor(th.TextMuted).MaxLines(2)
+		ui.Text(c, locales.In(c.Locale()).ResultTaskLine(file.TaskID)).FontSize(typeAction).TextColor(th.TextMuted).MaxLines(2)
+		ui.Text(c, locales.In(c.Locale()).ResultMessageLine(file.MessageID)).FontSize(typeAction).TextColor(th.TextMuted).MaxLines(2)
+		ui.Text(c, locales.In(c.Locale()).ResultCallLine(file.CallID)).FontSize(typeAction).TextColor(th.TextMuted).MaxLines(2)
 		ui.Scroll(c).MaxHeight(160).AlignSelf(ui.Stretch).Children(func() {
 			markdownReader(c, file.RawResult, markdownReaderOptions{
 				PlainText: true, CopyLabel: locales.In(c.Locale()).CopyToolRecordLabel(), CopyText: actions.CopyText,

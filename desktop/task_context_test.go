@@ -395,7 +395,7 @@ func exerciseTaskContextView(t *testing.T, dark bool) {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if !tr.HasText("context name is required") || !tr.HasText("Save snippet") {
+	if !tr.HasText("Enter a context name.") || !tr.HasText("Save snippet") {
 		t.Fatalf("validation error did not preserve the form: %v", tr.Texts())
 	}
 	if len(tc.snapshot()) != 2 {

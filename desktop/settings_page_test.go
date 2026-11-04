@@ -266,7 +266,7 @@ func TestSettingsPageCmdCommaFromIssueResultAndNestedReader(t *testing.T) {
 	a.issueResult = issueResultPage{
 		Open: true, OwnerContactID: a.selectedContact().ID, IssueID: issue.ID, ExecutionID: execution.ID,
 		Panel: issueResultPanelState{
-			RunLabel: "Run 1", RunStatus: "Completed", Files: []issueResultFile{file},
+			RunNumber: 1, RunStatus: issueExecutionCompleted, Files: []issueResultFile{file},
 			ReaderKey: key, FocusReader: true,
 		},
 	}
@@ -456,7 +456,7 @@ func TestSettingsPageCmdCommaFromIssueResultReturnsToResultControl(t *testing.T)
 	a.aux = "issue-result"
 	a.issueResult = issueResultPage{
 		Open: true, OwnerContactID: a.selectedContact().ID, IssueID: issue.ID, ExecutionID: execution.ID,
-		Panel: issueResultPanelState{RunLabel: "Run 1", RunStatus: "Completed", FocusClose: true},
+		Panel: issueResultPanelState{RunNumber: 1, RunStatus: issueExecutionCompleted, FocusClose: true},
 	}
 	a.windowWidth = 1040
 	tr := ui.NewTester(a.view, 1040, 720)
@@ -659,7 +659,7 @@ func TestSettingsPageCmdCommaFromReaderKeepsLongScrollAndFocusedControl(t *testi
 	a.issueResult = issueResultPage{
 		Open: true, OwnerContactID: a.selectedContact().ID, IssueID: issue.ID, ExecutionID: execution.ID,
 		Panel: issueResultPanelState{
-			RunLabel: "Run 1", RunStatus: "Completed", Files: []issueResultFile{file},
+			RunNumber: 1, RunStatus: issueExecutionCompleted, Files: []issueResultFile{file},
 			Inspection: &issueResultFileInspection{Exists: true, Regular: true, Preview: longPreview},
 			InspectFor: key, ReaderKey: key,
 		},
@@ -700,7 +700,7 @@ func TestSettingsPageCmdCommaFromResultReturnsToReloadControl(t *testing.T) {
 	issue := a.selectedContact().selectedIssue()
 	execution := issue.Executions[0]
 	a.aux = "issue-result"
-	a.issueResult = issueResultPage{Open: true, OwnerContactID: a.selectedContact().ID, IssueID: issue.ID, ExecutionID: execution.ID, Panel: issueResultPanelState{RunLabel: "Run 1", RunStatus: "Completed"}}
+	a.issueResult = issueResultPage{Open: true, OwnerContactID: a.selectedContact().ID, IssueID: issue.ID, ExecutionID: execution.ID, Panel: issueResultPanelState{RunNumber: 1, RunStatus: issueExecutionCompleted}}
 	a.windowWidth = 1040
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
@@ -738,7 +738,7 @@ func TestSettingsCmdCommaFromDynamicFileRowReturnsToSameRowAndReopens(t *testing
 	a.issueResult = issueResultPage{
 		Open: true, OwnerContactID: a.selectedContact().ID, IssueID: issue.ID, ExecutionID: execution.ID,
 		Panel: issueResultPanelState{
-			RunLabel: "Run 1", RunStatus: "Completed",
+			RunNumber: 1, RunStatus: issueExecutionCompleted,
 			Response: "# Result\n\n" + strings.Repeat("Long result body before reported files.\n\n", 50),
 			Files:    files, Inspection: &inspection, InspectFor: target,
 		},
@@ -851,7 +851,7 @@ func TestSettingsPageCmdCommaReturnsToReaderCopyPath(t *testing.T) {
 	file := issueResultFile{ExecutionID: execution.ID, SessionID: execution.SessionID, TaskID: execution.TaskID, MessageID: execution.MessageID, CallID: "copy-path", ToolName: "write", Path: "/tmp/copy-path.md", WorkingDirectory: "/tmp", RawResult: `{"path":"/tmp/copy-path.md"}`}
 	key := issueResultFileKey(file)
 	a.aux = "issue-result"
-	a.issueResult = issueResultPage{Open: true, OwnerContactID: a.selectedContact().ID, IssueID: issue.ID, ExecutionID: execution.ID, Panel: issueResultPanelState{RunLabel: "Run 1", RunStatus: "Completed", Files: []issueResultFile{file}, ReaderKey: key}}
+	a.issueResult = issueResultPage{Open: true, OwnerContactID: a.selectedContact().ID, IssueID: issue.ID, ExecutionID: execution.ID, Panel: issueResultPanelState{RunNumber: 1, RunStatus: issueExecutionCompleted, Files: []issueResultFile{file}, ReaderKey: key}}
 	a.windowWidth = 1040
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
@@ -936,7 +936,7 @@ func TestSettingsReturnKeepsReaderActions(t *testing.T) {
 	a.aux = "issue-result"
 	a.issueResult.Open = true
 	a.issueResult.Panel = issueResultPanelState{
-		RunLabel: "Run 1", RunStatus: "Completed", Files: []issueResultFile{file},
+		RunNumber: 1, RunStatus: issueExecutionCompleted, Files: []issueResultFile{file},
 		Inspection: &issueResultFileInspection{Path: file.Path, Exists: true, Regular: true, Preview: "preview"},
 		InspectFor: key, ReaderKey: key, SourceFor: key,
 	}

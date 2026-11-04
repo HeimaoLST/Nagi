@@ -466,8 +466,8 @@ func issueEvidenceText(issue *productIssue) string {
 	return "Completion not verified."
 }
 
-func issueExecutionText(msgs locales.Messages, execution *issueExecution) string {
-	switch execution.Status {
+func issueExecutionText(msgs locales.Messages, status string) string {
+	switch status {
 	case issueExecutionPending:
 		return msgs.IssueExecutionPending()
 	case issueExecutionNotDispatched:
@@ -484,8 +484,10 @@ func issueExecutionText(msgs locales.Messages, execution *issueExecution) string
 		return msgs.IssueExecutionFailed()
 	case issueExecutionInterrupted:
 		return msgs.IssueExecutionInterrupted()
-	default:
+	case issueExecutionUnknown:
 		return msgs.IssueExecutionUnknown()
+	default:
+		return status
 	}
 }
 

@@ -986,7 +986,7 @@ func (a *appModel) issueLatestResult(c *ui.Context, t *ui.Theme, ct *contact, is
 		return
 	}
 	ui.Text(c, msgs.IssueLatestExecution()).FontSize(typeGroupTitle).FontWeight(500).TextColor(t.TextMuted)
-	ui.Text(c, issueExecutionText(msgs, execution)).FontSize(14).TextColor(t.TextMuted)
+	ui.Text(c, issueExecutionText(msgs, execution.Status)).FontSize(14).TextColor(t.TextMuted)
 	text := strings.TrimSpace(ct.resultTextForExecution(execution))
 	work := workFor(ct, execution.TaskID)
 	switch {

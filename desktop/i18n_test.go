@@ -784,3 +784,59 @@ func TestIssueWorkLabelsFollowLocaleAndKeepTargets(t *testing.T) {
 		t.Fatalf("English issue detail did not return: %v", tr.Texts())
 	}
 }
+
+func TestTaskContextAndResultLabelsFollowLocale(t *testing.T) {
+	tc := &taskContext{}
+	item, err := tc.AddSnippet("Release notes", "Line one")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tc.previewID = item.ID
+	tr := taskContextTester(tc, false)
+	tr.SetLocale("zh-Hans")
+	tr.Frame()
+	if !tr.HasText("资料") || !tr.HasText("添加片段") || !tr.HasText("命名片段") ||
+		!tr.HasText("预览") || !tr.HasText("编辑") || !tr.HasText("移除") || !tr.HasText("Release notes") {
+		t.Fatalf("Chinese task context labels or raw name missing: %v", tr.Texts())
+	}
+	tc.cancelForm()
+	tc.openSnippetForm()
+	tr.Frame()
+	if !tr.HasText("名称") || !tr.HasText("文本") || !tr.HasText("保存资料片段") {
+		t.Fatalf("Chinese task context form labels missing: %v", tr.Texts())
+	}
+	tr.SetLocale("en")
+	tr.Frame()
+	if !tr.HasText("Task context") || !tr.HasText("Add snippet") || !tr.HasText("Save snippet") {
+		t.Fatalf("English task context labels did not return: %v", tr.Texts())
+	}
+
+	missing := &taskContext{}
+	missing.openFileForm()
+	missing.formPath = "/definitely/missing/context.txt"
+	missing.saveForm()
+	missingTr := taskContextTester(missing, false)
+	missingTr.SetLocale("zh-Hans")
+	missingTr.Frame()
+	if !missingTr.HasText("无法读取资料文件：open /definitely/missing/context.txt") {
+		t.Fatalf("task context read detail was lost: %v", missingTr.Texts())
+	}
+
+	state := &issueResultPanelState{
+		RunNumber: 1, RunGoal: "Ship results", RunStatus: issueExecutionCompleted,
+		Response: "Recorded result body.",
+		Files:    []issueResultFile{{Path: "/tmp/result.md", WorkingDirectory: "/tmp", ToolName: "write", CallID: "call-1"}},
+	}
+	resultTr := issueResultPanelTester(state, issueResultPanelActions{}, 1040, 720, false)
+	resultTr.SetLocale("zh-Hans")
+	resultTr.Frame()
+	if !resultTr.HasText("运行结果") || !resultTr.HasText("报告的文件") || !resultTr.HasText("读取文件 →") ||
+		!resultTr.HasText("Recorded result body.") || !resultTr.HasText("/tmp/result.md") {
+		t.Fatalf("Chinese result labels or raw content missing: %v", resultTr.Texts())
+	}
+	resultTr.SetLocale("en")
+	resultTr.Frame()
+	if !resultTr.HasText("Run results") || !resultTr.HasText("Reported files") || !resultTr.HasText("Read file →") {
+		t.Fatalf("English result labels did not return: %v", resultTr.Texts())
+	}
+}

@@ -5,10 +5,12 @@ package main
 // existing UI hook with contact/issue/execution/session/generation checks.
 
 import (
-	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/egoist/mygo/ui"
+
+	"saki/desktop/locales"
 )
 
 type issueResultPage struct {
@@ -76,8 +78,9 @@ func (a *appModel) openIssueResultEntry(issueID, executionID string, latest bool
 		Generation:   a.issueResult.Generation,
 		ReturnLatest: latest,
 		Panel: issueResultPanelState{
-			RunLabel:       fmt.Sprintf("Run %d: %s", runIndex+1, issue.Goal),
-			RunStatus:      issueExecutionLabel(execution),
+			RunNumber:      runIndex + 1,
+			RunGoal:        issue.Goal,
+			RunStatus:      execution.Status,
 			RunDetail:      runDetail,
 			LinkScope:      "contact:" + ct.ID + "/issue:" + issue.ID + "/execution:" + execution.ID,
 			LinkFocus:      &a.markdownLinkFocus,
@@ -141,8 +144,9 @@ func (a *appModel) reloadIssueResult(generation int) {
 	page.SessionID = execution.SessionID
 	page.TaskID = execution.TaskID
 	page.MessageID = execution.MessageID
-	page.Panel.RunLabel = fmt.Sprintf("Run %d: %s", runIndex+1, issue.Goal)
-	page.Panel.RunStatus = issueExecutionLabel(execution)
+	page.Panel.RunNumber = runIndex + 1
+	page.Panel.RunGoal = issue.Goal
+	page.Panel.RunStatus = execution.Status
 	page.Panel.RunDetail = ""
 	if issueExecutionNeedsAttention(execution.Status) {
 		page.Panel.RunDetail = strings.TrimSpace(execution.Detail)
@@ -312,17 +316,17 @@ func (a *appModel) issueResultPanelView(c *ui.Context, t *ui.Theme) {
 	}
 	hasBody := page.Panel.Response != "" || len(page.Panel.Files) > 0
 	if !hasBody && (page.Loading || page.LoadError != "") {
-		if page.Panel.RunLabel != "" {
-			ui.Text(c, page.Panel.RunLabel).FontSize(14).TextColor(t.TextMuted)
+		if page.Panel.RunGoal != "" {
+			ui.Text(c, locales.In(c.Locale()).ResultRunLabel(strconv.Itoa(page.Panel.RunNumber), page.Panel.RunGoal)).FontSize(14).TextColor(t.TextMuted)
 		}
 		if page.Panel.RunStatus != "" {
-			ui.Text(c, page.Panel.RunStatus).FontSize(typeAction).FontWeight(500).TextColor(t.TextMuted)
+			ui.Text(c, issueExecutionText(locales.In(c.Locale()), page.Panel.RunStatus)).FontSize(typeAction).FontWeight(500).TextColor(t.TextMuted)
 		}
 		if page.Panel.RunDetail != "" {
 			ui.Text(c, page.Panel.RunDetail).FontSize(14).LineHeight(1.5).TextColor(t.Warning)
 		}
 		if page.Loading {
-			ui.Text(c, "Loading execution history from Runtime…").FontSize(14).TextColor(t.TextMuted)
+			ui.Text(c, locales.In(c.Locale()).ResultLoadingHistory()).FontSize(14).TextColor(t.TextMuted)
 		}
 		if page.LoadError != "" {
 			ui.Text(c, page.LoadError).FontSize(14).LineHeight(1.5).TextColor(t.Warning)
@@ -330,7 +334,7 @@ func (a *appModel) issueResultPanelView(c *ui.Context, t *ui.Theme) {
 		return
 	}
 	if page.Loading {
-		ui.Text(c, "Reloading result from Runtime… The recorded output below is the previous snapshot.").FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+		ui.Text(c, locales.In(c.Locale()).ResultReloadingSnapshot()).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
 	}
 	if page.LoadError != "" {
 		ui.Text(c, page.LoadError).FontSize(14).LineHeight(1.5).TextColor(t.Warning)
@@ -455,16 +459,16 @@ func (a *appModel) requestIssueResultFileAction(generation int, file issueResult
 func issueResultPageHeader(c *ui.Context, t *ui.Theme, state *issueResultPanelState, actions issueResultPanelActions, showReload bool) {
 	ui.Row(c).Padding(16, 16).AlignItems(ui.Center).Gap(8).Children(func() {
 		if actions.Close != nil {
-			back := appTooltip(c, secondaryButton(c, "← Back").Label("Close results"), "Back from results").Bind(&state.CloseHandle).OnClick(actions.Close)
+			back := appTooltip(c, secondaryButton(c, locales.In(c.Locale()).ResultBack()).Label(locales.In(c.Locale()).ResultCloseResults()), locales.In(c.Locale()).ResultBackFromResults()).Bind(&state.CloseHandle).OnClick(actions.Close)
 			if state.FocusClose {
 				back.Focus()
 				state.FocusClose = false
 			}
 		}
-		ui.Text(c, "Run results").FontSize(typePageTitle).FontWeight(500).TextColor(t.Text)
+		ui.Text(c, locales.In(c.Locale()).ResultRunResults()).FontSize(typePageTitle).FontWeight(500).TextColor(t.Text)
 		ui.Spacer(c)
 		if showReload && actions.Reload != nil {
-			secondaryButton(c, "Reload result").Bind(&state.ReloadHandle).OnClick(actions.Reload)
+			secondaryButton(c, locales.In(c.Locale()).ResultReloadResult()).Bind(&state.ReloadHandle).OnClick(actions.Reload)
 		}
 	})
 }

@@ -7257,3 +7257,1049 @@ func IssueRequirementUnverified() string { return In(i18n.Locale()).IssueRequire
 func (msgs Messages) IssueRequirementUnverified() string {
 	return Catalog.Format(msgs.locale, "issueRequirementUnverified", nil)
 }
+
+// ResultHeading says "Result"
+// in the language the app shows.
+func ResultHeading() string { return In(i18n.Locale()).ResultHeading() }
+
+// ResultHeading says "Result"
+// in the language of msgs.
+func (msgs Messages) ResultHeading() string {
+	return Catalog.Format(msgs.locale, "resultHeading", nil)
+}
+
+// ResultNoAssistant says "No assistant response was recorded for this run."
+// in the language the app shows.
+func ResultNoAssistant() string { return In(i18n.Locale()).ResultNoAssistant() }
+
+// ResultNoAssistant says "No assistant response was recorded for this run."
+// in the language of msgs.
+func (msgs Messages) ResultNoAssistant() string {
+	return Catalog.Format(msgs.locale, "resultNoAssistant", nil)
+}
+
+// ResultReportedFiles says "Reported files"
+// in the language the app shows.
+func ResultReportedFiles() string { return In(i18n.Locale()).ResultReportedFiles() }
+
+// ResultReportedFiles says "Reported files"
+// in the language of msgs.
+func (msgs Messages) ResultReportedFiles() string {
+	return Catalog.Format(msgs.locale, "resultReportedFiles", nil)
+}
+
+// ResultNoFiles says "No files were reported for this run."
+// in the language the app shows.
+func ResultNoFiles() string { return In(i18n.Locale()).ResultNoFiles() }
+
+// ResultNoFiles says "No files were reported for this run."
+// in the language of msgs.
+func (msgs Messages) ResultNoFiles() string {
+	return Catalog.Format(msgs.locale, "resultNoFiles", nil)
+}
+
+// ResultReadFile says "Read file →"
+// in the language the app shows.
+func ResultReadFile() string { return In(i18n.Locale()).ResultReadFile() }
+
+// ResultReadFile says "Read file →"
+// in the language of msgs.
+func (msgs Messages) ResultReadFile() string {
+	return Catalog.Format(msgs.locale, "resultReadFile", nil)
+}
+
+// ResultWorkingDirectory says "Working directory: {path}"
+// in the language the app shows.
+func ResultWorkingDirectory(path string) string {
+	return In(i18n.Locale()).ResultWorkingDirectory(path)
+}
+
+// ResultWorkingDirectory says "Working directory: {path}"
+// in the language of msgs.
+func (msgs Messages) ResultWorkingDirectory(path string) string {
+	return Catalog.Format(msgs.locale, "resultWorkingDirectory", map[string]any{"path": path})
+}
+
+// ResultReportedBy says "Reported by {tool}"
+// in the language the app shows.
+func ResultReportedBy(tool string) string { return In(i18n.Locale()).ResultReportedBy(tool) }
+
+// ResultReportedBy says "Reported by {tool}"
+// in the language of msgs.
+func (msgs Messages) ResultReportedBy(tool string) string {
+	return Catalog.Format(msgs.locale, "resultReportedBy", map[string]any{"tool": tool})
+}
+
+// ResultBackResults says "← Back to results"
+// in the language the app shows.
+func ResultBackResults() string { return In(i18n.Locale()).ResultBackResults() }
+
+// ResultBackResults says "← Back to results"
+// in the language of msgs.
+func (msgs Messages) ResultBackResults() string {
+	return Catalog.Format(msgs.locale, "resultBackResults", nil)
+}
+
+// ResultCloseReading says "Close reading"
+// in the language the app shows.
+func ResultCloseReading() string { return In(i18n.Locale()).ResultCloseReading() }
+
+// ResultCloseReading says "Close reading"
+// in the language of msgs.
+func (msgs Messages) ResultCloseReading() string {
+	return Catalog.Format(msgs.locale, "resultCloseReading", nil)
+}
+
+// ResultBackToResultsTooltip says "Back to results"
+// in the language the app shows.
+func ResultBackToResultsTooltip() string { return In(i18n.Locale()).ResultBackToResultsTooltip() }
+
+// ResultBackToResultsTooltip says "Back to results"
+// in the language of msgs.
+func (msgs Messages) ResultBackToResultsTooltip() string {
+	return Catalog.Format(msgs.locale, "resultBackToResultsTooltip", nil)
+}
+
+// ResultCurrentFileDiff says "Current file: content may differ from this run"
+// in the language the app shows.
+func ResultCurrentFileDiff() string { return In(i18n.Locale()).ResultCurrentFileDiff() }
+
+// ResultCurrentFileDiff says "Current file: content may differ from this run"
+// in the language of msgs.
+func (msgs Messages) ResultCurrentFileDiff() string {
+	return Catalog.Format(msgs.locale, "resultCurrentFileDiff", nil)
+}
+
+// ResultCheckingFile says "Checking the current file…"
+// in the language the app shows.
+func ResultCheckingFile() string { return In(i18n.Locale()).ResultCheckingFile() }
+
+// ResultCheckingFile says "Checking the current file…"
+// in the language of msgs.
+func (msgs Messages) ResultCheckingFile() string {
+	return Catalog.Format(msgs.locale, "resultCheckingFile", nil)
+}
+
+// ResultCheckCurrentFile says "Check the current file at this path to preview it."
+// in the language the app shows.
+func ResultCheckCurrentFile() string { return In(i18n.Locale()).ResultCheckCurrentFile() }
+
+// ResultCheckCurrentFile says "Check the current file at this path to preview it."
+// in the language of msgs.
+func (msgs Messages) ResultCheckCurrentFile() string {
+	return Catalog.Format(msgs.locale, "resultCheckCurrentFile", nil)
+}
+
+// ResultEmptyFile says "Empty file (0 bytes)."
+// in the language the app shows.
+func ResultEmptyFile() string { return In(i18n.Locale()).ResultEmptyFile() }
+
+// ResultEmptyFile says "Empty file (0 bytes)."
+// in the language of msgs.
+func (msgs Messages) ResultEmptyFile() string {
+	return Catalog.Format(msgs.locale, "resultEmptyFile", nil)
+}
+
+// ResultSourceRaw says "Source & raw record"
+// in the language the app shows.
+func ResultSourceRaw() string { return In(i18n.Locale()).ResultSourceRaw() }
+
+// ResultSourceRaw says "Source & raw record"
+// in the language of msgs.
+func (msgs Messages) ResultSourceRaw() string {
+	return Catalog.Format(msgs.locale, "resultSourceRaw", nil)
+}
+
+// ResultSessionLine says "Session: {id}"
+// in the language the app shows.
+func ResultSessionLine(id string) string { return In(i18n.Locale()).ResultSessionLine(id) }
+
+// ResultSessionLine says "Session: {id}"
+// in the language of msgs.
+func (msgs Messages) ResultSessionLine(id string) string {
+	return Catalog.Format(msgs.locale, "resultSessionLine", map[string]any{"id": id})
+}
+
+// ResultTaskLine says "Task: {id}"
+// in the language the app shows.
+func ResultTaskLine(id string) string { return In(i18n.Locale()).ResultTaskLine(id) }
+
+// ResultTaskLine says "Task: {id}"
+// in the language of msgs.
+func (msgs Messages) ResultTaskLine(id string) string {
+	return Catalog.Format(msgs.locale, "resultTaskLine", map[string]any{"id": id})
+}
+
+// ResultMessageLine says "Message: {id}"
+// in the language the app shows.
+func ResultMessageLine(id string) string { return In(i18n.Locale()).ResultMessageLine(id) }
+
+// ResultMessageLine says "Message: {id}"
+// in the language of msgs.
+func (msgs Messages) ResultMessageLine(id string) string {
+	return Catalog.Format(msgs.locale, "resultMessageLine", map[string]any{"id": id})
+}
+
+// ResultCallLine says "Call: {id}"
+// in the language the app shows.
+func ResultCallLine(id string) string { return In(i18n.Locale()).ResultCallLine(id) }
+
+// ResultCallLine says "Call: {id}"
+// in the language of msgs.
+func (msgs Messages) ResultCallLine(id string) string {
+	return Catalog.Format(msgs.locale, "resultCallLine", map[string]any{"id": id})
+}
+
+// ResultLoadingHistory says "Loading execution history from Runtime…"
+// in the language the app shows.
+func ResultLoadingHistory() string { return In(i18n.Locale()).ResultLoadingHistory() }
+
+// ResultLoadingHistory says "Loading execution history from Runtime…"
+// in the language of msgs.
+func (msgs Messages) ResultLoadingHistory() string {
+	return Catalog.Format(msgs.locale, "resultLoadingHistory", nil)
+}
+
+// ResultReloadingSnapshot says "Reloading result from Runtime… The recorded output below is the previous snapshot."
+// in the language the app shows.
+func ResultReloadingSnapshot() string { return In(i18n.Locale()).ResultReloadingSnapshot() }
+
+// ResultReloadingSnapshot says "Reloading result from Runtime… The recorded output below is the previous snapshot."
+// in the language of msgs.
+func (msgs Messages) ResultReloadingSnapshot() string {
+	return Catalog.Format(msgs.locale, "resultReloadingSnapshot", nil)
+}
+
+// ResultBack says "← Back"
+// in the language the app shows.
+func ResultBack() string { return In(i18n.Locale()).ResultBack() }
+
+// ResultBack says "← Back"
+// in the language of msgs.
+func (msgs Messages) ResultBack() string {
+	return Catalog.Format(msgs.locale, "resultBack", nil)
+}
+
+// ResultCloseResults says "Close results"
+// in the language the app shows.
+func ResultCloseResults() string { return In(i18n.Locale()).ResultCloseResults() }
+
+// ResultCloseResults says "Close results"
+// in the language of msgs.
+func (msgs Messages) ResultCloseResults() string {
+	return Catalog.Format(msgs.locale, "resultCloseResults", nil)
+}
+
+// ResultBackFromResults says "Back from results"
+// in the language the app shows.
+func ResultBackFromResults() string { return In(i18n.Locale()).ResultBackFromResults() }
+
+// ResultBackFromResults says "Back from results"
+// in the language of msgs.
+func (msgs Messages) ResultBackFromResults() string {
+	return Catalog.Format(msgs.locale, "resultBackFromResults", nil)
+}
+
+// ResultRunResults says "Run results"
+// in the language the app shows.
+func ResultRunResults() string { return In(i18n.Locale()).ResultRunResults() }
+
+// ResultRunResults says "Run results"
+// in the language of msgs.
+func (msgs Messages) ResultRunResults() string {
+	return Catalog.Format(msgs.locale, "resultRunResults", nil)
+}
+
+// ResultReloadResult says "Reload result"
+// in the language the app shows.
+func ResultReloadResult() string { return In(i18n.Locale()).ResultReloadResult() }
+
+// ResultReloadResult says "Reload result"
+// in the language of msgs.
+func (msgs Messages) ResultReloadResult() string {
+	return Catalog.Format(msgs.locale, "resultReloadResult", nil)
+}
+
+// ResultNoDetailRecorded says "No execution detail was recorded for this run."
+// in the language the app shows.
+func ResultNoDetailRecorded() string { return In(i18n.Locale()).ResultNoDetailRecorded() }
+
+// ResultNoDetailRecorded says "No execution detail was recorded for this run."
+// in the language of msgs.
+func (msgs Messages) ResultNoDetailRecorded() string {
+	return Catalog.Format(msgs.locale, "resultNoDetailRecorded", nil)
+}
+
+// ResultRunLabel says "Run {number}: {goal}"
+// in the language the app shows.
+func ResultRunLabel(number string, goal string) string {
+	return In(i18n.Locale()).ResultRunLabel(number, goal)
+}
+
+// ResultRunLabel says "Run {number}: {goal}"
+// in the language of msgs.
+func (msgs Messages) ResultRunLabel(number string, goal string) string {
+	return Catalog.Format(msgs.locale, "resultRunLabel", map[string]any{"number": number, "goal": goal})
+}
+
+// TaskContextHeading says "Task context"
+// in the language the app shows.
+func TaskContextHeading() string { return In(i18n.Locale()).TaskContextHeading() }
+
+// TaskContextHeading says "Task context"
+// in the language of msgs.
+func (msgs Messages) TaskContextHeading() string {
+	return Catalog.Format(msgs.locale, "taskContextHeading", nil)
+}
+
+// TaskContextIntro says "Saved text is sent as caller-provided context with the next send. A file snapshot changes only when you refresh it."
+// in the language the app shows.
+func TaskContextIntro() string { return In(i18n.Locale()).TaskContextIntro() }
+
+// TaskContextIntro says "Saved text is sent as caller-provided context with the next send. A file snapshot changes only when you refresh it."
+// in the language of msgs.
+func (msgs Messages) TaskContextIntro() string {
+	return Catalog.Format(msgs.locale, "taskContextIntro", nil)
+}
+
+// TaskContextAddSnippet says "Add snippet"
+// in the language the app shows.
+func TaskContextAddSnippet() string { return In(i18n.Locale()).TaskContextAddSnippet() }
+
+// TaskContextAddSnippet says "Add snippet"
+// in the language of msgs.
+func (msgs Messages) TaskContextAddSnippet() string {
+	return Catalog.Format(msgs.locale, "taskContextAddSnippet", nil)
+}
+
+// TaskContextAddFile says "Add file"
+// in the language the app shows.
+func TaskContextAddFile() string { return In(i18n.Locale()).TaskContextAddFile() }
+
+// TaskContextAddFile says "Add file"
+// in the language of msgs.
+func (msgs Messages) TaskContextAddFile() string {
+	return Catalog.Format(msgs.locale, "taskContextAddFile", nil)
+}
+
+// TaskContextEmpty says "No saved context. The next send will not include caller context."
+// in the language the app shows.
+func TaskContextEmpty() string { return In(i18n.Locale()).TaskContextEmpty() }
+
+// TaskContextEmpty says "No saved context. The next send will not include caller context."
+// in the language of msgs.
+func (msgs Messages) TaskContextEmpty() string {
+	return Catalog.Format(msgs.locale, "taskContextEmpty", nil)
+}
+
+// TaskContextSource says "Source: {source}"
+// in the language the app shows.
+func TaskContextSource(source string) string { return In(i18n.Locale()).TaskContextSource(source) }
+
+// TaskContextSource says "Source: {source}"
+// in the language of msgs.
+func (msgs Messages) TaskContextSource(source string) string {
+	return Catalog.Format(msgs.locale, "taskContextSource", map[string]any{"source": source})
+}
+
+// TaskContextPreview says "Preview"
+// in the language the app shows.
+func TaskContextPreview() string { return In(i18n.Locale()).TaskContextPreview() }
+
+// TaskContextPreview says "Preview"
+// in the language of msgs.
+func (msgs Messages) TaskContextPreview() string {
+	return Catalog.Format(msgs.locale, "taskContextPreview", nil)
+}
+
+// TaskContextEdit says "Edit"
+// in the language the app shows.
+func TaskContextEdit() string { return In(i18n.Locale()).TaskContextEdit() }
+
+// TaskContextEdit says "Edit"
+// in the language of msgs.
+func (msgs Messages) TaskContextEdit() string {
+	return Catalog.Format(msgs.locale, "taskContextEdit", nil)
+}
+
+// TaskContextRefreshFile says "Refresh from file"
+// in the language the app shows.
+func TaskContextRefreshFile() string { return In(i18n.Locale()).TaskContextRefreshFile() }
+
+// TaskContextRefreshFile says "Refresh from file"
+// in the language of msgs.
+func (msgs Messages) TaskContextRefreshFile() string {
+	return Catalog.Format(msgs.locale, "taskContextRefreshFile", nil)
+}
+
+// TaskContextRemove says "Remove"
+// in the language the app shows.
+func TaskContextRemove() string { return In(i18n.Locale()).TaskContextRemove() }
+
+// TaskContextRemove says "Remove"
+// in the language of msgs.
+func (msgs Messages) TaskContextRemove() string {
+	return Catalog.Format(msgs.locale, "taskContextRemove", nil)
+}
+
+// TaskContextFormCancel says "Cancel"
+// in the language the app shows.
+func TaskContextFormCancel() string { return In(i18n.Locale()).TaskContextFormCancel() }
+
+// TaskContextFormCancel says "Cancel"
+// in the language of msgs.
+func (msgs Messages) TaskContextFormCancel() string {
+	return Catalog.Format(msgs.locale, "taskContextFormCancel", nil)
+}
+
+// TaskContextFileNameOptional says "Name (optional)"
+// in the language the app shows.
+func TaskContextFileNameOptional() string { return In(i18n.Locale()).TaskContextFileNameOptional() }
+
+// TaskContextFileNameOptional says "Name (optional)"
+// in the language of msgs.
+func (msgs Messages) TaskContextFileNameOptional() string {
+	return Catalog.Format(msgs.locale, "taskContextFileNameOptional", nil)
+}
+
+// TaskContextFileLabel says "Context file name"
+// in the language the app shows.
+func TaskContextFileLabel() string { return In(i18n.Locale()).TaskContextFileLabel() }
+
+// TaskContextFileLabel says "Context file name"
+// in the language of msgs.
+func (msgs Messages) TaskContextFileLabel() string {
+	return Catalog.Format(msgs.locale, "taskContextFileLabel", nil)
+}
+
+// TaskContextFilePlaceholder says "Defaults to the file name"
+// in the language the app shows.
+func TaskContextFilePlaceholder() string { return In(i18n.Locale()).TaskContextFilePlaceholder() }
+
+// TaskContextFilePlaceholder says "Defaults to the file name"
+// in the language of msgs.
+func (msgs Messages) TaskContextFilePlaceholder() string {
+	return Catalog.Format(msgs.locale, "taskContextFilePlaceholder", nil)
+}
+
+// TaskContextPath says "Path"
+// in the language the app shows.
+func TaskContextPath() string { return In(i18n.Locale()).TaskContextPath() }
+
+// TaskContextPath says "Path"
+// in the language of msgs.
+func (msgs Messages) TaskContextPath() string {
+	return Catalog.Format(msgs.locale, "taskContextPath", nil)
+}
+
+// TaskContextFilePathLabel says "Context file path"
+// in the language the app shows.
+func TaskContextFilePathLabel() string { return In(i18n.Locale()).TaskContextFilePathLabel() }
+
+// TaskContextFilePathLabel says "Context file path"
+// in the language of msgs.
+func (msgs Messages) TaskContextFilePathLabel() string {
+	return Catalog.Format(msgs.locale, "taskContextFilePathLabel", nil)
+}
+
+// TaskContextFilePathPlaceholder says "/absolute/path/to/file.txt"
+// in the language the app shows.
+func TaskContextFilePathPlaceholder() string {
+	return In(i18n.Locale()).TaskContextFilePathPlaceholder()
+}
+
+// TaskContextFilePathPlaceholder says "/absolute/path/to/file.txt"
+// in the language of msgs.
+func (msgs Messages) TaskContextFilePathPlaceholder() string {
+	return Catalog.Format(msgs.locale, "taskContextFilePathPlaceholder", nil)
+}
+
+// TaskContextFileRules says "Only UTF-8 text files are supported; PDF, Office, and other binary files are rejected. The file is read once now; lat…"
+// in the language the app shows.
+func TaskContextFileRules() string { return In(i18n.Locale()).TaskContextFileRules() }
+
+// TaskContextFileRules says "Only UTF-8 text files are supported; PDF, Office, and other binary files are rejected. The file is read once now; lat…"
+// in the language of msgs.
+func (msgs Messages) TaskContextFileRules() string {
+	return Catalog.Format(msgs.locale, "taskContextFileRules", nil)
+}
+
+// TaskContextName says "Name"
+// in the language the app shows.
+func TaskContextName() string { return In(i18n.Locale()).TaskContextName() }
+
+// TaskContextName says "Name"
+// in the language of msgs.
+func (msgs Messages) TaskContextName() string {
+	return Catalog.Format(msgs.locale, "taskContextName", nil)
+}
+
+// TaskContextNameLabel says "Context name"
+// in the language the app shows.
+func TaskContextNameLabel() string { return In(i18n.Locale()).TaskContextNameLabel() }
+
+// TaskContextNameLabel says "Context name"
+// in the language of msgs.
+func (msgs Messages) TaskContextNameLabel() string {
+	return Catalog.Format(msgs.locale, "taskContextNameLabel", nil)
+}
+
+// TaskContextNamePlaceholder says "Release notes"
+// in the language the app shows.
+func TaskContextNamePlaceholder() string { return In(i18n.Locale()).TaskContextNamePlaceholder() }
+
+// TaskContextNamePlaceholder says "Release notes"
+// in the language of msgs.
+func (msgs Messages) TaskContextNamePlaceholder() string {
+	return Catalog.Format(msgs.locale, "taskContextNamePlaceholder", nil)
+}
+
+// TaskContextText says "Text"
+// in the language the app shows.
+func TaskContextText() string { return In(i18n.Locale()).TaskContextText() }
+
+// TaskContextText says "Text"
+// in the language of msgs.
+func (msgs Messages) TaskContextText() string {
+	return Catalog.Format(msgs.locale, "taskContextText", nil)
+}
+
+// TaskContextTextLabel says "Context text"
+// in the language the app shows.
+func TaskContextTextLabel() string { return In(i18n.Locale()).TaskContextTextLabel() }
+
+// TaskContextTextLabel says "Context text"
+// in the language of msgs.
+func (msgs Messages) TaskContextTextLabel() string {
+	return Catalog.Format(msgs.locale, "taskContextTextLabel", nil)
+}
+
+// TaskContextTextPlaceholder says "Text to include exactly as written"
+// in the language the app shows.
+func TaskContextTextPlaceholder() string { return In(i18n.Locale()).TaskContextTextPlaceholder() }
+
+// TaskContextTextPlaceholder says "Text to include exactly as written"
+// in the language of msgs.
+func (msgs Messages) TaskContextTextPlaceholder() string {
+	return Catalog.Format(msgs.locale, "taskContextTextPlaceholder", nil)
+}
+
+// TaskContextEditHint says "Editing the snapshot does not change the source file. Refresh re-reads it."
+// in the language the app shows.
+func TaskContextEditHint() string { return In(i18n.Locale()).TaskContextEditHint() }
+
+// TaskContextEditHint says "Editing the snapshot does not change the source file. Refresh re-reads it."
+// in the language of msgs.
+func (msgs Messages) TaskContextEditHint() string {
+	return Catalog.Format(msgs.locale, "taskContextEditHint", nil)
+}
+
+// TaskContextPreviewTitle says "Preview: {name}"
+// in the language the app shows.
+func TaskContextPreviewTitle(name string) string {
+	return In(i18n.Locale()).TaskContextPreviewTitle(name)
+}
+
+// TaskContextPreviewTitle says "Preview: {name}"
+// in the language of msgs.
+func (msgs Messages) TaskContextPreviewTitle(name string) string {
+	return Catalog.Format(msgs.locale, "taskContextPreviewTitle", map[string]any{"name": name})
+}
+
+// TaskContextClosePreview says "Close preview"
+// in the language the app shows.
+func TaskContextClosePreview() string { return In(i18n.Locale()).TaskContextClosePreview() }
+
+// TaskContextClosePreview says "Close preview"
+// in the language of msgs.
+func (msgs Messages) TaskContextClosePreview() string {
+	return Catalog.Format(msgs.locale, "taskContextClosePreview", nil)
+}
+
+// TaskContextFormSnippet says "Add snippet"
+// in the language the app shows.
+func TaskContextFormSnippet() string { return In(i18n.Locale()).TaskContextFormSnippet() }
+
+// TaskContextFormSnippet says "Add snippet"
+// in the language of msgs.
+func (msgs Messages) TaskContextFormSnippet() string {
+	return Catalog.Format(msgs.locale, "taskContextFormSnippet", nil)
+}
+
+// TaskContextFormFile says "Add file snapshot"
+// in the language the app shows.
+func TaskContextFormFile() string { return In(i18n.Locale()).TaskContextFormFile() }
+
+// TaskContextFormFile says "Add file snapshot"
+// in the language of msgs.
+func (msgs Messages) TaskContextFormFile() string {
+	return Catalog.Format(msgs.locale, "taskContextFormFile", nil)
+}
+
+// TaskContextFormEdit says "Edit context"
+// in the language the app shows.
+func TaskContextFormEdit() string { return In(i18n.Locale()).TaskContextFormEdit() }
+
+// TaskContextFormEdit says "Edit context"
+// in the language of msgs.
+func (msgs Messages) TaskContextFormEdit() string {
+	return Catalog.Format(msgs.locale, "taskContextFormEdit", nil)
+}
+
+// TaskContextItemsLabel says "{count, plural, one {Task context: # item} other {Task context: # items}}"
+// in the language the app shows.
+func TaskContextItemsLabel(count int) string { return In(i18n.Locale()).TaskContextItemsLabel(count) }
+
+// TaskContextItemsLabel says "{count, plural, one {Task context: # item} other {Task context: # items}}"
+// in the language of msgs.
+func (msgs Messages) TaskContextItemsLabel(count int) string {
+	return Catalog.Format(msgs.locale, "taskContextItemsLabel", map[string]any{"count": count})
+}
+
+// TaskContextSize says "{count, plural, one {# item: {size} / 1 MiB} other {# items: {size} / 1 MiB}}"
+// in the language the app shows.
+func TaskContextSize(count int, size string) string {
+	return In(i18n.Locale()).TaskContextSize(count, size)
+}
+
+// TaskContextSize says "{count, plural, one {# item: {size} / 1 MiB} other {# items: {size} / 1 MiB}}"
+// in the language of msgs.
+func (msgs Messages) TaskContextSize(count int, size string) string {
+	return Catalog.Format(msgs.locale, "taskContextSize", map[string]any{"count": count, "size": size})
+}
+
+// TaskContextSourceNamed says "Named snippet"
+// in the language the app shows.
+func TaskContextSourceNamed() string { return In(i18n.Locale()).TaskContextSourceNamed() }
+
+// TaskContextSourceNamed says "Named snippet"
+// in the language of msgs.
+func (msgs Messages) TaskContextSourceNamed() string {
+	return Catalog.Format(msgs.locale, "taskContextSourceNamed", nil)
+}
+
+// TaskContextSourceFile says "File snapshot: revision {revision}"
+// in the language the app shows.
+func TaskContextSourceFile(revision string) string {
+	return In(i18n.Locale()).TaskContextSourceFile(revision)
+}
+
+// TaskContextSourceFile says "File snapshot: revision {revision}"
+// in the language of msgs.
+func (msgs Messages) TaskContextSourceFile(revision string) string {
+	return Catalog.Format(msgs.locale, "taskContextSourceFile", map[string]any{"revision": revision})
+}
+
+// TaskContextErrName says "Enter a context name."
+// in the language the app shows.
+func TaskContextErrName() string { return In(i18n.Locale()).TaskContextErrName() }
+
+// TaskContextErrName says "Enter a context name."
+// in the language of msgs.
+func (msgs Messages) TaskContextErrName() string {
+	return Catalog.Format(msgs.locale, "taskContextErrName", nil)
+}
+
+// TaskContextErrUTF8 says "Context text is not valid UTF-8."
+// in the language the app shows.
+func TaskContextErrUTF8() string { return In(i18n.Locale()).TaskContextErrUTF8() }
+
+// TaskContextErrUTF8 says "Context text is not valid UTF-8."
+// in the language of msgs.
+func (msgs Messages) TaskContextErrUTF8() string {
+	return Catalog.Format(msgs.locale, "taskContextErrUTF8", nil)
+}
+
+// TaskContextErrNotText says "The file is not UTF-8 text."
+// in the language the app shows.
+func TaskContextErrNotText() string { return In(i18n.Locale()).TaskContextErrNotText() }
+
+// TaskContextErrNotText says "The file is not UTF-8 text."
+// in the language of msgs.
+func (msgs Messages) TaskContextErrNotText() string {
+	return Catalog.Format(msgs.locale, "taskContextErrNotText", nil)
+}
+
+// TaskContextErrOversize says "Context exceeds the 1 MiB send limit."
+// in the language the app shows.
+func TaskContextErrOversize() string { return In(i18n.Locale()).TaskContextErrOversize() }
+
+// TaskContextErrOversize says "Context exceeds the 1 MiB send limit."
+// in the language of msgs.
+func (msgs Messages) TaskContextErrOversize() string {
+	return Catalog.Format(msgs.locale, "taskContextErrOversize", nil)
+}
+
+// TaskContextErrUnsupported says "Unsupported file format; only UTF-8 text files are supported."
+// in the language the app shows.
+func TaskContextErrUnsupported() string { return In(i18n.Locale()).TaskContextErrUnsupported() }
+
+// TaskContextErrUnsupported says "Unsupported file format; only UTF-8 text files are supported."
+// in the language of msgs.
+func (msgs Messages) TaskContextErrUnsupported() string {
+	return Catalog.Format(msgs.locale, "taskContextErrUnsupported", nil)
+}
+
+// TaskContextErrRead says "Could not read the context file."
+// in the language the app shows.
+func TaskContextErrRead() string { return In(i18n.Locale()).TaskContextErrRead() }
+
+// TaskContextErrRead says "Could not read the context file."
+// in the language of msgs.
+func (msgs Messages) TaskContextErrRead() string {
+	return Catalog.Format(msgs.locale, "taskContextErrRead", nil)
+}
+
+// TaskContextErrMissing says "The context item no longer exists."
+// in the language the app shows.
+func TaskContextErrMissing() string { return In(i18n.Locale()).TaskContextErrMissing() }
+
+// TaskContextErrMissing says "The context item no longer exists."
+// in the language of msgs.
+func (msgs Messages) TaskContextErrMissing() string {
+	return Catalog.Format(msgs.locale, "taskContextErrMissing", nil)
+}
+
+// TaskContextErrNoSource says "This context item has no file source."
+// in the language the app shows.
+func TaskContextErrNoSource() string { return In(i18n.Locale()).TaskContextErrNoSource() }
+
+// TaskContextErrNoSource says "This context item has no file source."
+// in the language of msgs.
+func (msgs Messages) TaskContextErrNoSource() string {
+	return Catalog.Format(msgs.locale, "taskContextErrNoSource", nil)
+}
+
+// TaskContextIssueUnavailable says "This issue is no longer available."
+// in the language the app shows.
+func TaskContextIssueUnavailable() string { return In(i18n.Locale()).TaskContextIssueUnavailable() }
+
+// TaskContextIssueUnavailable says "This issue is no longer available."
+// in the language of msgs.
+func (msgs Messages) TaskContextIssueUnavailable() string {
+	return Catalog.Format(msgs.locale, "taskContextIssueUnavailable", nil)
+}
+
+// TaskContextClose says "Close task context"
+// in the language the app shows.
+func TaskContextClose() string { return In(i18n.Locale()).TaskContextClose() }
+
+// TaskContextClose says "Close task context"
+// in the language of msgs.
+func (msgs Messages) TaskContextClose() string {
+	return Catalog.Format(msgs.locale, "taskContextClose", nil)
+}
+
+// SupplementAutoOn says "Automatic continuation on"
+// in the language the app shows.
+func SupplementAutoOn() string { return In(i18n.Locale()).SupplementAutoOn() }
+
+// SupplementAutoOn says "Automatic continuation on"
+// in the language of msgs.
+func (msgs Messages) SupplementAutoOn() string {
+	return Catalog.Format(msgs.locale, "supplementAutoOn", nil)
+}
+
+// SupplementAutoStopped says "Automatic continuation stopped"
+// in the language the app shows.
+func SupplementAutoStopped() string { return In(i18n.Locale()).SupplementAutoStopped() }
+
+// SupplementAutoStopped says "Automatic continuation stopped"
+// in the language of msgs.
+func (msgs Messages) SupplementAutoStopped() string {
+	return Catalog.Format(msgs.locale, "supplementAutoStopped", nil)
+}
+
+// SupplementDispatching says "Dispatching; waiting for the Runtime receipt. Automatic continuation will not start another batch yet."
+// in the language the app shows.
+func SupplementDispatching() string { return In(i18n.Locale()).SupplementDispatching() }
+
+// SupplementDispatching says "Dispatching; waiting for the Runtime receipt. Automatic continuation will not start another batch yet."
+// in the language of msgs.
+func (msgs Messages) SupplementDispatching() string {
+	return Catalog.Format(msgs.locale, "supplementDispatching", nil)
+}
+
+// SupplementUnknown says "Delivery is unknown; check the execution. Nothing will be resent automatically."
+// in the language the app shows.
+func SupplementUnknown() string { return In(i18n.Locale()).SupplementUnknown() }
+
+// SupplementUnknown says "Delivery is unknown; check the execution. Nothing will be resent automatically."
+// in the language of msgs.
+func (msgs Messages) SupplementUnknown() string {
+	return Catalog.Format(msgs.locale, "supplementUnknown", nil)
+}
+
+// SupplementNoExecution says "No execution yet. Use Start with supplement to authorize the first run."
+// in the language the app shows.
+func SupplementNoExecution() string { return In(i18n.Locale()).SupplementNoExecution() }
+
+// SupplementNoExecution says "No execution yet. Use Start with supplement to authorize the first run."
+// in the language of msgs.
+func (msgs Messages) SupplementNoExecution() string {
+	return Catalog.Format(msgs.locale, "supplementNoExecution", nil)
+}
+
+// SupplementReady says "Ready at the next safe boundary."
+// in the language the app shows.
+func SupplementReady() string { return In(i18n.Locale()).SupplementReady() }
+
+// SupplementReady says "Ready at the next safe boundary."
+// in the language of msgs.
+func (msgs Messages) SupplementReady() string {
+	return Catalog.Format(msgs.locale, "supplementReady", nil)
+}
+
+// SupplementPendingPreserved says "Pending text is preserved. Resume automatic continuation or use Continue explicitly."
+// in the language the app shows.
+func SupplementPendingPreserved() string { return In(i18n.Locale()).SupplementPendingPreserved() }
+
+// SupplementPendingPreserved says "Pending text is preserved. Resume automatic continuation or use Continue explicitly."
+// in the language of msgs.
+func (msgs Messages) SupplementPendingPreserved() string {
+	return Catalog.Format(msgs.locale, "supplementPendingPreserved", nil)
+}
+
+// SupplementSavedPending says "Saved pending supplements"
+// in the language the app shows.
+func SupplementSavedPending() string { return In(i18n.Locale()).SupplementSavedPending() }
+
+// SupplementSavedPending says "Saved pending supplements"
+// in the language of msgs.
+func (msgs Messages) SupplementSavedPending() string {
+	return Catalog.Format(msgs.locale, "supplementSavedPending", nil)
+}
+
+// SupplementClosePreview says "Close preview"
+// in the language the app shows.
+func SupplementClosePreview() string { return In(i18n.Locale()).SupplementClosePreview() }
+
+// SupplementClosePreview says "Close preview"
+// in the language of msgs.
+func (msgs Messages) SupplementClosePreview() string {
+	return Catalog.Format(msgs.locale, "supplementClosePreview", nil)
+}
+
+// SupplementPreviewFull says "Preview full text"
+// in the language the app shows.
+func SupplementPreviewFull() string { return In(i18n.Locale()).SupplementPreviewFull() }
+
+// SupplementPreviewFull says "Preview full text"
+// in the language of msgs.
+func (msgs Messages) SupplementPreviewFull() string {
+	return Catalog.Format(msgs.locale, "supplementPreviewFull", nil)
+}
+
+// SupplementAdd says "Add supplement"
+// in the language the app shows.
+func SupplementAdd() string { return In(i18n.Locale()).SupplementAdd() }
+
+// SupplementAdd says "Add supplement"
+// in the language of msgs.
+func (msgs Messages) SupplementAdd() string {
+	return Catalog.Format(msgs.locale, "supplementAdd", nil)
+}
+
+// SupplementAddLabel says "Add supplement"
+// in the language the app shows.
+func SupplementAddLabel() string { return In(i18n.Locale()).SupplementAddLabel() }
+
+// SupplementAddLabel says "Add supplement"
+// in the language of msgs.
+func (msgs Messages) SupplementAddLabel() string {
+	return Catalog.Format(msgs.locale, "supplementAddLabel", nil)
+}
+
+// SupplementCancel says "Cancel"
+// in the language the app shows.
+func SupplementCancel() string { return In(i18n.Locale()).SupplementCancel() }
+
+// SupplementCancel says "Cancel"
+// in the language of msgs.
+func (msgs Messages) SupplementCancel() string {
+	return Catalog.Format(msgs.locale, "supplementCancel", nil)
+}
+
+// SupplementFormLabel says "Add supplement to this issue"
+// in the language the app shows.
+func SupplementFormLabel() string { return In(i18n.Locale()).SupplementFormLabel() }
+
+// SupplementFormLabel says "Add supplement to this issue"
+// in the language of msgs.
+func (msgs Messages) SupplementFormLabel() string {
+	return Catalog.Format(msgs.locale, "supplementFormLabel", nil)
+}
+
+// SupplementFormPlaceholder says "Supplementary target, requirement, or correction"
+// in the language the app shows.
+func SupplementFormPlaceholder() string { return In(i18n.Locale()).SupplementFormPlaceholder() }
+
+// SupplementFormPlaceholder says "Supplementary target, requirement, or correction"
+// in the language of msgs.
+func (msgs Messages) SupplementFormPlaceholder() string {
+	return Catalog.Format(msgs.locale, "supplementFormPlaceholder", nil)
+}
+
+// SupplementSaveDisclaimer says "Saving a supplement is not a model-acceptance or requirement-satisfaction receipt."
+// in the language the app shows.
+func SupplementSaveDisclaimer() string { return In(i18n.Locale()).SupplementSaveDisclaimer() }
+
+// SupplementSaveDisclaimer says "Saving a supplement is not a model-acceptance or requirement-satisfaction receipt."
+// in the language of msgs.
+func (msgs Messages) SupplementSaveDisclaimer() string {
+	return Catalog.Format(msgs.locale, "supplementSaveDisclaimer", nil)
+}
+
+// SupplementStopAuto says "Stop auto"
+// in the language the app shows.
+func SupplementStopAuto() string { return In(i18n.Locale()).SupplementStopAuto() }
+
+// SupplementStopAuto says "Stop auto"
+// in the language of msgs.
+func (msgs Messages) SupplementStopAuto() string {
+	return Catalog.Format(msgs.locale, "supplementStopAuto", nil)
+}
+
+// SupplementResumeAuto says "Resume auto"
+// in the language the app shows.
+func SupplementResumeAuto() string { return In(i18n.Locale()).SupplementResumeAuto() }
+
+// SupplementResumeAuto says "Resume auto"
+// in the language of msgs.
+func (msgs Messages) SupplementResumeAuto() string {
+	return Catalog.Format(msgs.locale, "supplementResumeAuto", nil)
+}
+
+// SupplementReceiptFailed says "Local receipt save failed: {detail}"
+// in the language the app shows.
+func SupplementReceiptFailed(detail string) string {
+	return In(i18n.Locale()).SupplementReceiptFailed(detail)
+}
+
+// SupplementReceiptFailed says "Local receipt save failed: {detail}"
+// in the language of msgs.
+func (msgs Messages) SupplementReceiptFailed(detail string) string {
+	return Catalog.Format(msgs.locale, "supplementReceiptFailed", map[string]any{"detail": detail})
+}
+
+// SupplementSubmitted says "Submitted to Runtime execution {execution}, task {task}."
+// in the language the app shows.
+func SupplementSubmitted(execution string, task string) string {
+	return In(i18n.Locale()).SupplementSubmitted(execution, task)
+}
+
+// SupplementSubmitted says "Submitted to Runtime execution {execution}, task {task}."
+// in the language of msgs.
+func (msgs Messages) SupplementSubmitted(execution string, task string) string {
+	return Catalog.Format(msgs.locale, "supplementSubmitted", map[string]any{"execution": execution, "task": task})
+}
+
+// SupplementRetry says "Retry supplement"
+// in the language the app shows.
+func SupplementRetry() string { return In(i18n.Locale()).SupplementRetry() }
+
+// SupplementRetry says "Retry supplement"
+// in the language of msgs.
+func (msgs Messages) SupplementRetry() string {
+	return Catalog.Format(msgs.locale, "supplementRetry", nil)
+}
+
+// SupplementNeedsCheck says "Needs delivery check; this is not a completion claim."
+// in the language the app shows.
+func SupplementNeedsCheck() string { return In(i18n.Locale()).SupplementNeedsCheck() }
+
+// SupplementNeedsCheck says "Needs delivery check; this is not a completion claim."
+// in the language of msgs.
+func (msgs Messages) SupplementNeedsCheck() string {
+	return Catalog.Format(msgs.locale, "supplementNeedsCheck", nil)
+}
+
+// SupplementCheck says "Check execution"
+// in the language the app shows.
+func SupplementCheck() string { return In(i18n.Locale()).SupplementCheck() }
+
+// SupplementCheck says "Check execution"
+// in the language of msgs.
+func (msgs Messages) SupplementCheck() string {
+	return Catalog.Format(msgs.locale, "supplementCheck", nil)
+}
+
+// SupplementShowRecent says "Show recent batches"
+// in the language the app shows.
+func SupplementShowRecent() string { return In(i18n.Locale()).SupplementShowRecent() }
+
+// SupplementShowRecent says "Show recent batches"
+// in the language of msgs.
+func (msgs Messages) SupplementShowRecent() string {
+	return Catalog.Format(msgs.locale, "supplementShowRecent", nil)
+}
+
+// SupplementShowAll says "Show all batches"
+// in the language the app shows.
+func SupplementShowAll() string { return In(i18n.Locale()).SupplementShowAll() }
+
+// SupplementShowAll says "Show all batches"
+// in the language of msgs.
+func (msgs Messages) SupplementShowAll() string {
+	return Catalog.Format(msgs.locale, "supplementShowAll", nil)
+}
+
+// TaskContextErrReadDetail says "Could not read the context file: {detail}"
+// in the language the app shows.
+func TaskContextErrReadDetail(detail string) string {
+	return In(i18n.Locale()).TaskContextErrReadDetail(detail)
+}
+
+// TaskContextErrReadDetail says "Could not read the context file: {detail}"
+// in the language of msgs.
+func (msgs Messages) TaskContextErrReadDetail(detail string) string {
+	return Catalog.Format(msgs.locale, "taskContextErrReadDetail", map[string]any{"detail": detail})
+}
+
+// TaskContextErrOversizeDetail says "Context exceeds the 1 MiB send limit: {detail}"
+// in the language the app shows.
+func TaskContextErrOversizeDetail(detail string) string {
+	return In(i18n.Locale()).TaskContextErrOversizeDetail(detail)
+}
+
+// TaskContextErrOversizeDetail says "Context exceeds the 1 MiB send limit: {detail}"
+// in the language of msgs.
+func (msgs Messages) TaskContextErrOversizeDetail(detail string) string {
+	return Catalog.Format(msgs.locale, "taskContextErrOversizeDetail", map[string]any{"detail": detail})
+}
+
+// TaskContextErrUnsupportedDetail says "Unsupported file format; only UTF-8 text files are supported: {detail}"
+// in the language the app shows.
+func TaskContextErrUnsupportedDetail(detail string) string {
+	return In(i18n.Locale()).TaskContextErrUnsupportedDetail(detail)
+}
+
+// TaskContextErrUnsupportedDetail says "Unsupported file format; only UTF-8 text files are supported: {detail}"
+// in the language of msgs.
+func (msgs Messages) TaskContextErrUnsupportedDetail(detail string) string {
+	return Catalog.Format(msgs.locale, "taskContextErrUnsupportedDetail", map[string]any{"detail": detail})
+}
+
+// TaskContextErrUTF8Detail says "Context text is not valid UTF-8: {detail}"
+// in the language the app shows.
+func TaskContextErrUTF8Detail(detail string) string {
+	return In(i18n.Locale()).TaskContextErrUTF8Detail(detail)
+}
+
+// TaskContextErrUTF8Detail says "Context text is not valid UTF-8: {detail}"
+// in the language of msgs.
+func (msgs Messages) TaskContextErrUTF8Detail(detail string) string {
+	return Catalog.Format(msgs.locale, "taskContextErrUTF8Detail", map[string]any{"detail": detail})
+}
+
+// TaskContextErrNotTextDetail says "The file is not UTF-8 text: {detail}"
+// in the language the app shows.
+func TaskContextErrNotTextDetail(detail string) string {
+	return In(i18n.Locale()).TaskContextErrNotTextDetail(detail)
+}
+
+// TaskContextErrNotTextDetail says "The file is not UTF-8 text: {detail}"
+// in the language of msgs.
+func (msgs Messages) TaskContextErrNotTextDetail(detail string) string {
+	return Catalog.Format(msgs.locale, "taskContextErrNotTextDetail", map[string]any{"detail": detail})
+}

@@ -672,7 +672,7 @@ func TestPreviewNavigation219(t *testing.T) {
 			a.issueResult = issueResultPage{
 				Open: true, OwnerContactID: ct.ID, IssueID: "preview-issue", ExecutionID: "preview-exec",
 				Panel: issueResultPanelState{
-					RunLabel: "Run 1: 整理发布证据与未完成事项", RunStatus: "Completed",
+					RunNumber: 1, RunGoal: "整理发布证据与未完成事项", RunStatus: issueExecutionCompleted,
 					Response: "# 发布检查结果\n\n内容优先的主区阅读页保留完整中文正文，**不挤进 340px 右侧详情**。\n\n- file → result → work 逐层返回\n- Settings 返回到当前入口\n\n```text\ncurrent-file-preview\n```",
 					Files:    []issueResultFile{file},
 				},
@@ -783,7 +783,7 @@ func TestResultMainPageKeepsWorkbenchOutOfTabPath(t *testing.T) {
 	a.aux = "issue-result"
 	a.issueResult = issueResultPage{
 		Open: true, OwnerContactID: ct.ID, IssueID: "i-result", ExecutionID: "e-result",
-		Panel: issueResultPanelState{RunLabel: "Run 1", RunStatus: "Completed", Response: "main page result body"},
+		Panel: issueResultPanelState{RunNumber: 1, RunStatus: issueExecutionCompleted, Response: "main page result body"},
 	}
 	tr := ui.NewTester(a.view, 720, 640)
 	tr.Frame()
