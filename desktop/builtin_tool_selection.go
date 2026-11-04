@@ -5,9 +5,15 @@ package main
 // present, empty slice means "explicitly no built-in tools".
 
 import (
-	"fmt"
 	"slices"
 	"strings"
+)
+
+const (
+	builtinNoticeLegacy          = "builtin-legacy"
+	builtinNoticeManaged         = "builtin-managed"
+	builtinNoticeListUnavailable = "builtin-list-unavailable"
+	builtinNoticeToolPrefix      = "builtin-tool-unavailable:"
 )
 
 func cloneBuiltinTools(selection *[]string) *[]string {
@@ -52,18 +58,15 @@ func builtinToolSelectionContains(selection *[]string, name string) bool {
 }
 
 func builtinToolSelectionLabel(names []string) string {
-	if len(names) == 0 {
-		return "none"
-	}
 	return strings.Join(names, ", ")
 }
 
 func (a *appModel) validateBuiltinToolSelection(current, next *[]string) string {
 	if !a.connectionManaged && !builtinToolsEqual(current, next) {
 		if a.connectionLegacy {
-			return "Built-in tool selection requires a managed Nagi connection; this Runtime uses legacy environment configuration."
+			return builtinNoticeLegacy
 		}
-		return "Save and Apply a managed Nagi connection before customizing built-in tools."
+		return builtinNoticeManaged
 	}
 	if next == nil || len(*next) == 0 {
 		return ""
@@ -72,7 +75,7 @@ func (a *appModel) validateBuiltinToolSelection(current, next *[]string) string 
 		if current != nil && slices.Equal(*next, *current) {
 			return ""
 		}
-		return "The built-in tool list is not available from Runtime yet. Retry before changing the selection."
+		return builtinNoticeListUnavailable
 	}
 	available := make(map[string]bool, len(a.runtimeBuiltinTools))
 	for _, tool := range a.runtimeBuiltinTools {
@@ -80,7 +83,7 @@ func (a *appModel) validateBuiltinToolSelection(current, next *[]string) string 
 	}
 	for _, name := range *next {
 		if !available[name] {
-			return fmt.Sprintf("Built-in tool %q is not available from Runtime.", name)
+			return builtinNoticeToolPrefix + name
 		}
 	}
 	return ""

@@ -3,6 +3,8 @@ package main
 import (
 	"strings"
 	"testing"
+
+	"saki/desktop/locales"
 )
 
 func testApp(t *testing.T) *appModel {
@@ -204,7 +206,7 @@ func TestSnippetTruncatesByRunes(t *testing.T) {
 	c := &contact{Name: "X"}
 	c.Messages = []*message{{Kind: msgUser, Text: strings.Repeat("你", 80)}}
 	a := &appModel{contacts: []*contact{c}}
-	got := a.snippet(c)
+	got := a.snippet(c, locales.In("en"))
 	if !strings.HasSuffix(got, "…") {
 		t.Fatalf("long CJK snippet should be truncated: %q", got)
 	}

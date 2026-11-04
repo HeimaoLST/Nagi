@@ -30,6 +30,10 @@ func main() {
 		}
 		return
 	}
+	// The visible product name is Nagi; internal identifiers, the Saki.app
+	// artifact and Saki data paths stay as they are. Call before Run so the
+	// default app menu, About, Hide and Quit use Nagi too.
+	mygo.App.SetName("Nagi")
 	a, err := newRuntimeApp()
 	if err != nil {
 		a = newUnavailableApp(err)
@@ -47,7 +51,7 @@ func main() {
 	})
 	mygo.App.WhenReady(func() {
 		win := mygo.NewWindow(mygo.WindowOptions{
-			Title:     "Saki",
+			Title:     "Nagi",
 			Width:     1040,
 			Height:    720,
 			MinWidth:  720,

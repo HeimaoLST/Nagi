@@ -369,10 +369,10 @@ func TestStopConversationKeepsVisibleTextAndModelScope(t *testing.T) {
 	ct.ActiveTaskID = "task-live"
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	if !tr.HasText("Stop conversation") || !tr.HasText("Conversation") || !tr.HasText("gpt-fixture") {
+	if !tr.HasText("Stop chat") || !tr.HasText("Chat") || !tr.HasText("gpt-fixture") {
 		t.Fatalf("stop/model scope missing: %v", tr.Texts())
 	}
-	rect, ok := tr.Find("Stop conversation")
+	rect, ok := tr.Find("Stop chat")
 	if !ok || rect.W < 80 || rect.H < 32 {
 		t.Fatalf("stop control geometry = %+v/%v", rect, ok)
 	}
@@ -397,7 +397,7 @@ func TestSourcesPageBackReturnsToOriginatingControl(t *testing.T) {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if a.aux != "" || a.mainPageActive() || !tr.Focused("1 earlier messages") {
+	if a.aux != "" || a.mainPageActive() || !tr.Focused("1 earlier message") {
 		t.Fatalf("sources Back = aux=%q focused=%v", a.aux, tr.Focused("1 earlier messages"))
 	}
 }
@@ -513,8 +513,8 @@ func TestIssueModelPageBackReturnsToItsIssueButton(t *testing.T) {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if a.aux != "" || !a.detailIs(detailWork) || !tr.Focused("Issue model") {
-		t.Fatalf("issue model Back = aux=%q detail=%q focused=%v", a.aux, a.activeDetail(), tr.Focused("Issue model"))
+	if a.aux != "" || !a.detailIs(detailWork) || !tr.Focused("Task model") {
+		t.Fatalf("issue model Back = aux=%q detail=%q focused=%v", a.aux, a.activeDetail(), tr.Focused("Task model"))
 	}
 }
 
@@ -629,7 +629,7 @@ func TestPreviewNavigation219(t *testing.T) {
 						if !tr.HasText("整理发布证据与未完成事项") || !tr.HasText("Requirements") {
 							t.Fatalf("work preview lacks real issue content: %v", tr.Texts())
 						}
-					} else if !tr.HasText("New issue") || !tr.HasText("Issue filter") || !tr.HasText("Chat runs") {
+					} else if !tr.HasText("New task") || !tr.HasText("Task filter") || !tr.HasText("Chat runs") {
 						t.Fatalf("narrow work preview lost creation/overview content: %v", tr.Texts())
 					}
 				case detailHistory:
@@ -672,7 +672,7 @@ func TestPreviewNavigation219(t *testing.T) {
 			a.issueResult = issueResultPage{
 				Open: true, OwnerContactID: ct.ID, IssueID: "preview-issue", ExecutionID: "preview-exec",
 				Panel: issueResultPanelState{
-					RunLabel: "Run 1: 整理发布证据与未完成事项", RunStatus: "Completed",
+					RunNumber: 1, RunGoal: "整理发布证据与未完成事项", RunStatus: issueExecutionCompleted,
 					Response: "# 发布检查结果\n\n内容优先的主区阅读页保留完整中文正文，**不挤进 340px 右侧详情**。\n\n- file → result → work 逐层返回\n- Settings 返回到当前入口\n\n```text\ncurrent-file-preview\n```",
 					Files:    []issueResultFile{file},
 				},
@@ -783,7 +783,7 @@ func TestResultMainPageKeepsWorkbenchOutOfTabPath(t *testing.T) {
 	a.aux = "issue-result"
 	a.issueResult = issueResultPage{
 		Open: true, OwnerContactID: ct.ID, IssueID: "i-result", ExecutionID: "e-result",
-		Panel: issueResultPanelState{RunLabel: "Run 1", RunStatus: "Completed", Response: "main page result body"},
+		Panel: issueResultPanelState{RunNumber: 1, RunStatus: issueExecutionCompleted, Response: "main page result body"},
 	}
 	tr := ui.NewTester(a.view, 720, 640)
 	tr.Frame()
@@ -813,16 +813,16 @@ func TestNarrowWorkKeepsNewIssueAction(t *testing.T) {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	rect, ok := tr.Find("New issue")
+	rect, ok := tr.Find("New task")
 	if !ok || rect.W <= 0 || rect.H <= 0 || rect.X < 0 || rect.Y < 0 || rect.X+rect.W > 720 || rect.Y+rect.H > 640 {
-		t.Fatalf("narrow Work New issue = %+v/%v; texts=%v", rect, ok, tr.Texts())
+		t.Fatalf("narrow Work New task = %+v/%v; texts=%v", rect, ok, tr.Texts())
 	}
-	if err := tr.Click("New issue"); err != nil {
+	if err := tr.Click("New task"); err != nil {
 		t.Fatalf("narrow Work lost creation action: %v", err)
 	}
 	tr.Frame()
-	if !a.issueFormOpen || !tr.HasText("Issue goal") {
-		t.Fatalf("New issue did not open the existing form: open=%v texts=%v", a.issueFormOpen, tr.Texts())
+	if !a.issueFormOpen || !tr.HasText("Task goal") {
+		t.Fatalf("New task did not open the existing form: open=%v texts=%v", a.issueFormOpen, tr.Texts())
 	}
 }
 

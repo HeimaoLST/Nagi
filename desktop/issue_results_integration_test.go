@@ -138,8 +138,8 @@ func TestIssueResultFilesRuntimeIntegration(t *testing.T) {
 		MessageID: task.MessageID, WorkingDirectory: session.Metadata.WorkingDirectory,
 	}
 	derived := deriveIssueResultFiles(source, history)
-	if derived.Unavailable != "" {
-		t.Fatalf("unavailable = %q", derived.Unavailable)
+	if derived.UnavailableKind != "" {
+		t.Fatalf("unavailable = %q", derived.UnavailableKind)
 	}
 	if len(derived.Files) != 2 {
 		t.Fatalf("files = %+v", derived.Files)
@@ -160,7 +160,7 @@ func TestIssueResultFilesRuntimeIntegration(t *testing.T) {
 		opened = path
 		return nil
 	})
-	if action.Err != "" || action.Notice != "" || opened != wantPath {
+	if action.ErrKind != "" || action.NoticeKind != "" || opened != wantPath {
 		t.Fatalf("open action = %+v opened=%q", action, opened)
 	}
 	if err := first.client.shutdown(); err != nil {
@@ -187,7 +187,7 @@ func TestIssueResultFilesRuntimeIntegration(t *testing.T) {
 	}
 	source.WorkingDirectory = loaded.Metadata.WorkingDirectory
 	again := deriveIssueResultFiles(source, restored)
-	if again.Unavailable != "" || len(again.Files) != 2 {
+	if again.UnavailableKind != "" || len(again.Files) != 2 {
 		t.Fatalf("restored derivation = %+v", again)
 	}
 	if again.Files[0].RawResult != derived.Files[0].RawResult || again.Files[1].RawResult != derived.Files[1].RawResult {

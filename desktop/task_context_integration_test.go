@@ -23,6 +23,8 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+
+	"saki/desktop/locales"
 )
 
 type taskContextCallerContext struct {
@@ -759,7 +761,7 @@ func TestTaskContextIssueSentSnapshotPageCopyBeforeAndAfterRestart(t *testing.T)
 	h.pump.do(func() {
 		tr := ui.NewTester(h.app.view, 1040, 720)
 		tr.Frame()
-		if clickErr = clickAfterBoundedScrollInPump(tr, "More issue actions", 1040, 720); clickErr != nil {
+		if clickErr = clickAfterBoundedScrollInPump(tr, "More task actions", 1040, 720); clickErr != nil {
 			return
 		}
 		tr.Frame()
@@ -804,11 +806,11 @@ func TestTaskContextIssueSentSnapshotPageCopyBeforeAndAfterRestart(t *testing.T)
 		tr2.Frame()
 		// Restart restores persistent SelectedIssueID but the UI starts at the
 		// overview by design; enter the detail through the real issue row.
-		if restartClickErr = tr2.Click("Issue Show sent context"); restartClickErr != nil {
+		if restartClickErr = tr2.Click(locales.In("en").IssueRowLabel("Show sent context")); restartClickErr != nil {
 			return
 		}
 		tr2.Frame()
-		if restartClickErr = clickAfterBoundedScrollInPump(tr2, "More issue actions", 1040, 720); restartClickErr != nil {
+		if restartClickErr = clickAfterBoundedScrollInPump(tr2, "More task actions", 1040, 720); restartClickErr != nil {
 			return
 		}
 		tr2.Frame()

@@ -8,13 +8,13 @@ package main
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
 	goruntime "runtime"
+	"strconv"
 	"strings"
 	"syscall"
 	"unicode/utf8"
@@ -55,8 +55,8 @@ type issueResultFile struct {
 }
 
 type issueResultDerivation struct {
-	Files       []issueResultFile
-	Unavailable string
+	Files           []issueResultFile
+	UnavailableKind string
 }
 
 // deriveIssueResultFiles reads only the supplied Runtime history response. The
@@ -65,13 +65,13 @@ type issueResultDerivation struct {
 // latest work item.
 func deriveIssueResultFiles(source issueResultSource, history runtimeHistory) issueResultDerivation {
 	if source.SessionID == "" {
-		return issueResultDerivation{Unavailable: "Execution has no recorded Runtime session; results cannot be inspected."}
+		return issueResultDerivation{UnavailableKind: "no-session"}
 	}
 	if source.SessionID != history.SessionID {
-		return issueResultDerivation{Unavailable: "Runtime history belongs to a different session; results cannot be inspected."}
+		return issueResultDerivation{UnavailableKind: "session-mismatch"}
 	}
 	if source.TaskID == "" {
-		return issueResultDerivation{Unavailable: "Execution has no recorded Runtime task; results cannot be inspected."}
+		return issueResultDerivation{UnavailableKind: "no-task"}
 	}
 
 	projection := parseHistory(history.SessionID, history.Records, nil)
@@ -108,10 +108,10 @@ func deriveIssueResultFiles(source issueResultSource, history runtimeHistory) is
 		}
 	}
 	if !foundTask {
-		return issueResultDerivation{Unavailable: "Runtime history does not contain the execution's task; the session may be unavailable or legacy."}
+		return issueResultDerivation{UnavailableKind: "task-missing"}
 	}
 	if messageMismatch {
-		return issueResultDerivation{Unavailable: "Runtime history does not record the supplied execution message."}
+		return issueResultDerivation{UnavailableKind: "message-missing"}
 	}
 	return issueResultDerivation{Files: files}
 }
@@ -165,8 +165,10 @@ type issueResultFileInspection struct {
 	Regular          bool
 	Size             int64
 	Preview          string
-	Notice           string
-	ReadError        string
+	NoticeKind       string
+	NoticeDetail     string
+	ReadErrorKind    string
+	ReadErrorDetail  string
 }
 
 // inspectIssueResultFile reports the current file at the reported path. It does
@@ -176,40 +178,40 @@ func inspectIssueResultFile(file issueResultFile) issueResultFileInspection {
 	handle, err := os.OpenFile(file.Path, os.O_RDONLY|syscall.O_NONBLOCK, 0)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
-			inspection.Notice = "No file exists at the reported path; it may have been moved or deleted."
+			inspection.NoticeKind, inspection.NoticeDetail = resultNoticeMissing, ""
 		} else {
-			inspection.Notice = "Could not inspect the reported path: " + err.Error()
+			inspection.NoticeKind, inspection.NoticeDetail = resultNoticeInspect, err.Error()
 		}
 		return inspection
 	}
 	defer handle.Close()
 	info, err := handle.Stat()
 	if err != nil {
-		inspection.Notice = "Could not inspect the reported path: " + err.Error()
+		inspection.NoticeKind, inspection.NoticeDetail = resultNoticeInspect, err.Error()
 		return inspection
 	}
 	inspection.Exists = true
 	inspection.Size = info.Size()
 	if !info.Mode().IsRegular() {
-		inspection.Notice = "The reported path is no longer a regular file."
+		inspection.NoticeKind = resultNoticeRegular
 		return inspection
 	}
 	inspection.Regular = true
 	if info.Size() > issueResultPreviewLimit {
-		inspection.Notice = fmt.Sprintf("Current file is %d bytes; the preview limit is %d bytes. Open the file to inspect it in full.", info.Size(), issueResultPreviewLimit)
+		inspection.NoticeKind = resultNoticeTooLarge
 		return inspection
 	}
 	data, err := io.ReadAll(io.LimitReader(handle, issueResultPreviewLimit+1))
 	if err != nil {
-		inspection.ReadError = "Could not read the current file: " + err.Error()
+		inspection.ReadErrorKind, inspection.ReadErrorDetail = resultNoticeRead, err.Error()
 		return inspection
 	}
 	if len(data) > issueResultPreviewLimit {
-		inspection.Notice = fmt.Sprintf("Current file grew beyond the %d-byte preview limit. Open the file to inspect it in full.", issueResultPreviewLimit)
+		inspection.NoticeKind = resultNoticeGrew
 		return inspection
 	}
 	if !utf8.Valid(data) {
-		inspection.Notice = "The current file is not UTF-8 text; open it with the system application."
+		inspection.NoticeKind = resultNoticeNotUTF8
 		return inspection
 	}
 	inspection.Preview = string(data)
@@ -217,34 +219,126 @@ func inspectIssueResultFile(file issueResultFile) issueResultFileInspection {
 }
 
 type issueResultFileAction struct {
-	Path   string
-	Err    string
-	Notice string
+	Path         string
+	ErrKind      string
+	ErrDetail    string
+	NoticeKind   string
+	NoticeDetail string
 }
 
-func currentIssueResultPath(path string) string {
+const (
+	resultNoticeMissing  = "missing"
+	resultNoticeInspect  = "inspect-failed"
+	resultNoticeRegular  = "not-regular"
+	resultNoticeTooLarge = "too-large"
+	resultNoticeGrew     = "grew"
+	resultNoticeNotUTF8  = "not-utf8"
+	resultNoticeRead     = "read-failed"
+	resultActionOpen     = "open-failed"
+	resultActionReveal   = "reveal-failed"
+)
+
+func issueResultNoticeText(msgs locales.Messages, kind, detail string) string {
+	switch kind {
+	case resultNoticeMissing:
+		return msgs.ResultInspectMissing()
+	case resultNoticeInspect:
+		return msgs.ResultInspectFailed(detail)
+	case resultNoticeRegular:
+		return msgs.ResultInspectNotRegular()
+	case resultNoticeNotUTF8:
+		return msgs.ResultInspectNotUTF8()
+	case resultNoticeRead:
+		return msgs.ResultReadFailed(detail)
+	case resultActionOpen:
+		return msgs.ResultOpenFailed(detail)
+	case resultActionReveal:
+		return msgs.ResultRevealFailed(detail)
+	default:
+		return kind
+	}
+}
+
+func issueResultUnavailableRaw(kind string) string {
+	switch kind {
+	case "no-session":
+		return "Execution has no recorded Runtime session; results cannot be inspected."
+	case "session-mismatch":
+		return "Runtime history belongs to a different session; results cannot be inspected."
+	case "no-task":
+		return "Execution has no recorded Runtime task; results cannot be inspected."
+	case "task-missing":
+		return "Runtime history does not contain the execution's task; the session may be unavailable or legacy."
+	case "message-missing":
+		return "Runtime history does not record the supplied execution message."
+	default:
+		return ""
+	}
+}
+
+func issueResultPageText(msgs locales.Messages, kind, detail string) string {
+	switch kind {
+	case "load-no-session":
+		return msgs.ResultLoadNoSession()
+	case "load-runtime-not-ready":
+		return msgs.ResultLoadRuntimeNotReady()
+	case "load-owner-missing":
+		return msgs.ResultLoadOwnerMissing()
+	case "load-detached":
+		return msgs.ResultLoadDetached()
+	case "load-failed":
+		return msgs.ResultLoadFailed(detail)
+	case "notice-working-dir":
+		return msgs.ResultNoticeWorkingDirMissing()
+	case "no-session":
+		return msgs.ResultDeriveNoSession()
+	case "session-mismatch":
+		return msgs.ResultDeriveSessionMismatch()
+	case "no-task":
+		return msgs.ResultDeriveNoTask()
+	case "task-missing":
+		return msgs.ResultDeriveTaskMissing()
+	case "message-missing":
+		return msgs.ResultDeriveMessageMissing()
+	default:
+		return kind
+	}
+}
+
+func issueResultInspectionNoticeText(msgs locales.Messages, inspection issueResultFileInspection) string {
+	switch inspection.NoticeKind {
+	case resultNoticeTooLarge:
+		return msgs.ResultInspectTooLarge(strconv.FormatInt(inspection.Size, 10), strconv.Itoa(issueResultPreviewLimit))
+	case resultNoticeGrew:
+		return msgs.ResultInspectGrew(strconv.Itoa(issueResultPreviewLimit))
+	default:
+		return issueResultNoticeText(msgs, inspection.NoticeKind, inspection.NoticeDetail)
+	}
+}
+
+func currentIssueResultPath(path string) (string, string) {
 	info, err := os.Stat(path)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
-			return "No file exists at the reported path; it may have been moved or deleted."
+			return resultNoticeMissing, ""
 		}
-		return "Could not inspect the reported path: " + err.Error()
+		return resultNoticeInspect, err.Error()
 	}
 	if !info.Mode().IsRegular() {
-		return "The reported path is not a regular file."
+		return resultNoticeRegular, ""
 	}
-	return ""
+	return "", ""
 }
 
 // requestOpenIssueResultFile checks the current path before invoking the injected
 // opener. open is mygo.Shell.OpenPath in the application; tests inject a
 // recorder so a missing or non-regular path proves the opener was not called.
 func requestOpenIssueResultFile(file issueResultFile, open func(string) error) issueResultFileAction {
-	if notice := currentIssueResultPath(file.Path); notice != "" {
-		return issueResultFileAction{Path: file.Path, Notice: notice}
+	if kind, detail := currentIssueResultPath(file.Path); kind != "" {
+		return issueResultFileAction{Path: file.Path, NoticeKind: kind, NoticeDetail: detail}
 	}
 	if err := open(file.Path); err != nil {
-		return issueResultFileAction{Path: file.Path, Err: "Could not open the current file: " + err.Error()}
+		return issueResultFileAction{Path: file.Path, ErrKind: resultActionOpen, ErrDetail: err.Error()}
 	}
 	return issueResultFileAction{Path: file.Path}
 }
@@ -253,11 +347,11 @@ func requestOpenIssueResultFile(file issueResultFile, open func(string) error) i
 // The non-macOS API reports no outcome, so callers must not toast success for
 // it; only an explicit error is shown as failure.
 func requestRevealIssueResultFile(file issueResultFile, reveal func(string) error) issueResultFileAction {
-	if notice := currentIssueResultPath(file.Path); notice != "" {
-		return issueResultFileAction{Path: file.Path, Notice: notice}
+	if kind, detail := currentIssueResultPath(file.Path); kind != "" {
+		return issueResultFileAction{Path: file.Path, NoticeKind: kind, NoticeDetail: detail}
 	}
 	if err := reveal(file.Path); err != nil {
-		return issueResultFileAction{Path: file.Path, Err: "Could not reveal the current file: " + err.Error()}
+		return issueResultFileAction{Path: file.Path, ErrKind: resultActionReveal, ErrDetail: err.Error()}
 	}
 	return issueResultFileAction{Path: file.Path}
 }
@@ -281,7 +375,8 @@ func requestRevealIssueResultWithSystem(path string) error {
 // local reading mode (ReaderKey) and renders matching results on the next
 // frame. It contains no file I/O, task dispatch or persistence.
 type issueResultPanelState struct {
-	RunLabel           string
+	RunNumber          int
+	RunGoal            string
 	RunStatus          string
 	RunDetail          string
 	Response           string
@@ -365,11 +460,11 @@ func issueResultPanel(c *ui.Context, state *issueResultPanelState, actions issue
 		})
 	}
 	root.Children(func() {
-		if state.RunLabel != "" {
-			ui.Text(c, state.RunLabel).FontSize(14).TextColor(th.TextMuted)
+		if state.RunGoal != "" {
+			ui.Text(c, locales.In(c.Locale()).ResultRunLabel(strconv.Itoa(state.RunNumber), state.RunGoal)).FontSize(14).TextColor(th.TextMuted)
 		}
 		if state.RunStatus != "" {
-			ui.Text(c, state.RunStatus).FontSize(typeAction).FontWeight(500).TextColor(th.TextMuted)
+			ui.Text(c, issueExecutionText(locales.In(c.Locale()), state.RunStatus)).FontSize(typeAction).FontWeight(500).TextColor(th.TextMuted)
 		}
 		if state.RunDetail != "" {
 			ui.Text(c, state.RunDetail).FontSize(14).LineHeight(1.5).TextColor(th.Warning)
@@ -377,9 +472,9 @@ func issueResultPanel(c *ui.Context, state *issueResultPanelState, actions issue
 
 		result := ui.Column(c).AlignSelf(ui.Stretch).MinWidth(0).Padding(12).Radius(th.Radius).Background(th.Surface).Gap(8)
 		result.Children(func() {
-			ui.Text(c, "Result").FontSize(typeAction).FontWeight(500).TextColor(th.Text)
+			ui.Text(c, locales.In(c.Locale()).ResultHeading()).FontSize(typeAction).FontWeight(500).TextColor(th.Text)
 			if state.Response == "" {
-				ui.Text(c, "No assistant response was recorded for this run.").FontSize(14).LineHeight(1.5).TextColor(th.TextMuted)
+				ui.Text(c, locales.In(c.Locale()).ResultNoAssistant()).FontSize(14).LineHeight(1.5).TextColor(th.TextMuted)
 				return
 			}
 			markdownReader(c, state.Response, markdownReaderOptions{
@@ -395,9 +490,9 @@ func issueResultPanel(c *ui.Context, state *issueResultPanelState, actions issue
 		})
 
 		ui.Column(c).AlignSelf(ui.Stretch).MinWidth(0).Gap(8).Children(func() {
-			ui.Text(c, "Reported files").FontSize(typeAction).FontWeight(500).TextColor(th.Text)
+			ui.Text(c, locales.In(c.Locale()).ResultReportedFiles()).FontSize(typeAction).FontWeight(500).TextColor(th.Text)
 			if len(state.Files) == 0 {
-				ui.Text(c, "No files were reported for this run.").FontSize(14).LineHeight(1.5).TextColor(th.TextMuted)
+				ui.Text(c, locales.In(c.Locale()).ResultNoFiles()).FontSize(14).LineHeight(1.5).TextColor(th.TextMuted)
 				return
 			}
 			for index, file := range state.Files {
@@ -440,7 +535,7 @@ func issueResultFileRow(c *ui.Context, th *ui.Theme, state *issueResultPanelStat
 	key := issueResultFileKey(file)
 	handle := state.fileHandle(key)
 	row := ui.ButtonBase(c).
-		Label(fmt.Sprintf("Read file %d: %s", index+1, filepath.Base(file.Path))).
+		Label(locales.In(c.Locale()).ResultFileRowLabel(strconv.Itoa(index+1), filepath.Base(file.Path))).
 		AlignSelf(ui.Stretch).MinWidth(0).Padding(10).Radius(th.Radius).Border(0.5, th.Border).Gap(4).Bind(handle)
 	if state.Selected == key {
 		row.Background(th.SurfaceHover)
@@ -448,11 +543,11 @@ func issueResultFileRow(c *ui.Context, th *ui.Theme, state *issueResultPanelStat
 	row.Children(func() {
 		ui.Row(c).Wrap().AlignItems(ui.Center).Gap(8).Children(func() {
 			ui.Text(c, filepath.Base(file.Path)).FontSize(typeAction).FontWeight(500).TextColor(th.Text).MaxLines(2).Grow(1)
-			ui.Text(c, "Read file →").FontSize(typeAction).FontWeight(500).TextColor(th.TextMuted)
+			ui.Text(c, locales.In(c.Locale()).ResultReadFile()).FontSize(typeAction).FontWeight(500).TextColor(th.TextMuted)
 		})
 		ui.Text(c, file.Path).FontSize(14).TextColor(th.TextMuted).MaxLines(2)
-		ui.Text(c, "Working directory: "+file.WorkingDirectory).FontSize(typeAction).TextColor(th.TextMuted).MaxLines(2)
-		ui.Text(c, "Reported by "+file.ToolName).FontSize(typeAction).TextColor(th.TextMuted).MaxLines(2)
+		ui.Text(c, locales.In(c.Locale()).ResultWorkingDirectory(file.WorkingDirectory)).FontSize(typeAction).TextColor(th.TextMuted).MaxLines(2)
+		ui.Text(c, locales.In(c.Locale()).ResultReportedBy(file.ToolName)).FontSize(typeAction).TextColor(th.TextMuted).MaxLines(2)
 	})
 	if state.ReaderReturnKey == key {
 		row.Focus()
@@ -516,7 +611,7 @@ func issueResultReaderPage(c *ui.Context, th *ui.Theme, state *issueResultPanelS
 	}
 	root.Children(func() {
 		ui.Row(c).Padding(16, 16).AlignItems(ui.Center).Gap(8).Children(func() {
-			back := appTooltip(c, secondaryButton(c, "← Back to results").Label("Close reading"), "Back to results").Bind(&state.ReaderCloseHandle).OnClick(closeReader)
+			back := appTooltip(c, secondaryButton(c, locales.In(c.Locale()).ResultBackResults()).Label(locales.In(c.Locale()).ResultCloseReading()), locales.In(c.Locale()).ResultBackToResultsTooltip()).Bind(&state.ReaderCloseHandle).OnClick(closeReader)
 			if state.FocusReader {
 				back.Focus()
 				state.FocusReader = false
@@ -532,7 +627,7 @@ func issueResultReaderPage(c *ui.Context, th *ui.Theme, state *issueResultPanelS
 					CopyHandle: &state.CopyPathHandle,
 				})
 				issueResultReaderActions(c, th, state, actions, file)
-				ui.Text(c, "Current file: content may differ from this run").FontSize(typeAction).TextColor(th.TextMuted)
+				ui.Text(c, locales.In(c.Locale()).ResultCurrentFileDiff()).FontSize(typeAction).TextColor(th.TextMuted)
 				issueResultReaderPreview(c, th, state, actions, file, issueResultFileKey(file))
 				if state.SourceFor == issueResultFileKey(file) {
 					issueResultSourceView(c, th, state, actions, file)
@@ -588,10 +683,10 @@ func issueResultReaderActions(c *ui.Context, th *ui.Theme, state *issueResultPan
 			issueResultReaderAction(c, th, label).Bind(&state.ReaderSourceHandle).OnClick(func() { actions.ToggleSource(key) })
 		}
 	})
-	if state.ActionFor == key && state.Action.Err != "" {
-		ui.Text(c, state.Action.Err).FontSize(typeAction).LineHeight(1.4).TextColor(th.Danger)
-	} else if state.ActionFor == key && state.Action.Notice != "" {
-		ui.Text(c, state.Action.Notice).FontSize(typeAction).LineHeight(1.4).TextColor(th.Warning)
+	if state.ActionFor == key && state.Action.ErrKind != "" {
+		ui.Text(c, issueResultNoticeText(locales.In(c.Locale()), state.Action.ErrKind, state.Action.ErrDetail)).FontSize(typeAction).LineHeight(1.4).TextColor(th.Danger)
+	} else if state.ActionFor == key && state.Action.NoticeKind != "" {
+		ui.Text(c, issueResultNoticeText(locales.In(c.Locale()), state.Action.NoticeKind, state.Action.NoticeDetail)).FontSize(typeAction).LineHeight(1.4).TextColor(th.Warning)
 	}
 }
 
@@ -601,25 +696,25 @@ func issueResultReaderPreview(c *ui.Context, th *ui.Theme, state *issueResultPan
 		inspection = state.Inspection
 	}
 	if state.Checking && state.InspectFor == key {
-		ui.Text(c, "Checking the current file…").FontSize(14).TextColor(th.TextMuted)
+		ui.Text(c, locales.In(c.Locale()).ResultCheckingFile()).FontSize(14).TextColor(th.TextMuted)
 	}
 	if inspection == nil {
 		if !state.Checking {
-			ui.Text(c, "Check the current file at this path to preview it.").FontSize(14).TextColor(th.TextMuted)
+			ui.Text(c, locales.In(c.Locale()).ResultCheckCurrentFile()).FontSize(14).TextColor(th.TextMuted)
 		}
 		return
 	}
-	if inspection.Notice != "" {
-		ui.Text(c, inspection.Notice).FontSize(14).LineHeight(1.5).TextColor(th.Warning)
+	if inspection.NoticeKind != "" {
+		ui.Text(c, issueResultInspectionNoticeText(locales.In(c.Locale()), *inspection)).FontSize(14).LineHeight(1.5).TextColor(th.Warning)
 	}
-	if inspection.ReadError != "" {
-		ui.Text(c, inspection.ReadError).FontSize(14).LineHeight(1.5).TextColor(th.Danger)
+	if inspection.ReadErrorKind != "" {
+		ui.Text(c, issueResultNoticeText(locales.In(c.Locale()), inspection.ReadErrorKind, inspection.ReadErrorDetail)).FontSize(14).LineHeight(1.5).TextColor(th.Danger)
 	}
-	if !inspection.Exists || !inspection.Regular || inspection.Notice != "" || inspection.ReadError != "" {
+	if !inspection.Exists || !inspection.Regular || inspection.NoticeKind != "" || inspection.ReadErrorKind != "" {
 		return
 	}
 	if inspection.Preview == "" {
-		ui.Text(c, "Empty file (0 bytes).").FontSize(14).LineHeight(1.5).TextColor(th.TextMuted)
+		ui.Text(c, locales.In(c.Locale()).ResultEmptyFile()).FontSize(14).LineHeight(1.5).TextColor(th.TextMuted)
 	}
 	markdownReader(c, inspection.Preview, markdownReaderOptions{
 		PlainText:       !issueResultMarkdownFile(file.Path),
@@ -637,12 +732,12 @@ func issueResultReaderPreview(c *ui.Context, th *ui.Theme, state *issueResultPan
 func issueResultSourceView(c *ui.Context, th *ui.Theme, state *issueResultPanelState, actions issueResultPanelActions, file issueResultFile) {
 	source := ui.Column(c).AlignSelf(ui.Stretch).MinWidth(0).Gap(4)
 	source.Children(func() {
-		ui.Text(c, "Source & raw record").FontSize(typeAction).FontWeight(500).TextColor(th.Text)
-		ui.Text(c, "Working directory: "+file.WorkingDirectory).FontSize(typeAction).TextColor(th.TextMuted).MaxLines(2)
-		ui.Text(c, "Session: "+file.SessionID).FontSize(typeAction).TextColor(th.TextMuted).MaxLines(2)
-		ui.Text(c, "Task: "+file.TaskID).FontSize(typeAction).TextColor(th.TextMuted).MaxLines(2)
-		ui.Text(c, "Message: "+file.MessageID).FontSize(typeAction).TextColor(th.TextMuted).MaxLines(2)
-		ui.Text(c, "Call: "+file.CallID).FontSize(typeAction).TextColor(th.TextMuted).MaxLines(2)
+		ui.Text(c, locales.In(c.Locale()).ResultSourceRaw()).FontSize(typeAction).FontWeight(500).TextColor(th.Text)
+		ui.Text(c, locales.In(c.Locale()).ResultWorkingDirectory(file.WorkingDirectory)).FontSize(typeAction).TextColor(th.TextMuted).MaxLines(2)
+		ui.Text(c, locales.In(c.Locale()).ResultSessionLine(file.SessionID)).FontSize(typeAction).TextColor(th.TextMuted).MaxLines(2)
+		ui.Text(c, locales.In(c.Locale()).ResultTaskLine(file.TaskID)).FontSize(typeAction).TextColor(th.TextMuted).MaxLines(2)
+		ui.Text(c, locales.In(c.Locale()).ResultMessageLine(file.MessageID)).FontSize(typeAction).TextColor(th.TextMuted).MaxLines(2)
+		ui.Text(c, locales.In(c.Locale()).ResultCallLine(file.CallID)).FontSize(typeAction).TextColor(th.TextMuted).MaxLines(2)
 		ui.Scroll(c).MaxHeight(160).AlignSelf(ui.Stretch).Children(func() {
 			markdownReader(c, file.RawResult, markdownReaderOptions{
 				PlainText: true, CopyLabel: locales.In(c.Locale()).CopyToolRecordLabel(), CopyText: actions.CopyText,

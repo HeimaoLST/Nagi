@@ -8,6 +8,8 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+
+	"saki/desktop/locales"
 )
 
 type contactStatus int
@@ -99,6 +101,7 @@ type contact struct {
 	Status                contactStatus
 	Unread                int
 	Work                  string
+	WorkArg               string
 	WorkLabel             string
 	Messages              []*message
 	History               []historyEntry
@@ -129,12 +132,15 @@ type contact struct {
 	LastTaskID        string
 	SendState         sendState
 	SendError         string
+	SendErrorKind     string
+	SendErrorDetail   string
 	SubmittedDraft    string
 	SubmittedRev      int
 	pendingSend       *pendingSend
 	draftRev          int
 	HistoryDirty      bool
 	StatusDetail      string
+	StatusDetailKind  string
 	SessionWorkingDir string
 	SessionModel      string
 	SessionAPI        string
@@ -168,63 +174,68 @@ type appModel struct {
 	composerFocusModel   bool
 	composerFocusContext bool
 
-	settingsOpen         bool
-	settingsTab          string
-	settingsReturnFocus  string
-	settingsReturnLink   markdownLinkTarget
-	markdownLinkFocus    markdownLinkTarget
-	linkReturnTarget     markdownLinkTarget
-	linkReturnSeen       bool
-	settingsContactID    string
-	settingsProfiles     map[string]*contactProfileEditor
-	settingsPickerChoice string
-	settingsScroll       ui.ScrollState
-	settingsFocusBack    bool
-	settingsFocusTab     string
-	sourcesScroll        ui.ScrollState
-	modelScroll          ui.ScrollState
-	taskContextScroll    ui.ScrollState
-	issueResultScroll    ui.ScrollState
-	historyScroll        ui.ScrollState
-	historyFullScroll    ui.ScrollState
+	settingsOpen        bool
+	settingsTab         string
+	settingsReturnFocus string
+	settingsReturnLink  markdownLinkTarget
+	markdownLinkFocus   markdownLinkTarget
+	linkReturnTarget    markdownLinkTarget
+	linkReturnSeen      bool
+	settingsContactID   string
+	settingsProfiles    map[string]*contactProfileEditor
+	settingsScroll      ui.ScrollState
+	settingsFocusBack   bool
+	settingsFocusTab    string
+	sourcesScroll       ui.ScrollState
+	modelScroll         ui.ScrollState
+	taskContextScroll   ui.ScrollState
+	issueResultScroll   ui.ScrollState
+	historyScroll       ui.ScrollState
+	historyFullScroll   ui.ScrollState
 
-	contactProfile           *contactProfileEditor
-	contactProfileID         string
-	contactSearch            string
-	contactScope             string
-	contactScopeChoice       string
-	contactHistory           *contactHistoryResult
-	contactHistoryFull       *contactHistoryFull
-	contactHistoryBusy       bool
-	contactHistoryDetailBusy bool
-	contactHistoryError      string
-	contactHistoryGen        int
-	contactHistoryDetailGen  int
-	contactHistoryInFlight   int
-	resultInFlight           int
-	submissionInFlight       int
-	metadataInFlight         int
+	contactProfile            *contactProfileEditor
+	contactProfileID          string
+	contactSearch             string
+	contactScope              string
+	contactHistory            *contactHistoryResult
+	contactHistoryFull        *contactHistoryFull
+	contactHistoryBusy        bool
+	contactHistoryDetailBusy  bool
+	contactHistoryError       string
+	contactHistoryErrorDetail string
+	contactHistoryGen         int
+	contactHistoryDetailGen   int
+	contactHistoryInFlight    int
+	resultInFlight            int
+	submissionInFlight        int
+	metadataInFlight          int
 
-	appearanceMode   string
-	appearanceChoice string
-	appearanceStatus string
-	appearanceError  string
-	systemDark       bool
-	storeInitAllowed bool
-	localSaveErr     string
-	localSavePrevErr string
+	appearanceMode     string
+	languageMode       string
+	languageModeLoaded bool
+	uiLocale           string
+	appearanceStatus   string
+	appearanceError    string
+	systemDark         bool
+	storeInitAllowed   bool
+	localSaveErr       string
+	localSavePrevErr   string
+	localSavePrevKind  string
 
 	issueFormOpen                 bool
 	issueDetailOpen               map[string]bool
 	issueFormEditingID            string
-	issueFilterChoice             string
 	issueGoal                     string
 	issueRequirements             string
 	issueFormError                string
+	issueFormNotice               string
+	issueFormNoticeDetail         string
 	taskContextIssueID            string
 	focusIssueGoal                bool
 	focusIssueNew                 bool
 	issueActionError              string
+	issueActionNotice             string
+	issueActionNoticeDetail       string
 	issueRequirementDrafts        map[string]*string
 	issueCompletionDrafts         map[string]*string
 	issueSupplementDrafts         map[string]*string
@@ -239,8 +250,11 @@ type appModel struct {
 	rt                         *runtimeClient
 	runtimeStatus              string
 	runtimeErr                 string
+	runtimeErrKind             string
 	runtimeStage               string
 	runtimeHint                string
+	runtimeHintKind            string
+	runtimeHintArgs            []string
 	runtimeBinary              string
 	runtimeHelperChecked       bool
 	runtimeAPI                 string
@@ -298,14 +312,15 @@ type appModel struct {
 	issueToolRefresh         map[string]issueToolRefreshMark
 	issueToolReleaseInFlight int
 
-	modelForm         *modelSelection
-	modelPanelKind    string
-	modelOpenToken    int
-	modelPanelMessage string
-	modelPanelError   string
-	modelOpActive     bool
-	modelOpSessionID  string
-	modelRecovery     map[string]modelRecoveryState
+	modelForm             *modelSelection
+	modelPanelKind        string
+	modelOpenToken        int
+	modelPanelMessage     string
+	modelPanelError       string
+	modelPanelErrorDetail string
+	modelOpActive         bool
+	modelOpSessionID      string
+	modelRecovery         map[string]modelRecoveryState
 
 	// Layout is a GUI-wide preference, not a contact or runtime fact. Widths
 	// are persisted in the contact store; windowWidth is only the current
@@ -460,11 +475,11 @@ func (a *appModel) leaveIssueFormForSwitch() bool {
 		return true
 	}
 	if strings.TrimSpace(a.issueGoal) != "" || strings.TrimSpace(a.issueRequirements) != "" {
-		a.issueFormError = "Finish or cancel the current issue form before switching contacts."
+		a.setIssueFormNotice("Finish or cancel the current issue form before switching contacts.", "form-switch", "")
 		return false
 	}
 	a.issueFormOpen = false
-	a.issueFormError = ""
+	a.clearIssueFormNotice()
 	return true
 }
 
@@ -499,12 +514,12 @@ func (a *appModel) selectContact(i int) {
 	}
 }
 
-func (a *appModel) snippet(c *contact) string {
+func (a *appModel) snippet(c *contact, msgs locales.Messages) string {
 	if c.Status == statusWorking && c.Work != "" {
-		return c.Work
+		return workNoticeText(msgs, c.Work, c.WorkArg)
 	}
 	if !a.demo && c.SessionID != "" && !c.Loaded {
-		return "History not loaded"
+		return msgs.HistoryNotLoadedCompact()
 	}
 	for i := len(c.Messages) - 1; i >= 0; i-- {
 		m := c.Messages[i]
@@ -515,27 +530,26 @@ func (a *appModel) snippet(c *contact) string {
 		if text == "" {
 			continue
 		}
-		prefix := ""
-		if m.Kind == msgUser {
-			prefix = "You: "
-		}
 		runes := []rune(text)
 		if len(runes) > 36 {
 			text = strings.TrimSpace(string(runes[:35])) + "…"
 		}
-		return prefix + text
+		if m.Kind == msgUser {
+			return msgs.SnippetUser(text)
+		}
+		return text
 	}
-	return "No messages yet"
+	return msgs.EmptyNoMessages()
 }
 
-func (a *appModel) statusLabel(c *contact) string {
+func (a *appModel) statusLabel(c *contact, msgs locales.Messages) string {
 	switch c.Status {
 	case statusWorking:
-		return "Working"
+		return msgs.StatusWorking()
 	case statusAttention:
-		return "Needs attention"
+		return msgs.StatusNeedsAttention()
 	default:
-		return "Ready"
+		return msgs.StatusReady()
 	}
 }
 
@@ -553,7 +567,7 @@ func (a *appModel) addDefaultContact() {
 	a.defaultContactN++
 	c := &contact{
 		ID:        fmt.Sprintf("contact-%d", a.seq),
-		Name:      fmt.Sprintf("New contact %d", a.defaultContactN),
+		Name:      locales.In(a.uiLocale).NewContactName(a.defaultContactN),
 		Role:      "Assistant",
 		Status:    statusReady,
 		WorkLabel: "Preparing a reply",
@@ -573,7 +587,6 @@ func (a *appModel) addDefaultContact() {
 
 func (a *appModel) openSettings() {
 	a.settingsContactID = a.selectedContact().ID
-	a.settingsPickerChoice = ""
 	a.openSettingsTab(settingsTabContact, settingsSourceRail)
 }
 
@@ -608,6 +621,7 @@ func (a *appModel) closeAux() {
 		a.modelForm = nil
 		a.modelPanelMessage = ""
 		a.modelPanelError = ""
+		a.modelPanelErrorDetail = ""
 		if wasModelKind == "work" {
 			a.focusIssueModel = true
 		}
@@ -816,6 +830,29 @@ func (a *appModel) send(ct *contact, text string) bool {
 	})
 	return true
 }
+
+func (ct *contact) setSendError(raw, kind, detail string) {
+	ct.SendError = raw
+	ct.SendErrorKind = kind
+	ct.SendErrorDetail = detail
+}
+
+func (ct *contact) clearSendError() { ct.setSendError("", "", "") }
+
+func (ct *contact) setStatusDetail(raw, kind string) {
+	ct.StatusDetail = raw
+	ct.StatusDetailKind = kind
+}
+
+func (ct *contact) clearStatusDetail() { ct.setStatusDetail("", "") }
+
+func (w *issueWorkSession) setSendError(raw, kind, detail string) {
+	w.SendError = raw
+	w.SendErrorKind = kind
+	w.SendErrorDetail = detail
+}
+
+func (w *issueWorkSession) clearSendError() { w.setSendError("", "", "") }
 
 func (a *appModel) sendCurrent() bool {
 	ct := a.selectedContact()

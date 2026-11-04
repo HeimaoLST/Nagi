@@ -52,7 +52,7 @@ func (a *appModel) addIssueSupplementBefore(ct *contact, issueID, text string, b
 	if _, err := ledger.AddWith(target, text, before, a.persist); err != nil {
 		return err
 	}
-	a.issueActionError = ""
+	a.clearIssueActionNotice()
 	// Receipt is durable. Only an issue with an existing execution is already
 	// authorized to continue automatically; a never-run issue requires an
 	// explicit Start/Run (which includes pending supplements) before dispatch.
@@ -75,7 +75,7 @@ func (a *appModel) setIssueSupplementAuto(ct *contact, issueID string, enabled b
 		if !ledger.ResumeAutoContinue(a.persist) {
 			return false
 		}
-		a.issueActionError = ""
+		a.clearIssueActionNotice()
 		a.maybeAutoContinueIssue(ct, issue)
 		return true
 	}
@@ -87,7 +87,7 @@ func (a *appModel) setIssueSupplementAuto(ct *contact, issueID string, enabled b
 	if !ledger.StopAutoContinue(batch, a.persist) {
 		return false
 	}
-	a.issueActionError = ""
+	a.clearIssueActionNotice()
 	return true
 }
 
@@ -144,13 +144,13 @@ func (a *appModel) startIssueRun(ct *contact, issue *productIssue) bool {
 func (a *appModel) startIssueRunWithOperation(ct *contact, issue *productIssue, operationID string) bool {
 	prompt := issuePrompt(issue)
 	if strings.TrimSpace(prompt) == "" {
-		a.issueFormError = "This issue has no goal to run."
+		a.setIssueFormNotice("This issue has no goal to run.", "no-goal", "")
 		return false
 	}
 	ledger := issueSupplementLedgerFor(issue)
 	target := issueSupplementTargetFor(ct, issue)
 	if active := ledger.activeBatch(target); active != nil {
-		a.issueFormError = "A supplement batch is already " + active.State + " for this issue."
+		a.setIssueFormNotice("A supplement batch is already "+active.State+" for this issue.", "supplement-batch-active", active.State)
 		return false
 	}
 	pendingText := strings.TrimSpace(ledger.pendingText(target))
@@ -166,11 +166,12 @@ func (a *appModel) startIssueRunWithOperation(ct *contact, issue *productIssue, 
 	previousSend, previousPending := issue.Work.SendState, issue.Work.pendingExecutionID
 	previousStatus, previousUpdated := issue.Status, issue.UpdatedAt
 	previousError := issue.Work.SendError
+	previousErrorKind, previousErrorDetail := issue.Work.SendErrorKind, issue.Work.SendErrorDetail
 	issue.Executions = append(issue.Executions, execution)
 	issue.Status = issueStatusInProgress
 	issue.UpdatedAt = nowMillis()
 	issue.Work.SendState = sendSubmitting
-	issue.Work.SendError = ""
+	issue.Work.clearSendError()
 	issue.Work.pendingExecutionID = execution.ID
 
 	var batch *issueSupplementBatch
@@ -183,11 +184,12 @@ func (a *appModel) startIssueRunWithOperation(ct *contact, issue *productIssue, 
 	if err != nil {
 		issue.Executions = previousExecutions
 		issue.Work.SendState, issue.Work.pendingExecutionID = previousSend, previousPending
-		issue.Status, issue.UpdatedAt, issue.Work.SendError = previousStatus, previousUpdated, previousError
-		a.issueFormError = "Could not save the issue execution: " + err.Error()
+		issue.Status, issue.UpdatedAt = previousStatus, previousUpdated
+		issue.Work.setSendError(previousError, previousErrorKind, previousErrorDetail)
+		a.setIssueFormNotice("Could not save the issue execution: "+err.Error(), "execution-save-failed", err.Error())
 		return false
 	}
-	a.issueFormError = ""
+	a.clearIssueFormNotice()
 	if !a.startIssueTask(ct, issue, execution, prompt) {
 		detail := issue.Work.SendError
 		if detail == "" {
@@ -208,7 +210,7 @@ func (a *appModel) startIssueRunWithOperation(ct *contact, issue *productIssue, 
 		} else {
 			_ = a.persist()
 		}
-		a.issueFormError = detail
+		a.setIssueFormNotice(detail, "", "")
 		return false
 	}
 	return true
@@ -249,10 +251,10 @@ func (a *appModel) issueSupplementDraft(issueID string) *string {
 
 func (a *appModel) saveIssueSupplement(ct *contact, issueID, text string) bool {
 	if err := a.addIssueSupplement(ct, issueID, text); err != nil {
-		a.issueActionError = err.Error()
+		a.setIssueActionNotice(err.Error(), "", "")
 		return false
 	}
-	a.issueActionError = ""
+	a.clearIssueActionNotice()
 	return true
 }
 
@@ -261,11 +263,11 @@ func (a *appModel) retryIssueSupplementBatch(ct *contact, issue *productIssue, b
 		return false
 	}
 	if !issue.Supplements.RetryUnaccepted(batch, a.persist) {
-		a.issueActionError = "Could not save the retry intent; the old supplement receipt was left unchanged."
+		a.setIssueActionNotice("Could not save the retry intent; the old supplement receipt was left unchanged.", "supplement-retry-save-failed", "")
 		return false
 	}
 	if !a.issueRunCaptured(ct, issue) {
-		a.issueActionError = a.issueFormError
+		a.setIssueActionNotice(a.issueFormError, a.issueFormNotice, a.issueFormNoticeDetail)
 		return false
 	}
 	return true
@@ -304,7 +306,7 @@ func (a *appModel) normalizeRestoredSupplementBatches() {
 	}
 	if changed {
 		if err := a.persist(); err != nil {
-			a.issueActionError = "Could not save restored supplement integrity state: " + err.Error()
+			a.setIssueActionNotice("Could not save restored supplement integrity state: "+err.Error(), "supplement-restore-failed", err.Error())
 		}
 	}
 }
@@ -369,7 +371,7 @@ func (a *appModel) acceptSupplementFromHistory(issue *productIssue, execution *i
 		return false
 	}
 	if err != nil {
-		issue.Work.SendError = "Runtime accepted this supplement, but the history-verified receipt could not be saved: " + err.Error()
+		issue.Work.setSendError("Runtime accepted this supplement, but the history-verified receipt could not be saved: "+err.Error(), "supplement-history-receipt-failed", err.Error())
 	}
 	return true
 }

@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo/ui"
+
+	"saki/desktop/locales"
 )
 
 func workspaceTestApp(t *testing.T) (*appModel, *contact) {
@@ -24,10 +26,10 @@ func TestThreePaneBreakpointsAndToggles(t *testing.T) {
 	a.windowWidth = 1180
 	tr := ui.NewTester(a.view, 1180, 720)
 	tr.Frame()
-	if !tr.HasText("No issues in Unfinished.") || !tr.HasText("Chat runs") {
+	if !tr.HasText("No tasks in Not done.") || !tr.HasText("Chat runs") {
 		t.Fatal("new work panel should show the issue overview and local work entry")
 	}
-	if r, ok := tr.Find("No issues in Unfinished."); !ok || r.X < 800 {
+	if r, ok := tr.Find("No tasks in Not done."); !ok || r.X < 800 {
 		t.Fatalf("full-rail work overview x = %v, want >= 800", r.X)
 	}
 
@@ -53,14 +55,14 @@ func TestThreePaneBreakpointsAndToggles(t *testing.T) {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if tr.HasText("No issues in Unfinished.") || !tr.Focused("Work") {
+	if tr.HasText("No tasks in Not done.") || !tr.Focused("Work") {
 		t.Fatal("closing work should hide it and return focus to Work")
 	}
 	if err := tr.Click("Work"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if !tr.HasText("No issues in Unfinished.") || !tr.Focused("Close workspace") {
+	if !tr.HasText("No tasks in Not done.") || !tr.Focused("Close workspace") {
 		t.Fatal("opening work should show it and focus Close workspace")
 	}
 
@@ -76,7 +78,7 @@ func TestThreePaneBreakpointsAndToggles(t *testing.T) {
 	if a.workOverlay() {
 		t.Fatal("1380 should keep the work panel as a third column")
 	}
-	if r, ok := trWide.Find("No issues in Unfinished."); !ok || r.X < 1000 {
+	if r, ok := trWide.Find("No tasks in Not done."); !ok || r.X < 1000 {
 		t.Fatalf("wide work overview x = %v, want >= 1000", r.X)
 	}
 
@@ -122,9 +124,9 @@ func TestIssueOverviewContentHasPanelInset(t *testing.T) {
 					}
 					t.Logf("%s width=%d panelX=%.1f rect=%+v ok=%v", label, width, panelX, r, ok)
 				}
-				check("Issue filter")
+				check("Task filter")
 				if empty {
-					check("No issues in Unfinished.")
+					check("No tasks in Not done.")
 				} else {
 					check("overview row inset")
 				}
@@ -236,8 +238,14 @@ func TestLateAndStopEventsDoNotCrossTasks(t *testing.T) {
 	if w.State != workInterrupted || ct.ActiveTaskID != "" {
 		t.Fatalf("stop terminal = work %q active %q", w.State, ct.ActiveTaskID)
 	}
-	if got := workStateLabel(w); !strings.Contains(got, "Stopped") || !strings.Contains(got, "interrupted") {
+	if got := workStateText(locales.In("en"), w); got != "Stopped" {
 		t.Fatalf("stop terminal label = %q", got)
+	}
+	if got := workNoticeText(locales.In("en"), workNoticeForWork(w), ""); got != "Stopped" {
+		t.Fatalf("stop terminal notice = %q", got)
+	}
+	if got := workNoticeText(locales.In("en"), workNoticeForWork(&workItem{State: workInterrupted}), ""); got != "Interrupted" {
+		t.Fatalf("plain interrupted notice = %q", got)
 	}
 
 	ct.ActiveTaskID = "t2"
@@ -251,8 +259,8 @@ func TestLateAndStopEventsDoNotCrossTasks(t *testing.T) {
 	if len(w.Tools) != 0 || len(w2.Tools) != 0 {
 		t.Fatal("late event from old task polluted another work item")
 	}
-	if !strings.Contains(ct.Work, "Running") && ct.Work != "" {
-		t.Fatalf("unexpected work summary: %q", ct.Work)
+	if ct.Work != "" && !strings.Contains(workNoticeText(locales.In("en"), ct.Work, ct.WorkArg), "Running") {
+		t.Fatalf("unexpected work summary: %q/%q", ct.Work, ct.WorkArg)
 	}
 	beforeMessages := len(ct.Messages)
 	a.applyEvent(ct, runtimeEventEnvelope{
@@ -367,7 +375,7 @@ func TestHistoryModalPreservesWorkAndReturnsFocus(t *testing.T) {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if err := tr.Click("View in conversation"); err != nil {
+	if err := tr.Click("View in chat"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
@@ -442,7 +450,7 @@ func TestSingleExecutionSlotBlocksOtherContact(t *testing.T) {
 	a.rt = &runtimeClient{}
 	a.runtimeStatus = runtimeStateReady
 	reason := a.canSend(other)
-	if !strings.Contains(reason, "Another contact is working") {
+	if reason != blockAnotherContact {
 		t.Fatalf("second contact reason = %q", reason)
 	}
 	if other.Draft != "" || ct.ActiveTaskID != "t1" {
@@ -462,7 +470,7 @@ func TestUnloadedSessionDoesNotClaimEmptyHistory(t *testing.T) {
 	if tr.HasText("No messages yet") || tr.HasText("No current work") {
 		t.Fatalf("unloaded session was presented as truly empty: %v", tr.Texts())
 	}
-	for _, want := range []string{"Conversation history is not loaded", "Session history is not loaded", "Runtime is not ready"} {
+	for _, want := range []string{"Chat history is not loaded", "Session history is not loaded", "Runtime is not ready"} {
 		if !tr.HasText(want) {
 			t.Errorf("unloaded state missing %q", want)
 		}

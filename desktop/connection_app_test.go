@@ -54,7 +54,10 @@ func TestConnectionStoreCreationFailureCanBeRepaired(t *testing.T) {
 		t.Fatal(err)
 	}
 	config := testConnectionConfig(t)
-	h.pump.do(func() { h.app.saveConnection(config) })
+	h.pump.do(func() {
+		h.app.connectionForm.Draft = newConnectionSettings(&config, config.WorkingDirectory).Draft
+		h.app.saveConnection(config)
+	})
 	h.pump.wait(func() bool { return !h.app.connectionForm.Busy })
 	h.pump.do(func() {
 		if h.app.connectionForm.Error == "" || h.app.connectionReloadBlocked() == "" {
@@ -212,8 +215,8 @@ func TestConnectionApplyFailureRetryOnlyAppliesWithoutRewriting(t *testing.T) {
 		t.Fatal(clickErr)
 	}
 	h.pump.wait(func() bool { return !h.app.connectionForm.Busy })
-	if !strings.Contains(h.app.connectionForm.Error, "Could not start the new runtime") {
-		t.Fatalf("apply failure = %q", h.app.connectionForm.Error)
+	if h.app.connectionForm.Error != connErrorStart || h.app.connectionForm.ErrorDetail == "" {
+		t.Fatalf("apply failure = %q / %q", h.app.connectionForm.Error, h.app.connectionForm.ErrorDetail)
 	}
 	h.pump.do(func() {
 		tr := ui.NewTester(h.app.view, 1040, 720)
@@ -237,6 +240,67 @@ func TestConnectionApplyFailureRetryOnlyAppliesWithoutRewriting(t *testing.T) {
 	h.pump.do(func() { saved, applying, rt = h.app.connectionSaved, h.app.connectionApplying, h.app.rt })
 	if saved == nil || applying || rt != nil {
 		t.Fatal("retry apply changed saved/runtime state unexpectedly")
+	}
+	h.shutdown(t)
+}
+
+func TestConnectionFeedbackClearsAfterSuccessfulSaveAndLocaleSwitch(t *testing.T) {
+	root := t.TempDir()
+	isolateConnectionApp(t, root, "")
+	h := openConnectionHarness(t)
+	config := testConnectionConfig(t)
+	oldFailure := "provider timeout while testing"
+	var enTexts, zhTexts []string
+	h.pump.do(func() {
+		h.app.connectionForm.Error = connErrorTestFailed
+		h.app.connectionForm.ErrorDetail = oldFailure
+		h.app.connectionForm.Status = connStatusTesting
+		tr := ui.NewTester(h.app.view, 1040, 720)
+		tr.SetLocale("en")
+		tr.Frame()
+		enTexts = tr.Texts()
+		tr.SetLocale("zh-Hans")
+		tr.Frame()
+		zhTexts = tr.Texts()
+	})
+	if !containsText(enTexts, "Connection test failed: "+oldFailure) {
+		t.Fatalf("English test failure missing: %v", enTexts)
+	}
+	if !containsText(zhTexts, "连接测试失败："+oldFailure) {
+		t.Fatalf("Chinese test failure missing: %v", zhTexts)
+	}
+	h.pump.do(func() {
+		h.app.connectionForm.Draft = newConnectionSettings(&config, config.WorkingDirectory).Draft
+		h.app.saveConnection(config)
+	})
+	h.pump.wait(func() bool { return !h.app.connectionForm.Busy })
+	var keptError, keptDetail, savedModel string
+	h.pump.do(func() {
+		keptError, keptDetail = h.app.connectionForm.Error, h.app.connectionForm.ErrorDetail
+		savedModel = h.app.connectionForm.Draft.Model
+		tr := ui.NewTester(h.app.view, 1040, 720)
+		tr.SetLocale("zh-Hans")
+		tr.Frame()
+		zhTexts = tr.Texts()
+		tr.SetLocale("en")
+		tr.Frame()
+		enTexts = tr.Texts()
+		h.app.connectionForm.Error = connErrorTestFailed
+		h.app.connectionForm.ErrorDetail = "raw provider 500"
+		tr.Frame()
+		enTexts = tr.Texts()
+	})
+	if keptError != "" || keptDetail != "" {
+		t.Fatalf("save success kept old failure: %q / %q", keptError, keptDetail)
+	}
+	if savedModel != config.Model {
+		t.Fatalf("save success changed the saved draft: %q", savedModel)
+	}
+	if containsText(enTexts, "Connection test failed: raw provider 500") == false {
+		t.Fatalf("next raw failure missing: %v", enTexts)
+	}
+	if containsText(enTexts, oldFailure) || containsText(zhTexts, "连接测试失败") {
+		t.Fatalf("old failure revived: en=%v zh=%v", enTexts, zhTexts)
 	}
 	h.shutdown(t)
 }

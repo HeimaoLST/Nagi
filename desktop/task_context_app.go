@@ -4,7 +4,11 @@ package main
 // callback, restoring owned snapshot lists, the bounded editor panel, and
 // read-only material rendering for Runtime history.
 
-import "github.com/egoist/mygo/ui"
+import (
+	"github.com/egoist/mygo/ui"
+
+	"saki/desktop/locales"
+)
 
 const taskContextUncertainSendError = "A previous message may have been sent; delivery was not confirmed before restart. Reload history to verify. No automatic retry."
 
@@ -42,8 +46,8 @@ func (a *appModel) loadStoredTaskContexts(store *contactStore) {
 				ct.pendingSend.State = "unknown"
 				ct.SendState = sendUnknown
 				ct.Status = statusAttention
-				ct.SendError = taskContextUncertainSendError
-				ct.StatusDetail = ct.SendError
+				ct.setSendError(taskContextUncertainSendError, "send-uncertain", "")
+				ct.setStatusDetail(ct.SendError, ct.SendErrorKind)
 			}
 		}
 	}
@@ -83,22 +87,22 @@ func (a *appModel) openIssueTaskContext(issueID string) {
 
 func (a *appModel) taskContextPanel(c *ui.Context, t *ui.Theme) {
 	ct := a.selectedContact()
-	owner := "Conversation: " + ct.Name
+	owner := locales.In(c.Locale()).TaskContextOwnerConversation(ct.Name)
 	target := &ct.Context
 	if a.taskContextIssueID != "" {
 		issue := ct.issueByID(a.taskContextIssueID)
 		if issue == nil {
-			ui.Text(c, "This issue is no longer available.").FontSize(12).TextColor(t.Danger)
-			ui.Button(c, "Close task context").FontSize(12).OnClick(func() { a.closeAux() })
+			ui.Text(c, locales.In(c.Locale()).TaskContextIssueUnavailable()).FontSize(12).TextColor(t.Danger)
+			ui.Button(c, locales.In(c.Locale()).TaskContextClose()).FontSize(12).OnClick(func() { a.closeAux() })
 			return
 		}
-		owner = "Issue: " + issue.Goal
+		owner = locales.In(c.Locale()).TaskContextOwnerIssue(issue.Goal)
 		target = &issue.Context
 	}
 	ui.Row(c).AlignItems(ui.Center).Children(func() {
 		ui.Text(c, owner).FontSize(typePageTitle).FontWeight(500).TextColor(t.Text).MaxLines(2)
 		ui.Spacer(c)
-		ui.Button(c, "Close task context").FontSize(12).OnClick(func() { a.closeAux() })
+		ui.Button(c, locales.In(c.Locale()).TaskContextClose()).FontSize(12).OnClick(func() { a.closeAux() })
 	})
 	target.view(c, a.workTheme)
 }

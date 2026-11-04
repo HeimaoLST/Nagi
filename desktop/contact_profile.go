@@ -42,6 +42,84 @@ type contactProfileEditor struct {
 	initial               profileDraft
 }
 
+// Profile notices are stored by kind so the page can say them again in the
+// current language. Unknown text stays raw for callers that show a diagnostic.
+const (
+	profileNoticeBusy               = "profile-busy"
+	profileNoticeArchived           = "profile-archived"
+	profileNoticeNoConversation     = "profile-no-conversation"
+	profileNoticeReasonArchived     = "profile-reason-archived"
+	profileNoticeReasonUnknown      = "profile-reason-unknown"
+	profileNoticeReasonActive       = "profile-reason-active"
+	profileNoticeErrorStore         = "profile-error-store"
+	profileNoticeErrorSave          = "profile-error-save"
+	profileNoticeSavedDefaults      = "profile-saved-defaults"
+	profileNoticeSavedNextMessage   = "profile-saved-next-message"
+	profileNoticeNameRequired       = "profile-name-required"
+	profileNoticeWorkspaceAbsolute  = "profile-workspace-absolute"
+	profileNoticeWorkspaceDirectory = "profile-workspace-directory"
+)
+
+func profileNoticeText(msgs locales.Messages, notice string) string {
+	switch notice {
+	case profileNoticeBusy:
+		return msgs.ProfileErrorBusy()
+	case profileNoticeArchived:
+		return msgs.ProfileErrorArchived()
+	case profileNoticeNoConversation:
+		return msgs.ProfileErrorNoConversation()
+	case profileNoticeReasonArchived:
+		return msgs.ProfileReasonArchived()
+	case profileNoticeReasonUnknown:
+		return msgs.ProfileReasonUnknown()
+	case profileNoticeReasonActive:
+		return msgs.ProfileReasonActive()
+	case profileNoticeErrorStore:
+		return msgs.ProfileErrorStoreUnavailable()
+	case profileNoticeErrorSave:
+		return msgs.ProfileErrorSaveFailed()
+	case profileNoticeSavedDefaults:
+		return msgs.ProfileSavedDefaults()
+	case profileNoticeSavedNextMessage:
+		return msgs.ProfileSavedNextMessage()
+	case profileNoticeNameRequired:
+		return msgs.ValidationNameRequired()
+	case profileNoticeWorkspaceAbsolute:
+		return msgs.ValidationWorkspaceAbsolute()
+	case profileNoticeWorkspaceDirectory:
+		return msgs.ValidationWorkspaceDirectory()
+	case archiveNoticeAlready:
+		return msgs.ArchiveErrorAlready()
+	case archiveNoticeUnknown:
+		return msgs.ArchiveErrorUnknown()
+	case archiveNoticeActive:
+		return msgs.ArchiveErrorActive()
+	case archiveNoticeStore:
+		return msgs.ArchiveErrorStore()
+	case archiveNoticeSave:
+		return msgs.ArchiveErrorSave()
+	case archiveNoticeSaved:
+		return msgs.ArchiveSaved()
+	case restoreNoticeStore:
+		return msgs.RestoreErrorStore()
+	case restoreNoticeSave:
+		return msgs.RestoreErrorSave()
+	case restoreNoticeSaved:
+		return msgs.RestoreSaved()
+	case builtinNoticeLegacy:
+		return msgs.SettingsBuiltinLegacyError()
+	case builtinNoticeManaged:
+		return msgs.SettingsBuiltinManagedError()
+	case builtinNoticeListUnavailable:
+		return msgs.BuiltinListUnavailable()
+	default:
+		if name, ok := strings.CutPrefix(notice, builtinNoticeToolPrefix); ok {
+			return msgs.BuiltinToolUnavailable(name)
+		}
+		return notice
+	}
+}
+
 func newContactProfileEditor(draft profileDraft) *contactProfileEditor {
 	draft = cloneProfileDraft(draft)
 	return &contactProfileEditor{Draft: draft, initial: cloneProfileDraft(draft), focusField: "Name"}
@@ -87,13 +165,13 @@ func validateProfileDraft(draft profileDraft) (profileDraft, map[string]string) 
 	draft.Name = strings.TrimSpace(draft.Name)
 	draft.Workspace = strings.TrimSpace(draft.Workspace)
 	if draft.Name == "" {
-		problems["Name"] = "Enter a contact name."
+		problems["Name"] = profileNoticeNameRequired
 	}
 	if draft.Workspace != "" {
 		if !filepath.IsAbs(draft.Workspace) {
-			problems["Workspace"] = "Workspace must be an absolute path, or empty to use the applied default."
+			problems["Workspace"] = profileNoticeWorkspaceAbsolute
 		} else if info, err := os.Stat(draft.Workspace); err != nil || !info.IsDir() {
-			problems["Workspace"] = "Workspace must be an existing directory."
+			problems["Workspace"] = profileNoticeWorkspaceDirectory
 		}
 	}
 	return draft, problems
@@ -101,16 +179,16 @@ func validateProfileDraft(draft profileDraft) (profileDraft, map[string]string) 
 
 func (e *contactProfileEditor) Request(saveAndNew bool) (profileDraft, bool) {
 	if e.Busy {
-		e.Error = "Saving is already in progress."
+		e.Error = profileNoticeBusy
 		return profileDraft{}, false
 	}
 	if e.Archived {
-		e.Error = "Restore this contact before saving its profile."
+		e.Error = profileNoticeArchived
 		return profileDraft{}, false
 	}
 	if saveAndNew {
 		if !e.HasConversation {
-			e.Error = "A new conversation can be started only when an existing conversation exists."
+			e.Error = profileNoticeNoConversation
 			return profileDraft{}, false
 		}
 		if e.ActiveWork || e.UnknownWork {
@@ -136,11 +214,11 @@ func (e *contactProfileEditor) Request(saveAndNew bool) (profileDraft, bool) {
 func (e *contactProfileEditor) activityReason() string {
 	switch {
 	case e.Archived:
-		return "This contact is archived. Restore it before editing or starting new work."
+		return profileNoticeReasonArchived
 	case e.UnknownWork:
-		return "Work is still unresolved. Reload to confirm its status before archiving or starting a new conversation."
+		return profileNoticeReasonUnknown
 	case e.ActiveWork:
-		return "Active work must finish or stop before archiving or starting a new conversation."
+		return profileNoticeReasonActive
 	default:
 		return ""
 	}
@@ -184,26 +262,27 @@ func (e *contactProfileEditor) toggleBuiltinTool(name string, enabled bool) {
 }
 
 func (e *contactProfileEditor) builtinToolsView(c *ui.Context, t *ui.Theme, editable bool, actions contactProfileActions) {
+	msgs := locales.In(c.Locale())
 	if !e.BuiltinToolsSupported {
 		if e.BuiltinToolsError != "" {
-			ui.Text(c, "Built-in tools").FontSize(typeAction).FontWeight(500).TextColor(t.Text)
+			ui.Text(c, msgs.ProfileBuiltinTools()).FontSize(typeAction).FontWeight(500).TextColor(t.Text)
 			ui.Text(c, e.BuiltinToolsError).FontSize(14).LineHeight(1.5).TextColor(t.Warning)
 		}
 		return
 	}
-	ui.Text(c, "Built-in tools").FontSize(typeAction).FontWeight(500).TextColor(t.Text)
+	ui.Text(c, msgs.ProfileBuiltinTools()).FontSize(typeAction).FontWeight(500).TextColor(t.Text)
 	if e.BuiltinToolsLoading {
-		ui.Text(c, "Loading built-in tools from Runtime…").FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+		ui.Text(c, msgs.ProfileBuiltinLoading()).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
 		return
 	}
 	if !e.BuiltinToolsLoaded {
 		message := e.BuiltinToolsError
 		if message == "" {
-			message = "Built-in tools have not been loaded from Runtime yet."
+			message = msgs.ProfileBuiltinNotLoaded()
 		}
 		ui.Text(c, message).FontSize(14).LineHeight(1.5).TextColor(t.Warning)
 		if e.CanRetryBuiltinTools {
-			secondaryButton(c, "Retry built-in tools").Disabled(e.Busy).OnClick(func() {
+			secondaryButton(c, msgs.ProfileBuiltinRetry()).Disabled(e.Busy).OnClick(func() {
 				if actions.RetryBuiltinTools != nil {
 					actions.RetryBuiltinTools()
 				}
@@ -214,12 +293,12 @@ func (e *contactProfileEditor) builtinToolsView(c *ui.Context, t *ui.Theme, edit
 
 	defaultNames := e.builtinDefaultNames()
 	defaultSelected := e.Draft.BuiltinTools == nil
-	defaultLabel := "Use host defaults"
+	defaultLabel := msgs.ProfileBuiltinUseDefaults()
 	if len(defaultNames) > 0 {
 		defaultLabel += " (" + strings.Join(defaultNames, ", ") + ")"
 	}
 	defaultValue := defaultSelected
-	defaultBox := appTooltip(c, ui.Checkbox(c, &defaultValue, defaultLabel), "Use the built-in tools supplied by Runtime's host default.").FillWidth().MinHeight(32).Disabled(!editable)
+	defaultBox := appTooltip(c, ui.Checkbox(c, &defaultValue, defaultLabel), msgs.ProfileBuiltinUseDefaultsTooltip()).FillWidth().MinHeight(32).Disabled(!editable)
 	defaultBox.OnChange(func() { e.setBuiltinDefault(defaultValue) })
 
 	for _, tool := range e.BuiltinTools {
@@ -236,7 +315,7 @@ func (e *contactProfileEditor) builtinToolsView(c *ui.Context, t *ui.Theme, edit
 		box.OnChange(func() { e.toggleBuiltinTool(name, value) })
 	}
 	if e.Draft.BuiltinTools != nil && len(*e.Draft.BuiltinTools) == 0 {
-		ui.Text(c, "No built-in tools are enabled. Nagi issue tools remain available for their own workflows.").FontSize(14).LineHeight(1.5).TextColor(t.Warning)
+		ui.Text(c, msgs.ProfileBuiltinNone()).FontSize(14).LineHeight(1.5).TextColor(t.Warning)
 	}
 	if e.BuiltinToolsError != "" {
 		ui.Text(c, e.BuiltinToolsError).FontSize(14).LineHeight(1.5).TextColor(t.Danger)
@@ -244,70 +323,71 @@ func (e *contactProfileEditor) builtinToolsView(c *ui.Context, t *ui.Theme, edit
 }
 
 func (e *contactProfileEditor) view(c *ui.Context, t *ui.Theme, actions contactProfileActions) {
+	msgs := locales.In(c.Locale())
 	editable := !e.Busy && !e.Archived
 	ui.Column(c).Gap(10).Children(func() {
-		ui.Text(c, "Saving updates this contact's name. Other settings apply when a conversation or issue work session is first created; existing sessions keep their configuration.").FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+		ui.Text(c, msgs.ProfileSaveIntro()).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
 		if reason := e.activityReason(); reason != "" {
-			ui.Text(c, reason).FontSize(14).LineHeight(1.5).TextColor(t.Warning)
+			ui.Text(c, profileNoticeText(msgs, reason)).FontSize(14).LineHeight(1.5).TextColor(t.Warning)
 		}
 		if e.Archived {
-			ui.Text(c, "Archived").FontSize(typeAction).FontWeight(500).TextColor(t.Warning)
+			ui.Text(c, msgs.ProfileArchivedBadge()).FontSize(typeAction).FontWeight(500).TextColor(t.Warning)
 		}
 
-		ui.Text(c, "Name").FontSize(typeAction).FontWeight(500).TextColor(t.Text)
-		name := ui.TextInput(c, &e.Draft.Name).Label("Contact name").FontSize(14).Placeholder("Name").Disabled(!editable)
+		ui.Text(c, msgs.FieldName()).FontSize(typeAction).FontWeight(500).TextColor(t.Text)
+		name := ui.TextInput(c, &e.Draft.Name).Label(msgs.FieldNameAccessible()).FontSize(14).Placeholder(msgs.FieldNamePlaceholder()).Disabled(!editable)
 		if e.focusField == "Name" {
 			name.Focus()
 			e.focusField = ""
 		}
 		if message := e.Errors["Name"]; message != "" {
-			ui.Text(c, message).FontSize(14).TextColor(t.Danger)
+			ui.Text(c, profileNoticeText(msgs, message)).FontSize(14).TextColor(t.Danger)
 		}
-		ui.Text(c, "Purpose").FontSize(typeAction).FontWeight(500).TextColor(t.Text)
-		ui.TextArea(c, &e.Draft.Purpose).Label("Contact purpose").FontSize(14).Placeholder("Purpose").Disabled(!editable)
-		ui.Text(c, "Instructions").FontSize(typeAction).FontWeight(500).TextColor(t.Text)
-		ui.TextArea(c, &e.Draft.Instructions).Label("Contact instructions").FontSize(14).Placeholder("Instructions").Disabled(!editable)
-		ui.Text(c, "Workspace").FontSize(typeAction).FontWeight(500).TextColor(t.Text)
-		workspace := ui.TextInput(c, &e.Draft.Workspace).Label("Contact workspace").FontSize(14).Placeholder("/absolute/path/to/workspace (empty uses default)").Disabled(!editable)
+		ui.Text(c, msgs.ProfilePurpose()).FontSize(typeAction).FontWeight(500).TextColor(t.Text)
+		ui.TextArea(c, &e.Draft.Purpose).Label(msgs.FieldPurposeAccessible()).FontSize(14).Placeholder(msgs.ProfilePurpose()).Disabled(!editable)
+		ui.Text(c, msgs.ProfileInstructions()).FontSize(typeAction).FontWeight(500).TextColor(t.Text)
+		ui.TextArea(c, &e.Draft.Instructions).Label(msgs.FieldInstructionsAccessible()).FontSize(14).Placeholder(msgs.ProfileInstructions()).Disabled(!editable)
+		ui.Text(c, msgs.ProfileWorkspace()).FontSize(typeAction).FontWeight(500).TextColor(t.Text)
+		workspace := ui.TextInput(c, &e.Draft.Workspace).Label(msgs.FieldWorkspaceAccessible()).FontSize(14).Placeholder(msgs.FieldWorkspacePlaceholder()).Disabled(!editable)
 		if e.focusField == "Workspace" {
 			workspace.Focus()
 			e.focusField = ""
 		}
 		if message := e.Errors["Workspace"]; message != "" {
-			ui.Text(c, message).FontSize(14).TextColor(t.Danger)
+			ui.Text(c, profileNoticeText(msgs, message)).FontSize(14).TextColor(t.Danger)
 		}
-		ui.Text(c, "Leave Workspace empty to use the applied default directory.").FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+		ui.Text(c, msgs.ProfileWorkspaceHint()).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
 
 		e.builtinToolsView(c, t, editable, actions)
 
 		ui.Column(c).Gap(6).Children(func() {
 			ui.Row(c).Gap(8).Wrap().Children(func() {
-				secondaryButton(c, locales.In(c.Locale()).ContactSaveChanges()).Label(locales.In(c.Locale()).ContactSaveChanges()).Disabled(!editable).OnClick(func() {
+				secondaryButton(c, msgs.ContactSaveChanges()).Label(msgs.ContactSaveChanges()).Disabled(!editable).OnClick(func() {
 					if draft, ok := e.Request(false); ok && actions.Save != nil {
 						actions.Save(draft)
 					}
 				})
 				if e.HasConversation && !e.Archived {
-					secondaryButton(c, "Save and start new conversation").Disabled(!editable || e.ActiveWork || e.UnknownWork).OnClick(func() {
+					secondaryButton(c, msgs.ProfileSaveAndNew()).Disabled(!editable || e.ActiveWork || e.UnknownWork).OnClick(func() {
 						if draft, ok := e.Request(true); ok && actions.SaveAndNew != nil {
 							actions.SaveAndNew(draft)
 						}
 					})
 				}
 				if !profileDraftEqual(e.Draft, e.initial) && !e.Busy && actions.Discard != nil {
-					secondaryButton(c, "Discard changes").OnClick(actions.Discard)
+					secondaryButton(c, msgs.ProfileDiscard()).OnClick(actions.Discard)
 				}
 			})
-			ui.Text(c, "Contact management").FontSize(typeAction).FontWeight(500).TextColor(t.TextMuted)
+			ui.Text(c, msgs.ProfileContactManagement()).FontSize(typeAction).FontWeight(500).TextColor(t.TextMuted)
 			ui.Row(c).Gap(8).Wrap().Children(func() {
 				if e.Archived {
-					secondaryButton(c, "Restore").Disabled(e.Busy).OnClick(func() {
+					secondaryButton(c, msgs.ProfileRestore()).Disabled(e.Busy).OnClick(func() {
 						if actions.Restore != nil {
 							actions.Restore()
 						}
 					})
 				} else {
-					secondaryButton(c, "Archive").Disabled(e.Busy || e.ActiveWork || e.UnknownWork).OnClick(func() {
+					secondaryButton(c, msgs.ProfileArchive()).Disabled(e.Busy || e.ActiveWork || e.UnknownWork).OnClick(func() {
 						if actions.Archive != nil {
 							actions.Archive()
 						}
@@ -316,13 +396,13 @@ func (e *contactProfileEditor) view(c *ui.Context, t *ui.Theme, actions contactP
 			})
 		})
 		if e.Busy {
-			ui.Text(c, "Saving…").FontSize(14).TextColor(t.TextMuted)
+			ui.Text(c, msgs.ProfileSaving()).FontSize(14).TextColor(t.TextMuted)
 		}
 		if e.Error != "" {
-			ui.Text(c, e.Error).FontSize(14).LineHeight(1.5).TextColor(t.Danger)
+			ui.Text(c, profileNoticeText(msgs, e.Error)).FontSize(14).LineHeight(1.5).TextColor(t.Danger)
 		}
 		if e.Status != "" {
-			ui.Text(c, e.Status).FontSize(14).LineHeight(1.5).TextColor(t.Text)
+			ui.Text(c, profileNoticeText(msgs, e.Status)).FontSize(14).LineHeight(1.5).TextColor(t.Text)
 		}
 	})
 }

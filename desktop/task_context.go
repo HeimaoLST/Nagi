@@ -14,6 +14,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -42,6 +43,24 @@ var (
 	errTaskContextNoSource    = errors.New("this context item has no file source")
 )
 
+type taskContextError struct {
+	kind   error
+	detail string
+}
+
+func (e *taskContextError) Error() string {
+	if e.detail == "" {
+		return e.kind.Error()
+	}
+	return e.kind.Error() + ": " + e.detail
+}
+
+func (e *taskContextError) Unwrap() error { return e.kind }
+
+func taskContextDetail(kind error, detail string) error {
+	return &taskContextError{kind: kind, detail: detail}
+}
+
 type taskContextItem struct {
 	ID       string `json:"id"`
 	Name     string `json:"name"`
@@ -61,10 +80,10 @@ type taskContext struct {
 	formName  string
 	formText  string
 	formPath  string
-	formError string
+	formError error
 
 	previewID   string
-	actionError string
+	actionError error
 
 	// onChange is the single app-owned persistence path for committed snapshots.
 	// UI editor state is intentionally not persisted.
@@ -218,7 +237,7 @@ func (tc *taskContext) Remove(id string) bool {
 		previous := tc.snapshot()
 		tc.items = append(tc.items[:index], tc.items[index+1:]...)
 		if err := tc.persistChange(previous); err != nil {
-			tc.actionError = err.Error()
+			tc.actionError = err
 			return false
 		}
 		if tc.previewID == id {
@@ -261,17 +280,17 @@ func (tc *taskContext) clearSubmitted(submitted []taskContextItem) int {
 func (tc *taskContext) cancelForm() {
 	tc.formOpen = false
 	tc.formMode, tc.formID = "", ""
-	tc.formName, tc.formText, tc.formPath, tc.formError = "", "", "", ""
+	tc.formName, tc.formText, tc.formPath, tc.formError = "", "", "", nil
 }
 
 func (tc *taskContext) openSnippetForm() {
-	tc.actionError = ""
+	tc.actionError = nil
 	tc.cancelForm()
 	tc.formOpen, tc.formMode = true, "snippet"
 }
 
 func (tc *taskContext) openFileForm() {
-	tc.actionError = ""
+	tc.actionError = nil
 	tc.cancelForm()
 	tc.formOpen, tc.formMode = true, "file"
 }
@@ -279,10 +298,10 @@ func (tc *taskContext) openFileForm() {
 func (tc *taskContext) openEditForm(id string) {
 	item, ok := tc.itemByID(id)
 	if !ok {
-		tc.actionError = errTaskContextMissing.Error()
+		tc.actionError = errTaskContextMissing
 		return
 	}
-	tc.actionError = ""
+	tc.actionError = nil
 	tc.cancelForm()
 	tc.formOpen, tc.formMode, tc.formID = true, "edit", item.ID
 	tc.formName, tc.formText, tc.formPath = item.Name, item.Text, item.Source
@@ -304,20 +323,20 @@ func (tc *taskContext) saveForm() {
 		return
 	}
 	if err != nil {
-		tc.formError = err.Error()
+		tc.formError = err
 		return
 	}
-	tc.actionError = ""
+	tc.actionError = nil
 	tc.cancelForm()
 	tc.previewID = item.ID
 }
 
 func (tc *taskContext) refreshItem(id string) {
 	if _, err := tc.Refresh(id); err != nil {
-		tc.actionError = err.Error()
+		tc.actionError = err
 		return
 	}
-	tc.actionError = ""
+	tc.actionError = nil
 }
 
 func validateTaskContext(items []taskContextItem) error {
@@ -331,7 +350,7 @@ func validateTaskContext(items []taskContextItem) error {
 		}
 		total += taskContextWrapperBytes(item.inputName(), item.Text)
 		if total > taskContextMaxBytes {
-			return fmt.Errorf("%w: combined context needs %d bytes", errTaskContextOversize, total)
+			return taskContextDetail(errTaskContextOversize, fmt.Sprintf("combined context needs %d bytes", total))
 		}
 	}
 	return nil
@@ -369,33 +388,33 @@ var taskContextBinaryExtensions = map[string]bool{
 func readTaskContextFile(path string) (text, source string, err error) {
 	path = strings.TrimSpace(path)
 	if path == "" {
-		return "", "", fmt.Errorf("%w: enter a file path", errTaskContextRead)
+		return "", "", taskContextDetail(errTaskContextRead, "enter a file path")
 	}
 	ext := strings.ToLower(filepath.Ext(path))
 	if taskContextBinaryExtensions[ext] {
-		return "", "", fmt.Errorf("%w: %s", errTaskContextUnsupported, ext)
+		return "", "", taskContextDetail(errTaskContextUnsupported, ext)
 	}
 	absolute, err := filepath.Abs(path)
 	if err != nil {
-		return "", "", fmt.Errorf("%w: %v", errTaskContextRead, err)
+		return "", "", taskContextDetail(errTaskContextRead, err.Error())
 	}
 	file, err := os.Open(absolute)
 	if err != nil {
-		return "", "", fmt.Errorf("%w: %v", errTaskContextRead, err)
+		return "", "", taskContextDetail(errTaskContextRead, err.Error())
 	}
 	defer file.Close()
 	data, err := io.ReadAll(io.LimitReader(file, taskContextReadLimit))
 	if err != nil {
-		return "", "", fmt.Errorf("%w: %v", errTaskContextRead, err)
+		return "", "", taskContextDetail(errTaskContextRead, err.Error())
 	}
 	if len(data) > taskContextMaxBytes {
-		return "", "", fmt.Errorf("%w: %s is larger than 1 MiB", errTaskContextOversize, filepath.Base(absolute))
+		return "", "", taskContextDetail(errTaskContextOversize, filepath.Base(absolute)+" is larger than 1 MiB")
 	}
 	if !utf8.Valid(data) {
-		return "", "", fmt.Errorf("%w: %s", errTaskContextUTF8, filepath.Base(absolute))
+		return "", "", taskContextDetail(errTaskContextUTF8, filepath.Base(absolute))
 	}
 	if bytes.IndexByte(data, 0) >= 0 {
-		return "", "", fmt.Errorf("%w: %s", errTaskContextNotText, filepath.Base(absolute))
+		return "", "", taskContextDetail(errTaskContextNotText, filepath.Base(absolute))
 	}
 	return string(data), absolute, nil
 }
@@ -418,7 +437,7 @@ func validateRuntimeContextInputs(inputs []runtimeContextInput) error {
 	for _, input := range inputs {
 		total += taskContextWrapperBytes(input.Name, input.Text)
 		if total > taskContextMaxBytes {
-			return fmt.Errorf("%w: combined caller context needs %d bytes", errTaskContextOversize, total)
+			return taskContextDetail(errTaskContextOversize, fmt.Sprintf("combined caller context needs %d bytes", total))
 		}
 	}
 	return nil
@@ -489,7 +508,7 @@ func taskContextReadOnlyView(c *ui.Context, theme workbenchTheme, items []taskCo
 	}
 	t := theme.Theme
 	ui.Column(c).Gap(4).Children(func() {
-		ui.Text(c, fmt.Sprintf("Task context: %d %s", len(items), taskContextItemWord(len(items)))).FontSize(typeAction).FontWeight(500).TextColor(t.TextMuted)
+		ui.Text(c, locales.In(c.Locale()).TaskContextItemsLabel(len(items))).FontSize(typeAction).FontWeight(500).TextColor(t.TextMuted)
 		for index, item := range items {
 			item := item
 			key := item.ID
@@ -499,7 +518,7 @@ func taskContextReadOnlyView(c *ui.Context, theme workbenchTheme, items []taskCo
 			ui.Column(c).Key(key).Padding(7).Radius(t.Radius).Background(t.Surface).Gap(3).Children(func() {
 				ui.Text(c, item.Name).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
 				if item.Source != "" {
-					ui.Text(c, "File: "+item.Source).FontSize(typeMeta).LineHeight(1.35).TextColor(t.TextMuted)
+					ui.Text(c, locales.In(c.Locale()).TaskContextSource(item.Source)).FontSize(typeMeta).LineHeight(1.35).TextColor(t.TextMuted)
 				}
 				ui.Scroll(c).Height(96).Padding(6).Radius(5).Background(t.SurfaceHover).Children(func() {
 					markdownReader(c, item.Text, markdownReaderOptions{PlainText: true, CopyLabel: locales.In(c.Locale()).CopyContextTextLabel()}).
@@ -516,26 +535,26 @@ func (tc *taskContext) view(c *ui.Context, theme workbenchTheme) {
 	t := theme.Theme
 	ui.Column(c).Gap(8).Children(func() {
 		ui.Row(c).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, "Task context").FontSize(typeAction).FontWeight(500).TextColor(t.Text)
+			ui.Text(c, locales.In(c.Locale()).TaskContextHeading()).FontSize(typeAction).FontWeight(500).TextColor(t.Text)
 			ui.Spacer(c)
-			ui.Text(c, fmt.Sprintf("%d %s: %s / 1 MiB", len(tc.items), taskContextItemWord(len(tc.items)), taskContextSizeLabel(tc))).FontSize(14).TextColor(t.TextMuted)
+			ui.Text(c, locales.In(c.Locale()).TaskContextSize(len(tc.items), taskContextSizeLabel(tc))).FontSize(14).TextColor(t.TextMuted)
 		})
-		ui.Text(c, "Saved text is sent as caller-provided context with the next send. A file snapshot changes only when you refresh it.").FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+		ui.Text(c, locales.In(c.Locale()).TaskContextIntro()).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
 
-		if tc.actionError != "" {
-			ui.Text(c, tc.actionError).FontSize(14).LineHeight(1.5).TextColor(t.Danger)
+		if tc.actionError != nil {
+			ui.Text(c, taskContextErrorText(locales.In(c.Locale()), tc.actionError)).FontSize(14).LineHeight(1.5).TextColor(t.Danger)
 		}
 		if !tc.formOpen {
 			ui.Row(c).Gap(8).Children(func() {
-				secondaryButton(c, "Add snippet").OnClick(func() { tc.openSnippetForm() })
-				secondaryButton(c, "Add file").OnClick(func() { tc.openFileForm() })
+				secondaryButton(c, locales.In(c.Locale()).TaskContextAddSnippet()).OnClick(func() { tc.openSnippetForm() })
+				secondaryButton(c, locales.In(c.Locale()).TaskContextAddFile()).OnClick(func() { tc.openFileForm() })
 			})
 		} else {
 			tc.formView(c, theme)
 		}
 
 		if len(tc.items) == 0 {
-			ui.Text(c, "No saved context. The next send will not include caller context.").FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+			ui.Text(c, locales.In(c.Locale()).TaskContextEmpty()).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
 		}
 		for _, item := range tc.items {
 			item := item
@@ -543,18 +562,18 @@ func (tc *taskContext) view(c *ui.Context, theme workbenchTheme) {
 				ui.Row(c).AlignItems(ui.Center).Children(func() {
 					ui.Text(c, item.Name).FontSize(typeAction).FontWeight(500).TextColor(t.Text)
 					ui.Spacer(c)
-					ui.Text(c, taskContextSourceLabel(item)).FontSize(14).TextColor(t.TextMuted)
+					ui.Text(c, taskContextSourceLabel(locales.In(c.Locale()), item)).FontSize(14).TextColor(t.TextMuted)
 				})
 				if item.Source != "" {
-					ui.Text(c, "Source: "+item.Source).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+					ui.Text(c, locales.In(c.Locale()).TaskContextSource(item.Source)).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
 				}
 				ui.Row(c).Gap(8).Children(func() {
-					secondaryButton(c, "Preview").OnClick(func() { tc.previewID = item.ID })
-					secondaryButton(c, "Edit").OnClick(func() { tc.openEditForm(item.ID) })
+					secondaryButton(c, locales.In(c.Locale()).TaskContextPreview()).OnClick(func() { tc.previewID = item.ID })
+					secondaryButton(c, locales.In(c.Locale()).TaskContextEdit()).OnClick(func() { tc.openEditForm(item.ID) })
 					if item.Source != "" {
-						secondaryButton(c, "Refresh from file").OnClick(func() { tc.refreshItem(item.ID) })
+						secondaryButton(c, locales.In(c.Locale()).TaskContextRefreshFile()).OnClick(func() { tc.refreshItem(item.ID) })
 					}
-					secondaryButton(c, "Remove").OnClick(func() { tc.Remove(item.ID) })
+					secondaryButton(c, locales.In(c.Locale()).TaskContextRemove()).OnClick(func() { tc.Remove(item.ID) })
 				})
 				if tc.previewID == item.ID {
 					tc.previewView(c, theme, item)
@@ -567,35 +586,35 @@ func (tc *taskContext) view(c *ui.Context, theme workbenchTheme) {
 func (tc *taskContext) formView(c *ui.Context, theme workbenchTheme) {
 	t := theme.Theme
 	ui.Column(c).Padding(10).Radius(8).Background(t.SurfaceHover).Gap(6).Children(func() {
-		title := "Add snippet"
+		title := locales.In(c.Locale()).TaskContextFormSnippet()
 		if tc.formMode == "file" {
-			title = "Add file snapshot"
+			title = locales.In(c.Locale()).TaskContextFormFile()
 		} else if tc.formMode == "edit" {
-			title = "Edit context"
+			title = locales.In(c.Locale()).TaskContextFormEdit()
 		}
 		ui.Row(c).AlignItems(ui.Center).Children(func() {
 			ui.Text(c, title).FontSize(typeAction).FontWeight(500).TextColor(t.Text)
 			ui.Spacer(c)
-			secondaryButton(c, "Cancel").OnClick(func() { tc.cancelForm() })
+			secondaryButton(c, locales.In(c.Locale()).TaskContextFormCancel()).OnClick(func() { tc.cancelForm() })
 		})
 		switch tc.formMode {
 		case "file":
-			ui.Text(c, "Name (optional)").FontSize(typeAction).FontWeight(500).TextColor(t.Text)
-			ui.TextInput(c, &tc.formName).Label("Context file name").FontSize(14).Placeholder("Defaults to the file name")
-			ui.Text(c, "Path").FontSize(typeAction).FontWeight(500).TextColor(t.Text)
-			ui.TextInput(c, &tc.formPath).Label("Context file path").FontSize(14).Placeholder("/absolute/path/to/file.txt")
-			ui.Text(c, "Only UTF-8 text files are supported; PDF, Office, and other binary files are rejected. The file is read once now; later changes need Refresh.").FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+			ui.Text(c, locales.In(c.Locale()).TaskContextFileNameOptional()).FontSize(typeAction).FontWeight(500).TextColor(t.Text)
+			ui.TextInput(c, &tc.formName).Label(locales.In(c.Locale()).TaskContextFileLabel()).FontSize(14).Placeholder(locales.In(c.Locale()).TaskContextFilePlaceholder())
+			ui.Text(c, locales.In(c.Locale()).TaskContextPath()).FontSize(typeAction).FontWeight(500).TextColor(t.Text)
+			ui.TextInput(c, &tc.formPath).Label(locales.In(c.Locale()).TaskContextFilePathLabel()).FontSize(14).Placeholder(locales.In(c.Locale()).TaskContextFilePathPlaceholder())
+			ui.Text(c, locales.In(c.Locale()).TaskContextFileRules()).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
 		default:
-			ui.Text(c, "Name").FontSize(typeAction).FontWeight(500).TextColor(t.Text)
-			ui.TextInput(c, &tc.formName).Label("Context name").FontSize(14).Placeholder("Release notes")
-			ui.Text(c, "Text").FontSize(typeAction).FontWeight(500).TextColor(t.Text)
-			ui.TextArea(c, &tc.formText).Label("Context text").FontSize(14).Height(84).Placeholder("Text to include exactly as written")
+			ui.Text(c, locales.In(c.Locale()).TaskContextName()).FontSize(typeAction).FontWeight(500).TextColor(t.Text)
+			ui.TextInput(c, &tc.formName).Label(locales.In(c.Locale()).TaskContextNameLabel()).FontSize(14).Placeholder(locales.In(c.Locale()).TaskContextNamePlaceholder())
+			ui.Text(c, locales.In(c.Locale()).TaskContextText()).FontSize(typeAction).FontWeight(500).TextColor(t.Text)
+			ui.TextArea(c, &tc.formText).Label(locales.In(c.Locale()).TaskContextTextLabel()).FontSize(14).Height(84).Placeholder(locales.In(c.Locale()).TaskContextTextPlaceholder())
 			if tc.formMode == "edit" && tc.formPath != "" {
-				ui.Text(c, "Editing the snapshot does not change the source file. Refresh re-reads it.").FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+				ui.Text(c, locales.In(c.Locale()).TaskContextEditHint()).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
 			}
 		}
-		if tc.formError != "" {
-			ui.Text(c, tc.formError).FontSize(14).LineHeight(1.5).TextColor(t.Danger)
+		if tc.formError != nil {
+			ui.Text(c, taskContextErrorText(locales.In(c.Locale()), tc.formError)).FontSize(14).LineHeight(1.5).TextColor(t.Danger)
 		}
 		msgs := locales.In(c.Locale())
 		label := msgs.TaskContextSaveSnippet()
@@ -612,9 +631,9 @@ func (tc *taskContext) previewView(c *ui.Context, theme workbenchTheme, item tas
 	t := theme.Theme
 	ui.Column(c).Gap(4).Children(func() {
 		ui.Row(c).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, "Preview: "+item.Name).FontSize(typeAction).FontWeight(500).TextColor(t.Text)
+			ui.Text(c, locales.In(c.Locale()).TaskContextPreviewTitle(item.Name)).FontSize(typeAction).FontWeight(500).TextColor(t.Text)
 			ui.Spacer(c)
-			secondaryButton(c, "Close preview").OnClick(func() { tc.previewID = "" })
+			secondaryButton(c, locales.In(c.Locale()).TaskContextClosePreview()).OnClick(func() { tc.previewID = "" })
 		})
 		if item.Source != "" {
 			ui.Text(c, item.Source).FontSize(14).TextColor(t.TextMuted)
@@ -626,18 +645,54 @@ func (tc *taskContext) previewView(c *ui.Context, theme workbenchTheme, item tas
 	})
 }
 
-func taskContextItemWord(count int) string {
-	if count == 1 {
-		return "item"
+func taskContextErrorText(msgs locales.Messages, err error) string {
+	detail := ""
+	var detailErr *taskContextError
+	if errors.As(err, &detailErr) {
+		detail = detailErr.detail
 	}
-	return "items"
+	switch {
+	case errors.Is(err, errTaskContextName):
+		return msgs.TaskContextErrName()
+	case errors.Is(err, errTaskContextUTF8):
+		if detail != "" {
+			return msgs.TaskContextErrUTF8Detail(detail)
+		}
+		return msgs.TaskContextErrUTF8()
+	case errors.Is(err, errTaskContextNotText):
+		if detail != "" {
+			return msgs.TaskContextErrNotTextDetail(detail)
+		}
+		return msgs.TaskContextErrNotText()
+	case errors.Is(err, errTaskContextOversize):
+		if detail != "" {
+			return msgs.TaskContextErrOversizeDetail(detail)
+		}
+		return msgs.TaskContextErrOversize()
+	case errors.Is(err, errTaskContextUnsupported):
+		if detail != "" {
+			return msgs.TaskContextErrUnsupportedDetail(detail)
+		}
+		return msgs.TaskContextErrUnsupported()
+	case errors.Is(err, errTaskContextRead):
+		if detail != "" {
+			return msgs.TaskContextErrReadDetail(detail)
+		}
+		return msgs.TaskContextErrRead()
+	case errors.Is(err, errTaskContextMissing):
+		return msgs.TaskContextErrMissing()
+	case errors.Is(err, errTaskContextNoSource):
+		return msgs.TaskContextErrNoSource()
+	default:
+		return err.Error()
+	}
 }
 
-func taskContextSourceLabel(item taskContextItem) string {
+func taskContextSourceLabel(msgs locales.Messages, item taskContextItem) string {
 	if item.Source == "" {
-		return "Named snippet"
+		return msgs.TaskContextSourceNamed()
 	}
-	return "File snapshot: revision " + fmt.Sprint(item.Revision)
+	return msgs.TaskContextSourceFile(strconv.FormatUint(item.Revision, 10))
 }
 
 func taskContextSizeLabel(tc *taskContext) string {

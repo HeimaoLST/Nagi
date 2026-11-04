@@ -5,10 +5,12 @@ package main
 // existing UI hook with contact/issue/execution/session/generation checks.
 
 import (
-	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/egoist/mygo/ui"
+
+	"saki/desktop/locales"
 )
 
 type issueResultPage struct {
@@ -23,6 +25,7 @@ type issueResultPage struct {
 	checkSeq           int
 	Loading            bool
 	LoadError          string
+	LoadErrorDetail    string
 	Notice             string
 	Panel              issueResultPanelState
 	ReturnLatest       bool
@@ -76,8 +79,9 @@ func (a *appModel) openIssueResultEntry(issueID, executionID string, latest bool
 		Generation:   a.issueResult.Generation,
 		ReturnLatest: latest,
 		Panel: issueResultPanelState{
-			RunLabel:       fmt.Sprintf("Run %d: %s", runIndex+1, issue.Goal),
-			RunStatus:      issueExecutionLabel(execution),
+			RunNumber:      runIndex + 1,
+			RunGoal:        issue.Goal,
+			RunStatus:      execution.Status,
 			RunDetail:      runDetail,
 			LinkScope:      "contact:" + ct.ID + "/issue:" + issue.ID + "/execution:" + execution.ID,
 			LinkFocus:      &a.markdownLinkFocus,
@@ -96,16 +100,19 @@ func (a *appModel) startIssueResultLoad() {
 	page := &a.issueResult
 	if page.SessionID == "" || page.TaskID == "" {
 		page.Loading = false
-		page.LoadError = "This execution has no recorded Runtime session/task; results cannot be inspected."
+		page.LoadError = "load-no-session"
+		page.LoadErrorDetail = ""
 		return
 	}
 	if a.rt == nil || a.runtimeStatus != runtimeStateReady || a.shutdownStarted {
 		page.Loading = false
-		page.LoadError = "Runtime is not ready; reopen this result after history is available."
+		page.LoadError = "load-runtime-not-ready"
+		page.LoadErrorDetail = ""
 		return
 	}
 	page.Loading = true
 	page.LoadError = ""
+	page.LoadErrorDetail = ""
 	page.Notice = ""
 	rt, runtimeGeneration := a.rt, a.connectionGeneration
 	a.issueResultAsyncStarted()
@@ -120,7 +127,8 @@ func (a *appModel) reloadIssueResult(generation int) {
 	}
 	ct := a.contactByID(page.OwnerContactID)
 	if ct == nil {
-		page.LoadError = "The issue owner is no longer available; reload cannot continue."
+		page.LoadError = "load-owner-missing"
+		page.LoadErrorDetail = ""
 		return
 	}
 	if ct != a.selectedContact() {
@@ -128,7 +136,8 @@ func (a *appModel) reloadIssueResult(generation int) {
 	}
 	issue, execution := ct.executionByID(page.ExecutionID)
 	if issue == nil || execution == nil || issue.ID != page.IssueID {
-		page.LoadError = "This execution is no longer attached to the issue; reload cannot continue."
+		page.LoadError = "load-detached"
+		page.LoadErrorDetail = ""
 		return
 	}
 	runIndex := 0
@@ -141,8 +150,9 @@ func (a *appModel) reloadIssueResult(generation int) {
 	page.SessionID = execution.SessionID
 	page.TaskID = execution.TaskID
 	page.MessageID = execution.MessageID
-	page.Panel.RunLabel = fmt.Sprintf("Run %d: %s", runIndex+1, issue.Goal)
-	page.Panel.RunStatus = issueExecutionLabel(execution)
+	page.Panel.RunNumber = runIndex + 1
+	page.Panel.RunGoal = issue.Goal
+	page.Panel.RunStatus = execution.Status
 	page.Panel.RunDetail = ""
 	if issueExecutionNeedsAttention(execution.Status) {
 		page.Panel.RunDetail = strings.TrimSpace(execution.Detail)
@@ -155,6 +165,7 @@ func (a *appModel) reloadIssueResult(generation int) {
 	page.Panel.Action = issueResultFileAction{}
 	page.Generation++
 	page.LoadError = ""
+	page.LoadErrorDetail = ""
 	page.Notice = ""
 	a.startIssueResultLoad()
 	if issueExecutionNeedsAttention(execution.Status) {
@@ -166,7 +177,7 @@ func (a *appModel) loadIssueResult(rt *runtimeClient, runtimeGeneration, generat
 	contactID, issueID, executionID, sessionID, taskID, messageID string) {
 	history, historyErr := a.historyAllForSession(rt, sessionID)
 	if historyErr != nil {
-		message := "Execution history is unavailable: " + a.connectionRuntimeMessage(historyErr)
+		message := "Run history is unavailable: " + a.connectionRuntimeMessage(historyErr)
 		a.updateUI(func() {
 			defer a.issueResultAsyncFinished()
 			a.applyIssueResultError(rt, runtimeGeneration, generation, contactID, issueID, executionID, sessionID, taskID, message)
@@ -191,7 +202,7 @@ func (a *appModel) loadIssueResult(rt *runtimeClient, runtimeGeneration, generat
 	response := strings.Join(issueResultResponseSegments(history, taskID), "\n\n")
 	notice := ""
 	if workingDirectory == "" {
-		notice = "Runtime session working directory is unavailable; file paths are shown as reported."
+		notice = "notice-working-dir"
 	}
 	a.updateUI(func() {
 		defer a.issueResultAsyncFinished()
@@ -218,7 +229,8 @@ func (a *appModel) applyIssueResultError(rt *runtimeClient, runtimeGeneration, g
 		return
 	}
 	page.Loading = false
-	page.LoadError = message
+	page.LoadError = "load-failed"
+	page.LoadErrorDetail = message
 }
 
 func (a *appModel) applyIssueResultLoaded(rt *runtimeClient, runtimeGeneration, generation int,
@@ -232,8 +244,9 @@ func (a *appModel) applyIssueResultLoaded(rt *runtimeClient, runtimeGeneration, 
 	page.Notice = notice
 	page.Panel.Response = response
 	page.Panel.Files = derived.Files
-	if derived.Unavailable != "" {
-		page.LoadError = derived.Unavailable
+	if derived.UnavailableKind != "" {
+		page.LoadError = derived.UnavailableKind
+		page.LoadErrorDetail = ""
 	}
 }
 
@@ -264,6 +277,7 @@ func (a *appModel) cancelIssueResultView() {
 	a.issueResult.Open = false
 	a.issueResult.Loading = false
 	a.issueResult.LoadError = ""
+	a.issueResult.LoadErrorDetail = ""
 	a.issueResult.Notice = ""
 	a.issueResult.ReturnFocusPending = false
 	a.issueResult.Panel = issueResultPanelState{}
@@ -312,31 +326,31 @@ func (a *appModel) issueResultPanelView(c *ui.Context, t *ui.Theme) {
 	}
 	hasBody := page.Panel.Response != "" || len(page.Panel.Files) > 0
 	if !hasBody && (page.Loading || page.LoadError != "") {
-		if page.Panel.RunLabel != "" {
-			ui.Text(c, page.Panel.RunLabel).FontSize(14).TextColor(t.TextMuted)
+		if page.Panel.RunGoal != "" {
+			ui.Text(c, locales.In(c.Locale()).ResultRunLabel(strconv.Itoa(page.Panel.RunNumber), page.Panel.RunGoal)).FontSize(14).TextColor(t.TextMuted)
 		}
 		if page.Panel.RunStatus != "" {
-			ui.Text(c, page.Panel.RunStatus).FontSize(typeAction).FontWeight(500).TextColor(t.TextMuted)
+			ui.Text(c, issueExecutionText(locales.In(c.Locale()), page.Panel.RunStatus)).FontSize(typeAction).FontWeight(500).TextColor(t.TextMuted)
 		}
 		if page.Panel.RunDetail != "" {
 			ui.Text(c, page.Panel.RunDetail).FontSize(14).LineHeight(1.5).TextColor(t.Warning)
 		}
 		if page.Loading {
-			ui.Text(c, "Loading execution history from Runtime…").FontSize(14).TextColor(t.TextMuted)
+			ui.Text(c, locales.In(c.Locale()).ResultLoadingHistory()).FontSize(14).TextColor(t.TextMuted)
 		}
 		if page.LoadError != "" {
-			ui.Text(c, page.LoadError).FontSize(14).LineHeight(1.5).TextColor(t.Warning)
+			ui.Text(c, issueResultPageText(locales.In(c.Locale()), page.LoadError, page.LoadErrorDetail)).FontSize(14).LineHeight(1.5).TextColor(t.Warning)
 		}
 		return
 	}
 	if page.Loading {
-		ui.Text(c, "Reloading result from Runtime… The recorded output below is the previous snapshot.").FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+		ui.Text(c, locales.In(c.Locale()).ResultReloadingSnapshot()).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
 	}
 	if page.LoadError != "" {
-		ui.Text(c, page.LoadError).FontSize(14).LineHeight(1.5).TextColor(t.Warning)
+		ui.Text(c, issueResultPageText(locales.In(c.Locale()), page.LoadError, page.LoadErrorDetail)).FontSize(14).LineHeight(1.5).TextColor(t.Warning)
 	}
 	if page.Notice != "" {
-		ui.Text(c, page.Notice).FontSize(14).LineHeight(1.5).TextColor(t.Warning)
+		ui.Text(c, issueResultPageText(locales.In(c.Locale()), page.Notice, "")).FontSize(14).LineHeight(1.5).TextColor(t.Warning)
 	}
 	issueResultPanel(c, &page.Panel, a.issueResultPanelActions(page.Generation))
 }
@@ -455,16 +469,16 @@ func (a *appModel) requestIssueResultFileAction(generation int, file issueResult
 func issueResultPageHeader(c *ui.Context, t *ui.Theme, state *issueResultPanelState, actions issueResultPanelActions, showReload bool) {
 	ui.Row(c).Padding(16, 16).AlignItems(ui.Center).Gap(8).Children(func() {
 		if actions.Close != nil {
-			back := appTooltip(c, secondaryButton(c, "← Back").Label("Close results"), "Back from results").Bind(&state.CloseHandle).OnClick(actions.Close)
+			back := appTooltip(c, secondaryButton(c, locales.In(c.Locale()).ResultBack()).Label(locales.In(c.Locale()).ResultCloseResults()), locales.In(c.Locale()).ResultBackFromResults()).Bind(&state.CloseHandle).OnClick(actions.Close)
 			if state.FocusClose {
 				back.Focus()
 				state.FocusClose = false
 			}
 		}
-		ui.Text(c, "Run results").FontSize(typePageTitle).FontWeight(500).TextColor(t.Text)
+		ui.Text(c, locales.In(c.Locale()).ResultRunResults()).FontSize(typePageTitle).FontWeight(500).TextColor(t.Text)
 		ui.Spacer(c)
 		if showReload && actions.Reload != nil {
-			secondaryButton(c, "Reload result").Bind(&state.ReloadHandle).OnClick(actions.Reload)
+			secondaryButton(c, locales.In(c.Locale()).ResultReloadResult()).Bind(&state.ReloadHandle).OnClick(actions.Reload)
 		}
 	})
 }

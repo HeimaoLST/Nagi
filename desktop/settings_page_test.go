@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+
+	"saki/desktop/locales"
 )
 
 func TestSettingsPageReplacesWorkbenchAndRoutesEntries(t *testing.T) {
@@ -215,30 +217,37 @@ func TestSettingsContactPickerFollowsEditingIdentityAfterReturnToA(t *testing.T)
 	a.contacts = append(a.contacts, bContact)
 	a.openSettingsTab(settingsTabContact, settingsSourceRail)
 	a.settingsContactID = bContact.ID
-	a.settingsPickerChoice = a.settingsContactChoice(bContact)
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	if !strings.Contains(strings.Join(tr.Texts(), "\n"), a.settingsContactChoice(bContact)) {
+	if !strings.Contains(strings.Join(tr.Texts(), "\n"), a.settingsContactChoice(locales.In("en"), bContact)) {
 		t.Fatalf("picker/title did not show B: %v", tr.Texts())
 	}
 	a.closeSettings()
+	a.openContactProfile(bContact.ID)
+	tr.Frame()
+	tr.Key(ui.Cmd, ui.KeyComma)
 	tr.Frame()
 	if err := tr.Click("Contact profile"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
+	if a.settingsContactID != bContact.ID || a.settingsTab != settingsTabContact {
+		t.Fatalf("Cmd+, from B profile lost the picker target: id=%q tab=%q", a.settingsContactID, a.settingsTab)
+	}
+	a.closeSettings()
+	tr.Frame()
 	if err := tr.Click("Edit full profile"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if a.settingsContactID != aContact.ID || a.settingsPickerChoice != a.settingsContactChoice(aContact) {
-		t.Fatalf("A profile entry kept B picker: id=%q choice=%q want=%q", a.settingsContactID, a.settingsPickerChoice, a.settingsContactChoice(aContact))
+	if a.settingsContactID != aContact.ID {
+		t.Fatalf("A profile entry kept B target: id=%q want=%q", a.settingsContactID, aContact.ID)
 	}
 	texts := strings.Join(tr.Texts(), "\n")
-	if !strings.Contains(texts, "Contact profile: "+a.settingsContactChoice(aContact)) {
+	if !strings.Contains(texts, "Contact profile: "+a.settingsContactChoice(locales.In("en"), aContact)) {
 		t.Fatalf("A profile title/picker mismatch: %v", tr.Texts())
 	}
-	if a.settingsContactChoice(aContact) == a.settingsContactChoice(bContact) {
+	if a.settingsContactChoice(locales.In("en"), aContact) == a.settingsContactChoice(locales.In("en"), bContact) {
 		t.Fatal("same-name contacts did not get distinct readable labels")
 	}
 }
@@ -257,7 +266,7 @@ func TestSettingsPageCmdCommaFromIssueResultAndNestedReader(t *testing.T) {
 	a.issueResult = issueResultPage{
 		Open: true, OwnerContactID: a.selectedContact().ID, IssueID: issue.ID, ExecutionID: execution.ID,
 		Panel: issueResultPanelState{
-			RunLabel: "Run 1", RunStatus: "Completed", Files: []issueResultFile{file},
+			RunNumber: 1, RunStatus: issueExecutionCompleted, Files: []issueResultFile{file},
 			ReaderKey: key, FocusReader: true,
 		},
 	}
@@ -324,7 +333,6 @@ func TestSettingsContactPickerLongListReachesSelectedLastOption(t *testing.T) {
 	first, last := a.contacts[0], a.contacts[len(a.contacts)-1]
 	a.openSettingsTab(settingsTabContact, settingsSourceRail)
 	a.settingsContactID = first.ID
-	a.settingsPickerChoice = a.settingsContactChoice(first)
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
 	if a.settingsContactID != first.ID {
@@ -341,17 +349,17 @@ func TestSettingsContactPickerLongListReachesSelectedLastOption(t *testing.T) {
 	tr.Frame()
 	tr.Key(0, ui.KeyEnter)
 	tr.Frame()
-	if a.settingsContactID != last.ID || a.settingsPickerChoice != a.settingsContactChoice(last) {
-		t.Fatalf("long picker keyboard chose %q/%q, want last %q", a.settingsContactID, a.settingsPickerChoice, last.ID)
+	if a.settingsContactID != last.ID {
+		t.Fatalf("long picker keyboard chose %q, want last %q", a.settingsContactID, last.ID)
 	}
-	if tr.HasText(a.settingsContactChoice(a.contacts[len(a.contacts)-2])) {
+	if tr.HasText(a.settingsContactChoice(locales.In("en"), a.contacts[len(a.contacts)-2])) {
 		t.Fatalf("picker popup remained open after Enter: %v", tr.Texts())
 	}
 	// Down from the closed trigger proves the trigger kept focus; it must
 	// reopen the real popup rather than being lost after Enter.
 	tr.Key(0, ui.KeyDown)
 	tr.Frame()
-	if !tr.HasText(a.settingsContactChoice(a.contacts[len(a.contacts)-2])) {
+	if !tr.HasText(a.settingsContactChoice(locales.In("en"), a.contacts[len(a.contacts)-2])) {
 		t.Fatalf("picker trigger did not retain keyboard focus after Enter: %v", tr.Texts())
 	}
 	tr.Key(0, ui.KeyEscape)
@@ -366,7 +374,7 @@ func TestSettingsContactPickerDisambiguatesSameLastIDDigitsAndSavesB(t *testing.
 	bContact := &contact{ID: "contact-bbbb1111", Name: "Saki", Role: "Assistant", Status: statusReady, Workspace: t.TempDir()}
 	a := &appModel{store: store, storePath: store.path, contacts: []*contact{aContact, bContact}, selected: 0, scrollTo: -1, windowWidth: 1040}
 	a.openSettingsTab(settingsTabContact, settingsSourceRail)
-	if a.settingsContactChoice(aContact) == a.settingsContactChoice(bContact) {
+	if a.settingsContactChoice(locales.In("en"), aContact) == a.settingsContactChoice(locales.In("en"), bContact) {
 		t.Fatal("same-name contacts did not get distinct labels")
 	}
 	tr := ui.NewTester(a.view, 1040, 720)
@@ -377,11 +385,11 @@ func TestSettingsContactPickerDisambiguatesSameLastIDDigitsAndSavesB(t *testing.
 	if !tr.HasText("Edit contact") {
 		t.Fatalf("contact picker label prefix missing: %v", tr.Texts())
 	}
-	if _, ok := tr.Find(a.settingsContactChoice(aContact)); !ok {
+	if _, ok := tr.Find(a.settingsContactChoice(locales.In("en"), aContact)); !ok {
 		t.Fatalf("contact picker current choice missing: %v", tr.Texts())
 	}
 	showPreviewTooltip(t, tr, "Edit contact")
-	if full := "Edit contact: " + a.settingsContactChoice(aContact); !tr.HasText(full) {
+	if full := "Edit contact: " + a.settingsContactChoice(locales.In("en"), aContact); !tr.HasText(full) {
 		t.Fatalf("contact picker full tooltip/AX missing %q: %v", full, tr.Texts())
 	}
 	tr.Move(1, 1)
@@ -390,7 +398,7 @@ func TestSettingsContactPickerDisambiguatesSameLastIDDigitsAndSavesB(t *testing.
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if err := tr.Click(a.settingsContactChoice(bContact)); err != nil {
+	if err := tr.Click(a.settingsContactChoice(locales.In("en"), bContact)); err != nil {
 		t.Fatalf("picker B option: %v; texts=%v", err, tr.Texts())
 	}
 	tr.Frame()
@@ -427,7 +435,7 @@ func TestSettingsConnectionApplyAvailabilityFollowsCurrentWork(t *testing.T) {
 	a.openSettingsTab(settingsTabConnection, settingsSourceRail)
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	if a.connectionForm.ReloadBlocked == "" || !tr.HasText("Wait for all conversation and issue work to finish before applying a new connection.") {
+	if a.connectionForm.ReloadBlocked == "" || !tr.HasText("Wait for all chat and task work to finish before applying a new connection.") {
 		t.Fatalf("active work did not block Apply: %q / %v", a.connectionForm.ReloadBlocked, tr.Texts())
 	}
 	ct.ActiveTaskID = ""
@@ -436,7 +444,7 @@ func TestSettingsConnectionApplyAvailabilityFollowsCurrentWork(t *testing.T) {
 	if a.connectionForm.ReloadBlocked != "" {
 		t.Fatalf("Apply did not recover after work completed: %q", a.connectionForm.ReloadBlocked)
 	}
-	if tr.HasText("Wait for all conversation and issue work to finish before applying a new connection.") {
+	if tr.HasText("Wait for all chat and task work to finish before applying a new connection.") {
 		t.Fatal("stale Apply block remained after work completed")
 	}
 }
@@ -448,7 +456,7 @@ func TestSettingsPageCmdCommaFromIssueResultReturnsToResultControl(t *testing.T)
 	a.aux = "issue-result"
 	a.issueResult = issueResultPage{
 		Open: true, OwnerContactID: a.selectedContact().ID, IssueID: issue.ID, ExecutionID: execution.ID,
-		Panel: issueResultPanelState{RunLabel: "Run 1", RunStatus: "Completed", FocusClose: true},
+		Panel: issueResultPanelState{RunNumber: 1, RunStatus: issueExecutionCompleted, FocusClose: true},
 	}
 	a.windowWidth = 1040
 	tr := ui.NewTester(a.view, 1040, 720)
@@ -651,7 +659,7 @@ func TestSettingsPageCmdCommaFromReaderKeepsLongScrollAndFocusedControl(t *testi
 	a.issueResult = issueResultPage{
 		Open: true, OwnerContactID: a.selectedContact().ID, IssueID: issue.ID, ExecutionID: execution.ID,
 		Panel: issueResultPanelState{
-			RunLabel: "Run 1", RunStatus: "Completed", Files: []issueResultFile{file},
+			RunNumber: 1, RunStatus: issueExecutionCompleted, Files: []issueResultFile{file},
 			Inspection: &issueResultFileInspection{Exists: true, Regular: true, Preview: longPreview},
 			InspectFor: key, ReaderKey: key,
 		},
@@ -692,7 +700,7 @@ func TestSettingsPageCmdCommaFromResultReturnsToReloadControl(t *testing.T) {
 	issue := a.selectedContact().selectedIssue()
 	execution := issue.Executions[0]
 	a.aux = "issue-result"
-	a.issueResult = issueResultPage{Open: true, OwnerContactID: a.selectedContact().ID, IssueID: issue.ID, ExecutionID: execution.ID, Panel: issueResultPanelState{RunLabel: "Run 1", RunStatus: "Completed"}}
+	a.issueResult = issueResultPage{Open: true, OwnerContactID: a.selectedContact().ID, IssueID: issue.ID, ExecutionID: execution.ID, Panel: issueResultPanelState{RunNumber: 1, RunStatus: issueExecutionCompleted}}
 	a.windowWidth = 1040
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
@@ -730,7 +738,7 @@ func TestSettingsCmdCommaFromDynamicFileRowReturnsToSameRowAndReopens(t *testing
 	a.issueResult = issueResultPage{
 		Open: true, OwnerContactID: a.selectedContact().ID, IssueID: issue.ID, ExecutionID: execution.ID,
 		Panel: issueResultPanelState{
-			RunLabel: "Run 1", RunStatus: "Completed",
+			RunNumber: 1, RunStatus: issueExecutionCompleted,
 			Response: "# Result\n\n" + strings.Repeat("Long result body before reported files.\n\n", 50),
 			Files:    files, Inspection: &inspection, InspectFor: target,
 		},
@@ -843,7 +851,7 @@ func TestSettingsPageCmdCommaReturnsToReaderCopyPath(t *testing.T) {
 	file := issueResultFile{ExecutionID: execution.ID, SessionID: execution.SessionID, TaskID: execution.TaskID, MessageID: execution.MessageID, CallID: "copy-path", ToolName: "write", Path: "/tmp/copy-path.md", WorkingDirectory: "/tmp", RawResult: `{"path":"/tmp/copy-path.md"}`}
 	key := issueResultFileKey(file)
 	a.aux = "issue-result"
-	a.issueResult = issueResultPage{Open: true, OwnerContactID: a.selectedContact().ID, IssueID: issue.ID, ExecutionID: execution.ID, Panel: issueResultPanelState{RunLabel: "Run 1", RunStatus: "Completed", Files: []issueResultFile{file}, ReaderKey: key}}
+	a.issueResult = issueResultPage{Open: true, OwnerContactID: a.selectedContact().ID, IssueID: issue.ID, ExecutionID: execution.ID, Panel: issueResultPanelState{RunNumber: 1, RunStatus: issueExecutionCompleted, Files: []issueResultFile{file}, ReaderKey: key}}
 	a.windowWidth = 1040
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
@@ -928,7 +936,7 @@ func TestSettingsReturnKeepsReaderActions(t *testing.T) {
 	a.aux = "issue-result"
 	a.issueResult.Open = true
 	a.issueResult.Panel = issueResultPanelState{
-		RunLabel: "Run 1", RunStatus: "Completed", Files: []issueResultFile{file},
+		RunNumber: 1, RunStatus: issueExecutionCompleted, Files: []issueResultFile{file},
 		Inspection: &issueResultFileInspection{Path: file.Path, Exists: true, Regular: true, Preview: "preview"},
 		InspectFor: key, ReaderKey: key, SourceFor: key,
 	}
@@ -1393,5 +1401,89 @@ func TestSettingsPendingBannerSurvivesDistinctTestStatus(t *testing.T) {
 	tr.Frame()
 	if !tr.HasText("Saved configuration is awaiting Apply.") || !tr.HasText("Connection test completed: fixture") {
 		t.Fatalf("pending fact was lost behind distinct test status: %v", tr.Texts())
+	}
+}
+
+func TestSettingsContactPickerSameLabelSelectsStableID(t *testing.T) {
+	store, err := openContactStore(filepath.Join(t.TempDir(), "contacts.json"), t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	aContact := &contact{ID: "contact-aaaa", Name: "甲", Role: "Assistant", Status: statusReady, Workspace: t.TempDir()}
+	bContact := &contact{ID: "contact-bbbb", Name: "甲", Role: "Assistant", Status: statusReady, Workspace: t.TempDir()}
+	cContact := &contact{ID: "contact-cccc", Name: "甲（1）", Role: "Assistant", Status: statusReady, Workspace: t.TempDir()}
+	a := &appModel{store: store, storePath: store.path, contacts: []*contact{aContact, bContact, cContact}, selected: 0, scrollTo: -1, windowWidth: 1040}
+	a.ensureSettingsProfileEditor(aContact.ID).Draft.Purpose = "draft A"
+	a.ensureSettingsProfileEditor(bContact.ID).Draft.Purpose = "draft B"
+	a.ensureSettingsProfileEditor(cContact.ID).Draft.Purpose = "draft C"
+	a.openSettingsTab(settingsTabContact, settingsSourceRail)
+	tr := ui.NewTester(a.view, 1040, 720)
+	tr.SetLocale("zh-Hans")
+	tr.Frame()
+	msgs := locales.In("zh-Hans")
+	aLabel, cLabel := a.settingsContactChoice(msgs, aContact), a.settingsContactChoice(msgs, cContact)
+	if aLabel != cLabel {
+		t.Fatalf("fixture labels must collide, got %q / %q", aLabel, cLabel)
+	}
+	if texts := strings.Join(tr.Texts(), "\n"); strings.Contains(texts, aContact.ID) || strings.Contains(texts, cContact.ID) {
+		t.Fatalf("contact picker exposed raw IDs: %v", tr.Texts())
+	}
+	if err := tr.Click("编辑联系人"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	tr.Key(0, ui.KeyEnd)
+	tr.Frame()
+	tr.Key(0, ui.KeyEnter)
+	tr.Frame()
+	if a.settingsContactID != cContact.ID {
+		t.Fatalf("picker End/Enter chose %q, want C %q", a.settingsContactID, cContact.ID)
+	}
+	if a.ensureSettingsProfileEditor(cContact.ID).Draft.Purpose != "draft C" {
+		t.Fatal("picker changed C draft")
+	}
+	if a.ensureSettingsProfileEditor(aContact.ID).Draft.Purpose != "draft A" ||
+		a.ensureSettingsProfileEditor(bContact.ID).Draft.Purpose != "draft B" {
+		t.Fatal("picker changed A/B drafts")
+	}
+	if err := tr.Click("联系人名称"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Key(ui.Cmd, ui.KeyA)
+	tr.Type("Only C")
+	tr.Frame()
+	tr.SetLocale("en")
+	tr.Frame()
+	tr.SetLocale("zh-Hans")
+	tr.Frame()
+	if a.settingsContactID != cContact.ID || a.ensureSettingsProfileEditor(cContact.ID).Draft.Name != "Only C" ||
+		a.ensureSettingsProfileEditor(aContact.ID).Draft.Purpose != "draft A" ||
+		a.ensureSettingsProfileEditor(bContact.ID).Draft.Purpose != "draft B" {
+		t.Fatalf("locale switch lost target or drafts: id=%q", a.settingsContactID)
+	}
+	if err := clickSettingsAction(tr, "保存更改"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if aContact.Name != "甲" || bContact.Name != "甲" || cContact.Name != "Only C" {
+		t.Fatalf("save scope changed A=%q B=%q C=%q", aContact.Name, bContact.Name, cContact.Name)
+	}
+	stored, err := openContactStore(store.path, aContact.Workspace)
+	if err != nil {
+		t.Fatal(err)
+	}
+	storedByID := map[string]storedContact{}
+	for _, item := range stored.state.Contacts {
+		storedByID[item.ID] = item
+	}
+	if len(storedByID) != 3 || storedByID[aContact.ID].Name != "甲" ||
+		storedByID[bContact.ID].Name != "甲" || storedByID[cContact.ID].Name != "Only C" {
+		t.Fatalf("saved contact set/names = %+v", storedByID)
+	}
+	if storedByID[aContact.ID].Purpose != aContact.Purpose || storedByID[bContact.ID].Purpose != bContact.Purpose {
+		t.Fatalf("unsaved A/B profile purposes leaked into the store: %+v", storedByID)
+	}
+	if storedByID[cContact.ID].Purpose != "draft C" {
+		t.Fatalf("saved C purpose = %q, want draft C", storedByID[cContact.ID].Purpose)
 	}
 }

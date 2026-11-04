@@ -1269,17 +1269,17 @@ func TestIssueWorkStopButtonStopsIssueNotConversation(t *testing.T) {
 			issueClickErr = fmt.Errorf("Close workspace geometry = rect=%+v ok=%v", r, ok)
 			return
 		}
-		stop, ok := tr.Find("Stop issue task")
+		stop, ok := tr.Find("Stop task")
 		if !ok || stop.W <= 0 || stop.H <= 0 || stop.X < 0 || stop.X+stop.W > 1040 || stop.Y < 0 || stop.Y+stop.H > 720 {
 			issueClickErr = fmt.Errorf("Stop issue task control has no visible geometry: ok=%v rect=%+v", ok, stop)
 			return
 		}
-		chatStop, ok := tr.Find("Stop conversation")
+		chatStop, ok := tr.Find("Stop chat")
 		if !ok || chatStop.W <= 0 || chatStop.H <= 0 || chatStop.X < 0 || chatStop.X+chatStop.W > 1040 || chatStop.Y < 0 || chatStop.Y+chatStop.H > 720 {
-			issueClickErr = fmt.Errorf("Stop conversation control has no visible geometry: ok=%v rect=%+v", ok, chatStop)
+			issueClickErr = fmt.Errorf("Stop chat control has no visible geometry: ok=%v rect=%+v", ok, chatStop)
 			return
 		}
-		issueClickErr = tr.Click("Stop issue task")
+		issueClickErr = tr.Click("Stop task")
 		if issueClickErr != nil {
 			return
 		}
@@ -1309,11 +1309,11 @@ func TestIssueWorkStopButtonStopsIssueNotConversation(t *testing.T) {
 		h.app.windowWidth = 1040
 		tr := ui.NewTester(h.app.view, 1040, 720)
 		tr.Frame()
-		if _, ok := tr.Find("Stop conversation"); !ok {
-			issueClickErr = fmt.Errorf("Stop conversation control has no visible geometry")
+		if _, ok := tr.Find("Stop chat"); !ok {
+			issueClickErr = fmt.Errorf("Stop chat control has no visible geometry")
 			return
 		}
-		issueClickErr = tr.Click("Stop conversation")
+		issueClickErr = tr.Click("Stop chat")
 		if issueClickErr != nil {
 			return
 		}

@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -135,7 +134,7 @@ func TestModelSelectionErrorKeepsDraftAndReadbackKeepsEffective(t *testing.T) {
 	if _, ok := s.Request(); ok {
 		t.Fatal("invalid capacity was accepted")
 	}
-	if !strings.Contains(s.Error, "Context tokens") || s.Draft.Model != "provider-model-unconfirmed" {
+	if s.Error != modelValidationContextKind || s.Draft.Model != "provider-model-unconfirmed" {
 		t.Fatal("validation did not preserve the draft or explain the field")
 	}
 
@@ -222,7 +221,7 @@ func TestModelSelectionUnconfirmedRequiresRefreshAndPreservesDraft(t *testing.T)
 		// The valid draft is requestable before the readback becomes uncertain.
 		t.Fatal(s.Error)
 	}
-	s.SetUnconfirmed("Runtime could not confirm the current model configuration.")
+	s.SetUnconfirmed(modelUnconfirmedNotConfirmed, "")
 	if !s.Unconfirmed || s.Effective.Config.EffectiveConfig.Model != "provider-model-a" {
 		t.Fatal("unconfirmed state lost the last read effective value")
 	}
@@ -232,7 +231,7 @@ func TestModelSelectionUnconfirmedRequiresRefreshAndPreservesDraft(t *testing.T)
 
 	tr := modelSelectionTester(s, actions, 560, 720)
 	tr.Frame()
-	for _, text := range []string{"Last read model: provider-model-a", "Last read limits:", "Runtime could not confirm"} {
+	for _, text := range []string{"Last read model: provider-model-a", "Last read limits:", "Runtime did not confirm"} {
 		if !tr.HasText(text) {
 			t.Fatalf("unconfirmed view missing %q", text)
 		}
@@ -349,5 +348,61 @@ func TestModelSelectionRendersAtMinimumWindow(t *testing.T) {
 		if !tr.HasText(text) {
 			t.Fatalf("minimum-window form missing %q", text)
 		}
+	}
+}
+
+func TestModelFeedbackClearsAcrossActualSuccessAndLocale(t *testing.T) {
+	s := newModelSelection(selectionTarget(), selectionCatalog())
+	s.Draft.Model = "dirty-model-kept"
+	s.Draft.ContextTokens = "9000"
+	targetSession := s.Target.Config.SessionID
+	s.SetErrorKind(modelErrorBusy, "")
+	tr := modelSelectionTester(s, modelSelectionActions{}, 560, 720)
+	tr.SetLocale("en")
+	tr.Frame()
+	if !tr.HasText("This session is busy. Wait for its current task to finish before changing the model.") {
+		t.Fatalf("English failure feedback missing: %v", tr.Texts())
+	}
+
+	s.SetEffective(selectionConfig("provider-model-a", 131072, 8192, 5))
+	s.SetBusy(false, modelStatusRefreshed)
+	tr.Frame()
+	if tr.HasText("This session is busy") || !tr.HasText("Runtime configuration refreshed.") {
+		t.Fatalf("readback success did not clear the old failure: %v", tr.Texts())
+	}
+	if s.Draft.Model != "dirty-model-kept" || s.Target.Config.SessionID != targetSession {
+		t.Fatalf("success seam changed the dirty draft or target: draft=%q target=%q", s.Draft.Model, s.Target.Config.SessionID)
+	}
+	tr.SetLocale("zh-Hans")
+	tr.Frame()
+	if tr.HasText("This session is busy") || !tr.HasText("运行时配置已刷新。") {
+		t.Fatalf("Chinese refresh feedback or stale failure: %v", tr.Texts())
+	}
+	tr.SetLocale("en")
+	tr.Frame()
+	if tr.HasText("This session is busy") {
+		t.Fatalf("language switch revived an old failure: %v", tr.Texts())
+	}
+
+	s.SetErrorKind(modelErrorBusy, "")
+	s.ResetDraft()
+	tr.Frame()
+	if tr.HasText("This session is busy") {
+		t.Fatalf("discard did not clear the failure: %v", tr.Texts())
+	}
+	s.SetErrorKind(modelErrorBusy, "")
+	s.SetResult(selectionConfig("provider-model-a", 131072, 8192, 5))
+	tr.Frame()
+	if tr.HasText("This session is busy") || !tr.HasText("Model configuration applied.") {
+		t.Fatalf("result seam did not clear the failure: %v", tr.Texts())
+	}
+
+	s.SetError("raw provider failure: invalid_model_limits")
+	tr.Frame()
+	if !tr.HasText("raw provider failure: invalid_model_limits") || tr.HasText("This session is busy") {
+		t.Fatalf("next raw failure did not replace the old notice: %v", tr.Texts())
+	}
+	if s.Draft.Model != s.Effective.Config.EffectiveConfig.Model || s.Target.Config.SessionID != targetSession {
+		t.Fatalf("raw failure changed draft or target: draft=%q target=%q", s.Draft.Model, s.Target.Config.SessionID)
 	}
 }

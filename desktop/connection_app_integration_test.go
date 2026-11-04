@@ -1,17 +1,22 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/egoist/mygo/ui"
+
+	"saki/desktop/locales"
 )
 
 func openConnectionHarness(t *testing.T) *guiHarness {
@@ -388,7 +393,9 @@ func TestConnectionGUIFailedTestCanBeCorrectedWithoutSaving(t *testing.T) {
 	})
 	h.pump.wait(func() bool { return !h.app.connectionForm.Busy })
 	h.pump.do(func() {
-		if h.app.connectionForm.Error == "" || strings.Contains(h.app.connectionForm.Error, config.APIKey) {
+		form := h.app.connectionForm
+		text := connectionErrorText(locales.In("en"), form.Error, form.ErrorDetail)
+		if form.Error == "" || strings.Contains(text, config.APIKey) || strings.Contains(form.ErrorDetail, config.APIKey) {
 			t.Error("failed Test did not show a key-free, correctable error")
 		}
 		if h.app.connectionForm.Draft.APIKey != config.APIKey {
@@ -402,7 +409,7 @@ func TestConnectionGUIFailedTestCanBeCorrectedWithoutSaving(t *testing.T) {
 	})
 	h.pump.wait(func() bool { return !h.app.connectionForm.Busy })
 	h.pump.do(func() {
-		if h.app.connectionForm.Error != "" || !strings.Contains(h.app.connectionForm.Status, "test completed") {
+		if h.app.connectionForm.Error != "" || h.app.connectionForm.Status != connStatusTestCompleted {
 			t.Error("corrected Test did not succeed")
 		}
 		if h.app.connectionSaved != nil || h.app.connectionEffective != nil || h.app.rt != nil {
@@ -806,7 +813,7 @@ func TestConnectionGUISaveAndApplyRechecksActivityBeforeFinalSaveCallback(t *tes
 	if applying || rt != oldRT {
 		t.Fatal("save-then-apply replaced the healthy runtime while new activity was present")
 	}
-	if !strings.Contains(blocked, "Wait for all conversation and issue work to finish") {
+	if blocked != connBlockedActiveWork {
 		t.Fatalf("active-task guard did not block Apply: %q", blocked)
 	}
 	if saved == nil || saved.Model != edited.Model {
@@ -820,4 +827,136 @@ func TestConnectionGUISaveAndApplyRechecksActivityBeforeFinalSaveCallback(t *tes
 		h.app.modelOpActive = false
 	})
 	h.shutdown(t)
+}
+
+func TestConnectionGUILanguageChangePreservesRequestsAndSession(t *testing.T) {
+	binary := requireRuntimeBinary(t)
+	provider := &providerFixture{}
+	server := httptest.NewServer(provider.handler(t, "locale-fixture"))
+	t.Cleanup(server.Close)
+	root := t.TempDir()
+	isolateConnectionApp(t, root, binary)
+	oldRead, oldApply := loadLanguageMode, applyAppLocale
+	t.Cleanup(func() { loadLanguageMode, applyAppLocale = oldRead, oldApply })
+	savedMode := "en"
+	loadLanguageMode = func() string { return savedMode }
+	h := openConnectionHarness(t)
+	config := testConnectionConfig(t)
+	config.API, config.Endpoint, config.Model = connectionAPIResponses, server.URL, "locale-fixture-model"
+	saveAppConnection(t, h, config)
+	applyAppConnection(t, h)
+	const instructions = "Keep these instructions byte-for-byte: 不翻译用户指令."
+	h.pump.do(func() {
+		ct := h.app.selectedContact()
+		ct.Name, ct.Purpose, ct.Instructions = "Saki", "Original purpose 原始用途", instructions
+	})
+	if provider.count() != 0 {
+		t.Fatal("configuration created an unsolicited model request")
+	}
+	sessionID := sendConnectionConversation(t, h, "First explicit input 第一条", "locale-fixture answer")
+	var client *runtimeClient
+	var generation int
+	var ct *contact
+	h.pump.do(func() {
+		client, generation, ct = h.app.rt, h.app.connectionGeneration, h.app.selectedContact()
+		ct.Draft = "Unsent draft 保留草稿"
+	})
+	var before json.RawMessage
+	if err := client.call("session.config.get", map[string]any{"session_id": sessionID}, &before, runtimeControlTimeout); err != nil {
+		t.Fatal(err)
+	}
+	storeBefore, err := os.ReadFile(guiStorePath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var tr *ui.Tester
+	var applied []string
+	applyAppLocale = func(tag string) { savedMode = tag; applied = append(applied, tag); tr.SetLocale(tag) }
+	h.pump.do(func() {
+		h.app.openSettingsTab(settingsTabAppearance, settingsSourceRail)
+		tr = ui.NewTester(h.app.view, 1040, 720)
+		tr.SetLocale("en")
+		tr.Frame()
+		if err := tr.Click("简体中文"); err != nil {
+			t.Error(err)
+			return
+		}
+		tr.Frame()
+		if !tr.HasText("通用") || h.app.languageMode != "zh-Hans" {
+			t.Error("the actual General language action did not update its live view")
+		}
+		if h.app.rt != client || h.app.connectionGeneration != generation || h.app.selectedContact() != ct || ct.SessionID != sessionID || ct.Draft != "Unsent draft 保留草稿" || ct.Instructions != instructions {
+			t.Error("language change replaced Runtime, session, contact, draft or instructions")
+		}
+	})
+	if t.Failed() {
+		return
+	}
+	var after json.RawMessage
+	if err := client.call("session.config.get", map[string]any{"session_id": sessionID}, &after, runtimeControlTimeout); err != nil {
+		t.Fatal(err)
+	}
+	storeAfter, err := os.ReadFile(guiStorePath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(before, after) || !bytes.Equal(storeBefore, storeAfter) || provider.count() != 1 {
+		t.Fatal("language change mutated configuration/storage or requested the model")
+	}
+	h.pump.do(func() { h.app.closeSettings() })
+	if got := sendConnectionConversation(t, h, "Second explicit input 第二条", "locale-fixture answer"); got != sessionID {
+		t.Fatalf("second explicit send used a new session: %s / %s", got, sessionID)
+	}
+	h.pump.do(func() {
+		h.app.openSettingsTab(settingsTabAppearance, settingsSourceRail)
+		tr.SetLocale("zh-Hans")
+		tr.Frame()
+		if err := tr.Click("English"); err != nil {
+			t.Error(err)
+			return
+		}
+		tr.Frame()
+		if !tr.HasText("General") || h.app.languageMode != "en" {
+			t.Error("English did not return in the same UI instance")
+		}
+	})
+	if provider.count() != 2 || !slices.Equal(applied, []string{"zh-Hans", "en"}) {
+		t.Fatalf("explicit sends/switches = requests %d, applied %v", provider.count(), applied)
+	}
+	invariant := func(body string) []byte {
+		var request map[string]json.RawMessage
+		if err := json.Unmarshal([]byte(body), &request); err != nil {
+			t.Fatal(err)
+		}
+		var input []map[string]json.RawMessage
+		if err := json.Unmarshal(request["input"], &input); err != nil {
+			t.Fatal(err)
+		}
+		var system []json.RawMessage
+		for _, item := range input {
+			var role string
+			_ = json.Unmarshal(item["role"], &role)
+			if role == "system" || role == "developer" {
+				data, err := json.Marshal(item)
+				if err != nil {
+					t.Fatal(err)
+				}
+				system = append(system, data)
+			}
+		}
+		if len(system) == 0 || !strings.Contains(body, instructions) {
+			t.Fatal("the real provider did not receive the original system/instructions")
+		}
+		data, err := json.Marshal(struct {
+			Model, Tools json.RawMessage
+			System       []json.RawMessage
+		}{request["model"], request["tools"], system})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return data
+	}
+	if !bytes.Equal(invariant(provider.body(0)), invariant(provider.body(1))) {
+		t.Fatal("UI language changed provider model, tools, system/developer roles or prompt bytes")
+	}
 }

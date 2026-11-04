@@ -4,6 +4,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"saki/desktop/locales"
 )
 
 func lifecycleTestIssue() (*appModel, *contact, *productIssue) {
@@ -63,8 +65,8 @@ func TestIssueCompletedExecutionDoesNotCompleteIssue(t *testing.T) {
 	if !a.completeIssue(issue.ID, "user checked the delivered result") || issue.Status != issueStatusCompleted {
 		t.Fatalf("explicit completion = %+v", issue)
 	}
-	if !strings.Contains(issueEvidenceText(issue), "user checked") {
-		t.Fatalf("completion evidence = %q", issueEvidenceText(issue))
+	if !strings.Contains(issueEvidenceText(locales.In("en"), issue), "user checked") {
+		t.Fatalf("completion evidence = %q", issueEvidenceText(locales.In("en"), issue))
 	}
 }
 

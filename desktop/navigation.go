@@ -21,10 +21,11 @@ const (
 // scroll position. The Runtime callback still owns the live result; this only
 // remembers what the user was looking at when another contact is selected.
 type historyViewMemory struct {
-	Query  string
-	Scroll ui.ScrollState
-	Result *contactHistoryResult
-	Error  string
+	Query       string
+	Scroll      ui.ScrollState
+	Result      *contactHistoryResult
+	Error       string
+	ErrorDetail string
 }
 
 var (
@@ -146,14 +147,15 @@ func (a *appModel) focusDetailControl(c *ui.Context, button ui.Element) {
 }
 
 func (a *appModel) navigationToolbar(c *ui.Context, t *ui.Theme) {
+	msgs := locales.In(c.Locale())
 	ui.Toolbar(c, func() {
 		if a.railCollapsed {
-			contacts := appTooltip(c, ui.Button(c, "").Label("Contacts"), "Show contacts").
+			contacts := appTooltip(c, ui.Button(c, "").Label(msgs.RailContactsTitle()), msgs.NavShowContactsTooltip()).
 				MinHeight(32).Height(32).Padding(4, 8)
 			contacts.Children(func() {
 				ui.Row(c).AlignItems(ui.Center).Gap(4).Children(func() {
 					ui.Icon(c, navContactsIcon).Width(18).Height(18).TextColor(t.TextMuted)
-					ui.Text(c, "Contacts").FontSize(typeAction).LineHeight(1.3).TextColor(t.Text)
+					ui.Text(c, msgs.RailContactsTitle()).FontSize(typeAction).LineHeight(1.3).TextColor(t.Text)
 				})
 			})
 			if a.focusRail {
@@ -165,9 +167,9 @@ func (a *appModel) navigationToolbar(c *ui.Context, t *ui.Theme) {
 			}
 		}
 		a.navigationWorkEntry(c, t)
-		a.navigationToggle(c, t, detailHistory, "History", "Conversation history", navHistoryIcon, &a.focusHistory)
-		a.navigationToggle(c, t, detailProfile, "Contact profile", "Contact profile summary", navProfileIcon, &a.focusContactProfile)
-	}).Label("Workspace details")
+		a.navigationToggle(c, t, detailHistory, msgs.NavHistory(), msgs.NavConversationHistoryTooltip(), navHistoryIcon, &a.focusHistory)
+		a.navigationToggle(c, t, detailProfile, msgs.NavContactProfile(), msgs.NavContactProfileTooltip(), navProfileIcon, &a.focusContactProfile)
+	}).Label(msgs.NavWorkspaceDetails())
 }
 
 func (a *appModel) navigationWorkEntry(c *ui.Context, t *ui.Theme) {
@@ -259,7 +261,7 @@ func (a *appModel) rememberHistoryView(contactID string) {
 	}
 	a.historyByContact[contactID] = historyViewMemory{
 		Query: a.historyQuery, Scroll: a.historyScroll,
-		Result: a.contactHistory, Error: a.contactHistoryError,
+		Result: a.contactHistory, Error: a.contactHistoryError, ErrorDetail: a.contactHistoryErrorDetail,
 	}
 }
 
@@ -273,6 +275,7 @@ func (a *appModel) restoreHistoryView(contactID string) {
 	a.contactHistory = memory.Result
 	a.contactHistoryFull = nil
 	a.contactHistoryError = memory.Error
+	a.contactHistoryErrorDetail = memory.ErrorDetail
 	a.contactHistoryBusy = false
 	a.contactHistoryDetailBusy = false
 	a.contactHistoryGen++
@@ -318,16 +321,17 @@ func (a *appModel) profileDetail(c *ui.Context, t *ui.Theme, narrow bool) {
 	if ct == nil {
 		return
 	}
+	msgs := locales.In(c.Locale())
 	ui.Column(c).FillHeight().Padding(16).Gap(8).Children(func() {
 		ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(8).Children(func() {
 			if narrow {
-				back := detailBackButton(c, t, "Close profile", "Back from Contact profile").OnClick(func() { a.closeDetail() })
+				back := detailBackButton(c, t, msgs.ProfileClose(), msgs.ProfileBackTooltip()).OnClick(func() { a.closeDetail() })
 				a.focusDetailControl(c, back)
-				ui.Text(c, "Contact profile").FontSize(typePageTitle).FontWeight(500).TextColor(t.Text).Grow(1)
+				ui.Text(c, msgs.NavContactProfile()).FontSize(typePageTitle).FontWeight(500).TextColor(t.Text).Grow(1)
 				return
 			}
-			ui.Text(c, "Contact profile").FontSize(typePageTitle).FontWeight(500).TextColor(t.Text).Grow(1)
-			close := appTooltip(c, secondaryButton(c, "Close profile"), "Back from Contact profile").OnClick(func() { a.closeDetail() })
+			ui.Text(c, msgs.NavContactProfile()).FontSize(typePageTitle).FontWeight(500).TextColor(t.Text).Grow(1)
+			close := appTooltip(c, secondaryButton(c, msgs.ProfileClose()), msgs.ProfileBackTooltip()).OnClick(func() { a.closeDetail() })
 			a.focusDetailControl(c, close)
 		})
 		ui.Scroll(c).Grow(1).TrackScroll(a.profileScrollFor(ct.ID)).Children(func() {
@@ -336,41 +340,41 @@ func (a *appModel) profileDetail(c *ui.Context, t *ui.Theme, narrow bool) {
 					a.avatarTile(c, t, 32)
 					ui.Column(c).MinWidth(0).Shrink(1).Gap(1).Children(func() {
 						ui.Text(c, ct.Name).FontSize(typePageTitle).FontWeight(500).TextColor(t.Text).MaxLines(2)
-						ui.Text(c, a.statusLabel(ct)+": "+ct.Role).FontSize(typeMeta).LineHeight(1.4).TextColor(a.statusColor(t, ct.Status))
+						ui.Text(c, msgs.StatusDetail(a.statusLabel(ct, msgs), ct.Role)).FontSize(typeMeta).LineHeight(1.4).TextColor(a.statusColor(t, ct.Status))
 					})
 				})
 				if ct.Archived {
-					ui.Text(c, "Archived contact. Existing history, drafts and issue data remain available.").FontSize(typeAction).LineHeight(1.4).TextColor(t.Warning)
+					ui.Text(c, msgs.ProfileArchivedNotice()).FontSize(typeAction).LineHeight(1.4).TextColor(t.Warning)
 				}
-				a.profileSummaryField(c, t, "Purpose", valueOr(ct.Purpose, "No purpose recorded."))
+				a.profileSummaryField(c, t, msgs.ProfilePurpose(), valueOr(ct.Purpose, msgs.ProfileNoPurpose()))
 				instructions := strings.TrimSpace(ct.Instructions)
 				if instructions == "" {
-					instructions = "No instructions recorded."
+					instructions = msgs.ProfileNoInstructions()
 				}
-				a.profileSummaryField(c, t, "Instructions", instructions)
+				a.profileSummaryField(c, t, msgs.ProfileInstructions(), instructions)
 				workspace := strings.TrimSpace(ct.Workspace)
 				if workspace == "" {
-					workspace = "Inherited from the connection default"
+					workspace = msgs.ProfileWorkspaceInherited()
 				}
-				a.profileSummaryField(c, t, "Workspace", workspace)
-				session := "No conversation session yet."
+				a.profileSummaryField(c, t, msgs.ProfileWorkspace(), workspace)
+				session := msgs.ProfileNoSession()
 				if ct.SessionID != "" {
-					session = "Conversation session " + ct.SessionID
+					session = msgs.ProfileSession(ct.SessionID)
 					if !ct.Loaded {
-						session += ": history not loaded"
+						session = msgs.ProfileSessionNotLoaded(ct.SessionID)
 					}
 				}
-				a.profileSummaryField(c, t, "Conversation", session)
+				a.profileSummaryField(c, t, msgs.ProfileConversation(), session)
 				active, unknown := a.contactActivity(ct)
-				activity := "No active work."
+				activity := msgs.ProfileNoActivity()
 				switch {
 				case unknown:
-					activity = "Work status is unresolved; reload before changing or archiving."
+					activity = msgs.ProfileActivityUnknown()
 				case active:
-					activity = "Work is active for this contact."
+					activity = msgs.ProfileActivityActive()
 				}
-				a.profileSummaryField(c, t, "Activity", activity)
-				edit := secondaryButton(c, "Edit full profile").TextColor(t.Text).OnClick(func() { a.editContactProfile() })
+				a.profileSummaryField(c, t, msgs.ProfileActivity(), activity)
+				edit := secondaryButton(c, msgs.ProfileEditFull()).TextColor(t.Text).OnClick(func() { a.editContactProfile() })
 				if a.focusProfileEdit {
 					edit.Focus()
 					a.focusProfileEdit = false
@@ -411,24 +415,25 @@ func (a *appModel) historyFullPage(c *ui.Context, t *ui.Theme) {
 	if full == nil {
 		return
 	}
+	msgs := locales.In(c.Locale())
 	ct := a.selectedContact()
-	from := "Contact"
+	from := msgs.SpeakerContact()
 	if full.From == "me" {
-		from = "You"
+		from = msgs.SpeakerYou()
 	}
 	ui.Column(c).Fill().Children(func() {
 		ui.Row(c).Padding(16, 16).AlignItems(ui.Center).Gap(8).Children(func() {
-			back := appTooltip(c, secondaryButton(c, "← Back to history").Label("Close full message"), "Back to History").OnClick(func() { a.closeContactHistoryFull() })
+			back := appTooltip(c, secondaryButton(c, msgs.BackToHistoryVisible()).Label(msgs.CloseFullMessage()), msgs.BackToHistoryTooltip()).OnClick(func() { a.closeContactHistoryFull() })
 			if a.focusHistoryFullBack {
 				back.Focus()
 				a.focusHistoryFullBack = false
 			}
-			ui.Text(c, "Full saved message").FontSize(typePageTitle).FontWeight(500).TextColor(t.Text)
+			ui.Text(c, msgs.FullSavedMessage()).FontSize(typePageTitle).FontWeight(500).TextColor(t.Text)
 		})
 		ui.Scroll(c).Grow(1).TrackScroll(&a.historyFullScroll).Padding(0, 16).Children(func() {
 			ui.Column(c).FillWidth().MaxWidth(760).AlignItems(ui.Start).Gap(8).Children(func() {
-				ui.Text(c, from+". "+full.Date+". "+full.SessionID).FontSize(typeMeta).LineHeight(1.4).TextColor(t.TextMuted)
-				markdownReader(c, full.Text, a.readerOptions(markdownReaderOptions{CopyLabel: locales.In(c.Locale()).CopySavedMessageLabel(), Theme: messageMarkdownTheme}, historyLinkScope(ct.ID, "full:"+full.SessionID, full.EntryID))).FontSize(typeBody).LineHeight(1.6).TextColor(t.Text)
+				ui.Text(c, msgs.HistoryMessageMeta(from, full.Date, full.SessionID)).FontSize(typeMeta).LineHeight(1.4).TextColor(t.TextMuted)
+				markdownReader(c, full.Text, a.readerOptions(markdownReaderOptions{CopyLabel: msgs.CopySavedMessageLabel(), Theme: messageMarkdownTheme}, historyLinkScope(ct.ID, "full:"+full.SessionID, full.EntryID))).FontSize(typeBody).LineHeight(1.6).TextColor(t.Text)
 				taskContextReadOnlyView(c, a.workTheme, full.Context)
 			})
 		})
@@ -436,14 +441,15 @@ func (a *appModel) historyFullPage(c *ui.Context, t *ui.Theme) {
 }
 
 func (a *appModel) sourcesPage(c *ui.Context, t *ui.Theme) {
+	msgs := locales.In(c.Locale())
 	ui.Column(c).Fill().Children(func() {
 		ui.Row(c).Padding(16, 16).AlignItems(ui.Center).Gap(8).Children(func() {
-			back := appTooltip(c, secondaryButton(c, "← Back").Label("Close sources"), "Back from sources").OnClick(func() { a.closeAux() })
+			back := appTooltip(c, secondaryButton(c, msgs.BackAction()).Label(msgs.CloseSources()), msgs.BackFromSources()).OnClick(func() { a.closeAux() })
 			if a.focusSourcesBack {
 				back.Focus()
 				a.focusSourcesBack = false
 			}
-			ui.Text(c, "Sources").FontSize(typePageTitle).FontWeight(500).TextColor(t.Text)
+			ui.Text(c, msgs.SourcesTitle()).FontSize(typePageTitle).FontWeight(500).TextColor(t.Text)
 		})
 		ui.Scroll(c).Grow(1).TrackScroll(&a.sourcesScroll).Padding(0, 16).Children(func() {
 			ui.Column(c).FillWidth().MaxWidth(760).AlignItems(ui.Start).Gap(8).Children(func() {
@@ -454,15 +460,16 @@ func (a *appModel) sourcesPage(c *ui.Context, t *ui.Theme) {
 }
 
 func (a *appModel) auxPage(c *ui.Context, t *ui.Theme) {
-	title := "Session model"
-	closeLabel := "Close session model"
+	msgs := locales.In(c.Locale())
+	title := msgs.SessionModelTitle()
+	closeLabel := msgs.CloseSessionModel()
 	if a.aux == "task-context" {
-		title = "Task context"
-		closeLabel = "Close task context"
+		title = msgs.TaskContextTitle()
+		closeLabel = msgs.CloseTaskContext()
 	}
 	ui.Column(c).Fill().Children(func() {
 		ui.Row(c).Padding(16, 16).AlignItems(ui.Center).Gap(8).Children(func() {
-			back := appTooltip(c, secondaryButton(c, "← Back").Label(closeLabel), "Back from "+title).OnClick(func() { a.closeAux() })
+			back := appTooltip(c, secondaryButton(c, msgs.BackAction()).Label(closeLabel), msgs.BackFromAux(title)).OnClick(func() { a.closeAux() })
 			if a.focusAuxBack {
 				back.Focus()
 				a.focusAuxBack = false
@@ -505,7 +512,7 @@ func (a *appModel) syncDetailPageMode() {
 }
 
 func detailBackButton(c *ui.Context, t *ui.Theme, accessible, tooltip string, visible ...string) ui.Element {
-	label := "Back"
+	label := locales.In(c.Locale()).BackLabel()
 	if len(visible) > 0 && visible[0] != "" {
 		label = visible[0]
 	}

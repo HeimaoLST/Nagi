@@ -112,11 +112,11 @@ import sys
 path, version, minimum_os = sys.argv[1], sys.argv[2], sys.argv[3]
 info = {
     "CFBundleDevelopmentRegion": "en",
-    "CFBundleDisplayName": "Saki",
+    "CFBundleDisplayName": "Nagi",
     "CFBundleExecutable": "Saki",
     "CFBundleIdentifier": "dev.saki.desktop",
     "CFBundleInfoDictionaryVersion": "6.0",
-    "CFBundleName": "Saki",
+    "CFBundleName": "Nagi",
     "CFBundlePackageType": "APPL",
     "CFBundleShortVersionString": version,
     "CFBundleVersion": "1",
@@ -216,7 +216,7 @@ import platform
 out = os.environ["OUT"]
 manifest = {
     "schema": 1,
-    "product": "Saki",
+    "product": "Nagi",
     "candidate": "macos-arm64",
     "app": "Saki.app",
     "source_sha": os.environ["SOURCE_SHA"],
@@ -246,7 +246,7 @@ manifest = {
         "selection": "max(gui, helper)",
     },
     "bundle": {
-        "name": "Saki",
+        "name": "Nagi",
         "identifier": "dev.saki.desktop",
         "version": os.environ["APP_VERSION"],
         "build": "1",

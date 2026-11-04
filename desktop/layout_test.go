@@ -216,7 +216,7 @@ func TestResponsiveWorkbenchGeometryFirstSlice(t *testing.T) {
 				} else {
 					t.Fatal("Close workspace missing from open detail")
 				}
-				if empty, ok := tr.Find("No issues in Unfinished."); ok {
+				if empty, ok := tr.Find("No tasks in Not done."); ok {
 					t.Logf("empty rect=%+v", empty)
 				}
 				if tc.width == 960 && tc.left == 280 && tc.right == 440 {
@@ -922,5 +922,141 @@ func TestLayoutRuntimeEntryLoadsSavedPreference(t *testing.T) {
 	}
 	if !a.workspaceOpen || a.railWidth() != 230 || a.workWidth() != 360 {
 		t.Fatalf("runtime entry layout = open=%v left=%v right=%v", a.workspaceOpen, a.railWidth(), a.workWidth())
+	}
+}
+
+func TestHeaderGroupsStatusAndRoleWithLongRawText(t *testing.T) {
+	const shortRole = "Assistant"
+	const longEnglishRole = "Assistant for release engineering, cross-functional verification and runtime diagnostics"
+	const longChineseRole = "负责发布工程、跨团队验证、运行时诊断与发布后回归分析的助理，同时维护跨团队交付记录和异常跟进"
+	cases := []struct {
+		name   string
+		locale string
+		role   string
+		status string
+		wrap   bool
+		dark   bool
+		setup  func(a *appModel, ct *contact)
+	}{
+		{
+			name: "ready-960", locale: "en", role: shortRole, status: "Ready",
+			setup: func(a *appModel, ct *contact) {
+				a.rt = &runtimeClient{}
+				a.runtimeStatus = runtimeStateReady
+			},
+		},
+		{
+			name: "not-connected-960", locale: "en", role: shortRole, status: "Not connected", dark: true,
+			setup: func(a *appModel, ct *contact) {
+				cfg := connectionConfig{Version: 1, API: connectionAPIChatCompletions, Endpoint: "http://example.test/v1", APIKey: "fixture", Model: "fixture", ContextTokens: 1000, OutputTokens: 100, WorkingDirectory: t.TempDir(), MaxActiveTasks: 2}
+				a.runtimeStatus = runtimeStateExited
+				a.runtimeStage = "Connection configuration"
+				a.connectionSaved = &cfg
+				a.connectionEffective = &cfg
+				a.ensureConnectionForm()
+			},
+		},
+		{
+			name: "attention-long-960", locale: "en", role: longEnglishRole, status: "Needs attention", wrap: true, dark: true,
+			setup: func(a *appModel, ct *contact) {
+				a.rt = &runtimeClient{}
+				a.runtimeStatus = runtimeStateReady
+				ct.Status = statusAttention
+				ct.SendState = sendUnknown
+			},
+		},
+		{
+			name: "hans-long-960", locale: "zh-Hans", role: longChineseRole, status: locales.In("zh-Hans").StatusReady(), wrap: true,
+			setup: func(a *appModel, ct *contact) {
+				a.rt = &runtimeClient{}
+				a.runtimeStatus = runtimeStateReady
+			},
+		},
+		{
+			name: "en-XA-owned-status-960", locale: "en-XA", role: longEnglishRole, status: locales.In("en-XA").StatusReady(), wrap: true, dark: true,
+			setup: func(a *appModel, ct *contact) {
+				a.rt = &runtimeClient{}
+				a.runtimeStatus = runtimeStateReady
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			a, ct := workspaceTestApp(t)
+			a.windowWidth = 960
+			issue := &productIssue{ID: "issue-header", ContactID: ct.ID, Goal: "header detail", Status: issueStatusInProgress}
+			ct.Issues = []*productIssue{issue}
+			ct.SelectedIssueID = issue.ID
+			ct.Role = tc.role
+			ct.issueNavigation().DetailID = issue.ID
+			a.setWorkspaceOpen(true)
+			tc.setup(a, ct)
+			tr := ui.NewTester(a.view, 960, 640)
+			tr.SetLocale(tc.locale)
+			tr.SetDark(tc.dark)
+			tr.Frame()
+			msgs := locales.In(tc.locale)
+			if !tr.HasText(tc.status) || !tr.HasText(tc.role) {
+				t.Fatalf("header status/role missing: %v", tr.Texts())
+			}
+			status, statusOK := tr.Find(tc.status)
+			role, roleOK := tr.Find(tc.role)
+			if !statusOK || !roleOK || status.W <= 0 || status.H <= 0 || role.W <= 0 || role.H <= 0 {
+				t.Fatalf("header geometry status=%+v/%v role=%+v/%v", status, statusOK, role, roleOK)
+			}
+			mainStart := float32(0)
+			if a.avatarRailActive() {
+				mainStart = avatarRailWidth + paneSeparatorWidth
+			} else {
+				mainStart = a.effectiveRailWidth() + paneSeparatorWidth
+			}
+			centerRight := mainStart + a.centerPaneWidth
+			for _, item := range []struct {
+				name string
+				r    ui.Rect
+			}{{"status", status}, {"role", role}} {
+				if item.r.X < mainStart || item.r.X+item.r.W > centerRight || item.r.Y < 0 || item.r.Y+item.r.H > 640 {
+					t.Fatalf("header %s outside center: %+v center=[%.1f,%.1f]", item.name, item.r, mainStart, centerRight)
+				}
+			}
+			if issueHistoryRectsOverlap(status, role) {
+				t.Fatalf("header status/role overlap status=%+v role=%+v", status, role)
+			}
+			if status.Y < role.Y+role.H && role.Y < status.Y+status.H && role.X-(status.X+status.W) < 11.5 {
+				t.Fatalf("inline status/role separation below 12 logical pixels: status=%+v role=%+v", status, role)
+			}
+			if tc.wrap {
+				if role.H <= 24 {
+					t.Fatalf("long role did not wrap: %+v", role)
+				}
+			} else if status.Y >= role.Y+role.H || role.Y >= status.Y+status.H {
+				t.Fatalf("short status/role not on one row: status=%+v role=%+v", status, role)
+			}
+			minNavX := float32(960)
+			for _, label := range []string{msgs.WorkEntryLabel(), msgs.NavHistory(), msgs.NavContactProfile()} {
+				r, ok := tr.Find(label)
+				if !ok || r.W <= 0 || r.H <= 0 || r.X < 0 || r.X+r.W > 960 {
+					t.Fatalf("header navigation %q rect=%+v ok=%v texts=%v", label, r, ok, tr.Texts())
+				}
+				if r.X < minNavX {
+					minNavX = r.X
+				}
+			}
+			if role.X+role.W > minNavX {
+				t.Fatalf("long role squeezed navigation: role=%+v firstNavX=%.1f", role, minNavX)
+			}
+			composer, ok := tr.Find(msgs.ComposerLabel(ct.Name))
+			if !ok || composer.W-4 < 440 {
+				t.Fatalf("960 composer content changed: %+v ok=%v", composer, ok)
+			}
+			if a.selectedContact() != ct {
+				t.Fatal("header grouping changed the selected contact scope")
+			}
+			a.focusHistory = true
+			tr.Frame()
+			if !tr.Focused(msgs.NavHistory()) {
+				t.Fatalf("header navigation focus did not survive: %v", tr.Texts())
+			}
+		})
 	}
 }

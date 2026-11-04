@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo/ui"
+
+	"saki/desktop/locales"
 )
 
 func TestIssueDetailDefaultsToResultAndKeepsSecondaryDetailsCollapsed(t *testing.T) {
@@ -39,27 +41,27 @@ func TestIssueDetailDefaultsToResultAndKeepsSecondaryDetailsCollapsed(t *testing
 	a.windowWidth = 1040
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	for _, want := range []string{"Latest execution", "readable result body", "Requirements", "Continue task", "More issue actions"} {
+	for _, want := range []string{"Latest run", "readable result body", "Requirements", "Continue task", "More task actions"} {
 		if !tr.HasText(want) {
 			t.Fatalf("default issue detail missing %q: %v", want, tr.Texts())
 		}
 	}
-	if tr.HasText("Execution history") || tr.HasText("Sent snapshot:") || tr.HasText("Sent task context") {
+	if tr.HasText("Run history") || tr.HasText("Sent snapshot:") || tr.HasText("Sent task context") {
 		t.Fatalf("secondary execution details visible by default: %v", tr.Texts())
 	}
 	goal, _ := tr.Find("prepare the readable summary")
-	latest, _ := tr.Find("Latest execution")
+	latest, _ := tr.Find("Latest run")
 	requirements, _ := tr.Find("Requirements")
 	primary, _ := tr.Find("Continue task")
-	more, _ := tr.Find("More issue actions")
+	more, _ := tr.Find("More task actions")
 	if !(goal.Y < primary.Y && primary.Y < latest.Y && latest.Y < requirements.Y && requirements.Y < more.Y) {
 		t.Fatalf("default issue detail order = goal %.1f primary %.1f latest %.1f requirements %.1f more %.1f", goal.Y, primary.Y, latest.Y, requirements.Y, more.Y)
 	}
-	if err := tr.Click("More issue actions"); err != nil {
+	if err := tr.Click("More task actions"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if !tr.HasText("Execution history") || !tr.HasText("Show sent snapshot") {
+	if !tr.HasText("Run history") || !tr.HasText("Show sent snapshot") {
 		t.Fatalf("expanded issue detail did not expose execution details: %v", tr.Texts())
 	}
 	clickAfterBoundedScroll(t, tr, "Show sent snapshot", 1040, 720)
@@ -106,12 +108,12 @@ func TestIssueDetailsOpenStateDoesNotCrossContacts(t *testing.T) {
 	*firstDraft = "first contact evidence draft"
 	a.selectContact(1)
 	tr.Frame()
-	if tr.HasText("Execution history") || a.issueDetailOpen[secondIssue.ID] || tr.HasText("first contact evidence draft") {
+	if tr.HasText("Run history") || a.issueDetailOpen[secondIssue.ID] || tr.HasText("first contact evidence draft") {
 		t.Fatalf("second contact inherited first edit/detail state: %v", tr.Texts())
 	}
 	a.selectContact(0)
 	tr.Frame()
-	if !a.issueDetailOpen[firstIssue.ID] || !tr.HasText("Hide issue actions") ||
+	if !a.issueDetailOpen[firstIssue.ID] || !tr.HasText("Hide task actions") ||
 		firstDraft != a.requirementDraft(firstIssue.Requirements[0]) || *firstDraft != "first contact evidence draft" {
 		t.Fatal("first issue details/draft were lost after contact switch")
 	}
@@ -143,25 +145,25 @@ func TestIssueViewExecutionOpensAtTopAndBackRestoresCompact(t *testing.T) {
 	a.windowWidth = 1040
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	if _, back := tr.Find("Back to issue"); back || tr.HasText("Execution history") {
+	if _, back := tr.Find("Back to task"); back || tr.HasText("Run history") {
 		t.Fatalf("execution detail visible before explicit View execution: %v", tr.Texts())
 	}
-	if err := tr.Click("View execution"); err != nil {
+	if err := tr.Click("View run"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if ct.SelectedWorkTaskID != "task-view" || !tr.HasText("Back to issue") || !tr.HasText("view result") || !tr.HasText("tool raw output") {
+	if ct.SelectedWorkTaskID != "task-view" || !tr.HasText("Back to task") || !tr.HasText("view result") || !tr.HasText("tool raw output") {
 		t.Fatalf("View execution did not open the selected detail: %+v texts=%v", ct.SelectedWorkTaskID, tr.Texts())
 	}
-	back, ok := tr.Find("Back to issue")
+	back, ok := tr.Find("Back to task")
 	if !ok || back.Y > 720 {
 		t.Fatalf("Back to issue is not reachable: %+v ok=%v", back, ok)
 	}
-	if err := tr.Click("Back to issue"); err != nil {
+	if err := tr.Click("Back to task"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if ct.SelectedWorkTaskID != "" || func() bool { _, ok := tr.Find("Back to issue"); return ok }() || tr.HasText("Execution history") {
+	if ct.SelectedWorkTaskID != "" || func() bool { _, ok := tr.Find("Back to task"); return ok }() || tr.HasText("Run history") {
 		t.Fatalf("Back to issue did not restore compact detail: selected=%q texts=%v", ct.SelectedWorkTaskID, tr.Texts())
 	}
 	after, err := os.ReadFile(a.store.path)
@@ -202,7 +204,7 @@ func TestIssueAttentionClearsAfterViewingFailedExecutionDetail(t *testing.T) {
 	if notice := a.issueWorkNotice(ct); !notice.Attention || notice.IssueID != issue.ID {
 		t.Fatalf("unseen failed execution did not raise attention: %+v", notice)
 	}
-	if !tr.HasText("Execution failed") || !tr.HasText(detail) {
+	if !tr.HasText("Failed") || !tr.HasText(detail) {
 		t.Fatalf("failed status/reason was not visible before viewing: %v", tr.Texts())
 	}
 	if dir := os.Getenv("SAKI_PREVIEW_DIR"); dir != "" {
@@ -215,15 +217,15 @@ func TestIssueAttentionClearsAfterViewingFailedExecutionDetail(t *testing.T) {
 		tr.SetDark(false)
 		tr.Frame()
 	}
-	if err := tr.Click("View execution"); err != nil {
+	if err := tr.Click("View run"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if ct.SelectedWorkTaskID != "task-attention" || !tr.HasText("Back to issue") || !tr.HasText("Failed") ||
+	if ct.SelectedWorkTaskID != "task-attention" || !tr.HasText("Back to task") || !tr.HasText("Failed") ||
 		!tr.HasText(detail) || !tr.HasText("Activity") {
 		t.Fatalf("View execution did not display the failed detail: selected=%q texts=%v", ct.SelectedWorkTaskID, tr.Texts())
 	}
-	if notice := a.issueWorkNotice(ct); notice.Attention || notice.Text != "" {
+	if notice := a.issueWorkNotice(ct); notice.Attention || notice.IssueID != "" {
 		t.Fatalf("viewing the failed execution did not clear its attention: %+v", notice)
 	}
 	if dir := os.Getenv("SAKI_PREVIEW_DIR"); dir != "" {
@@ -257,7 +259,7 @@ func TestIssueInterruptedDetailUsesProjectedAttentionStatus(t *testing.T) {
 	if !tr.HasText("Needs attention") || tr.HasText("In progress") {
 		t.Fatalf("interrupted detail primary status = %v", tr.Texts())
 	}
-	if !tr.HasText("Execution interrupted") {
+	if !tr.HasText("Interrupted") {
 		t.Fatalf("interrupted detail lost the Run fact: %v", tr.Texts())
 	}
 }
@@ -296,11 +298,11 @@ func TestIssueAttentionViewRequiresMatchingReasonAndResultPageConfirms(t *testin
 
 	// The work card shows a stale reason, not this execution's reason, so the
 	// actual View execution click must not confirm A.
-	if err := tr.Click("View execution"); err != nil {
+	if err := tr.Click("View run"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if !tr.HasText("Back to issue") || !tr.HasText("stale older reason") || !tr.HasText("Activity") {
+	if !tr.HasText("Back to task") || !tr.HasText("stale older reason") || !tr.HasText("Activity") {
 		t.Fatalf("View execution did not open the stale work card: %v", tr.Texts())
 	}
 	if notice := a.issueWorkNotice(ct); !notice.Attention || notice.IssueID != issueA.ID ||
@@ -331,11 +333,11 @@ func TestIssueAttentionViewRequiresMatchingReasonAndResultPageConfirms(t *testin
 	if notice := a.issueWorkNotice(ct); !notice.Attention || notice.IssueID != issueB.ID {
 		t.Fatalf("selecting B changed its unseen attention: %+v", notice)
 	}
-	if err := tr.Click("View execution"); err != nil {
+	if err := tr.Click("View run"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if notice := a.issueWorkNotice(ct); notice.Attention || notice.Text != "" {
+	if notice := a.issueWorkNotice(ct); notice.Attention || notice.IssueID != "" {
 		t.Fatalf("B confirmation did not clear B: %+v", notice)
 	}
 	if issueA.Status != issueStatusInProgress || issueB.Status != issueStatusInProgress ||
@@ -394,7 +396,7 @@ func TestIssueAttentionResultPageConfirmsNoTaskNoDetailExecution(t *testing.T) {
 	if issue.Executions[0].AttentionSeenStatus != issueExecutionUnknown {
 		t.Fatalf("no-task result entry did not confirm unknown: %+v", issue.Executions[0])
 	}
-	if notice := a.issueWorkNotice(ct); notice.Attention || notice.Text != "" {
+	if notice := a.issueWorkNotice(ct); notice.Attention || notice.IssueID != "" {
 		t.Fatalf("no-task result entry did not clear attention: %+v", notice)
 	}
 	if issue.Status != issueStatusInProgress || issue.Executions[0].Status != issueExecutionUnknown || ct.Unread != 2 {
@@ -421,7 +423,7 @@ func TestIssueAttentionResultPageConfirmsNoTaskNoDetailExecution(t *testing.T) {
 	if issue.Executions[0].AttentionSeenStatus != issueExecutionFailed {
 		t.Fatalf("active reload did not confirm the displayed failed status: %+v", issue.Executions[0])
 	}
-	if notice := a.issueWorkNotice(ct); notice.Attention || notice.Text != "" {
+	if notice := a.issueWorkNotice(ct); notice.Attention || notice.IssueID != "" {
 		t.Fatalf("active reload left the displayed failure in attention: %+v", notice)
 	}
 	if issue.Status != issueStatusInProgress || issue.Executions[0].Status != issueExecutionFailed ||
@@ -511,7 +513,7 @@ func TestIssueAttentionPendingSeenStillShowsOlderException(t *testing.T) {
 		t.Fatalf("pending result page did not confirm its execution: %+v", latest)
 	}
 	notice := a.issueWorkNotice(ct)
-	if !notice.Attention || notice.IssueID != issue.ID || !strings.Contains(notice.Text, "older unseen failure") ||
+	if !notice.Attention || notice.IssueID != issue.ID || !strings.Contains(notice.AttentionReason, "older unseen failure") ||
 		older.AttentionSeenStatus != "" {
 		t.Fatalf("seen pending execution hid the older unseen exception: %+v older=%+v", notice, older)
 	}
@@ -542,7 +544,7 @@ func TestIssueAttentionTracksStatusReplayAndNewExecution(t *testing.T) {
 	if notice := a.issueWorkNotice(ct); !notice.Attention || notice.IssueID != issue.ID {
 		t.Fatalf("unseen unknown did not raise attention: %+v", notice)
 	}
-	if err := tr.Click("View execution"); err != nil {
+	if err := tr.Click("View run"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
@@ -551,11 +553,11 @@ func TestIssueAttentionTracksStatusReplayAndNewExecution(t *testing.T) {
 		execution.AttentionSeenStatus != issueExecutionUnknown || ct.Unread != 3 {
 		t.Fatalf("viewing unknown changed retained facts or seen status: %+v unread=%d", execution, ct.Unread)
 	}
-	if notice := a.issueWorkNotice(ct); notice.Attention || notice.Text != "" {
+	if notice := a.issueWorkNotice(ct); notice.Attention || notice.IssueID != "" {
 		t.Fatalf("seen unknown still raised attention: %+v", notice)
 	}
 	tr.Frame()
-	if notice := a.issueWorkNotice(ct); notice.Text != "" {
+	if notice := a.issueWorkNotice(ct); notice.IssueID != "" {
 		t.Fatalf("same-status replay raised attention: %+v", notice)
 	}
 
@@ -567,14 +569,14 @@ func TestIssueAttentionTracksStatusReplayAndNewExecution(t *testing.T) {
 	if notice := a.issueWorkNotice(ct); !notice.Attention || notice.IssueID != issue.ID {
 		t.Fatalf("new failed status did not re-prompt: %+v", notice)
 	}
-	if err := tr.Click("View execution"); err != nil {
+	if err := tr.Click("View run"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
 	if execution.AttentionSeenStatus != issueExecutionFailed {
 		t.Fatalf("failed status was not confirmed: %+v", execution)
 	}
-	if notice := a.issueWorkNotice(ct); notice.Text != "" {
+	if notice := a.issueWorkNotice(ct); notice.IssueID != "" {
 		t.Fatalf("confirmed failed status raised attention: %+v", notice)
 	}
 	reason := "replayed failure"
@@ -604,7 +606,7 @@ func TestIssueAttentionTracksStatusReplayAndNewExecution(t *testing.T) {
 		execution.AttentionSeenStatus != issueExecutionFailed {
 		t.Fatalf("failed history replay changed the seen execution: %+v", execution)
 	}
-	if notice := a.issueWorkNotice(ct); notice.Text != "" {
+	if notice := a.issueWorkNotice(ct); notice.IssueID != "" {
 		t.Fatalf("failed same-status history replay raised attention: %+v", notice)
 	}
 
@@ -615,7 +617,7 @@ func TestIssueAttentionTracksStatusReplayAndNewExecution(t *testing.T) {
 	issue.Work.SendState = sendIdle
 	issue.Work.SendError = ""
 	tr.Frame()
-	if notice := a.issueWorkNotice(ct); notice.Text != "" {
+	if notice := a.issueWorkNotice(ct); notice.IssueID != "" {
 		t.Fatalf("later success re-lit a seen failure: %+v", notice)
 	}
 
@@ -679,7 +681,7 @@ func TestIssueAttentionSeenPersistsAndSaveFailureStaysUnseen(t *testing.T) {
 	openIssueDetailForTest(a, ct, issue.ID)
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	if err := tr.Click("View execution"); err != nil {
+	if err := tr.Click("View run"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
@@ -693,7 +695,7 @@ func TestIssueAttentionSeenPersistsAndSaveFailureStaysUnseen(t *testing.T) {
 	}
 	b := &appModel{}
 	applyStoreSelection(b, reloaded)
-	if notice := b.issueWorkNotice(b.selectedContact()); notice.Attention || notice.Text != "" {
+	if notice := b.issueWorkNotice(b.selectedContact()); notice.Attention || notice.IssueID != "" {
 		t.Fatalf("reloaded seen execution raised attention: %+v", notice)
 	}
 
@@ -715,7 +717,7 @@ func TestIssueAttentionSeenPersistsAndSaveFailureStaysUnseen(t *testing.T) {
 	openIssueDetailForTest(a2, ct2, issue2.ID)
 	tr2 := ui.NewTester(a2.view, 1040, 720)
 	tr2.Frame()
-	if err := tr2.Click("View execution"); err != nil {
+	if err := tr2.Click("View run"); err != nil {
 		t.Fatal(err)
 	}
 	tr2.Frame()
@@ -791,9 +793,9 @@ func TestActiveIssueWorkKeepsStopReachableBeforeRequirements(t *testing.T) {
 	a.windowWidth = 1040
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	stop, ok := tr.Find("Stop issue task")
+	stop, ok := tr.Find("Stop task")
 	requirements, reqOK := tr.Find("Requirements")
-	if !ok || !reqOK || !tr.HasText("Stop issue task") || stop.Y >= requirements.Y {
+	if !ok || !reqOK || !tr.HasText("Stop task") || stop.Y >= requirements.Y {
 		t.Fatalf("active Stop is not reachable before requirements: stop=%+v ok=%v requirements=%+v ok=%v", stop, ok, requirements, reqOK)
 	}
 }
@@ -821,16 +823,16 @@ func TestIssueSupplementAt720ScrollsToSaveAndKeepsOwnerDraft(t *testing.T) {
 	issue := ct.selectedIssue()
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	if err := tr.Click("More issue actions"); err != nil {
+	if err := tr.Click("More task actions"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if err := tr.Click("Add supplement"); err != nil {
+	if err := tr.Click("Add follow-up"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
 	*a.issueSupplementDraft(issue.ID) = "720 visible supplement"
-	clickAfterBoundedScroll(t, tr, "Save supplement", 1040, 720)
+	clickAfterBoundedScroll(t, tr, "Save follow-up", 1040, 720)
 	tr.Frame()
 	if issue.ContactID != ct.ID || a.selectedContact() != ct || issue.Supplements.pendingCount() != 1 ||
 		a.issueSupplementFormID != "" || *a.issueSupplementDraft(issue.ID) != "" {
@@ -852,7 +854,7 @@ func TestIssueExecutionContextExpandsAndCopiesAt720(t *testing.T) {
 	openIssueDetailForTest(a, ct, issue.ID)
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	if err := tr.Click("More issue actions"); err != nil {
+	if err := tr.Click("More task actions"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
@@ -874,11 +876,11 @@ func TestIssueLatestExecutionShowsNonSuccessStatesAndToolOnly(t *testing.T) {
 		label  string
 		detail string
 	}{
-		{issueExecutionPending, "Prepared, not dispatched", ""},
+		{issueExecutionPending, "Waiting to start", ""},
 		{issueExecutionRejected, "Rejected", "Runtime rejected the task"},
-		{issueExecutionFailed, "Execution failed", "provider failed after dispatch"},
+		{issueExecutionFailed, "Failed", "provider failed after dispatch"},
 		{issueExecutionUnknown, "Result unknown", "no trusted terminal state"},
-		{issueExecutionInterrupted, "Execution interrupted", ""},
+		{issueExecutionInterrupted, "Interrupted", ""},
 	}
 	for _, tc := range cases {
 		t.Run(tc.status, func(t *testing.T) {
@@ -897,7 +899,7 @@ func TestIssueLatestExecutionShowsNonSuccessStatesAndToolOnly(t *testing.T) {
 			issue.Work.Messages = []*message{{Key: "old-success", Kind: msgContact, TaskID: "old-task", Text: "old success"}}
 			tr := ui.NewTester(a.view, 1040, 720)
 			tr.Frame()
-			if !tr.HasText("Latest execution") || !tr.HasText(tc.label) {
+			if !tr.HasText("Latest run") || !tr.HasText(tc.label) {
 				t.Fatalf("latest status %q not visible: %v", tc.label, tr.Texts())
 			}
 			if tc.detail != "" && !tr.HasText(tc.detail) {
@@ -909,15 +911,15 @@ func TestIssueLatestExecutionShowsNonSuccessStatesAndToolOnly(t *testing.T) {
 			if tc.status == issueExecutionPending && !tr.HasText("Prepared but not dispatched yet.") {
 				t.Fatalf("pending execution lacks actionable short state: %v", tr.Texts())
 			}
-			if tc.status == issueExecutionInterrupted && (!tr.HasText("Execution interrupted; inspect the execution details for the recorded terminal state.") ||
+			if tc.status == issueExecutionInterrupted && (!tr.HasText("Run interrupted; inspect the run details for the recorded terminal state.") ||
 				tr.HasText("terminal state is unknown")) {
 				t.Fatalf("interrupted execution was described as unknown: %v", tr.Texts())
 			}
-			if err := tr.Click("More issue actions"); err != nil {
+			if err := tr.Click("More task actions"); err != nil {
 				t.Fatal(err)
 			}
 			tr.Frame()
-			if !tr.HasText("Hide issue actions") {
+			if !tr.HasText("Hide task actions") {
 				t.Fatalf("issue actions did not expand: %v", tr.Texts())
 			}
 			if tr.HasText("Show sent snapshot") {
@@ -937,7 +939,7 @@ func TestIssueLatestExecutionShowsNonSuccessStatesAndToolOnly(t *testing.T) {
 	ct.Works = []*workItem{{TaskID: "tool-task", State: workCompleted, Tools: []*workTool{{CallID: "tool", Name: "write", Finished: true, Output: `{"bytes_written":1}`}}}}
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	if !tr.HasText("No assistant message was recorded; open the execution to inspect tool output.") || !tr.HasText("View execution") {
+	if !tr.HasText("No assistant message was recorded; open the run to inspect tool output.") || !tr.HasText("View run") {
 		t.Fatalf("tool-only execution lacks honest guidance: %v", tr.Texts())
 	}
 	if tr.HasText("tool raw output") || tr.HasText(`"bytes_written"`) {
@@ -1086,22 +1088,35 @@ func TestIssueExecutionHistoryLayoutKeepsHeaderRevisionAndActionsDistinct(t *tes
 			ct.Works = []*workItem{{TaskID: "task-1", State: workCompleted}, {TaskID: "task-2", State: workInterrupted}}
 			a.issueDetailOpen = map[string]bool{issue.ID: true}
 			openIssueDetailForTest(a, ct, issue.ID)
-			tr := ui.NewTester(a.view, tc.width, tc.height)
+			var measureLabels []string
+			for index := range issue.Executions {
+				measureLabels = append(measureLabels,
+					"Open result: run "+fmt.Sprint(index+1),
+					locales.In("en").IssueViewExecutionRun(fmt.Sprint(index+1)))
+			}
+			naturalActionWidth := map[string]float32{}
+			tr := ui.NewTester(func(c *ui.Context) {
+				a.view(c)
+				for _, label := range measureLabels {
+					width, _ := c.MeasureText(0, ui.Span{Text: label, Size: typeAction, Weight: 400})
+					naturalActionWidth[label] = width
+				}
+			}, tc.width, tc.height)
 			tr.SetDark(tc.dark)
 			tr.Frame()
 			panelX := float32(tc.width) - a.workWidth()
 			if a.detailPageActive() {
 				panelX = 0
 			}
-			history := issueHistoryFindVisible(t, tr, "Execution history", panelX, float32(tc.width), float32(tc.height))
+			history := issueHistoryFindVisible(t, tr, "Run history", panelX, float32(tc.width), float32(tc.height))
 			if history.X < panelX || history.X+history.W > float32(tc.width) {
-				t.Errorf("Execution history bounds=%+v panelX=%.1f width=%d", history, panelX, tc.width)
+				t.Errorf("Run history bounds=%+v panelX=%.1f width=%d", history, panelX, tc.width)
 			}
 			for index, execution := range issue.Executions {
-				headerText := "Execution " + fmt.Sprint(index+1) + ": " + issueExecutionLabel(execution)
+				headerText := locales.In("en").IssueRunHeader(fmt.Sprint(index+1), issueExecutionText(locales.In("en"), execution.Status))
 				revisionText := "revision " + fmt.Sprint(execution.RequirementsRevision)
 				openText := "Open result: run " + fmt.Sprint(index+1)
-				viewText := "View execution: run " + fmt.Sprint(index+1)
+				viewText := locales.In("en").IssueViewExecutionRun(fmt.Sprint(index + 1))
 				header, revision, open, view := issueHistoryFindCard(t, tr, headerText, revisionText, openText, viewText,
 					panelX, float32(tc.width), float32(tc.height))
 				if dir := os.Getenv("SAKI_PREVIEW_DIR"); dir != "" {
@@ -1120,8 +1135,13 @@ func TestIssueExecutionHistoryLayoutKeepsHeaderRevisionAndActionsDistinct(t *tes
 				if issueHistoryRectsOverlap(open, view) {
 					t.Errorf("result actions overlap open=%+v view=%+v", open, view)
 				}
-				if view.W < open.W {
-					t.Errorf("View execution label is clipped narrower than Open result: open=%+v view=%+v", open, view)
+				for _, action := range []struct {
+					label string
+					box   ui.Rect
+				}{{openText, open}, {viewText, view}} {
+					if natural := naturalActionWidth[action.label]; natural <= 0 || action.box.W+0.5 < natural {
+						t.Errorf("result action label %q is clipped: visible width %.1f, measured natural width %.1f", action.label, action.box.W, natural)
+					}
 				}
 				// Exercise each visible result entry and verify its real execution
 				// ownership. Close through the existing result control so the

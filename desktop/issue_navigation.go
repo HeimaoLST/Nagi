@@ -1,6 +1,10 @@
 package main
 
-import "github.com/egoist/mygo/ui"
+import (
+	"github.com/egoist/mygo/ui"
+
+	"saki/desktop/locales"
+)
 
 const (
 	issueFilterUnfinished = "unfinished"
@@ -40,36 +44,14 @@ func normalizeIssueFilter(filter string) string {
 	}
 }
 
-func issueFilterChoiceLabel(filter string) string {
+func issueFilterText(msgs locales.Messages, filter string) string {
 	switch normalizeIssueFilter(filter) {
 	case issueFilterCompleted:
-		return "Completed"
+		return msgs.IssueFilterCompleted()
 	case issueFilterAll:
-		return "All"
+		return msgs.IssueFilterAllDescription()
 	default:
-		return "Unfinished"
-	}
-}
-
-func issueFilterFromChoice(label string) string {
-	switch label {
-	case "Completed":
-		return issueFilterCompleted
-	case "All":
-		return issueFilterAll
-	default:
-		return issueFilterUnfinished
-	}
-}
-
-func issueFilterDescription(filter string) string {
-	switch normalizeIssueFilter(filter) {
-	case issueFilterCompleted:
-		return "Completed"
-	case issueFilterAll:
-		return "All issues"
-	default:
-		return "Unfinished"
+		return msgs.IssueFilterUnfinished()
 	}
 }
 

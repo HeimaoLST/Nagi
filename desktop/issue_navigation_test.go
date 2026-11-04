@@ -56,16 +56,16 @@ func TestIssueOverviewDefaultsToRowsAndOneFilter(t *testing.T) {
 			t.Fatalf("unfinished overview missing %q: %v", want, tr.Texts())
 		}
 	}
-	for _, notWant := range []string{"completed goal", "canceled goal", "archived goal", "Latest execution", "More issue actions"} {
+	for _, notWant := range []string{"completed goal", "canceled goal", "archived goal", "Latest run", "More task actions"} {
 		if tr.HasText(notWant) {
 			t.Fatalf("overview rendered detail/out-of-filter content %q: %v", notWant, tr.Texts())
 		}
 	}
-	if err := tr.Click("Unfinished"); err != nil {
+	if err := tr.Click("Not done"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if err := tr.Click("Completed"); err != nil {
+	if err := tr.Click("Done"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
@@ -73,7 +73,7 @@ func TestIssueOverviewDefaultsToRowsAndOneFilter(t *testing.T) {
 		tr.HasText("active goal") || tr.HasText("canceled goal") {
 		t.Fatalf("completed projection = filter=%q texts=%v", ct.issueNavigation().Filter, tr.Texts())
 	}
-	if err := tr.Click("Completed"); err != nil {
+	if err := tr.Click("Done"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
@@ -282,7 +282,7 @@ func TestIssueCompletedExecutionDoesNotImplyWholeDone(t *testing.T) {
 	if issue.Status != issueStatusInProgress || issue.Requirements[0].State != requirementUnverified {
 		t.Fatalf("execution terminal changed issue/requirement: %q / %q", issue.Status, issue.Requirements[0].State)
 	}
-	if !tr.HasText("This execution ended; the issue remains open.") || !tr.HasText("Unverified") {
+	if !tr.HasText("This run finished; the task remains open.") || !tr.HasText("Unverified") {
 		t.Fatalf("partial completed execution was not explained: %v", tr.Texts())
 	}
 }
@@ -354,7 +354,7 @@ func TestIssueDetailTopRowFitsNarrowWorkPanel(t *testing.T) {
 	tr.Frame()
 	panel := float32(1180) - a.workWidth() - paneSeparatorWidth
 	back, backOK := tr.Find("Back to tasks")
-	stop, stopOK := tr.Find("Stop issue task")
+	stop, stopOK := tr.Find("Stop task")
 	if !backOK || !stopOK || back.W <= 0 || stop.W <= 0 || back.X < panel || stop.X+stop.W > 1180 ||
 		back.X+back.W > stop.X {
 		t.Fatalf("narrow top row = panel=%v back=%+v/%v stop=%+v/%v", panel, back, backOK, stop, stopOK)
@@ -373,7 +373,7 @@ func TestIssueStoppingDetailDisablesStopLabel(t *testing.T) {
 	openIssueDetailForTest(a, ct, issue.ID)
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	if !tr.HasText("Stopping issue…") || tr.HasText("Stop issue task") {
+	if !tr.HasText("Stopping…") || tr.HasText("Stop task") {
 		t.Fatalf("stopping detail = %v", tr.Texts())
 	}
 }
@@ -498,7 +498,7 @@ func TestClosedChatWaitingOrInterruptedShowsTaskFactAndView(t *testing.T) {
 		tr := ui.NewTester(a.view, 1040, 720)
 		tr.Frame()
 		if a.workspaceOpen || len(ct.Messages) != 0 || !tr.HasText("View task") || !tr.HasText(wantFact) ||
-			tr.HasText("Start a conversation") {
+			tr.HasText("Start a chat") {
 			t.Fatalf("closed chat %s fact/view/state = open=%v messages=%d texts=%v",
 				map[bool]string{true: "interrupted", false: "waiting"}[interrupted], a.workspaceOpen, len(ct.Messages), tr.Texts())
 		}
@@ -531,7 +531,7 @@ func TestIssuePrimaryActionsAndPersistentLifecycle(t *testing.T) {
 			name: "continue",
 			issue: &productIssue{ID: "issue-action-continue", Goal: "Continue action", Status: issueStatusInProgress,
 				Executions: []*issueExecution{{ID: "run-continue", Status: issueExecutionCompleted}}},
-			wantPrimary: "Continue task", wantLife: "Mark complete",
+			wantPrimary: "Continue task", wantLife: "Mark done",
 		},
 		{
 			name: "question-attention",
@@ -671,7 +671,7 @@ func TestPrimaryReadReturnFocusConsumesExactResultOwner(t *testing.T) {
 	// Move focus off Read before checking mismatches. These are visible renders
 	// of the primary Read branch; a mismatch must leave the exact pending owner/
 	// issue/execution/latest intent untouched and must not consume it.
-	if err := tr.Click("More issue actions"); err != nil {
+	if err := tr.Click("More task actions"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
@@ -844,7 +844,7 @@ func TestIssueBackFocusesDisplayedDetailNotBackgroundSelection(t *testing.T) {
 	if ct.SelectedIssueID != background.ID {
 		t.Fatalf("persistent selection changed on Back: %q", ct.SelectedIssueID)
 	}
-	if !tr.Focused("Issue A displayed issue") {
+	if !tr.Focused(locales.In("en").IssueRowLabel("A displayed issue")) {
 		t.Fatalf("Back did not focus displayed A row: %v", tr.Texts())
 	}
 	if ct.Draft != "draft stays" {
@@ -861,7 +861,7 @@ func TestIssueOverviewRecentUsesLatestExecutionNotOlderToolWork(t *testing.T) {
 		wantRun    string
 	}{
 		{"unknown-empty-task", issueExecutionUnknown, "", "Needs attention", "Run result unknown"},
-		{"pending-empty-task", issueExecutionPending, "", "In progress", "Run prepared, not dispatched"},
+		{"pending-empty-task", issueExecutionPending, "", "In progress", "Waiting to start"},
 		{"unknown-trusted-task", issueExecutionUnknown, "task-latest", "Needs attention", "Run result unknown"},
 		{"failed-trusted-task", issueExecutionFailed, "task-latest", "Needs attention", "Run failed"},
 	} {
@@ -886,7 +886,7 @@ func TestIssueOverviewRecentUsesLatestExecutionNotOlderToolWork(t *testing.T) {
 			if !tr.HasText(tc.wantStatus) || !tr.HasText(tc.wantRun) {
 				t.Fatalf("latest %s row = %v, want status %q and run %q", tc.status, tr.Texts(), tc.wantStatus, tc.wantRun)
 			}
-			if tr.HasText("Last action: read") || tr.HasText("Last action: write") || tr.HasText("Execution completed") {
+			if tr.HasText("Last action: read") || tr.HasText("Last action: write") || tr.HasText("Finished") {
 				t.Fatalf("terminal/uncertain latest was masked by work/tool: %v", tr.Texts())
 			}
 		})

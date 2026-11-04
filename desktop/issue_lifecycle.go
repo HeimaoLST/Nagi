@@ -46,19 +46,19 @@ func (a *appModel) editIssueFor(ct *contact, issueID, goal, requirementsText str
 	issue := issueForContact(ct, issueID)
 	goal = strings.TrimSpace(goal)
 	if issue == nil {
-		a.issueFormError = "Issue not found for this contact."
+		a.setIssueFormNotice("Issue not found for this contact.", "issue-missing", "")
 		return false
 	}
 	if goal == "" {
-		a.issueFormError = "Enter an issue goal."
+		a.setIssueFormNotice("Enter an issue goal.", "enter-goal", "")
 		return false
 	}
 	if issue.Archived {
-		a.issueFormError = "Restore this archived issue before editing it."
+		a.setIssueFormNotice("Restore this archived issue before editing it.", "archived-edit", "")
 		return false
 	}
 	if issue.Status == issueStatusCompleted || issue.Status == issueStatusCanceled {
-		a.issueFormError = "Reopen this issue before editing a completed or canceled item."
+		a.setIssueFormNotice("Reopen this issue before editing a completed or canceled item.", "terminal-edit", "")
 		return false
 	}
 	oldGoal, oldRequirements, oldRevision, oldUpdated, oldEvidence := issue.Goal, issue.Requirements, issue.RequirementsRevision, issue.UpdatedAt, issue.Evidence
@@ -112,10 +112,10 @@ func (a *appModel) editIssueFor(ct *contact, issueID, goal, requirementsText str
 			}
 		}
 		issue.Goal, issue.Requirements, issue.RequirementsRevision, issue.UpdatedAt, issue.Evidence = oldGoal, oldRequirements, oldRevision, oldUpdated, oldEvidence
-		a.issueFormError = "Could not save this issue: " + err.Error()
+		a.setIssueFormNotice("Could not save this issue: "+err.Error(), "save-issue-failed", err.Error())
 		return false
 	}
-	a.issueFormError = ""
+	a.clearIssueFormNotice()
 	return true
 }
 
@@ -459,7 +459,7 @@ func (a *appModel) openNewIssueForm() {
 	a.issueFormEditingID = ""
 	a.issueGoal = ""
 	a.issueRequirements = ""
-	a.issueFormError = ""
+	a.clearIssueFormNotice()
 	a.focusIssueGoal = true
 }
 
@@ -471,7 +471,7 @@ func (a *appModel) openEditIssueForm(issue *productIssue) {
 	a.issueFormEditingID = issue.ID
 	a.issueGoal = issue.Goal
 	a.issueRequirements = issueRequirementsText(issue)
-	a.issueFormError = ""
+	a.clearIssueFormNotice()
 	a.focusIssueGoal = true
 }
 
@@ -480,7 +480,7 @@ func (a *appModel) saveIssueForm() {
 		if a.editIssue(a.issueFormEditingID, a.issueGoal, a.issueRequirements) {
 			a.issueFormOpen = false
 			a.issueFormEditingID = ""
-			a.issueFormError = ""
+			a.clearIssueFormNotice()
 			a.focusIssueNew = true
 		}
 		return
@@ -493,7 +493,7 @@ func (a *appModel) saveIssueForm() {
 func (a *appModel) cancelIssueForm() {
 	a.issueFormOpen = false
 	a.issueFormEditingID = ""
-	a.issueFormError = ""
+	a.clearIssueFormNotice()
 	a.focusIssueNew = true
 }
 

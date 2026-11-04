@@ -19,6 +19,8 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+
+	"saki/desktop/locales"
 )
 
 const issueResultPageWriteFinal = "created result\n\n```text\nwrite\n```"
@@ -304,10 +306,10 @@ func TestIssueResultPageRuntimeIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := issueResultClick(h, "Issue Ship visible results"); err != nil {
+	if err := issueResultClick(h, locales.In("en").IssueRowLabel("Ship visible results")); err != nil {
 		t.Fatal(err)
 	}
-	if err := issueResultClick(h, "More issue actions"); err != nil {
+	if err := issueResultClick(h, "More task actions"); err != nil {
 		t.Fatal(err)
 	}
 	if err := issueResultClick(h, "Open result: run 1"); err != nil {
@@ -371,7 +373,7 @@ func TestIssueResultPageRuntimeIntegration(t *testing.T) {
 	}
 	h.pump.wait(func() bool {
 		inspection := h.app.issueResult.Panel.Inspection
-		return !h.app.issueResult.Panel.Checking && inspection != nil && inspection.Notice == "" && inspection.Preview == "second\n"
+		return !h.app.issueResult.Panel.Checking && inspection != nil && inspection.NoticeKind == "" && inspection.Preview == "second\n"
 	})
 	issueResultRequireTexts(t, h, "Current file", "second")
 	if got, err := issueResultClickCopy(h, "Copy current file"); err != nil {
@@ -405,7 +407,7 @@ func TestIssueResultPageRuntimeIntegration(t *testing.T) {
 	}
 	h.pump.wait(func() bool {
 		action := h.app.issueResult.Panel.Action
-		return h.app.issueResult.Panel.ActionFor == openKey && action.Err != ""
+		return h.app.issueResult.Panel.ActionFor == openKey && action.ErrKind != ""
 	})
 	if openCalls.Load() != 1 || revealCalls.Load() != 0 || openPath != files[0].Path {
 		t.Fatalf("Open called wrong OS action: open=%d reveal=%d path=%q want=%q", openCalls.Load(), revealCalls.Load(), openPath, files[0].Path)
@@ -434,7 +436,7 @@ func TestIssueResultPageRuntimeIntegration(t *testing.T) {
 	}
 	h.pump.wait(func() bool {
 		page := h.app.issueResult
-		return page.Panel.ActionFor == openKey && page.Panel.Action.Err == ""
+		return page.Panel.ActionFor == openKey && page.Panel.Action.ErrKind == ""
 	})
 	if openCalls.Load() != 2 || revealCalls.Load() != 0 || openPath != files[0].Path {
 		t.Fatalf("second Open called wrong OS action: open=%d reveal=%d path=%q", openCalls.Load(), revealCalls.Load(), openPath)
@@ -448,7 +450,7 @@ func TestIssueResultPageRuntimeIntegration(t *testing.T) {
 	}
 	h.pump.wait(func() bool {
 		action := h.app.issueResult.Panel.Action
-		return h.app.issueResult.Panel.ActionFor == openKey && strings.Contains(action.Err, "injected reveal failure")
+		return h.app.issueResult.Panel.ActionFor == openKey && strings.Contains(action.ErrDetail, "injected reveal failure")
 	})
 	if revealCalls.Load() != 1 || openCalls.Load() != 2 || revealPath != files[0].Path {
 		t.Fatalf("Reveal called wrong OS action: open=%d reveal=%d path=%q want=%q", openCalls.Load(), revealCalls.Load(), revealPath, files[0].Path)
@@ -466,7 +468,7 @@ func TestIssueResultPageRuntimeIntegration(t *testing.T) {
 	}
 	h.pump.wait(func() bool {
 		page := h.app.issueResult
-		return page.Panel.ActionFor == openKey && page.Panel.Action.Err == ""
+		return page.Panel.ActionFor == openKey && page.Panel.Action.ErrKind == ""
 	})
 	if revealCalls.Load() != 2 || openCalls.Load() != 2 || revealPath != files[0].Path {
 		t.Fatalf("second Reveal called wrong OS action: open=%d reveal=%d path=%q", openCalls.Load(), revealCalls.Load(), revealPath)
@@ -998,17 +1000,17 @@ func TestIssueResultNavigationEntryAndReturnWideNarrow(t *testing.T) {
 	})
 	for _, width := range []int{1040, 720} {
 		h.pump.do(func() { h.app.windowWidth = width })
-		if err := issueResultClickAt(h, width, 720, "Issue Navigation result"); err != nil {
+		if err := issueResultClickAt(h, width, 720, locales.In("en").IssueRowLabel("Navigation result")); err != nil {
 			t.Fatalf("width %d enter issue detail: %v", width, err)
 		}
 		var actionsOpen bool
 		h.pump.do(func() { actionsOpen = h.app.issueDetailOpen[issueID] })
 		if !actionsOpen {
-			if err := issueResultClickAt(h, width, 720, "More issue actions"); err != nil {
+			if err := issueResultClickAt(h, width, 720, "More task actions"); err != nil {
 				t.Fatalf("width %d expand run records: %v", width, err)
 			}
 		}
-		if err := issueResultClickAt(h, width, 720, "View execution: run 1"); err != nil {
+		if err := issueResultClickAt(h, width, 720, "View run 1"); err != nil {
 			t.Fatalf("width %d select run for observable work identity: %v", width, err)
 		}
 		if err := issueResultTesterRunAt(h, width, 720, func(tr *ui.Tester) error {
@@ -1342,7 +1344,7 @@ func TestIssueResultPageReloadErrorKeepsReadableBody(t *testing.T) {
 		LoadError: "Execution history is unavailable: injected",
 		Notice:    "Runtime session working directory is unavailable; file paths are shown as reported.",
 		Panel: issueResultPanelState{
-			RunLabel: "Run 2: Reload error", RunStatus: "Completed",
+			RunNumber: 2, RunGoal: "Reload error", RunStatus: issueExecutionCompleted,
 			Response: "previous readable body\n", Files: []issueResultFile{file},
 		},
 	}
@@ -1366,7 +1368,7 @@ func issueResultAppPreview(scene string, width int) *appModel {
 		Open: true, OwnerContactID: ct.ID, IssueID: ct.SelectedIssueID, ExecutionID: "exec-preview",
 		SessionID: "session-preview", TaskID: "task-preview", MessageID: "msg-preview", Generation: 1,
 		Panel: issueResultPanelState{
-			RunLabel: "Run 2: Ship visible results", RunStatus: "Completed",
+			RunNumber: 2, RunGoal: "Ship visible results", RunStatus: issueExecutionCompleted,
 			Response: "# Recorded output\n\nResult body with `code`.\n\n```go\nfunc main() {}\n```\n",
 			Files:    []issueResultFile{file},
 		},
@@ -1407,15 +1409,15 @@ func issueResultAppPreview(scene string, width int) *appModel {
 		missingFile := issueResultPanelFixtureFile("missing", "/Users/you/Workspace/Saki/missing.md", `{"path":"/Users/you/Workspace/Saki/missing.md","bytes_written":12}`)
 		setReader(missingFile, issueResultFileInspection{
 			Path: missingFile.Path, WorkingDirectory: missingFile.WorkingDirectory,
-			Notice: "No file exists at the reported path; it may have been moved or deleted.",
+			NoticeKind: resultNoticeMissing,
 		})
 		page.Panel.ActionFor = issueResultFileKey(missingFile)
-		page.Panel.Action = issueResultFileAction{Path: missingFile.Path, Err: "Could not open the current file: no handler"}
+		page.Panel.Action = issueResultFileAction{Path: missingFile.Path, ErrKind: resultActionOpen, ErrDetail: "no handler"}
 	case "readerror":
 		readErrorFile := issueResultPanelFixtureFile("readerror", "/Users/you/Workspace/Saki/readerror.md", `{"path":"/Users/you/Workspace/Saki/readerror.md","bytes_written":12}`)
 		setReader(readErrorFile, issueResultFileInspection{
 			Path: readErrorFile.Path, WorkingDirectory: readErrorFile.WorkingDirectory, Exists: true, Regular: true,
-			ReadError: "Could not read the current file: permission denied",
+			ReadErrorKind: resultNoticeRead, ReadErrorDetail: "permission denied",
 		})
 	case "source":
 		inspection := issueResultFileInspection{
@@ -1434,7 +1436,8 @@ func issueResultAppPreview(scene string, width int) *appModel {
 		})
 	case "multiple":
 		second := issueResultPanelFixtureFile("preview-two", file.Path, `{"path":"/Users/you/Workspace/Saki/report.txt","applied":1}`)
-		page.Panel.RunLabel = "Run 3: Ship visible results"
+		page.Panel.RunNumber = 3
+		page.Panel.RunGoal = "Ship visible results"
 		page.Panel.Files = []issueResultFile{file, second}
 	}
 	a.issueResult = page
@@ -1550,7 +1553,7 @@ func TestIssueResultPageReloadDuringCheckDrainsStaleCallback(t *testing.T) {
 		Open: true, OwnerContactID: ct.ID, IssueID: issue.ID, ExecutionID: execution.ID,
 		SessionID: "old-session", TaskID: "old-task", MessageID: "old-message", Generation: 1,
 		Panel: issueResultPanelState{
-			RunLabel: "Run 1: old label", RunStatus: "Running",
+			RunNumber: 1, RunGoal: "old label", RunStatus: issueExecutionRunning,
 			Files: []issueResultFile{file}, Selected: key, InspectFor: key,
 		},
 	}
@@ -1574,7 +1577,7 @@ func TestIssueResultPageReloadDuringCheckDrainsStaleCallback(t *testing.T) {
 		page := app.issueResult
 		checking = page.Panel.Checking
 		sessionID, taskID, messageID = page.SessionID, page.TaskID, page.MessageID
-		status, runLabel, loadError = page.Panel.RunStatus, page.Panel.RunLabel, page.LoadError
+		status, runLabel, loadError = page.Panel.RunStatus, page.Panel.RunGoal, page.LoadError
 	})
 	if checking {
 		t.Fatal("reload left an in-flight Check marked as checking")
@@ -1582,7 +1585,7 @@ func TestIssueResultPageReloadDuringCheckDrainsStaleCallback(t *testing.T) {
 	if sessionID != "new-session" || taskID != "new-task" || messageID != "new-message" {
 		t.Fatalf("reload kept stale execution identity: %s/%s/%s", sessionID, taskID, messageID)
 	}
-	if status != issueExecutionLabel(execution) || runLabel != "Run 1: reload while checking" {
+	if status != execution.Status || runLabel != "reload while checking" {
 		t.Fatalf("reload kept stale run label/status: %q / %q", runLabel, status)
 	}
 	if loadError == "" {

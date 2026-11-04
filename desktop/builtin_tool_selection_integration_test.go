@@ -114,7 +114,7 @@ func selectBuiltinSubsetThroughProfile(t *testing.T, h *guiHarness, keep []strin
 		}
 		saveAction := "Save changes"
 		if h.app.selectedContact().SessionID != "" {
-			saveAction = "Save and start new conversation"
+			saveAction = "Save and start new chat"
 		}
 		if err := clickAfterBoundedScrollInPump(tr, saveAction, 1040, 720); err != nil {
 			setupErr = err
@@ -319,7 +319,7 @@ func TestBuiltinToolSelectionSurvivesGUIModelABA(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	openModelPanel(t, h, "Conversation model")
+	openModelPanel(t, h, "Chat model")
 	updateModelGUI(t, h, "model-B")
 	config, err = h.app.rt.connectionConfig(sessionID)
 	if err != nil {
@@ -338,7 +338,7 @@ func TestBuiltinToolSelectionSurvivesGUIModelABA(t *testing.T) {
 		t.Fatalf("model-B selection = %+v", config.EffectiveConfig.ToolSelection)
 	}
 
-	openModelPanel(t, h, "Conversation model")
+	openModelPanel(t, h, "Chat model")
 	updateModelGUI(t, h, "fixture")
 	h.pump.do(func() { h.app.closeAux() })
 	sendWithBuiltinSelection(t, h, "Return to A.")

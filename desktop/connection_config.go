@@ -233,36 +233,54 @@ func prepareConnectionLaunchWithTools(config connectionConfig, parentEnv []strin
 	}, nil
 }
 
+// Stable validation kinds. The form says them again in the current language;
+// internal config errors keep the kinds for diagnostics.
+const (
+	connectionValidationVersion            = "version"
+	connectionValidationAPI                = "api"
+	connectionValidationRequired           = "required"
+	connectionValidationPositive           = "positive"
+	connectionValidationLessThanContext    = "less-than-context"
+	connectionValidationContextGap         = "context-gap"
+	connectionValidationEndpointWhitespace = "endpoint-whitespace"
+	connectionValidationEndpointURL        = "endpoint-url"
+	connectionValidationEndpointUserinfo   = "endpoint-userinfo"
+	connectionValidationEndpointQuery      = "endpoint-query"
+	connectionValidationEndpointFragment   = "endpoint-fragment"
+	connectionValidationWorkspaceAbsolute  = "workspace-absolute"
+	connectionValidationWorkspaceDirectory = "workspace-directory"
+)
+
 func validateConnectionConfig(config connectionConfig) map[string]string {
 	fields := map[string]string{}
 	if config.Version != 1 {
-		fields["Version"] = "must be 1"
+		fields["Version"] = connectionValidationVersion
 	}
 	if config.API != connectionAPIResponses && config.API != connectionAPIChatCompletions {
-		fields["API"] = "must be openai-responses or openai-chat-completions"
+		fields["API"] = connectionValidationAPI
 	}
 	validateConnectionEndpoint(config.Endpoint, fields)
 	if strings.TrimSpace(config.APIKey) == "" {
-		fields["APIKey"] = "must not be blank"
+		fields["APIKey"] = connectionValidationRequired
 	}
 	if strings.TrimSpace(config.Model) == "" {
-		fields["Model"] = "must not be blank"
+		fields["Model"] = connectionValidationRequired
 	}
 	validateConnectionWorkingDirectory(config.WorkingDirectory, fields)
 	if config.ContextTokens <= 0 {
-		fields["ContextTokens"] = "must be positive"
+		fields["ContextTokens"] = connectionValidationPositive
 	}
 	if config.OutputTokens <= 0 {
-		fields["OutputTokens"] = "must be positive"
+		fields["OutputTokens"] = connectionValidationPositive
 	} else if config.ContextTokens > 0 {
 		if config.ContextTokens <= config.OutputTokens {
-			fields["OutputTokens"] = "must be less than ContextTokens"
+			fields["OutputTokens"] = connectionValidationLessThanContext
 		} else if config.ContextTokens-config.OutputTokens < 4 {
-			fields["ContextTokens"] = "must leave at least 4 tokens after OutputTokens"
+			fields["ContextTokens"] = connectionValidationContextGap
 		}
 	}
 	if config.MaxActiveTasks <= 0 {
-		fields["MaxActiveTasks"] = "must be positive"
+		fields["MaxActiveTasks"] = connectionValidationPositive
 	}
 	if len(fields) == 0 {
 		return nil
@@ -272,39 +290,39 @@ func validateConnectionConfig(config connectionConfig) map[string]string {
 
 func validateConnectionEndpoint(raw string, fields map[string]string) {
 	if raw == "" {
-		fields["Endpoint"] = "must not be blank"
+		fields["Endpoint"] = connectionValidationRequired
 		return
 	}
 	if raw != strings.TrimSpace(raw) {
-		fields["Endpoint"] = "must not contain surrounding whitespace"
+		fields["Endpoint"] = connectionValidationEndpointWhitespace
 		return
 	}
 	parsed, err := url.Parse(raw)
 	if err != nil || parsed.Host == "" || !strings.EqualFold(parsed.Scheme, "http") && !strings.EqualFold(parsed.Scheme, "https") {
-		fields["Endpoint"] = "must be an absolute http(s) URL with a host"
+		fields["Endpoint"] = connectionValidationEndpointURL
 		return
 	}
 	if parsed.User != nil {
-		fields["Endpoint"] = "must not contain userinfo"
+		fields["Endpoint"] = connectionValidationEndpointUserinfo
 		return
 	}
 	if parsed.RawQuery != "" || parsed.ForceQuery || strings.Contains(raw, "?") {
-		fields["Endpoint"] = "must not contain a query"
+		fields["Endpoint"] = connectionValidationEndpointQuery
 		return
 	}
 	if parsed.Fragment != "" || strings.Contains(raw, "#") {
-		fields["Endpoint"] = "must not contain a fragment"
+		fields["Endpoint"] = connectionValidationEndpointFragment
 	}
 }
 
 func validateConnectionWorkingDirectory(path string, fields map[string]string) {
 	if path == "" || !filepath.IsAbs(path) {
-		fields["WorkingDirectory"] = "must be an absolute path"
+		fields["WorkingDirectory"] = connectionValidationWorkspaceAbsolute
 		return
 	}
 	info, err := os.Stat(path)
 	if err != nil || !info.IsDir() {
-		fields["WorkingDirectory"] = "must exist and be a directory"
+		fields["WorkingDirectory"] = connectionValidationWorkspaceDirectory
 	}
 }
 

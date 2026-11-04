@@ -11,7 +11,7 @@
 更新日期：2026-11-04。当前唯一设计规范由 #216 维护：[Desktop workbench](desktop-workbench.md)。候选实现与合入状态以 PR 和 dev 为准。本地实现的候选事实见下方 [#219 节](#detail-navigation-219)。本文件不再把旧 #90/#130 的“所有次动作有底面”“右侧覆盖抽屉”等当作当前规范，那些内容只保留为历史实现记录，避免双标准。
 
 - **规范边界**：内容优先、输入集中在 composer、低频工具可发现、长内容主区阅读、右侧非模态详情、窄窗应用内页面与明确返回，均以 #216 为准；实现只引用该规范，不在本文件另立一套数值或组件规则。
-- **组件与文案**：复用当前固定 MyGo 稳定版和现有 theme 角色；不允许为单个任务另造兼容框架。实际版本、控件 API、palette 与必要偏离以 #98/#218 的实现事实及 #216 规范为准。
+- **组件与文案**：复用当前固定 MyGo 稳定版和现有 theme 角色；不允许为单个任务另造兼容框架。实际版本、控件 API、palette 与必要偏离以 #281/#218 的候选实现事实及 #216 规范为准；#98 保留其升级阶段记录。
 - **Disabled 与原因**：沿 MyGo 官方 disabled 语义和默认 opacity，不为候选 4.5 对比度加 patch，也不改禁用行为。浅色约 2.94:1、深色约 4.33:1 记录为当前适配事实，不列为本轮必过门槛；真实禁用/AX 保留，必要原因、当前有效模型和失败/容量信息必须在相邻可读文字中可见，不能只藏在不可聚焦 tooltip。
 - **历史约束**：本文早期 #90/#130 的字号、覆盖抽屉、所有次动作底面等具体数值和布局仍可作为历史证据，但不再约束当前实现。发现与 #216 冲突时，按 #216 记录偏离并更新对应实现事实。
 
@@ -499,7 +499,7 @@ type resolvedTheme struct {
 
 ### 依赖快照与上游差异（只读核对，不作为冻结政策）
 
-- 历史快照：本设计早期版本曾依赖 `github.com/egoist/mygo v0.4.9-0.20261014025635-fea932a7a2a9`。2026-10-30 #98 已升级到官方 `v0.7.3`（tag commit `6f28d7bb07b31177cf218e51586f6a5e99b38016`，Go 1.27.3）；当前依赖、patch 和验证边界见文末 **#98 MyGo v0.7.3 升级**。
+- 历史快照：本设计早期版本曾依赖 `github.com/egoist/mygo v0.4.9-0.20261014025635-fea932a7a2a9`。2026-10-30 #98 曾升级到官方 `v0.7.3`（tag commit `6f28d7bb07b31177cf218e51586f6a5e99b38016`，Go 1.27.3）；2026-11-04 #281 候选进一步使用 `v0.7.4`，当前语言、可见品牌和补丁边界见 [#281 语言与 Nagi 可见品牌](#nagi-language-281)。#98 节保留该轮历史验证。
 - 旧核对记录（已被 #98 取代）：早期曾只读核对 main commit `163d50e2acc1b5361d29bc6d26a8a0e11ebdb847`（解析为 `v0.5.6-0.20261020115920-163d50e2acc1`）；该记录不代表当前依赖。
 - 已核对差异：
   - `ui.Theme` 字段、`Context.Theme/SetTheme`、`ui.Preferences`、`mygo.Theme.SetSource/Source/IsDark/OnUpdated` 的语义未变。
@@ -514,8 +514,8 @@ type resolvedTheme struct {
 
 - 当前默认（candidate default，proposed）：内置 imagegen 生成的原图（1254×1254 RGBA），只做 256px 等比缩放，未做二次创作。Prompt：original minimal cat head, pale lavender, Rose Pine rose tuft/ears, dark plum outline, transparent background, readable at small size。
 - 资产：[previews/assets/saki-avatar-default.png](previews/assets/saki-avatar-default.png)，256×256 RGBA PNG。同一份优化字节以单个 data URI 内嵌在 fragment 中，供离线 sandbox 使用；不写入 widget state，也不引入 picker、上传或 contact 级头像抽象。
-- 当前原生（#90）：rail 32px、header 28px；主聊天不再逐条重复头像，历史引用/demo 仍可在需要时显示 28px；同一默认 mascot，圆角 tile 使用 overlay 背景。旧浏览器原型曾用 rail/消息 28px、header 36px，已属历史，不作为当前尺寸契约。
-- 头像是装饰（`alt=""`），名字始终保持可见；选中态属于行与名字，不改变 mascot 颜色。改名/切换主题不会重置历史；绑定后 profile 锁定，只有显示名可改。
+- 历史原生快照（#90）：rail 32px、header 28px；主聊天不再逐条重复头像，历史引用/demo 仍可在需要时显示 28px；同一默认 mascot，圆角 tile 使用 overlay 背景。旧浏览器原型曾用 rail/消息 28px、header 36px，已属历史，不作为当前尺寸契约。
+- 旧浏览器快照中头像是装饰（`alt=""`），姓名保持可见、绑定后 profile 锁定。当前原生联系人编辑与归档见 #152/#199；#279 压缩头像条的完整名称通过 tooltip/AX 提供，静止状态标识见 #279/#281，不能用旧浏览器规则描述当前所有模式。选中态不改变 mascot 颜色，改名/切换主题不重置历史。
 - 未来：same-family 的可选头像集合，保持一致的 silhouette、linework 与 Rose Pine／Dawn 调色。
 - 验证：头像针对性检查 27/27 通过——内嵌字节与 workspace 资产逐字节一致，256px RGBA，各位置 `naturalWidth` 256，新建／重命名／回复／Working 均使用默认头像，选中不重着色，1024／320 light／dark 无横向溢出，0 运行时错误。
 
@@ -823,7 +823,7 @@ type resolvedTheme struct {
 
 - **模式**：详情打开时按逻辑宽度派生三种模式：`<900` 使用既有非模态整页 Back；`900–1179` 使用固定 56 头像条（手动 `railCollapsed` 优先，不自动覆盖）；`>=1180` 使用完整 rail。详情关闭时保持完整 rail；resize、联系人切换、消息/任务事件不会自动打开详情。
 - **有效宽度与偏好**：`leftPaneWidth`/`rightPaneWidth` 仍是用户偏好，系统只派生 effective rail/detail/center，不把 56 或 effective detail 写回；`492` 的中间预算仅为响应式派生。三栏存在详情时有效中心下限为 `492`，保证 composer content 440；中档 effective detail 下限 `300`（即使手动隐藏 rail），完整 rail 下限仍为 `280`，最大 `440`。实际 mounted separator 才计入预算；手动隐藏不保留幽灵 rail/divider。关闭详情恢复完整 rail 与原偏好。
-- **头像条**：复用 `visibleContactIndices`、联系人 ID、既有 `selectContact` 与官方 ButtonBase；固定 56 宽 + 1 divider，Add contact/Settings 为 32 图标控件，稳定 Label、`Key(ct.ID)`、`Selected`、typed Description/tooltip（含 issue attention/waiting/active 与 active 计数）；头像 Contact 名称与 Add contact 使用本次最少新增的 `avatarContactLabel`/`avatarAddContact` en/zh catalog keys，状态复用既有 typed 文案。Selected 后以 Selection + Text 语义，不保留 accent 文字前景。Enter/Space 只选择联系人，不自动展开详情。搜索/scope 值在压缩期间保留，恢复完整 rail 后完整控件回来。
+- **头像条**：复用 `visibleContactIndices`、联系人 ID、既有 `selectContact` 与官方 ButtonBase；固定 56 宽 + 1 divider，Add contact/Settings 为 32 图标控件，稳定 Label、`Key(ct.ID)`、`Selected`、typed Description/tooltip（含 issue attention/waiting/active 与 active 计数）；头像 Contact 名称与 Add contact 使用本次最少新增的 `avatarContactLabel`/`avatarAddContact` en/zh catalog keys，状态复用既有 typed 文案。Selected 后以 Selection + Text 语义，不保留 accent 文字前景。Enter/Space 只选择联系人，不自动展开详情。搜索/scope 值在压缩期间保留，恢复完整 rail 后完整控件回来。 #281 后续补齐静止状态：优先显示真实 `issueWorkNotice` 的需处理 `!N`、等待 `◷N`、工作 `▶N`；只有真实非零事项数才画数字，对话工作/需处理只画图形，空闲不画，不把聊天未读混入事项数。标识使用既有主题与 12px 字号、`IgnoreInput(true)`，完整状态仍在 tooltip/AX；不新增状态机、回复或详情自动展开。对应独立提交 `64b5d22`，随后由 #279 接纳并与 #281 组合；原 faec 的头像只有 tooltip/AX 状态，不能追记为已有静止标识。
 - **Composer**：只把 composer 调用列从 86% 改为可用中心宽度 `FillWidth().MaxWidth(760)`，加 outer 12 水平 gutter；保留 well 12、TextArea 2 的既有内距，因此 content = `C-52`。header/message 仍保持原 86%/max760 reading width。实际 geometry 由 `ui.Tester` 的 TextArea 外 rect 加已知 2×2 padding 校验，并用 caret/typing 验证实际可编辑；不缩字体、不用 overflow 凑宽。
 - **状态与焦点**：Work/History/Profile 共用 active detail；899↔900 将焦点移到实际可见的 Back/Close 对应物，960 Escape 仍回到 Work；Settings 保持整页、无联系人 rail 泄漏。Settings 或 result/reader 主页面显示期间不推进 `detailPageMode`/不预置隐藏 workbench 的 Close；返回后按当前实际页面重新计算，避免 960→899→960 后 Back 被执行 X 焦点抢先。头像状态与完整 rail 使用同一 `issueWorkNotice`/header status 源，typed catalog 文案；未使用 snippet 或颜色猜完成。
 - **验证边界**：本地 headless `ui.Tester` 覆盖 899/900/901、960 default/max、1040、1179/1180/1181、manual hide、closed/open、drag/keyboard 偏好、detail/filter/draft/selection、composer caret/typing 和 en-XA 扩展；代表性 light/dark + long en/zh + pseudo 图由既有 `TestPreviewAdjustableLayout` hook 生成。`#278` typed catalog 不变；未新增持久化/路由/框架。未运行本机 full/race/native/model/observer，原生与真人仍未由本节宣称。
@@ -939,9 +939,26 @@ type resolvedTheme struct {
 新增 `issue_detail_ui_test.go` 用例在 1040×720 默认 340、1040×720 最小 280、720×640 overlay 三种实际工作栏宽度的明暗主题下，用有界滚动把整张执行卡带入可读区域，同一 frame 校验标题/revision 有明确分隔且不越界、两个结果操作完整可见且不重叠；每张卡实际点击 `Open result` 核对对应 execution ID，并通过既有 `Close results` 检查返回层与入口焦点。图片复用现有 `SAKI_PREVIEW_DIR` 分 before/after 外部目录生成，旧实现保存几何 RED，修复后 GREEN。这些是 `ui.Tester` headless 结果，不是原生窗口、输入法或完整发布验收；before/after PNG、日志和 SHA 证据在 `/private/tmp/saki-gui-214/`。
 
 
+<a id="nagi-language-281"></a>
+
+## #281 语言与 Nagi 可见品牌（候选实现事实与待验，2026-11-05）
+
+本节记录 `agent/gui/281-nagi-i18n-r3` 的模块事实，范围由 [完整 r3](https://github.com/HeimaoLST/Saki/issues/281#issuecomment-6631308418) 定义；当前组合包含 #279 几何、#295 生命周期 fixture 与 #297 CI 预算。I1 的局部中英接入不是完整交付；本候选仍以 [PR #299](https://github.com/HeimaoLST/Saki/pull/299) 的精确源、门禁和后续验收为准，不宣称已进入 dev 或完成 #273/#156 真人验收。
+
+- **单一语言来源**：复用 `desktop/mygo.json`、`locales/doc.go`、`en.json` / `zh-Hans.json` 和官方 `mygo generate` 的 typed catalog，逐帧使用 `locales.In(c.Locale())`。没有另一个 i18n 库、全局 locale provider 或 GUI locale 文件。`locale_darwin.go` 只读与 MyGo 相同的 current-application / current-user / any-host 自有 `AppleLanguages`；偏好缺失表示 System，已有 tag 表示显式选择，不能比较有效语言与首选语言来猜模式。写入仅调用公开 `App.SetLocale`，System 传空 tag；保留 `CGO_ENABLED=0` 路径。
+- **General 与状态保持**：沿用稳定 `appearance` route 展示 General / 通用，其内为外观与语言。仅提供 System（显示当前有效语言）、简体中文、English，业务值固定为空 tag、`zh-Hans`、`en`；控件译文不作为模型、API 或筛选 ID。模式镜像只属于当前 UI，重开 General 从唯一偏好源再读；显式 Hans 切 System 即使有效语言未变，也更新模式。语言切换不重建联系人、表单或 Runtime 会话，不主动 Save/Apply/Test/发送。新联系人默认名只在创建时取当帧语言，已保存名称、默认联系人 Saki、Purpose/Instructions/Draft、用户与 Agent 内容不重写。
+- **联系人选择的身份**：设置内联系人 picker 的官方 `SelectBase` value 直接使用唯一 `settingsContactID`，本地化 label 仅用于 trigger/item/tooltip/公开 `Value(display)`；不以显示名反查身份，也不维护另一份 picker ID 镜像。同名与“甲（1）”等合法名称可以显示相同 label，键盘选择和保存仍按各自 ContactID；raw ID 不作显示值。三联系人 Hans End/Enter 原错选 A 的 RED、修复后只保存 C 的 GREEN，以及 A/B 草稿、返回和长列表行为已有定向证据；同一用例重新打开真实联系人 store，核对三个稳定 ID、仅 C 改名、A/B 的原 Purpose 未变且 C 的 Purpose 正确保存。公开 Tester 无 AX 树 getter，本轮未独立读取 native AX，不把视觉 Texts 当作完整 AX 验收。
+- **术语与提示生命周期**：普通界面遵循[工作台术语及状态表](desktop-workbench.md#术语定稿)，使用 Chat / Task / Run / Chat runs / Follow-up，对应对话／事项／执行／对话执行／补充要求；事项 Done、执行 Finished、要求 Met / Not met、补充 Received / Waiting to send / Sent / Needs check 各自保留原业务事实。不新增持久状态，不把 Run 结束判作事项完成；表外的 Not dispatched / Rejected / Stopping 仍准确表示未递交、拒绝或正在停止。发送、取消、连接中断与本地保存失败沿原 handler 保存原始诊断，界面用有限的提示类型及原始参数在当前 locale 投影；替换、清除及失败回滚同时更新提示元数据，避免旧提示复现。事项表单及补充重试的共用拒绝原因也复用 `sendBlockText`，不以 `work-capacity` 等内部码覆盖正确原始错误；占槽时仍拒绝重试，不新增执行。原始工具响应、回执、协议名、枚举、用户和 Agent 内容保留原词；这些边界不以界面术语批量替换。
+- **Header 分组**：状态与联系人原始职责沿现有 header 同行展示，保留 12 号辅助字号，用字重、原状态色及至少 12 逻辑像素间距区分；长职责按可用宽度换行，三个页头导航保留自身宽度。职责仍为用户持久化原文，不随语言转换或裁剪数据。960px 详情场景的中英长职责及扩展 pseudo 通过实际几何检查，原生窗口另行验收。
+- **说明与系统文本**：语言下仅说明“部分系统窗口会在重启后使用新语言。” / “Some system windows use the new language after restarting.”。MyGo 应用 UI 与框架角色菜单沿官方实时语言路径更新；AppKit/WebKit 自身文本的下一次启动限制另行保留。不添加重启按钮或自动重启，不通过重启刷新页面。
+- **可见品牌与数据**：`main.go` 在 helper CLI 早返回之后、`Run` 之前设置应用名 Nagi，主窗口标题与 rail 品牌为 Nagi；打包脚本的 `CFBundleDisplayName`、`CFBundleName` 与 manifest 产品/显示字段一致。`Saki.app` / `Saki.app.zip`、`CFBundleExecutable=Saki`、`dev.saki.desktop`、`SAKI_*`、`Saki-runtime` 及内部 Go/Rust 标识不改。联系人与会话仍从显式 Saki 数据路径读取；当前应用无框架 `App.Path(UserData/Cache/Logs)` 消费，不为品牌创建迁移或复制目录。Finder/Dock/原生菜单的实际显示仍需同一准确候选包验收。
+- **SDK 与补丁**：候选固定官方 MyGo `v0.7.4`，沿 `scripts/gui-go.py` 的临时模块/校验 hash 入口保留 Split release、Editor selection release 与 Markdown LinkElement 观察三份补丁；Editor/Markdown 按该 tag 实际行位重定基，不增加临时 nil guard或私有框架 fork。没有改 Runtime 协议、核心执行循环或存储格式。
+- **可重复验收接点**：`i18n_test.go` 在同一 app view 中实际滚动事项列表、对话、详情和文件阅读面，语言往返保留有效中间位置、列表锚点及业务归属；设置用例保留非零滚动位置、当前分类、真实焦点和 caret。联系人名输入的实际 Cmd+A/copy 及切换后整段替换检验选区，不以模型字段相等代替输入行为。`TestPreviewI18nFinalMatrix` 为 10 个实际窗口场景生成中英浅深色及 6 个真实扩展 pseudo 代表图，普通窗口为 1040×720、详情为 960×640；长设置和详情仍沿既有纵向滚动。catalog 契约检查 key、ICU 参数类型与缺项负例，官方连续生成及删除生成物再生均逐字比对。旧 v1/v2/v4/v6 store、草稿与未知发送恢复沿现有行为测试读取，不新增迁移。
+- **验证边界**：现有 `ui.Tester` 覆盖语言与焦点/草稿/非零 scroll、Hans 与 System 同有效语言、catalog 契约/负例及真实扩展 pseudo；en-XA 仅测试，不进入发行选项。真实本地 provider + Rust/stdio + helper IPC 的两次明确发送验收核请求数为 2、语言动作本身为 0、同一 session/config/store 及 system/model/tools 字节不变；该测试只将 native 偏好写替换为 Tester locale，不能代替真实 System/重启持久化。各模块全量文案、最终代表图、准确 head CI 与原生/真人结果分别记录在 PR/issue；部分源码、旧 CI 或 headless 通过不等于完整候选已验收。
+
 ## #98 MyGo v0.7.3 升级（实现事实与待验，2026-10-30）
 
-代码来源：`agent/gui/98-mygo-upgrade`，基线 `72349b16750f8c655451979783ec0110f1cbbf23`。官方 release `v0.7.3`（非 pre-release，2026-10-29，tag commit `6f28d7bb07b31177cf218e51586f6a5e99b38016`）取代旧快照；`desktop/go.mod` 现为 `github.com/egoist/mygo v0.7.3`、Go `1.27.3`，`go.sum` 由精确 `go get`/`go mod tidy` 生成。
+代码来源：`agent/gui/98-mygo-upgrade`，基线 `72349b16750f8c655451979783ec0110f1cbbf23`。官方 release `v0.7.3`（非 pre-release，2026-10-29，tag commit `6f28d7bb07b31177cf218e51586f6a5e99b38016`）取代旧快照；该轮 `desktop/go.mod` 为 `github.com/egoist/mygo v0.7.3`、Go `1.27.3`，`go.sum` 由精确 `go get`/`go mod tidy` 生成。
 
 - **官方 API 迁移**：`ui.Enter`/`Element.OnEnter` 已移除，composer 改用 `ui.TextKey`/`OnTextKey`；Enter 发送、Shift+Enter 换行、空文本不发送和提交后清空语义保持不变，`TextArea` 仍以原 bind/OnChange/IME 路径编辑草稿。`Tester` 使用 v0.7.3 的 `Advance`/时钟语义；Stream 的 pending link 测试启用 `Reveal{Unit: AtOnce}` 后再执行原 Tab/Enter/无打开断言，避免静止测试时钟导致“未渲染”假阴性。
 - **上游仍缺的能力**：v0.7.3 源码仍未提供 `markdown.Options.LinkElement`，也仍可复现 Split/Editor release-before-frame 批次问题。保留三个最小 patch：`split-release.patch`、`editor-release.patch`、`markdown-link-focus.patch`；均按 v0.7.3 实际源码重做为零上下文 hunk，并保留对应 `ui` 回归文件。`scripts/gui-go.py` 已更新为 v0.7.3 和三个新的原/补丁生产 SHA，仍在临时模块副本和 `-modfile` 中工作，不改真实 module cache、`go.mod` 或 VCS。

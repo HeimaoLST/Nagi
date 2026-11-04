@@ -65,7 +65,7 @@ func TestMixedConnectionDiagnosticsStayIndependent(t *testing.T) {
 	if tr.HasText(ct.LoadErr) {
 		t.Fatal("known load diagnostic leaked before Details")
 	}
-	if _, known := knownConnectionFailure("wrapped: connection_mismatch: still unknown"); known {
+	if knownConnectionFailure("wrapped: connection_mismatch: still unknown") {
 		t.Fatal("unknown diagnostic containing the code was treated as known")
 	}
 }

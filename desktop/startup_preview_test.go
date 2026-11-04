@@ -27,16 +27,17 @@ func TestPreviewStartupDiagnostics(t *testing.T) {
 
 	preview := func(scene string) *appModel {
 		a := &appModel{
-			demo:          false,
-			runtimeStatus: runtimeStateFailed,
-			runtimeStage:  "Runtime configuration",
-			runtimeErr:    "API_KEY is not set.",
-			runtimeHint:   "Set API_KEY in the environment or in /Users/you/Workspace/saki-run/.env, then restart Saki.",
-			runtimeBinary: "/Users/you/Applications/Saki.app/Contents/MacOS/Saki-runtime",
-			storePath:     "/Users/you/Library/Application Support/Saki/contacts.json",
-			sessionDir:    "/Users/you/Library/Application Support/Saki/sessions",
-			workDir:       "/Users/you/Workspace/saki-run",
-			scrollTo:      -1,
+			demo:            false,
+			runtimeStatus:   runtimeStateFailed,
+			runtimeStage:    "Runtime configuration",
+			runtimeErrKind:  runtimeNoticeAPIKey,
+			runtimeHintKind: startupHintSetAPIKey,
+			runtimeHintArgs: []string{"/Users/you/Workspace/saki-run"},
+			runtimeBinary:   "/Users/you/Applications/Saki.app/Contents/MacOS/Saki-runtime",
+			storePath:       "/Users/you/Library/Application Support/Saki/contacts.json",
+			sessionDir:      "/Users/you/Library/Application Support/Saki/sessions",
+			workDir:         "/Users/you/Workspace/saki-run",
+			scrollTo:        -1,
 			contacts: []*contact{{
 				ID: "saki", Name: "Saki", Role: "Assistant",
 				Draft: "Keep this draft while I fix configuration.",
