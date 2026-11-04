@@ -1476,6 +1476,11 @@ func TestIssueToolReleaseCallbackRunsBeforeQuit(t *testing.T) {
 	t.Setenv("SAKI_TEST_ISSUE_TOOL_HELPER", helper)
 	provider := &issueToolSelectionProvider{}
 	h := startIssueToolTestHarness(t, binary, provider.handler())
+	h.pump.wait(func() bool {
+		return h.app.metadataInFlight == 0 &&
+			(h.app.runtimeCapabilitiesLoaded || h.app.runtimeCapabilitiesErr != "") &&
+			(h.app.runtimeBuiltinToolsLoaded || h.app.runtimeBuiltinToolsErr != "")
+	})
 	var contactID, issueID string
 	var setupErr string
 	h.pump.do(func() {
