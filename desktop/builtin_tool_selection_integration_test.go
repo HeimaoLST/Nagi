@@ -514,7 +514,7 @@ func TestExplicitBuiltinSelectionRequiresManagedConnectionOnNewCreate(t *testing
 			restartedLegacy.shutdown(t)
 		}
 	})
-	app.startRuntime()
+	pump.do(func() { app.startRuntime() })
 	pump.wait(func() bool { return app.runtimeStatus == runtimeStateReady })
 	var legacy, managed bool
 	appStorePath := ""
