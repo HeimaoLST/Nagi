@@ -216,5 +216,5 @@ func appTooltip(c *ui.Context, anchor ui.Element, text string) ui.Element {
 // reserved for the main action. Do not set Background on this control: MyGo's
 // styleButton only supplies hover/pressed while its default face is intact.
 func secondaryButton(c *ui.Context, label string) ui.Element {
-	return ui.Button(c, label).Label(label).FontSize(typeAction).FontWeight(400).MinHeight(32).Padding(6, 10)
+	return ui.Button(c, label).FontSize(typeAction).FontWeight(400).MinHeight(32).Padding(6, 10)
 }

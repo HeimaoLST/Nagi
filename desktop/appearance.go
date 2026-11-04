@@ -148,7 +148,7 @@ func (a *appModel) conversationModelDisplayParts(ct *contact) (head, tail string
 
 func splitModelTail(full string, tailRunes int) (head, tail string) {
 	runes := []rune(full)
-	if tailRunes < 1 || len(runes) <= tailRunes {
+	if tailRunes < 1 || len(runes) <= tailRunes*2 {
 		return full, ""
 	}
 	return string(runes[:len(runes)-tailRunes]), string(runes[len(runes)-tailRunes:])

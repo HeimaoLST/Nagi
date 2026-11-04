@@ -282,7 +282,7 @@ func (e *contactProfileEditor) view(c *ui.Context, t *ui.Theme, actions contactP
 
 		ui.Column(c).Gap(6).Children(func() {
 			ui.Row(c).Gap(8).Wrap().Children(func() {
-				secondaryButton(c, locales.In(c.Locale()).ContactSaveChanges()).Disabled(!editable).OnClick(func() {
+				secondaryButton(c, locales.In(c.Locale()).ContactSaveChanges()).Label(locales.In(c.Locale()).ContactSaveChanges()).Disabled(!editable).OnClick(func() {
 					if draft, ok := e.Request(false); ok && actions.Save != nil {
 						actions.Save(draft)
 					}

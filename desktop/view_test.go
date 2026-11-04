@@ -834,8 +834,7 @@ func TestComposerModelAndTaskContextStayInlineAndReturnFocus(t *testing.T) {
 	a.contacts[1].SessionModel = "model-mio"
 	a.selectContact(1)
 	tr.Frame()
-	_, modelTail := a.conversationModelDisplayParts(a.contacts[1])
-	if modelTail == "" || !tr.HasText(modelTail) || tr.HasText("model-default") {
+	if !tr.HasText("model-mio") || tr.HasText("model-default") {
 		t.Fatalf("selected contact model label crossed contacts: %v", tr.Texts())
 	}
 }
