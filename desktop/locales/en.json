@@ -5,6 +5,14 @@
   "@settingsOpenTooltip": {
     "description": "The tooltip of the Settings action."
   },
+  "avatarContactLabel": "Contact {name}",
+  "@avatarContactLabel": {
+    "description": "The accessible name of an avatar-rail contact."
+  },
+  "avatarAddContact": "Add contact",
+  "@avatarAddContact": {
+    "description": "The accessible name and tooltip of the avatar-rail Add contact action."
+  },
   "settingsRailActions": "App actions",
   "@settingsRailActions": {
     "description": "The accessible name of the toolbar holding the Settings action."

@@ -53,6 +53,12 @@ const (
 	maxRightPaneWidth     float32 = 440
 	minCenterPaneWidth    float32 = 480
 	paneSeparatorWidth    float32 = 1
+
+	avatarRailWidth      float32 = 56
+	fullRailBreakpoint   int     = 1180
+	avatarRailBreakpoint int     = 900
+	minAvatarDetailWidth float32 = 300
+	effectiveCenterWidth float32 = 492
 )
 
 func clampPaneWidth(value, fallback, minValue, maxValue float32) float32 {
@@ -84,26 +90,54 @@ func (a *appModel) workWidth() float32 {
 }
 
 func (a *appModel) workOverlay() bool {
-	return a.workOverlayFor(a.railWidth(), a.workWidth())
+	return a.layoutWidth() < avatarRailBreakpoint
 }
 
-func (a *appModel) workOverlayFor(leftWidth, rightWidth float32) bool {
-	total := float32(a.layoutWidth())
-	left := float32(0)
-	if !a.railCollapsed {
-		left = leftWidth + paneSeparatorWidth
+func (a *appModel) avatarRailActive() bool {
+	return a.workspaceOpen && !a.railCollapsed && !a.workOverlay() &&
+		a.layoutWidth() < fullRailBreakpoint
+}
+
+func (a *appModel) effectiveRailWidth() float32 {
+	switch {
+	case a.railCollapsed:
+		return 0
+	case a.avatarRailActive():
+		return avatarRailWidth
+	default:
+		return a.railWidth()
 	}
-	center := total - left - paneSeparatorWidth - rightWidth
-	if center < minCenterPaneWidth || center <= rightWidth {
-		return true
+}
+
+func (a *appModel) detailMinWidthForLayout() float32 {
+	width := a.layoutWidth()
+	if width >= avatarRailBreakpoint && width < fullRailBreakpoint {
+		return minAvatarDetailWidth
 	}
-	return !a.railCollapsed && center <= leftWidth
+	return minRightPaneWidth
+}
+
+func (a *appModel) effectiveDetailWidth() float32 {
+	separators := 1 // main/work split
+	if a.effectiveRailWidth() > 0 {
+		separators++ // rail/main split or fixed avatar divider
+	}
+	available := float32(a.layoutWidth()) - a.effectiveRailWidth() -
+		float32(separators)*paneSeparatorWidth - effectiveCenterWidth
+	minWidth := a.detailMinWidthForLayout()
+	if available < minWidth {
+		available = minWidth
+	}
+	return clampPaneWidth(a.workWidth(), defaultRightPaneWidth, minWidth, available)
 }
 
 func (a *appModel) clampLeftForDrag(value float32, threePaneAtStart bool) float32 {
 	limit := maxLeftPaneWidth
 	if a.workspaceOpen && threePaneAtStart {
-		byCenter := float32(a.layoutWidth()) - 2*paneSeparatorWidth - a.workWidth() - minCenterPaneWidth
+		// Left drag changes the rail preference. The detail may derive narrower
+		// effective width, but the saved right preference is not rewritten.
+		byCenter := float32(a.layoutWidth()) - 2*paneSeparatorWidth -
+			a.detailMinWidthForLayout() - effectiveCenterWidth
 		if byCenter < limit {
 			limit = byCenter
 		}
@@ -111,15 +145,15 @@ func (a *appModel) clampLeftForDrag(value float32, threePaneAtStart bool) float3
 	return clampPaneWidth(value, defaultLeftPaneWidth, minLeftPaneWidth, limit)
 }
 
-func (a *appModel) clampRightForDrag(value, left float32, threePaneAtStart bool) float32 {
+func (a *appModel) clampRightForDrag(value, area float32, threePaneAtStart bool) float32 {
 	limit := maxRightPaneWidth
 	if a.workspaceOpen && threePaneAtStart {
-		byCenter := float32(a.layoutWidth()) - left - 2*paneSeparatorWidth - minCenterPaneWidth
+		byCenter := area - paneSeparatorWidth - effectiveCenterWidth
 		if byCenter < limit {
 			limit = byCenter
 		}
 	}
-	return clampPaneWidth(value, defaultRightPaneWidth, minRightPaneWidth, limit)
+	return clampPaneWidth(value, defaultRightPaneWidth, a.detailMinWidthForLayout(), limit)
 }
 
 func workFor(ct *contact, taskID string) *workItem {
@@ -223,13 +257,21 @@ func (a *appModel) layoutBody(c *ui.Context, t *ui.Theme) {
 		return
 	}
 	if a.railCollapsed {
-		a.layoutMainArea(c, t, 0)
+		a.layoutMainArea(c, t, 0, false)
 		return
 	}
-	threePaneAtStart := a.workspaceOpen && !a.workOverlay()
+	if a.avatarRailActive() {
+		ui.Row(c).Fill().Children(func() {
+			a.avatarRail(c, t)
+			ui.Column(c).Width(paneSeparatorWidth).Shrink(0).FillHeight().Background(t.Border)
+			a.layoutMainArea(c, t, avatarRailWidth+paneSeparatorWidth, false)
+		})
+		return
+	}
+	threePaneAtStart := a.workspaceOpen
 	a.leftPaneWidth = a.railWidth()
 	ui.Split(c, &a.leftPaneWidth, func() { a.rail(c, t) }, func() {
-		a.layoutMainArea(c, t, a.leftPaneWidth)
+		a.layoutMainArea(c, t, a.leftPaneWidth, true)
 	}).OnChange(func() {
 		// Split updates its bound width inside the handle's afterInput, before
 		// OnChange and the rebuild. Clamp here, not after a stale build.
@@ -237,24 +279,24 @@ func (a *appModel) layoutBody(c *ui.Context, t *ui.Theme) {
 	}).Fill()
 }
 
-func (a *appModel) layoutMainArea(c *ui.Context, t *ui.Theme, left float32) {
+func (a *appModel) layoutMainArea(c *ui.Context, t *ui.Theme, left float32, outerSeparator bool) {
 	if !a.workspaceOpen {
 		a.main(c, t)
 		return
 	}
 	area := float32(a.layoutWidth()) - left
-	if !a.railCollapsed {
+	if outerSeparator {
 		area -= paneSeparatorWidth
 	}
-	threePaneAtStart := !a.workOverlay()
-	a.centerPaneWidth = area - paneSeparatorWidth - a.workWidth()
+	threePaneAtStart := true
+	a.centerPaneWidth = area - paneSeparatorWidth - a.effectiveDetailWidth()
 	ui.Split(c, &a.centerPaneWidth, func() {
 		a.main(c, t)
 	}, func() {
 		a.workspaceFrame(c, t)
 	}).OnChange(func() {
 		candidate := area - paneSeparatorWidth - a.centerPaneWidth
-		a.rightPaneWidth = a.clampRightForDrag(candidate, left, threePaneAtStart)
+		a.rightPaneWidth = a.clampRightForDrag(candidate, area, threePaneAtStart)
 	}).Fill()
 }
 

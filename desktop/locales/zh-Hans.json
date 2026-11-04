@@ -2,6 +2,8 @@
   "@@locale": "zh-Hans",
   "settingsTitle": "设置",
   "settingsOpenTooltip": "打开设置",
+  "avatarContactLabel": "联系人 {name}",
+  "avatarAddContact": "添加联系人",
   "settingsRailActions": "应用操作",
   "settingsBack": "返回",
   "settingsBackAccessible": "← 返回工作台",

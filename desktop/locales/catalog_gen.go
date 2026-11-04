@@ -62,6 +62,34 @@ func (msgs Messages) SettingsOpenTooltip() string {
 	return Catalog.Format(msgs.locale, "settingsOpenTooltip", nil)
 }
 
+// AvatarContactLabel says "Contact {name}"
+// in the language the app shows.
+//
+// The accessible name of an avatar-rail contact.
+func AvatarContactLabel(name string) string { return In(i18n.Locale()).AvatarContactLabel(name) }
+
+// AvatarContactLabel says "Contact {name}"
+// in the language of msgs.
+//
+// The accessible name of an avatar-rail contact.
+func (msgs Messages) AvatarContactLabel(name string) string {
+	return Catalog.Format(msgs.locale, "avatarContactLabel", map[string]any{"name": name})
+}
+
+// AvatarAddContact says "Add contact"
+// in the language the app shows.
+//
+// The accessible name and tooltip of the avatar-rail Add contact action.
+func AvatarAddContact() string { return In(i18n.Locale()).AvatarAddContact() }
+
+// AvatarAddContact says "Add contact"
+// in the language of msgs.
+//
+// The accessible name and tooltip of the avatar-rail Add contact action.
+func (msgs Messages) AvatarAddContact() string {
+	return Catalog.Format(msgs.locale, "avatarAddContact", nil)
+}
+
 // SettingsRailActions says "App actions"
 // in the language the app shows.
 //
