@@ -19,6 +19,8 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+
+	"saki/desktop/locales"
 )
 
 const issueResultPageWriteFinal = "created result\n\n```text\nwrite\n```"
@@ -304,7 +306,7 @@ func TestIssueResultPageRuntimeIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := issueResultClick(h, "Issue Ship visible results"); err != nil {
+	if err := issueResultClick(h, locales.In("en").IssueRowLabel("Ship visible results")); err != nil {
 		t.Fatal(err)
 	}
 	if err := issueResultClick(h, "More task actions"); err != nil {
@@ -998,7 +1000,7 @@ func TestIssueResultNavigationEntryAndReturnWideNarrow(t *testing.T) {
 	})
 	for _, width := range []int{1040, 720} {
 		h.pump.do(func() { h.app.windowWidth = width })
-		if err := issueResultClickAt(h, width, 720, "Issue Navigation result"); err != nil {
+		if err := issueResultClickAt(h, width, 720, locales.In("en").IssueRowLabel("Navigation result")); err != nil {
 			t.Fatalf("width %d enter issue detail: %v", width, err)
 		}
 		var actionsOpen bool
