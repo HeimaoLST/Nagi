@@ -102,7 +102,7 @@ func startIssueResultPageApp(t *testing.T) *guiHarness {
 	}
 	pump := newUIPump(t, app)
 	h := &guiHarness{app: app, pump: pump}
-	app.startRuntime()
+	pump.do(func() { app.startRuntime() })
 	pump.wait(func() bool {
 		return app.runtimeStatus == runtimeStateReady && (app.runtimeCapabilitiesLoaded || app.runtimeCapabilitiesErr != "")
 	})

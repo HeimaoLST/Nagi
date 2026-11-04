@@ -161,7 +161,7 @@ func startIssueToolTestHarness(t *testing.T, binary string, handler http.Handler
 	}
 	pump := newUIPump(t, app)
 	h = &guiHarness{app: app, pump: pump, root: root}
-	app.startRuntime()
+	pump.do(func() { app.startRuntime() })
 	pump.wait(func() bool {
 		return (app.runtimeStatus == runtimeStateReady && (app.runtimeCapabilitiesLoaded || app.runtimeCapabilitiesErr != "")) ||
 			app.runtimeStatus == runtimeStateFailed || app.runtimeStatus == runtimeStateExited

@@ -383,7 +383,7 @@ func startGUIHarness(t *testing.T, binary string, provider *providerFixture, mar
 	}
 	pump := newUIPump(t, app)
 	h := &guiHarness{app: app, pump: pump, provider: provider, root: root}
-	app.startRuntime()
+	pump.do(func() { app.startRuntime() })
 	pump.wait(func() bool { return app.runtimeStatus == runtimeStateReady })
 	t.Cleanup(func() {
 		server.Close()
@@ -403,7 +403,7 @@ func restartGUIHarness(t *testing.T, binary string) *guiHarness {
 	}
 	pump := newUIPump(t, app)
 	h := &guiHarness{app: app, pump: pump}
-	app.startRuntime()
+	pump.do(func() { app.startRuntime() })
 	pump.wait(func() bool { return app.runtimeStatus == runtimeStateReady })
 	return h
 }
@@ -1386,7 +1386,7 @@ func TestGUIOnlineSmoke(t *testing.T) {
 			h.shutdown(t)
 		}
 	}()
-	app.startRuntime()
+	pump.do(func() { app.startRuntime() })
 	pump.waitTimeout(func() bool { return app.runtimeStatus == runtimeStateReady }, 30*time.Second)
 	pump.do(func() {
 		ct := app.contacts[0]
