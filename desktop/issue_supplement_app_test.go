@@ -340,3 +340,85 @@ func TestIssueSupplementHistoryMatchesPersistedScopeWire(t *testing.T) {
 		t.Fatal("opaque token scope wire did not match exact history")
 	}
 }
+
+func TestIssueSupplementRetryWorkCapacityShowsCanonicalText(t *testing.T) {
+	a, ct := taskContextApp(t)
+	a.rt = &runtimeClient{}
+	a.runtimeStatus = runtimeStateReady
+	a.runtimeMaxActiveTasks = 2
+	if !a.createIssue("Capacity retry goal", "Keep the capacity notice localized") {
+		t.Fatal(a.issueFormError)
+	}
+	issue := ct.selectedIssue()
+	if issue == nil {
+		t.Fatal("issue missing")
+	}
+	if err := a.addIssueSupplement(ct, issue.ID, "retry under work capacity"); err != nil {
+		t.Fatal(err)
+	}
+	execution := &issueExecution{ID: "execution-capacity-retry", SessionID: "work-capacity", Prompt: "capacity retry", Status: issueExecutionRejected, RequirementsRevision: issue.RequirementsRevision}
+	issue.Executions = append(issue.Executions, execution)
+	batch, err := issue.Supplements.PrepareDispatch(issueSupplementTargetFor(ct, issue), execution, a.persist)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !issue.Supplements.Reject(batch, "controlled rejection", a.persist) {
+		t.Fatal("controlled rejection failed")
+	}
+	issue.Status = issueStatusInProgress
+	if err := a.persist(); err != nil {
+		t.Fatal(err)
+	}
+
+	active := &productIssue{ID: "issue-work-slot", ContactID: ct.ID, Goal: "active work slot", Status: issueStatusInProgress, WorkSessionID: "work-active-slot"}
+	ct.Issues = append(ct.Issues, active)
+	a.applyIssueEvent(ct, active, runtimeEventEnvelope{Version: 1, Type: "event", SessionID: "work-active-slot", TaskID: "task-active-slot", Event: &runtimeEvent{Type: "task_started"}})
+	if active.Work.ActiveTaskID != "task-active-slot" || active.Work.SendState != sendAccepted {
+		t.Fatalf("active work slot was not established: %+v", active.Work)
+	}
+	if got := a.canStartIssue(ct, issue); got != blockWorkCapacity {
+		t.Fatalf("precondition canStartIssue = %q, want %q", got, blockWorkCapacity)
+	}
+
+	beforeExecutions := len(issue.Executions)
+	a.windowWidth = 1040
+	tr := ui.NewTester(a.view, 1040, 720)
+	tr.Frame()
+	expandIssueDetails(t, tr)
+	clickAfterBoundedScroll(t, tr, "Retry follow-up", 1040, 720)
+	tr.Frame()
+
+	rawCanonical := "Work capacity is full; one runtime slot is reserved for conversation."
+	displayCanonical := "Work capacity is full; one runtime slot is reserved for chat."
+	if tr.HasText(blockWorkCapacity) {
+		t.Fatalf("bare blocker token rendered instead of canonical text: %v", tr.Texts())
+	}
+	if a.issueActionError != rawCanonical || a.issueActionNotice != blockWorkCapacity {
+		t.Fatalf("retry notice raw/kind = %q / %q", a.issueActionError, a.issueActionNotice)
+	}
+	if issue.Work.SendError != rawCanonical || issue.Work.SendErrorKind != blockWorkCapacity {
+		t.Fatalf("retry work raw/kind = %q / %q", issue.Work.SendError, issue.Work.SendErrorKind)
+	}
+	if len(issue.Executions) != beforeExecutions || issue.Work.ActiveTaskID != "" || issue.Work.SendState != sendIdle {
+		t.Fatalf("refused retry changed execution/work facts: executions=%d/%d work=%+v", len(issue.Executions), beforeExecutions, issue.Work)
+	}
+	if batch.State != supplementBatchCanceled || issue.Supplements.pendingCount() != 1 {
+		t.Fatalf("refused retry changed batch/items: batch=%q pending=%d", batch.State, issue.Supplements.pendingCount())
+	}
+	tr.Scroll(850, 300, 0, -2000)
+	tr.Frame()
+	if r, ok := tr.Find(displayCanonical); !ok || r.W <= 0 || r.H <= 0 || r.X < 700 || r.X+r.W > 1040 || r.Y < 0 || r.Y+r.H > 720 {
+		t.Fatalf("canonical blocked text is not visible after scrolling back: rect=%+v ok=%v", r, ok)
+	}
+
+	tr.SetLocale("zh-Hans")
+	tr.Frame()
+	if tr.HasText(blockWorkCapacity) || !tr.HasText("工作容量已满；一个运行时槽位保留给对话。") {
+		t.Fatalf("Chinese capacity notice missing or leaked token: %v", tr.Texts())
+	}
+	tr.SetLocale("en")
+	tr.Frame()
+	if tr.HasText(blockWorkCapacity) || !tr.HasText(displayCanonical) {
+		t.Fatalf("English capacity notice did not return: %v", tr.Texts())
+	}
+}

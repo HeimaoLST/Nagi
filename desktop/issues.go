@@ -588,7 +588,7 @@ func issueNoticeText(msgs locales.Messages, notice, detail string) string {
 	case "supplement-check-failed":
 		return msgs.IssueNoticeSupplementCheck()
 	default:
-		return notice
+		return sendBlockText(msgs, notice)
 	}
 }
 
