@@ -62,8 +62,8 @@ func TestRailShowsIssueWorkAttentionWithoutChatUnread(t *testing.T) {
 	ct.Issues = []*productIssue{issue}
 	ct.Unread = 2
 	ct.Messages = nil
-	a.windowWidth = 1040
-	tr := ui.NewTester(a.view, 1040, 720)
+	a.windowWidth = 1180
+	tr := ui.NewTester(a.view, 1180, 720)
 	tr.Frame()
 	want := locales.In("en").TaskRailAttention(issue.Goal)
 	if _, ok := tr.Find(want); !ok {
@@ -236,8 +236,8 @@ func TestRailShowsActiveIssueWorkCount(t *testing.T) {
 	issue.Executions = []*issueExecution{{ID: "e1", SessionID: "work-session", TaskID: "task-A", Status: issueExecutionRunning}}
 	ct.Issues = []*productIssue{issue}
 	ct.Messages = nil
-	a.windowWidth = 1040
-	tr := ui.NewTester(a.view, 1040, 720)
+	a.windowWidth = 1180
+	tr := ui.NewTester(a.view, 1180, 720)
 	tr.Frame()
 	wantCount := locales.In("en").TaskActiveCount(1)
 	wantSummary := locales.In("en").TaskRailInProgress(issue.Goal)

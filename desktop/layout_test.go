@@ -4,9 +4,12 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
+
+	"saki/desktop/locales"
 )
 
 func layoutAppAt(t *testing.T, width int) (*appModel, *contact) {
@@ -100,18 +103,18 @@ func TestLayoutPersistsGlobalPreferenceAndReloads(t *testing.T) {
 }
 
 func TestLayoutDragClampsBothEdgesAndKeepsCenterWidest(t *testing.T) {
-	a, ct := layoutAppAt(t, 1040)
+	a, ct := layoutAppAt(t, 1180)
 	ct.Draft = "keep this draft"
 	ct.ActiveTaskID = "task-keep"
 	ct.LastTaskID = "task-keep"
 	ct.Messages = []*message{{ID: 1, Kind: msgContact, Text: "keep this message"}}
-	tr := ui.NewTester(a.view, 1040, 720)
+	tr := ui.NewTester(a.view, 1180, 720)
 	tr.Frame()
 
 	tr.Press(200, 300)
 	tr.Move(260, 300)
 	// Still held: OnChange must clamp before the release/rebuild.
-	if center := float32(1040) - a.railWidth() - a.workWidth() - 2*paneSeparatorWidth; center < minCenterPaneWidth || center <= a.railWidth() || center <= a.workWidth() {
+	if center := float32(1180) - a.railWidth() - a.workWidth() - 2*paneSeparatorWidth; center < minCenterPaneWidth || center <= a.railWidth() || center <= a.workWidth() {
 		t.Fatalf("left held center = %v, left=%v right=%v", center, a.railWidth(), a.workWidth())
 	}
 	tr.Release(260, 300)
@@ -119,23 +122,23 @@ func TestLayoutDragClampsBothEdgesAndKeepsCenterWidest(t *testing.T) {
 	if a.railWidth() < minLeftPaneWidth || a.railWidth() > maxLeftPaneWidth {
 		t.Fatalf("left drag width = %v", a.railWidth())
 	}
-	if center := float32(1040) - a.railWidth() - a.workWidth() - 2*paneSeparatorWidth; center < minCenterPaneWidth || center <= a.railWidth() || center <= a.workWidth() {
+	if center := float32(1180) - a.railWidth() - a.workWidth() - 2*paneSeparatorWidth; center < minCenterPaneWidth || center <= a.railWidth() || center <= a.workWidth() {
 		t.Fatalf("left drag center = %v, left=%v right=%v", center, a.railWidth(), a.workWidth())
 	}
 	if ct.Draft != "keep this draft" || ct.ActiveTaskID != "task-keep" || len(ct.Messages) != 1 {
 		t.Fatal("left divider drag changed chat/task state")
 	}
-	if r, ok := tr.Find("Close workspace"); !ok || r.W <= 0 || r.H <= 0 || r.X < 0 || r.X+r.W > 1040 {
+	if r, ok := tr.Find("Close workspace"); !ok || r.W <= 0 || r.H <= 0 || r.X < 0 || r.X+r.W > 1180 {
 		t.Fatalf("close-workspace control after left drag = ok=%v rect=%+v", ok, r)
 	}
 
-	a, ct = layoutAppAt(t, 1040)
-	tr = ui.NewTester(a.view, 1040, 720)
+	a, ct = layoutAppAt(t, 1180)
+	tr = ui.NewTester(a.view, 1180, 720)
 	tr.Frame()
-	rightX := float32(1040) - a.workWidth() - paneSeparatorWidth
+	rightX := float32(1180) - a.workWidth() - paneSeparatorWidth
 	tr.Press(rightX, 300)
 	tr.Move(rightX-100, 300)
-	if center := float32(1040) - a.railWidth() - a.workWidth() - 2*paneSeparatorWidth; center < minCenterPaneWidth || center <= a.railWidth() || center <= a.workWidth() {
+	if center := float32(1180) - a.railWidth() - a.workWidth() - 2*paneSeparatorWidth; center < minCenterPaneWidth || center <= a.railWidth() || center <= a.workWidth() {
 		t.Fatalf("right held center = %v, left=%v right=%v", center, a.railWidth(), a.workWidth())
 	}
 	tr.Release(rightX-100, 300)
@@ -143,7 +146,7 @@ func TestLayoutDragClampsBothEdgesAndKeepsCenterWidest(t *testing.T) {
 	if a.workWidth() < minRightPaneWidth || a.workWidth() > maxRightPaneWidth {
 		t.Fatalf("right drag width = %v", a.workWidth())
 	}
-	if center := float32(1040) - a.railWidth() - a.workWidth() - 2*paneSeparatorWidth; center < minCenterPaneWidth || center <= a.railWidth() || center <= a.workWidth() {
+	if center := float32(1180) - a.railWidth() - a.workWidth() - 2*paneSeparatorWidth; center < minCenterPaneWidth || center <= a.railWidth() || center <= a.workWidth() {
 		t.Fatalf("right drag center = %v, left=%v right=%v", center, a.railWidth(), a.workWidth())
 	}
 	if ct.Draft != "" || ct.ActiveTaskID != "" || len(ct.Messages) != 0 {
@@ -160,11 +163,16 @@ func TestResponsiveWorkbenchGeometryFirstSlice(t *testing.T) {
 	}{
 		{width: 899, left: 200, right: 340, wantPage: true},
 		{width: 900, left: 200, right: 440, wantAvatar: true},
+		{width: 901, left: 200, right: 440, wantAvatar: true},
 		{width: 960, left: 200, right: 340, wantAvatar: true},
 		{width: 960, left: 280, right: 440, wantAvatar: true},
+		{width: 1040, left: 200, right: 340, wantAvatar: true},
+		{width: 1040, left: 280, right: 440, wantAvatar: true},
 		{width: 1179, left: 280, right: 440, wantAvatar: true},
 		{width: 1180, left: 200, right: 340},
 		{width: 1180, left: 280, right: 440},
+		{width: 1181, left: 200, right: 340},
+		{width: 1181, left: 280, right: 440},
 	} {
 		t.Run(fmt.Sprintf("%d/%g-%g", tc.width, tc.left, tc.right), func(t *testing.T) {
 			a, ct := workspaceTestApp(t)
@@ -189,7 +197,7 @@ func TestResponsiveWorkbenchGeometryFirstSlice(t *testing.T) {
 				mainStart := float32(0)
 				if a.avatarRailActive() {
 					mainStart = avatarRailWidth + paneSeparatorWidth
-					avatar, avatarOK := tr.Find("Contact Saki")
+					avatar, avatarOK := tr.Find(locales.In("en").AvatarContactLabel("Saki"))
 					if !avatarOK || avatar.W <= 0 || avatar.X < 0 || avatar.X+avatar.W > avatarRailWidth {
 						t.Fatalf("avatar button rect=%+v ok=%v", avatar, avatarOK)
 					}
@@ -215,6 +223,10 @@ func TestResponsiveWorkbenchGeometryFirstSlice(t *testing.T) {
 						t.Fatalf("960 max pref editable content=%g, want >=440", composer.W-4)
 					}
 					focusComposer(t, tr, "Composer for Saki")
+					caret, caretOK := tr.TextCaret()
+					if !caretOK || caret.X < composer.X+2 || caret.X+caret.W > composer.X+composer.W-2 {
+						t.Fatalf("composer caret/content inset = caret=%+v ok=%v composer=%+v", caret, caretOK, composer)
+					}
 					tr.Type("responsive draft")
 					tr.Frame()
 					if ct.Draft != "responsive draft" {
@@ -223,6 +235,293 @@ func TestResponsiveWorkbenchGeometryFirstSlice(t *testing.T) {
 				}
 			} else if tr.HasText("Composer for Saki") {
 				t.Fatal("composer mounted on 899 detail page")
+			}
+		})
+	}
+}
+
+func TestResponsiveAvatarRailKeyboardAndStatus(t *testing.T) {
+	a, saki := workspaceTestApp(t)
+	a.windowWidth = 960
+	a.workspaceOpen = true
+	saki.Status = statusWorking
+	waiting := &contact{ID: "contact-waiting", Name: "Waiting", Role: "Assistant", Status: statusReady, Loaded: true}
+	waiting.Issues = []*productIssue{{ID: "issue-waiting", ContactID: waiting.ID, Goal: "waiting task",
+		Status: issueStatusWaitingUser, Questions: []*issueQuestion{{Ref: "wait-q", Text: "answer", State: issueQuestionOpen}}}}
+	attention := &contact{ID: "contact-attention", Name: "Attention", Role: "Assistant", Status: statusReady, Loaded: true}
+	attention.Issues = []*productIssue{{ID: "issue-attention", ContactID: attention.ID, Goal: "attention task",
+		Status: issueStatusNeedsAttention}}
+	active := &contact{ID: "contact-active", Name: "Active", Role: "Assistant", Status: statusWorking, Loaded: true}
+	active.Issues = []*productIssue{{ID: "issue-active", ContactID: active.ID, Goal: "active task",
+		Status: issueStatusInProgress, Work: issueWorkSession{Loaded: true, ActiveTaskID: "active-task", SendState: sendAccepted}}}
+	a.contacts = append(a.contacts, waiting, attention, active)
+	tr := ui.NewTester(a.view, 960, 640)
+	tr.Frame()
+	for _, label := range []string{locales.In("en").AvatarAddContact(), locales.In("en").AvatarContactLabel("Saki"), locales.In("en").AvatarContactLabel("Waiting"), locales.In("en").AvatarContactLabel("Attention"), locales.In("en").AvatarContactLabel("Active"), "Settings"} {
+		if r, ok := tr.Find(label); !ok || r.X < 0 || r.X+r.W > avatarRailWidth {
+			t.Fatalf("avatar rail control %q rect=%+v ok=%v", label, r, ok)
+		}
+	}
+	saki.Draft = "draft-saki"
+	waiting.Draft = "draft-waiting"
+	attention.Draft = "draft-attention"
+	if err := tr.Click(locales.In("en").AvatarContactLabel("Saki")); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if a.selectedContact().ID != saki.ID || saki.Draft != "draft-saki" || !a.detailIs(detailWork) {
+		t.Fatalf("select Saki = selected=%q draft=%q detail=%q", a.selectedContact().ID, saki.Draft, a.activeDetail())
+	}
+	if texts := strings.Join(tr.Texts(), "\n"); !strings.Contains(texts, "Working") {
+		t.Fatalf("working avatar status not rendered: %v", tr.Texts())
+	}
+
+	tr.Key(0, ui.KeyTab)
+	tr.Frame()
+	waitingLabel := locales.In("en").AvatarContactLabel("Waiting")
+	if !tr.Focused(waitingLabel) || a.selectedContact().ID != saki.ID {
+		t.Fatalf("Tab did not focus Waiting without selecting: focused=%v selected=%q", tr.Focused(waitingLabel), a.selectedContact().ID)
+	}
+	if texts := strings.Join(tr.Texts(), "\n"); !strings.Contains(texts, "Waiting for you") {
+		t.Fatalf("waiting avatar status not rendered: %v", tr.Texts())
+	}
+	tr.Key(0, ui.KeySpace)
+	tr.Frame()
+	if a.selectedContact().ID != waiting.ID || waiting.Draft != "draft-waiting" || !a.detailIs(detailWork) {
+		t.Fatalf("Space did not select Waiting: selected=%q draft=%q detail=%q", a.selectedContact().ID, waiting.Draft, a.activeDetail())
+	}
+
+	tr.Key(0, ui.KeyTab)
+	tr.Frame()
+	attentionLabel := locales.In("en").AvatarContactLabel("Attention")
+	if !tr.Focused(attentionLabel) || a.selectedContact().ID != waiting.ID {
+		t.Fatalf("Tab did not focus Attention without selecting: focused=%v selected=%q", tr.Focused(attentionLabel), a.selectedContact().ID)
+	}
+	if texts := strings.Join(tr.Texts(), "\n"); !strings.Contains(texts, "Needs attention") {
+		t.Fatalf("attention avatar status not rendered: %v", tr.Texts())
+	}
+	tr.Key(0, ui.KeyEnter)
+	tr.Frame()
+	if a.selectedContact().ID != attention.ID || attention.Draft != "draft-attention" || !a.detailIs(detailWork) {
+		t.Fatalf("Enter did not select Attention: selected=%q draft=%q detail=%q", a.selectedContact().ID, attention.Draft, a.activeDetail())
+	}
+
+	activeLabel := locales.In("en").AvatarContactLabel("Active")
+	sakiLabel := locales.In("en").AvatarContactLabel("Saki")
+	tr.Key(0, ui.KeyTab)
+	tr.Frame()
+	if !tr.Focused(activeLabel) {
+		t.Fatalf("Tab did not reach Active avatar: %v", tr.Texts())
+	}
+	if texts := strings.Join(tr.Texts(), "\n"); !strings.Contains(texts, "In progress") ||
+		!strings.Contains(texts, "1 active task") || !strings.Contains(texts, "active task") {
+		t.Fatalf("focused active avatar tooltip/AX = %v", tr.Texts())
+	}
+	for _, step := range []struct {
+		mods ui.Modifiers
+		want string
+	}{
+		{mods: ui.Shift, want: attentionLabel},
+		{mods: ui.Shift, want: waitingLabel},
+		{mods: ui.Shift, want: sakiLabel},
+	} {
+		tr.Key(step.mods, ui.KeyTab)
+		tr.Frame()
+		if !tr.Focused(step.want) {
+			t.Fatalf("ShiftTab did not reach %q: %v", step.want, tr.Texts())
+		}
+	}
+	if got := a.avatarRailStatus(locales.In("en"), active); !strings.Contains(got, "In progress") || !strings.Contains(got, "1 active task") {
+		t.Fatalf("active avatar typed status = %q", got)
+	}
+	if got := a.avatarRailStatus(locales.In("en"), waiting); !strings.Contains(got, "Waiting for you") {
+		t.Fatalf("waiting avatar typed status = %q", got)
+	}
+	if got := a.avatarRailStatus(locales.In("en"), attention); !strings.Contains(got, "Needs attention") {
+		t.Fatalf("attention avatar typed status = %q", got)
+	}
+	if got := a.avatarRailStatus(locales.In("en"), saki); !strings.Contains(got, "Working") {
+		t.Fatalf("working avatar typed status = %q", got)
+	}
+
+}
+
+func TestResponsiveManualHideAndWideDrag(t *testing.T) {
+	for _, tc := range []struct {
+		width         int
+		wantDetailMin float32
+	}{
+		{width: 900, wantDetailMin: 300},
+		{width: 960, wantDetailMin: 300},
+		{width: 1180, wantDetailMin: 280},
+	} {
+		t.Run(fmt.Sprintf("hidden-%d", tc.width), func(t *testing.T) {
+			a, _ := workspaceTestApp(t)
+			a.windowWidth = tc.width
+			a.workspaceOpen = true
+			a.railCollapsed = true
+			a.rightPaneWidth = 440
+			tr := ui.NewTester(a.view, tc.width, 640)
+			tr.Frame()
+			if _, ok := tr.Find(locales.In("en").AvatarContactLabel("Saki")); ok {
+				t.Fatal("manual hide still mounted an avatar")
+			}
+			if a.avatarRailActive() || a.effectiveRailWidth() != 0 || a.effectiveDetailWidth() < tc.wantDetailMin {
+				t.Fatalf("%d hidden geometry avatar=%v rail=%v detail=%v", tc.width, a.avatarRailActive(), a.effectiveRailWidth(), a.effectiveDetailWidth())
+			}
+			composer, ok := tr.Find("Composer for Saki")
+			if !ok || composer.W-4 < 440 {
+				t.Fatalf("%d hidden composer=%+v ok=%v content=%g", tc.width, composer, ok, composer.W-4)
+			}
+			if err := tr.Click("Contacts"); err != nil {
+				t.Fatal(err)
+			}
+			tr.Frame()
+			if a.railCollapsed {
+				t.Fatal("manual Contacts did not restore the rail")
+			}
+			if tc.width < 1180 {
+				if !a.avatarRailActive() {
+					t.Fatal("manual Contacts did not restore the avatar rail in mid band")
+				}
+			} else if a.avatarRailActive() {
+				t.Fatal("manual Contacts restored avatar rail at full-rail width")
+			}
+			contactLabel := "Contact Saki"
+			addLabel := "Add contact"
+			if tc.width < 1180 {
+				contactLabel = locales.In("en").AvatarContactLabel("Saki")
+				addLabel = locales.In("en").AvatarAddContact()
+			}
+			if _, ok := tr.Find(contactLabel); !ok {
+				t.Fatal("restored rail lacks its contact")
+			}
+			if _, ok := tr.Find(addLabel); !ok {
+				t.Fatal("restored rail lacks Add contact")
+			}
+			if _, ok := tr.Find("Settings"); !ok && tc.width < 1180 {
+				t.Fatal("restored avatar rail lacks Settings")
+			}
+			if _, ok := tr.Find("App actions"); !ok && tc.width >= 1180 {
+				t.Fatal("restored full rail lacks Settings toolbar group")
+			}
+		})
+	}
+
+	a, _ := workspaceTestApp(t)
+	a.windowWidth = 1180
+	a.leftPaneWidth = 200
+	a.rightPaneWidth = 440
+	a.workspaceOpen = true
+	tr := ui.NewTester(a.view, 1180, 720)
+	tr.Frame()
+	beforeRight := a.workWidth()
+	tr.Press(200, 300)
+	tr.Move(400, 300)
+	tr.Release(400, 300)
+	tr.Frame()
+	if a.railWidth() != 280 || a.workWidth() != beforeRight || a.effectiveDetailWidth() != 406 || a.centerPaneWidth != 492 {
+		t.Fatalf("wide left drag geometry = left=%v prefRight=%v detail=%v center=%v", a.railWidth(), a.workWidth(), a.effectiveDetailWidth(), a.centerPaneWidth)
+	}
+}
+func TestResponsiveChatScrollSurvivesResizeAndDetailClose(t *testing.T) {
+	a, ct := workspaceTestApp(t)
+	a.windowWidth = 960
+	a.workspaceOpen = true
+	for i := 0; i < 40; i++ {
+		ct.Messages = append(ct.Messages, &message{Key: fmt.Sprintf("message-%02d", i), Kind: msgContact,
+			Text: fmt.Sprintf("visible responsive message %02d", i)})
+	}
+	ct.list.ScrollTo(10, ui.Start)
+	tr := ui.NewTester(a.view, 960, 640)
+	tr.Frame()
+	first, last := ct.list.Visible()
+	anchorKey := ct.Messages[first].Key
+	anchorText := ct.Messages[first].Text
+	if first <= 0 || last <= first || !tr.HasText(anchorText) {
+		t.Fatalf("initial chat scroll first=%d last=%d messages=%v", first, last, tr.Texts())
+	}
+	for _, width := range []int{1040, 1180, 960} {
+		a.windowWidth = width
+		tr.SetSize(width, 640)
+		tr.Frame()
+		nextFirst, nextLast := ct.list.Visible()
+		if nextFirst != first || nextLast <= nextFirst || ct.Messages[nextFirst].Key != anchorKey || !tr.HasText(anchorText) {
+			t.Fatalf("width %d changed chat anchor first=%d->%d last=%d key=%q anchor=%q texts=%v",
+				width, first, nextFirst, nextLast, ct.Messages[nextFirst].Key, anchorKey, tr.Texts())
+		}
+	}
+	a.closeDetail()
+	tr.Frame()
+	nextFirst, nextLast := ct.list.Visible()
+	if nextFirst != first || nextLast <= nextFirst || ct.Messages[nextFirst].Key != anchorKey || !tr.HasText(anchorText) {
+		t.Fatalf("detail close changed chat anchor first=%d->%d last=%d key=%q anchor=%q", first, nextFirst, nextLast, ct.Messages[nextFirst].Key, anchorKey)
+	}
+}
+func TestResponsiveResizePreservesDetailContext(t *testing.T) {
+	a, ct := workspaceTestApp(t)
+	a.windowWidth = 1040
+	requirements := ""
+	for i := 0; i < 30; i++ {
+		requirements += fmt.Sprintf("responsive requirement %d\n", i)
+	}
+	issue := &productIssue{ID: "i-responsive", ContactID: ct.ID, Goal: "responsive context", Status: issueStatusInProgress,
+		Requirements: parseIssueRequirements(requirements)}
+	ct.Issues = []*productIssue{issue}
+	ct.SelectedIssueID = issue.ID
+	ct.Draft = "keep responsive draft"
+	nav := ct.issueNavigation()
+	nav.Filter = issueFilterAll
+	nav.DetailID = issue.ID
+	nav.OverviewScroll.Y = 77
+	openIssueDetailForTest(a, ct, issue.ID)
+	nav.OverviewScroll.Y = 77
+	nav.DetailScroll.Y = 0
+	tr := ui.NewTester(a.view, 1040, 640)
+	tr.Frame()
+	tr.Scroll(800, 350, 0, 220)
+	tr.Frame()
+	detailY := nav.DetailScroll.Y
+	if detailY <= 0 {
+		t.Fatalf("detail content did not actually scroll: %v", detailY)
+	}
+	for _, width := range []int{899, 900, 1040, 1180, 960} {
+		a.windowWidth = width
+		tr.SetSize(width, 640)
+		tr.Frame()
+		if !a.workspaceOpen || nav.DetailID != issue.ID || nav.Filter != issueFilterAll ||
+			ct.SelectedIssueID != issue.ID || ct.Draft != "keep responsive draft" || nav.OverviewScroll.Y != 77 || nav.DetailScroll.Y != detailY {
+			t.Fatalf("width %d changed detail context: open=%v nav=%+v selected=%q draft=%q", width, a.workspaceOpen, nav, ct.SelectedIssueID, ct.Draft)
+		}
+	}
+}
+func TestResponsiveClosedDetailKeepsFullRailAndNoAutoOpen(t *testing.T) {
+	for _, width := range []int{899, 900, 901, 960, 1040, 1179, 1180, 1181} {
+		t.Run(fmt.Sprintf("%d", width), func(t *testing.T) {
+			a, _ := workspaceTestApp(t)
+			a.windowWidth = width
+			a.leftPaneWidth = 280
+			a.rightPaneWidth = 440
+			a.workspaceOpen = false
+			tr := ui.NewTester(a.view, width, 640)
+			tr.Frame()
+			if a.avatarRailActive() || a.detailPageActive() || !tr.HasText("Contact Saki") {
+				t.Fatalf("closed detail at %d mounted avatar/page or lost full rail", width)
+			}
+			if tr.HasText("Close workspace") {
+				t.Fatalf("closed detail at %d rendered a detail close", width)
+			}
+			if r, ok := tr.Find("Composer for Saki"); !ok || r.W-4 < 440 {
+				t.Fatalf("closed detail composer at %d = %+v ok=%v", width, r, ok)
+			}
+			a.windowWidth = 1180
+			tr.SetSize(1180, 640)
+			tr.Frame()
+			if a.workspaceOpen || a.avatarRailActive() {
+				t.Fatalf("resize opened detail at %d", width)
+			}
+			if !tr.HasText("Contact Saki") {
+				t.Fatal("closed resize lost full rail")
 			}
 		})
 	}
@@ -268,6 +567,87 @@ func TestLayoutOverlayBelow900ClosesWithEscape(t *testing.T) {
 		if a.workspaceOpen || !tr.Focused("Work") {
 			t.Fatalf("%d Escape = open=%v focusedWork=%v", width, a.workspaceOpen, tr.Focused("Work"))
 		}
+	}
+}
+
+func TestResponsivePseudoExpandedSettingsLabel(t *testing.T) {
+	a, _ := workspaceTestApp(t)
+	a.windowWidth = 1180
+	a.workspaceOpen = true
+	tr := ui.NewTester(a.view, 1180, 640)
+	tr.SetLocale("en")
+	tr.Frame()
+	en := locales.In("en").SettingsTitle()
+	if !tr.HasText(en) {
+		t.Fatalf("English Settings label missing: %v", tr.Texts())
+	}
+	tr.SetLocale("en-XA")
+	tr.Frame()
+	xa := locales.In("en-XA").SettingsTitle()
+	if xa == en || len(xa) <= len(en) {
+		t.Fatalf("en-XA Settings label did not expand: en=%q xa=%q", en, xa)
+	}
+	r, ok := tr.Find(xa)
+	if !ok || r.W <= 0 || r.X < 0 || r.X+r.W > 1180 {
+		t.Fatalf("expanded Settings label rect=%+v ok=%v", r, ok)
+	}
+	if tr.HasText(en) {
+		t.Fatalf("en-XA fell back to English Settings label: %v", tr.Texts())
+	}
+	a.windowWidth = 960
+	tr.SetSize(960, 640)
+	tr.Frame()
+	enAdd := locales.In("en").AvatarAddContact()
+	xaAdd := locales.In("en-XA").AvatarAddContact()
+	enContact := locales.In("en").AvatarContactLabel("Saki")
+	xaContact := locales.In("en-XA").AvatarContactLabel("Saki")
+	if xaAdd == enAdd || len(xaAdd) <= len(enAdd) || xaContact == enContact || len(xaContact) <= len(enContact) {
+		t.Fatalf("en-XA avatar labels did not expand: add %q/%q contact %q/%q", enAdd, xaAdd, enContact, xaContact)
+	}
+	for _, label := range []string{xaAdd, xaContact} {
+		if r, ok := tr.Find(label); !ok || r.X < 0 || r.X+r.W > avatarRailWidth {
+			t.Fatalf("en-XA avatar label %q rect=%+v ok=%v", label, r, ok)
+		}
+	}
+}
+func TestResponsive899To900FocusCounterpart(t *testing.T) {
+	for _, kind := range []detailKind{detailWork, detailHistory, detailProfile} {
+		t.Run(string(kind), func(t *testing.T) {
+			a, _ := workspaceTestApp(t)
+			a.windowWidth = 899
+			a.workspaceOpen = false
+			a.detail = ""
+			a.openDetail(kind)
+			tr := ui.NewTester(a.view, 899, 640)
+			tr.Frame()
+			pageLabel := "Close history"
+			if kind == detailWork {
+				pageLabel = "Back to chat"
+			} else if kind == detailProfile {
+				pageLabel = "Close profile"
+			}
+			if !a.detailPageActive() || !tr.Focused(pageLabel) {
+				t.Fatalf("899 %s page focus = page=%v focused=%v", kind, a.detailPageActive(), tr.Focused(pageLabel))
+			}
+			a.windowWidth = 900
+			tr.SetSize(900, 640)
+			tr.Frame()
+			wideLabel := "Close history"
+			if kind == detailWork {
+				wideLabel = "Close workspace"
+			} else if kind == detailProfile {
+				wideLabel = "Close profile"
+			}
+			if a.detailPageActive() || a.workOverlay() || !tr.Focused(wideLabel) {
+				t.Fatalf("900 %s counterpart focus = page=%v overlay=%v focused=%v", kind, a.detailPageActive(), a.workOverlay(), tr.Focused(wideLabel))
+			}
+			a.windowWidth = 899
+			tr.SetSize(899, 640)
+			tr.Frame()
+			if !a.detailPageActive() || !tr.Focused(pageLabel) {
+				t.Fatalf("899 return %s focus = page=%v focused=%v", kind, a.detailPageActive(), tr.Focused(pageLabel))
+			}
+		})
 	}
 }
 
@@ -322,8 +702,9 @@ func TestLayoutDragIsNotPersistedPerMove(t *testing.T) {
 	}
 	a := &appModel{store: store}
 	applyStoreSelection(a, store)
+	a.windowWidth = 1180
 	a.workspaceOpen = true
-	tr := ui.NewTester(a.view, 1040, 720)
+	tr := ui.NewTester(a.view, 1180, 720)
 	tr.Frame()
 	tr.Press(200, 300)
 	tr.Move(240, 300)
@@ -415,8 +796,8 @@ func TestLayoutWideDragAllowsPreferredRanges(t *testing.T) {
 }
 
 func TestLayoutDragHonorsMinimumPaneWidths(t *testing.T) {
-	a, _ := layoutAppAt(t, 1040)
-	tr := ui.NewTester(a.view, 1040, 720)
+	a, _ := layoutAppAt(t, 1180)
+	tr := ui.NewTester(a.view, 1180, 720)
 	tr.Frame()
 	tr.Press(200, 300)
 	tr.Move(0, 300)
@@ -426,13 +807,13 @@ func TestLayoutDragHonorsMinimumPaneWidths(t *testing.T) {
 		t.Fatalf("left minimum = %v", a.railWidth())
 	}
 
-	a, _ = layoutAppAt(t, 1040)
-	tr = ui.NewTester(a.view, 1040, 720)
+	a, _ = layoutAppAt(t, 1180)
+	tr = ui.NewTester(a.view, 1180, 720)
 	tr.Frame()
-	rightX := float32(1040) - a.workWidth() - paneSeparatorWidth
+	rightX := float32(1180) - a.workWidth() - paneSeparatorWidth
 	tr.Press(rightX, 300)
-	tr.Move(1040, 300)
-	tr.Release(1040, 300)
+	tr.Move(1180, 300)
+	tr.Release(1180, 300)
 	tr.Frame()
 	if a.workWidth() != minRightPaneWidth {
 		t.Fatalf("right minimum = %v", a.workWidth())

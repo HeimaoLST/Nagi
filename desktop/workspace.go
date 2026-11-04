@@ -109,6 +109,14 @@ func (a *appModel) effectiveRailWidth() float32 {
 	}
 }
 
+func (a *appModel) detailMinWidthForLayout() float32 {
+	width := a.layoutWidth()
+	if width >= avatarRailBreakpoint && width < fullRailBreakpoint {
+		return minAvatarDetailWidth
+	}
+	return minRightPaneWidth
+}
+
 func (a *appModel) effectiveDetailWidth() float32 {
 	separators := 1 // main/work split
 	if a.effectiveRailWidth() > 0 {
@@ -116,10 +124,7 @@ func (a *appModel) effectiveDetailWidth() float32 {
 	}
 	available := float32(a.layoutWidth()) - a.effectiveRailWidth() -
 		float32(separators)*paneSeparatorWidth - effectiveCenterWidth
-	minWidth := minRightPaneWidth
-	if a.avatarRailActive() {
-		minWidth = minAvatarDetailWidth
-	}
+	minWidth := a.detailMinWidthForLayout()
 	if available < minWidth {
 		available = minWidth
 	}
@@ -129,7 +134,10 @@ func (a *appModel) effectiveDetailWidth() float32 {
 func (a *appModel) clampLeftForDrag(value float32, threePaneAtStart bool) float32 {
 	limit := maxLeftPaneWidth
 	if a.workspaceOpen && threePaneAtStart {
-		byCenter := float32(a.layoutWidth()) - 2*paneSeparatorWidth - a.workWidth() - minCenterPaneWidth
+		// Left drag changes the rail preference. The detail may derive narrower
+		// effective width, but the saved right preference is not rewritten.
+		byCenter := float32(a.layoutWidth()) - 2*paneSeparatorWidth -
+			a.detailMinWidthForLayout() - effectiveCenterWidth
 		if byCenter < limit {
 			limit = byCenter
 		}
@@ -145,11 +153,7 @@ func (a *appModel) clampRightForDrag(value, area float32, threePaneAtStart bool)
 			limit = byCenter
 		}
 	}
-	minWidth := minRightPaneWidth
-	if a.avatarRailActive() {
-		minWidth = minAvatarDetailWidth
-	}
-	return clampPaneWidth(value, defaultRightPaneWidth, minWidth, limit)
+	return clampPaneWidth(value, defaultRightPaneWidth, a.detailMinWidthForLayout(), limit)
 }
 
 func workFor(ct *contact, taskID string) *workItem {

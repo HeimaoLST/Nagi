@@ -296,8 +296,8 @@ func TestDuplicateStartCannotReviveTerminalWork(t *testing.T) {
 
 func TestWorkModalEscapeReturnsFocusToEntry(t *testing.T) {
 	a, _ := workspaceTestApp(t)
-	a.windowWidth = 900
-	tr := ui.NewTester(a.view, 900, 640)
+	a.windowWidth = 899
+	tr := ui.NewTester(a.view, 899, 640)
 	tr.Frame()
 	if !tr.HasText("Back to chat") {
 		t.Fatal("narrow work page missing")
@@ -306,6 +306,22 @@ func TestWorkModalEscapeReturnsFocusToEntry(t *testing.T) {
 	tr.Frame()
 	if a.workspaceOpen || !tr.Focused("Work") {
 		t.Fatal("Escape did not close/focus-return the work page")
+	}
+}
+
+func TestAvatarWorkEscapeReturnsFocusToEntry(t *testing.T) {
+	a, _ := workspaceTestApp(t)
+	a.windowWidth = 960
+	a.workspaceOpen = true
+	tr := ui.NewTester(a.view, 960, 640)
+	tr.Frame()
+	if a.workOverlay() || !a.avatarRailActive() || !tr.HasText("Close workspace") {
+		t.Fatal("960 avatar work page missing")
+	}
+	tr.Key(0, ui.KeyEscape)
+	tr.Frame()
+	if a.workspaceOpen || !tr.Focused("Work") {
+		t.Fatal("960 Escape did not close/focus-return the avatar work page")
 	}
 }
 

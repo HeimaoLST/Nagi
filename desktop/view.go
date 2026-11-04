@@ -264,8 +264,9 @@ func (a *appModel) rail(c *ui.Context, t *ui.Theme) {
 
 func (a *appModel) avatarRail(c *ui.Context, t *ui.Theme) {
 	ui.Column(c).Width(avatarRailWidth).Shrink(0).FillHeight().Padding(4).Gap(4).Background(a.workTheme.Rail).Children(func() {
-		add := appTooltip(c, ui.Button(c, "").Label("Add contact").
-			MinWidth(32).MinHeight(32).Width(32).Height(32).Padding(0).Justify(ui.Center), "Add contact")
+		addLabel := locales.In(c.Locale()).AvatarAddContact()
+		add := appTooltip(c, ui.Button(c, "").Label(addLabel).
+			MinWidth(32).MinHeight(32).Width(32).Height(32).Padding(0).Justify(ui.Center), addLabel)
 		add.Children(func() { ui.Icon(c, railAddIcon).Width(18).Height(18).TextColor(t.TextMuted) })
 		add.OnClick(func() { a.addDefaultContact() })
 		visible := a.visibleContactIndices()
@@ -278,31 +279,54 @@ func (a *appModel) avatarRail(c *ui.Context, t *ui.Theme) {
 				}
 			})
 		}
-		settingsLabel := locales.In(c.Locale()).SettingsTitle()
-		settings := appTooltip(c, ui.Button(c, "").Label(settingsLabel).
-			MinWidth(32).MinHeight(32).Width(32).Height(32).Padding(0).Justify(ui.Center),
-			locales.In(c.Locale()).SettingsOpenTooltip())
-		settings.Children(func() { ui.Icon(c, railSettingsIcon).Width(16).Height(16).TextColor(t.TextMuted) })
-		settings.OnClick(func() { a.openSettingsTab(a.settingsLandingTab(), settingsSourceRail) })
-		if a.focusSettings {
-			settings.Focus()
-			a.focusSettings = false
-		}
+		ui.Toolbar(c, func() {
+			settingsLabel := locales.In(c.Locale()).SettingsTitle()
+			settings := appTooltip(c, ui.Button(c, "").Label(settingsLabel).
+				MinWidth(32).MinHeight(32).Width(32).Height(32).Padding(0).Justify(ui.Center),
+				locales.In(c.Locale()).SettingsOpenTooltip())
+			settings.Children(func() { ui.Icon(c, railSettingsIcon).Width(16).Height(16).TextColor(t.TextMuted) })
+			settings.OnClick(func() { a.openSettingsTab(a.settingsLandingTab(), settingsSourceRail) })
+			if a.focusSettings {
+				settings.Focus()
+				a.focusSettings = false
+			}
+		}).Label(locales.In(c.Locale()).SettingsRailActions()).Padding(0)
 	})
+}
+
+func (a *appModel) avatarRailStatus(msgs locales.Messages, ct *contact) string {
+	notice := a.issueWorkNotice(ct)
+	status := ""
+	switch {
+	case notice.Attention:
+		status = msgs.TaskRailAttention(notice.IssueName)
+	case notice.Waiting:
+		status = msgs.TaskRailWaiting(notice.IssueName)
+	case notice.Active:
+		status = msgs.TaskRailInProgress(notice.IssueName)
+	default:
+		status = a.headerStatusLabel(ct, msgs)
+	}
+	if notice.ActiveCount > 0 {
+		status += "\n" + msgs.TaskActiveCount(notice.ActiveCount)
+	}
+	return status
 }
 
 func (a *appModel) avatarRailRow(c *ui.Context, t *ui.Theme, i int) {
 	ct := a.contacts[i]
-	line := a.snippet(ct)
-	tip := ct.Name
-	if line != "" {
-		tip += "\n" + line
+	msgs := locales.In(c.Locale())
+	status := a.avatarRailStatus(msgs, ct)
+	label := msgs.AvatarContactLabel(ct.Name)
+	tip := label
+	if status != "" {
+		tip += "\n" + status
 	}
-	row := ui.ButtonBase(c).Label("Contact " + ct.Name).Selected(i == a.selected).
-		Width(48).Height(44).Padding(4).Radius(8).Justify(ui.Center).
-		Background(ui.Transparent).BorderWidth(0)
+	row := ui.ButtonBase(c).Key(ct.ID).Label(label).Description(status).
+		Selected(i == a.selected).Width(48).Height(44).Padding(4).Radius(8).
+		Justify(ui.Center).Background(ui.Transparent).BorderWidth(0).TextColor(t.Text)
 	if i == a.selected {
-		row.Background(t.SurfaceHover)
+		row.Background(t.Selection).TextColor(t.Text)
 	}
 	row = appTooltip(c, row, tip)
 	row.OnClick(func() { a.selectContact(i) })

@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo/ui"
+
+	"saki/desktop/locales"
 )
 
 func TestIssueStoreRoundTripAndV1Compatibility(t *testing.T) {
@@ -300,8 +302,11 @@ func TestIssueFormContactSwitchCannotLeakInput(t *testing.T) {
 	a.issueGoal = "only for Saki"
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	other := a.contacts[1].Name
-	if err := tr.Click(other); err != nil {
+	otherLabel := locales.In("en").AvatarContactLabel(a.contacts[1].Name)
+	if _, ok := tr.Find(otherLabel); !ok {
+		t.Fatalf("accessible contact activation target %q missing: %v", otherLabel, tr.Texts())
+	}
+	if err := tr.Click(otherLabel); err != nil {
 		t.Fatal(err)
 	}
 	if a.selected != 0 || a.issueGoal != "only for Saki" || !strings.Contains(a.issueFormError, "switching contacts") {
