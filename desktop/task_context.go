@@ -597,13 +597,14 @@ func (tc *taskContext) formView(c *ui.Context, theme workbenchTheme) {
 		if tc.formError != "" {
 			ui.Text(c, tc.formError).FontSize(14).LineHeight(1.5).TextColor(t.Danger)
 		}
-		label := "Save snippet"
+		msgs := locales.In(c.Locale())
+		label := msgs.TaskContextSaveSnippet()
 		if tc.formMode == "file" {
-			label = "Save file"
+			label = msgs.TaskContextSaveFile()
 		} else if tc.formMode == "edit" {
-			label = "Save changes"
+			label = msgs.TaskContextSaveChanges()
 		}
-		ui.PrimaryButton(c, label).FontSize(typeAction).OnClick(func() { tc.saveForm() })
+		secondaryButton(c, label).OnClick(func() { tc.saveForm() })
 	})
 }
 

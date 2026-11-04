@@ -133,7 +133,7 @@ func (s *connectionSettings) view(c *ui.Context, t *ui.Theme, actions connection
 						choice := choice
 						button := secondaryButton(c, choice.label).Disabled(s.Busy).OnClick(func() { s.Draft.API = choice.value })
 						if s.Draft.API == choice.value {
-							button.BorderWidth(2).BorderColor(t.Accent)
+							button.Background(t.Selection).TextColor(t.Text)
 						}
 					}
 				})
@@ -182,25 +182,25 @@ func (s *connectionSettings) view(c *ui.Context, t *ui.Theme, actions connection
 		ui.Column(c).FillWidth().Gap(8).Children(func() {
 			ui.Row(c).Gap(8).Wrap().Children(func() {
 				if s.SavedPending && !s.Dirty() {
-					ui.PrimaryButton(c, "Apply saved").Label("Apply saved").FontSize(typeAction).MinHeight(32).Disabled(s.Busy || s.ReloadBlocked != "").OnClick(actions.Apply)
-					secondaryButton(c, "Save configuration").Label("Save configuration").FontSize(typeAction).MinHeight(32).Disabled(s.Busy).OnClick(func() {
+					secondaryButton(c, msgs.ConnectionApplySaved()).Disabled(s.Busy || s.ReloadBlocked != "").OnClick(actions.Apply)
+					secondaryButton(c, msgs.ConnectionSaveConfiguration()).FontSize(typeAction).MinHeight(32).Disabled(s.Busy).OnClick(func() {
 						if config, ok := s.validated(); ok && actions.Save != nil {
 							actions.Save(config)
 						}
 					})
 				} else {
-					ui.PrimaryButton(c, msgs.ConnectionSaveAndApply()).Label(msgs.ConnectionSaveAndApply()).FontSize(typeAction).MinHeight(32).Disabled(s.Busy).OnClick(func() {
+					secondaryButton(c, msgs.ConnectionSaveAndApply()).Label(msgs.ConnectionSaveAndApply()).Disabled(s.Busy).OnClick(func() {
 						if config, ok := s.validated(); ok && actions.SaveAndApply != nil {
 							actions.SaveAndApply(config)
 						}
 					})
-					secondaryButton(c, "Save configuration").Label("Save configuration").FontSize(typeAction).MinHeight(32).Disabled(s.Busy).OnClick(func() {
+					secondaryButton(c, msgs.ConnectionSaveConfiguration()).FontSize(typeAction).MinHeight(32).Disabled(s.Busy).OnClick(func() {
 						if config, ok := s.validated(); ok && actions.Save != nil {
 							actions.Save(config)
 						}
 					})
 					if s.HasSaved {
-						secondaryButton(c, "Apply saved").Disabled(s.Busy || s.ReloadBlocked != "").OnClick(actions.Apply)
+						secondaryButton(c, msgs.ConnectionApplySaved()).Disabled(s.Busy || s.ReloadBlocked != "").OnClick(actions.Apply)
 					}
 				}
 				if s.Dirty() && actions.Discard != nil {

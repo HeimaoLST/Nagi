@@ -101,6 +101,37 @@ func resolveWorkbenchTheme(dark bool) workbenchTheme {
 	}
 }
 
+// segmentedSelection keeps MyGo's official SegmentedBase radio group,
+// keyboard semantics and Changed contract, with the app's restrained
+// Selection/Text face instead of the framework pressedColor and shadow.
+func segmentedSelection(c *ui.Context, selected *int, labels ...string) ui.Element {
+	t := c.Theme()
+	parts := ui.SegmentedBase(c, selected, len(labels))
+	track := parts.Track.Height(32).Padding(t.Space(0.5)).Gap(t.Space(0.5)).
+		Radius(t.Radius).Background(t.Surface).Border(1, t.Border)
+	track.Children(func() {
+		for i, label := range labels {
+			segment := parts.Segment(i).MinHeight(32).Padding(t.Space(1), t.Space(2)).
+				Radius(t.Radius).Background(ui.Transparent).BorderWidth(0).TextColor(t.TextMuted)
+			if i == *selected {
+				segment.Background(t.Selection).TextColor(t.Text)
+			}
+			if segment.Pressed() {
+				segment.Background(t.SurfacePressed)
+			} else if segment.Hovered() && i != *selected {
+				segment.Background(t.SurfaceHover)
+			}
+			if segment.Focused() {
+				segment.BorderWidth(1).BorderColor(t.Focus)
+			}
+			segment.Children(func() {
+				ui.Text(c, label).FontSize(typeAction).SingleLine()
+			})
+		}
+	})
+	return track
+}
+
 // selectWithoutChevron uses MyGo's official SelectBase so dropdown triggers
 // show the current value and keep keyboard/a11y behavior without the framework's
 // decorative chevron or elevated popup shadow.

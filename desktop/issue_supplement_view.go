@@ -111,7 +111,7 @@ func (a *appModel) issueSupplementSection(c *ui.Context, t *ui.Theme, ct *contac
 			ui.TextArea(c, draft).Label("Add supplement to this issue").FontSize(14).Height(56).
 				Placeholder("Supplementary target, requirement, or correction")
 			ui.Row(c).Gap(6).Children(func() {
-				ui.PrimaryButton(c, "Save supplement").FontSize(typeAction).OnClick(func() {
+				secondaryButton(c, locales.In(c.Locale()).IssueSupplementSave()).OnClick(func() {
 					if !a.saveIssueSupplement(ct, issue.ID, *draft) {
 						return
 					}

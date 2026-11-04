@@ -128,17 +128,30 @@ func (a *appModel) connectionDefaultModel() string {
 	return ""
 }
 
+func middleEllipsis(text string, limit int) string {
+	runes := []rune(strings.TrimSpace(text))
+	if limit < 1 || len(runes) <= limit {
+		return string(runes)
+	}
+	if limit == 1 {
+		return "…"
+	}
+	head := (limit - 1) / 2
+	tail := limit - 1 - head
+	return string(runes[:head]) + "…" + string(runes[len(runes)-tail:])
+}
+
 func (a *appModel) conversationModelShortName(ct *contact) string {
 	if ct != nil {
 		if model := strings.TrimSpace(ct.SessionModel); model != "" {
-			return truncate(model, 22)
+			return middleEllipsis(model, 22)
 		}
 		if ct.SessionID != "" {
 			return "Model not loaded"
 		}
 	}
 	if model := a.connectionDefaultModel(); model != "" {
-		return truncate(model, 22)
+		return middleEllipsis(model, 22)
 	}
 	return "Model not set"
 }
@@ -149,12 +162,12 @@ func (a *appModel) conversationModelSummary(ct *contact) string {
 	}
 	if ct.SessionID != "" {
 		if strings.TrimSpace(ct.SessionModel) != "" {
-			return "Session: " + truncate(ct.SessionModel, 42)
+			return "Session: " + strings.TrimSpace(ct.SessionModel)
 		}
 		return "Session model not loaded"
 	}
 	if model := a.connectionDefaultModel(); model != "" {
-		return "Connection default: " + truncate(model, 42)
+		return "Connection default: " + model
 	}
 	return "Connection default not configured"
 }

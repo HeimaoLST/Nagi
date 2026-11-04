@@ -348,7 +348,7 @@ func (a *appModel) workspaceContent(c *ui.Context, t *ui.Theme, narrow bool) {
 		if nav.ShowConversationWork {
 			tab = 1
 		}
-		tabs := ui.Segmented(c, &tab, msgs.WorkTasksTab(), msgs.WorkChatRunsTab()).Label(msgs.WorkTabs()).
+		tabs := segmentedSelection(c, &tab, msgs.WorkTasksTab(), msgs.WorkChatRunsTab()).Label(msgs.WorkTabs()).
 			FontSize(typeAction).Height(32).MaxWidth(360).FillWidth()
 		if nav.FocusConversation {
 			tabs.Focus()
@@ -368,15 +368,39 @@ func (a *appModel) workspaceContent(c *ui.Context, t *ui.Theme, narrow bool) {
 	}
 }
 
+func issueFilterIndex(filter string) int {
+	switch filter {
+	case issueFilterCompleted:
+		return 1
+	case issueFilterAll:
+		return 2
+	default:
+		return 0
+	}
+}
+
+func issueFilterFromIndex(index int) string {
+	switch index {
+	case 1:
+		return issueFilterCompleted
+	case 2:
+		return issueFilterAll
+	default:
+		return issueFilterUnfinished
+	}
+}
+
 func (a *appModel) issueOverviewView(c *ui.Context, t *ui.Theme, ct *contact, nav *issueViewState) {
 	if a.issueFormOpen {
 		a.issueFormView(c, t)
 	}
 	ui.Column(c).FillWidth().Grow(1).Padding(12).Gap(8).Children(func() {
-		a.issueFilterChoice = issueFilterChoiceLabel(nav.Filter)
-		filter := selectWithoutChevron(c, &a.issueFilterChoice, []string{"Unfinished", "Completed", "All"}, "Issue filter")
+		msgs := locales.In(c.Locale())
+		filterIndex := issueFilterIndex(nav.Filter)
+		filter := segmentedSelection(c, &filterIndex, msgs.IssueFilterUnfinished(), msgs.IssueFilterCompleted(), msgs.IssueFilterAll()).
+			Label("Issue filter").FontSize(typeAction).Height(32).MaxWidth(360).FillWidth()
 		if filter.Changed() {
-			a.setIssueFilter(ct, issueFilterFromChoice(a.issueFilterChoice))
+			a.setIssueFilter(ct, issueFilterFromIndex(filterIndex))
 			nav = ct.issueNavigation()
 		}
 		ui.Scroll(c).Grow(1).FillWidth().TrackScroll(&nav.OverviewScroll).Children(func() {
@@ -611,7 +635,7 @@ func (a *appModel) issueFormView(c *ui.Context, t *ui.Theme) {
 			ui.Text(c, a.issueFormError).FontSize(14).LineHeight(1.5).TextColor(t.Danger)
 		}
 		ui.Row(c).Gap(8).Children(func() {
-			ui.PrimaryButton(c, "Save issue").FontSize(typeAction).MinHeight(32).OnClick(func() { a.saveIssueForm() })
+			secondaryButton(c, locales.In(c.Locale()).WorkSaveIssue()).OnClick(func() { a.saveIssueForm() })
 		})
 	})
 }

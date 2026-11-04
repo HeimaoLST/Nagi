@@ -549,11 +549,14 @@ func issueResultReaderPage(c *ui.Context, th *ui.Theme, state *issueResultPanelS
 
 func issueResultReaderAction(c *ui.Context, th *ui.Theme, label string) ui.Element {
 	button := ui.Button(c, label).FontSize(typeAction).MinHeight(32).Padding(4, 8).
-		Background(ui.Transparent).BorderWidth(0).TextColor(th.TextMuted)
+		Background(th.Surface).BorderWidth(0).TextColor(th.Text)
 	if button.Pressed() {
 		button.Background(th.SurfacePressed)
 	} else if button.Hovered() {
 		button.Background(th.SurfaceHover)
+	}
+	if button.Focused() {
+		button.BorderWidth(1).BorderColor(th.Focus)
 	}
 	return button
 }

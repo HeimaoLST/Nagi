@@ -9,6 +9,8 @@ import (
 	"strings"
 
 	"github.com/egoist/mygo/ui"
+
+	"saki/desktop/locales"
 )
 
 type modelSelectionTarget struct {
@@ -398,7 +400,7 @@ func (s *modelSelection) view(c *ui.Context, t *ui.Theme, actions modelSelection
 					actions.Refresh(s.Target)
 				}
 			})
-			ui.PrimaryButton(c, "Update model").FontSize(typeAction).Disabled(s.Busy || s.Unconfirmed).OnClick(func() {
+			secondaryButton(c, locales.In(c.Locale()).ModelUpdateModel()).Disabled(s.Busy || s.Unconfirmed).OnClick(func() {
 				if request, ok := s.Request(); ok && actions.Update != nil {
 					actions.Update(request)
 				}
@@ -420,7 +422,7 @@ func (s *modelSelection) view(c *ui.Context, t *ui.Theme, actions modelSelection
 				entry := entry
 				button := secondaryButton(c, entry.Model+": context "+strconv.Itoa(entry.Compaction.ContextTokens)).Disabled(s.Busy).OnClick(func() { s.SelectConfiguredModel(entry.Model) })
 				if s.Draft.Model == entry.Model && s.Draft.CapacityMode == modelCapacityExplicit {
-					button.BorderWidth(2).BorderColor(t.Accent)
+					button.Background(t.Selection).TextColor(t.Text)
 				}
 			}
 			if len(configured) < len(s.Catalog.ConfiguredModels) {
@@ -438,7 +440,7 @@ func (s *modelSelection) view(c *ui.Context, t *ui.Theme, actions modelSelection
 				}
 				button := secondaryButton(c, label+": context "+strconv.Itoa(entry.Limits.Context)).Disabled(s.Busy).OnClick(func() { s.SelectCatalogID(entry.CatalogID) })
 				if s.Draft.CatalogID != "" && s.Draft.CatalogID == entry.CatalogID {
-					button.BorderWidth(2).BorderColor(t.Accent)
+					button.Background(t.Selection).TextColor(t.Text)
 				}
 			}
 			if len(catalog) < len(s.Catalog.Models) {

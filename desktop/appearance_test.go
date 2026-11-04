@@ -399,3 +399,22 @@ func TestAppearanceRetrySaveUIAndRuntimeErrorOwnership(t *testing.T) {
 		t.Fatal("appearance save retry changed the draft")
 	}
 }
+
+func TestConversationModelShortNameKeepsDistinguishingTail(t *testing.T) {
+	a, ct := workspaceTestApp(t)
+	ct.SessionID = "s1"
+	ct.SessionModel = "provider/" + strings.Repeat("shared-prefix-", 4) + "alpha"
+	alphaShort := a.conversationModelShortName(ct)
+	if !strings.Contains(alphaShort, "…") || !strings.HasSuffix(alphaShort, "alpha") {
+		t.Fatalf("short model = %q", alphaShort)
+	}
+	ct.SessionModel = "provider/" + strings.Repeat("shared-prefix-", 4) + "omega"
+	omegaShort := a.conversationModelShortName(ct)
+	if alphaShort == omegaShort || !strings.HasSuffix(omegaShort, "omega") {
+		t.Fatalf("short models not distinguishable: alpha=%q omega=%q", alphaShort, omegaShort)
+	}
+	summary := a.conversationModelSummary(ct)
+	if !strings.Contains(summary, strings.Repeat("shared-prefix-", 4)+"omega") {
+		t.Fatalf("summary lost full model id: %q", summary)
+	}
+}

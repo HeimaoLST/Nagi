@@ -6,6 +6,7 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -1022,4 +1023,40 @@ func contextLabelForTest(count int) string {
 		return fmt.Sprintf("Task context: %d", count)
 	}
 	return "Task context"
+}
+
+func TestComposerZeroContextKeepsIconWithoutZeroText(t *testing.T) {
+	a, ct := appReadingTestApp(t)
+	if ct.Context.count() != 0 {
+		t.Fatal("fixture context is not empty")
+	}
+	tr := ui.NewTester(a.view, 1040, 720)
+	tr.Frame()
+	if tr.HasText("Task context: 0") {
+		t.Fatalf("zero context rendered a numeric label: %v", tr.Texts())
+	}
+	button, ok := tr.Find("Task context")
+	if !ok || button.W < 32 || button.H < 32 {
+		t.Fatalf("zero-context control missing or under 32px: %+v ok=%v", button, ok)
+	}
+}
+
+func TestComposerModelTooltipKeepsFullActualID(t *testing.T) {
+	a, ct := appReadingTestApp(t)
+	prefix := "provider/" + strings.Repeat("shared-prefix-", 4)
+	a.connectionEffective = &connectionConfig{Model: prefix + "alpha"}
+	ct.SessionID = "s1"
+	ct.SessionModel = prefix + "omega"
+	tr := ui.NewTester(a.view, 1040, 720)
+	tr.Frame()
+	showPreviewTooltip(t, tr, "Conversation model")
+	if !tr.HasText(ct.SessionModel) || tr.HasText(prefix+"alpha") {
+		t.Fatalf("loaded session model tooltip = %v", tr.Texts())
+	}
+	ct.SessionModel = ""
+	tr.Frame()
+	showPreviewTooltip(t, tr, "Conversation model")
+	if !tr.HasText("Session model not loaded") || tr.HasText(prefix+"alpha") {
+		t.Fatalf("unloaded session fell back to connection default: %v", tr.Texts())
+	}
 }

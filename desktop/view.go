@@ -232,7 +232,7 @@ func (a *appModel) rail(c *ui.Context, t *ui.Theme) {
 				add.OnClick(func() { a.addDefaultContact() })
 			}).Label("Contact list actions").Padding(0)
 		})
-		ui.TextInput(c, &a.contactSearch).Label("Search contacts").FontSize(typeAction).Placeholder("Name or purpose")
+		ui.SearchField(c, &a.contactSearch).Label(locales.In(c.Locale()).SearchContacts()).FontSize(typeAction).Placeholder("Name or purpose")
 		a.contactScopeSelect(c)
 		visible := a.visibleContactIndices()
 		if len(visible) == 0 {
@@ -284,11 +284,35 @@ func contactScopeFromChoice(label string) string {
 	}
 }
 
+func contactScopeIndex(scope string) int {
+	switch scope {
+	case "archived":
+		return 1
+	case "all":
+		return 2
+	default:
+		return 0
+	}
+}
+
+func contactScopeFromIndex(index int) string {
+	switch index {
+	case 1:
+		return "archived"
+	case 2:
+		return "all"
+	default:
+		return "active"
+	}
+}
+
 func (a *appModel) contactScopeSelect(c *ui.Context) {
-	a.contactScopeChoice = contactScopeChoiceLabel(a.contactScope)
-	choice := selectWithoutChevron(c, &a.contactScopeChoice, []string{"Active", "Archived", "All"}, "Contact scope")
+	msgs := locales.In(c.Locale())
+	index := contactScopeIndex(a.contactScope)
+	choice := segmentedSelection(c, &index, msgs.ContactScopeActive(), msgs.ContactScopeArchived(), msgs.ContactScopeAll()).
+		Label("Contact scope").FontSize(typeAction).Height(32).FillWidth()
 	if choice.Changed() {
-		a.setContactScope(contactScopeFromChoice(a.contactScopeChoice))
+		a.setContactScope(contactScopeFromIndex(index))
 	}
 }
 
@@ -987,7 +1011,9 @@ func (a *appModel) composer(c *ui.Context, t *ui.Theme) {
 					contextButton.Children(func() {
 						ui.Row(c).AlignItems(ui.Center).Gap(2).Children(func() {
 							ui.Icon(c, composerAttachIcon).Width(16).Height(16).TextColor(t.TextMuted)
-							ui.Text(c, fmt.Sprint(contextCount)).FontSize(typeMeta).LineHeight(1.3).TextColor(t.TextMuted)
+							if contextCount > 0 {
+								ui.Text(c, fmt.Sprint(contextCount)).FontSize(typeMeta).LineHeight(1.3).TextColor(t.TextMuted)
+							}
 						})
 					})
 					contextButton.OnClick(func() { a.openComposerTaskContext() })

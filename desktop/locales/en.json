@@ -389,5 +389,69 @@
   "workTask": "Task",
   "@workTask": {
     "description": "Nagi workTask UI copy."
+  },
+  "contactScopeActive": "Active",
+  "@contactScopeActive": {
+    "description": "The Active contact scope."
+  },
+  "contactScopeArchived": "Archived",
+  "@contactScopeArchived": {
+    "description": "The Archived contact scope."
+  },
+  "contactScopeAll": "All",
+  "@contactScopeAll": {
+    "description": "The All contact scope."
+  },
+  "issueFilterUnfinished": "Unfinished",
+  "@issueFilterUnfinished": {
+    "description": "The Unfinished issue filter."
+  },
+  "issueFilterCompleted": "Completed",
+  "@issueFilterCompleted": {
+    "description": "The Completed issue filter."
+  },
+  "issueFilterAll": "All",
+  "@issueFilterAll": {
+    "description": "The All issue filter."
+  },
+  "searchContacts": "Search contacts",
+  "@searchContacts": {
+    "description": "The contact search field label."
+  },
+  "connectionApplySaved": "Apply saved",
+  "@connectionApplySaved": {
+    "description": "The action applying the saved connection."
+  },
+  "connectionSaveConfiguration": "Save configuration",
+  "@connectionSaveConfiguration": {
+    "description": "The action saving connection settings without applying."
+  },
+  "modelUpdateModel": "Update model",
+  "@modelUpdateModel": {
+    "description": "The action updating the selected session model."
+  },
+  "workSaveIssue": "Save issue",
+  "@workSaveIssue": {
+    "description": "The action saving the issue form."
+  },
+  "contactSaveChanges": "Save changes",
+  "@contactSaveChanges": {
+    "description": "The action saving contact profile changes."
+  },
+  "issueSupplementSave": "Save supplement",
+  "@issueSupplementSave": {
+    "description": "The action saving an issue supplement."
+  },
+  "taskContextSaveSnippet": "Save snippet",
+  "@taskContextSaveSnippet": {
+    "description": "The action saving a task context snippet."
+  },
+  "taskContextSaveFile": "Save file",
+  "@taskContextSaveFile": {
+    "description": "The action saving a task context file."
+  },
+  "taskContextSaveChanges": "Save changes",
+  "@taskContextSaveChanges": {
+    "description": "The action saving task context changes."
   }
 }
