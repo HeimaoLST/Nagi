@@ -181,7 +181,9 @@ def fixed_message(agent_id: str, comment_url: str) -> str:
 
 
 WORKING_ELAPSED = re.compile(
-    r"(?m)(^[ \t]*(?:[•●*][ \t]+)?Working \()[0-9]+m [0-9]+s(?= • esc to interrupt\))"
+    r"(?m)(^[ \t]*(?:[•●*][ \t]+)?Working \()"
+    r"(?:[0-9]+h )?[0-9]+m [0-9]+s"
+    r"(?= • esc to interrupt\))"
 )
 
 
