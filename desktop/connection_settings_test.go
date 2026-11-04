@@ -167,6 +167,9 @@ func TestConnectionSettingsSaveAndApplyPrimaryAndRetryApply(t *testing.T) {
 		Apply:        func() { applied++ },
 	}, 580, 1600)
 	tr.Frame()
+	if r, ok := tr.Find("Save and apply"); !ok || r.H < 32 {
+		t.Fatalf("save-and-apply target = %+v/%v", r, ok)
+	}
 	if err := tr.Click("Save and apply"); err != nil {
 		t.Fatal(err)
 	}
@@ -176,6 +179,9 @@ func TestConnectionSettingsSaveAndApplyPrimaryAndRetryApply(t *testing.T) {
 	s.HasSaved = true
 	s.SavedPending = true
 	tr.Frame()
+	if r, ok := tr.Find("Apply saved"); !ok || r.H < 32 {
+		t.Fatalf("retry-apply target = %+v/%v", r, ok)
+	}
 	if err := tr.Click("Apply saved"); err != nil {
 		t.Fatal(err)
 	}

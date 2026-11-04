@@ -182,7 +182,7 @@ func (s *connectionSettings) view(c *ui.Context, t *ui.Theme, actions connection
 		ui.Column(c).FillWidth().Gap(8).Children(func() {
 			ui.Row(c).Gap(8).Wrap().Children(func() {
 				if s.SavedPending && !s.Dirty() {
-					secondaryButton(c, msgs.ConnectionApplySaved()).Disabled(s.Busy || s.ReloadBlocked != "").OnClick(actions.Apply)
+					secondaryButton(c, msgs.ConnectionApplySaved()).Label(msgs.ConnectionApplySaved()).Disabled(s.Busy || s.ReloadBlocked != "").OnClick(actions.Apply)
 					secondaryButton(c, msgs.ConnectionSaveConfiguration()).Label(msgs.ConnectionSaveConfiguration()).FontSize(typeAction).MinHeight(32).Disabled(s.Busy).OnClick(func() {
 						if config, ok := s.validated(); ok && actions.Save != nil {
 							actions.Save(config)
@@ -200,7 +200,7 @@ func (s *connectionSettings) view(c *ui.Context, t *ui.Theme, actions connection
 						}
 					})
 					if s.HasSaved {
-						secondaryButton(c, msgs.ConnectionApplySaved()).Disabled(s.Busy || s.ReloadBlocked != "").OnClick(actions.Apply)
+						secondaryButton(c, msgs.ConnectionApplySaved()).Label(msgs.ConnectionApplySaved()).Disabled(s.Busy || s.ReloadBlocked != "").OnClick(actions.Apply)
 					}
 				}
 				if s.Dirty() && actions.Discard != nil {
