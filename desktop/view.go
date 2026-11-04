@@ -656,13 +656,13 @@ func (a *appModel) header(c *ui.Context, t *ui.Theme) {
 				a.avatarTile(c, t, 28)
 				ui.Column(c).MinWidth(0).Shrink(1).Gap(1).Children(func() {
 					ui.Text(c, ct.Name).FontSize(typeContactTitle).FontWeight(500).TextColor(t.Text).MaxLines(2)
-					ui.Row(c).AlignItems(ui.Center).Gap(4).Children(func() {
-						ui.Text(c, a.headerStatusLabel(ct, msgs)).FontSize(12).LineHeight(1.35).TextColor(a.headerStatusColor(t, ct))
-						ui.Text(c, ct.Role).FontSize(12).LineHeight(1.35).MaxLines(1).TextColor(t.TextMuted)
+					ui.Row(c).AlignItems(ui.Center).Gap(12).Wrap().Children(func() {
+						ui.Text(c, a.headerStatusLabel(ct, msgs)).FontSize(12).LineHeight(1.35).FontWeight(500).TextColor(a.headerStatusColor(t, ct))
+						ui.Text(c, ct.Role).FontSize(12).FontWeight(400).LineHeight(1.35).MinWidth(0).Grow(1).TextColor(t.TextMuted)
 					})
 				})
 				ui.Spacer(c)
-				a.navigationToolbar(c, t)
+				ui.Row(c).Shrink(0).Children(func() { a.navigationToolbar(c, t) })
 			})
 			if status, attention := a.workEntryStatus(ct, msgs); status != "" && !a.workspaceOpen {
 				color := t.Success

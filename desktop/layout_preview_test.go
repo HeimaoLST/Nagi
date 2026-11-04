@@ -89,3 +89,59 @@ func writeResponsiveBoundaryPreviews(t *testing.T, dir string) {
 		t.Logf("preview scene=%s base=12c3382fcf5e149c10183129f41d805c1eebbb4d source=working-tree theme=%s locale=%s width=%.0f height=640", sc.name, theme, sc.locale, sc.width)
 	}
 }
+
+func TestPreviewHeaderGrouping(t *testing.T) {
+	dir := os.Getenv("SAKI_PREVIEW_DIR")
+	if dir == "" {
+		t.Skip("set SAKI_PREVIEW_DIR for the bounded header grouping previews")
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := loadAvatar(); err != nil {
+		t.Fatal(err)
+	}
+	const longRole = "Assistant for release engineering, cross-functional verification and runtime diagnostics"
+	write := func(name, locale, role string, dark bool, setup func(*appModel, *contact)) {
+		t.Helper()
+		a, ct := workspaceTestApp(t)
+		a.windowWidth = 960
+		issue := &productIssue{ID: "header-preview", ContactID: ct.ID, Goal: "header grouping preview", Status: issueStatusInProgress}
+		ct.Issues = []*productIssue{issue}
+		ct.SelectedIssueID = issue.ID
+		ct.Role = role
+		ct.issueNavigation().DetailID = issue.ID
+		a.setWorkspaceOpen(true)
+		if setup != nil {
+			setup(a, ct)
+		}
+		tr := ui.NewTester(a.view, 960, 640)
+		tr.SetLocale(locale)
+		tr.SetDark(dark)
+		tr.Frame()
+		if !tr.HasText(role) {
+			t.Fatalf("header role %q missing: %v", role, tr.Texts())
+		}
+		img := tr.Image()
+		if img.Bounds().Dx() != 960 || img.Bounds().Dy() != 640 {
+			t.Fatalf("header preview image = %dx%d", img.Bounds().Dx(), img.Bounds().Dy())
+		}
+		writePreviewPNG(t, filepath.Join(dir, name), img)
+	}
+	write("header-960-light-ready.png", "en", "Assistant", false, func(a *appModel, _ *contact) {
+		a.rt = &runtimeClient{}
+		a.runtimeStatus = runtimeStateReady
+	})
+	write("header-960-dark-not-connected.png", "en", "Assistant", true, func(a *appModel, _ *contact) {
+		cfg := connectionConfig{Version: 1, API: connectionAPIChatCompletions, Endpoint: "http://example.test/v1", APIKey: "fixture", Model: "fixture", ContextTokens: 1000, OutputTokens: 100, WorkingDirectory: "/Users/you/Workspace/saki-run", MaxActiveTasks: 2}
+		a.runtimeStatus = runtimeStateExited
+		a.runtimeStage = "Connection configuration"
+		a.connectionSaved = &cfg
+		a.connectionEffective = &cfg
+		a.ensureConnectionForm()
+	})
+	write("header-960-dark-en-XA-long-role.png", "en-XA", longRole, true, func(a *appModel, _ *contact) {
+		a.rt = &runtimeClient{}
+		a.runtimeStatus = runtimeStateReady
+	})
+}
