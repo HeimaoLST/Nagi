@@ -95,6 +95,15 @@ WORKING_14 = (
 )
 WORKING_15 = WORKING_14.replace("25m 14s", "25m 15s")
 WORKING_UNKNOWN = WORKING_14.replace("esc to interrupt", "esc to cancel")
+WORKING_HOUR_25 = (
+    "› status\n\n"
+    "• Working (1h 11m 25s • esc to interrupt)\n\n"
+    "› ready\n"
+)
+WORKING_HOUR_26 = WORKING_HOUR_25.replace("1h 11m 25s", "1h 11m 26s")
+WORKING_59_59 = WORKING_HOUR_25.replace("1h 11m 25s", "59m 59s")
+WORKING_1H_0M_0S = WORKING_HOUR_25.replace("1h 11m 25s", "1h 0m 0s")
+WORKING_HOUR_UNKNOWN = WORKING_HOUR_25.replace("esc to interrupt", "esc to cancel")
 
 
 class FingerprintTests(unittest.TestCase):
@@ -115,6 +124,30 @@ class FingerprintTests(unittest.TestCase):
         self.assertIn(
             "Working (25m 14s • esc to cancel)",
             notify._normalized(WORKING_UNKNOWN),
+        )
+
+    def test_working_hour_seconds_keep_fingerprint(self) -> None:
+        target = pane()
+        self.assertEqual(
+            target.fingerprint(WORKING_HOUR_25),
+            target.fingerprint(WORKING_HOUR_26),
+        )
+
+    def test_working_minute_to_hour_boundary_keeps_fingerprint(self) -> None:
+        target = pane()
+        self.assertEqual(
+            target.fingerprint(WORKING_59_59),
+            target.fingerprint(WORKING_1H_0M_0S),
+        )
+
+    def test_hour_working_line_preserves_status_body_and_unknown_format(self) -> None:
+        normalized = notify._normalized(WORKING_HOUR_25)
+        self.assertIn("Working (<elapsed> • esc to interrupt)", normalized)
+        self.assertIn("› status", normalized)
+        self.assertIn("› ready", normalized)
+        self.assertIn(
+            "Working (1h 11m 25s • esc to cancel)",
+            notify._normalized(WORKING_HOUR_UNKNOWN),
         )
 
     def test_semantic_changes_still_change_fingerprint(self) -> None:
@@ -160,6 +193,26 @@ class SendTests(unittest.TestCase):
             ("status", WORKING_14.replace("Working", "Waiting"), [target]),
             ("task", WORKING_14, [pane(task="#other")]),
             ("identity", WORKING_14, [pane(pane_pid="456")]),
+        )
+        for name, capture, panes in cases:
+            with self.subTest(case=name):
+                with mock.patch.object(notify, "_comments", return_value=self.comments):
+                    with mock.patch.object(notify, "_tmux_panes", return_value=panes):
+                        with mock.patch.object(notify, "_tmux_capture", return_value=capture):
+                            with mock.patch.object(notify, "_run") as run:
+                                with self.assertRaisesRegex(notify.NotifyError, "state fingerprint"):
+                                    notify.send(target.agent_id, fingerprint, URL)
+                run.assert_not_called()
+
+    def test_hour_semantic_changes_send_nothing(self) -> None:
+        target = pane()
+        fingerprint = target.fingerprint(WORKING_HOUR_25)
+        cases = (
+            ("body", WORKING_HOUR_25.replace("ready", "blocked"), [target]),
+            ("status", WORKING_HOUR_25.replace("Working", "Waiting"), [target]),
+            ("suffix", WORKING_HOUR_UNKNOWN, [target]),
+            ("task", WORKING_HOUR_25, [pane(task="#other")]),
+            ("identity", WORKING_HOUR_25, [pane(pane_pid="456")]),
         )
         for name, capture, panes in cases:
             with self.subTest(case=name):
