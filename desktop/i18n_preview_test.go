@@ -145,3 +145,29 @@ func TestPreviewModelValidationAndHelperBrand(t *testing.T) {
 	helperTr.Frame()
 	writePreviewPNG(t, filepath.Join(dir, "runtime-helper-zh-Hans-light-1040x720.png"), helperTr.Image())
 }
+
+func TestPreviewIssueWorkLocalized(t *testing.T) {
+	dir := os.Getenv("SAKI_PREVIEW_DIR")
+	if dir == "" {
+		t.Skip("set SAKI_PREVIEW_DIR for the localized issue/work previews")
+	}
+	list := issuePreviewApp("expanded")
+	list.windowWidth = 1040
+	list.selectedContact().issueNavigation().Filter = issueFilterAll
+	list.setWorkspaceOpen(true)
+	listTr := ui.NewTester(list.view, 1040, 720)
+	listTr.SetLocale("zh-Hans")
+	listTr.Frame()
+	writePreviewPNG(t, filepath.Join(dir, "issue-overview-zh-Hans-light-1040x720.png"), listTr.Image())
+
+	detail := issuePreviewApp("expanded")
+	detail.windowWidth = 1040
+	issue := detail.selectedContact().Issues[0]
+	detail.selectedContact().issueNavigation().DetailID = issue.ID
+	detail.issueDetailOpen = map[string]bool{issue.ID: true}
+	detail.setWorkspaceOpen(true)
+	detailTr := ui.NewTester(detail.view, 1040, 720)
+	detailTr.SetLocale("zh-Hans")
+	detailTr.Frame()
+	writePreviewPNG(t, filepath.Join(dir, "issue-detail-zh-Hans-light-1040x720.png"), detailTr.Image())
+}

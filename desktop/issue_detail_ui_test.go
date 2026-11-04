@@ -223,7 +223,7 @@ func TestIssueAttentionClearsAfterViewingFailedExecutionDetail(t *testing.T) {
 		!tr.HasText(detail) || !tr.HasText("Activity") {
 		t.Fatalf("View execution did not display the failed detail: selected=%q texts=%v", ct.SelectedWorkTaskID, tr.Texts())
 	}
-	if notice := a.issueWorkNotice(ct); notice.Attention || notice.Text != "" {
+	if notice := a.issueWorkNotice(ct); notice.Attention || notice.IssueID != "" {
 		t.Fatalf("viewing the failed execution did not clear its attention: %+v", notice)
 	}
 	if dir := os.Getenv("SAKI_PREVIEW_DIR"); dir != "" {
@@ -335,7 +335,7 @@ func TestIssueAttentionViewRequiresMatchingReasonAndResultPageConfirms(t *testin
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if notice := a.issueWorkNotice(ct); notice.Attention || notice.Text != "" {
+	if notice := a.issueWorkNotice(ct); notice.Attention || notice.IssueID != "" {
 		t.Fatalf("B confirmation did not clear B: %+v", notice)
 	}
 	if issueA.Status != issueStatusInProgress || issueB.Status != issueStatusInProgress ||
@@ -394,7 +394,7 @@ func TestIssueAttentionResultPageConfirmsNoTaskNoDetailExecution(t *testing.T) {
 	if issue.Executions[0].AttentionSeenStatus != issueExecutionUnknown {
 		t.Fatalf("no-task result entry did not confirm unknown: %+v", issue.Executions[0])
 	}
-	if notice := a.issueWorkNotice(ct); notice.Attention || notice.Text != "" {
+	if notice := a.issueWorkNotice(ct); notice.Attention || notice.IssueID != "" {
 		t.Fatalf("no-task result entry did not clear attention: %+v", notice)
 	}
 	if issue.Status != issueStatusInProgress || issue.Executions[0].Status != issueExecutionUnknown || ct.Unread != 2 {
@@ -421,7 +421,7 @@ func TestIssueAttentionResultPageConfirmsNoTaskNoDetailExecution(t *testing.T) {
 	if issue.Executions[0].AttentionSeenStatus != issueExecutionFailed {
 		t.Fatalf("active reload did not confirm the displayed failed status: %+v", issue.Executions[0])
 	}
-	if notice := a.issueWorkNotice(ct); notice.Attention || notice.Text != "" {
+	if notice := a.issueWorkNotice(ct); notice.Attention || notice.IssueID != "" {
 		t.Fatalf("active reload left the displayed failure in attention: %+v", notice)
 	}
 	if issue.Status != issueStatusInProgress || issue.Executions[0].Status != issueExecutionFailed ||
@@ -511,7 +511,7 @@ func TestIssueAttentionPendingSeenStillShowsOlderException(t *testing.T) {
 		t.Fatalf("pending result page did not confirm its execution: %+v", latest)
 	}
 	notice := a.issueWorkNotice(ct)
-	if !notice.Attention || notice.IssueID != issue.ID || !strings.Contains(notice.Text, "older unseen failure") ||
+	if !notice.Attention || notice.IssueID != issue.ID || !strings.Contains(notice.AttentionReason, "older unseen failure") ||
 		older.AttentionSeenStatus != "" {
 		t.Fatalf("seen pending execution hid the older unseen exception: %+v older=%+v", notice, older)
 	}
@@ -551,11 +551,11 @@ func TestIssueAttentionTracksStatusReplayAndNewExecution(t *testing.T) {
 		execution.AttentionSeenStatus != issueExecutionUnknown || ct.Unread != 3 {
 		t.Fatalf("viewing unknown changed retained facts or seen status: %+v unread=%d", execution, ct.Unread)
 	}
-	if notice := a.issueWorkNotice(ct); notice.Attention || notice.Text != "" {
+	if notice := a.issueWorkNotice(ct); notice.Attention || notice.IssueID != "" {
 		t.Fatalf("seen unknown still raised attention: %+v", notice)
 	}
 	tr.Frame()
-	if notice := a.issueWorkNotice(ct); notice.Text != "" {
+	if notice := a.issueWorkNotice(ct); notice.IssueID != "" {
 		t.Fatalf("same-status replay raised attention: %+v", notice)
 	}
 
@@ -574,7 +574,7 @@ func TestIssueAttentionTracksStatusReplayAndNewExecution(t *testing.T) {
 	if execution.AttentionSeenStatus != issueExecutionFailed {
 		t.Fatalf("failed status was not confirmed: %+v", execution)
 	}
-	if notice := a.issueWorkNotice(ct); notice.Text != "" {
+	if notice := a.issueWorkNotice(ct); notice.IssueID != "" {
 		t.Fatalf("confirmed failed status raised attention: %+v", notice)
 	}
 	reason := "replayed failure"
@@ -604,7 +604,7 @@ func TestIssueAttentionTracksStatusReplayAndNewExecution(t *testing.T) {
 		execution.AttentionSeenStatus != issueExecutionFailed {
 		t.Fatalf("failed history replay changed the seen execution: %+v", execution)
 	}
-	if notice := a.issueWorkNotice(ct); notice.Text != "" {
+	if notice := a.issueWorkNotice(ct); notice.IssueID != "" {
 		t.Fatalf("failed same-status history replay raised attention: %+v", notice)
 	}
 
@@ -615,7 +615,7 @@ func TestIssueAttentionTracksStatusReplayAndNewExecution(t *testing.T) {
 	issue.Work.SendState = sendIdle
 	issue.Work.SendError = ""
 	tr.Frame()
-	if notice := a.issueWorkNotice(ct); notice.Text != "" {
+	if notice := a.issueWorkNotice(ct); notice.IssueID != "" {
 		t.Fatalf("later success re-lit a seen failure: %+v", notice)
 	}
 
@@ -693,7 +693,7 @@ func TestIssueAttentionSeenPersistsAndSaveFailureStaysUnseen(t *testing.T) {
 	}
 	b := &appModel{}
 	applyStoreSelection(b, reloaded)
-	if notice := b.issueWorkNotice(b.selectedContact()); notice.Attention || notice.Text != "" {
+	if notice := b.issueWorkNotice(b.selectedContact()); notice.Attention || notice.IssueID != "" {
 		t.Fatalf("reloaded seen execution raised attention: %+v", notice)
 	}
 

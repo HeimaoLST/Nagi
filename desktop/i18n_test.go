@@ -726,3 +726,61 @@ func TestRuntimeStartupFeedbackFollowsLocale(t *testing.T) {
 		t.Fatalf("Chinese helper feedback missing: %v", tr.Texts())
 	}
 }
+
+func TestIssueWorkLabelsFollowLocaleAndKeepTargets(t *testing.T) {
+	a := issuePreviewApp("expanded")
+	a.windowWidth = 1040
+	ct := a.selectedContact()
+	issue := ct.Issues[0]
+	nav := ct.issueNavigation()
+	nav.Filter = issueFilterAll
+	nav.DetailID = ""
+	a.setWorkspaceOpen(true)
+	tr := ui.NewTester(a.view, 1040, 720)
+	tr.SetLocale("en")
+	tr.Frame()
+	if !tr.HasText("New issue") || !tr.HasText("No issues in All issues.") && !tr.HasText(issue.Goal) {
+		t.Fatalf("English issue work labels missing: %v", tr.Texts())
+	}
+	tr.Scroll(300, 300, 0, 600)
+	tr.Frame()
+	scrollBefore := nav.OverviewScroll.Y
+	tr.SetLocale("zh-Hans")
+	tr.Frame()
+	if !tr.HasText("新建事项") || !tr.HasText(issue.Goal) {
+		t.Fatalf("Chinese issue work labels or raw goal missing: %v", tr.Texts())
+	}
+	if nav.Filter != issueFilterAll || nav.OverviewScroll.Y != scrollBefore {
+		t.Fatalf("locale switch changed issue filter/scroll: %+v", nav)
+	}
+
+	a.issueFormOpen = true
+	a.issueGoal = "keep this goal"
+	a.issueRequirements = "keep this requirement"
+	tr.Frame()
+	if !tr.HasText("目标") || !tr.HasText("要求") || a.issueGoal != "keep this goal" || a.issueRequirements != "keep this requirement" {
+		t.Fatalf("Chinese issue form labels or drafts missing: %v", tr.Texts())
+	}
+	tr.SetLocale("en")
+	tr.Frame()
+	if !tr.HasText("Goal") || !tr.HasText("Requirements") || a.issueGoal != "keep this goal" || a.issueRequirements != "keep this requirement" {
+		t.Fatalf("English form did not return or drafts changed: %v", tr.Texts())
+	}
+
+	a.issueFormOpen = false
+	nav.DetailID = issue.ID
+	a.issueDetailOpen = map[string]bool{issue.ID: true}
+	tr.SetLocale("zh-Hans")
+	tr.Frame()
+	if !tr.HasText("执行历史") || !tr.HasText("要求") || !tr.HasText(issue.Goal) {
+		t.Fatalf("Chinese issue detail labels or raw goal missing: %v", tr.Texts())
+	}
+	if nav.DetailID != issue.ID || nav.Filter != issueFilterAll || ct.Issues[0].Goal != issue.Goal {
+		t.Fatalf("locale switch changed the issue target or stored goal: %+v", nav)
+	}
+	tr.SetLocale("en")
+	tr.Frame()
+	if !tr.HasText("Execution history") || tr.HasText("执行历史") {
+		t.Fatalf("English issue detail did not return: %v", tr.Texts())
+	}
+}

@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"saki/desktop/locales"
 )
 
 // A productIssue is the GUI-owned product object. Runtime tasks are linked as
@@ -462,6 +464,29 @@ func issueEvidenceText(issue *productIssue) string {
 		return issue.Evidence
 	}
 	return "Completion not verified."
+}
+
+func issueExecutionText(msgs locales.Messages, execution *issueExecution) string {
+	switch execution.Status {
+	case issueExecutionPending:
+		return msgs.IssueExecutionPending()
+	case issueExecutionNotDispatched:
+		return msgs.IssueExecutionNotDispatched()
+	case issueExecutionRejected:
+		return msgs.IssueExecutionRejected()
+	case issueExecutionAccepted:
+		return msgs.IssueExecutionAccepted()
+	case issueExecutionRunning:
+		return msgs.IssueExecutionRunning()
+	case issueExecutionCompleted:
+		return msgs.IssueExecutionCompleted()
+	case issueExecutionFailed:
+		return msgs.IssueExecutionFailed()
+	case issueExecutionInterrupted:
+		return msgs.IssueExecutionInterrupted()
+	default:
+		return msgs.IssueExecutionUnknown()
+	}
 }
 
 func issueExecutionLabel(execution *issueExecution) string {
@@ -987,20 +1012,19 @@ func issueDisplayStatusFor(issue *productIssue) issueDisplayStatus {
 }
 
 type issueWorkNotice struct {
-	Text           string
-	Attention      bool
-	Waiting        bool
-	Active         bool
-	IssueID        string
-	IssueName      string
-	AttentionCount int
-	WaitingCount   int
-	ActiveCount    int
+	AttentionReason string
+	Attention       bool
+	Waiting         bool
+	Active          bool
+	IssueID         string
+	IssueName       string
+	AttentionCount  int
+	WaitingCount    int
+	ActiveCount     int
 }
 
 func (a *appModel) issueWorkNotice(ct *contact) issueWorkNotice {
 	type candidate struct {
-		text      string
 		issueID   string
 		issueName string
 		attention bool
@@ -1017,23 +1041,20 @@ func (a *appModel) issueWorkNotice(ct *contact) issueWorkNotice {
 		if display.Attention {
 			notice.AttentionCount++
 			if attentionCandidate == nil {
-				text := "Issue work needs attention: " + issue.Goal
-				if display.Reason != "" {
-					text += " — " + truncate(display.Reason, 180)
-				}
-				attentionCandidate = &candidate{text: text, issueID: issue.ID, issueName: issue.Goal, attention: true, active: display.Active}
+				attentionCandidate = &candidate{issueID: issue.ID, issueName: issue.Goal, attention: true, active: display.Active}
+				notice.AttentionReason = display.Reason
 			}
 		}
 		if display.Waiting {
 			notice.WaitingCount++
 			if waitingCandidate == nil {
-				waitingCandidate = &candidate{text: "Issue waiting for your answer: " + issue.Goal, issueID: issue.ID, issueName: issue.Goal, waiting: true, active: display.Active}
+				waitingCandidate = &candidate{issueID: issue.ID, issueName: issue.Goal, waiting: true, active: display.Active}
 			}
 		}
 		if display.Active {
 			notice.ActiveCount++
 			if activeCandidate == nil {
-				activeCandidate = &candidate{text: "Issue work active: " + issue.Goal, issueID: issue.ID, issueName: issue.Goal, active: true}
+				activeCandidate = &candidate{issueID: issue.ID, issueName: issue.Goal, active: true}
 			}
 		}
 	}
@@ -1045,7 +1066,6 @@ func (a *appModel) issueWorkNotice(ct *contact) issueWorkNotice {
 		winner = activeCandidate
 	}
 	if winner != nil {
-		notice.Text = winner.text
 		notice.IssueID = winner.issueID
 		notice.IssueName = winner.issueName
 		notice.Attention = winner.attention

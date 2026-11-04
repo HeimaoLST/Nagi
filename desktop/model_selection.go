@@ -450,7 +450,7 @@ func (s *modelSelection) view(c *ui.Context, t *ui.Theme, actions modelSelection
 				selectionButtonState(c, button, s.Draft.Model == entry.Model && s.Draft.CapacityMode == modelCapacityExplicit)
 			}
 			if len(configured) < len(s.Catalog.ConfiguredModels) {
-				ui.Text(c, msgs.ModelConfiguredMore(strconv.Itoa(len(configured)), strconv.Itoa(len(s.Catalog.ConfiguredModels)))).FontSize(14).TextColor(t.TextMuted)
+				ui.Text(c, msgs.ModelConfiguredMore(len(configured), len(s.Catalog.ConfiguredModels))).FontSize(14).TextColor(t.TextMuted)
 			}
 		}
 		catalog := s.visibleCatalogModels()
@@ -466,7 +466,7 @@ func (s *modelSelection) view(c *ui.Context, t *ui.Theme, actions modelSelection
 				selectionButtonState(c, button, s.Draft.CatalogID != "" && s.Draft.CatalogID == entry.CatalogID)
 			}
 			if len(catalog) < len(s.Catalog.Models) {
-				ui.Text(c, msgs.ModelCatalogMore(strconv.Itoa(len(catalog)), strconv.Itoa(len(s.Catalog.Models)))).FontSize(14).TextColor(t.TextMuted)
+				ui.Text(c, msgs.ModelCatalogMore(len(catalog), len(s.Catalog.Models))).FontSize(14).TextColor(t.TextMuted)
 			}
 		} else if len(s.Catalog.Models) == 0 {
 			ui.Text(c, msgs.ModelNoCatalog()).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)

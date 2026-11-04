@@ -543,11 +543,11 @@ func TestIssueWorkNoticeKeepsUnseenOlderExceptionAfterSuccess(t *testing.T) {
 	ct.Issues = []*productIssue{issue}
 	a := &appModel{contacts: []*contact{ct}, selected: 0}
 	notice := a.issueWorkNotice(ct)
-	if !notice.Attention || notice.IssueID != issue.ID || !strings.Contains(notice.Text, "old unseen failure") {
+	if !notice.Attention || notice.IssueID != issue.ID || !strings.Contains(notice.AttentionReason, "old unseen failure") {
 		t.Fatalf("later success hid an unseen older exception: %+v", notice)
 	}
 	issue.Executions[0].AttentionSeenStatus = issueExecutionFailed
-	if notice := a.issueWorkNotice(ct); notice.Text != "" {
+	if notice := a.issueWorkNotice(ct); notice.IssueID != "" {
 		t.Fatalf("seen older exception was re-lit after success: %+v", notice)
 	}
 }
@@ -572,7 +572,7 @@ func TestIssueSeenUnknownWithActiveTaskIDDoesNotReAttention(t *testing.T) {
 		t.Fatalf("seen unknown with retained ActiveTaskID re-raised attention: %+v", display)
 	}
 	notice := (&appModel{}).issueWorkNotice(ct)
-	if notice.Attention || notice.Text != "" {
+	if notice.Attention || notice.IssueID != "" {
 		t.Fatalf("seen unknown with retained ActiveTaskID re-raised notice: %+v", notice)
 	}
 	if issue.Work.ActiveTaskID != "task-seen-active-unknown" || issue.Work.SendState != sendUnknown ||
@@ -622,7 +622,7 @@ func TestIssueActiveAcceptedSendFailureStaysAttention(t *testing.T) {
 		t.Fatalf("accepted supplement failure projection = %+v", display)
 	}
 	notice := a.issueWorkNotice(ct)
-	if !notice.Attention || notice.IssueID != issue.ID || !strings.Contains(notice.Text, issue.Work.SendError) {
+	if !notice.Attention || notice.IssueID != issue.ID || !strings.Contains(notice.AttentionReason, issue.Work.SendError) {
 		t.Fatalf("accepted supplement failure notice = %+v", notice)
 	}
 	if issue.Work.ActiveTaskID != "task-accepted-save-failure" || issue.Work.SendState != sendAccepted ||
@@ -700,8 +700,7 @@ func TestIssueWorkNoticeBaselineTerminalAndWaiting(t *testing.T) {
 		Status: issueStatusInProgress, Questions: []*issueQuestion{{Ref: "question-baseline", Text: "please answer", State: issueQuestionOpen}}}
 	ct.Issues = []*productIssue{completed, archived, waiting}
 	notice := (&appModel{}).issueWorkNotice(ct)
-	if notice.Attention || notice.Text == "" || notice.IssueID != waiting.ID ||
-		!strings.Contains(notice.Text, waiting.Goal) {
+	if notice.Attention || notice.IssueID == "" || notice.IssueID != waiting.ID {
 		t.Fatalf("baseline notice = %+v, want waiting candidate", notice)
 	}
 	if got := issueWorkActiveCount(ct); got != 0 {
@@ -724,7 +723,7 @@ func TestIssueWorkNoticeWinnerScopeAndActive(t *testing.T) {
 	notice := (&appModel{}).issueWorkNotice(ct)
 	if !notice.Attention || notice.Waiting || !notice.Active ||
 		notice.IssueID != attention.ID || notice.IssueName != attention.Goal ||
-		!strings.Contains(notice.Text, attention.Goal) || !strings.Contains(notice.Text, "attention reason") {
+		!strings.Contains(notice.AttentionReason, "attention reason") {
 		t.Fatalf("attention winner = %+v", notice)
 	}
 	if notice.AttentionCount != 1 || notice.WaitingCount != 1 || notice.ActiveCount != 2 {
@@ -737,8 +736,7 @@ func TestIssueWorkNoticeWinnerScopeAndActive(t *testing.T) {
 	ct.Issues = []*productIssue{waiting, active}
 	notice = (&appModel{}).issueWorkNotice(ct)
 	if notice.Attention || !notice.Waiting || notice.Active ||
-		notice.IssueID != waiting.ID || notice.IssueName != waiting.Goal ||
-		!strings.Contains(notice.Text, waiting.Goal) {
+		notice.IssueID != waiting.ID || notice.IssueName != waiting.Goal {
 		t.Fatalf("waiting winner = %+v", notice)
 	}
 	if notice.WaitingCount != 1 || notice.ActiveCount != 1 {
@@ -765,7 +763,7 @@ func TestIssueWorkNoticeWinnerScopeAndActive(t *testing.T) {
 		t.Fatalf("not-started active count = %d", got)
 	}
 	if notice := (&appModel{}).issueWorkNotice(ct); !notice.Active || notice.Attention || notice.Waiting ||
-		notice.IssueID != notStartedActive.ID || !strings.Contains(notice.Text, notStartedActive.Goal) {
+		notice.IssueID != notStartedActive.ID || notice.IssueName != notStartedActive.Goal {
 		t.Fatalf("not-started active notice = %+v", notice)
 	}
 
@@ -846,8 +844,7 @@ func TestIssueWorkNoticeSurfacesFailureWithoutChatUnread(t *testing.T) {
 	ct.Issues = []*productIssue{issue}
 	a := &appModel{contacts: []*contact{ct}, selected: 0}
 	notice := a.issueWorkNotice(ct)
-	if !notice.Attention || notice.IssueID != issue.ID || !strings.Contains(notice.Text, "build login") ||
-		!strings.Contains(notice.Text, "provider failed") {
+	if !notice.Attention || notice.IssueID != issue.ID || !strings.Contains(notice.AttentionReason, "provider failed") {
 		t.Fatalf("issue work notice = %+v", notice)
 	}
 	if ct.Unread != 3 || ct.ActiveTaskID != "" {
@@ -855,7 +852,7 @@ func TestIssueWorkNoticeSurfacesFailureWithoutChatUnread(t *testing.T) {
 	}
 	issue.Executions[0].Status = issueExecutionRunning
 	notice = a.issueWorkNotice(ct)
-	if notice.Text != "" {
+	if notice.IssueID != "" {
 		t.Fatalf("running execution without active task produced a false notice: %+v", notice)
 	}
 }
