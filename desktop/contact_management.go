@@ -91,7 +91,6 @@ func (a *appModel) editContactProfile() {
 		return
 	}
 	a.settingsContactID = ct.ID
-	a.settingsPickerChoice = ""
 	a.ensureSettingsProfileEditor(ct.ID)
 	a.openSettingsTab(settingsTabContact, settingsSourceProfile)
 }

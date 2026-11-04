@@ -217,24 +217,31 @@ func TestSettingsContactPickerFollowsEditingIdentityAfterReturnToA(t *testing.T)
 	a.contacts = append(a.contacts, bContact)
 	a.openSettingsTab(settingsTabContact, settingsSourceRail)
 	a.settingsContactID = bContact.ID
-	a.settingsPickerChoice = a.settingsContactChoice(locales.In("en"), bContact)
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
 	if !strings.Contains(strings.Join(tr.Texts(), "\n"), a.settingsContactChoice(locales.In("en"), bContact)) {
 		t.Fatalf("picker/title did not show B: %v", tr.Texts())
 	}
 	a.closeSettings()
+	a.openContactProfile(bContact.ID)
+	tr.Frame()
+	tr.Key(ui.Cmd, ui.KeyComma)
 	tr.Frame()
 	if err := tr.Click("Contact profile"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
+	if a.settingsContactID != bContact.ID || a.settingsTab != settingsTabContact {
+		t.Fatalf("Cmd+, from B profile lost the picker target: id=%q tab=%q", a.settingsContactID, a.settingsTab)
+	}
+	a.closeSettings()
+	tr.Frame()
 	if err := tr.Click("Edit full profile"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if a.settingsContactID != aContact.ID || a.settingsPickerChoice != a.settingsContactChoice(locales.In("en"), aContact) {
-		t.Fatalf("A profile entry kept B picker: id=%q choice=%q want=%q", a.settingsContactID, a.settingsPickerChoice, a.settingsContactChoice(locales.In("en"), aContact))
+	if a.settingsContactID != aContact.ID {
+		t.Fatalf("A profile entry kept B target: id=%q want=%q", a.settingsContactID, aContact.ID)
 	}
 	texts := strings.Join(tr.Texts(), "\n")
 	if !strings.Contains(texts, "Contact profile: "+a.settingsContactChoice(locales.In("en"), aContact)) {
@@ -326,7 +333,6 @@ func TestSettingsContactPickerLongListReachesSelectedLastOption(t *testing.T) {
 	first, last := a.contacts[0], a.contacts[len(a.contacts)-1]
 	a.openSettingsTab(settingsTabContact, settingsSourceRail)
 	a.settingsContactID = first.ID
-	a.settingsPickerChoice = a.settingsContactChoice(locales.In("en"), first)
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
 	if a.settingsContactID != first.ID {
@@ -343,8 +349,8 @@ func TestSettingsContactPickerLongListReachesSelectedLastOption(t *testing.T) {
 	tr.Frame()
 	tr.Key(0, ui.KeyEnter)
 	tr.Frame()
-	if a.settingsContactID != last.ID || a.settingsPickerChoice != a.settingsContactChoice(locales.In("en"), last) {
-		t.Fatalf("long picker keyboard chose %q/%q, want last %q", a.settingsContactID, a.settingsPickerChoice, last.ID)
+	if a.settingsContactID != last.ID {
+		t.Fatalf("long picker keyboard chose %q, want last %q", a.settingsContactID, last.ID)
 	}
 	if tr.HasText(a.settingsContactChoice(locales.In("en"), a.contacts[len(a.contacts)-2])) {
 		t.Fatalf("picker popup remained open after Enter: %v", tr.Texts())
@@ -1395,5 +1401,71 @@ func TestSettingsPendingBannerSurvivesDistinctTestStatus(t *testing.T) {
 	tr.Frame()
 	if !tr.HasText("Saved configuration is awaiting Apply.") || !tr.HasText("Connection test completed: fixture") {
 		t.Fatalf("pending fact was lost behind distinct test status: %v", tr.Texts())
+	}
+}
+
+func TestSettingsContactPickerSameLabelSelectsStableID(t *testing.T) {
+	store, err := openContactStore(filepath.Join(t.TempDir(), "contacts.json"), t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	aContact := &contact{ID: "contact-aaaa", Name: "甲", Role: "Assistant", Status: statusReady, Workspace: t.TempDir()}
+	bContact := &contact{ID: "contact-bbbb", Name: "甲", Role: "Assistant", Status: statusReady, Workspace: t.TempDir()}
+	cContact := &contact{ID: "contact-cccc", Name: "甲（1）", Role: "Assistant", Status: statusReady, Workspace: t.TempDir()}
+	a := &appModel{store: store, storePath: store.path, contacts: []*contact{aContact, bContact, cContact}, selected: 0, scrollTo: -1, windowWidth: 1040}
+	a.ensureSettingsProfileEditor(aContact.ID).Draft.Purpose = "draft A"
+	a.ensureSettingsProfileEditor(bContact.ID).Draft.Purpose = "draft B"
+	a.ensureSettingsProfileEditor(cContact.ID).Draft.Purpose = "draft C"
+	a.openSettingsTab(settingsTabContact, settingsSourceRail)
+	tr := ui.NewTester(a.view, 1040, 720)
+	tr.SetLocale("zh-Hans")
+	tr.Frame()
+	msgs := locales.In("zh-Hans")
+	aLabel, cLabel := a.settingsContactChoice(msgs, aContact), a.settingsContactChoice(msgs, cContact)
+	if aLabel != cLabel {
+		t.Fatalf("fixture labels must collide, got %q / %q", aLabel, cLabel)
+	}
+	if texts := strings.Join(tr.Texts(), "\n"); strings.Contains(texts, aContact.ID) || strings.Contains(texts, cContact.ID) {
+		t.Fatalf("contact picker exposed raw IDs: %v", tr.Texts())
+	}
+	if err := tr.Click("编辑联系人"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	tr.Key(0, ui.KeyEnd)
+	tr.Frame()
+	tr.Key(0, ui.KeyEnter)
+	tr.Frame()
+	if a.settingsContactID != cContact.ID {
+		t.Fatalf("picker End/Enter chose %q, want C %q", a.settingsContactID, cContact.ID)
+	}
+	if a.ensureSettingsProfileEditor(cContact.ID).Draft.Purpose != "draft C" {
+		t.Fatal("picker changed C draft")
+	}
+	if a.ensureSettingsProfileEditor(aContact.ID).Draft.Purpose != "draft A" ||
+		a.ensureSettingsProfileEditor(bContact.ID).Draft.Purpose != "draft B" {
+		t.Fatal("picker changed A/B drafts")
+	}
+	if err := tr.Click("联系人名称"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Key(ui.Cmd, ui.KeyA)
+	tr.Type("Only C")
+	tr.Frame()
+	tr.SetLocale("en")
+	tr.Frame()
+	tr.SetLocale("zh-Hans")
+	tr.Frame()
+	if a.settingsContactID != cContact.ID || a.ensureSettingsProfileEditor(cContact.ID).Draft.Name != "Only C" ||
+		a.ensureSettingsProfileEditor(aContact.ID).Draft.Purpose != "draft A" ||
+		a.ensureSettingsProfileEditor(bContact.ID).Draft.Purpose != "draft B" {
+		t.Fatalf("locale switch lost target or drafts: id=%q", a.settingsContactID)
+	}
+	if err := clickSettingsAction(tr, "保存更改"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if aContact.Name != "甲" || bContact.Name != "甲" || cContact.Name != "Only C" {
+		t.Fatalf("save scope changed A=%q B=%q C=%q", aContact.Name, bContact.Name, cContact.Name)
 	}
 }

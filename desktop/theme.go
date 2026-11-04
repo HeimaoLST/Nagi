@@ -152,13 +152,29 @@ func selectionButtonState(c *ui.Context, button ui.Element, selected bool) {
 // selectWithoutChevron uses MyGo's official SelectBase so dropdown triggers
 // show the current value and keep keyboard/a11y behavior without the framework's
 // decorative chevron or elevated popup shadow.
-func selectWithoutChevron(c *ui.Context, selected *string, options []string, label string) ui.Element {
+type selectOption struct {
+	Value string
+	Label string
+}
+
+func selectWithoutChevron(c *ui.Context, selected *string, options []selectOption, label string) ui.Element {
 	t := c.Theme()
-	full := label + ": " + *selected
+	display := ""
+	for _, option := range options {
+		if option.Value == *selected {
+			display = option.Label
+			break
+		}
+	}
+	full := label
+	if display != "" {
+		full += ": " + display
+	}
 	sel := ui.SelectBase(c, selected)
 	trigger := sel.Trigger.Label(label).FontSize(typeAction).MinHeight(32).FillWidth().
 		Justify(ui.Start).Padding(t.Space(1.5), t.Space(2.5)).Radius(t.Radius).
-		Background(t.Surface).Border(1, t.Border).TextColor(t.Text)
+		Background(t.Surface).Border(1, t.Border).TextColor(t.Text).
+		Value(display)
 	if trigger.Pressed() {
 		trigger.Background(t.SurfacePressed)
 	} else if trigger.Hovered() {
@@ -170,7 +186,7 @@ func selectWithoutChevron(c *ui.Context, selected *string, options []string, lab
 	trigger.Children(func() {
 		ui.Row(c).FillWidth().MinWidth(0).AlignItems(ui.Center).Gap(6).Children(func() {
 			ui.Text(c, label).FontSize(typeMeta).MaxLines(1).Shrink(0).TextColor(t.TextMuted)
-			ui.Text(c, *selected).FontSize(typeAction).MaxLines(1).Grow(1).Shrink(1).MinWidth(0).
+			ui.Text(c, display).FontSize(typeAction).MaxLines(1).Grow(1).Shrink(1).MinWidth(0).
 				Ellipsis("…").TextColor(t.Text)
 		})
 	})
@@ -178,14 +194,14 @@ func selectWithoutChevron(c *ui.Context, selected *string, options []string, lab
 		panel.Padding(t.Space(1)).Radius(t.Radius).Background(t.Background).Border(0.5, t.Border)
 		ui.Scroll(c).MaxHeight(t.Space(80)).Children(func() {
 			for _, option := range options {
-				item := sel.Item(option).Padding(t.Space(1.5), t.Space(2.5)).Radius(t.Space(1))
+				item := sel.Item(option.Value).Padding(t.Space(1.5), t.Space(2.5)).Radius(t.Space(1))
 				switch {
 				case item.Highlighted():
 					item.Background(t.Selection).TextColor(t.Text)
-				case option == *selected:
+				case option.Value == *selected:
 					item.Background(t.Selection).TextColor(t.Text)
 				}
-				item.Children(func() { ui.Text(c, option).FontSize(typeAction).SingleLine() })
+				item.Children(func() { ui.Text(c, option.Label).FontSize(typeAction).SingleLine() })
 			}
 		})
 	})

@@ -445,26 +445,16 @@ func (a *appModel) settingsContactContent(c *ui.Context, t *ui.Theme) {
 		ui.Text(c, msgs.SettingsNoContactToEdit()).FontSize(14).TextColor(t.Warning)
 		return
 	}
-	choices := make([]string, 0, len(a.contacts))
+	options := make([]selectOption, 0, len(a.contacts))
 	for _, contact := range a.contacts {
 		if contact != nil {
-			choices = append(choices, a.settingsContactChoice(msgs, contact))
+			options = append(options, selectOption{Value: contact.ID, Label: a.settingsContactChoice(msgs, contact)})
 		}
 	}
-	want := a.settingsContactChoice(msgs, a.contactByID(a.settingsContactID))
-	if a.settingsPickerChoice == "" || !containsString(choices, a.settingsPickerChoice) {
-		a.settingsPickerChoice = want
-	}
-	picker := selectWithoutChevron(c, &a.settingsPickerChoice, choices, msgs.EditContactLabel())
+	picker := selectWithoutChevron(c, &a.settingsContactID, options, msgs.EditContactLabel())
 	if picker.Changed() {
-		for _, contact := range a.contacts {
-			if contact != nil && a.settingsContactChoice(msgs, contact) == a.settingsPickerChoice {
-				a.settingsContactID = contact.ID
-				a.ensureSettingsProfileEditor(contact.ID)
-				a.settingsScroll.Y = 0
-				break
-			}
-		}
+		a.ensureSettingsProfileEditor(a.settingsContactID)
+		a.settingsScroll.Y = 0
 	}
 	var ct *contact
 	ct = a.contactByID(a.settingsContactID)

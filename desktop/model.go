@@ -170,25 +170,24 @@ type appModel struct {
 	composerFocusModel   bool
 	composerFocusContext bool
 
-	settingsOpen         bool
-	settingsTab          string
-	settingsReturnFocus  string
-	settingsReturnLink   markdownLinkTarget
-	markdownLinkFocus    markdownLinkTarget
-	linkReturnTarget     markdownLinkTarget
-	linkReturnSeen       bool
-	settingsContactID    string
-	settingsProfiles     map[string]*contactProfileEditor
-	settingsPickerChoice string
-	settingsScroll       ui.ScrollState
-	settingsFocusBack    bool
-	settingsFocusTab     string
-	sourcesScroll        ui.ScrollState
-	modelScroll          ui.ScrollState
-	taskContextScroll    ui.ScrollState
-	issueResultScroll    ui.ScrollState
-	historyScroll        ui.ScrollState
-	historyFullScroll    ui.ScrollState
+	settingsOpen        bool
+	settingsTab         string
+	settingsReturnFocus string
+	settingsReturnLink  markdownLinkTarget
+	markdownLinkFocus   markdownLinkTarget
+	linkReturnTarget    markdownLinkTarget
+	linkReturnSeen      bool
+	settingsContactID   string
+	settingsProfiles    map[string]*contactProfileEditor
+	settingsScroll      ui.ScrollState
+	settingsFocusBack   bool
+	settingsFocusTab    string
+	sourcesScroll       ui.ScrollState
+	modelScroll         ui.ScrollState
+	taskContextScroll   ui.ScrollState
+	issueResultScroll   ui.ScrollState
+	historyScroll       ui.ScrollState
+	historyFullScroll   ui.ScrollState
 
 	contactProfile            *contactProfileEditor
 	contactProfileID          string
@@ -580,7 +579,6 @@ func (a *appModel) addDefaultContact() {
 
 func (a *appModel) openSettings() {
 	a.settingsContactID = a.selectedContact().ID
-	a.settingsPickerChoice = ""
 	a.openSettingsTab(settingsTabContact, settingsSourceRail)
 }
 
