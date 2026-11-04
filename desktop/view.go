@@ -262,6 +262,107 @@ func (a *appModel) rail(c *ui.Context, t *ui.Theme) {
 	})
 }
 
+func (a *appModel) avatarRail(c *ui.Context, t *ui.Theme) {
+	ui.Column(c).Width(avatarRailWidth).Shrink(0).FillHeight().Padding(4).Gap(4).Background(a.workTheme.Rail).Children(func() {
+		addLabel := locales.In(c.Locale()).AvatarAddContact()
+		add := appTooltip(c, ui.Button(c, "").Label(addLabel).
+			MinWidth(32).MinHeight(32).Width(32).Height(32).Padding(0).Justify(ui.Center), addLabel)
+		add.Children(func() { ui.Icon(c, railAddIcon).Width(18).Height(18).TextColor(t.TextMuted) })
+		add.OnClick(func() { a.addDefaultContact() })
+		visible := a.visibleContactIndices()
+		if len(visible) == 0 {
+			ui.Spacer(c).Grow(1)
+		} else {
+			ui.Scroll(c).Grow(1).Children(func() {
+				for _, i := range visible {
+					a.avatarRailRow(c, t, i)
+				}
+			})
+		}
+		ui.Toolbar(c, func() {
+			settingsLabel := locales.In(c.Locale()).SettingsTitle()
+			settings := appTooltip(c, ui.Button(c, "").Label(settingsLabel).
+				MinWidth(32).MinHeight(32).Width(32).Height(32).Padding(0).Justify(ui.Center),
+				locales.In(c.Locale()).SettingsOpenTooltip())
+			settings.Children(func() { ui.Icon(c, railSettingsIcon).Width(16).Height(16).TextColor(t.TextMuted) })
+			settings.OnClick(func() { a.openSettingsTab(a.settingsLandingTab(), settingsSourceRail) })
+			if a.focusSettings {
+				settings.Focus()
+				a.focusSettings = false
+			}
+		}).Label(locales.In(c.Locale()).SettingsRailActions()).Padding(0)
+	})
+}
+
+func (a *appModel) avatarRailStatus(msgs locales.Messages, ct *contact) string {
+	notice := a.issueWorkNotice(ct)
+	status := ""
+	switch {
+	case notice.Attention:
+		status = msgs.TaskRailAttention(notice.IssueName)
+	case notice.Waiting:
+		status = msgs.TaskRailWaiting(notice.IssueName)
+	case notice.Active:
+		status = msgs.TaskRailInProgress(notice.IssueName)
+	default:
+		status = a.headerStatusLabel(ct, msgs)
+	}
+	if notice.ActiveCount > 0 {
+		status += "\n" + msgs.TaskActiveCount(notice.ActiveCount)
+	}
+	return status
+}
+
+func (a *appModel) avatarRailRow(c *ui.Context, t *ui.Theme, i int) {
+	ct := a.contacts[i]
+	msgs := locales.In(c.Locale())
+	status := a.avatarRailStatus(msgs, ct)
+	label := msgs.AvatarContactLabel(ct.Name)
+	tip := label
+	if status != "" {
+		tip += "\n" + status
+	}
+	row := ui.ButtonBase(c).Key(ct.ID).Label(label).Description(status).
+		Selected(i == a.selected).Width(48).Height(44).Padding(4).Radius(8).
+		Justify(ui.Center).Background(ui.Transparent).BorderWidth(0).TextColor(t.Text)
+	if i == a.selected {
+		row.Background(t.Selection).TextColor(t.Text)
+	}
+	row = appTooltip(c, row, tip)
+	row.OnClick(func() { a.selectContact(i) })
+	row.Children(func() {
+		a.avatarTile(c, t, 28)
+		if glyph, count, color := a.avatarRailMarker(ct); glyph != "" {
+			text := glyph
+			if count > 0 {
+				text = fmt.Sprintf("%s%d", glyph, count)
+			}
+			ui.Text(c, text).
+				FontSize(typeMeta).FontWeight(500).TextColor(color).
+				Background(t.Surface).Padding(1, 3).Radius(4).SingleLine().
+				Absolute().Right(0).Bottom(0).IgnoreInput(true)
+		}
+	})
+}
+
+func (a *appModel) avatarRailMarker(ct *contact) (string, int, ui.Color) {
+	notice := a.issueWorkNotice(ct)
+	switch {
+	case notice.AttentionCount > 0:
+		return "!", notice.AttentionCount, a.workTheme.Theme.Warning
+	case notice.WaitingCount > 0:
+		return "◷", notice.WaitingCount, a.workTheme.Theme.Warning
+	case notice.ActiveCount > 0:
+		return "▶", notice.ActiveCount, a.workTheme.Theme.Success
+	case ct.Status == statusWorking:
+		return "▶", 0, a.workTheme.Theme.Success
+	case ct.Status == statusAttention:
+		return "!", 0, a.workTheme.Theme.Warning
+	default:
+		return "", 0, a.workTheme.Theme.TextMuted
+	}
+}
+
 func contactScopeChoiceLabel(scope string) string {
 	switch scope {
 	case "archived":
@@ -658,7 +759,7 @@ func (a *appModel) chat(c *ui.Context, t *ui.Theme) {
 			})
 		}
 		ui.Row(c).Key("composer").Justify(ui.Center).Children(func() {
-			ui.Column(c).WidthPercent(86).MaxWidth(760).Children(func() {
+			ui.Column(c).FillWidth().MaxWidth(760).Children(func() {
 				a.composer(c, t)
 			})
 		})
@@ -978,7 +1079,7 @@ func (a *appModel) composerInlinePanel(c *ui.Context, t *ui.Theme) {
 
 func (a *appModel) composer(c *ui.Context, t *ui.Theme) {
 	ct := a.selectedContact()
-	ui.Column(c).FillWidth().Padding(8, 0).Gap(4).Children(func() {
+	ui.Column(c).FillWidth().Padding(8, 12).Gap(4).Children(func() {
 		ui.Column(c).FillWidth().Padding(8, 12).Radius(12).Background(a.workTheme.Well).Gap(4).Children(func() {
 			input := ui.TextArea(c, &ct.Draft).Bind(&a.composerHandle).Label("Composer for "+ct.Name).
 				FontSize(typeBody).LineHeight(1.5).Lines(2, 6).MinHeight(0).

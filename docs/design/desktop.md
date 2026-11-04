@@ -817,6 +817,17 @@ type resolvedTheme struct {
 - **等待与文案**：开放问题卡使用与 #276 相同的 `issueDisplayStatusFor` + typed display label/color，不硬写 waiting；详情顶部在问题卡存在时不再重复主状态。问题与未看失败并存时只显示一份 `Needs attention` 主态，但主动作仍是 `Answer question`，不改变 276 的 attention 优先级。Completion evidence 的新 label/placeholder 也走 typed catalog，英文用 task（What proves this task is complete?）；#276 的事项名、Run 事实、未读数、工作计数和独立状态仍保留。所有新增可见文案、tooltip 和 AX 名称通过 `desktop/locales` 的 en/zh-Hans typed catalog 与官方 `mygo generate` 生成，不在渲染路径拼接翻译或手改生成文件。
 - **验证边界**：受影响 Go 测试覆盖问题和继续/成果主动作、活动 Run 原因、生命周期动作可见、Tasks/Chat runs 切换不改 selection/DetailID/draft、窄窗单层 Back、关闭/返回与既有焦点/布局断言；这些通过 `scripts/gui-go.py` 的 headless/hermetic 测试执行。预览由既有 `TestPreviewIssueStates` 入口生成，包含 en/zh-Hans、明暗、1040×720/720×640 的 overview/detail/question/completed 图；它们是 `ui.Tester` headless 图片，不是原生窗口或真实用户验收。未运行完整 race/CI、未启动原生 app、未创建或发送 Run；最终 Git/PR/CI 证据由父实例固定 SHA 后记录。
 
+## #279 响应式工作台布局（实现事实，2026-11-04）
+
+代码来源：`agent/gui/279-responsive-workbench`，基于 Reader/278 固定源 `12c3382fcf5e149c10183129f41d805c1eebbb4d`（tree `7412a50e6a7e62e1baaf14041bcd43429fcdd5b6`）。
+
+- **模式**：详情打开时按逻辑宽度派生三种模式：`<900` 使用既有非模态整页 Back；`900–1179` 使用固定 56 头像条（手动 `railCollapsed` 优先，不自动覆盖）；`>=1180` 使用完整 rail。详情关闭时保持完整 rail；resize、联系人切换、消息/任务事件不会自动打开详情。
+- **有效宽度与偏好**：`leftPaneWidth`/`rightPaneWidth` 仍是用户偏好，系统只派生 effective rail/detail/center，不把 56 或 effective detail 写回；`492` 的中间预算仅为响应式派生。三栏存在详情时有效中心下限为 `492`，保证 composer content 440；中档 effective detail 下限 `300`（即使手动隐藏 rail），完整 rail 下限仍为 `280`，最大 `440`。实际 mounted separator 才计入预算；手动隐藏不保留幽灵 rail/divider。关闭详情恢复完整 rail 与原偏好。
+- **头像条**：复用 `visibleContactIndices`、联系人 ID、既有 `selectContact` 与官方 ButtonBase；固定 56 宽 + 1 divider，Add contact/Settings 为 32 图标控件，稳定 Label、`Key(ct.ID)`、`Selected`、typed Description/tooltip（含 issue attention/waiting/active 与 active 计数）；头像 Contact 名称与 Add contact 使用本次最少新增的 `avatarContactLabel`/`avatarAddContact` en/zh catalog keys，状态复用既有 typed 文案。Selected 后以 Selection + Text 语义，不保留 accent 文字前景。Enter/Space 只选择联系人，不自动展开详情。搜索/scope 值在压缩期间保留，恢复完整 rail 后完整控件回来。
+- **Composer**：只把 composer 调用列从 86% 改为可用中心宽度 `FillWidth().MaxWidth(760)`，加 outer 12 水平 gutter；保留 well 12、TextArea 2 的既有内距，因此 content = `C-52`。header/message 仍保持原 86%/max760 reading width。实际 geometry 由 `ui.Tester` 的 TextArea 外 rect 加已知 2×2 padding 校验，并用 caret/typing 验证实际可编辑；不缩字体、不用 overflow 凑宽。
+- **状态与焦点**：Work/History/Profile 共用 active detail；899↔900 将焦点移到实际可见的 Back/Close 对应物，960 Escape 仍回到 Work；Settings 保持整页、无联系人 rail 泄漏。Settings 或 result/reader 主页面显示期间不推进 `detailPageMode`/不预置隐藏 workbench 的 Close；返回后按当前实际页面重新计算，避免 960→899→960 后 Back 被执行 X 焦点抢先。头像状态与完整 rail 使用同一 `issueWorkNotice`/header status 源，typed catalog 文案；未使用 snippet 或颜色猜完成。
+- **验证边界**：本地 headless `ui.Tester` 覆盖 899/900/901、960 default/max、1040、1179/1180/1181、manual hide、closed/open、drag/keyboard 偏好、detail/filter/draft/selection、composer caret/typing 和 en-XA 扩展；代表性 light/dark + long en/zh + pseudo 图由既有 `TestPreviewAdjustableLayout` hook 生成。`#278` typed catalog 不变；未新增持久化/路由/框架。未运行本机 full/race/native/model/observer，原生与真人仍未由本节宣称。
+
 ## #182 可读事项工作台与恢复边界（实现事实，2026-10-27）
 
 代码来源：`agent/gui/182-readable-workspace`，从 QA 基线 `7a6b9b1` 开出；当前增量实现源 `ad8998930bc5dc55a543b2d1cc450dc9640953a1`（前序 `003df7a`、`7f37afc` 的完整矩阵证据是历史候选，不自动覆盖此增量）。本节只描述本轮工作台可读性修复，不代表 #156 全 MVP、原生包或在线模型验收通过。

@@ -179,6 +179,64 @@ func TestResizeDoesNotStealSettingsFocus(t *testing.T) {
 	}
 }
 
+func TestAvatarSettingsResizeBackFocus(t *testing.T) {
+	t.Run("roundtrip-back-to-settings", func(t *testing.T) {
+		a, _ := workspaceTestApp(t)
+		a.windowWidth = 960
+		a.workspaceOpen = true
+		tr := ui.NewTester(a.view, 960, 640)
+		tr.Frame()
+		if err := tr.Click("Settings"); err != nil {
+			t.Fatal(err)
+		}
+		tr.Frame()
+		if !a.settingsOpen || !tr.Focused("← Back to workbench") {
+			t.Fatal("avatar Settings did not open with Settings focus")
+		}
+		a.windowWidth = 899
+		tr.SetSize(899, 640)
+		tr.Frame()
+		a.windowWidth = 960
+		tr.SetSize(960, 640)
+		tr.Frame()
+		if a.workspaceOpen == false || a.detailPageActive() || !a.settingsOpen {
+			t.Fatalf("roundtrip changed settings/work mode: open=%v page=%v settings=%v", a.workspaceOpen, a.detailPageActive(), a.settingsOpen)
+		}
+		if err := tr.Click("← Back to workbench"); err != nil {
+			t.Fatal(err)
+		}
+		tr.Frame()
+		if !tr.Focused("Settings") {
+			t.Fatalf("Back from resized Settings focused %v, want Settings", tr.Texts())
+		}
+	})
+
+	t.Run("settings-to-899-back-visible", func(t *testing.T) {
+		a, _ := workspaceTestApp(t)
+		a.windowWidth = 960
+		a.workspaceOpen = true
+		tr := ui.NewTester(a.view, 960, 640)
+		tr.Frame()
+		if err := tr.Click("Settings"); err != nil {
+			t.Fatal(err)
+		}
+		tr.Frame()
+		a.windowWidth = 899
+		tr.SetSize(899, 640)
+		tr.Frame()
+		if !a.settingsOpen || !a.workspaceOpen {
+			t.Fatalf("899 settings state = settings=%v work=%v", a.settingsOpen, a.workspaceOpen)
+		}
+		if err := tr.Click("← Back to workbench"); err != nil {
+			t.Fatal(err)
+		}
+		tr.Frame()
+		if !a.detailPageActive() || !tr.Focused("Back to chat") || tr.Focused("Settings") {
+			t.Fatalf("899 Back from Settings focus = page=%v back=%v settings=%v texts=%v", a.detailPageActive(), tr.Focused("Back to chat"), tr.Focused("Settings"), tr.Texts())
+		}
+	})
+}
+
 func TestHistoryFullLateResultCannotHijackAnotherSurface(t *testing.T) {
 	a, ct := workspaceTestApp(t)
 	a.windowWidth = 1040

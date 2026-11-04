@@ -839,6 +839,72 @@ func TestComposerModelAndTaskContextStayInlineAndReturnFocus(t *testing.T) {
 	}
 }
 
+func TestResponsiveComposerAt960WithLoadedSession(t *testing.T) {
+	a, ct := appReadingTestApp(t)
+	a.windowWidth = 960
+	a.workspaceOpen = true
+	a.leftPaneWidth = 280
+	a.rightPaneWidth = 440
+	a.runtimeStatus = runtimeStateReady
+	a.runtimeCapabilitiesLoaded = true
+	ct.Loaded = true
+	ct.SessionID = "responsive-loaded-session"
+	ct.SessionModel = "provider/very-long-responsive-model-name-with-stable-suffix-omega"
+	ct.Draft = "responsive loaded draft"
+	ct.Context.items = []taskContextItem{{ID: "responsive-context", Name: "资料", Text: "loaded context"}}
+	tr := ui.NewTester(a.view, 960, 640)
+	tr.Frame()
+	if a.workOverlay() || !a.avatarRailActive() {
+		t.Fatal("960 should use the avatar three-pane layout")
+	}
+	composer, ok := tr.Find("Composer for Saki")
+	if !ok || composer.W <= 0 || composer.W-4 < 440 {
+		t.Fatalf("960 loaded composer=%+v ok=%v content=%g", composer, ok, composer.W-4)
+	}
+	within := func(label string) ui.Rect {
+		t.Helper()
+		r, ok := tr.Find(label)
+		if !ok || r.W <= 0 || r.H <= 0 || r.X < composer.X || r.X+r.W > composer.X+composer.W {
+			t.Fatalf("960 composer control %q rect=%+v ok=%v composer=%+v", label, r, ok, composer)
+		}
+		return r
+	}
+	model := within("Conversation model")
+	within("Conversation")
+	within(contextLabelForTest(1))
+	send := within("Send")
+	if send.X < model.X+model.W {
+		t.Fatalf("960 Send overlaps model: send=%+v model=%+v", send, model)
+	}
+	head, tail := a.conversationModelDisplayParts(ct)
+	visibleModel := head
+	if tail != "" {
+		visibleModel = tail
+	}
+	if visibleModel == "" || !tr.HasText(visibleModel) {
+		t.Fatalf("960 visible model suffix %q missing: %v", visibleModel, tr.Texts())
+	}
+	showPreviewTooltip(t, tr, "Conversation model")
+	if !tr.HasText(ct.SessionModel) {
+		t.Fatalf("960 model tooltip missing full ID: %v", tr.Texts())
+	}
+
+	a.demo = false
+	a.rt = &runtimeClient{}
+	ct.ActiveTaskID = "responsive-loaded-task"
+	ct.Status = statusWorking
+	tr.Frame()
+	composer, ok = tr.Find("Composer for Saki")
+	if !ok || composer.W-4 < 440 {
+		t.Fatalf("960 Stop composer=%+v ok=%v content=%g", composer, ok, composer.W-4)
+	}
+	stop := within("Stop conversation")
+	model = within("Conversation model")
+	if stop.X < model.X+model.W || tr.HasText("Send") {
+		t.Fatalf("960 Stop geometry = stop=%+v model=%+v texts=%v", stop, model, tr.Texts())
+	}
+}
+
 func TestComposerKeepsModelScopeAndPrimaryActionAtNarrowCenter(t *testing.T) {
 	a := testApp(t)
 	a.windowWidth = 1040

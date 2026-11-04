@@ -340,7 +340,7 @@ func TestIssueBackAfterOutOfFilterActionKeepsFilterAndScroll(t *testing.T) {
 
 func TestIssueDetailTopRowFitsNarrowWorkPanel(t *testing.T) {
 	a, ct := workspaceTestApp(t)
-	a.windowWidth = 1040
+	a.windowWidth = 1180
 	a.rightPaneWidth = 280
 	a.workspaceOpen = true
 	issue := &productIssue{ID: "i-narrow", ContactID: ct.ID, Goal: "narrow panel issue", Status: issueStatusInProgress,
@@ -350,12 +350,12 @@ func TestIssueDetailTopRowFitsNarrowWorkPanel(t *testing.T) {
 	ct.Issues = []*productIssue{issue}
 	ct.Works = []*workItem{{TaskID: "task-narrow", State: workRunning, Prompt: "narrow"}}
 	openIssueDetailForTest(a, ct, issue.ID)
-	tr := ui.NewTester(a.view, 1040, 720)
+	tr := ui.NewTester(a.view, 1180, 720)
 	tr.Frame()
-	panel := float32(1040) - a.workWidth() - paneSeparatorWidth
+	panel := float32(1180) - a.workWidth() - paneSeparatorWidth
 	back, backOK := tr.Find("Back to tasks")
 	stop, stopOK := tr.Find("Stop issue task")
-	if !backOK || !stopOK || back.W <= 0 || stop.W <= 0 || back.X < panel || stop.X+stop.W > 1040 ||
+	if !backOK || !stopOK || back.W <= 0 || stop.W <= 0 || back.X < panel || stop.X+stop.W > 1180 ||
 		back.X+back.W > stop.X {
 		t.Fatalf("narrow top row = panel=%v back=%+v/%v stop=%+v/%v", panel, back, backOK, stop, stopOK)
 	}

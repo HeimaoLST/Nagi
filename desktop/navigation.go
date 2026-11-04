@@ -488,6 +488,12 @@ func (a *appModel) cancelHistoryFullDisplay() {
 }
 
 func (a *appModel) syncDetailPageMode() {
+	// A Settings or main-reader page is not showing the workbench. Do not
+	// advance the detail page mode or arm a hidden workbench close while that
+	// page owns focus; the next visible workbench frame evaluates it.
+	if a.settingsOpen || a.mainPageActive() {
+		return
+	}
 	now := a.detailPageActive()
 	if now == a.detailPageMode {
 		return
