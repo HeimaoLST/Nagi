@@ -544,22 +544,101 @@ func TestIntegratedMarkdownPreview(t *testing.T) {
 			if dark {
 				theme = "dark"
 			}
-			a, ct := workspaceTestApp(t)
-			a.rt = &runtimeClient{}
-			a.windowWidth = 960
-			a.workspaceOpen = false
-			ct.Messages = []*message{
-				{ID: 1, Kind: msgUser, Text: "一句话用户消息，复制入口在气泡外。"},
-				{ID: 2, Kind: msgContact, Text: md},
+			for _, size := range []struct {
+				name          string
+				width, height int
+			}{{"1040x720", 1040, 720}, {"960x640", 960, 640}} {
+				a, ct := workspaceTestApp(t)
+				a.rt = &runtimeClient{}
+				a.windowWidth = size.width
+				a.workspaceOpen = false
+				ct.Messages = []*message{
+					{ID: 1, Kind: msgUser, Text: "一句话用户消息，复制入口在气泡外。"},
+					{ID: 2, Kind: msgContact, Text: md},
+				}
+				tr := ui.NewTester(a.view, size.width, size.height)
+				tr.SetLocale(locale)
+				tr.SetDark(dark)
+				tr.SetFocused(true)
+				tr.Frame()
+				ct.list.ScrollTo(0, ui.Start)
+				tr.Frame()
+				writePreviewPNG(t, filepath.Join(dir,
+					fmt.Sprintf("message-affordance-%s-%s-%s.png", locale, theme, size.name)), tr.Image())
+				copyLabel := "Copy message"
+				if locale == "zh-Hans" {
+					copyLabel = "复制消息"
+				}
+				for i := 0; i < 64 && !tr.Focused(copyLabel); i++ {
+					tr.Key(0, ui.KeyTab)
+					tr.Frame()
+				}
+				if !tr.Focused(copyLabel) {
+					t.Fatalf("%s/%s/%s: user copy was not reachable by Tab", locale, theme, size.name)
+				}
+				tr.Frame()
+				writePreviewPNG(t, filepath.Join(dir,
+					fmt.Sprintf("message-affordance-user-focus-%s-%s-%s.png", locale, theme, size.name)), tr.Image())
 			}
-			tr := ui.NewTester(a.view, 960, 640)
-			tr.SetLocale(locale)
-			tr.SetDark(dark)
-			tr.Frame()
-			ct.list.ScrollTo(0, ui.Start)
-			tr.Frame()
-			writePreviewPNG(t, filepath.Join(dir,
-				fmt.Sprintf("message-affordance-%s-%s-960x640.png", locale, theme)), tr.Image())
 		}
+	}
+	for _, locale := range []string{"en", "zh-Hans"} {
+		for _, dark := range []bool{false, true} {
+			theme := "light"
+			if dark {
+				theme = "dark"
+			}
+			for _, size := range []struct {
+				name          string
+				width, height int
+			}{{"1040x720", 1040, 720}, {"960x640", 960, 640}} {
+				a, _ := appReadingTestApp(t)
+				a.rt = &runtimeClient{}
+				a.windowWidth = size.width
+				a.openDetail(detailHistory)
+				a.contactHistoryFull = &contactHistoryFull{
+					SessionID: "saved-session", EntryID: "saved-entry", Date: "Oct 1", From: "contact", Text: md,
+				}
+				tr := ui.NewTester(a.view, size.width, size.height)
+				tr.SetLocale(locale)
+				tr.SetDark(dark)
+				tr.Frame()
+				writePreviewPNG(t, filepath.Join(dir,
+					fmt.Sprintf("history-full-%s-%s-%s.png", locale, theme, size.name)), tr.Image())
+			}
+		}
+	}
+}
+
+func TestAppFullSavedMessageUsesReaderAndPreservesDraft(t *testing.T) {
+	saved := "## 完整历史\n\n中文长段落需要自然换行，保留[链接](https://example.com/full)。\n\n" +
+		"```go\nfunc saved() {\n\tfmt.Println(\"full\")\n}\n```\n\n" +
+		"| 名称 | 说明 |\n| --- | --- |\n| 历史 | " + strings.Repeat("abcdefghij", 12) + " |\n"
+	a, ct := appReadingTestApp(t)
+	a.windowWidth = 960
+	ct.Draft = "draft survives full history"
+	a.openDetail(detailHistory)
+	a.contactHistoryFull = &contactHistoryFull{
+		SessionID: "saved-session", EntryID: "entry-1", Date: "Oct 1", From: "contact", Text: saved,
+	}
+	tr := ui.NewTester(a.view, 960, 640)
+	tr.Frame()
+	for _, want := range []string{"Full saved message", "完整历史", "中文长段落", "func saved()", "名称", "历史"} {
+		if !tr.HasText(want) {
+			t.Fatalf("full saved message missing %q: %v", want, tr.Texts())
+		}
+	}
+	if err := tr.Click("Copy saved message"); err != nil {
+		t.Fatal(err)
+	}
+	if got := tr.Clipboard(); got != saved {
+		t.Fatalf("full saved copy = %q, want exact raw source", got)
+	}
+	if err := tr.Click("← Back to history"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if a.contactHistoryFull != nil || !a.detailIs(detailHistory) || ct.Draft != "draft survives full history" {
+		t.Fatalf("back from full history = full:%+v detail:%q draft:%q", a.contactHistoryFull, a.activeDetail(), ct.Draft)
 	}
 }
