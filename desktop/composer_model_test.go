@@ -76,6 +76,11 @@ func TestComposerModelPopoverGeometryAndKeyboard(t *testing.T) {
 			if !tr.Focused("provider-model-a") {
 				t.Fatal("Up did not return to current model")
 			}
+			tr.Key(0, ui.KeyDown)
+			tr.Frame()
+			if !tr.Focused("provider-model-b") {
+				t.Fatal("busy Enter did not target the other model")
+			}
 			// A legitimate busy target exercises the existing write rejection through Enter.
 			a.rt = &runtimeClient{}
 			a.runtimeStatus = runtimeStateReady
@@ -299,5 +304,25 @@ func TestComposerModelSettingsWaitsForUnreadWorkTarget(t *testing.T) {
 	a.closeSettings()
 	if a.settingsOpen || a.modelPanelKind != "work" || a.modelPanelSessionID != "work-session" || a.modelPanelLabel != "Original work" {
 		t.Fatal("unread work return loaded a different target")
+	}
+}
+
+func TestComposerModelCurrentItemDoesNotConfirmUnknownState(t *testing.T) {
+	for _, recovery := range []modelRecoveryState{0, modelRecoveryNeedsRefresh, modelRecoveryNeedsReload} {
+		t.Run(fmt.Sprint(recovery), func(t *testing.T) {
+			a, ct := composerModelTestApp(t)
+			a.openComposerModel()
+			if recovery == 0 {
+				a.modelForm.SetUnconfirmed(modelUnconfirmedReadback, "controlled unknown")
+			} else {
+				a.setModelRecovery(ct.SessionID, recovery)
+			}
+			a.rt = &runtimeClient{}
+			a.runtimeStatus = runtimeStateReady
+			a.chooseComposerModel(0)
+			if !a.composerModelOpen || !a.modelForm.Unconfirmed || a.modelOpActive {
+				t.Fatal("current item bypassed unknown/recovery state")
+			}
+		})
 	}
 }

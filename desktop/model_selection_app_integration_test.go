@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -829,6 +830,58 @@ func TestComposerModelPopoverGUISelectsDeclaredModelOnce(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			custom := initial.EffectiveConfig.Compaction
+			maxInput := custom.ContextTokens / 2
+			custom.MaxInputTokens = &maxInput
+			updated, err := rt.updateSessionModel(first, initial.ConfigRevision, runtimeModelPatch{Model: "model-A", Compaction: &custom})
+			if err != nil {
+				t.Fatal(err)
+			}
+			initial = updated.runtimeConnectionConfig
+			h.pump.do(func() { h.app.refreshSessionModel(h.app.modelForm.Target) })
+			h.pump.wait(func() bool { return !h.app.modelForm.Busy })
+			var manual modelSelectionDraft
+			h.pump.do(func() {
+				form := h.app.modelForm
+				if reflect.DeepEqual(form.Catalog.ConfiguredModels[0].Compaction, custom) {
+					t.Error("fixture declaration does not differ from session override")
+				}
+				form.Draft.Model = "unsaved-model-correction"
+				manual = form.Draft
+				tr := ui.NewTester(h.app.view, 960, 640)
+				tr.Frame()
+				// The current ID also appears on the composer. Click its menu row
+				// above the uniquely named next row, using the rendered row bounds.
+				next, ok := tr.Find("model-B")
+				if !ok {
+					t.Error("next model row is missing")
+					return
+				}
+				tr.ClickAt(next.X+next.W/2, next.Y-next.H/2)
+				tr.Frame()
+				if h.app.composerModelOpen || !tr.Focused("Chat model") || h.app.modelForm.Draft != manual {
+					t.Error("current activation did not close/return focus while preserving the unsaved model draft")
+				}
+			})
+			h.pump.wait(func() bool { return !h.app.modelOpActive && !h.app.modelForm.Busy })
+			unchanged, err := rt.connectionConfig(first)
+			if err != nil {
+				t.Fatal(err)
+			}
+			data, err := os.ReadFile(countPath)
+			if err != nil || string(data) != "update\n" {
+				t.Errorf("current item submitted an extra update: %q, %v", data, err)
+			}
+			if unchanged.ConfigRevision != initial.ConfigRevision || !reflect.DeepEqual(unchanged.EffectiveConfig.Compaction, custom) {
+				t.Errorf("current item changed revision/capacity: revision=%d want=%d compaction=%+v want=%+v", unchanged.ConfigRevision, initial.ConfigRevision, unchanged.EffectiveConfig.Compaction, custom)
+			}
+			h.pump.do(func() {
+				if h.app.composerModelOpen || h.app.modelForm.Draft != manual {
+					t.Error("current item did not close/return focus while preserving the unsaved model draft")
+				}
+				h.app.openComposerModel()
+			})
+			h.pump.wait(func() bool { return !h.app.modelForm.Busy })
 			before, err := os.ReadFile(history)
 			if err != nil {
 				t.Fatal(err)
@@ -850,7 +903,7 @@ func TestComposerModelPopoverGUISelectsDeclaredModelOnce(t *testing.T) {
 				}
 			})
 			h.pump.wait(func() bool { return !h.app.modelForm.Busy })
-			if data, err := os.ReadFile(countPath); err == nil && len(data) != 0 {
+			if data, err := os.ReadFile(countPath); err != nil || string(data) != "update\n" {
 				t.Fatal("navigation submitted an update")
 			}
 			h.pump.do(func() {
@@ -881,9 +934,32 @@ func TestComposerModelPopoverGUISelectsDeclaredModelOnce(t *testing.T) {
 			if err != nil || other.EffectiveConfig.Model != "model-A" {
 				t.Fatal("selection changed another session")
 			}
-			data, err := os.ReadFile(countPath)
-			if err != nil || string(data) != "update\n" {
+			data, err = os.ReadFile(countPath)
+			if err != nil || string(data) != "update\nupdate\n" {
 				t.Fatalf("selection update count = %q, %v", data, err)
+			}
+			// Explicit editing in Settings can still change capacity for the same model.
+			h.pump.do(func() { h.app.openComposerModel() })
+			h.pump.wait(func() bool { return !h.app.modelForm.Busy })
+			manualOutput := actual.EffectiveConfig.Compaction.OutputTokens / 2
+			h.pump.do(func() {
+				tr := ui.NewTester(h.app.view, 960, 640)
+				tr.Frame()
+				if err := tr.Click("Manage models"); err != nil {
+					t.Error(err)
+					return
+				}
+				h.app.modelForm.Draft.OutputTokens = strconv.Itoa(manualOutput)
+			})
+			clickModelAction(t, h, "Update model")
+			h.pump.wait(func() bool { return !h.app.modelForm.Busy })
+			edited, err := rt.connectionConfig(first)
+			if err != nil || edited.EffectiveConfig.Model != "model-B" || edited.ConfigRevision != actual.ConfigRevision+1 || edited.EffectiveConfig.Compaction.OutputTokens != manualOutput {
+				t.Fatal("explicit same-model capacity edit was skipped")
+			}
+			data, err = os.ReadFile(countPath)
+			if err != nil || string(data) != "update\nupdate\nupdate\n" {
+				t.Fatalf("explicit capacity edit count = %q, %v", data, err)
 			}
 			after, err := os.ReadFile(history)
 			if err != nil || string(after) != string(before) || len(provider.requestedModels()) != 2 {

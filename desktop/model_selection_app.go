@@ -152,6 +152,12 @@ func (a *appModel) chooseComposerModel(index int) {
 	if form == nil || form.Busy || a.modelOpActive || index < 0 || index >= len(form.Catalog.ConfiguredModels) {
 		return
 	}
+	if !form.Unconfirmed && a.modelRecoveryFor(form.Target.Config.SessionID) == 0 &&
+		form.Catalog.ConfiguredModels[index].Model == form.Effective.Config.EffectiveConfig.Model {
+		a.closeComposerModel()
+		a.composerFocusModel = true
+		return
+	}
 	form.SelectConfigured(index)
 	if request, ok := form.Request(); ok {
 		compaction := form.Catalog.ConfiguredModels[index].Compaction

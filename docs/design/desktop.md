@@ -705,7 +705,7 @@ type resolvedTheme struct {
 
 模型行保留完整可访问名称、tooltip、32px 命中区和当前项勾选。普通行透明，选中、hover 和键盘 focus 使用现有轻量底面。Up/Down 通过官方 `FocusGroup` 移动焦点，Enter 只激活菜单项，Escape 返回模型入口。Tab 关闭浮层并继续框架的焦点遍历，外部点击同时到达实际点击目标。关闭浮层不取消在途配置操作，也不解除未知结果保护。
 
-选择提交完整声明的模型和 compaction 参数，复用 `updateSessionModel` 的 revision、单次写入和实际回读。成功读回后更新 composer 并关闭浮层。失败保留实际模型和可见错误，未知结果继续使用 #115 的刷新或显式 Reload 契约。默认连接、其他会话、旧任务和历史不因此改变。
+实际配置已确认时，再次激活当前项只关闭浮层并返回入口焦点，不写配置、不改变 revision、容量或手工草稿。未知或待恢复状态不按已确认处理，Settings 中显式修改同模型容量仍走原更新。选择其他项提交完整声明的模型和 compaction 参数，复用 `updateSessionModel` 的 revision、单次写入和实际回读。成功读回后更新 composer 并关闭浮层。失败保留实际模型和可见错误，未知结果继续使用 #115 的刷新或显式 Reload 契约。默认连接、其他会话、旧任务和历史不因此改变。
 
 底部唯一的 Manage models / 管理模型进入现有 Settings 的 Connection & models / 连接与模型分类。默认连接表单与当前对话覆盖分别标明作用域，仍使用原 `connectionForm` 和 `modelSelection`。手动模型 ID、容量、Refresh、Update model 和 Reload session 保持可达。全局 Settings 与浮层入口使用同一页面和同一表单。每次打开模型入口沿既有 Refresh 路径读取实际配置，保留可修正草稿。会话表单按 session 保留内存草稿，切换联系人或进入事项模型后再返回，不覆盖另一份未保存草稿。从事项模型进入设置后返回时，恢复原事项表单和未保存草稿，配置操作在途时保留原有关闭保护。Apply 安装新 Runtime 时清空旧连接的会话表单，沿原路径重新读取。
 
