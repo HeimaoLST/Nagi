@@ -271,12 +271,33 @@ func TestComposerModelSettingsReturnsToOriginalWorkForm(t *testing.T) {
 	}
 	a.modelOpActive = true
 	a.closeSettings()
-	if !a.settingsOpen {
-		t.Fatal("settings restored a different target during a model update")
+	if a.settingsOpen {
+		t.Fatal("an already-read work form could not be restored during a conversation update")
+	}
+	a.modelOpActive = false
+	if a.modelForm != work || a.modelPanelKind != "work" || work.Draft.Model != "work-unsaved" || conversation.Draft.Model != "conversation-unsaved" {
+		t.Fatal("settings return replaced another model form or draft")
+	}
+}
+
+func TestComposerModelSettingsWaitsForUnreadWorkTarget(t *testing.T) {
+	a, _ := composerModelTestApp(t)
+	a.aux = "model"
+	a.modelForm = nil
+	a.modelPanelKind = "work"
+	a.modelPanelSessionID = "work-session"
+	a.modelPanelLabel = "Original work"
+	a.openSettingsTab(settingsTabAppearance, settingsSourceAux)
+	a.modelOpActive = true
+	a.closeSettings()
+	tr := ui.NewTester(a.view, 960, 640)
+	tr.Frame()
+	if !a.settingsOpen || !tr.HasText("Waiting for Runtime…") {
+		t.Fatal("pending return lost its target or visible reason")
 	}
 	a.modelOpActive = false
 	a.closeSettings()
-	if a.modelForm != work || a.modelPanelKind != "work" || work.Draft.Model != "work-unsaved" || conversation.Draft.Model != "conversation-unsaved" {
-		t.Fatal("settings return replaced another model form or draft")
+	if a.settingsOpen || a.modelPanelKind != "work" || a.modelPanelSessionID != "work-session" || a.modelPanelLabel != "Original work" {
+		t.Fatal("unread work return loaded a different target")
 	}
 }

@@ -185,7 +185,7 @@ func (a *appModel) selectSettingsTab(tab string) {
 }
 
 func (a *appModel) closeSettings() {
-	if !a.settingsOpen || (a.modelOpActive && a.settingsReturnModelTarget != nil) {
+	if !a.settingsOpen || (a.modelOpActive && a.settingsReturnModelTarget != nil && a.settingsReturnModel == nil) {
 		return
 	}
 	a.settingsOpen = false
@@ -331,12 +331,15 @@ func (a *appModel) settingsSidebar(c *ui.Context, t *ui.Theme, narrow bool) {
 				ui.Icon(c, navBackIcon).Width(16).Height(16).TextColor(t.TextMuted)
 				ui.Text(c, msgs.SettingsBack()).FontSize(typeAction).TextColor(t.Text)
 			})
-			back.Disabled(a.modelOpActive && a.settingsReturnModelTarget != nil).OnClick(func() { a.closeSettings() })
+			back.Disabled(a.modelOpActive && a.settingsReturnModelTarget != nil && a.settingsReturnModel == nil).OnClick(func() { a.closeSettings() })
 			if a.settingsFocusBack {
 				back.Focus()
 				a.settingsFocusBack = false
 			}
 		}).Label(msgs.SettingsNavigationLabel()).AlignSelf(ui.Start).Padding(0)
+		if a.modelOpActive && a.settingsReturnModelTarget != nil && a.settingsReturnModel == nil {
+			ui.Text(c, msgs.ModelWaiting()).FontSize(typeAction).LineHeight(1.5).TextColor(t.TextMuted)
+		}
 		ui.Text(c, msgs.SettingsTitle()).FontSize(typePageTitle).FontWeight(500).TextColor(t.Text)
 		nav := func(label, tab string) {
 			selected := a.settingsTab == tab
