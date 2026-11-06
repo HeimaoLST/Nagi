@@ -116,6 +116,20 @@ SAKI_GUI_WORKDIR=/abs/working-directory \
 ```
 Finder 启动不继承 shell 环境。空配置时通过 Connection settings 保存并 Apply；已有 GUI 配置从持久文件恢复。上述命令保留为开发者外部环境模式入口。不要把 key 放进 Info.plist、候选包或仓库。
 
+### 原生内容尺寸诊断（#328，实现事实，2026-11-06）
+
+实现源 `14f2275bfa74717f167d1c45344f25fecea78931` 在正常 GUI 启动时支持一个显式环境变量。测试启动者可以向同源包的可执行文件传入内容区逻辑尺寸，单位为 DIP：
+
+```sh
+SAKI_GUI_CONTENT_SIZE=960x640 "/path/to/Saki.app/Contents/MacOS/Saki"
+```
+
+非空值采用小写 `x` 分隔的两个正整数。非法值在应用、Runtime 和用户数据初始化前以 exit 1 和参数错误停止。缺省或空值保留原外框 `1040×720`、最小尺寸及正常启动路径，不输出本项诊断。现有 `--issue-tool-helper` 分支优先，不消费这个 GUI 选项。
+
+启用后，窗口使用 MyGo v0.7.4 的公开 `WindowOptions.UseContentSize`。创建和 resize 回调直接读取该窗口的 `ContentSize()`，同时更新既有响应式宽度。stderr 记录前缀为 `nagi native-content-size`，字段包括 `event=created|resize`、`unit=DIP`、启动请求 `requested_width/height` 和 getter 读回的 `actual_width/height`。请求值保持为启动参数，用户后续调整窗口不会被自动恢复到请求尺寸。该入口不写配置或会话，也不增加控制服务或窗口状态副本。
+
+尺寸验收须比较实际 getter 与请求值，并保留同源包的原生图和交互记录。OS 或窗口约束导致实际值不同时，如实记录差异；截图像素、CG 外框、应用宽度缓存和参数回显都不能替代内容区读回。接口实现及离线检查不等于原生 `960×640` 或视觉验收通过，实际验收由 #156 记录。
+
 ## 原生工作台（#130，历史实现事实；固定布局比例已由 #184 替代）
 
 更新于 2026-10-23。当前实现/测试 HEAD `c1b804e`（栈上合并 112 `31d3cff`；产品 formatter merge `4ec3ad5`）；本条只保留当轮 GUI 实现事实。当前布局规范和宽度偏好以顶部 [GUI 设计约束（当前规范）](#gui-design-constraints) 为准；当轮的固定 1120/960 列宽已由 [#184 可调三栏具体值](#adjustable-layout-values) 替代。后续宽窄返回的有限原生补验见 [1eb 固定包记录](#native-1eb-acceptance-r3)，不回填为旧 v3 包的通过结果。
