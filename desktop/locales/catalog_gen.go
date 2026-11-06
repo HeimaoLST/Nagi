@@ -9935,3 +9935,23 @@ func MarkdownFileSourceUnknown() string { return In(i18n.Locale()).MarkdownFileS
 func (msgs Messages) MarkdownFileSourceUnknown() string {
 	return Catalog.Format(msgs.locale, "markdownFileSourceUnknown", nil)
 }
+
+// IssueCollaborationUnavailable says "Issue collaboration unavailable"
+// in the language the app shows.
+func IssueCollaborationUnavailable() string { return In(i18n.Locale()).IssueCollaborationUnavailable() }
+
+// IssueCollaborationUnavailable says "Issue collaboration unavailable"
+// in the language of msgs.
+func (msgs Messages) IssueCollaborationUnavailable() string {
+	return Catalog.Format(msgs.locale, "issueCollaborationUnavailable", nil)
+}
+
+// IssueCollaborationRepairHint says "Fix the diagnostic error, then open Connection & model and apply the saved connection again, or restart the app."
+// in the language the app shows.
+func IssueCollaborationRepairHint() string { return In(i18n.Locale()).IssueCollaborationRepairHint() }
+
+// IssueCollaborationRepairHint says "Fix the diagnostic error, then open Connection & model and apply the saved connection again, or restart the app."
+// in the language of msgs.
+func (msgs Messages) IssueCollaborationRepairHint() string {
+	return Catalog.Format(msgs.locale, "issueCollaborationRepairHint", nil)
+}

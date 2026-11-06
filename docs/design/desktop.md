@@ -822,6 +822,13 @@ HTTPS、mailto、文内锚点、未完成链接与不支持的 scheme 保持原�
 
 - **#207 续测与 query-tail 证据（2026-10-30）**：首轮 049 原样复验保持 FAIL，5 次上游请求、无 run accepted/work/plan；首轮之后先有一次 0 请求的 setup RED（contact history 尚未 loaded 时 send 被拒，随后仅增加 restore 的 Loaded/HistoryDirty 准入，无产品改动）。真实补答阶段 9 次上游 200：同一 issue 的 `add_supplement` 返回 saved，store supplement ledger 为 submitted/accepted 并绑定唯一 execution `execution-bbe5b4528fa94e68`，execution Prompt 含 Python/7 自然日；work 最后写 `plan.md` 7434B（SHA `392dd08e…`），conversation 无 write/edit/bash 修改产物。该阶段 validator FAIL 是因为测试把模型整理后的 supplement 文本与用户原回答做逐字相等比较（源 `Text==answer` 误判），不是产品未补充；不覆盖原 FAIL JSON。随后 query-tail 仅发一次原文“刚才那件事完成了吗？请告诉我目前进度和成果在哪里。”，3 次上游 200，test PASS 7.37s/package PASS 8.887s；新工具仅 `issue_get` 与只读 bash，返回同一 issue/唯一 completed execution，最终 assistant 明确 Issue 仍 in_progress、6 条 requirements unverified；plan/notes hash 未变，旧 history 为字节前缀。总计 5+9+3=17 次上游。该证据是当前合成样本的一次有限真实链，不是重复写修复的硬保证，也不把 query-tail PASS 扩张为全量或 native 验收；详见 [#207 result 6513483964](https://github.com/HeimaoLST/Saki/issues/207#issuecomment-6513483964) 与 [PM review 6513478045](https://github.com/HeimaoLST/Saki/issues/207#issuecomment-6513478045)。
 
+### #331 macOS 事项协作 IPC 初始化（实现事实与待验，2026-11-06）
+
+- **短 IPC 地址**：应用唯一 Unix socket 使用 `/tmp/nagi-issue-<PID>-scope-<随机引用>.sock`，不再在用户 `TMPDIR` 后追加名称。macOS `sockaddr_un.sun_path` 只有 104 字节；真实 `newRuntimeApp` 初始化在 64B TMPDIR 下产生的 109B 地址曾返回 `bind: invalid argument`，短路径正对照成功。IPC 协议现有 4096B 参数上限未改变，也不是 OS 可绑定地址长度。用户 TMPDIR、store、session 和工作目录保持原设置；不新增目录、transport 或持久服务。
+- **所有权与退出**：沿用同一 `startIssueToolIPCServer` 和 `Close`，socket 保持 0600，碰撞地址不会被删除，退出只删除本服务记录的同一 inode。重复初始化复用同一服务；失败返回不发布 endpoint/source，正常退出和失败后恢复均沿已有应用 shutdown 收尾。
+- **能力状态与修复**：真实初始化错误在工作台显示“事项协作不可用”，入口仍是统一 Settings → Advanced；诊断显示具体错误及重新 Apply saved／重启指引。基础 Runtime Ready 独立显示，不被改写成连接失败。只有用户沿既有连接 Apply 显式重试；渲染、查看诊断和切设置页不自动重试。仅建好 socket 但新 Runtime 未安装成功时，错误与能力缺失仍保留；带该 tool source 的新 Runtime 安装成功才清除错误并恢复对话三工具／work `issue_wait` 的既有选择路径。
+- **验证边界**：在本机 macOS 以有效 64B 及更长 TMPDIR 走真实应用初始化 RED→GREEN；真实同入口 helper 的 `tools/list` 与只读 `issue_list` 覆盖声明、IPC 转发和无事项/operation 副作用。实际缺失 helper 文件、基本 Runtime Ready、诊断/设置导航、Apply 失败不伪恢复、成功重载及退出清理通过既有真实 Rust harness 验证。中英文、明暗与 720/1040 的提示入口由 headless Tester 检查；精确源、完整门禁和 required macOS CI 见 [#331](https://github.com/HeimaoLST/Saki/issues/331)。本任务不启动 GUI 或外部模型，整合候选后的原生自然交办仍待 PM 安排，不以局部通过代替完整 MVP。
+
 ### #210 事项工具的 revision 参数说明（实现事实与待验，2026-10-30）
 
 代码来源：`agent/gui/210-issue-tool-revision-errors`，基于固定 `04981e693e6ceeaa8d940181a3da056e1f3e6c15`。#207 的真实对话中，模型在 create 后省略 wait 的 `expected_revision`，只收到笼统 `invalid_action`；原线上结果仍按 #207 记录，不作为本修复的通过证据。
