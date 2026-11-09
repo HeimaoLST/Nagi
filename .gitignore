@@ -1,0 +1,7 @@
+/Nagi
+*.app/
+__pycache__/
+.DS_Store
+.env
+.saki/
+/headless-*.png

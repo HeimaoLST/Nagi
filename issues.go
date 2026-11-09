@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"saki/desktop/locales"
+	"github.com/HeimaoLST/Nagi/locales"
 )
 
 // A productIssue is the GUI-owned product object. Runtime tasks are linked as

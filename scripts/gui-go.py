@@ -2,7 +2,7 @@
 """Run Go through the temporary pinned editor, Split and Markdown link patches.
 
 Usage: python3 scripts/gui-go.py test|vet|build|run [Go arguments].
-The real desktop/go.mod, module cache, and source tree are not rewritten.
+The real go.mod, module cache, and source tree are not rewritten.
 """
 from __future__ import annotations
 
@@ -15,10 +15,9 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-DESKTOP = ROOT / "desktop"
-SPLIT_PATCH = DESKTOP / "patches" / "split-release.patch"
-EDITOR_PATCH = DESKTOP / "patches" / "editor-release.patch"
-MARKDOWN_LINK_PATCH = DESKTOP / "patches" / "markdown-link-focus.patch"
+SPLIT_PATCH = ROOT / "patches" / "split-release.patch"
+EDITOR_PATCH = ROOT / "patches" / "editor-release.patch"
+MARKDOWN_LINK_PATCH = ROOT / "patches" / "markdown-link-focus.patch"
 MYGO = "github.com/egoist/mygo"
 VERSION = "v0.7.4"
 SPLIT_BEFORE = "70f6d9b7e546278a54179d554b3935f2b8d3afc1e0df37e56fe0ad9f694c81a8"
@@ -46,14 +45,14 @@ def sha256(path: Path) -> str:
 
 def selected_module() -> dict:
     """Return Go's selected module metadata, including any Replace."""
-    raw = subprocess.check_output(["go", "list", "-m", "-json", MYGO], cwd=DESKTOP, text=True)
+    raw = subprocess.check_output(["go", "list", "-m", "-json", MYGO], cwd=ROOT, text=True)
     return json.loads(raw)
 
 
 def module_dir() -> Path:
     raw = subprocess.check_output(
         ["go", "mod", "download", "-json", MYGO + "@" + VERSION],
-        cwd=DESKTOP,
+        cwd=ROOT,
         text=True,
     )
     return Path(json.loads(raw)["Dir"])
@@ -76,8 +75,8 @@ def main(argv: list[str]) -> int:
         return fail("this launcher only forwards test, vet, build and run", 2)
     if any(arg == "-modfile" or arg.startswith("-modfile=") for arg in argv[1:]):
         return fail("caller may not override the prepared -modfile", 2)
-    if not DESKTOP.is_dir() or not SPLIT_PATCH.is_file() or not EDITOR_PATCH.is_file() or not MARKDOWN_LINK_PATCH.is_file():
-        return fail("desktop or a pinned patch is missing", 2)
+    if not ROOT.is_dir() or not SPLIT_PATCH.is_file() or not EDITOR_PATCH.is_file() or not MARKDOWN_LINK_PATCH.is_file():
+        return fail("root module or a pinned patch is missing", 2)
     selected = selected_module()
     if selected.get("Version") != VERSION or selected.get("Replace") is not None:
         return fail(
@@ -87,7 +86,7 @@ def main(argv: list[str]) -> int:
         )
 
     src = module_dir()
-    with tempfile.TemporaryDirectory(prefix="saki-gui-go-") as td:
+    with tempfile.TemporaryDirectory(prefix="nagi-gui-go-") as td:
         tmp = Path(td)
         module = tmp / "mygo"
         shutil.copytree(src, module)
@@ -145,15 +144,15 @@ def main(argv: list[str]) -> int:
                 % (markdown_after, MARKDOWN_VIEW_AFTER),
                 4,
             )
-        # A module file distinct from the real desktop/go.mod; Go uses the
+        # A module file distinct from the real go.mod; Go uses the
         # matching app.sum next to it. The source checkout is never edited.
         modfile = tmp / "app.mod"
         sumfile = tmp / "app.sum"
-        shutil.copyfile(DESKTOP / "go.mod", modfile)
-        shutil.copyfile(DESKTOP / "go.sum", sumfile)
+        shutil.copyfile(ROOT / "go.mod", modfile)
+        shutil.copyfile(ROOT / "go.sum", sumfile)
         edit = subprocess.run(
             ["go", "mod", "edit", "-modfile=" + str(modfile), "-replace=" + MYGO + "=" + str(module)],
-            cwd=DESKTOP,
+            cwd=ROOT,
             stdout=sys.stderr,
             stderr=sys.stderr,
         )
@@ -161,7 +160,7 @@ def main(argv: list[str]) -> int:
             return fail("could not add the prepared module replace", 5)
 
         cmd = ["go", argv[0], "-modfile=" + str(modfile), *argv[1:]]
-        rc = subprocess.run(cmd, cwd=DESKTOP).returncode
+        rc = subprocess.run(cmd, cwd=ROOT).returncode
         return 128 + (-rc) if rc < 0 else rc
 
 

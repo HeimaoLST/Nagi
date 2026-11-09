@@ -20,7 +20,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"saki/desktop/locales"
+	"github.com/HeimaoLST/Nagi/locales"
 )
 
 // The runtime bounds the sum of serialized caller-context wrappers carried by

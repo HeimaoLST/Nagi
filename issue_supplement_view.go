@@ -9,7 +9,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"saki/desktop/locales"
+	"github.com/HeimaoLST/Nagi/locales"
 )
 
 func (a *appModel) issueSupplementSection(c *ui.Context, t *ui.Theme, ct *contact, issue *productIssue, editable bool) {

@@ -20,7 +20,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"saki/desktop/locales"
+	"github.com/HeimaoLST/Nagi/locales"
 )
 
 const issueResultPageWriteFinal = "created result\n\n```text\nwrite\n```"

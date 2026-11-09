@@ -16,7 +16,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"saki/desktop/locales"
+	"github.com/HeimaoLST/Nagi/locales"
 )
 
 func openConnectionHarness(t *testing.T) *guiHarness {

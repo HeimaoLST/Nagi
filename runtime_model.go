@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"saki/desktop/locales"
+	"github.com/HeimaoLST/Nagi/locales"
 )
 
 const (

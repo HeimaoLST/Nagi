@@ -1,12 +1,12 @@
 #!/bin/bash
-# Build a traceable macOS arm64 Saki.app candidate from a clean checkout.
+# Build a traceable macOS arm64 Nagi.app candidate from a clean checkout.
 #
 # Usage:
-#   scripts/build-macos-app.sh /absolute/output-dir
+#   scripts/build-macos-app.sh /absolute/output-dir /absolute/Saki NAGI_VERSION RUNTIME_SOURCE_SHA
 #
 # The output directory must be outside this checkout. It receives:
-#   Saki.app/                 GUI + Saki-runtime helper, Info.plist, ad-hoc signature
-#   Saki.app.zip              ditto archive preserving modes/signature
+#   Nagi.app/                 GUI + prebuilt Saki-runtime helper, Info.plist, ad-hoc signature
+#   Nagi.app.zip              ditto archive preserving modes/signature
 #   manifest.json             source/toolchain/runner/file hashes/signing facts
 #   SHA256SUMS                completed app binaries, plist, zip and manifest
 #   codesign.log, validation.log, helper-smoke.log
@@ -14,16 +14,39 @@
 #
 # This is a packaging helper only. It does not change product source, call a
 # external provider, or include user store/session/.env data. Requires macOS arm64 with
-# bash, Go (from desktop/go.mod), Rust/cargo, Python 3, Xcode/codesign, ditto,
+# bash, Go (from go.mod), Python 3, Xcode/codesign, ditto,
 # lipo and plutil.
 set -euo pipefail
 
-if [ "$#" -ne 1 ]; then
-  echo "usage: $0 /absolute/output-dir (outside checkout)" >&2
+if [ "$#" -ne 4 ]; then
+  echo "usage: $0 OUT_DIR RUNTIME_BIN NAGI_VERSION RUNTIME_SOURCE_SHA (absolute paths, output outside checkout)" >&2
   exit 2
 fi
 
 OUT_INPUT=$1
+RUNTIME_BIN=$(python3 -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$2")
+APP_VERSION=$3
+RUNTIME_SOURCE_SHA=$4
+case "$2" in
+  /*) ;;
+  *) echo "runtime binary must be an absolute path" >&2; exit 2 ;;
+esac
+test -f "$RUNTIME_BIN" && test -x "$RUNTIME_BIN" || {
+  echo "runtime binary must be an executable file: $RUNTIME_BIN" >&2
+  exit 2
+}
+python3 - "$APP_VERSION" "$RUNTIME_SOURCE_SHA" <<'PYARGS'
+import re
+import sys
+if not re.fullmatch(r"[0-9]+(?:\.[0-9]+){1,2}", sys.argv[1]):
+    sys.exit("Nagi version must be numeric major.minor[.patch]")
+if not re.fullmatch(r"[0-9a-f]{40}", sys.argv[2]):
+    sys.exit("runtime source SHA must be a full lowercase Git commit SHA")
+PYARGS
+RUNTIME_VERSION=$("$RUNTIME_BIN" --version)
+test -n "$RUNTIME_VERSION" || { echo "runtime --version returned no identity" >&2; exit 2; }
+RUNTIME_INPUT_SHA=$(shasum -a 256 "$RUNTIME_BIN" | awk '{print $1}')
+export RUNTIME_BIN RUNTIME_SOURCE_SHA RUNTIME_VERSION RUNTIME_INPUT_SHA
 case "$OUT_INPUT" in
   /*) ;;
   *) echo "output directory must be absolute" >&2; exit 2 ;;
@@ -39,9 +62,13 @@ case "$OUT" in
   "$ROOT"|"$ROOT"/*) echo "output directory must be outside checkout: $ROOT" >&2; exit 2 ;;
 esac
 cd "$ROOT"
+test "$APP_VERSION" = "$(cat "$ROOT/VERSION")" || {
+  echo "Nagi version must match this checkout's VERSION file" >&2
+  exit 4
+}
 
 if [ -n "$(git status --porcelain)" ]; then
-  echo "source checkout is not clean; commit/push before building a candidate" >&2
+  echo "source checkout is not clean; a clean source commit is required before packaging a candidate" >&2
   git status --short >&2
   exit 3
 fi
@@ -51,7 +78,7 @@ CI_EVENT_SHA=${GITHUB_SHA:-$SOURCE_SHA}
 REF=${GITHUB_REF:-$(git symbolic-ref -q HEAD || echo detached)}
 RUN_URL=${RUN_URL:-}
 RUNNER_LABEL=${RUNNER_LABEL:-local}
-APP_NAME=Saki
+APP_NAME=Nagi
 APP="$OUT/$APP_NAME.app"
 ZIP="$OUT/$APP_NAME.app.zip"
 MANIFEST="$OUT/manifest.json"
@@ -60,9 +87,8 @@ CODESIGN_LOG="$OUT/codesign.log"
 VALIDATION_LOG="$OUT/validation.log"
 SMOKE_LOG="$OUT/helper-smoke.log"
 
-APP_VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n 1)
-case "$APP_VERSION" in
-  ''|*[!0-9.]*) echo "could not parse Cargo.toml version" >&2; exit 4 ;;
+case "$RUNTIME_BIN" in
+  "$APP"/*) echo "runtime input must be outside the app being replaced" >&2; exit 2 ;;
 esac
 
 rm -rf "$APP" "$ZIP" "$MANIFEST" "$SUMS" "$CODESIGN_LOG" "$VALIDATION_LOG" "$SMOKE_LOG"
@@ -73,23 +99,21 @@ echo "checkout=$ROOT"
 echo "output=$OUT"
 echo "bundle=$APP_NAME.app version=$APP_VERSION"
 
-echo "== build Rust helper =="
-cargo build --locked --release --bin Saki
-HELPER_SRC="$ROOT/target/release/Saki"
-test -x "$HELPER_SRC"
-cp "$HELPER_SRC" "$APP/Contents/MacOS/Saki-runtime"
+echo "== copy explicit prebuilt Runtime =="
+cp "$RUNTIME_BIN" "$APP/Contents/MacOS/Saki-runtime"
 chmod +x "$APP/Contents/MacOS/Saki-runtime"
+test "$(shasum -a 256 "$APP/Contents/MacOS/Saki-runtime" | awk '{print $1}')" = "$RUNTIME_INPUT_SHA"
 
 echo "== build GUI =="
-cd "$ROOT/desktop"
+cd "$ROOT"
 CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 python3 "$ROOT/scripts/gui-go.py" build \
   -trimpath -mod=readonly -buildvcs=true \
-  -o "$APP/Contents/MacOS/Saki" .
+  -o "$APP/Contents/MacOS/Nagi" .
 cd "$ROOT"
-chmod +x "$APP/Contents/MacOS/Saki"
+chmod +x "$APP/Contents/MacOS/Nagi"
 
 echo "== determine bundle minimum =="
-GUI_MIN_OS=$(python3 "$ROOT/scripts/macos_minimum.py" read "$APP/Contents/MacOS/Saki") || {
+GUI_MIN_OS=$(python3 "$ROOT/scripts/macos_minimum.py" read "$APP/Contents/MacOS/Nagi") || {
   echo "could not read GUI Mach-O minimum; refusing to build" >&2
   exit 5
 }
@@ -113,7 +137,7 @@ path, version, minimum_os = sys.argv[1], sys.argv[2], sys.argv[3]
 info = {
     "CFBundleDevelopmentRegion": "en",
     "CFBundleDisplayName": "Nagi",
-    "CFBundleExecutable": "Saki",
+    "CFBundleExecutable": "Nagi",
     "CFBundleIdentifier": "dev.saki.desktop",
     "CFBundleInfoDictionaryVersion": "6.0",
     "CFBundleName": "Nagi",
@@ -132,14 +156,12 @@ echo "== validate paths, architecture and Info.plist =="
 {
   printf 'uname -m: '; uname -m
   printf 'go env: '; go env GOOS GOARCH
-  printf 'rustc host: '; rustc -vV | sed -n 's/^host: //p'
   printf 'go version: '; go version
-  printf 'cargo: '; cargo --version
   printf 'xcodebuild: '; (xcodebuild -version 2>&1 | head -n 2 | tr '\n' ';' || true); echo
   printf 'sdk: '; (xcrun --sdk macosx --show-sdk-version 2>&1 || true)
   printf 'sw_vers: '; sw_vers -productVersion
-  printf 'files:\n'; file "$APP/Contents/MacOS/Saki" "$APP/Contents/MacOS/Saki-runtime" "$APP/Contents/Info.plist"
-  printf 'lipo GUI: '; lipo -archs "$APP/Contents/MacOS/Saki"
+  printf 'files:\n'; file "$APP/Contents/MacOS/Nagi" "$APP/Contents/MacOS/Saki-runtime" "$APP/Contents/Info.plist"
+  printf 'lipo GUI: '; lipo -archs "$APP/Contents/MacOS/Nagi"
   printf 'lipo helper: '; lipo -archs "$APP/Contents/MacOS/Saki-runtime"
   plutil -lint "$APP/Contents/Info.plist"
   printf 'CFBundleIdentifier: '; plutil -extract CFBundleIdentifier raw "$APP/Contents/Info.plist"
@@ -150,27 +172,25 @@ echo "== validate paths, architecture and Info.plist =="
   printf 'GUI Mach-O minos: %s\n' "$GUI_MIN_OS"
   printf 'Helper Mach-O minos: %s\n' "$HELPER_MIN_OS"
   printf 'Bundle minimum: %s\n' "$BUNDLE_MINIMUM_OS"
-  go version -m "$APP/Contents/MacOS/Saki"
+  go version -m "$APP/Contents/MacOS/Nagi"
 } | tee "$VALIDATION_LOG"
 
 test "$(uname -m)" = "arm64"
 test "$(go env GOOS)" = "darwin"
 test "$(go env GOARCH)" = "arm64"
-RUSTC_HOST=$(rustc -vV | sed -n 's/^host: //p')
-test "$RUSTC_HOST" = "aarch64-apple-darwin"
-test "$(lipo -archs "$APP/Contents/MacOS/Saki")" = "arm64"
+test "$(lipo -archs "$APP/Contents/MacOS/Nagi")" = "arm64"
 test "$(lipo -archs "$APP/Contents/MacOS/Saki-runtime")" = "arm64"
 grep -q 'Mach-O 64-bit executable arm64' "$VALIDATION_LOG"
 test "$(plutil -extract CFBundleIdentifier raw "$APP/Contents/Info.plist")" = "dev.saki.desktop"
-test "$(plutil -extract CFBundleExecutable raw "$APP/Contents/Info.plist")" = "Saki"
+test "$(plutil -extract CFBundleExecutable raw "$APP/Contents/Info.plist")" = "Nagi"
 test "$(plutil -extract CFBundleShortVersionString raw "$APP/Contents/Info.plist")" = "$APP_VERSION"
 test "$(plutil -extract CFBundleVersion raw "$APP/Contents/Info.plist")" = "1"
 test "$(plutil -extract LSMinimumSystemVersion raw "$APP/Contents/Info.plist")" = "$BUNDLE_MINIMUM_OS"
 python3 "$ROOT/scripts/macos_minimum.py" validate "$BUNDLE_MINIMUM_OS" "$GUI_MIN_OS" "$HELPER_MIN_OS"
-go version -m "$APP/Contents/MacOS/Saki" > "$OUT/gui-buildinfo.txt"
+go version -m "$APP/Contents/MacOS/Nagi" > "$OUT/gui-buildinfo.txt"
 grep -q "vcs.revision=$SOURCE_SHA" "$OUT/gui-buildinfo.txt"
 grep -q 'vcs.modified=false' "$OUT/gui-buildinfo.txt"
-test -x "$APP/Contents/MacOS/Saki"
+test -x "$APP/Contents/MacOS/Nagi"
 test -x "$APP/Contents/MacOS/Saki-runtime"
 
 echo "== sign helper, then app (ad-hoc) =="
@@ -188,14 +208,18 @@ codesign --verify --strict "$APP/Contents/MacOS/Saki-runtime" >> "$CODESIGN_LOG"
   echo "helper details:"; codesign -dv --verbose=4 "$APP/Contents/MacOS/Saki-runtime" 2>&1
 } >> "$CODESIGN_LOG"
 
-echo "== run existing stdio self-test against signed bundle helper =="
-python3 examples/runtime_stdio.py --self-test --binary "$APP/Contents/MacOS/Saki-runtime" 2>&1 | tee "$SMOKE_LOG"
+echo "== verify signed Runtime with existing offline protocol integration =="
+SAKI_TEST_RUNTIME_BIN="$APP/Contents/MacOS/Saki-runtime" \
+SAKI_TEST_ISSUE_TOOL_HELPER="$APP/Contents/MacOS/Nagi" \
+python3 "$ROOT/scripts/gui-go.py" test \
+  -run '^(TestRuntimeProcessIntegration|TestIssueToolConversationRealChainQueryCreateRun)$' \
+  -count=1 -v . 2>&1 | tee "$SMOKE_LOG"
 codesign --verify --strict "$APP/Contents/MacOS/Saki-runtime" >> "$CODESIGN_LOG" 2>&1
 
 echo "== archive and manifest =="
 ditto -c -k --sequesterRsrc --keepParent "$APP" "$ZIP"
 
-APP_SHA=$(shasum -a 256 "$APP/Contents/MacOS/Saki" | awk '{print $1}')
+APP_SHA=$(shasum -a 256 "$APP/Contents/MacOS/Nagi" | awk '{print $1}')
 HELPER_SHA=$(shasum -a 256 "$APP/Contents/MacOS/Saki-runtime" | awk '{print $1}')
 PLIST_SHA=$(shasum -a 256 "$APP/Contents/Info.plist" | awk '{print $1}')
 ZIP_SHA=$(shasum -a 256 "$ZIP" | awk '{print $1}')
@@ -215,16 +239,34 @@ import platform
 
 out = os.environ["OUT"]
 manifest = {
-    "schema": 1,
+    "schema": 2,
     "product": "Nagi",
     "candidate": "macos-arm64",
-    "app": "Saki.app",
+    "app": "Nagi.app",
     "source_sha": os.environ["SOURCE_SHA"],
     "checkout_sha": os.environ["SOURCE_SHA"],
     "ci_event_sha": os.environ["CI_EVENT_SHA"],
     "ref": os.environ["REF"],
     "dirty": False,
     "run_url": os.environ["RUN_URL"],
+    "nagi": {
+        "repository": "https://github.com/HeimaoLST/Nagi",
+        "module": "github.com/HeimaoLST/Nagi",
+        "version": os.environ["APP_VERSION"],
+        "source_sha": os.environ["SOURCE_SHA"],
+        "dirty": False,
+        "sha256": os.environ["APP_SHA"],
+    },
+    "runtime": {
+        "product": "Saki",
+        "repository": "https://github.com/HeimaoLST/Saki",
+        "source_sha": os.environ["RUNTIME_SOURCE_SHA"],
+        "source_identity": "caller-supplied",
+        "version_output": os.environ["RUNTIME_VERSION"],
+        "protocol_version": 1,
+        "input_sha256": os.environ["RUNTIME_INPUT_SHA"],
+        "packaged_sha256": os.environ["HELPER_SHA"],
+    },
     "runner": {
         "label": os.environ.get("RUNNER_LABEL", "local"),
         "arch": platform.machine(),
@@ -234,8 +276,6 @@ manifest = {
     },
     "toolchain": {
         "go": os.popen("go version").read().strip(),
-        "rustc": os.popen("rustc -vV | head -n 3 | tr '\\n' ';'").read().strip(),
-        "cargo": os.popen("cargo --version").read().strip(),
         "xcode": os.popen("xcodebuild -version 2>&1 | head -n 2 | tr '\\n' ';'").read().strip(),
         "sdk": os.popen("xcrun --sdk macosx --show-sdk-version 2>&1").read().strip(),
     },
@@ -251,9 +291,9 @@ manifest = {
         "version": os.environ["APP_VERSION"],
         "build": "1",
         "minimum_os": os.environ["BUNDLE_MINIMUM_OS"],
-        "gui": "Saki.app/Contents/MacOS/Saki",
-        "helper": "Saki.app/Contents/MacOS/Saki-runtime",
-        "info_plist": "Saki.app/Contents/Info.plist",
+        "gui": "Nagi.app/Contents/MacOS/Nagi",
+        "helper": "Nagi.app/Contents/MacOS/Saki-runtime",
+        "info_plist": "Nagi.app/Contents/Info.plist",
     },
     "sha256": {
         "app": os.environ["APP_SHA"],
@@ -267,7 +307,7 @@ manifest = {
         "helper_verify": "strict",
         "identifier": "dev.saki.desktop",
     },
-    "artifact": "Saki.app.zip",
+    "artifact": "Nagi.app.zip",
     "files": [line for line in open(os.path.join(out, "files.txt"), encoding="utf-8").read().splitlines() if line],
     "logs": ["build.log", "codesign.log", "validation.log", "helper-smoke.log"],
     "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
@@ -294,10 +334,10 @@ python3 "$ROOT/scripts/macos_minimum.py" validate-manifest "$MANIFEST" "$GUI_MIN
 (
   cd "$OUT"
   shasum -a 256 \
-    "Saki.app/Contents/MacOS/Saki" \
-    "Saki.app/Contents/MacOS/Saki-runtime" \
-    "Saki.app/Contents/Info.plist" \
-    "Saki.app.zip" \
+    "Nagi.app/Contents/MacOS/Nagi" \
+    "Nagi.app/Contents/MacOS/Saki-runtime" \
+    "Nagi.app/Contents/Info.plist" \
+    "Nagi.app.zip" \
     "manifest.json" > "$SUMS"
 )
 
