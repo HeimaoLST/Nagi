@@ -1,0 +1,634 @@
+{
+  "product": "nagi",
+  "source_repository": "https://github.com/HeimaoLST/Saki",
+  "source_commit": "00298ae22bb95afc11366597e517a3b1ceba21e7",
+  "source_tree": "d65528fc5d1975444dcff184d4354b1b04a73549",
+  "history": "original commits retained; product adaptation uses ordinary new commits",
+  "files": [
+    {
+      "source": "desktop/appearance.go",
+      "target": "appearance.go",
+      "blob": "ee3ff88c54ca19c0608bc3d66326f36253d95bde"
+    },
+    {
+      "source": "desktop/appearance_preview_test.go",
+      "target": "appearance_preview_test.go",
+      "blob": "0d67b27f4bb92019e2f27f18b5463bf210108795"
+    },
+    {
+      "source": "desktop/appearance_test.go",
+      "target": "appearance_test.go",
+      "blob": "36f365e928f1f7cc861d986b53fc1f01e4a53ace"
+    },
+    {
+      "source": "desktop/assets/saki-avatar-default.png",
+      "target": "assets/saki-avatar-default.png",
+      "blob": "4b907403e4a962b663ca4148a0e3a9637591baf3"
+    },
+    {
+      "source": "desktop/builtin_tool_selection.go",
+      "target": "builtin_tool_selection.go",
+      "blob": "3378d3e489935164c523ecad0c7309c5d3e2d573"
+    },
+    {
+      "source": "desktop/builtin_tool_selection_integration_test.go",
+      "target": "builtin_tool_selection_integration_test.go",
+      "blob": "30a086dc5c463121bdac36fda27b38dcc55512fd"
+    },
+    {
+      "source": "desktop/builtin_tool_selection_test.go",
+      "target": "builtin_tool_selection_test.go",
+      "blob": "4d3cc5e877a2ad0319b1b34bd412a937675f0ab7"
+    },
+    {
+      "source": "desktop/composer_model_test.go",
+      "target": "composer_model_test.go",
+      "blob": "545a23947a3ad14ece63ec914aea38f561b1d4ff"
+    },
+    {
+      "source": "desktop/connection_app.go",
+      "target": "connection_app.go",
+      "blob": "129bd18b49850b00dee42c63e7bcc040407bb6f4"
+    },
+    {
+      "source": "desktop/connection_app_integration_test.go",
+      "target": "connection_app_integration_test.go",
+      "blob": "f9353aca8b671cfce94aa96f3e5d13ab80734407"
+    },
+    {
+      "source": "desktop/connection_app_test.go",
+      "target": "connection_app_test.go",
+      "blob": "8e9cf63417a76589e1d5ef0fe018277989414c10"
+    },
+    {
+      "source": "desktop/connection_config.go",
+      "target": "connection_config.go",
+      "blob": "abeef56ed18998995447e33d926ea1b6d647ffb1"
+    },
+    {
+      "source": "desktop/connection_config_test.go",
+      "target": "connection_config_test.go",
+      "blob": "4ef823af78857486a45269c34651cbb1dba37c4c"
+    },
+    {
+      "source": "desktop/connection_error_ui_test.go",
+      "target": "connection_error_ui_test.go",
+      "blob": "0e6e8d4d0bd07813d167ed9981d2a8a170372a4a"
+    },
+    {
+      "source": "desktop/connection_integration_test.go",
+      "target": "connection_integration_test.go",
+      "blob": "8cf1de889006f64b7231363b33d17a5f884953a3"
+    },
+    {
+      "source": "desktop/connection_runtime.go",
+      "target": "connection_runtime.go",
+      "blob": "730276f5d782ec81d77887b8f4294efc373c7e33"
+    },
+    {
+      "source": "desktop/connection_settings.go",
+      "target": "connection_settings.go",
+      "blob": "d217abe2656c0b85d77f37007d5b808410ed79af"
+    },
+    {
+      "source": "desktop/connection_settings_test.go",
+      "target": "connection_settings_test.go",
+      "blob": "a1768c7fcdf5ddabbb7ef3a38aa3785ae14a6a41"
+    },
+    {
+      "source": "desktop/contact_history.go",
+      "target": "contact_history.go",
+      "blob": "bc9b6779f75384971ea271c2cf6fe35bfa28c7eb"
+    },
+    {
+      "source": "desktop/contact_history_test.go",
+      "target": "contact_history_test.go",
+      "blob": "336aa9f8f467f79510b525b13cf37e7f9078afd9"
+    },
+    {
+      "source": "desktop/contact_management.go",
+      "target": "contact_management.go",
+      "blob": "76b48ea134019a622a738d61def4e3f2a1498573"
+    },
+    {
+      "source": "desktop/contact_management_integration_test.go",
+      "target": "contact_management_integration_test.go",
+      "blob": "bd3e027234f1c792c9bbca306d8c2b431f70a37a"
+    },
+    {
+      "source": "desktop/contact_management_test.go",
+      "target": "contact_management_test.go",
+      "blob": "7ff273d75dac5ecba1ecaa281fed9397fc1a9d70"
+    },
+    {
+      "source": "desktop/contact_profile.go",
+      "target": "contact_profile.go",
+      "blob": "f7a8feb403ed5d478615a4208bf5344c8328524f"
+    },
+    {
+      "source": "desktop/contact_profile_test.go",
+      "target": "contact_profile_test.go",
+      "blob": "3b8f822804e1df0e61e4a37d7d298214b8cca253"
+    },
+    {
+      "source": "desktop/go.mod",
+      "target": "go.mod",
+      "blob": "a23188c68f3bad9578e0baafece471c5240674dd"
+    },
+    {
+      "source": "desktop/go.sum",
+      "target": "go.sum",
+      "blob": "0db2bc26a4f0da6d1361b557c2dacd24035aa5f5"
+    },
+    {
+      "source": "desktop/history_shutdown_integration_test.go",
+      "target": "history_shutdown_integration_test.go",
+      "blob": "217a17f864713b82564c56833f0cf169a9eef705"
+    },
+    {
+      "source": "desktop/i18n_preview_test.go",
+      "target": "i18n_preview_test.go",
+      "blob": "1a2a45262f27fff532b4ac2f80c44c24fd376be1"
+    },
+    {
+      "source": "desktop/i18n_test.go",
+      "target": "i18n_test.go",
+      "blob": "a8be648e2406f7f50c370f9fa8ecc80950706efb"
+    },
+    {
+      "source": "desktop/input_test.go",
+      "target": "input_test.go",
+      "blob": "ca22e13229fb807a158cf27d9582336672e1dcd2"
+    },
+    {
+      "source": "desktop/integration_runtime_test.go",
+      "target": "integration_runtime_test.go",
+      "blob": "459247a094674c5b0d1eb19fdd7320a70f5c29b2"
+    },
+    {
+      "source": "desktop/issue_detail_preview_test.go",
+      "target": "issue_detail_preview_test.go",
+      "blob": "f5f96d79e0ada215a48de89bb627ead5612c579b"
+    },
+    {
+      "source": "desktop/issue_detail_ui_test.go",
+      "target": "issue_detail_ui_test.go",
+      "blob": "f17106350bbbc9878e1691cc79a8445b1c83c213"
+    },
+    {
+      "source": "desktop/issue_lifecycle.go",
+      "target": "issue_lifecycle.go",
+      "blob": "cec0800341c4a863b54466535f8889b5eb799665"
+    },
+    {
+      "source": "desktop/issue_lifecycle_integration_test.go",
+      "target": "issue_lifecycle_integration_test.go",
+      "blob": "fc21f33b7846828fcb5e14d54557c8268834afa2"
+    },
+    {
+      "source": "desktop/issue_lifecycle_test.go",
+      "target": "issue_lifecycle_test.go",
+      "blob": "d70c2d3a41846eafe3149005589d435ff89653c4"
+    },
+    {
+      "source": "desktop/issue_navigation.go",
+      "target": "issue_navigation.go",
+      "blob": "1f12da35c9a8b7d10f301c6b2dad183bdfd7e8bb"
+    },
+    {
+      "source": "desktop/issue_navigation_test.go",
+      "target": "issue_navigation_test.go",
+      "blob": "f6a347bdc31c173311b5dda9bea4aee940ad18ca"
+    },
+    {
+      "source": "desktop/issue_results.go",
+      "target": "issue_results.go",
+      "blob": "de2aa9bd13f5bf795884a149cf4c8e2749a09bf8"
+    },
+    {
+      "source": "desktop/issue_results_app.go",
+      "target": "issue_results_app.go",
+      "blob": "c18bff8e6de909bb92c5bd8dc9b9dd6f2d0ca57a"
+    },
+    {
+      "source": "desktop/issue_results_app_integration_test.go",
+      "target": "issue_results_app_integration_test.go",
+      "blob": "dc3b9323ee3ba7bad9a2f49a2e04a04a74f0bf23"
+    },
+    {
+      "source": "desktop/issue_results_integration_test.go",
+      "target": "issue_results_integration_test.go",
+      "blob": "45cf02aa7e1c9fbeeafad2cfa0b238a48a6d08fe"
+    },
+    {
+      "source": "desktop/issue_results_test.go",
+      "target": "issue_results_test.go",
+      "blob": "d9751f136cbfbd49b7fe67a13c41f473c711e73a"
+    },
+    {
+      "source": "desktop/issue_supplement.go",
+      "target": "issue_supplement.go",
+      "blob": "a2b12c97fd2ac0d42ffd30b9cec11ac690bb7399"
+    },
+    {
+      "source": "desktop/issue_supplement_app.go",
+      "target": "issue_supplement_app.go",
+      "blob": "b5c07950dd21e44a47462c231b31bc49fdf1d161"
+    },
+    {
+      "source": "desktop/issue_supplement_app_test.go",
+      "target": "issue_supplement_app_test.go",
+      "blob": "14dd17dc3e27647a203dd62558e0703fc9c2f2d1"
+    },
+    {
+      "source": "desktop/issue_supplement_integration_test.go",
+      "target": "issue_supplement_integration_test.go",
+      "blob": "a0b256b272611894a55aa35f01a9c670b2a00be3"
+    },
+    {
+      "source": "desktop/issue_supplement_test.go",
+      "target": "issue_supplement_test.go",
+      "blob": "8689dd4a9e15b9dbd2d44d9f29ab9434beff7e5a"
+    },
+    {
+      "source": "desktop/issue_supplement_view.go",
+      "target": "issue_supplement_view.go",
+      "blob": "498e9cca5e3b0ad75f61862e12b2abc6f956a012"
+    },
+    {
+      "source": "desktop/issue_tool_app.go",
+      "target": "issue_tool_app.go",
+      "blob": "85cd52908e601c6f4145a7c9974fdafa1f345049"
+    },
+    {
+      "source": "desktop/issue_tool_app_test.go",
+      "target": "issue_tool_app_test.go",
+      "blob": "e922645b48fc4d8c578123a240796c0d08c635c4"
+    },
+    {
+      "source": "desktop/issue_tool_context_integration_test.go",
+      "target": "issue_tool_context_integration_test.go",
+      "blob": "9bde56f74ec6e20881857f0e188cc783b67e79d4"
+    },
+    {
+      "source": "desktop/issue_tool_contract.go",
+      "target": "issue_tool_contract.go",
+      "blob": "c5466adfec94d5a7caa09bdea6a12145b087c0ec"
+    },
+    {
+      "source": "desktop/issue_tool_contract_test.go",
+      "target": "issue_tool_contract_test.go",
+      "blob": "d1c5633bdf79b17c6d4a35f9b357e9fd318f53b4"
+    },
+    {
+      "source": "desktop/issue_tool_helper.go",
+      "target": "issue_tool_helper.go",
+      "blob": "66a9e5713f6c5d511995a0d50245667369f63139"
+    },
+    {
+      "source": "desktop/issue_tool_helper_test.go",
+      "target": "issue_tool_helper_test.go",
+      "blob": "1efb3e87f0595ea535576b61bbfb96941a5678fe"
+    },
+    {
+      "source": "desktop/issue_tool_integration_test.go",
+      "target": "issue_tool_integration_test.go",
+      "blob": "815c2a034d8191144816fbe05ff6477758bfd35a"
+    },
+    {
+      "source": "desktop/issue_tool_ipc.go",
+      "target": "issue_tool_ipc.go",
+      "blob": "075f18171723a887cec22bdcf9aeea161357c864"
+    },
+    {
+      "source": "desktop/issue_tool_ipc_test.go",
+      "target": "issue_tool_ipc_test.go",
+      "blob": "14c99d31f24a081847e0f145d1b863cb8112d7ab"
+    },
+    {
+      "source": "desktop/issue_tool_main.go",
+      "target": "issue_tool_main.go",
+      "blob": "a31568335bc30cac8354c8300acdd5890e80d985"
+    },
+    {
+      "source": "desktop/issue_tool_workflow.go",
+      "target": "issue_tool_workflow.go",
+      "blob": "baa8f32f08e96d868b87daec2990a4a01b0156c8"
+    },
+    {
+      "source": "desktop/issue_tool_workflow_test.go",
+      "target": "issue_tool_workflow_test.go",
+      "blob": "224515c8b05bc534660fa6e110b3f837eca3b643"
+    },
+    {
+      "source": "desktop/issues.go",
+      "target": "issues.go",
+      "blob": "601286d77fb0b87b64c11606a3af839fbfb65be4"
+    },
+    {
+      "source": "desktop/issues_preview_test.go",
+      "target": "issues_preview_test.go",
+      "blob": "a1033ce6472df8a88d69986a3cdb7aa39c9bb4a7"
+    },
+    {
+      "source": "desktop/issues_test.go",
+      "target": "issues_test.go",
+      "blob": "af9c36b1a7b960eb8fca124688a4751daa898b42"
+    },
+    {
+      "source": "desktop/issues_ui_test.go",
+      "target": "issues_ui_test.go",
+      "blob": "3bf9b68fd3918b898ec7838b3593facacf948a1c"
+    },
+    {
+      "source": "desktop/layout_preview_test.go",
+      "target": "layout_preview_test.go",
+      "blob": "4df99ddbdfc024ae6fc87c57e3861f1111d07864"
+    },
+    {
+      "source": "desktop/layout_test.go",
+      "target": "layout_test.go",
+      "blob": "fa04d0fb427b97185c12f0b751c8bdb99f6df112"
+    },
+    {
+      "source": "desktop/locale_darwin.go",
+      "target": "locale_darwin.go",
+      "blob": "c2cf118a0d2c4ceee8fc35f071775d89e8164ea6"
+    },
+    {
+      "source": "desktop/locales/catalog_gen.go",
+      "target": "locales/catalog_gen.go",
+      "blob": "1ed78c560144a6acaefd353f89c25f195f33a100"
+    },
+    {
+      "source": "desktop/locales/doc.go",
+      "target": "locales/doc.go",
+      "blob": "45245544f65840eb38b66cbf2c08eecaed6fb2d2"
+    },
+    {
+      "source": "desktop/locales/en.json",
+      "target": "locales/en.json",
+      "blob": "824881c3c233e43d84191b257b48cc6a4ad5a93e"
+    },
+    {
+      "source": "desktop/locales/zh-Hans.json",
+      "target": "locales/zh-Hans.json",
+      "blob": "bc115f7c5c0da1f939946461558ea89693103a8f"
+    },
+    {
+      "source": "desktop/main.go",
+      "target": "main.go",
+      "blob": "33be544cc0d7472a46c892db6451a927f1d4340f"
+    },
+    {
+      "source": "desktop/markdown.go",
+      "target": "markdown.go",
+      "blob": "675ed880f034ed81e3e93b59e2102d673c012909"
+    },
+    {
+      "source": "desktop/markdown_test.go",
+      "target": "markdown_test.go",
+      "blob": "3f7c323c21cff92645717185caca504803c2cfa9"
+    },
+    {
+      "source": "desktop/markdown_view_test.go",
+      "target": "markdown_view_test.go",
+      "blob": "125d4616560f556f44414c13cd7a9a2f3e233fcf"
+    },
+    {
+      "source": "desktop/model.go",
+      "target": "model.go",
+      "blob": "c0dcb7c82a5965e4066cf7bdfb9abbbe6744e060"
+    },
+    {
+      "source": "desktop/model_selection.go",
+      "target": "model_selection.go",
+      "blob": "23bb79c345e964e19dee3b7e1745387fb23f1c02"
+    },
+    {
+      "source": "desktop/model_selection_app.go",
+      "target": "model_selection_app.go",
+      "blob": "16aa495409dccc6c99fe412e67b0a1871e7483f7"
+    },
+    {
+      "source": "desktop/model_selection_app_integration_test.go",
+      "target": "model_selection_app_integration_test.go",
+      "blob": "94d0f9e08e846b3ce44d1bd6812bcce8dbb9ee85"
+    },
+    {
+      "source": "desktop/model_selection_app_test.go",
+      "target": "model_selection_app_test.go",
+      "blob": "4c47e4ff179a9cc90495d99989febbc8a97a2b13"
+    },
+    {
+      "source": "desktop/model_selection_integration_test.go",
+      "target": "model_selection_integration_test.go",
+      "blob": "a482cc59cf52e31a60b12c77b3788e58200778dd"
+    },
+    {
+      "source": "desktop/model_selection_test.go",
+      "target": "model_selection_test.go",
+      "blob": "e4403a6105d4464064be97ac639a6d9374fee595"
+    },
+    {
+      "source": "desktop/model_test.go",
+      "target": "model_test.go",
+      "blob": "88168ffba6d36253f0ab39f6f3e3d994ff0d9256"
+    },
+    {
+      "source": "desktop/mygo.json",
+      "target": "mygo.json",
+      "blob": "25a2e489c50e37be6d1f76a2b23147c1330a9aa2"
+    },
+    {
+      "source": "desktop/navigation.go",
+      "target": "navigation.go",
+      "blob": "beaa4ceaf887a949ad7b9811fa6a364740e25049"
+    },
+    {
+      "source": "desktop/navigation_test.go",
+      "target": "navigation_test.go",
+      "blob": "0d66382d2f2059f07e9c641332ede6f8d8765dcd"
+    },
+    {
+      "source": "desktop/patches/editor-release.patch",
+      "target": "patches/editor-release.patch",
+      "blob": "0b69bcd5cfca2bedac2e8692bdf982fb6ea12f78"
+    },
+    {
+      "source": "desktop/patches/markdown-link-focus.patch",
+      "target": "patches/markdown-link-focus.patch",
+      "blob": "9881848201523b515d769e7c46f66fef50d53ac3"
+    },
+    {
+      "source": "desktop/patches/split-release.patch",
+      "target": "patches/split-release.patch",
+      "blob": "a26a232417f6b676955dad6e020e9917b6be3a52"
+    },
+    {
+      "source": "desktop/routing_integration_test.go",
+      "target": "routing_integration_test.go",
+      "blob": "cdb788cdd4cb3321b3c79638b5303ee237a5fd28"
+    },
+    {
+      "source": "desktop/runtime.go",
+      "target": "runtime.go",
+      "blob": "ec953b95f86d4654639f18d2b8e658cf5f73c075"
+    },
+    {
+      "source": "desktop/runtime_model.go",
+      "target": "runtime_model.go",
+      "blob": "ec1306ac4a143323bc0fa84a049b27adc7b2b1e1"
+    },
+    {
+      "source": "desktop/runtime_model_test.go",
+      "target": "runtime_model_test.go",
+      "blob": "56f9b10258aed5df25069f62b5f2d811ead79504"
+    },
+    {
+      "source": "desktop/runtime_test.go",
+      "target": "runtime_test.go",
+      "blob": "d5183836f083f3f8752425ebf4f360427a93c66f"
+    },
+    {
+      "source": "desktop/settings_page.go",
+      "target": "settings_page.go",
+      "blob": "df593b40c8a5bd32817d37b924bf9a9127938efa"
+    },
+    {
+      "source": "desktop/settings_page_test.go",
+      "target": "settings_page_test.go",
+      "blob": "ec576e355ea97b8a04932d966cc36ca91b25f046"
+    },
+    {
+      "source": "desktop/startup_preview_test.go",
+      "target": "startup_preview_test.go",
+      "blob": "c38210468248f8465100c51a6ad8c8f185f696b8"
+    },
+    {
+      "source": "desktop/startup_test.go",
+      "target": "startup_test.go",
+      "blob": "56465d05086b917a80e277a2eb8c208eede4c38d"
+    },
+    {
+      "source": "desktop/store.go",
+      "target": "store.go",
+      "blob": "0664fd3404b6125bbb686892fc51a07c044df489"
+    },
+    {
+      "source": "desktop/store_test.go",
+      "target": "store_test.go",
+      "blob": "3cb729e6ec0ec72a94bd429ed28d35edc102979f"
+    },
+    {
+      "source": "desktop/task_context.go",
+      "target": "task_context.go",
+      "blob": "1d019e3c6d54d1c0296161c9943069ed6949bdcd"
+    },
+    {
+      "source": "desktop/task_context_app.go",
+      "target": "task_context_app.go",
+      "blob": "8400df2db94a2a20f5857af4a5a45c441e14ccdb"
+    },
+    {
+      "source": "desktop/task_context_app_test.go",
+      "target": "task_context_app_test.go",
+      "blob": "3b0595ca681b07083bf44c2672744bbd717c160b"
+    },
+    {
+      "source": "desktop/task_context_integration_test.go",
+      "target": "task_context_integration_test.go",
+      "blob": "c0fef3b62fd2859688a0e4ec2f6bbf2ee9768d63"
+    },
+    {
+      "source": "desktop/task_context_test.go",
+      "target": "task_context_test.go",
+      "blob": "dcc4b6d8fd20f8b1093978d000222f6c001b83f2"
+    },
+    {
+      "source": "desktop/theme.go",
+      "target": "theme.go",
+      "blob": "defb9586804807505274f80c1246457977799b84"
+    },
+    {
+      "source": "desktop/view.go",
+      "target": "view.go",
+      "blob": "f317a92a2d8829ff0f57abdc0c2d18c22a0a31bb"
+    },
+    {
+      "source": "desktop/view_test.go",
+      "target": "view_test.go",
+      "blob": "ecb4c1adcb901849b5aac69e93fdfe75f8570575"
+    },
+    {
+      "source": "desktop/workspace.go",
+      "target": "workspace.go",
+      "blob": "d7a6b1df7f5a8702b6b141d7c1dc673d34e573e6"
+    },
+    {
+      "source": "desktop/workspace_preview_test.go",
+      "target": "workspace_preview_test.go",
+      "blob": "75f28c4a57e8e21229273e2276940ba6acb160dd"
+    },
+    {
+      "source": "desktop/workspace_test.go",
+      "target": "workspace_test.go",
+      "blob": "0edb32c9c0cbc9505c36881032aab9d4d214f5a5"
+    },
+    {
+      "source": "docs/design/desktop-workbench.md",
+      "target": "docs/design/desktop-workbench.md",
+      "blob": "2687e1629f247db1efdf6ebebf9e6f1dbda3aa16"
+    },
+    {
+      "source": "docs/design/desktop.md",
+      "target": "docs/design/desktop.md",
+      "blob": "4c169ef06836f5862b6a01744e33e13f69a0253d"
+    },
+    {
+      "source": "docs/design/experience-to-behavior.md",
+      "target": "docs/design/experience-to-behavior.md",
+      "blob": "68b045d493f4e7421ba4a5cfd38318fc665f295e"
+    },
+    {
+      "source": "docs/design/previews/assets/saki-avatar-default.png",
+      "target": "docs/design/previews/assets/saki-avatar-default.png",
+      "blob": "4b907403e4a962b663ca4148a0e3a9637591baf3"
+    },
+    {
+      "source": "docs/design/previews/desktop-workbench.html",
+      "target": "docs/design/previews/desktop-workbench.html",
+      "blob": "b32d5a542c25d3b014b922717593c218e7ebb332"
+    },
+    {
+      "source": "docs/requirements/desktop.md",
+      "target": "docs/requirements/desktop.md",
+      "blob": "f0e8aae3b43c7a8b6a48c6d8aebf61fee8f2f707"
+    },
+    {
+      "source": "scripts/build-macos-app.sh",
+      "target": "scripts/build-macos-app.sh",
+      "blob": "c1f61a2f74bc518adbd6350bed6aeb0f9a7693ac"
+    },
+    {
+      "source": "scripts/check-gui-runtime-results.py",
+      "target": "scripts/check-gui-runtime-results.py",
+      "blob": "965de778da80a88729f4ef6ee20d9acf9e920625"
+    },
+    {
+      "source": "scripts/gui-go.py",
+      "target": "scripts/gui-go.py",
+      "blob": "f70ece5def1d1d6b9efa6bae2c097d6105cdb525"
+    },
+    {
+      "source": "scripts/macos_minimum.py",
+      "target": "scripts/macos_minimum.py",
+      "blob": "c6db9103f00df259a246de40c8401b081ee59f11"
+    },
+    {
+      "source": "scripts/test_macos_minimum.py",
+      "target": "scripts/test_macos_minimum.py",
+      "blob": "5f3929784494e4d43a10af86a78bbf568d32d4b3"
+    }
+  ]
+}
