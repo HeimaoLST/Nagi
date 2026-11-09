@@ -22,7 +22,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	"saki/desktop/locales"
+	"github.com/HeimaoLST/Nagi/locales"
 )
 
 // issueResultPreviewLimit bounds the current-file preview. A larger file is

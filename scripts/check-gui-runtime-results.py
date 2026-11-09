@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Validate go test -json results for the offline desktop GUI/runtime suite.
 
-This is a CI result contract, not a product test framework. The full desktop
-package runs in the rust job; this checker makes missing/extra-skipped key
+This is a CI result contract, not a product test framework. The full Nagi
+package runs against the pinned Saki artifact; this checker makes missing/extra-skipped key
 scenarios fail instead of letting a broad test count or cached run hide them.
 """
 from __future__ import annotations
@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import sys
 
-DESKTOP = "saki/desktop"
+DESKTOP = "github.com/HeimaoLST/Nagi"
 REQUIRED_TESTS = (
     # Original #87 five-test gate.
     "TestRuntimeProcessIntegration",
@@ -102,11 +102,11 @@ def main(path: str) -> int:
         if (package, test) not in ALLOWED_SKIPS:
             errors.append(f"unexpected SKIP: {package}::{test}")
 
-    desktop_package = [action for package, action in package_actions if package == "saki/desktop"]
+    desktop_package = [action for package, action in package_actions if package == "github.com/HeimaoLST/Nagi"]
     if "pass" not in desktop_package:
-        errors.append("saki/desktop package did not finish PASS")
-    if "fail" in desktop_package or any(pkg == "saki/desktop" for pkg, _ in fails):
-        errors.append("saki/desktop package finished FAIL")
+        errors.append("github.com/HeimaoLST/Nagi package did not finish PASS")
+    if "fail" in desktop_package or any(pkg == "github.com/HeimaoLST/Nagi" for pkg, _ in fails):
+        errors.append("github.com/HeimaoLST/Nagi package finished FAIL")
     if any(action == "fail" for _, action in package_actions):
         errors.append("a package finished FAIL")
 

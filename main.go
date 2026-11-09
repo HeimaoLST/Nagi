@@ -49,7 +49,7 @@ func main() {
 		windowOptions.Width, windowOptions.Height = width, height
 		windowOptions.UseContentSize = true
 	}
-	// The visible product name is Nagi; internal identifiers, the Saki.app
+	// The visible product name is Nagi; internal identifiers, the Nagi.app
 	// artifact and Saki data paths stay as they are. Call before Run so the
 	// default app menu, About, Hide and Quit use Nagi too.
 	mygo.App.SetName("Nagi")

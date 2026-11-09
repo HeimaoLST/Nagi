@@ -1,0 +1,139 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [dev, master, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+
+jobs:
+  gui:
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Go formatting
+        run: test -z "$(gofmt -l .)"
+      - name: Nagi vet, tests and independent build
+        env:
+          CGO_ENABLED: '0'
+          SAKI_TEST_ONLINE: '0'
+        run: |
+          python3 scripts/gui-go.py vet ./...
+          python3 scripts/gui-go.py test ./... -count=1
+          python3 scripts/gui-go.py test github.com/egoist/mygo/ui -run '^(TestSplitReleaseBeforeFrame|TestEditorSelectionReleaseBeforeFrame)$' -count=1 -v
+          python3 scripts/gui-go.py build -trimpath -mod=readonly -buildvcs=true -o "$RUNNER_TEMP/Nagi" .
+      - name: Python CI support tests
+        run: |
+          python3 - <<'PYTHON'
+          import unittest
+          suite = unittest.TestLoader().discover("scripts", pattern="test_*.py")
+          result = unittest.TextTestRunner(verbosity=2).run(suite)
+          print(f"DISCOVERED {result.testsRun} tests")
+          raise SystemExit(0 if result.testsRun and result.wasSuccessful() else 1)
+          PYTHON
+      - name: Headless previews
+        env:
+          CGO_ENABLED: '0'
+          SAKI_PREVIEW_DIR: ${{ runner.temp }}/nagi-previews
+        run: |
+          mkdir -p "$SAKI_PREVIEW_DIR"
+          python3 scripts/gui-go.py test -run TestPreviewImages -count=1 .
+      - uses: actions/upload-artifact@v7
+        with:
+          name: nagi-headless-previews
+          path: ${{ runner.temp }}/nagi-previews/*.png
+          if-no-files-found: error
+  runtime-compatibility:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Fetch exact pinned Saki runtime artifact
+        env:
+          GH_TOKEN: ${{ secrets.SAKI_ARTIFACT_READ_TOKEN || github.token }}
+        run: |
+          python3 scripts/fetch-saki-runtime.py --pin .github/saki-runtime.json \
+            --output "$RUNNER_TEMP/saki-runtime" --github-env "$GITHUB_ENV"
+      - name: Runtime identity
+        run: |
+          "$SAKI_RUNTIME_BIN" --version
+          cat "$RUNNER_TEMP/saki-runtime/manifest.json"
+      - name: Build same-source Nagi issue helper
+        env:
+          CGO_ENABLED: '0'
+        run: python3 scripts/gui-go.py build -trimpath -mod=readonly -buildvcs=true -o "$RUNNER_TEMP/nagi-issue-helper" .
+      - name: Full offline Nagi package against pinned Saki
+        timeout-minutes: 20
+        env:
+          CGO_ENABLED: '1'
+          SAKI_TEST_ISSUE_TOOL_HELPER: ${{ runner.temp }}/nagi-issue-helper
+          SAKI_TEST_ONLINE: '0'
+          SAKI_PREVIEW_DIR: ${{ runner.temp }}/nagi-compatibility-previews
+        run: |
+          mkdir -p "$SAKI_PREVIEW_DIR"
+          set -o pipefail
+          python3 scripts/gui-go.py test -race -timeout=15m -json ./... -count=1 | tee "$RUNNER_TEMP/nagi-runtime.json"
+      - name: Require real runtime scenarios and reject unexpected skips
+        if: always()
+        run: python3 scripts/check-gui-runtime-results.py "$RUNNER_TEMP/nagi-runtime.json"
+      - name: Package Nagi with verified external runtime
+        run: |
+          NAGI_VERSION=$(cat VERSION)
+          bash scripts/build-macos-app.sh "$RUNNER_TEMP/nagi-candidate" \
+            "$SAKI_RUNTIME_BIN" "$NAGI_VERSION" "$SAKI_RUNTIME_SOURCE_SHA"
+          test -f "$RUNNER_TEMP/nagi-candidate/Nagi.app.zip"
+          test -f "$RUNNER_TEMP/nagi-candidate/manifest.json"
+          test -f "$RUNNER_TEMP/nagi-candidate/SHA256SUMS"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: nagi-macos-arm64-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            ${{ runner.temp }}/nagi-candidate/Nagi.app.zip
+            ${{ runner.temp }}/nagi-candidate/manifest.json
+            ${{ runner.temp }}/nagi-candidate/SHA256SUMS
+            ${{ runner.temp }}/nagi-candidate/*.log
+          if-no-files-found: error
+  ci-required:
+    if: always()
+    needs: [gui, runtime-compatibility]
+    runs-on: macos-15-intel
+    timeout-minutes: 5
+    steps:
+      - name: Require Nagi and pinned protocol compatibility
+        env:
+          GUI_RESULT: ${{ needs.gui.result }}
+          COMPAT_RESULT: ${{ needs.runtime-compatibility.result }}
+        run: |
+          echo "gui=$GUI_RESULT runtime-compatibility=$COMPAT_RESULT"
+          test "$GUI_RESULT" = success
+          test "$COMPAT_RESULT" = success

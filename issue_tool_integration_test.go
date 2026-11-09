@@ -200,7 +200,7 @@ func ensureIssueToolTestHelper(t *testing.T) string {
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(dir) })
 	helper := filepath.Join(dir, "saki-issue-tool-helper")
-	cmd := exec.Command(python, "../scripts/gui-go.py", "build", "-o", helper, ".")
+	cmd := exec.Command(python, "scripts/gui-go.py", "build", "-o", helper, ".")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("build issue tool helper: %v\n%s", err, out)
 	}

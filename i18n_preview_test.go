@@ -9,7 +9,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"saki/desktop/locales"
+	"github.com/HeimaoLST/Nagi/locales"
 )
 
 // TestPreviewI18nSelectedSlice is the I1 headless preview for the selected

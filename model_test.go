@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"saki/desktop/locales"
+	"github.com/HeimaoLST/Nagi/locales"
 )
 
 func testApp(t *testing.T) *appModel {

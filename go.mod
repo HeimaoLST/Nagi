@@ -1,4 +1,4 @@
-module saki/desktop
+module github.com/HeimaoLST/Nagi
 
 go 1.27.3
 

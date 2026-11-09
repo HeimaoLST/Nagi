@@ -1,8 +1,8 @@
 # Nagi：GUI 产品定义与需求
 
-更新日期：2026-11-03。状态：**当前产品定义与行为需求，待分阶段实施与验收**。依据用户本轮关于开源产品、长期联系人、事项与工作分身的讨论修订；Nagi 是已确定的 GUI 名称，当前仍在 Saki 仓库的 `desktop/` 下，尚未独立出去。本文件是 GUI 产品定义的权威位置，设计稿和实现文档引用本文。需求不表示功能已经完成；完整 MVP 的行为范围已在下文明确；具体接口、迁移和后续版本仍按实际设计处理。
+更新日期：2026-11-09。状态：**当前产品定义与行为需求，待分阶段实施与验收**。依据用户本轮关于开源产品、长期联系人、事项与工作分身的讨论修订；Nagi 是已确定的 GUI 名称，现已在独立的 [Nagi Git 仓库](https://github.com/HeimaoLST/Nagi) 维护，根 Go module 为 `github.com/HeimaoLST/Nagi`；原始候选和历史来源见 [导入记录](../design/source-import.json)。本文件是 GUI 产品定义的权威位置，设计稿和实现文档引用本文。需求不表示功能已经完成；完整 MVP 的行为范围已在下文明确；具体接口、迁移和后续版本仍按实际设计处理。
 
-本次定义修订见 [#134](https://github.com/HeimaoLST/Saki/issues/134)，完整 MVP 范围修订见 [#151](https://github.com/HeimaoLST/Saki/issues/151)，交付由 [#140](https://github.com/HeimaoLST/Saki/issues/140) 和 [Nagi MVP 里程碑](https://github.com/HeimaoLST/Saki/milestone/3) 统筹，已有工程交接见 [#111](https://github.com/HeimaoLST/Saki/issues/111)。优先级、执行顺序、负责人和实时状态只在 GitHub 维护。具体实现及已验证限制见 [Desktop design](../design/desktop.md)，公共执行契约见 [Runtime API](../design/runtime-api.md)。
+本次定义修订见 [#134](https://github.com/HeimaoLST/Saki/issues/134)，完整 MVP 范围修订见 [#151](https://github.com/HeimaoLST/Saki/issues/151)，交付由 [#140](https://github.com/HeimaoLST/Saki/issues/140) 和 [Nagi MVP 里程碑](https://github.com/HeimaoLST/Saki/milestone/3) 统筹，已有工程交接见 [#111](https://github.com/HeimaoLST/Saki/issues/111)。优先级、执行顺序、负责人和实时状态只在 GitHub 维护。具体实现及已验证限制见 [Desktop design](../design/desktop.md)，公共执行契约见 [Runtime API](https://github.com/HeimaoLST/Saki/blob/dev/docs/design/runtime-api.md)。
 
 现行视觉与交互以 [Desktop workbench](../design/desktop-workbench.md) 为唯一来源：纸白/夜林、默认联系人栏 + 对话、详情按需打开，真实消息气泡、独立 Agent 工作区；宽屏三域与窄窗行为按[规范断点](../design/desktop-workbench.md#布局与右侧详情)执行。#130 实施阶段性的原生闭环；事项/看板/长期轨迹的界面与实现继续细化，原型 fixture 不作为生产功能。旧配色、工具附在聊天回复下的要求不再生效。
 
@@ -21,8 +21,8 @@
 | 产品 | 职责与默认使用方式 |
 | --- | --- |
 | Saki | 通用 Agent Runtime，提供模型／工具执行、上下文、会话、事件与调度等共同基础，让应用开发者聚焦自己的产品；跨应用协作是发展目标 |
-| Nagi（GUI 暂定名） | 联系人式桌面工作台，默认侧重用户委派、联系人自主推进和必要时反馈；它是有自身产品规则的应用 |
-| TUI（名称待定） | 终端中的执行与协作入口，默认侧重用户直接观察、指导和参与工作；继续复用 Saki 的运行能力 |
+| Nagi（GUI） | 联系人式桌面工作台，默认侧重用户委派、联系人自主推进和必要时反馈；它是有自身产品规则的应用 |
+| [Rous](https://github.com/HeimaoLST/Rous)（TUI） | 终端中的执行与协作入口，默认侧重用户直接观察、指导和参与工作；继续复用 Saki 的运行能力 |
 
 自主推进与人工介入可以发生在同一项工作中；这不是 GUI 与 TUI 的能力禁区划分。目标体验是从 GUI 进入某项具体执行，在 TUI 继续参与，再回到 GUI 查看同一事项的进展，无需用户复制上下文或重新派发。共享一套 Runtime 实现尚不足以证明这个跨端流程已经实现；交付时需验证同一工作归属、状态与操作的一致性。
 
@@ -84,7 +84,7 @@ X 对用户承担事项的持续跟进，也可以通过自己的执行会话直
 | MVP-08 | 添加、预览、编辑/移除文字或 UTF-8 文件快照，实际提交一次且来源明确。文件变化不改已预览快照；资料在被拒、容量满和重启后仍保留，已移除不发送 | [#117](https://github.com/HeimaoLST/Saki/issues/117)；G8 |
 | MVP-09 | 事项下可读/复制实际结果、定位来源执行、查看未满足要求；实际成果文件可打开/在 Finder 定位。文件不存在/移动/打开失败有事实反馈；不从任意模型文字虚构已生成文件或权威 diff | [#155](https://github.com/HeimaoLST/Saki/issues/155)、[#153](https://github.com/HeimaoLST/Saki/issues/153)、[#113](https://github.com/HeimaoLST/Saki/issues/113) |
 | MVP-10 | 停止、失败、断连未知、退出/重启后保留联系人、事项、要求、补充、草稿和既有成果；提供核对/修正/继续入口。恢复或查看不自动重放副作用；等待用户/失败/完成即使没有聊天消息也可发现 | [#118](https://github.com/HeimaoLST/Saki/issues/118)、[#142](https://github.com/HeimaoLST/Saki/issues/142)、[#153](https://github.com/HeimaoLST/Saki/issues/153)、[#146](https://github.com/HeimaoLST/Saki/issues/146)；G5 |
-| MVP-11 | 同一个可追溯应用候选包含 GUI 与 Runtime，准确说明安装/使用/支持范围。纸白/夜林、窗口、焦点和长内容可用；同 SHA 通过适用原生操作、功能回归及 required CI，构建成功不冒充原生通过 | [#143](https://github.com/HeimaoLST/Saki/issues/143)、[#96](https://github.com/HeimaoLST/Saki/issues/96)、[#101](https://github.com/HeimaoLST/Saki/issues/101)、[#114](https://github.com/HeimaoLST/Saki/issues/114)、[#130](https://github.com/HeimaoLST/Saki/issues/130) |
+| MVP-11 | 同一个可追溯应用候选包含 GUI 与 Runtime，准确说明安装/使用/支持范围。纸白/夜林、窗口、焦点和长内容可用；固定 GUI／Runtime 各自版本、source SHA 与 binary hash 的同一组合通过适用原生操作、功能回归及 required CI，构建成功不冒充原生通过 | [#143](https://github.com/HeimaoLST/Saki/issues/143)、[#96](https://github.com/HeimaoLST/Saki/issues/96)、[#101](https://github.com/HeimaoLST/Saki/issues/101)、[#114](https://github.com/HeimaoLST/Saki/issues/114)、[#130](https://github.com/HeimaoLST/Saki/issues/130) |
 | MVP-12 | 维护者和首批独立使用者实际完成连续工作，所有必须能力均有证据，无需开发者手工救场。PM 执行基线为维护者连续 3 个使用日、至少 2 类真实工作，以及至少 1 位未参与开发的使用者独立完成首用与一件工作；任务由使用者选择 | [#156](https://github.com/HeimaoLST/Saki/issues/156)、[#140](https://github.com/HeimaoLST/Saki/issues/140) |
 
 ### 事项、联系人与自主跟进的最小规则
@@ -151,7 +151,7 @@ MVP 允许在当前执行结束后的下一次输入应用补充，不要求中�
 
 后文 G1–G9 继承 #111 的工程验收，首轮使用现有 Go/MyGo 应用和 stdio 接口。联系人绑定一个会话、单执行槽、运行中暂不能继续发送，是该阶段的实现／交付限制，**不是 Nagi 的最终产品定义**。具体差距按 P 编号跟进，不以旧限制否定新的目标，也不靠文档更新声称代码已经具备。
 
-macOS arm64 是首个实际验收环境，其他平台支持需单独证据。读取执行历史走 Runtime API；新能力需要真实契约与端到端验收，不规定尚未定稿的 API 字段。既有 [工程 MVP](mvp.md) 的完成条件单独保留，不因这次定义更新自动扩大或宣告完成。
+macOS arm64 是首个实际验收环境，其他平台支持需单独证据。读取执行历史走 Runtime API；新能力需要真实契约与端到端验收，不规定尚未定稿的 API 字段。既有 [工程 MVP](https://github.com/HeimaoLST/Saki/blob/00298ae22bb95afc11366597e517a3b1ceba21e7/docs/requirements/mvp.md) 的完成条件单独保留，不因这次定义更新自动扩大或宣告完成。
 
 旧定义的处理：GUI 仅作 Runtime 展示、联系人永久等同单 session、每条消息等同任务、一次执行成功等同整件事项完成，均不再作为产品规则。完整人格／成长机制是研究方向，不是使用联系人或实现自主工作流程的前置。
 

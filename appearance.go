@@ -4,7 +4,7 @@ import (
 	"errors"
 	"strings"
 
-	"saki/desktop/locales"
+	"github.com/HeimaoLST/Nagi/locales"
 )
 
 const (

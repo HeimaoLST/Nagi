@@ -1,10 +1,20 @@
 # Desktop contacts：首版运行时接入
 
-更新日期：2026-11-06。当前设置页面见文末 **#199 独立设置页面**。本文保留各阶段的实现与验证记录；产品定义、联系人／事项／会话语义和 MVP-01–MVP-12 以 [Nagi 产品定义与需求](../requirements/desktop.md) 为唯一权威；当前视觉与交互以 [Desktop workbench](desktop-workbench.md) 为唯一规范。连接配置见 **#116 首用配置**，会话模型选择见 **#115 会话模型选择**，阅读与独立工作会话分别见 #113/#118，资料快照与递交见 **#117 资料快照、阅读与递交**，联系人编辑、归档及旧对话访问见 **#152 联系人管理与已保存对话**。早期原生窗口证据只适用于其注明的包，不代表新候选已完成原生验收。原生 MyGo 应用通过 `Saki --stdio` 消费 Runtime；GUI 维护联系人、事项与历史展示，执行历史由 Runtime 提供，GUI 不解析 Rust journal。最终集成状态以对应 PR 与 dev 为准。
+更新日期：2026-11-09。当前设置页面见文末 **#199 独立设置页面**。本文保留各阶段的实现与验证记录；产品定义、联系人／事项／会话语义和 MVP-01–MVP-12 以 [Nagi 产品定义与需求](../requirements/desktop.md) 为唯一权威；当前视觉与交互以 [Desktop workbench](desktop-workbench.md) 为唯一规范。连接配置见 **#116 首用配置**，会话模型选择见 **#115 会话模型选择**，阅读与独立工作会话分别见 #113/#118，资料快照与递交见 **#117 资料快照、阅读与递交**，联系人编辑、归档及旧对话访问见 **#152 联系人管理与已保存对话**。早期原生窗口证据只适用于其注明的包，不代表新候选已完成原生验收。原生 MyGo 应用通过 `Saki --stdio` 消费 Runtime；GUI 维护联系人、事项与历史展示，执行历史由 Runtime 提供，GUI 不解析 Rust journal。最终集成状态以对应 PR 与 dev 为准。
 
 早期浏览器示意保留在 Git 历史（[7145225 的 desktop-contacts.html](https://github.com/HeimaoLST/Saki/blob/7145225c47b9b29c8011edbaefc410d0d6d46b61/docs/design/previews/desktop-contacts.html)），不是当前原生应用的验收对象，也不在仓库维护第二套现行预览；仓库内 `desktop/` 是当前可运行的原生应用，当前视觉与交互以 [Desktop workbench](desktop-workbench.md) 为准。当前主题事实见 `desktop/theme.go` 的 `resolveWorkbenchTheme`（Paper/Moss；light/dark 语义角色）；#92 的 Moon/Dawn 和 #90 的 11px/12px 数值只保留为历史设计/实现记录，不再作为当前规范。此前将这些能力或颜色列为后续独立任务的说明已失效，不再作为当前实现或未来承诺；具体状态以对应任务段、PR 和 `dev` 为准。
 
 <a id="gui-design-constraints"></a>
+
+## 独立仓库与交付（实现事实，2026-11-09）
+
+Nagi 已从原 Saki candidate `00298ae22bb95afc11366597e517a3b1ceba21e7` 导出为独立 Git 仓库，原历史与产品行为保留，导入依据见 [source-import.json](source-import.json)。Go module 为 `github.com/HeimaoLST/Nagi`，Go 源码位于根目录。以下历史段落中的 `desktop/` 路径、Saki.app 和旧 SHA 指原始 Saki 布局及当时包，不能直接作为当前构建命令。
+
+当前构建／测试／打包入口统一见 [README](../../README.md)。`scripts/gui-go.py` 从本仓库根模块构建并保留三项固定 MyGo patch；macOS 包为 `Nagi.app`，GUI executable 为 `Nagi`，相邻 Runtime helper 仍为 `Saki-runtime`，bundle ID、联系人／连接／session 数据路径与运行时选择顺序保持兼容。Nagi 版本由根 `VERSION` 独立管理。
+
+打包只消费显式预编译的 Runtime，不调用 Cargo 或读取 Saki 源码／版本作为 Nagi 版本。manifest schema 2 分别记录两产品 source/version/hash，并区分原 Runtime 输入与签名后副本；Runtime source SHA 明确是调用方提供的产物来源声明。受控本地集成测试不等于原生／真人验收，旧 MVP 状态不因拆仓改变。
+
+协议权威在 [Saki Runtime API](https://github.com/HeimaoLST/Saki/blob/dev/docs/design/runtime-api.md)。Nagi 继续调用 stdio v1，不消费新增 metadata 订阅、不改变自动标题默认值，不引入独立后台业务服务。联系人／事项／补充／MCP回接仍由 Nagi 维护；Saki 保持唯一执行循环与持久执行事实。
 
 ## GUI 设计约束（当前规范）
 
@@ -82,39 +92,19 @@ Headless 证据（fixture，不等于线上模型或原生窗口）：
 
 ## 文件与配置（实现事实）
 
-- `desktop/runtime.go`：stdio v1 client／DTO（request id 路由、持续读 stdout、stderr 诊断、协议失败单一边界、迟到 response 丢弃、读完后 Wait）。
-- `desktop/runtime_model.go`：启动/恢复、真实发送、事件应用、history 转换、取消、退出与配置。
-- `desktop/store.go`：GUI contact store（原子写，损坏不覆盖）。
-- `desktop/contact_profile.go`、`contact_management.go`、`contact_history.go`：联系人表单与唯一保存路径、归档/恢复、联系人筛选、指定会话范围的历史搜索及原文定位。
-- `desktop/connection_config.go`、`connection_app.go`、`connection_runtime.go`、`connection_settings.go`：GUI 配置来源、保存/应用生命周期、既有 stdio 接口适配与表单；不实现模型协议客户端。
-- `desktop/model.go`／`view.go`／`main.go`：状态模型、原生布局与入口；`seededApp` 仅测试/截图。
+- `runtime.go`：stdio v1 client／DTO（request id 路由、持续读 stdout、stderr 诊断、协议失败单一边界、迟到 response 丢弃、读完后 Wait）。
+- `runtime_model.go`：启动/恢复、真实发送、事件应用、history 转换、取消、退出与配置。
+- `store.go`：GUI contact store（原子写，损坏不覆盖）。
+- `contact_profile.go`、`contact_management.go`、`contact_history.go`：联系人表单与唯一保存路径、归档/恢复、联系人筛选、指定会话范围的历史搜索及原文定位。
+- `connection_config.go`、`connection_app.go`、`connection_runtime.go`、`connection_settings.go`：GUI 配置来源、保存/应用生命周期、既有 stdio 接口适配与表单；不实现模型协议客户端。
+- `model.go`／`view.go`／`main.go`：状态模型、原生布局与入口；`seededApp` 仅测试/截图。
 - Store：`SAKI_GUI_STORE`，否则 `<UserConfigDir>/Saki/contacts.json`（macOS 通常 `~/Library/Application Support/Saki/contacts.json`）。
 - Session 目录：`SAKI_SESSION_DIR`，否则 `<store 目录>/sessions`；作为子进程环境注入。
 - Runtime 可执行：`SAKI_RUNTIME_BIN`；否则查找 GUI 可执行文件旁的 `Saki-runtime`／`saki-runtime`、`../Resources/Saki-runtime`／`../Resources/Saki`；最后查 `PATH` 的 `Saki`。
 - 工作目录：有 GUI 配置时使用已应用的默认目录；旧联系人仍保留自身 Workspace。外部配置模式沿用 `SAKI_GUI_WORKDIR`，否则当前目录（Finder 的 `/` 除外，退回 home）。
 - 模型连接：`<store 目录>/connection.json` 是唯一 GUI 可编辑来源，保存协议、endpoint、key、默认模型、显式 context/output 容量、默认目录与活动任务上限。无该文件时兼容既有宿主环境/`.env`；损坏或失效的 GUI 配置必须在界面修复，不能静默回退。详见末尾 #116。
 
-可复制的本机构建与启动（不含 key；key 由宿主 `.env`/环境提供）：
-
-```sh
-cd desktop
-python3 ../scripts/gui-go.py build -o /private/tmp/saki-gui/o .
-SAKI_RUNTIME_BIN=/abs/path/to/Saki \
-SAKI_GUI_STORE=/private/tmp/saki-gui/contacts.json \
-SAKI_SESSION_DIR=/private/tmp/saki-gui/sessions \
-SAKI_GUI_WORKDIR=/abs/working-directory \
-/private/tmp/saki-gui/o
-```
-
-打包应用：
-```sh
-# Contents/MacOS/Saki 为 GUI，Contents/MacOS/Saki-runtime 为 runtime，无需 SAKI_RUNTIME_BIN
-open "/private/tmp/saki-gui-63-app/Saki.app"
-# 需要显式 env 时也可从终端启动 GUI 可执行文件
-SAKI_GUI_WORKDIR=/abs/working-directory \
-  "/private/tmp/saki-gui-63-app/Saki.app/Contents/MacOS/Saki"
-```
-Finder 启动不继承 shell 环境。空配置时通过 Connection settings 保存并 Apply；已有 GUI 配置从持久文件恢复。上述命令保留为开发者外部环境模式入口。不要把 key 放进 Info.plist、候选包或仓库。
+当前根模块构建、外部 Runtime 启动和 `Nagi.app` 打包命令见 [README](../../README.md)。Finder 启动不继承 shell 环境，Connection settings 与外部环境模式的既有语义保持；不要把凭据写进包或仓库。
 
 ### 原生内容尺寸诊断（#328，实现事实，2026-11-06）
 

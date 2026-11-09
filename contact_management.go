@@ -5,7 +5,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"saki/desktop/locales"
+	"github.com/HeimaoLST/Nagi/locales"
 )
 
 // Contact management and saved-context notices are stored by kind and said

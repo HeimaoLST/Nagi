@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"saki/desktop/locales"
+	"github.com/HeimaoLST/Nagi/locales"
 )
 
 func lifecycleTestIssue() (*appModel, *contact, *productIssue) {

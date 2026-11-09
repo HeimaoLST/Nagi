@@ -2,7 +2,7 @@
 """Read and validate the macOS deployment minimum from a Mach-O via vtool.
 
 This is intentionally limited to the current arm64 LC_BUILD_VERSION form used
-by the Saki bundle. It does not build a general Mach-O or dynamic-library tool.
+by the Nagi bundle. It does not build a general Mach-O or dynamic-library tool.
 """
 from __future__ import annotations
 

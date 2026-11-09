@@ -1,0 +1,13 @@
+{
+  "status": "pending",
+  "repository": "HeimaoLST/Saki",
+  "run_id": null,
+  "run_attempt": null,
+  "source_sha": null,
+  "artifact_id": null,
+  "artifact_name": null,
+  "archive_sha256": null,
+  "binary_sha256": null,
+  "target": "aarch64-apple-darwin",
+  "protocol_version": 1
+}
