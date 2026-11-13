@@ -401,11 +401,11 @@ func runGUIOnlineManagedMCPSmoke(t *testing.T) {
 	}
 	final := ""
 	for _, message := range projection.messages {
-		if message.Kind == msgContact && message.TaskID == taskID && strings.Contains(message.Text, issueID) && strings.Contains(strings.ToLower(message.Text), "not started") {
+		if message.Kind == msgContact && message.TaskID == taskID {
 			final = message.Text
 		}
 	}
-	if final == "" {
+	if !strings.Contains(final, issueID) || !strings.Contains(strings.ToLower(final), "not started") {
 		fail("no final assistant response reports the actual created ID and not-started outcome")
 	}
 	evidence["final_response"] = safe(final)
