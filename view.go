@@ -219,10 +219,9 @@ func (a *appModel) rail(c *ui.Context, t *ui.Theme) {
 			ui.Text(c, "Nagi").FontSize(typePageTitle).FontWeight(500).TextColor(t.Text)
 			ui.Spacer(c)
 			ui.Toolbar(c, func() {
-				hide := appTooltip(c, ui.Button(c, "").Label(msgs.RailHide()), msgs.RailHideContactsTooltip()).
-					MinWidth(32).MinHeight(32).Width(32).Height(32).Padding(0).Justify(ui.Center)
+				hide := iconControlFace(c, appTooltip(c, ui.Button(c, "").Label(msgs.RailHide()), msgs.RailHideContactsTooltip()), iconChrome, false)
 				hide.Children(func() {
-					ui.Icon(c, railHideIcon).Width(18).Height(18).TextColor(t.TextMuted)
+					controlIcon(c, railHideIcon, iconChrome).TextColor(t.TextMuted)
 				})
 				hide.OnClick(func() { a.toggleRail() })
 				if a.focusRail {
@@ -235,10 +234,9 @@ func (a *appModel) rail(c *ui.Context, t *ui.Theme) {
 			ui.Text(c, msgs.RailContactsTitle()).FontSize(typeGroupTitle).FontWeight(500).TextColor(t.TextMuted)
 			ui.Spacer(c)
 			ui.Toolbar(c, func() {
-				add := appTooltip(c, ui.Button(c, "").Label(msgs.AvatarAddContact()), msgs.AvatarAddContact()).
-					MinWidth(32).MinHeight(32).Width(32).Height(32).Padding(0).Justify(ui.Center)
+				add := iconControlFace(c, appTooltip(c, ui.Button(c, "").Label(msgs.AvatarAddContact()), msgs.AvatarAddContact()), iconChrome, false)
 				add.Children(func() {
-					ui.Icon(c, railAddIcon).Width(18).Height(18).TextColor(t.TextMuted)
+					controlIcon(c, railAddIcon, iconChrome).TextColor(t.TextMuted)
 				})
 				add.OnClick(func() { a.addDefaultContact() })
 			}).Label(msgs.RailContactListActions()).Padding(0)
@@ -247,7 +245,7 @@ func (a *appModel) rail(c *ui.Context, t *ui.Theme) {
 		a.contactScopeSelect(c)
 		visible := a.visibleContactIndices()
 		if len(visible) == 0 {
-			ui.Text(c, msgs.RailNoContactsMatch()).FontSize(typeAction).LineHeight(1.35).TextColor(t.TextMuted)
+			ui.Text(c, msgs.RailNoContactsMatch()).FontSize(typeLabel).FixedLineHeight(lineLabel).TextColor(t.TextMuted)
 			ui.Spacer(c).Grow(1)
 		} else {
 			ui.Scroll(c).Grow(1).Children(func() {
@@ -261,7 +259,7 @@ func (a *appModel) rail(c *ui.Context, t *ui.Theme) {
 			settings := appTooltip(c, ui.Button(c, "").Label(settingsLabel), locales.In(c.Locale()).SettingsOpenTooltip()).
 				FillWidth().MinHeight(32).Height(32).Padding(4, 8).Gap(8).Justify(ui.Start)
 			settings.Children(func() {
-				ui.Icon(c, railSettingsIcon).Width(16).Height(16).TextColor(t.TextMuted)
+				controlIcon(c, railSettingsIcon, iconChrome).TextColor(t.TextMuted)
 				ui.Text(c, settingsLabel).FontSize(typeAction).TextColor(t.Text)
 			})
 			settings.OnClick(func() { a.openSettingsTab(a.settingsLandingTab(), settingsSourceRail) })
@@ -278,7 +276,7 @@ func (a *appModel) avatarRail(c *ui.Context, t *ui.Theme) {
 		addLabel := locales.In(c.Locale()).AvatarAddContact()
 		add := appTooltip(c, ui.Button(c, "").Label(addLabel).
 			MinWidth(32).MinHeight(32).Width(32).Height(32).Padding(0).Justify(ui.Center), addLabel)
-		add.Children(func() { ui.Icon(c, railAddIcon).Width(18).Height(18).TextColor(t.TextMuted) })
+		add.Children(func() { controlIcon(c, railAddIcon, iconChrome).TextColor(t.TextMuted) })
 		add.OnClick(func() { a.addDefaultContact() })
 		visible := a.visibleContactIndices()
 		if len(visible) == 0 {
@@ -292,10 +290,9 @@ func (a *appModel) avatarRail(c *ui.Context, t *ui.Theme) {
 		}
 		ui.Toolbar(c, func() {
 			settingsLabel := locales.In(c.Locale()).SettingsTitle()
-			settings := appTooltip(c, ui.Button(c, "").Label(settingsLabel).
-				MinWidth(32).MinHeight(32).Width(32).Height(32).Padding(0).Justify(ui.Center),
-				locales.In(c.Locale()).SettingsOpenTooltip())
-			settings.Children(func() { ui.Icon(c, railSettingsIcon).Width(16).Height(16).TextColor(t.TextMuted) })
+			settings := iconControlFace(c, appTooltip(c, ui.Button(c, "").Label(settingsLabel),
+				locales.In(c.Locale()).SettingsOpenTooltip()), iconChrome, false)
+			settings.Children(func() { controlIcon(c, railSettingsIcon, iconChrome).TextColor(t.TextMuted) })
 			settings.OnClick(func() { a.openSettingsTab(a.settingsLandingTab(), settingsSourceRail) })
 			if a.focusSettings {
 				settings.Focus()
@@ -431,10 +428,8 @@ func (a *appModel) openIssueFromRail(index int, issueID string) {
 func (a *appModel) railRow(c *ui.Context, t *ui.Theme, i int) {
 	ct := a.contacts[i]
 	currentMsgs := locales.In(c.Locale())
-	row := ui.ButtonBase(c).Label(currentMsgs.AvatarContactLabel(ct.Name)).Gap(8).Padding(6).MinHeight(44).Radius(8).AlignItems(ui.Start).Background(ui.Transparent).BorderWidth(0)
-	if i == a.selected {
-		row.Background(t.SurfaceHover)
-	}
+	row := ui.ButtonBase(c).Label(currentMsgs.AvatarContactLabel(ct.Name)).Gap(8).Padding(4, 8).MinHeight(controlHit).Radius(0).AlignItems(ui.Start).Background(ui.Transparent).BorderWidth(0).FocusRing(false)
+	row = drawControlFace(c, row, 8, 4, false, false, i == a.selected, 0, 2)
 	row.OnClick(func() { a.selectContact(i) })
 	row.Children(func() {
 		a.avatarTile(c, t, 28)
@@ -444,15 +439,15 @@ func (a *appModel) railRow(c *ui.Context, t *ui.Theme, i int) {
 				if i == a.selected {
 					nameWeight = 500
 				}
-				ui.Text(c, ct.Name).FontSize(typeRailName).FontWeight(nameWeight).TextColor(t.Text)
+				ui.Text(c, ct.Name).FontSize(typeRailName).FontWeight(nameWeight).FixedLineHeight(lineNavigation).TextColor(t.Text)
 				ui.Spacer(c)
 				msgs := locales.In(c.Locale())
 				notice := a.issueWorkNotice(ct)
 				if notice.ActiveCount > 0 {
-					ui.Text(c, msgs.TaskActiveCount(notice.ActiveCount)).FontSize(12).TextColor(t.TextMuted)
+					ui.Text(c, msgs.TaskActiveCount(notice.ActiveCount)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 				}
 				if ct.Unread > 0 {
-					ui.Text(c, fmt.Sprintf("%d", ct.Unread)).FontSize(12).TextColor(t.Warning)
+					ui.Text(c, fmt.Sprintf("%d", ct.Unread)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Warning)
 				}
 			})
 			msgs := locales.In(c.Locale())
@@ -487,15 +482,15 @@ func (a *appModel) railRow(c *ui.Context, t *ui.Theme, i int) {
 				color = a.statusColor(t, ct.Status)
 			}
 			if targetID != "" {
-				summary := ui.Button(c, "").Label(line).FontSize(typeRailSummary).LineHeight(1.2).
+				summary := ui.Button(c, "").Label(line).FontSize(typeRailSummary).FixedLineHeight(lineNavigation).
 					MinHeight(32).Padding(2, 6).FillWidth().Justify(ui.Start)
 				summary = appTooltip(c, summary, line)
 				summary.OnClick(func() { a.openIssueFromRail(i, targetID) })
 				summary.Children(func() {
-					ui.Text(c, line).FontSize(typeRailSummary).LineHeight(1.2).MaxLines(2).TextColor(color)
+					ui.Text(c, line).FontSize(typeRailSummary).FixedLineHeight(lineNavigation).MaxLines(2).TextColor(color)
 				})
 			} else {
-				ui.Text(c, line).FontSize(typeRailSummary).LineHeight(1.2).MaxLines(1).TextColor(color)
+				ui.Text(c, line).FontSize(typeRailSummary).FixedLineHeight(lineNavigation).MaxLines(1).TextColor(color)
 			}
 		})
 	})
@@ -579,7 +574,7 @@ func recoveryNotice(c *ui.Context, t *ui.Theme, summary, detail string, expanded
 	detail = safeDiagnostic(detail)
 	var entry ui.Element
 	ui.Column(c).FillWidth().MinWidth(0).Gap(6).Children(func() {
-		ui.Text(c, summary).FontSize(typeBody).LineHeight(1.5).TextColor(t.Warning)
+		ui.Text(c, summary).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Warning)
 		ui.Row(c).Wrap().Gap(8).Children(func() {
 			if settings != nil {
 				entry = secondaryButton(c, settingsLabel).Label(settingsLabel).OnClick(settings)
@@ -593,9 +588,9 @@ func recoveryNotice(c *ui.Context, t *ui.Theme, summary, detail string, expanded
 			}
 		})
 		if expanded && detail != "" {
-			ui.Text(c, msgs.RecoveryTechnicalDetailsHint()).FontSize(typeMeta).LineHeight(1.5).TextColor(t.TextMuted)
+			ui.Text(c, msgs.RecoveryTechnicalDetailsHint()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 			markdownReader(c, detail, markdownReaderOptions{PlainText: true, CopyLabel: msgs.CopyErrorDetailsLabel()}).
-				FontSize(typeBody).LineHeight(1.5).TextColor(t.TextMuted)
+				FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 		}
 	})
 	return entry
@@ -681,9 +676,9 @@ func (a *appModel) connectionRecoveryNotice(c *ui.Context, t *ui.Theme, state co
 		}
 	}
 	ui.Column(c).Padding(8, 16).Gap(3).Children(func() {
-		ui.Text(c, title).FontSize(14).LineHeight(1.5).TextColor(t.Warning)
+		ui.Text(c, title).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Warning)
 		if hint != "" {
-			ui.Text(c, hint).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+			ui.Text(c, hint).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 		}
 		if a.hasRuntimeError() && a.runtimeErrKind != runtimeNoticeConnectionRequired {
 			a.recoveryNotice(c, t, "startup", a.runtimeRecoverySummary(msgs), a.runtimeErrorDisplay(msgs)+"\n"+a.runtimeHintDisplay(msgs), false)
@@ -708,11 +703,11 @@ func (a *appModel) main(c *ui.Context, t *ui.Theme) {
 			state := a.connectionViewState()
 			switch {
 			case a.runtimeStatus == runtimeStateDraining:
-				ui.Text(c, msgs.RuntimeDraining()).FontSize(14).Padding(8, 16).TextColor(t.TextMuted)
+				ui.Text(c, msgs.RuntimeDraining()).FontSize(typeBody).FixedLineHeight(lineBody).Padding(8, 16).TextColor(t.TextMuted)
 			case state == connectionViewApplying:
 				ui.Column(c).Padding(8, 16).Gap(2).Children(func() {
-					ui.Text(c, msgs.ConnectionStatusApplying()).FontSize(14).LineHeight(1.5).TextColor(t.Warning)
-					ui.Text(c, msgs.ConnectionRecoverySavedHint()).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+					ui.Text(c, msgs.ConnectionStatusApplying()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Warning)
+					ui.Text(c, msgs.ConnectionRecoverySavedHint()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 				})
 			case a.connectionConfigurationBlocked():
 				a.connectionRecoveryNotice(c, t, state)
@@ -728,7 +723,7 @@ func (a *appModel) main(c *ui.Context, t *ui.Theme) {
 					})
 				}
 			case a.runtimeStatus == runtimeStateStarting:
-				ui.Text(c, msgs.RuntimeConnecting()).FontSize(14).Padding(8, 16).TextColor(t.TextMuted)
+				ui.Text(c, msgs.RuntimeConnecting()).FontSize(typeBody).FixedLineHeight(lineBody).Padding(8, 16).TextColor(t.TextMuted)
 			}
 			if a.issueToolErr != "" {
 				ui.Row(c).Padding(8, 16).Gap(8).AlignItems(ui.Center).Children(func() {
@@ -745,7 +740,7 @@ func (a *appModel) main(c *ui.Context, t *ui.Theme) {
 		}
 		if ct.Archived {
 			ui.Row(c).AlignItems(ui.Center).Gap(8).Padding(6, 16).Background(t.SurfaceHover).Children(func() {
-				ui.Text(c, msgs.ArchiveNotice()).FontSize(14).TextColor(t.Warning)
+				ui.Text(c, msgs.ArchiveNotice()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Warning)
 				ui.Spacer(c)
 				secondaryButton(c, msgs.RestoreContactAction()).TextColor(t.Text).OnClick(func() { a.restoreContact(ct.ID) })
 				secondaryButton(c, msgs.ContactProfileAction()).OnClick(func() { a.openContactProfile(ct.ID) })
@@ -777,14 +772,14 @@ func (a *appModel) header(c *ui.Context, t *ui.Theme) {
 	ct := a.selectedContact()
 	msgs := locales.In(c.Locale())
 	ui.Row(c).Key("header").Justify(ui.Center).Children(func() {
-		ui.Column(c).WidthPercent(86).MaxWidth(760).Padding(6, 0).Gap(4).Children(func() {
-			ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(8).Children(func() {
+		ui.Column(c).FillWidth().MaxWidth(conversationMaxWidth).Padding(4, 6).Gap(4).Children(func() {
+			ui.Row(c).FillWidth().MinHeight(32).AlignItems(ui.Center).Gap(12).Children(func() {
 				a.avatarTile(c, t, 28)
-				ui.Column(c).MinWidth(0).Shrink(1).Gap(1).Children(func() {
-					ui.Text(c, ct.Name).FontSize(typeContactTitle).FontWeight(500).TextColor(t.Text).MaxLines(2)
+				ui.Column(c).MinWidth(0).Shrink(1).Gap(0).Children(func() {
+					ui.Text(c, ct.Name).FontSize(typeContactTitle).FontWeight(500).FixedLineHeight(lineHeader).TextColor(t.Text).MaxLines(2)
 					ui.Row(c).AlignItems(ui.Center).Gap(12).Wrap().Children(func() {
-						ui.Text(c, a.headerStatusLabel(ct, msgs)).FontSize(12).LineHeight(1.35).FontWeight(500).TextColor(a.headerStatusColor(t, ct))
-						ui.Text(c, ct.Role).FontSize(12).FontWeight(400).LineHeight(1.35).MinWidth(0).Grow(1).TextColor(t.TextMuted)
+						ui.Text(c, a.headerStatusLabel(ct, msgs)).FontSize(typeHeaderMeta).FixedLineHeight(lineHeader).FontWeight(400).TextColor(a.headerStatusColor(t, ct))
+						ui.Text(c, ct.Role).FontSize(typeHeaderMeta).FontWeight(400).FixedLineHeight(lineHeader).MinWidth(0).Grow(1).TextColor(t.TextMuted)
 					})
 				})
 				ui.Spacer(c)
@@ -795,7 +790,7 @@ func (a *appModel) header(c *ui.Context, t *ui.Theme) {
 				if attention {
 					color = t.Warning
 				}
-				ui.Text(c, status).FontSize(typeMeta).LineHeight(1.35).TextColor(color)
+				ui.Text(c, status).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(color)
 			}
 		})
 	})
@@ -834,7 +829,7 @@ func (a *appModel) chat(c *ui.Context, t *ui.Theme) {
 	ui.Column(c).Key("chat").Grow(1).Children(func() {
 		if len(items) == 0 {
 			ui.Row(c).Grow(1).FillHeight().Justify(ui.Center).Children(func() {
-				ui.Scroll(c).FillHeight().WidthPercent(86).MaxWidth(760).Padding(16, 0).Children(func() {
+				ui.Scroll(c).FillHeight().FillWidth().MaxWidth(conversationMaxWidth).Padding(16).Children(func() {
 					a.emptyState(c, t)
 				})
 			})
@@ -848,7 +843,7 @@ func (a *appModel) chat(c *ui.Context, t *ui.Theme) {
 					default:
 						a.message(c, t, ct, it.msg)
 					}
-				}).Label(locales.In(c.Locale()).ConversationMessagesLabel()).FillHeight().WidthPercent(86).MaxWidth(760).Padding(16, 0).Gap(12)
+				}).Label(locales.In(c.Locale()).ConversationMessagesLabel()).FillHeight().FillWidth().MaxWidth(conversationMaxWidth).Padding(16).Gap(12)
 			})
 		}
 		if len(items) > 0 && !ct.list.AtEnd() {
@@ -861,7 +856,7 @@ func (a *appModel) chat(c *ui.Context, t *ui.Theme) {
 			})
 		}
 		ui.Row(c).Key("composer").Justify(ui.Center).Children(func() {
-			ui.Column(c).FillWidth().MaxWidth(760).Children(func() {
+			ui.Column(c).FillWidth().MaxWidth(conversationMaxWidth).Children(func() {
 				a.composer(c, t)
 			})
 		})
@@ -869,7 +864,7 @@ func (a *appModel) chat(c *ui.Context, t *ui.Theme) {
 }
 
 func (a *appModel) historyMessage(c *ui.Context, t *ui.Theme, e historyEntry, highlight bool) {
-	bg := a.workTheme.BubbleContact
+	bg := ui.Transparent
 	if e.From == "me" {
 		bg = a.workTheme.BubbleUser
 	} else if highlight {
@@ -877,11 +872,11 @@ func (a *appModel) historyMessage(c *ui.Context, t *ui.Theme, e historyEntry, hi
 	}
 	if e.From == "me" {
 		ui.Row(c).FillWidth().Justify(ui.End).Children(func() {
-			ui.Column(c).MaxWidth(460).MinWidth(0).Gap(4).Children(func() {
+			ui.Column(c).MaxWidth(userMessageMaxWidth).MinWidth(0).Gap(4).Children(func() {
 				if e.Text != "" {
 					opts := messageReaderOptions(c, true)
 					opts.MessageBubble = &markdownMessageBubble{Background: bg, PaddingX: 12, PaddingY: 8, Radius: 12, ContextualCopy: true}
-					markdownReader(c, e.Text, opts).FontSize(typeBody).LineHeight(1.5).TextColor(t.Text)
+					markdownReader(c, e.Text, opts).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text)
 				}
 				taskContextReadOnlyView(c, a.workTheme, e.Context)
 			})
@@ -890,15 +885,15 @@ func (a *appModel) historyMessage(c *ui.Context, t *ui.Theme, e historyEntry, hi
 	}
 	ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Start).Children(func() {
 		a.avatarTile(c, t, 28)
-		ui.Column(c).MaxWidth(680).MinWidth(0).Shrink(1).Children(func() {
+		ui.Column(c).MaxWidth(conversationMaxWidth).MinWidth(0).Shrink(1).Children(func() {
 			opts := a.readerOptions(messageReaderOptions(c, false), historyLinkScope(a.selectedContact().ID, "conversation", e.ID), a.selectedContact().SessionWorkingDir)
 			opts.MessageBubble = &markdownMessageBubble{
-				Background: bg, PaddingX: 14, PaddingY: 10, Radius: 14,
+				Background: bg, PaddingX: 0, PaddingY: 0, Radius: 0,
 				Header: func(hc *ui.Context) {
-					ui.Text(hc, a.selectedContact().Name+"  "+e.Date).FontSize(12).LineHeight(1.4).TextColor(t.TextMuted)
+					ui.Text(hc, a.selectedContact().Name+"  "+e.Date).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 				},
 			}
-			markdownReader(c, e.Text, opts).FontSize(typeBody).LineHeight(1.5)
+			markdownReader(c, e.Text, opts).FontSize(typeBody).FixedLineHeight(lineBody)
 		})
 	})
 }
@@ -915,7 +910,7 @@ func (a *appModel) message(c *ui.Context, t *ui.Theme, ct *contact, m *message) 
 			}
 			ui.Column(c).Gap(2).Padding(4, 0).Children(func() {
 				ui.Row(c).AlignItems(ui.Center).Gap(6).Children(func() {
-					ui.Text(c, title).FontSize(typeAction).LineHeight(1.4).TextColor(t.TextMuted)
+					ui.Text(c, title).FontSize(typeLabel).FixedLineHeight(lineLabel).TextColor(t.TextMuted)
 					if m.ToolOutput != "" {
 						label := msgs.DetailsAction()
 						if m.Expanded {
@@ -929,7 +924,7 @@ func (a *appModel) message(c *ui.Context, t *ui.Theme, ct *contact, m *message) 
 					if m.Expanded {
 						lines = 12
 					}
-					ui.Text(c, summary).FontSize(typeAction).LineHeight(1.5).MaxLines(lines).TextColor(t.TextMuted)
+					ui.Text(c, summary).FontSize(typeAction).FixedLineHeight(lineCompact).MaxLines(lines).TextColor(t.TextMuted)
 				}
 			})
 			return
@@ -947,7 +942,7 @@ func (a *appModel) message(c *ui.Context, t *ui.Theme, ct *contact, m *message) 
 				})
 				if m.Expanded {
 					for _, step := range m.Steps {
-						ui.Text(c, step).FontSize(typeAction).LineHeight(1.4).TextColor(t.TextMuted)
+						ui.Text(c, step).FontSize(typeLabel).FixedLineHeight(lineLabel).TextColor(t.TextMuted)
 					}
 					if len(m.Sources) > 0 {
 						ui.Row(c).Children(func() {
@@ -963,14 +958,14 @@ func (a *appModel) message(c *ui.Context, t *ui.Theme, ct *contact, m *message) 
 		})
 	case msgUser:
 		ui.Row(c).FillWidth().Justify(ui.End).Children(func() {
-			ui.Column(c).MaxWidthPercent(80).MinWidth(0).Shrink(1).Gap(2).Children(func() {
+			ui.Column(c).MaxWidth(userMessageMaxWidth).MinWidth(0).Shrink(1).Gap(2).Children(func() {
 				if m.Key != "" && m.Key == a.highlight {
-					ui.Text(c, msgs.LocatedInHistory()).FontSize(14).TextColor(t.TextMuted)
+					ui.Text(c, msgs.LocatedInHistory()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 				}
 				if m.Text != "" {
 					opts := messageReaderOptions(c, true)
 					opts.MessageBubble = &markdownMessageBubble{Background: a.workTheme.BubbleUser, PaddingX: 12, PaddingY: 8, Radius: 12, ContextualCopy: true}
-					markdownReader(c, m.Text, opts).FontSize(typeBody).LineHeight(1.5).TextColor(t.Text)
+					markdownReader(c, m.Text, opts).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text)
 				}
 				taskContextReadOnlyView(c, a.workTheme, m.Context)
 			})
@@ -978,13 +973,13 @@ func (a *appModel) message(c *ui.Context, t *ui.Theme, ct *contact, m *message) 
 	default:
 		ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Start).Children(func() {
 			a.avatarTile(c, t, 28)
-			ui.Column(c).MaxWidthPercent(80).MinWidth(0).Shrink(1).Children(func() {
+			ui.Column(c).MaxWidth(userMessageMaxWidth).MinWidth(0).Shrink(1).Children(func() {
 				opts := a.readerOptions(markdownReaderOptions{Streaming: m.Streaming, CopyLabel: locales.In(c.Locale()).CopyMessageLabel(), Theme: messageMarkdownTheme}, messageLinkScope(ct.ID, m), ct.SessionWorkingDir)
 				opts.MessageBubble = &markdownMessageBubble{
-					Background: a.workTheme.BubbleContact, PaddingX: 12, PaddingY: 8, Radius: 12,
+					Background: ui.Transparent, PaddingX: 0, PaddingY: 0, Radius: 0,
 					Header: func(hc *ui.Context) {
 						if m.Key != "" && m.Key == a.highlight {
-							ui.Text(hc, msgs.LocatedInHistory()).FontSize(14).TextColor(t.TextMuted)
+							ui.Text(hc, msgs.LocatedInHistory()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 						}
 					},
 					Footer: func(fc *ui.Context) {
@@ -1002,7 +997,7 @@ func (a *appModel) message(c *ui.Context, t *ui.Theme, ct *contact, m *message) 
 						}
 					},
 				}
-				markdownReader(c, m.Text, opts).FontSize(typeBody).LineHeight(1.5)
+				markdownReader(c, m.Text, opts).FontSize(typeBody).FixedLineHeight(lineBody)
 			})
 		})
 	}
@@ -1013,14 +1008,14 @@ func (a *appModel) alert(c *ui.Context, t *ui.Theme, m *message) {
 	ui.Column(c).Padding(8).Radius(10).Background(t.SurfaceHover).Gap(4).Children(func() {
 		ui.Text(c, m.AlertTitle).FontSize(typeAction).FontWeight(500).TextColor(t.Warning)
 		if m.AlertDetail != "" {
-			ui.Text(c, m.AlertDetail).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+			ui.Text(c, m.AlertDetail).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 		}
 		if m.Retry && !m.RetryDone {
 			ui.Row(c).Children(func() {
 				secondaryButton(c, msgs.TryAgain()).OnClick(func() { a.retry(m) })
 			})
 		} else if m.RetryDone {
-			ui.Text(c, msgs.Retried()).FontSize(14).TextColor(t.TextMuted)
+			ui.Text(c, msgs.Retried()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 		}
 	})
 }
@@ -1030,10 +1025,10 @@ func (a *appModel) emptyState(c *ui.Context, t *ui.Theme) {
 	msgs := locales.In(c.Locale())
 	ui.Column(c).Padding(8, 0).Gap(8).Children(func() {
 		if !a.demo && ct.SessionID != "" && !ct.Loaded {
-			ui.Text(c, msgs.HistoryNotLoadedTitle()).FontSize(16).FontWeight(500).TextColor(t.Text)
-			ui.Text(c, msgs.HistoryNotLoadedHint()).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+			ui.Text(c, msgs.HistoryNotLoadedTitle()).FontSize(typeBody).FontWeight(400).FixedLineHeight(lineBody).TextColor(t.Text)
+			ui.Text(c, msgs.HistoryNotLoadedHint()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 			if a.runtimeStatus != runtimeStateReady {
-				ui.Text(c, msgs.HistoryRuntimeNotReady()).FontSize(14).LineHeight(1.5).TextColor(t.Warning)
+				ui.Text(c, msgs.HistoryRuntimeNotReady()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Warning)
 			}
 			return
 		}
@@ -1049,7 +1044,7 @@ func (a *appModel) emptyState(c *ui.Context, t *ui.Theme) {
 		}
 		if fact != "" {
 			ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
-				ui.Text(c, fact).FontSize(typeBody).LineHeight(1.5).TextColor(t.Text).Grow(1)
+				ui.Text(c, fact).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text).Grow(1)
 				secondaryButton(c, msgs.TaskView()).OnClick(func() { a.openIssueTarget(notice.IssueID) })
 			})
 			return
@@ -1059,7 +1054,7 @@ func (a *appModel) emptyState(c *ui.Context, t *ui.Theme) {
 		if a.demo {
 			hint = msgs.EmptyConversationDraft(ct.Name)
 		}
-		ui.Text(c, hint).FontSize(typeBody).LineHeight(1.5).TextColor(t.TextMuted)
+		ui.Text(c, hint).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 	})
 }
 
@@ -1106,13 +1101,13 @@ func (a *appModel) composerInlineAux() bool {
 func (a *appModel) composerModelButton(c *ui.Context, t *ui.Theme, ct *contact) ui.Element {
 	msgs := locales.In(c.Locale())
 	summary := a.conversationModelSummary(msgs, ct)
-	button := appTooltip(c, ui.Button(c, "").Label(msgs.ConversationModelLabel()).
-		MinHeight(32).Height(32).MinWidth(0).MaxWidth(230).Shrink(1).Padding(4, 8),
+	button := appTooltip(c, sharedControlFace(c, ui.Button(c, "").Label(msgs.ConversationModelLabel()), 16, 4, false, false, false).
+		Margin(0).MinWidth(0).MaxWidth(230).Shrink(1).Padding(8),
 		msgs.ConversationModelTooltip(summary))
 	head, tail := a.conversationModelDisplayParts(msgs, ct)
 	button.Children(func() {
 		ui.Row(c).Grow(1).MinWidth(0).AlignItems(ui.Center).Gap(3).Children(func() {
-			ui.Text(c, msgs.ConversationBadge()).FontSize(typeMeta).LineHeight(1.3).
+			ui.Text(c, msgs.ConversationBadge()).FontSize(typeMeta).FontWeight(400).FixedLineHeight(lineNavigation).
 				MaxLines(1).Shrink(0).TextColor(t.TextMuted)
 			ui.Row(c).Grow(1).MinWidth(0).AlignItems(ui.Center).Gap(0).Children(func() {
 				if head != "" {
@@ -1133,9 +1128,9 @@ func (a *appModel) composerModelPopover(c *ui.Context, t *ui.Theme, anchor ui.El
 	msgs := locales.In(c.Locale())
 	panel := ui.PopoverBase(c, anchor, &a.composerModelOpen, func(panel ui.Element) {
 		panel.Label(msgs.ConversationModelLabel()).Role(ui.RoleMenu).FocusGroup(ui.Vertical).
-			Width(320).MaxHeight(360).Padding(6).Gap(4).Margin(4, 0, 0, 0).
-			Radius(t.Radius+2).Background(t.Background).Border(1, t.Border).
-			Shadow(0, 6, 20, 0, ui.RGBA(0, 0, 0, 0.18))
+			Width(320).MaxHeight(360).Padding(menuCompactPadding).Gap(menuCompactGap).Margin(4, 0, 0, 0).
+			Radius(menuCompactRadius).Background(t.Background).Border(1, t.Border).
+			Shadow(0, 0, 0, 0, ui.Transparent)
 		if panel.OverlayShortcut(0, ui.KeyEscape) {
 			a.closeComposerModel()
 			a.composerFocusModel = true
@@ -1156,7 +1151,7 @@ func (a *appModel) composerModelPopover(c *ui.Context, t *ui.Theme, anchor ui.El
 						text = modelPanelErrorText(msgs, a.modelPanelError, a.modelPanelErrorDetail)
 						color = t.Danger
 					}
-					ui.Text(c, text).FontSize(typeAction).LineHeight(1.5).TextColor(color)
+					ui.Text(c, text).FontSize(typeAction).FixedLineHeight(lineCompact).TextColor(color)
 				} else {
 					current := form.Effective.Config.EffectiveConfig.Model
 					declared := false
@@ -1168,19 +1163,19 @@ func (a *appModel) composerModelPopover(c *ui.Context, t *ui.Theme, anchor ui.El
 						if form.Unconfirmed {
 							label = msgs.ModelLastReadModel(current)
 						}
-						ui.Text(c, label).FontSize(typeAction).LineHeight(1.5).TextColor(t.TextMuted)
+						ui.Text(c, label).FontSize(typeAction).FixedLineHeight(lineCompact).TextColor(t.TextMuted)
 					}
 					if form.Status == modelStatusCatalogUnavailable || form.Status == modelStatusRefreshedNoCatalog {
-						ui.Text(c, msgs.ModelCatalogNotLoaded()).FontSize(typeAction).LineHeight(1.5).TextColor(t.Warning)
+						ui.Text(c, msgs.ModelCatalogNotLoaded()).FontSize(typeAction).FixedLineHeight(lineCompact).TextColor(t.Warning)
 					} else if len(form.Catalog.ConfiguredModels) == 0 {
-						ui.Text(c, msgs.ModelNoConfigured()).FontSize(typeAction).LineHeight(1.5).TextColor(t.TextMuted)
+						ui.Text(c, msgs.ModelNoConfigured()).FontSize(typeAction).FixedLineHeight(lineCompact).TextColor(t.TextMuted)
 					}
 					ui.Column(c).FillWidth().Children(func() {
 						ui.Column(c).FillWidth().Gap(2).Children(func() {
 							for index, entry := range form.Catalog.ConfiguredModels {
 								selected := !form.Unconfirmed && entry.Model == current
-								row := appTooltip(c, ui.ButtonBase(c).Radius(4).TextColor(t.Text).Label(entry.Model).Role(ui.RoleMenuItemRadio).Checked(selected).
-									FillWidth().MinHeight(32).Padding(6, 8).HandleInput(leaveOnTab), entry.Model)
+								row := appTooltip(c, ui.ButtonBase(c).Radius(menuCompactRadius).TextColor(t.Text).Label(entry.Model).Role(ui.RoleMenuItemRadio).Checked(selected).
+									FillWidth().MinHeight(32).Padding(menuCompactPadding).HandleInput(leaveOnTab), entry.Model)
 								if selected || row.Hovered() || row.FocusVisible() {
 									row.Background(t.SurfaceHover)
 								}
@@ -1189,9 +1184,9 @@ func (a *appModel) composerModelPopover(c *ui.Context, t *ui.Theme, anchor ui.El
 								}
 								row.Children(func() {
 									ui.Row(c).FillWidth().MinWidth(0).Gap(6).AlignItems(ui.Center).Children(func() {
-										ui.Text(c, entry.Model).FontSize(typeAction).Grow(1).MinWidth(0).MaxLines(1).Ellipsis("…")
+										ui.Text(c, entry.Model).FontSize(typeMeta).FixedLineHeight(lineNavigation).Grow(1).MinWidth(0).MaxLines(1).Ellipsis("…")
 										if selected {
-											ui.Icon(c, modelSelectedIcon).Size(16, 16).Shrink(0)
+											ui.Icon(c, modelSelectedIcon).Size(glyphMenu, glyphMenu).Shrink(0)
 										}
 									})
 								})
@@ -1205,10 +1200,10 @@ func (a *appModel) composerModelPopover(c *ui.Context, t *ui.Theme, anchor ui.El
 						})
 					})
 					if form.Error != "" {
-						ui.Text(c, modelErrorText(msgs, form.Error, form.ErrorDetail)).FontSize(typeAction).LineHeight(1.5).TextColor(t.Danger)
+						ui.Text(c, modelErrorText(msgs, form.Error, form.ErrorDetail)).FontSize(typeAction).FixedLineHeight(lineCompact).TextColor(t.Danger)
 					}
 					if form.UnconfirmedKind != "" {
-						ui.Text(c, modelUnconfirmedText(msgs, form.UnconfirmedKind, form.UnconfirmedDetail)).FontSize(typeAction).LineHeight(1.5).TextColor(t.Warning)
+						ui.Text(c, modelUnconfirmedText(msgs, form.UnconfirmedKind, form.UnconfirmedDetail)).FontSize(typeAction).FixedLineHeight(lineCompact).TextColor(t.Warning)
 					}
 					if form.Busy {
 						ui.Text(c, modelStatusText(msgs, form.Status)).FontSize(typeMeta).TextColor(t.TextMuted)
@@ -1217,10 +1212,10 @@ func (a *appModel) composerModelPopover(c *ui.Context, t *ui.Theme, anchor ui.El
 			})
 		})
 		ui.Divider(c)
-		manage := ui.ButtonBase(c).MinHeight(32).Padding(6, 8).Radius(4).TextColor(t.Text).Label(msgs.ModelManage()).FillWidth().Justify(ui.Start).HandleInput(leaveOnTab).Children(func() {
+		manage := ui.ButtonBase(c).MinHeight(32).Padding(menuCompactPadding).Radius(menuCompactRadius).TextColor(t.Text).Label(msgs.ModelManage()).FillWidth().Justify(ui.Start).HandleInput(leaveOnTab).Children(func() {
 			ui.Row(c).AlignItems(ui.Center).Gap(6).Children(func() {
-				ui.Icon(c, railSettingsIcon).Size(16, 16)
-				ui.Text(c, msgs.ModelManage()).FontSize(typeAction)
+				ui.Icon(c, railSettingsIcon).Size(glyphMenu, glyphMenu)
+				ui.Text(c, msgs.ModelManage()).FontSize(typeMeta).FixedLineHeight(lineNavigation)
 			})
 		}).OnClick(func() {
 			a.openSettingsTab(settingsTabConnection, settingsSourceModel)
@@ -1249,7 +1244,7 @@ func (a *appModel) composerInlinePanel(c *ui.Context, t *ui.Theme) {
 	c.OnShortcut(0, ui.KeyEscape, func() { a.closeAux() })
 	ui.Column(c).FillWidth().Children(func() {
 		ui.Scroll(c).Label(msgs.TaskContextDetailsScroll()).MaxHeight(300).TrackScroll(a.auxScrollFor(a.aux)).Children(func() {
-			ui.Column(c).Padding(8, 10).Radius(10).Background(t.Surface).Gap(8).Children(func() {
+			ui.Column(c).Padding(8, 0).Gap(8).Children(func() {
 				a.taskContextPanel(c, t)
 			})
 		})
@@ -1334,9 +1329,9 @@ func (a *appModel) composer(c *ui.Context, t *ui.Theme) {
 		}
 	}
 	ui.Column(c).FillWidth().Padding(8, 12).Gap(4).Children(func() {
-		ui.Column(c).FillWidth().Padding(8, 12).Radius(12).Background(a.workTheme.Well).Gap(4).Children(func() {
+		ui.Column(c).FillWidth().MinHeight(composerMinHeight).Padding(8, 12, 0).Radius(16).Border(1, t.Border).Background(a.workTheme.Reading).Gap(4).Children(func() {
 			input := ui.TextArea(c, &ct.Draft).Bind(&a.composerHandle).Label(msgs.ComposerLabel(ct.Name)).
-				FontSize(typeBody).LineHeight(1.5).Lines(2, 6).MinHeight(0).
+				FontSize(typeBody).FixedLineHeight(lineBody).Lines(2, 6).MinHeight(48).
 				Background(ui.Transparent).BorderWidth(0).Padding(2).
 				Placeholder(msgs.ComposerPlaceholder(ct.Name)).FillWidth().OnChange(func() {
 				a.draftChanged(ct)
@@ -1365,18 +1360,15 @@ func (a *appModel) composer(c *ui.Context, t *ui.Theme) {
 				sendReason = a.canSend(ct)
 				sendDisabled = strings.TrimSpace(ct.Draft) == "" || sendReason != ""
 			}
-			ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(4).Children(func() {
+			ui.Row(c).FillWidth().Height(composerToolbarHeight).Shrink(0).Padding(10, 6).AlignItems(ui.Center).Gap(6).Role(ui.RoleGroup).Label(msgs.ComposerTools()).Children(func() {
 				ui.Toolbar(c, func() {
-					contextButton := appTooltip(c, ui.Button(c, "").Label(contextLabel), contextLabel).
-						MinWidth(32).Height(32).Padding(2, 6)
+					contextButton := iconControlFace(c, appTooltip(c, ui.Button(c, "").Label(contextLabel), contextLabel), iconContext, false)
 					contextButton.Children(func() {
-						ui.Row(c).AlignItems(ui.Center).Gap(2).Children(func() {
-							ui.Icon(c, composerAttachIcon).Width(16).Height(16).TextColor(t.TextMuted)
-							if contextCount > 0 {
-								ui.Text(c, fmt.Sprint(contextCount)).FontSize(typeMeta).LineHeight(1.3).TextColor(t.TextMuted)
-							}
-						})
+						controlIcon(c, composerAttachIcon, iconContext).TextColor(t.TextMuted)
 					})
+					if contextCount > 0 {
+						ui.Text(c, fmt.Sprint(contextCount)).FontSize(typeMeta).FixedLineHeight(lineNavigation).TextColor(t.TextMuted)
+					}
 					contextButton.OnClick(func() { a.openComposerTaskContext() })
 					if a.composerFocusContext {
 						contextButton.Focus()
@@ -1402,13 +1394,13 @@ func (a *appModel) composer(c *ui.Context, t *ui.Theme) {
 					stop.Children(func() {
 						ui.Row(c).AlignItems(ui.Center).Gap(4).Children(func() {
 							ui.Icon(c, composerStopIcon).Width(16).Height(16)
-							ui.Text(c, msgs.StopConversation()).FontSize(typeAction).FontWeight(500).LineHeight(1.3).TextColor(t.Warning)
+							ui.Text(c, msgs.StopConversation()).FontSize(typeAction).FontWeight(500).FixedLineHeight(lineAction).TextColor(t.Warning)
 						})
 					})
 					stop.OnClick(func() { a.cancelSelected() })
 				} else {
 					send := appTooltip(c, ui.PrimaryButton(c, "").Label(msgs.SendAction()), msgs.SendTooltip()).
-						Width(32).Height(32).Padding(0).Disabled(sendDisabled)
+						Width(controlHit).Height(controlHit).Shrink(0).Padding(0).Radius(controlHit / 2).Disabled(sendDisabled)
 					send.Children(func() {
 						ui.Icon(c, composerSendIcon).Width(16).Height(16)
 					})
@@ -1424,17 +1416,17 @@ func (a *appModel) composer(c *ui.Context, t *ui.Theme) {
 						if message == "" {
 							message = msgs.CapacityUnknown()
 						}
-						ui.Text(c, message).FontSize(14).LineHeight(1.5).TextColor(t.Warning).Grow(1)
+						ui.Text(c, message).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Warning).Grow(1)
 						secondaryButton(c, msgs.RetryCapacity()).OnClick(func() { a.retryCapabilities() })
 					})
 				}
 				if sendReason != "" && strings.TrimSpace(ct.Draft) != "" {
-					ui.Text(c, sendBlockText(msgs, sendReason)).FontSize(typeBody).LineHeight(1.5).TextColor(t.TextMuted)
+					ui.Text(c, sendBlockText(msgs, sendReason)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 				}
 				if sendReason != "" && strings.TrimSpace(ct.Draft) == "" && (!a.runtimeAvailableForView() || a.connectionViewState() == connectionViewApplying) {
 					msgs := locales.In(c.Locale())
 					if a.shutdownStarted || ct.Archived {
-						ui.Text(c, sendBlockText(msgs, sendReason)).FontSize(typeBody).LineHeight(1.5).TextColor(t.TextMuted)
+						ui.Text(c, sendBlockText(msgs, sendReason)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 					} else {
 						hint := msgs.ConnectionRecoverySetupHint()
 						switch a.connectionViewState() {
@@ -1451,7 +1443,7 @@ func (a *appModel) composer(c *ui.Context, t *ui.Theme) {
 							hint = msgs.ConnectionRecoveryConnectingHint()
 						}
 						ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
-							ui.Text(c, hint).FontSize(typeBody).LineHeight(1.5).TextColor(t.TextMuted).Grow(1)
+							ui.Text(c, hint).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted).Grow(1)
 							if a.connectionConfigurationBlocked() {
 								secondaryButton(c, msgs.ConnectionRecoveryOpenSettings()).Label(msgs.ConnectionRecoveryOpenSettings()).OnClick(func() { a.openConfiguration() })
 							}
@@ -1460,11 +1452,11 @@ func (a *appModel) composer(c *ui.Context, t *ui.Theme) {
 				}
 				switch {
 				case ct.SendState == sendSubmitting:
-					ui.Text(c, msgs.SendingState()).FontSize(typeMeta).LineHeight(1.4).TextColor(t.TextMuted)
+					ui.Text(c, msgs.SendingState()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 				case ct.SendState == sendAccepted && ct.Status != statusWorking:
-					ui.Text(c, msgs.SendAcceptedState()).FontSize(typeMeta).LineHeight(1.4).TextColor(t.TextMuted)
+					ui.Text(c, msgs.SendAcceptedState()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 				case ct.SendState == sendUnknown:
-					ui.Text(c, unknownSummary).FontSize(typeMeta).LineHeight(1.4).TextColor(t.Danger)
+					ui.Text(c, unknownSummary).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Danger)
 				}
 				if ct.SendError != "" && !knownMismatch {
 					ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
@@ -1492,7 +1484,7 @@ func (a *appModel) composer(c *ui.Context, t *ui.Theme) {
 					} else if ct.StatusDetailKind == "" && formattedRunFailure(ct.StatusDetail) {
 						a.recoveryNotice(c, t, "task:"+ct.ID+":"+ct.SessionID+":"+ct.LastTaskID+":"+ct.ActiveTaskID, runFailureSummary(msgs, ct.StatusDetail), ct.StatusDetail, true)
 					} else {
-						ui.Text(c, statusText).FontSize(typeBody).LineHeight(1.5).TextColor(t.Warning)
+						ui.Text(c, statusText).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Warning)
 					}
 				}
 			}
@@ -1525,32 +1517,32 @@ func (a *appModel) historyDetail(c *ui.Context, t *ui.Theme, narrow bool) {
 		})
 		ui.Scroll(c).Grow(1).TrackScroll(&a.historyScroll).Children(func() {
 			ui.Column(c).Gap(8).Children(func() {
-				ui.Text(c, msgs.HistorySearchScopeHint(ct.Name)).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+				ui.Text(c, msgs.HistorySearchScopeHint(ct.Name)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 				if !a.demo && ct.SessionID != "" && !ct.Loaded {
-					ui.Text(c, msgs.HistoryNotLoadedShort()).FontSize(14).LineHeight(1.5).TextColor(t.Warning)
+					ui.Text(c, msgs.HistoryNotLoadedShort()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Warning)
 				}
-				ui.TextInput(c, &a.historyQuery).FontSize(14).Placeholder(msgs.HistorySearchPlaceholder(ct.Name))
+				preferenceInput(c, &a.historyQuery, false).Placeholder(msgs.HistorySearchPlaceholder(ct.Name))
 				if !a.demo {
 					secondaryButton(c, msgs.SearchSavedContexts()).TextColor(t.Text).OnClick(func() { a.searchContactHistoryAsync(a.historyQuery) })
 					if a.contactHistoryBusy {
-						ui.Text(c, msgs.SearchingSavedContexts()).FontSize(14).TextColor(t.TextMuted)
+						ui.Text(c, msgs.SearchingSavedContexts()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 					}
 					if a.contactHistoryError != "" {
-						ui.Text(c, contactHistoryNoticeText(msgs, a.contactHistoryError, a.contactHistoryErrorDetail)).FontSize(14).LineHeight(1.5).TextColor(t.Warning)
+						ui.Text(c, contactHistoryNoticeText(msgs, a.contactHistoryError, a.contactHistoryErrorDetail)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Warning)
 					}
 					if a.contactHistory != nil {
-						ui.Text(c, msgs.HistorySummary(len(a.contactHistory.Matches), boolIndex(a.contactHistory.Limited), len(a.contactHistory.Failures))).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+						ui.Text(c, msgs.HistorySummary(len(a.contactHistory.Matches), boolIndex(a.contactHistory.Limited), len(a.contactHistory.Failures))).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 						if len(a.contactHistory.Failures) > 0 {
 							for _, failure := range a.contactHistory.Failures {
-								ui.Text(c, msgs.SavedContextUnavailable(failure.SessionID)).FontSize(14).LineHeight(1.5).TextColor(t.Warning)
+								ui.Text(c, msgs.SavedContextUnavailable(failure.SessionID)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Warning)
 							}
 						}
 						for _, match := range a.contactHistory.Matches {
 							match := match
 							key := historyOriginKey(historyOriginSaved, match.SessionID, match.EntryID)
 							ui.Column(c).FillWidth().MinWidth(0).Padding(8).Radius(8).Background(t.SurfaceHover).Gap(4).Children(func() {
-								ui.Text(c, msgs.SavedContextMatch(match.Date, match.SessionID)).FontSize(typeMeta).LineHeight(1.4).TextColor(t.Success)
-								ui.Text(c, match.Preview).FontSize(14).LineHeight(1.5).TextColor(t.Text)
+								ui.Text(c, msgs.SavedContextMatch(match.Date, match.SessionID)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Success)
+								ui.Text(c, match.Preview).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text)
 								button := secondaryButton(c, msgs.ViewFullMessage()).OnClick(func() { a.openContactHistoryMatch(match) })
 								if a.focusHistoryFullID == key {
 									button.Focus()
@@ -1560,29 +1552,29 @@ func (a *appModel) historyDetail(c *ui.Context, t *ui.Theme, narrow bool) {
 						}
 					}
 					if a.contactHistoryDetailBusy {
-						ui.Text(c, msgs.OpeningFullSavedMessage()).FontSize(14).TextColor(t.TextMuted)
+						ui.Text(c, msgs.OpeningFullSavedMessage()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 					}
 				}
 				matches := a.historyMatches()
 				if len(matches) == 0 {
 					if strings.TrimSpace(a.historyQuery) == "" {
-						ui.Text(c, msgs.NoSavedMessages(ct.Name)).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+						ui.Text(c, msgs.NoSavedMessages(ct.Name)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 					} else {
-						ui.Text(c, msgs.NoMatchingMessages(ct.Name, a.historyQuery)).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+						ui.Text(c, msgs.NoMatchingMessages(ct.Name, a.historyQuery)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 					}
 				}
 				for _, e := range matches {
 					e := e
 					ui.Column(c).FillWidth().MinWidth(0).Padding(8).Radius(8).Background(t.SurfaceHover).Gap(4).Children(func() {
-						ui.Text(c, e.Date+". "+speakerLabel(msgs, ct, e)).FontSize(typeMeta).LineHeight(1.4).TextColor(t.Success)
+						ui.Text(c, e.Date+". "+speakerLabel(msgs, ct, e)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Success)
 						if len([]rune(e.Text)) <= 180 {
 							if e.From == "me" {
-								markdownReader(c, e.Text, markdownReaderOptions{PlainText: true, CopyLabel: msgs.CopyHistoryMessageLabel(), Theme: messageMarkdownTheme}).FontSize(typeBody).LineHeight(1.5).TextColor(t.Text)
+								markdownReader(c, e.Text, markdownReaderOptions{PlainText: true, CopyLabel: msgs.CopyHistoryMessageLabel(), Theme: messageMarkdownTheme}).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text)
 							} else {
-								markdownReader(c, e.Text, a.readerOptions(markdownReaderOptions{CopyLabel: msgs.CopyHistoryMessageLabel(), Theme: messageMarkdownTheme}, historyLinkScope(ct.ID, "history", e.ID), ct.SessionWorkingDir)).FontSize(typeBody).LineHeight(1.5)
+								markdownReader(c, e.Text, a.readerOptions(markdownReaderOptions{CopyLabel: msgs.CopyHistoryMessageLabel(), Theme: messageMarkdownTheme}, historyLinkScope(ct.ID, "history", e.ID), ct.SessionWorkingDir)).FontSize(typeBody).FixedLineHeight(lineBody)
 							}
 						} else {
-							ui.Text(c, truncate(e.Text, 150)).FontSize(14).LineHeight(1.5).MaxLines(3).TextColor(t.Text)
+							ui.Text(c, truncate(e.Text, 150)).FontSize(typeBody).FixedLineHeight(lineBody).MaxLines(3).TextColor(t.Text)
 						}
 						if len(e.Context) > 0 {
 							ui.Text(c, msgs.ContextCount(len(e.Context))).FontSize(typeAction).TextColor(t.TextMuted)
@@ -1622,15 +1614,15 @@ func (a *appModel) sourcesPanel(c *ui.Context, t *ui.Theme) {
 	ct := a.selectedContact()
 	msgs := locales.In(c.Locale())
 	entries := a.sourceEntries(a.auxMessage)
-	ui.Text(c, msgs.SourcesSummary(len(entries), ct.Name)).FontSize(typeMeta).LineHeight(1.4).TextColor(t.TextMuted)
+	ui.Text(c, msgs.SourcesSummary(len(entries), ct.Name)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 	for _, e := range entries {
 		e := e
 		ui.Column(c).FillWidth().MinWidth(0).Padding(8).Radius(8).Background(t.SurfaceHover).Gap(4).Children(func() {
-			ui.Text(c, e.Date+". "+speakerLabel(msgs, ct, e)).FontSize(typeMeta).LineHeight(1.4).TextColor(t.Success)
+			ui.Text(c, e.Date+". "+speakerLabel(msgs, ct, e)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Success)
 			if e.From == "me" {
-				markdownReader(c, e.Text, markdownReaderOptions{PlainText: true, CopyLabel: msgs.CopySourceMessageLabel(), Theme: messageMarkdownTheme}).FontSize(typeBody).LineHeight(1.5).TextColor(t.Text)
+				markdownReader(c, e.Text, markdownReaderOptions{PlainText: true, CopyLabel: msgs.CopySourceMessageLabel(), Theme: messageMarkdownTheme}).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text)
 			} else {
-				markdownReader(c, e.Text, a.readerOptions(markdownReaderOptions{CopyLabel: msgs.CopySourceMessageLabel(), Theme: messageMarkdownTheme}, historyLinkScope(ct.ID, "sources", e.ID), ct.SessionWorkingDir)).FontSize(typeBody).LineHeight(1.5)
+				markdownReader(c, e.Text, a.readerOptions(markdownReaderOptions{CopyLabel: msgs.CopySourceMessageLabel(), Theme: messageMarkdownTheme}, historyLinkScope(ct.ID, "sources", e.ID), ct.SessionWorkingDir)).FontSize(typeBody).FixedLineHeight(lineBody)
 			}
 			ui.Row(c).Children(func() {
 				secondaryButton(c, msgs.ViewInConversation()).OnClick(func() { a.viewInConversation(e.ID) })
@@ -1648,22 +1640,22 @@ func (a *appModel) runtimePanel(c *ui.Context, t *ui.Theme, ct *contact) {
 	msgs := locales.In(c.Locale())
 	localStore := a.runtimeStage == startupStageLocalStore
 	if localStore {
-		ui.Text(c, msgs.RuntimeLocalStoreUnavailable()).FontSize(14).LineHeight(1.5).TextColor(t.Danger)
-		ui.Text(c, msgs.RuntimeNotStartedLocalStore()).FontSize(14).LineHeight(1.5).TextColor(t.Text)
+		ui.Text(c, msgs.RuntimeLocalStoreUnavailable()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Danger)
+		ui.Text(c, msgs.RuntimeNotStartedLocalStore()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text)
 	} else {
 		status := msgs.RuntimeStatusLine(a.runtimeStatusText(msgs))
-		ui.Text(c, status).FontSize(14).LineHeight(1.5).TextColor(t.Text)
+		ui.Text(c, status).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text)
 	}
 	if a.hasRuntimeError() {
-		ui.Text(c, msgs.RuntimeStageLabel(a.runtimeStageDisplay(msgs), a.runtimeErrorDisplay(msgs))).FontSize(14).LineHeight(1.5).TextColor(t.Danger)
+		ui.Text(c, msgs.RuntimeStageLabel(a.runtimeStageDisplay(msgs), a.runtimeErrorDisplay(msgs))).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Danger)
 	}
 	if a.runtimeHintDisplay(msgs) != "" {
-		ui.Text(c, a.runtimeHintDisplay(msgs)).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+		ui.Text(c, a.runtimeHintDisplay(msgs)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 	}
 	if a.issueToolErr != "" {
-		ui.Text(c, msgs.IssueCollaborationUnavailable()).FontSize(14).TextColor(t.Warning)
-		ui.Text(c, a.redactConnectionText(a.issueToolErr)).FontSize(14).LineHeight(1.5).TextColor(t.Text)
-		ui.Text(c, msgs.IssueCollaborationRepairHint()).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+		ui.Text(c, msgs.IssueCollaborationUnavailable()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Warning)
+		ui.Text(c, a.redactConnectionText(a.issueToolErr)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text)
+		ui.Text(c, msgs.IssueCollaborationRepairHint()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 	}
 	helper := a.runtimeBinary
 	if helper == "" {
@@ -1678,15 +1670,15 @@ func (a *appModel) runtimePanel(c *ui.Context, t *ui.Theme, ct *contact) {
 			helper = msgs.RuntimeHelperNotChecked()
 		}
 	}
-	ui.Text(c, msgs.RuntimeHelperLine(helper)).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
-	ui.Text(c, msgs.RuntimeStoreLine(valueOr(a.storePath, msgs.RuntimeValueNotConfigured()))).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
-	ui.Text(c, msgs.RuntimeSessionDirLine(valueOr(a.sessionDir, msgs.RuntimeValueNotConfigured()))).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
-	ui.Text(c, msgs.RuntimeWorkDirLine(valueOr(a.workDir, msgs.RuntimeValueNotConfigured()))).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+	ui.Text(c, msgs.RuntimeHelperLine(helper)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
+	ui.Text(c, msgs.RuntimeStoreLine(valueOr(a.storePath, msgs.RuntimeValueNotConfigured()))).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
+	ui.Text(c, msgs.RuntimeSessionDirLine(valueOr(a.sessionDir, msgs.RuntimeValueNotConfigured()))).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
+	ui.Text(c, msgs.RuntimeWorkDirLine(valueOr(a.workDir, msgs.RuntimeValueNotConfigured()))).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 	workspace := ct.SessionWorkingDir
 	if workspace == "" {
 		workspace = a.effectiveContactWorkspace(ct)
 	}
-	ui.Text(c, msgs.RuntimeContactWorkspaceLine(valueOr(workspace, msgs.RuntimeValueNotConfigured()))).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+	ui.Text(c, msgs.RuntimeContactWorkspaceLine(valueOr(workspace, msgs.RuntimeValueNotConfigured()))).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 	session := ct.SessionID
 	if session == "" {
 		session = msgs.RuntimeSessionNotCreated()
@@ -1695,20 +1687,20 @@ func (a *appModel) runtimePanel(c *ui.Context, t *ui.Theme, ct *contact) {
 	if state == "" {
 		state = msgs.RuntimeValueUnknown()
 	}
-	ui.Text(c, msgs.RuntimeSessionLine(session, state)).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+	ui.Text(c, msgs.RuntimeSessionLine(session, state)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 	switch {
 	case ct.SessionAPI != "":
-		ui.Text(c, msgs.RuntimeSessionAPILine(ct.SessionAPI)).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+		ui.Text(c, msgs.RuntimeSessionAPILine(ct.SessionAPI)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 	case a.runtimeAPI != "":
-		ui.Text(c, msgs.RuntimeAPIConnectedLine(a.runtimeAPI)).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+		ui.Text(c, msgs.RuntimeAPIConnectedLine(a.runtimeAPI)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 	default:
-		ui.Text(c, msgs.RuntimeSessionAPIUnknown()).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+		ui.Text(c, msgs.RuntimeSessionAPIUnknown()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 	}
-	ui.Text(c, msgs.RuntimeSessionModelLine(valueOr(ct.SessionModel, msgs.RuntimeSessionModelUnknown()))).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+	ui.Text(c, msgs.RuntimeSessionModelLine(valueOr(ct.SessionModel, msgs.RuntimeSessionModelUnknown()))).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 	if a.connectionManaged || (a.connectionForm != nil && a.connectionForm.HasSaved) {
-		ui.Text(c, msgs.RuntimeConnectionManagedNote()).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+		ui.Text(c, msgs.RuntimeConnectionManagedNote()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 	} else {
-		ui.Text(c, msgs.RuntimeHostConfigNote()).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+		ui.Text(c, msgs.RuntimeHostConfigNote()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 	}
 }
 

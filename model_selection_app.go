@@ -501,7 +501,7 @@ func (a *appModel) modelPanel(c *ui.Context, t *ui.Theme) {
 	if a.modelForm != nil {
 		if a.modelTargetNeedsReload(a.modelForm.Target.Config.SessionID) {
 			secondaryButton(c, msgs.ModelReloadAction()).Disabled(a.modelOpActive).OnClick(func() { a.reloadModelSession() })
-			ui.Text(c, msgs.ModelUnconfirmedBanner()).FontSize(14).LineHeight(1.5).TextColor(t.Warning)
+			ui.Text(c, msgs.ModelUnconfirmedBanner()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Warning)
 		}
 		a.modelForm.view(c, t, modelSelectionActions{
 			Refresh: a.refreshSessionModel,
@@ -509,14 +509,14 @@ func (a *appModel) modelPanel(c *ui.Context, t *ui.Theme) {
 			Cancel:  a.closeAux,
 		})
 	} else if a.modelPanelError != "" {
-		ui.Text(c, msgs.ModelSessionTitle()).FontSize(16).FontWeight(500).TextColor(t.Text)
+		pageHeading(c, msgs.ModelSessionTitle())
 		errorText := modelPanelErrorText(msgs, a.modelPanelError, a.modelPanelErrorDetail)
-		ui.Text(c, errorText).FontSize(14).LineHeight(1.5).TextColor(t.Danger)
+		ui.Text(c, errorText).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Danger)
 		secondaryButton(c, msgs.ModelClose()).OnClick(func() { a.closeAux() })
 	} else {
-		ui.Text(c, msgs.ModelSessionTitle()).FontSize(16).FontWeight(500).TextColor(t.Text)
+		pageHeading(c, msgs.ModelSessionTitle())
 		message := valueOr(modelPanelMessageText(msgs, a.modelPanelMessage), msgs.ModelDefaultReading())
-		ui.Text(c, message).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+		ui.Text(c, message).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 		secondaryButton(c, msgs.ModelClose()).OnClick(func() { a.closeAux() })
 	}
 }

@@ -1,12 +1,15 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
+
+	"github.com/HeimaoLST/Nagi/locales"
 )
 
 // TestPreviewAdjustableLayout is an opt-in headless matrix for the global
@@ -184,6 +187,92 @@ func TestPreviewUnifiedTitleBar(t *testing.T) {
 				tr.SetTitleBar(ui.TitleBar{Height: 38, Left: 80})
 				writePreviewPNG(t, filepath.Join(dir,
 					fmt.Sprintf("headless-titlebar-%s-%s-%dx%d.png", theme, scene, size.width, size.height)), tr.Image())
+			}
+		}
+	}
+}
+
+func TestWorkbenchRoleScenesKeepActionsReachable(t *testing.T) {
+	for _, locale := range []string{"en", "zh-Hans"} {
+		for _, dark := range []bool{false, true} {
+			for _, size := range [][2]int{{720, 640}, {1040, 720}} {
+				for _, scene := range []string{"conversation", "work", "contact", "task-context", "model", "model-loading", "model-error"} {
+					t.Run(fmt.Sprintf("%s/%s/%dx%d/dark%t", scene, locale, size[0], size[1], dark), func(t *testing.T) {
+						a, ct := taskContextApp(t)
+						a.windowWidth, a.workspaceOpen = size[0], false
+						a.appearanceThemes = loadCustomThemes(t.TempDir())
+						a.languageModeLoaded = true
+						ct.Draft = "  keep this unsaved text 中文  "
+						ct.Instructions = "  exact profile instruction\n第二行  "
+						recoveryTestStore(t, a)
+						msgs := locales.In(locale)
+						label := msgs.TaskContextCount(0)
+						switch scene {
+						case "conversation":
+							ct.Messages = []*message{{Key: "user-visual", Kind: msgUser, Text: "A retained user message.\n中文换行。"}, {Key: "reply-visual", Kind: msgContact, Text: "A retained reply with **original emphasis**, a [link](https://example.invalid) and `code`."}}
+						case "work":
+							a.workspaceOpen, a.detail = true, detailWork
+							label = msgs.IssueNewIssue()
+						case "contact":
+							a.openSettingsTab(settingsTabContact, settingsSourceProfile)
+							label = msgs.WorkFolderChoose()
+						case "task-context":
+							a.openConversationTaskContext()
+							ct.Context.openFileForm()
+							ct.Context.formName = "A draft name 中文"
+							ct.Context.formPath = "/tmp/Unicode folder/未读取的 draft source.svg"
+							label = msgs.TaskContextChooseFile()
+						case "model":
+							a.aux = "model"
+							a.modelForm = newModelSelection(selectionTarget(), selectionCatalog())
+							a.modelForm.Draft.Model = "provider/long-model-value-that-must-remain-an-exact-draft"
+							label = msgs.ModelUpdateModel()
+						case "model-loading":
+							a.aux = "model"
+							a.modelPanelMessage = modelPanelMessageReading
+							label = msgs.ModelClose()
+						case "model-error":
+							a.aux = "model"
+							a.modelPanelError, a.modelPanelErrorDetail = modelPanelErrorReadFailed, "A retained, long local readback diagnostic 中文. It remains unchanged while this renderer is measured."
+							label = msgs.ModelClose()
+						}
+						tr := ui.NewTester(a.view, size[0], size[1])
+						tr.SetLocale(locale)
+						tr.SetDark(dark)
+						tr.Frame()
+						name := fmt.Sprintf("workbench-%s-%s-%dx%d-dark%t", scene, locale, size[0], size[1], dark)
+						if directory := os.Getenv("SAKI_PREVIEW_DIR"); directory != "" {
+							writePreviewPNG(t, filepath.Join(directory, name+"-top.png"), tr.Image())
+						}
+						var target ui.Rect
+						visible := false
+						for scroll := 0; scroll < 12; scroll++ {
+							r, ok := tr.Find(label)
+							if ok && r.W > 0 && r.H >= 32 && r.X >= 0 && r.X+r.W <= float32(size[0])+1 && r.Y >= 0 && r.Y+r.H <= float32(size[1])+1 {
+								target, visible = r, true
+								break
+							}
+							tr.Scroll(float32(size[0]-80), float32(size[1]-100), 0, 160)
+							tr.Frame()
+						}
+						if !visible {
+							t.Fatalf("%s is not reachable with a full target in %s: %v", label, name, tr.Texts())
+						}
+						if ct.Draft != "  keep this unsaved text 中文  " || ct.Instructions != "  exact profile instruction\n第二行  " || a.selectedContact() != ct || a.rt != nil || ct.pendingSend != nil {
+							t.Fatal("presentation changed owner/drafts or admitted execution")
+						}
+						if scene == "task-context" && (ct.Context.formName != "A draft name 中文" || ct.Context.formPath != "/tmp/Unicode folder/未读取的 draft source.svg" || ct.Context.count() != 0) {
+							t.Fatal("rendering read, saved or normalized a file draft")
+						}
+						if directory := os.Getenv("SAKI_PREVIEW_DIR"); directory != "" {
+							writePreviewPNG(t, filepath.Join(directory, name+"-reachable.png"), tr.Image())
+							data, _ := json.MarshalIndent(map[string]any{"label": label, "target": target, "width": size[0], "height": size[1], "owner_and_drafts_retained": true}, "", "  ")
+							if err := os.WriteFile(filepath.Join(directory, name+".json"), data, 0600); err != nil {
+								t.Fatal(err)
+							}
+						}
+					})
+				}
 			}
 		}
 	}

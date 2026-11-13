@@ -314,7 +314,7 @@ func (a *appModel) issueResultMainPage(c *ui.Context, t *ui.Theme) {
 	ui.Column(c).Fill().Children(func() {
 		issueResultPageHeader(c, t, &page.Panel, a.issueResultPanelActions(page.Generation), !page.Loading)
 		ui.Scroll(c).Grow(1).TrackScroll(&a.issueResultScroll).Padding(0, 16).Children(func() {
-			ui.Column(c).FillWidth().MaxWidth(760).AlignItems(ui.Start).Gap(10).Children(func() {
+			ui.Column(c).FillWidth().MaxWidth(conversationMaxWidth).AlignItems(ui.Start).Gap(10).Children(func() {
 				a.issueResultPanelView(c, t)
 			})
 		})
@@ -501,7 +501,7 @@ func issueResultPageHeader(c *ui.Context, t *ui.Theme, state *issueResultPanelSt
 				state.FocusClose = false
 			}
 		}
-		ui.Text(c, locales.In(c.Locale()).ResultRunResults()).FontSize(typePageTitle).FontWeight(500).TextColor(t.Text)
+		ui.Text(c, locales.In(c.Locale()).ResultRunResults()).FontSize(typePageTitle).FontWeight(500).FixedLineHeight(lineSettingsTitle).TextColor(t.Text)
 		ui.Spacer(c)
 		if showReload && actions.Reload != nil {
 			secondaryButton(c, locales.In(c.Locale()).ResultReloadResult()).Bind(&state.ReloadHandle).OnClick(actions.Reload)

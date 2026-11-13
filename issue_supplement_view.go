@@ -34,36 +34,36 @@ func (a *appModel) issueSupplementSection(c *ui.Context, t *ui.Theme, ct *contac
 	if pending > 0 {
 		title = msgs.SupplementTitlePending(pending)
 	}
-	ui.Text(c, title).FontSize(typeAction).FontWeight(500).TextColor(t.Text)
+	ui.Text(c, title).FontSize(typeLabel).FontWeight(400).FixedLineHeight(lineLabel).TextColor(t.Text)
 	if auto {
-		ui.Text(c, msgs.SupplementAutoOn()).FontSize(14).TextColor(t.TextMuted)
+		ui.Text(c, msgs.SupplementAutoOn()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 	} else {
-		ui.Text(c, msgs.SupplementAutoStopped()).FontSize(14).TextColor(t.Warning)
+		ui.Text(c, msgs.SupplementAutoStopped()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Warning)
 	}
 	ui.Text(c, msgs.SupplementCurrentTarget(fmt.Sprint(issue.RequirementsRevision), truncate(issue.Goal, 100))).
-		FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+		FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 	if ledger != nil {
 		if active := ledger.activeBatch(target); active != nil {
 			switch active.State {
 			case supplementBatchDispatching:
 				ui.Text(c, msgs.SupplementDispatching()).
-					FontSize(14).LineHeight(1.5).TextColor(t.Warning)
+					FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Warning)
 			case supplementBatchUnknown:
 				ui.Text(c, msgs.SupplementUnknown()).
-					FontSize(14).LineHeight(1.5).TextColor(t.Warning)
+					FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Warning)
 			}
 		} else if pending > 0 && auto {
 			if reason := a.canStartIssue(ct, issue); reason != "" {
-				ui.Text(c, locales.In(c.Locale()).WaitingReason(sendBlockText(locales.In(c.Locale()), reason))).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+				ui.Text(c, locales.In(c.Locale()).WaitingReason(sendBlockText(locales.In(c.Locale()), reason))).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 			} else if len(issue.Executions) == 0 {
 				ui.Text(c, msgs.SupplementNoExecution()).
-					FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+					FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 			} else {
-				ui.Text(c, msgs.SupplementReady()).FontSize(14).TextColor(t.TextMuted)
+				ui.Text(c, msgs.SupplementReady()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 			}
 		} else if pending > 0 {
 			ui.Text(c, msgs.SupplementPendingPreserved()).
-				FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+				FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 		}
 	}
 	if ledger != nil {
@@ -74,18 +74,18 @@ func (a *appModel) issueSupplementSection(c *ui.Context, t *ui.Theme, ct *contac
 			}
 		}
 		if len(pendingItems) > 0 {
-			ui.Text(c, msgs.SupplementSavedPending()).FontSize(typeAction).FontWeight(500).TextColor(t.TextMuted)
+			ui.Text(c, msgs.SupplementSavedPending()).FontSize(typeLabel).FontWeight(400).FixedLineHeight(lineLabel).TextColor(t.TextMuted)
 			for _, item := range pendingItems {
 				item := item
-				ui.Column(c).Padding(6).Radius(6).Background(t.Surface).Gap(2).Children(func() {
+				ui.Column(c).Padding(8, 0).BorderWidth(0, 0, 1, 0).BorderColor(t.Border).Gap(4).Children(func() {
 					ui.Text(c, msgs.SupplementReceived(fmt.Sprint(item.RequirementsRevision), truncate(item.Text, 180))).
-						FontSize(14).LineHeight(1.5).TextColor(t.Text)
+						FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text)
 					if a.issueSupplementPreviewID == item.ID {
 						ui.Row(c).Children(func() {
 							secondaryButton(c, msgs.SupplementClosePreview()).OnClick(func() { a.issueSupplementPreviewID = "" })
 						})
 						markdownReader(c, item.Text, markdownReaderOptions{PlainText: true, CopyLabel: locales.In(c.Locale()).CopySupplementTextLabel()}).
-							FontSize(14).LineHeight(1.5).TextColor(t.Text)
+							FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text)
 					} else {
 						secondaryButton(c, msgs.SupplementPreviewFull()).OnClick(func() { a.issueSupplementPreviewID = item.ID })
 					}
@@ -103,13 +103,13 @@ func (a *appModel) issueSupplementSection(c *ui.Context, t *ui.Theme, ct *contac
 		} else {
 			draft := a.issueSupplementDraft(issue.ID)
 			ui.Row(c).AlignItems(ui.Center).Children(func() {
-				ui.Text(c, msgs.SupplementAddLabel()).FontSize(typeAction).FontWeight(500).TextColor(t.TextMuted)
+				ui.Text(c, msgs.SupplementAddLabel()).FontSize(typeLabel).FontWeight(400).FixedLineHeight(lineLabel).TextColor(t.TextMuted)
 				ui.Spacer(c)
 				secondaryButton(c, msgs.SupplementCancel()).OnClick(func() {
 					a.closeIssueSupplementForm()
 				})
 			})
-			ui.TextArea(c, draft).Label(msgs.SupplementFormLabel()).FontSize(14).Height(56).
+			formTextArea(c, draft, false).Label(msgs.SupplementFormLabel()).Height(56).
 				Placeholder(msgs.SupplementFormPlaceholder())
 			ui.Row(c).Gap(6).Children(func() {
 				secondaryButton(c, locales.In(c.Locale()).IssueSupplementSave()).OnClick(func() {
@@ -121,7 +121,7 @@ func (a *appModel) issueSupplementSection(c *ui.Context, t *ui.Theme, ct *contac
 				})
 			})
 			ui.Text(c, msgs.SupplementSaveDisclaimer()).
-				FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+				FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 		}
 		if ledger != nil {
 			if auto {
@@ -146,40 +146,40 @@ func (a *appModel) issueSupplementSection(c *ui.Context, t *ui.Theme, ct *contac
 		}
 		if start > 0 {
 			ui.Text(c, msgs.SupplementHiddenBatches(start)).
-				FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+				FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 		}
 		for _, batch := range batches[start:] {
 			if batch == nil {
 				continue
 			}
 			batch := batch
-			ui.Column(c).Padding(7).Radius(7).Background(t.Surface).Gap(2).Children(func() {
+			ui.Column(c).Padding(8, 0).BorderWidth(0, 0, 1, 0).BorderColor(t.Border).Gap(4).Children(func() {
 				ui.Row(c).AlignItems(ui.Center).Children(func() {
-					ui.Text(c, issueSupplementBatchLabel(msgs, batch)).FontSize(typeAction).FontWeight(500).TextColor(t.TextMuted)
+					ui.Text(c, issueSupplementBatchLabel(msgs, batch)).FontSize(typeLabel).FontWeight(400).FixedLineHeight(lineLabel).TextColor(t.TextMuted)
 					ui.Spacer(c)
 					ui.Text(c, msgs.SupplementTargetRevision(fmt.Sprint(batch.Target.RequirementsRevision))).
-						FontSize(14).TextColor(t.TextMuted)
+						FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 				})
 				for _, item := range batch.Snapshot {
 					item := item
 					ui.Column(c).Gap(1).Children(func() {
 						ui.Text(c, msgs.SupplementReceived(fmt.Sprint(item.RequirementsRevision), truncate(item.Text, 180))).
-							FontSize(14).LineHeight(1.5).TextColor(t.Text)
+							FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text)
 						if a.issueSupplementPreviewID == item.ID {
 							secondaryButton(c, msgs.SupplementClosePreview()).OnClick(func() { a.issueSupplementPreviewID = "" })
 							markdownReader(c, item.Text, markdownReaderOptions{PlainText: true, CopyLabel: locales.In(c.Locale()).CopySupplementTextLabel()}).
-								FontSize(14).LineHeight(1.5).TextColor(t.Text)
+								FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text)
 						} else {
 							secondaryButton(c, msgs.SupplementPreviewFull()).OnClick(func() { a.issueSupplementPreviewID = item.ID })
 						}
 					})
 				}
 				if batch.SaveError != "" {
-					ui.Text(c, msgs.SupplementReceiptFailed(batch.SaveError)).FontSize(14).LineHeight(1.5).TextColor(t.Warning)
+					ui.Text(c, msgs.SupplementReceiptFailed(batch.SaveError)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Warning)
 				}
 				if batch.State == supplementBatchAccepted {
 					ui.Text(c, msgs.SupplementSubmitted(shortExecutionID(batch.ExecutionID), batch.TaskID)).
-						FontSize(14).TextColor(t.TextMuted)
+						FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 				}
 				if editable && (batch.State == supplementBatchRejected || batch.State == supplementBatchNotDispatched) {
 					secondaryButton(c, msgs.SupplementRetry()).OnClick(func() {
@@ -191,7 +191,7 @@ func (a *appModel) issueSupplementSection(c *ui.Context, t *ui.Theme, ct *contac
 					})
 				}
 				if batch.State == supplementBatchUnknown || batch.State == supplementBatchDispatching {
-					ui.Text(c, msgs.SupplementNeedsCheck()).FontSize(14).TextColor(t.Warning)
+					ui.Text(c, msgs.SupplementNeedsCheck()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Warning)
 					if batch.ExecutionID != "" {
 						executionID := batch.ExecutionID
 						secondaryButton(c, msgs.SupplementCheck()).OnClick(func() {

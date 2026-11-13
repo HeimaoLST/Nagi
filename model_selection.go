@@ -357,7 +357,7 @@ func (s *modelSelection) view(c *ui.Context, t *ui.Theme, actions modelSelection
 	compaction := effective.Compaction
 	ui.Column(c).Gap(10).Children(func() {
 		ui.Row(c).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, msgs.ModelSessionTitle()).FontSize(typePageTitle).FontWeight(500).TextColor(t.Text)
+			ui.Text(c, msgs.ModelSessionTitle()).FontSize(typeSettingsTitle).FontWeight(500).FixedLineHeight(lineSettingsTitle).TextColor(t.Text)
 			ui.Spacer(c)
 			secondaryButton(c, msgs.ModelCancel()).Disabled(s.Busy).OnClick(func() {
 				s.ResetDraft()
@@ -366,10 +366,10 @@ func (s *modelSelection) view(c *ui.Context, t *ui.Theme, actions modelSelection
 				}
 			})
 		})
-		ui.Text(c, msgs.ModelTargetLabel(s.targetLabel(msgs))).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
-		ui.Text(c, msgs.ModelSessionLine(valueOr(s.Target.Config.SessionID, msgs.ModelNotCreated()))).FontSize(14).TextColor(t.TextMuted)
+		ui.Text(c, msgs.ModelTargetLabel(s.targetLabel(msgs))).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
+		ui.Text(c, msgs.ModelSessionLine(valueOr(s.Target.Config.SessionID, msgs.ModelNotCreated()))).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 		if id := connectionIdentity(effective.ConnectionID); id != "" {
-			ui.Text(c, msgs.ModelConnectionLine(id)).FontSize(14).TextColor(t.TextMuted)
+			ui.Text(c, msgs.ModelConnectionLine(id)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 		}
 		modelLine := msgs.ModelEffectiveModel(valueOr(effective.Model, msgs.ModelUnknown()))
 		limitsPrefix := msgs.ModelEffectiveLimits
@@ -377,34 +377,34 @@ func (s *modelSelection) view(c *ui.Context, t *ui.Theme, actions modelSelection
 			modelLine = msgs.ModelLastReadModel(valueOr(effective.Model, msgs.ModelUnknown()))
 			limitsPrefix = msgs.ModelLastReadLimits
 		}
-		ui.Text(c, modelLine).FontSize(typeAction).FontWeight(500).TextColor(t.Text)
+		ui.Text(c, modelLine).FontSize(typeLabel).FontWeight(400).FixedLineHeight(lineLabel).TextColor(t.Text)
 		source := capacitySourceLabel(msgs, s.Effective)
 		if catalogID := s.effectiveCatalogID(); catalogID != "" {
 			source += " (" + catalogID + ")"
 		}
 		ui.Text(c, limitsPrefix(strconv.Itoa(compaction.ContextTokens), strconv.Itoa(compaction.OutputTokens), source, strconv.FormatUint(s.Target.Config.ConfigRevision, 10))).
-			FontSize(14).TextColor(t.TextMuted)
+			FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 		toolsLine := msgs.ModelEffectiveTools(valueOr(builtinToolSelectionLabel(effective.ToolSelection.Builtin), msgs.BuiltinNone()))
 		if s.Unconfirmed {
 			toolsLine = msgs.ModelLastReadTools(valueOr(builtinToolSelectionLabel(effective.ToolSelection.Builtin), msgs.BuiltinNone()))
 		}
-		ui.Text(c, toolsLine).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+		ui.Text(c, toolsLine).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 		if s.Unconfirmed {
-			ui.Text(c, msgs.ModelUnconfirmedHint()).FontSize(14).LineHeight(1.5).TextColor(t.Warning)
+			ui.Text(c, msgs.ModelUnconfirmedHint()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Warning)
 		}
 		if s.Error != "" {
-			ui.Text(c, modelErrorText(msgs, s.Error, s.ErrorDetail)).FontSize(14).LineHeight(1.5).TextColor(t.Danger)
+			ui.Text(c, modelErrorText(msgs, s.Error, s.ErrorDetail)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Danger)
 		}
 		if s.UnconfirmedKind != "" {
-			ui.Text(c, modelUnconfirmedText(msgs, s.UnconfirmedKind, s.UnconfirmedDetail)).FontSize(14).LineHeight(1.5).TextColor(t.Warning)
+			ui.Text(c, modelUnconfirmedText(msgs, s.UnconfirmedKind, s.UnconfirmedDetail)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Warning)
 		}
-		ui.Text(c, msgs.ModelProviderID()).FontSize(typeAction).FontWeight(500).TextColor(t.Text)
-		input := ui.TextInput(c, &s.Draft.Model).Label(msgs.ModelProviderID()).FontSize(14).Placeholder(msgs.ModelProviderID()).Disabled(s.Busy)
+		ui.Text(c, msgs.ModelProviderID()).FontSize(typeLabel).FontWeight(400).FixedLineHeight(lineLabel).TextColor(t.Text)
+		input := preferenceInput(c, &s.Draft.Model, false).Label(msgs.ModelProviderID()).Placeholder(msgs.ModelProviderID()).Disabled(s.Busy)
 		if s.focusField == "Model" {
 			input.Focus()
 			s.focusField = ""
 		}
-		ui.Text(c, msgs.ModelCatalogHint()).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+		ui.Text(c, msgs.ModelCatalogHint()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 		ui.Row(c).Gap(6).Children(func() {
 			catalogButton := secondaryButton(c, msgs.ModelUseCatalog()).Disabled(s.Busy || len(s.Catalog.Models) == 0).OnClick(func() { s.SelectCapacityMode(modelCapacityCatalog) })
 			selectionButtonState(c, catalogButton, s.Draft.CapacityMode == modelCapacityCatalog)
@@ -412,13 +412,13 @@ func (s *modelSelection) view(c *ui.Context, t *ui.Theme, actions modelSelection
 			selectionButtonState(c, explicitButton, s.Draft.CapacityMode != modelCapacityCatalog)
 		})
 		if s.Draft.CapacityMode == modelCapacityCatalog {
-			ui.Text(c, msgs.ModelCatalogCapacityHint()).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+			ui.Text(c, msgs.ModelCatalogCapacityHint()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 		} else {
-			ui.Text(c, msgs.ModelContextTokens()).FontSize(typeAction).FontWeight(500).TextColor(t.Text)
-			ui.TextInput(c, &s.Draft.ContextTokens).Label(msgs.ModelContextTokens()).FontSize(14).Placeholder("131072").Disabled(s.Busy)
-			ui.Text(c, msgs.ModelOutputTokens()).FontSize(typeAction).FontWeight(500).TextColor(t.Text)
-			ui.TextInput(c, &s.Draft.OutputTokens).Label(msgs.ModelOutputTokens()).FontSize(14).Placeholder("8192").Disabled(s.Busy)
-			ui.Text(c, msgs.ModelCompactionHint()).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+			ui.Text(c, msgs.ModelContextTokens()).FontSize(typeLabel).FontWeight(400).FixedLineHeight(lineLabel).TextColor(t.Text)
+			preferenceInput(c, &s.Draft.ContextTokens, false).Label(msgs.ModelContextTokens()).Placeholder("131072").Disabled(s.Busy)
+			ui.Text(c, msgs.ModelOutputTokens()).FontSize(typeLabel).FontWeight(400).FixedLineHeight(lineLabel).TextColor(t.Text)
+			preferenceInput(c, &s.Draft.OutputTokens, false).Label(msgs.ModelOutputTokens()).Placeholder("8192").Disabled(s.Busy)
+			ui.Text(c, msgs.ModelCompactionHint()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 		}
 		ui.Row(c).Gap(8).Children(func() {
 			secondaryButton(c, msgs.ModelRefresh()).Disabled(s.Busy).OnClick(func() {
@@ -433,29 +433,29 @@ func (s *modelSelection) view(c *ui.Context, t *ui.Theme, actions modelSelection
 			})
 		})
 		if s.Busy {
-			ui.Text(c, msgs.ModelWaiting()).FontSize(14).TextColor(t.TextMuted)
+			ui.Text(c, msgs.ModelWaiting()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 		}
 		if s.Status != "" {
-			ui.Text(c, modelStatusText(msgs, s.Status)).FontSize(14).LineHeight(1.5).TextColor(t.Text)
+			ui.Text(c, modelStatusText(msgs, s.Status)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Text)
 		}
-		ui.Text(c, msgs.ModelFilterCandidates()).FontSize(typeAction).FontWeight(500).TextColor(t.Text)
-		ui.TextInput(c, &s.Filter).Label(msgs.ModelFilter()).FontSize(14).Placeholder(msgs.ModelFilterPlaceholder()).Disabled(s.Busy)
+		ui.Text(c, msgs.ModelFilterCandidates()).FontSize(typeLabel).FontWeight(400).FixedLineHeight(lineLabel).TextColor(t.Text)
+		preferenceInput(c, &s.Filter, false).Label(msgs.ModelFilter()).Placeholder(msgs.ModelFilterPlaceholder()).Disabled(s.Busy)
 		configured := s.visibleConfiguredModels()
 		if len(configured) > 0 {
-			ui.Text(c, msgs.ModelConfiguredModels()).FontSize(typeAction).FontWeight(500).TextColor(t.Text)
-			ui.Text(c, msgs.ModelConfiguredHint()).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+			ui.Text(c, msgs.ModelConfiguredModels()).FontSize(typeLabel).FontWeight(400).FixedLineHeight(lineLabel).TextColor(t.Text)
+			ui.Text(c, msgs.ModelConfiguredHint()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 			for _, entry := range configured {
 				entry := entry
 				button := secondaryButton(c, msgs.ModelConfiguredChoice(entry.Model, strconv.Itoa(entry.Compaction.ContextTokens))).Disabled(s.Busy).OnClick(func() { s.SelectConfiguredModel(entry.Model) })
 				selectionButtonState(c, button, s.Draft.Model == entry.Model && s.Draft.CapacityMode == modelCapacityExplicit)
 			}
 			if len(configured) < len(s.Catalog.ConfiguredModels) {
-				ui.Text(c, msgs.ModelConfiguredMore(len(configured), len(s.Catalog.ConfiguredModels))).FontSize(14).TextColor(t.TextMuted)
+				ui.Text(c, msgs.ModelConfiguredMore(len(configured), len(s.Catalog.ConfiguredModels))).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 			}
 		}
 		catalog := s.visibleCatalogModels()
 		if len(catalog) > 0 {
-			ui.Text(c, msgs.ModelCatalogCapacity()).FontSize(typeAction).FontWeight(500).TextColor(t.Text)
+			ui.Text(c, msgs.ModelCatalogCapacity()).FontSize(typeLabel).FontWeight(400).FixedLineHeight(lineLabel).TextColor(t.Text)
 			for _, entry := range catalog {
 				entry := entry
 				label := entry.Name
@@ -466,10 +466,10 @@ func (s *modelSelection) view(c *ui.Context, t *ui.Theme, actions modelSelection
 				selectionButtonState(c, button, s.Draft.CatalogID != "" && s.Draft.CatalogID == entry.CatalogID)
 			}
 			if len(catalog) < len(s.Catalog.Models) {
-				ui.Text(c, msgs.ModelCatalogMore(len(catalog), len(s.Catalog.Models))).FontSize(14).TextColor(t.TextMuted)
+				ui.Text(c, msgs.ModelCatalogMore(len(catalog), len(s.Catalog.Models))).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 			}
 		} else if len(s.Catalog.Models) == 0 {
-			ui.Text(c, msgs.ModelNoCatalog()).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+			ui.Text(c, msgs.ModelNoCatalog()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 		}
 	})
 }

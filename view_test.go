@@ -1853,3 +1853,68 @@ func TestRP1MismatchReadbackKeepsConnectionGate(t *testing.T) {
 		})
 	}
 }
+
+func TestComposerDeclaredToolbarKeepsRealEdgeTargets(t *testing.T) {
+	for _, locale := range []string{"en", "zh-Hans"} {
+		for _, dark := range []bool{false, true} {
+			for _, size := range [][2]int{{720, 640}, {1040, 720}} {
+				t.Run(fmt.Sprintf("%s/%dx%d/dark%t", locale, size[0], size[1], dark), func(t *testing.T) {
+					a, ct := taskContextApp(t)
+					a.windowWidth, a.workspaceOpen = size[0], false
+					ct.Draft = "  exact unsaved composer draft 中文  "
+					item, err := ct.Context.AddSnippet("Context", "exact context body")
+					if err != nil {
+						t.Fatal(err)
+					}
+					tr := ui.NewTester(a.view, size[0], size[1])
+					tr.SetLocale(locale)
+					tr.SetDark(dark)
+					tr.SetFocused(true)
+					tr.Frame()
+					msgs := locales.In(locale)
+					contextLabel := msgs.TaskContextCount(1)
+					bar, ok := tr.Find(msgs.ComposerTools())
+					button, found := tr.Find(contextLabel)
+					if !ok || !found || bar.H != 42 || button.W != 32 || button.H != 32 || button.Y-bar.Y != 5 {
+						t.Fatalf("declared42/py10 bar did not center the full target: bar=%+v target=%+v", bar, button)
+					}
+					if button.X < bar.X || button.X+button.W > bar.X+bar.W || button.Y < 0 || button.Y+button.H > float32(size[1]) {
+						t.Fatal("composer target is clipped or outside its row/window")
+					}
+					for edge := 0; edge < 2; edge++ {
+						button, _ = tr.Find(contextLabel)
+						y := button.Y + 1
+						if edge == 1 {
+							y = button.Y + button.H - 1
+						}
+						generation := a.contextFileGeneration
+						tr.ClickAt(button.X+1, y)
+						tr.Frame()
+						if a.aux != "task-context" || !a.composerInlineAux() || a.contextFileGeneration != generation+1 {
+							t.Fatal("full target edge did not open exactly its own context panel")
+						}
+						if err := tr.Click(msgs.CloseTaskContext()); err != nil {
+							t.Fatal(err)
+						}
+						tr.Frame()
+						if a.aux != "" || !tr.Focused(contextLabel) {
+							t.Fatal("context Close lost the actual initiating control focus")
+						}
+					}
+					items := ct.Context.snapshot()
+					if ct.Draft != "  exact unsaved composer draft 中文  " || len(items) != 1 || items[0].ID != item.ID || items[0].Revision != item.Revision || a.rt != nil || ct.pendingSend != nil || len(ct.Messages) != 0 {
+						t.Fatal("edge navigation changed draft/snapshot or admitted execution")
+					}
+					if directory := os.Getenv("SAKI_PREVIEW_DIR"); directory != "" {
+						name := fmt.Sprintf("composer-declared-%s-%dx%d-dark%t", locale, size[0], size[1], dark)
+						writePreviewPNG(t, filepath.Join(directory, name+".png"), tr.Image())
+						data, _ := json.MarshalIndent(map[string]ui.Rect{"toolbar": bar, "context_target": button}, "", "  ")
+						if err := os.WriteFile(filepath.Join(directory, name+".json"), data, 0600); err != nil {
+							t.Fatal(err)
+						}
+					}
+				})
+			}
+		}
+	}
+}

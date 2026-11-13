@@ -24,6 +24,10 @@ const (
 	lineForm                 float32 = 20
 	typeHeaderMeta           float32 = 10
 	lineHeader               float32 = 16
+	menuCompactRadius        float32 = 6
+	menuCompactPadding       float32 = 6
+	menuCompactGap           float32 = 6
+	glyphMenu                float32 = 14
 	composerMinHeight        float32 = 120
 	composerToolbarHeight    float32 = 42
 	conversationMaxWidth     float32 = 768
@@ -37,13 +41,13 @@ const (
 	settingsSidebarWidth     float32 = 248
 	settingsContentWidth     float32 = 820
 	preferenceBreakpoint     float32 = 40 * cssRem
-	typeContactTitle         float32 = 16
-	typePageTitle            float32 = 16
-	typeGroupTitle           float32 = 14
+	typeContactTitle         float32 = 12
+	typePageTitle            float32 = typeSettingsTitle
+	typeGroupTitle           float32 = 13
 	typeBody                 float32 = 14
 	typeAction               float32 = 13
 	typeMeta                 float32 = 12
-	typeRailName             float32 = 13
+	typeRailName             float32 = 12
 	typeRailSummary          float32 = 12
 )
 
@@ -264,7 +268,7 @@ func appTooltip(c *ui.Context, anchor ui.Element, text string) ui.Element {
 
 // secondaryButton uses the shared md ghost face and the existing Button controller.
 func secondaryButton(c *ui.Context, label string) ui.Element {
-	return sharedControlFace(c, ui.Button(c, label), 16, 4, false, false, false).FontSize(typeAction).FontWeight(500).FixedLineHeight(lineAction).Padding(8, 12).Gap(6)
+	return sharedControlFace(c, ui.Button(c, label).Label(label), 16, 4, false, false, false).FontSize(typeAction).FontWeight(500).FixedLineHeight(lineAction).Padding(8, 12).Gap(6)
 }
 
 // The transparent interaction box extends two DIPs past the visible face.
@@ -357,6 +361,42 @@ func controlIcon(c *ui.Context, glyph *ui.SVG, role iconControlRole) ui.Element 
 func pageHeading(c *ui.Context, title string) ui.Element {
 	return ui.Text(c, title).Role(ui.RoleHeading).Level(1).Font("system-ui").
 		FontSize(typeSettingsTitle).FontWeight(500).FixedLineHeight(lineSettingsTitle).TextColor(c.Theme().Text)
+}
+
+type markdownHeadingTone uint8
+
+const (
+	headingPrimary markdownHeadingTone = iota
+	headingSecondary
+	headingTertiary
+)
+
+// Lengths are absolute DIPs; Top is for a nonfirst block. The reader owns
+// margin composition and display-to-source mapping, including Uppercase.
+type markdownHeadingRole struct {
+	Size, LineHeight           float32
+	Weight                     int
+	Top, Bottom, LetterSpacing float32
+	Uppercase                  bool
+	Tone                       markdownHeadingTone
+}
+
+func markdownHeadingRoles() [6]markdownHeadingRole {
+	return [6]markdownHeadingRole{
+		{20, 28, 500, 28, 8, -.5, false, headingPrimary},
+		{18, 24, 600, 24, 8, -.45, false, headingPrimary},
+		{16, 24, 600, 20, 8, -.4, false, headingPrimary},
+		{14, 20, 600, 16, 4, -.35, false, headingPrimary},
+		{14, 24, 600, 16, 4, -.35, false, headingSecondary},
+		{13, 20, 600, 16, 4, -.325, true, headingTertiary},
+	}
+}
+
+func (tone markdownHeadingTone) color(t *ui.Theme) ui.Color {
+	if tone == headingPrimary {
+		return t.Text
+	}
+	return t.TextMuted
 }
 
 func formTextArea(c *ui.Context, value *string, invalid bool) ui.Element {

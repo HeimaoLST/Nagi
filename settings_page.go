@@ -906,7 +906,7 @@ func (a *appModel) settingsConnectionContent(c *ui.Context, t *ui.Theme) {
 	msgs := locales.In(c.Locale())
 	form := a.connectionForm
 	ui.Column(c).FillWidth().AlignItems(ui.Start).Gap(8).Children(func() {
-		ui.Text(c, msgs.SettingsConnection()).FontSize(typeLabel).FontWeight(400).FixedLineHeight(lineLabel).TextColor(t.Text)
+		pageHeading(c, msgs.SettingsConnection())
 		ui.Text(c, msgs.ModelDefaultScope()).FontSize(typeLabel).FontWeight(400).FixedLineHeight(lineLabel).TextColor(t.Text)
 		if a.connectionApplied() && a.connectionEffective != nil {
 			ui.Column(c).FillWidth().Gap(4).Children(func() {
@@ -946,7 +946,7 @@ func (a *appModel) settingsContactContent(c *ui.Context, t *ui.Theme) {
 	msgs := locales.In(c.Locale())
 	editor := a.settingsContactEditor()
 	if editor == nil {
-		ui.Text(c, msgs.SettingsContact()).FontSize(typePageTitle).FontWeight(500).TextColor(t.Text)
+		ui.Text(c, msgs.SettingsContact()).FontSize(typeSettingsTitle).FontWeight(500).FixedLineHeight(lineSettingsTitle).TextColor(t.Text)
 		ui.Text(c, msgs.SettingsNoContactToEdit()).FontSize(14).TextColor(t.Warning)
 		return
 	}
@@ -965,7 +965,7 @@ func (a *appModel) settingsContactContent(c *ui.Context, t *ui.Theme) {
 	var ct *contact
 	ct = a.contactByID(a.settingsContactID)
 	editor = a.settingsContactEditor()
-	ui.Text(c, msgs.SettingsContactTitle(a.settingsContactChoice(msgs, ct))).FontSize(typePageTitle).FontWeight(500).TextColor(t.Text)
+	ui.Text(c, msgs.SettingsContactTitle(a.settingsContactChoice(msgs, ct))).FontSize(typeSettingsTitle).FontWeight(500).FixedLineHeight(lineSettingsTitle).TextColor(t.Text)
 	if !profileDraftEqual(editor.Draft, editor.initial) {
 		ui.Text(c, msgs.SettingsUnsavedChanges()).FontSize(typeMeta).LineHeight(1.5).TextColor(t.Warning)
 	}
@@ -1087,8 +1087,8 @@ func containsString(values []string, want string) bool {
 
 func (a *appModel) settingsAdvancedContent(c *ui.Context, t *ui.Theme) {
 	msgs := locales.In(c.Locale())
-	ui.Text(c, msgs.SettingsAdvanced()).FontSize(typePageTitle).FontWeight(500).TextColor(t.Text)
-	ui.Text(c, msgs.SettingsAdvancedIntro()).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+	ui.Text(c, msgs.SettingsAdvanced()).FontSize(typeSettingsTitle).FontWeight(500).FixedLineHeight(lineSettingsTitle).TextColor(t.Text)
+	ui.Text(c, msgs.SettingsAdvancedIntro()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 	ui.Text(c, msgs.SettingsStartupSection()).FontSize(typeGroupTitle).FontWeight(500).TextColor(t.Text)
 	label := msgs.SettingsShowRuntimeDetails()
 	if a.startupDetailsOpen {
