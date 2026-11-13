@@ -302,13 +302,14 @@
         margin: auto;
         display: grid;
         grid-template-columns: var(--left) 1px minmax(0, 1fr);
+        grid-template-rows: minmax(0, 1fr);
         background: var(--surface);
         border: 0.5px solid var(--line);
         border-radius: 13px;
         overflow: hidden;
       }
       .app.docked.work-open {
-        grid-template-columns: var(--left) 1px minmax(480px, 1fr) 1px var(
+        grid-template-columns: var(--left) 1px minmax(0, 1fr) 1px var(
             --right
           );
       }
@@ -316,6 +317,7 @@
         grid-column: 1;
         display: flex;
         flex-direction: column;
+        min-width: 0;
         min-height: 0;
         padding: 12px 8px 8px;
         background: var(--rail);
@@ -498,7 +500,7 @@
         padding: 16px 16px 8px;
       }
       .reading {
-        max-width: 710px;
+        max-width: 760px;
         margin: auto;
       }
       .date {
@@ -617,7 +619,7 @@
         padding: 8px 16px 12px;
       }
       .composer {
-        max-width: 710px;
+        max-width: 760px;
         margin: auto;
         background: var(--surface);
         border: 1px solid var(--control-border);
@@ -659,7 +661,7 @@
         min-width: 0;
       }
       .alert-inline {
-        max-width: 710px;
+        max-width: 760px;
         margin: 0 auto 12px;
         padding: 12px 14px;
         border-radius: 8px;
@@ -674,6 +676,7 @@
       .work {
         display: flex;
         flex-direction: column;
+        min-width: 0;
         min-height: 0;
         background: var(--panel);
         color: var(--ink);
@@ -1139,9 +1142,9 @@
       }
       .settings-content {
         width: 100%;
-        max-width: 720px;
+        max-width: 600px;
         min-width: 0;
-        margin: 0 auto;
+        margin: 0;
       }
       .appearance-cards {
         display: grid;
@@ -1395,6 +1398,50 @@
       .app.narrow .composer-wrap {
         padding-inline: 20px;
       }
+      .app.avatar-rail .rail {
+        padding: 4px;
+      }
+      .app.avatar-rail .brand,
+      .app.avatar-rail .search,
+      .app.avatar-rail .rail-heading select,
+      .app.avatar-rail .contact .grow,
+      .app.avatar-rail .rail-bottom > .small,
+      .app.avatar-rail .settings-entry span,
+      .app.avatar-rail #add-contact span {
+        display: none;
+      }
+      .app.avatar-rail .rail-heading,
+      .app.avatar-rail .rail-bottom {
+        padding: 0;
+        justify-content: center;
+      }
+      .app.avatar-rail #add-contact,
+      .app.avatar-rail .settings-entry {
+        width: 32px;
+        height: 32px;
+        min-height: 32px;
+        padding: 0;
+        justify-content: center;
+      }
+      .app.avatar-rail .contact {
+        position: relative;
+        justify-content: center;
+        padding: 6px;
+      }
+      .app.avatar-rail .contact > .dot {
+        position: absolute;
+        right: 0;
+        bottom: 6px;
+      }
+      .app.avatar-rail #left-split {
+        cursor: default;
+        pointer-events: none;
+      }
+      .app.avatar-rail .main-head,
+      .app.avatar-rail .conversation,
+      .app.avatar-rail .composer-wrap {
+        padding-inline: 12px;
+      }
       .app.settings-open.settings-narrow .settings-shell {
         grid-template-columns: minmax(0, 1fr);
         grid-template-rows: auto minmax(0, 1fr);
@@ -1463,64 +1510,64 @@
         .proto-footer {
           padding: 10px 12px;
         }
-        .board {
-          grid-template-columns: 1fr;
-        }
+      }
+      .app.narrow .board {
+        grid-template-columns: 1fr;
+      }
+      .app.compact {
+        --left: 66px !important;
+      }
+      .app.compact .brand strong,
+      .app.compact .brand .icon,
+      .app.compact .rail-heading,
+      .app.compact .search,
+      .app.compact .contact .grow,
+      .app.compact .contact > .dot,
+      .app.compact .rail-bottom .quiet,
+      .app.compact .rail-bottom > .small {
+        display: none;
+      }
+      .app.compact .brand {
+        padding: 0 10px;
+      }
+      .app.compact .rail {
+        padding-inline: 5px;
+      }
+      .app.compact .contact {
+        justify-content: center;
+        padding: 10px 4px;
+      }
+      .app.compact .rail-bottom {
+        justify-content: center;
+      }
+      .app.compact .main-head {
+        padding-inline: 12px !important;
+        gap: 8px;
+      }
+      .app.compact .head-actions {
+        gap: 2px;
+      }
+      .app.compact .head-actions .quiet {
+        display: none;
+      }
+      .app.compact .main-head > .avatar {
+        display: none;
+      }
+      .app.compact .bubble {
+        max-width: 100%;
+        font-size: 14px;
+      }
+      .app.compact .user .bubble {
+        max-width: 95%;
+      }
+      .app.compact .conversation,
+      .app.compact .composer-wrap {
+        padding-inline: 14px !important;
+      }
+      .app.compact .model-select {
+        max-width: 165px;
       }
       @media (max-width: 580px) {
-        .app {
-          --left: 66px !important;
-        }
-        .brand strong,
-        .brand .icon,
-        .rail-heading,
-        .search,
-        .contact .grow,
-        .contact > .dot,
-        .rail-bottom .quiet,
-        .rail-bottom > .small {
-          display: none;
-        }
-        .brand {
-          padding: 0 10px;
-        }
-        .rail {
-          padding-inline: 5px;
-        }
-        .contact {
-          justify-content: center;
-          padding: 10px 4px;
-        }
-        .rail-bottom {
-          justify-content: center;
-        }
-        .main-head {
-          padding-inline: 12px !important;
-          gap: 8px;
-        }
-        .head-actions {
-          gap: 2px;
-        }
-        .head-actions .quiet {
-          display: none;
-        }
-        .main-head > .avatar {
-          display: none;
-        }
-        .bubble {
-          max-width: 100%;
-          font-size: 14px;
-        }
-        .user .bubble {
-          max-width: 95%;
-        }
-        .conversation,
-        .composer-wrap {
-          padding-inline: 14px !important;
-        }
-        .model-select {
-          max-width: 165px;
-        }
         .proto-footer span:last-child {
           display: none;
         }
@@ -1629,6 +1676,13 @@
       .copy-tool svg {
         width: 16px;
         height: 16px;
+      }
+      .message.user .copy-tool svg {
+        visibility: hidden;
+      }
+      .message.user:hover .copy-tool svg,
+      .message.user:focus-within .copy-tool svg {
+        visibility: visible;
       }
       .message-meta {
         margin-top: 3px;
@@ -1884,26 +1938,24 @@
       .app.narrow .head-actions .tool {
         width: 32px;
       }
-      @media (max-width: 580px) {
-        .message-line {
-          max-width: calc(100% - 34px);
-        }
-        .copy-tool,
-        .composer .tool,
-        .send-icon {
-          width: 32px;
-          height: 32px;
-        }
-        .model-select {
-          max-width: 160px;
-        }
-        .app:not(.docked) .work-head {
-          padding-left: 12px;
-          gap: 6px;
-        }
-        .context-panel {
-          margin-inline: 7px;
-        }
+      .app.compact .message-line {
+        max-width: calc(100% - 34px);
+      }
+      .app.compact .copy-tool,
+      .app.compact .composer .tool,
+      .app.compact .send-icon {
+        width: 32px;
+        height: 32px;
+      }
+      .app.compact .model-select {
+        max-width: 160px;
+      }
+      .app.compact:not(.docked) .work-head {
+        padding-left: 12px;
+        gap: 6px;
+      }
+      .app.compact .context-panel {
+        margin-inline: 7px;
       }
 
       .history-search {
@@ -2112,8 +2164,8 @@
             <option value="active">联系人</option>
             <option value="archived">已归档</option>
             <option value="all">全部联系人</option></select
-          ><button class="quiet" id="add-contact">
-            <svg aria-hidden="true"><use href="#i-plus" /></svg>添加
+          ><button class="quiet" id="add-contact" aria-label="添加联系人" title="添加联系人">
+            <svg aria-hidden="true"><use href="#i-plus" /></svg><span>添加</span>
           </button>
         </div>
         <nav class="contacts" id="contacts" aria-label="联系人列表"></nav>
@@ -2478,7 +2530,7 @@
     <footer class="proto-footer">
       <span
         >可试：复制、统一输入区、三项详情、设置与主区阅读。</span
-      ><span>MyGo 官方 v0.7.3 基线，实际版本由 GUI 核定，配色 #221 语义适配，HTML 非原生</span>
+      ><span>MyGo 官方 v0.7.4 基线，实际版本由 GUI 核定，配色 #221 语义适配，HTML 非原生</span>
     </footer>
     <div
       id="announcer"
@@ -2734,7 +2786,8 @@
               const running = tasks.find(
                 (t) => t.contact === c.id && t.run === "running",
               );
-              return `<button class="contact" data-contact="${c.id}" aria-current="${c.id === selected}" aria-label="${escapeHTML(c.name)}，${running ? "正在工作" : escapeHTML(c.description)}">${avatar(c)}<span class="grow"><strong>${escapeHTML(c.name)}</strong><small>${running ? escapeHTML("正在处理，" + running.title) : escapeHTML(c.description)}</small></span>${running ? '<span class="dot status" aria-hidden="true"></span>' : ""}</button>`;
+              const label = escapeHTML(`${c.name}，${running ? "正在工作" : c.description}`);
+              return `<button class="contact" data-contact="${c.id}" aria-current="${c.id === selected}" aria-label="${label}" title="${label}">${avatar(c)}<span class="grow"><strong>${escapeHTML(c.name)}</strong><small>${running ? escapeHTML("正在处理，" + running.title) : escapeHTML(c.description)}</small></span>${running ? '<span class="dot status" aria-hidden="true"></span>' : ""}</button>`;
             })
             .join("") ||
           '<p class="muted small" style="padding:12px">没有符合条件的联系人</p>';
@@ -2921,7 +2974,7 @@
         const backgroundInert = page || settingsOpen || narrowDetail;
         $("rail").inert = backgroundInert;
         $("main").inert = backgroundInert;
-        $("left-split").inert = backgroundInert;
+        $("left-split").inert = backgroundInert || $("app").classList.contains("avatar-rail");
         $("right-split").inert = backgroundInert;
         $("work").inert = page || settingsOpen;
         $("settings-page").inert = !settingsOpen || page;
@@ -3443,18 +3496,22 @@
       function layout() {
         const app = $("app"),
           rect = app.getBoundingClientRect(),
-          width = rect.width,
-          available = width - leftWidth - 482;
-        app.style.setProperty("--left", leftWidth + "px");
-        app.style.setProperty(
-          "--right",
-          Math.min(rightWidth, Math.max(280, available)) + "px",
-        );
+          width = app.clientWidth,
+          docked = width >= 900,
+          avatarRail = detailOpen() && docked && width < 1180,
+          effectiveLeft = avatarRail ? 56 : width < 580 ? 66 : leftWidth,
+          minRight = avatarRail ? 300 : 280,
+          // Keep 440 editable pixels after composer gutters, border and padding.
+          available = width - effectiveLeft - 2 - 492,
+          effectiveRight = Math.max(minRight, Math.min(rightWidth, available));
+        app.style.setProperty("--left", effectiveLeft + "px");
+        app.style.setProperty("--right", effectiveRight + "px");
         const activeBefore = document.activeElement;
-        const docked = width >= leftWidth + 280 + 482;
         app.classList.toggle("docked", docked);
-        app.classList.toggle("narrow", width < 1000);
-        app.classList.toggle("settings-narrow", width < 760);
+        app.classList.toggle("avatar-rail", avatarRail);
+        app.classList.toggle("narrow", width < 900);
+        app.classList.toggle("compact", width < 580);
+        app.classList.toggle("settings-narrow", width < 800);
         syncInertRegions();
         if (detailOpen() && !settings.open && !pageOpen()) {
           const target = detailReturnTarget();
@@ -3477,10 +3534,9 @@
           docked && app.classList.contains("work-open")
         );
         $("left-split").setAttribute("aria-valuenow", leftWidth);
-        $("right-split").setAttribute(
-          "aria-valuenow",
-          Math.min(rightWidth, Math.max(280, available)),
-        );
+        $("right-split").setAttribute("aria-valuemin", minRight);
+        $("right-split").setAttribute("aria-valuenow", effectiveRight);
+        positionModelMenu();
       }
       function resizeColumn(side, delta) {
         if (side === "left")
@@ -3981,6 +4037,7 @@
         }
       });
       window.addEventListener("resize", layout);
+      new ResizeObserver(layout).observe($("app"));
       render();
       layout();
     </script>

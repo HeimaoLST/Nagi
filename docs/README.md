@@ -1,8 +1,10 @@
 # Nagi documentation
 
-Updated: 2026-11-09.
+Updated: 2026-11-10.
 
 Nagi now has an independent repository and root Go module. The [root README](../README.md) is the current build, test, packaging and data-compatibility entry point.
+
+Current work is tracked in the [migration and ownership index](https://github.com/HeimaoLST/Nagi/issues/2), [product roadmap](https://github.com/HeimaoLST/Nagi/issues/5), [complete-product acceptance](https://github.com/HeimaoLST/Nagi/issues/7) and [Nagi MVP milestone](https://github.com/HeimaoLST/Nagi/milestone/2). Older Saki issue and source links below retain their historical provenance.
 
 - [Product requirements](requirements/desktop.md): contacts, issues, requirements and the historical MVP acceptance criteria.
 - [Workbench design](design/desktop-workbench.md): current visual and interaction rules.

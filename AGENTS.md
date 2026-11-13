@@ -1,6 +1,6 @@
 # Nagi contributor instructions
 
-Updated: 2026-11-09.
+Updated: 2026-11-10.
 
 ## Ownership and boundaries
 
@@ -17,6 +17,8 @@ Preserve existing environment variables, data directories, IDs, binary lookup or
 Read the actual task and repository state before editing. Keep changes scoped, names conventional and each responsibility implemented once. Avoid speculative abstractions and repeated defensive guards. Do not operate other products' worktrees or old Saki checkouts.
 
 Product owners maintain Go/assets, product docs, `gui-go.py`, `build-macos-app.sh` and macOS minimum support. QA maintains `.github/workflows`, `.github/saki-runtime.json`, artifact fetch support and `check-gui-runtime-results.py`. Each task declares a unique lead, stable agent identity, exact writer paths and Git authority. Coordinate task members through hc after checking current identity/task/status; do not route by remembered terminal numbers. Workers do not launch more agents or mutate Git/GitHub unless expressly delegated.
+
+Use precise English for inter-agent task briefs, messages, reports and handoffs. User-facing updates may remain in Chinese.
 
 Use scoped feature branches and reviewable PRs targeting `dev`; preserve original source history and imported evidence. Do not force-push, rewrite others’ branches, tag, publish Releases or deploy without explicit authorization. User approval and applicable existing authorization determine commit/push/merge scope; a green CI result alone does not grant it. Keep unfinished work in review and state the remaining gates. During #333, PM retains Git/integration ownership.
 
