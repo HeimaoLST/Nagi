@@ -1113,14 +1113,14 @@ func TestTaskContextChooserBilingualFormsAndPreviews(t *testing.T) {
 								if !ok {
 									t.Fatal("chooser explanation missing")
 								}
-								_, full := ui.ShapeText(hint, ui.Font{Size: typeAction, LineHeight: 1.5, Lang: language}, r.W).Size()
+								_, full := ui.ShapeText(hint, ui.Font{Size: typeMeta, LineHeight: lineMeta / typeMeta, Lang: language}, r.W).Size()
 								bounds["hint"] = contextFileReach(t, tr, hint, size[0], size[1], full-0.5)
 								if state == "error" {
 									r, ok := tr.Find(msgs.TaskContextChooseFileFailed())
 									if !ok {
 										t.Fatal("error missing")
 									}
-									_, full := ui.ShapeText(msgs.TaskContextChooseFileFailed(), ui.Font{Size: typeAction, LineHeight: 1.5, Lang: language}, r.W).Size()
+									_, full := ui.ShapeText(msgs.TaskContextChooseFileFailed(), ui.Font{Size: typeMeta, LineHeight: lineMeta / typeMeta, Lang: language}, r.W).Size()
 									bounds["error"] = contextFileReach(t, tr, msgs.TaskContextChooseFileFailed(), size[0], size[1], full-0.5)
 								}
 								bounds["save"] = contextFileReach(t, tr, msgs.TaskContextSaveFile(), size[0], size[1], 32)
