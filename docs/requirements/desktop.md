@@ -6,6 +6,45 @@
 
 现行视觉与交互以 [Desktop workbench](../design/desktop-workbench.md) 为唯一来源：纸白/夜林、默认联系人栏 + 对话、详情按需打开，真实消息气泡、独立 Agent 工作区；宽屏三域与窄窗行为按[规范断点](../design/desktop-workbench.md#布局与右侧详情)执行。#130 实施阶段性的原生闭环；事项/看板/长期轨迹的界面与实现继续细化，原型 fixture 不作为生产功能。旧配色、工具附在聊天回复下的要求不再生效。
 
+<a id="qoder-match-20261113"></a>
+
+## Qoder 视觉约束：本日最新要求（2026-11-13）
+
+**当前规范，待实现与验收。** 用户要求先照实际 Qoder 的 UI 设计统一 Nagi，间距、字号、图标及共同组件遵循同一约束；保留 Nagi 名称／身份、Paper／Moss 语义配色和现有产品能力，不复制 Qoder 的账号、模型权限、自动保存、任务模式或宣传内容。此要求在 Settings、导航、对话／composer、事项／工作／结果的视觉上优先于旧工作台及 PREF-v1 的固定四档字号、旧间距／宽度、无 chevron、统一 32px 控件面等规定；旧事实与历史不删改。**第一片 Settings＋共享视觉角色、第二片完整导航／对话／composer／事项／成果对齐都必须交付**，不能用第一片完成宣称整项完成。
+
+唯一规范仍是本文件与[同日严格设计表](../design/desktop.md#qoder-match-design-20261113)，不另建全局设计系统。实际参考为 Qoder CN `0.4.8`／`f8c98a` 的原生 Settings／工作台／空 composer 观察，以及已纠正的静态包 `engineering-r2/metrics.json`（`b28b6b98`）；官方 QoderWork 图、旧超时记录和暂定 HTML 各保留原证据等级。静态声明不是当前 zoom、设备倍率、字体 fallback、活动分支或原生命中的测量。不得沿用已撤销的通用 `iconbutton.md=28` 推论。
+
+| 规则 | 必须满足的外部结果；精确角色值见设计表 |
+| --- | --- |
+| QD-01 | 只改变现有界面的统一视觉；Palette／身份为 Nagi，所有页面复用同一角色与组件定义，不逐页拼数值。 |
+| QD-02 | 明确采用声明基准：1 CSS px → 1 Nagi 逻辑单位、rem=16、scale=1；这是本产品移植约定，不是 Qoder 当前生效倍率。CSS rem 不经过按正文字号相乘的 MyGo Theme.Rem。字体家族、字号、字重与固定行盒按表，不以旧值或截图倍率补未知。 |
+| QD-03 | Settings shell／导航／章节／共享行／菜单按表的宽度、内边距和内容自然高度组织；不把每项做孤立卡片，也不把所有章节去掉其真实边框。 |
+| QD-04 | Input／Select／Button／composer／FloatingButton 按各自组件与分支分类；圆角与 squircle 不等价。可见面、裁切、边框、焦点和真实命中分别验证，不能拿同一 Radius 数字冒充匹配。 |
+| QD-05 | 同一操作使用同一已验证 SVG 与角色尺寸：16 个 RemixIcon v4.6.0 filled glyph 与独立 Heroicons v1.0.6 SelectChevron；不手画近似形，不给 filled 路径加旧 stroke。保留许可并随应用交付。 |
+| QD-06 | hover／pressed／selected／disabled／invalid／busy／unknown 与键盘、可访问名称、焦点／选择均可辨；源声明的 28px 面不自动等于 28px 命中，保留 32 逻辑单位真实命中要求且不得遮挡邻控件。 |
+| QD-07 | General、Connection、导航、对话、composer、事项、工作和结果均有唯一页面角色映射；Nagi 独有状态按共享层次适配，不捏造 Qoder 对应功能或自动执行。 |
+| QD-08 | 按声明断点与可用宽度响应；720×640、1040×720、en／zh-Hans、Paper／Moss、长值／错误下，完整必要反馈与操作可滚动／聚焦且无页面横向溢出。 |
+| QD-09 | PREF-AC1–6、AC7 的行为保护及全部 MVP-01–12、C1–C8、RP、C8-R、AD 不变：同一 Draft／store、显式 Test／Save／Apply、精确整数、unknown、不重放与退出 drain 均不得被视觉工作改写。 |
+| QD-10 | 使用两片唯一 writer 与独立验证；旧 WIP／RED／PASS 保留其源码归属，新基准另取实际行为、几何／图标／形状和原生证据。未知或缺口逐项登记，不宣称全域、原生、CI、打包或真人验收通过。 |
+
+<a id="preferences-list-20261113"></a>
+
+## 设置偏好列表：本次有界要求（2026-11-13）
+
+**当前规范，待实施与验收。** 本节细化 C1–C8／MVP-01、03、10 的 Settings 通用与连接呈现；同日要求在这两个页面的表单／容器排布上优先于旧段落，视觉以本日后续 QD-01–QD-10 为准；Nagi 语义色与既有功能边界保留。采用同组左侧标签／说明、右侧当前值／控件，以标题、留白、细线组织；不把每个选项独立做卡片。完整导航／对话／composer／事项／成果对齐是同样必须交付的第二片，本节不宣称已解决。完整 MVP-01–12、C1–C8、RP1/RP2、C8-R1–R8、attention 及日期历史均继续有效。
+
+PREF-v1 的参考为已检查的 QoderWork 官方偏好图与 Nagi 源码，当时已安装 Qoder CN 因 CUA 绑定超时未检查；该历史保留于 v1 archive。后续实际0.4.8原生／静态依据及当前视觉以本日 QD 规范为准，不从参考图杜撰 slider。枚举使用选择器／分段控件；本片不新增开关、滑块、字体／缩放偏好、provider 预设、模型／容量范围或即时保存连接的新语义。具体状态与源码／验收映射见[同日设计](../design/desktop.md#preferences-list-design-20261113)。
+
+### PREF-AC1–PREF-AC7
+
+1. **PREF-AC1（通用偏好）**：Given 外观／主题／语言当前值、主题缺失／导入取消及真实偏好保存失败；When 查看、键盘选择或重试；Then 同组行显示准确枚举和当前值，外观仍立即应用并经现有 store 尝试保存，失败不回滚已生效选择，保留未保存提示与 Retry save；语言仍走既有 MyGo SetLocale／系统偏好路径和局部系统窗口重启说明，不新造保存失败通道。主题选择条件、requested ID／同类回退／警告、导入不自动选中、registry／store／取消与 I/O 归属均不变；仅渲染行不调用 setter。
+2. **PREF-AC2（首用可完成）**：Given 尚无有效已保存受管连接或已有配置不可读取；When 首次进入连接设置并填写／校验；Then endpoint、遮蔽 key、model 三个必需自由文本输入直接可见，协议与文件夹选择可发现，目录必须由用户显式选择／确认，不能把启动 cwd 当选择。合法草稿才进入原显式动作；无效字段及完整错误可到达并聚焦，不能靠填写了部分值就切到已保存展示。720×640 自然滚动后所有必要控件可用；取消不改目录，不产生请求。
+3. **PREF-AC3（已存先读）**：Given 有有效已保存连接且表单静止、未改、无错误及待处理编辑；When 打开设置；Then endpoint、key、model 以标明来源的已保存值行呈现，不常驻自由文本表单，key 仍遮蔽；显式 Edit 在原行打开带标签的同一草稿字段。协议保留紧凑枚举；默认配置、实际已应用、已保存待应用及当前对话保持各自事实，不把已存值冒称当前会话值。
+4. **PREF-AC4（编辑不丢失）**：Given 已打开、未保存、无效、错误或异步动作中的原表单；When 收起／重开 Edit、切分类／返回，或保存／应用回调改变其他事实；Then 原始字符串、同一表单归属及必要反馈保持，布局不得重建／ResetDraft、用 saved/effective 覆盖草稿或空值替换 key。收起不是 Discard；收起的草稿仍明确未保存／无效，错误不能消失，编辑可直接恢复；校验自动展开并聚焦相关字段／Limits。原显式动作仍按既有语义更新 initial／反馈，只有显式 Discard 执行原 ResetDraft。
+5. **PREF-AC5（动作与作用域）**：Given 已保存、已应用、当前会话与当前草稿彼此不同；When 渲染／展开／修改、显式 Test、Save configuration、Save and apply 或 Apply saved；Then 前三类呈现操作零模型／任务请求，Test 只捕获完整当前表单且可能计费、不 save/apply，Apply saved 只用 host 已保存值；保存失败不应用，保存后应用失败只重试应用，活动／Busy 等准入不变。RP2 整体测试失败文案、一次当前表单回调、历史／ID／旧会话和不自动重发语义保持。
+6. **PREF-AC6（精确数值与目录）**：Given token／任务数字符串含空白、正号、非整数、后缀、空值、host-int 溢出或边界值；When 输入、校验或点击任务数 stepper；Then 继续使用 `strconv.Atoi(strings.TrimSpace(...))` 的原精确整数规则与错误，原无效文本不被 coercion／clamp／默认值替换；context／output 为精确输入，保持正数、output<context、context-output≥4。任务数只在当前文本为可表示正整数且 ±1 结果仍合法时改草稿，1 的减与 int 上界的加不改值；不新增产品上限或 provider 并发承诺。普通目录行显示值＋选择器，手输绝对路径仅经明确进阶入口，仍是同一草稿与原校验／选择后显式 Save／Test／Apply 边界。
+7. **PREF-AC7（相邻边界与可用性）**：Given 中／英文、Paper／Moss、720×640／1040×720、长值／错误、真实本地保存失败及 chooser／C8 活动；When 键盘／焦点导航、返回、取消、迟到回调或正常退出；Then 标签／状态／必要 Details 与动作可发现、可滚动且不截掉完整错误，视觉字号／间距／图标／控件面按 QD-01–QD-10，真实命中与焦点按 QD-06 单列验证，保留 Paper／Moss 语义色；原本地保存焦点／选择、单一 Settings/store、密钥去密、C8 准入／结果／未保存文字退出警告、AD 匹配可见确认、unknown、busy/no-queue、chooser 归属和 I/O drain 不变。源码、headless、真实原生／IME／AX／文件选择与独立用户证据分开，截图／HTML 不替代行为或原生通过。
+
 ## 产品定义
 
 **Nagi 是一个开源的、以长期 Agent 联系人为核心的桌面工作台。用户通过持续对话交代事项，联系人理解意图、组织工作并自主推进；用户可以随时补充要求、了解进展或深入参与具体执行。**
