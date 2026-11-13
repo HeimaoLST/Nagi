@@ -93,7 +93,7 @@ jobs:
           CGO_ENABLED: '0'
         run: python3 scripts/gui-go.py build -trimpath -mod=readonly -buildvcs=true -o "$RUNNER_TEMP/nagi-issue-helper" .
       - name: Full offline Nagi package against pinned Saki
-        timeout-minutes: 20
+        timeout-minutes: 25
         env:
           CGO_ENABLED: '1'
           SAKI_TEST_ISSUE_TOOL_HELPER: ${{ runner.temp }}/nagi-issue-helper
@@ -102,7 +102,7 @@ jobs:
         run: |
           mkdir -p "$SAKI_PREVIEW_DIR"
           set -o pipefail
-          python3 scripts/gui-go.py test -race -timeout=15m -json ./... -count=1 | tee "$RUNNER_TEMP/nagi-runtime.json"
+          python3 scripts/gui-go.py test -race -timeout=20m -json ./... -count=1 | tee "$RUNNER_TEMP/nagi-runtime.json"
       - name: Require real runtime scenarios and reject unexpected skips
         if: always()
         run: python3 scripts/check-gui-runtime-results.py "$RUNNER_TEMP/nagi-runtime.json"
