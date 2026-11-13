@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run Go through the temporary pinned editor, Split and Markdown link patches.
+"""Run Go through the temporary pinned editor, Split and Markdown patches.
 
 Usage: python3 scripts/gui-go.py test|vet|build|run [Go arguments].
 The real go.mod, module cache, and source tree are not rewritten.
@@ -18,6 +18,7 @@ ROOT = Path(__file__).resolve().parent.parent
 SPLIT_PATCH = ROOT / "patches" / "split-release.patch"
 EDITOR_PATCH = ROOT / "patches" / "editor-release.patch"
 MARKDOWN_LINK_PATCH = ROOT / "patches" / "markdown-link-focus.patch"
+MARKDOWN_PRESENTATION_PATCH = ROOT / "patches" / "markdown-presentation.patch"
 MYGO = "github.com/egoist/mygo"
 VERSION = "v0.7.4"
 SPLIT_BEFORE = "70f6d9b7e546278a54179d554b3935f2b8d3afc1e0df37e56fe0ad9f694c81a8"
@@ -26,6 +27,8 @@ EDITOR_INPUT_BEFORE = "d7a8635820d7f5583f82d1b4f5b2c17ed6ebdbcae154daa4afafcdcb3
 EDITOR_INPUT_AFTER = "e6d64ecaa49201256a8bcd64bf22954c0bef5ec49961b6231a47b998dedbc8d7"
 MARKDOWN_VIEW_BEFORE = "194e6719641a9dee4132e30d69a949e47ff9cd087fbdecf3f6ee84bb66b09b90"
 MARKDOWN_VIEW_AFTER = "b80afdb2a433dd73722d97e372661e3a27f59f10588fc9efca01241e5379efc2"
+MARKDOWN_PRESENTATION_BEFORE = {'ui/markdown/theme.go': '83bd2288ad3b10eceac6165fec4a845e2d28e8244d6824c5d372bc73030ba737', 'ui/markdown/view.go': 'b80afdb2a433dd73722d97e372661e3a27f59f10588fc9efca01241e5379efc2', 'ui/markdown/spans.go': '5b6db42985aed9f4e2be6556a57f4fcd03964d82d71c84cb7669a01cec7623ec', 'ui/markdown/copy.go': '6f0c9262590b1b233fb7c82db598a4250936097e2fb13706d5081b35daa6a093', 'ui/markdown/view_test.go': '35d91984cadb2087f23dc7044ae129e03950c77d76ea0ec60117a5599b6071c5'}
+MARKDOWN_PRESENTATION_AFTER = {'ui/markdown/theme.go': '7fd8e1215c5b4c7996a55811f777031f78a936beaf47dc23462f66e2b8bb4ead', 'ui/markdown/view.go': '64b9b9f557c00b0ac43d6074b8ff1fa4a11935fdcc5ba0e9c9cbe3869e2677b9', 'ui/markdown/spans.go': '16cf7b41d745d1749f4b547c35733feeca288c5864833d02ba79a9aa8fc6f315', 'ui/markdown/copy.go': '2e4a40a58ae59fedb867e99888be108d0b7cbdf82beddf0ad23d355bcac06d22', 'ui/markdown/view_test.go': 'd9b4f2d7eb75c3483ab8fd207c43502727e87c299de6cd86df33d09f06d022d4'}
 
 
 def fail(message: str, code: int) -> int:
@@ -75,7 +78,7 @@ def main(argv: list[str]) -> int:
         return fail("this launcher only forwards test, vet, build and run", 2)
     if any(arg == "-modfile" or arg.startswith("-modfile=") for arg in argv[1:]):
         return fail("caller may not override the prepared -modfile", 2)
-    if not ROOT.is_dir() or not SPLIT_PATCH.is_file() or not EDITOR_PATCH.is_file() or not MARKDOWN_LINK_PATCH.is_file():
+    if not ROOT.is_dir() or not SPLIT_PATCH.is_file() or not EDITOR_PATCH.is_file() or not MARKDOWN_LINK_PATCH.is_file() or not MARKDOWN_PRESENTATION_PATCH.is_file():
         return fail("root module or a pinned patch is missing", 2)
     selected = selected_module()
     if selected.get("Version") != VERSION or selected.get("Replace") is not None:
@@ -113,7 +116,11 @@ def main(argv: list[str]) -> int:
                 % (markdown_before, MARKDOWN_VIEW_BEFORE),
                 2,
             )
-        for label, patch in (("Split", SPLIT_PATCH), ("Editor", EDITOR_PATCH), ("Markdown link", MARKDOWN_LINK_PATCH)):
+        for label, patch in (("Split", SPLIT_PATCH), ("Editor", EDITOR_PATCH), ("Markdown link", MARKDOWN_LINK_PATCH), ("Markdown presentation", MARKDOWN_PRESENTATION_PATCH)):
+            if patch == MARKDOWN_PRESENTATION_PATCH:
+                actual = {path: sha256(module / path) for path in MARKDOWN_PRESENTATION_BEFORE}
+                if actual != MARKDOWN_PRESENTATION_BEFORE:
+                    return fail("unexpected Markdown presentation input hashes=%s; refusing to patch" % actual, 2)
             patch_result = subprocess.run(
                 ["patch", "-p1", "--fuzz=0", "--batch"],
                 cwd=module,
@@ -138,12 +145,16 @@ def main(argv: list[str]) -> int:
                 4,
             )
         markdown_after = sha256(module / "ui" / "markdown" / "view.go")
-        if markdown_after != MARKDOWN_VIEW_AFTER:
+        if markdown_after != MARKDOWN_PRESENTATION_AFTER["ui/markdown/view.go"]:
             return fail(
                 "unexpected patched Markdown source sha256=%s, expected %s"
-                % (markdown_after, MARKDOWN_VIEW_AFTER),
+                % (markdown_after, MARKDOWN_PRESENTATION_AFTER["ui/markdown/view.go"]),
                 4,
             )
+        actual = {path: sha256(module / path) for path in MARKDOWN_PRESENTATION_AFTER}
+        if actual != MARKDOWN_PRESENTATION_AFTER:
+            return fail("unexpected patched Markdown presentation hashes=%s; refusing partial source" % actual, 4)
+        print("gui-go: verified Markdown presentation " + json.dumps(actual, sort_keys=True), file=sys.stderr)
         # A module file distinct from the real go.mod; Go uses the
         # matching app.sum next to it. The source checkout is never edited.
         modfile = tmp / "app.mod"

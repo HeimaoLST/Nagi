@@ -1270,9 +1270,9 @@ func issueHistoryFindCard(t *testing.T, tr *ui.Tester, headerText, revisionText,
 		open, openOK := issueHistoryVisibleRect(tr, openText, panelX, width, height)
 		view, viewOK := issueHistoryVisibleRect(tr, viewText, panelX, width, height)
 		if headerOK && revisionOK && openOK && viewOK {
-			// Keep a full action control inside the readable viewport, not just
-			// its text line; secondaryButton has a 32px minimum height.
-			if view.Y+view.H+20 <= height {
+			// The labels identify full control boxes already inside the visible
+			// bounds above; require both actual 32px action targets.
+			if open.H >= 32 && view.H >= 32 {
 				return header, revision, open, view
 			}
 		}
@@ -1356,7 +1356,7 @@ func TestIssueExecutionHistoryLayoutKeepsHeaderRevisionAndActionsDistinct(t *tes
 			}, tc.width, tc.height)
 			tr.SetDark(tc.dark)
 			tr.Frame()
-			panelX := float32(tc.width) - a.workWidth()
+			panelX := float32(tc.width) - a.effectiveDetailWidth()
 			if a.detailPageActive() {
 				panelX = 0
 			}

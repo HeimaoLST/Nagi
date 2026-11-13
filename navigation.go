@@ -141,12 +141,12 @@ func (a *appModel) navigationToolbar(c *ui.Context, t *ui.Theme) {
 	msgs := locales.In(c.Locale())
 	ui.Toolbar(c, func() {
 		if a.railCollapsed {
-			contacts := appTooltip(c, ui.Button(c, "").Label(msgs.RailContactsTitle()), msgs.NavShowContactsTooltip()).
-				MinHeight(32).Height(32).Padding(4, 8)
+			contacts := appTooltip(c, secondaryButton(c, "").Label(msgs.RailContactsTitle()), msgs.NavShowContactsTooltip()).
+				Margin(0).Padding(8).FontSize(typeNavigation).FontWeight(400).FixedLineHeight(lineNavigation)
 			contacts.Children(func() {
-				ui.Row(c).AlignItems(ui.Center).Gap(4).Children(func() {
-					ui.Icon(c, navContactsIcon).Width(18).Height(18).TextColor(t.TextMuted)
-					ui.Text(c, msgs.RailContactsTitle()).FontSize(typeAction).LineHeight(1.3).TextColor(t.Text)
+				ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
+					controlIcon(c, navContactsIcon, iconChrome).TextColor(t.TextMuted)
+					ui.Text(c, msgs.RailContactsTitle()).FontSize(typeNavigation).FixedLineHeight(lineNavigation).TextColor(t.Text)
 				})
 			})
 			if a.focusRail {
@@ -176,6 +176,11 @@ func (a *appModel) navigationWorkEntry(c *ui.Context, t *ui.Theme) {
 	summary := msgs.WorkEntrySummary(total, notice.AttentionCount, notice.WaitingCount, notice.ActiveCount)
 	toggle := appTooltip(c, ui.Toggle(c, &on, "").Label(msgs.WorkEntryLabel()), summary).
 		MinWidth(44).Height(32).Padding(2, 4)
+	if total > 0 {
+		toggle = sharedControlFace(c, toggle, 16, 4, false, false, on).Margin(0).MinWidth(44).Padding(8)
+	} else {
+		toggle = iconControlFace(c, toggle, iconChrome, on)
+	}
 	toggle.Children(func() {
 		color := t.TextMuted
 		if on {
@@ -183,23 +188,22 @@ func (a *appModel) navigationWorkEntry(c *ui.Context, t *ui.Theme) {
 		}
 		if total > 0 {
 			ui.Row(c).AlignItems(ui.Center).Gap(2).Children(func() {
-				ui.Icon(c, navWorkIcon).Width(18).Height(18).TextColor(color)
+				controlIcon(c, navWorkIcon, iconChrome).TextColor(color)
 				countColor := t.TextMuted
 				if on {
 					countColor = t.Text
 				}
 				if notice.AttentionCount > 0 {
-					ui.Text(c, "!").FontSize(12).FontWeight(600).TextColor(t.Warning)
+					ui.Text(c, "!").FontSize(typeMeta).FixedLineHeight(lineMeta).FontWeight(600).TextColor(t.Warning)
 				}
-				ui.Text(c, fmt.Sprintf("%d", total)).FontSize(12).TextColor(countColor)
+				ui.Text(c, fmt.Sprintf("%d", total)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(countColor)
 			})
 		} else {
-			ui.Icon(c, navWorkIcon).Width(18).Height(18).TextColor(color)
+			controlIcon(c, navWorkIcon, iconChrome).TextColor(color)
 		}
 	})
 	if on {
 		toggle.Selected(true)
-		selectionButtonState(c, toggle, true)
 	}
 	if a.focusWorkspace {
 		toggle.Focus()
@@ -221,18 +225,16 @@ func (a *appModel) navigationWorkEntry(c *ui.Context, t *ui.Theme) {
 func (a *appModel) navigationToggle(c *ui.Context, t *ui.Theme, kind detailKind, label, tooltip string, icon *ui.SVG, focus *bool) {
 	active := a.detailIs(kind)
 	on := active
-	toggle := appTooltip(c, ui.Toggle(c, &on, "").Label(label), tooltip).
-		MinWidth(32).Width(32).Height(32).Padding(0)
+	toggle := iconControlFace(c, appTooltip(c, ui.Toggle(c, &on, "").Label(label), tooltip), iconChrome, active)
 	toggle.Children(func() {
 		color := t.TextMuted
 		if active {
 			color = t.Text
 		}
-		ui.Icon(c, icon).Width(18).Height(18).TextColor(color)
+		controlIcon(c, icon, iconChrome).TextColor(color)
 	})
 	if active {
 		toggle.Selected(true)
-		selectionButtonState(c, toggle, true)
 	}
 	if focus != nil && *focus {
 		toggle.Focus()
@@ -318,10 +320,10 @@ func (a *appModel) profileDetail(c *ui.Context, t *ui.Theme, narrow bool) {
 			if narrow {
 				back := detailBackButton(c, t, msgs.ProfileClose(), msgs.ProfileBackTooltip()).OnClick(func() { a.closeDetail() })
 				a.focusDetailControl(c, back)
-				ui.Text(c, msgs.NavContactProfile()).FontSize(typePageTitle).FontWeight(500).TextColor(t.Text).Grow(1)
+				ui.Text(c, msgs.NavContactProfile()).FontSize(typePageTitle).FontWeight(500).FixedLineHeight(lineSettingsTitle).TextColor(t.Text).Grow(1)
 				return
 			}
-			ui.Text(c, msgs.NavContactProfile()).FontSize(typePageTitle).FontWeight(500).TextColor(t.Text).Grow(1)
+			ui.Text(c, msgs.NavContactProfile()).FontSize(typePageTitle).FontWeight(500).FixedLineHeight(lineSettingsTitle).TextColor(t.Text).Grow(1)
 			close := appTooltip(c, secondaryButton(c, msgs.ProfileClose()), msgs.ProfileBackTooltip()).OnClick(func() { a.closeDetail() })
 			a.focusDetailControl(c, close)
 		})
@@ -330,12 +332,12 @@ func (a *appModel) profileDetail(c *ui.Context, t *ui.Theme, narrow bool) {
 				ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
 					a.avatarTile(c, t, 32)
 					ui.Column(c).MinWidth(0).Shrink(1).Gap(1).Children(func() {
-						ui.Text(c, ct.Name).FontSize(typePageTitle).FontWeight(500).TextColor(t.Text).MaxLines(2)
-						ui.Text(c, msgs.StatusDetail(a.statusLabel(ct, msgs), ct.Role)).FontSize(typeMeta).LineHeight(1.4).TextColor(a.statusColor(t, ct.Status))
+						ui.Text(c, ct.Name).FontSize(typePageTitle).FontWeight(500).FixedLineHeight(lineSettingsTitle).TextColor(t.Text).MaxLines(2)
+						ui.Text(c, msgs.StatusDetail(a.statusLabel(ct, msgs), ct.Role)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(a.statusColor(t, ct.Status))
 					})
 				})
 				if ct.Archived {
-					ui.Text(c, msgs.ProfileArchivedNotice()).FontSize(typeAction).LineHeight(1.4).TextColor(t.Warning)
+					ui.Text(c, msgs.ProfileArchivedNotice()).FontSize(typeLabel).FixedLineHeight(lineLabel).TextColor(t.Warning)
 				}
 				a.profileSummaryField(c, t, msgs.ProfilePurpose(), valueOr(ct.Purpose, msgs.ProfileNoPurpose()))
 				instructions := strings.TrimSpace(ct.Instructions)
@@ -378,7 +380,7 @@ func (a *appModel) profileDetail(c *ui.Context, t *ui.Theme, narrow bool) {
 func (a *appModel) profileSummaryField(c *ui.Context, t *ui.Theme, label, value string) {
 	ui.Column(c).FillWidth().MinWidth(0).Gap(2).Children(func() {
 		ui.Text(c, label).FontSize(typeMeta).FontWeight(500).TextColor(t.TextMuted)
-		ui.Text(c, value).FontSize(14).LineHeight(1.5).TextColor(t.Text)
+		ui.Text(c, value).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text)
 	})
 }
 
@@ -419,12 +421,12 @@ func (a *appModel) historyFullPage(c *ui.Context, t *ui.Theme) {
 				back.Focus()
 				a.focusHistoryFullBack = false
 			}
-			ui.Text(c, msgs.FullSavedMessage()).FontSize(typePageTitle).FontWeight(500).TextColor(t.Text)
+			ui.Text(c, msgs.FullSavedMessage()).FontSize(typePageTitle).FontWeight(500).FixedLineHeight(lineSettingsTitle).TextColor(t.Text)
 		})
 		ui.Scroll(c).Grow(1).TrackScroll(&a.historyFullScroll).Padding(0, 16).Children(func() {
-			ui.Column(c).FillWidth().MaxWidth(760).AlignItems(ui.Start).Gap(8).Children(func() {
-				ui.Text(c, msgs.HistoryMessageMeta(from, full.Date, full.SessionID)).FontSize(typeMeta).LineHeight(1.4).TextColor(t.TextMuted)
-				markdownReader(c, full.Text, a.readerOptions(markdownReaderOptions{CopyLabel: msgs.CopySavedMessageLabel(), Theme: messageMarkdownTheme}, historyLinkScope(ct.ID, "full:"+full.SessionID, full.EntryID), full.WorkingDirectory)).FontSize(typeBody).LineHeight(1.6).TextColor(t.Text)
+			ui.Column(c).FillWidth().MaxWidth(conversationMaxWidth).AlignItems(ui.Start).Gap(8).Children(func() {
+				ui.Text(c, msgs.HistoryMessageMeta(from, full.Date, full.SessionID)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
+				markdownReader(c, full.Text, a.readerOptions(markdownReaderOptions{CopyLabel: msgs.CopySavedMessageLabel(), Theme: messageMarkdownTheme}, historyLinkScope(ct.ID, "full:"+full.SessionID, full.EntryID), full.WorkingDirectory)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text)
 				taskContextReadOnlyView(c, a.workTheme, full.Context)
 			})
 		})
@@ -440,10 +442,10 @@ func (a *appModel) sourcesPage(c *ui.Context, t *ui.Theme) {
 				back.Focus()
 				a.focusSourcesBack = false
 			}
-			ui.Text(c, msgs.SourcesTitle()).FontSize(typePageTitle).FontWeight(500).TextColor(t.Text)
+			ui.Text(c, msgs.SourcesTitle()).FontSize(typePageTitle).FontWeight(500).FixedLineHeight(lineSettingsTitle).TextColor(t.Text)
 		})
 		ui.Scroll(c).Grow(1).TrackScroll(&a.sourcesScroll).Padding(0, 16).Children(func() {
-			ui.Column(c).FillWidth().MaxWidth(760).AlignItems(ui.Start).Gap(8).Children(func() {
+			ui.Column(c).FillWidth().MaxWidth(conversationMaxWidth).AlignItems(ui.Start).Gap(8).Children(func() {
 				a.sourcesPanel(c, t)
 			})
 		})
@@ -459,16 +461,16 @@ func (a *appModel) auxPage(c *ui.Context, t *ui.Theme) {
 		closeLabel = msgs.CloseTaskContext()
 	}
 	ui.Column(c).Fill().Children(func() {
-		ui.Row(c).Padding(16, 16).AlignItems(ui.Center).Gap(8).Children(func() {
+		ui.Row(c).MinHeight(40).Padding(4, 6).AlignItems(ui.Center).Gap(12).Children(func() {
 			back := appTooltip(c, secondaryButton(c, msgs.BackAction()).Label(closeLabel), msgs.BackFromAux(title)).OnClick(func() { a.closeAux() })
 			if a.focusAuxBack {
 				back.Focus()
 				a.focusAuxBack = false
 			}
-			ui.Text(c, title).FontSize(typePageTitle).FontWeight(500).TextColor(t.Text)
+			ui.Text(c, title).FontSize(typeContactTitle).FontWeight(500).FixedLineHeight(lineHeader).TextColor(t.Text)
 		})
 		ui.Scroll(c).Grow(1).TrackScroll(a.auxScrollFor(a.aux)).Padding(0, 16).Children(func() {
-			ui.Column(c).FillWidth().MaxWidth(760).AlignItems(ui.Start).Gap(8).Children(func() {
+			ui.Column(c).FillWidth().MaxWidth(conversationMaxWidth).AlignItems(ui.Start).Gap(8).Children(func() {
 				switch a.aux {
 				case "model":
 					a.modelPanel(c, t)
@@ -510,8 +512,8 @@ func detailBackButton(c *ui.Context, t *ui.Theme, accessible, tooltip string, vi
 	button := appTooltip(c, secondaryButton(c, "").Label(accessible), tooltip).Padding(4, 8)
 	button.Children(func() {
 		ui.Row(c).AlignItems(ui.Center).Gap(4).Children(func() {
-			ui.Icon(c, navBackIcon).Width(16).Height(16).TextColor(t.TextMuted)
-			ui.Text(c, label).FontSize(typeAction).LineHeight(1.3).TextColor(t.Text)
+			controlIcon(c, navBackIcon, iconChrome).TextColor(t.TextMuted)
+			ui.Text(c, label).FontSize(typeAction).FixedLineHeight(lineAction).TextColor(t.Text)
 		})
 	})
 	return button

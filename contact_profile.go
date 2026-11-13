@@ -270,14 +270,14 @@ func (e *contactProfileEditor) builtinToolsView(c *ui.Context, t *ui.Theme, edit
 	msgs := locales.In(c.Locale())
 	if !e.BuiltinToolsSupported {
 		if e.BuiltinToolsError != "" {
-			ui.Text(c, msgs.ProfileBuiltinTools()).FontSize(typeAction).FontWeight(500).TextColor(t.Text)
-			ui.Text(c, e.BuiltinToolsError).FontSize(14).LineHeight(1.5).TextColor(t.Warning)
+			ui.Text(c, msgs.ProfileBuiltinTools()).FontSize(typeLabel).FontWeight(400).FixedLineHeight(lineLabel).TextColor(t.Text)
+			ui.Text(c, e.BuiltinToolsError).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Warning)
 		}
 		return
 	}
-	ui.Text(c, msgs.ProfileBuiltinTools()).FontSize(typeAction).FontWeight(500).TextColor(t.Text)
+	ui.Text(c, msgs.ProfileBuiltinTools()).FontSize(typeLabel).FontWeight(400).FixedLineHeight(lineLabel).TextColor(t.Text)
 	if e.BuiltinToolsLoading {
-		ui.Text(c, msgs.ProfileBuiltinLoading()).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+		ui.Text(c, msgs.ProfileBuiltinLoading()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 		return
 	}
 	if !e.BuiltinToolsLoaded {
@@ -285,7 +285,7 @@ func (e *contactProfileEditor) builtinToolsView(c *ui.Context, t *ui.Theme, edit
 		if message == "" {
 			message = msgs.ProfileBuiltinNotLoaded()
 		}
-		ui.Text(c, message).FontSize(14).LineHeight(1.5).TextColor(t.Warning)
+		ui.Text(c, message).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Warning)
 		if e.CanRetryBuiltinTools {
 			secondaryButton(c, msgs.ProfileBuiltinRetry()).Disabled(e.Busy).OnClick(func() {
 				if actions.RetryBuiltinTools != nil {
@@ -320,10 +320,10 @@ func (e *contactProfileEditor) builtinToolsView(c *ui.Context, t *ui.Theme, edit
 		box.OnChange(func() { e.toggleBuiltinTool(name, value) })
 	}
 	if e.Draft.BuiltinTools != nil && len(*e.Draft.BuiltinTools) == 0 {
-		ui.Text(c, msgs.ProfileBuiltinNone()).FontSize(14).LineHeight(1.5).TextColor(t.Warning)
+		ui.Text(c, msgs.ProfileBuiltinNone()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Warning)
 	}
 	if e.BuiltinToolsError != "" {
-		ui.Text(c, e.BuiltinToolsError).FontSize(14).LineHeight(1.5).TextColor(t.Danger)
+		ui.Text(c, e.BuiltinToolsError).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Danger)
 	}
 }
 
@@ -331,37 +331,37 @@ func (e *contactProfileEditor) view(c *ui.Context, t *ui.Theme, actions contactP
 	msgs := locales.In(c.Locale())
 	editable := !e.Busy && !e.Archived
 	ui.Column(c).Gap(10).Children(func() {
-		ui.Text(c, msgs.ProfileSaveIntro()).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+		ui.Text(c, msgs.ProfileSaveIntro()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 		if reason := e.activityReason(); reason != "" {
-			ui.Text(c, profileNoticeText(msgs, reason)).FontSize(14).LineHeight(1.5).TextColor(t.Warning)
+			ui.Text(c, profileNoticeText(msgs, reason)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Warning)
 		}
 		if e.Archived {
-			ui.Text(c, msgs.ProfileArchivedBadge()).FontSize(typeAction).FontWeight(500).TextColor(t.Warning)
+			ui.Text(c, msgs.ProfileArchivedBadge()).FontSize(typeLabel).FontWeight(400).FixedLineHeight(lineLabel).TextColor(t.Warning)
 		}
 
-		ui.Text(c, msgs.FieldName()).FontSize(typeAction).FontWeight(500).TextColor(t.Text)
-		name := ui.TextInput(c, &e.Draft.Name).Label(msgs.FieldNameAccessible()).FontSize(14).Placeholder(msgs.FieldNamePlaceholder()).Disabled(!editable)
+		ui.Text(c, msgs.FieldName()).FontSize(typeLabel).FontWeight(400).FixedLineHeight(lineLabel).TextColor(t.Text)
+		name := preferenceInput(c, &e.Draft.Name, e.Errors["Name"] != "").Label(msgs.FieldNameAccessible()).Placeholder(msgs.FieldNamePlaceholder()).Disabled(!editable)
 		if e.focusField == "Name" {
 			name.Focus()
 			e.focusField = ""
 		}
 		if message := e.Errors["Name"]; message != "" {
-			ui.Text(c, profileNoticeText(msgs, message)).FontSize(14).TextColor(t.Danger)
+			ui.Text(c, profileNoticeText(msgs, message)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Danger)
 		}
-		ui.Text(c, msgs.ProfilePurpose()).FontSize(typeAction).FontWeight(500).TextColor(t.Text)
-		ui.TextArea(c, &e.Draft.Purpose).Label(msgs.FieldPurposeAccessible()).FontSize(14).Placeholder(msgs.ProfilePurpose()).Disabled(!editable)
-		ui.Text(c, msgs.ProfileInstructions()).FontSize(typeAction).FontWeight(500).TextColor(t.Text)
-		ui.TextArea(c, &e.Draft.Instructions).Label(msgs.FieldInstructionsAccessible()).FontSize(14).Placeholder(msgs.ProfileInstructions()).Disabled(!editable)
-		ui.Text(c, msgs.ProfileWorkspace()).FontSize(typeAction).FontWeight(500).TextColor(t.Text)
-		workspace := ui.TextInput(c, &e.Draft.Workspace).Label(msgs.FieldWorkspaceAccessible()).FontSize(14).Placeholder(msgs.FieldWorkspacePlaceholder()).Disabled(!editable)
+		ui.Text(c, msgs.ProfilePurpose()).FontSize(typeLabel).FontWeight(400).FixedLineHeight(lineLabel).TextColor(t.Text)
+		formTextArea(c, &e.Draft.Purpose, false).Label(msgs.FieldPurposeAccessible()).Placeholder(msgs.ProfilePurpose()).Disabled(!editable)
+		ui.Text(c, msgs.ProfileInstructions()).FontSize(typeLabel).FontWeight(400).FixedLineHeight(lineLabel).TextColor(t.Text)
+		formTextArea(c, &e.Draft.Instructions, false).Label(msgs.FieldInstructionsAccessible()).Placeholder(msgs.ProfileInstructions()).Disabled(!editable)
+		ui.Text(c, msgs.ProfileWorkspace()).FontSize(typeLabel).FontWeight(400).FixedLineHeight(lineLabel).TextColor(t.Text)
+		workspace := preferenceInput(c, &e.Draft.Workspace, e.Errors["Workspace"] != "").Label(msgs.FieldWorkspaceAccessible()).Placeholder(msgs.FieldWorkspacePlaceholder()).Disabled(!editable)
 		if e.focusField == "Workspace" {
 			workspace.Focus()
 			e.focusField = ""
 		}
 		if message := e.Errors["Workspace"]; message != "" {
-			ui.Text(c, profileNoticeText(msgs, message)).FontSize(14).TextColor(t.Danger)
+			ui.Text(c, profileNoticeText(msgs, message)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Danger)
 		}
-		ui.Text(c, msgs.ProfileWorkspaceHint()).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+		ui.Text(c, msgs.ProfileWorkspaceHint()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 		ui.Row(c).Gap(8).Wrap().Children(func() {
 			folder := secondaryButton(c, msgs.WorkFolderChoose()).Disabled(!editable).OnClick(actions.ChooseFolder)
 			if e.focusFolder {
@@ -375,7 +375,7 @@ func (e *contactProfileEditor) view(c *ui.Context, t *ui.Theme, actions contactP
 			})
 		})
 		if e.folderError != "" {
-			ui.Text(c, msgs.WorkFolderChooseFailed(e.folderError)).FontSize(typeBody).LineHeight(1.5).TextColor(t.Danger)
+			ui.Text(c, msgs.WorkFolderChooseFailed(e.folderError)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Danger)
 		}
 
 		e.builtinToolsView(c, t, editable, actions)
@@ -398,7 +398,7 @@ func (e *contactProfileEditor) view(c *ui.Context, t *ui.Theme, actions contactP
 					secondaryButton(c, msgs.ProfileDiscard()).OnClick(actions.Discard)
 				}
 			})
-			ui.Text(c, msgs.ProfileContactManagement()).FontSize(typeAction).FontWeight(500).TextColor(t.TextMuted)
+			ui.Text(c, msgs.ProfileContactManagement()).FontSize(typeLabel).FontWeight(400).FixedLineHeight(lineLabel).TextColor(t.TextMuted)
 			ui.Row(c).Gap(8).Wrap().Children(func() {
 				if e.Archived {
 					secondaryButton(c, msgs.ProfileRestore()).Disabled(e.Busy).OnClick(func() {
@@ -416,13 +416,13 @@ func (e *contactProfileEditor) view(c *ui.Context, t *ui.Theme, actions contactP
 			})
 		})
 		if e.Busy {
-			ui.Text(c, msgs.ProfileSaving()).FontSize(14).TextColor(t.TextMuted)
+			ui.Text(c, msgs.ProfileSaving()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 		}
 		if e.Error != "" {
-			ui.Text(c, profileNoticeText(msgs, e.Error)).FontSize(14).LineHeight(1.5).TextColor(t.Danger)
+			ui.Text(c, profileNoticeText(msgs, e.Error)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Danger)
 		}
 		if e.Status != "" {
-			ui.Text(c, profileNoticeText(msgs, e.Status)).FontSize(14).LineHeight(1.5).TextColor(t.Text)
+			ui.Text(c, profileNoticeText(msgs, e.Status)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Text)
 		}
 	})
 }

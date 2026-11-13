@@ -58,7 +58,7 @@ const (
 	fullRailBreakpoint   int     = 1180
 	avatarRailBreakpoint int     = 900
 	minAvatarDetailWidth float32 = 300
-	effectiveCenterWidth float32 = 492
+	effectiveCenterWidth float32 = 494
 )
 
 func clampPaneWidth(value, fallback, minValue, maxValue float32) float32 {
@@ -371,15 +371,15 @@ func (a *appModel) workspaceContent(c *ui.Context, t *ui.Theme, narrow bool) {
 					nav.FocusBack = false
 				}
 				a.focusDetailControl(c, back)
-				ui.Text(c, title).FontSize(typePageTitle).FontWeight(500).TextColor(t.Text).Grow(1).MaxLines(2)
+				ui.Text(c, title).FontSize(typePageTitle).FontWeight(500).FixedLineHeight(lineSettingsTitle).TextColor(t.Text).Grow(1).MaxLines(2)
 				newIssueAction()
 				return
 			}
-			ui.Text(c, title).FontSize(typePageTitle).FontWeight(500).TextColor(t.Text).Grow(1)
+			ui.Text(c, title).FontSize(typePageTitle).FontWeight(500).FixedLineHeight(lineSettingsTitle).TextColor(t.Text).Grow(1)
 			newIssueAction()
-			close := ui.Button(c, "").Label(msgs.WorkClose()).MinWidth(32).Width(32).Height(32).Padding(0)
+			close := iconControlFace(c, ui.Button(c, "").Label(msgs.WorkClose()), iconPanel, false)
 			close = appTooltip(c, close, msgs.WorkCloseTooltip()).OnClick(func() { a.closeDetail() })
-			close.Children(func() { ui.Icon(c, navCloseIcon).Width(18).Height(18).TextColor(t.TextMuted) })
+			close.Children(func() { controlIcon(c, navCloseIcon, iconPanel).TextColor(t.TextMuted) })
 			a.focusDetailControl(c, close)
 		})
 		tab := 0
@@ -529,14 +529,14 @@ func (a *appModel) issueOverviewRow(c *ui.Context, t *ui.Theme, ct *contact, iss
 					goalWeight = 500
 				}
 				ui.Text(c, issue.Goal).FontSize(typeAction).FontWeight(goalWeight).LineHeight(1.35).MaxLines(2).TextColor(t.Text).Grow(1)
-				ui.Text(c, "›").FontSize(16).TextColor(t.TextMuted)
+				ui.Icon(c, glyphArrowRightSLine).Size(14, 14).TextColor(t.TextMuted)
 			})
 			msgs := locales.In(c.Locale())
 			display := issueDisplayStatusFor(issue)
 			statusColor := issueDisplayColor(t, display)
 			ui.Row(c).AlignItems(ui.Center).Gap(6).Children(func() {
-				ui.Text(c, "●").FontSize(12).TextColor(statusColor)
-				ui.Text(c, issueDisplayLabel(msgs, display)).FontSize(12).LineHeight(1.4).MaxLines(1).TextColor(statusColor)
+				ui.Text(c, "●").FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(statusColor)
+				ui.Text(c, issueDisplayLabel(msgs, display)).FontSize(typeMeta).FixedLineHeight(lineMeta).MaxLines(1).TextColor(statusColor)
 			})
 			if latest := latestIssueExecution(issue); latest != nil {
 				runLabel := issueRunLabel(msgs, latest.Status)
@@ -548,7 +548,7 @@ func (a *appModel) issueOverviewRow(c *ui.Context, t *ui.Theme, ct *contact, iss
 					if issueExecutionNeedsAttention(latest.Status) {
 						runColor = t.Warning
 					}
-					ui.Text(c, runLabel).FontSize(12).LineHeight(1.4).MaxLines(1).TextColor(runColor)
+					ui.Text(c, runLabel).FontSize(typeMeta).FixedLineHeight(lineMeta).MaxLines(1).TextColor(runColor)
 				}
 			}
 		})
@@ -597,14 +597,14 @@ func (a *appModel) issueDetailView(c *ui.Context, t *ui.Theme, ct *contact, issu
 				})
 			}
 			if active {
-				ui.Text(c, locales.In(c.Locale()).IssueCurrentRun(workStateText(locales.In(c.Locale()), work))).FontSize(12).LineHeight(1.4).MaxLines(2).TextColor(a.workStateColor(work.State))
+				ui.Text(c, locales.In(c.Locale()).IssueCurrentRun(workStateText(locales.In(c.Locale()), work))).FontSize(typeMeta).FixedLineHeight(lineMeta).MaxLines(2).TextColor(a.workStateColor(work.State))
 			}
 			display := issueDisplayStatusFor(issue)
 			if issue.openQuestion() == nil {
-				ui.Text(c, issueDisplayLabel(locales.In(c.Locale()), display)).FontSize(12).FontWeight(500).TextColor(issueDisplayColor(t, display))
+				ui.Text(c, issueDisplayLabel(locales.In(c.Locale()), display)).FontSize(typeMeta).FixedLineHeight(lineMeta).FontWeight(500).TextColor(issueDisplayColor(t, display))
 			}
 			if issue.Status == issueStatusCompleted {
-				ui.Text(c, locales.In(c.Locale()).IssueMarkedByUser(issueEvidenceText(locales.In(c.Locale()), issue))).FontSize(12).LineHeight(1.4).TextColor(t.TextMuted).MaxLines(3)
+				ui.Text(c, locales.In(c.Locale()).IssueMarkedByUser(issueEvidenceText(locales.In(c.Locale()), issue))).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted).MaxLines(3)
 			}
 			if a.issueFormOpen && a.issueFormEditingID != "" {
 				a.issueFormView(c, t)
@@ -651,7 +651,7 @@ func (a *appModel) conversationWorkView(c *ui.Context, t *ui.Theme, ct *contact,
 				if ct.ActiveTaskID == work.TaskID {
 					title = "Current work"
 				}
-				ui.Text(c, title).FontSize(typePageTitle).FontWeight(500).TextColor(t.Text)
+				ui.Text(c, title).FontSize(typePageTitle).FontWeight(500).FixedLineHeight(lineSettingsTitle).TextColor(t.Text)
 				a.workCard(c, t, work, ct.ActiveTaskID == work.TaskID, false)
 				a.workActivity(c, t, work)
 			}
@@ -666,26 +666,26 @@ func (a *appModel) issueFormView(c *ui.Context, t *ui.Theme) {
 	if a.issueFormEditingID != "" {
 		title = msgs.IssueEdit()
 	}
-	ui.Column(c).Padding(8).Radius(8).Background(a.workTheme.Well).Gap(4).Children(func() {
+	ui.Column(c).Padding(8, 0).Gap(8).Children(func() {
 		ui.Row(c).AlignItems(ui.Center).Children(func() {
 			ui.Text(c, title).FontSize(typeBody).FontWeight(500).TextColor(t.Text)
 			ui.Spacer(c)
 			secondaryButton(c, locales.In(c.Locale()).ModelCancel()).OnClick(func() { a.cancelIssueForm() })
 		})
 		ui.Text(c, locales.In(c.Locale()).IssueFormGoal()).FontSize(typeAction).FontWeight(500).TextColor(t.Text)
-		goal := ui.TextArea(c, &a.issueGoal).Label(locales.In(c.Locale()).IssueFormGoalLabel()).FontSize(14).Placeholder(locales.In(c.Locale()).IssueFormGoalPlaceholder()).Height(56)
+		goal := formTextArea(c, &a.issueGoal, false).Label(locales.In(c.Locale()).IssueFormGoalLabel()).Placeholder(locales.In(c.Locale()).IssueFormGoalPlaceholder()).Height(56)
 		if a.focusIssueGoal {
 			goal.Focus()
 			a.focusIssueGoal = false
 		}
 		ui.Text(c, locales.In(c.Locale()).IssueFormRequirements()).FontSize(typeAction).FontWeight(500).TextColor(t.Text)
-		ui.TextArea(c, &a.issueRequirements).Label(locales.In(c.Locale()).IssueFormRequirementsLabel()).FontSize(14).Placeholder(locales.In(c.Locale()).IssueFormRequirementsPlaceholder()).Height(72)
+		formTextArea(c, &a.issueRequirements, false).Label(locales.In(c.Locale()).IssueFormRequirementsLabel()).Placeholder(locales.In(c.Locale()).IssueFormRequirementsPlaceholder()).Height(72)
 		if a.issueFormError != "" {
 			text := a.issueFormError
 			if a.issueFormNotice != "" {
 				text = issueNoticeText(locales.In(c.Locale()), a.issueFormNotice, a.issueFormNoticeDetail)
 			}
-			ui.Text(c, text).FontSize(14).LineHeight(1.5).TextColor(t.Danger)
+			ui.Text(c, text).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Danger)
 		}
 		ui.Row(c).Gap(8).Children(func() {
 			secondaryButton(c, locales.In(c.Locale()).WorkSaveIssue()).OnClick(func() { a.saveIssueForm() })
@@ -846,7 +846,7 @@ func (a *appModel) issuePrimaryAction(c *ui.Context, t *ui.Theme, ct *contact, i
 		return "read"
 	}
 	if startReason != "" {
-		ui.Text(c, msgs.WorkNextActionUnavailable(sendBlockText(msgs, startReason))).FontSize(12).LineHeight(1.4).TextColor(t.TextMuted).MaxLines(2)
+		ui.Text(c, msgs.WorkNextActionUnavailable(sendBlockText(msgs, startReason))).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted).MaxLines(2)
 	}
 	return ""
 }
@@ -874,7 +874,7 @@ func (a *appModel) issueLifecycleActions(c *ui.Context, t *ui.Theme, issue *prod
 				})
 			})
 		} else {
-			ui.Text(c, msgs.WorkNextActionUnavailable(reason)).FontSize(12).LineHeight(1.4).TextColor(t.TextMuted).MaxLines(2)
+			ui.Text(c, msgs.WorkNextActionUnavailable(reason)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted).MaxLines(2)
 		}
 		return
 	}
@@ -886,10 +886,10 @@ func (a *appModel) issueLifecycleActions(c *ui.Context, t *ui.Theme, issue *prod
 		})
 	})
 	if issue.Work.ActiveTaskID == "" && issue.Work.SendState == sendIdle && issueRunBlocked(issue) == "" {
-		ui.Text(c, msgs.WorkCompletionEvidence()).FontSize(12).TextColor(t.TextMuted)
+		ui.Text(c, msgs.WorkCompletionEvidence()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 		draft := a.completionDraft(issue)
 		ui.Row(c).AlignItems(ui.Center).Gap(6).Children(func() {
-			ui.TextInput(c, draft).Label(msgs.WorkCompletionEvidence()).FontSize(14).Placeholder(msgs.WorkCompletionEvidencePlaceholder()).Grow(1)
+			preferenceInput(c, draft, false).Label(msgs.WorkCompletionEvidence()).Placeholder(msgs.WorkCompletionEvidencePlaceholder()).Grow(1)
 			secondaryButton(c, msgs.WorkComplete()).OnClick(func() {
 				if !a.completeIssue(issue.ID, *draft) {
 					a.setIssueActionNotice("Could not complete this issue.", "complete-failed", "")
@@ -917,27 +917,27 @@ func (a *appModel) issueCard(c *ui.Context, t *ui.Theme, ct *contact, issue *pro
 	msgs := locales.In(c.Locale())
 	editable := !issue.Archived && issue.Status != issueStatusCompleted && issue.Status != issueStatusCanceled
 	expanded := a.issueDetailOpen[issue.ID]
-	ui.Column(c).Padding(8).Radius(8).Background(a.workTheme.Well).Gap(4).Children(func() {
+	ui.Column(c).Padding(8, 0).Gap(8).Children(func() {
 		ui.Column(c).Gap(2).Children(func() {
-			ui.Text(c, issue.Goal).FontSize(typePageTitle).FontWeight(500).LineHeight(1.5).TextColor(t.Text)
+			ui.Text(c, issue.Goal).FontSize(typeLabel).FontWeight(400).FixedLineHeight(lineLabel).TextColor(t.Text)
 		})
 		if a.issueActionError != "" {
 			text := a.issueActionError
 			if a.issueActionNotice != "" {
 				text = issueNoticeText(locales.In(c.Locale()), a.issueActionNotice, a.issueActionNoticeDetail)
 			}
-			ui.Text(c, text).FontSize(14).LineHeight(1.5).TextColor(t.Warning)
+			ui.Text(c, text).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Warning)
 		}
 		if question := issue.openQuestion(); question != nil {
 			display := issueDisplayStatusFor(issue)
-			ui.Column(c).Padding(8).Radius(8).Background(t.Surface).Gap(3).Children(func() {
+			ui.Column(c).Padding(8, 0).Gap(4).Children(func() {
 				ui.Text(c, issueDisplayLabel(locales.In(c.Locale()), display)).FontSize(typeAction).FontWeight(500).TextColor(issueDisplayColor(t, display))
 				if strings.TrimSpace(question.Text) == "" {
-					ui.Text(c, msgs.QuestionUnavailableTitle()).FontSize(14).LineHeight(1.5).TextColor(t.Text)
-					ui.Text(c, msgs.QuestionUnavailableHint()).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+					ui.Text(c, msgs.QuestionUnavailableTitle()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text)
+					ui.Text(c, msgs.QuestionUnavailableHint()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 					secondaryButton(c, msgs.IssueReloadTask()).OnClick(func() { a.reloadIssueWorkByID(ct.ID, issue.ID) })
 				} else {
-					ui.Text(c, question.Text).FontSize(14).LineHeight(1.5).TextColor(t.Text)
+					ui.Text(c, question.Text).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text)
 				}
 			})
 		}
@@ -961,7 +961,7 @@ func (a *appModel) issueCard(c *ui.Context, t *ui.Theme, ct *contact, issue *pro
 		a.issueLatestResult(c, t, ct, issue, primaryKind != "read")
 		if latest := latestIssueExecution(issue); latest != nil && latest.Status == issueExecutionCompleted &&
 			issue.Status != issueStatusCompleted && issue.Status != issueStatusCanceled && issueHasRemainingRequirements(issue) {
-			ui.Text(c, msgs.IssueEndedOpen()).FontSize(typeAction).LineHeight(1.4).TextColor(t.TextMuted)
+			ui.Text(c, msgs.IssueEndedOpen()).FontSize(typeLabel).FixedLineHeight(lineLabel).TextColor(t.TextMuted)
 		}
 		a.issueRequirementSummary(c, t, issue)
 		a.issueLifecycleActions(c, t, issue)
@@ -997,8 +997,8 @@ func (a *appModel) issueCard(c *ui.Context, t *ui.Theme, ct *contact, issue *pro
 			if issue.Evidence != "" && issue.Status != issueStatusCompleted {
 				evidence = msgs.IssuePreviousEvidence(issue.Evidence)
 			}
-			ui.Text(c, msgs.WorkCompletionEvidence()).FontSize(14).TextColor(t.TextMuted)
-			ui.Text(c, evidence).FontSize(14).LineHeight(1.5).TextColor(t.Text).MaxLines(4)
+			ui.Text(c, msgs.WorkCompletionEvidence()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
+			ui.Text(c, evidence).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text).MaxLines(4)
 			a.issueRequirementEvidence(c, t, ct, issue, editable)
 			a.issueSupplementSection(c, t, ct, issue, editable)
 			a.issueExecutions(c, t, ct, issue)
@@ -1006,7 +1006,7 @@ func (a *appModel) issueCard(c *ui.Context, t *ui.Theme, ct *contact, issue *pro
 			a.issueSupplementSection(c, t, ct, issue, editable)
 		}
 		if executionHasUnknownRecovery(issue) {
-			ui.Text(c, msgs.IssueRecoveryAvailable()).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+			ui.Text(c, msgs.IssueRecoveryAvailable()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 		}
 	})
 }
@@ -1019,29 +1019,29 @@ func (a *appModel) issueLatestResult(c *ui.Context, t *ui.Theme, ct *contact, is
 		return
 	}
 	ui.Text(c, msgs.IssueLatestExecution()).FontSize(typeGroupTitle).FontWeight(500).TextColor(t.TextMuted)
-	ui.Text(c, issueExecutionText(msgs, execution.Status)).FontSize(14).TextColor(t.TextMuted)
+	ui.Text(c, issueExecutionText(msgs, execution.Status)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 	text := strings.TrimSpace(ct.resultTextForExecution(execution))
 	work := workFor(ct, execution.TaskID)
 	switch {
 	case execution.Status == issueExecutionAccepted || execution.Status == issueExecutionRunning:
 		if text == "" {
-			ui.Text(c, msgs.IssueNoResultRunning()).FontSize(14).LineHeight(1.5).TextColor(t.Text).MaxLines(3)
+			ui.Text(c, msgs.IssueNoResultRunning()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text).MaxLines(3)
 		} else {
-			ui.Text(c, msgs.IssueCurrentResponse(truncate(text, 300))).FontSize(14).LineHeight(1.5).TextColor(t.Text).MaxLines(3)
+			ui.Text(c, msgs.IssueCurrentResponse(truncate(text, 300))).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text).MaxLines(3)
 		}
 	case execution.Status == issueExecutionCompleted:
 		if text == "" {
 			if work != nil && len(work.Tools) > 0 {
-				ui.Text(c, msgs.IssueNoAssistantTools()).FontSize(14).LineHeight(1.5).TextColor(t.Text).MaxLines(3)
+				ui.Text(c, msgs.IssueNoAssistantTools()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text).MaxLines(3)
 			} else {
-				ui.Text(c, msgs.IssueNoAssistant()).FontSize(14).LineHeight(1.5).TextColor(t.Text).MaxLines(3)
+				ui.Text(c, msgs.IssueNoAssistant()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text).MaxLines(3)
 			}
 		} else {
-			ui.Text(c, msgs.IssueResultPreview(truncate(text, 300))).FontSize(14).LineHeight(1.5).TextColor(t.Text).MaxLines(3)
+			ui.Text(c, msgs.IssueResultPreview(truncate(text, 300))).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text).MaxLines(3)
 		}
 	default:
 		if text != "" {
-			ui.Text(c, msgs.IssueResultPreview(truncate(text, 300))).FontSize(14).LineHeight(1.5).TextColor(t.Text).MaxLines(3)
+			ui.Text(c, msgs.IssueResultPreview(truncate(text, 300))).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text).MaxLines(3)
 		}
 		reason := strings.TrimSpace(execution.Detail)
 		if reason == "" {
@@ -1090,7 +1090,7 @@ func (a *appModel) issueLatestResult(c *ui.Context, t *ui.Theme, ct *contact, is
 func (a *appModel) issueRequirementSummary(c *ui.Context, t *ui.Theme, issue *productIssue) {
 	if len(issue.Requirements) == 0 {
 		ui.Text(c, locales.In(c.Locale()).IssueRequirements()).FontSize(typeGroupTitle).FontWeight(500).TextColor(t.TextMuted)
-		ui.Text(c, locales.In(c.Locale()).IssueNoRequirements()).FontSize(14).TextColor(t.TextMuted)
+		ui.Text(c, locales.In(c.Locale()).IssueNoRequirements()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 		return
 	}
 	ui.Text(c, locales.In(c.Locale()).IssueRequirements()).FontSize(typeGroupTitle).FontWeight(500).TextColor(t.TextMuted)
@@ -1099,8 +1099,8 @@ func (a *appModel) issueRequirementSummary(c *ui.Context, t *ui.Theme, issue *pr
 			continue
 		}
 		ui.Row(c).AlignItems(ui.Center).Gap(6).Children(func() {
-			ui.Text(c, requirement.Text).FontSize(14).LineHeight(1.5).TextColor(t.Text).Grow(1)
-			ui.Text(c, requirementStateText(locales.In(c.Locale()), requirement.State)).FontSize(14).TextColor(requirementStateColor(t, requirement.State))
+			ui.Text(c, requirement.Text).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text).Grow(1)
+			ui.Text(c, requirementStateText(locales.In(c.Locale()), requirement.State)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(requirementStateColor(t, requirement.State))
 		})
 	}
 }
@@ -1115,10 +1115,10 @@ func (a *appModel) issueRequirementEvidence(c *ui.Context, t *ui.Theme, ct *cont
 			continue
 		}
 		ui.Column(c).Padding(6).Radius(6).Background(t.Surface).Gap(3).Children(func() {
-			ui.Text(c, requirement.Text).FontSize(14).LineHeight(1.5).TextColor(t.Text).MaxLines(2)
+			ui.Text(c, requirement.Text).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text).MaxLines(2)
 			if editable {
 				draft := a.requirementDraft(requirement)
-				ui.TextInput(c, draft).Label(locales.In(c.Locale()).IssueEvidenceFor(requirement.Text)).FontSize(14).Placeholder(locales.In(c.Locale()).IssueEvidencePlaceholder())
+				preferenceInput(c, draft, false).Label(locales.In(c.Locale()).IssueEvidenceFor(requirement.Text)).Placeholder(locales.In(c.Locale()).IssueEvidencePlaceholder())
 				ui.Row(c).Gap(4).Children(func() {
 					for _, action := range []struct {
 						label, state string
@@ -1137,7 +1137,7 @@ func (a *appModel) issueRequirementEvidence(c *ui.Context, t *ui.Theme, ct *cont
 					}
 				})
 			} else if requirement.Evidence != "" {
-				ui.Text(c, locales.In(c.Locale()).IssueEvidencePrefix(requirement.Evidence)).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted).MaxLines(2)
+				ui.Text(c, locales.In(c.Locale()).IssueEvidencePrefix(requirement.Evidence)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted).MaxLines(2)
 			}
 		})
 	}
@@ -1156,9 +1156,9 @@ func (a *appModel) issueExecutions(c *ui.Context, t *ui.Theme, ct *contact, issu
 		w := workFor(ct, execution.TaskID)
 		ui.Column(c).Padding(8).Radius(8).Background(t.Surface).Gap(4).Children(func() {
 			ui.Column(c).Gap(2).Children(func() {
-				ui.Text(c, locales.In(c.Locale()).IssueRunHeader(strconv.Itoa(index+1), issueExecutionText(locales.In(c.Locale()), execution.Status))).FontSize(14).TextColor(t.TextMuted)
+				ui.Text(c, locales.In(c.Locale()).IssueRunHeader(strconv.Itoa(index+1), issueExecutionText(locales.In(c.Locale()), execution.Status))).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 				if execution.RequirementsRevision > 0 {
-					ui.Text(c, locales.In(c.Locale()).IssueRunRevision(strconv.Itoa(execution.RequirementsRevision))).FontSize(14).TextColor(t.TextMuted)
+					ui.Text(c, locales.In(c.Locale()).IssueRunRevision(strconv.Itoa(execution.RequirementsRevision))).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 				}
 			})
 			contextCount := len(executionTaskContextItems(ct, issue, execution))
@@ -1178,7 +1178,7 @@ func (a *appModel) issueExecutions(c *ui.Context, t *ui.Theme, ct *contact, issu
 			}
 			if execution.ContextExpanded {
 				if execution.Prompt != "" {
-					ui.Text(c, locales.In(c.Locale()).IssueSentSnapshot(truncate(execution.Prompt, 240))).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted).MaxLines(3)
+					ui.Text(c, locales.In(c.Locale()).IssueSentSnapshot(truncate(execution.Prompt, 240))).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted).MaxLines(3)
 				}
 				a.executionTaskContextView(c, t, ct, issue, execution)
 			}
@@ -1195,7 +1195,7 @@ func (a *appModel) issueExecutions(c *ui.Context, t *ui.Theme, ct *contact, issu
 					}
 					a.recoveryNotice(c, t, "execution:"+ct.ID+":"+execution.ID, summary, execution.Detail, true)
 				} else {
-					ui.Text(c, execution.Detail).FontSize(typeBody).LineHeight(1.5).TextColor(t.Warning)
+					ui.Text(c, execution.Detail).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Warning)
 				}
 			}
 			if execution.Status == issueExecutionUnknown || execution.Status == issueExecutionPending {
@@ -1218,7 +1218,7 @@ func (a *appModel) issueExecutions(c *ui.Context, t *ui.Theme, ct *contact, issu
 					}
 				})
 				if hint := a.issueExecutionCheckHint(msgs, ct, issue, execution); hint != "" {
-					ui.Text(c, hint).FontSize(typeMeta).LineHeight(1.5).TextColor(t.TextMuted)
+					ui.Text(c, hint).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 				}
 			}
 			ui.Column(c).AlignItems(ui.Start).Gap(6).Children(func() {
@@ -1298,7 +1298,7 @@ func (a *appModel) issueList(c *ui.Context, t *ui.Theme, ct *contact) {
 	nav := ct.issueNavigation()
 	issues := ct.issuesForFilter(nav.Filter)
 	if len(issues) == 0 {
-		ui.Text(c, msgs.IssueNoIssuesIn(issueFilterText(msgs, nav.Filter))).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+		ui.Text(c, msgs.IssueNoIssuesIn(issueFilterText(msgs, nav.Filter))).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 		return
 	}
 	for _, issue := range issues {
@@ -1335,19 +1335,19 @@ func requirementStateColor(t *ui.Theme, state string) ui.Color {
 func (a *appModel) workEmptyState(c *ui.Context, t *ui.Theme, ct *contact) {
 	if !a.demo && ct.SessionID != "" && !ct.Loaded {
 		ui.Text(c, locales.In(c.Locale()).WorkLoadingHistoryTitle()).FontSize(typeAction).FontWeight(500).TextColor(t.Text)
-		ui.Text(c, locales.In(c.Locale()).WorkLoadingHistoryHint()).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+		ui.Text(c, locales.In(c.Locale()).WorkLoadingHistoryHint()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 		if a.runtimeStatus != runtimeStateReady {
-			ui.Text(c, locales.In(c.Locale()).WorkHistoryNotReady()).FontSize(14).LineHeight(1.5).TextColor(t.Warning)
+			ui.Text(c, locales.In(c.Locale()).WorkHistoryNotReady()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Warning)
 		}
 		return
 	}
 	if !a.demo && a.runtimeStatus != runtimeStateReady {
 		ui.Text(c, locales.In(c.Locale()).WorkUnavailableTitle()).FontSize(typeAction).FontWeight(500).TextColor(t.Text)
-		ui.Text(c, locales.In(c.Locale()).WorkUnavailableHint()).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+		ui.Text(c, locales.In(c.Locale()).WorkUnavailableHint()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 		return
 	}
-	ui.Text(c, locales.In(c.Locale()).WorkNoCurrent()).FontSize(typePageTitle).FontWeight(500).TextColor(t.Text)
-	ui.Text(c, locales.In(c.Locale()).WorkNoCurrentHint(ct.Name)).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+	ui.Text(c, locales.In(c.Locale()).WorkNoCurrent()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text)
+	ui.Text(c, locales.In(c.Locale()).WorkNoCurrentHint(ct.Name)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 }
 
 func (a *appModel) issueWorkDisclosureSnapshot(ct *contact, issue *productIssue, work *workItem) (issueExecutionDisclosure, func() bool) {
@@ -1373,7 +1373,7 @@ func (a *appModel) issueWorkViewCurrent(ct *contact, issue *productIssue, work *
 
 func (a *appModel) workCard(c *ui.Context, t *ui.Theme, w *workItem, isCurrent, issueWork bool, disclosure ...func(bool, func())) {
 	msgs := locales.In(c.Locale())
-	ui.Column(c).Padding(8).Radius(8).Background(a.workTheme.WorkSurface).Border(0.5, t.Border).Gap(4).Children(func() {
+	ui.Column(c).Padding(8, 0).BorderWidth(0, 0, 1, 0).BorderColor(t.Border).Gap(4).Children(func() {
 		ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
 			ui.Text(c, workStateText(msgs, w)).FontSize(typeAction).FontWeight(500).TextColor(a.workStateColor(w.State))
 			ui.Spacer(c)
@@ -1401,7 +1401,7 @@ func (a *appModel) workCard(c *ui.Context, t *ui.Theme, w *workItem, isCurrent, 
 			}
 		})
 		if w.Prompt != "" {
-			ui.Text(c, w.Prompt).FontSize(typeBody).LineHeight(1.5).MaxLines(4).TextColor(a.workTheme.WorkText)
+			ui.Text(c, w.Prompt).FontSize(typeBody).FixedLineHeight(lineBody).MaxLines(4).TextColor(a.workTheme.WorkText)
 		}
 		if len(w.Tools) > 0 {
 			last := w.Tools[len(w.Tools)-1]
@@ -1411,22 +1411,22 @@ func (a *appModel) workCard(c *ui.Context, t *ui.Theme, w *workItem, isCurrent, 
 			} else {
 				action = msgs.WorkRunningAction(action)
 			}
-			ui.Text(c, action).FontSize(14).LineHeight(1.5).TextColor(a.workTheme.WorkMuted)
+			ui.Text(c, action).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(a.workTheme.WorkMuted)
 		}
 		if w.Detail != "" {
 			if w.State == workFailed || formattedRunFailure(w.Detail) {
 				a.recoveryNotice(c, t, "work:"+a.selectedContact().ID+":"+w.TaskID, runFailureSummary(msgs, w.Detail), w.Detail, true, disclosure...)
 			} else {
-				ui.Text(c, w.Detail).FontSize(typeBody).LineHeight(1.5).TextColor(a.workTheme.WorkAttention)
+				ui.Text(c, w.Detail).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(a.workTheme.WorkAttention)
 			}
 		}
 	})
 }
 
 func (a *appModel) workActivity(c *ui.Context, t *ui.Theme, w *workItem) {
-	ui.Text(c, locales.In(c.Locale()).WorkActivity()).FontSize(12).FontWeight(500).TextColor(t.TextMuted)
+	ui.Text(c, locales.In(c.Locale()).WorkActivity()).FontSize(typeMeta).FixedLineHeight(lineMeta).FontWeight(500).TextColor(t.TextMuted)
 	if len(w.Tools) == 0 {
-		ui.Text(c, locales.In(c.Locale()).WorkNoToolActivity()).FontSize(14).TextColor(t.TextMuted)
+		ui.Text(c, locales.In(c.Locale()).WorkNoToolActivity()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 		return
 	}
 	a.toolCalls(c, t, w.Tools)
@@ -1437,7 +1437,7 @@ func (a *appModel) unlinkedActivity(c *ui.Context, t *ui.Theme, tools []*workToo
 		return
 	}
 	ui.Text(c, locales.In(c.Locale()).WorkEarlierActivity()).FontSize(typeAction).FontWeight(500).TextColor(t.TextMuted)
-	ui.Text(c, locales.In(c.Locale()).WorkNoTaskIDHint()).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+	ui.Text(c, locales.In(c.Locale()).WorkNoTaskIDHint()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 	a.toolCalls(c, t, tools)
 }
 
@@ -1446,13 +1446,13 @@ func (a *appModel) toolCalls(c *ui.Context, t *ui.Theme, tools []*workTool) {
 		call := call
 		ui.Column(c).Padding(8).Radius(8).Background(a.workTheme.Well).Gap(3).Children(func() {
 			ui.Row(c).AlignItems(ui.Center).Gap(6).Children(func() {
-				ui.Text(c, toolTitleFor(call.Name, call.Args)).FontSize(14).LineHeight(1.5).TextColor(t.Text)
+				ui.Text(c, toolTitleFor(call.Name, call.Args)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text)
 				ui.Spacer(c)
 				state := locales.In(c.Locale()).WorkToolRunningState()
 				if call.Finished {
 					state = locales.In(c.Locale()).WorkToolFinishedState()
 				}
-				ui.Text(c, state).FontSize(14).TextColor(t.TextMuted)
+				ui.Text(c, state).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 			})
 			if call.Output != "" {
 				summary := toolOutputSummary(locales.In(c.Locale()), call.Output)
@@ -1460,7 +1460,7 @@ func (a *appModel) toolCalls(c *ui.Context, t *ui.Theme, tools []*workTool) {
 					// Keep long output (including unbroken JSON/paths) in its
 					// own full-width line so it cannot push the actions out of
 					// the card.
-					ui.Text(c, locales.In(c.Locale()).WorkPreview(summary)).FontSize(14).LineHeight(1.5).MaxLines(4).TextColor(t.TextMuted)
+					ui.Text(c, locales.In(c.Locale()).WorkPreview(summary)).FontSize(typeBody).FixedLineHeight(lineBody).MaxLines(4).TextColor(t.TextMuted)
 				}
 				label := locales.In(c.Locale()).WorkDetails()
 				if call.Expanded {
@@ -1480,10 +1480,10 @@ func (a *appModel) toolCalls(c *ui.Context, t *ui.Theme, tools []*workTool) {
 				})
 				if call.Expanded {
 					markdownReader(c, call.Output, markdownReaderOptions{PlainText: true, CopyLabel: locales.In(c.Locale()).CopyReceivedOutputLabel()}).
-						FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+						FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 				}
 			} else if call.Started && !call.Finished {
-				ui.Text(c, locales.In(c.Locale()).WorkToolRunning()).FontSize(14).TextColor(t.TextMuted)
+				ui.Text(c, locales.In(c.Locale()).WorkToolRunning()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 			}
 		})
 	}

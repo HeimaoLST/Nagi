@@ -524,21 +524,21 @@ func taskContextReadOnlyView(c *ui.Context, theme workbenchTheme, items []taskCo
 	}
 	t := theme.Theme
 	ui.Column(c).Gap(4).Children(func() {
-		ui.Text(c, locales.In(c.Locale()).TaskContextItemsLabel(len(items))).FontSize(typeAction).FontWeight(500).TextColor(t.TextMuted)
+		ui.Text(c, locales.In(c.Locale()).TaskContextItemsLabel(len(items))).FontSize(typeLabel).FontWeight(400).FixedLineHeight(lineLabel).TextColor(t.TextMuted)
 		for index, item := range items {
 			item := item
 			key := item.ID
 			if key == "" {
 				key = fmt.Sprintf("readonly-context-%d", index)
 			}
-			ui.Column(c).Key(key).Padding(7).Radius(t.Radius).Background(t.Surface).Gap(3).Children(func() {
-				ui.Text(c, item.Name).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+			ui.Column(c).Key(key).Padding(8, 0).BorderWidth(0, 0, 1, 0).BorderColor(t.Border).Gap(4).Children(func() {
+				ui.Text(c, item.Name).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 				if item.Source != "" {
-					ui.Text(c, locales.In(c.Locale()).TaskContextSource(item.Source)).FontSize(typeMeta).LineHeight(1.35).TextColor(t.TextMuted)
+					ui.Text(c, locales.In(c.Locale()).TaskContextSource(item.Source)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 				}
-				ui.Scroll(c).Height(96).Padding(6).Radius(5).Background(t.SurfaceHover).Children(func() {
+				ui.Scroll(c).Height(96).Padding(4, 0).Children(func() {
 					markdownReader(c, item.Text, markdownReaderOptions{PlainText: true, CopyLabel: locales.In(c.Locale()).CopyContextTextLabel()}).
-						FontSize(14).LineHeight(1.5).TextColor(t.Text)
+						FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text)
 				})
 			})
 		}
@@ -551,14 +551,14 @@ func (tc *taskContext) view(c *ui.Context, theme workbenchTheme) {
 	t := theme.Theme
 	ui.Column(c).Gap(8).Children(func() {
 		ui.Row(c).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, locales.In(c.Locale()).TaskContextHeading()).FontSize(typeAction).FontWeight(500).TextColor(t.Text)
+			ui.Text(c, locales.In(c.Locale()).TaskContextHeading()).FontSize(typeLabel).FontWeight(400).FixedLineHeight(lineLabel).TextColor(t.Text)
 			ui.Spacer(c)
-			ui.Text(c, locales.In(c.Locale()).TaskContextSize(len(tc.items), taskContextSizeLabel(tc))).FontSize(14).TextColor(t.TextMuted)
+			ui.Text(c, locales.In(c.Locale()).TaskContextSize(len(tc.items), taskContextSizeLabel(tc))).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 		})
-		ui.Text(c, locales.In(c.Locale()).TaskContextIntro()).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+		ui.Text(c, locales.In(c.Locale()).TaskContextIntro()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 
 		if tc.actionError != nil {
-			ui.Text(c, taskContextErrorText(locales.In(c.Locale()), tc.actionError)).FontSize(14).LineHeight(1.5).TextColor(t.Danger)
+			ui.Text(c, taskContextErrorText(locales.In(c.Locale()), tc.actionError)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Danger)
 		}
 		if !tc.formOpen {
 			ui.Row(c).Gap(8).Children(func() {
@@ -570,18 +570,18 @@ func (tc *taskContext) view(c *ui.Context, theme workbenchTheme) {
 		}
 
 		if len(tc.items) == 0 {
-			ui.Text(c, locales.In(c.Locale()).TaskContextEmpty()).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+			ui.Text(c, locales.In(c.Locale()).TaskContextEmpty()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 		}
 		for _, item := range tc.items {
 			item := item
-			ui.Column(c).Key(item.ID).Padding(9).Radius(8).Background(t.SurfaceHover).Gap(4).Children(func() {
+			ui.Column(c).Key(item.ID).Padding(8, 0).BorderWidth(0, 0, 1, 0).BorderColor(t.Border).Gap(4).Children(func() {
 				ui.Row(c).AlignItems(ui.Center).Children(func() {
-					ui.Text(c, item.Name).FontSize(typeAction).FontWeight(500).TextColor(t.Text)
+					ui.Text(c, item.Name).FontSize(typeLabel).FontWeight(400).FixedLineHeight(lineLabel).TextColor(t.Text)
 					ui.Spacer(c)
-					ui.Text(c, taskContextSourceLabel(locales.In(c.Locale()), item)).FontSize(14).TextColor(t.TextMuted)
+					ui.Text(c, taskContextSourceLabel(locales.In(c.Locale()), item)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 				})
 				if item.Source != "" {
-					ui.Text(c, locales.In(c.Locale()).TaskContextSource(item.Source)).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+					ui.Text(c, locales.In(c.Locale()).TaskContextSource(item.Source)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 				}
 				ui.Row(c).Gap(8).Children(func() {
 					secondaryButton(c, locales.In(c.Locale()).TaskContextPreview()).OnClick(func() { tc.previewID = item.ID })
@@ -601,7 +601,7 @@ func (tc *taskContext) view(c *ui.Context, theme workbenchTheme) {
 
 func (tc *taskContext) formView(c *ui.Context, theme workbenchTheme) {
 	t := theme.Theme
-	ui.Column(c).Padding(10).Radius(8).Background(t.SurfaceHover).Gap(6).Children(func() {
+	ui.Column(c).Padding(12, 0).Gap(4).Children(func() {
 		title := locales.In(c.Locale()).TaskContextFormSnippet()
 		if tc.formMode == "file" {
 			title = locales.In(c.Locale()).TaskContextFormFile()
@@ -609,14 +609,14 @@ func (tc *taskContext) formView(c *ui.Context, theme workbenchTheme) {
 			title = locales.In(c.Locale()).TaskContextFormEdit()
 		}
 		ui.Row(c).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, title).FontSize(typeAction).FontWeight(500).TextColor(t.Text)
+			ui.Text(c, title).FontSize(typeLabel).FontWeight(400).FixedLineHeight(lineLabel).TextColor(t.Text)
 			ui.Spacer(c)
 			secondaryButton(c, locales.In(c.Locale()).TaskContextFormCancel()).OnClick(func() { tc.cancelForm() })
 		})
 		switch tc.formMode {
 		case "file":
-			ui.Text(c, locales.In(c.Locale()).TaskContextFileNameOptional()).FontSize(typeAction).FontWeight(500).TextColor(t.Text)
-			ui.TextInput(c, &tc.formName).Label(locales.In(c.Locale()).TaskContextFileLabel()).FontSize(14).Placeholder(locales.In(c.Locale()).TaskContextFilePlaceholder())
+			ui.Text(c, locales.In(c.Locale()).TaskContextFileNameOptional()).FontSize(typeLabel).FontWeight(400).FixedLineHeight(lineLabel).TextColor(t.Text)
+			preferenceInput(c, &tc.formName, false).Label(locales.In(c.Locale()).TaskContextFileLabel()).Placeholder(locales.In(c.Locale()).TaskContextFilePlaceholder())
 			msgs := locales.In(c.Locale())
 			choose := secondaryButton(c, msgs.TaskContextChooseFile()).Label(msgs.TaskContextChooseFile()).Disabled(tc.fileChoosing || tc.fileChooserBlocked || tc.chooseFile == nil).OnClick(func() { tc.chooseFile() })
 			if tc.focusFileChooser {
@@ -624,30 +624,30 @@ func (tc *taskContext) formView(c *ui.Context, theme workbenchTheme) {
 				tc.focusFileChooser = false
 			}
 			if tc.fileChoosing {
-				ui.Text(c, msgs.TaskContextChoosingFile()).FontSize(typeAction).TextColor(t.TextMuted)
+				ui.Text(c, msgs.TaskContextChoosingFile()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 			}
 			if tc.fileChoiceFailed {
-				ui.Text(c, msgs.TaskContextChooseFileFailed()).FontSize(typeAction).LineHeight(1.5).TextColor(t.Danger)
+				ui.Text(c, msgs.TaskContextChooseFileFailed()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Danger)
 			}
-			ui.Text(c, msgs.TaskContextChooseFileHint()).FontSize(typeAction).LineHeight(1.5).TextColor(t.TextMuted)
-			ui.Text(c, locales.In(c.Locale()).TaskContextPath()).FontSize(typeAction).FontWeight(500).TextColor(t.Text)
-			ui.TextInput(c, &tc.formPath).Label(locales.In(c.Locale()).TaskContextFilePathLabel()).FontSize(14).Placeholder(locales.In(c.Locale()).TaskContextFilePathPlaceholder()).OnChange(func() {
+			ui.Text(c, msgs.TaskContextChooseFileHint()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
+			ui.Text(c, locales.In(c.Locale()).TaskContextPath()).FontSize(typeLabel).FontWeight(400).FixedLineHeight(lineLabel).TextColor(t.Text)
+			preferenceInput(c, &tc.formPath, false).Label(locales.In(c.Locale()).TaskContextFilePathLabel()).Placeholder(locales.In(c.Locale()).TaskContextFilePathPlaceholder()).OnChange(func() {
 				tc.fileForm.pathRevision++
 				tc.fileRequest++
 				tc.fileChoosing, tc.focusFileChooser = false, false
 			})
-			ui.Text(c, locales.In(c.Locale()).TaskContextFileRules()).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+			ui.Text(c, locales.In(c.Locale()).TaskContextFileRules()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 		default:
-			ui.Text(c, locales.In(c.Locale()).TaskContextName()).FontSize(typeAction).FontWeight(500).TextColor(t.Text)
-			ui.TextInput(c, &tc.formName).Label(locales.In(c.Locale()).TaskContextNameLabel()).FontSize(14).Placeholder(locales.In(c.Locale()).TaskContextNamePlaceholder())
-			ui.Text(c, locales.In(c.Locale()).TaskContextText()).FontSize(typeAction).FontWeight(500).TextColor(t.Text)
-			ui.TextArea(c, &tc.formText).Label(locales.In(c.Locale()).TaskContextTextLabel()).FontSize(14).Height(84).Placeholder(locales.In(c.Locale()).TaskContextTextPlaceholder())
+			ui.Text(c, locales.In(c.Locale()).TaskContextName()).FontSize(typeLabel).FontWeight(400).FixedLineHeight(lineLabel).TextColor(t.Text)
+			preferenceInput(c, &tc.formName, false).Label(locales.In(c.Locale()).TaskContextNameLabel()).Placeholder(locales.In(c.Locale()).TaskContextNamePlaceholder())
+			ui.Text(c, locales.In(c.Locale()).TaskContextText()).FontSize(typeLabel).FontWeight(400).FixedLineHeight(lineLabel).TextColor(t.Text)
+			formTextArea(c, &tc.formText, false).Label(locales.In(c.Locale()).TaskContextTextLabel()).Height(84).Placeholder(locales.In(c.Locale()).TaskContextTextPlaceholder())
 			if tc.formMode == "edit" && tc.formPath != "" {
-				ui.Text(c, locales.In(c.Locale()).TaskContextEditHint()).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+				ui.Text(c, locales.In(c.Locale()).TaskContextEditHint()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 			}
 		}
 		if tc.formError != nil {
-			ui.Text(c, taskContextErrorText(locales.In(c.Locale()), tc.formError)).FontSize(14).LineHeight(1.5).TextColor(t.Danger)
+			ui.Text(c, taskContextErrorText(locales.In(c.Locale()), tc.formError)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Danger)
 		}
 		msgs := locales.In(c.Locale())
 		label := msgs.TaskContextSaveSnippet()
@@ -664,16 +664,16 @@ func (tc *taskContext) previewView(c *ui.Context, theme workbenchTheme, item tas
 	t := theme.Theme
 	ui.Column(c).Gap(4).Children(func() {
 		ui.Row(c).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, locales.In(c.Locale()).TaskContextPreviewTitle(item.Name)).FontSize(typeAction).FontWeight(500).TextColor(t.Text)
+			ui.Text(c, locales.In(c.Locale()).TaskContextPreviewTitle(item.Name)).FontSize(typeLabel).FontWeight(400).FixedLineHeight(lineLabel).TextColor(t.Text)
 			ui.Spacer(c)
 			secondaryButton(c, locales.In(c.Locale()).TaskContextClosePreview()).OnClick(func() { tc.previewID = "" })
 		})
 		if item.Source != "" {
-			ui.Text(c, item.Source).FontSize(14).TextColor(t.TextMuted)
+			ui.Text(c, item.Source).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 		}
-		ui.Scroll(c).Height(220).Padding(8).Radius(6).Background(t.Surface).Children(func() {
+		ui.Scroll(c).Height(220).Padding(4, 0).Children(func() {
 			markdownReader(c, item.Text, markdownReaderOptions{PlainText: true, CopyLabel: locales.In(c.Locale()).CopyContextTextLabel()}).
-				FontSize(14).LineHeight(1.5).TextColor(t.Text)
+				FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text)
 		})
 	})
 }

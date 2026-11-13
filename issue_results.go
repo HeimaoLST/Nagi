@@ -460,7 +460,7 @@ func issueResultRunNotice(c *ui.Context, state *issueResultPanelState, actions i
 	}
 	msgs := locales.In(c.Locale())
 	if state.RunStatus != issueExecutionFailed && state.RunStatus != issueExecutionUnknown && state.RunStatus != issueExecutionPending && strings.TrimSpace(state.RunDetail) != "" {
-		ui.Text(c, state.RunDetail).FontSize(typeBody).LineHeight(1.5).TextColor(c.Theme().Warning)
+		ui.Text(c, state.RunDetail).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(c.Theme().Warning)
 		return
 	}
 	summary := msgs.IssueExecutionUnknownDetail()
@@ -518,15 +518,15 @@ func issueResultPanel(c *ui.Context, state *issueResultPanelState, actions issue
 	}
 	root.Children(func() {
 		if state.RunGoal != "" {
-			ui.Text(c, locales.In(c.Locale()).ResultRunLabel(strconv.Itoa(state.RunNumber), state.RunGoal)).FontSize(14).TextColor(th.TextMuted)
+			ui.Text(c, locales.In(c.Locale()).ResultRunLabel(strconv.Itoa(state.RunNumber), state.RunGoal)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(th.TextMuted)
 		}
 		issueResultRunHeader(c, state, actions, 12)
 
-		result := ui.Column(c).AlignSelf(ui.Stretch).MinWidth(0).Padding(12).Radius(th.Radius).Background(th.Surface).Gap(8)
+		result := ui.Column(c).AlignSelf(ui.Stretch).MinWidth(0).Padding(8, 0).Gap(8)
 		result.Children(func() {
 			ui.Text(c, locales.In(c.Locale()).ResultHeading()).FontSize(typeAction).FontWeight(500).TextColor(th.Text)
 			if state.Response == "" {
-				ui.Text(c, locales.In(c.Locale()).ResultNoAssistant()).FontSize(14).LineHeight(1.5).TextColor(th.TextMuted)
+				ui.Text(c, locales.In(c.Locale()).ResultNoAssistant()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(th.TextMuted)
 				return
 			}
 			var openLocalFile func(string) error
@@ -549,7 +549,7 @@ func issueResultPanel(c *ui.Context, state *issueResultPanelState, actions issue
 		ui.Column(c).AlignSelf(ui.Stretch).MinWidth(0).Gap(8).Children(func() {
 			ui.Text(c, locales.In(c.Locale()).ResultReportedFiles()).FontSize(typeAction).FontWeight(500).TextColor(th.Text)
 			if len(state.Files) == 0 {
-				ui.Text(c, locales.In(c.Locale()).ResultNoFiles()).FontSize(14).LineHeight(1.5).TextColor(th.TextMuted)
+				ui.Text(c, locales.In(c.Locale()).ResultNoFiles()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(th.TextMuted)
 				return
 			}
 			for index, file := range state.Files {
@@ -593,7 +593,7 @@ func issueResultFileRow(c *ui.Context, th *ui.Theme, state *issueResultPanelStat
 	handle := state.fileHandle(key)
 	row := ui.ButtonBase(c).
 		Label(locales.In(c.Locale()).ResultFileRowLabel(strconv.Itoa(index+1), filepath.Base(file.Path))).
-		AlignSelf(ui.Stretch).MinWidth(0).Padding(10).Radius(th.Radius).Border(0.5, th.Border).Gap(4).Bind(handle)
+		AlignSelf(ui.Stretch).MinWidth(0).Padding(8, 0).BorderWidth(0, 0, 1, 0).BorderColor(th.Border).Gap(4).Bind(handle)
 	if state.Selected == key {
 		row.Background(th.SurfaceHover)
 	}
@@ -602,7 +602,7 @@ func issueResultFileRow(c *ui.Context, th *ui.Theme, state *issueResultPanelStat
 			ui.Text(c, filepath.Base(file.Path)).FontSize(typeAction).FontWeight(500).TextColor(th.Text).MaxLines(2).Grow(1)
 			ui.Text(c, locales.In(c.Locale()).ResultReadFile()).FontSize(typeAction).FontWeight(500).TextColor(th.TextMuted)
 		})
-		ui.Text(c, file.Path).FontSize(14).TextColor(th.TextMuted).MaxLines(2)
+		ui.Text(c, file.Path).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(th.TextMuted).MaxLines(2)
 		ui.Text(c, locales.In(c.Locale()).ResultWorkingDirectory(file.WorkingDirectory)).FontSize(typeAction).TextColor(th.TextMuted).MaxLines(2)
 		ui.Text(c, locales.In(c.Locale()).ResultReportedBy(file.ToolName)).FontSize(typeAction).TextColor(th.TextMuted).MaxLines(2)
 	})
@@ -674,11 +674,11 @@ func issueResultReaderPage(c *ui.Context, th *ui.Theme, state *issueResultPanelS
 				state.FocusReader = false
 			}
 			ui.Column(c).MinWidth(0).Shrink(1).Gap(2).Children(func() {
-				ui.Text(c, filepath.Base(file.Path)).FontSize(16).FontWeight(500).TextColor(th.Text).MaxLines(2)
+				ui.Text(c, filepath.Base(file.Path)).FontSize(typePageTitle).FontWeight(500).FixedLineHeight(lineSettingsTitle).TextColor(th.Text).MaxLines(2)
 			})
 		})
 		ui.Scroll(c).Grow(1).TrackScroll(&state.ReaderScroll).Padding(0, 16).Children(func() {
-			ui.Column(c).AlignSelf(ui.Stretch).MaxWidth(760).MinWidth(0).Gap(10).Children(func() {
+			ui.Column(c).AlignSelf(ui.Stretch).MaxWidth(conversationMaxWidth).MinWidth(0).Gap(10).Children(func() {
 				markdownReader(c, file.Path, markdownReaderOptions{
 					PlainText: true, CopyLabel: locales.In(c.Locale()).CopyPathLabel(), CopyText: actions.CopyText,
 					CopyHandle: &state.CopyPathHandle,
@@ -700,17 +700,7 @@ func issueResultReaderPage(c *ui.Context, th *ui.Theme, state *issueResultPanelS
 }
 
 func issueResultReaderAction(c *ui.Context, th *ui.Theme, label string) ui.Element {
-	button := ui.Button(c, label).Label(label).FontSize(typeAction).MinHeight(32).Padding(4, 8).
-		Background(th.Surface).BorderWidth(0).TextColor(th.Text)
-	if button.Pressed() {
-		button.Background(th.SurfacePressed)
-	} else if button.Hovered() {
-		button.Background(th.SurfaceHover)
-	}
-	if button.Focused() {
-		button.BorderWidth(1).BorderColor(th.Focus)
-	}
-	return button
+	return secondaryButton(c, label).Label(label).Margin(0).TextColor(th.Text)
 }
 
 func issueResultReaderActions(c *ui.Context, th *ui.Theme, state *issueResultPanelState, actions issueResultPanelActions, file issueResultFile) {
@@ -741,9 +731,9 @@ func issueResultReaderActions(c *ui.Context, th *ui.Theme, state *issueResultPan
 		}
 	})
 	if state.ActionFor == key && state.Action.ErrKind != "" {
-		ui.Text(c, issueResultNoticeText(locales.In(c.Locale()), state.Action.ErrKind, state.Action.ErrDetail)).FontSize(typeAction).LineHeight(1.4).TextColor(th.Danger)
+		ui.Text(c, issueResultNoticeText(locales.In(c.Locale()), state.Action.ErrKind, state.Action.ErrDetail)).FontSize(typeLabel).FixedLineHeight(lineLabel).TextColor(th.Danger)
 	} else if state.ActionFor == key && state.Action.NoticeKind != "" {
-		ui.Text(c, issueResultNoticeText(locales.In(c.Locale()), state.Action.NoticeKind, state.Action.NoticeDetail)).FontSize(typeAction).LineHeight(1.4).TextColor(th.Warning)
+		ui.Text(c, issueResultNoticeText(locales.In(c.Locale()), state.Action.NoticeKind, state.Action.NoticeDetail)).FontSize(typeLabel).FixedLineHeight(lineLabel).TextColor(th.Warning)
 	}
 }
 
@@ -753,25 +743,25 @@ func issueResultReaderPreview(c *ui.Context, th *ui.Theme, state *issueResultPan
 		inspection = state.Inspection
 	}
 	if state.Checking && state.InspectFor == key {
-		ui.Text(c, locales.In(c.Locale()).ResultCheckingFile()).FontSize(14).TextColor(th.TextMuted)
+		ui.Text(c, locales.In(c.Locale()).ResultCheckingFile()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(th.TextMuted)
 	}
 	if inspection == nil {
 		if !state.Checking {
-			ui.Text(c, locales.In(c.Locale()).ResultCheckCurrentFile()).FontSize(14).TextColor(th.TextMuted)
+			ui.Text(c, locales.In(c.Locale()).ResultCheckCurrentFile()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(th.TextMuted)
 		}
 		return
 	}
 	if inspection.NoticeKind != "" {
-		ui.Text(c, issueResultInspectionNoticeText(locales.In(c.Locale()), *inspection)).FontSize(14).LineHeight(1.5).TextColor(th.Warning)
+		ui.Text(c, issueResultInspectionNoticeText(locales.In(c.Locale()), *inspection)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(th.Warning)
 	}
 	if inspection.ReadErrorKind != "" {
-		ui.Text(c, issueResultNoticeText(locales.In(c.Locale()), inspection.ReadErrorKind, inspection.ReadErrorDetail)).FontSize(14).LineHeight(1.5).TextColor(th.Danger)
+		ui.Text(c, issueResultNoticeText(locales.In(c.Locale()), inspection.ReadErrorKind, inspection.ReadErrorDetail)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(th.Danger)
 	}
 	if !inspection.Exists || !inspection.Regular || inspection.NoticeKind != "" || inspection.ReadErrorKind != "" {
 		return
 	}
 	if inspection.Preview == "" {
-		ui.Text(c, locales.In(c.Locale()).ResultEmptyFile()).FontSize(14).LineHeight(1.5).TextColor(th.TextMuted)
+		ui.Text(c, locales.In(c.Locale()).ResultEmptyFile()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(th.TextMuted)
 	}
 	var openLocalFile func(string) error
 	if actions.OpenLocalFile != nil {

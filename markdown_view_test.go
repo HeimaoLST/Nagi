@@ -19,6 +19,7 @@ func appReadingTestApp(t *testing.T) (*appModel, *contact) {
 	t.Helper()
 	a, ct := workspaceTestApp(t)
 	a.workspaceOpen = false
+	recoveryTestStore(t, a)
 	return a, ct
 }
 

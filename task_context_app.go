@@ -108,9 +108,9 @@ func (a *appModel) taskContextPanel(c *ui.Context, t *ui.Theme) {
 		ownerIssue = issue
 	}
 	ui.Row(c).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, owner).FontSize(typePageTitle).FontWeight(500).TextColor(t.Text).MaxLines(2)
+		ui.Text(c, owner).FontSize(typeSettingsTitle).FontWeight(500).FixedLineHeight(lineSettingsTitle).TextColor(t.Text).MaxLines(2)
 		ui.Spacer(c)
-		ui.Button(c, locales.In(c.Locale()).TaskContextClose()).FontSize(12).OnClick(func() { a.closeAux() })
+		secondaryButton(c, locales.In(c.Locale()).TaskContextClose()).OnClick(func() { a.closeAux() })
 	})
 	target.chooseFile = func() { a.chooseTaskContextFile(ct, ownerIssue, target) }
 	target.fileChooserBlocked = a.shutdownStarted || a.dataRecoveryBlocksChanges()
