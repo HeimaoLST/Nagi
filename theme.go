@@ -359,6 +359,42 @@ func pageHeading(c *ui.Context, title string) ui.Element {
 		FontSize(typeSettingsTitle).FontWeight(500).FixedLineHeight(lineSettingsTitle).TextColor(c.Theme().Text)
 }
 
+type markdownHeadingTone uint8
+
+const (
+	headingPrimary markdownHeadingTone = iota
+	headingSecondary
+	headingTertiary
+)
+
+// Lengths are absolute DIPs; Top is for a nonfirst block. The reader owns
+// margin composition and display-to-source mapping, including Uppercase.
+type markdownHeadingRole struct {
+	Size, LineHeight           float32
+	Weight                     int
+	Top, Bottom, LetterSpacing float32
+	Uppercase                  bool
+	Tone                       markdownHeadingTone
+}
+
+func markdownHeadingRoles() [6]markdownHeadingRole {
+	return [6]markdownHeadingRole{
+		{20, 28, 500, 28, 8, -.5, false, headingPrimary},
+		{18, 24, 600, 24, 8, -.45, false, headingPrimary},
+		{16, 24, 600, 20, 8, -.4, false, headingPrimary},
+		{14, 20, 600, 16, 4, -.35, false, headingPrimary},
+		{14, 24, 600, 16, 4, -.35, false, headingSecondary},
+		{13, 20, 600, 16, 4, -.325, true, headingTertiary},
+	}
+}
+
+func (tone markdownHeadingTone) color(t *ui.Theme) ui.Color {
+	if tone == headingPrimary {
+		return t.Text
+	}
+	return t.TextMuted
+}
+
 func formTextArea(c *ui.Context, value *string, invalid bool) ui.Element {
 	e := ui.TextAreaBase(c, value).Font("system-ui").FontSize(typeAction).FontWeight(400).
 		FixedLineHeight(lineForm).MinHeight(80).BorderWidth(8, 12).BorderColor(ui.Transparent).
