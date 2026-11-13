@@ -58,7 +58,7 @@ const (
 	fullRailBreakpoint   int     = 1180
 	avatarRailBreakpoint int     = 900
 	minAvatarDetailWidth float32 = 300
-	effectiveCenterWidth float32 = 492
+	effectiveCenterWidth float32 = 494
 )
 
 func clampPaneWidth(value, fallback, minValue, maxValue float32) float32 {

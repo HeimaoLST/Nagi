@@ -474,7 +474,7 @@ func TestResponsiveManualHideAndWideDrag(t *testing.T) {
 	tr.Move(400, 300)
 	tr.Release(400, 300)
 	tr.Frame()
-	if a.railWidth() != 280 || a.workWidth() != beforeRight || a.effectiveDetailWidth() != 406 || a.centerPaneWidth != 492 {
+	if a.railWidth() != 280 || a.workWidth() != beforeRight || a.effectiveDetailWidth() != 404 || a.centerPaneWidth != 494 {
 		t.Fatalf("wide left drag geometry = left=%v prefRight=%v detail=%v center=%v", a.railWidth(), a.workWidth(), a.effectiveDetailWidth(), a.centerPaneWidth)
 	}
 }
@@ -593,7 +593,7 @@ func TestLayoutPreferenceIsNotOverwrittenByNarrowViewport(t *testing.T) {
 	a.windowWidth = 960
 	tr.SetSize(960, 640)
 	tr.Frame()
-	if a.workOverlay() || !a.avatarRailActive() || a.effectiveDetailWidth() != 410 || a.centerPaneWidth != 492 {
+	if a.workOverlay() || !a.avatarRailActive() || a.effectiveDetailWidth() != 408 || a.centerPaneWidth != 494 {
 		t.Fatalf("960 avatar geometry = overlay=%v avatar=%v detail=%v center=%v",
 			a.workOverlay(), a.avatarRailActive(), a.effectiveDetailWidth(), a.centerPaneWidth)
 	}
