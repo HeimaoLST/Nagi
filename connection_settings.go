@@ -15,19 +15,22 @@ type connectionDraft struct {
 }
 
 type connectionSettings struct {
-	Draft         connectionDraft
-	initial       connectionDraft
-	Errors        map[string]string
-	Status        string
-	StatusArgs    []string
-	Error         string
-	ErrorDetail   string
-	ReloadBlocked string
-	Busy          bool
-	HasSaved      bool
-	SavedPending  bool
-	LimitsOpen    bool
-	focusField    string
+	Draft               connectionDraft
+	initial             connectionDraft
+	Errors              map[string]string
+	Status              string
+	StatusArgs          []string
+	Error               string
+	ErrorDetail         string
+	ReloadBlocked       string
+	Busy                bool
+	HasSaved            bool
+	SavedPending        bool
+	LimitsOpen          bool
+	RecoveryDetailsOpen bool
+	focusField          string
+	focusFolder         bool
+	folderError         string
 }
 
 type connectionSettingsActions struct {
@@ -36,21 +39,19 @@ type connectionSettingsActions struct {
 	Apply        func()
 	Test         func(connectionConfig)
 	Discard      func()
+	ChooseFolder func()
 }
 
 func newConnectionSettings(config *connectionConfig, workDir string) *connectionSettings {
-	s := &connectionSettings{Draft: connectionDraft{
-		API: "openai-chat-completions", ContextTokens: "131072", OutputTokens: "8192",
-		WorkingDirectory: workDir, Slots: "2",
-	}, focusField: "Endpoint"}
+	initial := defaultConnectionConfig(workDir)
 	if config != nil {
-		s.Draft = connectionDraft{
-			API: config.API, Endpoint: config.Endpoint, APIKey: config.APIKey, Model: config.Model,
-			ContextTokens: strconv.Itoa(config.ContextTokens), OutputTokens: strconv.Itoa(config.OutputTokens),
-			WorkingDirectory: config.WorkingDirectory, Slots: strconv.Itoa(config.MaxActiveTasks),
-		}
-		s.HasSaved = true
+		initial = *config
 	}
+	s := &connectionSettings{Draft: connectionDraft{
+		API: initial.API, Endpoint: initial.Endpoint, APIKey: initial.APIKey, Model: initial.Model,
+		ContextTokens: strconv.Itoa(initial.ContextTokens), OutputTokens: strconv.Itoa(initial.OutputTokens),
+		WorkingDirectory: initial.WorkingDirectory, Slots: strconv.Itoa(initial.MaxActiveTasks),
+	}, HasSaved: config != nil, focusField: "Endpoint"}
 	s.initial = s.Draft
 	return s
 }
@@ -71,6 +72,8 @@ func (s *connectionSettings) ResetDraft() {
 	s.StatusArgs = nil
 	s.ReloadBlocked = ""
 	s.focusField = "Endpoint"
+	s.folderError = ""
+	s.RecoveryDetailsOpen = false
 }
 
 func (s *connectionSettings) validated() (connectionConfig, bool) {
@@ -104,6 +107,7 @@ func (s *connectionSettings) validated() (connectionConfig, bool) {
 	}
 	s.Error = ""
 	s.ErrorDetail = ""
+	s.RecoveryDetailsOpen = false
 	if len(s.Errors) > 0 {
 		s.Error = connectionCheckFields
 		for _, key := range []string{"API", "Endpoint", "APIKey", "Model", "ContextTokens", "OutputTokens", "WorkingDirectory", "MaxActiveTasks"} {
@@ -123,15 +127,24 @@ func (s *connectionSettings) view(c *ui.Context, t *ui.Theme, actions connection
 	msgs := locales.In(c.Locale())
 	ui.Column(c).FillWidth().AlignItems(ui.Start).Gap(24).Children(func() {
 		if s.Error != "" || s.ErrorDetail != "" {
-			text := s.Error
-			if s.Error == "" {
-				text = msgs.ConnectionSaveFailed(s.ErrorDetail)
-			} else if connectionErrorIsKind(s.Error) {
-				text = connectionErrorText(msgs, s.Error, s.ErrorDetail)
-			} else if s.ErrorDetail != "" {
-				text = msgs.ConnectionSaveFailed(s.ErrorDetail)
+			summary := connectionErrorText(msgs, s.Error, "")
+			detail := s.ErrorDetail
+			if detail == "" && !connectionErrorIsKind(s.Error) && s.Error != connectionCheckFields {
+				detail = s.Error
 			}
-			ui.Text(c, text).FontSize(typeBody).LineHeight(1.5).TextColor(t.Danger)
+			if s.Error == connectionCheckFields {
+				summary = msgs.ConnectionCheckFields()
+				detail = ""
+			}
+			if !connectionErrorIsKind(s.Error) && s.Error != connectionCheckFields {
+				summary = msgs.RecoveryConnectionSaveFailed()
+			}
+			if s.Draft.APIKey != "" {
+				detail = strings.ReplaceAll(detail, s.Draft.APIKey, "[redacted]")
+			}
+			recoveryNotice(c, t, summary, detail, s.RecoveryDetailsOpen, func() { s.RecoveryDetailsOpen = !s.RecoveryDetailsOpen }, nil, "")
+		} else {
+			s.RecoveryDetailsOpen = false
 		}
 		ui.Column(c).FillWidth().Gap(16).Children(func() {
 			ui.Column(c).FillWidth().Gap(4).Children(func() {
@@ -184,8 +197,19 @@ func (s *connectionSettings) view(c *ui.Context, t *ui.Theme, actions connection
 					})
 				}
 			})
-			s.field(c, t, "WorkingDirectory", msgs.ConnectionFieldWorkingDirectory(), msgs.ConnectionWorkingDirectoryPlaceholder(), &s.Draft.WorkingDirectory, false,
-				msgs.ConnectionWorkingDirectoryHint())
+			folderHint := msgs.ConnectionWorkingDirectoryHint()
+			if strings.TrimSpace(s.Draft.WorkingDirectory) == "" {
+				folderHint = msgs.WorkFolderRequiredHint()
+			}
+			s.field(c, t, "WorkingDirectory", msgs.ConnectionFieldWorkingDirectory(), msgs.ConnectionWorkingDirectoryPlaceholder(), &s.Draft.WorkingDirectory, false, folderHint)
+			folder := secondaryButton(c, msgs.WorkFolderChoose()).Disabled(s.Busy).OnClick(actions.ChooseFolder)
+			if s.focusFolder {
+				folder.Focus()
+				s.focusFolder = false
+			}
+			if s.folderError != "" {
+				ui.Text(c, msgs.WorkFolderChooseFailed(s.folderError)).FontSize(typeBody).LineHeight(1.5).TextColor(t.Danger)
+			}
 		})
 		ui.Column(c).FillWidth().Gap(8).Children(func() {
 			ui.Row(c).Gap(8).Wrap().Children(func() {
@@ -368,19 +392,19 @@ func connectionErrorIsKind(kind string) bool {
 func connectionErrorText(msgs locales.Messages, kind, detail string) string {
 	switch kind {
 	case connErrorTestFailed:
-		return msgs.ConnectionErrorTestFailed(detail)
+		return msgs.RecoveryConnectionTestFailed()
 	case connErrorSavedNeedsRepair:
 		return msgs.ConnectionErrorSavedNeedsRepair()
 	case connErrorApplyConfig:
-		return msgs.ConnectionErrorApplyConfig(detail)
+		return msgs.RecoveryConnectionApplyFailed()
 	case connErrorHelperMissing:
-		return msgs.ConnectionErrorHelperMissing(detail)
+		return msgs.RecoveryRuntimeMissing()
 	case connErrorPrepare:
-		return msgs.ConnectionErrorPrepare(detail)
+		return msgs.RecoveryRuntimeStartFailed()
 	case connErrorStart:
-		return msgs.ConnectionErrorStart(detail)
+		return msgs.RecoveryRuntimeStartFailed()
 	case connStatusSavedStoreFailed:
-		return msgs.ConnectionStatusSavedStoreFailed(detail)
+		return msgs.RecoveryLocalSaveFailed()
 	case connErrorExitedBeforeReady:
 		return msgs.ConnectionErrorExitedBeforeReady()
 	case connErrorNotReady:

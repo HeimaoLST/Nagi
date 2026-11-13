@@ -28,6 +28,8 @@ type issueResultPage struct {
 	LoadErrorDetail    string
 	Notice             string
 	Panel              issueResultPanelState
+	disclosure         issueExecutionDisclosure
+	revealRun          bool
 	ReturnLatest       bool
 	ReturnFocusPending bool
 }
@@ -68,16 +70,14 @@ func (a *appModel) openIssueResultEntry(issueID, executionID string, latest bool
 	}
 	runDetail := ""
 	if issueExecutionNeedsAttention(execution.Status) {
-		runDetail = strings.TrimSpace(execution.Detail)
-		if runDetail == "" {
-			runDetail = "No execution detail was recorded for this run."
-		}
+		runDetail = execution.Detail
 	}
 	*page = issueResultPage{
 		Open: true, OwnerContactID: ct.ID, IssueID: issue.ID, ExecutionID: execution.ID,
 		SessionID: execution.SessionID, TaskID: execution.TaskID, MessageID: execution.MessageID,
 		Generation:   a.issueResult.Generation,
 		ReturnLatest: latest,
+		disclosure:   captureIssueExecutionDisclosure(ct, issue, execution),
 		Panel: issueResultPanelState{
 			RunNumber:      runIndex + 1,
 			RunGoal:        issue.Goal,
@@ -90,7 +90,9 @@ func (a *appModel) openIssueResultEntry(issueID, executionID string, latest bool
 		},
 	}
 	a.aux = "issue-result"
-	if issueExecutionNeedsAttention(execution.Status) {
+	if execution.Status == issueExecutionInterrupted && strings.TrimSpace(execution.Detail) != "" &&
+		execution.AttentionSeenStatus != execution.Status && a.issueResultDisclosureCurrent(page.Generation, page.disclosure) {
+		page.revealRun = true
 		a.confirmIssueExecutionSeen(ct, issue, execution)
 	}
 	a.startIssueResultLoad()
@@ -153,13 +155,13 @@ func (a *appModel) reloadIssueResult(generation int) {
 	page.Panel.RunNumber = runIndex + 1
 	page.Panel.RunGoal = issue.Goal
 	page.Panel.RunStatus = execution.Status
+	page.Panel.RunDetailsOpen = false
+	page.revealRun = false
 	page.Panel.RunDetail = ""
 	if issueExecutionNeedsAttention(execution.Status) {
-		page.Panel.RunDetail = strings.TrimSpace(execution.Detail)
-		if page.Panel.RunDetail == "" {
-			page.Panel.RunDetail = "No execution detail was recorded for this run."
-		}
+		page.Panel.RunDetail = execution.Detail
 	}
+	page.disclosure = captureIssueExecutionDisclosure(ct, issue, execution)
 	page.Panel.Checking = false
 	page.Panel.ActionFor = ""
 	page.Panel.Action = issueResultFileAction{}
@@ -168,7 +170,9 @@ func (a *appModel) reloadIssueResult(generation int) {
 	page.LoadErrorDetail = ""
 	page.Notice = ""
 	a.startIssueResultLoad()
-	if issueExecutionNeedsAttention(execution.Status) {
+	if execution.Status == issueExecutionInterrupted && strings.TrimSpace(execution.Detail) != "" &&
+		execution.AttentionSeenStatus != execution.Status && a.issueResultDisclosureCurrent(page.Generation, page.disclosure) {
+		page.revealRun = true
 		a.confirmIssueExecutionSeen(ct, issue, execution)
 	}
 }
@@ -322,25 +326,24 @@ func (a *appModel) issueResultPanelView(c *ui.Context, t *ui.Theme) {
 	if !page.Open {
 		return
 	}
+	actions := a.issueResultPanelActions(page.Generation)
+	if actions.RevealRun {
+		defer func() { page.revealRun = false }()
+	}
 	if a.localSaveErr != "" {
-		ui.Text(c, a.localSaveErr).FontSize(14).LineHeight(1.5).TextColor(t.Warning)
+		a.localSaveNotice(c, t)
 	}
 	hasBody := page.Panel.Response != "" || len(page.Panel.Files) > 0
 	if !hasBody && (page.Loading || page.LoadError != "") {
 		if page.Panel.RunGoal != "" {
 			ui.Text(c, locales.In(c.Locale()).ResultRunLabel(strconv.Itoa(page.Panel.RunNumber), page.Panel.RunGoal)).FontSize(14).TextColor(t.TextMuted)
 		}
-		if page.Panel.RunStatus != "" {
-			ui.Text(c, issueExecutionText(locales.In(c.Locale()), page.Panel.RunStatus)).FontSize(typeAction).FontWeight(500).TextColor(t.TextMuted)
-		}
-		if page.Panel.RunDetail != "" {
-			ui.Text(c, page.Panel.RunDetail).FontSize(14).LineHeight(1.5).TextColor(t.Warning)
-		}
+		issueResultRunHeader(c, &page.Panel, actions, 10)
 		if page.Loading {
 			ui.Text(c, locales.In(c.Locale()).ResultLoadingHistory()).FontSize(14).TextColor(t.TextMuted)
 		}
 		if page.LoadError != "" {
-			ui.Text(c, issueResultPageText(locales.In(c.Locale()), page.LoadError, page.LoadErrorDetail)).FontSize(14).LineHeight(1.5).TextColor(t.Warning)
+			a.recoveryNotice(c, t, "result-load:"+strconv.Itoa(page.Generation), issueResultPageText(locales.In(c.Locale()), page.LoadError, ""), page.LoadErrorDetail, true)
 		}
 		return
 	}
@@ -348,24 +351,36 @@ func (a *appModel) issueResultPanelView(c *ui.Context, t *ui.Theme) {
 		ui.Text(c, locales.In(c.Locale()).ResultReloadingSnapshot()).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
 	}
 	if page.LoadError != "" {
-		ui.Text(c, issueResultPageText(locales.In(c.Locale()), page.LoadError, page.LoadErrorDetail)).FontSize(14).LineHeight(1.5).TextColor(t.Warning)
+		a.recoveryNotice(c, t, "result-load:"+strconv.Itoa(page.Generation), issueResultPageText(locales.In(c.Locale()), page.LoadError, ""), page.LoadErrorDetail, true)
 	}
 	if page.Notice != "" {
 		ui.Text(c, issueResultPageText(locales.In(c.Locale()), page.Notice, "")).FontSize(14).LineHeight(1.5).TextColor(t.Warning)
 	}
-	issueResultPanel(c, &page.Panel, a.issueResultPanelActions(page.Generation))
+	issueResultPanel(c, &page.Panel, actions)
 }
 
 func (a *appModel) issueResultPanelActions(generation int) issueResultPanelActions {
+	snapshot := a.issueResult.disclosure
 	return issueResultPanelActions{
+		RevealRun:     a.issueResult.revealRun && a.issueResultDisclosureCurrent(generation, snapshot),
 		OpenLocalFile: a.openMarkdownFile,
 		OpenSettings:  func(c *ui.Context) { a.openSettingsFromContext(c, settingsTabAppearance, settingsSourceAux) },
 		Close:         func() { a.closeIssueResult() },
 		Reload:        func() { a.reloadIssueResult(generation) },
-		SelectFile:    func(key string) { a.checkIssueResultFileByKey(generation, key) },
-		CheckFile:     func(file issueResultFile) { a.checkIssueResultFile(generation, file) },
-		OpenFile:      func(file issueResultFile) { a.requestIssueResultFileAction(generation, file, true) },
-		RevealFile:    func(file issueResultFile) { a.requestIssueResultFileAction(generation, file, false) },
+		ToggleRunDetails: func() {
+			if !a.issueResultDisclosureCurrent(generation, snapshot) {
+				return
+			}
+			page := &a.issueResult
+			page.Panel.RunDetailsOpen = !page.Panel.RunDetailsOpen
+			if page.Panel.RunDetailsOpen {
+				a.confirmIssueExecutionSeen(snapshot.contact, snapshot.issue, snapshot.execution)
+			}
+		},
+		SelectFile: func(key string) { a.checkIssueResultFileByKey(generation, key) },
+		CheckFile:  func(file issueResultFile) { a.checkIssueResultFile(generation, file) },
+		OpenFile:   func(file issueResultFile) { a.requestIssueResultFileAction(generation, file, true) },
+		RevealFile: func(file issueResultFile) { a.requestIssueResultFileAction(generation, file, false) },
 		ToggleSource: func(key string) {
 			page := &a.issueResult
 			if page.Generation != generation {
@@ -378,6 +393,15 @@ func (a *appModel) issueResultPanelActions(generation int) issueResultPanelActio
 			}
 		},
 	}
+}
+
+func (a *appModel) issueResultDisclosureCurrent(generation int, snapshot issueExecutionDisclosure) bool {
+	page := &a.issueResult
+	return a.issueExecutionDisclosureCurrent(snapshot) && page.Open && page.Generation == generation &&
+		a.aux == "issue-result" && !a.settingsOpen && page.Panel.ReaderKey == "" &&
+		page.OwnerContactID == snapshot.contactID && page.IssueID == snapshot.issueID && page.ExecutionID == snapshot.executionID &&
+		page.SessionID == snapshot.sessionID && page.TaskID == snapshot.taskID && page.MessageID == snapshot.messageID &&
+		page.Panel.RunStatus == snapshot.status && page.Panel.RunDetail == snapshot.detail
 }
 
 func (a *appModel) checkIssueResultFileByKey(generation int, key string) {

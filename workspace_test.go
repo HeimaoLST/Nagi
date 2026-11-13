@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -689,5 +690,322 @@ func TestWorkspaceStructuredToolOutputDoesNotLeakRawJSON(t *testing.T) {
 	tr.Frame()
 	if !tr.HasText(`"bytes_written"`) {
 		t.Fatalf("details did not expose exact structured output: %v", tr.Texts())
+	}
+}
+
+func TestWorkRecoveryKeepsRunAndAgentRecords(t *testing.T) {
+	for _, locale := range []string{"en", "zh-Hans"} {
+		t.Run(locale, func(t *testing.T) {
+			a, ct := workspaceTestApp(t)
+			message := "HTTP 403: suppressed provider body with entitlement guesses"
+			raw := taskFailureDetail("model_error", &message)
+			w := &workItem{TaskID: "failed-run", State: workFailed, Detail: raw, Prompt: "Original user request"}
+			ct.Works = []*workItem{w}
+			tr := ui.NewTester(func(c *ui.Context) {
+				a.workTheme = resolveWorkbenchTheme(false)
+				c.SetTheme(a.workTheme.Theme)
+				ui.Scroll(c).Fill().Children(func() { a.workCard(c, c.Theme(), w, false, false) })
+			}, 600, 720)
+			tr.SetLocale(locale)
+			tr.Frame()
+			msgs := locales.In(locale)
+			if !tr.HasText(msgs.RecoveryProviderDenied("HTTP 403")) || tr.HasText(raw) {
+				t.Fatalf("failed work summary missing: %v", tr.Texts())
+			}
+			if err := tr.Click(msgs.DetailsAction()); err != nil {
+				t.Fatal(err)
+			}
+			tr.Frame()
+			if !tr.HasText(raw) || w.Detail != raw || tr.HasText(message) || w.Prompt != "Original user request" {
+				t.Fatal("work disclosure changed records or exposed a suppressed provider body")
+			}
+			if err := tr.Click(msgs.ConnectionSettingsAction()); err != nil {
+				t.Fatal(err)
+			}
+			if !a.settingsOpen || a.settingsTab != settingsTabConnection || ct.SendState != sendIdle || w.State != workFailed {
+				t.Fatal("recovery routed incorrectly or replayed work")
+			}
+		})
+	}
+}
+
+func TestIssueUnknownDeliveryRecoveryMatchesAvailableAction(t *testing.T) {
+	for _, locale := range []string{"en", "zh-Hans"} {
+		for _, cause := range []string{"protocol", "exit"} {
+			t.Run(locale+"/"+cause, func(t *testing.T) {
+				a, ct, issue := disconnectedRecoveryTestApp(t, cause)
+				raw := issue.Work.SendError
+				detail := issue.Executions[0].Detail
+				state := issue.Work
+				execution := *issue.Executions[0]
+				tr := ui.NewTester(func(c *ui.Context) {
+					a.workTheme = resolveWorkbenchTheme(false)
+					c.SetTheme(a.workTheme.Theme)
+					ui.Scroll(c).Fill().Children(func() { a.issueCard(c, c.Theme(), ct, issue); a.issueExecutions(c, c.Theme(), ct, issue) })
+				}, 720, 1200)
+				tr.SetLocale(locale)
+				tr.SetFocused(true)
+				tr.Frame()
+				msgs := locales.In(locale)
+				if !tr.HasText(msgs.SendDisconnectedState()) || tr.HasText(msgs.SendUnknownState()) || tr.HasText(raw) {
+					t.Fatalf("disconnected issue promised unavailable Reload or exposed detail: %v", tr.Texts())
+				}
+				if err := tr.Click(msgs.IssueCheckExecution()); err != nil {
+					t.Fatal(err)
+				}
+				tr.Frame()
+				if issue.Work.SendError != raw || issue.Executions[0].Detail != detail || a.rt.nextID != 0 || a.issueActionError != "" {
+					t.Fatal("disconnected Check run was actionable")
+				}
+				if err := tr.Click(msgs.DetailsAction()); err != nil {
+					t.Fatal(err)
+				}
+				tr.Frame()
+				if !tr.HasText(raw) || issue.Work.SendState != sendUnknown || issue.Executions[0].Status != issueExecutionUnknown {
+					t.Fatal("issue diagnostic was lost or uncertainty was cleared")
+				}
+				a.runtimeStatus = runtimeStateReady
+				tr.Frame()
+				if !tr.HasText(msgs.SupplementUnknown()) || tr.HasText(msgs.SendUnknownState()) || tr.HasText(msgs.SendDisconnectedState()) {
+					t.Fatalf("live issue guidance does not match Check run: %v", tr.Texts())
+				}
+				for i := 0; i < 70 && !tr.Focused(msgs.IssueCheckExecution()); i++ {
+					tr.Key(0, ui.KeyTab)
+					tr.Frame()
+				}
+				if !tr.Focused(msgs.IssueCheckExecution()) {
+					t.Fatal("live Check run control is not keyboard reachable")
+				}
+				if issue.Work.SendError != raw || issue.Work.SendState != state.SendState || issue.Work.ActiveTaskID != state.ActiveTaskID || issue.Executions[0].Status != execution.Status || issue.Executions[0].Detail != execution.Detail || issue.Executions[0].Prompt != execution.Prompt || ct.Messages[0].Text != "original message" || ct.History[0].Text != "original history" || ct.Draft != "retained unsent draft" || a.rt.nextID != 0 {
+					t.Fatal("issue recovery changed raw execution/history or sent work")
+				}
+			})
+		}
+	}
+}
+
+func recoveryIssueTester(a *appModel, ct *contact, issue *productIssue, width, height int) *ui.Tester {
+	return ui.NewTester(func(c *ui.Context) {
+		a.workTheme = resolveWorkbenchTheme(c.Theme().Dark)
+		c.SetTheme(a.workTheme.Theme)
+		ui.Scroll(c).Fill().Children(func() { a.issueCard(c, c.Theme(), ct, issue); a.issueExecutions(c, c.Theme(), ct, issue) })
+	}, width, height)
+}
+
+func TestRP1IssueAvailabilityMatrix(t *testing.T) {
+	for _, locale := range []string{"en", "zh-Hans"} {
+		for _, state := range []string{runtimeStateFailed, runtimeStateExited, runtimeStateStarting, "ready-no-client", runtimeStateReady} {
+			for _, diagnostic := range []string{"empty", "protocol", "delivery"} {
+				t.Run(locale+"/"+state+"/"+diagnostic, func(t *testing.T) {
+					cause := "exit"
+					if diagnostic == "protocol" {
+						cause = "protocol"
+					}
+					a, ct, issue := disconnectedRecoveryTestApp(t, cause)
+					if diagnostic == "empty" {
+						issue.Work.clearSendError()
+					}
+					a.runtimeStatus = state
+					if state == "ready-no-client" {
+						a.runtimeStatus = runtimeStateReady
+						a.rt = nil
+					}
+					before := recoveryRecordSnapshot(t, ct)
+					tr := recoveryIssueTester(a, ct, issue, 720, 1200)
+					tr.SetLocale(locale)
+					tr.SetFocused(true)
+					tr.Frame()
+					msgs := locales.In(locale)
+					live := state == runtimeStateReady
+					if tr.HasText(msgs.SendUnknownState()) {
+						t.Fatal("issue work uses the conversation Reload instruction")
+					}
+					if live {
+						if !tr.HasText(msgs.SupplementUnknown()) || tr.HasText(msgs.SendDisconnectedState()) {
+							t.Fatalf("live issue guidance does not match Check run: %v", tr.Texts())
+						}
+						for i := 0; i < 65 && !tr.Focused(msgs.IssueCheckExecution()); i++ {
+							tr.Key(0, ui.KeyTab)
+							tr.Frame()
+						}
+						if !tr.Focused(msgs.IssueCheckExecution()) {
+							t.Fatal("live Check run is not keyboard reachable")
+						}
+					} else {
+						if !tr.HasText(msgs.SendDisconnectedState()) || tr.HasText(msgs.SupplementUnknown()) {
+							t.Fatalf("unavailable issue action has no accurate reason: %v", tr.Texts())
+						}
+						if err := tr.Click(msgs.IssueCheckExecution()); err != nil {
+							t.Fatal(err)
+						}
+						tr.Key(0, ui.KeyEnter)
+						tr.Frame()
+						for i := 0; i < 30; i++ {
+							tr.Key(0, ui.KeyTab)
+							tr.Frame()
+							if tr.Focused(msgs.IssueCheckExecution()) {
+								t.Fatal("disabled Check run took keyboard focus")
+							}
+						}
+					}
+					if recoveryRecordSnapshot(t, ct) != before || a.issueActionError != "" || a.submissionInFlight != 0 {
+						t.Fatal("availability/mouse/keyboard changed unknown records or issued an action")
+					}
+					if a.rt != nil && a.rt.nextID != 0 {
+						t.Fatal("presentation or disabled control issued RPC")
+					}
+					if dir := os.Getenv("NAGI_RP_PREVIEW_DIR"); dir != "" && diagnostic == "delivery" && (state == runtimeStateReady || state == runtimeStateExited) {
+						writePreviewPNG(t, filepath.Join(dir, fmt.Sprintf("issue-%s-%s.png", locale, state)), tr.Image())
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestRP1MissingAssociationPreservesNavigation(t *testing.T) {
+	for _, locale := range []string{"en", "zh-Hans"} {
+		for _, missing := range []string{"session", "task", "wrong-owner", "wrong-contact"} {
+			t.Run(locale+"/"+missing, func(t *testing.T) {
+				a, ct, issue := disconnectedRecoveryTestApp(t, "exit")
+				a.runtimeStatus = runtimeStateReady
+				switch missing {
+				case "session":
+					issue.Executions[0].SessionID = ""
+				case "task":
+					issue.Executions[0].TaskID = ""
+				case "wrong-owner":
+					issue = &productIssue{ID: "another-owner", Goal: "Existing stale owner view", Executions: issue.Executions}
+				case "wrong-contact":
+					a.contacts = append(a.contacts, &contact{ID: "new-current", Name: "Other contact", SessionID: "other-session", Loaded: true})
+					a.selected = 1
+				}
+				before := recoveryRecordSnapshot(t, ct)
+				tr := recoveryIssueTester(a, ct, issue, 720, 1200)
+				tr.SetLocale(locale)
+				tr.SetFocused(true)
+				tr.Frame()
+				msgs := locales.In(locale)
+				if !tr.HasText(msgs.RecoveryTaskAssociationMissing()) || tr.HasText(msgs.SupplementUnknown()) {
+					t.Fatalf("missing association implies a usable action: %v", tr.Texts())
+				}
+				if err := tr.Click(msgs.IssueCheckExecution()); err != nil {
+					t.Fatal(err)
+				}
+				tr.Key(0, ui.KeyEnter)
+				tr.Frame()
+				for i := 0; i < 25; i++ {
+					tr.Key(0, ui.KeyTab)
+					tr.Frame()
+					if tr.Focused(msgs.IssueCheckExecution()) {
+						t.Fatal("untrusted Check run is keyboard enabled")
+					}
+				}
+				if err := tr.Click(msgs.DetailsAction()); err != nil {
+					t.Fatal(err)
+				}
+				tr.Frame()
+				if !tr.HasText(issue.Executions[0].Detail) {
+					t.Fatal("existing execution diagnostic is inaccessible")
+				}
+				a.openHistory()
+				if !a.detailIs(detailHistory) {
+					t.Fatal("history navigation was blocked")
+				}
+				a.closeDetail()
+				if recoveryRecordSnapshot(t, ct) != before || a.rt.nextID != 0 || a.issueActionError != "" {
+					t.Fatal("missing association changed records, read back or sent work")
+				}
+			})
+		}
+	}
+	// An event from a previously enabled row must also recheck its current owner.
+	a, ct, issue := disconnectedRecoveryTestApp(t, "exit")
+	a.runtimeStatus = runtimeStateReady
+	tr := recoveryIssueTester(a, ct, issue, 720, 1200)
+	tr.Frame()
+	a.contacts = append(a.contacts, &contact{ID: "replacement", Name: "Replacement", Loaded: true})
+	a.selected = 1
+	before := recoveryRecordSnapshot(t, ct)
+	if err := tr.Click("Check run"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if recoveryRecordSnapshot(t, ct) != before || a.rt.nextID != 0 || a.issueActionError != "" {
+		t.Fatal("late enabled event bypassed current ownership")
+	}
+}
+
+func TestRP1OriginalNotDispatchedConfirmationGate(t *testing.T) {
+	a, ct, issue := disconnectedRecoveryTestApp(t, "exit")
+	a.runtimeStatus = runtimeStateReady
+	execution := issue.Executions[0]
+	execution.TaskID = ""
+	execution.Status = issueExecutionPending
+	issue.Work.ActiveTaskID = ""
+	issue.Work.SendState = sendIdle
+	recoveryTestStore(t, a)
+	tr := recoveryIssueTester(a, ct, issue, 720, 1200)
+	tr.Frame()
+	if !tr.HasText(locales.In("en").IssueConfirmNotDispatched()) {
+		t.Fatal("original explicit confirmation entry was hidden")
+	}
+	if execution.Status != issueExecutionPending || a.rt.nextID != 0 {
+		t.Fatal("rendering auto-confirmed or read back missing task")
+	}
+	if err := tr.Click(locales.In("en").IssueConfirmNotDispatched()); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if execution.Status != issueExecutionNotDispatched || a.rt.nextID != 0 {
+		t.Fatal("isolated explicit confirmation failed or sent work")
+	}
+	issue.Work.ActiveTaskID = "active-task"
+	execution.Status = issueExecutionUnknown
+	tr.Frame()
+	if tr.HasText(locales.In("en").IssueConfirmNotDispatched()) {
+		t.Fatal("active work exposes not-dispatched confirmation")
+	}
+}
+
+func TestRP1AdjacentStatesKeepAdmission(t *testing.T) {
+	for _, status := range []string{issueExecutionPending, issueExecutionNotDispatched, issueExecutionRejected, issueExecutionFailed, issueExecutionAccepted} {
+		t.Run(status, func(t *testing.T) {
+			a, ct, issue := disconnectedRecoveryTestApp(t, "exit")
+			a.runtimeStatus = runtimeStateReady
+			execution := issue.Executions[0]
+			execution.Status = status
+			execution.Detail = ""
+			issue.Work.SendState = sendIdle
+			issue.Work.clearSendError()
+			if status == issueExecutionFailed {
+				message := "controlled execution failure"
+				execution.Detail = taskFailureDetail("tool_error", &message)
+			}
+			before := recoveryRecordSnapshot(t, ct)
+			tr := ui.NewTester(func(c *ui.Context) {
+				a.workTheme = resolveWorkbenchTheme(false)
+				c.SetTheme(a.workTheme.Theme)
+				ui.Column(c).Fill().Children(func() { a.issueLatestResult(c, c.Theme(), ct, issue, false) })
+			}, 720, 900)
+			tr.Frame()
+			msgs := locales.In("en")
+			want := issueExecutionText(msgs, status)
+			if !tr.HasText(want) || tr.HasText(msgs.SendDisconnectedState()) || tr.HasText(msgs.SendUnknownState()) {
+				t.Fatalf("neighboring run state lost its meaning: %v", tr.Texts())
+			}
+			if status == issueExecutionFailed && !tr.HasText(msgs.RecoveryRunFailed()) {
+				t.Fatal("real failed run lost its failure summary")
+			}
+			if status == issueExecutionNotDispatched && !tr.HasText(msgs.IssueNoTaskDispatched()) {
+				t.Fatal("not-dispatched summary missing")
+			}
+			if status == issueExecutionRejected && !tr.HasText(msgs.IssueExecutionRejectedDetail()) {
+				t.Fatal("rejected summary missing")
+			}
+			if recoveryRecordSnapshot(t, ct) != before || issue.Status == issueStatusCompleted || a.rt.nextID != 0 {
+				t.Fatal("presentation changed admission or task completion")
+			}
+		})
 	}
 }

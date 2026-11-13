@@ -69,6 +69,10 @@ type taskContextItem struct {
 	Revision uint64 `json:"revision"`
 }
 
+type taskContextFileForm struct {
+	pathRevision uint64
+}
+
 // taskContext keeps the saved snapshots together with the small, explicit UI
 // editor state. Saved item text is never re-read from disk implicitly.
 type taskContext struct {
@@ -81,6 +85,14 @@ type taskContext struct {
 	formText  string
 	formPath  string
 	formError error
+
+	fileForm           *taskContextFileForm
+	fileRequest        uint64
+	fileChoosing       bool
+	fileChoiceFailed   bool
+	focusFileChooser   bool
+	chooseFile         func()
+	fileChooserBlocked bool
 
 	previewID   string
 	actionError error
@@ -278,6 +290,9 @@ func (tc *taskContext) clearSubmitted(submitted []taskContextItem) int {
 }
 
 func (tc *taskContext) cancelForm() {
+	tc.fileForm = nil
+	tc.fileRequest++
+	tc.fileChoosing, tc.fileChoiceFailed, tc.focusFileChooser = false, false, false
 	tc.formOpen = false
 	tc.formMode, tc.formID = "", ""
 	tc.formName, tc.formText, tc.formPath, tc.formError = "", "", "", nil
@@ -293,6 +308,7 @@ func (tc *taskContext) openFileForm() {
 	tc.actionError = nil
 	tc.cancelForm()
 	tc.formOpen, tc.formMode = true, "file"
+	tc.fileForm = &taskContextFileForm{}
 }
 
 func (tc *taskContext) openEditForm(id string) {
@@ -601,8 +617,25 @@ func (tc *taskContext) formView(c *ui.Context, theme workbenchTheme) {
 		case "file":
 			ui.Text(c, locales.In(c.Locale()).TaskContextFileNameOptional()).FontSize(typeAction).FontWeight(500).TextColor(t.Text)
 			ui.TextInput(c, &tc.formName).Label(locales.In(c.Locale()).TaskContextFileLabel()).FontSize(14).Placeholder(locales.In(c.Locale()).TaskContextFilePlaceholder())
+			msgs := locales.In(c.Locale())
+			choose := secondaryButton(c, msgs.TaskContextChooseFile()).Label(msgs.TaskContextChooseFile()).Disabled(tc.fileChoosing || tc.fileChooserBlocked || tc.chooseFile == nil).OnClick(func() { tc.chooseFile() })
+			if tc.focusFileChooser {
+				choose.Focus().ScrollIntoView()
+				tc.focusFileChooser = false
+			}
+			if tc.fileChoosing {
+				ui.Text(c, msgs.TaskContextChoosingFile()).FontSize(typeAction).TextColor(t.TextMuted)
+			}
+			if tc.fileChoiceFailed {
+				ui.Text(c, msgs.TaskContextChooseFileFailed()).FontSize(typeAction).LineHeight(1.5).TextColor(t.Danger)
+			}
+			ui.Text(c, msgs.TaskContextChooseFileHint()).FontSize(typeAction).LineHeight(1.5).TextColor(t.TextMuted)
 			ui.Text(c, locales.In(c.Locale()).TaskContextPath()).FontSize(typeAction).FontWeight(500).TextColor(t.Text)
-			ui.TextInput(c, &tc.formPath).Label(locales.In(c.Locale()).TaskContextFilePathLabel()).FontSize(14).Placeholder(locales.In(c.Locale()).TaskContextFilePathPlaceholder())
+			ui.TextInput(c, &tc.formPath).Label(locales.In(c.Locale()).TaskContextFilePathLabel()).FontSize(14).Placeholder(locales.In(c.Locale()).TaskContextFilePathPlaceholder()).OnChange(func() {
+				tc.fileForm.pathRevision++
+				tc.fileRequest++
+				tc.fileChoosing, tc.focusFileChooser = false, false
+			})
 			ui.Text(c, locales.In(c.Locale()).TaskContextFileRules()).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
 		default:
 			ui.Text(c, locales.In(c.Locale()).TaskContextName()).FontSize(typeAction).FontWeight(500).TextColor(t.Text)
@@ -623,7 +656,7 @@ func (tc *taskContext) formView(c *ui.Context, theme workbenchTheme) {
 		} else if tc.formMode == "edit" {
 			label = msgs.TaskContextSaveChanges()
 		}
-		secondaryButton(c, label).OnClick(func() { tc.saveForm() })
+		secondaryButton(c, label).Label(label).OnClick(func() { tc.saveForm() })
 	})
 }
 

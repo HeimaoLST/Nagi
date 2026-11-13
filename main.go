@@ -33,11 +33,12 @@ func main() {
 		return
 	}
 	windowOptions := mygo.WindowOptions{
-		Title:     "Nagi",
-		Width:     1040,
-		Height:    720,
-		MinWidth:  720,
-		MinHeight: 640,
+		Title:         "Nagi",
+		TitleBarStyle: mygo.TitleBarHiddenInset,
+		Width:         1040,
+		Height:        720,
+		MinWidth:      720,
+		MinHeight:     640,
 	}
 	if size := os.Getenv("SAKI_GUI_CONTENT_SIZE"); size != "" {
 		widthText, heightText, ok := strings.Cut(size, "x")

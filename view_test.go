@@ -1,13 +1,17 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"image"
 	"image/png"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -30,6 +34,117 @@ func TestViewRendersBothThemes(t *testing.T) {
 	}
 	tr.SetDark(false)
 	tr.Frame()
+}
+
+func TestTitleBarKeepsNavigationOutsideNativeControls(t *testing.T) {
+	for _, width := range []int{720, 899, 900, 901, 960, 1040, 1179, 1180, 1181} {
+		for _, scene := range []string{"chat", "collapsed", "work", "history", "profile", "settings", "reading"} {
+			t.Run(fmt.Sprintf("%d/%s", width, scene), func(t *testing.T) {
+				a := testApp(t)
+				a.windowWidth = width
+				a.workspaceOpen = false
+				ct := a.selectedContact()
+				ct.Draft = "keep the titlebar draft"
+				labels := []string{"History", "Composer for Saki", "Chat model", "Send"}
+				closeLabel := ""
+				switch scene {
+				case "collapsed":
+					a.railCollapsed = true
+					labels = append(labels, "Contacts")
+				case "work":
+					a.openDetail(detailWork)
+					closeLabel = "Close workspace"
+					if width < avatarRailBreakpoint {
+						closeLabel = "Back to chat"
+					}
+					labels = []string{closeLabel, "New task"}
+					if width >= avatarRailBreakpoint {
+						labels = append(labels, "Chat model", "Send")
+					}
+				case "history":
+					a.openDetail(detailHistory)
+					closeLabel = "Close history"
+					labels = []string{closeLabel}
+				case "profile":
+					a.openDetail(detailProfile)
+					closeLabel = "Close profile"
+					labels = []string{closeLabel}
+				case "settings":
+					a.openSettingsTab(settingsTabAppearance, settingsSourceComposer)
+					closeLabel = "← Back to workbench"
+					labels = []string{closeLabel, "General"}
+				case "reading":
+					a.openDetail(detailHistory)
+					a.contactHistoryFull = &contactHistoryFull{SessionID: "saved", EntryID: "entry", Text: "# Saved message\n\nReadable history."}
+					closeLabel = "Close full message"
+					labels = []string{closeLabel, "Copy saved message"}
+				}
+				tr := ui.NewTester(a.view, width, 640)
+				bar := ui.TitleBar{Height: 38, Left: 80, Right: 138}
+				tr.SetTitleBar(bar)
+				for _, label := range labels {
+					r, ok := tr.Find(label)
+					if !ok || r.W <= 0 || r.H <= 0 || r.X < 0 || r.X+r.W > float32(width) || r.Y < bar.Height || r.Y+r.H > 640 {
+						t.Fatalf("%q collides with native controls or leaves the window: visible=%v bounds=%+v", label, ok, r)
+					}
+					if label == "Send" && (r.W < 32 || r.H < 32) {
+						t.Fatalf("Send target was clipped: %+v", r)
+					}
+				}
+				if closeLabel != "" {
+					if err := tr.Click(closeLabel); err != nil {
+						t.Fatal(err)
+					}
+					tr.Frame()
+					if a.settingsOpen || a.contactHistoryFull != nil || (scene != "reading" && a.workspaceOpen) || ct.Draft != "keep the titlebar draft" {
+						t.Fatalf("return did not preserve its route and draft: settings=%v detail=%q reading=%v draft=%q", a.settingsOpen, a.activeDetail(), a.contactHistoryFull != nil, ct.Draft)
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestTitleBarChangesKeepComposerAndSettingsFocus(t *testing.T) {
+	a := testApp(t)
+	a.workspaceOpen = false
+	tr := ui.NewTester(a.view, 1040, 720)
+	tr.SetFocused(true)
+	bar := ui.TitleBar{Height: 38, Left: 80}
+	tr.SetTitleBar(bar)
+	focusComposer(t, tr, "Composer for Saki")
+	tr.Type("draft before fullscreen")
+	work, _ := tr.Find("Work")
+	tr.SetTitleBar(ui.TitleBar{})
+	fullWork, ok := tr.Find("Work")
+	if !ok || fullWork.Y != work.Y-bar.Height {
+		t.Fatalf("fullscreen did not release the native control band: before=%+v after=%+v", work, fullWork)
+	}
+	if _, active := tr.TextCaret(); !active {
+		t.Fatal("changing native titlebar metrics lost the composer caret")
+	}
+	tr.Type(" and after")
+	tr.SetTitleBar(bar)
+	if a.selectedContact().Draft != "draft before fullscreen and after" {
+		t.Fatalf("titlebar transition changed the draft: %q", a.selectedContact().Draft)
+	}
+	tr.Key(ui.Cmd, ui.KeyComma)
+	tr.Frame()
+	if !a.settingsOpen || !tr.Focused("← Back to workbench") {
+		t.Fatal("Settings shortcut did not retain its visible return control")
+	}
+	tr.SetTitleBar(ui.TitleBar{})
+	tr.SetTitleBar(bar)
+	if !tr.Focused("← Back to workbench") {
+		t.Fatal("changing native titlebar metrics stole Settings focus")
+	}
+	if err := tr.Click("← Back to workbench"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if _, active := tr.TextCaret(); !active {
+		t.Fatal("Settings did not return the caret to the composer")
+	}
 }
 
 // TestMinimumWindowRenders checks the 960x640 window minimum with the
@@ -558,19 +673,110 @@ func TestLiveSendUnknownAfterDisconnectSaysRestart(t *testing.T) {
 	a := &appModel{demo: false, runtimeStatus: runtimeStateExited, scrollTo: -1, contacts: []*contact{ct}}
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	if !tr.HasText("restart Nagi") {
+	if !tr.HasText(locales.In("en").SendDisconnectedState()) {
 		t.Fatal("disconnected sendUnknown should tell the user to restart")
 	}
-	if tr.HasText("Reload to verify") {
+	if tr.HasText(locales.In("en").SendUnknownState()) {
 		t.Fatal("disconnected client must not offer an ineffective Reload instruction")
 	}
 
 	a.runtimeStatus = runtimeStateReady
 	a.rt = &runtimeClient{}
 	tr.Frame()
-	if !tr.HasText("Reload to verify") {
+	if !tr.HasText(locales.In("en").SendUnknownState()) {
 		t.Fatal("a live connection should keep the Reload instruction")
 	}
+
+	for _, locale := range []string{"en", "zh-Hans"} {
+		for _, cause := range []string{"protocol", "exit"} {
+			t.Run(locale+"/"+cause, func(t *testing.T) {
+				a, ct, issue := disconnectedRecoveryTestApp(t, cause)
+				rawSend, rawStatus := ct.SendError, ct.StatusDetail
+				taskID, sessionID, draft := ct.ActiveTaskID, ct.SessionID, ct.Draft
+				tr := ui.NewTester(a.view, 1040, 1200)
+				tr.SetLocale(locale)
+				tr.SetFocused(true)
+				tr.Frame()
+				msgs := locales.In(locale)
+				if !tr.HasText(msgs.SendDisconnectedState()) || tr.HasText(msgs.SendUnknownState()) || tr.HasText(msgs.ReloadAction()) || tr.HasText(msgs.SendNoticeConnectionLost()) {
+					t.Fatalf("disconnected producer state offered unusable Reload guidance: %v", tr.Texts())
+				}
+				if tr.HasText(rawSend) {
+					t.Fatal("diagnostic shown before explicit disclosure")
+				}
+				if err := tr.Click(msgs.DetailsAction()); err != nil {
+					t.Fatal(err)
+				}
+				tr.Frame()
+				// The startup notice may precede the contact notice in the full app.
+				if !tr.HasText(rawSend) {
+					if err := tr.Click(msgs.DetailsAction()); err != nil {
+						t.Fatal(err)
+					}
+					tr.Frame()
+				}
+				if !tr.HasText(rawSend) {
+					t.Fatal("unknown-delivery diagnostic cannot be disclosed")
+				}
+				if ct.SendError != rawSend || ct.StatusDetail != rawStatus || ct.SendState != sendUnknown || ct.ActiveTaskID != taskID || ct.SessionID != sessionID || ct.Draft != draft || ct.Messages[0].Text != "original message" || ct.History[0].Text != "original history" || a.rt.nextID != 0 || issue.Executions[0].Status != issueExecutionUnknown {
+					t.Fatal("disclosure changed unknown state/raw records/history or issued a request")
+				}
+				a.runtimeStatus = runtimeStateReady
+				a.runtimeErr, a.runtimeErrKind, a.runtimeStage, a.runtimeHintKind = "", "", "", ""
+				tr = ui.NewTester(a.view, 1040, 1200)
+				tr.SetLocale(locale)
+				tr.SetFocused(true)
+				tr.Frame()
+				if !tr.HasText(msgs.SendUnknownState()) || tr.HasText(msgs.SendDisconnectedState()) {
+					t.Fatal("live unknown state lost usable Reload guidance")
+				}
+				if _, ok := tr.Find(msgs.ReloadAction()); !ok {
+					t.Fatal("live Reload control missing")
+				}
+				for i := 0; i < 70 && !tr.Focused(msgs.ReloadAction()); i++ {
+					tr.Key(0, ui.KeyTab)
+					tr.Frame()
+				}
+				if !tr.Focused(msgs.ReloadAction()) {
+					t.Fatal("live Reload is not keyboard reachable")
+				}
+				if ct.SendError != rawSend || ct.StatusDetail != rawStatus || ct.SendState != sendUnknown || ct.Draft != draft || a.rt.nextID != 0 {
+					t.Fatal("live recovery guidance replayed or rewrote the retained state")
+				}
+			})
+		}
+	}
+}
+
+func disconnectedRecoveryTestApp(t *testing.T, cause string) (*appModel, *contact, *productIssue) {
+	t.Helper()
+	a, ct := workspaceTestApp(t)
+	a.workspaceOpen = false
+	a.runtimeHandshake = true
+	a.rt = &runtimeClient{}
+	a.runtimeMaxActiveTasks = 2
+	a.runtimeCapabilitiesLoaded = true
+	ct.ActiveTaskID = "chat-task"
+	ct.SendState = sendAccepted
+	ct.Status = statusWorking
+	ct.Draft = "retained unsent draft"
+	ct.Messages = []*message{{Kind: msgUser, Text: "original message"}}
+	ct.History = []historyEntry{{ID: "history-original", Text: "original history"}}
+	issue := &productIssue{ID: "recovery-issue", ContactID: ct.ID, Goal: "Retain original goal", Status: issueStatusInProgress, WorkSessionID: "work-session", Work: issueWorkSession{Loaded: true, ActiveTaskID: "issue-task", SendState: sendAccepted}, Executions: []*issueExecution{{ID: "execution", SessionID: "work-session", TaskID: "issue-task", Status: issueExecutionRunning, Prompt: "original run prompt"}}}
+	ct.Issues = []*productIssue{issue}
+	ct.Works = []*workItem{{TaskID: "chat-task", State: workRunning}, {TaskID: "issue-task", State: workRunning}}
+	switch cause {
+	case "protocol":
+		a.protocolFailed("unsupported runtime protocol version 2")
+	case "exit":
+		a.applyRuntimeExit(nil)
+	default:
+		t.Fatal("unsupported fixture cause")
+	}
+	if ct.SendState != sendUnknown || ct.SendError == "" || issue.Work.SendState != sendUnknown || issue.Work.SendError == "" || issue.Executions[0].Status != issueExecutionUnknown {
+		t.Fatal("actual producer did not establish unknown diagnostics")
+	}
+	return a, ct, issue
 }
 
 // runtimePreviewApp builds a runtime-backed model state without starting a
@@ -1233,5 +1439,417 @@ func TestComposerModelsKeepActualSuffixAt720And960(t *testing.T) {
 					width, model, tail, tailRect, ok, modelRect, tr.Texts())
 			}
 		}
+	}
+}
+
+type recoveryReadRequest struct {
+	ID     string          `json:"id"`
+	Method string          `json:"method"`
+	Params json.RawMessage `json:"params"`
+	reply  chan runtimeResponse
+}
+
+type recoveryMemoryClient struct {
+	client   *runtimeClient
+	requests chan *recoveryReadRequest
+	mu       sync.Mutex
+	methods  []string
+	once     sync.Once
+}
+
+func newRecoveryMemoryClient(t *testing.T) *recoveryMemoryClient {
+	t.Helper()
+	m := &recoveryMemoryClient{client: &runtimeClient{pending: map[string]chan runtimeResponse{}, issued: map[string]bool{}, done: make(chan struct{})}, requests: make(chan *recoveryReadRequest, 16)}
+	m.client.stdin = m
+	t.Cleanup(func() { _ = m.Close() })
+	return m
+}
+
+func (m *recoveryMemoryClient) Write(data []byte) (int, error) {
+	request := &recoveryReadRequest{reply: make(chan runtimeResponse, 1)}
+	if err := json.Unmarshal(data, request); err != nil {
+		return 0, err
+	}
+	m.mu.Lock()
+	m.methods = append(m.methods, request.Method)
+	m.mu.Unlock()
+	select {
+	case m.requests <- request:
+	case <-m.client.done:
+		return 0, errRuntimeDisconnected
+	}
+	select {
+	case response := <-request.reply:
+		m.client.stateMu.Lock()
+		pending := m.client.pending[request.ID]
+		m.client.stateMu.Unlock()
+		if pending == nil {
+			return 0, fmt.Errorf("no pending request %s", request.ID)
+		}
+		pending <- response
+		return len(data), nil
+	case <-m.client.done:
+		return 0, errRuntimeDisconnected
+	}
+}
+
+func (m *recoveryMemoryClient) Close() error { m.once.Do(func() { close(m.client.done) }); return nil }
+
+func (m *recoveryMemoryClient) next(t *testing.T, method string) *recoveryReadRequest {
+	t.Helper()
+	select {
+	case request := <-m.requests:
+		if request.Method != method {
+			t.Fatalf("readback method=%q, want %q", request.Method, method)
+		}
+		return request
+	case <-time.After(5 * time.Second):
+		t.Fatalf("no controlled %s request", method)
+		return nil
+	}
+}
+
+func (m *recoveryMemoryClient) methodNames() []string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return append([]string(nil), m.methods...)
+}
+
+func (r *recoveryReadRequest) respond(t *testing.T, result any, err *runtimeError) {
+	t.Helper()
+	data, marshalErr := json.Marshal(result)
+	if marshalErr != nil {
+		t.Fatal(marshalErr)
+	}
+	r.reply <- runtimeResponse{ID: r.ID, Result: data, Error: err}
+}
+
+func recoveryCallback(t *testing.T, callbacks <-chan func()) {
+	t.Helper()
+	select {
+	case fn := <-callbacks:
+		fn()
+	case <-time.After(5 * time.Second):
+		t.Fatal("controlled UI completion was not queued")
+	}
+}
+
+func recoveryRecordSnapshot(t *testing.T, ct *contact) string {
+	t.Helper()
+	issues := []any{}
+	for _, issue := range ct.Issues {
+		executions := []any{}
+		for _, e := range issue.Executions {
+			executions = append(executions, []any{e.ID, e.SessionID, e.TaskID, e.MessageID, e.Prompt, e.Status, e.Detail, e.Context})
+		}
+		issues = append(issues, []any{issue.ID, issue.ContactID, issue.Goal, issue.Status, issue.WorkSessionID, issue.Work.ActiveTaskID, issue.Work.LastTaskID, issue.Work.SendState, issue.Work.SendError, issue.Work.SendErrorKind, issue.Work.SendErrorDetail, executions})
+	}
+	data, err := json.Marshal([]any{ct.ID, ct.SessionID, ct.ActiveTaskID, ct.LastTaskID, ct.SendState, ct.SessionState, ct.SendError, ct.SendErrorKind, ct.SendErrorDetail, ct.StatusDetail, ct.StatusDetailKind, ct.Draft, ct.SubmittedDraft, ct.SubmittedRev, clonePendingSend(ct.pendingSend), ct.Messages, ct.History, issues})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
+}
+
+func recoveryTestStore(t *testing.T, a *appModel) {
+	t.Helper()
+	root := t.TempDir()
+	path := filepath.Join(root, "contacts.json")
+	store, err := openContactStore(path, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.store, a.storePath, a.workDir = store, path, root
+	if err := a.persist(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func recoveryComposerTester(a *appModel, width, height int) *ui.Tester {
+	return ui.NewTester(func(c *ui.Context) {
+		a.workTheme = resolveWorkbenchTheme(c.Theme().Dark)
+		c.SetTheme(a.workTheme.Theme)
+		ui.Scroll(c).Fill().Children(func() { a.composer(c, c.Theme()) })
+	}, width, height)
+}
+
+func TestRP1ConversationAvailabilityMatrix(t *testing.T) {
+	for _, locale := range []string{"en", "zh-Hans"} {
+		for _, state := range []string{runtimeStateFailed, runtimeStateExited, runtimeStateStarting, "ready-no-client", runtimeStateReady} {
+			for _, diagnostic := range []string{"empty", "protocol", "delivery"} {
+				t.Run(locale+"/"+state+"/"+diagnostic, func(t *testing.T) {
+					cause := "exit"
+					if diagnostic == "protocol" {
+						cause = "protocol"
+					}
+					a, ct, _ := disconnectedRecoveryTestApp(t, cause)
+					if diagnostic == "empty" {
+						ct.clearSendError()
+					}
+					a.runtimeStatus = state
+					if state == "ready-no-client" {
+						a.runtimeStatus = runtimeStateReady
+						a.rt = nil
+					}
+					before := recoveryRecordSnapshot(t, ct)
+					tr := recoveryComposerTester(a, 720, 640)
+					tr.SetLocale(locale)
+					tr.SetFocused(true)
+					tr.Frame()
+					msgs := locales.In(locale)
+					live := state == runtimeStateReady
+					if live {
+						if !tr.HasText(msgs.SendUnknownState()) || tr.HasText(msgs.SendDisconnectedState()) {
+							t.Fatalf("live summary disagrees with Reload: %v", tr.Texts())
+						}
+						for i := 0; i < 45 && !tr.Focused(msgs.ReloadAction()); i++ {
+							tr.Key(0, ui.KeyTab)
+							tr.Frame()
+						}
+						if !tr.Focused(msgs.ReloadAction()) {
+							t.Fatal("live Reload is not reachable")
+						}
+					} else {
+						if !tr.HasText(msgs.SendDisconnectedState()) || tr.HasText(msgs.SendUnknownState()) || tr.HasText(msgs.SendNoticeConnectionLost()) {
+							t.Fatalf("ordinary disconnected guidance contradicts action availability: %v", tr.Texts())
+						}
+						if _, ok := tr.Find(msgs.ReloadAction()); ok {
+							t.Fatal("unavailable conversation exposes Reload")
+						}
+					}
+					if recoveryRecordSnapshot(t, ct) != before || a.submissionInFlight != 0 {
+						t.Fatal("presentation/focus changed original records or started submission")
+					}
+					if dir := os.Getenv("NAGI_RP_PREVIEW_DIR"); dir != "" && diagnostic == "delivery" && (state == runtimeStateReady || state == runtimeStateExited) {
+						writePreviewPNG(t, filepath.Join(dir, fmt.Sprintf("conversation-%s-%s.png", locale, state)), tr.Image())
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestRP1DisclosurePreservesRecords(t *testing.T) {
+	for _, domain := range []string{"conversation", "issue"} {
+		for _, cause := range []string{"protocol", "exit"} {
+			t.Run(domain+"/"+cause, func(t *testing.T) {
+				a, ct, issue := disconnectedRecoveryTestApp(t, cause)
+				config := testConnectionConfig(t)
+				config.APIKey = "controlled-record-secret"
+				a.connectionSaved = &config
+				ct.SubmittedDraft = "original submitted text"
+				ct.SubmittedRev = 8
+				ct.SendError += "; API_KEY=" + config.APIKey + "; " + strings.Repeat("long diagnostic ", 80)
+				issue.Work.SendError += "; API_KEY=" + config.APIKey + "; " + strings.Repeat("long diagnostic ", 80)
+				before := recoveryRecordSnapshot(t, ct)
+				var tr *ui.Tester
+				if domain == "conversation" {
+					tr = recoveryComposerTester(a, 1040, 900)
+				} else {
+					tr = recoveryIssueTester(a, ct, issue, 1040, 900)
+				}
+				tr.SetFocused(true)
+				tr.Frame()
+				if err := tr.Click(locales.In("en").DetailsAction()); err != nil {
+					t.Fatal(err)
+				}
+				tr.Frame()
+				if err := tr.Click(locales.In("en").CopyErrorDetailsLabel()); err != nil {
+					t.Fatal(err)
+				}
+				copied := tr.Clipboard()
+				if strings.Contains(copied, config.APIKey) || !strings.Contains(copied, "[redacted]") || len([]rune(copied)) > 501 {
+					t.Fatalf("detail was not bounded/redacted: %q", copied)
+				}
+				if !tr.HasText(locales.In("en").RecoveryTechnicalDetailsHint()) {
+					t.Fatal("diagnostic is not marked as technical")
+				}
+				tr.SetLocale("zh-Hans")
+				tr.Frame()
+				if !tr.HasText(locales.In("zh-Hans").RecoveryTechnicalDetailsHint()) || strings.Contains(strings.Join(tr.Texts(), " "), config.APIKey) {
+					t.Fatal("locale change leaked diagnostic or lost technical label")
+				}
+				if err := tr.Click(locales.In("zh-Hans").HideDetailsAction()); err != nil {
+					t.Fatal(err)
+				}
+				tr.Frame()
+				if err := tr.Click(locales.In("zh-Hans").ConnectionSettingsAction()); err != nil {
+					t.Fatal(err)
+				}
+				if !a.settingsOpen || a.settingsTab != settingsTabConnection {
+					t.Fatal("recovery settings navigation failed")
+				}
+				a.closeSettings()
+				a.runtimeStatus = runtimeStateReady
+				tr.Frame()
+				if recoveryRecordSnapshot(t, ct) != before || a.rt.nextID != 0 || a.submissionInFlight != 0 {
+					t.Fatal("disclosure/language/navigation/readiness altered original records or issued RPC")
+				}
+			})
+		}
+	}
+}
+
+func TestRP1ControlledReadback(t *testing.T) {
+	for _, domain := range []string{"conversation", "issue"} {
+		for _, outcome := range []string{"trusted", "error", "stale-client", "stale-association"} {
+			t.Run(domain+"/"+outcome, func(t *testing.T) {
+				a, ct, issue := disconnectedRecoveryTestApp(t, "exit")
+				recoveryTestStore(t, a)
+				if domain == "conversation" {
+					ct.Issues = nil
+				}
+				memory := newRecoveryMemoryClient(t)
+				a.rt = memory.client
+				a.runtimeStatus = runtimeStateReady
+				callbacks := make(chan func(), 8)
+				a.setUIHook(func(fn func()) { callbacks <- fn })
+				before := recoveryRecordSnapshot(t, ct)
+				var tr *ui.Tester
+				if domain == "conversation" {
+					tr = recoveryComposerTester(a, 1040, 900)
+				} else {
+					tr = recoveryIssueTester(a, ct, issue, 1040, 1600)
+				}
+				tr.Frame()
+				if len(memory.methodNames()) != 0 {
+					t.Fatal("rendering invoked Runtime")
+				}
+				action := "Reload"
+				firstMethod := "session.load"
+				sessionID := ct.SessionID
+				if domain == "issue" {
+					action = "Check run"
+					firstMethod = "task.status"
+					sessionID = issue.Executions[0].SessionID
+				}
+				if err := tr.Click(action); err != nil {
+					t.Fatal(err)
+				}
+				request := memory.next(t, firstMethod)
+				var params map[string]any
+				if err := json.Unmarshal(request.Params, &params); err != nil {
+					t.Fatal(err)
+				}
+				if params["session_id"] != sessionID {
+					t.Fatal("readback used another session")
+				}
+				var load any = runtimeSession{SessionID: sessionID, State: "idle", Status: "completed", Loaded: true}
+				if domain == "issue" {
+					if params["task_id"] != issue.Executions[0].TaskID {
+						t.Fatal("Check run used another task")
+					}
+					load = runtimeTaskState{SessionID: sessionID, TaskID: issue.Executions[0].TaskID, Status: "completed"}
+				}
+				var readErr *runtimeError
+				if outcome == "error" {
+					readErr = &runtimeError{Code: "read_failure", Message: "controlled unavailable readback"}
+				}
+				request.respond(t, load, readErr)
+				history := runtimeHistory{SessionID: sessionID, Status: "completed", Records: []historyRecord{{Offset: 0, Record: journalRecord{Type: "task_started", TaskID: "issue-task", MessageID: "m1"}}, {Offset: 1, Record: journalRecord{Type: "task_finished", TaskID: "issue-task", Status: "completed"}}}}
+				memory.next(t, "session.history").respond(t, history, nil)
+				if domain == "conversation" && outcome == "error" {
+					memory.next(t, "session.config.get").respond(t, runtimeConnectionConfig{SessionID: sessionID}, nil)
+				}
+				if outcome == "stale-client" {
+					a.rt = &runtimeClient{}
+				} else if outcome == "stale-association" {
+					if domain == "conversation" {
+						ct.historyGen++
+					} else {
+						issue.Executions[0].TaskID = "replacement-task"
+					}
+					before = recoveryRecordSnapshot(t, ct)
+				}
+				recoveryCallback(t, callbacks)
+				expected := []string{firstMethod, "session.history"}
+				if domain == "conversation" && outcome == "error" {
+					expected = append(expected, "session.config.get")
+				}
+				if outcome == "trusted" && domain == "issue" {
+					memory.next(t, "session.load").respond(t, runtimeSession{SessionID: sessionID, State: "idle", Status: "completed", Loaded: true}, nil)
+					memory.next(t, "session.history").respond(t, history, nil)
+					recoveryCallback(t, callbacks)
+					expected = append(expected, "session.load", "session.history")
+				}
+				if !reflect.DeepEqual(memory.methodNames(), expected) {
+					t.Fatalf("readback methods=%v want %v", memory.methodNames(), expected)
+				}
+				if outcome == "trusted" {
+					if domain == "conversation" && ct.SendState != sendIdle {
+						t.Fatal("trusted explicit Reload did not resolve unknown")
+					}
+					if domain == "issue" && (issue.Executions[0].Status != issueExecutionCompleted || issue.Status == issueStatusCompleted) {
+						t.Fatal("trusted Check run failed or incorrectly completed the product task")
+					}
+				} else if strings.HasPrefix(outcome, "stale") {
+					if recoveryRecordSnapshot(t, ct) != before {
+						t.Fatal("stale readback changed the current records")
+					}
+				} else {
+					if domain == "conversation" && ct.SendState != sendUnknown {
+						t.Fatal("failed Reload cleared uncertainty")
+					}
+					if domain == "issue" && issue.Executions[0].Status != issueExecutionUnknown {
+						t.Fatal("failed Check run cleared uncertainty")
+					}
+				}
+				if ct.Draft != "retained unsent draft" || a.submissionInFlight != 0 {
+					t.Fatal("explicit readback sent work or lost the draft")
+				}
+			})
+		}
+	}
+}
+
+func TestRP1MismatchReadbackKeepsConnectionGate(t *testing.T) {
+	for _, locale := range []string{"en", "zh-Hans"} {
+		t.Run(locale, func(t *testing.T) {
+			a, ct, _ := disconnectedRecoveryTestApp(t, "exit")
+			ct.Issues = nil
+			recoveryTestStore(t, a)
+			memory := newRecoveryMemoryClient(t)
+			a.rt = memory.client
+			a.runtimeStatus = runtimeStateReady
+			a.runtimeErr, a.runtimeErrKind, a.runtimeStage, a.runtimeHintKind = "", "", "", ""
+			callbacks := make(chan func(), 4)
+			a.setUIHook(func(fn func()) { callbacks <- fn })
+			tr := ui.NewTester(a.view, 1040, 1000)
+			tr.SetLocale(locale)
+			tr.Frame()
+			msgs := locales.In(locale)
+			if err := tr.Click(msgs.ReloadAction()); err != nil {
+				t.Fatal(err)
+			}
+			memory.next(t, "session.load").respond(t, runtimeSession{SessionID: ct.SessionID, State: "idle", Loaded: true}, nil)
+			memory.next(t, "session.history").respond(t, nil, &runtimeError{Code: "connection_mismatch", Message: "saved context belongs to another connection"})
+			recoveryCallback(t, callbacks)
+			raw := ct.SendError
+			if !knownConnectionFailure(raw) || ct.SendState != sendUnknown || ct.SessionID != "s1" || ct.Draft != "retained unsent draft" {
+				t.Fatal("existing readback error did not preserve unknown/mismatch overlap")
+			}
+			before := recoveryRecordSnapshot(t, ct)
+			tr.Frame()
+			if _, visible := tr.Find(msgs.ReloadAction()); visible || tr.HasText(msgs.SendUnknownState()) || !tr.HasText(msgs.ConnectionMismatchSummary()) {
+				t.Fatalf("known mismatch bypassed original connection gate: %v", tr.Texts())
+			}
+			if tr.HasText(raw) {
+				t.Fatal("mismatch raw detail shown without disclosure")
+			}
+			if err := tr.Click(msgs.DetailsAction()); err != nil {
+				t.Fatal(err)
+			}
+			tr.Frame()
+			if !tr.HasText(raw) {
+				t.Fatal("typed mismatch detail was lost")
+			}
+			if err := tr.Click(msgs.ConnectionSettingsAction()); err != nil {
+				t.Fatal(err)
+			}
+			tr.Frame()
+			if !a.settingsOpen || a.settingsTab != settingsTabConnection || recoveryRecordSnapshot(t, ct) != before || !reflect.DeepEqual(memory.methodNames(), []string{"session.load", "session.history"}) {
+				t.Fatal("mismatch recovery rewrote unknown/raw/history state, replayed, or lost Settings routing")
+			}
+		})
 	}
 }

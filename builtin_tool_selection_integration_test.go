@@ -3,11 +3,13 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -503,6 +505,7 @@ func TestExplicitBuiltinSelectionRequiresManagedConnectionOnNewCreate(t *testing
 	t.Setenv("SAKI_API", config.API)
 	t.Setenv("SAKI_BASE_URL", config.Endpoint)
 	t.Setenv("SAKI_MODEL", config.Model)
+	t.Setenv("SAKI_CONTEXT_TOKENS", fmt.Sprint(config.ContextTokens))
 	app, err := newRuntimeApp()
 	if err != nil {
 		t.Fatal(err)
@@ -515,7 +518,44 @@ func TestExplicitBuiltinSelectionRequiresManagedConnectionOnNewCreate(t *testing
 		}
 	})
 	pump.do(func() { app.startRuntime() })
-	pump.wait(func() bool { return app.runtimeStatus == runtimeStateReady })
+	type startupObservation struct {
+		status     string
+		detail     string
+		diagnostic shutdownDiagnostic
+	}
+	var lastStartup atomic.Value
+	logStartupFailure := func() {
+		observation, ok := lastStartup.Load().(startupObservation)
+		if !ok {
+			t.Log("legacy startup diagnostics: no UI-pump snapshot was captured; app state at failure is unknown")
+		} else {
+			diag := observation.diagnostic
+			t.Logf("legacy startup diagnostics: last UI-pump observation captured=%s age=%s; this is cached state, not a fresh app-state read at failure:\n%s\n%s\ncurrent_channel_state.client_done=%s tool_done=%s tool_close_done=%s",
+				diag.capturedAt.UTC().Format(time.RFC3339Nano), time.Since(diag.capturedAt).Round(time.Millisecond),
+				observation.detail, diag.state, shutdownChannelState(diag.clientDone), shutdownChannelState(diag.toolDone), shutdownChannelState(diag.toolClose))
+		}
+		t.Log("legacy startup failure: current Go-process stack and Runtime launch observation follow; Runtime stack and progress after the cached observation remain unknown")
+		logShutdownStack(t, captureShutdownStack(make([]byte, shutdownStackLimit)))
+		restartedLegacy.logShutdownOS(t)
+	}
+	pump.waitTimeout(func() bool {
+		var stderr []string
+		if app.rt != nil {
+			stderr = app.rt.diagnostics()
+		}
+		lastStartup.Store(startupObservation{
+			status: app.runtimeStatus,
+			detail: fmt.Sprintf("handshake=%v generation=%d stage=%q error_kind=%q error=%q legacy=%v managed=%v runtime_binary=%q stderr=%q",
+				app.runtimeHandshake, app.connectionGeneration, app.runtimeStage, app.runtimeErrKind, app.runtimeErr,
+				app.connectionLegacy, app.connectionManaged, app.runtimeBinary, stderr),
+			diagnostic: restartedLegacy.shutdownSnapshot(),
+		})
+		return app.runtimeStatus == runtimeStateReady || app.runtimeStatus == runtimeStateFailed || app.runtimeStatus == runtimeStateExited
+	}, 15*time.Second, logStartupFailure)
+	if observation := lastStartup.Load().(startupObservation); observation.status != runtimeStateReady {
+		logStartupFailure()
+		t.Fatalf("legacy Runtime startup failed: status=%q; Ready is required", observation.status)
+	}
 	var legacy, managed bool
 	appStorePath := ""
 	pump.do(func() { legacy, managed, appStorePath = app.connectionLegacy, app.connectionManaged, app.storePath })

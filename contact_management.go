@@ -161,7 +161,7 @@ func (a *appModel) saveContactProfileDraftFor(contactID string, draft profileDra
 	if ct == nil {
 		return false
 	}
-	if !a.demo && a.store == nil {
+	if !a.demo && a.ensureContactStore() != nil {
 		if editor != nil {
 			editor.Draft = entered
 			editor.SetError(profileNoticeErrorStore)
@@ -281,7 +281,7 @@ func (a *appModel) archiveContact(contactID string) bool {
 	if ct == nil || ct.Archived {
 		return false
 	}
-	if !a.demo && a.store == nil {
+	if !a.demo && a.ensureContactStore() != nil {
 		if editor := a.profileEditorFor(contactID); editor != nil {
 			editor.SetError(archiveNoticeStore)
 		}
@@ -325,7 +325,7 @@ func (a *appModel) restoreContact(contactID string) bool {
 	if ct == nil || !ct.Archived {
 		return false
 	}
-	if !a.demo && a.store == nil {
+	if !a.demo && a.ensureContactStore() != nil {
 		if editor := a.profileEditorFor(contactID); editor != nil {
 			editor.SetError(restoreNoticeStore)
 		}

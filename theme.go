@@ -1,6 +1,10 @@
 package main
 
-import "github.com/egoist/mygo/ui"
+import (
+	"math"
+
+	"github.com/egoist/mygo/ui"
+)
 
 // workbenchTheme is the one per-frame resolution of the Paper & Moss
 // appearance. Theme keeps the framework's control roles semantic; the small
@@ -99,6 +103,25 @@ func resolveWorkbenchTheme(dark bool) workbenchTheme {
 		WorkMuted: ui.Hex("#5D6B61"), WorkAttention: ui.Hex("#80501F"),
 		WorkWarningBg: ui.Hex("#FFF2DF"),
 	}
+}
+
+func paletteLuminance(c ui.Color) float64 {
+	linear := func(v uint8) float64 {
+		f := float64(v) / 255
+		if f <= 0.04045 {
+			return f / 12.92
+		}
+		return math.Pow((f+0.055)/1.055, 2.4)
+	}
+	return 0.2126*linear(c.R) + 0.7152*linear(c.G) + 0.0722*linear(c.B)
+}
+
+func paletteContrast(a, b ui.Color) float64 {
+	x, y := paletteLuminance(a), paletteLuminance(b)
+	if x < y {
+		x, y = y, x
+	}
+	return (x + 0.05) / (y + 0.05)
 }
 
 // segmentedSelection keeps MyGo's official SegmentedBase radio group,

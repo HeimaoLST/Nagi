@@ -1618,3 +1618,322 @@ func TestIssueResultAppEmptyStateShowsHonestPanelControls(t *testing.T) {
 		}
 	}
 }
+
+func TestRecoveryPresentationEmptyResultUsesActualSettingsRoute(t *testing.T) {
+	message := "upstream refused the request"
+	raw := taskFailureDetail("model_error", &message)
+	a, ct, issue, execution := attentionDisclosureApp(t, issueExecutionFailed, raw)
+	a.openIssueResult(issue.ID, execution.ID)
+	tr := ui.NewTester(func(c *ui.Context) {
+		a.workTheme = resolveWorkbenchTheme(false)
+		c.SetTheme(a.workTheme.Theme)
+		ui.Column(c).Fill().Children(func() { a.issueResultPanelView(c, c.Theme()) })
+	}, 720, 640)
+	tr.Frame()
+	if !tr.HasText(locales.In("en").RecoveryModelRequestFailed()) || tr.HasText(raw) {
+		t.Fatalf("empty result omitted recovery summary: %v", tr.Texts())
+	}
+	if err := tr.Click("Details"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if !tr.HasText(raw) || a.issueResult.Panel.RunDetail != raw {
+		t.Fatal("empty result lost raw run record")
+	}
+	if err := tr.Click("Settings"); err != nil {
+		t.Fatal(err)
+	}
+	if !a.settingsOpen || a.settingsTab != settingsTabAppearance {
+		t.Fatal("result Settings did not preserve its General entry route")
+	}
+	settings := ui.NewTester(a.view, 1040, 720)
+	settings.Frame()
+	if err := settings.Click("Connection & model"); err != nil {
+		t.Fatal(err)
+	}
+	settings.Frame()
+	if a.settingsTab != settingsTabConnection || a.rt != nil || ct.SendState != sendIdle || a.issueResult.Panel.RunDetail != raw {
+		t.Fatal("ordinary result-to-connection route changed records or executed work")
+	}
+}
+
+func TestIssueAttentionDisclosureRejectsStaleResultActions(t *testing.T) {
+	cases := []struct {
+		name   string
+		change func(*appModel, *contact, *productIssue, *issueExecution)
+	}{
+		{"reason", func(_ *appModel, _ *contact, _ *productIssue, e *issueExecution) { e.Detail += " changed" }},
+		{"status", func(_ *appModel, _ *contact, _ *productIssue, e *issueExecution) { e.Status = issueExecutionUnknown }},
+		{"session", func(_ *appModel, _ *contact, _ *productIssue, e *issueExecution) { e.SessionID = "new-session" }},
+		{"task", func(_ *appModel, _ *contact, _ *productIssue, e *issueExecution) { e.TaskID = "new-task" }},
+		{"message", func(_ *appModel, _ *contact, _ *productIssue, e *issueExecution) { e.MessageID = "new-message" }},
+		{"replacement", func(_ *appModel, _ *contact, i *productIssue, e *issueExecution) {
+			replacement := *e
+			i.Executions[0] = &replacement
+		}},
+		{"detached", func(_ *appModel, ct *contact, _ *productIssue, _ *issueExecution) { ct.Issues = nil }},
+		{"contact", func(a *appModel, _ *contact, _ *productIssue, _ *issueExecution) {
+			a.contacts = append(a.contacts, &contact{ID: "other-owner"})
+			a.selected = 1
+		}},
+		{"generation", func(a *appModel, _ *contact, _ *productIssue, _ *issueExecution) { a.issueResult.Generation++ }},
+		{"page-issue", func(a *appModel, _ *contact, _ *productIssue, _ *issueExecution) {
+			a.issueResult.IssueID = "other-issue"
+		}},
+		{"page-detail", func(a *appModel, _ *contact, _ *productIssue, _ *issueExecution) {
+			a.issueResult.Panel.RunDetail = "different displayed reason"
+		}},
+		{"settings", func(a *appModel, _ *contact, _ *productIssue, _ *issueExecution) { a.settingsOpen = true }},
+		{"reader", func(a *appModel, _ *contact, _ *productIssue, _ *issueExecution) {
+			a.issueResult.Panel.ReaderKey = "file-reader"
+		}},
+		{"aux", func(a *appModel, _ *contact, _ *productIssue, _ *issueExecution) { a.aux = "sources" }},
+		{"closed", func(a *appModel, _ *contact, _ *productIssue, _ *issueExecution) { a.closeIssueResult() }},
+		{"shutdown", func(a *appModel, _ *contact, _ *productIssue, _ *issueExecution) { a.shutdownStarted = true }},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			a, ct, issue, execution := attentionDisclosureApp(t, issueExecutionFailed, "captured original reason")
+			a.openIssueResult(issue.ID, execution.ID)
+			actions := a.issueResultPanelActions(a.issueResult.Generation)
+			before, err := os.ReadFile(a.store.path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			tc.change(a, ct, issue, execution)
+			actions.ToggleRunDetails()
+			after, err := os.ReadFile(a.store.path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if execution.AttentionSeenStatus != "" || a.issueResult.Panel.RunDetailsOpen || string(before) != string(after) || a.resultInFlight != 0 {
+				t.Fatal("stale disclosure changed seen, disclosure state, saved bytes or started a read")
+			}
+		})
+	}
+}
+
+func TestIssueAttentionDisclosureVisibleAtMinimumAndDefaultSize(t *testing.T) {
+	for _, locale := range []string{"en", "zh-Hans"} {
+		for _, size := range [][2]int{{720, 640}, {1040, 720}} {
+			for _, surface := range []string{"work", "result"} {
+				t.Run(fmt.Sprintf("%s/%dx%d/%s", locale, size[0], size[1], surface), func(t *testing.T) {
+					a, _, issue, execution := attentionDisclosureApp(t, issueExecutionFailed, "minimum-size explicit reason")
+					a.windowWidth = size[0]
+					tr := ui.NewTester(a.view, size[0], size[1])
+					tr.SetLocale(locale)
+					tr.Frame()
+					msgs := locales.In(locale)
+					entry := msgs.WorkReadResult()
+					if surface == "work" {
+						entry = msgs.IssueViewExecution()
+					}
+					clickAfterBoundedScroll(t, tr, entry, size[0], size[1])
+					tr.Frame()
+					if execution.AttentionSeenStatus != "" {
+						t.Fatal("navigation acknowledged a hidden reason")
+					}
+					clickAfterBoundedScroll(t, tr, msgs.DetailsAction(), size[0], size[1])
+					tr.Frame()
+					if !tr.HasText(execution.Detail) || !tr.HasText(issueExecutionText(msgs, execution.Status)) || execution.AttentionSeenStatus != issueExecutionFailed {
+						t.Fatalf("visible current disclosure missing: %v", tr.Texts())
+					}
+					geometry := map[string]ui.Rect{}
+					for _, label := range []string{execution.Detail, issueExecutionText(msgs, execution.Status), msgs.HideDetailsAction()} {
+						r, ok := tr.Find(label)
+						if !ok || r.W <= 0 || r.H <= 0 || r.X < 0 || r.Y < 0 || r.X+r.W > float32(size[0])+1 || r.Y+r.H > float32(size[1])+1 {
+							t.Fatalf("disclosed status/reason/control is outside the viewport: %q %+v found=%v", label, r, ok)
+						}
+						geometry[label] = r
+					}
+					t.Logf("reachable entry=%q disclosure=%q size=%dx%d issue=%s", entry, msgs.DetailsAction(), size[0], size[1], issue.ID)
+					if dir := os.Getenv("SAKI_PREVIEW_DIR"); dir != "" {
+						name := fmt.Sprintf("ad-visible-%s-%dx%d-%s", locale, size[0], size[1], surface)
+						writePreviewPNG(t, filepath.Join(dir, name+".png"), tr.Image())
+						data, err := json.MarshalIndent(geometry, "", "  ")
+						if err != nil {
+							t.Fatal(err)
+						}
+						if err := os.WriteFile(filepath.Join(dir, name+".geometry.json"), data, 0600); err != nil {
+							t.Fatal(err)
+						}
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestIssueAttentionDisclosureSaveRetryDoesNotAcknowledgeRollback(t *testing.T) {
+	a, _, issue, execution := attentionDisclosureApp(t, issueExecutionUnknown, "retained unknown reason")
+	goodPath := a.store.path
+	blocked := filepath.Join(t.TempDir(), "file-parent")
+	if err := os.WriteFile(blocked, []byte("preserve me"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	a.store.path = filepath.Join(blocked, "contacts.json")
+	a.openIssueResult(issue.ID, execution.ID)
+	tr := ui.NewTester(a.view, 1040, 720)
+	tr.Frame()
+	if err := tr.Click("Details"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if execution.AttentionSeenStatus != "" || a.localSaveErr == "" || !a.issueWorkNotice(a.selectedContact()).Attention || !tr.HasText(execution.Detail) {
+		t.Fatal("failed seen write did not roll back with the disclosed reason and local error")
+	}
+	page := a.issueResult
+	a.applyIssueResultLoaded(nil, 0, page.Generation, page.OwnerContactID, issue.ID, execution.ID,
+		page.SessionID, page.TaskID, issueResultDerivation{}, "retained result body", "")
+	tr.Frame()
+	if execution.AttentionSeenStatus != "" || a.localSaveErr == "" {
+		t.Fatal("background result acknowledged or cleared local error")
+	}
+	a.store.path = goodPath
+	if err := tr.Click(locales.In("en").SettingsRetrySave()); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if execution.AttentionSeenStatus != "" || a.localSaveErr != "" {
+		t.Fatal("Retry save acknowledged a rolled-back disclosure")
+	}
+	saved, err := openContactStore(goodPath, a.workDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if saved.state.Issues[0].Executions[0].AttentionSeenStatus != "" || execution.Status != issueExecutionUnknown || execution.Detail != "retained unknown reason" {
+		t.Fatal("retry changed attention or unknown facts")
+	}
+	tr.SetLocale("zh-Hans")
+	tr.Frame()
+	if execution.AttentionSeenStatus != "" {
+		t.Fatal("locale/render acknowledged the rolled-back exception")
+	}
+	if err := tr.Click(locales.In("zh-Hans").HideDetailsAction()); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if execution.AttentionSeenStatus != "" {
+		t.Fatal("collapsing Details acknowledged the exception")
+	}
+	if err := tr.Click(locales.In("zh-Hans").DetailsAction()); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if execution.AttentionSeenStatus != issueExecutionUnknown || !tr.HasText(execution.Detail) {
+		t.Fatal("a new explicit matching disclosure did not acknowledge after local recovery")
+	}
+}
+
+func TestIssueAttentionRetainedResultScrollShowsInterruptedTarget(t *testing.T) {
+	for _, locale := range []string{"en", "zh-Hans"} {
+		for _, size := range [][2]int{{720, 640}, {1040, 720}} {
+			for _, entry := range []string{"open-long-goal", "reload-response", "reload-long-goal"} {
+				t.Run(fmt.Sprintf("%s/%dx%d/%s", locale, size[0], size[1], entry), func(t *testing.T) {
+					a, ct, issue, execution := attentionDisclosureApp(t, issueExecutionCompleted, "")
+					a.windowWidth = size[0]
+					if err := a.persist(); err != nil {
+						t.Fatal(err)
+					}
+					tr := ui.NewTester(a.view, size[0], size[1])
+					tr.SetLocale(locale)
+					tr.Frame()
+					msgs := locales.In(locale)
+					clickAfterBoundedScroll(t, tr, msgs.WorkReadResult(), size[0], size[1])
+					tr.Frame()
+					page := a.issueResult
+					a.applyIssueResultLoaded(nil, a.connectionGeneration, page.Generation, ct.ID, issue.ID, execution.ID, execution.SessionID, execution.TaskID,
+						issueResultDerivation{}, strings.Repeat("Recorded response paragraph.\n\n", 100), "")
+					tr.Frame()
+					tr.Scroll(float32(size[0]/2), float32(size[1]/2), 0, 300)
+					tr.Frame()
+					before := a.issueResultScroll.Y
+					if before < 200 {
+						t.Fatalf("response did not establish an actual retained scroll: %.1f", before)
+					}
+					if entry != "reload-response" {
+						// Goals have no producer length restriction; this valid saved goal
+						// puts the exception below the old offset on a newly opened page.
+						issue.Goal = strings.Repeat("Saved context for this task.\n", 60)
+					}
+					execution.Status, execution.Detail = issueExecutionInterrupted, "Matching interrupted reason"
+					if err := a.persist(); err != nil {
+						t.Fatal(err)
+					}
+					if entry == "open-long-goal" {
+						if err := tr.Click(msgs.ResultCloseResults()); err != nil {
+							t.Fatal(err)
+						}
+						tr.Frame()
+						clickAfterBoundedScroll(t, tr, msgs.WorkReadResult(), size[0], size[1])
+					} else if err := tr.Click(msgs.ResultReloadResult()); err != nil {
+						t.Fatal(err)
+					}
+					tr.Frame()
+					saved, err := openContactStore(a.store.path, a.workDir)
+					if err != nil {
+						t.Fatal(err)
+					}
+					seen := saved.state.Issues[0].Executions[0].AttentionSeenStatus
+					attentionTargetEvidence(t, tr, fmt.Sprintf("result-%s-%d-%s", locale, size[0], entry), issueExecutionText(msgs, execution.Status), execution.Detail, seen, before, a.issueResultScroll.Y, size[0], size[1])
+					if seen != issueExecutionInterrupted || execution.AttentionSeenStatus != seen || a.issueResult.ExecutionID != execution.ID || a.rt != nil || a.resultInFlight != 0 {
+						t.Fatal("result entry lost current identity/persisted seen or started Runtime work")
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestIssueAttentionVisibleTargetKeepsOrdinaryReloadPosition(t *testing.T) {
+	for _, kind := range []string{"seen-interrupted", "newly-seen-interrupted", "completed"} {
+		t.Run(kind, func(t *testing.T) {
+			status, reason := issueExecutionInterrupted, "Already displayed interruption"
+			if kind == "completed" {
+				status, reason = issueExecutionCompleted, ""
+			}
+			a, ct, issue, execution := attentionDisclosureApp(t, status, reason)
+			if kind == "seen-interrupted" {
+				execution.AttentionSeenStatus = status
+			}
+			if err := a.persist(); err != nil {
+				t.Fatal(err)
+			}
+			tr := ui.NewTester(a.view, 1040, 720)
+			tr.Frame()
+			clickAfterBoundedScroll(t, tr, "Read latest result", 1040, 720)
+			tr.Frame()
+			page := a.issueResult
+			response := strings.Repeat("Recorded readable response.\n\n", 100)
+			a.applyIssueResultLoaded(nil, a.connectionGeneration, page.Generation, ct.ID, issue.ID, execution.ID, execution.SessionID, execution.TaskID, issueResultDerivation{}, response, "")
+			tr.Frame()
+			tr.Scroll(520, 360, 0, 300)
+			tr.Frame()
+			before := a.issueResultScroll.Y
+			if before < 200 {
+				t.Fatal("long body did not establish a real scroll")
+			}
+			saved, err := os.ReadFile(a.store.path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			page = a.issueResult
+			a.applyIssueResultLoaded(nil, a.connectionGeneration, page.Generation, ct.ID, issue.ID, execution.ID, execution.SessionID, execution.TaskID, issueResultDerivation{}, response, "")
+			tr.Frame()
+			if a.issueResultScroll.Y != before {
+				t.Fatal("passive result completion repositioned the view")
+			}
+			if err := tr.Click("Reload result"); err != nil {
+				t.Fatal(err)
+			}
+			tr.Frame()
+			after, err := os.ReadFile(a.store.path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if a.issueResultScroll.Y != before || string(saved) != string(after) || a.rt != nil || a.resultInFlight != 0 || a.issueResult.Panel.Response != response {
+				t.Fatal("ordinary reload scrolled, persisted seen, altered the readable body or started Runtime work")
+			}
+		})
+	}
+}

@@ -293,6 +293,7 @@ func TestManualCompleteShowsUserSourceAndKeepsUnverified(t *testing.T) {
 		RequirementsRevision: 1, Requirements: parseIssueRequirements("must remain unverified")}
 	ct.Issues = []*productIssue{issue}
 	openIssueDetailForTest(a, ct, issue.ID)
+	recoveryTestStore(t, a)
 	if !a.completeIssue(issue.ID, "reviewed by the user") {
 		t.Fatal("manual complete failed")
 	}
@@ -301,6 +302,15 @@ func TestManualCompleteShowsUserSourceAndKeepsUnverified(t *testing.T) {
 	if issue.Status != issueStatusCompleted || issue.Requirements[0].State != requirementUnverified ||
 		!tr.HasText("Marked by user: reviewed by the user") || !tr.HasText("Unverified") {
 		t.Fatalf("manual completion = status=%q req=%q texts=%v", issue.Status, issue.Requirements[0].State, tr.Texts())
+	}
+	reloaded, err := openContactStore(a.storePath, a.workDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(reloaded.state.Issues) != 1 || reloaded.state.Issues[0].ID != issue.ID ||
+		reloaded.state.Issues[0].Status != issueStatusCompleted || reloaded.state.Issues[0].Evidence != "reviewed by the user" ||
+		len(reloaded.state.Issues[0].RequirementItems) != 1 || reloaded.state.Issues[0].RequirementItems[0].State != requirementUnverified {
+		t.Fatalf("saved manual completion = %+v", reloaded.state.Issues)
 	}
 }
 
@@ -324,6 +334,7 @@ func TestIssueBackAfterOutOfFilterActionKeepsFilterAndScroll(t *testing.T) {
 			nav.Filter = issueFilterUnfinished
 			nav.OverviewScroll.Y = 123
 			openIssueDetailForTest(a, ct, issue.ID)
+			recoveryTestStore(t, a)
 			if !tc.act(a, issue.ID) {
 				t.Fatal("action failed")
 			}
@@ -333,6 +344,15 @@ func TestIssueBackAfterOutOfFilterActionKeepsFilterAndScroll(t *testing.T) {
 			}
 			if nav.DetailID != "" || nav.FocusRowID != issue.ID || ct.SelectedIssueID != issue.ID {
 				t.Fatalf("back state = detail=%q focus=%q selected=%q", nav.DetailID, nav.FocusRowID, ct.SelectedIssueID)
+			}
+			reloaded, err := openContactStore(a.storePath, a.workDir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(reloaded.state.Issues) != 1 || reloaded.state.Issues[0].ID != issue.ID ||
+				reloaded.state.Issues[0].Status != issue.Status || reloaded.state.Issues[0].Archived != issue.Archived ||
+				reloaded.state.Contacts[0].SelectedIssueID != issue.ID {
+				t.Fatalf("saved out-of-filter action = %+v", reloaded.state)
 			}
 		})
 	}
@@ -558,6 +578,9 @@ func TestIssuePrimaryActionsAndPersistentLifecycle(t *testing.T) {
 			tc.issue.ContactID = ct.ID
 			ct.Issues = []*productIssue{tc.issue}
 			ct.SelectedIssueID = tc.issue.ID
+			if tc.name == "question" {
+				recoveryTestStore(t, a)
+			}
 			openIssueDetailForTest(a, ct, tc.issue.ID)
 			tr := ui.NewTester(a.view, 1040, 720)
 			tr.Frame()
@@ -584,6 +607,16 @@ func TestIssuePrimaryActionsAndPersistentLifecycle(t *testing.T) {
 				if tc.issue.Status != issueStatusCanceled || len(tc.issue.Executions) != beforeExecutions || ct.SessionID != beforeSession {
 					t.Fatalf("Cancel task boundary: status=%q executions=%d session=%q (before %d/%q)",
 						tc.issue.Status, len(tc.issue.Executions), ct.SessionID, beforeExecutions, beforeSession)
+				}
+				reloaded, err := openContactStore(a.storePath, a.workDir)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if len(reloaded.state.Issues) != 1 || reloaded.state.Issues[0].ID != tc.issue.ID ||
+					reloaded.state.Issues[0].Status != issueStatusCanceled || len(reloaded.state.Issues[0].Executions) != beforeExecutions ||
+					reloaded.state.Contacts[0].SessionID != beforeSession || reloaded.state.Contacts[0].Draft != "question draft" ||
+					reloaded.state.Contacts[0].SelectedIssueID != beforeID {
+					t.Fatalf("saved Cancel task boundary = %+v", reloaded.state)
 				}
 			}
 		})

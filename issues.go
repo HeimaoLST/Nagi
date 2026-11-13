@@ -790,18 +790,46 @@ func (a *appModel) showIssueWork(issueID, taskID string) {
 	ct.SelectedIssueID = issueID
 	ct.SelectedWorkTaskID = taskID
 	a.setWorkspaceOpen(true)
-	// View execution confirms only when the work card shows this execution's
-	// same nonempty reason; a stale work reason is not enough.
-	execution := executionForTask(issue, taskID)
-	executionDetail := ""
-	if execution != nil {
-		executionDetail = strings.TrimSpace(execution.Detail)
+	if work.State != workFailed && !formattedRunFailure(work.Detail) {
+		if snapshot, current := a.issueWorkDisclosureSnapshot(ct, issue, work); current() {
+			nav.DetailScroll.Y = 0
+			a.confirmIssueExecutionSeen(snapshot.contact, snapshot.issue, snapshot.execution)
+		}
 	}
-	if execution != nil && executionDetail != "" && issueExecutionNeedsAttention(execution.Status) &&
-		issueExecutionStatusFromWork(work.State) == execution.Status &&
-		strings.TrimSpace(work.Detail) == executionDetail {
-		a.confirmIssueExecutionSeen(ct, issue, execution)
+}
+
+// Disclosure callbacks retain the original records, not redacted text or IDs
+// that could now resolve to a replacement record.
+type issueExecutionDisclosure struct {
+	contact                         *contact
+	issue                           *productIssue
+	execution                       *issueExecution
+	contactID, issueID, executionID string
+	status, detail                  string
+	sessionID, taskID, messageID    string
+}
+
+func captureIssueExecutionDisclosure(ct *contact, issue *productIssue, execution *issueExecution) issueExecutionDisclosure {
+	snapshot := issueExecutionDisclosure{contact: ct, issue: issue, execution: execution}
+	if ct != nil && issue != nil && execution != nil {
+		snapshot.contactID, snapshot.issueID, snapshot.executionID = ct.ID, issue.ID, execution.ID
+		snapshot.status, snapshot.detail = execution.Status, execution.Detail
+		snapshot.sessionID, snapshot.taskID, snapshot.messageID = execution.SessionID, execution.TaskID, execution.MessageID
 	}
+	return snapshot
+}
+
+func (a *appModel) issueExecutionDisclosureCurrent(snapshot issueExecutionDisclosure) bool {
+	ct, issue, execution := snapshot.contact, snapshot.issue, snapshot.execution
+	if a.shutdownStarted || ct == nil || issue == nil || execution == nil ||
+		a.selectedContact() != ct || a.contactByID(snapshot.contactID) != ct ||
+		ct.ID != snapshot.contactID || issue.ID != snapshot.issueID || issue.ContactID != ct.ID {
+		return false
+	}
+	owner, found := ct.executionByID(snapshot.executionID)
+	return owner == issue && found == execution && execution.ID == snapshot.executionID &&
+		issueExecutionNeedsAttention(execution.Status) && execution.Status == snapshot.status && execution.Detail == snapshot.detail &&
+		execution.SessionID == snapshot.sessionID && execution.TaskID == snapshot.taskID && execution.MessageID == snapshot.messageID
 }
 
 // confirmIssueExecutionSeen records that the current owner displayed this
@@ -809,11 +837,12 @@ func (a *appModel) showIssueWork(issueID, taskID string) {
 // issue lifecycle, requirements, evidence, unread and dispatch state remain
 // unchanged. A failed save leaves the exception unseen and reports the error.
 func (a *appModel) confirmIssueExecutionSeen(ct *contact, issue *productIssue, execution *issueExecution) bool {
-	if ct == nil || issue == nil || execution == nil || a.selectedContact() != ct || issue.ContactID != ct.ID {
+	if a.shutdownStarted || ct == nil || issue == nil || execution == nil || a.selectedContact() != ct ||
+		a.contactByID(ct.ID) != ct || issue.ContactID != ct.ID {
 		return false
 	}
 	owner, found := ct.executionByID(execution.ID)
-	if owner != issue || found == nil || !issueExecutionNeedsAttention(found.Status) {
+	if owner != issue || found != execution || !issueExecutionNeedsAttention(found.Status) {
 		return false
 	}
 	if found.AttentionSeenStatus == found.Status {

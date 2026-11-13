@@ -1,8 +1,8 @@
 # Desktop contacts：首版运行时接入
 
-更新日期：2026-11-09。当前设置页面见文末 **#199 独立设置页面**。本文保留各阶段的实现与验证记录；产品定义、联系人／事项／会话语义和 MVP-01–MVP-12 以 [Nagi 产品定义与需求](../requirements/desktop.md) 为唯一权威；当前视觉与交互以 [Desktop workbench](desktop-workbench.md) 为唯一规范。连接配置见 **#116 首用配置**，会话模型选择见 **#115 会话模型选择**，阅读与独立工作会话分别见 #113/#118，资料快照与递交见 **#117 资料快照、阅读与递交**，联系人编辑、归档及旧对话访问见 **#152 联系人管理与已保存对话**。早期原生窗口证据只适用于其注明的包，不代表新候选已完成原生验收。原生 MyGo 应用通过 `Saki --stdio` 消费 Runtime；GUI 维护联系人、事项与历史展示，执行历史由 Runtime 提供，GUI 不解析 Rust journal。最终集成状态以对应 PR 与 dev 为准。
+更新日期：2026-11-11。当前设置页面见文末 **#199 独立设置页面**。本文保留各阶段的实现与验证记录；产品定义、联系人／事项／会话语义和 MVP-01–MVP-12 以 [Nagi 产品定义与需求](../requirements/desktop.md) 为唯一权威；当前视觉与交互以 [Desktop workbench](desktop-workbench.md) 为唯一规范。连接配置见 **#116 首用配置**，会话模型选择见 **#115 会话模型选择**，阅读与独立工作会话分别见 #113/#118，资料快照与递交见 **#117 资料快照、阅读与递交**，联系人编辑、归档及旧对话访问见 **#152 联系人管理与已保存对话**。早期原生窗口证据只适用于其注明的包，不代表新候选已完成原生验收。原生 MyGo 应用通过 `Saki --stdio` 消费 Runtime；GUI 维护联系人、事项与历史展示，执行历史由 Runtime 提供，GUI 不解析 Rust journal。最终集成状态以对应 PR 与 dev 为准。
 
-早期浏览器示意保留在 Git 历史（[7145225 的 desktop-contacts.html](https://github.com/HeimaoLST/Saki/blob/7145225c47b9b29c8011edbaefc410d0d6d46b61/docs/design/previews/desktop-contacts.html)），不是当前原生应用的验收对象，也不在仓库维护第二套现行预览；仓库内 `desktop/` 是当前可运行的原生应用，当前视觉与交互以 [Desktop workbench](desktop-workbench.md) 为准。当前主题事实见 `desktop/theme.go` 的 `resolveWorkbenchTheme`（Paper/Moss；light/dark 语义角色）；#92 的 Moon/Dawn 和 #90 的 11px/12px 数值只保留为历史设计/实现记录，不再作为当前规范。此前将这些能力或颜色列为后续独立任务的说明已失效，不再作为当前实现或未来承诺；具体状态以对应任务段、PR 和 `dev` 为准。
+早期浏览器示意保留在 Git 历史（[7145225 的 desktop-contacts.html](https://github.com/HeimaoLST/Saki/blob/7145225c47b9b29c8011edbaefc410d0d6d46b61/docs/design/previews/desktop-contacts.html)），不是当前原生应用的验收对象，也不在仓库维护第二套现行预览；当前原生 Go 应用位于 Nagi 仓库根目录，视觉与交互以 [Desktop workbench](desktop-workbench.md) 为准。当前主题事实见 `theme.go` 的 `resolveWorkbenchTheme`（Paper/Moss；light/dark 语义角色）；#92 的 Moon/Dawn 和 #90 的 11px/12px 数值只保留为历史设计/实现记录，不再作为当前规范。此前将这些能力或颜色列为后续独立任务的说明已失效，不再作为当前实现或未来承诺；具体状态以对应任务段、PR 和 `dev` 为准。
 
 <a id="gui-design-constraints"></a>
 
@@ -10,11 +10,124 @@
 
 Nagi 已从原 Saki candidate `00298ae22bb95afc11366597e517a3b1ceba21e7` 导出为独立 Git 仓库，原历史与产品行为保留，导入依据见 [source-import.json](source-import.json)。Go module 为 `github.com/HeimaoLST/Nagi`，Go 源码位于根目录。以下历史段落中的 `desktop/` 路径、Saki.app 和旧 SHA 指原始 Saki 布局及当时包，不能直接作为当前构建命令。
 
+当前未完成工作由 [迁移索引 Nagi #2](https://github.com/HeimaoLST/Nagi/issues/2)、[产品路线 Nagi #5](https://github.com/HeimaoLST/Nagi/issues/5) 和 [完整验收 Nagi #7](https://github.com/HeimaoLST/Nagi/issues/7) 跟踪；下方日期、原 issue 编号与包证据保留历史归属。
+
 当前构建／测试／打包入口统一见 [README](../../README.md)。`scripts/gui-go.py` 从本仓库根模块构建并保留三项固定 MyGo patch；macOS 包为 `Nagi.app`，GUI executable 为 `Nagi`，相邻 Runtime helper 仍为 `Saki-runtime`，bundle ID、联系人／连接／session 数据路径与运行时选择顺序保持兼容。Nagi 版本由根 `VERSION` 独立管理。
 
 打包只消费显式预编译的 Runtime，不调用 Cargo 或读取 Saki 源码／版本作为 Nagi 版本。manifest schema 2 分别记录两产品 source/version/hash，并区分原 Runtime 输入与签名后副本；Runtime source SHA 明确是调用方提供的产物来源声明。受控本地集成测试不等于原生／真人验收，旧 MVP 状态不因拆仓改变。
 
 协议权威在 [Saki Runtime API](https://github.com/HeimaoLST/Saki/blob/dev/docs/design/runtime-api.md)。Nagi 继续调用 stdio v1，不消费新增 metadata 订阅、不改变自动标题默认值，不引入独立后台业务服务。联系人／事项／补充／MCP回接仍由 Nagi 维护；Saki 保持唯一执行循环与持久执行事实。
+
+<a id="consumer-configuration-20261110"></a>
+
+## 普通用户配置：现状与实施交接（2026-11-10）
+
+新增产品契约及 C1–C8 验收以 [需求文档](../requirements/desktop.md#consumer-configuration) 为准；本节区分源码事实与待实现目标。检查对象是 `d36666dcaffda373c97dc6df3144992bc6f6f797` 加冻结候选补丁 `cc4c1bbbf90f76d6a6355269469f6def6552da6942fc333182cba3e58b7d8ee6` 的独立副本，不表示 `dev` 已集成。原 `development-candidate-20261110` 保持冻结：既有 race 记录为 1012 PASS／1 FAIL／3 SKIP（含子测试），失败为 `TestExplicitBuiltinSelectionRequiresManagedConnectionOnNewCreate` 的启动 ready 等待；本次未执行测试、构建、生成、Runtime、原生或模型调用，不改变失败判定。Saki #336 另行调查启动因果；测试 context-env 修正不能完成消费产品配置契约。
+
+### 已检查的实现与缺口
+
+下列路径均相对 Nagi 根目录；行号指本节检查的代码副本。现有测试仅作为行为边界阅读，不在本次声称通过。
+
+| 路径 | GUI 已有行为与证据 | 普通用户缺口／应保护的边界 |
+| --- | --- | --- |
+| 冷启动与连接前探索 | `runtime_model.go:30` 的 `newRuntimeApp` 在无 GUI／外部配置时打开连接设置，使用临时联系人；`settings_page.go:191` 可返回工作台；`settings_page_test.go:722` 覆盖初始页面。 | 无凭据并非不能浏览，但本地编辑尚不一致：缺 store 时 `runtime_model.go:3100` 的 `persist` 直接返回 nil，草稿／新增联系人只有内存状态；`contact_management.go:164` 拒绝保存资料。不能把可输入或没有报错当作已持久化。 |
+| 连接、凭据与模型接入 | `connection_settings.go:41,132` 提供 Chat Completions／Responses、endpoint、遮蔽 key、模型 ID 和折叠容量；默认容量 131072／8192、并发 2，地址／key／模型留空。`connection_config.go:73,254` 校验并原子保存私有明文连接配置；`connection_runtime.go:125` 的 `probeConnection` 仅显式测试时在无工具临时会话发短请求。 | 单个受管 API-key 连接，尚无面向普通用户的 provider／权限获取引导；协议不是供应商列表，任意模型 ID 不是可用性承诺。默认容量没有在首用表单从实际模型推导。Test 使用当前草稿、可能计费、不 save/apply；ready／Apply 不验证模型权限（`locales/en.json:954,962,972`）。 |
+| 默认与当前对话／工作 | `settings_page.go:478` 分开默认连接与当前对话；`model_selection_app.go:54,169` 读取当前连接目录及指定 session 配置；`model_selection.go:354` 展示实际模型、容量来源和 revision。composer 候选仅用 `ConfiguredModels`；容量 `Models` 不代表可用模型，见 #324。 | 仍以 provider ID、token 数和内部 session/revision 为主，需让普通用户先看懂对象、生效时点和合理默认，再展开技术详情。实际值、上次读回、未创建上下文必须分开；不能把默认覆盖到已有对话／事项工作。 |
+| 工作目录 | `runtime_model.go:192,3086` 默认取覆盖值／启动 cwd／home，联系人可有自己的 Workspace；`connection_settings.go:187` 与 `contact_profile.go:350` 都是路径文本框，分别校验绝对路径和目录存在。 | 未提供文件夹选择。新默认不改旧联系人／已绑定 cwd；用户需看到默认、联系人和当前工作实际目录的区别，以及保留历史的新上下文入口。连接前保存的临时联系人不能把偶然 cwd 固化成未确认选择。 |
+| 保存、应用与重启 | `connection_app.go:164,248,280` 分开 Save／Apply；候选 helper ready + `connection.list` 验证后才安装，失败保留原 helper；保存后回调重新检查活动。`settings_page.go:478,607` 显示 dirty／saved pending／current。 | 保留现有保护，不把 UI 文案简化为无差别“成功”。`connection_app_test.go:153,194` 覆盖保存失败不 Apply、重试只 Apply；`connection_app_integration_test.go:199,851` 覆盖实际请求／重启和保存中出现新活动。仍须同一最终候选的 GUI 端到端验收。 |
+| 外观与语言 | `settings_page.go:412` 在同一 General 内切换 System／Light／Dark 和 System／简中／English；`appearance.go:167,181` 保存到联系人 store，失败保留已生效状态并可重试。语言通过 `settings_page.go:66` 的 MyGo `SetLocale` 与 `locale_darwin.go:17` 的既有 CFPreferences 读取路径处理，部分系统窗口需重启。 | 不另造偏好文件／语言真源；原生重启持久化不可由注入语言测试替代。外观首次保存有特有的合法缺 store 初始化路径，见下文切片 1。 |
+| 可选主题 | 候选 `appearance.go:25`／`custom_theme.go:104` 读取并验证固定目录的 JSON；General 可选择、Reload、显示错误及回退 Paper/Moss，所选 ID 经同一 store 保存（`settings_page.go:435`、`custom_theme_test.go:137,196`）。 | `locales/en.json:1555` 仍要求用户手放文件；没有 GUI 导入。主题作者格式文档可保留，不能当普通使用说明。缺失 ID 保留、按类别回退与低对比提示沿 #3 保持，不重做配色或布局。 |
+| 诊断与恢复 | `view.go:562,1549` 复用错误入口和 Advanced 详情；`runtime_model.go:146,609` 保留 store 读取错误、启动阶段和断连未知，`model_selection_app.go:408,436` 对未知更新先核对／显式恢复而非重写。 | `locales/en.json:1037` 起仍有设置 API_KEY、修 `.env`、修数据文件／权限、放置 helper 或设置 SAKI_RUNTIME_BIN 的提示；GUI 缺少完整图形化恢复路径。未知不得自动重发；没有有效数据副本不能承诺修复损坏文件，不能静默换 store。 |
+
+**内部兼容机制**：`connection_app.go:26,49` 在无 GUI 配置时探测环境／`.env`；`runtime_model.go:173–232,419` 保留 store/session/workdir/helper 覆盖和既有查找顺序，`connection_config.go:215,350` 对受管 child 启动过滤并注入连接／容量。`main.go:43` 的内容尺寸及测试 binary 覆盖是工程入口。保留这些机制不等于要求用户操作它们；正常设置和恢复入口必须满足 C1–C8，不为每个内部变量新增 GUI 字段。损坏 GUI 配置不能静默回退 legacy 来源。密钥继续本机私有明文如实告知、输入遮蔽与诊断去密；本单不引入凭据服务或第二个配置库。
+
+### 目标决定与未决发布条件
+
+负责人已接受**自备 API 权限**作为本契约草案的当前实现边界；不是公开发布承诺。建议先对实际验证的 provider／模型／协议组合给出 GUI 引导和可信容量默认，保留进阶自定义入口。没有 API 权限时仍可探索并保存本地内容，但不能假装能执行。支持矩阵、权限／费用获取说明及无 API 权限用户的发布体验仍由负责人决策；本次不承诺托管推理、登录、计费、免费模型或新的 Runtime 契约。
+
+通用表单使用可见标签、就地错误和明确动词；技术容量／原始诊断渐进展开，必要失败原因始终可读，返回原入口和未保存草稿。该交互指导采用 ui-ux-pro-max 的 `progressive-disclosure`、`error-recovery`、`error-clarity` 与 `focus-management`；字号、32px 控件、布局及 Paper/Moss 继续服从工作台现行规范，不采用该技能的通用视觉默认值另做一套设计。
+
+**文件选择可行性与已确认规则**：已读 UI owner 的只读交接，并核对本机固定 MyGo v0.7.4 `dialog.go:24,128`：现有 `Dialog.Open` 支持目录或单个带 JSON 筛选的文件，取消返回 nil paths，可附着当前窗口。无需新设置／导入框架；这是源码能力，不是 Nagi 原生验收。负责人已确认：保留已有目录与联系人继承；文件夹选择只改发起它的草稿，取消不改值，首次执行前明确确认易懂的建议目录，不隐式移动旧工作。主题首片拒绝覆盖与 ID 冲突，导入保持模式／所选 ID，不自动选择新 ID，已请求的缺失 ID 恢复仍沿现有逻辑。
+
+### 首批三个实施切片（行为交接，实施按独立分派执行）
+
+每片只有一个验收总负责身份；具体源码按下述唯一实施人分工，由 lead 独立授权和串行安排，本契约任务本身不授权写代码。沿用已有 Settings、store、Runtime 配置消费及错误处理路径。
+
+1. **P0：连接前本地状态与目录选择。验收总负责：`agent:nagi-business#hc-20261110`。** 按实际源码划分唯一实施写入人：本地 store／持久化修正由 `agent:nagi-business#hc-20261110` 负责 `runtime_model.go`、`appearance.go`（现有 `ensureAppearanceStore`／`saveAppearance` 初始化接点）、`contact_management.go` 及对应既有测试；`connection_app.go`／`store.go` 是只读调用接点，当前业务首片不扩大写入范围。目录选择由 `agent:nagi-ui#hc-20261110` 负责 `connection_settings.go`、`contact_profile.go`、`settings_page.go` 和既有本地化源。UI 不复制保存逻辑，业务不另建目录控件；共享接线按上述文件作者串行交接。复用候选已有 `ensureAppearanceStore → persist → contactStore.save` 的合法缺文件初始化能力，使本地保存不依赖更改外观；只在已确认首次缺文件时初始化，原 stat/read/parse 错误继续走 `newUnavailableApp`，不得制造替代 store。区分内存草稿、保存失败与真正落盘。当前首次 Connection Save 在 store 缺失时走 `openContactStore` 新建 ID 再 `applyStoreSelection` 替换内存联系人（`connection_app.go:175,200,220`、`store.go:169`），连接前内容与 ID 丢失是静态路径风险，需行为复现；目录以系统选择器确认，取消不改值，已有 session cwd 不变。
+   **最小验收**：空数据且无凭据，从设置返回，输入对话草稿并新增联系人、显式保存资料编辑，不切外观；重开应用后同一 ID、文字和选择仍在，后续保存连接也不替换它们，Runtime／模型请求为零。未点击保存的资料编辑仍是未提交草稿，不与已保存联系人混同。首次落盘失败须保留内存编辑、明确“未保存”并可重试，不能只返回成功；已有坏文件／无权限读取时字节不变且无新 store。文件夹取消／失效后重选、确认默认后首个实际请求目录正确。复用 `appearance_test.go:142`、`connection_app_test.go:24,96`、`startup_test.go:163` 的边界，补上述跨入口行为而非机械字段测试；系统选择器和重启另做原生验收。对应 C1/C5/C6。
+2. **P0：可理解的 API 配置、作用域与恢复。验收总负责：`agent:nagi-business#hc-20261110`。** 配置／恢复逻辑的唯一写入人为 `agent:nagi-business#hc-20261110`：`connection_config.go`、`connection_runtime.go`、`connection_app.go`、`model_selection_app.go`、`runtime_model.go`；同一 Settings 的界面接线唯一写入人为 `agent:nagi-ui#hc-20261110`：`connection_settings.go`、`model_selection.go`、`settings_page.go`、`view.go`、`locales/en.json`／`locales/zh-Hans.json`。业务交付状态／动作契约，UI 消费同一路径，切片 1 完成后串行接续。在已核定支持组合内完成权限指引、合理默认、显式测试和修正；默认／当前对话／事项工作配置及模型容量／并发容量分开表达。普通恢复优先编辑设置、仅应用已保存值、核对配置／历史和明确图形化重开／重装步骤；内部变量和文件路径仅为可选诊断。数据读取恢复的可用副本来源、保留原件方式与明确恢复操作须先由 lead 收敛，不把“手修文件”或空白新 store 当完成，也不在本片自动迁移／增建备份服务。
+   **验收**：复用 `TestConnectionGUIFirstSaveApplyTestSendAndRestart`、`TestConnectionGUISaveFailureAndUnknownExecutionRecovery`、`TestConnectionGUIEndpointChangePreservesOldContextAndNewDefaults`（`connection_app_integration_test.go`），以及 `TestModelSelectionGUIActualTargetsAndRestart`／`TestModelSelectionGUICommitUnknownRequiresExplicitRecovery`（`model_selection_app_integration_test.go`）。新增真实行为边界：未验证默认不冒充可用、无权限／错误凭据／模型或目录失效从 GUI 修正；活动中只保存不切换，旧 cwd／配置／历史保留；保存后应用失败只 Apply；断连／未知先核对、无额外任务发送；helper 缺失及数据不可读按声明路径完成图形化恢复或准确报告不可恢复，不能以提示存在替代恢复成功。整个支持路径零 CLI／env／手改文件。对应 C2–C6/C8，依赖切片 1 的一致本地保存。
+3. **P1：通用偏好与可选主题导入闭环。负责：`agent:nagi-ui#hc-20261110`。** 唯一实施写入人为该 UI owner；`appearance.go` 须待切片 1 的持久化修正验收交接后再取得写入权，不并写。当前接点：`settings_page.go`、`appearance.go`、`custom_theme.go`、`locale_darwin.go` 及既有本地化源；沿 #3 格式／解析／fallback，经 General 的文件选择、验证、导入后再由用户选择，保留现有 store 的偏好保存和重试。用户无需创建目录或编辑 JSON；内置主题始终可回到，语言／外观不更改 Agent 原文或重启 Runtime。
+   **验收**：复用 `TestCustomThemeSettingsSelectReloadAndReturnKeepsWorkState`／`TestCustomThemeSettingsLowContrastFailedSaveRetry`（`settings_page_test.go`）、`custom_theme_test.go` 的丢失 ID／重复／低对比边界和 `TestGeneralLanguageUsesStableValuesAndPreservesState`（`i18n_test.go`）。补 GUI 导入取消／无效／重复／成功与恢复内置的行为，失败不替换有效主题；偏好保存失败明确未持久化。准确原生候选验证 System／中英重启保持，任务／草稿／焦点不变，导入和偏好操作零推理请求。对应 C7；不阻塞无自定义主题的正常使用。
+
+**整体验收仍待完成**：实施后的适用 Go tests/vet、真实独立 Runtime 接线、准确同一应用候选的原生操作与支持模型验证分别记录；所有 C1–C8 正常支持路径零终端／环境变量／手改文件，并最终由未参与开发的非程序员独立完成首用、真实工作与恢复。历史截图／CI／mock 不能替代，冻结候选失败不得覆写。此轮只交付两份文档和本地报告，未实施任何切片，也未复验其他实施线。
+
+<a id="c8-data-recovery-implementation-20261111"></a>
+
+## C8：恢复副本与暂停恢复的接线／验收（规格草案 v2，2026-11-11）
+
+行为与 C8-R1–R8 以[需求节](../requirements/desktop.md#c8-data-recovery-20261111)为准。基线为不可变 `race-r2-final.source`／source `51d8898f5a7600ea97e90bb0691925cf21cceb84c190d6ad70d0b4a58e111223`；本片两份 topic docs 是唯一规范，临时 JSON 只绑定事实、哈希与评审。当前既无导出也无文件恢复，均为目标，不把已接受 RP1／RP2 的 headless 结果扩成 C8 通过。用户已恢复分派的 MVP 工作；历史暂停／失败记录保留其时间归属。
+
+| 已检查接点 | 事实与单一路径要求 |
+| --- | --- |
+| `store.go:29–111,133–205,219–327` | storedState 是唯一数据格式；普通 open 读 v1–9、校验并有 Selected／scope／ledger 修补；saveState 会重新投影 ledger/scopes，save 会重建 v9、更新时间和字段。抽取／复用同一 decoder／基本校验及既有同目录字节写入原语；copy/restore 另加严格 v9／兼容限制，不改普通加载兼容，不把 live contacts→save 当无损 stage。 |
+| `connection_app.go:79–139`；`issues.go:236–248,293–307,447–479,630–699`；`issue_tool_app.go:1436–1456`；`task_context_app.go:22–51`；`issue_supplement_app.go:276–311` | 对应需求兼容表：所选联系人回退、非空悬空事项选择、要求／问题／执行丢弃或生成、状态／revision 修补、pending intent／batch 改写需拒绝；不能以 version9 代替记录校验。实际 MCP 首事项可持久化缺省／空 SelectedIssueID；它是合法可选 UI 默认，即使已有事项也接受。安装不回填派生 ID，普通重开可推导显示选择；空 operation ledger {}、合法可选缺省与已是 unknown、缺可信关联的记录仍可表示，不补造关联。 |
+| `runtime_model.go:30–60,146–174,3104–3175` | 不可用实例 store=nil／storeInitAllowed=false；真正缺文件初始化、健康保存、失败 Retry 与旧副本恢复分别准入。恢复不使 fallback 模型变为已加载 store，不绕过原保存／活动／未知门槛。 |
+| `issue_supplement_app.go:94–133`；`runtime_model.go:778,1044,1146` | capabilities／历史后可调用自动继续，裸替换后重开可能派发旧 pending；恢复必须先把已存在 ledger.AutoContinue=false 明确落盘。保持原未知读回／准入，不能声称所有未知或较新工作从未派发。没有缺失的 Runtime 能力，也不需要读取 journal／Saki checkout。 |
+| `settings_page.go:575–605`；`view.go:632–656,1637–1674`；`connection_app.go:181–238,775–829`；`main.go:64–105` | 在现有 Settings／不可用提示内放入口，复用 parented native picker、generation／UI actor／退出 drain；不新开 Settings 框架或自启进程。Worker 只处理被准入的文件 I/O，迟到选择／导航不跨操作安装；替换已准入后退出须等结果。已有 Finder 文件定位能力可复用。 |
+
+### 拟分工与精确接点（仍须 lead 单独分派）
+
+唯一后端 writer 建议 business `agent:nagi-business#hc-20261110`：`store.go`／`store_test.go`、`runtime_model.go`／`runtime_model_test.go`、`startup_test.go`。唯一 UI／接线 writer 建议 UI `agent:nagi-ui#hc-20261110`：`model.go`（只加瞬时操作身份／结果）、`connection_app.go`／`connection_app_test.go`（只把已准入 I/O 纳入原 shutdown）、`settings_page.go`／`settings_page_test.go`、`view.go`／`connection_error_ui_test.go`、`locales/en.json`／`locales/zh-Hans.json`／`locales/catalog_gen.go`。lead 须安排共享 model／drain 接点的串行交接，不并写；该列表是可审查提案，不授权生产改动。`issues.go`、`task_context_app.go`、`issue_supplement*.go`、main／Runtime／模型实现保持只读；无需新源码文件、依赖或 schema。
+
+### 最小证据与完成门槛
+
+- **C8-R1／2**：现有 Settings 的真实行为入口在原源上证明缺失动作的 RED，不能以编译缺 symbol 当 RED；临时真实文件系统验证 exact saved bytes、独占同名失败／取消／错误／当前位置／未保存编辑保持，源与旧文件不变。
+- **C8-R3**：按需求兼容表逐类负例及合法对照，复用 store 普通加载边界。必须沿实际 MCP 首事项创建→createIssueForWithSave→persist 取得已存 v9 正例，验证缺省／空 SelectedIssueID 在已有事项时可导出／预检／安装且不回填；另含空 operation ledger {} 与合法可选缺省正例，保留非空悬空 ID 拒绝。补 copy/restore 的严格字段／normalization 边界，不改 producer、不在安装调用 live projection，不削弱原 v1–9 测试，不以字面量／常量比较代替行为。
+- **C8-R4／5／6**：实际临时目录与受控完成顺序验证预览确认、仅 AutoContinue 的语义差异、原件归档和暂存／替换／读回失败、目标变化、加载／dirty／活动／在途拒绝、旧回调与退出 drain。只清理失败操作新建的部分文件；安装待核对不自动重试。已有 Rename 约定不提供任意文件系统／掉电／多实例保证，不新增通用事务服务。
+- **C8-R7**：必须跑通实际导出的文件→损坏→同一 GUI 恢复→重开；受控 callbacks 证明 capabilities／history 边界不自动发送，再由最终组合的真实 Runtime 接线核对引用与零 task.send／模型请求；历史缺失反例不假造。恢复副本不能代 Runtime 存储或真实产出验收。
+- **C8-R8**：适用 focused race／vet／官方 locale generation、固定最终源与同一 GUI／Runtime 产物；原生文件选择、Finder 定位、退出／重开与独立非程序员按支持范围实测，零 CLI／env／手改文件。随后才判断本片 AC；完整 MVP／C1–C8、required CI、真实模型、MVP-12 连续使用与发布仍各保留原门槛。
+
+DoD：lead 接受精确冻结规格；实施任务有唯一 writers；有意义的失败复现和逐 AC 行为证据；适用检查完成；source／spec／包身份冻结；business／QA 独立核验无未解决重要缺陷。规格编写只做 setup、read-only 检查和 diff --check，未实施或执行上述验收。支持 v9-compatible 子集是显式取舍：不自动迁移 legacy／丢未知字段，也不承诺恢复不可保留原字节的访问故障；无兼容副本仍不能恢复。新显式导出解决普通用户可产生副本的入口，不形成备份服务或完整 Runtime 备份。
+
+<a id="rp1-rp2-implementation-20261111"></a>
+
+## RP1／RP2：实施与验收映射（2026-11-11）
+
+行为、双语文案及 RP-AC1–RP-AC7 以[需求节](../requirements/desktop.md#rp1-rp2-20261111)为准；两份现有 topic docs 是唯一规范，本节不是整体验收或生产修复完成声明。产品 owner 只写这两份文档；lead 接受冻结规格后才可另行授权 UI 实施，business 独立审查调用语义，QA 独立逐 AC 核验，评审者不编辑规格或授权 UI。
+
+### 本次基线事实与边界
+
+检查副本为 `consumer-recovery-disconnect`，基于冻结 recovery 补丁 `f784bc9c9fdbde23eaf73058b2243a51102be0f031244e524941c13654456192`。修改文档前与冻结 source `de98afcb2e4af484c93a96dd7ee3765a6cac4b92e3426b848bce725d63a141dd` 的逐文件比较，仅三个既有测试文件不同，生产未改；保留其全部预暂停测试编辑。原评审 `recovery-presentation-review.json` SHA256 `0cd5ec99fe3108d329db5ec06cead552c9bad24a928b3941645675fb1ed8d384` 及 UI `preparation.json` 保留在临时证据目录，不成为第二规格。
+
+| 已读源接点（相对根目录；行号为本次基线） | 已确认事实／窄范围目标 |
+| --- | --- |
+| `runtime_model.go:536,574,609` → `view.go:1444–1480` | 实际 protocol／exit producer 设置 unknown、非空 send-protocol／send-delivery；主状态行已分连接，诊断摘要却恒用 SendUnknownState，退出 status-connection-lost 还另含 Reload。只修当前普通呈现及既有 Reload 暴露条件；不改 producer 原件或全局状态分类。 |
+| `workspace.go:919–933,1157–1188` → `issues.go:884–896` | 事项摘要误用对话 Reload；Check run 当前无连接禁用条件，控制器只先核对归属与非空 SessionID／TaskID，随后使用 a.rt 读回。视图对既有 Check run 的提示、Disabled／激活条件同时对齐当前连接与可信关联，原因在相邻可读文本；不修改 issues.go，不全局禁用导航。 |
+| `runtime_model.go:1076,1150,3037`；`issues.go:899` 起 | Reload／Check run 复用既有 session／task 状态与历史读回；关闭、generation、对象归属及未知解除规则保持。恢复 UI 不另发任务、不重放未知副作用；不改现有控制器的合法读回结果处理。 |
+| `connection_app.go:554–592` → `connection_settings.go:392–395`；`connection_runtime.go:115–219` | probe 错误统一为 connErrorTestFailed；临时存储／准备／启动／ready／读取配置可在 sendTask 前失败，deferred shutdown 可在成功响应后失败。只将该 kind 映射到新中立本地化摘要，不靠诊断字符串猜阶段，不改实际 probe、错误分类或真正 runFailureSummary。 |
+
+### 唯一实施写入范围（提案，不是授权）
+
+UI owner `agent:nagi-ui#hc-20261110`：`view.go`、`workspace.go`、`connection_settings.go`；`view_test.go`、`workspace_test.go`、`connection_settings_test.go`；`locales/en.json`、`locales/zh-Hans.json`、`locales/catalog_gen.go`（官方生成）。复用 recoveryNotice／safeDiagnostic、已有 Settings／Test／Save／Apply／Details，不另造框架。其余源、producer、Runtime、store、依赖、schema 均只读；若验证必须越出此列表，先向 lead 说明，不默许扩权。Paper/Moss、布局、字体沿用工作台。
+
+### 行为测试映射与尚缺证据
+
+既有 t8p RED（`recovery-disconnect/red.stdout`、`red.files.json`）是 **3 roots／12 leaves 的行为失败，0 named PASS／0 skip**，不是编译／几何失败；测试 source 前后同为 `2a1f1aee4dc94c33989f562663648eb7d9393b0e344bfb47bc109b7a6d392576`。以下是已读测试边界与后续验收目标，本次没有执行任何测试。
+
+| AC | 可复用的现有边界／后续须补足的行为证据 |
+| --- | --- |
+| RP-AC1／2 | `view_test.go:667` TestLiveSendUnknownAfterDisconnectSaysRestart、`workspace_test.go:731` TestIssueUnknownDeliveryRecoveryMatchesAvailableAction：两语言实际 headless protocolFailed／applyRuntimeExit。旧空诊断仅覆盖对话；须补事项空诊断、ready 无 client 及 failed／exited／live 对应的提示与动作可用性，包含退出第二条提示。 |
+| RP-AC3 | 上述 workspace 测试尚无缺关联用例；补 SessionID／TaskID 各缺一项及不可核对时鼠标／键盘无 RPC、导航仍可用。只读复用 `issues_test.go` TestIssueRecoveryRejectsAnotherIssuesExecution／TestUnknownIssueExecutionCanBeConfirmedNotDispatched 的归属与原准入边界，不能靠名字当成视图覆盖。 |
+| RP-AC4 | 两个 RP1 RED 根后半已有原始记录、披露、live 焦点及零 request-ID 断言，**均在首条断连提示失败后短路，未执行／未 PASS**。须实际走完，并验证可用动作调用既有读回及失败／陈旧读回不重放；复用已读 `runtime_model_test.go` TestReloadRecoversUnknownOnlyAfterIdleConfirmation、TestStaleReloadCannotClobberNewSubmit、TestHistoryFailureDetailSurvivesReload 的控制器边界，不改控制器。 |
+| RP-AC5 | 已读 `issue_results_test.go` TestRecoveryPresentationPreparedAndUnknownStayDistinct、`connection_error_ui_test.go` TestRecoveryPresentationTaskFailureDisclosureAndSettings、`model_selection_app_test.go` TestModelRecoveryGateUsesTypedUnconfirmedCopy 提供邻接语义／原文／更新隔离边界；本片保留这些路径，针对受影响视图核对 rejected／mismatch 与真实失败，避免泛改 shared 文案。 |
+| RP-AC6／7 | `connection_settings_test.go:302` TestRecoveryPresentationExplicitTestUsesDraftAndDisclosesFailure：startup-shaped／post-response-cleanup-shaped 错误是**受控 Test 回调模拟，不是实际 probe 阶段执行**。当前首条中立摘要断言失败；其后披露／去密、重复显式 Test、保存／待应用保持未执行。须走完；目前没有历史 fixture，须补实际 app/form 交互的历史保持断言（可在既有获准测试文件内），不以 standalone form 的无 Save／Apply 回调冒称已验证历史。 |
+
+### 完成定义与未决门槛
+
+DoD 仅针对 RP1／RP2：lead 批准同一冻结规格；绑定源身份的有效失败复现（可复用上述 RED，补其未覆盖的关键条件）；严格范围内实现；适用 focused race／vet 与官方 locale generation；冻结实现源和两份规格身份；business／QA 对 RP-AC1–7 独立逐项评审，未执行项如实列出且无未解决的重要缺陷。旧 RED 的后续断言必须新取得证据，源码阅读或测试存在不等于通过。本规格形成期间仅准许文档范围检查及 git diff --check，不授权上述实现／执行。
+
+本次不承诺完整 C8、安装／数据恢复、provider 权限／支持矩阵、原生／真实模型／干净 CI／包／Git 集成验收；原启动 FAIL、历史报告和其他暂停工作保持。现有按钮的实际读回能力是视图可用性依据，不推导新的 Runtime 保证；如独立评审发现无法在获准视图范围保持此规则，须将具体冲突交 lead，不能悄悄扩大控制器修改范围。
 
 ## GUI 设计约束（当前规范）
 
@@ -106,19 +219,25 @@ Headless 证据（fixture，不等于线上模型或原生窗口）：
 
 当前根模块构建、外部 Runtime 启动和 `Nagi.app` 打包命令见 [README](../../README.md)。Finder 启动不继承 shell 环境，Connection settings 与外部环境模式的既有语义保持；不要把凭据写进包或仓库。
 
-### 原生内容尺寸诊断（#328，实现事实，2026-11-06）
+### 原生内容尺寸诊断（原 #328，现 Nagi #23）
 
 实现源 `14f2275bfa74717f167d1c45344f25fecea78931` 在正常 GUI 启动时支持一个显式环境变量。测试启动者可以向同源包的可执行文件传入内容区逻辑尺寸，单位为 DIP：
 
 ```sh
-SAKI_GUI_CONTENT_SIZE=960x640 "/path/to/Saki.app/Contents/MacOS/Saki"
+SAKI_GUI_CONTENT_SIZE=960x640 "/path/to/Nagi.app/Contents/MacOS/Nagi"
 ```
 
 非空值采用小写 `x` 分隔的两个正整数。非法值在应用、Runtime 和用户数据初始化前以 exit 1 和参数错误停止。缺省或空值保留原外框 `1040×720`、最小尺寸及正常启动路径，不输出本项诊断。现有 `--issue-tool-helper` 分支优先，不消费这个 GUI 选项。
 
 启用后，窗口使用 MyGo v0.7.4 的公开 `WindowOptions.UseContentSize`。创建和 resize 回调直接读取该窗口的 `ContentSize()`，同时更新既有响应式宽度。stderr 记录前缀为 `nagi native-content-size`，字段包括 `event=created|resize`、`unit=DIP`、启动请求 `requested_width/height` 和 getter 读回的 `actual_width/height`。请求值保持为启动参数，用户后续调整窗口不会被自动恢复到请求尺寸。该入口不写配置或会话，也不增加控制服务或窗口状态副本。
 
-尺寸验收须比较实际 getter 与请求值，并保留同源包的原生图和交互记录。OS 或窗口约束导致实际值不同时，如实记录差异；截图像素、CG 外框、应用宽度缓存和参数回显都不能替代内容区读回。接口实现及离线检查不等于原生 `960×640` 或视觉验收通过，实际验收由 #156 记录。
+尺寸验收须比较实际 getter 与请求值，并保留同源包的原生图和交互记录。OS 或窗口约束导致实际值不同时，如实记录差异；截图像素、CG 外框、应用宽度缓存和参数回显都不能替代内容区读回。接口实现及离线检查不等于原生 `960×640` 或视觉验收通过，实际验收由 [Nagi #7](https://github.com/HeimaoLST/Nagi/issues/7) 记录。
+
+### Nagi #4 一体标题栏（本地候选，2026-11-10）
+
+[Nagi #4](https://github.com/HeimaoLST/Nagi/issues/4) 的当前候选适配现有页面，不复制旧 PR102 界面。`main.go` 配置固定 MyGo v0.7.4 的 `TitleBarHiddenInset`；`view.go` 在所有路由外共用一条应用配色的原生控件安全带，直接使用 `Context.TitleBar().Height` 并调用 `DragWindow`，正文占据剩余高度。全屏时安全带保持同一节点、使用框架返回的零高度，不靠页面各自补标题栏或维护另一份窗口几何。
+
+现有 Settings／阅读返回、Escape、草稿与焦点路径保留。实际 headless 检查覆盖路由、断点、正文位置和完整 Send 命中区；它们不证明原生拖动、系统关闭／最小化／全屏按钮、真实安全区、系统辅助功能或退出行为。该候选尚未集成 `dev`，这些原生门槛仍由 #4 与 [Nagi #7](https://github.com/HeimaoLST/Nagi/issues/7) 接续。
 
 ## 原生工作台（#130，历史实现事实；固定布局比例已由 #184 替代）
 
@@ -300,7 +419,7 @@ v2 `8a04d63` 的原生修复证据（13..18）：
 
 ## 主题系统（#92 设计）
 
-状态：**历史设计记录**（[#92](https://github.com/HeimaoLST/Saki/issues/92)）。用户当时的 Moon/Dawn 方向已由 #96 的 Paper & Moss 当前实现替代；本节的 Moon/Dawn 数值、B 阶段目录与自定义主题提案只保留为历史设计，不表示当前能力或未来承诺。当前实现见末尾 [#96 Paper/Moss 外观、联系人 scope 与 composer 模型入口](#96-paper-moss-外观联系人-scope-与-composer-模型入口实现事实2026-10-28)。
+状态：**历史设计记录**（[#92](https://github.com/HeimaoLST/Saki/issues/92)）。用户当时的 Moon/Dawn 方向已由 #96 的 Paper & Moss 当前实现替代；本节的 Moon/Dawn 数值、B 阶段目录与自定义主题提案只保留为历史设计，不表示当前能力或未来承诺。内置外观见末尾 [#96 Paper/Moss 外观、联系人 scope 与 composer 模型入口](#96-paper-moss-外观联系人-scope-与-composer-模型入口实现事实2026-10-28)；本地自定义主题候选的独立格式见 [Nagi #3](#custom-themes)，不沿用本节的旧字段表。
 
 ### 当前实现事实（不是目标）
 
@@ -739,6 +858,7 @@ HTTPS、mailto、文内锚点、未完成链接与不支持的 scheme 保持原�
 代码来源：reader/reader-iris 的 agent/gui/117-task-context，固定 settings #115 d9872e8（含 #153 1700f8d 与 Runtime #160 722de4b）之上。最终源码、门禁和交付 SHA 以 PR170 为准；本节不等于完整 MVP 或已集成 dev。
 
 - **输入与快照**：命名文字和用户明确填写路径的 UTF-8 文件使用唯一 taskContextItem 值模型。Name/Source/Text/ID/Revision 保存当次快照；Source为明确导入的绝对路径，显示名称和原始来源一起投影到 Runtime context.name，text 不改写。文件变化不会自动重读；Refresh from file 才生成新版本，编辑只改变快照不写源文件，刷新/读取/格式/总预算错误保留原值。PDF/Office/二进制容器不做提取。
+- **现行 MVP08 文件选择补充（2026-11-11，受控证据与原生验收分别记录）**：保留上述历史快照事实，在原 Add file 表单加入父窗口绑定的单文件 Choose UTF-8 file…；无扩展名限制，选择只填发起表单路径，名称和后续编辑保留。内容仍仅由原 Save file → ImportFile 读取／预算校验／持久化／预览，Refresh 和明确 send/run 不变。旧手填相对路径仍按既有 GUI cwd 解析，不新增工作目录推断。捕获联系人／事项对象、taskContext／文件表单 token、路径版本、最新请求及导航代数；取消和选择错误回原控件，迟到结果不跨 A→B→A、表单关闭／重建、路径修改或退出。选择器仅为瞬时草稿操作，单独不延迟退出；与 C8 恢复 reservation 互斥，不新增任务／附件／存储框架。TF1–TF5 以受控 GUI 和两条现有实际进程递交验证，原生选择／焦点／Retina／AX 与非程序员 TF6 另验。
 - **界面与归属**：对话 composer 和事项详情各有轻量 Task context 入口，编辑在既有有界侧面板，联系人与每个事项各自保存待发清单。未保存编辑在联系人/页面切换时留在原对象，只有明确保存成功的快照保证重启恢复。英文提示沿用 Paper/Moss 主题；不新增附件平台。
 - **单次输入**：对话和事项 Run/Continue 都沿既有 sendTask 的可选 context 参数。派发前固定并保存该次输入；正文只放 message.text、资料只放 context，不拼进 system 或再次附进正文。每个 issueExecution.Context 是独立不可变快照；后续编辑/刷新不改旧执行。接纳只移除同ID同Revision待发项，后来的编辑仍保留；拒绝、容量满和派发前保存失败不清空。
 - **预算**：GUI检查序列化 caller_context 包装后的合计1MiB，包含名称和来源标签；不是裸文件大小。Go JSON转义相对Rust略保守，最终接纳验证仍由Runtime负责。不静默截断或部分读取后当成功。
@@ -913,6 +1033,68 @@ HTTPS、mailto、文内锚点、未完成链接与不支持的 scheme 保持原�
 - **失败与恢复**：模式切换先立即生效；保存失败显示“Applied but not saved”并提供明确的 `Retry save`，不把页面回退到旧模式。重试与后续任何成功的 `persist`（包括联系人保存）走同一保存路径并清除该未保存提示；持久化错误只清除自己写入的 contact-save 错误，不覆盖无关的 Runtime 诊断。没有 Runtime 重建、任务取消/重发、草稿清空、选择或焦点迁移。
 - **范围边界**：#184 的默认右侧关闭、拖动/键盘调宽、中心最宽、覆盖抽屉与持久宽度保持不变；本单不改 reader 文件（#187 独占）、事项概览/筛选（#186）、Runtime 协议、执行生命周期或 store 现有执行契约。
 - **验证边界**：首轮 review set 在 `/private/tmp/saki-gui-96/previews-key/`（Paper/Night 1040 主面、Appearance、720 composer 共 6 张）；完整 16 张 headless 状态在 `/private/tmp/saki-gui-96/previews-first/`（Paper/Night × 1040/1380/960/720 normal，加 1040 working/attention/error/empty）。新增图片由既有 `TestPreviewImages` 入口生成，未增加独立 opt-in 测试。两者均为 `ui.Tester`，属 headless only；exact candidate tests/CI/native evidence 见 #96/PR；native/IME 尚未声称。
+
+<a id="custom-themes"></a>
+
+### Nagi #3 本地自定义主题（本地候选，2026-11-10）
+
+本节描述 [Nagi #3](https://github.com/HeimaoLST/Nagi/issues/3) 的本地实现候选；尚未集成 `dev`，原生选择、最终同源包与 CI 仍待验收。它在现有 General 外观设置中增加本地配色选择，复用同一 `workbenchTheme`、窗口背景与保存路径；字体、字号、间距和布局不由主题文件配置。
+
+主题文件放在 `UserConfigDir/Saki/themes/*.json`，macOS 通常是 `~/Library/Application Support/Saki/themes/`。目录与 `SAKI_GUI_STORE`、工作目录和 session 目录无关。启动和 General 中的 `Reload themes / 重新加载主题` 才读取文件；应用显示实际目录，不自动创建或修改主题文件，不递归扫描，也不监听文件变化。目录不存在表示没有自定义主题，其他读取错误在设置中显示，内置配色继续可用。
+
+每个 UTF-8 JSON 文件定义一套配色。必需字段为 `version`（整数 `1`）、`id`（以字母开头的小写 kebab-case）、`name`（非空显示名）、`kind`（`light` 或 `dark`）及 `colors`。ID 与文件名独立，显示名可重复；选择器同时显示自定义名称和 ID。内置 `paper`（Paper）及 `night`（Moss）保留，不能被覆盖。同 ID 的有效文件全部报错，不按扫描顺序选择其中一份。未知字段、错误类型、缺失必需颜色、不支持的版本或非法颜色按文件与字段报告，不影响其他有效文件。
+
+颜色只接受不透明 `#RRGGBB`，十六进制字母大小写均可。以下完整示例可保存为 `garden-paper.json`：
+
+```json
+{
+  "version": 1,
+  "id": "garden-paper",
+  "name": "Garden Paper",
+  "kind": "light",
+  "colors": {
+    "background": "#FFFFFF",
+    "surface": "#EEF2EF",
+    "surface_hover": "#E5EFE8",
+    "surface_pressed": "#E5EAE6",
+    "border": "#7C8A7F",
+    "text": "#252E28",
+    "text_muted": "#5D6B61",
+    "accent": "#365E4D",
+    "accent_hover": "#2D5242",
+    "accent_pressed": "#244536",
+    "accent_text": "#FFFFFF",
+    "selection": "#E5EFE8",
+    "focus": "#3C7155",
+    "danger": "#9B3C43",
+    "warning": "#80501F",
+    "success": "#31684A",
+    "rail": "#F5F7F5",
+    "panel": "#F8FAF8",
+    "bubble_user": "#E5EFE8",
+    "bubble_contact": "#F2F5F2"
+  }
+}
+```
+
+示例中的 20 个颜色字段全部必需。另有 8 个可选角色，省略时取同一文件的以下颜色；已提供但无效的值仍然报错：
+
+| 可选角色 | 省略时使用 |
+| --- | --- |
+| `scrollbar` | `text_muted` |
+| `reading` | `background` |
+| `well` | `surface` |
+| `work_surface` | `panel` |
+| `work_text` | `text` |
+| `work_muted` | `text_muted` |
+| `work_attention` | `warning` |
+| `work_warning_bg` | `well`；当前没有独立可见消费者 |
+
+原有 System/Light/Dark 模式保持不变：模式决定当前明暗类别，每类各记住一个配色 ID。自定义方案或失效选择存在时，General 显示两类选择器。选择立即生效，通过现有 contacts store 的可选 `theme_ids: {"light": "garden-paper", "dark": "night"}` 保存，不升 store v9，不增加偏好文件。保存失败仍显示“已生效但未保存”，沿现有重试保存入口恢复；其他联系人保存也保留配色偏好。旧 store 没有该字段时使用内置配色，旧程序重写新 store 可能丢弃此可选外观偏好。
+
+已选 ID 的文件被删除、损坏、改 ID 或改成另一类别时，只在原类别回退内置配色，并保留所选 ID。恢复同 ID、同类别的有效文件后，重新加载即可恢复原选择；主动选其他方案才替换 ID。低对比自定义配色显示颜色组合、比值和参考阈值，仍允许应用；该提示不改变内置对比验收，也不证明原生渲染或所有状态可读。
+
+本格式不提供继承、透明色、表达式、字体配置、主题市场或在线下载。历史 Moon/Dawn B 提案不是已发布格式，不自动转换；版本 1 的角色与默认映射不能被未来版本静默改义。
 
 <a id="issue-navigation"></a>
 

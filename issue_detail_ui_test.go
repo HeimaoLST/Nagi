@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,6 +12,202 @@ import (
 
 	"github.com/HeimaoLST/Nagi/locales"
 )
+
+func attentionTargetEvidence(t *testing.T, tr *ui.Tester, name, status, reason, seen string, before, after float32, width, height int) {
+	t.Helper()
+	statusRect, statusFound := tr.Find(status)
+	reasonRect, reasonFound := tr.Find(reason)
+	visible := func(r ui.Rect, found bool) bool {
+		return found && r.W > 0 && r.H > 0 && r.X >= 0 && r.Y >= 0 && r.X+r.W <= float32(width)+1 && r.Y+r.H <= float32(height)+1
+	}
+	evidence := struct {
+		Before, After            float32
+		Status, Reason           ui.Rect
+		StatusFound, ReasonFound bool
+		Seen                     string
+	}{before, after, statusRect, reasonRect, statusFound, reasonFound, seen}
+	t.Logf("retained scroll disclosure: %+v", evidence)
+	if dir := os.Getenv("SAKI_PREVIEW_DIR"); dir != "" {
+		writePreviewPNG(t, filepath.Join(dir, name+".png"), tr.Image())
+		data, err := json.MarshalIndent(evidence, "", "  ")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, name+".json"), data, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if !visible(statusRect, statusFound) || !visible(reasonRect, reasonFound) {
+		t.Fatalf("acknowledged target is not actually in the viewport: status=%+v found=%v reason=%+v found=%v seen=%q scroll=%.1f->%.1f", statusRect, statusFound, reasonRect, reasonFound, seen, before, after)
+	}
+}
+
+func TestIssueAttentionRetainedWorkScrollShowsInlineTarget(t *testing.T) {
+	for _, locale := range []string{"en", "zh-Hans"} {
+		for _, size := range [][2]int{{720, 640}, {1040, 720}} {
+			t.Run(fmt.Sprintf("%s/%dx%d", locale, size[0], size[1]), func(t *testing.T) {
+				a, ct, issue, execution := attentionDisclosureApp(t, issueExecutionUnknown, "Matching inline unknown reason")
+				a.windowWidth = size[0]
+				history := []*issueExecution{}
+				for i := 0; i < 7; i++ {
+					history = append(history, &issueExecution{ID: fmt.Sprintf("older-%d", i), SessionID: execution.SessionID, TaskID: fmt.Sprintf("older-task-%d", i),
+						Status: issueExecutionCompleted, Detail: strings.Repeat("Recorded history context.\n", 3)})
+				}
+				issue.Executions = append(history, execution)
+				if err := a.persist(); err != nil {
+					t.Fatal(err)
+				}
+				tr := ui.NewTester(a.view, size[0], size[1])
+				tr.SetLocale(locale)
+				tr.Frame()
+				msgs := locales.In(locale)
+				clickAfterBoundedScroll(t, tr, msgs.IssueMoreActions(), size[0], size[1])
+				tr.Frame()
+				view := msgs.IssueViewExecutionRun(fmt.Sprint(len(issue.Executions)))
+				panelX := float32(0)
+				if !a.workOverlay() {
+					panelX = float32(size[0]) - a.workWidth()
+				}
+				issueHistoryFindVisible(t, tr, view, panelX, float32(size[0]), float32(size[1]))
+				before := ct.issueNavigation().DetailScroll.Y
+				if before < float32(size[1]) {
+					t.Fatalf("history did not establish a deep actual scroll: %.1f", before)
+				}
+				if err := tr.Click(view); err != nil {
+					t.Fatal(err)
+				}
+				tr.Frame()
+				saved, err := openContactStore(a.store.path, a.workDir)
+				if err != nil {
+					t.Fatal(err)
+				}
+				seen := saved.state.Issues[0].Executions[len(issue.Executions)-1].AttentionSeenStatus
+				attentionTargetEvidence(t, tr, fmt.Sprintf("work-%s-%d", locale, size[0]), issueExecutionText(msgs, execution.Status), execution.Detail, seen, before, ct.issueNavigation().DetailScroll.Y, size[0], size[1])
+				if seen != issueExecutionUnknown || execution.AttentionSeenStatus != seen || ct.SelectedWorkTaskID != execution.TaskID || a.rt != nil || a.resultInFlight != 0 {
+					t.Fatal("explicit work target did not retain matching ownership/persisted seen or started Runtime work")
+				}
+			})
+		}
+	}
+}
+
+func attentionDisclosureApp(t *testing.T, status string, reason string) (*appModel, *contact, *productIssue, *issueExecution) {
+	t.Helper()
+	a, ct := workspaceTestApp(t)
+	a.rt = nil
+	execution := &issueExecution{ID: "disclosure-run", SessionID: "disclosure-session", TaskID: "disclosure-task", Status: status, Detail: reason}
+	issue := &productIssue{ID: "disclosure-issue", ContactID: ct.ID, Goal: "Preserve exception facts", Status: issueStatusInProgress,
+		WorkSessionID: execution.SessionID, Work: issueWorkSession{Loaded: true}, Executions: []*issueExecution{execution}}
+	ct.Issues = []*productIssue{issue}
+	ct.SelectedIssueID = issue.ID
+	ct.Works = []*workItem{{TaskID: execution.TaskID, State: workFailed, Detail: reason}}
+	if status == issueExecutionUnknown {
+		ct.Works[0].State = workUnknown
+	} else if status == issueExecutionInterrupted {
+		ct.Works[0].State = workInterrupted
+	}
+	recoveryTestStore(t, a)
+	openIssueDetailForTest(a, ct, issue.ID)
+	return a, ct, issue, execution
+}
+
+func TestIssueAttentionDisclosureRequiresExplicitResultDetails(t *testing.T) {
+	for _, locale := range []string{"en", "zh-Hans"} {
+		for _, width := range []int{720, 1040} {
+			for _, status := range []string{issueExecutionFailed, issueExecutionUnknown} {
+				t.Run(fmt.Sprintf("%s/%d/%s", locale, width, status), func(t *testing.T) {
+					const reason = "dispatch exception: original diagnostic"
+					a, _, issue, execution := attentionDisclosureApp(t, status, reason)
+					a.windowWidth = width
+					tr := ui.NewTester(a.view, width, 720)
+					tr.SetLocale(locale)
+					tr.Frame()
+					msgs := locales.In(locale)
+					clickAfterBoundedScroll(t, tr, msgs.WorkReadResult(), width, 720)
+					tr.Frame()
+					if execution.AttentionSeenStatus != "" || tr.HasText(reason) || a.issueResult.Panel.RunDetailsOpen {
+						t.Fatalf("collapsed result acknowledged or disclosed a hidden reason: seen=%q texts=%v", execution.AttentionSeenStatus, tr.Texts())
+					}
+					if err := tr.Click(msgs.DetailsAction()); err != nil {
+						t.Fatal(err)
+					}
+					tr.Frame()
+					if execution.AttentionSeenStatus != status || !tr.HasText(reason) || !tr.HasText(issueExecutionText(msgs, status)) {
+						t.Fatalf("explicit result disclosure did not present and acknowledge the matching exception: seen=%q texts=%v", execution.AttentionSeenStatus, tr.Texts())
+					}
+					if execution.Detail != reason || issue.Status != issueStatusInProgress || a.rt != nil || a.resultInFlight != 0 {
+						t.Fatal("disclosure changed facts or started Runtime work")
+					}
+					if dir := os.Getenv("SAKI_PREVIEW_DIR"); dir != "" {
+						writePreviewPNG(t, filepath.Join(dir, fmt.Sprintf("ad-result-%s-%d-%s.png", locale, width, status)), tr.Image())
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestIssueAttentionDisclosureNoTaskUsesLocalAbsence(t *testing.T) {
+	for _, locale := range []string{"en", "zh-Hans"} {
+		for _, status := range []string{issueExecutionFailed, issueExecutionUnknown, issueExecutionInterrupted} {
+			t.Run(locale+"/"+string(status), func(t *testing.T) {
+				a, _, _, execution := attentionDisclosureApp(t, status, " \t")
+				a.windowWidth = 720
+				execution.SessionID, execution.TaskID = "", ""
+				tr := ui.NewTester(a.view, 720, 720)
+				tr.SetLocale(locale)
+				tr.Frame()
+				msgs := locales.In(locale)
+				clickAfterBoundedScroll(t, tr, msgs.WorkReadResult(), 720, 720)
+				tr.Frame()
+				if execution.AttentionSeenStatus != "" || tr.HasText(msgs.ResultNoDetailRecorded()) {
+					t.Fatalf("no-task entry acknowledged without explicit absence disclosure: seen=%q texts=%v", execution.AttentionSeenStatus, tr.Texts())
+				}
+				if err := tr.Click(msgs.DetailsAction()); err != nil {
+					t.Fatal(err)
+				}
+				tr.Frame()
+				if !tr.HasText(msgs.ResultNoDetailRecorded()) || !tr.HasText(issueExecutionText(msgs, status)) || execution.AttentionSeenStatus != status {
+					t.Fatalf("local absence disclosure failed: seen=%q texts=%v", execution.AttentionSeenStatus, tr.Texts())
+				}
+				if execution.Detail != " \t" || execution.TaskID != "" || execution.SessionID != "" || a.rt != nil || a.resultInFlight != 0 {
+					t.Fatal("absence disclosure changed raw records or started Runtime work")
+				}
+			})
+		}
+	}
+}
+
+func TestIssueAttentionDisclosureWorkNavigationAndActivePrecedence(t *testing.T) {
+	for _, activeOverride := range []bool{false, true} {
+		t.Run(fmt.Sprint(activeOverride), func(t *testing.T) {
+			a, ct, issue, execution := attentionDisclosureApp(t, issueExecutionFailed, "original work failure")
+			if activeOverride {
+				issue.Work.ActiveTaskID = "new-active-task"
+				issue.Executions = append([]*issueExecution{{ID: "active-run", TaskID: "new-active-task", Status: issueExecutionRunning}}, issue.Executions...)
+				ct.Works = append(ct.Works, &workItem{TaskID: "new-active-task", State: workRunning, Detail: "active task progress"})
+			}
+			tr := ui.NewTester(a.view, 1040, 720)
+			tr.Frame()
+			if err := tr.Click("View run"); err != nil {
+				t.Fatal(err)
+			}
+			tr.Frame()
+			if execution.AttentionSeenStatus != "" || tr.HasText(execution.Detail) {
+				t.Fatalf("navigation acknowledged a hidden or undisplayed old work reason: active=%v seen=%q texts=%v", activeOverride, execution.AttentionSeenStatus, tr.Texts())
+			}
+			if !activeOverride {
+				if err := tr.Click("Details"); err != nil {
+					t.Fatal(err)
+				}
+				tr.Frame()
+				if execution.AttentionSeenStatus != issueExecutionFailed || !tr.HasText(execution.Detail) {
+					t.Fatalf("explicit current work disclosure failed: seen=%q texts=%v", execution.AttentionSeenStatus, tr.Texts())
+				}
+			}
+		})
+	}
+}
 
 func TestIssueDetailDefaultsToResultAndKeepsSecondaryDetailsCollapsed(t *testing.T) {
 	a, ct := workspaceTestApp(t)
@@ -204,7 +401,7 @@ func TestIssueAttentionClearsAfterViewingFailedExecutionDetail(t *testing.T) {
 	if notice := a.issueWorkNotice(ct); !notice.Attention || notice.IssueID != issue.ID {
 		t.Fatalf("unseen failed execution did not raise attention: %+v", notice)
 	}
-	if !tr.HasText("Failed") || !tr.HasText(detail) {
+	if !tr.HasText("Failed") || tr.HasText(detail) {
 		t.Fatalf("failed status/reason was not visible before viewing: %v", tr.Texts())
 	}
 	if dir := os.Getenv("SAKI_PREVIEW_DIR"); dir != "" {
@@ -218,6 +415,10 @@ func TestIssueAttentionClearsAfterViewingFailedExecutionDetail(t *testing.T) {
 		tr.Frame()
 	}
 	if err := tr.Click("View run"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if err := tr.Click("Details"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
@@ -302,6 +503,10 @@ func TestIssueAttentionViewRequiresMatchingReasonAndResultPageConfirms(t *testin
 		t.Fatal(err)
 	}
 	tr.Frame()
+	if err := tr.Click("Details"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
 	if !tr.HasText("Back to task") || !tr.HasText("stale older reason") || !tr.HasText("Activity") {
 		t.Fatalf("View execution did not open the stale work card: %v", tr.Texts())
 	}
@@ -310,9 +515,16 @@ func TestIssueAttentionViewRequiresMatchingReasonAndResultPageConfirms(t *testin
 		t.Fatalf("stale work reason confirmed A: notice=%+v seen=%q", notice, issueA.Executions[0].AttentionSeenStatus)
 	}
 
+	if err := tr.Click("Hide details"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+
 	// The existing result entry now presents the execution's real Detail and
 	// confirms only A; B remains unseen.
-	if err := tr.Click("Read latest result"); err != nil {
+	clickAfterBoundedScroll(t, tr, "Read latest result", 1040, 720)
+	tr.Frame()
+	if err := tr.Click("Details"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
@@ -334,6 +546,10 @@ func TestIssueAttentionViewRequiresMatchingReasonAndResultPageConfirms(t *testin
 		t.Fatalf("selecting B changed its unseen attention: %+v", notice)
 	}
 	if err := tr.Click("View run"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if err := tr.Click("Details"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
@@ -388,8 +604,12 @@ func TestIssueAttentionResultPageConfirmsNoTaskNoDetailExecution(t *testing.T) {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	const absent = "No execution detail was recorded for this run."
-	if !a.issueResult.Open || a.issueResult.Panel.RunDetail != absent || !tr.HasText(absent) {
+	if err := tr.Click("Details"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	absent := locales.In("en").ResultNoDetailRecorded()
+	if !a.issueResult.Open || a.issueResult.Panel.RunDetail != "" || !tr.HasText(absent) {
 		t.Fatalf("no-task result page did not present the explicit absence of detail: open=%v detail=%q texts=%v",
 			a.issueResult.Open, a.issueResult.Panel.RunDetail, tr.Texts())
 	}
@@ -403,7 +623,7 @@ func TestIssueAttentionResultPageConfirmsNoTaskNoDetailExecution(t *testing.T) {
 		t.Fatalf("no-task result entry changed retained facts: %+v status=%q unread=%d", issue.Executions[0], issue.Status, ct.Unread)
 	}
 
-	// A user-requested Reload displays the new status/reason and confirms it.
+	// Reload resets disclosure; the new exception remains unseen until Details.
 	// Background reads and closing remain non-confirming.
 	issue.Executions[0].Status = issueExecutionFailed
 	issue.Executions[0].Detail = "new no-task failure"
@@ -412,6 +632,13 @@ func TestIssueAttentionResultPageConfirmsNoTaskNoDetailExecution(t *testing.T) {
 	}
 	generation := a.issueResult.Generation
 	if err := tr.Click("Reload result"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if issue.Executions[0].AttentionSeenStatus != issueExecutionUnknown || a.issueResult.Panel.RunDetailsOpen || tr.HasText("new no-task failure") {
+		t.Fatal("reload acknowledged or disclosed the new collapsed reason")
+	}
+	if err := tr.Click("Details"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
@@ -509,6 +736,10 @@ func TestIssueAttentionPendingSeenStillShowsOlderException(t *testing.T) {
 		t.Fatal(err)
 	}
 	tr.Frame()
+	if err := tr.Click("Details"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
 	if latest.AttentionSeenStatus != issueExecutionUnknown {
 		t.Fatalf("pending result page did not confirm its execution: %+v", latest)
 	}
@@ -569,7 +800,9 @@ func TestIssueAttentionTracksStatusReplayAndNewExecution(t *testing.T) {
 	if notice := a.issueWorkNotice(ct); !notice.Attention || notice.IssueID != issue.ID {
 		t.Fatalf("new failed status did not re-prompt: %+v", notice)
 	}
-	if err := tr.Click("View run"); err != nil {
+	clickAfterBoundedScroll(t, tr, "View run", 1040, 720)
+	tr.Frame()
+	if err := tr.Click("Details"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
@@ -685,6 +918,10 @@ func TestIssueAttentionSeenPersistsAndSaveFailureStaysUnseen(t *testing.T) {
 		t.Fatal(err)
 	}
 	tr.Frame()
+	if err := tr.Click("Details"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
 	reloaded, err := openContactStore(path, t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -721,6 +958,10 @@ func TestIssueAttentionSeenPersistsAndSaveFailureStaysUnseen(t *testing.T) {
 		t.Fatal(err)
 	}
 	tr2.Frame()
+	if err := tr2.Click("Details"); err != nil {
+		t.Fatal(err)
+	}
+	tr2.Frame()
 	if issue2.Executions[0].AttentionSeenStatus != "" {
 		t.Fatalf("failed save left a false seen status: %+v", issue2.Executions[0])
 	}
@@ -730,7 +971,9 @@ func TestIssueAttentionSeenPersistsAndSaveFailureStaysUnseen(t *testing.T) {
 
 	// Read latest result must show the same existing localSaveErr on the result
 	// main page, keep the seen rollback, and preserve it after a background load.
-	if err := tr2.Click("Read latest result"); err != nil {
+	clickAfterBoundedScroll(t, tr2, "Read latest result", 1040, 720)
+	tr2.Frame()
+	if err := tr2.Click("Details"); err != nil {
 		t.Fatal(err)
 	}
 	tr2.Frame()
@@ -809,7 +1052,7 @@ func clickAfterBoundedScroll(t *testing.T, tr *ui.Tester, label string, width, h
 			}
 			return
 		}
-		tr.Scroll(850, 500, 0, 300)
+		tr.Scroll(float32(min(850, width-60)), 500, 0, 300)
 		tr.Frame()
 	}
 	t.Fatalf("could not reach %q within the bounded scroll area", label)
@@ -901,6 +1144,15 @@ func TestIssueLatestExecutionShowsNonSuccessStatesAndToolOnly(t *testing.T) {
 			tr.Frame()
 			if !tr.HasText("Latest run") || !tr.HasText(tc.label) {
 				t.Fatalf("latest status %q not visible: %v", tc.label, tr.Texts())
+			}
+			if tc.detail != "" && (tc.status == issueExecutionFailed || tc.status == issueExecutionUnknown) {
+				if tr.HasText(tc.detail) {
+					t.Fatalf("technical reason was exposed before Details: %v", tr.Texts())
+				}
+				if err := tr.Click("Details"); err != nil {
+					t.Fatal(err)
+				}
+				tr.Frame()
 			}
 			if tc.detail != "" && !tr.HasText(tc.detail) {
 				t.Fatalf("latest reason %q not visible: %v", tc.detail, tr.Texts())

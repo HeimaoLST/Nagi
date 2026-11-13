@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
 	"github.com/HeimaoLST/Nagi/locales"
@@ -389,8 +390,80 @@ func TestTaskContextGUIAppConversationAndIssueRuntimeSend(t *testing.T) {
 		if _, err := ct.Context.AddSnippet("GUI release notes", "GUI snippet\n第一行"); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := ct.Context.ImportFile(filePath, ""); err != nil {
-			t.Fatal(err)
+	})
+	// Each native boundary is controlled, while the actual app form owns Choose -> Save.
+	chooseFile := func(issueID, selectedPath string) taskContextItem {
+		t.Helper()
+		requests := make(chan mygo.OpenDialogOptions, 1)
+		results := make(chan []string, 1)
+		var tr *ui.Tester
+		var target *taskContext
+		var uiErr error
+		h.pump.do(func() {
+			a := h.app
+			ct := a.selectedContact()
+			a.chooseContextFile = func(opts mygo.OpenDialogOptions) ([]string, error) { requests <- opts; return <-results, nil }
+			if issueID == "" {
+				a.openConversationTaskContext()
+				target = &ct.Context
+			} else {
+				a.openIssueTaskContext(issueID)
+				target = &ct.issueByID(issueID).Context
+			}
+			tr = ui.NewTester(a.view, 1040, 900)
+			tr.SetLocale("en")
+			tr.Frame()
+			if uiErr = tr.Click("Add file"); uiErr != nil {
+				return
+			}
+			tr.Frame()
+			uiErr = tr.Click("Choose UTF-8 file…")
+		})
+		if uiErr != nil {
+			t.Fatal(uiErr)
+		}
+		select {
+		case opts := <-requests:
+			if opts.Parent != h.app.win || opts.Directory || opts.Multiple || len(opts.Filters) != 0 {
+				t.Fatal("GUI file request is not the parented single-file contract")
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatal("GUI file chooser was not reached")
+		}
+		results <- []string{selectedPath}
+		// Wait outside pump.do: the chooser's UI completion must be allowed to run.
+		h.pump.wait(func() bool { return target.formPath == selectedPath && !target.fileChoosing })
+		var item taskContextItem
+		h.pump.do(func() {
+			tr.Frame()
+			if target.formName != "" {
+				uiErr = fmt.Errorf("optional name changed while choosing")
+				return
+			}
+			if uiErr = clickAfterBoundedScrollInPump(tr, "Save file", 1040, 900); uiErr != nil {
+				return
+			}
+			tr.Frame()
+			if target.formOpen || len(target.items) != 2 {
+				uiErr = fmt.Errorf("GUI Save file: %v", target.formError)
+				return
+			}
+			item = target.items[1]
+			if item.ID == "" || item.Revision != 1 || item.Source != selectedPath || item.Name != filepath.Base(selectedPath) || target.previewID != item.ID {
+				uiErr = fmt.Errorf("GUI snapshot identity/source/preview = %+v", item)
+			}
+			h.app.closeAux()
+		})
+		if uiErr != nil {
+			t.Fatal(uiErr)
+		}
+		return item
+	}
+	conversationItem := chooseFile("", filePath)
+	h.pump.do(func() {
+		ct := h.app.selectedContact()
+		if got := ct.Context.snapshot()[1]; got != conversationItem || got.Text != fileText {
+			t.Error("conversation snapshot changed before send")
 		}
 		ct.Draft = "Use the GUI context."
 		if !h.app.sendCurrent() {
@@ -457,6 +530,21 @@ func TestTaskContextGUIAppConversationAndIssueRuntimeSend(t *testing.T) {
 		if _, err := issue.Context.AddSnippet("Issue release notes", "issue snippet"); err != nil {
 			t.Fatal(err)
 		}
+	})
+	issueFilePath := filepath.Join(h.root, "事项 input.svg")
+	issueFileText := "<svg>Issue file snapshot — 你好</svg>"
+	if err := os.WriteFile(issueFilePath, []byte(issueFileText), 0600); err != nil {
+		t.Fatal(err)
+	}
+	issueItem := chooseFile(issueID, issueFilePath)
+	if err := os.WriteFile(issueFilePath, []byte("changed issue source after Save"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	h.pump.do(func() {
+		ct := h.app.selectedContact()
+		if got := ct.issueByID(issueID).Context.snapshot()[1]; got != issueItem || got.Text != issueFileText {
+			t.Error("issue snapshot changed before run")
+		}
 		ct.Draft = "ordinary conversation draft"
 		if !h.app.runIssue(issueID) {
 			t.Fatalf("runIssue: %s", h.app.issueFormError)
@@ -476,8 +564,11 @@ func TestTaskContextGUIAppConversationAndIssueRuntimeSend(t *testing.T) {
 	}
 	secondBody := provider.body(1)
 	secondContexts := taskContextCallerContexts(t, secondBody)
-	if len(secondContexts) != 1 || secondContexts[0].Name != "Issue release notes" || secondContexts[0].Text != "issue snippet" {
+	if len(secondContexts) != 2 || secondContexts[0].Name != "Issue release notes" || secondContexts[0].Text != "issue snippet" {
 		t.Fatalf("issue contexts = %+v", secondContexts)
+	}
+	if secondContexts[1].Type != "caller_context" || secondContexts[1].Text != issueFileText || !strings.Contains(secondContexts[1].Name, issueFilePath) || strings.Contains(secondBody, "changed issue source after Save") {
+		t.Fatalf("issue file wire snapshot = %+v", secondContexts[1])
 	}
 	h.pump.do(func() {
 		ct := h.app.selectedContact()
@@ -486,8 +577,11 @@ func TestTaskContextGUIAppConversationAndIssueRuntimeSend(t *testing.T) {
 			t.Fatalf("accepted issue context was not cleared: %+v", issue.Context.snapshot())
 		}
 		execution := issue.Executions[len(issue.Executions)-1]
-		if len(execution.Context) != 1 || execution.Context[0].Text != "issue snippet" {
+		if len(execution.Context) != 2 || execution.Context[0].Text != "issue snippet" {
 			t.Fatalf("issue execution snapshot = %+v", execution.Context)
+		}
+		if execution.Context[1] != issueItem {
+			t.Fatalf("issue execution file identity/revision = %+v", execution.Context[1])
 		}
 		if ct.Draft != "ordinary conversation draft" {
 			t.Fatalf("issue run changed conversation draft: %q", ct.Draft)
@@ -497,7 +591,7 @@ func TestTaskContextGUIAppConversationAndIssueRuntimeSend(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if contexts := taskContextHistoryCallerContexts(t, issueHistory); len(contexts) != 1 || contexts[0].Text != "issue snippet" {
+	if contexts := taskContextHistoryCallerContexts(t, issueHistory); len(contexts) != 2 || contexts[0].Text != "issue snippet" || contexts[1].Text != issueFileText || !strings.Contains(contexts[1].Name, issueFilePath) {
 		t.Fatalf("issue history contexts = %+v", contexts)
 	}
 }

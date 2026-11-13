@@ -381,6 +381,7 @@ type issueResultPanelState struct {
 	RunGoal            string
 	RunStatus          string
 	RunDetail          string
+	RunDetailsOpen     bool
 	Response           string
 	Files              []issueResultFile
 	Selected           string
@@ -419,16 +420,18 @@ type issueResultPanelState struct {
 // issueResultPanelActions are explicit user requests. The component never
 // inspects, opens, reveals or starts a task by itself.
 type issueResultPanelActions struct {
-	OpenLocalFile func(base, destination string) error
-	OpenSettings  func(c *ui.Context)
-	Close         func()
-	Reload        func()
-	SelectFile    func(key string)
-	CheckFile     func(file issueResultFile)
-	OpenFile      func(file issueResultFile)
-	RevealFile    func(file issueResultFile)
-	ToggleSource  func(key string)
-	CopyText      func(text string) error
+	OpenLocalFile    func(base, destination string) error
+	OpenSettings     func(c *ui.Context)
+	Close            func()
+	Reload           func()
+	ToggleRunDetails func()
+	RevealRun        bool
+	SelectFile       func(key string)
+	CheckFile        func(file issueResultFile)
+	OpenFile         func(file issueResultFile)
+	RevealFile       func(file issueResultFile)
+	ToggleSource     func(key string)
+	CopyText         func(text string) error
 }
 
 // issueResultMarkdownFile is the explicit Markdown rendering allowlist. Other
@@ -450,6 +453,57 @@ func issueResultFileKey(file issueResultFile) string {
 // issueResultPanel renders a selected execution result and its reported files.
 // The caller supplies the actual run identity, exact response source and file
 // rows; this function does not read history or the filesystem.
+func issueResultRunNotice(c *ui.Context, state *issueResultPanelState, actions issueResultPanelActions) {
+	if strings.TrimSpace(state.RunDetail) == "" && !issueExecutionNeedsAttention(state.RunStatus) {
+		state.RunDetailsOpen = false
+		return
+	}
+	msgs := locales.In(c.Locale())
+	if state.RunStatus != issueExecutionFailed && state.RunStatus != issueExecutionUnknown && state.RunStatus != issueExecutionPending && strings.TrimSpace(state.RunDetail) != "" {
+		ui.Text(c, state.RunDetail).FontSize(typeBody).LineHeight(1.5).TextColor(c.Theme().Warning)
+		return
+	}
+	summary := msgs.IssueExecutionUnknownDetail()
+	if state.RunStatus == issueExecutionFailed {
+		summary = runFailureSummary(msgs, state.RunDetail)
+	} else if state.RunStatus == issueExecutionPending {
+		summary = msgs.IssuePreparedNotDispatched()
+	}
+	var settings func()
+	if actions.OpenSettings != nil {
+		settings = func() { actions.OpenSettings(c) }
+	}
+	detail := state.RunDetail
+	if strings.TrimSpace(detail) == "" {
+		detail = msgs.ResultNoDetailRecorded()
+	}
+	toggle := actions.ToggleRunDetails
+	if toggle == nil {
+		toggle = func() { state.RunDetailsOpen = !state.RunDetailsOpen }
+	}
+	if state.RunStatus == issueExecutionInterrupted {
+		summary = msgs.IssueExecutionInterruptedDetail()
+	}
+	recoveryNotice(c, c.Theme(), summary, detail, state.RunDetailsOpen, toggle, settings, msgs.SettingsTitle())
+}
+
+func issueResultRunHeader(c *ui.Context, state *issueResultPanelState, actions issueResultPanelActions, gap float32) {
+	if state.RunStatus == "" && strings.TrimSpace(state.RunDetail) == "" {
+		state.RunDetailsOpen = false
+		return
+	}
+	target := ui.Column(c).FillWidth().Gap(gap)
+	if actions.RevealRun {
+		target.ScrollIntoView()
+	}
+	target.Children(func() {
+		if state.RunStatus != "" {
+			ui.Text(c, issueExecutionText(locales.In(c.Locale()), state.RunStatus)).FontSize(typeAction).FontWeight(500).TextColor(c.Theme().TextMuted)
+		}
+		issueResultRunNotice(c, state, actions)
+	})
+}
+
 func issueResultPanel(c *ui.Context, state *issueResultPanelState, actions issueResultPanelActions) ui.Element {
 	th := c.Theme()
 	if state.ResultCodeHandles == nil {
@@ -466,12 +520,7 @@ func issueResultPanel(c *ui.Context, state *issueResultPanelState, actions issue
 		if state.RunGoal != "" {
 			ui.Text(c, locales.In(c.Locale()).ResultRunLabel(strconv.Itoa(state.RunNumber), state.RunGoal)).FontSize(14).TextColor(th.TextMuted)
 		}
-		if state.RunStatus != "" {
-			ui.Text(c, issueExecutionText(locales.In(c.Locale()), state.RunStatus)).FontSize(typeAction).FontWeight(500).TextColor(th.TextMuted)
-		}
-		if state.RunDetail != "" {
-			ui.Text(c, state.RunDetail).FontSize(14).LineHeight(1.5).TextColor(th.Warning)
-		}
+		issueResultRunHeader(c, state, actions, 12)
 
 		result := ui.Column(c).AlignSelf(ui.Stretch).MinWidth(0).Padding(12).Radius(th.Radius).Background(th.Surface).Gap(8)
 		result.Children(func() {

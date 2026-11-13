@@ -20,6 +20,7 @@ type contactProfileActions struct {
 	Restore           func()
 	Discard           func()
 	RetryBuiltinTools func()
+	ChooseFolder      func()
 }
 
 type contactProfileEditor struct {
@@ -39,6 +40,8 @@ type contactProfileEditor struct {
 	BuiltinToolsSupported bool
 	CanRetryBuiltinTools  bool
 	focusField            string
+	focusFolder           bool
+	folderError           string
 	initial               profileDraft
 }
 
@@ -139,6 +142,7 @@ func (e *contactProfileEditor) SetProfile(draft profileDraft) {
 	e.Errors = nil
 	e.Error = ""
 	e.Status = ""
+	e.folderError = ""
 }
 
 func (e *contactProfileEditor) SetBusy(busy bool, status string) {
@@ -158,6 +162,7 @@ func (e *contactProfileEditor) ResetDraft() {
 	e.Error = ""
 	e.Status = ""
 	e.focusField = "Name"
+	e.folderError = ""
 }
 
 func validateProfileDraft(draft profileDraft) (profileDraft, map[string]string) {
@@ -357,6 +362,21 @@ func (e *contactProfileEditor) view(c *ui.Context, t *ui.Theme, actions contactP
 			ui.Text(c, profileNoticeText(msgs, message)).FontSize(14).TextColor(t.Danger)
 		}
 		ui.Text(c, msgs.ProfileWorkspaceHint()).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+		ui.Row(c).Gap(8).Wrap().Children(func() {
+			folder := secondaryButton(c, msgs.WorkFolderChoose()).Disabled(!editable).OnClick(actions.ChooseFolder)
+			if e.focusFolder {
+				folder.Focus()
+				e.focusFolder = false
+			}
+			secondaryButton(c, msgs.WorkFolderUseDefault()).Disabled(!editable || e.Draft.Workspace == "").OnClick(func() {
+				e.Draft.Workspace = ""
+				delete(e.Errors, "Workspace")
+				e.folderError = ""
+			})
+		})
+		if e.folderError != "" {
+			ui.Text(c, msgs.WorkFolderChooseFailed(e.folderError)).FontSize(typeBody).LineHeight(1.5).TextColor(t.Danger)
+		}
 
 		e.builtinToolsView(c, t, editable, actions)
 

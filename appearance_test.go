@@ -1,8 +1,12 @@
 package main
 
 import (
-	"math"
+	"fmt"
 	"os"
+	"reflect"
+	"time"
+
+	"github.com/egoist/mygo"
 	"path/filepath"
 	"testing"
 
@@ -28,23 +32,39 @@ func TestAppearanceModeResolutionUsesDarkTheme(t *testing.T) {
 	}
 }
 
-func paletteLuminance(c ui.Color) float64 {
-	linear := func(v uint8) float64 {
-		f := float64(v) / 255
-		if f <= 0.04045 {
-			return f / 12.92
+func TestCustomThemeSystemModeAndHeadlessPreviews(t *testing.T) {
+	a, ct := workspaceTestApp(t)
+	a.workspaceOpen = false
+	a.appearanceMode = appearanceSystem
+	directory := t.TempDir()
+	writeCustomTheme(t, directory, "light.json", customThemeDocument("garden-light", appearanceLight))
+	writeCustomTheme(t, directory, "dark.json", customThemeDocument("garden-dark", appearanceDark))
+	a.appearanceThemes = loadCustomThemes(directory)
+	a.appearanceThemeIDs = appearanceThemeIDs{Light: "garden-light", Dark: "garden-dark"}
+	ct.Draft, ct.ActiveTaskID = "Keep system appearance work", "system-task"
+	tr := ui.NewTester(a.view, 1040, 720)
+	for _, dark := range []bool{false, true, false} {
+		tr.SetDark(dark)
+		tr.Frame()
+		resolved := a.resolveAppearanceTheme(dark)
+		want := "garden-light"
+		if dark {
+			want = "garden-dark"
 		}
-		return math.Pow((f+0.055)/1.055, 2.4)
+		if resolved.EffectiveID != want || a.workTheme.Theme.Dark != dark || a.appearanceMode != appearanceSystem || ct.ActiveTaskID != "system-task" || ct.Draft != "Keep system appearance work" {
+			t.Fatalf("system kind switch changed selection/work: dark=%v result=%+v", dark, resolved)
+		}
 	}
-	return 0.2126*linear(c.R) + 0.7152*linear(c.G) + 0.0722*linear(c.B)
-}
-
-func paletteContrast(a, b ui.Color) float64 {
-	x, y := paletteLuminance(a), paletteLuminance(b)
-	if x < y {
-		x, y = y, x
+	if dir := os.Getenv("SAKI_PREVIEW_DIR"); dir != "" {
+		a.openAppearance()
+		for _, dark := range []bool{false, true} {
+			name := "custom-theme-paper.png"
+			if dark {
+				name = "custom-theme-moss.png"
+			}
+			writeV07AppearancePreview(t, dir, name, a, 1040, 720, dark)
+		}
 	}
-	return (x + 0.05) / (y + 0.05)
 }
 
 func TestSemanticPaletteContrastInvariants(t *testing.T) {
@@ -427,4 +447,389 @@ func TestSegmentedSelectionKeepsTargetAndKeyboard(t *testing.T) {
 	if selected != 1 {
 		t.Fatalf("Right selected %d, want 1", selected)
 	}
+}
+
+func themeImportTestApp(t *testing.T) (*appModel, *contact, chan func()) {
+	t.Helper()
+	a, ct := workspaceTestApp(t)
+	a.workspaceOpen = false
+	a.rt = &runtimeClient{}
+	ct.Draft = "retained theme-import draft"
+	ct.ActiveTaskID = "active-task"
+	ct.SendState = sendAccepted
+	ct.SessionState = "running"
+	ct.Messages = []*message{{Kind: msgUser, Text: "original user text"}, {Kind: msgContact, Text: "Original Agent JSON is not translated."}}
+	ct.History = []historyEntry{{ID: "original-history", Text: "original saved history"}}
+	a.appearanceMode = appearanceSystem
+	a.appearanceThemeIDs = appearanceThemeIDs{Light: "paper", Dark: "night"}
+	a.appearanceThemes = loadCustomThemes(filepath.Join(t.TempDir(), "installed"))
+	recoveryTestStore(t, a)
+	a.openAppearance()
+	a.uiLocale = "en"
+	callbacks := make(chan func(), 8)
+	a.setUIHook(func(fn func()) { callbacks <- fn })
+	return a, ct, callbacks
+}
+
+func themeImportCompletion(t *testing.T, callbacks <-chan func()) func() {
+	t.Helper()
+	select {
+	case fn := <-callbacks:
+		return fn
+	case <-time.After(5 * time.Second):
+		t.Fatal("theme import completion was not queued")
+		return nil
+	}
+}
+
+func TestThemeImportCancelAndDialogErrorPreserveState(t *testing.T) {
+	for _, dialogError := range []bool{false, true} {
+		t.Run(fmt.Sprintf("dialog-error-%t", dialogError), func(t *testing.T) {
+			a, ct, callbacks := themeImportTestApp(t)
+			previous := &themeFileError{File: "earlier.json", Field: "colors.text", Message: "earlier diagnostic"}
+			a.themeImport = &appearanceThemeImport{Problem: previous, ImportedName: "earlier theme"}
+			a.appearanceError = appearanceStatusSaveFailed
+			a.appearanceStatus = appearanceStatusApplied
+			before := recoveryRecordSnapshot(t, ct)
+			ids, mode := a.appearanceThemeIDs, a.appearanceMode
+			catalog := a.appearanceThemes
+			stored, err := os.ReadFile(a.store.path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			a.chooseThemeFile = func(mygo.OpenDialogOptions) ([]string, error) {
+				if dialogError {
+					return nil, fmt.Errorf("controlled dialog error")
+				}
+				return nil, nil
+			}
+			a.importAppearanceTheme()
+			themeImportCompletion(t, callbacks)()
+			if a.themeImport.Busy || !a.themeImport.focus {
+				t.Fatal("dialog did not release its initiating control")
+			}
+			if !dialogError && (a.themeImport.Problem != previous || a.themeImport.ImportedName != "earlier theme") {
+				t.Fatal("cancel changed prior import feedback")
+			}
+			if dialogError && (a.themeImport.Problem == nil || a.themeImport.Problem.Message != "controlled dialog error") {
+				t.Fatal("dialog error is not available for retry")
+			}
+			after, err := os.ReadFile(a.store.path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(after) != string(stored) || a.appearanceThemeIDs != ids || a.appearanceMode != mode || !reflect.DeepEqual(a.appearanceThemes, catalog) || recoveryRecordSnapshot(t, ct) != before || a.appearanceError != appearanceStatusSaveFailed || a.appearanceStatus != appearanceStatusApplied || a.rt.nextID != 0 {
+				t.Fatal("cancel/dialog error changed preferences, independent save feedback, work or store")
+			}
+			if _, err := os.Stat(catalog.Directory); !os.IsNotExist(err) {
+				t.Fatal("cancel/dialog error installed a directory")
+			}
+		})
+	}
+}
+
+func TestThemeImportFailuresPreserveFilesAndPreferences(t *testing.T) {
+	for _, kind := range []string{"invalid-json", "reserved-id", "duplicate-id", "excluded-duplicate-id", "filename-collision", "missing-source", "unreadable-source", "target-file", "target-readonly"} {
+		t.Run(kind, func(t *testing.T) {
+			a, ct, callbacks := themeImportTestApp(t)
+			directory := t.TempDir()
+			a.appearanceThemes = loadCustomThemes(directory)
+			sourceDir := t.TempDir()
+			source := writeCustomTheme(t, sourceDir, "downloaded.json", customThemeDocument("imported", appearanceLight))
+			switch kind {
+			case "invalid-json":
+				if err := os.WriteFile(source, []byte("{invalid"), 0600); err != nil {
+					t.Fatal(err)
+				}
+			case "reserved-id":
+				source = writeCustomTheme(t, sourceDir, "downloaded.json", customThemeDocument("paper", appearanceLight))
+			case "duplicate-id":
+				writeCustomTheme(t, directory, "existing.json", customThemeDocument("imported", appearanceLight))
+			case "excluded-duplicate-id":
+				writeCustomTheme(t, directory, "first.json", customThemeDocument("imported", appearanceLight))
+				writeCustomTheme(t, directory, "second.json", customThemeDocument("imported", appearanceDark))
+			case "filename-collision":
+				writeCustomTheme(t, directory, "downloaded.json", customThemeDocument("existing", appearanceLight))
+			case "missing-source":
+				if err := os.Remove(source); err != nil {
+					t.Fatal(err)
+				}
+			case "unreadable-source":
+				if err := os.Chmod(source, 0); err != nil {
+					t.Fatal(err)
+				}
+				defer os.Chmod(source, 0600)
+			case "target-file":
+				directory = filepath.Join(t.TempDir(), "existing-file")
+				if err := os.WriteFile(directory, []byte("keep original destination"), 0600); err != nil {
+					t.Fatal(err)
+				}
+			case "target-readonly":
+				if err := os.Chmod(directory, 0500); err != nil {
+					t.Fatal(err)
+				}
+				defer os.Chmod(directory, 0700)
+			}
+			a.appearanceThemes = loadCustomThemes(directory)
+			catalog := a.appearanceThemes
+			beforeFiles := map[string]string{}
+			if kind != "target-file" {
+				beforeFiles = snapshotThemeFiles(t, directory)
+			}
+			before := recoveryRecordSnapshot(t, ct)
+			ids, mode := a.appearanceThemeIDs, a.appearanceMode
+			stored, err := os.ReadFile(a.store.path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			a.chooseThemeFile = func(mygo.OpenDialogOptions) ([]string, error) { return []string{source}, nil }
+			a.importAppearanceTheme()
+			themeImportCompletion(t, callbacks)()
+			themeImportCompletion(t, callbacks)()
+			if a.themeImport.Busy || a.themeImport.Problem == nil || a.themeImport.Problem.Message == "" || !a.themeImport.focus {
+				t.Fatalf("import failure is not actionable: %+v", a.themeImport)
+			}
+			if kind == "target-file" {
+				data, err := os.ReadFile(directory)
+				if err != nil || string(data) != "keep original destination" {
+					t.Fatal("import replaced the target file")
+				}
+			} else if !reflect.DeepEqual(beforeFiles, snapshotThemeFiles(t, directory)) {
+				t.Fatal("failed import changed installed files")
+			}
+			after, err := os.ReadFile(a.store.path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(after) != string(stored) || a.appearanceThemeIDs != ids || a.appearanceMode != mode || !reflect.DeepEqual(a.appearanceThemes, catalog) || recoveryRecordSnapshot(t, ct) != before || a.rt.nextID != 0 {
+				t.Fatal("failed import rewrote preferences, catalog, work or store")
+			}
+		})
+	}
+}
+
+func TestThemeImportStaleDialogAndInstallResults(t *testing.T) {
+	for _, phase := range []string{"dialog", "installed"} {
+		for _, leave := range []string{"back", "tab-return", "contact", "shutdown"} {
+			t.Run(phase+"/"+leave, func(t *testing.T) {
+				a, ct, callbacks := themeImportTestApp(t)
+				directory := a.appearanceThemes.Directory
+				source := writeCustomTheme(t, t.TempDir(), "late.json", customThemeDocument("late-id", appearanceLight))
+				a.themeImport = &appearanceThemeImport{ImportedName: "prior result"}
+				a.chooseThemeFile = func(mygo.OpenDialogOptions) ([]string, error) { return []string{source}, nil }
+				before := recoveryRecordSnapshot(t, ct)
+				catalog := a.appearanceThemes
+				ids, mode := a.appearanceThemeIDs, a.appearanceMode
+				a.importAppearanceTheme()
+				completion := themeImportCompletion(t, callbacks)
+				if phase == "installed" {
+					completion()
+					completion = themeImportCompletion(t, callbacks)
+				}
+				switch leave {
+				case "back":
+					a.closeSettings()
+				case "tab-return":
+					a.selectSettingsTab(settingsTabConnection)
+					a.selectSettingsTab(settingsTabAppearance)
+				case "contact":
+					a.contacts = append(a.contacts, &contact{ID: "different-contact", Name: "Other", Loaded: true})
+					a.selected = 1
+				case "shutdown":
+					a.shutdownStarted = true
+					a.shutdownDrainStarted = true
+				}
+				completion()
+				if a.appearanceThemeIDs != ids || a.appearanceMode != mode || !reflect.DeepEqual(a.appearanceThemes, catalog) || a.themeImport.ImportedName != "prior result" || a.themeImport.Problem != nil || a.themeImport.focus || recoveryRecordSnapshot(t, ct) != before || a.rt.nextID != 0 {
+					t.Fatal("late result changed another view/contact or shutdown state")
+				}
+				if leave == "shutdown" && !a.themeImport.Busy {
+					t.Fatal("post-shutdown callback mutated import state")
+				}
+				_, err := os.Stat(filepath.Join(directory, "late.json"))
+				if phase == "dialog" && !os.IsNotExist(err) {
+					t.Fatal("stale dialog started installation")
+				}
+				if phase == "installed" && err != nil {
+					t.Fatal("completed explicit install was removed or lost")
+				}
+			})
+		}
+	}
+}
+
+func TestThemeImportShutdownWaitsForOwnedCompletion(t *testing.T) {
+	for _, invalid := range []bool{false, true} {
+		for _, leave := range []bool{false, true} {
+			t.Run(fmt.Sprintf("invalid-%t/leave-%t", invalid, leave), func(t *testing.T) {
+				a, ct, callbacks := themeImportTestApp(t)
+				a.rt = nil
+				source := writeCustomTheme(t, t.TempDir(), "shutdown.json", customThemeDocument("shutdown-theme", appearanceLight))
+				if invalid {
+					if err := os.WriteFile(source, []byte("{invalid"), 0600); err != nil {
+						t.Fatal(err)
+					}
+				}
+				original, err := os.ReadFile(source)
+				if err != nil {
+					t.Fatal(err)
+				}
+				previous := &themeFileError{File: "earlier.json", Field: "$", Message: "earlier feedback"}
+				a.themeImport = &appearanceThemeImport{Problem: previous, ImportedName: "earlier theme"}
+				a.chooseThemeFile = func(mygo.OpenDialogOptions) ([]string, error) { return []string{source}, nil }
+				before := recoveryRecordSnapshot(t, ct)
+				catalog, ids, mode := a.appearanceThemes, a.appearanceThemeIDs, a.appearanceMode
+				quitCount := 0
+				a.requestQuit = func() { quitCount++ }
+				a.importAppearanceTheme()
+				themeImportCompletion(t, callbacks)()
+				// I/O has finished; its final UI-owned completion is deliberately still queued.
+				completion := themeImportCompletion(t, callbacks)
+				if leave {
+					a.closeSettings()
+				}
+				a.beginShutdown()
+				a.beginShutdown()
+				a.finishShutdown()
+				if a.quitReady || quitCount != 0 {
+					t.Errorf("quit escaped the admitted import before its final owned callback: ready=%t calls=%d", a.quitReady, quitCount)
+				}
+				completion()
+				if !a.quitReady || quitCount != 1 {
+					t.Fatalf("import completion did not finish shutdown exactly once: ready=%t calls=%d", a.quitReady, quitCount)
+				}
+				a.beginShutdown()
+				a.finishShutdown()
+				if quitCount != 1 || a.rt != nil || !reflect.DeepEqual(a.appearanceThemes, catalog) || a.appearanceThemeIDs != ids || a.appearanceMode != mode || a.themeImport.Problem != previous || a.themeImport.ImportedName != "earlier theme" || a.themeImport.focus || recoveryRecordSnapshot(t, ct) != before {
+					t.Fatal("shutdown completion changed catalog/preferences/feedback/work or requested quit again")
+				}
+				installed, err := os.ReadFile(filepath.Join(catalog.Directory, filepath.Base(source)))
+				if invalid {
+					if !os.IsNotExist(err) {
+						t.Fatal("invalid import left an installed file")
+					}
+				} else if err != nil || string(installed) != string(original) {
+					t.Fatal("shutdown lost or changed the completed explicit installation")
+				}
+			})
+		}
+	}
+}
+
+func TestThemeImportShutdownDoesNotWaitForDialog(t *testing.T) {
+	for _, selected := range []bool{false, true} {
+		t.Run(fmt.Sprintf("selected-%t", selected), func(t *testing.T) {
+			a, ct, callbacks := themeImportTestApp(t)
+			a.rt = nil
+			source := writeCustomTheme(t, t.TempDir(), "late-dialog.json", customThemeDocument("late-dialog-theme", appearanceLight))
+			entered, release := make(chan struct{}), make(chan struct{})
+			a.chooseThemeFile = func(mygo.OpenDialogOptions) ([]string, error) {
+				close(entered)
+				<-release
+				if selected {
+					return []string{source}, nil
+				}
+				return nil, nil
+			}
+			defer func() {
+				select {
+				case <-release:
+				default:
+					close(release)
+				}
+			}()
+			before := recoveryRecordSnapshot(t, ct)
+			catalog, ids, mode := a.appearanceThemes, a.appearanceThemeIDs, a.appearanceMode
+			quitCount := 0
+			a.requestQuit = func() { quitCount++ }
+			a.importAppearanceTheme()
+			select {
+			case <-entered:
+			case <-time.After(5 * time.Second):
+				t.Fatal("controlled picker did not open")
+			}
+			a.beginShutdown()
+			if !a.quitReady || quitCount != 1 {
+				t.Fatal("quit waited for a dialog that had admitted no installation")
+			}
+			close(release)
+			themeImportCompletion(t, callbacks)()
+			if quitCount != 1 || !reflect.DeepEqual(a.appearanceThemes, catalog) || a.appearanceThemeIDs != ids || a.appearanceMode != mode || a.themeImport.Problem != nil || a.themeImport.ImportedName != "" || a.themeImport.focus || recoveryRecordSnapshot(t, ct) != before {
+				t.Fatal("late picker result changed the shutting-down app")
+			}
+			if _, err := os.Stat(catalog.Directory); !os.IsNotExist(err) {
+				t.Fatal("late picker result started installation after quit")
+			}
+		})
+	}
+}
+
+func TestThemeImportRestoresRequestedMissingIDWithoutSaving(t *testing.T) {
+	a, ct, callbacks := themeImportTestApp(t)
+	a.appearanceThemeIDs.Light = "restored-theme"
+	if err := a.persist(); err != nil {
+		t.Fatal(err)
+	}
+	if !a.resolveAppearanceTheme(false).Unavailable {
+		t.Fatal("fixture theme is not missing")
+	}
+	document := customThemeDocument("restored-theme", appearanceLight)
+	document["colors"].(map[string]any)["work_attention"] = "#FFFFFF"
+	source := writeCustomTheme(t, t.TempDir(), "restored.json", document)
+	a.chooseThemeFile = func(mygo.OpenDialogOptions) ([]string, error) { return []string{source}, nil }
+	before := recoveryRecordSnapshot(t, ct)
+	stored, err := os.ReadFile(a.store.path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids, mode := a.appearanceThemeIDs, a.appearanceMode
+	a.importAppearanceTheme()
+	themeImportCompletion(t, callbacks)()
+	themeImportCompletion(t, callbacks)()
+	resolved := a.resolveAppearanceTheme(false)
+	after, err := os.ReadFile(a.store.path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resolved.EffectiveID != "restored-theme" || resolved.Unavailable || len(resolved.Warnings) == 0 || a.appearanceThemeIDs != ids || a.appearanceMode != mode || string(after) != string(stored) || recoveryRecordSnapshot(t, ct) != before {
+		t.Fatal("missing-ID restoration lost warning, changed selection/mode or saved work")
+	}
+}
+
+func TestC8ThemeInstallExcludesRecoveryAndKeepsQuitDrain(t *testing.T) {
+	a := c8SavedApp(t)
+	needsServiceClose := a.issueToolServer != nil
+	if os.Getenv("SAKI_TEST_ISSUE_TOOL_HELPER") != "" && !needsServiceClose {
+		t.Fatal("configured saved-app fixture has no owned host service")
+	}
+	a.appearanceThemes = loadCustomThemes(filepath.Join(t.TempDir(), "themes"))
+	req, reply, updates := c8ControlledPicker(t, a)
+	a.chooseThemeFile = a.chooseRecoveryFile
+	source := writeCustomTheme(t, t.TempDir(), "owned-theme.json", customThemeDocument("owned-theme", appearanceLight))
+	a.importAppearanceTheme()
+	awaitFolderChoice(t, req)
+	reply <- folderChoiceReply{paths: []string{source}}
+	awaitFolderChoice(t, updates)()
+	completion := awaitFolderChoice(t, updates)
+	a.chooseDataRecovery(false)
+	if a.dataRecovery != nil && (a.dataRecovery.choosing || a.dataRecovery.inFlight) {
+		t.Fatal("admitted theme installation admitted recovery")
+	}
+	quit := 0
+	a.requestQuit = func() { quit++ }
+	a.beginShutdown()
+	if a.quitReady || quit != 0 {
+		t.Fatal("recovery integration bypassed C7 owned-install drain")
+	}
+	completion()
+	if needsServiceClose {
+		if a.quitReady || quit != 0 {
+			t.Fatal("Quit escaped the owned host-service close completion")
+		}
+		awaitFolderChoice(t, updates)()
+	}
+	if !a.quitReady || quit != 1 || a.themeImport.installInFlight {
+		t.Fatal("C7 final completion did not release quit after recovery rejection")
+	}
+	t.Logf("host-service close completion required=%t; final Quit callbacks=%d", needsServiceClose, quit)
 }

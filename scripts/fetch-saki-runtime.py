@@ -58,9 +58,11 @@ def validate_remote(pin: dict, run: dict, artifact: dict) -> None:
 
 
 def verify_archive(archive: Path, pin: dict) -> tuple[dict, bytes]:
+    archive_hash = hashlib.sha256()
     with archive.open("rb") as handle:
-        digest = hashlib.file_digest(handle, "sha256").hexdigest()
-    if digest != pin["archive_sha256"]:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            archive_hash.update(chunk)
+    if archive_hash.hexdigest() != pin["archive_sha256"]:
         raise ValueError("downloaded archive SHA256 differs from pin")
     with zipfile.ZipFile(archive) as bundle:
         if len(bundle.namelist()) != 3 or set(bundle.namelist()) != {"Saki", "manifest.json", "SHA256SUMS"}:

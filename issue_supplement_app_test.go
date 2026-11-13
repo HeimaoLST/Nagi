@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo/ui"
+
+	"github.com/HeimaoLST/Nagi/locales"
 )
 
 func TestIssueSupplementBusyAdmissionKeepsPendingAndAutomaticIntent(t *testing.T) {
@@ -137,11 +139,22 @@ func TestIssueSupplementConfirmNotDispatchedSaveFailureRestoresAllWorkState(t *t
 	}
 	openIssueDetailForTest(a, ct, issue.ID)
 	a.setWorkspaceOpen(true)
+	before := recoveryRecordSnapshot(t, ct)
 	r := ui.NewTester(a.view, 1040, 720)
 	r.SetLocale("zh-Hans")
 	r.Frame()
-	if !r.HasText("先前的消息可能已发送；重启前交付未确认。请重新加载历史核实。不会自动重试。") {
+	if !r.HasText(locales.In("zh-Hans").SendDisconnectedState()) || r.HasText(issue.Work.SendError) {
 		t.Fatalf("confirm rollback lost the localized work notice: %v", r.Texts())
+	}
+	r = recoveryIssueTester(a, ct, issue, 1040, 900)
+	r.SetLocale("zh-Hans")
+	r.Frame()
+	if err := r.Click(locales.In("zh-Hans").DetailsAction()); err != nil {
+		t.Fatal(err)
+	}
+	r.Frame()
+	if !r.HasText("unknown delivery") || recoveryRecordSnapshot(t, ct) != before || a.submissionInFlight != 0 {
+		t.Fatal("issue-send disclosure lost the rolled-back diagnostic or changed work state")
 	}
 }
 

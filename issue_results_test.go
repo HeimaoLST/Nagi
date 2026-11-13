@@ -963,3 +963,85 @@ func TestIssueResultReaderLongChineseNameWrapsAtNarrowWidth(t *testing.T) {
 		}
 	}
 }
+
+func TestRecoveryPresentationResultDisclosureKeepsOriginalResponse(t *testing.T) {
+	for _, locale := range []string{"en", "zh-Hans"} {
+		t.Run(locale, func(t *testing.T) {
+			message := "connection closed; API_KEY=secret"
+			raw := taskFailureDetail("model_error", &message)
+			response := "Original Agent response: API_KEY is a quoted variable.\n"
+			state := &issueResultPanelState{RunStatus: issueExecutionFailed, RunDetail: raw, Response: response}
+			settings, reloads := 0, 0
+			tr := issueResultPanelTester(state, issueResultPanelActions{OpenSettings: func(*ui.Context) { settings++ }, Reload: func() { reloads++ }}, 600, 900, false)
+			tr.SetLocale(locale)
+			tr.Frame()
+			msgs := locales.In(locale)
+			if !tr.HasText(msgs.RecoveryModelRequestFailed()) || tr.HasText(raw) {
+				t.Fatalf("result summary missing: %v", tr.Texts())
+			}
+			if err := tr.Click(msgs.DetailsAction()); err != nil {
+				t.Fatal(err)
+			}
+			tr.Frame()
+			if !tr.HasText(raw) || state.RunDetail != raw || state.Response != response {
+				t.Fatal("result disclosure rewrote source records")
+			}
+			if err := tr.Click(msgs.CopyResultLabel()); err != nil {
+				t.Fatal(err)
+			}
+			if tr.Clipboard() != response {
+				t.Fatal("Agent result copy was translated or redacted")
+			}
+			if err := tr.Click(msgs.SettingsTitle()); err != nil {
+				t.Fatal(err)
+			}
+			if settings != 1 || reloads != 0 {
+				t.Fatal("result recovery replayed or reloaded instead of requesting Settings")
+			}
+		})
+	}
+}
+
+func TestRecoveryPresentationPreparedAndUnknownStayDistinct(t *testing.T) {
+	for _, locale := range []string{"en", "zh-Hans"} {
+		for _, status := range []string{issueExecutionPending, issueExecutionUnknown} {
+			t.Run(locale+"/"+status, func(t *testing.T) {
+				a, ct := workspaceTestApp(t)
+				msgs := locales.In(locale)
+				execution := &issueExecution{ID: "run", Status: status, Detail: "Original recorded dispatch detail"}
+				issue := &productIssue{ID: "issue", Executions: []*issueExecution{execution}}
+				state := &issueResultPanelState{RunStatus: status, RunDetail: execution.Detail}
+				for _, surface := range []string{"latest", "result"} {
+					tr := ui.NewTester(func(c *ui.Context) {
+						a.workTheme = resolveWorkbenchTheme(false)
+						c.SetTheme(a.workTheme.Theme)
+						ui.Column(c).Fill().Children(func() {
+							if surface == "latest" {
+								a.issueLatestResult(c, c.Theme(), ct, issue, false)
+							} else {
+								issueResultRunNotice(c, state, issueResultPanelActions{})
+							}
+						})
+					}, 600, 720)
+					tr.SetLocale(locale)
+					tr.Frame()
+					want := msgs.IssueExecutionUnknownDetail()
+					other := msgs.IssuePreparedNotDispatched()
+					if status == issueExecutionPending {
+						want, other = other, want
+					}
+					if !tr.HasText(want) || tr.HasText(other) || tr.HasText(execution.Detail) {
+						t.Fatalf("%s changed dispatch certainty: %v", surface, tr.Texts())
+					}
+					if err := tr.Click(msgs.DetailsAction()); err != nil {
+						t.Fatal(err)
+					}
+					tr.Frame()
+					if !tr.HasText(execution.Detail) || execution.Status != status || state.RunStatus != status || ct.SendState != sendIdle {
+						t.Fatal("disclosure changed the dispatch record or sent work")
+					}
+				}
+			})
+		}
+	}
+}

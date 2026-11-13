@@ -522,6 +522,7 @@ func TestUnknownIssueExecutionCanBeConfirmedNotDispatched(t *testing.T) {
 	ct.Issues = append(ct.Issues, issue)
 	ct.SelectedIssueID = issue.ID
 	a := &appModel{contacts: []*contact{ct}, selected: 0}
+	recoveryTestStore(t, a)
 	if !a.confirmIssueExecutionNotDispatched(issue.ID, execution.ID) {
 		t.Fatal("unknown execution without task id was not confirmable")
 	}
