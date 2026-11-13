@@ -53,7 +53,7 @@
 
 | 组件／分支 | 声明与本次基准值 | 分类与约束 |
 | --- | --- | --- |
-| button.md | h28，13／500／16，gap6 | 文字操作共用此角色；padding／角形不得从别的分支假推为源码事实，统一未绑定的部分须登记后采用，不逐页自填 |
+| button.md（普通有文字动作，非 textButton 特殊分支） | h28，13／500／16，gap6；无 prefix 左右12，有 prefix 左10／右14；默认 ghost，rounded=square→squircle-2xl region16 | 只绑定 size=md、textButton=false 的 Button；显式 prefix 按该支处理，不是 FloatingButton 或 generic toolbar |
 | input.md | h28、px12、13／16、border1、squircle-2xl region16、disabled opacity .5 | 首用／Edit／进阶路径／精确数字共用；invalid 使用原错误与语义色 |
 | textarea.md | 13／400／20、px12、py8、min-height80、squircle region16 | 对应普通多行表单；composer 正文另用14／24 |
 | select.md | min-h28、py2、13／500／16、gap6、padding-start12/end10、glyph16、squircle region16 | 外观／语言／主题／协议等枚举沿用原 SelectBase 语义，恢复真实下拉 indicator；不变成多个布尔开关 |
@@ -61,6 +61,8 @@
 | FloatingButton.md/default | box32、padding8、glyph16、rounded-full | 默认／非sm FloatingButton 分支，继承字体与有效命中未知；不据此把所有按钮改32 |
 | toolbar.iconbutton | generic 源组件／尺寸／padding／字重／形状 **UNKNOWN** | 本片 Nagi 普通 toolbar 明确适配 button.md 的文字／可见高度与 glyph16（P），不是“Qoder 泛用 toolbar=28”的事实；具体角形／padding 未绑定前不能算完全对齐；不用 FloatingButton 代替普通导航 |
 | composer | min-height120、border1；选择已声明的 rounded-2xl16/no-shadow 分支及 toolbar h42、gap6、px6、py10（P） | 另一 region20/small-shadow、min-h44/gap4/px6/pb8 分支保留为 D，当前生效分支 UNKNOWN；禁止页面自行混用。内 selector h28、px8、12／400／16、继承 family |
+
+本次 `button.md` 绑定 `CMOdY8kL.js`（SHA256 `d2f7c51f…`）bytes `985600..990100` 的 Button 默认参数与 md 非 text 分支；尺寸按 QD-02 既有 R16／scale1 解析，不是原生有效尺寸测量。prefix 指 `prefixIcon`；只有 suffix 而无 prefix 仍走左右12。`textButton=true` 的特殊 text 分支不在本行；generic toolbar／FloatingButton 的分类、未知项与既有 curve／hit／focus 限制不因本次绑定改变。
 
 **Squircle 是真实目标／缺口，不是 radius 别名。** 源 `.squircle-lg` region8 与 `.squircle-2xl` region16 使用 `corner-shape:squircle`；按 [W3C CSS Borders 4（2025-12-16 draft）](https://www.w3.org/TR/2025/WD-css-borders-4-20251216/#corner-shaping) 为 superellipse(2)、指数4，round 为 superellipse(1)。corner region、边框、内容裁切必须遵循对应曲线及 CSS radius 归一化；普通 group/menu/composer 的 circular rounded 不变成 squircle。
 
@@ -83,6 +85,17 @@ Pinned MyGo 的公开 Radius／Clip 为 circular；已有 Draw、Path（MoveTo�
 | Select 下拉 indicator | **独立 Heroicons v1.0.6** `optimized/outline/chevron-down.svg`（MIT）；24 viewBox，fill none，path `M19 9l-7 7-7-7`，stroke currentColor／2、round cap/join；不是 filled ArrowDownS |
 
 附件 paperclip／Nagi 联系人等未在这16个共同 glyph 中精确绑定的角色不得保留旧自画图并称匹配。Nagi 独有对象可在同一 pinned Remix 家族登记具体 ID／许可／尺寸后使用；相同操作若要宣称与 Qoder 一样，须有对应组件／路径证据。未绑定时保持显式文字入口和 UNKNOWN，不伪造精确映射，不引入 Qoder 专有功能／品牌 glyph。
+
+新增以下 **Nagi 专有语义适配（P）** 登记：资源来自 pinned RemixIcon v4.6.0，并非新取得的 Qoder 相同操作／路径匹配证据。均为24 viewBox、currentColor filled，沿用本节 Apache-2.0 notices及随应用交付要求；下表只绑定 QD-03 导航 glyph14，不给 generic toolbar／附件控制推导尺寸。
+
+| Nagi 导航语义 | 适配 ID／pinned 上游文件 | 尺寸／分类 |
+| --- | --- | --- |
+| 事项／工作对象导航 | `BriefcaseLine` → `RemixIcon v4.6.0/icons/Business/briefcase-line.svg` | 14／P，非 Qoder exact shared-action |
+| 单个联系人／资料导航 | `UserLine` → `RemixIcon v4.6.0/icons/User & Faces/user-line.svg` | 14／P，非 Qoder exact shared-action |
+| 联系人集合导航 | `GroupLine` → `RemixIcon v4.6.0/icons/User & Faces/group-line.svg` | 14／P，非 Qoder exact shared-action |
+| 收起侧导航 | `SidebarFoldLine` → `RemixIcon v4.6.0/icons/System/sidebar-fold-line.svg` | 14／P，非 Qoder exact shared-action |
+
+`UserLine`／`GroupLine` 只使用已成功取得的 `User & Faces/` 路径；早期 `User/` 404 不作证据。附件 glyph 与实际 generic toolbar 的绑定继续单列 UNKNOWN，不由同包另一个成功取得的附件 SVG 或本次四项登记解除。
 
 若采用这些资源，仓库和最终应用都保留 `assets/licenses/RemixIcon-Apache-2.0.txt`、`assets/licenses/Heroicons-MIT.txt` 的 pinned 原文。当前 build-macos-app.sh 不复制这些 notices；未来有界打包改动把它们按字节复制到 `Nagi.app/Contents/Resources/licenses/` 并以包内容／hash 验证。此处只记录 writer 需求，不授予实现权限，不新增 About／Settings 许可页面、不改变 Runtime。
 
