@@ -194,7 +194,7 @@ test -x "$APP/Contents/MacOS/Nagi"
 test -x "$APP/Contents/MacOS/Saki-runtime"
 
 mkdir -p "$APP/Contents/Resources/licenses"
-cp "$ROOT/assets/licenses/RemixIcon-Apache-2.0.txt" "$ROOT/assets/licenses/Heroicons-MIT.txt" "$APP/Contents/Resources/licenses/"
+cp "$ROOT/assets/licenses/RemixIcon-Apache-2.0.txt" "$ROOT/assets/licenses/Heroicons-MIT.txt" "$ROOT/assets/licenses/Heroicons-v2.2.0-MIT.txt" "$APP/Contents/Resources/licenses/"
 
 echo "== sign helper, then app (ad-hoc) =="
 : > "$CODESIGN_LOG"

@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo/ui"
+
+	"github.com/HeimaoLST/Nagi/locales"
 )
 
 func TestPreferenceControlFacesKeepHitAndKeyboard(t *testing.T) {
@@ -376,6 +378,162 @@ func writeV07AppearancePreviews(t *testing.T, dir string) {
 					fmt.Sprintf("v07-%s-%s-%dx%d.png", mode.name, scene, size.width, size.height),
 					a, size.width, size.height, mode.sysDark)
 			}
+		}
+	}
+}
+
+func TestGeneralPageHeadingKeepsDraftAndThemeAction(t *testing.T) {
+	for _, language := range []string{"en", "zh-Hans"} {
+		t.Run(language, func(t *testing.T) {
+			a, ct := workspaceTestApp(t)
+			recoveryTestStore(t, a)
+			ct.Draft = "Keep this exact unsaved text"
+			tr := ui.NewTester(func(c *ui.Context) {
+				a.workTheme = resolveWorkbenchTheme(a.appearanceMode == appearanceDark)
+				c.SetTheme(a.workTheme.Theme)
+				ui.Scroll(c).Fill().Padding(20).Children(func() { a.settingsAppearanceContent(c, c.Theme()) })
+			}, 420, 640)
+			tr.SetLocale(language)
+			tr.SetFocused(true)
+			tr.Frame()
+			msgs := locales.In(language)
+			heading, ok := tr.Find(msgs.SettingsGeneral())
+			if !ok || heading.H != 32 {
+				t.Fatalf("General page title has no full declared 32-unit line box: %+v", heading)
+			}
+			if err := tr.Click(msgs.AppearanceMode()); err != nil {
+				t.Fatal(err)
+			}
+			tr.Frame()
+			if err := tr.Click(msgs.AppearanceDark()); err != nil {
+				t.Fatal(err)
+			}
+			tr.Frame()
+			if a.appearanceMode != appearanceDark || ct.Draft != "Keep this exact unsaved text" || a.localSaveErr != "" {
+				t.Fatalf("shared title change disturbed the actual theme action/draft: mode=%s draft=%q error=%q", a.appearanceMode, ct.Draft, a.localSaveErr)
+			}
+		})
+	}
+}
+
+func TestWorkbenchIconRolesKeepTargetsFocusAndNeighbors(t *testing.T) {
+	roles := []struct {
+		name        string
+		role        iconControlRole
+		face, glyph float32
+	}{
+		{"Chrome", iconChrome, 28, 14},
+		{"Header", iconHeader, 28, 16},
+		{"Panel", iconPanel, 26, 16},
+		{"Response", iconResponse, 24, 16},
+		{"Context", iconContext, 28, 20},
+		{"Primary", iconPrimary, 32, 16},
+	}
+	for _, dark := range []bool{false, true} {
+		for _, width := range []int{720, 1040} {
+			t.Run(fmt.Sprintf("width%d-dark%t", width, dark), func(t *testing.T) {
+				counts := make([]int, len(roles))
+				value, invalid := "", false
+				tr := ui.NewTester(func(c *ui.Context) {
+					theme := resolveWorkbenchTheme(dark).Theme
+					c.SetTheme(theme)
+					ui.Column(c).Fill().Padding(20).Gap(12).Background(theme.Background).Children(func() {
+						ui.Row(c).Gap(8).Children(func() {
+							for index, spec := range roles {
+								index, spec := index, spec
+								iconControlFace(c, ui.ButtonBase(c).Label(spec.name), spec.role, true).OnClick(func() { counts[index]++ }).Children(func() {
+									glyph := glyphCloseLine
+									if spec.role == iconContext {
+										glyph = composerAttachIcon
+									}
+									controlIcon(c, glyph, spec.role).Label(spec.name + " glyph")
+								})
+							}
+						})
+						formTextArea(c, &value, invalid).Width(300).Label("Exact multiline draft")
+					})
+				}, width, 640)
+				tr.SetFocused(true)
+				tr.Frame()
+				bounds := map[string]ui.Rect{}
+				for index, spec := range roles {
+					box, ok := tr.Find(spec.name)
+					glyph, hasGlyph := tr.Find(spec.name + " glyph")
+					if !ok || box.W != 32 || box.H != 32 || !hasGlyph || glyph.W != spec.glyph || glyph.H != spec.glyph {
+						t.Fatalf("%s lost its real target or role glyph: hit=%+v glyph=%+v", spec.name, box, glyph)
+					}
+					bounds[spec.name], bounds[spec.name+" glyph"] = box, glyph
+					// Selected fill makes the actual face boundary observable independently of its glyph.
+					img := tr.Image()
+					background := resolveWorkbenchTheme(dark).Theme.Background
+					left, right := -1, -1
+					y := int(box.Y + box.H/2)
+					for x := int(box.X); x < int(box.X+box.W); x++ {
+						p := img.RGBAAt(x, y)
+						if p.R != background.R || p.G != background.G || p.B != background.B {
+							if left < 0 {
+								left = x
+							}
+							right = x
+						}
+					}
+					if float32(right-left+1) != spec.face {
+						t.Fatalf("%s actual face width=%d, expected %.0f", spec.name, right-left+1, spec.face)
+					}
+					if index > 0 {
+						prev := bounds[roles[index-1].name]
+						if prev.X+prev.W > box.X {
+							t.Fatal("neighbor targets overlap")
+						}
+					}
+				}
+				for index, spec := range roles {
+					tr.Key(0, ui.KeyTab)
+					tr.Frame()
+					if !tr.Focused(spec.name) {
+						t.Fatalf("Tab did not reach %s", spec.name)
+					}
+					tr.Key(0, ui.KeyEnter)
+					tr.Frame()
+					if counts[index] != 1 {
+						t.Fatalf("%s keyboard dispatch count: %v", spec.name, counts)
+					}
+				}
+				for index, spec := range roles {
+					box := bounds[spec.name]
+					tr.ClickAt(box.X+1, box.Y+1)
+					tr.Frame()
+					if counts[index] != 2 {
+						t.Fatalf("%s did not activate once per keyboard/transparent-edge click: %v", spec.name, counts)
+					}
+					if index+1 < len(roles) {
+						tr.ClickAt(box.X+box.W+4, box.Y+box.H/2)
+						tr.Frame()
+						if counts[index] != 2 || counts[index+1] != 1 {
+							t.Fatalf("gap click dispatched a neighbor: %v", counts)
+						}
+					}
+				}
+				if err := tr.Click("Exact multiline draft"); err != nil {
+					t.Fatal(err)
+				}
+				tr.Type("  中文 exact\nsecond line  ")
+				invalid = true
+				tr.Frame()
+				tr.Type("!")
+				tr.Frame()
+				if value != "  中文 exact\nsecond line  !" || !tr.Focused("Exact multiline draft") {
+					t.Fatalf("form face stole focus or changed raw text: %q", value)
+				}
+				if directory := os.Getenv("SAKI_PREVIEW_DIR"); directory != "" {
+					name := fmt.Sprintf("shared-workbench-%d-dark%t", width, dark)
+					writePreviewPNG(t, filepath.Join(directory, name+".png"), tr.Image())
+					data, _ := json.MarshalIndent(bounds, "", "  ")
+					if err := os.WriteFile(filepath.Join(directory, name+".json"), data, 0600); err != nil {
+						t.Fatal(err)
+					}
+				}
+			})
 		}
 	}
 }

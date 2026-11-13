@@ -18,6 +18,16 @@ const (
 	cssRem                   float32 = 16
 	controlHeight            float32 = 28
 	controlHit               float32 = 32
+	typeSettingsTitle        float32 = 20
+	lineSettingsTitle        float32 = 32
+	lineCompact              float32 = 22
+	lineForm                 float32 = 20
+	typeHeaderMeta           float32 = 10
+	lineHeader               float32 = 16
+	composerMinHeight        float32 = 120
+	composerToolbarHeight    float32 = 42
+	conversationMaxWidth     float32 = 768
+	userMessageMaxWidth      float32 = 752
 	typeLabel                float32 = 13
 	lineLabel                float32 = 20
 	lineMeta                 float32 = 18
@@ -260,12 +270,16 @@ func secondaryButton(c *ui.Context, label string) ui.Element {
 // The transparent interaction box extends two DIPs past the visible face.
 // Negative block margins keep its layout contribution at the declared 28 DIPs.
 func sharedControlFace(c *ui.Context, e ui.Element, region float32, exponent float64, outlined, invalid, selected bool) ui.Element {
-	t := c.Theme()
 	e.Height(controlHit).MinHeight(controlHit).Margin(-2, 0).Radius(0).
 		Background(ui.Transparent).Border(0, ui.Transparent).FocusRing(false)
+	return drawControlFace(c, e, region, exponent, outlined, invalid, selected, 0, 2)
+}
+
+func drawControlFace(c *ui.Context, e ui.Element, region float32, exponent float64, outlined, invalid, selected bool, insetX, insetY float32) ui.Element {
+	t := c.Theme()
 	e.Draw(func(p *ui.Painter, r ui.Rect) {
-		r.Y += 2
-		r.H -= 4
+		r.X, r.Y = r.X+insetX, r.Y+insetY
+		r.W, r.H = r.W-2*insetX, r.H-2*insetY
 		fill, border := ui.Transparent, ui.Transparent
 		if outlined {
 			fill, border = t.Surface, t.Border
@@ -291,6 +305,65 @@ func sharedControlFace(c *ui.Context, e ui.Element, region float32, exponent flo
 		}
 	})
 	return e
+}
+
+type iconControlRole uint8
+
+const (
+	iconChrome iconControlRole = iota
+	iconHeader
+	iconPanel
+	iconResponse
+	iconContext
+	iconPrimary
+)
+
+func (role iconControlRole) metrics() (face, glyph, region float32) {
+	switch role {
+	case iconChrome:
+		return 28, 14, 16
+	case iconPanel:
+		return 26, 16, 16
+	case iconResponse:
+		return 24, 16, 16
+	case iconContext:
+		return 28, 20, 10
+	case iconPrimary:
+		return 32, 16, 16
+	default:
+		return 28, 16, 16
+	}
+}
+
+// The face is centered in a real target. Callers reserve the whole target,
+// including around an isolated response action; it never borrows a neighbor's box.
+func iconControlFace(c *ui.Context, e ui.Element, role iconControlRole, selected bool) ui.Element {
+	face, _, region := role.metrics()
+	e.Size(controlHit, controlHit).MinWidth(controlHit).MinHeight(controlHit).Shrink(0).
+		Margin(0).Padding(0).Gap(0).Radius(0).Background(ui.Transparent).Border(0, ui.Transparent).FocusRing(false)
+	exponent := float64(4)
+	if role == iconPrimary {
+		exponent = 2
+	}
+	inset := (controlHit - face) / 2
+	return drawControlFace(c, e, region, exponent, false, false, selected, inset, inset)
+}
+
+func controlIcon(c *ui.Context, glyph *ui.SVG, role iconControlRole) ui.Element {
+	_, size, _ := role.metrics()
+	return ui.Icon(c, glyph).Size(size, size).Shrink(0)
+}
+
+func pageHeading(c *ui.Context, title string) ui.Element {
+	return ui.Text(c, title).Role(ui.RoleHeading).Level(1).Font("system-ui").
+		FontSize(typeSettingsTitle).FontWeight(500).FixedLineHeight(lineSettingsTitle).TextColor(c.Theme().Text)
+}
+
+func formTextArea(c *ui.Context, value *string, invalid bool) ui.Element {
+	e := ui.TextAreaBase(c, value).Font("system-ui").FontSize(typeAction).FontWeight(400).
+		FixedLineHeight(lineForm).MinHeight(80).BorderWidth(8, 12).BorderColor(ui.Transparent).
+		Padding(0).Radius(0).Background(ui.Transparent).TextColor(c.Theme().Text).FocusRing(false)
+	return drawControlFace(c, e, 16, 4, true, invalid, false, 0, 0)
 }
 
 func paintPreferenceFace(p *ui.Painter, r ui.Rect, region float32, exponent float64, fill, border ui.Color) {
@@ -355,13 +428,17 @@ var (
 	glyphSelectChevron   = ui.MustParseSVG([]byte(`<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true">
   <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
 </svg>`))
-	navWorkIcon            = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M7 5V2C7 1.44772 7.44772 1 8 1H16C16.5523 1 17 1.44772 17 2V5H21C21.5523 5 22 5.44772 22 6V20C22 20.5523 21.5523 21 21 21H3C2.44772 21 2 20.5523 2 20V6C2 5.44772 2.44772 5 3 5H7ZM4 16V19H20V16H4ZM4 14H20V7H4V14ZM9 3V5H15V3H9ZM11 11H13V13H11V11Z"/></svg>`))
-	navHistoryIcon         = glyphTimeLine
-	navProfileIcon         = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M4 22C4 17.5817 7.58172 14 12 14C16.4183 14 20 17.5817 20 22H18C18 18.6863 15.3137 16 12 16C8.68629 16 6 18.6863 6 22H4ZM12 13C8.685 13 6 10.315 6 7C6 3.685 8.685 1 12 1C15.315 1 18 3.685 18 7C18 10.315 15.315 13 12 13ZM12 11C14.21 11 16 9.21 16 7C16 4.79 14.21 3 12 3C9.79 3 8 4.79 8 7C8 9.21 9.79 11 12 11Z"/></svg>`))
-	navBackIcon            = glyphArrowLeftLine
-	navContactsIcon        = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M2 22C2 17.5817 5.58172 14 10 14C14.4183 14 18 17.5817 18 22H16C16 18.6863 13.3137 16 10 16C6.68629 16 4 18.6863 4 22H2ZM10 13C6.685 13 4 10.315 4 7C4 3.685 6.685 1 10 1C13.315 1 16 3.685 16 7C16 10.315 13.315 13 10 13ZM10 11C12.21 11 14 9.21 14 7C14 4.79 12.21 3 10 3C7.79 3 6 4.79 6 7C6 9.21 7.79 11 10 11ZM18.2837 14.7028C21.0644 15.9561 23 18.752 23 22H21C21 19.564 19.5483 17.4671 17.4628 16.5271L18.2837 14.7028ZM17.5962 3.41321C19.5944 4.23703 21 6.20361 21 8.5C21 11.3702 18.8042 13.7252 16 13.9776V11.9646C17.6967 11.7222 19 10.264 19 8.5C19 7.11935 18.2016 5.92603 17.041 5.35635L17.5962 3.41321Z"/></svg>`))
-	navCloseIcon           = glyphCloseLine
-	composerAttachIcon     = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M14.8287 7.75737L9.1718 13.4142C8.78127 13.8047 8.78127 14.4379 9.1718 14.8284C9.56232 15.219 10.1955 15.219 10.586 14.8284L16.2429 9.17158C17.4144 8.00001 17.4144 6.10052 16.2429 4.92894C15.0713 3.75737 13.1718 3.75737 12.0002 4.92894L6.34337 10.5858C4.39075 12.5384 4.39075 15.7042 6.34337 17.6569C8.29599 19.6095 11.4618 19.6095 13.4144 17.6569L19.0713 12L20.4855 13.4142L14.8287 19.0711C12.095 21.8047 7.66283 21.8047 4.92916 19.0711C2.19549 16.3374 2.19549 11.9053 4.92916 9.17158L10.586 3.51473C12.5386 1.56211 15.7045 1.56211 17.6571 3.51473C19.6097 5.46735 19.6097 8.63317 17.6571 10.5858L12.0002 16.2427C10.8287 17.4142 8.92916 17.4142 7.75759 16.2427C6.58601 15.0711 6.58601 13.1716 7.75759 12L13.4144 6.34316L14.8287 7.75737Z"/></svg>`))
+	navWorkIcon     = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M7 5V2C7 1.44772 7.44772 1 8 1H16C16.5523 1 17 1.44772 17 2V5H21C21.5523 5 22 5.44772 22 6V20C22 20.5523 21.5523 21 21 21H3C2.44772 21 2 20.5523 2 20V6C2 5.44772 2.44772 5 3 5H7ZM4 16V19H20V16H4ZM4 14H20V7H4V14ZM9 3V5H15V3H9ZM11 11H13V13H11V11Z"/></svg>`))
+	navHistoryIcon  = glyphTimeLine
+	navProfileIcon  = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M4 22C4 17.5817 7.58172 14 12 14C16.4183 14 20 17.5817 20 22H18C18 18.6863 15.3137 16 12 16C8.68629 16 6 18.6863 6 22H4ZM12 13C8.685 13 6 10.315 6 7C6 3.685 8.685 1 12 1C15.315 1 18 3.685 18 7C18 10.315 15.315 13 12 13ZM12 11C14.21 11 16 9.21 16 7C16 4.79 14.21 3 12 3C9.79 3 8 4.79 8 7C8 9.21 9.79 11 12 11Z"/></svg>`))
+	navBackIcon     = glyphArrowLeftLine
+	navContactsIcon = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M2 22C2 17.5817 5.58172 14 10 14C14.4183 14 18 17.5817 18 22H16C16 18.6863 13.3137 16 10 16C6.68629 16 4 18.6863 4 22H2ZM10 13C6.685 13 4 10.315 4 7C4 3.685 6.685 1 10 1C13.315 1 16 3.685 16 7C16 10.315 13.315 13 10 13ZM10 11C12.21 11 14 9.21 14 7C14 4.79 12.21 3 10 3C7.79 3 6 4.79 6 7C6 9.21 7.79 11 10 11ZM18.2837 14.7028C21.0644 15.9561 23 18.752 23 22H21C21 19.564 19.5483 17.4671 17.4628 16.5271L18.2837 14.7028ZM17.5962 3.41321C19.5944 4.23703 21 6.20361 21 8.5C21 11.3702 18.8042 13.7252 16 13.9776V11.9646C17.6967 11.7222 19 10.264 19 8.5C19 7.11935 18.2016 5.92603 17.041 5.35635L17.5962 3.41321Z"/></svg>`))
+	navCloseIcon    = glyphCloseLine
+	// Heroicons v2.2.0 plus-small: the adopted ideal geometry for add-context only.
+	composerAttachIcon = ui.MustParseSVG([]byte(`<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
+  <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m6-6H6"/>
+</svg>
+`))
 	composerSendIcon       = glyphArrowUpLine
 	composerStopIcon       = glyphStopFill
 	railHideIcon           = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M5 5H13V19H5V5ZM19 19H15V5H19V19ZM4 3C3.44772 3 3 3.44772 3 4V20C3 20.5523 3.44772 21 4 21H20C20.5523 21 21 20.5523 21 20V4C21 3.44772 20.5523 3 20 3H4ZM7 12L11 8.5V15.5L7 12Z"/></svg>`))

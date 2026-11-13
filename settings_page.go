@@ -446,7 +446,7 @@ func settingsPreferenceRow(c *ui.Context, t *ui.Theme, label, description string
 func (a *appModel) settingsAppearanceContent(c *ui.Context, t *ui.Theme) {
 	msgs := locales.In(c.Locale())
 	a.ensureLanguageMode()
-	ui.Text(c, msgs.SettingsGeneral()).FontSize(typeLabel).FontWeight(400).FixedLineHeight(lineLabel).TextColor(t.Text)
+	pageHeading(c, msgs.SettingsGeneral())
 	preferenceSection(c, t, msgs.SettingsAppearance(), func() {
 		c.Key("appearance-preference")
 		settingsPreferenceRow(c, t, msgs.AppearanceMode(), "", func() {
