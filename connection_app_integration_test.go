@@ -146,8 +146,12 @@ func runGUIOnlineManagedMCPSmoke(t *testing.T) {
 			"captured_at": time.Now().UTC(), "phase": phase, "runtime": a.runtimeStatus,
 			"handshake": a.runtimeHandshake, "managed": a.connectionManaged,
 			"capabilities_loaded": a.runtimeCapabilitiesLoaded, "capacity": a.maxActiveTasks(),
-			"builtin_catalog_loaded": a.runtimeBuiltinToolsLoaded,
-			"runtime_error":          safe(a.runtimeErr), "tool_error": safe(a.issueToolErr),
+			"builtin_catalog_loaded":  a.runtimeBuiltinToolsLoaded,
+			"connection_busy":         a.connectionForm.Busy,
+			"connection_applying":     a.connectionApplying,
+			"connection_error":        safe(a.connectionForm.Error),
+			"connection_error_detail": safe(a.connectionForm.ErrorDetail),
+			"runtime_error":           safe(a.runtimeErr), "tool_error": safe(a.issueToolErr),
 			"capabilities_error": safe(a.runtimeCapabilitiesErr), "builtin_catalog_error": safe(a.runtimeBuiltinToolsErr),
 			"local_save_error": safe(a.localSaveErr), "stop_requested": stopRequested,
 		}
@@ -231,8 +235,11 @@ func runGUIOnlineManagedMCPSmoke(t *testing.T) {
 	h.pump.waitTimeout(func() bool {
 		capture()
 		a := h.app
+		if a.connectionApplying || a.connectionForm.Busy {
+			return false
+		}
 		return a.runtimeStatus == runtimeStateFailed || a.runtimeStatus == runtimeStateExited || a.issueToolErr != "" || a.runtimeBuiltinToolsErr != "" || a.runtimeCapabilitiesErr != "" || a.connectionForm.Error != "" ||
-			(!a.connectionForm.Busy && a.runtimeStatus == runtimeStateReady && a.runtimeCapabilitiesLoaded && a.runtimeBuiltinToolsLoaded)
+			(a.runtimeStatus == runtimeStateReady && a.runtimeCapabilitiesLoaded && a.runtimeBuiltinToolsLoaded)
 	}, 30*time.Second)
 	h.pump.do(func() {
 		a := h.app
