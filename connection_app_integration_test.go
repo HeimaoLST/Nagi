@@ -73,6 +73,377 @@ func applyAppConnection(t *testing.T, h *guiHarness) {
 	})
 }
 
+func runGUIOnlineManagedMCPSmoke(t *testing.T) {
+	t.Helper()
+	root := os.Getenv("NAGI_TEST_MANAGED_MCP_ROOT")
+	key := os.Getenv("NAGI_TEST_MANAGED_MCP_API_KEY")
+	if root == "" || !filepath.IsAbs(root) || key == "" || strings.TrimSpace(os.Getenv("SAKI_TEST_RUNTIME_BIN")) == "" || strings.TrimSpace(os.Getenv("SAKI_TEST_ISSUE_TOOL_HELPER")) == "" {
+		t.Fatal("managed MCP smoke requires an absolute fresh case root, a private test-child key and explicit Runtime/helper paths")
+	}
+	// Exclusive creation prevents this experiment from loading an existing profile.
+	if err := os.Mkdir(root, 0o700); err != nil {
+		t.Fatalf("create fresh managed MCP case root: %v", err)
+	}
+	work := filepath.Join(root, "work")
+	if err := os.Mkdir(work, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	resolvedWork, err := filepath.EvalSymlinks(work)
+	if err != nil {
+		t.Fatal(err)
+	}
+	work = resolvedWork
+	safe := func(text string) string {
+		text = strings.ReplaceAll(text, key, "[redacted]")
+		if len(text) > 8192 {
+			text = text[:8192] + " [truncated]"
+		}
+		return text
+	}
+	evidence := map[string]any{
+		"result": "FAIL", "root": root,
+		"api": connectionAPIChatCompletions, "endpoint": "http://127.0.0.1:3425/v1", "model": "deepseek/deepseek-flash",
+		"context_tokens": 16384, "output_tokens": 512, "task_slots": 1,
+		"scope": "one logical conversation; not a provider-request or cost cap; no native picker evidence",
+	}
+	var h *guiHarness
+	var cacheMu sync.Mutex
+	var cached []byte
+	// Registered before the harness cleanup: retain evidence after ordinary drain,
+	// including failure paths, without reading mutable app state off the UI pump.
+	t.Cleanup(func() {
+		cacheMu.Lock()
+		last := append([]byte(nil), cached...)
+		cacheMu.Unlock()
+		if len(last) > 0 {
+			evidence["last_ui_observation"] = json.RawMessage(last)
+		}
+		evidence["shutdown_completed"] = h != nil && h.closed
+		data, err := json.MarshalIndent(evidence, "", "  ")
+		if err == nil {
+			data = []byte(strings.ReplaceAll(string(data), key, "[redacted]"))
+			err = os.WriteFile(filepath.Join(root, "managed-mcp-evidence.json"), append(data, '\n'), 0o600)
+		}
+		if err != nil {
+			t.Errorf("retain managed MCP evidence: %s", safe(err.Error()))
+		}
+	})
+	fail := func(message string) {
+		evidence["failure"] = safe(message)
+		t.Fatal(safe(message))
+	}
+	binary := requireRuntimeBinary(t)
+	ensureIssueToolTestHelper(t)
+	isolateConnectionApp(t, root, binary)
+	t.Setenv("SAKI_GUI_WORKDIR", work)
+	h = openConnectionHarness(t)
+	h.root = root
+	h.shutdownOSObserver = func(shutdownProcessIdentity) string { return "OS sampling is outside this bounded experiment" }
+	phase, stopRequested := "first-connection", false
+	capture := func() {
+		a := h.app
+		state := map[string]any{
+			"captured_at": time.Now().UTC(), "phase": phase, "runtime": a.runtimeStatus,
+			"handshake": a.runtimeHandshake, "managed": a.connectionManaged,
+			"capabilities_loaded": a.runtimeCapabilitiesLoaded, "capacity": a.maxActiveTasks(),
+			"builtin_catalog_loaded":  a.runtimeBuiltinToolsLoaded,
+			"connection_busy":         a.connectionForm.Busy,
+			"connection_applying":     a.connectionApplying,
+			"connection_error":        safe(a.connectionForm.Error),
+			"connection_error_detail": safe(a.connectionForm.ErrorDetail),
+			"runtime_error":           safe(a.runtimeErr), "tool_error": safe(a.issueToolErr),
+			"capabilities_error": safe(a.runtimeCapabilitiesErr), "builtin_catalog_error": safe(a.runtimeBuiltinToolsErr),
+			"local_save_error": safe(a.localSaveErr), "stop_requested": stopRequested,
+		}
+		if ct := a.selectedContact(); ct != nil {
+			state["contact_id"], state["session_id"] = ct.ID, ct.SessionID
+			state["send_state"], state["send_error"] = ct.SendState, safe(ct.SendError)
+			state["active_task_id"], state["last_task_id"] = ct.ActiveTaskID, ct.LastTaskID
+			state["issues"] = len(ct.Issues)
+		}
+		if a.issueToolLedger != nil {
+			var actions, receipts []string
+			for _, operation := range a.issueToolLedger.Operations {
+				actions = append(actions, operation.Action)
+				if operation.Receipt != nil {
+					receipts = append(receipts, operation.Receipt.State)
+				} else {
+					receipts = append(receipts, "unresolved")
+				}
+			}
+			state["operation_actions"], state["receipt_states"] = actions, receipts
+		}
+		data, _ := json.Marshal(state)
+		cacheMu.Lock()
+		cached = data
+		cacheMu.Unlock()
+	}
+	var tr *ui.Tester
+	var actionErr error
+	var contactID, selectedIssue string
+	h.pump.do(func() {
+		a := h.app
+		a.windowWidth = 1040
+		a.openConfiguration()
+		ct := a.selectedContact()
+		contactID, selectedIssue = ct.ID, ct.SelectedIssueID
+		if a.rt != nil || a.connectionSaved != nil || ct.SessionID != "" || len(ct.Issues) != 0 {
+			actionErr = fmt.Errorf("case did not start as a fresh unconfigured profile")
+			return
+		}
+		a.connectionForm.Draft = connectionDraft{
+			API: connectionAPIChatCompletions, Endpoint: "http://127.0.0.1:3425/v1", APIKey: key,
+			Model: "deepseek/deepseek-flash", ContextTokens: "16384", OutputTokens: "512", Slots: "1",
+		}
+		a.chooseFolder = func(mygo.OpenDialogOptions) ([]string, error) { return []string{work}, nil }
+		tr = ui.NewTester(a.view, 1040, 720)
+		tr.SetLocale("en")
+		tr.Frame()
+		actionErr = clickSettingsAction(tr, "Choose folder…")
+		capture()
+	})
+	if actionErr != nil {
+		fail(actionErr.Error())
+	}
+	h.pump.wait(func() bool { capture(); return !h.app.connectionForm.Busy })
+	h.pump.do(func() {
+		if h.app.connectionForm.Draft.WorkingDirectory != work || h.app.connectionForm.folderError != "" {
+			actionErr = fmt.Errorf("folder-picker callback did not establish the owned work directory")
+			return
+		}
+		tr.Frame()
+		actionErr = clickSettingsAction(tr, "Save configuration")
+		capture()
+	})
+	if actionErr != nil {
+		fail(actionErr.Error())
+	}
+	h.pump.wait(func() bool { capture(); return !h.app.connectionForm.Busy })
+	h.pump.do(func() {
+		if !h.app.connectionForm.HasSaved || h.app.connectionForm.Error != "" || h.app.rt != nil {
+			actionErr = fmt.Errorf("normal connection Save did not finish before Runtime launch: %s", safe(h.app.connectionForm.Error))
+			return
+		}
+		phase = "apply"
+		tr.Frame()
+		actionErr = clickSettingsAction(tr, "Apply saved")
+		capture()
+	})
+	if actionErr != nil {
+		fail(actionErr.Error())
+	}
+	h.pump.waitTimeout(func() bool {
+		capture()
+		a := h.app
+		if a.connectionApplying || a.connectionForm.Busy {
+			return false
+		}
+		return a.runtimeStatus == runtimeStateFailed || a.runtimeStatus == runtimeStateExited || a.issueToolErr != "" || a.runtimeBuiltinToolsErr != "" || a.runtimeCapabilitiesErr != "" || a.connectionForm.Error != "" ||
+			(a.runtimeStatus == runtimeStateReady && a.runtimeCapabilitiesLoaded && a.runtimeBuiltinToolsLoaded)
+	}, 30*time.Second)
+	h.pump.do(func() {
+		a := h.app
+		want := connectionConfig{Version: 1, API: connectionAPIChatCompletions, Endpoint: "http://127.0.0.1:3425/v1", APIKey: key, Model: "deepseek/deepseek-flash", ContextTokens: 16384, OutputTokens: 512, WorkingDirectory: work, MaxActiveTasks: 1}
+		if a.rt == nil || a.runtimeStatus != runtimeStateReady || !a.runtimeHandshake || !a.connectionManaged || !a.issueToolEnabled() || !a.runtimeCapabilitiesLoaded || !a.runtimeBuiltinToolsLoaded || a.issueToolErr != "" || a.runtimeBuiltinToolsErr != "" || a.runtimeCapabilitiesErr != "" || a.maxActiveTasks() != 1 || a.connectionForm.Error != "" || a.connectionSaved == nil || *a.connectionSaved != want || a.connectionEffective == nil || *a.connectionEffective != want {
+			actionErr = fmt.Errorf("managed Apply/catalog/capacity prerequisites were not confirmed")
+		}
+		capture()
+	})
+	if actionErr != nil {
+		fail(actionErr.Error())
+	}
+	selectBuiltinSubsetThroughProfile(t, h, nil)
+	goal := fmt.Sprintf("Nagi MCP smoke %d", time.Now().UnixNano())
+	requirement := "Record-only probe; do not start work."
+	var sendErr string
+	h.pump.do(func() {
+		a, ct := h.app, h.app.selectedContact()
+		if ct.ID != contactID || ct.SessionID != "" || ct.BuiltinTools == nil || len(*ct.BuiltinTools) != 0 {
+			sendErr = "profile did not save explicit builtin[] before the first session"
+			return
+		}
+		phase = "one-conversation"
+		ct.Draft = fmt.Sprintf("Use Nagi issue_action and the supplied scope to create exactly one issue with goal %q and the sole requirement %q. Do not start or run work, update, stop, wait, resume or add a supplement. Read-only issue_list and issue_get are allowed. After the saved receipt, reply with its exact issue_id and say created, not started. Do not create another issue.", goal, requirement)
+		if !a.sendCurrent() {
+			sendErr = valueOr(safe(ct.SendError), "conversation send was rejected")
+		}
+		capture()
+	})
+	if sendErr != "" {
+		fail(sendErr)
+	}
+	h.pump.waitTimeout(func() bool {
+		capture()
+		ct := h.app.selectedContact()
+		return h.app.runtimeStatus == runtimeStateFailed || h.app.runtimeStatus == runtimeStateExited || ct.SendState == sendUnknown ||
+			ct.ActiveTaskID == "" && ct.SendState == sendIdle && (ct.LastTaskID != "" || ct.SendError != "") && !ct.HistoryDirty
+	}, 180*time.Second, func() {
+		h.pump.do(func() {
+			if !stopRequested {
+				stopRequested = true
+				h.app.cancelSelected()
+			}
+			phase = "deadline-stop-once-no-resend"
+			capture()
+		})
+	})
+	var client *runtimeClient
+	var sessionID, taskID, issueID, scopeRef string
+	h.pump.do(func() {
+		a, ct := h.app, h.app.selectedContact()
+		phase = "terminal-product"
+		capture()
+		client, sessionID, taskID = a.rt, ct.SessionID, ct.LastTaskID
+		if a.runtimeStatus != runtimeStateReady || ct.Status != statusReady || ct.StatusDetail != "" || ct.SendError != "" || ct.ActiveTaskID != "" || ct.Draft != "" || len(a.contacts) != 1 || len(ct.Issues) != 1 || ct.ID != contactID || ct.SelectedIssueID != selectedIssue || a.localSaveErr != "" {
+			actionErr = fmt.Errorf("terminal conversation did not preserve the required successful single-owner state")
+			return
+		}
+		issue := ct.Issues[0]
+		issueID = issue.ID
+		if issue.Goal != goal || issue.Status != issueStatusNotStarted || issue.WorkSessionID != "" || len(issue.Executions) != 0 || len(issue.Requirements) != 1 || issue.Requirements[0].Text != requirement || issue.RequirementsRevision != 1 || len(issue.Questions) != 0 || issue.Supplements == nil || issue.Supplements.pendingCount() != 0 {
+			actionErr = fmt.Errorf("created issue differs from the requested record-only facts")
+			return
+		}
+		if a.issueToolLedger == nil || len(a.issueToolLedger.Operations) != 1 {
+			actionErr = fmt.Errorf("expected only one durable create operation")
+			return
+		}
+		op := a.issueToolLedger.Operations[0]
+		if op.Action != issueToolActionCreate || op.Receipt == nil || op.Receipt.State != issueToolReceiptSaved || op.Receipt.IssueID != issueID {
+			actionErr = fmt.Errorf("create receipt is missing, unresolved or not saved")
+			return
+		}
+		scopeRef = op.ScopeRef
+		scope, ok := a.issueToolScopes[scopeRef]
+		if !ok || scope.ContactID != contactID || scope.RuntimeSession() != sessionID || scope.RuntimeTaskID != taskID || !scope.AllowsIssueID(issueID) {
+			actionErr = fmt.Errorf("saved create operation has a different owner/session/task scope")
+		}
+	})
+	if actionErr != nil {
+		fail(actionErr.Error())
+	}
+	if client == nil || sessionID == "" || taskID == "" {
+		fail("terminal conversation lacks its actual Runtime client/session/task identity")
+	}
+	actual, err := client.connectionConfig(sessionID)
+	if err != nil {
+		fail("public connection.config: " + err.Error())
+	}
+	wantWork, err := filepath.EvalSymlinks(work)
+	if err != nil {
+		fail(err.Error())
+	}
+	selection := actual.EffectiveConfig.ToolSelection
+	if actual.SessionID != sessionID || actual.StorageSchema != 2 || actual.EffectiveConfig.ConnectionBinding.State != "bound" || actual.EffectiveConfig.API != connectionAPIChatCompletions || actual.EffectiveConfig.Model != "deepseek/deepseek-flash" || actual.EffectiveConfig.WorkingDirectory != wantWork || actual.EffectiveConfig.Compaction.ContextTokens != 16384 || actual.EffectiveConfig.Compaction.OutputTokens != 512 || selection.Builtin == nil || len(selection.Builtin) != 0 || len(selection.External) != 3 {
+		fail("public effective connection/budgets/builtin[] do not match the managed request")
+	}
+	for _, definition := range issueToolConversationDefinitions() {
+		if !slices.ContainsFunc(selection.External, func(binding runtimeExternalToolBinding) bool {
+			return binding.SourceID == issueToolSourceID && binding.ToolName == definition.Name && binding.ExposedName == definition.Name
+		}) {
+			fail("public effective selection is missing the conversation issue tool " + definition.Name)
+		}
+	}
+	history, err := h.app.historyAllForSession(client, sessionID)
+	if err != nil {
+		fail("public session.history: " + err.Error())
+	}
+	projection := parseHistory(sessionID, history.Records, nil)
+	if len(projection.works) != 1 || projection.works[0].TaskID != taskID || projection.works[0].State != workCompleted {
+		fail("public history does not contain exactly the completed submitted conversation")
+	}
+	calls, outputs := map[string]inputItem{}, map[string]inputItem{}
+	counts := map[string]int{}
+	var callFacts, resultFacts []inputItem
+	var historyProblems []string
+	for _, record := range history.Records {
+		for _, item := range record.Record.Items {
+			switch item.Type {
+			case "tool_call":
+				counts[item.Name]++
+				fact := item
+				fact.Arguments = safe(fact.Arguments)
+				callFacts = append(callFacts, fact)
+				if item.CallID == "" || calls[item.CallID].CallID != "" {
+					historyProblems = append(historyProblems, "missing or repeated public tool call identity")
+				}
+				calls[item.CallID] = item
+			case "tool_result":
+				fact := item
+				fact.Output = safe(fact.Output)
+				resultFacts = append(resultFacts, fact)
+				if item.CallID == "" || outputs[item.CallID].CallID != "" {
+					historyProblems = append(historyProblems, "missing or repeated public tool result identity")
+				}
+				outputs[item.CallID] = item
+			}
+		}
+	}
+	evidence["observed_tool_call_counts"] = counts
+	evidence["public_tool_calls"], evidence["public_tool_results"] = callFacts, resultFacts
+	evidence["contact_id"], evidence["session_id"], evidence["task_id"], evidence["issue_id"] = contactID, sessionID, taskID, issueID
+	if len(historyProblems) != 0 || counts["issue_action"] != 1 || len(calls) != len(outputs) {
+		fail("public tool identities or single-create call count failed")
+	}
+	for callID, call := range calls {
+		var request IssueToolActionRequest
+		var response issueToolForwardResponse
+		if json.Unmarshal([]byte(call.Arguments), &request) != nil || request.ScopeRef != scopeRef || json.Unmarshal([]byte(outputs[callID].Output), &response) != nil || response.IsError || len(response.Content) != 1 {
+			fail("public tool call/result is invalid, failed or outside the owned scope")
+		}
+		switch call.Name {
+		case "issue_list":
+		case "issue_get":
+			if request.IssueID != issueID {
+				fail("issue_get read a different issue")
+			}
+		case "issue_action":
+			var receipt IssueToolReceipt
+			if request.Action != issueToolActionCreate || request.Goal != goal || request.IssueID != "" || !reflect.DeepEqual(request.Requirements, []string{requirement}) || json.Unmarshal([]byte(response.Content[0].Text), &receipt) != nil || receipt.State != issueToolReceiptSaved || receipt.IssueID != issueID || receipt.IssueStatus != issueStatusNotStarted || receipt.RequirementsRevision == nil || *receipt.RequirementsRevision != 1 {
+				fail("public mutation was not the single requested create with a resolved saved receipt")
+			}
+		default:
+			fail("unexpected public tool attempt: " + call.Name)
+		}
+	}
+	final := ""
+	for _, message := range projection.messages {
+		if message.Kind == msgContact && message.TaskID == taskID {
+			final = message.Text
+		}
+	}
+	if !strings.Contains(final, issueID) || !strings.Contains(strings.ToLower(final), "not started") {
+		fail("no final assistant response reports the actual created ID and not-started outcome")
+	}
+	evidence["final_response"] = safe(final)
+	evidence["effective_tool_selection"] = selection
+	h.pump.do(func() { phase = "ordinary-shutdown"; capture() })
+	h.shutdown(t)
+	data, err := os.ReadFile(filepath.Join(root, "gui", "contacts.json"))
+	if err != nil {
+		fail("read owned durable product store: " + err.Error())
+	}
+	var stored storedState
+	if err := json.Unmarshal(data, &stored); err != nil {
+		fail("decode owned durable product store: " + err.Error())
+	}
+	if stored.Version != contactStoreVersion || len(stored.Contacts) != 1 || stored.Contacts[0].ID != contactID || stored.Contacts[0].SessionID != sessionID || stored.Contacts[0].Draft != "" || stored.Contacts[0].SelectedIssueID != selectedIssue || stored.Contacts[0].BuiltinTools == nil || len(*stored.Contacts[0].BuiltinTools) != 0 || len(stored.Issues) != 1 || stored.Issues[0].ID != issueID || stored.Issues[0].ContactID != contactID || stored.Issues[0].Goal != goal || stored.Issues[0].Status != issueStatusNotStarted || stored.Issues[0].WorkSessionID != "" || len(stored.Issues[0].Executions) != 0 || len(stored.Issues[0].RequirementItems) != 1 || stored.Issues[0].RequirementItems[0].Text != requirement || stored.IssueToolOperations == nil || len(stored.IssueToolOperations.Operations) != 1 {
+		fail("durable own-store facts differ from the single requested record-only issue")
+	}
+	op := stored.IssueToolOperations.Operations[0]
+	if op.Action != issueToolActionCreate || op.ScopeRef != scopeRef || op.Receipt == nil || op.Receipt.State != issueToolReceiptSaved || op.Receipt.IssueID != issueID {
+		fail("durable create operation/receipt is missing or unresolved")
+	}
+	if !slices.ContainsFunc(stored.IssueToolScopes, func(scope IssueToolScope) bool {
+		return scope.Ref == scopeRef && scope.ContactID == contactID && scope.RuntimeSession() == sessionID && scope.RuntimeTaskID == taskID && scope.AllowsIssueID(issueID)
+	}) {
+		fail("durable create scope lost its actual owner/session/task association")
+	}
+	evidence["durable_contact"], evidence["durable_issue"], evidence["durable_operation"] = stored.Contacts[0], stored.Issues[0], op
+	evidence["result"] = "PASS"
+	t.Logf("managed MCP record-only outcome retained at %s; queries list=%d get=%d create=%d; these are public tool-call counts, not HTTP attempts", root, counts["issue_list"], counts["issue_get"], counts["issue_action"])
+}
+
 func TestIssueToolStartupFailureVisibleAndApplyRecovery(t *testing.T) {
 	binary := requireRuntimeBinary(t)
 	helper := ensureIssueToolTestHelper(t)

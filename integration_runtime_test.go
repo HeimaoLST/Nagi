@@ -1676,11 +1676,16 @@ func TestGUIFirstCreateUsesProfileSnapshot(t *testing.T) {
 //	SAKI_TEST_RUNTIME_BIN=/abs/path/to/Saki \
 //	go test -run TestGUIOnlineSmoke -count=1 .
 //
-// The directory must contain the host's .env; no value is read or printed by
-// the test. The verified host combination uses Chat Completions.
+// NAGI_TEST_MANAGED_MCP_SMOKE=1 selects the isolated managed-connection MCP
+// experiment instead. The legacy directory must contain the host's .env;
+// no value is read or printed by that test path.
 func TestGUIOnlineSmoke(t *testing.T) {
 	if os.Getenv("SAKI_TEST_ONLINE") != "1" {
 		t.Skip("set SAKI_TEST_ONLINE=1 for the online provider smoke")
+	}
+	if os.Getenv("NAGI_TEST_MANAGED_MCP_SMOKE") == "1" {
+		runGUIOnlineManagedMCPSmoke(t)
+		return
 	}
 	binary := requireRuntimeBinary(t)
 	workdir := os.Getenv("SAKI_TEST_ONLINE_WORKDIR")
