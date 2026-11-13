@@ -624,12 +624,12 @@ func (tc *taskContext) formView(c *ui.Context, theme workbenchTheme) {
 				tc.focusFileChooser = false
 			}
 			if tc.fileChoosing {
-				ui.Text(c, msgs.TaskContextChoosingFile()).FontSize(typeAction).TextColor(t.TextMuted)
+				ui.Text(c, msgs.TaskContextChoosingFile()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 			}
 			if tc.fileChoiceFailed {
-				ui.Text(c, msgs.TaskContextChooseFileFailed()).FontSize(typeAction).LineHeight(1.5).TextColor(t.Danger)
+				ui.Text(c, msgs.TaskContextChooseFileFailed()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Danger)
 			}
-			ui.Text(c, msgs.TaskContextChooseFileHint()).FontSize(typeAction).LineHeight(1.5).TextColor(t.TextMuted)
+			ui.Text(c, msgs.TaskContextChooseFileHint()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 			ui.Text(c, locales.In(c.Locale()).TaskContextPath()).FontSize(typeLabel).FontWeight(400).FixedLineHeight(lineLabel).TextColor(t.Text)
 			preferenceInput(c, &tc.formPath, false).Label(locales.In(c.Locale()).TaskContextFilePathLabel()).Placeholder(locales.In(c.Locale()).TaskContextFilePathPlaceholder()).OnChange(func() {
 				tc.fileForm.pathRevision++

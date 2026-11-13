@@ -336,11 +336,11 @@ func (a *appModel) issueResultPanelView(c *ui.Context, t *ui.Theme) {
 	hasBody := page.Panel.Response != "" || len(page.Panel.Files) > 0
 	if !hasBody && (page.Loading || page.LoadError != "") {
 		if page.Panel.RunGoal != "" {
-			ui.Text(c, locales.In(c.Locale()).ResultRunLabel(strconv.Itoa(page.Panel.RunNumber), page.Panel.RunGoal)).FontSize(14).TextColor(t.TextMuted)
+			ui.Text(c, locales.In(c.Locale()).ResultRunLabel(strconv.Itoa(page.Panel.RunNumber), page.Panel.RunGoal)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 		}
 		issueResultRunHeader(c, &page.Panel, actions, 10)
 		if page.Loading {
-			ui.Text(c, locales.In(c.Locale()).ResultLoadingHistory()).FontSize(14).TextColor(t.TextMuted)
+			ui.Text(c, locales.In(c.Locale()).ResultLoadingHistory()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 		}
 		if page.LoadError != "" {
 			a.recoveryNotice(c, t, "result-load:"+strconv.Itoa(page.Generation), issueResultPageText(locales.In(c.Locale()), page.LoadError, ""), page.LoadErrorDetail, true)
@@ -348,13 +348,13 @@ func (a *appModel) issueResultPanelView(c *ui.Context, t *ui.Theme) {
 		return
 	}
 	if page.Loading {
-		ui.Text(c, locales.In(c.Locale()).ResultReloadingSnapshot()).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
+		ui.Text(c, locales.In(c.Locale()).ResultReloadingSnapshot()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 	}
 	if page.LoadError != "" {
 		a.recoveryNotice(c, t, "result-load:"+strconv.Itoa(page.Generation), issueResultPageText(locales.In(c.Locale()), page.LoadError, ""), page.LoadErrorDetail, true)
 	}
 	if page.Notice != "" {
-		ui.Text(c, issueResultPageText(locales.In(c.Locale()), page.Notice, "")).FontSize(14).LineHeight(1.5).TextColor(t.Warning)
+		ui.Text(c, issueResultPageText(locales.In(c.Locale()), page.Notice, "")).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Warning)
 	}
 	issueResultPanel(c, &page.Panel, actions)
 }
