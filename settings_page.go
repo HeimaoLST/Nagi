@@ -435,7 +435,7 @@ func settingsPreferenceRow(c *ui.Context, t *ui.Theme, label, description string
 		})
 		controls := ui.Column(c).MinWidth(0).Gap(8)
 		if width >= preferenceBreakpoint {
-			controls.Width(336).MaxWidthPercent(66).Shrink(1).AlignItems(ui.End)
+			controls.MaxWidthPercent(66).Shrink(1).AlignItems(ui.End)
 		} else {
 			controls.FillWidth()
 		}

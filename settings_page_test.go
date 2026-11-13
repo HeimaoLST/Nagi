@@ -303,6 +303,65 @@ func TestSettingsCategoryChangeResetsContentScrollAndKeepsDraft(t *testing.T) {
 	}
 }
 
+func TestGeneralPreferenceSelectorsKeepWidthAndKeyboardChoice(t *testing.T) {
+	for _, locale := range []string{"en", "zh-Hans"} {
+		for _, width := range []int{720, 1040} {
+			t.Run(fmt.Sprintf("%s-%d", locale, width), func(t *testing.T) {
+				a, ct := workspaceTestApp(t)
+				recoveryTestStore(t, a)
+				a.windowWidth = width
+				a.languageModeLoaded = true
+				a.languageMode = ""
+				ct.Draft = "preserve current text 原文"
+				a.openSettingsTab(settingsTabAppearance, settingsSourceRail)
+				oldApply := applyAppLocale
+				defer func() { applyAppLocale = oldApply }()
+				var applied []string
+				applyAppLocale = func(tag string) { applied = append(applied, tag) }
+				tr := ui.NewTester(a.view, width, 720)
+				tr.SetLocale(locale)
+				tr.SetFocused(true)
+				tr.Frame()
+				msgs := locales.In(locale)
+				for _, label := range []string{msgs.AppearanceMode()} {
+					var box ui.Rect
+					found := false
+					for step := 0; step < 12; step++ {
+						box, found = tr.Find(label)
+						if found && box.H >= 32 && box.Y >= 0 && box.Y+box.H <= 720 {
+							break
+						}
+						tr.Scroll(float32(width-100), 600, 0, 100)
+						tr.Frame()
+					}
+					if !found || box.H < 32 || box.W < 120 || box.W > 160 {
+						t.Fatalf("real General selector %q bounds=%+v; expected fit120..160 with32 hit", label, box)
+					}
+				}
+				if len(applied) != 0 {
+					t.Fatal("rendering a General selector changed locale")
+				}
+				for step := 0; step < 16 && !tr.Focused(msgs.SettingsLanguage()); step++ {
+					tr.Key(0, ui.KeyTab)
+					tr.Frame()
+				}
+				if !tr.Focused(msgs.SettingsLanguage()) {
+					t.Fatal("real Language selector was not keyboard reachable")
+				}
+				tr.Key(0, ui.KeySpace)
+				tr.Frame()
+				tr.Key(0, ui.KeyEnd)
+				tr.Frame()
+				tr.Key(0, ui.KeyEnter)
+				tr.Frame()
+				if len(applied) != 1 || applied[0] != "en" || a.languageMode != "en" || ct.Draft != "preserve current text 原文" || a.settingsTab != settingsTabAppearance {
+					t.Fatalf("real popup keyboard choice lost its stable value/state: applied=%v mode=%q draft=%q", applied, a.languageMode, ct.Draft)
+				}
+			})
+		}
+	}
+}
+
 func TestSettingsConnectionDirtyDiscardAndAppliedReopen(t *testing.T) {
 	config := connectionConfig{Version: 1, API: connectionAPIChatCompletions, Endpoint: "http://example.test/v1", APIKey: "fixture", Model: "fixture", ContextTokens: 1000, OutputTokens: 100, WorkingDirectory: t.TempDir(), MaxActiveTasks: 2}
 	a, _ := workspaceTestApp(t)
@@ -460,7 +519,13 @@ func TestPreferencesListControlsAndPreviews(t *testing.T) {
 								tr.Key(0, ui.KeyTab)
 								tr.Frame()
 								for _, label := range []string{msgs.ConnectionFieldEndpoint(), msgs.ConnectionFieldAPIKey(), msgs.ConnectionFieldModel()} {
-									inputs[label] = inputs[label] || tr.Focused(label)
+									if tr.Focused(label) {
+										inputs[label] = true
+										box, found := tr.Find(label)
+										if !found || box.W < 32 || box.H < 32 {
+											t.Fatalf("focused fresh input lacks its real hit area: %q %+v", label, box)
+										}
+									}
 								}
 								if tr.Focused(msgs.ConnectionFieldWorkingDirectory()) {
 									t.Fatal("fresh setup exposed the manual path before its disclosure")

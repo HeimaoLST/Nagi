@@ -199,6 +199,77 @@ func TestPreferenceDisabledFaceComposesOnce(t *testing.T) {
 	}
 }
 
+func TestPreferenceInputScrolledSelectionKeepsFaceBorder(t *testing.T) {
+	for _, dark := range []bool{false, true} {
+		for _, width := range []int{80, 240} {
+			name := fmt.Sprintf("scrolled-selection-%d-dark-%t", width, dark)
+			t.Run(name, func(t *testing.T) {
+				value := ""
+				tr := ui.NewTester(func(c *ui.Context) {
+					theme := resolveWorkbenchTheme(dark).Theme
+					c.SetTheme(theme)
+					ui.Column(c).Fill().Padding(20).Background(theme.Background).Children(func() {
+						preferenceInput(c, &value, false).Label("Editable viewport").Width(float32(width))
+					})
+				}, width+40, 80)
+				tr.SetFocused(true)
+				tr.Frame()
+				if err := tr.Click("Editable viewport"); err != nil {
+					t.Fatal(err)
+				}
+				tr.Move(0, 0)
+				tr.Frame()
+				box, ok := tr.Find("Editable viewport")
+				if !ok || box.H < 32 {
+					t.Fatalf("missing real input hit box: %+v", box)
+				}
+				baseline := make([][4]uint8, 0, 12*28)
+				for y := int(box.Y + 2); y < int(box.Y+30); y++ {
+					for x := int(box.X); x < int(box.X+12); x++ {
+						p := tr.Image().RGBAAt(x, y)
+						baseline = append(baseline, [4]uint8{p.R, p.G, p.B, p.A})
+					}
+				}
+				const text = "0123456789 abcdefghijklmnopqrstuvwxyz long current raw draft 原文保留 0123456789 abcdefghijklmnopqrstuvwxyz long current raw draft 原文保留"
+				tr.Type(text)
+				tr.Key(ui.Cmd, ui.KeyA)
+				tr.Key(ui.Cmd, ui.KeyC)
+				tr.Frame()
+				if value != text || tr.Clipboard() != text || !tr.Focused("Editable viewport") {
+					t.Fatal("scroll/selection styling changed raw text, clipboard or actual input focus")
+				}
+				changed, index := 0, 0
+				for y := int(box.Y + 2); y < int(box.Y+30); y++ {
+					for x := int(box.X); x < int(box.X+12); x++ {
+						p := tr.Image().RGBAAt(x, y)
+						if [4]uint8{p.R, p.G, p.B, p.A} != baseline[index] {
+							changed++
+						}
+						index++
+					}
+				}
+				if changed != 0 {
+					t.Errorf("horizontally scrolled selection overwrote %d border/inset pixels", changed)
+				}
+				caret, active := tr.TextCaret()
+				if !active || caret.X < box.X+12 || caret.X+caret.W > box.X+box.W-12+.5 {
+					t.Errorf("caret escaped the same editable content box: caret=%+v input=%+v", caret, box)
+				}
+				if directory := os.Getenv("SAKI_PREVIEW_DIR"); directory != "" {
+					writePreviewPNG(t, filepath.Join(directory, name+".png"), tr.Image())
+					data, err := json.MarshalIndent(map[string]any{"hit": box, "face": ui.Rect{X: box.X, Y: box.Y + 2, W: box.W, H: 28}, "caret": caret, "changed_border_and_inset_pixels": changed, "raw_text_and_clipboard_preserved": value == text && tr.Clipboard() == text}, "", "  ")
+					if err != nil {
+						t.Fatal(err)
+					}
+					if err := os.WriteFile(filepath.Join(directory, name+".json"), data, 0600); err != nil {
+						t.Fatal(err)
+					}
+				}
+			})
+		}
+	}
+}
+
 // appearancePreviewApp uses the existing workspace fixture state; it does not
 // seed production work or call Runtime.
 func appearancePreviewApp(t *testing.T, scene string) (*appModel, *contact) {

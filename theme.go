@@ -12,27 +12,29 @@ import (
 // CSS roles use the adopted rem16/scale1 profile, independent of Theme.Rem.
 // Existing workbench title aliases remain an S2 binding seam.
 const (
-	lineBody             float32 = 24
-	cssRem               float32 = 16
-	controlHeight        float32 = 28
-	controlHit           float32 = 32
-	typeLabel            float32 = 13
-	lineLabel            float32 = 20
-	lineMeta             float32 = 18
-	lineAction           float32 = 16
-	typeNavigation       float32 = 12
-	lineNavigation       float32 = 16
-	settingsSidebarWidth float32 = 248
-	settingsContentWidth float32 = 820
-	preferenceBreakpoint float32 = 40 * cssRem
-	typeContactTitle     float32 = 16
-	typePageTitle        float32 = 16
-	typeGroupTitle       float32 = 14
-	typeBody             float32 = 14
-	typeAction           float32 = 13
-	typeMeta             float32 = 12
-	typeRailName         float32 = 13
-	typeRailSummary      float32 = 12
+	preferenceSelectMinWidth float32 = 120
+	preferenceSelectMaxWidth float32 = 160
+	lineBody                 float32 = 24
+	cssRem                   float32 = 16
+	controlHeight            float32 = 28
+	controlHit               float32 = 32
+	typeLabel                float32 = 13
+	lineLabel                float32 = 20
+	lineMeta                 float32 = 18
+	lineAction               float32 = 16
+	typeNavigation           float32 = 12
+	lineNavigation           float32 = 16
+	settingsSidebarWidth     float32 = 248
+	settingsContentWidth     float32 = 820
+	preferenceBreakpoint     float32 = 40 * cssRem
+	typeContactTitle         float32 = 16
+	typePageTitle            float32 = 16
+	typeGroupTitle           float32 = 14
+	typeBody                 float32 = 14
+	typeAction               float32 = 13
+	typeMeta                 float32 = 12
+	typeRailName             float32 = 13
+	typeRailSummary          float32 = 12
 )
 
 type workbenchTheme struct {
@@ -207,7 +209,8 @@ func preferenceSelect(c *ui.Context, selected *string, options []selectOption, l
 	}
 	sel := ui.SelectBase(c, selected)
 	trigger := sharedControlFace(c, sel.Trigger.Label(label).Value(display).Disabled(blocked), 16, 4, true, false, false).
-		FillWidth().Justify(ui.Start).Padding(8, 10, 8, 12).FontWeight(500)
+		FillWidth().MinWidth(preferenceSelectMinWidth).MaxWidth(preferenceSelectMaxWidth).
+		Justify(ui.Start).Padding(8, 10, 8, 12).FontWeight(500)
 	trigger.Children(func() {
 		ui.Row(c).FillWidth().MinWidth(0).AlignItems(ui.Center).Gap(6).Children(func() {
 			ui.Text(c, display).FontSize(typeAction).FontWeight(500).FixedLineHeight(lineAction).
@@ -324,8 +327,11 @@ func controlPath(r ui.Rect, region float32, exponent float64) *ui.Path {
 
 func preferenceInput(c *ui.Context, value *string, invalid bool) ui.Element {
 	e := ui.TextInputBase(c, value).Font("system-ui").FontSize(typeAction).FontWeight(400).
-		FixedLineHeight(lineAction).Padding(8, 12).TextColor(c.Theme().Text)
-	return sharedControlFace(c, e, 16, 4, true, invalid, false)
+		FixedLineHeight(lineAction).TextColor(c.Theme().Text)
+	e = sharedControlFace(c, e, 16, 4, true, invalid, false)
+	// The editor scrolls inside its real border clip, not its padding.
+	// Reserve the same content inset without letting glyphs paint over the face.
+	return e.BorderWidth(0, 12, 0, 12).Padding(8, 0)
 }
 
 // RemixIcon v4.6.0 (Apache-2.0), with the distinct Heroicons v1.0.6 (MIT) selector indicator.
