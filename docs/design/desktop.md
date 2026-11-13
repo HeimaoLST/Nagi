@@ -4,6 +4,180 @@
 
 早期浏览器示意保留在 Git 历史（[7145225 的 desktop-contacts.html](https://github.com/HeimaoLST/Saki/blob/7145225c47b9b29c8011edbaefc410d0d6d46b61/docs/design/previews/desktop-contacts.html)），不是当前原生应用的验收对象，也不在仓库维护第二套现行预览；当前原生 Go 应用位于 Nagi 仓库根目录，视觉与交互以 [Desktop workbench](desktop-workbench.md) 为准。当前主题事实见 `theme.go` 的 `resolveWorkbenchTheme`（Paper/Moss；light/dark 语义角色）；#92 的 Moon/Dawn 和 #90 的 11px/12px 数值只保留为历史设计/实现记录，不再作为当前规范。此前将这些能力或颜色列为后续独立任务的说明已失效，不再作为当前实现或未来承诺；具体状态以对应任务段、PR 和 `dev` 为准。
 
+<a id="qoder-match-design-20261113"></a>
+
+## Qoder 严格视觉契约（本日最新方向，2026-11-13）
+
+<a id="qd-01"></a>
+
+**QD-01：一套现有共享路径。** 按[需求](../requirements/desktop.md#qoder-match-20261113)统一所有目标页面，Nagi 身份和 Paper／Moss 颜色之外，已声明的同类间距、字形、字重、控件与图标不得各页自定。此节显式替代旧四档字号、旧密度／宽度、无 chevron 和 32px 可见面限制；既有文案、作用域、原文内容和控制器不变。规范只在这两个 topic docs；外部 JSON 是本节证据／机器映射，不能成为第二个设计系统。Qoder 新任务首页的插画、积分、模式、权限、语音和品牌不成为 Nagi 新功能。
+
+**证据基线**：实际安装 `com.qodercn.app` 0.4.8，静态完整 commit `f8c98a817f6059ab9a959f501e9a483805170942`／ASAR `c76906bf…`；原生报告 `qoder-native-r2/report.json`、本次 `product/stage-a/` 与 `stage-a2/`。静态当前权威为 `engineering-r2/metrics.json b28b6b98`、evidence `fa2ef2e4`、correction `a4f9e77e`、manifest `112fa259`，继承其逐哈希绑定的许可／字体／MyGo 证据。旧 `f131cfa0/9409ac96` 保留历史，不能再引用错误的泛用 iconbutton.md 分类。以下 D＝源码声明，P＝Nagi 明确选择的声明基准／角色适配；都不冒称原生有效值。
+
+<a id="qd-02"></a>
+### QD-02：单位与字体角色
+
+采用唯一移植基准 **R=16、scale=1、1 声明 CSS px=1 Nagi 逻辑单位**（P）；`s=.25rem=4`，源码 rem／utility 先在此基准解析再交渲染。当前 Qoder root／zoom／device scale／活动 large scale 仍 UNKNOWN；large=1.1 只是另一声明，不新增 Nagi 缩放偏好。`Theme.Rem(n)=n*Theme.FontSize`，当前正文 13 与 R 无关，禁止用它解释 CSS rem。用显式 DIP、`Theme.Font`／`Element.Font`／`FontSize`／`FontWeight`／`FixedLineHeight` 表达；已知字体／行盒没有已证实框架缺口。
+
+| 共享角色 | CSS 声明（D） | 采用的逻辑值／用途（P） |
+| --- | --- | --- |
+| ui.family | system-ui／-apple-system／BlinkMacSystemFont／Segoe UI／sans-serif | 同一系统 UI 路径；OS／CJK fallback 与具体生效 face 未测，不全局换 Inter／Instrument Sans |
+| label / settings.label | 13px，400，leading-5 | 13／400／固定行高 20；普通设置标签、紧凑对象标题 |
+| description / section | 12px／18px；section weight400；mt-1 | 12／400／18；说明距标签 4；章节／状态／辅助说明同角色 |
+| navigation.label | 12px，400，leading-4 | 12／400／16 |
+| action / select | 13px，500，leading-4 | 13／500／16；Input 同为 13／16，使用原正常字重 |
+| conversation / composer text | small13/24、medium14/24、large16/28 三个声明分支 | 本次统一选择 medium 14／24；不声称当前 Qoder 已选 medium，不新增字号选项 |
+| reader / result | base、chat 14/24；compact13/22；docs15/26；reading16/30 | 结果／阅读正文统一 base 14／24，压缩记录才用 compact13／22；不把所有结果擅改 docs／reading 分支 |
+| code | ui-monospace／SFMono-Regular／SF Mono／Consolas／Liberation Mono／Menlo／monospace | 原代码内容与行结构保留，不把等宽字体用于普通标签 |
+| new-chat greeting | Instrument Sans → system-ui，仅此对应角色已证实 | 不新增 Qoder 首页／greeting；Nagi 既有联系人空态仍用对应普通 UI／conversation 角色。若以后明确实例化此 greeting，另绑定字体与 OFL／注册路径，不从 WOFF 猜原生等价 |
+
+原生 General 的大 H1、任意 Markdown 标题细分的确切字号／分支不在本次已绑定角色表中，保留 UNKNOWN；不得回填旧 16 或任选新数值后称为 Qoder 实测。紧凑业务对象标题采用表内 label 是明确的 Nagi 角色适配；需声称大 H1／标题细分也已对齐时，必须先绑定其声明角色。未知不阻止其余已知角色实施，但不能算该角色完成。
+
+<a id="qd-03"></a>
+### QD-03：shell、列表与留白
+
+| 角色 | 声明 → 本次基准逻辑值 |
+| --- | --- |
+| Settings sidebar | default248px／min208px；用户已有可调整宽度是状态，不冒称参考默认，不自动覆盖已存布局 |
+| Settings content | MaxWidth820px，px-8→32，pt-2→8，pb-12→48；max 不是固定宽度 |
+| section | header h-11→44、inner h-7→28、px-4→16；content mt-2→8；标题 12／18 |
+| group | 一个章节共用 border1、circular rounded-xl→12、px-4→16；不是每项一张卡 |
+| preference row | py-3.5→上下14；底边1 dashed，末行无边；高度随说明换行，不固定截断 |
+| row composition | `<40rem`＝640 前 column/stretch；从640起 row/center；leading glyph3.5s→14 |
+| navigation row | h-7→28，icon/text gap2s→8，px-2→8，glyph14；必要 Nagi 二行状态按同一 label／meta 自然增高，不裁掉状态来硬塞28 |
+| menu.compact | 12／16，gap6，padding6，circular radius6，glyph14；普通读回／行菜单统一此角色 |
+| menu.regular | 12，gap8，padding8，circular radius4，glyph14；仅明确普通菜单分支使用，不逐页混选 |
+
+<a id="qd-04"></a>
+### QD-04：控件分类、形状与共享面
+
+| 组件／分支 | 声明与本次基准值 | 分类与约束 |
+| --- | --- | --- |
+| button.md | h28，13／500／16，gap6 | 文字操作共用此角色；padding／角形不得从别的分支假推为源码事实，统一未绑定的部分须登记后采用，不逐页自填 |
+| input.md | h28、px12、13／16、border1、squircle-2xl region16、disabled opacity .5 | 首用／Edit／进阶路径／精确数字共用；invalid 使用原错误与语义色 |
+| textarea.md | 13／400／20、px12、py8、min-height80、squircle region16 | 对应普通多行表单；composer 正文另用14／24 |
+| select.md | min-h28、py2、13／500／16、gap6、padding-start12/end10、glyph16、squircle region16 | 外观／语言／主题／协议等枚举沿用原 SelectBase 语义，恢复真实下拉 indicator；不变成多个布尔开关 |
+| FloatingButton.sm | box28、padding6、glyph16、rounded-full | 仅 small FloatingButton 分支；不是通用 toolbar |
+| FloatingButton.md/default | box32、padding8、glyph16、rounded-full | 默认／非sm FloatingButton 分支，继承字体与有效命中未知；不据此把所有按钮改32 |
+| toolbar.iconbutton | generic 源组件／尺寸／padding／字重／形状 **UNKNOWN** | 本片 Nagi 普通 toolbar 明确适配 button.md 的文字／可见高度与 glyph16（P），不是“Qoder 泛用 toolbar=28”的事实；具体角形／padding 未绑定前不能算完全对齐；不用 FloatingButton 代替普通导航 |
+| composer | min-height120、border1；选择已声明的 rounded-2xl16/no-shadow 分支及 toolbar h42、gap6、px6、py10（P） | 另一 region20/small-shadow、min-h44/gap4/px6/pb8 分支保留为 D，当前生效分支 UNKNOWN；禁止页面自行混用。内 selector h28、px8、12／400／16、继承 family |
+
+**Squircle 是真实目标／缺口，不是 radius 别名。** 源 `.squircle-lg` region8 与 `.squircle-2xl` region16 使用 `corner-shape:squircle`；按 [W3C CSS Borders 4（2025-12-16 draft）](https://www.w3.org/TR/2025/WD-css-borders-4-20251216/#corner-shaping) 为 superellipse(2)、指数4，round 为 superellipse(1)。corner region、边框、内容裁切必须遵循对应曲线及 CSS radius 归一化；普通 group/menu/composer 的 circular rounded 不变成 squircle。
+
+Pinned MyGo 的公开 Radius／Clip 为 circular；已有 Draw、Path（MoveTo／LineTo／CubeTo）、FillPath／StrokePath 支持在现有 `theme.go` 实现一个局部共享 face/path，是具体候选，不代表 clip、hit、focus 已等价，也不证明需要 framework fork。后续须用同一基准的参考 CSS face 与实际 MyGo face，覆盖 region8／16、28高控件、窄／宽、normal／focus／invalid／disabled，并核对边框、角区裁切、子内容与焦点轮廓；只检查 Radius 数字／画一层背景不通过。若公开 clip 不足，报告具体可见差异和单一局部修正；不悄悄用旧圆角、不扩建渲染框架，其他已知角色可先推进，形状未验则标未验。
+
+<a id="qd-05"></a>
+### QD-05：操作图标与许可
+
+共用下表的 **24×24 viewBox、currentColor filled 路径**，来源精确匹配 RemixIcon **v4.6.0**（Apache-2.0），不是视觉相似或任意 Lucide 替换；不加旧1.8／1.9 stroke。同一动作在 Settings、nav、chat、work、reader 仅引用同一登记资源。大小取其角色：导航／菜单14、Select indicator16；普通 Nagi toolbar 的16是 QD-04明确适配，不是所有 Qoder 图标的默认尺寸。源码未给 size 的 glyph 原为1em，不能一律当16。
+
+| Nagi 操作／角色 | 唯一资源 |
+| --- | --- |
+| 添加对象／资料；任务数加 | QoderAddLine = Remix System/add-line |
+| 普通返回／后退 | QoderArrowLeftLine = Arrows/arrow-left-line |
+| 层级左右 disclosure | QoderArrowLeftSLine／QoderArrowRightSLine；垂直 disclosure 用 QoderArrowDownSLine |
+| 发送；停止当前对象 | QoderArrowUpLine／QoderStopFill；只换图形，不改停止作用域 |
+| 选中／成功核对；关闭 | QoderCheckLine／QoderCloseLine |
+| 设置；复制原文；更多 | QoderSettings4Line／QoderFileCopyLine／QoderMoreLine |
+| 搜索；任务数减；目录；历史时间 | QoderSearchLine／QoderSubtractLine／QoderFolderLine／QoderTimeLine |
+| Select 下拉 indicator | **独立 Heroicons v1.0.6** `optimized/outline/chevron-down.svg`（MIT）；24 viewBox，fill none，path `M19 9l-7 7-7-7`，stroke currentColor／2、round cap/join；不是 filled ArrowDownS |
+
+附件 paperclip／Nagi 联系人等未在这16个共同 glyph 中精确绑定的角色不得保留旧自画图并称匹配。Nagi 独有对象可在同一 pinned Remix 家族登记具体 ID／许可／尺寸后使用；相同操作若要宣称与 Qoder 一样，须有对应组件／路径证据。未绑定时保持显式文字入口和 UNKNOWN，不伪造精确映射，不引入 Qoder 专有功能／品牌 glyph。
+
+若采用这些资源，仓库和最终应用都保留 `assets/licenses/RemixIcon-Apache-2.0.txt`、`assets/licenses/Heroicons-MIT.txt` 的 pinned 原文。当前 build-macos-app.sh 不复制这些 notices；未来有界打包改动把它们按字节复制到 `Nagi.app/Contents/Resources/licenses/` 并以包内容／hash 验证。此处只记录 writer 需求，不授予实现权限，不新增 About／Settings 许可页面、不改变 Runtime。
+
+<a id="qd-06"></a>
+### QD-06：状态、命中、焦点
+
+normal／hover／pressed／selected 共享一套组件面、边框与 Nagi 语义色，不能各页增加高亮壳；disabled 使用对应声明（Input .5）并保留真实 disabled/controller gate，不只变灰。invalid 的完整摘要／字段错误与显式原始 Details 不隐藏；busy／unknown／saved-pending／tested／applied 是不同事实，不做装饰开关。仅 FloatingButton 的已绑定分支才可引用其特定圆面／动画，不能套到所有 toolbar。
+
+**可见面与真实 hit 分开。** 28高是已选组件的可见角色，旧“所有控件面32”失效；Nagi 的真实 hit 仍至少32逻辑单位。可用不改变可见面、行距与对齐的透明交互包围区域，但不得挡邻项／把非动作区域吞掉；若做不到，列明实际 pinned API／布局缺口，不能用视觉面高度替代命中证据或保留旧面掩盖问题。此适配是 Nagi 功能可用性保护，不声称 Qoder 有同样 hit slop。
+
+继续使用原官方 controller／Label／Description／Focus 和稳定值：Tab／方向键／Enter／Space／Escape、popup选中／收起后的焦点、Back 的准确原入口、文本 caret／selection 与 IME 均实际验证。不能重建菜单／事件真源，不能因绘制 squircle 改点击、焦点或回调次数；外观、语言、错误重排不抢走原输入焦点。
+
+<a id="qd-07"></a>
+### QD-07：页面与内容映射
+
+| 必交页面 | 一致的视觉角色；保留 Nagi 语义 |
+| --- | --- |
+| General | Settings shell → section/group/row → label/description＋Select／显式导入／恢复 action；主题警告与语言说明沿同一行层次，不加每项独立卡 |
+| Connection 首用／已存／Edit | 同一 shell、row、Input/Select/action/description；三必填输入、当前值来源、完整 errors、limits、精确 stepper、目录 chooser 与进阶入口保留原状态机 |
+| 导航／联系人／对象 header | 共用 navigation label/glyph/选中面、紧凑 label/meta/actions；Nagi 必需二行状态自然增高。实际 Qoder 大 H1与应用 header 的未绑定差异单列，不把身份／复制品功能塞入导航 |
+| 对话 | normal MaxWidth768、用户内容MaxWidth752、正文14/24；wide968为未选声明。不新建宽度偏好，不改已有用户内容、消息／工作隔离与历史 |
+| composer | QD-04的唯一已选 shell／toolbar、正文14/24；现有资料／模型／Send/Stop 映射同一图标与控件；不复制语音、授权、积分、workspace功能；必要真实错误位于附近可读 |
+| 事项／工作 | Nagi 独有生命周期映射共享 heading/label/meta/row/action/disclosure；一件对象一个有意义章节，不套多层背景。Run完成≠事项Done，unknown、待回答、补充回执与AD可见确认不变 |
+| 结果／文件／reader | shared reader14/24、compact13/22、菜单/action／copy/check/close、代码mono；成果／消息／真实 Runtime facts 保留分层，文件缺失／未核对与原始 Details 不藏进装饰卡 |
+
+这是原生工作台结构＋源码声明的 Nagi 角色适配，不宣称 Qoder 存在 Nagi 的事项／C8／AD机制。原生观察支持 open prose、安静 response-action toolbar、单一选中导航、对象 header／右侧工作列表和内嵌 composer工具行；未把任务文字写进规格，也不从截图推字号或逻辑尺寸。
+
+<a id="qd-08"></a>
+### QD-08：响应、溢出与未知
+
+基准只使用 QD-03已声明的640 row断点和约束宽度，不保留旧800横向 Settings导航阈值作为默认。Sidebar按248／min208的共同角色与已有可调整状态；内容和reader是max-width，可随可用区域收缩。720×640及1040×720、en／zh-Hans、Paper／Moss下，长路径／模型值可换行或在完整tooltip/可访问名称下收敛，必要状态／错误／保存动作不能省掉；滚动后可达且不会让焦点跑到不可见位置。Code可有局部横向滚动，页面本身不可横向溢出。业务二行／长说明按同一组件自然长高，不新增逐页字号／补偿边距。
+
+明确 UNKNOWN：实际 root／zoom／active scale／fallback、活动 chat-size／width、活动 composer分支、当前resized sidebar、未绑定大H1／Markdown标题细分、generic toolbar源组件／角形／padding、部分附件／专有 glyph、material有效合成及 squircle clip/hit 的原生等价。当前选择的 medium／normal／composer分支和CSS base为 P，**不是猜测这些当前状态**。未知只阻止相应角色的完整匹配声明，不阻止已知约束文档化／实施；未经声明的值不得由页面代码偷偷补齐或回用旧值后称已匹配。
+
+<a id="qd-09"></a>
+### QD-09：功能与数据边界
+
+PREF-AC1–6与AC7行为条件保持；保留当前WIP的同一 Draft／initial、Edit收起不Discard、invalid原文、反馈与focus揭示、确切当前表单Test、saved/effective/session区别、独立Save／Save+Apply／Apply saved、Atoi／TrimSpace＋受检整数步进、folder／file choose-only与显式Save/read/preview/send。不得把 MyGo float Stepper 替代精确整数，也不得抄 Qoder Configure 的自动保存到Connection。保留 C8原件／副本／paused／unconfirmed与退出前复制未保存文字，AD只在匹配可见详情确认，unknown／busy/no-queue／活动-work／回调归属／drain不重试或重放。视觉句柄／图标改变不改控制器、Runtime／store／schema／服务或model调用。
+
+<a id="qd-10"></a>
+### QD-10：唯一 writer、两片验证和交付
+
+| 必交片／所有权提案（最终由lead分配） | 最小现有路径与边界 |
+| --- | --- |
+| S1 Preferences工程师：Settings＋共享视觉基准 | `theme.go` 唯一角色／单位／face／glyph入口，`settings_page.go`、`connection_settings.go`；保留当前Edit／strict-int WIP。候选测试 `settings_page_test.go`、`connection_settings_test.go`、`appearance_preview_test.go`；必要文案仍 `locales/en.json`／`zh-Hans.json`／`catalog_gen.go`。旧 i18n_test.go 单项授权不自动扩大。拟新增仅上述两份 license文本。 |
+| S2 既有UI owner：完整导航／对话／事项／成果对齐 | `navigation.go`、`view.go`、`workspace.go`、`issue_results.go`、`markdown.go` 调用S1同一角色／glyph，不另建一套token。候选测试 `navigation_test.go`、`view_test.go`、`workspace_test.go`、`issue_results_test.go`、`markdown_view_test.go`、`layout_test.go`／`layout_preview_test.go`；只改renderer，不能改producer／business callback／store。 |
+| 打包交付唯一owner | lead另配 `scripts/build-macos-app.sh` 的两份 notice→Resources/licenses 有界复制与实际包内容校验；不改Runtime、不增许可UI；不是本规格写者的source权限。 |
+| QA／business／product | 只读独立检查QDrule／PREF逐项证据与caller语义；此表不向任何worker授予源码或执行权限。共享 `theme.go` 只能一个writer；后续追加角色也需lead明确，不在各renderer旁造默认。 |
+
+新基准须先复现有意义的**实际角色／控件**差异：真实布局bound／行盒／字号角色、选中／展开／focus、点击真实hit包围区、精确SVG来源与完整状态，而不是只测常量／字符串或截图计数。Squircle做独立face／border／clip／focus比较，不能以圆角数值等同过关。至少覆盖首用／已存／dirty／invalid／长反馈及各目标表面，en／zh、浅／深、720×640／1040×720；真实失存、chooser取消／迟到、C8／AD／unknown／无重放仍有行为回归。旧有效behavior RED与PASS可继承其**确切未改行为**的证据，不能当新视觉／最终源码通过。
+
+完成记录必须绑定新版规格＋实际source，适用focused race／vet／官方locale生成与重现，两个slice分别独立审查，并检验最终包携带license。原生字体／curve／popup／hit／focus／IME／chooser／正常Quit与非开发者MVP12依然单列实证；headless、静态声明和旧native包不代替。本规范保留所有未验／失败，不授予实现或运行权限，不扩展framework／依赖／全局服务。
+
+<a id="preferences-list-design-20261113"></a>
+
+## Settings 偏好列表：实施映射（当前规范，2026-11-13）
+
+**本节保留 PREF 的功能切片，当前全域视觉以本日 QD-01–QD-10 为准。** 行为权威是[需求 PREF-AC1–7](../requirements/desktop.md#preferences-list-20261113)；第一片 General／Connection 与共享角色、第二片全域对齐均必须交付。旧字号／间距／无chevron／控件面高度让位于新的实际Qoder基准；语义配色与真实命中、功能边界保留。通用保持 Appearance → 可选主题／导入 → Language → 工作台数据；连接保持默认连接／表单 → 保存／应用 → 显式 Test → 当前对话。用同组行的共享边线、留白和列表选中表达层级，避免每项独立卡片及多层底面；错误／输入边界保留。对话／事项／成果去卡片化另行分配，本片不修改它们。
+
+### 已核事实、参考与控件（PREF-v1 基线；现视觉按 QD）
+
+- 基线 `2ffc3c67`／tree `cf82a6fb` 的 `settings_page.go:419–501,742–899` 与 `connection_settings.go:126–260` 是真实入口。当前连接页本身是宽的纵向表单，并非每行卡片；本次新增的是首用与已保存阅读态的区别。QoderWork 官方图只证明组内左右偏好行及 selector／switch，不证明 slider；已安装 Qoder CN 只有 inventory 身份，设置／版本／原生尺寸仍未检查。外部 HTML `78dcff14`／report `97c1ce72` 是暂定视觉参考，caller review `6aec1bb5` 约束其草稿／动作映射；本文两节是规范，不将临时报告变成第二份规格。
+- 外观 System／Light／Dark、协议 Chat completions／Responses、语言 System（空串）／zh-Hans／en 保留原枚举值与事件，视觉统一映射 QD 的 Select；Paper／Moss 的原 ID `paper`／`night` 与条件主题选择器不变。缺 requested ID、同类内置回退和低对比提示仍在相关行可读。外观 setter／Retry 仍写原 store；语言仍由 `settings_page.go:36–37,69–74` 的 MyGo SetLocale 与现有系统偏好源处理，二者不混成新的保存机制。
+- endpoint／key／model 是必要自由文本，不改成假 provider 下拉。key 沿用原遮蔽输入／诊断去密，不能把“已保存”文案或占位符写回 Draft。context／output 保留精确字符串输入，slots 可增加受检 ±1 与同一精确输入；没有 slider、猜测范围、容量／权限默认或新开关。普通目录为路径值＋现有 chooser，手动路径入口渐进展开，仍用原 WorkingDirectory 字符串。
+
+### 呈现状态与所有权
+
+| 条件 | 可观察呈现与保留规则 |
+| --- | --- |
+| 无有效已保存受管配置（包括无凭据／读取错误） | 沿用 `ensureConnectionForm` 的真实来源与错误。endpoint／key／model 直接输入，协议与文件夹选择可见；不能用“非空草稿”或 legacy 有值冒充已存。 |
+| 已保存、静止、未改且无字段／动作错误或已打开编辑 | 用有来源标签的值行与 Edit；可保留已保存待应用提示。是否已有受管保存仍以 host／form 既有事实判断，不由是否填完／测试成功推导。 |
+| 用户打开编辑或有 dirty／invalid／error／Busy／chooser 等待 | 编辑可见性归属于既有 `connectionSettings`；切分类／返回恢复原打开状态。用户显式收起只改 disclosure，草稿来源／未保存与错误外显；不得因为 Save／Apply／Test 的其他状态变化自动隐藏或重置 pending 编辑。校验强制展开对应输入并用原 focusField／folder focus 路径回到错误。 |
+
+唯一草稿仍是 `connectionSettings.Draft`；`initial` 用于既有 Dirty／Discard，host 的 `connectionSaved`、`connectionEffective` 和当前 session 另有作用域。值行显示 saved 时标清“已保存”；显示 draft 时保留未保存／无效分类；不得从 effective 填回草稿。只增加最少的本表单 disclosure 状态，不新增持久设置、镜像字段或独立缓存真源。`ResetDraft` 只由原显式 Discard 使用，原 host 显式保存／应用回调的合法 initial／状态更新保留。
+
+`connection_settings.go:79–123` 的 TrimSpace＋Atoi 校验与 `connection_config.go:262–296` 的整数／关系校验继续是唯一路径。stepper 仅解析成功且结果为合法 host int 正数时执行一次受检整数 ±1；无效／1 下减／上界上加不改原文，不用 HTML 示例的 parseInt／Number／Math.max。原动作校验仍报告空值、非整数、数字后缀、0x 前缀和溢出，自动开 Limits／首错输入；不向 slider 或显示缩写取整。
+
+原 `connectionSettingsActions`／`connection_app.go` 继续承担 Test 当前全草稿、Save、SaveAndApply、Apply saved；不得加“行内保存”或由 Edit／selector 自动 Apply。已有错误摘要、显式原始 Details、saved-pending 与 Test Status 同时可读；Test 失败仍是整体过程失败，不能推断有没有模型请求。目录 `chooseConnectionWorkFolder` 原 Parent／form／generation／tab／shutdown／cancel／focus 归属，主题原 registry／decoder／import drain，以及 C8 preview／confirm／outcome 不因行布局改写。
+
+### 实施路径与验收映射（计划，不授予执行权限）
+
+候选唯一 UI writer：`settings_page.go`、`connection_settings.go`；行为测试候选 `settings_page_test.go`、`connection_settings_test.go`、`connection_error_ui_test.go`；必要新 Edit／数字增减可访问文案走 `locales/en.json`、`locales/zh-Hans.json` 与官方生成的 `locales/catalog_gen.go`。使用现有 theme helper／类型，不改 host／Runtime／store／schema／依赖。其他既有测试只作邻接验证；若须适配旧的“输入常驻”fixture，先向 lead 列明具体测试／仅添加显式 Edit 的原因与保留断言，**本规格不预授权改这些文件或弱化断言**。
+
+| AC | 新行为 RED／后续断言 | 有意义的既有邻接边界 |
+| --- | --- | --- |
+| 1 | 同组行的枚举键盘选择、真实保存失败仍应用＋Retry 后磁盘读回；导入取消／缺 ID 不改变选择 | `TestCustomThemeSettingsLowContrastFailedSaveRetry`；`TestThemeImportCancelAndDialogErrorPreserveState`；`TestLanguageSwitchKeepsNonzeroSettingsScrollAndActualFocus` |
+| 2 | 无已存源时 3 必要字段与 chooser 可达；校验展开／首错输入；取消／迟到目录不保存 | `TestFirstUseWorkFolderRequiresExplicitChoiceBeforeActions`；`TestConnectionSettingsValidationKeepsDraftAndFocus`；`TestConnectionFolderChooserRejectsLateTargets` |
+| 3 | 真实已存静止态不存在常驻自由文本控件；点击／键盘 Edit 进入原值、遮蔽 key、原焦点 | `TestSettingsConnectionDirtyDiscardAndAppliedReopen`（原 Discard／已应用断言保留） |
+| 4 | saved＋dirty／invalid／error／pending 下收起→返回→再开，逐字保留草稿／反馈；原 host 回调不覆盖新编辑 | `TestSettingsCategoryChangeResetsContentScrollAndKeepsDraft`；`TestSettingsPendingBannerSurvivesDistinctTestStatus`；`TestFirstConnectionSaveQueuedCompletionRetainsLiveLocalState` |
+| 5 | 在已存／effective 与不同草稿之间真实点 Test／Save／Apply，捕获完整参数和回调次数，验证零额外动作／历史变化 | `TestRecoveryPresentationExplicitTestUsesDraftAndDisclosesFailure`；`TestConnectionSaveAndApplySaveFailureDoesNotApply`；`TestConnectionApplyFailureRetryOnlyAppliesWithoutRewriting` |
+| 6 | 空／小数／后缀／int 溢出不改原文，合法大整数精确 ±1、1 下减／int 上界上加不改值；token 关系与进阶目录错误揭示 | `TestConnectionSettingsValidationKeepsDraftAndFocus`；`TestFirstUseWorkFolderManualEntryAndReset`；`TestConnectionFolderControlRequiresExplicitSaveAndApply` |
+| 7 | en／zh、light／dark、720×640／1040×720 的实际键盘、状态、完整错误与命中；真实本地保存失败后输入／返回保持焦点与选择 | `TestSaveFailureTypingKeepsComposerReturnFocus`；`TestSettingsLongConnectionScrollsThenPrimaryActionIsVisible`；`TestC8UnsavedRecoveryGuidanceBeforeQuit`；`TestC8ThemeInstallExcludesRecoveryAndKeepsQuitDrain` |
+
+RED 必须从实际进入／编辑／操作产生失败，先保留旧源码／输出；截图及字面量断言不证明行为。集中覆盖本片，再按实际影响跑以上邻接选择，不把测试改成主动打开所有字段而绕过新阅读态。后续 implementation 的完成条件：lead 接受冻结规格、有效 RED、限定路径实现、适用 focused race／vet／locale 官方生成与复现、冻结 source＋spec 绑定及独立逐 AC 审查无未结实质问题。真实原生键盘／IME／AX／chooser／正常 Quit 与独立非开发者的原 MVP/C1–C8 检查仍单列未验，不由 HTML／headless／旧 PASS 替代，不宣称完整 MVP、原生、模型、CI、包或发布已通过。
+
 <a id="gui-design-constraints"></a>
 
 ## 独立仓库与交付（实现事实，2026-11-09）

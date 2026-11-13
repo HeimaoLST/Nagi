@@ -416,16 +416,33 @@ func (a *appModel) settingsMain(c *ui.Context, t *ui.Theme, narrow bool) {
 	})
 }
 
+func settingsPreferenceRow(c *ui.Context, t *ui.Theme, label, description string, control func()) {
+	ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(16).Padding(12, 0).Children(func() {
+		ui.Column(c).Grow(1).Shrink(1).MinWidth(0).Gap(4).Children(func() {
+			ui.Text(c, label+":").FontSize(typeAction).FontWeight(500).TextColor(t.Text)
+			if description != "" {
+				ui.Text(c, description).FontSize(typeMeta).LineHeight(1.5).TextColor(t.TextMuted)
+			}
+		})
+		ui.Column(c).Width(336).MaxWidthPercent(66).Shrink(1).AlignItems(ui.End).Gap(8).Children(control)
+	})
+	ui.Divider(c)
+}
+
 func (a *appModel) settingsAppearanceContent(c *ui.Context, t *ui.Theme) {
 	msgs := locales.In(c.Locale())
 	a.ensureLanguageMode()
 	ui.Text(c, msgs.SettingsGeneral()).FontSize(typePageTitle).FontWeight(500).TextColor(t.Text)
 	ui.Text(c, msgs.SettingsAppearance()).FontSize(typeGroupTitle).FontWeight(500).TextColor(t.TextMuted)
-	selected := appearanceModeIndex(a.appearanceMode)
-	appearance := segmentedSelection(c, &selected, msgs.AppearanceSystem(), msgs.AppearanceLight(), msgs.AppearanceDark()).Label(msgs.AppearanceMode()).FontSize(typeAction)
-	if appearance.Changed() {
-		a.setAppearanceMode(appearanceModeFromIndex(selected))
-	}
+	c.Key("appearance-preference")
+	settingsPreferenceRow(c, t, msgs.AppearanceMode(), "", func() {
+		selected := appearanceModeIndex(a.appearanceMode)
+		c.Key("appearance-mode")
+		appearance := segmentedSelection(c, &selected, msgs.AppearanceSystem(), msgs.AppearanceLight(), msgs.AppearanceDark()).Label(msgs.AppearanceMode()).FontSize(typeAction)
+		if appearance.Changed() {
+			a.setAppearanceMode(appearanceModeFromIndex(selected))
+		}
+	})
 	if a.appearanceStatus != appearanceStatusNone {
 		ui.Text(c, appearanceStatusLabel(msgs, a.appearanceStatus)).FontSize(typeAction).TextColor(t.Success)
 	}
@@ -450,25 +467,31 @@ func (a *appModel) settingsAppearanceContent(c *ui.Context, t *ui.Theme) {
 			if resolved.Unavailable {
 				options = append(options, selectOption{Value: selected, Label: msgs.ThemeUnavailable(selected, builtinName)})
 			}
-			c.Key("theme-" + kind)
-			if selectWithoutChevron(c, &selected, options, label).Changed() {
-				a.setAppearanceTheme(kind, selected)
-			}
+			ui.Column(c).Key("theme-row-" + kind).FillWidth().Children(func() {
+				settingsPreferenceRow(c, t, label, "", func() {
+					c.Key("theme-" + kind)
+					if selectWithoutChevron(c, &selected, options, label).Changed() {
+						a.setAppearanceTheme(kind, selected)
+					}
+				})
+			})
 			for _, warning := range resolved.Warnings {
 				ui.Text(c, msgs.ThemeContrastWarning(selected, warning.Foreground, warning.Background, fmt.Sprintf("%.2f", warning.Ratio), fmt.Sprintf("%.1f", warning.Minimum))).
 					FontSize(typeMeta).LineHeight(1.5).TextColor(t.Warning)
 			}
 		}
 	}
-	ui.Text(c, msgs.ThemeImportHint()).FontSize(typeMeta).LineHeight(1.5).TextColor(t.TextMuted)
-	ui.Row(c).Gap(8).Wrap().Children(func() {
-		busy := a.themeImport != nil && a.themeImport.Busy
-		importButton := secondaryButton(c, msgs.ThemeImportAction()).Label(msgs.ThemeImportAction()).Disabled(busy || a.shutdownStarted || a.dataRecoveryBlocksChanges()).OnClick(a.importAppearanceTheme)
-		if a.themeImport != nil && a.themeImport.focus {
-			importButton.Focus()
-			a.themeImport.focus = false
-		}
-		secondaryButton(c, msgs.ThemeReload()).OnClick(a.reloadAppearanceThemes)
+	c.Key("local-themes-preference")
+	settingsPreferenceRow(c, t, msgs.SettingsLocalThemes(), msgs.ThemeImportHint(), func() {
+		ui.Row(c).Gap(8).Wrap().Children(func() {
+			busy := a.themeImport != nil && a.themeImport.Busy
+			importButton := secondaryButton(c, msgs.ThemeImportAction()).Label(msgs.ThemeImportAction()).Disabled(busy || a.shutdownStarted || a.dataRecoveryBlocksChanges()).OnClick(a.importAppearanceTheme)
+			if a.themeImport != nil && a.themeImport.focus {
+				importButton.Focus()
+				a.themeImport.focus = false
+			}
+			secondaryButton(c, msgs.ThemeReload()).Label(msgs.ThemeReload()).OnClick(a.reloadAppearanceThemes)
+		})
 	})
 	if state := a.themeImport; state != nil {
 		if state.Busy {
@@ -487,17 +510,19 @@ func (a *appModel) settingsAppearanceContent(c *ui.Context, t *ui.Theme) {
 		ui.Text(c, msgs.ThemeFileError(problem.File, problem.Field, problem.Message)).FontSize(typeMeta).LineHeight(1.5).TextColor(t.Warning)
 	}
 	ui.Text(c, msgs.SettingsLanguage()).FontSize(typeGroupTitle).FontWeight(500).TextColor(t.TextMuted)
-	languageModes := []string{"", "zh-Hans", "en"}
-	languageSelected := languageModeIndex(a.languageMode)
-	language := segmentedSelection(c, &languageSelected,
-		msgs.LanguageSystem(languageSelfName(msgs, c.Locale())),
-		msgs.LanguageChinese(),
-		msgs.LanguageEnglish(),
-	).Label(msgs.SettingsLanguage()).FontSize(typeAction)
-	if language.Changed() {
-		a.setLanguageMode(languageModes[languageSelected])
-	}
-	ui.Text(c, msgs.LanguageHint()).FontSize(typeMeta).LineHeight(1.5).TextColor(t.TextMuted)
+	c.Key("language-preference")
+	settingsPreferenceRow(c, t, msgs.SettingsLanguage(), msgs.LanguageHint(), func() {
+		options := []selectOption{
+			{Value: "", Label: msgs.LanguageSystem(languageSelfName(msgs, c.Locale()))},
+			{Value: "zh-Hans", Label: msgs.LanguageChinese()},
+			{Value: "en", Label: msgs.LanguageEnglish()},
+		}
+		selected := []string{"", "zh-Hans", "en"}[languageModeIndex(a.languageMode)]
+		c.Key("settings-language")
+		if selectWithoutChevron(c, &selected, options, msgs.SettingsLanguage()).Changed() {
+			a.setLanguageMode(selected)
+		}
+	})
 	a.settingsDataRecoveryContent(c, t)
 }
 

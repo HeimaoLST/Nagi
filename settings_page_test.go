@@ -328,6 +328,222 @@ func TestSettingsConnectionDirtyDiscardAndAppliedReopen(t *testing.T) {
 	}
 }
 
+func TestSettingsConnectionEditorsSurviveNavigationAndLocale(t *testing.T) {
+	a, ct := workspaceTestApp(t)
+	recoveryTestStore(t, a)
+	saved := testConnectionConfig(t)
+	effective := saved
+	effective.Model = "effective-model"
+	a.connectionSaved, a.connectionEffective = &saved, &effective
+	form := newConnectionSettings(&saved, saved.WorkingDirectory)
+	a.connectionForm = form
+	ct.Draft = "keep conversation text"
+	a.openSettingsTab(settingsTabConnection, settingsSourceRail)
+	tr := ui.NewTester(a.view, 1040, 720)
+	tr.SetFocused(true)
+	tr.Frame()
+	if err := clickSettingsAction(tr, "Edit Default model"); err != nil {
+		t.Fatal(err)
+	}
+	if !tr.Focused("Default model") {
+		t.Fatal("model Edit did not focus the existing input")
+	}
+	tr.Key(ui.Cmd, ui.KeyA)
+	tr.Type("unsaved-model")
+	tr.Frame()
+	if err := clickSettingsAction(tr, "Close Default model editor"); err != nil {
+		t.Fatal(err)
+	}
+	form.Draft.Slots = "invalid slots"
+	form.Errors = map[string]string{"MaxActiveTasks": validationNumeric}
+	form.Error, form.ErrorDetail = connErrorTestFailed, "original failure detail"
+	form.Status = connStatusTestCompleted
+	form.StatusArgs = []string{"tested-model", "https://tested.example.invalid", "1000", "100"}
+	draft := form.Draft
+	a.selectSettingsTab(settingsTabAppearance)
+	tr.Frame()
+	a.selectSettingsTab(settingsTabConnection)
+	tr.Frame()
+	a.closeSettings()
+	tr.Frame()
+	a.openSettingsTab(settingsTabConnection, settingsSourceRail)
+	tr.Frame()
+	tr.SetLocale("zh-Hans")
+	tr.Frame()
+	tr.SetLocale("en")
+	tr.Frame()
+	if a.connectionForm != form || form.Draft != draft || form.ErrorDetail != "original failure detail" || form.Status != connStatusTestCompleted || form.Errors["MaxActiveTasks"] != validationNumeric || !form.Dirty() || !a.connectionSavedPending() {
+		t.Fatal("navigation/locale replaced the form, raw edits or independent feedback")
+	}
+	if *a.connectionSaved != saved || *a.connectionEffective != effective || a.rt != nil || ct.SessionID != "s1" || ct.Draft != "keep conversation text" {
+		t.Fatal("disclosure/navigation changed saved, effective or conversation state, or started Runtime")
+	}
+	if err := clickSettingsAction(tr, "Edit Default model"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Type("-again")
+	tr.Frame()
+	if form.Draft.Model != "unsaved-model-again" || form.ErrorDetail != "original failure detail" {
+		t.Fatal("reopened editor lost current text, focus or feedback")
+	}
+}
+
+func TestPreferencesListControlsAndPreviews(t *testing.T) {
+	directory := os.Getenv("SAKI_PREVIEW_DIR")
+	for _, locale := range []string{"en", "zh-Hans"} {
+		for _, dark := range []bool{false, true} {
+			for _, size := range [][2]int{{720, 640}, {1040, 720}} {
+				for _, scene := range []string{"general", "fresh", "saved", "dirty", "invalid-long"} {
+					name := fmt.Sprintf("preferences-%s-%s-%dx%d-dark-%t", scene, locale, size[0], size[1], dark)
+					t.Run(name, func(t *testing.T) {
+						a, ct := workspaceTestApp(t)
+						recoveryTestStore(t, a)
+						a.windowWidth = size[0]
+						config := testConnectionConfig(t)
+						a.connectionPath = filepath.Join(t.TempDir(), "connection.json")
+						if scene != "fresh" {
+							if err := saveConnectionConfig(a.connectionPath, config); err != nil {
+								t.Fatal(err)
+							}
+							saved, err := loadConnectionConfig(a.connectionPath)
+							if err != nil {
+								t.Fatal(err)
+							}
+							a.connectionSaved = &saved
+						}
+						a.connectionForm = newConnectionSettings(a.connectionSaved, "")
+						form := a.connectionForm
+						if scene == "dirty" || scene == "invalid-long" {
+							form.Draft.Endpoint = "https://current.example.invalid/" + strings.Repeat("long-project/", 10)
+							form.Draft.Model = "current/" + strings.Repeat("long-model-name-", 8)
+						}
+						if scene == "invalid-long" {
+							form.Draft.APIKey = ""
+							form.Draft.ContextTokens, form.Draft.OutputTokens, form.Draft.Slots = "9007199254740993suffix", "1.5", "invalid slots"
+							form.validated()
+							form.Errors["Endpoint"] = strings.Repeat("A complete original field error must remain readable while scrolling. ", 8)
+						}
+						tab := settingsTabConnection
+						if scene == "general" {
+							tab = settingsTabAppearance
+							a.appearanceThemeIDs = appearanceThemeIDs{Light: "paper", Dark: "night"}
+						}
+						a.openSettingsTab(tab, settingsSourceRail)
+						tr := ui.NewTester(a.view, size[0], size[1])
+						tr.SetLocale(locale)
+						tr.SetDark(dark)
+						tr.SetFocused(true)
+						tr.Frame()
+						msgs := locales.In(locale)
+						controls := []string{msgs.SettingsBackAccessible()}
+						if scene == "general" {
+							controls = append(controls, msgs.ThemeImportAction(), msgs.ThemeReload())
+						} else {
+							controls = append(controls, msgs.WorkFolderChoose(), msgs.ConnectionFolderEnterPath(), msgs.ConnectionSaveConfiguration(), msgs.ConnectionTestAction())
+							if scene == "saved" || scene == "dirty" {
+								controls = append(controls, msgs.ConnectionEditField(msgs.ConnectionFieldEndpoint()), msgs.ConnectionEditField(msgs.ConnectionFieldAPIKey()), msgs.ConnectionEditField(msgs.ConnectionFieldModel()))
+							}
+						}
+						if scene == "saved" {
+							for i := 0; i < 18; i++ {
+								tr.Key(0, ui.KeyTab)
+								tr.Frame()
+								if active, _ := tr.TextInputActive(); active {
+									t.Fatal("saved quiescent settings kept a permanent free-text input")
+								}
+							}
+							tr.Key(0, ui.KeyEscape)
+						}
+						if scene == "fresh" {
+							inputs := map[string]bool{}
+							for i := 0; i < 18; i++ {
+								tr.Key(0, ui.KeyTab)
+								tr.Frame()
+								for _, label := range []string{msgs.ConnectionFieldEndpoint(), msgs.ConnectionFieldAPIKey(), msgs.ConnectionFieldModel()} {
+									inputs[label] = inputs[label] || tr.Focused(label)
+								}
+								if tr.Focused(msgs.ConnectionFieldWorkingDirectory()) {
+									t.Fatal("fresh setup exposed the manual path before its disclosure")
+								}
+							}
+							for label, reachable := range inputs {
+								if !reachable {
+									t.Fatalf("fresh setup required an Edit action for %q", label)
+								}
+							}
+						}
+						a.settingsScroll.Y = 0
+						tr.Frame()
+						seen := map[string]bool{}
+						bounds := map[string]ui.Rect{}
+						fullErrorSeen := false
+						for step := 0; step < 24; step++ {
+							for _, label := range controls {
+								r, ok := tr.Find(label)
+								if ok && r.X >= 0 && r.X+r.W <= float32(size[0]) && r.Y >= 0 && r.Y+r.H <= float32(size[1]) && r.H >= 32 {
+									seen[label] = true
+									bounds[label] = r
+								}
+							}
+							for _, text := range tr.Texts() {
+								r, ok := tr.Find(text)
+								if ok && (r.X < 0 || r.X+r.W > float32(size[0])+1) {
+									t.Fatalf("text crosses horizontal window edge: %q %+v", text, r)
+								}
+							}
+							if scene == "invalid-long" {
+								text := form.Errors["Endpoint"]
+								r, ok := tr.Find(text)
+								_, height := ui.ShapeText(text, ui.Font{Size: typeBody, LineHeight: 1.5, Lang: locale}, r.W).Size()
+								visible := ok && r.H+0.5 >= height && r.Y >= 0 && r.Y+r.H <= float32(size[1])
+								if visible && !fullErrorSeen && directory != "" {
+									writePreviewPNG(t, filepath.Join(directory, name+"-full-error.png"), tr.Image())
+								}
+								fullErrorSeen = fullErrorSeen || visible
+								if visible {
+									bounds["complete-field-error"] = r
+								}
+							}
+							before := a.settingsScroll.Y
+							if directory != "" && (step == 0 || step == 2) {
+								writePreviewPNG(t, filepath.Join(directory, fmt.Sprintf("%s-scroll-%02d.png", name, step)), tr.Image())
+							}
+							tr.Scroll(float32(size[0]/2), float32(size[1]-100), 0, 240)
+							tr.Frame()
+							if before == a.settingsScroll.Y {
+								if directory != "" {
+									writePreviewPNG(t, filepath.Join(directory, name+"-bottom.png"), tr.Image())
+								}
+								break
+							}
+						}
+						for _, label := range controls {
+							if !seen[label] {
+								t.Errorf("required control not fully reachable with a 32px target: %q", label)
+							}
+						}
+						if scene == "invalid-long" && !fullErrorSeen {
+							t.Fatal("the complete original field error was not reachable by scrolling")
+						}
+						if a.rt != nil || a.connectionTesting || a.connectionApplying || ct.SessionID != "s1" {
+							t.Fatal("rendering/keyboard traversal started execution or changed the session")
+						}
+						if directory != "" {
+							data, err := json.MarshalIndent(bounds, "", "  ")
+							if err != nil {
+								t.Fatal(err)
+							}
+							if err := os.WriteFile(filepath.Join(directory, name+".bounds.json"), data, 0600); err != nil {
+								t.Fatal(err)
+							}
+						}
+					})
+				}
+			}
+		}
+	}
+}
+
 func TestSettingsContactPickerFollowsEditingIdentityAfterReturnToA(t *testing.T) {
 	a, aContact := workspaceTestApp(t)
 	bContact := &contact{ID: "contact-bbbb2222", Name: aContact.Name, Role: "Assistant", Status: statusReady}
