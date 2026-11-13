@@ -628,6 +628,10 @@ func TestC8RecoveryOutcomePresentationUsesOutcomeWithError(t *testing.T) {
 						t.Fatal("outcome/error was misrepresented or details leaked/activated app")
 					}
 					name := fmt.Sprintf("%s-%d-%s", locale, size[0], outcome)
+					before, found := tr.Find(msgs.DetailsAction())
+					scrollBefore := a.settingsScroll.Y
+					reached := c8ReachAction(t, tr, msgs.DetailsAction(), size[0], size[1])
+					t.Logf("Details reachability: before=%+v found=%t reached=%+v settingsScrollY=%g->%g", before, found, reached, scrollBefore, a.settingsScroll.Y)
 					c8RenderEvidence(t, tr, name+"-summary", size[0], size[1], msgs.DetailsAction())
 					if err := tr.Click(msgs.DetailsAction()); err != nil {
 						t.Fatal(err)
