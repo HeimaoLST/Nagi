@@ -19,7 +19,7 @@ env:
 
 jobs:
   gui:
-    runs-on: macos-15
+    runs-on: macos-15-intel
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
@@ -42,7 +42,7 @@ jobs:
           python3 scripts/gui-go.py vet ./...
           python3 scripts/gui-go.py test ./... -count=1
           python3 scripts/gui-go.py test github.com/egoist/mygo/ui -run '^(TestSplitReleaseBeforeFrame|TestEditorSelectionReleaseBeforeFrame)$' -count=1 -v
-          python3 scripts/gui-go.py build -trimpath -mod=readonly -buildvcs=true -o "$RUNNER_TEMP/Nagi" .
+          GOARCH=arm64 python3 scripts/gui-go.py build -trimpath -mod=readonly -buildvcs=true -o "$RUNNER_TEMP/Nagi" .
       - name: Python CI support tests
         run: |
           python3 - <<'PYTHON'
