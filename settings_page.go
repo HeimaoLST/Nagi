@@ -306,7 +306,7 @@ func (a *appModel) settingsPage(c *ui.Context, t *ui.Theme) {
 		a.settingsContactID = a.selectedContact().ID
 	}
 	a.ensureConnectionForm()
-	if a.layoutWidth() < 800 {
+	if a.layoutWidth() < int(preferenceBreakpoint) {
 		ui.Column(c).Fill().Background(a.workTheme.Reading).Children(func() {
 			a.settingsSidebar(c, t, true)
 			a.settingsMain(c, t, true)
@@ -321,11 +321,11 @@ func (a *appModel) settingsPage(c *ui.Context, t *ui.Theme) {
 
 func (a *appModel) settingsSidebar(c *ui.Context, t *ui.Theme, narrow bool) {
 	msgs := locales.In(c.Locale())
-	width := float32(200)
+	width := settingsSidebarWidth
 	if narrow {
 		width = 0
 	}
-	column := ui.Column(c).Gap(12).Padding(16).Background(a.workTheme.Rail).AlignItems(ui.Start)
+	column := ui.Column(c).Gap(12).Padding(12).Background(a.workTheme.Rail).AlignItems(ui.Start)
 	if narrow {
 		column.FillWidth()
 	} else {
@@ -333,8 +333,7 @@ func (a *appModel) settingsSidebar(c *ui.Context, t *ui.Theme, narrow bool) {
 	}
 	column.Children(func() {
 		ui.Toolbar(c, func() {
-			back := ui.Button(c, "").Label(msgs.SettingsBackAccessible()).
-				MinHeight(32).Height(32).Padding(4, 8).Gap(6)
+			back := secondaryButton(c, "").Label(msgs.SettingsBackAccessible()).Padding(8, 14, 8, 10)
 			back.Children(func() {
 				ui.Icon(c, navBackIcon).Width(16).Height(16).TextColor(t.TextMuted)
 				ui.Text(c, msgs.SettingsBack()).FontSize(typeAction).TextColor(t.Text)
@@ -348,27 +347,16 @@ func (a *appModel) settingsSidebar(c *ui.Context, t *ui.Theme, narrow bool) {
 		if a.modelOpActive && a.settingsReturnModelTarget != nil && a.settingsReturnModel == nil {
 			ui.Text(c, msgs.ModelWaiting()).FontSize(typeAction).LineHeight(1.5).TextColor(t.TextMuted)
 		}
-		ui.Text(c, msgs.SettingsTitle()).FontSize(typePageTitle).FontWeight(500).TextColor(t.Text)
+		ui.Text(c, msgs.SettingsTitle()).FontSize(typeLabel).FontWeight(400).FixedLineHeight(lineLabel).TextColor(t.Text)
 		nav := func(label, tab string) {
 			selected := a.settingsTab == tab
-			button := ui.ButtonBase(c).Label(label).FontSize(typeAction).MinHeight(32).
-				Padding(4, 8).Justify(ui.Start).Background(ui.Transparent).BorderWidth(0).
-				TextColor(t.TextMuted).FontWeight(400)
+			button := sharedControlFace(c, ui.ButtonBase(c).Label(label), 8, 4, false, false, selected).
+				FontSize(typeNavigation).FontWeight(400).FixedLineHeight(lineNavigation).
+				Padding(8).Justify(ui.Start).TextColor(t.Text)
 			if !narrow {
 				button.FillWidth()
 			}
-			if selected {
-				button.Background(t.Selection).TextColor(t.Text).FontWeight(500)
-			}
-			if button.Pressed() {
-				button.Background(t.SurfacePressed)
-			} else if button.Hovered() {
-				button.Background(t.SurfaceHover)
-			}
-			if button.Focused() {
-				button.BorderWidth(1).BorderColor(t.Focus)
-			}
-			button.Children(func() { ui.Text(c, label).FontSize(typeAction) })
+			button.Children(func() { ui.Text(c, label).FontSize(typeNavigation).FontWeight(400).FixedLineHeight(lineNavigation) })
 			button.OnClick(func() { a.selectSettingsTab(tab) })
 			if a.settingsFocusTab == tab {
 				button.Focus()
@@ -394,13 +382,9 @@ func (a *appModel) settingsSidebar(c *ui.Context, t *ui.Theme, narrow bool) {
 }
 
 func (a *appModel) settingsMain(c *ui.Context, t *ui.Theme, narrow bool) {
-	paddingY, paddingX := float32(16), float32(16)
-	if narrow {
-		paddingY, paddingX = 16, 16
-	}
 	ui.Column(c).Grow(1).FillHeight().AlignItems(ui.Start).Children(func() {
-		ui.Scroll(c).Grow(1).FillHeight().TrackScroll(&a.settingsScroll).Padding(paddingY, paddingX).Children(func() {
-			ui.Column(c).FillWidth().MaxWidth(720).AlignItems(ui.Start).Gap(12).Children(func() {
+		ui.Scroll(c).Grow(1).FillHeight().TrackScroll(&a.settingsScroll).Padding(8, 32, 48).Children(func() {
+			ui.Column(c).FillWidth().MaxWidth(settingsContentWidth).AlignSelf(ui.Center).AlignItems(ui.Start).Gap(8).Children(func() {
 				switch a.settingsTab {
 				case settingsTabAppearance:
 					a.settingsAppearanceContent(c, t)
@@ -416,88 +400,145 @@ func (a *appModel) settingsMain(c *ui.Context, t *ui.Theme, narrow bool) {
 	})
 }
 
+func preferenceGroup(c *ui.Context, t *ui.Theme, children func()) {
+	ui.Column(c).FillWidth().Padding(0, 16).Draw(func(p *ui.Painter, r ui.Rect) {
+		paintPreferenceFace(p, r, 12, 2, t.Background, t.Border)
+	}).Children(children)
+}
+
+func preferenceSection(c *ui.Context, t *ui.Theme, title string, children func()) {
+	ui.Column(c).FillWidth().Gap(8).Children(func() {
+		ui.Column(c).FillWidth().Height(44).Padding(0, 16).Justify(ui.End).Children(func() {
+			ui.Row(c).FillWidth().Height(28).AlignItems(ui.Center).Children(func() {
+				ui.Text(c, title).FontSize(typeMeta).FontWeight(400).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
+			})
+		})
+		preferenceGroup(c, t, children)
+	})
+}
+
+func settingsPreferenceRow(c *ui.Context, t *ui.Theme, label, description string, control func(), last ...bool) {
+	width, _ := c.Size()
+	row := ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(12).Padding(14, 0)
+	if width < preferenceBreakpoint {
+		row = ui.Column(c).FillWidth().AlignItems(ui.Stretch).Gap(12).Padding(14, 0)
+	}
+	if len(last) == 0 || !last[0] {
+		row.BorderWidth(0, 0, 1, 0).BorderColor(t.Border).BorderStyle(ui.BorderDashed)
+	}
+	row.Children(func() {
+		ui.Column(c).Grow(1).Shrink(1).MinWidth(0).Gap(4).Children(func() {
+			ui.Text(c, label+":").FontSize(typeLabel).FontWeight(400).FixedLineHeight(lineLabel).TextColor(t.Text)
+			if description != "" {
+				ui.Text(c, description).FontSize(typeMeta).FontWeight(400).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
+			}
+		})
+		controls := ui.Column(c).MinWidth(0).Gap(8)
+		if width >= preferenceBreakpoint {
+			controls.MaxWidthPercent(66).Shrink(1).AlignItems(ui.End)
+		} else {
+			controls.FillWidth()
+		}
+		controls.Children(control)
+	})
+}
+
 func (a *appModel) settingsAppearanceContent(c *ui.Context, t *ui.Theme) {
 	msgs := locales.In(c.Locale())
 	a.ensureLanguageMode()
-	ui.Text(c, msgs.SettingsGeneral()).FontSize(typePageTitle).FontWeight(500).TextColor(t.Text)
-	ui.Text(c, msgs.SettingsAppearance()).FontSize(typeGroupTitle).FontWeight(500).TextColor(t.TextMuted)
-	selected := appearanceModeIndex(a.appearanceMode)
-	appearance := segmentedSelection(c, &selected, msgs.AppearanceSystem(), msgs.AppearanceLight(), msgs.AppearanceDark()).Label(msgs.AppearanceMode()).FontSize(typeAction)
-	if appearance.Changed() {
-		a.setAppearanceMode(appearanceModeFromIndex(selected))
-	}
-	if a.appearanceStatus != appearanceStatusNone {
-		ui.Text(c, appearanceStatusLabel(msgs, a.appearanceStatus)).FontSize(typeAction).TextColor(t.Success)
-	}
-	if a.appearanceError != "" {
-		ui.Text(c, appearanceStatusLabel(msgs, a.appearanceError)).FontSize(typeBody).LineHeight(1.5).TextColor(t.Danger)
-		secondaryButton(c, msgs.SettingsRetrySave()).OnClick(func() { a.saveAppearance() })
-	}
-	if len(a.appearanceThemes.Themes) > 0 || a.appearanceThemeIDs != (appearanceThemeIDs{}) {
-		for _, kind := range []string{appearanceLight, appearanceDark} {
-			label, builtinName, builtinID := msgs.ThemeLight(), msgs.ThemePaper(), "paper"
-			if kind == appearanceDark {
-				label, builtinName, builtinID = msgs.ThemeDark(), msgs.ThemeMoss(), "night"
+	ui.Text(c, msgs.SettingsGeneral()).FontSize(typeLabel).FontWeight(400).FixedLineHeight(lineLabel).TextColor(t.Text)
+	preferenceSection(c, t, msgs.SettingsAppearance(), func() {
+		c.Key("appearance-preference")
+		settingsPreferenceRow(c, t, msgs.AppearanceMode(), "", func() {
+			selected := []string{appearanceSystem, appearanceLight, appearanceDark}[appearanceModeIndex(a.appearanceMode)]
+			c.Key("appearance-mode")
+			appearance := preferenceSelect(c, &selected, []selectOption{{appearanceSystem, msgs.AppearanceSystem()}, {appearanceLight, msgs.AppearanceLight()}, {appearanceDark, msgs.AppearanceDark()}}, msgs.AppearanceMode())
+			if appearance.Changed() {
+				a.setAppearanceMode(selected)
 			}
-			selected := a.appearanceThemeIDs.forKind(kind)
-			options := []selectOption{{Value: builtinID, Label: builtinName}}
-			for _, theme := range a.appearanceThemes.Themes {
-				if theme.Kind == kind {
-					options = append(options, selectOption{Value: theme.ID, Label: theme.Name + " (" + theme.ID + ")"})
+		})
+		if a.appearanceStatus != appearanceStatusNone {
+			ui.Text(c, appearanceStatusLabel(msgs, a.appearanceStatus)).FontSize(typeAction).TextColor(t.Success)
+		}
+		if a.appearanceError != "" {
+			ui.Text(c, appearanceStatusLabel(msgs, a.appearanceError)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Danger)
+			secondaryButton(c, msgs.SettingsRetrySave()).OnClick(func() { a.saveAppearance() })
+		}
+		if len(a.appearanceThemes.Themes) > 0 || a.appearanceThemeIDs != (appearanceThemeIDs{}) {
+			for _, kind := range []string{appearanceLight, appearanceDark} {
+				label, builtinName, builtinID := msgs.ThemeLight(), msgs.ThemePaper(), "paper"
+				if kind == appearanceDark {
+					label, builtinName, builtinID = msgs.ThemeDark(), msgs.ThemeMoss(), "night"
+				}
+				selected := a.appearanceThemeIDs.forKind(kind)
+				options := []selectOption{{Value: builtinID, Label: builtinName}}
+				for _, theme := range a.appearanceThemes.Themes {
+					if theme.Kind == kind {
+						options = append(options, selectOption{Value: theme.ID, Label: theme.Name + " (" + theme.ID + ")"})
+					}
+				}
+				resolved := a.resolveAppearanceTheme(kind == appearanceDark)
+				if resolved.Unavailable {
+					options = append(options, selectOption{Value: selected, Label: msgs.ThemeUnavailable(selected, builtinName)})
+				}
+				ui.Column(c).Key("theme-row-" + kind).FillWidth().Children(func() {
+					settingsPreferenceRow(c, t, label, "", func() {
+						c.Key("theme-" + kind)
+						if preferenceSelect(c, &selected, options, label).Changed() {
+							a.setAppearanceTheme(kind, selected)
+						}
+					})
+				})
+				for _, warning := range resolved.Warnings {
+					ui.Text(c, msgs.ThemeContrastWarning(selected, warning.Foreground, warning.Background, fmt.Sprintf("%.2f", warning.Ratio), fmt.Sprintf("%.1f", warning.Minimum))).
+						FontSize(typeMeta).LineHeight(1.5).TextColor(t.Warning)
 				}
 			}
-			resolved := a.resolveAppearanceTheme(kind == appearanceDark)
-			if resolved.Unavailable {
-				options = append(options, selectOption{Value: selected, Label: msgs.ThemeUnavailable(selected, builtinName)})
+		}
+		c.Key("local-themes-preference")
+		settingsPreferenceRow(c, t, msgs.SettingsLocalThemes(), msgs.ThemeImportHint(), func() {
+			ui.Row(c).Gap(8).Wrap().Children(func() {
+				busy := a.themeImport != nil && a.themeImport.Busy
+				importButton := secondaryButton(c, msgs.ThemeImportAction()).Label(msgs.ThemeImportAction()).Disabled(busy || a.shutdownStarted || a.dataRecoveryBlocksChanges()).OnClick(a.importAppearanceTheme)
+				if a.themeImport != nil && a.themeImport.focus {
+					importButton.Focus()
+					a.themeImport.focus = false
+				}
+				secondaryButton(c, msgs.ThemeReload()).Label(msgs.ThemeReload()).OnClick(a.reloadAppearanceThemes)
+			})
+		}, true)
+		if state := a.themeImport; state != nil {
+			if state.Busy {
+				ui.Text(c, msgs.ThemeImportBusy()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 			}
-			c.Key("theme-" + kind)
-			if selectWithoutChevron(c, &selected, options, label).Changed() {
-				a.setAppearanceTheme(kind, selected)
+			if state.Problem != nil {
+				ui.Text(c, msgs.ThemeImportFailed()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Warning)
+				problem := state.Problem
+				ui.Text(c, msgs.ThemeFileError(safeDiagnostic(problem.File), safeDiagnostic(problem.Field), safeDiagnostic(problem.Message))).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
+			} else if state.ImportedName != "" {
+				ui.Text(c, msgs.ThemeImportSucceeded(safeDiagnostic(state.ImportedName))).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Success)
 			}
-			for _, warning := range resolved.Warnings {
-				ui.Text(c, msgs.ThemeContrastWarning(selected, warning.Foreground, warning.Background, fmt.Sprintf("%.2f", warning.Ratio), fmt.Sprintf("%.1f", warning.Minimum))).
-					FontSize(typeMeta).LineHeight(1.5).TextColor(t.Warning)
-			}
 		}
-	}
-	ui.Text(c, msgs.ThemeImportHint()).FontSize(typeMeta).LineHeight(1.5).TextColor(t.TextMuted)
-	ui.Row(c).Gap(8).Wrap().Children(func() {
-		busy := a.themeImport != nil && a.themeImport.Busy
-		importButton := secondaryButton(c, msgs.ThemeImportAction()).Label(msgs.ThemeImportAction()).Disabled(busy || a.shutdownStarted || a.dataRecoveryBlocksChanges()).OnClick(a.importAppearanceTheme)
-		if a.themeImport != nil && a.themeImport.focus {
-			importButton.Focus()
-			a.themeImport.focus = false
-		}
-		secondaryButton(c, msgs.ThemeReload()).OnClick(a.reloadAppearanceThemes)
-	})
-	if state := a.themeImport; state != nil {
-		if state.Busy {
-			ui.Text(c, msgs.ThemeImportBusy()).FontSize(typeMeta).LineHeight(1.5).TextColor(t.TextMuted)
-		}
-		if state.Problem != nil {
-			ui.Text(c, msgs.ThemeImportFailed()).FontSize(typeBody).LineHeight(1.5).TextColor(t.Warning)
-			problem := state.Problem
-			ui.Text(c, msgs.ThemeFileError(safeDiagnostic(problem.File), safeDiagnostic(problem.Field), safeDiagnostic(problem.Message))).FontSize(typeMeta).LineHeight(1.5).TextColor(t.TextMuted)
-		} else if state.ImportedName != "" {
-			ui.Text(c, msgs.ThemeImportSucceeded(safeDiagnostic(state.ImportedName))).FontSize(typeBody).LineHeight(1.5).TextColor(t.Success)
-		}
-	}
 
-	for _, problem := range a.appearanceThemes.Errors {
-		ui.Text(c, msgs.ThemeFileError(problem.File, problem.Field, problem.Message)).FontSize(typeMeta).LineHeight(1.5).TextColor(t.Warning)
-	}
-	ui.Text(c, msgs.SettingsLanguage()).FontSize(typeGroupTitle).FontWeight(500).TextColor(t.TextMuted)
-	languageModes := []string{"", "zh-Hans", "en"}
-	languageSelected := languageModeIndex(a.languageMode)
-	language := segmentedSelection(c, &languageSelected,
-		msgs.LanguageSystem(languageSelfName(msgs, c.Locale())),
-		msgs.LanguageChinese(),
-		msgs.LanguageEnglish(),
-	).Label(msgs.SettingsLanguage()).FontSize(typeAction)
-	if language.Changed() {
-		a.setLanguageMode(languageModes[languageSelected])
-	}
-	ui.Text(c, msgs.LanguageHint()).FontSize(typeMeta).LineHeight(1.5).TextColor(t.TextMuted)
+		for _, problem := range a.appearanceThemes.Errors {
+			ui.Text(c, msgs.ThemeFileError(problem.File, problem.Field, problem.Message)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Warning)
+		}
+	})
+	preferenceSection(c, t, msgs.SettingsLanguage(), func() {
+		c.Key("language-preference")
+		settingsPreferenceRow(c, t, msgs.SettingsLanguage(), msgs.LanguageHint(), func() {
+			options := []selectOption{
+				{Value: "", Label: msgs.LanguageSystem(languageSelfName(msgs, c.Locale()))},
+				{Value: "zh-Hans", Label: msgs.LanguageChinese()},
+				{Value: "en", Label: msgs.LanguageEnglish()},
+			}
+			selected := []string{"", "zh-Hans", "en"}[languageModeIndex(a.languageMode)]
+			c.Key("settings-language")
+			if preferenceSelect(c, &selected, options, msgs.SettingsLanguage()).Changed() {
+				a.setLanguageMode(selected)
+			}
+		}, true)
+	})
 	a.settingsDataRecoveryContent(c, t)
 }
 
@@ -742,143 +783,146 @@ func (a *appModel) confirmDataRecovery() {
 func (a *appModel) settingsDataRecoveryContent(c *ui.Context, t *ui.Theme) {
 	msgs := locales.In(c.Locale())
 	s := a.ensureDataRecovery()
-	ui.Text(c, msgs.RecoveryDataTitle()).FontSize(typeGroupTitle).FontWeight(500).TextColor(t.Text)
-	ui.Text(c, msgs.RecoveryDataIncluded()).FontSize(typeBody).LineHeight(1.5).TextColor(t.TextMuted)
-	ui.Text(c, msgs.RecoveryDataExcluded()).FontSize(typeMeta).LineHeight(1.5).TextColor(t.TextMuted)
-	ui.Row(c).Wrap().Gap(8).Children(func() {
-		for _, restore := range []bool{false, true} {
-			label, key := msgs.SaveRecoveryCopyAction(), "copy"
-			if restore {
-				label, key = msgs.RestorePausedAction(), "restore"
-			}
-			button := secondaryButton(c, label).Label(label).Disabled(a.dataRecoveryBlocksChanges() || a.dataRecoveryBlocked(restore) != "").OnClick(func() { a.chooseDataRecovery(restore) })
-			if s.focus == key {
-				button.Focus().ScrollIntoView()
-				s.focus = ""
-			}
-		}
-	})
-	if reason := a.dataRecoveryBlocked(a.store == nil); reason != "" && s.result.Outcome != storeRecoveryVerifiedInstalled && s.result.Outcome != storeRecoveryInstallUnconfirmed {
-		ui.Text(c, dataRecoveryBlockedText(msgs, reason)).FontSize(typeMeta).LineHeight(1.5).TextColor(t.TextMuted)
-	}
-	if s.choosing || s.inFlight {
-		ui.Text(c, msgs.RecoveryDataWorking()).FontSize(typeBody).LineHeight(1.5).TextColor(t.TextMuted)
-	}
-	if a.dataRecoveryPreviewCurrent(s) {
-		ui.Text(c, msgs.RecoveryPreviewTitle()).FontSize(typeGroupTitle).FontWeight(500).TextColor(t.Text)
-		ui.Text(c, safeDiagnostic(s.copy.Path)).FontSize(typeBody).LineHeight(1.5).TextColor(t.Text)
-		ui.Text(c, msgs.RecoveryPreviewCounts(s.copy.Contacts, s.copy.Issues)).FontSize(typeBody).TextColor(t.Text)
-		ui.Text(c, msgs.RecoveryFileModified(s.copy.ModifiedAt.Format("2006-01-02 15:04:05 MST"))).FontSize(typeMeta).LineHeight(1.5).TextColor(t.TextMuted)
-		ui.Text(c, msgs.RecoveryPreviewWarning()).FontSize(typeBody).LineHeight(1.5).TextColor(t.Warning)
-		ui.Text(c, msgs.RecoveryPauseWarning()).FontSize(typeBody).LineHeight(1.5).TextColor(t.Warning)
-		ui.Row(c).Wrap().Gap(8).Children(func() {
-			confirm := secondaryButton(c, msgs.RecoveryConfirmAction()).Label(msgs.RecoveryConfirmAction()).Disabled(s.inFlight || a.dataRecoveryBlocked(true) != "").OnClick(a.confirmDataRecovery)
-			if s.focus == "confirm" {
-				confirm.Focus().ScrollIntoView()
-				s.focus = ""
-			}
-			secondaryButton(c, msgs.RecoveryCancelAction()).Label(msgs.RecoveryCancelAction()).Disabled(s.inFlight).OnClick(func() { s.copy, s.target = nil, nil; s.focus = "restore" })
-		})
-	}
-	var summary string
-	switch s.result.Outcome {
-	case storeRecoveryNotInstalled:
-		summary = msgs.RecoveryNotInstalled()
-	case storeRecoveryVerifiedInstalled:
-		summary = msgs.RecoveryInstalled()
-	case storeRecoveryInstallUnconfirmed:
-		summary = msgs.RecoveryUnconfirmed()
-	default:
-		switch s.notice {
-		case "copy-saved":
-			summary = msgs.RecoveryCopySaved(safeDiagnostic(s.output))
-		case "copy-failed":
-			summary = msgs.RecoveryCopyFailed()
-		case "copy-unusable":
-			summary = msgs.RecoveryCopyUnusable()
-		case "choose-failed", "inspect-failed":
-			summary = msgs.RecoveryInspectFailed()
-		default:
-			if strings.HasPrefix(s.notice, "blocked:") {
-				summary = dataRecoveryBlockedText(msgs, strings.TrimPrefix(s.notice, "blocked:"))
-			}
-		}
-	}
-	if summary != "" {
-		color := t.Warning
-		if s.notice == "copy-saved" && s.result.Outcome == "" {
-			color = t.Success
-		}
-		ui.Text(c, summary).FontSize(typeBody).LineHeight(1.5).TextColor(color)
-	}
-	reveal := func(path, label string) {
-		if path == "" {
-			return
-		}
-		if path == s.result.ArchivePath {
-			ui.Text(c, msgs.RecoveryArchiveLocation(safeDiagnostic(path))).FontSize(typeMeta).LineHeight(1.5).TextColor(t.TextMuted)
-		}
-		secondaryButton(c, label).Label(label).OnClick(func() {
-			fn := a.revealRecoveryFile
-			if fn == nil {
-				fn = requestRevealIssueResultWithSystem
-			}
-			token, generation, owner, canonical := s.token, a.folderChoiceGeneration, a.selectedContact(), a.storePath
-			go func() {
-				err := fn(path)
-				a.updateUI(func() {
-					if err != nil && a.dataRecoveryCurrent(s, token, generation, owner, canonical) {
-						s.problem = strings.TrimSpace(s.problem + "\n" + a.connectionSafeMessage(err))
+	preferenceSection(c, t, msgs.RecoveryDataTitle(), func() {
+		ui.Column(c).FillWidth().Padding(14, 0).Gap(8).Children(func() {
+			ui.Text(c, msgs.RecoveryDataIncluded()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
+			ui.Text(c, msgs.RecoveryDataExcluded()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
+			ui.Row(c).Wrap().Gap(8).Children(func() {
+				for _, restore := range []bool{false, true} {
+					label, key := msgs.SaveRecoveryCopyAction(), "copy"
+					if restore {
+						label, key = msgs.RestorePausedAction(), "restore"
 					}
+					button := secondaryButton(c, label).Label(label).Disabled(a.dataRecoveryBlocksChanges() || a.dataRecoveryBlocked(restore) != "").OnClick(func() { a.chooseDataRecovery(restore) })
+					if s.focus == key {
+						button.Focus().ScrollIntoView()
+						s.focus = ""
+					}
+				}
+			})
+			if reason := a.dataRecoveryBlocked(a.store == nil); reason != "" && s.result.Outcome != storeRecoveryVerifiedInstalled && s.result.Outcome != storeRecoveryInstallUnconfirmed {
+				ui.Text(c, dataRecoveryBlockedText(msgs, reason)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
+			}
+			if s.choosing || s.inFlight {
+				ui.Text(c, msgs.RecoveryDataWorking()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
+			}
+			if a.dataRecoveryPreviewCurrent(s) {
+				ui.Text(c, msgs.RecoveryPreviewTitle()).FontSize(typeLabel).FontWeight(400).FixedLineHeight(lineLabel).TextColor(t.Text)
+				ui.Text(c, safeDiagnostic(s.copy.Path)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text)
+				ui.Text(c, msgs.RecoveryPreviewCounts(s.copy.Contacts, s.copy.Issues)).FontSize(typeBody).TextColor(t.Text)
+				ui.Text(c, msgs.RecoveryFileModified(s.copy.ModifiedAt.Format("2006-01-02 15:04:05 MST"))).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
+				ui.Text(c, msgs.RecoveryPreviewWarning()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Warning)
+				ui.Text(c, msgs.RecoveryPauseWarning()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Warning)
+				ui.Row(c).Wrap().Gap(8).Children(func() {
+					confirm := secondaryButton(c, msgs.RecoveryConfirmAction()).Label(msgs.RecoveryConfirmAction()).Disabled(s.inFlight || a.dataRecoveryBlocked(true) != "").OnClick(a.confirmDataRecovery)
+					if s.focus == "confirm" {
+						confirm.Focus().ScrollIntoView()
+						s.focus = ""
+					}
+					secondaryButton(c, msgs.RecoveryCancelAction()).Label(msgs.RecoveryCancelAction()).Disabled(s.inFlight).OnClick(func() { s.copy, s.target = nil, nil; s.focus = "restore" })
 				})
-			}()
+			}
+			var summary string
+			switch s.result.Outcome {
+			case storeRecoveryNotInstalled:
+				summary = msgs.RecoveryNotInstalled()
+			case storeRecoveryVerifiedInstalled:
+				summary = msgs.RecoveryInstalled()
+			case storeRecoveryInstallUnconfirmed:
+				summary = msgs.RecoveryUnconfirmed()
+			default:
+				switch s.notice {
+				case "copy-saved":
+					summary = msgs.RecoveryCopySaved(safeDiagnostic(s.output))
+				case "copy-failed":
+					summary = msgs.RecoveryCopyFailed()
+				case "copy-unusable":
+					summary = msgs.RecoveryCopyUnusable()
+				case "choose-failed", "inspect-failed":
+					summary = msgs.RecoveryInspectFailed()
+				default:
+					if strings.HasPrefix(s.notice, "blocked:") {
+						summary = dataRecoveryBlockedText(msgs, strings.TrimPrefix(s.notice, "blocked:"))
+					}
+				}
+			}
+			if summary != "" {
+				color := t.Warning
+				if s.notice == "copy-saved" && s.result.Outcome == "" {
+					color = t.Success
+				}
+				ui.Text(c, summary).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(color)
+			}
+			reveal := func(path, label string) {
+				if path == "" {
+					return
+				}
+				if path == s.result.ArchivePath {
+					ui.Text(c, msgs.RecoveryArchiveLocation(safeDiagnostic(path))).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
+				}
+				secondaryButton(c, label).Label(label).OnClick(func() {
+					fn := a.revealRecoveryFile
+					if fn == nil {
+						fn = requestRevealIssueResultWithSystem
+					}
+					token, generation, owner, canonical := s.token, a.folderChoiceGeneration, a.selectedContact(), a.storePath
+					go func() {
+						err := fn(path)
+						a.updateUI(func() {
+							if err != nil && a.dataRecoveryCurrent(s, token, generation, owner, canonical) {
+								s.problem = strings.TrimSpace(s.problem + "\n" + a.connectionSafeMessage(err))
+							}
+						})
+					}()
+				})
+			}
+			reveal(s.output, msgs.RecoveryShowCopy())
+			if s.result.OutputPath != "" {
+				ui.Text(c, msgs.RecoveryDataLocation(safeDiagnostic(s.result.OutputPath))).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
+			}
+			reveal(s.result.ArchivePath, msgs.RecoveryShowArchive())
+			if s.problem != "" {
+				label := msgs.DetailsAction()
+				if s.details {
+					label = msgs.HideDetailsAction()
+				}
+				secondaryButton(c, label).Label(label).OnClick(func() { s.details = !s.details })
+				if s.details {
+					markdownReader(c, safeDiagnostic(s.problem), markdownReaderOptions{PlainText: true, CopyLabel: msgs.CopyErrorDetailsLabel()}).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
+				}
+			}
+			if s.result.Outcome == storeRecoveryVerifiedInstalled || s.result.Outcome == storeRecoveryInstallUnconfirmed {
+				quit := secondaryButton(c, msgs.RecoveryQuitAction()).Label(msgs.RecoveryQuitAction()).OnClick(a.beginShutdown)
+				if s.focus == "quit" {
+					quit.Focus().ScrollIntoView()
+					s.focus = ""
+				}
+			}
 		})
-	}
-	reveal(s.output, msgs.RecoveryShowCopy())
-	if s.result.OutputPath != "" {
-		ui.Text(c, msgs.RecoveryDataLocation(safeDiagnostic(s.result.OutputPath))).FontSize(typeMeta).LineHeight(1.5).TextColor(t.TextMuted)
-	}
-	reveal(s.result.ArchivePath, msgs.RecoveryShowArchive())
-	if s.problem != "" {
-		label := msgs.DetailsAction()
-		if s.details {
-			label = msgs.HideDetailsAction()
-		}
-		secondaryButton(c, label).Label(label).OnClick(func() { s.details = !s.details })
-		if s.details {
-			markdownReader(c, safeDiagnostic(s.problem), markdownReaderOptions{PlainText: true, CopyLabel: msgs.CopyErrorDetailsLabel()}).FontSize(typeMeta).LineHeight(1.5).TextColor(t.TextMuted)
-		}
-	}
-	if s.result.Outcome == storeRecoveryVerifiedInstalled || s.result.Outcome == storeRecoveryInstallUnconfirmed {
-		quit := secondaryButton(c, msgs.RecoveryQuitAction()).Label(msgs.RecoveryQuitAction()).OnClick(a.beginShutdown)
-		if s.focus == "quit" {
-			quit.Focus().ScrollIntoView()
-			s.focus = ""
-		}
-	}
+	})
 }
 
 func (a *appModel) settingsConnectionContent(c *ui.Context, t *ui.Theme) {
 	msgs := locales.In(c.Locale())
 	form := a.connectionForm
-	ui.Column(c).FillWidth().MaxWidth(600).AlignItems(ui.Start).Gap(12).Children(func() {
-		ui.Text(c, msgs.SettingsConnection()).FontSize(typePageTitle).FontWeight(500).TextColor(t.Text)
-		ui.Text(c, msgs.ModelDefaultScope()).FontSize(typeGroupTitle).FontWeight(500).TextColor(t.Text)
+	ui.Column(c).FillWidth().AlignItems(ui.Start).Gap(8).Children(func() {
+		ui.Text(c, msgs.SettingsConnection()).FontSize(typeLabel).FontWeight(400).FixedLineHeight(lineLabel).TextColor(t.Text)
+		ui.Text(c, msgs.ModelDefaultScope()).FontSize(typeLabel).FontWeight(400).FixedLineHeight(lineLabel).TextColor(t.Text)
 		if a.connectionApplied() && a.connectionEffective != nil {
 			ui.Column(c).FillWidth().Gap(4).Children(func() {
-				ui.Text(c, msgs.ConnectionCurrent(connectionCurrentSummary(a.connectionEffective))).FontSize(typeBody).LineHeight(1.5).TextColor(t.Text)
+				ui.Text(c, msgs.ConnectionCurrent(connectionCurrentSummary(a.connectionEffective))).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text)
 				if form.Error != "" {
-					ui.Text(c, msgs.ConnectionKeptOnFailure()).FontSize(typeAction).LineHeight(1.5).TextColor(t.Warning)
+					ui.Text(c, msgs.ConnectionKeptOnFailure()).FontSize(typeLabel).FixedLineHeight(lineLabel).TextColor(t.Warning)
 				}
 			})
 		} else {
-			ui.Text(c, msgs.ConnectionNoneApplied()).FontSize(typeBody).LineHeight(1.5).TextColor(t.TextMuted)
+			ui.Text(c, msgs.ConnectionNoneApplied()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 		}
 		if form.Dirty() {
-			ui.Text(c, msgs.ConnectionUnsavedForm()).FontSize(typeAction).LineHeight(1.5).TextColor(t.Warning)
+			ui.Text(c, msgs.ConnectionUnsavedForm()).FontSize(typeLabel).FixedLineHeight(lineLabel).TextColor(t.Warning)
 		}
 		if a.connectionSavedPending() {
-			ui.Text(c, msgs.ConnectionSavedAwaitingApply()).FontSize(typeAction).LineHeight(1.5).TextColor(t.Warning)
+			ui.Text(c, msgs.ConnectionSavedAwaitingApply()).FontSize(typeLabel).FixedLineHeight(lineLabel).TextColor(t.Warning)
 		}
 		form.ReloadBlocked = a.connectionReloadBlocked()
 		form.SavedPending = a.connectionSavedPending()
@@ -886,7 +930,7 @@ func (a *appModel) settingsConnectionContent(c *ui.Context, t *ui.Theme) {
 		actions.Discard = func() { form.ResetDraft() }
 		form.view(c, t, actions)
 		ui.Divider(c)
-		ui.Text(c, msgs.ModelConversationScope()).FontSize(typeGroupTitle).FontWeight(500).TextColor(t.Text)
+		ui.Text(c, msgs.ModelConversationScope()).FontSize(typeLabel).FontWeight(400).FixedLineHeight(lineLabel).TextColor(t.Text)
 		if a.modelPanelKind == "conversation" && a.modelPanelSessionID == a.selectedContact().SessionID {
 			a.modelPanel(c, t)
 		} else {
@@ -912,7 +956,7 @@ func (a *appModel) settingsContactContent(c *ui.Context, t *ui.Theme) {
 			options = append(options, selectOption{Value: contact.ID, Label: a.settingsContactChoice(msgs, contact)})
 		}
 	}
-	picker := selectWithoutChevron(c, &a.settingsContactID, options, msgs.EditContactLabel())
+	picker := preferenceSelect(c, &a.settingsContactID, options, msgs.EditContactLabel())
 	if picker.Changed() {
 		a.folderChoiceGeneration++
 		a.ensureSettingsProfileEditor(a.settingsContactID)

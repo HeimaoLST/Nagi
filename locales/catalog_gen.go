@@ -4248,6 +4248,146 @@ func (msgs Messages) HistoryMessageMeta(speaker string, date string, session str
 	return Catalog.Format(msgs.locale, "historyMessageMeta", map[string]any{"speaker": speaker, "date": date, "session": session})
 }
 
+// SettingsLocalThemes says "Local themes"
+// in the language the app shows.
+func SettingsLocalThemes() string { return In(i18n.Locale()).SettingsLocalThemes() }
+
+// SettingsLocalThemes says "Local themes"
+// in the language of msgs.
+func (msgs Messages) SettingsLocalThemes() string {
+	return Catalog.Format(msgs.locale, "settingsLocalThemes", nil)
+}
+
+// ConnectionEditAction says "Edit"
+// in the language the app shows.
+func ConnectionEditAction() string { return In(i18n.Locale()).ConnectionEditAction() }
+
+// ConnectionEditAction says "Edit"
+// in the language of msgs.
+func (msgs Messages) ConnectionEditAction() string {
+	return Catalog.Format(msgs.locale, "connectionEditAction", nil)
+}
+
+// ConnectionCloseEditorAction says "Close editor"
+// in the language the app shows.
+func ConnectionCloseEditorAction() string { return In(i18n.Locale()).ConnectionCloseEditorAction() }
+
+// ConnectionCloseEditorAction says "Close editor"
+// in the language of msgs.
+func (msgs Messages) ConnectionCloseEditorAction() string {
+	return Catalog.Format(msgs.locale, "connectionCloseEditorAction", nil)
+}
+
+// ConnectionEditField says "Edit {field}"
+// in the language the app shows.
+func ConnectionEditField(field string) string { return In(i18n.Locale()).ConnectionEditField(field) }
+
+// ConnectionEditField says "Edit {field}"
+// in the language of msgs.
+func (msgs Messages) ConnectionEditField(field string) string {
+	return Catalog.Format(msgs.locale, "connectionEditField", map[string]any{"field": field})
+}
+
+// ConnectionCloseField says "Close {field} editor"
+// in the language the app shows.
+func ConnectionCloseField(field string) string { return In(i18n.Locale()).ConnectionCloseField(field) }
+
+// ConnectionCloseField says "Close {field} editor"
+// in the language of msgs.
+func (msgs Messages) ConnectionCloseField(field string) string {
+	return Catalog.Format(msgs.locale, "connectionCloseField", map[string]any{"field": field})
+}
+
+// ConnectionValueSaved says "Saved value"
+// in the language the app shows.
+func ConnectionValueSaved() string { return In(i18n.Locale()).ConnectionValueSaved() }
+
+// ConnectionValueSaved says "Saved value"
+// in the language of msgs.
+func (msgs Messages) ConnectionValueSaved() string {
+	return Catalog.Format(msgs.locale, "connectionValueSaved", nil)
+}
+
+// ConnectionValueDraft says "Current draft"
+// in the language the app shows.
+func ConnectionValueDraft() string { return In(i18n.Locale()).ConnectionValueDraft() }
+
+// ConnectionValueDraft says "Current draft"
+// in the language of msgs.
+func (msgs Messages) ConnectionValueDraft() string {
+	return Catalog.Format(msgs.locale, "connectionValueDraft", nil)
+}
+
+// ConnectionValueUnsavedDraft says "Unsaved current draft"
+// in the language the app shows.
+func ConnectionValueUnsavedDraft() string { return In(i18n.Locale()).ConnectionValueUnsavedDraft() }
+
+// ConnectionValueUnsavedDraft says "Unsaved current draft"
+// in the language of msgs.
+func (msgs Messages) ConnectionValueUnsavedDraft() string {
+	return Catalog.Format(msgs.locale, "connectionValueUnsavedDraft", nil)
+}
+
+// ConnectionValueInvalidDraft says "Invalid current draft"
+// in the language the app shows.
+func ConnectionValueInvalidDraft() string { return In(i18n.Locale()).ConnectionValueInvalidDraft() }
+
+// ConnectionValueInvalidDraft says "Invalid current draft"
+// in the language of msgs.
+func (msgs Messages) ConnectionValueInvalidDraft() string {
+	return Catalog.Format(msgs.locale, "connectionValueInvalidDraft", nil)
+}
+
+// ConnectionValueUnset says "Not set"
+// in the language the app shows.
+func ConnectionValueUnset() string { return In(i18n.Locale()).ConnectionValueUnset() }
+
+// ConnectionValueUnset says "Not set"
+// in the language of msgs.
+func (msgs Messages) ConnectionValueUnset() string {
+	return Catalog.Format(msgs.locale, "connectionValueUnset", nil)
+}
+
+// ConnectionFolderEnterPath says "Enter folder path"
+// in the language the app shows.
+func ConnectionFolderEnterPath() string { return In(i18n.Locale()).ConnectionFolderEnterPath() }
+
+// ConnectionFolderEnterPath says "Enter folder path"
+// in the language of msgs.
+func (msgs Messages) ConnectionFolderEnterPath() string {
+	return Catalog.Format(msgs.locale, "connectionFolderEnterPath", nil)
+}
+
+// ConnectionFolderHidePath says "Hide folder path"
+// in the language the app shows.
+func ConnectionFolderHidePath() string { return In(i18n.Locale()).ConnectionFolderHidePath() }
+
+// ConnectionFolderHidePath says "Hide folder path"
+// in the language of msgs.
+func (msgs Messages) ConnectionFolderHidePath() string {
+	return Catalog.Format(msgs.locale, "connectionFolderHidePath", nil)
+}
+
+// ConnectionSlotsIncrease says "Increase maximum active tasks"
+// in the language the app shows.
+func ConnectionSlotsIncrease() string { return In(i18n.Locale()).ConnectionSlotsIncrease() }
+
+// ConnectionSlotsIncrease says "Increase maximum active tasks"
+// in the language of msgs.
+func (msgs Messages) ConnectionSlotsIncrease() string {
+	return Catalog.Format(msgs.locale, "connectionSlotsIncrease", nil)
+}
+
+// ConnectionSlotsDecrease says "Decrease maximum active tasks"
+// in the language the app shows.
+func ConnectionSlotsDecrease() string { return In(i18n.Locale()).ConnectionSlotsDecrease() }
+
+// ConnectionSlotsDecrease says "Decrease maximum active tasks"
+// in the language of msgs.
+func (msgs Messages) ConnectionSlotsDecrease() string {
+	return Catalog.Format(msgs.locale, "connectionSlotsDecrease", nil)
+}
+
 // ConnectionFieldEndpoint says "API endpoint"
 // in the language the app shows.
 func ConnectionFieldEndpoint() string { return In(i18n.Locale()).ConnectionFieldEndpoint() }

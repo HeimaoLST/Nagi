@@ -340,21 +340,22 @@ func TestAppearancePanelSwitchesModeAndKeepsCurrentDraft(t *testing.T) {
 		a.appearanceMode != appearanceSystem || a.workTheme.Theme == nil || a.workTheme.Theme.Dark != a.systemDark {
 		t.Fatalf("appearance panel/state missing: %q", tr.Texts())
 	}
-	// The official segmented control is one tab stop; arrows move and choose
-	// among its radio segments, without a custom keyboard handler.
+	// The official Select trigger is one tab stop; its popup owns keyboard selection.
 	for i := 0; i < 8 && !tr.Focused("System"); i++ {
 		tr.Key(0, ui.KeyTab)
 		tr.Frame()
 	}
 	if !tr.Focused("System") {
-		t.Fatalf("appearance segmented control is not keyboard reachable: %v", tr.Texts())
+		t.Fatalf("appearance selector is not keyboard reachable: %v", tr.Texts())
 	}
-	tr.Key(0, ui.KeyRight)
+	tr.Key(0, ui.KeySpace)
 	tr.Frame()
-	tr.Key(0, ui.KeyRight)
+	tr.Key(0, ui.KeyEnd)
+	tr.Frame()
+	tr.Key(0, ui.KeyEnter)
 	tr.Frame()
 	if !tr.Focused("Dark") {
-		t.Fatalf("Dark appearance segment is not keyboard reachable: %v", tr.Texts())
+		t.Fatalf("Dark selected value did not retain keyboard focus: %v", tr.Texts())
 	}
 	if a.appearanceMode != appearanceDark || a.appearanceError != "" {
 		t.Fatalf("appearance switch = mode=%q error=%q", a.appearanceMode, a.appearanceError)
@@ -382,23 +383,27 @@ func TestAppearanceRetrySaveUIAndRuntimeErrorOwnership(t *testing.T) {
 	a.openAppearance()
 	tr := ui.NewTester(a.view, 1040, 720)
 	// The actual system is dark while the stored choice stays System; the
-	// segmented control exposes the three persistence modes independently.
+	// selector exposes the three persistence modes independently.
 	tr.SetDark(true)
 	tr.Frame()
-	// Settings focus order is Back, four category buttons, then the
-	// segmented control on its selected System segment. One Right arrow
-	// chooses Light through the official radio-group behavior.
+	// Reach the selected System value, open its official popup and choose Light.
 	for i := 0; i < 6 && !tr.Focused("System"); i++ {
 		tr.Key(0, ui.KeyTab)
 		tr.Frame()
 	}
 	if !tr.Focused("System") {
-		t.Fatalf("System appearance segment is not keyboard focused: %v", tr.Texts())
+		t.Fatalf("System appearance selector is not keyboard focused: %v", tr.Texts())
 	}
-	tr.Key(0, ui.KeyRight)
+	tr.Key(0, ui.KeySpace)
+	tr.Frame()
+	tr.Key(0, ui.KeyHome)
+	tr.Frame()
+	tr.Key(0, ui.KeyDown)
+	tr.Frame()
+	tr.Key(0, ui.KeyEnter)
 	tr.Frame()
 	if !tr.Focused("Light") {
-		t.Fatalf("Light appearance segment is not keyboard focused after Right: %v", tr.Texts())
+		t.Fatalf("Light selected value did not retain keyboard focus: %v", tr.Texts())
 	}
 	if a.appearanceMode != appearanceLight || a.appearanceError == "" {
 		t.Fatalf("failed UI save = mode=%q error=%q", a.appearanceMode, a.appearanceError)

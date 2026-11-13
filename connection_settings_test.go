@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -99,6 +100,10 @@ func TestConnectionProtocolSegmentedKeepsDraftAndBusyGate(t *testing.T) {
 	s := newConnectionSettings(&config, "")
 	tr := connectionSettingsTester(s, connectionSettingsActions{}, 580, 1600)
 	tr.Frame()
+	if err := tr.Click("Protocol"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
 	if !tr.HasText("Protocol") || !tr.HasText("Chat completions") || !tr.HasText("Responses") {
 		t.Fatalf("protocol choices missing: %v", tr.Texts())
 	}
@@ -109,6 +114,10 @@ func TestConnectionProtocolSegmentedKeepsDraftAndBusyGate(t *testing.T) {
 	if s.Draft.API != connectionAPIResponses {
 		t.Fatalf("protocol draft = %q, want Responses", s.Draft.API)
 	}
+	if err := tr.Click("Protocol"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
 	s.Busy = true
 	tr.Frame()
 	if err := tr.Click("Chat completions"); err != nil {
@@ -271,6 +280,10 @@ func TestFirstUseWorkFolderManualEntryAndReset(t *testing.T) {
 			if !tr.HasText(msgs.WorkFolderRequiredHint()) {
 				t.Fatal("fresh work-folder instruction is not visible")
 			}
+			if err := tr.Click(msgs.ConnectionFolderEnterPath()); err != nil {
+				t.Fatal(err)
+			}
+			tr.Frame()
 			// The caption shares this label; reach the input through the keyboard focus order.
 			for i := 0; i < 12 && !tr.Focused(msgs.ConnectionFieldWorkingDirectory()); i++ {
 				tr.Key(0, ui.KeyTab)
@@ -393,5 +406,168 @@ func TestRecoveryPresentationExplicitTestUsesDraftAndDisclosesFailure(t *testing
 				}
 			})
 		}
+	}
+}
+
+func TestConnectionSettingsEditCollapsePreservesCurrentDraftAndActionScopes(t *testing.T) {
+	saved := testConnectionConfig(t)
+	s := newConnectionSettings(&saved, saved.WorkingDirectory)
+	s.SavedPending = true
+	var tested, written connectionConfig
+	tests, saves, applies := 0, 0, 0
+	tr := connectionSettingsTester(s, connectionSettingsActions{
+		Test: func(config connectionConfig) { tested = config; tests++ },
+		Save: func(config connectionConfig) {
+			written = config
+			saves++
+			s.Error, s.ErrorDetail = "permission denied", "original save detail"
+		},
+		Apply: func() { applies++ },
+	}, 600, 2000)
+	tr.SetFocused(true)
+	tr.Frame()
+	if err := tr.Click("Edit API endpoint"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if !tr.Focused("API endpoint") {
+		t.Fatal("Edit did not focus the original endpoint input")
+	}
+	tr.Key(ui.Cmd, ui.KeyA)
+	tr.Type("https://current.example.invalid/v1")
+	tr.Frame()
+	current := saved
+	current.Endpoint = "https://current.example.invalid/v1"
+	if err := tr.Click("Close API endpoint editor"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if s.Draft.Endpoint != current.Endpoint || !s.Dirty() || !strings.Contains(strings.Join(tr.Texts(), "\n"), current.Endpoint) || !tr.Focused("Edit API endpoint") {
+		t.Fatal("collapse discarded or hid the current draft, or lost the Edit return focus")
+	}
+	if tests+saves+applies != 0 || s.initial.Endpoint != saved.Endpoint {
+		t.Fatal("editing performed a confirmation action or advanced the saved baseline")
+	}
+	if err := tr.Click("Test connection and model"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if tested != current || tests != 1 || saves+applies != 0 {
+		t.Fatal("Test did not consume the complete collapsed draft exactly once")
+	}
+	if err := tr.Click("Save configuration"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if written != current || saves != 1 || s.ErrorDetail != "original save detail" || !s.Dirty() {
+		t.Fatal("failed Save lost the draft or original error")
+	}
+	if err := tr.Click("Apply saved"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if applies != 1 || tests != 1 || saves != 1 || s.initial.Endpoint != saved.Endpoint || s.Draft.Endpoint != current.Endpoint {
+		t.Fatal("Apply changed the current form or performed another action")
+	}
+	if err := tr.Click("Edit API endpoint"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	tr.Type("/again")
+	tr.Frame()
+	if s.Draft.Endpoint != current.Endpoint+"/again" || s.ErrorDetail != "original save detail" {
+		t.Fatal("reopening did not restore the original draft input and feedback")
+	}
+}
+
+func TestConnectionSettingsValidationRevealsCollapsedDraft(t *testing.T) {
+	config := testConnectionConfig(t)
+	s := newConnectionSettings(&config, config.WorkingDirectory)
+	calls := 0
+	tr := connectionSettingsTester(s, connectionSettingsActions{Save: func(connectionConfig) { calls++ }}, 600, 2000)
+	tr.SetFocused(true)
+	tr.Frame()
+	if err := tr.Click("Edit API key"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	tr.Key(ui.Cmd, ui.KeyA)
+	tr.Key(0, ui.KeyBackspace)
+	tr.Frame()
+	if err := tr.Click("Close API key editor"); err != nil {
+		t.Fatal(err)
+	}
+	s.Draft.ContextTokens = "9007199254740993suffix"
+	s.Draft.WorkingDirectory = "relative-path"
+	tr.Frame()
+	if err := tr.Click("Save configuration"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if calls != 0 || s.Draft.APIKey != "" || s.Draft.ContextTokens != "9007199254740993suffix" || s.Errors["APIKey"] == "" || s.Errors["ContextTokens"] != validationNumeric || !s.LimitsOpen || !tr.Focused("API key") {
+		t.Fatal("validation did not preserve raw values, reveal capacity and focus the hidden first invalid field")
+	}
+	tr.Type("replacement-key")
+	tr.Frame()
+	if err := tr.Click("Close API key editor"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if s.Errors["APIKey"] == "" || !tr.HasText(locales.In("en").ValidationRequired()) {
+		t.Fatal("explicit collapse erased the pending field error")
+	}
+	s.Draft.ContextTokens = "131072"
+	if err := tr.Click("Save configuration"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if !tr.Focused("Default working directory") || s.Draft.WorkingDirectory != "relative-path" || calls != 0 {
+		t.Fatal("validation did not reveal and focus the manual folder input")
+	}
+}
+
+func TestConnectionSettingsSlotsStepPreservesInvalidAndOverflow(t *testing.T) {
+	maxInt := int(^uint(0) >> 1)
+	for _, tc := range []struct{ raw, increase, decrease string }{
+		{"2", "3", "1"}, {"  +2  ", "3", "1"}, {"0002", "3", "1"},
+		{"1", "2", "1"}, {strconv.Itoa(maxInt), strconv.Itoa(maxInt), strconv.Itoa(maxInt - 1)},
+		{"", "", ""}, {" ", " ", " "}, {"1.5", "1.5", "1.5"},
+		{"2tasks", "2tasks", "2tasks"}, {"0x2", "0x2", "0x2"}, {"0", "0", "0"},
+		{"999999999999999999999999", "999999999999999999999999", "999999999999999999999999"},
+		{"9007199254740993", "9007199254740994", "9007199254740992"},
+	} {
+		t.Run(tc.raw, func(t *testing.T) {
+			config := testConnectionConfig(t)
+			s := newConnectionSettings(&config, config.WorkingDirectory)
+			s.Draft.Slots, s.LimitsOpen = tc.raw, true
+			s.Errors = map[string]string{"MaxActiveTasks": validationNumeric}
+			tr := connectionSettingsTester(s, connectionSettingsActions{}, 600, 2000)
+			tr.Frame()
+			if err := tr.Click("Increase maximum active tasks"); err != nil {
+				t.Fatal(err)
+			}
+			tr.Frame()
+			if s.Draft.Slots != tc.increase || s.Errors["MaxActiveTasks"] != validationNumeric {
+				t.Fatalf("increase %q = %q, want %q; pending error=%q", tc.raw, s.Draft.Slots, tc.increase, s.Errors["MaxActiveTasks"])
+			}
+			s.Draft.Slots = tc.raw
+			tr.Frame()
+			if err := tr.Click("Decrease maximum active tasks"); err != nil {
+				t.Fatal(err)
+			}
+			tr.Frame()
+			if s.Draft.Slots != tc.decrease {
+				t.Fatalf("decrease %q = %q, want %q", tc.raw, s.Draft.Slots, tc.decrease)
+			}
+			s.Busy = true
+			s.Draft.Slots = tc.raw
+			tr.Frame()
+			if err := tr.Click("Increase maximum active tasks"); err != nil {
+				t.Fatal(err)
+			}
+			if s.Draft.Slots != tc.raw {
+				t.Fatal("busy slot step changed the draft")
+			}
+		})
 	}
 }
