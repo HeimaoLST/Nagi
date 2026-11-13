@@ -12,12 +12,12 @@
 
 **QD-01：一套现有共享路径。** 按[需求](../requirements/desktop.md#qoder-match-20261113)统一所有目标页面，Nagi 身份和 Paper／Moss 颜色之外，已声明的同类间距、字形、字重、控件与图标不得各页自定。此节显式替代旧四档字号、旧密度／宽度、无 chevron 和 32px 可见面限制；既有文案、作用域、原文内容和控制器不变。规范只在这两个 topic docs；外部 JSON 是本节证据／机器映射，不能成为第二个设计系统。Qoder 新任务首页的插画、积分、模式、权限、语音和品牌不成为 Nagi 新功能。
 
-**证据基线**：实际安装 `com.qodercn.app` 0.4.8，静态完整 commit `f8c98a817f6059ab9a959f501e9a483805170942`／ASAR `c76906bf…`；原生报告 `qoder-native-r2/report.json`、本次 `product/stage-a/` 与 `stage-a2/`。静态当前权威为 `engineering-r2/metrics.json b28b6b98`、evidence `fa2ef2e4`、correction `a4f9e77e`、manifest `112fa259`，继承其逐哈希绑定的许可／字体／MyGo 证据。旧 `f131cfa0/9409ac96` 保留历史，不能再引用错误的泛用 iconbutton.md 分类。以下 D＝源码声明，P＝Nagi 明确选择的声明基准／角色适配；都不冒称原生有效值。
+**证据基线**：实际安装 `com.qodercn.app` 0.4.8，静态完整 commit `f8c98a817f6059ab9a959f501e9a483805170942`／ASAR `c76906bf…`；原生报告 `qoder-native-r2/report.json`、本次 `product/stage-a/` 与 `stage-a2/`。静态当前权威为 `engineering-r2/metrics.json b28b6b98`、evidence `fa2ef2e4`、correction `a4f9e77e`、manifest `112fa259`，继承其逐哈希绑定的许可／字体／MyGo 证据。旧 `f131cfa0/9409ac96` 保留历史，不能再引用错误的泛用 iconbutton.md 分类。以下 D＝源码声明，P＝Nagi 明确选择的声明基准／角色适配；都不冒称原生有效值。本节后续角色绑定同时采用冻结 `s2-calibration/preparation.json 15366feb`／manifest `4b1796dc`（evidence `e6ffdeba`、upstream `086164ac`）与 `implementation-s1/selector-width-evidence.json b2d8661d`；它们补齐指定角色，不覆盖 corrected b28b 的其余分类。
 
 <a id="qd-02"></a>
 ### QD-02：单位与字体角色
 
-采用唯一移植基准 **R=16、scale=1、1 声明 CSS px=1 Nagi 逻辑单位**（P）；`s=.25rem=4`，源码 rem／utility 先在此基准解析再交渲染。当前 Qoder root／zoom／device scale／活动 large scale 仍 UNKNOWN；large=1.1 只是另一声明，不新增 Nagi 缩放偏好。`Theme.Rem(n)=n*Theme.FontSize`，当前正文 13 与 R 无关，禁止用它解释 CSS rem。用显式 DIP、`Theme.Font`／`Element.Font`／`FontSize`／`FontWeight`／`FixedLineHeight` 表达；已知字体／行盒没有已证实框架缺口。
+采用唯一移植基准 **R=16、scale=1、1 声明 CSS px=1 Nagi 逻辑单位**（P）；`s=.25rem=4`，源码 rem／utility 先在此基准解析再交渲染。当前 Qoder root／zoom／device scale／活动 large scale 仍 UNKNOWN；large=1.1 只是另一声明，不新增 Nagi 缩放偏好。`Theme.Rem(n)=n*Theme.FontSize`，当前正文 13 与 R 无关，禁止用它解释 CSS rem。用显式 DIP、`Theme.Font`／`Element.Font`／`FontSize`／`FontWeight`／`FixedLineHeight` 表达；普通Element的已知字体／固定行盒API没有已证实缺口；Markdown标题的转发限制见下文，不混为全局font-gap。
 
 | 共享角色 | CSS 声明（D） | 采用的逻辑值／用途（P） |
 | --- | --- | --- |
@@ -31,7 +31,22 @@
 | code | ui-monospace／SFMono-Regular／SF Mono／Consolas／Liberation Mono／Menlo／monospace | 原代码内容与行结构保留，不把等宽字体用于普通标签 |
 | new-chat greeting | Instrument Sans → system-ui，仅此对应角色已证实 | 不新增 Qoder 首页／greeting；Nagi 既有联系人空态仍用对应普通 UI／conversation 角色。若以后明确实例化此 greeting，另绑定字体与 OFL／注册路径，不从 WOFF 猜原生等价 |
 
-原生 General 的大 H1、任意 Markdown 标题细分的确切字号／分支不在本次已绑定角色表中，保留 UNKNOWN；不得回填旧 16 或任选新数值后称为 Qoder 实测。紧凑业务对象标题采用表内 label 是明确的 Nagi 角色适配；需声称大 H1／标题细分也已对齐时，必须先绑定其声明角色。未知不阻止其余已知角色实施，但不能算该角色完成。
+**已绑定的标题分支（D→同一 R16／scale1 的 P）。** General 的实际 `$n` H1 是 **20／500／32**，无 description 的 header 高32、水平 padding16（`general.header.component`／`general.actual.call`）；不是 Markdown H1，也不是另一个通用 page20／600／28。Connection 等同类 Nagi Settings 页映射此页面标题角色（P），不声称 Qoder 有相同连接页。
+
+实际 chat `KL1 → MarkdownBody → createMarkdownComponents` 的 static／streaming 共用下表；证据 `markdown.presentation`、`markdown.component.headings`、`markdown.actual.chat.call`。不可混入另一套 Typeset CSS 的 H1–H6。所有数值为声明移植值，不是原生有效测量；普通正文仍14／24／system UI。
+
+| Markdown 角色 | 字号／字重／行盒 | 非首子项 top／bottom | Nagi 语义色／呈现 |
+| --- | --- | --- | --- |
+| H1 | 20／500／28 | 28／8 | 主正文色 |
+| H2 | 18／600／24 | 24／8 | 主正文色 |
+| H3 | 16／600／24 | 20／8 | 主正文色 |
+| H4 | 14／600／20 | 16／4 | 主正文色；inline14／20优先于class15／24 |
+| H5 | 14／600／24 | 16／4 | secondary |
+| H6 | 13／600／20 | 16／4 | tertiary；仅视觉 uppercase |
+
+首子项 top=0；全部标题继承正文 family，tracking-tight 为 **−.025em**（`unit.trackingtight`；`index-DohubooF.css` bytes3316..3340 inclusive），按各标题字号解析，不能按 Theme.Rem13。表内 top／bottom 是各自声明，须验证连续块与换行后的实际间隔，不能假设 MyGo 的 max 合并等于 CSS margin 结果。H6 大写只改变呈现：原 Markdown、复制／选择的原文、slug／anchor／链接目标与身份不变，不通过改写输入文本实现。紧凑对象 label 与页面 H1／正文标题是不同角色。
+
+**现有 renderer 边界。** Pinned MyGo v0.7.4 `ui/markdown/theme.go:85–99` 的 HeadingStyle 只有 Size／Weight／Color／Top／Bottom／Rule；`ui/markdown/view.go:319–338` heading 经私有 paragraph，`:258–298` 合并块间距，公开 Options.Block（`:66–68`）是替换 block，并非装饰既有 heading。`markdown.go` 的 `normalizedMarkdownTheme`／现有 reader 呈现是最小核验入口；Element.LetterSpacing已存在；缺口是HeadingStyle／既有heading renderer未转发per-heading tracking、独立linebox与视觉uppercase，不是全局字体API缺口。只改theme的字号／margin不能宣称已满足这些角色。后续须证明一个保持 selection／inline links／anchors／原文的窄 renderer 路径；若现有公开 API 不足，先向 lead 报具体最小 API／renderer 边界，不推定要 fork／扩建 framework，也不因此回用旧16标题或遗漏本表。
 
 <a id="qd-03"></a>
 ### QD-03：shell、列表与留白
@@ -44,36 +59,49 @@
 | group | 一个章节共用 border1、circular rounded-xl→12、px-4→16；不是每项一张卡 |
 | preference row | py-3.5→上下14；底边1 dashed，末行无边；高度随说明换行，不固定截断 |
 | row composition | `<40rem`＝640 前 column/stretch；从640起 row/center；leading glyph3.5s→14 |
+| General Appearance／Language selector | intrinsic w-fit，min120／max160；value span truncate，并保留完整可访问值／既有选项；不是整行或所有表单固定宽度 |
 | navigation row | h-7→28，icon/text gap2s→8，px-2→8，glyph14；必要 Nagi 二行状态按同一 label／meta 自然增高，不裁掉状态来硬塞28 |
 | menu.compact | 12／16，gap6，padding6，circular radius6，glyph14；普通读回／行菜单统一此角色 |
 | menu.regular | 12，gap8，padding8，circular radius4，glyph14；仅明确普通菜单分支使用，不逐页混选 |
+
+General 两个 selector 的声明分别绑定 `DIR8HOYO.js 52b8425f…` bytes `14786448..14786493` 与共用 `ku` bytes `14783831..14783887`／Language call `14788618..14789056`。Nagi 连接 input、组合动作及长值的宽度分配仍是既有响应约束下的 P，不冒称由这120–160推导出 Qoder 原值。
 
 <a id="qd-04"></a>
 ### QD-04：控件分类、形状与共享面
 
 | 组件／分支 | 声明与本次基准值 | 分类与约束 |
 | --- | --- | --- |
-| button.md | h28，13／500／16，gap6 | 文字操作共用此角色；padding／角形不得从别的分支假推为源码事实，统一未绑定的部分须登记后采用，不逐页自填 |
+| button.md（普通有文字动作，非 textButton 特殊分支） | h28，13／500／16，gap6；无 prefix 左右12，有 prefix 左10／右14；默认 ghost，rounded=square→squircle-2xl region16 | 只绑定 size=md、textButton=false 的 Button；显式 prefix 按该支处理，不是 FloatingButton 或 generic toolbar |
 | input.md | h28、px12、13／16、border1、squircle-2xl region16、disabled opacity .5 | 首用／Edit／进阶路径／精确数字共用；invalid 使用原错误与语义色 |
 | textarea.md | 13／400／20、px12、py8、min-height80、squircle region16 | 对应普通多行表单；composer 正文另用14／24 |
 | select.md | min-h28、py2、13／500／16、gap6、padding-start12/end10、glyph16、squircle region16 | 外观／语言／主题／协议等枚举沿用原 SelectBase 语义，恢复真实下拉 indicator；不变成多个布尔开关 |
 | FloatingButton.sm | box28、padding6、glyph16、rounded-full | 仅 small FloatingButton 分支；不是通用 toolbar |
 | FloatingButton.md/default | box32、padding8、glyph16、rounded-full | 默认／非sm FloatingButton 分支，继承字体与有效命中未知；不据此把所有按钮改32 |
-| toolbar.iconbutton | generic 源组件／尺寸／padding／字重／形状 **UNKNOWN** | 本片 Nagi 普通 toolbar 明确适配 button.md 的文字／可见高度与 glyph16（P），不是“Qoder 泛用 toolbar=28”的事实；具体角形／padding 未绑定前不能算完全对齐；不用 FloatingButton 代替普通导航 |
+| IconButton classifier | defaults secondary／md／square；md且非toolbar→face28／padding6／text16；sm→face20／padding6／text12；custom不加尺寸；inner leading-none，square→squircle-region16，字重未显式绑定 | 与 Button／FloatingButton 分离；variant=toolbar 的 md 不给上述 size／padding，不能套默认；glyph由具体slot／1em决定 |
+| chrome.back／forward | LayoutChrome ghost／md：face28／padding6／squircle16，arrow glyph14，组gap2；源panel glyph16 | WorkbenchFrame声明及Settings-frame调用已绑定；Nagi普通工作台左导航采用同一角色是P，正常app调用链仍未证实；Nagi侧栏glyph沿QD-05适配登记，不称其等于源PanelToggleIcon |
+| conversation.header／overflow | 实际local Jw：header40／gap12／pl6；普通title12／500／16，secondary；已有subtitle10／16；overflow ghost／md：face28／padding6／squircle16，1em glyph在此名义16 | Nagi对应现有对象header采用同层次（P）；Qoder pr6／为panel预留pr80两支的活动状态UNKNOWN，不凭空给Nagi添加panel或空白80 |
+| header.panel-toggle（条件slot） | 实际Jw链的ghost／custom：face26／padding6／glyph16／squircle16；wrapper高26／gap4 | 仅映射Nagi已有同类panel action时采用；不是所有header／所有导航按钮26 |
+| response.copy／more | 实际sm＋!size24：face24／padding6／glyph16／squircle16；bar高24、gap2、px8、mt4、ml−4 | qH0／WH0实际response路径；不同于sm默认20、header28或FloatingButton。只映射已有response操作，不增任务动作 |
+| unassigned toolbar slot | 无对应call-site时不能声称存在通用Qoder toolbar尺寸／字重 | Nagi既有普通icon action若适配ghost／md28／padding6／glyph16须标P并登记slot，不称所有toolbar=28或32；不从variant=toolbar空size支或FloatingButton推导 |
+| composer.add-context | face28／padding0／squircle-region10；24 viewBox、nominal glyph20 | 只绑定现有add-context action；QD-05采用有许可的理想圆端plus，不改所有Add、chooser／显式Save/read/send或原controller |
 | composer | min-height120、border1；选择已声明的 rounded-2xl16/no-shadow 分支及 toolbar h42、gap6、px6、py10（P） | 另一 region20/small-shadow、min-h44/gap4/px6/pb8 分支保留为 D，当前生效分支 UNKNOWN；禁止页面自行混用。内 selector h28、px8、12／400／16、继承 family |
+
+本次 `button.md` 绑定 `CMOdY8kL.js`（SHA256 `d2f7c51f…`）bytes `985600..990100` 的 Button 默认参数与 md 非 text 分支；尺寸按 QD-02 既有 R16／scale1 解析，不是原生有效尺寸测量。prefix 指 `prefixIcon`；只有 suffix 而无 prefix 仍走左右12。`textButton=true` 的特殊 text 分支不在本行；FloatingButton 的分类与既有 curve／hit／focus 限制不因本次绑定改变。
+
+IconButton绑定 `CMOdY8kL.js d2f7c51f…` bytes `1152847..1153322`／`1155004..1155834`（`iconbutton.defaults`／`iconbutton.sizes`）；各slot分别由 `nav.LayoutChrome`／`nav.Settings.frame.call`、`header.actual.session.call`／`header.overflow.call`／`header.panel.call`、`response.actual.turn.call`／`response.copy.call`／`response.more.call`／`response.toolbar` 证明。不能将一个组件的默认值写成所有调用结果；三种24／26／28可见面与QD-06真实hit分开。composer add-context绑定 `attach.face.classes`／`attach.svg.path`／`attach.composer.call`；源码menu-open旋转不是Nagi新增展开／关闭行为。
 
 **Squircle 是真实目标／缺口，不是 radius 别名。** 源 `.squircle-lg` region8 与 `.squircle-2xl` region16 使用 `corner-shape:squircle`；按 [W3C CSS Borders 4（2025-12-16 draft）](https://www.w3.org/TR/2025/WD-css-borders-4-20251216/#corner-shaping) 为 superellipse(2)、指数4，round 为 superellipse(1)。corner region、边框、内容裁切必须遵循对应曲线及 CSS radius 归一化；普通 group/menu/composer 的 circular rounded 不变成 squircle。
 
-Pinned MyGo 的公开 Radius／Clip 为 circular；已有 Draw、Path（MoveTo／LineTo／CubeTo）、FillPath／StrokePath 支持在现有 `theme.go` 实现一个局部共享 face/path，是具体候选，不代表 clip、hit、focus 已等价，也不证明需要 framework fork。后续须用同一基准的参考 CSS face 与实际 MyGo face，覆盖 region8／16、28高控件、窄／宽、normal／focus／invalid／disabled，并核对边框、角区裁切、子内容与焦点轮廓；只检查 Radius 数字／画一层背景不通过。若公开 clip 不足，报告具体可见差异和单一局部修正；不悄悄用旧圆角、不扩建渲染框架，其他已知角色可先推进，形状未验则标未验。
+Pinned MyGo 的公开 Radius／Clip 为 circular；已有 Draw、Path（MoveTo／LineTo／CubeTo）、FillPath／StrokePath 支持在现有 `theme.go` 实现一个局部共享 face/path，是具体候选，不代表 clip、hit、focus 已等价，也不证明需要 framework fork。后续须用同一基准的参考 CSS face 与实际 MyGo face，覆盖 region8／10／16、24／26／28可见面与窄／宽控件、normal／focus／invalid／disabled，并核对边框、角区裁切、子内容与焦点轮廓；只检查 Radius 数字／画一层背景不通过。若公开 clip 不足，报告具体可见差异和单一局部修正；不悄悄用旧圆角、不扩建渲染框架，其他已知角色可先推进，形状未验则标未验。
 
 <a id="qd-05"></a>
 ### QD-05：操作图标与许可
 
-共用下表的 **24×24 viewBox、currentColor filled 路径**，来源精确匹配 RemixIcon **v4.6.0**（Apache-2.0），不是视觉相似或任意 Lucide 替换；不加旧1.8／1.9 stroke。同一动作在 Settings、nav、chat、work、reader 仅引用同一登记资源。大小取其角色：导航／菜单14、Select indicator16；普通 Nagi toolbar 的16是 QD-04明确适配，不是所有 Qoder 图标的默认尺寸。源码未给 size 的 glyph 原为1em，不能一律当16。
+共用下表的 **24×24 viewBox、currentColor filled 路径**，来源精确匹配 RemixIcon **v4.6.0**（Apache-2.0），不是视觉相似或任意 Lucide 替换；不加旧1.8／1.9 stroke。同一动作在 Settings、nav、chat、work、reader 仅引用同一登记资源。大小取其角色：导航／菜单14、Select indicator16；header／response／未绑定toolbar的尺寸分类以QD-04指定slot为准，不是所有Qoder图标的默认尺寸。源码未给 size 的 glyph 原为1em，不能一律当16。
 
 | Nagi 操作／角色 | 唯一资源 |
 | --- | --- |
-| 添加对象／资料；任务数加 | QoderAddLine = Remix System/add-line |
+| 添加对象／任务数加（不含下述add-context专属slot） | QoderAddLine = Remix System/add-line |
 | 普通返回／后退 | QoderArrowLeftLine = Arrows/arrow-left-line |
 | 层级左右 disclosure | QoderArrowLeftSLine／QoderArrowRightSLine；垂直 disclosure 用 QoderArrowDownSLine |
 | 发送；停止当前对象 | QoderArrowUpLine／QoderStopFill；只换图形，不改停止作用域 |
@@ -82,16 +110,29 @@ Pinned MyGo 的公开 Radius／Clip 为 circular；已有 Draw、Path（MoveTo�
 | 搜索；任务数减；目录；历史时间 | QoderSearchLine／QoderSubtractLine／QoderFolderLine／QoderTimeLine |
 | Select 下拉 indicator | **独立 Heroicons v1.0.6** `optimized/outline/chevron-down.svg`（MIT）；24 viewBox，fill none，path `M19 9l-7 7-7-7`，stroke currentColor／2、round cap/join；不是 filled ArrowDownS |
 
-附件 paperclip／Nagi 联系人等未在这16个共同 glyph 中精确绑定的角色不得保留旧自画图并称匹配。Nagi 独有对象可在同一 pinned Remix 家族登记具体 ID／许可／尺寸后使用；相同操作若要宣称与 Qoder 一样，须有对应组件／路径证据。未绑定时保持显式文字入口和 UNKNOWN，不伪造精确映射，不引入 Qoder 专有功能／品牌 glyph。
+**add-context的明确资源采用（P），不新增exact-match来源结论。** 仅此既有action采用官方 **Heroicons v2.2.0 `optimized/24/outline/plus-small.svg`**：24 viewBox、fill none、currentColor stroke1.5、round cap／join，path `M12 6v12m6-6H6`，glyph20／face28／squircle-region10。上游blob `7fb7dcb148bea21998cbb23248cdabca084811de`，SVG SHA256 `d2300e6c31f273cacd48ad9670e1174d9dc7a7bec9a5729327958ffb9a083a66`。它与Qoder源码声明plus的**理想几何**一致：中心12／12、中心线端点6..18、bar宽1.5、端半径.75、bbox5.25..18.75；不等于Qoder filled d文本，也未证明Qoder来自该上游或raster相等（源码cubic圆端近似与理想stroke仍有精度区别）。不引入专有DY组件、品牌、菜单旋转／新行为，不把全部Add换成它；原label／可访问名称、焦点与chooser／显式Save边界不变。
 
-若采用这些资源，仓库和最终应用都保留 `assets/licenses/RemixIcon-Apache-2.0.txt`、`assets/licenses/Heroicons-MIT.txt` 的 pinned 原文。当前 build-macos-app.sh 不复制这些 notices；未来有界打包改动把它们按字节复制到 `Nagi.app/Contents/Resources/licenses/` 并以包内容／hash 验证。此处只记录 writer 需求，不授予实现权限，不新增 About／Settings 许可页面、不改变 Runtime。
+其他未绑定附件／专有glyph不因这项几何采用解除UNKNOWN；不得保留旧自画图却声称exact match。Nagi独有对象可在同一pinned Remix家族登记ID／许可／尺寸；精确共同路径、Nagi语义适配与本项理想几何采用是三种不同证据。未绑定时保留显式文字入口，不伪造精确映射，不引入Qoder专有功能／品牌glyph。
+
+新增以下 **Nagi 专有语义适配（P）** 登记：资源来自 pinned RemixIcon v4.6.0，并非新取得的 Qoder 相同操作／路径匹配证据。均为24 viewBox、currentColor filled，沿用本节 Apache-2.0 notices及随应用交付要求；下表只绑定 QD-03 导航 glyph14，不给 generic toolbar／附件控制推导尺寸。
+
+| Nagi 导航语义 | 适配 ID／pinned 上游文件 | 尺寸／分类 |
+| --- | --- | --- |
+| 事项／工作对象导航 | `BriefcaseLine` → `RemixIcon v4.6.0/icons/Business/briefcase-line.svg` | 14／P，非 Qoder exact shared-action |
+| 单个联系人／资料导航 | `UserLine` → `RemixIcon v4.6.0/icons/User & Faces/user-line.svg` | 14／P，非 Qoder exact shared-action |
+| 联系人集合导航 | `GroupLine` → `RemixIcon v4.6.0/icons/User & Faces/group-line.svg` | 14／P，非 Qoder exact shared-action |
+| 收起侧导航 | `SidebarFoldLine` → `RemixIcon v4.6.0/icons/System/sidebar-fold-line.svg` | 14／P，非 Qoder exact shared-action |
+
+`UserLine`／`GroupLine` 只使用已成功取得的 `User & Faces/` 路径；早期 `User/` 404 不作证据。本四项不绑定其他附件或未分配toolbar；add-context仅按上段已采用的限定几何处理，实际IconButton与特定slot以QD-04为准。
+
+仓库和最终应用保留原 `assets/licenses/RemixIcon-Apache-2.0.txt`、`assets/licenses/Heroicons-MIT.txt`（Select v1.0.6）及新增的 **`assets/licenses/Heroicons-v2.2.0-MIT.txt`**。v2.2.0完整MIT notice为Tailwind Labs, Inc.，SHA256 `60e0b68c0f35c078eef3a5d29419d0b03ff84ec1df9c3f9d6e39a519a5ae7985`；与v1.0.6的2020 Refactoring UI Inc.原文不逐字相同，不能覆盖／冒用旧notice。上游v2.2.0 LICENSE blob `d6a82290738a9f78946cbcb4594535d6984086dd`，逐字保留完整notice，不只保存一行署名。三份notices在有界打包改动中按字节复制到 `Nagi.app/Contents/Resources/licenses/` 并以实际包内容／hash验证；原两份资源与精确匹配结论不变。此处只记录writer需求，不授予实现权限，不新增About／Settings许可页面、不改变Runtime。
 
 <a id="qd-06"></a>
 ### QD-06：状态、命中、焦点
 
 normal／hover／pressed／selected 共享一套组件面、边框与 Nagi 语义色，不能各页增加高亮壳；disabled 使用对应声明（Input .5）并保留真实 disabled/controller gate，不只变灰。invalid 的完整摘要／字段错误与显式原始 Details 不隐藏；busy／unknown／saved-pending／tested／applied 是不同事实，不做装饰开关。仅 FloatingButton 的已绑定分支才可引用其特定圆面／动画，不能套到所有 toolbar。
 
-**可见面与真实 hit 分开。** 28高是已选组件的可见角色，旧“所有控件面32”失效；Nagi 的真实 hit 仍至少32逻辑单位。可用不改变可见面、行距与对齐的透明交互包围区域，但不得挡邻项／把非动作区域吞掉；若做不到，列明实际 pinned API／布局缺口，不能用视觉面高度替代命中证据或保留旧面掩盖问题。此适配是 Nagi 功能可用性保护，不声称 Qoder 有同样 hit slop。
+**可见面与真实 hit 分开。** 24／26／28是不同已绑定slot的可见面（另保留FloatingButton分支），旧“所有控件面32”失效；Nagi 的真实 hit 仍至少32逻辑单位。可用不改变可见面、行距与对齐的透明交互包围区域，但不得挡邻项／把非动作区域吞掉；若做不到，列明实际 pinned API／布局缺口，不能用视觉面高度替代命中证据或保留旧面掩盖问题。此适配是 Nagi 功能可用性保护，不声称 Qoder 有同样 hit slop。
 
 继续使用原官方 controller／Label／Description／Focus 和稳定值：Tab／方向键／Enter／Space／Escape、popup选中／收起后的焦点、Back 的准确原入口、文本 caret／selection 与 IME 均实际验证。不能重建菜单／事件真源，不能因绘制 squircle 改点击、焦点或回调次数；外观、语言、错误重排不抢走原输入焦点。
 
@@ -100,11 +141,11 @@ normal／hover／pressed／selected 共享一套组件面、边框与 Nagi 语�
 
 | 必交页面 | 一致的视觉角色；保留 Nagi 语义 |
 | --- | --- |
-| General | Settings shell → section/group/row → label/description＋Select／显式导入／恢复 action；主题警告与语言说明沿同一行层次，不加每项独立卡 |
+| General | page H1 20／500／32 → Settings section/group/row → label/description＋Appearance／Language intrinsic120–160 Select／显式导入／恢复action；主题警告与语言说明沿同一行层次，不加每项独立卡 |
 | Connection 首用／已存／Edit | 同一 shell、row、Input/Select/action/description；三必填输入、当前值来源、完整 errors、limits、精确 stepper、目录 chooser 与进阶入口保留原状态机 |
-| 导航／联系人／对象 header | 共用 navigation label/glyph/选中面、紧凑 label/meta/actions；Nagi 必需二行状态自然增高。实际 Qoder 大 H1与应用 header 的未绑定差异单列，不把身份／复制品功能塞入导航 |
-| 对话 | normal MaxWidth768、用户内容MaxWidth752、正文14/24；wide968为未选声明。不新建宽度偏好，不改已有用户内容、消息／工作隔离与历史 |
-| composer | QD-04的唯一已选 shell／toolbar、正文14/24；现有资料／模型／Send/Stop 映射同一图标与控件；不复制语音、授权、积分、workspace功能；必要真实错误位于附近可读 |
+| 导航／联系人／对象 header | 共用navigation row；header用QD-04 title12／500／16、已有meta10／16、overflow28及条件panel26；必需二行状态自然增高。普通workbench左导航调用等价仍是P，不把Settings Chrome证据扩成全部app导航；不添加Qoder专有panel／身份功能 |
+| 对话 | normal MaxWidth768、用户内容MaxWidth752、正文14/24与QD-02实际Markdown标题；response action用24面／16glyph专属slot；wide968为未选声明。不新建宽度偏好，不改已有用户内容、消息／工作隔离与历史 |
+| composer | QD-04的唯一已选 shell／toolbar、正文14/24；现有add-context用其专属28面／20plus；模型／Send/Stop映射各自已登记图标与控件；不复制语音、授权、积分、workspace功能；必要真实错误位于附近可读 |
 | 事项／工作 | Nagi 独有生命周期映射共享 heading/label/meta/row/action/disclosure；一件对象一个有意义章节，不套多层背景。Run完成≠事项Done，unknown、待回答、补充回执与AD可见确认不变 |
 | 结果／文件／reader | shared reader14/24、compact13/22、菜单/action／copy/check/close、代码mono；成果／消息／真实 Runtime facts 保留分层，文件缺失／未核对与原始 Details 不藏进装饰卡 |
 
@@ -115,7 +156,7 @@ normal／hover／pressed／selected 共享一套组件面、边框与 Nagi 语�
 
 基准只使用 QD-03已声明的640 row断点和约束宽度，不保留旧800横向 Settings导航阈值作为默认。Sidebar按248／min208的共同角色与已有可调整状态；内容和reader是max-width，可随可用区域收缩。720×640及1040×720、en／zh-Hans、Paper／Moss下，长路径／模型值可换行或在完整tooltip/可访问名称下收敛，必要状态／错误／保存动作不能省掉；滚动后可达且不会让焦点跑到不可见位置。Code可有局部横向滚动，页面本身不可横向溢出。业务二行／长说明按同一组件自然长高，不新增逐页字号／补偿边距。
 
-明确 UNKNOWN：实际 root／zoom／active scale／fallback、活动 chat-size／width、活动 composer分支、当前resized sidebar、未绑定大H1／Markdown标题细分、generic toolbar源组件／角形／padding、部分附件／专有 glyph、material有效合成及 squircle clip/hit 的原生等价。当前选择的 medium／normal／composer分支和CSS base为 P，**不是猜测这些当前状态**。未知只阻止相应角色的完整匹配声明，不阻止已知约束文档化／实施；未经声明的值不得由页面代码偷偷补齐或回用旧值后称已匹配。
+明确 UNKNOWN：实际 root／zoom／active scale／fallback、活动 chat-size／width、活动 composer分支、当前resized sidebar、普通workbench左导航的完整调用等价、未分配toolbar的具体slot／variant、其他附件／专有glyph、标题独立linebox／tracking／visual-uppercase的具体renderer实施路径、material有效合成及 squircle clip/hit 的原生等价。当前选择的 medium／normal／composer分支和CSS base为 P，**不是猜测这些当前状态**。未知只阻止相应角色的完整匹配声明，不阻止已知约束文档化／实施；未经声明的值不得由页面代码偷偷补齐或回用旧值后称已匹配。
 
 <a id="qd-09"></a>
 ### QD-09：功能与数据边界
@@ -127,10 +168,12 @@ PREF-AC1–6与AC7行为条件保持；保留当前WIP的同一 Draft／initial�
 
 | 必交片／所有权提案（最终由lead分配） | 最小现有路径与边界 |
 | --- | --- |
-| S1 Preferences工程师：Settings＋共享视觉基准 | `theme.go` 唯一角色／单位／face／glyph入口，`settings_page.go`、`connection_settings.go`；保留当前Edit／strict-int WIP。候选测试 `settings_page_test.go`、`connection_settings_test.go`、`appearance_preview_test.go`；必要文案仍 `locales/en.json`／`zh-Hans.json`／`catalog_gen.go`。旧 i18n_test.go 单项授权不自动扩大。拟新增仅上述两份 license文本。 |
-| S2 既有UI owner：完整导航／对话／事项／成果对齐 | `navigation.go`、`view.go`、`workspace.go`、`issue_results.go`、`markdown.go` 调用S1同一角色／glyph，不另建一套token。候选测试 `navigation_test.go`、`view_test.go`、`workspace_test.go`、`issue_results_test.go`、`markdown_view_test.go`、`layout_test.go`／`layout_preview_test.go`；只改renderer，不能改producer／business callback／store。 |
-| 打包交付唯一owner | lead另配 `scripts/build-macos-app.sh` 的两份 notice→Resources/licenses 有界复制与实际包内容校验；不改Runtime、不增许可UI；不是本规格写者的source权限。 |
+| S1 Preferences工程师：Settings＋共享视觉基准 | `theme.go` 唯一角色／单位／face／glyph入口，`settings_page.go`、`connection_settings.go`；保留当前Edit／strict-int WIP。候选测试 `settings_page_test.go`、`connection_settings_test.go`、`appearance_preview_test.go`；必要文案仍 `locales/en.json`／`zh-Hans.json`／`catalog_gen.go`。旧 i18n_test.go 单项授权不自动扩大。拟新增／保留QD-05指定三份license文本。 |
+| S2 既有UI owner：完整导航／对话／事项／成果对齐 | `navigation.go`、`view.go`、`workspace.go`、`issue_results.go`、`markdown.go` 调用S1同一角色／glyph，不另建一套token。可见配套表单也必须复用同一shared input／textarea／button路径：`contact_profile.go` 的view／builtinToolsView（已核输入343–356）、`model_selection.go` 的modelSelection.view（354+，model／capacity／filter402–442）、`task_context.go` 的form（619–644）、`issue_supplement_view.go` 的supplement textarea（112）；这些只是renderer seams，不产生新的业务／parser／request／chooser／controller writer。候选测试 `navigation_test.go`、`view_test.go`、`workspace_test.go`、`issue_results_test.go`、`markdown_view_test.go`、`layout_test.go`／`layout_preview_test.go`；补充各现有contact-profile／model-selection／task-context／supplement表单行为测试，实际文件由lead在分配时绑定（task-context已知入口含`task_context_app_test.go`），不以本表预授权新增测试文件；只改renderer，不能改producer／business callback／store；Markdown的独立linebox／tracking／visual-uppercase需先证明上述窄reader路径及原文／selection／links／anchors不变，缺公开API则报lead具体边界，不由本表授权依赖或framework改动。 |
+| 打包交付唯一owner | lead另配 `scripts/build-macos-app.sh` 的三份notice→Resources/licenses 有界复制与实际包内容校验；不改Runtime、不增许可UI；不是本规格写者的source权限。 |
 | QA／business／product | 只读独立检查QDrule／PREF逐项证据与caller语义；此表不向任何worker授予源码或执行权限。共享 `theme.go` 只能一个writer；后续追加角色也需lead明确，不在各renderer旁造默认。 |
+
+后续有界新增验证覆盖：配套表单真实进入／编辑／取消／错误／保存及返回焦点，逐字保留profile文本、model／capacity／filter草稿、task-context load／preview／snapshot与显式send、supplement文本／原提交及unknown状态；共享控件的geometry变化不得改其解析、请求、chooser或回调。General实际H1及120–160 selector；Settings Chrome／header overflow28、条件panel26、response24分别测face／glyph／padding与真实≥32hit，键盘焦点／相邻点击不被遮挡；add-context只改变既有入口的图形，保留原chooser／Save／零额外提交，核对采用SVG／完整版本notice。Markdown以实际static／streaming、首／非首子项及换行H1–H6核对size／linebox／tracking／边距／语义色，尤其H4 inline14／20、H6仅视觉大写；复制含原大小写／inline link的原文，selection／slug／anchor／阅读滚动不变。`markdown_view_test.go`／既有reader布局测试承担真实呈现与复制边界，不以literal／theme常量证明行盒；native有效字形／曲线／hit依然单列未验。这些是候选verification／writer映射，不授予改测试或运行权限。
 
 新基准须先复现有意义的**实际角色／控件**差异：真实布局bound／行盒／字号角色、选中／展开／focus、点击真实hit包围区、精确SVG来源与完整状态，而不是只测常量／字符串或截图计数。Squircle做独立face／border／clip／focus比较，不能以圆角数值等同过关。至少覆盖首用／已存／dirty／invalid／长反馈及各目标表面，en／zh、浅／深、720×640／1040×720；真实失存、chooser取消／迟到、C8／AD／unknown／无重放仍有行为回归。旧有效behavior RED与PASS可继承其**确切未改行为**的证据，不能当新视觉／最终源码通过。
 

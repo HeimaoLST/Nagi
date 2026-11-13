@@ -1,12 +1,274 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
 )
+
+func TestPreferenceControlFacesKeepHitAndKeyboard(t *testing.T) {
+	for _, dark := range []bool{false, true} {
+		for _, width := range []int{160, 320} {
+			t.Run(fmt.Sprintf("width%d-dark%t", width, dark), func(t *testing.T) {
+				value, selected := "", "one"
+				first, second := 0, 0
+				blocked, invalid := false, false
+				tr := ui.NewTester(func(c *ui.Context) {
+					theme := resolveWorkbenchTheme(dark).Theme
+					c.SetTheme(theme)
+					ui.Column(c).Fill().Padding(20).Gap(12).Background(theme.Background).Children(func() {
+						preferenceInput(c, &value, invalid).Label("Exact value").Width(float32(width)).Disabled(blocked)
+						secondaryButton(c, "First action").Label("First action").OnClick(func() { first++ })
+						secondaryButton(c, "Second action").Label("Second action").OnClick(func() { second++ })
+						preferenceSelect(c, &selected, []selectOption{{"one", "One"}, {"two", "Two"}}, "Choice", blocked).Width(float32(width))
+					})
+				}, width+40, 280)
+				tr.SetFocused(true)
+				tr.Frame()
+				input, ok := tr.Find("Exact value")
+				if !ok || input.H < 32 {
+					t.Fatalf("input has no full interaction box: %+v", input)
+				}
+				image := tr.Image()
+				background := resolveWorkbenchTheme(dark).Theme.Background
+				pixel := image.RGBAAt(int(input.X+input.W/2), int(input.Y))
+				if pixel.R != background.R || pixel.G != background.G || pixel.B != background.B {
+					t.Fatalf("transparent hit extension became a visible input face: %+v", pixel)
+				}
+				tr.ClickAt(input.X+input.W/2, input.Y+1)
+				tr.Type("  +0002  ")
+				tr.Frame()
+				if value != "  +0002  " || !tr.Focused("Exact value") {
+					t.Fatal("transparent input extension failed to focus/edit the exact string")
+				}
+				tr.Key(ui.Cmd, ui.KeyA)
+				tr.Type("long raw invalid value with suffix 2x")
+				invalid = true
+				tr.Frame()
+				if value != "long raw invalid value with suffix 2x" {
+					t.Fatal("styled input normalized or lost invalid text")
+				}
+				bounds := map[string]ui.Rect{"input": input}
+				for _, label := range []string{"First action", "Second action"} {
+					box, ok := tr.Find(label)
+					if !ok || box.H < 32 {
+						t.Fatalf("action lost its real hit target: %s %+v", label, box)
+					}
+					bounds[label] = box
+				}
+				one, two := bounds["First action"], bounds["Second action"]
+				tr.ClickAt(one.X+one.W/2, one.Y+1)
+				tr.Frame()
+				if first != 1 || second != 0 {
+					t.Fatal("transparent button extension did not dispatch exactly its own action")
+				}
+				tr.ClickAt(one.X+one.W/2, (one.Y+one.H+two.Y)/2)
+				tr.Frame()
+				if first != 1 || second != 0 {
+					t.Fatal("interaction extension intercepted the gap or its neighbor")
+				}
+				tr.ClickAt(two.X+two.W/2, two.Y+two.H-1)
+				tr.Frame()
+				tr.Key(0, ui.KeyEnter)
+				tr.Frame()
+				if first != 1 || second != 2 {
+					t.Fatal("neighbor pointer/keyboard action changed ownership or dispatch count")
+				}
+				if err := tr.Click("Choice"); err != nil {
+					t.Fatal(err)
+				}
+				tr.Frame()
+				blocked = true
+				tr.Frame()
+				if err := tr.Click("Two"); err != nil {
+					t.Fatal(err)
+				}
+				tr.Frame()
+				if selected != "one" {
+					t.Fatal("busy popup changed a stable enum value")
+				}
+				tr.Key(0, ui.KeyEscape)
+				tr.Frame()
+				if directory := os.Getenv("SAKI_PREVIEW_DIR"); directory != "" {
+					name := fmt.Sprintf("shared-controls-%d-dark-%t", width, dark)
+					writePreviewPNG(t, filepath.Join(directory, name+".png"), tr.Image())
+					data, err := json.MarshalIndent(bounds, "", "  ")
+					if err != nil {
+						t.Fatal(err)
+					}
+					if err := os.WriteFile(filepath.Join(directory, name+".bounds.json"), data, 0600); err != nil {
+						t.Fatal(err)
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestPreferenceControlShapeReferenceFrames(t *testing.T) {
+	for _, region := range []float32{8, 16} {
+		for _, width := range []int{80, 240} {
+			for _, state := range []string{"normal", "focus", "invalid", "disabled"} {
+				name := fmt.Sprintf("shape-region%.0f-width%d-%s", region, width, state)
+				t.Run(name, func(t *testing.T) {
+					value := ""
+					if state == "focus" {
+						value = "Long input text deliberately overflows its inner text viewport"
+					}
+					tr := ui.NewTester(func(c *ui.Context) {
+						theme := resolveWorkbenchTheme(false).Theme
+						c.SetTheme(theme)
+						ui.Column(c).Fill().Padding(20).Background(theme.Background).Children(func() {
+							var face ui.Element
+							if region == 16 {
+								face = preferenceInput(c, &value, state == "invalid")
+							} else {
+								// The same region8 face used by navigation, isolated for geometric comparison.
+								face = sharedControlFace(c, ui.ButtonBase(c), region, 4, true, state == "invalid", false)
+							}
+							face.Label(name).Width(float32(width)).Disabled(state == "disabled")
+						})
+					}, width+40, 80)
+					tr.SetFocused(true)
+					tr.Frame()
+					if state == "focus" {
+						if err := tr.Click(name); err != nil {
+							t.Fatal(err)
+						}
+						tr.Frame()
+						tr.Move(0, 0)
+						if region == 16 {
+							tr.Key(ui.Cmd, ui.KeyA)
+						}
+						tr.Frame()
+						if !tr.Focused(name) {
+							t.Fatal("reference frame did not acquire actual control focus")
+						}
+					}
+					box, ok := tr.Find(name)
+					if !ok || box.H < 32 || box.X < 0 || box.X+box.W > float32(width+40) {
+						t.Fatalf("reference control lost its actual bounded interaction box: %+v", box)
+					}
+					if directory := os.Getenv("SAKI_PREVIEW_DIR"); directory != "" {
+						writePreviewPNG(t, filepath.Join(directory, name+".png"), tr.Image())
+						data, err := json.MarshalIndent(map[string]any{"hit": box, "face": ui.Rect{X: box.X, Y: box.Y + 2, W: box.W, H: box.H - 4}, "region": region, "state": state, "actual_focus": tr.Focused(name), "actual_input": region == 16, "diagnostic": "Region8 isolates the shared face; region16 is the production TextInputBase path. Native/browser text raster is not compared."}, "", "  ")
+						if err != nil {
+							t.Fatal(err)
+						}
+						if err := os.WriteFile(filepath.Join(directory, name+".json"), data, 0600); err != nil {
+							t.Fatal(err)
+						}
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestPreferenceDisabledFaceComposesOnce(t *testing.T) {
+	blocked, value := false, ""
+	tr := ui.NewTester(func(c *ui.Context) {
+		theme := resolveWorkbenchTheme(false).Theme
+		c.SetTheme(theme)
+		ui.Column(c).Fill().Padding(20).Background(theme.Background).Children(func() {
+			preferenceInput(c, &value, false).Label("Opacity input").Width(160).Disabled(blocked)
+		})
+	}, 200, 80)
+	tr.Frame()
+	box, ok := tr.Find("Opacity input")
+	if !ok {
+		t.Fatal("input missing")
+	}
+	x, y := int(box.X+box.W/2), int(box.Y+2)
+	normal := tr.Image().RGBAAt(x, y)
+	blocked = true
+	tr.Frame()
+	disabled := tr.Image().RGBAAt(x, y)
+	background := resolveWorkbenchTheme(false).Theme.Background
+	for channel, pair := range [][3]uint8{{normal.R, disabled.R, background.R}, {normal.G, disabled.G, background.G}, {normal.B, disabled.B, background.B}} {
+		expected := (int(pair[0]) + int(pair[2])) / 2
+		difference := int(pair[1]) - expected
+		// One level permits only integer alpha rounding, not overlapping half-opacity paints.
+		if difference < -1 || difference > 1 {
+			t.Errorf("disabled border channel%d=%d, single half-opacity composite=%d (normal=%v disabled=%v)", channel, pair[1], expected, normal, disabled)
+		}
+	}
+}
+
+func TestPreferenceInputScrolledSelectionKeepsFaceBorder(t *testing.T) {
+	for _, dark := range []bool{false, true} {
+		for _, width := range []int{80, 240} {
+			name := fmt.Sprintf("scrolled-selection-%d-dark-%t", width, dark)
+			t.Run(name, func(t *testing.T) {
+				value := ""
+				tr := ui.NewTester(func(c *ui.Context) {
+					theme := resolveWorkbenchTheme(dark).Theme
+					c.SetTheme(theme)
+					ui.Column(c).Fill().Padding(20).Background(theme.Background).Children(func() {
+						preferenceInput(c, &value, false).Label("Editable viewport").Width(float32(width))
+					})
+				}, width+40, 80)
+				tr.SetFocused(true)
+				tr.Frame()
+				if err := tr.Click("Editable viewport"); err != nil {
+					t.Fatal(err)
+				}
+				tr.Move(0, 0)
+				tr.Frame()
+				box, ok := tr.Find("Editable viewport")
+				if !ok || box.H < 32 {
+					t.Fatalf("missing real input hit box: %+v", box)
+				}
+				baseline := make([][4]uint8, 0, 12*28)
+				for y := int(box.Y + 2); y < int(box.Y+30); y++ {
+					for x := int(box.X); x < int(box.X+12); x++ {
+						p := tr.Image().RGBAAt(x, y)
+						baseline = append(baseline, [4]uint8{p.R, p.G, p.B, p.A})
+					}
+				}
+				const text = "0123456789 abcdefghijklmnopqrstuvwxyz long current raw draft 原文保留 0123456789 abcdefghijklmnopqrstuvwxyz long current raw draft 原文保留"
+				tr.Type(text)
+				tr.Key(ui.Cmd, ui.KeyA)
+				tr.Key(ui.Cmd, ui.KeyC)
+				tr.Frame()
+				if value != text || tr.Clipboard() != text || !tr.Focused("Editable viewport") {
+					t.Fatal("scroll/selection styling changed raw text, clipboard or actual input focus")
+				}
+				changed, index := 0, 0
+				for y := int(box.Y + 2); y < int(box.Y+30); y++ {
+					for x := int(box.X); x < int(box.X+12); x++ {
+						p := tr.Image().RGBAAt(x, y)
+						if [4]uint8{p.R, p.G, p.B, p.A} != baseline[index] {
+							changed++
+						}
+						index++
+					}
+				}
+				if changed != 0 {
+					t.Errorf("horizontally scrolled selection overwrote %d border/inset pixels", changed)
+				}
+				caret, active := tr.TextCaret()
+				if !active || caret.X < box.X+12 || caret.X+caret.W > box.X+box.W-12+.5 {
+					t.Errorf("caret escaped the same editable content box: caret=%+v input=%+v", caret, box)
+				}
+				if directory := os.Getenv("SAKI_PREVIEW_DIR"); directory != "" {
+					writePreviewPNG(t, filepath.Join(directory, name+".png"), tr.Image())
+					data, err := json.MarshalIndent(map[string]any{"hit": box, "face": ui.Rect{X: box.X, Y: box.Y + 2, W: box.W, H: 28}, "caret": caret, "changed_border_and_inset_pixels": changed, "raw_text_and_clipboard_preserved": value == text && tr.Clipboard() == text}, "", "  ")
+					if err != nil {
+						t.Fatal(err)
+					}
+					if err := os.WriteFile(filepath.Join(directory, name+".json"), data, 0600); err != nil {
+						t.Fatal(err)
+					}
+				}
+			})
+		}
+	}
+}
 
 // appearancePreviewApp uses the existing workspace fixture state; it does not
 // seed production work or call Runtime.

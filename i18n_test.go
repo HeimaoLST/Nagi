@@ -63,6 +63,10 @@ func TestGeneralLanguageUsesStableValuesAndPreservesState(t *testing.T) {
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.SetLocale("en")
 	tr.Frame()
+	if err := tr.Click("System (English)"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
 	if !tr.HasText("General") || !tr.HasText("Appearance") || !tr.HasText("Language") ||
 		!tr.HasText("System (English)") || !tr.HasText("English") || !tr.HasText("简体中文") {
 		t.Fatalf("General/Language labels missing: %v", tr.Texts())
@@ -77,6 +81,10 @@ func TestGeneralLanguageUsesStableValuesAndPreservesState(t *testing.T) {
 	if a.settingsTab != settingsTabAppearance || ct.Draft != "keep the conversation draft" {
 		t.Fatalf("English action reset UI state: tab=%q draft=%q", a.settingsTab, ct.Draft)
 	}
+	if err := tr.Click("English"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
 	if err := tr.Click("System (English)"); err != nil {
 		t.Fatal(err)
 	}
@@ -89,6 +97,10 @@ func TestGeneralLanguageUsesStableValuesAndPreservesState(t *testing.T) {
 	}
 
 	tr.SetLocale("zh-Hans")
+	tr.Frame()
+	if err := tr.Click("系统（简体中文）"); err != nil {
+		t.Fatal(err)
+	}
 	tr.Frame()
 	if !tr.HasText("通用") || !tr.HasText("外观") || !tr.HasText("语言") ||
 		!tr.HasText("系统（简体中文）") || !tr.HasText("简体中文") || !tr.HasText("English") {
@@ -108,6 +120,10 @@ func TestGeneralLanguageUsesStableValuesAndPreservesState(t *testing.T) {
 	if len(applied) != 3 || applied[2] != "zh-Hans" || a.languageMode != "zh-Hans" {
 		t.Fatalf("explicit Chinese action = applied=%v mode=%q", applied, a.languageMode)
 	}
+	if err := tr.Click("简体中文"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
 	if err := tr.Click("系统（简体中文）"); err != nil {
 		t.Fatal(err)
 	}
