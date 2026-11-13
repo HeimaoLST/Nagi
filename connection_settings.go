@@ -159,21 +159,14 @@ func (s *connectionSettings) view(c *ui.Context, t *ui.Theme, actions connection
 		} else {
 			s.RecoveryDetailsOpen = false
 		}
-		ui.Column(c).Key("connection-fields").FillWidth().Gap(8).Children(func() {
+		c.Key("connection-fields")
+		preferenceGroup(c, t, func() {
 			settingsPreferenceRow(c, t, msgs.ProtocolLabel(), "", func() {
-				apiIndex := 0
-				if s.Draft.API == connectionAPIResponses {
-					apiIndex = 1
-				}
 				c.Key("connection-protocol")
-				protocol := segmentedSelection(c, &apiIndex, msgs.ProtocolChatCompletionsLabel(), msgs.ProtocolResponsesLabel()).
-					Label(msgs.ProtocolLabel()).Disabled(s.Busy)
-				if protocol.Changed() {
-					s.Draft.API = []string{connectionAPIChatCompletions, connectionAPIResponses}[apiIndex]
-				}
+				preferenceSelect(c, &s.Draft.API, []selectOption{{connectionAPIChatCompletions, msgs.ProtocolChatCompletionsLabel()}, {connectionAPIResponses, msgs.ProtocolResponsesLabel()}}, msgs.ProtocolLabel(), s.Busy)
 			})
 			if s.Errors["API"] != "" {
-				ui.Text(c, connectionFieldErrorText(msgs, "API", s.Errors["API"])).FontSize(typeBody).LineHeight(1.5).TextColor(t.Danger)
+				ui.Text(c, connectionFieldErrorText(msgs, "API", s.Errors["API"])).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Danger)
 			}
 			s.editableField(c, t, "Endpoint", msgs.ConnectionFieldEndpoint(), msgs.ConnectionEndpointPlaceholder(), &s.Draft.Endpoint, false, msgs.ConnectionEndpointHint())
 			s.editableField(c, t, "APIKey", msgs.ConnectionFieldAPIKey(), msgs.ConnectionAPIKeyPlaceholder(), &s.Draft.APIKey, true, msgs.ConnectionAPIKeyHint())
@@ -187,20 +180,20 @@ func (s *connectionSettings) view(c *ui.Context, t *ui.Theme, actions connection
 				}
 				ui.Toolbar(c, func() {
 					c.Key("limits-disclosure")
-					limits := appTooltip(c, ui.Button(c, "").Label(limitsLabel), limitsTooltip).
+					limits := appTooltip(c, secondaryButton(c, "").Label(limitsLabel), limitsTooltip).
 						MinHeight(32).Padding(4, 8).Gap(6)
 					limits.Children(func() {
 						arrow := float32(180)
 						if s.LimitsOpen {
 							arrow = -90
 						}
-						ui.Icon(c, navBackIcon).Width(16).Height(16).Rotate(arrow).TextColor(t.TextMuted)
+						ui.Icon(c, glyphArrowRightSLine).Width(16).Height(16).Rotate(arrow - 180).TextColor(t.TextMuted)
 						ui.Text(c, limitsLabel).FontSize(typeAction).TextColor(t.Text)
 					})
 					limits.OnClick(func() { s.LimitsOpen = !s.LimitsOpen })
 				}).Label(msgs.ConnectionCapacityDisclosure()).Padding(0)
 				if s.LimitsOpen {
-					ui.Text(c, msgs.ConnectionLimitsHint()).FontSize(typeMeta).LineHeight(1.5).TextColor(t.TextMuted)
+					ui.Text(c, msgs.ConnectionLimitsHint()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 					s.field(c, t, "ContextTokens", msgs.ConnectionFieldContextTokens(), "131072", &s.Draft.ContextTokens, false, "")
 					s.field(c, t, "OutputTokens", msgs.ConnectionFieldOutputTokens(), "8192", &s.Draft.OutputTokens, false, "")
 					s.field(c, t, "MaxActiveTasks", msgs.ConnectionFieldMaxActiveTasks(), "2", &s.Draft.Slots, false, "")
@@ -211,9 +204,9 @@ func (s *connectionSettings) view(c *ui.Context, t *ui.Theme, actions connection
 						{"OutputTokens", msgs.ConnectionFieldOutputTokens(), s.Draft.OutputTokens},
 						{"MaxActiveTasks", msgs.ConnectionFieldMaxActiveTasks(), s.Draft.Slots},
 					} {
-						ui.Text(c, field.label+": "+field.value).FontSize(typeMeta).LineHeight(1.5).TextColor(t.TextMuted)
+						ui.Text(c, field.label+": "+field.value).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 						if message := s.Errors[field.key]; message != "" {
-							ui.Text(c, connectionFieldErrorText(msgs, field.key, message)).FontSize(typeBody).LineHeight(1.5).TextColor(t.Danger)
+							ui.Text(c, connectionFieldErrorText(msgs, field.key, message)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Danger)
 						}
 					}
 				}
@@ -226,7 +219,7 @@ func (s *connectionSettings) view(c *ui.Context, t *ui.Theme, actions connection
 					folderHint = msgs.WorkFolderRequiredHint()
 				}
 				settingsPreferenceRow(c, t, msgs.ConnectionFieldWorkingDirectory(), s.valueSource(msgs), func() {
-					ui.Text(c, path).FontSize(typeBody).LineHeight(1.5).TextColor(t.Text)
+					ui.Text(c, path).FontSize(typeLabel).FixedLineHeight(lineLabel).TextColor(t.Text)
 					c.Key("choose-connection-folder")
 					folder := secondaryButton(c, msgs.WorkFolderChoose()).Label(msgs.WorkFolderChoose()).Disabled(s.Busy).OnClick(actions.ChooseFolder)
 					if s.focusFolder {
@@ -234,7 +227,7 @@ func (s *connectionSettings) view(c *ui.Context, t *ui.Theme, actions connection
 						s.focusFolder = false
 					}
 				})
-				ui.Text(c, folderHint).FontSize(typeMeta).LineHeight(1.5).TextColor(t.TextMuted)
+				ui.Text(c, folderHint).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 				label := msgs.ConnectionFolderEnterPath()
 				if s.editOpen["WorkingDirectory"] {
 					label = msgs.ConnectionFolderHidePath()
@@ -249,10 +242,10 @@ func (s *connectionSettings) view(c *ui.Context, t *ui.Theme, actions connection
 				if s.editOpen["WorkingDirectory"] {
 					s.field(c, t, "WorkingDirectory", msgs.ConnectionFieldWorkingDirectory(), msgs.ConnectionWorkingDirectoryPlaceholder(), &s.Draft.WorkingDirectory, false, "")
 				} else if message := s.Errors["WorkingDirectory"]; message != "" {
-					ui.Text(c, connectionFieldErrorText(msgs, "WorkingDirectory", message)).FontSize(typeBody).LineHeight(1.5).TextColor(t.Danger)
+					ui.Text(c, connectionFieldErrorText(msgs, "WorkingDirectory", message)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Danger)
 				}
 				if s.folderError != "" {
-					ui.Text(c, msgs.WorkFolderChooseFailed(s.folderError)).FontSize(typeBody).LineHeight(1.5).TextColor(t.Danger)
+					ui.Text(c, msgs.WorkFolderChooseFailed(s.folderError)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Danger)
 				}
 			})
 		})
@@ -285,7 +278,7 @@ func (s *connectionSettings) view(c *ui.Context, t *ui.Theme, actions connection
 				}
 			})
 			if s.ReloadBlocked != "" {
-				ui.Text(c, connectionBlockedText(msgs, s.ReloadBlocked)).FontSize(typeBody).LineHeight(1.5).TextColor(t.Warning)
+				ui.Text(c, connectionBlockedText(msgs, s.ReloadBlocked)).FontSize(typeLabel).FixedLineHeight(lineLabel).TextColor(t.Warning)
 			}
 			ui.Text(c, msgs.ConnectionSaveDoesNotInterrupt()).
 				FontSize(typeMeta).LineHeight(1.5).TextColor(t.TextMuted)
@@ -299,7 +292,7 @@ func (s *connectionSettings) view(c *ui.Context, t *ui.Theme, actions connection
 			ui.Text(c, msgs.ConnectionTestHint()).
 				FontSize(typeMeta).LineHeight(1.5).TextColor(t.TextMuted)
 			if s.Status != "" {
-				ui.Text(c, connectionStatusText(msgs, s.Status, s.StatusArgs)).FontSize(typeBody).LineHeight(1.5).TextColor(t.Text)
+				ui.Text(c, connectionStatusText(msgs, s.Status, s.StatusArgs)).FontSize(typeLabel).FixedLineHeight(lineLabel).TextColor(t.Text)
 			}
 		})
 	})
@@ -334,7 +327,7 @@ func (s *connectionSettings) editableField(c *ui.Context, t *ui.Theme, key, labe
 			} else if secret {
 				text = "••••••••"
 			}
-			ui.Text(c, text).FontSize(typeBody).LineHeight(1.5).TextColor(t.Text)
+			ui.Text(c, text).FontSize(typeLabel).FixedLineHeight(lineLabel).TextColor(t.Text)
 			buttonText, accessible := msgs.ConnectionEditAction(), msgs.ConnectionEditField(label)
 			if open {
 				buttonText, accessible = msgs.ConnectionCloseEditorAction(), msgs.ConnectionCloseField(label)
@@ -356,7 +349,7 @@ func (s *connectionSettings) editableField(c *ui.Context, t *ui.Theme, key, labe
 		if open {
 			s.field(c, t, key, label, placeholder, value, secret, helper)
 		} else if message := s.Errors[key]; message != "" {
-			ui.Text(c, connectionFieldErrorText(msgs, key, message)).FontSize(typeBody).LineHeight(1.5).TextColor(t.Danger)
+			ui.Text(c, connectionFieldErrorText(msgs, key, message)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Danger)
 		}
 	})
 }
@@ -365,7 +358,7 @@ func (s *connectionSettings) field(c *ui.Context, t *ui.Theme, key, label, place
 	ui.Column(c).Key("connection-field-" + key).FillWidth().Gap(4).Children(func() {
 		input := func() ui.Element {
 			c.Key("input-" + key)
-			field := ui.TextInput(c, value).Label(label).FontSize(typeBody).Placeholder(placeholder).Disabled(s.Busy)
+			field := preferenceInput(c, value, s.Errors[key] != "").Label(label).Placeholder(placeholder).Disabled(s.Busy)
 			if secret {
 				field.Password()
 			}
@@ -377,25 +370,25 @@ func (s *connectionSettings) field(c *ui.Context, t *ui.Theme, key, label, place
 		}
 		if key == "ContextTokens" || key == "OutputTokens" || key == "MaxActiveTasks" {
 			settingsPreferenceRow(c, t, label, "", func() {
-				ui.Row(c).AlignItems(ui.Center).Gap(4).Children(func() {
+				ui.Row(c).FillWidth().MinWidth(0).AlignItems(ui.Center).Gap(4).Children(func() {
 					if key == "MaxActiveTasks" {
 						s.slotStep(c, -1)
 					}
-					input().Width(180)
+					input().Width(180).MinWidth(0).Shrink(1)
 					if key == "MaxActiveTasks" {
 						s.slotStep(c, 1)
 					}
 				})
 			})
 		} else {
-			ui.Text(c, label).FontSize(typeAction).FontWeight(500).TextColor(t.Text)
+			ui.Text(c, label).FontSize(typeLabel).FontWeight(400).FixedLineHeight(lineLabel).TextColor(t.Text)
 			input().FillWidth()
 		}
 		if message := s.Errors[key]; message != "" {
-			ui.Text(c, connectionFieldErrorText(locales.In(c.Locale()), key, message)).FontSize(typeBody).LineHeight(1.5).TextColor(t.Danger)
+			ui.Text(c, connectionFieldErrorText(locales.In(c.Locale()), key, message)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Danger)
 		}
 		if helper != "" {
-			ui.Text(c, helper).FontSize(typeMeta).LineHeight(1.5).TextColor(t.TextMuted)
+			ui.Text(c, helper).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 		}
 	})
 }
@@ -409,7 +402,13 @@ func (s *connectionSettings) slotStep(c *ui.Context, delta int) {
 	value, err := positiveInt(s.Draft.Slots)
 	blocked := err != nil || delta < 0 && value == 1 || delta > 0 && value == int(^uint(0)>>1)
 	c.Key("slot-step-" + text)
-	secondaryButton(c, text).Label(label).MinWidth(32).Height(32).Padding(4).Disabled(s.Busy || blocked).OnClick(func() {
+	button := secondaryButton(c, "").Label(label).Width(40).Padding(8, 12).Disabled(s.Busy || blocked)
+	icon := glyphSubtractLine
+	if delta > 0 {
+		icon = glyphAddLine
+	}
+	button.Children(func() { ui.Icon(c, icon).Width(16).Height(16) })
+	button.OnClick(func() {
 		s.Draft.Slots = strconv.Itoa(value + delta)
 	})
 }
