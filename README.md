@@ -37,11 +37,17 @@ Use the corresponding issue/work/result and history views to inspect actual runs
 
 For a local save error, retain the open draft, correct the reported condition and use **Retry save**. Connection errors belong in **Connection & model**. Opening settings or details does not repeat a model request.
 
-In **Settings → General → Workbench data**, **Save recovery copy…** exports saved contact/task records, saved drafts, requirements and attached text snapshots. It excludes unsaved edits, actual chat/tool history, API settings and keys, work files, themes and language preferences; it is not a complete backup.
+In **Settings → General → Workbench data**, **Save recovery copy…** exports saved contact/task records, saved drafts, requirements and attached text snapshots. It excludes unsaved edits, actual chat/tool history, API settings and keys, work files, theme files and language preferences; it is not a complete backup.
 
-When startup cannot load workbench data, **Restore paused…** lets you select a compatible copy, review its preview and explicitly confirm **Restore paused**. An existing original is archived before replacement. The restored data is loaded after a normal Quit and reopen, with automatic continuation paused and pending/unknown records retained. A loaded workbench or failed local save uses its existing save/retry path instead of replacement.
+When startup cannot load workbench data, **Restore paused…** lets you select a compatible copy, review its preview and explicitly confirm **Restore paused**. An existing original is archived before replacement. Read the outcome before taking another action:
 
-If the current window cannot save, copy any unsaved text you need elsewhere before quitting. Retain the locations and details shown for an unconfirmed installation, and check before another attempt. Missing Runtime history is reported separately; restoring workbench records does not recreate it or resend work.
+| Outcome | Next step |
+| --- | --- |
+| Verified installation | The current window still cannot save or run work. Quit and reopen to load the verified restored records, with automatic continuation paused and pending/unknown records retained. |
+| Not installed | The original was not replaced. Keep any listed archive and review Details before a new explicit attempt. |
+| Installation unconfirmed | Nagi has not confirmed the on-disk result; the current window cannot save or run work. Keep the listed locations and Details. Check the result before another attempt; do not automatically repeat or roll back. |
+
+If the current window cannot save, copy any unsaved text you need elsewhere before quitting. A loaded workbench or failed local save uses its existing save/retry path instead of replacement. Missing Runtime history is reported separately; restoring workbench records does not recreate it or resend work.
 
 ## Build and run
 
