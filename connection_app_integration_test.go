@@ -230,11 +230,30 @@ func TestConnectionGUIFirstSaveApplyTestSendAndRestart(t *testing.T) {
 		h.app.connectionForm.Draft = newConnectionSettings(&config, "").Draft
 		tr := ui.NewTester(h.app.view, 1040, 720)
 		tr.Frame()
+		logSave := func(phase string) {
+			r, ok := tr.Find("Save configuration")
+			t.Logf("Save bounds %s: rect=%+v found=%t scrollY=%g saved=%t busy=%t dirty=%t editOpen=%v provider=%d", phase, r, ok, h.app.settingsScroll.Y, h.app.connectionForm.HasSaved, h.app.connectionForm.Busy, h.app.connectionForm.Dirty(), h.app.connectionForm.editOpen, provider.count())
+		}
+		logSave("initial")
+		for step := 0; step < 12; step++ {
+			if r, ok := tr.Find("Save configuration"); ok && r.W > 0 && r.H >= 32 && r.X >= 0 && r.X+r.W <= 1040 && r.Y >= 0 && r.Y+r.H <= 720 {
+				break
+			}
+			tr.Scroll(520, 360, 0, 180)
+			tr.Frame()
+		}
+		logSave("reached before activation")
+		if r, ok := tr.Find("Save configuration"); !ok || r.W <= 0 || r.H < 32 || r.X < 0 || r.X+r.W > 1040 || r.Y < 0 || r.Y+r.H > 720 {
+			t.Error("Save configuration does not provide a fully reachable minimum click target before activation")
+			return
+		}
 		clickErr = clickSettingsAction(tr, "Save configuration")
+		logSave("after activation before explicit frame")
 		if r, ok := tr.Find("Save configuration"); !ok || r.H < 32 {
 			t.Error("Save configuration does not provide the minimum click target")
 		}
 		tr.Frame()
+		logSave("after explicit frame")
 	})
 	if clickErr != nil {
 		t.Fatal(clickErr)
@@ -1011,12 +1030,33 @@ func TestConnectionGUILanguageChangePreservesRequestsAndSession(t *testing.T) {
 	}
 	var tr *ui.Tester
 	var applied []string
+	openLanguage := func(locale string) bool {
+		label := locales.In(locale).SettingsLanguage()
+		for step := 0; step < 16 && !tr.Focused(label); step++ {
+			tr.Key(0, ui.KeyTab)
+			tr.Frame()
+		}
+		if !tr.Focused(label) {
+			t.Error("Language selector was not keyboard reachable")
+			return false
+		}
+		tr.Key(0, ui.KeySpace)
+		tr.Frame()
+		t.Logf("Language selector opened through focused %q control", label)
+		return true
+	}
 	applyAppLocale = func(tag string) { savedMode = tag; applied = append(applied, tag); tr.SetLocale(tag) }
 	h.pump.do(func() {
 		h.app.openSettingsTab(settingsTabAppearance, settingsSourceRail)
 		tr = ui.NewTester(h.app.view, 1040, 720)
 		tr.SetLocale("en")
 		tr.Frame()
+		selector, selectorFound := tr.Find("Language")
+		option, optionFound := tr.Find("简体中文")
+		t.Logf("Language before disclosure: selector=%+v/%t option=%+v/%t", selector, selectorFound, option, optionFound)
+		if !openLanguage("en") {
+			return
+		}
 		if err := tr.Click("简体中文"); err != nil {
 			t.Error(err)
 			return
@@ -1051,6 +1091,9 @@ func TestConnectionGUILanguageChangePreservesRequestsAndSession(t *testing.T) {
 		h.app.openSettingsTab(settingsTabAppearance, settingsSourceRail)
 		tr.SetLocale("zh-Hans")
 		tr.Frame()
+		if !openLanguage("zh-Hans") {
+			return
+		}
 		if err := tr.Click("English"); err != nil {
 			t.Error(err)
 			return
