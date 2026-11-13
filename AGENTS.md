@@ -1,6 +1,6 @@
 # Nagi contributor instructions
 
-Updated: 2026-11-10.
+Updated: 2026-11-13.
 
 ## Ownership and boundaries
 
@@ -21,6 +21,8 @@ Product owners maintain Go/assets, product docs, `gui-go.py`, `build-macos-app.s
 Use precise English for inter-agent task briefs, messages, reports and handoffs. User-facing updates may remain in Chinese.
 
 Use scoped feature branches and reviewable PRs targeting `dev`; preserve original source history and imported evidence. Do not force-push, rewrite others’ branches, tag, publish Releases or deploy without explicit authorization. User approval and applicable existing authorization determine commit/push/merge scope; a green CI result alone does not grant it. Keep unfinished work in review and state the remaining gates. During #333, PM retains Git/integration ownership.
+
+Worktrees and system temporary directories are disposable development environments, not durable project storage. Keep authoritative source, requirements, design constraints, notices and relevant validation summaries in the repository or its reviewable PR. At a completed scoped boundary, commit and push, complete applicable review and required CI, and integrate into `dev` promptly; do not accumulate finished work only in worktrees. For unfinished work, push a clearly labelled checkpoint/WIP branch at a safe source/validation boundary, without merging incomplete work. Bulk generated previews and raw logs may stay outside source as supplemental evidence, but must not be the only acceptance record. Before cleanup, verify that necessary commits are present remotely and completed work is integrated; preserve other owners’ unfinished changes.
 
 Use hc background terminals with explicit repository cwd for long builds/tests and wait with hc. Do not use old tmux routes. Report actual command, exit code, files and limitations. No external-model tests, native GUI acceptance or old MVP resumption without explicit authorization. Historical product acceptance remains incomplete.
 
