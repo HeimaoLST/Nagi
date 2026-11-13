@@ -2624,7 +2624,7 @@ func TestC8UnsavedRecoveryGuidanceBeforeQuit(t *testing.T) {
 					}
 					// Reach the actual warning paragraph without scrolling the fixed Settings navigation away.
 					top := float32(0)
-					if size[0] < 800 {
+					if size[0] < int(preferenceBreakpoint) {
 						nav, ok := tr.Find(msgs.SettingsAdvanced())
 						if !ok {
 							t.Fatal("narrow Settings navigation missing")

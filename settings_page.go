@@ -333,7 +333,7 @@ func (a *appModel) settingsSidebar(c *ui.Context, t *ui.Theme, narrow bool) {
 	}
 	column.Children(func() {
 		ui.Toolbar(c, func() {
-			back := secondaryButton(c, "").Label(msgs.SettingsBackAccessible()).Padding(8, 10, 8, 14)
+			back := secondaryButton(c, "").Label(msgs.SettingsBackAccessible()).Padding(8, 14, 8, 10)
 			back.Children(func() {
 				ui.Icon(c, navBackIcon).Width(16).Height(16).TextColor(t.TextMuted)
 				ui.Text(c, msgs.SettingsBack()).FontSize(typeAction).TextColor(t.Text)
@@ -350,7 +350,7 @@ func (a *appModel) settingsSidebar(c *ui.Context, t *ui.Theme, narrow bool) {
 		ui.Text(c, msgs.SettingsTitle()).FontSize(typeLabel).FontWeight(400).FixedLineHeight(lineLabel).TextColor(t.Text)
 		nav := func(label, tab string) {
 			selected := a.settingsTab == tab
-			button := sharedControlFace(c, ui.ButtonBase(c).Label(label), 8, false, false, selected).
+			button := sharedControlFace(c, ui.ButtonBase(c).Label(label), 8, 4, false, false, selected).
 				FontSize(typeNavigation).FontWeight(400).FixedLineHeight(lineNavigation).
 				Padding(8).Justify(ui.Start).TextColor(t.Text)
 			if !narrow {
@@ -402,8 +402,7 @@ func (a *appModel) settingsMain(c *ui.Context, t *ui.Theme, narrow bool) {
 
 func preferenceGroup(c *ui.Context, t *ui.Theme, children func()) {
 	ui.Column(c).FillWidth().Padding(0, 16).Draw(func(p *ui.Painter, r ui.Rect) {
-		p.FillPath(controlPath(r, 12, 2), t.Background)
-		p.StrokePath(controlPath(ui.Rect{X: r.X + .5, Y: r.Y + .5, W: r.W - 1, H: r.H - 1}, 11.5, 2), 1, t.Border)
+		paintPreferenceFace(p, r, 12, 2, t.Background, t.Border)
 	}).Children(children)
 }
 

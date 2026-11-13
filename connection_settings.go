@@ -226,7 +226,7 @@ func (s *connectionSettings) view(c *ui.Context, t *ui.Theme, actions connection
 						folder.Focus()
 						s.focusFolder = false
 					}
-				})
+				}, true)
 				ui.Text(c, folderHint).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 				label := msgs.ConnectionFolderEnterPath()
 				if s.editOpen["WorkingDirectory"] {
@@ -368,27 +368,19 @@ func (s *connectionSettings) field(c *ui.Context, t *ui.Theme, key, label, place
 			}
 			return field
 		}
-		if key == "ContextTokens" || key == "OutputTokens" || key == "MaxActiveTasks" {
-			settingsPreferenceRow(c, t, label, "", func() {
+		settingsPreferenceRow(c, t, label, helper, func() {
+			if key == "MaxActiveTasks" {
 				ui.Row(c).FillWidth().MinWidth(0).AlignItems(ui.Center).Gap(4).Children(func() {
-					if key == "MaxActiveTasks" {
-						s.slotStep(c, -1)
-					}
+					s.slotStep(c, -1)
 					input().Width(180).MinWidth(0).Shrink(1)
-					if key == "MaxActiveTasks" {
-						s.slotStep(c, 1)
-					}
+					s.slotStep(c, 1)
 				})
-			})
-		} else {
-			ui.Text(c, label).FontSize(typeLabel).FontWeight(400).FixedLineHeight(lineLabel).TextColor(t.Text)
-			input().FillWidth()
-		}
+			} else {
+				input().FillWidth()
+			}
+		})
 		if message := s.Errors[key]; message != "" {
 			ui.Text(c, connectionFieldErrorText(locales.In(c.Locale()), key, message)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Danger)
-		}
-		if helper != "" {
-			ui.Text(c, helper).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 		}
 	})
 }

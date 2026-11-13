@@ -100,6 +100,10 @@ func TestConnectionProtocolSegmentedKeepsDraftAndBusyGate(t *testing.T) {
 	s := newConnectionSettings(&config, "")
 	tr := connectionSettingsTester(s, connectionSettingsActions{}, 580, 1600)
 	tr.Frame()
+	if err := tr.Click("Protocol"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
 	if !tr.HasText("Protocol") || !tr.HasText("Chat completions") || !tr.HasText("Responses") {
 		t.Fatalf("protocol choices missing: %v", tr.Texts())
 	}
@@ -110,6 +114,10 @@ func TestConnectionProtocolSegmentedKeepsDraftAndBusyGate(t *testing.T) {
 	if s.Draft.API != connectionAPIResponses {
 		t.Fatalf("protocol draft = %q, want Responses", s.Draft.API)
 	}
+	if err := tr.Click("Protocol"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
 	s.Busy = true
 	tr.Frame()
 	if err := tr.Click("Chat completions"); err != nil {

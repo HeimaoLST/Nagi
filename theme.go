@@ -206,7 +206,7 @@ func preferenceSelect(c *ui.Context, selected *string, options []selectOption, l
 		full += ": " + display
 	}
 	sel := ui.SelectBase(c, selected)
-	trigger := sharedControlFace(c, sel.Trigger.Label(label).Value(display).Disabled(blocked), 16, true, false, false).
+	trigger := sharedControlFace(c, sel.Trigger.Label(label).Value(display).Disabled(blocked), 16, 4, true, false, false).
 		FillWidth().Justify(ui.Start).Padding(8, 10, 8, 12).FontWeight(500)
 	trigger.Children(func() {
 		ui.Row(c).FillWidth().MinWidth(0).AlignItems(ui.Center).Gap(6).Children(func() {
@@ -216,16 +216,12 @@ func preferenceSelect(c *ui.Context, selected *string, options []selectOption, l
 		})
 	})
 	sel.Popup(func(panel ui.Element) {
-		panel.Padding(4).Radius(8).Background(t.Background).Border(1, t.Border)
+		panel.Padding(4).Radius(0).Background(ui.Transparent).Border(0, ui.Transparent).Draw(func(p *ui.Painter, r ui.Rect) { paintPreferenceFace(p, r, 8, 2, t.Background, t.Border) })
 		ui.Scroll(c).MaxHeight(t.Space(80)).Children(func() {
 			for _, option := range options {
-				item := sel.Item(option.Value).Disabled(blocked).MinHeight(controlHit).Padding(8, 6).Radius(6).FontSize(typeMeta).FixedLineHeight(lineAction)
-				switch {
-				case item.Highlighted():
-					item.Background(t.Selection).TextColor(t.Text)
-				case option.Value == *selected:
-					item.Background(t.Selection).TextColor(t.Text)
-				}
+				item := sel.Item(option.Value).Disabled(blocked)
+				item = sharedControlFace(c, item, 6, 2, false, false, item.Highlighted() || option.Value == *selected).
+					Padding(8, 6).FontSize(typeMeta).FixedLineHeight(lineAction).TextColor(t.Text)
 				item.Children(func() { ui.Text(c, option.Label).FontSize(typeMeta).FixedLineHeight(lineAction).SingleLine() })
 			}
 		})
@@ -255,12 +251,12 @@ func appTooltip(c *ui.Context, anchor ui.Element, text string) ui.Element {
 
 // secondaryButton uses the shared md ghost face and the existing Button controller.
 func secondaryButton(c *ui.Context, label string) ui.Element {
-	return sharedControlFace(c, ui.Button(c, label), 16, false, false, false).FontSize(typeAction).FontWeight(500).FixedLineHeight(lineAction).Padding(8, 12).Gap(6)
+	return sharedControlFace(c, ui.Button(c, label), 16, 4, false, false, false).FontSize(typeAction).FontWeight(500).FixedLineHeight(lineAction).Padding(8, 12).Gap(6)
 }
 
 // The transparent interaction box extends two DIPs past the visible face.
 // Negative block margins keep its layout contribution at the declared 28 DIPs.
-func sharedControlFace(c *ui.Context, e ui.Element, region float32, outlined, invalid, selected bool) ui.Element {
+func sharedControlFace(c *ui.Context, e ui.Element, region float32, exponent float64, outlined, invalid, selected bool) ui.Element {
 	t := c.Theme()
 	e.Height(controlHit).MinHeight(controlHit).Margin(-2, 0).Radius(0).
 		Background(ui.Transparent).Border(0, ui.Transparent).FocusRing(false)
@@ -286,14 +282,25 @@ func sharedControlFace(c *ui.Context, e ui.Element, region float32, outlined, in
 		} else if e.Focused() {
 			border = t.Focus
 		}
-		p.FillPath(controlPath(r, region, 4), fill)
-		inside := ui.Rect{X: r.X + .5, Y: r.Y + .5, W: r.W - 1, H: r.H - 1}
-		p.StrokePath(controlPath(inside, region-.5, 4), 1, border)
+		paintPreferenceFace(p, r, region, exponent, fill, border)
 		if !outlined && e.FocusVisible() {
-			p.StrokePath(controlPath(r, region, 4), 2, t.Focus)
+			p.StrokePath(controlPath(r, region, exponent), 2, t.Focus)
 		}
 	})
 	return e
+}
+
+func paintPreferenceFace(p *ui.Painter, r ui.Rect, region float32, exponent float64, fill, border ui.Color) {
+	interior := r
+	if border.A > 0 {
+		// Disabled opacity applies to each paint; keep fill out of the border.
+		interior = ui.Rect{X: r.X + 1, Y: r.Y + 1, W: r.W - 2, H: r.H - 2}
+		p.FillPath(controlPath(interior, region-1, exponent), fill)
+	} else {
+		p.FillPath(controlPath(interior, region, exponent), fill)
+	}
+	inside := ui.Rect{X: r.X + .5, Y: r.Y + .5, W: r.W - 1, H: r.H - 1}
+	p.StrokePath(controlPath(inside, region-.5, exponent), 1, border)
 }
 
 // Sample the declared superellipse, normalizing corner regions to the box.
@@ -318,7 +325,7 @@ func controlPath(r ui.Rect, region float32, exponent float64) *ui.Path {
 func preferenceInput(c *ui.Context, value *string, invalid bool) ui.Element {
 	e := ui.TextInputBase(c, value).Font("system-ui").FontSize(typeAction).FontWeight(400).
 		FixedLineHeight(lineAction).Padding(8, 12).TextColor(c.Theme().Text)
-	return sharedControlFace(c, e, 16, true, invalid, false)
+	return sharedControlFace(c, e, 16, 4, true, invalid, false)
 }
 
 // RemixIcon v4.6.0 (Apache-2.0), with the distinct Heroicons v1.0.6 (MIT) selector indicator.
