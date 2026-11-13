@@ -1,0 +1,376 @@
+--- a/ui/markdown/theme.go
++++ b/ui/markdown/theme.go
+@@ -87,6 +87,10 @@
+ 	// Size is their size in ems, and Weight their weight.
+ 	Size   float32
+ 	Weight int
++	// FixedLineHeight and LetterSpacing are absolute DIPs; zero keeps
++	// the inherited line height and spacing. Uppercase only changes display.
++	FixedLineHeight, LetterSpacing float32
++	Uppercase                      bool
+ 	// Color colors them: Theme.Text when zero.
+ 	Color Color
+ 	// Top and Bottom are the room above and below them in ems, which
+--- a/ui/markdown/view.go
++++ b/ui/markdown/view.go
+@@ -336,7 +336,14 @@
+ 		h := th.Headings[b.Level-1]
+ 		s := base
+ 		s.weight, s.size, s.color = h.Weight, th.em(h.Size), h.Color
++		s.letterSpacing, s.uppercase = h.LetterSpacing, h.Uppercase
+ 		el := st.paragraph(c, i, s).Role(ui.RoleHeading).Level(b.Level)
++		if h.FixedLineHeight != 0 {
++			el.FontSize(s.size).FixedLineHeight(h.FixedLineHeight)
++		}
++		if h.LetterSpacing != 0 {
++			el.LetterSpacing(h.LetterSpacing)
++		}
+ 		if h.Rule {
+ 			el.BorderWidth(0, 0, 1, 0).BorderColor(th.Rule).Padding(0, 0, th.em(0.3), 0)
+ 		}
+@@ -441,6 +448,7 @@
+ 	}
+ 	if objects := p.objects; len(objects) > 0 {
+ 		el.DrawObjects(func(pa *ui.Painter, at int, r ui.Rect) {
++			at = p.originalBoundary(at, false)
+ 			if k, ok := slices.BinarySearchFunc(objects, at, func(o mathObject, at int) int { return o.rune - at }); ok && objects[k].draw != nil {
+ 				objects[k].draw(pa, r)
+ 			}
+--- a/ui/markdown/spans.go
++++ b/ui/markdown/spans.go
+@@ -3,6 +3,9 @@
+ import (
+ 	"strings"
+ 	"unicode/utf8"
++
++	"golang.org/x/text/cases"
++	"golang.org/x/text/language"
+ 
+ 	"github.com/egoist/mygo/ui"
+ 	"github.com/egoist/mygo/ui/markdown/parser"
+@@ -37,8 +40,10 @@
+ 
+ // para is what a paragraph, heading or cell shows.
+ type para struct {
+-	pieces []piece
+-	marks  []runMark
++	pieces   []piece
++	marks    []runMark
++	original string
++	display  []displayRange
+ 	// objects are its math drawn by the app, in order: a slice of each
+ 	// build's own, which the view's drawing keeps.
+ 	objects []mathObject
+@@ -61,6 +66,57 @@
+ 	size                float32
+ 	font                string
+ 	inLink, pendingLink bool
++	letterSpacing       float32
++	uppercase           bool
++}
++
++// Each displayed range belongs to one original decoded rune. Selecting
++// any nonempty part of an expansion copies that original unit once.
++type displayRange struct{ start, end, original int }
++
++func (p *para) uppercase() {
++	var original strings.Builder
++	upper := cases.Upper(language.Und)
++	at, source := 0, 0
++	for i := range p.pieces {
++		for j := range p.pieces[i].spans {
++			sp := &p.pieces[i].spans[j]
++			original.WriteString(sp.Text)
++			var display strings.Builder
++			for _, r := range sp.Text {
++				text := upper.String(string(r))
++				n := utf8.RuneCountInString(text)
++				p.display = append(p.display, displayRange{at, at + n, source})
++				at, source = at+n, source+1
++				display.WriteString(text)
++			}
++			sp.Text = display.String()
++		}
++	}
++	p.original = original.String()
++}
++
++func (p *para) originalBoundary(r int, end bool) int {
++	if len(p.display) == 0 {
++		return r
++	}
++	lo, hi := 0, len(p.display)
++	for lo < hi {
++		m := (lo + hi) / 2
++		if p.display[m].end <= r {
++			lo = m + 1
++		} else {
++			hi = m
++		}
++	}
++	if lo == len(p.display) {
++		return p.runes
++	}
++	u := p.display[lo]
++	if end && r > u.start {
++		return u.original + 1
++	}
++	return u.original
+ }
+ 
+ type spanBuilder struct {
+@@ -95,6 +151,9 @@
+ 	for i := range p.pieces {
+ 		p.pieces[i].spans = append([]ui.Span(nil), p.pieces[i].spans...)
+ 	}
++	if base.uppercase {
++		p.uppercase()
++	}
+ }
+ 
+ func (sb *spanBuilder) piece(link int) *piece {
+@@ -195,6 +254,7 @@
+ func (sb *spanBuilder) addSpan(text string, src, end int, exact bool, s spanStyle, link int, alpha float32) {
+ 	th := sb.th
+ 	sp := ui.Span{Text: text, Font: th.Font, Size: th.FontSize, Weight: s.weight, Italic: s.italic, Strikethrough: s.strike, Underline: s.underline}
++	sp.LetterSpacing = s.letterSpacing
+ 	if s.size != 0 {
+ 		sp.Size = s.size
+ 	}
+--- a/ui/markdown/copy.go
++++ b/ui/markdown/copy.go
+@@ -53,6 +53,16 @@
+ // math drawn as objects, as $x_i$, in place of their characters.
+ func (st *viewState) writeText(b *strings.Builder, inf elemInfo, p ui.SelectedText) {
+ 	text := runeSlice(p.Text, p.Start, p.End)
++	if inf.line == -1 && inf.block < len(st.paras) && st.paras[inf.block].ok {
++		para := &st.paras[inf.block].p
++		if len(para.display) > 0 {
++			if p.End <= p.Start {
++				return
++			}
++			p.Start, p.End = para.originalBoundary(p.Start, false), para.originalBoundary(p.End, true)
++			text = runeSlice(para.original, p.Start, p.End)
++		}
++	}
+ 	if inf.line != -1 || inf.block >= len(st.paras) || !st.paras[inf.block].ok || len(st.paras[inf.block].p.objects) == 0 {
+ 		b.WriteString(text)
+ 		return
+@@ -181,7 +191,8 @@
+ 		return b.Start
+ 	}
+ 	if inf.block < len(st.paras) && st.paras[inf.block].ok {
+-		return st.paras[inf.block].p.sourceAt(d.Source(), r, end)
++		p := &st.paras[inf.block].p
++		return p.sourceAt(d.Source(), p.originalBoundary(r, end), end)
+ 	}
+ 	return b.Start
+ }
+@@ -198,6 +209,9 @@
+ 	li, ok2 := st.elem(last.ID)
+ 	if !ok1 || !ok2 {
+ 		return st.copyText(parts)
++	}
++	if len(parts) == 1 && first.End <= first.Start && fi.block < len(st.paras) && len(st.paras[fi.block].p.display) > 0 {
++		return ""
+ 	}
+ 	fb, lb := d.Block(fi.block), d.Block(li.block)
+ 	a := st.srcAt(fi, first.Start, false)
+--- a/ui/markdown/view_test.go
++++ b/ui/markdown/view_test.go
+@@ -8,6 +8,7 @@
+ 	"time"
+ 	"unicode/utf8"
+ 
++	"github.com/egoist/mygo/transfer"
+ 	"github.com/egoist/mygo/ui"
+ )
+ 
+@@ -407,3 +408,187 @@
+ 		t.Errorf("done, shows %q", got)
+ 	}
+ }
++
++func TestHeadingUppercaseCopiesOriginalRanges(t *testing.T) {
++	src := "Before Mixed.\n\n###### Straße &amp; ﬃ e\u0301 `MiXeD` [Same](https://example.com/x) [Same](https://example.com/x)\n\nAfter Mixed.\n\n```txt\nStraße MiXeD\n```\n"
++	o := &Options{Theme: &Theme{}}
++	o.Theme.Headings[5].Uppercase = true
++	tt, get := rvView(&src, o)
++	st := get()
++	display := "STRASSE & FFI E\u0301 MIXED SAME SAME"
++	if got := rvParaText(st, 2); got != display {
++		t.Fatalf("display=%q, want %q", got, display)
++	}
++	if st.doc.Source() != src || !tt.HasText("Straße MiXeD") {
++		t.Fatal("source or fenced code was transformed")
++	}
++	k := rvElemOf(t, st, 2)
++	for _, c := range []struct {
++		from, to  int
++		plain, md string
++	}{
++		{4, 5, "ß", "ß"}, {5, 6, "ß", "ß"}, {4, 6, "ß", "ß"}, {5, 5, "", ""},
++		{10, 11, "ﬃ", "ﬃ"}, {11, 13, "ﬃ", "ﬃ"}, {8, 9, "&", "&amp;"},
++	} {
++		parts := []ui.SelectedText{rvPart(st, k, display, c.from, c.to)}
++		if got := st.copyText(parts); got != c.plain {
++			t.Errorf("[%d:%d] plain=%q, want %q", c.from, c.to, got, c.plain)
++		}
++		if got := st.copyMarkdown(parts); got != c.md {
++			t.Errorf("[%d:%d] Markdown=%q, want %q", c.from, c.to, got, c.md)
++		}
++		html, err := st.copyData(parts).Read(transfer.HTML)
++		if err != nil || c.plain != "" && !strings.Contains(string(html), c.plain) && c.plain != "&" {
++			t.Errorf("[%d:%d] HTML=%q err=%v", c.from, c.to, html, err)
++		}
++	}
++	r, _ := tt.Find("Before Mixed.")
++	tt.ClickAt(r.X+2, r.Y+r.H/2)
++	tt.Command("selectAll")
++	tt.Command("copy")
++	wantPlain := "Before Mixed.\n\nStraße & ﬃ e\u0301 MiXeD Same Same\n\nAfter Mixed.\n\nStraße MiXeD"
++	if got := tt.Clipboard(); got != wantPlain {
++		t.Errorf("real selection copy=%q, want %q", got, wantPlain)
++	}
++	// Cross-block selection stops at the last painted code line, as before.
++	md, err := tt.ClipboardData().Read(transfer.Markdown)
++	if err != nil || string(md) != strings.TrimSuffix(src, "\n```\n") {
++		t.Errorf("real selection Markdown=%q err=%v", md, err)
++	}
++	html, err := tt.ClipboardData().Read(transfer.HTML)
++	if err != nil || !strings.Contains(string(html), "Straße &amp; ﬃ") || strings.Contains(string(html), "STRASSE") {
++		t.Errorf("real selection HTML=%q err=%v", html, err)
++	}
++	if st.headingNamed(Slug("Straße & ﬃ e\u0301 MiXeD Same Same")) != 2 {
++		t.Fatal("heading anchor changed with display")
++	}
++	beforeID := st.elems[k].id
++	o.Theme.Headings[5].Uppercase = false
++	tt.Frame()
++	if rvParaText(get(), 2) != "Straße & ﬃ e\u0301 MiXeD Same Same" || get().elems[k].id != beforeID {
++		t.Fatal("heading style cache failed to invalidate or replaced identity")
++	}
++}
++
++func TestHeadingUppercaseObjectsAndStreamIdentity(t *testing.T) {
++	var m mathRecorder
++	o := m.options()
++	o.Theme = &Theme{}
++	o.Theme.Headings[5].Uppercase = true
++	o.Reveal = &Reveal{Unit: AtOnce, Fade: -1}
++	src, done := "###### Straße $x$ [MiXeD](https://example.com/x)\n\nOriginal body.", false
++	var st *viewState
++	tt := ui.NewTester(func(c *ui.Context) {
++		var root ui.Element
++		if done {
++			root = View(c, src, o)
++		} else {
++			root = Stream(c, src, o)
++		}
++		st = *ui.Local(root, stateKey{}, newState)
++	}, 600, 400)
++	text := rvParaText(st, 1)
++	if text != "STRASSE \uFFFC MIXED" {
++		t.Fatalf("display=%q", text)
++	}
++	if r, ok := m.drawn["x"]; !ok || r.W != 20 || r.H != 16 {
++		t.Fatalf("expanded heading lost actual math drawing: %+v found=%t", r, ok)
++	}
++	k := rvElemOf(t, st, 1)
++	parts := []ui.SelectedText{rvPart(st, k, text, 8, 9)}
++	if got := st.copyText(parts); got != "$x$" {
++		t.Fatalf("object plain=%q", got)
++	}
++	if got := st.copyMarkdown(parts); got != "$x$" {
++		t.Fatalf("object Markdown=%q", got)
++	}
++	r, _ := tt.Find(text)
++	tt.ClickAt(r.X+2, r.Y+r.H/2)
++	tt.Command("selectAll")
++	tt.Command("copy")
++	selected, identity := tt.Clipboard(), st.elems[k].id
++	src += " Appended."
++	tt.Frame()
++	done = true
++	tt.Frame()
++	tt.Command("copy")
++	if tt.Clipboard() != selected || st.elems[k].id != identity {
++		t.Fatalf("stream->View changed selection or identity: copied=%q want=%q", tt.Clipboard(), selected)
++	}
++}
++
++func TestHeadingUppercaseKeepsLinkController(t *testing.T) {
++	src := "###### [MiXeD](https://example.com/x) [Again](https://example.com/x) [Unsafe](javascript:alert(1))\n"
++	var ids []uint64
++	o := &Options{Theme: &Theme{}}
++	o.Theme.Headings[5].Uppercase = true
++	o.LinkElement = func(c *ui.Context, block, inline int, dest string, e ui.Element) {
++		if block != 1 || inline < 0 {
++			t.Fatal("link parsed identity changed")
++		}
++		ids = append(ids, e.ID())
++	}
++	tt, _ := rvView(&src, o)
++	if len(ids) < 3 || ids[len(ids)-3] == ids[len(ids)-2] {
++		t.Fatal("duplicate destinations lost distinct link identities")
++	}
++	before := append([]uint64(nil), ids[len(ids)-3:]...)
++	ids = nil
++	tt.Frame()
++	if !slices.Equal(before, ids[len(ids)-3:]) {
++		t.Fatal("heading link identity changed on unchanged frame")
++	}
++	if err := tt.Click("UNSAFE"); err != nil {
++		t.Fatal(err)
++	}
++	if len(tt.OpenedURLs()) != 0 {
++		t.Fatal("unsafe uppercase link opened")
++	}
++	if err := tt.Click("MIXED"); err != nil {
++		t.Fatal(err)
++	}
++	if got := tt.OpenedURLs(); !slices.Equal(got, []string{"https://example.com/x"}) {
++		t.Fatalf("safe original destination=%q", got)
++	}
++	var calls []string
++	o.OnLink = func(dest string) { calls = append(calls, dest) }
++	tt.Frame()
++	tt.SetFocused(true)
++	for i := 0; i < 10 && !tt.Focused("AGAIN"); i++ {
++		tt.Key(0, ui.KeyTab)
++		tt.Frame()
++	}
++	if !tt.Focused("AGAIN") {
++		t.Fatal("uppercase duplicate link not keyboard reachable")
++	}
++	tt.Key(0, ui.KeyEnter)
++	if !slices.Equal(calls, []string{"https://example.com/x"}) {
++		t.Fatalf("keyboard callback=%q", calls)
++	}
++}
++
++func TestHeadingUppercasePendingLinkDoesNotOpen(t *testing.T) {
++	src := "###### Read [MiXeD](https://example.com"
++	o := &Options{Theme: &Theme{}, Reveal: &Reveal{Unit: AtOnce, Fade: -1}}
++	o.Theme.Headings[5].Uppercase = true
++	tt := ui.NewTester(func(c *ui.Context) { Stream(c, src, o) }, 600, 200)
++	for i := 0; i < 10 && !tt.Focused("MIXED"); i++ {
++		tt.Key(0, ui.KeyTab)
++		tt.Frame()
++	}
++	if !tt.Focused("MIXED") {
++		t.Fatal("pending uppercase link not keyboard reachable")
++	}
++	tt.Key(0, ui.KeyEnter)
++	if len(tt.OpenedURLs()) != 0 {
++		t.Fatal("pending uppercase link opened")
++	}
++	src += "/docs)"
++	tt.Frame()
++	if err := tt.Click("MIXED"); err != nil {
++		t.Fatal(err)
++	}
++	if got := tt.OpenedURLs(); !slices.Equal(got, []string{"https://example.com/docs"}) {
++		t.Fatalf("finished original destination=%q", got)
++	}
++}

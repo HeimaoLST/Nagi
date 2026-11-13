@@ -118,10 +118,11 @@ func (f *readerCopyFeedback) show(now time.Time) (visible, failed bool) {
 func markdownReader(c *ui.Context, source string, options markdownReaderOptions) ui.Element {
 	var root ui.Element
 	if options.MessageBubble == nil {
-		root = ui.Column(c).AlignSelf(ui.Stretch).LineHeight(1.5)
+		root = ui.Column(c).AlignSelf(ui.Stretch)
 	} else {
-		root = ui.Row(c).AlignItems(ui.Start).Gap(4).Shrink(1).LineHeight(1.5)
+		root = ui.Row(c).AlignItems(ui.Start).Gap(4).Shrink(1)
 	}
+	root.Font("system-ui").FontSize(typeBody).FixedLineHeight(lineBody)
 	st := ui.Local(root, markdownReaderStateKey{}, func() markdownReaderState {
 		return markdownReaderState{codeFeedback: map[int]*readerCopyFeedback{}}
 	})
@@ -166,7 +167,7 @@ func markdownReader(c *ui.Context, source string, options markdownReaderOptions)
 			}
 		}
 	}
-	st.opts.Theme = normalizedMarkdownTheme(options.Theme)
+	st.opts.Theme = normalizedMarkdownTheme(c, options.Theme)
 	st.opts.LinkElement = nil
 	if !options.PlainText && options.LinkScope != "" && options.LinkFocus != nil {
 		scope, focus, returnTarget, returnSeen := options.LinkScope, options.LinkFocus, options.LinkReturn, options.LinkReturnSeen
@@ -190,7 +191,7 @@ func markdownReader(c *ui.Context, source string, options markdownReaderOptions)
 	drawBody := func(c *ui.Context) {
 		switch {
 		case options.PlainText:
-			text := ui.Text(c, source).Selectable().LineHeight(1.5)
+			text := ui.Text(c, source).Selectable().Font("system-ui").FontSize(typeBody).FixedLineHeight(lineBody)
 			if options.MessageBubble != nil && options.MessageBubble.ContextualCopy {
 				text.ContextMenu(func(m *ui.Menu) {
 					if m.Item(label).Chosen() {
@@ -366,15 +367,10 @@ func (st *markdownReaderState) sourceCopyButton(c *ui.Context, now time.Time, ac
 		btn.Bind(handle)
 	}
 	theme := c.Theme()
-	btn.Key("source-copy").Size(32, 32).Padding(0).Gap(0).Radius(6).
-		Background(ui.Transparent).BorderWidth(0)
+	btn.Key("source-copy")
+	btn = iconControlFace(c, btn, iconResponse, false)
 	if !outside {
 		btn.Absolute().Top(0).Right(0)
-	}
-	if btn.Pressed() {
-		btn.Background(theme.SurfacePressed)
-	} else if btn.Hovered() {
-		btn.Background(theme.SurfaceHover)
 	}
 	color := markdownReaderTheme(c, st.opts.Theme).Muted
 	icon := markdownCopyIcon
@@ -392,7 +388,7 @@ func (st *markdownReaderState) sourceCopyButton(c *ui.Context, now time.Time, ac
 	showIcon := reveal == nil || reveal() || btn.Hovered() || btn.FocusVisible()
 	if showIcon {
 		btn.Children(func() {
-			ui.Icon(c, icon).Size(16, 16).TextColor(color)
+			controlIcon(c, icon, iconResponse).TextColor(color)
 		})
 	}
 	if btn.Clicked() {
@@ -468,33 +464,34 @@ func writeClipboardText(text string, write func(string), read func() string) err
 	return nil
 }
 
-// normalizedMarkdownTheme keeps rendered Markdown inside the app's four-size
-// scale. H1 maps to 16; H2-H6 map to 14 and use weight/spacing; code uses 13.
-// Source text
-// and user-provided Markdown are never rewritten.
-func normalizedMarkdownTheme(override *markdown.Theme) *markdown.Theme {
-	// Start with the complete caller override and let the framework resolve all
-	// fields it left zero. Only constrain the app-controlled size scale here.
+func normalizedMarkdownTheme(c *ui.Context, override *markdown.Theme) *markdown.Theme {
 	th := markdown.Theme{}
 	if override != nil {
 		th = *override
 	}
 	th.FontSize = typeBody
-	th.LineHeight = 1.5
-	th.CodeLineHeight = 1.5
-	headingSizes := [6]float32{16, 14, 14, 14, 14, 14}
-	for i := range th.Headings {
-		th.Headings[i].Size = headingSizes[i] / th.FontSize
-		if th.Headings[i].Weight == 0 {
-			// Preserve an explicit caller weight; otherwise keep semantic hierarchy
-			// with the app's restrained 16/14 scale.
-			th.Headings[i].Weight = 500
-			if i == 0 {
-				th.Headings[i].Weight = 600
+	th.Font = "system-ui"
+	th.LineHeight = lineBody / typeBody
+	for i, role := range markdownHeadingRoles() {
+		h := &th.Headings[i]
+		h.Size, h.Weight = role.Size/th.FontSize, role.Weight
+		h.FixedLineHeight, h.LetterSpacing = role.LineHeight, role.LetterSpacing
+		h.Top, h.Bottom, h.Uppercase = role.Top/th.FontSize, role.Bottom/th.FontSize, role.Uppercase
+		if h.Color == (markdown.Color{}) {
+			h.Color = role.Tone.color(c.Theme())
+			if role.Tone == headingPrimary && th.Text != (markdown.Color{}) {
+				h.Color = th.Text
+			} else if role.Tone != headingPrimary && th.Muted != (markdown.Color{}) {
+				h.Color = th.Muted
 			}
 		}
 	}
-	th.CodeSize = typeAction / th.FontSize
+	if th.CodeSize == 0 {
+		th.CodeSize = typeAction / th.FontSize
+	}
+	if th.CodeLineHeight == 0 {
+		th.CodeLineHeight = 1.5
+	}
 	return &th
 }
 

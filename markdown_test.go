@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"image"
@@ -1067,5 +1068,262 @@ func TestMarkdownLocalFileCallbackPreservesOtherLinks(t *testing.T) {
 	}
 	if calls != 0 || len(pending.OpenedURLs()) != 0 {
 		t.Fatal("pending link was activated")
+	}
+}
+
+func TestMarkdownReaderHeadingHierarchyAndOriginalCopy(t *testing.T) {
+	roles := []struct {
+		level                int
+		size, line, tracking float32
+		weight               int
+	}{
+		{1, 20, 28, -.5, 500}, {2, 18, 24, -.45, 600},
+		{3, 16, 24, -.4, 600}, {4, 14, 20, -.35, 600},
+		{5, 14, 24, -.35, 600}, {6, 13, 20, -.325, 600},
+	}
+	for _, role := range roles {
+		for _, width := range []int{220, 720} {
+			for _, streaming := range []bool{false, true} {
+				t.Run(fmt.Sprintf("H%d-width%d-stream%t", role.level, width, streaming), func(t *testing.T) {
+					title := "Mixed Straße ﬃ & e\u0301 words to wrap a heading across lines"
+					display := title
+					if role.level == 6 {
+						display = "MIXED STRASSE FFI & E\u0301 WORDS TO WRAP A HEADING ACROSS LINES"
+					}
+					source := strings.Repeat("#", role.level) + " " + title + "\n\nOriginal body.\n"
+					dark := false
+					options := markdownReaderOptions{CopyLabel: "Copy message"}
+					tr := ui.NewTester(readerTestView(&source, &streaming, &options, &dark), width, 640)
+					ref := ui.NewTester(func(c *ui.Context) {
+						c.SetTheme(resolveWorkbenchTheme(false).Theme)
+						ui.Column(c).Padding(0, 32, 0, 0).Children(func() {
+							ui.Text(c, display).Font("system-ui").FontSize(role.size).FontWeight(role.weight).
+								FixedLineHeight(role.line).LetterSpacing(role.tracking)
+						})
+					}, width, 640)
+					actual, found := tr.Find(display)
+					want, _ := ref.Find(display)
+					if !found || actual.H != want.H {
+						t.Errorf("actual heading line geometry=%+v found=%t, independent text role=%+v; text=%q", actual, found, want, tr.Texts())
+					}
+					body, found := tr.Find("Original body.")
+					if !found || body.H != 24 {
+						t.Errorf("body fixed line box=%+v found=%t, want 24", body, found)
+					}
+					if err := tr.Click("Copy message"); err != nil {
+						t.Fatal(err)
+					}
+					if got := tr.Clipboard(); got != source {
+						t.Fatalf("full-source copy=%q, want unchanged %q", got, source)
+					}
+				})
+			}
+		}
+	}
+}
+
+func readerInkBounds(img *image.RGBA, r ui.Rect) image.Rectangle {
+	x0, y0 := max(0, int(r.X)), max(0, int(r.Y))
+	x1, y1 := min(img.Bounds().Dx(), int(r.X+r.W)), min(img.Bounds().Dy(), int(r.Y+r.H))
+	bg := img.RGBAAt(x0, y0)
+	ink := image.Rectangle{Min: image.Pt(x1, y1), Max: image.Pt(x0, y0)}
+	for y := y0; y < y1; y++ {
+		for x := x0; x < x1; x++ {
+			if img.RGBAAt(x, y) != bg {
+				ink.Min.X, ink.Min.Y = min(ink.Min.X, x), min(ink.Min.Y, y)
+				ink.Max.X, ink.Max.Y = max(ink.Max.X, x+1), max(ink.Max.Y, y+1)
+			}
+		}
+	}
+	return ink.Sub(image.Pt(x0, y0))
+}
+
+func TestMarkdownReaderHeadingMarginsTrackingAndPreviews(t *testing.T) {
+	roles := []struct {
+		level                             int
+		size, line, top, bottom, tracking float32
+		weight                            int
+	}{
+		{1, 20, 28, 28, 8, -.5, 500}, {2, 18, 24, 24, 8, -.45, 600},
+		{3, 16, 24, 20, 8, -.4, 600}, {4, 14, 20, 16, 4, -.35, 600},
+		{5, 14, 24, 16, 4, -.35, 600}, {6, 13, 20, 16, 4, -.325, 600},
+	}
+	for _, role := range roles {
+		t.Run(fmt.Sprintf("H%d", role.level), func(t *testing.T) {
+			title, display := "Measure Mixed Words For Tracking", "Measure Mixed Words For Tracking"
+			if role.level == 6 {
+				display = "MEASURE MIXED WORDS FOR TRACKING"
+			}
+			for _, prefix := range []string{"", "Before.\n\n", "# Adjacent.\n\n"} {
+				source := prefix + strings.Repeat("#", role.level) + " " + title + "\n\nEnd."
+				streaming, dark := false, false
+				options := markdownReaderOptions{}
+				tr := ui.NewTester(readerTestView(&source, &streaming, &options, &dark), 720, 640)
+				r, ok := tr.Find(display)
+				if !ok {
+					t.Fatalf("heading missing: %q", tr.Texts())
+				}
+				if prefix == "" && r.Y != 0 {
+					t.Errorf("first heading top=%g, want 0", r.Y)
+				}
+				if prefix != "" {
+					label := "Before."
+					if strings.HasPrefix(prefix, "#") {
+						label = "Adjacent."
+					}
+					prev, _ := tr.Find(label)
+					if gap := r.Y - prev.Y - prev.H; gap != role.top {
+						t.Errorf("nonfirst/adjacent top=%g, want %g", gap, role.top)
+					}
+				}
+				end, _ := tr.Find("End.")
+				if gap := end.Y - r.Y - r.H; gap != role.bottom {
+					t.Errorf("bottom=%g, want %g", gap, role.bottom)
+				}
+				ref := ui.NewTester(func(c *ui.Context) {
+					c.SetTheme(resolveWorkbenchTheme(false).Theme)
+					ui.Text(c, display).Font("system-ui").FontSize(role.size).FontWeight(role.weight).
+						FixedLineHeight(role.line).LetterSpacing(role.tracking)
+				}, 720, 640)
+				want, _ := ref.Find(display)
+				actualInk, wantedInk := readerInkBounds(tr.Image(), r), readerInkBounds(ref.Image(), want)
+				if actualInk.Dx() != wantedInk.Dx() || actualInk.Dy() != wantedInk.Dy() {
+					t.Errorf("actual shaped glyph bounds=%v, independent role=%v", actualInk, wantedInk)
+				}
+			}
+		})
+	}
+	for _, locale := range []string{"en", "zh-Hans"} {
+		for _, dark := range []bool{false, true} {
+			for _, width := range []int{720, 1040} {
+				t.Run(fmt.Sprintf("render-%s-dark%t-width%d", locale, dark, width), func(t *testing.T) {
+					var source strings.Builder
+					for level := 1; level <= 6; level++ {
+						title := fmt.Sprintf("Heading %d — %s", level, strings.Repeat("Reading text across the available width. ", 4))
+						if locale == "zh-Hans" {
+							title = fmt.Sprintf("标题 %d — %s", level, strings.Repeat("保留完整原文、选择与真实链接，标题在可用宽度中自然换行。", 4))
+						}
+						if level == 6 {
+							title = "Straße ﬃ e\u0301 `MiXeD` [Original link](https://example.com/reader)"
+						}
+						source.WriteString(strings.Repeat("#", level) + " " + title + "\n\nOriginal body — 原始正文。\n\n")
+					}
+					raw := source.String()
+					var scroll ui.ScrollState
+					tr := ui.NewTester(func(c *ui.Context) {
+						c.SetTheme(resolveWorkbenchTheme(dark).Theme)
+						c.DisableAnimations()
+						ui.Scroll(c).Fill().TrackScroll(&scroll).Children(func() { markdownReader(c, raw, markdownReaderOptions{CopyLabel: "Copy original"}) })
+					}, width, map[int]int{720: 640, 1040: 720}[width])
+					tr.SetLocale(locale)
+					tr.Frame()
+					capture := func(phase string) {
+						if dir := os.Getenv("NAGI_READER_PREVIEW_DIR"); dir != "" {
+							if err := os.MkdirAll(dir, 0755); err != nil {
+								t.Fatal(err)
+							}
+							writePreviewPNG(t, filepath.Join(dir, fmt.Sprintf("reader-%s-dark%t-%d-%s.png", locale, dark, width, phase)), tr.Image())
+							heading, _ := tr.Find("STRASSE FFI E\u0301 MIXED ORIGINAL LINK")
+							link, _ := tr.Find("ORIGINAL LINK")
+							copy, _ := tr.Find("Copy original")
+							bounds, err := json.MarshalIndent(map[string]any{"heading": heading, "link": link, "copy": copy, "scrollY": scroll.Y}, "", "  ")
+							if err != nil {
+								t.Fatal(err)
+							}
+							if err := os.WriteFile(filepath.Join(dir, fmt.Sprintf("reader-%s-dark%t-%d-%s.json", locale, dark, width, phase)), bounds, 0644); err != nil {
+								t.Fatal(err)
+							}
+						}
+					}
+					capture("initial")
+					if err := tr.Click("Copy original"); err != nil {
+						t.Fatal(err)
+					}
+					if tr.Clipboard() != raw {
+						t.Fatal("render fixture full-source copy changed text")
+					}
+					for i := 0; i < 10; i++ {
+						r, ok := tr.Find("STRASSE FFI E\u0301 MIXED ORIGINAL LINK")
+						if ok && r.H >= 20 && r.Y >= 0 && r.Y+r.H <= float32(map[int]int{720: 640, 1040: 720}[width]) {
+							break
+						}
+						tr.Scroll(float32(width/2), 320, 0, 300)
+						tr.Frame()
+					}
+					r, ok := tr.Find("STRASSE FFI E\u0301 MIXED ORIGINAL LINK")
+					if !ok || r.H < 20 || r.Y < 0 || r.Y+r.H > float32(map[int]int{720: 640, 1040: 720}[width]) {
+						t.Fatal("long heading document did not reveal H6 through real scrolling")
+					}
+					link, ok := tr.Find("ORIGINAL LINK")
+					if !ok || link.H < 20 || link.Y < 0 || link.Y+link.H > float32(map[int]int{720: 640, 1040: 720}[width]) {
+						t.Fatal("H6 link target is clipped")
+					}
+					if err := tr.Click("ORIGINAL LINK"); err != nil {
+						t.Fatal(err)
+					}
+					if got := tr.OpenedURLs(); len(got) != 1 || got[0] != "https://example.com/reader" {
+						t.Fatalf("render link destination=%q", got)
+					}
+					capture("scrolled-h6")
+				})
+			}
+		}
+	}
+}
+
+func TestMarkdownReaderSourceCopyFaceAndTarget(t *testing.T) {
+	for _, dark := range []bool{false, true} {
+		calls := 0
+		source := "Original Straße — 原文。"
+		tr := ui.NewTester(func(c *ui.Context) {
+			c.SetTheme(resolveWorkbenchTheme(dark).Theme)
+			markdownReader(c, source, markdownReaderOptions{CopyLabel: "Copy original", CopyText: func(got string) error {
+				calls++
+				if got != source {
+					t.Fatalf("copy=%q", got)
+				}
+				return nil
+			}})
+		}, 720, 640)
+		button, ok := tr.Find("Copy original")
+		if !ok || button.W != 32 || button.H != 32 {
+			t.Fatalf("copy true target=%+v found=%t", button, ok)
+		}
+		before := tr.Image()
+		tr.Move(button.X+1, button.Y+button.H/2)
+		tr.Frame()
+		after := tr.Image()
+		changed := image.Rectangle{Min: image.Pt(720, 640), Max: image.Pt(0, 0)}
+		for y := int(button.Y); y < int(button.Y+button.H); y++ {
+			for x := int(button.X); x < int(button.X+button.W); x++ {
+				if before.RGBAAt(x, y) != after.RGBAAt(x, y) {
+					changed.Min.X = min(changed.Min.X, x)
+					changed.Min.Y = min(changed.Min.Y, y)
+					changed.Max.X = max(changed.Max.X, x+1)
+					changed.Max.Y = max(changed.Max.Y, y+1)
+				}
+			}
+		}
+		if changed.Dx() != 24 || changed.Dy() != 24 || changed.Min.X != int(button.X)+4 || changed.Min.Y != int(button.Y)+4 {
+			t.Fatalf("actual copy face=%v, target=%+v", changed, button)
+		}
+		tr.ClickAt(button.X+1, button.Y+button.H/2)
+		if calls != 1 {
+			t.Fatalf("transparent-edge copy calls=%d", calls)
+		}
+		tr.ClickAt(1, 100)
+		tr.Move(1, 100)
+		tr.Frame()
+		for i := 0; i < 10 && !tr.Focused("Copy original"); i++ {
+			tr.Key(0, ui.KeyTab)
+			tr.Frame()
+		}
+		if !tr.Focused("Copy original") {
+			t.Fatal("copy not keyboard reachable")
+		}
+		tr.Key(0, ui.KeyEnter)
+		if calls != 2 {
+			t.Fatalf("keyboard copy calls=%d", calls)
+		}
 	}
 }
