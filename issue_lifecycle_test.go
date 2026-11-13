@@ -59,6 +59,7 @@ func TestIssueCompletedExecutionDoesNotCompleteIssue(t *testing.T) {
 	a, _, issue := lifecycleTestIssue()
 	issue.Status = issueStatusInProgress
 	issue.Executions = []*issueExecution{{ID: "e1", SessionID: "work", TaskID: "t1", Status: issueExecutionCompleted}}
+	recoveryTestStore(t, a)
 	if issue.Status != issueStatusInProgress {
 		t.Fatal("fixture status")
 	}
@@ -68,6 +69,14 @@ func TestIssueCompletedExecutionDoesNotCompleteIssue(t *testing.T) {
 	if !strings.Contains(issueEvidenceText(locales.In("en"), issue), "user checked") {
 		t.Fatalf("completion evidence = %q", issueEvidenceText(locales.In("en"), issue))
 	}
+	reloaded, err := openContactStore(a.storePath, a.workDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(reloaded.state.Issues) != 1 || reloaded.state.Issues[0].ID != issue.ID ||
+		reloaded.state.Issues[0].Status != issueStatusCompleted || reloaded.state.Issues[0].Evidence != issue.Evidence {
+		t.Fatalf("saved completion = %+v", reloaded.state.Issues)
+	}
 }
 
 func TestIssueStopAndCancelAreDifferentActions(t *testing.T) {
@@ -75,6 +84,7 @@ func TestIssueStopAndCancelAreDifferentActions(t *testing.T) {
 	issue.Status = issueStatusInProgress
 	issue.Work.ActiveTaskID = "t1"
 	issue.Work.SendState = sendAccepted
+	recoveryTestStore(t, a)
 	if a.cancelIssueProduct(issue.ID) {
 		t.Fatal("cancel product succeeded without a Runtime for active work")
 	}
@@ -86,8 +96,22 @@ func TestIssueStopAndCancelAreDifferentActions(t *testing.T) {
 	if issue.Work.ActiveTaskID != "" {
 		t.Fatal("cancel invented an active work state")
 	}
+	reloaded, err := openContactStore(a.storePath, a.workDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(reloaded.state.Issues) != 1 || reloaded.state.Issues[0].ID != issue.ID || reloaded.state.Issues[0].Status != issueStatusCanceled {
+		t.Fatalf("saved cancellation = %+v", reloaded.state.Issues)
+	}
 	if !a.reopenIssue(issue.ID) || issue.Status != issueStatusNotStarted {
 		t.Fatalf("reopen canceled issue = %+v", issue)
+	}
+	reloaded, err = openContactStore(a.storePath, a.workDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(reloaded.state.Issues) != 1 || reloaded.state.Issues[0].ID != issue.ID || reloaded.state.Issues[0].Status != issueStatusNotStarted {
+		t.Fatalf("saved reopened issue = %+v", reloaded.state.Issues)
 	}
 }
 
@@ -98,6 +122,7 @@ func TestIssueArchiveKeepsActiveWorkAndRestore(t *testing.T) {
 	issue.Work.ActiveTaskID = "t1"
 	issue.Work.SendState = sendAccepted
 	issue.Executions = []*issueExecution{{ID: "e1", SessionID: "work-i1", TaskID: "t1", Status: issueExecutionRunning}}
+	recoveryTestStore(t, a)
 	if !a.archiveIssue(issue.ID) {
 		t.Fatal("archive failed")
 	}
@@ -105,11 +130,30 @@ func TestIssueArchiveKeepsActiveWorkAndRestore(t *testing.T) {
 		issue.WorkSessionID != "work-i1" {
 		t.Fatalf("archive lost running identity: %+v", issue)
 	}
+	reloaded, err := openContactStore(a.storePath, a.workDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(reloaded.state.Issues) != 1 || reloaded.state.Issues[0].ID != issue.ID ||
+		!reloaded.state.Issues[0].Archived || reloaded.state.Issues[0].Status != issueStatusInProgress ||
+		reloaded.state.Issues[0].WorkSessionID != "work-i1" || len(reloaded.state.Issues[0].Executions) != 1 ||
+		reloaded.state.Issues[0].Executions[0].TaskID != "t1" {
+		t.Fatalf("saved archive lost running identity: %+v", reloaded.state.Issues)
+	}
 	if !a.restoreIssue(issue.ID) || issue.Archived {
 		t.Fatal("restore failed")
 	}
 	if issue.Work.ActiveTaskID != "t1" || issue.WorkSessionID != "work-i1" {
 		t.Fatal("restore lost running identity")
+	}
+	reloaded, err = openContactStore(a.storePath, a.workDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(reloaded.state.Issues) != 1 || reloaded.state.Issues[0].ID != issue.ID ||
+		reloaded.state.Issues[0].Archived || reloaded.state.Issues[0].WorkSessionID != "work-i1" ||
+		len(reloaded.state.Issues[0].Executions) != 1 || reloaded.state.Issues[0].Executions[0].TaskID != "t1" {
+		t.Fatalf("saved restore lost running identity: %+v", reloaded.state.Issues)
 	}
 }
 
@@ -120,6 +164,7 @@ func TestIssueRequirementEditOnlyInvalidatesChangedText(t *testing.T) {
 	second := issue.Requirements[1]
 	first.State, first.Evidence = requirementSatisfied, "old proof"
 	second.State, second.Evidence = requirementUnverified, ""
+	recoveryTestStore(t, a)
 	if !a.editIssue(issue.ID, issue.Goal, "support SMS\nshow better errors") {
 		t.Fatal("edit failed")
 	}
@@ -128,6 +173,18 @@ func TestIssueRequirementEditOnlyInvalidatesChangedText(t *testing.T) {
 	}
 	if issue.Requirements[1] == second || issue.Requirements[1].State != requirementUnverified || issue.Requirements[1].Evidence != "" {
 		t.Fatalf("changed requirement kept old evidence: %+v", issue.Requirements[1])
+	}
+	reloaded, err := openContactStore(a.storePath, a.workDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(reloaded.state.Issues) != 1 || reloaded.state.Issues[0].ID != issue.ID || len(reloaded.state.Issues[0].RequirementItems) != 2 {
+		t.Fatalf("saved edited issue = %+v", reloaded.state.Issues)
+	}
+	stored := reloaded.state.Issues[0].RequirementItems
+	if stored[0].ID != first.ID || stored[0].State != requirementSatisfied || stored[0].Evidence != "old proof" ||
+		stored[1].Text != "show better errors" || stored[1].State != requirementUnverified || stored[1].Evidence != "" {
+		t.Fatalf("saved requirement evidence = %+v", stored)
 	}
 }
 
@@ -192,12 +249,25 @@ func TestGoalChangeInvalidatesSameTextRequirementEvidence(t *testing.T) {
 	a, _, issue := lifecycleTestIssue()
 	requirement := issue.Requirements[0]
 	requirement.State, requirement.Evidence = requirementSatisfied, "proved against old goal"
+	recoveryTestStore(t, a)
 	if !a.editIssue(issue.ID, "new goal", issueRequirementsText(issue)) {
 		t.Fatal("goal edit failed")
 	}
 	if issue.Requirements[0] != requirement || requirement.State != requirementUnverified ||
 		!strings.HasPrefix(requirement.Evidence, "Previous evidence (goal changed): ") {
 		t.Fatalf("goal edit kept satisfied evidence as current: %+v", requirement)
+	}
+	reloaded, err := openContactStore(a.storePath, a.workDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(reloaded.state.Issues) != 1 || reloaded.state.Issues[0].ID != issue.ID ||
+		reloaded.state.Issues[0].Goal != "new goal" || len(reloaded.state.Issues[0].RequirementItems) != 2 {
+		t.Fatalf("saved goal edit = %+v", reloaded.state.Issues)
+	}
+	stored := reloaded.state.Issues[0].RequirementItems[0]
+	if stored.ID != requirement.ID || stored.State != requirementUnverified || stored.Evidence != requirement.Evidence {
+		t.Fatalf("saved goal-change evidence = %+v", stored)
 	}
 }
 

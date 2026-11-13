@@ -35,6 +35,14 @@ type connectionConfig struct {
 	MaxActiveTasks   int    `json:"max_active_tasks"`
 }
 
+func defaultConnectionConfig(workDir string) connectionConfig {
+	return connectionConfig{
+		Version: 1, API: connectionAPIChatCompletions,
+		ContextTokens: 131072, OutputTokens: 8192,
+		WorkingDirectory: workDir, MaxActiveTasks: 2,
+	}
+}
+
 type connectionLaunch struct {
 	Dir            string
 	Env            []string

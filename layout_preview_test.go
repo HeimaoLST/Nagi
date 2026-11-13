@@ -145,3 +145,46 @@ func TestPreviewHeaderGrouping(t *testing.T) {
 		a.runtimeStatus = runtimeStateReady
 	})
 }
+
+func TestPreviewUnifiedTitleBar(t *testing.T) {
+	dir := os.Getenv("SAKI_PREVIEW_DIR")
+	if dir == "" {
+		t.Skip("set SAKI_PREVIEW_DIR for headless titlebar previews")
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, dark := range []bool{false, true} {
+		theme := "light"
+		if dark {
+			theme = "dark"
+		}
+		for _, size := range []struct{ width, height int }{{720, 640}, {960, 640}, {1040, 720}, {1180, 720}} {
+			for _, scene := range []string{"chat", "work", "history", "settings", "reading"} {
+				a := testApp(t)
+				a.windowWidth = size.width
+				a.workspaceOpen = false
+				a.selectedContact().Draft = "Keep the draft while navigating."
+				switch scene {
+				case "work":
+					a.openDetail(detailWork)
+				case "history":
+					a.openDetail(detailHistory)
+				case "settings":
+					a.openSettingsTab(settingsTabAppearance, settingsSourceRail)
+				case "reading":
+					a.openDetail(detailHistory)
+					a.contactHistoryFull = &contactHistoryFull{
+						SessionID: "saved-preview", EntryID: "entry-preview", From: "contact", Date: "Nov 10",
+						Text: "# Saved message\n\nLong history stays in the reading page, with a return to its original History entry.\n\n```go\nfmt.Println(\"Nagi\")\n```",
+					}
+				}
+				tr := ui.NewTester(a.view, size.width, size.height)
+				tr.SetDark(dark)
+				tr.SetTitleBar(ui.TitleBar{Height: 38, Left: 80})
+				writePreviewPNG(t, filepath.Join(dir,
+					fmt.Sprintf("headless-titlebar-%s-%s-%dx%d.png", theme, scene, size.width, size.height)), tr.Image())
+			}
+		}
+	}
+}

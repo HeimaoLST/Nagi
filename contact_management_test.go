@@ -2,13 +2,283 @@ package main
 
 import (
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
 )
+
+func TestUnconfiguredContactWorkspacesFollowFirstConnection(t *testing.T) {
+	launchFolder, connectionFolder, contactFolder := t.TempDir(), t.TempDir(), t.TempDir()
+	isolateConnectionApp(t, launchFolder, filepath.Join(launchFolder, "unused-runtime"))
+	t.Setenv("SAKI_TEST_ISSUE_TOOL_HELPER", "")
+	a, err := newRuntimeApp()
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstID := a.selectedID()
+	tr := ui.NewTester(a.view, 1040, 720)
+	tr.Frame()
+	if err := tr.Click("← Back to workbench"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	focusComposer(t, tr, "Composer for Saki")
+	tr.Type("Keep the launch-folder draft")
+	tr.Frame()
+	if err := tr.Click("Add contact"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	second := a.selectedContact()
+	secondID := second.ID
+	second.Draft = "Keep the added-contact draft"
+	a.draftChanged(second)
+	draft := contactProfileDraft(second)
+	draft.Name = "Inherited folder contact"
+	if !a.saveContactProfileDraft(draft, false) {
+		t.Fatal("local profile Save failed before connection")
+	}
+	a.addRuntimeContact()
+	explicitID := a.selectedID()
+	if !a.saveContactProfileDraft(profileDraft{Name: "Explicit folder contact", Workspace: contactFolder}, false) {
+		t.Fatal("explicit contact folder Save failed before connection")
+	}
+	beforeConnection, err := newRuntimeApp()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if beforeConnection.effectiveContactWorkspace(beforeConnection.contactByID(firstID)) != launchFolder {
+		t.Fatal("local display lost its launch-folder fallback")
+	}
+	var requests atomic.Int32
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer provider.Close()
+	config := testConnectionConfig(t)
+	config.WorkingDirectory = connectionFolder
+	config.Endpoint = provider.URL + "/v1"
+	pump := newUIPump(t, beforeConnection)
+	defer pump.close()
+	pump.do(func() { beforeConnection.saveConnection(config) })
+	pump.wait(func() bool { return !beforeConnection.connectionSaveInFlight })
+	var connectionError string
+	pump.do(func() { connectionError = beforeConnection.connectionForm.Error })
+	if connectionError != "" {
+		t.Fatal(connectionError)
+	}
+	reopened, err := newRuntimeApp()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(reopened.contacts) != 3 || reopened.selectedID() != explicitID || reopened.contactByID(firstID) == nil || reopened.contactByID(secondID) == nil || reopened.contactByID(explicitID) == nil {
+		t.Fatal("connection Save/reopen changed local IDs or selection")
+	}
+	if reopened.contactByID(firstID).Draft != "Keep the launch-folder draft" || reopened.contactByID(secondID).Draft != "Keep the added-contact draft" || reopened.contactByID(secondID).Name != "Inherited folder contact" {
+		t.Fatal("connection Save/reopen changed local text")
+	}
+	for _, id := range []string{firstID, secondID} {
+		ct := reopened.contactByID(id)
+		if got := reopened.effectiveContactWorkspace(ct); ct.Workspace != "" || got != connectionFolder {
+			t.Errorf("unconfirmed contact %q pinned launch folder: stored=%q effective=%q; want inherited %q", id, ct.Workspace, got, connectionFolder)
+		}
+	}
+	if ct := reopened.contactByID(explicitID); ct.Workspace != contactFolder || reopened.effectiveContactWorkspace(ct) != contactFolder {
+		t.Fatal("explicit contact folder C was replaced by connection folder B")
+	}
+	for _, app := range []*appModel{a, beforeConnection, reopened} {
+		if app.rt != nil || app.runtimeHandshake || app.runtimeHelperChecked || app.runtimeBinary != "" {
+			t.Fatal("local workspace selection started Runtime")
+		}
+	}
+	if requests.Load() != 0 {
+		t.Fatal("local workspace selection called the provider")
+	}
+}
+
+func TestContactWorkspaceDefaultsRespectConnectionSource(t *testing.T) {
+	for _, source := range []string{"managed", "legacy", "invalid", "demo"} {
+		t.Run(source, func(t *testing.T) {
+			launchFolder := t.TempDir()
+			isolateConnectionApp(t, launchFolder, filepath.Join(launchFolder, "unused-runtime"))
+			t.Setenv("SAKI_TEST_ISSUE_TOOL_HELPER", "")
+			want := launchFolder
+			var a *appModel
+			if source == "demo" {
+				a = &appModel{demo: true, workDir: launchFolder, contacts: []*contact{{ID: "demo-contact", Name: "Saki"}}, scrollTo: -1}
+			} else {
+				if source == "legacy" || source == "invalid" {
+					t.Setenv("API_KEY", "offline-fixture")
+				}
+				if source == "managed" || source == "invalid" {
+					config := testConnectionConfig(t)
+					if err := saveConnectionConfig(connectionConfigPath(guiStorePath()), config); err != nil {
+						t.Fatal(err)
+					}
+					want = config.WorkingDirectory
+					if source == "invalid" {
+						if err := os.Remove(config.WorkingDirectory); err != nil {
+							t.Fatal(err)
+						}
+						want = ""
+					}
+				}
+				var err error
+				a, err = newRuntimeApp()
+				if err != nil {
+					t.Fatal(err)
+				}
+				if a.selectedContact().Workspace != want {
+					t.Errorf("%s initial contact workspace=%q, want %q", source, a.selectedContact().Workspace, want)
+				}
+			}
+			a.addRuntimeContact()
+			if got := a.selectedContact().Workspace; got != want {
+				t.Errorf("%s added contact workspace=%q, want %q", source, got, want)
+			}
+			if a.rt != nil || a.runtimeHelperChecked {
+				t.Fatal("contact defaults started Runtime")
+			}
+		})
+	}
+}
+
+func TestLocalStateBeforeConnectionCreateSaveAndRestart(t *testing.T) {
+	root := t.TempDir()
+	isolateConnectionApp(t, root, filepath.Join(root, "unused-runtime"))
+	t.Setenv("SAKI_TEST_ISSUE_TOOL_HELPER", "")
+	a, err := newRuntimeApp()
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstID := a.selectedContact().ID
+	tr := ui.NewTester(a.view, 1040, 720)
+	tr.Frame()
+	if err := tr.Click("← Back to workbench"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	focusComposer(t, tr, "Composer for Saki")
+	tr.Type("Keep the first local draft")
+	tr.Frame()
+	if err := tr.Click("Add contact"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	second := a.selectedContact()
+	secondID := second.ID
+	if err := tr.Click("Contact profile"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if err := tr.Click("Edit full profile"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if err := tr.Click("Contact name"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Key(ui.Cmd, ui.KeyA)
+	tr.Type("Local contact")
+	if err := clickSettingsAction(tr, "Save changes"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if second.Name != "Local contact" || a.settingsContactEditor().Error != "" {
+		t.Fatalf("pre-connection profile save failed: name=%q editor=%+v", second.Name, a.settingsContactEditor())
+	}
+	a.settingsContactEditor().Draft.Name = "Intentionally unsaved editor"
+	second.Draft = "Keep the second local draft"
+	a.draftChanged(second)
+	restarted, err := newRuntimeApp()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(restarted.contacts) != 2 || restarted.selectedID() != secondID || restarted.contactByID(firstID) == nil || restarted.contactByID(firstID).Draft != "Keep the first local draft" || restarted.selectedContact().Name != "Local contact" || restarted.selectedContact().Draft != second.Draft {
+		t.Fatalf("fresh app lost local IDs/text/selection or saved the editor draft: %+v", restarted.contacts)
+	}
+	var requests atomic.Int32
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer provider.Close()
+	config := testConnectionConfig(t)
+	config.Endpoint = provider.URL + "/v1"
+	pump := newUIPump(t, restarted)
+	defer pump.close()
+	pump.do(func() { restarted.saveConnection(config) })
+	pump.wait(func() bool { return !restarted.connectionSaveInFlight })
+	var connectionError string
+	var stateRetained bool
+	pump.do(func() {
+		connectionError = restarted.connectionForm.Error
+		first := restarted.contactByID(firstID)
+		stateRetained = first != nil && restarted.selectedID() == secondID && first.Draft == "Keep the first local draft" && restarted.selectedContact().Draft == second.Draft
+	})
+	if connectionError != "" || !stateRetained {
+		t.Fatalf("first connection Save replaced local state: error=%q", connectionError)
+	}
+	afterConnection, err := newRuntimeApp()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if afterConnection.selectedID() != secondID || afterConnection.contactByID(firstID).Draft != "Keep the first local draft" || afterConnection.selectedContact().Name != "Local contact" {
+		t.Fatal("connection Save/reopen lost local contact state")
+	}
+	for _, app := range []*appModel{a, restarted, afterConnection} {
+		if app.rt != nil || app.runtimeHandshake || app.runtimeHelperChecked || app.runtimeBinary != "" {
+			t.Fatal("local exploration or connection Save started Runtime")
+		}
+	}
+	if requests.Load() != 0 {
+		t.Fatal("local exploration or connection Save called the provider")
+	}
+}
+
+func TestLocalStateBeforeConnectionExplicitProfileSave(t *testing.T) {
+	root := t.TempDir()
+	isolateConnectionApp(t, root, "")
+	t.Setenv("SAKI_TEST_ISSUE_TOOL_HELPER", "")
+	a, err := newRuntimeApp()
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := a.selectedID()
+	a.openSettingsTab(settingsTabContact, settingsSourceRail)
+	tr := ui.NewTester(a.view, 1040, 720)
+	tr.Frame()
+	if err := tr.Click("Contact name"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Key(ui.Cmd, ui.KeyA)
+	tr.Type("Saved without appearance")
+	tr.Frame()
+	if _, err := os.Stat(a.storePath); !os.IsNotExist(err) {
+		t.Fatal("unsaved profile-editor input unexpectedly wrote a store")
+	}
+	if err := clickSettingsAction(tr, "Save changes"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if a.settingsContactEditor().Error != "" {
+		t.Fatalf("explicit local profile Save was refused: %q", a.settingsContactEditor().Error)
+	}
+	restarted, err := newRuntimeApp()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if restarted.selectedID() != id || restarted.selectedContact().Name != "Saved without appearance" || a.appearanceMode != "" {
+		t.Fatal("explicit profile Save lost identity/name or required an appearance change")
+	}
+}
 
 func TestContactManagementSaveUpdatesFutureProfileWithoutReplacingSession(t *testing.T) {
 	a, bound, _ := testRuntimeModel(t)

@@ -176,24 +176,29 @@ type appModel struct {
 	composerFocusModel   bool
 	composerFocusContext bool
 
-	settingsOpen        bool
-	settingsTab         string
-	settingsReturnFocus string
-	settingsReturnLink  markdownLinkTarget
-	markdownLinkFocus   markdownLinkTarget
-	linkReturnTarget    markdownLinkTarget
-	linkReturnSeen      bool
-	settingsContactID   string
-	settingsProfiles    map[string]*contactProfileEditor
-	settingsScroll      ui.ScrollState
-	settingsFocusBack   bool
-	settingsFocusTab    string
-	sourcesScroll       ui.ScrollState
-	modelScroll         ui.ScrollState
-	taskContextScroll   ui.ScrollState
-	issueResultScroll   ui.ScrollState
-	historyScroll       ui.ScrollState
-	historyFullScroll   ui.ScrollState
+	settingsOpen           bool
+	settingsTab            string
+	settingsReturnFocus    string
+	settingsReturnLink     markdownLinkTarget
+	markdownLinkFocus      markdownLinkTarget
+	linkReturnTarget       markdownLinkTarget
+	linkReturnSeen         bool
+	settingsContactID      string
+	settingsProfiles       map[string]*contactProfileEditor
+	settingsScroll         ui.ScrollState
+	settingsFocusBack      bool
+	settingsFocusTab       string
+	contextFileGeneration  uint64
+	contextFilePickers     int
+	chooseContextFile      func(mygo.OpenDialogOptions) ([]string, error)
+	folderChoiceGeneration uint64
+	chooseFolder           func(mygo.OpenDialogOptions) ([]string, error)
+	sourcesScroll          ui.ScrollState
+	modelScroll            ui.ScrollState
+	taskContextScroll      ui.ScrollState
+	issueResultScroll      ui.ScrollState
+	historyScroll          ui.ScrollState
+	historyFullScroll      ui.ScrollState
 
 	settingsReturnModel       *modelSelection
 	settingsReturnModelTarget *modelSelectionTarget
@@ -215,6 +220,13 @@ type appModel struct {
 	submissionInFlight        int
 	metadataInFlight          int
 
+	appearanceThemeIDs appearanceThemeIDs
+	appearanceThemes   customThemeCatalog
+	themeImport        *appearanceThemeImport
+	dataRecovery       *dataRecoveryState
+	chooseRecoveryFile func(mygo.OpenDialogOptions) ([]string, error)
+	revealRecoveryFile func(string) error
+	chooseThemeFile    func(mygo.OpenDialogOptions) ([]string, error)
 	appearanceMode     string
 	languageMode       string
 	languageModeLoaded bool
@@ -499,6 +511,7 @@ func (a *appModel) selectContact(i int) {
 	if !a.leaveIssueFormForSwitch() {
 		return
 	}
+	a.contextFileGeneration++
 	a.rememberHistoryView(a.selectedContact().ID)
 	a.contacts[i].Unread = 0
 	a.selected = i
@@ -636,6 +649,7 @@ func (a *appModel) closeAux() {
 			a.focusIssueModel = true
 		}
 	case "task-context":
+		a.contextFileGeneration++
 		if wasContextIssue != "" {
 			a.focusIssueContext = true
 		}

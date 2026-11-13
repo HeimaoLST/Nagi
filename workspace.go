@@ -611,7 +611,17 @@ func (a *appModel) issueDetailView(c *ui.Context, t *ui.Theme, ct *contact, issu
 			}
 			if explicit {
 				a.issueResultContext(c, t, issue, work)
-				a.workCard(c, t, work, active, true)
+				snapshot, current := a.issueWorkDisclosureSnapshot(ct, issue, work)
+				state, detail := work.State, work.Detail
+				a.workCard(c, t, work, active, true, func(expanding bool, toggle func()) {
+					if !a.issueWorkViewCurrent(ct, issue, work, state, detail) {
+						return
+					}
+					toggle()
+					if expanding && current() {
+						a.confirmIssueExecutionSeen(snapshot.contact, snapshot.issue, snapshot.execution)
+					}
+				})
 				a.workActivity(c, t, work)
 				ui.Divider(c)
 			}
@@ -889,6 +899,20 @@ func (a *appModel) issueLifecycleActions(c *ui.Context, t *ui.Theme, issue *prod
 	}
 }
 
+func (a *appModel) issueExecutionCheckHint(msgs locales.Messages, ct *contact, issue *productIssue, execution *issueExecution) string {
+	if a.runtimeStatus != runtimeStateReady || a.rt == nil || a.shutdownStarted {
+		return msgs.SendDisconnectedState()
+	}
+	if ct != a.selectedContact() || issue == nil || ct.issueByID(issue.ID) != issue || execution == nil || execution.SessionID == "" || execution.TaskID == "" {
+		return msgs.RecoveryTaskAssociationMissing()
+	}
+	owner, current := ct.executionByID(execution.ID)
+	if owner != issue || current != execution {
+		return msgs.RecoveryTaskAssociationMissing()
+	}
+	return ""
+}
+
 func (a *appModel) issueCard(c *ui.Context, t *ui.Theme, ct *contact, issue *productIssue) {
 	msgs := locales.In(c.Locale())
 	editable := !issue.Archived && issue.Status != issueStatusCompleted && issue.Status != issueStatusCanceled
@@ -918,12 +942,21 @@ func (a *appModel) issueCard(c *ui.Context, t *ui.Theme, ct *contact, issue *pro
 			})
 		}
 		primaryKind := a.issuePrimaryAction(c, t, ct, issue)
-		if issue.Work.SendError != "" {
+		if issue.Work.SendError != "" || issue.Work.SendState == sendUnknown {
 			text := issue.Work.SendError
 			if issue.Work.SendErrorKind != "" {
-				text = contactNoticeText(locales.In(c.Locale()), issue.Work.SendErrorKind, issue.Work.SendErrorDetail)
+				text = contactNoticeText(locales.In(c.Locale()), issue.Work.SendErrorKind, "")
 			}
-			ui.Text(c, text).FontSize(14).LineHeight(1.5).TextColor(t.Warning)
+			if issue.Work.SendState == sendUnknown {
+				text = a.issueExecutionCheckHint(msgs, ct, issue, latestIssueExecution(issue))
+				if text == "" {
+					text = msgs.SupplementUnknown()
+				}
+			}
+			if issue.Work.SendErrorKind == "" && issue.Work.SendState != sendUnknown {
+				text = msgs.RecoveryRequestFailed()
+			}
+			a.recoveryNotice(c, t, "issue-send:"+ct.ID+":"+issue.ID, text, issue.Work.SendError, true)
 		}
 		a.issueLatestResult(c, t, ct, issue, primaryKind != "read")
 		if latest := latestIssueExecution(issue); latest != nil && latest.Status == issueExecutionCompleted &&
@@ -1027,7 +1060,16 @@ func (a *appModel) issueLatestResult(c *ui.Context, t *ui.Theme, ct *contact, is
 				reason = msgs.IssueExecutionUnknownDetail()
 			}
 		}
-		ui.Text(c, truncate(reason, 180)).FontSize(14).LineHeight(1.5).TextColor(t.Warning).MaxLines(3)
+		summary := reason
+		if execution.Status == issueExecutionFailed {
+			summary = runFailureSummary(msgs, execution.Detail)
+		}
+		if execution.Status == issueExecutionUnknown {
+			summary = msgs.IssueExecutionUnknownDetail()
+		} else if execution.Status == issueExecutionPending {
+			summary = msgs.IssuePreparedNotDispatched()
+		}
+		a.recoveryNotice(c, t, "latest:"+ct.ID+":"+execution.ID, summary, execution.Detail, true)
 	}
 	if showRead {
 		ui.Row(c).Wrap().Gap(6).AlignItems(ui.Center).Children(func() {
@@ -1141,11 +1183,28 @@ func (a *appModel) issueExecutions(c *ui.Context, t *ui.Theme, ct *contact, issu
 				a.executionTaskContextView(c, t, ct, issue, execution)
 			}
 			if execution.Detail != "" {
-				ui.Text(c, execution.Detail).FontSize(14).LineHeight(1.5).TextColor(t.Warning)
+				if execution.Status == issueExecutionFailed || execution.Status == issueExecutionUnknown || execution.Status == issueExecutionPending {
+					summary := a.issueExecutionCheckHint(msgs, ct, issue, execution)
+					if summary == "" {
+						summary = msgs.SupplementUnknown()
+					}
+					if execution.Status == issueExecutionFailed {
+						summary = runFailureSummary(msgs, execution.Detail)
+					} else if execution.Status == issueExecutionPending {
+						summary = msgs.IssuePreparedNotDispatched()
+					}
+					a.recoveryNotice(c, t, "execution:"+ct.ID+":"+execution.ID, summary, execution.Detail, true)
+				} else {
+					ui.Text(c, execution.Detail).FontSize(typeBody).LineHeight(1.5).TextColor(t.Warning)
+				}
 			}
 			if execution.Status == issueExecutionUnknown || execution.Status == issueExecutionPending {
 				ui.Row(c).Gap(6).Children(func() {
-					secondaryButton(c, locales.In(c.Locale()).IssueCheckExecution()).OnClick(func() {
+					checkHint := a.issueExecutionCheckHint(msgs, ct, issue, execution)
+					secondaryButton(c, msgs.IssueCheckExecution()).Label(msgs.IssueCheckExecution()).Disabled(checkHint != "").OnClick(func() {
+						if a.issueExecutionCheckHint(locales.In(c.Locale()), ct, issue, execution) != "" {
+							return
+						}
 						if !a.reconcileIssueExecution(issue.ID, execution.ID) {
 							a.setIssueActionNotice(execution.Detail, "", "")
 						}
@@ -1158,6 +1217,9 @@ func (a *appModel) issueExecutions(c *ui.Context, t *ui.Theme, ct *contact, issu
 						})
 					}
 				})
+				if hint := a.issueExecutionCheckHint(msgs, ct, issue, execution); hint != "" {
+					ui.Text(c, hint).FontSize(typeMeta).LineHeight(1.5).TextColor(t.TextMuted)
+				}
 			}
 			ui.Column(c).AlignItems(ui.Start).Gap(6).Children(func() {
 				resultButton := secondaryButton(c, msgs.IssueOpenResultRun(strconv.Itoa(index+1))).OnClick(func() { a.openIssueResult(issue.ID, execution.ID) })
@@ -1288,7 +1350,28 @@ func (a *appModel) workEmptyState(c *ui.Context, t *ui.Theme, ct *contact) {
 	ui.Text(c, locales.In(c.Locale()).WorkNoCurrentHint(ct.Name)).FontSize(14).LineHeight(1.5).TextColor(t.TextMuted)
 }
 
-func (a *appModel) workCard(c *ui.Context, t *ui.Theme, w *workItem, isCurrent, issueWork bool) {
+func (a *appModel) issueWorkDisclosureSnapshot(ct *contact, issue *productIssue, work *workItem) (issueExecutionDisclosure, func() bool) {
+	snapshot := captureIssueExecutionDisclosure(ct, issue, executionForTask(issue, work.TaskID))
+	state, detail := work.State, work.Detail
+	return snapshot, func() bool {
+		return a.issueExecutionDisclosureCurrent(snapshot) && a.issueWorkViewCurrent(ct, issue, work, state, detail) &&
+			issueExecutionStatusFromWork(state) == snapshot.status &&
+			strings.TrimSpace(detail) != "" && strings.TrimSpace(detail) == strings.TrimSpace(snapshot.detail)
+	}
+}
+
+func (a *appModel) issueWorkViewCurrent(ct *contact, issue *productIssue, work *workItem, state workState, detail string) bool {
+	if a.shutdownStarted || a.selectedContact() != ct || a.contactByID(ct.ID) != ct || ct.issueByID(issue.ID) != issue ||
+		issue.ContactID != ct.ID || !a.detailIs(detailWork) || a.settingsOpen || a.mainPageActive() || a.aux != "" {
+		return false
+	}
+	nav := ct.issueNavigation()
+	return nav.DetailID == issue.ID && !nav.ShowConversationWork && ct.SelectedIssueID == issue.ID &&
+		ct.SelectedWorkTaskID == work.TaskID && ct.issueWork(issue) == work && workFor(ct, work.TaskID) == work &&
+		work.State == state && work.Detail == detail
+}
+
+func (a *appModel) workCard(c *ui.Context, t *ui.Theme, w *workItem, isCurrent, issueWork bool, disclosure ...func(bool, func())) {
 	msgs := locales.In(c.Locale())
 	ui.Column(c).Padding(8).Radius(8).Background(a.workTheme.WorkSurface).Border(0.5, t.Border).Gap(4).Children(func() {
 		ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
@@ -1331,7 +1414,11 @@ func (a *appModel) workCard(c *ui.Context, t *ui.Theme, w *workItem, isCurrent, 
 			ui.Text(c, action).FontSize(14).LineHeight(1.5).TextColor(a.workTheme.WorkMuted)
 		}
 		if w.Detail != "" {
-			ui.Text(c, w.Detail).FontSize(14).LineHeight(1.5).TextColor(a.workTheme.WorkAttention)
+			if w.State == workFailed || formattedRunFailure(w.Detail) {
+				a.recoveryNotice(c, t, "work:"+a.selectedContact().ID+":"+w.TaskID, runFailureSummary(msgs, w.Detail), w.Detail, true, disclosure...)
+			} else {
+				ui.Text(c, w.Detail).FontSize(typeBody).LineHeight(1.5).TextColor(a.workTheme.WorkAttention)
+			}
 		}
 	})
 }

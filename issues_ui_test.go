@@ -260,6 +260,7 @@ func TestIssueConfirmNotDispatchedTargetsSelectedExecution(t *testing.T) {
 	issue.Executions = []*issueExecution{target, other}
 	ct.Issues = []*productIssue{issue}
 	openIssueDetailForTest(a, ct, issue.ID)
+	recoveryTestStore(t, a)
 	a.windowWidth = 1040
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
@@ -271,6 +272,18 @@ func TestIssueConfirmNotDispatchedTargetsSelectedExecution(t *testing.T) {
 	}
 	if other.Status != issueExecutionCompleted || other.TaskID != "task-other" {
 		t.Fatalf("confirm changed another execution: %+v", other)
+	}
+	reloaded, err := openContactStore(a.storePath, a.workDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(reloaded.state.Issues) != 1 || reloaded.state.Issues[0].ID != issue.ID || len(reloaded.state.Issues[0].Executions) != 2 {
+		t.Fatalf("saved confirmation = %+v", reloaded.state.Issues)
+	}
+	stored := reloaded.state.Issues[0].Executions
+	if stored[0].ID != target.ID || stored[0].Status != issueExecutionNotDispatched || stored[0].TaskID != "" ||
+		stored[1].ID != other.ID || stored[1].Status != issueExecutionCompleted || stored[1].TaskID != "task-other" {
+		t.Fatalf("saved confirmation changed the wrong execution: %+v", stored)
 	}
 }
 

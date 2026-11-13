@@ -237,3 +237,33 @@ func TestPreviewContactProfile(t *testing.T) {
 		}
 	}
 }
+
+func TestContactFolderDefaultControlRetainsExplicitSaveSemantics(t *testing.T) {
+	editor := newContactProfileEditor(profileDraftForTest(t))
+	editor.HasConversation = true
+	editor.UnknownWork = true
+	original := editor.Draft.Workspace
+	saves, replacements := 0, 0
+	tr := contactProfileTester(editor, contactProfileActions{
+		Save: func(draft profileDraft) {
+			saves++
+			if draft.Workspace != "" {
+				t.Fatal("Save did not keep the inherited-folder representation")
+			}
+		}, SaveAndNew: func(profileDraft) { replacements++ },
+	}, 560, 1800)
+	tr.Frame()
+	if err := tr.Click("Use default folder"); err != nil {
+		t.Fatal(err)
+	}
+	if original == "" || editor.Draft.Workspace != "" || saves != 0 || replacements != 0 {
+		t.Fatal("default-folder action saved or started a conversation")
+	}
+	tr.Frame()
+	if err := tr.Click("Save changes"); err != nil {
+		t.Fatal(err)
+	}
+	if saves != 1 || replacements != 0 {
+		t.Fatal("saving inheritance changed the new-session/unknown-work boundary")
+	}
+}

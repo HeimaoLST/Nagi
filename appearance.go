@@ -1,8 +1,11 @@
 package main
 
 import (
-	"errors"
+	"os"
+	"path/filepath"
 	"strings"
+
+	"github.com/egoist/mygo"
 
 	"github.com/HeimaoLST/Nagi/locales"
 )
@@ -12,6 +15,172 @@ const (
 	appearanceLight  = "light"
 	appearanceDark   = "dark"
 )
+
+type appearanceThemeResolution struct {
+	Palette                  workbenchTheme
+	RequestedID, EffectiveID string
+	Unavailable              bool
+	Warnings                 []themeContrastWarning
+}
+
+func appearanceThemeDirectory(directory string) (string, error) {
+	if directory != "" {
+		return directory, nil
+	}
+	configDir, err := os.UserConfigDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(configDir, "Saki", "themes"), nil
+}
+
+func (a *appModel) reloadAppearanceThemes() {
+	directory, err := appearanceThemeDirectory(a.appearanceThemes.Directory)
+	if err != nil {
+		a.appearanceThemes = customThemeCatalog{Errors: []themeFileError{{Field: "$", Message: err.Error()}}}
+		return
+	}
+	a.appearanceThemes = loadCustomThemes(directory)
+}
+
+type appearanceThemeImport struct {
+	Busy            bool
+	Problem         *themeFileError
+	ImportedName    string
+	focus           bool
+	installInFlight bool
+}
+
+func (a *appModel) themeImportCurrent(state *appearanceThemeImport, generation uint64, owner *contact) bool {
+	return !a.shutdownStarted && a.themeImport == state && a.folderChoiceGeneration == generation && a.settingsOpen && a.settingsTab == settingsTabAppearance && a.selectedContact() == owner
+}
+
+func (a *appModel) importAppearanceTheme() {
+	if a.dataRecoveryBlocksChanges() || a.shutdownStarted || !a.settingsOpen || a.settingsTab != settingsTabAppearance || (a.themeImport != nil && a.themeImport.Busy) {
+		return
+	}
+	if a.themeImport == nil {
+		a.themeImport = &appearanceThemeImport{}
+	}
+	state := a.themeImport
+	state.Busy = true
+	generation, owner := a.folderChoiceGeneration, a.selectedContact()
+	directory := a.appearanceThemes.Directory
+	pick := a.chooseThemeFile
+	if pick == nil {
+		pick = mygo.Dialog.Open
+	}
+	msgs := locales.In(a.uiLocale)
+	opts := mygo.OpenDialogOptions{Parent: a.win, Title: msgs.ThemeImportTitle(), ButtonLabel: msgs.ThemeImportAction(), Filters: []mygo.FileFilter{{Name: msgs.ThemeImportFilter(), Extensions: []string{"json"}}}}
+	go func() {
+		home, _ := os.UserHomeDir()
+		opts.DefaultPath = home
+		if downloads := filepath.Join(home, "Downloads"); home != "" {
+			if info, err := os.Stat(downloads); err == nil && info.IsDir() {
+				opts.DefaultPath = downloads
+			}
+		}
+		paths, err := pick(opts)
+		a.updateUI(func() {
+			if a.shutdownStarted {
+				return
+			}
+			state.Busy = false
+			if !a.themeImportCurrent(state, generation, owner) {
+				return
+			}
+			state.focus = true
+			if err != nil {
+				state.Problem = &themeFileError{Field: "$", Message: err.Error()}
+				state.ImportedName = ""
+				return
+			}
+			if len(paths) == 0 {
+				return
+			}
+			state.Busy = true
+			state.focus = false
+			state.installInFlight = true
+			source := paths[0]
+			go func() {
+				target, err := appearanceThemeDirectory(directory)
+				var theme customTheme
+				var problem *themeFileError
+				if err != nil {
+					problem = &themeFileError{Field: "$", Message: err.Error()}
+				} else {
+					theme, problem = installCustomTheme(source, target)
+				}
+				var catalog customThemeCatalog
+				if problem == nil {
+					catalog = loadCustomThemes(target)
+				}
+				a.updateUI(func() {
+					state.installInFlight = false
+					if a.shutdownStarted {
+						a.finishShutdown()
+						return
+					}
+					state.Busy = false
+					if !a.themeImportCurrent(state, generation, owner) {
+						return
+					}
+					state.focus = true
+					state.Problem = problem
+					if problem != nil {
+						state.ImportedName = ""
+						return
+					}
+					a.appearanceThemes = catalog
+					state.ImportedName = theme.Name
+				})
+			}()
+		})
+	}()
+}
+
+func (a *appModel) resolveAppearanceTheme(dark bool) appearanceThemeResolution {
+	kind, builtin := appearanceLight, "paper"
+	if dark {
+		kind, builtin = appearanceDark, "night"
+	}
+	id := a.appearanceThemeIDs.forKind(kind)
+	result := appearanceThemeResolution{Palette: resolveWorkbenchTheme(dark), RequestedID: id, EffectiveID: builtin}
+	if id == builtin {
+		return result
+	}
+	for _, theme := range a.appearanceThemes.Themes {
+		if theme.ID == id && theme.Kind == kind {
+			palette := theme.Palette
+			controls := *palette.Theme
+			palette.Theme = &controls
+			result.Palette, result.EffectiveID, result.Warnings = palette, id, theme.Warnings
+			return result
+		}
+	}
+	result.Unavailable = true
+	return result
+}
+
+func (a *appModel) setAppearanceTheme(kind, id string) {
+	ids := a.appearanceThemeIDs
+	if kind == appearanceDark {
+		ids.Dark = id
+	} else {
+		ids.Light = id
+	}
+	previous := a.appearanceThemeIDs
+	a.appearanceThemeIDs = ids
+	if a.resolveAppearanceTheme(kind == appearanceDark).Unavailable {
+		a.appearanceThemeIDs = previous
+		return
+	}
+	if a.demo {
+		a.appearanceStatus = appearanceStatusPreview
+		return
+	}
+	a.saveAppearance()
+}
 
 // Appearance feedback is stored by kind, never as a rendered sentence, so a
 // language switch re-localizes feedback that is already on screen.
@@ -102,31 +271,11 @@ func (a *appModel) setAppearanceMode(mode string) {
 func (a *appModel) saveAppearance() {
 	a.appearanceStatus = appearanceStatusNone
 	a.appearanceError = ""
-	if err := a.ensureAppearanceStore(); err != nil {
-		a.appearanceError = appearanceStatusSaveFailed
-		return
-	}
 	if err := a.persist(); err != nil {
 		a.appearanceError = appearanceStatusSaveFailed
 		return
 	}
 	a.appearanceStatus = appearanceStatusSaved
-}
-
-func (a *appModel) ensureAppearanceStore() error {
-	if a.store != nil {
-		return nil
-	}
-	if !a.storeInitAllowed || strings.TrimSpace(a.storePath) == "" {
-		return errors.New("the local contact store is unavailable")
-	}
-	if len(a.contacts) == 0 {
-		return errors.New("there is no current contact to save")
-	}
-	store := &contactStore{path: a.storePath}
-	store.setIssueToolState(a.issueToolLedger, a.issueToolScopes)
-	a.store = store
-	return nil
 }
 
 func appearanceStatusLabel(msgs locales.Messages, status string) string {

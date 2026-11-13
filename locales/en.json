@@ -202,7 +202,7 @@
   "@connectionStatusConnecting": {
     "description": "The header status while the runtime is starting."
   },
-  "connectionRecoverySetupHint": "Complete the connection settings to start the runtime.",
+  "connectionRecoverySetupHint": "Open Connection & model in Settings. Enter your API connection, model and work folder, then choose Save and apply. You can explore Nagi before connecting.",
   "@connectionRecoverySetupHint": {
     "description": "The recovery hint for a first-use setup with no connection."
   },
@@ -226,7 +226,7 @@
   "@connectionRecoveryManagedTitle": {
     "description": "The recovery title for a managed saved connection that could not start."
   },
-  "connectionRecoveryManagedHint": "Fix Connection settings, then save and apply.",
+  "connectionRecoveryManagedHint": "Connection startup did not finish. Review Connection & model; Configuration details shows the recorded error. Applying settings does not test model access.",
   "@connectionRecoveryManagedHint": {
     "description": "The recovery hint for a managed saved connection that could not start."
   },
@@ -641,8 +641,8 @@
   "retryCapacity": "Retry capacity",
   "sendingState": "Sending…",
   "sendAcceptedState": "Accepted; waiting for the runtime to start.",
-  "sendUnknownState": "Delivery not confirmed. Reload to verify before sending again.",
-  "sendDisconnectedState": "Runtime disconnected; restart Nagi to check the task and history.",
+  "sendUnknownState": "Delivery is unconfirmed. Choose Reload to check the task and history. Nothing will be resent by Reload.",
+  "sendDisconnectedState": "The connection was lost and the result is unconfirmed. Save or copy any unsaved text before quitting. Reopen Nagi and check history before sending again; reopening does not resend work.",
   "reloadAction": "Reload",
   "historyTitle": "History: {name}",
   "@historyTitle": {
@@ -786,7 +786,7 @@
   "connectionKeptOnFailure": "The current connection remains in use; this attempt did not replace it.",
   "connectionNoneApplied": "No connection is currently applied.",
   "connectionUnsavedForm": "Unsaved form changes.",
-  "connectionSavedAwaitingApply": "Saved configuration is awaiting Apply.",
+  "connectionSavedAwaitingApply": "Saved, but not applied. When applying is available, choose Apply saved. Running work keeps its settings.",
   "settingsNoContactToEdit": "No contact is available to edit.",
   "settingsUnsavedChanges": "Unsaved changes.",
   "settingsBuiltinLegacyError": "Built-in tool selection requires a managed Nagi connection; this Runtime uses legacy environment configuration.",
@@ -868,8 +868,8 @@
   "runtimeStatusLine": "Runtime: {status}",
   "runtimeStatusNotLoaded": "unknown",
   "runtimeStatusConnectionOnly": "{status} (connection only)",
-  "runtimeHelperNotStartedLocalStore": "not started; fix the local contact store first",
-  "runtimeHelperNotFound": "not found (expected next to Saki as Saki-runtime, or set SAKI_RUNTIME_BIN)",
+  "runtimeHelperNotStartedLocalStore": "not started because local data is unavailable",
+  "runtimeHelperNotFound": "not found in the checked runtime locations",
   "runtimeHelperNotApplied": "not started yet; apply the saved connection to check the helper",
   "runtimeHelperNotChecked": "not checked yet; configure and apply a connection first",
   "runtimeHelperLine": "Helper: {helper}",
@@ -883,7 +883,7 @@
   "runtimeSessionAPIUnknown": "Session API: unknown until the runtime session is loaded",
   "runtimeSessionModelLine": "Session model: {model}",
   "runtimeConnectionManagedNote": "Connection settings are managed by Nagi; the runtime reads its endpoint, model and key from that saved connection.",
-  "runtimeHostConfigNote": "Host configuration: API_KEY is required; SAKI_API, SAKI_BASE_URL and SAKI_MODEL have runtime defaults. Set them in the environment or in the GUI work directory's .env; values stay hidden.",
+  "runtimeHostConfigNote": "This launch uses external developer connection settings. Connection & model can save a Nagi-managed connection.",
   "runtimeValueNotConfigured": "not configured",
   "runtimeValueUnknown": "unknown",
   "runtimeSessionNotCreated": "not created until the first message",
@@ -978,7 +978,7 @@
   "validationEndpointUserinfo": "Remove the username or password from the URL.",
   "validationEndpointQuery": "Remove the query string.",
   "validationEndpointFragment": "Remove the fragment.",
-  "validationWorkspaceAbsolutePath": "Enter an absolute path.",
+  "validationWorkspaceAbsolutePath": "Choose a folder or enter its absolute path.",
   "validationWorkspaceDirectoryExists": "The directory must exist.",
   "validationPositive": "Enter a whole number greater than zero.",
   "validationLessThanContext": "Output tokens must be less than context tokens.",
@@ -988,10 +988,10 @@
   "connectionStatusSaving": "Saving configuration…",
   "connectionStatusSavedApplied": "Saved. This configuration is already applied.",
   "connectionStatusCheckingSaved": "Checking the saved connection…",
-  "connectionStatusApplied": "Applied. New work uses this connection.",
+  "connectionStatusApplied": "Connection applied. New conversations and work use its defaults; existing contexts keep their settings. Applying does not test model access.",
   "connectionStatusTesting": "Testing connection and model…",
   "connectionStatusTestCompleted": "Connection test completed: {model}, {endpoint}, context {context} / output {output}",
-  "connectionStatusSavedStoreFailed": "Configuration was saved, but the local contact store could not be created: {error}",
+  "connectionStatusSavedStoreFailed": "Connection settings are saved, but local changes are not saved. Use Retry save for local autosave; profile edits use Save changes. Details: {error}",
   "connectionErrorTestFailed": "Connection test failed: {error}",
   "connectionErrorApplyConfig": "Could not apply saved configuration: {error}",
   "connectionErrorHelperMissing": "Runtime helper not found. {hint}",
@@ -1002,14 +1002,14 @@
   "connectionErrorNotExposed": "The new runtime did not expose the saved connection; the previous connection was kept.",
   "connectionErrorExitedWhileValidating": "The new runtime exited while validating the saved connection; the previous connection was kept.",
   "connectionErrorExitedDuringValidation": "The new runtime exited during validation; the previous connection was kept.",
-  "connectionErrorSavedNeedsRepair": "Saved connection settings need repair. Check the values and save again.",
+  "connectionErrorSavedNeedsRepair": "Saved connection settings could not be used. Review the fields in Connection & model, then choose Save and apply.",
   "connectionBlockedModelOp": "Wait for the in-flight session model operation to finish before applying a new connection.",
   "connectionBlockedApplying": "A new connection is already being applied.",
   "connectionBlockedShutdown": "The app is shutting down.",
   "connectionBlockedNoSaved": "Save a valid connection configuration first.",
-  "connectionBlockedStore": "The local contact store is unavailable. Fix its file or permissions, then save again.",
+  "connectionBlockedStore": "Local data is unavailable or has unsaved changes, so applying is blocked. Review the local save warning and Configuration details.",
   "connectionBlockedActiveWork": "Wait for all chat and task work to finish before applying a new connection.",
-  "connectionBlockedUntrustedIssue": "A task run has no trusted terminal state; reload or reconcile it before applying a new connection.",
+  "connectionBlockedUntrustedIssue": "A run has an unconfirmed result. Open its task and choose Check run before applying a new connection.",
   "canSendShutdown": "The app is shutting down.",
   "canSendArchived": "This contact is archived. Restore it before sending a message.",
   "canSendApplying": "Connection settings are being applied; wait for the new helper to become ready.",
@@ -1050,7 +1050,7 @@
   "modelLastReadLimits": "Last read limits: context {context} / output {output}, {source}, revision {revision}",
   "modelEffectiveTools": "Effective built-in tools: {tools}",
   "modelLastReadTools": "Last read built-in tools: {tools}",
-  "modelUnconfirmedHint": "Runtime has not confirmed the current configuration; these are the last read values. Refresh is available.",
+  "modelUnconfirmedHint": "The current settings are unconfirmed. Refresh reads them again; if Reload session is shown, use it before sending more work.",
   "modelProviderID": "Provider model ID",
   "modelCatalogHint": "Catalog entries supply capacity only; they do not prove that the provider endpoint supports a model.",
   "modelUseCatalog": "Use Runtime catalog",
@@ -1107,7 +1107,7 @@
   "modelReloadFailed": "Session reload failed; the session remains quarantined. {error}",
   "modelReloaded": "Session reloaded. The next task uses the read-back model.",
   "modelReloadAction": "Reload session",
-  "modelUnconfirmedBanner": "Configuration commit is unconfirmed. Reload is required before this session can accept another task; Refresh only re-reads config.",
+  "modelUnconfirmedBanner": "Current settings are unconfirmed. Choose Reload session before sending more work; Refresh only reads the settings.",
   "modelClose": "Close",
   "modelDefaultReading": "Reading session model…",
   "builtinNone": "none",
@@ -1282,7 +1282,7 @@
   "taskContextPath": "Path",
   "taskContextFilePathLabel": "Context file path",
   "taskContextFilePathPlaceholder": "/absolute/path/to/file.txt",
-  "taskContextFileRules": "Only UTF-8 text files are supported; PDF, Office, and other binary files are rejected. The file is read once now; later changes need Refresh.",
+  "taskContextFileRules": "Only UTF-8 text files are supported; PDF, Office, and other binary files are rejected. Save file reads it once; later changes need Refresh.",
   "taskContextName": "Name",
   "taskContextNameLabel": "Context name",
   "taskContextNamePlaceholder": "Release notes",
@@ -1523,5 +1523,270 @@
   "modelConversationScope": "Current conversation override",
   "markdownFileSourceUnknown": "The source session working directory is unknown; this relative file link cannot be resolved.",
   "issueCollaborationUnavailable": "Issue collaboration unavailable",
-  "issueCollaborationRepairHint": "Fix the diagnostic error, then open Connection & model and apply the saved connection again, or restart the app."
+  "issueCollaborationRepairHint": "Task coordination is unavailable. Review Connection & model; if Apply saved is available, use it to try starting coordination again. Configuration details shows the recorded error. No task is resent.",
+  "themeLight": "Light theme",
+  "@themeLight": {
+    "description": "General settings local theme selection, discovery and non-blocking diagnostics."
+  },
+  "themeDark": "Dark theme",
+  "@themeDark": {
+    "description": "General settings local theme selection, discovery and non-blocking diagnostics."
+  },
+  "themePaper": "Paper",
+  "@themePaper": {
+    "description": "General settings local theme selection, discovery and non-blocking diagnostics."
+  },
+  "themeMoss": "Moss",
+  "@themeMoss": {
+    "description": "General settings local theme selection, discovery and non-blocking diagnostics."
+  },
+  "themeUnavailable": "{id} unavailable — using {builtin}",
+  "@themeUnavailable": {
+    "description": "General settings local theme selection, discovery and non-blocking diagnostics.",
+    "placeholders": {
+      "id": {
+        "type": "String"
+      },
+      "builtin": {
+        "type": "String"
+      }
+    }
+  },
+  "themeFilesHint": "Add version-1 theme JSON files to this folder, then reload. Light and dark choices are saved independently. Low contrast is advisory.",
+  "@themeFilesHint": {
+    "description": "General settings local theme selection, discovery and non-blocking diagnostics."
+  },
+  "themeReload": "Reload themes",
+  "@themeReload": {
+    "description": "General settings local theme selection, discovery and non-blocking diagnostics."
+  },
+  "themeFileError": "{file} ({field}): {message}",
+  "@themeFileError": {
+    "description": "General settings local theme selection, discovery and non-blocking diagnostics.",
+    "placeholders": {
+      "file": {
+        "type": "String"
+      },
+      "field": {
+        "type": "String"
+      },
+      "message": {
+        "type": "String"
+      }
+    }
+  },
+  "themeContrastWarning": "{id}: {foreground} on {background} has contrast {ratio}:1 (recommended {minimum}:1).",
+  "@themeContrastWarning": {
+    "description": "General settings local theme selection, discovery and non-blocking diagnostics.",
+    "placeholders": {
+      "id": {
+        "type": "String"
+      },
+      "foreground": {
+        "type": "String"
+      },
+      "background": {
+        "type": "String"
+      },
+      "ratio": {
+        "type": "String"
+      },
+      "minimum": {
+        "type": "String"
+      }
+    }
+  },
+  "workFolderChoose": "Choose folder…",
+  "workFolderChooseTitle": "Choose a work folder",
+  "workFolderUseDefault": "Use default folder",
+  "workFolderChooseFailed": "Could not choose this folder. Your edits are unchanged. Choose folder again. Details: {detail}",
+  "workFolderRequiredHint": "Choose where Nagi will keep work files, or enter a folder path. Choose a folder before saving, testing, or applying this connection.",
+  "recoveryProviderDenied": "The provider rejected this request ({status}). In Connection & model, check the API key and model access, then choose Test connection and model. Testing may incur provider charges. The task is not retried automatically.",
+  "@recoveryProviderDenied": {
+    "description": "Recovery guidance for an existing exact HTTP authentication classification.",
+    "placeholders": {
+      "status": {
+        "type": "String"
+      }
+    }
+  },
+  "recoveryModelRequestFailed": "The model request failed. In Connection & model, check the API key, server address and model, then choose Test connection and model. Testing may incur provider charges. The task is not retried automatically.",
+  "recoveryRunFailed": "This run failed. Review its details to choose the next step. For a connection problem, open Connection & model and choose Test connection and model. Testing may incur provider charges; this does not retry the run.",
+  "recoveryTechnicalDetailsHint": "Technical details may mention developer settings. Use Settings and the recovery actions for normal setup.",
+  "recoveryRuntimeMissing": "Nagi could not find its runtime component. A complete application package with that component is needed; this screen cannot install or repair it.",
+  "recoveryRuntimeStartFailed": "Nagi could not start its runtime component. Review the work folder in Connection & model and open Configuration details for the recorded error. You can quit and reopen Nagi; this does not repair missing or inaccessible files.",
+  "recoveryLocalSaveFailed": "Local changes are not saved. Keep this window open. Choose Retry save for local autosave, or Save changes for profile edits.",
+  "recoveryLocalDataUnavailable": "Local contacts and tasks are unavailable. Nagi has not replaced existing data. Choose a compatible recovery copy if you have one. Without a compatible copy, Nagi cannot restore this workbench data.",
+  "recoveryConnectionSaveFailed": "Connection settings could not be saved. Your edits are still here; review the details, then try Save again.",
+  "recoveryConnectionApplyFailed": "Saved connection settings could not be applied. Review the fields and Configuration details. No work is resent.",
+  "recoveryRequestFailed": "The request could not be completed. Review its details before trying again. Nothing is retried automatically.",
+  "recoveryConnectionTestFailed": "Connection and model test did not complete successfully.",
+  "recoveryTaskAssociationMissing": "Nagi has no verified record of which task to check. Review the existing run details and history before continuing; nothing will be resent automatically.",
+  "themeImportAction": "Import theme…",
+  "themeImportTitle": "Choose a downloaded theme",
+  "themeImportFilter": "JSON theme files",
+  "themeImportHint": "Choose a downloaded .json theme file. Nagi validates and installs it for you; then choose it from the light or dark theme list. Built-in themes remain available.",
+  "themeImportBusy": "Choosing or importing a theme…",
+  "themeImportFailed": "The theme could not be imported. Existing files and settings are unchanged. Choose another file or try again; built-in themes remain available.",
+  "themeImportSucceeded": "Imported {name}. Choose it from the light or dark theme list. Your appearance mode and selected theme IDs were kept.",
+  "@themeImportSucceeded": {
+    "description": "A local theme was installed without selecting a different ID or changing appearance mode.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "recoveryDataTitle": "Workbench data",
+  "@recoveryDataTitle": {
+    "description": "C8 workbench recovery GUI: recoveryDataTitle."
+  },
+  "saveRecoveryCopyAction": "Save recovery copy…",
+  "@saveRecoveryCopyAction": {
+    "description": "C8 workbench recovery GUI: saveRecoveryCopyAction."
+  },
+  "restorePausedAction": "Restore paused…",
+  "@restorePausedAction": {
+    "description": "C8 workbench recovery GUI: restorePausedAction."
+  },
+  "recoveryConfirmAction": "Restore paused",
+  "@recoveryConfirmAction": {
+    "description": "C8 workbench recovery GUI: recoveryConfirmAction."
+  },
+  "recoveryCancelAction": "Cancel restore",
+  "@recoveryCancelAction": {
+    "description": "C8 workbench recovery GUI: recoveryCancelAction."
+  },
+  "recoveryDataIncluded": "Save a recovery copy of contact and task records, saved drafts, requirements and attached text snapshots. Their saved conversation references are kept.",
+  "@recoveryDataIncluded": {
+    "description": "C8 workbench recovery GUI: recoveryDataIncluded."
+  },
+  "recoveryDataExcluded": "Not included: unsaved edits, actual chats, tool output and chat history, API connection settings or keys, work files, theme files, the app or system language. This is not a complete conversation or device backup.",
+  "@recoveryDataExcluded": {
+    "description": "C8 workbench recovery GUI: recoveryDataExcluded."
+  },
+  "recoveryDataBusy": "Wait for the current action to finish before starting recovery.",
+  "@recoveryDataBusy": {
+    "description": "C8 workbench recovery GUI: recoveryDataBusy."
+  },
+  "recoveryCopyNeedsSavedData": "A recovery copy needs saved, readable workbench data. If a local save failed, use Retry save first. Unsaved edits are not saved by this action.",
+  "@recoveryCopyNeedsSavedData": {
+    "description": "C8 workbench recovery GUI: recoveryCopyNeedsSavedData."
+  },
+  "recoveryRestoreNeedsUnavailable": "Restore is available only when startup cannot load local workbench data. It cannot replace a loaded workbench or fix a failed local save; use Retry save for that.",
+  "@recoveryRestoreNeedsUnavailable": {
+    "description": "C8 workbench recovery GUI: recoveryRestoreNeedsUnavailable."
+  },
+  "recoveryRestoreUnsaved": "Recovery cannot replace this workbench while it has live work or unsaved edits. Your unsaved edits remain in this window. Return to them and copy any text you need somewhere safe before quitting. Quitting does not save these edits.",
+  "@recoveryRestoreUnsaved": {
+    "description": "C8 workbench recovery GUI: recoveryRestoreUnsaved."
+  },
+  "recoveryDataWorking": "Waiting for file selection or finishing the current data operation…",
+  "@recoveryDataWorking": {
+    "description": "C8 workbench recovery GUI: recoveryDataWorking."
+  },
+  "recoveryCopyFolderTitle": "Choose a folder for the recovery copy",
+  "@recoveryCopyFolderTitle": {
+    "description": "C8 workbench recovery GUI: recoveryCopyFolderTitle."
+  },
+  "recoveryChooseFileTitle": "Choose a compatible Nagi recovery copy",
+  "@recoveryChooseFileTitle": {
+    "description": "C8 workbench recovery GUI: recoveryChooseFileTitle."
+  },
+  "recoveryCopyFilter": "Nagi recovery copy (JSON)",
+  "@recoveryCopyFilter": {
+    "description": "C8 workbench recovery GUI: recoveryCopyFilter."
+  },
+  "recoveryPreviewTitle": "Review recovery copy",
+  "@recoveryPreviewTitle": {
+    "description": "C8 workbench recovery GUI: recoveryPreviewTitle."
+  },
+  "recoveryPreviewCounts": "{contacts, plural, one {# saved contact} other {# saved contacts}} · {issues, plural, one {# saved task} other {# saved tasks}}",
+  "@recoveryPreviewCounts": {
+    "description": "C8 workbench recovery GUI: recoveryPreviewCounts."
+  },
+  "recoveryFileModified": "File modified: {time} (file metadata; not a known backup creation time)",
+  "@recoveryFileModified": {
+    "description": "C8 workbench recovery GUI: recoveryFileModified.",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "recoveryPreviewWarning": "This is the captured saved copy. Newer changes may be lost. The original file will be preserved in a separate archive before replacement.",
+  "@recoveryPreviewWarning": {
+    "description": "C8 workbench recovery GUI: recoveryPreviewWarning."
+  },
+  "recoveryPauseWarning": "Confirming restores the saved records and pauses existing automatic continuation. Pending and unknown records remain uncertain; an older copy cannot prove that recent work was never sent. Nothing is automatically rerun.",
+  "@recoveryPauseWarning": {
+    "description": "C8 workbench recovery GUI: recoveryPauseWarning."
+  },
+  "recoveryCopySaved": "Recovery copy saved: {path}. Unsaved edits were kept and excluded.",
+  "@recoveryCopySaved": {
+    "description": "C8 workbench recovery GUI: recoveryCopySaved.",
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "recoveryCopyFailed": "The recovery copy could not be saved. Existing files and unsaved edits are kept. Check Details, then choose a folder to try again; an existing filename will not be overwritten.",
+  "@recoveryCopyFailed": {
+    "description": "C8 workbench recovery GUI: recoveryCopyFailed."
+  },
+  "recoveryInspectFailed": "The selection or unavailable original could not be safely prepared. Files are unchanged. Check Details or choose another compatible copy.",
+  "@recoveryInspectFailed": {
+    "description": "C8 workbench recovery GUI: recoveryInspectFailed."
+  },
+  "recoveryCopyUnusable": "This version cannot safely use this recovery copy. Your files are unchanged. Choose another compatible Nagi copy.",
+  "@recoveryCopyUnusable": {
+    "description": "C8 workbench recovery GUI: recoveryCopyUnusable."
+  },
+  "recoveryNotInstalled": "The recovery copy was not installed. The original was not replaced. A verified original archive may be listed below. Check Details before starting a new explicit attempt.",
+  "@recoveryNotInstalled": {
+    "description": "C8 workbench recovery GUI: recoveryNotInstalled."
+  },
+  "recoveryInstalled": "Restored and paused on disk, but not loaded in this window. This workbench still cannot save or run work. Quit Nagi, then reopen normally to load the restored records. Chat history and work files may still be unavailable. Before quitting, copy any unsaved text you need somewhere safe; this window cannot save it.",
+  "@recoveryInstalled": {
+    "description": "C8 workbench recovery GUI: recoveryInstalled."
+  },
+  "recoveryUnconfirmed": "Installation result needs checking. Nagi cannot confirm the replaced file. Do not repeat or roll back this operation automatically. The current window remains unable to save or run work; keep the listed locations and Details. Before quitting, copy any unsaved text you need somewhere safe; this window cannot save it.",
+  "@recoveryUnconfirmed": {
+    "description": "C8 workbench recovery GUI: recoveryUnconfirmed."
+  },
+  "recoveryShowCopy": "Show recovery copy in Finder",
+  "@recoveryShowCopy": {
+    "description": "C8 workbench recovery GUI: recoveryShowCopy."
+  },
+  "recoveryShowArchive": "Show original archive in Finder",
+  "@recoveryShowArchive": {
+    "description": "C8 workbench recovery GUI: recoveryShowArchive."
+  },
+  "recoveryQuitAction": "Quit Nagi",
+  "@recoveryQuitAction": {
+    "description": "C8 workbench recovery GUI: recoveryQuitAction."
+  },
+  "recoveryDataLocation": "Workbench data location: {path}",
+  "@recoveryDataLocation": {
+    "description": "The identified location of recovery data, not a claim of loaded history.",
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "recoveryArchiveLocation": "Preserved original archive: {path}",
+  "@recoveryArchiveLocation": {
+    "description": "The identified location of recovery data, not a claim of loaded history.",
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "taskContextChooseFile": "Choose UTF-8 file…",
+  "taskContextChoosingFile": "Choosing a file…",
+  "taskContextChooseFileFailed": "Could not open the file chooser. Try again or enter the path below.",
+  "taskContextChooseFileHint": "Choose a UTF-8 text file, then Save file to read and preview a snapshot. Choosing does not send anything."
 }

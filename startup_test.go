@@ -208,7 +208,7 @@ func TestUnavailableStoreFallbackKeepsPathsAndFile(t *testing.T) {
 		"Store: " + storePath,
 		"Session directory: " + sessionDir,
 		"GUI work directory: " + workDir,
-		"Helper: not started; fix the local contact store first",
+		locales.In("en").RuntimeHelperLine(locales.In("en").RuntimeHelperNotStartedLocalStore()),
 	} {
 		if !tr.HasText(want) {
 			t.Errorf("fallback panel missing %q", want)
@@ -321,7 +321,7 @@ func TestStartupBannerKeepsComposerFocusAndDraft(t *testing.T) {
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.SetFocused(true)
 	tr.Frame()
-	if !tr.HasText("Configuration details") || !tr.HasText("set SAKI_RUNTIME_BIN") {
+	if !tr.HasText("Configuration details") || !tr.HasText(locales.In("en").ConnectionRecoveryManagedHint()) || tr.HasText(a.runtimeErr) || tr.HasText(a.runtimeHint) {
 		t.Fatal("startup failure should show an actionable banner")
 	}
 	if err := tr.Click("Composer for Saki"); err != nil {
@@ -338,10 +338,14 @@ func TestStartupBannerKeepsComposerFocusAndDraft(t *testing.T) {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if !a.settingsOpen || a.settingsTab != settingsTabAdvanced {
+	if !a.settingsOpen || a.settingsTab != settingsTabAdvanced || !tr.HasText(a.runtimeErr) || !tr.HasText(a.runtimeHint) {
 		t.Fatalf("banner opened settings=%v tab=%q, want Advanced", a.settingsOpen, a.settingsTab)
 	}
 	a.closeSettings()
+	if ct.Draft != "keep" || a.runtimeStatus != runtimeStateFailed || a.runtimeErr != "Runtime helper not found." ||
+		a.runtimeHint != "Place Saki-runtime next to the app or set SAKI_RUNTIME_BIN." || a.submissionInFlight != 0 {
+		t.Fatal("startup disclosure changed the draft or original failure facts")
+	}
 }
 
 func TestTaskFailureKeepsAcceptedHistoryAndLaterDraft(t *testing.T) {
@@ -407,6 +411,7 @@ func TestProviderAuthFailureUIAndRecovery(t *testing.T) {
 		Messages: []*message{{Key: "live:task-1:user", Kind: msgUser, Text: "sent task"}},
 	}
 	a := &appModel{demo: false, runtimeStatus: runtimeStateReady, runtimeHandshake: true, scrollTo: -1, contacts: []*contact{ct}}
+	recoveryTestStore(t, a)
 	a.applyEvent(ct, runtimeEventEnvelope{
 		Version: 1, Type: "event", SessionID: "session-1", TaskID: "task-1",
 		Event: &runtimeEvent{Type: "task_finished", Status: "failed",
@@ -422,8 +427,27 @@ func TestProviderAuthFailureUIAndRecovery(t *testing.T) {
 	}
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	if !tr.HasText("Provider authentication failed") || tr.HasText("sk-sentinel-112") {
+	if !tr.HasText(locales.In("en").RecoveryProviderDenied("HTTP 401")) || tr.HasText(ct.StatusDetail) || tr.HasText("sk-sentinel-112") {
 		t.Fatal("provider auth UI must show the bounded classification without the provider body")
+	}
+
+	if err := tr.Click(locales.In("en").DetailsAction()); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if !tr.HasText(ct.StatusDetail) || !tr.HasText(locales.In("en").RecoveryTechnicalDetailsHint()) {
+		if dir := os.Getenv("NAGI_RP_PREVIEW_DIR"); dir != "" {
+			writePreviewPNG(t, filepath.Join(dir, "auth-disclosure-failure.png"), tr.Image())
+		}
+		t.Fatalf("original bounded auth diagnostic unavailable after disclosure: raw=%q flags=%v texts=%v", ct.StatusDetail, a.connectionDetailsOpen, tr.Texts())
+	}
+	for _, leaked := range []string{"Incorrect API key", "sk-sentinel-112"} {
+		if tr.HasText(leaked) {
+			t.Fatalf("disclosed auth detail echoed %q", leaked)
+		}
+	}
+	if ct.Draft != "later edit" || ct.SendState != sendIdle || ct.ActiveTaskID != "" || len(ct.Messages) != 1 {
+		t.Fatal("auth disclosure retried or changed current draft/history")
 	}
 
 	// A later accepted task can start from the same contact; no automatic

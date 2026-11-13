@@ -1,11 +1,134 @@
 package main
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/egoist/mygo/ui"
+
+	"github.com/HeimaoLST/Nagi/locales"
 )
+
+func TestLocalStateFirstWriteFailureRetainsDraftAndRetries(t *testing.T) {
+	root := t.TempDir()
+	isolateConnectionApp(t, root, "")
+	t.Setenv("SAKI_TEST_ISSUE_TOOL_HELPER", "")
+	a, err := newRuntimeApp()
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := a.selectedID()
+	blocker := filepath.Dir(a.storePath)
+	if err := os.WriteFile(blocker, []byte("blocked"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ct := a.selectedContact()
+	ct.Draft = "Keep the failed local draft"
+	a.draftChanged(ct)
+	if a.localSaveErr == "" || a.runtimeErrKind != runtimeNoticeStoreSave || ct.Draft != "Keep the failed local draft" {
+		t.Fatal("first-save failure was silent or discarded the draft")
+	}
+	a.closeSettings()
+	tr := ui.NewTester(a.view, 1040, 720)
+	tr.Frame()
+	msgs := locales.In("en")
+	if !tr.HasText(msgs.RecoveryLocalSaveFailed()) || !tr.HasText(msgs.SettingsRetrySave()) || !tr.HasText(msgs.ConnectionStatusSetupNeeded()) {
+		t.Fatalf("pre-connection save failure/retry or connection guidance was hidden: %v", tr.Texts())
+	}
+	if tr.HasText(msgs.RuntimeErrorStoreSave(a.localSaveErr)) {
+		t.Fatal("raw local diagnostic shown before disclosure")
+	}
+	if err := tr.Click(msgs.DetailsAction()); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if !tr.HasText(safeDiagnostic(a.localSaveErr)) {
+		t.Fatal("local diagnostic inaccessible after disclosure")
+	}
+	if err := os.Remove(blocker); err != nil {
+		t.Fatal(err)
+	}
+	if err := tr.Click(msgs.SettingsRetrySave()); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if a.localSaveErr != "" || a.runtimeErrKind != runtimeNoticeConnectionRequired || !tr.HasText(msgs.ConnectionStatusSetupNeeded()) {
+		t.Fatalf("local Retry save did not recover independently of connection: error=%q kind=%q", a.localSaveErr, a.runtimeErrKind)
+	}
+	restarted, err := newRuntimeApp()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if restarted.selectedID() != id || restarted.selectedContact().Draft != ct.Draft || a.rt != nil || a.runtimeHelperChecked || a.runtimeHandshake {
+		t.Fatal("retry lost local state or started Runtime")
+	}
+}
+
+func TestLocalStateReadFailuresNeverInitializeReplacement(t *testing.T) {
+	for _, kind := range []string{"decode", "read", "stat"} {
+		t.Run(kind, func(t *testing.T) {
+			root := t.TempDir()
+			isolateConnectionApp(t, root, "")
+			t.Setenv("SAKI_TEST_ISSUE_TOOL_HELPER", "")
+			path := guiStorePath()
+			original := []byte("unreadable local state")
+			if kind == "stat" {
+				path = filepath.Dir(path)
+			} else if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if kind == "read" {
+				if err := os.Mkdir(path, 0o700); err != nil {
+					t.Fatal(err)
+				}
+			} else if err := os.WriteFile(path, original, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := newRuntimeApp(); err == nil {
+				t.Fatal("existing state error was treated as initial absence")
+			} else {
+				a := newUnavailableApp(err)
+				if saveErr := a.persist(); saveErr == nil || a.store != nil || a.storeInitAllowed {
+					t.Fatal("unavailable local store claimed a successful save or initialized a replacement")
+				}
+			}
+			if kind == "read" {
+				entries, err := os.ReadDir(path)
+				if err != nil || len(entries) != 0 {
+					t.Fatal("unreadable store directory changed")
+				}
+			} else if data, err := os.ReadFile(path); err != nil || string(data) != string(original) {
+				t.Fatal("failed local-state read overwrote original bytes")
+			}
+		})
+	}
+}
+
+func TestLocalStateAppearingBeforeFirstSaveIsNotOverwritten(t *testing.T) {
+	root := t.TempDir()
+	isolateConnectionApp(t, root, "")
+	t.Setenv("SAKI_TEST_ISSUE_TOOL_HELPER", "")
+	a, err := newRuntimeApp()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(a.storePath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	original := []byte("existing state appeared after startup")
+	if err := os.WriteFile(a.storePath, original, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.persist(); err == nil || a.store != nil {
+		t.Fatal("first Save ignored an existing store")
+	}
+	if data, err := os.ReadFile(a.storePath); err != nil || string(data) != string(original) {
+		t.Fatal("first Save replaced existing state")
+	}
+}
 
 func testRuntimeModel(t *testing.T) (*appModel, *contact, *contact) {
 	t.Helper()

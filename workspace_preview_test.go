@@ -11,6 +11,8 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo/ui"
+
+	"github.com/HeimaoLST/Nagi/locales"
 )
 
 func TestPreviewWorkspaceToolCardWrapping(t *testing.T) {
@@ -85,11 +87,25 @@ func TestPreviewToolFailureDetails(t *testing.T) {
 			tr.SetDark(dark)
 			tr.Frame()
 			openConversationWorkPanel(t, tr)
-			if !tr.HasText("Failed") || !tr.HasText(diagnostic) {
+			if !tr.HasText("Failed") || !tr.HasText(locales.In("en").RecoveryRunFailed()) || tr.HasText(diagnostic) {
 				t.Fatalf("%s %dx%d failed work/diagnostic missing: %q", theme, size.width, size.height, tr.Texts())
 			}
 			if err := tr.Click("Details"); err != nil {
 				t.Fatalf("%s %dx%d Details: %v", theme, size.width, size.height, err)
+			}
+			tr.Frame()
+			if !tr.HasText(diagnostic) || w.Detail != diagnostic || w.Tools[0].Expanded {
+				t.Fatalf("%s %dx%d run disclosure did not expose only its diagnostic: %v", theme, size.width, size.height, tr.Texts())
+			}
+			for attempt := 0; attempt < 12; attempt++ {
+				if r, ok := tr.Find("Details"); ok && r.Y >= 0 && r.Y+r.H <= float32(size.height) {
+					break
+				}
+				tr.Scroll(float32(size.width-100), float32(size.height-100), 0, 180)
+				tr.Frame()
+			}
+			if err := tr.Click("Details"); err != nil {
+				t.Fatalf("%s %dx%d received-output Details: %v", theme, size.width, size.height, err)
 			}
 			tr.Frame()
 			if !tr.HasText("Hide") {

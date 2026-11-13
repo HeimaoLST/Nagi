@@ -618,14 +618,14 @@ func TestConnectionAndModelFeedbackFollowLocale(t *testing.T) {
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.SetLocale("en")
 	tr.Frame()
-	if !tr.HasText("Applied. New work uses this connection.") ||
+	if !tr.HasText(locales.In("en").ConnectionStatusApplied()) ||
 		!tr.HasText("Wait for all chat and task work to finish before applying a new connection.") ||
 		!tr.HasText("Enter an absolute http(s) URL with a host.") {
 		t.Fatalf("English connection feedback missing: %v", tr.Texts())
 	}
 	tr.SetLocale("zh-Hans")
 	tr.Frame()
-	if !tr.HasText("已应用。新工作使用此连接。") ||
+	if !tr.HasText(locales.In("zh-Hans").ConnectionStatusApplied()) ||
 		!tr.HasText("请等待所有对话和事项工作结束后再应用新连接。") ||
 		!tr.HasText("请输入带主机的绝对 http(s) URL。") {
 		t.Fatalf("Chinese connection feedback missing: %v", tr.Texts())
@@ -872,6 +872,7 @@ func TestTaskContextAndResultLabelsFollowLocale(t *testing.T) {
 
 func TestIssueFormNoticeFollowsLocaleAndClearsOnSuccess(t *testing.T) {
 	a := issuePreviewApp("expanded")
+	recoveryTestStore(t, a)
 	a.windowWidth = 1040
 	a.selectedContact().issueNavigation().DetailID = ""
 	a.issueDetailOpen = nil
@@ -897,6 +898,15 @@ func TestIssueFormNoticeFollowsLocaleAndClearsOnSuccess(t *testing.T) {
 	tr.Frame()
 	if tr.HasText("Enter a task goal.") || a.issueFormNotice != "" || a.issueFormError != "" {
 		t.Fatalf("success did not clear the issue notice: %v", tr.Texts())
+	}
+	reloaded, err := openContactStore(a.storePath, a.workDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	savedContact := &contact{Issues: issuesForStoredContact(reloaded.state.Issues, a.selectedID())}
+	savedIssue := savedContact.issueByID(a.selectedContact().SelectedIssueID)
+	if savedIssue == nil || savedIssue.Goal != "Locale form success" {
+		t.Fatalf("successful form was not saved: %+v", reloaded.state.Issues)
 	}
 	blocked := filepath.Join(t.TempDir(), "not-a-directory")
 	if err := os.WriteFile(blocked, []byte("x"), 0o600); err != nil {
@@ -976,21 +986,38 @@ func TestSendAndStatusNoticesFollowLocaleWithoutChangingRaw(t *testing.T) {
 	if ct.StatusDetailKind != "status-connection-lost" || ct.SendErrorKind != "send-delivery" {
 		t.Fatalf("exit kinds = %q / %q", ct.StatusDetailKind, ct.SendErrorKind)
 	}
+	before := recoveryRecordSnapshot(t, ct)
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.SetLocale("en")
 	tr.Frame()
-	if !tr.HasText(ct.SendError) || !tr.HasText(ct.StatusDetail) {
+	if !tr.HasText(locales.In("en").SendDisconnectedState()) || tr.HasText(ct.SendError) || tr.HasText(ct.StatusDetail) || tr.HasText(locales.In("en").ReloadAction()) {
 		t.Fatalf("English send/status notices missing: %v", tr.Texts())
 	}
 	tr.SetLocale("zh-Hans")
 	tr.Frame()
-	if !tr.HasText("交付/结果未确认。再次发送前请重新加载。") ||
-		!tr.HasText("任务完成前连接已断开；请重新加载核实。") {
+	if !tr.HasText(locales.In("zh-Hans").SendDisconnectedState()) || tr.HasText(ct.SendError) || tr.HasText(ct.StatusDetail) || tr.HasText(locales.In("zh-Hans").ReloadAction()) {
 		t.Fatalf("Chinese send/status notices missing: %v", tr.Texts())
+	}
+	if err := tr.Click(locales.In("zh-Hans").DetailsAction()); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if !tr.HasText(ct.SendError) || tr.HasText(ct.StatusDetail) {
+		t.Fatalf("send disclosure did not isolate its original diagnostic: %v", tr.Texts())
+	}
+	if err := tr.Click(locales.In("zh-Hans").DetailsAction()); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if !tr.HasText(ct.SendError) || !tr.HasText(ct.StatusDetail) {
+		t.Fatalf("status disclosure did not expose its original diagnostic: %v", tr.Texts())
 	}
 	if ct.SendError != "Delivery/result not confirmed. Reload before sending again." ||
 		ct.StatusDetail != "Connection lost before the task finished; reload to verify." {
 		t.Fatal("locale switch changed the canonical send/status raw bytes")
+	}
+	if recoveryRecordSnapshot(t, ct) != before || a.submissionInFlight != 0 || ct.SendState != sendUnknown || ct.ActiveTaskID != "" {
+		t.Fatal("disconnected disclosure changed execution facts or replayed work")
 	}
 }
 
@@ -1006,18 +1033,42 @@ func TestCancelFailureNoticeReplacesRequestAndClears(t *testing.T) {
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.SetLocale("zh-Hans")
 	tr.Frame()
-	if !tr.HasText("取消失败：backend down") || tr.HasText("已请求取消") {
+	if !tr.HasText(locales.In("zh-Hans").IssueSendCancelFailed("")) || tr.HasText("backend down") || tr.HasText("已请求取消") {
 		t.Fatalf("Chinese cancel failure missing or stale: %v", tr.Texts())
+	}
+	if err := tr.Click(locales.In("zh-Hans").DetailsAction()); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if !tr.HasText("Cancel failed: backend down") || ct.SendErrorKind != "send-cancel-failed" || ct.SendErrorDetail != "backend down" {
+		t.Fatalf("Chinese disclosure lost the original cancel failure: %v", tr.Texts())
+	}
+	if err := tr.Click(locales.In("zh-Hans").HideDetailsAction()); err != nil {
+		t.Fatal(err)
 	}
 	tr.SetLocale("en")
 	tr.Frame()
-	if !tr.HasText("Cancel failed: backend down") || tr.HasText("Cancellation requested") {
+	if !tr.HasText(locales.In("en").IssueSendCancelFailed("")) || tr.HasText("backend down") || tr.HasText("Cancellation requested") {
 		t.Fatalf("English cancel failure missing or stale: %v", tr.Texts())
+	}
+	if err := tr.Click(locales.In("en").DetailsAction()); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if !tr.HasText("Cancel failed: backend down") || ct.SendError != "Cancel failed: backend down" || ct.ActiveTaskID != "t1" || ct.SendState != sendAccepted {
+		t.Fatal("English disclosure changed the original cancel failure or active task")
 	}
 	ct.setSendError("raw provider 500", "", "")
 	tr.Frame()
-	if !tr.HasText("raw provider 500") || tr.HasText("Cancel failed: backend down") {
+	if !tr.HasText(locales.In("en").RecoveryRequestFailed()) || tr.HasText("raw provider 500") || tr.HasText("Cancel failed:") {
 		t.Fatalf("next raw failure revived the old kind: %v", tr.Texts())
+	}
+	if err := tr.Click(locales.In("en").DetailsAction()); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if !tr.HasText("raw provider 500") || tr.HasText("backend down") || ct.SendErrorKind != "" || ct.SendErrorDetail != "" {
+		t.Fatalf("next raw failure lost its own diagnostic: %v", tr.Texts())
 	}
 	ct.clearSendError()
 	tr.SetLocale("zh-Hans")

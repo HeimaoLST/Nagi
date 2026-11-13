@@ -78,7 +78,8 @@ func newRuntimeApp() (*appModel, error) {
 		applyStoreSelection(a, store)
 		a.loadStoredTaskContexts(store)
 	} else {
-		a.contacts = []*contact{placeholderContact(workDir)}
+		// Local edits must not confirm the launch-folder fallback as an override.
+		a.contacts = []*contact{placeholderContact("")}
 		a.selected = 0
 	}
 	a.bindTaskContexts()
@@ -130,12 +131,12 @@ func newRuntimeApp() (*appModel, error) {
 	if startup.LoadErr != nil || (startup.Config == nil && !startup.External) {
 		a.openSettingsTab(settingsTabConnection, settingsSourceConnection)
 	}
-	// The first launch can legitimately have no store file yet. Appearance is
-	// the first GUI-global preference, so allow a lazy save through persist;
-	// read/stat failures still use newUnavailableApp and never overwrite data.
+	// Local saves retain the placeholder's identity on a first launch without
+	// a connection. Read/stat failures never enable missing-store initialization.
 	if a.store == nil && a.storePath != "" {
 		a.storeInitAllowed = true
 	}
+	a.reloadAppearanceThemes()
 	return a, nil
 }
 
@@ -164,6 +165,7 @@ func newUnavailableApp(err error) *appModel {
 			WorkLabel: "Preparing a reply",
 		}},
 	}
+	a.reloadAppearanceThemes()
 	a.contacts[0].Unavailable = err.Error()
 	return a
 }
@@ -3050,13 +3052,17 @@ func (a *appModel) addRuntimeContact() {
 	if !a.leaveIssueFormForSwitch() {
 		return
 	}
+	workspace := ""
+	if a.demo || a.connectionEffective != nil || a.connectionLegacy {
+		workspace = a.workDir
+	}
 	c := &contact{
 		ID:        newContactID(),
 		Name:      locales.In(a.uiLocale).NewContactName(len(a.contacts) + 1),
 		Role:      "Assistant",
 		Status:    statusReady,
 		WorkLabel: "Preparing a reply",
-		Workspace: a.workDir,
+		Workspace: workspace,
 	}
 	c.Context.onChange = a.persist
 	a.rememberHistoryView(a.selectedContact().ID)
@@ -3095,18 +3101,46 @@ func (a *appModel) selectedID() string {
 	return a.contacts[a.selected].ID
 }
 
-func (a *appModel) persist() error {
-	if a.store == nil {
+func (a *appModel) ensureContactStore() error {
+	if a.store != nil {
 		return nil
 	}
-	a.store.setIssueToolState(a.issueToolLedger, a.issueToolScopes)
-	a.store.state.Appearance = normalizeAppearanceMode(a.appearanceMode)
-	a.store.state.Layout = &storedLayout{
-		LeftWidth:     a.railWidth(),
-		RightWidth:    a.workWidth(),
-		WorkspaceOpen: a.workspaceOpen,
+	if !a.storeInitAllowed || strings.TrimSpace(a.storePath) == "" {
+		return errors.New("the local contact store is unavailable")
 	}
-	if err := a.store.save(a.contacts, a.selectedID()); err != nil {
+	if len(a.contacts) == 0 {
+		return errors.New("there is no current contact to save")
+	}
+	if _, err := os.Stat(a.storePath); err == nil {
+		return fmt.Errorf("local contact store %s exists but has not been loaded", a.storePath)
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	a.store = &contactStore{path: a.storePath}
+	return nil
+}
+
+func (a *appModel) persist() error {
+	if a.demo && a.store == nil {
+		return nil
+	}
+	err := a.ensureContactStore()
+	if err == nil {
+		a.store.setIssueToolState(a.issueToolLedger, a.issueToolScopes)
+		a.store.state.Appearance = normalizeAppearanceMode(a.appearanceMode)
+		a.store.state.ThemeIDs = nil
+		if a.appearanceThemeIDs != (appearanceThemeIDs{}) {
+			ids := a.appearanceThemeIDs
+			a.store.state.ThemeIDs = &ids
+		}
+		a.store.state.Layout = &storedLayout{
+			LeftWidth:     a.railWidth(),
+			RightWidth:    a.workWidth(),
+			WorkspaceOpen: a.workspaceOpen,
+		}
+		err = a.store.save(a.contacts, a.selectedID())
+	}
+	if err != nil {
 		if a.localSaveErr == "" {
 			a.localSavePrevErr = a.runtimeErr
 			a.localSavePrevKind = a.runtimeErrKind

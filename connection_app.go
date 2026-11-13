@@ -4,10 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/egoist/mygo"
+
+	"github.com/HeimaoLST/Nagi/locales"
 )
 
 type connectionStartup struct {
@@ -57,6 +62,10 @@ func readConnectionStartup(storePath string, workDir string) connectionStartup {
 	if errors.Is(err, os.ErrNotExist) {
 		startup.Missing = true
 		startup.External = externalConnectionSource(workDir)
+		if !startup.External {
+			initial := defaultConnectionConfig("")
+			startup.FormConfig = &initial
+		}
 		startup.LoadErr = nil
 		return startup
 	}
@@ -127,6 +136,10 @@ func applyStoreSelection(a *appModel, store *contactStore) {
 		a.workspaceOpen = false
 	}
 	a.appearanceMode = normalizeAppearanceMode(store.state.Appearance)
+	a.appearanceThemeIDs = appearanceThemeIDs{}
+	if store.state.ThemeIDs != nil {
+		a.appearanceThemeIDs = *store.state.ThemeIDs
+	}
 }
 
 func (a *appModel) ensureConnectionForm() {
@@ -134,8 +147,11 @@ func (a *appModel) ensureConnectionForm() {
 		return
 	}
 	config := a.connectionSaved
-	a.connectionForm = newConnectionSettings(config, a.workDir)
 	if config == nil {
+		config = readConnectionStartup(a.storePath, a.workDir).FormConfig
+	}
+	a.connectionForm = newConnectionSettings(config, a.workDir)
+	if a.connectionSaved == nil {
 		a.connectionForm.HasSaved = false
 	}
 }
@@ -146,7 +162,80 @@ func (a *appModel) connectionActions() connectionSettingsActions {
 		SaveAndApply: a.saveAndApplyConnection,
 		Apply:        a.applyConnection,
 		Test:         a.testConnection,
+		ChooseFolder: a.chooseConnectionWorkFolder,
 	}
+}
+
+func workFolderStart(draft, effective string) string {
+	for _, path := range []string{draft, effective} {
+		if filepath.IsAbs(path) {
+			if info, err := os.Stat(path); err == nil && info.IsDir() {
+				return path
+			}
+		}
+	}
+	home, _ := os.UserHomeDir()
+	return home
+}
+
+func chooseWorkFolder(pick func(mygo.OpenDialogOptions) ([]string, error), opts mygo.OpenDialogOptions) (string, error) {
+	if pick == nil {
+		pick = mygo.Dialog.Open
+	}
+	paths, err := pick(opts)
+	if err != nil || len(paths) == 0 {
+		return "", err
+	}
+	path := paths[0]
+	if !filepath.IsAbs(path) {
+		return "", errors.New("the selected folder path is not absolute")
+	}
+	folder, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer folder.Close()
+	// Reading an entry also detects an inaccessible or removed directory; empty folders are valid.
+	if _, err := folder.Readdirnames(1); err != nil && !errors.Is(err, io.EOF) {
+		return "", err
+	}
+	return path, nil
+}
+
+func (a *appModel) chooseConnectionWorkFolder() {
+	form := a.connectionForm
+	if form == nil || form.Busy || a.shutdownStarted || !a.settingsOpen || a.settingsTab != settingsTabConnection {
+		return
+	}
+	a.folderChoiceGeneration++
+	generation := a.folderChoiceGeneration
+	msgs := locales.In(a.uiLocale)
+	opts := mygo.OpenDialogOptions{Parent: a.win, Directory: true,
+		Title: msgs.WorkFolderChooseTitle(), ButtonLabel: msgs.WorkFolderChoose()}
+	draft, effective := form.Draft.WorkingDirectory, a.workDir
+	if form.initial.WorkingDirectory == "" && a.connectionSaved == nil && !a.connectionLegacy {
+		effective = ""
+	}
+	pick := a.chooseFolder
+	form.Busy = true
+	go func() {
+		opts.DefaultPath = workFolderStart(draft, effective)
+		path, err := chooseWorkFolder(pick, opts)
+		a.updateUI(func() {
+			form.Busy = false
+			if a.shutdownStarted || generation != a.folderChoiceGeneration || a.connectionForm != form || !a.settingsOpen || a.settingsTab != settingsTabConnection {
+				return
+			}
+			form.focusFolder = true
+			if err != nil {
+				form.folderError = err.Error()
+			} else if path != "" {
+				form.Draft.WorkingDirectory = path
+				delete(form.Errors, "WorkingDirectory")
+				form.folderError = ""
+			}
+		})
+	}()
 }
 
 func (a *appModel) saveConnection(config connectionConfig) {
@@ -160,7 +249,7 @@ func (a *appModel) saveAndApplyConnection(config connectionConfig) {
 func (a *appModel) saveConnectionWithApply(config connectionConfig, applyAfterSave bool) {
 	a.ensureConnectionForm()
 	form := a.connectionForm
-	if form.Busy || a.shutdownStarted {
+	if form.Busy || a.shutdownStarted || a.dataRecoveryBlocksChanges() {
 		return
 	}
 	path := a.connectionPath
@@ -169,7 +258,10 @@ func (a *appModel) saveConnectionWithApply(config connectionConfig, applyAfterSa
 		a.connectionPath = path
 	}
 	needStore := a.store == nil
-	storePath := a.storePath
+	if needStore || a.localSaveErr != "" {
+		// persist owns local state and its error; the connection write reports independently.
+		_ = a.persist()
+	}
 	form.Busy = true
 	form.Error = ""
 	form.ErrorDetail = ""
@@ -191,10 +283,6 @@ func (a *appModel) saveConnectionWithApply(config connectionConfig, applyAfterSa
 			})
 			return
 		}
-		var store *contactStore
-		if needStore {
-			store, err = openContactStore(storePath, config.WorkingDirectory)
-		}
 		a.updateUI(func() {
 			a.connectionSaveInFlight = false
 			form.Busy = false
@@ -207,13 +295,12 @@ func (a *appModel) saveConnectionWithApply(config connectionConfig, applyAfterSa
 			}
 			a.connectionForm.Error = ""
 			a.connectionForm.ErrorDetail = ""
-			if err != nil {
+			if a.localSaveErr != "" {
 				a.connectionForm.Error = connStatusSavedStoreFailed
-				a.connectionForm.ErrorDetail = a.redactConnectionText(err.Error())
-			} else if store != nil {
+				a.connectionForm.ErrorDetail = a.redactConnectionText(a.localSaveErr)
+			} else if needStore {
 				a.workDir = config.WorkingDirectory
 				a.startupDetailsOpen = false
-				applyStoreSelection(a, store)
 			}
 			if applyAfterSave && !a.shutdownStarted {
 				if reason := a.connectionReloadBlocked(); reason != "" {
@@ -254,7 +341,7 @@ func (a *appModel) connectionReloadBlocked() string {
 	if a.connectionSaved == nil {
 		return connBlockedNoSaved
 	}
-	if a.store == nil {
+	if a.store == nil || a.localSaveErr != "" {
 		return connBlockedStore
 	}
 	if runtimeHasExited(a.rt) {
@@ -276,7 +363,7 @@ func (a *appModel) connectionReloadBlocked() string {
 func (a *appModel) applyConnection() {
 	a.ensureConnectionForm()
 	form := a.connectionForm
-	if form.Busy || a.shutdownStarted {
+	if form.Busy || a.shutdownStarted || a.dataRecoveryBlocksChanges() {
 		return
 	}
 	if reason := a.connectionReloadBlocked(); reason != "" {
@@ -467,7 +554,7 @@ func (a *appModel) runOnUI(fn func()) {
 func (a *appModel) testConnection(config connectionConfig) {
 	a.ensureConnectionForm()
 	form := a.connectionForm
-	if form.Busy || a.shutdownStarted {
+	if form.Busy || a.shutdownStarted || a.dataRecoveryBlocksChanges() {
 		return
 	}
 	binary := findRuntimeBinary()
@@ -683,10 +770,10 @@ func (c *runtimeClient) createConfiguredSessionWithTools(workingDir, systemPromp
 }
 
 // finishShutdown drains Runtime only after in-flight history, metadata,
-// issue/conversation submission, and result reads have delivered their final
-// UI callbacks; those callbacks re-enter this function.
+// issue/conversation submission, result reads, and theme installs have delivered
+// their final UI callbacks; those callbacks re-enter this function.
 func (a *appModel) finishShutdown() {
-	if a.quitReady || a.shutdownDrainStarted || a.connectionSaveInFlight || a.connectionApplying || a.connectionTesting || a.modelOpActive || a.contactHistoryInFlight > 0 || a.resultInFlight > 0 || a.submissionInFlight > 0 || a.issueToolReleaseInFlight > 0 || a.metadataInFlight > 0 {
+	if a.quitReady || a.shutdownDrainStarted || (a.dataRecovery != nil && a.dataRecovery.inFlight) || a.connectionSaveInFlight || a.connectionApplying || a.connectionTesting || a.modelOpActive || a.contactHistoryInFlight > 0 || a.resultInFlight > 0 || a.submissionInFlight > 0 || a.issueToolReleaseInFlight > 0 || a.metadataInFlight > 0 || (a.themeImport != nil && a.themeImport.installInFlight) {
 		return
 	}
 	if a.rt == nil {

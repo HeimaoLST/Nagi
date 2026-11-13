@@ -11,6 +11,8 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo/ui"
+
+	"github.com/HeimaoLST/Nagi/locales"
 )
 
 func appReadingTestApp(t *testing.T) (*appModel, *contact) {
@@ -311,6 +313,7 @@ func TestAppFourColumnTableAndCodeFitReadingBubble(t *testing.T) {
 
 func TestAppChatScrollUpSurvivesStreamAppendAndBackToLatest(t *testing.T) {
 	a, ct := appReadingTestApp(t)
+	recoveryTestStore(t, a)
 	for i := 0; i < 50; i++ {
 		ct.Messages = append(ct.Messages, &message{
 			Key: fmt.Sprintf("m-%02d", i), Kind: msgContact,
@@ -385,6 +388,11 @@ func TestAppChatScrollUpSurvivesStreamAppendAndBackToLatest(t *testing.T) {
 	}
 	if got := tr.Clipboard(); got != selected {
 		t.Fatalf("appearance switch changed copied selection: %q -> %q", selected, got)
+	}
+	tr.SetClipboard("")
+	tr.Command("copy")
+	if got := tr.Clipboard(); got != selected {
+		t.Fatalf("appearance switch lost the active selection before append: %q -> %q", selected, got)
 	}
 
 	firstBeforeAppend, _ := ct.list.Visible()
@@ -801,5 +809,115 @@ func TestIssueResultMarkdownLinksUseRunAndFileOrigins(t *testing.T) {
 	}
 	if len(paths) != 2 || paths[0] != filepath.Join(runRoot, "target.md") || paths[1] != filepath.Join(documentRoot, "target.md") {
 		t.Fatalf("run/file reader paths=%q", paths)
+	}
+}
+
+func TestSaveFailureAppearanceKeepsReaderSelection(t *testing.T) {
+	for _, locale := range []string{"en", "zh-Hans"} {
+		t.Run(locale, func(t *testing.T) {
+			a, ct := appReadingTestApp(t)
+			a.windowWidth, a.uiLocale, a.appearanceMode = 1040, locale, appearanceLight
+			a.appearanceThemes = loadCustomThemes(t.TempDir())
+			ct.Draft = "Draft retained across a failed appearance save — 你好"
+			for i := 0; i < 50; i++ {
+				ct.Messages = append(ct.Messages, &message{Key: fmt.Sprintf("m-%02d", i), Kind: msgContact, Text: fmt.Sprintf("message %02d\n\nwith a second line", i)})
+			}
+			ct.Messages = append(ct.Messages, &message{Key: "live:t1:text:a1", Kind: msgContact, TaskID: "t1", ItemID: "a1", Text: "live start", Streaming: true})
+			recoveryTestStore(t, a)
+			goodPath := a.store.path
+			goodBytes, err := os.ReadFile(goodPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if a.localSaveErr != "" || a.rt != nil {
+				t.Fatal("valid isolated-store setup failed")
+			}
+			tr := ui.NewTester(a.view, 1040, 720)
+			tr.SetLocale(locale)
+			tr.Frame()
+			msgs := locales.In(locale)
+			viewport, ok := tr.Find(msgs.ConversationMessagesLabel())
+			if !ok || viewport.W <= 0 || viewport.H <= 0 {
+				t.Fatal("actual chat viewport missing")
+			}
+			for i := 0; i < 3 && ct.list.AtEnd(); i++ {
+				tr.Scroll(viewport.X+viewport.W/2, viewport.Y+viewport.H/2, 0, -4000)
+				tr.Frame()
+			}
+			if ct.list.AtEnd() || !tr.HasText(msgs.BackToLatest()) {
+				t.Fatal("reader fixture did not pause above latest")
+			}
+			first, _ := ct.list.Visible()
+			clicked := -1
+			var row ui.Rect
+			for i := first; i < len(ct.Messages)-1; i++ {
+				candidate, found := tr.Find(fmt.Sprintf("message %02d", i))
+				if found && candidate.W > 0 && candidate.H > 0 && candidate.Y >= viewport.Y && candidate.Y+candidate.H <= viewport.Y+viewport.H {
+					clicked, row = i, candidate
+					break
+				}
+			}
+			if clicked < 0 {
+				t.Fatal("no fully visible earlier Markdown paragraph to select")
+			}
+			tr.ClickAt(row.X+row.W/2, row.Y+row.H/2)
+			tr.Command("selectAll")
+			tr.SetClipboard("")
+			tr.Command("copy")
+			selected := tr.Clipboard()
+			if selected == "" || selected != ct.Messages[clicked].Text {
+				t.Fatalf("reader precondition copied %q, want original %q", selected, ct.Messages[clicked].Text)
+			}
+			ownerID, sessionID, draft := ct.ID, ct.SessionID, ct.Draft
+			anchor, _ := ct.list.Visible()
+			capture := func(phase string) {
+				current, _ := ct.list.Visible()
+				t.Logf("phase=%s anchor=%d paused=%t owner=%q draft=%q localSaveErr=%q appearanceError=%q clipboard=%q", phase, current, !ct.list.AtEnd(), a.selectedContact().ID, ct.Draft, a.localSaveErr, a.appearanceError, tr.Clipboard())
+				if dir := os.Getenv("NAGI_SAVE_ERROR_PREVIEW_DIR"); dir != "" {
+					if err := os.MkdirAll(dir, 0755); err != nil {
+						t.Fatal(err)
+					}
+					writePreviewPNG(t, filepath.Join(dir, "reader-"+locale+"-"+phase+".png"), tr.Image())
+				}
+			}
+			capture("selected-before-failure")
+			blockedParent := filepath.Join(t.TempDir(), "regular-file-parent")
+			if err := os.WriteFile(blockedParent, []byte("This is a file, not a directory."), 0600); err != nil {
+				t.Fatal(err)
+			}
+			a.store.path = filepath.Join(blockedParent, "contacts.json")
+			// Invoke the existing appearance action without a deliberate focus-changing navigation.
+			a.setAppearanceMode(appearanceDark)
+			tr.Frame()
+			capture("appearance-error-reflow")
+			if a.localSaveErr == "" || a.appearanceError != appearanceStatusSaveFailed || !tr.HasText(msgs.RecoveryLocalSaveFailed()) {
+				t.Fatal("appearance action did not expose the genuine failed filesystem save")
+			}
+			if got, err := os.ReadFile(goodPath); err != nil || string(got) != string(goodBytes) {
+				t.Fatal("failed appearance save changed original good disk bytes")
+			}
+			after, _ := ct.list.Visible()
+			if a.selectedContact() != ct || ct.ID != ownerID || ct.SessionID != sessionID || ct.Draft != draft || ct.list.AtEnd() || after != anchor {
+				t.Fatal("failed appearance save changed owner/draft or paused anchor")
+			}
+			tr.SetClipboard("")
+			tr.Command("copy")
+			capture("fresh-copy-after-error")
+			if got := tr.Clipboard(); got != selected {
+				t.Fatalf("AC-SAVE1: failed-save error reflow lost active reader selection before any stream delta: copied %q, want %q", got, selected)
+			}
+			a.applyEvent(ct, runtimeEventEnvelope{Version: 1, Type: "event", SessionID: "s1", TaskID: "t1", MessageID: "m1", Event: &runtimeEvent{Type: "response_text_delta", ItemID: "a1", Delta: " appended"}})
+			tr.Frame()
+			after, _ = ct.list.Visible()
+			tr.SetClipboard("")
+			tr.Command("copy")
+			capture("fresh-copy-after-stream")
+			if ct.list.AtEnd() || after != anchor || tr.Clipboard() != selected || a.selectedContact() != ct || ct.ID != ownerID || ct.SessionID != sessionID || ct.Draft != draft {
+				t.Fatal("AC-SAVE1: controlled stream delta changed active selection, anchor or owned draft")
+			}
+			if got, err := os.ReadFile(goodPath); err != nil || string(got) != string(goodBytes) || a.rt != nil {
+				t.Fatal("controlled stream changed original saved file or launched Runtime")
+			}
+		})
 	}
 }

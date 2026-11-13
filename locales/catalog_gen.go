@@ -680,13 +680,13 @@ func (msgs Messages) ConnectionStatusConnecting() string {
 	return Catalog.Format(msgs.locale, "connectionStatusConnecting", nil)
 }
 
-// ConnectionRecoverySetupHint says "Complete the connection settings to start the runtime."
+// ConnectionRecoverySetupHint says "Open Connection & model in Settings. Enter your API connection, model and work folder, then choose Save and apply. Yo…"
 // in the language the app shows.
 //
 // The recovery hint for a first-use setup with no connection.
 func ConnectionRecoverySetupHint() string { return In(i18n.Locale()).ConnectionRecoverySetupHint() }
 
-// ConnectionRecoverySetupHint says "Complete the connection settings to start the runtime."
+// ConnectionRecoverySetupHint says "Open Connection & model in Settings. Enter your API connection, model and work folder, then choose Save and apply. Yo…"
 // in the language of msgs.
 //
 // The recovery hint for a first-use setup with no connection.
@@ -772,13 +772,13 @@ func (msgs Messages) ConnectionRecoveryManagedTitle() string {
 	return Catalog.Format(msgs.locale, "connectionRecoveryManagedTitle", nil)
 }
 
-// ConnectionRecoveryManagedHint says "Fix Connection settings, then save and apply."
+// ConnectionRecoveryManagedHint says "Connection startup did not finish. Review Connection & model; Configuration details shows the recorded error. Applyin…"
 // in the language the app shows.
 //
 // The recovery hint for a managed saved connection that could not start.
 func ConnectionRecoveryManagedHint() string { return In(i18n.Locale()).ConnectionRecoveryManagedHint() }
 
-// ConnectionRecoveryManagedHint says "Fix Connection settings, then save and apply."
+// ConnectionRecoveryManagedHint says "Connection startup did not finish. Review Connection & model; Configuration details shows the recorded error. Applyin…"
 // in the language of msgs.
 //
 // The recovery hint for a managed saved connection that could not start.
@@ -2650,21 +2650,21 @@ func (msgs Messages) SendAcceptedState() string {
 	return Catalog.Format(msgs.locale, "sendAcceptedState", nil)
 }
 
-// SendUnknownState says "Delivery not confirmed. Reload to verify before sending again."
+// SendUnknownState says "Delivery is unconfirmed. Choose Reload to check the task and history. Nothing will be resent by Reload."
 // in the language the app shows.
 func SendUnknownState() string { return In(i18n.Locale()).SendUnknownState() }
 
-// SendUnknownState says "Delivery not confirmed. Reload to verify before sending again."
+// SendUnknownState says "Delivery is unconfirmed. Choose Reload to check the task and history. Nothing will be resent by Reload."
 // in the language of msgs.
 func (msgs Messages) SendUnknownState() string {
 	return Catalog.Format(msgs.locale, "sendUnknownState", nil)
 }
 
-// SendDisconnectedState says "Runtime disconnected; restart Nagi to check the task and history."
+// SendDisconnectedState says "The connection was lost and the result is unconfirmed. Save or copy any unsaved text before quitting. Reopen Nagi and…"
 // in the language the app shows.
 func SendDisconnectedState() string { return In(i18n.Locale()).SendDisconnectedState() }
 
-// SendDisconnectedState says "Runtime disconnected; restart Nagi to check the task and history."
+// SendDisconnectedState says "The connection was lost and the result is unconfirmed. Save or copy any unsaved text before quitting. Reopen Nagi and…"
 // in the language of msgs.
 func (msgs Messages) SendDisconnectedState() string {
 	return Catalog.Format(msgs.locale, "sendDisconnectedState", nil)
@@ -3282,11 +3282,11 @@ func (msgs Messages) ConnectionUnsavedForm() string {
 	return Catalog.Format(msgs.locale, "connectionUnsavedForm", nil)
 }
 
-// ConnectionSavedAwaitingApply says "Saved configuration is awaiting Apply."
+// ConnectionSavedAwaitingApply says "Saved, but not applied. When applying is available, choose Apply saved. Running work keeps its settings."
 // in the language the app shows.
 func ConnectionSavedAwaitingApply() string { return In(i18n.Locale()).ConnectionSavedAwaitingApply() }
 
-// ConnectionSavedAwaitingApply says "Saved configuration is awaiting Apply."
+// ConnectionSavedAwaitingApply says "Saved, but not applied. When applying is available, choose Apply saved. Running work keeps its settings."
 // in the language of msgs.
 func (msgs Messages) ConnectionSavedAwaitingApply() string {
 	return Catalog.Format(msgs.locale, "connectionSavedAwaitingApply", nil)
@@ -3926,23 +3926,23 @@ func (msgs Messages) RuntimeStatusConnectionOnly(status string) string {
 	return Catalog.Format(msgs.locale, "runtimeStatusConnectionOnly", map[string]any{"status": status})
 }
 
-// RuntimeHelperNotStartedLocalStore says "not started; fix the local contact store first"
+// RuntimeHelperNotStartedLocalStore says "not started because local data is unavailable"
 // in the language the app shows.
 func RuntimeHelperNotStartedLocalStore() string {
 	return In(i18n.Locale()).RuntimeHelperNotStartedLocalStore()
 }
 
-// RuntimeHelperNotStartedLocalStore says "not started; fix the local contact store first"
+// RuntimeHelperNotStartedLocalStore says "not started because local data is unavailable"
 // in the language of msgs.
 func (msgs Messages) RuntimeHelperNotStartedLocalStore() string {
 	return Catalog.Format(msgs.locale, "runtimeHelperNotStartedLocalStore", nil)
 }
 
-// RuntimeHelperNotFound says "not found (expected next to Saki as Saki-runtime, or set SAKI_RUNTIME_BIN)"
+// RuntimeHelperNotFound says "not found in the checked runtime locations"
 // in the language the app shows.
 func RuntimeHelperNotFound() string { return In(i18n.Locale()).RuntimeHelperNotFound() }
 
-// RuntimeHelperNotFound says "not found (expected next to Saki as Saki-runtime, or set SAKI_RUNTIME_BIN)"
+// RuntimeHelperNotFound says "not found in the checked runtime locations"
 // in the language of msgs.
 func (msgs Messages) RuntimeHelperNotFound() string {
 	return Catalog.Format(msgs.locale, "runtimeHelperNotFound", nil)
@@ -4086,11 +4086,11 @@ func (msgs Messages) RuntimeConnectionManagedNote() string {
 	return Catalog.Format(msgs.locale, "runtimeConnectionManagedNote", nil)
 }
 
-// RuntimeHostConfigNote says "Host configuration: API_KEY is required; SAKI_API, SAKI_BASE_URL and SAKI_MODEL have runtime defaults. Set them in th…"
+// RuntimeHostConfigNote says "This launch uses external developer connection settings. Connection & model can save a Nagi-managed connection."
 // in the language the app shows.
 func RuntimeHostConfigNote() string { return In(i18n.Locale()).RuntimeHostConfigNote() }
 
-// RuntimeHostConfigNote says "Host configuration: API_KEY is required; SAKI_API, SAKI_BASE_URL and SAKI_MODEL have runtime defaults. Set them in th…"
+// RuntimeHostConfigNote says "This launch uses external developer connection settings. Connection & model can save a Nagi-managed connection."
 // in the language of msgs.
 func (msgs Messages) RuntimeHostConfigNote() string {
 	return Catalog.Format(msgs.locale, "runtimeHostConfigNote", nil)
@@ -4576,13 +4576,13 @@ func (msgs Messages) ValidationEndpointFragment() string {
 	return Catalog.Format(msgs.locale, "validationEndpointFragment", nil)
 }
 
-// ValidationWorkspaceAbsolutePath says "Enter an absolute path."
+// ValidationWorkspaceAbsolutePath says "Choose a folder or enter its absolute path."
 // in the language the app shows.
 func ValidationWorkspaceAbsolutePath() string {
 	return In(i18n.Locale()).ValidationWorkspaceAbsolutePath()
 }
 
-// ValidationWorkspaceAbsolutePath says "Enter an absolute path."
+// ValidationWorkspaceAbsolutePath says "Choose a folder or enter its absolute path."
 // in the language of msgs.
 func (msgs Messages) ValidationWorkspaceAbsolutePath() string {
 	return Catalog.Format(msgs.locale, "validationWorkspaceAbsolutePath", nil)
@@ -4680,11 +4680,11 @@ func (msgs Messages) ConnectionStatusCheckingSaved() string {
 	return Catalog.Format(msgs.locale, "connectionStatusCheckingSaved", nil)
 }
 
-// ConnectionStatusApplied says "Applied. New work uses this connection."
+// ConnectionStatusApplied says "Connection applied. New conversations and work use its defaults; existing contexts keep their settings. Applying does…"
 // in the language the app shows.
 func ConnectionStatusApplied() string { return In(i18n.Locale()).ConnectionStatusApplied() }
 
-// ConnectionStatusApplied says "Applied. New work uses this connection."
+// ConnectionStatusApplied says "Connection applied. New conversations and work use its defaults; existing contexts keep their settings. Applying does…"
 // in the language of msgs.
 func (msgs Messages) ConnectionStatusApplied() string {
 	return Catalog.Format(msgs.locale, "connectionStatusApplied", nil)
@@ -4712,13 +4712,13 @@ func (msgs Messages) ConnectionStatusTestCompleted(model string, endpoint string
 	return Catalog.Format(msgs.locale, "connectionStatusTestCompleted", map[string]any{"model": model, "endpoint": endpoint, "context": context, "output": output})
 }
 
-// ConnectionStatusSavedStoreFailed says "Configuration was saved, but the local contact store could not be created: {error}"
+// ConnectionStatusSavedStoreFailed says "Connection settings are saved, but local changes are not saved. Use Retry save for local autosave; profile edits use …"
 // in the language the app shows.
 func ConnectionStatusSavedStoreFailed(error string) string {
 	return In(i18n.Locale()).ConnectionStatusSavedStoreFailed(error)
 }
 
-// ConnectionStatusSavedStoreFailed says "Configuration was saved, but the local contact store could not be created: {error}"
+// ConnectionStatusSavedStoreFailed says "Connection settings are saved, but local changes are not saved. Use Retry save for local autosave; profile edits use …"
 // in the language of msgs.
 func (msgs Messages) ConnectionStatusSavedStoreFailed(error string) string {
 	return Catalog.Format(msgs.locale, "connectionStatusSavedStoreFailed", map[string]any{"error": error})
@@ -4838,13 +4838,13 @@ func (msgs Messages) ConnectionErrorExitedDuringValidation() string {
 	return Catalog.Format(msgs.locale, "connectionErrorExitedDuringValidation", nil)
 }
 
-// ConnectionErrorSavedNeedsRepair says "Saved connection settings need repair. Check the values and save again."
+// ConnectionErrorSavedNeedsRepair says "Saved connection settings could not be used. Review the fields in Connection & model, then choose Save and apply."
 // in the language the app shows.
 func ConnectionErrorSavedNeedsRepair() string {
 	return In(i18n.Locale()).ConnectionErrorSavedNeedsRepair()
 }
 
-// ConnectionErrorSavedNeedsRepair says "Saved connection settings need repair. Check the values and save again."
+// ConnectionErrorSavedNeedsRepair says "Saved connection settings could not be used. Review the fields in Connection & model, then choose Save and apply."
 // in the language of msgs.
 func (msgs Messages) ConnectionErrorSavedNeedsRepair() string {
 	return Catalog.Format(msgs.locale, "connectionErrorSavedNeedsRepair", nil)
@@ -4890,11 +4890,11 @@ func (msgs Messages) ConnectionBlockedNoSaved() string {
 	return Catalog.Format(msgs.locale, "connectionBlockedNoSaved", nil)
 }
 
-// ConnectionBlockedStore says "The local contact store is unavailable. Fix its file or permissions, then save again."
+// ConnectionBlockedStore says "Local data is unavailable or has unsaved changes, so applying is blocked. Review the local save warning and Configura…"
 // in the language the app shows.
 func ConnectionBlockedStore() string { return In(i18n.Locale()).ConnectionBlockedStore() }
 
-// ConnectionBlockedStore says "The local contact store is unavailable. Fix its file or permissions, then save again."
+// ConnectionBlockedStore says "Local data is unavailable or has unsaved changes, so applying is blocked. Review the local save warning and Configura…"
 // in the language of msgs.
 func (msgs Messages) ConnectionBlockedStore() string {
 	return Catalog.Format(msgs.locale, "connectionBlockedStore", nil)
@@ -4910,13 +4910,13 @@ func (msgs Messages) ConnectionBlockedActiveWork() string {
 	return Catalog.Format(msgs.locale, "connectionBlockedActiveWork", nil)
 }
 
-// ConnectionBlockedUntrustedIssue says "A task run has no trusted terminal state; reload or reconcile it before applying a new connection."
+// ConnectionBlockedUntrustedIssue says "A run has an unconfirmed result. Open its task and choose Check run before applying a new connection."
 // in the language the app shows.
 func ConnectionBlockedUntrustedIssue() string {
 	return In(i18n.Locale()).ConnectionBlockedUntrustedIssue()
 }
 
-// ConnectionBlockedUntrustedIssue says "A task run has no trusted terminal state; reload or reconcile it before applying a new connection."
+// ConnectionBlockedUntrustedIssue says "A run has an unconfirmed result. Open its task and choose Check run before applying a new connection."
 // in the language of msgs.
 func (msgs Messages) ConnectionBlockedUntrustedIssue() string {
 	return Catalog.Format(msgs.locale, "connectionBlockedUntrustedIssue", nil)
@@ -5334,11 +5334,11 @@ func (msgs Messages) ModelLastReadTools(tools string) string {
 	return Catalog.Format(msgs.locale, "modelLastReadTools", map[string]any{"tools": tools})
 }
 
-// ModelUnconfirmedHint says "Runtime has not confirmed the current configuration; these are the last read values. Refresh is available."
+// ModelUnconfirmedHint says "The current settings are unconfirmed. Refresh reads them again; if Reload session is shown, use it before sending mor…"
 // in the language the app shows.
 func ModelUnconfirmedHint() string { return In(i18n.Locale()).ModelUnconfirmedHint() }
 
-// ModelUnconfirmedHint says "Runtime has not confirmed the current configuration; these are the last read values. Refresh is available."
+// ModelUnconfirmedHint says "The current settings are unconfirmed. Refresh reads them again; if Reload session is shown, use it before sending mor…"
 // in the language of msgs.
 func (msgs Messages) ModelUnconfirmedHint() string {
 	return Catalog.Format(msgs.locale, "modelUnconfirmedHint", nil)
@@ -5920,11 +5920,11 @@ func (msgs Messages) ModelReloadAction() string {
 	return Catalog.Format(msgs.locale, "modelReloadAction", nil)
 }
 
-// ModelUnconfirmedBanner says "Configuration commit is unconfirmed. Reload is required before this session can accept another task; Refresh only re-…"
+// ModelUnconfirmedBanner says "Current settings are unconfirmed. Choose Reload session before sending more work; Refresh only reads the settings."
 // in the language the app shows.
 func ModelUnconfirmedBanner() string { return In(i18n.Locale()).ModelUnconfirmedBanner() }
 
-// ModelUnconfirmedBanner says "Configuration commit is unconfirmed. Reload is required before this session can accept another task; Refresh only re-…"
+// ModelUnconfirmedBanner says "Current settings are unconfirmed. Choose Reload session before sending more work; Refresh only reads the settings."
 // in the language of msgs.
 func (msgs Messages) ModelUnconfirmedBanner() string {
 	return Catalog.Format(msgs.locale, "modelUnconfirmedBanner", nil)
@@ -7714,11 +7714,11 @@ func (msgs Messages) TaskContextFilePathPlaceholder() string {
 	return Catalog.Format(msgs.locale, "taskContextFilePathPlaceholder", nil)
 }
 
-// TaskContextFileRules says "Only UTF-8 text files are supported; PDF, Office, and other binary files are rejected. The file is read once now; lat…"
+// TaskContextFileRules says "Only UTF-8 text files are supported; PDF, Office, and other binary files are rejected. Save file reads it once; later…"
 // in the language the app shows.
 func TaskContextFileRules() string { return In(i18n.Locale()).TaskContextFileRules() }
 
-// TaskContextFileRules says "Only UTF-8 text files are supported; PDF, Office, and other binary files are rejected. The file is read once now; lat…"
+// TaskContextFileRules says "Only UTF-8 text files are supported; PDF, Office, and other binary files are rejected. Save file reads it once; later…"
 // in the language of msgs.
 func (msgs Messages) TaskContextFileRules() string {
 	return Catalog.Format(msgs.locale, "taskContextFileRules", nil)
@@ -9946,12 +9946,924 @@ func (msgs Messages) IssueCollaborationUnavailable() string {
 	return Catalog.Format(msgs.locale, "issueCollaborationUnavailable", nil)
 }
 
-// IssueCollaborationRepairHint says "Fix the diagnostic error, then open Connection & model and apply the saved connection again, or restart the app."
+// IssueCollaborationRepairHint says "Task coordination is unavailable. Review Connection & model; if Apply saved is available, use it to try starting coor…"
 // in the language the app shows.
 func IssueCollaborationRepairHint() string { return In(i18n.Locale()).IssueCollaborationRepairHint() }
 
-// IssueCollaborationRepairHint says "Fix the diagnostic error, then open Connection & model and apply the saved connection again, or restart the app."
+// IssueCollaborationRepairHint says "Task coordination is unavailable. Review Connection & model; if Apply saved is available, use it to try starting coor…"
 // in the language of msgs.
 func (msgs Messages) IssueCollaborationRepairHint() string {
 	return Catalog.Format(msgs.locale, "issueCollaborationRepairHint", nil)
+}
+
+// ThemeLight says "Light theme"
+// in the language the app shows.
+//
+// General settings local theme selection, discovery and non-blocking
+// diagnostics.
+func ThemeLight() string { return In(i18n.Locale()).ThemeLight() }
+
+// ThemeLight says "Light theme"
+// in the language of msgs.
+//
+// General settings local theme selection, discovery and non-blocking
+// diagnostics.
+func (msgs Messages) ThemeLight() string {
+	return Catalog.Format(msgs.locale, "themeLight", nil)
+}
+
+// ThemeDark says "Dark theme"
+// in the language the app shows.
+//
+// General settings local theme selection, discovery and non-blocking
+// diagnostics.
+func ThemeDark() string { return In(i18n.Locale()).ThemeDark() }
+
+// ThemeDark says "Dark theme"
+// in the language of msgs.
+//
+// General settings local theme selection, discovery and non-blocking
+// diagnostics.
+func (msgs Messages) ThemeDark() string {
+	return Catalog.Format(msgs.locale, "themeDark", nil)
+}
+
+// ThemePaper says "Paper"
+// in the language the app shows.
+//
+// General settings local theme selection, discovery and non-blocking
+// diagnostics.
+func ThemePaper() string { return In(i18n.Locale()).ThemePaper() }
+
+// ThemePaper says "Paper"
+// in the language of msgs.
+//
+// General settings local theme selection, discovery and non-blocking
+// diagnostics.
+func (msgs Messages) ThemePaper() string {
+	return Catalog.Format(msgs.locale, "themePaper", nil)
+}
+
+// ThemeMoss says "Moss"
+// in the language the app shows.
+//
+// General settings local theme selection, discovery and non-blocking
+// diagnostics.
+func ThemeMoss() string { return In(i18n.Locale()).ThemeMoss() }
+
+// ThemeMoss says "Moss"
+// in the language of msgs.
+//
+// General settings local theme selection, discovery and non-blocking
+// diagnostics.
+func (msgs Messages) ThemeMoss() string {
+	return Catalog.Format(msgs.locale, "themeMoss", nil)
+}
+
+// ThemeUnavailable says "{id} unavailable — using {builtin}"
+// in the language the app shows.
+//
+// General settings local theme selection, discovery and non-blocking
+// diagnostics.
+func ThemeUnavailable(id string, builtin string) string {
+	return In(i18n.Locale()).ThemeUnavailable(id, builtin)
+}
+
+// ThemeUnavailable says "{id} unavailable — using {builtin}"
+// in the language of msgs.
+//
+// General settings local theme selection, discovery and non-blocking
+// diagnostics.
+func (msgs Messages) ThemeUnavailable(id string, builtin string) string {
+	return Catalog.Format(msgs.locale, "themeUnavailable", map[string]any{"id": id, "builtin": builtin})
+}
+
+// ThemeFilesHint says "Add version-1 theme JSON files to this folder, then reload. Light and dark choices are saved independently. Low contr…"
+// in the language the app shows.
+//
+// General settings local theme selection, discovery and non-blocking
+// diagnostics.
+func ThemeFilesHint() string { return In(i18n.Locale()).ThemeFilesHint() }
+
+// ThemeFilesHint says "Add version-1 theme JSON files to this folder, then reload. Light and dark choices are saved independently. Low contr…"
+// in the language of msgs.
+//
+// General settings local theme selection, discovery and non-blocking
+// diagnostics.
+func (msgs Messages) ThemeFilesHint() string {
+	return Catalog.Format(msgs.locale, "themeFilesHint", nil)
+}
+
+// ThemeReload says "Reload themes"
+// in the language the app shows.
+//
+// General settings local theme selection, discovery and non-blocking
+// diagnostics.
+func ThemeReload() string { return In(i18n.Locale()).ThemeReload() }
+
+// ThemeReload says "Reload themes"
+// in the language of msgs.
+//
+// General settings local theme selection, discovery and non-blocking
+// diagnostics.
+func (msgs Messages) ThemeReload() string {
+	return Catalog.Format(msgs.locale, "themeReload", nil)
+}
+
+// ThemeFileError says "{file} ({field}): {message}"
+// in the language the app shows.
+//
+// General settings local theme selection, discovery and non-blocking
+// diagnostics.
+func ThemeFileError(file string, field string, message string) string {
+	return In(i18n.Locale()).ThemeFileError(file, field, message)
+}
+
+// ThemeFileError says "{file} ({field}): {message}"
+// in the language of msgs.
+//
+// General settings local theme selection, discovery and non-blocking
+// diagnostics.
+func (msgs Messages) ThemeFileError(file string, field string, message string) string {
+	return Catalog.Format(msgs.locale, "themeFileError", map[string]any{"file": file, "field": field, "message": message})
+}
+
+// ThemeContrastWarning says "{id}: {foreground} on {background} has contrast {ratio}:1 (recommended {minimum}:1)."
+// in the language the app shows.
+//
+// General settings local theme selection, discovery and non-blocking
+// diagnostics.
+func ThemeContrastWarning(id string, foreground string, background string, ratio string, minimum string) string {
+	return In(i18n.Locale()).ThemeContrastWarning(id, foreground, background, ratio, minimum)
+}
+
+// ThemeContrastWarning says "{id}: {foreground} on {background} has contrast {ratio}:1 (recommended {minimum}:1)."
+// in the language of msgs.
+//
+// General settings local theme selection, discovery and non-blocking
+// diagnostics.
+func (msgs Messages) ThemeContrastWarning(id string, foreground string, background string, ratio string, minimum string) string {
+	return Catalog.Format(msgs.locale, "themeContrastWarning", map[string]any{"id": id, "foreground": foreground, "background": background, "ratio": ratio, "minimum": minimum})
+}
+
+// WorkFolderChoose says "Choose folder…"
+// in the language the app shows.
+func WorkFolderChoose() string { return In(i18n.Locale()).WorkFolderChoose() }
+
+// WorkFolderChoose says "Choose folder…"
+// in the language of msgs.
+func (msgs Messages) WorkFolderChoose() string {
+	return Catalog.Format(msgs.locale, "workFolderChoose", nil)
+}
+
+// WorkFolderChooseTitle says "Choose a work folder"
+// in the language the app shows.
+func WorkFolderChooseTitle() string { return In(i18n.Locale()).WorkFolderChooseTitle() }
+
+// WorkFolderChooseTitle says "Choose a work folder"
+// in the language of msgs.
+func (msgs Messages) WorkFolderChooseTitle() string {
+	return Catalog.Format(msgs.locale, "workFolderChooseTitle", nil)
+}
+
+// WorkFolderUseDefault says "Use default folder"
+// in the language the app shows.
+func WorkFolderUseDefault() string { return In(i18n.Locale()).WorkFolderUseDefault() }
+
+// WorkFolderUseDefault says "Use default folder"
+// in the language of msgs.
+func (msgs Messages) WorkFolderUseDefault() string {
+	return Catalog.Format(msgs.locale, "workFolderUseDefault", nil)
+}
+
+// WorkFolderChooseFailed says "Could not choose this folder. Your edits are unchanged. Choose folder again. Details: {detail}"
+// in the language the app shows.
+func WorkFolderChooseFailed(detail string) string {
+	return In(i18n.Locale()).WorkFolderChooseFailed(detail)
+}
+
+// WorkFolderChooseFailed says "Could not choose this folder. Your edits are unchanged. Choose folder again. Details: {detail}"
+// in the language of msgs.
+func (msgs Messages) WorkFolderChooseFailed(detail string) string {
+	return Catalog.Format(msgs.locale, "workFolderChooseFailed", map[string]any{"detail": detail})
+}
+
+// WorkFolderRequiredHint says "Choose where Nagi will keep work files, or enter a folder path. Choose a folder before saving, testing, or applying t…"
+// in the language the app shows.
+func WorkFolderRequiredHint() string { return In(i18n.Locale()).WorkFolderRequiredHint() }
+
+// WorkFolderRequiredHint says "Choose where Nagi will keep work files, or enter a folder path. Choose a folder before saving, testing, or applying t…"
+// in the language of msgs.
+func (msgs Messages) WorkFolderRequiredHint() string {
+	return Catalog.Format(msgs.locale, "workFolderRequiredHint", nil)
+}
+
+// RecoveryProviderDenied says "The provider rejected this request ({status}). In Connection & model, check the API key and model access, then choose…"
+// in the language the app shows.
+//
+// Recovery guidance for an existing exact HTTP authentication
+// classification.
+func RecoveryProviderDenied(status string) string {
+	return In(i18n.Locale()).RecoveryProviderDenied(status)
+}
+
+// RecoveryProviderDenied says "The provider rejected this request ({status}). In Connection & model, check the API key and model access, then choose…"
+// in the language of msgs.
+//
+// Recovery guidance for an existing exact HTTP authentication
+// classification.
+func (msgs Messages) RecoveryProviderDenied(status string) string {
+	return Catalog.Format(msgs.locale, "recoveryProviderDenied", map[string]any{"status": status})
+}
+
+// RecoveryModelRequestFailed says "The model request failed. In Connection & model, check the API key, server address and model, then choose Test connec…"
+// in the language the app shows.
+func RecoveryModelRequestFailed() string { return In(i18n.Locale()).RecoveryModelRequestFailed() }
+
+// RecoveryModelRequestFailed says "The model request failed. In Connection & model, check the API key, server address and model, then choose Test connec…"
+// in the language of msgs.
+func (msgs Messages) RecoveryModelRequestFailed() string {
+	return Catalog.Format(msgs.locale, "recoveryModelRequestFailed", nil)
+}
+
+// RecoveryRunFailed says "This run failed. Review its details to choose the next step. For a connection problem, open Connection & model and ch…"
+// in the language the app shows.
+func RecoveryRunFailed() string { return In(i18n.Locale()).RecoveryRunFailed() }
+
+// RecoveryRunFailed says "This run failed. Review its details to choose the next step. For a connection problem, open Connection & model and ch…"
+// in the language of msgs.
+func (msgs Messages) RecoveryRunFailed() string {
+	return Catalog.Format(msgs.locale, "recoveryRunFailed", nil)
+}
+
+// RecoveryTechnicalDetailsHint says "Technical details may mention developer settings. Use Settings and the recovery actions for normal setup."
+// in the language the app shows.
+func RecoveryTechnicalDetailsHint() string { return In(i18n.Locale()).RecoveryTechnicalDetailsHint() }
+
+// RecoveryTechnicalDetailsHint says "Technical details may mention developer settings. Use Settings and the recovery actions for normal setup."
+// in the language of msgs.
+func (msgs Messages) RecoveryTechnicalDetailsHint() string {
+	return Catalog.Format(msgs.locale, "recoveryTechnicalDetailsHint", nil)
+}
+
+// RecoveryRuntimeMissing says "Nagi could not find its runtime component. A complete application package with that component is needed; this screen …"
+// in the language the app shows.
+func RecoveryRuntimeMissing() string { return In(i18n.Locale()).RecoveryRuntimeMissing() }
+
+// RecoveryRuntimeMissing says "Nagi could not find its runtime component. A complete application package with that component is needed; this screen …"
+// in the language of msgs.
+func (msgs Messages) RecoveryRuntimeMissing() string {
+	return Catalog.Format(msgs.locale, "recoveryRuntimeMissing", nil)
+}
+
+// RecoveryRuntimeStartFailed says "Nagi could not start its runtime component. Review the work folder in Connection & model and open Configuration detai…"
+// in the language the app shows.
+func RecoveryRuntimeStartFailed() string { return In(i18n.Locale()).RecoveryRuntimeStartFailed() }
+
+// RecoveryRuntimeStartFailed says "Nagi could not start its runtime component. Review the work folder in Connection & model and open Configuration detai…"
+// in the language of msgs.
+func (msgs Messages) RecoveryRuntimeStartFailed() string {
+	return Catalog.Format(msgs.locale, "recoveryRuntimeStartFailed", nil)
+}
+
+// RecoveryLocalSaveFailed says "Local changes are not saved. Keep this window open. Choose Retry save for local autosave, or Save changes for profile…"
+// in the language the app shows.
+func RecoveryLocalSaveFailed() string { return In(i18n.Locale()).RecoveryLocalSaveFailed() }
+
+// RecoveryLocalSaveFailed says "Local changes are not saved. Keep this window open. Choose Retry save for local autosave, or Save changes for profile…"
+// in the language of msgs.
+func (msgs Messages) RecoveryLocalSaveFailed() string {
+	return Catalog.Format(msgs.locale, "recoveryLocalSaveFailed", nil)
+}
+
+// RecoveryLocalDataUnavailable says "Local contacts and tasks are unavailable. Nagi has not replaced existing data. Choose a compatible recovery copy if y…"
+// in the language the app shows.
+func RecoveryLocalDataUnavailable() string { return In(i18n.Locale()).RecoveryLocalDataUnavailable() }
+
+// RecoveryLocalDataUnavailable says "Local contacts and tasks are unavailable. Nagi has not replaced existing data. Choose a compatible recovery copy if y…"
+// in the language of msgs.
+func (msgs Messages) RecoveryLocalDataUnavailable() string {
+	return Catalog.Format(msgs.locale, "recoveryLocalDataUnavailable", nil)
+}
+
+// RecoveryConnectionSaveFailed says "Connection settings could not be saved. Your edits are still here; review the details, then try Save again."
+// in the language the app shows.
+func RecoveryConnectionSaveFailed() string { return In(i18n.Locale()).RecoveryConnectionSaveFailed() }
+
+// RecoveryConnectionSaveFailed says "Connection settings could not be saved. Your edits are still here; review the details, then try Save again."
+// in the language of msgs.
+func (msgs Messages) RecoveryConnectionSaveFailed() string {
+	return Catalog.Format(msgs.locale, "recoveryConnectionSaveFailed", nil)
+}
+
+// RecoveryConnectionApplyFailed says "Saved connection settings could not be applied. Review the fields and Configuration details. No work is resent."
+// in the language the app shows.
+func RecoveryConnectionApplyFailed() string { return In(i18n.Locale()).RecoveryConnectionApplyFailed() }
+
+// RecoveryConnectionApplyFailed says "Saved connection settings could not be applied. Review the fields and Configuration details. No work is resent."
+// in the language of msgs.
+func (msgs Messages) RecoveryConnectionApplyFailed() string {
+	return Catalog.Format(msgs.locale, "recoveryConnectionApplyFailed", nil)
+}
+
+// RecoveryRequestFailed says "The request could not be completed. Review its details before trying again. Nothing is retried automatically."
+// in the language the app shows.
+func RecoveryRequestFailed() string { return In(i18n.Locale()).RecoveryRequestFailed() }
+
+// RecoveryRequestFailed says "The request could not be completed. Review its details before trying again. Nothing is retried automatically."
+// in the language of msgs.
+func (msgs Messages) RecoveryRequestFailed() string {
+	return Catalog.Format(msgs.locale, "recoveryRequestFailed", nil)
+}
+
+// RecoveryConnectionTestFailed says "Connection and model test did not complete successfully."
+// in the language the app shows.
+func RecoveryConnectionTestFailed() string { return In(i18n.Locale()).RecoveryConnectionTestFailed() }
+
+// RecoveryConnectionTestFailed says "Connection and model test did not complete successfully."
+// in the language of msgs.
+func (msgs Messages) RecoveryConnectionTestFailed() string {
+	return Catalog.Format(msgs.locale, "recoveryConnectionTestFailed", nil)
+}
+
+// RecoveryTaskAssociationMissing says "Nagi has no verified record of which task to check. Review the existing run details and history before continuing; no…"
+// in the language the app shows.
+func RecoveryTaskAssociationMissing() string {
+	return In(i18n.Locale()).RecoveryTaskAssociationMissing()
+}
+
+// RecoveryTaskAssociationMissing says "Nagi has no verified record of which task to check. Review the existing run details and history before continuing; no…"
+// in the language of msgs.
+func (msgs Messages) RecoveryTaskAssociationMissing() string {
+	return Catalog.Format(msgs.locale, "recoveryTaskAssociationMissing", nil)
+}
+
+// ThemeImportAction says "Import theme…"
+// in the language the app shows.
+func ThemeImportAction() string { return In(i18n.Locale()).ThemeImportAction() }
+
+// ThemeImportAction says "Import theme…"
+// in the language of msgs.
+func (msgs Messages) ThemeImportAction() string {
+	return Catalog.Format(msgs.locale, "themeImportAction", nil)
+}
+
+// ThemeImportTitle says "Choose a downloaded theme"
+// in the language the app shows.
+func ThemeImportTitle() string { return In(i18n.Locale()).ThemeImportTitle() }
+
+// ThemeImportTitle says "Choose a downloaded theme"
+// in the language of msgs.
+func (msgs Messages) ThemeImportTitle() string {
+	return Catalog.Format(msgs.locale, "themeImportTitle", nil)
+}
+
+// ThemeImportFilter says "JSON theme files"
+// in the language the app shows.
+func ThemeImportFilter() string { return In(i18n.Locale()).ThemeImportFilter() }
+
+// ThemeImportFilter says "JSON theme files"
+// in the language of msgs.
+func (msgs Messages) ThemeImportFilter() string {
+	return Catalog.Format(msgs.locale, "themeImportFilter", nil)
+}
+
+// ThemeImportHint says "Choose a downloaded .json theme file. Nagi validates and installs it for you; then choose it from the light or dark t…"
+// in the language the app shows.
+func ThemeImportHint() string { return In(i18n.Locale()).ThemeImportHint() }
+
+// ThemeImportHint says "Choose a downloaded .json theme file. Nagi validates and installs it for you; then choose it from the light or dark t…"
+// in the language of msgs.
+func (msgs Messages) ThemeImportHint() string {
+	return Catalog.Format(msgs.locale, "themeImportHint", nil)
+}
+
+// ThemeImportBusy says "Choosing or importing a theme…"
+// in the language the app shows.
+func ThemeImportBusy() string { return In(i18n.Locale()).ThemeImportBusy() }
+
+// ThemeImportBusy says "Choosing or importing a theme…"
+// in the language of msgs.
+func (msgs Messages) ThemeImportBusy() string {
+	return Catalog.Format(msgs.locale, "themeImportBusy", nil)
+}
+
+// ThemeImportFailed says "The theme could not be imported. Existing files and settings are unchanged. Choose another file or try again; built-i…"
+// in the language the app shows.
+func ThemeImportFailed() string { return In(i18n.Locale()).ThemeImportFailed() }
+
+// ThemeImportFailed says "The theme could not be imported. Existing files and settings are unchanged. Choose another file or try again; built-i…"
+// in the language of msgs.
+func (msgs Messages) ThemeImportFailed() string {
+	return Catalog.Format(msgs.locale, "themeImportFailed", nil)
+}
+
+// ThemeImportSucceeded says "Imported {name}. Choose it from the light or dark theme list. Your appearance mode and selected theme IDs were kept."
+// in the language the app shows.
+//
+// A local theme was installed without selecting a different ID or changing
+// appearance mode.
+func ThemeImportSucceeded(name string) string { return In(i18n.Locale()).ThemeImportSucceeded(name) }
+
+// ThemeImportSucceeded says "Imported {name}. Choose it from the light or dark theme list. Your appearance mode and selected theme IDs were kept."
+// in the language of msgs.
+//
+// A local theme was installed without selecting a different ID or changing
+// appearance mode.
+func (msgs Messages) ThemeImportSucceeded(name string) string {
+	return Catalog.Format(msgs.locale, "themeImportSucceeded", map[string]any{"name": name})
+}
+
+// RecoveryDataTitle says "Workbench data"
+// in the language the app shows.
+//
+// C8 workbench recovery GUI: recoveryDataTitle.
+func RecoveryDataTitle() string { return In(i18n.Locale()).RecoveryDataTitle() }
+
+// RecoveryDataTitle says "Workbench data"
+// in the language of msgs.
+//
+// C8 workbench recovery GUI: recoveryDataTitle.
+func (msgs Messages) RecoveryDataTitle() string {
+	return Catalog.Format(msgs.locale, "recoveryDataTitle", nil)
+}
+
+// SaveRecoveryCopyAction says "Save recovery copy…"
+// in the language the app shows.
+//
+// C8 workbench recovery GUI: saveRecoveryCopyAction.
+func SaveRecoveryCopyAction() string { return In(i18n.Locale()).SaveRecoveryCopyAction() }
+
+// SaveRecoveryCopyAction says "Save recovery copy…"
+// in the language of msgs.
+//
+// C8 workbench recovery GUI: saveRecoveryCopyAction.
+func (msgs Messages) SaveRecoveryCopyAction() string {
+	return Catalog.Format(msgs.locale, "saveRecoveryCopyAction", nil)
+}
+
+// RestorePausedAction says "Restore paused…"
+// in the language the app shows.
+//
+// C8 workbench recovery GUI: restorePausedAction.
+func RestorePausedAction() string { return In(i18n.Locale()).RestorePausedAction() }
+
+// RestorePausedAction says "Restore paused…"
+// in the language of msgs.
+//
+// C8 workbench recovery GUI: restorePausedAction.
+func (msgs Messages) RestorePausedAction() string {
+	return Catalog.Format(msgs.locale, "restorePausedAction", nil)
+}
+
+// RecoveryConfirmAction says "Restore paused"
+// in the language the app shows.
+//
+// C8 workbench recovery GUI: recoveryConfirmAction.
+func RecoveryConfirmAction() string { return In(i18n.Locale()).RecoveryConfirmAction() }
+
+// RecoveryConfirmAction says "Restore paused"
+// in the language of msgs.
+//
+// C8 workbench recovery GUI: recoveryConfirmAction.
+func (msgs Messages) RecoveryConfirmAction() string {
+	return Catalog.Format(msgs.locale, "recoveryConfirmAction", nil)
+}
+
+// RecoveryCancelAction says "Cancel restore"
+// in the language the app shows.
+//
+// C8 workbench recovery GUI: recoveryCancelAction.
+func RecoveryCancelAction() string { return In(i18n.Locale()).RecoveryCancelAction() }
+
+// RecoveryCancelAction says "Cancel restore"
+// in the language of msgs.
+//
+// C8 workbench recovery GUI: recoveryCancelAction.
+func (msgs Messages) RecoveryCancelAction() string {
+	return Catalog.Format(msgs.locale, "recoveryCancelAction", nil)
+}
+
+// RecoveryDataIncluded says "Save a recovery copy of contact and task records, saved drafts, requirements and attached text snapshots. Their saved…"
+// in the language the app shows.
+//
+// C8 workbench recovery GUI: recoveryDataIncluded.
+func RecoveryDataIncluded() string { return In(i18n.Locale()).RecoveryDataIncluded() }
+
+// RecoveryDataIncluded says "Save a recovery copy of contact and task records, saved drafts, requirements and attached text snapshots. Their saved…"
+// in the language of msgs.
+//
+// C8 workbench recovery GUI: recoveryDataIncluded.
+func (msgs Messages) RecoveryDataIncluded() string {
+	return Catalog.Format(msgs.locale, "recoveryDataIncluded", nil)
+}
+
+// RecoveryDataExcluded says "Not included: unsaved edits, actual chats, tool output and chat history, API connection settings or keys, work files,…"
+// in the language the app shows.
+//
+// C8 workbench recovery GUI: recoveryDataExcluded.
+func RecoveryDataExcluded() string { return In(i18n.Locale()).RecoveryDataExcluded() }
+
+// RecoveryDataExcluded says "Not included: unsaved edits, actual chats, tool output and chat history, API connection settings or keys, work files,…"
+// in the language of msgs.
+//
+// C8 workbench recovery GUI: recoveryDataExcluded.
+func (msgs Messages) RecoveryDataExcluded() string {
+	return Catalog.Format(msgs.locale, "recoveryDataExcluded", nil)
+}
+
+// RecoveryDataBusy says "Wait for the current action to finish before starting recovery."
+// in the language the app shows.
+//
+// C8 workbench recovery GUI: recoveryDataBusy.
+func RecoveryDataBusy() string { return In(i18n.Locale()).RecoveryDataBusy() }
+
+// RecoveryDataBusy says "Wait for the current action to finish before starting recovery."
+// in the language of msgs.
+//
+// C8 workbench recovery GUI: recoveryDataBusy.
+func (msgs Messages) RecoveryDataBusy() string {
+	return Catalog.Format(msgs.locale, "recoveryDataBusy", nil)
+}
+
+// RecoveryCopyNeedsSavedData says "A recovery copy needs saved, readable workbench data. If a local save failed, use Retry save first. Unsaved edits are…"
+// in the language the app shows.
+//
+// C8 workbench recovery GUI: recoveryCopyNeedsSavedData.
+func RecoveryCopyNeedsSavedData() string { return In(i18n.Locale()).RecoveryCopyNeedsSavedData() }
+
+// RecoveryCopyNeedsSavedData says "A recovery copy needs saved, readable workbench data. If a local save failed, use Retry save first. Unsaved edits are…"
+// in the language of msgs.
+//
+// C8 workbench recovery GUI: recoveryCopyNeedsSavedData.
+func (msgs Messages) RecoveryCopyNeedsSavedData() string {
+	return Catalog.Format(msgs.locale, "recoveryCopyNeedsSavedData", nil)
+}
+
+// RecoveryRestoreNeedsUnavailable says "Restore is available only when startup cannot load local workbench data. It cannot replace a loaded workbench or fix …"
+// in the language the app shows.
+//
+// C8 workbench recovery GUI: recoveryRestoreNeedsUnavailable.
+func RecoveryRestoreNeedsUnavailable() string {
+	return In(i18n.Locale()).RecoveryRestoreNeedsUnavailable()
+}
+
+// RecoveryRestoreNeedsUnavailable says "Restore is available only when startup cannot load local workbench data. It cannot replace a loaded workbench or fix …"
+// in the language of msgs.
+//
+// C8 workbench recovery GUI: recoveryRestoreNeedsUnavailable.
+func (msgs Messages) RecoveryRestoreNeedsUnavailable() string {
+	return Catalog.Format(msgs.locale, "recoveryRestoreNeedsUnavailable", nil)
+}
+
+// RecoveryRestoreUnsaved says "Recovery cannot replace this workbench while it has live work or unsaved edits. Your unsaved edits remain in this win…"
+// in the language the app shows.
+//
+// C8 workbench recovery GUI: recoveryRestoreUnsaved.
+func RecoveryRestoreUnsaved() string { return In(i18n.Locale()).RecoveryRestoreUnsaved() }
+
+// RecoveryRestoreUnsaved says "Recovery cannot replace this workbench while it has live work or unsaved edits. Your unsaved edits remain in this win…"
+// in the language of msgs.
+//
+// C8 workbench recovery GUI: recoveryRestoreUnsaved.
+func (msgs Messages) RecoveryRestoreUnsaved() string {
+	return Catalog.Format(msgs.locale, "recoveryRestoreUnsaved", nil)
+}
+
+// RecoveryDataWorking says "Waiting for file selection or finishing the current data operation…"
+// in the language the app shows.
+//
+// C8 workbench recovery GUI: recoveryDataWorking.
+func RecoveryDataWorking() string { return In(i18n.Locale()).RecoveryDataWorking() }
+
+// RecoveryDataWorking says "Waiting for file selection or finishing the current data operation…"
+// in the language of msgs.
+//
+// C8 workbench recovery GUI: recoveryDataWorking.
+func (msgs Messages) RecoveryDataWorking() string {
+	return Catalog.Format(msgs.locale, "recoveryDataWorking", nil)
+}
+
+// RecoveryCopyFolderTitle says "Choose a folder for the recovery copy"
+// in the language the app shows.
+//
+// C8 workbench recovery GUI: recoveryCopyFolderTitle.
+func RecoveryCopyFolderTitle() string { return In(i18n.Locale()).RecoveryCopyFolderTitle() }
+
+// RecoveryCopyFolderTitle says "Choose a folder for the recovery copy"
+// in the language of msgs.
+//
+// C8 workbench recovery GUI: recoveryCopyFolderTitle.
+func (msgs Messages) RecoveryCopyFolderTitle() string {
+	return Catalog.Format(msgs.locale, "recoveryCopyFolderTitle", nil)
+}
+
+// RecoveryChooseFileTitle says "Choose a compatible Nagi recovery copy"
+// in the language the app shows.
+//
+// C8 workbench recovery GUI: recoveryChooseFileTitle.
+func RecoveryChooseFileTitle() string { return In(i18n.Locale()).RecoveryChooseFileTitle() }
+
+// RecoveryChooseFileTitle says "Choose a compatible Nagi recovery copy"
+// in the language of msgs.
+//
+// C8 workbench recovery GUI: recoveryChooseFileTitle.
+func (msgs Messages) RecoveryChooseFileTitle() string {
+	return Catalog.Format(msgs.locale, "recoveryChooseFileTitle", nil)
+}
+
+// RecoveryCopyFilter says "Nagi recovery copy (JSON)"
+// in the language the app shows.
+//
+// C8 workbench recovery GUI: recoveryCopyFilter.
+func RecoveryCopyFilter() string { return In(i18n.Locale()).RecoveryCopyFilter() }
+
+// RecoveryCopyFilter says "Nagi recovery copy (JSON)"
+// in the language of msgs.
+//
+// C8 workbench recovery GUI: recoveryCopyFilter.
+func (msgs Messages) RecoveryCopyFilter() string {
+	return Catalog.Format(msgs.locale, "recoveryCopyFilter", nil)
+}
+
+// RecoveryPreviewTitle says "Review recovery copy"
+// in the language the app shows.
+//
+// C8 workbench recovery GUI: recoveryPreviewTitle.
+func RecoveryPreviewTitle() string { return In(i18n.Locale()).RecoveryPreviewTitle() }
+
+// RecoveryPreviewTitle says "Review recovery copy"
+// in the language of msgs.
+//
+// C8 workbench recovery GUI: recoveryPreviewTitle.
+func (msgs Messages) RecoveryPreviewTitle() string {
+	return Catalog.Format(msgs.locale, "recoveryPreviewTitle", nil)
+}
+
+// RecoveryPreviewCounts says "{contacts, plural, one {# saved contact} other {# saved contacts}} · {issues, plural, one {# saved task} other {# sa…"
+// in the language the app shows.
+//
+// C8 workbench recovery GUI: recoveryPreviewCounts.
+func RecoveryPreviewCounts(contacts int, issues int) string {
+	return In(i18n.Locale()).RecoveryPreviewCounts(contacts, issues)
+}
+
+// RecoveryPreviewCounts says "{contacts, plural, one {# saved contact} other {# saved contacts}} · {issues, plural, one {# saved task} other {# sa…"
+// in the language of msgs.
+//
+// C8 workbench recovery GUI: recoveryPreviewCounts.
+func (msgs Messages) RecoveryPreviewCounts(contacts int, issues int) string {
+	return Catalog.Format(msgs.locale, "recoveryPreviewCounts", map[string]any{"contacts": contacts, "issues": issues})
+}
+
+// RecoveryFileModified says "File modified: {time} (file metadata; not a known backup creation time)"
+// in the language the app shows.
+//
+// C8 workbench recovery GUI: recoveryFileModified.
+func RecoveryFileModified(time_ string) string { return In(i18n.Locale()).RecoveryFileModified(time_) }
+
+// RecoveryFileModified says "File modified: {time} (file metadata; not a known backup creation time)"
+// in the language of msgs.
+//
+// C8 workbench recovery GUI: recoveryFileModified.
+func (msgs Messages) RecoveryFileModified(time_ string) string {
+	return Catalog.Format(msgs.locale, "recoveryFileModified", map[string]any{"time": time_})
+}
+
+// RecoveryPreviewWarning says "This is the captured saved copy. Newer changes may be lost. The original file will be preserved in a separate archive…"
+// in the language the app shows.
+//
+// C8 workbench recovery GUI: recoveryPreviewWarning.
+func RecoveryPreviewWarning() string { return In(i18n.Locale()).RecoveryPreviewWarning() }
+
+// RecoveryPreviewWarning says "This is the captured saved copy. Newer changes may be lost. The original file will be preserved in a separate archive…"
+// in the language of msgs.
+//
+// C8 workbench recovery GUI: recoveryPreviewWarning.
+func (msgs Messages) RecoveryPreviewWarning() string {
+	return Catalog.Format(msgs.locale, "recoveryPreviewWarning", nil)
+}
+
+// RecoveryPauseWarning says "Confirming restores the saved records and pauses existing automatic continuation. Pending and unknown records remain …"
+// in the language the app shows.
+//
+// C8 workbench recovery GUI: recoveryPauseWarning.
+func RecoveryPauseWarning() string { return In(i18n.Locale()).RecoveryPauseWarning() }
+
+// RecoveryPauseWarning says "Confirming restores the saved records and pauses existing automatic continuation. Pending and unknown records remain …"
+// in the language of msgs.
+//
+// C8 workbench recovery GUI: recoveryPauseWarning.
+func (msgs Messages) RecoveryPauseWarning() string {
+	return Catalog.Format(msgs.locale, "recoveryPauseWarning", nil)
+}
+
+// RecoveryCopySaved says "Recovery copy saved: {path}. Unsaved edits were kept and excluded."
+// in the language the app shows.
+//
+// C8 workbench recovery GUI: recoveryCopySaved.
+func RecoveryCopySaved(path string) string { return In(i18n.Locale()).RecoveryCopySaved(path) }
+
+// RecoveryCopySaved says "Recovery copy saved: {path}. Unsaved edits were kept and excluded."
+// in the language of msgs.
+//
+// C8 workbench recovery GUI: recoveryCopySaved.
+func (msgs Messages) RecoveryCopySaved(path string) string {
+	return Catalog.Format(msgs.locale, "recoveryCopySaved", map[string]any{"path": path})
+}
+
+// RecoveryCopyFailed says "The recovery copy could not be saved. Existing files and unsaved edits are kept. Check Details, then choose a folder …"
+// in the language the app shows.
+//
+// C8 workbench recovery GUI: recoveryCopyFailed.
+func RecoveryCopyFailed() string { return In(i18n.Locale()).RecoveryCopyFailed() }
+
+// RecoveryCopyFailed says "The recovery copy could not be saved. Existing files and unsaved edits are kept. Check Details, then choose a folder …"
+// in the language of msgs.
+//
+// C8 workbench recovery GUI: recoveryCopyFailed.
+func (msgs Messages) RecoveryCopyFailed() string {
+	return Catalog.Format(msgs.locale, "recoveryCopyFailed", nil)
+}
+
+// RecoveryInspectFailed says "The selection or unavailable original could not be safely prepared. Files are unchanged. Check Details or choose anot…"
+// in the language the app shows.
+//
+// C8 workbench recovery GUI: recoveryInspectFailed.
+func RecoveryInspectFailed() string { return In(i18n.Locale()).RecoveryInspectFailed() }
+
+// RecoveryInspectFailed says "The selection or unavailable original could not be safely prepared. Files are unchanged. Check Details or choose anot…"
+// in the language of msgs.
+//
+// C8 workbench recovery GUI: recoveryInspectFailed.
+func (msgs Messages) RecoveryInspectFailed() string {
+	return Catalog.Format(msgs.locale, "recoveryInspectFailed", nil)
+}
+
+// RecoveryCopyUnusable says "This version cannot safely use this recovery copy. Your files are unchanged. Choose another compatible Nagi copy."
+// in the language the app shows.
+//
+// C8 workbench recovery GUI: recoveryCopyUnusable.
+func RecoveryCopyUnusable() string { return In(i18n.Locale()).RecoveryCopyUnusable() }
+
+// RecoveryCopyUnusable says "This version cannot safely use this recovery copy. Your files are unchanged. Choose another compatible Nagi copy."
+// in the language of msgs.
+//
+// C8 workbench recovery GUI: recoveryCopyUnusable.
+func (msgs Messages) RecoveryCopyUnusable() string {
+	return Catalog.Format(msgs.locale, "recoveryCopyUnusable", nil)
+}
+
+// RecoveryNotInstalled says "The recovery copy was not installed. The original was not replaced. A verified original archive may be listed below. …"
+// in the language the app shows.
+//
+// C8 workbench recovery GUI: recoveryNotInstalled.
+func RecoveryNotInstalled() string { return In(i18n.Locale()).RecoveryNotInstalled() }
+
+// RecoveryNotInstalled says "The recovery copy was not installed. The original was not replaced. A verified original archive may be listed below. …"
+// in the language of msgs.
+//
+// C8 workbench recovery GUI: recoveryNotInstalled.
+func (msgs Messages) RecoveryNotInstalled() string {
+	return Catalog.Format(msgs.locale, "recoveryNotInstalled", nil)
+}
+
+// RecoveryInstalled says "Restored and paused on disk, but not loaded in this window. This workbench still cannot save or run work. Quit Nagi, …"
+// in the language the app shows.
+//
+// C8 workbench recovery GUI: recoveryInstalled.
+func RecoveryInstalled() string { return In(i18n.Locale()).RecoveryInstalled() }
+
+// RecoveryInstalled says "Restored and paused on disk, but not loaded in this window. This workbench still cannot save or run work. Quit Nagi, …"
+// in the language of msgs.
+//
+// C8 workbench recovery GUI: recoveryInstalled.
+func (msgs Messages) RecoveryInstalled() string {
+	return Catalog.Format(msgs.locale, "recoveryInstalled", nil)
+}
+
+// RecoveryUnconfirmed says "Installation result needs checking. Nagi cannot confirm the replaced file. Do not repeat or roll back this operation …"
+// in the language the app shows.
+//
+// C8 workbench recovery GUI: recoveryUnconfirmed.
+func RecoveryUnconfirmed() string { return In(i18n.Locale()).RecoveryUnconfirmed() }
+
+// RecoveryUnconfirmed says "Installation result needs checking. Nagi cannot confirm the replaced file. Do not repeat or roll back this operation …"
+// in the language of msgs.
+//
+// C8 workbench recovery GUI: recoveryUnconfirmed.
+func (msgs Messages) RecoveryUnconfirmed() string {
+	return Catalog.Format(msgs.locale, "recoveryUnconfirmed", nil)
+}
+
+// RecoveryShowCopy says "Show recovery copy in Finder"
+// in the language the app shows.
+//
+// C8 workbench recovery GUI: recoveryShowCopy.
+func RecoveryShowCopy() string { return In(i18n.Locale()).RecoveryShowCopy() }
+
+// RecoveryShowCopy says "Show recovery copy in Finder"
+// in the language of msgs.
+//
+// C8 workbench recovery GUI: recoveryShowCopy.
+func (msgs Messages) RecoveryShowCopy() string {
+	return Catalog.Format(msgs.locale, "recoveryShowCopy", nil)
+}
+
+// RecoveryShowArchive says "Show original archive in Finder"
+// in the language the app shows.
+//
+// C8 workbench recovery GUI: recoveryShowArchive.
+func RecoveryShowArchive() string { return In(i18n.Locale()).RecoveryShowArchive() }
+
+// RecoveryShowArchive says "Show original archive in Finder"
+// in the language of msgs.
+//
+// C8 workbench recovery GUI: recoveryShowArchive.
+func (msgs Messages) RecoveryShowArchive() string {
+	return Catalog.Format(msgs.locale, "recoveryShowArchive", nil)
+}
+
+// RecoveryQuitAction says "Quit Nagi"
+// in the language the app shows.
+//
+// C8 workbench recovery GUI: recoveryQuitAction.
+func RecoveryQuitAction() string { return In(i18n.Locale()).RecoveryQuitAction() }
+
+// RecoveryQuitAction says "Quit Nagi"
+// in the language of msgs.
+//
+// C8 workbench recovery GUI: recoveryQuitAction.
+func (msgs Messages) RecoveryQuitAction() string {
+	return Catalog.Format(msgs.locale, "recoveryQuitAction", nil)
+}
+
+// RecoveryDataLocation says "Workbench data location: {path}"
+// in the language the app shows.
+//
+// The identified location of recovery data, not a claim of loaded history.
+func RecoveryDataLocation(path string) string { return In(i18n.Locale()).RecoveryDataLocation(path) }
+
+// RecoveryDataLocation says "Workbench data location: {path}"
+// in the language of msgs.
+//
+// The identified location of recovery data, not a claim of loaded history.
+func (msgs Messages) RecoveryDataLocation(path string) string {
+	return Catalog.Format(msgs.locale, "recoveryDataLocation", map[string]any{"path": path})
+}
+
+// RecoveryArchiveLocation says "Preserved original archive: {path}"
+// in the language the app shows.
+//
+// The identified location of recovery data, not a claim of loaded history.
+func RecoveryArchiveLocation(path string) string {
+	return In(i18n.Locale()).RecoveryArchiveLocation(path)
+}
+
+// RecoveryArchiveLocation says "Preserved original archive: {path}"
+// in the language of msgs.
+//
+// The identified location of recovery data, not a claim of loaded history.
+func (msgs Messages) RecoveryArchiveLocation(path string) string {
+	return Catalog.Format(msgs.locale, "recoveryArchiveLocation", map[string]any{"path": path})
+}
+
+// TaskContextChooseFile says "Choose UTF-8 file…"
+// in the language the app shows.
+func TaskContextChooseFile() string { return In(i18n.Locale()).TaskContextChooseFile() }
+
+// TaskContextChooseFile says "Choose UTF-8 file…"
+// in the language of msgs.
+func (msgs Messages) TaskContextChooseFile() string {
+	return Catalog.Format(msgs.locale, "taskContextChooseFile", nil)
+}
+
+// TaskContextChoosingFile says "Choosing a file…"
+// in the language the app shows.
+func TaskContextChoosingFile() string { return In(i18n.Locale()).TaskContextChoosingFile() }
+
+// TaskContextChoosingFile says "Choosing a file…"
+// in the language of msgs.
+func (msgs Messages) TaskContextChoosingFile() string {
+	return Catalog.Format(msgs.locale, "taskContextChoosingFile", nil)
+}
+
+// TaskContextChooseFileFailed says "Could not open the file chooser. Try again or enter the path below."
+// in the language the app shows.
+func TaskContextChooseFileFailed() string { return In(i18n.Locale()).TaskContextChooseFileFailed() }
+
+// TaskContextChooseFileFailed says "Could not open the file chooser. Try again or enter the path below."
+// in the language of msgs.
+func (msgs Messages) TaskContextChooseFileFailed() string {
+	return Catalog.Format(msgs.locale, "taskContextChooseFileFailed", nil)
+}
+
+// TaskContextChooseFileHint says "Choose a UTF-8 text file, then Save file to read and preview a snapshot. Choosing does not send anything."
+// in the language the app shows.
+func TaskContextChooseFileHint() string { return In(i18n.Locale()).TaskContextChooseFileHint() }
+
+// TaskContextChooseFileHint says "Choose a UTF-8 text file, then Save file to read and preview a snapshot. Choosing does not send anything."
+// in the language of msgs.
+func (msgs Messages) TaskContextChooseFileHint() string {
+	return Catalog.Format(msgs.locale, "taskContextChooseFileHint", nil)
 }

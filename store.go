@@ -5,16 +5,19 @@ package main
 // session.history. The JSON file is private to the GUI.
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // v3 added issue.work_session_id. v4 made structured requirements the
@@ -106,6 +109,7 @@ type storedState struct {
 	IssueToolOperations *IssueToolOperationLedger `json:"issue_tool_operations,omitempty"`
 	IssueToolScopes     []IssueToolScope          `json:"issue_tool_scopes,omitempty"`
 	Layout              *storedLayout             `json:"layout,omitempty"`
+	ThemeIDs            *appearanceThemeIDs       `json:"theme_ids,omitempty"`
 	Appearance          string                    `json:"appearance,omitempty"`
 }
 
@@ -134,33 +138,11 @@ func openContactStore(path, defaultWorkspace string) (*contactStore, error) {
 	data, err := os.ReadFile(path)
 	switch {
 	case err == nil:
-		if err := json.Unmarshal(data, &store.state); err != nil {
-			return nil, fmt.Errorf("contact store %s is not readable: %w", path, err)
+		store.state, err = decodeStoredState(path, data, false)
+		if err != nil {
+			return nil, err
 		}
-		if store.state.Version < 1 || store.state.Version > contactStoreVersion {
-			return nil, fmt.Errorf("contact store %s has unsupported version %d", path, store.state.Version)
-		}
-		if len(store.state.Contacts) == 0 {
-			return nil, fmt.Errorf("contact store %s has no contacts", path)
-		}
-		seen := map[string]bool{}
-		for _, contact := range store.state.Contacts {
-			if contact.ID == "" || seen[contact.ID] {
-				return nil, fmt.Errorf("contact store %s has an empty or duplicate contact id", path)
-			}
-			seen[contact.ID] = true
-		}
-		seenIssues := map[string]bool{}
-		for _, issue := range store.state.Issues {
-			if issue.ID == "" || seenIssues[issue.ID] {
-				return nil, fmt.Errorf("contact store %s has an empty or duplicate issue id", path)
-			}
-			if issue.ContactID == "" || !seen[issue.ContactID] {
-				return nil, fmt.Errorf("contact store %s issue %s has an unknown contact id", path, issue.ID)
-			}
-			seenIssues[issue.ID] = true
-		}
-		if !seen[store.state.Selected] {
+		if !store.hasContact(store.state.Selected) {
 			store.state.Selected = store.state.Contacts[0].ID
 		}
 		store.restoreIssueToolState()
@@ -237,15 +219,7 @@ func (s *contactStore) saveState() error {
 		temp.Close()
 		return err
 	}
-	if _, err := temp.Write(data); err != nil {
-		temp.Close()
-		return err
-	}
-	if err := temp.Sync(); err != nil {
-		temp.Close()
-		return err
-	}
-	if err := temp.Close(); err != nil {
+	if err := writeStoreBytes(temp, data); err != nil {
 		return err
 	}
 	return os.Rename(tempName, s.path)
@@ -262,6 +236,7 @@ func (s *contactStore) save(contacts []*contact, selected string) error {
 		IssueToolScopes:     s.issueToolScopesList(),
 		Layout:              s.state.Layout,
 		Appearance:          s.state.Appearance,
+		ThemeIDs:            s.state.ThemeIDs,
 	}
 	for _, c := range contacts {
 		storedContact := storedContact{
@@ -344,4 +319,391 @@ func (s *contactStore) hasContact(id string) bool {
 		}
 	}
 	return false
+}
+
+func decodeStoredState(path string, data []byte, strict bool) (storedState, error) {
+	var state storedState
+	var err error
+	if strict {
+		if !utf8.Valid(data) {
+			return state, fmt.Errorf("contact store %s is not readable: expected UTF-8 JSON", path)
+		}
+		decoder := json.NewDecoder(bytes.NewReader(data))
+		decoder.DisallowUnknownFields()
+		err = decoder.Decode(&state)
+		if err == nil {
+			if decoder.Decode(new(any)) != io.EOF {
+				err = errors.New("expected exactly one JSON object")
+			}
+		}
+	} else {
+		err = json.Unmarshal(data, &state)
+	}
+	if err != nil {
+		return state, fmt.Errorf("contact store %s is not readable: %w", path, err)
+	}
+	if state.Version < 1 || state.Version > contactStoreVersion {
+		return state, fmt.Errorf("contact store %s has unsupported version %d", path, state.Version)
+	}
+	if len(state.Contacts) == 0 {
+		return state, fmt.Errorf("contact store %s has no contacts", path)
+	}
+	contacts, issues := map[string]bool{}, map[string]bool{}
+	for _, contact := range state.Contacts {
+		if contact.ID == "" || contacts[contact.ID] {
+			return state, fmt.Errorf("contact store %s has an empty or duplicate contact id", path)
+		}
+		contacts[contact.ID] = true
+	}
+	for _, issue := range state.Issues {
+		if issue.ID == "" || issues[issue.ID] {
+			return state, fmt.Errorf("contact store %s has an empty or duplicate issue id", path)
+		}
+		if issue.ContactID == "" || !contacts[issue.ContactID] {
+			return state, fmt.Errorf("contact store %s issue %s has an unknown contact id", path, issue.ID)
+		}
+		issues[issue.ID] = true
+	}
+	return state, nil
+}
+
+func validateRecoveryState(state storedState) error {
+	fail := func(field, message string) error { return fmt.Errorf("%s: %s", field, message) }
+	if state.Version != contactStoreVersion {
+		return fail("version", "only current version 9 recovery copies are supported")
+	}
+	selected := false
+	for i, contact := range state.Contacts {
+		selected = selected || contact.ID == state.Selected
+		if contact.SelectedIssueID != "" {
+			found := false
+			for _, issue := range state.Issues {
+				found = found || issue.ID == contact.SelectedIssueID && issue.ContactID == contact.ID
+			}
+			if !found {
+				return fail(fmt.Sprintf("contacts[%d].selected_issue_id", i), "selected issue does not belong to this contact")
+			}
+		}
+		if pending := contact.PendingSend; pending != nil && (pending.State == "submitting" || pending.State == "unknown" && contact.SessionID == "") {
+			return fail(fmt.Sprintf("contacts[%d].pending_send", i), "this intent would change or be discarded on ordinary load")
+		}
+	}
+	if !selected {
+		return fail("selected", "selected contact is missing")
+	}
+	if state.IssueToolOperations == nil {
+		return fail("issue_tool_operations", "missing operation ledger would be synthesized on ordinary load")
+	}
+	refs := map[string]bool{}
+	for i, scope := range state.IssueToolScopes {
+		if scope.Validate() != nil || refs[scope.Ref] {
+			return fail(fmt.Sprintf("issue_tool_scopes[%d]", i), "invalid or duplicate scope would be dropped or replaced on ordinary load")
+		}
+		refs[scope.Ref] = true
+	}
+	for i, issue := range state.Issues {
+		field := fmt.Sprintf("issues[%d]", i)
+		if issue.Requirements != "" {
+			return fail(field+".requirements", "legacy requirements are not supported in a version 9 recovery copy")
+		}
+		if issue.RequirementsRevision < 1 {
+			return fail(field+".requirements_revision", "revision would be repaired on ordinary load")
+		}
+		for j, item := range issue.RequirementItems {
+			if strings.TrimSpace(item.Text) == "" || item.State != requirementUnverified && item.State != requirementSatisfied && item.State != requirementUnmet {
+				return fail(fmt.Sprintf("%s.requirement_items[%d]", field, j), "requirement would be dropped or normalized on ordinary load")
+			}
+		}
+		for j, question := range issue.Questions {
+			if question == nil || strings.TrimSpace(question.Ref) == "" {
+				return fail(fmt.Sprintf("%s.questions[%d]", field, j), "question would be dropped on ordinary load")
+			}
+		}
+		switch issue.Status {
+		case issueStatusNotStarted, issueStatusInProgress, issueStatusWaitingUser, issueStatusNeedsAttention, issueStatusCompleted, issueStatusCanceled:
+		default:
+			return fail(field+".status", "issue status would be normalized on ordinary load")
+		}
+		for j, execution := range issue.Executions {
+			if execution.ID == "" || execution.Status == "" || execution.Status == issueExecutionPending || execution.TaskID == "" && (execution.Status == issueExecutionAccepted || execution.Status == issueExecutionRunning) {
+				return fail(fmt.Sprintf("%s.executions[%d]", field, j), "execution would be dropped or normalized on ordinary load")
+			}
+		}
+		if issue.Supplements != nil {
+			for j, batch := range issue.Supplements.Batches {
+				if batch != nil && batch.State == supplementBatchDispatching && batch.ExecutionID == "" {
+					return fail(fmt.Sprintf("%s.supplements.batches[%d]", field, j), "batch would be normalized on ordinary load")
+				}
+			}
+		}
+	}
+	if state.Appearance != "" && state.Appearance != appearanceSystem && state.Appearance != appearanceLight && state.Appearance != appearanceDark {
+		return fail("appearance", "invalid appearance preference")
+	}
+	if layout := state.Layout; layout != nil {
+		if layout.LeftWidth != 0 && (layout.LeftWidth < minLeftPaneWidth || layout.LeftWidth > maxLeftPaneWidth) || layout.RightWidth != 0 && (layout.RightWidth < minRightPaneWidth || layout.RightWidth > maxRightPaneWidth) {
+			return fail("layout", "pane dimensions would be corrected on ordinary load")
+		}
+	}
+	return nil
+}
+
+type storeRecoveryCopy struct {
+	Path       string
+	Contacts   int
+	Issues     int
+	ModifiedAt time.Time
+	data       []byte
+	info       os.FileInfo
+}
+
+type storeRecoveryTarget struct {
+	path string
+	data []byte
+	info os.FileInfo
+}
+
+type storeRecoveryOutcome string
+
+const (
+	storeRecoveryNotInstalled       storeRecoveryOutcome = "not_installed"
+	storeRecoveryVerifiedInstalled  storeRecoveryOutcome = "verified_installed"
+	storeRecoveryInstallUnconfirmed storeRecoveryOutcome = "install_unconfirmed"
+)
+
+type storeRecoveryResult struct {
+	Outcome     storeRecoveryOutcome
+	OutputPath  string
+	ArchivePath string
+}
+
+// A copy captures one saved point in time. Later operations use these validated
+// bytes, never a live app projection or a newly read source with different facts.
+func inspectStoreRecoveryCopy(path string) (*storeRecoveryCopy, error) {
+	path, err := filepath.Abs(path)
+	if err != nil {
+		return nil, err
+	}
+	data, info, err := readRecoveryFile(path)
+	if err != nil {
+		return nil, err
+	}
+	state, err := decodeStoredState(path, data, true)
+	if err == nil {
+		err = validateRecoveryState(state)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("unsupported recovery copy %s: %w", path, err)
+	}
+	return &storeRecoveryCopy{Path: path, Contacts: len(state.Contacts), Issues: len(state.Issues), ModifiedAt: info.ModTime(), data: data, info: info}, nil
+}
+
+func writeStoreBytes(file *os.File, data []byte) (err error) {
+	defer func() {
+		if closeErr := file.Close(); err == nil {
+			err = closeErr
+		}
+	}()
+	if _, err = file.Write(data); err != nil {
+		return err
+	}
+	return file.Sync()
+}
+
+func readRecoveryFile(path string) ([]byte, os.FileInfo, error) {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return nil, nil, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, nil, fmt.Errorf("%s: expected an existing regular file, not a directory or symbolic link", path)
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, nil, err
+	}
+	opened, statErr := file.Stat()
+	data, readErr := io.ReadAll(file)
+	closeErr := file.Close()
+	if err := errors.Join(statErr, readErr, closeErr); err != nil {
+		return nil, nil, err
+	}
+	after, err := os.Lstat(path)
+	if err != nil {
+		return nil, nil, err
+	}
+	if !after.Mode().IsRegular() || !os.SameFile(info, opened) || !os.SameFile(info, after) {
+		return nil, nil, fmt.Errorf("%s: file changed while being read", path)
+	}
+	return data, info, nil
+}
+
+func removeIncompleteRecoveryFile(path string, info os.FileInfo, cause error) error {
+	if info == nil {
+		return fmt.Errorf("%w; could not establish ownership to remove incomplete file %s", cause, path)
+	}
+	current, err := os.Lstat(path)
+	if err == nil && os.SameFile(info, current) {
+		err = os.Remove(path)
+	} else if err == nil {
+		err = errors.New("file identity changed; replacement was not removed")
+	}
+	if errors.Is(err, os.ErrNotExist) {
+		return cause
+	}
+	if err != nil {
+		return fmt.Errorf("%w; could not remove incomplete file %s: %v", cause, path, err)
+	}
+	return cause
+}
+
+// The caller chooses a complete destination filename and owns GUI admission.
+// A collision is an error; this operation never overwrites or silently renames.
+func writeStoreRecoveryCopy(copy *storeRecoveryCopy, destination string) (string, error) {
+	if copy == nil {
+		return "", errors.New("inspect a compatible recovery copy first")
+	}
+	destination, err := filepath.Abs(destination)
+	if err != nil {
+		return "", err
+	}
+	if destination == copy.Path {
+		return "", errors.New("the recovery output must be separate from its saved source")
+	}
+	file, err := os.OpenFile(destination, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		return "", err
+	}
+	info, err := file.Stat()
+	if err != nil {
+		file.Close()
+		return "", removeIncompleteRecoveryFile(destination, nil, err)
+	}
+	if err := writeStoreBytes(file, copy.data); err != nil {
+		return "", removeIncompleteRecoveryFile(destination, info, err)
+	}
+	data, current, err := readRecoveryFile(destination)
+	if err == nil && (!os.SameFile(info, current) || !bytes.Equal(data, copy.data)) {
+		err = errors.New("recovery copy readback did not match the captured saved bytes")
+	}
+	if err != nil {
+		return "", removeIncompleteRecoveryFile(destination, info, err)
+	}
+	return destination, nil
+}
+
+func inspectStoreRecoveryTarget(path string) (*storeRecoveryTarget, error) {
+	path, err := filepath.Abs(path)
+	if err != nil {
+		return nil, err
+	}
+	data, info, err := readRecoveryFile(path)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := decodeStoredState(path, data, false); err == nil {
+		return nil, fmt.Errorf("%s: the store is readable; recovery replacement is not allowed", path)
+	}
+	return &storeRecoveryTarget{path: path, data: data, info: info}, nil
+}
+
+func (target *storeRecoveryTarget) unchanged() error {
+	current, err := inspectStoreRecoveryTarget(target.path)
+	if err != nil {
+		return err
+	}
+	if !os.SameFile(target.info, current.info) || !bytes.Equal(target.data, current.data) {
+		return fmt.Errorf("%s: the unavailable store changed after inspection", target.path)
+	}
+	return nil
+}
+
+// The UI must explicitly confirm pausing and reserve quiescent unavailable
+// state before calling. A successful Rename is never rolled back or retried:
+// failed readback means install_unconfirmed, not that nothing was installed.
+func restoreStoreRecoveryCopy(copy *storeRecoveryCopy, target *storeRecoveryTarget) (storeRecoveryResult, error) {
+	return restoreStoreRecoveryCopyWithRename(copy, target, os.Rename)
+}
+
+func restoreStoreRecoveryCopyWithRename(copy *storeRecoveryCopy, target *storeRecoveryTarget, rename func(string, string) error) (storeRecoveryResult, error) {
+	result := storeRecoveryResult{Outcome: storeRecoveryNotInstalled}
+	if copy == nil || target == nil {
+		return result, errors.New("inspect a compatible copy and the unavailable original first")
+	}
+	result.OutputPath = target.path
+	currentSource, sourceErr := os.Stat(copy.Path)
+	if os.SameFile(copy.info, target.info) || filepath.Clean(copy.Path) == filepath.Clean(target.path) || sourceErr == nil && os.SameFile(currentSource, target.info) {
+		return result, errors.New("the selected recovery copy must be separate from the unavailable original")
+	}
+	if err := target.unchanged(); err != nil {
+		return result, err
+	}
+	state, err := decodeStoredState(copy.Path, copy.data, true)
+	if err == nil {
+		err = validateRecoveryState(state)
+	}
+	if err != nil {
+		return result, err
+	}
+	for i := range state.Issues {
+		if ledger := state.Issues[i].Supplements; ledger != nil {
+			ledger.AutoContinue = false
+		}
+	}
+	paused, err := json.MarshalIndent(state, "", "  ")
+	if err != nil {
+		return result, err
+	}
+	paused = append(paused, '\n')
+	dir := filepath.Dir(target.path)
+	archive, err := os.CreateTemp(dir, "nagi-unreadable-*.json")
+	if err != nil {
+		return result, err
+	}
+	archivePath := archive.Name()
+	archiveInfo, err := archive.Stat()
+	if err != nil {
+		archive.Close()
+		return result, removeIncompleteRecoveryFile(archivePath, nil, err)
+	}
+	if err := writeStoreBytes(archive, target.data); err != nil {
+		return result, removeIncompleteRecoveryFile(archivePath, archiveInfo, err)
+	}
+	archived, info, err := readRecoveryFile(archivePath)
+	if err == nil && (!os.SameFile(archiveInfo, info) || !bytes.Equal(archived, target.data)) {
+		err = errors.New("original archive readback did not match the captured damaged bytes")
+	}
+	if err != nil {
+		return result, removeIncompleteRecoveryFile(archivePath, archiveInfo, err)
+	}
+	result.ArchivePath = archivePath
+	stage, err := os.CreateTemp(dir, ".contacts-restore-*.tmp")
+	if err != nil {
+		return result, err
+	}
+	stagePath := stage.Name()
+	stageInfo, err := stage.Stat()
+	if err != nil {
+		stage.Close()
+		return result, removeIncompleteRecoveryFile(stagePath, nil, err)
+	}
+	if err := writeStoreBytes(stage, paused); err != nil {
+		return result, removeIncompleteRecoveryFile(stagePath, stageInfo, err)
+	}
+	if err := target.unchanged(); err != nil {
+		return result, removeIncompleteRecoveryFile(stagePath, stageInfo, err)
+	}
+	if err := rename(stagePath, target.path); err != nil {
+		return result, removeIncompleteRecoveryFile(stagePath, stageInfo, err)
+	}
+	result.Outcome = storeRecoveryInstallUnconfirmed
+	installed, info, err := readRecoveryFile(target.path)
+	if err == nil && (!os.SameFile(stageInfo, info) || !bytes.Equal(installed, paused)) {
+		err = errors.New("installed data readback did not match the paused recovery copy")
+	}
+	if err != nil {
+		return result, fmt.Errorf("installation result must be checked before any retry: %w", err)
+	}
+	result.Outcome = storeRecoveryVerifiedInstalled
+	return result, nil
 }
