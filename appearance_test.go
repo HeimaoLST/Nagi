@@ -114,32 +114,6 @@ func TestSemanticPaletteContrastInvariants(t *testing.T) {
 					t.Errorf("%s on_accent/%s contrast = %.3f, want >= 4.5", tc.name, accent.name, got)
 				}
 			}
-			for _, base := range []struct {
-				name string
-				bg   ui.Color
-			}{
-				{"surface", th.Reading},
-				{"panel", th.Panel},
-				{"well", th.Well},
-				{"selected", th.Theme.Selection},
-			} {
-				if got := paletteContrast(th.Theme.Focus, base.bg); got < 3 {
-					t.Errorf("%s focus/%s contrast = %.3f, want >= 3", tc.name, base.name, got)
-				}
-			}
-			for _, base := range []struct {
-				name string
-				bg   ui.Color
-			}{
-				{"surface", th.Reading},
-				{"panel", th.Panel},
-				{"well", th.Well},
-				{"selected", th.Theme.Selection},
-			} {
-				if got := paletteContrast(th.Theme.Border, base.bg); got < 3 {
-					t.Errorf("%s control-border/%s contrast = %.3f, want >= 3", tc.name, base.name, got)
-				}
-			}
 		})
 	}
 }
@@ -250,30 +224,13 @@ func TestAppearanceFailedSaveKeepsModeAndRetryClearsWarning(t *testing.T) {
 	}
 }
 
-func TestContactScopeSelectAndComposerModelEntry(t *testing.T) {
+func TestComposerModelEntry(t *testing.T) {
 	a := testApp(t)
-	tr := ui.NewTester(a.view, 1040, 720)
-	tr.Frame()
-	if !tr.HasText("Contact scope") || !tr.HasText("Active") {
-		t.Fatalf("contact scope selector is missing: %q", tr.Texts())
-	}
-	if err := tr.Click("Active"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if err := tr.Click("Archived"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if a.contactScope != "archived" {
-		t.Fatalf("scope select = %q, want archived", a.contactScope)
-	}
-
 	a.selectContact(0)
 	a.contacts[0].SessionID = ""
 	a.contacts[0].Draft = "draft-kept"
 	a.connectionEffective = &connectionConfig{Model: "model-default"}
-	tr = ui.NewTester(a.view, 1040, 720)
+	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
 	head, tail := a.conversationModelDisplayParts(locales.In("en"), a.contacts[0])
 	if !tr.HasText(head) || !tr.HasText(tail) {

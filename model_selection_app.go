@@ -504,9 +504,10 @@ func (a *appModel) modelPanel(c *ui.Context, t *ui.Theme) {
 			ui.Text(c, msgs.ModelUnconfirmedBanner()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Warning)
 		}
 		a.modelForm.view(c, t, modelSelectionActions{
-			Refresh: a.refreshSessionModel,
-			Update:  a.updateSessionModel,
-			Cancel:  a.closeAux,
+			Embedded: a.settingsOpen && a.settingsTab == settingsTabConnection,
+			Refresh:  a.refreshSessionModel,
+			Update:   a.updateSessionModel,
+			Cancel:   a.closeAux,
 		})
 	} else if a.modelPanelError != "" {
 		pageHeading(c, msgs.ModelSessionTitle())

@@ -4,7 +4,20 @@
 
 本次定义修订见 [#134](https://github.com/HeimaoLST/Saki/issues/134)，完整 MVP 范围修订见 [#151](https://github.com/HeimaoLST/Saki/issues/151)，交付由 [Nagi #5](https://github.com/HeimaoLST/Nagi/issues/5) 和 [Nagi MVP 里程碑](https://github.com/HeimaoLST/Nagi/milestone/2) 统筹，已有工程交接见 [#111](https://github.com/HeimaoLST/Saki/issues/111)。优先级、执行顺序、负责人和实时状态只在 GitHub 维护。具体实现及已验证限制见 [Desktop design](../design/desktop.md)，公共执行契约见 [Runtime API](https://github.com/HeimaoLST/Saki/blob/dev/docs/design/runtime-api.md)。
 
-现行视觉与交互以 [Desktop workbench](../design/desktop-workbench.md) 为唯一来源：纸白/夜林、默认联系人栏 + 对话、详情按需打开，真实消息气泡、独立 Agent 工作区；宽屏三域与窄窗行为按[规范断点](../design/desktop-workbench.md#布局与右侧详情)执行。#130 实施阶段性的原生闭环；事项/看板/长期轨迹的界面与实现继续细化，原型 fixture 不作为生产功能。旧配色、工具附在聊天回复下的要求不再生效。
+现行视觉与布局以本页 [Qoder 完整 UI 与布局基准](#qoder-complete-ui-20261116) 及其对应设计为准；默认联系人栏 + 对话、详情按需打开、独立 Agent 工作区等产品语义继续保持；宽屏三域与窄窗行为按[规范断点](../design/desktop-workbench.md#布局与右侧详情)执行。#130 实施阶段性的原生闭环；事项/看板/长期轨迹的界面与实现继续细化，原型 fixture 不作为生产功能。旧配色、工具附在聊天回复下的要求不再生效。
+
+<a id="qoder-complete-ui-20261116"></a>
+
+## Qoder 完整 UI 与布局基准（2026-11-16，当前最高视觉约束）
+
+用户明确要求 **UI 完全参考 Qoder，先不建立 Nagi 自己的风格**。本节取代当前 QD／PREF 中保留 Paper／Moss 独立配色及仅对齐控件外观的约定；既有段落保留为演进记录，发生视觉冲突以本节为准。Nagi 产品名称与联系人／事项／Runtime 能力保持既有语义，不复制 Qoder 的账号、任务模式或权限能力。
+
+- 参考现场为已安装 Qoder CN 0.4.8／f8c98a，Bee 浅色、Sans、Standard 内容宽度；深色采用相同 Bee 主题的声明。容器层级、滚动视口、内容限宽、导航、排版、图标、状态反馈、边界、色彩均以实际参考为准，不逐页自创替代样式。只对 Nagi 真实存在的功能映射相同组件，不新增 Qoder 功能来凑外观。
+- 侧栏不重复显示 Nagi 名称，不再提供活跃／已归档／全部筛选。联系人使用一个可搜索列表；既有归档标记、只读／恢复与发送限制仍由联系人资料管理，不因移除筛选而清除记录。
+- 页面先定义完整布局契约：侧栏、主面板与滚动视口分别明确宽度；内容的最大宽度在满宽视口内生效；导航组填满侧栏且共享文字／图标对齐线；同页嵌入的表单共享分区边界，不能按最长文字各自收缩。
+- 必验实际组合为：已有联系人／会话、已保存默认连接、已展开当前会话模型覆盖，以及中段滚动；同时检查720×640、1040×720及宽窗口，中／英、浅／深色。验收内容包括整体对齐、主区边界与滚动条位置，不能仅以控件可达、截图数量或 CI 绿证明页面合格。
+- 保留原 Draft／Save／Test／Apply、精确整数、scope、unknown／不重放、取消、恢复与退出 drain。视觉参考不授权改变业务行为。自定义主题仍为用户显式选择的覆盖，不自动改写用户已存选择；内置默认视觉采用 Qoder 配色，旧内置ID继续可读。
+- 每个完整页面有一个集成验收负责人，组件作者的局部通过不替代页面组合通过。交付分别报告实现／CI／包与实际整页原生验收状态，未检查的组合保留待验。
 
 <a id="qoder-match-20261113"></a>
 

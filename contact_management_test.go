@@ -422,8 +422,8 @@ func TestContactManagementArchiveRestorePersistsAndBlocksActiveWork(t *testing.T
 	if !bound.Archived || bound.ArchivedAt == 0 {
 		t.Fatal("contact was not archived")
 	}
-	if !a.contactProfile.Archived || a.contactScope != "archived" {
-		t.Fatal("archive did not switch the visible read-only state")
+	if !a.contactProfile.Archived {
+		t.Fatal("archive did not update the visible read-only state")
 	}
 	reloaded, err := openContactStore(a.store.path, "/tmp")
 	if err != nil {
@@ -438,32 +438,23 @@ func TestContactManagementArchiveRestorePersistsAndBlocksActiveWork(t *testing.T
 	if !a.restoreContact(bound.ID) || bound.Archived || bound.ArchivedAt != 0 {
 		t.Fatalf("restore failed: %+v", bound)
 	}
-	if a.contactScope != "active" {
-		t.Fatal("restore did not return to the active scope")
-	}
 }
 
-func TestContactManagementSidebarScopeAndSearchKeepStableIndices(t *testing.T) {
+func TestContactManagementSidebarSearchKeepsStableIndices(t *testing.T) {
 	a, bound, unbound := testRuntimeModel(t)
 	archive := &contact{ID: "archive", Name: "Archive", Purpose: "old budget notes", Archived: true, Status: statusReady}
 	a.contacts = append(a.contacts, archive)
-	a.contactScope = "active"
 	a.contactSearch = "purpose"
 	if got := a.visibleContactIndices(); len(got) != 1 || a.contacts[got[0]] != bound {
-		t.Fatalf("active search = %v", got)
+		t.Fatalf("name/purpose search = %v", got)
 	}
 	a.contactSearch = "budget"
-	if got := a.visibleContactIndices(); len(got) != 0 {
-		t.Fatalf("archived contact leaked into active search: %v", got)
-	}
-	a.setContactScope("archived")
 	if got := a.visibleContactIndices(); len(got) != 1 || a.contacts[got[0]] != archive {
 		t.Fatalf("archived search = %v", got)
 	}
-	a.contactScope = "all"
 	a.contactSearch = "new contact"
 	if got := a.visibleContactIndices(); len(got) != 1 || a.contacts[got[0]] != unbound {
-		t.Fatalf("all search = %v", got)
+		t.Fatalf("contact search = %v", got)
 	}
 }
 
@@ -599,7 +590,6 @@ func TestContactManagementAppPreviews(t *testing.T) {
 	}
 
 	archived := testApp(t)
-	archived.contactScope = "archived"
 	archived.selectedContact().Archived = true
 	archived.openSettings()
 	tr := ui.NewTester(archived.view, 1280, 720)
@@ -620,11 +610,10 @@ func TestContactManagementAppPreviews(t *testing.T) {
 	writePreviewPNG(t, filepath.Join(dir, "app-archive-restored-1280.png"), tr.Image())
 
 	empty := testApp(t)
-	empty.contactScope = "archived"
 	empty.contactSearch = "no-such-contact"
 	tr = ui.NewTester(empty.view, 1280, 720)
 	tr.Frame()
-	if !tr.HasText("No contacts match this scope and search.") {
+	if !tr.HasText("No contacts match your search.") {
 		t.Fatal("empty filter preview does not explain the result")
 	}
 	writePreviewPNG(t, filepath.Join(dir, "app-empty-filter-1280.png"), tr.Image())

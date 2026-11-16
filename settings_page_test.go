@@ -107,7 +107,7 @@ func TestCustomThemeSettingsSelectReloadAndReturnKeepsWorkState(t *testing.T) {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if a.appearanceThemeIDs.Light != "garden" || !a.resolveAppearanceTheme(false).Unavailable || !tr.HasText("garden unavailable — using Paper") {
+	if a.appearanceThemeIDs.Light != "garden" || !a.resolveAppearanceTheme(false).Unavailable || !tr.HasText("garden unavailable — using Bee Light") {
 		t.Fatalf("reload forgot or hid missing selection: %v", tr.Texts())
 	}
 	writeCustomTheme(t, directory, "restored-name.json", document)
@@ -2893,5 +2893,85 @@ func TestSaveFailureTypingKeepsComposerReturnFocus(t *testing.T) {
 				t.Fatal("failed follow-up autosave changed original good disk bytes")
 			}
 		})
+	}
+}
+
+func TestSettingsQoderIntegratedLayout(t *testing.T) {
+	for _, size := range [][2]int{{720, 640}, {1040, 720}, {1380, 900}} {
+		width, height := size[0], size[1]
+		for _, locale := range []string{"en", "zh-Hans"} {
+			for _, dark := range []bool{false, true} {
+				t.Run(fmt.Sprintf("%s-%dx%d-dark-%t", locale, width, height, dark), func(t *testing.T) {
+					a, ct := workspaceTestApp(t)
+					recoveryTestStore(t, a)
+					a.windowWidth = width
+					config := testConnectionConfig(t)
+					a.connectionSaved, a.connectionEffective = &config, &config
+					a.connectionForm = newConnectionSettings(&config, config.WorkingDirectory)
+					target := selectionTarget()
+					target.Config.SessionID, target.Label = ct.SessionID, ct.Name
+					a.modelForm = newModelSelection(target, selectionCatalog())
+					a.modelForm.focusField = ""
+					a.modelPanelKind, a.modelPanelSessionID = "conversation", ct.SessionID
+					ct.Draft = "Keep the actual draft while inspecting settings layout"
+					a.openSettingsTab(settingsTabConnection, settingsSourceRail)
+					originalModel := a.modelForm.Draft
+					var viewport ui.Rect
+					tr := ui.NewTester(func(c *ui.Context) {
+						ui.Box(c).Fill().DrawOver(func(_ *ui.Painter, _ ui.Rect) { viewport = a.settingsScroll.Bounds(c) }).Children(func() { a.view(c) })
+					}, width, height)
+					tr.SetLocale(locale)
+					tr.SetDark(dark)
+					tr.Frame()
+					if dir := os.Getenv("SAKI_PREVIEW_DIR"); dir != "" {
+						writePreviewPNG(t, filepath.Join(dir, fmt.Sprintf("qoder-layout-%s-%dx%d-dark-%t-top.png", locale, width, height, dark)), tr.Image())
+					}
+					msgs := locales.In(locale)
+					// The scrolling viewport belongs to the main pane, not its readable column.
+					if viewport.W <= 0 || float32(width)-(viewport.X+viewport.W) > 8 {
+						t.Errorf("scroll viewport stops before main-pane edge: viewport=%+v window=%d", viewport, width)
+					}
+					general, ok := tr.Find(msgs.SettingsGeneral())
+					if !ok {
+						t.Fatal("General navigation row missing")
+					}
+					connection, ok := tr.Find(msgs.SettingsConnection())
+					if !ok {
+						t.Fatal("Connection navigation row missing")
+					}
+					if general.X != connection.X || general.W != connection.W || viewport.X-(connection.X+connection.W) > 24 {
+						t.Errorf("navigation rows do not fill the sidebar group: general=%+v connection=%+v viewport=%+v", general, connection, viewport)
+					}
+					var field ui.Rect
+					for i := 0; i < 24; i++ {
+						if r, found := tr.Find(msgs.ModelFilter()); found && r.H >= 32 {
+							field = r
+							break
+						}
+						tr.Scroll(viewport.X+viewport.W/2, 400, 0, 160)
+						tr.Frame()
+					}
+					if field.H < 32 {
+						t.Fatal("loaded session model field not reachable")
+					}
+					// Both form sections inherit one centered border-box content column.
+					expected := min(viewport.W, float32(820)) - 64 - 32
+					if field.W < expected-2 || field.X < viewport.X+32 || field.X+field.W > viewport.X+viewport.W-32 {
+						t.Errorf("embedded session editor uses its own width: field=%+v viewport=%+v minimum=%v", field, viewport, expected)
+					}
+					if a.modelForm.Draft != originalModel || ct.Draft != "Keep the actual draft while inspecting settings layout" || ct.pendingSend != nil {
+						t.Fatal("rendering/scanning settings changed a model or conversation draft")
+					}
+					if dir := os.Getenv("SAKI_PREVIEW_DIR"); dir != "" {
+						writePreviewPNG(t, filepath.Join(dir, fmt.Sprintf("qoder-layout-%s-%dx%d-dark-%t-model.png", locale, width, height, dark)), tr.Image())
+					}
+					a.selectSettingsTab(settingsTabAppearance)
+					tr.Frame()
+					if dir := os.Getenv("SAKI_PREVIEW_DIR"); dir != "" {
+						writePreviewPNG(t, filepath.Join(dir, fmt.Sprintf("qoder-layout-%s-%dx%d-dark-%t-general.png", locale, width, height, dark)), tr.Image())
+					}
+				})
+			}
+		}
 	}
 }

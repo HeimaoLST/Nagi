@@ -112,13 +112,14 @@ func TestLayoutDragClampsBothEdgesAndKeepsCenterWidest(t *testing.T) {
 	tr := ui.NewTester(a.view, 1180, 720)
 	tr.Frame()
 
-	tr.Press(200, 300)
-	tr.Move(260, 300)
+	leftDivider := a.railWidth()
+	tr.Press(leftDivider, 300)
+	tr.Move(leftDivider+60, 300)
 	// Still held: OnChange must clamp before the release/rebuild.
 	if center := float32(1180) - a.railWidth() - a.workWidth() - 2*paneSeparatorWidth; center < minCenterPaneWidth || center <= a.railWidth() || center <= a.workWidth() {
 		t.Fatalf("left held center = %v, left=%v right=%v", center, a.railWidth(), a.workWidth())
 	}
-	tr.Release(260, 300)
+	tr.Release(leftDivider+60, 300)
 	tr.Frame()
 	if a.railWidth() < minLeftPaneWidth || a.railWidth() > maxLeftPaneWidth {
 		t.Fatalf("left drag width = %v", a.railWidth())
@@ -474,7 +475,7 @@ func TestResponsiveManualHideAndWideDrag(t *testing.T) {
 	tr.Move(400, 300)
 	tr.Release(400, 300)
 	tr.Frame()
-	if a.railWidth() != 280 || a.workWidth() != beforeRight || a.effectiveDetailWidth() != 404 || a.centerPaneWidth != 494 {
+	if a.railWidth() != 394 || a.workWidth() != beforeRight || a.effectiveDetailWidth() != 280 || a.centerPaneWidth != 504 {
 		t.Fatalf("wide left drag geometry = left=%v prefRight=%v detail=%v center=%v", a.railWidth(), a.workWidth(), a.effectiveDetailWidth(), a.centerPaneWidth)
 	}
 }
@@ -593,7 +594,7 @@ func TestLayoutPreferenceIsNotOverwrittenByNarrowViewport(t *testing.T) {
 	a.windowWidth = 960
 	tr.SetSize(960, 640)
 	tr.Frame()
-	if a.workOverlay() || !a.avatarRailActive() || a.effectiveDetailWidth() != 408 || a.centerPaneWidth != 494 {
+	if a.workOverlay() || !a.avatarRailActive() || a.effectiveDetailWidth() != 398 || a.centerPaneWidth != 504 {
 		t.Fatalf("960 avatar geometry = overlay=%v avatar=%v detail=%v center=%v",
 			a.workOverlay(), a.avatarRailActive(), a.effectiveDetailWidth(), a.centerPaneWidth)
 	}
@@ -760,9 +761,10 @@ func TestLayoutDragIsNotPersistedPerMove(t *testing.T) {
 	a.workspaceOpen = true
 	tr := ui.NewTester(a.view, 1180, 720)
 	tr.Frame()
-	tr.Press(200, 300)
-	tr.Move(240, 300)
-	tr.Release(240, 300)
+	leftDivider := a.railWidth()
+	tr.Press(leftDivider, 300)
+	tr.Move(leftDivider+40, 300)
+	tr.Release(leftDivider+40, 300)
 	tr.Frame()
 	if a.railWidth() == defaultLeftPaneWidth {
 		t.Fatal("drag did not change the in-memory left width")
@@ -825,9 +827,9 @@ func TestLayoutWideDragAllowsPreferredRanges(t *testing.T) {
 	a, _ := layoutAppAt(t, 1380)
 	tr := ui.NewTester(a.view, 1380, 900)
 	tr.Frame()
-	tr.Press(200, 400)
-	tr.Move(400, 400)
-	tr.Release(400, 400)
+	tr.Press(a.railWidth(), 400)
+	tr.Move(500, 400)
+	tr.Release(500, 400)
 	tr.Frame()
 	if a.railWidth() != maxLeftPaneWidth {
 		t.Fatalf("wide left max = %v", a.railWidth())
@@ -853,7 +855,7 @@ func TestLayoutDragHonorsMinimumPaneWidths(t *testing.T) {
 	a, _ := layoutAppAt(t, 1180)
 	tr := ui.NewTester(a.view, 1180, 720)
 	tr.Frame()
-	tr.Press(200, 300)
+	tr.Press(a.railWidth(), 300)
 	tr.Move(0, 300)
 	tr.Release(0, 300)
 	tr.Frame()

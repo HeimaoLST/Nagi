@@ -6,11 +6,8 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
-// workbenchTheme is the one per-frame resolution of the Paper & Moss
-// appearance. Theme keeps the framework's control roles semantic; the small
-// app-only set names reading surfaces that must not be reused as button faces.
+// workbenchTheme resolves the Qoder reference palette and product surfaces.
 // CSS roles use the adopted rem16/scale1 profile, independent of Theme.Rem.
-// Existing workbench title aliases remain an S2 binding seam.
 const (
 	preferenceSelectMinWidth float32 = 120
 	preferenceSelectMaxWidth float32 = 160
@@ -53,6 +50,11 @@ const (
 
 type workbenchTheme struct {
 	Theme         *ui.Theme
+	ChromeFrom    ui.Color
+	ChromeTo      ui.Color
+	Tertiary      ui.Color
+	NavHover      ui.Color
+	NavSelected   ui.Color
 	Rail          ui.Color
 	Reading       ui.Color
 	Panel         ui.Color
@@ -68,70 +70,52 @@ type workbenchTheme struct {
 
 func resolveWorkbenchTheme(dark bool) workbenchTheme {
 	t := ui.LightTheme()
-	t.FontSize = typeLabel
-	t.Font = "system-ui"
-	t.Spacing = 4
-	t.Radius = 8
 	if dark {
 		t = ui.DarkTheme()
-		t.FontSize = typeLabel
-		t.Font = "system-ui"
-		t.Spacing = 4
-		t.Radius = 8
-		// #218 palette: the same theme fields, populated from the researched
-		// semantic roles. Border is the control/input boundary; the decorative
-		// line role has no separate Theme field in v0.7.3.
-		t.Background = ui.Hex("#1D2520")
-		t.Surface = ui.Hex("#29362D")
-		t.SurfaceHover = ui.Hex("#314D3B")
-		t.SurfacePressed = ui.Hex("#303B33")
-		t.Border = ui.Hex("#879B8D")
-		t.Text = ui.Hex("#EDF3EE")
-		t.TextMuted = ui.Hex("#B0BFB3")
-		t.Accent = ui.Hex("#B5D5BE")
-		t.AccentHover = ui.Hex("#C7E3CF")
-		t.AccentPressed = ui.Hex("#D8EDDE")
-		t.AccentText = ui.Hex("#183624")
-		t.Selection = ui.Hex("#314D3B")
-		t.Focus = ui.Hex("#A7D6B8")
-		t.Danger = ui.Hex("#F2A8AF")
-		t.Warning = ui.Hex("#F0C38E")
-		t.Success = ui.Hex("#A2D5AF")
-		t.Scrollbar = ui.Hex("#B0BFB3")
-		return workbenchTheme{
-			Theme: t,
-			Rail:  ui.Hex("#171E19"), Reading: ui.Hex("#1D2520"), Panel: ui.Hex("#202A23"),
-			Well: ui.Hex("#29362D"), BubbleUser: ui.Hex("#324A3B"), BubbleContact: ui.Hex("#28332B"),
-			WorkSurface: ui.Hex("#202A23"), WorkText: ui.Hex("#EDF3EE"),
-			WorkMuted: ui.Hex("#B0BFB3"), WorkAttention: ui.Hex("#F0C38E"),
-			WorkWarningBg: ui.Hex("#403222"),
-		}
 	}
+	t.FontSize, t.Font, t.Spacing, t.Radius = typeLabel, "system-ui", 4, 8
 	t.Background = ui.Hex("#FFFFFF")
-	t.Surface = ui.Hex("#EEF2EF")
-	t.SurfaceHover = ui.Hex("#E5EFE8")
-	t.SurfacePressed = ui.Hex("#E5EAE6")
-	t.Border = ui.Hex("#7C8A7F")
-	t.Text = ui.Hex("#252E28")
-	t.TextMuted = ui.Hex("#5D6B61")
-	t.Accent = ui.Hex("#365E4D")
-	t.AccentHover = ui.Hex("#2D5242")
-	t.AccentPressed = ui.Hex("#244536")
-	t.AccentText = ui.Hex("#FFFFFF")
-	t.Selection = ui.Hex("#E5EFE8")
-	t.Focus = ui.Hex("#3C7155")
-	t.Danger = ui.Hex("#9B3C43")
-	t.Warning = ui.Hex("#80501F")
-	t.Success = ui.Hex("#31684A")
-	t.Scrollbar = ui.Hex("#5D6B61")
-	return workbenchTheme{
-		Theme: t,
-		Rail:  ui.Hex("#F5F7F5"), Reading: ui.Hex("#FFFFFF"), Panel: ui.Hex("#F8FAF8"),
-		Well: ui.Hex("#EEF2EF"), BubbleUser: ui.Hex("#E5EFE8"), BubbleContact: ui.Hex("#F2F5F2"),
-		WorkSurface: ui.Hex("#F8FAF8"), WorkText: ui.Hex("#252E28"),
-		WorkMuted: ui.Hex("#5D6B61"), WorkAttention: ui.Hex("#80501F"),
-		WorkWarningBg: ui.Hex("#FFF2DF"),
+	t.Surface = ui.Hex("#FFFFFF")
+	t.SurfaceHover = ui.Hex("#EFEFEF")
+	t.SurfacePressed = ui.Hex("#DFDFDF")
+	t.Border = ui.Hex("#E6E6E6")
+	t.Text = ui.Hex("#141414")
+	t.TextMuted = ui.Hex("#636261")
+	t.Accent = ui.Hex("#0D0D0D")
+	t.AccentHover = ui.Hex("#436651")
+	t.AccentPressed = ui.Hex("#3A5747")
+	t.AccentText = ui.Hex("#FDFDFD")
+	t.Selection = ui.Hex("#EFEFEF")
+	t.Focus = ui.Hex("#BCBBBA")
+	t.Danger = ui.Hex("#EC5B56")
+	t.Warning = ui.Hex("#EFB041")
+	t.Success = ui.Hex("#579B6E")
+	t.Scrollbar, t.ScrollbarWidth = ui.Hex("#DFDFDF"), 6
+	palette := workbenchTheme{
+		Theme:      t,
+		ChromeFrom: ui.Hex("#E6E6B6"), ChromeTo: ui.Hex("#C4D0DA"), Tertiary: ui.Hex("#838280"),
+		NavHover: ui.Hex("#0000000A"), NavSelected: ui.Hex("#00000012"),
+		Rail: ui.Hex("#E6E6B6"), Reading: t.Background, Panel: t.Background,
+		Well: t.Surface, BubbleUser: ui.Hex("#F2F4F2"), BubbleContact: t.Background,
+		WorkSurface: t.Background, WorkText: t.Text, WorkMuted: t.TextMuted,
+		WorkAttention: t.Warning, WorkWarningBg: ui.Hex("#FEFBE8"),
 	}
+	if dark {
+		t.Background, t.Surface = ui.Hex("#171814"), ui.Hex("#171814")
+		t.SurfaceHover, t.SurfacePressed = ui.Hex("#2C2E28"), ui.Hex("#363830")
+		t.Border, t.Text, t.TextMuted = ui.Hex("#30322D"), ui.Hex("#F2F1E8"), ui.Hex("#C1BFB1")
+		t.Accent, t.AccentHover, t.AccentPressed = ui.Hex("#E0C65C"), ui.Hex("#F0DA78"), ui.Hex("#E8D06E")
+		t.AccentText, t.Selection, t.Focus = ui.Hex("#171407"), t.SurfaceHover, ui.Hex("#47483F")
+		t.Danger, t.Warning, t.Success, t.Scrollbar = ui.Hex("#FF4D4F"), ui.Hex("#FAAD14"), ui.Hex("#73CD94"), ui.Hex("#363830")
+		palette.ChromeFrom, palette.ChromeTo, palette.Rail = ui.Hex("#10110E"), ui.Hex("#10110E"), ui.Hex("#10110E")
+		palette.Tertiary = ui.Hex("#89877A")
+		palette.NavHover, palette.NavSelected = ui.Hex("#3D3F39"), ui.Hex("#454741")
+		palette.Reading, palette.Panel, palette.Well = t.Background, t.Background, t.Surface
+		palette.BubbleUser, palette.BubbleContact = ui.Hex("#2E2916"), t.Background
+		palette.WorkSurface, palette.WorkText, palette.WorkMuted = t.Background, t.Text, t.TextMuted
+		palette.WorkAttention, palette.WorkWarningBg = t.Warning, ui.Hex("#4A4019")
+	}
+	return palette
 }
 
 func paletteLuminance(c ui.Color) float64 {
@@ -271,15 +255,30 @@ func secondaryButton(c *ui.Context, label string) ui.Element {
 	return sharedControlFace(c, ui.Button(c, label).Label(label), 16, 4, false, false, false).FontSize(typeAction).FontWeight(500).FixedLineHeight(lineAction).Padding(8, 12).Gap(6)
 }
 
+func navigationControl(c *ui.Context, e ui.Element, palette workbenchTheme, selected bool) ui.Element {
+	e = sharedControlFace(c, e, 8, 4, false, false, false)
+	e.Draw(func(p *ui.Painter, r ui.Rect) {
+		r.Y, r.H = r.Y+2, r.H-4
+		fill := ui.Transparent
+		if selected {
+			fill = palette.NavSelected
+		} else if e.Hovered() || e.Focused() {
+			fill = palette.NavHover
+		}
+		paintPreferenceFace(p, r, 8, 4, fill, ui.Transparent)
+	})
+	return e
+}
+
 // The transparent interaction box extends two DIPs past the visible face.
 // Negative block margins keep its layout contribution at the declared 28 DIPs.
 func sharedControlFace(c *ui.Context, e ui.Element, region float32, exponent float64, outlined, invalid, selected bool) ui.Element {
 	e.Height(controlHit).MinHeight(controlHit).Margin(-2, 0).Radius(0).
 		Background(ui.Transparent).Border(0, ui.Transparent).FocusRing(false)
-	return drawControlFace(c, e, region, exponent, outlined, invalid, selected, 0, 2)
+	return drawControlFace(c, e, region, exponent, outlined, invalid, selected, 0, 2, c.Theme().SurfaceHover)
 }
 
-func drawControlFace(c *ui.Context, e ui.Element, region float32, exponent float64, outlined, invalid, selected bool, insetX, insetY float32) ui.Element {
+func drawControlFace(c *ui.Context, e ui.Element, region float32, exponent float64, outlined, invalid, selected bool, insetX, insetY float32, focusFill ui.Color) ui.Element {
 	t := c.Theme()
 	e.Draw(func(p *ui.Painter, r ui.Rect) {
 		r.X, r.Y = r.X+insetX, r.Y+insetY
@@ -297,16 +296,16 @@ func drawControlFace(c *ui.Context, e ui.Element, region float32, exponent float
 			} else if e.Hovered() {
 				fill = t.SurfaceHover
 			}
+			if !outlined && e.FocusVisible() {
+				fill = focusFill
+			}
 		}
 		if invalid {
 			border = t.Danger
-		} else if e.Focused() {
+		} else if outlined && e.Focused() {
 			border = t.Focus
 		}
 		paintPreferenceFace(p, r, region, exponent, fill, border)
-		if !outlined && e.FocusVisible() {
-			p.StrokePath(controlPath(r, region, exponent), 2, t.Focus)
-		}
 	})
 	return e
 }
@@ -350,7 +349,11 @@ func iconControlFace(c *ui.Context, e ui.Element, role iconControlRole, selected
 		exponent = 2
 	}
 	inset := (controlHit - face) / 2
-	return drawControlFace(c, e, region, exponent, false, false, selected, inset, inset)
+	focusFill := c.Theme().SurfaceHover
+	if role == iconPrimary {
+		focusFill = c.Theme().AccentPressed
+	}
+	return drawControlFace(c, e, region, exponent, false, false, selected, inset, inset, focusFill)
 }
 
 func controlIcon(c *ui.Context, glyph *ui.SVG, role iconControlRole) ui.Element {
@@ -403,7 +406,7 @@ func formTextArea(c *ui.Context, value *string, invalid bool) ui.Element {
 	e := ui.TextAreaBase(c, value).Font("system-ui").FontSize(typeAction).FontWeight(400).
 		FixedLineHeight(lineForm).MinHeight(80).BorderWidth(8, 12).BorderColor(ui.Transparent).
 		Padding(0).Radius(0).Background(ui.Transparent).TextColor(c.Theme().Text).FocusRing(false)
-	return drawControlFace(c, e, 16, 4, true, invalid, false, 0, 0)
+	return drawControlFace(c, e, 16, 4, true, invalid, false, 0, 0, c.Theme().SurfaceHover)
 }
 
 func paintPreferenceFace(p *ui.Painter, r ui.Rect, region float32, exponent float64, fill, border ui.Color) {

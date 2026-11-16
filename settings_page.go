@@ -307,13 +307,13 @@ func (a *appModel) settingsPage(c *ui.Context, t *ui.Theme) {
 	}
 	a.ensureConnectionForm()
 	if a.layoutWidth() < int(preferenceBreakpoint) {
-		ui.Column(c).Fill().Background(a.workTheme.Reading).Children(func() {
+		ui.Column(c).Fill().Background(ui.Transparent).Children(func() {
 			a.settingsSidebar(c, t, true)
 			a.settingsMain(c, t, true)
 		})
 		return
 	}
-	ui.Row(c).Fill().Background(a.workTheme.Reading).Children(func() {
+	ui.Row(c).Fill().Background(ui.Transparent).Children(func() {
 		a.settingsSidebar(c, t, false)
 		a.settingsMain(c, t, false)
 	})
@@ -325,38 +325,54 @@ func (a *appModel) settingsSidebar(c *ui.Context, t *ui.Theme, narrow bool) {
 	if narrow {
 		width = 0
 	}
-	column := ui.Column(c).Gap(12).Padding(12).Background(a.workTheme.Rail).AlignItems(ui.Start)
+	column := ui.Column(c).MinWidth(0).Shrink(0)
 	if narrow {
 		column.FillWidth()
 	} else {
 		column.FillHeight().Width(width)
 	}
 	column.Children(func() {
+		if !narrow {
+			ui.Row(c).FillWidth().Height(max(float32(40), c.TitleBar().Height)).Shrink(0).DragWindow()
+		}
 		ui.Toolbar(c, func() {
-			back := secondaryButton(c, "").Label(msgs.SettingsBackAccessible()).Padding(8, 14, 8, 10)
+			back := navigationControl(c, ui.ButtonBase(c).Label(msgs.SettingsBackAccessible()), a.workTheme, false).Padding(4).Gap(8).TextColor(a.workTheme.Tertiary)
 			back.Children(func() {
 				ui.Icon(c, navBackIcon).Width(16).Height(16).TextColor(t.TextMuted)
-				ui.Text(c, msgs.SettingsBack()).FontSize(typeAction).TextColor(t.Text)
+				ui.Text(c, msgs.SettingsBack()).FontSize(typeAction).FixedLineHeight(22).TextColor(a.workTheme.Tertiary)
 			})
 			back.Disabled(a.modelOpActive && a.settingsReturnModelTarget != nil && a.settingsReturnModel == nil).OnClick(func() { a.closeSettings() })
 			if a.settingsFocusBack {
 				back.Focus()
 				a.settingsFocusBack = false
 			}
-		}).Label(msgs.SettingsNavigationLabel()).AlignSelf(ui.Start).Padding(0)
+		}).Label(msgs.SettingsNavigationLabel()).FillWidth().Padding(12)
 		if a.modelOpActive && a.settingsReturnModelTarget != nil && a.settingsReturnModel == nil {
 			ui.Text(c, msgs.ModelWaiting()).FontSize(typeAction).LineHeight(1.5).TextColor(t.TextMuted)
 		}
-		ui.Text(c, msgs.SettingsTitle()).FontSize(typeLabel).FontWeight(400).FixedLineHeight(lineLabel).TextColor(t.Text)
+		ui.Text(c, msgs.SettingsTitle()).FontSize(typeNavigation).FontWeight(500).FixedLineHeight(lineNavigation).TextColor(a.workTheme.Tertiary).Opacity(.6).Height(18).Padding(0, 16)
 		nav := func(label, tab string) {
 			selected := a.settingsTab == tab
-			button := sharedControlFace(c, ui.ButtonBase(c).Label(label), 8, 4, false, false, selected).
+			button := navigationControl(c, ui.ButtonBase(c).Label(label), a.workTheme, selected).
 				FontSize(typeNavigation).FontWeight(400).FixedLineHeight(lineNavigation).
-				Padding(8).Justify(ui.Start).TextColor(t.Text)
+				Padding(8).Gap(8).Justify(ui.Start).TextColor(t.TextMuted)
 			if !narrow {
 				button.FillWidth()
 			}
-			button.Children(func() { ui.Text(c, label).FontSize(typeNavigation).FontWeight(400).FixedLineHeight(lineNavigation) })
+			if selected {
+				button.TextColor(t.Text)
+			}
+			button.Children(func() {
+				glyph := glyphSettings4Line
+				if tab == settingsTabContact {
+					glyph = navProfileIcon
+				}
+				if tab == settingsTabAdvanced {
+					glyph = glyphMoreLine
+				}
+				ui.Box(c).Size(16, 16).AlignItems(ui.Center).Justify(ui.Center).Children(func() { ui.Icon(c, glyph).Size(14, 14) })
+				ui.Text(c, label).FontSize(typeNavigation).FontWeight(400).FixedLineHeight(lineNavigation)
+			})
 			button.OnClick(func() { a.selectSettingsTab(tab) })
 			if a.settingsFocusTab == tab {
 				button.Focus()
@@ -364,14 +380,14 @@ func (a *appModel) settingsSidebar(c *ui.Context, t *ui.Theme, narrow bool) {
 			}
 		}
 		if narrow {
-			ui.Row(c).Gap(4).Wrap().Children(func() {
+			ui.Row(c).FillWidth().Padding(0, 8).Gap(2).Wrap().Children(func() {
 				nav(msgs.SettingsGeneral(), settingsTabAppearance)
 				nav(msgs.SettingsConnection(), settingsTabConnection)
 				nav(msgs.SettingsContact(), settingsTabContact)
 				nav(msgs.SettingsAdvanced(), settingsTabAdvanced)
 			})
 		} else {
-			ui.Column(c).Gap(4).Children(func() {
+			ui.Column(c).FillWidth().Padding(0, 8).Gap(2).Children(func() {
 				nav(msgs.SettingsGeneral(), settingsTabAppearance)
 				nav(msgs.SettingsConnection(), settingsTabConnection)
 				nav(msgs.SettingsContact(), settingsTabContact)
@@ -382,9 +398,10 @@ func (a *appModel) settingsSidebar(c *ui.Context, t *ui.Theme, narrow bool) {
 }
 
 func (a *appModel) settingsMain(c *ui.Context, t *ui.Theme, narrow bool) {
-	ui.Column(c).Grow(1).FillHeight().AlignItems(ui.Start).Children(func() {
-		ui.Scroll(c).Grow(1).FillHeight().TrackScroll(&a.settingsScroll).Padding(8, 32, 48).Children(func() {
-			ui.Column(c).FillWidth().MaxWidth(settingsContentWidth).AlignSelf(ui.Center).AlignItems(ui.Start).Gap(8).Children(func() {
+	ui.Column(c).Grow(1).MinWidth(0).FillHeight().Margin(4).Background(a.workTheme.Reading).Border(1, t.Border).Radius(16).Clip().Children(func() {
+		ui.Row(c).FillWidth().Height(40).Shrink(0).DragWindow()
+		ui.Scroll(c).FillWidth().Grow(1).MinHeight(0).TrackScroll(&a.settingsScroll).Children(func() {
+			ui.Column(c).FillWidth().MaxWidth(settingsContentWidth).AlignSelf(ui.Center).AlignItems(ui.Start).Padding(8, 32, 48).Gap(8).Children(func() {
 				switch a.settingsTab {
 				case settingsTabAppearance:
 					a.settingsAppearanceContent(c, t)
@@ -408,12 +425,16 @@ func preferenceGroup(c *ui.Context, t *ui.Theme, children func()) {
 
 func preferenceSection(c *ui.Context, t *ui.Theme, title string, children func()) {
 	ui.Column(c).FillWidth().Gap(8).Children(func() {
-		ui.Column(c).FillWidth().Height(44).Padding(0, 16).Justify(ui.End).Children(func() {
-			ui.Row(c).FillWidth().Height(28).AlignItems(ui.Center).Children(func() {
-				ui.Text(c, title).FontSize(typeMeta).FontWeight(400).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
-			})
-		})
+		preferenceSectionHeader(c, t, title)
 		preferenceGroup(c, t, children)
+	})
+}
+
+func preferenceSectionHeader(c *ui.Context, t *ui.Theme, title string) {
+	ui.Column(c).FillWidth().Height(44).Padding(0, 16).Justify(ui.End).Children(func() {
+		ui.Row(c).FillWidth().Height(28).AlignItems(ui.Center).Children(func() {
+			ui.Text(c, title).FontSize(typeMeta).FontWeight(400).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
+		})
 	})
 }
 
@@ -446,7 +467,7 @@ func settingsPreferenceRow(c *ui.Context, t *ui.Theme, label, description string
 func (a *appModel) settingsAppearanceContent(c *ui.Context, t *ui.Theme) {
 	msgs := locales.In(c.Locale())
 	a.ensureLanguageMode()
-	pageHeading(c, msgs.SettingsGeneral())
+	pageHeading(c, msgs.SettingsGeneral()).Padding(0, 16)
 	preferenceSection(c, t, msgs.SettingsAppearance(), func() {
 		c.Key("appearance-preference")
 		settingsPreferenceRow(c, t, msgs.AppearanceMode(), "", func() {
@@ -906,8 +927,8 @@ func (a *appModel) settingsConnectionContent(c *ui.Context, t *ui.Theme) {
 	msgs := locales.In(c.Locale())
 	form := a.connectionForm
 	ui.Column(c).FillWidth().AlignItems(ui.Start).Gap(8).Children(func() {
-		pageHeading(c, msgs.SettingsConnection())
-		ui.Text(c, msgs.ModelDefaultScope()).FontSize(typeLabel).FontWeight(400).FixedLineHeight(lineLabel).TextColor(t.Text)
+		pageHeading(c, msgs.SettingsConnection()).Padding(0, 16)
+		preferenceSectionHeader(c, t, msgs.ModelDefaultScope())
 		if a.connectionApplied() && a.connectionEffective != nil {
 			ui.Column(c).FillWidth().Gap(4).Children(func() {
 				ui.Text(c, msgs.ConnectionCurrent(connectionCurrentSummary(a.connectionEffective))).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text)
@@ -929,10 +950,11 @@ func (a *appModel) settingsConnectionContent(c *ui.Context, t *ui.Theme) {
 		actions := a.connectionActions()
 		actions.Discard = func() { form.ResetDraft() }
 		form.view(c, t, actions)
-		ui.Divider(c)
-		ui.Text(c, msgs.ModelConversationScope()).FontSize(typeLabel).FontWeight(400).FixedLineHeight(lineLabel).TextColor(t.Text)
+		preferenceSectionHeader(c, t, msgs.ModelConversationScope())
 		if a.modelPanelKind == "conversation" && a.modelPanelSessionID == a.selectedContact().SessionID {
-			a.modelPanel(c, t)
+			preferenceGroup(c, t, func() {
+				ui.Column(c).FillWidth().Padding(14, 0).Children(func() { a.modelPanel(c, t) })
+			})
 		} else {
 			secondaryButton(c, msgs.ModelSessionTitle()).Disabled(a.modelOpActive).
 				OnClick(func() {

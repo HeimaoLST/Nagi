@@ -1508,48 +1508,6 @@ func (msgs Messages) WorkTask() string {
 	return Catalog.Format(msgs.locale, "workTask", nil)
 }
 
-// ContactScopeActive says "Active"
-// in the language the app shows.
-//
-// The Active contact scope.
-func ContactScopeActive() string { return In(i18n.Locale()).ContactScopeActive() }
-
-// ContactScopeActive says "Active"
-// in the language of msgs.
-//
-// The Active contact scope.
-func (msgs Messages) ContactScopeActive() string {
-	return Catalog.Format(msgs.locale, "contactScopeActive", nil)
-}
-
-// ContactScopeArchived says "Archived"
-// in the language the app shows.
-//
-// The Archived contact scope.
-func ContactScopeArchived() string { return In(i18n.Locale()).ContactScopeArchived() }
-
-// ContactScopeArchived says "Archived"
-// in the language of msgs.
-//
-// The Archived contact scope.
-func (msgs Messages) ContactScopeArchived() string {
-	return Catalog.Format(msgs.locale, "contactScopeArchived", nil)
-}
-
-// ContactScopeAll says "All"
-// in the language the app shows.
-//
-// The All contact scope.
-func ContactScopeAll() string { return In(i18n.Locale()).ContactScopeAll() }
-
-// ContactScopeAll says "All"
-// in the language of msgs.
-//
-// The All contact scope.
-func (msgs Messages) ContactScopeAll() string {
-	return Catalog.Format(msgs.locale, "contactScopeAll", nil)
-}
-
 // IssueFilterUnfinished says "Not done"
 // in the language the app shows.
 //
@@ -1918,24 +1876,14 @@ func (msgs Messages) RailContactSearchPlaceholder() string {
 	return Catalog.Format(msgs.locale, "railContactSearchPlaceholder", nil)
 }
 
-// RailNoContactsMatch says "No contacts match this scope and search."
+// RailNoContactsMatch says "No contacts match your search."
 // in the language the app shows.
 func RailNoContactsMatch() string { return In(i18n.Locale()).RailNoContactsMatch() }
 
-// RailNoContactsMatch says "No contacts match this scope and search."
+// RailNoContactsMatch says "No contacts match your search."
 // in the language of msgs.
 func (msgs Messages) RailNoContactsMatch() string {
 	return Catalog.Format(msgs.locale, "railNoContactsMatch", nil)
-}
-
-// ContactScopeLabel says "Contact scope"
-// in the language the app shows.
-func ContactScopeLabel() string { return In(i18n.Locale()).ContactScopeLabel() }
-
-// ContactScopeLabel says "Contact scope"
-// in the language of msgs.
-func (msgs Messages) ContactScopeLabel() string {
-	return Catalog.Format(msgs.locale, "contactScopeLabel", nil)
 }
 
 // NavShowContactsTooltip says "Show contacts"
@@ -10128,14 +10076,14 @@ func (msgs Messages) ThemeDark() string {
 	return Catalog.Format(msgs.locale, "themeDark", nil)
 }
 
-// ThemePaper says "Paper"
+// ThemePaper says "Bee Light"
 // in the language the app shows.
 //
 // General settings local theme selection, discovery and non-blocking
 // diagnostics.
 func ThemePaper() string { return In(i18n.Locale()).ThemePaper() }
 
-// ThemePaper says "Paper"
+// ThemePaper says "Bee Light"
 // in the language of msgs.
 //
 // General settings local theme selection, discovery and non-blocking
@@ -10144,14 +10092,14 @@ func (msgs Messages) ThemePaper() string {
 	return Catalog.Format(msgs.locale, "themePaper", nil)
 }
 
-// ThemeMoss says "Moss"
+// ThemeMoss says "Bee Dark"
 // in the language the app shows.
 //
 // General settings local theme selection, discovery and non-blocking
 // diagnostics.
 func ThemeMoss() string { return In(i18n.Locale()).ThemeMoss() }
 
-// ThemeMoss says "Moss"
+// ThemeMoss says "Bee Dark"
 // in the language of msgs.
 //
 // General settings local theme selection, discovery and non-blocking

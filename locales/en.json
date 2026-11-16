@@ -440,18 +440,6 @@
   "@workTask": {
     "description": "Nagi workTask UI copy."
   },
-  "contactScopeActive": "Active",
-  "@contactScopeActive": {
-    "description": "The Active contact scope."
-  },
-  "contactScopeArchived": "Archived",
-  "@contactScopeArchived": {
-    "description": "The Archived contact scope."
-  },
-  "contactScopeAll": "All",
-  "@contactScopeAll": {
-    "description": "The All contact scope."
-  },
   "issueFilterUnfinished": "Not done",
   "@issueFilterUnfinished": {
     "description": "The Unfinished issue filter."
@@ -546,8 +534,7 @@
   "railContactsTitle": "Contacts",
   "railContactListActions": "Contact list actions",
   "railContactSearchPlaceholder": "Name or purpose",
-  "railNoContactsMatch": "No contacts match this scope and search.",
-  "contactScopeLabel": "Contact scope",
+  "railNoContactsMatch": "No contacts match your search.",
   "navShowContactsTooltip": "Show contacts",
   "navHistory": "History",
   "navConversationHistoryTooltip": "Chat history",
@@ -1548,11 +1535,11 @@
   "@themeDark": {
     "description": "General settings local theme selection, discovery and non-blocking diagnostics."
   },
-  "themePaper": "Paper",
+  "themePaper": "Bee Light",
   "@themePaper": {
     "description": "General settings local theme selection, discovery and non-blocking diagnostics."
   },
-  "themeMoss": "Moss",
+  "themeMoss": "Bee Dark",
   "@themeMoss": {
     "description": "General settings local theme selection, discovery and non-blocking diagnostics."
   },

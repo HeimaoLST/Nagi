@@ -38,69 +38,72 @@ func TestViewRendersBothThemes(t *testing.T) {
 
 func TestTitleBarKeepsNavigationOutsideNativeControls(t *testing.T) {
 	for _, width := range []int{720, 899, 900, 901, 960, 1040, 1179, 1180, 1181} {
-		for _, scene := range []string{"chat", "collapsed", "work", "history", "profile", "settings", "reading"} {
-			t.Run(fmt.Sprintf("%d/%s", width, scene), func(t *testing.T) {
-				a := testApp(t)
-				a.windowWidth = width
-				a.workspaceOpen = false
-				ct := a.selectedContact()
-				ct.Draft = "keep the titlebar draft"
-				labels := []string{"History", "Composer for Saki", "Chat model", "Send"}
-				closeLabel := ""
-				switch scene {
-				case "collapsed":
-					a.railCollapsed = true
-					labels = append(labels, "Contacts")
-				case "work":
-					a.openDetail(detailWork)
-					closeLabel = "Close workspace"
-					if width < avatarRailBreakpoint {
-						closeLabel = "Back to chat"
+		for _, right := range []float32{0, 138} {
+			for _, scene := range []string{"chat", "collapsed", "work", "history", "profile", "settings", "reading"} {
+				t.Run(fmt.Sprintf("%d/right-%g/%s", width, right, scene), func(t *testing.T) {
+					a := testApp(t)
+					a.windowWidth = width
+					a.workspaceOpen = false
+					ct := a.selectedContact()
+					ct.Draft = "keep the titlebar draft"
+					labels := []string{"History", "Composer for Saki", "Chat model", "Send"}
+					closeLabel := ""
+					switch scene {
+					case "collapsed":
+						a.railCollapsed = true
+						labels = append(labels, "Contacts")
+					case "work":
+						a.openDetail(detailWork)
+						closeLabel = "Close workspace"
+						if width < avatarRailBreakpoint {
+							closeLabel = "Back to chat"
+						}
+						labels = []string{closeLabel, "New task"}
+						if width >= avatarRailBreakpoint {
+							labels = append(labels, "Chat model", "Send")
+						}
+					case "history":
+						a.openDetail(detailHistory)
+						closeLabel = "Close history"
+						labels = []string{closeLabel}
+					case "profile":
+						a.openDetail(detailProfile)
+						closeLabel = "Close profile"
+						labels = []string{closeLabel}
+					case "settings":
+						a.openSettingsTab(settingsTabAppearance, settingsSourceComposer)
+						closeLabel = "← Back to workbench"
+						labels = []string{closeLabel, "General"}
+					case "reading":
+						a.openDetail(detailHistory)
+						a.contactHistoryFull = &contactHistoryFull{SessionID: "saved", EntryID: "entry", Text: "# Saved message\n\nReadable history."}
+						closeLabel = "Close full message"
+						labels = []string{closeLabel, "Copy saved message"}
 					}
-					labels = []string{closeLabel, "New task"}
-					if width >= avatarRailBreakpoint {
-						labels = append(labels, "Chat model", "Send")
+					tr := ui.NewTester(a.view, width, 640)
+					bar := ui.TitleBar{Height: 38, Left: 80, Right: right}
+					tr.SetTitleBar(bar)
+					for _, label := range labels {
+						r, ok := tr.Find(label)
+						overlapsControls := r.Y < bar.Height && (r.X < bar.Left || r.X+r.W > float32(width)-bar.Right)
+						if !ok || r.W <= 0 || r.H <= 0 || r.X < 0 || r.X+r.W > float32(width) || r.Y < 0 || overlapsControls || r.Y+r.H > 640 {
+							t.Fatalf("%q collides with native controls or leaves the window: visible=%v bounds=%+v", label, ok, r)
+						}
+						if label == "Send" && (r.W < 32 || r.H < 32) {
+							t.Fatalf("Send target was clipped: %+v", r)
+						}
 					}
-				case "history":
-					a.openDetail(detailHistory)
-					closeLabel = "Close history"
-					labels = []string{closeLabel}
-				case "profile":
-					a.openDetail(detailProfile)
-					closeLabel = "Close profile"
-					labels = []string{closeLabel}
-				case "settings":
-					a.openSettingsTab(settingsTabAppearance, settingsSourceComposer)
-					closeLabel = "← Back to workbench"
-					labels = []string{closeLabel, "General"}
-				case "reading":
-					a.openDetail(detailHistory)
-					a.contactHistoryFull = &contactHistoryFull{SessionID: "saved", EntryID: "entry", Text: "# Saved message\n\nReadable history."}
-					closeLabel = "Close full message"
-					labels = []string{closeLabel, "Copy saved message"}
-				}
-				tr := ui.NewTester(a.view, width, 640)
-				bar := ui.TitleBar{Height: 38, Left: 80, Right: 138}
-				tr.SetTitleBar(bar)
-				for _, label := range labels {
-					r, ok := tr.Find(label)
-					if !ok || r.W <= 0 || r.H <= 0 || r.X < 0 || r.X+r.W > float32(width) || r.Y < bar.Height || r.Y+r.H > 640 {
-						t.Fatalf("%q collides with native controls or leaves the window: visible=%v bounds=%+v", label, ok, r)
+					if closeLabel != "" {
+						if err := tr.Click(closeLabel); err != nil {
+							t.Fatal(err)
+						}
+						tr.Frame()
+						if a.settingsOpen || a.contactHistoryFull != nil || (scene != "reading" && a.workspaceOpen) || ct.Draft != "keep the titlebar draft" {
+							t.Fatalf("return did not preserve its route and draft: settings=%v detail=%q reading=%v draft=%q", a.settingsOpen, a.activeDetail(), a.contactHistoryFull != nil, ct.Draft)
+						}
 					}
-					if label == "Send" && (r.W < 32 || r.H < 32) {
-						t.Fatalf("Send target was clipped: %+v", r)
-					}
-				}
-				if closeLabel != "" {
-					if err := tr.Click(closeLabel); err != nil {
-						t.Fatal(err)
-					}
-					tr.Frame()
-					if a.settingsOpen || a.contactHistoryFull != nil || (scene != "reading" && a.workspaceOpen) || ct.Draft != "keep the titlebar draft" {
-						t.Fatalf("return did not preserve its route and draft: settings=%v detail=%q reading=%v draft=%q", a.settingsOpen, a.activeDetail(), a.contactHistoryFull != nil, ct.Draft)
-					}
-				}
-			})
+				})
+			}
 		}
 	}
 }
@@ -117,8 +120,8 @@ func TestTitleBarChangesKeepComposerAndSettingsFocus(t *testing.T) {
 	work, _ := tr.Find("Work")
 	tr.SetTitleBar(ui.TitleBar{})
 	fullWork, ok := tr.Find("Work")
-	if !ok || fullWork.Y != work.Y-bar.Height {
-		t.Fatalf("fullscreen did not release the native control band: before=%+v after=%+v", work, fullWork)
+	if !ok || fullWork.Y != work.Y {
+		t.Fatalf("fixed reference chrome moved when native controls changed: before=%+v after=%+v", work, fullWork)
 	}
 	if _, active := tr.TextCaret(); !active {
 		t.Fatal("changing native titlebar metrics lost the composer caret")
@@ -932,7 +935,12 @@ func TestContactRailControlsStayVisibleAtNarrowWidths(t *testing.T) {
 		if limit != defaultLeftPaneWidth {
 			t.Fatalf("%d rail width = %v", width, limit)
 		}
-		for _, label := range []string{"Add contact", "Contact scope", "Active"} {
+		for _, removed := range []string{"Nagi", "Contact scope", "Active", "Archived", "All"} {
+			if tr.HasText(removed) {
+				t.Fatalf("redundant sidebar control %q is still shown", removed)
+			}
+		}
+		for _, label := range []string{"Add contact", "Search contacts", "Settings"} {
 			r, ok := tr.Find(label)
 			if !ok || r.W <= 0 || r.H <= 0 || r.X < 0 || r.X+r.W > limit || r.Y < 0 || r.Y+r.H > 720 {
 				t.Fatalf("%dx720 contact rail %q out of rail: ok=%v rect=%+v", width, label, ok, r)

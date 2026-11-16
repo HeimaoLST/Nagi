@@ -123,9 +123,6 @@ func applyStoreSelection(a *appModel, store *contactStore) {
 		a.contacts = []*contact{placeholderContact(a.workDir)}
 		a.selected = 0
 	}
-	if a.selectedContact().Archived {
-		a.contactScope = "archived"
-	}
 	if layout := store.state.Layout; layout != nil {
 		a.leftPaneWidth = clampPaneWidth(layout.LeftWidth, defaultLeftPaneWidth, minLeftPaneWidth, maxLeftPaneWidth)
 		a.rightPaneWidth = clampPaneWidth(layout.RightWidth, defaultRightPaneWidth, minRightPaneWidth, maxRightPaneWidth)
