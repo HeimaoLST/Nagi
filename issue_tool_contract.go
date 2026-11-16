@@ -18,6 +18,88 @@ import (
 	"time"
 )
 
+type issueToolContent struct {
+	Type string `json:"type"`
+	Text string `json:"text"`
+}
+
+type issueToolForwardRequest struct {
+	Tool      string          `json:"tool"`
+	Arguments json.RawMessage `json:"arguments"`
+}
+
+type issueToolForwardResponse struct {
+	Content           []issueToolContent `json:"content"`
+	StructuredContent json.RawMessage    `json:"structuredContent,omitempty"`
+	IsError           bool               `json:"isError,omitempty"`
+}
+
+type issueToolDefinition struct {
+	Name        string         `json:"name"`
+	Description string         `json:"description"`
+	InputSchema map[string]any `json:"inputSchema"`
+}
+
+func issueToolDefinitions() []issueToolDefinition {
+	stringProp := func(description string) map[string]any {
+		return map[string]any{"type": "string", "description": description}
+	}
+	return []issueToolDefinition{
+		{
+			Name: "issue_list", Description: "Discover existing issues in this app-issued conversation scope, including issues that have never run. Use when the user refers to an existing plan, output, or task; the user need not know its issue ID. Read-only, with bounded pages and has_more/next_cursor.",
+			InputSchema: map[string]any{
+				"type": "object", "additionalProperties": false,
+				"properties": map[string]any{
+					"scope":            stringProp("Opaque app-issued scope token; never invent or change it."),
+					"include_archived": map[string]any{"type": "boolean", "default": false},
+					"limit":            map[string]any{"type": "integer", "minimum": 1, "maximum": 100},
+					"cursor":           stringProp("Opaque next_cursor from a previous page."),
+				},
+				"required": []string{"scope"},
+			},
+		},
+		{
+			Name: "issue_get", Description: "Read one authorized issue's goal, structured requirements, bounded executions, pending supplement count, and recorded result excerpt/files when available. Read-only; use this to inspect delegated work instead of repeating it; never infer an issue from GUI selection.",
+			InputSchema: map[string]any{
+				"type": "object", "additionalProperties": false,
+				"properties": map[string]any{
+					"scope":    stringProp("Opaque app-issued scope token; never invent or change it."),
+					"issue_id": stringProp("Exact authorized issue id."),
+				},
+				"required": []string{"scope", "issue_id"},
+			},
+		},
+		{
+			Name: "issue_wait", Description: "Report that the current issue execution needs information and pause work. Returns a short waiting_user receipt with question_ref; do not wait inside the tool call.",
+			InputSchema: map[string]any{
+				"type": "object", "additionalProperties": false,
+				"properties": map[string]any{
+					"scope": stringProp("Opaque app-issued work scope token; never invent or change it."),
+					"text":  stringProp("The missing-information question for the user."),
+				},
+				"required": []string{"scope", "text"},
+			},
+		},
+		{
+			Name: "issue_action", Description: "Apply one explicit user-authorized issue action through Nagi's existing issue path, including wait for missing information and resume. Do not use for ordinary discussion. A run action's accepted receipt means the issue work started, not completed; use issue_get for progress/results and do not duplicate the delegated work in conversation. Ambiguous/missing targets return candidates; no operation is accepted without real Runtime IDs.",
+			InputSchema: map[string]any{
+				"type": "object", "additionalProperties": false,
+				"properties": map[string]any{
+					"scope":             stringProp("Opaque app-issued scope token; never invent or change it."),
+					"action":            map[string]any{"type": "string", "enum": []string{issueToolActionCreate, issueToolActionUpdate, issueToolActionRun, issueToolActionStop, issueToolActionAddSupplement, issueToolActionWait, issueToolActionResume}},
+					"issue_id":          stringProp("Exact authorized issue id. Required for update/run/stop/add_supplement/wait/resume; omit only for create."),
+					"expected_revision": map[string]any{"type": "integer", "minimum": 1, "description": "Required positive integer for update/wait. Copy the current requirements_revision from the create receipt or issue_get; do not guess."},
+					"goal":              stringProp("Issue goal. Required for create/update."),
+					"requirements":      map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Requirement strings for create/update; send the complete requirement list."},
+					"text":              stringProp("Supplement/answer text for add_supplement; missing-information question for wait."),
+					"question_ref":      stringProp("Open question_ref returned by wait; required when add_supplement answers that question."),
+				},
+				"required": []string{"scope", "action"},
+			},
+		},
+	}
+}
+
 const (
 	issueToolActionCreate        = "create"
 	issueToolActionUpdate        = "update"
