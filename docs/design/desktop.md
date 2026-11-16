@@ -1,8 +1,8 @@
 # Desktop contacts：首版运行时接入
 
-更新日期：2026-11-11。当前设置页面见文末 **#199 独立设置页面**。本文保留各阶段的实现与验证记录；产品定义、联系人／事项／会话语义和 MVP-01–MVP-12 以 [Nagi 产品定义与需求](../requirements/desktop.md) 为唯一权威；当前视觉与交互以 [Desktop workbench](desktop-workbench.md) 为唯一规范。连接配置见 **#116 首用配置**，会话模型选择见 **#115 会话模型选择**，阅读与独立工作会话分别见 #113/#118，资料快照与递交见 **#117 资料快照、阅读与递交**，联系人编辑、归档及旧对话访问见 **#152 联系人管理与已保存对话**。早期原生窗口证据只适用于其注明的包，不代表新候选已完成原生验收。原生 MyGo 应用通过 `Saki --stdio` 消费 Runtime；GUI 维护联系人、事项与历史展示，执行历史由 Runtime 提供，GUI 不解析 Rust journal。最终集成状态以对应 PR 与 dev 为准。
+更新日期：2026-11-11。当前设置页面见文末 **#199 独立设置页面**。本文保留各阶段的实现与验证记录；产品定义、联系人／事项／会话语义和 MVP-01–MVP-12 以 [Nagi 产品定义与需求](../requirements/desktop.md) 为唯一权威；当前视觉与布局以本页 [Qoder 完整页面组合](#qoder-complete-layout-20261116) 为准；旧工作台规范作为带日期的演进记录。连接配置见 **#116 首用配置**，会话模型选择见 **#115 会话模型选择**，阅读与独立工作会话分别见 #113/#118，资料快照与递交见 **#117 资料快照、阅读与递交**，联系人编辑、归档及旧对话访问见 **#152 联系人管理与已保存对话**。早期原生窗口证据只适用于其注明的包，不代表新候选已完成原生验收。原生 MyGo 应用通过 `Saki --stdio` 消费 Runtime；GUI 维护联系人、事项与历史展示，执行历史由 Runtime 提供，GUI 不解析 Rust journal。最终集成状态以对应 PR 与 dev 为准。
 
-早期浏览器示意保留在 Git 历史（[7145225 的 desktop-contacts.html](https://github.com/HeimaoLST/Saki/blob/7145225c47b9b29c8011edbaefc410d0d6d46b61/docs/design/previews/desktop-contacts.html)），不是当前原生应用的验收对象，也不在仓库维护第二套现行预览；当前原生 Go 应用位于 Nagi 仓库根目录，视觉与交互以 [Desktop workbench](desktop-workbench.md) 为准。当前主题事实见 `theme.go` 的 `resolveWorkbenchTheme`（Paper/Moss；light/dark 语义角色）；#92 的 Moon/Dawn 和 #90 的 11px/12px 数值只保留为历史设计/实现记录，不再作为当前规范。此前将这些能力或颜色列为后续独立任务的说明已失效，不再作为当前实现或未来承诺；具体状态以对应任务段、PR 和 `dev` 为准。
+早期浏览器示意保留在 Git 历史（[7145225 的 desktop-contacts.html](https://github.com/HeimaoLST/Saki/blob/7145225c47b9b29c8011edbaefc410d0d6d46b61/docs/design/previews/desktop-contacts.html)），不是当前原生应用的验收对象，也不在仓库维护第二套现行预览；当前原生 Go 应用位于 Nagi 仓库根目录，视觉与布局以本页当前 Qoder 基准为准。当前主题事实见 `theme.go` 的 `resolveWorkbenchTheme`（Bee Light／Bee Dark；light/dark 语义角色）；#92 的 Moon/Dawn 和 #90 的 11px/12px 数值只保留为历史设计/实现记录，不再作为当前规范。此前将这些能力或颜色列为后续独立任务的说明已失效，不再作为当前实现或未来承诺；具体状态以对应任务段、PR 和 `dev` 为准。
 
 <a id="qoder-complete-layout-20261116"></a>
 
@@ -18,9 +18,15 @@
 | 滚动视口 | 主面板内容区内全宽／全高，滚动条归属于该视口右边界；视口自身不设正文max-width或正文左右padding。 |
 | 正文列 | 在视口内居中，border-box max-width820、padding左右32／上8／下48，故宽窗正文净宽最大756；不是820净宽再额外加64。满宽分区与嵌入模型表单继承同一列。 |
 | 章节与表单 | 保留已绑定section/group/row/Select/Input规则，默认连接与当前会话是作用域不同的同级分区；嵌入模型编辑器不能用自己的内容宽度缩小整区。字段宽度由所属行／表单约定，不由模型名、ID、错误字符串决定。 |
-| 语义配色 | 浅色正文#141414／secondary#636261／tertiary#838280，container#fff，控件面#fcfcfc／hover#efefef，边界#bcbbba、章节细线#e6e6e6，Bee primary#0d0d0d。深色正文#f2f1e8／secondary#c1bfb1／tertiary#89877a，container#171814，控件面#1d1f1a／hover#2c2e28，边界#47483f、细线#30322d，primary#e0c65c。状态色取同一来源的error／warning／success，不另造调色板。 |
+| 语义配色 | 浅色正文#141414／secondary#636261／tertiary#838280，container#fff，outline控件面#fff／hover#efefef，边界#bcbbba、章节细线#e6e6e6，Bee primary#0d0d0d。深色正文#f2f1e8／secondary#c1bfb1／tertiary#89877a，container#171814，outline控件面#171814／hover#2c2e28，边界#47483f、细线#30322d，primary#e0c65c。状态色取同一来源的error／warning／success，不另造调色板。 |
+
+主按钮同源hover／active：浅色#436651／#3a5747、文字#fdfdfd；深色#f0da78／#e8d06e、文字#171407。消息用户底面取primary-bg（浅#f2f4f2／深#2e2916）；Scrollbar组件默认thumb取fill（浅#dfdfdf／深#363830）、宽6。Composer工具栏顶部使用border-tertiary的60%虚线，作为装饰绘制，不挤压既有42行和32命中。
+
+控件状态同样遵循参考：outline Input默认`border-tertiary`，focus改为`border`（浅#bcbbba／深#47483f），不叠加ring；ghost／导航按钮用参考fill反馈键盘focus，不保留Nagi独立描边环。旧Paper／Moss把所有边框／focus色与背景都要求≥3的palette断言随视觉标准撤销；正文／辅助文字、主按钮文字对比及实际键盘focus／可访问名称／不遮挡行为仍须验证，不将参考的装饰细线冒称高对比边界。
 
 来源绑定：`DIR8HOYO.js` SHA52b8425f 的Settings调用为frame的sidebar/default248、B区margin4／border、full-height Scroll与`mx-auto w-full max-w-[820px] px-8 pb-12 pt-2`；导航`w-full justify-start`。`CMOdY8kL.js` SHAd2f7c51f 的frame为A／B独立区域、header40与满宽content flex-1。`index-DohubooF.css` SHAfc66ec5c 的Bee light／dark声明和语义utility解析出上述颜色，完整静态包仍在本机只读参考；工程资料不作为第二份规范。
+
+工作台也采用同一已绑定frame角色：未设用户偏好时，左栏使用共享frame默认238／min180／max420（Settings显式override为248／min208）；这表示采用已核组件默认值，不冒称已测得Qoder正常任务页的当前拖动值。右侧主面板margin4／border1，正文与composer各自内部限宽，header操作跨满面板；可见联系人／助手导航使用同一线形glyph，不保留固定装饰吉祥物。既有右栏业务及窄窗page／avatar／overlay语义保持；新增主面板横向margin8＋border2后，中心预算从494增到504，继续保证composer实际可编辑区至少440，不通过缩小输入区换取外观。窄栏／全页等原生controls不足的分支保留独立安全带，需同包原生核对，不将其冒称Qoder活动分支的实测值。
 
 布局回归必须在真实app.view中加载同一页的默认连接和会话模型表单，核对侧栏行的完整宽度、分区左右线、完整滚动视口右边界、长值／反馈与底部操作可达；默认／最小／宽窗口逐项看整页。沿用行为测试，但增加页面关系断言，禁止用同一常量镜像测试替代实际几何。不以按钮32命中或字号映射正确推导页面正确。原生拖动、焦点、IME、弹层及最终同包观感仍按实际证据验收。
 

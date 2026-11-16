@@ -33,9 +33,10 @@ type modelSelectionRequest struct {
 }
 
 type modelSelectionActions struct {
-	Refresh func(modelSelectionTarget)
-	Update  func(modelSelectionRequest)
-	Cancel  func()
+	Refresh  func(modelSelectionTarget)
+	Update   func(modelSelectionRequest)
+	Cancel   func()
+	Embedded bool
 }
 
 type modelSelection struct {
@@ -355,9 +356,13 @@ func (s *modelSelection) view(c *ui.Context, t *ui.Theme, actions modelSelection
 	msgs := locales.In(c.Locale())
 	effective := s.Effective.Config.EffectiveConfig
 	compaction := effective.Compaction
-	ui.Column(c).Gap(10).Children(func() {
+	ui.Column(c).FillWidth().Gap(10).Children(func() {
 		ui.Row(c).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, msgs.ModelSessionTitle()).FontSize(typeSettingsTitle).FontWeight(500).FixedLineHeight(lineSettingsTitle).TextColor(t.Text)
+			titleSize, titleLine := typeSettingsTitle, lineSettingsTitle
+			if actions.Embedded {
+				titleSize, titleLine = typeGroupTitle, lineLabel
+			}
+			ui.Text(c, msgs.ModelSessionTitle()).FontSize(titleSize).FontWeight(500).FixedLineHeight(titleLine).TextColor(t.Text)
 			ui.Spacer(c)
 			secondaryButton(c, msgs.ModelCancel()).Disabled(s.Busy).OnClick(func() {
 				s.ResetDraft()

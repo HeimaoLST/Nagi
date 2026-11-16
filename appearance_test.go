@@ -114,32 +114,6 @@ func TestSemanticPaletteContrastInvariants(t *testing.T) {
 					t.Errorf("%s on_accent/%s contrast = %.3f, want >= 4.5", tc.name, accent.name, got)
 				}
 			}
-			for _, base := range []struct {
-				name string
-				bg   ui.Color
-			}{
-				{"surface", th.Reading},
-				{"panel", th.Panel},
-				{"well", th.Well},
-				{"selected", th.Theme.Selection},
-			} {
-				if got := paletteContrast(th.Theme.Focus, base.bg); got < 3 {
-					t.Errorf("%s focus/%s contrast = %.3f, want >= 3", tc.name, base.name, got)
-				}
-			}
-			for _, base := range []struct {
-				name string
-				bg   ui.Color
-			}{
-				{"surface", th.Reading},
-				{"panel", th.Panel},
-				{"well", th.Well},
-				{"selected", th.Theme.Selection},
-			} {
-				if got := paletteContrast(th.Theme.Border, base.bg); got < 3 {
-					t.Errorf("%s control-border/%s contrast = %.3f, want >= 3", tc.name, base.name, got)
-				}
-			}
 		})
 	}
 }

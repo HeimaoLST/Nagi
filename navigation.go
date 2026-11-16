@@ -330,7 +330,7 @@ func (a *appModel) profileDetail(c *ui.Context, t *ui.Theme, narrow bool) {
 		ui.Scroll(c).Grow(1).TrackScroll(a.profileScrollFor(ct.ID)).Children(func() {
 			ui.Column(c).Gap(8).Children(func() {
 				ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
-					a.avatarTile(c, t, 32)
+					a.contactIcon(c, t, 32)
 					ui.Column(c).MinWidth(0).Shrink(1).Gap(1).Children(func() {
 						ui.Text(c, ct.Name).FontSize(typePageTitle).FontWeight(500).FixedLineHeight(lineSettingsTitle).TextColor(t.Text).MaxLines(2)
 						ui.Text(c, msgs.StatusDetail(a.statusLabel(ct, msgs), ct.Role)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(a.statusColor(t, ct.Status))

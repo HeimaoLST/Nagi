@@ -45,9 +45,9 @@ type workItem struct {
 }
 
 const (
-	defaultLeftPaneWidth  float32 = 200
+	defaultLeftPaneWidth  float32 = 238
 	minLeftPaneWidth      float32 = 180
-	maxLeftPaneWidth      float32 = 280
+	maxLeftPaneWidth      float32 = 420
 	defaultRightPaneWidth float32 = 340
 	minRightPaneWidth     float32 = 280
 	maxRightPaneWidth     float32 = 440
@@ -58,7 +58,7 @@ const (
 	fullRailBreakpoint   int     = 1180
 	avatarRailBreakpoint int     = 900
 	minAvatarDetailWidth float32 = 300
-	effectiveCenterWidth float32 = 494
+	effectiveCenterWidth float32 = 504
 )
 
 func clampPaneWidth(value, fallback, minValue, maxValue float32) float32 {

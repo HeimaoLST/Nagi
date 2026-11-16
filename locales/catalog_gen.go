@@ -10128,14 +10128,14 @@ func (msgs Messages) ThemeDark() string {
 	return Catalog.Format(msgs.locale, "themeDark", nil)
 }
 
-// ThemePaper says "Paper"
+// ThemePaper says "Bee Light"
 // in the language the app shows.
 //
 // General settings local theme selection, discovery and non-blocking
 // diagnostics.
 func ThemePaper() string { return In(i18n.Locale()).ThemePaper() }
 
-// ThemePaper says "Paper"
+// ThemePaper says "Bee Light"
 // in the language of msgs.
 //
 // General settings local theme selection, discovery and non-blocking
@@ -10144,14 +10144,14 @@ func (msgs Messages) ThemePaper() string {
 	return Catalog.Format(msgs.locale, "themePaper", nil)
 }
 
-// ThemeMoss says "Moss"
+// ThemeMoss says "Bee Dark"
 // in the language the app shows.
 //
 // General settings local theme selection, discovery and non-blocking
 // diagnostics.
 func ThemeMoss() string { return In(i18n.Locale()).ThemeMoss() }
 
-// ThemeMoss says "Moss"
+// ThemeMoss says "Bee Dark"
 // in the language of msgs.
 //
 // General settings local theme selection, discovery and non-blocking

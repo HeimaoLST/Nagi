@@ -1548,11 +1548,11 @@
   "@themeDark": {
     "description": "General settings local theme selection, discovery and non-blocking diagnostics."
   },
-  "themePaper": "Paper",
+  "themePaper": "Bee Light",
   "@themePaper": {
     "description": "General settings local theme selection, discovery and non-blocking diagnostics."
   },
-  "themeMoss": "Moss",
+  "themeMoss": "Bee Dark",
   "@themeMoss": {
     "description": "General settings local theme selection, discovery and non-blocking diagnostics."
   },

@@ -65,10 +65,14 @@ func (a *appModel) view(c *ui.Context) {
 	if !a.settingsOpen {
 		c.OnShortcut(0, ui.KeyEscape, func() { a.escapeTopLayer() })
 	}
-	ui.Column(c).Fill().Background(a.workTheme.Reading).Children(func() {
-		// Reserve the native controls' whole band on every route. Keeping this
-		// node at zero height in fullscreen preserves the content's UI identity.
-		ui.Row(c).FillWidth().Height(c.TitleBar().Height).Shrink(0).DragWindow()
+	ui.Column(c).Fill().LinearGradient(ui.LinearGradient{From: a.workTheme.ChromeFrom, To: a.workTheme.ChromeTo, Angle: 180}).Children(func() {
+		// The reference chrome shares the controls' band on macOS. Full pages,
+		// narrow rails and platforms with right-side controls reserve it.
+		titleBarHeight := c.TitleBar().Height
+		if a.settingsOpen || c.TitleBar().Right == 0 && !a.mainPageActive() && !a.detailPageActive() && !a.railCollapsed && !a.avatarRailActive() {
+			titleBarHeight = 0
+		}
+		ui.Row(c).FillWidth().Height(titleBarHeight).Shrink(0).DragWindow()
 		ui.Box(c).FillWidth().Grow(1).MinHeight(0).Children(func() {
 			if a.settingsOpen {
 				a.settingsPage(c, t)
@@ -214,9 +218,10 @@ func (a *appModel) finishMarkdownLinkReturn() {
 
 func (a *appModel) rail(c *ui.Context, t *ui.Theme) {
 	msgs := locales.In(c.Locale())
-	ui.Column(c).FillWidth().FillHeight().Padding(8).Gap(8).Background(a.workTheme.Rail).Children(func() {
+	ui.Column(c).FillWidth().FillHeight().Padding(8).Gap(8).Background(ui.Transparent).Children(func() {
+		ui.Row(c).FillWidth().Height(40).Shrink(0).DragWindow()
 		ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
-			ui.Text(c, "Nagi").FontSize(typePageTitle).FontWeight(500).TextColor(t.Text)
+			ui.Text(c, "Nagi").FontSize(typeGroupTitle).FontWeight(500).FixedLineHeight(lineLabel).TextColor(t.Text)
 			ui.Spacer(c)
 			ui.Toolbar(c, func() {
 				hide := iconControlFace(c, appTooltip(c, ui.Button(c, "").Label(msgs.RailHide()), msgs.RailHideContactsTooltip()), iconChrome, false)
@@ -272,7 +277,7 @@ func (a *appModel) rail(c *ui.Context, t *ui.Theme) {
 }
 
 func (a *appModel) avatarRail(c *ui.Context, t *ui.Theme) {
-	ui.Column(c).Width(avatarRailWidth).Shrink(0).FillHeight().Padding(4).Gap(4).Background(a.workTheme.Rail).Children(func() {
+	ui.Column(c).Width(avatarRailWidth).Shrink(0).FillHeight().Padding(4).Gap(4).Background(ui.Transparent).Children(func() {
 		addLabel := locales.In(c.Locale()).AvatarAddContact()
 		add := appTooltip(c, ui.Button(c, "").Label(addLabel).
 			MinWidth(32).MinHeight(32).Width(32).Height(32).Padding(0).Justify(ui.Center), addLabel)
@@ -339,7 +344,7 @@ func (a *appModel) avatarRailRow(c *ui.Context, t *ui.Theme, i int) {
 	row = appTooltip(c, row, tip)
 	row.OnClick(func() { a.selectContact(i) })
 	row.Children(func() {
-		a.avatarTile(c, t, 28)
+		a.contactIcon(c, t, 28)
 		if glyph, count, color := a.avatarRailMarker(ct); glyph != "" {
 			text := glyph
 			if count > 0 {
@@ -429,10 +434,9 @@ func (a *appModel) railRow(c *ui.Context, t *ui.Theme, i int) {
 	ct := a.contacts[i]
 	currentMsgs := locales.In(c.Locale())
 	row := ui.ButtonBase(c).Label(currentMsgs.AvatarContactLabel(ct.Name)).Gap(8).Padding(4, 8).MinHeight(controlHit).Radius(0).AlignItems(ui.Start).Background(ui.Transparent).BorderWidth(0).FocusRing(false)
-	row = drawControlFace(c, row, 8, 4, false, false, i == a.selected, 0, 2)
+	row = drawControlFace(c, row, 8, 4, false, false, i == a.selected, 0, 2, a.workTheme.NavHover)
 	row.OnClick(func() { a.selectContact(i) })
 	row.Children(func() {
-		a.avatarTile(c, t, 28)
 		ui.Column(c).Grow(1).Gap(2).Children(func() {
 			ui.Row(c).AlignItems(ui.Center).Gap(4).Children(func() {
 				nameWeight := 400
@@ -496,12 +500,9 @@ func (a *appModel) railRow(c *ui.Context, t *ui.Theme, i int) {
 	})
 }
 
-func (a *appModel) avatarTile(c *ui.Context, t *ui.Theme, size float32) {
-	tile := ui.Column(c).Width(size).Height(size).Radius(size / 3).Background(t.SurfaceHover)
-	tile.Children(func() {
-		if avatarBMP != nil {
-			ui.Image(c, avatarBMP).Width(size).Height(size).Radius(size / 3)
-		}
+func (a *appModel) contactIcon(c *ui.Context, t *ui.Theme, size float32) {
+	ui.Box(c).Size(size, size).AlignItems(ui.Center).Justify(ui.Center).Children(func() {
+		ui.Icon(c, navProfileIcon).Size(14, 14).TextColor(t.TextMuted)
 	})
 }
 
@@ -693,7 +694,7 @@ func (a *appModel) connectionRecoveryNotice(c *ui.Context, t *ui.Theme, state co
 func (a *appModel) main(c *ui.Context, t *ui.Theme) {
 	ct := a.selectedContact()
 	msgs := locales.In(c.Locale())
-	ui.Column(c).Grow(1).FillHeight().Background(a.workTheme.Reading).Children(func() {
+	ui.Column(c).Grow(1).MinWidth(0).FillHeight().Margin(4).Background(a.workTheme.Reading).Border(1, t.Border).Radius(16).Clip().Children(func() {
 		if !a.demo {
 			if a.localSaveErr != "" {
 				ui.Column(c).Padding(8, 16).Gap(6).Children(func() {
@@ -772,9 +773,8 @@ func (a *appModel) header(c *ui.Context, t *ui.Theme) {
 	ct := a.selectedContact()
 	msgs := locales.In(c.Locale())
 	ui.Row(c).Key("header").Justify(ui.Center).Children(func() {
-		ui.Column(c).FillWidth().MaxWidth(conversationMaxWidth).Padding(4, 6).Gap(4).Children(func() {
+		ui.Column(c).FillWidth().Padding(4, 6).Gap(4).Children(func() {
 			ui.Row(c).FillWidth().MinHeight(32).AlignItems(ui.Center).Gap(12).Children(func() {
-				a.avatarTile(c, t, 28)
 				ui.Column(c).MinWidth(0).Shrink(1).Gap(0).Children(func() {
 					ui.Text(c, ct.Name).FontSize(typeContactTitle).FontWeight(500).FixedLineHeight(lineHeader).TextColor(t.Text).MaxLines(2)
 					ui.Row(c).AlignItems(ui.Center).Gap(12).Wrap().Children(func() {
@@ -884,7 +884,6 @@ func (a *appModel) historyMessage(c *ui.Context, t *ui.Theme, e historyEntry, hi
 		return
 	}
 	ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Start).Children(func() {
-		a.avatarTile(c, t, 28)
 		ui.Column(c).MaxWidth(conversationMaxWidth).MinWidth(0).Shrink(1).Children(func() {
 			opts := a.readerOptions(messageReaderOptions(c, false), historyLinkScope(a.selectedContact().ID, "conversation", e.ID), a.selectedContact().SessionWorkingDir)
 			opts.MessageBubble = &markdownMessageBubble{
@@ -972,7 +971,6 @@ func (a *appModel) message(c *ui.Context, t *ui.Theme, ct *contact, m *message) 
 		})
 	default:
 		ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Start).Children(func() {
-			a.avatarTile(c, t, 28)
 			ui.Column(c).MaxWidth(userMessageMaxWidth).MinWidth(0).Shrink(1).Children(func() {
 				opts := a.readerOptions(markdownReaderOptions{Streaming: m.Streaming, CopyLabel: locales.In(c.Locale()).CopyMessageLabel(), Theme: messageMarkdownTheme}, messageLinkScope(ct.ID, m), ct.SessionWorkingDir)
 				opts.MessageBubble = &markdownMessageBubble{
@@ -1360,7 +1358,11 @@ func (a *appModel) composer(c *ui.Context, t *ui.Theme) {
 				sendReason = a.canSend(ct)
 				sendDisabled = strings.TrimSpace(ct.Draft) == "" || sendReason != ""
 			}
-			ui.Row(c).FillWidth().Height(composerToolbarHeight).Shrink(0).Padding(10, 6).AlignItems(ui.Center).Gap(6).Role(ui.RoleGroup).Label(msgs.ComposerTools()).Children(func() {
+			ui.Row(c).FillWidth().Height(composerToolbarHeight).Shrink(0).Padding(10, 6).AlignItems(ui.Center).Gap(6).Role(ui.RoleGroup).Label(msgs.ComposerTools()).Draw(func(p *ui.Painter, r ui.Rect) {
+				for x := r.X; x < r.X+r.W; x += 6 {
+					p.Line(x, r.Y+0.5, min(x+3, r.X+r.W), r.Y+0.5, 1, t.Border.Alpha(0.6))
+				}
+			}).Children(func() {
 				ui.Toolbar(c, func() {
 					contextButton := iconControlFace(c, appTooltip(c, ui.Button(c, "").Label(contextLabel), contextLabel), iconContext, false)
 					contextButton.Children(func() {
