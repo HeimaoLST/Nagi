@@ -29,6 +29,10 @@ def verify_pi_inputs(pi: dict) -> None:
         path = (ROOT / pi[path_key]).resolve()
         if not path.is_relative_to(ROOT) or sha256(path) != pi[hash_key]:
             raise ValueError(f"Pi {path_key} differs from the pin")
+    patch = pi["mcp_patch"]
+    patch_path = (ROOT / patch["path"]).resolve()
+    if patch["package"] != "@earendil-works/pi-mcp" or not patch_path.is_relative_to(ROOT) or sha256(patch_path) != patch["sha256"]:
+        raise ValueError("Pi MCP patch differs from the pin")
     package = json.loads((ROOT / pi["package_json"]).read_text())
     lock = json.loads((ROOT / pi["lock_file"]).read_text())
     for name, expected in pi["packages"].items():
@@ -50,8 +54,8 @@ def load_pin(path: Path) -> dict:
         raise ValueError("Node pin must identify one official archive and its SHA256")
     if pi["version"] != "1.5.2" or not re.fullmatch(r"[0-9a-f]{40}", pi["declared_source_sha"]):
         raise ValueError("Pi pin must identify1.5.2 and its declared source")
-    if set(pi["packages"]) != {"@earendil-works/pi-coding-agent", "@earendil-works/pi-ai"}:
-        raise ValueError("Pi pin must bind its coding-agent and AI packages")
+    if set(pi["packages"]) != {"@earendil-works/pi-coding-agent", "@earendil-works/pi-ai", "@earendil-works/pi-mcp"}:
+        raise ValueError("Pi pin must bind its coding-agent, AI and MCP packages")
     verify_pi_inputs(pi)
     return pin
 
@@ -91,7 +95,7 @@ def fetch(pin_path: Path, output: Path) -> dict:
         "node": {**node, "archive_path": str(archive), "archive_sha256_verified": True},
         "pi": pin["pi"],
         "files": files,
-        "verification": "Archive verified before extraction; Pi package and lock bytes verified before and after fetch. Node was not executed; version/source/support declarations come from the pin. Pi packages were not installed or verified against their registry tarballs by this fetch.",
+        "verification": "Archive verified before extraction; Pi package, lock and repo-owned MCP patch bytes verified before and after fetch. Node was not executed; version/source/support declarations come from the pin. Pi packages were not installed or verified against their registry tarballs by this fetch.",
     }
     receipt_path = output / "manifest.json"
     receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n")
