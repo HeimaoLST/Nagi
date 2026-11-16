@@ -14,6 +14,7 @@ REQUIRED_GROUPS = {
             "TestPiClientProcessCodingHistoryReopen",
             "TestPiClientProcessIndependentToolAnswerAndCancel",
             "TestPiClientProcessCapturedContextConfiguration",
+            "TestPiClientProcessMCPToolsLifecycle",
         ),
     ),
     "product": (

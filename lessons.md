@@ -64,7 +64,7 @@
 
 **Problem:** Temporary files and worktrees can be removed during routine workspace cleanup.
 **Cause or correction:** They are disposable development environments, not the authoritative project record.
-**Prevention:** Commit/push coherent safe checkpoints, retain essential contracts and actual validation summaries in Git/PR records, and merge completed work after required gates. Do not rely on a temporary evidence path alone.
+**Prevention:** Commit/push coherent safe checkpoints, retain essential contracts and actual validation summaries in Git/PR records, and merge completed work after required gates. Export controlled process receipts before test TempDir cleanup, including on failure. Do not rely on a temporary evidence path alone.
 
 ## Inspect process path dependencies beyond executable names
 
