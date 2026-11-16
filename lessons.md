@@ -50,9 +50,9 @@
 
 ## Export child-process outcomes separately
 
-**Problem:** The lab exported native app/fixture exit zero but not the native worker's individual exit status.
-**Cause or correction:** App exit and disappearance of a child do not prove that child's exit code. The unexported native worker outcome remained unknown.
-**Prevention:** Correlate each owned child with its wait/reap result and export the actual exit code. Keep app, worker, provider and cleanup outcomes separate.
+**Problem:** The lab exported native app/fixture exit zero but not the native worker's individual exit status. The first product-control wrapper also omitted its raw child outcome when interrupted.
+**Cause or correction:** App exit, a mapped helper status and disappearance of a child do not prove that child's exit code. Unexported child outcomes remain unknown.
+**Prevention:** Correlate each owned child with its actual wait result and export raw return code and signal before mapping a helper exit, including interrupted runs. Keep app, worker, provider and cleanup outcomes separate.
 
 ## Persist completed work beyond worktrees
 
@@ -116,6 +116,30 @@
 
 ## Report digests only after freezing actual bytes
 
-**Problem:** Several handoffs announced placeholder SHA values and then corrected them in follow-up messages.
-**Cause or correction:** A pending or manually typed prefix is not evidence of a frozen file.
-**Prevention:** Write and freeze the artifact, compute its actual digest and parse actual result counts before sending. Label incomplete work without a SHA field; preserve later corrections instead of rewriting earlier evidence.
+**Problem:** Several handoffs announced placeholder SHA values and then corrected them in follow-up messages. An external-build readback also asserted a manually assumed compiler version instead of reading the lock.
+**Cause or correction:** A pending digest or manually assumed version is not evidence of actual frozen inputs. The compiler-version assertion failed after a successful build, without a compiler or payload failure.
+**Prevention:** Write and freeze the artifact, compute digests and derive versions/counts from the actual lock and result records before sending. Label incomplete work without a SHA field; preserve corrected metadata separately without rerunning unchanged production work.
+
+## Keep worker build payloads outside the checkout
+
+**Problem:** The initial worker build copied the lab convention and emitted an ignored dist directory inside the task worktree despite the project rule requiring external outputs.
+**Cause or correction:** A disposable ignored directory is not a delivery workspace. Package provenance must bind actual external compiled/runtime/dependency inputs.
+**Prevention:** Require an explicit fresh external worker output, record its source/runtime/lock/notice hashes and use that payload for integration and packaging. Archive verified prior outputs before retiring the old generated directory; never substitute its historical test paths into later results.
+
+## Bind the compiler that actually produces the payload
+
+**Problem:** Source review found that the external builder still used a source-side installed TypeScript compiler and declarations without recording their actual identity.
+**Cause or correction:** A tracked dependency lock describes intended inputs; it does not identify an existing mutable node_modules tree. No incorrect payload was observed.
+**Prevention:** Install the locked dependency set in the fresh external build directory, compile against that tree, record the actual compiler/version/files and install receipt, then prune development dependencies. Do not claim the corrected builder is validated by a prior build.
+
+## Parse orchestration code before launching a phase
+
+**Problem:** A native build wrapper had a missing closing parenthesis and failed before invoking Go. A shell orchestration expression also failed before executing its intended commands.
+**Cause or correction:** These were wrapper syntax failures, not product compilation or behavior failures.
+**Prevention:** Parse generated Python and check shell/JavaScript quoting before starting a long HC phase. Preserve the failed wrapper and raw result, then make a bounded correction without relabeling the first attempt.
+
+## Keep window-binding failures separate from control observations
+
+**Problem:** The desktop inventory succeeded but binding the unique synthetic-control app returned cgWindowNotFound. The fixture was stopped without input, Test or Save.
+**Cause or correction:** Unconfirmed. No AX value or secure-entry assertion was reached; the failed controlled attempt does not establish credential exposure or a passing native control.
+**Prevention:** Retain the exact app/PID, tool error and controlled stop outcome. Await a real environment change before a new isolated case; do not retry the unchanged binding, operate a reserved app or treat missing observations as success.

@@ -7,7 +7,7 @@
     "node": ">=22.19.0"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "python3 ../../../scripts/build-pi-worker.py",
     "check": "tsc --noEmit"
   },
   "dependencies": {

@@ -57,9 +57,8 @@ Use Go1.27.3, Python3 and `patch`. The MyGo launcher composes pinned patches in 
 
 ```sh
 python3 scripts/gui-go.py build -o /private/tmp/Nagi .
-cd internal/pi/worker
-npm ci --ignore-scripts --no-audit --no-fund
-npm run build
+python3 scripts/fetch-node-runtime.py --pin .github/pi-runtime.json --output /private/tmp/nagi-node
+python3 scripts/build-pi-worker.py --runtime /private/tmp/nagi-node --output /private/tmp/nagi-pi-worker
 ```
 
 A static build does not establish a working Pi-backed native app. Actual integration/E2E, synthetic-key accessibility, product tool/MCP, lifecycle and Node-independent package gates must pass on the combined tree. Developers do not add or modify unit tests; necessary unit maintenance belongs to the test owner.

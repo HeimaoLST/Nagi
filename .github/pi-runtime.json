@@ -14,7 +14,7 @@
     "version": "1.5.2",
     "declared_source_sha": "b4afdddf44e059c67ccf5097e5317d913521b470",
     "package_json": "internal/pi/worker/package.json",
-    "package_json_sha256": "0fecda46005026a2a36fdf69bb9555bb961d14aa7aff3faca9c14d6581cb8032",
+    "package_json_sha256": "19dab69c310888fc09e3ac946274ecb8bcc233957c551cce89391d5c67eb6189",
     "lock_file": "internal/pi/worker/package-lock.json",
     "lock_sha256": "ed9b5d0093ffad7b0762e8b4327ee2e083ce3eed7b6c331f4604c2863cf24100",
     "packages": {
