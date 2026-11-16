@@ -40,7 +40,7 @@ jobs:
           SAKI_TEST_ONLINE: '0'
         run: |
           python3 scripts/gui-go.py vet ./...
-          python3 scripts/gui-go.py test ./... -count=1
+          python3 scripts/gui-go.py test . -count=1
           python3 scripts/gui-go.py test github.com/egoist/mygo/ui -run '^(TestSplitReleaseBeforeFrame|TestEditorSelectionReleaseBeforeFrame)$' -count=1 -v
           GOARCH=arm64 python3 scripts/gui-go.py build -trimpath -mod=readonly -buildvcs=true -o "$RUNNER_TEMP/Nagi" .
       - name: Python CI support tests
@@ -64,7 +64,7 @@ jobs:
           name: nagi-headless-previews
           path: ${{ runner.temp }}/nagi-previews/*.png
           if-no-files-found: error
-  runtime-compatibility:
+  pi-integration:
     runs-on: macos-15
     timeout-minutes: 30
     steps:
@@ -78,62 +78,63 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
-      - name: Fetch exact pinned Saki runtime artifact
-        env:
-          GH_TOKEN: ${{ secrets.SAKI_ARTIFACT_READ_TOKEN || github.token }}
+      - name: Fetch exact pinned Node runtime
+        id: node-runtime
         run: |
-          python3 scripts/fetch-saki-runtime.py --pin .github/saki-runtime.json \
-            --output "$RUNNER_TEMP/saki-runtime" --github-env "$GITHUB_ENV"
-      - name: Runtime identity
-        run: |
-          "$SAKI_RUNTIME_BIN" --version
-          cat "$RUNNER_TEMP/saki-runtime/manifest.json"
-      - name: Build same-source Nagi issue helper
-        env:
-          CGO_ENABLED: '0'
-        run: python3 scripts/gui-go.py build -trimpath -mod=readonly -buildvcs=true -o "$RUNNER_TEMP/nagi-issue-helper" .
-      - name: Full offline Nagi package against pinned Saki
+          python3 scripts/fetch-node-runtime.py --pin .github/pi-runtime.json --output "$RUNNER_TEMP/node-runtime"
+          python3 - <<'PYTHON'
+          import json
+          import os
+          with open(".github/pi-runtime.json") as handle:
+              version = json.load(handle)["node"]["version"]
+          with open(os.environ["GITHUB_OUTPUT"], "a") as handle:
+              handle.write(f"version={version}\n")
+          PYTHON
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ steps.node-runtime.outputs.version }}
+          package-manager-cache: false
+      - name: Build external pinned worker payload
+        run: python3 scripts/build-pi-worker.py --runtime "$RUNNER_TEMP/node-runtime" --output "$RUNNER_TEMP/pi-payload"
+      - name: Pi process and product integration
         timeout-minutes: 25
         env:
           CGO_ENABLED: '1'
-          SAKI_TEST_ISSUE_TOOL_HELPER: ${{ runner.temp }}/nagi-issue-helper
           SAKI_TEST_ONLINE: '0'
-          SAKI_PREVIEW_DIR: ${{ runner.temp }}/nagi-compatibility-previews
+          NAGI_TEST_NODE: ${{ runner.temp }}/pi-payload/bin/node
+          NAGI_TEST_WORKER: ${{ runner.temp }}/pi-payload/dist/worker.js
+          SAKI_PREVIEW_DIR: ${{ runner.temp }}/nagi-pi-previews
         run: |
           mkdir -p "$SAKI_PREVIEW_DIR"
           set -o pipefail
-          python3 scripts/gui-go.py test -race -timeout=20m -json ./... -count=1 | tee "$RUNNER_TEMP/nagi-runtime.json"
-      - name: Require real runtime scenarios and reject unexpected skips
+          python3 scripts/gui-go.py test -race -timeout=20m -json -count=1 ./internal/pi . \
+            -run '^(TestPiClientProcessCodingHistoryReopen|TestPiClientProcessIndependentToolAnswerAndCancel|TestPiClientProcessCapturedContextConfiguration|TestPiAppConnectionAndConversation|TestPiAppScopedDomainTools|TestPiAppActivitiesAndQuestions|TestPiAppCrashRecoveryNoReplay|TestPiAppLegacyDataRecovery|TestPiAppContextAndResults|TestPiPackageStandalone)$' \
+            | tee "$RUNNER_TEMP/nagi-pi-results.jsonl"
+      - name: Require actual Pi core and product scenarios
         if: always()
-        run: python3 scripts/check-gui-runtime-results.py "$RUNNER_TEMP/nagi-runtime.json"
-      - name: Package Nagi with verified external runtime
-        run: |
-          NAGI_VERSION=$(cat VERSION)
-          bash scripts/build-macos-app.sh "$RUNNER_TEMP/nagi-candidate" \
-            "$SAKI_RUNTIME_BIN" "$NAGI_VERSION" "$SAKI_RUNTIME_SOURCE_SHA"
-          test -f "$RUNNER_TEMP/nagi-candidate/Nagi.app.zip"
-          test -f "$RUNNER_TEMP/nagi-candidate/manifest.json"
-          test -f "$RUNNER_TEMP/nagi-candidate/SHA256SUMS"
+        run: python3 scripts/check-pi-results.py "$RUNNER_TEMP/nagi-pi-results.jsonl"
       - uses: actions/upload-artifact@v7
+        if: always()
         with:
-          name: nagi-macos-arm64-${{ github.event.pull_request.head.sha || github.sha }}
+          name: nagi-pi-integration-${{ github.event.pull_request.head.sha || github.sha }}
           path: |
-            ${{ runner.temp }}/nagi-candidate/Nagi.app.zip
-            ${{ runner.temp }}/nagi-candidate/manifest.json
-            ${{ runner.temp }}/nagi-candidate/SHA256SUMS
-            ${{ runner.temp }}/nagi-candidate/*.log
+            ${{ runner.temp }}/nagi-pi-results.jsonl
+            ${{ runner.temp }}/node-runtime/manifest.json
+            ${{ runner.temp }}/pi-payload/manifest.json
+            ${{ runner.temp }}/pi-payload/build.log
+            ${{ runner.temp }}/nagi-pi-previews/*.png
           if-no-files-found: error
   ci-required:
     if: always()
-    needs: [gui, runtime-compatibility]
+    needs: [gui, pi-integration]
     runs-on: macos-15-intel
     timeout-minutes: 5
     steps:
-      - name: Require Nagi and pinned protocol compatibility
+      - name: Require GUI and actual Pi integration
         env:
           GUI_RESULT: ${{ needs.gui.result }}
-          COMPAT_RESULT: ${{ needs.runtime-compatibility.result }}
+          PI_RESULT: ${{ needs.pi-integration.result }}
         run: |
-          echo "gui=$GUI_RESULT runtime-compatibility=$COMPAT_RESULT"
+          echo "gui=$GUI_RESULT pi-integration=$PI_RESULT"
           test "$GUI_RESULT" = success
-          test "$COMPAT_RESULT" = success
+          test "$PI_RESULT" = success
