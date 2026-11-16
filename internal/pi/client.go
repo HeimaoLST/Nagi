@@ -129,11 +129,14 @@ func (c *Client) Ready(ctx context.Context) (Ready, error) {
 
 func (c *Client) Configure(ctx context.Context, params ConfigureParams) (ConfigureResult, error) {
 	var result ConfigureResult
+	if params.CredentialSource == "" {
+		return result, &CommandError{Method: "configure", Delivery: NotSent, Err: errors.New("credentialSource is required")}
+	}
 	err := c.call(ctx, "configure", params, &result)
 	c.mu.Lock()
 	epoch := c.ready.WorkerEpoch
 	c.mu.Unlock()
-	if err == nil && (!result.Configured || result.WorkerEpoch != epoch || result.EngineVersion != "1.5.2" || result.PricingKnown) {
+	if err == nil && (!result.Configured || result.WorkerEpoch != epoch || result.EngineVersion != "1.5.2" || result.PricingKnown || result.CredentialSource != params.CredentialSource) {
 		err = c.invalidResult("configure")
 	}
 	return result, err
@@ -141,6 +144,9 @@ func (c *Client) Configure(ctx context.Context, params ConfigureParams) (Configu
 
 func (c *Client) OpenContext(ctx context.Context, params OpenContextParams) (ContextBinding, error) {
 	var result ContextBinding
+	if params.Configuration != nil && params.Configuration.CredentialSource == "" {
+		return result, &CommandError{Method: "context.open", Delivery: NotSent, Err: errors.New("credentialSource is required")}
+	}
 	err := c.call(ctx, "context.open", params, &result)
 	if err != nil {
 		return result, err
@@ -149,6 +155,24 @@ func (c *Client) OpenContext(ctx context.Context, params OpenContextParams) (Con
 	returnedCWD, returnedErr := filepath.EvalSymlinks(result.CWD)
 	if result.ContextID != params.ContextID || result.BotID != params.BotID || result.Purpose != params.Purpose || result.ActivityID != params.ActivityID || result.SelectionRevision != params.SelectionRevision || requestedErr != nil || returnedErr != nil || requestedCWD != returnedCWD || result.SessionRef == "" || params.Used && !result.Used {
 		err = c.invalidResult("context.open")
+	}
+	return result, err
+}
+
+func (c *Client) ContextConfiguration(ctx context.Context, contextID string) (ContextConfiguration, error) {
+	var result ContextConfiguration
+	err := c.call(ctx, "context.configuration", ContextParams{ContextID: contextID}, &result)
+	if err == nil && (result.ContextID != contextID || result.CredentialSource == "") {
+		err = c.invalidResult("context.configuration")
+	}
+	return result, err
+}
+
+func (c *Client) ConfigureContext(ctx context.Context, params ConfigureContextParams) (ContextConfiguration, error) {
+	var result ContextConfiguration
+	err := c.call(ctx, "context.configure", params, &result)
+	if err == nil && (result.ContextID != params.ContextID || result.CredentialSource == "") {
+		err = c.invalidResult("context.configure")
 	}
 	return result, err
 }

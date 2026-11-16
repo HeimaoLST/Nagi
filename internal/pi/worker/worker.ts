@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { access, mkdir, realpath } from 'node:fs/promises';
+import { mkdir, realpath, stat } from 'node:fs/promises';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import {
   createAgentSessionFromServices, createAgentSessionRuntime, createAgentSessionServices,
@@ -14,6 +14,7 @@ import {
 } from './protocol.js';
 
 const BINDING_TYPE = 'nagi-context-v1';
+const CONFIGURATION_TYPE = 'nagi-configuration-v1';
 const PROVIDER = 'nagi';
 type Binding = Pick<OpenParams, 'contextId' | 'botId' | 'purpose' | 'activityId' | 'selectionRevision' | 'cwd'>;
 type Run = {
@@ -22,7 +23,7 @@ type Run = {
   pending: Map<string, (result: ToolResult) => void>; inputs: Map<string, unknown>;
 };
 type Context = {
-  binding: Binding; instructions: string; codingTools: OpenParams['codingTools']; domainTools: OpenParams['domainTools'];
+  binding: Binding; configuration: ConfigureParams; instructions: string; codingTools: OpenParams['codingTools']; domainTools: OpenParams['domainTools'];
   manager: SessionManager; runtime: AgentSessionRuntime; used: boolean; runIds: Set<string>;
   active?: Run; observationSeq: number;
 };
@@ -36,7 +37,7 @@ class Worker {
   private closing = false;
   private disconnected = false;
   private shutdownComplete = false;
-  constructor(private stateDir: string, private models: ModelRuntime) {}
+  constructor(private stateDir: string) {}
   private response(id: string, result: object): Promise<void> {
     return this.writer.send({ v: 1, type: 'response', id, ok: true, result });
   }
@@ -48,8 +49,8 @@ class Worker {
   }
   private cleanMessage(error: unknown): string {
     const text = message(error);
-    const key = this.configured?.apiKey;
-    return key ? text.split(key).join('[credential]') : text;
+    const keys = [this.configured?.apiKey, ...[...this.contexts.values()].map(context => context.configuration.apiKey)];
+    return keys.reduce<string>((value, key) => key ? value.split(key).join('[credential]') : value, text);
   }
   private event(context: Context, run: Run, event: string, data: object): void {
     const value = { v: 1, type: 'event', workerEpoch: this.epoch, contextId: context.binding.contextId, runId: run.id, seq: ++run.seq, event, data };
@@ -104,24 +105,51 @@ class Worker {
       },
     };
   }
-  private async configure(params: ConfigureParams): Promise<void> {
-    if ([...this.contexts.values()].some(context => context.active)) throw new RequestError('busy', 'A context is running');
+  private validatedConfiguration(params: ConfigureParams): ConfigureParams {
     if (params.outputTokens >= params.contextTokens) throw new RequestError('invalid_params', 'Output limit must be below context limit');
     const endpoint = new URL(params.baseUrl);
     if (!['http:', 'https:'].includes(endpoint.protocol) || endpoint.username || endpoint.password) throw new RequestError('invalid_params', 'HTTP(S) endpoint required without URL credentials');
-    this.configured = params;
-    this.models.registerProvider(PROVIDER, { api: params.wireApi, baseUrl: endpoint.toString(), models: [{
-      id: params.model, name: params.model, reasoning: false, input: ['text'],
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-      contextWindow: params.contextTokens, maxTokens: params.outputTokens,
-    }] });
-    await this.models.setRuntimeApiKey(PROVIDER, params.apiKey);
-    const model = this.models.getModel(PROVIDER, params.model);
-    if (!model) throw new Error('Configured model is unavailable');
+    const config = { ...params, baseUrl: endpoint.toString() };
     for (const context of this.contexts.values()) {
-      await context.runtime.session.setModel(model);
-      this.configureSettings(context.runtime.services.settingsManager, params);
+      const current = context.configuration;
+      if (current.credentialSource === config.credentialSource && (current.wireApi !== config.wireApi || current.baseUrl !== config.baseUrl || current.apiKey !== config.apiKey)) throw new RequestError('source_conflict', 'Credential source is already bound to another connection snapshot');
     }
+    return config;
+  }
+  private nonsecretConfiguration(config: ConfigureParams): object {
+    return { wireApi: config.wireApi, baseUrl: config.baseUrl, model: config.model, contextTokens: config.contextTokens, outputTokens: config.outputTokens, credentialSource: config.credentialSource };
+  }
+  private configure(params: ConfigureParams): void {
+    this.configured = this.validatedConfiguration(params);
+  }
+  private registerModel(models: ModelRuntime, config: ConfigureParams): void {
+    models.registerProvider(PROVIDER, { api: config.wireApi, baseUrl: config.baseUrl, models: [{
+      id: config.model, name: config.model, reasoning: false, input: ['text'],
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      contextWindow: config.contextTokens, maxTokens: config.outputTokens,
+    }] });
+  }
+  private configuration(context: Context): object {
+    const model = context.runtime.session.model;
+    if (!model) throw new RequestError('not_configured', 'Context model is unavailable');
+    return { contextId: context.binding.contextId, wireApi: model.api, baseUrl: model.baseUrl, model: model.id,
+      contextTokens: model.contextWindow, outputTokens: model.maxTokens,
+      credentialSource: context.configuration.credentialSource,
+      credentialPresent: context.runtime.services.modelRuntime.hasConfiguredAuth(PROVIDER),
+      activeTools: context.runtime.session.getActiveToolNames() };
+  }
+  private async configureContext(context: Context, settings: Extract<Command, { method: 'context.configure' }>['params']['settings']): Promise<void> {
+    if (context.active) throw new RequestError('busy', 'Context is running');
+    const config = this.validatedConfiguration({ ...context.configuration, ...settings });
+    const models = context.runtime.services.modelRuntime;
+    this.registerModel(models, config);
+    const model = models.getModel(PROVIDER, config.model);
+    if (!model) throw new Error('Configured model is unavailable');
+    await context.runtime.session.setModel(model);
+    this.configureSettings(context.runtime.services.settingsManager, config);
+    context.configuration = config;
+    context.manager.appendCustomEntry(CONFIGURATION_TYPE, this.nonsecretConfiguration(config));
+    context.observationSeq++;
   }
   private configureSettings(settings: SettingsManager, params: ConfigureParams): void {
     settings.applyOverrides({
@@ -130,15 +158,16 @@ class Worker {
     });
   }
   private async open(params: OpenParams): Promise<Context> {
-    const config = this.configured;
-    if (!config) throw new RequestError('not_configured', 'Configure first');
+    const source = params.configuration ?? this.configured;
+    if (!source) throw new RequestError('not_configured', 'Configure first');
+    const config = this.validatedConfiguration(source);
     if (!isAbsolute(params.cwd)) throw new RequestError('invalid_params', 'Absolute project directory required');
     const cwd = await realpath(params.cwd);
     const binding: Binding = { contextId: params.contextId, botId: params.botId, purpose: params.purpose, ...(params.activityId ? { activityId: params.activityId } : {}), selectionRevision: params.selectionRevision, cwd };
     const existing = this.contexts.get(params.contextId);
     if (existing) {
       if (existing.active) throw new RequestError('busy', 'Context is running');
-      if (JSON.stringify(existing.binding) !== JSON.stringify(binding) || existing.instructions !== params.instructions || JSON.stringify(existing.codingTools) !== JSON.stringify(params.codingTools) || JSON.stringify(existing.domainTools) !== JSON.stringify(params.domainTools) || (params.resumeRef && existing.manager.getSessionFile() !== params.resumeRef)) throw new RequestError('binding_conflict', 'Open context configuration differs');
+      if (JSON.stringify(existing.binding) !== JSON.stringify(binding) || JSON.stringify(existing.configuration) !== JSON.stringify(config) || existing.instructions !== params.instructions || JSON.stringify(existing.codingTools) !== JSON.stringify(params.codingTools) || JSON.stringify(existing.domainTools) !== JSON.stringify(params.domainTools) || (params.resumeRef && existing.manager.getSessionFile() !== params.resumeRef)) throw new RequestError('binding_conflict', 'Open context configuration differs');
       return existing;
     }
     const directory = join(this.stateDir, 'sessions');
@@ -147,27 +176,40 @@ class Worker {
     if (params.resumeRef) {
       const path = resolve(params.resumeRef);
       if (dirname(path) !== directory) throw new RequestError('invalid_resume', 'Session reference is outside the owned directory');
-      let missing = false;
-      try { await access(path); }
-      catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; missing = true; }
-      if (missing) {
-        if (params.used) throw new RequestError('history_unavailable', 'A used session is missing');
+      let unavailable = false;
+      try {
+        const info = await stat(path);
+        if (!info.isFile()) throw new RequestError('history_unavailable', 'Session reference is not a regular file');
+        unavailable = info.size === 0;
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+        unavailable = true;
+      }
+      if (unavailable) {
+        if (params.used) throw new RequestError('history_unavailable', 'A used session is missing or empty');
         manager = SessionManager.create(cwd, directory);
         manager.appendCustomEntry(BINDING_TYPE, binding);
+        manager.appendCustomEntry(CONFIGURATION_TYPE, this.nonsecretConfiguration(config));
       } else {
         if (await realpath(path) !== path) throw new RequestError('invalid_resume', 'Session reference is not canonical');
         if ([...this.contexts.values()].some(context => context.manager.getSessionFile() === path)) throw new RequestError('binding_conflict', 'Session already open');
         manager = SessionManager.open(path, directory, cwd);
         const saved = manager.getEntries().find(entry => entry.type === 'custom' && entry.customType === BINDING_TYPE);
         if (!saved || saved.type !== 'custom' || JSON.stringify(saved.data) !== JSON.stringify(binding)) throw new RequestError('binding_conflict', 'Saved context owner differs');
+        const savedConfig = manager.getEntries().findLast(entry => entry.type === 'custom' && entry.customType === CONFIGURATION_TYPE);
+        if (!savedConfig || savedConfig.type !== 'custom' || JSON.stringify(savedConfig.data) !== JSON.stringify(this.nonsecretConfiguration(config))) throw new RequestError('binding_conflict', 'Captured connection configuration differs from the saved context');
         used = used || manager.getEntries().some(entry => entry.type === 'message');
       }
     } else {
       if (params.used) throw new RequestError('history_unavailable', 'A used context requires its session reference');
       manager = SessionManager.create(cwd, directory);
       manager.appendCustomEntry(BINDING_TYPE, binding);
+      manager.appendCustomEntry(CONFIGURATION_TYPE, this.nonsecretConfiguration(config));
     }
-    const model = this.models.getModel(PROVIDER, config.model);
+    const models = await ModelRuntime.create({ credentials: new InMemoryCredentialStore(), modelsPath: null, allowModelNetwork: false, refreshOnCreate: false });
+    this.registerModel(models, config);
+    await models.setRuntimeApiKey(PROVIDER, config.apiKey);
+    const model = models.getModel(PROVIDER, config.model);
     if (!model) throw new Error('Configured model is unavailable');
     const customTools = (params.domainTools ?? []).map(tool => this.domainTool(params.contextId, tool));
     const codingTools = params.codingTools ?? ['read', 'bash', 'edit', 'write'];
@@ -179,13 +221,13 @@ class Worker {
     const agentDir = join(this.stateDir, 'agent');
     const runtime = await createAgentSessionRuntime(async target => {
       const services = await createAgentSessionServices({
-        ...target, modelRuntime: this.models, settingsManager: settings,
+        ...target, modelRuntime: models, settingsManager: settings,
         resourceLoaderOptions: { noExtensions: true, noSkills: true, noPromptTemplates: true, noThemes: true, disabledBuiltinExtensions: ['mcp'], appendSystemPrompt: params.instructions ? [params.instructions] : [] },
       });
       const result = await createAgentSessionFromServices({ services, sessionManager: target.sessionManager, model, thinkingLevel: 'off', tools: [...codingTools, ...customTools.map(tool => tool.name)], customTools });
       return { ...result, services, diagnostics: services.diagnostics };
     }, { cwd, agentDir, sessionManager: manager });
-    const context: Context = { binding, instructions: params.instructions, codingTools: params.codingTools, domainTools: params.domainTools, manager, runtime, used, runIds: new Set(), observationSeq: 0 };
+    const context: Context = { binding, configuration: config, instructions: params.instructions, codingTools: params.codingTools, domainTools: params.domainTools, manager, runtime, used, runIds: new Set(), observationSeq: 0 };
     runtime.session.subscribe(event => this.onSdkEvent(context, event));
     this.contexts.set(params.contextId, context);
     await runtime.session.bindExtensions({});
@@ -240,8 +282,8 @@ class Worker {
     if (this.closing) throw new RequestError('closing', 'Worker is shutting down');
     switch (command.method) {
       case 'configure':
-        await this.configure(command.params);
-        await this.response(id, { configured: true, workerEpoch: this.epoch, engineVersion: '1.5.2', pricingKnown: false });
+        this.configure(command.params);
+        await this.response(id, { configured: true, workerEpoch: this.epoch, engineVersion: '1.5.2', pricingKnown: false, credentialSource: this.configured?.credentialSource });
         break;
       case 'context.open':
         await this.response(id, this.binding(await this.open(command.params)));
@@ -252,6 +294,15 @@ class Worker {
       case 'context.inspect':
         await this.response(id, this.inspect(this.context(command.params.contextId)));
         break;
+      case 'context.configuration':
+        await this.response(id, this.configuration(this.context(command.params.contextId)));
+        break;
+      case 'context.configure': {
+        const context = this.context(command.params.contextId);
+        await this.configureContext(context, command.params.settings);
+        await this.response(id, this.configuration(context));
+        break;
+      }
       case 'run.start': {
         const context = this.context(command.params.contextId);
         if (context.active) throw new RequestError('busy', 'Context is running');
@@ -356,8 +407,7 @@ async function main(): Promise<void> {
   const stateDir = await realpath(args[1]);
   await mkdir(join(stateDir, 'sessions'), { recursive: true });
   await mkdir(join(stateDir, 'agent'), { recursive: true });
-  const models = await ModelRuntime.create({ credentials: new InMemoryCredentialStore(), modelsPath: null, allowModelNetwork: false, refreshOnCreate: false });
-  const worker = new Worker(stateDir, models);
+  const worker = new Worker(stateDir);
   await worker.writer.send({ v: 1, type: 'ready', workerEpoch: worker.epoch, engine: { name: 'pi', version: '1.5.2' }, runtime: { name: 'node', version: process.version } });
   await worker.read();
 }

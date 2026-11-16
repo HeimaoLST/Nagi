@@ -53,19 +53,44 @@ type Ready struct {
 }
 
 type ConfigureParams struct {
-	WireAPI       WireAPI `json:"wireApi"`
-	BaseURL       string  `json:"baseUrl"`
-	APIKey        string  `json:"apiKey"`
-	Model         string  `json:"model"`
-	ContextTokens int     `json:"contextTokens"`
-	OutputTokens  int     `json:"outputTokens"`
+	WireAPI          WireAPI `json:"wireApi"`
+	BaseURL          string  `json:"baseUrl"`
+	APIKey           string  `json:"apiKey"`
+	Model            string  `json:"model"`
+	ContextTokens    int     `json:"contextTokens"`
+	OutputTokens     int     `json:"outputTokens"`
+	CredentialSource string  `json:"credentialSource"`
 }
 
 type ConfigureResult struct {
-	Configured    bool   `json:"configured"`
-	WorkerEpoch   string `json:"workerEpoch"`
-	EngineVersion string `json:"engineVersion"`
-	PricingKnown  bool   `json:"pricingKnown"`
+	Configured       bool   `json:"configured"`
+	WorkerEpoch      string `json:"workerEpoch"`
+	EngineVersion    string `json:"engineVersion"`
+	PricingKnown     bool   `json:"pricingKnown"`
+	CredentialSource string `json:"credentialSource"`
+}
+
+type ContextSettings struct {
+	Model         string `json:"model"`
+	ContextTokens int    `json:"contextTokens"`
+	OutputTokens  int    `json:"outputTokens"`
+}
+
+type ConfigureContextParams struct {
+	ContextID string          `json:"contextId"`
+	Settings  ContextSettings `json:"settings"`
+}
+
+type ContextConfiguration struct {
+	ContextID         string   `json:"contextId"`
+	WireAPI           WireAPI  `json:"wireApi"`
+	BaseURL           string   `json:"baseUrl"`
+	Model             string   `json:"model"`
+	ContextTokens     int      `json:"contextTokens"`
+	OutputTokens      int      `json:"outputTokens"`
+	CredentialSource  string   `json:"credentialSource"`
+	CredentialPresent bool     `json:"credentialPresent"`
+	ActiveTools       []string `json:"activeTools"`
 }
 
 type DomainTool struct {
@@ -75,17 +100,18 @@ type DomainTool struct {
 }
 
 type OpenContextParams struct {
-	ContextID         string       `json:"contextId"`
-	BotID             string       `json:"botId"`
-	Purpose           Purpose      `json:"purpose"`
-	ActivityID        string       `json:"activityId,omitempty"`
-	SelectionRevision uint64       `json:"selectionRevision"`
-	Instructions      string       `json:"instructions"`
-	CWD               string       `json:"cwd"`
-	ResumeRef         string       `json:"resumeRef,omitempty"`
-	Used              bool         `json:"used"`
-	CodingTools       []string     `json:"codingTools"`
-	DomainTools       []DomainTool `json:"domainTools"`
+	ContextID         string           `json:"contextId"`
+	BotID             string           `json:"botId"`
+	Purpose           Purpose          `json:"purpose"`
+	ActivityID        string           `json:"activityId,omitempty"`
+	SelectionRevision uint64           `json:"selectionRevision"`
+	Instructions      string           `json:"instructions"`
+	CWD               string           `json:"cwd"`
+	ResumeRef         string           `json:"resumeRef,omitempty"`
+	Used              bool             `json:"used"`
+	CodingTools       []string         `json:"codingTools"`
+	DomainTools       []DomainTool     `json:"domainTools"`
+	Configuration     *ConfigureParams `json:"configuration,omitempty"`
 }
 
 type ContextBinding struct {

@@ -69,8 +69,8 @@
 ## Decode maintenance metadata as data
 
 **Problem:** A cleanup classifier embedded JSON booleans directly in Python source and failed with NameError before any deletion.
-**Cause or correction:** JSON true/false are not Python literals; serializing data did not make it executable Python.
-**Prevention:** Read metadata with json.loads or a data file. Produce the bounded inventory before mutations, preserve actual failures, and require verified archives before destructive retirement.
+**Cause or correction:** JSON true/false are not Python literals; serializing data did not make it executable Python. HC also rejects program names over32characters before launch.
+**Prevention:** Read metadata with json.loads or a data file and validate HC name constraints before launch. Produce the bounded inventory before mutations, preserve actual failures, and require verified archives before destructive retirement.
 
 ## Verify exact SDK types before implementing an adapter
 
@@ -101,3 +101,21 @@
 **Problem:** Source review found exact-string cwd and used-flag comparisons that rejected canonical path aliases or an SDK-proven unused-to-used upgrade.
 **Cause or correction:** A same-host canonical path can represent the selected directory, and saved public entries can establish use beyond the host's conservative knowledge. Owner/context/purpose correlation must still match.
 **Prevention:** Compare canonical path identity, accept only monotonic use evidence, and keep missing used sessions unavailable. Test actual temporary-directory reopen instead of mirroring raw request fields.
+
+## Keep new defaults separate from bound context settings
+
+**Problem:** The initial worker globally updated every existing context when defaults changed and lacked effective per-context configuration readback.
+**Cause or correction:** Existing product callers require bound model/limits; endpoint, wire and credential source must not be silently repointed either.
+**Prevention:** Capture an immutable connection source and independent SDK configuration per context. Change model/limits only through an explicit idle-target operation, report actual nonsecret readback, and observe A remaining bound after B/default changes.
+
+## Reject unavailable history before a mutating SDK open
+
+**Problem:** Source review found that opening an existing empty used Pi session caused the SDK to write a fresh header before Nagi rejected its missing binding.
+**Cause or correction:** SessionManager.open intentionally initializes empty files. Nonempty invalid files already fail unchanged; Nagi must classify used missing/empty references before this call.
+**Prevention:** Check file metadata first, report used history unavailable and preserve original bytes. Recreate only durably proven-unused bindings with a new reference, using public SDK APIs without parsing journals.
+
+## Report digests only after freezing actual bytes
+
+**Problem:** Several handoffs announced placeholder SHA values and then corrected them in follow-up messages.
+**Cause or correction:** A pending or manually typed prefix is not evidence of a frozen file.
+**Prevention:** Write and freeze the artifact, compute its actual digest and parse actual result counts before sending. Label incomplete work without a SHA field; preserve later corrections instead of rewriting earlier evidence.
