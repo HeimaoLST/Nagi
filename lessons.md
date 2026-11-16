@@ -86,15 +86,21 @@
 
 ## Bind extension defaults to the owned SDK directory
 
-**Problem:** Source inspection found that the public MCP extension's default credential store and log use the SDK global agent-directory setting, rather than the explicit session agentDir alone.
-**Cause or correction:** The worker must set that documented SDK directory to its own state and supply an owned log path. No unrelated credential file was opened during this finding.
-**Prevention:** Inspect extension-level defaults as well as the session constructor. Keep explicit configuration and owned private paths throughout the process; do not assume a session directory argument controls every extension service.
+**Problem:** The public MCP extension has separate default credential/log paths. Source review initially missed the worker's owned-directory override, then retained the narrower implicit OAuth-from-owned-file finding.
+**Cause or correction:** The directory override confines paths but does not isolate authentication. Inject the SDK's empty in-memory MCP credential store separately from the model store; no unrelated credential access or runtime failure was observed.
+**Prevention:** Inspect extension defaults and complete startup ordering. Keep paths owned and credentials explicit, then verify anonymous/static-header HTTP against synthetic saved tokens without claiming that memory disables OAuth protocol.
 
 ## Select the cached compiler explicitly for offline phases
 
 **Problem:** A package-only build stopped before compilation because GOTOOLCHAIN=local selected Go1.27.1; a second bootstrap attempt failed with GOSUMDB disabled.
 **Cause or correction:** The module requires Go1.27.3, which was already cached. Environment restrictions changed toolchain selection and verification before source compilation.
 **Prevention:** Resolve the required cached compiler path before an offline phase, put its bin directory on PATH and keep normal checksum handling. Preserve setup failures separately from compiler or behavior failures.
+
+## Separate isolated declaration setup from SDK defects
+
+**Problem:** The memory-credential export preparation first typechecked isolated copies without dependency resolution and produced124 missing-module diagnostics.
+**Cause or correction:** Packet-local resolution fixed setup. Strict baseline/proposed checks then had the same44 diagnostics; the public caller passed with upstream library checking skipped. No full declaration or runtime PASS was established.
+**Prevention:** Resolve isolated dependencies read-only, compare baseline and proposed diagnostics, and report setup, caller and runtime results separately. Do not change SDK code or versions to conceal an unchanged baseline failure.
 
 ## Keep the IPC type map in one declaration set
 

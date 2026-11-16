@@ -3,7 +3,7 @@ import { mkdir, realpath, stat } from 'node:fs/promises';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import {
   createAgentSessionFromServices, createAgentSessionRuntime, createAgentSessionServices,
-  ModelRuntime, SessionManager, SettingsManager, createMcpExtension,
+  ModelRuntime, SessionManager, SettingsManager, createMcpExtension, McpOAuthCredentialStore, InMemoryAuthStorageBackend,
   type AgentSessionEvent, type AgentSessionRuntime, type ToolDefinition, type McpServerEntry, type McpTransportFactory,
 } from '@earendil-works/pi-coding-agent';
 import { InMemoryCredentialStore, type AssistantMessage } from '@earendil-works/pi-ai';
@@ -203,6 +203,7 @@ class Worker {
       });
     };
     return createMcpExtension({ loadConfig: () => ({ servers, autoEnableCodemode: false, errors: [] }), createTransport,
+      credentials: new McpOAuthCredentialStore(new InMemoryAuthStorageBackend()),
       logPath: join(this.stateDir, 'agent', 'mcp.log'),
       openUrl: () => { throw new RequestError('unsupported_auth', 'MCP browser authentication is unavailable'); },
       updateConfig: () => { throw new RequestError('unsupported_operation', 'Change MCP configuration through Nagi'); },

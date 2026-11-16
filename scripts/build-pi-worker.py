@@ -23,12 +23,18 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def verify_patch_files(package_root: Path, patch: dict, field: str) -> None:
+    for name, hashes in patch["files"].items():
+        if sha256(package_root / name) != hashes[field]:
+            raise ValueError(f"{patch['package']}:{name} differs from {field}")
+
+
 def source_inputs() -> dict:
     paths = [SOURCE / name for name in ("package.json", "package-lock.json", "tsconfig.json")]
     paths.extend(SOURCE.glob("*.ts"))
     paths.extend((ROOT / ".github" / "pi-runtime.json", ROOT / "assets" / "licenses" / "Pi-MIT.txt", Path(__file__).resolve()))
     pin = json.loads((ROOT / ".github" / "pi-runtime.json").read_text())
-    paths.append(ROOT / pin["pi"]["mcp_patch"]["path"])
+    paths.extend(ROOT / patch["path"] for patch in pin["pi"]["patches"])
     return {str(path.relative_to(ROOT)): sha256(path) for path in paths}
 
 
@@ -66,30 +72,28 @@ def build(output: Path, runtime: Path) -> dict:
         shutil.copy2(path, build_source / path.name)
     compiled_inputs = {path.name: sha256(path) for path in build_source.iterdir()}
     node = output / "bin" / "node"
-    patch = pin["pi"]["mcp_patch"]
-    patch_path = ROOT / patch["path"]
-    if sha256(patch_path) != patch["sha256"]:
-        raise ValueError("MCP observer patch differs from the pin")
-    mcp_root = output / "node_modules" / patch["package"]
+    patches = pin["pi"]["patches"]
+    package_roots = [output / "node_modules" / patch["package"] for patch in patches]
+    for patch in patches:
+        if sha256(ROOT / patch["path"]) != patch["sha256"]:
+            raise ValueError("Pi SDK patch differs from the pin")
     compiler_root = output / "node_modules" / "typescript"
     compiler = compiler_root / "bin" / "tsc"
     environment = os.environ.copy()
     environment["PATH"] = str(node.parent) + os.pathsep + environment.get("PATH", "")
-    commands = [
-        [npm, "ci", "--ignore-scripts", "--no-audit", "--no-fund"],
-        ["/usr/bin/patch", "--batch", "--forward", "--fuzz=0", "-p1", "-i", str(patch_path)],
+    dependency_command = [npm, "ci", "--ignore-scripts", "--no-audit", "--no-fund"]
+    patch_commands = [["/usr/bin/patch", "--batch", "--forward", "--fuzz=0", "-p1", "-i", str(ROOT / patch["path"])] for patch in patches]
+    build_commands = [
         [str(node), str(compiler), "--project", str(build_source / "tsconfig.json"), "--noEmit", "false", "--outDir", str(output / "dist")],
         [npm, "prune", "--omit=dev", "--ignore-scripts", "--no-audit", "--no-fund"],
     ]
+    commands = [dependency_command, *patch_commands, *build_commands]
     with (output / "build.log").open("wb") as log:
-        subprocess.run(commands[0], cwd=output, env=environment, stdout=log, stderr=subprocess.STDOUT, check=True)
-        for name, hashes in patch["files"].items():
-            if sha256(mcp_root / name) != hashes["before_sha256"]:
-                raise ValueError("installed MCP input differs from the observer patch base")
-        subprocess.run(commands[1], cwd=mcp_root, env=environment, stdout=log, stderr=subprocess.STDOUT, check=True)
-        for name, hashes in patch["files"].items():
-            if sha256(mcp_root / name) != hashes["after_sha256"]:
-                raise ValueError("patched MCP output differs from the pinned observer")
+        subprocess.run(dependency_command, cwd=output, env=environment, stdout=log, stderr=subprocess.STDOUT, check=True)
+        for patch, command, package_root in zip(patches, patch_commands, package_roots):
+            verify_patch_files(package_root, patch, "before_sha256")
+            subprocess.run(command, cwd=package_root, env=environment, stdout=log, stderr=subprocess.STDOUT, check=True)
+            verify_patch_files(package_root, patch, "after_sha256")
         lock = json.loads((output / "package-lock.json").read_text())
         compiler_package = json.loads((compiler_root / "package.json").read_text())
         if compiler_package["version"] != lock["packages"]["node_modules/typescript"]["version"]:
@@ -103,7 +107,7 @@ def build(output: Path, runtime: Path) -> dict:
             },
             "development_install": json.loads((output / "node_modules" / ".package-lock.json").read_text()),
         }
-        for command in commands[2:]:
+        for command in build_commands:
             subprocess.run(command, cwd=output, env=environment, stdout=log, stderr=subprocess.STDOUT, check=True)
     if {path.name: sha256(path) for path in build_source.iterdir()} != compiled_inputs:
         raise ValueError("worker compilation source changed during build")
@@ -117,9 +121,8 @@ def build(output: Path, runtime: Path) -> dict:
         actual = json.loads((output / "node_modules" / name / "package.json").read_text())
         if actual["version"] != expected["version"]:
             raise ValueError("installed Pi package differs from the pinned version")
-    for name, hashes in patch["files"].items():
-        if sha256(mcp_root / name) != hashes["after_sha256"]:
-            raise ValueError("delivered MCP output differs from the pinned observer")
+    for patch, package_root in zip(patches, package_roots):
+        verify_patch_files(package_root, patch, "after_sha256")
     if source_inputs() != before:
         raise ValueError("worker source inputs changed during build")
     files = {}
@@ -136,7 +139,7 @@ def build(output: Path, runtime: Path) -> dict:
         "pi": pin["pi"],
         "node": {**pin["node"], "input_receipt_sha256": sha256(receipt_path), "binary_sha256": sha256(node)},
         "commands": commands,
-        "command_cwds": [str(output), str(mcp_root), str(output), str(output)],
+        "command_cwds": [str(output), *map(str, package_roots), str(output), str(output)],
         "compilation": compilation,
         "entry": {"node": "bin/node", "worker": "dist/worker.js"},
         "files": files,

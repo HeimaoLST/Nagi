@@ -29,10 +29,10 @@ def verify_pi_inputs(pi: dict) -> None:
         path = (ROOT / pi[path_key]).resolve()
         if not path.is_relative_to(ROOT) or sha256(path) != pi[hash_key]:
             raise ValueError(f"Pi {path_key} differs from the pin")
-    patch = pi["mcp_patch"]
-    patch_path = (ROOT / patch["path"]).resolve()
-    if patch["package"] != "@earendil-works/pi-mcp" or not patch_path.is_relative_to(ROOT) or sha256(patch_path) != patch["sha256"]:
-        raise ValueError("Pi MCP patch differs from the pin")
+    for patch in pi["patches"]:
+        patch_path = (ROOT / patch["path"]).resolve()
+        if patch["package"] not in pi["packages"] or not patch_path.is_relative_to(ROOT) or sha256(patch_path) != patch["sha256"]:
+            raise ValueError("Pi MCP patch differs from the pin")
     package = json.loads((ROOT / pi["package_json"]).read_text())
     lock = json.loads((ROOT / pi["lock_file"]).read_text())
     for name, expected in pi["packages"].items():
