@@ -1,0 +1,364 @@
+import { randomUUID } from 'node:crypto';
+import { access, mkdir, realpath } from 'node:fs/promises';
+import { dirname, isAbsolute, join, resolve } from 'node:path';
+import {
+  createAgentSessionFromServices, createAgentSessionRuntime, createAgentSessionServices,
+  ModelRuntime, SessionManager, SettingsManager,
+  type AgentSessionEvent, type AgentSessionRuntime, type ToolDefinition,
+} from '@earendil-works/pi-coding-agent';
+import { InMemoryCredentialStore, type AssistantMessage } from '@earendil-works/pi-ai';
+import type { TSchema } from 'typebox';
+import {
+  MAX_FRAME, RequestError, Writer, frameBytes, message, parseRequest,
+  type Command, type ConfigureParams, type OpenParams, type StartParams, type ToolResult,
+} from './protocol.js';
+
+const BINDING_TYPE = 'nagi-context-v1';
+const PROVIDER = 'nagi';
+type Binding = Pick<OpenParams, 'contextId' | 'botId' | 'purpose' | 'activityId' | 'selectionRevision' | 'cwd'>;
+type Run = {
+  id: string; seq: number; cancelled: boolean; sdkStarted: boolean; sdkSettled: boolean; sdkAborted: boolean;
+  final?: AssistantMessage; correlation: StartParams['correlation']; done: Promise<void>;
+  pending: Map<string, (result: ToolResult) => void>; inputs: Map<string, unknown>;
+};
+type Context = {
+  binding: Binding; instructions: string; codingTools: OpenParams['codingTools']; domainTools: OpenParams['domainTools'];
+  manager: SessionManager; runtime: AgentSessionRuntime; used: boolean; runIds: Set<string>;
+  active?: Run; observationSeq: number;
+};
+
+
+class Worker {
+  readonly epoch = randomUUID();
+  readonly contexts = new Map<string, Context>();
+  readonly writer = new Writer(process.stdout, () => { void this.disconnect(true); });
+  private configured?: ConfigureParams;
+  private closing = false;
+  private disconnected = false;
+  private shutdownComplete = false;
+  constructor(private stateDir: string, private models: ModelRuntime) {}
+  private response(id: string, result: object): Promise<void> {
+    return this.writer.send({ v: 1, type: 'response', id, ok: true, result });
+  }
+  private failure(id: string, error: unknown): Promise<void> {
+    return this.writer.send({ v: 1, type: 'response', id, ok: false, error: {
+      code: error instanceof RequestError ? error.code : 'request_failed',
+      message: this.cleanMessage(error),
+    } });
+  }
+  private cleanMessage(error: unknown): string {
+    const text = message(error);
+    const key = this.configured?.apiKey;
+    return key ? text.split(key).join('[credential]') : text;
+  }
+  private event(context: Context, run: Run, event: string, data: object): void {
+    const value = { v: 1, type: 'event', workerEpoch: this.epoch, contextId: context.binding.contextId, runId: run.id, seq: ++run.seq, event, data };
+    try { void this.writer.send(value).catch(() => this.disconnect(true)); }
+    catch { void this.disconnect(true); }
+  }
+  private context(id: string): Context {
+    const context = this.contexts.get(id);
+    if (!context) throw new RequestError('not_found', 'Context is not open');
+    return context;
+  }
+  private binding(context: Context): object {
+    return { ...context.binding, sessionRef: context.manager.getSessionFile(), used: context.used };
+  }
+  private onSdkEvent(context: Context, event: AgentSessionEvent): void {
+    context.observationSeq++;
+    const run = context.active;
+    if (!run) return;
+    if (event.type === 'agent_start') {
+      run.sdkStarted = true;
+      if (run.cancelled || this.disconnected) void context.runtime.session.abort().catch(() => this.disconnect(true));
+    }
+    if (event.type === 'agent_settled') { run.sdkSettled = true; run.sdkAborted = event.aborted; }
+    if (event.type === 'message_end' && event.message.role === 'assistant') run.final = event.message;
+    if (event.type === 'message_update' && event.assistantMessageEvent.type === 'text_delta') {
+      this.event(context, run, 'text.delta', { text: event.assistantMessageEvent.delta });
+    }
+    if (event.type === 'tool_execution_start') run.inputs.set(event.toolCallId, event.args);
+    if (event.type === 'tool_execution_end') {
+      this.event(context, run, 'tool.finished', { callId: event.toolCallId, name: event.toolName, input: run.inputs.get(event.toolCallId), isError: event.isError, result: event.result });
+      run.inputs.delete(event.toolCallId);
+    }
+  }
+  private domainTool(contextId: string, tool: NonNullable<OpenParams['domainTools']>[number]): ToolDefinition {
+    return {
+      name: tool.name, label: tool.name, description: tool.description, parameters: tool.parameters as TSchema,
+      execute: (callId, input, signal) => {
+        const context = this.context(contextId);
+        const run = context.active;
+        if (!run || signal?.aborted) return Promise.reject(new Error('Tool cancelled'));
+        return new Promise((accept, reject) => {
+          const cleanup = () => { run.pending.delete(callId); signal?.removeEventListener('abort', abort); };
+          const abort = () => { cleanup(); reject(new Error('Tool cancelled')); };
+          run.pending.set(callId, result => {
+            cleanup();
+            if (result.error) reject(new Error(result.error.message));
+            else accept({ content: result.content ?? [], details: result.details ?? {} });
+          });
+          signal?.addEventListener('abort', abort, { once: true });
+          this.event(context, run, 'tool.request', { callId, name: tool.name, input });
+        });
+      },
+    };
+  }
+  private async configure(params: ConfigureParams): Promise<void> {
+    if ([...this.contexts.values()].some(context => context.active)) throw new RequestError('busy', 'A context is running');
+    if (params.outputTokens >= params.contextTokens) throw new RequestError('invalid_params', 'Output limit must be below context limit');
+    const endpoint = new URL(params.baseUrl);
+    if (!['http:', 'https:'].includes(endpoint.protocol) || endpoint.username || endpoint.password) throw new RequestError('invalid_params', 'HTTP(S) endpoint required without URL credentials');
+    this.configured = params;
+    this.models.registerProvider(PROVIDER, { api: params.wireApi, baseUrl: endpoint.toString(), models: [{
+      id: params.model, name: params.model, reasoning: false, input: ['text'],
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      contextWindow: params.contextTokens, maxTokens: params.outputTokens,
+    }] });
+    await this.models.setRuntimeApiKey(PROVIDER, params.apiKey);
+    const model = this.models.getModel(PROVIDER, params.model);
+    if (!model) throw new Error('Configured model is unavailable');
+    for (const context of this.contexts.values()) {
+      await context.runtime.session.setModel(model);
+      this.configureSettings(context.runtime.services.settingsManager, params);
+    }
+  }
+  private configureSettings(settings: SettingsManager, params: ConfigureParams): void {
+    settings.applyOverrides({
+      compaction: { enabled: true, reserveTokens: params.outputTokens, keepRecentTokens: Math.min(8192, Math.floor((params.contextTokens - params.outputTokens) / 4)) },
+      retry: { enabled: false, provider: { maxRetries: 0 } }, cacheWarming: 'off',
+    });
+  }
+  private async open(params: OpenParams): Promise<Context> {
+    const config = this.configured;
+    if (!config) throw new RequestError('not_configured', 'Configure first');
+    if (!isAbsolute(params.cwd)) throw new RequestError('invalid_params', 'Absolute project directory required');
+    const cwd = await realpath(params.cwd);
+    const binding: Binding = { contextId: params.contextId, botId: params.botId, purpose: params.purpose, ...(params.activityId ? { activityId: params.activityId } : {}), selectionRevision: params.selectionRevision, cwd };
+    const existing = this.contexts.get(params.contextId);
+    if (existing) {
+      if (existing.active) throw new RequestError('busy', 'Context is running');
+      if (JSON.stringify(existing.binding) !== JSON.stringify(binding) || existing.instructions !== params.instructions || JSON.stringify(existing.codingTools) !== JSON.stringify(params.codingTools) || JSON.stringify(existing.domainTools) !== JSON.stringify(params.domainTools) || (params.resumeRef && existing.manager.getSessionFile() !== params.resumeRef)) throw new RequestError('binding_conflict', 'Open context configuration differs');
+      return existing;
+    }
+    const directory = join(this.stateDir, 'sessions');
+    let manager: SessionManager;
+    let used = params.used;
+    if (params.resumeRef) {
+      const path = resolve(params.resumeRef);
+      if (dirname(path) !== directory) throw new RequestError('invalid_resume', 'Session reference is outside the owned directory');
+      let missing = false;
+      try { await access(path); }
+      catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; missing = true; }
+      if (missing) {
+        if (params.used) throw new RequestError('history_unavailable', 'A used session is missing');
+        manager = SessionManager.create(cwd, directory);
+        manager.appendCustomEntry(BINDING_TYPE, binding);
+      } else {
+        if (await realpath(path) !== path) throw new RequestError('invalid_resume', 'Session reference is not canonical');
+        if ([...this.contexts.values()].some(context => context.manager.getSessionFile() === path)) throw new RequestError('binding_conflict', 'Session already open');
+        manager = SessionManager.open(path, directory, cwd);
+        const saved = manager.getEntries().find(entry => entry.type === 'custom' && entry.customType === BINDING_TYPE);
+        if (!saved || saved.type !== 'custom' || JSON.stringify(saved.data) !== JSON.stringify(binding)) throw new RequestError('binding_conflict', 'Saved context owner differs');
+        used = used || manager.getEntries().some(entry => entry.type === 'message');
+      }
+    } else {
+      if (params.used) throw new RequestError('history_unavailable', 'A used context requires its session reference');
+      manager = SessionManager.create(cwd, directory);
+      manager.appendCustomEntry(BINDING_TYPE, binding);
+    }
+    const model = this.models.getModel(PROVIDER, config.model);
+    if (!model) throw new Error('Configured model is unavailable');
+    const customTools = (params.domainTools ?? []).map(tool => this.domainTool(params.contextId, tool));
+    const codingTools = params.codingTools ?? ['read', 'bash', 'edit', 'write'];
+    const known = new Set(['read', 'bash', 'edit', 'write', 'grep', 'find', 'ls']);
+    if (codingTools.some(name => !known.has(name))) throw new RequestError('unsupported_tool', 'Unsupported coding tool selection');
+    if (new Set(customTools.map(tool => tool.name)).size !== customTools.length || customTools.some(tool => known.has(tool.name))) throw new RequestError('invalid_params', 'Conflicting domain tool name');
+    const settings = SettingsManager.inMemory({ retry: { enabled: false, provider: { maxRetries: 0 } }, cacheWarming: 'off' });
+    this.configureSettings(settings, config);
+    const agentDir = join(this.stateDir, 'agent');
+    const runtime = await createAgentSessionRuntime(async target => {
+      const services = await createAgentSessionServices({
+        ...target, modelRuntime: this.models, settingsManager: settings,
+        resourceLoaderOptions: { noExtensions: true, noSkills: true, noPromptTemplates: true, noThemes: true, disabledBuiltinExtensions: ['mcp'], appendSystemPrompt: params.instructions ? [params.instructions] : [] },
+      });
+      const result = await createAgentSessionFromServices({ services, sessionManager: target.sessionManager, model, thinkingLevel: 'off', tools: [...codingTools, ...customTools.map(tool => tool.name)], customTools });
+      return { ...result, services, diagnostics: services.diagnostics };
+    }, { cwd, agentDir, sessionManager: manager });
+    const context: Context = { binding, instructions: params.instructions, codingTools: params.codingTools, domainTools: params.domainTools, manager, runtime, used, runIds: new Set(), observationSeq: 0 };
+    runtime.session.subscribe(event => this.onSdkEvent(context, event));
+    this.contexts.set(params.contextId, context);
+    await runtime.session.bindExtensions({});
+    return context;
+  }
+  private async execute(context: Context, run: Run, params: StartParams): Promise<void> {
+    let failure: unknown;
+    this.event(context, run, 'run.started', { correlation: run.correlation });
+    try {
+      const snapshots = (params.context ?? []).map(item => `\n\n<context name=${JSON.stringify(item.name)}>\n${item.text}\n</context>`).join('');
+      if (!run.cancelled && !this.disconnected) await context.runtime.session.prompt(params.text + snapshots);
+      await context.runtime.session.waitForIdle();
+    } catch (error) { failure = error; }
+    const last = run.final;
+    const status = run.cancelled || run.sdkAborted || last?.stopReason === 'aborted' ? 'interrupted'
+      : failure || !run.sdkSettled || !last || last.stopReason !== 'stop' ? 'failed' : 'completed';
+    const text = last?.content.filter(item => item.type === 'text').map(item => item.text).join('') ?? '';
+    const error = status === 'failed' ? { code: 'execution_failed', message: failure ? this.cleanMessage(failure) : this.cleanMessage(last?.errorMessage ?? `SDK outcome: ${last?.stopReason ?? 'missing settlement'}`) } : undefined;
+    context.active = undefined;
+    context.observationSeq++;
+    this.event(context, run, 'run.settled', { status, text, ...(error ? { error } : {}), ...(last?.usage ? { usage: { ...last.usage, cost: undefined, scope: 'final_assistant', pricingKnown: false } } : {}) });
+  }
+  private history(context: Context, cursor: string | undefined, limit: number): object {
+    const entries = context.manager.getEntries();
+    const offset = cursor ? entries.findIndex(entry => entry.id === cursor) + 1 : 0;
+    if (cursor && !offset) throw new RequestError('invalid_cursor', 'History cursor is not in this session');
+    const page = entries.slice(offset, offset + (limit || 50));
+    const metadata = { leafId: context.manager.getLeafId(), sessionId: context.manager.getSessionId(), compactionAware: true };
+    let result: { contextId: string; sessionRef: string | undefined; entries: typeof page; nextCursor?: string; projection: typeof metadata };
+    do {
+      const nextCursor = offset + page.length < entries.length ? page.at(-1)?.id : undefined;
+      result = { contextId: context.binding.contextId, sessionRef: context.manager.getSessionFile(), entries: page, ...(nextCursor ? { nextCursor } : {}), projection: metadata };
+      if (frameBytes({ v: 1, type: 'response', id: 'history', ok: true, result }) < MAX_FRAME - 1024) return result;
+      page.pop();
+    } while (page.length);
+    throw new RequestError('entry_too_large', 'A history entry exceeds the frame limit');
+  }
+  private inspect(context: Context): object {
+    const state = context.runtime.session.state;
+    const result = {
+      contextId: context.binding.contextId, sessionRef: context.manager.getSessionFile(),
+      modelContext: { systemPrompt: context.runtime.session.systemPrompt, messages: context.manager.buildSessionContext().messages },
+      finalizedMessages: context.manager.buildSessionContext().messages,
+      ...(state.streamingMessage ? { partial: state.streamingMessage } : {}),
+      ...(context.active ? { activeRun: { runId: context.active.id, cancelRequested: context.active.cancelled } } : {}),
+      observationSeq: context.observationSeq, capturedAt: new Date().toISOString(), complete: true,
+    };
+    if (frameBytes(result) > MAX_FRAME - 1024) throw new RequestError('snapshot_too_large', 'Complete context exceeds frame limit; use paged history');
+    return result;
+  }
+  private async handle(id: string, command: Command): Promise<void> {
+    if (this.closing) throw new RequestError('closing', 'Worker is shutting down');
+    switch (command.method) {
+      case 'configure':
+        await this.configure(command.params);
+        await this.response(id, { configured: true, workerEpoch: this.epoch, engineVersion: '1.5.2', pricingKnown: false });
+        break;
+      case 'context.open':
+        await this.response(id, this.binding(await this.open(command.params)));
+        break;
+      case 'context.history':
+        await this.response(id, this.history(this.context(command.params.contextId), command.params.cursor, command.params.limit));
+        break;
+      case 'context.inspect':
+        await this.response(id, this.inspect(this.context(command.params.contextId)));
+        break;
+      case 'run.start': {
+        const context = this.context(command.params.contextId);
+        if (context.active) throw new RequestError('busy', 'Context is running');
+        if (context.runIds.has(command.params.runId)) throw new RequestError('duplicate_run', 'Run ID already used');
+        const run: Run = { id: command.params.runId, seq: 0, cancelled: false, sdkStarted: false, sdkSettled: false, sdkAborted: false, correlation: command.params.correlation, done: Promise.resolve(), pending: new Map(), inputs: new Map() };
+        context.active = run; context.used = true; context.runIds.add(run.id); context.observationSeq++;
+        await this.response(id, { contextId: context.binding.contextId, runId: run.id, admitted: true });
+        run.done = this.execute(context, run, command.params);
+        break;
+      }
+      case 'run.cancel': {
+        const context = this.context(command.params.contextId);
+        const run = context.active;
+        if (!run || run.id !== command.params.runId) throw new RequestError('not_found', 'Active run not found');
+        run.cancelled = true;
+        await this.response(id, { contextId: context.binding.contextId, runId: run.id, cancelRequested: true });
+        void context.runtime.session.abort().catch(() => this.disconnect(true));
+        break;
+      }
+      case 'tool.result': {
+        const context = this.context(command.params.contextId);
+        const run = context.active;
+        const finish = run?.id === command.params.runId && command.params.workerEpoch === this.epoch ? run.pending.get(command.params.callId) : undefined;
+        if (!finish) throw new RequestError('not_found', 'Pending tool call not found');
+        run?.pending.delete(command.params.callId);
+        await this.response(id, { resolved: true });
+        finish(command.params);
+        break;
+      }
+      case 'context.close': {
+        const context = this.context(command.params.contextId);
+        if (context.active) throw new RequestError('busy', 'Context is running');
+        await context.runtime.dispose();
+        this.contexts.delete(context.binding.contextId);
+        await this.response(id, { contextId: context.binding.contextId, closed: true });
+        break;
+      }
+      case 'shutdown':
+        if ([...this.contexts.values()].some(context => context.active)) throw new RequestError('busy', 'Drain or cancel admitted runs before shutdown');
+        this.closing = true;
+        for (const context of this.contexts.values()) await context.runtime.dispose();
+        await this.response(id, { shuttingDown: true });
+        await this.writer.flush();
+        this.shutdownComplete = true;
+        process.stdin.destroy();
+        break;
+    }
+  }
+  private async disconnect(failed: boolean): Promise<void> {
+    if (this.disconnected) return;
+    this.disconnected = true; this.closing = true;
+    if (failed) process.exitCode = 1;
+    const outcomes = await Promise.allSettled([...this.contexts.values()].map(async context => {
+      const run = context.active;
+      if (run) run.cancelled = true;
+      try {
+        await context.runtime.session.abort();
+        if (run) await run.done;
+      } finally { await context.runtime.dispose(); }
+    }));
+    if (outcomes.some(outcome => outcome.status === 'rejected')) process.exitCode = 1;
+    await this.writer.flush().catch(() => {});
+    process.stdin.destroy();
+  }
+  async read(): Promise<void> {
+    let partial = Buffer.alloc(0);
+    let commands: Promise<void> = Promise.resolve();
+    try {
+      for await (const chunk of process.stdin) {
+        partial = Buffer.concat([partial, Buffer.from(chunk)]);
+        let newline: number;
+        while ((newline = partial.indexOf(10)) >= 0) {
+          if (newline + 1 > MAX_FRAME) throw new Error('Input frame limit exceeded');
+          const data = partial.subarray(0, newline);
+          partial = partial.subarray(newline + 1);
+          commands = commands.then(async () => {
+            let request: ReturnType<typeof parseRequest>;
+            try { request = parseRequest(data); }
+            catch (error) {
+              if (!(error instanceof RequestError) || !error.requestId) throw error;
+              await this.failure(error.requestId, error);
+              return;
+            }
+            try { await this.handle(request.id, request.command); }
+            catch (error) { await this.failure(request.id, error); }
+          });
+          commands = commands.catch(() => this.disconnect(true));
+        }
+        if (partial.length >= MAX_FRAME) throw new Error('Input frame limit exceeded');
+      }
+      if (partial.length) throw new Error('Partial JSONL at EOF');
+      await commands;
+      if (!this.shutdownComplete) await this.disconnect(false);
+    } catch { if (!this.shutdownComplete) await this.disconnect(true); }
+  }
+}
+
+async function main(): Promise<void> {
+  const args = process.argv.slice(2);
+  if (args.length !== 2 || args[0] !== '--state-dir' || !isAbsolute(args[1])) throw new Error('Usage: node worker.js --state-dir <absolute owned directory>');
+  await mkdir(args[1], { recursive: true });
+  const stateDir = await realpath(args[1]);
+  await mkdir(join(stateDir, 'sessions'), { recursive: true });
+  await mkdir(join(stateDir, 'agent'), { recursive: true });
+  const models = await ModelRuntime.create({ credentials: new InMemoryCredentialStore(), modelsPath: null, allowModelNetwork: false, refreshOnCreate: false });
+  const worker = new Worker(stateDir, models);
+  await worker.writer.send({ v: 1, type: 'ready', workerEpoch: worker.epoch, engine: { name: 'pi', version: '1.5.2' }, runtime: { name: 'node', version: process.version } });
+  await worker.read();
+}
+main().catch(() => { process.stderr.write('Pi worker initialization failed\n'); process.exitCode = 1; });
