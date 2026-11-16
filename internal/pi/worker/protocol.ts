@@ -8,13 +8,14 @@ const stringList = Type.Array(Type.String());
 const target = { contextId: id, runId: id };
 const content = Type.Array(Type.Union([Type.Object({ type: Type.Literal('text'), text: Type.String() }), Type.Object({ type: Type.Literal('image'), data: Type.String(), mimeType: id })]));
 const domainTool = Type.Object({ name: id, description: Type.String(), parameters: Type.Record(Type.String(), Type.Unknown()) });
+const mcpServer = Type.Object({ name: id, sourceId: id, config: Type.Record(Type.String(), Type.Unknown()) });
 const request = Type.Object({ v: Type.Literal(1), id, method: id, params: Type.Record(Type.String(), Type.Unknown()) });
 const positiveInteger = Type.Integer({ minimum: 1, maximum: Number.MAX_SAFE_INTEGER });
 const modelSettings = Type.Object({ model: id, contextTokens: positiveInteger, outputTokens: positiveInteger });
 const configuration = Type.Object({ wireApi: Type.Union([Type.Literal('openai-completions'), Type.Literal('openai-responses')]), baseUrl: id, apiKey: id, credentialSource: id, ...modelSettings.properties });
 const commands = Type.Union([
   Type.Object({ method: Type.Literal('configure'), params: configuration }),
-  Type.Object({ method: Type.Literal('context.open'), params: Type.Object({ contextId: id, botId: id, purpose: Type.Union([Type.Literal('conversation'), Type.Literal('activity')]), activityId: Type.Optional(id), selectionRevision: Type.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER }), instructions: Type.String(), cwd: id, resumeRef: Type.Optional(id), used: Type.Boolean(), codingTools: Type.Union([Type.Null(), stringList]), domainTools: Type.Union([Type.Null(), Type.Array(domainTool)]), configuration: Type.Optional(configuration) }) }),
+  Type.Object({ method: Type.Literal('context.open'), params: Type.Object({ contextId: id, botId: id, purpose: Type.Union([Type.Literal('conversation'), Type.Literal('activity')]), activityId: Type.Optional(id), selectionRevision: Type.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER }), instructions: Type.String(), cwd: id, resumeRef: Type.Optional(id), used: Type.Boolean(), codingTools: Type.Union([Type.Null(), stringList]), domainTools: Type.Union([Type.Null(), Type.Array(domainTool)]), mcpServers: Type.Optional(Type.Array(mcpServer)), configuration: Type.Optional(configuration) }) }),
   Type.Object({ method: Type.Literal('context.history'), params: Type.Object({ contextId: id, cursor: Type.Optional(id), limit: Type.Integer({ minimum: 0, maximum: 200 }) }) }),
   Type.Object({ method: Type.Literal('context.inspect'), params: Type.Object({ contextId: id }) }),
   Type.Object({ method: Type.Literal('context.configuration'), params: Type.Object({ contextId: id }) }),

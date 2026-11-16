@@ -1,12 +1,13 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, realpath, stat } from 'node:fs/promises';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import {
   createAgentSessionFromServices, createAgentSessionRuntime, createAgentSessionServices,
-  ModelRuntime, SessionManager, SettingsManager,
-  type AgentSessionEvent, type AgentSessionRuntime, type ToolDefinition,
+  ModelRuntime, SessionManager, SettingsManager, createMcpExtension,
+  type AgentSessionEvent, type AgentSessionRuntime, type ToolDefinition, type McpServerEntry, type McpTransportFactory,
 } from '@earendil-works/pi-coding-agent';
 import { InMemoryCredentialStore, type AssistantMessage } from '@earendil-works/pi-ai';
+import { StdioTransport, StreamableHttpTransport, validateMcpServerConfig, mcpNamespace } from '@earendil-works/pi-mcp';
 import type { TSchema } from 'typebox';
 import {
   MAX_FRAME, RequestError, Writer, frameBytes, message, parseRequest,
@@ -15,6 +16,7 @@ import {
 
 const BINDING_TYPE = 'nagi-context-v1';
 const CONFIGURATION_TYPE = 'nagi-configuration-v1';
+const MCP_TYPE = 'nagi-mcp-v1';
 const PROVIDER = 'nagi';
 type Binding = Pick<OpenParams, 'contextId' | 'botId' | 'purpose' | 'activityId' | 'selectionRevision' | 'cwd'>;
 type Run = {
@@ -23,17 +25,26 @@ type Run = {
   pending: Map<string, (result: ToolResult) => void>; inputs: Map<string, unknown>;
 };
 type Context = {
-  binding: Binding; configuration: ConfigureParams; instructions: string; codingTools: OpenParams['codingTools']; domainTools: OpenParams['domainTools'];
+  binding: Binding; configuration: ConfigureParams; instructions: string; codingTools: OpenParams['codingTools']; domainTools: OpenParams['domainTools']; mcpServers: NonNullable<OpenParams['mcpServers']>;
   manager: SessionManager; runtime: AgentSessionRuntime; used: boolean; runIds: Set<string>;
   active?: Run; observationSeq: number;
 };
 
+function canonicalConfig(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonicalConfig);
+  if (value !== null && typeof value === 'object') {
+    const fields = value as Record<string, unknown>;
+    return Object.fromEntries(Object.keys(fields).sort().map(key => [key, canonicalConfig(fields[key])]));
+  }
+  return value;
+}
 
 class Worker {
   readonly epoch = randomUUID();
   readonly contexts = new Map<string, Context>();
   readonly writer = new Writer(process.stdout, () => { void this.disconnect(true); });
   private configured?: ConfigureParams;
+  private mcpSequences = new Map<string, { id: string; seq: number }>();
   private closing = false;
   private disconnected = false;
   private shutdownComplete = false;
@@ -49,10 +60,11 @@ class Worker {
   }
   private cleanMessage(error: unknown): string {
     const text = message(error);
-    const keys = [this.configured?.apiKey, ...[...this.contexts.values()].map(context => context.configuration.apiKey)];
+    const keys = [this.configured?.apiKey, ...[...this.contexts.values()].flatMap(context => [context.configuration.apiKey,
+      ...context.mcpServers.flatMap(server => [server.config.env, server.config.headers].flatMap(values => values && typeof values === 'object' ? Object.values(values).filter((value): value is string => typeof value === 'string') : []))])];
     return keys.reduce<string>((value, key) => key ? value.split(key).join('[credential]') : value, text);
   }
-  private event(context: Context, run: Run, event: string, data: object): void {
+  private event(context: Pick<Context, 'binding'>, run: Pick<Run, 'id' | 'seq'>, event: string, data: object): void {
     const value = { v: 1, type: 'event', workerEpoch: this.epoch, contextId: context.binding.contextId, runId: run.id, seq: ++run.seq, event, data };
     try { void this.writer.send(value).catch(() => this.disconnect(true)); }
     catch { void this.disconnect(true); }
@@ -157,6 +169,45 @@ class Worker {
       retry: { enabled: false, provider: { maxRetries: 0 } }, cacheWarming: 'off',
     });
   }
+  private mcpEntries(servers: NonNullable<OpenParams['mcpServers']>): McpServerEntry[] {
+    if (new Set(servers.map(server => mcpNamespace(server.name))).size !== servers.length) throw new RequestError('invalid_params', 'Conflicting MCP server names');
+    return servers.map(server => {
+      const validated = validateMcpServerConfig(server.name, server.config);
+      if (validated.kind === 'invalid') throw new RequestError('invalid_params', validated.error);
+      if (validated.config.oauth !== undefined || validated.config.auth !== undefined) throw new RequestError('unsupported_auth', 'MCP OAuth and provider-token authentication are not supported');
+      if (validated.kind === 'stdio' && !isAbsolute(validated.config.command)) throw new RequestError('invalid_params', 'MCP command must be absolute');
+      if (validated.kind === 'http') {
+        const url = new URL(validated.config.url);
+        if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) throw new RequestError('invalid_params', 'MCP requires HTTP(S) without URL credentials');
+      }
+      for (const context of this.contexts.values()) {
+        const current = context.mcpServers.find(item => item.sourceId === server.sourceId);
+        if (current && JSON.stringify(current) !== JSON.stringify(server)) throw new RequestError('source_conflict', 'MCP source is already bound to another configuration snapshot');
+      }
+      return { name: server.name, source: server.sourceId, scope: 'extension', config: { ...validated.config, exposure: 'direct', toolExposure: {} } };
+    });
+  }
+  private mcpExtension(binding: Binding, servers: McpServerEntry[]) {
+    let notifications = this.mcpSequences.get(binding.contextId);
+    if (!notifications) {
+      notifications = { id: '', seq: 0 };
+      this.mcpSequences.set(binding.contextId, notifications);
+    }
+    const sequence = notifications;
+    const createTransport: McpTransportFactory = (entry, cwd, authProvider) => {
+      if ('url' in entry.config) return new StreamableHttpTransport({ url: entry.config.url, headers: entry.config.headers, authProvider });
+      const attemptId = randomUUID();
+      return new StdioTransport({ command: entry.config.command, args: entry.config.args, cwd: resolve(cwd, entry.config.cwd ?? '.'), env: entry.config.env, stderr: 'pipe',
+        onProcessEvent: event => this.event({ binding }, sequence, 'mcp.process', { server: entry.name, sourceId: entry.source, attemptId, ...event,
+          ...(event.kind === 'spawn_error' ? { error: { ...event.error, message: this.cleanMessage(event.error.message) } } : {}) }),
+      });
+    };
+    return createMcpExtension({ loadConfig: () => ({ servers, autoEnableCodemode: false, errors: [] }), createTransport,
+      logPath: join(this.stateDir, 'agent', 'mcp.log'),
+      openUrl: () => { throw new RequestError('unsupported_auth', 'MCP browser authentication is unavailable'); },
+      updateConfig: () => { throw new RequestError('unsupported_operation', 'Change MCP configuration through Nagi'); },
+    });
+  }
   private async open(params: OpenParams): Promise<Context> {
     const source = params.configuration ?? this.configured;
     if (!source) throw new RequestError('not_configured', 'Configure first');
@@ -164,10 +215,14 @@ class Worker {
     if (!isAbsolute(params.cwd)) throw new RequestError('invalid_params', 'Absolute project directory required');
     const cwd = await realpath(params.cwd);
     const binding: Binding = { contextId: params.contextId, botId: params.botId, purpose: params.purpose, ...(params.activityId ? { activityId: params.activityId } : {}), selectionRevision: params.selectionRevision, cwd };
+    const mcpServers = params.mcpServers ?? [];
+    const mcpEntries = this.mcpEntries(mcpServers);
+    const mcpBinding = mcpServers.map(server => ({ name: server.name, sourceId: server.sourceId,
+      configSha256: createHash('sha256').update(JSON.stringify(canonicalConfig(server.config))).digest('hex') }));
     const existing = this.contexts.get(params.contextId);
     if (existing) {
       if (existing.active) throw new RequestError('busy', 'Context is running');
-      if (JSON.stringify(existing.binding) !== JSON.stringify(binding) || JSON.stringify(existing.configuration) !== JSON.stringify(config) || existing.instructions !== params.instructions || JSON.stringify(existing.codingTools) !== JSON.stringify(params.codingTools) || JSON.stringify(existing.domainTools) !== JSON.stringify(params.domainTools) || (params.resumeRef && existing.manager.getSessionFile() !== params.resumeRef)) throw new RequestError('binding_conflict', 'Open context configuration differs');
+      if (JSON.stringify(existing.binding) !== JSON.stringify(binding) || JSON.stringify(existing.configuration) !== JSON.stringify(config) || existing.instructions !== params.instructions || JSON.stringify(existing.codingTools) !== JSON.stringify(params.codingTools) || JSON.stringify(existing.domainTools) !== JSON.stringify(params.domainTools) || JSON.stringify(existing.mcpServers) !== JSON.stringify(mcpServers) || (params.resumeRef && existing.manager.getSessionFile() !== params.resumeRef)) throw new RequestError('binding_conflict', 'Open context configuration differs');
       return existing;
     }
     const directory = join(this.stateDir, 'sessions');
@@ -190,6 +245,7 @@ class Worker {
         manager = SessionManager.create(cwd, directory);
         manager.appendCustomEntry(BINDING_TYPE, binding);
         manager.appendCustomEntry(CONFIGURATION_TYPE, this.nonsecretConfiguration(config));
+        if (mcpBinding.length) manager.appendCustomEntry(MCP_TYPE, mcpBinding);
       } else {
         if (await realpath(path) !== path) throw new RequestError('invalid_resume', 'Session reference is not canonical');
         if ([...this.contexts.values()].some(context => context.manager.getSessionFile() === path)) throw new RequestError('binding_conflict', 'Session already open');
@@ -198,6 +254,8 @@ class Worker {
         if (!saved || saved.type !== 'custom' || JSON.stringify(saved.data) !== JSON.stringify(binding)) throw new RequestError('binding_conflict', 'Saved context owner differs');
         const savedConfig = manager.getEntries().findLast(entry => entry.type === 'custom' && entry.customType === CONFIGURATION_TYPE);
         if (!savedConfig || savedConfig.type !== 'custom' || JSON.stringify(savedConfig.data) !== JSON.stringify(this.nonsecretConfiguration(config))) throw new RequestError('binding_conflict', 'Captured connection configuration differs from the saved context');
+        const savedMcp = manager.getEntries().findLast(entry => entry.type === 'custom' && entry.customType === MCP_TYPE);
+        if (JSON.stringify(savedMcp?.type === 'custom' ? savedMcp.data : []) !== JSON.stringify(mcpBinding)) throw new RequestError('binding_conflict', 'Captured MCP sources differ from the saved context');
         used = used || manager.getEntries().some(entry => entry.type === 'message');
       }
     } else {
@@ -205,6 +263,7 @@ class Worker {
       manager = SessionManager.create(cwd, directory);
       manager.appendCustomEntry(BINDING_TYPE, binding);
       manager.appendCustomEntry(CONFIGURATION_TYPE, this.nonsecretConfiguration(config));
+      if (mcpBinding.length) manager.appendCustomEntry(MCP_TYPE, mcpBinding);
     }
     const models = await ModelRuntime.create({ credentials: new InMemoryCredentialStore(), modelsPath: null, allowModelNetwork: false, refreshOnCreate: false });
     this.registerModel(models, config);
@@ -222,15 +281,16 @@ class Worker {
     const runtime = await createAgentSessionRuntime(async target => {
       const services = await createAgentSessionServices({
         ...target, modelRuntime: models, settingsManager: settings,
-        resourceLoaderOptions: { noExtensions: true, noSkills: true, noPromptTemplates: true, noThemes: true, disabledBuiltinExtensions: ['mcp'], appendSystemPrompt: params.instructions ? [params.instructions] : [] },
+        resourceLoaderOptions: { noExtensions: true, noSkills: true, noPromptTemplates: true, noThemes: true, disabledBuiltinExtensions: ['mcp'], extensionFactories: mcpEntries.length ? [this.mcpExtension(binding, mcpEntries)] : [], appendSystemPrompt: params.instructions ? [params.instructions] : [] },
       });
-      const result = await createAgentSessionFromServices({ services, sessionManager: target.sessionManager, model, thinkingLevel: 'off', tools: [...codingTools, ...customTools.map(tool => tool.name)], customTools });
+      const result = await createAgentSessionFromServices({ services, sessionManager: target.sessionManager, model, thinkingLevel: 'off', tools: [...codingTools, ...customTools.map(tool => tool.name), ...(mcpEntries.length ? ['mcp__*'] : [])], customTools });
       return { ...result, services, diagnostics: services.diagnostics };
     }, { cwd, agentDir, sessionManager: manager });
-    const context: Context = { binding, configuration: config, instructions: params.instructions, codingTools: params.codingTools, domainTools: params.domainTools, manager, runtime, used, runIds: new Set(), observationSeq: 0 };
+    const context: Context = { binding, configuration: config, instructions: params.instructions, codingTools: params.codingTools, domainTools: params.domainTools, mcpServers, manager, runtime, used, runIds: new Set(), observationSeq: 0 };
     runtime.session.subscribe(event => this.onSdkEvent(context, event));
     this.contexts.set(params.contextId, context);
-    await runtime.session.bindExtensions({});
+    try { await runtime.session.bindExtensions({}); }
+    catch (error) { await runtime.dispose(); this.contexts.delete(params.contextId); throw error; }
     return context;
   }
   private async execute(context: Context, run: Run, params: StartParams): Promise<void> {
@@ -405,6 +465,7 @@ async function main(): Promise<void> {
   if (args.length !== 2 || args[0] !== '--state-dir' || !isAbsolute(args[1])) throw new Error('Usage: node worker.js --state-dir <absolute owned directory>');
   await mkdir(args[1], { recursive: true });
   const stateDir = await realpath(args[1]);
+  process.env.PI_CODING_AGENT_DIR = join(stateDir, 'agent');
   await mkdir(join(stateDir, 'sessions'), { recursive: true });
   await mkdir(join(stateDir, 'agent'), { recursive: true });
   const worker = new Worker(stateDir);

@@ -54,6 +54,12 @@
 **Cause or correction:** App exit, a mapped helper status and disappearance of a child do not prove that child's exit code. Unexported child outcomes remain unknown.
 **Prevention:** Correlate each owned child with its actual wait result and export raw return code and signal before mapping a helper exit, including interrupted runs. Keep app, worker, provider and cleanup outcomes separate.
 
+## Contain the entire optional observer boundary
+
+**Problem:** Source review of the MCP hook found that optional-hook lookup and its undefined fast-path initially sat outside error containment.
+**Cause or correction:** Reading an instrumentation property can throw before dispatch. The final isolated patch moves lookup, capture and scheduled dispatch into one contained boundary; this was source review, not a reproduced runtime failure.
+**Prevention:** Keep optional instrumentation from changing the observed operation's error path. State scheduling and loss limits, observe actual direct-child event fields and verify behavior separately from static patch replay.
+
 ## Persist completed work beyond worktrees
 
 **Problem:** Temporary files and worktrees can be removed during routine workspace cleanup.
@@ -77,6 +83,12 @@
 **Problem:** The first worker compile used a nonexistent settings setter and treated credential metadata as credential contents. A lab-only TypeScript erasure restriction also conflicted with the compiled-JavaScript delivery path.
 **Cause or correction:** Pinned Pi provides SettingsManager.applyOverrides and an exported InMemoryCredentialStore; credential enumeration is metadata only. Production delivers compiled JavaScript rather than the lab's direct TypeScript entry.
 **Prevention:** Read exact pinned declarations and scan existing exported helpers before coding an adapter. Compile the smallest boundary, preserve actual compiler failures, and align compiler options with the delivered runtime entry.
+
+## Bind extension defaults to the owned SDK directory
+
+**Problem:** Source inspection found that the public MCP extension's default credential store and log use the SDK global agent-directory setting, rather than the explicit session agentDir alone.
+**Cause or correction:** The worker must set that documented SDK directory to its own state and supply an owned log path. No unrelated credential file was opened during this finding.
+**Prevention:** Inspect extension-level defaults as well as the session constructor. Keep explicit configuration and owned private paths throughout the process; do not assume a session directory argument controls every extension service.
 
 ## Select the cached compiler explicitly for offline phases
 
@@ -102,6 +114,18 @@
 **Cause or correction:** A same-host canonical path can represent the selected directory, and saved public entries can establish use beyond the host's conservative knowledge. Owner/context/purpose correlation must still match.
 **Prevention:** Compare canonical path identity, accept only monotonic use evidence, and keep missing used sessions unavailable. Test actual temporary-directory reopen instead of mirroring raw request fields.
 
+## Preserve context notification sequences across reopen
+
+**Problem:** Source review of the new MCP integration found a notification counter created for each open, while the client validates sequence monotonicity for the whole worker epoch and context ID.
+**Cause or correction:** Closing and reopening that context would reset the producer counter while the consumer retained its last value. No dynamic failure was claimed.
+**Prevention:** Keep context notification counters with the worker until its epoch ends, and exercise close/reopen with actual process events. Distinguish attempts with explicit IDs instead of resetting or weakening sequence validation.
+
+## Bind MCP configuration beyond an open-context cache
+
+**Problem:** Source review found that used MCP reopen compared saved server/source labels, while full configuration checks covered only currently open contexts.
+**Cause or correction:** After close/restart, reusing a source label could retarget the old context to different configuration. No dynamic failure was claimed.
+**Prevention:** Store a canonical configuration integrity digest with the existing public binding metadata, retain opaque source identity separately and reject drift before creating transports. Keep raw private values outside history and exercise same-label/different-configuration reopen.
+
 ## Keep new defaults separate from bound context settings
 
 **Problem:** The initial worker globally updated every existing context when defaults changed and lacked effective per-context configuration readback.
@@ -116,9 +140,9 @@
 
 ## Report digests only after freezing actual bytes
 
-**Problem:** Several handoffs announced placeholder SHA values and then corrected them in follow-up messages. An external-build readback also asserted a manually assumed compiler version instead of reading the lock.
-**Cause or correction:** A pending digest or manually assumed version is not evidence of actual frozen inputs. The compiler-version assertion failed after a successful build, without a compiler or payload failure.
-**Prevention:** Write and freeze the artifact, compute digests and derive versions/counts from the actual lock and result records before sending. Label incomplete work without a SHA field; preserve corrected metadata separately without rerunning unchanged production work.
+**Problem:** Handoffs announced placeholder digests, and readbacks assumed a compiler version or complete SDK inventory instead of reading the actual records.
+**Cause or correction:** These were metadata mistakes after successful builds. The prepared SDK tree covered113 matching files; the fresh package also contained3 unchanged documentation/notice files.
+**Prevention:** Freeze actual bytes, derive versions/counts from records and compare explicit file sets, reporting additional files. Label incomplete work without a digest; preserve metadata corrections without rerunning unchanged production work.
 
 ## Keep worker build payloads outside the checkout
 

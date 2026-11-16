@@ -99,6 +99,12 @@ type DomainTool struct {
 	Parameters  json.RawMessage `json:"parameters"`
 }
 
+type MCPServer struct {
+	Name     string          `json:"name"`
+	SourceID string          `json:"sourceId"`
+	Config   json.RawMessage `json:"config"`
+}
+
 type OpenContextParams struct {
 	ContextID         string           `json:"contextId"`
 	BotID             string           `json:"botId"`
@@ -112,6 +118,7 @@ type OpenContextParams struct {
 	CodingTools       []string         `json:"codingTools"`
 	DomainTools       []DomainTool     `json:"domainTools"`
 	Configuration     *ConfigureParams `json:"configuration,omitempty"`
+	MCPServers        []MCPServer      `json:"mcpServers,omitempty"`
 }
 
 type ContextBinding struct {
@@ -234,6 +241,7 @@ const (
 	ToolRequest  EventName = "tool.request"
 	ToolFinished EventName = "tool.finished"
 	RunSettled   EventName = "run.settled"
+	MCPProcess   EventName = "mcp.process"
 )
 
 type Event struct {
@@ -263,6 +271,25 @@ type ToolFinishedData struct {
 	Input   json.RawMessage `json:"input"`
 	IsError bool            `json:"isError"`
 	Result  json.RawMessage `json:"result"`
+}
+
+type MCPProcessError struct {
+	Name    string `json:"name"`
+	Message string `json:"message"`
+	Code    string `json:"code,omitempty"`
+}
+
+type MCPProcessEvent struct {
+	Server        string           `json:"server"`
+	SourceID      string           `json:"sourceId"`
+	AttemptID     string           `json:"attemptId"`
+	Kind          string           `json:"kind"`
+	PID           *int             `json:"pid,omitempty"`
+	Code          *int             `json:"code"`
+	Signal        *string          `json:"signal"`
+	SpawnObserved *bool            `json:"spawnObserved,omitempty"`
+	ExitObserved  *bool            `json:"exitObserved,omitempty"`
+	Error         *MCPProcessError `json:"error,omitempty"`
 }
 
 type RunStatus string

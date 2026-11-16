@@ -471,11 +471,18 @@ func (c *Client) handle(line []byte) error {
 		}
 	case "event":
 		var event Event
-		if json.Unmarshal(line, &event) != nil || event.ContextID == "" || event.RunID == "" || event.Seq == 0 || len(event.Data) == 0 {
+		if json.Unmarshal(line, &event) != nil || event.ContextID == "" || event.Seq == 0 || len(event.Data) == 0 {
 			return errors.New("invalid Pi event envelope")
 		}
 		switch event.Name {
 		case RunStarted, TextDelta, ToolRequest, ToolFinished, RunSettled:
+			if event.RunID == "" {
+				return errors.New("Pi run event requires a run ID")
+			}
+		case MCPProcess:
+			if event.RunID != "" {
+				return errors.New("Pi MCP process event requires an empty run ID")
+			}
 		default:
 			return errors.New("unknown Pi event name")
 		}
