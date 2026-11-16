@@ -12,7 +12,7 @@ Current work is tracked in the [migration and ownership index](https://github.co
 - [Implementation and evidence](design/desktop.md): current repository boundary followed by dated implementation and acceptance history.
 - [Source import](design/source-import.json): byte-level import provenance from Saki candidate `00298ae` with original Git history retained.
 - [Experience-to-behavior research](https://github.com/HeimaoLST/Saki/blob/dev/docs/design/experience-to-behavior.md): a historical proposal, not a required Nagi execution layer.
-- [Pi product integration](https://github.com/HeimaoLST/Nagi/issues/31): active cleanup-first migration. The previous Saki service contract remains historical input; the current integration does not authorize Saki development or legacy-history conversion.
+- [Pi product integration](design/pi-integration.md): active cleanup-first migration tracked in [issue31](https://github.com/HeimaoLST/Nagi/issues/31). The previous Saki service contract remains historical input; the current integration does not authorize Saki development or legacy-history conversion.
 
 The obsolete browser prototype and unused mascot loader have been retired. Their original bytes remain in Git history; a browser scene is not a native product implementation.
 
