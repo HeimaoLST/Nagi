@@ -120,6 +120,7 @@ func startPiProcess(t *testing.T, ctx context.Context, stateDir, endpoint string
 	if _, err := client.Configure(ctx, pi.ConfigureParams{
 		WireAPI: pi.OpenAICompletions, BaseURL: endpoint + "/v1", APIKey: "nagi-loopback-only",
 		Model: "nagi-local-integration", ContextTokens: 65536, OutputTokens: 4096,
+		CredentialSource: "qa-process-connection",
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -421,6 +422,26 @@ func TestPiClientProcessCodingHistoryReopen(t *testing.T) {
 	}
 	provider.check(t, 3)
 	h2.shutdown(t, ctx)
+	canonicalState, err := filepath.EvalSymlinks(state)
+	if err != nil || filepath.Dir(binding.SessionRef) != filepath.Join(canonicalState, "sessions") {
+		t.Fatalf("fault target is not an owned session reference: error=%v", err)
+	}
+	if err := os.Truncate(binding.SessionRef, 0); err != nil {
+		t.Fatal(err)
+	}
+	emptyBefore, err := os.Stat(binding.SessionRef)
+	if err != nil || emptyBefore.Size() != 0 {
+		t.Fatalf("owned empty session preparation: %v", err)
+	}
+	h3 := startPiProcess(t, ctx, state, server.URL)
+	_, err = h3.client.OpenContext(ctx, params)
+	piRejected(t, err, "history_unavailable")
+	emptyAfter, err := os.Stat(binding.SessionRef)
+	if err != nil || emptyAfter.Size() != 0 || !os.SameFile(emptyBefore, emptyAfter) || !emptyBefore.ModTime().Equal(emptyAfter.ModTime()) {
+		t.Fatalf("used empty session was mutated during rejection: %v", err)
+	}
+	provider.check(t, 3)
+	h3.shutdown(t, ctx)
 	t.Logf("actual coding/history/reopen: requests=%d entries_before=%d entries_after=%d", provider.count(), len(before), len(after))
 }
 
@@ -526,4 +547,230 @@ func TestPiClientProcessIndependentToolAnswerAndCancel(t *testing.T) {
 	provider.check(t, 5)
 	h.shutdown(t, ctx)
 	t.Logf("actual held-tool/independent-chat/answer/cancel: requests=%d", provider.count())
+}
+
+type piConfigurationRequest struct {
+	URL          string
+	Model        string
+	TokenField   string
+	OutputTokens int
+	AuthMatches  bool
+}
+
+type piConfigurationProvider struct {
+	mu       sync.Mutex
+	key      string
+	requests []piConfigurationRequest
+}
+
+func (p *piConfigurationProvider) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Model               string `json:"model"`
+		Stream              bool   `json:"stream"`
+		MaxTokens           *int   `json:"max_tokens"`
+		MaxCompletionTokens *int   `json:"max_completion_tokens"`
+		Messages            []struct {
+			Role       string          `json:"role"`
+			Content    json.RawMessage `json:"content"`
+			ToolCallID string          `json:"tool_call_id"`
+		} `json:"messages"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || r.Method != http.MethodPost || !body.Stream || len(body.Messages) == 0 {
+		http.Error(w, "invalid loopback Chat Completions request", http.StatusBadRequest)
+		return
+	}
+	request := piConfigurationRequest{URL: "http://" + r.Host + r.URL.Path, Model: body.Model, AuthMatches: r.Header.Get("Authorization") == "Bearer "+p.key}
+	switch {
+	case body.MaxTokens != nil && body.MaxCompletionTokens == nil:
+		request.TokenField, request.OutputTokens = "max_tokens", *body.MaxTokens
+	case body.MaxCompletionTokens != nil && body.MaxTokens == nil:
+		request.TokenField, request.OutputTokens = "max_completion_tokens", *body.MaxCompletionTokens
+	default:
+		http.Error(w, "missing or ambiguous output limit", http.StatusBadRequest)
+		return
+	}
+	p.mu.Lock()
+	p.requests = append(p.requests, request)
+	p.mu.Unlock()
+	if !request.AuthMatches {
+		http.Error(w, "wrong synthetic credential snapshot", http.StatusUnauthorized)
+		return
+	}
+	delta := map[string]any{"role": "assistant", "content": body.Model + "_DONE"}
+	finish := "stop"
+	last := body.Messages[len(body.Messages)-1]
+	var user string
+	for _, message := range body.Messages {
+		if message.Role == "user" {
+			user = string(message.Content)
+		}
+	}
+	if strings.Contains(user, "CAPTURED_A") && last.Role != "tool" {
+		delta = map[string]any{"role": "assistant", "tool_calls": []any{map[string]any{
+			"index": 0, "id": "captured-a-call", "type": "function",
+			"function": map[string]string{"name": "ask_user", "arguments": `{"question":"Preserve connection A"}`},
+		}}}
+		finish = "tool_calls"
+	} else if strings.Contains(user, "CAPTURED_A") && (last.ToolCallID != "captured-a-call" || !strings.Contains(string(last.Content), "CONFIG_ANSWER_A")) {
+		http.Error(w, "answer did not match captured A call", http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Type", "text/event-stream")
+	for _, choice := range []map[string]any{{"index": 0, "delta": delta, "finish_reason": nil}, {"index": 0, "delta": map[string]any{}, "finish_reason": finish}} {
+		chunk, _ := json.Marshal(map[string]any{"id": "local-config-response", "object": "chat.completion.chunk", "created": 1, "model": body.Model, "choices": []any{choice}})
+		fmt.Fprintf(w, "data: %s\n\n", chunk)
+	}
+	fmt.Fprint(w, "data: [DONE]\n\n")
+}
+
+func (p *piConfigurationProvider) check(t *testing.T, endpoint string, models []string, limits []int) {
+	t.Helper()
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if len(p.requests) != len(models) || len(models) != len(limits) {
+		t.Fatalf("observed configuration requests=%+v expected_models=%v", p.requests, models)
+	}
+	for i, request := range p.requests {
+		if request.URL != endpoint+"/chat/completions" || request.Model != models[i] || request.OutputTokens != limits[i] || !request.AuthMatches {
+			t.Fatalf("actual configured request[%d]=%+v", i, request)
+		}
+	}
+	t.Logf("observed loopback configuration requests=%+v", p.requests)
+}
+
+func piConfigurationReadback(t *testing.T, got pi.ContextConfiguration, id string, want pi.ConfigureParams, tools []string, secrets ...string) {
+	t.Helper()
+	if got.ContextID != id || got.WireAPI != want.WireAPI || got.BaseURL != want.BaseURL || got.Model != want.Model || got.ContextTokens != want.ContextTokens || got.OutputTokens != want.OutputTokens || got.CredentialSource != want.CredentialSource || !got.CredentialPresent || len(got.ActiveTools) != len(tools) {
+		t.Fatalf("declared nonsecret configuration=%+v", got)
+	}
+	for i := range tools {
+		if got.ActiveTools[i] != tools[i] {
+			t.Fatalf("context tools changed: %v", got.ActiveTools)
+		}
+	}
+	raw, err := json.Marshal(got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, secret := range secrets {
+		if strings.Contains(string(raw), secret) {
+			t.Fatal("synthetic credential leaked through a declared readback value")
+		}
+	}
+	t.Logf("declared nonsecret configuration=%s", raw)
+}
+
+func TestPiClientProcessCapturedContextConfiguration(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	aProvider := &piConfigurationProvider{key: "synthetic-context-key-a"}
+	bProvider := &piConfigurationProvider{key: "synthetic-context-key-b"}
+	aServer, bServer := httptest.NewServer(aProvider), httptest.NewServer(bProvider)
+	defer aServer.Close()
+	defer bServer.Close()
+	state := t.TempDir()
+	h := startPiProcess(t, ctx, state, aServer.URL)
+	configA := pi.ConfigureParams{WireAPI: pi.OpenAICompletions, BaseURL: aServer.URL + "/a/v1", APIKey: aProvider.key, CredentialSource: "qa-source-a", Model: "captured-model-a", ContextTokens: 65536, OutputTokens: 1024}
+	configB := pi.ConfigureParams{WireAPI: pi.OpenAICompletions, BaseURL: bServer.URL + "/b/v1", APIKey: bProvider.key, CredentialSource: "qa-source-b", Model: "captured-model-b", ContextTokens: 49152, OutputTokens: 768}
+	if _, err := h.client.Configure(ctx, configA); err != nil {
+		t.Fatal(err)
+	}
+	project, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	tool := pi.DomainTool{Name: "ask_user", Description: "Hold the exact configuration test call.", Parameters: json.RawMessage(`{"type":"object","properties":{"question":{"type":"string"}},"required":["question"],"additionalProperties":false}`)}
+	paramsA := pi.OpenContextParams{ContextID: "config-a", BotID: "config-bot", Purpose: pi.Activity, ActivityID: "config-activity-a", SelectionRevision: 1, CWD: project, CodingTools: []string{}, DomainTools: []pi.DomainTool{tool}}
+	bindingA, err := h.client.OpenContext(ctx, paramsA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.contexts = append(h.contexts, paramsA.ContextID)
+	if _, err := h.client.StartRun(ctx, pi.StartRunParams{ContextID: "config-a", RunID: "captured-a", Text: "CAPTURED_A"}); err != nil {
+		t.Fatal(err)
+	}
+	request := h.events.await(t, ctx, "config-a", "captured-a", pi.ToolRequest)
+	var asked pi.ToolRequestData
+	if err := json.Unmarshal(request.Data, &asked); err != nil || asked.CallID != "captured-a-call" {
+		t.Fatalf("captured held call=%+v error=%v", asked, err)
+	}
+	if _, err := h.client.Configure(ctx, configB); err != nil {
+		t.Fatal(err)
+	}
+	readA, err := h.client.ContextConfiguration(ctx, "config-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	piConfigurationReadback(t, readA, "config-a", configA, []string{"ask_user"}, aProvider.key, bProvider.key)
+	paramsB := pi.OpenContextParams{ContextID: "config-b", BotID: "config-bot", Purpose: pi.Conversation, SelectionRevision: 1, CWD: project, CodingTools: []string{}}
+	if _, err := h.client.OpenContext(ctx, paramsB); err != nil {
+		t.Fatal(err)
+	}
+	h.contexts = append(h.contexts, paramsB.ContextID)
+	readB, err := h.client.ContextConfiguration(ctx, "config-b")
+	if err != nil {
+		t.Fatal(err)
+	}
+	piConfigurationReadback(t, readB, "config-b", configB, nil, aProvider.key, bProvider.key)
+	if _, err := h.client.StartRun(ctx, pi.StartRunParams{ContextID: "config-b", RunID: "captured-b1", Text: "CONFIG_B1"}); err != nil {
+		t.Fatal(err)
+	}
+	piSettled(t, ctx, h, "config-b", "captured-b1", pi.Completed, configB.Model+"_DONE")
+	updatedB := configB
+	updatedB.Model, updatedB.ContextTokens, updatedB.OutputTokens = "captured-model-b-updated", 57344, 1536
+	readB, err = h.client.ConfigureContext(ctx, pi.ConfigureContextParams{ContextID: "config-b", Settings: pi.ContextSettings{Model: updatedB.Model, ContextTokens: updatedB.ContextTokens, OutputTokens: updatedB.OutputTokens}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	piConfigurationReadback(t, readB, "config-b", updatedB, nil, aProvider.key, bProvider.key)
+	readA, err = h.client.ContextConfiguration(ctx, "config-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	piConfigurationReadback(t, readA, "config-a", configA, []string{"ask_user"}, aProvider.key, bProvider.key)
+	held, err := h.client.Inspect(ctx, "config-a")
+	if err != nil || held.ActiveRun == nil || held.ActiveRun.RunID != "captured-a" {
+		t.Fatalf("idle B update changed held A: active=%+v error=%v", held.ActiveRun, err)
+	}
+	if _, err := h.client.StartRun(ctx, pi.StartRunParams{ContextID: "config-b", RunID: "captured-b2", Text: "CONFIG_B2"}); err != nil {
+		t.Fatal(err)
+	}
+	piSettled(t, ctx, h, "config-b", "captured-b2", pi.Completed, updatedB.Model+"_DONE")
+	if result, err := h.client.ToolResult(ctx, pi.ToolResultParams{WorkerEpoch: request.WorkerEpoch, ContextID: request.ContextID, RunID: request.RunID, CallID: asked.CallID, Content: []pi.ContentBlock{{Type: "text", Text: "CONFIG_ANSWER_A"}}}); err != nil || !result.Resolved {
+		t.Fatalf("captured A answer result=%+v error=%v", result, err)
+	}
+	piSettled(t, ctx, h, "config-a", "captured-a", pi.Completed, configA.Model+"_DONE")
+	aProvider.check(t, configA.BaseURL, []string{configA.Model, configA.Model}, []int{configA.OutputTokens, configA.OutputTokens})
+	bProvider.check(t, configB.BaseURL, []string{configB.Model, updatedB.Model}, []int{configB.OutputTokens, updatedB.OutputTokens})
+	h.shutdown(t, ctx)
+	h2 := startPiProcess(t, ctx, state, aServer.URL)
+	if _, err := h2.client.Configure(ctx, configB); err != nil {
+		t.Fatal(err)
+	}
+	paramsA.ResumeRef, paramsA.Used = bindingA.SessionRef, true
+	_, err = h2.client.OpenContext(ctx, paramsA)
+	piRejected(t, err, "binding_conflict")
+	rotatedA := configA
+	rotatedA.CredentialSource, rotatedA.APIKey = "qa-source-a-rotated", "synthetic-context-key-a-rotated"
+	paramsA.Configuration = &rotatedA
+	_, err = h2.client.OpenContext(ctx, paramsA)
+	piRejected(t, err, "binding_conflict")
+	paramsA.Configuration = &configA
+	reopened, err := h2.client.OpenContext(ctx, paramsA)
+	if err != nil || reopened.SessionRef != bindingA.SessionRef || !reopened.Used {
+		t.Fatalf("captured A reopen=%+v error=%v", reopened, err)
+	}
+	h2.contexts = append(h2.contexts, paramsA.ContextID)
+	readA, err = h2.client.ContextConfiguration(ctx, "config-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	piConfigurationReadback(t, readA, "config-a", configA, []string{"ask_user"}, aProvider.key, bProvider.key, rotatedA.APIKey)
+	restored, err := h2.client.Inspect(ctx, "config-a")
+	if err != nil || restored.ActiveRun != nil || !strings.Contains(string(restored.ModelContext), configA.Model+"_DONE") {
+		t.Fatalf("captured A public reopen inspect error=%v active=%+v", err, restored.ActiveRun)
+	}
+	aProvider.check(t, configA.BaseURL, []string{configA.Model, configA.Model}, []int{configA.OutputTokens, configA.OutputTokens})
+	bProvider.check(t, configB.BaseURL, []string{configB.Model, updatedB.Model}, []int{configB.OutputTokens, updatedB.OutputTokens})
+	h2.shutdown(t, ctx)
 }
