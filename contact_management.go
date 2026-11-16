@@ -314,9 +314,6 @@ func (a *appModel) archiveContact(contactID string) bool {
 		editor.Archived = true
 		editor.Status = archiveNoticeSaved
 	}
-	if a.selectedContact().ID == contactID {
-		a.contactScope = "archived"
-	}
 	return true
 }
 
@@ -352,67 +349,19 @@ func (a *appModel) restoreContact(contactID string) bool {
 		editor.Archived = false
 		editor.Status = restoreNoticeSaved
 	}
-	if a.selectedContact().ID == contactID {
-		a.contactScope = "active"
-	}
 	return true
 }
 
 func (a *appModel) visibleContactIndices() []int {
-	return a.visibleContactIndicesForScope(a.contactScope, a.contactSearch)
-}
-
-func (a *appModel) visibleContactIndicesForScope(scope, search string) []int {
-	query := strings.ToLower(strings.TrimSpace(search))
-	if scope == "" {
-		scope = "active"
-	}
+	query := strings.ToLower(strings.TrimSpace(a.contactSearch))
 	out := make([]int, 0, len(a.contacts))
 	for i, ct := range a.contacts {
-		switch scope {
-		case "archived":
-			if !ct.Archived {
-				continue
-			}
-		case "all":
-		default:
-			if ct.Archived {
-				continue
-			}
-		}
 		if query != "" && !strings.Contains(strings.ToLower(ct.Name+" "+ct.Purpose), query) {
 			continue
 		}
 		out = append(out, i)
 	}
 	return out
-}
-
-func (a *appModel) setContactScope(scope string) {
-	if scope != "active" && scope != "archived" && scope != "all" {
-		return
-	}
-	indices := a.visibleContactIndicesForScope(scope, a.contactSearch)
-	if len(indices) == 0 {
-		a.contactScope = scope
-		return
-	}
-	target := indices[0]
-	for _, i := range indices {
-		if i == a.selected {
-			target = a.selected
-			break
-		}
-	}
-	if target != a.selected {
-		if !a.leaveIssueFormForSwitch() {
-			return
-		}
-		a.contactScope = scope
-		a.selectContact(target)
-		return
-	}
-	a.contactScope = scope
 }
 
 func (a *appModel) contactHistorySessionIDs(ct *contact) []string {

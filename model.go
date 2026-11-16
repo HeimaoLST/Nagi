@@ -206,7 +206,6 @@ type appModel struct {
 	contactProfile            *contactProfileEditor
 	contactProfileID          string
 	contactSearch             string
-	contactScope              string
 	contactHistory            *contactHistoryResult
 	contactHistoryFull        *contactHistoryFull
 	contactHistoryBusy        bool
@@ -599,7 +598,6 @@ func (a *appModel) addDefaultContact() {
 	a.contacts = append(a.contacts, c)
 	a.selected = len(a.contacts) - 1
 	a.restoreHistoryView(c.ID)
-	a.contactScope = "active"
 	a.contactSearch = ""
 	a.aux = ""
 	a.composerPanel = ""

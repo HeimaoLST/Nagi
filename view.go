@@ -219,9 +219,7 @@ func (a *appModel) finishMarkdownLinkReturn() {
 func (a *appModel) rail(c *ui.Context, t *ui.Theme) {
 	msgs := locales.In(c.Locale())
 	ui.Column(c).FillWidth().FillHeight().Padding(8).Gap(8).Background(ui.Transparent).Children(func() {
-		ui.Row(c).FillWidth().Height(40).Shrink(0).DragWindow()
-		ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
-			ui.Text(c, "Nagi").FontSize(typeGroupTitle).FontWeight(500).FixedLineHeight(lineLabel).TextColor(t.Text)
+		ui.Row(c).FillWidth().Height(40).Shrink(0).DragWindow().AlignItems(ui.Center).Children(func() {
 			ui.Spacer(c)
 			ui.Toolbar(c, func() {
 				hide := iconControlFace(c, appTooltip(c, ui.Button(c, "").Label(msgs.RailHide()), msgs.RailHideContactsTooltip()), iconChrome, false)
@@ -247,7 +245,6 @@ func (a *appModel) rail(c *ui.Context, t *ui.Theme) {
 			}).Label(msgs.RailContactListActions()).Padding(0)
 		})
 		ui.SearchField(c, &a.contactSearch).Label(msgs.SearchContacts()).FontSize(typeAction).Placeholder(msgs.RailContactSearchPlaceholder())
-		a.contactScopeSelect(c)
 		visible := a.visibleContactIndices()
 		if len(visible) == 0 {
 			ui.Text(c, msgs.RailNoContactsMatch()).FontSize(typeLabel).FixedLineHeight(lineLabel).TextColor(t.TextMuted)
@@ -373,38 +370,6 @@ func (a *appModel) avatarRailMarker(ct *contact) (string, int, ui.Color) {
 		return "!", 0, a.workTheme.Theme.Warning
 	default:
 		return "", 0, a.workTheme.Theme.TextMuted
-	}
-}
-
-func contactScopeIndex(scope string) int {
-	switch scope {
-	case "archived":
-		return 1
-	case "all":
-		return 2
-	default:
-		return 0
-	}
-}
-
-func contactScopeFromIndex(index int) string {
-	switch index {
-	case 1:
-		return "archived"
-	case 2:
-		return "all"
-	default:
-		return "active"
-	}
-}
-
-func (a *appModel) contactScopeSelect(c *ui.Context) {
-	msgs := locales.In(c.Locale())
-	index := contactScopeIndex(a.contactScope)
-	choice := segmentedSelection(c, &index, msgs.ContactScopeActive(), msgs.ContactScopeArchived(), msgs.ContactScopeAll()).
-		Label(msgs.ContactScopeLabel()).FontSize(typeAction).FillWidth()
-	if choice.Changed() {
-		a.setContactScope(contactScopeFromIndex(index))
 	}
 }
 

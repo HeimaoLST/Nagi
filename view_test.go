@@ -935,7 +935,12 @@ func TestContactRailControlsStayVisibleAtNarrowWidths(t *testing.T) {
 		if limit != defaultLeftPaneWidth {
 			t.Fatalf("%d rail width = %v", width, limit)
 		}
-		for _, label := range []string{"Add contact", "Contact scope", "Active"} {
+		for _, removed := range []string{"Nagi", "Contact scope", "Active", "Archived", "All"} {
+			if tr.HasText(removed) {
+				t.Fatalf("redundant sidebar control %q is still shown", removed)
+			}
+		}
+		for _, label := range []string{"Add contact", "Search contacts", "Settings"} {
 			r, ok := tr.Find(label)
 			if !ok || r.W <= 0 || r.H <= 0 || r.X < 0 || r.X+r.W > limit || r.Y < 0 || r.Y+r.H > 720 {
 				t.Fatalf("%dx720 contact rail %q out of rail: ok=%v rect=%+v", width, label, ok, r)

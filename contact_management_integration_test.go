@@ -414,7 +414,6 @@ func TestContactManagementGUISaveFailureArchiveRestoreAndRestart(t *testing.T) {
 		if ct.ID != contactID || !ct.Archived || ct.Draft != "unsent archived draft" || ct.SessionID != sessionID || !reflect.DeepEqual(ct.Context.snapshot(), []taskContextItem{pending}) || ct.issueByID(issueID) == nil {
 			t.Error("restart lost the selected archived contact or owned drafts/history")
 		}
-		restarted.app.setContactScope("archived")
 		restarted.app.contactSearch = "Persistent"
 		if got := restarted.app.visibleContactIndices(); !reflect.DeepEqual(got, []int{0}) {
 			t.Errorf("archived contact is not discoverable: %v", got)
