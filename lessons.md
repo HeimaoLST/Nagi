@@ -138,6 +138,12 @@
 **Cause or correction:** These were wrapper syntax failures, not product compilation or behavior failures.
 **Prevention:** Parse generated Python and check shell/JavaScript quoting before starting a long HC phase. Preserve the failed wrapper and raw result, then make a bounded correction without relabeling the first attempt.
 
+## Check formatting for tagged integration sources before pushing
+
+**Problem:** The first Pi Draft's GUI lane stopped at formatting in the native-control integration file, before vet, tests or build ran.
+**Cause or correction:** A successful tagged compilation and whitespace diff check did not establish canonical Go formatting. The correction changed only whitespace and the harness's bound source hash.
+**Prevention:** Run the pinned gofmt listing over the actual committed tree, including tagged integration files, before pushing. Preserve the original CI failure and do not count unexecuted later steps as passed or expected missing-product results.
+
 ## Keep window-binding failures separate from control observations
 
 **Problem:** The desktop inventory succeeded but binding the unique synthetic-control app returned cgWindowNotFound. The fixture was stopped without input, Test or Save.

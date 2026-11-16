@@ -12,7 +12,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
 CONTROL = REPO / 'connection_native_integration_test.go'
-CONTROL_SHA = 'eb52e2493be7e7bbaacffdd914d0701d1f7b0ab00ae3c1a54156cd30c740cf5d'
+CONTROL_SHA = '199a9202f335d481dfd09d90b55139ad002fd368b2d7f8cb91ed129f6a371091'
 SELECTOR = '^TestConnectionNativeSecureControlE2E$'
 
 

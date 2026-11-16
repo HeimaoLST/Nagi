@@ -51,15 +51,15 @@ func TestMain(m *testing.M) {
 }
 
 type connectionNativeScene struct {
-	app              *appModel
-	root             string
-	testCalls        int
-	saveCalls        int
-	callbackExact    bool
-	released         bool
-	savedClosed      bool
-	savedReopened    bool
-	failure          string
+	app           *appModel
+	root          string
+	testCalls     int
+	saveCalls     int
+	callbackExact bool
+	released      bool
+	savedClosed   bool
+	savedReopened bool
+	failure       string
 }
 
 func (s *connectionNativeScene) recordFailure(message string) {
@@ -129,11 +129,11 @@ func (s *connectionNativeScene) writeState() error {
 	state := map[string]any{
 		"pid": os.Getpid(), "phase": phase, "busy": form.Busy,
 		"test_calls": s.testCalls, "save_calls": s.saveCalls,
-		"draft_exact": form.Draft.APIKey == connectionNativeSentinel,
+		"draft_exact":  form.Draft.APIKey == connectionNativeSentinel,
 		"draft_sha256": hex.EncodeToString(digest[:]), "callback_exact": s.callbackExact,
 		"has_saved": form.HasSaved, "saved_closed": s.savedClosed, "saved_reopened": s.savedReopened,
 		"save_in_flight": s.app.connectionSaveInFlight,
-		"config_path": s.app.connectionPath, "failure": s.failure,
+		"config_path":    s.app.connectionPath, "failure": s.failure,
 		"scope": "native production Connection form; controlled Test callback, real Save, no Apply or provider",
 	}
 	data, err := json.MarshalIndent(state, "", "  ")
