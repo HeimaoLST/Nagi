@@ -132,6 +132,12 @@
 **Cause or correction:** After close/restart, reusing a source label could retarget the old context to different configuration. No dynamic failure was claimed.
 **Prevention:** Store a canonical configuration integrity digest with the existing public binding metadata, retain opaque source identity separately and reject drift before creating transports. Keep raw private values outside history and exercise same-label/different-configuration reopen.
 
+## Decode public SDK history by message role
+
+**Problem:** The first MCP process E2E failed while decoding every public message with a tool-result content-array schema, after the real MCP call succeeded.
+**Cause or correction:** The SDK emitted a valid system message with string content and tool-declaration metadata. This was a fixture decoder failure, not a demonstrated worker or MCP defect.
+**Prevention:** Read the entry/message discriminator first, then decode the matching role's content. Keep strict call/receipt assertions for tool results and preserve heterogeneous SDK records instead of fabricating a legacy transcript shape.
+
 ## Keep new defaults separate from bound context settings
 
 **Problem:** The initial worker globally updated every existing context when defaults changed and lacked effective per-context configuration readback.

@@ -1098,18 +1098,22 @@ process.on('exit', code => record({ kind: 'exit', code }));
 		for _, raw := range piPublicHistory(t, ctx, h.client, contextID) {
 			var entry struct {
 				Message struct {
-					Role       string            `json:"role"`
-					ToolCallID string            `json:"toolCallId"`
-					ToolName   string            `json:"toolName"`
-					IsError    bool              `json:"isError"`
-					Content    []pi.ContentBlock `json:"content"`
+					Role       string          `json:"role"`
+					ToolCallID string          `json:"toolCallId"`
+					ToolName   string          `json:"toolName"`
+					IsError    bool            `json:"isError"`
+					Content    json.RawMessage `json:"content"`
 				} `json:"message"`
 			}
 			if json.Unmarshal(raw, &entry) != nil {
 				t.Fatalf("invalid public history: %s", raw)
 			}
 			if entry.Message.Role == "toolResult" && entry.Message.ToolCallID == current.call {
-				if entry.Message.ToolName != current.tool || entry.Message.IsError || piMCPContentReceipt(t, entry.Message.Content) != receipt {
+				var content []pi.ContentBlock
+				if err := json.Unmarshal(entry.Message.Content, &content); err != nil {
+					t.Fatalf("invalid matched MCP history content: %s", raw)
+				}
+				if entry.Message.ToolName != current.tool || entry.Message.IsError || piMCPContentReceipt(t, content) != receipt {
 					t.Fatalf("public MCP history mismatch: %s", raw)
 				}
 				t.Logf("actual MCP public toolResult=%s", raw)
