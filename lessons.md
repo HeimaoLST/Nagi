@@ -59,3 +59,15 @@
 **Problem:** Temporary files and worktrees can be removed during routine workspace cleanup.
 **Cause or correction:** They are disposable development environments, not the authoritative project record.
 **Prevention:** Commit/push coherent safe checkpoints, retain essential contracts and actual validation summaries in Git/PR records, and merge completed work after required gates. Do not rely on a temporary evidence path alone.
+
+## Inspect process path dependencies beyond executable names
+
+**Problem:** Historical cleanup filtering by expected executable names missed a Python process whose working directory referenced a retained task path.
+**Cause or correction:** A dependency can exist in any process's cwd, executable, arguments or open files. Nonempty lsof output still matters when lsof exits nonzero.
+**Prevention:** Inspect all-process exact-path references before retirement. Preserve any observed live dependency, evaluate lsof output separately from its exit code, and never signal an uncertain owner process.
+
+## Decode maintenance metadata as data
+
+**Problem:** A cleanup classifier embedded JSON booleans directly in Python source and failed with NameError before any deletion.
+**Cause or correction:** JSON true/false are not Python literals; serializing data did not make it executable Python.
+**Prevention:** Read metadata with json.loads or a data file. Produce the bounded inventory before mutations, preserve actual failures, and require verified archives before destructive retirement.
