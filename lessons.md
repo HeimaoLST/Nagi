@@ -78,6 +78,12 @@
 **Cause or correction:** JSON true/false are not Python literals; serializing data did not make it executable Python. HC also rejects program names over32characters before launch.
 **Prevention:** Read metadata with json.loads or a data file and validate HC name constraints before launch. Produce the bounded inventory before mutations, preserve actual failures, and require verified archives before destructive retirement.
 
+## Verify owner identity from actual metadata
+
+**Problem:** A coordination message copied a displayed redaction token as its sender identity. A subsequent check guessed a role value and stopped before sending because the actual metadata differed.
+**Cause or correction:** Display substitutions are not routable identities, and role values must come from the current owner metadata rather than a naming assumption.
+**Prevention:** Read the current HC identity, project, role, task and state before dispatch. Never copy a displayed redaction token into a message or command; use the verified owner description and current address when the identity cannot be displayed literally.
+
 ## Verify exact SDK types before implementing an adapter
 
 **Problem:** The first worker compile used a nonexistent settings setter and treated credential metadata as credential contents. A lab-only TypeScript erasure restriction also conflicted with the compiled-JavaScript delivery path.
