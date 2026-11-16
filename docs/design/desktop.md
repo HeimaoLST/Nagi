@@ -4,6 +4,26 @@
 
 早期浏览器示意保留在 Git 历史（[7145225 的 desktop-contacts.html](https://github.com/HeimaoLST/Saki/blob/7145225c47b9b29c8011edbaefc410d0d6d46b61/docs/design/previews/desktop-contacts.html)），不是当前原生应用的验收对象，也不在仓库维护第二套现行预览；当前原生 Go 应用位于 Nagi 仓库根目录，视觉与交互以 [Desktop workbench](desktop-workbench.md) 为准。当前主题事实见 `theme.go` 的 `resolveWorkbenchTheme`（Paper/Moss；light/dark 语义角色）；#92 的 Moon/Dawn 和 #90 的 11px/12px 数值只保留为历史设计/实现记录，不再作为当前规范。此前将这些能力或颜色列为后续独立任务的说明已失效，不再作为当前实现或未来承诺；具体状态以对应任务段、PR 和 `dev` 为准。
 
+<a id="qoder-complete-layout-20261116"></a>
+
+## Qoder 完整页面组合（2026-11-16，当前视觉基准）
+
+本节落实同日需求的“完全参考 Qoder”，优先于下文独立 Paper／Moss 配色与不完整容器映射。沿用1 CSS px→1 DIP、rem16／scale1的既有移植基准；它不表示已测得原生 zoom／字体 fallback 等价。参考 Qoder CN0.4.8／f8c98a，原生现场为 Bee／Light／Sans／Standard；颜色来自其同版 CSS，布局来自 Settings 调用及共享 frame，不能从截图像素猜逻辑尺寸。
+
+| 层次 | 唯一布局契约 |
+| --- | --- |
+| 应用外壳 | Qoder Bee浅色从#e6e6b6到#c4d0da的垂直渐变；对应深色#10110e。侧栏透明地置于外壳上，不继续使用 Nagi 绿色底。 |
+| Settings侧栏 | 默认248，导航区左右8；分类标题与导航内容共享8内缩；行占满导航组，12／16、glyph14、gap8、28可见面及既有32真实命中。返回区按源px12／py12组织，不叠加未经绑定的按钮外边框。 |
+| 主面板 | Settings frame的B区四周margin4，浅色白／深色#171814，border-tertiary，独立圆角；顶部frame header40。满宽、可收缩的主区不由正文长度决定。 |
+| 滚动视口 | 主面板内容区内全宽／全高，滚动条归属于该视口右边界；视口自身不设正文max-width或正文左右padding。 |
+| 正文列 | 在视口内居中，border-box max-width820、padding左右32／上8／下48，故宽窗正文净宽最大756；不是820净宽再额外加64。满宽分区与嵌入模型表单继承同一列。 |
+| 章节与表单 | 保留已绑定section/group/row/Select/Input规则，默认连接与当前会话是作用域不同的同级分区；嵌入模型编辑器不能用自己的内容宽度缩小整区。字段宽度由所属行／表单约定，不由模型名、ID、错误字符串决定。 |
+| 语义配色 | 浅色正文#141414／secondary#636261／tertiary#838280，container#fff，控件面#fcfcfc／hover#efefef，边界#bcbbba、章节细线#e6e6e6，Bee primary#0d0d0d。深色正文#f2f1e8／secondary#c1bfb1／tertiary#89877a，container#171814，控件面#1d1f1a／hover#2c2e28，边界#47483f、细线#30322d，primary#e0c65c。状态色取同一来源的error／warning／success，不另造调色板。 |
+
+来源绑定：`DIR8HOYO.js` SHA52b8425f 的Settings调用为frame的sidebar/default248、B区margin4／border、full-height Scroll与`mx-auto w-full max-w-[820px] px-8 pb-12 pt-2`；导航`w-full justify-start`。`CMOdY8kL.js` SHAd2f7c51f 的frame为A／B独立区域、header40与满宽content flex-1。`index-DohubooF.css` SHAfc66ec5c 的Bee light／dark声明和语义utility解析出上述颜色，完整静态包仍在本机只读参考；工程资料不作为第二份规范。
+
+布局回归必须在真实app.view中加载同一页的默认连接和会话模型表单，核对侧栏行的完整宽度、分区左右线、完整滚动视口右边界、长值／反馈与底部操作可达；默认／最小／宽窗口逐项看整页。沿用行为测试，但增加页面关系断言，禁止用同一常量镜像测试替代实际几何。不以按钮32命中或字号映射正确推导页面正确。原生拖动、焦点、IME、弹层及最终同包观感仍按实际证据验收。
+
 <a id="qoder-match-design-20261113"></a>
 
 ## Qoder 严格视觉契约（本日最新方向，2026-11-13）
