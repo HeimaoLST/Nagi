@@ -19,9 +19,6 @@ func TestPreviewAdjustableLayout(t *testing.T) {
 	if dir == "" {
 		t.Skip("set SAKI_PREVIEW_DIR to write adjustable-layout previews")
 	}
-	if err := loadAvatar(); err != nil {
-		t.Fatal(err)
-	}
 	if os.Getenv("SAKI_PREVIEW_RESPONSIVE_ONLY") != "1" {
 		scenes := []string{"closed", "open", "dragged"}
 		for _, dark := range []bool{false, true} {
@@ -99,9 +96,6 @@ func TestPreviewHeaderGrouping(t *testing.T) {
 		t.Skip("set SAKI_PREVIEW_DIR for the bounded header grouping previews")
 	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := loadAvatar(); err != nil {
 		t.Fatal(err)
 	}
 	const longRole = "Assistant for release engineering, cross-functional verification and runtime diagnostics"

@@ -210,9 +210,6 @@ func TestPreviewI18nFinalMatrix(t *testing.T) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := loadAvatar(); err != nil {
-		t.Fatal(err)
-	}
 
 	type scene struct {
 		name          string

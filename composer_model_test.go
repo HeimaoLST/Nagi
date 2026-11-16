@@ -186,9 +186,6 @@ func TestPreviewComposerModelPopover(t *testing.T) {
 	if dir == "" {
 		t.Skip("set SAKI_PREVIEW_DIR for headless composer model popover matrix")
 	}
-	if err := loadAvatar(); err != nil {
-		t.Fatal(err)
-	}
 	for _, locale := range []string{"en", "zh-Hans"} {
 		for _, dark := range []bool{false, true} {
 			for _, width := range []int{1040, 960} {

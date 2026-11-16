@@ -21,9 +21,6 @@ func TestPreviewStartupDiagnostics(t *testing.T) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := loadAvatar(); err != nil {
-		t.Fatal(err)
-	}
 
 	preview := func(scene string) *appModel {
 		a := &appModel{

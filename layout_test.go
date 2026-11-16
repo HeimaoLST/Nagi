@@ -247,9 +247,6 @@ func TestPreviewAvatarStatusMarkers(t *testing.T) {
 	if dir == "" {
 		t.Skip("set SAKI_PREVIEW_DIR to write avatar marker previews")
 	}
-	if err := loadAvatar(); err != nil {
-		t.Fatal(err)
-	}
 	for _, dark := range []bool{false, true} {
 		theme := "light"
 		if dark {

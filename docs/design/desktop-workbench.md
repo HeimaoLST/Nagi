@@ -1,6 +1,6 @@
 # Nagi 工作台：内容优先的视觉与交互规范
 
-更新日期：2026-11-10。当前设计维护由 Nagi 主责协调；原设计负责人及阶段来源保留在历史记录中。任务 [#124](https://github.com/HeimaoLST/Saki/issues/124)、[Nagi #9](https://github.com/HeimaoLST/Nagi/issues/9)、[#257](https://github.com/HeimaoLST/Saki/issues/257)、[Nagi #12](https://github.com/HeimaoLST/Nagi/issues/12)。[打开交互原型](previews/desktop-workbench.html)。
+更新日期：2026-11-10。当前设计维护由 Nagi 主责协调；原设计负责人及阶段来源保留在历史记录中。任务 [#124](https://github.com/HeimaoLST/Saki/issues/124)、[Nagi #9](https://github.com/HeimaoLST/Nagi/issues/9)、[#257](https://github.com/HeimaoLST/Saki/issues/257)、[Nagi #12](https://github.com/HeimaoLST/Nagi/issues/12)。[历史交互原型（已停止维护）](https://github.com/HeimaoLST/Nagi/blob/57e0a6784ba7f8ec4c37e5a76f6ab8cdccd9542c/docs/design/previews/desktop-workbench.html)。
 
 **实施指导，原生效果仍需验收。** 本规范把用户本轮“内容优先、集中输入、图标可发现、普通流程非模态”的要求落到现有工作台，不改变 Runtime 协议、产品能力或 store。HTML 是设计参考和交互样本，不调用模型、不修改真实数据，也不证明原生功能已经实现。
 

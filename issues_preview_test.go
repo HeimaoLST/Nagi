@@ -195,9 +195,6 @@ func TestPreviewIssueStates(t *testing.T) {
 	if dir == "" {
 		t.Skip("set SAKI_PREVIEW_DIR to write issue/workbench previews")
 	}
-	if err := loadAvatar(); err != nil {
-		t.Fatal(err)
-	}
 	write := func(scene string, width, height int, dark bool) {
 		theme := "light"
 		if dark {
@@ -249,9 +246,6 @@ func TestPreviewIssueStates(t *testing.T) {
 }
 
 func writeIssueOverviewInsetPreviews(t *testing.T, dir string) {
-	if err := loadAvatar(); err != nil {
-		t.Fatal(err)
-	}
 	for _, dark := range []bool{false, true} {
 		theme := "light"
 		if dark {
@@ -331,9 +325,6 @@ func TestPreviewSupplementStates(t *testing.T) {
 	if dir == "" {
 		dir = t.TempDir()
 	} else if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := loadAvatar(); err != nil {
 		t.Fatal(err)
 	}
 	for _, dark := range []bool{false, true} {

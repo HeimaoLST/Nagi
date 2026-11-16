@@ -328,9 +328,6 @@ func writeV07AppearancePreview(t *testing.T, dir, name string, a *appModel, widt
 // entry; it adds no new opt-in skip and no second preview test.
 func writeV07AppearancePreviews(t *testing.T, dir string) {
 	t.Helper()
-	if err := loadAvatar(); err != nil {
-		t.Fatal(err)
-	}
 	// First review gate: main, Appearance panel, and the minimum composer.
 	for _, mode := range []struct {
 		name    string

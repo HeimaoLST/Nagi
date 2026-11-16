@@ -20,9 +20,6 @@ func TestPreviewWorkspaceToolCardWrapping(t *testing.T) {
 	if dir == "" {
 		t.Skip("set SAKI_PREVIEW_DIR to write workspace tool-card previews")
 	}
-	if err := loadAvatar(); err != nil {
-		t.Fatal(err)
-	}
 	for _, dark := range []bool{false, true} {
 		theme := "light"
 		if dark {
@@ -59,9 +56,6 @@ func TestPreviewToolFailureDetails(t *testing.T) {
 	dir := os.Getenv("SAKI_PREVIEW_DIR")
 	if dir == "" {
 		t.Skip("set SAKI_PREVIEW_DIR to write tool-failure details previews")
-	}
-	if err := loadAvatar(); err != nil {
-		t.Fatal(err)
 	}
 	const diagnostic = "tool_error: permission denied while reading customer-report.md"
 	for _, dark := range []bool{false, true} {

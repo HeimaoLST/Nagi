@@ -936,9 +936,6 @@ func TestPreviewSettingsPage(t *testing.T) {
 	} else if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := loadAvatar(); err != nil {
-		t.Fatal(err)
-	}
 	previewStore, err := openContactStore(filepath.Join(t.TempDir(), "contacts.json"), t.TempDir())
 	if err != nil {
 		t.Fatal(err)

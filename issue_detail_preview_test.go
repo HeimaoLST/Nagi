@@ -51,9 +51,6 @@ func TestPreviewIssueReadableDetails(t *testing.T) {
 	if dir == "" {
 		t.Skip("set SAKI_PREVIEW_DIR to write issue-detail previews")
 	}
-	if err := loadAvatar(); err != nil {
-		t.Fatal(err)
-	}
 	scenes := []string{"compact", "expanded", "completed", "working", "no-assistant", "long-connection", "view-execution"}
 	for _, dark := range []bool{false, true} {
 		theme := "light"

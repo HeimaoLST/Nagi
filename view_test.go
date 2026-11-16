@@ -855,9 +855,6 @@ func TestPreviewRuntimeStates(t *testing.T) {
 	if dir == "" {
 		t.Skip("set SAKI_PREVIEW_DIR to write runtime-backed headless previews")
 	}
-	if err := loadAvatar(); err != nil {
-		t.Fatal(err)
-	}
 	write := func(scene string, width, height int, dark bool) {
 		theme := "light"
 		if dark {

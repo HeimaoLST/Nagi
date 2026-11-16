@@ -580,9 +580,6 @@ func TestPreviewNavigation219(t *testing.T) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := loadAvatar(); err != nil {
-		t.Fatal(err)
-	}
 	for _, dark := range []bool{false, true} {
 		theme := "light"
 		if dark {

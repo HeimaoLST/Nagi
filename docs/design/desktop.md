@@ -881,7 +881,7 @@ type resolvedTheme struct {
 ## 头像（Saki mascot）
 
 - 当前默认（candidate default，proposed）：内置 imagegen 生成的原图（1254×1254 RGBA），只做 256px 等比缩放，未做二次创作。Prompt：original minimal cat head, pale lavender, Rose Pine rose tuft/ears, dark plum outline, transparent background, readable at small size。
-- 资产：[previews/assets/saki-avatar-default.png](previews/assets/saki-avatar-default.png)，256×256 RGBA PNG。同一份优化字节以单个 data URI 内嵌在 fragment 中，供离线 sandbox 使用；不写入 widget state，也不引入 picker、上传或 contact 级头像抽象。
+- 资产：[历史原型头像资产](https://github.com/HeimaoLST/Nagi/blob/57e0a6784ba7f8ec4c37e5a76f6ab8cdccd9542c/docs/design/previews/assets/saki-avatar-default.png)，256×256 RGBA PNG。同一份优化字节以单个 data URI 内嵌在 fragment 中，供离线 sandbox 使用；不写入 widget state，也不引入 picker、上传或 contact 级头像抽象。
 - 历史原生快照（#90）：rail 32px、header 28px；主聊天不再逐条重复头像，历史引用/demo 仍可在需要时显示 28px；同一默认 mascot，圆角 tile 使用 overlay 背景。旧浏览器原型曾用 rail/消息 28px、header 36px，已属历史，不作为当前尺寸契约。
 - 旧浏览器快照中头像是装饰（`alt=""`），姓名保持可见、绑定后 profile 锁定。当前原生联系人编辑与归档见 #152/#199；#279 压缩头像条的完整名称通过 tooltip/AX 提供，静止状态标识见 #279/#281，不能用旧浏览器规则描述当前所有模式。选中态不改变 mascot 颜色，改名/切换主题不重置历史。
 - 未来：same-family 的可选头像集合，保持一致的 silhouette、linework 与 Rose Pine／Dawn 调色。
