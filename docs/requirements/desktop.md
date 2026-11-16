@@ -1,5 +1,7 @@
 # Nagi：GUI 产品定义与需求
 
+当前执行系统正在按 [Pi integration](../design/pi-integration.md) 替换旧 Saki 接入。既有产品能力、数据及不确定状态约束继续有效；旧引擎专用传输／打包假设不约束 Pi 新实现。旧会话历史的保留方式仍待用户决定，不由迁移代码静默删除或改释引用。
+
 更新日期：2026-11-11。状态：**当前产品定义与行为需求，待分阶段实施与验收**。依据用户本轮关于开源产品、长期联系人、事项与工作分身的讨论修订；Nagi 是已确定的 GUI 名称，现已在独立的 [Nagi Git 仓库](https://github.com/HeimaoLST/Nagi) 维护，根 Go module 为 `github.com/HeimaoLST/Nagi`；原始候选和历史来源见 [导入记录](../design/source-import.json)。本文件是 GUI 产品定义的权威位置，设计稿和实现文档引用本文。需求不表示功能已经完成；完整 MVP 的行为范围已在下文明确；具体接口、迁移和后续版本仍按实际设计处理。
 
 本次定义修订见 [#134](https://github.com/HeimaoLST/Saki/issues/134)，完整 MVP 范围修订见 [#151](https://github.com/HeimaoLST/Saki/issues/151)，交付由 [Nagi #5](https://github.com/HeimaoLST/Nagi/issues/5) 和 [Nagi MVP 里程碑](https://github.com/HeimaoLST/Nagi/milestone/2) 统筹，已有工程交接见 [#111](https://github.com/HeimaoLST/Saki/issues/111)。优先级、执行顺序、负责人和实时状态只在 GitHub 维护。具体实现及已验证限制见 [Desktop design](../design/desktop.md)，公共执行契约见 [Runtime API](https://github.com/HeimaoLST/Saki/blob/dev/docs/design/runtime-api.md)。

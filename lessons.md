@@ -21,7 +21,7 @@
 ## Visual password masking does not establish secure accessibility
 
 **Problem:** A synthetic key was visually masked in the Pi lab but remained literal in its accessibility snapshot.
-**Cause or correction:** The exact Nagi product behavior is Unconfirmed. The lab used MyGo v0.7.4 TextInput.Password; visual bullets did not prove secure AX semantics.
+**Cause or correction:** Product-native exposure is Unconfirmed. Product TextInputBase.Password and lab TextInput.Password share the same editor. Read-only inspection found a Darwin superclass value-cache path and a disabled-state secure-trait gap; visual bullets do not establish secure AX semantics.
 **Prevention:** Inspect the actual product control and matching accessibility bridge, then validate with a synthetic key under an exact native scope. Do not enter real credentials or claim readiness until that path is established.
 
 ## Preserve legacy data without executing the retired engine
@@ -44,9 +44,9 @@
 
 ## Keep explanations outside implementation bodies
 
-**Problem:** Earlier code conventions allowed inline and implementation-body explanations.
+**Problem:** Earlier code conventions allowed inline and implementation-body explanations. A patch report also mistook unchanged upstream comment context for newly added comments.
 **Cause or correction:** The current user rules prohibit new end-of-line and implementation-body comments. Necessary contract documentation must explain what callers cannot infer from names/types/signatures.
-**Prevention:** Use clear names and small cohesive functions; inspect changed code for prohibited comments and place only necessary independent explanations outside implementation bodies.
+**Prevention:** Use clear names and small cohesive functions; inspect added source for prohibited comments and place only necessary independent explanations outside implementation bodies. In patch files distinguish added lines from unchanged upstream context; patch syntax adds a leading space before Go tabs, so verify source whitespace after application rather than rejecting required context prefixes.
 
 ## Export child-process outcomes separately
 
@@ -71,3 +71,33 @@
 **Problem:** A cleanup classifier embedded JSON booleans directly in Python source and failed with NameError before any deletion.
 **Cause or correction:** JSON true/false are not Python literals; serializing data did not make it executable Python.
 **Prevention:** Read metadata with json.loads or a data file. Produce the bounded inventory before mutations, preserve actual failures, and require verified archives before destructive retirement.
+
+## Verify exact SDK types before implementing an adapter
+
+**Problem:** The first worker compile used a nonexistent settings setter and treated credential metadata as credential contents. A lab-only TypeScript erasure restriction also conflicted with the compiled-JavaScript delivery path.
+**Cause or correction:** Pinned Pi provides SettingsManager.applyOverrides and an exported InMemoryCredentialStore; credential enumeration is metadata only. Production delivers compiled JavaScript rather than the lab's direct TypeScript entry.
+**Prevention:** Read exact pinned declarations and scan existing exported helpers before coding an adapter. Compile the smallest boundary, preserve actual compiler failures, and align compiler options with the delivered runtime entry.
+
+## Select the cached compiler explicitly for offline phases
+
+**Problem:** A package-only build stopped before compilation because GOTOOLCHAIN=local selected Go1.27.1; a second bootstrap attempt failed with GOSUMDB disabled.
+**Cause or correction:** The module requires Go1.27.3, which was already cached. Environment restrictions changed toolchain selection and verification before source compilation.
+**Prevention:** Resolve the required cached compiler path before an offline phase, put its bin directory on PATH and keep normal checksum handling. Preserve setup failures separately from compiler or behavior failures.
+
+## Keep the IPC type map in one declaration set
+
+**Problem:** The first compiled Go client contained duplicate MaxFrameBytes and history/inspection type declarations.
+**Cause or correction:** The duplicate declarations were in the assembled types.go source, not a Runtime or product behavior failure.
+**Prevention:** Keep one canonical typed wire map, check symbol uniqueness after assembling edits, and compile the actual package before assigning its consumers. Preserve compiler failures without presenting them as behavioral RED evidence.
+
+## Preserve active work after a rejected shutdown
+
+**Problem:** Source review found that the first Pi client closed stdin after every shutdown reply, including a proved busy rejection; this would abort admitted work. No dynamic failure was claimed.
+**Cause or correction:** Request rejection is not permission to terminate the worker. A busy reply must leave the client usable for the existing run's answer/cancel/drain path.
+**Prevention:** Keep busy shutdown rejection separate from transport-unknown teardown. Exercise a held tool call, rejected shutdown, targeted answer and later successful shutdown in actual process integration.
+
+## Accept authoritative binding facts without losing ownership
+
+**Problem:** Source review found exact-string cwd and used-flag comparisons that rejected canonical path aliases or an SDK-proven unused-to-used upgrade.
+**Cause or correction:** A same-host canonical path can represent the selected directory, and saved public entries can establish use beyond the host's conservative knowledge. Owner/context/purpose correlation must still match.
+**Prevention:** Compare canonical path identity, accept only monotonic use evidence, and keep missing used sessions unavailable. Test actual temporary-directory reopen instead of mirroring raw request fields.

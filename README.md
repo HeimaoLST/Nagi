@@ -19,7 +19,7 @@ Normal setup, file selection and the recovery actions below use the GUI. You can
 Obtain API access from your model service, including its API base URL, key, exact model ID and supported limits. Provider/model verification remains part of the build's acceptance scope; a compatible API shape alone does not establish model access or capacity.
 
 1. Open **Settings → Connection & model**. Select the protocol supported by your service, then enter **API endpoint**, **API key** and **Default model**. Nagi adds the selected protocol path to the base URL.
-2. Use **Choose folder…** to select the default working directory. Open **Capacity & execution limits** and check the context/output values against your service. Limits are not inferred from a model name; task slots describe local execution capacity.
+2. Use **Choose folder…** to select the default working directory. Working context/output and slot defaults are provided. **Capacity & execution limits** contains advanced overrides; declared limits are not inferred from a model name or verified provider capacity.
 3. Choose **Test connection and model** when you want an explicit model check. It uses the current form, may incur service charges, and leaves saved/applied settings unchanged.
 4. While idle, choose **Save and apply**. Follow the displayed saved, applied or error state. If settings were saved but application failed, correct the reported condition and use **Apply saved**.
 
@@ -49,53 +49,23 @@ When startup cannot load workbench data, **Restore paused…** lets you select a
 
 If the current window cannot save, copy any unsaved text you need elsewhere before quitting. A loaded workbench or failed local save uses its existing save/retry path instead of replacement. Missing Runtime history is reported separately; restoring workbench records does not recreate it or resend work.
 
-## Build and run
+## Development during the Pi migration
 
-For contributors: the supported product target is macOS arm64. Use Go 1.27.3, Python 3 and `patch`. Dependencies stay pinned in `go.mod` and `go.sum`. The launcher applies the existing MyGo v0.7.4 Split, editor, Markdown link and presentation patches in a temporary copy, checks their hashes, and leaves the module cache and repository module files unchanged.
+The cleanup-first Pi integration is in progress under [issue31](https://github.com/HeimaoLST/Nagi/issues/31). The [integration contract](docs/design/pi-integration.md) defines the concrete client/worker, product ownership, legacy-data fence and acceptance gates. This branch is an incomplete migration, not a usable Pi release. Existing consumer flows above remain the capabilities to preserve; provider/native acceptance has not been established for this changed tree.
+
+Use Go1.27.3, Python3 and `patch`. The MyGo launcher composes pinned patches in a temporary module copy without changing the module cache. The product target remains macOS13.0/ARM64. Pi1.5.2 requires Node>=22.19.0; the package owns a separately pinned runtime rather than relying on the consumer's PATH.
 
 ```sh
 python3 scripts/gui-go.py build -o /private/tmp/Nagi .
-SAKI_RUNTIME_BIN=/absolute/path/to/Saki /private/tmp/Nagi
+cd internal/pi/worker
+npm ci --ignore-scripts --no-audit --no-fund
+npm run build
 ```
 
-Provide a separately built compatible Saki executable. Nagi does not build Rust or search a sibling source checkout. An ordinary first launch lets the user configure the provider in Connection settings. The existing external environment configuration mode remains supported.
-
-Runtime selection retains this order: `SAKI_RUNTIME_BIN`, helpers beside the GUI named `Saki-runtime` or `saki-runtime`, the existing Resources helper paths, then `Saki` on `PATH`. Nagi starts the selected executable with `--stdio`; it does not opt into metadata invalidations or enable automatic title jobs.
+A static build does not establish a working Pi-backed native app. Actual integration/E2E, synthetic-key accessibility, product tool/MCP, lifecycle and Node-independent package gates must pass on the combined tree. Developers do not add or modify unit tests; necessary unit maintenance belongs to the test owner.
 
 Existing data locations and IDs remain unchanged: `SAKI_GUI_STORE` or `<UserConfigDir>/Saki/contacts.json`, adjacent `connection.json`, and `SAKI_SESSION_DIR` or the adjacent `sessions/` directory. `SAKI_GUI_WORKDIR` remains supported. On macOS the default config root is normally `~/Library/Application Support/Saki`. This split does not move data or replay old tasks.
 
-## Verify
+Legacy conversation files and product references remain preserved. The archive-versus-readable product choice is pending; the migration does not reinterpret old references or replay work. The previous Saki launcher/artifact/package instructions are [historical at57e0a678](https://github.com/HeimaoLST/Nagi/blob/57e0a6784ba7f8ec4c37e5a76f6ab8cdccd9542c/README.md#build-and-run), not the target production architecture or instructions to resume Saki development.
 
-Run from this repository root. Tests use headless UI fixtures; no native app or external model is required. Tests requiring an actual Saki binary explicitly skip when it is absent, so a plain Go PASS alone does not prove integration compatibility.
-
-```sh
-python3 scripts/gui-go.py test -race -timeout=20m -count=1 ./...
-python3 scripts/gui-go.py vet ./...
-python3 -m unittest discover -s scripts -p 'test_macos_minimum.py'
-
-# Exercise the existing real-process protocol and issue-tool tests with local providers.
-python3 scripts/gui-go.py build -o /private/tmp/Nagi-issue-helper .
-mkdir -p /private/tmp/nagi-previews
-SAKI_TEST_RUNTIME_BIN=/absolute/path/to/Saki \
-SAKI_TEST_ISSUE_TOOL_HELPER=/private/tmp/Nagi-issue-helper \
-SAKI_PREVIEW_DIR=/private/tmp/nagi-previews SAKI_TEST_ONLINE=0 \
-python3 scripts/gui-go.py test -race -timeout=20m -json -count=1 ./... > /private/tmp/nagi-runtime-results.jsonl
-python3 scripts/check-gui-runtime-results.py /private/tmp/nagi-runtime-results.jsonl
-```
-
-The helper uses the same executable's `--issue-tool-helper` entry point and does not create a GUI. Nagi's existing issue tools remain an application-owned MCP bridge; their transport and state are separate from Saki's Agent loop.
-
-## Package macOS
-
-Use a clean Nagi checkout, the Nagi release version in `VERSION`, and an explicitly provided macOS arm64 Saki binary whose `--version` reports its identity without starting a model. The runtime source SHA must come from that artifact's provenance.
-
-```sh
-scripts/build-macos-app.sh /absolute/output-directory \
-  /absolute/path/to/prebuilt/Saki "$(cat VERSION)" FULL_RUNTIME_SOURCE_SHA
-```
-
-The script builds only Go, copies the supplied Runtime, selects the maximum of both Mach-O deployment minima, ad-hoc signs the copied helper and `Nagi.app`, then runs two existing offline protocol integration tests. It does not launch the native GUI, compile Saki/Cargo, or take Nagi's version from Saki. The bundle uses `Contents/MacOS/Nagi` and `Contents/MacOS/Saki-runtime`; the existing bundle identifier `dev.saki.desktop` is retained.
-
-Outputs include `Nagi.app.zip`, `manifest.json` and `SHA256SUMS`. Manifest schema 2 records separate `nagi` and `runtime` identities. The top-level source fields refer to Nagi. Runtime fields distinguish the caller-supplied source SHA, self-reported version, original input hash and packaged hash after signing. The source SHA is provenance supplied by the caller, not an embedded-commit verification claim. The input Runtime is never re-signed in place.
-
-`VERSION` is Nagi's version authority; the packaging argument must match it. Runtime compatibility is version 1 stdio with the required methods used by `runtime.go` and `connection_runtime.go`, not equality between the two products' source commits or release versions. Release CI owns artifact pinning and compatibility checks.
+The protected CI aggregate must use replacement Pi integration and package proofs before this migration is accepted. Missing replacement gates are not optional skips. Nagi version, Pi/dependency locks, Node archive/binary, signed package identity and notices are separate provenance. No Release or deployment follows from an intermediate build.
