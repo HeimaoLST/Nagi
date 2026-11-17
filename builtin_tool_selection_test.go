@@ -105,8 +105,16 @@ func TestContactProfileShowsBuiltinToolSelection(t *testing.T) {
 	if ct.BuiltinTools == nil || len(*ct.BuiltinTools) != 1 || (*ct.BuiltinTools)[0] != "read" {
 		t.Fatalf("saved subset = %v", ct.BuiltinTools)
 	}
-	if present, raw := storedBuiltinToolsForTest(t, a.store.path); !present || strings.TrimSpace(raw) != `["read"]` {
-		t.Fatalf("explicit subset store shape = present=%v raw=%q", present, raw)
+	present, raw := storedBuiltinToolsForTest(t, a.store.path)
+	if !present {
+		t.Fatal("explicit subset store field is missing")
+	}
+	var subset []string
+	if err := json.Unmarshal([]byte(raw), &subset); err != nil {
+		t.Fatalf("explicit subset is not a string array: raw=%q err=%v", raw, err)
+	}
+	if subset == nil || len(subset) != 1 || subset[0] != "read" {
+		t.Fatalf("explicit subset store shape = %#v", subset)
 	}
 
 	// Empty the explicit subset. This is not the host default and must persist

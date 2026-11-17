@@ -403,10 +403,18 @@ func TestGeneralPageHeadingKeepsDraftAndThemeAction(t *testing.T) {
 			if !ok || !contentOK || heading.W <= 0 || heading.H <= 0 || heading.X < 0 || heading.Y < 0 || heading.X+heading.W > 720 || heading.Y+heading.H > content.Y {
 				t.Fatalf("composed General heading is missing or not above its controls: heading=%+v content=%+v texts=%v", heading, content, tr.Texts())
 			}
-			if err := tr.Click(msgs.AppearanceMode()); err != nil {
-				t.Fatal(err)
+			for attempt := 0; attempt < 8 && !tr.Focused(msgs.AppearanceSystem()); attempt++ {
+				tr.Key(0, ui.KeyTab)
+				tr.Frame()
 			}
+			if !tr.Focused(msgs.AppearanceSystem()) {
+				t.Fatalf("appearance current-value trigger is not keyboard reachable: %v", tr.Texts())
+			}
+			tr.Key(0, ui.KeySpace)
 			tr.Frame()
+			if !tr.HasText(msgs.AppearanceDark()) {
+				t.Fatalf("focused appearance trigger did not open its real options: %v", tr.Texts())
+			}
 			if err := tr.Click(msgs.AppearanceDark()); err != nil {
 				t.Fatal(err)
 			}
