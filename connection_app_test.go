@@ -15,15 +15,15 @@ import (
 	"github.com/HeimaoLST/Nagi/locales"
 )
 
-func isolateConnectionApp(t *testing.T, root, binary string) {
+func isolateConnectionApp(t *testing.T, root, payload string) {
 	t.Helper()
-	for key := range filteredConnectionEnv {
-		t.Setenv(key, "")
+	if payload == "" {
+		payload = filepath.Join(root, "missing-pi-payload")
 	}
 	t.Setenv("SAKI_GUI_STORE", filepath.Join(root, "gui", "contacts.json"))
 	t.Setenv("SAKI_GUI_WORKDIR", root)
 	t.Setenv("SAKI_SESSION_DIR", filepath.Join(root, "sessions"))
-	t.Setenv("SAKI_RUNTIME_BIN", binary)
+	t.Setenv("NAGI_PI_PAYLOAD", payload)
 }
 
 func TestConnectionFirstUseDoesNotPersistWrongDefaultWorkspace(t *testing.T) {
@@ -198,7 +198,7 @@ func TestConnectionSaveAndApplySaveFailureDoesNotApply(t *testing.T) {
 
 func TestConnectionApplyFailureRetryOnlyAppliesWithoutRewriting(t *testing.T) {
 	root := t.TempDir()
-	missing := filepath.Join(root, "missing-Saki-runtime")
+	missing := filepath.Join(root, "missing-pi-payload")
 	isolateConnectionApp(t, root, missing)
 	h := openConnectionHarness(t)
 	config := testConnectionConfig(t)
@@ -220,7 +220,7 @@ func TestConnectionApplyFailureRetryOnlyAppliesWithoutRewriting(t *testing.T) {
 		t.Fatal(clickErr)
 	}
 	h.pump.wait(func() bool { return !h.app.connectionForm.Busy })
-	if h.app.connectionForm.Error != connErrorStart || h.app.connectionForm.ErrorDetail == "" {
+	if h.app.connectionForm.Error != connErrorApplyConfig || !strings.Contains(h.app.connectionForm.ErrorDetail, missing) {
 		t.Fatalf("apply failure = %q / %q", h.app.connectionForm.Error, h.app.connectionForm.ErrorDetail)
 	}
 	h.pump.do(func() {
@@ -243,7 +243,7 @@ func TestConnectionApplyFailureRetryOnlyAppliesWithoutRewriting(t *testing.T) {
 	var applying bool
 	var rt *runtimeClient
 	h.pump.do(func() { saved, applying, rt = h.app.connectionSaved, h.app.connectionApplying, h.app.rt })
-	if saved == nil || applying || rt != nil {
+	if saved == nil || *saved != config || applying || rt != nil || h.app.pi != nil || h.app.connectionEffective != nil || h.app.connectionForm.Error != connErrorApplyConfig || !strings.Contains(h.app.connectionForm.ErrorDetail, missing) {
 		t.Fatal("retry apply changed saved/runtime state unexpectedly")
 	}
 	h.shutdown(t)

@@ -170,6 +170,7 @@ type piAppFixture struct {
 	project  string
 	state    string
 	client   *pi.Client
+	config   pi.ConfigureParams
 	ready    pi.Ready
 	exits    chan pi.ProcessOutcome
 	bindings []pi.ContextBinding
@@ -280,7 +281,8 @@ func (f *piAppFixture) startWorker() {
 	if f.ready.Engine.Version != "1.5.2" || f.ready.Runtime.Version != "v22.23.5" || f.ready.WorkerEpoch == "" {
 		f.t.Fatalf("unpinned real worker identity: %+v", f.ready)
 	}
-	if _, err := client.Configure(f.ctx, pi.ConfigureParams{WireAPI: pi.OpenAICompletions, BaseURL: f.server.URL + "/v1", APIKey: "nagi-product-loopback", CredentialSource: "product-loopback-connection", Model: "nagi-product-fixture", ContextTokens: 65536, OutputTokens: 4096}); err != nil {
+	f.config = pi.ConfigureParams{WireAPI: pi.OpenAICompletions, BaseURL: f.server.URL + "/v1", APIKey: "nagi-product-loopback", CredentialSource: "product-loopback-connection", Model: "nagi-product-fixture", ContextTokens: 65536, OutputTokens: 4096}
+	if _, err := client.Configure(f.ctx, f.config); err != nil {
 		f.t.Fatal(err)
 	}
 	piAppRecord(f.t, "ready", f.ready)
@@ -353,6 +355,14 @@ func (f *piAppFixture) prepare(binding pi.ContextBinding) *piAppRun {
 	run := &piAppRun{binding: binding, params: pi.StartRunParams{ContextID: binding.ContextID, RunID: fmt.Sprintf("product-run-%d", f.turn), Text: fmt.Sprintf("PRODUCT_TURN_%d", f.turn)}}
 	f.onUI(func() error {
 		ct := f.app.contactByID(binding.BotID)
+		ct.PiBinding = &piConversationBinding{
+			Engine: "pi", Context: binding,
+			Selection: piConversationSelection{CWD: binding.CWD, CodingTools: []string{}},
+			Configuration: piConversationConfiguration{WireAPI: f.config.WireAPI, BaseURL: f.config.BaseURL,
+				Model: f.config.Model, ContextTokens: f.config.ContextTokens, OutputTokens: f.config.OutputTokens,
+				CredentialSource: f.config.CredentialSource},
+		}
+		ct.PiBinding.Context.Used = true
 		ct.SessionID, ct.SendState, ct.ActiveTaskID = binding.SessionRef, sendSubmitting, ""
 		ct.pendingSend = &pendingSend{Draft: run.params.Text}
 		scope, err := f.app.issueToolNewScope(ct.ID, binding.SessionRef, run.params.RunID+"-turn", false)

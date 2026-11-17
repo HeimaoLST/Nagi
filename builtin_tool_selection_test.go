@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -318,69 +317,4 @@ func TestPreviewBuiltinToolSelection(t *testing.T) {
 			writePreviewPNG(t, filepath.Join(dir, "builtin-tool-selection-"+theme+"-"+size.name+".png"), tr.Image())
 		}
 	}
-}
-
-func TestBuiltinCatalogRetryUsesRuntimeAndKeepsDraft(t *testing.T) {
-	a, ct := taskContextApp(t)
-	a.connectionManaged = true
-	a.runtimeStatus = runtimeStateReady
-	selected := []string{"fixture-read"}
-	ct.BuiltinTools = &selected
-	a.openSettingsTab(settingsTabContact, settingsSourceRail)
-	editor := a.settingsContactEditor()
-	editor.Draft.Name = "Unsaved profile"
-	callbacks := make(chan func(), 8)
-	a.setUIHook(func(fn func()) { callbacks <- fn })
-	runtime := startTestRuntime(t, "RUNTIME_TOOLS_FAIL_FIRST=1")
-	a.rt = runtime.client
-	consume := func() {
-		t.Helper()
-		select {
-		case fn := <-callbacks:
-			fn()
-		case <-time.After(5 * time.Second):
-			t.Fatal("tool catalog UI callback did not arrive")
-		}
-	}
-	request := func(want string) {
-		t.Helper()
-		select {
-		case got := <-runtime.stderr:
-			if got != "tools-fixture:"+want {
-				t.Fatalf("unexpected RPC: %q, want %q", got, want)
-			}
-		case <-time.After(5 * time.Second):
-			t.Fatal("tool catalog RPC trace did not arrive")
-		}
-	}
-	a.startBuiltinToolsLoad(runtime.client, a.connectionGeneration)
-	consume()
-	if a.metadataInFlight != 0 {
-		t.Fatalf("catalog error callback left metadata in flight: %d", a.metadataInFlight)
-	}
-	request("tool.list")
-	tr := ui.NewTester(a.view, 1040, 720)
-	tr.Frame()
-	if a.runtimeBuiltinToolsLoaded || !tr.HasText("controlled tool catalog failure") || !tr.HasText("Retry built-in tools") {
-		t.Fatalf("catalog failure is not recoverable: %v", tr.Texts())
-	}
-	if err := clickSettingsAction(tr, "Retry built-in tools"); err != nil {
-		t.Fatal(err)
-	}
-	consume()
-	if a.metadataInFlight != 0 {
-		t.Fatalf("catalog success callback left metadata in flight: %d", a.metadataInFlight)
-	}
-	request("tool.list")
-	tr.Frame()
-	if !a.runtimeBuiltinToolsLoaded || a.runtimeBuiltinToolsErr != "" || !tr.HasText("fixture-read") || tr.HasText("Retry built-in tools") {
-		t.Fatalf("retry did not use the returned catalog: %v", tr.Texts())
-	}
-	if editor.Draft.Name != "Unsaved profile" || !builtinToolsEqual(editor.Draft.BuiltinTools, &selected) || ct.Name == editor.Draft.Name {
-		t.Fatal("catalog failure/retry changed the draft or saved profile")
-	}
-	if err := runtime.client.shutdown(); err != nil {
-		t.Fatal(err)
-	}
-	request("runtime.shutdown")
 }

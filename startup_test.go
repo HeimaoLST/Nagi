@@ -3,8 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -52,41 +50,6 @@ func TestInvalidContentSizeStopsBeforeStartup(t *testing.T) {
 func runtimeFeedback(a *appModel) (string, string) {
 	msgs := locales.In("en")
 	return a.runtimeErrorDisplay(msgs), a.runtimeHintDisplay(msgs)
-}
-
-func TestRuntimeHelperMissingHasConfigHint(t *testing.T) {
-	a := &appModel{store: &contactStore{}, runtimeStatus: runtimeStateStarting, workDir: t.TempDir()}
-	t.Setenv("SAKI_RUNTIME_BIN", "")
-	t.Setenv("PATH", "")
-	a.startRuntime()
-	if a.runtimeStage != "Runtime helper" {
-		t.Fatalf("stage = %q, want Runtime helper", a.runtimeStage)
-	}
-	_, hint := runtimeFeedback(a)
-	for _, want := range []string{"Saki-runtime", "SAKI_RUNTIME_BIN"} {
-		if !strings.Contains(hint, want) {
-			t.Fatalf("hint = %q, missing %q", hint, want)
-		}
-	}
-	if !a.hasRuntimeError() {
-		t.Fatal("missing helper should set a visible error")
-	}
-}
-
-func TestRuntimeExecFailureHasStartHint(t *testing.T) {
-	missing := filepath.Join(t.TempDir(), "missing-Saki")
-	a := &appModel{store: &contactStore{}, runtimeStatus: runtimeStateStarting, workDir: t.TempDir()}
-	t.Setenv("SAKI_RUNTIME_BIN", missing)
-	a.startRuntime()
-	if a.runtimeStage != "Runtime start" {
-		t.Fatalf("stage = %q, want Runtime start", a.runtimeStage)
-	}
-	if _, hint := runtimeFeedback(a); !strings.Contains(hint, missing) {
-		t.Fatalf("hint = %q, want helper path", hint)
-	}
-	if a.runtimeBinary != missing {
-		t.Fatalf("runtimeBinary = %q", a.runtimeBinary)
-	}
 }
 
 func TestRuntimeExitClassifiesConfigAndRedacts(t *testing.T) {
@@ -533,127 +496,6 @@ func TestRuntimeExitUnknownBeforeReadyIsStartup(t *testing.T) {
 	errText, hintText := runtimeFeedback(a)
 	if !strings.Contains(errText, "exited before ready") || strings.Contains(hintText, "API_KEY") {
 		t.Fatalf("unknown startup classified as configuration: err=%q hint=%q", errText, hintText)
-	}
-}
-
-func TestRealRuntimeStartupConfigurationFailure(t *testing.T) {
-	binary := os.Getenv("SAKI_TEST_RUNTIME_BIN")
-	if binary == "" {
-		t.Skip("set SAKI_TEST_RUNTIME_BIN for the real startup failure check")
-	}
-	root := t.TempDir()
-	env := withoutEnv(os.Environ(), "API_KEY")
-	env = append(env,
-		"SAKI_API=openai-responses",
-		"SAKI_BASE_URL=http://127.0.0.1:1/v1",
-		"SAKI_MODEL=fixture",
-		"SAKI_SESSION_DIR="+filepath.Join(root, "sessions"),
-	)
-	ready := make(chan runtimeReady, 1)
-	exited := make(chan error, 1)
-	client, err := startRuntime(runtimeOptions{
-		Binary: binary, Dir: root, Env: env,
-		Handlers: runtimeHandlers{
-			OnReady: func(value runtimeReady) { ready <- value },
-			OnExit:  func(err error) { exited <- err },
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = client.shutdown() }()
-	select {
-	case <-ready:
-		t.Fatal("runtime without API_KEY must not report ready")
-	case <-exited:
-	case <-time.After(15 * time.Second):
-		t.Fatal("runtime did not exit after configuration failure")
-	}
-	diagnostic := strings.Join(client.diagnostics(), "\n")
-	if !strings.Contains(diagnostic, "API_KEY is not set") {
-		t.Fatalf("missing safe configuration diagnostic: %q", diagnostic)
-	}
-	if strings.Contains(diagnostic, "sk-") {
-		t.Fatalf("diagnostic leaked a secret: %q", diagnostic)
-	}
-}
-
-func TestRealProviderAuthFailureClassification(t *testing.T) {
-	binary := os.Getenv("SAKI_TEST_RUNTIME_BIN")
-	if binary == "" {
-		t.Skip("set SAKI_TEST_RUNTIME_BIN for the real provider auth check")
-	}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusUnauthorized)
-		_, _ = w.Write([]byte(`{"error":{"message":"Incorrect API key provided: sk-sentinel-112"}}`))
-	}))
-	defer server.Close()
-	root := t.TempDir()
-	env := withoutEnv(os.Environ(), "API_KEY")
-	env = append(env,
-		"API_KEY=offline-fixture",
-		"SAKI_API=openai-responses",
-		"SAKI_BASE_URL="+server.URL+"/v1",
-		"SAKI_MODEL=fixture",
-		"SAKI_CONTEXT_TOKENS=65536",
-		"SAKI_SESSION_DIR="+filepath.Join(root, "sessions"),
-	)
-	ready := make(chan runtimeReady, 1)
-	events := make(chan runtimeEventEnvelope, 8)
-	exited := make(chan error, 1)
-	client, err := startRuntime(runtimeOptions{
-		Binary: binary, Dir: root, Env: env,
-		Handlers: runtimeHandlers{
-			OnReady: func(value runtimeReady) { ready <- value },
-			OnEvent: func(event runtimeEventEnvelope) { events <- event },
-			OnExit:  func(err error) { exited <- err },
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = client.shutdown() }()
-	select {
-	case <-ready:
-	case err := <-exited:
-		t.Fatalf("runtime exited before ready: %v", err)
-	case <-time.After(15 * time.Second):
-		t.Fatal("runtime did not become ready")
-	}
-	session, err := client.createSession(root, "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	task, err := client.sendTask(session.SessionID, "hello")
-	if err != nil {
-		t.Fatal(err)
-	}
-	deadline := time.After(15 * time.Second)
-	for {
-		select {
-		case event := <-events:
-			if event.TaskID == task.TaskID && event.Event.Type == "task_finished" {
-				if event.Event.Status != "failed" || event.Event.Error == nil || event.Event.Error.Code != "model_error" {
-					t.Fatalf("auth task terminal = %+v", event.Event)
-				}
-				if !providerAuthFailure(event.Event.Error.Message) {
-					t.Fatalf("auth message = %q", event.Event.Error.Message)
-				}
-				detail := taskFinishedDetail(event.Event)
-				if !strings.Contains(detail, "Provider authentication failed") {
-					t.Fatalf("auth detail = %q", detail)
-				}
-				if strings.Contains(detail, "sk-sentinel-112") || strings.Contains(detail, "Incorrect API key") {
-					t.Fatalf("auth detail echoed provider body: %q", detail)
-				}
-				return
-			}
-		case <-exited:
-			t.Fatal("runtime exited before task terminal")
-		case <-deadline:
-			t.Fatal("auth task did not finish")
-		}
 	}
 }
 
