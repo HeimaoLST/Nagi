@@ -147,6 +147,7 @@ func TestContactProfileShowsBuiltinToolSelection(t *testing.T) {
 func TestContactProfileBuiltinChecksAreKeyboardReachable(t *testing.T) {
 	editor := newContactProfileEditor(profileDraftForTest(t))
 	editor.BuiltinTools = builtinToolsForTest()
+	editor.BuiltinDefaults = []string{"bash", "edit", "read", "write"}
 	editor.BuiltinToolsLoaded = true
 	editor.BuiltinToolsSupported = true
 	tr := contactProfileTester(editor, contactProfileActions{}, 560, 1200)
@@ -284,9 +285,10 @@ func TestContactProfileBuiltinSaveFailureKeepsDraft(t *testing.T) {
 }
 
 func TestBuiltinToolCatalogErrorDoesNotOfferDeadRetry(t *testing.T) {
-	a, _ := workspaceTestApp(t)
+	a, _ := freshBuiltinProfileTestApp(t)
 	a.connectionManaged = true
 	a.runtimeStatus = runtimeStateFailed
+	a.runtimeBuiltinToolsLoaded = false
 	a.runtimeBuiltinToolsErr = "Runtime tool list unavailable."
 	a.openSettingsTab(settingsTabContact, settingsSourceRail)
 	tr := ui.NewTester(a.view, 1040, 720)
@@ -295,13 +297,23 @@ func TestBuiltinToolCatalogErrorDoesNotOfferDeadRetry(t *testing.T) {
 		t.Fatalf("unavailable runtime rendered a dead retry: %v", tr.Texts())
 	}
 
-	a.runtimeStatus = runtimeStateReady
-	a.rt = &runtimeClient{}
-	a.runtimeBuiltinToolsLoaded = false
+	config := testConnectionConfig(t)
+	a.connectionPath = connectionConfigPath(a.store.path)
+	if err := saveConnectionConfig(a.connectionPath, config); err != nil {
+		t.Fatal(err)
+	}
+	saved, err := loadConnectionConfig(a.connectionPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.connectionSaved = &saved
 	a.runtimeBuiltinToolsErr = "Catalog could not be read."
 	tr.Frame()
 	if !tr.HasText("Catalog could not be read.") || !tr.HasText("Retry built-in tools") {
-		t.Fatalf("available runtime did not expose retry: %v", tr.Texts())
+		t.Fatalf("configured idle connection did not expose retry: %v", tr.Texts())
+	}
+	if a.pi != nil || a.rt != nil || a.connectionProbe != nil || a.connectionApplying || a.connectionTesting || a.runtimeAvailableForView() {
+		t.Fatal("catalog error presentation started a host/probe/apply or fabricated runtime readiness")
 	}
 }
 

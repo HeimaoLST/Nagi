@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -518,8 +520,9 @@ func TestFirstUseWorkFolderRequiresExplicitChoiceBeforeActions(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = a.closeIssueToolService() })
 	ct := a.selectedContact()
+	ct.Workspace = t.TempDir()
 	originalID, originalFolder := ct.ID, ct.Workspace
-	ct.Draft, ct.SessionID = "Keep local draft", "existing-session"
+	ct.Draft = "Keep local draft"
 	a.contacts = append(a.contacts, &contact{ID: "inherited-contact", Name: "Inherited", Role: "Assistant"})
 	if err := a.persist(); err != nil {
 		t.Fatal(err)
@@ -547,7 +550,7 @@ func TestFirstUseWorkFolderRequiresExplicitChoiceBeforeActions(t *testing.T) {
 		if saves != 0 || probes != 0 || applies != 0 {
 			t.Fatalf("fresh GUI silently accepted launch folder %q: saves=%d probes=%d applies=%d", form.Draft.WorkingDirectory, saves, probes, applies)
 		}
-		if form.Errors["WorkingDirectory"] == "" || a.rt != nil || a.connectionApplying || a.connectionTesting {
+		if form.Errors["WorkingDirectory"] == "" || a.pi != nil || a.rt != nil || a.connectionProbe != nil || a.connectionApplying || a.connectionTesting {
 			t.Fatal("unconfirmed work folder did not block GUI actions")
 		}
 	}
@@ -597,10 +600,10 @@ func TestFirstUseWorkFolderRequiresExplicitChoiceBeforeActions(t *testing.T) {
 		t.Fatal("reopening lost the confirmed connection choice or contact identity")
 	}
 	retained := reopened.contactByID(originalID)
-	if retained.Workspace != originalFolder || retained.SessionID != "existing-session" || retained.Draft != "Keep local draft" || reopened.contactByID("inherited-contact").Workspace != "" {
+	if retained.Workspace != originalFolder || retained.SessionID != "" || retained.PiBinding != nil || retained.Draft != "Keep local draft" || reopened.contactByID("inherited-contact").Workspace != "" {
 		t.Fatal("connection choice rewrote an existing contact/session folder or inheritance")
 	}
-	if a.rt != nil || reopened.rt != nil || probes != 0 || applies != 0 {
+	if a.pi != nil || reopened.pi != nil || a.rt != nil || reopened.rt != nil || a.connectionProbe != nil || reopened.connectionProbe != nil || a.connectionTesting || reopened.connectionTesting || a.connectionApplying || reopened.connectionApplying || probes != 0 || applies != 0 {
 		t.Fatal("first-use folder workflow started/tested/applied Runtime")
 	}
 }
@@ -611,8 +614,29 @@ func TestFirstUseWorkFolderRetainsLegacyAndSavedChoices(t *testing.T) {
 			root := t.TempDir()
 			isolateConnectionApp(t, root, filepath.Join(root, "unused-runtime"))
 			want := root
+			var legacyBytes []byte
+			legacyFolder := ""
 			if source == "legacy" {
-				t.Setenv("API_KEY", "legacy-fixture-key")
+				want = ""
+				legacyFolder = t.TempDir()
+				legacy := storedState{
+					Version: 9, Selected: "legacy-contact",
+					Contacts: []storedContact{
+						{ID: "legacy-contact", Name: "Legacy", Role: "Assistant", Workspace: legacyFolder, SessionID: "existing-session", Draft: "Keep local draft"},
+						{ID: "inherited-contact", Name: "Inherited", Role: "Assistant"},
+					},
+				}
+				data, err := json.MarshalIndent(legacy, "", "  ")
+				if err != nil {
+					t.Fatal(err)
+				}
+				legacyBytes = append(data, '\n')
+				if err := os.MkdirAll(filepath.Dir(guiStorePath()), 0o700); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(guiStorePath(), legacyBytes, 0o600); err != nil {
+					t.Fatal(err)
+				}
 			} else {
 				config := testConnectionConfig(t)
 				want = config.WorkingDirectory
@@ -631,8 +655,43 @@ func TestFirstUseWorkFolderRetainsLegacyAndSavedChoices(t *testing.T) {
 			}
 			t.Cleanup(func() { _ = a.closeIssueToolService() })
 			a.openSettingsTab(settingsTabConnection, settingsSourceRail)
-			if a.connectionForm.Draft.WorkingDirectory != want || a.rt != nil {
+			if a.connectionForm.Draft.WorkingDirectory != want || a.pi != nil || a.rt != nil || a.connectionProbe != nil || a.connectionApplying || a.connectionTesting {
 				t.Fatalf("%s folder choice was cleared or started Runtime: %+v", source, a.connectionForm.Draft)
+			}
+			if source != "legacy" {
+				return
+			}
+			if a.store == nil || !a.piDataReadOnly() || a.store.state.Version != 9 || a.connectionSaved != nil || a.connectionForm.HasSaved || a.connectionManaged {
+				t.Fatal("legacy store was upgraded, activated or treated as a confirmed Pi connection")
+			}
+			ct, inherited := a.contactByID("legacy-contact"), a.contactByID("inherited-contact")
+			if ct == nil || inherited == nil || len(a.contacts) != 2 || a.selectedID() != "legacy-contact" || ct.Workspace != legacyFolder || ct.SessionID != "existing-session" || ct.PiBinding != nil || ct.Draft != "Keep local draft" || inherited.Workspace != "" {
+				t.Fatal("opening legacy data lost contact identity, opaque session, draft, workspace or inheritance")
+			}
+			if err := a.persist(); err == nil || !strings.Contains(err.Error(), "read-only") {
+				t.Fatalf("legacy persistence did not refuse read-only data: %v", err)
+			}
+			reopened, err := newRuntimeApp()
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = reopened.closeIssueToolService() })
+			if reopened.store == nil || !reopened.piDataReadOnly() || reopened.store.state.Version != 9 || reopened.connectionSaved != nil || reopened.connectionForm.HasSaved || reopened.connectionManaged || reopened.connectionForm.Draft.WorkingDirectory != "" {
+				t.Fatal("reopening legacy data upgraded or confirmed its contact folder as a Pi default")
+			}
+			retained, inherited := reopened.contactByID("legacy-contact"), reopened.contactByID("inherited-contact")
+			if retained == nil || inherited == nil || len(reopened.contacts) != 2 || reopened.selectedID() != "legacy-contact" || retained.Workspace != legacyFolder || retained.SessionID != "existing-session" || retained.PiBinding != nil || retained.Draft != "Keep local draft" || inherited.Workspace != "" {
+				t.Fatal("reopening legacy data lost contact identity, opaque session, draft, workspace or inheritance")
+			}
+			preserved, err := os.ReadFile(guiStorePath())
+			if err != nil || !bytes.Equal(preserved, legacyBytes) {
+				t.Fatalf("opening or refusing to save legacy data changed original bytes: %v", err)
+			}
+			if _, err := os.Stat(a.connectionPath); !errors.Is(err, os.ErrNotExist) {
+				t.Fatalf("legacy data created an implicit Pi connection file: %v", err)
+			}
+			if a.pi != nil || reopened.pi != nil || a.rt != nil || reopened.rt != nil || a.connectionProbe != nil || reopened.connectionProbe != nil || a.connectionApplying || reopened.connectionApplying || a.connectionTesting || reopened.connectionTesting {
+				t.Fatal("legacy read-only use started/tested/applied or replayed Runtime")
 			}
 		})
 	}

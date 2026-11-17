@@ -316,7 +316,7 @@
 
 **Problem:** Caller maintenance initially assumed that mapping a domain helper made rejection/non-dispatch persistence exercisable without checking legacy-data admission. Later fixtures added opaque work references and executions, ignored a scope-save error, then dereferenced the nil scope in default CI.
 **Cause or correction:** Opaque legacy executions remain read-only. The new activity source admits explicitly marked fresh Pi intent, binding and run facts; it does not reinterpret old or ambiguous records. A legacy-shaped fixture can therefore fail before its intended authorization assertion. Ignoring that persistence error causes a test panic rather than evidence of a native-app failure.
-**Prevention:** Inspect data admission and persistence results alongside domain callers before claiming a mapping is complete. Check creation/save errors and preserve persistence/reopen/rerun assertions. Use explicitly current synthetic records only for their stated regression boundary; never count them as actual SDK admission, retag legacy data, bypass the guard or change the pending history policy for green tests.
+**Prevention:** Inspect data admission and persistence results alongside domain callers before claiming a mapping is complete. Check creation/save errors and preserve persistence/reopen/rerun assertions. Use explicitly current synthetic records only for their stated regression boundary; never count them as actual SDK admission, retag legacy data, bypass the guard or change the pending history policy for green tests. Keep fresh first-use folder selection separate from held legacy-byte preservation; launch-directory or credential environment variables are not a persisted legacy configuration or a confirmed Pi folder.
 
 ## Reuse current ownership and canonical admission reasons
 
@@ -335,3 +335,9 @@
 **Problem:** A new subset-persistence assertion rejected a valid saved array because its JSON was indented rather than compact. A later source review incorrectly called a batch snapshot's empty/null distinction irrelevant after misreading its JSON tag as omitempty.
 **Cause or correction:** Whitespace is not part of the selection contract; decoded presence, nullability and values are. The snapshot has no omitempty tag, so cloning must retain its nil versus nonnil-empty distinction. Original legacy-file preservation remains a byte-level contract.
 **Prevention:** Inspect the actual serialization tag and decode current JSON to assert the required values and omitted/null/empty distinctions. Use the existing clone path with nil-preserving copies rather than wrappers or restoration scans. Reserve exact byte comparisons for contracts that preserve the original bytes.
+
+## Keep supported tool catalogs separate from defaults
+
+**Problem:** A keyboard regression supplied supported tools but expected a host-default label without supplying the independent default list; a Retry fixture used a retired client stub instead of current configuration eligibility.
+**Cause or correction:** Supported tools and default selections are distinct ready-envelope facts. Configured idle Retry presentation does not require a live host, while a legacy client stub establishes neither configuration nor Pi readiness.
+**Prevention:** Supply explicit independent fixture defaults, preserve nil/empty/subset semantics and exercise actual keyboard controls. Use a fresh current store and saved valid configuration for offline Retry presentation; keep unconfigured blocking and actual process-level Retry evidence separate.
