@@ -44,12 +44,23 @@ type ComponentVersion struct {
 	Version string `json:"version"`
 }
 
+type BuiltinTool struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+}
+
+type BuiltinCatalog struct {
+	Supported []BuiltinTool `json:"supported"`
+	Defaults  []string      `json:"defaults"`
+}
+
 type Ready struct {
-	Version     int              `json:"v"`
-	Type        string           `json:"type"`
-	WorkerEpoch string           `json:"workerEpoch"`
-	Engine      ComponentVersion `json:"engine"`
-	Runtime     ComponentVersion `json:"runtime"`
+	Version        int              `json:"v"`
+	Type           string           `json:"type"`
+	WorkerEpoch    string           `json:"workerEpoch"`
+	Engine         ComponentVersion `json:"engine"`
+	Runtime        ComponentVersion `json:"runtime"`
+	BuiltinCatalog *BuiltinCatalog  `json:"builtinCatalog"`
 }
 
 type ConfigureParams struct {

@@ -947,11 +947,12 @@ func (a *appModel) settingsContactContent(c *ui.Context, t *ui.Theme) {
 	ct = a.contactByID(a.settingsContactID)
 	editor = a.settingsContactEditor()
 	editor.BuiltinTools = append([]runtimeBuiltinTool(nil), a.runtimeBuiltinTools...)
+	editor.BuiltinDefaults = append([]string{}, a.runtimeBuiltinDefaults...)
 	editor.BuiltinToolsLoaded = a.runtimeBuiltinToolsLoaded
-	editor.BuiltinToolsLoading = a.runtimeBuiltinToolsLoading
+	editor.BuiltinToolsLoading = a.connectionApplying
 	editor.BuiltinToolsError = a.runtimeBuiltinToolsErr
 	editor.BuiltinToolsSupported = a.connectionManaged
-	editor.CanRetryBuiltinTools = editor.BuiltinToolsSupported && a.rt != nil && a.runtimeStatus == runtimeStateReady
+	editor.CanRetryBuiltinTools = editor.BuiltinToolsSupported && !a.connectionApplying && a.connectionReloadBlocked() == ""
 	if !editor.BuiltinToolsSupported {
 		if a.connectionLegacy {
 			editor.BuiltinToolsError = msgs.SettingsBuiltinLegacyError()
@@ -971,7 +972,7 @@ func (a *appModel) settingsContactContent(c *ui.Context, t *ui.Theme) {
 			Archive:           func() { a.archiveContact(ct.ID) },
 			Restore:           func() { a.restoreContact(ct.ID) },
 			Discard:           func() { editor.ResetDraft() },
-			RetryBuiltinTools: func() { a.retryBuiltinTools() },
+			RetryBuiltinTools: func() { a.applyConnection() },
 			ChooseFolder:      func() { a.chooseContactWorkFolder(ct.ID, editor) },
 		})
 	})

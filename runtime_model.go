@@ -390,8 +390,8 @@ func (a *appModel) childEnv() []string {
 
 func (a *appModel) clearBuiltinToolCatalog() {
 	a.runtimeBuiltinTools = nil
+	a.runtimeBuiltinDefaults = nil
 	a.runtimeBuiltinToolsLoaded = false
-	a.runtimeBuiltinToolsLoading = false
 	a.runtimeBuiltinToolsErr = ""
 }
 
@@ -639,43 +639,6 @@ func (a *appModel) loadCapabilities(rt *runtimeClient, gen int) {
 		a.runtimeCapabilitiesErr = ""
 		a.maybeAutoContinueAllIssues()
 	})
-}
-
-func (a *appModel) loadBuiltinTools(rt *runtimeClient, gen int) {
-	catalog, err := rt.tools()
-	a.updateUI(func() {
-		defer a.metadataLoadFinished()
-		if gen != a.connectionGeneration || a.rt != rt || a.runtimeStatus != runtimeStateReady {
-			return
-		}
-		a.runtimeBuiltinToolsLoading = false
-		if err != nil {
-			a.runtimeBuiltinTools = nil
-			a.runtimeBuiltinToolsLoaded = false
-			a.runtimeBuiltinToolsErr = "Could not load built-in tools from Runtime: " + a.connectionRuntimeMessage(err) + ". Retry after Runtime is ready."
-			return
-		}
-		a.runtimeBuiltinTools = append([]runtimeBuiltinTool(nil), catalog.Builtin...)
-		a.runtimeBuiltinToolsLoaded = true
-		a.runtimeBuiltinToolsErr = ""
-	})
-}
-
-func (a *appModel) startBuiltinToolsLoad(rt *runtimeClient, gen int) {
-	if rt == nil || a.runtimeBuiltinToolsLoading || !a.metadataLoadStarted() {
-		return
-	}
-	a.runtimeBuiltinToolsLoading = true
-	a.runtimeBuiltinToolsErr = ""
-	go a.loadBuiltinTools(rt, gen)
-}
-
-func (a *appModel) retryBuiltinTools() {
-	if a.rt == nil || a.runtimeStatus != runtimeStateReady {
-		a.runtimeBuiltinToolsErr = "Built-in tools are available after Runtime is ready."
-		return
-	}
-	a.startBuiltinToolsLoad(a.rt, a.connectionGeneration)
 }
 
 func (a *appModel) capacityKnown() bool {

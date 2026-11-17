@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 )
 
@@ -443,6 +444,27 @@ func readFrame(reader *bufio.Reader) ([]byte, error) {
 	}
 }
 
+func validBuiltinCatalog(catalog *BuiltinCatalog) bool {
+	if catalog == nil || len(catalog.Supported) == 0 || catalog.Defaults == nil {
+		return false
+	}
+	supported := make(map[string]bool, len(catalog.Supported))
+	for _, tool := range catalog.Supported {
+		if strings.TrimSpace(tool.Name) != tool.Name || tool.Name == "" || strings.TrimSpace(tool.Description) == "" || supported[tool.Name] {
+			return false
+		}
+		supported[tool.Name] = true
+	}
+	defaults := make(map[string]bool, len(catalog.Defaults))
+	for _, name := range catalog.Defaults {
+		if !supported[name] || defaults[name] {
+			return false
+		}
+		defaults[name] = true
+	}
+	return true
+}
+
 func (c *Client) handle(line []byte) error {
 	var header struct {
 		Version int    `json:"v"`
@@ -454,7 +476,7 @@ func (c *Client) handle(line []byte) error {
 	switch header.Type {
 	case "ready":
 		var ready Ready
-		if json.Unmarshal(line, &ready) != nil || ready.WorkerEpoch == "" || ready.Engine.Name != "pi" || ready.Engine.Version != "1.5.2" || ready.Runtime.Name != "node" || ready.Runtime.Version == "" {
+		if json.Unmarshal(line, &ready) != nil || ready.WorkerEpoch == "" || ready.Engine.Name != "pi" || ready.Engine.Version != "1.5.2" || ready.Runtime.Name != "node" || ready.Runtime.Version == "" || !validBuiltinCatalog(ready.BuiltinCatalog) {
 			return errors.New("invalid pinned Pi worker ready envelope")
 		}
 		c.mu.Lock()

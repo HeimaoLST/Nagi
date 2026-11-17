@@ -492,9 +492,6 @@ func (a *appModel) handleRuntimeReady(gen int, ready runtimeReady) {
 	a.restoreContacts(a.rt, gen)
 	a.restoreIssueWorks(a.rt, gen)
 	a.startCapabilitiesLoad(a.rt, gen)
-	if a.connectionManaged {
-		a.startBuiltinToolsLoad(a.rt, gen)
-	}
 }
 
 func (a *appModel) handleRuntimeEvent(gen int, event runtimeEventEnvelope) {

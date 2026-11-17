@@ -45,6 +45,7 @@ type piAppHost struct {
 	contexts       map[string]pi.ContextBinding
 	openMu         sync.Mutex
 	outcome        pi.ProcessOutcome
+	exitApplied    chan struct{}
 	defaults       piConversationConfiguration
 }
 
@@ -128,10 +129,9 @@ func (a *appModel) startPiHost() {
 	a.connectionForm.Status = connStatusChecking
 	config := *a.connectionSaved
 	host := a.pi
+	owner := host
 	generation := a.connectionGeneration
-	if host == nil {
-		generation++
-	}
+	ownerGeneration := generation
 	connectionPath, stateDir := a.connectionPath, filepath.Join(filepath.Dir(a.storePath), "pi")
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -144,13 +144,51 @@ func (a *appModel) startPiHost() {
 				err = errors.New("saved connection changed while applying")
 			}
 		}
+		if err == nil && host != nil {
+			select {
+			case <-host.client.Done():
+				outcome, _ := host.client.Wait(ctx)
+				if !outcome.Reaped {
+					err = errors.New("Pi worker exit was not reaped")
+				} else {
+					select {
+					case <-host.client.CallbacksDone():
+					case <-ctx.Done():
+						err = ctx.Err()
+					}
+					if err == nil && host.exitApplied != nil {
+						select {
+						case <-host.exitApplied:
+						case <-ctx.Done():
+							err = ctx.Err()
+						}
+					}
+				}
+				if err == nil {
+					a.runOnUI(func() {
+						if a.pi != owner || a.connectionGeneration != ownerGeneration || a.shutdownStarted {
+							err = errors.New("Pi connection owner changed while applying")
+							return
+						}
+						a.pi = nil
+						a.clearBuiltinToolCatalog()
+					})
+					if err == nil {
+						host = nil
+						owner = nil
+					}
+				}
+			default:
+			}
+		}
 		created := false
 		cleanupFailed := false
 		if err == nil && host == nil {
+			generation++
 			var node, worker string
 			node, worker, err = piPayloadPaths()
 			if err == nil {
-				host = &piAppHost{generation: generation, connectionPath: connectionPath,
+				host = &piAppHost{generation: generation, connectionPath: connectionPath, exitApplied: make(chan struct{}),
 					bridges: make(map[string]*piIssueTools), contexts: make(map[string]pi.ContextBinding)}
 				host.client, err = pi.Start(pi.Options{NodePath: node, WorkerPath: worker, StateDir: stateDir,
 					Handlers: pi.Handlers{OnEvent: func(event pi.Event) { host.onEvent(a, event) },
@@ -158,8 +196,8 @@ func (a *appModel) startPiHost() {
 				created = err == nil
 			}
 		}
+		var ready pi.Ready
 		if err == nil {
-			var ready pi.Ready
 			ready, err = host.client.Ready(ctx)
 			if err == nil && ready.Runtime.Version != "v22.23.5" {
 				err = fmt.Errorf("Pi worker requires Node 22.23.5; got %s", ready.Runtime.Version)
@@ -171,28 +209,41 @@ func (a *appModel) startPiHost() {
 		if err != nil && created {
 			cleanup, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
 			outcome, cleanupErr := host.client.Shutdown(cleanup)
-			cleanupCancel()
-			if !outcome.Reaped {
-				cleanupFailed = true
-				err = errors.Join(err, cleanupErr, errors.New("Pi startup worker was not reaped"))
+			if outcome.Reaped {
+				select {
+				case <-host.client.CallbacksDone():
+				case <-cleanup.Done():
+					cleanupErr = errors.Join(cleanupErr, cleanup.Err())
+				}
 			}
-		}
-		if err == nil {
-			host.mu.Lock()
-			host.defaults = piConversationConfiguration{WireAPI: piWireAPI(config.API), BaseURL: config.Endpoint,
-				Model: config.Model, ContextTokens: config.ContextTokens, OutputTokens: config.OutputTokens,
-				CredentialSource: private.CredentialSource}
-			host.mu.Unlock()
+			if !outcome.Reaped || cleanup.Err() != nil {
+				cleanupFailed = true
+				err = errors.Join(err, cleanupErr, errors.New("Pi startup worker cleanup is incomplete"))
+			}
+			cleanupCancel()
 		}
 		a.updateUI(func() {
 			a.connectionApplying = false
 			a.connectionForm.Busy = false
+			if a.pi != owner || a.connectionGeneration != ownerGeneration {
+				err = errors.New("Pi connection owner changed while applying")
+			}
+			if err == nil {
+				select {
+				case <-host.client.Done():
+					err = errors.New("Pi worker exited while applying")
+					if created {
+						cleanupFailed = true
+					}
+				default:
+				}
+			}
 			if err != nil {
-				if cleanupFailed {
+				if cleanupFailed && a.pi == owner {
 					a.pi = host
 					a.connectionGeneration = generation
 				}
-				if created || host == nil {
+				if created || owner == nil {
 					a.runtimeStatus = runtimeStateFailed
 				}
 				a.connectionForm.Status = ""
@@ -205,6 +256,22 @@ func (a *appModel) startPiHost() {
 			}
 			a.pi = host
 			a.connectionGeneration = generation
+			if a.shutdownStarted {
+				a.finishShutdown()
+				return
+			}
+			host.mu.Lock()
+			host.defaults = piConversationConfiguration{WireAPI: piWireAPI(config.API), BaseURL: config.Endpoint,
+				Model: config.Model, ContextTokens: config.ContextTokens, OutputTokens: config.OutputTokens,
+				CredentialSource: private.CredentialSource}
+			host.mu.Unlock()
+			a.runtimeBuiltinTools = make([]runtimeBuiltinTool, len(ready.BuiltinCatalog.Supported))
+			for i, tool := range ready.BuiltinCatalog.Supported {
+				a.runtimeBuiltinTools[i] = runtimeBuiltinTool{Name: tool.Name, Description: tool.Description}
+			}
+			a.runtimeBuiltinDefaults = append([]string{}, ready.BuiltinCatalog.Defaults...)
+			a.runtimeBuiltinToolsLoaded = true
+			a.runtimeBuiltinToolsErr = ""
 			a.connectionEffective = &config
 			a.connectionManaged = true
 			a.connectionLegacy = false
@@ -220,9 +287,6 @@ func (a *appModel) startPiHost() {
 				if ct.PiBinding != nil && !ct.Loaded {
 					a.reloadContactByID(ct.ID, false)
 				}
-			}
-			if a.shutdownStarted {
-				a.finishShutdown()
 			}
 		})
 	}()
@@ -251,9 +315,13 @@ func (h *piAppHost) onExit(a *appModel, outcome pi.ProcessOutcome) {
 	h.outcome = outcome
 	h.mu.Unlock()
 	a.updateUI(func() {
+		if h.exitApplied != nil {
+			defer close(h.exitApplied)
+		}
 		if a.pi != h {
 			return
 		}
+		a.clearBuiltinToolCatalog()
 		for _, ct := range a.contacts {
 			if ct.ActiveTaskID != "" || ct.SendState == sendSubmitting {
 				ct.ActiveTaskID = ""

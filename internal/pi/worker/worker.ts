@@ -3,6 +3,8 @@ import { mkdir, realpath, stat } from 'node:fs/promises';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import {
   createAgentSessionFromServices, createAgentSessionRuntime, createAgentSessionServices,
+  createReadToolDefinition, createBashToolDefinition, createEditToolDefinition, createWriteToolDefinition,
+  createGrepToolDefinition, createFindToolDefinition, createLsToolDefinition,
   ModelRuntime, SessionManager, SettingsManager, createMcpExtension, McpOAuthCredentialStore, InMemoryAuthStorageBackend,
   type AgentSessionEvent, type AgentSessionRuntime, type ToolDefinition, type McpServerEntry, type McpTransportFactory,
 } from '@earendil-works/pi-coding-agent';
@@ -49,7 +51,15 @@ class Worker {
   private closing = false;
   private disconnected = false;
   private shutdownComplete = false;
-  constructor(private stateDir: string) {}
+  readonly builtinCatalog: { supported: { name: string; description: string }[]; defaults: string[] };
+  private readonly knownBuiltinTools: Set<string>;
+  constructor(private stateDir: string) {
+    const definitions = [createReadToolDefinition, createBashToolDefinition, createEditToolDefinition, createWriteToolDefinition,
+      createGrepToolDefinition, createFindToolDefinition, createLsToolDefinition].map(factory => factory(stateDir));
+    this.builtinCatalog = { supported: definitions.map(({ name, description }) => ({ name, description })),
+      defaults: definitions.slice(0, 4).map(({ name }) => name) };
+    this.knownBuiltinTools = new Set(this.builtinCatalog.supported.map(tool => tool.name));
+  }
   private response(id: string, result: object): Promise<void> {
     return this.writer.send({ v: 1, type: 'response', id, ok: true, result });
   }
@@ -273,10 +283,9 @@ class Worker {
     const model = models.getModel(PROVIDER, config.model);
     if (!model) throw new Error('Configured model is unavailable');
     const customTools = (params.domainTools ?? []).map(tool => this.domainTool(params.contextId, tool));
-    const codingTools = params.codingTools ?? ['read', 'bash', 'edit', 'write'];
-    const known = new Set(['read', 'bash', 'edit', 'write', 'grep', 'find', 'ls']);
-    if (codingTools.some(name => !known.has(name))) throw new RequestError('unsupported_tool', 'Unsupported coding tool selection');
-    if (new Set(customTools.map(tool => tool.name)).size !== customTools.length || customTools.some(tool => known.has(tool.name))) throw new RequestError('invalid_params', 'Conflicting domain tool name');
+    const codingTools = params.codingTools ?? this.builtinCatalog.defaults;
+    if (codingTools.some(name => !this.knownBuiltinTools.has(name))) throw new RequestError('unsupported_tool', 'Unsupported coding tool selection');
+    if (new Set(customTools.map(tool => tool.name)).size !== customTools.length || customTools.some(tool => this.knownBuiltinTools.has(tool.name))) throw new RequestError('invalid_params', 'Conflicting domain tool name');
     const settings = SettingsManager.inMemory({ retry: { enabled: false, provider: { maxRetries: 0 } }, cacheWarming: 'off' });
     this.configureSettings(settings, config);
     const agentDir = join(this.stateDir, 'agent');
@@ -472,7 +481,7 @@ async function main(): Promise<void> {
   await mkdir(join(stateDir, 'sessions'), { recursive: true });
   await mkdir(join(stateDir, 'agent'), { recursive: true });
   const worker = new Worker(stateDir);
-  await worker.writer.send({ v: 1, type: 'ready', workerEpoch: worker.epoch, engine: { name: 'pi', version: '1.5.2' }, runtime: { name: 'node', version: process.version } });
+  await worker.writer.send({ v: 1, type: 'ready', workerEpoch: worker.epoch, engine: { name: 'pi', version: '1.5.2' }, runtime: { name: 'node', version: process.version }, builtinCatalog: worker.builtinCatalog });
   await worker.read();
 }
 main().catch(() => { process.stderr.write('Pi worker initialization failed\n'); process.exitCode = 1; });

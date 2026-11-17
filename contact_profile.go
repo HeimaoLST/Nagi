@@ -34,6 +34,7 @@ type contactProfileEditor struct {
 	Error                 string
 	Status                string
 	BuiltinTools          []runtimeBuiltinTool
+	BuiltinDefaults       []string
 	BuiltinToolsLoaded    bool
 	BuiltinToolsLoading   bool
 	BuiltinToolsError     string
@@ -230,7 +231,7 @@ func (e *contactProfileEditor) activityReason() string {
 }
 
 func (e *contactProfileEditor) builtinDefaultNames() []string {
-	return builtinToolNames(e.BuiltinTools)
+	return append([]string{}, e.BuiltinDefaults...)
 }
 
 func (e *contactProfileEditor) setBuiltinDefault(enabled bool) {
