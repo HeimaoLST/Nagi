@@ -4397,6 +4397,26 @@ func TestPiAppCrashRecoveryNoReplay(t *testing.T) {
 		}
 		return nil
 	})
+	const unsentBeforeLoss = "Unsent draft kept during the worker loss"
+	const unsentAfterLoss = unsentBeforeLoss + " and continued afterward"
+	h.onUI(func() error {
+		ct := app.contactByID(h.contactID)
+		label := msgs.ComposerLabel(ct.Name)
+		if ct.Draft != "" {
+			return errors.New("admitted conversation left an unexpected composer draft")
+		}
+		if err := h.focus(label, true); err != nil {
+			return err
+		}
+		h.tester.Type(unsentBeforeLoss)
+		h.tester.Frame()
+		active, _ := h.tester.TextInputActive()
+		if !active || !h.tester.Focused(label) || ct.Draft != unsentBeforeLoss || !reflect.DeepEqual(ct.pendingSend, pending) {
+			return errors.New("actual composer did not retain the focused unsent draft before worker loss")
+		}
+		piAppRecord(t, "crash-notice-draft-before", map[string]any{"synthetic": false, "draft": ct.Draft, "focused": true, "text_input_active": active})
+		return nil
+	})
 	h.screenshot("crash-before-owned-worker-loss")
 	bodies, _ := provider.snapshot()
 	if len(bodies) != 3 {
@@ -4411,9 +4431,26 @@ func TestPiAppCrashRecoveryNoReplay(t *testing.T) {
 		t.Fatalf("owned crash injection did not yield a correlated abnormal exit: %+v %v", killed, killErr)
 	}
 	h.wait(func() bool { return len(app.piQuestionWaiters) == 0 && app.submissionInFlight == 0 })
+	h.onUI(func() error {
+		ct := app.contactByID(h.contactID)
+		label := msgs.ComposerLabel(ct.Name)
+		h.tester.Frame()
+		active, _ := h.tester.TextInputActive()
+		if !active || !h.tester.Focused(label) || ct.Draft != unsentBeforeLoss {
+			return errors.New("worker loss changed the focused unsent composer draft")
+		}
+		h.tester.Type(" and continued afterward")
+		h.tester.Frame()
+		active, _ = h.tester.TextInputActive()
+		if !active || !h.tester.Focused(label) || ct.Draft != unsentAfterLoss || !reflect.DeepEqual(ct.pendingSend, pending) {
+			return errors.New("notice change interrupted continued typing or changed the pending send")
+		}
+		piAppRecord(t, "crash-notice-draft-after", map[string]any{"synthetic": false, "draft": ct.Draft, "focused": true, "text_input_active": active})
+		return nil
+	})
 	verifyUnknown := func(current *appModel) error {
 		ct := current.contactByID(h.contactID)
-		if ct == nil || ct.PiBinding == nil || !reflect.DeepEqual(ct.PiBinding, chatBinding) || !reflect.DeepEqual(ct.pendingSend, pending) || ct.SendState != sendUnknown || ct.ActiveTaskID != "" {
+		if ct == nil || ct.PiBinding == nil || !reflect.DeepEqual(ct.PiBinding, chatBinding) || !reflect.DeepEqual(ct.pendingSend, pending) || ct.Draft != unsentAfterLoss || ct.SendState != sendUnknown || ct.ActiveTaskID != "" {
 			return errors.New("crash lost the captured unknown conversation or its source")
 		}
 		a, b := ct.issueByID(issueA), ct.issueByID(issueB)
@@ -4434,7 +4471,120 @@ func TestPiAppCrashRecoveryNoReplay(t *testing.T) {
 		}
 		return verifyUnknown(app)
 	})
+	h.onUI(func() error {
+		ct := app.contactByID(h.contactID)
+		h.tester.Frame()
+		count := 0
+		for _, text := range h.tester.Texts() {
+			if text == msgs.SendDisconnectedState() {
+				count++
+			}
+		}
+		bounds, found := h.tester.Find(msgs.SendDisconnectedState())
+		viewport := h.tester.Image().Bounds()
+		if app.connectionSendFailureKnown(ct) || ct.SendError == "" || count != 1 || !found || bounds.W <= 0 || bounds.H <= 0 || bounds.X < 0 || bounds.Y < 0 || bounds.X+bounds.W > float32(viewport.Dx()) || bounds.Y+bounds.H > float32(viewport.Dy()) || !h.tester.HasText(msgs.ConnectionStatusNotConnected()) || h.tester.HasText(msgs.ConnectionRecoveryManagedTitle()) || h.tester.HasText(msgs.ConnectionRecoveryManagedHint()) || h.tester.HasText(ct.SendError) || h.tester.HasText(msgs.ReloadAction()) {
+			return fmt.Errorf("actual exited recovery presentation is not neutral, singular and folded: summary_count=%d first_match=%+v found=%v viewport=%v", count, bounds, found, viewport)
+		}
+		piAppRecord(t, "crash-notice-exited", map[string]any{"synthetic": false, "summary_count": count, "summary_first_match": bounds, "viewport": viewport, "reload_visible": false, "diagnostic_folded": true})
+		return nil
+	})
 	h.screenshot("crash-after-owned-worker-loss")
+	var saveNoticeImage func()
+	h.onUI(func() error {
+		ct := app.contactByID(h.contactID)
+		previousDetail, previousKind := ct.StatusDetail, ct.StatusDetailKind
+		defer func() {
+			ct.StatusDetail, ct.StatusDetailKind = previousDetail, previousKind
+			h.tester.Frame()
+		}()
+		const syntheticStatus = "C3 synthetic second connection diagnostic"
+		ct.StatusDetail, ct.StatusDetailKind = syntheticStatus, "status-connection-lost"
+		h.tester.Frame()
+		count := 0
+		for _, text := range h.tester.Texts() {
+			if text == msgs.SendDisconnectedState() {
+				count++
+			}
+		}
+		if count != 1 || h.tester.HasText(ct.SendError) || h.tester.HasText(syntheticStatus) {
+			return fmt.Errorf("synthetic two-diagnostic notice is not singular and folded: count=%d", count)
+		}
+		if err := h.focus(msgs.DetailsAction(), false); err != nil {
+			return err
+		}
+		h.tester.Key(0, ui.KeySpace)
+		h.tester.Frame()
+		if !h.tester.HasText(ct.SendError) || !h.tester.HasText(syntheticStatus) {
+			return errors.New("actual Details control did not reveal both eligible diagnostics")
+		}
+		if err := h.focus(msgs.CopyErrorDetailsLabel(), false); err != nil {
+			return err
+		}
+		image := h.tester.Image()
+		saveNoticeImage = func() { writePreviewPNG(t, filepath.Join(evidence, "crash-notice-expanded-details.png"), image) }
+		h.tester.SetClipboard("crash-notice-copy-sentinel")
+		h.tester.Key(0, ui.KeySpace)
+		h.tester.Frame()
+		copied := h.tester.Clipboard()
+		if !strings.Contains(copied, ct.SendError) || !strings.Contains(copied, syntheticStatus) {
+			return errors.New("actual diagnostic Copy did not retain both eligible diagnostics")
+		}
+		if err := h.focus(msgs.HideDetailsAction(), false); err != nil {
+			return err
+		}
+		h.tester.Key(0, ui.KeySpace)
+		h.tester.Frame()
+		if h.tester.HasText(ct.SendError) || h.tester.HasText(syntheticStatus) {
+			return errors.New("actual Hide details control did not fold the diagnostics")
+		}
+		piAppRecord(t, "crash-notice-details", map[string]any{"synthetic_status": true, "actual_send_error": ct.SendError, "copied": copied, "image": "crash-notice-expanded-details.png", "viewport": image.Bounds()})
+		return verifyUnknown(app)
+	})
+	saveNoticeImage()
+	h.onUI(func() error {
+		ct := app.contactByID(h.contactID)
+		previousSend, previousSendKind, previousSendDetail := ct.SendError, ct.SendErrorKind, ct.SendErrorDetail
+		previousStatus, previousStatusKind := ct.StatusDetail, ct.StatusDetailKind
+		previousRuntime, previousStage, previousRuntimeError, previousRuntimeKind := app.runtimeStatus, app.runtimeStage, app.runtimeErr, app.runtimeErrKind
+		defer func() {
+			ct.SendError, ct.SendErrorKind, ct.SendErrorDetail = previousSend, previousSendKind, previousSendDetail
+			ct.StatusDetail, ct.StatusDetailKind = previousStatus, previousStatusKind
+			app.runtimeStatus, app.runtimeStage, app.runtimeErr, app.runtimeErrKind = previousRuntime, previousStage, previousRuntimeError, previousRuntimeKind
+			h.tester.Frame()
+		}()
+		ct.SendError, ct.SendErrorKind, ct.SendErrorDetail = "", "", ""
+		ct.StatusDetail, ct.StatusDetailKind = "", ""
+		h.tester.Frame()
+		count := 0
+		for _, text := range h.tester.Texts() {
+			if text == msgs.SendDisconnectedState() {
+				count++
+			}
+		}
+		if count != 1 || ct.SendState != sendUnknown || !reflect.DeepEqual(ct.pendingSend, pending) || ct.Draft != unsentAfterLoss {
+			return fmt.Errorf("synthetic no-details fallback lost its sole uncertainty notice or retained draft: count=%d", count)
+		}
+		ct.SendError = "connection_mismatch:C3 synthetic mismatch diagnostic"
+		h.tester.Frame()
+		if !h.tester.HasText(msgs.ConnectionMismatchSummary()) || h.tester.HasText(ct.SendError) || h.tester.HasText(msgs.ReloadAction()) {
+			return errors.New("synthetic known mismatch exposed its folded diagnostic or Reload")
+		}
+		ct.SendError, ct.SendErrorKind, ct.SendErrorDetail = previousSend, previousSendKind, previousSendDetail
+		ct.StatusDetail, ct.StatusDetailKind = previousStatus, previousStatusKind
+		app.runtimeStatus, app.runtimeStage = runtimeStateFailed, "Connection configuration"
+		app.runtimeErrKind, app.runtimeErr = runtimeNoticeStart, "C3 synthetic startup diagnostic"
+		h.tester.Frame()
+		if !h.tester.HasText(msgs.ConnectionRecoveryManagedTitle()) || !h.tester.HasText(msgs.RecoveryRuntimeStartFailed()) {
+			return errors.New("synthetic startup failure lost the managed title or specific start error")
+		}
+		piAppRecord(t, "crash-notice-synthetic", map[string]any{"synthetic": true, "fallback_summary_count": count, "known_mismatch_folded": true, "startup_title": msgs.ConnectionRecoveryManagedTitle(), "startup_error": msgs.RecoveryRuntimeStartFailed()})
+		return nil
+	})
+	h.onUI(func() error { return verifyUnknown(app) })
+	bodies, _ = provider.snapshot()
+	if len(bodies) != 3 {
+		t.Fatalf("recovery notice interactions sent an unexpected model request: %d", len(bodies))
+	}
 	storePath := app.store.path
 	stored, err := openContactStore(storePath, project)
 	if err != nil {
@@ -4463,6 +4613,9 @@ func TestPiAppCrashRecoveryNoReplay(t *testing.T) {
 	}
 	if storedOperationA.Receipt == nil || storedOperationA.Receipt.QuestionRef != questionRefA || storedOperationB.Receipt == nil || storedOperationB.Receipt.QuestionRef != questionRefB {
 		t.Fatal("reopened store lost the captured question receipts")
+	}
+	if storedContact.Draft != unsentAfterLoss {
+		t.Fatal("reopened store lost the continued unsent composer draft")
 	}
 	piAppRecord(t, "crash-durable-unknown", map[string]any{"contact_id": h.contactID, "chat_run": chatRun, "chat_binding": chatBinding, "pending": storedContact.PendingSend, "activity_run": runA, "activity_call": callA, "stopped_run": runB, "stopped_call": callB, "requests": len(bodies)})
 	h.onUI(func() error {
@@ -4544,6 +4697,23 @@ func TestPiAppCrashRecoveryNoReplay(t *testing.T) {
 		return verifyUnknown(app)
 	})
 	h.screenshot("crash-old-activity-unavailable")
+	h.onUI(func() error {
+		ct := app.contactByID(h.contactID)
+		h.tester.Frame()
+		count := 0
+		for _, text := range h.tester.Texts() {
+			if text == msgs.SendUnknownState() {
+				count++
+			}
+		}
+		bounds, found := h.tester.Find(msgs.SendUnknownState())
+		viewport := h.tester.Image().Bounds()
+		if count != 1 || !found || bounds.W <= 0 || bounds.H <= 0 || bounds.X < 0 || bounds.Y < 0 || bounds.X+bounds.W > float32(viewport.Dx()) || bounds.Y+bounds.H > float32(viewport.Dy()) || !h.tester.HasText(msgs.ReloadAction()) || ct.Draft != unsentAfterLoss || ct.SendState != sendUnknown || !reflect.DeepEqual(ct.pendingSend, pending) {
+			return fmt.Errorf("recovered conversation does not show one unknown notice and guarded Reload: summary_count=%d first_match=%+v found=%v viewport=%v", count, bounds, found, viewport)
+		}
+		piAppRecord(t, "crash-notice-recovered", map[string]any{"synthetic": false, "summary_count": count, "summary_first_match": bounds, "viewport": viewport, "reload_visible": true, "draft": ct.Draft, "pending_state": ct.pendingSend.State})
+		return nil
+	})
 	var historyGeneration int
 	h.onUI(func() error {
 		historyGeneration = app.contactByID(h.contactID).historyGen

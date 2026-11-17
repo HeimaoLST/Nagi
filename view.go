@@ -622,6 +622,9 @@ func (a *appModel) runtimeRecoverySummary(msgs locales.Messages) string {
 	case runtimeNoticeStoreSave:
 		return msgs.RecoveryLocalSaveFailed()
 	default:
+		if a.runtimeStatus == runtimeStateExited {
+			return msgs.ConnectionRecoveryNotConnectedHint()
+		}
 		return msgs.ConnectionRecoveryManagedHint()
 	}
 }
@@ -642,17 +645,22 @@ func (a *appModel) connectionRecoveryNotice(c *ui.Context, t *ui.Theme, state co
 		title, hint = msgs.ConnectionStatusSavedAwaitingApply(), msgs.ConnectionRecoverySavedHint()
 	case connectionViewNotConnected:
 		title, hint = msgs.ConnectionStatusNotConnected(), msgs.ConnectionRecoveryNotConnectedHint()
-		if a.runtimeStage == "Connection configuration" && (a.connectionEffective != nil || a.connectionSaved != nil || a.connectionManaged) {
+		if a.runtimeStatus != runtimeStateExited && a.runtimeStage == "Connection configuration" && (a.connectionEffective != nil || a.connectionSaved != nil || a.connectionManaged) {
 			title, hint = msgs.ConnectionRecoveryManagedTitle(), msgs.ConnectionRecoveryManagedHint()
 		}
 	}
+	showRuntimeError := a.hasRuntimeError() && a.runtimeErrKind != runtimeNoticeConnectionRequired
+	runtimeSummary := ""
+	if showRuntimeError {
+		runtimeSummary = a.runtimeRecoverySummary(msgs)
+	}
 	ui.Column(c).Padding(8, 16).Gap(3).Children(func() {
 		ui.Text(c, title).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Warning)
-		if hint != "" {
+		if hint != "" && hint != runtimeSummary {
 			ui.Text(c, hint).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 		}
-		if a.hasRuntimeError() && a.runtimeErrKind != runtimeNoticeConnectionRequired {
-			a.recoveryNotice(c, t, "startup", a.runtimeRecoverySummary(msgs), a.runtimeErrorDisplay(msgs)+"\n"+a.runtimeHintDisplay(msgs), false)
+		if showRuntimeError {
+			a.recoveryNotice(c, t, "startup", runtimeSummary, a.runtimeErrorDisplay(msgs)+"\n"+a.runtimeHintDisplay(msgs), false)
 		}
 		ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
 			secondaryButton(c, msgs.ConnectionRecoveryOpenSettings()).Label(msgs.ConnectionRecoveryOpenSettings()).MinHeight(32).OnClick(func() { a.openConfiguration() })
@@ -1264,6 +1272,9 @@ func (a *appModel) composer(c *ui.Context, t *ui.Theme) {
 						secondaryButton(c, msgs.RetryCapacity()).OnClick(func() { a.retryCapabilities() })
 					})
 				}
+				sendErrorVisible := ct.SendError != "" && !knownMismatch
+				connectionLostDetail := ct.SendState == sendUnknown && ct.StatusDetail != "" && ct.StatusDetailKind == "status-connection-lost"
+				unknownNotice := ct.SendState == sendUnknown && (sendErrorVisible || connectionLostDetail)
 				if sendReason != "" && strings.TrimSpace(ct.Draft) != "" {
 					ui.Text(c, sendBlockText(msgs, sendReason)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 				}
@@ -1271,14 +1282,14 @@ func (a *appModel) composer(c *ui.Context, t *ui.Theme) {
 					msgs := locales.In(c.Locale())
 					if a.shutdownStarted || ct.Archived {
 						ui.Text(c, sendBlockText(msgs, sendReason)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
-					} else {
+					} else if !unknownNotice {
 						hint := msgs.ConnectionRecoverySetupHint()
 						switch a.connectionViewState() {
 						case connectionViewSaved:
 							hint = msgs.ConnectionRecoverySavedHint()
 						case connectionViewNotConnected:
 							hint = msgs.ConnectionRecoveryNotConnectedHint()
-							if a.runtimeStage == "Connection configuration" && (a.connectionEffective != nil || a.connectionSaved != nil || a.connectionManaged) {
+							if a.runtimeStatus != runtimeStateExited && a.runtimeStage == "Connection configuration" && (a.connectionEffective != nil || a.connectionSaved != nil || a.connectionManaged) {
 								hint = msgs.ConnectionRecoveryManagedHint()
 							}
 						case connectionViewApplying:
@@ -1299,33 +1310,39 @@ func (a *appModel) composer(c *ui.Context, t *ui.Theme) {
 					ui.Text(c, msgs.SendingState()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 				case ct.SendState == sendAccepted && ct.Status != statusWorking:
 					ui.Text(c, msgs.SendAcceptedState()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
-				case ct.SendState == sendUnknown:
+				case ct.SendState == sendUnknown && !unknownNotice:
 					ui.Text(c, unknownSummary).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Danger)
 				}
-				if ct.SendError != "" && !knownMismatch {
-					ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
-						summary := msgs.RecoveryRequestFailed()
+				if sendErrorVisible || connectionLostDetail {
+					var key, detail string
+					if sendErrorVisible {
+						key = "send:" + ct.ID + ":" + ct.SessionID + ":" + ct.LastTaskID + ":" + ct.ActiveTaskID
+						detail = ct.SendError
+						if connectionLostDetail && ct.StatusDetail != ct.SendError {
+							detail += "\n\n" + ct.StatusDetail
+						}
+					} else {
+						key = "status:" + ct.ID + ":" + ct.SessionID + ":" + ct.LastTaskID
+						detail = ct.StatusDetail
+					}
+					summary := unknownSummary
+					if !unknownNotice {
+						summary = msgs.RecoveryRequestFailed()
 						if ct.SendErrorKind != "" {
 							summary = contactNoticeText(msgs, ct.SendErrorKind, "")
 						}
-						if ct.SendState == sendUnknown {
-							summary = unknownSummary
-						}
-						a.recoveryNotice(c, t, "send:"+ct.ID+":"+ct.SessionID+":"+ct.LastTaskID+":"+ct.ActiveTaskID, summary, ct.SendError, true)
-
-					})
+					}
+					a.recoveryNotice(c, t, key, summary, detail, true)
 				}
 				if canReload && (ct.SendState == sendUnknown || ct.SendError != "") {
 					secondaryButton(c, msgs.ReloadAction()).Label(msgs.ReloadAction()).OnClick(func() { a.reloadSelected() })
 				}
-				if ct.StatusDetail != "" {
+				if ct.StatusDetail != "" && !connectionLostDetail {
 					statusText := ct.StatusDetail
 					if ct.StatusDetailKind != "" {
 						statusText = contactNoticeText(locales.In(c.Locale()), ct.StatusDetailKind, "")
 					}
-					if ct.SendState == sendUnknown && ct.StatusDetailKind == "status-connection-lost" {
-						a.recoveryNotice(c, t, "status:"+ct.ID+":"+ct.SessionID+":"+ct.LastTaskID, unknownSummary, ct.StatusDetail, true)
-					} else if ct.StatusDetailKind == "" && formattedRunFailure(ct.StatusDetail) {
+					if ct.StatusDetailKind == "" && formattedRunFailure(ct.StatusDetail) {
 						a.recoveryNotice(c, t, "task:"+ct.ID+":"+ct.SessionID+":"+ct.LastTaskID+":"+ct.ActiveTaskID, runFailureSummary(msgs, ct.StatusDetail), ct.StatusDetail, true)
 					} else {
 						ui.Text(c, statusText).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Warning)
