@@ -341,3 +341,9 @@
 **Problem:** A keyboard regression supplied supported tools but expected a host-default label without supplying the independent default list; a Retry fixture used a retired client stub instead of current configuration eligibility.
 **Cause or correction:** Supported tools and default selections are distinct ready-envelope facts. Configured idle Retry presentation does not require a live host, while a legacy client stub establishes neither configuration nor Pi readiness.
 **Prevention:** Supply explicit independent fixture defaults, preserve nil/empty/subset semantics and exercise actual keyboard controls. Use a fresh current store and saved valid configuration for offline Retry presentation; keep unconfigured blocking and actual process-level Retry evidence separate.
+
+## Preserve human drafts before terminal delivery
+
+**Problem:** Sending screenshot materials through hc cleared an old unsent human draft. A preceding --if idle attempt rejected the observed done status without typing; a later default send delivered the materials but replaced the draft.
+**Cause or correction:** HC's draft hold expires after a finite interval; it does not preserve an old draft indefinitely. The original text was restored through raw bracketed paste without Enter, and the unchanged message turn, exact unsent input and original terminal size were verified. Named-key input rejected Unicode without typing.
+**Prevention:** Inspect the actual input before delivery. When a human draft exists, share material files and links without sending another terminal prompt; elapsed quiet time is not consent to replace it. Preserve the exact original and restore only that text without submission after an accidental replacement. Match original terminal dimensions before attaching.
