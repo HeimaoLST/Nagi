@@ -30,6 +30,19 @@ var piIssueToolDefinitions = sync.OnceValues(func() ([]pi.DomainTool, error) {
 	return tools, nil
 })
 
+var piIssueWorkDefinitions = sync.OnceValues(func() ([]pi.DomainTool, error) {
+	definitions := issueToolWorkDefinitions()
+	tools := make([]pi.DomainTool, 0, len(definitions))
+	for _, definition := range definitions {
+		parameters, err := json.Marshal(definition.InputSchema)
+		if err != nil {
+			return nil, err
+		}
+		tools = append(tools, pi.DomainTool{Name: definition.Name, Description: "Ask the user a concise question and wait for the answer.", Parameters: parameters})
+	}
+	return tools, nil
+})
+
 type piIssueToolCall struct {
 	callID  string
 	request issueToolForwardRequest
@@ -48,29 +61,36 @@ type piIssueTools struct {
 	scope   IssueToolScope
 	tools   []pi.DomainTool
 
-	mu      sync.Mutex
-	started bool
-	settled bool
-	closed  bool
-	seq     uint64
-	calls   map[string]struct{}
-	queue   chan piIssueToolCall
-	done    chan struct{}
-	err     error
+	mu       sync.Mutex
+	started  bool
+	settled  bool
+	closed   bool
+	seq      uint64
+	calls    map[string]struct{}
+	queue    chan piIssueToolCall
+	done     chan struct{}
+	stop     chan struct{}
+	stopOnce sync.Once
+	err      error
 }
 
 func newPiIssueTools(ctx context.Context, a *appModel, client *pi.Client, binding pi.ContextBinding, run pi.StartRunParams) (*piIssueTools, error) {
-	if a == nil || client == nil || binding.Purpose != pi.Conversation || binding.ActivityID != "" ||
-		binding.ContextID == "" || binding.BotID == "" || binding.SessionRef == "" ||
+	if a == nil || client == nil || binding.ContextID == "" || binding.BotID == "" || binding.SessionRef == "" ||
 		run.ContextID != binding.ContextID || run.RunID == "" || run.Correlation == nil ||
-		run.Correlation.TurnID == "" || run.Correlation.ScopeRef == "" || run.Correlation.ExecutionID != "" {
-		return nil, errors.New("Pi issue tools require a bound conversation and an exact turn/scope correlation")
+		run.Correlation.TurnID == "" || run.Correlation.ScopeRef == "" ||
+		(binding.Purpose == pi.Conversation && (binding.ActivityID != "" || run.Correlation.ExecutionID != "")) ||
+		(binding.Purpose == pi.Activity && (binding.ActivityID == "" || run.Correlation.ExecutionID == "")) ||
+		(binding.Purpose != pi.Conversation && binding.Purpose != pi.Activity) {
+		return nil, errors.New("Pi issue tools require an exact bound run and scope")
 	}
 	ready, err := client.Ready(ctx)
 	if err != nil {
 		return nil, err
 	}
 	tools, err := piIssueToolDefinitions()
+	if binding.Purpose == pi.Activity {
+		tools, err = piIssueWorkDefinitions()
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -81,9 +101,11 @@ func newPiIssueTools(ctx context.Context, a *appModel, client *pi.Client, bindin
 			return
 		}
 		if scope.ContactID != binding.BotID || scope.RuntimeSession() != binding.SessionRef ||
-			scope.TurnID != run.Correlation.TurnID || scope.Mode == issueToolModeWork ||
-			scope.RuntimeTaskID != "" && scope.RuntimeTaskID != run.RunID || !a.issueToolScopeActive(scope) {
-			err = errors.New("Pi conversation binding does not own the active issue tool scope")
+			scope.TurnID != run.Correlation.TurnID || scope.RuntimeTaskID != "" && scope.RuntimeTaskID != run.RunID ||
+			binding.Purpose == pi.Conversation && scope.Mode == issueToolModeWork ||
+			binding.Purpose == pi.Activity && (scope.Mode != issueToolModeWork || scope.WorkIssueID != binding.ActivityID || scope.WorkExecutionID != run.Correlation.ExecutionID) ||
+			!a.issueToolScopeActive(scope) {
+			err = errors.New("Pi binding does not own the active issue tool scope")
 		}
 	})
 	if err != nil {
@@ -93,7 +115,7 @@ func newPiIssueTools(ctx context.Context, a *appModel, client *pi.Client, bindin
 		app: a, client: client, epoch: ready.WorkerEpoch, binding: binding,
 		runID: run.RunID, scope: scope, tools: tools,
 		calls: make(map[string]struct{}), queue: make(chan piIssueToolCall, piIssueToolQueueLimit),
-		done: make(chan struct{}),
+		done: make(chan struct{}), stop: make(chan struct{}),
 	}
 	go bridge.serve()
 	return bridge, nil
@@ -106,7 +128,7 @@ func (b *piIssueTools) HandleEvent(event pi.Event) error {
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	if b.closed || event.Seq <= b.seq {
+	if event.Seq <= b.seq || b.closed && event.Name != pi.RunStarted && event.Name != pi.RunSettled && event.Name != pi.ToolFinished {
 		return errors.New("Pi issue tool callback is stale or admission is closed")
 	}
 	switch event.Name {
@@ -114,9 +136,9 @@ func (b *piIssueTools) HandleEvent(event pi.Event) error {
 		var data struct {
 			Correlation pi.RunCorrelation `json:"correlation"`
 		}
-		if b.started || json.Unmarshal(event.Data, &data) != nil ||
+		if b.started || b.settled || json.Unmarshal(event.Data, &data) != nil ||
 			data.Correlation.TurnID != b.scope.TurnID || data.Correlation.ScopeRef != b.scope.Ref ||
-			data.Correlation.ExecutionID != "" {
+			data.Correlation.ExecutionID != b.scope.WorkExecutionID {
 			return errors.New("Pi run started with a different issue tool correlation")
 		}
 		b.started = true
@@ -136,6 +158,10 @@ func (b *piIssueTools) HandleEvent(event pi.Event) error {
 			return errors.New("Pi callback is not a registered conversation issue tool")
 		}
 		if _, exists := b.calls[data.CallID]; exists {
+			if b.binding.Purpose == pi.Activity {
+				b.seq = event.Seq
+				return nil
+			}
 			return errors.New("Pi issue tool call was already admitted; not replaying it")
 		}
 		if len(b.calls) >= piIssueToolCallLimit {
@@ -149,9 +175,15 @@ func (b *piIssueTools) HandleEvent(event pi.Event) error {
 			return errors.New("Pi issue tool callback queue is full")
 		}
 	case pi.RunSettled:
+		if b.settled {
+			return errors.New("Pi run has already settled")
+		}
 		b.settled = true
-		b.closed = true
-		close(b.queue)
+		b.cancelWait()
+		if !b.closed {
+			b.closed = true
+			close(b.queue)
+		}
 	}
 	b.seq = event.Seq
 	return nil
@@ -164,6 +196,10 @@ func (b *piIssueTools) closeAdmission() {
 		close(b.queue)
 	}
 	b.mu.Unlock()
+}
+
+func (b *piIssueTools) cancelWait() {
+	b.stopOnce.Do(func() { close(b.stop) })
 }
 
 func (b *piIssueTools) Drain(ctx context.Context) error {
@@ -186,11 +222,20 @@ func (b *piIssueTools) serve() {
 			if !ok {
 				return
 			}
-			b.dispatch(call)
+			if b.binding.Purpose == pi.Activity {
+				b.dispatchActivity(call)
+			} else {
+				b.dispatch(call)
+			}
 		case <-b.client.Done():
+			b.cancelWait()
 			b.closeAdmission()
 			for call := range b.queue {
-				b.dispatch(call)
+				if b.binding.Purpose == pi.Activity {
+					b.dispatchActivity(call)
+				} else {
+					b.dispatch(call)
+				}
 			}
 			return
 		}
@@ -223,9 +268,11 @@ func (b *piIssueTools) authorize(ctx context.Context) error {
 			return
 		}
 		if settled || scope.ContactID != b.binding.BotID || scope.RuntimeSession() != b.binding.SessionRef ||
-			scope.TurnID != b.scope.TurnID || scope.Mode == issueToolModeWork ||
-			scope.RuntimeTaskID != "" && scope.RuntimeTaskID != b.runID || !b.app.issueToolScopeActive(b.scope) {
-			ownerErr = &IssueToolError{Code: "scope_inactive", Message: "the captured Pi conversation no longer owns this issue tool scope"}
+			scope.TurnID != b.scope.TurnID || scope.RuntimeTaskID != "" && scope.RuntimeTaskID != b.runID ||
+			b.binding.Purpose == pi.Conversation && scope.Mode == issueToolModeWork ||
+			b.binding.Purpose == pi.Activity && (scope.Mode != issueToolModeWork || scope.WorkIssueID != b.binding.ActivityID) ||
+			!b.app.issueToolScopeActive(b.scope) {
+			ownerErr = &IssueToolError{Code: "scope_inactive", Message: "the captured Pi run no longer owns this issue tool scope"}
 		}
 	})
 	return ownerErr

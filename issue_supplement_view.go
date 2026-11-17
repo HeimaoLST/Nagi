@@ -76,7 +76,7 @@ func (a *appModel) issueSupplementSection(c *ui.Context, t *ui.Theme, ct *contac
 	if ledger != nil {
 		var pendingItems []*issueSupplement
 		for _, item := range ledger.Items {
-			if item != nil && item.State == supplementStatePending {
+			if item != nil && item.State == supplementStatePending && item.PiQuestionOperationID == "" {
 				pendingItems = append(pendingItems, item)
 			}
 		}
@@ -122,6 +122,10 @@ func (a *appModel) issueSupplementSection(c *ui.Context, t *ui.Theme, ct *contac
 					a.closeIssueSupplementForm()
 				})
 			})
+			c.Key(struct {
+				ContactID, IssueID, QuestionRef string
+				Answering                       bool
+			}{ct.ID, issue.ID, questionRef, answering})
 			formTextArea(c, draft, false, a.workTheme.InputBorder).Label(inputLabel).Height(56).
 				Placeholder(msgs.SupplementFormPlaceholder())
 			ui.Row(c).Gap(6).Children(func() {
@@ -213,11 +217,17 @@ func (a *appModel) issueSupplementSection(c *ui.Context, t *ui.Theme, ct *contac
 					ui.Text(c, msgs.SupplementNeedsCheck()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Warning)
 					if batch.ExecutionID != "" {
 						executionID := batch.ExecutionID
-						secondaryButton(c, msgs.SupplementCheck()).OnClick(func() {
+						secondaryButton(c, msgs.SupplementCheck()).Disabled(!a.demo).OnClick(func() {
+							if !a.demo {
+								return
+							}
 							if !a.reconcileIssueExecution(issue.ID, executionID) {
 								a.setIssueActionNotice("Could not check this supplement execution.", "supplement-check-failed", "")
 							}
 						})
+						if !a.demo {
+							ui.Text(c, piResultsUnavailable).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Warning)
+						}
 					}
 				}
 			})

@@ -9,6 +9,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"github.com/HeimaoLST/Nagi/internal/pi"
 	"github.com/HeimaoLST/Nagi/locales"
 )
 
@@ -239,15 +240,23 @@ func TestPiConversationRunStartedClearsSubmittedDraft(t *testing.T) {
 func TestIssueConfirmedRejectIsPersistedAndRerunnable(t *testing.T) {
 	a, ct, _ := piRunStartedTestApp(t)
 	ct.ActiveTaskID, ct.SendState = "", sendIdle
-	issue := &productIssue{ID: "i1", ContactID: ct.ID, Goal: "work", Status: issueStatusNotStarted}
-	execution := &issueExecution{ID: "e1", Prompt: "work", Status: issueExecutionPending}
+	issue, err := a.createIssueFor(ct, "work", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	execution := &issueExecution{ID: newIssueExecutionID(), PiIntent: true, Prompt: "work", Status: issueExecutionPending, RequirementsRevision: issue.RequirementsRevision}
 	issue.Executions = append(issue.Executions, execution)
-	ct.Issues = append(ct.Issues, issue)
 	ct.SelectedIssueID = issue.ID
 	issue.Work.pendingExecutionID = execution.ID
 	issue.Work.SendState = sendSubmitting
 	path := a.store.path
-	a.failIssueSubmit(ct.ID, issue.ID, &runtimeError{Code: "invalid_request", Message: "not accepted"}, true)
+	if err := a.persist(); err != nil {
+		t.Fatal(err)
+	}
+	a.failPiActivity(a.pi, ct.ID, issue.ID, execution.ID, &pi.CommandError{
+		Method: "run.start", Delivery: pi.Rejected,
+		Err: &pi.RemoteError{Code: "invalid_request", Message: "not accepted"},
+	}, false)
 	if execution.Status != issueExecutionRejected || issue.Work.SendState != sendIdle || ct.SendState != sendIdle {
 		t.Fatalf("confirmed reject state = %+v / %v / %v", execution, issue.Work.SendState, ct.SendState)
 	}
@@ -341,15 +350,22 @@ func TestIssueResultAttributionFollowsSelectedIssue(t *testing.T) {
 func TestIssueNotDispatchedIsPersistedAndRerunnable(t *testing.T) {
 	a, ct, _ := piRunStartedTestApp(t)
 	ct.ActiveTaskID, ct.SendState = "", sendIdle
-	issue := &productIssue{ID: "i1", ContactID: ct.ID, Goal: "work", Status: issueStatusNotStarted}
-	execution := &issueExecution{ID: "e1", Prompt: "work", Status: issueExecutionPending}
+	issue, err := a.createIssueFor(ct, "work", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	execution := &issueExecution{ID: newIssueExecutionID(), PiIntent: true, Prompt: "work", Status: issueExecutionPending, RequirementsRevision: issue.RequirementsRevision}
 	issue.Executions = append(issue.Executions, execution)
-	ct.Issues = append(ct.Issues, issue)
 	ct.SelectedIssueID = issue.ID
 	issue.Work.pendingExecutionID = execution.ID
 	issue.Work.SendState = sendSubmitting
 	path := a.store.path
-	a.failIssueSubmit(ct.ID, issue.ID, &runtimeError{Code: "protocol_error", Message: "dispatch was not issued"}, false)
+	if err := a.persist(); err != nil {
+		t.Fatal(err)
+	}
+	a.failPiActivity(a.pi, ct.ID, issue.ID, execution.ID, &pi.CommandError{
+		Method: "run.start", Delivery: pi.NotSent, Err: os.ErrClosed,
+	}, false)
 	if execution.Status != issueExecutionNotDispatched || issue.Work.SendState != sendIdle || issueRunBlocked(issue) != "" {
 		t.Fatalf("not-dispatched state = %+v", execution)
 	}
@@ -561,56 +577,6 @@ func TestIssueSeenUnknownWithActiveTaskIDDoesNotReAttention(t *testing.T) {
 	if issue.Work.ActiveTaskID != "task-seen-active-unknown" || issue.Work.SendState != sendUnknown ||
 		execution.AttentionSeenStatus != issueExecutionUnknown || execution.Status != issueExecutionUnknown {
 		t.Fatalf("seen unknown state was rewritten: work=%+v run=%+v", issue.Work, execution)
-	}
-}
-
-func TestIssueActiveAcceptedSendFailureStaysAttention(t *testing.T) {
-	a, ct := taskContextApp(t)
-	issue := &productIssue{
-		ID: "issue-accepted-save-failure", ContactID: ct.ID, Goal: "accepted context failure",
-		Status: issueStatusInProgress, WorkSessionID: "work-accepted-save-failure",
-		RequirementsRevision: 1,
-	}
-	ct.Issues = []*productIssue{issue}
-	ct.SelectedIssueID = issue.ID
-	if err := a.addIssueSupplement(ct, issue.ID, "accepted supplement"); err != nil {
-		t.Fatal(err)
-	}
-	execution := &issueExecution{
-		ID: "run-accepted-save-failure", SessionID: issue.WorkSessionID,
-		Prompt: "accepted prompt", Status: issueExecutionPending, RequirementsRevision: 1,
-	}
-	issue.Executions = []*issueExecution{execution}
-	issue.Work.SendState = sendSubmitting
-	issue.Work.pendingExecutionID = execution.ID
-	target := issueSupplementTargetFor(ct, issue)
-	if _, err := issue.Supplements.PrepareDispatch(target, execution, a.persist); err != nil {
-		t.Fatal(err)
-	}
-	// Force the accepted supplement receipt save to fail after the real Runtime
-	// acceptance is already represented in memory.
-	a.store = &contactStore{path: t.TempDir()}
-	a.acceptIssueTask(ct, issue, execution, "accepted prompt", runtimeSendResult{
-		TaskID: "task-accepted-save-failure", MessageID: "message-accepted-save-failure",
-	})
-	if issue.Work.ActiveTaskID != "task-accepted-save-failure" || issue.Work.SendState != sendAccepted ||
-		issue.Work.SendError == "" || execution.Status != issueExecutionAccepted ||
-		issue.Status != issueStatusInProgress {
-		t.Fatalf("accepted supplement failure state = work=%+v execution=%+v issue=%q",
-			issue.Work, execution, issue.Status)
-	}
-	display := issueDisplayStatusFor(issue)
-	if !display.Attention || !display.Active || display.Reason != issue.Work.SendError ||
-		display.Status != issueStatusNeedsAttention {
-		t.Fatalf("accepted supplement failure projection = %+v", display)
-	}
-	notice := a.issueWorkNotice(ct)
-	if !notice.Attention || notice.IssueID != issue.ID || !strings.Contains(notice.AttentionReason, issue.Work.SendError) {
-		t.Fatalf("accepted supplement failure notice = %+v", notice)
-	}
-	if issue.Work.ActiveTaskID != "task-accepted-save-failure" || issue.Work.SendState != sendAccepted ||
-		execution.Status != issueExecutionAccepted || strings.Contains(issue.Work.SendError, "unknown") {
-		t.Fatalf("accepted supplement failure was misclassified as unknown/success: issue=%+v execution=%+v", issue.Work, execution)
 	}
 }
 

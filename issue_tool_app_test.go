@@ -1005,30 +1005,6 @@ func TestIssueToolReplacementQuestionSaveFailureKeepsOriginalOpen(t *testing.T) 
 	}
 }
 
-func TestIssueToolRefreshMarkerIsRuntimeGenerationBound(t *testing.T) {
-	a, _ := newIssueToolTestApp(t)
-	rt1, rt2 := &runtimeClient{}, &runtimeClient{}
-	a.connectionGeneration = 1
-	if a.issueToolRefreshRequired(rt1, "session-schema") {
-		t.Fatal("empty refresh marker was required")
-	}
-	a.requireIssueToolRefresh(rt1, "session-schema")
-	if !a.issueToolRefreshRequired(rt1, "session-schema") {
-		t.Fatal("same runtime/generation refresh marker was not required")
-	}
-	if a.issueToolRefreshRequired(rt2, "session-schema") {
-		t.Fatal("refresh marker leaked to a different runtime")
-	}
-	a.connectionGeneration = 2
-	if a.issueToolRefreshRequired(rt1, "session-schema") {
-		t.Fatal("refresh marker leaked to a different generation")
-	}
-	a.clearIssueToolRefresh("session-schema")
-	if a.issueToolRefreshRequired(rt1, "session-schema") {
-		t.Fatal("refresh marker survived clear")
-	}
-}
-
 func TestIssueToolWaitBeforeTaskBindingUsesScopeThenRealTask(t *testing.T) {
 	a, _ := newIssueToolTestApp(t)
 	ct := a.selectedContact()
@@ -1110,59 +1086,6 @@ func TestIssueToolInternalScopeIsFilteredFromUserHistoryOnlyAtTail(t *testing.T)
 	}
 }
 
-func TestIssueToolRoleGuidanceFilteredOnlyBesideVerifiedTailScope(t *testing.T) {
-	a, _ := newIssueToolTestApp(t)
-	ct := a.selectedContact()
-	appScope, err := a.issueToolNewScope(ct.ID, "history-session", "history-turn", true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	oldScope, err := a.issueToolNewScope(ct.ID, "history-session", "history-old-turn", false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	other, err := a.issueToolNewScope(ct.ID, "other-session", "other-turn", true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	user := taskContextItem{Name: "user-note", Text: "user material", Revision: 1}
-	guidance := taskContextItem{Name: issueToolRoleGuidanceContextName, Text: issueToolConversationGuidance, Revision: 1}
-	workGuidance := taskContextItem{Name: issueToolRoleGuidanceContextName, Text: issueToolWorkGuidance, Revision: 1}
-	different := taskContextItem{Name: issueToolRoleGuidanceContextName, Text: "same name, different text", Revision: 1}
-	nonCurrent := taskContextItem{Name: issueToolRoleGuidanceContextName, Text: "app provenance, non-current body", Revision: 1}
-	appScopeItem := taskContextItem{Name: issueToolScopeContextName, Text: appScope.Ref, Revision: 1}
-	oldScopeItem := taskContextItem{Name: issueToolScopeContextName, Text: oldScope.Ref, Revision: 1}
-	unknown := taskContextItem{Name: issueToolScopeContextName, Text: "scope-unknown", Revision: 1}
-	otherSession := taskContextItem{Name: issueToolScopeContextName, Text: other.Ref, Revision: 1}
-	cases := []struct {
-		name  string
-		items []taskContextItem
-		want  []taskContextItem
-	}{
-		{"conversation guidance beside app scope", []taskContextItem{user, guidance, appScopeItem}, []taskContextItem{user}},
-		{"work guidance beside app scope", []taskContextItem{user, workGuidance, appScopeItem}, []taskContextItem{user}},
-		{"app scope hides non-current body", []taskContextItem{user, nonCurrent, appScopeItem}, []taskContextItem{user}},
-		{"old scope keeps app-shaped user material", []taskContextItem{user, guidance, oldScopeItem}, []taskContextItem{user, guidance}},
-		{"same name different text", []taskContextItem{user, different, oldScopeItem}, []taskContextItem{user, different}},
-		{"earlier guidance", []taskContextItem{guidance, user, oldScopeItem}, []taskContextItem{guidance, user}},
-		{"two guidance removes at most one", []taskContextItem{user, guidance, guidance, appScopeItem}, []taskContextItem{user, guidance}},
-		{"unknown scope", []taskContextItem{user, guidance, unknown}, []taskContextItem{user, guidance, unknown}},
-		{"other session scope", []taskContextItem{user, guidance, otherSession}, []taskContextItem{user, guidance, otherSession}},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			records := supplementRawHistoryRecords(t, "history-task", "history-message", "body", tc.items, true)
-			filtered := parseHistoryWithIssueToolScopeFilter("history-session", records, nil, a.issueToolScopeIndexSnapshot())
-			if len(filtered.messages) != 1 {
-				t.Fatalf("filtered messages = %+v", filtered.messages)
-			}
-			if !reflect.DeepEqual(filtered.messages[0].Context, tc.want) {
-				t.Fatalf("filtered contexts = %+v, want %+v", filtered.messages[0].Context, tc.want)
-			}
-		})
-	}
-}
-
 func TestIssueToolConversationIssueListIsBoundedAndScopeOwned(t *testing.T) {
 	a, _ := newIssueToolTestApp(t)
 	ct := a.selectedContact()
@@ -1211,34 +1134,32 @@ func TestIssueToolConversationIssueListIsBoundedAndScopeOwned(t *testing.T) {
 }
 
 func TestIssueToolIssueListHistoryRequiresPersistedProvenance(t *testing.T) {
-	a, store := newIssueToolTestApp(t)
-	ct := a.selectedContact()
-	scope, err := a.issueToolNewScope(ct.ID, "catalog-session", "catalog-turn", true)
+	a, ct, event := piRunStartedTestApp(t)
+	scope, err := a.issueToolNewScope(ct.ID, ct.PiBinding.Context.SessionRef, event.RunID, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	reloaded, err := openContactStore(store.path, a.workDir)
+	reloaded, err := openContactStore(a.store.path, a.workDir)
 	if err != nil {
 		t.Fatal(err)
 	}
 	b := &appModel{issueToolScopes: reloaded.issueToolScopes}
 	index := b.issueToolScopeIndexSnapshot()
 	user := taskContextItem{Name: issueToolIssueListContextName, Text: "same-named user material"}
-	guidance := taskContextItem{Name: issueToolRoleGuidanceContextName, Text: issueToolConversationGuidance}
 	list := taskContextItem{Name: issueToolIssueListContextName, Text: `{"issues":[],"has_more":false}`}
 	token := taskContextItem{Name: issueToolScopeContextName, Text: scope.Ref}
-	items := []taskContextItem{user, guidance, list, token}
-	if got := filterIssueToolContextWithIndex(index, "catalog-session", items); !reflect.DeepEqual(got, []taskContextItem{user}) {
+	items := []taskContextItem{user, list, token}
+	if got := filterIssueToolContextWithIndex(index, ct.PiBinding.Context.SessionRef, items); !reflect.DeepEqual(got, []taskContextItem{user}) {
 		t.Fatalf("current app items were not hidden after reload: %+v", got)
 	}
-	if got := filterIssueToolContextWithIndex(index, "other-session", items); !reflect.DeepEqual(got, items) {
+	if got := filterIssueToolContextWithIndex(index, filepath.Join(t.TempDir(), "other-session.jsonl"), items); !reflect.DeepEqual(got, items) {
 		t.Fatalf("foreign-session items were hidden: %+v", got)
 	}
 	identity := index[scope.Ref]
-	identity.IssueListAppended, identity.RoleGuidanceAppended = false, false
+	identity.IssueListAppended = false
 	index[scope.Ref] = identity
-	if got := filterIssueToolContextWithIndex(index, "catalog-session", items); !reflect.DeepEqual(got, items[:3]) {
-		t.Fatalf("legacy scope hid same-named user material: %+v", got)
+	if got := filterIssueToolContextWithIndex(index, ct.PiBinding.Context.SessionRef, items); !reflect.DeepEqual(got, items[:2]) {
+		t.Fatalf("unproven list context hid same-named user material: %+v", got)
 	}
 }
 
@@ -1357,45 +1278,6 @@ func TestIssueToolAnswerBeforeWorkTerminalWaitsForRealTerminal(t *testing.T) {
 	}
 }
 
-func TestIssueToolWorkWaitBeforeAcceptLatchesRealTask(t *testing.T) {
-	a, _ := newIssueToolTestApp(t)
-	ct := a.selectedContact()
-	issue, err := a.createIssueFor(ct, "preaccept work wait", "requirement")
-	if err != nil {
-		t.Fatal(err)
-	}
-	issue.WorkSessionID = "work-preaccept"
-	issue.Work.SendState = sendSubmitting
-	execution := &issueExecution{ID: "execution-preaccept", SessionID: "work-preaccept", Status: issueExecutionPending}
-	issue.Executions = []*issueExecution{execution}
-	scope, err := a.issueToolNewWorkScope(ct.ID, issue.ID, execution.ID, issue.WorkSessionID, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	execution.ToolScopeRef = scope.Ref
-	execution.ToolScopeInput = issueToolScopeToken(scope)
-	if !a.issueToolScopeActive(*scope) {
-		t.Fatal("work scope was not active while awaiting accept")
-	}
-	request := IssueToolActionRequest{ScopeRef: scope.Ref, Action: issueToolActionWait, IssueID: issue.ID, ExpectedRevision: issueToolRevisionPointer(issue.RequirementsRevision), Text: "preaccept question"}
-	operation, created, existing, _, err := a.issueToolReserveForTurn(*scope, request)
-	if err != nil || !created || existing {
-		t.Fatalf("preaccept reserve = %+v created=%v existing=%v err=%v", operation, created, existing, err)
-	}
-	response, err := a.issueToolWorkWait(*scope, request, operation)
-	if err != nil || response.IsError {
-		t.Fatalf("preaccept work wait = %+v err=%v", response, err)
-	}
-	question := issue.openQuestion()
-	if question == nil || question.SourceTaskID != "" || execution.WaitRequested != true {
-		t.Fatalf("preaccept wait state = question=%+v execution=%+v", question, execution)
-	}
-	a.acceptIssueTask(ct, issue, execution, "preaccept question", runtimeSendResult{TaskID: "task-preaccept", MessageID: "message-preaccept"})
-	if execution.TaskID != "task-preaccept" || question.SourceTaskID != "task-preaccept" || !execution.WaitRequested {
-		t.Fatalf("accept did not bind wait scope/task: execution=%+v question=%+v", execution, question)
-	}
-}
-
 func TestIssueToolWorkScopeRejectsConversationAndActionTools(t *testing.T) {
 	a, _ := newIssueToolTestApp(t)
 	ct := a.selectedContact()
@@ -1411,27 +1293,6 @@ func TestIssueToolWorkScopeRejectsConversationAndActionTools(t *testing.T) {
 	response, err := a.handleIssueToolForward(context.Background(), issueToolForwardRequest{Tool: "issue_action", Arguments: issueToolActionArgs(t, *scope, issueToolActionRun, map[string]any{"issue_id": issue.ID})})
 	if err != nil || !response.IsError {
 		t.Fatalf("work scope action bypass = %+v err=%v", response, err)
-	}
-}
-
-func TestIssueToolLateWaitStopCannotCancelNewExecution(t *testing.T) {
-	a, _ := newIssueToolTestApp(t)
-	ct := a.selectedContact()
-	issue, _ := a.createIssueFor(ct, "late stop", "")
-	execution := &issueExecution{
-		ID: "execution-old", SessionID: "session-old", TaskID: "task-old", Status: issueExecutionRunning,
-		WaitRequested: true,
-	}
-	issue.Executions = []*issueExecution{execution}
-	issue.WorkSessionID = "session-old"
-	issue.Work.ActiveTaskID = "task-new"
-	issue.Work.SendState = sendAccepted
-	a.rt = &runtimeClient{}
-	if a.requestIssueWaitStop(ct, issue, execution.ID, execution.SessionID, execution.TaskID) {
-		t.Fatal("late wait stop accepted an old execution after a new task became active")
-	}
-	if issue.Work.StopRequestedTasks["task-new"] || issue.Work.StopRequestedTasks["task-old"] {
-		t.Fatal("late wait stop recorded a user Stop on any task")
 	}
 }
 

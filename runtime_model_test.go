@@ -267,8 +267,8 @@ func piRunStartedTestApp(t *testing.T) (*appModel, *contact, pi.Event) {
 			ContextID: "conversation-" + ct.ID, BotID: ct.ID, Purpose: pi.Conversation,
 			SelectionRevision: 1, CWD: root, SessionRef: filepath.Join(root, "session.jsonl"), Used: true,
 		},
-		Selection: piConversationSelection{CWD: root, CodingTools: []string{}},
-		Configuration: piConversationConfiguration{
+		Selection: piSelection{CWD: root, CodingTools: []string{}},
+		Configuration: piConfiguration{
 			WireAPI: pi.OpenAICompletions, BaseURL: "http://127.0.0.1:1/v1", Model: "reducer-fixture",
 			ContextTokens: 65536, OutputTokens: 4096, CredentialSource: "reducer-fixture",
 		},

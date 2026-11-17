@@ -226,31 +226,6 @@ func TestTaskContextExplicitReloadRetiresUnknownWithoutRemovingMaterials(t *test
 	}
 }
 
-func TestTaskContextIssueAcceptedClearsPendingOnly(t *testing.T) {
-	a, ct := taskContextApp(t)
-	issue := &productIssue{ID: "i1", ContactID: ct.ID, Goal: "Goal", Status: issueStatusInProgress}
-	issue.Context.onChange = a.persist
-	item, err := issue.Context.AddSnippet("Issue notes", "snapshot")
-	if err != nil {
-		t.Fatal(err)
-	}
-	issue.Context.openSnippetForm()
-	issue.Context.formName = "next run draft"
-	execution := &issueExecution{ID: "e1", Context: []taskContextItem{item}}
-	issue.Executions = []*issueExecution{execution}
-	ct.Issues = []*productIssue{issue}
-	a.acceptIssueTask(ct, issue, execution, "prompt", runtimeSendResult{TaskID: "t1", MessageID: "m1"})
-	if got := issue.Context.snapshot(); len(got) != 0 {
-		t.Fatalf("accepted issue context was not cleared: %+v", got)
-	}
-	if len(execution.Context) != 1 || execution.Context[0].Text != "snapshot" {
-		t.Fatalf("execution context was not immutable: %+v", execution.Context)
-	}
-	if !issue.Context.formOpen || issue.Context.formName != "next run draft" {
-		t.Fatal("accepted clear destroyed an unsaved next-run editor")
-	}
-}
-
 func TestTaskContextUserContentSeparatesOnlyActualEnvelope(t *testing.T) {
 	envelope, err := json.Marshal(map[string]string{
 		"type": "caller_context", "label": "Caller-provided context (user data)",

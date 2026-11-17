@@ -1,36 +1,9 @@
 package main
 
 import (
-	"errors"
 	"strings"
 	"testing"
 )
-
-func TestAddWorkflowGuidanceUpgradesReleasedPrefixesWithoutProfileLoss(t *testing.T) {
-	profile := "Purpose: Keep the custom brief.\nInstructions: Preserve this exact text."
-	cases := []struct {
-		name     string
-		current  string
-		guidance string
-	}{
-		{"conversation-initial", previousIssueToolConversationGuidance, issueToolConversationGuidance},
-		{"conversation-207", previousIssueToolConversationGuidanceV2, issueToolConversationGuidance},
-		{"conversation-2026-11-03", previousIssueToolConversationGuidanceV3, issueToolConversationGuidance},
-		{"work-released", previousIssueToolWorkGuidance, issueToolWorkGuidance},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			want := tc.guidance + "\n\n" + profile
-			got := addWorkflowGuidance(tc.current+"\n\n"+profile, tc.guidance)
-			if got != want {
-				t.Fatalf("upgrade lost profile or stacked the old role:\n%s", got)
-			}
-			if again := addWorkflowGuidance(got, tc.guidance); again != got {
-				t.Fatal("repeated ensure changed an already-current prompt")
-			}
-		})
-	}
-}
 
 func TestIssueToolNewSessionPromptCombinesRoleAndProfile(t *testing.T) {
 	ct := &contact{ID: "profile-contact", Purpose: "Keep the launch notes.", Instructions: "Cite earlier decisions."}
@@ -85,83 +58,13 @@ func TestIssueToolWorkflowGuidanceRequiresManagedConnection(t *testing.T) {
 	}
 }
 
-func TestIssueToolTypedErrorOnlyMarksSchemaRefresh(t *testing.T) {
-	a, _ := newIssueToolTestApp(t)
-	rt := &runtimeClient{}
-	a.noteIssueToolTaskError(rt, "session-typed", &runtimeError{Code: "tool_error", Message: "not schema"})
-	if a.issueToolRefreshRequired(rt, "session-typed") {
-		t.Fatal("non-schema error marked refresh")
-	}
-	a.noteIssueToolTaskError(rt, "session-typed", &runtimeError{Code: "tool_schema_changed", Message: "schema"})
-	if !a.issueToolRefreshRequired(rt, "session-typed") {
-		t.Fatal("typed schema error did not mark refresh")
-	}
-}
-
-func TestIssueToolNativeTaskGuidanceRequiresExactReadback(t *testing.T) {
-	connectionID, executionID := "connection-native", "connection-native"
-	base := runtimeConnectionConfig{SessionID: "native-session", ConfigRevision: 7, StorageSchema: 2}
-	base.EffectiveConfig.SystemPrompt = previousIssueToolConversationGuidanceV2 + "\n\nPROFILE BYTES"
-	base.EffectiveConfig.ConnectionID = &connectionID
-	base.EffectiveConfig.ExecutionConnectionID = &executionID
-	base.EffectiveConfig.ConnectionBinding.State = "bound"
-	base.EffectiveConfig.ToolSelection = runtimeToolSelection{
-		Builtin: []string{"read"},
-		External: []runtimeExternalToolBinding{{
-			SourceID: issueToolSourceID, ToolName: "issue_get", ExposedName: "issue_get",
-		}},
-	}
-	updated := runtimeConfigUpdated{runtimeConnectionConfig: base}
-	nativeErr := &runtimeError{Code: "continuation_not_supported", Message: "native"}
-	if got := issueToolNativeTaskGuidance(base, updated, nativeErr, issueToolConversationGuidance, true, false); got != issueToolConversationGuidance {
-		t.Fatalf("valid native guidance = %q", got)
-	}
-	withReadbackError := updated
-	withReadbackError.ReadbackError = errors.New("readback failed")
-	if got := issueToolNativeTaskGuidance(base, withReadbackError, nativeErr, issueToolConversationGuidance, true, false); got != "" {
-		t.Fatalf("readback error accepted: %q", got)
-	}
-	withRevision := updated
-	withRevision.ConfigRevision++
-	if got := issueToolNativeTaskGuidance(base, withRevision, nativeErr, issueToolConversationGuidance, true, false); got != "" {
-		t.Fatalf("revision change accepted: %q", got)
-	}
-	withPrompt := updated
-	withPrompt.EffectiveConfig.SystemPrompt += " changed"
-	if got := issueToolNativeTaskGuidance(base, withPrompt, nativeErr, issueToolConversationGuidance, true, false); got != "" {
-		t.Fatalf("readback prompt change accepted: %q", got)
-	}
-	withTools := updated
-	withTools.EffectiveConfig.ToolSelection.Builtin = append([]string{}, withTools.EffectiveConfig.ToolSelection.Builtin...)
-	withTools.EffectiveConfig.ToolSelection.Builtin = append(withTools.EffectiveConfig.ToolSelection.Builtin, "edit")
-	if got := issueToolNativeTaskGuidance(base, withTools, nativeErr, issueToolConversationGuidance, true, false); got != "" {
-		t.Fatalf("readback tool change accepted: %q", got)
-	}
-	if got := issueToolNativeTaskGuidance(base, updated, &runtimeError{Code: "tool_schema_changed", Message: "schema"}, issueToolConversationGuidance, true, false); got != "" {
-		t.Fatalf("non-native error accepted: %q", got)
-	}
-	if got := issueToolNativeTaskGuidance(base, updated, nativeErr, issueToolConversationGuidance, false, false); got != "" {
-		t.Fatalf("missing tools accepted: %q", got)
-	}
-	if got := issueToolNativeTaskGuidance(base, updated, nativeErr, issueToolConversationGuidance, true, true); got != "" {
-		t.Fatalf("refresh accepted: %q", got)
-	}
-	mixed := base
-	mixed.EffectiveConfig.SystemPrompt = previousIssueToolConversationGuidanceV2 + " trailing mixed text"
-	if got := issueToolNativeTaskGuidance(mixed, runtimeConfigUpdated{runtimeConnectionConfig: mixed}, nativeErr, issueToolConversationGuidance, true, false); got != "" {
-		t.Fatalf("mixed prompt accepted: %q", got)
-	}
-	quoted := base
-	quoted.EffectiveConfig.SystemPrompt = previousIssueToolConversationGuidanceV2 + "\n\nPROFILE: quote " + issueToolConversationGuidance
-	if got := issueToolNativeTaskGuidance(quoted, runtimeConfigUpdated{runtimeConnectionConfig: quoted}, nativeErr, issueToolConversationGuidance, true, false); got != issueToolConversationGuidance {
-		t.Fatalf("profile containing current role rejected: %q", got)
-	}
-}
-
-func TestAddWorkflowGuidancePreservesProfileContainingCurrentRole(t *testing.T) {
+func TestCombineWorkflowPromptPreservesProfileContainingCurrentRole(t *testing.T) {
 	profile := "Purpose: quote the current rule without replacing it: " + issueToolConversationGuidance
 	want := issueToolConversationGuidance + "\n\n" + profile
-	if got := addWorkflowGuidance(previousIssueToolConversationGuidanceV2+"\n\n"+profile, issueToolConversationGuidance); got != want {
+	if got := combineWorkflowPrompt(issueToolConversationGuidance, profile, true); got != want {
 		t.Fatalf("profile containing current role was not preserved: %q", got)
+	}
+	if got := combineWorkflowPrompt(issueToolConversationGuidance, profile, false); got != profile {
+		t.Fatalf("disabled workflow changed the profile: %q", got)
 	}
 }

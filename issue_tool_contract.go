@@ -302,6 +302,7 @@ type IssueToolReceipt struct {
 	ExecutionID          string          `json:"execution_id,omitempty"`
 	SessionID            string          `json:"session_id,omitempty"`
 	TaskID               string          `json:"task_id,omitempty"`
+	PiRun                *piActivityRun  `json:"pi_run,omitempty"`
 	MessageID            string          `json:"message_id,omitempty"`
 	RequirementsRevision *int            `json:"requirements_revision,omitempty"`
 	QuestionRef          string          `json:"question_ref,omitempty"`
@@ -325,8 +326,9 @@ func ValidateIssueToolReceipt(receipt *IssueToolReceipt) error {
 			return errors.New("dispatching receipt requires issue_id and execution_id")
 		}
 	case issueToolReceiptAccepted:
-		if strings.TrimSpace(receipt.IssueID) == "" || strings.TrimSpace(receipt.ExecutionID) == "" || strings.TrimSpace(receipt.SessionID) == "" ||
-			strings.TrimSpace(receipt.TaskID) == "" || strings.TrimSpace(receipt.MessageID) == "" {
+		piAccepted := receipt.PiRun != nil && receipt.PiRun.Admitted && receipt.PiRun.WorkerEpoch != "" && receipt.PiRun.ContextID != "" && receipt.PiRun.SessionRef != "" && receipt.PiRun.RunID != "" && receipt.MessageID == "" && (receipt.SessionID == "" || receipt.SessionID == receipt.PiRun.SessionRef) && (receipt.TaskID == "" || receipt.TaskID == receipt.PiRun.RunID)
+		legacyAccepted := receipt.PiRun == nil && strings.TrimSpace(receipt.SessionID) != "" && strings.TrimSpace(receipt.TaskID) != "" && strings.TrimSpace(receipt.MessageID) != ""
+		if strings.TrimSpace(receipt.IssueID) == "" || strings.TrimSpace(receipt.ExecutionID) == "" || !piAccepted && !legacyAccepted {
 			return errIssueToolReceiptIDsMissing
 		}
 	case issueToolReceiptStopRequested:
@@ -352,6 +354,7 @@ type IssueToolOperation struct {
 	Action        string            `json:"action"`
 	TargetIssueID string            `json:"target_issue_id,omitempty"`
 	Payload       string            `json:"payload"`
+	PiCall        *piQuestionCall   `json:"pi_call,omitempty"`
 	Receipt       *IssueToolReceipt `json:"receipt,omitempty"`
 	CreatedAt     int64             `json:"created_at"`
 	UpdatedAt     int64             `json:"updated_at"`
@@ -484,13 +487,14 @@ type IssueToolRequirementView struct {
 }
 
 type IssueToolExecutionView struct {
-	ID                   string `json:"id"`
-	SessionID            string `json:"session_id,omitempty"`
-	TaskID               string `json:"task_id,omitempty"`
-	MessageID            string `json:"message_id,omitempty"`
-	Status               string `json:"status"`
-	Detail               string `json:"detail,omitempty"`
-	RequirementsRevision int    `json:"requirements_revision"`
+	ID                   string         `json:"id"`
+	SessionID            string         `json:"session_id,omitempty"`
+	TaskID               string         `json:"task_id,omitempty"`
+	MessageID            string         `json:"message_id,omitempty"`
+	PiRun                *piActivityRun `json:"pi_run,omitempty"`
+	Status               string         `json:"status"`
+	Detail               string         `json:"detail,omitempty"`
+	RequirementsRevision int            `json:"requirements_revision"`
 }
 
 const issueToolExecutionPageLimit = 20
@@ -502,6 +506,13 @@ type IssueToolResultFileView struct {
 	Path        string `json:"path"`
 }
 
+type IssueToolPiProgress struct {
+	ContextID       string `json:"context_id"`
+	RunID           string `json:"run_id"`
+	Active          bool   `json:"active"`
+	CancelRequested bool   `json:"cancel_requested,omitempty"`
+}
+
 type IssueToolIssueDetail struct {
 	Issue               IssueToolIssueSummary      `json:"issue"`
 	Requirements        []IssueToolRequirementView `json:"requirements,omitempty"`
@@ -510,6 +521,7 @@ type IssueToolIssueDetail struct {
 	Executions          []IssueToolExecutionView   `json:"executions,omitempty"`
 	ExecutionCount      int                        `json:"execution_count"`
 	ExecutionsHasMore   bool                       `json:"executions_has_more"`
+	PiProgress          *IssueToolPiProgress       `json:"pi_progress,omitempty"`
 
 	// Result facts are derived from the latest recorded execution's typed
 	// history. They are never fabricated from assistant prose or tool logs.
@@ -635,6 +647,7 @@ func issueToolGet(scope IssueToolScope, issues []*productIssue, issueID string) 
 		detail.Executions = append(detail.Executions, IssueToolExecutionView{
 			ID: execution.ID, SessionID: execution.SessionID, TaskID: execution.TaskID,
 			MessageID: execution.MessageID, Status: execution.Status, Detail: execution.Detail,
+			PiRun:                clonePiActivityRun(execution.PiRun),
 			RequirementsRevision: execution.RequirementsRevision,
 		})
 	}

@@ -65,6 +65,8 @@ type storedIssueExecution struct {
 	ToolOperationID      string            `json:"tool_operation_id,omitempty"`
 	ToolScopeRef         string            `json:"tool_scope_ref,omitempty"`
 	ToolScopeInput       string            `json:"tool_scope_input,omitempty"`
+	PiIntent             bool              `json:"pi_intent,omitempty"`
+	PiRun                *piActivityRun    `json:"pi_run,omitempty"`
 	WaitRequested        bool              `json:"wait_requested,omitempty"`
 }
 
@@ -88,6 +90,7 @@ type storedIssue struct {
 	Evidence             string                 `json:"evidence,omitempty"`
 	CreatedAt            int64                  `json:"created_at,omitempty"`
 	UpdatedAt            int64                  `json:"updated_at,omitempty"`
+	PiBinding            *piActivityBinding     `json:"pi_binding,omitempty"`
 	WorkSessionID        string                 `json:"work_session_id,omitempty"`
 	TaskContext          []taskContextItem      `json:"task_context,omitempty"`
 	Supplements          *issueSupplementLedger `json:"supplements,omitempty"`
@@ -216,11 +219,81 @@ func (state storedState) piDataReadOnly() bool {
 		}
 	}
 	for _, issue := range state.Issues {
-		if issue.WorkSessionID != "" || len(issue.Executions) != 0 {
+		if !storedPiIssueValid(issue, state.IssueToolOperations) {
 			return true
 		}
 	}
 	return false
+}
+
+func storedPiIssueValid(issue storedIssue, ledger *IssueToolOperationLedger) bool {
+	if issue.PiBinding == nil {
+		if issue.WorkSessionID != "" {
+			return false
+		}
+	} else {
+		binding := issue.PiBinding
+		if binding.Engine != "pi" || binding.Context.Purpose != "activity" ||
+			binding.Context.BotID != issue.ContactID || binding.Context.ActivityID != issue.ID ||
+			binding.Context.ContextID == "" || binding.Context.SessionRef == "" || binding.Context.SelectionRevision == 0 || binding.Context.CWD == "" ||
+			binding.Selection.CWD == "" || binding.Configuration.CredentialSource == "" ||
+			issue.WorkSessionID != binding.Context.SessionRef {
+			return false
+		}
+	}
+	for _, execution := range issue.Executions {
+		if !execution.PiIntent || execution.ID == "" || execution.MessageID != "" {
+			return false
+		}
+		if execution.PiRun == nil {
+			if execution.SessionID != "" || execution.TaskID != "" || execution.Status == issueExecutionAccepted || execution.Status == issueExecutionRunning || execution.Status == issueExecutionCompleted {
+				return false
+			}
+			continue
+		}
+		run := execution.PiRun
+		if issue.PiBinding == nil || run.WorkerEpoch == "" || run.ContextID != issue.PiBinding.Context.ContextID ||
+			run.SessionRef != issue.PiBinding.Context.SessionRef || run.RunID == "" ||
+			execution.SessionID != "" && execution.SessionID != run.SessionRef ||
+			execution.TaskID != "" && execution.TaskID != run.RunID ||
+			run.Admitted && (execution.SessionID != run.SessionRef || execution.TaskID != run.RunID) ||
+			!run.Admitted && (execution.Status == issueExecutionAccepted || execution.Status == issueExecutionRunning || execution.Status == issueExecutionCompleted) {
+			return false
+		}
+	}
+	for _, question := range issue.Questions {
+		if question == nil || question.PiCall == nil {
+			continue
+		}
+		call := question.PiCall
+		if issue.PiBinding == nil || call.ContactID != issue.ContactID || call.IssueID != issue.ID || call.WorkerEpoch == "" || call.ContextID != issue.PiBinding.Context.ContextID || call.SessionRef != issue.PiBinding.Context.SessionRef || call.RunID == "" || call.CallID == "" || call.OperationID == "" || call.ExecutionID == "" || ledger == nil {
+			return false
+		}
+		operation := ledger.operationByID(call.OperationID)
+		if operation == nil || operation.PiCall == nil || *operation.PiCall != *call {
+			return false
+		}
+		matched := false
+		for _, execution := range issue.Executions {
+			if execution.ID == call.ExecutionID && execution.PiRun != nil && execution.PiRun.WorkerEpoch == call.WorkerEpoch && execution.PiRun.ContextID == call.ContextID && execution.PiRun.RunID == call.RunID {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return false
+		}
+		if question.State == issueQuestionAnswered {
+			if question.AnswerSupplementID == "" || issue.Supplements == nil {
+				return false
+			}
+			item := issue.Supplements.itemByID(question.AnswerSupplementID)
+			if item == nil || item.PiQuestionOperationID != call.OperationID || item.Text != question.AnswerText {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func (a *appModel) piDataReadOnly() bool {
@@ -237,6 +310,7 @@ func cloneIssueToolLedger(ledger *IssueToolOperationLedger) *IssueToolOperationL
 		for i, operation := range ledger.Operations {
 			if operation != nil {
 				copy := *operation
+				copy.PiCall = clonePiQuestionCall(operation.PiCall)
 				copy.Receipt = cloneIssueToolReceipt(operation.Receipt)
 				cloned.Operations[i] = &copy
 			}
@@ -260,6 +334,8 @@ func cloneIssueQuestions(questions []*issueQuestion) []*issueQuestion {
 	for i, question := range questions {
 		if question != nil {
 			copy := *question
+			copy.PiCall = clonePiQuestionCall(question.PiCall)
+			copy.AnswerContext = cloneTaskContextItems(question.AnswerContext)
 			cloned[i] = &copy
 		}
 	}
@@ -301,11 +377,13 @@ func cloneStoredState(state storedState) storedState {
 				issue.RequirementItems = append([]storedRequirement{}, issue.RequirementItems...)
 			}
 			issue.TaskContext = cloneTaskContextItems(issue.TaskContext)
+			issue.PiBinding = clonePiActivityBinding(issue.PiBinding)
 			issue.Supplements = cloneIssueSupplementLedger(issue.Supplements)
 			issue.Questions = cloneIssueQuestions(issue.Questions)
 			if issue.Executions != nil {
 				issue.Executions = append([]storedIssueExecution{}, issue.Executions...)
 				for j := range issue.Executions {
+					issue.Executions[j].PiRun = clonePiActivityRun(issue.Executions[j].PiRun)
 					issue.Executions[j].Context = cloneTaskContextItems(issue.Executions[j].Context)
 				}
 			}
@@ -425,6 +503,7 @@ func (s *contactStore) saveWithPreferences(contacts []*contact, selected, appear
 				ID: issue.ID, ContactID: issue.ContactID, Goal: issue.Goal,
 				Status: issue.Status, Archived: issue.Archived,
 				Evidence: issue.Evidence, CreatedAt: issue.CreatedAt, UpdatedAt: issue.UpdatedAt,
+				PiBinding:     clonePiActivityBinding(issue.PiBinding),
 				WorkSessionID: issue.WorkSessionID, RequirementsRevision: issue.RequirementsRevision,
 				TaskContext: issue.Context.snapshot(), Supplements: cloneIssueSupplementLedger(issue.Supplements),
 				Questions: cloneIssueQuestions(issue.Questions),
@@ -450,7 +529,8 @@ func (s *contactStore) saveWithPreferences(contacts []*contact, selected, appear
 					ToolOperationID:      execution.ToolOperationID,
 					ToolScopeRef:         execution.ToolScopeRef,
 					ToolScopeInput:       execution.ToolScopeInput,
-					WaitRequested:        execution.WaitRequested,
+					PiIntent:             execution.PiIntent, PiRun: clonePiActivityRun(execution.PiRun),
+					WaitRequested: execution.WaitRequested,
 				})
 			}
 			candidate.Issues = append(candidate.Issues, stored)

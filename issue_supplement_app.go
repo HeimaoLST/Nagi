@@ -162,6 +162,21 @@ func (a *appModel) startIssueRunWithOperation(ct *contact, issue *productIssue, 
 		Status: issueExecutionPending, RequirementsRevision: issue.RequirementsRevision,
 		Context: issue.Context.snapshot(), ToolOperationID: operationID,
 	}
+	if a.pi != nil && !a.demo {
+		execution.PiIntent = true
+		execution.SessionID = ""
+	}
+	var operation *IssueToolOperation
+	var previousReceipt *IssueToolReceipt
+	if execution.PiIntent && operationID != "" {
+		operation = a.issueToolLedger.operationByID(operationID)
+		if operation == nil {
+			a.setIssueFormNotice("The issue operation is no longer available.", "", "")
+			return false
+		}
+		previousReceipt = operation.Receipt
+		operation.Receipt = &IssueToolReceipt{State: issueToolReceiptDispatching, IssueID: issue.ID, IssueStatus: issueStatusInProgress, ExecutionID: execution.ID}
+	}
 	previousExecutions := issue.Executions
 	previousSend, previousPending := issue.Work.SendState, issue.Work.pendingExecutionID
 	previousStatus, previousUpdated := issue.Status, issue.UpdatedAt
@@ -182,6 +197,9 @@ func (a *appModel) startIssueRunWithOperation(ct *contact, issue *productIssue, 
 		err = a.persist()
 	}
 	if err != nil {
+		if operation != nil {
+			operation.Receipt = previousReceipt
+		}
 		issue.Executions = previousExecutions
 		issue.Work.SendState, issue.Work.pendingExecutionID = previousSend, previousPending
 		issue.Status, issue.UpdatedAt = previousStatus, previousUpdated

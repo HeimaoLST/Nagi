@@ -556,20 +556,6 @@ func (a *appModel) connectionTaskFinishedDetail(payload *runtimeEvent) string {
 	return taskFinishedDetail(&copyPayload)
 }
 
-func (a *appModel) configuredWorkCreate(rt *runtimeClient, configured bool, workspace, system string, builtin *[]string, issueTools bool) (runtimeSession, error) {
-	if configured {
-		selection, err := runtimeWorkSelection(rt, builtin, issueTools)
-		if err != nil {
-			return runtimeSession{}, err
-		}
-		return rt.createConfiguredConversationSession(workspace, system, selection)
-	}
-	if builtin != nil {
-		return runtimeSession{}, errors.New("Built-in tool selection requires a managed Nagi connection; save and Apply a connection before creating a new work session.")
-	}
-	return rt.createSession(workspace, system)
-}
-
 func (c *runtimeClient) createConfiguredSession(workingDir, systemPrompt string) (runtimeSession, error) {
 	return c.createConfiguredSessionWithTools(workingDir, systemPrompt, nil)
 }
@@ -609,15 +595,37 @@ func (c *runtimeClient) createConfiguredSessionWithTools(workingDir, systemPromp
 // issue/conversation submission, result reads, and theme installs have delivered
 // their final UI callbacks; those callbacks re-enter this function.
 func (a *appModel) finishShutdown() {
-	if a.quitReady || a.shutdownDrainStarted || (a.dataRecovery != nil && a.dataRecovery.inFlight) || a.connectionSaveInFlight || a.connectionApplying || a.connectionTesting || a.contactHistoryInFlight > 0 || a.resultInFlight > 0 || a.submissionInFlight > 0 || a.issueToolReleaseInFlight > 0 || a.metadataInFlight > 0 || (a.themeImport != nil && a.themeImport.installInFlight) {
+	if a.quitReady || a.shutdownDrainStarted {
 		return
 	}
 	if a.pi != nil {
+		active := false
 		for _, ct := range a.contacts {
-			if ct.ActiveTaskID != "" || ct.SendState == sendSubmitting {
-				return
+			for _, issue := range ct.Issues {
+				if issue.Work.ActiveTaskID != "" {
+					active = true
+					if !issue.Work.StopRequestedTasks[issue.Work.ActiveTaskID] {
+						a.cancelPiIssue(ct, issue)
+					}
+				}
+			}
+			if ct.ActiveTaskID != "" {
+				active = true
+				if ct.SendState != sendSubmitting || a.submissionInFlight == 0 {
+					a.cancelRuntimeTask(ct, ct.ActiveTaskID)
+				}
+			} else if ct.SendState == sendSubmitting {
+				active = true
 			}
 		}
+		if active {
+			return
+		}
+	}
+	if (a.dataRecovery != nil && a.dataRecovery.inFlight) || a.connectionSaveInFlight || a.connectionApplying || a.connectionTesting || a.contactHistoryInFlight > 0 || a.resultInFlight > 0 || a.submissionInFlight > 0 || a.issueToolReleaseInFlight > 0 || a.metadataInFlight > 0 || (a.themeImport != nil && a.themeImport.installInFlight) {
+		return
+	}
+	if a.pi != nil {
 		a.shutdownDrainStarted = true
 		a.runtimeStatus = runtimeStateDraining
 		host := a.pi

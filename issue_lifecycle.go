@@ -358,7 +358,7 @@ func (a *appModel) cancelIssueProductFor(ct *contact, issueID string) bool {
 	}
 	activeTask := issue.Work.ActiveTaskID != ""
 	pendingAccept := !activeTask && (issue.Work.SendState == sendSubmitting || issue.Work.SendState == sendUnknown)
-	if activeTask && a.rt == nil {
+	if activeTask && a.pi == nil {
 		return false
 	}
 	oldStatus, oldUpdated, oldCancelAfter := issue.Status, issue.UpdatedAt, issue.Work.cancelAfterAccept

@@ -99,9 +99,6 @@ func newRuntimeApp() (*appModel, error) {
 	if a.issueToolShutdown == nil {
 		a.issueToolShutdown = make(chan struct{})
 	}
-	if a.issueToolRefresh == nil {
-		a.issueToolRefresh = map[string]issueToolRefreshMark{}
-	}
 	formConfig := startup.Config
 	if formConfig == nil {
 		formConfig = startup.FormConfig
@@ -899,6 +896,10 @@ func (a *appModel) restoreIssueReadOnly(rt *runtimeClient, generation int, conta
 }
 
 func (a *appModel) reloadIssueWorkByID(contactID, issueID string) {
+	if a.pi != nil {
+		a.inspectPiIssueWork(contactID, issueID)
+		return
+	}
 	if a.rt == nil || a.shutdownStarted || a.runtimeStatus == runtimeStateDraining || a.runtimeStatus == runtimeStateExited {
 		return
 	}
@@ -1503,16 +1504,6 @@ func runtimeMessage(err error) string {
 	return safeDiagnostic(err.Error())
 }
 
-func confirmedReject(err error) bool {
-	var runtimeErr *runtimeError
-	return errors.As(err, &runtimeErr) && runtimeErr.Code != "protocol_error"
-}
-
-func taskAdmissionDeferred(err error) bool {
-	var runtimeErr *runtimeError
-	return errors.As(err, &runtimeErr) && runtimeErr.Code == "busy"
-}
-
 func (a *appModel) routeSession(sessionID string) (*contact, *productIssue, bool) {
 	for _, ct := range a.contacts {
 		if ct.SessionID == sessionID {
@@ -2047,41 +2038,35 @@ func (a *appModel) canSend(ct *contact) string {
 }
 
 func (a *appModel) canStartIssue(ct *contact, issue *productIssue) string {
+	if ct == nil || issue == nil || a.contactByID(ct.ID) != ct || ct.issueByID(issue.ID) != issue {
+		return "The issue owner is no longer available."
+	}
 	if a.shutdownStarted {
-		return blockShutdown
+		return sendBlockRaw(blockShutdown)
 	}
 	if ct.Archived {
-		return blockArchivedIssue
+		return sendBlockRaw(blockArchivedIssue)
 	}
 	if a.demo {
 		return ""
 	}
-	if a.pi != nil {
-		return "Activity execution is unavailable in this integration stage."
-	}
 	if a.connectionApplying {
-		return blockApplying
+		return sendBlockRaw(blockApplying)
 	}
-	if a.rt == nil || a.runtimeStatus != runtimeStateReady {
-		return blockRuntimeNotReady
+	if !a.runtimeAvailableForView() {
+		return sendBlockRaw(blockRuntimeNotReady)
 	}
 	if sessionBusy(issue.Work.SendState, issue.Work.ActiveTaskID) {
-		return blockIssueActive
+		return sendBlockRaw(blockIssueActive)
 	}
-	if issue.Work.Releasing || issue.Work.ReleasePending {
-		return blockIssueReleasing
-	}
-	if issue.WorkSessionID != "" && !issue.Work.Loaded && !issue.Work.Released {
-		return blockIssueHistoryLoading
+	if issue.WorkSessionID != "" && !isPiActivityIssue(issue) {
+		return "This issue's previous work context is unavailable."
 	}
 	if a.activeTaskCount() >= a.maxActiveTasks() {
-		if a.maxActiveTasks() <= 1 {
-			return blockSingleSlot
-		}
-		return blockCapacity
+		return sendBlockRaw(blockCapacity)
 	}
 	if a.activeWorkTaskCount() >= a.workTaskLimit() {
-		return blockWorkCapacity
+		return sendBlockRaw(blockWorkCapacity)
 	}
 	return ""
 }
@@ -2091,35 +2076,11 @@ func (a *appModel) startIssueTask(ct *contact, issue *productIssue, execution *i
 		issue.Work.setSendError("The app is shutting down.", "shutdown", "")
 		return false
 	}
-	if a.pi != nil {
-		issue.Work.setSendError("Activity execution is unavailable in this integration stage.", "unsupported-stage", "")
-		return false
-	}
-	if ct.Archived {
-		issue.Work.setSendError("This contact is archived. Restore it before starting issue work.", "archived-issue", "")
-		return false
-	}
-	if a.connectionApplying {
-		issue.Work.setSendError("Connection settings are being applied; wait for the new helper to become ready.", "applying", "")
-		return false
-	}
-	if a.rt == nil || a.runtimeStatus != runtimeStateReady {
+	if a.demo {
 		issue.Work.setSendError("Runtime is not ready.", "runtime-not-ready", "")
 		return false
 	}
-	// Capture immutable session inputs on the UI thread. The worker must not
-	// look up the contact/issue or read mutable profile/session fields later.
-	workspace := a.effectiveContactWorkspace(ct)
-	system := a.issueToolWorkSystemPrompt(ct)
-	sessionID := issue.WorkSessionID
-	context := cloneTaskContextItems(execution.Context)
-	builtin := a.capturedBuiltinSelection(ct)
-	rt, configured := a.rt, a.connectionManaged
-	issueTools := a.issueToolEnabled() && configured
-	released := issue.Work.Released
-	a.submissionAsyncStarted()
-	go a.submitIssueTask(rt, configured, ct.ID, issue.ID, execution.ID, sessionID, workspace, system, prompt, context, released, builtin, issueTools)
-	return true
+	return a.startPiIssueTask(ct, issue, execution, prompt)
 }
 
 // submissionAsyncStarted/Finished keep the submission owner visible to the
@@ -2139,363 +2100,6 @@ func (a *appModel) submissionAsyncFinished() {
 	}
 }
 
-func (a *appModel) submitIssueTask(rt *runtimeClient, configured bool, contactID, issueID, executionID, sessionID, workspace, system, prompt string, context []taskContextItem, released bool, builtin *[]string, workTools bool) {
-	createdSession := false
-	if sessionID == "" {
-		var session runtimeSession
-		var err error
-		session, err = a.configuredWorkCreate(rt, configured, workspace, system, builtin, workTools)
-		createdSession = err == nil
-		if err != nil {
-			a.failIssueSubmit(contactID, issueID, err, false)
-			return
-		}
-		sessionID = session.SessionID
-		saved := make(chan error, 1)
-		a.updateUI(func() {
-			ct := a.contactByID(contactID)
-			if ct == nil {
-				saved <- errors.New("contact disappeared before saving its work session")
-				return
-			}
-			issue := ct.issueByID(issueID)
-			if issue == nil {
-				saved <- errors.New("issue disappeared before saving its work session")
-				return
-			}
-			if issue.WorkSessionID != "" && issue.WorkSessionID != sessionID {
-				saved <- errors.New("issue work session changed before it was saved")
-				return
-			}
-			issue.WorkSessionID = sessionID
-			issue.Work.Loaded = true
-			issue.Work.SessionState = session.State
-			if _, execution := ct.executionByID(executionID); execution != nil {
-				execution.SessionID = sessionID
-			}
-			saved <- a.persist()
-		})
-		if err := <-saved; err != nil {
-			a.failIssueSubmit(contactID, issueID, fmt.Errorf("save issue work session mapping: %w", err), false)
-			return
-		}
-	}
-	if sessionID != "" && released {
-		if _, err := rt.loadSession(sessionID); err != nil {
-			a.failIssueSubmit(contactID, issueID, fmt.Errorf("reload released work session: %w", err), false)
-			return
-		}
-		a.runOnUI(func() {
-			if issue := a.contactByID(contactID).issueByID(issueID); issue != nil {
-				issue.Work.Released = false
-				issue.Work.Loaded = true
-				_ = a.persist()
-			}
-		})
-	}
-	wireContext := taskContextInputs(context)
-	if workTools {
-		ensured, err := a.issueToolEnsureWorkSession(rt, sessionID, issueToolWorkGuidance, createdSession)
-		if err != nil {
-			a.failIssueSubmit(contactID, issueID, err, false)
-			return
-		}
-		roleGuidanceAppended := false
-		if input, ok := issueToolRoleGuidanceInput(ensured.TaskGuidance); ok {
-			wireContext = append(wireContext, input)
-			roleGuidanceAppended = true
-		}
-		if ensured.Ready {
-			var scope *IssueToolScope
-			var scopeErr error
-			a.runOnUI(func() {
-				if a.shutdownStarted {
-					scopeErr = errors.New("app is shutting down")
-					return
-				}
-				scope, scopeErr = a.issueToolNewWorkScope(contactID, issueID, executionID, sessionID, roleGuidanceAppended)
-				if scopeErr != nil {
-					return
-				}
-				ct := a.contactByID(contactID)
-				if ct == nil {
-					scopeErr = errors.New("contact disappeared before work scope")
-					return
-				}
-				_, execution := ct.executionByID(executionID)
-				if execution == nil {
-					scopeErr = errors.New("execution disappeared before work scope")
-					return
-				}
-				execution.ToolScopeRef = scope.Ref
-				execution.ToolScopeInput = issueToolScopeToken(scope)
-				if err := a.persist(); err != nil {
-					scopeErr = err
-				}
-			})
-			if scopeErr != nil {
-				a.failIssueSubmit(contactID, issueID, scopeErr, false)
-				return
-			}
-			if input, ok := issueToolScopeInput(scope); ok {
-				wireContext = append(wireContext, input)
-			}
-		}
-	}
-	if err := validateRuntimeContextInputs(wireContext); err != nil {
-		a.failIssueSubmit(contactID, issueID, fmt.Errorf("issue work caller context: %w", err), false)
-		return
-	}
-	result, err := rt.sendTask(sessionID, prompt, wireContext...)
-	if err != nil {
-		a.noteIssueToolTaskError(rt, sessionID, err)
-		a.failIssueSubmit(contactID, issueID, err, true)
-		return
-	}
-	a.updateUI(func() {
-		defer a.submissionAsyncFinished()
-		if a.rt != rt {
-			return
-		}
-		ct := a.contactByID(contactID)
-		if ct == nil {
-			return
-		}
-		issue := ct.issueByID(issueID)
-		if issue == nil || issue.WorkSessionID != sessionID {
-			return
-		}
-		execution := ct.executionByTask(result.TaskID)
-		if execution == nil {
-			_, execution = ct.executionByID(executionID)
-		}
-		a.acceptIssueTask(ct, issue, execution, prompt, result)
-	})
-}
-
-func (a *appModel) acceptIssueTask(ct *contact, issue *productIssue, execution *issueExecution, prompt string, result runtimeSendResult) {
-	issue.Work.historyGen++
-	issue.Work.ActiveTaskID = result.TaskID
-	issue.Work.LastTaskID = result.TaskID
-	issue.Work.SendState = sendAccepted
-	issue.Work.clearSendError()
-	if execution != nil {
-		execution.SessionID = issue.WorkSessionID
-		execution.TaskID = result.TaskID
-		execution.MessageID = result.MessageID
-		execution.Status = issueExecutionAccepted
-		execution.Detail = ""
-		if execution.ToolScopeRef != "" {
-			a.issueToolBindTask(execution.ToolScopeRef, result.TaskID)
-		}
-	}
-	issue.Work.pendingExecutionID = ""
-	if w := a.ensureWork(ct, result.TaskID, result.MessageID); w != nil {
-		w.State = workAccepted
-		w.Prompt = prompt
-	}
-	batch := issueSupplementBatchForExecution(issue, executionIDOf(execution))
-	acceptedSaved := false
-	if batch != nil {
-		// Clear the exact submitted context in the same save as the acceptance
-		// receipt. If the save fails, restore the pending context and keep the
-		// external acceptance receipt in memory.
-		previousContext := issue.Context.snapshot()
-		if execution != nil && len(execution.Context) > 0 {
-			issue.Context.clearSubmitted(execution.Context)
-		}
-		association := issueSupplementAssociation{}
-		if execution != nil {
-			association = issueSupplementAssociation{
-				SessionID: execution.SessionID, TaskID: execution.TaskID,
-				MessageID: execution.MessageID, ExecutionID: execution.ID,
-			}
-		}
-		accepted, err := issue.Supplements.Accept(batch, association, a.persist)
-		switch {
-		case accepted && err == nil:
-			acceptedSaved = true
-			issue.Work.clearSendError()
-		case accepted && err != nil:
-			issue.Context.items = previousContext
-			issue.Work.setSendError("Runtime accepted this supplement, but its local receipt could not be saved; reload before sending again.", "supplement-receipt-failed", "")
-		case err != nil:
-			issue.Context.items = previousContext
-			issue.Work.setSendError("Could not save the supplement acceptance: "+err.Error(), "supplement-receipt-save-failed", err.Error())
-		default:
-			issue.Context.items = previousContext
-			issue.Work.setSendError("The supplement dispatch association was not in a recordable state; reload before sending again.", "supplement-association", "")
-			_ = a.persist()
-		}
-	} else {
-		if err := a.persist(); err != nil {
-			if issue.Supplements != nil {
-				issue.Supplements.AutoContinue = false
-			}
-			if execution != nil {
-				execution.Status = issueExecutionUnknown
-				execution.Detail = "Task was accepted, but its work-session association could not be saved: " + err.Error()
-			}
-			issue.Work.setSendError("Task accepted, but its issue association could not be saved; reload before retrying.", "send-issue-association", "")
-		} else {
-			acceptedSaved = true
-		}
-	}
-	if acceptedSaved && batch == nil && execution != nil && len(execution.Context) > 0 {
-		previous := issue.Context.snapshot()
-		if issue.Context.clearSubmitted(execution.Context) > 0 {
-			if err := a.persist(); err != nil {
-				issue.Context.items = previous
-				if issue.Supplements != nil {
-					issue.Supplements.AutoContinue = false
-				}
-				issue.Work.setSendError("Task accepted, but its sent context could not be cleared from the next-run draft; reload before sending again.", "send-draft-not-cleared", "")
-			}
-		}
-	}
-	pending := issue.Work.pendingEvents
-	issue.Work.pendingEvents = nil
-	for _, event := range pending {
-		a.applyIssueEvent(ct, issue, event)
-	}
-	if (issue.Work.cancelAfterAccept || issue.Status == issueStatusCanceled) && issue.Work.ActiveTaskID != "" {
-		if a.cancelIssueFor(ct, issue.ID) {
-			issue.Work.cancelAfterAccept = false
-		} else {
-			issue.Work.setSendError("The accepted task could not be cancelled; do not retry it automatically.", "send-accepted-cancel", "")
-		}
-	}
-	if execution != nil && execution.ToolOperationID != "" {
-		detail := ""
-		if !acceptedSaved {
-			detail = issue.Work.SendError
-			if detail == "" {
-				detail = "Runtime accepted the task, but its local receipt could not be saved."
-			}
-		}
-		a.issueToolCompleteExecution(execution, acceptedSaved, detail)
-	}
-	if execution != nil && execution.WaitRequested && issue.openQuestion() != nil &&
-		a.requestIssueWaitStop(ct, issue, execution.ID, execution.SessionID, execution.TaskID) {
-		// The actual Runtime task is now known; cancellation was intentionally
-		// deferred until this accept callback.
-	}
-}
-
-func executionIDOf(execution *issueExecution) string {
-	if execution == nil {
-		return ""
-	}
-	return execution.ID
-}
-
-func (a *appModel) failIssueSubmit(contactID, issueID string, err error, submitted bool) {
-	a.updateUI(func() {
-		defer a.submissionAsyncFinished()
-		ct := a.contactByID(contactID)
-		if ct == nil {
-			return
-		}
-		issue := ct.issueByID(issueID)
-		if issue == nil {
-			return
-		}
-		issue.Work.pendingEvents = nil
-		_, execution := ct.executionByID(issue.Work.pendingExecutionID)
-		issue.Work.pendingExecutionID = ""
-		if execution != nil && execution.ToolOperationID != "" {
-			defer func() {
-				detail := execution.Detail
-				if detail == "" {
-					detail = issue.Work.SendError
-				}
-				a.issueToolCompleteExecution(execution, false, detail)
-			}()
-		}
-		batch := issueSupplementBatchForExecution(issue, executionIDOf(execution))
-		detail := a.connectionRuntimeMessage(err)
-		switch {
-		case taskAdmissionDeferred(err):
-			issue.Work.SendState = sendIdle
-			issue.Work.setSendError("Waiting for runtime availability: "+detail, "waiting-runtime", detail)
-			if execution != nil {
-				execution.Status = issueExecutionNotDispatched
-				execution.Detail = issue.Work.SendError
-			}
-			if batch != nil {
-				if !issue.Supplements.DeferDispatch(batch, a.persist) {
-					_ = a.persist()
-				}
-			} else {
-				_ = a.persist()
-			}
-		case confirmedReject(err):
-			if issue.Supplements != nil {
-				issue.Supplements.AutoContinue = false
-			}
-			if issue.Status != issueStatusCanceled && issue.Status != issueStatusCompleted && !issue.Archived {
-				issue.Status = issueStatusNeedsAttention
-				issue.UpdatedAt = nowMillis()
-			}
-			issue.Work.SendState = sendIdle
-			issue.Work.setSendError(detail, "", "")
-			if execution != nil {
-				execution.Status = issueExecutionRejected
-				execution.Detail = detail
-			}
-			if batch != nil {
-				if !issue.Supplements.Reject(batch, detail, a.persist) {
-					_ = a.persist()
-				}
-			} else {
-				_ = a.persist()
-			}
-		case submitted:
-			if issue.Supplements != nil {
-				issue.Supplements.AutoContinue = false
-			}
-			if issue.Status != issueStatusCanceled && issue.Status != issueStatusCompleted && !issue.Archived {
-				issue.Status = issueStatusNeedsAttention
-				issue.UpdatedAt = nowMillis()
-			}
-			issue.Work.SendState = sendUnknown
-			issue.Work.setSendError("Supplement delivery not confirmed ("+detail+"). Reload to check before sending again.", "supplement-delivery", detail)
-			if execution != nil {
-				execution.Status = issueExecutionUnknown
-				execution.Detail = issue.Work.SendError
-			}
-			if batch != nil {
-				if !issue.Supplements.Unknown(batch, issue.Work.SendError, a.persist) {
-					_ = a.persist()
-				}
-			} else {
-				_ = a.persist()
-			}
-		default:
-			if issue.Supplements != nil {
-				issue.Supplements.AutoContinue = false
-			}
-			if issue.Status != issueStatusCanceled && issue.Status != issueStatusCompleted && !issue.Archived {
-				issue.Status = issueStatusNeedsAttention
-				issue.UpdatedAt = nowMillis()
-			}
-			issue.Work.SendState = sendIdle
-			issue.Work.setSendError(detail, "", "")
-			if execution != nil {
-				execution.Status = issueExecutionNotDispatched
-				execution.Detail = detail
-			}
-			if batch != nil {
-				if !issue.Supplements.NotDispatched(batch, detail, a.persist) {
-					_ = a.persist()
-				}
-			} else {
-				_ = a.persist()
-			}
-		}
-	})
-}
-
 func (a *appModel) cancelSelected() {
 	ct := a.selectedContact()
 	if ct != nil {
@@ -2507,7 +2111,14 @@ func (a *appModel) cancelRuntimeTask(ct *contact, taskID string) {
 	if a.pi == nil || ct == nil || a.contactByID(ct.ID) != ct || ct.PiBinding == nil || taskID == "" || ct.ActiveTaskID != taskID {
 		return
 	}
+	if a.shutdownStarted {
+		if ct.shutdownCancelTaskID == taskID {
+			return
+		}
+		ct.shutdownCancelTaskID = taskID
+	}
 	host, contactID, contextID := a.pi, ct.ID, ct.PiBinding.Context.ContextID
+	generation := a.connectionGeneration
 	ct.setSendError("Cancellation requested", "send-cancelled", "")
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -2515,7 +2126,7 @@ func (a *appModel) cancelRuntimeTask(ct *contact, taskID string) {
 		cancel()
 		a.updateUI(func() {
 			ct := a.contactByID(contactID)
-			if a.pi == host && ct != nil && ct.ActiveTaskID == taskID && err != nil {
+			if a.pi == host && a.connectionGeneration == generation && ct != nil && ct.PiBinding != nil && ct.PiBinding.Context.ContextID == contextID && ct.ActiveTaskID == taskID && err != nil {
 				ct.setSendError(a.connectionSafeMessage(err), "", "")
 			}
 		})
@@ -2527,70 +2138,10 @@ func (a *appModel) cancelIssue(issueID string) bool {
 }
 
 func (a *appModel) cancelIssueFor(ct *contact, issueID string) bool {
-	if a.rt == nil || ct == nil {
+	if a.pi == nil || ct == nil {
 		return false
 	}
-	issue := ct.issueByID(issueID)
-	if issue == nil || issue.Work.ActiveTaskID == "" || issue.WorkSessionID == "" {
-		return false
-	}
-	if ledger := issue.Supplements; ledger != nil && ledger.AutoContinue {
-		target := issueSupplementTargetFor(ct, issue)
-		active := ledger.activeBatch(target)
-		if !ledger.StopAutoContinue(active, a.persist) {
-			// A local intent-save failure must not erase the real Stop request.
-			ledger.AutoContinue = false
-			issue.Work.setSendError("Supplement automation was stopped in memory; its intent could not be saved. Reload before relying on automatic continuation.", "auto-stop-memory", "")
-		}
-	}
-	taskID, sessionID := issue.Work.ActiveTaskID, issue.WorkSessionID
-	if w := workFor(ct, taskID); w != nil {
-		w.State = workStopping
-		w.StopRequested = true
-	}
-	if issue.Work.StopRequestedTasks == nil {
-		issue.Work.StopRequestedTasks = map[string]bool{}
-	}
-	issue.Work.StopRequestedTasks[taskID] = true
-	issue.Work.setSendError("Cancellation requested", "send-cancelled", "")
-	go func() {
-		status, err := a.rt.cancelTask(sessionID, taskID)
-		a.updateUI(func() { a.applyIssueCancelResult(ct.ID, issueID, taskID, status, err) })
-	}()
-	return true
-}
-
-func (a *appModel) applyIssueCancelResult(contactID, issueID, taskID, status string, err error) {
-	ct := a.contactByID(contactID)
-	if ct == nil {
-		return
-	}
-	issue := ct.issueByID(issueID)
-	if issue == nil {
-		return
-	}
-	if err != nil {
-		if issue.Work.ActiveTaskID == taskID {
-			if w := workFor(ct, taskID); w != nil && w.State == workStopping {
-				w.State = workRunning
-			}
-			issue.Work.setSendError("Cancel failed: "+a.connectionRuntimeMessage(err), "send-cancel-failed", a.connectionRuntimeMessage(err))
-		}
-		return
-	}
-	if issue.Work.ActiveTaskID != taskID {
-		return
-	}
-	switch status {
-	case "requested", "already_requested":
-		if w := workFor(ct, taskID); w != nil {
-			w.State = workStopping
-			w.StopRequested = true
-		}
-		issue.Work.setSendError("Cancelling; waiting for the runtime to stop.", "send-cancelling", "")
-	case "not_running":
-		issue.Work.setSendError("The task already finished; waiting for its final state.", "send-already-finished", "")
-	}
+	return a.cancelPiIssue(ct, ct.issueByID(issueID))
 }
 
 func (a *appModel) applyCancelResult(contactID, taskID, status string, err error) {

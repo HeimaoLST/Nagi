@@ -24,6 +24,7 @@ type productIssue struct {
 	CreatedAt            int64
 	UpdatedAt            int64
 	Executions           []*issueExecution
+	PiBinding            *piActivityBinding
 	RequirementsRevision int
 
 	// Context is the pending context for the next Run/Continue. Each execution
@@ -46,23 +47,31 @@ type productIssue struct {
 }
 
 const (
-	issueQuestionOpen       = "open"
-	issueQuestionAnswered   = "answered"
-	issueQuestionSuperseded = "superseded"
+	issueQuestionOpen                = "open"
+	issueQuestionAnswered            = "answered"
+	issueQuestionSuperseded          = "superseded"
+	issueQuestionDeliverySaved       = "saved"
+	issueQuestionDeliveryDispatching = "dispatching"
+	issueQuestionDeliveryResolved    = "resolved"
+	issueQuestionDeliveryUnknown     = "unknown"
+	issueQuestionDeliveryCanceled    = "canceled"
 )
 
 type issueQuestion struct {
-	Ref                  string `json:"ref"`
-	Text                 string `json:"text"`
-	RequirementsRevision int    `json:"requirements_revision"`
-	SourceTaskID         string `json:"source_task_id,omitempty"`
-	SourceScopeRef       string `json:"source_scope_ref,omitempty"`
-	SourceTurnID         string `json:"source_turn_id,omitempty"`
-	State                string `json:"state"`
-	CreatedAt            int64  `json:"created_at,omitempty"`
-	AnsweredAt           int64  `json:"answered_at,omitempty"`
-	AnswerSupplementID   string `json:"answer_supplement_id,omitempty"`
-	AnswerText           string `json:"answer_text,omitempty"`
+	Ref                  string            `json:"ref"`
+	Text                 string            `json:"text"`
+	RequirementsRevision int               `json:"requirements_revision"`
+	SourceTaskID         string            `json:"source_task_id,omitempty"`
+	SourceScopeRef       string            `json:"source_scope_ref,omitempty"`
+	SourceTurnID         string            `json:"source_turn_id,omitempty"`
+	State                string            `json:"state"`
+	CreatedAt            int64             `json:"created_at,omitempty"`
+	AnsweredAt           int64             `json:"answered_at,omitempty"`
+	AnswerSupplementID   string            `json:"answer_supplement_id,omitempty"`
+	PiCall               *piQuestionCall   `json:"pi_call,omitempty"`
+	DeliveryState        string            `json:"delivery_state,omitempty"`
+	AnswerContext        []taskContextItem `json:"answer_context,omitempty"`
+	AnswerText           string            `json:"answer_text,omitempty"`
 }
 
 func newIssueQuestionRef() string {
@@ -117,6 +126,7 @@ type issueWorkSession struct {
 	pendingEvents      []runtimeEventEnvelope
 	pendingExecutionID string
 	cancelAfterAccept  bool
+	piCancelSent       map[string]bool
 	historyGen         int
 	HistoryDirty       bool
 	Released           bool
@@ -153,6 +163,8 @@ type issueExecution struct {
 	ToolOperationID      string
 	ToolScopeRef         string
 	ToolScopeInput       string
+	PiIntent             bool
+	PiRun                *piActivityRun
 	WaitRequested        bool
 }
 
@@ -637,6 +649,7 @@ func issuesForStoredContact(all []storedIssue, contactID string) []*productIssue
 			ID: stored.ID, ContactID: contactID, Goal: stored.Goal,
 			Archived: stored.Archived, RequirementsRevision: stored.RequirementsRevision,
 			Evidence: stored.Evidence, CreatedAt: stored.CreatedAt, UpdatedAt: stored.UpdatedAt,
+			PiBinding:     clonePiActivityBinding(stored.PiBinding),
 			WorkSessionID: stored.WorkSessionID,
 			Context:       taskContext{items: cloneTaskContextItems(stored.TaskContext)},
 			Supplements:   cloneIssueSupplementLedger(stored.Supplements),
@@ -646,6 +659,11 @@ func issuesForStoredContact(all []storedIssue, contactID string) []*productIssue
 				continue
 			}
 			copy := *question
+			copy.PiCall = clonePiQuestionCall(question.PiCall)
+			copy.AnswerContext = cloneTaskContextItems(question.AnswerContext)
+			if copy.DeliveryState == issueQuestionDeliveryDispatching {
+				copy.DeliveryState = issueQuestionDeliveryUnknown
+			}
 			issue.Questions = append(issue.Questions, &copy)
 		}
 		if len(stored.RequirementItems) > 0 {
@@ -678,6 +696,9 @@ func issuesForStoredContact(all []storedIssue, contactID string) []*productIssue
 			}
 			detail := execution.Detail
 			switch {
+			case execution.PiIntent && (status == issueExecutionPending || status == issueExecutionAccepted || status == issueExecutionRunning):
+				status = issueExecutionUnknown
+				detail = "The previous Pi run is unavailable; its outcome is unknown."
 			case status == issueExecutionPending:
 				status = issueExecutionUnknown
 				detail = "No trusted Runtime task association was recorded; reload before rerunning."
@@ -693,6 +714,7 @@ func issuesForStoredContact(all []storedIssue, contactID string) []*productIssue
 				Context:              cloneTaskContextItems(execution.Context), SupplementBatchID: execution.SupplementBatchID,
 				ToolOperationID: execution.ToolOperationID, ToolScopeRef: execution.ToolScopeRef,
 				ToolScopeInput: execution.ToolScopeInput, WaitRequested: execution.WaitRequested,
+				PiIntent: execution.PiIntent, PiRun: clonePiActivityRun(execution.PiRun),
 			})
 		}
 		issue.Status = normalizeIssueStatus(stored.Status, issue.Executions)

@@ -14,13 +14,13 @@ import (
 	"github.com/HeimaoLST/Nagi/internal/pi"
 )
 
-type piConversationSelection struct {
+type piSelection struct {
 	CWD          string   `json:"cwd"`
 	Instructions string   `json:"instructions"`
 	CodingTools  []string `json:"coding_tools"`
 }
 
-type piConversationConfiguration struct {
+type piConfiguration struct {
 	WireAPI          pi.WireAPI `json:"wire_api"`
 	BaseURL          string     `json:"base_url"`
 	Model            string     `json:"model"`
@@ -30,10 +30,76 @@ type piConversationConfiguration struct {
 }
 
 type piConversationBinding struct {
-	Engine        string                      `json:"engine"`
-	Context       pi.ContextBinding           `json:"context"`
-	Selection     piConversationSelection     `json:"selection"`
-	Configuration piConversationConfiguration `json:"configuration"`
+	Engine        string            `json:"engine"`
+	Context       pi.ContextBinding `json:"context"`
+	Selection     piSelection       `json:"selection"`
+	Configuration piConfiguration   `json:"configuration"`
+}
+
+type piActivityBinding struct {
+	Engine        string            `json:"engine"`
+	Context       pi.ContextBinding `json:"context"`
+	Selection     piSelection       `json:"selection"`
+	Configuration piConfiguration   `json:"configuration"`
+}
+
+type piActivityRun struct {
+	WorkerEpoch     string `json:"worker_epoch"`
+	ContextID       string `json:"context_id"`
+	SessionRef      string `json:"session_ref"`
+	RunID           string `json:"run_id"`
+	CancelRequested bool   `json:"cancel_requested,omitempty"`
+	Admitted        bool   `json:"admitted"`
+}
+
+type piQuestionCall struct {
+	WorkerEpoch string `json:"worker_epoch"`
+	ContextID   string `json:"context_id"`
+	RunID       string `json:"run_id"`
+	CallID      string `json:"call_id"`
+	OperationID string `json:"operation_id"`
+	ExecutionID string `json:"execution_id"`
+	ContactID   string `json:"contact_id"`
+	IssueID     string `json:"issue_id"`
+	SessionRef  string `json:"session_ref"`
+}
+
+func clonePiActivityBinding(binding *piActivityBinding) *piActivityBinding {
+	if binding == nil {
+		return nil
+	}
+	copy := *binding
+	if binding.Selection.CodingTools != nil {
+		copy.Selection.CodingTools = append([]string{}, binding.Selection.CodingTools...)
+	}
+	return &copy
+}
+
+func clonePiActivityRun(run *piActivityRun) *piActivityRun {
+	if run == nil {
+		return nil
+	}
+	copy := *run
+	return &copy
+}
+
+func samePiActivityRun(left, right *piActivityRun) bool {
+	return left != nil && right != nil && left.WorkerEpoch == right.WorkerEpoch && left.ContextID == right.ContextID && left.SessionRef == right.SessionRef && left.RunID == right.RunID
+}
+
+func clonePiQuestionCall(call *piQuestionCall) *piQuestionCall {
+	if call == nil {
+		return nil
+	}
+	copy := *call
+	return &copy
+}
+
+func isPiActivityIssue(issue *productIssue) bool {
+	return issue != nil && issue.PiBinding != nil && issue.PiBinding.Engine == "pi" &&
+		issue.PiBinding.Context.Purpose == pi.Activity && issue.PiBinding.Context.BotID == issue.ContactID &&
+		issue.PiBinding.Context.ActivityID == issue.ID && issue.PiBinding.Context.ContextID != "" &&
+		issue.PiBinding.Context.SessionRef != "" && issue.WorkSessionID == issue.PiBinding.Context.SessionRef
 }
 
 type piAppHost struct {
@@ -46,7 +112,7 @@ type piAppHost struct {
 	openMu         sync.Mutex
 	outcome        pi.ProcessOutcome
 	exitApplied    chan struct{}
-	defaults       piConversationConfiguration
+	defaults       piConfiguration
 }
 
 func clonePiConversationBinding(binding *piConversationBinding) *piConversationBinding {
@@ -104,7 +170,7 @@ func piWireAPI(api string) pi.WireAPI {
 	return pi.OpenAICompletions
 }
 
-func piConfiguration(config connectionConfig, sourceID string) pi.ConfigureParams {
+func piConfigureParams(config connectionConfig, sourceID string) pi.ConfigureParams {
 	return pi.ConfigureParams{WireAPI: piWireAPI(config.API), BaseURL: config.Endpoint, APIKey: config.APIKey,
 		Model: config.Model, ContextTokens: config.ContextTokens, OutputTokens: config.OutputTokens, CredentialSource: sourceID}
 }
@@ -204,7 +270,7 @@ func (a *appModel) startPiHost() {
 			}
 		}
 		if err == nil {
-			_, err = host.client.Configure(ctx, piConfiguration(config, private.CredentialSource))
+			_, err = host.client.Configure(ctx, piConfigureParams(config, private.CredentialSource))
 		}
 		if err != nil && created {
 			cleanup, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -261,7 +327,7 @@ func (a *appModel) startPiHost() {
 				return
 			}
 			host.mu.Lock()
-			host.defaults = piConversationConfiguration{WireAPI: piWireAPI(config.API), BaseURL: config.Endpoint,
+			host.defaults = piConfiguration{WireAPI: piWireAPI(config.API), BaseURL: config.Endpoint,
 				Model: config.Model, ContextTokens: config.ContextTokens, OutputTokens: config.OutputTokens,
 				CredentialSource: private.CredentialSource}
 			host.mu.Unlock()
@@ -307,11 +373,18 @@ func (h *piAppHost) onEvent(a *appModel, event pi.Event) {
 		}()
 		return
 	}
+	if bridge.binding.Purpose == pi.Activity {
+		a.updateUI(func() { a.applyPiActivityEvent(h, bridge, event) })
+		return
+	}
 	a.updateUI(func() { a.applyPiEvent(h.generation, event) })
 }
 
 func (h *piAppHost) onExit(a *appModel, outcome pi.ProcessOutcome) {
 	h.mu.Lock()
+	for _, bridge := range h.bridges {
+		bridge.cancelWait()
+	}
 	h.outcome = outcome
 	h.mu.Unlock()
 	a.updateUI(func() {
@@ -332,6 +405,25 @@ func (h *piAppHost) onExit(a *appModel, outcome pi.ProcessOutcome) {
 				}
 				ct.pendingSend.State = "unknown"
 				ct.setSendError("Pi disconnected; delivery is unknown. Reload before sending again.", "send-uncertain", "")
+			}
+			for _, issue := range ct.Issues {
+				if issue.Work.ActiveTaskID == "" && issue.Work.SendState != sendSubmitting {
+					continue
+				}
+				for _, execution := range issue.Executions {
+					if execution != nil && execution.PiIntent && (execution.Status == issueExecutionPending || execution.Status == issueExecutionAccepted || execution.Status == issueExecutionRunning) {
+						execution.Status = issueExecutionUnknown
+						execution.Detail = "Pi disconnected; the activity outcome is unknown."
+					}
+				}
+				for _, question := range issue.Questions {
+					if question != nil && question.PiCall != nil && question.DeliveryState == issueQuestionDeliveryDispatching {
+						question.DeliveryState = issueQuestionDeliveryUnknown
+					}
+				}
+				issue.Work.ActiveTaskID = ""
+				issue.Work.SendState = sendUnknown
+				issue.Status = issueStatusNeedsAttention
 			}
 		}
 		_ = a.persist()
@@ -428,7 +520,7 @@ func (a *appModel) sendPiConversation(ct *contact, text string) bool {
 	return true
 }
 
-func (a *appModel) submitPiConversation(host *piAppHost, contactID string, binding *piConversationBinding, workspace, instructions string, codingTools *[]string, captured piConversationConfiguration, text string, items []taskContextItem) {
+func (a *appModel) submitPiConversation(host *piAppHost, contactID string, binding *piConversationBinding, workspace, instructions string, codingTools *[]string, captured piConfiguration, text string, items []taskContextItem) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if binding == nil {
@@ -442,7 +534,7 @@ func (a *appModel) submitPiConversation(host *piAppHost, contactID string, bindi
 		}
 		binding = &piConversationBinding{Engine: "pi", Context: pi.ContextBinding{ContextID: newIssueToolTurnID(), BotID: contactID,
 			Purpose: pi.Conversation, SelectionRevision: 1},
-			Selection:     piConversationSelection{CWD: workspace, Instructions: instructions, CodingTools: selection},
+			Selection:     piSelection{CWD: workspace, Instructions: instructions, CodingTools: selection},
 			Configuration: captured}
 	}
 	actual, err := host.openContext(ctx, *binding)
@@ -523,6 +615,18 @@ func (a *appModel) submitPiConversation(host *piAppHost, contactID string, bindi
 	}
 	_, err = host.client.StartRun(ctx, run)
 	if err != nil {
+		bridge.mu.Lock()
+		started := bridge.started
+		bridge.mu.Unlock()
+		if started {
+			a.updateUI(func() {
+				defer a.submissionAsyncFinished()
+				if a.shutdownStarted {
+					a.finishShutdown()
+				}
+			})
+			return
+		}
 		var command *pi.CommandError
 		uncertain := !errors.As(err, &command) || command.Delivery == pi.Unanswered
 		_ = bridge.Drain(ctx)
@@ -611,6 +715,9 @@ func (a *appModel) applyPiEvent(generation int, event pi.Event) {
 			ct.Context.previewID = previousPreviewID
 			ct.SendState = sendUnknown
 			ct.setSendError("Run admitted, but its local state could not be saved.", "send-uncertain", "")
+		}
+		if a.shutdownStarted {
+			a.finishShutdown()
 		}
 	case pi.TextDelta:
 		var data pi.TextDeltaData
@@ -995,7 +1102,7 @@ func probePiConnection(ctx context.Context, config connectionConfig, probe *piCo
 	if ready.Runtime.Version != "v22.23.5" {
 		return fmt.Errorf("Pi worker requires Node 22.23.5; got %s", ready.Runtime.Version)
 	}
-	if _, err = client.Configure(ctx, piConfiguration(config, newIssueToolScopeRef())); err != nil {
+	if _, err = client.Configure(ctx, piConfigureParams(config, newIssueToolScopeRef())); err != nil {
 		return err
 	}
 	if _, err = client.OpenContext(ctx, pi.OpenContextParams{ContextID: contextID, BotID: "connection-test", Purpose: pi.Conversation,

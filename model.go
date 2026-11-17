@@ -123,6 +123,7 @@ type contact struct {
 	issueView             issueViewState
 	StopRequestedTasks    map[string]bool
 	pendingIssueExecution string
+	shutdownCancelTaskID  string
 
 	// Runtime-backed state. Empty SessionID means the contact has no runtime
 	// session yet; it is created lazily before the first task.send.
@@ -322,9 +323,8 @@ type appModel struct {
 	issueToolHelper          string
 	issueToolErr             string
 	issueToolWaiters         map[string]chan IssueToolReceipt
+	piQuestionWaiters        map[string]chan struct{}
 	issueToolShutdown        chan struct{}
-	issueToolMu              sync.Mutex
-	issueToolRefresh         map[string]issueToolRefreshMark
 	issueToolReleaseInFlight int
 
 	// Layout is a GUI-wide preference, not a contact or runtime fact. Widths

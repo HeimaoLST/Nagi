@@ -49,19 +49,21 @@ type issueSupplementTarget struct {
 }
 
 type issueSupplement struct {
-	ID                   string `json:"id"`
-	ContactID            string `json:"contact_id"`
-	IssueID              string `json:"issue_id"`
-	Text                 string `json:"text"`
-	RequirementsRevision int    `json:"requirements_revision"`
-	CreatedAt            int64  `json:"created_at"`
-	State                string `json:"state"`
-	BatchID              string `json:"batch_id,omitempty"`
-	Detail               string `json:"detail,omitempty"`
-	SessionID            string `json:"session_id,omitempty"`
-	TaskID               string `json:"task_id,omitempty"`
-	MessageID            string `json:"message_id,omitempty"`
-	ExecutionID          string `json:"execution_id,omitempty"`
+	ID                    string         `json:"id"`
+	ContactID             string         `json:"contact_id"`
+	IssueID               string         `json:"issue_id"`
+	Text                  string         `json:"text"`
+	RequirementsRevision  int            `json:"requirements_revision"`
+	CreatedAt             int64          `json:"created_at"`
+	State                 string         `json:"state"`
+	BatchID               string         `json:"batch_id,omitempty"`
+	Detail                string         `json:"detail,omitempty"`
+	SessionID             string         `json:"session_id,omitempty"`
+	TaskID                string         `json:"task_id,omitempty"`
+	MessageID             string         `json:"message_id,omitempty"`
+	ExecutionID           string         `json:"execution_id,omitempty"`
+	PiRun                 *piActivityRun `json:"pi_run,omitempty"`
+	PiQuestionOperationID string         `json:"pi_question_operation_id,omitempty"`
 }
 
 type issueSupplementSnapshot struct {
@@ -81,6 +83,7 @@ type issueSupplementBatch struct {
 	TaskID      string                    `json:"task_id,omitempty"`
 	MessageID   string                    `json:"message_id,omitempty"`
 	ExecutionID string                    `json:"execution_id,omitempty"`
+	PiRun       *piActivityRun            `json:"pi_run,omitempty"`
 	SaveError   string                    `json:"save_error,omitempty"`
 }
 
@@ -89,6 +92,7 @@ type issueSupplementAssociation struct {
 	TaskID      string
 	MessageID   string
 	ExecutionID string
+	PiRun       *piActivityRun
 }
 
 // issueSupplementHistory is a caller-provided record, not a claim that this
@@ -123,7 +127,7 @@ func newIssueSupplementLedger() *issueSupplementLedger {
 func (l *issueSupplementLedger) pendingCount() int {
 	count := 0
 	for _, item := range l.Items {
-		if item != nil && item.State == supplementStatePending {
+		if item != nil && item.State == supplementStatePending && item.PiQuestionOperationID == "" {
 			count++
 		}
 	}
@@ -133,7 +137,7 @@ func (l *issueSupplementLedger) pendingCount() int {
 func (l *issueSupplementLedger) pendingBytes() int {
 	total := 0
 	for _, item := range l.Items {
-		if item != nil && item.State == supplementStatePending {
+		if item != nil && item.State == supplementStatePending && item.PiQuestionOperationID == "" {
 			total += len([]byte(item.Text))
 		}
 	}
@@ -207,7 +211,7 @@ func supplementTargetsSameIssue(a, b issueSupplementTarget) bool {
 func (l *issueSupplementLedger) pendingFor(target issueSupplementTarget) []*issueSupplement {
 	var out []*issueSupplement
 	for _, item := range l.Items {
-		if item != nil && item.State == supplementStatePending &&
+		if item != nil && item.State == supplementStatePending && item.PiQuestionOperationID == "" &&
 			supplementTargetsSameIssue(issueSupplementTarget{
 				ContactID: item.ContactID, IssueID: item.IssueID,
 			}, target) &&
@@ -374,9 +378,7 @@ func (l *issueSupplementLedger) DeferDispatch(batch *issueSupplementBatch, save 
 	return true
 }
 
-// Accept records a real Runtime acceptance with all four identities. It remains
-// valid even if auto-continuation was stopped after dispatch; submission does
-// not claim adoption, understanding, or requirement satisfaction.
+// Accept records the observed runtime association and does not imply issue completion.
 func (l *issueSupplementLedger) Accept(batch *issueSupplementBatch, association issueSupplementAssociation, save func() error) (bool, error) {
 	canonical := l.canonicalBatch(batch)
 	if canonical == nil || (canonical.State != supplementBatchDispatching && canonical.State != supplementBatchUnknown) {
@@ -386,17 +388,20 @@ func (l *issueSupplementLedger) Accept(batch *issueSupplementBatch, association 
 	if save == nil {
 		return false, errSupplementSaveRequired
 	}
-	if strings.TrimSpace(association.SessionID) == "" || strings.TrimSpace(association.TaskID) == "" ||
-		strings.TrimSpace(association.MessageID) == "" || strings.TrimSpace(association.ExecutionID) == "" {
-		return false, errors.New("accepted supplement requires session, task, message and execution ids")
+	piAccepted := association.PiRun != nil && association.PiRun.Admitted && association.PiRun.WorkerEpoch != "" && association.PiRun.ContextID != "" && association.PiRun.SessionRef != "" && association.PiRun.RunID != "" && association.MessageID == "" && (association.SessionID == "" || association.SessionID == association.PiRun.SessionRef) && (association.TaskID == "" || association.TaskID == association.PiRun.RunID)
+	legacyAccepted := association.PiRun == nil && strings.TrimSpace(association.SessionID) != "" && strings.TrimSpace(association.TaskID) != "" && strings.TrimSpace(association.MessageID) != ""
+	if strings.TrimSpace(association.ExecutionID) == "" || !piAccepted && !legacyAccepted {
+		return false, errors.New("accepted supplement requires a real execution and runtime association")
 	}
 	batch.State = supplementBatchAccepted
 	batch.SessionID, batch.TaskID, batch.MessageID, batch.ExecutionID = association.SessionID, association.TaskID, association.MessageID, association.ExecutionID
+	batch.PiRun = clonePiActivityRun(association.PiRun)
 	batch.SaveError = ""
 	for _, snapshot := range batch.Snapshot {
 		if item := l.itemByID(snapshot.ID); item != nil {
 			item.State = supplementStateSubmitted
 			item.SessionID, item.TaskID, item.MessageID, item.ExecutionID = batch.SessionID, batch.TaskID, batch.MessageID, batch.ExecutionID
+			item.PiRun = clonePiActivityRun(batch.PiRun)
 		}
 	}
 	if err := save(); err != nil {
@@ -591,6 +596,7 @@ func cloneIssueSupplementLedger(ledger *issueSupplementLedger) *issueSupplementL
 				continue
 			}
 			copyItem := *item
+			copyItem.PiRun = clonePiActivityRun(item.PiRun)
 			out.Items = append(out.Items, &copyItem)
 		}
 	}
@@ -602,6 +608,7 @@ func cloneIssueSupplementLedger(ledger *issueSupplementLedger) *issueSupplementL
 				continue
 			}
 			copyBatch := *batch
+			copyBatch.PiRun = clonePiActivityRun(batch.PiRun)
 			copyBatch.Snapshot = slices.Clone(batch.Snapshot)
 			out.Batches = append(out.Batches, &copyBatch)
 		}

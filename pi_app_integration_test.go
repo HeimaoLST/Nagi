@@ -358,8 +358,8 @@ func (f *piAppFixture) prepare(binding pi.ContextBinding) *piAppRun {
 		ct := f.app.contactByID(binding.BotID)
 		ct.PiBinding = &piConversationBinding{
 			Engine: "pi", Context: binding,
-			Selection: piConversationSelection{CWD: binding.CWD, CodingTools: []string{}},
-			Configuration: piConversationConfiguration{WireAPI: f.config.WireAPI, BaseURL: f.config.BaseURL,
+			Selection: piSelection{CWD: binding.CWD, CodingTools: []string{}},
+			Configuration: piConfiguration{WireAPI: f.config.WireAPI, BaseURL: f.config.BaseURL,
 				Model: f.config.Model, ContextTokens: f.config.ContextTokens, OutputTokens: f.config.OutputTokens,
 				CredentialSource: f.config.CredentialSource},
 		}
