@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -385,6 +386,14 @@ func (s *connectionSettings) field(c *ui.Context, t *ui.Theme, key, label, place
 	})
 }
 
+func positiveInt(value string) (int, error) {
+	parsed, err := strconv.Atoi(strings.TrimSpace(value))
+	if err != nil || parsed <= 0 {
+		return 0, fmt.Errorf("not a positive integer")
+	}
+	return parsed, nil
+}
+
 func (s *connectionSettings) slotStep(c *ui.Context, delta int) {
 	msgs := locales.In(c.Locale())
 	text, label := "−", msgs.ConnectionSlotsDecrease()
@@ -429,7 +438,6 @@ const (
 	connErrorNotExposed          = "not-exposed"
 	connErrorExitedWhileChecking = "exited-while-validating"
 	connErrorExitedDuringInstall = "exited-during-validation"
-	connBlockedModelOp           = "model-op"
 	connBlockedApplying          = "applying"
 	connBlockedShutdown          = "shutdown"
 	connBlockedNoSaved           = "no-saved"
@@ -550,8 +558,6 @@ func connectionErrorText(msgs locales.Messages, kind, detail string) string {
 
 func connectionBlockedText(msgs locales.Messages, kind string) string {
 	switch kind {
-	case connBlockedModelOp:
-		return msgs.ConnectionBlockedModelOp()
 	case connBlockedApplying:
 		return msgs.ConnectionBlockedApplying()
 	case connBlockedShutdown:

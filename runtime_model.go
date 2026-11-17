@@ -1935,9 +1935,6 @@ const (
 	blockArchivedSend        = "archived-send"
 	blockApplying            = "applying"
 	blockRuntimeNotReady     = "runtime-not-ready"
-	blockModelReload         = "model-reload"
-	blockModelRefresh        = "model-refresh"
-	blockModelUpdating       = "model-updating"
 	blockHistoryLoading      = "history-loading"
 	blockBusy                = "busy"
 	blockSingleSlot          = "single-slot"
@@ -1960,12 +1957,6 @@ func sendBlockRaw(reason string) string {
 		return "Connection settings are being applied; wait for the new helper to become ready."
 	case blockRuntimeNotReady:
 		return "Runtime is not ready."
-	case blockModelReload:
-		return "Session configuration is unconfirmed; Reload the session before sending."
-	case blockModelRefresh:
-		return "Session configuration is unconfirmed; Refresh before sending."
-	case blockModelUpdating:
-		return "The session model is being updated; this session cannot accept a new task yet."
 	case blockHistoryLoading:
 		return "This contact is still loading its history."
 	case blockBusy:
@@ -2001,12 +1992,6 @@ func sendBlockText(msgs locales.Messages, reason string) string {
 		return msgs.CanSendApplying()
 	case blockRuntimeNotReady:
 		return msgs.CanSendRuntimeNotReady()
-	case blockModelReload:
-		return msgs.CanSendModelReload()
-	case blockModelRefresh:
-		return msgs.CanSendModelRefresh()
-	case blockModelUpdating:
-		return msgs.CanSendModelUpdating()
 	case blockHistoryLoading:
 		return msgs.CanSendHistoryLoading()
 	case blockBusy:
@@ -2082,9 +2067,6 @@ func (a *appModel) canStartIssue(ct *contact, issue *productIssue) string {
 	if a.rt == nil || a.runtimeStatus != runtimeStateReady {
 		return blockRuntimeNotReady
 	}
-	if status := a.modelSessionStatus(issue.WorkSessionID); status != "" {
-		return status
-	}
 	if sessionBusy(issue.Work.SendState, issue.Work.ActiveTaskID) {
 		return blockIssueActive
 	}
@@ -2121,10 +2103,6 @@ func (a *appModel) startIssueTask(ct *contact, issue *productIssue, execution *i
 	}
 	if a.connectionApplying {
 		issue.Work.setSendError("Connection settings are being applied; wait for the new helper to become ready.", "applying", "")
-		return false
-	}
-	if status := a.modelSessionStatus(issue.WorkSessionID); status != "" {
-		issue.Work.setSendError(sendBlockRaw(status), status, "")
 		return false
 	}
 	if a.rt == nil || a.runtimeStatus != runtimeStateReady {

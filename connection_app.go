@@ -306,9 +306,6 @@ func runtimeHasExited(rt *runtimeClient) bool {
 }
 
 func (a *appModel) connectionReloadBlocked() string {
-	if a.modelOpActive {
-		return connBlockedModelOp
-	}
 	if a.connectionApplying {
 		return connBlockedApplying
 	}
@@ -615,7 +612,7 @@ func (c *runtimeClient) createConfiguredSessionWithTools(workingDir, systemPromp
 // issue/conversation submission, result reads, and theme installs have delivered
 // their final UI callbacks; those callbacks re-enter this function.
 func (a *appModel) finishShutdown() {
-	if a.quitReady || a.shutdownDrainStarted || (a.dataRecovery != nil && a.dataRecovery.inFlight) || a.connectionSaveInFlight || a.connectionApplying || a.connectionTesting || a.modelOpActive || a.contactHistoryInFlight > 0 || a.resultInFlight > 0 || a.submissionInFlight > 0 || a.issueToolReleaseInFlight > 0 || a.metadataInFlight > 0 || (a.themeImport != nil && a.themeImport.installInFlight) {
+	if a.quitReady || a.shutdownDrainStarted || (a.dataRecovery != nil && a.dataRecovery.inFlight) || a.connectionSaveInFlight || a.connectionApplying || a.connectionTesting || a.contactHistoryInFlight > 0 || a.resultInFlight > 0 || a.submissionInFlight > 0 || a.issueToolReleaseInFlight > 0 || a.metadataInFlight > 0 || (a.themeImport != nil && a.themeImport.installInFlight) {
 		return
 	}
 	if a.pi != nil {

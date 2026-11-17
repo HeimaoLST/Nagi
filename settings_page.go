@@ -27,7 +27,6 @@ const (
 	settingsSourceConfiguration = "configuration"
 	settingsSourceCommand       = "command"
 	settingsSourceComposer      = "composer"
-	settingsSourceModel         = "composer-model"
 	settingsSourceHistory       = "history"
 	settingsSourceAux           = "aux"
 	settingsSourceLink          = "link"
@@ -139,20 +138,8 @@ func (a *appModel) openSettingsTab(tab, source string) {
 		a.folderChoiceGeneration++
 	}
 	if !wasOpen {
-		if a.aux == "model" && a.modelPanelKind == "work" {
-			target := modelSelectionTarget{Kind: "work", Label: a.modelPanelLabel, Config: runtimeConnectionConfig{SessionID: a.modelPanelSessionID}}
-			if a.modelForm != nil {
-				target = a.modelForm.Target
-			}
-			a.settingsReturnModelTarget = &target
-			a.settingsReturnModel = a.modelForm
-		}
 		a.settingsReturnFocus = source
 		a.settingsFocusBack = true
-	}
-	a.closeComposerModel()
-	if a.modelForm != nil {
-		a.modelForm.focusField = ""
 	}
 	a.settingsOpen = true
 	a.settingsTab = tab
@@ -192,24 +179,11 @@ func (a *appModel) selectSettingsTab(tab string) {
 }
 
 func (a *appModel) closeSettings() {
-	if !a.settingsOpen || (a.modelOpActive && a.settingsReturnModelTarget != nil && a.settingsReturnModel == nil) {
+	if !a.settingsOpen {
 		return
 	}
 	a.folderChoiceGeneration++
 	a.settingsOpen = false
-	if target := a.settingsReturnModelTarget; target != nil && a.aux == "model" {
-		if a.settingsReturnModel != nil {
-			a.modelOpenToken++
-			a.modelForm = a.settingsReturnModel
-			a.modelPanelKind = target.Kind
-			a.modelPanelSessionID = target.Config.SessionID
-			a.modelPanelLabel = target.Label
-		} else {
-			a.openSessionModel(target.Config.SessionID, target.Kind, target.Label)
-		}
-	}
-	a.settingsReturnModel = nil
-	a.settingsReturnModelTarget = nil
 	a.settingsFocusBack = false
 	a.settingsFocusTab = ""
 	switch a.settingsReturnFocus {
@@ -229,8 +203,6 @@ func (a *appModel) closeSettings() {
 		a.focusConnectionEntry = true
 	case settingsSourceConfiguration:
 		a.focusConfiguration = true
-	case settingsSourceModel:
-		a.composerFocusModel = true
 	case settingsSourceComposer:
 		a.focusComposer = true
 	case settingsSourceHistory:
@@ -262,12 +234,6 @@ func (a *appModel) closeSettings() {
 			}
 		case a.aux == "sources":
 			a.focusSourcesBack = true
-		case a.aux == "model":
-			if a.composerInlineAux() {
-				a.composerFocusModel = true
-			} else {
-				a.focusAuxBack = true
-			}
 		case a.aux == "task-context":
 			if a.composerInlineAux() {
 				a.composerFocusContext = true
@@ -341,15 +307,12 @@ func (a *appModel) settingsSidebar(c *ui.Context, t *ui.Theme, narrow bool) {
 				ui.Icon(c, navBackIcon).Width(16).Height(16).TextColor(t.TextMuted)
 				ui.Text(c, msgs.SettingsBack()).FontSize(typeAction).FixedLineHeight(22).TextColor(a.workTheme.Tertiary)
 			})
-			back.Disabled(a.modelOpActive && a.settingsReturnModelTarget != nil && a.settingsReturnModel == nil).OnClick(func() { a.closeSettings() })
+			back.OnClick(func() { a.closeSettings() })
 			if a.settingsFocusBack {
 				back.Focus()
 				a.settingsFocusBack = false
 			}
 		}).Label(msgs.SettingsNavigationLabel()).FillWidth().Padding(12)
-		if a.modelOpActive && a.settingsReturnModelTarget != nil && a.settingsReturnModel == nil {
-			ui.Text(c, msgs.ModelWaiting()).FontSize(typeAction).LineHeight(1.5).TextColor(t.TextMuted)
-		}
 		ui.Text(c, msgs.SettingsTitle()).FontSize(typeNavigation).FontWeight(500).FixedLineHeight(lineNavigation).TextColor(a.workTheme.Tertiary).Opacity(.6).Height(18).Padding(0, 16)
 		nav := func(label, tab string) {
 			selected := a.settingsTab == tab
@@ -610,7 +573,7 @@ func (a *appModel) dataRecoveryBlocked(restore bool) string {
 	if a.contactProfile != nil && a.contactProfile.Busy {
 		return "busy"
 	}
-	if a.contextFilePickers > 0 || a.shutdownStarted || a.connectionSaveInFlight || a.connectionApplying || a.connectionTesting || a.modelOpActive || a.contactHistoryInFlight > 0 || a.resultInFlight > 0 || a.submissionInFlight > 0 || a.metadataInFlight > 0 || a.issueToolReleaseInFlight > 0 || a.activeTaskCount() > 0 || a.themeImport != nil && a.themeImport.Busy || a.connectionForm != nil && a.connectionForm.Busy {
+	if a.contextFilePickers > 0 || a.shutdownStarted || a.connectionSaveInFlight || a.connectionApplying || a.connectionTesting || a.contactHistoryInFlight > 0 || a.resultInFlight > 0 || a.submissionInFlight > 0 || a.metadataInFlight > 0 || a.issueToolReleaseInFlight > 0 || a.activeTaskCount() > 0 || a.themeImport != nil && a.themeImport.Busy || a.connectionForm != nil && a.connectionForm.Busy {
 		return "busy"
 	}
 	if a.dataRecovery != nil && (a.dataRecovery.choosing || a.dataRecovery.inFlight || a.dataRecovery.result.Outcome == storeRecoveryVerifiedInstalled || a.dataRecovery.result.Outcome == storeRecoveryInstallUnconfirmed) {
@@ -625,7 +588,7 @@ func (a *appModel) dataRecoveryBlocked(restore bool) string {
 	if a.store != nil || a.storeInitAllowed || a.rt != nil || a.runtimeStage != startupStageLocalStore || a.storePath == "" {
 		return "unavailable"
 	}
-	if a.localSaveErr != "" || len(a.contacts) != 1 || a.issueFormOpen || a.issueGoal != "" || a.issueRequirements != "" || len(a.issueRequirementDrafts)+len(a.issueCompletionDrafts)+len(a.issueSupplementDrafts) > 0 || a.modelForm != nil && a.modelForm.dirty() || a.connectionForm != nil && a.connectionForm.Dirty() {
+	if a.localSaveErr != "" || len(a.contacts) != 1 || a.issueFormOpen || a.issueGoal != "" || a.issueRequirements != "" || len(a.issueRequirementDrafts)+len(a.issueCompletionDrafts)+len(a.issueSupplementDrafts) > 0 || a.connectionForm != nil && a.connectionForm.Dirty() {
 		return "unsaved"
 	}
 	ct := a.selectedContact()
@@ -950,17 +913,6 @@ func (a *appModel) settingsConnectionContent(c *ui.Context, t *ui.Theme) {
 		actions := a.connectionActions()
 		actions.Discard = func() { form.ResetDraft() }
 		form.view(c, t, actions)
-		preferenceSectionHeader(c, t, msgs.ModelConversationScope())
-		if a.modelPanelKind == "conversation" && a.modelPanelSessionID == a.selectedContact().SessionID {
-			preferenceGroup(c, t, func() {
-				ui.Column(c).FillWidth().Padding(14, 0).Children(func() { a.modelPanel(c, t) })
-			})
-		} else {
-			secondaryButton(c, msgs.ModelSessionTitle()).Disabled(a.modelOpActive).
-				OnClick(func() {
-					a.prepareConversationModel()
-				})
-		}
 	})
 }
 
@@ -1127,8 +1079,6 @@ func (a *appModel) auxScrollFor(kind string) *ui.ScrollState {
 	switch kind {
 	case "sources":
 		return &a.sourcesScroll
-	case "model":
-		return &a.modelScroll
 	case "task-context":
 		return &a.taskContextScroll
 	case "issue-result":

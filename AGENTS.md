@@ -18,6 +18,8 @@ Inspect existing callers and implementations before editing. Keep one clear impl
 
 Developer TDD and developer-written or modified unit tests are prohibited. Development verification uses real integration/E2E behavior, preferably existing coverage. The test owner alone maintains necessary unit regression coverage. Tests must check observable behavior and meaningful invariants, not constants or removed features unless absence is the contract. Coordinate concurrent integration tests deterministically where practical.
 
+When a feature is explicitly retired, remove its obsolete UI, callers and dedicated tests rather than preserving it as a capability-hold panel. Keep unrelated live configuration and product-data behavior intact.
+
 ## Writers and Git
 
 The Nagi lead is the unique repository delivery and Git/integration owner for this migration. The PM coordinates overall direction. Every task binds a source/worktree, exact writer paths and execution authority; recheck stable HC identity/task/status before dispatch. Existing product owners remain unique writers. Workers do not spawn agents, edit another owner's paths, or mutate Git/GitHub without express delegation. Use precise English for briefs, reports and handoffs.
@@ -37,3 +39,5 @@ Use `python3 scripts/gui-go.py build|test|vet` to preserve the pinned MyGo patch
 Pi integration requires the actual pinned worker and real product tool bridge against a controlled local provider, with correlated contexts, direct progress reads, targeted question/answer, cancellation, crash/restart/no-replay and child reaping evidence. Package provenance must identify Nagi, Pi/dependency locks and the delivered JS runtime separately. Standalone delivery requires launching with Node absent from PATH. Existing Saki CI results or prototype screenshots do not validate changed Nagi code. Keep the protected aggregate gate and replace obsolete engine checks with actual Pi checks; do not turn missing coverage into a skip/pass.
 
 Keep current requirements/design in the existing topic documents and preserve useful historical evidence through explicit Git links. Remove superseded normative instructions rather than maintaining competing current designs. Distinguish source, build, integration/E2E, native, real-model and human acceptance. Every final report states commands/exits, source identity, observed results and remaining gaps.
+
+UI acceptance requires visual inspection of actual rendered pages against the adopted Qoder reference at the relevant widths and interaction states. Source checks, geometry assertions and passing tests supplement that inspection; they do not establish visual quality. Distinguish headless rendered screenshots from observed native windows and record which states were actually inspected.

@@ -1013,20 +1013,11 @@ func (a *appModel) issueCard(c *ui.Context, t *ui.Theme, ct *contact, issue *pro
 			})
 		})
 		if expanded {
-			ui.Row(c).Wrap().Gap(6).Children(func() {
-				if editable {
+			if editable {
+				ui.Row(c).Wrap().Gap(6).Children(func() {
 					secondaryButton(c, msgs.IssueEdit()).OnClick(func() { a.openEditIssueForm(issue) })
-				}
-				if issue.WorkSessionID != "" {
-					modelButton := secondaryButton(c, msgs.IssueModel()).OnClick(func() {
-						a.openSessionModel(issue.WorkSessionID, "work", issue.Goal)
-					})
-					if a.focusIssueModel {
-						modelButton.Focus()
-						a.focusIssueModel = false
-					}
-				}
-			})
+				})
+			}
 			a.issueActions(c, t, ct, issue, editable)
 			evidence := issueEvidenceText(locales.In(c.Locale()), issue)
 			if issue.Evidence != "" && issue.Status != issueStatusCompleted {

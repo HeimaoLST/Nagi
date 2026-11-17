@@ -36,9 +36,6 @@ func (a *appModel) view(c *ui.Context) {
 		form.RecoveryDetailsOpen = false
 	}
 	a.syncDetailPageMode()
-	if a.settingsOpen || a.mainPageActive() || a.detailPageActive() {
-		a.closeComposerModel()
-	}
 	if !a.settingsOpen {
 		a.linkReturnSeen = false
 	}
@@ -1061,142 +1058,23 @@ func (a *appModel) composerInlineAux() bool {
 	return a.aux == composerPanelContext && a.composerPanel == composerPanelContext
 }
 
-func (a *appModel) composerModelButton(c *ui.Context, t *ui.Theme, ct *contact) ui.Element {
+func (a *appModel) composerModelSummary(c *ui.Context, t *ui.Theme, ct *contact) {
 	msgs := locales.In(c.Locale())
-	summary := a.conversationModelSummary(msgs, ct)
-	button := appTooltip(c, sharedControlFace(c, ui.Button(c, "").Label(msgs.ConversationModelLabel()), 16, 4, false, false, false).
-		Margin(0).MinWidth(0).MaxWidth(230).Shrink(1).Padding(8),
-		msgs.ConversationModelTooltip(summary))
 	head, tail := a.conversationModelDisplayParts(msgs, ct)
-	button.Children(func() {
-		ui.Row(c).Grow(1).MinWidth(0).AlignItems(ui.Center).Gap(3).Children(func() {
-			ui.Text(c, msgs.ConversationBadge()).FontSize(typeMeta).FontWeight(400).FixedLineHeight(lineNavigation).
-				MaxLines(1).Shrink(0).TextColor(t.TextMuted)
-			ui.Row(c).Grow(1).MinWidth(0).AlignItems(ui.Center).Gap(0).Children(func() {
-				if head != "" {
-					ui.Text(c, head).FontSize(typeAction).FontWeight(500).
-						Grow(1).Shrink(1).MinWidth(0).MaxLines(1).Ellipsis("…").TextColor(t.Text)
-				}
-				if tail != "" {
-					ui.Text(c, tail).FontSize(typeAction).FontWeight(500).
-						MaxLines(1).Shrink(0).TextColor(t.Text)
-				}
-			})
-		})
-	})
-	return button
-}
-
-func (a *appModel) composerModelPopover(c *ui.Context, t *ui.Theme, anchor ui.Element) {
-	msgs := locales.In(c.Locale())
-	panel := ui.PopoverBase(c, anchor, &a.composerModelOpen, func(panel ui.Element) {
-		panel.Label(msgs.ConversationModelLabel()).Role(ui.RoleMenu).FocusGroup(ui.Vertical).
-			Width(320).MaxHeight(360).Padding(menuCompactPadding).Gap(menuCompactGap).Margin(4, 0, 0, 0).
-			Radius(menuCompactRadius).Background(t.Background).Border(1, t.Border).
-			Shadow(0, 0, 0, 0, ui.Transparent)
-		if panel.OverlayShortcut(0, ui.KeyEscape) {
-			a.closeComposerModel()
-			a.composerFocusModel = true
-		}
-		leaveOnTab := func(ev ui.InputEvent) bool {
-			if ev.Kind == ui.InputKeyDown && ev.Key == ui.KeyTab {
-				a.closeComposerModel()
+	appTooltip(c, ui.Row(c).Label(msgs.ConversationModelLabel()), msgs.ConversationModelTooltip(a.conversationModelSummary(msgs, ct))).MinWidth(0).MaxWidth(230).Shrink(1).Padding(8).AlignItems(ui.Center).Gap(3).Children(func() {
+		ui.Text(c, msgs.ConversationBadge()).FontSize(typeMeta).FontWeight(400).FixedLineHeight(lineNavigation).
+			MaxLines(1).Shrink(0).TextColor(t.TextMuted)
+		ui.Row(c).Grow(1).MinWidth(0).AlignItems(ui.Center).Gap(0).Children(func() {
+			if head != "" {
+				ui.Text(c, head).FontSize(typeAction).FontWeight(500).
+					Grow(1).Shrink(1).MinWidth(0).MaxLines(1).Ellipsis("…").TextColor(t.Text)
 			}
-			return false
-		}
-		ui.Scroll(c).FillWidth().MaxHeight(280).Children(func() {
-			ui.Column(c).FillWidth().Gap(4).Children(func() {
-				form := a.modelForm
-				if form == nil {
-					text := modelPanelMessageText(msgs, a.modelPanelMessage)
-					color := t.TextMuted
-					if a.modelPanelError != "" {
-						text = modelPanelErrorText(msgs, a.modelPanelError, a.modelPanelErrorDetail)
-						color = t.Danger
-					}
-					ui.Text(c, text).FontSize(typeAction).FixedLineHeight(lineCompact).TextColor(color)
-				} else {
-					current := form.Effective.Config.EffectiveConfig.Model
-					declared := false
-					for _, entry := range form.Catalog.ConfiguredModels {
-						declared = declared || entry.Model == current
-					}
-					if !declared || form.Unconfirmed {
-						label := msgs.ModelEffectiveModel(current)
-						if form.Unconfirmed {
-							label = msgs.ModelLastReadModel(current)
-						}
-						ui.Text(c, label).FontSize(typeAction).FixedLineHeight(lineCompact).TextColor(t.TextMuted)
-					}
-					if form.Status == modelStatusCatalogUnavailable || form.Status == modelStatusRefreshedNoCatalog {
-						ui.Text(c, msgs.ModelCatalogNotLoaded()).FontSize(typeAction).FixedLineHeight(lineCompact).TextColor(t.Warning)
-					} else if len(form.Catalog.ConfiguredModels) == 0 {
-						ui.Text(c, msgs.ModelNoConfigured()).FontSize(typeAction).FixedLineHeight(lineCompact).TextColor(t.TextMuted)
-					}
-					ui.Column(c).FillWidth().Children(func() {
-						ui.Column(c).FillWidth().Gap(2).Children(func() {
-							for index, entry := range form.Catalog.ConfiguredModels {
-								selected := !form.Unconfirmed && entry.Model == current
-								row := appTooltip(c, ui.ButtonBase(c).Radius(menuCompactRadius).TextColor(t.Text).Label(entry.Model).Role(ui.RoleMenuItemRadio).Checked(selected).
-									FillWidth().MinHeight(32).Padding(menuCompactPadding).HandleInput(leaveOnTab), entry.Model)
-								if selected || row.Hovered() || row.FocusVisible() {
-									row.Background(t.SurfaceHover)
-								}
-								if row.Pressed() {
-									row.Background(t.SurfacePressed)
-								}
-								row.Children(func() {
-									ui.Row(c).FillWidth().MinWidth(0).Gap(6).AlignItems(ui.Center).Children(func() {
-										ui.Text(c, entry.Model).FontSize(typeMeta).FixedLineHeight(lineNavigation).Grow(1).MinWidth(0).MaxLines(1).Ellipsis("…")
-										if selected {
-											ui.Icon(c, modelSelectedIcon).Size(glyphMenu, glyphMenu).Shrink(0)
-										}
-									})
-								})
-								row.Disabled(form.Busy || form.Unconfirmed || a.modelOpActive).
-									OnClick(func() { a.chooseComposerModel(index) })
-								if a.composerModelFocus && !form.Busy && !form.Unconfirmed {
-									row.Focus()
-									a.composerModelFocus = false
-								}
-							}
-						})
-					})
-					if form.Error != "" {
-						ui.Text(c, modelErrorText(msgs, form.Error, form.ErrorDetail)).FontSize(typeAction).FixedLineHeight(lineCompact).TextColor(t.Danger)
-					}
-					if form.UnconfirmedKind != "" {
-						ui.Text(c, modelUnconfirmedText(msgs, form.UnconfirmedKind, form.UnconfirmedDetail)).FontSize(typeAction).FixedLineHeight(lineCompact).TextColor(t.Warning)
-					}
-					if form.Busy {
-						ui.Text(c, modelStatusText(msgs, form.Status)).FontSize(typeMeta).TextColor(t.TextMuted)
-					}
-				}
-			})
+			if tail != "" {
+				ui.Text(c, tail).FontSize(typeAction).FontWeight(500).
+					MaxLines(1).Shrink(0).TextColor(t.Text)
+			}
 		})
-		ui.Divider(c)
-		manage := ui.ButtonBase(c).MinHeight(32).Padding(menuCompactPadding).Radius(menuCompactRadius).TextColor(t.Text).Label(msgs.ModelManage()).FillWidth().Justify(ui.Start).HandleInput(leaveOnTab).Children(func() {
-			ui.Row(c).AlignItems(ui.Center).Gap(6).Children(func() {
-				ui.Icon(c, railSettingsIcon).Size(glyphMenu, glyphMenu)
-				ui.Text(c, msgs.ModelManage()).FontSize(typeMeta).FixedLineHeight(lineNavigation)
-			})
-		}).OnClick(func() {
-			a.openSettingsTab(settingsTabConnection, settingsSourceModel)
-		})
-		if manage.Hovered() || manage.FocusVisible() {
-			manage.Background(t.SurfaceHover)
-		}
-		if manage.Pressed() {
-			manage.Background(t.SurfacePressed)
-		}
-		if a.composerModelFocus {
-			manage.Focus()
-			a.composerModelFocus = false
-		}
 	})
-	if panel.Dismissed() {
-		a.closeComposerModel()
-	}
 }
 
 func (a *appModel) composerInlinePanel(c *ui.Context, t *ui.Theme) {
@@ -1343,16 +1221,7 @@ func (a *appModel) composer(c *ui.Context, t *ui.Theme) {
 					}
 				}).Label(msgs.ComposerTools()).Shrink(0).Padding(0)
 				ui.Spacer(c)
-				modelButton := a.composerModelButton(c, t, ct)
-				modelButton.OnClick(func() { a.openComposerModel() })
-				if modelButton.Shortcut(0, ui.KeyDown) {
-					a.openComposerModel()
-				}
-				a.composerModelPopover(c, t, modelButton)
-				if a.composerFocusModel {
-					modelButton.Focus()
-					a.composerFocusModel = false
-				}
+				a.composerModelSummary(c, t, ct)
 				// Send/Stop are outside the Toolbar: the main action must never
 				// disappear into a toolbar overflow menu at narrow widths.
 				if !a.demo && ct.ActiveTaskID != "" {

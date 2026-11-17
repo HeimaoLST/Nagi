@@ -2,9 +2,9 @@
 
 ## Validate composed pages rather than isolated controls
 
-**Problem:** Settings navigation shrank to label width, the scrollbar followed a narrow content column, and an embedded session editor had a different width despite passing component checks.
-**Cause or correction:** Start alignment, a non-filling navigation group/scroll viewport and an auto-width nested form were composed without a shared page-width contract.
-**Prevention:** Check actual loaded page combinations with one full-pane scroll viewport and a separate bounded content column. Inspect minimum/default/wide layouts and the current-session editor, not only individual control targets.
+**Problem:** Settings navigation shrank to label width, the scrollbar followed a narrow content column, and an embedded editor had a different width despite passing component checks. A later UI progress report emphasized source/test maintenance instead of visual inspection.
+**Cause or correction:** Start alignment, a non-filling scroll viewport and an auto-width nested form lacked a shared page-width contract. The user requires visual inspection; source, geometry and test results do not establish visual quality. The obsolete session editor is now removed.
+**Prevention:** Inspect actual rendered page combinations against Qoder with one full-pane scroll viewport and a separate bounded content column. Check minimum/default/wide layouts, scrolling and relevant states. Distinguish inspected headless images from native-window observations and preserve screenshots; do not infer visual acceptance from assertions or screenshot counts.
 
 ## Use the current candidate without disturbing dirty ownership
 
@@ -238,7 +238,7 @@
 
 **Problem:** Initial symbol searches named absent guessed question files, and later inspections assumed absent source, SDK and external recorder paths. An edit anchor was also rejected before mutation because the relevant range had not been read.
 **Cause or correction:** Repository symbol/path discovery located the actual files; none of these failed lookups established a product defect.
-**Prevention:** Use rg --files and symbol discovery before targeted reads or edits, including SDK payloads and external evidence directories, then read the actual edit range. Keep lookup/setup failures separate from compilation and behavior results.
+**Prevention:** Use rg --files and symbol discovery before targeted reads or edits, including SDK payloads and external evidence directories, then read the actual edit range. Pass filename patterns through quoted rg --glob filters rather than unmatched shell globs. Keep lookup/setup failures separate from compilation and behavior results.
 
 ## Select process tests explicitly in CI
 
@@ -287,3 +287,9 @@
 **Problem:** A coordination brief used unsupported_stage ambiguously, and six user-visible notices included that literal machine-style prefix. A copy-only edit briefly added stray suffix characters before static parsing caught them.
 **Cause or correction:** Capability holds require plain explanatory copy; internal error codes belong only to machine contracts. The final six prefix deletions were verified by exact inverse hashes.
 **Prevention:** Specify displayed text separately from protocol codes, parse edits and verify their exact delta before freezing. Preserve the actual capability guard and reuse existing product controls.
+
+## Retire obsolete panels instead of porting their tests
+
+**Problem:** The first-use compatibility task adapted the obsolete session-model panel and its tests into capability-hold behavior instead of removing them.
+**Cause or correction:** The user explicitly requested direct removal. The old editor is not a feature to maintain during Pi integration; normal connection model configuration remains required. Source review of removal also found the retained read-only model summary had lost its existing full-value tooltip.
+**Prevention:** Remove the retired panel, its entry points/state and dedicated tests together. Inspect surviving read-only information separately; retain its full-value tooltip and shared configuration helpers. Avoid placeholder panels or replacement tests for a feature the user no longer wants.

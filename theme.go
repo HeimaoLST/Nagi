@@ -490,5 +490,4 @@ var (
 	markdownCopyIcon       = glyphFileCopyLine
 	markdownCopiedIcon     = glyphCheckLine
 	markdownCopyFailedIcon = glyphCloseLine
-	modelSelectedIcon      = glyphCheckLine
 )

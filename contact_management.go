@@ -107,9 +107,6 @@ func (a *appModel) contactActivity(ct *contact) (active, unknown bool) {
 	if ct.SendState == sendUnknown || (ct.pendingSend != nil && ct.pendingSend.State == "unknown") {
 		unknown = true
 	}
-	if a.modelOpActive && ct.SessionID != "" && a.modelOpSessionID == ct.SessionID {
-		active = true
-	}
 	for _, issue := range ct.Issues {
 		if sessionBusy(issue.Work.SendState, issue.Work.ActiveTaskID) || issue.Work.pendingExecutionID != "" {
 			active = true
@@ -128,9 +125,6 @@ func (a *appModel) contactActivity(ct *contact) (active, unknown bool) {
 			if execution.Status == issueExecutionUnknown {
 				unknown = true
 			}
-		}
-		if a.modelOpActive && issue.WorkSessionID != "" && a.modelOpSessionID == issue.WorkSessionID {
-			active = true
 		}
 	}
 	return active, unknown

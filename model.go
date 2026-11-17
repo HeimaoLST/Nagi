@@ -173,9 +173,6 @@ type appModel struct {
 	focusComposer        bool
 	composerHandle       ui.Handle
 	composerPanel        string
-	composerModelOpen    bool
-	composerModelFocus   bool
-	composerFocusModel   bool
 	composerFocusContext bool
 
 	settingsOpen           bool
@@ -196,14 +193,10 @@ type appModel struct {
 	folderChoiceGeneration uint64
 	chooseFolder           func(mygo.OpenDialogOptions) ([]string, error)
 	sourcesScroll          ui.ScrollState
-	modelScroll            ui.ScrollState
 	taskContextScroll      ui.ScrollState
 	issueResultScroll      ui.ScrollState
 	historyScroll          ui.ScrollState
 	historyFullScroll      ui.ScrollState
-
-	settingsReturnModel       *modelSelection
-	settingsReturnModelTarget *modelSelectionTarget
 
 	contactProfile            *contactProfileEditor
 	contactProfileID          string
@@ -334,17 +327,6 @@ type appModel struct {
 	issueToolRefresh         map[string]issueToolRefreshMark
 	issueToolReleaseInFlight int
 
-	modelForm             *modelSelection
-	modelPanelKind        string
-	modelPanelSessionID   string
-	modelPanelLabel       string
-	modelOpenToken        int
-	modelPanelMessage     string
-	modelPanelError       string
-	modelPanelErrorDetail string
-	modelOpActive         bool
-	modelOpSessionID      string
-
 	// Layout is a GUI-wide preference, not a contact or runtime fact. Widths
 	// are persisted in the contact store; windowWidth is only the current
 	// native viewport and never overwrites a preferred width when it shrinks.
@@ -364,7 +346,6 @@ type appModel struct {
 	focusSources         bool
 	focusSourcesBack     bool
 	focusAuxBack         bool
-	focusIssueModel      bool
 	focusIssueContext    bool
 	focusHistoryFullID   string
 	focusHistoryFullBack bool
@@ -527,8 +508,6 @@ func (a *appModel) selectContact(i int) {
 	a.contactHistoryFull = nil
 	a.aux = ""
 	a.composerPanel = ""
-	a.composerModelOpen = false
-	a.composerFocusModel = false
 	a.composerFocusContext = false
 	a.highlight = ""
 	if !a.demo {
@@ -604,8 +583,6 @@ func (a *appModel) addDefaultContact() {
 	a.contactSearch = ""
 	a.aux = ""
 	a.composerPanel = ""
-	a.composerModelOpen = false
-	a.composerFocusModel = false
 	a.composerFocusContext = false
 	a.focusComposer = true
 }
@@ -625,30 +602,16 @@ func (a *appModel) closeAux() {
 		a.closeSettings()
 		return
 	}
-	if a.aux == "model" && a.modelOpActive {
-		return
-	}
 	was := a.aux
-	wasModelKind := a.modelPanelKind
 	wasContextIssue := a.taskContextIssueID
 	switch a.composerPanel {
 	case composerPanelContext:
 		a.composerFocusContext = true
 	}
 	a.composerPanel = ""
-	a.composerModelOpen = false
-	a.modelPanelKind = ""
 	switch was {
 	case "sources":
 		a.focusSources = true
-	case "model":
-		a.modelForm = nil
-		a.modelPanelMessage = ""
-		a.modelPanelError = ""
-		a.modelPanelErrorDetail = ""
-		if wasModelKind == "work" {
-			a.focusIssueModel = true
-		}
 	case "task-context":
 		a.contextFileGeneration++
 		if wasContextIssue != "" {
@@ -665,7 +628,6 @@ func (a *appModel) closeAux() {
 func (a *appModel) openSources(messageID int) {
 	a.aux = "sources"
 	a.composerPanel = ""
-	a.composerModelOpen = false
 	a.contactHistoryFull = nil
 	a.auxMessage = messageID
 	a.focusSources = false
@@ -674,7 +636,6 @@ func (a *appModel) openSources(messageID int) {
 func (a *appModel) openHistory() {
 	a.aux = ""
 	a.composerPanel = ""
-	a.composerModelOpen = false
 	a.contactHistoryFull = nil
 	a.openDetail(detailHistory)
 }

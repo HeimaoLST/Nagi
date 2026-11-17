@@ -115,15 +115,12 @@ func (a *appModel) detailPageActive() bool {
 	return a.workspaceOpen && a.workOverlay()
 }
 
-// mainPageActive means a result, reader, source list or non-composer model
-// surface has taken over the main area. The right detail remains available in
-// state, but is not squeezed beside the reading surface.
 func (a *appModel) mainPageActive() bool {
 	if a.issueResult.Open || a.contactHistoryFull != nil {
 		return true
 	}
 	switch a.aux {
-	case "sources", "model", "task-context":
+	case "sources", "task-context":
 		return !a.composerInlineAux()
 	default:
 		return false
@@ -393,8 +390,6 @@ func (a *appModel) mainPage(c *ui.Context, t *ui.Theme) {
 			a.historyFullPage(c, t)
 		case a.aux == "sources":
 			a.sourcesPage(c, t)
-		case a.aux == "model":
-			a.auxPage(c, t)
 		case a.aux == "task-context":
 			a.auxPage(c, t)
 		default:
@@ -454,12 +449,8 @@ func (a *appModel) sourcesPage(c *ui.Context, t *ui.Theme) {
 
 func (a *appModel) auxPage(c *ui.Context, t *ui.Theme) {
 	msgs := locales.In(c.Locale())
-	title := msgs.SessionModelTitle()
-	closeLabel := msgs.CloseSessionModel()
-	if a.aux == "task-context" {
-		title = msgs.TaskContextTitle()
-		closeLabel = msgs.CloseTaskContext()
-	}
+	title := msgs.TaskContextTitle()
+	closeLabel := msgs.CloseTaskContext()
 	ui.Column(c).Fill().Children(func() {
 		ui.Row(c).MinHeight(40).Padding(4, 6).AlignItems(ui.Center).Gap(12).Children(func() {
 			back := appTooltip(c, secondaryButton(c, msgs.BackAction()).Label(closeLabel), msgs.BackFromAux(title)).OnClick(func() { a.closeAux() })
@@ -471,12 +462,7 @@ func (a *appModel) auxPage(c *ui.Context, t *ui.Theme) {
 		})
 		ui.Scroll(c).Grow(1).TrackScroll(a.auxScrollFor(a.aux)).Padding(0, 16).Children(func() {
 			ui.Column(c).FillWidth().MaxWidth(conversationMaxWidth).AlignItems(ui.Start).Gap(8).Children(func() {
-				switch a.aux {
-				case "model":
-					a.modelPanel(c, t)
-				case "task-context":
-					a.taskContextPanel(c, t)
-				}
+				a.taskContextPanel(c, t)
 			})
 		})
 	})
