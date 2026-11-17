@@ -61,7 +61,7 @@ func contactsFromStore(store *contactStore) []*contact {
 			Archived: stored.Archived, ArchivedAt: stored.ArchivedAt,
 			PreviousSessions:   append([]string(nil), stored.PreviousSessions...),
 			PiBinding:          clonePiConversationBinding(stored.PiBinding),
-			PreviousPiBindings: stored.PreviousPiBindings,
+			PreviousPiBindings: clonePiConversationBindings(stored.PreviousPiBindings),
 			Status:             statusReady, WorkLabel: "Preparing a reply",
 		}
 		ct.Issues = issuesForStoredContact(store.state.Issues, ct.ID)

@@ -2730,18 +2730,17 @@ func (a *appModel) persist() error {
 	err := a.ensureContactStore()
 	if err == nil {
 		a.store.setIssueToolState(a.issueToolLedger, a.issueToolScopes)
-		a.store.state.Appearance = normalizeAppearanceMode(a.appearanceMode)
-		a.store.state.ThemeIDs = nil
+		var themeIDs *appearanceThemeIDs
 		if a.appearanceThemeIDs != (appearanceThemeIDs{}) {
 			ids := a.appearanceThemeIDs
-			a.store.state.ThemeIDs = &ids
+			themeIDs = &ids
 		}
-		a.store.state.Layout = &storedLayout{
+		layout := &storedLayout{
 			LeftWidth:     a.railWidth(),
 			RightWidth:    a.workWidth(),
 			WorkspaceOpen: a.workspaceOpen,
 		}
-		err = a.store.save(a.contacts, a.selectedID())
+		err = a.store.saveWithPreferences(a.contacts, a.selectedID(), normalizeAppearanceMode(a.appearanceMode), themeIDs, layout)
 	}
 	if err != nil {
 		if a.localSaveErr == "" {

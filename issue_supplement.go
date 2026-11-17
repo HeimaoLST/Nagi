@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 )
@@ -601,7 +602,7 @@ func cloneIssueSupplementLedger(ledger *issueSupplementLedger) *issueSupplementL
 				continue
 			}
 			copyBatch := *batch
-			copyBatch.Snapshot = append([]issueSupplementSnapshot(nil), batch.Snapshot...)
+			copyBatch.Snapshot = slices.Clone(batch.Snapshot)
 			out.Batches = append(out.Batches, &copyBatch)
 		}
 	}

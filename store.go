@@ -173,7 +173,7 @@ func openContactStore(path, defaultWorkspace string) (*contactStore, error) {
 
 func (s *contactStore) restoreIssueToolState() {
 	if s.issueToolLedger == nil {
-		s.issueToolLedger = s.state.IssueToolOperations
+		s.issueToolLedger = cloneIssueToolLedger(s.state.IssueToolOperations)
 	}
 	if s.issueToolLedger == nil {
 		s.issueToolLedger = &IssueToolOperationLedger{}
@@ -183,7 +183,7 @@ func (s *contactStore) restoreIssueToolState() {
 	}
 	for _, scope := range s.state.IssueToolScopes {
 		if scope.Validate() == nil {
-			s.issueToolScopes[scope.Ref] = scope
+			s.issueToolScopes[scope.Ref] = cloneIssueToolScope(scope)
 		}
 	}
 }
@@ -195,7 +195,7 @@ func (s *contactStore) setIssueToolState(ledger *IssueToolOperationLedger, scope
 	s.issueToolLedger = ledger
 	s.issueToolScopes = make(map[string]IssueToolScope, len(scopes))
 	for ref, scope := range scopes {
-		s.issueToolScopes[ref] = scope
+		s.issueToolScopes[ref] = cloneIssueToolScope(scope)
 	}
 }
 
@@ -203,15 +203,19 @@ func (s *contactStore) piDataReadOnly() bool {
 	if s == nil {
 		return false
 	}
-	if s.state.Version < contactStoreVersion {
+	return s.state.piDataReadOnly()
+}
+
+func (state storedState) piDataReadOnly() bool {
+	if state.Version < contactStoreVersion {
 		return true
 	}
-	for _, ct := range s.state.Contacts {
+	for _, ct := range state.Contacts {
 		if len(ct.PreviousSessions) != 0 || ct.SessionID != "" && (ct.PiBinding == nil || ct.PiBinding.Engine != "pi" || ct.PiBinding.Context.SessionRef != ct.SessionID) {
 			return true
 		}
 	}
-	for _, issue := range s.state.Issues {
+	for _, issue := range state.Issues {
 		if issue.WorkSessionID != "" || len(issue.Executions) != 0 {
 			return true
 		}
@@ -223,17 +227,127 @@ func (a *appModel) piDataReadOnly() bool {
 	return a.store != nil && a.store.piDataReadOnly()
 }
 
+func cloneIssueToolLedger(ledger *IssueToolOperationLedger) *IssueToolOperationLedger {
+	if ledger == nil {
+		return nil
+	}
+	cloned := *ledger
+	if ledger.Operations != nil {
+		cloned.Operations = make([]*IssueToolOperation, len(ledger.Operations))
+		for i, operation := range ledger.Operations {
+			if operation != nil {
+				copy := *operation
+				copy.Receipt = cloneIssueToolReceipt(operation.Receipt)
+				cloned.Operations[i] = &copy
+			}
+		}
+	}
+	return &cloned
+}
+
+func cloneIssueToolScope(scope IssueToolScope) IssueToolScope {
+	if scope.AllowedIssueIDs != nil {
+		scope.AllowedIssueIDs = append([]string{}, scope.AllowedIssueIDs...)
+	}
+	return scope
+}
+
+func cloneIssueQuestions(questions []*issueQuestion) []*issueQuestion {
+	if questions == nil {
+		return nil
+	}
+	cloned := make([]*issueQuestion, len(questions))
+	for i, question := range questions {
+		if question != nil {
+			copy := *question
+			cloned[i] = &copy
+		}
+	}
+	return cloned
+}
+
+func clonePiConversationBindings(bindings []piConversationBinding) []piConversationBinding {
+	if bindings == nil {
+		return nil
+	}
+	cloned := make([]piConversationBinding, len(bindings))
+	for i := range bindings {
+		cloned[i] = *clonePiConversationBinding(&bindings[i])
+	}
+	return cloned
+}
+
+func cloneStoredState(state storedState) storedState {
+	cloned := state
+	if state.Contacts != nil {
+		cloned.Contacts = append([]storedContact{}, state.Contacts...)
+		for i := range cloned.Contacts {
+			ct := &cloned.Contacts[i]
+			ct.BuiltinTools = cloneBuiltinTools(ct.BuiltinTools)
+			ct.TaskContext = cloneTaskContextItems(ct.TaskContext)
+			if ct.PreviousSessions != nil {
+				ct.PreviousSessions = append([]string{}, ct.PreviousSessions...)
+			}
+			ct.PiBinding = clonePiConversationBinding(ct.PiBinding)
+			ct.PreviousPiBindings = clonePiConversationBindings(ct.PreviousPiBindings)
+			ct.PendingSend = clonePendingSend(ct.PendingSend)
+		}
+	}
+	if state.Issues != nil {
+		cloned.Issues = append([]storedIssue{}, state.Issues...)
+		for i := range cloned.Issues {
+			issue := &cloned.Issues[i]
+			if issue.RequirementItems != nil {
+				issue.RequirementItems = append([]storedRequirement{}, issue.RequirementItems...)
+			}
+			issue.TaskContext = cloneTaskContextItems(issue.TaskContext)
+			issue.Supplements = cloneIssueSupplementLedger(issue.Supplements)
+			issue.Questions = cloneIssueQuestions(issue.Questions)
+			if issue.Executions != nil {
+				issue.Executions = append([]storedIssueExecution{}, issue.Executions...)
+				for j := range issue.Executions {
+					issue.Executions[j].Context = cloneTaskContextItems(issue.Executions[j].Context)
+				}
+			}
+		}
+	}
+	cloned.IssueToolOperations = cloneIssueToolLedger(state.IssueToolOperations)
+	if state.IssueToolScopes != nil {
+		cloned.IssueToolScopes = make([]IssueToolScope, len(state.IssueToolScopes))
+		for i, scope := range state.IssueToolScopes {
+			cloned.IssueToolScopes[i] = cloneIssueToolScope(scope)
+		}
+	}
+	if state.Layout != nil {
+		layout := *state.Layout
+		cloned.Layout = &layout
+	}
+	if state.ThemeIDs != nil {
+		themeIDs := *state.ThemeIDs
+		cloned.ThemeIDs = &themeIDs
+	}
+	return cloned
+}
+
 func (s *contactStore) saveState() error {
-	if s.piDataReadOnly() {
+	state := s.state
+	state.IssueToolOperations = nil
+	state.IssueToolScopes = nil
+	candidate := cloneStoredState(state)
+	candidate.IssueToolOperations = cloneIssueToolLedger(s.issueToolLedger)
+	candidate.IssueToolScopes = s.issueToolScopesList()
+	return s.commitState(candidate)
+}
+
+func (s *contactStore) commitState(candidate storedState) error {
+	if s.piDataReadOnly() || candidate.piDataReadOnly() {
 		return errors.New("legacy product data is read-only until its history policy is selected")
 	}
-	s.state.IssueToolOperations = s.issueToolLedger
-	s.state.IssueToolScopes = s.issueToolScopesList()
 	dir := filepath.Dir(s.path)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return fmt.Errorf("create contact store directory: %w", err)
 	}
-	data, err := json.MarshalIndent(s.state, "", "  ")
+	data, err := json.MarshalIndent(candidate, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -251,24 +365,38 @@ func (s *contactStore) saveState() error {
 	if err := writeStoreBytes(temp, data); err != nil {
 		return err
 	}
-	return os.Rename(tempName, s.path)
+	if err := os.Rename(tempName, s.path); err != nil {
+		return err
+	}
+	s.state = candidate
+	return nil
 }
 
 // save writes the current in-memory contacts. It is called from the change
 // event (drafts) and from explicit product edits; it does not rewrite messages.
 func (s *contactStore) save(contacts []*contact, selected string) error {
+	return s.saveWithPreferences(contacts, selected, s.state.Appearance, s.state.ThemeIDs, s.state.Layout)
+}
+
+func (s *contactStore) saveWithPreferences(contacts []*contact, selected, appearance string, themeIDs *appearanceThemeIDs, layout *storedLayout) error {
 	if s.piDataReadOnly() {
 		return errors.New("legacy product data is read-only until its history policy is selected")
 	}
-	s.state = storedState{
+	candidate := storedState{
 		Version:             contactStoreVersion,
 		Selected:            selected,
 		Contacts:            make([]storedContact, 0, len(contacts)),
-		IssueToolOperations: s.issueToolLedger,
+		IssueToolOperations: cloneIssueToolLedger(s.issueToolLedger),
 		IssueToolScopes:     s.issueToolScopesList(),
-		Layout:              s.state.Layout,
-		Appearance:          s.state.Appearance,
-		ThemeIDs:            s.state.ThemeIDs,
+		Appearance:          appearance,
+	}
+	if layout != nil {
+		value := *layout
+		candidate.Layout = &value
+	}
+	if themeIDs != nil {
+		value := *themeIDs
+		candidate.ThemeIDs = &value
 	}
 	for _, c := range contacts {
 		storedContact := storedContact{
@@ -291,15 +419,15 @@ func (s *contactStore) save(contacts []*contact, selected string) error {
 			SelectedIssueID:    c.SelectedIssueID,
 			UpdatedAt:          nowMillis(),
 		}
-		s.state.Contacts = append(s.state.Contacts, storedContact)
+		candidate.Contacts = append(candidate.Contacts, storedContact)
 		for _, issue := range c.Issues {
 			stored := storedIssue{
 				ID: issue.ID, ContactID: issue.ContactID, Goal: issue.Goal,
 				Status: issue.Status, Archived: issue.Archived,
 				Evidence: issue.Evidence, CreatedAt: issue.CreatedAt, UpdatedAt: issue.UpdatedAt,
 				WorkSessionID: issue.WorkSessionID, RequirementsRevision: issue.RequirementsRevision,
-				TaskContext: issue.Context.snapshot(), Supplements: issue.Supplements,
-				Questions: issue.Questions,
+				TaskContext: issue.Context.snapshot(), Supplements: cloneIssueSupplementLedger(issue.Supplements),
+				Questions: cloneIssueQuestions(issue.Questions),
 			}
 			for _, requirement := range issue.Requirements {
 				if requirement == nil || strings.TrimSpace(requirement.Text) == "" {
@@ -325,13 +453,22 @@ func (s *contactStore) save(contacts []*contact, selected string) error {
 					WaitRequested:        execution.WaitRequested,
 				})
 			}
-			s.state.Issues = append(s.state.Issues, stored)
+			candidate.Issues = append(candidate.Issues, stored)
 		}
 	}
-	if !s.hasContact(selected) && len(contacts) > 0 {
-		s.state.Selected = contacts[0].ID
+	if len(contacts) > 0 {
+		found := false
+		for _, ct := range candidate.Contacts {
+			if ct.ID == selected {
+				found = true
+				break
+			}
+		}
+		if !found {
+			candidate.Selected = contacts[0].ID
+		}
 	}
-	return s.saveState()
+	return s.commitState(candidate)
 }
 
 func (s *contactStore) issueToolScopesList() []IssueToolScope {
@@ -340,7 +477,7 @@ func (s *contactStore) issueToolScopesList() []IssueToolScope {
 	}
 	out := make([]IssueToolScope, 0, len(s.issueToolScopes))
 	for _, scope := range s.issueToolScopes {
-		out = append(out, scope)
+		out = append(out, cloneIssueToolScope(scope))
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt < out[j].CreatedAt })
 	return out
