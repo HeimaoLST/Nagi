@@ -134,9 +134,9 @@
 
 ## Select the cached compiler explicitly for offline phases
 
-**Problem:** A package-only build stopped before compilation because GOTOOLCHAIN=local selected Go1.27.1; a second bootstrap attempt failed with GOSUMDB disabled. A later formatting phase probed the system1.27.1 formatter instead of using the already established cached1.27.3 executable and stopped before formatting.
-**Cause or correction:** The module requires Go1.27.3, which was already cached. Environment restrictions changed toolchain selection and verification before source compilation.
-**Prevention:** Resolve the required cached compiler and formatter paths before an offline phase, reuse their exact argv in subsequent owner fences, put the compiler bin directory on PATH and keep normal checksum handling. Preserve setup failures separately from format, compiler or behavior failures.
+**Problem:** A package-only build stopped before compilation because GOTOOLCHAIN=local selected Go1.27.1; a second bootstrap attempt failed with GOSUMDB disabled. A later formatting phase probed the system1.27.1 formatter instead of using the already established cached1.27.3 executable and stopped before formatting. Subsequent QA maintenance used /usr/local/go/bin/gofmt under a cached label, without establishing that it was the assigned formatter.
+**Cause or correction:** The module requires Go1.27.3, which was already cached. Environment restrictions changed toolchain selection and verification before source compilation. The system and assigned formatter binaries differed; root's explicit cached formatter check produced no source diff, without establishing a version for the system binary.
+**Prevention:** Resolve the required cached compiler and formatter paths before an offline phase, reuse their exact argv in subsequent owner fences, put the compiler bin directory on PATH and keep normal checksum handling. Record the actual executable path rather than treating a system installation or a cached label as pinned-tool evidence. Preserve setup failures separately from format, compiler or behavior failures.
 
 ## Separate isolated declaration setup from SDK defects
 
