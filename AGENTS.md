@@ -41,3 +41,5 @@ Pi integration requires the actual pinned worker and real product tool bridge ag
 Keep current requirements/design in the existing topic documents and preserve useful historical evidence through explicit Git links. Remove superseded normative instructions rather than maintaining competing current designs. Distinguish source, build, integration/E2E, native, real-model and human acceptance. Every final report states commands/exits, source identity, observed results and remaining gaps.
 
 UI acceptance requires visual inspection of actual rendered pages against the adopted Qoder reference at the relevant widths and interaction states. Source checks, geometry assertions and passing tests supplement that inspection; they do not establish visual quality. Distinguish headless rendered screenshots from observed native windows and record which states were actually inspected.
+
+Controlled native cases must retain their isolated profile binding on independent app launches, not only in the first parent process environment. Recheck process identity after close observations; a new window is not evidence that the original process stayed alive or drained.

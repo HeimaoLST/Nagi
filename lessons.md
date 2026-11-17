@@ -293,3 +293,9 @@
 **Problem:** The first-use compatibility task adapted the obsolete session-model panel and its tests into capability-hold behavior instead of removing them.
 **Cause or correction:** The user explicitly requested direct removal. The old editor is not a feature to maintain during Pi integration; normal connection model configuration remains required. Source review of removal also found the retained read-only model summary had lost its existing full-value tooltip.
 **Prevention:** Remove the retired panel, its entry points/state and dedicated tests together. Inspect surviving read-only information separately; retain its full-value tooltip and shared configuration helpers. Avoid placeholder panels or replacement tests for a feature the user no longer wants.
+
+## Bind window observations to the launched process
+
+**Problem:** A post-Quit window observation returned a new window after the owned visual app had exited0; an exact-path check found a distinct no-argument process with parent1.
+**Cause or correction:** Unconfirmed. The original app exit does not identify the new instance or prove its profile binding. No further UI input was sent; the additional task-owned executable was identity-checked and stopped, with its exit code left unknown.
+**Prevention:** Record the launch PID and verify identity changes around close/observation. Keep isolated profile selection in the bundle entrypoint so an independent launch cannot fall back to user data; do not resume native cases until that boundary is established. Preserve actual process outcomes and distinguish bounded visual observations from lifecycle acceptance.
