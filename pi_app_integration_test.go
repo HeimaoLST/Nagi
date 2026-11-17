@@ -2162,8 +2162,54 @@ func TestPiAppConnectionAndConversation(t *testing.T) {
 	})
 	h.click("Settings")
 	h.click("Connection & model")
-	h.click("Edit API endpoint")
-	h.input("API endpoint", endpointB)
+	msgs := locales.In("en")
+	endpointLabel := msgs.ConnectionFieldEndpoint()
+	editEndpoint := msgs.ConnectionEditField(endpointLabel)
+	closeEndpoint := msgs.ConnectionCloseField(endpointLabel)
+	h.onUI(func() error {
+		form := app.connectionForm
+		if form == nil || !form.HasSaved || app.connectionSaved == nil || form.Draft.Endpoint != endpointA || app.connectionSaved.Endpoint != endpointA {
+			return errors.New("saved endpoint editor did not retain the original connection")
+		}
+		h.tester.Frame()
+		initialOpen := form.editOpen["Endpoint"]
+		_, hasEdit := h.tester.Find(editEndpoint)
+		_, hasClose := h.tester.Find(closeEndpoint)
+		piAppRecord(t, "saved-endpoint-editor-initial", map[string]any{"open": initialOpen, "edit_control": hasEdit, "close_control": hasClose, "limits_open": form.LimitsOpen})
+		if initialOpen {
+			if !hasClose || hasEdit {
+				return errors.New("open endpoint editor did not expose its Close controller")
+			}
+			if err := h.focus(closeEndpoint, false); err != nil {
+				return err
+			}
+			h.tester.Key(0, ui.KeySpace)
+			h.tester.Frame()
+		}
+		_, hasEdit = h.tester.Find(editEndpoint)
+		_, hasClose = h.tester.Find(closeEndpoint)
+		if form.editOpen["Endpoint"] || !hasEdit || hasClose || form.Draft.Endpoint != endpointA {
+			return errors.New("saved endpoint editor did not close to its unchanged read-only value")
+		}
+		if err := h.focus(editEndpoint, false); err != nil {
+			return err
+		}
+		active, _ := h.tester.TextInputActive()
+		piAppRecord(t, "saved-endpoint-editor-closed", map[string]any{"open": form.editOpen["Endpoint"], "edit_focused": h.tester.Focused(editEndpoint), "text_input_active": active})
+		h.tester.Key(0, ui.KeySpace)
+		h.tester.Frame()
+		_, hasClose = h.tester.Find(closeEndpoint)
+		if !form.editOpen["Endpoint"] || !hasClose || form.Draft.Endpoint != endpointA {
+			return errors.New("saved endpoint Edit controller did not reopen the unchanged editor")
+		}
+		if err := h.focus(endpointLabel, true); err != nil {
+			return err
+		}
+		active, _ = h.tester.TextInputActive()
+		piAppRecord(t, "saved-endpoint-editor-opened", map[string]any{"open": form.editOpen["Endpoint"], "input_focused": h.tester.Focused(endpointLabel), "text_input_active": active})
+		return nil
+	})
+	h.input(endpointLabel, endpointB)
 	h.input("Output tokens", "2048")
 	h.click("Save configuration")
 	h.pump.wait(func() bool { return !app.connectionForm.Busy && !app.connectionSaveInFlight })
