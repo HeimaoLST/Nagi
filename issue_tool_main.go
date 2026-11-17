@@ -15,10 +15,3 @@ func runIssueToolHelperCLI(in io.Reader, out, logger io.Writer) error {
 	}
 	return issueToolHelperServe(context.Background(), in, out, issueToolIPCForwarder(endpoint), issueToolHelperOptions{Logger: logger})
 }
-
-func runIssueToolHelperMain(args []string, in io.Reader, out, logger io.Writer) error {
-	if len(args) != 1 || args[0] != "--issue-tool-helper" {
-		return errors.New("not an issue tool helper invocation")
-	}
-	return runIssueToolHelperCLI(in, out, logger)
-}

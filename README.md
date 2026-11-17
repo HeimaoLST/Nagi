@@ -1,12 +1,12 @@
 # Nagi
 
-Nagi is a desktop workbench for persistent Agent contacts, delegated issues, follow-up requirements and execution results. It is an independent Go application that consumes [Saki Runtime's version 1 stdio contract](https://github.com/HeimaoLST/Saki/blob/dev/docs/design/runtime-api.md). Saki owns model and tool execution, context management and session history; Nagi owns its product data and interface.
+Nagi is a native desktop workbench for persistent Bots, independent activities, follow-up requirements and execution results. Pi owns Agent execution, provider/tools and authoritative session transcripts; Nagi owns product identity, routing, state, receipts and the interface. The replacement is in progress; the current tree has not completed product cutover or standalone acceptance.
 
 This repository preserves the Nagi product exported from Saki candidate `00298ae22bb95afc11366597e517a3b1ceba21e7`, including its existing regressions and tests. Repository separation does not complete the historical MVP, native acceptance, real-model A/B work or user trials. See [the documentation index](docs/README.md) and [import provenance](docs/design/source-import.json).
 
-## Use the macOS preview
+## Previously built macOS previews
 
-Development previews target Apple Silicon Macs and currently declare macOS 13.0 as their minimum. Native and independent-user acceptance is still in progress; follow the [complete-product acceptance record](https://github.com/HeimaoLST/Nagi/issues/7) for the tested scope of a particular build.
+The installation steps below apply to a maintainer-identified earlier package. This migration's current CI emits headless previews and worker provenance, not a standalone Nagi.app; its obsolete Saki-only app packager has been retired. The product target remains Apple Silicon/macOS13.0. Follow the [complete-product acceptance record](https://github.com/HeimaoLST/Nagi/issues/7) for the tested scope of an exact package; an older package does not validate this changed tree.
 
 1. Open [Nagi CI](https://github.com/HeimaoLST/Nagi/actions/workflows/ci.yml) and select the maintainer-identified successful `dev` build. Under **Artifacts**, download `nagi-macos-arm64-<source SHA>`. GitHub requires sign-in and repository read access to download artifacts; see its [download instructions](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/download-workflow-artifacts).
 2. Extract the downloaded artifact, then extract its `Nagi.app.zip`. Move `Nagi.app` to Applications and open it from Finder. Keep the accompanying `manifest.json` and `SHA256SUMS` so the build can be identified when reporting a problem.
@@ -52,6 +52,8 @@ If the current window cannot save, copy any unsaved text you need elsewhere befo
 ## Development during the Pi migration
 
 The cleanup-first Pi integration is in progress under [issue31](https://github.com/HeimaoLST/Nagi/issues/31). The [integration contract](docs/design/pi-integration.md) defines the concrete client/worker, product ownership, legacy-data fence and acceptance gates. This branch is an incomplete migration, not a usable Pi release. Existing consumer flows above remain the capabilities to preserve; provider/native acceptance has not been established for this changed tree.
+
+Development uses `dev`; frozen integration/E2E candidates use `integration`; stable releases use `main`. The normal checkout is `~/Workspace/Nagi`, with the integration checkout at `~/Workspace/worktrees/Nagi/integration`. Additional worktrees are temporary task isolation, with an owner and cleanup condition. Do not modify a tested checkout during validation.
 
 Use Go1.27.3, Python3 and `patch`. The MyGo launcher composes pinned patches in a temporary module copy without changing the module cache. The product target remains macOS13.0/ARM64. Pi1.5.2 requires Node>=22.19.0; the package owns a separately pinned runtime rather than relying on the consumer's PATH.
 

@@ -4,17 +4,18 @@ This is the current migration contract for [Nagi #31](https://github.com/HeimaoL
 
 ## Source and product boundary
 
-Remote dev `833403e1248e131dab09be254f17f1b8db4434b0` is an ancestor of PR30 `57e0a6784ba7f8ec4c37e5a76f6ab8cdccd9542c`. Integration inherits both, including PR30's Settings and single-list sidebar. PR30's historical timeout is not Pi evidence. The dirty main checkout, reserved preview apps and user profiles are outside this task.
+Remote dev `833403e1248e131dab09be254f17f1b8db4434b0` is an ancestor of PR30 `57e0a6784ba7f8ec4c37e5a76f6ab8cdccd9542c`. Integration inherits both, including PR30's Settings and single-list sidebar. PR30's historical timeout is not Pi evidence. Development now uses the canonical Nagi checkout on dev. Integration/E2E uses the separate integration worktree at a frozen committed candidate; main is the stable-release line. Extra task worktrees have explicit owners and cleanup conditions. Reserved preview apps and user profiles remain outside routine source cleanup.
 
 Pi 1.5.2 owns model execution, coding tools, compaction and session transcripts. Nagi owns Bot identity, conversation/activity routing, admission, questions, product ledgers and durable effect receipts. A Bot can have concurrent conversation and activity contexts. This does not select a permanent parent/child hierarchy, autonomous clones, branch naming or a fork policy. Finishing a conversation turn or switching the selected contact does not cancel admitted activities. App-off continuation, a daemon and a general scheduler are outside scope.
 
-There will be one concrete Pi implementation, not a backend interface or permanent fallback to Saki. During migration, an incomplete Draft must remain visibly incomplete. Legacy-history reading is reserved pending the user's explicit archive-versus-readable choice; do not remove that capability or reinterpret its references while the choice is pending.
+There will be one concrete Pi implementation, not a backend interface or permanent fallback to Saki. During migration, an incomplete Draft must remain visibly incomplete. Legacy-history reading is reserved pending the user's explicit archive-versus-readable choice; do not remove that capability or reinterpret its references while the choice is pending. This holds legacy-data activation and reader deletion, not unrelated product wiring or isolated fresh-data E2E.
 
 ## Cleanup and callers
 
 | Existing responsibility | Treatment and replacement |
 | --- | --- |
 | Unused mascot embed/decoder, two PNGs and browser prototype | Remove. No live view consumes the bitmap. Keep immutable historical links; the native implementation is the product. |
+| Unused helper-entry wrapper, unrelated research stub and Saki-only app packager | Retire independently. The live helper CLI/domain callers remain until their replacement is wired. There is no current standalone Pi app packager; its required gate stays incomplete. |
 | `runtime.go` Saki v1 framing/RPC DTOs | Retire at the actual execution cutover. Replace with `internal/pi` client and native Pi facts, not fabricated Saki journal records. Preserve correlation, bounded frames, disconnect outcomes and child reaping. |
 | `runtime_model.go` binary search and Saki launch branches | Replace with the single bundled Node/Pi launch. Retain UI-actor ownership, stale-callback rejection, admission order, independent work and drain. Legacy reader removal remains fenced. |
 | `connection_config.go` derived host.json and SAKI runtime injection | Remove after callers move. Keep GUI validation, saved/effective scopes, explicit Test/Save/Apply and existing user-owned data paths. Do not discover unrelated Pi auth/config or ancestor dotenv files for normal setup. |
