@@ -76,7 +76,7 @@
 
 **Problem:** A cleanup classifier embedded JSON booleans directly in Python source and failed with NameError before any deletion.
 **Cause or correction:** JSON true/false are not Python literals; serializing data did not make it executable Python. HC also rejects program names over32characters before launch.
-**Prevention:** Read metadata with json.loads or a data file and validate HC name constraints before launch. Produce the bounded inventory before mutations, preserve actual failures, and require verified archives before destructive retirement.
+**Prevention:** Read metadata with json.loads or a data file and validate HC name constraints before launch. Produce the bounded inventory before mutations and preserve actual failures. Follow the current explicit resource scope: the user now requests direct deletion of confirmed obsolete worktrees and branches without new archives; preserve reserved data, live resources and original evidence.
 
 ## Verify owner identity from actual metadata
 
@@ -227,3 +227,15 @@
 **Problem:** The desktop inventory succeeded but binding the unique synthetic-control app returned cgWindowNotFound. The fixture was stopped without input, Test or Save.
 **Cause or correction:** Unconfirmed. No AX value or secure-entry assertion was reached; the failed controlled attempt does not establish credential exposure or a passing native control.
 **Prevention:** Retain the exact app/PID, tool error and controlled stop outcome. Await a real environment change before a new isolated case; do not retry the unchanged binding, operate a reserved app or treat missing observations as success.
+
+## Answer the captured current question
+
+**Problem:** The GUI Answer action opened a generic supplement form, and answer extraction needed an explicit guard against a superseded question at the same requirements revision.
+**Cause or correction:** A supplement is not a question answer. Capture the displayed owner, issue, question reference and revision, then share the existing atomic question/supplement mutation and receipt.
+**Prevention:** Reject noncurrent unanswered targets before saving; preserve drafts on rejection and deduplicate identical saved answers. Verify the actual GUI save and model-tool path against one durable association without claiming that form coverage proves the separate activity-call lifecycle.
+
+## Discover source paths before targeted inspection
+
+**Problem:** Initial symbol searches named absent guessed question files, and a later worker inspection assumed an absent src directory. An edit anchor was also rejected before mutation because the relevant range had not been read.
+**Cause or correction:** Repository symbol/path discovery located the actual files; none of these failed lookups established a product defect.
+**Prevention:** Use rg --files and symbol discovery before targeted reads or edits, then read the actual edit range. Keep lookup/setup failures separate from compilation and behavior results.

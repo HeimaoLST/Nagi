@@ -229,11 +229,20 @@ func issueSupplementBatchForExecution(issue *productIssue, executionID string) *
 }
 
 func (a *appModel) openIssueSupplementForm(issueID string) {
+	a.closeIssueSupplementForm()
 	a.issueSupplementFormID = issueID
+}
+
+func (a *appModel) openIssueQuestionAnswerForm(target issueSupplementTarget, questionRef string) {
+	a.issueSupplementFormID = target.IssueID
+	a.issueSupplementAnswerTarget = target
+	a.issueSupplementQuestionRef = questionRef
 }
 
 func (a *appModel) closeIssueSupplementForm() {
 	a.issueSupplementFormID = ""
+	a.issueSupplementAnswerTarget = issueSupplementTarget{}
+	a.issueSupplementQuestionRef = ""
 }
 
 func (a *appModel) issueSupplementDraft(issueID string) *string {
@@ -251,6 +260,16 @@ func (a *appModel) issueSupplementDraft(issueID string) *string {
 
 func (a *appModel) saveIssueSupplement(ct *contact, issueID, text string) bool {
 	if err := a.addIssueSupplement(ct, issueID, text); err != nil {
+		a.setIssueActionNotice(err.Error(), "", "")
+		return false
+	}
+	a.clearIssueActionNotice()
+	return true
+}
+
+func (a *appModel) saveIssueQuestionAnswer(target issueSupplementTarget, questionRef, text string) bool {
+	ct := a.contactByID(target.ContactID)
+	if _, err := a.answerIssueQuestionFor(ct, target.IssueID, questionRef, &target.RequirementsRevision, text, nil, nil); err != nil {
 		a.setIssueActionNotice(err.Error(), "", "")
 		return false
 	}

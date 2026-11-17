@@ -1798,101 +1798,114 @@ func (a *appModel) issueToolAnswerQuestion(scope IssueToolScope, request IssueTo
 			return
 		}
 		ct := a.contactByID(scope.ContactID)
-		issue := issueForContact(ct, request.IssueID)
-		if issue == nil {
-			callErr = &IssueToolError{Code: "not_found", Message: "issue not found for this question"}
-			return
-		}
-		question := issue.questionByRef(request.QuestionRef)
-		if question == nil {
-			candidates := make([]string, 0)
-			if open := issue.openQuestion(); open != nil {
-				candidates = append(candidates, open.Ref)
-			}
-			callErr = &IssueToolError{Code: "question_not_found", Message: "question_ref is not attached to this issue", Candidates: candidates}
-			return
-		}
-		if question.State == issueQuestionAnswered {
-			answer := issueSupplementLedgerFor(issue).itemByID(question.AnswerSupplementID)
-			if answer == nil {
-				callErr = &IssueToolError{Code: "operation_unknown", Message: "the saved answer supplement is missing; reload before revising"}
-				return
-			}
-			if strings.TrimSpace(request.Text) != strings.TrimSpace(answer.Text) {
-				callErr = &IssueToolError{Code: "question_answer_conflict", Message: "this question already has a different answer; reload before revising"}
-				return
-			}
-			receipt = &IssueToolReceipt{
-				State: issueToolReceiptSaved, IssueID: issue.ID, QuestionRef: question.Ref,
-				QuestionState: question.State, IssueStatus: issue.Status,
-				SupplementID:         question.AnswerSupplementID,
-				RequirementsRevision: issueToolRevisionPointer(question.RequirementsRevision),
-			}
-			callErr = a.issueToolSetReceipt(operation, receipt)
-			return
-		}
-		if request.ExpectedRevision != nil && *request.ExpectedRevision != issue.RequirementsRevision ||
-			question.RequirementsRevision != issue.RequirementsRevision {
-			callErr = &IssueToolError{Code: "revision_mismatch", Message: "question or issue was changed; reload before answering", CurrentRevision: issueToolRevisionPointer(issue.RequirementsRevision)}
-			return
-		}
-		if issue.Archived || issue.Status == issueStatusCompleted || issue.Status == issueStatusCanceled {
-			callErr = errors.New("issue cannot accept this answer in its current state")
-			return
-		}
-		latestScope, latestErr := a.issueToolScopeByRef(scope.Ref)
-		if latestErr != nil {
-			callErr = latestErr
-			return
-		}
-		captured, captureErr := a.issueToolCaptureTurnContext(ct, latestScope)
-		if captureErr != nil {
-			callErr = captureErr
-			return
-		}
-		ledger := issueSupplementLedgerFor(issue)
-		previousQuestion := *question
-		previousStatus, previousUpdated, previousAuto := issue.Status, issue.UpdatedAt, ledger.AutoContinue
-		previousContext := issue.Context.snapshot()
-		mergedContext := mergeIssueToolTurnContext(issue.Context.items, captured)
-		contextChanged := len(mergedContext) != len(issue.Context.items)
-		if contextChanged {
-			if err := validateTaskContext(mergedContext); err != nil {
-				callErr = err
-				return
-			}
-		}
-		if err := a.addIssueSupplementBefore(ct, issue.ID, request.Text, func(item *issueSupplement) {
-			if contextChanged {
-				issue.Context.items = mergedContext
-			}
-			question.State, question.AnsweredAt, question.AnswerSupplementID = issueQuestionAnswered, nowMillis(), item.ID
-			if len(issue.Executions) > 0 {
-				issue.Status, ledger.AutoContinue = issueStatusInProgress, true
-			} else {
-				issue.Status, ledger.AutoContinue = issueStatusNotStarted, false
-			}
-			issue.UpdatedAt = nowMillis()
-			receipt = &IssueToolReceipt{
-				State: issueToolReceiptSaved, IssueID: issue.ID, QuestionRef: question.Ref,
-				QuestionState: issueQuestionAnswered, IssueStatus: issue.Status,
-				SupplementID: item.ID, RequirementsRevision: issueToolRevisionPointer(issue.RequirementsRevision),
-			}
-			operation.Receipt = receipt
-		}); err != nil {
-			*question = previousQuestion
-			issue.Status, issue.UpdatedAt, ledger.AutoContinue = previousStatus, previousUpdated, previousAuto
-			issue.Context.items = previousContext
-			operation.Receipt = nil
+		latestScope, err := a.issueToolScopeByRef(scope.Ref)
+		if err != nil {
 			callErr = err
 			return
 		}
-		receipt = cloneIssueToolReceipt(receipt)
+		receipt, callErr = a.answerIssueQuestionFor(ct, request.IssueID, request.QuestionRef, request.ExpectedRevision, request.Text, a.issueToolTurnContext(ct, latestScope), operation)
 	})
 	if callErr != nil {
 		return issueActionErrorResponse(callErr)
 	}
 	return issueToolJSONResponse(receipt, false)
+}
+
+func (a *appModel) answerIssueQuestionFor(ct *contact, issueID, questionRef string, expectedRevision *int, text string, capturedContext []taskContextItem, operation *IssueToolOperation) (*IssueToolReceipt, error) {
+	if a.shutdownStarted || ct == nil || a.contactByID(ct.ID) != ct || ct.Archived {
+		return nil, &IssueToolError{Code: "scope_inactive", Message: "the question owner is no longer active"}
+	}
+	issue := issueForContact(ct, issueID)
+	if issue == nil {
+		return nil, &IssueToolError{Code: "not_found", Message: "issue not found for this question"}
+	}
+	question := issue.questionByRef(questionRef)
+	if question == nil {
+		candidates := make([]string, 0)
+		if open := issue.openQuestion(); open != nil {
+			candidates = append(candidates, open.Ref)
+		}
+		return nil, &IssueToolError{Code: "question_not_found", Message: "question_ref is not attached to this issue", Candidates: candidates}
+	}
+	if question.State == issueQuestionAnswered {
+		answer := issueSupplementLedgerFor(issue).itemByID(question.AnswerSupplementID)
+		if answer == nil {
+			return nil, &IssueToolError{Code: "operation_unknown", Message: "the saved answer supplement is missing; reload before revising"}
+		}
+		if strings.TrimSpace(text) != strings.TrimSpace(answer.Text) {
+			return nil, &IssueToolError{Code: "question_answer_conflict", Message: "this question already has a different answer; reload before revising"}
+		}
+		receipt := &IssueToolReceipt{
+			State: issueToolReceiptSaved, IssueID: issue.ID, QuestionRef: question.Ref,
+			QuestionState: question.State, IssueStatus: issue.Status,
+			SupplementID:         question.AnswerSupplementID,
+			RequirementsRevision: issueToolRevisionPointer(question.RequirementsRevision),
+		}
+		if operation != nil {
+			if err := a.issueToolSetReceipt(operation, receipt); err != nil {
+				return nil, err
+			}
+		}
+		return cloneIssueToolReceipt(receipt), nil
+	}
+	if question.State != issueQuestionOpen || issue.openQuestion() != question {
+		return nil, &IssueToolError{Code: "question_inactive", Message: "this question is no longer awaiting an answer; reload before answering"}
+	}
+	if expectedRevision != nil && *expectedRevision != issue.RequirementsRevision ||
+		question.RequirementsRevision != issue.RequirementsRevision {
+		return nil, &IssueToolError{Code: "revision_mismatch", Message: "question or issue was changed; reload before answering", CurrentRevision: issueToolRevisionPointer(issue.RequirementsRevision)}
+	}
+	if issue.Archived || issue.Status == issueStatusCompleted || issue.Status == issueStatusCanceled {
+		return nil, errors.New("issue cannot accept this answer in its current state")
+	}
+	if err := validateTaskContext(capturedContext); err != nil {
+		return nil, err
+	}
+	ledger := issueSupplementLedgerFor(issue)
+	previousQuestion := *question
+	previousStatus, previousUpdated, previousAuto := issue.Status, issue.UpdatedAt, ledger.AutoContinue
+	previousContext := issue.Context.snapshot()
+	var previousReceipt *IssueToolReceipt
+	if operation != nil {
+		previousReceipt = operation.Receipt
+	}
+	mergedContext := mergeIssueToolTurnContext(issue.Context.items, capturedContext)
+	contextChanged := len(mergedContext) != len(issue.Context.items)
+	if contextChanged {
+		if err := validateTaskContext(mergedContext); err != nil {
+			return nil, err
+		}
+	}
+	var receipt *IssueToolReceipt
+	if err := a.addIssueSupplementBefore(ct, issue.ID, text, func(item *issueSupplement) {
+		if contextChanged {
+			issue.Context.items = mergedContext
+		}
+		question.State, question.AnsweredAt, question.AnswerSupplementID = issueQuestionAnswered, nowMillis(), item.ID
+		if len(issue.Executions) > 0 {
+			issue.Status, ledger.AutoContinue = issueStatusInProgress, true
+		} else {
+			issue.Status, ledger.AutoContinue = issueStatusNotStarted, false
+		}
+		issue.UpdatedAt = nowMillis()
+		receipt = &IssueToolReceipt{
+			State: issueToolReceiptSaved, IssueID: issue.ID, QuestionRef: question.Ref,
+			QuestionState: issueQuestionAnswered, IssueStatus: issue.Status,
+			SupplementID: item.ID, RequirementsRevision: issueToolRevisionPointer(issue.RequirementsRevision),
+		}
+		if operation != nil {
+			operation.Receipt = receipt
+		}
+	}); err != nil {
+		*question = previousQuestion
+		issue.Status, issue.UpdatedAt, ledger.AutoContinue = previousStatus, previousUpdated, previousAuto
+		issue.Context.items = previousContext
+		if operation != nil {
+			operation.Receipt = previousReceipt
+		}
+		return nil, err
+	}
+	return cloneIssueToolReceipt(receipt), nil
 }
 
 func (a *appModel) issueToolRun(scope IssueToolScope, _ IssueToolActionRequest, operation *IssueToolOperation) (issueToolForwardResponse, error) {

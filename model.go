@@ -256,6 +256,8 @@ type appModel struct {
 	issueCompletionDrafts         map[string]*string
 	issueSupplementDrafts         map[string]*string
 	issueSupplementFormID         string
+	issueSupplementAnswerTarget   issueSupplementTarget
+	issueSupplementQuestionRef    string
 	issueSupplementPreviewID      string
 	issueSupplementShowAllBatches bool
 

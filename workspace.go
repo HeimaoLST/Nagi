@@ -797,8 +797,11 @@ func (a *appModel) issuePrimaryAction(c *ui.Context, t *ui.Theme, ct *contact, i
 			secondaryButton(c, msgs.IssueReloadTask()).OnClick(func() { a.reloadIssueWorkByID(ct.ID, issue.ID) })
 			return "question-missing"
 		}
+		target := issueSupplementTargetFor(ct, issue)
+		target.RequirementsRevision = question.RequirementsRevision
+		questionRef := question.Ref
 		ui.Row(c).Wrap().Gap(6).AlignItems(ui.Center).Children(func() {
-			secondaryButton(c, msgs.WorkAnswer()).FontWeight(500).OnClick(func() { a.openIssueSupplementForm(issue.ID) })
+			secondaryButton(c, msgs.WorkAnswer()).FontWeight(500).OnClick(func() { a.openIssueQuestionAnswerForm(target, questionRef) })
 		})
 		return "answer"
 	}

@@ -26,7 +26,14 @@ func (a *appModel) issueSupplementSection(c *ui.Context, t *ui.Theme, ct *contac
 	if target.IssueID == "" {
 		return
 	}
-	formOpen := a.issueSupplementFormID == issue.ID
+	answerTarget := a.issueSupplementAnswerTarget
+	questionRef := a.issueSupplementQuestionRef
+	answering := answerTarget.IssueID != ""
+	formOpen := a.issueSupplementFormID == issue.ID && (!answering || answerTarget.ContactID == ct.ID)
+	targetRevision := target.RequirementsRevision
+	if formOpen && answering {
+		targetRevision = answerTarget.RequirementsRevision
+	}
 	if pending == 0 && len(batches) == 0 && !formOpen {
 		return
 	}
@@ -40,7 +47,7 @@ func (a *appModel) issueSupplementSection(c *ui.Context, t *ui.Theme, ct *contac
 	} else {
 		ui.Text(c, msgs.SupplementAutoStopped()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Warning)
 	}
-	ui.Text(c, msgs.SupplementCurrentTarget(fmt.Sprint(issue.RequirementsRevision), truncate(issue.Goal, 100))).
+	ui.Text(c, msgs.SupplementCurrentTarget(fmt.Sprint(targetRevision), truncate(issue.Goal, 100))).
 		FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 	if ledger != nil {
 		if active := ledger.activeBatch(target); active != nil {
@@ -93,7 +100,7 @@ func (a *appModel) issueSupplementSection(c *ui.Context, t *ui.Theme, ct *contac
 			}
 		}
 	}
-	if editable {
+	if editable || formOpen && answering {
 		if !formOpen {
 			ui.Row(c).Gap(6).Children(func() {
 				secondaryButton(c, msgs.SupplementAdd()).TextColor(t.Text).OnClick(func() {
@@ -102,18 +109,30 @@ func (a *appModel) issueSupplementSection(c *ui.Context, t *ui.Theme, ct *contac
 			})
 		} else {
 			draft := a.issueSupplementDraft(issue.ID)
+			formLabel := msgs.SupplementAddLabel()
+			inputLabel := msgs.SupplementFormLabel()
+			saveLabel := msgs.IssueSupplementSave()
+			if answering {
+				formLabel, inputLabel, saveLabel = msgs.WorkAnswer(), msgs.WorkAnswer(), msgs.WorkAnswer()
+			}
 			ui.Row(c).AlignItems(ui.Center).Children(func() {
-				ui.Text(c, msgs.SupplementAddLabel()).FontSize(typeLabel).FontWeight(400).FixedLineHeight(lineLabel).TextColor(t.TextMuted)
+				ui.Text(c, formLabel).FontSize(typeLabel).FontWeight(400).FixedLineHeight(lineLabel).TextColor(t.TextMuted)
 				ui.Spacer(c)
 				secondaryButton(c, msgs.SupplementCancel()).OnClick(func() {
 					a.closeIssueSupplementForm()
 				})
 			})
-			formTextArea(c, draft, false).Label(msgs.SupplementFormLabel()).Height(56).
+			formTextArea(c, draft, false).Label(inputLabel).Height(56).
 				Placeholder(msgs.SupplementFormPlaceholder())
 			ui.Row(c).Gap(6).Children(func() {
-				secondaryButton(c, locales.In(c.Locale()).IssueSupplementSave()).OnClick(func() {
-					if !a.saveIssueSupplement(ct, issue.ID, *draft) {
+				secondaryButton(c, saveLabel).OnClick(func() {
+					var saved bool
+					if answering {
+						saved = a.saveIssueQuestionAnswer(answerTarget, questionRef, *draft)
+					} else {
+						saved = a.saveIssueSupplement(ct, issue.ID, *draft)
+					}
+					if !saved {
 						return
 					}
 					*draft = ""
@@ -123,7 +142,7 @@ func (a *appModel) issueSupplementSection(c *ui.Context, t *ui.Theme, ct *contac
 			ui.Text(c, msgs.SupplementSaveDisclaimer()).
 				FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 		}
-		if ledger != nil {
+		if editable && ledger != nil {
 			if auto {
 				secondaryButton(c, msgs.SupplementStopAuto()).TextColor(t.Warning).OnClick(func() {
 					if !a.setIssueSupplementAuto(ct, issue.ID, false) {
