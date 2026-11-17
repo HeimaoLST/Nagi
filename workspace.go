@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	piResultsUnavailable     = "Activity results are unavailable during Pi integration; saved execution records are preserved."
-	piLegacyActivityReadOnly = "Legacy activity data is read-only during Pi integration."
+	piResultsUnavailable     = "Task results aren't available in this view. Saved run records are kept."
+	piLegacyActivityReadOnly = "Task data is read-only."
 )
 
 // A workItem is the GUI projection of one runtime task. User/assistant text

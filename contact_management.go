@@ -22,8 +22,8 @@ const (
 	restoreNoticeSave    = "restore-save"
 	restoreNoticeSaved   = "restore-saved"
 
-	profileNoticePiLegacy = "Legacy profiles are read-only during Pi integration."
-	historyNoticePiLegacy = "Legacy history is unavailable during Pi integration."
+	profileNoticePiLegacy = "Contact profiles are read-only."
+	historyNoticePiLegacy = "History isn't available in this view."
 
 	historyNoticeMissingQuery = "history-missing-query"
 	historyNoticeRuntime      = "history-runtime"

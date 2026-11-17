@@ -404,7 +404,7 @@ func (h *piAppHost) onExit(a *appModel, outcome pi.ProcessOutcome) {
 					ct.pendingSend = &pendingSend{Draft: ct.SubmittedDraft}
 				}
 				ct.pendingSend.State = "unknown"
-				ct.setSendError("Pi disconnected; delivery is unknown. Reload before sending again.", "send-uncertain", "")
+				ct.setSendError("Connection lost; message delivery is unconfirmed. This message will not be sent again automatically.", "send-uncertain", "")
 			}
 			for _, issue := range ct.Issues {
 				if issue.Work.ActiveTaskID == "" && issue.Work.SendState != sendSubmitting {
@@ -796,12 +796,12 @@ func (h *piAppHost) loadPiHistory(ctx context.Context, binding piConversationBin
 	displayTime := func(timestamp string) string {
 		parsed, err := time.Parse(time.RFC3339, timestamp)
 		if err != nil {
-			addDetail("Pi history contains an unavailable or invalid timestamp.")
+			addDetail("Some history dates are missing or invalid.")
 			return ""
 		}
 		formatted := formatMillis(parsed.UnixMilli())
 		if formatted == "" {
-			addDetail("Pi history contains an unavailable or invalid timestamp.")
+			addDetail("Some history dates are missing or invalid.")
 		}
 		return formatted
 	}
@@ -861,7 +861,7 @@ func (h *piAppHost) loadPiHistory(ctx context.Context, binding piConversationBin
 				return historyProjection{}, err
 			}
 			if header.Role == "toolResult" {
-				addDetail("Tool results remain in Pi history; this view does not yet display them.")
+				addDetail("Tool output is kept in saved history and isn't shown here.")
 				continue
 			}
 			if header.Role != "assistant" {
