@@ -311,6 +311,7 @@ type appModel struct {
 	connectionSaveInFlight bool
 	connectionTesting      bool
 	connectionTestCancel   func()
+	connectionProbe        *piConnectionProbe
 	startupDetailsOpen     bool
 	shutdownDrainStarted   bool
 

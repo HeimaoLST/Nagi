@@ -601,6 +601,26 @@ func (a *appModel) applyPiEvent(generation int, event pi.Event) {
 
 func (h *piAppHost) loadPiHistory(ctx context.Context, binding piConversationBinding) (historyProjection, error) {
 	var result historyProjection
+	addDetail := func(detail string) {
+		if !strings.Contains(result.detail, detail) {
+			if result.detail != "" {
+				result.detail += " "
+			}
+			result.detail += detail
+		}
+	}
+	displayTime := func(timestamp string) string {
+		parsed, err := time.Parse(time.RFC3339, timestamp)
+		if err != nil {
+			addDetail("Pi history contains an unavailable or invalid timestamp.")
+			return ""
+		}
+		formatted := formatMillis(parsed.UnixMilli())
+		if formatted == "" {
+			addDetail("Pi history contains an unavailable or invalid timestamp.")
+		}
+		return formatted
+	}
 	actual, err := h.openContext(ctx, binding)
 	if err != nil {
 		return result, err
@@ -618,6 +638,7 @@ func (h *piAppHost) loadPiHistory(ctx context.Context, binding piConversationBin
 			var entry struct {
 				ID         string          `json:"id"`
 				Type       string          `json:"type"`
+				Timestamp  string          `json:"timestamp"`
 				CustomType string          `json:"customType"`
 				Data       json.RawMessage `json:"data"`
 				Message    json.RawMessage `json:"message"`
@@ -641,8 +662,9 @@ func (h *piAppHost) loadPiHistory(ctx context.Context, binding piConversationBin
 						contexts = append(contexts, taskContextItem{Name: item.Name, Text: item.Text})
 					}
 				}
-				result.messages = append(result.messages, &message{Key: key, Kind: msgUser, Text: turn.Text, TaskID: turn.RunID, History: true, Context: contexts})
-				result.entries = append(result.entries, historyEntry{ID: key, From: "me", Text: turn.Text, Context: contexts})
+				date := displayTime(entry.Timestamp)
+				result.messages = append(result.messages, &message{Key: key, Kind: msgUser, Text: turn.Text, Time: date, TaskID: turn.RunID, History: true, Context: contexts})
+				result.entries = append(result.entries, historyEntry{ID: key, Date: date, From: "me", Text: turn.Text, Context: contexts})
 				continue
 			}
 			if entry.Type != "message" {
@@ -655,7 +677,7 @@ func (h *piAppHost) loadPiHistory(ctx context.Context, binding piConversationBin
 				return historyProjection{}, err
 			}
 			if header.Role == "toolResult" {
-				result.detail = "Tool results remain in Pi history; this view does not yet display them."
+				addDetail("Tool results remain in Pi history; this view does not yet display them.")
 				continue
 			}
 			if header.Role != "assistant" {
@@ -678,8 +700,9 @@ func (h *piAppHost) loadPiHistory(ctx context.Context, binding piConversationBin
 				}
 			}
 			if text.Len() != 0 {
-				result.messages = append(result.messages, &message{Key: key, Kind: msgContact, Text: text.String(), History: true})
-				result.entries = append(result.entries, historyEntry{ID: key, From: "contact", Text: text.String()})
+				date := displayTime(entry.Timestamp)
+				result.messages = append(result.messages, &message{Key: key, Kind: msgContact, Text: text.String(), Time: date, History: true})
+				result.entries = append(result.entries, historyEntry{ID: key, Date: date, From: "contact", Text: text.String()})
 			}
 		}
 		if page.NextCursor == "" {
@@ -763,7 +786,35 @@ func (a *appModel) finishPiShutdown(host *piAppHost) {
 	})
 }
 
-func probePiConnection(ctx context.Context, config connectionConfig) (err error) {
+type piConnectionProbe struct {
+	mu            sync.Mutex
+	client        *pi.Client
+	stateDir      string
+	outcome       pi.ProcessOutcome
+	callbacksDone bool
+	forced        bool
+	cancelErr     error
+	shutdownErr   error
+	waitErr       error
+	killErr       error
+	callbackErr   error
+	removeErr     error
+	cleanupErr    error
+	testErr       error
+}
+
+func (probe *piConnectionProbe) cleanupComplete() bool {
+	probe.mu.Lock()
+	defer probe.mu.Unlock()
+	return probe.client == nil || probe.outcome.Reaped && probe.callbacksDone
+}
+
+func probePiConnection(ctx context.Context, config connectionConfig, probe *piConnectionProbe) (err error) {
+	defer func() {
+		probe.mu.Lock()
+		probe.testErr = err
+		probe.mu.Unlock()
+	}()
 	if fields := validateConnectionConfig(config); len(fields) != 0 {
 		return errors.New(connectionValidationSummary(fields))
 	}
@@ -775,6 +826,9 @@ func probePiConnection(ctx context.Context, config connectionConfig) (err error)
 	if err != nil {
 		return err
 	}
+	probe.mu.Lock()
+	probe.stateDir = dir
+	probe.mu.Unlock()
 	events := make(chan pi.Event, 1)
 	client, err := pi.Start(pi.Options{NodePath: node, WorkerPath: worker, StateDir: dir,
 		Handlers: pi.Handlers{OnEvent: func(event pi.Event) {
@@ -786,39 +840,76 @@ func probePiConnection(ctx context.Context, config connectionConfig) (err error)
 			}
 		}}})
 	if err != nil {
-		_ = os.RemoveAll(dir)
-		return err
+		removeErr := os.RemoveAll(dir)
+		probe.mu.Lock()
+		probe.removeErr = removeErr
+		probe.mu.Unlock()
+		return errors.Join(err, removeErr)
 	}
+	probe.mu.Lock()
+	probe.client = client
+	probe.mu.Unlock()
 	contextID, runID := newIssueToolTurnID(), newIssueToolTurnID()
 	submitted, settled := false, false
 	defer func() {
 		cleanup, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
+		var cancelErr, waitErr, killErr, callbackErr, removeErr error
 		if submitted && !settled {
-			_, _ = client.CancelRun(cleanup, pi.CancelRunParams{ContextID: contextID, RunID: runID})
+			_, cancelErr = client.CancelRun(cleanup, pi.CancelRunParams{ContextID: contextID, RunID: runID})
 		}
 		outcome, shutdownErr := client.Shutdown(cleanup)
+		shutdownErrors := shutdownErr
 		if !outcome.Reaped {
 			select {
 			case <-events:
 				outcome, shutdownErr = client.Shutdown(cleanup)
+				shutdownErrors = errors.Join(shutdownErrors, shutdownErr)
 			case <-client.Done():
-				outcome, shutdownErr = client.Wait(cleanup)
+				outcome, waitErr = client.Wait(cleanup)
 			case <-cleanup.Done():
 			}
 		}
+		forced := false
 		if !outcome.Reaped {
 			<-cleanup.Done()
 			killCtx, killCancel := context.WithTimeout(context.Background(), 10*time.Second)
-			var killErr error
+			forced = true
 			outcome, killErr = client.Kill(killCtx)
 			killCancel()
-			shutdownErr = errors.Join(shutdownErr, cleanup.Err(), killErr)
 		}
-		if outcome.Reaped {
-			shutdownErr = errors.Join(shutdownErr, os.RemoveAll(dir))
+		callbackCtx, callbackCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		callbacksDone := false
+		select {
+		case <-client.CallbacksDone():
+			callbacksDone = true
+		case <-callbackCtx.Done():
+			callbackErr = callbackCtx.Err()
 		}
-		err = errors.Join(err, shutdownErr)
+		callbackCancel()
+		if outcome.Reaped && callbacksDone {
+			removeErr = os.RemoveAll(dir)
+		}
+		cleanupErr := errors.Join(cancelErr, shutdownErr, waitErr, killErr, callbackErr, removeErr)
+		if forced {
+			cleanupErr = errors.Join(cleanupErr, errors.New("connection test required forced worker termination"))
+		}
+		if !outcome.Reaped || !callbacksDone {
+			cleanupErr = errors.Join(cleanupErr, errors.New("connection test worker cleanup is unconfirmed"))
+		}
+		probe.mu.Lock()
+		probe.outcome = outcome
+		probe.callbacksDone = callbacksDone
+		probe.forced = forced
+		probe.cancelErr = cancelErr
+		probe.shutdownErr = shutdownErrors
+		probe.waitErr = waitErr
+		probe.killErr = killErr
+		probe.callbackErr = callbackErr
+		probe.removeErr = removeErr
+		probe.cleanupErr = cleanupErr
+		probe.mu.Unlock()
+		err = errors.Join(err, cleanupErr)
 	}()
 	ready, err := client.Ready(ctx)
 	if err != nil {

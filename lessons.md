@@ -236,9 +236,9 @@
 
 ## Discover source paths before targeted inspection
 
-**Problem:** Initial symbol searches named absent guessed question files, and a later worker inspection assumed an absent src directory. An edit anchor was also rejected before mutation because the relevant range had not been read.
+**Problem:** Initial symbol searches named absent guessed question files, and later inspections assumed absent source, SDK and external recorder paths. An edit anchor was also rejected before mutation because the relevant range had not been read.
 **Cause or correction:** Repository symbol/path discovery located the actual files; none of these failed lookups established a product defect.
-**Prevention:** Use rg --files and symbol discovery before targeted reads or edits, then read the actual edit range. Keep lookup/setup failures separate from compilation and behavior results.
+**Prevention:** Use rg --files and symbol discovery before targeted reads or edits, including SDK payloads and external evidence directories, then read the actual edit range. Keep lookup/setup failures separate from compilation and behavior results.
 
 ## Select process tests explicitly in CI
 
@@ -267,8 +267,14 @@
 ## Bound isolated probe cleanup by actual reaping
 
 **Problem:** Source inspection found that a timed-out connection Test could receive busy from Shutdown while the client exposed only Shutdown/Wait, leaving its isolated worker and state unretired.
-**Cause or correction:** This was a source gap, not an observed process failure. Normal cancellation and graceful shutdown remain first; a separate owned-process Kill/wait API supplies the bounded fallback without changing busy rejection.
-**Prevention:** Exercise a held synthetic probe, preserve actual wait/error/callback outcomes and remove its state only after reaping. Do not force-cancel ordinary business work, report a killed test as successful, or infer descendant exit from the Node worker outcome.
+**Cause or correction:** These are source gaps, not observed process failures. An owned-process Kill/wait fallback does not itself retain a failed probe owner or prove callback completion. Clearing the UI Test flag after an error-only return could release quit with cleanup unproved.
+**Prevention:** Retain the specific probe client and state until actual reaping and callback completion, including after a bounded cleanup failure. Keep the existing quit barrier until both are observed. Exercise held synthetic cleanup, preserve raw outcomes and keep ordinary business cancellation and busy shutdown unchanged; a killed test is not successful or proof of descendant termination.
+
+## Preserve public history timestamps in product projections
+
+**Problem:** Source review found the first Pi history projection preserved entry IDs and text but left message times and history dates blank.
+**Cause or correction:** The public SDK entry timestamp was omitted from decoding and projection even though the existing product renderer and search use those fields. No dynamic failure was claimed.
+**Prevention:** Map actual public timestamps through the existing product formatter alongside original text, context and IDs. Include reopen, search and full-message display in first-use E2E; do not substitute the current time for missing history facts.
 
 ## Match actual readiness values and captured cancellation targets
 

@@ -367,22 +367,38 @@ func (a *appModel) runOnUI(fn func()) {
 func (a *appModel) testConnection(config connectionConfig) {
 	a.ensureConnectionForm()
 	form := a.connectionForm
-	if form.Busy || a.shutdownStarted || a.dataRecoveryBlocksChanges() || a.piDataReadOnly() {
+	if form.Busy || a.connectionTesting || a.shutdownStarted || a.dataRecoveryBlocksChanges() || a.piDataReadOnly() {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	a.connectionTesting = true
 	a.connectionTestCancel = cancel
+	probe := &piConnectionProbe{}
+	a.connectionProbe = probe
 	form.Busy = true
 	form.Error = ""
 	form.ErrorDetail = ""
 	form.Status = connStatusTesting
 	go func() {
-		err := probePiConnection(ctx, config)
+		err := probePiConnection(ctx, config, probe)
 		cancel()
 		a.updateUI(func() {
-			a.connectionTesting = false
+			if a.connectionProbe != probe {
+				return
+			}
 			a.connectionTestCancel = nil
+			if !probe.cleanupComplete() {
+				form.Status = ""
+				form.Error = connErrorTestFailed
+				form.ErrorDetail = a.connectionSafeMessage(err)
+				if a.shutdownStarted {
+					a.runtimeErrKind = runtimeNoticeRuntimeShutdown
+					a.runtimeErr = form.ErrorDetail
+				}
+				go a.awaitPiConnectionProbe(probe)
+				return
+			}
+			a.connectionTesting = false
 			form.Busy = false
 			if a.shutdownStarted {
 				a.finishShutdown()
@@ -399,6 +415,45 @@ func (a *appModel) testConnection(config connectionConfig) {
 			form.Error = ""
 		})
 	}()
+}
+
+func (a *appModel) awaitPiConnectionProbe(probe *piConnectionProbe) {
+	probe.mu.Lock()
+	client, dir := probe.client, probe.stateDir
+	probe.mu.Unlock()
+	outcome, waitErr := client.Wait(context.Background())
+	<-client.CallbacksDone()
+	var removeErr error
+	if outcome.Reaped {
+		removeErr = os.RemoveAll(dir)
+	}
+	probe.mu.Lock()
+	probe.outcome = outcome
+	probe.callbacksDone = true
+	probe.waitErr = errors.Join(probe.waitErr, waitErr)
+	probe.removeErr = errors.Join(probe.removeErr, removeErr)
+	probe.cleanupErr = errors.Join(probe.cleanupErr, waitErr, removeErr)
+	probe.testErr = errors.Join(probe.testErr, waitErr, removeErr)
+	testErr := probe.testErr
+	probe.mu.Unlock()
+	a.updateUI(func() {
+		if a.connectionProbe != probe {
+			return
+		}
+		if !outcome.Reaped {
+			a.connectionForm.ErrorDetail = a.connectionSafeMessage(errors.Join(testErr, errors.New("connection test worker was not reaped")))
+			return
+		}
+		a.connectionTesting = false
+		a.connectionTestCancel = nil
+		a.connectionForm.Busy = false
+		a.connectionForm.Status = ""
+		a.connectionForm.Error = connErrorTestFailed
+		a.connectionForm.ErrorDetail = a.connectionSafeMessage(testErr)
+		if a.shutdownStarted {
+			a.finishShutdown()
+		}
+	})
 }
 
 func (a *appModel) runtimeHandlers(gen int, ready chan<- runtimeReady) runtimeHandlers {
