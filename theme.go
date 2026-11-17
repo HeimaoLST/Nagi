@@ -19,7 +19,7 @@ const (
 	lineSettingsTitle        float32 = 28
 	lineCompact              float32 = 22
 	lineForm                 float32 = 20
-	typeHeaderMeta           float32 = 10
+	typeHeaderMeta           float32 = 12
 	lineHeader               float32 = 16
 	menuCompactRadius        float32 = 6
 	menuCompactPadding       float32 = 6
@@ -38,7 +38,7 @@ const (
 	settingsSidebarWidth     float32 = 248
 	settingsContentWidth     float32 = 820
 	preferenceBreakpoint     float32 = 40 * cssRem
-	typeContactTitle         float32 = 12
+	typeContactTitle         float32 = 13
 	typePageTitle            float32 = typeSettingsTitle
 	typeGroupTitle           float32 = 13
 	typeBody                 float32 = 14
