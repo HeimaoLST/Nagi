@@ -121,16 +121,6 @@ func (a *appModel) issueToolLaunchSource() *runtimeToolSource {
 	}
 }
 
-func issueToolConversationExternal() []map[string]string {
-	external := make([]map[string]string, 0, len(issueToolConversationDefinitions()))
-	for _, definition := range issueToolConversationDefinitions() {
-		external = append(external, map[string]string{
-			"source_id": issueToolSourceID, "tool_name": definition.Name, "exposed_name": definition.Name,
-		})
-	}
-	return external
-}
-
 func issueToolConversationDefinitions() []issueToolDefinition {
 	all := issueToolDefinitions()
 	out := make([]issueToolDefinition, 0, len(all))
@@ -168,21 +158,6 @@ func resolveBuiltinToolNames(rt *runtimeClient, selection *[]string) ([]string, 
 		return nil, fmt.Errorf("load Runtime built-in tools: %w", err)
 	}
 	return builtinToolNames(catalog.Builtin), nil
-}
-
-func runtimeConversationSelection(rt *runtimeClient, builtin *[]string, issueTools bool) (map[string]any, error) {
-	if builtin == nil && !issueTools {
-		return nil, nil
-	}
-	names, err := resolveBuiltinToolNames(rt, builtin)
-	if err != nil {
-		return nil, err
-	}
-	external := []map[string]string{}
-	if issueTools {
-		external = issueToolConversationExternal()
-	}
-	return map[string]any{"builtin": names, "external": external}, nil
 }
 
 func runtimeWorkSelection(rt *runtimeClient, builtin *[]string, issueTools bool) (map[string]any, error) {
@@ -368,60 +343,6 @@ func (a *appModel) issueToolNewWorkScope(contactID, issueID, executionID, sessio
 	return &scope, nil
 }
 
-func runtimeSelectionHasIssueTools(selection runtimeToolSelection) bool {
-	found := map[string]bool{}
-	for _, binding := range selection.External {
-		if binding.SourceID == issueToolSourceID {
-			found[binding.ToolName+"\x00"+binding.ExposedName] = true
-		}
-	}
-	for _, definition := range issueToolConversationDefinitions() {
-		if !found[definition.Name+"\x00"+definition.Name] {
-			return false
-		}
-	}
-	return true
-}
-
-func (a *appModel) issueToolMergedSelection(current runtimeToolSelection) (map[string]any, error) {
-	if !a.issueToolEnabled() {
-		return nil, nil
-	}
-	selection := map[string]any{"external": issueToolConversationExternal()}
-	// An empty builtin list is an explicit "no built-in tools" choice. Preserve
-	// it exactly; only a new conversation resolves the host default.
-	selection["builtin"] = append([]string{}, current.Builtin...)
-	external := make([]map[string]string, 0, len(current.External)+len(issueToolConversationDefinitions()))
-	exposedOwner := map[string]string{}
-	canonical := map[string]bool{}
-	for _, binding := range current.External {
-		external = append(external, map[string]string{
-			"source_id": binding.SourceID, "tool_name": binding.ToolName, "exposed_name": binding.ExposedName,
-		})
-		if binding.ExposedName != "" {
-			exposedOwner[binding.ExposedName] = binding.SourceID + "\x00" + binding.ToolName
-		}
-		if binding.SourceID == issueToolSourceID && binding.ToolName == binding.ExposedName {
-			canonical[binding.ToolName] = true
-		}
-	}
-	for _, definition := range issueToolDefinitions() {
-		if canonical[definition.Name] {
-			continue
-		}
-		owner := issueToolSourceID + "\x00" + definition.Name
-		if existing, used := exposedOwner[definition.Name]; used && existing != owner {
-			return nil, fmt.Errorf("issue tool exposed name %q is already used by %s", definition.Name, existing)
-		}
-		exposedOwner[definition.Name] = owner
-		external = append(external, map[string]string{
-			"source_id": issueToolSourceID, "tool_name": definition.Name, "exposed_name": definition.Name,
-		})
-	}
-	selection["external"] = external
-	return selection, nil
-}
-
 // issueToolEnsureResult reports whether the session can run this task and, for
 // the exact native compatibility path, the one current-role guidance to attach
 // to this task's caller context. It never represents a system-config upgrade.
@@ -475,10 +396,6 @@ func issueToolNativeTaskGuidance(config runtimeConnectionConfig, updated runtime
 	return roleGuidance
 }
 
-// issueToolEnsureConversationSession checks an existing schema-2 session and
-// adds only the issue-tool bindings when absent. It deliberately does not
-// migrate schema 1 or guessed legacy ownership; those paths remain explicit
-// follow-ups.
 type issueToolRefreshMark struct {
 	runtime    *runtimeClient
 	generation int
@@ -514,68 +431,6 @@ func (a *appModel) clearIssueToolRefresh(sessionID string) {
 	a.issueToolMu.Lock()
 	delete(a.issueToolRefresh, sessionID)
 	a.issueToolMu.Unlock()
-}
-
-func (a *appModel) issueToolEnsureConversationSession(rt *runtimeClient, sessionID, roleGuidance string, created bool) (issueToolEnsureResult, error) {
-	if created {
-		return issueToolEnsureResult{Ready: true}, nil
-	}
-	if rt == nil || sessionID == "" {
-		return issueToolEnsureResult{}, errRuntimeDisconnected
-	}
-	config, err := rt.connectionConfig(sessionID)
-	if err != nil {
-		return issueToolEnsureResult{}, fmt.Errorf("read conversation tool selection: %w", err)
-	}
-	if config.StorageSchema < 2 {
-		return issueToolEnsureResult{}, nil
-	}
-	toolsReady := runtimeSelectionHasIssueTools(config.EffectiveConfig.ToolSelection)
-	desiredPrompt := addWorkflowGuidance(config.EffectiveConfig.SystemPrompt, roleGuidance)
-	promptReady := desiredPrompt == config.EffectiveConfig.SystemPrompt
-	refresh := a.issueToolRefreshRequired(rt, sessionID)
-	if toolsReady && promptReady && !refresh {
-		// The session already has the exact selection and prompt. A no-op
-		// config.update after restart can be rejected for native continuation,
-		// so do not touch Runtime configuration.
-		return issueToolEnsureResult{Ready: true}, nil
-	}
-	selection, mergeErr := a.issueToolMergedSelection(config.EffectiveConfig.ToolSelection)
-	if mergeErr != nil {
-		return issueToolEnsureResult{}, mergeErr
-	}
-	if selection == nil {
-		return issueToolEnsureResult{}, nil
-	}
-	if toolsReady && !refresh {
-		selection = nil
-	}
-	// Updating the full selection is only needed when it is not already present
-	// or when Runtime explicitly requested a schema refresh. The combined prompt
-	// preserves the user's saved profile; this changes no model/cwd/compaction
-	// setting.
-	promptPatch := ""
-	if !promptReady {
-		promptPatch = desiredPrompt
-	}
-	updated, err := rt.updateSessionConfiguration(sessionID, config.ConfigRevision, selection, promptPatch)
-	if err != nil {
-		if guidance := issueToolNativeTaskGuidance(config, updated, err, roleGuidance, toolsReady, refresh); guidance != "" {
-			return issueToolEnsureResult{Ready: true, TaskGuidance: guidance}, nil
-		}
-		return issueToolEnsureResult{}, fmt.Errorf("enable or refresh conversation issue workflow: %w", err)
-	}
-	if updated.ReadbackError != nil {
-		return issueToolEnsureResult{}, fmt.Errorf("read back conversation configuration: %w", updated.ReadbackError)
-	}
-	if !runtimeSelectionHasIssueTools(updated.EffectiveConfig.ToolSelection) {
-		return issueToolEnsureResult{}, errors.New("Runtime did not confirm the conversation issue-tool selection")
-	}
-	if updated.EffectiveConfig.SystemPrompt != desiredPrompt {
-		return issueToolEnsureResult{}, errors.New("Runtime did not confirm the conversation workflow prompt")
-	}
-	a.clearIssueToolRefresh(sessionID)
-	return issueToolEnsureResult{Ready: true}, nil
 }
 
 // issueToolNewScope issues one app-owned scope before a conversation task is
@@ -665,7 +520,7 @@ func (a *appModel) issueToolScopeByRef(ref string) (IssueToolScope, error) {
 // authorization: a new turn, new session, archive, restart after terminal, or
 // failed send cannot use an old scope for a new side effect.
 func (a *appModel) issueToolScopeActive(captured IssueToolScope) bool {
-	if a.shutdownStarted || captured.Validate() != nil || a.issueToolScopes == nil {
+	if a.shutdownStarted && a.pi == nil || captured.Validate() != nil || a.issueToolScopes == nil {
 		return false
 	}
 	// The accepted task can bind after the handler captured its scope copy.

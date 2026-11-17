@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"os"
 	"strconv"
@@ -12,13 +11,6 @@ import (
 )
 
 func main() {
-	if len(os.Args) == 2 && os.Args[1] == "--issue-tool-helper" {
-		if err := runIssueToolHelperCLI(os.Stdin, os.Stdout, os.Stderr); err != nil {
-			fmt.Fprintln(os.Stderr, "issue tool helper:", err)
-			os.Exit(1)
-		}
-		return
-	}
 	windowOptions := mygo.WindowOptions{
 		Title:         "Nagi",
 		TitleBarStyle: mygo.TitleBarHiddenInset,
@@ -48,7 +40,7 @@ func main() {
 			return
 		}
 		e.PreventDefault()
-		a.beginShutdown()
+		a.drainPiHost()
 	})
 	mygo.App.WhenReady(func() {
 		windowOptions.Content = ui.View(a.view)
@@ -73,9 +65,9 @@ func main() {
 				return
 			}
 			e.PreventDefault()
-			a.beginShutdown()
+			a.drainPiHost()
 		})
-		a.startRuntime()
+		a.startPiHost()
 	})
 	if err := mygo.App.Run(); err != nil {
 		log.Fatal(err)

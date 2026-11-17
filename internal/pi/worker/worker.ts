@@ -17,6 +17,7 @@ import {
 const BINDING_TYPE = 'nagi-context-v1';
 const CONFIGURATION_TYPE = 'nagi-configuration-v1';
 const MCP_TYPE = 'nagi-mcp-v1';
+const TURN_TYPE = 'nagi-turn-v1';
 const PROVIDER = 'nagi';
 type Binding = Pick<OpenParams, 'contextId' | 'botId' | 'purpose' | 'activityId' | 'selectionRevision' | 'cwd'>;
 type Run = {
@@ -298,6 +299,7 @@ class Worker {
     let failure: unknown;
     this.event(context, run, 'run.started', { correlation: run.correlation });
     try {
+      context.manager.appendCustomEntry(TURN_TYPE, { runId: run.id, text: params.text, context: params.context ?? [], correlation: run.correlation });
       const snapshots = (params.context ?? []).map(item => `\n\n<context name=${JSON.stringify(item.name)}>\n${item.text}\n</context>`).join('');
       if (!run.cancelled && !this.disconnected) await context.runtime.session.prompt(params.text + snapshots);
       await context.runtime.session.waitForIdle();

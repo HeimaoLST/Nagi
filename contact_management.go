@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"strings"
 
 	"github.com/egoist/mygo/ui"
@@ -20,6 +21,9 @@ const (
 	restoreNoticeStore   = "restore-store"
 	restoreNoticeSave    = "restore-save"
 	restoreNoticeSaved   = "restore-saved"
+
+	profileNoticePiLegacy = "Legacy profiles are read-only during Pi integration."
+	historyNoticePiLegacy = "Legacy history is unavailable during Pi integration."
 
 	historyNoticeMissingQuery = "history-missing-query"
 	historyNoticeRuntime      = "history-runtime"
@@ -161,6 +165,13 @@ func (a *appModel) saveContactProfileDraftFor(contactID string, draft profileDra
 	if ct == nil {
 		return false
 	}
+	if !a.demo && a.piDataReadOnly() {
+		if editor != nil {
+			editor.Draft = entered
+			editor.SetError(profileNoticePiLegacy)
+		}
+		return false
+	}
 	if !a.demo && a.ensureContactStore() != nil {
 		if editor != nil {
 			editor.Draft = entered
@@ -182,7 +193,7 @@ func (a *appModel) saveContactProfileDraftFor(contactID string, draft profileDra
 			}
 			return false
 		}
-		if ct.SessionID == "" {
+		if ct.PiBinding == nil && (!a.demo || ct.SessionID == "") {
 			if editor != nil {
 				editor.SetError(profileNoticeNoConversation)
 			}
@@ -209,7 +220,6 @@ func (a *appModel) saveContactProfileDraftFor(contactID string, draft profileDra
 		return false
 	}
 	previous := *ct
-	previousSessions := append([]string(nil), ct.PreviousSessions...)
 	var oldState storedState
 	if a.store != nil {
 		oldState = a.store.state
@@ -221,7 +231,10 @@ func (a *appModel) saveContactProfileDraftFor(contactID string, draft profileDra
 	ct.Workspace = draft.Workspace
 	ct.BuiltinTools = cloneBuiltinTools(draft.BuiltinTools)
 	if startNew {
-		if ct.SessionID != "" {
+		if binding := clonePiConversationBinding(ct.PiBinding); binding != nil {
+			ct.PreviousPiBindings = append(ct.PreviousPiBindings, *binding)
+			ct.PiBinding = nil
+		} else if a.demo && ct.SessionID != "" {
 			ct.PreviousSessions = append(ct.PreviousSessions, ct.SessionID)
 		}
 		ct.SessionID = ""
@@ -254,7 +267,6 @@ func (a *appModel) saveContactProfileDraftFor(contactID string, draft profileDra
 	}
 	if err := a.persist(); err != nil {
 		*ct = previous
-		ct.PreviousSessions = previousSessions
 		if a.store != nil {
 			a.store.state = oldState
 		}
@@ -266,7 +278,7 @@ func (a *appModel) saveContactProfileDraftFor(contactID string, draft profileDra
 	}
 	if editor != nil {
 		editor.SetProfile(draft)
-		editor.HasConversation = ct.SessionID != ""
+		editor.HasConversation = ct.PiBinding != nil || a.demo && ct.SessionID != ""
 		editor.Status = profileNoticeSavedDefaults
 		if startNew {
 			editor.HasConversation = false
@@ -279,6 +291,12 @@ func (a *appModel) saveContactProfileDraftFor(contactID string, draft profileDra
 func (a *appModel) archiveContact(contactID string) bool {
 	ct := a.contactByID(contactID)
 	if ct == nil || ct.Archived {
+		return false
+	}
+	if !a.demo && a.piDataReadOnly() {
+		if editor := a.profileEditorFor(contactID); editor != nil {
+			editor.SetError(profileNoticePiLegacy)
+		}
 		return false
 	}
 	if !a.demo && a.ensureContactStore() != nil {
@@ -320,6 +338,12 @@ func (a *appModel) archiveContact(contactID string) bool {
 func (a *appModel) restoreContact(contactID string) bool {
 	ct := a.contactByID(contactID)
 	if ct == nil || !ct.Archived {
+		return false
+	}
+	if !a.demo && a.piDataReadOnly() {
+		if editor := a.profileEditorFor(contactID); editor != nil {
+			editor.SetError(profileNoticePiLegacy)
+		}
 		return false
 	}
 	if !a.demo && a.ensureContactStore() != nil {
@@ -364,22 +388,6 @@ func (a *appModel) visibleContactIndices() []int {
 	return out
 }
 
-func (a *appModel) contactHistorySessionIDs(ct *contact) []string {
-	ids := make([]string, 0, 1+len(ct.PreviousSessions))
-	seen := map[string]bool{}
-	if ct.SessionID != "" {
-		ids = append(ids, ct.SessionID)
-		seen[ct.SessionID] = true
-	}
-	for _, id := range ct.PreviousSessions {
-		if id != "" && !seen[id] {
-			ids = append(ids, id)
-			seen[id] = true
-		}
-	}
-	return ids
-}
-
 func (a *appModel) historyAsyncStarted() {
 	a.contactHistoryInFlight++
 }
@@ -393,7 +401,6 @@ func (a *appModel) historyAsyncFinished() {
 	}
 }
 
-// Bind results to the contact, Runtime generation and query that started them.
 func (a *appModel) searchContactHistoryAsync(query string) {
 	if a.shutdownStarted {
 		return
@@ -405,7 +412,12 @@ func (a *appModel) searchContactHistoryAsync(query string) {
 		a.contactHistoryErrorDetail = ""
 		return
 	}
-	if ct == nil || a.rt == nil || a.runtimeStatus != runtimeStateReady {
+	if a.piDataReadOnly() {
+		a.contactHistoryError = historyNoticePiLegacy
+		a.contactHistoryErrorDetail = ""
+		return
+	}
+	if ct == nil || a.pi == nil {
 		a.contactHistoryError = historyNoticeRuntime
 		a.contactHistoryErrorDetail = ""
 		return
@@ -414,9 +426,8 @@ func (a *appModel) searchContactHistoryAsync(query string) {
 	a.contactHistoryDetailGen++
 	generation := a.contactHistoryGen
 	contactID := ct.ID
-	rt, runtimeGeneration := a.rt, a.connectionGeneration
-	sessionIDs := a.contactHistorySessionIDs(ct)
-	scopeIndex := a.issueToolScopeIndexSnapshot()
+	h, hostGeneration := a.pi, a.connectionGeneration
+	bindings := ct.piHistoryBindings()
 	a.contactHistoryBusy = true
 	a.contactHistoryDetailBusy = false
 	a.contactHistoryFull = nil
@@ -424,17 +435,18 @@ func (a *appModel) searchContactHistoryAsync(query string) {
 	a.contactHistoryErrorDetail = ""
 	a.historyAsyncStarted()
 	go func() {
-		result := a.searchContactHistory(rt, sessionIDs, query, scopeIndex)
+		result := a.searchContactHistory(h, bindings, query)
 		a.updateUI(func() {
-			a.historyAsyncFinished()
-			if a.rt != rt || a.connectionGeneration != runtimeGeneration || generation != a.contactHistoryGen || a.selectedContact().ID != contactID {
+			defer a.historyAsyncFinished()
+			if a.pi != h || a.connectionGeneration != hostGeneration || generation != a.contactHistoryGen ||
+				a.contactByID(contactID) != ct || a.selectedContact() != ct {
 				return
 			}
 			a.contactHistory = &result
 			a.contactHistoryBusy = false
 			if len(result.Failures) > 0 {
 				a.contactHistoryError = historyNoticePartial
-				a.contactHistoryErrorDetail = ""
+				a.contactHistoryErrorDetail = a.connectionSafeMessage(result.Failures[0].Err)
 			}
 		})
 	}()
@@ -445,26 +457,30 @@ func (a *appModel) openContactHistoryMatch(match contactHistoryMatch) bool {
 		return false
 	}
 	ct := a.selectedContact()
-	if ct == nil || a.rt == nil || a.runtimeStatus != runtimeStateReady {
+	if a.piDataReadOnly() {
+		a.contactHistoryError = historyNoticePiLegacy
+		a.contactHistoryErrorDetail = ""
+		return false
+	}
+	if ct == nil || a.pi == nil {
 		a.contactHistoryError = historyNoticeRuntime
 		a.contactHistoryErrorDetail = ""
 		return false
 	}
-	inScope := false
-	for _, sessionID := range a.contactHistorySessionIDs(ct) {
-		if sessionID == match.SessionID {
-			inScope = true
+	bindings := ct.piHistoryBindings()
+	var binding *piConversationBinding
+	for i := range bindings {
+		if bindings[i].Context.SessionRef == match.SessionID {
+			binding = &bindings[i]
 			break
 		}
 	}
-	if !inScope {
+	if binding == nil {
 		a.contactHistoryError = historyNoticeNotSaved
 		a.contactHistoryErrorDetail = ""
 		return false
 	}
-	contactID := ct.ID
-	rt, runtimeGeneration := a.rt, a.connectionGeneration
-	scopeIndex := a.issueToolScopeIndexSnapshot()
+	h, hostGeneration := a.pi, a.connectionGeneration
 	searchGen := a.contactHistoryGen
 	a.contactHistoryDetailGen++
 	detailGen := a.contactHistoryDetailGen
@@ -474,16 +490,17 @@ func (a *appModel) openContactHistoryMatch(match contactHistoryMatch) bool {
 	a.contactHistoryErrorDetail = ""
 	a.historyAsyncStarted()
 	go func() {
-		records, _, err := a.historyAllFor(rt, match.SessionID)
+		projection, err := h.loadPiHistory(context.Background(), *binding)
 		var full *contactHistoryFull
 		errorText := ""
 		if err != nil {
 			errorText = historyNoticeReadFailed
 		} else {
-			for _, entry := range parseHistoryWithIssueToolScopeFilter(match.SessionID, records, nil, scopeIndex).entries {
+			for _, entry := range projection.entries {
 				if entry.ID == match.EntryID {
 					full = &contactHistoryFull{
-						Origin: historyOriginSaved, SessionID: match.SessionID, EntryID: match.EntryID, Date: entry.Date,
+						WorkingDirectory: binding.Selection.CWD,
+						Origin:           historyOriginSaved, SessionID: match.SessionID, EntryID: entry.ID, Date: entry.Date,
 						From: entry.From, Text: entry.Text, Context: entry.Context,
 					}
 					break
@@ -493,31 +510,21 @@ func (a *appModel) openContactHistoryMatch(match contactHistoryMatch) bool {
 				errorText = historyNoticeMoved
 			}
 		}
-		if full != nil {
-			if config, configErr := rt.connectionConfig(match.SessionID); configErr == nil {
-				full.WorkingDirectory = config.EffectiveConfig.WorkingDirectory
-			}
-		}
 		a.updateUI(func() {
 			defer a.historyAsyncFinished()
-			a.applyContactHistoryFull(rt, runtimeGeneration, contactID, searchGen, detailGen, full, errorText, err)
+			a.applyContactHistoryFull(h, hostGeneration, ct, searchGen, detailGen, full, errorText, err, projection.detail)
 		})
 	}()
 	return true
 }
 
-func (a *appModel) applyContactHistoryFull(rt *runtimeClient, runtimeGeneration int, contactID string,
-	searchGen, detailGen int, full *contactHistoryFull, errorText string, readErr error) {
-	if a.rt != rt || a.connectionGeneration != runtimeGeneration ||
+func (a *appModel) applyContactHistoryFull(h *piAppHost, hostGeneration int, ct *contact,
+	searchGen, detailGen int, full *contactHistoryFull, errorText string, readErr error, projectionDetail string) {
+	if a.pi != h || a.connectionGeneration != hostGeneration ||
 		a.contactHistoryGen != searchGen || a.contactHistoryDetailGen != detailGen ||
-		a.selectedContact().ID != contactID {
+		a.contactByID(ct.ID) != ct || a.selectedContact() != ct {
 		return
 	}
-	// A saved-message click is allowed to keep an inline model/task-context
-	// carrier that was already open when the request started. Any accepted
-	// model/context entry after the request cancels through
-	// cancelHistoryFullDisplay and invalidates detailGen; a refused entry does
-	// not.
 	carrierOK := a.aux == "" || a.composerInlineAux()
 	if !a.detailIs(detailHistory) || !carrierOK || a.settingsOpen {
 		a.contactHistoryDetailBusy = false
@@ -527,11 +534,15 @@ func (a *appModel) applyContactHistoryFull(rt *runtimeClient, runtimeGeneration 
 	if errorText != "" {
 		a.contactHistoryError = errorText
 		if readErr != nil {
-			a.contactHistoryErrorDetail = a.connectionRuntimeMessage(readErr)
+			a.contactHistoryErrorDetail = a.connectionSafeMessage(readErr)
 		} else {
 			a.contactHistoryErrorDetail = ""
 		}
 		return
+	}
+	if projectionDetail != "" {
+		a.contactHistoryError = historyNoticePartial
+		a.contactHistoryErrorDetail = projectionDetail
 	}
 	a.contactHistoryFull = full
 	a.historyFullScroll = ui.ScrollState{}
@@ -543,8 +554,17 @@ func (a *appModel) openHistoryEntryFull(e historyEntry) {
 	if ct == nil {
 		return
 	}
+	if !a.demo && (a.piDataReadOnly() || ct.PiBinding == nil) {
+		a.contactHistoryError = historyNoticePiLegacy
+		a.contactHistoryErrorDetail = ""
+		return
+	}
+	workingDirectory, sessionID := ct.SessionWorkingDir, ct.SessionID
+	if binding := ct.PiBinding; binding != nil {
+		workingDirectory, sessionID = binding.Selection.CWD, binding.Context.SessionRef
+	}
 	a.contactHistoryFull = &contactHistoryFull{
-		WorkingDirectory: ct.SessionWorkingDir, Origin: historyOriginLoaded, SessionID: ct.SessionID, EntryID: e.ID, Date: e.Date, From: e.From,
+		WorkingDirectory: workingDirectory, Origin: historyOriginLoaded, SessionID: sessionID, EntryID: e.ID, Date: e.Date, From: e.From,
 		Text: e.Text, Context: cloneTaskContextItems(e.Context),
 	}
 	a.historyFullScroll = ui.ScrollState{}

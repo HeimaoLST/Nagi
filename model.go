@@ -110,6 +110,8 @@ type contact struct {
 	Archived              bool
 	ArchivedAt            int64
 	PreviousSessions      []string
+	PiBinding             *piConversationBinding
+	PreviousPiBindings    []piConversationBinding
 	Context               taskContext
 	replyIndex            int
 	list                  ui.ListState
@@ -266,6 +268,7 @@ type appModel struct {
 	demo                       bool
 	store                      *contactStore
 	rt                         *runtimeClient
+	pi                         *piAppHost
 	runtimeStatus              string
 	runtimeErr                 string
 	runtimeErrKind             string
@@ -340,9 +343,6 @@ type appModel struct {
 	modelPanelErrorDetail string
 	modelOpActive         bool
 	modelOpSessionID      string
-	modelRecovery         map[string]modelRecoveryState
-
-	conversationModelForms map[string]*modelSelection
 
 	// Layout is a GUI-wide preference, not a contact or runtime fact. Widths
 	// are persisted in the contact store; windowWidth is only the current
@@ -838,7 +838,7 @@ func (a *appModel) send(ct *contact, text string) bool {
 		return false
 	}
 	if !a.demo {
-		return a.sendRuntime(ct, text)
+		return a.sendPiConversation(ct, text)
 	}
 	if ct.Status == statusWorking {
 		return false

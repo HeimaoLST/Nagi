@@ -28,29 +28,6 @@ func connectionConfigPath(storePath string) string {
 	return filepath.Join(filepath.Dir(storePath), "connection.json")
 }
 
-func externalConnectionSource(workDir string) bool {
-	if strings.TrimSpace(os.Getenv("API_KEY")) != "" {
-		return true
-	}
-	if strings.TrimSpace(os.Getenv("SAKI_RUNTIME_CONFIG")) != "" {
-		return true
-	}
-	dir, err := filepath.Abs(workDir)
-	if err != nil {
-		return false
-	}
-	for {
-		if _, err := os.Stat(filepath.Join(dir, ".env")); err == nil {
-			return true
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			return false
-		}
-		dir = parent
-	}
-}
-
 func readConnectionStartup(storePath string, workDir string) connectionStartup {
 	startup := connectionStartup{Path: connectionConfigPath(storePath)}
 	config, err := loadConnectionConfig(startup.Path)
@@ -61,11 +38,8 @@ func readConnectionStartup(storePath string, workDir string) connectionStartup {
 	}
 	if errors.Is(err, os.ErrNotExist) {
 		startup.Missing = true
-		startup.External = externalConnectionSource(workDir)
-		if !startup.External {
-			initial := defaultConnectionConfig("")
-			startup.FormConfig = &initial
-		}
+		initial := defaultConnectionConfig("")
+		startup.FormConfig = &initial
 		startup.LoadErr = nil
 		return startup
 	}
@@ -85,8 +59,10 @@ func contactsFromStore(store *contactStore) []*contact {
 			Workspace: stored.Workspace, BuiltinTools: cloneBuiltinTools(stored.BuiltinTools),
 			SessionID: stored.SessionID, Draft: stored.Draft,
 			Archived: stored.Archived, ArchivedAt: stored.ArchivedAt,
-			PreviousSessions: append([]string(nil), stored.PreviousSessions...),
-			Status:           statusReady, WorkLabel: "Preparing a reply",
+			PreviousSessions:   append([]string(nil), stored.PreviousSessions...),
+			PiBinding:          clonePiConversationBinding(stored.PiBinding),
+			PreviousPiBindings: stored.PreviousPiBindings,
+			Status:             statusReady, WorkLabel: "Preparing a reply",
 		}
 		ct.Issues = issuesForStoredContact(store.state.Issues, ct.ID)
 		if stored.SelectedIssueID != "" {
@@ -246,6 +222,10 @@ func (a *appModel) saveAndApplyConnection(config connectionConfig) {
 func (a *appModel) saveConnectionWithApply(config connectionConfig, applyAfterSave bool) {
 	a.ensureConnectionForm()
 	form := a.connectionForm
+	if a.piDataReadOnly() {
+		form.Error = "Legacy product data is read-only until its history policy is selected."
+		return
+	}
 	if form.Busy || a.shutdownStarted || a.dataRecoveryBlocksChanges() {
 		return
 	}
@@ -341,11 +321,13 @@ func (a *appModel) connectionReloadBlocked() string {
 	if a.store == nil || a.localSaveErr != "" {
 		return connBlockedStore
 	}
-	if runtimeHasExited(a.rt) {
-		return ""
+	if a.piDataReadOnly() {
+		return connBlockedStore
 	}
-	if a.activeTaskCount() > 0 {
-		return connBlockedActiveWork
+	for _, ct := range a.contacts {
+		if ct.ActiveTaskID != "" || ct.SendState == sendSubmitting || ct.SendState == sendAccepted {
+			return connBlockedActiveWork
+		}
 	}
 	for _, ct := range a.contacts {
 		for _, issue := range ct.Issues {
@@ -365,178 +347,12 @@ func (a *appModel) applyConnection() {
 	}
 	if reason := a.connectionReloadBlocked(); reason != "" {
 		form.ReloadBlocked = reason
-		form.Error = ""
-		form.ErrorDetail = ""
-		form.Busy = false
 		return
 	}
 	form.ReloadBlocked = ""
 	form.Error = ""
 	form.ErrorDetail = ""
-	if a.issueToolErr != "" {
-		if err := a.startIssueToolService(); err != nil {
-			a.issueToolErr = err.Error()
-		}
-	}
-	form.Busy = true
-	form.Status = connStatusChecking
-	a.connectionApplying = true
-	oldRT := a.rt
-	oldLaunch := a.connectionLaunch
-	path := a.connectionPath
-	sessionDir := a.sessionDir
-	gen := a.connectionGeneration + 1
-	go a.applyConnectionWorker(gen, path, sessionDir, oldRT, oldLaunch, a.issueToolLaunchSource())
-}
-
-func (a *appModel) applyConnectionWorker(gen int, path, sessionDir string, oldRT *runtimeClient, oldLaunch *connectionLaunch, toolSource *runtimeToolSource) {
-	fail := func(kind, detail string) {
-		a.updateUI(func() {
-			a.connectionApplying = false
-			a.connectionForm.Busy = false
-			a.connectionForm.Status = ""
-			a.connectionForm.Error = kind
-			a.connectionForm.ErrorDetail = a.redactConnectionText(detail)
-			if a.shutdownStarted {
-				a.finishShutdown()
-			}
-		})
-	}
-	config, err := loadConnectionConfig(path)
-	if err != nil {
-		fail(connErrorApplyConfig, err.Error())
-		return
-	}
-	binary := findRuntimeBinary()
-	a.updateUI(func() {
-		if a.rt == nil {
-			a.runtimeHelperChecked = true
-			a.runtimeBinary = binary
-		}
-	})
-	if binary == "" {
-		fail(connErrorHelperMissing, "")
-		return
-	}
-	launch, err := prepareConnectionLaunchWithTools(config, os.Environ(), sessionDir, os.TempDir(), toolSource)
-	if err != nil {
-		fail(connErrorPrepare, err.Error())
-		return
-	}
-	ready := make(chan runtimeReady, 1)
-	rt, err := startRuntime(runtimeOptions{
-		Binary: binary, Dir: launch.Dir, Env: launch.Env,
-		Handlers: a.runtimeHandlers(gen, ready),
-	})
-	if err != nil {
-		launch.Cleanup()
-		fail(connErrorStart, err.Error())
-		return
-	}
-	var readyValue runtimeReady
-	select {
-	case readyValue = <-ready:
-	case <-rt.done:
-		launch.Cleanup()
-		fail(connErrorExitedBeforeReady, "")
-		return
-	case <-time.After(runtimeControlTimeout):
-		_ = rt.shutdown()
-		launch.Cleanup()
-		fail(connErrorNotReady, "")
-		return
-	}
-	connections, err := rt.connections()
-	if err != nil || len(connections) != 1 || connections[0].ID != connectionID {
-		_ = rt.shutdown()
-		launch.Cleanup()
-		fail(connErrorNotExposed, "")
-		return
-	}
-	select {
-	case <-rt.done:
-		launch.Cleanup()
-		fail(connErrorExitedWhileChecking, "")
-		return
-	default:
-	}
-	installed := false
-	a.runOnUI(func() {
-		if runtimeHasExited(rt) {
-			return
-		}
-		installed = true
-		a.connectionGeneration = gen
-		a.modelRecovery = nil
-		a.modelForm = nil
-		a.conversationModelForms = nil
-		a.modelPanelKind = ""
-		a.modelPanelSessionID = ""
-		a.modelPanelLabel = ""
-		a.settingsReturnModel = nil
-		a.modelOpenToken++
-		a.rt = rt
-		a.connectionLaunch = launch
-		a.connectionEffective = &config
-		a.connectionManaged = true
-		a.connectionLegacy = false
-		if toolSource != nil {
-			a.issueToolErr = ""
-		}
-		a.workDir = config.WorkingDirectory
-		a.runtimeBinary = binary
-		a.runtimeStatus = runtimeStateReady
-		a.runtimeAPI = readyValue.API
-		a.runtimeHandshake = true
-		a.runtimeErr = ""
-		a.runtimeErrKind = ""
-		a.runtimeStage = ""
-		a.runtimeHint = ""
-		a.runtimeHintKind = ""
-		a.runtimeHintArgs = nil
-		a.connectionForm.Error = ""
-		a.connectionForm.ReloadBlocked = ""
-		a.runtimeCapabilitiesLoaded = false
-		a.runtimeMaxActiveTasks = 0
-		a.runtimeCapabilitiesErr = ""
-		a.runtimeBuiltinTools = nil
-		a.runtimeBuiltinToolsLoaded = false
-		a.runtimeBuiltinToolsLoading = false
-		a.runtimeBuiltinToolsErr = ""
-	})
-	if !installed {
-		launch.Cleanup()
-		fail(connErrorExitedDuringInstall, "")
-		return
-	}
-	if oldRT != nil {
-		_ = oldRT.shutdown()
-	}
-	if oldLaunch != nil {
-		_ = oldLaunch.Cleanup()
-	}
-	a.runOnUI(func() {
-		a.connectionApplying = false
-		a.connectionForm.Busy = false
-		if a.runtimeStatus != runtimeStateReady {
-			a.connectionForm.Error = connErrorApplyConfig
-			a.connectionForm.ErrorDetail = a.runtimeErr
-			a.connectionForm.Status = ""
-		} else {
-			a.connectionForm.Status = connStatusApplied
-		}
-		if !a.shutdownStarted && a.runtimeStatus == runtimeStateReady {
-			a.restoreContacts(rt, gen)
-			a.restoreIssueWorks(rt, gen)
-			a.startCapabilitiesLoad(rt, gen)
-			if a.connectionManaged {
-				a.startBuiltinToolsLoad(rt, gen)
-			}
-		}
-		if a.shutdownStarted {
-			a.finishShutdown()
-		}
-	})
+	a.startPiHost()
 }
 
 func (a *appModel) runOnUI(fn func()) {
@@ -551,17 +367,7 @@ func (a *appModel) runOnUI(fn func()) {
 func (a *appModel) testConnection(config connectionConfig) {
 	a.ensureConnectionForm()
 	form := a.connectionForm
-	if form.Busy || a.shutdownStarted || a.dataRecoveryBlocksChanges() {
-		return
-	}
-	binary := findRuntimeBinary()
-	if a.rt == nil {
-		a.runtimeHelperChecked = true
-		a.runtimeBinary = binary
-	}
-	if binary == "" {
-		form.Error = connErrorHelperMissing
-		form.ErrorDetail = ""
+	if form.Busy || a.shutdownStarted || a.dataRecoveryBlocksChanges() || a.piDataReadOnly() {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
@@ -572,7 +378,7 @@ func (a *appModel) testConnection(config connectionConfig) {
 	form.ErrorDetail = ""
 	form.Status = connStatusTesting
 	go func() {
-		result, err := probeConnection(ctx, binary, config, os.Environ(), os.TempDir())
+		err := probePiConnection(ctx, config)
 		cancel()
 		a.updateUI(func() {
 			a.connectionTesting = false
@@ -589,9 +395,7 @@ func (a *appModel) testConnection(config connectionConfig) {
 				return
 			}
 			form.Status = connStatusTestCompleted
-			form.StatusArgs = []string{result.Config.EffectiveConfig.Model, result.Connection.Endpoint,
-				fmt.Sprintf("%d", result.Config.EffectiveConfig.Compaction.ContextTokens),
-				fmt.Sprintf("%d", result.Config.EffectiveConfig.Compaction.OutputTokens)}
+			form.StatusArgs = []string{config.Model, config.Endpoint, fmt.Sprint(config.ContextTokens), fmt.Sprint(config.OutputTokens)}
 			form.Error = ""
 		})
 	}()
@@ -703,20 +507,6 @@ func (a *appModel) connectionTaskFinishedDetail(payload *runtimeEvent) string {
 	return taskFinishedDetail(&copyPayload)
 }
 
-func (a *appModel) configuredConversationCreate(rt *runtimeClient, configured bool, workspace, system string, builtin *[]string, issueTools bool) (runtimeSession, error) {
-	if configured {
-		selection, err := runtimeConversationSelection(rt, builtin, issueTools)
-		if err != nil {
-			return runtimeSession{}, err
-		}
-		return rt.createConfiguredConversationSession(workspace, system, selection)
-	}
-	if builtin != nil {
-		return runtimeSession{}, errors.New("Built-in tool selection requires a managed Nagi connection; save and Apply a connection before creating a new conversation.")
-	}
-	return rt.createSession(workspace, system)
-}
-
 func (a *appModel) configuredWorkCreate(rt *runtimeClient, configured bool, workspace, system string, builtin *[]string, issueTools bool) (runtimeSession, error) {
 	if configured {
 		selection, err := runtimeWorkSelection(rt, builtin, issueTools)
@@ -771,6 +561,18 @@ func (c *runtimeClient) createConfiguredSessionWithTools(workingDir, systemPromp
 // their final UI callbacks; those callbacks re-enter this function.
 func (a *appModel) finishShutdown() {
 	if a.quitReady || a.shutdownDrainStarted || (a.dataRecovery != nil && a.dataRecovery.inFlight) || a.connectionSaveInFlight || a.connectionApplying || a.connectionTesting || a.modelOpActive || a.contactHistoryInFlight > 0 || a.resultInFlight > 0 || a.submissionInFlight > 0 || a.issueToolReleaseInFlight > 0 || a.metadataInFlight > 0 || (a.themeImport != nil && a.themeImport.installInFlight) {
+		return
+	}
+	if a.pi != nil {
+		for _, ct := range a.contacts {
+			if ct.ActiveTaskID != "" || ct.SendState == sendSubmitting {
+				return
+			}
+		}
+		a.shutdownDrainStarted = true
+		a.runtimeStatus = runtimeStateDraining
+		host := a.pi
+		go a.finishPiShutdown(host)
 		return
 	}
 	if a.rt == nil {

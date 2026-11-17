@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
@@ -263,6 +264,21 @@ func (c *Client) Wait(ctx context.Context) (ProcessOutcome, error) {
 		defer c.mu.Unlock()
 		return c.outcome, ctx.Err()
 	}
+}
+
+// Kill force-ends this client's owned worker and waits within ctx. A reaped
+// worker can have a nonzero exit and error; this does not prove graceful drain
+// or descendant termination. Callback completion remains a separate observation.
+func (c *Client) Kill(ctx context.Context) (ProcessOutcome, error) {
+	c.mu.Lock()
+	c.closing = true
+	c.mu.Unlock()
+	killErr := c.cmd.Process.Kill()
+	if errors.Is(killErr, os.ErrProcessDone) {
+		killErr = nil
+	}
+	outcome, waitErr := c.Wait(ctx)
+	return outcome, errors.Join(killErr, waitErr)
 }
 
 func (c *Client) Done() <-chan struct{} {

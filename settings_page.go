@@ -288,7 +288,7 @@ func (a *appModel) closeSettings() {
 }
 
 func (a *appModel) connectionApplied() bool {
-	return a.rt != nil && a.runtimeStatus == runtimeStateReady && a.connectionEffective != nil
+	return a.pi != nil && a.runtimeStatus == runtimeStateReady && a.connectionEffective != nil
 }
 
 func (a *appModel) settingsLandingTab() string {

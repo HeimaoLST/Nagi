@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"strings"
 	"unicode/utf8"
 )
@@ -26,31 +28,31 @@ type contactHistoryResult struct {
 
 const contactHistoryMatchLimit = 100
 
-// Session IDs are an explicit contact-owned scope. Search never discovers
-// unrelated sessions or loads them for execution; EntryID locates the full
-// message through the same history projection used by the conversation view.
-func (a *appModel) searchContactHistory(rt *runtimeClient, sessionIDs []string, query string, scopeIndex map[string]issueToolScopeIdentity) contactHistoryResult {
+func (a *appModel) searchContactHistory(h *piAppHost, bindings []piConversationBinding, query string) contactHistoryResult {
 	query = strings.ToLower(strings.TrimSpace(query))
 	result := contactHistoryResult{}
-	seen := make(map[string]bool, len(sessionIDs))
-	for _, sessionID := range sessionIDs {
-		if sessionID == "" || seen[sessionID] {
+	seen := make(map[string]bool, len(bindings))
+	for _, binding := range bindings {
+		sessionRef := binding.Context.SessionRef
+		if seen[sessionRef] {
 			continue
 		}
-		seen[sessionID] = true
-		records, _, err := a.historyAllFor(rt, sessionID)
+		seen[sessionRef] = true
+		projection, err := h.loadPiHistory(context.Background(), binding)
 		if err != nil {
-			result.Failures = append(result.Failures, contactHistoryFailure{SessionID: sessionID, Err: err})
+			result.Failures = append(result.Failures, contactHistoryFailure{SessionID: sessionRef, Err: err})
 			continue
 		}
-		entries := parseHistoryWithIssueToolScopeFilter(sessionID, records, nil, scopeIndex).entries
-		for i := len(entries) - 1; i >= 0; i-- {
-			entry := entries[i]
+		if projection.detail != "" {
+			result.Failures = append(result.Failures, contactHistoryFailure{SessionID: sessionRef, Err: errors.New(projection.detail)})
+		}
+		for i := len(projection.entries) - 1; i >= 0; i-- {
+			entry := projection.entries[i]
 			if !strings.Contains(strings.ToLower(entry.Text), query) {
 				continue
 			}
 			result.Matches = append(result.Matches, contactHistoryMatch{
-				SessionID: sessionID, EntryID: entry.ID, Date: entry.Date, From: entry.From,
+				SessionID: sessionRef, EntryID: entry.ID, Date: entry.Date, From: entry.From,
 				Preview: contactHistoryPreview(entry.Text, query),
 			})
 			if len(result.Matches) == contactHistoryMatchLimit {

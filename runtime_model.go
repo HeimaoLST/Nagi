@@ -5,15 +5,16 @@ package main
 // through win.Update; I/O and JSON decoding stay off the UI thread.
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
 
+	"github.com/HeimaoLST/Nagi/internal/pi"
 	"github.com/HeimaoLST/Nagi/locales"
 )
 
@@ -83,7 +84,9 @@ func newRuntimeApp() (*appModel, error) {
 		a.selected = 0
 	}
 	a.bindTaskContexts()
-	a.normalizeRestoredSupplementBatches()
+	if !a.piDataReadOnly() {
+		a.normalizeRestoredSupplementBatches()
+	}
 	if a.issueToolLedger == nil {
 		a.issueToolLedger = &IssueToolOperationLedger{}
 	}
@@ -98,9 +101,6 @@ func newRuntimeApp() (*appModel, error) {
 	}
 	if a.issueToolRefresh == nil {
 		a.issueToolRefresh = map[string]issueToolRefreshMark{}
-	}
-	if err := a.startIssueToolService(); err != nil {
-		a.issueToolErr = err.Error()
 	}
 	formConfig := startup.Config
 	if formConfig == nil {
@@ -202,35 +202,6 @@ func guiWorkDir() string {
 	return "."
 }
 
-func runtimeHelperCandidates() []string {
-	exe, err := os.Executable()
-	if err != nil {
-		return nil
-	}
-	dir := filepath.Dir(exe)
-	return []string{
-		filepath.Join(dir, "Saki-runtime"),
-		filepath.Join(dir, "saki-runtime"),
-		filepath.Join(dir, "..", "Resources", "Saki-runtime"),
-		filepath.Join(dir, "..", "Resources", "Saki"),
-	}
-}
-
-func findRuntimeBinary() string {
-	if value := os.Getenv("SAKI_RUNTIME_BIN"); value != "" {
-		return value
-	}
-	for _, candidate := range runtimeHelperCandidates() {
-		if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
-			return candidate
-		}
-	}
-	if path, err := exec.LookPath("Saki"); err == nil {
-		return path
-	}
-	return ""
-}
-
 const (
 	startupHintFixConnection      = "fix-connection"
 	startupHintEnterConnection    = "enter-connection"
@@ -245,13 +216,6 @@ const (
 	startupHintHelperInstall      = "helper-install"
 	startupHintHelperInstallNone  = "helper-install-none"
 )
-
-func (a *appModel) runtimeHelperHintParts() (string, []string) {
-	if candidates := runtimeHelperCandidates(); len(candidates) > 0 {
-		return startupHintHelperInstall, []string{strings.Join(candidates, ", ")}
-	}
-	return startupHintHelperInstallNone, nil
-}
 
 const (
 	runtimeNoticeSavedNeedsRepair   = "saved-needs-repair"
@@ -422,108 +386,6 @@ func (a *appModel) childEnv() []string {
 		env = append(env, "SAKI_SESSION_DIR="+a.sessionDir)
 	}
 	return env
-}
-
-func (a *appModel) startRuntime() {
-	if a.demo || a.store == nil || a.rt != nil || a.connectionApplying {
-		return
-	}
-	if a.connectionEffective == nil && !a.connectionLegacy && a.connectionForm != nil && !a.connectionForm.HasSaved {
-		a.runtimeStatus = runtimeStateFailed
-		a.runtimeStage = "Connection configuration"
-		a.runtimeErrKind = runtimeNoticeConnectionRequired
-		a.runtimeErr = ""
-		a.runtimeHintKind = startupHintEnterConnection
-		a.runtimeHintArgs = nil
-		return
-	}
-	binary := findRuntimeBinary()
-	a.runtimeHelperChecked = true
-	if binary == "" {
-		a.runtimeStatus = runtimeStateFailed
-		a.runtimeStage = "Runtime helper"
-		a.runtimeErrKind = runtimeNoticeHelperMissing
-		a.runtimeErr = ""
-		a.runtimeHintKind, a.runtimeHintArgs = a.runtimeHelperHintParts()
-		if a.connectionForm != nil {
-			a.connectionForm.Error = connErrorHelperMissing
-			a.connectionForm.ErrorDetail = ""
-			a.connectionForm.Busy = false
-		}
-		return
-	}
-	a.runtimeBinary = binary
-	gen := a.connectionGeneration + 1
-	a.connectionGeneration = gen
-
-	var rt *runtimeClient
-	var err error
-	if a.connectionEffective != nil {
-		launch, prepareErr := prepareConnectionLaunchWithTools(*a.connectionEffective, os.Environ(), a.sessionDir, os.TempDir(), a.issueToolLaunchSource())
-		if prepareErr != nil {
-			a.runtimeStatus = runtimeStateFailed
-			a.runtimeStage = "Connection configuration"
-			a.runtimeErrKind = runtimeNoticePrepare
-			a.runtimeErr = a.connectionSafeMessage(prepareErr)
-			a.runtimeHintKind = startupHintFixThenApply
-			a.runtimeHintArgs = nil
-			if a.connectionForm != nil {
-				a.connectionForm.Error = connErrorPrepare
-				a.connectionForm.ErrorDetail = a.connectionSafeMessage(prepareErr)
-				a.connectionForm.Busy = false
-			}
-			return
-		}
-		rt, err = startRuntime(runtimeOptions{
-			Binary: binary, Dir: launch.Dir, Env: launch.Env,
-			Handlers: a.runtimeHandlers(gen, nil),
-		})
-		if err != nil {
-			launch.Cleanup()
-		} else {
-			a.connectionLaunch = launch
-			a.connectionManaged = true
-			a.connectionLegacy = false
-			a.workDir = a.connectionEffective.WorkingDirectory
-		}
-	} else if a.connectionLegacy || a.connectionForm == nil {
-		rt, err = startRuntime(runtimeOptions{
-			Binary: binary, Dir: a.workDir, Env: a.childEnv(),
-			Handlers: a.runtimeHandlers(gen, nil),
-		})
-	} else {
-		a.connectionGeneration = gen - 1
-		a.runtimeStatus = runtimeStateFailed
-		a.runtimeStage = "Connection configuration"
-		a.runtimeErrKind = runtimeNoticeConnectionRequired
-		a.runtimeErr = ""
-		a.runtimeHintKind = startupHintEnterConnection
-		a.runtimeHintArgs = nil
-		return
-	}
-	if err != nil {
-		a.runtimeStatus = runtimeStateFailed
-		a.runtimeStage = "Runtime start"
-		a.runtimeErrKind = runtimeNoticeStart
-		a.runtimeErr = a.connectionSafeMessage(err)
-		a.runtimeHintKind = startupHintHelperPath
-		a.runtimeHintArgs = []string{binary}
-		if a.connectionForm != nil {
-			a.connectionForm.Error = connErrorStart
-			a.connectionForm.ErrorDetail = a.connectionSafeMessage(err)
-			a.connectionForm.Busy = false
-		}
-		return
-	}
-	a.rt = rt
-	a.runtimeStatus = runtimeStateStarting
-	a.runtimeHandshake = false
-	a.runtimeErr = ""
-	a.runtimeErrKind = ""
-	a.runtimeStage = ""
-	a.runtimeHint = ""
-	a.runtimeHintKind = ""
-	a.runtimeHintArgs = nil
 }
 
 func (a *appModel) clearBuiltinToolCatalog() {
@@ -1148,19 +1010,36 @@ func (a *appModel) reloadIssueWork(rt *runtimeClient, runtimeGeneration int, con
 }
 
 func (a *appModel) reloadContactByID(contactID string, explicit bool) {
-	if a.rt == nil || a.shutdownStarted || a.runtimeStatus == runtimeStateDraining || a.runtimeStatus == runtimeStateExited {
-		return
-	}
 	ct := a.contactByID(contactID)
-	if ct == nil || ct.SessionID == "" {
+	if a.pi == nil || a.shutdownStarted || ct == nil || ct.PiBinding == nil {
 		return
 	}
 	ct.historyGen++
-	gen := ct.historyGen
-	sessionID := ct.SessionID
-	rt, runtimeGeneration := a.rt, a.connectionGeneration
+	historyGen := ct.historyGen
+	host, binding := a.pi, *clonePiConversationBinding(ct.PiBinding)
 	a.historyAsyncStarted()
-	go a.reloadSession(rt, runtimeGeneration, contactID, sessionID, gen, explicit)
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		projection, err := host.loadPiHistory(ctx, binding)
+		cancel()
+		a.updateUI(func() {
+			defer a.historyAsyncFinished()
+			ct := a.contactByID(contactID)
+			if a.pi != host || ct == nil || ct.historyGen != historyGen || ct.PiBinding == nil || ct.PiBinding.Context.ContextID != binding.Context.ContextID {
+				return
+			}
+			if err != nil {
+				ct.LoadErr = a.connectionSafeMessage(err)
+				ct.Unavailable = ct.LoadErr
+				ct.Loaded = false
+				return
+			}
+			ct.Messages, ct.History = projection.messages, projection.entries
+			ct.Loaded, ct.LoadErr, ct.Unavailable = true, "", ""
+			ct.setStatusDetail(projection.detail, "")
+			ct.HistoryDirty = false
+		})
+	}()
 }
 
 func (a *appModel) reloadSession(rt *runtimeClient, runtimeGeneration int, contactID, sessionID string, gen int, explicit bool) {
@@ -2015,7 +1894,7 @@ const (
 )
 
 func (a *appModel) runtimeAvailableForView() bool {
-	return a.demo || (a.rt != nil && a.runtimeStatus == runtimeStateReady)
+	return a.demo || (a.pi != nil && a.runtimeStatus == runtimeStateReady)
 }
 
 func (a *appModel) connectionViewState() connectionViewState {
@@ -2025,10 +1904,10 @@ func (a *appModel) connectionViewState() connectionViewState {
 	if a.connectionApplying {
 		return connectionViewApplying
 	}
-	if a.rt != nil && a.runtimeStatus == runtimeStateReady {
+	if a.pi != nil && a.runtimeStatus == runtimeStateReady {
 		return connectionViewHealthy
 	}
-	if a.rt != nil && a.runtimeStatus == runtimeStateStarting {
+	if a.pi != nil && a.runtimeStatus == runtimeStateStarting {
 		return connectionViewConnecting
 	}
 	if a.connectionSaved != nil && (a.connectionEffective == nil || *a.connectionSaved != *a.connectionEffective) {
@@ -2166,11 +2045,8 @@ func (a *appModel) canSend(ct *contact) string {
 	if a.connectionApplying {
 		return blockApplying
 	}
-	if a.rt == nil || a.runtimeStatus != runtimeStateReady {
+	if a.pi == nil || a.piDataReadOnly() || a.runtimeStatus != runtimeStateReady {
 		return blockRuntimeNotReady
-	}
-	if status := a.modelSessionStatus(ct.SessionID); status != "" {
-		return status
 	}
 	if ct.SessionID != "" && !ct.Loaded {
 		return blockHistoryLoading
@@ -2196,6 +2072,9 @@ func (a *appModel) canStartIssue(ct *contact, issue *productIssue) string {
 	}
 	if a.demo {
 		return ""
+	}
+	if a.pi != nil {
+		return "Activity execution is unavailable in this integration stage."
 	}
 	if a.connectionApplying {
 		return blockApplying
@@ -2230,6 +2109,10 @@ func (a *appModel) canStartIssue(ct *contact, issue *productIssue) string {
 func (a *appModel) startIssueTask(ct *contact, issue *productIssue, execution *issueExecution, prompt string) bool {
 	if a.shutdownStarted {
 		issue.Work.setSendError("The app is shutting down.", "shutdown", "")
+		return false
+	}
+	if a.pi != nil {
+		issue.Work.setSendError("Activity execution is unavailable in this integration stage.", "unsupported-stage", "")
 		return false
 	}
 	if ct.Archived {
@@ -2637,283 +2520,28 @@ func (a *appModel) failIssueSubmit(contactID, issueID string, err error, submitt
 	})
 }
 
-func (a *appModel) sendRuntime(ct *contact, text string) bool {
-	return a.sendRuntimeForIssue(ct, text, "")
-}
-
-func (a *appModel) sendRuntimeForIssue(ct *contact, text, issueExecutionID string) bool {
-	if reason := a.canSend(ct); reason != "" {
-		ct.setSendError(sendBlockRaw(reason), reason, "")
-		// A rejected send must not consume or replace an in-flight issue
-		// association; only an admitted dispatch may change it.
-		return false
-	}
-	previousExecution := ct.pendingIssueExecution
-	ct.pendingIssueExecution = issueExecutionID
-	contactID := ct.ID
-	sessionID := ct.SessionID
-	workspace := a.effectiveContactWorkspace(ct)
-	system := a.issueToolConversationSystemPrompt(ct)
-	submittedContext := ct.Context.snapshot()
-	builtin := a.capturedBuiltinSelection(ct)
-	ct.historyGen++ // invalidate any in-flight reload
-	ct.SubmittedDraft = text
-	ct.SubmittedRev = ct.draftRev
-	ct.pendingSend = &pendingSend{Draft: text, Context: cloneTaskContextItems(submittedContext), State: "submitting"}
-	ct.SendState = sendSubmitting
-	ct.clearSendError()
-	if err := a.persist(); err != nil {
-		ct.SendState = sendIdle
-		ct.setSendError("Could not save this contact; the message was not sent. "+err.Error(), "send-contact-save", err.Error())
-		ct.pendingIssueExecution = previousExecution
-		ct.pendingSend = nil
-		return false
-	}
-	rt, configured := a.rt, a.connectionManaged
-	issueTools := a.issueToolEnabled() && a.connectionManaged
-	a.submissionAsyncStarted()
-	go a.submitTask(rt, configured, contactID, sessionID, text, workspace, system, submittedContext, newIssueToolTurnID(), issueTools, builtin)
-	return true
-}
-
-func (a *appModel) submitTask(rt *runtimeClient, configured bool, contactID, sessionID, text, workspace, system string, context []taskContextItem, turnID string, issueTools bool, builtin *[]string) {
-	createdSession := false
-	if sessionID == "" {
-		session, err := a.configuredConversationCreate(rt, configured, workspace, system, builtin, issueTools)
-		if err != nil {
-			a.failSubmit(contactID, err, false)
-			return
-		}
-		sessionID = session.SessionID
-		createdSession = true
-		// The mapping must be durably saved before task.send; Window.Update is
-		// asynchronous, so wait for the UI callback's save result.
-		saved := make(chan error, 1)
-		a.updateUI(func() {
-			ct := a.contactByID(contactID)
-			if ct == nil {
-				saved <- errors.New("contact disappeared before saving its session")
-				return
-			}
-			ct.SessionID = sessionID
-			ct.Loaded = true
-			ct.SessionState = session.State
-			if _, execution := ct.executionByID(ct.pendingIssueExecution); execution != nil {
-				execution.SessionID = sessionID
-			}
-			if session.Metadata != nil {
-				ct.SessionWorkingDir = session.Metadata.WorkingDirectory
-				ct.SessionModel = session.Metadata.Model
-				ct.SessionAPI = session.Metadata.API
-			}
-			saved <- a.persist()
-		})
-		if err := <-saved; err != nil {
-			a.failSubmit(contactID, fmt.Errorf("save session mapping: %w", err), false)
-			return
-		}
-	}
-	wireContext := taskContextInputs(context)
-	roleGuidanceAppended := false
-	if issueTools {
-		ensured, err := a.issueToolEnsureConversationSession(rt, sessionID, issueToolConversationGuidance, createdSession)
-		if err != nil {
-			a.failSubmit(contactID, err, false)
-			return
-		}
-		issueTools = ensured.Ready
-		if input, ok := issueToolRoleGuidanceInput(ensured.TaskGuidance); ok {
-			wireContext = append(wireContext, input)
-			roleGuidanceAppended = true
-		}
-	}
-	if issueTools {
-		var scope *IssueToolScope
-		var scopeErr error
-		var issueList runtimeContextInput
-		a.runOnUI(func() {
-			if a.shutdownStarted {
-				scopeErr = errors.New("app is shutting down")
-				return
-			}
-			scope, scopeErr = a.issueToolNewScope(contactID, sessionID, turnID, roleGuidanceAppended)
-			if scopeErr == nil {
-				issueList, scopeErr = a.issueToolConversationIssueList(scope)
-			}
-		})
-		if scopeErr != nil {
-			a.failSubmit(contactID, fmt.Errorf("prepare issue tool scope: %w", scopeErr), false)
-			return
-		}
-		a.runOnUI(func() {
-			if err := a.issueToolAttachPendingScope(contactID, scope.Ref); err != nil {
-				scopeErr = fmt.Errorf("attach issue tool scope: %w", err)
-			}
-		})
-		if scopeErr != nil {
-			a.failSubmit(contactID, scopeErr, false)
-			return
-		}
-		if input, ok := issueToolScopeInput(scope); ok {
-			wireContext = append(wireContext, issueList, input)
-		}
-	}
-	if err := validateRuntimeContextInputs(wireContext); err != nil {
-		a.failSubmit(contactID, fmt.Errorf("caller context plus issue tool scope: %w", err), false)
-		return
-	}
-	result, err := rt.sendTask(sessionID, text, wireContext...)
-	if err != nil {
-		a.noteIssueToolTaskError(rt, sessionID, err)
-		a.failSubmit(contactID, err, true)
-		return
-	}
-	a.updateUI(func() {
-		defer a.submissionAsyncFinished()
-		if a.rt != rt {
-			return
-		}
-		ct := a.contactByID(contactID)
-		if ct == nil || ct.SessionID != sessionID {
-			return
-		}
-		a.acceptTask(ct, text, result)
-	})
-}
-
-func (a *appModel) acceptTask(ct *contact, text string, result runtimeSendResult) {
-	var submittedContext []taskContextItem
-	scopeRef := ""
-	if ct.pendingSend != nil {
-		submittedContext = cloneTaskContextItems(ct.pendingSend.Context)
-		scopeRef = ct.pendingSend.ToolScopeRef
-	}
-	ct.historyGen++
-	ct.ActiveTaskID = result.TaskID
-	ct.LastTaskID = result.TaskID
-	ct.SendState = sendAccepted
-	ct.clearSendError()
-	a.issueToolBindTask(scopeRef, result.TaskID)
-	issueSend := ct.pendingIssueExecution != ""
-	if w := a.ensureWork(ct, result.TaskID, result.MessageID); w != nil {
-		w.State = workAccepted
-		w.Prompt = text
-	}
-	_, execution := ct.executionByID(ct.pendingIssueExecution)
-	if execution != nil && execution.ToolScopeRef != "" {
-		a.issueToolBindTask(execution.ToolScopeRef, result.TaskID)
-	}
-	if execution != nil {
-		execution.SessionID = ct.SessionID
-		execution.TaskID = result.TaskID
-		execution.MessageID = result.MessageID
-		execution.Status = issueExecutionAccepted
-		execution.Detail = ""
-		ct.pendingIssueExecution = ""
-	}
-	if !issueSend && ct.draftRev == ct.SubmittedRev && strings.TrimSpace(ct.Draft) == strings.TrimSpace(text) {
-		ct.Draft = ""
-	}
-	ct.Messages = append(ct.Messages, &message{
-		Key: "live:" + result.TaskID + ":user", Kind: msgUser, Text: text,
-		Time: nowTime(), TaskID: result.TaskID, MessageID: result.MessageID,
-		Context: submittedContext,
-	})
-	pending := ct.pendingEvents
-	ct.pendingEvents = nil
-	for _, event := range pending {
-		a.applyEvent(ct, event)
-	}
-	if err := a.persist(); err != nil {
-		if execution != nil {
-			execution.Status = issueExecutionUnknown
-			execution.Detail = "Task was accepted, but its issue association could not be saved: " + err.Error()
-		}
-		if ct.pendingSend != nil {
-			ct.pendingSend.State = "unknown"
-		}
-		ct.setSendError("Task accepted, but its issue association could not be saved; reload before retrying.", "send-issue-association", "")
-	} else {
-		needSave := ct.pendingSend != nil
-		ct.pendingSend = nil
-		previous := ct.Context.snapshot()
-		if ct.Context.clearSubmitted(submittedContext) > 0 {
-			needSave = true
-		}
-		if needSave {
-			if err := a.persist(); err != nil {
-				ct.Context.items = previous
-				ct.setSendError("Task accepted, but its sent context could not be cleared from the next-message draft; reload before sending again.", "send-draft-not-cleared", "")
-			}
-		}
-	}
-}
-
-func (a *appModel) failSubmit(contactID string, err error, submitted bool) {
-	a.updateUI(func() {
-		defer a.submissionAsyncFinished()
-		ct := a.contactByID(contactID)
-		if ct == nil {
-			return
-		}
-		ct.pendingEvents = nil
-		if confirmedReject(err) {
-			ct.pendingSend = nil
-			ct.SendState = sendIdle
-			ct.setSendError(a.connectionRuntimeMessage(err), "", "")
-			a.updatePendingIssueExecution(ct, issueExecutionRejected, ct.SendError)
-			_ = a.persist()
-			return
-		}
-		ct.setSendError(a.connectionRuntimeMessage(err), "", "")
-		if submitted {
-			if ct.pendingSend == nil {
-				ct.pendingSend = &pendingSend{Draft: ct.SubmittedDraft, Context: nil, State: "unknown"}
-			}
-			ct.pendingSend.State = "unknown"
-			ct.SendState = sendUnknown
-			detail := ct.SendError
-			ct.setSendError("Delivery not confirmed ("+detail+"). Reload to check before sending again.", "", "")
-			a.updatePendingIssueExecution(ct, issueExecutionUnknown, ct.SendError)
-			_ = a.persist()
-			return
-		}
-		ct.pendingSend = nil
-		ct.SendState = sendIdle
-		a.updatePendingIssueExecution(ct, issueExecutionNotDispatched, ct.SendError)
-		_ = a.persist()
-	})
-}
-
 func (a *appModel) cancelSelected() {
 	ct := a.selectedContact()
-	if a.rt == nil {
+	if ct != nil {
+		a.cancelRuntimeTask(ct, ct.ActiveTaskID)
+	}
+}
+
+func (a *appModel) cancelRuntimeTask(ct *contact, taskID string) {
+	if a.pi == nil || ct == nil || a.contactByID(ct.ID) != ct || ct.PiBinding == nil || taskID == "" || ct.ActiveTaskID != taskID {
 		return
 	}
-	if ct.ActiveTaskID == "" {
-		if issue := ct.selectedIssue(); issue != nil && issue.Work.ActiveTaskID != "" {
-			a.cancelIssue(issue.ID)
-		}
-		return
-	}
-	contactID, sessionID, taskID := ct.ID, ct.SessionID, ct.ActiveTaskID
-	if w := ct.activeWork(); w != nil {
-		w.State = workStopping
-		w.StopRequested = true
-		if ct.StopRequestedTasks == nil {
-			ct.StopRequestedTasks = map[string]bool{}
-		}
-		ct.StopRequestedTasks[taskID] = true
-	}
+	host, contactID, contextID := a.pi, ct.ID, ct.PiBinding.Context.ContextID
 	ct.setSendError("Cancellation requested", "send-cancelled", "")
-	rt := a.rt
 	go func() {
-		status, err := rt.cancelTask(sessionID, taskID)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		_, err := host.client.CancelRun(ctx, pi.CancelRunParams{ContextID: contextID, RunID: taskID})
+		cancel()
 		a.updateUI(func() {
-			if a.rt != rt {
-				return
+			ct := a.contactByID(contactID)
+			if a.pi == host && ct != nil && ct.ActiveTaskID == taskID && err != nil {
+				ct.setSendError(a.connectionSafeMessage(err), "", "")
 			}
-			a.applyCancelResult(contactID, taskID, status, err)
 		})
 	}()
 }
@@ -3115,13 +2743,16 @@ func (a *appModel) ensureContactStore() error {
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
-	a.store = &contactStore{path: a.storePath}
+	a.store = &contactStore{path: a.storePath, state: storedState{Version: contactStoreVersion}}
 	return nil
 }
 
 func (a *appModel) persist() error {
 	if a.demo && a.store == nil {
 		return nil
+	}
+	if a.piDataReadOnly() {
+		return errors.New("legacy product data is read-only until its history policy is selected")
 	}
 	err := a.ensureContactStore()
 	if err == nil {

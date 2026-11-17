@@ -257,3 +257,27 @@
 **Problem:** Receipt analysis tried decoding individual Go JSONL Output chunks and failed on an unterminated JSON string; partial-chunk filtering also emitted unrelated continuation data.
 **Cause or correction:** One test log message can span multiple Output events. Reassembling saved chunks by test recovered the original receipt lines without another execution.
 **Prevention:** Concatenate each test's output before splitting complete log lines and decoding bounded receipt records. Preserve raw JSONL and distinguish analysis/setup errors from test or product failures.
+
+## Preserve original input beside model context
+
+**Problem:** The worker appends named app-context suffixes to its SDK prompt. A normal conversation-history caller would otherwise display those suffixes or try stripping user text heuristically.
+**Cause or correction:** Model input and original user input are distinct. The worker can retain the original run text/context/correlation with the existing public SDK custom-entry API before prompting; no second transcript store is needed.
+**Prevention:** Project original input from proven nagi-turn-v1 metadata and retain actual public entry IDs. Do not parse engine journals, strip arbitrary user-authored tags, or label recorded input as successful execution. Validate this changed worker in a fresh external payload with the real first-use flow.
+
+## Bound isolated probe cleanup by actual reaping
+
+**Problem:** Source inspection found that a timed-out connection Test could receive busy from Shutdown while the client exposed only Shutdown/Wait, leaving its isolated worker and state unretired.
+**Cause or correction:** This was a source gap, not an observed process failure. Normal cancellation and graceful shutdown remain first; a separate owned-process Kill/wait API supplies the bounded fallback without changing busy rejection.
+**Prevention:** Exercise a held synthetic probe, preserve actual wait/error/callback outcomes and remove its state only after reaping. Do not force-cancel ordinary business work, report a killed test as successful, or infer descendant exit from the Node worker outcome.
+
+## Match actual readiness values and captured cancellation targets
+
+**Problem:** Source review found Node readiness compared against an unprefixed version and a bridge-error cancellation using the rejected incoming event's context/run IDs.
+**Cause or correction:** The worker reports process.version with its v prefix. Cancellation after a rejected event must use the admitted bridge's captured owner/context/run, not the rejected packet. Both corrections preceded execution.
+**Prevention:** Read the actual producer and admitted caller identity before implementing checks or failure handling. Validate canonical readiness and exact cancellation ownership in the frozen product E2E.
+
+## Keep machine codes out of capability notices
+
+**Problem:** A coordination brief used unsupported_stage ambiguously, and six user-visible notices included that literal machine-style prefix. A copy-only edit briefly added stray suffix characters before static parsing caught them.
+**Cause or correction:** Capability holds require plain explanatory copy; internal error codes belong only to machine contracts. The final six prefix deletions were verified by exact inverse hashes.
+**Prevention:** Specify displayed text separately from protocol codes, parse edits and verify their exact delta before freezing. Preserve the actual capability guard and reuse existing product controls.

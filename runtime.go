@@ -1,8 +1,6 @@
 package main
 
-// stdio v1 runtime client and DTOs for the confirmed #60 contract.
-// The process boundary is the only integration point: no Rust journal parsing,
-// no second model/tool loop, no SDK/plugin layer.
+// Legacy stdio runtime DTOs and client/reader code retained pending the history policy.
 
 import (
 	"bufio"
@@ -260,14 +258,6 @@ type runtimeHandlers struct {
 	OnStderr        func(string)
 }
 
-type runtimeOptions struct {
-	Binary   string
-	Args     []string
-	Dir      string
-	Env      []string
-	Handlers runtimeHandlers
-}
-
 type runtimeClient struct {
 	cmd       *exec.Cmd
 	stdin     io.WriteCloser
@@ -293,59 +283,6 @@ type runtimeClient struct {
 
 	stderrMu sync.Mutex
 	stderr   []string
-}
-
-func startRuntime(opts runtimeOptions) (*runtimeClient, error) {
-	if opts.Binary == "" {
-		return nil, errors.New("runtime binary is not configured")
-	}
-	args := opts.Args
-	if args == nil {
-		args = []string{"--stdio"}
-	}
-	cmd := exec.Command(opts.Binary, args...)
-	cmd.Dir = opts.Dir
-	cmd.Env = opts.Env
-
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return nil, err
-	}
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return nil, err
-	}
-	stdin, err := cmd.StdinPipe()
-	if err != nil {
-		return nil, err
-	}
-	c := &runtimeClient{
-		cmd:      cmd,
-		stdin:    stdin,
-		handlers: opts.Handlers,
-		pending:  make(map[string]chan runtimeResponse),
-		issued:   make(map[string]bool),
-		done:     make(chan struct{}),
-	}
-	if err := cmd.Start(); err != nil {
-		return nil, err
-	}
-	var readers sync.WaitGroup
-	readers.Add(2)
-	go func() {
-		defer readers.Done()
-		c.readStdout(stdout)
-	}()
-	go func() {
-		defer readers.Done()
-		c.readStderr(stderr)
-	}()
-	// Wait only after both pipes have been read to EOF, as StdoutPipe requires.
-	go func() {
-		readers.Wait()
-		c.finish(cmd.Wait())
-	}()
-	return c, nil
 }
 
 func (c *runtimeClient) readStdout(r io.Reader) {

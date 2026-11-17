@@ -26,26 +26,28 @@ import (
 // and explicit references to conversations replaced by Save and start new.
 // v8 adds the conversation issue-tool scope/operation ledger. v9 adds
 // persistent missing-information questions and their answer associations.
-// v1-v8 remain readable here. Older apps reject v9 instead of dropping fields.
-const contactStoreVersion = 9
+// v10 adds tagged Pi conversation bindings; earlier versions stay read-only.
+const contactStoreVersion = 10
 
 type storedContact struct {
-	ID               string            `json:"id"`
-	Name             string            `json:"name"`
-	Role             string            `json:"role,omitempty"`
-	Purpose          string            `json:"purpose,omitempty"`
-	Instructions     string            `json:"instructions,omitempty"`
-	Workspace        string            `json:"workspace,omitempty"`
-	BuiltinTools     *[]string         `json:"builtin_tools,omitempty"`
-	SessionID        string            `json:"session_id,omitempty"`
-	Draft            string            `json:"draft,omitempty"`
-	TaskContext      []taskContextItem `json:"task_context,omitempty"`
-	Archived         bool              `json:"archived,omitempty"`
-	ArchivedAt       int64             `json:"archived_at,omitempty"`
-	PreviousSessions []string          `json:"previous_sessions,omitempty"`
-	PendingSend      *pendingSend      `json:"pending_send,omitempty"`
-	SelectedIssueID  string            `json:"selected_issue_id,omitempty"`
-	UpdatedAt        int64             `json:"updated_at,omitempty"`
+	ID                 string                  `json:"id"`
+	Name               string                  `json:"name"`
+	Role               string                  `json:"role,omitempty"`
+	Purpose            string                  `json:"purpose,omitempty"`
+	Instructions       string                  `json:"instructions,omitempty"`
+	Workspace          string                  `json:"workspace,omitempty"`
+	BuiltinTools       *[]string               `json:"builtin_tools,omitempty"`
+	SessionID          string                  `json:"session_id,omitempty"`
+	Draft              string                  `json:"draft,omitempty"`
+	TaskContext        []taskContextItem       `json:"task_context,omitempty"`
+	Archived           bool                    `json:"archived,omitempty"`
+	ArchivedAt         int64                   `json:"archived_at,omitempty"`
+	PreviousSessions   []string                `json:"previous_sessions,omitempty"`
+	PiBinding          *piConversationBinding  `json:"pi_binding,omitempty"`
+	PreviousPiBindings []piConversationBinding `json:"previous_pi_bindings,omitempty"`
+	PendingSend        *pendingSend            `json:"pending_send,omitempty"`
+	SelectedIssueID    string                  `json:"selected_issue_id,omitempty"`
+	UpdatedAt          int64                   `json:"updated_at,omitempty"`
 }
 
 type storedIssueExecution struct {
@@ -197,7 +199,34 @@ func (s *contactStore) setIssueToolState(ledger *IssueToolOperationLedger, scope
 	}
 }
 
+func (s *contactStore) piDataReadOnly() bool {
+	if s == nil {
+		return false
+	}
+	if s.state.Version < contactStoreVersion {
+		return true
+	}
+	for _, ct := range s.state.Contacts {
+		if len(ct.PreviousSessions) != 0 || ct.SessionID != "" && (ct.PiBinding == nil || ct.PiBinding.Engine != "pi" || ct.PiBinding.Context.SessionRef != ct.SessionID) {
+			return true
+		}
+	}
+	for _, issue := range s.state.Issues {
+		if issue.WorkSessionID != "" || len(issue.Executions) != 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func (a *appModel) piDataReadOnly() bool {
+	return a.store != nil && a.store.piDataReadOnly()
+}
+
 func (s *contactStore) saveState() error {
+	if s.piDataReadOnly() {
+		return errors.New("legacy product data is read-only until its history policy is selected")
+	}
 	s.state.IssueToolOperations = s.issueToolLedger
 	s.state.IssueToolScopes = s.issueToolScopesList()
 	dir := filepath.Dir(s.path)
@@ -228,6 +257,9 @@ func (s *contactStore) saveState() error {
 // save writes the current in-memory contacts. It is called from the change
 // event (drafts) and from explicit product edits; it does not rewrite messages.
 func (s *contactStore) save(contacts []*contact, selected string) error {
+	if s.piDataReadOnly() {
+		return errors.New("legacy product data is read-only until its history policy is selected")
+	}
 	s.state = storedState{
 		Version:             contactStoreVersion,
 		Selected:            selected,
@@ -240,22 +272,24 @@ func (s *contactStore) save(contacts []*contact, selected string) error {
 	}
 	for _, c := range contacts {
 		storedContact := storedContact{
-			ID:               c.ID,
-			Name:             c.Name,
-			Role:             c.Role,
-			Purpose:          c.Purpose,
-			Instructions:     c.Instructions,
-			Workspace:        c.Workspace,
-			BuiltinTools:     cloneBuiltinTools(c.BuiltinTools),
-			SessionID:        c.SessionID,
-			Draft:            c.Draft,
-			TaskContext:      c.Context.snapshot(),
-			Archived:         c.Archived,
-			ArchivedAt:       c.ArchivedAt,
-			PreviousSessions: append([]string(nil), c.PreviousSessions...),
-			PendingSend:      clonePendingSend(c.pendingSend),
-			SelectedIssueID:  c.SelectedIssueID,
-			UpdatedAt:        nowMillis(),
+			ID:                 c.ID,
+			Name:               c.Name,
+			Role:               c.Role,
+			Purpose:            c.Purpose,
+			Instructions:       c.Instructions,
+			Workspace:          c.Workspace,
+			BuiltinTools:       cloneBuiltinTools(c.BuiltinTools),
+			SessionID:          c.SessionID,
+			Draft:              c.Draft,
+			TaskContext:        c.Context.snapshot(),
+			Archived:           c.Archived,
+			ArchivedAt:         c.ArchivedAt,
+			PreviousSessions:   append([]string(nil), c.PreviousSessions...),
+			PiBinding:          clonePiConversationBinding(c.PiBinding),
+			PreviousPiBindings: c.piPreviousBindings(),
+			PendingSend:        clonePendingSend(c.pendingSend),
+			SelectedIssueID:    c.SelectedIssueID,
+			UpdatedAt:          nowMillis(),
 		}
 		s.state.Contacts = append(s.state.Contacts, storedContact)
 		for _, issue := range c.Issues {
@@ -370,7 +404,7 @@ func decodeStoredState(path string, data []byte, strict bool) (storedState, erro
 func validateRecoveryState(state storedState) error {
 	fail := func(field, message string) error { return fmt.Errorf("%s: %s", field, message) }
 	if state.Version != contactStoreVersion {
-		return fail("version", "only current version 9 recovery copies are supported")
+		return fail("version", "only current version 10 recovery copies are supported")
 	}
 	selected := false
 	for i, contact := range state.Contacts {
