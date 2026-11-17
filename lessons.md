@@ -134,9 +134,9 @@
 
 ## Select the cached compiler explicitly for offline phases
 
-**Problem:** A package-only build stopped before compilation because GOTOOLCHAIN=local selected Go1.27.1; a second bootstrap attempt failed with GOSUMDB disabled.
+**Problem:** A package-only build stopped before compilation because GOTOOLCHAIN=local selected Go1.27.1; a second bootstrap attempt failed with GOSUMDB disabled. A later formatting phase probed the system1.27.1 formatter instead of using the already established cached1.27.3 executable and stopped before formatting.
 **Cause or correction:** The module requires Go1.27.3, which was already cached. Environment restrictions changed toolchain selection and verification before source compilation.
-**Prevention:** Resolve the required cached compiler path before an offline phase, put its bin directory on PATH and keep normal checksum handling. Preserve setup failures separately from compiler or behavior failures.
+**Prevention:** Resolve the required cached compiler and formatter paths before an offline phase, reuse their exact argv in subsequent owner fences, put the compiler bin directory on PATH and keep normal checksum handling. Preserve setup failures separately from format, compiler or behavior failures.
 
 ## Separate isolated declaration setup from SDK defects
 
@@ -236,9 +236,9 @@
 
 ## Discover source paths before targeted inspection
 
-**Problem:** Initial symbol searches named absent guessed question files, and later inspections assumed absent source, SDK and external recorder paths. An edit anchor was also rejected before mutation because the relevant range had not been read.
+**Problem:** Initial symbol searches named absent guessed question files, and later inspections assumed absent source, SDK, official example and external recorder paths. An edit anchor was also rejected before mutation because the relevant range had not been read.
 **Cause or correction:** Repository symbol/path discovery located the actual files; none of these failed lookups established a product defect.
-**Prevention:** Use rg --files and symbol discovery before targeted reads or edits, including SDK payloads and external evidence directories, then read the actual edit range. Pass filename patterns through quoted rg --glob filters rather than unmatched shell globs. Keep lookup/setup failures separate from compilation and behavior results.
+**Prevention:** Use rg --files and symbol discovery before targeted reads or edits, including pinned SDK examples, payloads and external evidence directories, then read the actual edit range. Do not assume an example directory from a component name. Pass filename patterns through quoted rg --glob filters rather than unmatched shell globs. Keep lookup/setup failures separate from compilation and behavior results.
 
 ## Select process tests explicitly in CI
 

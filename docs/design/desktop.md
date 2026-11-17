@@ -14,9 +14,9 @@
 | --- | --- |
 | 应用外壳 | 浅色垂直渐变#f2f2e2到#e6ebef；深色#10110e。侧栏透明地置于外壳上；外壳辅助文字使用secondary#636261，不使用tertiary。 |
 | Settings侧栏 | 默认248，导航区左右8；分类标题与导航内容共享8内缩；行占满导航组，12／16、glyph14、gap8、28可见面及既有32真实命中。返回区按源px12／py12组织，不叠加未经绑定的按钮外边框。 |
-| 主面板 | Settings frame的B区四周margin4，浅色白／深色#171814，border-tertiary，独立圆角；顶部frame header40。满宽、可收缩的主区不由正文长度决定。 |
+| 主面板 | Settings四周margin8，浅色白／深色#171814，border-tertiary，独立圆角；顶部40高的公共标题／拖动行。标题与正文采用同一居中限宽列和水平内缩，主区不由正文长度决定。 |
 | 滚动视口 | 主面板内容区内全宽／全高，滚动条归属于该视口右边界；视口自身不设正文max-width或正文左右padding。 |
-| 正文列 | 在视口内居中，border-box max-width820、padding左右32／上8／下48，故宽窗正文净宽最大756。General、Connection、Contact profile与Advanced共用同一正文列和标题容器，四周面板margin一致；标题不再额外左右缩进16。 |
+| 正文列 | 在视口内居中，border-box max-width820、四周padding32，故宽窗正文净宽最大756。General、Connection、Contact profile与Advanced共用同一正文列和标题容器；标题不再额外左右缩进16。分组四周padding16，最后操作保留可滚动的底部留白。 |
 | 章节与表单 | 四个分类统一为页面标题→章节标题→分组框→偏好行；联系人选择放在页面标题之后的第一行。偏好行以自身可用宽度决定横排／竖排，标签不加冒号，右侧控件对齐；旧会话模型覆盖分区已移除。保留真实表单、状态、草稿和动作，不以新分组增加功能或自动保存。 |
 | 语义配色 | 浅色正文#141414／secondary#636261／tertiary#838280，container#fff，章节细线#e6e6e6，primary#0d0d0d。深色正文#f2f1e8／secondary#c1bfb1／tertiary#89877a，container#171814，细线#30322d，primary#e0c65c。警告／成功／错误文字浅色分别#8a5300／#2e6b45／#b4232c，深色仍#faad14／#73cd94／#ff4d4f；原亮状态色只可用于图标、圆点。日期用中性secondary。链接浅色#2d6a4a、深色#e0c65c，均有下划线。 |
 
@@ -86,9 +86,9 @@ Input静止边界浅#8f8e8b／深#76776c，focus使用2px主色环；浅色输�
 | 角色 | 声明 → 本次基准逻辑值 |
 | --- | --- |
 | Settings sidebar | default248px／min208px；用户已有可调整宽度是状态，不冒称参考默认，不自动覆盖已存布局 |
-| Settings content | MaxWidth820px，px-8→32，pt-2→8，pb-12→48；max 不是固定宽度 |
+| Settings content | 原始声明MaxWidth820、左右32／上8／下48（D）；Nagi采用MaxWidth820、四周32（P），max不是固定宽度 |
 | section | header h-11→44、inner h-7→28、px-4→16；content mt-2→8；标题 12／18 |
-| group | 一个章节共用 border1、circular rounded-xl→12、px-4→16；不是每项一张卡 |
+| group | 一个章节共用border1、circular radius12、四周padding16；不是每项一张卡 |
 | preference row | py-3.5→上下14；底边1 dashed，末行无边；高度随说明换行，不固定截断 |
 | row composition | 偏好行自身可用宽度＜640时column/stretch，从640起row/center；不能使用整个窗口宽度。leading glyph14保留 |
 | General Appearance／Language selector | intrinsic w-fit，min120／max160；value span truncate，并保留完整可访问值／既有选项；不是整行或所有表单固定宽度 |

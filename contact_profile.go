@@ -330,7 +330,7 @@ func (e *contactProfileEditor) builtinToolsView(c *ui.Context, t *ui.Theme, edit
 func (e *contactProfileEditor) view(c *ui.Context, t *ui.Theme, actions contactProfileActions) {
 	msgs := locales.In(c.Locale())
 	editable := !e.Busy && !e.Archived
-	ui.Column(c).Gap(10).Children(func() {
+	ui.Column(c).FillWidth().MinWidth(0).Gap(8).Children(func() {
 		ui.Text(c, msgs.ProfileSaveIntro()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 		if reason := e.activityReason(); reason != "" {
 			ui.Text(c, profileNoticeText(msgs, reason)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Warning)
@@ -339,44 +339,47 @@ func (e *contactProfileEditor) view(c *ui.Context, t *ui.Theme, actions contactP
 			ui.Text(c, msgs.ProfileArchivedBadge()).FontSize(typeLabel).FontWeight(400).FixedLineHeight(lineLabel).TextColor(t.Warning)
 		}
 
-		ui.Text(c, msgs.FieldName()).FontSize(typeLabel).FontWeight(400).FixedLineHeight(lineLabel).TextColor(t.Text)
-		name := preferenceInput(c, &e.Draft.Name, e.Errors["Name"] != "").Label(msgs.FieldNameAccessible()).Placeholder(msgs.FieldNamePlaceholder()).Disabled(!editable)
-		if e.focusField == "Name" {
-			name.Focus()
-			e.focusField = ""
-		}
-		if message := e.Errors["Name"]; message != "" {
-			ui.Text(c, profileNoticeText(msgs, message)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Danger)
-		}
-		ui.Text(c, msgs.ProfilePurpose()).FontSize(typeLabel).FontWeight(400).FixedLineHeight(lineLabel).TextColor(t.Text)
-		formTextArea(c, &e.Draft.Purpose, false).Label(msgs.FieldPurposeAccessible()).Placeholder(msgs.ProfilePurpose()).Disabled(!editable)
-		ui.Text(c, msgs.ProfileInstructions()).FontSize(typeLabel).FontWeight(400).FixedLineHeight(lineLabel).TextColor(t.Text)
-		formTextArea(c, &e.Draft.Instructions, false).Label(msgs.FieldInstructionsAccessible()).Placeholder(msgs.ProfileInstructions()).Disabled(!editable)
-		ui.Text(c, msgs.ProfileWorkspace()).FontSize(typeLabel).FontWeight(400).FixedLineHeight(lineLabel).TextColor(t.Text)
-		workspace := preferenceInput(c, &e.Draft.Workspace, e.Errors["Workspace"] != "").Label(msgs.FieldWorkspaceAccessible()).Placeholder(msgs.FieldWorkspacePlaceholder()).Disabled(!editable)
-		if e.focusField == "Workspace" {
-			workspace.Focus()
-			e.focusField = ""
-		}
-		if message := e.Errors["Workspace"]; message != "" {
-			ui.Text(c, profileNoticeText(msgs, message)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Danger)
-		}
-		ui.Text(c, msgs.ProfileWorkspaceHint()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
-		ui.Row(c).Gap(8).Wrap().Children(func() {
-			folder := secondaryButton(c, msgs.WorkFolderChoose()).Disabled(!editable).OnClick(actions.ChooseFolder)
-			if e.focusFolder {
-				folder.Focus()
-				e.focusFolder = false
+		settingsPreferenceRow(c, t, msgs.FieldName(), "", func() {
+			name := preferenceInput(c, &e.Draft.Name, e.Errors["Name"] != "").FillWidth().MinWidth(0).Label(msgs.FieldNameAccessible()).Placeholder(msgs.FieldNamePlaceholder()).Disabled(!editable)
+			if e.focusField == "Name" {
+				name.Focus()
+				e.focusField = ""
 			}
-			secondaryButton(c, msgs.WorkFolderUseDefault()).Disabled(!editable || e.Draft.Workspace == "").OnClick(func() {
-				e.Draft.Workspace = ""
-				delete(e.Errors, "Workspace")
-				e.folderError = ""
-			})
+			if message := e.Errors["Name"]; message != "" {
+				ui.Text(c, profileNoticeText(msgs, message)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Danger)
+			}
 		})
-		if e.folderError != "" {
-			ui.Text(c, msgs.WorkFolderChooseFailed(e.folderError)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Danger)
-		}
+		settingsPreferenceRow(c, t, msgs.ProfilePurpose(), "", func() {
+			formTextArea(c, &e.Draft.Purpose, false).FillWidth().MinWidth(0).Label(msgs.FieldPurposeAccessible()).Placeholder(msgs.ProfilePurpose()).Disabled(!editable)
+		})
+		settingsPreferenceRow(c, t, msgs.ProfileInstructions(), "", func() {
+			formTextArea(c, &e.Draft.Instructions, false).FillWidth().MinWidth(0).Label(msgs.FieldInstructionsAccessible()).Placeholder(msgs.ProfileInstructions()).Disabled(!editable)
+		})
+		settingsPreferenceRow(c, t, msgs.ProfileWorkspace(), msgs.ProfileWorkspaceHint(), func() {
+			workspace := preferenceInput(c, &e.Draft.Workspace, e.Errors["Workspace"] != "").FillWidth().MinWidth(0).Label(msgs.FieldWorkspaceAccessible()).Placeholder(msgs.FieldWorkspacePlaceholder()).Disabled(!editable)
+			if e.focusField == "Workspace" {
+				workspace.Focus()
+				e.focusField = ""
+			}
+			if message := e.Errors["Workspace"]; message != "" {
+				ui.Text(c, profileNoticeText(msgs, message)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Danger)
+			}
+			ui.Row(c).Gap(8).Wrap().Children(func() {
+				folder := secondaryButton(c, msgs.WorkFolderChoose()).Disabled(!editable).OnClick(actions.ChooseFolder)
+				if e.focusFolder {
+					folder.Focus()
+					e.focusFolder = false
+				}
+				secondaryButton(c, msgs.WorkFolderUseDefault()).Disabled(!editable || e.Draft.Workspace == "").OnClick(func() {
+					e.Draft.Workspace = ""
+					delete(e.Errors, "Workspace")
+					e.folderError = ""
+				})
+			})
+			if e.folderError != "" {
+				ui.Text(c, msgs.WorkFolderChooseFailed(e.folderError)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Danger)
+			}
+		}, true)
 
 		e.builtinToolsView(c, t, editable, actions)
 
