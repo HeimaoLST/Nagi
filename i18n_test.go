@@ -1029,7 +1029,7 @@ func TestCancelFailureNoticeReplacesRequestAndClears(t *testing.T) {
 func TestGuardedActionsKeepCanonicalRawAndKind(t *testing.T) {
 	a, ct := workspaceTestApp(t)
 	ct.Archived = true
-	if a.sendRuntimeForIssue(ct, "blocked", "") {
+	if a.send(ct, "blocked") {
 		t.Fatal("archived send was accepted")
 	}
 	if ct.SendError != "This contact is archived. Restore it before sending a message." || ct.SendErrorKind != blockArchivedSend {

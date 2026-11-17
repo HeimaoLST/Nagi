@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -159,21 +158,6 @@ func TestIssueNavigationIsPerContact(t *testing.T) {
 	if !tr.HasText("first issue") || first.issueNavigation().DetailID != "ia" ||
 		first.issueNavigation().Filter != issueFilterAll {
 		t.Fatalf("first contact navigation lost: %+v", first.issueNavigation())
-	}
-}
-
-func TestAcceptTaskDoesNotStealIssueDetail(t *testing.T) {
-	a, ct := workspaceTestApp(t)
-	a.store = &contactStore{path: filepath.Join(t.TempDir(), "contacts.json")}
-	issue := &productIssue{ID: "i-task", ContactID: ct.ID, Goal: "task issue", Status: issueStatusInProgress,
-		Executions: []*issueExecution{{ID: "e-task", Status: issueExecutionPending, Prompt: "task"}},
-	}
-	ct.Issues = []*productIssue{issue}
-	openIssueDetailForTest(a, ct, issue.ID)
-	ct.pendingIssueExecution = "e-task"
-	a.acceptTask(ct, "task", runtimeSendResult{TaskID: "task-1", MessageID: "message-1"})
-	if ct.SelectedWorkTaskID != "" || ct.issueNavigation().DetailID != issue.ID {
-		t.Fatalf("accepted task stole navigation: work=%q detail=%q", ct.SelectedWorkTaskID, ct.issueNavigation().DetailID)
 	}
 }
 

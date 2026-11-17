@@ -159,23 +159,6 @@ func TestStoreRejectsIssueWithoutValidContact(t *testing.T) {
 	}
 }
 
-func TestAcceptedAssociationSaveFailureLeavesUnknownSnapshot(t *testing.T) {
-	ct := &contact{ID: "c1", Name: "Saki", Draft: "later draft"}
-	issue := &productIssue{ID: "i1", ContactID: "c1", Goal: "work", Status: issueStatusNotStarted}
-	execution := &issueExecution{ID: "e1", Prompt: "work", Status: issueExecutionPending}
-	issue.Executions = append(issue.Executions, execution)
-	ct.Issues = append(ct.Issues, issue)
-	ct.pendingIssueExecution = execution.ID
-	a := &appModel{store: &contactStore{path: t.TempDir()}, contacts: []*contact{ct}}
-	a.acceptTask(ct, "work", runtimeSendResult{TaskID: "t1", MessageID: "m1"})
-	if execution.Status != issueExecutionUnknown || execution.Prompt != "work" || execution.TaskID != "t1" {
-		t.Fatalf("accepted save failure lost snapshot: %+v", execution)
-	}
-	if ct.pendingIssueExecution != "" || issue.Status != issueStatusNotStarted || ct.Draft != "later draft" {
-		t.Fatalf("accepted save failure changed item/draft: issue=%+v pending=%q draft=%q", issue, ct.pendingIssueExecution, ct.Draft)
-	}
-}
-
 func TestStoredPendingExecutionIsUnknownAfterRestart(t *testing.T) {
 	issues := issuesForStoredContact([]storedIssue{{
 		ID: "i1", ContactID: "c1", Goal: "work", Status: issueStatusNotStarted,
@@ -238,27 +221,18 @@ func TestIssueFormCreatesExplicitItemWithoutTouchingComposer(t *testing.T) {
 	}
 }
 
-func TestIssueRunPreservesComposerWhenDraftMatchesPrompt(t *testing.T) {
-	ct := &contact{ID: "c1", Name: "Saki", Draft: "work"}
-	issue := &productIssue{ID: "i1", ContactID: "c1", Goal: "work", Status: issueStatusNotStarted}
-	execution := &issueExecution{ID: "e1", Prompt: "work", Status: issueExecutionPending}
-	issue.Executions = append(issue.Executions, execution)
-	ct.Issues = append(ct.Issues, issue)
-	ct.SelectedIssueID = issue.ID
-	ct.pendingIssueExecution = execution.ID
+func TestPiConversationRunStartedClearsSubmittedDraft(t *testing.T) {
+	a, ct, event := piRunStartedTestApp(t)
+	ct.Draft = "sent"
+	ct.SubmittedDraft = "sent"
 	ct.SubmittedRev = ct.draftRev
-	a := &appModel{contacts: []*contact{ct}}
-	a.acceptTask(ct, "work", runtimeSendResult{TaskID: "t1", MessageID: "m1"})
-	if ct.Draft != "work" {
-		t.Fatalf("explicit issue run consumed composer: %q", ct.Draft)
+	ct.pendingSend = &pendingSend{Draft: "sent", State: "submitting"}
+	a.applyPiEvent(a.connectionGeneration, event)
+	if ct.Draft != "" {
+		t.Fatalf("ordinary admitted send did not clear its draft: %q", ct.Draft)
 	}
-
-	normal := &contact{ID: "c2", Name: "Saki", Draft: "sent"}
-	normal.SubmittedRev = normal.draftRev
-	a.contacts = append(a.contacts, normal)
-	a.acceptTask(normal, "sent", runtimeSendResult{TaskID: "t2", MessageID: "m2"})
-	if normal.Draft != "" {
-		t.Fatalf("ordinary accepted send did not clear its draft: %q", normal.Draft)
+	if ct.SendState != sendAccepted || ct.ActiveTaskID != event.RunID || ct.pendingSend == nil || ct.pendingSend.State != "unknown" {
+		t.Fatalf("admitted send lost its run or unsettled intent: state=%v run=%q pending=%+v", ct.SendState, ct.ActiveTaskID, ct.pendingSend)
 	}
 }
 

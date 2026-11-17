@@ -488,40 +488,6 @@ func TestIssueToolReservedActionRechecksOwnerBeforeSideEffect(t *testing.T) {
 	}
 }
 
-func TestIssueToolMergedSelectionPreservesEmptyBuiltinAndAliases(t *testing.T) {
-	a, _ := newIssueToolTestApp(t)
-	a.issueToolServer = &issueToolIPCServer{}
-	a.issueToolEndpoint = "/tmp/test-issue-tool.sock"
-	a.issueToolHelper = "/tmp/test-issue-tool-helper"
-	current := runtimeToolSelection{
-		Builtin: []string{},
-		External: []runtimeExternalToolBinding{{
-			SourceID: "other-source", ToolName: "other-tool", ExposedName: "alias-other",
-		}},
-	}
-	merged, err := a.issueToolMergedSelection(current)
-	if err != nil {
-		t.Fatal(err)
-	}
-	builtin, _ := merged["builtin"].([]string)
-	if len(builtin) != 0 {
-		t.Fatalf("empty builtin was replaced: %v", builtin)
-	}
-	external, _ := merged["external"].([]map[string]string)
-	if len(external) != 1+len(issueToolDefinitions()) {
-		t.Fatalf("external bindings = %+v", external)
-	}
-	if external[0]["source_id"] != "other-source" || external[0]["exposed_name"] != "alias-other" {
-		t.Fatalf("alias was not preserved: %+v", external[0])
-	}
-	conflict := runtimeToolSelection{External: []runtimeExternalToolBinding{{
-		SourceID: "other-source", ToolName: "other-tool", ExposedName: issueToolDefinitions()[0].Name,
-	}}}
-	if _, err := a.issueToolMergedSelection(conflict); err == nil {
-		t.Fatal("exposed-name conflict was silently accepted")
-	}
-}
-
 func TestIssueToolAcceptedSaveFailureKeepsKnownIDs(t *testing.T) {
 	a, _ := newIssueToolTestApp(t)
 	ct := a.selectedContact()

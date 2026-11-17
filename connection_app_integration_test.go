@@ -15,7 +15,7 @@ func openConnectionHarness(t *testing.T) *guiHarness {
 	}
 	h := &guiHarness{app: a, pump: newUIPump(t, a)}
 	t.Cleanup(func() { h.shutdown(t) })
-	h.pump.do(func() { a.startRuntime() })
+	h.pump.do(func() { a.startPiHost() })
 	return h
 }
 

@@ -79,7 +79,7 @@ func TestTaskContextStoreRoundTripAndOwnedLists(t *testing.T) {
 }
 
 func TestTaskContextAcceptedSendClearsOnlyExactSubmittedVersions(t *testing.T) {
-	a, ct := taskContextApp(t)
+	a, ct, event := piRunStartedTestApp(t)
 	first, err := ct.Context.AddSnippet("First", "old first")
 	if err != nil {
 		t.Fatal(err)
@@ -93,9 +93,9 @@ func TestTaskContextAcceptedSendClearsOnlyExactSubmittedVersions(t *testing.T) {
 		t.Fatal(err)
 	}
 	ct.Draft = "prompt"
-	ct.SubmittedRev = ct.draftRev
+	ct.SubmittedDraft, ct.SubmittedRev = "prompt", ct.draftRev
 	ct.pendingSend = &pendingSend{Draft: "prompt", Context: submitted, State: "submitting"}
-	a.acceptTask(ct, "prompt", runtimeSendResult{TaskID: "t1", MessageID: "m1"})
+	a.applyPiEvent(a.connectionGeneration, event)
 
 	left := ct.Context.snapshot()
 	if len(left) != 1 || left[0].ID != first.ID || left[0].Text != "newer first" || left[0].Revision != 2 {
@@ -107,31 +107,47 @@ func TestTaskContextAcceptedSendClearsOnlyExactSubmittedVersions(t *testing.T) {
 	if len(ct.Messages) != 1 || len(ct.Messages[0].Context) != 2 || ct.Messages[0].Context[0].Text != "old first" {
 		t.Fatalf("live message context = %+v", ct.Messages)
 	}
-	if ct.Messages[0].Context[0].Revision != submitted[0].Revision || ct.Messages[0].Context[1].Text != "remove me" {
+	if ct.Messages[0].Context[0] != submitted[0] || ct.Messages[0].Context[1] != submitted[1] {
 		t.Fatalf("message did not retain the exact submitted values: %+v", ct.Messages[0].Context)
 	}
-	if ct.pendingSend != nil {
-		t.Fatalf("accepted send left pending intent: %+v", ct.pendingSend)
+	if ct.pendingSend == nil || ct.pendingSend.State != "unknown" || ct.pendingSend.Draft != "prompt" {
+		t.Fatalf("admitted send lost unsettled intent: %+v", ct.pendingSend)
+	}
+	saved := a.store.state.Contacts[0].PendingSend
+	if saved == nil || saved.State != "unknown" || len(saved.Context) != 2 || saved.Context[0] != submitted[0] || saved.Context[1] != submitted[1] {
+		t.Fatalf("saved intent lost admitted materials before settlement: %+v", saved)
 	}
 }
 
 func TestTaskContextAcceptedSaveFailureKeepsNextDraftVisible(t *testing.T) {
-	a, ct := taskContextApp(t)
+	a, ct, event := piRunStartedTestApp(t)
 	item, err := ct.Context.AddSnippet("Keep", "keep after acceptance")
 	if err != nil {
 		t.Fatal(err)
 	}
+	ct.Draft, ct.SubmittedDraft = "next draft", "prompt"
+	ct.SubmittedRev = ct.draftRev
+	ct.draftRev++
 	ct.pendingSend = &pendingSend{Draft: "prompt", Context: ct.Context.snapshot(), State: "submitting"}
-	a.store = &contactStore{path: t.TempDir()}
-	a.acceptTask(ct, "prompt", runtimeSendResult{TaskID: "t1", MessageID: "m1"})
-	if got := ct.Context.snapshot(); len(got) != 1 || got[0].ID != item.ID {
-		t.Fatalf("accepted+savefailure cleared user data: %+v", got)
+	a.store.path = t.TempDir()
+	a.applyPiEvent(a.connectionGeneration, event)
+	if got := ct.Context.snapshot(); len(got) != 1 || got[0] != item {
+		t.Fatalf("admitted+savefailure cleared user data: %+v", got)
 	}
-	if !strings.Contains(ct.SendError, "accepted") {
-		t.Fatalf("accepted save failure was not explicit: %q", ct.SendError)
+	if ct.Draft != "next draft" {
+		t.Fatalf("admitted+savefailure changed the later draft: %q", ct.Draft)
 	}
-	if ct.SendState != sendAccepted || ct.ActiveTaskID != "t1" {
-		t.Fatalf("accepted state was not retained: state=%v task=%q", ct.SendState, ct.ActiveTaskID)
+	if !strings.Contains(ct.SendError, "admitted") || ct.SendErrorKind != "send-uncertain" {
+		t.Fatalf("admitted save failure was not explicit: %q / %q", ct.SendError, ct.SendErrorKind)
+	}
+	if ct.SendState != sendUnknown || ct.ActiveTaskID != event.RunID || ct.LastTaskID != event.RunID {
+		t.Fatalf("save failure lost the known run: state=%v active=%q last=%q", ct.SendState, ct.ActiveTaskID, ct.LastTaskID)
+	}
+	if ct.pendingSend == nil || ct.pendingSend.State != "unknown" || len(ct.pendingSend.Context) != 1 || ct.pendingSend.Context[0] != item {
+		t.Fatalf("save failure lost unsettled materials: %+v", ct.pendingSend)
+	}
+	if len(ct.Messages) != 1 || ct.Messages[0].Text != "prompt" || ct.Messages[0].TaskID != event.RunID || len(ct.Messages[0].Context) != 1 || ct.Messages[0].Context[0] != item {
+		t.Fatalf("save failure lost admitted message context: %+v", ct.Messages)
 	}
 }
 

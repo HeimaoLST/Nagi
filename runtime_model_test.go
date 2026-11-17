@@ -9,6 +9,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"github.com/HeimaoLST/Nagi/internal/pi"
 	"github.com/HeimaoLST/Nagi/locales"
 )
 
@@ -234,26 +235,63 @@ func TestFailSubmitKeepsDraftForUnconfirmedProtocolError(t *testing.T) {
 	}
 }
 
-func TestAcceptTaskKeepsLaterDraftEdits(t *testing.T) {
-	a, bound, _ := testRuntimeModel(t)
-	bound.Draft = "edited later"
-	bound.SubmittedDraft = "sent"
-	bound.SubmittedRev = 1
-	bound.draftRev = 2
-	bound.SendState = sendSubmitting
-	bound.pendingEvents = []runtimeEventEnvelope{{
-		Version: 1, Type: "event", SessionID: "s1", TaskID: "t1", MessageID: "m1",
-		Event: &runtimeEvent{Type: "task_started"},
-	}}
-	a.acceptTask(bound, "sent", runtimeSendResult{TaskID: "t1", MessageID: "m1"})
-	if bound.Draft != "edited later" {
-		t.Fatalf("late acceptance cleared the later draft: %q", bound.Draft)
+func piRunStartedTestApp(t *testing.T) (*appModel, *contact, pi.Event) {
+	t.Helper()
+	root := t.TempDir()
+	store, err := openContactStore(filepath.Join(root, "contacts.json"), root)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if bound.ActiveTaskID != "t1" || bound.SendState != sendAccepted || bound.LastTaskID != "t1" {
-		t.Fatalf("task state = %+v", bound)
+	a := &appModel{
+		store: store, contacts: contactsFromStore(store), selected: 0,
+		runtimeStatus: runtimeStateReady, connectionGeneration: 1,
+		pi: &piAppHost{generation: 1},
 	}
-	if !strings.HasPrefix(bound.Messages[len(bound.Messages)-1].Key, "live:t1:user") {
-		t.Fatalf("user message not appended: %+v", bound.Messages[len(bound.Messages)-1])
+	ct := a.selectedContact()
+	ct.PiBinding = &piConversationBinding{
+		Engine: "pi",
+		Context: pi.ContextBinding{
+			ContextID: "conversation-" + ct.ID, BotID: ct.ID, Purpose: pi.Conversation,
+			SelectionRevision: 1, CWD: root, SessionRef: filepath.Join(root, "session.jsonl"), Used: true,
+		},
+		Selection: piConversationSelection{CWD: root, CodingTools: []string{}},
+		Configuration: piConversationConfiguration{
+			WireAPI: pi.OpenAICompletions, BaseURL: "http://127.0.0.1:1/v1", Model: "reducer-fixture",
+			ContextTokens: 65536, OutputTokens: 4096, CredentialSource: "reducer-fixture",
+		},
+	}
+	ct.SessionID, ct.Loaded = ct.PiBinding.Context.SessionRef, true
+	a.bindTaskContexts()
+	if err := a.persist(); err != nil {
+		t.Fatal(err)
+	}
+	event := pi.Event{
+		Version: 1, Type: "event", WorkerEpoch: "reducer-fixture", ContextID: ct.PiBinding.Context.ContextID,
+		RunID: "run-1", Seq: 1, Name: pi.RunStarted,
+	}
+	ct.ActiveTaskID, ct.SendState = event.RunID, sendSubmitting
+	return a, ct, event
+}
+
+func TestPiRunStartedKeepsLaterDraftEdits(t *testing.T) {
+	a, ct, event := piRunStartedTestApp(t)
+	ct.Draft = "edited later"
+	ct.SubmittedDraft = "sent"
+	ct.SubmittedRev = 1
+	ct.draftRev = 2
+	ct.pendingSend = &pendingSend{Draft: "sent", State: "submitting"}
+	a.applyPiEvent(a.connectionGeneration, event)
+	if ct.Draft != "edited later" {
+		t.Fatalf("late admission cleared the later draft: %q", ct.Draft)
+	}
+	if ct.ActiveTaskID != event.RunID || ct.SendState != sendAccepted || ct.LastTaskID != event.RunID {
+		t.Fatalf("run state = %+v", ct)
+	}
+	if len(ct.Messages) != 1 || ct.Messages[0].Key != "pi:"+event.RunID+":user" || ct.Messages[0].TaskID != event.RunID || ct.Messages[0].Text != "sent" || ct.Messages[0].Kind != msgUser {
+		t.Fatalf("admitted user message not retained: %+v", ct.Messages)
+	}
+	if ct.pendingSend == nil || ct.pendingSend.State != "unknown" || ct.pendingSend.Draft != "sent" {
+		t.Fatalf("admission lost unsettled intent: %+v", ct.pendingSend)
 	}
 }
 
