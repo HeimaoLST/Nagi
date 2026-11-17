@@ -245,3 +245,15 @@
 **Problem:** The GUI lane runs default root tests without pinned worker inputs, while new process E2E roots require those inputs and must fail when they are missing.
 **Cause or correction:** Test selection and runtime-input requirements are different contracts. The new product process file uses the integration build tag, selected explicitly by the Pi lane; it does not skip on missing inputs.
 **Prevention:** Review every caller when adding process tests. Keep the ordinary GUI lane independent, execute supplemental form coverage explicitly, and leave all required product roots and missing/failure rules unchanged.
+
+## Reacquire form targets after structural updates
+
+**Problem:** The captured-answer E2E reached a completed issue but observed no rejection notice while its draft stayed intact; it had not recorded whether Save was activated.
+**Cause or correction:** First-run activation is Unconfirmed. The fixture assumed textarea focus survived a Frame that changed preceding controls; pinned MyGo derives unkeyed element IDs from sibling position. Source review still found the completed-target form and rejecting save path.
+**Prevention:** Reacquire the actual form after structural updates, assert text-input focus and then the non-input Save target before activation, and retain focus/result receipts. Keep rejection, draft and no-effect assertions intact; do not infer a toolkit defect or add a production patch from missing activation evidence.
+
+## Reassemble streamed test output before parsing receipts
+
+**Problem:** Receipt analysis tried decoding individual Go JSONL Output chunks and failed on an unterminated JSON string; partial-chunk filtering also emitted unrelated continuation data.
+**Cause or correction:** One test log message can span multiple Output events. Reassembling saved chunks by test recovered the original receipt lines without another execution.
+**Prevention:** Concatenate each test's output before splitting complete log lines and decoding bounded receipt records. Preserve raw JSONL and distinguish analysis/setup errors from test or product failures.

@@ -920,19 +920,95 @@ func (f *piAppFixture) formInput(tr *ui.Tester, issueID, text string) {
 	})
 }
 
-func (f *piAppFixture) saveForm(tr *ui.Tester) {
+func (f *piAppFixture) saveForm(tr *ui.Tester, saveLabel string) {
 	f.t.Helper()
 	f.onUI(func() error {
+		formID := f.app.issueSupplementFormID
+		target := f.app.issueSupplementAnswerTarget
+		questionRef := f.app.issueSupplementQuestionRef
+		ownerID := f.app.selectedContact().ID
+		inputLabel := locales.SupplementFormLabel()
+		if saveLabel == locales.WorkAnswer() {
+			inputLabel = locales.WorkAnswer()
+		}
+		if target.IssueID != "" {
+			ownerID = target.ContactID
+		}
+		_, cancelPresent := tr.Find(locales.SupplementCancel())
+		_, inputPresent := tr.Find(inputLabel)
+		_, savePresent := tr.Find(saveLabel)
+		beforeInputActive, _ := tr.TextInputActive()
+		facts := map[string]any{
+			"form_id": formID, "form_open": formID != "", "selected_contact_id": f.app.selectedContact().ID,
+			"target": target, "question_ref": questionRef, "input_label": inputLabel, "save_label": saveLabel,
+			"cancel_present": cancelPresent, "input_present": inputPresent, "save_present": savePresent,
+			"cancel_focused_before": tr.Focused(locales.SupplementCancel()), "input_label_focused_before": tr.Focused(inputLabel), "save_label_focused_before": tr.Focused(saveLabel),
+			"text_input_active_before": beforeInputActive,
+		}
+		piAppRecord(f.t, "form-focus-before", facts)
+		if formID == "" || !cancelPresent || !inputPresent || !savePresent {
+			return errors.New("the actual form or its Cancel/input/Save controls are absent; Save was not activated")
+		}
+		draft := f.app.issueSupplementDraft(formID)
+		beforeDraft := *draft
+		steps := 0
+		for steps < 64 && !tr.Focused(locales.SupplementCancel()) {
+			tr.Key(0, ui.KeyTab)
+			steps++
+		}
+		facts["tabs_to_cancel"], facts["cancel_reacquired"] = steps, tr.Focused(locales.SupplementCancel())
+		if !tr.Focused(locales.SupplementCancel()) {
+			piAppRecord(f.t, "form-save-unreached", facts)
+			return errors.New("the rendered form Cancel control did not receive focus; Save was not activated")
+		}
 		tr.Key(0, ui.KeyTab)
+		inputActive, _ := tr.TextInputActive()
+		facts["input_label_focused_after_cancel"] = tr.Focused(inputLabel)
+		facts["text_input_active_after_cancel"] = inputActive
+		if !tr.Focused(inputLabel) || !inputActive {
+			piAppRecord(f.t, "form-save-unreached", facts)
+			return errors.New("the expected form text input did not receive focus after Cancel; Save was not activated")
+		}
+		tr.Key(0, ui.KeyTab)
+		saveInputActive, _ := tr.TextInputActive()
+		facts["save_label_focused_after_input"] = tr.Focused(saveLabel)
+		facts["text_input_active_at_save"] = saveInputActive
+		facts["draft_before_activation"] = *draft
+		piAppRecord(f.t, "form-save-before", facts)
+		if !tr.Focused(saveLabel) || saveInputActive || *draft != beforeDraft {
+			return errors.New("the expected non-text Save control is not focused or focusing changed the draft; Save was not activated")
+		}
 		tr.Key(0, ui.KeySpace)
 		tr.Frame()
+		afterInputActive, _ := tr.TextInputActive()
+		association := map[string]any{"owner_id": ownerID, "issue_id": formID, "question_ref": questionRef}
+		issue := issueForContact(f.app.contactByID(ownerID), formID)
+		association["issue_found"] = issue != nil
+		if issue != nil {
+			association["issue_status"] = issue.Status
+			association["supplement_count"] = 0
+			if issue.Supplements != nil {
+				association["supplement_count"] = len(issue.Supplements.Items)
+			}
+			if question := issue.questionByRef(questionRef); question != nil {
+				association["question_state"], association["answer_supplement_id"] = question.State, question.AnswerSupplementID
+			}
+		}
+		piAppRecord(f.t, "form-save-after", map[string]any{
+			"form_id": f.app.issueSupplementFormID, "form_open": f.app.issueSupplementFormID != "",
+			"target": f.app.issueSupplementAnswerTarget, "question_ref": f.app.issueSupplementQuestionRef, "save_label": saveLabel,
+			"cancel_focused_after": tr.Focused(locales.SupplementCancel()), "input_label_focused_after": tr.Focused(inputLabel), "save_label_focused_after": tr.Focused(saveLabel),
+			"text_input_active_after": afterInputActive,
+			"error":                   f.app.issueActionError, "notice": f.app.issueActionNotice, "notice_detail": f.app.issueActionNoticeDetail,
+			"draft": *draft, "association": association,
+		})
 		return nil
 	})
 }
 
 func (f *piAppFixture) rejectedForm(tr *ui.Tester, issue *productIssue, draft string) {
 	f.t.Helper()
-	f.saveForm(tr)
+	f.saveForm(tr, locales.WorkAnswer())
 	f.onUI(func() error {
 		if f.app.issueActionError == "" || !tr.HasText(f.app.issueActionError) || *f.app.issueSupplementDraft(issue.ID) != draft || issue.Supplements != nil && len(issue.Supplements.Items) != 0 {
 			return fmt.Errorf("rejected form lost draft or created an answer: error=%q draft=%q", f.app.issueActionError, *f.app.issueSupplementDraft(issue.ID))
@@ -952,7 +1028,7 @@ func TestPiAppCapturedQuestionAnswerForm(t *testing.T) {
 	answer := "Use the captured delivery.\n保留这一行。"
 	tr := f.answerForm(success, question, answer)
 	beforeSave := f.provider.count()
-	f.saveForm(tr)
+	f.saveForm(tr, locales.WorkAnswer())
 	var supplementID string
 	f.onUI(func() error {
 		if question.State != issueQuestionAnswered || question.AnswerSupplementID == "" || success.Supplements == nil || len(success.Supplements.Items) != 1 || success.Supplements.Items[0].Text != answer || success.Supplements.Items[0].ID != question.AnswerSupplementID || f.app.issueSupplementFormID != "" || *f.app.issueSupplementDraft(success.ID) != "" {
@@ -1057,7 +1133,7 @@ func TestPiAppCapturedQuestionAnswerForm(t *testing.T) {
 		return nil
 	})
 	ownedForm = f.answerForm(owned, ownedQuestion, ownedDraft)
-	f.saveForm(ownedForm)
+	f.saveForm(ownedForm, locales.WorkAnswer())
 	f.onUI(func() error {
 		if ownedQuestion.State != issueQuestionAnswered || ownedQuestion.AnswerSupplementID == "" || len(owned.Supplements.Items) != 1 || len(f.app.contactByID(bID).Issues) != 0 {
 			return errors.New("reopened captured owner form failed or mutated the other contact")
@@ -1082,7 +1158,7 @@ func TestPiAppCapturedQuestionAnswerForm(t *testing.T) {
 		return nil
 	})
 	f.formInput(ordinaryForm, ordinary.ID, "An ordinary follow-up, not a question answer")
-	f.saveForm(ordinaryForm)
+	f.saveForm(ordinaryForm, locales.IssueSupplementSave())
 	f.onUI(func() error {
 		if ordinaryQuestion.State != issueQuestionOpen || ordinaryQuestion.AnswerSupplementID != "" || ordinary.Supplements == nil || len(ordinary.Supplements.Items) != 1 || ordinary.Supplements.Items[0].Text != "An ordinary follow-up, not a question answer" || f.app.issueSupplementFormID != "" {
 			return errors.New("ordinary follow-up was retargeted to a question answer")
