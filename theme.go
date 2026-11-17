@@ -50,6 +50,7 @@ const (
 
 type workbenchTheme struct {
 	Theme         *ui.Theme
+	Link          ui.Color
 	ChromeFrom    ui.Color
 	ChromeTo      ui.Color
 	Tertiary      ui.Color
@@ -93,6 +94,7 @@ func resolveWorkbenchTheme(dark bool) workbenchTheme {
 	t.Scrollbar, t.ScrollbarWidth = ui.Hex("#DFDFDF"), 6
 	palette := workbenchTheme{
 		Theme:      t,
+		Link:       ui.Hex("#2D6A4A"),
 		ChromeFrom: ui.Hex("#F2F2E2"), ChromeTo: ui.Hex("#E6EBEF"), Tertiary: ui.Hex("#838280"),
 		NavHover: ui.Hex("#0000000A"), NavSelected: ui.Hex("#00000012"),
 		Rail: ui.Hex("#F2F2E2"), Reading: t.Background, Panel: t.Background,
@@ -109,6 +111,7 @@ func resolveWorkbenchTheme(dark bool) workbenchTheme {
 		t.Danger, t.Warning, t.Success, t.Scrollbar = ui.Hex("#FF4D4F"), ui.Hex("#FAAD14"), ui.Hex("#73CD94"), ui.Hex("#363830")
 		palette.ChromeFrom, palette.ChromeTo, palette.Rail = ui.Hex("#10110E"), ui.Hex("#10110E"), ui.Hex("#10110E")
 		palette.Tertiary = ui.Hex("#89877A")
+		palette.Link = ui.Hex("#E0C65C")
 		palette.NavHover, palette.NavSelected = ui.Hex("#3D3F39"), ui.Hex("#454741")
 		palette.Reading, palette.Panel, palette.Well = t.Background, t.Background, t.Surface
 		palette.BubbleUser, palette.BubbleContact = ui.Hex("#2E2916"), t.Background

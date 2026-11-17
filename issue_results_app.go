@@ -304,6 +304,7 @@ func (a *appModel) issueResultMainPage(c *ui.Context, t *ui.Theme) {
 	if !page.Open {
 		return
 	}
+	page.Panel.MarkdownTheme.Link = a.workTheme.Link
 	if page.Panel.ReaderKey != "" {
 		if file, ok := issueResultFileByKey(page.Panel.Files, page.Panel.ReaderKey); ok {
 			issueResultReaderPage(c, t, &page.Panel, a.issueResultPanelActions(page.Generation), file)
@@ -326,6 +327,7 @@ func (a *appModel) issueResultPanelView(c *ui.Context, t *ui.Theme) {
 	if !page.Open {
 		return
 	}
+	page.Panel.MarkdownTheme.Link = a.workTheme.Link
 	actions := a.issueResultPanelActions(page.Generation)
 	if actions.RevealRun {
 		defer func() { page.revealRun = false }()

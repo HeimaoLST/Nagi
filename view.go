@@ -167,6 +167,14 @@ func (a *appModel) armActiveSurfaceFallback() {
 
 func (a *appModel) readerOptions(options markdownReaderOptions, scope, base string) markdownReaderOptions {
 	options.OpenLocalFile = func(dest string) error { return a.openMarkdownFile(base, dest) }
+	if !options.PlainText && (options.Theme == nil || options.Theme.Link == (markdown.Color{})) {
+		var theme markdown.Theme
+		if options.Theme != nil {
+			theme = *options.Theme
+		}
+		theme.Link = a.workTheme.Link
+		options.Theme = &theme
+	}
 	if !options.PlainText && scope != "" {
 		options.LinkScope = scope
 		options.LinkFocus = &a.markdownLinkFocus

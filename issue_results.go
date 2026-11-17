@@ -21,6 +21,7 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/markdown"
 
 	"github.com/HeimaoLST/Nagi/locales"
 )
@@ -383,6 +384,7 @@ type issueResultPanelState struct {
 	RunDetail          string
 	RunDetailsOpen     bool
 	Response           string
+	MarkdownTheme      markdown.Theme
 	Files              []issueResultFile
 	Selected           string
 	Inspection         *issueResultFileInspection
@@ -534,6 +536,7 @@ func issueResultPanel(c *ui.Context, state *issueResultPanelState, actions issue
 				openLocalFile = func(dest string) error { return actions.OpenLocalFile(state.WorkingDirectory, dest) }
 			}
 			markdownReader(c, state.Response, markdownReaderOptions{
+				Theme:           &state.MarkdownTheme,
 				OpenLocalFile:   openLocalFile,
 				CopyLabel:       locales.In(c.Locale()).CopyResultLabel(),
 				CopyText:        actions.CopyText,
@@ -768,6 +771,7 @@ func issueResultReaderPreview(c *ui.Context, th *ui.Theme, state *issueResultPan
 		openLocalFile = func(dest string) error { return actions.OpenLocalFile(filepath.Dir(file.Path), dest) }
 	}
 	markdownReader(c, inspection.Preview, markdownReaderOptions{
+		Theme:           &state.MarkdownTheme,
 		OpenLocalFile:   openLocalFile,
 		PlainText:       !issueResultMarkdownFile(file.Path),
 		CopyLabel:       locales.In(c.Locale()).CopyCurrentFileLabel(),

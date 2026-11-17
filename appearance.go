@@ -154,6 +154,7 @@ func (a *appModel) resolveAppearanceTheme(dark bool) appearanceThemeResolution {
 			palette := theme.Palette
 			controls := *palette.Theme
 			palette.Theme = &controls
+			palette.Link = palette.Theme.Accent
 			palette.ChromeFrom, palette.ChromeTo, palette.Tertiary = palette.Rail, palette.Rail, palette.Theme.TextMuted
 			palette.NavHover, palette.NavSelected = palette.Theme.SurfaceHover, palette.Theme.Selection
 			result.Palette, result.EffectiveID, result.Warnings = palette, id, theme.Warnings
