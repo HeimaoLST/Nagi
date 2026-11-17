@@ -14,6 +14,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
+	"github.com/HeimaoLST/Nagi/internal/pi"
 	"github.com/HeimaoLST/Nagi/locales"
 )
 
@@ -152,14 +153,19 @@ func TestTaskContextAcceptedSaveFailureKeepsNextDraftVisible(t *testing.T) {
 }
 
 func TestTaskContextRejectedSendKeepsMaterials(t *testing.T) {
-	a, ct := taskContextApp(t)
-	if _, err := ct.Context.AddSnippet("Keep", "rejected context"); err != nil {
+	a, ct, event := piRunStartedTestApp(t)
+	item, err := ct.Context.AddSnippet("Keep", "rejected context")
+	if err != nil {
 		t.Fatal(err)
 	}
-	ct.pendingSend = &pendingSend{Draft: "rejected", Context: ct.Context.snapshot(), State: "submitting"}
-	a.failSubmit(ct.ID, &runtimeError{Code: "capacity", Message: "full"}, false)
-	if len(ct.Context.snapshot()) != 1 || ct.pendingSend != nil {
-		t.Fatalf("rejected send changed context: %+v", ct.Context.snapshot())
+	ct.Draft = "rejected"
+	ct.SubmittedDraft = ct.Draft
+	ct.pendingSend = &pendingSend{Draft: ct.Draft, Context: ct.Context.snapshot(), State: "submitting"}
+	a.failPiSubmission(a.pi, ct.ID, event.RunID,
+		&pi.CommandError{Method: "run.start", Delivery: pi.Rejected, Err: &pi.RemoteError{Code: "capacity", Message: "full"}}, false)
+	items := ct.Context.snapshot()
+	if len(items) != 1 || items[0] != item || ct.pendingSend != nil || ct.Draft != "rejected" {
+		t.Fatalf("rejected send changed materials: context=%+v draft=%q pending=%+v", items, ct.Draft, ct.pendingSend)
 	}
 	if ct.SendState != sendIdle {
 		t.Fatalf("confirmed rejection state = %v", ct.SendState)
@@ -167,25 +173,30 @@ func TestTaskContextRejectedSendKeepsMaterials(t *testing.T) {
 }
 
 func TestTaskContextUnknownFailurePersistsPendingIntent(t *testing.T) {
-	a, ct := taskContextApp(t)
-	if _, err := ct.Context.AddSnippet("Maybe sent", "possibly delivered"); err != nil {
+	a, ct, event := piRunStartedTestApp(t)
+	item, err := ct.Context.AddSnippet("Maybe sent", "possibly delivered")
+	if err != nil {
 		t.Fatal(err)
 	}
-	ct.pendingSend = &pendingSend{Draft: "uncertain prompt", Context: ct.Context.snapshot(), State: "submitting"}
-	ct.SubmittedDraft = "uncertain prompt"
-	a.failSubmit(ct.ID, &runtimeError{Code: "protocol_error", Message: "disconnected"}, true)
+	ct.Draft = "uncertain prompt"
+	ct.pendingSend = &pendingSend{Draft: ct.Draft, Context: ct.Context.snapshot(), State: "submitting"}
+	ct.SubmittedDraft = ct.Draft
+	a.failPiSubmission(a.pi, ct.ID, event.RunID,
+		&pi.CommandError{Method: "run.start", Delivery: pi.Unanswered, Err: errors.New("disconnected")}, true)
 	if ct.SendState != sendUnknown || ct.pendingSend == nil || ct.pendingSend.State != "unknown" {
 		t.Fatalf("unknown failure = state %v pending %+v", ct.SendState, ct.pendingSend)
 	}
-	if len(ct.Context.snapshot()) != 1 {
-		t.Fatalf("unknown failure lost context: %+v", ct.Context.snapshot())
+	items := ct.Context.snapshot()
+	if len(items) != 1 || items[0] != item || ct.Draft != "uncertain prompt" {
+		t.Fatalf("unknown failure lost materials: context=%+v draft=%q", items, ct.Draft)
 	}
 	store, err := openContactStore(a.store.path, "/tmp")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if store.state.Contacts[0].PendingSend == nil || store.state.Contacts[0].PendingSend.State != "unknown" {
-		t.Fatalf("unknown intent was not persisted: %+v", store.state.Contacts[0].PendingSend)
+	saved := store.state.Contacts[0].PendingSend
+	if saved == nil || saved.State != "unknown" || saved.Draft != "uncertain prompt" || len(saved.Context) != 1 || saved.Context[0] != item {
+		t.Fatalf("unknown intent or its materials were not persisted: %+v", saved)
 	}
 }
 

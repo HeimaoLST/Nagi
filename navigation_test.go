@@ -238,16 +238,18 @@ func TestAvatarSettingsResizeBackFocus(t *testing.T) {
 }
 
 func TestHistoryFullLateResultCannotHijackAnotherSurface(t *testing.T) {
-	a, ct := workspaceTestApp(t)
+	a, ct, _ := piRunStartedTestApp(t)
+	ct.ActiveTaskID, ct.SendState = "", sendIdle
+	host, hostGeneration := a.pi, a.connectionGeneration
 	a.windowWidth = 1040
 	a.openDetail(detailHistory)
-	a.contactHistory = &contactHistoryResult{Matches: []contactHistoryMatch{{SessionID: "s1", EntryID: "h1"}}}
+	a.contactHistory = &contactHistoryResult{Matches: []contactHistoryMatch{{SessionID: ct.SessionID, EntryID: "h1"}}}
 	searchGen := a.contactHistoryGen
 	detailGen := a.contactHistoryDetailGen
 	a.contactHistoryDetailBusy = true
 	a.openDetail(detailWork)
-	a.applyContactHistoryFull(nil, a.connectionGeneration, ct.ID, searchGen, detailGen,
-		&contactHistoryFull{SessionID: "s1", EntryID: "h1", Text: "late full"}, "", nil)
+	a.applyContactHistoryFull(host, hostGeneration, ct, searchGen, detailGen,
+		&contactHistoryFull{SessionID: ct.SessionID, EntryID: "h1", Text: "late full"}, "", nil, "")
 	if a.contactHistoryFull != nil || !a.detailIs(detailWork) {
 		t.Fatalf("late full opened over Work: full=%+v detail=%q", a.contactHistoryFull, a.activeDetail())
 	}
@@ -260,29 +262,33 @@ func TestHistoryFullLateResultCannotHijackAnotherSurface(t *testing.T) {
 }
 
 func TestHistoryFullLateResultCannotOpenAfterHistoryClosed(t *testing.T) {
-	a, ct := workspaceTestApp(t)
+	a, ct, _ := piRunStartedTestApp(t)
+	ct.ActiveTaskID, ct.SendState = "", sendIdle
+	host, hostGeneration := a.pi, a.connectionGeneration
 	a.windowWidth = 1040
 	a.openDetail(detailHistory)
 	searchGen := a.contactHistoryGen
 	detailGen := a.contactHistoryDetailGen
 	a.closeDetail()
-	a.applyContactHistoryFull(nil, a.connectionGeneration, ct.ID, searchGen, detailGen,
-		&contactHistoryFull{SessionID: "s1", EntryID: "h1", Text: "late full"}, "", nil)
+	a.applyContactHistoryFull(host, hostGeneration, ct, searchGen, detailGen,
+		&contactHistoryFull{SessionID: ct.SessionID, EntryID: "h1", Text: "late full"}, "", nil, "")
 	if a.contactHistoryFull != nil || a.workspaceOpen {
 		t.Fatalf("late full reopened a closed History: full=%+v detail=%q", a.contactHistoryFull, a.activeDetail())
 	}
 }
 
 func TestHistoryFullActiveRequestPreservesInlineCarrier(t *testing.T) {
-	a, ct := workspaceTestApp(t)
+	a, ct, _ := piRunStartedTestApp(t)
+	ct.ActiveTaskID, ct.SendState = "", sendIdle
+	host, hostGeneration := a.pi, a.connectionGeneration
 	a.windowWidth = 1040
 	a.openDetail(detailHistory)
 	a.aux = "task-context"
 	a.composerPanel = composerPanelContext
 	a.taskContextIssueID = ""
 	a.contactHistoryDetailBusy = true
-	a.applyContactHistoryFull(nil, a.connectionGeneration, ct.ID, a.contactHistoryGen, a.contactHistoryDetailGen,
-		&contactHistoryFull{SessionID: "s1", EntryID: "h1", Text: "full with inline context"}, "", nil)
+	a.applyContactHistoryFull(host, hostGeneration, ct, a.contactHistoryGen, a.contactHistoryDetailGen,
+		&contactHistoryFull{SessionID: ct.SessionID, EntryID: "h1", Text: "full with inline context"}, "", nil, "")
 	if a.contactHistoryFull == nil || a.aux != "task-context" || !a.composerInlineAux() {
 		t.Fatalf("inline carrier was lost: full=%+v aux=%q panel=%q", a.contactHistoryFull, a.aux, a.composerPanel)
 	}
@@ -302,12 +308,14 @@ func TestHistoryFullActiveRequestPreservesInlineCarrier(t *testing.T) {
 }
 
 func TestHistoryFullActiveRequestUsesMainReadingPage(t *testing.T) {
-	a, ct := workspaceTestApp(t)
+	a, ct, _ := piRunStartedTestApp(t)
+	ct.ActiveTaskID, ct.SendState = "", sendIdle
+	host, hostGeneration := a.pi, a.connectionGeneration
 	a.windowWidth = 1040
 	a.openDetail(detailHistory)
 	a.contactHistoryDetailBusy = true
-	a.applyContactHistoryFull(nil, a.connectionGeneration, ct.ID, a.contactHistoryGen, a.contactHistoryDetailGen,
-		&contactHistoryFull{SessionID: "s1", EntryID: "h1", Text: "full marker"}, "", nil)
+	a.applyContactHistoryFull(host, hostGeneration, ct, a.contactHistoryGen, a.contactHistoryDetailGen,
+		&contactHistoryFull{SessionID: ct.SessionID, EntryID: "h1", Text: "full marker"}, "", nil, "")
 	if a.contactHistoryFull == nil || !a.mainPageActive() {
 		t.Fatalf("active full message did not open the main page: %+v", a.contactHistoryFull)
 	}

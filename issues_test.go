@@ -237,18 +237,19 @@ func TestPiConversationRunStartedClearsSubmittedDraft(t *testing.T) {
 }
 
 func TestIssueConfirmedRejectIsPersistedAndRerunnable(t *testing.T) {
-	ct := &contact{ID: "c1", Name: "Saki"}
-	issue := &productIssue{ID: "i1", ContactID: "c1", Goal: "work", Status: issueStatusNotStarted}
+	a, ct, _ := piRunStartedTestApp(t)
+	ct.ActiveTaskID, ct.SendState = "", sendIdle
+	issue := &productIssue{ID: "i1", ContactID: ct.ID, Goal: "work", Status: issueStatusNotStarted}
 	execution := &issueExecution{ID: "e1", Prompt: "work", Status: issueExecutionPending}
 	issue.Executions = append(issue.Executions, execution)
 	ct.Issues = append(ct.Issues, issue)
 	ct.SelectedIssueID = issue.ID
-	ct.pendingIssueExecution = execution.ID
-	path := filepath.Join(t.TempDir(), "contacts.json")
-	a := &appModel{contacts: []*contact{ct}, selected: 0, store: &contactStore{path: path}}
-	a.failSubmit(ct.ID, &runtimeError{Code: "invalid_request", Message: "not accepted"}, true)
-	if execution.Status != issueExecutionRejected || ct.SendState != sendIdle {
-		t.Fatalf("confirmed reject state = %+v / %v", execution, ct.SendState)
+	issue.Work.pendingExecutionID = execution.ID
+	issue.Work.SendState = sendSubmitting
+	path := a.store.path
+	a.failIssueSubmit(ct.ID, issue.ID, &runtimeError{Code: "invalid_request", Message: "not accepted"}, true)
+	if execution.Status != issueExecutionRejected || issue.Work.SendState != sendIdle || ct.SendState != sendIdle {
+		t.Fatalf("confirmed reject state = %+v / %v / %v", execution, issue.Work.SendState, ct.SendState)
 	}
 	if reason := issueRunBlocked(issue); reason != "" {
 		t.Fatalf("rejected execution blocked an explicit rerun: %q", reason)
@@ -260,10 +261,13 @@ func TestIssueConfirmedRejectIsPersistedAndRerunnable(t *testing.T) {
 	if len(loaded.state.Issues) != 1 || len(loaded.state.Issues[0].Executions) != 1 {
 		t.Fatalf("persisted issues = %+v", loaded.state.Issues)
 	}
+	if loaded.state.Issues[0].ID != issue.ID || loaded.state.Issues[0].ContactID != ct.ID || loaded.state.Issues[0].Executions[0].ID != execution.ID {
+		t.Fatalf("persisted rejection lost its issue association: %+v", loaded.state.Issues[0])
+	}
 	if got := loaded.state.Issues[0].Executions[0].Status; got != issueExecutionRejected {
 		t.Fatalf("persisted reject status = %q", got)
 	}
-	restored := issuesForStoredContact(loaded.state.Issues, "c1")
+	restored := issuesForStoredContact(loaded.state.Issues, ct.ID)
 	if len(restored) != 1 || restored[0].Executions[0].Status != issueExecutionRejected || issueRunBlocked(restored[0]) != "" {
 		t.Fatalf("restored reject = %+v", restored)
 	}
@@ -335,26 +339,30 @@ func TestIssueResultAttributionFollowsSelectedIssue(t *testing.T) {
 }
 
 func TestIssueNotDispatchedIsPersistedAndRerunnable(t *testing.T) {
-	ct := &contact{ID: "c1", Name: "Saki"}
-	issue := &productIssue{ID: "i1", ContactID: "c1", Goal: "work", Status: issueStatusNotStarted}
+	a, ct, _ := piRunStartedTestApp(t)
+	ct.ActiveTaskID, ct.SendState = "", sendIdle
+	issue := &productIssue{ID: "i1", ContactID: ct.ID, Goal: "work", Status: issueStatusNotStarted}
 	execution := &issueExecution{ID: "e1", Prompt: "work", Status: issueExecutionPending}
 	issue.Executions = append(issue.Executions, execution)
 	ct.Issues = append(ct.Issues, issue)
 	ct.SelectedIssueID = issue.ID
-	ct.pendingIssueExecution = execution.ID
-	path := filepath.Join(t.TempDir(), "contacts.json")
-	a := &appModel{contacts: []*contact{ct}, selected: 0, store: &contactStore{path: path}}
-	a.failSubmit(ct.ID, &runtimeError{Code: "protocol_error", Message: "sendTask was not issued"}, false)
-	if execution.Status != issueExecutionNotDispatched || issueRunBlocked(issue) != "" {
+	issue.Work.pendingExecutionID = execution.ID
+	issue.Work.SendState = sendSubmitting
+	path := a.store.path
+	a.failIssueSubmit(ct.ID, issue.ID, &runtimeError{Code: "protocol_error", Message: "dispatch was not issued"}, false)
+	if execution.Status != issueExecutionNotDispatched || issue.Work.SendState != sendIdle || issueRunBlocked(issue) != "" {
 		t.Fatalf("not-dispatched state = %+v", execution)
 	}
 	loaded, err := openContactStore(path, t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
-	restored := issuesForStoredContact(loaded.state.Issues, "c1")
+	restored := issuesForStoredContact(loaded.state.Issues, ct.ID)
 	if len(restored) != 1 || restored[0].Executions[0].Status != issueExecutionNotDispatched || issueRunBlocked(restored[0]) != "" {
 		t.Fatalf("restored not-dispatched = %+v", restored)
+	}
+	if restored[0].ID != issue.ID || restored[0].ContactID != ct.ID || restored[0].Executions[0].ID != execution.ID {
+		t.Fatalf("persisted non-dispatch lost its issue association: %+v", restored[0])
 	}
 }
 

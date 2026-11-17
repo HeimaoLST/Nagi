@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -220,18 +221,30 @@ func TestSettingsDuringFirstCreateKeepsSubmittedSnapshot(t *testing.T) {
 	}
 }
 
-func TestFailSubmitKeepsDraftForUnconfirmedProtocolError(t *testing.T) {
-	a, bound, _ := testRuntimeModel(t)
+func TestPiSubmissionFailureKeepsDraftForUnknownDelivery(t *testing.T) {
+	a, bound, event := piRunStartedTestApp(t)
 	bound.Draft = "keep"
-	bound.SendState = sendSubmitting
-	a.failSubmit(bound.ID, &runtimeError{Code: "protocol_error", Message: "bad wire"}, true)
+	bound.SubmittedDraft = bound.Draft
+	bound.pendingSend = &pendingSend{Draft: bound.Draft, State: "submitting"}
+	a.failPiSubmission(a.pi, bound.ID, event.RunID,
+		&pi.CommandError{Method: "run.start", Delivery: pi.Unanswered, Err: errors.New("bad wire")}, true)
 	if bound.SendState != sendUnknown || bound.Draft != "keep" {
 		t.Fatalf("state=%v draft=%q", bound.SendState, bound.Draft)
 	}
-	bound.SendState = sendSubmitting
-	a.failSubmit(bound.ID, &runtimeError{Code: "busy", Message: "slot occupied"}, true)
+	if bound.pendingSend == nil || bound.pendingSend.State != "unknown" || bound.pendingSend.Draft != "keep" {
+		t.Fatalf("unconfirmed failure lost pending intent: %+v", bound.pendingSend)
+	}
+	a, bound, event = piRunStartedTestApp(t)
+	bound.Draft = "keep"
+	bound.SubmittedDraft = bound.Draft
+	bound.pendingSend = &pendingSend{Draft: bound.Draft, State: "submitting"}
+	a.failPiSubmission(a.pi, bound.ID, event.RunID,
+		&pi.CommandError{Method: "run.start", Delivery: pi.Rejected, Err: &pi.RemoteError{Code: "busy", Message: "slot occupied"}}, false)
 	if bound.SendState != sendIdle || !strings.Contains(bound.SendError, "busy") {
 		t.Fatalf("state=%v error=%q", bound.SendState, bound.SendError)
+	}
+	if bound.Draft != "keep" || bound.pendingSend != nil {
+		t.Fatalf("confirmed rejection changed draft or retained pending intent: draft=%q pending=%+v", bound.Draft, bound.pendingSend)
 	}
 }
 
