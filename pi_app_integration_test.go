@@ -2610,3 +2610,1143 @@ func TestPiAppConnectionAndConversation(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+type piActivityProvider struct {
+	harness   *piFirstUseHarness
+	mu        sync.Mutex
+	requests  int
+	bodies    []json.RawMessage
+	problems  []string
+	results   map[string]string
+	issueA    string
+	issueB    string
+	stopB     bool
+	arrivedA  chan struct{}
+	releaseA  chan struct{}
+	arrivedB  chan struct{}
+	releaseB  chan struct{}
+	quitStart chan struct{}
+	quitHold  chan struct{}
+}
+
+func (p *piActivityProvider) count() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.requests
+}
+
+func (p *piActivityProvider) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 512<<10))
+	var request struct {
+		Model    string `json:"model"`
+		Stream   bool   `json:"stream"`
+		Messages []struct {
+			Role       string          `json:"role"`
+			Content    json.RawMessage `json:"content"`
+			ToolCallID string          `json:"tool_call_id"`
+		} `json:"messages"`
+		Tools []struct {
+			Function struct {
+				Name string `json:"name"`
+			} `json:"function"`
+		} `json:"tools"`
+	}
+	if err == nil {
+		err = json.Unmarshal(body, &request)
+	}
+	p.mu.Lock()
+	p.requests++
+	p.bodies = append(p.bodies, append(json.RawMessage(nil), body...))
+	if err == nil && (p.requests > 24 || r.Method != http.MethodPost || r.URL.Path != "/v1/chat/completions" || r.Header.Get("Authorization") != "Bearer nagi-product-loopback" || request.Model != "nagi-product-fixture" || !request.Stream || len(request.Messages) == 0) {
+		err = errors.New("unexpected activity loopback request or budget exceeded")
+	}
+	stopB, issueA, issueB := p.stopB, p.issueA, p.issueB
+	p.mu.Unlock()
+	if err != nil {
+		p.mu.Lock()
+		p.problems = append(p.problems, err.Error())
+		p.mu.Unlock()
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	marker := ""
+	for _, message := range request.Messages {
+		if message.Role == "user" {
+			for _, candidate := range []string{"ACTIVITY_A", "ACTIVITY_B", "ACTIVITY_CHAT_QUERY", "ACTIVITY_CHAT_QUIT"} {
+				if strings.Contains(string(message.Content), candidate) {
+					marker = candidate
+				}
+			}
+		}
+	}
+	last := request.Messages[len(request.Messages)-1]
+	if marker == "" && err == nil {
+		err = errors.New("activity loopback request has no owned scenario marker")
+	}
+	callName, callID, scope := "", "", ""
+	if err == nil && last.Role == "tool" {
+		var text string
+		if json.Unmarshal(last.Content, &text) != nil || last.ToolCallID == "" {
+			err = errors.New("activity tool result is not correlated text")
+		} else {
+			p.mu.Lock()
+			p.results[last.ToolCallID] = text
+			p.mu.Unlock()
+		}
+	} else if err == nil {
+		switch {
+		case marker == "ACTIVITY_A":
+			callName, callID = "issue_wait", "activity-wait-a"
+		case marker == "ACTIVITY_B" && stopB:
+			callName, callID = "issue_wait", "activity-wait-b"
+		case marker == "ACTIVITY_CHAT_QUERY":
+			callName, callID = "issue_get", "activity-progress-query"
+		}
+		if callName != "" {
+			ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+			err = p.harness.actor(ctx, func() {
+				ct := p.harness.app.selectedContact()
+				if ct == nil {
+					return
+				}
+				if callName == "issue_get" {
+					if ct.pendingSend != nil {
+						scope = ct.pendingSend.ToolScopeRef
+					}
+					return
+				}
+				issueID := issueA
+				if marker == "ACTIVITY_B" {
+					issueID = issueB
+				}
+				if issue := ct.issueByID(issueID); issue != nil {
+					if execution := latestIssueExecution(issue); execution != nil {
+						scope = execution.ToolScopeRef
+					}
+				}
+			})
+			cancel()
+			found := false
+			for _, tool := range request.Tools {
+				found = found || tool.Function.Name == callName
+			}
+			if err == nil && (!found || scope == "") {
+				err = fmt.Errorf("actual %s registration or captured scope is unavailable", callName)
+			}
+		}
+	}
+	if err != nil {
+		p.mu.Lock()
+		p.problems = append(p.problems, err.Error())
+		p.mu.Unlock()
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if last.Role != "tool" && marker == "ACTIVITY_A" {
+		close(p.arrivedA)
+		select {
+		case <-p.releaseA:
+		case <-r.Context().Done():
+			return
+		}
+	}
+	if last.Role != "tool" && marker == "ACTIVITY_B" && !stopB {
+		close(p.arrivedB)
+		select {
+		case <-p.releaseB:
+		case <-r.Context().Done():
+			return
+		}
+	}
+	delta := map[string]any{"role": "assistant", "content": "ACTIVITY_TURN_COMPLETE"}
+	finish := "stop"
+	if callName != "" {
+		arguments := map[string]any{"scope": scope}
+		if callName == "issue_wait" {
+			arguments["text"] = "Which delivery should this activity use?"
+		} else {
+			arguments["issue_id"] = issueA
+		}
+		encoded, _ := json.Marshal(arguments)
+		delta = map[string]any{"role": "assistant", "tool_calls": []any{map[string]any{"index": 0, "id": callID, "type": "function", "function": map[string]string{"name": callName, "arguments": string(encoded)}}}}
+		finish = "tool_calls"
+	}
+	w.Header().Set("Content-Type", "text/event-stream")
+	chunk, _ := json.Marshal(map[string]any{"id": "activity-loopback", "object": "chat.completion.chunk", "created": 1, "model": "nagi-product-fixture", "choices": []any{map[string]any{"index": 0, "delta": delta, "finish_reason": nil}}})
+	fmt.Fprintf(w, "data: %s\n\n", chunk)
+	if marker == "ACTIVITY_CHAT_QUIT" {
+		if flush, ok := w.(http.Flusher); ok {
+			flush.Flush()
+		}
+		close(p.quitStart)
+		select {
+		case <-p.quitHold:
+		case <-r.Context().Done():
+			return
+		}
+	}
+	chunk, _ = json.Marshal(map[string]any{"id": "activity-loopback", "object": "chat.completion.chunk", "created": 1, "model": "nagi-product-fixture", "choices": []any{map[string]any{"index": 0, "delta": map[string]any{}, "finish_reason": finish}}})
+	fmt.Fprintf(w, "data: %s\n\ndata: [DONE]\n\n", chunk)
+}
+
+type piActivityHarness struct {
+	*piFirstUseHarness
+	provider  *piActivityProvider
+	evidence  string
+	contactID string
+}
+
+func (h *piActivityHarness) screenshot(name string) {
+	h.t.Helper()
+	var save func()
+	h.onUI(func() error {
+		h.tester.Frame()
+		image := h.tester.Image()
+		save = func() { writePreviewPNG(h.t, filepath.Join(h.evidence, name+".png"), image) }
+		return nil
+	})
+	save()
+}
+
+func (h *piActivityHarness) createIssue(goal string) string {
+	h.t.Helper()
+	msgs := locales.In("en")
+	h.click(msgs.IssueNewIssue())
+	h.onUI(func() error {
+		if err := h.focus(msgs.IssueFormGoalLabel(), true); err != nil {
+			return err
+		}
+		h.tester.Type(goal)
+		if err := h.focus(msgs.IssueFormRequirementsLabel(), true); err != nil {
+			return err
+		}
+		h.tester.Type("Keep the captured activity ownership.")
+		return nil
+	})
+	h.click(msgs.WorkSaveIssue())
+	var id string
+	h.onUI(func() error {
+		ct := h.app.contactByID(h.contactID)
+		if ct == nil || ct.SelectedIssueID == "" || ct.issueByID(ct.SelectedIssueID) == nil || ct.issueByID(ct.SelectedIssueID).Goal != goal {
+			return fmt.Errorf("GUI did not create captured issue %q", goal)
+		}
+		id = ct.SelectedIssueID
+		return nil
+	})
+	h.click(msgs.WorkBackToIssues())
+	return id
+}
+
+func (h *piActivityHarness) selectIssue(goal, id string) {
+	h.t.Helper()
+	h.click(locales.In("en").IssueRowLabel(goal))
+	h.onUI(func() error {
+		ct := h.app.contactByID(h.contactID)
+		if ct == nil || ct.issueNavigation().DetailID != id {
+			return errors.New("GUI selected a different activity")
+		}
+		return nil
+	})
+}
+
+func (h *piActivityHarness) startIssue(label, id string) {
+	h.t.Helper()
+	h.click(label)
+	h.onUI(func() error {
+		issue := h.app.contactByID(h.contactID).issueByID(id)
+		if issue == nil || latestIssueExecution(issue) == nil || !latestIssueExecution(issue).PiIntent {
+			return errors.New("GUI did not persist an activity intent")
+		}
+		return nil
+	})
+}
+
+func (h *piActivityHarness) wait(condition func() bool) {
+	h.t.Helper()
+	h.pump.waitTimeout(condition, 45*time.Second)
+}
+
+func (h *piActivityHarness) waitSignal(signal <-chan struct{}, name string) {
+	h.t.Helper()
+	select {
+	case <-signal:
+	case <-time.After(30 * time.Second):
+		h.t.Fatalf("timed out waiting for %s", name)
+	}
+}
+
+func (h *piActivityHarness) saveForm(inputLabel, saveLabel string) {
+	h.t.Helper()
+	h.onUI(func() error {
+		if err := h.focus(locales.In("en").SupplementCancel(), false); err != nil {
+			return err
+		}
+		h.tester.Key(0, ui.KeyTab)
+		h.tester.Frame()
+		active, _ := h.tester.TextInputActive()
+		if !active || !h.tester.Focused(inputLabel) {
+			return errors.New("captured form input was not focused after Cancel")
+		}
+		h.tester.Key(0, ui.KeyTab)
+		h.tester.Frame()
+		active, _ = h.tester.TextInputActive()
+		if active || !h.tester.Focused(saveLabel) {
+			return errors.New("captured form Save was not focused after its input")
+		}
+		h.tester.Key(0, ui.KeySpace)
+		h.tester.Frame()
+		return nil
+	})
+}
+
+func TestPiAppActivitiesAndQuestions(t *testing.T) {
+	node, worker := os.Getenv("NAGI_TEST_NODE"), os.Getenv("NAGI_TEST_WORKER")
+	if !filepath.IsAbs(node) || !filepath.IsAbs(worker) {
+		t.Fatal("NAGI_TEST_NODE and NAGI_TEST_WORKER must be pinned absolute files")
+	}
+	var err error
+	node, err = filepath.EvalSymlinks(node)
+	if err != nil {
+		t.Fatal(err)
+	}
+	worker, err = filepath.EvalSymlinks(worker)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload := filepath.Dir(filepath.Dir(node))
+	if node != filepath.Join(payload, "bin", "node") || worker != filepath.Join(payload, "dist", "worker.js") {
+		t.Fatal("pinned Node and worker must belong to the same product payload")
+	}
+	for _, path := range []string{node, worker} {
+		info, err := os.Stat(path)
+		if err != nil || !info.Mode().IsRegular() {
+			t.Fatalf("pinned input %q is not a regular file: %v", path, err)
+		}
+	}
+	evidence := os.Getenv("NAGI_ACTIVITY_EVIDENCE_DIR")
+	if !filepath.IsAbs(evidence) {
+		t.Fatal("NAGI_ACTIVITY_EVIDENCE_DIR must be an absolute directory outside source")
+	}
+	worktree, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info, err := os.Stat(evidence); err != nil || !info.IsDir() {
+		t.Fatalf("activity evidence directory must already exist: %v", err)
+	}
+	worktree, err = filepath.EvalSymlinks(worktree)
+	if err != nil {
+		t.Fatal(err)
+	}
+	evidence, err = filepath.EvalSymlinks(evidence)
+	if err != nil {
+		t.Fatal(err)
+	}
+	relative, err := filepath.Rel(worktree, evidence)
+	if err != nil || relative == "." || relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+		t.Fatal("activity evidence must be written outside the source tree")
+	}
+	inputs := map[string]string{}
+	for _, path := range []string{node, worker, "pi_app_integration_test.go", "pi_activity.go", "pi_app.go", "issue_supplement_view.go", "workspace.go"} {
+		digest, err := piAppFileHash(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		inputs[path] = digest
+	}
+	piAppRecord(t, "activity-source-inputs", inputs)
+	root := t.TempDir()
+	project, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HOME", root)
+	t.Setenv("TMPDIR", root)
+	t.Setenv("SAKI_TEST_ISSUE_TOOL_HELPER", "")
+	isolateConnectionApp(t, root, payload)
+	t.Setenv("SAKI_GUI_STORE", guiStorePath())
+	app, err := newRuntimeApp()
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := &piFirstUseHarness{t: t, app: app, provider: &piAppProvider{limit: 24}}
+	first.pump = newUIPump(t, app)
+	first.tester = ui.NewTester(app.view, 1040, 720)
+	first.tester.SetLocale("en")
+	first.tester.SetFocused(true)
+	h := &piActivityHarness{piFirstUseHarness: first, evidence: evidence}
+	p := &piActivityProvider{harness: first, results: make(map[string]string), arrivedA: make(chan struct{}), releaseA: make(chan struct{}), arrivedB: make(chan struct{}), releaseB: make(chan struct{}), quitStart: make(chan struct{}), quitHold: make(chan struct{})}
+	h.provider = p
+	server := httptest.NewServer(p)
+	first.servers = append(first.servers, server)
+	t.Cleanup(func() {
+		p.mu.Lock()
+		bodies := append([]json.RawMessage(nil), p.bodies...)
+		problems := append([]string(nil), p.problems...)
+		requests := p.requests
+		p.mu.Unlock()
+		piAppRecord(t, "activity-loopback", map[string]any{"requests": requests, "bodies": bodies, "problems": problems})
+		if len(problems) != 0 {
+			t.Errorf("activity loopback rejected requests through cleanup: %v", problems)
+		}
+		if !t.Failed() && requests != 7 {
+			t.Errorf("activity loopback final request count = %d, want 7", requests)
+		}
+	})
+	t.Cleanup(first.cleanup)
+	var releaseA, releaseB, releaseQuit sync.Once
+	t.Cleanup(func() {
+		releaseA.Do(func() { close(p.releaseA) })
+		releaseB.Do(func() { close(p.releaseB) })
+		releaseQuit.Do(func() { close(p.quitHold) })
+	})
+	h.onUI(func() error {
+		if app.selectedContact() == nil || app.connectionForm == nil || app.connectionForm.Draft.Slots != "2" {
+			return errors.New("fresh app or default capacity is unavailable")
+		}
+		h.contactID = app.selectedContact().ID
+		return nil
+	})
+	h.input("API endpoint", server.URL+"/v1")
+	h.input("API key", "nagi-product-loopback")
+	h.input("Default model", "nagi-product-fixture")
+	h.activate("Capacity & execution limits")
+	h.input("Context tokens", "65536")
+	h.input("Output tokens", "4096")
+	h.input("Maximum active tasks", "3")
+	h.onUI(func() error {
+		app.chooseFolder = func(mygo.OpenDialogOptions) ([]string, error) { return []string{project}, nil }
+		return nil
+	})
+	h.click("Choose folder…")
+	h.wait(func() bool { return !app.connectionForm.Busy })
+	h.click("Save configuration")
+	h.wait(func() bool { return !app.connectionForm.Busy && !app.connectionSaveInFlight })
+	h.click("Apply saved")
+	h.wait(func() bool { return !app.connectionApplying })
+	var host *piAppHost
+	h.onUI(func() error {
+		host = app.pi
+		if host == nil || host.client == nil || app.runtimeStatus != runtimeStateReady || app.connectionForm.Error != "" || app.maxActiveTasks() != 3 {
+			return errors.New("GUI Apply did not publish a ready three-slot worker")
+		}
+		return nil
+	})
+	first.hosts = append(first.hosts, host)
+	ready, err := host.client.Ready(context.Background())
+	if err != nil || ready.Engine.Version != "1.5.2" || ready.Runtime.Version != "v22.23.5" || ready.WorkerEpoch == "" {
+		t.Fatalf("actual pinned worker readiness: %+v %v", ready, err)
+	}
+	piAppRecord(t, "activity-ready", ready)
+	h.click("← Back to workbench")
+	h.click("Work")
+	issueA := h.createIssue("ACTIVITY_A")
+	issueB := h.createIssue("ACTIVITY_B")
+	issueC := h.createIssue("ACTIVITY_C_PREATTEMPT")
+	p.mu.Lock()
+	p.issueA, p.issueB = issueA, issueB
+	p.mu.Unlock()
+	msgs := locales.In("en")
+	h.selectIssue("ACTIVITY_A", issueA)
+	h.startIssue(msgs.WorkStart(), issueA)
+	h.waitSignal(p.arrivedA, "activity A provider request")
+	h.click(msgs.IssueMoreActions())
+	h.click(msgs.SupplementAdd())
+	const initialDraft = "Keep this follow-up draft"
+	const finalDraft = initialDraft + " while the question arrives"
+	h.onUI(func() error {
+		if err := h.focus(msgs.SupplementFormLabel(), true); err != nil {
+			return err
+		}
+		h.tester.Type(initialDraft)
+		h.tester.Frame()
+		active, _ := h.tester.TextInputActive()
+		if !active || !h.tester.Focused(msgs.SupplementFormLabel()) || *app.issueSupplementDraft(issueA) != initialDraft || app.issueSupplementFormID != issueA {
+			return errors.New("ordinary follow-up did not retain its focused draft")
+		}
+		piAppRecord(t, "activity-followup-before", map[string]any{"issue_id": issueA, "focused": true, "text_input_active": active, "draft": *app.issueSupplementDraft(issueA)})
+		return nil
+	})
+	h.screenshot("activity-followup-before-question")
+	releaseA.Do(func() { close(p.releaseA) })
+	h.wait(func() bool {
+		issue := app.contactByID(h.contactID).issueByID(issueA)
+		return issue != nil && issue.openQuestion() != nil
+	})
+	var runA piActivityRun
+	var questionA piQuestionCall
+	var questionRef, scopeA string
+	var questionRevision int
+	h.onUI(func() error {
+		ct := app.contactByID(h.contactID)
+		issue := ct.issueByID(issueA)
+		execution := latestIssueExecution(issue)
+		question := issue.openQuestion()
+		if execution == nil || execution.PiRun == nil || !execution.PiRun.Admitted || question == nil || question.PiCall == nil || question.DeliveryState != "" || question.State != issueQuestionOpen || len(issue.Questions) != 1 {
+			return errors.New("actual held call did not save one unanswered question")
+		}
+		runA, questionA = *execution.PiRun, *question.PiCall
+		questionRef, questionRevision, scopeA = question.Ref, question.RequirementsRevision, execution.ToolScopeRef
+		if questionA.WorkerEpoch != ready.WorkerEpoch || questionA.ContextID != runA.ContextID || questionA.RunID != runA.RunID || questionA.CallID != "activity-wait-a" || questionA.ContactID != h.contactID || questionA.IssueID != issueA || questionA.ExecutionID != execution.ID || questionA.SessionRef != runA.SessionRef || questionA.OperationID == "" || questionRevision != issue.RequirementsRevision || app.piQuestionWaiters[questionA.OperationID] == nil {
+			return errors.New("held question did not preserve exact worker, call and product ownership")
+		}
+		operation := app.issueToolLedger.operationByID(questionA.OperationID)
+		if operation == nil || operation.PiCall == nil || *operation.PiCall != questionA || operation.Receipt == nil || operation.Receipt.QuestionRef != questionRef {
+			return errors.New("held call operation receipt is not correlated to its question")
+		}
+		h.tester.Frame()
+		active, _ := h.tester.TextInputActive()
+		if !active || !h.tester.Focused(msgs.SupplementFormLabel()) || *app.issueSupplementDraft(issueA) != initialDraft {
+			return errors.New("question arrival changed the focused follow-up controller or draft")
+		}
+		h.tester.Type(" while the question arrives")
+		h.tester.Key(ui.Cmd, ui.KeyA)
+		h.tester.Key(ui.Cmd, ui.KeyC)
+		h.tester.Frame()
+		active, _ = h.tester.TextInputActive()
+		if !active || *app.issueSupplementDraft(issueA) != finalDraft || h.tester.Clipboard() != finalDraft || !h.tester.Focused(msgs.SupplementFormLabel()) {
+			return errors.New("typing or copying after the question lost the focused follow-up")
+		}
+		piAppRecord(t, "activity-followup-after", map[string]any{"question": questionRef, "call": questionA, "run": runA, "focused": true, "text_input_active": active, "draft": *app.issueSupplementDraft(issueA), "copied": h.tester.Clipboard()})
+		return nil
+	})
+	h.screenshot("activity-followup-after-question")
+	h.click(msgs.SupplementCancel())
+	h.click(msgs.WorkBackToIssues())
+	h.selectIssue("ACTIVITY_B", issueB)
+	h.startIssue(msgs.WorkStart(), issueB)
+	h.waitSignal(p.arrivedB, "activity B provider request")
+	var runB piActivityRun
+	var bindingB *piActivityBinding
+	var executionBID, issueStatusB string
+	var sendStateB sendState
+	var workStateB workState
+	h.wait(func() bool {
+		issue := app.contactByID(h.contactID).issueByID(issueB)
+		execution := latestIssueExecution(issue)
+		return execution != nil && execution.PiRun != nil && execution.PiRun.Admitted && execution.Status == issueExecutionRunning && issue.Work.ActiveTaskID == execution.PiRun.RunID
+	})
+	h.onUI(func() error {
+		ct := app.contactByID(h.contactID)
+		a, b := ct.issueByID(issueA), ct.issueByID(issueB)
+		execution := latestIssueExecution(b)
+		runB = *execution.PiRun
+		work := workFor(ct, runB.RunID)
+		if work == nil || work.State != workRunning {
+			return errors.New("activity B did not publish its running work state")
+		}
+		bindingB, executionBID, issueStatusB = clonePiActivityBinding(b.PiBinding), execution.ID, b.Status
+		sendStateB, workStateB = b.Work.SendState, work.State
+		if a.PiBinding == nil || b.PiBinding == nil || a.PiBinding.Context.Purpose != pi.Activity || b.PiBinding.Context.Purpose != pi.Activity || a.PiBinding.Context.BotID != h.contactID || b.PiBinding.Context.BotID != h.contactID || a.PiBinding.Context.ActivityID != issueA || b.PiBinding.Context.ActivityID != issueB || runA.ContextID == runB.ContextID || runA.RunID == runB.RunID || !reflect.DeepEqual(a.PiBinding.Configuration, b.PiBinding.Configuration) || !reflect.DeepEqual(a.PiBinding.Selection, b.PiBinding.Selection) {
+			return errors.New("concurrent activities did not retain distinct captured Pi owners and configurations")
+		}
+		return nil
+	})
+	checkB := func() error {
+		ct := app.contactByID(h.contactID)
+		if ct == nil {
+			return errors.New("activity B owner disappeared")
+		}
+		issue := ct.issueByID(issueB)
+		if issue == nil {
+			return errors.New("activity B disappeared")
+		}
+		execution := latestIssueExecution(issue)
+		work := workFor(ct, runB.RunID)
+		if execution == nil || execution.ID != executionBID || !reflect.DeepEqual(execution.PiRun, &runB) || !reflect.DeepEqual(issue.PiBinding, bindingB) || issue.Work.ActiveTaskID != runB.RunID || execution.Status != issueExecutionRunning || issue.Work.SendState != sendStateB || issue.Status != issueStatusB || work == nil || work.State != workStateB {
+			return errors.New("activity B changed while activity A resolved")
+		}
+		return nil
+	}
+	beforeCapacity := p.count()
+	h.click(msgs.WorkBackToIssues())
+	h.selectIssue("ACTIVITY_C_PREATTEMPT", issueC)
+	h.click(msgs.IssueMoreActions())
+	h.click(msgs.SupplementAdd())
+	h.onUI(func() error {
+		if err := h.focus(msgs.SupplementFormLabel(), true); err != nil {
+			return err
+		}
+		h.tester.Type("Material preserved before cancellation")
+		return nil
+	})
+	h.saveForm(msgs.SupplementFormLabel(), msgs.IssueSupplementSave())
+	h.onUI(func() error {
+		ct := app.contactByID(h.contactID)
+		issue := ct.issueByID(issueC)
+		reason := app.canStartIssue(ct, issue)
+		h.tester.Frame()
+		if reason != sendBlockRaw(blockWorkCapacity) || !h.tester.HasText(msgs.WorkNextActionUnavailable(reason)) || latestIssueExecution(issue) != nil || issue.Supplements == nil || issue.Supplements.pendingCount() != 1 || issue.Supplements.Items[0].Text != "Material preserved before cancellation" || p.count() != beforeCapacity {
+			return errors.New("full work capacity did not preserve the unadmitted supplement and visible refusal")
+		}
+		if _, present := h.tester.Find(msgs.WorkStartWithSupplement()); present {
+			return errors.New("full work capacity exposed an available Start action")
+		}
+		piAppRecord(t, "activity-capacity-refusal", map[string]any{"issue_id": issueC, "reason": reason, "requests": p.count(), "supplement": issue.Supplements.Items[0]})
+		return nil
+	})
+	h.screenshot("activity-capacity-refusal")
+	h.send("ACTIVITY_CHAT_QUERY")
+	h.wait(func() bool {
+		ct := app.contactByID(h.contactID)
+		return ct != nil && ct.PiBinding != nil && ct.SendState == sendIdle && ct.ActiveTaskID == ""
+	})
+	var chatBinding *piConversationBinding
+	var activityConfiguration piConfiguration
+	h.onUI(func() error {
+		ct := app.contactByID(h.contactID)
+		a := ct.issueByID(issueA)
+		if ct.PiBinding == nil || a.PiBinding == nil || ct.PiBinding.Context.Purpose != pi.Conversation || ct.PiBinding.Context.BotID != h.contactID || ct.PiBinding.Context.ActivityID != "" || ct.PiBinding.Context.ContextID == runA.ContextID || ct.PiBinding.Context.ContextID == runB.ContextID || ct.PiBinding.Selection.CWD != project || a.PiBinding.Selection.CWD != project || !reflect.DeepEqual(ct.PiBinding.Configuration, a.PiBinding.Configuration) || !reflect.DeepEqual(ct.PiBinding.Selection.CodingTools, a.PiBinding.Selection.CodingTools) {
+			return errors.New("chat did not retain the same captured configuration and its own Pi owner")
+		}
+		chatBinding = clonePiConversationBinding(ct.PiBinding)
+		activityConfiguration = a.PiBinding.Configuration
+		return nil
+	})
+	configCtx, configCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	for _, owner := range []struct {
+		contextID string
+		tool      string
+	}{{runA.ContextID, "issue_wait"}, {runB.ContextID, "issue_wait"}, {chatBinding.Context.ContextID, "issue_get"}} {
+		configuration, configErr := host.client.ContextConfiguration(configCtx, owner.contextID)
+		found := false
+		for _, tool := range configuration.ActiveTools {
+			found = found || tool == owner.tool
+		}
+		if configErr != nil || configuration.ContextID != owner.contextID || configuration.BaseURL != activityConfiguration.BaseURL || configuration.Model != activityConfiguration.Model || configuration.CredentialSource != activityConfiguration.CredentialSource || configuration.WireAPI != activityConfiguration.WireAPI || !found {
+			configCancel()
+			t.Fatalf("actual context configuration or registered tool differs: %+v %v", configuration, configErr)
+		}
+		piAppRecord(t, "activity-context-configuration", configuration)
+	}
+	configCancel()
+	p.mu.Lock()
+	queryResult := p.results["activity-progress-query"]
+	p.mu.Unlock()
+	if !strings.Contains(queryResult, runA.ContextID) || !strings.Contains(queryResult, runA.RunID) || !strings.Contains(queryResult, "pi_progress") {
+		t.Fatalf("actual registered issue_get did not return captured progress: %s", queryResult)
+	}
+	beforeInspect := p.count()
+	rawGet, _ := json.Marshal(map[string]string{"scope": scopeA, "issue_id": issueA})
+	readCtx, readCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	getResponse, err := app.issueToolHandleGet(readCtx, rawGet)
+	inspection, inspectErr := host.client.Inspect(readCtx, runA.ContextID)
+	readCancel()
+	var detail IssueToolIssueDetail
+	if err != nil || getResponse.IsError || len(getResponse.Content) != 1 || json.Unmarshal([]byte(getResponse.Content[0].Text), &detail) != nil || detail.PiProgress == nil || !detail.PiProgress.Active || detail.PiProgress.RunID != runA.RunID || detail.ResultUnavailable == "" || inspectErr != nil || inspection.ActiveRun == nil || inspection.ActiveRun.RunID != runA.RunID || p.count() != beforeInspect {
+		t.Fatalf("direct issue_get/Inspect changed requests or lost captured activity: response=%+v inspect=%+v errors=%v/%v", getResponse, inspection, err, inspectErr)
+	}
+	piAppRecord(t, "activity-direct-progress", map[string]any{"detail": detail, "inspect": inspection, "requests": beforeInspect})
+	h.click(msgs.WorkBackToIssues())
+	h.selectIssue("ACTIVITY_A", issueA)
+	beforeRefresh := p.count()
+	h.click(msgs.IssueReloadTask())
+	h.wait(func() bool { return app.contactHistoryInFlight == 0 })
+	if p.count() != beforeRefresh {
+		t.Fatal("captured GUI refresh made a model request")
+	}
+	h.screenshot("activity-question-held")
+	h.click(msgs.WorkAnswer())
+	h.onUI(func() error {
+		if app.issueSupplementAnswerTarget.ContactID != h.contactID || app.issueSupplementAnswerTarget.IssueID != issueA || app.issueSupplementAnswerTarget.RequirementsRevision != questionRevision || app.issueSupplementQuestionRef != questionRef || *app.issueSupplementDraft(issueA) != finalDraft {
+			return errors.New("GUI answer did not preserve the captured question and ordinary draft")
+		}
+		return nil
+	})
+	h.screenshot("activity-answer-before-save")
+	storePath := app.store.path
+	backupPath := storePath + ".activity-answer-backup"
+	backupHeld, obstructed := false, false
+	restoreStore := func() error {
+		if obstructed {
+			if err := os.Remove(storePath); err != nil {
+				return err
+			}
+			obstructed = false
+		}
+		if backupHeld {
+			if err := os.Rename(backupPath, storePath); err != nil {
+				return err
+			}
+			backupHeld = false
+		}
+		return nil
+	}
+	t.Cleanup(func() {
+		if err := restoreStore(); err != nil {
+			t.Errorf("restore owned activity store: %v", err)
+		}
+	})
+	diskBefore, err := os.ReadFile(storePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var committedBefore, ledgerBefore []byte
+	var waiter chan struct{}
+	h.onUI(func() error {
+		var err error
+		committedBefore, err = json.Marshal(app.store.state)
+		if err != nil {
+			return err
+		}
+		ledgerBefore, err = json.Marshal(app.issueToolLedger)
+		waiter = app.piQuestionWaiters[questionA.OperationID]
+		return err
+	})
+	if waiter == nil {
+		t.Fatal("held question has no installed waiter")
+	}
+	beforeSave := p.count()
+	if err := os.Rename(storePath, backupPath); err != nil {
+		t.Fatal(err)
+	}
+	backupHeld = true
+	if err := os.Mkdir(storePath, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	obstructed = true
+	h.saveForm(msgs.WorkAnswer(), msgs.WorkAnswer())
+	h.onUI(func() error {
+		issue := app.contactByID(h.contactID).issueByID(issueA)
+		question := issue.questionByRef(questionRef)
+		committed, err := json.Marshal(app.store.state)
+		if err != nil {
+			return err
+		}
+		ledger, err := json.Marshal(app.issueToolLedger)
+		if err != nil {
+			return err
+		}
+		disk, err := os.ReadFile(backupPath)
+		if err != nil || app.issueActionError == "" || app.issueSupplementFormID != issueA || *app.issueSupplementDraft(issueA) != finalDraft || question == nil || question.State != issueQuestionOpen || question.DeliveryState != "" || question.AnswerSupplementID != "" || app.piQuestionWaiters[questionA.OperationID] != waiter || !bytes.Equal(committed, committedBefore) || !bytes.Equal(ledger, ledgerBefore) || !bytes.Equal(disk, diskBefore) || p.count() != beforeSave {
+			return fmt.Errorf("failed captured answer Save changed durable state, waiter or draft: %v", err)
+		}
+		piAppRecord(t, "activity-answer-save-failure", map[string]any{"question_ref": questionRef, "operation_id": questionA.OperationID, "draft": finalDraft, "disk_sha256": fmt.Sprintf("%x", sha256.Sum256(disk)), "requests": beforeSave, "waiter_retained": true, "error": app.issueActionError})
+		return nil
+	})
+	h.screenshot("activity-answer-save-failed")
+	if err := restoreStore(); err != nil {
+		t.Fatal(err)
+	}
+	h.saveForm(msgs.WorkAnswer(), msgs.WorkAnswer())
+	var supplementID string
+	h.onUI(func() error {
+		issue := app.contactByID(h.contactID).issueByID(issueA)
+		question := issue.questionByRef(questionRef)
+		if question == nil || question.State != issueQuestionAnswered || question.AnswerSupplementID == "" || question.AnswerText != finalDraft || question.DeliveryState == "" || issue.Supplements == nil || len(issue.Supplements.Items) != 1 || issue.Supplements.pendingCount() != 0 || app.issueSupplementFormID != "" {
+			return errors.New("GUI did not save exactly one captured held-call answer")
+		}
+		supplementID = question.AnswerSupplementID
+		item := issue.Supplements.itemByID(supplementID)
+		if item == nil || item.PiQuestionOperationID != questionA.OperationID || item.Text != finalDraft {
+			return errors.New("saved answer is not associated with the exact held call")
+		}
+		return nil
+	})
+	h.wait(func() bool {
+		issue := app.contactByID(h.contactID).issueByID(issueA)
+		question := issue.questionByRef(questionRef)
+		execution := latestIssueExecution(issue)
+		return question != nil && question.DeliveryState == issueQuestionDeliveryResolved && execution != nil && execution.Status == issueExecutionCompleted && issue.Work.ActiveTaskID == ""
+	})
+	h.onUI(func() error {
+		ct := app.contactByID(h.contactID)
+		issue := ct.issueByID(issueA)
+		question := issue.questionByRef(questionRef)
+		if issue.Status == issueStatusCompleted || len(issue.Questions) != 1 || len(issue.Supplements.Items) != 1 || issue.Supplements.pendingCount() != 0 || ct.ActiveTaskID != "" || question.DeliveryState != issueQuestionDeliveryResolved {
+			return errors.New("answer delivery changed unrelated work or falsely completed the issue")
+		}
+		if err := checkB(); err != nil {
+			return err
+		}
+		before := p.count()
+		receipt, err := app.answerIssueQuestionFor(ct, issueA, questionRef, &questionRevision, finalDraft, nil, nil)
+		if err != nil || receipt == nil || receipt.SupplementID != supplementID || len(issue.Supplements.Items) != 1 || p.count() != before {
+			return errors.New("identical answer retry created another answer or model run")
+		}
+		piAppRecord(t, "activity-answer-resolved", map[string]any{"question": question, "run": runA, "receipt": receipt, "requests": before, "raw_tool_finished_exported": false, "raw_tool_result_reply_exported": false})
+		return nil
+	})
+	h.screenshot("activity-answer-delivered")
+	p.mu.Lock()
+	answerResult := p.results["activity-wait-a"]
+	p.mu.Unlock()
+	if answerResult != finalDraft || p.count() != beforeSave+1 {
+		t.Fatalf("next actual model request did not carry exactly the saved answer: text=%q requests=%d", answerResult, p.count())
+	}
+	historyCtx, historyCancel := context.WithTimeout(context.Background(), 15*time.Second)
+	cursor := ""
+	matches := 0
+	var matchedEntry json.RawMessage
+	var matchedEntryID string
+	for {
+		page, historyErr := host.client.History(historyCtx, pi.HistoryParams{ContextID: runA.ContextID, Cursor: cursor, Limit: 100})
+		if historyErr != nil || page.ContextID != runA.ContextID || page.SessionRef != runA.SessionRef {
+			historyCancel()
+			t.Fatalf("public activity history owner mismatch: %+v %v", page, historyErr)
+		}
+		for _, raw := range page.Entries {
+			var entry struct {
+				ID      string          `json:"id"`
+				Type    string          `json:"type"`
+				Message json.RawMessage `json:"message"`
+			}
+			var message struct {
+				Role       string `json:"role"`
+				ToolCallID string `json:"toolCallId"`
+				ToolName   string `json:"toolName"`
+			}
+			if json.Unmarshal(raw, &entry) == nil && entry.Type == "message" && json.Unmarshal(entry.Message, &message) == nil && message.Role == "toolResult" && message.ToolCallID == questionA.CallID {
+				text, contentErr := piAppContent(entry.Message)
+				if contentErr != nil || message.ToolName != "issue_wait" || text != finalDraft || entry.ID == "" || len(raw) > 64<<10 {
+					historyCancel()
+					t.Fatalf("public held answer differs from the delivered call: %s", entry.Message)
+				}
+				matchedEntry = append(json.RawMessage(nil), raw...)
+				matchedEntryID = entry.ID
+				matches++
+			}
+		}
+		if page.NextCursor == "" {
+			break
+		}
+		if page.NextCursor == cursor {
+			historyCancel()
+			t.Fatal("activity history cursor did not advance")
+		}
+		cursor = page.NextCursor
+	}
+	historyCancel()
+	if matches != 1 {
+		t.Fatalf("public history held answer count = %d", matches)
+	}
+	piAppRecord(t, "activity-answer-history", map[string]any{"worker_epoch": runA.WorkerEpoch, "context_id": runA.ContextID, "session_ref": runA.SessionRef, "run_id": runA.RunID, "call_id": questionA.CallID, "entry_id": matchedEntryID, "entry": matchedEntry})
+	h.onUI(checkB)
+	bCtx, bCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	bInspection, bErr := host.client.Inspect(bCtx, runB.ContextID)
+	bCancel()
+	if bErr != nil || bInspection.ContextID != runB.ContextID || bInspection.SessionRef != runB.SessionRef || bInspection.ActiveRun == nil || bInspection.ActiveRun.RunID != runB.RunID || bInspection.ActiveRun.CancelRequested {
+		t.Fatalf("activity B no longer has its captured active run: %+v %v", bInspection, bErr)
+	}
+	piAppRecord(t, "activity-b-held-after-answer", map[string]any{"run": runB, "inspection": bInspection})
+	releaseB.Do(func() { close(p.releaseB) })
+	h.wait(func() bool {
+		issue := app.contactByID(h.contactID).issueByID(issueB)
+		execution := latestIssueExecution(issue)
+		return execution != nil && execution.Status == issueExecutionCompleted && issue.Work.ActiveTaskID == ""
+	})
+	h.click(msgs.WorkBackToIssues())
+	h.selectIssue("ACTIVITY_B", issueB)
+	p.mu.Lock()
+	p.stopB = true
+	p.mu.Unlock()
+	h.startIssue(msgs.WorkContinue(), issueB)
+	h.wait(func() bool {
+		issue := app.contactByID(h.contactID).issueByID(issueB)
+		return issue != nil && issue.openQuestion() != nil
+	})
+	var stopCall piQuestionCall
+	var stopRun piActivityRun
+	h.onUI(func() error {
+		ct := app.contactByID(h.contactID)
+		issue := ct.issueByID(issueB)
+		question := issue.openQuestion()
+		execution := latestIssueExecution(issue)
+		if question == nil || question.PiCall == nil || question.DeliveryState != "" || execution == nil || execution.PiRun == nil || !execution.PiRun.Admitted {
+			return errors.New("second held call was not actually admitted")
+		}
+		stopCall, stopRun = *question.PiCall, *execution.PiRun
+		if stopCall.CallID != "activity-wait-b" || stopCall.RunID != stopRun.RunID || stopRun.ContextID != runB.ContextID || stopRun.RunID == runB.RunID || stopCall.OperationID == questionA.OperationID || stopCall.CallID == questionA.CallID {
+			return errors.New("second held call did not retain a distinct exact owner")
+		}
+		return nil
+	})
+	h.screenshot("activity-second-question-before-stop")
+	h.click(msgs.WorkStopIssueTask())
+	h.wait(func() bool {
+		issue := app.contactByID(h.contactID).issueByID(issueB)
+		execution := latestIssueExecution(issue)
+		return execution != nil && execution.Status == issueExecutionInterrupted && issue.Work.ActiveTaskID == ""
+	})
+	h.onUI(func() error {
+		ct := app.contactByID(h.contactID)
+		a, b := ct.issueByID(issueA), ct.issueByID(issueB)
+		question := b.openQuestion()
+		if question == nil || question.PiCall == nil || *question.PiCall != stopCall || question.DeliveryState != "" || question.AnswerSupplementID != "" || a.questionByRef(questionRef).DeliveryState != issueQuestionDeliveryResolved || a.questionByRef(questionRef).AnswerSupplementID != supplementID || ct.ActiveTaskID != "" || b.Status == issueStatusCompleted {
+			return errors.New("Stop answered a held call, changed another owner or completed its issue")
+		}
+		piAppRecord(t, "activity-stopped-held-call", map[string]any{"call": stopCall, "run": stopRun, "execution": latestIssueExecution(b), "question": question})
+		return nil
+	})
+	p.mu.Lock()
+	_, stopDelivered := p.results[stopCall.CallID]
+	p.mu.Unlock()
+	if stopDelivered {
+		t.Fatal("explicit Stop delivered an answer to the canceled held call")
+	}
+	h.click(msgs.WorkBackToIssues())
+	h.selectIssue("ACTIVITY_C_PREATTEMPT", issueC)
+	beforeCanceledPreparation := p.count()
+	host.openMu.Lock()
+	openLocked := true
+	defer func() {
+		if openLocked {
+			host.openMu.Unlock()
+		}
+	}()
+	h.startIssue(msgs.WorkStartWithSupplement(), issueC)
+	h.onUI(func() error {
+		issue := app.contactByID(h.contactID).issueByID(issueC)
+		execution := latestIssueExecution(issue)
+		batch := issueSupplementBatchForExecution(issue, execution.ID)
+		if issue.Work.SendState != sendSubmitting || execution.PiRun != nil || batch == nil || batch.State != supplementBatchDispatching {
+			return errors.New("open-context gate did not hold the genuine pre-attempt execution and batch")
+		}
+		h.tester.Frame()
+		if _, ok := h.tester.Find(msgs.SupplementCheck()); !ok || !h.tester.HasText(piResultsUnavailable) {
+			return errors.New("the unavailable batch Check was not visible while dispatch was held")
+		}
+		checkErr := h.tester.Click(msgs.SupplementCheck())
+		h.tester.Frame()
+		if batch.State != supplementBatchDispatching || execution.PiRun != nil || p.count() != beforeCanceledPreparation {
+			return errors.New("unavailable batch Check changed the held execution")
+		}
+		piAppRecord(t, "activity-unavailable-check", map[string]any{"batch_id": batch.ID, "state": batch.State, "click_error": fmt.Sprint(checkErr), "requests": p.count()})
+		return nil
+	})
+	h.screenshot("activity-batch-check-unavailable")
+	h.click(msgs.WorkCancel())
+	h.onUI(func() error {
+		issue := app.contactByID(h.contactID).issueByID(issueC)
+		if issue.Status != issueStatusCanceled || !issue.Work.cancelAfterAccept || latestIssueExecution(issue).PiRun != nil {
+			return errors.New("GUI did not cancel the owned pre-attempt issue")
+		}
+		return nil
+	})
+	host.openMu.Unlock()
+	openLocked = false
+	h.wait(func() bool {
+		issue := app.contactByID(h.contactID).issueByID(issueC)
+		execution := latestIssueExecution(issue)
+		return execution != nil && execution.Status == issueExecutionNotDispatched && issue.Work.SendState == sendIdle
+	})
+	h.onUI(func() error {
+		issue := app.contactByID(h.contactID).issueByID(issueC)
+		execution := latestIssueExecution(issue)
+		batch := issueSupplementBatchForExecution(issue, execution.ID)
+		if issue.Status != issueStatusCanceled || execution.PiRun != nil || batch == nil || batch.State != supplementBatchNotDispatched || len(batch.Snapshot) != 1 || batch.Snapshot[0].Text != "Material preserved before cancellation" || p.count() != beforeCanceledPreparation {
+			return errors.New("pre-attempt cancel dispatched a run or lost its durable batch")
+		}
+		piAppRecord(t, "activity-pre-attempt-canceled", map[string]any{"issue": issue.ID, "execution": execution, "batch": batch, "requests": p.count()})
+		return nil
+	})
+	checkedStore, err := openContactStore(storePath, project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var reopenedC *productIssue
+	for _, contact := range contactsFromStore(checkedStore) {
+		if contact.ID == h.contactID {
+			reopenedC = contact.issueByID(issueC)
+		}
+	}
+	if reopenedC == nil || reopenedC.Status != issueStatusCanceled || latestIssueExecution(reopenedC) == nil {
+		t.Fatal("reopened store lost the canceled issue")
+	}
+	reopenedExecution := latestIssueExecution(reopenedC)
+	reopenedBatch := issueSupplementBatchForExecution(reopenedC, reopenedExecution.ID)
+	if reopenedExecution.Status != issueExecutionNotDispatched || reopenedExecution.PiRun != nil || reopenedBatch == nil || reopenedBatch.State != supplementBatchNotDispatched {
+		t.Fatal("reopened store lost the proven pre-attempt non-dispatch")
+	}
+	h.send("ACTIVITY_CHAT_QUIT")
+	h.waitSignal(p.quitStart, "active chat stream before Quit")
+	var quitRun, chatContext string
+	h.wait(func() bool {
+		ct := app.contactByID(h.contactID)
+		return ct != nil && ct.PiBinding != nil && ct.ActiveTaskID != "" && ct.SendState == sendAccepted
+	})
+	h.onUI(func() error {
+		ct := app.contactByID(h.contactID)
+		quitRun, chatContext = ct.ActiveTaskID, ct.PiBinding.Context.ContextID
+		if quitRun == "" || chatContext == "" || chatContext == runA.ContextID || chatContext == runB.ContextID {
+			return errors.New("Quit chat did not retain its own captured context and run")
+		}
+		return nil
+	})
+	h.screenshot("activity-quit-active-chat")
+	requestsBeforeRestart := p.count()
+	if err := h.shutdown(); err != nil {
+		t.Fatalf("actual app Quit did not drain and reap: %v", err)
+	}
+	releaseQuit.Do(func() { close(p.quitHold) })
+	stoppedContact := app.contactByID(h.contactID)
+	if stoppedContact == nil || stoppedContact.ActiveTaskID != "" || stoppedContact.LastTaskID != quitRun || stoppedContact.SessionState != string(pi.Interrupted) || !app.quitReady {
+		t.Fatal("Quit did not retain the captured chat terminal state")
+	}
+	piAppRecord(t, "activity-quit-settlement", map[string]any{"context_id": chatContext, "run_id": quitRun, "status": stoppedContact.SessionState, "requests": requestsBeforeRestart})
+	app, err = newRuntimeApp()
+	if err != nil {
+		t.Fatal(err)
+	}
+	first.app, first.pump, first.closed = app, newUIPump(t, app), false
+	first.tester = ui.NewTester(app.view, 1040, 720)
+	first.tester.SetLocale("en")
+	first.tester.SetFocused(true)
+	h.onUI(func() error {
+		ct := app.contactByID(h.contactID)
+		if ct == nil || ct.PiBinding == nil || ct.PiBinding.Context.ContextID != chatContext {
+			return errors.New("restart lost the captured conversation binding")
+		}
+		app.startPiHost()
+		return nil
+	})
+	h.wait(func() bool {
+		return !app.connectionApplying && app.runtimeStatus == runtimeStateReady && app.contactHistoryInFlight == 0
+	})
+	h.onUI(func() error {
+		if app.pi == nil || app.pi.client == nil {
+			return errors.New("restart did not own its real Pi worker")
+		}
+		first.hosts = append(first.hosts, app.pi)
+		ct := app.contactByID(h.contactID)
+		if ct == nil {
+			return errors.New("restart lost the activity owner")
+		}
+		a, b, c := ct.issueByID(issueA), ct.issueByID(issueB), ct.issueByID(issueC)
+		if a == nil || b == nil || c == nil {
+			return errors.New("restart lost a captured issue")
+		}
+		question := a.questionByRef(questionRef)
+		operation := app.issueToolLedger.operationByID(questionA.OperationID)
+		if question == nil || question.PiCall == nil || *question.PiCall != questionA || question.AnswerSupplementID != supplementID || question.AnswerText != finalDraft || question.DeliveryState != issueQuestionDeliveryResolved || operation == nil || operation.PiCall == nil || *operation.PiCall != questionA || a.Supplements == nil || len(a.Supplements.Items) != 1 || a.Supplements.pendingCount() != 0 || b.openQuestion() == nil || b.openQuestion().DeliveryState != "" || c.Status != issueStatusCanceled || latestIssueExecution(c) == nil || latestIssueExecution(c).Status != issueExecutionNotDispatched || len(app.piQuestionWaiters) != 0 || p.count() != requestsBeforeRestart {
+			return errors.New("restart replayed or lost the saved answer, unanswered call or canceled intent")
+		}
+		app.pi.mu.Lock()
+		activeBridges := len(app.pi.bridges)
+		app.pi.mu.Unlock()
+		if activeBridges != 0 {
+			return errors.New("restart recreated a run or tool delivery bridge")
+		}
+		piAppRecord(t, "activity-restart", map[string]any{"question": question, "operation": operation, "unanswered": b.openQuestion(), "canceled_execution": latestIssueExecution(c), "requests": p.count(), "bridges": activeBridges})
+		return nil
+	})
+	var beforeA []byte
+	var stoppedQuestionRef string
+	var stoppedExecutionCount int
+	var settingsOpen, workOpen, detailOpen, chatWorkOpen bool
+	h.onUI(func() error {
+		ct := app.contactByID(h.contactID)
+		if app.selectedContact() != ct {
+			return errors.New("restart selected a different activity owner")
+		}
+		a, b := ct.issueByID(issueA), ct.issueByID(issueB)
+		question := b.openQuestion()
+		if question == nil || question.PiCall == nil || *question.PiCall != stopCall || question.DeliveryState != "" || app.piQuestionWaiters[stopCall.OperationID] != nil || b.Work.ActiveTaskID != "" {
+			return errors.New("restarted stopped call is not an unanswered, waiter-free question")
+		}
+		var err error
+		beforeA, err = json.Marshal(a.questionByRef(questionRef))
+		if err != nil {
+			return err
+		}
+		stoppedQuestionRef, stoppedExecutionCount = question.Ref, len(b.Executions)
+		settingsOpen, workOpen = app.settingsOpen, app.workspaceOpen
+		detailOpen, chatWorkOpen = ct.issueNavigation().DetailID != "", ct.issueNavigation().ShowConversationWork
+		return nil
+	})
+	if settingsOpen {
+		h.click("← Back to workbench")
+	}
+	if !workOpen {
+		h.click("Work")
+	}
+	if chatWorkOpen {
+		h.click(msgs.WorkBackToIssues())
+	}
+	if detailOpen {
+		h.click(msgs.WorkBackToIssues())
+	}
+	h.selectIssue("ACTIVITY_B", issueB)
+	h.click(msgs.WorkAnswer())
+	const stoppedAnswer = "Save this answer for the stopped activity."
+	h.onUI(func() error {
+		if app.issueSupplementAnswerTarget.ContactID != h.contactID || app.issueSupplementAnswerTarget.IssueID != issueB || app.issueSupplementQuestionRef != stoppedQuestionRef {
+			return errors.New("GUI did not capture the restarted stopped question")
+		}
+		if err := h.focus(msgs.WorkAnswer(), true); err != nil {
+			return err
+		}
+		h.tester.Key(ui.Cmd, ui.KeyA)
+		h.tester.Type(stoppedAnswer)
+		h.tester.Frame()
+		if *app.issueSupplementDraft(issueB) != stoppedAnswer {
+			return errors.New("restarted answer form did not retain its draft")
+		}
+		return nil
+	})
+	h.saveForm(msgs.WorkAnswer(), msgs.WorkAnswer())
+	var stoppedSupplementID string
+	h.onUI(func() error {
+		ct := app.contactByID(h.contactID)
+		a, b := ct.issueByID(issueA), ct.issueByID(issueB)
+		question := b.questionByRef(stoppedQuestionRef)
+		if question == nil || question.PiCall == nil || *question.PiCall != stopCall || question.State != issueQuestionAnswered || question.AnswerText != stoppedAnswer || question.DeliveryState != issueQuestionDeliverySaved || question.AnswerSupplementID == "" || b.Supplements == nil || len(b.Supplements.Items) != 1 || b.Supplements.pendingCount() != 0 || b.Work.ActiveTaskID != "" || len(b.Executions) != stoppedExecutionCount || latestIssueExecution(b).ID != stopCall.ExecutionID || app.piQuestionWaiters[stopCall.OperationID] != nil || len(app.piQuestionWaiters) != 0 || p.count() != requestsBeforeRestart {
+			return errors.New("restarted GUI answer was delivered, replayed or lost its saved association")
+		}
+		stoppedSupplementID = question.AnswerSupplementID
+		item := b.Supplements.itemByID(stoppedSupplementID)
+		if item == nil || item.PiQuestionOperationID != stopCall.OperationID || item.Text != stoppedAnswer {
+			return errors.New("saved answer does not belong to the stopped call")
+		}
+		currentA, err := json.Marshal(a.questionByRef(questionRef))
+		if err != nil || !bytes.Equal(currentA, beforeA) || a.questionByRef(questionRef).DeliveryState != issueQuestionDeliveryResolved || a.questionByRef(questionRef).AnswerSupplementID != supplementID {
+			return errors.New("saving the stopped answer changed the resolved activity A")
+		}
+		app.pi.mu.Lock()
+		bridges := len(app.pi.bridges)
+		app.pi.mu.Unlock()
+		h.tester.Frame()
+		if bridges != 0 || !h.tester.HasText(msgs.IssueAnswerSaved()) || h.tester.HasText(msgs.SupplementSavedPending()) {
+			return errors.New("saved-unconfirmed answer appeared as pending work or created a bridge")
+		}
+		piAppRecord(t, "activity-saved-without-waiter", map[string]any{"question": question, "supplement": item, "requests": p.count(), "waiters": len(app.piQuestionWaiters), "bridges": bridges, "executions": len(b.Executions)})
+		return nil
+	})
+	h.screenshot("activity-saved-unconfirmed-after-restart")
+	reopenedAnswerStore, err := openContactStore(storePath, project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var reopenedB *productIssue
+	for _, contact := range contactsFromStore(reopenedAnswerStore) {
+		if contact.ID == h.contactID {
+			reopenedB = contact.issueByID(issueB)
+		}
+	}
+	if reopenedB == nil || reopenedB.Supplements == nil {
+		t.Fatal("reopened store lost the stopped activity answer")
+	}
+	if reopenedAnswerStore.issueToolLedger == nil {
+		t.Fatal("reopened store lost the stopped call ledger")
+	}
+	reopenedQuestion := reopenedB.questionByRef(stoppedQuestionRef)
+	reopenedItem := reopenedB.Supplements.itemByID(stoppedSupplementID)
+	reopenedOperation := reopenedAnswerStore.issueToolLedger.operationByID(stopCall.OperationID)
+	if reopenedQuestion == nil || reopenedQuestion.PiCall == nil || *reopenedQuestion.PiCall != stopCall || reopenedQuestion.State != issueQuestionAnswered || reopenedQuestion.DeliveryState != issueQuestionDeliverySaved || reopenedQuestion.AnswerSupplementID != stoppedSupplementID || reopenedQuestion.AnswerText != stoppedAnswer || reopenedItem == nil || reopenedItem.PiQuestionOperationID != stopCall.OperationID || reopenedItem.Text != stoppedAnswer || reopenedB.Supplements.pendingCount() != 0 || reopenedOperation == nil || reopenedOperation.PiCall == nil || *reopenedOperation.PiCall != stopCall || p.count() != requestsBeforeRestart {
+		t.Fatal("reopened store did not retain the saved-unconfirmed answer")
+	}
+	piAppRecord(t, "activity-reopened-saved-without-waiter", map[string]any{"question": reopenedQuestion, "supplement": reopenedItem, "operation": reopenedOperation, "requests": p.count()})
+	if len(first.hosts)+len(first.probes) != 2 || p.count() != 7 || p.count() != requestsBeforeRestart {
+		t.Fatalf("activity worker/request budget or restart count differs: workers=%d requests=%d", len(first.hosts)+len(first.probes), p.count())
+	}
+	p.mu.Lock()
+	problems := append([]string(nil), p.problems...)
+	p.mu.Unlock()
+	if len(problems) != 0 {
+		t.Fatalf("activity loopback rejected actual requests: %v", problems)
+	}
+	piAppRecord(t, "activity-budget", map[string]any{"workers": len(first.hosts) + len(first.probes), "worker_limit": 3, "model_requests": p.count(), "request_limit": 24, "raw_tool_finished_exported": false, "raw_tool_result_reply_exported": false})
+	if err := h.shutdown(); err != nil {
+		t.Fatalf("restarted app did not reap normally: %v", err)
+	}
+}

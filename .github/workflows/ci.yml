@@ -104,6 +104,7 @@ jobs:
           NAGI_TEST_NODE: ${{ runner.temp }}/pi-payload/bin/node
           NAGI_TEST_WORKER: ${{ runner.temp }}/pi-payload/dist/worker.js
           SAKI_PREVIEW_DIR: ${{ runner.temp }}/nagi-pi-previews
+          NAGI_ACTIVITY_EVIDENCE_DIR: ${{ runner.temp }}/nagi-pi-previews
         run: |
           mkdir -p "$SAKI_PREVIEW_DIR"
           set -o pipefail
