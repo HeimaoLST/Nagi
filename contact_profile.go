@@ -335,7 +335,7 @@ func (e *contactProfileEditor) view(c *ui.Context, t *ui.Theme, actions contactP
 	}
 	msgs := locales.In(c.Locale())
 	editable := !e.Busy && !e.Archived
-	ui.Column(c).FillWidth().MinWidth(0).Gap(8).Children(func() {
+	ui.Column(c).Key("contact-profile-editor").FillWidth().MinWidth(0).Gap(8).Children(func() {
 		ui.Text(c, msgs.ProfileSaveIntro()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 		if reason := e.activityReason(); reason != "" {
 			ui.Text(c, profileNoticeText(msgs, reason)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Warning)
