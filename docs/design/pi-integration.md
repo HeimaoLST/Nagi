@@ -107,3 +107,30 @@ The protected `ci-required` aggregate requires both the retained GUI lane and th
 | `TestPiPackageStandalone` | A clean signed native app includes the pinned Node/worker/dependencies and complete notices, starts with Node absent from PATH, exports process outcomes and reads back matching source/build provenance. |
 
 Synthetic native secure-entry coverage remains separate from headless product E2E. Its reproducible harness is `test/native/connection/run.py`, with a fresh absolute external `--output` for each case. It exercises the production Connection control without a real provider. Unavailable AX reads or an unbound window remain unverified; an interrupted fixture is not a passing security observation. Retain the failed attempt before preparing a new case after an actual environment change.
+
+## First-use caller unit
+
+The next development unit wires the existing settings and conversation callers on fresh data. It does not select a legacy-history policy or complete the activity, results, native-key or standalone gates. The existing MyGo form and callbacks remain the GUI; no new widget/layout implementation is needed.
+
+The shared root-package seams are:
+
+    func (a *appModel) startPiHost()
+    func (a *appModel) sendPiConversation(ct *contact, text string) bool
+    func (a *appModel) applyPiEvent(generation int, event pi.Event)
+    func (a *appModel) drainPiHost()
+    func (h *piAppHost) loadPiHistory(ctx context.Context, binding piConversationBinding) (historyProjection, error)
+    func (ct *contact) piHistoryBindings() []piConversationBinding
+    func clonePiConversationBinding(binding *piConversationBinding) *piConversationBinding
+    func (a *appModel) piDataReadOnly() bool
+
+Actor-facing start/send/drain methods enqueue I/O and return without waiting on the UI actor. The event method applies only a captured current generation/owner on that actor. History loading runs off the actor through the captured host and immutable binding, returning the existing product historyProjection type; it does not parse Saki records. Existing cancellation must target the actual Pi context/run. Drain preserves the single shutdown path and exports worker wait/callback completion before quit.
+
+appModel.pi is *piAppHost. contact.PiBinding is *piConversationBinding and contact.PreviousPiBindings is []piConversationBinding. A binding has Engine="pi", Context of type pi.ContextBinding, and immutable Selection/Configuration snapshots. Context.SessionRef is the actual SDK reference. Configuration is nonsecret and retains wire/endpoint/model/limits/credentialSource; selection retains cwd/instructions/tools. UI profile replacement clones the current binding into its previous list instead of relabelling an opaque legacy reference. Existing product SessionID/TaskID fields may mirror actual Pi references only alongside a matching explicit Pi binding; they never establish engine identity alone.
+
+Fresh product schema10 persists these bindings in the existing store. Versions1-9 and records with unresolved legacy execution references remain preserved/read-only during this Draft, with visible unavailability and no automatic save/upgrade/replay. Version10 persistence must not silently convert an old store. Private connection schema2 owns nonsecret defaults referencing one immutable credential source plus a source-ID map containing its wire/endpoint/key snapshots. The source map is authoritative for keys; resolve it before used reopen, retain old captured sources on Save, and never put keys in product bindings, history, argv or nonsecret readback. These schemas do not authorize touching a live user's files during development.
+
+Normal startup must stop selecting or launching Saki, creating host.json/key environment injections or starting the issue-helper service. Preserve reserved legacy-reader source pending the data choice, with no Saki execution fallback. Activity start/restore/tools, legacy results and unmigrated session-model actions remain explicitly unavailable in this intermediate Draft rather than silently dropping their data or claiming acceptance.
+
+For original user-text projection, the worker records runId, text, named context inputs and correlation in an SDK public custom entry of type nagi-turn-v1 before its prompt. The prompt may carry app-supplied scope/context suffixes; the UI must use this proven original-input metadata rather than heuristically stripping user text. This is SDK-owned transcript metadata, not another product store or execution loop. Other public SDK records remain heterogeneous and retain their original IDs/content.
+
+Acceptance uses actual GUI Draft/Edit/Save/Apply and a fresh owned store/process against a controlled local provider. Save/Apply make zero provider calls; explicit Test is bounded and tools-disabled. Validate configured endpoint/key/wire/model/folder and existing131072/8192/two-slot defaults, real conversation admission/stream/settlement, paged public history/original copy, nonsecret readback, unchanged captured settings after new defaults, used reopen from its retained credential source, targeted cancellation and actual shutdown/drain/reap. Missing payload/source/history fails visibly without a PATH fallback, a replacement session or command replay. Real keys/provider use and native acceptance still require their separate gates.
