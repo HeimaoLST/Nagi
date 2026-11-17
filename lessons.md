@@ -254,9 +254,9 @@
 
 ## Reassemble streamed test output before parsing receipts
 
-**Problem:** Receipt analysis tried decoding individual Go JSONL Output chunks and failed on an unterminated JSON string; partial-chunk filtering also emitted unrelated continuation data.
-**Cause or correction:** One test log message can span multiple Output events. Reassembling saved chunks by test recovered the original receipt lines without another execution.
-**Prevention:** Concatenate each test's output before splitting complete log lines and decoding bounded receipt records. Preserve raw JSONL and distinguish analysis/setup errors from test or product failures.
+**Problem:** Receipt analysis tried decoding individual Go JSONL Output chunks and failed on an unterminated JSON string; partial-chunk filtering also emitted unrelated continuation data. A later pre-launch recorder copied obsolete receipt names and a provider limit field absent from the current producer.
+**Cause or correction:** One test log message can span multiple Output events. Reassembling saved chunks by test recovered the original receipt lines without another execution. The activity producer emits activity-loopback and activity-budget with different fields from the earlier fixture; the recorder mismatch was corrected before execution.
+**Prevention:** Concatenate each test's output before splitting complete log lines and decoding bounded receipt records. Check current producer names and fields before reusing a recorder. Retain observed request bodies and counts even when an early failure prevents the final budget receipt; leave unobserved worker totals unknown. Preserve raw JSONL and distinguish analysis/setup errors from test or product failures.
 
 ## Match evidence to the observable product boundary
 
