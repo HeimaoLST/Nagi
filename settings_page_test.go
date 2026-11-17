@@ -936,10 +936,6 @@ func TestPreviewSettingsPage(t *testing.T) {
 	} else if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	previewStore, err := openContactStore(filepath.Join(t.TempDir(), "contacts.json"), t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
 	longPath := "/Users/you/Workspace/a-very-long-project-directory-name/with/deep/nested/segments"
 	longURL := "https://provider.example.invalid/v1/organizations/team/projects/workspace/models/default"
 	longError := "Connection could not be applied because the saved endpoint is unavailable. Review the endpoint and retry after the current work finishes."
@@ -951,10 +947,11 @@ func TestPreviewSettingsPage(t *testing.T) {
 		}
 		for _, size := range []struct{ width, height int }{{720, 640}, {1040, 720}, {1380, 900}} {
 			for _, tab := range []string{settingsTabAppearance, settingsTabConnection, settingsTabContact, settingsTabAdvanced} {
-				a := testApp(t)
-				a.demo = false
-				a.store = previewStore
-				a.storePath = previewStore.path
+				a, ct, _ := piRunStartedTestApp(t)
+				ct.ActiveTaskID, ct.SendState = "", sendIdle
+				a.storePath = a.store.path
+				a.connectionPath = connectionConfigPath(a.storePath)
+				a.workDir = filepath.Dir(a.storePath)
 				a.windowWidth = size.width
 				switch tab {
 				case settingsTabConnection:
@@ -964,7 +961,6 @@ func TestPreviewSettingsPage(t *testing.T) {
 					a.connectionForm.HasSaved = true
 					a.connectionForm.Error = longError
 					a.runtimeStatus = runtimeStateReady
-					a.rt = &runtimeClient{}
 				case settingsTabContact:
 					a.openSettingsTab(settingsTabContact, settingsSourceRail)
 					editor := a.settingsContactEditor()
