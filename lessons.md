@@ -80,7 +80,7 @@
 
 ## Verify owner identity from actual metadata
 
-**Problem:** A coordination message copied a displayed redaction token as its sender identity. A subsequent check guessed a role value and stopped before sending because the actual metadata differed.
+**Problem:** A coordination message copied a displayed redaction token as its sender identity. A later color assignment also included a display placeholder instead of the approved value and was corrected before treating it as source data. A separate check guessed a role value and stopped before sending because the actual metadata differed.
 **Cause or correction:** Display substitutions are not routable identities, and role values must come from the current owner metadata rather than a naming assumption.
 **Prevention:** Read the current HC identity, project, role, task and state before dispatch. Never copy a displayed redaction token into a message or command; use the verified owner description and current address when the identity cannot be displayed literally.
 
