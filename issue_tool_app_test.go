@@ -11,6 +11,8 @@ import (
 	"sync"
 	"testing"
 	"unicode/utf8"
+
+	"github.com/HeimaoLST/Nagi/internal/pi"
 )
 
 func newIssueToolTestApp(t *testing.T) (*appModel, *contactStore) {
@@ -716,15 +718,27 @@ func TestIssueToolWrongOrStaleQuestionRefIsRejected(t *testing.T) {
 }
 
 func TestIssueToolAnswerAfterProductCancelIsRejected(t *testing.T) {
-	a, _ := newIssueToolTestApp(t)
-	ct := a.selectedContact()
+	a, ct, event := piRunStartedTestApp(t)
+	a.storePath, a.workDir = a.store.path, filepath.Dir(a.store.path)
+	a.issueToolLedger, a.issueToolScopes = a.store.issueToolLedger, a.store.issueToolScopes
+	a.issueToolWaiters = map[string]chan IssueToolReceipt{}
 	issue, err := a.createIssueFor(ct, "cancel question", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	attachIssueToolTestExecution(issue)
-	scope, _ := a.issueToolNewScope(ct.ID, "conversation-cancel", "turn-cancel", false)
-	activateIssueToolTestScope(t, a, scope)
+	scope, err := a.issueToolNewScope(ct.ID, ct.PiBinding.Context.SessionRef, event.RunID, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ct.pendingSend = &pendingSend{Draft: "Cancel question validation", State: "submitting"}
+	if err := a.issueToolAttachPendingScope(ct.ID, scope.Ref); err != nil {
+		t.Fatal(err)
+	}
+	a.issueToolBindTask(scope.Ref, event.RunID)
+	a.applyPiEvent(a.connectionGeneration, event)
+	if ct.SendState != sendAccepted || ct.ActiveTaskID != event.RunID || !a.issueToolScopeActive(*scope) {
+		t.Fatalf("current Pi conversation was not admitted: %+v", ct)
+	}
 	wait, err := a.handleIssueToolForward(context.Background(), issueToolForwardRequest{Tool: "issue_action", Arguments: issueToolActionArgs(t, *scope, issueToolActionWait, map[string]any{
 		"issue_id": issue.ID, "expected_revision": issue.RequirementsRevision, "text": "need answer",
 	})})
@@ -732,8 +746,14 @@ func TestIssueToolAnswerAfterProductCancelIsRejected(t *testing.T) {
 		t.Fatalf("wait = %+v err=%v", wait, err)
 	}
 	question := issue.openQuestion()
+	if question == nil || question.SourceTaskID != event.RunID || question.SourceScopeRef != scope.Ref || question.SourceTurnID != scope.TurnID {
+		t.Fatalf("question lost the admitted conversation owner: %+v", question)
+	}
 	if !a.cancelIssueProductFor(ct, issue.ID) || issue.Status != issueStatusCanceled {
 		t.Fatalf("product cancel = status %q", issue.Status)
+	}
+	if !a.issueToolScopeActive(*scope) {
+		t.Fatal("product cancellation invalidated the conversation scope")
 	}
 	answer, err := a.handleIssueToolForward(context.Background(), issueToolForwardRequest{Tool: "issue_action", Arguments: issueToolActionArgs(t, *scope, issueToolActionAddSupplement, map[string]any{
 		"issue_id": issue.ID, "text": "answer", "question_ref": question.Ref,
@@ -744,15 +764,27 @@ func TestIssueToolAnswerAfterProductCancelIsRejected(t *testing.T) {
 }
 
 func TestIssueToolAnsweredQuestionMissingSupplementIsUnknown(t *testing.T) {
-	a, _ := newIssueToolTestApp(t)
-	ct := a.selectedContact()
+	a, ct, event := piRunStartedTestApp(t)
+	a.storePath, a.workDir = a.store.path, filepath.Dir(a.store.path)
+	a.issueToolLedger, a.issueToolScopes = a.store.issueToolLedger, a.store.issueToolScopes
+	a.issueToolWaiters = map[string]chan IssueToolReceipt{}
 	issue, err := a.createIssueFor(ct, "missing answer", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	attachIssueToolTestExecution(issue)
-	scope, _ := a.issueToolNewScope(ct.ID, "conversation-missing", "turn-missing", false)
-	activateIssueToolTestScope(t, a, scope)
+	scope, err := a.issueToolNewScope(ct.ID, ct.PiBinding.Context.SessionRef, event.RunID, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ct.pendingSend = &pendingSend{Draft: "Missing answer validation", State: "submitting"}
+	if err := a.issueToolAttachPendingScope(ct.ID, scope.Ref); err != nil {
+		t.Fatal(err)
+	}
+	a.issueToolBindTask(scope.Ref, event.RunID)
+	a.applyPiEvent(a.connectionGeneration, event)
+	if ct.SendState != sendAccepted || ct.ActiveTaskID != event.RunID || !a.issueToolScopeActive(*scope) {
+		t.Fatalf("current Pi conversation was not admitted: %+v", ct)
+	}
 	wait, err := a.handleIssueToolForward(context.Background(), issueToolForwardRequest{Tool: "issue_action", Arguments: issueToolActionArgs(t, *scope, issueToolActionWait, map[string]any{
 		"issue_id": issue.ID, "expected_revision": issue.RequirementsRevision, "text": "question",
 	})})
@@ -760,10 +792,36 @@ func TestIssueToolAnsweredQuestionMissingSupplementIsUnknown(t *testing.T) {
 		t.Fatalf("wait = %+v err=%v", wait, err)
 	}
 	question := issue.openQuestion()
+	if question == nil || question.SourceTaskID != event.RunID || question.SourceScopeRef != scope.Ref || question.SourceTurnID != scope.TurnID {
+		t.Fatalf("question lost the admitted conversation owner: %+v", question)
+	}
 	question.State = issueQuestionAnswered
 	question.AnswerSupplementID = "supplement-missing"
-	newScope, _ := a.issueToolNewScope(ct.ID, "conversation-missing2", "turn-missing2", false)
-	activateIssueToolTestScope(t, a, newScope)
+	settled := event
+	settled.Name, settled.Seq = pi.RunSettled, event.Seq+1
+	settled.Data, err = json.Marshal(pi.RunSettledData{Status: pi.Completed})
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.applyPiEvent(a.connectionGeneration, settled)
+	if ct.SendState != sendIdle || ct.ActiveTaskID != "" || a.localSaveErr != "" {
+		t.Fatalf("previous conversation run did not settle: contact=%+v save=%q", ct, a.localSaveErr)
+	}
+	event.RunID, event.Seq = newIssueToolTurnID(), settled.Seq+1
+	newScope, err := a.issueToolNewScope(ct.ID, ct.PiBinding.Context.SessionRef, newIssueToolTurnID(), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ct.pendingSend = &pendingSend{Draft: "Resolve missing answer", State: "submitting"}
+	if err := a.issueToolAttachPendingScope(ct.ID, newScope.Ref); err != nil {
+		t.Fatal(err)
+	}
+	ct.ActiveTaskID, ct.SendState = event.RunID, sendSubmitting
+	a.issueToolBindTask(newScope.Ref, event.RunID)
+	a.applyPiEvent(a.connectionGeneration, event)
+	if ct.SendState != sendAccepted || ct.ActiveTaskID != event.RunID || !a.issueToolScopeActive(*newScope) {
+		t.Fatalf("next Pi conversation turn was not admitted: %+v", ct)
+	}
 	answer, err := a.handleIssueToolForward(context.Background(), issueToolForwardRequest{Tool: "issue_action", Arguments: issueToolActionArgs(t, *newScope, issueToolActionAddSupplement, map[string]any{
 		"issue_id": issue.ID, "text": "answer", "question_ref": question.Ref,
 	})})
@@ -774,15 +832,27 @@ func TestIssueToolAnsweredQuestionMissingSupplementIsUnknown(t *testing.T) {
 }
 
 func TestIssueToolWaitSupersedesChangedQuestionAndRevision(t *testing.T) {
-	a, _ := newIssueToolTestApp(t)
-	ct := a.selectedContact()
+	a, ct, event := piRunStartedTestApp(t)
+	a.storePath, a.workDir = a.store.path, filepath.Dir(a.store.path)
+	a.issueToolLedger, a.issueToolScopes = a.store.issueToolLedger, a.store.issueToolScopes
+	a.issueToolWaiters = map[string]chan IssueToolReceipt{}
 	issue, err := a.createIssueFor(ct, "supersede", "first requirement")
 	if err != nil {
 		t.Fatal(err)
 	}
-	attachIssueToolTestExecution(issue)
-	scope, _ := a.issueToolNewScope(ct.ID, "conversation-sup", "turn-sup", false)
-	activateIssueToolTestScope(t, a, scope)
+	scope, err := a.issueToolNewScope(ct.ID, ct.PiBinding.Context.SessionRef, event.RunID, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ct.pendingSend = &pendingSend{Draft: "Initial question", State: "submitting"}
+	if err := a.issueToolAttachPendingScope(ct.ID, scope.Ref); err != nil {
+		t.Fatal(err)
+	}
+	a.issueToolBindTask(scope.Ref, event.RunID)
+	a.applyPiEvent(a.connectionGeneration, event)
+	if ct.SendState != sendAccepted || ct.ActiveTaskID != event.RunID || !a.issueToolScopeActive(*scope) {
+		t.Fatalf("current Pi conversation was not admitted: %+v", ct)
+	}
 	wait := func(scope *IssueToolScope, text string, revision int) {
 		t.Helper()
 		response, err := a.handleIssueToolForward(context.Background(), issueToolForwardRequest{Tool: "issue_action", Arguments: issueToolActionArgs(t, *scope, issueToolActionWait, map[string]any{
@@ -793,9 +863,36 @@ func TestIssueToolWaitSupersedesChangedQuestionAndRevision(t *testing.T) {
 		}
 	}
 	wait(scope, "first question", issue.RequirementsRevision)
-	firstRef := issue.openQuestion().Ref
-	secondScope, _ := a.issueToolNewScope(ct.ID, "conversation-sup2", "turn-sup2", false)
-	activateIssueToolTestScope(t, a, secondScope)
+	first := issue.openQuestion()
+	if first == nil || first.SourceTaskID != event.RunID || first.SourceScopeRef != scope.Ref || first.SourceTurnID != scope.TurnID {
+		t.Fatalf("question lost the admitted conversation owner: %+v", first)
+	}
+	firstRef := first.Ref
+	settled := event
+	settled.Name, settled.Seq = pi.RunSettled, event.Seq+1
+	settled.Data, err = json.Marshal(pi.RunSettledData{Status: pi.Completed})
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.applyPiEvent(a.connectionGeneration, settled)
+	if ct.SendState != sendIdle || ct.ActiveTaskID != "" || a.localSaveErr != "" {
+		t.Fatalf("first conversation run did not settle: contact=%+v save=%q", ct, a.localSaveErr)
+	}
+	event.RunID, event.Seq = newIssueToolTurnID(), settled.Seq+1
+	secondScope, err := a.issueToolNewScope(ct.ID, ct.PiBinding.Context.SessionRef, newIssueToolTurnID(), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ct.pendingSend = &pendingSend{Draft: "Correct the question", State: "submitting"}
+	if err := a.issueToolAttachPendingScope(ct.ID, secondScope.Ref); err != nil {
+		t.Fatal(err)
+	}
+	ct.ActiveTaskID, ct.SendState = event.RunID, sendSubmitting
+	a.issueToolBindTask(secondScope.Ref, event.RunID)
+	a.applyPiEvent(a.connectionGeneration, event)
+	if ct.SendState != sendAccepted || ct.ActiveTaskID != event.RunID || !a.issueToolScopeActive(*secondScope) {
+		t.Fatalf("second Pi conversation turn was not admitted: %+v", ct)
+	}
 	wait(secondScope, "corrected question", issue.RequirementsRevision)
 	if len(issue.Questions) != 2 || issue.Questions[0].Ref != firstRef || issue.Questions[0].State != issueQuestionSuperseded ||
 		issue.Questions[1].State != issueQuestionOpen || issue.Questions[1].Text != "corrected question" {
@@ -805,8 +902,26 @@ func TestIssueToolWaitSupersedesChangedQuestionAndRevision(t *testing.T) {
 	if !a.editIssueFor(ct, issue.ID, issue.Goal, "second requirement") {
 		t.Fatalf("edit requirements: %s", a.issueFormError)
 	}
-	thirdScope, _ := a.issueToolNewScope(ct.ID, "conversation-sup3", "turn-sup3", false)
-	activateIssueToolTestScope(t, a, thirdScope)
+	settled.RunID, settled.Seq = event.RunID, event.Seq+1
+	a.applyPiEvent(a.connectionGeneration, settled)
+	if ct.SendState != sendIdle || ct.ActiveTaskID != "" || a.localSaveErr != "" {
+		t.Fatalf("second conversation run did not settle: contact=%+v save=%q", ct, a.localSaveErr)
+	}
+	event.RunID, event.Seq = newIssueToolTurnID(), settled.Seq+1
+	thirdScope, err := a.issueToolNewScope(ct.ID, ct.PiBinding.Context.SessionRef, newIssueToolTurnID(), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ct.pendingSend = &pendingSend{Draft: "Question for revised requirements", State: "submitting"}
+	if err := a.issueToolAttachPendingScope(ct.ID, thirdScope.Ref); err != nil {
+		t.Fatal(err)
+	}
+	ct.ActiveTaskID, ct.SendState = event.RunID, sendSubmitting
+	a.issueToolBindTask(thirdScope.Ref, event.RunID)
+	a.applyPiEvent(a.connectionGeneration, event)
+	if ct.SendState != sendAccepted || ct.ActiveTaskID != event.RunID || !a.issueToolScopeActive(*thirdScope) {
+		t.Fatalf("third Pi conversation turn was not admitted: %+v", ct)
+	}
 	wait(thirdScope, "new revision question", issue.RequirementsRevision)
 	if len(issue.Questions) != 3 || issue.questionByRef(secondRef).State != issueQuestionSuperseded {
 		t.Fatalf("revision supersede = %+v", issue.Questions)
@@ -837,15 +952,27 @@ func TestIssueToolResumeWithoutStructuredQuestionStillWorks(t *testing.T) {
 }
 
 func TestIssueToolReplacementQuestionSaveFailureKeepsOriginalOpen(t *testing.T) {
-	a, _ := newIssueToolTestApp(t)
-	ct := a.selectedContact()
+	a, ct, event := piRunStartedTestApp(t)
+	a.storePath, a.workDir = a.store.path, filepath.Dir(a.store.path)
+	a.issueToolLedger, a.issueToolScopes = a.store.issueToolLedger, a.store.issueToolScopes
+	a.issueToolWaiters = map[string]chan IssueToolReceipt{}
 	issue, err := a.createIssueFor(ct, "atomic replacement", "requirement")
 	if err != nil {
 		t.Fatal(err)
 	}
-	attachIssueToolTestExecution(issue)
-	scope, _ := a.issueToolNewScope(ct.ID, "conversation-atomic-q", "turn-atomic-q", false)
-	activateIssueToolTestScope(t, a, scope)
+	scope, err := a.issueToolNewScope(ct.ID, ct.PiBinding.Context.SessionRef, event.RunID, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ct.pendingSend = &pendingSend{Draft: "Atomic question replacement", State: "submitting"}
+	if err := a.issueToolAttachPendingScope(ct.ID, scope.Ref); err != nil {
+		t.Fatal(err)
+	}
+	a.issueToolBindTask(scope.Ref, event.RunID)
+	a.applyPiEvent(a.connectionGeneration, event)
+	if ct.SendState != sendAccepted || ct.ActiveTaskID != event.RunID || !a.issueToolScopeActive(*scope) {
+		t.Fatalf("current Pi conversation was not admitted: %+v", ct)
+	}
 	wait, err := a.handleIssueToolForward(context.Background(), issueToolForwardRequest{Tool: "issue_action", Arguments: issueToolActionArgs(t, *scope, issueToolActionWait, map[string]any{
 		"issue_id": issue.ID, "expected_revision": issue.RequirementsRevision, "text": "original question",
 	})})
@@ -853,6 +980,9 @@ func TestIssueToolReplacementQuestionSaveFailureKeepsOriginalOpen(t *testing.T) 
 		t.Fatalf("wait = %+v err=%v", wait, err)
 	}
 	original := issue.openQuestion()
+	if original == nil || original.SourceTaskID != event.RunID || original.SourceScopeRef != scope.Ref || original.SourceTurnID != scope.TurnID {
+		t.Fatalf("question lost the admitted conversation owner: %+v", original)
+	}
 	originalRef, originalText := original.Ref, original.Text
 	issue.Supplements.AutoContinue = true
 	replacement := &issueQuestion{
@@ -861,9 +991,12 @@ func TestIssueToolReplacementQuestionSaveFailureKeepsOriginalOpen(t *testing.T) 
 	}
 	operation := &IssueToolOperation{ID: "issue-op-replacement", Action: issueToolActionWait, TargetIssueID: issue.ID}
 	receipt := &IssueToolReceipt{State: issueToolReceiptSaved, IssueID: issue.ID, QuestionRef: replacement.Ref}
-	a.store.path = t.TempDir() // atomic save fails after in-memory mutations
+	a.store.path = t.TempDir()
 	if a.markIssueWaitingForQuestion(ct, issue.ID, originalRef, replacement, operation, receipt) {
 		t.Fatal("replacement wait unexpectedly saved with a failing store")
+	}
+	if a.localSaveErr == "" {
+		t.Fatal("replacement wait did not reach the filesystem save failure")
 	}
 	if issue.openQuestion() == nil || issue.openQuestion().Ref != originalRef || issue.openQuestion().Text != originalText ||
 		issue.openQuestion().State != issueQuestionOpen || len(issue.Questions) != 1 ||
