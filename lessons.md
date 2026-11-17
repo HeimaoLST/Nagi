@@ -52,7 +52,7 @@
 
 **Problem:** The lab exported native app/fixture exit zero but not the native worker's individual exit status. The first product-control wrapper also omitted its raw child outcome when interrupted.
 **Cause or correction:** App exit, a mapped helper status and disappearance of a child do not prove that child's exit code. Unexported child outcomes remain unknown.
-**Prevention:** Correlate each owned child with its actual wait result and export raw return code and signal before mapping a helper exit, including interrupted runs. Keep app, worker, provider and cleanup outcomes separate.
+**Prevention:** Correlate each owned child with its actual wait result and export raw return code and signal before mapping a helper exit, including interrupted runs. Keep app, worker, provider and cleanup outcomes separate. Release test gates, complete owned process/server cleanup, then snapshot final provider request counts; an earlier snapshot can miss requests during failure cleanup.
 
 ## Contain the entire optional observer boundary
 
@@ -258,6 +258,12 @@
 **Cause or correction:** One test log message can span multiple Output events. Reassembling saved chunks by test recovered the original receipt lines without another execution.
 **Prevention:** Concatenate each test's output before splitting complete log lines and decoding bounded receipt records. Preserve raw JSONL and distinguish analysis/setup errors from test or product failures.
 
+## Match evidence to the observable product boundary
+
+**Problem:** An activity E2E brief demanded separate raw tool.finished and ToolResult response exports from the actual app-owned client, whose host exposes no independent event subscriber.
+**Cause or correction:** The product gate requires an owner-correlated answer and settlement. Exact public SDK tool-result history, the actual model request carrying that result, captured delivery state and owned settlement can establish that outcome. They do not independently export either raw protocol packet.
+**Prevention:** Specify the business assertion and its actual evidence sources before requiring instrumentation. Keep unobserved packets explicit, never import another fixture client's receipts, and avoid a production test-hook framework solely for redundant logging. Verify continued typing, selection and copying through public UI APIs rather than reflecting into private controller fields solely to compare identities.
+
 ## Preserve original input beside model context
 
 **Problem:** The worker appends named app-context suffixes to its SDK prompt. A normal conversation-history caller would otherwise display those suffixes or try stripping user text heuristically.
@@ -308,9 +314,9 @@
 
 ## Separate domain persistence from legacy-data admission
 
-**Problem:** Caller maintenance initially described retained issue rejection/non-dispatch persistence oracles as exercisable through a current domain helper without checking the store's legacy-data policy.
-**Cause or correction:** Source review found that any stored issue execution triggers the existing legacy read-only guard. The retained failure helper changes in-memory status while ignoring a failed persist. Current Pi activity dispatch is still unavailable; mapping a helper name does not prove durable outcomes. This is a source finding, not an executed failure.
-**Prevention:** Inspect data admission and persistence results alongside domain callers before claiming a mapping is complete. Retain the relevant persistence/reopen/rerun assertions and explicit open gate. Do not bypass the legacy guard, fabricate Pi dispatch or silently change the pending history policy to make tests pass.
+**Problem:** Caller maintenance initially assumed that mapping a domain helper made rejection/non-dispatch persistence exercisable without checking legacy-data admission. Later fixtures added opaque work references and executions, ignored a scope-save error, then dereferenced the nil scope in default CI.
+**Cause or correction:** Opaque legacy executions remain read-only. The new activity source admits explicitly marked fresh Pi intent, binding and run facts; it does not reinterpret old or ambiguous records. A legacy-shaped fixture can therefore fail before its intended authorization assertion. Ignoring that persistence error causes a test panic rather than evidence of a native-app failure.
+**Prevention:** Inspect data admission and persistence results alongside domain callers before claiming a mapping is complete. Check creation/save errors and preserve persistence/reopen/rerun assertions. Use explicitly current synthetic records only for their stated regression boundary; never count them as actual SDK admission, retag legacy data, bypass the guard or change the pending history policy for green tests.
 
 ## Reuse current ownership and canonical admission reasons
 
