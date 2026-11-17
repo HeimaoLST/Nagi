@@ -1009,14 +1009,24 @@ func (a *appModel) reloadIssueWork(rt *runtimeClient, runtimeGeneration int, con
 	})
 }
 
+func (a *appModel) canReloadPiConversation(ct *contact) bool {
+	if a.demo || !a.runtimeAvailableForView() || ct == nil || a.contactByID(ct.ID) != ct || ct.PiBinding == nil {
+		return false
+	}
+	binding := ct.PiBinding
+	return binding.Engine == "pi" && binding.Context.BotID == ct.ID && binding.Context.Purpose == pi.Conversation &&
+		binding.Context.ContextID != "" && binding.Context.SessionRef != "" && binding.Context.SessionRef == ct.SessionID
+}
+
 func (a *appModel) reloadContactByID(contactID string, explicit bool) {
 	ct := a.contactByID(contactID)
-	if a.pi == nil || a.shutdownStarted || ct == nil || ct.PiBinding == nil {
+	if !a.canReloadPiConversation(ct) {
 		return
 	}
 	ct.historyGen++
 	historyGen := ct.historyGen
-	host, binding := a.pi, *clonePiConversationBinding(ct.PiBinding)
+	host, generation, bindingOwner := a.pi, a.connectionGeneration, ct.PiBinding
+	binding := *clonePiConversationBinding(bindingOwner)
 	a.historyAsyncStarted()
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -1024,9 +1034,21 @@ func (a *appModel) reloadContactByID(contactID string, explicit bool) {
 		cancel()
 		a.updateUI(func() {
 			defer a.historyAsyncFinished()
-			ct := a.contactByID(contactID)
-			if a.pi != host || ct == nil || ct.historyGen != historyGen || ct.PiBinding == nil || ct.PiBinding.Context.ContextID != binding.Context.ContextID {
+			if a.pi != host || a.connectionGeneration != generation || a.contactByID(contactID) != ct ||
+				ct.historyGen != historyGen || !a.canReloadPiConversation(ct) || ct.PiBinding != bindingOwner {
 				return
+			}
+			current := ct.PiBinding
+			if current.Context != binding.Context || current.Configuration != binding.Configuration ||
+				current.Selection.CWD != binding.Selection.CWD || current.Selection.Instructions != binding.Selection.Instructions ||
+				(current.Selection.CodingTools == nil) != (binding.Selection.CodingTools == nil) ||
+				len(current.Selection.CodingTools) != len(binding.Selection.CodingTools) {
+				return
+			}
+			for i, tool := range binding.Selection.CodingTools {
+				if current.Selection.CodingTools[i] != tool {
+					return
+				}
 			}
 			if err != nil {
 				ct.LoadErr = a.connectionSafeMessage(err)
@@ -1894,7 +1916,20 @@ const (
 )
 
 func (a *appModel) runtimeAvailableForView() bool {
-	return a.demo || (a.pi != nil && a.runtimeStatus == runtimeStateReady)
+	if a.demo {
+		return true
+	}
+	host := a.pi
+	if a.shutdownStarted || a.connectionApplying || a.piDataReadOnly() || host == nil || host.client == nil ||
+		a.runtimeStatus != runtimeStateReady || host.generation != a.connectionGeneration {
+		return false
+	}
+	select {
+	case <-host.client.Done():
+		return false
+	default:
+		return true
+	}
 }
 
 func (a *appModel) connectionViewState() connectionViewState {
@@ -2642,16 +2677,13 @@ func (a *appModel) applyCancelResult(contactID, taskID, status string, err error
 
 func (a *appModel) reloadSelected() {
 	ct := a.selectedContact()
-	if a.rt == nil || a.runtimeStatus != runtimeStateReady {
-		ct.setSendError("Runtime disconnected; restart Saki to reload history.", "send-reload-disconnected", "")
+	if !a.canReloadPiConversation(ct) {
+		if ct != nil {
+			ct.setSendError("Conversation history is unavailable for this contact or connection.", "", "")
+		}
 		return
 	}
-	if ct.SessionID != "" {
-		a.reloadContactByID(ct.ID, true)
-	}
-	if issue := ct.selectedIssue(); issue != nil && issue.WorkSessionID != "" {
-		a.reloadIssueWorkByID(ct.ID, issue.ID)
-	}
+	a.reloadContactByID(ct.ID, true)
 }
 
 func (a *appModel) addRuntimeContact() {

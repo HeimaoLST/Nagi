@@ -1157,9 +1157,9 @@ func contactNoticeText(msgs locales.Messages, kind, detail string) string {
 func (a *appModel) composer(c *ui.Context, t *ui.Theme) {
 	ct := a.selectedContact()
 	msgs := locales.In(c.Locale())
-	connected := a.runtimeStatus == runtimeStateReady && a.rt != nil && !a.shutdownStarted
+	connected := a.runtimeAvailableForView()
 	knownMismatch := a.connectionSendFailureKnown(ct)
-	canReload := connected && ct.SessionID != "" && !knownMismatch
+	canReload := a.canReloadPiConversation(ct) && !knownMismatch
 	unknownSummary := msgs.SendDisconnectedState()
 	if knownMismatch {
 		unknownSummary = msgs.ConnectionMismatchSummary()

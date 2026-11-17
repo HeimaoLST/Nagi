@@ -320,12 +320,15 @@ func (h *piAppHost) openContext(ctx context.Context, binding piConversationBindi
 }
 
 func (a *appModel) sendPiConversation(ct *contact, text string) bool {
-	if ct == nil || a.contactByID(ct.ID) != ct || a.piDataReadOnly() || a.shutdownStarted || a.connectionApplying ||
-		a.pi == nil || a.runtimeStatus != runtimeStateReady || ct.Archived || sessionBusy(ct.SendState, ct.ActiveTaskID) ||
-		a.activeTaskCount() >= a.maxActiveTasks() || ct.SessionID != "" && ct.PiBinding == nil || ct.PiBinding != nil && !ct.Loaded {
-		if ct != nil {
-			ct.setSendError("The conversation is unavailable or busy.", "", "")
-		}
+	if ct == nil || a.contactByID(ct.ID) != ct {
+		return false
+	}
+	if reason := a.canSend(ct); reason != "" {
+		ct.setSendError(sendBlockRaw(reason), reason, "")
+		return false
+	}
+	if a.pi == nil || a.piDataReadOnly() || ct.SessionID != "" && ct.PiBinding == nil || ct.PiBinding != nil && !ct.Loaded {
+		ct.setSendError("The conversation is unavailable or busy.", "", "")
 		return false
 	}
 	if err := validateTaskContext(ct.Context.items); err != nil {
@@ -526,12 +529,18 @@ func (a *appModel) applyPiEvent(generation int, event pi.Event) {
 		ct.SessionState = "running"
 		ct.Messages = append(ct.Messages, &message{Key: "pi:" + event.RunID + ":user", Kind: msgUser,
 			Text: pending.Draft, Time: nowTime(), TaskID: event.RunID, Context: cloneTaskContextItems(pending.Context)})
+		previousDraft := ct.Draft
+		previousContext := ct.Context.snapshot()
+		previousPreviewID := ct.Context.previewID
 		if ct.draftRev == ct.SubmittedRev && strings.TrimSpace(ct.Draft) == strings.TrimSpace(pending.Draft) {
 			ct.Draft = ""
 		}
 		pending.State = "unknown"
 		ct.Context.clearSubmitted(pending.Context)
 		if err := a.persist(); err != nil {
+			ct.Draft = previousDraft
+			ct.Context.items = previousContext
+			ct.Context.previewID = previousPreviewID
 			ct.SendState = sendUnknown
 			ct.setSendError("Run admitted, but its local state could not be saved.", "send-uncertain", "")
 		}
