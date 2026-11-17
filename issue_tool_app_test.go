@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -89,11 +90,41 @@ func TestIssueToolAppInitializesWithLongTemporaryDirectory(t *testing.T) {
 
 func activateIssueToolTestScope(t *testing.T, a *appModel, scope *IssueToolScope) {
 	t.Helper()
+	if scope == nil || scope.Mode != "" && scope.Mode != issueToolModeConversation {
+		t.Fatal("synthetic conversation scope required")
+	}
 	ct := a.contactByID(scope.ContactID)
 	if ct == nil {
 		t.Fatal("scope test contact missing")
 	}
+	if a.piDataReadOnly() {
+		t.Fatal("scope fixture cannot change legacy product data")
+	}
+	contextID := "scope-fixture-" + ct.ID
+	if ct.PiBinding == nil {
+		if ct.SessionID != "" {
+			t.Fatal("scope fixture cannot retag an opaque conversation session")
+		}
+		root := filepath.Dir(a.store.path)
+		ct.PiBinding = &piConversationBinding{
+			Engine: "pi",
+			Context: pi.ContextBinding{
+				ContextID: contextID, BotID: ct.ID, Purpose: pi.Conversation,
+				SelectionRevision: 1, CWD: root,
+			},
+			Selection: piSelection{CWD: root, CodingTools: []string{}},
+			Configuration: piConfiguration{
+				WireAPI: pi.OpenAICompletions, BaseURL: "http://127.0.0.1:1/v1", Model: "scope-fixture",
+				ContextTokens: 65536, OutputTokens: 4096, CredentialSource: "scope-fixture",
+			},
+		}
+	} else if ct.PiBinding.Engine != "pi" || ct.PiBinding.Context.ContextID != contextID ||
+		ct.PiBinding.Context.BotID != ct.ID || ct.PiBinding.Context.Purpose != pi.Conversation ||
+		ct.PiBinding.Context.SessionRef != ct.SessionID || ct.PiBinding.Context.Used {
+		t.Fatal("scope fixture cannot replace a foreign conversation binding")
+	}
 	ct.SessionID = scope.RuntimeSession()
+	ct.PiBinding.Context.SessionRef = ct.SessionID
 	ct.SendState = sendAccepted
 	ct.ActiveTaskID = "task-test"
 	scope.RuntimeTaskID = "task-test"
@@ -1279,20 +1310,50 @@ func TestIssueToolAnswerBeforeWorkTerminalWaitsForRealTerminal(t *testing.T) {
 }
 
 func TestIssueToolWorkScopeRejectsConversationAndActionTools(t *testing.T) {
-	a, _ := newIssueToolTestApp(t)
+	a, store := newIssueToolTestApp(t)
 	ct := a.selectedContact()
-	issue, _ := a.createIssueFor(ct, "work tool boundary", "")
-	issue.WorkSessionID = "work-boundary"
-	execution := &issueExecution{ID: "exec-boundary", SessionID: "work-boundary", TaskID: "task-boundary", Status: issueExecutionRunning}
-	issue.Executions = []*issueExecution{execution}
-	issue.Work.ActiveTaskID = execution.TaskID
-	issue.Work.SendState = sendAccepted
-	scope, _ := a.issueToolNewWorkScope(ct.ID, issue.ID, execution.ID, issue.WorkSessionID, false)
-	scope.RuntimeTaskID = execution.TaskID
-	a.issueToolScopes[scope.Ref] = *scope
-	response, err := a.handleIssueToolForward(context.Background(), issueToolForwardRequest{Tool: "issue_action", Arguments: issueToolActionArgs(t, *scope, issueToolActionRun, map[string]any{"issue_id": issue.ID})})
-	if err != nil || !response.IsError {
-		t.Fatalf("work scope action bypass = %+v err=%v", response, err)
+	issue, err := a.createIssueFor(ct, "work tool boundary", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	scope, err := a.issueToolNewWorkScope(ct.ID, issue.ID, newIssueExecutionID(), filepath.Join(t.TempDir(), "scope-fixture.jsonl"), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	beforeIssue, err := json.Marshal(issue)
+	if err != nil {
+		t.Fatal(err)
+	}
+	beforeStore, err := os.ReadFile(store.path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, action := range []string{issueToolActionRun, issueToolActionCreate} {
+		response, err := a.handleIssueToolForward(context.Background(), issueToolForwardRequest{Tool: "issue_action", Arguments: issueToolActionArgs(t, *scope, action, map[string]any{
+			"issue_id": issue.ID, "goal": "unauthorized issue",
+		})})
+		if err != nil || !response.IsError {
+			t.Fatalf("work scope %s bypass = %+v err=%v", action, response, err)
+		}
+		var toolErr IssueToolError
+		if err := json.Unmarshal(issueToolResponseJSON(t, response), &toolErr); err != nil {
+			t.Fatal(err)
+		}
+		if toolErr.Code != "scope_denied" {
+			t.Fatalf("work scope %s denial = %+v", action, toolErr)
+		}
+		afterIssue, err := json.Marshal(issue)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(a.issueToolLedger.Operations) != 0 || len(ct.Issues) != 1 || ct.Issues[0] != issue ||
+			len(issue.Executions) != 0 || !bytes.Equal(afterIssue, beforeIssue) {
+			t.Fatalf("work scope %s changed issue or operations: issue=%+v operations=%+v", action, issue, a.issueToolLedger.Operations)
+		}
+		afterStore, err := os.ReadFile(store.path)
+		if err != nil || !bytes.Equal(afterStore, beforeStore) {
+			t.Fatalf("work scope %s changed saved bytes: %v", action, err)
+		}
 	}
 }
 
