@@ -326,6 +326,6 @@
 
 ## Compare persisted JSON by its contract
 
-**Problem:** A new subset-persistence assertion rejected a valid saved array because its JSON was indented rather than compact.
-**Cause or correction:** Whitespace is not part of the selection contract; decoded presence, nullability and values are. Original legacy-file preservation remains a byte-level contract.
-**Prevention:** Decode current JSON and assert the required values and omitted/null/empty distinctions. Reserve exact byte comparisons for contracts that preserve the original bytes.
+**Problem:** A new subset-persistence assertion rejected a valid saved array because its JSON was indented rather than compact. A later source review incorrectly called a batch snapshot's empty/null distinction irrelevant after misreading its JSON tag as omitempty.
+**Cause or correction:** Whitespace is not part of the selection contract; decoded presence, nullability and values are. The snapshot has no omitempty tag, so cloning must retain its nil versus nonnil-empty distinction. Original legacy-file preservation remains a byte-level contract.
+**Prevention:** Inspect the actual serialization tag and decode current JSON to assert the required values and omitted/null/empty distinctions. Use the existing clone path with nil-preserving copies rather than wrappers or restoration scans. Reserve exact byte comparisons for contracts that preserve the original bytes.
