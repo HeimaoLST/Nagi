@@ -224,7 +224,7 @@ func TestAppearanceFailedSaveKeepsModeAndRetryClearsWarning(t *testing.T) {
 	}
 }
 
-func TestComposerModelEntry(t *testing.T) {
+func TestComposerModelSummary(t *testing.T) {
 	a := testApp(t)
 	a.selectContact(0)
 	a.contacts[0].SessionID = ""
@@ -239,15 +239,8 @@ func TestComposerModelEntry(t *testing.T) {
 	if tr.HasText("Task model") {
 		t.Fatal("issue model entry leaked into the conversation composer")
 	}
-	if err := tr.Click("Chat model"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if !a.composerModelOpen || a.mainPageActive() || !tr.HasText("This context has no Runtime session yet") {
-		t.Fatalf("conversation model entry = aux=%q texts=%q", a.aux, tr.Texts())
-	}
 	if a.selectedContact().Draft != "draft-kept" {
-		t.Fatal("opening conversation model changed the draft")
+		t.Fatal("rendering the model summary changed the draft")
 	}
 }
 

@@ -86,14 +86,6 @@ func TestPreviewI18nSelectedSlice(t *testing.T) {
 	connTr.Frame()
 	writePreviewPNG(t, filepath.Join(dir, "connection-zh-Hans-light-1040x720.png"), connTr.Image())
 
-	model, _ := workspaceTestApp(t)
-	model.modelForm = newModelSelection(selectionTarget(), selectionCatalog())
-	model.aux = "model"
-	modelTr := ui.NewTester(model.view, 1040, 720)
-	modelTr.SetLocale("zh-Hans")
-	modelTr.Frame()
-	writePreviewPNG(t, filepath.Join(dir, "model-zh-Hans-light-1040x720.png"), modelTr.Image())
-
 	runtimeApp, _ := workspaceTestApp(t)
 	runtimeApp.runtimeStatus = runtimeStateFailed
 	runtimeApp.runtimeStage = "Connection configuration"
@@ -118,20 +110,11 @@ func showPreviewTooltip(t *testing.T, tr *ui.Tester, label string) {
 	tr.Frame()
 }
 
-func TestPreviewModelValidationAndHelperBrand(t *testing.T) {
+func TestPreviewHelperBrand(t *testing.T) {
 	dir := os.Getenv("SAKI_PREVIEW_DIR")
 	if dir == "" {
-		t.Skip("set SAKI_PREVIEW_DIR for the model validation and helper brand previews")
+		t.Skip("set SAKI_PREVIEW_DIR for the helper brand previews")
 	}
-	model, _ := workspaceTestApp(t)
-	model.modelForm = newModelSelection(selectionTarget(), selectionCatalog())
-	model.modelForm.Draft.Model = ""
-	model.modelForm.Request()
-	model.aux = "model"
-	modelTr := ui.NewTester(model.view, 1040, 720)
-	modelTr.SetLocale("zh-Hans")
-	modelTr.Frame()
-	writePreviewPNG(t, filepath.Join(dir, "model-validation-zh-Hans-light-1040x720.png"), modelTr.Image())
 
 	helper, _ := workspaceTestApp(t)
 	helper.runtimeStatus = runtimeStateFailed

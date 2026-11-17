@@ -946,7 +946,7 @@ func TestContactRailControlsStayVisibleAtNarrowWidths(t *testing.T) {
 	}
 }
 
-func TestComposerModelPopoverAndInlineContextReturnFocus(t *testing.T) {
+func TestComposerInlineContextReturnFocus(t *testing.T) {
 	a := testApp(t)
 	ct := a.selectedContact()
 	ct.Context.items = []taskContextItem{
@@ -955,21 +955,6 @@ func TestComposerModelPopoverAndInlineContextReturnFocus(t *testing.T) {
 	}
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	if err := tr.Click("Chat model"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if !a.composerModelOpen || a.mainPageActive() {
-		t.Fatalf("conversation model aux=%q panel=%q inline=%v", a.aux, a.composerPanel, a.composerInlineAux())
-	}
-	if !tr.HasText("This context has no Runtime session yet") {
-		t.Fatalf("inline model panel missing actual target state: %v", tr.Texts())
-	}
-	tr.Key(0, ui.KeyEscape)
-	tr.Frame()
-	if a.composerModelOpen || !tr.Focused("Chat model") {
-		t.Fatalf("model close = aux=%q panel=%q focused=%v", a.aux, a.composerPanel, tr.Focused("Chat model"))
-	}
 
 	if err := tr.Click("Task context: 2"); err != nil {
 		t.Fatal(err)
@@ -986,61 +971,14 @@ func TestComposerModelPopoverAndInlineContextReturnFocus(t *testing.T) {
 		t.Fatalf("context close = aux=%q panel=%q focused=%v", a.aux, a.composerPanel, tr.Focused("Task context: 2"))
 	}
 
-	// A model open request refused by an active model transaction must not
-	// expose a model panel flag while the context panel remains the owner.
-	for _, reject := range []struct {
-		name  string
-		set   func(*appModel)
-		clear func(*appModel)
-	}{
-		{name: "model-busy", set: func(a *appModel) { a.modelOpActive = true }, clear: func(a *appModel) { a.modelOpActive = false }},
-		{name: "connection-applying", set: func(a *appModel) { a.connectionApplying = true }, clear: func(a *appModel) { a.connectionApplying = false }},
-	} {
-		t.Run(reject.name, func(t *testing.T) {
-			a := testApp(t)
-			ct := a.selectedContact()
-			ct.Context.items = []taskContextItem{{ID: "reject-1", Name: "资料", Text: "保留"}}
-			tr := ui.NewTester(a.view, 1040, 720)
-			tr.Frame()
-			if err := tr.Click("Task context: 1"); err != nil {
-				t.Fatal(err)
-			}
-			tr.Frame()
-			reject.set(a)
-			if err := tr.Click("Chat model"); err != nil {
-				t.Fatal(err)
-			}
-			tr.Frame()
-			if a.aux != "task-context" || a.composerPanel != composerPanelContext || !a.composerInlineAux() || tr.HasText("Session model") {
-				t.Fatalf("rejected model open changed owner: aux=%q panel=%q inline=%v texts=%v", a.aux, a.composerPanel, a.composerInlineAux(), tr.Texts())
-			}
-			reject.clear(a)
-			if err := tr.Click("Chat model"); err != nil {
-				t.Fatal(err)
-			}
-			tr.Frame()
-			if !a.composerModelOpen || a.aux != "task-context" || a.composerPanel != composerPanelContext {
-				t.Fatalf("model could not open after rejection cleared: aux=%q panel=%q inline=%v", a.aux, a.composerPanel, a.composerInlineAux())
-			}
-			tr.Key(0, ui.KeyEscape)
-			tr.Frame()
-			if a.composerModelOpen || a.aux != "task-context" || !a.composerInlineAux() {
-				t.Fatal("model Escape also closed the separate task context")
-			}
-
-		})
-	}
-
-	// Switching contacts while the inline model entry is open must drop the
-	// owner-specific panel rather than leaving it attached to the new target.
-	if err := tr.Click("Chat model"); err != nil {
+	if err := tr.Click("Task context: 2"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
 	a.selectContact(1)
 	tr.Frame()
-	if a.composerModelOpen || a.aux != "" || a.composerPanel != "" || a.composerInlineAux() {
-		t.Fatalf("contact switch kept stale inline model panel: aux=%q panel=%q texts=%v", a.aux, a.composerPanel, tr.Texts())
+	if a.aux != "" || a.composerPanel != "" || a.composerInlineAux() {
+		t.Fatalf("contact switch kept stale inline context: aux=%q panel=%q texts=%v", a.aux, a.composerPanel, tr.Texts())
 	}
 	a.selectContact(0)
 	tr.Frame()
@@ -1190,23 +1128,6 @@ func TestComposerKeepsModelScopeAndPrimaryActionAtNarrowCenter(t *testing.T) {
 		t.Fatal("running conversation kept the Send action instead of Stop chat")
 	}
 
-	// The same view shows the real send guard reason when the model recovery
-	// state blocks a non-empty draft; it is not hidden only in the button tip.
-	a = testApp(t)
-	a.demo = false
-	a.runtimeStatus = runtimeStateReady
-	a.runtimeCapabilitiesLoaded = true
-	a.rt = &runtimeClient{}
-	ct = a.selectedContact()
-	ct.SessionID = "recovery-session"
-	ct.Loaded = true
-	ct.Draft = "保留并提示原因"
-	a.modelRecovery = map[string]modelRecoveryState{ct.SessionID: modelRecoveryNeedsReload}
-	tr = ui.NewTester(a.view, 1040, 720)
-	tr.Frame()
-	if !tr.HasText("Reload the session before sending") {
-		t.Fatalf("send guard reason missing: %v", tr.Texts())
-	}
 }
 
 // TestPreviewComposerTypography always exercises the composer geometry matrix;

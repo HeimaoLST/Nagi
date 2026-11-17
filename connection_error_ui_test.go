@@ -563,7 +563,7 @@ func TestC8UnavailableDataRestoreEntryKeepsOriginalFile(t *testing.T) {
 		if readErr != nil || len(entries) != 1 || entries[0].Name() != "contacts.json" {
 			t.Error("restore navigation created replacement/configuration/archive files before confirmation")
 		}
-		if a.rt != nil || a.runtimeHelperChecked || a.connectionSaved != nil || a.connectionEffective != nil || a.connectionSaveInFlight || a.connectionApplying || a.connectionTesting || a.modelOpActive || a.submissionInFlight != 0 || a.shutdownStarted {
+		if a.rt != nil || a.runtimeHelperChecked || a.connectionSaved != nil || a.connectionEffective != nil || a.connectionSaveInFlight || a.connectionApplying || a.connectionTesting || a.submissionInFlight != 0 || a.shutdownStarted {
 			t.Error("restore entry saved/applied/tested a connection or started execution/shutdown")
 		}
 	}()

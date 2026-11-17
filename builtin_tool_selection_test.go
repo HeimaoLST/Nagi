@@ -253,32 +253,6 @@ func TestBuiltinToolCatalogErrorDoesNotOfferDeadRetry(t *testing.T) {
 	}
 }
 
-func TestModelPanelShowsEffectiveBuiltinTools(t *testing.T) {
-	render := func(builtin []string) *ui.Tester {
-		config := runtimeConnectionConfig{SessionID: "s1", ConfigRevision: 3}
-		config.EffectiveConfig.Model = "fixture"
-		config.EffectiveConfig.ToolSelection.Builtin = builtin
-		selection := newModelSelection(modelSelectionTarget{Kind: "conversation", Label: "Saki", Config: config}, runtimeModelCatalog{})
-		return ui.NewTester(func(c *ui.Context) {
-			theme := resolveWorkbenchTheme(false).Theme
-			c.SetTheme(theme)
-			ui.Scroll(c).Fill().Padding(16).Children(func() {
-				selection.view(c, theme, modelSelectionActions{})
-			})
-		}, 1040, 720)
-	}
-	tr := render([]string{"read"})
-	tr.Frame()
-	if !tr.HasText("Effective built-in tools: read") {
-		t.Fatalf("effective tool selection missing: %v", tr.Texts())
-	}
-	tr = render(nil)
-	tr.Frame()
-	if !tr.HasText("Effective built-in tools: none") {
-		t.Fatalf("empty effective tool selection missing: %v", tr.Texts())
-	}
-}
-
 func TestFirstUseBuiltinSelectionRequiresManagedConnection(t *testing.T) {
 	a, ct := taskContextApp(t)
 	a.connectionManaged = false

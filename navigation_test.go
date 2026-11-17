@@ -301,39 +301,6 @@ func TestHistoryFullActiveRequestPreservesInlineCarrier(t *testing.T) {
 	}
 }
 
-func TestHistoryFullCanCompleteWhileModelPopoverIsOpen(t *testing.T) {
-	a, ct := workspaceTestApp(t)
-	a.windowWidth = 1040
-	a.openDetail(detailHistory)
-	searchGen := a.contactHistoryGen
-	detailGen := a.contactHistoryDetailGen
-	a.contactHistoryDetailBusy = true
-	a.openComposerModel()
-	a.applyContactHistoryFull(nil, a.connectionGeneration, ct.ID, searchGen, detailGen,
-		&contactHistoryFull{SessionID: "s1", EntryID: "h1", Text: "late same kind"}, "", nil)
-	if a.contactHistoryFull == nil || a.contactHistoryFull.Text != "late same kind" || !a.composerModelOpen || a.contactHistoryDetailBusy {
-		t.Fatalf("late result stole reopened inline kind: full=%+v aux=%q panel=%q busy=%v",
-			a.contactHistoryFull, a.aux, a.composerPanel, a.contactHistoryDetailBusy)
-	}
-}
-
-func TestHistoryFullRefusedInlineOpenDoesNotInvalidatePendingRead(t *testing.T) {
-	a, ct := workspaceTestApp(t)
-	a.windowWidth = 1040
-	a.openDetail(detailHistory)
-	searchGen := a.contactHistoryGen
-	detailGen := a.contactHistoryDetailGen
-	a.contactHistoryDetailBusy = true
-	a.modelOpActive = true
-	a.openComposerModel()
-	a.applyContactHistoryFull(nil, a.connectionGeneration, ct.ID, searchGen, detailGen,
-		&contactHistoryFull{SessionID: "s1", EntryID: "h1", Text: "accepted after refusal"}, "", nil)
-	if a.contactHistoryFull == nil || a.contactHistoryFull.Text != "accepted after refusal" || a.composerModelOpen {
-		t.Fatalf("refused inline open invalidated pending read: full=%+v aux=%q panel=%q",
-			a.contactHistoryFull, a.aux, a.composerPanel)
-	}
-}
-
 func TestHistoryFullActiveRequestUsesMainReadingPage(t *testing.T) {
 	a, ct := workspaceTestApp(t)
 	a.windowWidth = 1040
@@ -484,33 +451,6 @@ func TestProfileAndSourcesSettingsReturnToVisibleOrigin(t *testing.T) {
 	tr.Frame()
 	if a.aux != "sources" || !tr.Focused("Close sources") {
 		t.Fatalf("sources settings return = aux=%q focused=%v", a.aux, tr.Focused("Close sources"))
-	}
-}
-
-func TestIssueModelPageBackReturnsToItsIssueButton(t *testing.T) {
-	a, ct := workspaceTestApp(t)
-	a.windowWidth = 1040
-	a.workspaceOpen = false
-	a.detail = ""
-	issue := &productIssue{ID: "i-model", ContactID: ct.ID, Goal: "model issue", WorkSessionID: "work-model", Status: issueStatusInProgress}
-	ct.Issues = []*productIssue{issue}
-	ct.SelectedIssueID = issue.ID
-	nav := ct.issueNavigation()
-	nav.DetailID = issue.ID
-	a.issueDetailOpen = map[string]bool{issue.ID: true}
-	a.openDetail(detailWork)
-	a.openSessionModel(issue.WorkSessionID, "work", issue.Goal)
-	tr := ui.NewTester(a.view, 1040, 720)
-	tr.Frame()
-	if a.aux != "model" || !a.mainPageActive() || !tr.Focused("Close session model") {
-		t.Fatalf("issue model page = aux=%q focused=%v", a.aux, tr.Focused("Close session model"))
-	}
-	if err := tr.Click("← Back"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if a.aux != "" || !a.detailIs(detailWork) || !tr.Focused("Task model") {
-		t.Fatalf("issue model Back = aux=%q detail=%q focused=%v", a.aux, a.activeDetail(), tr.Focused("Task model"))
 	}
 }
 
@@ -831,31 +771,5 @@ func TestExplicitDetailOpenKeepsTheSamePageOpen(t *testing.T) {
 	a.toggleDetail(detailHistory)
 	if a.workspaceOpen {
 		t.Fatal("header toggle did not use the same-item close path")
-	}
-}
-
-func TestAcceptedIssueModelTargetLeavesConversationCarrier(t *testing.T) {
-	a, _ := workspaceTestApp(t)
-	a.openComposerModel()
-	if !a.composerModelOpen || a.mainPageActive() {
-		t.Fatalf("conversation model marker = aux=%q panel=%q", a.aux, a.composerPanel)
-	}
-	if !a.openSessionModel("issue-session", "work", "Issue") {
-		t.Fatal("issue model rejected without an active operation")
-	}
-	if a.composerModelOpen || a.aux != "model" || a.composerPanel != "" || a.composerInlineAux() || !a.mainPageActive() || a.modelPanelKind != "work" {
-		t.Fatalf("issue model kept conversation carrier: aux=%q panel=%q inline=%v main=%v kind=%q",
-			a.aux, a.composerPanel, a.composerInlineAux(), a.mainPageActive(), a.modelPanelKind)
-	}
-
-	rejected, _ := workspaceTestApp(t)
-	rejected.openComposerModel()
-	rejected.modelOpActive = true
-	if rejected.openSessionModel("issue-session", "work", "Issue") {
-		t.Fatal("guarded issue model open was accepted")
-	}
-	if !rejected.composerModelOpen || rejected.aux != "" || rejected.mainPageActive() || rejected.modelPanelKind != "conversation" {
-		t.Fatalf("rejected open changed the conversation carrier: aux=%q panel=%q inline=%v kind=%q",
-			rejected.aux, rejected.composerPanel, rejected.composerInlineAux(), rejected.modelPanelKind)
 	}
 }

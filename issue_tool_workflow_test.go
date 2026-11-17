@@ -12,6 +12,48 @@ import (
 	"time"
 )
 
+type modelProviderFixture struct {
+	mu      sync.Mutex
+	models  []string
+	hold    <-chan struct{}
+	arrived chan struct{}
+	opaque  bool
+}
+
+func (p *modelProviderFixture) handler(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Model string `json:"model"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "invalid request", http.StatusBadRequest)
+		return
+	}
+	p.mu.Lock()
+	p.models = append(p.models, body.Model)
+	first := len(p.models) == 1
+	p.mu.Unlock()
+	if first && p.arrived != nil {
+		close(p.arrived)
+	}
+	if first && p.hold != nil {
+		<-p.hold
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if r.URL.Path == "/v1/chat/completions" {
+		_, _ = w.Write([]byte(`{"id":"chat","choices":[{"index":0,"message":{"role":"assistant","content":"model fixture answer"},"finish_reason":"stop"}]}`))
+	} else if p.opaque {
+		_, _ = w.Write([]byte(`{"id":"response","status":"completed","output":[{"type":"reasoning","id":"reasoning","status":"completed","content":[{"type":"reasoning_text","text":"opaque"}],"encrypted_content":"opaque-fixture"},{"type":"message","id":"answer","status":"completed","role":"assistant","content":[{"type":"output_text","text":"model fixture answer"}]}]}`))
+	} else {
+		_, _ = w.Write([]byte(`{"id":"response","status":"completed","output":[{"type":"message","id":"answer","status":"completed","role":"assistant","content":[{"type":"output_text","text":"model fixture answer"}]}]}`))
+	}
+}
+
+func (p *modelProviderFixture) requestedModels() []string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return append([]string(nil), p.models...)
+}
+
 func TestAddWorkflowGuidanceUpgradesReleasedPrefixesWithoutProfileLoss(t *testing.T) {
 	profile := "Purpose: Keep the custom brief.\nInstructions: Preserve this exact text."
 	cases := []struct {

@@ -1301,7 +1301,6 @@ func TestConnectionGUISaveAndApplyRechecksActivityBeforeFinalSaveCallback(t *tes
 				ct := h.app.selectedContact()
 				ct.ActiveTaskID = ""
 				ct.SendState = sendIdle
-				h.app.modelOpActive = false
 			})
 		}
 	})
@@ -1354,7 +1353,6 @@ func TestConnectionGUISaveAndApplyRechecksActivityBeforeFinalSaveCallback(t *tes
 		ct := h.app.selectedContact()
 		ct.ActiveTaskID = ""
 		ct.SendState = sendIdle
-		h.app.modelOpActive = false
 	})
 	h.shutdown(t)
 }

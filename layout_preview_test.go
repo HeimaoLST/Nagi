@@ -190,7 +190,7 @@ func TestWorkbenchRoleScenesKeepActionsReachable(t *testing.T) {
 	for _, locale := range []string{"en", "zh-Hans"} {
 		for _, dark := range []bool{false, true} {
 			for _, size := range [][2]int{{720, 640}, {1040, 720}} {
-				for _, scene := range []string{"conversation", "work", "contact", "task-context", "model", "model-loading", "model-error"} {
+				for _, scene := range []string{"conversation", "work", "contact", "task-context"} {
 					t.Run(fmt.Sprintf("%s/%s/%dx%d/dark%t", scene, locale, size[0], size[1], dark), func(t *testing.T) {
 						a, ct := taskContextApp(t)
 						a.windowWidth, a.workspaceOpen = size[0], false
@@ -216,19 +216,6 @@ func TestWorkbenchRoleScenesKeepActionsReachable(t *testing.T) {
 							ct.Context.formName = "A draft name 中文"
 							ct.Context.formPath = "/tmp/Unicode folder/未读取的 draft source.svg"
 							label = msgs.TaskContextChooseFile()
-						case "model":
-							a.aux = "model"
-							a.modelForm = newModelSelection(selectionTarget(), selectionCatalog())
-							a.modelForm.Draft.Model = "provider/long-model-value-that-must-remain-an-exact-draft"
-							label = msgs.ModelUpdateModel()
-						case "model-loading":
-							a.aux = "model"
-							a.modelPanelMessage = modelPanelMessageReading
-							label = msgs.ModelClose()
-						case "model-error":
-							a.aux = "model"
-							a.modelPanelError, a.modelPanelErrorDetail = modelPanelErrorReadFailed, "A retained, long local readback diagnostic 中文. It remains unchanged while this renderer is measured."
-							label = msgs.ModelClose()
 						}
 						tr := ui.NewTester(a.view, size[0], size[1])
 						tr.SetLocale(locale)

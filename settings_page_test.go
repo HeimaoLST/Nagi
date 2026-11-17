@@ -2165,7 +2165,7 @@ func TestC8SaveRecoveryCopyEntryKeepsSavedAndUnsavedState(t *testing.T) {
 		if readErr != nil || string(after) != string(saved) || recoveryRecordSnapshot(t, ct) != before || editor.Draft.Name != profileName || ct.Name == profileName || a.connectionForm.Draft != modelDraft || a.appearanceThemeIDs != ids || a.appearanceMode != mode || a.store != store {
 			t.Error("recovery-copy entry changed saved bytes, IDs, work, unsaved editors or preferences")
 		}
-		if a.rt != nil || a.runtimeHelperChecked || a.connectionSaved != nil || a.connectionEffective != nil || a.connectionSaveInFlight || a.connectionApplying || a.connectionTesting || a.modelOpActive || a.submissionInFlight != 0 || a.shutdownStarted {
+		if a.rt != nil || a.runtimeHelperChecked || a.connectionSaved != nil || a.connectionEffective != nil || a.connectionSaveInFlight || a.connectionApplying || a.connectionTesting || a.submissionInFlight != 0 || a.shutdownStarted {
 			t.Error("recovery-copy entry saved/applied/tested a connection or started execution/shutdown")
 		}
 	}()
@@ -2905,14 +2905,8 @@ func TestSettingsQoderIntegratedLayout(t *testing.T) {
 					config := testConnectionConfig(t)
 					a.connectionSaved, a.connectionEffective = &config, &config
 					a.connectionForm = newConnectionSettings(&config, config.WorkingDirectory)
-					target := selectionTarget()
-					target.Config.SessionID, target.Label = ct.SessionID, ct.Name
-					a.modelForm = newModelSelection(target, selectionCatalog())
-					a.modelForm.focusField = ""
-					a.modelPanelKind, a.modelPanelSessionID = "conversation", ct.SessionID
 					ct.Draft = "Keep the actual draft while inspecting settings layout"
 					a.openSettingsTab(settingsTabConnection, settingsSourceRail)
-					originalModel := a.modelForm.Draft
 					var viewport ui.Rect
 					tr := ui.NewTester(func(c *ui.Context) {
 						ui.Box(c).Fill().DrawOver(func(_ *ui.Painter, _ ui.Rect) { viewport = a.settingsScroll.Bounds(c) }).Children(func() { a.view(c) })
@@ -2939,28 +2933,8 @@ func TestSettingsQoderIntegratedLayout(t *testing.T) {
 					if general.X != connection.X || general.W != connection.W || viewport.X-(connection.X+connection.W) > 24 {
 						t.Errorf("navigation rows do not fill the sidebar group: general=%+v connection=%+v viewport=%+v", general, connection, viewport)
 					}
-					var field ui.Rect
-					for i := 0; i < 24; i++ {
-						if r, found := tr.Find(msgs.ModelFilter()); found && r.H >= 32 {
-							field = r
-							break
-						}
-						tr.Scroll(viewport.X+viewport.W/2, 400, 0, 160)
-						tr.Frame()
-					}
-					if field.H < 32 {
-						t.Fatal("loaded session model field not reachable")
-					}
-					// Both form sections inherit one centered border-box content column.
-					expected := min(viewport.W, float32(820)) - 64 - 32
-					if field.W < expected-2 || field.X < viewport.X+32 || field.X+field.W > viewport.X+viewport.W-32 {
-						t.Errorf("embedded session editor uses its own width: field=%+v viewport=%+v minimum=%v", field, viewport, expected)
-					}
-					if a.modelForm.Draft != originalModel || ct.Draft != "Keep the actual draft while inspecting settings layout" || ct.pendingSend != nil {
-						t.Fatal("rendering/scanning settings changed a model or conversation draft")
-					}
-					if dir := os.Getenv("SAKI_PREVIEW_DIR"); dir != "" {
-						writePreviewPNG(t, filepath.Join(dir, fmt.Sprintf("qoder-layout-%s-%dx%d-dark-%t-model.png", locale, width, height, dark)), tr.Image())
+					if ct.Draft != "Keep the actual draft while inspecting settings layout" || ct.pendingSend != nil {
+						t.Fatal("rendering settings changed the conversation draft")
 					}
 					a.selectSettingsTab(settingsTabAppearance)
 					tr.Frame()

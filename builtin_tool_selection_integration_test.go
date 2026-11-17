@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
 	"os"
 	"slices"
 	"strings"
@@ -289,73 +288,6 @@ func TestBuiltinToolSelectionCreatesRuntimeSessions(t *testing.T) {
 	}
 	if !runtimeSelectionHasWorkWait(readWorkConfig.EffectiveConfig.ToolSelection) {
 		t.Fatalf("read work effective selection lost issue_wait: %+v", readWorkConfig.EffectiveConfig.ToolSelection)
-	}
-}
-
-func TestBuiltinToolSelectionSurvivesGUIModelABA(t *testing.T) {
-	binary := requireRuntimeBinary(t)
-	helper := ensureIssueToolTestHelper(t)
-	t.Setenv("SAKI_TEST_ISSUE_TOOL_HELPER", helper)
-	t.Setenv("SAKI_TEST_ONLINE", "0")
-	provider := &modelProviderFixture{}
-	h := startIssueToolTestHarness(t, binary, http.HandlerFunc(provider.handler))
-	h.pump.wait(func() bool { return h.app.runtimeBuiltinToolsLoaded || h.app.runtimeBuiltinToolsErr != "" })
-	selectBuiltinSubsetThroughProfile(t, h, []string{"read"})
-	sessionID := sendWithBuiltinSelection(t, h, "Start with A.")
-	config, err := h.app.rt.connectionConfig(sessionID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := config.EffectiveConfig.ToolSelection.Builtin; len(got) != 1 || got[0] != "read" || !runtimeSelectionHasIssueTools(config.EffectiveConfig.ToolSelection) {
-		t.Fatalf("initial model-A selection = %+v", config.EffectiveConfig.ToolSelection)
-	}
-
-	// Seed an existing binding with a custom exposed name and no canonical
-	// Nagi bindings. Normal sending must supplement it without losing the alias.
-	alias := runtimeExternalToolBinding{SourceID: issueToolSourceID, ToolName: "issue_get", ExposedName: "saved_issue_lookup"}
-	_, err = h.app.rt.updateSessionConfiguration(sessionID, config.ConfigRevision, map[string]any{
-		"builtin":  []string{"read"},
-		"external": []runtimeExternalToolBinding{alias},
-	}, "")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	openModelPanel(t, h, "Chat model")
-	updateModelGUI(t, h, "model-B")
-	config, err = h.app.rt.connectionConfig(sessionID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !slices.Equal(config.EffectiveConfig.ToolSelection.External, []runtimeExternalToolBinding{alias}) {
-		t.Fatalf("model update changed the existing alias: %+v", config.EffectiveConfig.ToolSelection.External)
-	}
-	h.pump.do(func() { h.app.closeAux() })
-	sendWithBuiltinSelection(t, h, "Use B.")
-	config, err = h.app.rt.connectionConfig(sessionID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := config.EffectiveConfig.ToolSelection.Builtin; len(got) != 1 || got[0] != "read" || !runtimeSelectionHasIssueTools(config.EffectiveConfig.ToolSelection) {
-		t.Fatalf("model-B selection = %+v", config.EffectiveConfig.ToolSelection)
-	}
-
-	openModelPanel(t, h, "Chat model")
-	updateModelGUI(t, h, "fixture")
-	h.pump.do(func() { h.app.closeAux() })
-	sendWithBuiltinSelection(t, h, "Return to A.")
-	config, err = h.app.rt.connectionConfig(sessionID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := config.EffectiveConfig.ToolSelection.Builtin; len(got) != 1 || got[0] != "read" || !runtimeSelectionHasIssueTools(config.EffectiveConfig.ToolSelection) {
-		t.Fatalf("model-A return selection = %+v", config.EffectiveConfig.ToolSelection)
-	}
-	if !slices.Contains(config.EffectiveConfig.ToolSelection.External, alias) {
-		t.Fatalf("model switching or tool supplementation lost the alias: %+v", config.EffectiveConfig.ToolSelection.External)
-	}
-	if got := provider.requestedModels(); len(got) != 3 || got[0] != "fixture" || got[1] != "model-B" || got[2] != "fixture" {
-		t.Fatalf("requested models = %v", got)
 	}
 }
 

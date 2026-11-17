@@ -617,7 +617,7 @@ func TestShellHistoryAndNewContactFollowLocale(t *testing.T) {
 	}
 }
 
-func TestConnectionAndModelFeedbackFollowLocale(t *testing.T) {
+func TestConnectionFeedbackFollowLocale(t *testing.T) {
 	a, ct := workspaceTestApp(t)
 	config := connectionConfig{Version: 1, API: connectionAPIChatCompletions, Endpoint: "https://provider.example.invalid/v1", APIKey: "fixture", Model: "fixture", ContextTokens: 131072, OutputTokens: 8192, WorkingDirectory: t.TempDir(), MaxActiveTasks: 2}
 	a.connectionForm = newConnectionSettings(&config, config.WorkingDirectory)
@@ -650,76 +650,6 @@ func TestConnectionAndModelFeedbackFollowLocale(t *testing.T) {
 		t.Fatalf("locale switch changed the connection draft: %q", a.connectionForm.Draft.Endpoint)
 	}
 
-	model, _ := workspaceTestApp(t)
-	model.modelForm = newModelSelection(selectionTarget(), selectionCatalog())
-	model.aux = "model"
-	modelTr := ui.NewTester(model.view, 1040, 720)
-	modelTr.SetLocale("zh-Hans")
-	modelTr.Frame()
-	if !modelTr.HasText("会话模型") || !modelTr.HasText("提供方模型 ID") ||
-		!modelTr.HasText("刷新") || !modelTr.HasText("使用运行时目录") {
-		t.Fatalf("Chinese model panel labels missing: %v", modelTr.Texts())
-	}
-	modelTr.SetLocale("en")
-	modelTr.Frame()
-	if !modelTr.HasText("Session model") || !modelTr.HasText("Provider model ID") ||
-		!modelTr.HasText("Refresh") || !modelTr.HasText("Use Runtime catalog") {
-		t.Fatalf("English model panel labels did not return: %v", modelTr.Texts())
-	}
-
-	form := model.modelForm
-	form.Draft.Model = ""
-	if _, ok := form.Request(); ok {
-		t.Fatal("empty model ID was accepted")
-	}
-	modelTr.SetLocale("zh-Hans")
-	modelTr.Frame()
-	if !modelTr.HasText("请输入提供方模型 ID。") || modelTr.HasText("Enter the provider model ID.") {
-		t.Fatalf("Chinese model-required validation missing: %v", modelTr.Texts())
-	}
-	form.Draft.Model = "provider-model"
-	form.Draft.CapacityMode = modelCapacityExplicit
-	form.Draft.ContextTokens, form.Draft.OutputTokens = "0", "10"
-	form.Request()
-	modelTr.Frame()
-	if !modelTr.HasText("上下文 token 数必须是正整数。") {
-		t.Fatalf("Chinese context validation missing: %v", modelTr.Texts())
-	}
-	form.Draft.ContextTokens, form.Draft.OutputTokens = "10", "0"
-	form.Request()
-	modelTr.Frame()
-	if !modelTr.HasText("输出 token 数必须是正整数。") {
-		t.Fatalf("Chinese output validation missing: %v", modelTr.Texts())
-	}
-	form.Draft.ContextTokens, form.Draft.OutputTokens = "10", "20"
-	form.Request()
-	modelTr.Frame()
-	if !modelTr.HasText("上下文 token 数必须大于输出 token 数。") {
-		t.Fatalf("Chinese context order validation missing: %v", modelTr.Texts())
-	}
-	form.Draft.CapacityMode = modelCapacityCatalog
-	form.Draft.CatalogID = ""
-	form.Request()
-	modelTr.Frame()
-	if !modelTr.HasText("请选择运行时目录条目或设置显式限制。") {
-		t.Fatalf("Chinese catalog validation missing: %v", modelTr.Texts())
-	}
-	targetSession := form.Target.Config.SessionID
-	form.Draft.CapacityMode = modelCapacityExplicit
-	form.Draft.ContextTokens, form.Draft.OutputTokens = "131072", "8192"
-	form.Target.Config.SessionID = ""
-	form.Request()
-	modelTr.Frame()
-	if !modelTr.HasText("请先选择会话目标。") {
-		t.Fatalf("Chinese session-target validation missing: %v", modelTr.Texts())
-	}
-	form.Target.Config.SessionID = targetSession
-	form.Unconfirmed = true
-	form.Request()
-	modelTr.Frame()
-	if !modelTr.HasText("更新模型前请刷新运行时配置。当前生效值尚未确认。") {
-		t.Fatalf("Chinese unconfirmed validation missing: %v", modelTr.Texts())
-	}
 }
 
 func TestRuntimeStartupFeedbackFollowsLocale(t *testing.T) {
