@@ -192,13 +192,20 @@ func TestAppearanceSwitchKeepsComposerFocusAndActiveTask(t *testing.T) {
 }
 
 func TestAppearanceFailedSaveKeepsModeAndRetryClearsWarning(t *testing.T) {
+	root := t.TempDir()
+	store, err := openContactStore(filepath.Join(root, "contacts.json"), root)
+	if err != nil {
+		t.Fatal(err)
+	}
 	blocked := filepath.Join(t.TempDir(), "not-a-directory")
 	if err := os.WriteFile(blocked, []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	store := &contactStore{path: filepath.Join(blocked, "contacts.json")}
+	store.path = filepath.Join(blocked, "contacts.json")
 	a := &appModel{
 		store:            store,
+		storePath:        filepath.Join(root, "contacts.json"),
+		workDir:          root,
 		selected:         0,
 		appearanceMode:   appearanceSystem,
 		contacts:         []*contact{{ID: "contact-keep", Name: "Saki", Draft: "draft-keep"}},
@@ -245,13 +252,19 @@ func TestComposerModelSummary(t *testing.T) {
 }
 
 func TestAppearanceLaterContactSaveClearsUnsavedWarning(t *testing.T) {
+	root := t.TempDir()
+	store, err := openContactStore(filepath.Join(root, "contacts.json"), root)
+	if err != nil {
+		t.Fatal(err)
+	}
 	blocked := filepath.Join(t.TempDir(), "not-a-directory")
 	if err := os.WriteFile(blocked, []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	store := &contactStore{path: filepath.Join(blocked, "contacts.json")}
+	store.path = filepath.Join(blocked, "contacts.json")
 	a := &appModel{
-		store: store, selected: 0, appearanceMode: appearanceSystem,
+		store: store, storePath: filepath.Join(root, "contacts.json"), workDir: root,
+		selected: 0, appearanceMode: appearanceSystem,
 		contacts:        []*contact{{ID: "contact-keep", Name: "Saki"}},
 		issueToolLedger: &IssueToolOperationLedger{}, issueToolScopes: map[string]IssueToolScope{},
 	}
@@ -275,7 +288,7 @@ func TestAppearancePanelSwitchesModeAndKeepsCurrentDraft(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	a := &appModel{store: store, storePath: path, appearanceMode: appearanceSystem, rt: &runtimeClient{}, runtimeStatus: runtimeStateReady}
+	a := &appModel{store: store, storePath: path, workDir: filepath.Dir(path), appearanceMode: appearanceSystem, runtimeStatus: runtimeStateReady}
 	applyStoreSelection(a, store)
 	ct := a.selectedContact()
 	const draftBeforeAppearance = "draft stays while appearance changes"
@@ -283,6 +296,10 @@ func TestAppearancePanelSwitchesModeAndKeepsCurrentDraft(t *testing.T) {
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
 	if err := tr.Click("Settings"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if err := tr.Click("General"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
@@ -319,13 +336,19 @@ func TestAppearancePanelSwitchesModeAndKeepsCurrentDraft(t *testing.T) {
 }
 
 func TestAppearanceRetrySaveUIAndRuntimeErrorOwnership(t *testing.T) {
+	root := t.TempDir()
+	store, err := openContactStore(filepath.Join(root, "contacts.json"), root)
+	if err != nil {
+		t.Fatal(err)
+	}
 	blocked := filepath.Join(t.TempDir(), "not-a-directory")
 	if err := os.WriteFile(blocked, []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	store := &contactStore{path: filepath.Join(blocked, "contacts.json")}
+	store.path = filepath.Join(blocked, "contacts.json")
 	a := &appModel{
-		store: store, selected: 0, appearanceMode: appearanceSystem, systemDark: true,
+		store: store, storePath: filepath.Join(root, "contacts.json"), workDir: root,
+		selected: 0, appearanceMode: appearanceSystem, systemDark: true,
 		contacts:        []*contact{{ID: "contact-keep", Name: "Saki", Draft: "keep"}},
 		issueToolLedger: &IssueToolOperationLedger{}, issueToolScopes: map[string]IssueToolScope{},
 		runtimeErr: "Runtime protocol error: unrelated",
@@ -407,6 +430,7 @@ func TestSegmentedSelectionKeepsTargetAndKeyboard(t *testing.T) {
 func themeImportTestApp(t *testing.T) (*appModel, *contact, chan func()) {
 	t.Helper()
 	a, ct := workspaceTestApp(t)
+	ct.SessionID, ct.Loaded = "", false
 	a.workspaceOpen = false
 	a.rt = &runtimeClient{}
 	ct.Draft = "retained theme-import draft"
