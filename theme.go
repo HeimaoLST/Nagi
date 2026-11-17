@@ -16,7 +16,7 @@ const (
 	controlHeight            float32 = 28
 	controlHit               float32 = 32
 	typeSettingsTitle        float32 = 20
-	lineSettingsTitle        float32 = 32
+	lineSettingsTitle        float32 = 28
 	lineCompact              float32 = 22
 	lineForm                 float32 = 20
 	typeHeaderMeta           float32 = 10
@@ -82,20 +82,20 @@ func resolveWorkbenchTheme(dark bool) workbenchTheme {
 	t.Text = ui.Hex("#141414")
 	t.TextMuted = ui.Hex("#636261")
 	t.Accent = ui.Hex("#0D0D0D")
-	t.AccentHover = ui.Hex("#436651")
-	t.AccentPressed = ui.Hex("#3A5747")
+	t.AccentHover = ui.Hex("#2B2B2A")
+	t.AccentPressed = ui.Hex("#3A3A38")
 	t.AccentText = ui.Hex("#FDFDFD")
 	t.Selection = ui.Hex("#EFEFEF")
 	t.Focus = ui.Hex("#BCBBBA")
-	t.Danger = ui.Hex("#EC5B56")
-	t.Warning = ui.Hex("#EFB041")
-	t.Success = ui.Hex("#579B6E")
+	t.Danger = ui.Hex("#B4232C")
+	t.Warning = ui.Hex("#8A5300")
+	t.Success = ui.Hex("#2E6B45")
 	t.Scrollbar, t.ScrollbarWidth = ui.Hex("#DFDFDF"), 6
 	palette := workbenchTheme{
 		Theme:      t,
-		ChromeFrom: ui.Hex("#E6E6B6"), ChromeTo: ui.Hex("#C4D0DA"), Tertiary: ui.Hex("#838280"),
+		ChromeFrom: ui.Hex("#F2F2E2"), ChromeTo: ui.Hex("#E6EBEF"), Tertiary: ui.Hex("#838280"),
 		NavHover: ui.Hex("#0000000A"), NavSelected: ui.Hex("#00000012"),
-		Rail: ui.Hex("#E6E6B6"), Reading: t.Background, Panel: t.Background,
+		Rail: ui.Hex("#F2F2E2"), Reading: t.Background, Panel: t.Background,
 		Well: t.Surface, BubbleUser: ui.Hex("#F2F4F2"), BubbleContact: t.Background,
 		WorkSurface: t.Background, WorkText: t.Text, WorkMuted: t.TextMuted,
 		WorkAttention: t.Warning, WorkWarningBg: ui.Hex("#FEFBE8"),
@@ -363,7 +363,7 @@ func controlIcon(c *ui.Context, glyph *ui.SVG, role iconControlRole) ui.Element 
 
 func pageHeading(c *ui.Context, title string) ui.Element {
 	return ui.Text(c, title).Role(ui.RoleHeading).Level(1).Font("system-ui").
-		FontSize(typeSettingsTitle).FontWeight(500).FixedLineHeight(lineSettingsTitle).TextColor(c.Theme().Text)
+		FontSize(typeSettingsTitle).FontWeight(600).FixedLineHeight(lineSettingsTitle).TextColor(c.Theme().Text)
 }
 
 type markdownHeadingTone uint8

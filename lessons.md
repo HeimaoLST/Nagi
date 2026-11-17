@@ -303,8 +303,14 @@
 ## Resolve compatibility callers before claiming compilation
 
 **Problem:** Test retirement passed formatting and a scoped import heuristic but the frozen compile failed on a retained launcher call, two missing imports and additional deleted-method callers outside the original fence.
-**Cause or correction:** Parsing and selected symbol searches do not resolve the complete test package. The first compiler page stopped after too many errors, so its list was incomplete.
-**Prevention:** Preserve the first failed command and source snapshot. Check all callers of each removed declaration, maintain accurate test names, and compile one committed unchanged candidate before executing tests. Give the test owner exact follow-up paths; do not restore an emulator or discard live business assertions to obtain a green compile.
+**Cause or correction:** Parsing and selected symbol searches do not resolve the complete test package. The first compiler page stopped after too many errors; its first closure left deleted failure-helper calls and changed history signatures unresolved. An uncapped root-package diagnostic established the complete remaining compiler list.
+**Prevention:** Preserve failed commands and source snapshots. When diagnostics are truncated, collect the complete root-package errors before assigning another closure; cached Go supports root-only -gcflags=-e. Check each removed declaration's callers, maintain accurate test names, and compile a committed unchanged candidate before executing tests. Give the test owner exact paths; do not restore an emulator or discard business assertions for green compilation. Compilation does not establish behavior or resolve an explicit domain/data-policy blocker.
+
+## Separate domain persistence from legacy-data admission
+
+**Problem:** Caller maintenance initially described retained issue rejection/non-dispatch persistence oracles as exercisable through a current domain helper without checking the store's legacy-data policy.
+**Cause or correction:** Source review found that any stored issue execution triggers the existing legacy read-only guard. The retained failure helper changes in-memory status while ignoring a failed persist. Current Pi activity dispatch is still unavailable; mapping a helper name does not prove durable outcomes. This is a source finding, not an executed failure.
+**Prevention:** Inspect data admission and persistence results alongside domain callers before claiming a mapping is complete. Retain the relevant persistence/reopen/rerun assertions and explicit open gate. Do not bypass the legacy guard, fabricate Pi dispatch or silently change the pending history policy to make tests pass.
 
 ## Reuse current ownership and canonical admission reasons
 
