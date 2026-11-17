@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -46,14 +47,27 @@ func clickProfileAction(t *testing.T, tr *ui.Tester, label string) {
 	tr.Frame()
 }
 
+func freshBuiltinProfileTestApp(t *testing.T) (*appModel, *contact) {
+	t.Helper()
+	root := t.TempDir()
+	store, err := openContactStore(filepath.Join(root, "contacts.json"), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := &appModel{
+		storePath: store.path, workDir: root, windowWidth: 1040, scrollTo: -1,
+		connectionManaged: true, runtimeStatus: runtimeStateReady,
+		runtimeBuiltinTools: builtinToolsForTest(), runtimeBuiltinToolsLoaded: true,
+	}
+	applyStoreSelection(a, store)
+	a.bindTaskContexts()
+	return a, a.selectedContact()
+}
+
 // This regression is expressed through the actual profile UI, not by assigning
 // the draft field. The old UI fails because it has no built-in-tool entry.
 func TestContactProfileShowsBuiltinToolSelection(t *testing.T) {
-	a, ct := taskContextApp(t)
-	a.connectionManaged = true
-	a.runtimeStatus = runtimeStateReady
-	a.runtimeBuiltinTools = builtinToolsForTest()
-	a.runtimeBuiltinToolsLoaded = true
+	a, ct := freshBuiltinProfileTestApp(t)
 	a.openSettingsTab(settingsTabContact, settingsSourceRail)
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
@@ -66,6 +80,9 @@ func TestContactProfileShowsBuiltinToolSelection(t *testing.T) {
 
 	// Save the omitted/default value: the store must keep the field absent.
 	clickProfileAction(t, tr, "Save changes")
+	if editor := a.settingsContactEditor(); editor.Error != "" || editor.Status != profileNoticeSavedDefaults || a.localSaveErr != "" {
+		t.Fatalf("default profile save failed: editor=%+v local=%q", editor, a.localSaveErr)
+	}
 	if ct.BuiltinTools != nil {
 		t.Fatalf("saving default changed it into an explicit selection: %v", ct.BuiltinTools)
 	}
@@ -82,8 +99,22 @@ func TestContactProfileShowsBuiltinToolSelection(t *testing.T) {
 		t.Fatalf("UI subset draft = %v", got)
 	}
 	clickProfileAction(t, tr, "Save changes")
+	if editor := a.settingsContactEditor(); editor.Error != "" || editor.Status != profileNoticeSavedDefaults || a.localSaveErr != "" {
+		t.Fatalf("subset profile save failed: editor=%+v local=%q", editor, a.localSaveErr)
+	}
 	if ct.BuiltinTools == nil || len(*ct.BuiltinTools) != 1 || (*ct.BuiltinTools)[0] != "read" {
 		t.Fatalf("saved subset = %v", ct.BuiltinTools)
+	}
+	present, raw := storedBuiltinToolsForTest(t, a.store.path)
+	if !present {
+		t.Fatal("explicit subset store field is missing")
+	}
+	var subset []string
+	if err := json.Unmarshal([]byte(raw), &subset); err != nil {
+		t.Fatalf("explicit subset is not a string array: raw=%q err=%v", raw, err)
+	}
+	if subset == nil || len(subset) != 1 || subset[0] != "read" {
+		t.Fatalf("explicit subset store shape = %#v", subset)
 	}
 
 	// Empty the explicit subset. This is not the host default and must persist
@@ -93,6 +124,9 @@ func TestContactProfileShowsBuiltinToolSelection(t *testing.T) {
 		t.Fatalf("UI empty draft = %v", got)
 	}
 	clickProfileAction(t, tr, "Save changes")
+	if editor := a.settingsContactEditor(); editor.Error != "" || editor.Status != profileNoticeSavedDefaults || a.localSaveErr != "" {
+		t.Fatalf("empty profile save failed: editor=%+v local=%q", editor, a.localSaveErr)
+	}
 	if ct.BuiltinTools == nil || len(*ct.BuiltinTools) != 0 {
 		t.Fatalf("saved empty selection = %v", ct.BuiltinTools)
 	}
@@ -142,12 +176,33 @@ func TestContactProfileBuiltinChecksAreKeyboardReachable(t *testing.T) {
 }
 
 func TestContactStorePreservesDefaultAndExplicitEmptyBuiltinTools(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "contacts.json")
+	legacyPath := filepath.Join(t.TempDir(), "contacts.json")
 	legacy := storedState{Version: 9, Selected: "c1", Contacts: []storedContact{{ID: "c1", Name: "Saki"}}}
-	if err := writeStoredState(path, legacy); err != nil {
+	legacyBytes, err := json.Marshal(legacy)
+	if err != nil {
 		t.Fatal(err)
 	}
-	store, err := openContactStore(path, "/tmp")
+	if err := os.WriteFile(legacyPath, legacyBytes, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	legacyStore, err := openContactStore(legacyPath, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacyContact := contactsFromStore(legacyStore)[0]
+	if !legacyStore.piDataReadOnly() || legacyContact.BuiltinTools != nil {
+		t.Fatalf("legacy default or read-only policy changed: version=%d tools=%v", legacyStore.state.Version, legacyContact.BuiltinTools)
+	}
+	if err := legacyStore.save([]*contact{legacyContact}, legacyContact.ID); err == nil || !strings.Contains(err.Error(), "read-only") {
+		t.Fatalf("legacy save did not refuse read-only data: %v", err)
+	}
+	preserved, err := os.ReadFile(legacyPath)
+	if err != nil || !bytes.Equal(preserved, legacyBytes) {
+		t.Fatalf("legacy save changed original bytes: err=%v", err)
+	}
+	root := t.TempDir()
+	path := filepath.Join(root, "contacts.json")
+	store, err := openContactStore(path, root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -155,7 +210,7 @@ func TestContactStorePreservesDefaultAndExplicitEmptyBuiltinTools(t *testing.T) 
 	if ct.BuiltinTools != nil {
 		t.Fatalf("missing field did not use Runtime default: %v", ct.BuiltinTools)
 	}
-	if err := store.save([]*contact{ct}, "c1"); err != nil {
+	if err := store.save([]*contact{ct}, ct.ID); err != nil {
 		t.Fatal(err)
 	}
 	if present, raw := storedBuiltinToolsForTest(t, path); present {
@@ -164,7 +219,7 @@ func TestContactStorePreservesDefaultAndExplicitEmptyBuiltinTools(t *testing.T) 
 
 	empty := []string{}
 	ct.BuiltinTools = &empty
-	if err := store.save([]*contact{ct}, "c1"); err != nil {
+	if err := store.save([]*contact{ct}, ct.ID); err != nil {
 		t.Fatal(err)
 	}
 	if present, raw := storedBuiltinToolsForTest(t, path); !present || strings.TrimSpace(raw) != "[]" {
@@ -181,18 +236,18 @@ func TestContactStorePreservesDefaultAndExplicitEmptyBuiltinTools(t *testing.T) 
 }
 
 func TestContactProfileBuiltinSelectionIsPerContact(t *testing.T) {
-	a, first := taskContextApp(t)
-	a.connectionManaged = true
+	a, first := freshBuiltinProfileTestApp(t)
 	second := &contact{ID: "second", Name: "Mio", Role: "Assistant"}
 	read := []string{"read"}
 	second.BuiltinTools = &read
 	a.contacts = append(a.contacts, second)
-	a.runtimeStatus = runtimeStateReady
-	a.runtimeBuiltinTools = builtinToolsForTest()
-	a.runtimeBuiltinToolsLoaded = true
+	editor := a.ensureSettingsProfileEditor(first.ID)
+	if editor == nil {
+		t.Fatal("first contact profile editor is unavailable")
+	}
 	empty := []string{}
 	if !a.saveContactProfileDraftFor(first.ID, profileDraft{Name: first.Name, BuiltinTools: &empty}, false) {
-		t.Fatalf("save first = %s", a.profileEditorFor(first.ID).Error)
+		t.Fatalf("save first = %q; local=%q", editor.Error, a.localSaveErr)
 	}
 	if second.BuiltinTools == nil || len(*second.BuiltinTools) != 1 || (*second.BuiltinTools)[0] != "read" {
 		t.Fatalf("saving first changed second: %v", second.BuiltinTools)
@@ -203,11 +258,7 @@ func TestContactProfileBuiltinSelectionIsPerContact(t *testing.T) {
 }
 
 func TestContactProfileBuiltinSaveFailureKeepsDraft(t *testing.T) {
-	a, ct := taskContextApp(t)
-	a.connectionManaged = true
-	a.runtimeStatus = runtimeStateReady
-	a.runtimeBuiltinTools = builtinToolsForTest()
-	a.runtimeBuiltinToolsLoaded = true
+	a, ct := freshBuiltinProfileTestApp(t)
 	a.store.path = t.TempDir()
 	a.openSettingsTab(settingsTabContact, settingsSourceRail)
 	editor := a.settingsContactEditor()
@@ -253,14 +304,18 @@ func TestBuiltinToolCatalogErrorDoesNotOfferDeadRetry(t *testing.T) {
 }
 
 func TestFirstUseBuiltinSelectionRequiresManagedConnection(t *testing.T) {
-	a, ct := taskContextApp(t)
+	a, ct := freshBuiltinProfileTestApp(t)
 	a.connectionManaged = false
-	a.runtimeStatus = runtimeStateReady
-	a.runtimeBuiltinTools = builtinToolsForTest()
-	a.runtimeBuiltinToolsLoaded = true
+	editor := a.ensureSettingsProfileEditor(ct.ID)
+	if editor == nil {
+		t.Fatal("first-use contact profile editor is unavailable")
+	}
 	read := []string{"read"}
 	if a.saveContactProfileDraftFor(ct.ID, profileDraft{Name: ct.Name, BuiltinTools: &read}, false) {
 		t.Fatal("legacy connection accepted an explicit built-in selection")
+	}
+	if editor.Error != builtinNoticeManaged {
+		t.Fatalf("first-use selection rejected for the wrong reason: %q", editor.Error)
 	}
 	if ct.BuiltinTools != nil {
 		t.Fatalf("legacy rejection changed profile: %v", ct.BuiltinTools)
@@ -293,12 +348,8 @@ func TestPreviewBuiltinToolSelection(t *testing.T) {
 			name string
 			w, h int
 		}{{"1040x720", 1040, 720}, {"720x640", 720, 640}} {
-			a, _ := taskContextApp(t)
-			a.connectionManaged = true
+			a, _ := freshBuiltinProfileTestApp(t)
 			a.windowWidth = size.w
-			a.runtimeStatus = runtimeStateReady
-			a.runtimeBuiltinTools = builtinToolsForTest()
-			a.runtimeBuiltinToolsLoaded = true
 			a.openSettingsTab(settingsTabContact, settingsSourceRail)
 			read := []string{"read"}
 			a.settingsContactEditor().Draft.BuiltinTools = &read

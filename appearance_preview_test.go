@@ -383,31 +383,50 @@ func TestGeneralPageHeadingKeepsDraftAndThemeAction(t *testing.T) {
 	for _, language := range []string{"en", "zh-Hans"} {
 		t.Run(language, func(t *testing.T) {
 			a, ct := workspaceTestApp(t)
+			ct.SessionID, ct.Loaded = "", false
 			recoveryTestStore(t, a)
 			ct.Draft = "Keep this exact unsaved text"
+			before := recoveryRecordSnapshot(t, ct)
+			store := a.store
+			a.openSettingsTab(settingsTabAppearance, settingsSourceRail)
 			tr := ui.NewTester(func(c *ui.Context) {
 				a.workTheme = resolveWorkbenchTheme(a.appearanceMode == appearanceDark)
 				c.SetTheme(a.workTheme.Theme)
-				ui.Scroll(c).Fill().Padding(20).Children(func() { a.settingsAppearanceContent(c, c.Theme()) })
-			}, 420, 640)
+				ui.Row(c).Fill().Children(func() { a.settingsMain(c, c.Theme(), false) })
+			}, 720, 640)
 			tr.SetLocale(language)
 			tr.SetFocused(true)
 			tr.Frame()
 			msgs := locales.In(language)
 			heading, ok := tr.Find(msgs.SettingsGeneral())
-			if !ok || heading.H != 32 {
-				t.Fatalf("General page title has no full declared 32-unit line box: %+v", heading)
+			content, contentOK := tr.Find(msgs.AppearanceMode())
+			if !ok || !contentOK || heading.W <= 0 || heading.H <= 0 || heading.X < 0 || heading.Y < 0 || heading.X+heading.W > 720 || heading.Y+heading.H > content.Y {
+				t.Fatalf("composed General heading is missing or not above its controls: heading=%+v content=%+v texts=%v", heading, content, tr.Texts())
 			}
-			if err := tr.Click(msgs.AppearanceMode()); err != nil {
-				t.Fatal(err)
+			for attempt := 0; attempt < 8 && !tr.Focused(msgs.AppearanceSystem()); attempt++ {
+				tr.Key(0, ui.KeyTab)
+				tr.Frame()
 			}
+			if !tr.Focused(msgs.AppearanceSystem()) {
+				t.Fatalf("appearance current-value trigger is not keyboard reachable: %v", tr.Texts())
+			}
+			tr.Key(0, ui.KeySpace)
 			tr.Frame()
+			if !tr.HasText(msgs.AppearanceDark()) {
+				t.Fatalf("focused appearance trigger did not open its real options: %v", tr.Texts())
+			}
 			if err := tr.Click(msgs.AppearanceDark()); err != nil {
 				t.Fatal(err)
 			}
 			tr.Frame()
+			if !tr.Focused(msgs.AppearanceDark()) {
+				t.Fatalf("theme selection lost focus: %v", tr.Texts())
+			}
 			if a.appearanceMode != appearanceDark || ct.Draft != "Keep this exact unsaved text" || a.localSaveErr != "" {
 				t.Fatalf("shared title change disturbed the actual theme action/draft: mode=%s draft=%q error=%q", a.appearanceMode, ct.Draft, a.localSaveErr)
+			}
+			if a.selectedContact() != ct || a.store != store || recoveryRecordSnapshot(t, ct) != before {
+				t.Fatal("General theme action changed unrelated contact state or store ownership")
 			}
 		})
 	}

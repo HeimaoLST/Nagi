@@ -238,7 +238,7 @@
 
 **Problem:** Initial symbol searches named absent guessed question files, and later inspections assumed absent source, SDK, official example and external recorder paths. An edit anchor was also rejected before mutation because the relevant range had not been read.
 **Cause or correction:** Repository symbol/path discovery located the actual files; none of these failed lookups established a product defect.
-**Prevention:** Use rg --files and symbol discovery before targeted reads or edits, including pinned SDK examples, payloads and external evidence directories, then read the actual edit range. Do not assume an example directory from a component name. Pass filename patterns through quoted rg --glob filters rather than unmatched shell globs. Keep lookup/setup failures separate from compilation and behavior results.
+**Prevention:** Use rg --files and symbol discovery before targeted reads or edits, including pinned SDK examples, payloads and external evidence directories. Observe the discovered path before issuing the dependent read, then replace a complete balanced block when changing its delimiters. Do not assume an example directory from a component name. Pass filename patterns through quoted rg --glob filters rather than unmatched shell globs. Keep lookup/setup failures separate from compilation and behavior results.
 
 ## Select process tests explicitly in CI
 
@@ -249,8 +249,8 @@
 ## Reacquire form targets after structural updates
 
 **Problem:** The captured-answer E2E reached a completed issue but observed no rejection notice while its draft stayed intact; it had not recorded whether Save was activated.
-**Cause or correction:** First-run activation is Unconfirmed. The fixture assumed textarea focus survived a Frame that changed preceding controls; pinned MyGo derives unkeyed element IDs from sibling position. Source review still found the completed-target form and rejecting save path.
-**Prevention:** Reacquire the actual form after structural updates, assert text-input focus and then the non-input Save target before activation, and retain focus/result receipts. Keep rejection, draft and no-effect assertions intact; do not infer a toolkit defect or add a production patch from missing activation evidence.
+**Cause or correction:** First-run activation is Unconfirmed. The fixture assumed textarea focus survived a Frame that changed preceding controls; pinned MyGo derives unkeyed element IDs from sibling position. Source review still found the completed-target form and rejecting save path. Later Settings caption changes made the caption and select controller share text; clicking the first matching caption did not establish popup activation.
+**Prevention:** Reacquire the actual form after structural updates, assert text-input focus and then the non-input Save target before activation, and retain focus/result receipts. Target the actual controller by its current value or verified keyboard focus when captions repeat, and require the real options before selection. Keep rejection, draft and no-effect assertions intact; do not infer a toolkit defect or add a production patch from missing activation evidence.
 
 ## Reassemble streamed test output before parsing receipts
 
@@ -323,3 +323,9 @@
 **Problem:** Pi RunStarted cleared the draft and submitted context before saving; a failed save changed the send state to unknown without restoring those materials.
 **Cause or correction:** Source inspection found missing rollback. clearSubmitted also compacts its backing slice and changes preview selection, so a shallow context copy cannot preserve the original contents.
 **Prevention:** Capture independent context items and the current draft/preview before clearing. Restore user materials on save failure while retaining known admitted run facts, pending intent and unknown/no-replay semantics. Preserve later edits and verify the existing business assertions through the actual Pi reducer and process E2E.
+
+## Compare persisted JSON by its contract
+
+**Problem:** A new subset-persistence assertion rejected a valid saved array because its JSON was indented rather than compact.
+**Cause or correction:** Whitespace is not part of the selection contract; decoded presence, nullability and values are. Original legacy-file preservation remains a byte-level contract.
+**Prevention:** Decode current JSON and assert the required values and omitted/null/empty distinctions. Reserve exact byte comparisons for contracts that preserve the original bytes.
