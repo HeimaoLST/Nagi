@@ -2808,6 +2808,70 @@ func (h *piActivityHarness) screenshot(name string) {
 	save()
 }
 
+func (h *piActivityHarness) openFollowup(issueID, name string) {
+	h.t.Helper()
+	h.screenshot("activity-followup-before-action-" + name)
+	h.onUI(func() error {
+		msgs := locales.In("en")
+		record := func(stage, controller string) {
+			h.tester.Frame()
+			labels := h.tester.Texts()
+			labelCount := len(labels)
+			if len(labels) > 100 {
+				labels = labels[:100]
+			}
+			bounds := map[string]any{}
+			for _, label := range []string{msgs.IssueMoreActions(), msgs.IssueHideActions(), msgs.SupplementAdd(), msgs.SupplementFormLabel()} {
+				rect, found := h.tester.Find(label)
+				bounds[label] = map[string]any{"found": found, "bounds": rect}
+			}
+			active, noInputMethod := h.tester.TextInputActive()
+			selectedContact, selectedIssue, detailIssue := "", "", ""
+			if ct := h.app.selectedContact(); ct != nil {
+				selectedContact, selectedIssue, detailIssue = ct.ID, ct.SelectedIssueID, ct.issueView.DetailID
+			}
+			piAppRecord(h.t, "activity-followup-action", map[string]any{
+				"stage": stage, "expected_contact": h.contactID, "expected_issue": issueID,
+				"selected_contact": selectedContact, "selected_issue": selectedIssue, "detail_issue": detailIssue,
+				"expanded": h.app.issueDetailOpen[issueID], "form_id": h.app.issueSupplementFormID,
+				"answer_target": h.app.issueSupplementAnswerTarget, "question_ref": h.app.issueSupplementQuestionRef,
+				"frame_labels_first_100": labels, "frame_label_count": labelCount, "first_match_bounds": bounds,
+				"expected_controller": controller, "controller_focused": h.tester.Focused(controller),
+				"text_input_active": active, "no_input_method": noInputMethod, "viewport": h.tester.Image().Bounds(),
+			})
+		}
+		owned := func() bool {
+			ct := h.app.selectedContact()
+			return ct != nil && ct.ID == h.contactID && ct.SelectedIssueID == issueID && ct.issueView.DetailID == issueID && ct.issueByID(issueID) != nil
+		}
+		record("before-more-actions", msgs.IssueMoreActions())
+		if !owned() {
+			return errors.New("follow-up action lost its captured contact or issue")
+		}
+		if !h.app.issueDetailOpen[issueID] {
+			if err := h.focus(msgs.IssueMoreActions(), false); err != nil {
+				record("more-actions-focus-failed", msgs.IssueMoreActions())
+				return err
+			}
+			h.tester.Key(0, ui.KeySpace)
+		}
+		record("after-more-actions", msgs.SupplementAdd())
+		if !owned() || !h.app.issueDetailOpen[issueID] || !h.tester.HasText(msgs.IssueHideActions()) {
+			return errors.New("activity actions did not expand for the captured issue")
+		}
+		if err := h.focus(msgs.SupplementAdd(), false); err != nil {
+			record("add-follow-up-focus-failed", msgs.SupplementAdd())
+			return err
+		}
+		h.tester.Key(0, ui.KeySpace)
+		record("after-add-follow-up", msgs.SupplementFormLabel())
+		if !owned() || h.app.issueSupplementFormID != issueID || h.app.issueSupplementAnswerTarget != (issueSupplementTarget{}) || h.app.issueSupplementQuestionRef != "" {
+			return errors.New("ordinary follow-up form did not open for the captured issue")
+		}
+		return nil
+	})
+}
+
 func (h *piActivityHarness) createIssue(goal string) string {
 	h.t.Helper()
 	msgs := locales.In("en")
@@ -3050,8 +3114,7 @@ func TestPiAppActivitiesAndQuestions(t *testing.T) {
 	h.selectIssue("ACTIVITY_A", issueA)
 	h.startIssue(msgs.WorkStart(), issueA)
 	h.waitSignal(p.arrivedA, "activity A provider request")
-	h.click(msgs.IssueMoreActions())
-	h.click(msgs.SupplementAdd())
+	h.openFollowup(issueA, "a")
 	const initialDraft = "Keep this follow-up draft"
 	const finalDraft = initialDraft + " while the question arrives"
 	h.onUI(func() error {
@@ -3161,8 +3224,7 @@ func TestPiAppActivitiesAndQuestions(t *testing.T) {
 	beforeCapacity := p.count()
 	h.click(msgs.WorkBackToIssues())
 	h.selectIssue("ACTIVITY_C_PREATTEMPT", issueC)
-	h.click(msgs.IssueMoreActions())
-	h.click(msgs.SupplementAdd())
+	h.openFollowup(issueC, "c")
 	h.onUI(func() error {
 		if err := h.focus(msgs.SupplementFormLabel(), true); err != nil {
 			return err

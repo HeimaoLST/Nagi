@@ -762,6 +762,11 @@ func (b *piIssueTools) dispatchActivity(call piIssueToolCall) {
 func (b *piIssueTools) sendActivityError(callID string, failure error) {
 	ctx, cancel := context.WithTimeout(context.Background(), issueToolWaitTimeout)
 	defer cancel()
+	select {
+	case <-b.stop:
+		return
+	default:
+	}
 	_, err := b.client.ToolResult(ctx, pi.ToolResultParams{WorkerEpoch: b.epoch, ContextID: b.binding.ContextID, RunID: b.runID, CallID: callID,
 		Error: &pi.RemoteError{Code: "operation_failed", Message: failure.Error()}})
 	if err != nil {
