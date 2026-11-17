@@ -20,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
 	"github.com/HeimaoLST/Nagi/internal/pi"
@@ -1195,6 +1196,1148 @@ func TestPiAppCapturedQuestionAnswerForm(t *testing.T) {
 		t.Fatalf("answer-form loopback requests=%d want=18", f.provider.count())
 	}
 	if err := f.stop(f.ctx); err != nil {
+		t.Fatal(err)
+	}
+}
+
+type piFirstUseRequest struct {
+	Endpoint string          `json:"endpoint"`
+	Path     string          `json:"path"`
+	AuthOK   bool            `json:"auth_ok"`
+	Body     json.RawMessage `json:"body"`
+}
+
+type piFirstUseHarness struct {
+	t             *testing.T
+	app           *appModel
+	pump          *uiPump
+	tester        *ui.Tester
+	provider      *piAppProvider
+	servers       []*httptest.Server
+	mu            sync.Mutex
+	requests      []piFirstUseRequest
+	streamStarted chan struct{}
+	streamRelease <-chan struct{}
+	hosts         []*piAppHost
+	probes        []*piConnectionProbe
+	capturedHost  *piAppHost
+	closed        bool
+}
+
+func (h *piFirstUseHarness) onUI(fn func() error) {
+	h.t.Helper()
+	var err error
+	h.pump.do(func() { err = fn() })
+	if err != nil {
+		h.t.Fatal(err)
+	}
+}
+
+func (h *piFirstUseHarness) click(label string) {
+	h.t.Helper()
+	h.onUI(func() error {
+		h.tester.Frame()
+		if bounds, ok := h.tester.Find(label); !ok || bounds.Y < 0 || bounds.Y+bounds.H > 720 {
+			h.tester.Scroll(520, 360, 0, -3000)
+			h.tester.Frame()
+		}
+		if err := clickSettingsAction(h.tester, label); err != nil {
+			return err
+		}
+		h.tester.Frame()
+		return nil
+	})
+}
+
+func (h *piFirstUseHarness) focus(label string, input bool) error {
+	h.tester.Frame()
+	for range 128 {
+		active, _ := h.tester.TextInputActive()
+		if h.tester.Focused(label) && active == input {
+			return nil
+		}
+		h.tester.Key(0, ui.KeyTab)
+		h.tester.Frame()
+	}
+	return fmt.Errorf("controller %q was not keyboard reachable as text input=%v", label, input)
+}
+
+func (h *piFirstUseHarness) activate(label string) {
+	h.t.Helper()
+	h.onUI(func() error {
+		if err := h.focus(label, false); err != nil {
+			return err
+		}
+		h.tester.Key(0, ui.KeySpace)
+		h.tester.Frame()
+		return nil
+	})
+}
+
+func (h *piFirstUseHarness) selectOption(current, option string, options ...string) {
+	h.t.Helper()
+	h.onUI(func() error {
+		if err := h.focus(current, false); err != nil {
+			return err
+		}
+		h.tester.Key(0, ui.KeySpace)
+		h.tester.Frame()
+		for _, expected := range options {
+			if !h.tester.HasText(expected) {
+				return fmt.Errorf("select %q did not reveal option %q", current, expected)
+			}
+		}
+		if err := h.tester.Click(option); err != nil {
+			return err
+		}
+		h.tester.Frame()
+		return nil
+	})
+}
+
+func (h *piFirstUseHarness) input(label, text string) {
+	h.t.Helper()
+	h.onUI(func() error {
+		if err := h.focus(label, true); err != nil {
+			return err
+		}
+		h.tester.Key(ui.Cmd, ui.KeyA)
+		h.tester.Type(text)
+		h.tester.Frame()
+		form := h.app.connectionForm
+		if form == nil {
+			return errors.New("connection form disappeared while typing")
+		}
+		var actual string
+		switch label {
+		case "API endpoint":
+			actual = form.Draft.Endpoint
+		case "API key":
+			actual = form.Draft.APIKey
+		case "Default model":
+			actual = form.Draft.Model
+		case "Context tokens":
+			actual = form.Draft.ContextTokens
+		case "Output tokens":
+			actual = form.Draft.OutputTokens
+		case "Maximum active tasks":
+			actual = form.Draft.Slots
+		default:
+			return fmt.Errorf("unknown connection input %q", label)
+		}
+		if actual != text {
+			return fmt.Errorf("input %q did not retain the typed value", label)
+		}
+		return nil
+	})
+}
+
+type piFirstUseWriter struct {
+	http.ResponseWriter
+	started chan struct{}
+	release <-chan struct{}
+	ctx     context.Context
+	flushed bool
+}
+
+func (w *piFirstUseWriter) Write(data []byte) (int, error) {
+	n, err := w.ResponseWriter.Write(data)
+	if !w.flushed && w.started != nil {
+		w.flushed = true
+		if flush, ok := w.ResponseWriter.(http.Flusher); ok {
+			flush.Flush()
+		}
+		close(w.started)
+		select {
+		case <-w.release:
+		case <-w.ctx.Done():
+		}
+	}
+	return n, err
+}
+
+func (h *piFirstUseHarness) endpoint(name string) string {
+	h.t.Helper()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 512<<10))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		r.Body = io.NopCloser(bytes.NewReader(body))
+		h.mu.Lock()
+		h.requests = append(h.requests, piFirstUseRequest{Endpoint: name, Path: r.URL.Path,
+			AuthOK: r.Header.Get("Authorization") == "Bearer nagi-product-loopback", Body: append(json.RawMessage(nil), body...)})
+		started, release := h.streamStarted, h.streamRelease
+		h.streamStarted, h.streamRelease = nil, nil
+		h.mu.Unlock()
+		h.provider.ServeHTTP(&piFirstUseWriter{ResponseWriter: w, started: started, release: release, ctx: r.Context()}, r)
+	}))
+	h.servers = append(h.servers, server)
+	return server.URL + "/v1"
+}
+
+func (h *piFirstUseHarness) script(arrived chan struct{}, release <-chan struct{}) {
+	h.t.Helper()
+	if err := h.provider.install([]piAppCall{}, arrived, release); err != nil {
+		h.t.Fatal(err)
+	}
+}
+
+func (h *piFirstUseHarness) profileSelection(expected *[]string) {
+	h.t.Helper()
+	h.onUI(func() error {
+		ct := h.app.selectedContact()
+		if ct == nil || h.app.store == nil || !reflect.DeepEqual(ct.BuiltinTools, expected) {
+			return errors.New("profile selection did not match the saved draft")
+		}
+		data, err := os.ReadFile(h.app.store.path)
+		if err != nil {
+			return err
+		}
+		var state storedState
+		if err := json.Unmarshal(data, &state); err != nil {
+			return err
+		}
+		for _, stored := range state.Contacts {
+			if stored.ID == ct.ID {
+				if !reflect.DeepEqual(stored.BuiltinTools, expected) {
+					return errors.New("durable profile selection differs from the GUI selection")
+				}
+				return nil
+			}
+		}
+		return errors.New("saved contact is absent from the product store")
+	})
+}
+
+func piFirstUseCodingTools(active, supported []string) map[string]bool {
+	names := make(map[string]bool)
+	for _, name := range active {
+		for _, codingName := range supported {
+			if name == codingName {
+				names[name] = true
+			}
+		}
+	}
+	return names
+}
+
+func (h *piFirstUseHarness) send(text string) {
+	h.t.Helper()
+	h.onUI(func() error {
+		ct := h.app.selectedContact()
+		if ct == nil {
+			return errors.New("no selected contact for Send")
+		}
+		label := locales.In("en").ComposerLabel(ct.Name)
+		if err := h.focus(label, true); err != nil {
+			return err
+		}
+		h.tester.Key(ui.Cmd, ui.KeyA)
+		h.tester.Type(text)
+		h.tester.Frame()
+		if ct.Draft != text {
+			return errors.New("composer did not retain the exact draft")
+		}
+		if err := h.tester.Click(locales.In("en").SendAction()); err != nil {
+			return err
+		}
+		h.tester.Frame()
+		if ct.SendState != sendSubmitting || ct.pendingSend == nil {
+			return fmt.Errorf("Send did not submit the captured draft: state=%v error=%q", ct.SendState, ct.SendError)
+		}
+		return nil
+	})
+}
+
+func (h *piFirstUseHarness) actor(ctx context.Context, fn func()) error {
+	done := make(chan struct{})
+	select {
+	case h.pump.q <- func() { fn(); h.pump.captureProcessIdentity(); close(done) }:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (h *piFirstUseHarness) waitUI(ctx context.Context, condition func() bool) error {
+	waiter := &uiWaiter{cond: condition, ch: make(chan struct{})}
+	h.pump.mu.Lock()
+	h.pump.waiters = append(h.pump.waiters, waiter)
+	h.pump.mu.Unlock()
+	defer func() {
+		h.pump.mu.Lock()
+		for i, current := range h.pump.waiters {
+			if current == waiter {
+				h.pump.waiters = append(h.pump.waiters[:i], h.pump.waiters[i+1:]...)
+				break
+			}
+		}
+		h.pump.mu.Unlock()
+	}()
+	select {
+	case h.pump.q <- func() {}:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	select {
+	case <-waiter.ch:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (h *piFirstUseHarness) shutdown() error {
+	if h.closed {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Second)
+	defer cancel()
+	owners := make(chan *piAppHost, 1)
+	if err := h.actor(ctx, func() {
+		owners <- h.app.pi
+		h.app.beginShutdown()
+	}); err != nil {
+		return fmt.Errorf("request app shutdown: %w", err)
+	}
+	host := <-owners
+	if host != nil {
+		h.capturedHost = host
+	}
+	if err := h.waitUI(ctx, func() bool { return h.app.quitReady }); err != nil {
+		return fmt.Errorf("wait for app shutdown: %w", err)
+	}
+	drainResult := make(chan string, 1)
+	if err := h.actor(ctx, func() {
+		if h.app.runtimeErrKind == runtimeNoticeRuntimeShutdown {
+			drainResult <- h.app.runtimeErr
+		} else {
+			drainResult <- ""
+		}
+	}); err != nil {
+		return fmt.Errorf("read app shutdown result: %w", err)
+	}
+	drainError := <-drainResult
+	if host != nil {
+		if host.client == nil {
+			return errors.New("app shutdown lost its owned Pi client")
+		}
+		outcome, err := host.client.Wait(ctx)
+		select {
+		case <-host.client.CallbacksDone():
+		case <-ctx.Done():
+			err = errors.Join(err, ctx.Err())
+		}
+		if host.exitApplied == nil {
+			err = errors.Join(err, errors.New("app exit callback receipt is unavailable"))
+		} else {
+			select {
+			case <-host.exitApplied:
+			case <-ctx.Done():
+				err = errors.Join(err, ctx.Err())
+			}
+		}
+		host.mu.Lock()
+		observed := host.outcome
+		host.mu.Unlock()
+		piAppRecord(h.t, "app-worker-exit", map[string]any{"wait": outcome, "callback": observed, "callbacks_done": shutdownChannelClosed(host.client.CallbacksDone()), "error": fmt.Sprint(err), "drain_error": drainError})
+		if err != nil || drainError != "" || !outcome.Reaped || outcome.ExitCode != 0 || outcome.PID <= 0 || observed.PID != outcome.PID || !observed.Reaped || observed.ExitCode != outcome.ExitCode {
+			return fmt.Errorf("actual app worker did not drain and reap: wait=%+v callback=%+v error=%v drain=%q", outcome, observed, err, drainError)
+		}
+	} else if drainError != "" {
+		return fmt.Errorf("app shutdown failed: %s", drainError)
+	}
+	h.closed = true
+	close(h.pump.q)
+	select {
+	case <-h.pump.done:
+		return nil
+	case <-ctx.Done():
+		return fmt.Errorf("close UI pump: %w", ctx.Err())
+	}
+}
+
+func (h *piFirstUseHarness) cleanupClient(client *pi.Client, host *piAppHost, source string) bool {
+	if client == nil {
+		return true
+	}
+	waitCtx, waitCancel := context.WithTimeout(context.Background(), time.Second)
+	outcome, waitErr := client.Wait(waitCtx)
+	waitCancel()
+	forced := false
+	var killErr error
+	if !outcome.Reaped {
+		forced = true
+		killCtx, killCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		outcome, killErr = client.Kill(killCtx)
+		killCancel()
+		h.t.Errorf("owned %s worker required forced cleanup: %v", source, killErr)
+	}
+	finalCtx, finalCancel := context.WithTimeout(context.Background(), 2*time.Second)
+	finalOutcome, finalErr := client.Wait(finalCtx)
+	finalCancel()
+	callbackCtx, callbackCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	callbacksDone := false
+	select {
+	case <-client.CallbacksDone():
+		callbacksDone = true
+	case <-callbackCtx.Done():
+	}
+	exitApplied := host == nil
+	var observed pi.ProcessOutcome
+	if host != nil {
+		if host.exitApplied != nil {
+			select {
+			case <-host.exitApplied:
+				exitApplied = true
+			case <-callbackCtx.Done():
+			}
+		}
+		host.mu.Lock()
+		observed = host.outcome
+		host.mu.Unlock()
+	}
+	callbackErr := callbackCtx.Err()
+	callbackCancel()
+	piAppRecord(h.t, "owned-client-cleanup", map[string]any{"source": source, "wait": outcome, "wait_error": fmt.Sprint(waitErr), "final_wait": finalOutcome, "final_wait_error": fmt.Sprint(finalErr), "forced": forced, "kill_error": fmt.Sprint(killErr), "callbacks_done": callbacksDone, "callback_error": fmt.Sprint(callbackErr), "on_exit": observed, "exit_applied": exitApplied, "has_exit_handler": host != nil})
+	if !forced && (waitErr != nil || outcome.Err != nil || outcome.ExitCode != 0) {
+		h.t.Errorf("owned %s worker exited unsuccessfully: outcome=%+v error=%v", source, outcome, waitErr)
+	}
+	if !outcome.Reaped || !finalOutcome.Reaped || finalOutcome.PID <= 0 || finalOutcome.PID != outcome.PID || finalOutcome.ExitCode != outcome.ExitCode || finalErr != nil && (finalOutcome.Err == nil || !errors.Is(finalErr, finalOutcome.Err)) || !callbacksDone || !exitApplied || host != nil && (observed.PID != finalOutcome.PID || !observed.Reaped || observed.ExitCode != finalOutcome.ExitCode || fmt.Sprint(observed.Err) != fmt.Sprint(finalOutcome.Err)) {
+		h.t.Errorf("owned %s cleanup is incomplete: wait=%+v on_exit=%+v callbacks=%v exit_applied=%v", source, outcome, observed, callbacksDone, exitApplied)
+		return false
+	}
+	return true
+}
+
+func (h *piFirstUseHarness) cleanup() {
+	defer func() {
+		for _, server := range h.servers {
+			server.CloseClientConnections()
+			done := make(chan struct{})
+			go func() { server.Close(); close(done) }()
+			select {
+			case <-done:
+			case <-time.After(10 * time.Second):
+				h.t.Error("controlled loopback server did not close")
+			}
+		}
+	}()
+	type owners struct {
+		host     *piAppHost
+		probe    *piConnectionProbe
+		observed *pi.Client
+		facts    map[string]any
+	}
+	capture := func() (owners, error) {
+		result := make(chan owners, 1)
+		read := func() {
+			value := owners{host: h.app.pi, probe: h.app.connectionProbe, observed: h.pump.observedPi}
+			value.facts = map[string]any{"store_path": h.app.storePath, "local_save_error": h.app.localSaveErr, "runtime_status": h.app.runtimeStatus, "connection_applying": h.app.connectionApplying}
+			if h.app.connectionSaved != nil {
+				config := h.app.connectionSaved
+				value.facts["saved_connection"] = map[string]any{"endpoint": config.Endpoint, "wire_api": config.API, "model": config.Model, "context_tokens": config.ContextTokens, "output_tokens": config.OutputTokens, "working_directory": config.WorkingDirectory}
+			}
+			if h.app.store != nil {
+				digest, err := piAppFileHash(h.app.store.path)
+				value.facts["store_sha256"], value.facts["store_hash_error"] = digest, fmt.Sprint(err)
+				value.facts["contact_count"], value.facts["selected_id"] = len(h.app.contacts), h.app.selectedID()
+			}
+			result <- value
+		}
+		if h.closed {
+			select {
+			case <-h.pump.done:
+				read()
+			default:
+				return owners{}, errors.New("closed UI pump has not stopped")
+			}
+		} else {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			err := h.actor(ctx, read)
+			cancel()
+			if err != nil {
+				return owners{}, err
+			}
+		}
+		return <-result, nil
+	}
+	last, captureErr := capture()
+	if captureErr != nil {
+		h.t.Errorf("capture cleanup owner: %v", captureErr)
+	} else {
+		piAppRecord(h.t, "first-use-state", last.facts)
+	}
+	h.mu.Lock()
+	piAppRecord(h.t, "first-use-requests", h.requests)
+	h.mu.Unlock()
+	h.provider.mu.Lock()
+	piAppRecord(h.t, "first-use-provider", map[string]any{"requests": h.provider.requests, "limit": h.provider.limit, "problems": h.provider.problems})
+	if len(h.provider.problems) != 0 {
+		h.t.Errorf("controlled provider problems: %v", h.provider.problems)
+	}
+	h.provider.mu.Unlock()
+	if h.pump != nil && !h.closed {
+		observedHost := make(chan *piAppHost, 1)
+		watcher := &uiWaiter{ch: make(chan struct{}), cond: func() bool {
+			if h.app.pi == nil || h.app.pi.client == nil {
+				return false
+			}
+			observedHost <- h.app.pi
+			return true
+		}}
+		h.pump.mu.Lock()
+		h.pump.waiters = append(h.pump.waiters, watcher)
+		h.pump.mu.Unlock()
+		if err := h.shutdown(); err != nil {
+			h.t.Errorf("normal app shutdown failed: %v", err)
+		}
+		h.pump.mu.Lock()
+		for i, current := range h.pump.waiters {
+			if current == watcher {
+				h.pump.waiters = append(h.pump.waiters[:i], h.pump.waiters[i+1:]...)
+				break
+			}
+		}
+		h.pump.mu.Unlock()
+		select {
+		case host := <-observedHost:
+			h.hosts = append(h.hosts, host)
+		default:
+		}
+		if updated, captureErr := capture(); captureErr != nil {
+			h.t.Errorf("capture owner after shutdown: %v", captureErr)
+		} else {
+			if updated.host == nil {
+				updated.host = last.host
+			}
+			if updated.probe == nil {
+				updated.probe = last.probe
+			}
+			last = updated
+		}
+	}
+	seen := map[*pi.Client]bool{}
+	complete := true
+	for _, host := range append(append([]*piAppHost{}, h.hosts...), h.capturedHost, last.host) {
+		if host == nil {
+			continue
+		}
+		if host.client == nil {
+			h.t.Error("captured app host has no owned client")
+			complete = false
+			continue
+		}
+		if seen[host.client] {
+			continue
+		}
+		seen[host.client] = true
+		complete = h.cleanupClient(host.client, host, "app") && complete
+	}
+	seenProbes := map[*piConnectionProbe]bool{}
+	for _, probe := range append(append([]*piConnectionProbe{}, h.probes...), last.probe) {
+		if probe == nil || seenProbes[probe] {
+			continue
+		}
+		seenProbes[probe] = true
+		probe.mu.Lock()
+		client, outcome, callbacksDone, forced := probe.client, probe.outcome, probe.callbacksDone, probe.forced
+		testErr, cleanupErr := probe.testErr, probe.cleanupErr
+		probe.mu.Unlock()
+		piAppRecord(h.t, "probe-cleanup-owner", map[string]any{"outcome": outcome, "callbacks_done": callbacksDone, "forced": forced, "test_error": fmt.Sprint(testErr), "cleanup_error": fmt.Sprint(cleanupErr), "has_exit_handler": false})
+		if forced || cleanupErr != nil || testErr != nil {
+			h.t.Errorf("connection probe did not complete cleanly: forced=%v test=%v cleanup=%v", forced, testErr, cleanupErr)
+		}
+		if client == nil || seen[client] {
+			continue
+		}
+		seen[client] = true
+		complete = h.cleanupClient(client, nil, "probe") && complete
+	}
+	if last.observed != nil && !seen[last.observed] {
+		seen[last.observed] = true
+		complete = h.cleanupClient(last.observed, nil, "observed-app") && complete
+		h.t.Error("app worker exit owner was unavailable during cleanup")
+	}
+	if !h.closed {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		err := h.waitUI(ctx, func() bool { return h.app.quitReady })
+		quit := err == nil
+		cancel()
+		if complete && quit {
+			h.closed = true
+			close(h.pump.q)
+			select {
+			case <-h.pump.done:
+			case <-time.After(5 * time.Second):
+				h.t.Error("owned UI pump did not stop")
+			}
+		} else {
+			h.t.Error("UI pump retained because app shutdown or callback ownership is unconfirmed")
+		}
+	}
+}
+
+func TestPiAppConnectionAndConversation(t *testing.T) {
+	inputs := map[string]string{}
+	paths := make([]string, 0, 2)
+	for _, name := range []string{"NAGI_TEST_NODE", "NAGI_TEST_WORKER"} {
+		path := os.Getenv(name)
+		if !filepath.IsAbs(path) {
+			t.Fatalf("%s must identify an explicit pinned absolute input", name)
+		}
+		resolved, err := filepath.EvalSymlinks(path)
+		if err != nil {
+			t.Fatalf("resolve %s: %v", name, err)
+		}
+		info, err := os.Stat(resolved)
+		if err != nil || !info.Mode().IsRegular() {
+			t.Fatalf("%s must identify a regular file: %v", name, err)
+		}
+		hash, err := piAppFileHash(resolved)
+		if err != nil {
+			t.Fatal(err)
+		}
+		inputs[name] = hash
+		paths = append(paths, resolved)
+	}
+	payload := filepath.Dir(filepath.Dir(paths[0]))
+	if paths[0] != filepath.Join(payload, "bin", "node") || paths[1] != filepath.Join(payload, "dist", "worker.js") {
+		t.Fatal("pinned Node and worker do not belong to one actual product payload tree")
+	}
+	for _, path := range []string{"pi_app_integration_test.go", "pi_app.go", "connection_app.go", "connection_settings.go", "store.go", "internal/pi/worker/worker.ts"} {
+		hash, err := piAppFileHash(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		inputs[path] = hash
+	}
+	piAppRecord(t, "first-use-source-and-inputs", inputs)
+	root := t.TempDir()
+	project, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HOME", root)
+	t.Setenv("TMPDIR", root)
+	t.Setenv("SAKI_TEST_ISSUE_TOOL_HELPER", "")
+	isolateConnectionApp(t, root, payload)
+	storePath := guiStorePath()
+	broken := filepath.Join(root, "broken", "contacts.json")
+	if err := os.MkdirAll(filepath.Dir(broken), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	brokenBytes := []byte("{unreadable synthetic store\n")
+	if err := os.WriteFile(broken, brokenBytes, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("SAKI_GUI_STORE", broken)
+	if _, err := newRuntimeApp(); err == nil {
+		t.Fatal("unreadable existing store was accepted")
+	}
+	afterBroken, err := os.ReadFile(broken)
+	if err != nil || !bytes.Equal(afterBroken, brokenBytes) {
+		t.Fatalf("unreadable original store changed: %v", err)
+	}
+	t.Setenv("SAKI_GUI_STORE", storePath)
+	app, err := newRuntimeApp()
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := &piFirstUseHarness{t: t, app: app, provider: &piAppProvider{limit: 16}}
+	h.pump = newUIPump(t, app)
+	h.tester = ui.NewTester(app.view, 1040, 720)
+	h.tester.SetLocale("en")
+	h.tester.SetFocused(true)
+	t.Cleanup(h.cleanup)
+	endpointA, endpointB := h.endpoint("initial"), h.endpoint("replacement")
+	var firstID string
+	h.onUI(func() error {
+		if !app.settingsOpen || app.settingsTab != settingsTabConnection || app.connectionForm == nil || app.pi != nil || app.selectedContact() == nil {
+			return errors.New("fresh app did not open disconnected Connection settings")
+		}
+		firstID = app.selectedContact().ID
+		h.tester.Frame()
+		return nil
+	})
+	h.click("← Back to workbench")
+	h.onUI(func() error {
+		if err := h.focus("Composer for Saki", true); err != nil {
+			return err
+		}
+		h.tester.Type("Keep the offline draft")
+		h.tester.Key(0, ui.KeyEnter)
+		h.tester.Frame()
+		if app.selectedContact().Draft != "Keep the offline draft" || len(app.selectedContact().Messages) != 0 || app.pi != nil {
+			return errors.New("disconnected Send changed the draft or fabricated a reply")
+		}
+		if !h.tester.HasText("Open connection settings") {
+			return errors.New("disconnected Send did not offer connection settings")
+		}
+		return nil
+	})
+	h.click("Open connection settings")
+	h.onUI(func() error {
+		if !app.settingsOpen || app.settingsTab != settingsTabConnection {
+			return errors.New("disconnected recovery did not open Connection settings")
+		}
+		return nil
+	})
+	h.click("← Back to workbench")
+	h.click("Add contact")
+	var secondID string
+	h.onUI(func() error {
+		ct := app.selectedContact()
+		if ct == nil || ct.ID == firstID || app.contactByID(firstID) == nil {
+			return errors.New("offline Add contact did not create a separate product contact")
+		}
+		secondID = ct.ID
+		return nil
+	})
+	h.click("Settings")
+	h.click("General")
+	h.selectOption("System", "Dark", "System", "Light", "Dark")
+	h.onUI(func() error {
+		if app.appearanceMode != appearanceDark {
+			return errors.New("appearance controller did not apply Dark")
+		}
+		return nil
+	})
+	if err := h.shutdown(); err != nil {
+		t.Fatal(err)
+	}
+	app, err = newRuntimeApp()
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.app, h.pump, h.closed = app, newUIPump(t, app), false
+	h.tester = ui.NewTester(app.view, 1040, 720)
+	h.tester.SetLocale("en")
+	h.tester.SetFocused(true)
+	h.onUI(func() error {
+		first := app.contactByID(firstID)
+		if first == nil || first.Draft != "Keep the offline draft" || app.contactByID(secondID) == nil || app.appearanceMode != appearanceDark || app.pi != nil {
+			return errors.New("offline contact, draft or general preference did not survive restart")
+		}
+		if app.selectedContact() == nil || app.selectedContact().ID != secondID || !app.settingsOpen || app.settingsTab != settingsTabConnection || app.connectionForm == nil {
+			return errors.New("restart lost its selected contact or disconnected Connection page")
+		}
+		h.tester.Frame()
+		return nil
+	})
+	if h.provider.count() != 0 {
+		t.Fatal("offline preparation made a model request")
+	}
+	h.onUI(func() error {
+		form := app.connectionForm
+		if form == nil || form.Draft.ContextTokens != "131072" || form.Draft.OutputTokens != "8192" || form.Draft.Slots != "2" || form.LimitsOpen {
+			return errors.New("fresh connection defaults or advanced disclosure differ")
+		}
+		h.tester.Frame()
+		for _, text := range []string{"Capacity & execution limits", "Context tokens: 131072", "Output tokens: 8192", "Maximum active tasks: 2"} {
+			if !h.tester.HasText(text) {
+				return fmt.Errorf("fresh Connection did not disclose %q", text)
+			}
+		}
+		return nil
+	})
+	h.selectOption("Chat completions", "Responses", "Chat completions", "Responses")
+	h.onUI(func() error {
+		if app.connectionForm.Draft.API != connectionAPIResponses {
+			return errors.New("protocol controller did not select Responses")
+		}
+		return nil
+	})
+	h.selectOption("Responses", "Chat completions", "Chat completions", "Responses")
+	h.onUI(func() error {
+		if app.connectionForm.Draft.API != connectionAPIChatCompletions {
+			return errors.New("protocol controller did not select Chat completions")
+		}
+		return nil
+	})
+	h.input("API endpoint", endpointA)
+	h.input("API key", "nagi-product-loopback")
+	h.input("Default model", "nagi-product-fixture")
+	h.onUI(func() error {
+		if err := h.focus("Capacity & execution limits", false); err != nil {
+			return err
+		}
+		h.tester.Key(0, ui.KeySpace)
+		h.tester.Frame()
+		if !app.connectionForm.LimitsOpen {
+			return errors.New("capacity disclosure did not open")
+		}
+		for _, label := range []string{"Context tokens", "Output tokens", "Maximum active tasks"} {
+			if !h.tester.HasText(label) {
+				return fmt.Errorf("expanded capacity controls omit %q", label)
+			}
+		}
+		return nil
+	})
+	h.input("Context tokens", "65536")
+	h.input("Output tokens", "4096")
+	h.input("Maximum active tasks", "2")
+	h.onUI(func() error {
+		app.chooseFolder = func(mygo.OpenDialogOptions) ([]string, error) { return []string{project}, nil }
+		return nil
+	})
+	h.click("Choose folder…")
+	h.pump.wait(func() bool { return !app.connectionForm.Busy })
+	h.onUI(func() error {
+		if app.connectionForm.Draft.WorkingDirectory != project || app.connectionForm.Draft.API != connectionAPIChatCompletions {
+			return errors.New("actual folder or protocol control did not update the connection draft")
+		}
+		return nil
+	})
+	h.click("Save configuration")
+	h.pump.wait(func() bool { return !app.connectionForm.Busy && !app.connectionSaveInFlight })
+	h.onUI(func() error {
+		if app.connectionForm.Error != "" || app.connectionSaved == nil || app.pi != nil {
+			return fmt.Errorf("Save did not leave a saved, unapplied connection: %s", app.connectionForm.Error)
+		}
+		return nil
+	})
+	if h.provider.count() != 0 {
+		t.Fatal("Save made a model request")
+	}
+	h.script(nil, nil)
+	h.click("Test connection and model")
+	var probe *piConnectionProbe
+	h.onUI(func() error { probe = app.connectionProbe; return nil })
+	if probe == nil {
+		t.Fatal("actual Test did not capture its probe owner")
+	}
+	h.probes = append(h.probes, probe)
+	h.pump.waitTimeout(func() bool { return !app.connectionTesting && !app.connectionForm.Busy }, 45*time.Second)
+	probe.mu.Lock()
+	probeOutcome, probeCallbacks, forced, probeErr := probe.outcome, probe.callbacksDone, probe.forced, probe.testErr
+	probe.mu.Unlock()
+	piAppRecord(t, "connection-test-process", map[string]any{"outcome": probeOutcome, "callbacks_done": probeCallbacks, "forced": forced, "error": fmt.Sprint(probeErr)})
+	if probeErr != nil || forced || !probeOutcome.Reaped || probeOutcome.ExitCode != 0 || !probeCallbacks || h.provider.count() != 1 {
+		t.Fatalf("real connection Test or probe cleanup failed: outcome=%+v callbacks=%v forced=%v error=%v", probeOutcome, probeCallbacks, forced, probeErr)
+	}
+	h.onUI(func() error {
+		if app.connectionForm.Status != connStatusTestCompleted || app.connectionForm.Error != "" {
+			return fmt.Errorf("actual Test did not report success: status=%q error=%q", app.connectionForm.Status, app.connectionForm.Error)
+		}
+		return nil
+	})
+	h.click("Apply saved")
+	h.pump.waitTimeout(func() bool { return !app.connectionApplying }, 45*time.Second)
+	var host *piAppHost
+	h.onUI(func() error {
+		host = app.pi
+		if host == nil || host.client == nil || app.runtimeStatus != runtimeStateReady || !app.runtimeBuiltinToolsLoaded || app.connectionForm.Error != "" {
+			return errors.New("actual Apply did not publish a ready Pi host and catalog")
+		}
+		return nil
+	})
+	h.hosts = append(h.hosts, host)
+	ready, err := host.client.Ready(context.Background())
+	if err != nil || ready.BuiltinCatalog == nil {
+		t.Fatalf("actual worker catalog unavailable: %v", err)
+	}
+	var supported []string
+	for _, tool := range ready.BuiltinCatalog.Supported {
+		supported = append(supported, tool.Name)
+	}
+	if !reflect.DeepEqual(supported, []string{"read", "bash", "edit", "write", "grep", "find", "ls"}) || !reflect.DeepEqual(ready.BuiltinCatalog.Defaults, []string{"read", "bash", "edit", "write"}) || h.provider.count() != 1 {
+		t.Fatalf("actual catalog or Apply request count differs: %+v requests=%d", ready.BuiltinCatalog, h.provider.count())
+	}
+	piAppRecord(t, "actual-ready-catalog", ready)
+	h.click("Contact profile")
+	h.click("Save changes")
+	h.profileSelection(nil)
+	defaultLabel := "Use host defaults (" + strings.Join(ready.BuiltinCatalog.Defaults, ", ") + ")"
+	h.activate(defaultLabel)
+	for _, name := range ready.BuiltinCatalog.Defaults {
+		h.activate(name)
+	}
+	h.click("Save changes")
+	empty := []string{}
+	h.profileSelection(&empty)
+	h.activate("read")
+	h.click("Save changes")
+	readOnly := []string{"read"}
+	h.profileSelection(&readOnly)
+	h.activate(defaultLabel)
+	h.click("Save changes")
+	h.profileSelection(nil)
+	if h.provider.count() != 1 {
+		t.Fatal("profile catalog or Save made a model request")
+	}
+	h.click("← Back to workbench")
+	started, release := make(chan struct{}), make(chan struct{})
+	var releaseOnce sync.Once
+	releaseStream := func() { releaseOnce.Do(func() { close(release) }) }
+	defer releaseStream()
+	h.mu.Lock()
+	h.streamStarted, h.streamRelease = started, release
+	h.mu.Unlock()
+	h.script(nil, nil)
+	h.send("First original message 你好")
+	select {
+	case <-started:
+	case <-time.After(15 * time.Second):
+		t.Fatal("controlled provider did not start the response stream")
+	}
+	h.pump.waitTimeout(func() bool {
+		ct := app.selectedContact()
+		if ct == nil {
+			return false
+		}
+		for _, message := range ct.Messages {
+			if message != nil && message.Streaming && message.Text == "PRODUCT_TURN_COMPLETE" {
+				return true
+			}
+		}
+		return false
+	}, 15*time.Second)
+	releaseStream()
+	h.pump.waitTimeout(func() bool {
+		ct := app.selectedContact()
+		return ct != nil && ct.PiBinding != nil && ct.SendState == sendIdle && ct.SessionState == string(pi.Completed) && ct.ActiveTaskID == "" && app.submissionInFlight == 0
+	}, 30*time.Second)
+	var oldBinding *piConversationBinding
+	h.onUI(func() error {
+		ct := app.selectedContact()
+		if ct == nil || ct.PiBinding == nil || ct.SessionID == "" || ct.PiBinding.Context.SessionRef != ct.SessionID {
+			return errors.New("actual conversation did not retain its Pi binding")
+		}
+		oldBinding = clonePiConversationBinding(ct.PiBinding)
+		return nil
+	})
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	oldConfig, err := host.client.ContextConfiguration(ctx, oldBinding.Context.ContextID)
+	if err != nil || oldConfig.BaseURL != endpointA || oldConfig.CredentialSource != oldBinding.Configuration.CredentialSource || oldConfig.Model != "nagi-product-fixture" || oldConfig.OutputTokens != 4096 || !reflect.DeepEqual(piFirstUseCodingTools(oldConfig.ActiveTools, supported), map[string]bool{"read": true, "bash": true, "edit": true, "write": true}) {
+		t.Fatalf("first context configuration=%+v error=%v", oldConfig, err)
+	}
+	piAppRecord(t, "first-context-configuration", oldConfig)
+	h.onUI(func() error { app.reloadContactByID(app.selectedID(), true); return nil })
+	h.pump.waitTimeout(func() bool { return app.contactHistoryInFlight == 0 }, 30*time.Second)
+	h.onUI(func() error {
+		ct := app.selectedContact()
+		if ct == nil || !ct.Loaded || ct.LoadErr != "" {
+			return errors.New("actual conversation history reload failed")
+		}
+		for _, entry := range ct.History {
+			if entry.From == "me" && entry.Text == "First original message 你好" && entry.ID != "" && entry.Date != "" {
+				piAppRecord(t, "original-history-entry", entry)
+				return nil
+			}
+		}
+		return errors.New("public history lost original text, entry identity or timestamp")
+	})
+	h.onUI(func() error {
+		copies := map[string]bool{"First original message 你好": false, "PRODUCT_TURN_COMPLETE": false}
+		for range 192 {
+			h.tester.Key(0, ui.KeyTab)
+			h.tester.Frame()
+			active, _ := h.tester.TextInputActive()
+			if !h.tester.Focused("Copy message") || active {
+				continue
+			}
+			h.tester.SetClipboard("first-use-copy-sentinel")
+			h.tester.Key(0, ui.KeySpace)
+			h.tester.Frame()
+			copied := h.tester.Clipboard()
+			if _, expected := copies[copied]; !expected {
+				return fmt.Errorf("focused message copy returned unexpected source %q", copied)
+			}
+			copies[copied] = true
+			if copies["First original message 你好"] && copies["PRODUCT_TURN_COMPLETE"] {
+				piAppRecord(t, "first-use-copy-sources", copies)
+				return nil
+			}
+		}
+		return fmt.Errorf("keyboard copy controls did not preserve both original sources: %v", copies)
+	})
+	h.click("Settings")
+	h.click("Connection & model")
+	h.click("Edit API endpoint")
+	h.input("API endpoint", endpointB)
+	h.input("Output tokens", "2048")
+	h.click("Save configuration")
+	h.pump.wait(func() bool { return !app.connectionForm.Busy && !app.connectionSaveInFlight })
+	h.click("Apply saved")
+	h.pump.waitTimeout(func() bool { return !app.connectionApplying }, 30*time.Second)
+	if h.provider.count() != 2 {
+		t.Fatalf("saving and applying new defaults made a model request: %d", h.provider.count())
+	}
+	h.onUI(func() error {
+		ct := app.selectedContact()
+		if app.pi != host || ct == nil || !reflect.DeepEqual(ct.PiBinding, oldBinding) || app.connectionForm.Error != "" {
+			return errors.New("Apply changed an existing context binding or host")
+		}
+		return nil
+	})
+	unchanged, err := host.client.ContextConfiguration(ctx, oldBinding.Context.ContextID)
+	if err != nil || !reflect.DeepEqual(unchanged, oldConfig) {
+		t.Fatalf("Apply changed captured context configuration: before=%+v after=%+v error=%v", oldConfig, unchanged, err)
+	}
+	h.click("Contact profile")
+	h.activate(defaultLabel)
+	for _, name := range []string{"bash", "edit", "write"} {
+		h.activate(name)
+	}
+	h.click("Save changes")
+	h.profileSelection(&readOnly)
+	unchanged, err = host.client.ContextConfiguration(ctx, oldBinding.Context.ContextID)
+	if err != nil || !reflect.DeepEqual(unchanged, oldConfig) || h.provider.count() != 2 {
+		t.Fatalf("profile Save changed the existing context or made a request: configuration=%+v requests=%d error=%v", unchanged, h.provider.count(), err)
+	}
+	h.click("← Back to workbench")
+	h.script(nil, nil)
+	h.send("Existing binding remains original")
+	h.pump.waitTimeout(func() bool {
+		ct := app.selectedContact()
+		return ct != nil && ct.SendState == sendIdle && ct.SessionState == string(pi.Completed) && ct.ActiveTaskID == "" && app.submissionInFlight == 0
+	}, 30*time.Second)
+	h.click("Settings")
+	h.click("Contact profile")
+	h.click("Save and start new chat")
+	h.onUI(func() error {
+		ct := app.selectedContact()
+		if ct == nil || ct.PiBinding != nil || len(ct.PreviousPiBindings) == 0 || !reflect.DeepEqual(&ct.PreviousPiBindings[len(ct.PreviousPiBindings)-1], oldBinding) {
+			return errors.New("new chat did not preserve the prior typed binding")
+		}
+		return nil
+	})
+	h.click("← Back to workbench")
+	h.script(nil, nil)
+	h.send("New binding uses new defaults")
+	h.pump.waitTimeout(func() bool {
+		ct := app.selectedContact()
+		return ct != nil && ct.PiBinding != nil && ct.SendState == sendIdle && ct.SessionState == string(pi.Completed) && ct.ActiveTaskID == "" && app.submissionInFlight == 0
+	}, 30*time.Second)
+	var newBinding *piConversationBinding
+	h.onUI(func() error {
+		ct := app.selectedContact()
+		if ct == nil || ct.PiBinding == nil || !reflect.DeepEqual(ct.PiBinding.Selection.CodingTools, []string{"read"}) {
+			return errors.New("new conversation did not capture the explicit profile selection")
+		}
+		newBinding = clonePiConversationBinding(ct.PiBinding)
+		return nil
+	})
+	newConfig, err := host.client.ContextConfiguration(ctx, newBinding.Context.ContextID)
+	if err != nil {
+		t.Fatalf("read replacement context configuration: %v", err)
+	}
+	selectedCodingTools := piFirstUseCodingTools(newConfig.ActiveTools, supported)
+	if newConfig.BaseURL != endpointB || newConfig.OutputTokens != 2048 || newConfig.CredentialSource == oldConfig.CredentialSource || !reflect.DeepEqual(selectedCodingTools, map[string]bool{"read": true}) {
+		t.Fatalf("new captured context configuration=%+v error=%v", newConfig, err)
+	}
+	piAppRecord(t, "replacement-context-configuration", newConfig)
+	arrived, held := make(chan struct{}), make(chan struct{})
+	var heldOnce sync.Once
+	releaseHeld := func() { heldOnce.Do(func() { close(held) }) }
+	defer releaseHeld()
+	h.script(arrived, held)
+	h.send("Cancel this owned run")
+	select {
+	case <-arrived:
+	case <-time.After(15 * time.Second):
+		t.Fatal("cancel scenario did not reach the controlled provider")
+	}
+	h.pump.waitTimeout(func() bool {
+		ct := app.selectedContact()
+		return ct != nil && ct.ActiveTaskID != "" && ct.SendState == sendAccepted
+	}, 15*time.Second)
+	var canceledRunID string
+	h.onUI(func() error {
+		ct := app.selectedContact()
+		if ct == nil || ct.ActiveTaskID == "" || ct.PiBinding == nil || ct.PiBinding.Context.ContextID != newBinding.Context.ContextID {
+			return errors.New("cancel target is no longer the captured conversation")
+		}
+		canceledRunID = ct.ActiveTaskID
+		h.tester.Frame()
+		if err := h.tester.Click("Stop chat"); err != nil {
+			return err
+		}
+		h.tester.Frame()
+		if ct.ActiveTaskID != canceledRunID || ct.SendErrorKind != "send-cancelled" {
+			return errors.New("Stop did not target the captured active run")
+		}
+		return nil
+	})
+	h.pump.waitTimeout(func() bool {
+		ct := app.selectedContact()
+		return ct != nil && ct.ActiveTaskID == "" && ct.LastTaskID == canceledRunID && ct.SendState == sendIdle && ct.SessionState == string(pi.Interrupted) && app.submissionInFlight == 0
+	}, 30*time.Second)
+	releaseHeld()
+	if h.provider.count() != 5 {
+		t.Fatalf("unexpected model request count before restart: %d", h.provider.count())
+	}
+	if err := h.shutdown(); err != nil {
+		t.Fatal(err)
+	}
+	app, err = newRuntimeApp()
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.app, h.pump, h.closed = app, newUIPump(t, app), false
+	h.tester = ui.NewTester(app.view, 1040, 720)
+	h.tester.SetLocale("en")
+	h.tester.SetFocused(true)
+	h.onUI(func() error {
+		ct := app.contactByID(secondID)
+		if ct == nil || ct.PiBinding == nil || !reflect.DeepEqual(ct.PiBinding, newBinding) || len(ct.PreviousPiBindings) == 0 || !reflect.DeepEqual(&ct.PreviousPiBindings[len(ct.PreviousPiBindings)-1], oldBinding) {
+			return errors.New("restart lost current or prior typed binding")
+		}
+		app.startPiHost()
+		return nil
+	})
+	h.pump.waitTimeout(func() bool {
+		return !app.connectionApplying && app.runtimeStatus == runtimeStateReady && app.contactHistoryInFlight == 0
+	}, 45*time.Second)
+	h.onUI(func() error {
+		if app.pi == nil || app.pi.client == nil {
+			return errors.New("restart did not own a Pi host")
+		}
+		h.hosts = append(h.hosts, app.pi)
+		ct := app.contactByID(secondID)
+		if ct == nil || !ct.Loaded || ct.LoadErr != "" {
+			return errors.New("restart did not reload the captured conversation")
+		}
+		return nil
+	})
+	if h.provider.count() != 5 || len(h.hosts)+len(h.probes) != 3 {
+		t.Fatalf("restart replayed a request or exceeded worker budget: requests=%d hosts=%d probes=%d", h.provider.count(), len(h.hosts), len(h.probes))
+	}
+	h.mu.Lock()
+	requests := append([]piFirstUseRequest(nil), h.requests...)
+	h.mu.Unlock()
+	if len(requests) != 5 {
+		t.Fatalf("request receipt count=%d", len(requests))
+	}
+	for i, request := range requests {
+		var body struct {
+			Model               string            `json:"model"`
+			MaxTokens           int               `json:"max_tokens"`
+			MaxCompletionTokens int               `json:"max_completion_tokens"`
+			Tools               []json.RawMessage `json:"tools"`
+		}
+		if err := json.Unmarshal(request.Body, &body); err != nil {
+			t.Fatal(err)
+		}
+		wantEndpoint, wantLimit := "initial", 4096
+		if i >= 3 {
+			wantEndpoint, wantLimit = "replacement", 2048
+		}
+		if request.Endpoint != wantEndpoint || request.Path != "/v1/chat/completions" || !request.AuthOK || body.Model != "nagi-product-fixture" || body.MaxTokens != wantLimit && body.MaxCompletionTokens != wantLimit || i == 0 && len(body.Tools) != 0 {
+			t.Fatalf("actual request %d did not match captured configuration: endpoint=%s path=%s auth=%v body=%s", i, request.Endpoint, request.Path, request.AuthOK, request.Body)
+		}
+	}
+	piAppRecord(t, "first-use-budget", map[string]any{"workers": len(h.hosts) + len(h.probes), "worker_limit": 3, "model_requests": len(requests), "request_limit": 16})
+	if err := h.shutdown(); err != nil {
 		t.Fatal(err)
 	}
 }
