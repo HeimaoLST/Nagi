@@ -32,9 +32,9 @@
 
 ## Distinguish rendered duplication from duplicate business state
 
-**Problem:** The lab's final native screenshot repeated one answered-choice label while saved state and AX contained one answer.
-**Cause or correction:** Unconfirmed. This is not proof of duplicate answers or a toolkit defect, and prototype visual acceptance was limited.
-**Prevention:** Compare actual product render, AX and persisted question/receipt identities. Do not copy the prototype wholesale or report a clean native result without checking the product scene.
+**Problem:** The lab's final native screenshot repeated one answered-choice label while saved state and AX contained one answer. Later controlled crash screenshots repeated the same uncertainty guidance in red and amber.
+**Cause or correction:** The prototype cause remains Unconfirmed. Current composer source renders the unknown summary directly and again through recoveryNotice; that presentation duplication does not establish duplicate execution or receipt state.
+**Prevention:** Compare actual product render, AX and persisted question/receipt identities. Trace all visible notice producers before changing ledger logic. Do not copy the prototype wholesale or report a clean native result without checking the product scene.
 
 ## Keep development verification at integration boundaries
 
@@ -290,9 +290,9 @@
 
 ## Keep machine codes out of capability notices
 
-**Problem:** A coordination brief used unsupported_stage ambiguously, and six user-visible notices included that literal machine-style prefix. A copy-only edit briefly added stray suffix characters before static parsing caught them. Later activity originals still exposed engineering-stage and engine-history wording in ordinary notices.
-**Cause or correction:** Capability holds require plain explanatory copy; internal codes belong in machine contracts and technical details in explicit diagnostics. Removing a prefix alone did not address the related ordinary profile, task and history messages.
-**Prevention:** Trace each producer to its actual presentation and apply the approved wording rule across related ordinary notices, including projection warnings; a helper named addDetail is not necessarily folded. Preserve diagnostic contracts, capability guards, saved/delivered distinctions and callbacks. Verify exact inverse substitutions and qualify English-only work separately from localization and visual acceptance.
+**Problem:** A coordination brief used unsupported_stage ambiguously, and six user-visible notices included that literal machine-style prefix. A copy-only edit briefly added stray suffix characters before static parsing caught them. Later activity originals still exposed engineering-stage and engine-history wording in ordinary notices. Changing a raw exit detail did not change the visible localized recovery summary.
+**Cause or correction:** Capability holds require plain explanatory copy; internal codes belong in machine contracts and technical details in explicit diagnostics. Removing a prefix alone did not address the related ordinary profile, task and history messages. For sendUnknown, composer selects unknownSummary independently of the stored diagnostic text.
+**Prevention:** Trace each producer through its formatter to the actual rendered surface and apply the approved wording rule across related ordinary notices, including projection warnings; a helper named addDetail is not necessarily folded. Preserve diagnostic contracts, capability guards, saved/delivered distinctions and callbacks. Verify exact inverse substitutions and qualify English-only work separately from localization and visual acceptance.
 
 ## Retire obsolete panels instead of porting their tests
 
@@ -357,5 +357,5 @@
 ## Allow explicit host recovery without replaying unknown work
 
 **Problem:** Source review found that worker exit marks admitted activity records unknown, while the Apply predicate rejects every unresolved execution and therefore blocks the documented dead-host replacement path.
-**Cause or correction:** Replacing a fully observed exited host is a connection operation, not permission to resend unknown work. Live admission and preserved uncertainty need distinct eligibility checks; this finding is source-only until the controlled crash scenario runs.
+**Cause or correction:** Replacing a fully observed exited host is a connection operation, not permission to resend unknown work. Live admission and preserved uncertainty need distinct eligibility checks. Controlled C3 on4ed3cb1 passed with three requests and three workers, preserving unknown through explicit Apply, history readback and restart. Its deliberate owned Kill does not establish spontaneous crash or ToolResult reply-loss recovery.
 **Prevention:** Permit explicit recovery only for the current owned host after actual reaping, callback completion and applied exit state, while retaining live/pending work, store and legacy guards. Keep unknown records and captured sources unchanged, and verify Apply/reopen produces no model request or automatic replay. Record deliberate abnormal test exits separately from normal drain.
