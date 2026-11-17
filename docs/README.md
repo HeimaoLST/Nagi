@@ -8,6 +8,7 @@ Current work is tracked in the [migration and ownership index](https://github.co
 
 - [Product requirements](requirements/desktop.md): current contacts/issues, consumer configuration and recovery contracts, and complete MVP acceptance criteria.
 - [Current visual contract](design/desktop.md#qoder-complete-layout-20261116): the shared Qoder-derived typography, spacing, controls and icon roles.
+- [UI aesthetic standard and checklist](design/ui-checklist.md): the user-requested aesthetic standard and rendered-page checks. Phase 1 keeps the Qoder base and applies the decided minimum-quality corrections, which supersede the matching Qoder values; phase 2 is a proposed Nagi style direction.
 - [Workbench design foundation](design/desktop-workbench.md): earlier layout and interaction rules, subject to the newer requirements and visual contract.
 - [Implementation and evidence](design/desktop.md): current repository boundary followed by dated implementation and acceptance history.
 - [Source import](design/source-import.json): byte-level import provenance from Saki candidate `00298ae` with original Git history retained.

@@ -361,10 +361,22 @@ func (a *appModel) settingsSidebar(c *ui.Context, t *ui.Theme, narrow bool) {
 }
 
 func (a *appModel) settingsMain(c *ui.Context, t *ui.Theme, narrow bool) {
-	ui.Column(c).Grow(1).MinWidth(0).FillHeight().Margin(4).Background(a.workTheme.Reading).Border(1, t.Border).Radius(16).Clip().Children(func() {
-		ui.Row(c).FillWidth().Height(40).Shrink(0).DragWindow()
-		ui.Scroll(c).FillWidth().Grow(1).MinHeight(0).TrackScroll(&a.settingsScroll).Children(func() {
-			ui.Column(c).FillWidth().MaxWidth(settingsContentWidth).AlignSelf(ui.Center).AlignItems(ui.Start).Padding(8, 32, 48).Gap(8).Children(func() {
+	msgs := locales.In(c.Locale())
+	title := msgs.SettingsAdvanced()
+	switch a.settingsTab {
+	case settingsTabAppearance:
+		title = msgs.SettingsGeneral()
+	case settingsTabConnection:
+		title = msgs.SettingsConnection()
+	case settingsTabContact:
+		title = msgs.SettingsContact()
+	}
+	ui.Column(c).Grow(1).MinWidth(0).FillHeight().Margin(8).Background(a.workTheme.Reading).Border(1, t.Border).Radius(16).Clip().Children(func() {
+		ui.Row(c).FillWidth().MaxWidth(settingsContentWidth).AlignSelf(ui.Center).Height(40).Shrink(0).Padding(0, 32).AlignItems(ui.Center).DragWindow().Children(func() {
+			pageHeading(c, title)
+		})
+		ui.Scroll(c).FillWidth().MinWidth(0).Grow(1).MinHeight(0).TrackScroll(&a.settingsScroll).Children(func() {
+			ui.Column(c).FillWidth().MaxWidth(settingsContentWidth).MinWidth(0).AlignSelf(ui.Center).Padding(32).Gap(8).Children(func() {
 				switch a.settingsTab {
 				case settingsTabAppearance:
 					a.settingsAppearanceContent(c, t)
@@ -381,7 +393,7 @@ func (a *appModel) settingsMain(c *ui.Context, t *ui.Theme, narrow bool) {
 }
 
 func preferenceGroup(c *ui.Context, t *ui.Theme, children func()) {
-	ui.Column(c).FillWidth().Padding(0, 16).Draw(func(p *ui.Painter, r ui.Rect) {
+	ui.Column(c).FillWidth().Padding(16).Draw(func(p *ui.Painter, r ui.Rect) {
 		paintPreferenceFace(p, r, 12, 2, t.Background, t.Border)
 	}).Children(children)
 }
@@ -402,35 +414,24 @@ func preferenceSectionHeader(c *ui.Context, t *ui.Theme, title string) {
 }
 
 func settingsPreferenceRow(c *ui.Context, t *ui.Theme, label, description string, control func(), last ...bool) {
-	width, _ := c.Size()
-	row := ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(12).Padding(14, 0)
-	if width < preferenceBreakpoint {
-		row = ui.Column(c).FillWidth().AlignItems(ui.Stretch).Gap(12).Padding(14, 0)
-	}
+	row := ui.Row(c).FillWidth().MinWidth(0).Wrap().AlignItems(ui.Center).Gap(12).Padding(12, 0)
 	if len(last) == 0 || !last[0] {
 		row.BorderWidth(0, 0, 1, 0).BorderColor(t.Border).BorderStyle(ui.BorderDashed)
 	}
 	row.Children(func() {
-		ui.Column(c).Grow(1).Shrink(1).MinWidth(0).Gap(4).Children(func() {
-			ui.Text(c, label+":").FontSize(typeLabel).FontWeight(400).FixedLineHeight(lineLabel).TextColor(t.Text)
+		ui.Column(c).Basis(240).Grow(1).Shrink(1).MinWidth(0).Gap(4).Children(func() {
+			ui.Text(c, label).FontSize(typeLabel).FontWeight(400).FixedLineHeight(lineLabel).TextColor(t.Text)
 			if description != "" {
 				ui.Text(c, description).FontSize(typeMeta).FontWeight(400).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 			}
 		})
-		controls := ui.Column(c).MinWidth(0).Gap(8)
-		if width >= preferenceBreakpoint {
-			controls.MaxWidthPercent(66).Shrink(1).AlignItems(ui.End)
-		} else {
-			controls.FillWidth()
-		}
-		controls.Children(control)
+		ui.Column(c).Basis(388).Grow(1).Shrink(1).MinWidth(0).AlignItems(ui.End).Gap(8).Children(control)
 	})
 }
 
 func (a *appModel) settingsAppearanceContent(c *ui.Context, t *ui.Theme) {
 	msgs := locales.In(c.Locale())
 	a.ensureLanguageMode()
-	pageHeading(c, msgs.SettingsGeneral()).Padding(0, 16)
 	preferenceSection(c, t, msgs.SettingsAppearance(), func() {
 		c.Key("appearance-preference")
 		settingsPreferenceRow(c, t, msgs.AppearanceMode(), "", func() {
@@ -889,25 +890,26 @@ func (a *appModel) settingsDataRecoveryContent(c *ui.Context, t *ui.Theme) {
 func (a *appModel) settingsConnectionContent(c *ui.Context, t *ui.Theme) {
 	msgs := locales.In(c.Locale())
 	form := a.connectionForm
-	ui.Column(c).FillWidth().AlignItems(ui.Start).Gap(8).Children(func() {
-		pageHeading(c, msgs.SettingsConnection()).Padding(0, 16)
+	ui.Column(c).FillWidth().MinWidth(0).Gap(8).Children(func() {
 		preferenceSectionHeader(c, t, msgs.ModelDefaultScope())
-		if a.connectionApplied() && a.connectionEffective != nil {
-			ui.Column(c).FillWidth().Gap(4).Children(func() {
-				ui.Text(c, msgs.ConnectionCurrent(connectionCurrentSummary(a.connectionEffective))).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text)
-				if form.Error != "" {
-					ui.Text(c, msgs.ConnectionKeptOnFailure()).FontSize(typeLabel).FixedLineHeight(lineLabel).TextColor(t.Warning)
-				}
-			})
-		} else {
-			ui.Text(c, msgs.ConnectionNoneApplied()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
-		}
-		if form.Dirty() {
-			ui.Text(c, msgs.ConnectionUnsavedForm()).FontSize(typeLabel).FixedLineHeight(lineLabel).TextColor(t.Warning)
-		}
-		if a.connectionSavedPending() {
-			ui.Text(c, msgs.ConnectionSavedAwaitingApply()).FontSize(typeLabel).FixedLineHeight(lineLabel).TextColor(t.Warning)
-		}
+		ui.Column(c).FillWidth().MinWidth(0).Padding(0, 16).Gap(8).Children(func() {
+			if a.connectionApplied() && a.connectionEffective != nil {
+				ui.Column(c).FillWidth().Gap(4).Children(func() {
+					ui.Text(c, msgs.ConnectionCurrent(connectionCurrentSummary(a.connectionEffective))).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text)
+					if form.Error != "" {
+						ui.Text(c, msgs.ConnectionKeptOnFailure()).FontSize(typeLabel).FixedLineHeight(lineLabel).TextColor(t.Warning)
+					}
+				})
+			} else {
+				ui.Text(c, msgs.ConnectionNoneApplied()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
+			}
+			if form.Dirty() {
+				ui.Text(c, msgs.ConnectionUnsavedForm()).FontSize(typeLabel).FixedLineHeight(lineLabel).TextColor(t.Warning)
+			}
+			if a.connectionSavedPending() {
+				ui.Text(c, msgs.ConnectionSavedAwaitingApply()).FontSize(typeLabel).FixedLineHeight(lineLabel).TextColor(t.Warning)
+			}
+		})
 		form.ReloadBlocked = a.connectionReloadBlocked()
 		form.SavedPending = a.connectionSavedPending()
 		actions := a.connectionActions()
@@ -920,8 +922,9 @@ func (a *appModel) settingsContactContent(c *ui.Context, t *ui.Theme) {
 	msgs := locales.In(c.Locale())
 	editor := a.settingsContactEditor()
 	if editor == nil {
-		ui.Text(c, msgs.SettingsContact()).FontSize(typeSettingsTitle).FontWeight(500).FixedLineHeight(lineSettingsTitle).TextColor(t.Text)
-		ui.Text(c, msgs.SettingsNoContactToEdit()).FontSize(14).TextColor(t.Warning)
+		preferenceSection(c, t, msgs.EditContactLabel(), func() {
+			ui.Text(c, msgs.SettingsNoContactToEdit()).FontSize(14).TextColor(t.Warning)
+		})
 		return
 	}
 	options := make([]selectOption, 0, len(a.contacts))
@@ -930,19 +933,19 @@ func (a *appModel) settingsContactContent(c *ui.Context, t *ui.Theme) {
 			options = append(options, selectOption{Value: contact.ID, Label: a.settingsContactChoice(msgs, contact)})
 		}
 	}
-	picker := preferenceSelect(c, &a.settingsContactID, options, msgs.EditContactLabel())
-	if picker.Changed() {
-		a.folderChoiceGeneration++
-		a.ensureSettingsProfileEditor(a.settingsContactID)
-		a.settingsScroll.Y = 0
-	}
+	preferenceSection(c, t, msgs.EditContactLabel(), func() {
+		settingsPreferenceRow(c, t, msgs.SettingsContact(), "", func() {
+			picker := preferenceSelect(c, &a.settingsContactID, options, msgs.EditContactLabel())
+			if picker.Changed() {
+				a.folderChoiceGeneration++
+				a.ensureSettingsProfileEditor(a.settingsContactID)
+				a.settingsScroll.Y = 0
+			}
+		}, true)
+	})
 	var ct *contact
 	ct = a.contactByID(a.settingsContactID)
 	editor = a.settingsContactEditor()
-	ui.Text(c, msgs.SettingsContactTitle(a.settingsContactChoice(msgs, ct))).FontSize(typeSettingsTitle).FontWeight(500).FixedLineHeight(lineSettingsTitle).TextColor(t.Text)
-	if !profileDraftEqual(editor.Draft, editor.initial) {
-		ui.Text(c, msgs.SettingsUnsavedChanges()).FontSize(typeMeta).LineHeight(1.5).TextColor(t.Warning)
-	}
 	editor.BuiltinTools = append([]runtimeBuiltinTool(nil), a.runtimeBuiltinTools...)
 	editor.BuiltinToolsLoaded = a.runtimeBuiltinToolsLoaded
 	editor.BuiltinToolsLoading = a.runtimeBuiltinToolsLoading
@@ -958,14 +961,19 @@ func (a *appModel) settingsContactContent(c *ui.Context, t *ui.Theme) {
 	} else if !editor.BuiltinToolsLoaded && !editor.BuiltinToolsLoading && editor.BuiltinToolsError == "" && !editor.CanRetryBuiltinTools {
 		editor.BuiltinToolsError = msgs.SettingsBuiltinNotReady()
 	}
-	editor.view(c, t, contactProfileActions{
-		Save:              func(draft profileDraft) { a.saveContactProfileDraftFor(ct.ID, draft, false) },
-		SaveAndNew:        func(draft profileDraft) { a.saveContactProfileDraftFor(ct.ID, draft, true) },
-		Archive:           func() { a.archiveContact(ct.ID) },
-		Restore:           func() { a.restoreContact(ct.ID) },
-		Discard:           func() { editor.ResetDraft() },
-		RetryBuiltinTools: func() { a.retryBuiltinTools() },
-		ChooseFolder:      func() { a.chooseContactWorkFolder(ct.ID, editor) },
+	preferenceSection(c, t, msgs.SettingsContactTitle(a.settingsContactChoice(msgs, ct)), func() {
+		if !profileDraftEqual(editor.Draft, editor.initial) {
+			ui.Text(c, msgs.SettingsUnsavedChanges()).FontSize(typeMeta).LineHeight(1.5).TextColor(t.Warning)
+		}
+		editor.view(c, t, contactProfileActions{
+			Save:              func(draft profileDraft) { a.saveContactProfileDraftFor(ct.ID, draft, false) },
+			SaveAndNew:        func(draft profileDraft) { a.saveContactProfileDraftFor(ct.ID, draft, true) },
+			Archive:           func() { a.archiveContact(ct.ID) },
+			Restore:           func() { a.restoreContact(ct.ID) },
+			Discard:           func() { editor.ResetDraft() },
+			RetryBuiltinTools: func() { a.retryBuiltinTools() },
+			ChooseFolder:      func() { a.chooseContactWorkFolder(ct.ID, editor) },
+		})
 	})
 }
 
@@ -1061,18 +1069,20 @@ func containsString(values []string, want string) bool {
 
 func (a *appModel) settingsAdvancedContent(c *ui.Context, t *ui.Theme) {
 	msgs := locales.In(c.Locale())
-	ui.Text(c, msgs.SettingsAdvanced()).FontSize(typeSettingsTitle).FontWeight(500).FixedLineHeight(lineSettingsTitle).TextColor(t.Text)
-	ui.Text(c, msgs.SettingsAdvancedIntro()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
-	ui.Text(c, msgs.SettingsStartupSection()).FontSize(typeGroupTitle).FontWeight(500).TextColor(t.Text)
-	label := msgs.SettingsShowRuntimeDetails()
-	if a.startupDetailsOpen {
-		label = msgs.SettingsHideRuntimeDetails()
-	}
-	secondaryButton(c, label).OnClick(func() { a.startupDetailsOpen = !a.startupDetailsOpen })
-	if a.startupDetailsOpen {
-		a.runtimePanel(c, t, a.selectedContact())
-	}
-	secondaryButton(c, msgs.SettingsOpenConnection()).OnClick(func() { a.selectSettingsTab(settingsTabConnection) })
+	preferenceSection(c, t, msgs.SettingsStartupSection(), func() {
+		ui.Column(c).FillWidth().MinWidth(0).AlignItems(ui.Start).Gap(8).Children(func() {
+			ui.Text(c, msgs.SettingsAdvancedIntro()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
+			label := msgs.SettingsShowRuntimeDetails()
+			if a.startupDetailsOpen {
+				label = msgs.SettingsHideRuntimeDetails()
+			}
+			secondaryButton(c, label).OnClick(func() { a.startupDetailsOpen = !a.startupDetailsOpen })
+			if a.startupDetailsOpen {
+				a.runtimePanel(c, t, a.selectedContact())
+			}
+			secondaryButton(c, msgs.SettingsOpenConnection()).OnClick(func() { a.selectSettingsTab(settingsTabConnection) })
+		})
+	})
 }
 
 func (a *appModel) auxScrollFor(kind string) *ui.ScrollState {

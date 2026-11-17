@@ -3,8 +3,8 @@
 ## Validate composed pages rather than isolated controls
 
 **Problem:** Settings navigation shrank to label width, the scrollbar followed a narrow content column, and an embedded editor had a different width despite passing component checks. A later UI progress report emphasized source/test maintenance instead of visual inspection.
-**Cause or correction:** Start alignment, a non-filling scroll viewport and an auto-width nested form lacked a shared page-width contract. The user requires visual inspection; source, geometry and test results do not establish visual quality. The obsolete session editor is now removed.
-**Prevention:** Inspect actual rendered page combinations against Qoder with one full-pane scroll viewport and a separate bounded content column. Check minimum/default/wide layouts, scrolling and relevant states. Distinguish inspected headless images from native-window observations and preserve screenshots; do not infer visual acceptance from assertions or screenshot counts.
+**Cause or correction:** Start alignment, a non-filling scroll viewport and an auto-width nested form lacked a shared page-width contract. The user requires visual inspection; source, geometry and test results do not establish visual quality. The obsolete session editor is now removed. A later native 720-DIP review confirmed that settings rows compared the whole window width from MyGo Context.Size with the breakpoint instead of the width remaining after the sidebar. The user subsequently approved all phase1 readability, hierarchy and layout corrections in the UI checklist, superseding the corresponding Qoder values; phase2 styling remains a proposal.
+**Prevention:** Inspect actual rendered page combinations against the current Qoder-based contract with one full-pane scroll viewport and a separate bounded content column. Use the row's available width for responsive composition and one title/content skeleton across Settings categories. Synchronize approved corrections into the existing contract before implementation, preserving source-reference facts and historical evidence. Check minimum/default/wide layouts, scrolling and relevant states. Distinguish inspected headless images from native-window observations and preserve screenshots; do not infer visual acceptance from assertions or screenshot counts.
 
 ## Use the current candidate without disturbing dirty ownership
 
@@ -134,9 +134,9 @@
 
 ## Select the cached compiler explicitly for offline phases
 
-**Problem:** A package-only build stopped before compilation because GOTOOLCHAIN=local selected Go1.27.1; a second bootstrap attempt failed with GOSUMDB disabled.
+**Problem:** A package-only build stopped before compilation because GOTOOLCHAIN=local selected Go1.27.1; a second bootstrap attempt failed with GOSUMDB disabled. A later formatting phase probed the system1.27.1 formatter instead of using the already established cached1.27.3 executable and stopped before formatting.
 **Cause or correction:** The module requires Go1.27.3, which was already cached. Environment restrictions changed toolchain selection and verification before source compilation.
-**Prevention:** Resolve the required cached compiler path before an offline phase, put its bin directory on PATH and keep normal checksum handling. Preserve setup failures separately from compiler or behavior failures.
+**Prevention:** Resolve the required cached compiler and formatter paths before an offline phase, reuse their exact argv in subsequent owner fences, put the compiler bin directory on PATH and keep normal checksum handling. Preserve setup failures separately from format, compiler or behavior failures.
 
 ## Separate isolated declaration setup from SDK defects
 
@@ -196,7 +196,7 @@
 
 **Problem:** Handoffs announced placeholder digests, and readbacks assumed a compiler version or complete SDK inventory instead of reading the actual records. A later payload report also stored displayed redaction placeholders in digest fields.
 **Cause or correction:** These were metadata mistakes after successful builds. The prepared SDK tree covered113 matching files; the fresh package also contained3 unchanged documentation/notice files.
-**Prevention:** Freeze actual bytes, derive versions/counts/digests programmatically from records and compare explicit file sets, reporting additional files. Keep machine-readable digest fields exact; suppress display when necessary instead of replacing stored data with transcript placeholders. Label incomplete work without a digest and preserve metadata corrections without rerunning unchanged production work.
+**Prevention:** Freeze actual bytes, derive versions/counts/digests programmatically from records and compare explicit file sets, reporting additional files. Keep machine-readable digest fields exact; suppress display when necessary instead of replacing stored data with transcript placeholders. Inspect captured image magic bytes and dimensions before selecting an extension or MIME type; the native capture API returned JPEG despite an initial PNG assumption. Label incomplete work without a digest and preserve metadata corrections without rerunning unchanged production work.
 
 ## Keep worker build payloads outside the checkout
 
@@ -236,9 +236,9 @@
 
 ## Discover source paths before targeted inspection
 
-**Problem:** Initial symbol searches named absent guessed question files, and later inspections assumed absent source, SDK and external recorder paths. An edit anchor was also rejected before mutation because the relevant range had not been read.
+**Problem:** Initial symbol searches named absent guessed question files, and later inspections assumed absent source, SDK, official example and external recorder paths. An edit anchor was also rejected before mutation because the relevant range had not been read.
 **Cause or correction:** Repository symbol/path discovery located the actual files; none of these failed lookups established a product defect.
-**Prevention:** Use rg --files and symbol discovery before targeted reads or edits, including SDK payloads and external evidence directories, then read the actual edit range. Pass filename patterns through quoted rg --glob filters rather than unmatched shell globs. Keep lookup/setup failures separate from compilation and behavior results.
+**Prevention:** Use rg --files and symbol discovery before targeted reads or edits, including pinned SDK examples, payloads and external evidence directories, then read the actual edit range. Do not assume an example directory from a component name. Pass filename patterns through quoted rg --glob filters rather than unmatched shell globs. Keep lookup/setup failures separate from compilation and behavior results.
 
 ## Select process tests explicitly in CI
 
@@ -299,3 +299,21 @@
 **Problem:** A post-Quit window observation returned a new window after the owned visual app had exited0; an exact-path check found a distinct no-argument process with parent1.
 **Cause or correction:** Unconfirmed. The original app exit does not identify the new instance or prove its profile binding. No further UI input was sent; the additional task-owned executable was identity-checked and stopped, with its exit code left unknown.
 **Prevention:** Record the launch PID and verify identity changes around close/observation. Keep isolated profile selection in the bundle entrypoint so an independent launch cannot fall back to user data; do not resume native cases until that boundary is established. Preserve actual process outcomes and distinguish bounded visual observations from lifecycle acceptance.
+
+## Resolve compatibility callers before claiming compilation
+
+**Problem:** Test retirement passed formatting and a scoped import heuristic but the frozen compile failed on a retained launcher call, two missing imports and additional deleted-method callers outside the original fence.
+**Cause or correction:** Parsing and selected symbol searches do not resolve the complete test package. The first compiler page stopped after too many errors, so its list was incomplete.
+**Prevention:** Preserve the first failed command and source snapshot. Check all callers of each removed declaration, maintain accurate test names, and compile one committed unchanged candidate before executing tests. Give the test owner exact follow-up paths; do not restore an emulator or discard live business assertions to obtain a green compile.
+
+## Reuse current ownership and canonical admission reasons
+
+**Problem:** Pi conversation callers retained Saki-client checks in composer Reload while the Pi Send path replaced canonical rejection reasons with one generic message.
+**Cause or correction:** Readiness, owned history reload and send admission have different conditions. Existing runtimeAvailableForView, canSend and sendBlockRaw already own related decisions; the new path did not consistently use them. These are source findings, not executed failures.
+**Prevention:** Keep one live-host readiness decision and revalidate the captured Pi conversation at history dispatch/completion. Reuse canonical admission reasons for owned contacts. Preserve drafts and unknown delivery; never infer Pi ownership from an opaque legacy session reference or let history refresh replay Send.
+
+## Restore materials when admitted-run persistence fails
+
+**Problem:** Pi RunStarted cleared the draft and submitted context before saving; a failed save changed the send state to unknown without restoring those materials.
+**Cause or correction:** Source inspection found missing rollback. clearSubmitted also compacts its backing slice and changes preview selection, so a shallow context copy cannot preserve the original contents.
+**Prevention:** Capture independent context items and the current draft/preview before clearing. Restore user materials on save failure while retaining known admitted run facts, pending intent and unknown/no-replay semantics. Preserve later edits and verify the existing business assertions through the actual Pi reducer and process E2E.
