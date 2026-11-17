@@ -11,7 +11,6 @@ import (
 )
 
 const (
-	piActivityUnavailable    = "Activity execution and runtime restore are unavailable during Pi integration."
 	piResultsUnavailable     = "Activity results are unavailable during Pi integration; saved execution records are preserved."
 	piLegacyActivityReadOnly = "Legacy activity data is read-only during Pi integration."
 )
@@ -574,6 +573,11 @@ func (a *appModel) issueDetailView(c *ui.Context, t *ui.Theme, ct *contact, issu
 	work := ct.issueWork(issue)
 	active := work != nil && issue.Work.ActiveTaskID == work.TaskID
 	explicit := work != nil && ct.SelectedWorkTaskID != "" && ct.SelectedWorkTaskID == work.TaskID
+	piProgress := work != nil && !a.piDataReadOnly() && isPiActivityIssue(issue)
+	cancelReason := ""
+	if active {
+		cancelReason = a.canCancelIssue(ct, issue)
+	}
 	ui.Scroll(c).Grow(1).FillWidth().TrackScroll(&nav.DetailScroll).Padding(0, 12).Children(func() {
 		ui.Column(c).Gap(8).Children(func() {
 			ui.Row(c).AlignItems(ui.Center).Gap(6).Children(func() {
@@ -590,8 +594,9 @@ func (a *appModel) issueDetailView(c *ui.Context, t *ui.Theme, ct *contact, issu
 					if work.State == workStopping {
 						label = locales.In(c.Locale()).WorkStoppingIssue()
 					}
-					stop := secondaryButton(c, label).TextColor(t.Warning).Disabled(!a.demo).OnClick(func() {
-						a.cancelWorkTask(ct, work.TaskID)
+					taskID := work.TaskID
+					stop := secondaryButton(c, label).TextColor(t.Warning).Disabled(cancelReason != "").OnClick(func() {
+						a.cancelWorkTask(ct, taskID)
 					})
 					if work.State == workStopping {
 						stop.Disabled(true)
@@ -608,6 +613,9 @@ func (a *appModel) issueDetailView(c *ui.Context, t *ui.Theme, ct *contact, issu
 			}
 			if active {
 				ui.Text(c, locales.In(c.Locale()).IssueCurrentRun(workStateText(locales.In(c.Locale()), work))).FontSize(typeMeta).FixedLineHeight(lineMeta).MaxLines(2).TextColor(a.workStateColor(work.State))
+				if cancelReason != "" {
+					ui.Text(c, locales.In(c.Locale()).WorkNextActionUnavailable(cancelReason)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
+				}
 			}
 			display := issueDisplayStatusFor(issue)
 			if issue.openQuestion() == nil {
@@ -619,9 +627,19 @@ func (a *appModel) issueDetailView(c *ui.Context, t *ui.Theme, ct *contact, issu
 			if a.issueFormOpen && a.issueFormEditingID != "" {
 				a.issueFormView(c, t)
 			}
-			if explicit {
+			if explicit || piProgress {
 				if !a.demo {
-					ui.Text(c, piResultsUnavailable).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Warning)
+					if piProgress {
+						contactID, issueID := ct.ID, issue.ID
+						secondaryButton(c, locales.In(c.Locale()).IssueReloadTask()).Disabled(a.shutdownStarted).OnClick(func() {
+							a.reloadIssueWorkByID(contactID, issueID)
+						})
+						a.workCard(c, t, work, active, true)
+						a.workActivity(c, t, work)
+						ui.Divider(c)
+					} else {
+						ui.Text(c, piResultsUnavailable).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Warning)
+					}
 				} else {
 					a.issueResultContext(c, t, issue, work)
 					snapshot, current := a.issueWorkDisclosureSnapshot(ct, issue, work)
@@ -812,7 +830,6 @@ func (a *appModel) issuePrimaryAction(c *ui.Context, t *ui.Theme, ct *contact, i
 	if question := issue.openQuestion(); question != nil && editable {
 		if strings.TrimSpace(question.Text) == "" {
 			if !a.demo {
-				ui.Text(c, piActivityUnavailable).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Warning)
 				return "question-missing"
 			}
 			secondaryButton(c, msgs.IssueReloadTask()).OnClick(func() { a.reloadIssueWorkByID(ct.ID, issue.ID) })
@@ -825,10 +842,6 @@ func (a *appModel) issuePrimaryAction(c *ui.Context, t *ui.Theme, ct *contact, i
 			secondaryButton(c, msgs.WorkAnswer()).FontWeight(500).OnClick(func() { a.openIssueQuestionAnswerForm(target, questionRef) })
 		})
 		return "answer"
-	}
-	if !a.demo {
-		ui.Text(c, piActivityUnavailable).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Warning)
-		return "unavailable"
 	}
 	startReason := ""
 	if !issueManagementTerminal(issue) && !issue.Archived {
@@ -851,9 +864,10 @@ func (a *appModel) issuePrimaryAction(c *ui.Context, t *ui.Theme, ct *contact, i
 					label = msgs.WorkContinueWithSupplement()
 				}
 			}
+			issueID := issue.ID
 			ui.Row(c).Wrap().Gap(6).AlignItems(ui.Center).Children(func() {
 				secondaryButton(c, label).FontWeight(500).OnClick(func() {
-					if !a.runIssue(issue.ID) {
+					if !a.runIssueFor(ct, issueID) {
 						a.setIssueActionNotice(a.issueFormError, a.issueFormNotice, a.issueFormNoticeDetail)
 					}
 				})
@@ -861,7 +875,7 @@ func (a *appModel) issuePrimaryAction(c *ui.Context, t *ui.Theme, ct *contact, i
 			return "continue"
 		}
 	}
-	if latest := latestIssueExecution(issue); issueHasReadableResult(ct, latest) {
+	if latest := latestIssueExecution(issue); a.demo && issueHasReadableResult(ct, latest) {
 		ui.Row(c).Wrap().Gap(6).AlignItems(ui.Center).Children(func() {
 			read := secondaryButton(c, msgs.WorkReadResult()).FontWeight(500).OnClick(func() {
 				a.openIssueResultFromLatest(issue.ID, latest.ID)
@@ -933,7 +947,7 @@ func (a *appModel) issueLifecycleActions(c *ui.Context, t *ui.Theme, issue *prod
 
 func (a *appModel) issueExecutionCheckHint(msgs locales.Messages, ct *contact, issue *productIssue, execution *issueExecution) string {
 	if !a.demo {
-		return piActivityUnavailable
+		return piResultsUnavailable
 	}
 	if a.runtimeStatus != runtimeStateReady || a.rt == nil || a.shutdownStarted {
 		return msgs.SendDisconnectedState()
@@ -952,9 +966,34 @@ func (a *appModel) issueCard(c *ui.Context, t *ui.Theme, ct *contact, issue *pro
 	msgs := locales.In(c.Locale())
 	editable := !a.piDataReadOnly() && !issue.Archived && issue.Status != issueStatusCompleted && issue.Status != issueStatusCanceled
 	expanded := a.issueDetailOpen[issue.ID]
-	ui.Column(c).Padding(8, 0).Gap(8).Children(func() {
+	ui.Column(c).Key(issue.ID).Padding(8, 0).Gap(8).Children(func() {
 		ui.Column(c).Gap(2).Children(func() {
 			ui.Text(c, issue.Goal).FontSize(typeLabel).FontWeight(400).FixedLineHeight(lineLabel).TextColor(t.Text)
+			for _, question := range issue.Questions {
+				if question == nil || question.PiCall == nil || question.DeliveryState == "" {
+					continue
+				}
+				var delivery string
+				switch question.DeliveryState {
+				case issueQuestionDeliverySaved:
+					delivery = msgs.IssueAnswerSaved()
+				case issueQuestionDeliveryDispatching:
+					delivery = msgs.IssueAnswerDispatching()
+				case issueQuestionDeliveryResolved:
+					delivery = msgs.SupplementReceivedStatus()
+				case issueQuestionDeliveryUnknown:
+					delivery = msgs.SupplementUnknown()
+				case issueQuestionDeliveryCanceled:
+					delivery = msgs.TaskStatusCanceled()
+				default:
+					delivery = msgs.SupplementUnknown()
+				}
+				ui.Column(c).Key(question.Ref).Gap(4).Children(func() {
+					ui.Text(c, question.Text).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text)
+					ui.Text(c, question.AnswerText).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text)
+					ui.Text(c, delivery).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
+				})
+			}
 		})
 		if a.issueActionError != "" {
 			text := a.issueActionError
@@ -970,7 +1009,10 @@ func (a *appModel) issueCard(c *ui.Context, t *ui.Theme, ct *contact, issue *pro
 				if strings.TrimSpace(question.Text) == "" {
 					ui.Text(c, msgs.QuestionUnavailableTitle()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text)
 					ui.Text(c, msgs.QuestionUnavailableHint()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
-					secondaryButton(c, msgs.IssueReloadTask()).Disabled(!a.demo).OnClick(func() { a.reloadIssueWorkByID(ct.ID, issue.ID) })
+					contactID, issueID := ct.ID, issue.ID
+					secondaryButton(c, msgs.IssueReloadTask()).Disabled(a.shutdownStarted || !a.demo && (a.piDataReadOnly() || !isPiActivityIssue(issue))).OnClick(func() {
+						a.reloadIssueWorkByID(contactID, issueID)
+					})
 				} else {
 					ui.Text(c, question.Text).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text)
 				}
@@ -1299,11 +1341,19 @@ func (a *appModel) issueActions(c *ui.Context, t *ui.Theme, ct *contact, issue *
 				return
 			}
 			if issue.Status == issueStatusWaitingUser || issue.Status == issueStatusNeedsAttention {
-				secondaryButton(c, locales.In(c.Locale()).IssueResume()).Disabled(!a.demo).OnClick(func() {
-					if !a.resumeIssue(issue.ID) {
+				issueID := issue.ID
+				resumeReason := a.canStartIssue(ct, issue)
+				if blocked := issueRunBlocked(issue); resumeReason == "" && blocked != "" {
+					resumeReason = sendBlockText(locales.In(c.Locale()), blocked)
+				}
+				secondaryButton(c, locales.In(c.Locale()).IssueResume()).Disabled(resumeReason != "").OnClick(func() {
+					if !a.resumeIssueFor(ct, issueID) {
 						a.setIssueActionNotice("Could not resume this issue.", "resume-failed", "")
 					}
 				})
+				if resumeReason != "" {
+					ui.Text(c, locales.In(c.Locale()).WorkNextActionUnavailable(resumeReason)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
+				}
 			} else if issue.Work.ActiveTaskID == "" && issue.Work.SendState == sendIdle {
 				secondaryButton(c, locales.In(c.Locale()).IssueMarkWaiting()).OnClick(func() {
 					if !a.markIssueWaiting(issue.ID) {
@@ -1409,6 +1459,7 @@ func (a *appModel) issueWorkViewCurrent(ct *contact, issue *productIssue, work *
 
 func (a *appModel) workCard(c *ui.Context, t *ui.Theme, w *workItem, isCurrent, issueWork bool, disclosure ...func(bool, func())) {
 	msgs := locales.In(c.Locale())
+	ct, taskID := a.selectedContact(), w.TaskID
 	ui.Column(c).Padding(8, 0).BorderWidth(0, 0, 1, 0).BorderColor(t.Border).Gap(4).Children(func() {
 		ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
 			ui.Text(c, workStateText(msgs, w)).FontSize(typeAction).FontWeight(500).TextColor(a.workStateColor(w.State))
@@ -1426,11 +1477,15 @@ func (a *appModel) workCard(c *ui.Context, t *ui.Theme, w *workItem, isCurrent, 
 				}
 				stop := secondaryButton(c, label).FontWeight(500).OnClick(func() {
 					if issueWork {
-						a.cancelWorkTask(a.selectedContact(), w.TaskID)
+						a.cancelWorkTask(ct, taskID)
 					} else {
 						a.cancelSelected()
 					}
 				})
+				if issueWork {
+					issue, _ := ct.issueForTask(taskID)
+					stop.Disabled(a.canCancelIssue(ct, issue) != "")
+				}
 				if w.State == workStopping {
 					stop.Disabled(true)
 				}
@@ -1657,8 +1712,10 @@ func executionHasUnknownRecovery(issue *productIssue) bool {
 }
 
 func (a *appModel) cancelWorkTask(ct *contact, taskID string) {
-	if issue, _ := ct.issueForTask(taskID); issue != nil && issue.Work.ActiveTaskID == taskID {
-		a.cancelIssue(issue.ID)
+	if issue, _ := ct.issueForTask(taskID); issue != nil {
+		if issue.Work.ActiveTaskID == taskID {
+			a.cancelIssueFor(ct, issue.ID)
+		}
 		return
 	}
 	if a.demo {
