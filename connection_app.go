@@ -321,15 +321,45 @@ func (a *appModel) connectionReloadBlocked() string {
 	if a.piDataReadOnly() {
 		return connBlockedStore
 	}
+	recoverable := false
+	if host := a.pi; host != nil && host.client != nil && host.generation == a.connectionGeneration && a.runtimeStatus == runtimeStateExited && host.exitApplied != nil {
+		select {
+		case <-host.client.Done():
+			select {
+			case <-host.client.CallbacksDone():
+				select {
+				case <-host.exitApplied:
+					if host.mu.TryLock() {
+						recoverable = host.outcome.Reaped && host.outcome.PID > 0
+						host.mu.Unlock()
+					}
+				default:
+				}
+			default:
+			}
+		default:
+		}
+	}
 	for _, ct := range a.contacts {
 		if ct.ActiveTaskID != "" || ct.SendState == sendSubmitting || ct.SendState == sendAccepted {
+			return connBlockedActiveWork
+		}
+		if recoverable && ct.SendState == sendUnknown && (ct.pendingSend == nil || ct.pendingSend.State != "unknown" || ct.PiBinding == nil || ct.PiBinding.Engine != "pi" || ct.PiBinding.Context.Purpose != pi.Conversation || ct.PiBinding.Context.BotID != ct.ID || ct.PiBinding.Context.ContextID == "" || ct.PiBinding.Context.SessionRef == "" || ct.PiBinding.Context.SessionRef != ct.SessionID || ct.PiBinding.Configuration.CredentialSource == "") {
 			return connBlockedActiveWork
 		}
 	}
 	for _, ct := range a.contacts {
 		for _, issue := range ct.Issues {
-			if reason := issueRunBlocked(issue); reason != "" {
+			if issue.Work.ActiveTaskID != "" || issue.Work.SendState == sendSubmitting || issue.Work.SendState == sendAccepted {
 				return connBlockedUntrustedIssue
+			}
+			for _, execution := range issue.Executions {
+				if !unresolvedExecution(execution) {
+					continue
+				}
+				if !recoverable || execution.Status != issueExecutionUnknown || !execution.PiIntent || !isPiActivityIssue(issue) || issue.ContactID != ct.ID || execution.PiRun == nil || execution.ID == "" || execution.PiRun.WorkerEpoch == "" || execution.PiRun.RunID == "" || execution.PiRun.ContextID != issue.PiBinding.Context.ContextID || execution.PiRun.SessionRef != issue.PiBinding.Context.SessionRef {
+					return connBlockedUntrustedIssue
+				}
 			}
 		}
 	}

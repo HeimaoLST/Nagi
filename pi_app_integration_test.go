@@ -3944,3 +3944,689 @@ func TestPiAppActivitiesAndQuestions(t *testing.T) {
 		t.Fatalf("restarted app did not reap normally: %v", err)
 	}
 }
+
+type piCrashProvider struct {
+	activity *piActivityProvider
+	mu       sync.Mutex
+	bodies   []json.RawMessage
+	seen     map[string]bool
+	problems []string
+}
+
+func (p *piCrashProvider) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 512<<10))
+	var request struct {
+		Messages []struct {
+			Role    string          `json:"role"`
+			Content json.RawMessage `json:"content"`
+		} `json:"messages"`
+	}
+	if err == nil {
+		err = json.Unmarshal(body, &request)
+	}
+	marker := ""
+	for _, message := range request.Messages {
+		if message.Role == "user" {
+			for _, candidate := range []string{"ACTIVITY_A", "ACTIVITY_B", "ACTIVITY_CHAT_QUIT"} {
+				if strings.Contains(string(message.Content), candidate) {
+					marker = candidate
+				}
+			}
+		}
+	}
+	p.mu.Lock()
+	p.bodies = append(p.bodies, append(json.RawMessage(nil), body...))
+	if err == nil && (len(p.bodies) > 12 || marker == "" || p.seen[marker]) {
+		err = fmt.Errorf("unexpected or repeated crash scenario request: marker=%q count=%d", marker, len(p.bodies))
+	}
+	if err != nil {
+		p.problems = append(p.problems, err.Error())
+	} else {
+		p.seen[marker] = true
+	}
+	p.mu.Unlock()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	r.Body = io.NopCloser(bytes.NewReader(body))
+	p.activity.ServeHTTP(w, r)
+}
+
+func (p *piCrashProvider) snapshot() ([]json.RawMessage, []string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return append([]json.RawMessage(nil), p.bodies...), append([]string(nil), p.problems...)
+}
+
+type piCrashHarness struct {
+	*piActivityHarness
+	provider    *piCrashProvider
+	server      *httptest.Server
+	killed      *piAppHost
+	releaseA    sync.Once
+	releaseB    sync.Once
+	releaseChat sync.Once
+}
+
+func (h *piCrashHarness) screenshot(name string) {
+	h.t.Helper()
+	var save func()
+	h.onUI(func() error {
+		h.tester.Frame()
+		image := h.tester.Image()
+		piAppRecord(h.t, "crash-image", map[string]any{"name": name, "viewport": image.Bounds()})
+		save = func() { writePreviewPNG(h.t, filepath.Join(h.evidence, name+".png"), image) }
+		return nil
+	})
+	save()
+}
+
+func (h *piCrashHarness) release() {
+	p := h.provider.activity
+	h.releaseA.Do(func() { close(p.releaseA) })
+	h.releaseB.Do(func() { close(p.releaseB) })
+	h.releaseChat.Do(func() { close(p.quitHold) })
+}
+
+func (h *piCrashHarness) observeKilled(host *piAppHost) bool {
+	h.t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	outcome, err := host.client.Wait(ctx)
+	callbacks, applied := false, false
+	select {
+	case <-host.client.CallbacksDone():
+		callbacks = true
+	case <-ctx.Done():
+	}
+	select {
+	case <-host.exitApplied:
+		applied = true
+	case <-ctx.Done():
+	}
+	host.mu.Lock()
+	observed := host.outcome
+	bridges := make([]*piIssueTools, 0, len(host.bridges))
+	for _, bridge := range host.bridges {
+		bridges = append(bridges, bridge)
+	}
+	host.mu.Unlock()
+	drained := true
+	for _, bridge := range bridges {
+		select {
+		case <-bridge.done:
+		case <-ctx.Done():
+			drained = false
+		}
+	}
+	done := shutdownChannelClosed(host.client.Done())
+	piAppRecord(h.t, "crash-owned-exit", map[string]any{"injected": true, "wait": outcome, "wait_error": fmt.Sprint(err), "on_exit": observed, "done": done, "callbacks_done": callbacks, "exit_applied": applied, "bridge_count": len(bridges), "bridges_done": drained})
+	return outcome.PID > 0 && outcome.Reaped && outcome.ExitCode != 0 && err != nil && observed.PID == outcome.PID && observed.Reaped && observed.ExitCode == outcome.ExitCode && fmt.Sprint(observed.Err) == fmt.Sprint(outcome.Err) && done && callbacks && applied && drained
+}
+
+func (h *piCrashHarness) cleanup() {
+	h.release()
+	first := h.piFirstUseHarness
+	var current *piAppHost
+	if first.pump != nil && !first.closed {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		err := first.actor(ctx, func() { current = first.app.pi })
+		cancel()
+		if err != nil {
+			h.t.Errorf("capture crash cleanup owner: %v", err)
+		}
+		if current != h.killed || h.killed == nil {
+			observedHost := make(chan *piAppHost, 1)
+			watcher := &uiWaiter{ch: make(chan struct{}), cond: func() bool {
+				if first.app.pi == nil || first.app.pi.client == nil {
+					return false
+				}
+				observedHost <- first.app.pi
+				return true
+			}}
+			first.pump.mu.Lock()
+			first.pump.waiters = append(first.pump.waiters, watcher)
+			first.pump.mu.Unlock()
+			if err := first.shutdown(); err != nil {
+				h.t.Errorf("normal crash-scenario shutdown failed: %v", err)
+			}
+			first.pump.mu.Lock()
+			for i, waiter := range first.pump.waiters {
+				if waiter == watcher {
+					first.pump.waiters = append(first.pump.waiters[:i], first.pump.waiters[i+1:]...)
+					break
+				}
+			}
+			first.pump.mu.Unlock()
+			select {
+			case host := <-observedHost:
+				first.hosts = append(first.hosts, host)
+			default:
+			}
+		}
+	}
+	seen := map[*pi.Client]bool{}
+	for _, host := range append(append([]*piAppHost{}, first.hosts...), current, first.capturedHost) {
+		if host == nil || host.client == nil || seen[host.client] {
+			continue
+		}
+		seen[host.client] = true
+		if host == h.killed {
+			if !h.observeKilled(host) {
+				h.t.Error("injected crash did not retain matching owned exit and callbacks")
+				first.cleanupClient(host.client, host, "injected crash")
+			}
+		} else {
+			first.cleanupClient(host.client, host, "crash-scenario app")
+		}
+	}
+	if len(seen) > 3 {
+		h.t.Errorf("crash scenario exceeded its worker ceiling: %d", len(seen))
+	}
+	var observed *pi.Client
+	if first.pump != nil {
+		if first.closed {
+			observed = first.pump.observedPi
+		} else {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			err := first.actor(ctx, func() { observed = first.pump.observedPi })
+			cancel()
+			if err != nil {
+				h.t.Errorf("capture observed crash-scenario client: %v", err)
+			}
+		}
+	}
+	if observed != nil && !seen[observed] {
+		first.cleanupClient(observed, nil, "unmatched crash-scenario app")
+		h.t.Error("observed crash-scenario client has no captured host or OnExit owner")
+	}
+	if first.pump != nil && !first.closed {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		err := first.waitUI(ctx, func() bool {
+			return first.app.submissionInFlight == 0 && first.app.contactHistoryInFlight == 0 && !first.app.connectionApplying && len(first.app.piQuestionWaiters) == 0
+		})
+		cancel()
+		if err != nil {
+			h.t.Errorf("crash cleanup callbacks remain active: %v", err)
+		} else {
+			first.closed = true
+			close(first.pump.q)
+			<-first.pump.done
+		}
+	}
+	if h.server != nil {
+		h.server.CloseClientConnections()
+		done := make(chan struct{})
+		go func() { h.server.Close(); close(done) }()
+		select {
+		case <-done:
+		case <-time.After(10 * time.Second):
+			h.t.Error("crash loopback server did not close")
+		}
+	}
+	bodies, problems := h.provider.snapshot()
+	h.provider.activity.mu.Lock()
+	activityProblems := append([]string(nil), h.provider.activity.problems...)
+	h.provider.activity.mu.Unlock()
+	piAppRecord(h.t, "crash-final-provider", map[string]any{"requests": len(bodies), "bodies": bodies, "problems": problems, "activity_problems": activityProblems, "worker_limit": 3, "request_limit": 12})
+	if len(problems) != 0 || len(activityProblems) != 0 || len(bodies) > 12 {
+		h.t.Errorf("crash provider failed: requests=%d problems=%v activity=%v", len(bodies), problems, activityProblems)
+	}
+}
+
+func TestPiAppCrashRecoveryNoReplay(t *testing.T) {
+	node, worker := os.Getenv("NAGI_TEST_NODE"), os.Getenv("NAGI_TEST_WORKER")
+	if !filepath.IsAbs(node) || !filepath.IsAbs(worker) {
+		t.Fatal("NAGI_TEST_NODE and NAGI_TEST_WORKER must identify the pinned payload")
+	}
+	var err error
+	node, err = filepath.EvalSymlinks(node)
+	if err != nil {
+		t.Fatal(err)
+	}
+	worker, err = filepath.EvalSymlinks(worker)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload := filepath.Dir(filepath.Dir(node))
+	if node != filepath.Join(payload, "bin", "node") || worker != filepath.Join(payload, "dist", "worker.js") {
+		t.Fatal("pinned inputs do not belong to the same product payload")
+	}
+	for _, path := range []string{node, worker} {
+		info, statErr := os.Stat(path)
+		if statErr != nil || !info.Mode().IsRegular() {
+			t.Fatalf("pinned input %q is not a regular file: %v", path, statErr)
+		}
+	}
+	evidence := os.Getenv("NAGI_ACTIVITY_EVIDENCE_DIR")
+	if !filepath.IsAbs(evidence) {
+		t.Fatal("crash evidence directory must be absolute")
+	}
+	worktree, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	worktree, err = filepath.EvalSymlinks(worktree)
+	if err != nil {
+		t.Fatal(err)
+	}
+	evidence, err = filepath.EvalSymlinks(evidence)
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(evidence)
+	if err != nil || !info.IsDir() {
+		t.Fatalf("crash evidence directory is unavailable: %v", err)
+	}
+	relative, err := filepath.Rel(worktree, evidence)
+	if err != nil || relative == "." || relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+		t.Fatal("crash evidence must be outside the source tree")
+	}
+	inputs := map[string]string{}
+	for _, path := range []string{node, worker, "pi_app_integration_test.go", "connection_app.go", "pi_app.go", "pi_activity.go"} {
+		digest, hashErr := piAppFileHash(path)
+		if hashErr != nil {
+			t.Fatal(hashErr)
+		}
+		inputs[path] = digest
+	}
+	piAppRecord(t, "crash-source-inputs", inputs)
+	root := t.TempDir()
+	project, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HOME", root)
+	t.Setenv("TMPDIR", root)
+	t.Setenv("SAKI_TEST_ISSUE_TOOL_HELPER", "")
+	isolateConnectionApp(t, root, payload)
+	t.Setenv("SAKI_GUI_STORE", guiStorePath())
+	app, err := newRuntimeApp()
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := &piFirstUseHarness{t: t, app: app, provider: &piAppProvider{limit: 12}}
+	first.pump = newUIPump(t, app)
+	first.tester = ui.NewTester(app.view, 1040, 720)
+	first.tester.SetLocale("en")
+	first.tester.SetFocused(true)
+	activity := &piActivityProvider{harness: first, results: make(map[string]string), stopB: true, arrivedA: make(chan struct{}), releaseA: make(chan struct{}), arrivedB: make(chan struct{}), releaseB: make(chan struct{}), quitStart: make(chan struct{}), quitHold: make(chan struct{})}
+	provider := &piCrashProvider{activity: activity, seen: make(map[string]bool)}
+	h := &piCrashHarness{piActivityHarness: &piActivityHarness{piFirstUseHarness: first, provider: activity, evidence: evidence}, provider: provider}
+	h.server = httptest.NewServer(provider)
+	t.Cleanup(h.cleanup)
+	h.onUI(func() error {
+		if app.selectedContact() == nil || app.connectionForm == nil || app.connectionForm.Draft.Slots != "2" {
+			return errors.New("fresh crash scenario has no disconnected owner or default capacity")
+		}
+		h.contactID = app.selectedContact().ID
+		return nil
+	})
+	h.input("API endpoint", h.server.URL+"/v1")
+	h.input("API key", "nagi-product-loopback")
+	h.input("Default model", "nagi-product-fixture")
+	h.activate("Capacity & execution limits")
+	h.input("Context tokens", "65536")
+	h.input("Output tokens", "4096")
+	h.input("Maximum active tasks", "3")
+	h.onUI(func() error {
+		app.chooseFolder = func(mygo.OpenDialogOptions) ([]string, error) { return []string{project}, nil }
+		return nil
+	})
+	h.click("Choose folder…")
+	h.wait(func() bool { return !app.connectionForm.Busy })
+	h.click("Save configuration")
+	h.wait(func() bool { return !app.connectionForm.Busy && !app.connectionSaveInFlight })
+	h.click("Apply saved")
+	h.wait(func() bool { return !app.connectionApplying })
+	var original *piAppHost
+	h.onUI(func() error {
+		original = app.pi
+		if original == nil || original.client == nil || app.runtimeStatus != runtimeStateReady || app.connectionForm.Error != "" || app.maxActiveTasks() != 3 || app.connectionProbe != nil {
+			return errors.New("crash scenario did not apply a three-slot app-owned host")
+		}
+		return nil
+	})
+	first.hosts = append(first.hosts, original)
+	ready, err := original.client.Ready(context.Background())
+	if err != nil || ready.Engine.Version != "1.5.2" || ready.Runtime.Version != "v22.23.5" || ready.WorkerEpoch == "" {
+		t.Fatalf("original app worker readiness: %+v %v", ready, err)
+	}
+	h.click("← Back to workbench")
+	h.click("Work")
+	issueA := h.createIssue("ACTIVITY_A")
+	issueB := h.createIssue("ACTIVITY_B")
+	activity.mu.Lock()
+	activity.issueA, activity.issueB = issueA, issueB
+	activity.mu.Unlock()
+	msgs := locales.In("en")
+	h.selectIssue("ACTIVITY_A", issueA)
+	h.startIssue(msgs.WorkStart(), issueA)
+	h.waitSignal(activity.arrivedA, "activity A request before held question")
+	h.releaseA.Do(func() { close(activity.releaseA) })
+	h.wait(func() bool {
+		issue := app.contactByID(h.contactID).issueByID(issueA)
+		return issue != nil && issue.openQuestion() != nil
+	})
+	var runA, runB piActivityRun
+	var callA, callB piQuestionCall
+	var bindingA, bindingB *piActivityBinding
+	var questionRefA, questionRefB string
+	h.onUI(func() error {
+		ct := app.contactByID(h.contactID)
+		issue := ct.issueByID(issueA)
+		execution, question := latestIssueExecution(issue), issue.openQuestion()
+		if execution == nil || execution.PiRun == nil || !execution.PiRun.Admitted || question == nil || question.PiCall == nil || question.DeliveryState != "" || app.piQuestionWaiters[question.PiCall.OperationID] == nil {
+			return errors.New("activity A did not admit its real unanswered held question")
+		}
+		runA, callA, bindingA, questionRefA = *execution.PiRun, *question.PiCall, clonePiActivityBinding(issue.PiBinding), question.Ref
+		if callA.WorkerEpoch != ready.WorkerEpoch || callA.ContextID != runA.ContextID || callA.RunID != runA.RunID || callA.IssueID != issueA || callA.ContactID != h.contactID || callA.ExecutionID != execution.ID || callA.CallID != "activity-wait-a" {
+			return errors.New("activity A held call lost its actual owner")
+		}
+		operation := app.issueToolLedger.operationByID(callA.OperationID)
+		if bindingA == nil || callA.OperationID == "" || callA.SessionRef != runA.SessionRef || question.RequirementsRevision != issue.RequirementsRevision || operation == nil || operation.PiCall == nil || *operation.PiCall != callA || operation.Receipt == nil || operation.Receipt.QuestionRef != questionRefA {
+			return errors.New("activity A question lacks its captured durable operation")
+		}
+		if app.connectionReloadBlocked() == "" {
+			return errors.New("live activity did not block Apply")
+		}
+		return nil
+	})
+	h.backToIssues()
+	h.selectIssue("ACTIVITY_B", issueB)
+	h.startIssue(msgs.WorkStart(), issueB)
+	h.wait(func() bool {
+		issue := app.contactByID(h.contactID).issueByID(issueB)
+		return issue != nil && issue.openQuestion() != nil
+	})
+	h.onUI(func() error {
+		ct := app.contactByID(h.contactID)
+		issue := ct.issueByID(issueB)
+		execution, question := latestIssueExecution(issue), issue.openQuestion()
+		if execution == nil || execution.PiRun == nil || !execution.PiRun.Admitted || question == nil || question.PiCall == nil || question.DeliveryState != "" || app.piQuestionWaiters[question.PiCall.OperationID] == nil {
+			return errors.New("activity B did not admit its real unanswered held question")
+		}
+		runB, callB, bindingB, questionRefB = *execution.PiRun, *question.PiCall, clonePiActivityBinding(issue.PiBinding), question.Ref
+		if callB.WorkerEpoch != ready.WorkerEpoch || callB.ContextID != runB.ContextID || callB.RunID != runB.RunID || callB.IssueID != issueB || callB.ContactID != h.contactID || callB.ExecutionID != execution.ID || callB.CallID != "activity-wait-b" || runB.ContextID == runA.ContextID || runB.RunID == runA.RunID || callB.OperationID == callA.OperationID {
+			return errors.New("activity B did not retain a distinct actual call owner")
+		}
+		operation := app.issueToolLedger.operationByID(callB.OperationID)
+		if bindingB == nil || callB.OperationID == "" || callB.SessionRef != runB.SessionRef || question.RequirementsRevision != issue.RequirementsRevision || operation == nil || operation.PiCall == nil || *operation.PiCall != callB || operation.Receipt == nil || operation.Receipt.QuestionRef != questionRefB {
+			return errors.New("activity B question lacks its captured durable operation")
+		}
+		return nil
+	})
+	h.activateActivity(msgs.WorkStopIssueTask(), func() error {
+		ct := app.selectedContact()
+		issue := ct.issueByID(issueB)
+		execution := latestIssueExecution(issue)
+		if ct.ID != h.contactID || ct.issueView.DetailID != issueB || execution == nil || execution.PiRun == nil || execution.PiRun.RunID != runB.RunID || !execution.PiRun.CancelRequested {
+			return errors.New("GUI Stop did not target activity B")
+		}
+		return nil
+	})
+	h.wait(func() bool {
+		issue := app.contactByID(h.contactID).issueByID(issueB)
+		execution := latestIssueExecution(issue)
+		return execution != nil && execution.Status == issueExecutionInterrupted && issue.Work.ActiveTaskID == ""
+	})
+	h.onUI(func() error {
+		ct := app.contactByID(h.contactID)
+		a, b := ct.issueByID(issueA), ct.issueByID(issueB)
+		questionA, questionB := a.questionByRef(questionRefA), b.questionByRef(questionRefB)
+		if a.Work.ActiveTaskID != runA.RunID || questionA == nil || questionA.PiCall == nil || *questionA.PiCall != callA || questionA.DeliveryState != "" || app.piQuestionWaiters[callA.OperationID] == nil || questionB == nil || questionB.PiCall == nil || *questionB.PiCall != callB || questionB.DeliveryState != "" || questionB.AnswerSupplementID != "" {
+			return errors.New("targeted Stop changed the other held activity or answered a question")
+		}
+		return nil
+	})
+	h.send("ACTIVITY_CHAT_QUIT")
+	h.waitSignal(activity.quitStart, "unfinished conversation before crash")
+	h.wait(func() bool {
+		ct := app.contactByID(h.contactID)
+		return ct != nil && ct.PiBinding != nil && ct.ActiveTaskID != "" && ct.SendState == sendAccepted
+	})
+	var chatBinding *piConversationBinding
+	var chatRun string
+	var pending *pendingSend
+	h.onUI(func() error {
+		ct := app.contactByID(h.contactID)
+		chatBinding, chatRun, pending = clonePiConversationBinding(ct.PiBinding), ct.ActiveTaskID, clonePendingSend(ct.pendingSend)
+		if chatBinding == nil || pending == nil || pending.State != "unknown" || pending.Draft != "ACTIVITY_CHAT_QUIT" || chatRun == "" || chatBinding.Context.ContextID == runA.ContextID || chatBinding.Context.ContextID == runB.ContextID || app.connectionReloadBlocked() == "" {
+			return errors.New("active conversation did not retain a distinct owner or block Apply")
+		}
+		return nil
+	})
+	h.screenshot("crash-before-owned-worker-loss")
+	bodies, _ := provider.snapshot()
+	if len(bodies) != 3 {
+		t.Fatalf("expected three admitted controlled requests before crash, got %d", len(bodies))
+	}
+	h.killed = original
+	killCtx, killCancel := context.WithTimeout(context.Background(), 15*time.Second)
+	killed, killErr := original.client.Kill(killCtx)
+	killCancel()
+	piAppRecord(t, "crash-injection", map[string]any{"kind": "owned-client-kill", "outcome": killed, "error": fmt.Sprint(killErr)})
+	if killed.PID <= 0 || !killed.Reaped || killed.ExitCode == 0 || killErr == nil || !h.observeKilled(original) {
+		t.Fatalf("owned crash injection did not yield a correlated abnormal exit: %+v %v", killed, killErr)
+	}
+	h.wait(func() bool { return len(app.piQuestionWaiters) == 0 && app.submissionInFlight == 0 })
+	verifyUnknown := func(current *appModel) error {
+		ct := current.contactByID(h.contactID)
+		if ct == nil || ct.PiBinding == nil || !reflect.DeepEqual(ct.PiBinding, chatBinding) || !reflect.DeepEqual(ct.pendingSend, pending) || ct.SendState != sendUnknown || ct.ActiveTaskID != "" {
+			return errors.New("crash lost the captured unknown conversation or its source")
+		}
+		a, b := ct.issueByID(issueA), ct.issueByID(issueB)
+		if a == nil || b == nil || !reflect.DeepEqual(a.PiBinding, bindingA) || !reflect.DeepEqual(b.PiBinding, bindingB) {
+			return errors.New("crash changed the captured activity bindings")
+		}
+		executionA, executionB := latestIssueExecution(a), latestIssueExecution(b)
+		questionA, questionB := a.questionByRef(questionRefA), b.questionByRef(questionRefB)
+		operationA, operationB := current.issueToolLedger.operationByID(callA.OperationID), current.issueToolLedger.operationByID(callB.OperationID)
+		if executionA == nil || executionA.Status != issueExecutionUnknown || executionA.PiRun == nil || !reflect.DeepEqual(*executionA.PiRun, runA) || executionB == nil || executionB.Status != issueExecutionInterrupted || executionB.PiRun == nil || executionB.PiRun.RunID != runB.RunID || questionA == nil || questionA.PiCall == nil || *questionA.PiCall != callA || questionA.State != issueQuestionOpen || questionA.DeliveryState != "" || questionA.AnswerSupplementID != "" || questionB == nil || questionB.PiCall == nil || *questionB.PiCall != callB || questionB.State != issueQuestionOpen || questionB.DeliveryState != "" || questionB.AnswerSupplementID != "" || operationA == nil || operationA.PiCall == nil || *operationA.PiCall != callA || operationB == nil || operationB.PiCall == nil || *operationB.PiCall != callB || len(current.piQuestionWaiters) != 0 {
+			return errors.New("crash lost an unknown activity, its unanswered call, or the independently stopped activity")
+		}
+		return nil
+	}
+	h.onUI(func() error {
+		if app.pi != original || app.runtimeStatus != runtimeStateExited || app.runtimeBuiltinToolsLoaded || app.localSaveErr != "" || app.connectionReloadBlocked() != "" {
+			return errors.New("observed dead host did not expose explicit Apply recovery")
+		}
+		return verifyUnknown(app)
+	})
+	h.screenshot("crash-after-owned-worker-loss")
+	storePath := app.store.path
+	stored, err := openContactStore(storePath, project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var storedContact *storedContact
+	for i := range stored.state.Contacts {
+		if stored.state.Contacts[i].ID == h.contactID {
+			storedContact = &stored.state.Contacts[i]
+		}
+	}
+	var storedA, storedB *productIssue
+	for _, ct := range contactsFromStore(stored) {
+		if ct.ID == h.contactID {
+			storedA, storedB = ct.issueByID(issueA), ct.issueByID(issueB)
+		}
+	}
+	if storedContact == nil || !reflect.DeepEqual(storedContact.PiBinding, chatBinding) || storedContact.PendingSend == nil || storedContact.PendingSend.State != "unknown" || storedContact.PendingSend.Draft != pending.Draft || !reflect.DeepEqual(storedContact.PendingSend.Context, pending.Context) || storedA == nil || storedB == nil || !reflect.DeepEqual(storedA.PiBinding, bindingA) || !reflect.DeepEqual(storedB.PiBinding, bindingB) || latestIssueExecution(storedA) == nil || latestIssueExecution(storedA).Status != issueExecutionUnknown || latestIssueExecution(storedB) == nil || latestIssueExecution(storedB).Status != issueExecutionInterrupted || storedA.questionByRef(questionRefA) == nil || storedA.questionByRef(questionRefA).PiCall == nil || *storedA.questionByRef(questionRefA).PiCall != callA || storedA.questionByRef(questionRefA).DeliveryState != "" || stored.issueToolLedger == nil || stored.issueToolLedger.operationByID(callA.OperationID) == nil {
+		t.Fatal("reopened actual store lost crash ownership or unknown delivery")
+	}
+	storedOperationA := stored.issueToolLedger.operationByID(callA.OperationID)
+	storedOperationB := stored.issueToolLedger.operationByID(callB.OperationID)
+	storedQuestionB := storedB.questionByRef(questionRefB)
+	if !reflect.DeepEqual(storedContact.PendingSend, pending) || latestIssueExecution(storedA).PiRun == nil || !reflect.DeepEqual(*latestIssueExecution(storedA).PiRun, runA) || storedQuestionB == nil || storedQuestionB.PiCall == nil || *storedQuestionB.PiCall != callB || storedQuestionB.State != issueQuestionOpen || storedQuestionB.DeliveryState != "" || storedOperationA == nil || storedOperationA.PiCall == nil || *storedOperationA.PiCall != callA || storedOperationB == nil || storedOperationB.PiCall == nil || *storedOperationB.PiCall != callB {
+		t.Fatal("reopened store changed a captured pending send or question operation")
+	}
+	if storedOperationA.Receipt == nil || storedOperationA.Receipt.QuestionRef != questionRefA || storedOperationB.Receipt == nil || storedOperationB.Receipt.QuestionRef != questionRefB {
+		t.Fatal("reopened store lost the captured question receipts")
+	}
+	piAppRecord(t, "crash-durable-unknown", map[string]any{"contact_id": h.contactID, "chat_run": chatRun, "chat_binding": chatBinding, "pending": storedContact.PendingSend, "activity_run": runA, "activity_call": callA, "stopped_run": runB, "stopped_call": callB, "requests": len(bodies)})
+	h.onUI(func() error {
+		h.tester.Key(ui.Cmd, ui.KeyComma)
+		h.tester.Frame()
+		if !app.settingsOpen {
+			return errors.New("GUI shortcut did not open settings")
+		}
+		return nil
+	})
+	h.activate(msgs.SettingsConnection())
+	h.onUI(func() error {
+		h.tester.Frame()
+		if app.settingsTab != settingsTabConnection || app.connectionForm == nil || app.connectionForm.ReloadBlocked != "" {
+			return errors.New("GUI did not expose Apply for the observed dead host")
+		}
+		return nil
+	})
+	h.activate(msgs.ConnectionApplySaved())
+	h.wait(func() bool { return !app.connectionApplying && app.pi != nil && app.pi != original })
+	var replacement *piAppHost
+	h.onUI(func() error {
+		replacement = app.pi
+		if replacement == nil || replacement.client == nil || replacement.client == original.client || app.runtimeStatus != runtimeStateReady || app.connectionForm.Error != "" {
+			return errors.New("GUI Apply did not replace the observed dead host")
+		}
+		if err := verifyUnknown(app); err != nil {
+			return err
+		}
+		replacement.mu.Lock()
+		bridges := len(replacement.bridges)
+		replacement.mu.Unlock()
+		if bridges != 0 {
+			return errors.New("GUI Apply recreated a previous run or bridge")
+		}
+		return nil
+	})
+	first.hosts = append(first.hosts, replacement)
+	readyCtx, readyCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	replacementReady, readyErr := replacement.client.Ready(readyCtx)
+	readyCancel()
+	if readyErr != nil || replacementReady.WorkerEpoch == "" || replacementReady.WorkerEpoch == ready.WorkerEpoch {
+		t.Fatalf("replacement worker epoch: %+v %v", replacementReady, readyErr)
+	}
+	bodies, _ = provider.snapshot()
+	if len(bodies) != 3 {
+		t.Fatalf("Apply replayed a controlled request: %d", len(bodies))
+	}
+	h.screenshot("crash-replacement-settings")
+	h.click("← Back to workbench")
+	var detailOpen bool
+	h.onUI(func() error {
+		ct := app.contactByID(h.contactID)
+		detailOpen = ct.issueView.DetailID != "" || ct.issueView.ShowConversationWork
+		return nil
+	})
+	if detailOpen {
+		h.backToIssues()
+	}
+	h.selectIssue("ACTIVITY_A", issueA)
+	var activityGeneration int
+	h.onUI(func() error {
+		activityGeneration = app.contactByID(h.contactID).issueByID(issueA).Work.historyGen
+		return nil
+	})
+	h.activateActivity(msgs.IssueReloadTask(), func() error {
+		ct := app.selectedContact()
+		if ct == nil || ct.ID != h.contactID || ct.issueView.DetailID != issueA || ct.issueByID(issueA).Work.historyGen != activityGeneration+1 {
+			return errors.New("GUI did not inspect the captured old-epoch activity")
+		}
+		return nil
+	})
+	h.wait(func() bool { return app.contactHistoryInFlight == 0 })
+	h.onUI(func() error {
+		issue := app.contactByID(h.contactID).issueByID(issueA)
+		if issue.Work.LoadErr != "Pi activity progress is unavailable." || latestIssueExecution(issue).Status != issueExecutionUnknown {
+			return errors.New("old-epoch activity was remapped or its unavailable progress was hidden")
+		}
+		return verifyUnknown(app)
+	})
+	h.screenshot("crash-old-activity-unavailable")
+	var historyGeneration int
+	h.onUI(func() error {
+		historyGeneration = app.contactByID(h.contactID).historyGen
+		return nil
+	})
+	h.activate(msgs.ReloadAction())
+	h.wait(func() bool {
+		ct := app.contactByID(h.contactID)
+		return ct != nil && ct.historyGen > historyGeneration && app.contactHistoryInFlight == 0
+	})
+	h.onUI(func() error {
+		ct := app.contactByID(h.contactID)
+		if ct.LoadErr != "" || !ct.Loaded {
+			return errors.New("captured conversation history did not reload")
+		}
+		if err := verifyUnknown(app); err != nil {
+			return err
+		}
+		piAppRecord(t, "crash-history-reload", map[string]any{"send_error": ct.SendError, "pending_state": ct.pendingSend.State, "send_unknown": ct.SendState == sendUnknown, "history_loaded": ct.Loaded})
+		return nil
+	})
+	configCtx, configCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	configuration, configErr := replacement.client.ContextConfiguration(configCtx, chatBinding.Context.ContextID)
+	configCancel()
+	if configErr != nil || configuration.ContextID != chatBinding.Context.ContextID || configuration.BaseURL != chatBinding.Configuration.BaseURL || configuration.WireAPI != chatBinding.Configuration.WireAPI || configuration.Model != chatBinding.Configuration.Model || configuration.CredentialSource != chatBinding.Configuration.CredentialSource || configuration.ContextTokens != chatBinding.Configuration.ContextTokens || configuration.OutputTokens != chatBinding.Configuration.OutputTokens {
+		t.Fatalf("reopened conversation changed its captured configuration: %+v %v", configuration, configErr)
+	}
+	bodies, _ = provider.snapshot()
+	if len(bodies) != 3 {
+		t.Fatalf("history recovery replayed a model request: %d", len(bodies))
+	}
+	piAppRecord(t, "crash-replacement", map[string]any{"old_epoch": ready.WorkerEpoch, "new_epoch": replacementReady.WorkerEpoch, "conversation": chatBinding.Context, "configuration": configuration, "unknown_send": true, "old_activity_unavailable": true, "requests": len(bodies)})
+	if err := h.shutdown(); err != nil {
+		t.Fatalf("replacement app did not drain normally: %v", err)
+	}
+	app, err = newRuntimeApp()
+	if err != nil {
+		t.Fatal(err)
+	}
+	first.app, first.pump, first.closed = app, newUIPump(t, app), false
+	first.tester = ui.NewTester(app.view, 1040, 720)
+	first.tester.SetLocale("en")
+	first.tester.SetFocused(true)
+	h.onUI(func() error {
+		if err := verifyUnknown(app); err != nil {
+			return err
+		}
+		app.startPiHost()
+		return nil
+	})
+	h.wait(func() bool {
+		return !app.connectionApplying && app.runtimeStatus == runtimeStateReady && app.contactHistoryInFlight == 0
+	})
+	var restarted *piAppHost
+	h.onUI(func() error {
+		restarted = app.pi
+		if restarted == nil || restarted.client == nil || restarted.client == original.client || restarted.client == replacement.client {
+			return errors.New("normal app startup did not own a fresh worker")
+		}
+		if err := verifyUnknown(app); err != nil {
+			return err
+		}
+		restarted.mu.Lock()
+		bridges := len(restarted.bridges)
+		restarted.mu.Unlock()
+		if bridges != 0 {
+			return errors.New("normal app startup replayed a previous bridge")
+		}
+		return nil
+	})
+	first.hosts = append(first.hosts, restarted)
+	readyCtx, readyCancel = context.WithTimeout(context.Background(), 10*time.Second)
+	restartedReady, readyErr := restarted.client.Ready(readyCtx)
+	readyCancel()
+	if readyErr != nil || restartedReady.WorkerEpoch == "" || restartedReady.WorkerEpoch == ready.WorkerEpoch || restartedReady.WorkerEpoch == replacementReady.WorkerEpoch {
+		t.Fatalf("normal restart worker epoch: %+v %v", restartedReady, readyErr)
+	}
+	bodies, _ = provider.snapshot()
+	if len(first.hosts) != 3 || len(first.probes) != 0 || len(bodies) != 3 {
+		t.Fatalf("crash recovery worker/request budget changed: workers=%d probes=%d requests=%d", len(first.hosts), len(first.probes), len(bodies))
+	}
+	piAppRecord(t, "crash-restart", map[string]any{"workers": len(first.hosts), "worker_limit": 3, "requests": len(bodies), "request_limit": 12, "old_epoch": ready.WorkerEpoch, "replacement_epoch": replacementReady.WorkerEpoch, "restart_epoch": restartedReady.WorkerEpoch, "unknown_send_preserved": true, "activity_call": callA})
+	if err := h.shutdown(); err != nil {
+		t.Fatalf("restarted app did not drain normally: %v", err)
+	}
+}

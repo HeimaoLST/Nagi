@@ -290,9 +290,9 @@
 
 ## Keep machine codes out of capability notices
 
-**Problem:** A coordination brief used unsupported_stage ambiguously, and six user-visible notices included that literal machine-style prefix. A copy-only edit briefly added stray suffix characters before static parsing caught them.
-**Cause or correction:** Capability holds require plain explanatory copy; internal error codes belong only to machine contracts. The final six prefix deletions were verified by exact inverse hashes.
-**Prevention:** Specify displayed text separately from protocol codes, parse edits and verify their exact delta before freezing. Preserve the actual capability guard and reuse existing product controls.
+**Problem:** A coordination brief used unsupported_stage ambiguously, and six user-visible notices included that literal machine-style prefix. A copy-only edit briefly added stray suffix characters before static parsing caught them. Later activity originals still exposed engineering-stage and engine-history wording in ordinary notices.
+**Cause or correction:** Capability holds require plain explanatory copy; internal codes belong in machine contracts and technical details in explicit diagnostics. Removing a prefix alone did not address the related ordinary profile, task and history messages.
+**Prevention:** Trace each producer to its actual presentation and apply the approved wording rule across related ordinary notices, including projection warnings; a helper named addDetail is not necessarily folded. Preserve diagnostic contracts, capability guards, saved/delivered distinctions and callbacks. Verify exact inverse substitutions and qualify English-only work separately from localization and visual acceptance.
 
 ## Retire obsolete panels instead of porting their tests
 
@@ -321,8 +321,8 @@
 ## Reuse current ownership and canonical admission reasons
 
 **Problem:** Pi conversation callers retained Saki-client checks in composer Reload while the Pi Send path replaced canonical rejection reasons with one generic message.
-**Cause or correction:** Readiness, owned history reload and send admission have different conditions. Existing runtimeAvailableForView, canSend and sendBlockRaw already own related decisions; the new path did not consistently use them. These are source findings, not executed failures.
-**Prevention:** Keep one live-host readiness decision and revalidate the captured Pi conversation at history dispatch/completion. Reuse canonical admission reasons for owned contacts. Recheck durable cancellation before an activity crosses its first run-attempt boundary; a canceled preparation must not start work merely to cancel it after admission. Keep actually attempted or uncertain commands distinct from known non-dispatch. Preserve drafts and unknown delivery; never infer Pi ownership from an opaque legacy session reference or let history refresh replay Send.
+**Cause or correction:** Readiness, owned history reload and send admission have different conditions. Existing runtimeAvailableForView, canSend and sendBlockRaw already own related decisions; the new path did not consistently use them. Later exit copy incorrectly implied that history reload would permit sending, while the Pi path preserves sendUnknown. These are source findings, not executed failures.
+**Prevention:** Keep one live-host readiness decision and revalidate the captured Pi conversation at history dispatch/completion. Reuse canonical admission reasons for owned contacts. Recheck durable cancellation before an activity crosses its first run-attempt boundary; a canceled preparation must not start work merely to cancel it after admission. Keep actually attempted or uncertain commands distinct from known non-dispatch. Preserve drafts and unknown delivery; never infer Pi ownership from an opaque legacy session reference or let history refresh replay Send. Describe history readback without promising that it resolves an unknown send or selecting a new recovery policy.
 
 ## Restore materials when admitted-run persistence fails
 
@@ -353,3 +353,9 @@
 **Problem:** A passing activity E2E emitted named answer/save/check scenes whose relevant controls were outside the captured viewport. The Check click returned an outside-window error, so unchanged state did not prove the disabled action or rejection path.
 **Cause or correction:** Stage names and functional state receipts do not establish what the pixels show or whether a control received input. The original images remain valid evidence of their actual scroll positions.
 **Prevention:** Inspect each original and qualify hidden controls explicitly. Capture the relevant visible control before claiming its visual or interaction coverage, and distinguish failure to hit a control from a successful no-effect activation. Do not promote a root PASS, filename or image count into whole-app visual acceptance.
+
+## Allow explicit host recovery without replaying unknown work
+
+**Problem:** Source review found that worker exit marks admitted activity records unknown, while the Apply predicate rejects every unresolved execution and therefore blocks the documented dead-host replacement path.
+**Cause or correction:** Replacing a fully observed exited host is a connection operation, not permission to resend unknown work. Live admission and preserved uncertainty need distinct eligibility checks; this finding is source-only until the controlled crash scenario runs.
+**Prevention:** Permit explicit recovery only for the current owned host after actual reaping, callback completion and applied exit state, while retaining live/pending work, store and legacy guards. Keep unknown records and captured sources unchanged, and verify Apply/reopen produces no model request or automatic replay. Record deliberate abnormal test exits separately from normal drain.
