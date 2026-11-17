@@ -28,7 +28,7 @@
 
 **Problem:** Existing Nagi records contain opaque Saki session/execution references that Pi cannot be assumed to understand.
 **Cause or correction:** Product records and engine transcripts have different owners. No destructive conversion, journal parsing, silent history loss or uncertain-effect replay is authorized.
-**Prevention:** Inventory legacy fields and live capabilities before deleting adapters. Preserve IDs/drafts/requirements/receipts and opaque references; expose unsupported history and require an explicit caller-visible mapping decision.
+**Prevention:** Inventory legacy fields and live capabilities before deleting adapters. Preserve IDs/drafts/requirements/receipts and opaque references; expose unsupported history and require an explicit caller-visible mapping decision. The pending legacy-history choice holds legacy-data activation and reader deletion, not unrelated product wiring or isolated fresh-data E2E.
 
 ## Distinguish rendered duplication from duplicate business state
 
@@ -83,6 +83,42 @@
 **Problem:** A coordination message copied a displayed redaction token as its sender identity. A subsequent check guessed a role value and stopped before sending because the actual metadata differed.
 **Cause or correction:** Display substitutions are not routable identities, and role values must come from the current owner metadata rather than a naming assumption.
 **Prevention:** Read the current HC identity, project, role, task and state before dispatch. Never copy a displayed redaction token into a message or command; use the verified owner description and current address when the identity cannot be displayed literally.
+
+## Prefer MyGo components and examples
+
+**Problem:** UI work lacked an explicit requirement to begin with the component library and examples rather than custom rendering.
+**Cause or correction:** The user requires reuse of MyGo components and matching examples; handwritten UI is justified only when necessary.
+**Prevention:** Inspect the pinned component API, official examples and existing shared product path before implementation. Record the concrete unsupported behavior and keep any necessary custom code narrow.
+
+## Verify the active model after switching
+
+**Problem:** A cleanup brief and HC labels claimed Flash while the UI owner observed Sol in the actual OMP session and correctly stopped before editing.
+**Cause or correction:** Unconfirmed why the runtime selection changed. Launch arguments and descriptive labels do not establish the current model after an interactive switch.
+**Prevention:** Verify the live model footer or current session metadata immediately before model-specific work. Keep mismatch and correction receipts; do not relabel an unexecuted task as a Flash result.
+
+## Use concise product and branch names
+
+**Problem:** Worktree and branch names repeated the product, runtime implementation, date and task prefixes. The first proposed replacements still named the product workspace after Pi or the runtime role.
+**Cause or correction:** Nagi is one product. The user selected main for stable releases, dev for development and integration for integration testing; runtime identity is not a workspace naming requirement.
+**Prevention:** Use the product checkout and short conventional branch names. Name necessary temporary worktrees for their actual task and remove them when that task ends.
+
+## Complete the worktree lifecycle
+
+**Problem:** Completed tasks left historical worktrees and local branches behind. A proposed fixed two-worktree limit also misread the user's intent.
+**Cause or correction:** Worktrees isolate conflicting features, fixes and validation; their number follows actual needs. Testing must use a committed frozen candidate. The user requested direct deletion of confirmed obsolete resources without new archives.
+**Prevention:** Assign every temporary worktree an owner, purpose and completion condition. Stop writes before validation, collect the result, then remove completed worktrees and temporary branches after checking live path dependencies. Preserve product data and original acceptance evidence.
+
+## Show requested team sessions in the product Space
+
+**Problem:** The rebuilt OMP team initially ran only as background HC children and was not visible in the user's Space.
+**Cause or correction:** Starting an HC terminal does not give it a visible Herdr tab. The user expects team members to be visible alongside the lead.
+**Prevention:** Inspect the current Space, create or attach named team tabs there, and verify the actual visible layout. Put each role, model and thinking level in its tab name.
+
+## Reserve Astra for difficult work
+
+**Problem:** Astra was assigned routine onboarding and quality inventory work despite being the user's most expensive model.
+**Cause or correction:** The user reserves Astra for the most challenging tasks or problems that other models repeatedly fail to solve.
+**Prevention:** Use the shared DeepSeek Flash model for bounded mechanical operations, Sol for routine work and Terra for demanding implementation. UI remains a peer Sol implementation role; use the separate user-created Flash operator for shared quick work. Keep the visible role/model labels accurate. Escalate a concrete difficult problem to Astra with the existing failure evidence rather than staffing routine tasks with it.
 
 ## Verify exact SDK types before implementing an adapter
 
@@ -184,7 +220,7 @@
 
 **Problem:** The first Pi Draft's GUI lane stopped at formatting in the native-control integration file, before vet, tests or build ran.
 **Cause or correction:** A successful tagged compilation and whitespace diff check did not establish canonical Go formatting. The correction changed only whitespace and the harness's bound source hash.
-**Prevention:** Run the pinned gofmt listing over the actual committed tree, including tagged integration files, before pushing. Preserve the original CI failure and do not count unexecuted later steps as passed or expected missing-product results.
+**Prevention:** Run the pinned gofmt listing over the actual committed tree, including tagged integration files and files whose last declaration was removed, before pushing. A last-function deletion can leave an extra EOF blank line even when retained declaration bytes are exact. Preserve original failures and do not count unexecuted later steps as passed.
 
 ## Keep window-binding failures separate from control observations
 
