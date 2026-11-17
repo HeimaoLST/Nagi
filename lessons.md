@@ -75,8 +75,8 @@
 ## Decode maintenance metadata as data
 
 **Problem:** A cleanup classifier embedded JSON booleans directly in Python source and failed with NameError before any deletion.
-**Cause or correction:** JSON true/false are not Python literals; serializing data did not make it executable Python. HC also rejects program names over32characters before launch.
-**Prevention:** Read metadata with json.loads or a data file and validate HC name constraints before launch. Produce the bounded inventory before mutations and preserve actual failures. Follow the current explicit resource scope: the user now requests direct deletion of confirmed obsolete worktrees and branches without new archives; preserve reserved data, live resources and original evidence.
+**Cause or correction:** JSON true/false are not Python literals; serializing data did not make it executable Python. HC also rejects program names over32characters before launch. A later CI collector received empty logs because gh rejected terminal escape sequences; retrieving the same immutable jobs with its explicit raw-output option succeeded without a CI retry.
+**Prevention:** Read metadata with json.loads or a data file and validate HC name constraints before launch. Collect escape-bearing CI logs directly into evidence files with the CLI's explicit raw-output option; keep the original collection error separate from CI outcomes. Produce the bounded inventory before mutations and preserve actual failures. Follow the current explicit resource scope: the user now requests direct deletion of confirmed obsolete worktrees and branches without new archives; preserve reserved data, live resources and original evidence.
 
 ## Verify owner identity from actual metadata
 
