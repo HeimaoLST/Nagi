@@ -1074,11 +1074,11 @@ func (a *appModel) composerModelSummary(c *ui.Context, t *ui.Theme, ct *contact)
 			MaxLines(1).Shrink(0).TextColor(t.TextMuted)
 		ui.Row(c).Grow(1).MinWidth(0).AlignItems(ui.Center).Gap(0).Children(func() {
 			if head != "" {
-				ui.Text(c, head).FontSize(typeAction).FontWeight(500).
+				ui.Text(c, head).FontSize(typeAction).FontWeight(400).
 					Grow(1).Shrink(1).MinWidth(0).MaxLines(1).Ellipsis("…").TextColor(t.Text)
 			}
 			if tail != "" {
-				ui.Text(c, tail).FontSize(typeAction).FontWeight(500).
+				ui.Text(c, tail).FontSize(typeAction).FontWeight(400).
 					MaxLines(1).Shrink(0).TextColor(t.Text)
 			}
 		})
@@ -1385,7 +1385,7 @@ func (a *appModel) historyDetail(c *ui.Context, t *ui.Theme, narrow bool) {
 							match := match
 							key := historyOriginKey(historyOriginSaved, match.SessionID, match.EntryID)
 							ui.Column(c).FillWidth().MinWidth(0).Padding(8).Radius(8).Background(t.SurfaceHover).Gap(4).Children(func() {
-								ui.Text(c, msgs.SavedContextMatch(match.Date, match.SessionID)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Success)
+								ui.Text(c, msgs.SavedContextMatch(match.Date, match.SessionID)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 								ui.Text(c, match.Preview).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text)
 								button := secondaryButton(c, msgs.ViewFullMessage()).OnClick(func() { a.openContactHistoryMatch(match) })
 								if a.focusHistoryFullID == key {
@@ -1410,7 +1410,7 @@ func (a *appModel) historyDetail(c *ui.Context, t *ui.Theme, narrow bool) {
 				for _, e := range matches {
 					e := e
 					ui.Column(c).FillWidth().MinWidth(0).Padding(8).Radius(8).Background(t.SurfaceHover).Gap(4).Children(func() {
-						ui.Text(c, e.Date+". "+speakerLabel(msgs, ct, e)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Success)
+						ui.Text(c, e.Date+". "+speakerLabel(msgs, ct, e)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 						if len([]rune(e.Text)) <= 180 {
 							if e.From == "me" {
 								markdownReader(c, e.Text, markdownReaderOptions{PlainText: true, CopyLabel: msgs.CopyHistoryMessageLabel(), Theme: messageMarkdownTheme}).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text)
@@ -1462,7 +1462,7 @@ func (a *appModel) sourcesPanel(c *ui.Context, t *ui.Theme) {
 	for _, e := range entries {
 		e := e
 		ui.Column(c).FillWidth().MinWidth(0).Padding(8).Radius(8).Background(t.SurfaceHover).Gap(4).Children(func() {
-			ui.Text(c, e.Date+". "+speakerLabel(msgs, ct, e)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Success)
+			ui.Text(c, e.Date+". "+speakerLabel(msgs, ct, e)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 			if e.From == "me" {
 				markdownReader(c, e.Text, markdownReaderOptions{PlainText: true, CopyLabel: msgs.CopySourceMessageLabel(), Theme: messageMarkdownTheme}).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text)
 			} else {
