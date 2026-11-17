@@ -4411,7 +4411,10 @@ func TestPiAppCrashRecoveryNoReplay(t *testing.T) {
 		h.tester.Type(unsentBeforeLoss)
 		h.tester.Frame()
 		active, _ := h.tester.TextInputActive()
-		if !active || !h.tester.Focused(label) || ct.Draft != unsentBeforeLoss || !reflect.DeepEqual(ct.pendingSend, pending) {
+		focused := h.tester.Focused(label)
+		draftEqual := ct.Draft == unsentBeforeLoss
+		piAppRecord(t, "crash-notice-loss-observation", map[string]any{"synthetic": false, "phase": "before-loss", "text_input_active": active, "composer_focused": focused, "draft_equal": draftEqual, "expected_draft": unsentBeforeLoss, "observed_draft": ct.Draft, "return_focus_pending": app.focusConnectionEntry, "recovery_settings_focused": h.tester.Focused(msgs.ConnectionSettingsAction())})
+		if !active || !focused || !draftEqual || !reflect.DeepEqual(ct.pendingSend, pending) {
 			return errors.New("actual composer did not retain the focused unsent draft before worker loss")
 		}
 		piAppRecord(t, "crash-notice-draft-before", map[string]any{"synthetic": false, "draft": ct.Draft, "focused": true, "text_input_active": active})
@@ -4431,23 +4434,54 @@ func TestPiAppCrashRecoveryNoReplay(t *testing.T) {
 		t.Fatalf("owned crash injection did not yield a correlated abnormal exit: %+v %v", killed, killErr)
 	}
 	h.wait(func() bool { return len(app.piQuestionWaiters) == 0 && app.submissionInFlight == 0 })
+	var lossErr error
+	var saveLossImage func()
 	h.onUI(func() error {
 		ct := app.contactByID(h.contactID)
 		label := msgs.ComposerLabel(ct.Name)
+		defer func() {
+			if lossErr == nil {
+				return
+			}
+			image := h.tester.Image()
+			saveLossImage = func() {
+				file, err := os.CreateTemp(evidence, "crash-notice-loss-failure-*.png")
+				if err != nil {
+					t.Fatalf("create loss failure image: %v", err)
+				}
+				if err := file.Close(); err != nil {
+					t.Fatalf("close loss failure image: %v", err)
+				}
+				writePreviewPNG(t, file.Name(), image)
+				t.Logf("crash notice loss failure image: %s", file.Name())
+			}
+		}()
 		h.tester.Frame()
 		active, _ := h.tester.TextInputActive()
-		if !active || !h.tester.Focused(label) || ct.Draft != unsentBeforeLoss {
-			return errors.New("worker loss changed the focused unsent composer draft")
+		focused := h.tester.Focused(label)
+		draftEqual := ct.Draft == unsentBeforeLoss
+		piAppRecord(t, "crash-notice-loss-observation", map[string]any{"synthetic": false, "phase": "after-loss-before-typing", "text_input_active": active, "composer_focused": focused, "draft_equal": draftEqual, "expected_draft": unsentBeforeLoss, "observed_draft": ct.Draft, "return_focus_pending": app.focusConnectionEntry, "recovery_settings_focused": h.tester.Focused(msgs.ConnectionSettingsAction())})
+		if !active || !focused || !draftEqual {
+			lossErr = errors.New("worker loss changed the focused unsent composer draft")
+			return nil
 		}
 		h.tester.Type(" and continued afterward")
 		h.tester.Frame()
 		active, _ = h.tester.TextInputActive()
-		if !active || !h.tester.Focused(label) || ct.Draft != unsentAfterLoss || !reflect.DeepEqual(ct.pendingSend, pending) {
-			return errors.New("notice change interrupted continued typing or changed the pending send")
+		focused = h.tester.Focused(label)
+		draftEqual = ct.Draft == unsentAfterLoss
+		piAppRecord(t, "crash-notice-loss-observation", map[string]any{"synthetic": false, "phase": "after-loss-after-typing", "text_input_active": active, "composer_focused": focused, "draft_equal": draftEqual, "expected_draft": unsentAfterLoss, "observed_draft": ct.Draft, "return_focus_pending": app.focusConnectionEntry, "recovery_settings_focused": h.tester.Focused(msgs.ConnectionSettingsAction())})
+		if !active || !focused || !draftEqual || !reflect.DeepEqual(ct.pendingSend, pending) {
+			lossErr = errors.New("notice change interrupted continued typing or changed the pending send")
+			return nil
 		}
 		piAppRecord(t, "crash-notice-draft-after", map[string]any{"synthetic": false, "draft": ct.Draft, "focused": true, "text_input_active": active})
 		return nil
 	})
+	if lossErr != nil {
+		saveLossImage()
+		t.Fatal(lossErr)
+	}
 	verifyUnknown := func(current *appModel) error {
 		ct := current.contactByID(h.contactID)
 		if ct == nil || ct.PiBinding == nil || !reflect.DeepEqual(ct.PiBinding, chatBinding) || !reflect.DeepEqual(ct.pendingSend, pending) || ct.Draft != unsentAfterLoss || ct.SendState != sendUnknown || ct.ActiveTaskID != "" {

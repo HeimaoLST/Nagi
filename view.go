@@ -1209,6 +1209,9 @@ func (a *appModel) composer(c *ui.Context, t *ui.Theme) {
 				input.Focus()
 				a.focusComposer = false
 			}
+			if a.focusConnectionEntry && c.Focused(a.composerHandle) {
+				a.focusConnectionEntry = false
+			}
 			contextCount := ct.Context.count()
 			contextLabel := msgs.TaskContextCount(contextCount)
 			sendDisabled := strings.TrimSpace(ct.Draft) == "" || ct.Status == statusWorking
