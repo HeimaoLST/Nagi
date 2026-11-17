@@ -9634,6 +9634,26 @@ func (msgs Messages) IssueSendAnswerStopping() string {
 	return Catalog.Format(msgs.locale, "issueSendAnswerStopping", nil)
 }
 
+// IssueAnswerSaved says "Answer saved. Delivery has not been confirmed."
+// in the language the app shows.
+func IssueAnswerSaved() string { return In(i18n.Locale()).IssueAnswerSaved() }
+
+// IssueAnswerSaved says "Answer saved. Delivery has not been confirmed."
+// in the language of msgs.
+func (msgs Messages) IssueAnswerSaved() string {
+	return Catalog.Format(msgs.locale, "issueAnswerSaved", nil)
+}
+
+// IssueAnswerDispatching says "Answer saved. Waiting for delivery confirmation."
+// in the language the app shows.
+func IssueAnswerDispatching() string { return In(i18n.Locale()).IssueAnswerDispatching() }
+
+// IssueAnswerDispatching says "Answer saved. Waiting for delivery confirmation."
+// in the language of msgs.
+func (msgs Messages) IssueAnswerDispatching() string {
+	return Catalog.Format(msgs.locale, "issueAnswerDispatching", nil)
+}
+
 // WorkStateRunning says "Running"
 // in the language the app shows.
 func WorkStateRunning() string { return In(i18n.Locale()).WorkStateRunning() }

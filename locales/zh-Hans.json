@@ -1019,6 +1019,8 @@
   "issueSendReloadDisconnected": "运行时已断开；请重启 Nagi 重新加载历史。",
   "issueSendUncertain": "先前的消息可能已发送；重启前交付未确认。请重新加载历史核实。不会自动重试。",
   "issueSendAnswerStopping": "等待你的回答；正在停止当前执行。",
+  "issueAnswerSaved": "回答已保存，尚未确认送达。",
+  "issueAnswerDispatching": "回答已保存，正在等待送达确认。",
   "workStateRunning": "运行中",
   "issueRunHeader": "执行 {number}：{status}",
   "issueRunRevision": "修订 {number}",

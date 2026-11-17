@@ -1462,6 +1462,8 @@
   "issueSendReloadDisconnected": "Runtime disconnected; restart Nagi to reload history.",
   "issueSendUncertain": "A previous message may have been sent; delivery was not confirmed before restart. Reload history to verify. No automatic retry.",
   "issueSendAnswerStopping": "Waiting for your answer; stopping the current run.",
+  "issueAnswerSaved": "Answer saved. Delivery has not been confirmed.",
+  "issueAnswerDispatching": "Answer saved. Waiting for delivery confirmation.",
   "workStateRunning": "Running",
   "issueRunHeader": "Run {number}: {status}",
   "issueRunRevision": "revision {number}",
