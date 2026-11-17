@@ -448,7 +448,7 @@ func TestContactManagementArchiveRestorePersistsAndBlocksActiveWork(t *testing.T
 		t.Fatal("archive did not explain the active work")
 	}
 	bound.ActiveTaskID, bound.SendState = "", sendUnknown
-	if a.archiveContact(bound.ID) || bound.Archived || a.contactArchiveBlocked(bound) != profileNoticeUnknown {
+	if a.archiveContact(bound.ID) || bound.Archived || a.contactArchiveBlocked(bound) != archiveNoticeUnknown {
 		t.Fatal("archive did not preserve the conversation with unknown delivery")
 	}
 
