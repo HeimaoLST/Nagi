@@ -6,23 +6,27 @@
 
 <a id="qoder-complete-layout-20261116"></a>
 
-## Qoder 完整页面组合（2026-11-16，当前视觉基准）
+## Qoder 基础与第一阶段修正（当前视觉契约）
 
-本节落实同日需求的“完全参考 Qoder”，优先于下文独立 Paper／Moss 配色与不完整容器映射。沿用1 CSS px→1 DIP、rem16／scale1的既有移植基准；它不表示已测得原生 zoom／字体 fallback 等价。参考 Qoder CN0.4.8／f8c98a，原生现场为 Bee／Light／Sans／Standard；颜色来自其同版 CSS，布局来自 Settings 调用及共享 frame，不能从截图像素猜逻辑尺寸。
+本节以“完全参考 Qoder”为基础，并同步用户已批准的 [UI 检查单 §9](ui-checklist.md#9-第一阶段下限修正已决定) 全部下限修正：可读性、按钮层级、字体和页面结构。其余 Qoder 控件尺寸、形状、间距与图标资源保留；§10 自有风格仍为提案，不按其实施。以下是目标契约，不代表当前源码或原生验收已完成。沿用1 CSS px→1 DIP、rem16／scale1的移植基准；不表示已测得原生 zoom／字体 fallback 等价。原始参考为 Qoder CN0.4.8／f8c98a、Bee／Light／Sans／Standard；第一阶段修正是 Nagi 的明确选择，不能倒写成 Qoder 源码事实。
 
 | 层次 | 唯一布局契约 |
 | --- | --- |
-| 应用外壳 | Qoder Bee浅色从#e6e6b6到#c4d0da的垂直渐变；对应深色#10110e。侧栏透明地置于外壳上，不继续使用 Nagi 绿色底。 |
+| 应用外壳 | 浅色垂直渐变#f2f2e2到#e6ebef；深色#10110e。侧栏透明地置于外壳上；外壳辅助文字使用secondary#636261，不使用tertiary。 |
 | Settings侧栏 | 默认248，导航区左右8；分类标题与导航内容共享8内缩；行占满导航组，12／16、glyph14、gap8、28可见面及既有32真实命中。返回区按源px12／py12组织，不叠加未经绑定的按钮外边框。 |
 | 主面板 | Settings frame的B区四周margin4，浅色白／深色#171814，border-tertiary，独立圆角；顶部frame header40。满宽、可收缩的主区不由正文长度决定。 |
 | 滚动视口 | 主面板内容区内全宽／全高，滚动条归属于该视口右边界；视口自身不设正文max-width或正文左右padding。 |
-| 正文列 | 在视口内居中，border-box max-width820、padding左右32／上8／下48，故宽窗正文净宽最大756；不是820净宽再额外加64。默认连接与高级设置分区继承同一列。 |
-| 章节与表单 | 保留已绑定section/group/row/Select/Input规则，默认连接与高级设置分区共享正文宽度；旧会话模型覆盖分区已移除。字段宽度由所属行／表单约定，不由模型名、ID、错误字符串决定。 |
-| 语义配色 | 浅色正文#141414／secondary#636261／tertiary#838280，container#fff，outline控件面#fff／hover#efefef，边界#bcbbba、章节细线#e6e6e6，Bee primary#0d0d0d。深色正文#f2f1e8／secondary#c1bfb1／tertiary#89877a，container#171814，outline控件面#171814／hover#2c2e28，边界#47483f、细线#30322d，primary#e0c65c。状态色取同一来源的error／warning／success，不另造调色板。 |
+| 正文列 | 在视口内居中，border-box max-width820、padding左右32／上8／下48，故宽窗正文净宽最大756。General、Connection、Contact profile与Advanced共用同一正文列和标题容器，四周面板margin一致；标题不再额外左右缩进16。 |
+| 章节与表单 | 四个分类统一为页面标题→章节标题→分组框→偏好行；联系人选择放在页面标题之后的第一行。偏好行以自身可用宽度决定横排／竖排，标签不加冒号，右侧控件对齐；旧会话模型覆盖分区已移除。保留真实表单、状态、草稿和动作，不以新分组增加功能或自动保存。 |
+| 语义配色 | 浅色正文#141414／secondary#636261／tertiary#838280，container#fff，章节细线#e6e6e6，primary#0d0d0d。深色正文#f2f1e8／secondary#c1bfb1／tertiary#89877a，container#171814，细线#30322d，primary#e0c65c。警告／成功／错误文字浅色分别#8a5300／#2e6b45／#b4232c，深色仍#faad14／#73cd94／#ff4d4f；原亮状态色只可用于图标、圆点。日期用中性secondary。链接浅色#2d6a4a、深色#e0c65c，均有下划线。 |
 
-主按钮同源hover／active：浅色#436651／#3a5747、文字#fdfdfd；深色#f0da78／#e8d06e、文字#171407。消息用户底面取primary-bg（浅#f2f4f2／深#2e2916）；Scrollbar组件默认thumb取fill（浅#dfdfdf／深#363830）、宽6。Composer工具栏顶部使用border-tertiary的60%虚线，作为装饰绘制，不挤压既有42行和32命中。
+按钮按任务分三级，每页一个明确主操作：主按钮浅色#0d0d0d、hover#2b2b2a／pressed#3a3a38、文字#fdfdfd；深色#e0c65c、hover#f0da78／pressed#e8d06e、文字#171407。次按钮浅色白底／border#bcbbba／hover#efefef；深色#171814／border#47483f／hover#2c2e28，文字13／500。轻操作用链接色或纯图标；破坏性操作沿用次按钮外观及错误文字色。Save and apply、Save configuration、Import theme、Choose folder、Save task和Edit full profile按所在任务分级，不继续统一使用ghost。消息用户底面仍浅#f2f4f2／深#2e2916；Scrollbar默认thumb仍浅#dfdfdf／深#363830、宽6。Composer顶部虚线不挤压既有42行和32命中。
 
-控件状态同样遵循参考：outline Input默认`border-tertiary`，focus改为`border`（浅#bcbbba／深#47483f），不叠加ring；ghost／导航按钮用参考fill反馈键盘focus，不保留Nagi独立描边环。旧Paper／Moss把所有边框／focus色与背景都要求≥3的palette断言随视觉标准撤销；正文／辅助文字、主按钮文字对比及实际键盘focus／可访问名称／不遮挡行为仍须验证，不将参考的装饰细线冒称高对比边界。
+Input静止边界浅#8f8e8b／深#76776c，focus使用2px主色环；浅色输入框hover保持白底。选中页头图标采用中性选中底面，不用方形粗描边；键盘focus与选中仍是不同状态。正文、辅助文字、按钮文字、输入边界及实际focus／可访问名称／不遮挡行为分别验证，不将装饰细线冒称控件边界。
+
+字体目标：Settings页面标题20／600／28；联系人页头名称13／500／正文色，状态和角色分开使用12／400／secondary；活动摘要、模型名与元数据400。其他正文和Markdown角色保持下面已绑定的数值。
+
+完整页面还须落实：右侧及整页详情沿用主面板卡片外框与内边距，New task不贴边，三个详情均用右上角X关闭；头像使用首字母及按名称稳定分配的底色；设置／断连提示只保留一处且不挤开固定页头；侧栏与历史摘要显示Markdown的纯文本投影；普通资料不展示内部会话路径；窄栏顶部只保留实际系统安全区；导航图标按功能区分、空态使用完整文案。保留原文复制、业务归属、状态与动作。对应检查项见检查单§4与§9，不以截图数量或源码检查代替实际观感。
 
 来源绑定：`DIR8HOYO.js` SHA52b8425f 的Settings调用为frame的sidebar/default248、B区margin4／border、full-height Scroll与`mx-auto w-full max-w-[820px] px-8 pb-12 pt-2`；导航`w-full justify-start`。`CMOdY8kL.js` SHAd2f7c51f 的frame为A／B独立区域、header40与满宽content flex-1。`index-DohubooF.css` SHAfc66ec5c 的Bee light／dark声明和语义utility解析出上述颜色，完整静态包仍在本机只读参考；工程资料不作为第二份规范。
 
@@ -34,11 +38,11 @@
 
 <a id="qoder-match-design-20261113"></a>
 
-## Qoder 严格视觉契约（本日最新方向，2026-11-13）
+## Qoder 角色映射（参考来源与当前采用值）
 
 <a id="qd-01"></a>
 
-**QD-01：一套现有共享路径。** 按[需求](../requirements/desktop.md#qoder-match-20261113)统一所有目标页面，Nagi 身份和 Paper／Moss 颜色之外，已声明的同类间距、字形、字重、控件与图标不得各页自定。此节显式替代旧四档字号、旧密度／宽度、无 chevron 和 32px 可见面限制；既有文案、作用域、原文内容和控制器不变。规范只在这两个 topic docs；外部 JSON 是本节证据／机器映射，不能成为第二个设计系统。Qoder 新任务首页的插画、积分、模式、权限、语音和品牌不成为 Nagi 新功能。
+**QD-01：一套现有共享路径。** 按[当前需求](../requirements/desktop.md#qoder-complete-ui-20261116)统一目标页面，采用顶部Qoder基础与第一阶段修正；下列D保留原始声明事实，P表示当前采用值。不要把已修正的旧声明继续当成实现要求，也不把Nagi选择写成Qoder事实。外部JSON只作证据／机器映射；不另建第二个设计系统。Qoder首页插画、积分、模式、权限、语音和品牌不成为Nagi新功能。
 
 **证据基线**：实际安装 `com.qodercn.app` 0.4.8，静态完整 commit `f8c98a817f6059ab9a959f501e9a483805170942`／ASAR `c76906bf…`；原生报告 `qoder-native-r2/report.json`、本次 `product/stage-a/` 与 `stage-a2/`。静态当前权威为 `engineering-r2/metrics.json b28b6b98`、evidence `fa2ef2e4`、correction `a4f9e77e`、manifest `112fa259`，继承其逐哈希绑定的许可／字体／MyGo 证据。旧 `f131cfa0/9409ac96` 保留历史，不能再引用错误的泛用 iconbutton.md 分类。以下 D＝源码声明，P＝Nagi 明确选择的声明基准／角色适配；都不冒称原生有效值。本节后续角色绑定同时采用冻结 `s2-calibration/preparation.json 15366feb`／manifest `4b1796dc`（evidence `e6ffdeba`、upstream `086164ac`）与 `implementation-s1/selector-width-evidence.json b2d8661d`；它们补齐指定角色，不覆盖 corrected b28b 的其余分类。
 
@@ -59,7 +63,7 @@
 | code | ui-monospace／SFMono-Regular／SF Mono／Consolas／Liberation Mono／Menlo／monospace | 原代码内容与行结构保留，不把等宽字体用于普通标签 |
 | new-chat greeting | Instrument Sans → system-ui，仅此对应角色已证实 | 不新增 Qoder 首页／greeting；Nagi 既有联系人空态仍用对应普通 UI／conversation 角色。若以后明确实例化此 greeting，另绑定字体与 OFL／注册路径，不从 WOFF 猜原生等价 |
 
-**已绑定的标题分支（D→同一 R16／scale1 的 P）。** General 的实际 `$n` H1 是 **20／500／32**，无 description 的 header 高32、水平 padding16（`general.header.component`／`general.actual.call`）；不是 Markdown H1，也不是另一个通用 page20／600／28。Connection 等同类 Nagi Settings 页映射此页面标题角色（P），不声称 Qoder 有相同连接页。
+**标题来源与当前选择。** General的原始`$n` H1声明是20／500／32、水平padding16（D）；用户批准的Nagi Settings目标改为20／600／28（P）。四个分类的标题统一由同一正文列容器定位，不再额外缩进16；不改Markdown H1，不声称Qoder有相同连接页。
 
 实际 chat `KL1 → MarkdownBody → createMarkdownComponents` 的 static／streaming 共用下表；证据 `markdown.presentation`、`markdown.component.headings`、`markdown.actual.chat.call`。不可混入另一套 Typeset CSS 的 H1–H6。所有数值为声明移植值，不是原生有效测量；普通正文仍14／24／system UI。
 
@@ -86,7 +90,7 @@
 | section | header h-11→44、inner h-7→28、px-4→16；content mt-2→8；标题 12／18 |
 | group | 一个章节共用 border1、circular rounded-xl→12、px-4→16；不是每项一张卡 |
 | preference row | py-3.5→上下14；底边1 dashed，末行无边；高度随说明换行，不固定截断 |
-| row composition | `<40rem`＝640 前 column/stretch；从640起 row/center；leading glyph3.5s→14 |
+| row composition | 偏好行自身可用宽度＜640时column/stretch，从640起row/center；不能使用整个窗口宽度。leading glyph14保留 |
 | General Appearance／Language selector | intrinsic w-fit，min120／max160；value span truncate，并保留完整可访问值／既有选项；不是整行或所有表单固定宽度 |
 | navigation row | h-7→28，icon/text gap2s→8，px-2→8，glyph14；必要 Nagi 二行状态按同一 label／meta 自然增高，不裁掉状态来硬塞28 |
 | menu.compact | 12／16，gap6，padding6，circular radius6，glyph14；普通读回／行菜单统一此角色 |
@@ -99,7 +103,7 @@ General 两个 selector 的声明分别绑定 `DIR8HOYO.js 52b8425f…` bytes `1
 
 | 组件／分支 | 声明与本次基准值 | 分类与约束 |
 | --- | --- | --- |
-| button.md（普通有文字动作，非 textButton 特殊分支） | h28，13／500／16，gap6；无 prefix 左右12，有 prefix 左10／右14；默认 ghost，rounded=square→squircle-2xl region16 | 只绑定 size=md、textButton=false 的 Button；显式 prefix 按该支处理，不是 FloatingButton 或 generic toolbar |
+| button.md（普通有文字动作，非 textButton 特殊分支） | h28，13／500／16，gap6；无prefix左右12，有prefix左10／右14；squircle-region16；面按顶部主／次／轻／破坏性分级 | 原始默认ghost是D，不再决定全部Nagi动作外观；尺寸与具体slot不变，不混为FloatingButton或generic toolbar |
 | input.md | h28、px12、13／16、border1、squircle-2xl region16、disabled opacity .5 | 首用／Edit／进阶路径／精确数字共用；invalid 使用原错误与语义色 |
 | textarea.md | 13／400／20、px12、py8、min-height80、squircle region16 | 对应普通多行表单；composer 正文另用14／24 |
 | select.md | min-h28、py2、13／500／16、gap6、padding-start12/end10、glyph16、squircle region16 | 外观／语言／主题／协议等枚举沿用原 SelectBase 语义，恢复真实下拉 indicator；不变成多个布尔开关 |
@@ -107,7 +111,7 @@ General 两个 selector 的声明分别绑定 `DIR8HOYO.js 52b8425f…` bytes `1
 | FloatingButton.md/default | box32、padding8、glyph16、rounded-full | 默认／非sm FloatingButton 分支，继承字体与有效命中未知；不据此把所有按钮改32 |
 | IconButton classifier | defaults secondary／md／square；md且非toolbar→face28／padding6／text16；sm→face20／padding6／text12；custom不加尺寸；inner leading-none，square→squircle-region16，字重未显式绑定 | 与 Button／FloatingButton 分离；variant=toolbar 的 md 不给上述 size／padding，不能套默认；glyph由具体slot／1em决定 |
 | chrome.back／forward | LayoutChrome ghost／md：face28／padding6／squircle16，arrow glyph14，组gap2；源panel glyph16 | WorkbenchFrame声明及Settings-frame调用已绑定；Nagi普通工作台左导航采用同一角色是P，正常app调用链仍未证实；Nagi侧栏glyph沿QD-05适配登记，不称其等于源PanelToggleIcon |
-| conversation.header／overflow | 实际local Jw：header40／gap12／pl6；普通title12／500／16，secondary；已有subtitle10／16；overflow ghost／md：face28／padding6／squircle16，1em glyph在此名义16 | Nagi对应现有对象header采用同层次（P）；Qoder pr6／为panel预留pr80两支的活动状态UNKNOWN，不凭空给Nagi添加panel或空白80 |
+| conversation.header／overflow | 原始Jw声明header40／gap12／pl6、title12／500／16和subtitle10／16（D）；Nagi名称13／500／正文色，状态与角色分开12／400／secondary（P）；overflow保留face28／padding6／squircle16 | 不凭空添加Qoder panel预留空白；选中图标用中性底面，保留真实焦点 |
 | header.panel-toggle（条件slot） | 实际Jw链的ghost／custom：face26／padding6／glyph16／squircle16；wrapper高26／gap4 | 仅映射Nagi已有同类panel action时采用；不是所有header／所有导航按钮26 |
 | response.copy／more | 实际sm＋!size24：face24／padding6／glyph16／squircle16；bar高24、gap2、px8、mt4、ml−4 | qH0／WH0实际response路径；不同于sm默认20、header28或FloatingButton。只映射已有response操作，不增任务动作 |
 | unassigned toolbar slot | 无对应call-site时不能声称存在通用Qoder toolbar尺寸／字重 | Nagi既有普通icon action若适配ghost／md28／padding6／glyph16须标P并登记slot，不称所有toolbar=28或32；不从variant=toolbar空size支或FloatingButton推导 |
@@ -169,9 +173,9 @@ normal／hover／pressed／selected 共享一套组件面、边框与 Nagi 语�
 
 | 必交页面 | 一致的视觉角色；保留 Nagi 语义 |
 | --- | --- |
-| General | page H1 20／500／32 → Settings section/group/row → label/description＋Appearance／Language intrinsic120–160 Select／显式导入／恢复action；主题警告与语言说明沿同一行层次，不加每项独立卡 |
+| Settings四分类 | 同一正文列与H1 20／600／28 → section/group/row → label/description＋现有控件；Contact选择在标题之后，Advanced仍使用同一分组结构。Appearance／Language Select保留intrinsic120–160，不加每项独立卡 |
 | Connection 首用／已存／Edit | 同一 shell、row、Input/Select/action/description；三必填输入、当前值来源、完整 errors、limits、精确 stepper、目录 chooser 与进阶入口保留原状态机 |
-| 导航／联系人／对象 header | 共用navigation row；header用QD-04 title12／500／16、已有meta10／16、overflow28及条件panel26；必需二行状态自然增高。普通workbench左导航调用等价仍是P，不把Settings Chrome证据扩成全部app导航；不添加Qoder专有panel／身份功能 |
+| 导航／联系人／对象 header | 共用navigation row；名称13／500／正文色，状态与角色分开12／400／secondary，overflow28及条件panel26；必需二行状态自然增高。普通workbench左导航调用等价仍是P，不把Settings Chrome证据扩成全部app导航；不添加Qoder专有身份功能 |
 | 对话 | normal MaxWidth768、用户内容MaxWidth752、正文14/24与QD-02实际Markdown标题；response action用24面／16glyph专属slot；wide968为未选声明。不新建宽度偏好，不改已有用户内容、消息／工作隔离与历史 |
 | composer | QD-04的唯一已选 shell／toolbar、正文14/24；现有add-context用其专属28面／20plus；模型／Send/Stop映射各自已登记图标与控件；不复制语音、授权、积分、workspace功能；必要真实错误位于附近可读 |
 | 事项／工作 | Nagi 独有生命周期映射共享 heading/label/meta/row/action/disclosure；一件对象一个有意义章节，不套多层背景。Run完成≠事项Done，unknown、待回答、补充回执与AD可见确认不变 |
@@ -182,7 +186,7 @@ normal／hover／pressed／selected 共享一套组件面、边框与 Nagi 语�
 <a id="qd-08"></a>
 ### QD-08：响应、溢出与未知
 
-基准只使用 QD-03已声明的640 row断点和约束宽度，不保留旧800横向 Settings导航阈值作为默认。Sidebar按248／min208的共同角色与已有可调整状态；内容和reader是max-width，可随可用区域收缩。720×640及1040×720、en／zh-Hans、Paper／Moss下，长路径／模型值可换行或在完整tooltip/可访问名称下收敛，必要状态／错误／保存动作不能省掉；滚动后可达且不会让焦点跑到不可见位置。Code可有局部横向滚动，页面本身不可横向溢出。业务二行／长说明按同一组件自然长高，不新增逐页字号／补偿边距。
+偏好行按自身可用宽度使用640断点，不按窗口宽度；Sidebar按248／min208及已有调整状态，内容和reader为可收缩max-width。检查720×640、960×640、1040×720及宽窗口、en／zh-Hans、Bee浅／深色；长路径／模型值可换行或保留完整tooltip／可访问名称，必要状态／错误／保存动作不省掉。滚动后动作可达，焦点不被遮挡。Code可有局部横向滚动，页面不可横向溢出；不以缩小字号或逐页补偿边距掩盖问题。
 
 明确 UNKNOWN：实际 root／zoom／active scale／fallback、活动 chat-size／width、活动 composer分支、当前resized sidebar、普通workbench左导航的完整调用等价、未分配toolbar的具体slot／variant、其他附件／专有glyph、标题独立linebox／tracking／visual-uppercase的具体renderer实施路径、material有效合成及 squircle clip/hit 的原生等价。当前选择的 medium／normal／composer分支和CSS base为 P，**不是猜测这些当前状态**。未知只阻止相应角色的完整匹配声明，不阻止已知约束文档化／实施；未经声明的值不得由页面代码偷偷补齐或回用旧值后称已匹配。
 
@@ -211,7 +215,7 @@ PREF-AC1–6与AC7行为条件保持；保留当前WIP的同一 Draft／initial�
 
 ## Settings 偏好列表：实施映射（当前规范，2026-11-13）
 
-**本节保留 PREF 的功能切片，当前全域视觉以本日 QD-01–QD-10 为准。** 行为权威是[需求 PREF-AC1–7](../requirements/desktop.md#preferences-list-20261113)；第一片 General／Connection 与共享角色、第二片全域对齐均必须交付。旧字号／间距／无chevron／控件面高度让位于新的实际Qoder基准；语义配色与真实命中、功能边界保留。通用保持 Appearance → 可选主题／导入 → Language → 工作台数据；连接保持默认连接／表单 → 保存／应用 → 显式 Test → 当前对话。用同组行的共享边线、留白和列表选中表达层级，避免每项独立卡片及多层底面；错误／输入边界保留。对话／事项／成果去卡片化另行分配，本片不修改它们。
+**本节保留PREF功能切片，视觉采用顶部Qoder基础与第一阶段修正及QD角色表。** 行为权威仍为[需求PREF-AC1–7](../requirements/desktop.md#preferences-list-20261113)。四个Settings分类共享标题／正文／滚动／分组骨架；主题、语言、连接、资料和高级动作保留原所有权与顺序，不新增已退役的会话模型面板。章节共用边线与留白，避免每项独立卡片；保留真实输入边界、错误、命中与焦点。其他主面板／详情卡片按第一阶段统一容器实施，不把旧去卡片化措辞作为相反要求。
 
 ### 已核事实、参考与控件（PREF-v1 基线；现视觉按 QD）
 
@@ -376,12 +380,12 @@ DoD 仅针对 RP1／RP2：lead 批准同一冻结规格；绑定源身份的有�
 
 ## GUI 设计约束（当前规范）
 
-更新日期：2026-11-04。当前唯一设计规范由 #216 维护：[Desktop workbench](desktop-workbench.md)。候选实现与合入状态以 PR 和 dev 为准。本地实现的候选事实见下方 [#219 节](#detail-navigation-219)。本文件不再把旧 #90/#130 的“所有次动作有底面”“右侧覆盖抽屉”等当作当前规范，那些内容只保留为历史实现记录，避免双标准。
+本节保留#216的通用交互边界；当前视觉与页面组合以顶部[Qoder基础与第一阶段修正](#qoder-complete-layout-20261116)为准。[Desktop workbench](desktop-workbench.md)及下方[#219](#detail-navigation-219)保留历史设计／候选事实，不是另一套现行数值。候选实现与合入状态以PR和dev实际证据为准。
 
-- **规范边界**：内容优先、输入集中在 composer、低频工具可发现、长内容主区阅读、右侧非模态详情、窄窗应用内页面与明确返回，均以 #216 为准；实现只引用该规范，不在本文件另立一套数值或组件规则。
-- **组件与文案**：复用当前固定 MyGo 稳定版和现有 theme 角色；不允许为单个任务另造兼容框架。实际版本、控件 API、palette 与必要偏离以 #281/#218 的候选实现事实及 #216 规范为准；#98 保留其升级阶段记录。
+- **规范边界**：保留内容优先、composer输入、可发现低频工具、长内容主区阅读、非模态详情、窄窗应用内页面和明确返回；布局与数值采用顶部现行契约，不从历史章节恢复冲突要求。
+- **组件与文案**：先用固定MyGo组件库、匹配版本的官方示例和现有theme角色；具体API缺口才允许最小自定义部分，不为单页另造框架。历史升级记录不授予更换依赖权限。
 - **Disabled 与原因**：沿 MyGo 官方 disabled 语义和默认 opacity，不为候选 4.5 对比度加 patch，也不改禁用行为。浅色约 2.94:1、深色约 4.33:1 记录为当前适配事实，不列为本轮必过门槛；真实禁用/AX 保留，必要原因、当前有效模型和失败/容量信息必须在相邻可读文字中可见，不能只藏在不可聚焦 tooltip。
-- **历史约束**：本文早期 #90/#130 的字号、覆盖抽屉、所有次动作底面等具体数值和布局仍可作为历史证据，但不再约束当前实现。发现与 #216 冲突时，按 #216 记录偏离并更新对应实现事实。
+- **历史约束**：早期字号、覆盖抽屉和所有次动作底面的规则只作历史；当前按钮按任务分级，不是恢复旧的全局底面要求。发生视觉冲突按顶部现行契约处理，不能改写旧验收为新候选通过。
 
 ### UI 硬约束首切片（历史实现记录，2026-10-31；现行值以工作台规范为准）
 
