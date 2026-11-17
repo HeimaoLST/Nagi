@@ -371,7 +371,7 @@ func (a *appModel) settingsMain(c *ui.Context, t *ui.Theme, narrow bool) {
 	case settingsTabContact:
 		title = msgs.SettingsContact()
 	}
-	ui.Column(c).Grow(1).MinWidth(0).FillHeight().Margin(8).Background(a.workTheme.Reading).Border(1, t.Border).Radius(16).Clip().Children(func() {
+	ui.Column(c).Grow(1).MinWidth(0).MinHeight(0).AlignSelf(ui.Stretch).Margin(8).Background(a.workTheme.Reading).Border(1, t.Border).Radius(16).Clip().Children(func() {
 		ui.Row(c).FillWidth().MaxWidth(settingsContentWidth).AlignSelf(ui.Center).Height(40).Shrink(0).Padding(0, 32).AlignItems(ui.Center).DragWindow().Children(func() {
 			pageHeading(c, title)
 		})
