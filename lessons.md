@@ -194,9 +194,9 @@
 
 ## Report digests only after freezing actual bytes
 
-**Problem:** Handoffs announced placeholder digests, and readbacks assumed a compiler version or complete SDK inventory instead of reading the actual records.
+**Problem:** Handoffs announced placeholder digests, and readbacks assumed a compiler version or complete SDK inventory instead of reading the actual records. A later payload report also stored displayed redaction placeholders in digest fields.
 **Cause or correction:** These were metadata mistakes after successful builds. The prepared SDK tree covered113 matching files; the fresh package also contained3 unchanged documentation/notice files.
-**Prevention:** Freeze actual bytes, derive versions/counts from records and compare explicit file sets, reporting additional files. Label incomplete work without a digest; preserve metadata corrections without rerunning unchanged production work.
+**Prevention:** Freeze actual bytes, derive versions/counts/digests programmatically from records and compare explicit file sets, reporting additional files. Keep machine-readable digest fields exact; suppress display when necessary instead of replacing stored data with transcript placeholders. Label incomplete work without a digest and preserve metadata corrections without rerunning unchanged production work.
 
 ## Keep worker build payloads outside the checkout
 
@@ -239,3 +239,9 @@
 **Problem:** Initial symbol searches named absent guessed question files, and a later worker inspection assumed an absent src directory. An edit anchor was also rejected before mutation because the relevant range had not been read.
 **Cause or correction:** Repository symbol/path discovery located the actual files; none of these failed lookups established a product defect.
 **Prevention:** Use rg --files and symbol discovery before targeted reads or edits, then read the actual edit range. Keep lookup/setup failures separate from compilation and behavior results.
+
+## Select process tests explicitly in CI
+
+**Problem:** The GUI lane runs default root tests without pinned worker inputs, while new process E2E roots require those inputs and must fail when they are missing.
+**Cause or correction:** Test selection and runtime-input requirements are different contracts. The new product process file uses the integration build tag, selected explicitly by the Pi lane; it does not skip on missing inputs.
+**Prevention:** Review every caller when adding process tests. Keep the ordinary GUI lane independent, execute supplemental form coverage explicitly, and leave all required product roots and missing/failure rules unchanged.

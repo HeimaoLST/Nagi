@@ -107,8 +107,8 @@ jobs:
         run: |
           mkdir -p "$SAKI_PREVIEW_DIR"
           set -o pipefail
-          python3 scripts/gui-go.py test -race -timeout=20m -json -count=1 ./internal/pi . \
-            -run '^(TestPiClientProcessCodingHistoryReopen|TestPiClientProcessIndependentToolAnswerAndCancel|TestPiClientProcessCapturedContextConfiguration|TestPiClientProcessMCPToolsLifecycle|TestPiAppConnectionAndConversation|TestPiAppScopedDomainTools|TestPiAppActivitiesAndQuestions|TestPiAppCrashRecoveryNoReplay|TestPiAppLegacyDataRecovery|TestPiAppContextAndResults|TestPiPackageStandalone)$' \
+          python3 scripts/gui-go.py test -tags=integration -race -timeout=20m -json -count=1 ./internal/pi . \
+            -run '^(TestPiClientProcessCodingHistoryReopen|TestPiClientProcessIndependentToolAnswerAndCancel|TestPiClientProcessCapturedContextConfiguration|TestPiClientProcessMCPToolsLifecycle|TestPiAppConnectionAndConversation|TestPiAppScopedDomainTools|TestPiAppCapturedQuestionAnswerForm|TestPiAppActivitiesAndQuestions|TestPiAppCrashRecoveryNoReplay|TestPiAppLegacyDataRecovery|TestPiAppContextAndResults|TestPiPackageStandalone)$' \
             | tee "$RUNNER_TEMP/nagi-pi-results.jsonl"
       - name: Require actual Pi core and product scenarios
         if: always()
