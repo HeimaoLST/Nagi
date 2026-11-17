@@ -122,7 +122,7 @@ func (a *appModel) issueSupplementSection(c *ui.Context, t *ui.Theme, ct *contac
 					a.closeIssueSupplementForm()
 				})
 			})
-			formTextArea(c, draft, false).Label(inputLabel).Height(56).
+			formTextArea(c, draft, false, a.workTheme.InputBorder).Label(inputLabel).Height(56).
 				Placeholder(msgs.SupplementFormPlaceholder())
 			ui.Row(c).Gap(6).Children(func() {
 				secondaryButton(c, saveLabel).OnClick(func() {

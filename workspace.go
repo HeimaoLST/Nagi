@@ -690,13 +690,13 @@ func (a *appModel) issueFormView(c *ui.Context, t *ui.Theme) {
 			ui.Text(c, piLegacyActivityReadOnly).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Warning)
 		}
 		ui.Text(c, locales.In(c.Locale()).IssueFormGoal()).FontSize(typeAction).FontWeight(500).TextColor(t.Text)
-		goal := formTextArea(c, &a.issueGoal, false).Label(locales.In(c.Locale()).IssueFormGoalLabel()).Placeholder(locales.In(c.Locale()).IssueFormGoalPlaceholder()).Height(56)
+		goal := formTextArea(c, &a.issueGoal, false, a.workTheme.InputBorder).Label(locales.In(c.Locale()).IssueFormGoalLabel()).Placeholder(locales.In(c.Locale()).IssueFormGoalPlaceholder()).Height(56)
 		if a.focusIssueGoal {
 			goal.Focus()
 			a.focusIssueGoal = false
 		}
 		ui.Text(c, locales.In(c.Locale()).IssueFormRequirements()).FontSize(typeAction).FontWeight(500).TextColor(t.Text)
-		formTextArea(c, &a.issueRequirements, false).Label(locales.In(c.Locale()).IssueFormRequirementsLabel()).Placeholder(locales.In(c.Locale()).IssueFormRequirementsPlaceholder()).Height(72)
+		formTextArea(c, &a.issueRequirements, false, a.workTheme.InputBorder).Label(locales.In(c.Locale()).IssueFormRequirementsLabel()).Placeholder(locales.In(c.Locale()).IssueFormRequirementsPlaceholder()).Height(72)
 		if a.issueFormError != "" {
 			text := a.issueFormError
 			if a.issueFormNotice != "" {
@@ -921,7 +921,7 @@ func (a *appModel) issueLifecycleActions(c *ui.Context, t *ui.Theme, issue *prod
 		ui.Text(c, msgs.WorkCompletionEvidence()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 		draft := a.completionDraft(issue)
 		ui.Row(c).AlignItems(ui.Center).Gap(6).Children(func() {
-			preferenceInput(c, draft, false).Label(msgs.WorkCompletionEvidence()).Placeholder(msgs.WorkCompletionEvidencePlaceholder()).Grow(1)
+			preferenceInput(c, draft, false, a.workTheme.InputBorder).Label(msgs.WorkCompletionEvidence()).Placeholder(msgs.WorkCompletionEvidencePlaceholder()).Grow(1)
 			secondaryButton(c, msgs.WorkComplete()).OnClick(func() {
 				if !a.completeIssue(issue.ID, *draft) {
 					a.setIssueActionNotice("Could not complete this issue.", "complete-failed", "")
@@ -1148,7 +1148,7 @@ func (a *appModel) issueRequirementEvidence(c *ui.Context, t *ui.Theme, ct *cont
 			ui.Text(c, requirement.Text).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text).MaxLines(2)
 			if editable {
 				draft := a.requirementDraft(requirement)
-				preferenceInput(c, draft, false).Label(locales.In(c.Locale()).IssueEvidenceFor(requirement.Text)).Placeholder(locales.In(c.Locale()).IssueEvidencePlaceholder())
+				preferenceInput(c, draft, false, a.workTheme.InputBorder).Label(locales.In(c.Locale()).IssueEvidenceFor(requirement.Text)).Placeholder(locales.In(c.Locale()).IssueEvidencePlaceholder())
 				ui.Row(c).Gap(4).Children(func() {
 					for _, action := range []struct {
 						label, state string

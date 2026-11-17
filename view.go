@@ -1365,7 +1365,7 @@ func (a *appModel) historyDetail(c *ui.Context, t *ui.Theme, narrow bool) {
 				if !a.demo && ct.SessionID != "" && !ct.Loaded {
 					ui.Text(c, msgs.HistoryNotLoadedShort()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Warning)
 				}
-				preferenceInput(c, &a.historyQuery, false).Placeholder(msgs.HistorySearchPlaceholder(ct.Name))
+				preferenceInput(c, &a.historyQuery, false, a.workTheme.InputBorder).Placeholder(msgs.HistorySearchPlaceholder(ct.Name))
 				if !a.demo {
 					secondaryButton(c, msgs.SearchSavedContexts()).TextColor(t.Text).OnClick(func() { a.searchContactHistoryAsync(a.historyQuery) })
 					if a.contactHistoryBusy {

@@ -914,7 +914,7 @@ func (a *appModel) settingsConnectionContent(c *ui.Context, t *ui.Theme) {
 		form.SavedPending = a.connectionSavedPending()
 		actions := a.connectionActions()
 		actions.Discard = func() { form.ResetDraft() }
-		form.view(c, t, actions)
+		form.view(c, t, actions, a.workTheme.InputBorder)
 	})
 }
 
@@ -974,7 +974,7 @@ func (a *appModel) settingsContactContent(c *ui.Context, t *ui.Theme) {
 			Discard:           func() { editor.ResetDraft() },
 			RetryBuiltinTools: func() { a.applyConnection() },
 			ChooseFolder:      func() { a.chooseContactWorkFolder(ct.ID, editor) },
-		})
+		}, a.workTheme.InputBorder)
 	})
 }
 

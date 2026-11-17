@@ -616,7 +616,7 @@ func (tc *taskContext) formView(c *ui.Context, theme workbenchTheme) {
 		switch tc.formMode {
 		case "file":
 			ui.Text(c, locales.In(c.Locale()).TaskContextFileNameOptional()).FontSize(typeLabel).FontWeight(400).FixedLineHeight(lineLabel).TextColor(t.Text)
-			preferenceInput(c, &tc.formName, false).Label(locales.In(c.Locale()).TaskContextFileLabel()).Placeholder(locales.In(c.Locale()).TaskContextFilePlaceholder())
+			preferenceInput(c, &tc.formName, false, theme.InputBorder).Label(locales.In(c.Locale()).TaskContextFileLabel()).Placeholder(locales.In(c.Locale()).TaskContextFilePlaceholder())
 			msgs := locales.In(c.Locale())
 			choose := secondaryButton(c, msgs.TaskContextChooseFile()).Label(msgs.TaskContextChooseFile()).Disabled(tc.fileChoosing || tc.fileChooserBlocked || tc.chooseFile == nil).OnClick(func() { tc.chooseFile() })
 			if tc.focusFileChooser {
@@ -631,7 +631,7 @@ func (tc *taskContext) formView(c *ui.Context, theme workbenchTheme) {
 			}
 			ui.Text(c, msgs.TaskContextChooseFileHint()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 			ui.Text(c, locales.In(c.Locale()).TaskContextPath()).FontSize(typeLabel).FontWeight(400).FixedLineHeight(lineLabel).TextColor(t.Text)
-			preferenceInput(c, &tc.formPath, false).Label(locales.In(c.Locale()).TaskContextFilePathLabel()).Placeholder(locales.In(c.Locale()).TaskContextFilePathPlaceholder()).OnChange(func() {
+			preferenceInput(c, &tc.formPath, false, theme.InputBorder).Label(locales.In(c.Locale()).TaskContextFilePathLabel()).Placeholder(locales.In(c.Locale()).TaskContextFilePathPlaceholder()).OnChange(func() {
 				tc.fileForm.pathRevision++
 				tc.fileRequest++
 				tc.fileChoosing, tc.focusFileChooser = false, false
@@ -639,9 +639,9 @@ func (tc *taskContext) formView(c *ui.Context, theme workbenchTheme) {
 			ui.Text(c, locales.In(c.Locale()).TaskContextFileRules()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 		default:
 			ui.Text(c, locales.In(c.Locale()).TaskContextName()).FontSize(typeLabel).FontWeight(400).FixedLineHeight(lineLabel).TextColor(t.Text)
-			preferenceInput(c, &tc.formName, false).Label(locales.In(c.Locale()).TaskContextNameLabel()).Placeholder(locales.In(c.Locale()).TaskContextNamePlaceholder())
+			preferenceInput(c, &tc.formName, false, theme.InputBorder).Label(locales.In(c.Locale()).TaskContextNameLabel()).Placeholder(locales.In(c.Locale()).TaskContextNamePlaceholder())
 			ui.Text(c, locales.In(c.Locale()).TaskContextText()).FontSize(typeLabel).FontWeight(400).FixedLineHeight(lineLabel).TextColor(t.Text)
-			formTextArea(c, &tc.formText, false).Label(locales.In(c.Locale()).TaskContextTextLabel()).Height(84).Placeholder(locales.In(c.Locale()).TaskContextTextPlaceholder())
+			formTextArea(c, &tc.formText, false, theme.InputBorder).Label(locales.In(c.Locale()).TaskContextTextLabel()).Height(84).Placeholder(locales.In(c.Locale()).TaskContextTextPlaceholder())
 			if tc.formMode == "edit" && tc.formPath != "" {
 				ui.Text(c, locales.In(c.Locale()).TaskContextEditHint()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 			}

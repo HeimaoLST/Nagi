@@ -51,6 +51,7 @@ const (
 type workbenchTheme struct {
 	Theme         *ui.Theme
 	Link          ui.Color
+	InputBorder   ui.Color
 	ChromeFrom    ui.Color
 	ChromeTo      ui.Color
 	Tertiary      ui.Color
@@ -93,8 +94,8 @@ func resolveWorkbenchTheme(dark bool) workbenchTheme {
 	t.Success = ui.Hex("#2E6B45")
 	t.Scrollbar, t.ScrollbarWidth = ui.Hex("#DFDFDF"), 6
 	palette := workbenchTheme{
-		Theme:      t,
-		Link:       ui.Hex("#2D6A4A"),
+		Theme: t,
+		Link:  ui.Hex("#2D6A4A"), InputBorder: ui.Hex("#8F8E8B"),
 		ChromeFrom: ui.Hex("#F2F2E2"), ChromeTo: ui.Hex("#E6EBEF"), Tertiary: ui.Hex("#838280"),
 		NavHover: ui.Hex("#0000000A"), NavSelected: ui.Hex("#00000012"),
 		Rail: ui.Hex("#F2F2E2"), Reading: t.Background, Panel: t.Background,
@@ -111,7 +112,7 @@ func resolveWorkbenchTheme(dark bool) workbenchTheme {
 		t.Danger, t.Warning, t.Success, t.Scrollbar = ui.Hex("#FF4D4F"), ui.Hex("#FAAD14"), ui.Hex("#73CD94"), ui.Hex("#363830")
 		palette.ChromeFrom, palette.ChromeTo, palette.Rail = ui.Hex("#10110E"), ui.Hex("#10110E"), ui.Hex("#10110E")
 		palette.Tertiary = ui.Hex("#89877A")
-		palette.Link = ui.Hex("#E0C65C")
+		palette.Link, palette.InputBorder = ui.Hex("#E0C65C"), ui.Hex("#76776C")
 		palette.NavHover, palette.NavSelected = ui.Hex("#3D3F39"), ui.Hex("#454741")
 		palette.Reading, palette.Panel, palette.Well = t.Background, t.Background, t.Surface
 		palette.BubbleUser, palette.BubbleContact = ui.Hex("#2E2916"), t.Background
@@ -275,14 +276,19 @@ func navigationControl(c *ui.Context, e ui.Element, palette workbenchTheme, sele
 
 // The transparent interaction box extends two DIPs past the visible face.
 // Negative block margins keep its layout contribution at the declared 28 DIPs.
-func sharedControlFace(c *ui.Context, e ui.Element, region float32, exponent float64, outlined, invalid, selected bool) ui.Element {
+func sharedControlFace(c *ui.Context, e ui.Element, region float32, exponent float64, outlined, invalid, selected bool, inputBorder ...ui.Color) ui.Element {
 	e.Height(controlHit).MinHeight(controlHit).Margin(-2, 0).Radius(0).
 		Background(ui.Transparent).Border(0, ui.Transparent).FocusRing(false)
-	return drawControlFace(c, e, region, exponent, outlined, invalid, selected, 0, 2, c.Theme().SurfaceHover)
+	return drawControlFace(c, e, region, exponent, outlined, invalid, selected, 0, 2, c.Theme().SurfaceHover, inputBorder...)
 }
 
-func drawControlFace(c *ui.Context, e ui.Element, region float32, exponent float64, outlined, invalid, selected bool, insetX, insetY float32, focusFill ui.Color) ui.Element {
+func drawControlFace(c *ui.Context, e ui.Element, region float32, exponent float64, outlined, invalid, selected bool, insetX, insetY float32, focusFill ui.Color, inputBorder ...ui.Color) ui.Element {
 	t := c.Theme()
+	textInput := len(inputBorder) > 0
+	var inputBoundary ui.Color
+	if textInput {
+		inputBoundary = inputBorder[0]
+	}
 	e.Draw(func(p *ui.Painter, r ui.Rect) {
 		r.X, r.Y = r.X+insetX, r.Y+insetY
 		r.W, r.H = r.W-2*insetX, r.H-2*insetY
@@ -293,7 +299,10 @@ func drawControlFace(c *ui.Context, e ui.Element, region float32, exponent float
 		if selected {
 			fill = t.Selection
 		}
-		if !e.IsDisabled() {
+		if textInput {
+			fill, border = t.Surface, inputBoundary
+		}
+		if !textInput && !e.IsDisabled() {
 			if e.Pressed() {
 				fill = t.SurfacePressed
 			} else if e.Hovered() {
@@ -303,12 +312,26 @@ func drawControlFace(c *ui.Context, e ui.Element, region float32, exponent float
 				fill = focusFill
 			}
 		}
+		inputFocused := textInput && !invalid && !e.IsDisabled() && e.Focused()
 		if invalid {
 			border = t.Danger
-		} else if outlined && e.Focused() {
+		} else if inputFocused {
+			border = t.Accent
+		} else if !textInput && outlined && e.Focused() {
 			border = t.Focus
 		}
-		paintPreferenceFace(p, r, region, exponent, fill, border)
+		if inputFocused {
+			interior, interiorRegion := r, region
+			if border.A > 0 {
+				interior = ui.Rect{X: r.X + 2, Y: r.Y + 2, W: r.W - 4, H: r.H - 4}
+				interiorRegion -= 2
+			}
+			p.FillPath(controlPath(interior, interiorRegion, exponent), fill)
+			inside := ui.Rect{X: r.X + 1, Y: r.Y + 1, W: r.W - 2, H: r.H - 2}
+			p.StrokePath(controlPath(inside, region-1, exponent), 2, border)
+		} else {
+			paintPreferenceFace(p, r, region, exponent, fill, border)
+		}
 	})
 	return e
 }
@@ -405,11 +428,15 @@ func (tone markdownHeadingTone) color(t *ui.Theme) ui.Color {
 	return t.TextMuted
 }
 
-func formTextArea(c *ui.Context, value *string, invalid bool) ui.Element {
+func formTextArea(c *ui.Context, value *string, invalid bool, inputBorder ...ui.Color) ui.Element {
+	border := c.Theme().Border
+	if len(inputBorder) > 0 {
+		border = inputBorder[0]
+	}
 	e := ui.TextAreaBase(c, value).Font("system-ui").FontSize(typeAction).FontWeight(400).
 		FixedLineHeight(lineForm).MinHeight(80).BorderWidth(8, 12).BorderColor(ui.Transparent).
 		Padding(0).Radius(0).Background(ui.Transparent).TextColor(c.Theme().Text).FocusRing(false)
-	return drawControlFace(c, e, 16, 4, true, invalid, false, 0, 0, c.Theme().SurfaceHover)
+	return drawControlFace(c, e, 16, 4, true, invalid, false, 0, 0, c.Theme().SurfaceHover, border)
 }
 
 func paintPreferenceFace(p *ui.Painter, r ui.Rect, region float32, exponent float64, fill, border ui.Color) {
@@ -444,10 +471,14 @@ func controlPath(r ui.Rect, region float32, exponent float64) *ui.Path {
 	return path.Close()
 }
 
-func preferenceInput(c *ui.Context, value *string, invalid bool) ui.Element {
+func preferenceInput(c *ui.Context, value *string, invalid bool, inputBorder ...ui.Color) ui.Element {
+	border := c.Theme().Border
+	if len(inputBorder) > 0 {
+		border = inputBorder[0]
+	}
 	e := ui.TextInputBase(c, value).Font("system-ui").FontSize(typeAction).FontWeight(400).
 		FixedLineHeight(lineAction).TextColor(c.Theme().Text)
-	e = sharedControlFace(c, e, 16, 4, true, invalid, false)
+	e = sharedControlFace(c, e, 16, 4, true, invalid, false, border)
 	// The editor scrolls inside its real border clip, not its padding.
 	// Reserve the same content inset without letting glyphs paint over the face.
 	return e.BorderWidth(0, 12, 0, 12).Padding(8, 0)

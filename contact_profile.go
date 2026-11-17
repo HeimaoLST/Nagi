@@ -328,7 +328,11 @@ func (e *contactProfileEditor) builtinToolsView(c *ui.Context, t *ui.Theme, edit
 	}
 }
 
-func (e *contactProfileEditor) view(c *ui.Context, t *ui.Theme, actions contactProfileActions) {
+func (e *contactProfileEditor) view(c *ui.Context, t *ui.Theme, actions contactProfileActions, inputBorder ...ui.Color) {
+	border := c.Theme().Border
+	if len(inputBorder) > 0 {
+		border = inputBorder[0]
+	}
 	msgs := locales.In(c.Locale())
 	editable := !e.Busy && !e.Archived
 	ui.Column(c).FillWidth().MinWidth(0).Gap(8).Children(func() {
@@ -341,7 +345,7 @@ func (e *contactProfileEditor) view(c *ui.Context, t *ui.Theme, actions contactP
 		}
 
 		settingsPreferenceRow(c, t, msgs.FieldName(), "", func() {
-			name := preferenceInput(c, &e.Draft.Name, e.Errors["Name"] != "").FillWidth().MinWidth(0).Label(msgs.FieldNameAccessible()).Placeholder(msgs.FieldNamePlaceholder()).Disabled(!editable)
+			name := preferenceInput(c, &e.Draft.Name, e.Errors["Name"] != "", border).FillWidth().MinWidth(0).Label(msgs.FieldNameAccessible()).Placeholder(msgs.FieldNamePlaceholder()).Disabled(!editable)
 			if e.focusField == "Name" {
 				name.Focus()
 				e.focusField = ""
@@ -351,13 +355,13 @@ func (e *contactProfileEditor) view(c *ui.Context, t *ui.Theme, actions contactP
 			}
 		})
 		settingsPreferenceRow(c, t, msgs.ProfilePurpose(), "", func() {
-			formTextArea(c, &e.Draft.Purpose, false).FillWidth().MinWidth(0).Label(msgs.FieldPurposeAccessible()).Placeholder(msgs.ProfilePurpose()).Disabled(!editable)
+			formTextArea(c, &e.Draft.Purpose, false, border).FillWidth().MinWidth(0).Label(msgs.FieldPurposeAccessible()).Placeholder(msgs.ProfilePurpose()).Disabled(!editable)
 		})
 		settingsPreferenceRow(c, t, msgs.ProfileInstructions(), "", func() {
-			formTextArea(c, &e.Draft.Instructions, false).FillWidth().MinWidth(0).Label(msgs.FieldInstructionsAccessible()).Placeholder(msgs.ProfileInstructions()).Disabled(!editable)
+			formTextArea(c, &e.Draft.Instructions, false, border).FillWidth().MinWidth(0).Label(msgs.FieldInstructionsAccessible()).Placeholder(msgs.ProfileInstructions()).Disabled(!editable)
 		})
 		settingsPreferenceRow(c, t, msgs.ProfileWorkspace(), msgs.ProfileWorkspaceHint(), func() {
-			workspace := preferenceInput(c, &e.Draft.Workspace, e.Errors["Workspace"] != "").FillWidth().MinWidth(0).Label(msgs.FieldWorkspaceAccessible()).Placeholder(msgs.FieldWorkspacePlaceholder()).Disabled(!editable)
+			workspace := preferenceInput(c, &e.Draft.Workspace, e.Errors["Workspace"] != "", border).FillWidth().MinWidth(0).Label(msgs.FieldWorkspaceAccessible()).Placeholder(msgs.FieldWorkspacePlaceholder()).Disabled(!editable)
 			if e.focusField == "Workspace" {
 				workspace.Focus()
 				e.focusField = ""
