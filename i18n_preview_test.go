@@ -495,3 +495,102 @@ func TestPreviewI18nFinalMatrix(t *testing.T) {
 		write(t, base, "en-XA", item.theme, item.dark)
 	}
 }
+
+func TestPreviewMarkdownLinks(t *testing.T) {
+	dir := os.Getenv("SAKI_PREVIEW_DIR")
+	if dir == "" {
+		t.Skip("set SAKI_PREVIEW_DIR to write the whole-app Markdown link previews")
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	const paragraph = "Read [the design note](https://example.invalid/design) with `inline code` and surrounding text. 中文正文保留原文与链接。\n"
+	type scene struct {
+		locale, theme string
+		width, height int
+		streaming     bool
+		custom        bool
+	}
+	scenes := make([]scene, 0, 11)
+	for _, locale := range []string{"en", "zh-Hans"} {
+		for _, theme := range []string{appearanceLight, appearanceDark} {
+			for _, size := range [][2]int{{720, 640}, {1040, 720}} {
+				scenes = append(scenes, scene{locale: locale, theme: theme, width: size[0], height: size[1]})
+			}
+		}
+	}
+	for _, theme := range []string{appearanceLight, appearanceDark} {
+		scenes = append(scenes, scene{locale: "en", theme: theme, width: 1040, height: 720, streaming: true})
+	}
+	scenes = append(scenes, scene{locale: "zh-Hans", theme: appearanceLight, width: 1040, height: 720, custom: true})
+	for _, item := range scenes {
+		state, caption := "ordinary", "Ordinary / 普通正文"
+		if item.streaming {
+			state, caption = "streaming", "Streaming / 流式正文"
+		}
+		theme := item.theme
+		if item.custom {
+			theme = "custom-light-accent"
+		}
+		name := fmt.Sprintf("markdown-links-paragraph-%s-%s-%s-%dx%d", item.locale, theme, state, item.width, item.height)
+		t.Run(name, func(t *testing.T) {
+			a, ct, _ := piRunStartedTestApp(t)
+			ct.ActiveTaskID, ct.SendState = "", sendIdle
+			a.storePath, a.workDir = a.store.path, filepath.Dir(a.store.path)
+			a.windowWidth, a.scrollTo, a.workspaceOpen = item.width, -1, false
+			a.appearanceMode = item.theme
+			a.languageMode, a.languageModeLoaded = item.locale, true
+			wantThemeID := "paper"
+			if item.theme == appearanceDark {
+				wantThemeID = "night"
+			}
+			if item.custom {
+				wantThemeID = "preview-light-accent"
+				syntheticLightPalette := resolveWorkbenchTheme(false)
+				a.appearanceThemes = customThemeCatalog{Themes: []customTheme{{
+					ID: wantThemeID, Name: "Custom theme with built-in light accent", Kind: appearanceLight,
+					Palette: syntheticLightPalette,
+				}}}
+				a.appearanceThemeIDs = appearanceThemeIDs{Light: wantThemeID}
+			}
+			source := caption + "\n\n" + paragraph
+			ct.Draft = "Draft preserved / 保留草稿"
+			ct.Messages = []*message{{Key: "preview-markdown-link", Kind: msgContact, Text: source, Streaming: item.streaming}}
+			tr := ui.NewTester(a.view, item.width, item.height)
+			tr.SetLocale(item.locale)
+			tr.SetDark(item.theme == appearanceDark)
+			tr.Move(-1, -1)
+			tr.Frame()
+			msgs := locales.In(item.locale)
+			viewport, viewportOK := tr.Find(msgs.ConversationMessagesLabel())
+			link, linkOK := tr.Find("the design note")
+			if !viewportOK || !linkOK || !tr.HasText("the design note") || link.W <= 0 || link.H <= 0 ||
+				link.X < 0 || link.Y < 0 || link.X+link.W > float32(item.width) || link.Y+link.H > float32(item.height) ||
+				link.X < viewport.X || link.Y < viewport.Y || link.X+link.W > viewport.X+viewport.W || link.Y+link.H > viewport.Y+viewport.H {
+				t.Fatalf("parsed paragraph link is not visible: link=%+v found=%v viewport=%+v found=%v texts=%q", link, linkOK, viewport, viewportOK, tr.Texts())
+			}
+			resolved := a.resolveAppearanceTheme(item.theme == appearanceDark)
+			if resolved.Unavailable || resolved.RequestedID != wantThemeID || resolved.EffectiveID != wantThemeID {
+				t.Fatalf("preview theme did not resolve its selected provenance: %+v", resolved)
+			}
+			if opened := tr.OpenedURLs(); len(opened) != 0 {
+				t.Fatalf("baseline activated a link: %q", opened)
+			}
+			path := filepath.Join(dir, name+".png")
+			t.Logf("Markdown link preview path=%s source=%q locale=%s theme=%s requested=%s effective=%s width=%d height=%d streaming=%v synthetic_custom_catalog=%v accent=%+v pointer=(-1,-1) link=%+v viewport=%+v", path, source, item.locale, theme, resolved.RequestedID, resolved.EffectiveID, item.width, item.height, item.streaming, item.custom, resolved.Palette.Theme.Accent, link, viewport)
+			writePreviewPNG(t, path, tr.Image())
+			if err := tr.Click(msgs.CopyMessageLabel()); err != nil {
+				t.Fatal(err)
+			}
+			if got := tr.Clipboard(); got != source {
+				t.Fatalf("message copy changed the original Markdown: got=%q want=%q", got, source)
+			}
+			if ct.Draft != "Draft preserved / 保留草稿" || ct.Messages[0].Text != source || ct.Messages[0].Streaming != item.streaming {
+				t.Fatal("copy changed the draft or preview message")
+			}
+			if opened := tr.OpenedURLs(); len(opened) != 0 {
+				t.Fatalf("copy activated a link: %q", opened)
+			}
+		})
+	}
+}

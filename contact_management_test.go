@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -281,7 +282,14 @@ func TestLocalStateBeforeConnectionExplicitProfileSave(t *testing.T) {
 }
 
 func TestContactManagementSaveUpdatesFutureProfileWithoutReplacingSession(t *testing.T) {
-	a, bound, _ := testRuntimeModel(t)
+	a, bound, _ := piRunStartedTestApp(t)
+	bound.ActiveTaskID, bound.SendState = "", sendIdle
+	a.storePath, a.workDir = a.store.path, filepath.Dir(a.store.path)
+	bound.Draft = "keep me"
+	bound.Messages = []*message{{Kind: msgUser, Text: "old message"}}
+	bound.History = []historyEntry{{ID: "history-kept", Text: "old message"}}
+	sessionRef := bound.SessionID
+	binding := clonePiConversationBinding(bound.PiBinding)
 	workspace := t.TempDir()
 	if _, err := bound.Context.AddSnippet("Keep", "keep context"); err != nil {
 		t.Fatal(err)
@@ -301,7 +309,7 @@ func TestContactManagementSaveUpdatesFutureProfileWithoutReplacingSession(t *tes
 	if bound.Instructions != "line one\n  indented line" {
 		t.Fatalf("instructions were rewritten: %q", bound.Instructions)
 	}
-	if bound.SessionID != "s1" || len(bound.Messages) != before || bound.Draft != "keep me" || len(bound.Context.snapshot()) != 1 {
+	if bound.SessionID != sessionRef || !reflect.DeepEqual(bound.PiBinding, binding) || len(bound.Messages) != before || bound.Draft != "keep me" || len(bound.Context.snapshot()) != 1 {
 		t.Fatalf("session-owned state changed: %+v", bound)
 	}
 	reloaded, err := openContactStore(a.store.path, "/tmp")
@@ -309,7 +317,7 @@ func TestContactManagementSaveUpdatesFutureProfileWithoutReplacingSession(t *tes
 		t.Fatal(err)
 	}
 	stored := reloaded.state.Contacts[0]
-	if stored.Name != "Renamed" || stored.Purpose != "future purpose" || stored.Instructions != bound.Instructions || stored.SessionID != "s1" {
+	if stored.Name != "Renamed" || stored.Purpose != "future purpose" || stored.Instructions != bound.Instructions || stored.SessionID != sessionRef || !reflect.DeepEqual(stored.PiBinding, binding) {
 		t.Fatalf("stored = %+v", stored)
 	}
 }
@@ -362,11 +370,19 @@ func TestContactManagementSaveAndNewDetachesOnlyCurrentConversation(t *testing.T
 }
 
 func TestContactManagementSaveFailureRollsBackFieldsAndKeepsDraft(t *testing.T) {
-	a, bound, _ := testRuntimeModel(t)
+	a, bound, _ := piRunStartedTestApp(t)
+	bound.ActiveTaskID, bound.SendState = "", sendIdle
+	a.storePath, a.workDir = a.store.path, filepath.Dir(a.store.path)
+	bound.Draft = "keep me"
+	sessionRef := bound.SessionID
+	binding := clonePiConversationBinding(bound.PiBinding)
+	if err := a.persist(); err != nil {
+		t.Fatal(err)
+	}
 	oldPurpose := bound.Purpose
 	oldWorkspace := bound.Workspace
 	broken := t.TempDir()
-	a.store.path = broken // rename onto a directory must fail after the in-memory snapshot changes
+	a.store.path = broken
 	workspace := t.TempDir()
 
 	a.openSettings()
@@ -377,7 +393,7 @@ func TestContactManagementSaveFailureRollsBackFieldsAndKeepsDraft(t *testing.T) 
 	if bound.Name != "Saki" || bound.Purpose != oldPurpose || bound.Workspace != oldWorkspace {
 		t.Fatalf("failed save changed the contact: %+v", bound)
 	}
-	if a.contactProfile == nil || a.contactProfile.Error == "" || a.contactProfile.Draft.Name != "Cannot Save" {
+	if a.contactProfile == nil || a.contactProfile.Error != profileNoticeErrorSave || a.contactProfile.Draft.Name != "Cannot Save" {
 		t.Fatalf("failed save did not report an error or preserve the draft: %+v", a.contactProfile)
 	}
 	if a.contactProfile.Status != "" {
@@ -386,10 +402,23 @@ func TestContactManagementSaveFailureRollsBackFieldsAndKeepsDraft(t *testing.T) 
 	if a.store.state.Contacts[0].Name != "Saki" {
 		t.Fatal("failed save left the store's in-memory snapshot changed")
 	}
+	if bound.Draft != "keep me" || bound.SessionID != sessionRef || !reflect.DeepEqual(bound.PiBinding, binding) {
+		t.Fatalf("failed save changed conversation identity or draft: %+v", bound)
+	}
 }
 
 func TestContactManagementSaveAndNewFailureKeepsOldSessionReference(t *testing.T) {
-	a, bound, _ := testRuntimeModel(t)
+	a, bound, _ := piRunStartedTestApp(t)
+	bound.ActiveTaskID, bound.SendState = "", sendIdle
+	a.storePath, a.workDir = a.store.path, filepath.Dir(a.store.path)
+	bound.Draft = "keep me"
+	bound.Messages = []*message{{Kind: msgUser, Text: "old message"}}
+	bound.History = []historyEntry{{ID: "history-kept", Text: "old message"}}
+	sessionRef := bound.SessionID
+	binding := clonePiConversationBinding(bound.PiBinding)
+	if err := a.persist(); err != nil {
+		t.Fatal(err)
+	}
 	broken := t.TempDir()
 	a.store.path = broken
 	workspace := t.TempDir()
@@ -397,25 +426,33 @@ func TestContactManagementSaveAndNewFailureKeepsOldSessionReference(t *testing.T
 	if a.saveContactProfileDraft(profileDraft{Name: "Renamed", Workspace: workspace}, true) {
 		t.Fatal("save and new unexpectedly succeeded")
 	}
-	if bound.SessionID != "s1" || len(bound.PreviousSessions) != 0 || len(bound.Messages) != 1 {
+	if bound.SessionID != sessionRef || !reflect.DeepEqual(bound.PiBinding, binding) || len(bound.PreviousPiBindings) != 0 || len(bound.PreviousSessions) != 0 || len(bound.Messages) != 1 || len(bound.History) != 1 || bound.Draft != "keep me" {
 		t.Fatalf("failed save and new changed the current conversation: %+v", bound)
+	}
+	if a.contactProfile == nil || a.contactProfile.Error != profileNoticeErrorSave {
+		t.Fatalf("save and new failed outside the intended filesystem boundary: %+v", a.contactProfile)
 	}
 }
 
 func TestContactManagementArchiveRestorePersistsAndBlocksActiveWork(t *testing.T) {
-	a, bound, _ := testRuntimeModel(t)
+	a, bound, _ := piRunStartedTestApp(t)
+	a.storePath, a.workDir = a.store.path, filepath.Dir(a.store.path)
+	sessionRef := bound.SessionID
+	binding := clonePiConversationBinding(bound.PiBinding)
 	bound.SendState = sendSubmitting
 	a.openSettings()
 	if a.archiveContact(bound.ID) {
-		t.Fatal("archive unexpectedly succeeded with a loaded conversation")
+		t.Fatal("archive unexpectedly succeeded with an active conversation")
 	}
 	if bound.Archived || a.contactArchiveBlocked(bound) == "" {
 		t.Fatal("archive did not explain the active work")
 	}
+	bound.ActiveTaskID, bound.SendState = "", sendUnknown
+	if a.archiveContact(bound.ID) || bound.Archived || a.contactArchiveBlocked(bound) != archiveNoticeUnknown {
+		t.Fatal("archive did not preserve the conversation with unknown delivery")
+	}
 
-	bound.SessionID = ""
-	bound.Loaded = false
-	bound.SendState = sendIdle
+	bound.ActiveTaskID, bound.SendState = "", sendIdle
 	if !a.archiveContact(bound.ID) {
 		t.Fatalf("archive failed: %+v", a.contactProfile)
 	}
@@ -429,7 +466,7 @@ func TestContactManagementArchiveRestorePersistsAndBlocksActiveWork(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reloaded.state.Contacts[0].Archived || reloaded.state.Contacts[0].ArchivedAt == 0 {
+	if !reloaded.state.Contacts[0].Archived || reloaded.state.Contacts[0].ArchivedAt == 0 || reloaded.state.Contacts[0].SessionID != sessionRef || !reflect.DeepEqual(reloaded.state.Contacts[0].PiBinding, binding) {
 		t.Fatal("archive was not persisted")
 	}
 	if reason := a.canSend(bound); !strings.Contains(reason, "archived") {
@@ -438,10 +475,26 @@ func TestContactManagementArchiveRestorePersistsAndBlocksActiveWork(t *testing.T
 	if !a.restoreContact(bound.ID) || bound.Archived || bound.ArchivedAt != 0 {
 		t.Fatalf("restore failed: %+v", bound)
 	}
+	if bound.SessionID != sessionRef || !reflect.DeepEqual(bound.PiBinding, binding) {
+		t.Fatal("archive and restore changed the saved conversation binding")
+	}
+	reloaded, err = openContactStore(a.store.path, "/tmp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	stored := reloaded.state.Contacts[0]
+	if stored.Archived || stored.ArchivedAt != 0 || stored.SessionID != sessionRef || !reflect.DeepEqual(stored.PiBinding, binding) {
+		t.Fatal("restore was not persisted with the original conversation binding")
+	}
 }
 
 func TestContactManagementSidebarSearchKeepsStableIndices(t *testing.T) {
-	a, bound, unbound := testRuntimeModel(t)
+	a, bound, _ := piRunStartedTestApp(t)
+	bound.ActiveTaskID, bound.SendState = "", sendIdle
+	a.storePath, a.workDir = a.store.path, filepath.Dir(a.store.path)
+	bound.Purpose = "old purpose"
+	unbound := &contact{ID: "new", Name: "New contact 1", Role: "Assistant", Workspace: a.workDir, Status: statusReady}
+	a.contacts = append(a.contacts, unbound)
 	archive := &contact{ID: "archive", Name: "Archive", Purpose: "old budget notes", Archived: true, Status: statusReady}
 	a.contacts = append(a.contacts, archive)
 	a.contactSearch = "purpose"
@@ -516,7 +569,11 @@ func TestContactManagementShutdownWaitsForHistoryCallback(t *testing.T) {
 }
 
 func TestSelectContactPersistsTheNewSelectionImmediately(t *testing.T) {
-	a, _, unbound := testRuntimeModel(t)
+	a, bound, _ := piRunStartedTestApp(t)
+	bound.ActiveTaskID, bound.SendState = "", sendIdle
+	a.storePath, a.workDir = a.store.path, filepath.Dir(a.store.path)
+	unbound := &contact{ID: "new", Name: "New contact 1", Role: "Assistant", Workspace: a.workDir, Status: statusReady}
+	a.contacts = append(a.contacts, unbound)
 	a.selectContact(1)
 	reloaded, err := openContactStore(a.store.path, "/tmp")
 	if err != nil {
