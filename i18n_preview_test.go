@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -591,6 +593,273 @@ func TestPreviewMarkdownLinks(t *testing.T) {
 			if opened := tr.OpenedURLs(); len(opened) != 0 {
 				t.Fatalf("copy activated a link: %q", opened)
 			}
+		})
+	}
+}
+
+func TestPreviewInputStates(t *testing.T) {
+	dir := os.Getenv("SAKI_PREVIEW_DIR")
+	if dir == "" {
+		t.Skip("set SAKI_PREVIEW_DIR to write whole-app input state previews")
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	type scene struct {
+		theme, field, state string
+		custom              bool
+	}
+	scenes := make([]scene, 0, 16)
+	for _, theme := range []string{appearanceLight, appearanceDark} {
+		for _, state := range []string{"rest", "hover", "keyboard-focus", "invalid-focus", "disabled"} {
+			scenes = append(scenes, scene{theme: theme, field: "contact-name", state: state})
+		}
+		scenes = append(scenes,
+			scene{theme: theme, field: "contact-instructions", state: "keyboard-focus"},
+			scene{theme: theme, field: "connection-endpoint", state: "keyboard-focus"},
+		)
+	}
+	for _, state := range []string{"rest", "keyboard-focus"} {
+		scenes = append(scenes, scene{theme: appearanceLight, field: "contact-name", state: state, custom: true})
+	}
+	for _, item := range scenes {
+		themeName := item.theme
+		if item.custom {
+			themeName = "custom-light-matching-border"
+		}
+		name := fmt.Sprintf("inputs-%s-%s-%s-1040x960", themeName, item.field, item.state)
+		t.Run(name, func(t *testing.T) {
+			a, ct, _ := piRunStartedTestApp(t)
+			ct.ActiveTaskID, ct.SendState = "", sendIdle
+			ct.Name, ct.Purpose = "Input fixture", "Original purpose / 原始用途"
+			ct.Instructions = "Original instructions / 原始指令\nKeep the exact source and spacing."
+			ct.Draft = "Pending conversation draft / 待发送草稿"
+			a.pi = nil
+			a.storePath, a.workDir = a.store.path, filepath.Dir(a.store.path)
+			a.windowWidth, a.scrollTo, a.workspaceOpen = 1040, -1, false
+			a.appearanceMode = item.theme
+			a.languageMode, a.languageModeLoaded = "en", true
+			cfg := connectionConfig{
+				Version: 1, API: connectionAPIChatCompletions,
+				Endpoint: "https://input-fixture.example.invalid/v1", APIKey: "fixture-not-a-real-key", Model: "input-fixture",
+				ContextTokens: 131072, OutputTokens: 8192, WorkingDirectory: a.workDir, MaxActiveTasks: 2,
+			}
+			a.connectionSaved = &cfg
+			a.connectionForm = newConnectionSettings(&cfg, cfg.WorkingDirectory)
+			wantThemeID := "paper"
+			if item.theme == appearanceDark {
+				wantThemeID = "night"
+			}
+			if item.custom {
+				wantThemeID = "preview-input-custom"
+				document := customThemeDocument(wantThemeID, appearanceLight)
+				colors := document["colors"].(map[string]any)
+				colors["border"], colors["accent"] = "#E6E6E6", "#245B78"
+				themeDir := t.TempDir()
+				writeCustomTheme(t, themeDir, "input-custom.json", document)
+				a.appearanceThemes = loadCustomThemes(themeDir)
+				if len(a.appearanceThemes.Errors) != 0 {
+					t.Fatalf("custom input fixture did not decode: %+v", a.appearanceThemes.Errors)
+				}
+				a.appearanceThemeIDs = appearanceThemeIDs{Light: wantThemeID}
+			}
+			tab := settingsTabContact
+			if item.field == "connection-endpoint" {
+				tab = settingsTabConnection
+			}
+			a.openSettingsTab(tab, settingsSourceRail)
+			editor := a.ensureSettingsProfileEditor(ct.ID)
+			if item.state == "invalid-focus" {
+				editor.Errors = map[string]string{"Name": profileNoticeNameRequired}
+			}
+			if item.state == "disabled" {
+				editor.Busy = true
+			}
+			tr := ui.NewTester(a.view, 1040, 960)
+			tr.SetLocale("en")
+			tr.SetDark(item.theme == appearanceDark)
+			tr.SetFocused(true)
+			tr.Move(-1, -1)
+			tr.Frame()
+			msgs := locales.In("en")
+			label := msgs.FieldNameAccessible()
+			if item.field == "contact-instructions" {
+				label = msgs.FieldInstructionsAccessible()
+			} else if item.field == "connection-endpoint" {
+				label = msgs.ConnectionFieldEndpoint()
+			}
+			viewport := ui.Rect{W: float32(tr.Image().Bounds().Dx()), H: float32(tr.Image().Bounds().Dy())}
+			contains := func(outer, inner ui.Rect) bool {
+				return inner.W > 0 && inner.H > 0 && inner.X >= outer.X && inner.Y >= outer.Y &&
+					inner.X+inner.W <= outer.X+outer.W && inner.Y+inner.H <= outer.Y+outer.H
+			}
+			var inputBounds *ui.Rect
+			if item.field != "connection-endpoint" {
+				box, found := tr.Find(label)
+				if !found || !contains(viewport, box) || box.H < 32 {
+					t.Fatalf("actual uniquely named input is not visible: label=%q box=%+v found=%v", label, box, found)
+				}
+				inputBounds = &box
+			}
+			baselineActive, baselineNoIME := tr.TextInputActive()
+			baselineCaret, baselineCaretActive := tr.TextCaret()
+			baseline := map[string]any{
+				"pointer": [2]float32{-1, -1}, "target_focused": tr.Focused(label),
+				"text_input_active": baselineActive, "no_input_method": baselineNoIME,
+				"caret": baselineCaret, "caret_active": baselineCaretActive,
+				"control_bounds": inputBounds, "window_viewport": viewport, "scroll_state": a.settingsScroll,
+			}
+			wantProfile := cloneProfileDraft(editor.Draft)
+			wantContact := contactProfileDraft(ct)
+			wantConnection, wantSaved := a.connectionForm.Draft, cfg
+			wantConversationDraft := ct.Draft
+			storeBefore, err := os.ReadFile(a.store.path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			focusInput := func() {
+				for range 48 {
+					active, _ := tr.TextInputActive()
+					if tr.Focused(label) && active {
+						return
+					}
+					tr.Key(0, ui.KeyTab)
+					tr.Frame()
+				}
+				t.Fatalf("actual text controller was not keyboard reachable: label=%q", label)
+			}
+			var disclosureBounds *ui.Rect
+			if item.field == "connection-endpoint" {
+				if !tr.HasText(cfg.Endpoint) {
+					t.Fatal("saved endpoint value is not present before its real disclosure action")
+				}
+				action := msgs.ConnectionEditField(label)
+				box, found := tr.Find(action)
+				if !found || !contains(viewport, box) {
+					t.Fatalf("endpoint disclosure is not visible: %+v", box)
+				}
+				disclosureBounds = &box
+				if err := tr.Click(action); err != nil {
+					t.Fatal(err)
+				}
+				tr.Frame()
+				focusInput()
+			} else {
+				switch item.state {
+				case "hover":
+					tr.Move(inputBounds.X+inputBounds.W/2, inputBounds.Y+inputBounds.H/2)
+				case "keyboard-focus", "invalid-focus":
+					focusInput()
+				case "disabled":
+					tr.ClickAt(inputBounds.X+inputBounds.W/2, inputBounds.Y+inputBounds.H/2)
+					if active, _ := tr.TextInputActive(); active || tr.Focused(label) {
+						t.Fatal("disabled input acquired text focus")
+					}
+					tr.Type("must not enter a disabled field")
+				}
+			}
+			tr.Frame()
+			if inputBounds != nil {
+				box, found := tr.Find(label)
+				if !found || box != *inputBounds {
+					t.Fatalf("focus/hover changed actual input geometry: before=%+v after=%+v found=%v", *inputBounds, box, found)
+				}
+			}
+			if !profileDraftEqual(editor.Draft, wantProfile) || a.connectionForm.Draft != wantConnection {
+				t.Fatal("input focus/hover/disabled targeting changed a draft")
+			}
+			active, noIME := tr.TextInputActive()
+			caret, caretActive := tr.TextCaret()
+			if item.state == "keyboard-focus" || item.state == "invalid-focus" {
+				if !tr.Focused(label) || !active || !caretActive || !contains(viewport, caret) {
+					t.Fatalf("target is not an active visible text controller: label=%q active=%v caret=%+v", label, active, caret)
+				}
+				if inputBounds != nil && !contains(*inputBounds, caret) {
+					t.Fatalf("caret escaped its actual input bounds: caret=%+v input=%+v", caret, *inputBounds)
+				}
+			}
+			resolved := a.resolveAppearanceTheme(item.theme == appearanceDark)
+			if resolved.Unavailable || resolved.EffectiveID != wantThemeID || resolved.RequestedID != wantThemeID {
+				t.Fatalf("actual appearance resolver did not select the scene theme: %+v", resolved)
+			}
+			captionBounds, captionFound := tr.Find(label)
+			receipt := map[string]any{
+				"baseline": baseline, "field": item.field, "state": item.state,
+				"theme_requested": resolved.RequestedID, "theme_effective": resolved.EffectiveID,
+				"synthetic_custom_document": item.custom, "synthetic_busy": item.state == "disabled",
+				"synthetic_error": item.state == "invalid-focus", "provider_readiness_claimed": false,
+				"target_label": label, "target_focused": tr.Focused(label), "text_input_active": active,
+				"no_input_method": noIME, "caret": caret, "caret_active": caretActive,
+				"control_bounds": inputBounds, "window_viewport": viewport, "scroll_state": a.settingsScroll,
+				"caption_or_label_bounds": captionBounds, "caption_or_label_found": captionFound,
+				"connection_disclosure_bounds":        disclosureBounds,
+				"connection_editor_bounds_observable": item.field != "connection-endpoint",
+				"connection_bounds_limit":             "Connection caption and editor share a label; its caption is not an editor-bound observation",
+				"input_border_role":                   resolved.Palette.InputBorder, "accent_role": resolved.Palette.Theme.Accent,
+				"noninput_border_role": resolved.Palette.Theme.Border,
+			}
+			pointer := [2]float32{-1, -1}
+			if item.state == "hover" || item.state == "disabled" {
+				pointer = [2]float32{inputBounds.X + inputBounds.W/2, inputBounds.Y + inputBounds.H/2}
+			} else if disclosureBounds != nil {
+				pointer = [2]float32{disclosureBounds.X + disclosureBounds.W/2, disclosureBounds.Y + disclosureBounds.H/2}
+			}
+			receipt["pointer"] = pointer
+			writePreviewPNG(t, filepath.Join(dir, name+".png"), tr.Image())
+			if item.state == "keyboard-focus" || item.state == "invalid-focus" {
+				original := editor.Draft.Name
+				typed := "  Exact draft 原文 : []() and spaces  "
+				if item.field == "contact-instructions" {
+					original = editor.Draft.Instructions
+					typed = "  Exact instructions 原文\nSecond line : []()\nTrailing spaces  "
+				} else if item.field == "connection-endpoint" {
+					original = a.connectionForm.Draft.Endpoint
+					typed = "https://typed.example.invalid/v1?source=raw&mode=exact"
+				}
+				tr.Key(ui.Cmd, ui.KeyA)
+				tr.Type(typed)
+				tr.Key(ui.Cmd, ui.KeyA)
+				tr.Key(ui.Cmd, ui.KeyC)
+				tr.Frame()
+				got := editor.Draft.Name
+				if item.field == "contact-instructions" {
+					got = editor.Draft.Instructions
+				} else if item.field == "connection-endpoint" {
+					got = a.connectionForm.Draft.Endpoint
+				}
+				if got != typed || tr.Clipboard() != typed || !tr.Focused(label) {
+					t.Fatalf("actual input typing/selection changed source: draft=%q clipboard=%q want=%q", got, tr.Clipboard(), typed)
+				}
+				receipt["typed_source"], receipt["copied_source"] = typed, tr.Clipboard()
+				tr.Key(ui.Cmd, ui.KeyA)
+				tr.Type(original)
+				tr.Frame()
+			}
+			if !profileDraftEqual(editor.Draft, wantProfile) || a.connectionForm.Draft != wantConnection ||
+				!profileDraftEqual(contactProfileDraft(ct), wantContact) || ct.Draft != wantConversationDraft ||
+				a.connectionSaved == nil || *a.connectionSaved != wantSaved {
+				t.Fatal("input interactions did not preserve the exact drafts and saved source after restoration")
+			}
+			if a.connectionApplying || a.connectionTesting || a.connectionSaveInFlight || a.connectionProbe != nil || a.pi != nil || len(tr.OpenedURLs()) != 0 {
+				t.Fatal("input-only interaction triggered a connection or external action")
+			}
+			storeAfter, err := os.ReadFile(a.store.path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Equal(storeBefore, storeAfter) {
+				t.Fatal("input focus/hover/typing changed persisted product data")
+			}
+			receipt["drafts_restored_exactly"], receipt["saved_source_unchanged"] = true, true
+			receipt["provider_action_observed"] = false
+			data, err := json.MarshalIndent(receipt, "", "  ")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(dir, name+".json"), data, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			t.Logf("whole-app input preview=%s receipt=%s synthetic_fixture=true native_or_IME_acceptance=false", filepath.Join(dir, name+".png"), filepath.Join(dir, name+".json"))
 		})
 	}
 }
