@@ -2808,6 +2808,93 @@ func (h *piActivityHarness) screenshot(name string) {
 	save()
 }
 
+func (h *piActivityHarness) activateActivity(label string, check func() error) {
+	h.t.Helper()
+	var actionErr error
+	var save func()
+	h.pump.do(func() {
+		actionErr = h.focus(label, false)
+		if actionErr == nil {
+			h.tester.Key(0, ui.KeySpace)
+			h.tester.Frame()
+			actionErr = check()
+		}
+		if actionErr == nil {
+			return
+		}
+		h.tester.Frame()
+		image := h.tester.Image()
+		save = func() { writePreviewPNG(h.t, filepath.Join(h.evidence, "activity-control-failure.png"), image) }
+		labels := h.tester.Texts()
+		count := len(labels)
+		if len(labels) > 100 {
+			labels = labels[:100]
+		}
+		bounds, found := h.tester.Find(label)
+		active, noInputMethod := h.tester.TextInputActive()
+		selectedContact, selectedIssue, detailIssue := "", "", ""
+		chatWork := false
+		if ct := h.app.selectedContact(); ct != nil {
+			selectedContact, selectedIssue, detailIssue = ct.ID, ct.SelectedIssueID, ct.issueView.DetailID
+			chatWork = ct.issueView.ShowConversationWork
+		}
+		piAppRecord(h.t, "activity-control-failure", map[string]any{
+			"control": label, "error": actionErr.Error(), "expected_contact": h.contactID,
+			"selected_contact": selectedContact, "selected_issue": selectedIssue, "detail_issue": detailIssue,
+			"conversation_work": chatWork, "form_id": h.app.issueSupplementFormID,
+			"answer_target": h.app.issueSupplementAnswerTarget, "question_ref": h.app.issueSupplementQuestionRef,
+			"frame_labels_first_100": labels, "frame_label_count": count, "first_match_found": found,
+			"first_match_bounds": bounds, "controller_focused": h.tester.Focused(label),
+			"text_input_active": active, "no_input_method": noInputMethod, "viewport": image.Bounds(),
+		})
+	})
+	if actionErr != nil {
+		save()
+		h.t.Fatal(actionErr)
+	}
+}
+
+func (h *piActivityHarness) backToIssues() {
+	h.t.Helper()
+	var detailID, selectedID string
+	var conversationWork bool
+	h.onUI(func() error {
+		ct := h.app.selectedContact()
+		if ct == nil || ct.ID != h.contactID {
+			return errors.New("back navigation lost its captured contact")
+		}
+		detailID, selectedID, conversationWork = ct.issueView.DetailID, ct.SelectedIssueID, ct.issueView.ShowConversationWork
+		if detailID == "" && !conversationWork {
+			return errors.New("back navigation has no captured detail or conversation work")
+		}
+		return nil
+	})
+	h.activateActivity(locales.In("en").WorkBackToIssues(), func() error {
+		ct := h.app.selectedContact()
+		if ct == nil || ct.ID != h.contactID || ct.SelectedIssueID != selectedID || ct.issueView.ShowConversationWork {
+			return errors.New("back navigation changed its captured owner or did not leave conversation work")
+		}
+		if conversationWork && ct.issueView.DetailID != detailID || !conversationWork && (ct.issueView.DetailID != "" || ct.SelectedWorkTaskID != "") {
+			return errors.New("back navigation did not reach the expected activity overview")
+		}
+		return nil
+	})
+}
+
+func (h *piActivityHarness) cancelFollowup(issueID, draft string) {
+	h.t.Helper()
+	h.activateActivity(locales.In("en").SupplementCancel(), func() error {
+		ct := h.app.selectedContact()
+		saved := h.app.issueSupplementDrafts[issueID]
+		if ct == nil || ct.ID != h.contactID || ct.SelectedIssueID != issueID || ct.issueView.DetailID != issueID ||
+			h.app.issueSupplementFormID != "" || h.app.issueSupplementAnswerTarget != (issueSupplementTarget{}) ||
+			h.app.issueSupplementQuestionRef != "" || saved == nil || *saved != draft {
+			return errors.New("cancel did not close the captured ordinary form and preserve its draft")
+		}
+		return nil
+	})
+}
+
 func (h *piActivityHarness) openFollowup(issueID, name string) {
 	h.t.Helper()
 	h.screenshot("activity-followup-before-action-" + name)
@@ -2875,7 +2962,12 @@ func (h *piActivityHarness) openFollowup(issueID, name string) {
 func (h *piActivityHarness) createIssue(goal string) string {
 	h.t.Helper()
 	msgs := locales.In("en")
-	h.click(msgs.IssueNewIssue())
+	h.activateActivity(msgs.IssueNewIssue(), func() error {
+		if ct := h.app.selectedContact(); ct == nil || ct.ID != h.contactID || !h.app.issueFormOpen || h.app.issueFormEditingID != "" {
+			return errors.New("new issue form did not open for the captured contact")
+		}
+		return nil
+	})
 	h.onUI(func() error {
 		if err := h.focus(msgs.IssueFormGoalLabel(), true); err != nil {
 			return err
@@ -2887,26 +2979,24 @@ func (h *piActivityHarness) createIssue(goal string) string {
 		h.tester.Type("Keep the captured activity ownership.")
 		return nil
 	})
-	h.click(msgs.WorkSaveIssue())
 	var id string
-	h.onUI(func() error {
+	h.activateActivity(msgs.WorkSaveIssue(), func() error {
 		ct := h.app.contactByID(h.contactID)
-		if ct == nil || ct.SelectedIssueID == "" || ct.issueByID(ct.SelectedIssueID) == nil || ct.issueByID(ct.SelectedIssueID).Goal != goal {
+		if ct == nil || h.app.selectedContact() != ct || h.app.issueFormOpen || ct.SelectedIssueID == "" || ct.issueByID(ct.SelectedIssueID) == nil || ct.issueByID(ct.SelectedIssueID).Goal != goal || ct.issueView.DetailID != ct.SelectedIssueID {
 			return fmt.Errorf("GUI did not create captured issue %q", goal)
 		}
 		id = ct.SelectedIssueID
 		return nil
 	})
-	h.click(msgs.WorkBackToIssues())
+	h.backToIssues()
 	return id
 }
 
 func (h *piActivityHarness) selectIssue(goal, id string) {
 	h.t.Helper()
-	h.click(locales.In("en").IssueRowLabel(goal))
-	h.onUI(func() error {
+	h.activateActivity(locales.In("en").IssueRowLabel(goal), func() error {
 		ct := h.app.contactByID(h.contactID)
-		if ct == nil || ct.issueNavigation().DetailID != id {
+		if ct == nil || h.app.selectedContact() != ct || ct.SelectedIssueID != id || ct.issueNavigation().DetailID != id || ct.issueView.ShowConversationWork {
 			return errors.New("GUI selected a different activity")
 		}
 		return nil
@@ -2915,10 +3005,22 @@ func (h *piActivityHarness) selectIssue(goal, id string) {
 
 func (h *piActivityHarness) startIssue(label, id string) {
 	h.t.Helper()
-	h.click(label)
+	var before int
 	h.onUI(func() error {
-		issue := h.app.contactByID(h.contactID).issueByID(id)
-		if issue == nil || latestIssueExecution(issue) == nil || !latestIssueExecution(issue).PiIntent {
+		ct := h.app.selectedContact()
+		if ct == nil || ct.ID != h.contactID || ct.SelectedIssueID != id || ct.issueView.DetailID != id || ct.issueByID(id) == nil {
+			return errors.New("run action lost its captured activity")
+		}
+		before = len(ct.issueByID(id).Executions)
+		return nil
+	})
+	h.activateActivity(label, func() error {
+		ct := h.app.selectedContact()
+		if ct == nil || ct.ID != h.contactID || ct.SelectedIssueID != id || ct.issueView.DetailID != id {
+			return errors.New("run action changed its captured activity")
+		}
+		issue := ct.issueByID(id)
+		if issue == nil || len(issue.Executions) != before+1 || latestIssueExecution(issue) == nil || !latestIssueExecution(issue).PiIntent {
 			return errors.New("GUI did not persist an activity intent")
 		}
 		return nil
@@ -3174,8 +3276,8 @@ func TestPiAppActivitiesAndQuestions(t *testing.T) {
 		return nil
 	})
 	h.screenshot("activity-followup-after-question")
-	h.click(msgs.SupplementCancel())
-	h.click(msgs.WorkBackToIssues())
+	h.cancelFollowup(issueA, finalDraft)
+	h.backToIssues()
 	h.selectIssue("ACTIVITY_B", issueB)
 	h.startIssue(msgs.WorkStart(), issueB)
 	h.waitSignal(p.arrivedB, "activity B provider request")
@@ -3222,7 +3324,7 @@ func TestPiAppActivitiesAndQuestions(t *testing.T) {
 		return nil
 	}
 	beforeCapacity := p.count()
-	h.click(msgs.WorkBackToIssues())
+	h.backToIssues()
 	h.selectIssue("ACTIVITY_C_PREATTEMPT", issueC)
 	h.openFollowup(issueC, "c")
 	h.onUI(func() error {
@@ -3299,18 +3401,29 @@ func TestPiAppActivitiesAndQuestions(t *testing.T) {
 		t.Fatalf("direct issue_get/Inspect changed requests or lost captured activity: response=%+v inspect=%+v errors=%v/%v", getResponse, inspection, err, inspectErr)
 	}
 	piAppRecord(t, "activity-direct-progress", map[string]any{"detail": detail, "inspect": inspection, "requests": beforeInspect})
-	h.click(msgs.WorkBackToIssues())
+	h.backToIssues()
 	h.selectIssue("ACTIVITY_A", issueA)
 	beforeRefresh := p.count()
-	h.click(msgs.IssueReloadTask())
+	var refreshGeneration int
+	h.onUI(func() error {
+		refreshGeneration = app.contactByID(h.contactID).issueByID(issueA).Work.historyGen
+		return nil
+	})
+	h.activateActivity(msgs.IssueReloadTask(), func() error {
+		ct := app.selectedContact()
+		if ct == nil || ct.ID != h.contactID || ct.issueView.DetailID != issueA || ct.SelectedIssueID != issueA || ct.issueByID(issueA).Work.historyGen != refreshGeneration+1 {
+			return errors.New("refresh did not start for the captured activity")
+		}
+		return nil
+	})
 	h.wait(func() bool { return app.contactHistoryInFlight == 0 })
 	if p.count() != beforeRefresh {
 		t.Fatal("captured GUI refresh made a model request")
 	}
 	h.screenshot("activity-question-held")
-	h.click(msgs.WorkAnswer())
-	h.onUI(func() error {
-		if app.issueSupplementAnswerTarget.ContactID != h.contactID || app.issueSupplementAnswerTarget.IssueID != issueA || app.issueSupplementAnswerTarget.RequirementsRevision != questionRevision || app.issueSupplementQuestionRef != questionRef || *app.issueSupplementDraft(issueA) != finalDraft {
+	h.activateActivity(msgs.WorkAnswer(), func() error {
+		ct := app.selectedContact()
+		if ct == nil || ct.ID != h.contactID || ct.SelectedIssueID != issueA || ct.issueView.DetailID != issueA || app.issueSupplementFormID != issueA || app.issueSupplementAnswerTarget.ContactID != h.contactID || app.issueSupplementAnswerTarget.IssueID != issueA || app.issueSupplementAnswerTarget.RequirementsRevision != questionRevision || app.issueSupplementQuestionRef != questionRef || *app.issueSupplementDraft(issueA) != finalDraft {
 			return errors.New("GUI answer did not preserve the captured question and ordinary draft")
 		}
 		return nil
@@ -3497,7 +3610,7 @@ func TestPiAppActivitiesAndQuestions(t *testing.T) {
 		execution := latestIssueExecution(issue)
 		return execution != nil && execution.Status == issueExecutionCompleted && issue.Work.ActiveTaskID == ""
 	})
-	h.click(msgs.WorkBackToIssues())
+	h.backToIssues()
 	h.selectIssue("ACTIVITY_B", issueB)
 	p.mu.Lock()
 	p.stopB = true
@@ -3524,7 +3637,17 @@ func TestPiAppActivitiesAndQuestions(t *testing.T) {
 		return nil
 	})
 	h.screenshot("activity-second-question-before-stop")
-	h.click(msgs.WorkStopIssueTask())
+	h.activateActivity(msgs.WorkStopIssueTask(), func() error {
+		ct := app.selectedContact()
+		if ct == nil || ct.ID != h.contactID || ct.issueView.DetailID != issueB || ct.SelectedIssueID != issueB {
+			return errors.New("Stop changed its captured activity")
+		}
+		execution := latestIssueExecution(ct.issueByID(issueB))
+		if execution == nil || execution.PiRun == nil || execution.PiRun.RunID != stopRun.RunID || !execution.PiRun.CancelRequested {
+			return errors.New("Stop did not request cancellation for the captured run")
+		}
+		return nil
+	})
 	h.wait(func() bool {
 		issue := app.contactByID(h.contactID).issueByID(issueB)
 		execution := latestIssueExecution(issue)
@@ -3546,7 +3669,7 @@ func TestPiAppActivitiesAndQuestions(t *testing.T) {
 	if stopDelivered {
 		t.Fatal("explicit Stop delivered an answer to the canceled held call")
 	}
-	h.click(msgs.WorkBackToIssues())
+	h.backToIssues()
 	h.selectIssue("ACTIVITY_C_PREATTEMPT", issueC)
 	beforeCanceledPreparation := p.count()
 	host.openMu.Lock()
@@ -3577,9 +3700,12 @@ func TestPiAppActivitiesAndQuestions(t *testing.T) {
 		return nil
 	})
 	h.screenshot("activity-batch-check-unavailable")
-	h.click(msgs.WorkCancel())
-	h.onUI(func() error {
-		issue := app.contactByID(h.contactID).issueByID(issueC)
+	h.activateActivity(msgs.WorkCancel(), func() error {
+		ct := app.selectedContact()
+		if ct == nil || ct.ID != h.contactID || ct.SelectedIssueID != issueC || ct.issueView.DetailID != issueC {
+			return errors.New("cancel changed its captured activity")
+		}
+		issue := ct.issueByID(issueC)
 		if issue.Status != issueStatusCanceled || !issue.Work.cancelAfterAccept || latestIssueExecution(issue).PiRun != nil {
 			return errors.New("GUI did not cancel the owned pre-attempt issue")
 		}
@@ -3723,13 +3849,19 @@ func TestPiAppActivitiesAndQuestions(t *testing.T) {
 		h.click("Work")
 	}
 	if chatWorkOpen {
-		h.click(msgs.WorkBackToIssues())
+		h.backToIssues()
 	}
 	if detailOpen {
-		h.click(msgs.WorkBackToIssues())
+		h.backToIssues()
 	}
 	h.selectIssue("ACTIVITY_B", issueB)
-	h.click(msgs.WorkAnswer())
+	h.activateActivity(msgs.WorkAnswer(), func() error {
+		ct := app.selectedContact()
+		if ct == nil || ct.ID != h.contactID || ct.SelectedIssueID != issueB || ct.issueView.DetailID != issueB || app.issueSupplementFormID != issueB || app.issueSupplementAnswerTarget.ContactID != h.contactID || app.issueSupplementAnswerTarget.IssueID != issueB || app.issueSupplementQuestionRef != stoppedQuestionRef || ct.issueByID(issueB).openQuestion() == nil || app.issueSupplementAnswerTarget.RequirementsRevision != ct.issueByID(issueB).openQuestion().RequirementsRevision {
+			return errors.New("GUI did not capture the restarted stopped question")
+		}
+		return nil
+	})
 	const stoppedAnswer = "Save this answer for the stopped activity."
 	h.onUI(func() error {
 		if app.issueSupplementAnswerTarget.ContactID != h.contactID || app.issueSupplementAnswerTarget.IssueID != issueB || app.issueSupplementQuestionRef != stoppedQuestionRef {
