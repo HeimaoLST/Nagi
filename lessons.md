@@ -347,3 +347,9 @@
 **Problem:** Sending screenshot materials through hc cleared an old unsent human draft. A preceding --if idle attempt rejected the observed done status without typing; a later default send delivered the materials but replaced the draft.
 **Cause or correction:** HC's draft hold expires after a finite interval; it does not preserve an old draft indefinitely. The original text was restored through raw bracketed paste without Enter, and the unchanged message turn, exact unsent input and original terminal size were verified. Named-key input rejected Unicode without typing.
 **Prevention:** Inspect the actual input before delivery. When a human draft exists, share material files and links without sending another terminal prompt; elapsed quiet time is not consent to replace it. Preserve the exact original and restore only that text without submission after an accidental replacement. Match original terminal dimensions before attaching.
+
+## Inspect the control actually shown in a screenshot
+
+**Problem:** A passing activity E2E emitted named answer/save/check scenes whose relevant controls were outside the captured viewport. The Check click returned an outside-window error, so unchanged state did not prove the disabled action or rejection path.
+**Cause or correction:** Stage names and functional state receipts do not establish what the pixels show or whether a control received input. The original images remain valid evidence of their actual scroll positions.
+**Prevention:** Inspect each original and qualify hidden controls explicitly. Capture the relevant visible control before claiming its visual or interaction coverage, and distinguish failure to hit a control from a successful no-effect activation. Do not promote a root PASS, filename or image count into whole-app visual acceptance.
