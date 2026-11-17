@@ -153,8 +153,8 @@
 ## Preserve active work after a rejected shutdown
 
 **Problem:** Source review found that the first Pi client closed stdin after every shutdown reply, including a proved busy rejection; this would abort admitted work. No dynamic failure was claimed.
-**Cause or correction:** Request rejection is not permission to terminate the worker. A busy reply must leave the client usable for the existing run's answer/cancel/drain path.
-**Prevention:** Keep busy shutdown rejection separate from transport-unknown teardown. Exercise a held tool call, rejected shutdown, targeted answer and later successful shutdown in actual process integration.
+**Cause or correction:** Request rejection is not permission to terminate the worker. A busy reply must leave the client usable for the existing run's answer/cancel/drain path. A later product Quit path requested activity cancellation but only waited for active chat, so a stalled chat could prevent drain indefinitely; this was also found in source review before execution.
+**Prevention:** Keep busy shutdown rejection separate from transport-unknown teardown. Product Quit must request cancellation through each captured active owner, including a chat admitted during shutdown, then observe settlement, callback completion and reaping. Keep cancellation ownership idempotent without suppressing ordinary retry after a failed Stop. Exercise a held tool call, rejected shutdown, targeted answer and later successful shutdown in actual process integration.
 
 ## Accept authoritative binding facts without losing ownership
 
@@ -232,13 +232,13 @@
 
 **Problem:** The GUI Answer action opened a generic supplement form, and answer extraction needed an explicit guard against a superseded question at the same requirements revision.
 **Cause or correction:** A supplement is not a question answer. Capture the displayed owner, issue, question reference and revision, then share the existing atomic question/supplement mutation and receipt.
-**Prevention:** Reject noncurrent unanswered targets before saving; preserve drafts on rejection and deduplicate identical saved answers. Verify the actual GUI save and model-tool path against one durable association without claiming that form coverage proves the separate activity-call lifecycle.
+**Prevention:** Reject noncurrent unanswered targets before saving; preserve drafts on rejection and deduplicate identical saved answers. A held question has an empty delivery state until an answer is durably saved, including when an unanswered call is canceled or its worker exits. Show saved, dispatching, resolved, unknown or canceled only for a recorded answer, and never infer delivery from saved text. Verify the actual GUI save and model-tool path against one durable association without claiming that form coverage proves the separate activity-call lifecycle.
 
 ## Discover source paths before targeted inspection
 
 **Problem:** Initial symbol searches named absent guessed question files, and later inspections assumed absent source, SDK, official example and external recorder paths. An edit anchor was also rejected before mutation because the relevant range had not been read. An activity review later cited the wrong commit, a nonexistent draft and store/event names absent from the reviewed source.
 **Cause or correction:** Repository symbol/path discovery located the actual files; none of these failed lookups established a product defect. The activity report contained unsupported source claims and was held for correction rather than imported as a contract.
-**Prevention:** Use rg --files and symbol discovery before targeted reads or edits, including pinned SDK examples, payloads and external evidence directories. Resolve the exact declaration and read the actual callee before replacing a symbol: a keyword match found a profile notice, but the tested archive guard returned a different enum. Verify the full supplied commit and each cited existing symbol/event against the actual producer; label proposed names as proposals. Observe the discovered path before issuing the dependent read, then replace a complete balanced block when changing its delimiters. Do not assume an example directory from a component name. Pass filename patterns through quoted rg --glob filters rather than unmatched shell globs. Keep lookup/setup failures separate from compilation and behavior results.
+**Prevention:** Use rg --files and symbol discovery before targeted reads or edits, including pinned SDK examples, payloads and external evidence directories. Resolve the exact declaration and read the actual callee before replacing a symbol: a keyword match found a profile notice, but the tested archive guard returned a different enum. Include methods when mapping call sites to their enclosing declarations, and inspect completed search output before publishing an exact caller count or writer fence. Verify the full supplied commit and each cited existing symbol/event against the actual producer; label proposed names as proposals. Observe the discovered path before issuing the dependent read, then replace a complete balanced block when changing its delimiters. Do not assume an example directory from a component name. Pass filename patterns through quoted rg --glob filters rather than unmatched shell globs. Keep lookup/setup failures separate from compilation and behavior results.
 
 ## Select process tests explicitly in CI
 
@@ -303,7 +303,7 @@
 ## Resolve compatibility callers before claiming compilation
 
 **Problem:** Test retirement passed formatting and a scoped import heuristic but the frozen compile failed on a retained launcher call, two missing imports and additional deleted-method callers outside the original fence.
-**Cause or correction:** Parsing and selected symbol searches do not resolve the complete test package. The first compiler page stopped after too many errors; its first closure left deleted failure-helper calls and changed history signatures unresolved. An uncapped root-package diagnostic established the complete remaining compiler list.
+**Cause or correction:** Parsing and selected symbol searches do not resolve the complete test package. The first compiler page stopped after too many errors; its first closure left deleted failure-helper calls and changed history signatures unresolved. An uncapped root-package diagnostic established the complete remaining compiler list. A later shared activity type rename also collided with an existing package-level configuration factory; source review caught it before compilation, and the factory plus both callers received a distinct name.
 **Prevention:** Preserve failed commands and source snapshots. When diagnostics are truncated, collect the complete root-package errors before assigning another closure; cached Go supports root-only -gcflags=-e. Check each removed declaration's callers, maintain accurate test names, and compile a committed unchanged candidate before executing tests. Give the test owner exact paths; do not restore an emulator or discard business assertions for green compilation. Compilation does not establish behavior or resolve an explicit domain/data-policy blocker.
 
 ## Separate domain persistence from legacy-data admission
@@ -316,7 +316,7 @@
 
 **Problem:** Pi conversation callers retained Saki-client checks in composer Reload while the Pi Send path replaced canonical rejection reasons with one generic message.
 **Cause or correction:** Readiness, owned history reload and send admission have different conditions. Existing runtimeAvailableForView, canSend and sendBlockRaw already own related decisions; the new path did not consistently use them. These are source findings, not executed failures.
-**Prevention:** Keep one live-host readiness decision and revalidate the captured Pi conversation at history dispatch/completion. Reuse canonical admission reasons for owned contacts. Preserve drafts and unknown delivery; never infer Pi ownership from an opaque legacy session reference or let history refresh replay Send.
+**Prevention:** Keep one live-host readiness decision and revalidate the captured Pi conversation at history dispatch/completion. Reuse canonical admission reasons for owned contacts. Recheck durable cancellation before an activity crosses its first run-attempt boundary; a canceled preparation must not start work merely to cancel it after admission. Keep actually attempted or uncertain commands distinct from known non-dispatch. Preserve drafts and unknown delivery; never infer Pi ownership from an opaque legacy session reference or let history refresh replay Send.
 
 ## Restore materials when admitted-run persistence fails
 
