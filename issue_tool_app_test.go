@@ -656,40 +656,62 @@ func TestIssueToolWaitAnswerResumeUsesQuestionAnd142Ledger(t *testing.T) {
 }
 
 func TestIssueToolWrongOrStaleQuestionRefIsRejected(t *testing.T) {
-	a, _ := newIssueToolTestApp(t)
-	ct := a.selectedContact()
-	issue, err := a.createIssueFor(ct, "question errors", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	attachIssueToolTestExecution(issue)
-	scope, _ := a.issueToolNewScope(ct.ID, "conversation-qe", "turn-qe", false)
-	activateIssueToolTestScope(t, a, scope)
-	waitArgs := issueToolActionArgs(t, *scope, issueToolActionWait, map[string]any{
-		"issue_id": issue.ID, "expected_revision": issue.RequirementsRevision, "text": "Need input",
-	})
-	wait, err := a.handleIssueToolForward(context.Background(), issueToolForwardRequest{Tool: "issue_action", Arguments: waitArgs})
-	if err != nil || wait.IsError {
-		t.Fatalf("wait setup = %+v err=%v", wait, err)
-	}
-	bad, err := a.handleIssueToolForward(context.Background(), issueToolForwardRequest{Tool: "issue_action", Arguments: issueToolActionArgs(t, *scope, issueToolActionAddSupplement, map[string]any{
-		"issue_id": issue.ID, "text": "answer", "question_ref": "question-wrong",
-	})})
-	if err != nil || !bad.IsError || !strings.Contains(string(issueToolResponseJSON(t, bad)), "question_not_found") {
-		t.Fatalf("wrong question = %+v err=%v", bad, err)
-	}
-	question := issue.openQuestion()
-	question.RequirementsRevision = 0
-	staleScope, err := a.issueToolNewScope(ct.ID, "conversation-qe2", "turn-qe2", false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	activateIssueToolTestScope(t, a, staleScope)
-	stale, err := a.handleIssueToolForward(context.Background(), issueToolForwardRequest{Tool: "issue_action", Arguments: issueToolActionArgs(t, *staleScope, issueToolActionAddSupplement, map[string]any{
-		"issue_id": issue.ID, "text": "answer", "question_ref": question.Ref,
-	})})
-	if err != nil || !stale.IsError || !strings.Contains(string(issueToolResponseJSON(t, stale)), "revision_mismatch") {
-		t.Fatalf("stale question = %+v err=%v", stale, err)
+	for _, tc := range []struct {
+		name     string
+		stale    bool
+		wantCode string
+	}{
+		{name: "wrong", wantCode: "question_not_found"},
+		{name: "stale", stale: true, wantCode: "revision_mismatch"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			a, ct, event := piRunStartedTestApp(t)
+			a.storePath, a.workDir = a.store.path, filepath.Dir(a.store.path)
+			a.issueToolLedger, a.issueToolScopes = a.store.issueToolLedger, a.store.issueToolScopes
+			a.issueToolWaiters = map[string]chan IssueToolReceipt{}
+			issue, err := a.createIssueFor(ct, "question errors", "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			scope, err := a.issueToolNewScope(ct.ID, ct.SessionID, event.RunID, false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			ct.pendingSend = &pendingSend{Draft: "Question reference validation", State: "submitting"}
+			if err := a.issueToolAttachPendingScope(ct.ID, scope.Ref); err != nil {
+				t.Fatal(err)
+			}
+			a.issueToolBindTask(scope.Ref, event.RunID)
+			a.applyPiEvent(a.connectionGeneration, event)
+			if ct.SendState != sendAccepted || ct.ActiveTaskID != event.RunID {
+				t.Fatalf("current Pi conversation was not admitted: %+v", ct)
+			}
+			waitArgs := issueToolActionArgs(t, *scope, issueToolActionWait, map[string]any{
+				"issue_id": issue.ID, "expected_revision": issue.RequirementsRevision, "text": "Need input",
+			})
+			wait, err := a.handleIssueToolForward(context.Background(), issueToolForwardRequest{Tool: "issue_action", Arguments: waitArgs})
+			if err != nil || wait.IsError {
+				t.Fatalf("wait setup = %+v err=%v", wait, err)
+			}
+			question := issue.openQuestion()
+			if question == nil || question.SourceTaskID != event.RunID || question.SourceScopeRef != scope.Ref || question.SourceTurnID != scope.TurnID {
+				t.Fatalf("question lost the admitted conversation owner: %+v", question)
+			}
+			questionRef := "question-wrong"
+			if tc.stale {
+				question.RequirementsRevision = 0
+				questionRef = question.Ref
+			}
+			response, err := a.handleIssueToolForward(context.Background(), issueToolForwardRequest{Tool: "issue_action", Arguments: issueToolActionArgs(t, *scope, issueToolActionAddSupplement, map[string]any{
+				"issue_id": issue.ID, "text": "answer", "question_ref": questionRef,
+			})})
+			if err != nil || !response.IsError || !strings.Contains(string(issueToolResponseJSON(t, response)), tc.wantCode) {
+				t.Fatalf("%s question = %+v err=%v", tc.name, response, err)
+			}
+			if question.State != issueQuestionOpen || question.AnswerSupplementID != "" {
+				t.Fatalf("rejected answer changed the open question: %+v", question)
+			}
+		})
 	}
 }
 

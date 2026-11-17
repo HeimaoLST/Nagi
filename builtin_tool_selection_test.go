@@ -54,10 +54,12 @@ func freshBuiltinProfileTestApp(t *testing.T) (*appModel, *contact) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	syntheticBuiltinDefaults := []string{"bash", "edit", "read", "write"}
 	a := &appModel{
 		storePath: store.path, workDir: root, windowWidth: 1040, scrollTo: -1,
 		connectionManaged: true, runtimeStatus: runtimeStateReady,
 		runtimeBuiltinTools: builtinToolsForTest(), runtimeBuiltinToolsLoaded: true,
+		runtimeBuiltinDefaults: syntheticBuiltinDefaults,
 	}
 	applyStoreSelection(a, store)
 	a.bindTaskContexts()

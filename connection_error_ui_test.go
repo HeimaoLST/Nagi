@@ -96,6 +96,7 @@ func TestConnectionRecoveryStatusAndOneClickSettings(t *testing.T) {
 	for _, tc := range []struct {
 		name       string
 		setup      func(*appModel, *contact)
+		hasPiHost  bool
 		wantHeader string
 		wantHint   string
 		wantButton bool
@@ -160,9 +161,9 @@ func TestConnectionRecoveryStatusAndOneClickSettings(t *testing.T) {
 			wantButton: true,
 		},
 		{
-			name: "starting with saved connection",
+			name:      "starting with saved connection",
+			hasPiHost: true,
 			setup: func(a *appModel, _ *contact) {
-				a.rt = &runtimeClient{}
 				a.runtimeStatus = runtimeStateStarting
 				a.connectionSaved = &config
 			},
@@ -181,12 +182,12 @@ func TestConnectionRecoveryStatusAndOneClickSettings(t *testing.T) {
 			wantButton: false,
 		},
 		{
-			name: "healthy old runtime with pending saved candidate",
+			name:      "healthy Pi runtime with pending saved candidate",
+			hasPiHost: true,
 			setup: func(a *appModel, _ *contact) {
 				old, next := config, config
 				old.Model = "old-model"
 				next.Model = "pending-model"
-				a.rt = &runtimeClient{}
 				a.runtimeStatus = runtimeStateReady
 				a.connectionEffective = &old
 				a.connectionSaved = &next
@@ -196,19 +197,28 @@ func TestConnectionRecoveryStatusAndOneClickSettings(t *testing.T) {
 			wantButton: false,
 		},
 		{
-			name: "healthy legacy runtime without effective config",
+			name: "legacy connection without current Pi host",
 			setup: func(a *appModel, _ *contact) {
-				a.rt = &runtimeClient{}
 				a.runtimeStatus = runtimeStateReady
 				a.connectionLegacy = true
 				a.connectionEffective = nil
 			},
-			wantHeader: "Ready",
-			wantButton: false,
+			wantHeader: "Not connected",
+			wantHint:   "The runtime is not connected. Review the connection settings.",
+			wantButton: true,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			a, ct := workspaceTestApp(t)
+			a, ct, _ := piRunStartedTestApp(t)
+			ct.ActiveTaskID, ct.SendState = "", sendIdle
+			a.storePath, a.workDir = a.store.path, filepath.Dir(a.store.path)
+			host := a.pi
+			a.pi = nil
+			if tc.hasPiHost {
+				a.pi = host
+			}
+			record := recoveryRecordSnapshot(t, ct)
+			binding := ct.PiBinding
 			tc.setup(a, ct)
 			tr := ui.NewTester(a.view, 1040, 720)
 			tr.Frame()
@@ -231,6 +241,9 @@ func TestConnectionRecoveryStatusAndOneClickSettings(t *testing.T) {
 				}
 			} else if tr.HasText("Open connection settings") {
 				t.Fatalf("non-actionable state exposed a recovery entry: %v", tr.Texts())
+			}
+			if a.selectedContact() != ct || ct.PiBinding != binding || recoveryRecordSnapshot(t, ct) != record {
+				t.Fatal("connection recovery changed the selected conversation or draft")
 			}
 		})
 	}
@@ -374,14 +387,13 @@ func TestRecoveryPresentationTaskFailureDisclosureAndSettings(t *testing.T) {
 }
 
 func TestRecoveryPresentationLocalRetryClearsOnlyOwnedFeedback(t *testing.T) {
-	a, ct := workspaceTestApp(t)
-	root := t.TempDir()
-	path := filepath.Join(root, "contacts.json")
-	store, err := openContactStore(path, root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	a.store, a.storePath, a.workDir = store, path, root
+	a, ct, _ := piRunStartedTestApp(t)
+	ct.ActiveTaskID, ct.SendState = "", sendIdle
+	a.pi = nil
+	path := a.store.path
+	root := filepath.Dir(path)
+	a.storePath, a.workDir = path, root
+	sessionRef, binding := ct.SessionID, ct.PiBinding
 	if err := os.Remove(path); err != nil {
 		t.Fatal(err)
 	}
@@ -418,7 +430,7 @@ func TestRecoveryPresentationLocalRetryClearsOnlyOwnedFeedback(t *testing.T) {
 	}
 	a.connectionForm.Error, a.connectionForm.ErrorDetail = connErrorStart, "unrelated startup failure"
 	tr.Frame()
-	if a.connectionForm.Error != connErrorStart || a.connectionForm.ErrorDetail != "unrelated startup failure" || ct.Draft != "retained local edit" {
+	if a.connectionForm.Error != connErrorStart || a.connectionForm.ErrorDetail != "unrelated startup failure" || ct.Draft != "retained local edit" || ct.SessionID != sessionRef || ct.PiBinding != binding || a.selectedContact() != ct {
 		t.Fatal("local recovery cleared unrelated state")
 	}
 }
