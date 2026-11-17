@@ -344,7 +344,7 @@ func (a *appModel) connectionReloadBlocked() string {
 		if ct.ActiveTaskID != "" || ct.SendState == sendSubmitting || ct.SendState == sendAccepted {
 			return connBlockedActiveWork
 		}
-		if recoverable && ct.SendState == sendUnknown && (ct.pendingSend == nil || ct.pendingSend.State != "unknown" || ct.PiBinding == nil || ct.PiBinding.Engine != "pi" || ct.PiBinding.Context.Purpose != pi.Conversation || ct.PiBinding.Context.BotID != ct.ID || ct.PiBinding.Context.ContextID == "" || ct.PiBinding.Context.SessionRef == "" || ct.PiBinding.Context.SessionRef != ct.SessionID || ct.PiBinding.Configuration.CredentialSource == "") {
+		if recoverable && ct.SendState == sendUnknown && (ct.pendingSend == nil || ct.pendingSend.State != "unknown" || ct.PiBinding == nil || ct.PiBinding.Engine != "pi" || ct.PiBinding.Context.Purpose != "conversation" || ct.PiBinding.Context.BotID != ct.ID || ct.PiBinding.Context.ContextID == "" || ct.PiBinding.Context.SessionRef == "" || ct.PiBinding.Context.SessionRef != ct.SessionID || ct.PiBinding.Configuration.CredentialSource == "") {
 			return connBlockedActiveWork
 		}
 	}
