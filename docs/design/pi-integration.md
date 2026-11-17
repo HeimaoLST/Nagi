@@ -114,7 +114,7 @@ Synthetic native secure-entry coverage remains separate from headless product E2
 
 ## First-use caller unit
 
-The next development unit wires the existing settings and conversation callers on fresh data. It does not select a legacy-history policy or complete the activity, results, native-key or standalone gates. The existing MyGo form and callbacks remain the GUI; no new widget/layout implementation is needed.
+The first-use unit wires the existing settings and conversation callers on fresh data. It does not select a legacy-history policy or complete the activity, results, native-key or standalone gates. The existing MyGo form and callbacks remain the GUI.
 
 The shared root-package seams are:
 
@@ -146,3 +146,11 @@ The app retains the specific isolated probe owner through failed cleanup. A boun
 Send rejection retains the existing canonical admission reason and raw diagnostic. After run admission, clear only the exact submitted draft/context versions; newer edits remain. A failed local save restores user materials and preview state while retaining known admitted run facts and pending unknown delivery. Local persistence failure does not imply execution rejection or permission to resend.
 
 Raw public history remains authoritative in Pi storage and Client.History. The first-use UI reuses the existing human-view historyProjection and stable public entry IDs; it does not duplicate raw SDK blobs on every message or reinterpret tool results as assistant prose. Complete context/results rendering remains a separate required gate.
+
+### Controlled first-use evidence
+
+`TestPiAppConnectionAndConversation` passed once on source `ce54dc6b9611a400dafbf34448642ab10547d7cb` with the actual pinned worker and headless product GUI. The command was `python3 scripts/gui-go.py test -tags=integration -mod=readonly -race -count=1 -parallel=1 -timeout=6m -json -run '^TestPiAppConnectionAndConversation$' .`, using cached Go1.27.3 and offline module inputs. It reached offline setup/restart, actual Save/Test/Apply, catalog and profile selection, streamed conversation, original history/copy, replacement defaults with old-binding isolation, new-chat binding capture, targeted Stop and configured restart without replay. Save/Apply added no provider requests; the explicit tools-disabled Test remained separate.
+
+The observed totals were five scripted loopback requests and three sequential owned workers. All three workers were reaped with exit0 and separate callback completion; both application exit callbacks matched Wait, and normal drain reported no error. All145 tracked source files and the entire15517-entry payload inventory were unchanged. The payload remains the clean `a20ec471113fa7ec0118002a6d5ef53c98163a9b` build, manifest SHA256 `905d9aff2b6f8eb318b2565875163d5c6c82ee696585ee467c13668afc4325e8`; all ten current worker inputs and five SDK patch guards matched. This is reuse of unchanged inputs, not a new package build.
+
+The frozen report SHA256 is `90cb899af209e9e909e98bfb3e44cbf90e79ddb8425f9704547b3626998c0aad`; its evidence manifest is `ed782504d17c290744457a9400bfc5b74568497f282946a9735a6841577a560a`. The preceding failed observation at `6bc7facab10f2245bd8ac6f3b2053d2c75e613bc`, report `b4eabdde8b53e30b84f5de68f4883e90ad6840d52da7efd882bf5e3f18b9ae60`, remains preserved. It stopped before replacement settings while looking for Edit; the successor recorded the already-open editor and exercised its real Close/Edit controls. The successful controlled root does not establish native visual or secure-entry behavior, real-provider quality, Responses wire behavior, full-suite CI or standalone delivery.
