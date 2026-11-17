@@ -825,6 +825,108 @@ func TestPiAppScopedDomainTools(t *testing.T) {
 	if beforeRequests != 12 {
 		t.Fatalf("scoped loopback requests=%d want=12", beforeRequests)
 	}
+	storePath := f.app.store.path
+	backupPath := storePath + ".scoped-failure-backup"
+	backupHeld, obstruction := false, false
+	observations := map[string]any{"store_path": storePath, "backup_path": backupPath}
+	restoreStore := func() error {
+		if obstruction {
+			if err := os.Remove(storePath); err != nil {
+				return err
+			}
+			obstruction = false
+		}
+		if backupHeld {
+			if err := os.Rename(backupPath, storePath); err != nil {
+				return err
+			}
+			backupHeld = false
+		}
+		return nil
+	}
+	t.Cleanup(func() {
+		err := restoreStore()
+		observations["cleanup_error"] = fmt.Sprint(err)
+		piAppRecord(t, "scoped-store-failure", observations)
+		if err != nil {
+			t.Errorf("restore scoped store: %v", err)
+		}
+	})
+	diskBefore, err := os.ReadFile(storePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var committedBefore []byte
+	var savedIssues []storedIssue
+	var savedOperations *IssueToolOperationLedger
+	var originalName string
+	f.onUI(func() error {
+		var err error
+		committedBefore, err = json.Marshal(f.app.store.state)
+		if err != nil {
+			return err
+		}
+		savedIssues = f.app.store.state.Issues
+		savedOperations = f.app.store.state.IssueToolOperations
+		originalName = f.app.contactByID(aID).Name
+		observations["before"] = map[string]any{"disk_sha256": fmt.Sprintf("%x", sha256.Sum256(diskBefore)), "committed": json.RawMessage(committedBefore), "requests": f.provider.count(), "receipt": receipt}
+		return nil
+	})
+	if err := os.Rename(storePath, backupPath); err != nil {
+		t.Fatal(err)
+	}
+	backupHeld = true
+	if err := os.Mkdir(storePath, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	obstruction = true
+	const rejectedName = "Rejected profile draft"
+	const savedName = "Saved profile after failure"
+	f.onUI(func() error {
+		ct := f.app.contactByID(aID)
+		editor := f.app.ensureSettingsProfileEditor(aID)
+		editor.Draft.Name = rejectedName
+		if f.app.saveContactProfileDraftFor(aID, editor.Draft, false) {
+			return errors.New("obstructed profile save unexpectedly succeeded")
+		}
+		committedAfter, err := json.Marshal(f.app.store.state)
+		if err != nil {
+			return err
+		}
+		diskAfter, err := os.ReadFile(backupPath)
+		observations["failure"] = map[string]any{"error": editor.Error, "draft": editor.Draft.Name, "contact_name": ct.Name, "committed": json.RawMessage(committedAfter), "disk_sha256": fmt.Sprintf("%x", sha256.Sum256(diskAfter)), "requests": f.provider.count()}
+		if err != nil || editor.Error != profileNoticeErrorSave || editor.Draft.Name != rejectedName || ct.Name != originalName || !bytes.Equal(committedBefore, committedAfter) || !bytes.Equal(diskBefore, diskAfter) || f.provider.count() != beforeRequests {
+			return fmt.Errorf("failed profile save changed committed state or lost draft: %v", err)
+		}
+		return nil
+	})
+	if err := restoreStore(); err != nil {
+		t.Fatal(err)
+	}
+	f.onUI(func() error {
+		editor := f.app.ensureSettingsProfileEditor(aID)
+		editor.Draft.Name = savedName
+		if !f.app.saveContactProfileDraftFor(aID, editor.Draft, false) {
+			return fmt.Errorf("profile save after restoration failed: %s", editor.Error)
+		}
+		observations["after"] = map[string]any{"name": f.app.contactByID(aID).Name, "requests": f.provider.count(), "receipt": f.app.issueToolLedger.Operations[0].Receipt}
+		return nil
+	})
+	checkedStore, err := openContactStore(storePath, f.project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkedContacts := contactsFromStore(checkedStore)
+	var checkedContact *contact
+	for _, ct := range checkedContacts {
+		if ct.ID == aID {
+			checkedContact = ct
+		}
+	}
+	observations["reopen"] = map[string]any{"contact": checkedContact, "operations": checkedStore.issueToolLedger, "requests": f.provider.count()}
+	if checkedContact == nil || checkedContact.Name != savedName || !reflect.DeepEqual(savedIssues, checkedStore.state.Issues) || !reflect.DeepEqual(savedOperations, checkedStore.issueToolLedger) || f.provider.count() != beforeRequests {
+		t.Fatal("reopened store lost the legitimate profile or changed the original issue/receipt")
+	}
 	var ledgerBefore []byte
 	f.onUI(func() error {
 		var err error
@@ -1039,6 +1141,112 @@ func TestPiAppCapturedQuestionAnswerForm(t *testing.T) {
 	answer := "Use the captured delivery.\n保留这一行。"
 	tr := f.answerForm(success, question, answer)
 	beforeSave := f.provider.count()
+	storePath := f.app.store.path
+	backupPath := storePath + ".answer-failure-backup"
+	backupHeld, obstruction := false, false
+	observations := map[string]any{"store_path": storePath, "backup_path": backupPath, "question_ref": question.Ref}
+	restoreStore := func() error {
+		if obstruction {
+			if err := os.Remove(storePath); err != nil {
+				return err
+			}
+			obstruction = false
+		}
+		if backupHeld {
+			if err := os.Rename(backupPath, storePath); err != nil {
+				return err
+			}
+			backupHeld = false
+		}
+		return nil
+	}
+	t.Cleanup(func() {
+		err := restoreStore()
+		observations["cleanup_error"] = fmt.Sprint(err)
+		piAppRecord(t, "answer-store-failure", observations)
+		if err != nil {
+			t.Errorf("restore answer store: %v", err)
+		}
+	})
+	diskBefore, err := os.ReadFile(storePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var committedBefore, operationsBefore []byte
+	waitersBefore := map[string]int{}
+	f.onUI(func() error {
+		var err error
+		committedBefore, err = json.Marshal(f.app.store.state)
+		if err != nil {
+			return err
+		}
+		operationsBefore, err = json.Marshal(f.app.issueToolLedger)
+		for id, waiter := range f.app.issueToolWaiters {
+			waitersBefore[id] = len(waiter)
+		}
+		observations["before"] = map[string]any{"disk_sha256": fmt.Sprintf("%x", sha256.Sum256(diskBefore)), "committed": json.RawMessage(committedBefore), "operations": json.RawMessage(operationsBefore), "question": *question, "waiters": waitersBefore, "requests": beforeSave}
+		return err
+	})
+	f.mu.Lock()
+	eventsBefore := len(f.events)
+	f.mu.Unlock()
+	if err := os.Rename(storePath, backupPath); err != nil {
+		t.Fatal(err)
+	}
+	backupHeld = true
+	if err := os.Mkdir(storePath, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	obstruction = true
+	f.saveForm(tr, locales.WorkAnswer())
+	f.onUI(func() error {
+		committedAfter, err := json.Marshal(f.app.store.state)
+		if err != nil {
+			return err
+		}
+		operationsAfter, err := json.Marshal(f.app.issueToolLedger)
+		if err != nil {
+			return err
+		}
+		diskAfter, err := os.ReadFile(backupPath)
+		supplementCount := 0
+		if success.Supplements != nil {
+			supplementCount = len(success.Supplements.Items)
+		}
+		waitersAfter := map[string]int{}
+		for id, waiter := range f.app.issueToolWaiters {
+			waitersAfter[id] = len(waiter)
+		}
+		observations["failure"] = map[string]any{"error": f.app.issueActionError, "draft": *f.app.issueSupplementDraft(success.ID), "question": *question, "supplement_count": supplementCount, "committed": json.RawMessage(committedAfter), "operations": json.RawMessage(operationsAfter), "disk_sha256": fmt.Sprintf("%x", sha256.Sum256(diskAfter)), "waiters": waitersAfter, "requests": f.provider.count()}
+		if err != nil || f.app.issueActionError == "" || !tr.HasText(f.app.issueActionError) || *f.app.issueSupplementDraft(success.ID) != answer || f.app.issueSupplementFormID != success.ID || question.State != issueQuestionOpen || question.AnswerSupplementID != "" || success.Supplements != nil && len(success.Supplements.Items) != 0 || !bytes.Equal(committedBefore, committedAfter) || !bytes.Equal(operationsBefore, operationsAfter) || !bytes.Equal(diskBefore, diskAfter) || !reflect.DeepEqual(waitersBefore, waitersAfter) || f.provider.count() != beforeSave {
+			return fmt.Errorf("failed answer save changed durable state or lost its draft: %v", err)
+		}
+		return nil
+	})
+	f.mu.Lock()
+	eventsAfter := len(f.events)
+	f.mu.Unlock()
+	if eventsAfter != eventsBefore {
+		t.Fatal("failed answer save emitted a Pi event")
+	}
+	if err := restoreStore(); err != nil {
+		t.Fatal(err)
+	}
+	failedStore, err := openContactStore(storePath, f.project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var failedIssue *productIssue
+	for _, ct := range contactsFromStore(failedStore) {
+		if ct.ID == aID {
+			failedIssue = ct.issueByID(success.ID)
+		}
+	}
+	failedOperations, err := json.Marshal(failedStore.issueToolLedger)
+	observations["reopen_failure"] = map[string]any{"issue": failedIssue, "operations": json.RawMessage(failedOperations), "events_before": eventsBefore, "events_after": eventsAfter}
+	if err != nil || failedIssue == nil || failedIssue.openQuestion() == nil || failedIssue.openQuestion().Ref != question.Ref || failedIssue.openQuestion().AnswerSupplementID != "" || failedIssue.Supplements != nil && len(failedIssue.Supplements.Items) != 0 || !bytes.Equal(operationsBefore, failedOperations) {
+		t.Fatalf("reopened failed answer changed question or receipt: %v", err)
+	}
 	f.saveForm(tr, locales.WorkAnswer())
 	var supplementID string
 	f.onUI(func() error {
@@ -1046,10 +1254,25 @@ func TestPiAppCapturedQuestionAnswerForm(t *testing.T) {
 			return errors.New("actual GUI save did not make one atomic answer/supplement association")
 		}
 		supplementID = question.AnswerSupplementID
+		observations["after"] = map[string]any{"question": *question, "supplement_id": supplementID, "draft": *f.app.issueSupplementDraft(success.ID), "requests": f.provider.count()}
 		return nil
 	})
 	if f.provider.count() != beforeSave {
 		t.Fatal("GUI answer Save issued a model request")
+	}
+	answeredStore, err := openContactStore(storePath, f.project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var answeredIssue *productIssue
+	for _, ct := range contactsFromStore(answeredStore) {
+		if ct.ID == aID {
+			answeredIssue = ct.issueByID(success.ID)
+		}
+	}
+	observations["reopen_after"] = map[string]any{"issue": answeredIssue, "operations": answeredStore.issueToolLedger, "requests": f.provider.count()}
+	if answeredIssue == nil || answeredIssue.questionByRef(question.Ref) == nil || answeredIssue.questionByRef(question.Ref).AnswerSupplementID != supplementID || answeredIssue.Supplements == nil || len(answeredIssue.Supplements.Items) != 1 || answeredIssue.Supplements.Items[0].Text != answer {
+		t.Fatal("reopened store lost the successful answer after the failed save")
 	}
 	for i, text := range []string{answer, "A conflicting answer"} {
 		run := f.prepare(binding)
