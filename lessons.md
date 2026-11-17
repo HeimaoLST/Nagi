@@ -80,7 +80,7 @@
 
 ## Verify owner identity from actual metadata
 
-**Problem:** A coordination message copied a displayed redaction token as its sender identity. A later color assignment also included a display placeholder instead of the approved value and was corrected before treating it as source data. A separate check guessed a role value and stopped before sending because the actual metadata differed.
+**Problem:** A coordination message copied a displayed redaction token as its sender identity. A later color assignment also included a display placeholder instead of the approved value and was corrected before treating it as source data. A separate check guessed a role value and stopped before sending because the actual metadata differed. One root-launched recorder also declared a task-owner parent although its actual HC parent was null.
 **Cause or correction:** Display substitutions are not routable identities, and role values must come from the current owner metadata rather than a naming assumption.
 **Prevention:** Read the current HC identity, project, role, task and state before dispatch. Never copy a displayed redaction token into a message or command; use the verified owner description and current address when the identity cannot be displayed literally.
 
@@ -238,7 +238,7 @@
 
 **Problem:** Initial symbol searches named absent guessed question files, and later inspections assumed absent source, SDK, official example and external recorder paths. An edit anchor was also rejected before mutation because the relevant range had not been read.
 **Cause or correction:** Repository symbol/path discovery located the actual files; none of these failed lookups established a product defect.
-**Prevention:** Use rg --files and symbol discovery before targeted reads or edits, including pinned SDK examples, payloads and external evidence directories. Observe the discovered path before issuing the dependent read, then replace a complete balanced block when changing its delimiters. Do not assume an example directory from a component name. Pass filename patterns through quoted rg --glob filters rather than unmatched shell globs. Keep lookup/setup failures separate from compilation and behavior results.
+**Prevention:** Use rg --files and symbol discovery before targeted reads or edits, including pinned SDK examples, payloads and external evidence directories. Resolve the exact declaration and read the actual callee before replacing a symbol: a keyword match found a profile notice, but the tested archive guard returned a different enum. Observe the discovered path before issuing the dependent read, then replace a complete balanced block when changing its delimiters. Do not assume an example directory from a component name. Pass filename patterns through quoted rg --glob filters rather than unmatched shell globs. Keep lookup/setup failures separate from compilation and behavior results.
 
 ## Select process tests explicitly in CI
 
@@ -250,7 +250,7 @@
 
 **Problem:** The captured-answer E2E reached a completed issue but observed no rejection notice while its draft stayed intact; it had not recorded whether Save was activated.
 **Cause or correction:** First-run activation is Unconfirmed. The fixture assumed textarea focus survived a Frame that changed preceding controls; pinned MyGo derives unkeyed element IDs from sibling position. Source review still found the completed-target form and rejecting save path. Later Settings caption changes made the caption and select controller share text; clicking the first matching caption did not establish popup activation.
-**Prevention:** Reacquire the actual form after structural updates, assert text-input focus and then the non-input Save target before activation, and retain focus/result receipts. Target the actual controller by its current value or verified keyboard focus when captions repeat, and require the real options before selection. Keep rejection, draft and no-effect assertions intact; do not infer a toolkit defect or add a production patch from missing activation evidence.
+**Prevention:** Reacquire the actual form after structural updates, assert text-input focus and then the non-input Save target before activation, and retain focus/result receipts. Target the actual controller by its current value or verified keyboard focus when captions repeat, and require the real options before selection. When messages share a copy label, identify the copied source through verified focus and clipboard receipts rather than assuming the first match is the assistant reply. Keep rejection, draft and no-effect assertions intact; do not infer a toolkit defect or add a production patch from missing activation evidence.
 
 ## Reassemble streamed test output before parsing receipts
 

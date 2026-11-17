@@ -34,7 +34,7 @@ Use coherent commits and normal pushes to reviewable branches/PRs targeting `dev
 
 ## Validation and delivery
 
-Use `python3 scripts/gui-go.py build|test|vet` to preserve the pinned MyGo patches without changing the module cache. Keep MyGo unchanged unless a concrete required API gap is separately approved. Use explicit-cwd owned HC background programs for long commands and wait with HC. Build outputs and raw evidence stay outside source. Do not reopen old MVP/native/model runs merely because an older task had authorization.
+Use `python3 scripts/gui-go.py build|test|vet` to preserve the pinned MyGo patches without changing the module cache. Keep MyGo unchanged unless a concrete required API gap is separately approved. Use explicit-cwd owned HC background programs for long commands and wait with HC. Pass the verified owner with `--parent` and retain actual HC parent/exit metadata separately from a declared task owner. Build outputs and raw evidence stay outside source. Do not reopen old MVP/native/model runs merely because an older task had authorization.
 
 Pi integration requires the actual pinned worker and real product tool bridge against a controlled local provider, with correlated contexts, direct progress reads, targeted question/answer, cancellation, crash/restart/no-replay and child reaping evidence. Package provenance must identify Nagi, Pi/dependency locks and the delivered JS runtime separately. Standalone delivery requires launching with Node absent from PATH. Existing Saki CI results or prototype screenshots do not validate changed Nagi code. Keep the protected aggregate gate and replace obsolete engine checks with actual Pi checks; do not turn missing coverage into a skip/pass.
 
