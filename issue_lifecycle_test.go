@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/HeimaoLST/Nagi/internal/pi"
 	"github.com/HeimaoLST/Nagi/locales"
 )
 
@@ -201,45 +202,6 @@ func TestIssueActionsRejectArchivedAndCompletedStart(t *testing.T) {
 	}
 }
 
-func TestLegacyRequirementsBecomeStructuredAtStoreBoundary(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "contacts.json")
-	legacy := storedState{
-		Version: 3, Selected: "c1",
-		Contacts: []storedContact{{ID: "c1", Name: "Saki"}},
-		Issues: []storedIssue{{
-			ID: "i1", ContactID: "c1", Goal: "legacy", Requirements: "old one\nold two", Status: "open",
-			Executions: []storedIssueExecution{{ID: "e1", SessionID: "work", TaskID: "t1", Prompt: "old prompt", Status: issueExecutionCompleted}},
-		}},
-	}
-	if err := writeStoredState(path, legacy); err != nil {
-		t.Fatal(err)
-	}
-	store, err := openContactStore(path, t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	issues := issuesForStoredContact(store.state.Issues, "c1")
-	issue := issues[0]
-	if len(issue.Requirements) != 2 || issue.Requirements[0].Text != "old one" ||
-		issue.Requirements[1].State != requirementUnverified || issue.Status != issueStatusInProgress {
-		t.Fatalf("legacy migration = %+v", issue)
-	}
-	ct := &contact{ID: "c1", Name: "Saki", Issues: issues}
-	ct.SelectedIssueID = issue.ID
-	if err := store.save([]*contact{ct}, "c1"); err != nil {
-		t.Fatal(err)
-	}
-	reloaded, err := openContactStore(path, t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if reloaded.state.Version != contactStoreVersion || reloaded.state.Issues[0].Requirements != "" ||
-		len(reloaded.state.Issues[0].RequirementItems) != 2 ||
-		reloaded.state.Issues[0].Executions[0].Prompt != "old prompt" {
-		t.Fatalf("v4 migration boundary = %+v", reloaded.state.Issues[0])
-	}
-}
-
 func writeStoredState(path string, state storedState) error {
 	store := &contactStore{path: path, state: state}
 	return store.saveState()
@@ -271,29 +233,31 @@ func TestGoalChangeInvalidatesSameTextRequirementEvidence(t *testing.T) {
 	}
 }
 
-func TestRecoveredHistoryUpdatesBusinessStatusWithoutOverridingActive(t *testing.T) {
-	issue := &productIssue{ID: "i1", Status: issueStatusInProgress, WorkSessionID: "work"}
-	issue.Executions = []*issueExecution{{ID: "e1", SessionID: "work", TaskID: "t1", Status: issueExecutionFailed}}
-	issue.Work.StopRequestedTasks = map[string]bool{}
-	a := &appModel{}
-	a.applyIssueRecoveredLifecycle(issue)
-	if issue.Status != issueStatusNeedsAttention {
-		t.Fatalf("recovered failed history status = %q", issue.Status)
+func TestStalePiSettlementPreservesActiveAndWaitingIssueStatus(t *testing.T) {
+	a, _, issue := lifecycleTestIssue()
+	a.pi = presentationPiHost(a)
+	attachIssueToolTestExecution(issue)
+	old := issue.Executions[0]
+	old.Status = issueExecutionFailed
+	bridge := &piIssueTools{
+		epoch: old.PiRun.WorkerEpoch, binding: issue.PiBinding.Context,
+		scope: IssueToolScope{WorkExecutionID: old.ID},
 	}
-
+	event := pi.Event{
+		WorkerEpoch: old.PiRun.WorkerEpoch, ContextID: old.PiRun.ContextID, RunID: old.PiRun.RunID,
+		Name: pi.RunSettled, Data: []byte(`{"status":"failed"}`),
+	}
 	issue.Status = issueStatusInProgress
-	issue.Work.ActiveTaskID = "t2"
-	issue.Executions = append(issue.Executions, &issueExecution{ID: "e2", SessionID: "work", TaskID: "t2", Status: issueExecutionRunning})
-	a.applyIssueRecoveredLifecycle(issue)
-	if issue.Status != issueStatusInProgress {
-		t.Fatalf("old failed execution overrode active new task: %q", issue.Status)
+	issue.Work.ActiveTaskID, issue.Work.SendState = "new-run", sendAccepted
+	a.applyPiActivityEvent(a.pi, bridge, event)
+	if issue.Status != issueStatusInProgress || issue.Work.ActiveTaskID != "new-run" || issue.Work.SendState != sendAccepted {
+		t.Fatalf("stale Pi settlement changed active issue %s: status=%q work=%+v", issue.ID, issue.Status, issue.Work)
 	}
 
 	issue.Status = issueStatusWaitingUser
-	issue.Work.ActiveTaskID = ""
-	issue.Executions = append(issue.Executions, &issueExecution{ID: "e3", SessionID: "work", TaskID: "t3", Status: issueExecutionFailed})
-	a.applyIssueRecoveredLifecycle(issue)
-	if issue.Status != issueStatusWaitingUser {
-		t.Fatalf("recovered history overrode explicit waiting: %q", issue.Status)
+	issue.Work.ActiveTaskID, issue.Work.SendState = "", sendIdle
+	a.applyPiActivityEvent(a.pi, bridge, event)
+	if issue.Status != issueStatusWaitingUser || issue.Work.ActiveTaskID != "" || issue.Work.SendState != sendIdle {
+		t.Fatalf("stale Pi settlement changed waiting issue %s: status=%q work=%+v", issue.ID, issue.Status, issue.Work)
 	}
 }

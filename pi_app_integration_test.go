@@ -2343,7 +2343,7 @@ func TestPiAppConnectionAndConversation(t *testing.T) {
 		t.Fatalf("first context configuration=%+v error=%v", oldConfig, err)
 	}
 	piAppRecord(t, "first-context-configuration", oldConfig)
-	h.onUI(func() error { app.reloadContactByID(app.selectedID(), true); return nil })
+	h.onUI(func() error { app.reloadContactByID(app.selectedID()); return nil })
 	h.pump.waitTimeout(func() bool { return app.contactHistoryInFlight == 0 }, 30*time.Second)
 	h.onUI(func() error {
 		ct := app.selectedContact()

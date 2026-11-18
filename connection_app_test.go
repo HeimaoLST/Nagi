@@ -778,7 +778,6 @@ func TestC8RecoveryOwnedCompletionDrainsQuit(t *testing.T) {
 				} else if a.dataRecovery.output == "" {
 					t.Fatal("shutdown lost completed copy location")
 				}
-				t.Logf("host-service close completion required=%t; final Quit callbacks=%d", needsServiceClose, quitCount)
 			})
 		}
 	}

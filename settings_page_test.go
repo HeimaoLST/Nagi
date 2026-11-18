@@ -1594,7 +1594,6 @@ func TestSettingsCmdCommaFromIssueResultMarkdownLinkReturnsToSameLink(t *testing
 	a.openIssueResultEntry(issue.ID, execution.ID, false)
 	a.issueResult.Loading = false
 	a.issueResult.LoadError = ""
-	a.issueResult.Notice = ""
 	a.issueResult.Panel.Response = "结果[第一结果链接](https://example.com/result) 第二[第二结果链接](https://example.com/result)。"
 	a.windowWidth = 1040
 	tr := ui.NewTester(a.view, 1040, 720)
@@ -1635,7 +1634,6 @@ func TestSettingsCmdCommaFromInnerFileMarkdownLinkReturnsToSameLink(t *testing.T
 	a.openIssueResultEntry(issue.ID, execution.ID, false)
 	a.issueResult.Loading = false
 	a.issueResult.LoadError = ""
-	a.issueResult.Notice = ""
 	a.issueResult.Panel.Files = []issueResultFile{file}
 	a.issueResult.Panel.ReaderKey = key
 	a.issueResult.Panel.InspectFor = key

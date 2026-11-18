@@ -1278,9 +1278,9 @@ func TestIssueToolQueryResponsesRespectByteBudgetAndUTF8(t *testing.T) {
 		if err != nil || listResponse.IsError {
 			t.Fatalf("budget list page %d = %+v err=%v", page, listResponse, err)
 		}
-		rawList, _ := json.Marshal(issueToolRPCResponse{JSONRPC: "2.0", ID: json.RawMessage(`"budget-probe"`), Result: listResponse})
-		if len(rawList) > issueToolQueryMaxBytes || !utf8.Valid(rawList) {
-			t.Fatalf("list MCP response bytes=%d validUTF8=%v", len(rawList), utf8.Valid(rawList))
+		rawList, err := json.Marshal(listResponse)
+		if err != nil || len(rawList)+issueToolEnvelopeReserve > issueToolQueryMaxBytes || !utf8.Valid(rawList) {
+			t.Fatalf("Pi list response payload bytes=%d validUTF8=%v err=%v", len(rawList), utf8.Valid(rawList), err)
 		}
 		var list IssueToolIssueListResult
 		if err := json.Unmarshal(issueToolResponseJSON(t, listResponse), &list); err != nil {
@@ -1308,9 +1308,9 @@ func TestIssueToolQueryResponsesRespectByteBudgetAndUTF8(t *testing.T) {
 	if err != nil || getResponse.IsError {
 		t.Fatalf("budget get = %+v err=%v", getResponse, err)
 	}
-	rawGet, _ := json.Marshal(issueToolRPCResponse{JSONRPC: "2.0", ID: json.RawMessage(`"budget-probe"`), Result: getResponse})
-	if len(rawGet) > issueToolQueryMaxBytes || !utf8.Valid(rawGet) {
-		t.Fatalf("detail MCP response bytes=%d validUTF8=%v", len(rawGet), utf8.Valid(rawGet))
+	rawGet, err := json.Marshal(getResponse)
+	if err != nil || len(rawGet)+issueToolEnvelopeReserve > issueToolQueryMaxBytes || !utf8.Valid(rawGet) {
+		t.Fatalf("Pi detail response payload bytes=%d validUTF8=%v err=%v", len(rawGet), utf8.Valid(rawGet), err)
 	}
 	var detail IssueToolIssueDetail
 	if err := json.Unmarshal(issueToolResponseJSON(t, getResponse), &detail); err != nil {
@@ -1336,9 +1336,9 @@ func TestIssueToolDetailBudgetShrinksLongExcerptAndPreservesIdentity(t *testing.
 		ResultExcerpt:     long + long,
 	}
 	bounded := boundIssueToolDetail(detail)
-	responseBytes, _ := json.Marshal(issueToolRPCResponse{JSONRPC: "2.0", ID: json.RawMessage(`"budget"`), Result: mustIssueToolDetailForward(t, bounded)})
-	if len(responseBytes) > issueToolQueryMaxBytes || !utf8.Valid(responseBytes) {
-		t.Fatalf("long detail MCP bytes=%d validUTF8=%v", len(responseBytes), utf8.Valid(responseBytes))
+	responseBytes, err := json.Marshal(mustIssueToolDetailForward(t, bounded))
+	if err != nil || len(responseBytes)+issueToolEnvelopeReserve > issueToolQueryMaxBytes || !utf8.Valid(responseBytes) {
+		t.Fatalf("Pi long detail response payload bytes=%d validUTF8=%v err=%v", len(responseBytes), utf8.Valid(responseBytes), err)
 	}
 	if bounded.Issue.ID != "issue-budget-identity" || bounded.Issue.Status != issueStatusWaitingUser ||
 		bounded.Issue.QuestionRef != "question-budget" || bounded.Issue.RequirementsRevision != 7 ||

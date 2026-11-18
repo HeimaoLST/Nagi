@@ -314,7 +314,8 @@ func TestAppChatScrollUpSurvivesStreamAppendAndBackToLatest(t *testing.T) {
 	}
 	ct.Draft = "draft stays across appearance switch"
 	first, _ := ct.list.Visible()
-	composer, composerOK := tr.Find("Composer for Nagi")
+	composerLabel := locales.In("en").ComposerLabel(ct.Name)
+	composer, composerOK := tr.Find(composerLabel)
 	settings, settingsOK := tr.Find("Contact profile")
 	if !composerOK || !settingsOK {
 		t.Fatalf("reading viewport bounds unavailable: composer=%+v/%v settings=%+v/%v", composer, composerOK, settings, settingsOK)
@@ -390,17 +391,16 @@ func TestAppChatScrollUpSurvivesStreamAppendAndBackToLatest(t *testing.T) {
 		t.Fatalf("append changed the earlier selection: %q -> %q", selected, got)
 	}
 
-	composer := locales.In("en").ComposerLabel(ct.Name)
-	if err := tr.Click(composer); err != nil {
+	if err := tr.Click(composerLabel); err != nil {
 		t.Fatal(err)
 	}
-	if !tr.Focused(composer) {
+	if !tr.Focused(composerLabel) {
 		t.Fatal("composer did not take focus")
 	}
 	event.Data = json.RawMessage(`{"text":" more"}`)
 	a.applyPiEvent(a.connectionGeneration, event)
 	tr.Frame()
-	if !tr.Focused(composer) {
+	if !tr.Focused(composerLabel) {
 		t.Fatal("streaming text stole composer focus")
 	}
 
@@ -411,13 +411,13 @@ func TestAppChatScrollUpSurvivesStreamAppendAndBackToLatest(t *testing.T) {
 	if !ct.list.AtEnd() || tr.HasText("Back to latest") {
 		t.Fatal("Back to latest did not resume following")
 	}
-	if !tr.Focused(composer) {
+	if !tr.Focused(composerLabel) {
 		t.Fatal("Back to latest did not return meaningful focus to the composer")
 	}
 	event.Data = json.RawMessage(`{"text":" after back"}`)
 	a.applyPiEvent(a.connectionGeneration, event)
 	tr.Frame()
-	if !ct.list.AtEnd() || !tr.Focused(composer) {
+	if !ct.list.AtEnd() || !tr.Focused(composerLabel) {
 		t.Fatal("following/focus did not persist after returning to the latest")
 	}
 
@@ -432,7 +432,7 @@ func TestAppChatScrollUpSurvivesStreamAppendAndBackToLatest(t *testing.T) {
 	}
 	tr.Key(0, ui.KeyEnter)
 	tr.Frame()
-	if !ct.list.AtEnd() || !tr.Focused("Composer for Nagi") {
+	if !ct.list.AtEnd() || !tr.Focused(composerLabel) {
 		t.Fatal("keyboard activation of Back to latest did not resume following with composer focus")
 	}
 }
