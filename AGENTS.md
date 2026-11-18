@@ -2,6 +2,8 @@
 
 ## Product and execution ownership
 
+The product goal is an open-source Bot Team, with Grokbot as the user’s reference. Tie UI and Agent milestones to what a user can accomplish with multiple Bots working together.
+
 Nagi is the native MyGo product in module `github.com/HeimaoLST/Nagi`. The authorized integration replaces Saki execution with pinned Pi 1.5.2. Pi owns its execution loop, provider integration, tools and authoritative session transcripts. Nagi owns persistent Bot identity, routing, activities, questions, delivery/effect receipts and user interaction. Do not implement another Agent loop or retain two permanent execution implementations. Do not add a generic backend-plugin framework.
 
 Nagi uses only Pi and its current product store. Retire Saki adapters, legacy session readers, old schema migration and dedicated fixtures. Start with the Nagi profile. Preserve current Pi contacts, drafts, receipts, backups and restart semantics. Keep changes and data cleanup confined to the Nagi product; the Saki project is outside this checkout.

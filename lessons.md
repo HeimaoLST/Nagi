@@ -30,6 +30,12 @@
 **Cause or correction:** Product-native exposure is Unconfirmed. Product TextInputBase.Password and lab TextInput.Password share the same editor. Read-only inspection found a Darwin superclass value-cache path and a disabled-state secure-trait gap; visual bullets do not establish secure AX semantics.
 **Prevention:** Inspect the actual product control and matching accessibility bridge, then validate with a synthetic key under an exact native scope. Do not enter real credentials or claim readiness until that path is established.
 
+## Report progress against the Bot Team product goal
+
+**Problem:** A product direction update described a single Bot desktop workflow and reported runtime migration as the main milestone.
+**Cause or correction:** The user specified an open-source Bot Team product similar to Grokbot.
+**Prevention:** Describe the user-visible collaboration that a milestone enables. Report individual Pi execution and multi-Bot collaboration separately, and show a shared task completed by multiple Bots before claiming the team workflow works.
+
 ## Keep the Pi cutover free of Saki compatibility
 
 **Problem:** The migration retained an unused engine client and treated legacy history recovery as a release requirement.
