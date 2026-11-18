@@ -40,6 +40,12 @@ Pi integration requires the actual pinned worker and real product tool bridge ag
 
 Keep current requirements/design in the existing topic documents and preserve useful historical evidence through explicit Git links. Remove superseded normative instructions rather than maintaining competing current designs. Distinguish source, build, integration/E2E, native, real-model and human acceptance. Every final report states commands/exits, source identity, observed results and remaining gaps.
 
-UI acceptance requires visual inspection of actual rendered pages against the adopted Qoder reference at the relevant widths and interaction states. Source checks, geometry assertions and passing tests supplement that inspection; they do not establish visual quality. Distinguish headless rendered screenshots from observed native windows and record which states were actually inspected.
-
 Controlled native cases must retain their isolated profile binding on independent app launches, not only in the first parent process environment. Recheck process identity after close observations; a new window is not evidence that the original process stayed alive or drained.
+
+## Required UI review
+
+Read and apply the [UI design checklist](docs/design/ui-checklist.md) for every change that affects what users see or how they interact, including shared components, themes, layout, controls, wording, localization and user-visible state transitions. Follow the [UI review workflow](docs/design/ui-review.md). Freeze the candidate, identify the affected checklist items and shared surfaces, and inspect original screenshots of the actual composed pages against the adopted design and approved phase 1 corrections. Check the affected sizes, themes, languages, data and interaction states from the checklist. Include the full applicable matrix in whole-app acceptance.
+
+Use native-window evidence for §12 and any native claim. Record the actual action and its result when an item depends on interaction. Headless screenshots support rendered appearance claims within their observed scope. Source inspection, geometry and passing tests supplement visual review. Keep evidence tied to the inspected candidate and scene, and keep original files outside the checkout.
+
+Record the reviewer, candidate, checklist results, evidence and open items in the PR or delivery record. Apply §7.2 to the declared scope. Confirmed P0/P1 findings fail review. Missing applicable evidence, unreviewed items or P2 findings without a repair plan leave review pending. Affected UI must pass before acceptance or merge. Draft PRs may retain pending or failed reviews with the findings recorded. The reviewer must inspect the evidence and record a visual verdict.

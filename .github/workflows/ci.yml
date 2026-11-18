@@ -30,6 +30,7 @@ jobs:
           go-version-file: go.mod
           cache-dependency-path: go.sum
       - uses: actions/setup-python@v7
+        id: gui-python
         with:
           python-version: '3.12'
       - name: Go formatting
@@ -53,16 +54,14 @@ jobs:
           raise SystemExit(0 if result.testsRun and result.wasSuccessful() else 1)
           PYTHON
       - name: Headless previews
-        env:
-          CGO_ENABLED: '0'
-          SAKI_PREVIEW_DIR: ${{ runner.temp }}/nagi-previews
-        run: |
-          mkdir -p "$SAKI_PREVIEW_DIR"
-          python3 scripts/gui-go.py test -run TestPreviewImages -count=1 .
+        id: headless-previews
+        if: ${{ !cancelled() && steps.gui-python.outcome == 'success' }}
+        run: python3 scripts/capture-ui-review.py "$RUNNER_TEMP/nagi-previews"
       - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() && (steps.headless-previews.outcome == 'success' || steps.headless-previews.outcome == 'failure') }}
         with:
           name: nagi-headless-previews
-          path: ${{ runner.temp }}/nagi-previews/*.png
+          path: ${{ runner.temp }}/nagi-previews/
           if-no-files-found: error
   pi-integration:
     runs-on: macos-15

@@ -6,6 +6,12 @@
 **Cause or correction:** Start alignment, a non-filling scroll viewport and an auto-width nested form lacked a shared page-width contract. The user requires visual inspection; source, geometry and test results do not establish visual quality. The obsolete session editor is now removed. A later native 720-DIP review confirmed that settings rows compared the whole window width from MyGo Context.Size with the breakpoint instead of the width remaining after the sidebar. The user subsequently approved all phase1 readability, hierarchy and layout corrections in the UI checklist, superseding the corresponding Qoder values; phase2 styling remains a proposal. The first corrected headless render still showed flush vertical edges: percent100 FillHeight plus margins under MyGo's default centered Row oversized the card and canceled the visible vertical margins. The remaining recovery action-spacing cause is Unconfirmed.
 **Prevention:** Inspect actual rendered page combinations against the current Qoder-based contract with one full-pane scroll viewport and a separate bounded content column. Let parent flex allocation account for outer margins with explicit stretch and MinHeight0 rather than combining percent100 height with extra margins. Use the row's available width for responsive composition and one title/content skeleton across Settings categories. Inspect actual action separation; a declared gap or full-width container does not establish it. Synchronize approved corrections into the existing contract before implementation, preserving source-reference facts and historical evidence. Inspect the selected fixture source before running previews: a rich-table or copy screenshot may contain no ordinary parsed link and cannot validate body-link styling. Check minimum/default/wide layouts, scrolling and relevant states. Distinguish inspected headless images from native-window observations and preserve screenshots; do not infer visual acceptance from assertions or screenshot counts.
 
+## Record a visual verdict before accepting UI changes
+
+**Problem:** UI checks depended on ad hoc screenshot handoffs, and a default test failure could prevent CI from producing the headless preview artifact.
+**Cause or correction:** The user requires the revised UI design checklist to govern reviews. Capturing a screenshot and inspecting it are separate steps, and native interaction claims require the applicable native evidence.
+**Prevention:** Scope the checklist items, capture original evidence from the frozen candidate, and record the reviewer and verdict before merge. Keep the existing preview capture available after earlier CI test failures. Apply the checklist verdict to missing evidence and open findings.
+
 ## Use the current candidate without disturbing dirty ownership
 
 **Problem:** The main checkout is an old baseline with preexisting dirty documents and is not the current delivered UI candidate.
@@ -111,8 +117,8 @@
 ## Show requested team sessions in the product Space
 
 **Problem:** The rebuilt OMP team initially ran only as background HC children and was not visible in the user's Space.
-**Cause or correction:** Starting an HC terminal does not give it a visible Herdr tab. The user expects team members to be visible alongside the lead.
-**Prevention:** Inspect the current Space, create or attach named team tabs there, and verify the actual visible layout. Put each role, model and thinking level in its tab name.
+**Cause or correction:** Starting an HC terminal does not give it a visible Herdr tab. The user expects the existing team to be visible and involved in delivering the product.
+**Prevention:** Inspect the current Space, create or attach named team tabs there, and verify the actual visible layout. Put each role, model and thinking level in its tab name. For a feature that spans the team, assign the existing backend, UI and QA owners distinct work and verify their combined result.
 
 ## Reserve Astra for difficult work
 
@@ -352,7 +358,7 @@
 
 **Problem:** A passing activity E2E emitted named answer/save/check scenes whose relevant controls were outside the captured viewport. The Check click returned an outside-window error, so unchanged state did not prove the disabled action or rejection path.
 **Cause or correction:** Stage names and functional state receipts do not establish what the pixels show or whether a control received input. The original images remain valid evidence of their actual scroll positions.
-**Prevention:** Inspect each original and qualify hidden controls explicitly. Capture the relevant visible control before claiming its visual or interaction coverage, and distinguish failure to hit a control from a successful no-effect activation. Do not promote a root PASS, filename or image count into whole-app visual acceptance.
+**Prevention:** Inspect each original and qualify hidden controls explicitly. For a headless resize, update the fixture’s application width as the native resize handler does and check the control bounds against the new viewport. Capture the relevant visible control before claiming its visual or interaction coverage, and distinguish failure to hit a control from a successful no-effect activation. Do not promote a root PASS, filename or image count into whole-app visual acceptance.
 
 ## Allow explicit host recovery without replaying unknown work
 
