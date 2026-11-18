@@ -34,7 +34,7 @@
 
 **Problem:** The migration retained an unused engine client and treated legacy history recovery as a release requirement.
 **Cause or correction:** The user chose a clean Pi-only product and explicitly authorized deleting the old local workbench data without archiving it.
-**Prevention:** Use the Nagi profile and current Pi schema. Remove retired adapters, recovery gates and dedicated fixtures together. Continue testing current Pi backups, captured bindings and restart without replay. Scope local deletion to identified obsolete application data.
+**Prevention:** Use the Nagi profile and current Pi schema. Remove retired adapters, recovery gates and dedicated fixtures together. Continue testing current Pi backups, captured bindings and restart without replay. For an explicitly retired profile, check the user configuration directory, workspace-local `.saki` directories, temporary test profiles and the branded preferences domain. Verify the paths are absent after cleanup because preference writes can be asynchronous.
 
 ## Distinguish rendered duplication from duplicate business state
 
