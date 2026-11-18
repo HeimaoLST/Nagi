@@ -611,13 +611,11 @@ func (a *appModel) runtimeRecoverySummary(msgs locales.Messages) string {
 		return msgs.RecoveryLocalDataUnavailable()
 	}
 	switch a.runtimeErrKind {
-	case runtimeNoticeHelperMissing:
-		return msgs.RecoveryRuntimeMissing()
-	case runtimeNoticePrepare, runtimeNoticeStart:
+	case runtimeNoticeStart:
 		return msgs.RecoveryRuntimeStartFailed()
 	case runtimeNoticeSavedNeedsRepair:
 		return msgs.ConnectionErrorSavedNeedsRepair()
-	case runtimeNoticeConnectionRequired, runtimeNoticeAPIKey, runtimeNoticeEnvParse:
+	case runtimeNoticeConnectionRequired:
 		return msgs.ConnectionRecoverySetupHint()
 	case runtimeNoticeStoreSave:
 		return msgs.RecoveryLocalSaveFailed()
@@ -703,12 +701,6 @@ func (a *appModel) main(c *ui.Context, t *ui.Theme) {
 				}
 			case a.runtimeStatus == runtimeStateStarting:
 				ui.Text(c, msgs.RuntimeConnecting()).FontSize(typeBody).FixedLineHeight(lineBody).Padding(8, 16).TextColor(t.TextMuted)
-			}
-			if a.issueToolErr != "" {
-				ui.Row(c).Padding(8, 16).Gap(8).AlignItems(ui.Center).Children(func() {
-					a.recoveryNotice(c, t, "coordination", msgs.IssueCollaborationRepairHint(), a.issueToolErr, true)
-					secondaryButton(c, msgs.ConfigurationDetails()).OnClick(func() { a.openAdvancedSettings() })
-				})
 			}
 		}
 		a.connectionErrorBanner(c, t, ct)
@@ -1265,16 +1257,6 @@ func (a *appModel) composer(c *ui.Context, t *ui.Theme) {
 				}
 			})
 			if !a.demo {
-				if a.rt != nil && a.runtimeStatus == runtimeStateReady && !a.capacityKnown() {
-					ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
-						message := a.runtimeCapabilitiesErr
-						if message == "" {
-							message = msgs.CapacityUnknown()
-						}
-						ui.Text(c, message).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Warning).Grow(1)
-						secondaryButton(c, msgs.RetryCapacity()).OnClick(func() { a.retryCapabilities() })
-					})
-				}
 				sendErrorVisible := ct.SendError != "" && !knownMismatch
 				connectionLostDetail := ct.SendState == sendUnknown && ct.StatusDetail != "" && ct.StatusDetailKind == "status-connection-lost"
 				unknownNotice := ct.SendState == sendUnknown && (sendErrorVisible || connectionLostDetail)
@@ -1516,27 +1498,10 @@ func (a *appModel) runtimePanel(c *ui.Context, t *ui.Theme, ct *contact) {
 	if a.runtimeHintDisplay(msgs) != "" {
 		ui.Text(c, a.runtimeHintDisplay(msgs)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 	}
-	if a.issueToolErr != "" {
-		ui.Text(c, msgs.IssueCollaborationUnavailable()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Warning)
-		ui.Text(c, a.redactConnectionText(a.issueToolErr)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text)
-		ui.Text(c, msgs.IssueCollaborationRepairHint()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
+	if a.runtimeBinary != "" {
+		ui.Text(c, msgs.RuntimeHelperLine(a.runtimeBinary)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 	}
-	helper := a.runtimeBinary
-	if helper == "" {
-		switch {
-		case localStore:
-			helper = msgs.RuntimeHelperNotStartedLocalStore()
-		case a.runtimeHelperChecked || a.runtimeStage == "Runtime helper":
-			helper = msgs.RuntimeHelperNotFound()
-		case a.connectionForm != nil && a.connectionForm.HasSaved:
-			helper = msgs.RuntimeHelperNotApplied()
-		default:
-			helper = msgs.RuntimeHelperNotChecked()
-		}
-	}
-	ui.Text(c, msgs.RuntimeHelperLine(helper)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 	ui.Text(c, msgs.RuntimeStoreLine(valueOr(a.storePath, msgs.RuntimeValueNotConfigured()))).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
-	ui.Text(c, msgs.RuntimeSessionDirLine(valueOr(a.sessionDir, msgs.RuntimeValueNotConfigured()))).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 	ui.Text(c, msgs.RuntimeWorkDirLine(valueOr(a.workDir, msgs.RuntimeValueNotConfigured()))).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 	workspace := ct.SessionWorkingDir
 	if workspace == "" {
@@ -1555,16 +1520,12 @@ func (a *appModel) runtimePanel(c *ui.Context, t *ui.Theme, ct *contact) {
 	switch {
 	case ct.SessionAPI != "":
 		ui.Text(c, msgs.RuntimeSessionAPILine(ct.SessionAPI)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
-	case a.runtimeAPI != "":
-		ui.Text(c, msgs.RuntimeAPIConnectedLine(a.runtimeAPI)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 	default:
 		ui.Text(c, msgs.RuntimeSessionAPIUnknown()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 	}
 	ui.Text(c, msgs.RuntimeSessionModelLine(valueOr(ct.SessionModel, msgs.RuntimeSessionModelUnknown()))).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 	if a.connectionManaged || (a.connectionForm != nil && a.connectionForm.HasSaved) {
 		ui.Text(c, msgs.RuntimeConnectionManagedNote()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
-	} else {
-		ui.Text(c, msgs.RuntimeHostConfigNote()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 	}
 }
 

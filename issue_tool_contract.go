@@ -125,7 +125,7 @@ var (
 	errIssueToolAction            = errors.New("issue tool action is invalid")
 	errIssueToolIntentConflict    = errors.New("issue tool intent already has different payload")
 	errIssueToolSaveRequired      = errors.New("issue tool operation save is required")
-	errIssueToolReceiptIDsMissing = errors.New("accepted issue tool receipt lacks real Runtime IDs")
+	errIssueToolReceiptIDsMissing = errors.New("accepted issue tool receipt lacks an admitted Pi run")
 )
 
 // IssueToolScope is issued before a Runtime task exists. TurnID is the stable
@@ -137,32 +137,22 @@ const (
 )
 
 type IssueToolScope struct {
-	Ref                   string   `json:"ref"`
-	Mode                  string   `json:"mode,omitempty"`
-	ContactID             string   `json:"contact_id"`
-	ConversationSessionID string   `json:"conversation_session_id,omitempty"` // legacy read fallback only
-	RuntimeSessionID      string   `json:"runtime_session_id,omitempty"`
-	TurnID                string   `json:"turn_id"`
-	AllowedIssueIDs       []string `json:"allowed_issue_ids,omitempty"`
-	AllowCreate           bool     `json:"allow_create,omitempty"`
-	RuntimeTaskID         string   `json:"runtime_task_id,omitempty"`
-	WorkIssueID           string   `json:"work_issue_id,omitempty"`
-	WorkExecutionID       string   `json:"work_execution_id,omitempty"`
-	RoleGuidanceAppended  bool     `json:"role_guidance_appended,omitempty"`
-	IssueListAppended     bool     `json:"issue_list_appended,omitempty"`
-	CreatedAt             int64    `json:"created_at"`
-}
-
-func (s IssueToolScope) RuntimeSession() string {
-	if strings.TrimSpace(s.RuntimeSessionID) != "" {
-		return strings.TrimSpace(s.RuntimeSessionID)
-	}
-	return strings.TrimSpace(s.ConversationSessionID)
+	Ref              string   `json:"ref"`
+	Mode             string   `json:"mode,omitempty"`
+	ContactID        string   `json:"contact_id"`
+	RuntimeSessionID string   `json:"runtime_session_id,omitempty"`
+	TurnID           string   `json:"turn_id"`
+	AllowedIssueIDs  []string `json:"allowed_issue_ids,omitempty"`
+	AllowCreate      bool     `json:"allow_create,omitempty"`
+	RuntimeTaskID    string   `json:"runtime_task_id,omitempty"`
+	WorkIssueID      string   `json:"work_issue_id,omitempty"`
+	WorkExecutionID  string   `json:"work_execution_id,omitempty"`
+	CreatedAt        int64    `json:"created_at"`
 }
 
 func (s IssueToolScope) Validate() error {
 	if strings.TrimSpace(s.Ref) == "" || strings.TrimSpace(s.ContactID) == "" ||
-		strings.TrimSpace(s.RuntimeSession()) == "" || strings.TrimSpace(s.TurnID) == "" {
+		strings.TrimSpace(s.RuntimeSessionID) == "" || strings.TrimSpace(s.TurnID) == "" {
 		return errIssueToolScope
 	}
 	for _, id := range s.AllowedIssueIDs {
@@ -303,7 +293,6 @@ type IssueToolReceipt struct {
 	SessionID            string          `json:"session_id,omitempty"`
 	TaskID               string          `json:"task_id,omitempty"`
 	PiRun                *piActivityRun  `json:"pi_run,omitempty"`
-	MessageID            string          `json:"message_id,omitempty"`
 	RequirementsRevision *int            `json:"requirements_revision,omitempty"`
 	QuestionRef          string          `json:"question_ref,omitempty"`
 	QuestionState        string          `json:"question_state,omitempty"`
@@ -326,9 +315,8 @@ func ValidateIssueToolReceipt(receipt *IssueToolReceipt) error {
 			return errors.New("dispatching receipt requires issue_id and execution_id")
 		}
 	case issueToolReceiptAccepted:
-		piAccepted := receipt.PiRun != nil && receipt.PiRun.Admitted && receipt.PiRun.WorkerEpoch != "" && receipt.PiRun.ContextID != "" && receipt.PiRun.SessionRef != "" && receipt.PiRun.RunID != "" && receipt.MessageID == "" && (receipt.SessionID == "" || receipt.SessionID == receipt.PiRun.SessionRef) && (receipt.TaskID == "" || receipt.TaskID == receipt.PiRun.RunID)
-		legacyAccepted := receipt.PiRun == nil && strings.TrimSpace(receipt.SessionID) != "" && strings.TrimSpace(receipt.TaskID) != "" && strings.TrimSpace(receipt.MessageID) != ""
-		if strings.TrimSpace(receipt.IssueID) == "" || strings.TrimSpace(receipt.ExecutionID) == "" || !piAccepted && !legacyAccepted {
+		piAccepted := receipt.PiRun != nil && receipt.PiRun.Admitted && receipt.PiRun.WorkerEpoch != "" && receipt.PiRun.ContextID != "" && receipt.PiRun.SessionRef != "" && receipt.PiRun.RunID != "" && (receipt.SessionID == "" || receipt.SessionID == receipt.PiRun.SessionRef) && (receipt.TaskID == "" || receipt.TaskID == receipt.PiRun.RunID)
+		if strings.TrimSpace(receipt.IssueID) == "" || strings.TrimSpace(receipt.ExecutionID) == "" || !piAccepted {
 			return errIssueToolReceiptIDsMissing
 		}
 	case issueToolReceiptStopRequested:
@@ -490,7 +478,6 @@ type IssueToolExecutionView struct {
 	ID                   string         `json:"id"`
 	SessionID            string         `json:"session_id,omitempty"`
 	TaskID               string         `json:"task_id,omitempty"`
-	MessageID            string         `json:"message_id,omitempty"`
 	PiRun                *piActivityRun `json:"pi_run,omitempty"`
 	Status               string         `json:"status"`
 	Detail               string         `json:"detail,omitempty"`
@@ -646,7 +633,7 @@ func issueToolGet(scope IssueToolScope, issues []*productIssue, issueID string) 
 		}
 		detail.Executions = append(detail.Executions, IssueToolExecutionView{
 			ID: execution.ID, SessionID: execution.SessionID, TaskID: execution.TaskID,
-			MessageID: execution.MessageID, Status: execution.Status, Detail: execution.Detail,
+			Status: execution.Status, Detail: execution.Detail,
 			PiRun:                clonePiActivityRun(execution.PiRun),
 			RequirementsRevision: execution.RequirementsRevision,
 		})

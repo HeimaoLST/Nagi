@@ -20,13 +20,11 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"github.com/HeimaoLST/Nagi/internal/pi"
 	"github.com/HeimaoLST/Nagi/locales"
 )
 
-// The runtime bounds the sum of serialized caller-context wrappers carried by
-// one user turn (src/agent/message.rs MAX_CONTEXT_BYTES). Validate the same
-// budget here so a failed send cannot be the first place an oversize snapshot
-// is reported.
+// Bound serialized context passed to Pi before submitting a run.
 const (
 	taskContextMaxBytes  = 1024 * 1024
 	taskContextReadLimit = taskContextMaxBytes + 1
@@ -372,22 +370,9 @@ func validateTaskContext(items []taskContextItem) error {
 	return nil
 }
 
-// taskContextWrapperBytes mirrors the runtime's serialized caller_context
-// wrapper for budget purposes. Go's JSON escaping is a little more eager than
-// serde's, so the estimate is conservative; it is not a wire DTO.
 func taskContextWrapperBytes(name, text string) int {
-	data, _ := json.Marshal(struct {
-		Type  string `json:"type"`
-		Label string `json:"label"`
-		Name  string `json:"name"`
-		Text  string `json:"text"`
-	}{
-		Type:  "caller_context",
-		Label: "Caller-provided context (user data)",
-		Name:  name,
-		Text:  text,
-	})
-	return len(data)
+	data, _ := json.Marshal(pi.ContextInput{Name: name, Text: text})
+	return len(data) + 1
 }
 
 var taskContextBinaryExtensions = map[string]bool{
@@ -435,20 +420,16 @@ func readTaskContextFile(path string) (text, source string, err error) {
 	return string(data), absolute, nil
 }
 
-// taskContextInputs is the single snapshot-to-wire projection used by every
-// sender (conversation, issue run/continue, and module tests).
-func taskContextInputs(items []taskContextItem) []runtimeContextInput {
-	inputs := make([]runtimeContextInput, 0, len(items))
+func taskContextInputs(items []taskContextItem, extra ...pi.ContextInput) []pi.ContextInput {
+	inputs := make([]pi.ContextInput, 0, len(items)+len(extra))
 	for _, item := range items {
-		inputs = append(inputs, runtimeContextInput{Name: item.inputName(), Text: item.Text})
+		inputs = append(inputs, pi.ContextInput{Name: item.inputName(), Text: item.Text})
 	}
-	return inputs
+	return append(inputs, extra...)
 }
 
-// validateRuntimeContextInputs checks the actual caller-context wire budget,
-// including app-injected internal context. It never truncates or drops user
-// material; the caller must fail before task.send and preserve the draft.
-func validateRuntimeContextInputs(inputs []runtimeContextInput) error {
+// validateRuntimeContextInputs includes app-injected context in the Pi request budget.
+func validateRuntimeContextInputs(inputs []pi.ContextInput) error {
 	total := 0
 	for _, input := range inputs {
 		total += taskContextWrapperBytes(input.Name, input.Text)
@@ -457,63 +438,6 @@ func validateRuntimeContextInputs(inputs []runtimeContextInput) error {
 		}
 	}
 	return nil
-}
-
-// taskContextUserContent separates a Runtime user message's ordinary text from
-// actual caller_context parts. Ordinary text that merely resembles JSON stays
-// text; only the Runtime envelope type and label are recognized.
-func taskContextUserContent(raw json.RawMessage) (string, []taskContextItem) {
-	var plain string
-	if err := json.Unmarshal(raw, &plain); err == nil {
-		return plain, nil
-	}
-	var parts []struct {
-		Type string `json:"type"`
-		Text string `json:"text"`
-	}
-	if err := json.Unmarshal(raw, &parts); err != nil {
-		return "", nil
-	}
-	var text strings.Builder
-	var items []taskContextItem
-	bodySeen := false
-	for _, part := range parts {
-		switch part.Type {
-		case "image":
-			text.WriteString("[image]")
-		case "text":
-			if !bodySeen {
-				// Runtime places the nonempty GUI body first, then caller
-				// context wrappers. The wire has no origin tag, so a first
-				// context-only wrapper from another caller stays literal.
-				text.WriteString(part.Text)
-				bodySeen = true
-				continue
-			}
-			if item, ok := taskContextEnvelope(part.Text); ok {
-				items = append(items, item)
-			} else {
-				text.WriteString(part.Text)
-			}
-		}
-	}
-	return text.String(), items
-}
-
-func taskContextEnvelope(text string) (taskContextItem, bool) {
-	var envelope struct {
-		Type  string `json:"type"`
-		Label string `json:"label"`
-		Name  string `json:"name"`
-		Text  string `json:"text"`
-	}
-	if err := json.Unmarshal([]byte(text), &envelope); err != nil {
-		return taskContextItem{}, false
-	}
-	if envelope.Type != "caller_context" || envelope.Label != "Caller-provided context (user data)" {
-		return taskContextItem{}, false
-	}
-	return taskContextItem{Name: envelope.Name, Text: envelope.Text, Revision: 1}, true
 }
 
 // taskContextReadOnlyView renders history materials without editor/resend

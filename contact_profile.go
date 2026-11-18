@@ -110,8 +110,6 @@ func profileNoticeText(msgs locales.Messages, notice string) string {
 		return msgs.RestoreErrorSave()
 	case restoreNoticeSaved:
 		return msgs.RestoreSaved()
-	case builtinNoticeLegacy:
-		return msgs.SettingsBuiltinLegacyError()
 	case builtinNoticeManaged:
 		return msgs.SettingsBuiltinManagedError()
 	case builtinNoticeListUnavailable:

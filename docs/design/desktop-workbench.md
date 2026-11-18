@@ -43,7 +43,7 @@
 - Settings 的 `通用 / General` 分类包含 `外观 / Appearance` 与 `语言 / Language` 两组。语言选项为「跟随系统（当前：简体中文） / System (currently English)」「简体中文」「English」；每种语言名用自身语言书写。切换立即生效，保留草稿、焦点、滚动位置、已打开详情和设置分类；重启后保持所选语言。若只有部分系统菜单需重启才切换，在语言组下方用一行事实说明。
 - 采用 MyGo 内置 i18n 路线：ARB 风格翻译、ICU MessageFormat、CLDR 复数／语言匹配及生成函数，按实际 API 生成和读取；不引入 go-i18n、另一套 locale 框架或第二份语言权威，也不另写第二套语言判定算法。当前只记录设计约束，框架接入、`SetLocale` 持久化、菜单和伪语言验证仍由 GUI 实现并另验。
 - 界面语言不修改 system／instructions、联系人职责、会话快照或 Agent 的回复语言；不翻译用户／Agent 原始内容、已有联系人名称、模型/provider 名称、协议值、文件路径、代码和工具原始输出。原始诊断保留原文，面向用户的主文案另给“发生了什么 + 怎么办 + 入口”。
-- 新 UI 的品牌名一律为 **Nagi**；改软件名不等于替换用户内容、对话或事项文本、或联系人名。内部数据目录 `Application Support/Saki/`、bundle ID、`SAKI_*`、`Saki-runtime` 及已有联系人名 `Saki` 不改。软件名 Saki 只在诊断中以 Saki Runtime 出现；用户／联系人原文中的 Saki 按上一条保持原样。
+- 产品名为 **Nagi**，使用独立的 Nagi 数据目录与 Pi 运行时。
 
 ### 术语定稿
 

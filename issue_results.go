@@ -1,12 +1,6 @@
 package main
 
-// Independent issue result projection. A reported file is evidence only when a
-// finished Runtime tool result from write/edit contains the resolved path and
-// that call's success fields. Assistant prose, read/bash output, errors and
-// interrupted results are never treated as generated files.
-
 import (
-	"encoding/json"
 	"errors"
 	"io"
 	"io/fs"
@@ -30,17 +24,6 @@ import (
 // reported with its actual size instead of copying a silently truncated view.
 const issueResultPreviewLimit = 256 * 1024
 
-// issueResultSource is the execution identity supplied by the caller. It must
-// come from issue.execution facts and its actual Runtime session, not from the
-// selected contact's current session or the prompt text.
-type issueResultSource struct {
-	ExecutionID      string
-	SessionID        string
-	TaskID           string
-	MessageID        string
-	WorkingDirectory string
-}
-
 // issueResultFile is one successful write/edit result. Multiple calls and
 // executions remain separate rows even when they report the same path.
 type issueResultFile struct {
@@ -53,111 +36,6 @@ type issueResultFile struct {
 	Path             string
 	WorkingDirectory string
 	RawResult        string
-}
-
-type issueResultDerivation struct {
-	WorkingDirectory string
-	Files            []issueResultFile
-	UnavailableKind  string
-}
-
-// deriveIssueResultFiles reads only the supplied Runtime history response. The
-// history header and the execution's recorded session must match; the function
-// cannot discover a session by itself and never falls back to a prompt or
-// latest work item.
-func deriveIssueResultFiles(source issueResultSource, history runtimeHistory) issueResultDerivation {
-	if source.SessionID == "" {
-		return issueResultDerivation{UnavailableKind: "no-session"}
-	}
-	if source.SessionID != history.SessionID {
-		return issueResultDerivation{UnavailableKind: "session-mismatch"}
-	}
-	if source.TaskID == "" {
-		return issueResultDerivation{UnavailableKind: "no-task"}
-	}
-
-	projection := parseHistory(history.SessionID, history.Records, nil)
-	var files []issueResultFile
-	foundTask, messageMismatch := false, false
-	for _, work := range projection.works {
-		if work.TaskID != source.TaskID {
-			continue
-		}
-		foundTask = true
-		if source.MessageID != "" && work.MessageID != source.MessageID {
-			messageMismatch = true
-			continue
-		}
-		for _, tool := range work.Tools {
-			if tool == nil || !tool.Finished {
-				continue
-			}
-			path, ok := successfulWriteEditPath(tool.Name, tool.Output)
-			if !ok {
-				continue
-			}
-			files = append(files, issueResultFile{
-				ExecutionID:      source.ExecutionID,
-				SessionID:        source.SessionID,
-				TaskID:           work.TaskID,
-				MessageID:        work.MessageID,
-				CallID:           tool.CallID,
-				ToolName:         tool.Name,
-				Path:             path,
-				WorkingDirectory: source.WorkingDirectory,
-				RawResult:        tool.Output,
-			})
-		}
-	}
-	if !foundTask {
-		return issueResultDerivation{UnavailableKind: "task-missing"}
-	}
-	if messageMismatch {
-		return issueResultDerivation{UnavailableKind: "message-missing"}
-	}
-	return issueResultDerivation{Files: files, WorkingDirectory: source.WorkingDirectory}
-}
-
-func successfulWriteEditPath(toolName, output string) (string, bool) {
-	if toolName != "write" && toolName != "edit" {
-		return "", false
-	}
-	var fields map[string]json.RawMessage
-	if err := json.Unmarshal([]byte(output), &fields); err != nil {
-		return "", false
-	}
-	if _, failed := fields["error"]; failed {
-		return "", false
-	}
-	if raw, interrupted := fields["interrupted"]; interrupted {
-		var value bool
-		if json.Unmarshal(raw, &value) == nil && value {
-			return "", false
-		}
-	}
-	var path string
-	rawPath, ok := fields["path"]
-	if !ok || json.Unmarshal(rawPath, &path) != nil {
-		return "", false
-	}
-	if path == "" || !filepath.IsAbs(path) {
-		return "", false
-	}
-	switch toolName {
-	case "write":
-		var written int
-		raw, ok := fields["bytes_written"]
-		if !ok || json.Unmarshal(raw, &written) != nil || written < 0 {
-			return "", false
-		}
-	case "edit":
-		var applied int
-		raw, ok := fields["applied"]
-		if !ok || json.Unmarshal(raw, &applied) != nil || applied < 1 {
-			return "", false
-		}
-	}
-	return path, true
 }
 
 type issueResultFileInspection struct {
@@ -261,27 +139,8 @@ func issueResultNoticeText(msgs locales.Messages, kind, detail string) string {
 	}
 }
 
-func issueResultUnavailableRaw(kind string) string {
-	switch kind {
-	case "no-session":
-		return "Execution has no recorded Runtime session; results cannot be inspected."
-	case "session-mismatch":
-		return "Runtime history belongs to a different session; results cannot be inspected."
-	case "no-task":
-		return "Execution has no recorded Runtime task; results cannot be inspected."
-	case "task-missing":
-		return "Runtime history does not contain the execution's task; the session may be unavailable or legacy."
-	case "message-missing":
-		return "Runtime history does not record the supplied execution message."
-	default:
-		return ""
-	}
-}
-
 func issueResultPageText(msgs locales.Messages, kind, detail string) string {
 	switch kind {
-	case "load-no-session":
-		return msgs.ResultLoadNoSession()
 	case "load-runtime-not-ready":
 		return msgs.ResultLoadRuntimeNotReady()
 	case "load-owner-missing":
@@ -290,18 +149,6 @@ func issueResultPageText(msgs locales.Messages, kind, detail string) string {
 		return msgs.ResultLoadDetached()
 	case "load-failed":
 		return msgs.ResultLoadFailed(detail)
-	case "notice-working-dir":
-		return msgs.ResultNoticeWorkingDirMissing()
-	case "no-session":
-		return msgs.ResultDeriveNoSession()
-	case "session-mismatch":
-		return msgs.ResultDeriveSessionMismatch()
-	case "no-task":
-		return msgs.ResultDeriveNoTask()
-	case "task-missing":
-		return msgs.ResultDeriveTaskMissing()
-	case "message-missing":
-		return msgs.ResultDeriveMessageMissing()
 	default:
 		return kind
 	}

@@ -107,9 +107,7 @@ func (issue *productIssue) questionByRef(ref string) *issueQuestion {
 	return nil
 }
 
-// issueWorkSession is the in-memory runtime projection for one issue's
-// execution context. Only WorkSessionID is persisted; messages, work items
-// and task state are restored from the Runtime by session_id.
+// issueWorkSession is transient state for the issue's Pi activity.
 type issueWorkSession struct {
 	Loaded             bool
 	LoadErr            string
@@ -119,23 +117,14 @@ type issueWorkSession struct {
 	SendError          string
 	SendErrorKind      string
 	SendErrorDetail    string
-	SessionState       string
 	Messages           []*message
-	UnlinkedTools      []*workTool
 	StopRequestedTasks map[string]bool
-	pendingEvents      []runtimeEventEnvelope
 	pendingExecutionID string
 	cancelAfterAccept  bool
 	piCancelSent       map[string]bool
 	historyGen         int
-	HistoryDirty       bool
-	Released           bool
-	Releasing          bool
-	ReleasePending     bool
 }
 
-// issueRequirement is the single live truth for a product requirement. The
-// legacy Requirements string exists only at the store serialization boundary.
 type issueRequirement struct {
 	ID        string
 	Text      string
@@ -162,7 +151,6 @@ type issueExecution struct {
 	SupplementBatchID    string
 	ToolOperationID      string
 	ToolScopeRef         string
-	ToolScopeInput       string
 	PiIntent             bool
 	PiRun                *piActivityRun
 	WaitRequested        bool
@@ -597,8 +585,6 @@ func issueNoticeText(msgs locales.Messages, notice, detail string) string {
 		return msgs.IssueNoticeSupplementAutoResume()
 	case "supplement-retry-failed":
 		return msgs.IssueNoticeSupplementRetry()
-	case "supplement-check-failed":
-		return msgs.IssueNoticeSupplementCheck()
 	default:
 		return sendBlockText(msgs, notice)
 	}
@@ -666,26 +652,21 @@ func issuesForStoredContact(all []storedIssue, contactID string) []*productIssue
 			}
 			issue.Questions = append(issue.Questions, &copy)
 		}
-		if len(stored.RequirementItems) > 0 {
-			for _, item := range stored.RequirementItems {
-				if strings.TrimSpace(item.Text) == "" {
-					continue
-				}
-				state := item.State
-				if state != requirementSatisfied && state != requirementUnmet {
-					state = requirementUnverified
-				}
-				issue.Requirements = append(issue.Requirements, &issueRequirement{
-					ID: item.ID, Text: item.Text, State: state, Evidence: item.Evidence, UpdatedAt: item.UpdatedAt,
-				})
+		for _, item := range stored.RequirementItems {
+			if strings.TrimSpace(item.Text) == "" {
+				continue
 			}
-		} else {
-			issue.Requirements = parseIssueRequirements(stored.Requirements)
+			state := item.State
+			if state != requirementSatisfied && state != requirementUnmet {
+				state = requirementUnverified
+			}
+			issue.Requirements = append(issue.Requirements, &issueRequirement{
+				ID: item.ID, Text: item.Text, State: state, Evidence: item.Evidence, UpdatedAt: item.UpdatedAt,
+			})
 		}
 		if issue.RequirementsRevision < 1 {
 			issue.RequirementsRevision = 1
 		}
-		issue.WorkSessionID = stored.WorkSessionID
 		for _, execution := range stored.Executions {
 			if execution.ID == "" {
 				continue
@@ -695,16 +676,9 @@ func issuesForStoredContact(all []storedIssue, contactID string) []*productIssue
 				status = issueExecutionUnknown
 			}
 			detail := execution.Detail
-			switch {
-			case execution.PiIntent && (status == issueExecutionPending || status == issueExecutionAccepted || status == issueExecutionRunning):
+			if status == issueExecutionPending || status == issueExecutionAccepted || status == issueExecutionRunning {
 				status = issueExecutionUnknown
 				detail = "The previous Pi run is unavailable; its outcome is unknown."
-			case status == issueExecutionPending:
-				status = issueExecutionUnknown
-				detail = "No trusted Runtime task association was recorded; reload before rerunning."
-			case execution.TaskID == "" && (status == issueExecutionAccepted || status == issueExecutionRunning):
-				status = issueExecutionUnknown
-				detail = "No trusted Runtime task association was recorded; reload before rerunning."
 			}
 			issue.Executions = append(issue.Executions, &issueExecution{
 				ID: execution.ID, SessionID: execution.SessionID, TaskID: execution.TaskID,
@@ -713,8 +687,8 @@ func issuesForStoredContact(all []storedIssue, contactID string) []*productIssue
 				RequirementsRevision: execution.RequirementsRevision,
 				Context:              cloneTaskContextItems(execution.Context), SupplementBatchID: execution.SupplementBatchID,
 				ToolOperationID: execution.ToolOperationID, ToolScopeRef: execution.ToolScopeRef,
-				ToolScopeInput: execution.ToolScopeInput, WaitRequested: execution.WaitRequested,
-				PiIntent: execution.PiIntent, PiRun: clonePiActivityRun(execution.PiRun),
+				WaitRequested: execution.WaitRequested,
+				PiIntent:      execution.PiIntent, PiRun: clonePiActivityRun(execution.PiRun),
 			})
 		}
 		issue.Status = normalizeIssueStatus(stored.Status, issue.Executions)
@@ -880,19 +854,6 @@ func (a *appModel) confirmIssueExecutionSeen(ct *contact, issue *productIssue, e
 	return true
 }
 
-func (a *appModel) updatePendingIssueExecution(ct *contact, status, message string) {
-	if ct.pendingIssueExecution == "" {
-		return
-	}
-	_, execution := ct.executionByID(ct.pendingIssueExecution)
-	ct.pendingIssueExecution = ""
-	if execution == nil {
-		return
-	}
-	execution.Status = status
-	execution.Detail = message
-}
-
 func issueExecutionStatusFromWork(state workState) string {
 	switch state {
 	case workAccepted:
@@ -926,146 +887,6 @@ func issueRunBlocked(issue *productIssue) string {
 		}
 	}
 	return ""
-}
-
-// reconcileIssueExecution is the explicit recovery action for an execution
-// whose local terminal state is unknown. It only trusts the Runtime task
-// association (session_id + task_id); it never guesses a task from prompt text
-// and never dispatches a replacement task.
-func (a *appModel) reconcileIssueExecution(issueID, executionID string) bool {
-	ct := a.selectedContact()
-	issue := ct.issueByID(issueID)
-	owner, execution := ct.executionByID(executionID)
-	if issue == nil || execution == nil || owner != issue {
-		return false
-	}
-	if execution.SessionID == "" || execution.TaskID == "" {
-		execution.Detail = "No trusted task association is recorded; inspect the issue work history or confirm that this execution was not dispatched. No automatic retry."
-		return false
-	}
-	sessionID, taskID := execution.SessionID, execution.TaskID
-	go a.checkIssueExecution(a.rt, ct.ID, issue.ID, execution.ID, sessionID, taskID)
-	return true
-}
-
-func (a *appModel) checkIssueExecution(rt *runtimeClient, contactID, issueID, executionID, sessionID, taskID string) {
-	state, err := rt.taskStatus(sessionID, taskID)
-	pages, _, historyErr := a.historyAllFor(rt, sessionID)
-	a.updateUI(func() {
-		if a.rt != rt {
-			return
-		}
-		ct := a.contactByID(contactID)
-		if ct == nil {
-			return
-		}
-		issue := ct.issueByID(issueID)
-		if issue == nil {
-			return
-		}
-		owner, execution := ct.executionByID(executionID)
-		if owner != issue || execution == nil || execution.SessionID != sessionID || execution.TaskID != taskID {
-			return
-		}
-		if err != nil {
-			execution.Detail = "Could not verify this execution with Runtime: " + a.connectionRuntimeMessage(err) + ". No automatic retry."
-			return
-		}
-		switch state.Status {
-		case "completed", "failed", "interrupted":
-			execution.Status = state.Status
-			execution.Detail = ""
-			if issue.Work.ActiveTaskID == taskID {
-				issue.Work.ActiveTaskID = ""
-				issue.Work.SendState = sendIdle
-				issue.Work.clearSendError()
-			}
-			if w := workFor(ct, taskID); w != nil {
-				w.State = workStateFromTask(state.Status)
-				w.Detail = ""
-			}
-			if !a.acceptSupplementFromHistory(issue, execution, pages, historyErr) {
-				_ = a.persist()
-			}
-			a.reloadIssueWorkByID(contactID, issueID)
-			a.maybeAutoContinueAllIssues()
-		case "accepted", "running":
-			execution.Status = state.Status
-			execution.Detail = ""
-			if issue.Work.ActiveTaskID == "" || issue.Work.ActiveTaskID == taskID {
-				issue.Work.ActiveTaskID = taskID
-				issue.Work.LastTaskID = taskID
-				issue.Work.SendState = sendAccepted
-				issue.Work.clearSendError()
-			}
-			if w := a.ensureWork(ct, taskID, execution.MessageID); w != nil {
-				if state.Status == "running" {
-					w.State = workRunning
-				} else {
-					w.State = workAccepted
-				}
-			}
-			if !a.acceptSupplementFromHistory(issue, execution, pages, historyErr) {
-				_ = a.persist()
-			}
-		default:
-			execution.Status = issueExecutionUnknown
-			execution.Detail = "Runtime reports no trusted terminal state for this task; inspect the work record or confirm not dispatched. No automatic retry."
-			_ = a.persist()
-		}
-	})
-}
-
-// confirmIssueExecutionNotDispatched is the explicit user decision for a
-// pending/unknown execution with no trusted task ID. It records "no task was
-// dispatched" and never claims a result or retries the side effect.
-func (a *appModel) confirmIssueExecutionNotDispatched(issueID, executionID string) bool {
-	ct := a.selectedContact()
-	issue := ct.issueByID(issueID)
-	owner, execution := ct.executionByID(executionID)
-	if issue == nil || execution == nil || owner != issue || execution.TaskID != "" {
-		return false
-	}
-	if issue.Work.ActiveTaskID != "" || issue.Work.SendState == sendSubmitting {
-		return false
-	}
-	switch execution.Status {
-	case issueExecutionPending, issueExecutionUnknown:
-	default:
-		return false
-	}
-	oldExecutionStatus, oldExecutionDetail := execution.Status, execution.Detail
-	oldWorkState, oldWorkError, oldWorkPending := issue.Work.SendState, issue.Work.SendError, issue.Work.pendingExecutionID
-	oldWorkErrorKind, oldWorkErrorDetail := issue.Work.SendErrorKind, issue.Work.SendErrorDetail
-	oldAuto := false
-	if issue.Supplements != nil {
-		oldAuto = issue.Supplements.AutoContinue
-		issue.Supplements.AutoContinue = false
-	}
-	execution.Status = issueExecutionNotDispatched
-	execution.Detail = "User confirmed that no task was dispatched; the execution remains available for an explicit retry."
-	issue.Work.SendState = sendIdle
-	issue.Work.clearSendError()
-	issue.Work.pendingExecutionID = ""
-	batch := issueSupplementBatchForExecution(issue, execution.ID)
-	saved := true
-	if batch != nil {
-		if issue.Supplements == nil || !issue.Supplements.NotDispatched(batch, execution.Detail, a.persist) {
-			saved = false
-		}
-	} else if err := a.persist(); err != nil {
-		saved = false
-	}
-	if !saved {
-		execution.Status, execution.Detail = oldExecutionStatus, oldExecutionDetail
-		issue.Work.SendState, issue.Work.pendingExecutionID = oldWorkState, oldWorkPending
-		issue.Work.setSendError(oldWorkError, oldWorkErrorKind, oldWorkErrorDetail)
-		if issue.Supplements != nil {
-			issue.Supplements.AutoContinue = oldAuto
-		}
-		return false
-	}
-	return true
 }
 
 // issueDisplayStatus is the single read-only display projection for an issue.

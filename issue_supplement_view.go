@@ -213,23 +213,6 @@ func (a *appModel) issueSupplementSection(c *ui.Context, t *ui.Theme, ct *contac
 						}
 					})
 				}
-				if batch.State == supplementBatchUnknown || batch.State == supplementBatchDispatching {
-					ui.Text(c, msgs.SupplementNeedsCheck()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Warning)
-					if batch.ExecutionID != "" {
-						executionID := batch.ExecutionID
-						secondaryButton(c, msgs.SupplementCheck()).Disabled(!a.demo).OnClick(func() {
-							if !a.demo {
-								return
-							}
-							if !a.reconcileIssueExecution(issue.ID, executionID) {
-								a.setIssueActionNotice("Could not check this supplement execution.", "supplement-check-failed", "")
-							}
-						})
-						if !a.demo {
-							ui.Text(c, piResultsUnavailable).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Warning)
-						}
-					}
-				}
 			})
 		}
 		if len(batches) > 6 {

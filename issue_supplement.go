@@ -60,7 +60,6 @@ type issueSupplement struct {
 	Detail                string         `json:"detail,omitempty"`
 	SessionID             string         `json:"session_id,omitempty"`
 	TaskID                string         `json:"task_id,omitempty"`
-	MessageID             string         `json:"message_id,omitempty"`
 	ExecutionID           string         `json:"execution_id,omitempty"`
 	PiRun                 *piActivityRun `json:"pi_run,omitempty"`
 	PiQuestionOperationID string         `json:"pi_question_operation_id,omitempty"`
@@ -81,7 +80,6 @@ type issueSupplementBatch struct {
 	State       string                    `json:"state"`
 	SessionID   string                    `json:"session_id,omitempty"`
 	TaskID      string                    `json:"task_id,omitempty"`
-	MessageID   string                    `json:"message_id,omitempty"`
 	ExecutionID string                    `json:"execution_id,omitempty"`
 	PiRun       *piActivityRun            `json:"pi_run,omitempty"`
 	SaveError   string                    `json:"save_error,omitempty"`
@@ -90,20 +88,8 @@ type issueSupplementBatch struct {
 type issueSupplementAssociation struct {
 	SessionID   string
 	TaskID      string
-	MessageID   string
 	ExecutionID string
 	PiRun       *piActivityRun
-}
-
-// issueSupplementHistory is a caller-provided record, not a claim that this
-// package parsed Runtime history. Matching requires a complete input string and
-// all association identities supplied by the caller.
-type issueSupplementHistory struct {
-	Text        string
-	SessionID   string
-	TaskID      string
-	MessageID   string
-	ExecutionID string
 }
 
 type issueSupplementLedger struct {
@@ -388,19 +374,18 @@ func (l *issueSupplementLedger) Accept(batch *issueSupplementBatch, association 
 	if save == nil {
 		return false, errSupplementSaveRequired
 	}
-	piAccepted := association.PiRun != nil && association.PiRun.Admitted && association.PiRun.WorkerEpoch != "" && association.PiRun.ContextID != "" && association.PiRun.SessionRef != "" && association.PiRun.RunID != "" && association.MessageID == "" && (association.SessionID == "" || association.SessionID == association.PiRun.SessionRef) && (association.TaskID == "" || association.TaskID == association.PiRun.RunID)
-	legacyAccepted := association.PiRun == nil && strings.TrimSpace(association.SessionID) != "" && strings.TrimSpace(association.TaskID) != "" && strings.TrimSpace(association.MessageID) != ""
-	if strings.TrimSpace(association.ExecutionID) == "" || !piAccepted && !legacyAccepted {
-		return false, errors.New("accepted supplement requires a real execution and runtime association")
+	piAccepted := association.PiRun != nil && association.PiRun.Admitted && association.PiRun.WorkerEpoch != "" && association.PiRun.ContextID != "" && association.PiRun.SessionRef != "" && association.PiRun.RunID != "" && (association.SessionID == "" || association.SessionID == association.PiRun.SessionRef) && (association.TaskID == "" || association.TaskID == association.PiRun.RunID)
+	if strings.TrimSpace(association.ExecutionID) == "" || !piAccepted {
+		return false, errors.New("accepted supplement requires an admitted Pi run and execution ID")
 	}
 	batch.State = supplementBatchAccepted
-	batch.SessionID, batch.TaskID, batch.MessageID, batch.ExecutionID = association.SessionID, association.TaskID, association.MessageID, association.ExecutionID
+	batch.SessionID, batch.TaskID, batch.ExecutionID = association.SessionID, association.TaskID, association.ExecutionID
 	batch.PiRun = clonePiActivityRun(association.PiRun)
 	batch.SaveError = ""
 	for _, snapshot := range batch.Snapshot {
 		if item := l.itemByID(snapshot.ID); item != nil {
 			item.State = supplementStateSubmitted
-			item.SessionID, item.TaskID, item.MessageID, item.ExecutionID = batch.SessionID, batch.TaskID, batch.MessageID, batch.ExecutionID
+			item.SessionID, item.TaskID, item.ExecutionID = batch.SessionID, batch.TaskID, batch.ExecutionID
 			item.PiRun = clonePiActivityRun(batch.PiRun)
 		}
 	}
@@ -563,26 +548,6 @@ func (l *issueSupplementLedger) canonicalBatch(batch *issueSupplementBatch) *iss
 	return canonical
 }
 
-// MatchProvidedHistory matches a caller-supplied complete send input and
-// association against an accepted batch. It does not parse Runtime history and
-// batch.Text is not claimed to be the full model input.
-func (b *issueSupplementBatch) MatchProvidedHistory(fullInput string, records []issueSupplementHistory) bool {
-	if b == nil || b.State != supplementBatchAccepted || b.Text == "" ||
-		b.SessionID == "" || b.TaskID == "" || b.MessageID == "" || b.ExecutionID == "" {
-		return false
-	}
-	for _, record := range records {
-		if record.Text != fullInput || record.SessionID != b.SessionID || record.TaskID != b.TaskID ||
-			record.MessageID != b.MessageID || record.ExecutionID != b.ExecutionID {
-			continue
-		}
-		return true
-	}
-	return false
-}
-
-// cloneIssueSupplementLedger copies every persisted supplement object so an
-// app/store reload cannot alias the in-memory ledger with the stored snapshot.
 func cloneIssueSupplementLedger(ledger *issueSupplementLedger) *issueSupplementLedger {
 	if ledger == nil {
 		return nil

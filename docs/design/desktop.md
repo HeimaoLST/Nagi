@@ -454,28 +454,18 @@ Headless 证据（fixture，不等于线上模型或原生窗口）：
 - `/private/tmp/saki-gui-90-app/Saki.app`；GUI sha256 `ba5fda24c811fb226995c4f2fae6fd6fa6203976c7557789d5bc8d39fe1855c1`，runtime helper sha256 `0828c59072c313e74e458f78e7f25122c30d1e838ebc17db3c77eac6aafb0379`（复用 #63 helper）。
 - 构建源码 SHA `fe964f4769d78f845dc8d5487b0ac8cc434fd7fd`；`go version -m` 记录 `vcs.revision=fe964f4`、`vcs.modified=false`，日志 `/private/tmp/saki-gui-90-app/logs/`；ad-hoc 签名，`codesign --verify --strict` / `--deep --strict` 通过，arm64。
 
-## 文件与配置（实现事实）
+## 文件与配置（当前 Pi 版本）
 
-- `runtime.go`：stdio v1 client／DTO（request id 路由、持续读 stdout、stderr 诊断、协议失败单一边界、迟到 response 丢弃、读完后 Wait）。
-- `runtime_model.go`：启动/恢复、真实发送、事件应用、history 转换、取消、退出与配置。
-- `store.go`：GUI contact store（原子写，损坏不覆盖）。
-- `contact_profile.go`、`contact_management.go`、`contact_history.go`：联系人表单与唯一保存路径、归档/恢复、联系人筛选、指定会话范围的历史搜索及原文定位。
-- `connection_config.go`、`connection_app.go`、`connection_runtime.go`、`connection_settings.go`：GUI 配置来源、保存/应用生命周期、既有 stdio 接口适配与表单；不实现模型协议客户端。
-- `model.go`／`view.go`／`main.go`：状态模型、原生布局与入口；`seededApp` 仅测试/截图。
-- Store：`SAKI_GUI_STORE`，否则 `<UserConfigDir>/Saki/contacts.json`（macOS 通常 `~/Library/Application Support/Saki/contacts.json`）。
-- Session 目录：`SAKI_SESSION_DIR`，否则 `<store 目录>/sessions`；作为子进程环境注入。
-- Runtime 可执行：`SAKI_RUNTIME_BIN`；否则查找 GUI 可执行文件旁的 `Saki-runtime`／`saki-runtime`、`../Resources/Saki-runtime`／`../Resources/Saki`；最后查 `PATH` 的 `Saki`。
-- 工作目录：有 GUI 配置时使用已应用的默认目录；旧联系人仍保留自身 Workspace。外部配置模式沿用 `SAKI_GUI_WORKDIR`，否则当前目录（Finder 的 `/` 除外，退回 home）。
-- 模型连接：`<store 目录>/connection.json` 是唯一 GUI 可编辑来源，保存协议、endpoint、key、默认模型、显式 context/output 容量、默认目录与活动任务上限。无该文件时兼容既有宿主环境/`.env`；损坏或失效的 GUI 配置必须在界面修复，不能静默回退。详见末尾 #116。
-
-当前根模块构建、外部 Runtime 启动和 `Nagi.app` 打包命令见 [README](../../README.md)。Finder 启动不继承 shell 环境，Connection settings 与外部环境模式的既有语义保持；不要把凭据写进包或仓库。
+- Nagi 从 GUI 的连接设置读取配置，Pi 执行会话与事项。协议与调用边界见 [Pi 集成说明](pi-integration.md)。
+- macOS 默认工作台位于 `~/Library/Application Support/Nagi`，包含 `contacts.json`、私有 `connection.json` 和 `pi/`。用户通过界面选择工作目录和配置模型。
+- 开发用隔离工作台可设置 `NAGI_GUI_STORE` 和 `NAGI_GUI_WORKDIR`。构建说明见 [README](../../README.md)。
 
 ### 原生内容尺寸诊断（原 #328，现 Nagi #23）
 
 实现源 `14f2275bfa74717f167d1c45344f25fecea78931` 在正常 GUI 启动时支持一个显式环境变量。测试启动者可以向同源包的可执行文件传入内容区逻辑尺寸，单位为 DIP：
 
 ```sh
-SAKI_GUI_CONTENT_SIZE=960x640 "/path/to/Nagi.app/Contents/MacOS/Nagi"
+NAGI_GUI_CONTENT_SIZE=960x640 "/path/to/Nagi.app/Contents/MacOS/Nagi"
 ```
 
 非空值采用小写 `x` 分隔的两个正整数。非法值在应用、Runtime 和用户数据初始化前以 exit 1 和参数错误停止。缺省或空值保留原外框 `1040×720`、最小尺寸及正常启动路径，不输出本项诊断。现有 `--issue-tool-helper` 分支优先，不消费这个 GUI 选项。
@@ -1291,7 +1281,7 @@ HTTPS、mailto、文内锚点、未完成链接与不支持的 scheme 保持原�
 
 本节描述 [Nagi #3](https://github.com/HeimaoLST/Nagi/issues/3) 的本地实现候选；尚未集成 `dev`，原生选择、最终同源包与 CI 仍待验收。它在现有 General 外观设置中增加本地配色选择，复用同一 `workbenchTheme`、窗口背景与保存路径；字体、字号、间距和布局不由主题文件配置。
 
-主题文件放在 `UserConfigDir/Saki/themes/*.json`，macOS 通常是 `~/Library/Application Support/Saki/themes/`。目录与 `SAKI_GUI_STORE`、工作目录和 session 目录无关。启动和 General 中的 `Reload themes / 重新加载主题` 才读取文件；应用显示实际目录，不自动创建或修改主题文件，不递归扫描，也不监听文件变化。目录不存在表示没有自定义主题，其他读取错误在设置中显示，内置配色继续可用。
+主题文件放在 `UserConfigDir/Nagi/themes/*.json`，macOS 通常是 `~/Library/Application Support/Nagi/themes/`。目录与 `SAKI_GUI_STORE`、工作目录和 session 目录无关。启动和 General 中的 `Reload themes / 重新加载主题` 才读取文件；应用显示实际目录，不自动创建或修改主题文件，不递归扫描，也不监听文件变化。目录不存在表示没有自定义主题，其他读取错误在设置中显示，内置配色继续可用。
 
 每个 UTF-8 JSON 文件定义一套配色。必需字段为 `version`（整数 `1`）、`id`（以字母开头的小写 kebab-case）、`name`（非空显示名）、`kind`（`light` 或 `dark`）及 `colors`。ID 与文件名独立，显示名可重复；选择器同时显示自定义名称和 ID。内置 `paper`（Paper）及 `night`（Moss）保留，不能被覆盖。同 ID 的有效文件全部报错，不按扫描顺序选择其中一份。未知字段、错误类型、缺失必需颜色、不支持的版本或非法颜色按文件与字段报告，不影响其他有效文件。
 

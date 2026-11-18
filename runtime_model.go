@@ -31,8 +31,7 @@ const (
 func newRuntimeApp() (*appModel, error) {
 	storePath := guiStorePath()
 	defaultWorkDir := guiWorkDir()
-	sessionDir := guiSessionDir(storePath)
-	startup := readConnectionStartup(storePath, defaultWorkDir)
+	startup := readConnectionStartup(storePath)
 	workDir := defaultWorkDir
 	formWorkDir := defaultWorkDir
 	if startup.Config != nil {
@@ -54,8 +53,6 @@ func newRuntimeApp() (*appModel, error) {
 		store, err = openContactStore(storePath, workDir)
 	case startup.Config != nil:
 		store, err = openContactStore(storePath, startup.Config.WorkingDirectory)
-	case startup.Missing && startup.External:
-		store, err = openContactStore(storePath, workDir)
 	}
 	if err != nil {
 		return nil, err
@@ -64,7 +61,6 @@ func newRuntimeApp() (*appModel, error) {
 	a := &appModel{
 		store:               store,
 		storePath:           storePath,
-		sessionDir:          sessionDir,
 		workDir:             workDir,
 		runtimeStatus:       runtimeStateStarting,
 		workspaceOpen:       false,
@@ -73,7 +69,6 @@ func newRuntimeApp() (*appModel, error) {
 		connectionSaved:     startup.Config,
 		connectionEffective: startup.Config,
 		connectionManaged:   startup.Config != nil,
-		connectionLegacy:    startup.Missing && startup.External && startup.Config == nil,
 	}
 	if store != nil {
 		applyStoreSelection(a, store)
@@ -84,9 +79,7 @@ func newRuntimeApp() (*appModel, error) {
 		a.selected = 0
 	}
 	a.bindTaskContexts()
-	if !a.piDataReadOnly() {
-		a.normalizeRestoredSupplementBatches()
-	}
+	a.normalizeRestoredSupplementBatches()
 	if a.issueToolLedger == nil {
 		a.issueToolLedger = &IssueToolOperationLedger{}
 	}
@@ -116,7 +109,7 @@ func newRuntimeApp() (*appModel, error) {
 			a.runtimeErr = ""
 			a.runtimeHintKind = startupHintFixConnection
 			a.runtimeHintArgs = nil
-		case !startup.External:
+		default:
 			a.runtimeStatus = runtimeStateFailed
 			a.runtimeStage = "Connection configuration"
 			a.runtimeErrKind = runtimeNoticeConnectionRequired
@@ -125,7 +118,7 @@ func newRuntimeApp() (*appModel, error) {
 			a.runtimeHintArgs = nil
 		}
 	}
-	if startup.LoadErr != nil || (startup.Config == nil && !startup.External) {
+	if startup.Config == nil {
 		a.openSettingsTab(settingsTabConnection, settingsSourceConnection)
 	}
 	// Local saves retain the placeholder's identity on a first launch without
@@ -150,13 +143,12 @@ func newUnavailableApp(err error) *appModel {
 		runtimeHintKind: startupHintExistingStore,
 		runtimeHintArgs: []string{storePath},
 		storePath:       storePath,
-		sessionDir:      guiSessionDir(storePath),
 		workDir:         workDir,
 		workspaceOpen:   false,
 		scrollTo:        -1,
 		contacts: []*contact{{
 			ID:        newContactID(),
-			Name:      "Saki",
+			Name:      "Nagi",
 			Role:      "Assistant",
 			Status:    statusAttention,
 			WorkLabel: "Preparing a reply",
@@ -168,7 +160,7 @@ func newUnavailableApp(err error) *appModel {
 }
 
 func guiStorePath() string {
-	if value := os.Getenv("SAKI_GUI_STORE"); value != "" {
+	if value := os.Getenv("NAGI_GUI_STORE"); value != "" {
 		return value
 	}
 	dir, err := os.UserConfigDir()
@@ -176,18 +168,11 @@ func guiStorePath() string {
 		home, _ := os.UserHomeDir()
 		dir = filepath.Join(home, ".config")
 	}
-	return filepath.Join(dir, "Saki", "contacts.json")
-}
-
-func guiSessionDir(storePath string) string {
-	if value := os.Getenv("SAKI_SESSION_DIR"); value != "" {
-		return value
-	}
-	return filepath.Join(filepath.Dir(storePath), "sessions")
+	return filepath.Join(dir, "Nagi", "contacts.json")
 }
 
 func guiWorkDir() string {
-	if value := os.Getenv("SAKI_GUI_WORKDIR"); value != "" {
+	if value := os.Getenv("NAGI_GUI_WORKDIR"); value != "" {
 		return value
 	}
 	if wd, err := os.Getwd(); err == nil && wd != "" && wd != "/" {
@@ -200,33 +185,18 @@ func guiWorkDir() string {
 }
 
 const (
-	startupHintFixConnection      = "fix-connection"
-	startupHintEnterConnection    = "enter-connection"
-	startupHintFixThenApply       = "fix-then-apply"
-	startupHintHelperPath         = "helper-path"
-	startupHintHelperPathStart    = "helper-path-start"
-	startupHintRestartUnconfirmed = "restart-unconfirmed"
-	startupHintRestartReload      = "restart-reload"
-	startupHintSetAPIKey          = "set-api-key"
-	startupHintFixEnv             = "fix-env"
-	startupHintExistingStore      = "existing-store"
-	startupHintHelperInstall      = "helper-install"
-	startupHintHelperInstallNone  = "helper-install-none"
+	startupHintFixConnection   = "fix-connection"
+	startupHintEnterConnection = "enter-connection"
+	startupHintRestartReload   = "restart-reload"
+	startupHintExistingStore   = "existing-store"
 )
 
 const (
 	runtimeNoticeSavedNeedsRepair   = "saved-needs-repair"
 	runtimeNoticeConnectionRequired = "connection-required"
-	runtimeNoticeHelperMissing      = "helper-missing"
-	runtimeNoticePrepare            = "prepare"
 	runtimeNoticeStart              = "start"
-	runtimeNoticeProtocol           = "protocol"
 	runtimeNoticeConnectionLost     = "connection-lost"
-	runtimeNoticeAPIKey             = "api-key"
-	runtimeNoticeEnvParse           = "env-parse"
-	runtimeNoticeExitedBeforeReady  = "exited-before-ready"
 	runtimeNoticeStoreSave          = "store-save"
-	runtimeNoticeIssueToolShutdown  = "issue-tool-shutdown"
 	runtimeNoticeRuntimeShutdown    = "runtime-shutdown"
 )
 
@@ -260,18 +230,8 @@ func (a *appModel) runtimeStageDisplay(msgs locales.Messages) string {
 		return msgs.RuntimeStageLocalStore()
 	case "Connection configuration":
 		return msgs.RuntimeStageConnectionConfiguration()
-	case "Runtime helper":
-		return msgs.RuntimeStageRuntimeHelper()
 	case "Runtime start":
 		return msgs.RuntimeStageRuntimeStart()
-	case "Runtime protocol":
-		return msgs.RuntimeStageRuntimeProtocol()
-	case "Runtime connection":
-		return msgs.RuntimeStageRuntimeConnection()
-	case "Runtime configuration":
-		return msgs.RuntimeStageRuntimeConfiguration()
-	case "Runtime startup":
-		return msgs.RuntimeStageRuntimeStartup()
 	case "":
 		return msgs.RuntimeStageRuntimeLabel()
 	default:
@@ -285,32 +245,15 @@ func runtimeErrorText(msgs locales.Messages, kind, detail string) string {
 		return msgs.RuntimeErrorSavedNeedsRepair()
 	case runtimeNoticeConnectionRequired:
 		return msgs.RuntimeErrorConnectionRequired()
-	case runtimeNoticeHelperMissing:
-		return msgs.RuntimeErrorHelperMissing()
-	case runtimeNoticePrepare:
-		return msgs.RuntimeErrorPrepare(detail)
 	case runtimeNoticeStart:
 		return msgs.RuntimeErrorStart(detail)
-	case runtimeNoticeProtocol:
-		return msgs.RuntimeErrorProtocol(detail)
 	case runtimeNoticeConnectionLost:
 		if detail != "" {
 			return msgs.RuntimeErrorConnectionLostDetail(detail)
 		}
 		return msgs.RuntimeErrorConnectionLost()
-	case runtimeNoticeAPIKey:
-		return msgs.RuntimeErrorAPIKey()
-	case runtimeNoticeEnvParse:
-		return msgs.RuntimeErrorEnvParse()
-	case runtimeNoticeExitedBeforeReady:
-		if detail != "" {
-			return msgs.RuntimeErrorExitedBeforeReadyDetail(detail)
-		}
-		return msgs.RuntimeErrorExitedBeforeReady()
 	case runtimeNoticeStoreSave:
 		return msgs.RuntimeErrorStoreSave(detail)
-	case runtimeNoticeIssueToolShutdown:
-		return msgs.RuntimeErrorIssueToolShutdown(detail)
 	case runtimeNoticeRuntimeShutdown:
 		return msgs.RuntimeErrorRuntimeShutdown(detail)
 	default:
@@ -331,26 +274,10 @@ func runtimeHintText(msgs locales.Messages, kind string, args []string) string {
 		return msgs.StartupHintFixConnection()
 	case startupHintEnterConnection:
 		return msgs.StartupHintEnterConnection()
-	case startupHintFixThenApply:
-		return msgs.StartupHintFixThenApply()
-	case startupHintHelperPath:
-		return msgs.StartupHintHelperPath(noticeArg(args, 0))
-	case startupHintHelperPathStart:
-		return msgs.StartupHintHelperPathStart()
-	case startupHintRestartUnconfirmed:
-		return msgs.StartupHintRestartUnconfirmed()
 	case startupHintRestartReload:
 		return msgs.StartupHintRestartReload()
-	case startupHintSetAPIKey:
-		return msgs.StartupHintSetAPIKey(noticeArg(args, 0))
-	case startupHintFixEnv:
-		return msgs.StartupHintFixEnv(noticeArg(args, 0))
 	case startupHintExistingStore:
 		return msgs.StartupHintExistingStore(noticeArg(args, 0))
-	case startupHintHelperInstall:
-		return msgs.StartupHintHelperInstall(noticeArg(args, 0))
-	case startupHintHelperInstallNone:
-		return msgs.StartupHintHelperInstallNoList()
 	default:
 		return ""
 	}
@@ -377,165 +304,11 @@ func safeDiagnostic(text string) string {
 	return truncate(text, 500)
 }
 
-func (a *appModel) childEnv() []string {
-	env := os.Environ()
-	if os.Getenv("SAKI_SESSION_DIR") == "" {
-		env = append(env, "SAKI_SESSION_DIR="+a.sessionDir)
-	}
-	return env
-}
-
 func (a *appModel) clearBuiltinToolCatalog() {
 	a.runtimeBuiltinTools = nil
 	a.runtimeBuiltinDefaults = nil
 	a.runtimeBuiltinToolsLoaded = false
 	a.runtimeBuiltinToolsErr = ""
-}
-
-func (a *appModel) protocolFailed(message string) {
-	a.clearBuiltinToolCatalog()
-	a.runtimeStatus = runtimeStateFailed
-	a.runtimeStage = "Runtime protocol"
-	a.runtimeErrKind = runtimeNoticeProtocol
-	a.runtimeErr = a.redactConnectionText(message)
-	a.runtimeHintKind = startupHintRestartUnconfirmed
-	a.runtimeHintArgs = nil
-	for _, ct := range a.contacts {
-		if ct.SendState == sendSubmitting || ct.ActiveTaskID != "" {
-			if w := ct.activeWork(); w != nil {
-				w.State = workUnknown
-				w.Detail = "Protocol failure; result not confirmed."
-			}
-			ct.SessionState = "unknown"
-			ct.SendState = sendUnknown
-			ct.Status = statusAttention
-			ct.setSendError("Protocol failure; delivery not confirmed. Reload before sending again.", "send-protocol", "")
-		}
-		for _, issue := range ct.Issues {
-			if issue.Work.SendState == sendSubmitting || issue.Work.ActiveTaskID != "" || issue.Work.SendState == sendUnknown {
-				if w := workFor(ct, issue.Work.ActiveTaskID); w != nil {
-					w.State = workUnknown
-					w.Detail = "Protocol failure; result not confirmed."
-				}
-				issue.Work.SessionState = "unknown"
-				issue.Work.SendState = sendUnknown
-				issue.Work.setSendError("Protocol failure; delivery not confirmed. Reload before sending again.", "send-protocol", "")
-				if execution := ct.executionByTask(issue.Work.ActiveTaskID); execution != nil {
-					execution.Status = issueExecutionUnknown
-					execution.Detail = issue.Work.SendError
-				}
-				issue.Work.ActiveTaskID = ""
-			}
-		}
-	}
-}
-
-func (a *appModel) clearActiveTasksAfterExit() {
-	for _, ct := range a.contacts {
-		if ct.ActiveTaskID != "" {
-			if w := ct.activeWork(); w != nil {
-				w.State = workUnknown
-				w.Detail = "Connection lost before the task finished; reload to verify."
-			}
-			ct.ActiveTaskID = ""
-			ct.SessionState = "unknown"
-			ct.SendState = sendUnknown
-			ct.Status = statusAttention
-			ct.setStatusDetail("Connection lost before the task finished; reload to verify.", "status-connection-lost")
-			ct.setSendError("Delivery/result not confirmed. Reload before sending again.", "send-delivery", "")
-		}
-		for _, issue := range ct.Issues {
-			if issue.Work.ActiveTaskID == "" && issue.Work.SendState == sendIdle {
-				continue
-			}
-			issue.Work.SessionState = "unknown"
-			issue.Work.SendState = sendUnknown
-			issue.Work.setSendError("Delivery/result not confirmed. Reload before sending again.", "send-delivery", "")
-			if w := workFor(ct, issue.Work.ActiveTaskID); w != nil {
-				w.State = workUnknown
-				w.Detail = "Connection lost before the task finished; reload to verify."
-			}
-			execution := ct.executionByTask(issue.Work.ActiveTaskID)
-			if execution != nil {
-				execution.Status = issueExecutionUnknown
-				execution.Detail = issue.Work.SendError
-			}
-			issue.Work.ActiveTaskID = ""
-		}
-	}
-}
-
-func (a *appModel) applyRuntimeExit(err error) {
-	a.clearBuiltinToolCatalog()
-	if a.runtimeStatus == runtimeStateDraining {
-		a.runtimeStatus = runtimeStateExited
-		return
-	}
-	if a.runtimeStage == "Runtime protocol" {
-		a.runtimeStatus = runtimeStateExited
-		a.clearActiveTasksAfterExit()
-		return
-	}
-	diagnostic := ""
-	if a.rt != nil {
-		if lines := a.rt.diagnostics(); len(lines) > 0 {
-			diagnostic = a.redactConnectionText(lines[len(lines)-1])
-		}
-	}
-	wasReady := a.runtimeHandshake
-	a.runtimeStatus = runtimeStateExited
-	if wasReady {
-		a.runtimeStage = "Runtime connection"
-		a.runtimeErrKind = runtimeNoticeConnectionLost
-		if err != nil {
-			a.runtimeErr = a.redactConnectionText(err.Error())
-		} else {
-			a.runtimeErr = ""
-		}
-		a.runtimeHintKind = startupHintRestartReload
-		a.runtimeHintArgs = nil
-	} else {
-		managed := a.connectionManaged || a.connectionEffective != nil || a.connectionSaved != nil
-		switch {
-		case !managed && strings.Contains(diagnostic, "API_KEY is not set"):
-			a.runtimeStage = "Runtime configuration"
-			a.runtimeErrKind = runtimeNoticeAPIKey
-			a.runtimeErr = ""
-			a.runtimeHintKind = startupHintSetAPIKey
-			a.runtimeHintArgs = []string{a.workDir}
-		case !managed && strings.Contains(diagnostic, ".env exists but could not be parsed"):
-			a.runtimeStage = "Runtime configuration"
-			a.runtimeErrKind = runtimeNoticeEnvParse
-			a.runtimeErr = ""
-			a.runtimeHintKind = startupHintFixEnv
-			a.runtimeHintArgs = []string{a.workDir}
-		case managed:
-			a.runtimeStage = "Connection configuration"
-			a.runtimeErrKind = ""
-			if diagnostic != "" {
-				a.runtimeErr = diagnostic
-			} else if err != nil {
-				a.runtimeErr = a.redactConnectionText(err.Error())
-			} else {
-				a.runtimeErr = ""
-			}
-			a.runtimeHintKind = ""
-			a.runtimeHintArgs = nil
-		default:
-			a.runtimeStage = "Runtime startup"
-			a.runtimeErrKind = runtimeNoticeExitedBeforeReady
-			a.runtimeHintKind = startupHintHelperPathStart
-			a.runtimeHintArgs = nil
-			if diagnostic != "" {
-				a.runtimeErr = diagnostic
-			} else if err != nil {
-				a.runtimeErr = a.redactConnectionText(err.Error())
-			} else {
-				a.runtimeErr = ""
-			}
-		}
-	}
-	a.clearActiveTasksAfterExit()
 }
 
 // beginShutdown is the single quit path for the window close button and
@@ -581,74 +354,8 @@ func (a *appModel) updateUI(fn func()) {
 	fn()
 }
 
-func (a *appModel) contactBySession(sessionID string) *contact {
-	for _, ct := range a.contacts {
-		if ct.SessionID == sessionID {
-			return ct
-		}
-	}
-	return nil
-}
-
-// metadataLoadStarted/Finished keep admitted catalog reads visible to the
-// shutdown drain until their final UI callback has run.
-func (a *appModel) metadataLoadStarted() bool {
-	if a.shutdownStarted {
-		return false
-	}
-	a.metadataInFlight++
-	return true
-}
-
-func (a *appModel) metadataLoadFinished() {
-	a.metadataInFlight--
-	if a.shutdownStarted && !a.quitReady {
-		a.finishShutdown()
-	}
-}
-
-func (a *appModel) startCapabilitiesLoad(rt *runtimeClient, gen int) {
-	if rt == nil || !a.metadataLoadStarted() {
-		return
-	}
-	go a.loadCapabilities(rt, gen)
-}
-
-func (a *appModel) loadCapabilities(rt *runtimeClient, gen int) {
-	capabilities, err := rt.capabilities()
-	a.updateUI(func() {
-		defer a.metadataLoadFinished()
-		if gen != a.connectionGeneration || a.rt != rt {
-			return
-		}
-		if err != nil {
-			a.runtimeCapabilitiesLoaded = false
-			a.runtimeCapabilitiesErr = "Runtime capacity is not loaded: " + a.connectionRuntimeMessage(err) + ". The app uses the conservative single-slot behavior until it is retried."
-			return
-		}
-		if capabilities.MaxActiveTasks < 1 {
-			a.runtimeCapabilitiesLoaded = false
-			a.runtimeCapabilitiesErr = "Runtime returned an invalid task capacity; the app uses the conservative single-slot behavior."
-			return
-		}
-		a.runtimeMaxActiveTasks = capabilities.MaxActiveTasks
-		a.runtimeCapabilitiesLoaded = true
-		a.runtimeCapabilitiesErr = ""
-		a.maybeAutoContinueAllIssues()
-	})
-}
-
 func (a *appModel) capacityKnown() bool {
 	return a.demo || a.runtimeCapabilitiesLoaded
-}
-
-func (a *appModel) retryCapabilities() {
-	if a.rt == nil || a.runtimeStatus != runtimeStateReady {
-		return
-	}
-	rt, gen := a.rt, a.connectionGeneration
-	a.runtimeCapabilitiesErr = ""
-	a.startCapabilitiesLoad(rt, gen)
 }
 
 func (a *appModel) maxActiveTasks() int {
@@ -698,281 +405,6 @@ func (a *appModel) activeWorkTaskCount() int {
 	return count
 }
 
-func (a *appModel) restoreIssueWorks(rt *runtimeClient, generation int) {
-	for _, ct := range a.contacts {
-		for _, issue := range ct.Issues {
-			if issue.WorkSessionID == "" {
-				continue
-			}
-			contactID, issueID, sessionID := ct.ID, issue.ID, issue.WorkSessionID
-			issue.Work.Loaded = false
-			a.historyAsyncStarted()
-			go a.restoreIssueWork(rt, generation, contactID, issueID, sessionID)
-		}
-	}
-}
-
-func (a *appModel) restoreContacts(rt *runtimeClient, generation int) {
-	for _, ct := range a.contacts {
-		if ct.SessionID == "" {
-			continue
-		}
-		contactID, sessionID := ct.ID, ct.SessionID
-		ct.Loaded = false
-		a.historyAsyncStarted()
-		go a.restoreSession(rt, generation, contactID, sessionID)
-	}
-}
-
-func (a *appModel) restoreSession(rt *runtimeClient, generation int, contactID, sessionID string) {
-	session, err := rt.loadSession(sessionID)
-	if err != nil {
-		a.restoreContactReadOnly(rt, generation, contactID, sessionID, err)
-		return
-	}
-	pages, status, err := a.historyAllFor(rt, sessionID)
-	a.updateUI(func() {
-		defer a.historyAsyncFinished()
-		if generation != a.connectionGeneration || a.rt != rt {
-			return
-		}
-		ct := a.contactByID(contactID)
-		if ct == nil || ct.SessionID != sessionID {
-			return
-		}
-		ct.Loaded = err == nil
-		ct.LoadErr = ""
-		ct.Unavailable = ""
-		ct.SessionState = session.State
-		if session.Metadata != nil {
-			ct.SessionWorkingDir = session.Metadata.WorkingDirectory
-			ct.SessionModel = session.Metadata.Model
-			ct.SessionAPI = session.Metadata.API
-		}
-		if session.ActiveTask != nil {
-			ct.ActiveTaskID = session.ActiveTask.TaskID
-			ct.LastTaskID = session.ActiveTask.TaskID
-			ct.SendState = sendAccepted
-			ct.Status = statusWorking
-			ct.Work = workNoticeResuming
-			ct.WorkArg = ""
-			if w := a.ensureWork(ct, session.ActiveTask.TaskID, session.ActiveTask.MessageID); w != nil {
-				w.State = workRunning
-			}
-		}
-		if err != nil {
-			ct.LoadErr = a.connectionRuntimeMessage(err)
-			ct.Status = statusAttention
-			ct.setStatusDetail(ct.LoadErr, "")
-			return
-		}
-		if ct.ActiveTaskID != "" {
-			ct.HistoryDirty = true
-			return
-		}
-		a.applyHistory(ct, pages, status)
-		if session.ActiveTask != nil {
-			if w := a.ensureWork(ct, session.ActiveTask.TaskID, session.ActiveTask.MessageID); w != nil {
-				w.State = workRunning
-				ct.Work, ct.WorkArg = a.workActivitySummary(ct)
-			}
-		}
-	})
-}
-
-func (a *appModel) restoreContactReadOnly(rt *runtimeClient, generation int, contactID, sessionID string, loadErr error) {
-	pages, status, historyErr := a.historyAllFor(rt, sessionID)
-	config, configErr := rt.connectionConfig(sessionID)
-	a.updateUI(func() {
-		defer a.historyAsyncFinished()
-		if generation != a.connectionGeneration || a.rt != rt {
-			return
-		}
-		ct := a.contactByID(contactID)
-		if ct == nil || ct.SessionID != sessionID {
-			return
-		}
-		ct.Loaded = false
-		ct.LoadErr = a.connectionRuntimeMessage(loadErr)
-		ct.Unavailable = ct.LoadErr
-		ct.Status = statusAttention
-		ct.setStatusDetail(ct.LoadErr, "")
-		if configErr == nil {
-			ct.SessionModel = config.EffectiveConfig.Model
-			ct.SessionAPI = config.EffectiveConfig.API
-			ct.SessionWorkingDir = config.EffectiveConfig.WorkingDirectory
-		}
-		if historyErr == nil {
-			a.applyHistory(ct, pages, status)
-			ct.Loaded = false
-			ct.Status = statusAttention
-			ct.setStatusDetail(ct.LoadErr, "")
-			ct.Unavailable = ct.LoadErr
-		} else {
-			ct.LoadErr += "; history unavailable: " + a.connectionRuntimeMessage(historyErr)
-		}
-	})
-}
-
-func (a *appModel) restoreIssueWork(rt *runtimeClient, generation int, contactID, issueID, sessionID string) {
-	session, err := rt.loadSession(sessionID)
-	if err != nil {
-		a.restoreIssueReadOnly(rt, generation, contactID, issueID, sessionID, err)
-		return
-	}
-	pages, status, err := a.historyAllFor(rt, sessionID)
-	a.updateUI(func() {
-		defer a.historyAsyncFinished()
-		if generation != a.connectionGeneration || a.rt != rt {
-			return
-		}
-		ct := a.contactByID(contactID)
-		if ct == nil {
-			return
-		}
-		issue := ct.issueByID(issueID)
-		if issue == nil || issue.WorkSessionID != sessionID {
-			return
-		}
-		issue.Work.Loaded = err == nil
-		issue.Work.LoadErr = ""
-		issue.Work.SessionState = session.State
-		if err != nil {
-			issue.Work.LoadErr = a.connectionRuntimeMessage(err)
-			issue.Work.setSendError(issue.Work.LoadErr, "", "")
-			return
-		}
-		a.applyIssueWorkHistory(ct, issue, pages, status)
-		if session.ActiveTask != nil {
-			issue.Work.ActiveTaskID = session.ActiveTask.TaskID
-			issue.Work.LastTaskID = session.ActiveTask.TaskID
-			issue.Work.SendState = sendAccepted
-			if w := a.ensureWork(ct, session.ActiveTask.TaskID, session.ActiveTask.MessageID); w != nil {
-				w.State = workRunning
-			}
-			if execution := ct.executionByTask(session.ActiveTask.TaskID); execution != nil {
-				execution.Status = issueExecutionRunning
-			}
-			if issue.Status == issueStatusCanceled {
-				_ = a.cancelIssueFor(ct, issue.ID)
-			} else if issue.Status != issueStatusCompleted && issue.Status != issueStatusWaitingUser {
-				issue.Status = issueStatusInProgress
-			}
-			return
-		}
-		issue.Work.ActiveTaskID = ""
-		issue.Work.SendState = sendIdle
-		issue.Work.clearSendError()
-		a.maybeAutoContinueAllIssues()
-	})
-}
-
-func (a *appModel) restoreIssueReadOnly(rt *runtimeClient, generation int, contactID, issueID, sessionID string, loadErr error) {
-	pages, status, historyErr := a.historyAllFor(rt, sessionID)
-	a.updateUI(func() {
-		defer a.historyAsyncFinished()
-		if generation != a.connectionGeneration || a.rt != rt {
-			return
-		}
-		ct := a.contactByID(contactID)
-		if ct == nil {
-			return
-		}
-		issue := ct.issueByID(issueID)
-		if issue == nil || issue.WorkSessionID != sessionID {
-			return
-		}
-		issue.Work.Loaded = false
-		issue.Work.LoadErr = a.connectionRuntimeMessage(loadErr)
-		issue.Work.setSendError(issue.Work.LoadErr, "", "")
-		if historyErr == nil {
-			a.applyIssueWorkHistory(ct, issue, pages, status)
-			issue.Work.Loaded = false
-			issue.Work.setSendError(issue.Work.LoadErr, "", "")
-		} else {
-			issue.Work.LoadErr += "; history unavailable: " + a.connectionRuntimeMessage(historyErr)
-		}
-	})
-}
-
-func (a *appModel) reloadIssueWorkByID(contactID, issueID string) {
-	if a.pi != nil {
-		a.inspectPiIssueWork(contactID, issueID)
-		return
-	}
-	if a.rt == nil || a.shutdownStarted || a.runtimeStatus == runtimeStateDraining || a.runtimeStatus == runtimeStateExited {
-		return
-	}
-	ct := a.contactByID(contactID)
-	if ct == nil {
-		return
-	}
-	issue := ct.issueByID(issueID)
-	if issue == nil || issue.WorkSessionID == "" {
-		return
-	}
-	issue.Work.historyGen++
-	gen := issue.Work.historyGen
-	sessionID := issue.WorkSessionID
-	rt, runtimeGeneration := a.rt, a.connectionGeneration
-	a.historyAsyncStarted()
-	go a.reloadIssueWork(rt, runtimeGeneration, contactID, issueID, sessionID, gen)
-}
-
-func (a *appModel) reloadIssueWork(rt *runtimeClient, runtimeGeneration int, contactID, issueID, sessionID string, gen int) {
-	session, err := rt.loadSession(sessionID)
-	if err != nil {
-		a.restoreIssueReadOnly(rt, runtimeGeneration, contactID, issueID, sessionID, err)
-		return
-	}
-	pages, status, err := a.historyAllFor(rt, sessionID)
-	a.updateUI(func() {
-		defer a.historyAsyncFinished()
-		if runtimeGeneration != a.connectionGeneration || a.rt != rt {
-			return
-		}
-		ct := a.contactByID(contactID)
-		if ct == nil {
-			return
-		}
-		issue := ct.issueByID(issueID)
-		if issue == nil || issue.WorkSessionID != sessionID || issue.Work.historyGen != gen {
-			return
-		}
-		if err != nil {
-			issue.Work.LoadErr = a.connectionRuntimeMessage(err)
-			issue.Work.setSendError(issue.Work.LoadErr, "", "")
-			return
-		}
-		issue.Work.SessionState = session.State
-		a.applyIssueWorkHistory(ct, issue, pages, status)
-		if session.ActiveTask != nil {
-			if issue.Work.SendState == sendSubmitting {
-				return
-			}
-			issue.Work.ActiveTaskID = session.ActiveTask.TaskID
-			issue.Work.LastTaskID = session.ActiveTask.TaskID
-			issue.Work.SendState = sendAccepted
-			issue.Work.clearSendError()
-			if w := a.ensureWork(ct, session.ActiveTask.TaskID, session.ActiveTask.MessageID); w != nil {
-				w.State = workRunning
-			}
-			if execution := ct.executionByTask(session.ActiveTask.TaskID); execution != nil {
-				execution.Status = issueExecutionRunning
-			}
-			return
-		}
-		if issue.Work.SendState == sendSubmitting {
-			return
-		}
-		issue.Work.ActiveTaskID = ""
-		issue.Work.SendState = sendIdle
-		issue.Work.clearSendError()
-		issue.Work.LoadErr = ""
-		a.maybeAutoContinueAllIssues()
-	})
-}
-
 func (a *appModel) canReloadPiConversation(ct *contact) bool {
 	if a.demo || !a.runtimeAvailableForView() || ct == nil || a.contactByID(ct.ID) != ct || ct.PiBinding == nil {
 		return false
@@ -982,7 +414,7 @@ func (a *appModel) canReloadPiConversation(ct *contact) bool {
 		binding.Context.ContextID != "" && binding.Context.SessionRef != "" && binding.Context.SessionRef == ct.SessionID
 }
 
-func (a *appModel) reloadContactByID(contactID string, explicit bool) {
+func (a *appModel) reloadContactByID(contactID string) {
 	ct := a.contactByID(contactID)
 	if !a.canReloadPiConversation(ct) {
 		return
@@ -1023,461 +455,14 @@ func (a *appModel) reloadContactByID(contactID string, explicit bool) {
 			ct.Messages, ct.History = projection.messages, projection.entries
 			ct.Loaded, ct.LoadErr, ct.Unavailable = true, "", ""
 			ct.setStatusDetail(projection.detail, "")
-			ct.HistoryDirty = false
 		})
 	}()
-}
-
-func (a *appModel) reloadSession(rt *runtimeClient, runtimeGeneration int, contactID, sessionID string, gen int, explicit bool) {
-	session, err := rt.loadSession(sessionID)
-	if err != nil {
-		a.restoreContactReadOnly(rt, runtimeGeneration, contactID, sessionID, err)
-		return
-	}
-	pages, status, err := a.historyAllFor(rt, sessionID)
-	a.updateUI(func() {
-		defer a.historyAsyncFinished()
-		if runtimeGeneration != a.connectionGeneration || a.rt != rt {
-			return
-		}
-		a.applyReload(contactID, sessionID, gen, session, pages, status, err, explicit)
-	})
-}
-
-func (a *appModel) applyReload(contactID, sessionID string, gen int, session runtimeSession, pages []historyRecord, status string, err error, explicit bool) {
-	ct := a.contactByID(contactID)
-	if ct == nil || ct.SessionID != sessionID || ct.historyGen != gen {
-		return // a newer submit/task superseded this reload
-	}
-	if err != nil {
-		ct.LoadErr = a.connectionRuntimeMessage(err)
-		ct.setSendError(ct.LoadErr, "", "")
-		return
-	}
-	ct.SessionState = session.State
-	if session.Metadata != nil {
-		ct.SessionWorkingDir = session.Metadata.WorkingDirectory
-		ct.SessionModel = session.Metadata.Model
-		ct.SessionAPI = session.Metadata.API
-	}
-	if session.ActiveTask != nil {
-		if ct.SendState == sendSubmitting {
-			return
-		}
-		ct.ActiveTaskID = session.ActiveTask.TaskID
-		ct.LastTaskID = session.ActiveTask.TaskID
-		ct.SendState = sendAccepted
-		ct.Status = statusWorking
-		ct.Work = workNoticeRunning
-		ct.WorkArg = ""
-		ct.clearSendError()
-		if w := a.ensureWork(ct, session.ActiveTask.TaskID, session.ActiveTask.MessageID); w != nil {
-			w.State = workRunning
-		}
-		return
-	}
-	if ct.SendState == sendSubmitting {
-		return // a newer submit owns this contact; its generation changed too
-	}
-	// The runtime confirms this session is idle. For sendUnknown (or a missed
-	// terminal event) this is where an explicit reload may recover, but only
-	// after history was fetched successfully. Never re-send.
-	a.applyHistory(ct, pages, status)
-	unknownPending := ct.pendingSend != nil && ct.pendingSend.State == "unknown"
-	if unknownPending && !explicit {
-		ct.ActiveTaskID = ""
-		ct.SendState = sendUnknown
-		ct.Status = statusAttention
-		ct.setSendError(taskContextUncertainSendError, "send-uncertain", "")
-		ct.setStatusDetail(ct.SendError, ct.SendErrorKind)
-		ct.LoadErr = ""
-		return
-	}
-	if unknownPending {
-		previous := clonePendingSend(ct.pendingSend)
-		ct.pendingSend = nil
-		if err := a.persist(); err != nil {
-			ct.pendingSend = previous
-			ct.LoadErr = "Could not save the history-reload state: " + err.Error()
-			return
-		}
-		ct.setStatusDetail("History reloaded; no retry was sent. Inspect the recorded messages before explicitly sending or removing retained task context.", "status-history-reloaded")
-	}
-	ct.ActiveTaskID = ""
-	ct.SendState = sendIdle
-	ct.clearSendError()
-	ct.LoadErr = ""
-}
-
-func (a *appModel) historyAll(sessionID string) ([]historyRecord, string, error) {
-	return a.historyAllFor(a.rt, sessionID)
-}
-
-func (a *appModel) historyAllFor(rt *runtimeClient, sessionID string) ([]historyRecord, string, error) {
-	history, err := a.historyAllForSession(rt, sessionID)
-	if err != nil {
-		return nil, "", err
-	}
-	return history.Records, history.Status, nil
-}
-
-// historyAllForSession keeps the Runtime session header so callers can verify
-// typed provenance instead of assuming which session a record slice came from.
-func (a *appModel) historyAllForSession(rt *runtimeClient, sessionID string) (runtimeHistory, error) {
-	if rt == nil {
-		return runtimeHistory{}, errRuntimeDisconnected
-	}
-	offset := 0
-	var all []historyRecord
-	status := ""
-	for page := 0; page < 1000; page++ {
-		result, err := rt.historyPage(sessionID, offset, 100)
-		if err != nil {
-			return runtimeHistory{}, err
-		}
-		if result.SessionID != sessionID {
-			return runtimeHistory{}, errors.New("runtime history returned a different session")
-		}
-		all = append(all, result.Records...)
-		status = result.Status
-		if result.NextOffset == nil {
-			return runtimeHistory{SessionID: result.SessionID, Records: all, Status: status}, nil
-		}
-		if *result.NextOffset <= offset {
-			return runtimeHistory{}, errors.New("history pagination did not advance")
-		}
-		offset = *result.NextOffset
-	}
-	return runtimeHistory{}, errors.New("history pagination exceeded 1000 pages")
 }
 
 type historyProjection struct {
 	messages []*message
 	entries  []historyEntry
-	works    []*workItem
-	unlinked []*workTool
 	detail   string
-}
-
-func parseHistory(sessionID string, records []historyRecord, stopRequested map[string]bool) historyProjection {
-	return parseHistoryWithContextFilter(sessionID, records, stopRequested, nil)
-}
-
-func parseHistoryWithContextFilter(sessionID string, records []historyRecord, stopRequested map[string]bool, filter func(string, []taskContextItem) []taskContextItem) historyProjection {
-	projection := historyProjection{}
-	byTask := map[string]*workItem{}
-	taskID, messageID := "", ""
-	ensure := func(id, msgID string) *workItem {
-		if id == "" {
-			return nil
-		}
-		if w := byTask[id]; w != nil {
-			if w.MessageID == "" {
-				w.MessageID = msgID
-			}
-			return w
-		}
-		w := &workItem{TaskID: id, MessageID: msgID, State: workUnknown, StopRequested: stopRequested[id]}
-		byTask[id] = w
-		projection.works = append(projection.works, w)
-		return w
-	}
-	unlinked := func(callID string) *workTool {
-		if callID != "" {
-			for _, call := range projection.unlinked {
-				if call.CallID == callID {
-					return call
-				}
-			}
-		}
-		call := &workTool{CallID: callID}
-		projection.unlinked = append(projection.unlinked, call)
-		return call
-	}
-	for _, rec := range records {
-		switch rec.Record.Type {
-		case "task_started":
-			taskID, messageID = rec.Record.TaskID, rec.Record.MessageID
-			if w := ensure(taskID, messageID); w != nil {
-				w.State = workRunning
-			}
-		case "task_finished":
-			finishedTask := rec.Record.TaskID
-			if finishedTask == "" {
-				finishedTask = taskID
-			}
-			finishedMessage := rec.Record.MessageID
-			if finishedMessage == "" {
-				finishedMessage = messageID
-			}
-			if w := ensure(finishedTask, finishedMessage); w != nil {
-				w.State = workStateFromTask(rec.Record.Status)
-				w.Detail = historyWorkDetail(rec.Record.Status, rec.Record.Error)
-			}
-			projection.detail = historyWorkDetail(rec.Record.Status, rec.Record.Error)
-			taskID, messageID = "", ""
-		case "messages":
-			w := ensure(taskID, messageID)
-			for index, item := range rec.Record.Items {
-				key := fmt.Sprintf("hist:%s:%d:%d", sessionID, rec.Offset, index)
-				timeLabel := formatMillis(rec.TimestampMS)
-				switch item.Type {
-				case "message":
-					if item.Role == "system" || item.Role == "developer" {
-						continue
-					}
-					text, contexts := inputText(item.Content), []taskContextItem(nil)
-					if item.Role == "user" {
-						text, contexts = taskContextUserContent(item.Content)
-					}
-					if filter != nil && len(contexts) > 0 {
-						contexts = filter(sessionID, contexts)
-					}
-					if text == "" && len(contexts) == 0 {
-						continue
-					}
-					kind := msgContact
-					from := "contact"
-					if item.Role == "user" {
-						kind = msgUser
-						from = "me"
-						if w != nil && w.Prompt == "" {
-							w.Prompt = text
-						}
-					}
-					projection.messages = append(projection.messages, &message{
-						Key: key, Kind: kind, Text: text, Time: timeLabel,
-						TaskID: taskID, MessageID: messageID, History: true,
-						Context: contexts,
-					})
-					projection.entries = append(projection.entries, historyEntry{ID: key, Date: timeLabel, From: from, Text: text, Context: contexts})
-				case "tool_call":
-					if w == nil {
-						call := unlinked(item.CallID)
-						call.Name = item.Name
-						call.Args = item.Arguments
-						call.Started = true
-						continue
-					}
-					call := workToolFor(w, item.CallID)
-					if call == nil {
-						continue
-					}
-					call.Name = item.Name
-					call.Args = item.Arguments
-					call.Started = true
-				case "tool_result":
-					if w == nil {
-						call := unlinked(item.CallID)
-						call.Output = item.Output
-						call.Finished = true
-						continue
-					}
-					call := workToolFor(w, item.CallID)
-					if call == nil {
-						continue
-					}
-					call.Output = item.Output
-					call.Finished = true
-				case "reasoning", "provider_item":
-					// Reasoning stays internal; desktop.md does not show it.
-				}
-			}
-		}
-	}
-	return projection
-}
-
-// mergeWorks keeps work items from other runtime sessions (conversation vs an
-// issue work context) while replacing the projection for the session being
-// reloaded. A work item belongs to exactly one session.
-// mergeWorks keeps work items owned by a different runtime session while
-// replacing the projection for targetSession. Work items carry no session of
-// their own; ownership comes from the persisted issue execution TaskID and its
-// actual SessionID.
-func mergeWorks(ct *contact, existing, incoming []*workItem, targetSession string) []*workItem {
-	byTask := make(map[string]*workItem, len(incoming))
-	for _, work := range incoming {
-		byTask[work.TaskID] = work
-	}
-	owners := map[string]string{}
-	for _, issue := range ct.Issues {
-		for _, execution := range issue.Executions {
-			if execution.TaskID != "" && execution.SessionID != "" {
-				owners[execution.TaskID] = execution.SessionID
-			}
-		}
-	}
-	out := make([]*workItem, 0, len(existing)+len(incoming))
-	for _, work := range existing {
-		if _, ok := byTask[work.TaskID]; ok {
-			continue
-		}
-		owner := owners[work.TaskID]
-		switch {
-		case owner != "" && owner != targetSession:
-			out = append(out, work)
-		case owner == "" && targetSession != ct.SessionID:
-			out = append(out, work)
-		}
-	}
-	out = append(out, incoming...)
-	return out
-}
-
-func (a *appModel) applyHistory(ct *contact, records []historyRecord, status string) {
-	projection := parseHistoryWithIssueToolScopeFilter(ct.SessionID, records, ct.StopRequestedTasks, a.issueToolScopeIndexSnapshot())
-	ct.Messages = projection.messages
-	ct.History = projection.entries
-	ct.UnlinkedTools = projection.unlinked
-	ct.Works = mergeWorks(ct, ct.Works, projection.works, ct.SessionID)
-	for _, issue := range ct.Issues {
-		for _, execution := range issue.Executions {
-			// Only legacy executions that actually used the conversation
-			// session are reconciled here. New issue work sessions are
-			// reconciled by applyIssueWorkHistory.
-			if execution.SessionID != ct.SessionID {
-				continue
-			}
-			if w := workFor(ct, execution.TaskID); w != nil {
-				execution.Status = issueExecutionStatusFromWork(w.State)
-				execution.Detail = w.Detail
-			} else if execution.Status == issueExecutionPending ||
-				execution.Status == issueExecutionAccepted || execution.Status == issueExecutionRunning {
-				execution.Status = issueExecutionUnknown
-				execution.Detail = "No trusted Runtime task history was found for this execution; reload before rerunning."
-			}
-		}
-	}
-	ct.HistoryDirty = false
-	ct.Loaded = true
-	ct.Status = statusFromString(status)
-	ct.setStatusDetail(projection.detail, "")
-	if ct.Status == statusAttention && ct.StatusDetail == "" {
-		ct.setStatusDetail("Previous task did not complete.", "status-previous-incomplete")
-	}
-	if len(projection.works) > 0 {
-		ct.LastTaskID = projection.works[len(projection.works)-1].TaskID
-	}
-	if w := ct.activeWork(); w != nil {
-		if w.State == workUnknown || w.State == workAccepted {
-			w.State = workRunning
-		}
-		ct.Work, ct.WorkArg = a.workActivitySummary(ct)
-	} else {
-		ct.Work = ""
-		ct.WorkArg = ""
-	}
-}
-
-func (a *appModel) applyIssueWorkHistory(ct *contact, issue *productIssue, records []historyRecord, status string) {
-	sessionID := issue.WorkSessionID
-	projection := parseHistoryWithIssueToolScopeFilter(sessionID, records, issue.Work.StopRequestedTasks, a.issueToolScopeIndexSnapshot())
-	issue.Work.Messages = projection.messages
-	issue.Work.UnlinkedTools = projection.unlinked
-	ct.Works = mergeWorks(ct, ct.Works, projection.works, sessionID)
-	for _, execution := range issue.Executions {
-		if execution.SessionID != sessionID {
-			continue
-		}
-		if w := workFor(ct, execution.TaskID); w != nil {
-			execution.Status = issueExecutionStatusFromWork(w.State)
-			execution.Detail = w.Detail
-		} else if execution.Status == issueExecutionPending ||
-			execution.Status == issueExecutionAccepted || execution.Status == issueExecutionRunning {
-			execution.Status = issueExecutionUnknown
-			execution.Detail = "No trusted Runtime task history was found for this execution; reload before rerunning."
-		}
-	}
-	issue.Work.Loaded = true
-	issue.Work.SessionState = status
-	if issue.Work.ReleasePending && issue.Work.ActiveTaskID == "" && issue.Work.SendState == sendIdle &&
-		issue.Work.pendingExecutionID == "" && len(issue.Work.pendingEvents) == 0 && !issue.Work.Releasing {
-		a.releaseIssueWorkSession(ct, issue)
-	}
-	issue.Work.HistoryDirty = false
-	a.applyIssueRecoveredLifecycle(issue)
-}
-
-func (a *appModel) applyIssueRecoveredLifecycle(issue *productIssue) {
-	if issue == nil || issue.Status == issueStatusCompleted || issue.Status == issueStatusCanceled ||
-		issue.Status == issueStatusWaitingUser {
-		return
-	}
-	if issue.Work.ActiveTaskID != "" {
-		issue.Status = issueStatusInProgress
-		issue.UpdatedAt = nowMillis()
-		return
-	}
-	if len(issue.Executions) == 0 {
-		return
-	}
-	latest := issue.Executions[len(issue.Executions)-1]
-	switch latest.Status {
-	case issueExecutionCompleted:
-		issue.Status = issueStatusInProgress
-	case issueExecutionFailed, issueExecutionUnknown, issueExecutionPending,
-		issueExecutionNotDispatched, issueExecutionRejected:
-		issue.Status = issueStatusNeedsAttention
-	case issueExecutionInterrupted:
-		if issue.Work.StopRequestedTasks[latest.TaskID] {
-			issue.Status = issueStatusInProgress
-		} else {
-			issue.Status = issueStatusNeedsAttention
-		}
-	case issueExecutionAccepted, issueExecutionRunning:
-		issue.Status = issueStatusInProgress
-	}
-	issue.UpdatedAt = nowMillis()
-}
-
-func historyWorkDetail(status string, errText *string) string {
-	switch status {
-	case "failed":
-		return taskFailureDetail("", errText)
-	case "interrupted":
-		return "Task interrupted"
-	default:
-		return ""
-	}
-}
-
-func unlinkedToolFor(ct *contact, callID string) *workTool {
-	if callID != "" {
-		for _, call := range ct.UnlinkedTools {
-			if call.CallID == callID {
-				return call
-			}
-		}
-	}
-	call := &workTool{CallID: callID}
-	ct.UnlinkedTools = append(ct.UnlinkedTools, call)
-	return call
-}
-
-func workToolFor(w *workItem, callID string) *workTool {
-	if callID == "" {
-		return nil
-	}
-	for _, call := range w.Tools {
-		if call.CallID == callID {
-			return call
-		}
-	}
-	call := &workTool{CallID: callID}
-	w.Tools = append(w.Tools, call)
-	return call
-}
-
-func statusFromString(status string) contactStatus {
-	switch status {
-	case "failed", "interrupted":
-		return statusAttention
-	case "running":
-		return statusWorking
-	default:
-		return statusReady
-	}
 }
 
 func formatMillis(ms int64) string {
@@ -1490,357 +475,6 @@ func formatMillis(ms int64) string {
 		return value.Format("15:04")
 	}
 	return value.Format("Jan 2 15:04")
-}
-
-func runtimeMessage(err error) string {
-	var runtimeErr *runtimeError
-	if errors.As(err, &runtimeErr) {
-		message := runtimeErr.Code + ": " + safeDiagnostic(runtimeErr.Message)
-		if runtimeErr.Reason != "" {
-			message += " [" + runtimeErr.Reason + "]"
-		}
-		return message
-	}
-	return safeDiagnostic(err.Error())
-}
-
-func (a *appModel) routeSession(sessionID string) (*contact, *productIssue, bool) {
-	for _, ct := range a.contacts {
-		if ct.SessionID == sessionID {
-			return ct, nil, false
-		}
-		for _, issue := range ct.Issues {
-			if issue.WorkSessionID == sessionID {
-				return ct, issue, true
-			}
-		}
-	}
-	return nil, nil, false
-}
-
-func (a *appModel) applyRuntimeEvent(event runtimeEventEnvelope) {
-	if event.Event == nil {
-		return
-	}
-	if ct, issue, work := a.routeSession(event.SessionID); work {
-		if issue == nil {
-			return
-		}
-		if issue.Work.SendState == sendSubmitting && issue.Work.ActiveTaskID == "" {
-			issue.Work.pendingEvents = append(issue.Work.pendingEvents, event)
-			return
-		}
-		a.applyIssueEvent(ct, issue, event)
-		return
-	}
-	ct := a.contactBySession(event.SessionID)
-	if ct == nil {
-		return
-	}
-	if ct.SendState == sendSubmitting && ct.ActiveTaskID == "" {
-		ct.pendingEvents = append(ct.pendingEvents, event)
-		return
-	}
-	a.applyEvent(ct, event)
-}
-
-func (a *appModel) applyIssueEvent(ct *contact, issue *productIssue, event runtimeEventEnvelope) {
-	payload := event.Event
-	if payload == nil {
-		return
-	}
-	if issue.Work.ActiveTaskID == "" && payload.Type != "task_started" {
-		return
-	}
-	if event.TaskID != "" && issue.Work.ActiveTaskID != "" && event.TaskID != issue.Work.ActiveTaskID {
-		return
-	}
-	switch payload.Type {
-	case "task_started":
-		if w := workFor(ct, event.TaskID); w != nil {
-			switch w.State {
-			case workStopping, workCompleted, workFailed, workInterrupted, workUnknown:
-				return
-			}
-		}
-		if issue.Work.ActiveTaskID == "" && issue.Work.LastTaskID != "" && event.TaskID != issue.Work.LastTaskID {
-			return
-		}
-		if issue.Work.ActiveTaskID == "" {
-			issue.Work.ActiveTaskID = event.TaskID
-		}
-		if event.TaskID != issue.Work.ActiveTaskID {
-			return
-		}
-		issue.Work.LastTaskID = event.TaskID
-		issue.Work.SendState = sendAccepted
-		issue.Work.SessionState = "running"
-		issue.Work.clearSendError()
-		if w := a.ensureWork(ct, event.TaskID, event.MessageID); w != nil {
-			w.State = workRunning
-		}
-		if execution := ct.executionByTask(event.TaskID); execution != nil {
-			execution.Status = issueExecutionRunning
-			execution.Detail = ""
-		}
-	case "response_text_delta":
-		item := a.liveIssueText(issue, event.TaskID, payload.ItemID)
-		item.Text += payload.Delta
-		item.Streaming = true
-	case "response_text":
-		item := a.liveIssueText(issue, event.TaskID, payload.ItemID)
-		item.Text = payload.Text
-		item.Streaming = false
-	case "tool_started":
-		w := a.ensureWork(ct, event.TaskID, event.MessageID)
-		if w == nil {
-			return
-		}
-		call := workToolFor(w, payload.CallID)
-		if call == nil {
-			return
-		}
-		call.Name = payload.Name
-		call.Args = payload.Arguments
-		call.Started = true
-	case "tool_finished":
-		w := a.ensureWork(ct, event.TaskID, event.MessageID)
-		if w == nil {
-			return
-		}
-		call := workToolFor(w, payload.CallID)
-		if call == nil {
-			return
-		}
-		call.Name = payload.Name
-		call.Output = outputText(payload.Output)
-		call.Finished = true
-	case "task_finished":
-		if issue.Work.ActiveTaskID != "" && event.TaskID != issue.Work.ActiveTaskID {
-			return
-		}
-		if issue.Work.ActiveTaskID == "" && issue.Work.LastTaskID != "" && event.TaskID != issue.Work.LastTaskID {
-			return
-		}
-		issue.Work.LastTaskID = event.TaskID
-		issue.Work.ActiveTaskID = ""
-		issue.Work.SendState = sendIdle
-		issue.Work.clearSendError()
-		issue.Work.SessionState = "unknown"
-		issue.Work.HistoryDirty = true
-		issue.Work.historyGen++
-		detail := a.connectionTaskFinishedDetail(payload)
-		if w := workFor(ct, event.TaskID); w != nil {
-			w.State = workStateFromTask(payload.Status)
-			w.Detail = detail
-		} else if w := a.ensureWork(ct, event.TaskID, event.MessageID); w != nil {
-			w.State = workStateFromTask(payload.Status)
-			w.Detail = detail
-		}
-		if execution := ct.executionByTask(event.TaskID); execution != nil {
-			execution.Status = issueExecutionStatusFromWork(workStateFromTask(payload.Status))
-			execution.Detail = detail
-		}
-		a.applyIssueTerminalLifecycle(issue, event.TaskID, payload.Status)
-		if a.issueToolEnabled() {
-			issue.Work.ReleasePending = true
-		}
-		_ = a.persist()
-		a.reloadIssueWorkByID(ct.ID, issue.ID)
-		a.maybeAutoContinueAllIssues()
-	}
-}
-
-func (a *appModel) liveIssueText(issue *productIssue, taskID, itemID string) *message {
-	key := "work-live:" + taskID + ":text:" + itemID
-	for _, m := range issue.Work.Messages {
-		if m.Key == key {
-			return m
-		}
-	}
-	m := &message{Key: key, Kind: msgContact, TaskID: taskID, ItemID: itemID, Time: nowTime()}
-	issue.Work.Messages = append(issue.Work.Messages, m)
-	return m
-}
-
-func (a *appModel) applyEvent(ct *contact, event runtimeEventEnvelope) {
-	payload := event.Event
-	if ct.ActiveTaskID == "" && payload.Type != "task_started" {
-		return
-	}
-	if event.TaskID != "" && ct.ActiveTaskID != "" && event.TaskID != ct.ActiveTaskID {
-		return
-	}
-	switch payload.Type {
-	case "task_started":
-		if w := workFor(ct, event.TaskID); w != nil {
-			switch w.State {
-			case workStopping, workCompleted, workFailed, workInterrupted, workUnknown:
-				return // completed/stopping/unknown work cannot be revived by a duplicate start
-			}
-		}
-		if ct.ActiveTaskID == "" && ct.LastTaskID != "" && event.TaskID != ct.LastTaskID {
-			return // a late start from an older task cannot own this contact
-		}
-		if ct.ActiveTaskID == "" {
-			ct.ActiveTaskID = event.TaskID
-		}
-		if event.TaskID != ct.ActiveTaskID {
-			return
-		}
-		ct.LastTaskID = event.TaskID
-		ct.SendState = sendAccepted
-		ct.SessionState = "running"
-		ct.Status = statusWorking
-		ct.Work = workNoticeStarting
-		ct.WorkArg = ""
-		ct.clearSendError()
-		if w := a.ensureWork(ct, event.TaskID, event.MessageID); w != nil {
-			w.State = workRunning
-		}
-		if execution := ct.executionByTask(event.TaskID); execution != nil {
-			execution.Status = issueExecutionRunning
-			execution.Detail = ""
-		}
-	case "model_request_started":
-		if payload.Purpose == "compaction" {
-			ct.Work = workNoticeCompacting
-			ct.WorkArg = ""
-		} else {
-			ct.Work = workNoticeWaitingModel
-			ct.WorkArg = ""
-		}
-	case "reasoning_delta":
-		ct.Work = workNoticeThinking
-		ct.WorkArg = ""
-	case "response_text_delta":
-		item := a.liveText(ct, event.TaskID, payload.ItemID)
-		item.Text += payload.Delta
-		item.Streaming = true
-		ct.Work = workNoticeWriting
-		ct.WorkArg = ""
-	case "response_text":
-		item := a.liveText(ct, event.TaskID, payload.ItemID)
-		item.Text = payload.Text
-		item.Streaming = false
-		ct.Work = workNoticeWriting
-		ct.WorkArg = ""
-	case "tool_started":
-		w := a.ensureWork(ct, event.TaskID, event.MessageID)
-		if w == nil {
-			return
-		}
-		call := workToolFor(w, payload.CallID)
-		if call == nil {
-			return
-		}
-		call.Name = payload.Name
-		call.Args = payload.Arguments
-		call.Started = true
-		ct.Work = workNoticeRunningTool
-		ct.WorkArg = payload.Name
-	case "tool_finished":
-		w := a.ensureWork(ct, event.TaskID, event.MessageID)
-		if w == nil {
-			return
-		}
-		call := workToolFor(w, payload.CallID)
-		if call == nil {
-			return
-		}
-		call.Name = payload.Name
-		call.Output = outputText(payload.Output)
-		call.Finished = true
-		ct.Work = workNoticeWaitingModel
-		ct.WorkArg = ""
-	case "task_finished":
-		if ct.ActiveTaskID != "" && event.TaskID != ct.ActiveTaskID {
-			return
-		}
-		if ct.ActiveTaskID == "" && ct.LastTaskID != "" && event.TaskID != ct.LastTaskID {
-			return // duplicate/late terminal from an older task
-		}
-		ct.LastTaskID = event.TaskID
-		ct.ActiveTaskID = ""
-		ct.SendState = sendIdle
-		ct.clearSendError()
-		ct.Work = ""
-		ct.WorkArg = ""
-		ct.HistoryDirty = true
-		ct.historyGen++
-		ct.SessionState = "unknown"
-		ct.Status = statusFromString(payload.Status)
-		ct.setStatusDetail(a.connectionTaskFinishedDetail(payload), "")
-		if ct.Status == statusAttention && ct.StatusDetail == "" {
-			ct.setStatusDetail("Previous task did not complete.", "status-previous-incomplete")
-		}
-		if w := workFor(ct, event.TaskID); w != nil {
-			w.State = workStateFromTask(payload.Status)
-			w.Detail = ct.StatusDetail
-		} else if w := a.ensureWork(ct, event.TaskID, event.MessageID); w != nil {
-			w.State = workStateFromTask(payload.Status)
-			w.Detail = ct.StatusDetail
-		}
-		if execution := ct.executionByTask(event.TaskID); execution != nil {
-			execution.Status = issueExecutionStatusFromWork(workStateFromTask(payload.Status))
-			execution.Detail = ct.StatusDetail
-		}
-		_ = a.persist()
-		a.reloadContactByID(ct.ID, false)
-		a.maybeAutoContinueAllIssues()
-	}
-}
-
-func httpAuthStatus(message string) string {
-	message = strings.TrimSpace(message)
-	for _, status := range []string{"HTTP 401", "HTTP 403"} {
-		if !strings.HasPrefix(message, status) {
-			continue
-		}
-		n := len(status)
-		if len(message) == n || message[n] < '0' || message[n] > '9' {
-			return status
-		}
-	}
-	return ""
-}
-
-func providerAuthFailure(message string) bool { return httpAuthStatus(message) != "" }
-
-func taskFailureDetail(code string, message *string) string {
-	if message == nil {
-		return "Task failed."
-	}
-	if status := httpAuthStatus(*message); status != "" {
-		return "Provider authentication failed: " + status +
-			". Check API_KEY and provider configuration; no automatic retry."
-	}
-	stage := "Task failed"
-	if code == "model_error" {
-		stage = "Model request failed"
-	}
-	prefix := stage
-	if code != "" {
-		prefix += ": " + code
-	}
-	return prefix + ": " + safeDiagnostic(*message) +
-		". Check provider configuration (API_KEY / SAKI_BASE_URL / SAKI_MODEL); no automatic retry."
-}
-
-func taskFinishedDetail(payload *runtimeEvent) string {
-	switch payload.Status {
-	case "failed":
-		if payload.Error != nil {
-			return taskFailureDetail(payload.Error.Code, &payload.Error.Message)
-		}
-		return "Task failed."
-	case "interrupted":
-		return "Task interrupted; no automatic retry."
-	case "completed":
-		return ""
-	default:
-		return ""
-	}
 }
 
 func (a *appModel) liveText(ct *contact, taskID, itemID string) *message {
@@ -1874,7 +508,7 @@ func (a *appModel) runtimeAvailableForView() bool {
 		return true
 	}
 	host := a.pi
-	if a.shutdownStarted || a.connectionApplying || a.piDataReadOnly() || host == nil || host.client == nil ||
+	if a.shutdownStarted || a.connectionApplying || host == nil || host.client == nil ||
 		a.runtimeStatus != runtimeStateReady || host.generation != a.connectionGeneration {
 		return false
 	}
@@ -1902,7 +536,7 @@ func (a *appModel) connectionViewState() connectionViewState {
 	if a.connectionSaved != nil && (a.connectionEffective == nil || *a.connectionSaved != *a.connectionEffective) {
 		return connectionViewSaved
 	}
-	if a.connectionForm != nil && !a.connectionForm.HasSaved && !a.connectionLegacy && a.connectionSaved == nil {
+	if a.connectionForm != nil && !a.connectionForm.HasSaved && a.connectionSaved == nil {
 		return connectionViewSetup
 	}
 	return connectionViewNotConnected
@@ -1920,20 +554,17 @@ func (a *appModel) connectionConfigurationBlocked() bool {
 // Send/start blockers are stable reasons. One condition function serves the
 // composer and every work surface; rendering happens in the current language.
 const (
-	blockShutdown            = "shutdown"
-	blockArchivedSend        = "archived-send"
-	blockApplying            = "applying"
-	blockRuntimeNotReady     = "runtime-not-ready"
-	blockHistoryLoading      = "history-loading"
-	blockBusy                = "busy"
-	blockSingleSlot          = "single-slot"
-	blockCapacity            = "capacity"
-	blockAnotherContact      = "other-contact-working"
-	blockArchivedIssue       = "archived-issue"
-	blockIssueActive         = "issue-active"
-	blockIssueReleasing      = "issue-releasing"
-	blockIssueHistoryLoading = "issue-history-loading"
-	blockWorkCapacity        = "work-capacity"
+	blockShutdown        = "shutdown"
+	blockArchivedSend    = "archived-send"
+	blockApplying        = "applying"
+	blockRuntimeNotReady = "runtime-not-ready"
+	blockHistoryLoading  = "history-loading"
+	blockBusy            = "busy"
+	blockCapacity        = "capacity"
+	blockAnotherContact  = "other-contact-working"
+	blockArchivedIssue   = "archived-issue"
+	blockIssueActive     = "issue-active"
+	blockWorkCapacity    = "work-capacity"
 )
 
 func sendBlockRaw(reason string) string {
@@ -1943,15 +574,13 @@ func sendBlockRaw(reason string) string {
 	case blockArchivedSend:
 		return "This contact is archived. Restore it before sending a message."
 	case blockApplying:
-		return "Connection settings are being applied; wait for the new helper to become ready."
+		return "Connection settings are being applied. Wait for Pi to become ready."
 	case blockRuntimeNotReady:
 		return "Runtime is not ready."
 	case blockHistoryLoading:
 		return "This contact is still loading its history."
 	case blockBusy:
 		return "This contact is busy."
-	case blockSingleSlot:
-		return "The single runtime slot is in use; retry after the conversation or work task finishes."
 	case blockCapacity:
 		return "Runtime task capacity is full; retry after a task finishes."
 	case blockAnotherContact:
@@ -1960,10 +589,6 @@ func sendBlockRaw(reason string) string {
 		return "This contact is archived. Restore it before starting issue work."
 	case blockIssueActive:
 		return "This issue already has an active execution."
-	case blockIssueReleasing:
-		return "This issue's work session is still being released; retry after it completes."
-	case blockIssueHistoryLoading:
-		return "This issue's work history is still loading."
 	case blockWorkCapacity:
 		return "Work capacity is full; one runtime slot is reserved for conversation."
 	default:
@@ -1985,8 +610,6 @@ func sendBlockText(msgs locales.Messages, reason string) string {
 		return msgs.CanSendHistoryLoading()
 	case blockBusy:
 		return msgs.CanSendBusy()
-	case blockSingleSlot:
-		return msgs.CanSendSingleSlot()
 	case blockCapacity:
 		return msgs.CanSendCapacity()
 	case blockAnotherContact:
@@ -1995,10 +618,6 @@ func sendBlockText(msgs locales.Messages, reason string) string {
 		return msgs.CanStartArchived()
 	case blockIssueActive:
 		return msgs.CanStartIssueActive()
-	case blockIssueReleasing:
-		return msgs.CanStartIssueReleasing()
-	case blockIssueHistoryLoading:
-		return msgs.CanStartIssueHistoryLoading()
 	case blockWorkCapacity:
 		return msgs.CanStartWorkCapacity()
 	default:
@@ -2019,7 +638,7 @@ func (a *appModel) canSend(ct *contact) string {
 	if a.connectionApplying {
 		return blockApplying
 	}
-	if a.pi == nil || a.piDataReadOnly() || a.runtimeStatus != runtimeStateReady {
+	if !a.runtimeAvailableForView() {
 		return blockRuntimeNotReady
 	}
 	if ct.SessionID != "" && !ct.Loaded {
@@ -2058,9 +677,6 @@ func (a *appModel) canStartIssue(ct *contact, issue *productIssue) string {
 	}
 	if sessionBusy(issue.Work.SendState, issue.Work.ActiveTaskID) {
 		return sendBlockRaw(blockIssueActive)
-	}
-	if issue.WorkSessionID != "" && !isPiActivityIssue(issue) {
-		return "This issue's previous work context is unavailable."
 	}
 	if a.activeTaskCount() >= a.maxActiveTasks() {
 		return sendBlockRaw(blockCapacity)
@@ -2144,51 +760,6 @@ func (a *appModel) cancelIssueFor(ct *contact, issueID string) bool {
 	return a.cancelPiIssue(ct, ct.issueByID(issueID))
 }
 
-func (a *appModel) applyCancelResult(contactID, taskID, status string, err error) {
-	ct := a.contactByID(contactID)
-	if ct == nil {
-		return
-	}
-	if err != nil {
-		if ct.ActiveTaskID == taskID {
-			if w := ct.activeWork(); w != nil && w.State == workStopping {
-				w.State = workRunning
-			}
-			ct.setSendError("Cancel failed: "+a.connectionRuntimeMessage(err), "send-cancel-failed", a.connectionRuntimeMessage(err))
-		}
-		return
-	}
-	if ct.ActiveTaskID != taskID {
-		// The task already finished, or a different task now owns the contact;
-		// a late cancel reply must not rewrite that state.
-		return
-	}
-	switch status {
-	case "requested":
-		if w := ct.activeWork(); w != nil {
-			w.State = workStopping
-			w.StopRequested = true
-			if ct.StopRequestedTasks == nil {
-				ct.StopRequestedTasks = map[string]bool{}
-			}
-			ct.StopRequestedTasks[taskID] = true
-		}
-		ct.setSendError("Cancelling; waiting for the runtime to stop.", "send-cancelling", "")
-	case "already_requested":
-		if w := ct.activeWork(); w != nil {
-			w.State = workStopping
-			w.StopRequested = true
-			if ct.StopRequestedTasks == nil {
-				ct.StopRequestedTasks = map[string]bool{}
-			}
-			ct.StopRequestedTasks[taskID] = true
-		}
-		ct.setSendError("Cancellation already requested.", "send-cancel-already", "")
-	case "not_running":
-		ct.setSendError("The task already finished; waiting for its final state.", "send-already-finished", "")
-	}
-}
-
 func (a *appModel) reloadSelected() {
 	ct := a.selectedContact()
 	if !a.canReloadPiConversation(ct) {
@@ -2197,7 +768,7 @@ func (a *appModel) reloadSelected() {
 		}
 		return
 	}
-	a.reloadContactByID(ct.ID, true)
+	a.reloadContactByID(ct.ID)
 }
 
 func (a *appModel) addRuntimeContact() {
@@ -2205,7 +776,7 @@ func (a *appModel) addRuntimeContact() {
 		return
 	}
 	workspace := ""
-	if a.demo || a.connectionEffective != nil || a.connectionLegacy {
+	if a.demo || a.connectionEffective != nil {
 		workspace = a.workDir
 	}
 	c := &contact{
@@ -2274,9 +845,6 @@ func (a *appModel) ensureContactStore() error {
 func (a *appModel) persist() error {
 	if a.demo && a.store == nil {
 		return nil
-	}
-	if a.piDataReadOnly() {
-		return errors.New("legacy product data is read-only until its history policy is selected")
 	}
 	err := a.ensureContactStore()
 	if err == nil {

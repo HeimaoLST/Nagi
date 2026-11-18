@@ -19,12 +19,12 @@ func main() {
 		MinWidth:      720,
 		MinHeight:     640,
 	}
-	if size := os.Getenv("SAKI_GUI_CONTENT_SIZE"); size != "" {
+	if size := os.Getenv("NAGI_GUI_CONTENT_SIZE"); size != "" {
 		widthText, heightText, ok := strings.Cut(size, "x")
 		width, widthErr := strconv.Atoi(widthText)
 		height, heightErr := strconv.Atoi(heightText)
 		if !ok || widthErr != nil || heightErr != nil || width <= 0 || height <= 0 {
-			log.Fatal("SAKI_GUI_CONTENT_SIZE must be positive integer WIDTHxHEIGHT in DIPs, for example 960x640")
+			log.Fatal("NAGI_GUI_CONTENT_SIZE must be positive integer WIDTHxHEIGHT in DIPs, for example 960x640")
 		}
 		windowOptions.Width, windowOptions.Height = width, height
 		windowOptions.UseContentSize = true

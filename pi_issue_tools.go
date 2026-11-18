@@ -100,7 +100,7 @@ func newPiIssueTools(ctx context.Context, a *appModel, client *pi.Client, bindin
 		if err != nil {
 			return
 		}
-		if scope.ContactID != binding.BotID || scope.RuntimeSession() != binding.SessionRef ||
+		if scope.ContactID != binding.BotID || scope.RuntimeSessionID != binding.SessionRef ||
 			scope.TurnID != run.Correlation.TurnID || scope.RuntimeTaskID != "" && scope.RuntimeTaskID != run.RunID ||
 			binding.Purpose == pi.Conversation && scope.Mode == issueToolModeWork ||
 			binding.Purpose == pi.Activity && (scope.Mode != issueToolModeWork || scope.WorkIssueID != binding.ActivityID || scope.WorkExecutionID != run.Correlation.ExecutionID) ||
@@ -267,7 +267,7 @@ func (b *piIssueTools) authorize(ctx context.Context) error {
 			ownerErr = err
 			return
 		}
-		if settled || scope.ContactID != b.binding.BotID || scope.RuntimeSession() != b.binding.SessionRef ||
+		if settled || scope.ContactID != b.binding.BotID || scope.RuntimeSessionID != b.binding.SessionRef ||
 			scope.TurnID != b.scope.TurnID || scope.RuntimeTaskID != "" && scope.RuntimeTaskID != b.runID ||
 			b.binding.Purpose == pi.Conversation && scope.Mode == issueToolModeWork ||
 			b.binding.Purpose == pi.Activity && (scope.Mode != issueToolModeWork || scope.WorkIssueID != b.binding.ActivityID) ||

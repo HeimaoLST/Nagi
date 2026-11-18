@@ -2558,26 +2558,6 @@ func (msgs Messages) SendTooltip() string {
 	return Catalog.Format(msgs.locale, "sendTooltip", nil)
 }
 
-// CapacityUnknown says "Runtime task capacity is not loaded; using the conservative single-slot behavior."
-// in the language the app shows.
-func CapacityUnknown() string { return In(i18n.Locale()).CapacityUnknown() }
-
-// CapacityUnknown says "Runtime task capacity is not loaded; using the conservative single-slot behavior."
-// in the language of msgs.
-func (msgs Messages) CapacityUnknown() string {
-	return Catalog.Format(msgs.locale, "capacityUnknown", nil)
-}
-
-// RetryCapacity says "Retry capacity"
-// in the language the app shows.
-func RetryCapacity() string { return In(i18n.Locale()).RetryCapacity() }
-
-// RetryCapacity says "Retry capacity"
-// in the language of msgs.
-func (msgs Messages) RetryCapacity() string {
-	return Catalog.Format(msgs.locale, "retryCapacity", nil)
-}
-
 // SendingState says "Sending…"
 // in the language the app shows.
 func SendingState() string { return In(i18n.Locale()).SendingState() }
@@ -3008,26 +2988,24 @@ func (msgs Messages) ProfileNoSession() string {
 	return Catalog.Format(msgs.locale, "profileNoSession", nil)
 }
 
-// ProfileSession says "Chat session {session}"
+// ProfileSession says "Chat session available"
 // in the language the app shows.
-func ProfileSession(session string) string { return In(i18n.Locale()).ProfileSession(session) }
+func ProfileSession() string { return In(i18n.Locale()).ProfileSession() }
 
-// ProfileSession says "Chat session {session}"
+// ProfileSession says "Chat session available"
 // in the language of msgs.
-func (msgs Messages) ProfileSession(session string) string {
-	return Catalog.Format(msgs.locale, "profileSession", map[string]any{"session": session})
+func (msgs Messages) ProfileSession() string {
+	return Catalog.Format(msgs.locale, "profileSession", nil)
 }
 
-// ProfileSessionNotLoaded says "Chat session {session}: history not loaded"
+// ProfileSessionNotLoaded says "Chat history has not loaded"
 // in the language the app shows.
-func ProfileSessionNotLoaded(session string) string {
-	return In(i18n.Locale()).ProfileSessionNotLoaded(session)
-}
+func ProfileSessionNotLoaded() string { return In(i18n.Locale()).ProfileSessionNotLoaded() }
 
-// ProfileSessionNotLoaded says "Chat session {session}: history not loaded"
+// ProfileSessionNotLoaded says "Chat history has not loaded"
 // in the language of msgs.
-func (msgs Messages) ProfileSessionNotLoaded(session string) string {
-	return Catalog.Format(msgs.locale, "profileSessionNotLoaded", map[string]any{"session": session})
+func (msgs Messages) ProfileSessionNotLoaded() string {
+	return Catalog.Format(msgs.locale, "profileSessionNotLoaded", nil)
 }
 
 // ProfileActivity says "Activity"
@@ -3258,16 +3236,6 @@ func SettingsUnsavedChanges() string { return In(i18n.Locale()).SettingsUnsavedC
 // in the language of msgs.
 func (msgs Messages) SettingsUnsavedChanges() string {
 	return Catalog.Format(msgs.locale, "settingsUnsavedChanges", nil)
-}
-
-// SettingsBuiltinLegacyError says "Built-in tool selection requires a managed Nagi connection; this Runtime uses legacy environment configuration."
-// in the language the app shows.
-func SettingsBuiltinLegacyError() string { return In(i18n.Locale()).SettingsBuiltinLegacyError() }
-
-// SettingsBuiltinLegacyError says "Built-in tool selection requires a managed Nagi connection; this Runtime uses legacy environment configuration."
-// in the language of msgs.
-func (msgs Messages) SettingsBuiltinLegacyError() string {
-	return Catalog.Format(msgs.locale, "settingsBuiltinLegacyError", nil)
 }
 
 // SettingsBuiltinManagedError says "Save and Apply a managed Nagi connection before customizing built-in tools."
@@ -3874,53 +3842,11 @@ func (msgs Messages) RuntimeStatusConnectionOnly(status string) string {
 	return Catalog.Format(msgs.locale, "runtimeStatusConnectionOnly", map[string]any{"status": status})
 }
 
-// RuntimeHelperNotStartedLocalStore says "not started because local data is unavailable"
-// in the language the app shows.
-func RuntimeHelperNotStartedLocalStore() string {
-	return In(i18n.Locale()).RuntimeHelperNotStartedLocalStore()
-}
-
-// RuntimeHelperNotStartedLocalStore says "not started because local data is unavailable"
-// in the language of msgs.
-func (msgs Messages) RuntimeHelperNotStartedLocalStore() string {
-	return Catalog.Format(msgs.locale, "runtimeHelperNotStartedLocalStore", nil)
-}
-
-// RuntimeHelperNotFound says "not found in the checked runtime locations"
-// in the language the app shows.
-func RuntimeHelperNotFound() string { return In(i18n.Locale()).RuntimeHelperNotFound() }
-
-// RuntimeHelperNotFound says "not found in the checked runtime locations"
-// in the language of msgs.
-func (msgs Messages) RuntimeHelperNotFound() string {
-	return Catalog.Format(msgs.locale, "runtimeHelperNotFound", nil)
-}
-
-// RuntimeHelperNotApplied says "not started yet; apply the saved connection to check the helper"
-// in the language the app shows.
-func RuntimeHelperNotApplied() string { return In(i18n.Locale()).RuntimeHelperNotApplied() }
-
-// RuntimeHelperNotApplied says "not started yet; apply the saved connection to check the helper"
-// in the language of msgs.
-func (msgs Messages) RuntimeHelperNotApplied() string {
-	return Catalog.Format(msgs.locale, "runtimeHelperNotApplied", nil)
-}
-
-// RuntimeHelperNotChecked says "not checked yet; configure and apply a connection first"
-// in the language the app shows.
-func RuntimeHelperNotChecked() string { return In(i18n.Locale()).RuntimeHelperNotChecked() }
-
-// RuntimeHelperNotChecked says "not checked yet; configure and apply a connection first"
-// in the language of msgs.
-func (msgs Messages) RuntimeHelperNotChecked() string {
-	return Catalog.Format(msgs.locale, "runtimeHelperNotChecked", nil)
-}
-
-// RuntimeHelperLine says "Helper: {helper}"
+// RuntimeHelperLine says "Pi runtime: {helper}"
 // in the language the app shows.
 func RuntimeHelperLine(helper string) string { return In(i18n.Locale()).RuntimeHelperLine(helper) }
 
-// RuntimeHelperLine says "Helper: {helper}"
+// RuntimeHelperLine says "Pi runtime: {helper}"
 // in the language of msgs.
 func (msgs Messages) RuntimeHelperLine(helper string) string {
 	return Catalog.Format(msgs.locale, "runtimeHelperLine", map[string]any{"helper": helper})
@@ -3934,16 +3860,6 @@ func RuntimeStoreLine(path string) string { return In(i18n.Locale()).RuntimeStor
 // in the language of msgs.
 func (msgs Messages) RuntimeStoreLine(path string) string {
 	return Catalog.Format(msgs.locale, "runtimeStoreLine", map[string]any{"path": path})
-}
-
-// RuntimeSessionDirLine says "Session directory: {path}"
-// in the language the app shows.
-func RuntimeSessionDirLine(path string) string { return In(i18n.Locale()).RuntimeSessionDirLine(path) }
-
-// RuntimeSessionDirLine says "Session directory: {path}"
-// in the language of msgs.
-func (msgs Messages) RuntimeSessionDirLine(path string) string {
-	return Catalog.Format(msgs.locale, "runtimeSessionDirLine", map[string]any{"path": path})
 }
 
 // RuntimeWorkDirLine says "GUI work directory: {path}"
@@ -3990,18 +3906,6 @@ func (msgs Messages) RuntimeSessionAPILine(api string) string {
 	return Catalog.Format(msgs.locale, "runtimeSessionAPILine", map[string]any{"api": api})
 }
 
-// RuntimeAPIConnectedLine says "Runtime API (connected): {api}; no session API loaded"
-// in the language the app shows.
-func RuntimeAPIConnectedLine(api string) string {
-	return In(i18n.Locale()).RuntimeAPIConnectedLine(api)
-}
-
-// RuntimeAPIConnectedLine says "Runtime API (connected): {api}; no session API loaded"
-// in the language of msgs.
-func (msgs Messages) RuntimeAPIConnectedLine(api string) string {
-	return Catalog.Format(msgs.locale, "runtimeAPIConnectedLine", map[string]any{"api": api})
-}
-
 // RuntimeSessionAPIUnknown says "Session API: unknown until the runtime session is loaded"
 // in the language the app shows.
 func RuntimeSessionAPIUnknown() string { return In(i18n.Locale()).RuntimeSessionAPIUnknown() }
@@ -4032,16 +3936,6 @@ func RuntimeConnectionManagedNote() string { return In(i18n.Locale()).RuntimeCon
 // in the language of msgs.
 func (msgs Messages) RuntimeConnectionManagedNote() string {
 	return Catalog.Format(msgs.locale, "runtimeConnectionManagedNote", nil)
-}
-
-// RuntimeHostConfigNote says "This launch uses external developer connection settings. Connection & model can save a Nagi-managed connection."
-// in the language the app shows.
-func RuntimeHostConfigNote() string { return In(i18n.Locale()).RuntimeHostConfigNote() }
-
-// RuntimeHostConfigNote says "This launch uses external developer connection settings. Connection & model can save a Nagi-managed connection."
-// in the language of msgs.
-func (msgs Messages) RuntimeHostConfigNote() string {
-	return Catalog.Format(msgs.locale, "runtimeHostConfigNote", nil)
 }
 
 // RuntimeValueNotConfigured says "not configured"
@@ -4998,13 +4892,13 @@ func (msgs Messages) ConnectionBlockedActiveWork() string {
 	return Catalog.Format(msgs.locale, "connectionBlockedActiveWork", nil)
 }
 
-// ConnectionBlockedUntrustedIssue says "A run has an unconfirmed result. Open its task and choose Check run before applying a new connection."
+// ConnectionBlockedUntrustedIssue says "A run has an unconfirmed result. Nagi cannot apply a new connection while this run is unresolved."
 // in the language the app shows.
 func ConnectionBlockedUntrustedIssue() string {
 	return In(i18n.Locale()).ConnectionBlockedUntrustedIssue()
 }
 
-// ConnectionBlockedUntrustedIssue says "A run has an unconfirmed result. Open its task and choose Check run before applying a new connection."
+// ConnectionBlockedUntrustedIssue says "A run has an unconfirmed result. Nagi cannot apply a new connection while this run is unresolved."
 // in the language of msgs.
 func (msgs Messages) ConnectionBlockedUntrustedIssue() string {
 	return Catalog.Format(msgs.locale, "connectionBlockedUntrustedIssue", nil)
@@ -5210,26 +5104,6 @@ func (msgs Messages) StartupHintFixThenApply() string {
 	return Catalog.Format(msgs.locale, "startupHintFixThenApply", nil)
 }
 
-// StartupHintHelperPath says "Check the helper path and permissions at {path}, then try Apply saved."
-// in the language the app shows.
-func StartupHintHelperPath(path string) string { return In(i18n.Locale()).StartupHintHelperPath(path) }
-
-// StartupHintHelperPath says "Check the helper path and permissions at {path}, then try Apply saved."
-// in the language of msgs.
-func (msgs Messages) StartupHintHelperPath(path string) string {
-	return Catalog.Format(msgs.locale, "startupHintHelperPath", map[string]any{"path": path})
-}
-
-// StartupHintHelperPathStart says "Check the helper path and the startup diagnostic, then restart Nagi."
-// in the language the app shows.
-func StartupHintHelperPathStart() string { return In(i18n.Locale()).StartupHintHelperPathStart() }
-
-// StartupHintHelperPathStart says "Check the helper path and the startup diagnostic, then restart Nagi."
-// in the language of msgs.
-func (msgs Messages) StartupHintHelperPathStart() string {
-	return Catalog.Format(msgs.locale, "startupHintHelperPathStart", nil)
-}
-
 // StartupHintRestartUnconfirmed says "Restart Nagi; delivery or result may be unconfirmed. No automatic retry."
 // in the language the app shows.
 func StartupHintRestartUnconfirmed() string { return In(i18n.Locale()).StartupHintRestartUnconfirmed() }
@@ -5250,26 +5124,6 @@ func (msgs Messages) StartupHintRestartReload() string {
 	return Catalog.Format(msgs.locale, "startupHintRestartReload", nil)
 }
 
-// StartupHintSetAPIKey says "Set API_KEY in the environment or in {path}/.env, then restart Nagi."
-// in the language the app shows.
-func StartupHintSetAPIKey(path string) string { return In(i18n.Locale()).StartupHintSetAPIKey(path) }
-
-// StartupHintSetAPIKey says "Set API_KEY in the environment or in {path}/.env, then restart Nagi."
-// in the language of msgs.
-func (msgs Messages) StartupHintSetAPIKey(path string) string {
-	return Catalog.Format(msgs.locale, "startupHintSetAPIKey", map[string]any{"path": path})
-}
-
-// StartupHintFixEnv says "Fix or replace the .env file in {path}, then restart Nagi."
-// in the language the app shows.
-func StartupHintFixEnv(path string) string { return In(i18n.Locale()).StartupHintFixEnv(path) }
-
-// StartupHintFixEnv says "Fix or replace the .env file in {path}, then restart Nagi."
-// in the language of msgs.
-func (msgs Messages) StartupHintFixEnv(path string) string {
-	return Catalog.Format(msgs.locale, "startupHintFixEnv", map[string]any{"path": path})
-}
-
 // StartupHintExistingStore says "Nagi left the existing file untouched and did not create a replacement store. Fix the file or its permissions at {pat…"
 // in the language the app shows.
 func StartupHintExistingStore(path string) string {
@@ -5280,30 +5134,6 @@ func StartupHintExistingStore(path string) string {
 // in the language of msgs.
 func (msgs Messages) StartupHintExistingStore(path string) string {
 	return Catalog.Format(msgs.locale, "startupHintExistingStore", map[string]any{"path": path})
-}
-
-// StartupHintHelperInstall says "Place Saki-runtime next to the Saki executable (expected: {candidates}) or set SAKI_RUNTIME_BIN, then restart Nagi."
-// in the language the app shows.
-func StartupHintHelperInstall(candidates string) string {
-	return In(i18n.Locale()).StartupHintHelperInstall(candidates)
-}
-
-// StartupHintHelperInstall says "Place Saki-runtime next to the Saki executable (expected: {candidates}) or set SAKI_RUNTIME_BIN, then restart Nagi."
-// in the language of msgs.
-func (msgs Messages) StartupHintHelperInstall(candidates string) string {
-	return Catalog.Format(msgs.locale, "startupHintHelperInstall", map[string]any{"candidates": candidates})
-}
-
-// StartupHintHelperInstallNoList says "Place Saki-runtime next to the Saki executable or set SAKI_RUNTIME_BIN, then restart Nagi."
-// in the language the app shows.
-func StartupHintHelperInstallNoList() string {
-	return In(i18n.Locale()).StartupHintHelperInstallNoList()
-}
-
-// StartupHintHelperInstallNoList says "Place Saki-runtime next to the Saki executable or set SAKI_RUNTIME_BIN, then restart Nagi."
-// in the language of msgs.
-func (msgs Messages) StartupHintHelperInstallNoList() string {
-	return Catalog.Format(msgs.locale, "startupHintHelperInstallNoList", nil)
 }
 
 // ModelSessionTitle says "Session model"
@@ -6122,16 +5952,6 @@ func (msgs Messages) RuntimeStageConnectionConfiguration() string {
 	return Catalog.Format(msgs.locale, "runtimeStageConnectionConfiguration", nil)
 }
 
-// RuntimeStageRuntimeHelper says "Runtime helper"
-// in the language the app shows.
-func RuntimeStageRuntimeHelper() string { return In(i18n.Locale()).RuntimeStageRuntimeHelper() }
-
-// RuntimeStageRuntimeHelper says "Runtime helper"
-// in the language of msgs.
-func (msgs Messages) RuntimeStageRuntimeHelper() string {
-	return Catalog.Format(msgs.locale, "runtimeStageRuntimeHelper", nil)
-}
-
 // RuntimeStageRuntimeStart says "Runtime start"
 // in the language the app shows.
 func RuntimeStageRuntimeStart() string { return In(i18n.Locale()).RuntimeStageRuntimeStart() }
@@ -6216,26 +6036,6 @@ func (msgs Messages) RuntimeErrorConnectionRequired() string {
 	return Catalog.Format(msgs.locale, "runtimeErrorConnectionRequired", nil)
 }
 
-// RuntimeErrorHelperMissing says "Runtime helper not found."
-// in the language the app shows.
-func RuntimeErrorHelperMissing() string { return In(i18n.Locale()).RuntimeErrorHelperMissing() }
-
-// RuntimeErrorHelperMissing says "Runtime helper not found."
-// in the language of msgs.
-func (msgs Messages) RuntimeErrorHelperMissing() string {
-	return Catalog.Format(msgs.locale, "runtimeErrorHelperMissing", nil)
-}
-
-// RuntimeErrorPrepare says "Could not prepare the saved connection: {detail}"
-// in the language the app shows.
-func RuntimeErrorPrepare(detail string) string { return In(i18n.Locale()).RuntimeErrorPrepare(detail) }
-
-// RuntimeErrorPrepare says "Could not prepare the saved connection: {detail}"
-// in the language of msgs.
-func (msgs Messages) RuntimeErrorPrepare(detail string) string {
-	return Catalog.Format(msgs.locale, "runtimeErrorPrepare", map[string]any{"detail": detail})
-}
-
 // RuntimeErrorStart says "Could not start runtime: {detail}"
 // in the language the app shows.
 func RuntimeErrorStart(detail string) string { return In(i18n.Locale()).RuntimeErrorStart(detail) }
@@ -6244,18 +6044,6 @@ func RuntimeErrorStart(detail string) string { return In(i18n.Locale()).RuntimeE
 // in the language of msgs.
 func (msgs Messages) RuntimeErrorStart(detail string) string {
 	return Catalog.Format(msgs.locale, "runtimeErrorStart", map[string]any{"detail": detail})
-}
-
-// RuntimeErrorProtocol says "Runtime protocol error: {detail}"
-// in the language the app shows.
-func RuntimeErrorProtocol(detail string) string {
-	return In(i18n.Locale()).RuntimeErrorProtocol(detail)
-}
-
-// RuntimeErrorProtocol says "Runtime protocol error: {detail}"
-// in the language of msgs.
-func (msgs Messages) RuntimeErrorProtocol(detail string) string {
-	return Catalog.Format(msgs.locale, "runtimeErrorProtocol", map[string]any{"detail": detail})
 }
 
 // RuntimeErrorConnectionLost says "Runtime connection lost"
@@ -6280,48 +6068,6 @@ func (msgs Messages) RuntimeErrorConnectionLostDetail(detail string) string {
 	return Catalog.Format(msgs.locale, "runtimeErrorConnectionLostDetail", map[string]any{"detail": detail})
 }
 
-// RuntimeErrorAPIKey says "API_KEY is not set."
-// in the language the app shows.
-func RuntimeErrorAPIKey() string { return In(i18n.Locale()).RuntimeErrorAPIKey() }
-
-// RuntimeErrorAPIKey says "API_KEY is not set."
-// in the language of msgs.
-func (msgs Messages) RuntimeErrorAPIKey() string {
-	return Catalog.Format(msgs.locale, "runtimeErrorAPIKey", nil)
-}
-
-// RuntimeErrorEnvParse says ".env could not be parsed."
-// in the language the app shows.
-func RuntimeErrorEnvParse() string { return In(i18n.Locale()).RuntimeErrorEnvParse() }
-
-// RuntimeErrorEnvParse says ".env could not be parsed."
-// in the language of msgs.
-func (msgs Messages) RuntimeErrorEnvParse() string {
-	return Catalog.Format(msgs.locale, "runtimeErrorEnvParse", nil)
-}
-
-// RuntimeErrorExitedBeforeReady says "Runtime exited before ready"
-// in the language the app shows.
-func RuntimeErrorExitedBeforeReady() string { return In(i18n.Locale()).RuntimeErrorExitedBeforeReady() }
-
-// RuntimeErrorExitedBeforeReady says "Runtime exited before ready"
-// in the language of msgs.
-func (msgs Messages) RuntimeErrorExitedBeforeReady() string {
-	return Catalog.Format(msgs.locale, "runtimeErrorExitedBeforeReady", nil)
-}
-
-// RuntimeErrorExitedBeforeReadyDetail says "Runtime exited before ready: {detail}"
-// in the language the app shows.
-func RuntimeErrorExitedBeforeReadyDetail(detail string) string {
-	return In(i18n.Locale()).RuntimeErrorExitedBeforeReadyDetail(detail)
-}
-
-// RuntimeErrorExitedBeforeReadyDetail says "Runtime exited before ready: {detail}"
-// in the language of msgs.
-func (msgs Messages) RuntimeErrorExitedBeforeReadyDetail(detail string) string {
-	return Catalog.Format(msgs.locale, "runtimeErrorExitedBeforeReadyDetail", map[string]any{"detail": detail})
-}
-
 // RuntimeErrorStoreSave says "Could not save contacts: {detail}"
 // in the language the app shows.
 func RuntimeErrorStoreSave(detail string) string {
@@ -6332,18 +6078,6 @@ func RuntimeErrorStoreSave(detail string) string {
 // in the language of msgs.
 func (msgs Messages) RuntimeErrorStoreSave(detail string) string {
 	return Catalog.Format(msgs.locale, "runtimeErrorStoreSave", map[string]any{"detail": detail})
-}
-
-// RuntimeErrorIssueToolShutdown says "Task tool service shutdown: {detail}"
-// in the language the app shows.
-func RuntimeErrorIssueToolShutdown(detail string) string {
-	return In(i18n.Locale()).RuntimeErrorIssueToolShutdown(detail)
-}
-
-// RuntimeErrorIssueToolShutdown says "Task tool service shutdown: {detail}"
-// in the language of msgs.
-func (msgs Messages) RuntimeErrorIssueToolShutdown(detail string) string {
-	return Catalog.Format(msgs.locale, "runtimeErrorIssueToolShutdown", map[string]any{"detail": detail})
 }
 
 // RuntimeErrorRuntimeShutdown says "Runtime shutdown: {detail}"
@@ -6654,26 +6388,6 @@ func (msgs Messages) WorkNoToolActivity() string {
 	return Catalog.Format(msgs.locale, "workNoToolActivity", nil)
 }
 
-// WorkEarlierActivity says "Earlier activity"
-// in the language the app shows.
-func WorkEarlierActivity() string { return In(i18n.Locale()).WorkEarlierActivity() }
-
-// WorkEarlierActivity says "Earlier activity"
-// in the language of msgs.
-func (msgs Messages) WorkEarlierActivity() string {
-	return Catalog.Format(msgs.locale, "workEarlierActivity", nil)
-}
-
-// WorkNoTaskIDHint says "No task ID was recorded; these tool results are shown as readable history, without a claimed task."
-// in the language the app shows.
-func WorkNoTaskIDHint() string { return In(i18n.Locale()).WorkNoTaskIDHint() }
-
-// WorkNoTaskIDHint says "No task ID was recorded; these tool results are shown as readable history, without a claimed task."
-// in the language of msgs.
-func (msgs Messages) WorkNoTaskIDHint() string {
-	return Catalog.Format(msgs.locale, "workNoTaskIDHint", nil)
-}
-
 // WorkPreview says "Preview: {text}"
 // in the language the app shows.
 func WorkPreview(text string) string { return In(i18n.Locale()).WorkPreview(text) }
@@ -6804,6 +6518,16 @@ func (msgs Messages) IssueLatestExecution() string {
 	return Catalog.Format(msgs.locale, "issueLatestExecution", nil)
 }
 
+// IssueRunResultUnavailable says "Results are unavailable for this run."
+// in the language the app shows.
+func IssueRunResultUnavailable() string { return In(i18n.Locale()).IssueRunResultUnavailable() }
+
+// IssueRunResultUnavailable says "Results are unavailable for this run."
+// in the language of msgs.
+func (msgs Messages) IssueRunResultUnavailable() string {
+	return Catalog.Format(msgs.locale, "issueRunResultUnavailable", nil)
+}
+
 // IssueNoResultRunning says "No result yet; this run is still running."
 // in the language the app shows.
 func IssueNoResultRunning() string { return In(i18n.Locale()).IssueNoResultRunning() }
@@ -6924,16 +6648,6 @@ func IssueEndedOpen() string { return In(i18n.Locale()).IssueEndedOpen() }
 // in the language of msgs.
 func (msgs Messages) IssueEndedOpen() string {
 	return Catalog.Format(msgs.locale, "issueEndedOpen", nil)
-}
-
-// IssueRecoveryAvailable says "Recovery is available for a run without a trusted terminal state."
-// in the language the app shows.
-func IssueRecoveryAvailable() string { return In(i18n.Locale()).IssueRecoveryAvailable() }
-
-// IssueRecoveryAvailable says "Recovery is available for a run without a trusted terminal state."
-// in the language of msgs.
-func (msgs Messages) IssueRecoveryAvailable() string {
-	return Catalog.Format(msgs.locale, "issueRecoveryAvailable", nil)
 }
 
 // IssuePreviousEvidence says "Previous completion evidence: {evidence}"
@@ -7222,26 +6936,6 @@ func IssueSentSnapshot(text string) string { return In(i18n.Locale()).IssueSentS
 // in the language of msgs.
 func (msgs Messages) IssueSentSnapshot(text string) string {
 	return Catalog.Format(msgs.locale, "issueSentSnapshot", map[string]any{"text": text})
-}
-
-// IssueCheckExecution says "Check run"
-// in the language the app shows.
-func IssueCheckExecution() string { return In(i18n.Locale()).IssueCheckExecution() }
-
-// IssueCheckExecution says "Check run"
-// in the language of msgs.
-func (msgs Messages) IssueCheckExecution() string {
-	return Catalog.Format(msgs.locale, "issueCheckExecution", nil)
-}
-
-// IssueConfirmNotDispatched says "Confirm not dispatched"
-// in the language the app shows.
-func IssueConfirmNotDispatched() string { return In(i18n.Locale()).IssueConfirmNotDispatched() }
-
-// IssueConfirmNotDispatched says "Confirm not dispatched"
-// in the language of msgs.
-func (msgs Messages) IssueConfirmNotDispatched() string {
-	return Catalog.Format(msgs.locale, "issueConfirmNotDispatched", nil)
 }
 
 // IssueResume says "Resume"
@@ -8108,11 +7802,11 @@ func (msgs Messages) SupplementDispatching() string {
 	return Catalog.Format(msgs.locale, "supplementDispatching", nil)
 }
 
-// SupplementUnknown says "Delivery is unknown; check the run. Nothing will be resent automatically."
+// SupplementUnknown says "Delivery is unconfirmed. Nothing will be resent automatically."
 // in the language the app shows.
 func SupplementUnknown() string { return In(i18n.Locale()).SupplementUnknown() }
 
-// SupplementUnknown says "Delivery is unknown; check the run. Nothing will be resent automatically."
+// SupplementUnknown says "Delivery is unconfirmed. Nothing will be resent automatically."
 // in the language of msgs.
 func (msgs Messages) SupplementUnknown() string {
 	return Catalog.Format(msgs.locale, "supplementUnknown", nil)
@@ -8290,26 +7984,6 @@ func SupplementRetry() string { return In(i18n.Locale()).SupplementRetry() }
 // in the language of msgs.
 func (msgs Messages) SupplementRetry() string {
 	return Catalog.Format(msgs.locale, "supplementRetry", nil)
-}
-
-// SupplementNeedsCheck says "Needs delivery check; this is not a completion claim."
-// in the language the app shows.
-func SupplementNeedsCheck() string { return In(i18n.Locale()).SupplementNeedsCheck() }
-
-// SupplementNeedsCheck says "Needs delivery check; this is not a completion claim."
-// in the language of msgs.
-func (msgs Messages) SupplementNeedsCheck() string {
-	return Catalog.Format(msgs.locale, "supplementNeedsCheck", nil)
-}
-
-// SupplementCheck says "Check run"
-// in the language the app shows.
-func SupplementCheck() string { return In(i18n.Locale()).SupplementCheck() }
-
-// SupplementCheck says "Check run"
-// in the language of msgs.
-func (msgs Messages) SupplementCheck() string {
-	return Catalog.Format(msgs.locale, "supplementCheck", nil)
 }
 
 // SupplementShowRecent says "Show recent batches"
@@ -9162,16 +8836,6 @@ func (msgs Messages) IssueNoticeSupplementRetry() string {
 	return Catalog.Format(msgs.locale, "issueNoticeSupplementRetry", nil)
 }
 
-// IssueNoticeSupplementCheck says "Could not check this follow-up run."
-// in the language the app shows.
-func IssueNoticeSupplementCheck() string { return In(i18n.Locale()).IssueNoticeSupplementCheck() }
-
-// IssueNoticeSupplementCheck says "Could not check this follow-up run."
-// in the language of msgs.
-func (msgs Messages) IssueNoticeSupplementCheck() string {
-	return Catalog.Format(msgs.locale, "issueNoticeSupplementCheck", nil)
-}
-
 // ResultLoadNoSession says "This run has no recorded Runtime session/task; results cannot be inspected."
 // in the language the app shows.
 func ResultLoadNoSession() string { return In(i18n.Locale()).ResultLoadNoSession() }
@@ -9230,56 +8894,6 @@ func ResultNoticeWorkingDirMissing() string { return In(i18n.Locale()).ResultNot
 // in the language of msgs.
 func (msgs Messages) ResultNoticeWorkingDirMissing() string {
 	return Catalog.Format(msgs.locale, "resultNoticeWorkingDirMissing", nil)
-}
-
-// ResultDeriveNoSession says "Run has no recorded Runtime session; results cannot be inspected."
-// in the language the app shows.
-func ResultDeriveNoSession() string { return In(i18n.Locale()).ResultDeriveNoSession() }
-
-// ResultDeriveNoSession says "Run has no recorded Runtime session; results cannot be inspected."
-// in the language of msgs.
-func (msgs Messages) ResultDeriveNoSession() string {
-	return Catalog.Format(msgs.locale, "resultDeriveNoSession", nil)
-}
-
-// ResultDeriveSessionMismatch says "Runtime history belongs to a different session; results cannot be inspected."
-// in the language the app shows.
-func ResultDeriveSessionMismatch() string { return In(i18n.Locale()).ResultDeriveSessionMismatch() }
-
-// ResultDeriveSessionMismatch says "Runtime history belongs to a different session; results cannot be inspected."
-// in the language of msgs.
-func (msgs Messages) ResultDeriveSessionMismatch() string {
-	return Catalog.Format(msgs.locale, "resultDeriveSessionMismatch", nil)
-}
-
-// ResultDeriveNoTask says "Run has no recorded Runtime task; results cannot be inspected."
-// in the language the app shows.
-func ResultDeriveNoTask() string { return In(i18n.Locale()).ResultDeriveNoTask() }
-
-// ResultDeriveNoTask says "Run has no recorded Runtime task; results cannot be inspected."
-// in the language of msgs.
-func (msgs Messages) ResultDeriveNoTask() string {
-	return Catalog.Format(msgs.locale, "resultDeriveNoTask", nil)
-}
-
-// ResultDeriveTaskMissing says "Runtime history does not contain the run's task; the session may be unavailable or legacy."
-// in the language the app shows.
-func ResultDeriveTaskMissing() string { return In(i18n.Locale()).ResultDeriveTaskMissing() }
-
-// ResultDeriveTaskMissing says "Runtime history does not contain the run's task; the session may be unavailable or legacy."
-// in the language of msgs.
-func (msgs Messages) ResultDeriveTaskMissing() string {
-	return Catalog.Format(msgs.locale, "resultDeriveTaskMissing", nil)
-}
-
-// ResultDeriveMessageMissing says "Runtime history does not record the supplied run message."
-// in the language the app shows.
-func ResultDeriveMessageMissing() string { return In(i18n.Locale()).ResultDeriveMessageMissing() }
-
-// ResultDeriveMessageMissing says "Runtime history does not record the supplied run message."
-// in the language of msgs.
-func (msgs Messages) ResultDeriveMessageMissing() string {
-	return Catalog.Format(msgs.locale, "resultDeriveMessageMissing", nil)
 }
 
 // SendNoticeProtocol says "Protocol failure; delivery not confirmed. Reload before sending again."
@@ -10042,26 +9656,6 @@ func MarkdownFileSourceUnknown() string { return In(i18n.Locale()).MarkdownFileS
 // in the language of msgs.
 func (msgs Messages) MarkdownFileSourceUnknown() string {
 	return Catalog.Format(msgs.locale, "markdownFileSourceUnknown", nil)
-}
-
-// IssueCollaborationUnavailable says "Issue collaboration unavailable"
-// in the language the app shows.
-func IssueCollaborationUnavailable() string { return In(i18n.Locale()).IssueCollaborationUnavailable() }
-
-// IssueCollaborationUnavailable says "Issue collaboration unavailable"
-// in the language of msgs.
-func (msgs Messages) IssueCollaborationUnavailable() string {
-	return Catalog.Format(msgs.locale, "issueCollaborationUnavailable", nil)
-}
-
-// IssueCollaborationRepairHint says "Task coordination is unavailable. Review Connection & model; if Apply saved is available, use it to try starting coor…"
-// in the language the app shows.
-func IssueCollaborationRepairHint() string { return In(i18n.Locale()).IssueCollaborationRepairHint() }
-
-// IssueCollaborationRepairHint says "Task coordination is unavailable. Review Connection & model; if Apply saved is available, use it to try starting coor…"
-// in the language of msgs.
-func (msgs Messages) IssueCollaborationRepairHint() string {
-	return Catalog.Format(msgs.locale, "issueCollaborationRepairHint", nil)
 }
 
 // ThemeLight says "Light theme"

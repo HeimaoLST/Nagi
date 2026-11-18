@@ -75,8 +75,7 @@ type message struct {
 	RetryDone   bool
 	Expanded    bool
 
-	// Runtime-backed display identity. Key is stable for a journal record
-	// item (offset+index) or a live (task,item/call) tuple.
+	// Key identifies a Pi history entry or a live run item.
 	Key        string
 	TaskID     string
 	MessageID  string
@@ -90,43 +89,43 @@ type message struct {
 	Context    []taskContextItem
 }
 
-type contact struct {
-	ID                    string
-	Name                  string
-	Role                  string
-	Purpose               string
-	Instructions          string
-	Workspace             string
-	BuiltinTools          *[]string
-	Status                contactStatus
-	Unread                int
-	Work                  string
-	WorkArg               string
-	WorkLabel             string
-	Messages              []*message
-	History               []historyEntry
-	Revealed              []string
-	Draft                 string
-	Archived              bool
-	ArchivedAt            int64
-	PreviousSessions      []string
-	PiBinding             *piConversationBinding
-	PreviousPiBindings    []piConversationBinding
-	Context               taskContext
-	replyIndex            int
-	list                  ui.ListState
-	Works                 []*workItem
-	Issues                []*productIssue
-	SelectedIssueID       string
-	SelectedWorkTaskID    string
-	UnlinkedTools         []*workTool
-	issueView             issueViewState
-	StopRequestedTasks    map[string]bool
-	pendingIssueExecution string
-	shutdownCancelTaskID  string
+type runtimeBuiltinTool struct {
+	Name        string
+	Description string
+}
 
-	// Runtime-backed state. Empty SessionID means the contact has no runtime
-	// session yet; it is created lazily before the first task.send.
+type contact struct {
+	ID                   string
+	Name                 string
+	Role                 string
+	Purpose              string
+	Instructions         string
+	Workspace            string
+	BuiltinTools         *[]string
+	Status               contactStatus
+	Unread               int
+	Work                 string
+	WorkArg              string
+	WorkLabel            string
+	Messages             []*message
+	History              []historyEntry
+	Revealed             []string
+	Draft                string
+	Archived             bool
+	ArchivedAt           int64
+	PiBinding            *piConversationBinding
+	PreviousPiBindings   []piConversationBinding
+	Context              taskContext
+	replyIndex           int
+	list                 ui.ListState
+	Works                []*workItem
+	Issues               []*productIssue
+	SelectedIssueID      string
+	SelectedWorkTaskID   string
+	issueView            issueViewState
+	shutdownCancelTaskID string
+
+	// A Pi conversation is opened lazily on its first send.
 	SessionID         string
 	Loaded            bool
 	LoadErr           string
@@ -141,7 +140,6 @@ type contact struct {
 	SubmittedRev      int
 	pendingSend       *pendingSend
 	draftRev          int
-	HistoryDirty      bool
 	StatusDetail      string
 	StatusDetailKind  string
 	SessionWorkingDir string
@@ -149,7 +147,6 @@ type contact struct {
 	SessionAPI        string
 	SessionState      string
 	historyGen        int
-	pendingEvents     []runtimeEventEnvelope
 }
 
 type profileDraft struct {
@@ -213,7 +210,6 @@ type appModel struct {
 	contactHistoryInFlight    int
 	resultInFlight            int
 	submissionInFlight        int
-	metadataInFlight          int
 
 	appearanceThemeIDs appearanceThemeIDs
 	appearanceThemes   customThemeCatalog
@@ -261,7 +257,6 @@ type appModel struct {
 	// the shipped app is runtime-backed.
 	demo                      bool
 	store                     *contactStore
-	rt                        *runtimeClient
 	pi                        *piAppHost
 	runtimeStatus             string
 	runtimeErr                string
@@ -271,18 +266,13 @@ type appModel struct {
 	runtimeHintKind           string
 	runtimeHintArgs           []string
 	runtimeBinary             string
-	runtimeHelperChecked      bool
-	runtimeAPI                string
-	runtimeHandshake          bool
 	runtimeMaxActiveTasks     int
 	runtimeCapabilitiesLoaded bool
-	runtimeCapabilitiesErr    string
 	runtimeBuiltinTools       []runtimeBuiltinTool
 	runtimeBuiltinDefaults    []string
 	runtimeBuiltinToolsLoaded bool
 	runtimeBuiltinToolsErr    string
 	workDir                   string
-	sessionDir                string
 	storePath                 string
 	uiHookMu                  sync.Mutex
 	uiHook                    func(func()) // test seam for deterministic UI-thread ordering
@@ -296,9 +286,7 @@ type appModel struct {
 	connectionForm         *connectionSettings
 	connectionSaved        *connectionConfig
 	connectionEffective    *connectionConfig
-	connectionLaunch       *connectionLaunch
 	connectionManaged      bool
-	connectionLegacy       bool
 	connectionGeneration   int
 	connectionApplying     bool
 	connectionDetailsOpen  map[string]bool
@@ -316,16 +304,11 @@ type appModel struct {
 
 	// #154 conversation issue tools. The scope/operation records live in the
 	// same contact store, not in a second database or queue.
-	issueToolLedger          *IssueToolOperationLedger
-	issueToolScopes          map[string]IssueToolScope
-	issueToolServer          *issueToolIPCServer
-	issueToolEndpoint        string
-	issueToolHelper          string
-	issueToolErr             string
-	issueToolWaiters         map[string]chan IssueToolReceipt
-	piQuestionWaiters        map[string]chan struct{}
-	issueToolShutdown        chan struct{}
-	issueToolReleaseInFlight int
+	issueToolLedger   *IssueToolOperationLedger
+	issueToolScopes   map[string]IssueToolScope
+	issueToolWaiters  map[string]chan IssueToolReceipt
+	piQuestionWaiters map[string]chan struct{}
+	issueToolShutdown chan struct{}
 
 	// Layout is a GUI-wide preference, not a contact or runtime fact. Widths
 	// are persisted in the contact store; windowWidth is only the current
@@ -362,7 +345,7 @@ type appModel struct {
 }
 
 var cannedReplies = map[string][]string{
-	"saki": {
+	"nagi": {
 		"Noted — I kept the earlier MyGo scope in view while answering, and nothing earlier was rewritten.",
 		"That fits the current scope. I will treat it as the next check-in point rather than a new decision.",
 	},
@@ -380,33 +363,33 @@ func seededApp() *appModel {
 	return &appModel{
 		contacts: []*contact{
 			{
-				ID: "saki", Name: "Saki", Role: "Research partner",
+				ID: "nagi", Name: "Nagi", Role: "Research partner",
 				Purpose:      "Long-running product and research questions, with earlier decisions kept in view.",
 				Instructions: "Cite earlier decisions when they shape an answer. Keep replies short and concrete.",
 				WorkLabel:    "Looking through this thread",
 				Status:       statusReady,
 				Messages: []*message{
 					{ID: 1, Kind: msgUser, Text: "Where did we land on the MyGo decision before the desktop work starts?", Time: "9:42"},
-					{ID: 2, Kind: msgActivity, Text: "Looked up earlier conversations", Time: "9:43", Sources: []string{"saki-h1", "saki-h2"},
+					{ID: 2, Kind: msgActivity, Text: "Looked up earlier conversations", Time: "9:43", Sources: []string{"nagi-h1", "nagi-h2"},
 						Steps: []string{
 							"Searched this contact's history for “MyGo”",
 							"Read 3 earlier messages from Sep 27 and Oct 3",
 							"Cited 2 messages in the reply",
 						}},
 					{ID: 3, Kind: msgContact, Time: "9:43",
-						Text:    "We agreed to try MyGo for the desktop shell while keeping Saki in Rust. Each contact keeps its own profile and history.",
-						Sources: []string{"saki-h1", "saki-h2"}},
+						Text:    "We agreed to use MyGo for the desktop and Pi for execution. Each contact keeps its own profile and history.",
+						Sources: []string{"nagi-h1", "nagi-h2"}},
 					{ID: 4, Kind: msgUser, Text: "Good. Then the desktop shell should show exactly that: contacts, drafts, and cited history.", Time: "9:44"},
 					{ID: 5, Kind: msgContact, Time: "9:44",
 						Text:    "Yes — and profile edits should only affect later replies, never rewrite old ones. I kept the earlier decision in view.",
-						Sources: []string{"saki-h2", "saki-h5"}},
+						Sources: []string{"nagi-h2", "nagi-h5"}},
 				},
 				History: []historyEntry{
-					{ID: "saki-h1", Date: "Sep 27", From: "me", Text: "Let's settle the first scope for the MyGo desktop shell."},
-					{ID: "saki-h2", Date: "Sep 27", From: "contact", Text: "Keep Saki as the Rust agent core and let MyGo be the desktop shell. Each contact keeps its own profile and history."},
-					{ID: "saki-h3", Date: "Oct 3", From: "me", Text: "So no shared memory between contacts yet."},
-					{ID: "saki-h4", Date: "Oct 3", From: "contact", Text: "Right — scoped history only. Revisit collaboration after the single-contact loop is useful."},
-					{ID: "saki-h5", Date: "Oct 5", From: "contact", Text: "Profile edits affect future replies; saved history stays intact."},
+					{ID: "nagi-h1", Date: "Sep 27", From: "me", Text: "Let's settle the first scope for the MyGo desktop."},
+					{ID: "nagi-h2", Date: "Sep 27", From: "contact", Text: "Use Pi for execution and MyGo for the desktop. Each contact keeps its own profile and history."},
+					{ID: "nagi-h3", Date: "Oct 3", From: "me", Text: "So no shared memory between contacts yet."},
+					{ID: "nagi-h4", Date: "Oct 3", From: "contact", Text: "Right. Each contact keeps its own history. Revisit collaboration after the single-contact workflow is useful."},
+					{ID: "nagi-h5", Date: "Oct 5", From: "contact", Text: "Profile edits affect future replies; saved history stays intact."},
 				},
 			},
 			{
@@ -432,7 +415,7 @@ func seededApp() *appModel {
 				ID: "ren", Name: "Ren", Role: "Coding partner",
 				Purpose:      "Small parser and runtime changes, reported as test results rather than guesses.",
 				Instructions: "Report failing cases with the diff context. Do not claim a fix until the tests pass.",
-				Workspace:    "~/Workspace/saki",
+				Workspace:    "~/Workspace/Nagi",
 				WorkLabel:    "Running the parser tests",
 				Status:       statusWorking,
 				Work:         "Running the parser tests",
@@ -512,8 +495,8 @@ func (a *appModel) selectContact(i int) {
 	a.highlight = ""
 	if !a.demo {
 		ct := a.contacts[i]
-		if ct.SessionID != "" && (!ct.Loaded || ct.HistoryDirty) && ct.ActiveTaskID == "" {
-			a.reloadContactByID(ct.ID, false)
+		if ct.PiBinding != nil && !ct.Loaded && ct.ActiveTaskID == "" {
+			a.reloadContactByID(ct.ID)
 		}
 	}
 }
@@ -669,8 +652,7 @@ func (a *appModel) historyMatches() []historyEntry {
 			seen[e.ID] = true
 		}
 	}
-	// Live text can exist before the journal projection is reloaded. Keep it
-	// readable in History without duplicating an already-projected item.
+	// Include live messages that are not yet in the loaded Pi history.
 	for _, m := range c.Messages {
 		if m.Kind != msgUser && m.Kind != msgContact || (strings.TrimSpace(m.Text) == "" && len(m.Context) == 0) {
 			continue

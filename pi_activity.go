@@ -122,7 +122,7 @@ func (a *appModel) submitPiActivity(host *piAppHost, contactID, issueID, executi
 			issue.Work.Loaded = previousLoaded
 			return
 		}
-		scope, err = a.issueToolNewWorkScope(contactID, issueID, executionID, actual.SessionRef, false)
+		scope, err = a.issueToolNewWorkScope(contactID, issueID, executionID, actual.SessionRef)
 	})
 	if err != nil {
 		a.failPiActivity(host, contactID, issueID, executionID, err, false)
@@ -136,17 +136,17 @@ func (a *appModel) submitPiActivity(host *piAppHost, contactID, issueID, executi
 	runID := newIssueToolTurnID()
 	run := pi.StartRunParams{ContextID: actual.ContextID, RunID: runID, Text: prompt,
 		Correlation: &pi.RunCorrelation{TurnID: scope.TurnID, ScopeRef: scope.Ref, ExecutionID: executionID}}
-	wireInputs := taskContextInputs(items)
+	var wireInputs []pi.ContextInput
 	if scopeInput, ok := issueToolScopeInput(scope); ok {
-		wireInputs = append(wireInputs, scopeInput)
+		wireInputs = taskContextInputs(items, scopeInput)
+	} else {
+		wireInputs = taskContextInputs(items)
 	}
 	if err := validateRuntimeContextInputs(wireInputs); err != nil {
 		a.failPiActivity(host, contactID, issueID, executionID, err, false)
 		return
 	}
-	for _, item := range wireInputs {
-		run.Context = append(run.Context, pi.ContextInput{Name: item.Name, Text: item.Text})
-	}
+	run.Context = wireInputs
 	alreadyAttempted := false
 	a.runOnUI(func() {
 		ct := a.contactByID(contactID)
@@ -171,7 +171,7 @@ func (a *appModel) submitPiActivity(host *piAppHost, contactID, issueID, executi
 		previousScope := a.issueToolScopes[scope.Ref]
 		issue.PiBinding.Context.Used = true
 		execution.PiRun = &piActivityRun{WorkerEpoch: ready.WorkerEpoch, ContextID: actual.ContextID, SessionRef: actual.SessionRef, RunID: runID, CancelRequested: issue.Work.cancelAfterAccept || issue.Status == issueStatusCanceled}
-		execution.ToolScopeRef, execution.ToolScopeInput = scope.Ref, scope.Ref
+		execution.ToolScopeRef = scope.Ref
 		issue.Work.ActiveTaskID = runID
 		a.issueToolBindTask(scope.Ref, runID)
 		err = a.persist()
@@ -179,7 +179,7 @@ func (a *appModel) submitPiActivity(host *piAppHost, contactID, issueID, executi
 			issue.PiBinding.Context.Used = previousUsed
 			a.issueToolScopes[scope.Ref] = previousScope
 			execution.PiRun = nil
-			execution.ToolScopeRef, execution.ToolScopeInput = "", ""
+			execution.ToolScopeRef = ""
 			issue.Work.ActiveTaskID = ""
 		}
 	})

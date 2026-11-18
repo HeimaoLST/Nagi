@@ -10,7 +10,6 @@ import (
 )
 
 const (
-	builtinNoticeLegacy          = "builtin-legacy"
 	builtinNoticeManaged         = "builtin-managed"
 	builtinNoticeListUnavailable = "builtin-list-unavailable"
 	builtinNoticeToolPrefix      = "builtin-tool-unavailable:"
@@ -42,17 +41,6 @@ func profileDraftEqual(left, right profileDraft) bool {
 		builtinToolsEqual(left.BuiltinTools, right.BuiltinTools)
 }
 
-func builtinToolNames(tools []runtimeBuiltinTool) []string {
-	names := make([]string, 0, len(tools))
-	for _, tool := range tools {
-		name := strings.TrimSpace(tool.Name)
-		if name != "" && !slices.Contains(names, name) {
-			names = append(names, name)
-		}
-	}
-	return names
-}
-
 func builtinToolSelectionContains(selection *[]string, name string) bool {
 	return selection != nil && slices.Contains(*selection, name)
 }
@@ -63,9 +51,6 @@ func builtinToolSelectionLabel(names []string) string {
 
 func (a *appModel) validateBuiltinToolSelection(current, next *[]string) string {
 	if !a.connectionManaged && !builtinToolsEqual(current, next) {
-		if a.connectionLegacy {
-			return builtinNoticeLegacy
-		}
 		return builtinNoticeManaged
 	}
 	if next == nil || len(*next) == 0 {
@@ -87,24 +72,4 @@ func (a *appModel) validateBuiltinToolSelection(current, next *[]string) string 
 		}
 	}
 	return ""
-}
-
-func (a *appModel) capturedBuiltinSelection(ct *contact) *[]string {
-	if ct == nil {
-		return nil
-	}
-	if ct.BuiltinTools != nil {
-		return cloneBuiltinTools(ct.BuiltinTools)
-	}
-	// A legacy environment connection has no schema-2 connection identity,
-	// so the app must not turn its nil/default profile into an explicit
-	// selection that the legacy create path cannot honor.
-	if !a.connectionManaged {
-		return nil
-	}
-	if a.runtimeBuiltinToolsLoaded {
-		names := builtinToolNames(a.runtimeBuiltinTools)
-		return &names
-	}
-	return nil
 }

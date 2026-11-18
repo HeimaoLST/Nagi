@@ -31,7 +31,7 @@ func appearanceThemeDirectory(directory string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(configDir, "Saki", "themes"), nil
+	return filepath.Join(configDir, "Nagi", "themes"), nil
 }
 
 func (a *appModel) reloadAppearanceThemes() {
@@ -196,8 +196,7 @@ const (
 	appearanceStatusSaveFailed = "save-failed"
 )
 
-// normalizeAppearanceMode treats every absent or unknown stored value as the
-// legacy system-following default. It never writes a new preference file.
+// normalizeAppearanceMode treats absent or unknown values as system-following.
 func normalizeAppearanceMode(mode string) string {
 	switch strings.TrimSpace(mode) {
 	case appearanceLight:

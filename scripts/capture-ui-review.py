@@ -31,7 +31,7 @@ def capture(root, output, tests):
     selector = "^(" + "|".join(tests) + ")$"
     command = [sys.executable, "scripts/gui-go.py", "test", "-mod=readonly", "-count=1",
                "-parallel=1", "-json", "-run", selector, "."]
-    env = dict(os.environ, CGO_ENABLED="0", SAKI_TEST_ONLINE="0", SAKI_PREVIEW_DIR=str(shots))
+    env = dict(os.environ, CGO_ENABLED="0", NAGI_TEST_ONLINE="0", NAGI_PREVIEW_DIR=str(shots))
     log = output / "test.jsonl"
     with log.open("wb") as stdout, (output / "test.stderr").open("wb") as stderr:
         result = subprocess.run(command, cwd=root, env=env, stdout=stdout, stderr=stderr)

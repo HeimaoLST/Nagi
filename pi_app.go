@@ -179,11 +179,6 @@ func (a *appModel) startPiHost() {
 	if a.demo || a.shutdownStarted || a.connectionApplying {
 		return
 	}
-	if a.piDataReadOnly() {
-		a.runtimeStatus = runtimeStateFailed
-		a.runtimeErr = "Legacy product data is read-only until its history policy is selected."
-		return
-	}
 	if a.connectionSaved == nil || a.store == nil {
 		a.runtimeStatus = runtimeStateFailed
 		a.runtimeErrKind = runtimeNoticeConnectionRequired
@@ -340,10 +335,8 @@ func (a *appModel) startPiHost() {
 			a.runtimeBuiltinToolsErr = ""
 			a.connectionEffective = &config
 			a.connectionManaged = true
-			a.connectionLegacy = false
 			a.workDir = config.WorkingDirectory
 			a.runtimeStatus = runtimeStateReady
-			a.runtimeHandshake = true
 			a.runtimeMaxActiveTasks = config.MaxActiveTasks
 			a.runtimeCapabilitiesLoaded = true
 			a.runtimeErr, a.runtimeErrKind = "", ""
@@ -351,7 +344,7 @@ func (a *appModel) startPiHost() {
 			a.connectionForm.Error = ""
 			for _, ct := range a.contacts {
 				if ct.PiBinding != nil && !ct.Loaded {
-					a.reloadContactByID(ct.ID, false)
+					a.reloadContactByID(ct.ID)
 				}
 			}
 		})
@@ -487,10 +480,6 @@ func (a *appModel) sendPiConversation(ct *contact, text string) bool {
 		ct.setSendError(sendBlockRaw(reason), reason, "")
 		return false
 	}
-	if a.pi == nil || a.piDataReadOnly() || ct.SessionID != "" && ct.PiBinding == nil || ct.PiBinding != nil && !ct.Loaded {
-		ct.setSendError("The conversation is unavailable or busy.", "", "")
-		return false
-	}
 	if err := validateTaskContext(ct.Context.items); err != nil {
 		ct.setSendError(err.Error(), "", "")
 		return false
@@ -544,7 +533,7 @@ func (a *appModel) submitPiConversation(host *piAppHost, contactID string, bindi
 	}
 	binding.Context = actual
 	var scope *IssueToolScope
-	var issueList runtimeContextInput
+	var issueList pi.ContextInput
 	a.runOnUI(func() {
 		ct := a.contactByID(contactID)
 		if a.pi != host || a.shutdownStarted || ct == nil || ct.pendingSend == nil || ct.SendState != sendSubmitting {
@@ -562,7 +551,7 @@ func (a *appModel) submitPiConversation(host *piAppHost, contactID string, bindi
 			return
 		}
 		turnID := newIssueToolTurnID()
-		scope, err = a.issueToolNewScope(contactID, actual.SessionRef, turnID, false)
+		scope, err = a.issueToolNewScope(contactID, actual.SessionRef, turnID)
 		if err == nil {
 			issueList, err = a.issueToolConversationIssueList(scope)
 		}
@@ -575,12 +564,11 @@ func (a *appModel) submitPiConversation(host *piAppHost, contactID string, bindi
 		return
 	}
 	runID := newIssueToolTurnID()
-	inputs := make([]pi.ContextInput, 0, len(items)+2)
-	for _, item := range items {
-		inputs = append(inputs, pi.ContextInput{Name: item.inputName(), Text: item.Text})
+	inputs := taskContextInputs(items, issueList, pi.ContextInput{Name: issueToolScopeContextName, Text: scope.Ref})
+	if err := validateRuntimeContextInputs(inputs); err != nil {
+		a.failPiSubmission(host, contactID, "", err, false)
+		return
 	}
-	inputs = append(inputs, pi.ContextInput{Name: issueList.Name, Text: issueList.Text},
-		pi.ContextInput{Name: issueToolScopeContextName, Text: scope.Ref})
 	run := pi.StartRunParams{ContextID: actual.ContextID, RunID: runID, Text: text, Context: inputs,
 		Correlation: &pi.RunCorrelation{TurnID: scope.TurnID, ScopeRef: scope.Ref}}
 	bridge, err := newPiIssueTools(ctx, a, host.client, actual, run)

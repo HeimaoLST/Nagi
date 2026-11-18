@@ -1,10 +1,5 @@
 package main
 
-// Application-side adapter for #154 conversation issue tools. It owns only
-// scope resolution, the persistent operation ledger and projection of existing
-// productIssue/issueExecution/history facts. It does not create a second issue
-// model, Runtime client, dispatcher or history parser.
-
 import (
 	"context"
 	"crypto/rand"
@@ -12,22 +7,20 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/HeimaoLST/Nagi/internal/pi"
 )
 
 const (
-	issueToolSourceID             = "nagi_issue_tools"
 	issueToolScopeContextName     = "nagi.issue_tools.scope"
 	issueToolIssueListContextName = "nagi.issue_tools.issues"
 	issueToolWaitTimeout          = 25 * time.Second
 	issueToolResultExcerptSize    = 4096
-	issueToolResultFilesLimit     = 50
 	issueToolQueryMaxBytes        = 16 * 1024
-	issueToolMCPEnvelopeReserve   = 512
+	issueToolEnvelopeReserve      = 512
 	issueToolQueryTextLimit       = 512
 )
 
@@ -45,78 +38,6 @@ func newIssueToolScopeRef() string {
 		return "scope-" + hex.EncodeToString(raw[:])
 	}
 	return fmt.Sprintf("scope-%d", time.Now().UnixNano())
-}
-
-func (a *appModel) issueToolEnabled() bool {
-	return a.issueToolLaunchSource() != nil && a.issueToolErr == ""
-}
-
-func (a *appModel) startIssueToolService() error {
-	if a.issueToolServer != nil {
-		return nil
-	}
-	helper := strings.TrimSpace(os.Getenv("SAKI_TEST_ISSUE_TOOL_HELPER"))
-	if helper == "" {
-		exe, err := os.Executable()
-		if err != nil {
-			return fmt.Errorf("locate issue tool helper: %w", err)
-		}
-		// The Go test binary is not a runnable helper entry point. Tests that
-		// exercise the real chain explicitly provide a built helper path.
-		if strings.HasSuffix(filepath.Base(exe), ".test") {
-			return nil
-		}
-		helper = exe
-	}
-	helper, err := filepath.Abs(helper)
-	if err != nil {
-		return fmt.Errorf("resolve issue tool helper: %w", err)
-	}
-	if info, err := os.Stat(helper); err != nil || info.IsDir() {
-		return fmt.Errorf("issue tool helper is not executable at %s", helper)
-	}
-	// macOS TMPDIR can exceed sun_path once the socket name is appended.
-	// Only the IPC address uses /tmp; user data and workspaces stay unchanged.
-	endpoint := filepath.Join("/tmp", fmt.Sprintf("nagi-issue-%d-%s.sock", os.Getpid(), newIssueToolScopeRef()))
-	server, err := startIssueToolIPCServer(endpoint, a.handleIssueToolForward)
-	if err != nil {
-		return err
-	}
-	a.issueToolServer = server
-	a.issueToolEndpoint = endpoint
-	a.issueToolHelper = helper
-	if a.issueToolLedger == nil {
-		a.issueToolLedger = &IssueToolOperationLedger{}
-	}
-	if a.issueToolScopes == nil {
-		a.issueToolScopes = map[string]IssueToolScope{}
-	}
-	if a.issueToolWaiters == nil {
-		a.issueToolWaiters = map[string]chan IssueToolReceipt{}
-	}
-	return nil
-}
-
-func (a *appModel) closeIssueToolService() error {
-	if a == nil || a.issueToolServer == nil {
-		return nil
-	}
-	return a.issueToolServer.Close()
-}
-
-// A recovered socket can be prepared for Apply while the current Runtime still
-// lacks its source. issueToolEnabled stays false until that Apply succeeds.
-func (a *appModel) issueToolLaunchSource() *runtimeToolSource {
-	if a == nil || a.issueToolServer == nil || a.issueToolEndpoint == "" || a.issueToolHelper == "" {
-		return nil
-	}
-	return &runtimeToolSource{
-		ID: issueToolSourceID, Transport: "stdio", Command: a.issueToolHelper,
-		Args:    []string{"--issue-tool-helper"},
-		EnvFrom: []string{issueToolIPCSocketEnv}, Protocol: "legacy",
-		Endpoint:         a.issueToolEndpoint,
-		StartupTimeoutMS: 10000, CallTimeoutMS: 120000, CancelGraceMS: 2000,
-	}
 }
 
 func issueToolConversationDefinitions() []issueToolDefinition {
@@ -141,52 +62,7 @@ func issueToolWorkDefinitions() []issueToolDefinition {
 
 const issueToolWorkToolName = "issue_wait"
 
-func (a *appModel) releaseIssueWorkSession(ct *contact, issue *productIssue) {
-	if a == nil || a.rt == nil || ct == nil || issue == nil || !a.issueToolEnabled() || a.shutdownStarted ||
-		issue.WorkSessionID == "" || issue.Work.ActiveTaskID != "" || issue.Work.Releasing ||
-		issue.Work.SendState != sendIdle || issue.Work.pendingExecutionID != "" || len(issue.Work.pendingEvents) > 0 {
-		return
-	}
-	sessionID, contactID, issueID := issue.WorkSessionID, ct.ID, issue.ID
-	rt, generation := a.rt, a.connectionGeneration
-	issue.Work.Releasing = true
-	a.issueToolReleaseInFlight++
-	go func() {
-		err := rt.releaseSession(sessionID)
-		a.updateUI(func() {
-			if a.issueToolReleaseInFlight > 0 {
-				a.issueToolReleaseInFlight--
-			}
-			defer func() {
-				if a.shutdownStarted {
-					a.finishShutdown()
-				}
-			}()
-			if a.rt != rt || a.connectionGeneration != generation {
-				return
-			}
-			contactOwner := a.contactByID(contactID)
-			if contactOwner == nil {
-				return
-			}
-			owner := contactOwner.issueByID(issueID)
-			if owner == nil || owner.WorkSessionID != sessionID {
-				return
-			}
-			owner.Work.Releasing = false
-			owner.Work.ReleasePending = false
-			if err != nil {
-				owner.Work.setSendError("Could not release idle work tool process: "+a.connectionRuntimeMessage(err), "release-tool-failed", a.connectionRuntimeMessage(err))
-			} else {
-				owner.Work.Released = true
-				owner.Work.Loaded = true
-			}
-			a.maybeAutoContinueIssue(contactOwner, owner)
-		})
-	}()
-}
-
-func (a *appModel) issueToolNewWorkScope(contactID, issueID, executionID, sessionID string, roleGuidanceAppended bool) (*IssueToolScope, error) {
+func (a *appModel) issueToolNewWorkScope(contactID, issueID, executionID, sessionID string) (*IssueToolScope, error) {
 	ct := a.contactByID(contactID)
 	if ct == nil || issueForContact(ct, issueID) == nil {
 		return nil, errors.New("issue not found for work scope")
@@ -196,7 +72,7 @@ func (a *appModel) issueToolNewWorkScope(contactID, issueID, executionID, sessio
 		ContactID: contactID, RuntimeSessionID: sessionID,
 		TurnID: executionID, AllowedIssueIDs: []string{issueID},
 		WorkIssueID: issueID, WorkExecutionID: executionID,
-		RoleGuidanceAppended: roleGuidanceAppended, CreatedAt: nowMillis(),
+		CreatedAt: nowMillis(),
 	}
 	if err := scope.Validate(); err != nil {
 		return nil, err
@@ -214,7 +90,7 @@ func (a *appModel) issueToolNewWorkScope(contactID, issueID, executionID, sessio
 
 // issueToolNewScope issues one app-owned scope before a conversation task is
 // sent. The caller appends the bounded issue list followed by the opaque scope.
-func (a *appModel) issueToolNewScope(contactID, sessionID, turnID string, roleGuidanceAppended bool) (*IssueToolScope, error) {
+func (a *appModel) issueToolNewScope(contactID, sessionID, turnID string) (*IssueToolScope, error) {
 	ct := a.contactByID(contactID)
 	if ct == nil {
 		return nil, errors.New("contact not found for issue tool scope")
@@ -228,7 +104,7 @@ func (a *appModel) issueToolNewScope(contactID, sessionID, turnID string, roleGu
 	scope := IssueToolScope{
 		Ref: newIssueToolScopeRef(), ContactID: contactID, RuntimeSessionID: sessionID,
 		TurnID: turnID, AllowedIssueIDs: ids, AllowCreate: true,
-		RoleGuidanceAppended: roleGuidanceAppended, IssueListAppended: true, CreatedAt: nowMillis(),
+		CreatedAt: nowMillis(),
 	}
 	if err := scope.Validate(); err != nil {
 		return nil, err
@@ -254,30 +130,30 @@ func issueToolScopeToken(scope *IssueToolScope) string {
 	return scope.Ref
 }
 
-func issueToolScopeInput(scope *IssueToolScope) (runtimeContextInput, bool) {
+func issueToolScopeInput(scope *IssueToolScope) (pi.ContextInput, bool) {
 	token := issueToolScopeToken(scope)
 	if token == "" {
-		return runtimeContextInput{}, false
+		return pi.ContextInput{}, false
 	}
-	return runtimeContextInput{Name: issueToolScopeContextName, Text: token}, true
+	return pi.ContextInput{Name: issueToolScopeContextName, Text: token}, true
 }
 
 // Called on the UI actor alongside scope issuance, before task.send. This is
 // discovery material, not an implicit target or a second authorization source.
-func (a *appModel) issueToolConversationIssueList(scope *IssueToolScope) (runtimeContextInput, error) {
+func (a *appModel) issueToolConversationIssueList(scope *IssueToolScope) (pi.ContextInput, error) {
 	ct := a.contactByID(scope.ContactID)
 	if ct == nil {
-		return runtimeContextInput{}, errors.New("contact not found for issue list context")
+		return pi.ContextInput{}, errors.New("contact not found for issue list context")
 	}
 	list, err := issueToolList(*scope, ct.Issues, false, 50, "")
 	if err != nil {
-		return runtimeContextInput{}, err
+		return pi.ContextInput{}, err
 	}
 	data, err := json.Marshal(boundIssueToolList(list))
 	if err != nil {
-		return runtimeContextInput{}, err
+		return pi.ContextInput{}, err
 	}
-	return runtimeContextInput{Name: issueToolIssueListContextName, Text: string(data)}, nil
+	return pi.ContextInput{Name: issueToolIssueListContextName, Text: string(data)}, nil
 }
 
 func (a *appModel) issueToolScopeByRef(ref string) (IssueToolScope, error) {
@@ -307,7 +183,7 @@ func (a *appModel) issueToolScopeActive(captured IssueToolScope) bool {
 	// immutable scope identity still matches the captured one.
 	scope, ok := a.issueToolScopes[captured.Ref]
 	if !ok || scope.Ref != captured.Ref || scope.ContactID != captured.ContactID ||
-		scope.RuntimeSession() != captured.RuntimeSession() || scope.TurnID != captured.TurnID {
+		scope.RuntimeSessionID != captured.RuntimeSessionID || scope.TurnID != captured.TurnID {
 		return false
 	}
 	ct := a.contactByID(scope.ContactID)
@@ -316,7 +192,7 @@ func (a *appModel) issueToolScopeActive(captured IssueToolScope) bool {
 	}
 	if scope.Mode == issueToolModeWork {
 		issue := ct.issueByID(scope.WorkIssueID)
-		if issue == nil || issue.Archived || issue.WorkSessionID != scope.RuntimeSession() {
+		if issue == nil || issue.Archived || issue.WorkSessionID != scope.RuntimeSessionID {
 			return false
 		}
 		_, execution := ct.executionByID(scope.WorkExecutionID)
@@ -325,9 +201,9 @@ func (a *appModel) issueToolScopeActive(captured IssueToolScope) bool {
 				execution != nil && execution.ToolScopeRef == scope.Ref && execution.TaskID == issue.Work.ActiveTaskID
 		}
 		return issue.Work.SendState == sendSubmitting && execution != nil &&
-			execution.ToolScopeRef == scope.Ref && execution.SessionID == scope.RuntimeSession()
+			execution.ToolScopeRef == scope.Ref && execution.SessionID == scope.RuntimeSessionID
 	}
-	if ct.SessionID != scope.RuntimeSession() {
+	if ct.SessionID != scope.RuntimeSessionID {
 		return false
 	}
 	if ct.ActiveTaskID != "" {
@@ -418,76 +294,6 @@ func (a *appModel) issueToolReserveForTurn(scope IssueToolScope, request IssueTo
 		}
 	})
 	return operation, created, existing, receipt, resultErr
-}
-
-type issueToolScopeIdentity struct {
-	Ref                  string
-	ContactID            string
-	RuntimeSessionID     string
-	TurnID               string
-	RoleGuidanceAppended bool
-	IssueListAppended    bool
-	CreatedAt            int64
-}
-
-// issueToolScopeIndexSnapshot copies only immutable issued-scope identity. It
-// must be called on the UI actor before handing history parsing to a goroutine.
-func (a *appModel) issueToolScopeIndexSnapshot() map[string]issueToolScopeIdentity {
-	index := make(map[string]issueToolScopeIdentity, len(a.issueToolScopes))
-	for ref, scope := range a.issueToolScopes {
-		index[ref] = issueToolScopeIdentity{
-			Ref: ref, ContactID: scope.ContactID,
-			RuntimeSessionID: scope.RuntimeSession(),
-			TurnID:           scope.TurnID, RoleGuidanceAppended: scope.RoleGuidanceAppended,
-			IssueListAppended: scope.IssueListAppended,
-			CreatedAt:         scope.CreatedAt,
-		}
-	}
-	return index
-}
-
-func filterIssueToolContextWithIndex(index map[string]issueToolScopeIdentity, sessionID string, items []taskContextItem) []taskContextItem {
-	if len(items) == 0 {
-		return items
-	}
-	last := items[len(items)-1]
-	if last.Name != issueToolScopeContextName {
-		return items
-	}
-	text := strings.TrimSpace(last.Text)
-	var identity issueToolScopeIdentity
-	verified := false
-	var input IssueToolScope
-	if json.Unmarshal([]byte(text), &input) == nil && input.Validate() == nil {
-		identity, verified = index[input.Ref]
-		verified = verified && identity.ContactID == input.ContactID && identity.RuntimeSessionID == sessionID &&
-			identity.TurnID == input.TurnID && identity.CreatedAt == input.CreatedAt
-	} else {
-		// New wire form: the model-facing scope value is only the opaque ref.
-		// Legacy persisted JSON above is still recognized; unknown/same-named user
-		// material is never filtered merely by its name.
-		var ok bool
-		identity, ok = index[text]
-		verified = ok && identity.ContactID != "" && identity.RuntimeSessionID == sessionID
-	}
-	if !verified {
-		return items
-	}
-	end := len(items) - 1
-	if identity.IssueListAppended && end > 0 && items[end-1].Name == issueToolIssueListContextName {
-		end--
-	}
-	// The app's optional role precedes its issue list and trailing scope.
-	if identity.RoleGuidanceAppended && end > 0 {
-		end--
-	}
-	return append([]taskContextItem(nil), items[:end]...)
-}
-
-func parseHistoryWithIssueToolScopeFilter(sessionID string, records []historyRecord, stopRequested map[string]bool, index map[string]issueToolScopeIdentity) historyProjection {
-	return parseHistoryWithContextFilter(sessionID, records, stopRequested, func(recordSession string, items []taskContextItem) []taskContextItem {
-		return filterIssueToolContextWithIndex(index, recordSession, items)
-	})
 }
 
 func cloneIssueToolReceipt(receipt *IssueToolReceipt) *IssueToolReceipt {
@@ -583,7 +389,7 @@ func issueToolResponseBytes(value any) int {
 	if err != nil {
 		return issueToolQueryMaxBytes + 1
 	}
-	return len(data) + issueToolMCPEnvelopeReserve
+	return len(data) + issueToolEnvelopeReserve
 }
 
 func boundIssueToolList(result IssueToolIssueListResult) IssueToolIssueListResult {
@@ -699,10 +505,7 @@ func (a *appModel) issueToolHandleGet(ctx context.Context, raw json.RawMessage) 
 		return issueToolErrorResponse("invalid_arguments", "issue_id is required")
 	}
 	var detail *IssueToolIssueDetail
-	var source issueResultSource
 	var scope IssueToolScope
-	var rt *runtimeClient
-	var generation int
 	var piHost *piAppHost
 	var piRun *piActivityRun
 	var piExecutionID string
@@ -732,25 +535,11 @@ func (a *appModel) issueToolHandleGet(ctx context.Context, raw json.RawMessage) 
 			callErr = &IssueToolError{Code: "not_found", Message: "issue was not found"}
 			return
 		}
-		for index := len(issue.Executions) - 1; index >= 0; index-- {
-			execution := issue.Executions[index]
-			if execution != nil && execution.PiIntent {
-				detail.ResultExecutionID = execution.ID
-				if execution.PiRun != nil && isPiActivityIssue(issue) {
-					piHost, piRun, piExecutionID = a.pi, clonePiActivityRun(execution.PiRun), execution.ID
-				}
-				break
-			}
-			if execution == nil || execution.SessionID == "" || execution.TaskID == "" {
-				continue
-			}
-			source = issueResultSource{
-				ExecutionID: execution.ID, SessionID: execution.SessionID,
-				TaskID: execution.TaskID, MessageID: execution.MessageID,
-			}
+		if execution := latestIssueExecution(issue); execution != nil {
 			detail.ResultExecutionID = execution.ID
-			rt, generation = a.rt, a.connectionGeneration
-			break
+			if execution.PiRun != nil && isPiActivityIssue(issue) {
+				piHost, piRun, piExecutionID = a.pi, clonePiActivityRun(execution.PiRun), execution.ID
+			}
 		}
 	})
 	if callErr != nil {
@@ -798,66 +587,8 @@ func (a *appModel) issueToolHandleGet(ctx context.Context, raw json.RawMessage) 
 		}
 		return issueToolJSONResponse(boundIssueToolDetail(detail), false)
 	}
-	if source.ExecutionID == "" {
-		if detail.ResultExecutionID != "" {
-			detail.ResultUnavailable = "The latest activity has no recorded Pi run."
-		} else {
-			detail.ResultUnavailable = "The latest execution has no recorded Runtime session/task; results cannot be inspected."
-		}
-		return issueToolJSONResponse(boundIssueToolDetail(detail), false)
-	}
-	stillCurrent := false
-	a.runOnUI(func() { stillCurrent = rt != nil && a.rt == rt && a.connectionGeneration == generation })
-	if !stillCurrent {
-		detail.ResultUnavailable = "Runtime is not available for the recorded execution; results cannot be inspected."
-		return issueToolJSONResponse(boundIssueToolDetail(detail), false)
-	}
-	history, historyErr := a.historyAllForSession(rt, source.SessionID)
-	if historyErr != nil {
-		var historyErrText string
-		a.runOnUI(func() { historyErrText = a.connectionRuntimeMessage(historyErr) })
-		detail.ResultUnavailable = "Execution history is unavailable: " + historyErrText
-		return issueToolJSONResponse(boundIssueToolDetail(detail), false)
-	}
-	workingDirectory := ""
-	if config, err := rt.connectionConfig(source.SessionID); err == nil {
-		workingDirectory = config.EffectiveConfig.WorkingDirectory
-	} else if session, loadErr := rt.loadSession(source.SessionID); loadErr == nil && session.Metadata != nil {
-		workingDirectory = session.Metadata.WorkingDirectory
-	}
-	source.WorkingDirectory = workingDirectory
-	derived := deriveIssueResultFiles(source, history)
-	if derived.UnavailableKind != "" {
-		detail.ResultUnavailable = issueResultUnavailableRaw(derived.UnavailableKind)
-	} else {
-		detail.ResultFileCount = len(derived.Files)
-		if len(derived.Files) > issueToolResultFilesLimit {
-			derived.Files = derived.Files[:issueToolResultFilesLimit]
-			detail.ResultFilesHasMore = true
-		}
-		for _, file := range derived.Files {
-			detail.ResultFiles = append(detail.ResultFiles, IssueToolResultFileView{
-				ExecutionID: file.ExecutionID, CallID: file.CallID,
-				ToolName: file.ToolName, Path: file.Path,
-			})
-		}
-	}
-	if excerpt := strings.TrimSpace(strings.Join(issueResultResponseSegments(history, source.TaskID), "\n\n")); excerpt != "" {
-		detail.ResultExcerpt = truncateIssueToolText(excerpt, issueToolResultExcerptSize)
-	}
-	stillCurrent = false
-	a.runOnUI(func() {
-		ct := a.contactByID(scope.ContactID)
-		owner, execution := (*productIssue)(nil), (*issueExecution)(nil)
-		if ct != nil {
-			owner, execution = ct.executionByID(source.ExecutionID)
-		}
-		stillCurrent = rt != nil && a.rt == rt && a.connectionGeneration == generation &&
-			ct != nil && owner != nil && owner.ID == issueID && execution != nil &&
-			execution.SessionID == source.SessionID && execution.TaskID == source.TaskID
-	})
-	if !stillCurrent {
-		detail = &IssueToolIssueDetail{Issue: detail.Issue, ResultExecutionID: source.ExecutionID, ResultUnavailable: "The conversation turn or Runtime owner changed while history was being read; results were discarded."}
+	if detail.ResultExecutionID != "" {
+		detail.ResultUnavailable = "The latest activity has no recorded Pi run."
 	}
 	return issueToolJSONResponse(boundIssueToolDetail(detail), false)
 }
@@ -934,7 +665,7 @@ func (a *appModel) issueToolCompleteExecution(execution *issueExecution, accepte
 	}
 	receipt := &IssueToolReceipt{
 		State: issueToolReceiptUnknown, IssueID: issueID, ExecutionID: execution.ID,
-		SessionID: execution.SessionID, TaskID: execution.TaskID, MessageID: execution.MessageID,
+		SessionID: execution.SessionID, TaskID: execution.TaskID,
 		PiRun: clonePiActivityRun(execution.PiRun),
 	}
 	if accepted {
@@ -946,7 +677,7 @@ func (a *appModel) issueToolCompleteExecution(execution *issueExecution, accepte
 	if err := a.issueToolSetReceipt(operation, receipt); err != nil {
 		receipt = &IssueToolReceipt{
 			State: issueToolReceiptUnknown, IssueID: issueID, ExecutionID: execution.ID,
-			SessionID: execution.SessionID, TaskID: execution.TaskID, MessageID: execution.MessageID,
+			SessionID: execution.SessionID, TaskID: execution.TaskID,
 			PiRun: clonePiActivityRun(execution.PiRun),
 			Error: &IssueToolError{Code: "operation_unknown", Message: "task acceptance was not saved with its operation receipt; reload before retrying"},
 		}
@@ -1052,7 +783,7 @@ func (a *appModel) issueToolTurnContext(ct *contact, scope IssueToolScope) []tas
 	if ct == nil || ct.ID != scope.ContactID {
 		return nil
 	}
-	sessionID := scope.RuntimeSession()
+	sessionID := scope.RuntimeSessionID
 	if sessionID == "" || ct.SessionID != sessionID {
 		return nil
 	}
@@ -1496,13 +1227,6 @@ func (a *appModel) issueToolRun(scope IssueToolScope, _ IssueToolActionRequest, 
 		if execution == nil || execution.ID == "" {
 			callErr = errors.New("issue run did not record an execution")
 			return
-		}
-		if !execution.PiIntent {
-			if err := a.issueToolSetReceipt(operation, &IssueToolReceipt{
-				State: issueToolReceiptDispatching, IssueID: issue.ID, IssueStatus: issue.Status, ExecutionID: execution.ID,
-			}); err != nil {
-				callErr = err
-			}
 		}
 	})
 	if callErr != nil {

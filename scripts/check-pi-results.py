@@ -24,7 +24,6 @@ REQUIRED_GROUPS = {
             "TestPiAppScopedDomainTools",
             "TestPiAppActivitiesAndQuestions",
             "TestPiAppCrashRecoveryNoReplay",
-            "TestPiAppLegacyDataRecovery",
             "TestPiAppContextAndResults",
             "TestPiPackageStandalone",
         ),

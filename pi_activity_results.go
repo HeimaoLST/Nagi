@@ -36,7 +36,7 @@ func canReadPiIssueResult(ct *contact, issue *productIssue, execution *issueExec
 
 func (a *appModel) startPiIssueResultLoad(generation int, owner issueExecutionDisclosure) {
 	page := &a.issueResult
-	if !canReadPiIssueResult(owner.contact, owner.issue, owner.execution) || a.piDataReadOnly() {
+	if !canReadPiIssueResult(owner.contact, owner.issue, owner.execution) {
 		page.Loading = false
 		page.LoadError = "load-detached"
 		page.LoadErrorDetail = ""
@@ -52,7 +52,6 @@ func (a *appModel) startPiIssueResultLoad(generation int, owner issueExecutionDi
 	page.Loading = true
 	page.LoadError = ""
 	page.LoadErrorDetail = ""
-	page.Notice = ""
 	binding := clonePiActivityBinding(owner.issue.PiBinding)
 	run := *owner.execution.PiRun
 	a.issueResultAsyncStarted()
@@ -70,7 +69,7 @@ func (a *appModel) startPiIssueResultLoad(generation int, owner issueExecutionDi
 			}
 			page.Loading = false
 			ct, issue, execution := owner.contact, owner.issue, owner.execution
-			if ct != a.selectedContact() || ct != a.contactByID(owner.contactID) || a.piDataReadOnly() ||
+			if ct != a.selectedContact() || ct != a.contactByID(owner.contactID) ||
 				issue.ID != owner.issueID || execution.ID != owner.executionID || !canReadPiIssueResult(ct, issue, execution) ||
 				execution.Status != owner.status || execution.MessageID != owner.messageID || *execution.PiRun != run ||
 				!reflect.DeepEqual(issue.PiBinding, binding) {
@@ -88,7 +87,7 @@ func (a *appModel) startPiIssueResultLoad(generation int, owner issueExecutionDi
 			}
 			if err != nil {
 				page.LoadError = "load-failed"
-				page.LoadErrorDetail = a.connectionRuntimeMessage(err)
+				page.LoadErrorDetail = a.connectionSafeMessage(err)
 				return
 			}
 			page.Panel.WorkingDirectory = result.cwd

@@ -20,15 +20,13 @@ type connectionStartup struct {
 	Config     *connectionConfig
 	FormConfig *connectionConfig
 	LoadErr    error
-	Missing    bool
-	External   bool
 }
 
 func connectionConfigPath(storePath string) string {
 	return filepath.Join(filepath.Dir(storePath), "connection.json")
 }
 
-func readConnectionStartup(storePath string, workDir string) connectionStartup {
+func readConnectionStartup(storePath string) connectionStartup {
 	startup := connectionStartup{Path: connectionConfigPath(storePath)}
 	config, err := loadConnectionConfig(startup.Path)
 	if err == nil {
@@ -37,10 +35,8 @@ func readConnectionStartup(storePath string, workDir string) connectionStartup {
 		return startup
 	}
 	if errors.Is(err, os.ErrNotExist) {
-		startup.Missing = true
 		initial := defaultConnectionConfig("")
 		startup.FormConfig = &initial
-		startup.LoadErr = nil
 		return startup
 	}
 	startup.LoadErr = err
@@ -59,7 +55,6 @@ func contactsFromStore(store *contactStore) []*contact {
 			Workspace: stored.Workspace, BuiltinTools: cloneBuiltinTools(stored.BuiltinTools),
 			SessionID: stored.SessionID, Draft: stored.Draft,
 			Archived: stored.Archived, ArchivedAt: stored.ArchivedAt,
-			PreviousSessions:   append([]string(nil), stored.PreviousSessions...),
 			PiBinding:          clonePiConversationBinding(stored.PiBinding),
 			PreviousPiBindings: clonePiConversationBindings(stored.PreviousPiBindings),
 			Status:             statusReady, WorkLabel: "Preparing a reply",
@@ -78,7 +73,7 @@ func contactsFromStore(store *contactStore) []*contact {
 
 func placeholderContact(workDir string) *contact {
 	return &contact{
-		ID: newContactID(), Name: "Saki", Role: "Assistant",
+		ID: newContactID(), Name: "Nagi", Role: "Assistant",
 		Workspace: workDir, Status: statusReady, WorkLabel: "Preparing a reply",
 	}
 }
@@ -121,7 +116,7 @@ func (a *appModel) ensureConnectionForm() {
 	}
 	config := a.connectionSaved
 	if config == nil {
-		config = readConnectionStartup(a.storePath, a.workDir).FormConfig
+		config = readConnectionStartup(a.storePath).FormConfig
 	}
 	a.connectionForm = newConnectionSettings(config, a.workDir)
 	if a.connectionSaved == nil {
@@ -186,7 +181,7 @@ func (a *appModel) chooseConnectionWorkFolder() {
 	opts := mygo.OpenDialogOptions{Parent: a.win, Directory: true,
 		Title: msgs.WorkFolderChooseTitle(), ButtonLabel: msgs.WorkFolderChoose()}
 	draft, effective := form.Draft.WorkingDirectory, a.workDir
-	if form.initial.WorkingDirectory == "" && a.connectionSaved == nil && !a.connectionLegacy {
+	if form.initial.WorkingDirectory == "" && a.connectionSaved == nil {
 		effective = ""
 	}
 	pick := a.chooseFolder
@@ -222,10 +217,6 @@ func (a *appModel) saveAndApplyConnection(config connectionConfig) {
 func (a *appModel) saveConnectionWithApply(config connectionConfig, applyAfterSave bool) {
 	a.ensureConnectionForm()
 	form := a.connectionForm
-	if a.piDataReadOnly() {
-		form.Error = "Legacy product data is read-only until its history policy is selected."
-		return
-	}
 	if form.Busy || a.shutdownStarted || a.dataRecoveryBlocksChanges() {
 		return
 	}
@@ -293,18 +284,6 @@ func (a *appModel) saveConnectionWithApply(config connectionConfig, applyAfterSa
 	}()
 }
 
-func runtimeHasExited(rt *runtimeClient) bool {
-	if rt == nil {
-		return true
-	}
-	select {
-	case <-rt.done:
-		return true
-	default:
-		return false
-	}
-}
-
 func (a *appModel) connectionReloadBlocked() string {
 	if a.connectionApplying {
 		return connBlockedApplying
@@ -316,9 +295,6 @@ func (a *appModel) connectionReloadBlocked() string {
 		return connBlockedNoSaved
 	}
 	if a.store == nil || a.localSaveErr != "" {
-		return connBlockedStore
-	}
-	if a.piDataReadOnly() {
 		return connBlockedStore
 	}
 	recoverable := false
@@ -394,7 +370,7 @@ func (a *appModel) runOnUI(fn func()) {
 func (a *appModel) testConnection(config connectionConfig) {
 	a.ensureConnectionForm()
 	form := a.connectionForm
-	if form.Busy || a.connectionTesting || a.shutdownStarted || a.dataRecoveryBlocksChanges() || a.piDataReadOnly() {
+	if form.Busy || a.connectionTesting || a.shutdownStarted || a.dataRecoveryBlocksChanges() {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
@@ -483,68 +459,6 @@ func (a *appModel) awaitPiConnectionProbe(probe *piConnectionProbe) {
 	})
 }
 
-func (a *appModel) runtimeHandlers(gen int, ready chan<- runtimeReady) runtimeHandlers {
-	return runtimeHandlers{
-		OnReady: func(value runtimeReady) {
-			if ready != nil {
-				select {
-				case ready <- value:
-				default:
-				}
-			}
-			a.updateUI(func() { a.handleRuntimeReady(gen, value) })
-		},
-		OnEvent: func(event runtimeEventEnvelope) {
-			a.updateUI(func() { a.handleRuntimeEvent(gen, event) })
-		},
-		OnExit: func(err error) {
-			a.updateUI(func() { a.handleRuntimeExit(gen, err) })
-		},
-		OnProtocolError: func(message string) {
-			a.updateUI(func() { a.handleRuntimeProtocolError(gen, message) })
-		},
-	}
-}
-
-func (a *appModel) handleRuntimeReady(gen int, ready runtimeReady) {
-	if gen != a.connectionGeneration || a.rt == nil || a.shutdownStarted {
-		return
-	}
-	a.runtimeStatus = runtimeStateReady
-	a.runtimeErr = ""
-	a.runtimeErrKind = ""
-	a.runtimeStage = ""
-	a.runtimeHint = ""
-	a.runtimeHintKind = ""
-	a.runtimeHintArgs = nil
-	a.runtimeAPI = ready.API
-	a.runtimeHandshake = true
-	a.restoreContacts(a.rt, gen)
-	a.restoreIssueWorks(a.rt, gen)
-	a.startCapabilitiesLoad(a.rt, gen)
-}
-
-func (a *appModel) handleRuntimeEvent(gen int, event runtimeEventEnvelope) {
-	if gen != a.connectionGeneration {
-		return
-	}
-	a.applyRuntimeEvent(event)
-}
-
-func (a *appModel) handleRuntimeExit(gen int, err error) {
-	if gen != a.connectionGeneration {
-		return
-	}
-	a.applyRuntimeExit(err)
-}
-
-func (a *appModel) handleRuntimeProtocolError(gen int, message string) {
-	if gen != a.connectionGeneration {
-		return
-	}
-	a.protocolFailed(message)
-}
-
 func (a *appModel) connectionSafeMessage(err error) string {
 	if err == nil {
 		return ""
@@ -568,62 +482,7 @@ func (a *appModel) redactConnectionText(text string) string {
 	return safeDiagnostic(text)
 }
 
-func (a *appModel) connectionRuntimeMessage(err error) string {
-	return a.redactConnectionText(runtimeMessage(err))
-}
-
-func (a *appModel) connectionTaskFinishedDetail(payload *runtimeEvent) string {
-	if payload == nil {
-		return ""
-	}
-	copyPayload := *payload
-	if payload.Error != nil {
-		errorCopy := *payload.Error
-		errorCopy.Message = a.redactConnectionText(payload.Error.Message)
-		errorCopy.Reason = a.redactConnectionText(payload.Error.Reason)
-		copyPayload.Error = &errorCopy
-	}
-	return taskFinishedDetail(&copyPayload)
-}
-
-func (c *runtimeClient) createConfiguredSession(workingDir, systemPrompt string) (runtimeSession, error) {
-	return c.createConfiguredSessionWithTools(workingDir, systemPrompt, nil)
-}
-
-func (c *runtimeClient) createConfiguredConversationSession(workingDir, systemPrompt string, toolSelection map[string]any) (runtimeSession, error) {
-	return c.createConfiguredSessionWithTools(workingDir, systemPrompt, toolSelection)
-}
-
-func (c *runtimeClient) createConfiguredSessionWithTools(workingDir, systemPrompt string, toolSelection map[string]any) (runtimeSession, error) {
-	config := map[string]any{
-		"connection_id": connectionID,
-	}
-	if workingDir != "" {
-		config["working_directory"] = workingDir
-	}
-	if systemPrompt != "" {
-		config["system_prompt"] = systemPrompt
-	}
-	if toolSelection != nil {
-		config["tool_selection"] = toolSelection
-	}
-	var session runtimeSession
-	err := c.call("session.create", map[string]any{
-		"storage_schema": 2,
-		"config":         config,
-	}, &session, runtimeControlTimeout)
-	if err != nil {
-		return runtimeSession{}, err
-	}
-	if session.SessionID == "" {
-		return runtimeSession{}, errors.New("runtime returned a session without session_id")
-	}
-	return session, nil
-}
-
-// finishShutdown drains Runtime only after in-flight history, metadata,
-// issue/conversation submission, result reads, and theme installs have delivered
-// their final UI callbacks; those callbacks re-enter this function.
+// finishShutdown waits for admitted operations and their final UI callbacks before draining Pi.
 func (a *appModel) finishShutdown() {
 	if a.quitReady || a.shutdownDrainStarted {
 		return
@@ -652,7 +511,7 @@ func (a *appModel) finishShutdown() {
 			return
 		}
 	}
-	if (a.dataRecovery != nil && a.dataRecovery.inFlight) || a.connectionSaveInFlight || a.connectionApplying || a.connectionTesting || a.contactHistoryInFlight > 0 || a.resultInFlight > 0 || a.submissionInFlight > 0 || a.issueToolReleaseInFlight > 0 || a.metadataInFlight > 0 || (a.themeImport != nil && a.themeImport.installInFlight) {
+	if (a.dataRecovery != nil && a.dataRecovery.inFlight) || a.connectionSaveInFlight || a.connectionApplying || a.connectionTesting || a.contactHistoryInFlight > 0 || a.resultInFlight > 0 || a.submissionInFlight > 0 || (a.themeImport != nil && a.themeImport.installInFlight) {
 		return
 	}
 	if a.pi != nil {
@@ -662,55 +521,8 @@ func (a *appModel) finishShutdown() {
 		go a.finishPiShutdown(host)
 		return
 	}
-	if a.rt == nil {
-		if a.issueToolServer == nil {
-			a.quitReady = true
-			if a.requestQuit != nil {
-				a.requestQuit()
-			}
-			return
-		}
-		a.shutdownDrainStarted = true
-		go func() {
-			err := a.closeIssueToolService()
-			a.updateUI(func() {
-				a.quitReady = true
-				if err != nil {
-					a.runtimeErrKind = runtimeNoticeIssueToolShutdown
-					a.runtimeErr = a.connectionSafeMessage(err)
-				}
-				if a.requestQuit != nil {
-					a.requestQuit()
-				}
-			})
-		}()
-		return
+	a.quitReady = true
+	if a.requestQuit != nil {
+		a.requestQuit()
 	}
-	a.shutdownDrainStarted = true
-	a.runtimeStatus = runtimeStateDraining
-	a.runtimeErr = ""
-	a.runtimeErrKind = ""
-	rt := a.rt
-	launch := a.connectionLaunch
-	go func() {
-		err := rt.shutdown()
-		if launch != nil {
-			_ = launch.Cleanup()
-		}
-		toolErr := a.closeIssueToolService()
-		a.updateUI(func() {
-			a.quitReady = true
-			if err != nil {
-				a.runtimeErrKind = runtimeNoticeRuntimeShutdown
-				a.runtimeErr = a.connectionSafeMessage(err)
-			}
-			if toolErr != nil {
-				a.runtimeErrKind = runtimeNoticeIssueToolShutdown
-				a.runtimeErr = a.connectionSafeMessage(toolErr)
-			}
-			if a.requestQuit != nil {
-				a.requestQuit()
-			}
-		})
-	}()
 }

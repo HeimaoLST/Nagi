@@ -38,7 +38,7 @@ jobs:
       - name: Nagi vet, tests and independent build
         env:
           CGO_ENABLED: '0'
-          SAKI_TEST_ONLINE: '0'
+          NAGI_TEST_ONLINE: '0'
         run: |
           python3 scripts/gui-go.py vet ./...
           python3 scripts/gui-go.py test . -count=1
@@ -99,16 +99,16 @@ jobs:
         timeout-minutes: 25
         env:
           CGO_ENABLED: '1'
-          SAKI_TEST_ONLINE: '0'
+          NAGI_TEST_ONLINE: '0'
           NAGI_TEST_NODE: ${{ runner.temp }}/pi-payload/bin/node
           NAGI_TEST_WORKER: ${{ runner.temp }}/pi-payload/dist/worker.js
-          SAKI_PREVIEW_DIR: ${{ runner.temp }}/nagi-pi-previews
+          NAGI_PREVIEW_DIR: ${{ runner.temp }}/nagi-pi-previews
           NAGI_ACTIVITY_EVIDENCE_DIR: ${{ runner.temp }}/nagi-pi-previews
         run: |
-          mkdir -p "$SAKI_PREVIEW_DIR"
+          mkdir -p "$NAGI_PREVIEW_DIR"
           set -o pipefail
           python3 scripts/gui-go.py test -tags=integration -race -timeout=20m -json -count=1 ./internal/pi . \
-            -run '^(TestPiClientProcessCodingHistoryReopen|TestPiClientProcessIndependentToolAnswerAndCancel|TestPiClientProcessCapturedContextConfiguration|TestPiClientProcessMCPToolsLifecycle|TestPiAppConnectionAndConversation|TestPiAppScopedDomainTools|TestPiAppCapturedQuestionAnswerForm|TestPiAppActivitiesAndQuestions|TestPiAppCrashRecoveryNoReplay|TestPiAppLegacyDataRecovery|TestPiAppContextAndResults|TestPiPackageStandalone)$' \
+            -run '^(TestPiClientProcessCodingHistoryReopen|TestPiClientProcessIndependentToolAnswerAndCancel|TestPiClientProcessCapturedContextConfiguration|TestPiClientProcessMCPToolsLifecycle|TestPiAppConnectionAndConversation|TestPiAppScopedDomainTools|TestPiAppCapturedQuestionAnswerForm|TestPiAppActivitiesAndQuestions|TestPiAppCrashRecoveryNoReplay|TestPiAppContextAndResults|TestPiPackageStandalone)$' \
             | tee "$RUNNER_TEMP/nagi-pi-results.jsonl"
       - name: Require actual Pi core and product scenarios
         if: always()

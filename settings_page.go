@@ -574,7 +574,7 @@ func (a *appModel) dataRecoveryBlocked(restore bool) string {
 	if a.contactProfile != nil && a.contactProfile.Busy {
 		return "busy"
 	}
-	if a.contextFilePickers > 0 || a.shutdownStarted || a.connectionSaveInFlight || a.connectionApplying || a.connectionTesting || a.contactHistoryInFlight > 0 || a.resultInFlight > 0 || a.submissionInFlight > 0 || a.metadataInFlight > 0 || a.issueToolReleaseInFlight > 0 || a.activeTaskCount() > 0 || a.themeImport != nil && a.themeImport.Busy || a.connectionForm != nil && a.connectionForm.Busy {
+	if a.contextFilePickers > 0 || a.shutdownStarted || a.connectionSaveInFlight || a.connectionApplying || a.connectionTesting || a.contactHistoryInFlight > 0 || a.resultInFlight > 0 || a.submissionInFlight > 0 || a.activeTaskCount() > 0 || a.themeImport != nil && a.themeImport.Busy || a.connectionForm != nil && a.connectionForm.Busy {
 		return "busy"
 	}
 	if a.dataRecovery != nil && (a.dataRecovery.choosing || a.dataRecovery.inFlight || a.dataRecovery.result.Outcome == storeRecoveryVerifiedInstalled || a.dataRecovery.result.Outcome == storeRecoveryInstallUnconfirmed) {
@@ -586,14 +586,14 @@ func (a *appModel) dataRecoveryBlocked(restore bool) string {
 		}
 		return ""
 	}
-	if a.store != nil || a.storeInitAllowed || a.rt != nil || a.runtimeStage != startupStageLocalStore || a.storePath == "" {
+	if a.store != nil || a.storeInitAllowed || a.pi != nil || a.runtimeStage != startupStageLocalStore || a.storePath == "" {
 		return "unavailable"
 	}
 	if a.localSaveErr != "" || len(a.contacts) != 1 || a.issueFormOpen || a.issueGoal != "" || a.issueRequirements != "" || len(a.issueRequirementDrafts)+len(a.issueCompletionDrafts)+len(a.issueSupplementDrafts) > 0 || a.connectionForm != nil && a.connectionForm.Dirty() {
 		return "unsaved"
 	}
 	ct := a.selectedContact()
-	if ct.Unavailable == "" || ct.SessionID != "" || ct.Draft != "" || len(ct.Messages)+len(ct.History)+len(ct.Issues)+len(ct.PreviousSessions) > 0 || ct.pendingSend != nil || len(ct.Context.items) > 0 || ct.Context.formOpen || ct.Context.formName != "" || ct.Context.formText != "" || ct.Context.formPath != "" {
+	if ct.Unavailable == "" || ct.SessionID != "" || ct.Draft != "" || len(ct.Messages)+len(ct.History)+len(ct.Issues)+len(ct.PreviousPiBindings) > 0 || ct.pendingSend != nil || len(ct.Context.items) > 0 || ct.Context.formOpen || ct.Context.formName != "" || ct.Context.formText != "" || ct.Context.formPath != "" {
 		return "unsaved"
 	}
 	for id, editor := range a.settingsProfiles {
@@ -954,11 +954,7 @@ func (a *appModel) settingsContactContent(c *ui.Context, t *ui.Theme) {
 	editor.BuiltinToolsSupported = a.connectionManaged
 	editor.CanRetryBuiltinTools = editor.BuiltinToolsSupported && !a.connectionApplying && a.connectionReloadBlocked() == ""
 	if !editor.BuiltinToolsSupported {
-		if a.connectionLegacy {
-			editor.BuiltinToolsError = msgs.SettingsBuiltinLegacyError()
-		} else {
-			editor.BuiltinToolsError = msgs.SettingsBuiltinManagedError()
-		}
+		editor.BuiltinToolsError = msgs.SettingsBuiltinManagedError()
 	} else if !editor.BuiltinToolsLoaded && !editor.BuiltinToolsLoading && editor.BuiltinToolsError == "" && !editor.CanRetryBuiltinTools {
 		editor.BuiltinToolsError = msgs.SettingsBuiltinNotReady()
 	}

@@ -22,9 +22,6 @@ const (
 	restoreNoticeSave    = "restore-save"
 	restoreNoticeSaved   = "restore-saved"
 
-	profileNoticePiLegacy = "Contact profiles are read-only."
-	historyNoticePiLegacy = "History isn't available in this view."
-
 	historyNoticeMissingQuery = "history-missing-query"
 	historyNoticeRuntime      = "history-runtime"
 	historyNoticePartial      = "history-partial"
@@ -101,7 +98,7 @@ func (a *appModel) editContactProfile() {
 }
 
 func (a *appModel) contactActivity(ct *contact) (active, unknown bool) {
-	if sessionBusy(ct.SendState, ct.ActiveTaskID) || ct.pendingSend != nil || ct.pendingIssueExecution != "" {
+	if sessionBusy(ct.SendState, ct.ActiveTaskID) || ct.pendingSend != nil {
 		active = true
 	}
 	if ct.SendState == sendUnknown || (ct.pendingSend != nil && ct.pendingSend.State == "unknown") {
@@ -157,13 +154,6 @@ func (a *appModel) saveContactProfileDraftFor(contactID string, draft profileDra
 	editor := a.profileEditorFor(contactID)
 	entered := draft
 	if ct == nil {
-		return false
-	}
-	if !a.demo && a.piDataReadOnly() {
-		if editor != nil {
-			editor.Draft = entered
-			editor.SetError(profileNoticePiLegacy)
-		}
 		return false
 	}
 	if !a.demo && a.ensureContactStore() != nil {
@@ -228,8 +218,6 @@ func (a *appModel) saveContactProfileDraftFor(contactID string, draft profileDra
 		if binding := clonePiConversationBinding(ct.PiBinding); binding != nil {
 			ct.PreviousPiBindings = append(ct.PreviousPiBindings, *binding)
 			ct.PiBinding = nil
-		} else if a.demo && ct.SessionID != "" {
-			ct.PreviousSessions = append(ct.PreviousSessions, ct.SessionID)
 		}
 		ct.SessionID = ""
 		ct.Loaded = false
@@ -250,10 +238,6 @@ func (a *appModel) saveContactProfileDraftFor(contactID string, draft profileDra
 		ct.Status = statusReady
 		ct.Work = ""
 		ct.WorkLabel = "Preparing a reply"
-		ct.UnlinkedTools = nil
-		ct.StopRequestedTasks = nil
-		ct.pendingEvents = nil
-		ct.HistoryDirty = false
 		ct.SessionWorkingDir = ""
 		ct.SessionModel = ""
 		ct.SessionAPI = ""
@@ -285,12 +269,6 @@ func (a *appModel) saveContactProfileDraftFor(contactID string, draft profileDra
 func (a *appModel) archiveContact(contactID string) bool {
 	ct := a.contactByID(contactID)
 	if ct == nil || ct.Archived {
-		return false
-	}
-	if !a.demo && a.piDataReadOnly() {
-		if editor := a.profileEditorFor(contactID); editor != nil {
-			editor.SetError(profileNoticePiLegacy)
-		}
 		return false
 	}
 	if !a.demo && a.ensureContactStore() != nil {
@@ -332,12 +310,6 @@ func (a *appModel) archiveContact(contactID string) bool {
 func (a *appModel) restoreContact(contactID string) bool {
 	ct := a.contactByID(contactID)
 	if ct == nil || !ct.Archived {
-		return false
-	}
-	if !a.demo && a.piDataReadOnly() {
-		if editor := a.profileEditorFor(contactID); editor != nil {
-			editor.SetError(profileNoticePiLegacy)
-		}
 		return false
 	}
 	if !a.demo && a.ensureContactStore() != nil {
@@ -406,11 +378,6 @@ func (a *appModel) searchContactHistoryAsync(query string) {
 		a.contactHistoryErrorDetail = ""
 		return
 	}
-	if a.piDataReadOnly() {
-		a.contactHistoryError = historyNoticePiLegacy
-		a.contactHistoryErrorDetail = ""
-		return
-	}
 	if ct == nil || a.pi == nil {
 		a.contactHistoryError = historyNoticeRuntime
 		a.contactHistoryErrorDetail = ""
@@ -451,11 +418,6 @@ func (a *appModel) openContactHistoryMatch(match contactHistoryMatch) bool {
 		return false
 	}
 	ct := a.selectedContact()
-	if a.piDataReadOnly() {
-		a.contactHistoryError = historyNoticePiLegacy
-		a.contactHistoryErrorDetail = ""
-		return false
-	}
 	if ct == nil || a.pi == nil {
 		a.contactHistoryError = historyNoticeRuntime
 		a.contactHistoryErrorDetail = ""
@@ -548,8 +510,8 @@ func (a *appModel) openHistoryEntryFull(e historyEntry) {
 	if ct == nil {
 		return
 	}
-	if !a.demo && (a.piDataReadOnly() || ct.PiBinding == nil) {
-		a.contactHistoryError = historyNoticePiLegacy
+	if !a.demo && ct.PiBinding == nil {
+		a.contactHistoryError = historyNoticeNotSaved
 		a.contactHistoryErrorDetail = ""
 		return
 	}

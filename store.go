@@ -20,29 +20,22 @@ import (
 	"unicode/utf8"
 )
 
-// v3 added issue.work_session_id. v4 made structured requirements the
-// persisted truth. v5 added owned task-context snapshots and pending-send
-// intent. v6 added the issue supplement ledger. v7 adds contact archive state
-// and explicit references to conversations replaced by Save and start new.
-// v8 adds the conversation issue-tool scope/operation ledger. v9 adds
-// persistent missing-information questions and their answer associations.
-// v10 adds tagged Pi conversation bindings; earlier versions stay read-only.
 const contactStoreVersion = 10
 
 type storedContact struct {
-	ID                 string                  `json:"id"`
-	Name               string                  `json:"name"`
-	Role               string                  `json:"role,omitempty"`
-	Purpose            string                  `json:"purpose,omitempty"`
-	Instructions       string                  `json:"instructions,omitempty"`
-	Workspace          string                  `json:"workspace,omitempty"`
-	BuiltinTools       *[]string               `json:"builtin_tools,omitempty"`
-	SessionID          string                  `json:"session_id,omitempty"`
-	Draft              string                  `json:"draft,omitempty"`
-	TaskContext        []taskContextItem       `json:"task_context,omitempty"`
-	Archived           bool                    `json:"archived,omitempty"`
-	ArchivedAt         int64                   `json:"archived_at,omitempty"`
-	PreviousSessions   []string                `json:"previous_sessions,omitempty"`
+	ID           string            `json:"id"`
+	Name         string            `json:"name"`
+	Role         string            `json:"role,omitempty"`
+	Purpose      string            `json:"purpose,omitempty"`
+	Instructions string            `json:"instructions,omitempty"`
+	Workspace    string            `json:"workspace,omitempty"`
+	BuiltinTools *[]string         `json:"builtin_tools,omitempty"`
+	SessionID    string            `json:"session_id,omitempty"`
+	Draft        string            `json:"draft,omitempty"`
+	TaskContext  []taskContextItem `json:"task_context,omitempty"`
+	Archived     bool              `json:"archived,omitempty"`
+	ArchivedAt   int64             `json:"archived_at,omitempty"`
+
 	PiBinding          *piConversationBinding  `json:"pi_binding,omitempty"`
 	PreviousPiBindings []piConversationBinding `json:"previous_pi_bindings,omitempty"`
 	PendingSend        *pendingSend            `json:"pending_send,omitempty"`
@@ -64,7 +57,6 @@ type storedIssueExecution struct {
 	SupplementBatchID    string            `json:"supplement_batch_id,omitempty"`
 	ToolOperationID      string            `json:"tool_operation_id,omitempty"`
 	ToolScopeRef         string            `json:"tool_scope_ref,omitempty"`
-	ToolScopeInput       string            `json:"tool_scope_input,omitempty"`
 	PiIntent             bool              `json:"pi_intent,omitempty"`
 	PiRun                *piActivityRun    `json:"pi_run,omitempty"`
 	WaitRequested        bool              `json:"wait_requested,omitempty"`
@@ -79,10 +71,10 @@ type storedRequirement struct {
 }
 
 type storedIssue struct {
-	ID                   string                 `json:"id"`
-	ContactID            string                 `json:"contact_id"`
-	Goal                 string                 `json:"goal"`
-	Requirements         string                 `json:"requirements,omitempty"` // legacy v1-v3 only
+	ID        string `json:"id"`
+	ContactID string `json:"contact_id"`
+	Goal      string `json:"goal"`
+
 	RequirementsRevision int                    `json:"requirements_revision,omitempty"`
 	RequirementItems     []storedRequirement    `json:"requirement_items,omitempty"`
 	Status               string                 `json:"status,omitempty"`
@@ -135,7 +127,7 @@ func newContactID() string {
 
 func nowMillis() int64 { return time.Now().UnixMilli() }
 
-// openContactStore loads the store, or creates and persists a default Saki
+// openContactStore loads the store, or creates and persists a default Nagi
 // contact when the file does not exist. A corrupt or unsupported file is
 // reported and left untouched; the app must not silently replace it.
 func openContactStore(path, defaultWorkspace string) (*contactStore, error) {
@@ -157,7 +149,7 @@ func openContactStore(path, defaultWorkspace string) (*contactStore, error) {
 			Version: contactStoreVersion,
 			Contacts: []storedContact{{
 				ID:        newContactID(),
-				Name:      "Saki",
+				Name:      "Nagi",
 				Role:      "Assistant",
 				Workspace: defaultWorkspace,
 				UpdatedAt: nowMillis(),
@@ -202,28 +194,18 @@ func (s *contactStore) setIssueToolState(ledger *IssueToolOperationLedger, scope
 	}
 }
 
-func (s *contactStore) piDataReadOnly() bool {
-	if s == nil {
-		return false
-	}
-	return s.state.piDataReadOnly()
-}
-
-func (state storedState) piDataReadOnly() bool {
-	if state.Version < contactStoreVersion {
-		return true
-	}
+func (state storedState) validatePiBindings() error {
 	for _, ct := range state.Contacts {
-		if len(ct.PreviousSessions) != 0 || ct.SessionID != "" && (ct.PiBinding == nil || ct.PiBinding.Engine != "pi" || ct.PiBinding.Context.SessionRef != ct.SessionID) {
-			return true
+		if ct.SessionID != "" && (ct.PiBinding == nil || ct.PiBinding.Engine != "pi" || ct.PiBinding.Context.SessionRef != ct.SessionID) {
+			return fmt.Errorf("contact %s has an invalid Pi session binding", ct.ID)
 		}
 	}
 	for _, issue := range state.Issues {
 		if !storedPiIssueValid(issue, state.IssueToolOperations) {
-			return true
+			return fmt.Errorf("issue %s has an invalid Pi execution record", issue.ID)
 		}
 	}
-	return false
+	return nil
 }
 
 func storedPiIssueValid(issue storedIssue, ledger *IssueToolOperationLedger) bool {
@@ -296,10 +278,6 @@ func storedPiIssueValid(issue storedIssue, ledger *IssueToolOperationLedger) boo
 	return true
 }
 
-func (a *appModel) piDataReadOnly() bool {
-	return a.store != nil && a.store.piDataReadOnly()
-}
-
 func cloneIssueToolLedger(ledger *IssueToolOperationLedger) *IssueToolOperationLedger {
 	if ledger == nil {
 		return nil
@@ -361,9 +339,6 @@ func cloneStoredState(state storedState) storedState {
 			ct := &cloned.Contacts[i]
 			ct.BuiltinTools = cloneBuiltinTools(ct.BuiltinTools)
 			ct.TaskContext = cloneTaskContextItems(ct.TaskContext)
-			if ct.PreviousSessions != nil {
-				ct.PreviousSessions = append([]string{}, ct.PreviousSessions...)
-			}
 			ct.PiBinding = clonePiConversationBinding(ct.PiBinding)
 			ct.PreviousPiBindings = clonePiConversationBindings(ct.PreviousPiBindings)
 			ct.PendingSend = clonePendingSend(ct.PendingSend)
@@ -418,8 +393,8 @@ func (s *contactStore) saveState() error {
 }
 
 func (s *contactStore) commitState(candidate storedState) error {
-	if s.piDataReadOnly() || candidate.piDataReadOnly() {
-		return errors.New("legacy product data is read-only until its history policy is selected")
+	if err := candidate.validatePiBindings(); err != nil {
+		return err
 	}
 	dir := filepath.Dir(s.path)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
@@ -457,9 +432,6 @@ func (s *contactStore) save(contacts []*contact, selected string) error {
 }
 
 func (s *contactStore) saveWithPreferences(contacts []*contact, selected, appearance string, themeIDs *appearanceThemeIDs, layout *storedLayout) error {
-	if s.piDataReadOnly() {
-		return errors.New("legacy product data is read-only until its history policy is selected")
-	}
 	candidate := storedState{
 		Version:             contactStoreVersion,
 		Selected:            selected,
@@ -478,19 +450,19 @@ func (s *contactStore) saveWithPreferences(contacts []*contact, selected, appear
 	}
 	for _, c := range contacts {
 		storedContact := storedContact{
-			ID:                 c.ID,
-			Name:               c.Name,
-			Role:               c.Role,
-			Purpose:            c.Purpose,
-			Instructions:       c.Instructions,
-			Workspace:          c.Workspace,
-			BuiltinTools:       cloneBuiltinTools(c.BuiltinTools),
-			SessionID:          c.SessionID,
-			Draft:              c.Draft,
-			TaskContext:        c.Context.snapshot(),
-			Archived:           c.Archived,
-			ArchivedAt:         c.ArchivedAt,
-			PreviousSessions:   append([]string(nil), c.PreviousSessions...),
+			ID:           c.ID,
+			Name:         c.Name,
+			Role:         c.Role,
+			Purpose:      c.Purpose,
+			Instructions: c.Instructions,
+			Workspace:    c.Workspace,
+			BuiltinTools: cloneBuiltinTools(c.BuiltinTools),
+			SessionID:    c.SessionID,
+			Draft:        c.Draft,
+			TaskContext:  c.Context.snapshot(),
+			Archived:     c.Archived,
+			ArchivedAt:   c.ArchivedAt,
+
 			PiBinding:          clonePiConversationBinding(c.PiBinding),
 			PreviousPiBindings: c.piPreviousBindings(),
 			PendingSend:        clonePendingSend(c.pendingSend),
@@ -528,7 +500,6 @@ func (s *contactStore) saveWithPreferences(contacts []*contact, selected, appear
 					SupplementBatchID:    execution.SupplementBatchID,
 					ToolOperationID:      execution.ToolOperationID,
 					ToolScopeRef:         execution.ToolScopeRef,
-					ToolScopeInput:       execution.ToolScopeInput,
 					PiIntent:             execution.PiIntent, PiRun: clonePiActivityRun(execution.PiRun),
 					WaitRequested: execution.WaitRequested,
 				})
@@ -593,7 +564,7 @@ func decodeStoredState(path string, data []byte, strict bool) (storedState, erro
 	if err != nil {
 		return state, fmt.Errorf("contact store %s is not readable: %w", path, err)
 	}
-	if state.Version < 1 || state.Version > contactStoreVersion {
+	if state.Version != contactStoreVersion {
 		return state, fmt.Errorf("contact store %s has unsupported version %d", path, state.Version)
 	}
 	if len(state.Contacts) == 0 {
@@ -615,7 +586,7 @@ func decodeStoredState(path string, data []byte, strict bool) (storedState, erro
 		}
 		issues[issue.ID] = true
 	}
-	return state, nil
+	return state, state.validatePiBindings()
 }
 
 func validateRecoveryState(state storedState) error {
@@ -654,9 +625,6 @@ func validateRecoveryState(state storedState) error {
 	}
 	for i, issue := range state.Issues {
 		field := fmt.Sprintf("issues[%d]", i)
-		if issue.Requirements != "" {
-			return fail(field+".requirements", "legacy requirements are not supported in a version 9 recovery copy")
-		}
 		if issue.RequirementsRevision < 1 {
 			return fail(field+".requirements_revision", "revision would be repaired on ordinary load")
 		}

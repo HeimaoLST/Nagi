@@ -67,7 +67,7 @@ func readPrivateConnectionConfig(path string) (privateConnectionConfig, error) {
 		return config, fmt.Errorf("parse private connection config %s: trailing data", path)
 	}
 	if config.Version != 2 {
-		return config, fmt.Errorf("connection config version %d is unavailable pending legacy policy", config.Version)
+		return config, fmt.Errorf("connection config version %d is unsupported", config.Version)
 	}
 	return config, nil
 }
@@ -96,24 +96,6 @@ func defaultConnectionConfig(workDir string) connectionConfig {
 		ContextTokens: 131072, OutputTokens: 8192,
 		WorkingDirectory: workDir, MaxActiveTasks: 2,
 	}
-}
-
-type connectionLaunch struct {
-	Dir            string
-	Env            []string
-	HostConfigPath string
-	tempDir        string
-}
-
-func (l *connectionLaunch) Cleanup() error {
-	if l == nil || l.tempDir == "" {
-		return nil
-	}
-	if err := os.RemoveAll(l.tempDir); err != nil {
-		return fmt.Errorf("remove connection launch directory: %w", err)
-	}
-	l.tempDir = ""
-	return nil
 }
 
 func loadConnectionConfig(path string) (connectionConfig, error) {
@@ -200,19 +182,6 @@ func saveConnectionConfig(path string, config connectionConfig) error {
 		return fmt.Errorf("replace connection config: %w", err)
 	}
 	return nil
-}
-
-type runtimeToolSource struct {
-	ID               string   `json:"id"`
-	Transport        string   `json:"transport"`
-	Command          string   `json:"command"`
-	Args             []string `json:"args,omitempty"`
-	EnvFrom          []string `json:"env_from,omitempty"`
-	Protocol         string   `json:"protocol,omitempty"`
-	StartupTimeoutMS int      `json:"startup_timeout_ms,omitempty"`
-	CallTimeoutMS    int      `json:"call_timeout_ms,omitempty"`
-	CancelGraceMS    int      `json:"cancel_grace_ms,omitempty"`
-	Endpoint         string   `json:"-"`
 }
 
 // Stable validation kinds. The form says them again in the current language;

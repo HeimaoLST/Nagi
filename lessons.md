@@ -30,11 +30,11 @@
 **Cause or correction:** Product-native exposure is Unconfirmed. Product TextInputBase.Password and lab TextInput.Password share the same editor. Read-only inspection found a Darwin superclass value-cache path and a disabled-state secure-trait gap; visual bullets do not establish secure AX semantics.
 **Prevention:** Inspect the actual product control and matching accessibility bridge, then validate with a synthetic key under an exact native scope. Do not enter real credentials or claim readiness until that path is established.
 
-## Preserve legacy data without executing the retired engine
+## Keep the Pi cutover free of Saki compatibility
 
-**Problem:** Existing Nagi records contain opaque Saki session/execution references that Pi cannot be assumed to understand.
-**Cause or correction:** Product records and engine transcripts have different owners. No destructive conversion, journal parsing, silent history loss or uncertain-effect replay is authorized.
-**Prevention:** Inventory legacy fields and live capabilities before deleting adapters. Preserve IDs/drafts/requirements/receipts and opaque references; expose unsupported history and require an explicit caller-visible mapping decision. The pending legacy-history choice holds legacy-data activation and reader deletion, not unrelated product wiring or isolated fresh-data E2E.
+**Problem:** The migration retained an unused engine client and treated legacy history recovery as a release requirement.
+**Cause or correction:** The user chose a clean Pi-only product and explicitly authorized deleting the old local workbench data without archiving it.
+**Prevention:** Use the Nagi profile and current Pi schema. Remove retired adapters, recovery gates and dedicated fixtures together. Continue testing current Pi backups, captured bindings and restart without replay. Scope local deletion to identified obsolete application data.
 
 ## Distinguish rendered duplication from duplicate business state
 

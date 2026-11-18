@@ -4,15 +4,9 @@ Nagi is a native desktop workbench for persistent Bots, independent activities, 
 
 This repository preserves the Nagi product exported from Saki candidate `00298ae22bb95afc11366597e517a3b1ceba21e7`, including its existing regressions and tests. Repository separation does not complete the historical MVP, native acceptance, real-model A/B work or user trials. See [the documentation index](docs/README.md) and [import provenance](docs/design/source-import.json).
 
-## Previously built macOS previews
+## Using Nagi
 
-The installation steps below apply to a maintainer-identified earlier package. This migration's current CI emits headless previews and worker provenance, not a standalone Nagi.app; its obsolete Saki-only app packager has been retired. The product target remains Apple Silicon/macOS13.0. Follow the [complete-product acceptance record](https://github.com/HeimaoLST/Nagi/issues/7) for the tested scope of an exact package; an older package does not validate this changed tree.
-
-1. Open [Nagi CI](https://github.com/HeimaoLST/Nagi/actions/workflows/ci.yml) and select the maintainer-identified successful `dev` build. Under **Artifacts**, download `nagi-macos-arm64-<source SHA>`. GitHub requires sign-in and repository read access to download artifacts; see its [download instructions](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/download-workflow-artifacts).
-2. Extract the downloaded artifact, then extract its `Nagi.app.zip`. Move `Nagi.app` to Applications and open it from Finder. Keep the accompanying `manifest.json` and `SHA256SUMS` so the build can be identified when reporting a problem.
-3. CI previews use ad-hoc signing. For a developer-verification alert, consult [Apple's GUI instructions](https://support.apple.com/en-us/102445). A damaged-app or malware alert needs investigation; report the exact message.
-
-Normal setup, file selection and the recovery actions below use the GUI. You can browse the workbench and prepare local contacts and drafts before connecting a model service.
+Nagi targets Apple Silicon on macOS 13 or later. The standalone Pi package is still in development. CI publishes the tested source, screenshots and worker build evidence. [Current CI](https://github.com/HeimaoLST/Nagi/actions/workflows/ci.yml)
 
 ### First connection
 
@@ -51,7 +45,7 @@ If the current window cannot save, copy any unsaved text you need elsewhere befo
 
 ## Development during the Pi migration
 
-The cleanup-first Pi integration is in progress under [issue31](https://github.com/HeimaoLST/Nagi/issues/31). The [integration contract](docs/design/pi-integration.md) defines the concrete client/worker, product ownership, legacy-data fence and acceptance gates. This branch is an incomplete migration, not a usable Pi release. Existing consumer flows above remain the capabilities to preserve; provider/native acceptance has not been established for this changed tree.
+The cleanup-first Pi integration is in progress under [issue31](https://github.com/HeimaoLST/Nagi/issues/31). The [integration contract](docs/design/pi-integration.md) defines the concrete client/worker, product ownership, current profile format and acceptance gates. This branch is an incomplete migration, not a usable Pi release. Existing consumer flows above remain the capabilities to preserve; provider/native acceptance has not been established for this changed tree.
 
 Development uses `dev`; frozen integration/E2E candidates use `integration`; stable releases use `main`. The normal checkout is `~/Workspace/Nagi`, with the integration checkout at `~/Workspace/worktrees/Nagi/integration`. Additional worktrees are temporary task isolation, with an owner and cleanup condition. Do not modify a tested checkout during validation.
 
@@ -65,8 +59,6 @@ python3 scripts/build-pi-worker.py --runtime /private/tmp/nagi-node --output /pr
 
 A static build does not establish a working Pi-backed native app. Actual integration/E2E, synthetic-key accessibility, product tool/MCP, lifecycle and Node-independent package gates must pass on the combined tree. Developers do not add or modify unit tests; necessary unit maintenance belongs to the test owner.
 
-Existing data locations and IDs remain unchanged: `SAKI_GUI_STORE` or `<UserConfigDir>/Saki/contacts.json`, adjacent `connection.json`, and `SAKI_SESSION_DIR` or the adjacent `sessions/` directory. `SAKI_GUI_WORKDIR` remains supported. On macOS the default config root is normally `~/Library/Application Support/Saki`. This split does not move data or replay old tasks.
-
-Legacy conversation files and product references remain preserved. The archive-versus-readable product choice is pending; the migration does not reinterpret old references or replay work. The previous Saki launcher/artifact/package instructions are [historical at57e0a678](https://github.com/HeimaoLST/Nagi/blob/57e0a6784ba7f8ec4c37e5a76f6ab8cdccd9542c/README.md#build-and-run), not the target production architecture or instructions to resume Saki development.
+Nagi starts with its own profile. On macOS the default directory is `~/Library/Application Support/Nagi`. It contains `contacts.json`, the private `connection.json` and Pi session data under `pi/`. Isolated developer fixtures can set `NAGI_GUI_STORE` and `NAGI_GUI_WORKDIR`. The application uses the current store format and current-format backups. Saki imports, session replay and legacy data recovery are retired.
 
 The protected CI aggregate must use replacement Pi integration and package proofs before this migration is accepted. Missing replacement gates are not optional skips. Nagi version, Pi/dependency locks, Node archive/binary, signed package identity and notices are separate provenance. No Release or deployment follows from an intermediate build.

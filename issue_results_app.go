@@ -26,7 +26,6 @@ type issueResultPage struct {
 	Loading            bool
 	LoadError          string
 	LoadErrorDetail    string
-	Notice             string
 	Panel              issueResultPanelState
 	disclosure         issueExecutionDisclosure
 	revealRun          bool
@@ -100,31 +99,17 @@ func (a *appModel) openIssueResultEntry(issueID, executionID string, latest bool
 
 func (a *appModel) startIssueResultLoad() {
 	page := &a.issueResult
-	snapshot := page.disclosure
-	if execution := snapshot.execution; execution != nil && (execution.PiIntent || execution.PiRun != nil) {
-		a.startPiIssueResultLoad(page.Generation, snapshot)
+	if a.demo {
+		page.Panel.WorkingDirectory = a.effectiveContactWorkspace(page.disclosure.contact)
+		page.Panel.Response = ""
+		for _, message := range page.disclosure.issue.Work.Messages {
+			if message.Kind == msgContact && message.TaskID == page.TaskID {
+				page.Panel.Response = message.Text
+			}
+		}
 		return
 	}
-	if page.SessionID == "" || page.TaskID == "" {
-		page.Loading = false
-		page.LoadError = "load-no-session"
-		page.LoadErrorDetail = ""
-		return
-	}
-	if a.rt == nil || a.runtimeStatus != runtimeStateReady || a.shutdownStarted {
-		page.Loading = false
-		page.LoadError = "load-runtime-not-ready"
-		page.LoadErrorDetail = ""
-		return
-	}
-	page.Loading = true
-	page.LoadError = ""
-	page.LoadErrorDetail = ""
-	page.Notice = ""
-	rt, runtimeGeneration := a.rt, a.connectionGeneration
-	a.issueResultAsyncStarted()
-	go a.loadIssueResult(rt, runtimeGeneration, page.Generation,
-		page.OwnerContactID, page.IssueID, page.ExecutionID, page.SessionID, page.TaskID, page.MessageID)
+	a.startPiIssueResultLoad(page.Generation, page.disclosure)
 }
 
 func (a *appModel) reloadIssueResult(generation int) {
@@ -173,100 +158,12 @@ func (a *appModel) reloadIssueResult(generation int) {
 	page.Generation++
 	page.LoadError = ""
 	page.LoadErrorDetail = ""
-	page.Notice = ""
 	a.startIssueResultLoad()
 	if execution.Status == issueExecutionInterrupted && strings.TrimSpace(execution.Detail) != "" &&
 		execution.AttentionSeenStatus != execution.Status && a.issueResultDisclosureCurrent(page.Generation, page.disclosure) {
 		page.revealRun = true
 		a.confirmIssueExecutionSeen(ct, issue, execution)
 	}
-}
-
-func (a *appModel) loadIssueResult(rt *runtimeClient, runtimeGeneration, generation int,
-	contactID, issueID, executionID, sessionID, taskID, messageID string) {
-	history, historyErr := a.historyAllForSession(rt, sessionID)
-	if historyErr != nil {
-		message := "Run history is unavailable: " + a.connectionRuntimeMessage(historyErr)
-		a.updateUI(func() {
-			defer a.issueResultAsyncFinished()
-			a.applyIssueResultError(rt, runtimeGeneration, generation, contactID, issueID, executionID, sessionID, taskID, message)
-		})
-		return
-	}
-
-	// The history read is the authoritative path. Read the effective working
-	// directory from the existing session config; only fall back to an explicit
-	// session load when that config is unavailable.
-	workingDirectory := ""
-	if config, err := rt.connectionConfig(sessionID); err == nil {
-		workingDirectory = config.EffectiveConfig.WorkingDirectory
-	} else if session, loadErr := rt.loadSession(sessionID); loadErr == nil && session.Metadata != nil {
-		workingDirectory = session.Metadata.WorkingDirectory
-	}
-	source := issueResultSource{
-		ExecutionID: executionID, SessionID: sessionID, TaskID: taskID, MessageID: messageID,
-		WorkingDirectory: workingDirectory,
-	}
-	derived := deriveIssueResultFiles(source, history)
-	response := strings.Join(issueResultResponseSegments(history, taskID), "\n\n")
-	notice := ""
-	if workingDirectory == "" {
-		notice = "notice-working-dir"
-	}
-	a.updateUI(func() {
-		defer a.issueResultAsyncFinished()
-		a.applyIssueResultLoaded(rt, runtimeGeneration, generation, contactID, issueID, executionID, sessionID, taskID,
-			derived, response, notice)
-	})
-}
-
-func issueResultResponseSegments(history runtimeHistory, taskID string) []string {
-	projection := parseHistory(history.SessionID, history.Records, nil)
-	var segments []string
-	for _, message := range projection.messages {
-		if message.Kind == msgContact && message.TaskID == taskID && strings.TrimSpace(message.Text) != "" {
-			segments = append(segments, message.Text)
-		}
-	}
-	return segments
-}
-
-func (a *appModel) applyIssueResultError(rt *runtimeClient, runtimeGeneration, generation int,
-	contactID, issueID, executionID, sessionID, taskID, message string) {
-	page := &a.issueResult
-	if !a.issueResultStillOwned(rt, runtimeGeneration, generation, contactID, issueID, executionID, sessionID, taskID) {
-		return
-	}
-	page.Loading = false
-	page.LoadError = "load-failed"
-	page.LoadErrorDetail = message
-}
-
-func (a *appModel) applyIssueResultLoaded(rt *runtimeClient, runtimeGeneration, generation int,
-	contactID, issueID, executionID, sessionID, taskID string,
-	derived issueResultDerivation, response, notice string) {
-	page := &a.issueResult
-	if !a.issueResultStillOwned(rt, runtimeGeneration, generation, contactID, issueID, executionID, sessionID, taskID) {
-		return
-	}
-	page.Loading = false
-	page.Notice = notice
-	page.Panel.WorkingDirectory = derived.WorkingDirectory
-	page.Panel.Response = response
-	page.Panel.Files = derived.Files
-	if derived.UnavailableKind != "" {
-		page.LoadError = derived.UnavailableKind
-		page.LoadErrorDetail = ""
-	}
-}
-
-func (a *appModel) issueResultStillOwned(rt *runtimeClient, runtimeGeneration, generation int,
-	contactID, issueID, executionID, sessionID, taskID string) bool {
-	page := &a.issueResult
-	return page.Open && a.aux == "issue-result" && page.Generation == generation &&
-		page.OwnerContactID == contactID && page.IssueID == issueID && page.ExecutionID == executionID &&
-		page.SessionID == sessionID && page.TaskID == taskID &&
-		runtimeGeneration == a.connectionGeneration && a.rt == rt && a.contactByID(contactID) != nil
 }
 
 func (a *appModel) closeIssueResult() {
@@ -288,7 +185,6 @@ func (a *appModel) cancelIssueResultView() {
 	a.issueResult.Loading = false
 	a.issueResult.LoadError = ""
 	a.issueResult.LoadErrorDetail = ""
-	a.issueResult.Notice = ""
 	a.issueResult.ReturnFocusPending = false
 	a.issueResult.Panel = issueResultPanelState{}
 }
@@ -359,9 +255,6 @@ func (a *appModel) issueResultPanelView(c *ui.Context, t *ui.Theme) {
 	}
 	if page.LoadError != "" {
 		a.recoveryNotice(c, t, "result-load:"+strconv.Itoa(page.Generation), issueResultPageText(locales.In(c.Locale()), page.LoadError, ""), page.LoadErrorDetail, true)
-	}
-	if page.Notice != "" {
-		ui.Text(c, issueResultPageText(locales.In(c.Locale()), page.Notice, "")).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Warning)
 	}
 	issueResultPanel(c, &page.Panel, actions)
 }
@@ -439,7 +332,6 @@ func (a *appModel) checkIssueResultFile(generation int, file issueResultFile) {
 		page.Panel.ActionFor = ""
 		page.Panel.Action = issueResultFileAction{}
 	}
-	rt, runtimeGeneration := a.rt, a.connectionGeneration
 	inspect := a.issueResultInspect
 	if inspect == nil {
 		inspect = inspectIssueResultFile
@@ -451,7 +343,7 @@ func (a *appModel) checkIssueResultFile(generation int, file issueResultFile) {
 			defer a.issueResultAsyncFinished()
 			page := &a.issueResult
 			if page.Generation != generation || page.checkSeq != seq || !page.Open || a.aux != "issue-result" ||
-				page.Panel.InspectFor != key || runtimeGeneration != a.connectionGeneration || a.rt != rt {
+				page.Panel.InspectFor != key {
 				return
 			}
 			page.Panel.Checking = false
@@ -477,7 +369,6 @@ func (a *appModel) requestIssueResultFileAction(generation int, file issueResult
 	if revealWith == nil {
 		revealWith = requestRevealIssueResultWithSystem
 	}
-	rt, runtimeGeneration := a.rt, a.connectionGeneration
 	a.issueResultAsyncStarted()
 	go func() {
 		var action issueResultFileAction
@@ -489,8 +380,7 @@ func (a *appModel) requestIssueResultFileAction(generation int, file issueResult
 		a.updateUI(func() {
 			defer a.issueResultAsyncFinished()
 			page := &a.issueResult
-			if page.Generation != generation || !page.Open || a.aux != "issue-result" ||
-				runtimeGeneration != a.connectionGeneration || a.rt != rt {
+			if page.Generation != generation || !page.Open || a.aux != "issue-result" {
 				return
 			}
 			page.Panel.ActionFor = key
