@@ -1281,7 +1281,7 @@ HTTPS、mailto、文内锚点、未完成链接与不支持的 scheme 保持原�
 
 本节描述 [Nagi #3](https://github.com/HeimaoLST/Nagi/issues/3) 的本地实现候选；尚未集成 `dev`，原生选择、最终同源包与 CI 仍待验收。它在现有 General 外观设置中增加本地配色选择，复用同一 `workbenchTheme`、窗口背景与保存路径；字体、字号、间距和布局不由主题文件配置。
 
-主题文件放在 `UserConfigDir/Nagi/themes/*.json`，macOS 通常是 `~/Library/Application Support/Nagi/themes/`。目录与 `SAKI_GUI_STORE`、工作目录和 session 目录无关。启动和 General 中的 `Reload themes / 重新加载主题` 才读取文件；应用显示实际目录，不自动创建或修改主题文件，不递归扫描，也不监听文件变化。目录不存在表示没有自定义主题，其他读取错误在设置中显示，内置配色继续可用。
+主题文件放在 `UserConfigDir/Nagi/themes/*.json`，macOS 通常是 `~/Library/Application Support/Nagi/themes/`。主题目录独立于 `NAGI_GUI_STORE`、工作目录和 Pi 会话目录。启动和 General 中的 `Reload themes / 重新加载主题` 才读取文件；应用显示实际目录，不自动创建或修改主题文件，不递归扫描，也不监听文件变化。目录不存在表示没有自定义主题，其他读取错误在设置中显示，内置配色继续可用。
 
 每个 UTF-8 JSON 文件定义一套配色。必需字段为 `version`（整数 `1`）、`id`（以字母开头的小写 kebab-case）、`name`（非空显示名）、`kind`（`light` 或 `dark`）及 `colors`。ID 与文件名独立，显示名可重复；选择器同时显示自定义名称和 ID。内置 `paper`（Paper）及 `night`（Moss）保留，不能被覆盖。同 ID 的有效文件全部报错，不按扫描顺序选择其中一份。未知字段、错误类型、缺失必需颜色、不支持的版本或非法颜色按文件与字段报告，不影响其他有效文件。
 
