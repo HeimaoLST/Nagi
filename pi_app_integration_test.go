@@ -5143,8 +5143,10 @@ func TestPiAppContextAndResults(t *testing.T) {
 	piResultsReadFile(h, msgs, filePath)
 	h.screenshot("activity-result-file-en-light")
 	h.activate(msgs.ResultCloseReading())
+	const narrowWidth, narrowHeight = 720, 640
 	h.onUI(func() error {
-		h.tester.SetSize(720, 640)
+		app.windowWidth = narrowWidth
+		h.tester.SetSize(narrowWidth, narrowHeight)
 		h.tester.SetDark(true)
 		h.tester.SetLocale("zh-Hans")
 		return nil
@@ -5156,7 +5158,46 @@ func TestPiAppContextAndResults(t *testing.T) {
 	h.screenshot("activity-result-file-zh-dark-narrow")
 	h.activate(zh.ResultCloseReading())
 	h.activate(zh.ResultCloseResults())
+	latestLabel := zh.WorkReadResult()
+	h.onUI(func() error {
+		tr := h.tester
+		tr.Frame()
+		ct := app.selectedContact()
+		if app.mainPageActive() || !app.detailPageActive() || !app.detailIs(detailWork) || ct.ID != h.contactID || ct.issueView.DetailID != issueID || ct.issueView.ShowConversationWork {
+			return errors.New("closing the result did not return to the narrow issue detail")
+		}
+		tabs, found := tr.Find(zh.WorkTabs())
+		if !found || tabs.H <= 0 {
+			return errors.New("narrow issue detail tabs are not visible")
+		}
+		fullyVisible := func() bool {
+			r, found := tr.Find(latestLabel)
+			return found && r.W > 0 && r.H > 0 && r.X > 12 && r.X+r.W < narrowWidth-12 &&
+				r.Y > tabs.Y+tabs.H+12 && r.Y+r.H < narrowHeight
+		}
+		if fullyVisible() {
+			return nil
+		}
+		tr.Scroll(narrowWidth-60, 500, 0, -ct.issueView.DetailScroll.Y)
+		for range 24 {
+			tr.Frame()
+			if fullyVisible() {
+				return nil
+			}
+			tr.Scroll(narrowWidth-60, 500, 0, 120)
+		}
+		return fmt.Errorf("%q is not fully visible in the narrow issue detail", latestLabel)
+	})
 	h.screenshot("activity-result-issue-zh-dark-narrow")
+	h.onUI(func() error { return h.tester.Click(latestLabel) })
+	h.wait(func() bool { return !app.issueResult.Loading && app.resultInFlight == 0 })
+	h.onUI(func() error {
+		page := &app.issueResult
+		if !page.Open || !page.ReturnLatest || page.OwnerContactID != h.contactID || page.IssueID != issueID || page.ExecutionID != nextRun.ID || page.SessionID != nextRun.SessionID || page.TaskID != nextRun.TaskID || page.Panel.RunNumber != 2 || page.Panel.Response != piResultsNextResponse || page.LoadError != "" {
+			return fmt.Errorf("%q did not load the latest execution %s: got issue=%s execution=%s task=%s error=%s %s", latestLabel, nextRun.ID, page.IssueID, page.ExecutionID, page.TaskID, page.LoadError, page.LoadErrorDetail)
+		}
+		return nil
+	})
 	piResultsRequestBudget(h, piResultsRequestCount)
 	if err := h.shutdown(); err != nil {
 		t.Fatalf("initial app did not drain and reap its worker: %v", err)

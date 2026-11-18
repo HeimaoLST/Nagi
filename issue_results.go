@@ -596,18 +596,20 @@ func issueResultFileRow(c *ui.Context, th *ui.Theme, state *issueResultPanelStat
 	handle := state.fileHandle(key)
 	row := ui.ButtonBase(c).
 		Label(locales.In(c.Locale()).ResultFileRowLabel(strconv.Itoa(index+1), filepath.Base(file.Path))).
-		AlignSelf(ui.Stretch).MinWidth(0).Padding(8, 0).BorderWidth(0, 0, 1, 0).BorderColor(th.Border).Gap(4).Bind(handle)
+		AlignSelf(ui.Stretch).MinWidth(0).Padding(8, 0).BorderWidth(0, 0, 1, 0).BorderColor(th.Border).Bind(handle)
 	if state.Selected == key {
 		row.Background(th.SurfaceHover)
 	}
 	row.Children(func() {
-		ui.Row(c).Wrap().AlignItems(ui.Center).Gap(8).Children(func() {
-			ui.Text(c, filepath.Base(file.Path)).FontSize(typeAction).FontWeight(500).TextColor(th.Text).MaxLines(2).Grow(1)
-			ui.Text(c, locales.In(c.Locale()).ResultReadFile()).FontSize(typeAction).FontWeight(500).TextColor(th.TextMuted)
+		ui.Column(c).Grow(1).MinWidth(0).AlignItems(ui.Stretch).Gap(4).Children(func() {
+			ui.Row(c).Wrap().AlignItems(ui.Center).Gap(8).Children(func() {
+				ui.Text(c, filepath.Base(file.Path)).FontSize(typeAction).FontWeight(500).TextColor(th.Text).MaxLines(2).Grow(1).MinWidth(0)
+				ui.Text(c, locales.In(c.Locale()).ResultReadFile()).FontSize(typeAction).FontWeight(500).TextColor(th.TextMuted).Shrink(0)
+			})
+			ui.Text(c, file.Path).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(th.TextMuted).MaxLines(2)
+			ui.Text(c, locales.In(c.Locale()).ResultWorkingDirectory(file.WorkingDirectory)).FontSize(typeAction).TextColor(th.TextMuted).MaxLines(2)
+			ui.Text(c, locales.In(c.Locale()).ResultReportedBy(file.ToolName)).FontSize(typeAction).TextColor(th.TextMuted).MaxLines(2)
 		})
-		ui.Text(c, file.Path).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(th.TextMuted).MaxLines(2)
-		ui.Text(c, locales.In(c.Locale()).ResultWorkingDirectory(file.WorkingDirectory)).FontSize(typeAction).TextColor(th.TextMuted).MaxLines(2)
-		ui.Text(c, locales.In(c.Locale()).ResultReportedBy(file.ToolName)).FontSize(typeAction).TextColor(th.TextMuted).MaxLines(2)
 	})
 	if state.ReaderReturnKey == key {
 		row.Focus()

@@ -112,6 +112,12 @@ The protected `ci-required` aggregate requires both the retained GUI lane and th
 
 Synthetic native secure-entry coverage remains separate from headless product E2E. Its reproducible harness is `test/native/connection/run.py`, with a fresh absolute external `--output` for each case. It exercises the production Connection control without a real provider. Unavailable AX reads or an unbound window remain unverified; an interrupted fixture is not a passing security observation. Retain the failed attempt before preparing a new case after an actual environment change.
 
+### Reading a task result
+
+Open **Read latest result** in the task detail, or choose a numbered run in the task history. The reader shows the final assistant response for that execution and lets the user copy its original text. A finished run leaves the task and its requirements open until the user takes a business action.
+
+Reported files come from successful Pi write or edit calls in that same turn. Each file retains its tool receipt and working directory. The reader shows the file’s current contents, which may have changed since the run. Paths mentioned only in the response stay in the response. Reading, reloading and reopening a saved result use the captured activity session without submitting another model turn.
+
 ## First-use caller unit
 
 The first-use unit wires the existing settings and conversation callers on fresh data. It does not select a legacy-history policy or complete the activity, results, native-key or standalone gates. The existing MyGo form and callbacks remain the GUI.
@@ -171,7 +177,7 @@ An actual issue_wait captures worker epoch, context, run, call, contact, issue, 
 
 Stop, worker loss and shutdown must release the exact held waiters and preserve owned settlement evidence before draining bridges and reaping the worker/callbacks. Closing new callback admission must not discard required terminal evidence from an already admitted run. Ordinary business shutdown does not use the isolated-probe Kill fallback. On reopen, expose saved questions and uncertain work without starting runs or replaying ToolResult. Execution settlement does not complete the business issue.
 
-Acceptance remains the existing TestPiAppActivitiesAndQuestions gate: two same-Bot activities and a continuing chat with three explicitly configured slots, while the normal default stays two. Hold activity A on its real product question, advance B and chat, inspect progress without another model request, answer A through its captured GUI and observe exact tool delivery/settlement without affecting B. Preserve failed-save rollback, explicit Stop, reopen/no replay, real process outcomes and separate callbacks. Current result/history holds remain until their own gate is implemented. This unit selects no permanent Agent hierarchy, naming/fork policy, scheduler or app-off execution.
+Acceptance remains the existing TestPiAppActivitiesAndQuestions gate: two same-Bot activities and a continuing chat with three explicitly configured slots, while the normal default stays two. Hold activity A on its real product question, advance B and chat, inspect progress without another model request, answer A through its captured GUI and observe exact tool delivery/settlement without affecting B. Preserve failed-save rollback, explicit Stop, reopen/no replay, real process outcomes and separate callbacks. A terminal run with an admitted Pi activity binding can open its result from the task detail or numbered execution history. Opaque legacy activity history remains read-only. This unit selects no permanent Agent hierarchy, naming/fork policy, scheduler or app-off execution.
 
 The activity source checkpoint `1cb7a25cd155bd10c32740ab94c5a12f6fa6da79` implements typed intent/binding/admission, held-call answers and captured cancellation. Review corrections cover active-chat Quit, known cancellation before an attempt, stable follow-up controller identity, answer delivery presentation and unavailable batch recovery. QA retired obsolete Runtime-specific mechanics while preserving current domain regressions and mapping real admission/call obligations to the pending activity E2E.
 
