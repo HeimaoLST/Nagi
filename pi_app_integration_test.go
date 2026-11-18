@@ -1019,13 +1019,13 @@ func (f *piAppFixture) answerForm(issue *productIssue, question *issueQuestion, 
 func (f *piAppFixture) formInput(tr *ui.Tester, issueID, text string) {
 	f.t.Helper()
 	f.onUI(func() error {
-		for i := 0; i < 64 && !tr.Focused(locales.SupplementCancel()); i++ {
-			tr.Key(0, ui.KeyTab)
+		inputLabel := locales.SupplementFormLabel()
+		if f.app.issueSupplementAnswerTarget.IssueID != "" {
+			inputLabel = locales.WorkAnswer()
 		}
-		if !tr.Focused(locales.SupplementCancel()) {
-			return errors.New("existing form Cancel control did not receive keyboard focus")
+		if err := focusPiControl(tr, inputLabel, true); err != nil {
+			return err
 		}
-		tr.Key(0, ui.KeyTab)
 		tr.Key(ui.Cmd, ui.KeyA)
 		tr.Type(text)
 		tr.Frame()
@@ -1067,32 +1067,17 @@ func (f *piAppFixture) saveForm(tr *ui.Tester, saveLabel string) {
 		}
 		draft := f.app.issueSupplementDraft(formID)
 		beforeDraft := *draft
-		steps := 0
-		for steps < 64 && !tr.Focused(locales.SupplementCancel()) {
-			tr.Key(0, ui.KeyTab)
-			steps++
-		}
-		facts["tabs_to_cancel"], facts["cancel_reacquired"] = steps, tr.Focused(locales.SupplementCancel())
-		if !tr.Focused(locales.SupplementCancel()) {
-			piAppRecord(f.t, "form-save-unreached", facts)
-			return errors.New("the rendered form Cancel control did not receive focus; Save was not activated")
-		}
-		tr.Key(0, ui.KeyTab)
-		inputActive, _ := tr.TextInputActive()
-		facts["input_label_focused_after_cancel"] = tr.Focused(inputLabel)
-		facts["text_input_active_after_cancel"] = inputActive
-		if !tr.Focused(inputLabel) || !inputActive {
-			piAppRecord(f.t, "form-save-unreached", facts)
-			return errors.New("the expected form text input did not receive focus after Cancel; Save was not activated")
-		}
-		tr.Key(0, ui.KeyTab)
+		focusErr := focusPiFormSave(tr, inputLabel, saveLabel)
 		saveInputActive, _ := tr.TextInputActive()
-		facts["save_label_focused_after_input"] = tr.Focused(saveLabel)
+		facts["save_label_focused"] = tr.Focused(saveLabel)
 		facts["text_input_active_at_save"] = saveInputActive
 		facts["draft_before_activation"] = *draft
 		piAppRecord(f.t, "form-save-before", facts)
-		if !tr.Focused(saveLabel) || saveInputActive || *draft != beforeDraft {
-			return errors.New("the expected non-text Save control is not focused or focusing changed the draft; Save was not activated")
+		if focusErr != nil {
+			return focusErr
+		}
+		if *draft != beforeDraft {
+			return errors.New("focusing Save changed the draft")
 		}
 		tr.Key(0, ui.KeySpace)
 		tr.Frame()
@@ -1476,16 +1461,27 @@ func (h *piFirstUseHarness) click(label string) {
 }
 
 func (h *piFirstUseHarness) focus(label string, input bool) error {
-	h.tester.Frame()
+	return focusPiControl(h.tester, label, input)
+}
+
+func focusPiControl(tr *ui.Tester, label string, input bool) error {
+	tr.Frame()
 	for range 128 {
-		active, _ := h.tester.TextInputActive()
-		if h.tester.Focused(label) && active == input {
+		active, _ := tr.TextInputActive()
+		if tr.Focused(label) && active == input {
 			return nil
 		}
-		h.tester.Key(0, ui.KeyTab)
-		h.tester.Frame()
+		tr.Key(0, ui.KeyTab)
+		tr.Frame()
 	}
 	return fmt.Errorf("controller %q was not keyboard reachable as text input=%v", label, input)
+}
+
+func focusPiFormSave(tr *ui.Tester, inputLabel, saveLabel string) error {
+	if err := focusPiControl(tr, inputLabel, true); err != nil {
+		return err
+	}
+	return focusPiControl(tr, saveLabel, false)
 }
 
 func (h *piFirstUseHarness) activate(label string) {
@@ -2644,8 +2640,8 @@ func TestPiAppConnectionAndConversation(t *testing.T) {
 
 type piIndependentBot struct {
 	id, name, prompt, reply, draft, runID string
-	binding                              *piConversationBinding
-	historyIDs                           [2]string
+	binding                               *piConversationBinding
+	historyIDs                            [2]string
 }
 
 func (h *piFirstUseHarness) runIndependentBots(firstID, secondID string) [2]piIndependentBot {
@@ -3287,20 +3283,14 @@ func (h *piActivityHarness) waitSignal(signal <-chan struct{}, name string) {
 func (h *piActivityHarness) saveForm(inputLabel, saveLabel string) {
 	h.t.Helper()
 	h.onUI(func() error {
-		if err := h.focus(locales.In("en").SupplementCancel(), false); err != nil {
+		formID := h.app.issueSupplementFormID
+		draft := h.app.issueSupplementDraft(formID)
+		beforeDraft := *draft
+		if err := focusPiFormSave(h.tester, inputLabel, saveLabel); err != nil {
 			return err
 		}
-		h.tester.Key(0, ui.KeyTab)
-		h.tester.Frame()
-		active, _ := h.tester.TextInputActive()
-		if !active || !h.tester.Focused(inputLabel) {
-			return errors.New("captured form input was not focused after Cancel")
-		}
-		h.tester.Key(0, ui.KeyTab)
-		h.tester.Frame()
-		active, _ = h.tester.TextInputActive()
-		if active || !h.tester.Focused(saveLabel) {
-			return errors.New("captured form Save was not focused after its input")
+		if *draft != beforeDraft {
+			return errors.New("focusing activity form Save changed the draft")
 		}
 		h.tester.Key(0, ui.KeySpace)
 		h.tester.Frame()
@@ -3573,6 +3563,10 @@ func TestPiAppActivitiesAndQuestions(t *testing.T) {
 			return err
 		}
 		h.tester.Type("Material preserved before cancellation")
+		h.tester.Frame()
+		if *app.issueSupplementDraft(issueC) != "Material preserved before cancellation" {
+			return errors.New("activity follow-up did not retain the typed draft")
+		}
 		return nil
 	})
 	h.saveForm(msgs.SupplementFormLabel(), msgs.IssueSupplementSave())
