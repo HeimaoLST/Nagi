@@ -27,7 +27,7 @@ func attentionTargetEvidence(t *testing.T, tr *ui.Tester, name, status, reason, 
 		Seen                     string
 	}{before, after, statusRect, reasonRect, statusFound, reasonFound, seen}
 	t.Logf("retained scroll disclosure: %+v", evidence)
-	if dir := os.Getenv("SAKI_PREVIEW_DIR"); dir != "" {
+	if dir := os.Getenv("NAGI_PREVIEW_DIR"); dir != "" {
 		writePreviewPNG(t, filepath.Join(dir, name+".png"), tr.Image())
 		data, err := json.MarshalIndent(evidence, "", "  ")
 		if err != nil {
@@ -83,7 +83,7 @@ func TestIssueAttentionRetainedWorkScrollShowsInlineTarget(t *testing.T) {
 				}
 				seen := saved.state.Issues[0].Executions[len(issue.Executions)-1].AttentionSeenStatus
 				attentionTargetEvidence(t, tr, fmt.Sprintf("work-%s-%d", locale, size[0]), issueExecutionText(msgs, execution.Status), execution.Detail, seen, before, ct.issueNavigation().DetailScroll.Y, size[0], size[1])
-				if seen != issueExecutionUnknown || execution.AttentionSeenStatus != seen || ct.SelectedWorkTaskID != execution.TaskID || a.rt != nil || a.resultInFlight != 0 {
+				if seen != issueExecutionUnknown || execution.AttentionSeenStatus != seen || ct.SelectedWorkTaskID != execution.TaskID || a.pi != nil || a.resultInFlight != 0 {
 					t.Fatal("explicit work target did not retain matching ownership/persisted seen or started Runtime work")
 				}
 			})
@@ -94,10 +94,10 @@ func TestIssueAttentionRetainedWorkScrollShowsInlineTarget(t *testing.T) {
 func attentionDisclosureApp(t *testing.T, status string, reason string) (*appModel, *contact, *productIssue, *issueExecution) {
 	t.Helper()
 	a, ct := workspaceTestApp(t)
-	a.rt = nil
-	execution := &issueExecution{ID: "disclosure-run", SessionID: "disclosure-session", TaskID: "disclosure-task", Status: status, Detail: reason}
-	issue := &productIssue{ID: "disclosure-issue", ContactID: ct.ID, Goal: "Preserve exception facts", Status: issueStatusInProgress,
-		WorkSessionID: execution.SessionID, Work: issueWorkSession{Loaded: true}, Executions: []*issueExecution{execution}}
+	issue := &productIssue{ID: "disclosure-issue", ContactID: ct.ID, Goal: "Preserve exception facts", Status: issueStatusInProgress, RequirementsRevision: 1, Work: issueWorkSession{Loaded: true}}
+	attachIssueToolTestExecution(issue)
+	execution := issue.Executions[0]
+	execution.Status, execution.Detail = status, reason
 	ct.Issues = []*productIssue{issue}
 	ct.SelectedIssueID = issue.ID
 	ct.Works = []*workItem{{TaskID: execution.TaskID, State: workFailed, Detail: reason}}
@@ -135,10 +135,10 @@ func TestIssueAttentionDisclosureRequiresExplicitResultDetails(t *testing.T) {
 					if execution.AttentionSeenStatus != status || !tr.HasText(reason) || !tr.HasText(issueExecutionText(msgs, status)) {
 						t.Fatalf("explicit result disclosure did not present and acknowledge the matching exception: seen=%q texts=%v", execution.AttentionSeenStatus, tr.Texts())
 					}
-					if execution.Detail != reason || issue.Status != issueStatusInProgress || a.rt != nil || a.resultInFlight != 0 {
+					if execution.Detail != reason || issue.Status != issueStatusInProgress || a.pi != nil || a.resultInFlight != 0 {
 						t.Fatal("disclosure changed facts or started Runtime work")
 					}
-					if dir := os.Getenv("SAKI_PREVIEW_DIR"); dir != "" {
+					if dir := os.Getenv("NAGI_PREVIEW_DIR"); dir != "" {
 						writePreviewPNG(t, filepath.Join(dir, fmt.Sprintf("ad-result-%s-%d-%s.png", locale, width, status)), tr.Image())
 					}
 				})
@@ -170,7 +170,7 @@ func TestIssueAttentionDisclosureNoTaskUsesLocalAbsence(t *testing.T) {
 				if !tr.HasText(msgs.ResultNoDetailRecorded()) || !tr.HasText(issueExecutionText(msgs, status)) || execution.AttentionSeenStatus != status {
 					t.Fatalf("local absence disclosure failed: seen=%q texts=%v", execution.AttentionSeenStatus, tr.Texts())
 				}
-				if execution.Detail != " \t" || execution.TaskID != "" || execution.SessionID != "" || a.rt != nil || a.resultInFlight != 0 {
+				if execution.Detail != " \t" || execution.TaskID != "" || execution.SessionID != "" || a.pi != nil || a.resultInFlight != 0 {
 					t.Fatal("absence disclosure changed raw records or started Runtime work")
 				}
 			})
@@ -211,7 +211,6 @@ func TestIssueAttentionDisclosureWorkNavigationAndActivePrecedence(t *testing.T)
 
 func TestIssueDetailDefaultsToResultAndKeepsSecondaryDetailsCollapsed(t *testing.T) {
 	a, ct := workspaceTestApp(t)
-	a.rt = &runtimeClient{}
 	a.store = &contactStore{path: filepath.Join(t.TempDir(), "contacts.json")}
 	a.runtimeCapabilitiesLoaded = true
 	a.runtimeMaxActiveTasks = 2
@@ -318,7 +317,6 @@ func TestIssueDetailsOpenStateDoesNotCrossContacts(t *testing.T) {
 
 func TestIssueViewExecutionOpensAtTopAndBackRestoresCompact(t *testing.T) {
 	a, ct := workspaceTestApp(t)
-	a.rt = &runtimeClient{}
 	a.store = &contactStore{path: filepath.Join(t.TempDir(), "contacts.json")}
 	a.runtimeCapabilitiesLoaded = true
 	a.runtimeMaxActiveTasks = 2
@@ -377,7 +375,6 @@ func TestIssueViewExecutionOpensAtTopAndBackRestoresCompact(t *testing.T) {
 
 func TestIssueAttentionClearsAfterViewingFailedExecutionDetail(t *testing.T) {
 	a, ct := workspaceTestApp(t)
-	a.rt = &runtimeClient{}
 	a.store = &contactStore{path: filepath.Join(t.TempDir(), "contacts.json")}
 	a.runtimeCapabilitiesLoaded = true
 	a.runtimeMaxActiveTasks = 2
@@ -404,7 +401,7 @@ func TestIssueAttentionClearsAfterViewingFailedExecutionDetail(t *testing.T) {
 	if !tr.HasText("Failed") || tr.HasText(detail) {
 		t.Fatalf("failed status/reason was not visible before viewing: %v", tr.Texts())
 	}
-	if dir := os.Getenv("SAKI_PREVIEW_DIR"); dir != "" {
+	if dir := os.Getenv("NAGI_PREVIEW_DIR"); dir != "" {
 		tr.SetDark(false)
 		tr.Frame()
 		writePreviewPNG(t, filepath.Join(dir, "headless-attention-before-light.png"), tr.Image())
@@ -429,7 +426,7 @@ func TestIssueAttentionClearsAfterViewingFailedExecutionDetail(t *testing.T) {
 	if notice := a.issueWorkNotice(ct); notice.Attention || notice.IssueID != "" {
 		t.Fatalf("viewing the failed execution did not clear its attention: %+v", notice)
 	}
-	if dir := os.Getenv("SAKI_PREVIEW_DIR"); dir != "" {
+	if dir := os.Getenv("NAGI_PREVIEW_DIR"); dir != "" {
 		tr.SetDark(false)
 		tr.Frame()
 		writePreviewPNG(t, filepath.Join(dir, "headless-attention-after-light.png"), tr.Image())
@@ -443,7 +440,6 @@ func TestIssueAttentionClearsAfterViewingFailedExecutionDetail(t *testing.T) {
 
 func TestIssueInterruptedDetailUsesProjectedAttentionStatus(t *testing.T) {
 	a, ct := workspaceTestApp(t)
-	a.rt = &runtimeClient{}
 	a.store = &contactStore{path: filepath.Join(t.TempDir(), "contacts.json")}
 	issue := &productIssue{
 		ID: "issue-interrupted-detail", ContactID: ct.ID, Goal: "Interrupted detail status", Status: issueStatusInProgress,
@@ -467,7 +463,6 @@ func TestIssueInterruptedDetailUsesProjectedAttentionStatus(t *testing.T) {
 
 func TestIssueAttentionViewRequiresMatchingReasonAndResultPageConfirms(t *testing.T) {
 	a, ct := workspaceTestApp(t)
-	a.rt = nil
 	a.store = &contactStore{path: filepath.Join(t.TempDir(), "contacts.json")}
 	const reasonA = "A failed after dispatch"
 	issueA := &productIssue{
@@ -582,7 +577,6 @@ func TestIssueAttentionViewRequiresMatchingReasonAndResultPageConfirms(t *testin
 
 func TestIssueAttentionResultPageConfirmsNoTaskNoDetailExecution(t *testing.T) {
 	a, ct := workspaceTestApp(t)
-	a.rt = nil
 	a.store = &contactStore{path: filepath.Join(t.TempDir(), "contacts.json")}
 	issue := &productIssue{
 		ID: "i-no-task", ContactID: ct.ID, Goal: "no task unknown", Status: issueStatusInProgress,
@@ -714,7 +708,6 @@ func TestIssueAttentionResultPageConfirmsNoTaskNoDetailExecution(t *testing.T) {
 
 func TestIssueAttentionPendingSeenStillShowsOlderException(t *testing.T) {
 	a, ct := workspaceTestApp(t)
-	a.rt = nil
 	a.store = &contactStore{path: filepath.Join(t.TempDir(), "contacts.json")}
 	older := &issueExecution{ID: "e-older-visible", TaskID: "task-older", Status: issueExecutionFailed, Detail: "older unseen failure"}
 	latest := &issueExecution{ID: "e-pending-visible", Status: issueExecutionUnknown}
@@ -752,7 +745,6 @@ func TestIssueAttentionPendingSeenStillShowsOlderException(t *testing.T) {
 
 func TestIssueAttentionTracksStatusReplayAndNewExecution(t *testing.T) {
 	a, ct := workspaceTestApp(t)
-	a.rt = &runtimeClient{}
 	a.store = &contactStore{path: filepath.Join(t.TempDir(), "contacts.json")}
 	const initialDetail = "delivery was not confirmed"
 	issue := &productIssue{
@@ -813,15 +805,8 @@ func TestIssueAttentionTracksStatusReplayAndNewExecution(t *testing.T) {
 		t.Fatalf("confirmed failed status raised attention: %+v", notice)
 	}
 	reason := "replayed failure"
-	records := []historyRecord{
-		{Offset: 0, Record: journalRecord{Type: "task_started", TaskID: "task-status", MessageID: "message-status"}},
-		{Offset: 1, Record: journalRecord{Type: "task_finished", TaskID: "task-status", MessageID: "message-status",
-			Status: "failed", Error: &reason}},
-	}
-	a.applyIssueWorkHistory(ct, issue, records, "failed")
-	if issue.Status != issueStatusNeedsAttention {
-		t.Fatalf("failed history did not preserve explicit needs_attention: %+v", issue)
-	}
+	execution.Detail = reason
+	issue.Status = issueStatusNeedsAttention
 	display := issueDisplayStatusFor(issue)
 	notice := a.issueWorkNotice(ct)
 	if !display.Attention || display.Status != issueStatusNeedsAttention ||
@@ -865,32 +850,6 @@ func TestIssueAttentionTracksStatusReplayAndNewExecution(t *testing.T) {
 	}
 	if issue.Status != issueStatusInProgress || ct.Unread != 3 {
 		t.Fatalf("attention tracking changed issue status/unread: status=%q unread=%d", issue.Status, ct.Unread)
-	}
-}
-
-func TestIssueAttentionExpiredResultCallbackDoesNotConfirm(t *testing.T) {
-	a, ct := workspaceTestApp(t)
-	seen := &issueExecution{ID: "e-already-seen", SessionID: "work-expired", TaskID: "task-seen",
-		Status: issueExecutionFailed, Detail: "already seen failure", AttentionSeenStatus: issueExecutionFailed}
-	expired := &issueExecution{ID: "e-expired", SessionID: "work-expired", TaskID: "task-expired",
-		Status: issueExecutionFailed, Detail: "expired failure"}
-	issue := &productIssue{ID: "i-expired", ContactID: ct.ID, Goal: "expired callback", Status: issueStatusInProgress,
-		WorkSessionID: "work-expired", Work: issueWorkSession{Loaded: true},
-		Executions: []*issueExecution{seen, expired}}
-	ct.Issues = []*productIssue{issue}
-	a.aux = "issue-result"
-	a.issueResult = issueResultPage{
-		Open: true, OwnerContactID: ct.ID, IssueID: issue.ID, ExecutionID: "e-expired",
-		SessionID: "work-expired", TaskID: "task-expired", Generation: 2,
-	}
-	a.applyIssueResultLoaded(nil, 0, 1, ct.ID, issue.ID, "e-expired", "work-expired", "task-expired",
-		issueResultDerivation{}, "stale result", "")
-	if seen.AttentionSeenStatus != issueExecutionFailed || expired.AttentionSeenStatus != "" {
-		t.Fatalf("expired result callback changed seen fields: seen=%q expired=%q",
-			seen.AttentionSeenStatus, expired.AttentionSeenStatus)
-	}
-	if notice := a.issueWorkNotice(ct); !notice.Attention || notice.IssueID != issue.ID {
-		t.Fatalf("expired callback changed attention: %+v", notice)
 	}
 }
 
@@ -986,9 +945,7 @@ func TestIssueAttentionSeenPersistsAndSaveFailureStaysUnseen(t *testing.T) {
 		issue2.Executions[0].Detail != badDetail || issue2.Status != issueStatusInProgress {
 		t.Fatalf("result save failure changed facts or did not roll back: issue=%+v", issue2)
 	}
-	page := a2.issueResult
-	a2.applyIssueResultLoaded(nil, 0, page.Generation, page.OwnerContactID, page.IssueID, page.ExecutionID,
-		page.SessionID, page.TaskID, issueResultDerivation{}, "", "")
+	a2.issueResult.Panel.Response = "retained response"
 	tr2.Frame()
 	if a2.localSaveErr == "" || !strings.Contains(strings.Join(tr2.Texts(), "\n"), a2.localSaveErr) {
 		t.Fatalf("background load cleared/hid the save error: localSaveErr=%q texts=%v", a2.localSaveErr, tr2.Texts())
@@ -1007,7 +964,7 @@ func TestIssueAttentionSeenPersistsAndSaveFailureStaysUnseen(t *testing.T) {
 	if a2.localSaveErr == "" || !strings.Contains(strings.Join(tr2.Texts(), "\n"), a2.localSaveErr) {
 		t.Fatalf("reload after save failure cleared/hid localSaveErr: %q texts=%v", a2.localSaveErr, tr2.Texts())
 	}
-	if dir := os.Getenv("SAKI_PREVIEW_DIR"); dir != "" {
+	if dir := os.Getenv("NAGI_PREVIEW_DIR"); dir != "" {
 		tr2.SetDark(false)
 		tr2.Frame()
 		writePreviewPNG(t, filepath.Join(dir, "headless-attention-result-save-error-light.png"), tr2.Image())
@@ -1021,7 +978,6 @@ func TestIssueAttentionSeenPersistsAndSaveFailureStaysUnseen(t *testing.T) {
 
 func TestActiveIssueWorkKeepsStopReachableBeforeRequirements(t *testing.T) {
 	a, ct := workspaceTestApp(t)
-	a.rt = &runtimeClient{}
 	a.runtimeCapabilitiesLoaded = true
 	a.runtimeMaxActiveTasks = 2
 	issue := &productIssue{ID: "i-active", ContactID: ct.ID, Goal: "active work", Status: issueStatusInProgress,
@@ -1316,7 +1272,6 @@ func TestIssueExecutionHistoryLayoutKeepsHeaderRevisionAndActionsDistinct(t *tes
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			a, ct := workspaceTestApp(t)
-			a.rt = nil
 			a.windowWidth = tc.width
 			a.leftPaneWidth = tc.left
 			a.rightPaneWidth = tc.right
@@ -1371,7 +1326,7 @@ func TestIssueExecutionHistoryLayoutKeepsHeaderRevisionAndActionsDistinct(t *tes
 				viewText := locales.In("en").IssueViewExecutionRun(fmt.Sprint(index + 1))
 				header, revision, open, view := issueHistoryFindCard(t, tr, headerText, revisionText, openText, viewText,
 					panelX, float32(tc.width), float32(tc.height))
-				if dir := os.Getenv("SAKI_PREVIEW_DIR"); dir != "" {
+				if dir := os.Getenv("NAGI_PREVIEW_DIR"); dir != "" {
 					writePreviewPNG(t, filepath.Join(dir, fmt.Sprintf(
 						"headless-issue-execution-history-%s-run-%d.png", tc.name, index+1)), tr.Image())
 				}

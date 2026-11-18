@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -179,30 +178,6 @@ func TestContactProfileBuiltinChecksAreKeyboardReachable(t *testing.T) {
 }
 
 func TestContactStorePreservesDefaultAndExplicitEmptyBuiltinTools(t *testing.T) {
-	legacyPath := filepath.Join(t.TempDir(), "contacts.json")
-	legacy := storedState{Version: 9, Selected: "c1", Contacts: []storedContact{{ID: "c1", Name: "Saki"}}}
-	legacyBytes, err := json.Marshal(legacy)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(legacyPath, legacyBytes, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	legacyStore, err := openContactStore(legacyPath, t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	legacyContact := contactsFromStore(legacyStore)[0]
-	if !legacyStore.piDataReadOnly() || legacyContact.BuiltinTools != nil {
-		t.Fatalf("legacy default or read-only policy changed: version=%d tools=%v", legacyStore.state.Version, legacyContact.BuiltinTools)
-	}
-	if err := legacyStore.save([]*contact{legacyContact}, legacyContact.ID); err == nil || !strings.Contains(err.Error(), "read-only") {
-		t.Fatalf("legacy save did not refuse read-only data: %v", err)
-	}
-	preserved, err := os.ReadFile(legacyPath)
-	if err != nil || !bytes.Equal(preserved, legacyBytes) {
-		t.Fatalf("legacy save changed original bytes: err=%v", err)
-	}
 	root := t.TempDir()
 	path := filepath.Join(root, "contacts.json")
 	store, err := openContactStore(path, root)
@@ -312,7 +287,7 @@ func TestBuiltinToolCatalogErrorDoesNotOfferDeadRetry(t *testing.T) {
 	if !tr.HasText("Catalog could not be read.") || !tr.HasText("Retry built-in tools") {
 		t.Fatalf("configured idle connection did not expose retry: %v", tr.Texts())
 	}
-	if a.pi != nil || a.rt != nil || a.connectionProbe != nil || a.connectionApplying || a.connectionTesting || a.runtimeAvailableForView() {
+	if a.pi != nil || a.connectionProbe != nil || a.connectionApplying || a.connectionTesting || a.runtimeAvailableForView() {
 		t.Fatal("catalog error presentation started a host/probe/apply or fabricated runtime readiness")
 	}
 }
@@ -334,9 +309,6 @@ func TestFirstUseBuiltinSelectionRequiresManagedConnection(t *testing.T) {
 	if ct.BuiltinTools != nil {
 		t.Fatalf("legacy rejection changed profile: %v", ct.BuiltinTools)
 	}
-	if got := a.capturedBuiltinSelection(ct); got != nil {
-		t.Fatalf("legacy nil default became explicit: %v", got)
-	}
 	a.openSettingsTab(settingsTabContact, settingsSourceRail)
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
@@ -346,7 +318,7 @@ func TestFirstUseBuiltinSelectionRequiresManagedConnection(t *testing.T) {
 }
 
 func TestPreviewBuiltinToolSelection(t *testing.T) {
-	dir := os.Getenv("SAKI_PREVIEW_DIR")
+	dir := os.Getenv("NAGI_PREVIEW_DIR")
 	if dir == "" {
 		dir = t.TempDir()
 	}

@@ -21,12 +21,12 @@ func TestDraftsAreScopedPerContact(t *testing.T) {
 	a.selectContact(1)
 	a.selectedContact().Draft = "draft for mio"
 	a.selectContact(0)
-	a.selectedContact().Draft = "草稿 for saki"
+	a.selectedContact().Draft = "草稿 for nagi"
 	if a.contacts[1].Draft != "draft for mio" {
 		t.Fatalf("Mio draft changed: %q", a.contacts[1].Draft)
 	}
-	if a.contacts[0].Draft != "草稿 for saki" {
-		t.Fatalf("Saki draft changed: %q", a.contacts[0].Draft)
+	if a.contacts[0].Draft != "草稿 for nagi" {
+		t.Fatalf("Nagi draft changed: %q", a.contacts[0].Draft)
 	}
 }
 
@@ -121,11 +121,11 @@ func TestHistoryIsScopedToCurrentContact(t *testing.T) {
 	a.selectContact(0)
 	a.historyQuery = "shared memory"
 	if len(a.historyMatches()) == 0 {
-		t.Fatal("Saki history should match 'shared memory'")
+		t.Fatal("Nagi history should match 'shared memory'")
 	}
 	a.historyQuery = "empty-input"
 	if len(a.historyMatches()) != 0 {
-		t.Fatal("Ren's history must not leak into Saki's scope")
+		t.Fatal("Ren's history must not leak into Nagi's scope")
 	}
 }
 
@@ -135,10 +135,10 @@ func TestHistoryIsScopedToCurrentContact(t *testing.T) {
 // against the running app.
 func TestReplyStaysInOriginatingContact(t *testing.T) {
 	a := testApp(t)
-	saki := a.contactByID("saki")
+	nagi := a.contactByID("nagi")
 	mio := a.contactByID("mio")
-	sakiCount := len(saki.Messages)
-	sakiLastID := saki.Messages[sakiCount-1].ID
+	nagiCount := len(nagi.Messages)
+	nagiLastID := nagi.Messages[nagiCount-1].ID
 	a.selectContact(1)
 	mio.Draft = "ping"
 	if !a.sendCurrent() {
@@ -150,11 +150,11 @@ func TestReplyStaysInOriginatingContact(t *testing.T) {
 	if mio.Messages[len(mio.Messages)-1].Kind != msgContact {
 		t.Fatal("reply must land in the originating contact")
 	}
-	if len(saki.Messages) != sakiCount || saki.Messages[sakiCount-1].ID != sakiLastID {
+	if len(nagi.Messages) != nagiCount || nagi.Messages[nagiCount-1].ID != nagiLastID {
 		t.Fatal("another contact's messages must not change")
 	}
 	a.selectContact(0)
-	if len(a.selectedContact().Messages) != sakiCount {
+	if len(a.selectedContact().Messages) != nagiCount {
 		t.Fatal("contacts must not share messages")
 	}
 }
@@ -162,7 +162,7 @@ func TestReplyStaysInOriginatingContact(t *testing.T) {
 func TestBackgroundWorkMarksUnread(t *testing.T) {
 	a := testApp(t)
 	ren := a.contactByID("ren")
-	a.selectContact(0) // Saki visible, Ren in the background
+	a.selectContact(0)
 	before := ren.Unread
 	a.startWork(ren, "Re-running the parser tests", 0, func() { ren.Status = statusReady })
 	if ren.Unread != before+1 {
@@ -178,17 +178,17 @@ func TestSourceScopeAndReveal(t *testing.T) {
 		t.Fatalf("want 2 sources, got %d", len(entries))
 	}
 	for _, e := range entries {
-		if e.ID != "saki-h2" && e.ID != "saki-h5" {
+		if e.ID != "nagi-h2" && e.ID != "nagi-h5" {
 			t.Fatalf("unexpected source %s", e.ID)
 		}
 	}
-	a.viewInConversation("saki-h2")
-	if a.highlight != "saki-h2" || a.workspaceOpen {
+	a.viewInConversation("nagi-h2")
+	if a.highlight != "nagi-h2" || a.workspaceOpen {
 		t.Fatal("reveal should highlight the entry in the conversation")
 	}
 	found := false
 	for _, e := range a.revealedEntries() {
-		if e.ID == "saki-h2" {
+		if e.ID == "nagi-h2" {
 			found = true
 		}
 	}

@@ -32,7 +32,6 @@ type uiPump struct {
 	done            chan struct{}
 	app             *appModel
 	createdAt       time.Time
-	observedClient  *runtimeClient
 	observedPi      *pi.Client
 	processIdentity atomic.Pointer[shutdownProcessIdentity]
 }
@@ -71,12 +70,6 @@ func (p *uiPump) captureProcessIdentity() {
 		p.processIdentity.Store(&shutdownProcessIdentity{pid: outcome.PID, executable: node, notBefore: p.createdAt, observedAt: time.Now().UTC()})
 		return
 	}
-	c := p.app.rt
-	if c == nil || c == p.observedClient || c.cmd == nil || c.cmd.Process == nil {
-		return
-	}
-	p.observedClient = c
-	p.processIdentity.Store(&shutdownProcessIdentity{pid: c.cmd.Process.Pid, executable: c.cmd.Path, notBefore: p.createdAt, observedAt: time.Now().UTC()})
 }
 
 func (p *uiPump) check() {
@@ -168,47 +161,6 @@ func shutdownChannelState(ch <-chan struct{}) string {
 	return "open"
 }
 
-func runtimeClientShutdownDiagnostic(c *runtimeClient) string {
-	if c == nil {
-		return "client=nil"
-	}
-	var closed bool
-	var pending int
-	var failedCode string
-	c.stateMu.Lock()
-	closed = c.closed
-	pending = len(c.pending)
-	if c.failed != nil {
-		failedCode = c.failed.Code
-	}
-	c.stateMu.Unlock()
-	pid := "unknown"
-	if c.cmd != nil && c.cmd.Process != nil {
-		pid = fmt.Sprintf("%d", c.cmd.Process.Pid)
-	}
-	done := shutdownChannelClosed(c.done)
-	processState := "unknown"
-	exitErrPresent := "unknown"
-	if done {
-		processState = fmt.Sprintf("%v", c.cmd != nil && c.cmd.ProcessState != nil)
-		exitErrPresent = fmt.Sprintf("%v", c.exitErr != nil)
-	}
-	return fmt.Sprintf("client.closed=%v client.pending_requests=%d client.failed_code=%q client.done_at_capture=%s client.process_pid=%s client.process_state_present=%s client.exit_err_present=%s",
-		closed, pending, failedCode, shutdownChannelState(c.done), pid, processState, exitErrPresent)
-}
-
-func issueToolServerShutdownDiagnostic(s *issueToolIPCServer) string {
-	if s == nil {
-		return "issue_tool_server=nil"
-	}
-	s.mu.Lock()
-	closing := s.closing
-	conns := len(s.conns)
-	s.mu.Unlock()
-	return fmt.Sprintf("issue_tool_server.present=true closing=%v conns=%d done_closed=%v close_done_closed=%v",
-		closing, conns, shutdownChannelClosed(s.done), shutdownChannelClosed(s.closeDone))
-}
-
 const shutdownStackLimit = 256 * 1024
 
 type shutdownStackTrace struct {
@@ -239,11 +191,10 @@ func logShutdownStack(t *testing.T, trace shutdownStackTrace) {
 }
 
 type shutdownDiagnostic struct {
-	capturedAt time.Time
-	state      string
-	clientDone <-chan struct{}
-	toolDone   <-chan struct{}
-	toolClose  <-chan struct{}
+	capturedAt    time.Time
+	state         string
+	clientDone    <-chan struct{}
+	callbacksDone <-chan struct{}
 }
 
 // shutdownSnapshot runs only from the UI pump predicate. It must not be called
@@ -251,22 +202,14 @@ type shutdownDiagnostic struct {
 func (h *guiHarness) shutdownSnapshot() shutdownDiagnostic {
 	a := h.app
 	var b strings.Builder
-	fmt.Fprintf(&b, "shutdown_started=%v quit_ready=%v drain_started=%v runtime_status=%q rt_nil=%v connection_launch_present=%v\n",
-		a.shutdownStarted, a.quitReady, a.shutdownDrainStarted, a.runtimeStatus, a.rt == nil, a.connectionLaunch != nil)
-	fmt.Fprintf(&b, "gates.connection_save_in_flight=%v connection_applying=%v connection_testing=%v contact_history_in_flight=%d result_in_flight=%d submission_in_flight=%d metadata_in_flight=%d issue_tool_release_in_flight=%d\n",
-		a.connectionSaveInFlight, a.connectionApplying, a.connectionTesting, a.contactHistoryInFlight, a.resultInFlight, a.submissionInFlight, a.metadataInFlight, a.issueToolReleaseInFlight)
-	b.WriteString(runtimeClientShutdownDiagnostic(a.rt))
-	b.WriteString("\n")
-	b.WriteString(issueToolServerShutdownDiagnostic(a.issueToolServer))
-	var clientDone, toolDone, toolClose <-chan struct{}
-	if a.rt != nil {
-		clientDone = a.rt.done
+	fmt.Fprintf(&b, "shutdown_started=%v quit_ready=%v runtime_status=%q pi_present=%v\n", a.shutdownStarted, a.quitReady, a.runtimeStatus, a.pi != nil)
+	fmt.Fprintf(&b, "gates.connection_save_in_flight=%v connection_applying=%v connection_testing=%v contact_history_in_flight=%d result_in_flight=%d submission_in_flight=%d\n",
+		a.connectionSaveInFlight, a.connectionApplying, a.connectionTesting, a.contactHistoryInFlight, a.resultInFlight, a.submissionInFlight)
+	var clientDone, callbacksDone <-chan struct{}
+	if a.pi != nil && a.pi.client != nil {
+		clientDone, callbacksDone = a.pi.client.Done(), a.pi.client.CallbacksDone()
 	}
-	if a.issueToolServer != nil {
-		toolDone = a.issueToolServer.done
-		toolClose = a.issueToolServer.closeDone
-	}
-	return shutdownDiagnostic{capturedAt: time.Now(), state: b.String(), clientDone: clientDone, toolDone: toolDone, toolClose: toolClose}
+	return shutdownDiagnostic{capturedAt: time.Now(), state: b.String(), clientDone: clientDone, callbacksDone: callbacksDone}
 }
 
 func shutdownStackBlockedWorker(started chan<- struct{}, release <-chan struct{}) {
@@ -462,22 +405,6 @@ func (h *guiHarness) logShutdownOS(t *testing.T) {
 	})
 }
 
-func TestShutdownOSObservationCapturesEachLaunchOnUIPump(t *testing.T) {
-	app := &appModel{}
-	pump := newUIPump(t, app)
-	defer pump.close()
-	setClient := func(pid int) *shutdownProcessIdentity {
-		pump.do(func() { app.rt = &runtimeClient{cmd: &exec.Cmd{Path: "/tmp/helper", Process: &os.Process{Pid: pid}}} })
-		pump.wait(func() bool { identity := pump.processIdentity.Load(); return identity != nil && identity.pid == pid })
-		return pump.processIdentity.Load()
-	}
-	first := setClient(41)
-	second := setClient(42)
-	if first.pid != 41 || second.pid != 42 || first == second || first.executable != "/tmp/helper" || first.observedAt.Before(first.notBefore) {
-		t.Fatalf("launch identity was changed or not captured: first=%+v second=%+v", first, second)
-	}
-}
-
 func TestShutdownOSObservationIdentityStates(t *testing.T) {
 	at := time.Date(2026, 11, 4, 18, 0, 0, 0, time.UTC)
 	identity := shutdownProcessIdentity{pid: 42, executable: "/tmp/helper", notBefore: at.Add(-time.Second), observedAt: at.Add(time.Second)}
@@ -632,9 +559,9 @@ func (h *guiHarness) shutdown(t *testing.T) {
 			t.Log("shutdown diagnostics: no UI-pump snapshot was captured before the wait failed; app state at timeout is unknown")
 		} else {
 			captured := diag.capturedAt.UTC()
-			t.Logf("shutdown diagnostics: last UI-pump observation captured=%s age=%s; this is not a fresh app-state read at timeout:\n%s\ncurrent_channel_state.client_done=%s tool_done=%s tool_close_done=%s",
+			t.Logf("shutdown diagnostics: last UI-pump observation captured=%s age=%s; this is not a fresh app-state read at timeout:\n%s\ncurrent_channel_state.client_done=%s callbacks_done=%s",
 				captured.Format(time.RFC3339Nano), time.Since(captured).Round(time.Millisecond), diag.state,
-				shutdownChannelState(diag.clientDone), shutdownChannelState(diag.toolDone), shutdownChannelState(diag.toolClose))
+				shutdownChannelState(diag.clientDone), shutdownChannelState(diag.callbacksDone))
 		}
 		logShutdownStack(t, captureShutdownStack(make([]byte, shutdownStackLimit)))
 		if timedOut {
@@ -652,7 +579,7 @@ func (h *guiHarness) shutdown(t *testing.T) {
 		// This predicate is evaluated on the UI pump. Cache the whole
 		// observation tuple here, not from the timeout/defer goroutine.
 		lastDiagnostic.Store(h.shutdownSnapshot())
-		satisfied := h.app.quitReady && (h.app.rt == nil || h.app.runtimeStatus == runtimeStateExited)
+		satisfied := h.app.quitReady
 		if h.piClient != nil {
 			satisfied = satisfied && shutdownChannelClosed(h.piClient.Done()) && shutdownChannelClosed(h.piClient.CallbacksDone())
 		}

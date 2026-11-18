@@ -107,7 +107,7 @@ func TestIssueUITargetsLifecycleActions(t *testing.T) {
 	ct.Issues = []*productIssue{issue}
 	ct.SelectedIssueID = issue.ID
 	openIssueDetailForTest(a, ct, issue.ID)
-	a.rt = &runtimeClient{}
+	a.pi = presentationPiHost(a)
 	a.store = &contactStore{path: filepath.Join(t.TempDir(), "contacts.json")}
 	a.windowWidth = 1040
 	tr := ui.NewTester(a.view, 1040, 720)
@@ -216,7 +216,7 @@ func TestArchivedActiveIssueStillBlocksApply(t *testing.T) {
 	issue.Work.SendState = sendAccepted
 	ct.Issues = []*productIssue{issue}
 	a.connectionSaved = &connectionConfig{}
-	a.rt = &runtimeClient{}
+	a.pi = presentationPiHost(a)
 	a.store = &contactStore{path: filepath.Join(t.TempDir(), "contacts.json")}
 	reason := a.connectionReloadBlocked()
 	if reason != connBlockedActiveWork {

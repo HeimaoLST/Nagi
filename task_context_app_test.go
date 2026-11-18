@@ -24,7 +24,7 @@ func taskContextApp(t *testing.T) (*appModel, *contact) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ct := &contact{ID: "saki-context", Name: "Saki", Role: "Assistant", SessionID: "s1", Loaded: true}
+	ct := &contact{ID: "nagi-context", Name: "Nagi", Role: "Assistant", SessionID: "s1", PiBinding: recoveryConversationBinding("nagi-context", "/tmp", "s1"), Loaded: true}
 	a := &appModel{
 		store: store, runtimeStatus: runtimeStateReady, workspaceOpen: true,
 		windowWidth: 1040, scrollTo: -1, contacts: []*contact{ct}, selected: 0,
@@ -200,84 +200,6 @@ func TestTaskContextUnknownFailurePersistsPendingIntent(t *testing.T) {
 	}
 }
 
-func TestTaskContextExplicitReloadRetiresUnknownWithoutRemovingMaterials(t *testing.T) {
-	a, ct := taskContextApp(t)
-	if _, err := ct.Context.AddSnippet("Keep", "after explicit reload"); err != nil {
-		t.Fatal(err)
-	}
-	ct.pendingSend = &pendingSend{Draft: "uncertain", Context: ct.Context.snapshot(), State: "unknown"}
-	ct.SendState = sendUnknown
-	if err := a.persist(); err != nil {
-		t.Fatal(err)
-	}
-	a.applyReload(ct.ID, ct.SessionID, 0, runtimeSession{SessionID: ct.SessionID, State: "idle", Status: "completed"}, nil, "completed", nil, true)
-	if ct.SendState != sendIdle || ct.pendingSend != nil {
-		t.Fatalf("explicit reload state = %v / %+v", ct.SendState, ct.pendingSend)
-	}
-	if len(ct.Context.snapshot()) != 1 || !strings.Contains(ct.StatusDetail, "History reloaded; no retry was sent") {
-		t.Fatalf("explicit reload materials/copy = %+v / %q", ct.Context.snapshot(), ct.StatusDetail)
-	}
-	store, err := openContactStore(a.store.path, "/tmp")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if store.state.Contacts[0].PendingSend != nil {
-		t.Fatalf("retired unknown intent reappeared in the store: %+v", store.state.Contacts[0].PendingSend)
-	}
-}
-
-func TestTaskContextUserContentSeparatesOnlyActualEnvelope(t *testing.T) {
-	envelope, err := json.Marshal(map[string]string{
-		"type": "caller_context", "label": "Caller-provided context (user data)",
-		"name": "notes · file /tmp/notes.txt", "text": "exact\nbody",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	raw := []byte(`[{"type":"text","text":"main text"},{"type":"text","text":` + string(mustJSON(t, string(envelope))) + `}]`)
-	text, contexts := taskContextUserContent(raw)
-	if text != "main text" || len(contexts) != 1 || contexts[0].Name != "notes · file /tmp/notes.txt" || contexts[0].Text != "exact\nbody" {
-		t.Fatalf("parsed = %q / %+v", text, contexts)
-	}
-	ordinary := []byte(`[{"type":"text","text":"{\"type\":\"caller_context\",\"name\":\"ordinary\"}"}]`)
-	text, contexts = taskContextUserContent(ordinary)
-	if text != `{"type":"caller_context","name":"ordinary"}` || len(contexts) != 0 {
-		t.Fatalf("ordinary JSON became context: %q / %+v", text, contexts)
-	}
-	bodyJSON, err := json.Marshal(map[string]string{
-		"type": "caller_context", "label": "Caller-provided context (user data)",
-		"name": "body-as-json", "text": "literal body",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	realJSON, err := json.Marshal(map[string]string{
-		"type": "caller_context", "label": "Caller-provided context (user data)",
-		"name": "Real context", "text": "real body",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	both := []byte(`[{"type":"text","text":` + string(mustJSON(t, string(bodyJSON))) + `},{"type":"text","text":` + string(mustJSON(t, string(realJSON))) + `}]`)
-	text, contexts = taskContextUserContent(both)
-	if text != string(bodyJSON) || len(contexts) != 1 || contexts[0].Name != "Real context" || contexts[0].Text != "real body" {
-		t.Fatalf("envelope-like body was hidden or parsed: %q / %+v", text, contexts)
-	}
-	text, contexts = taskContextUserContent([]byte(`"main only"`))
-	if text != "main only" || len(contexts) != 0 {
-		t.Fatalf("plain content = %q / %+v", text, contexts)
-	}
-}
-
-func mustJSON(t *testing.T, text string) []byte {
-	t.Helper()
-	data, err := json.Marshal(text)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return data
-}
-
 func TestTaskContextAppModalAndReadOnlyHistoryCopy(t *testing.T) {
 	a, ct := taskContextApp(t)
 	if _, err := ct.Context.AddSnippet("Conversation notes", "conversation body"); err != nil {
@@ -286,7 +208,7 @@ func TestTaskContextAppModalAndReadOnlyHistoryCopy(t *testing.T) {
 	a.openConversationTaskContext()
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	for _, want := range []string{"Task context", "Chat: Saki", "Conversation notes", "Close task context"} {
+	for _, want := range []string{"Task context", "Chat: Nagi", "Conversation notes", "Close task context"} {
 		if !tr.HasText(want) {
 			t.Fatalf("conversation modal missing %q: %v", want, tr.Texts())
 		}
@@ -384,40 +306,6 @@ func TestTaskContextRefreshStaysInOwningContactAndIssue(t *testing.T) {
 	}
 }
 
-func TestTaskContextHistoryProjectionUsesOnlyRealEnvelope(t *testing.T) {
-	contextJSON, err := json.Marshal(map[string]string{
-		"type": "caller_context", "label": "Caller-provided context (user data)",
-		"name": "Doc · file /tmp/doc.txt", "text": "history body",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	content, err := json.Marshal([]any{
-		map[string]string{"type": "text", "text": "main prompt"},
-		map[string]string{"type": "text", "text": string(contextJSON)},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	records := []historyRecord{
-		{Offset: 0, Record: journalRecord{Type: "task_started", TaskID: "t1", MessageID: "m1"}},
-		{Offset: 1, Record: journalRecord{Type: "messages", Items: []inputItem{{
-			Type: "message", Role: "user", Content: content,
-		}}}},
-	}
-	projection := parseHistory("s1", records, nil)
-	if len(projection.messages) != 1 || len(projection.messages[0].Context) != 1 {
-		t.Fatalf("projection = %+v", projection)
-	}
-	message := projection.messages[0]
-	if message.Text != "main prompt" || message.Context[0].Text != "history body" || message.Context[0].Name != "Doc · file /tmp/doc.txt" {
-		t.Fatalf("message projection = %+v", message)
-	}
-	if len(projection.entries) != 1 || len(projection.entries[0].Context) != 1 || projection.entries[0].Text != "main prompt" {
-		t.Fatalf("entry projection = %+v", projection.entries)
-	}
-}
-
 func TestTaskContextUnsavedEditorSurvivesContactSwitch(t *testing.T) {
 	a, ct := taskContextApp(t)
 	second := &contact{ID: "second", Name: "Mio", Role: "Assistant"}
@@ -436,7 +324,7 @@ func TestTaskContextUnsavedEditorSurvivesContactSwitch(t *testing.T) {
 }
 
 func TestTaskContextAppPreviewScreenshots(t *testing.T) {
-	dir := os.Getenv("SAKI_PREVIEW_DIR")
+	dir := os.Getenv("NAGI_PREVIEW_DIR")
 	if dir == "" {
 		dir = t.TempDir()
 	}
@@ -519,20 +407,7 @@ func TestTaskContextExecutionFallbackUsesOnlyItsOwnedSession(t *testing.T) {
 	}
 }
 
-func TestTaskContextAutomaticReloadKeepsUnknownIntent(t *testing.T) {
-	a, ct := taskContextApp(t)
-	if _, err := ct.Context.AddSnippet("Keep", "still uncertain"); err != nil {
-		t.Fatal(err)
-	}
-	ct.pendingSend = &pendingSend{Draft: "uncertain", Context: ct.Context.snapshot(), State: "unknown"}
-	ct.SendState = sendIdle // a terminal event may have cleared the state before automatic reload
-	a.applyReload(ct.ID, ct.SessionID, 0, runtimeSession{SessionID: ct.SessionID, State: "idle", Status: "completed"}, nil, "completed", nil, false)
-	if ct.SendState != sendUnknown || ct.pendingSend == nil || ct.pendingSend.State != "unknown" || len(ct.Context.snapshot()) != 1 {
-		t.Fatalf("automatic reload retired unknown intent: state=%v pending=%+v context=%+v", ct.SendState, ct.pendingSend, ct.Context.snapshot())
-	}
-}
-
-func TestTaskContextRestoredSubmittingIntentSurvivesAutomaticReload(t *testing.T) {
+func TestTaskContextRestoredSubmittingIntentRemainsUnknown(t *testing.T) {
 	a, ct := taskContextApp(t)
 	if _, err := ct.Context.AddSnippet("Restored in flight", "crash before reply"); err != nil {
 		t.Fatal(err)
@@ -551,10 +426,6 @@ func TestTaskContextRestoredSubmittingIntentSurvivesAutomaticReload(t *testing.T
 	restored := reloaded.contacts[0]
 	if restored.pendingSend == nil || restored.pendingSend.State != "unknown" || restored.SendState != sendUnknown {
 		t.Fatalf("restored submitting intent was not normalized: state=%v pending=%+v", restored.SendState, restored.pendingSend)
-	}
-	reloaded.applyReload(restored.ID, restored.SessionID, 0, runtimeSession{SessionID: restored.SessionID, State: "idle", Status: "completed"}, nil, "completed", nil, false)
-	if restored.SendState != sendUnknown || restored.pendingSend == nil || restored.pendingSend.State != "unknown" || len(restored.Context.snapshot()) != 1 {
-		t.Fatalf("automatic reload retired restored intent: state=%v pending=%+v context=%+v", restored.SendState, restored.pendingSend, restored.Context.snapshot())
 	}
 }
 
@@ -588,41 +459,13 @@ func TestTaskContextUnknownSendSurvivesStoreRestartWithoutAutoReplay(t *testing.
 	if len(got.Context.snapshot()) != 1 || !strings.Contains(got.SendError, "may have been sent") {
 		t.Fatalf("restart context/error = %+v / %q", got.Context.snapshot(), got.SendError)
 	}
-	if reloaded.rt != nil {
+	if reloaded.pi != nil {
 		t.Fatal("restart unknown state created a runtime or replayed a send")
 	}
 }
 
-func TestTaskContextStoreV6ReadsOldV4WithoutContext(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "contacts.json")
-	legacy := storedState{
-		Version: 4, Selected: "c1",
-		Contacts: []storedContact{{ID: "c1", Name: "Saki", Draft: "old draft"}},
-	}
-	if err := writeStoredState(path, legacy); err != nil {
-		t.Fatal(err)
-	}
-	store, err := openContactStore(path, "/tmp")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(store.state.Contacts) != 1 || store.state.Contacts[0].Draft != "old draft" || len(store.state.Contacts[0].TaskContext) != 0 {
-		t.Fatalf("v4 read = %+v", store.state)
-	}
-	if err := store.save([]*contact{{ID: "c1", Name: "Saki"}}, "c1"); err != nil {
-		t.Fatal(err)
-	}
-	reloaded, err := openContactStore(path, "/tmp")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if reloaded.state.Version != contactStoreVersion {
-		t.Fatalf("old v4 data was not saved as the current version: %d", reloaded.state.Version)
-	}
-}
-
 func TestTaskContextAppIssueAndReadOnlyPreviewScreenshots(t *testing.T) {
-	dir := os.Getenv("SAKI_PREVIEW_DIR")
+	dir := os.Getenv("NAGI_PREVIEW_DIR")
 	if dir == "" {
 		dir = t.TempDir()
 	}
@@ -646,11 +489,9 @@ func TestTaskContextAppIssueAndReadOnlyPreviewScreenshots(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				issue.Executions = []*issueExecution{{
-					ID: "e1", SessionID: "issue-session", TaskID: "t1", MessageID: "m1",
-					Prompt: "Sent issue snapshot", Status: issueExecutionCompleted,
-					Context: []taskContextItem{item},
-				}}
+				attachIssueToolTestExecution(issue)
+				issue.Executions[0].Prompt = "Sent issue snapshot"
+				issue.Executions[0].Context = []taskContextItem{item}
 				issue.WorkSessionID = "issue-session"
 				ct.Issues = []*productIssue{issue}
 				ct.SelectedIssueID = issue.ID
@@ -706,7 +547,7 @@ func TestTaskContextFileChooserReachableForBothOwners(t *testing.T) {
 			}
 			tr.Type("keep-the-manual-path")
 			defer func() {
-				if target.formName != "Latest optional label" || target.formPath != "keep-the-manual-path" || target.count() != 0 || a.selectedContact() != ct || a.rt != nil || string(recoverySavedBytes(t, a.store.path)) != string(stored) {
+				if target.formName != "Latest optional label" || target.formPath != "keep-the-manual-path" || target.count() != 0 || a.selectedContact() != ct || a.pi != nil || string(recoverySavedBytes(t, a.store.path)) != string(stored) {
 					t.Error("file discovery mutated owner, input, snapshots/store or started execution")
 				}
 			}()
@@ -778,7 +619,7 @@ func TestTaskContextChooserDefersReadUntilSaveAndRefresh(t *testing.T) {
 			results <- []string{path}
 			themeImportCompletion(t, callbacks)()
 			tr.Frame()
-			if tc.formPath != path || tc.formName != "Latest edited name" || tc.count() != 0 || tc.formError != nil || string(recoverySavedBytes(t, a.store.path)) != string(before) || a.rt != nil {
+			if tc.formPath != path || tc.formName != "Latest edited name" || tc.count() != 0 || tc.formError != nil || string(recoverySavedBytes(t, a.store.path)) != string(before) || a.pi != nil {
 				t.Fatal("choosing read/saved/dispatched, or lost a later name edit")
 			}
 			if !tr.Focused("Choose UTF-8 file…") {
@@ -931,7 +772,7 @@ func TestTaskContextChooserStaleResultsNeverMutateOrFocus(t *testing.T) {
 				disk := recoverySavedBytes(t, a.store.path)
 				close(release)
 				themeImportCompletion(t, callbacks)()
-				if tc.formName != name || tc.formPath != path || tc.formError != formErr || tc.fileChoiceFailed || tc.focusFileChooser || tc.count() != 0 || a.contextFilePickers != 0 || string(recoverySavedBytes(t, a.store.path)) != string(disk) || a.rt != nil {
+				if tc.formName != name || tc.formPath != path || tc.formError != formErr || tc.fileChoiceFailed || tc.focusFileChooser || tc.count() != 0 || a.contextFilePickers != 0 || string(recoverySavedBytes(t, a.store.path)) != string(disk) || a.pi != nil {
 					t.Fatal("stale chooser changed editor/data/focus or leaked reservation")
 				}
 			})
@@ -1029,7 +870,7 @@ func TestTaskContextChooserKeepsReadAndSaveFailureBoundaries(t *testing.T) {
 				t.Fatal(err)
 			}
 			tr.Frame()
-			if !tc.formOpen || tc.formPath != path || tc.formError == nil || tc.count() != 1 || tc.snapshot()[0] != old || string(recoverySavedBytes(t, a.store.path)) != string(before) || a.rt != nil {
+			if !tc.formOpen || tc.formPath != path || tc.formError == nil || tc.count() != 1 || tc.snapshot()[0] != old || string(recoverySavedBytes(t, a.store.path)) != string(before) || a.pi != nil {
 				t.Fatalf("explicit failed Save lost prior state: %v", tc.formError)
 			}
 		})
@@ -1132,7 +973,7 @@ func TestTaskContextChooserBilingualFormsAndPreviews(t *testing.T) {
 								}
 								bounds["copy"] = contextFileReach(t, tr, msgs.CopyContextTextLabel(), size[0], size[1], 32)
 							}
-							if dir := os.Getenv("SAKI_PREVIEW_DIR"); dir != "" {
+							if dir := os.Getenv("NAGI_PREVIEW_DIR"); dir != "" {
 								if err := os.MkdirAll(dir, 0755); err != nil {
 									t.Fatal(err)
 								}
@@ -1274,10 +1115,10 @@ func TestTaskContextChooserKeyboardAtMinimum(t *testing.T) {
 							if outcome == "selection" {
 								wantPath = path
 							}
-							if calls.Load() != 1 || target.formPath != wantPath || target.formName != "Keep the optional name" || target.formError != originalError || target.count() != 1 || target.snapshot()[0] != original || ct.Draft != draft || !tr.Focused(msgs.TaskContextChooseFile()) || a.contextFilePickers != 0 || a.rt != nil || a.submissionInFlight != 0 || string(recoverySavedBytes(t, a.store.path)) != string(before) {
+							if calls.Load() != 1 || target.formPath != wantPath || target.formName != "Keep the optional name" || target.formError != originalError || target.count() != 1 || target.snapshot()[0] != original || ct.Draft != draft || !tr.Focused(msgs.TaskContextChooseFile()) || a.contextFilePickers != 0 || a.pi != nil || a.submissionInFlight != 0 || string(recoverySavedBytes(t, a.store.path)) != string(before) {
 								t.Fatal("keyboard choice/cancel changed saved material, draft, errors, execution or focus")
 							}
-							if dir := os.Getenv("SAKI_PREVIEW_DIR"); dir != "" {
+							if dir := os.Getenv("NAGI_PREVIEW_DIR"); dir != "" {
 								if err := os.MkdirAll(dir, 0755); err != nil {
 									t.Fatal(err)
 								}

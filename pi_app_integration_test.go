@@ -366,7 +366,7 @@ func (f *piAppFixture) prepare(binding pi.ContextBinding) *piAppRun {
 		ct.PiBinding.Context.Used = true
 		ct.SessionID, ct.SendState, ct.ActiveTaskID = binding.SessionRef, sendSubmitting, ""
 		ct.pendingSend = &pendingSend{Draft: run.params.Text}
-		scope, err := f.app.issueToolNewScope(ct.ID, binding.SessionRef, run.params.RunID+"-turn", false)
+		scope, err := f.app.issueToolNewScope(ct.ID, binding.SessionRef, run.params.RunID+"-turn")
 		if err != nil {
 			return err
 		}
@@ -680,7 +680,7 @@ func TestPiAppScopedDomainTools(t *testing.T) {
 	var foreignScope *IssueToolScope
 	f.onUI(func() error {
 		var err error
-		foreignScope, err = f.app.issueToolNewScope(bID, other.SessionRef, "foreign-conversation-turn", false)
+		foreignScope, err = f.app.issueToolNewScope(bID, other.SessionRef, "foreign-conversation-turn")
 		return err
 	})
 	run := f.prepare(binding)
@@ -2050,7 +2050,6 @@ func TestPiAppConnectionAndConversation(t *testing.T) {
 	}
 	t.Setenv("HOME", root)
 	t.Setenv("TMPDIR", root)
-	t.Setenv("SAKI_TEST_ISSUE_TOOL_HELPER", "")
 	isolateConnectionApp(t, root, payload)
 	storePath := guiStorePath()
 	broken := filepath.Join(root, "broken", "contacts.json")
@@ -2061,7 +2060,7 @@ func TestPiAppConnectionAndConversation(t *testing.T) {
 	if err := os.WriteFile(broken, brokenBytes, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("SAKI_GUI_STORE", broken)
+	t.Setenv("NAGI_GUI_STORE", broken)
 	if _, err := newRuntimeApp(); err == nil {
 		t.Fatal("unreadable existing store was accepted")
 	}
@@ -2069,7 +2068,7 @@ func TestPiAppConnectionAndConversation(t *testing.T) {
 	if err != nil || !bytes.Equal(afterBroken, brokenBytes) {
 		t.Fatalf("unreadable original store changed: %v", err)
 	}
-	t.Setenv("SAKI_GUI_STORE", storePath)
+	t.Setenv("NAGI_GUI_STORE", storePath)
 	app, err := newRuntimeApp()
 	if err != nil {
 		t.Fatal(err)
@@ -2092,7 +2091,7 @@ func TestPiAppConnectionAndConversation(t *testing.T) {
 	})
 	h.click("← Back to workbench")
 	h.onUI(func() error {
-		if err := h.focus("Composer for Saki", true); err != nil {
+		if err := h.focus(locales.In("en").ComposerLabel(app.selectedContact().Name), true); err != nil {
 			return err
 		}
 		h.tester.Type("Keep the offline draft")
@@ -3128,9 +3127,7 @@ func TestPiAppActivitiesAndQuestions(t *testing.T) {
 	}
 	t.Setenv("HOME", root)
 	t.Setenv("TMPDIR", root)
-	t.Setenv("SAKI_TEST_ISSUE_TOOL_HELPER", "")
 	isolateConnectionApp(t, root, payload)
-	t.Setenv("SAKI_GUI_STORE", guiStorePath())
 	app, err := newRuntimeApp()
 	if err != nil {
 		t.Fatal(err)
@@ -3687,19 +3684,12 @@ func TestPiAppActivitiesAndQuestions(t *testing.T) {
 		if issue.Work.SendState != sendSubmitting || execution.PiRun != nil || batch == nil || batch.State != supplementBatchDispatching {
 			return errors.New("open-context gate did not hold the genuine pre-attempt execution and batch")
 		}
-		h.tester.Frame()
-		if _, ok := h.tester.Find(msgs.SupplementCheck()); !ok || !h.tester.HasText(piResultsUnavailable) {
-			return errors.New("the unavailable batch Check was not visible while dispatch was held")
+		if p.count() != beforeCanceledPreparation {
+			return errors.New("held pre-attempt execution made a model request before cancellation")
 		}
-		checkErr := h.tester.Click(msgs.SupplementCheck())
-		h.tester.Frame()
-		if batch.State != supplementBatchDispatching || execution.PiRun != nil || p.count() != beforeCanceledPreparation {
-			return errors.New("unavailable batch Check changed the held execution")
-		}
-		piAppRecord(t, "activity-unavailable-check", map[string]any{"batch_id": batch.ID, "state": batch.State, "click_error": fmt.Sprint(checkErr), "requests": p.count()})
+		piAppRecord(t, "activity-pre-attempt-held", map[string]any{"batch_id": batch.ID, "state": batch.State, "requests": p.count()})
 		return nil
 	})
-	h.screenshot("activity-batch-check-unavailable")
 	h.activateActivity(msgs.WorkCancel(), func() error {
 		ct := app.selectedContact()
 		if ct == nil || ct.ID != h.contactID || ct.SelectedIssueID != issueC || ct.issueView.DetailID != issueC {
@@ -4239,9 +4229,7 @@ func TestPiAppCrashRecoveryNoReplay(t *testing.T) {
 	}
 	t.Setenv("HOME", root)
 	t.Setenv("TMPDIR", root)
-	t.Setenv("SAKI_TEST_ISSUE_TOOL_HELPER", "")
 	isolateConnectionApp(t, root, payload)
-	t.Setenv("SAKI_GUI_STORE", guiStorePath())
 	app, err := newRuntimeApp()
 	if err != nil {
 		t.Fatal(err)
@@ -5074,7 +5062,6 @@ func TestPiAppContextAndResults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("SAKI_TEST_ISSUE_TOOL_HELPER", "")
 	isolateConnectionApp(t, root, payload)
 	app, err := newRuntimeApp()
 	if err != nil {

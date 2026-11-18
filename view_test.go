@@ -12,6 +12,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"github.com/HeimaoLST/Nagi/internal/pi"
 	"github.com/HeimaoLST/Nagi/locales"
 )
 
@@ -19,14 +20,14 @@ func TestViewRendersBothThemes(t *testing.T) {
 	a := testApp(t)
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	for _, want := range []string{"Saki", "Mio", "Ren", "Send", "History", "Settings"} {
+	for _, want := range []string{"Nagi", "Mio", "Ren", "Send", "History", "Settings"} {
 		if !tr.HasText(want) {
 			t.Fatalf("light frame is missing %q", want)
 		}
 	}
 	tr.SetDark(true)
 	tr.Frame()
-	if !tr.HasText("Saki") {
+	if !tr.HasText("Nagi") {
 		t.Fatal("dark frame should render the selected contact")
 	}
 	tr.SetDark(false)
@@ -43,7 +44,7 @@ func TestTitleBarKeepsNavigationOutsideNativeControls(t *testing.T) {
 					a.workspaceOpen = false
 					ct := a.selectedContact()
 					ct.Draft = "keep the titlebar draft"
-					labels := []string{"History", "Composer for Saki", "Chat model", "Send"}
+					labels := []string{"History", "Composer for Nagi", "Chat model", "Send"}
 					closeLabel := ""
 					switch scene {
 					case "collapsed":
@@ -112,7 +113,7 @@ func TestTitleBarChangesKeepComposerAndSettingsFocus(t *testing.T) {
 	tr.SetFocused(true)
 	bar := ui.TitleBar{Height: 38, Left: 80}
 	tr.SetTitleBar(bar)
-	focusComposer(t, tr, "Composer for Saki")
+	focusComposer(t, tr, "Composer for Nagi")
 	tr.Type("draft before fullscreen")
 	work, _ := tr.Find("Work")
 	tr.SetTitleBar(ui.TitleBar{})
@@ -153,7 +154,7 @@ func TestMinimumWindowRenders(t *testing.T) {
 	a := testApp(t)
 	tr := ui.NewTester(a.view, 960, 640)
 	tr.Frame()
-	if !tr.HasText("Send") || !tr.HasText("Saki") {
+	if !tr.HasText("Send") || !tr.HasText("Nagi") {
 		t.Fatal("chat should render at the 960x640 minimum")
 	}
 	a.openSettings()
@@ -190,7 +191,7 @@ func TestComposerCompositionDoesNotSendUntilCommit(t *testing.T) {
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.SetFocused(true)
 	tr.Frame()
-	focusComposer(t, tr, "Composer for Saki")
+	focusComposer(t, tr, "Composer for Nagi")
 	before := len(a.selectedContact().Messages)
 	tr.Compose("你好 Saki", 4)
 	tr.Frame()
@@ -248,14 +249,14 @@ func TestDraftSwitchThroughTester(t *testing.T) {
 	if a.contacts[1].Draft != "draft for mio" {
 		t.Fatalf("Mio draft = %q", a.contacts[1].Draft)
 	}
-	if err := tr.Click("Contact Saki"); err != nil {
+	if err := tr.Click("Contact Nagi"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
 	if a.selected != 0 {
-		t.Fatal("did not switch to Saki")
+		t.Fatal("did not switch to Nagi")
 	}
-	focusComposer(t, tr, "Composer for Saki")
+	focusComposer(t, tr, "Composer for Nagi")
 	tr.Type("saki draft")
 	tr.Frame()
 	if a.contacts[0].Draft != "saki draft" {
@@ -498,8 +499,8 @@ func TestSourceRevealScrollsOnceAndCanMoveAway(t *testing.T) {
 		ct.Messages = append(ct.Messages, &message{ID: a.seq, Kind: msgContact, Text: "filler line"})
 	}
 	a.selectContact(0)
-	a.viewInConversation("saki-h1")
-	a.viewInConversation("saki-h2") // the target is the second revealed entry
+	a.viewInConversation("nagi-h1")
+	a.viewInConversation("nagi-h2")
 	if a.scrollTo != 1 || a.scrollTo != a.revealIndex() {
 		t.Fatalf("reveal should request the entry row once: scrollTo=%d revealIndex=%d", a.scrollTo, a.revealIndex())
 	}
@@ -508,7 +509,7 @@ func TestSourceRevealScrollsOnceAndCanMoveAway(t *testing.T) {
 	if a.scrollTo != -1 {
 		t.Fatalf("scroll request should be consumed by one frame, got %d", a.scrollTo)
 	}
-	if !tr.HasText("Keep Saki as the Rust agent core") {
+	if !tr.HasText("Use Pi for execution and MyGo for the desktop. Each contact keeps its own profile and history.") {
 		t.Fatal("the revealed source should be rendered in the list")
 	}
 	first, last := ct.list.Visible()
@@ -521,17 +522,17 @@ func TestSourceRevealScrollsOnceAndCanMoveAway(t *testing.T) {
 	if a.scrollTo != -1 {
 		t.Fatal("manual scrolling must not re-issue the reveal scroll")
 	}
-	if a.highlight != "saki-h2" {
+	if a.highlight != "nagi-h2" {
 		t.Fatal("the highlight must survive a manual scroll away")
 	}
 }
 
 // TestPreviewImages writes headless preview PNGs for design review. It is
-// inert unless SAKI_PREVIEW_DIR points at a scratch directory.
+// inert unless NAGI_PREVIEW_DIR points at a scratch directory.
 func TestPreviewImages(t *testing.T) {
-	dir := os.Getenv("SAKI_PREVIEW_DIR")
+	dir := os.Getenv("NAGI_PREVIEW_DIR")
 	if dir == "" {
-		t.Skip("set SAKI_PREVIEW_DIR to write native preview PNGs")
+		t.Skip("set NAGI_PREVIEW_DIR to write native preview PNGs")
 	}
 	for _, dark := range []bool{false, true} {
 		theme := "light"
@@ -587,89 +588,32 @@ func writePreviewPNG(t *testing.T, path string, img image.Image) {
 // application and the view together: accepted-but-not-started, started,
 // streaming, tool activity, and completed must not show contradictory text.
 func TestLiveTaskStatesRenderWithoutWaitingConflict(t *testing.T) {
-	ct := &contact{
-		ID: "bound", Name: "Saki", Role: "Assistant", SessionID: "s1", Loaded: true,
-		Status: statusReady, SendState: sendAccepted, ActiveTaskID: "t1", Draft: "hello",
-	}
-	a := &appModel{
-		demo: false, runtimeStatus: runtimeStateReady, scrollTo: -1,
-		workspaceOpen: true, windowWidth: 1040,
-		contacts: []*contact{ct},
-	}
+	a, ct, event := piRunStartedTestApp(t)
+	a.windowWidth = 1040
+	ct.pendingSend = &pendingSend{Draft: "hello", State: "submitting"}
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	openConversationWorkPanel(t, tr)
-	if !tr.HasText("Accepted; waiting for the runtime to start.") {
-		t.Fatal("accepted task should show the pre-start waiting state")
-	}
-
-	a.applyEvent(ct, runtimeEventEnvelope{
-		Version: 1, Type: "event", SessionID: "s1", TaskID: "t1", MessageID: "m1",
-		Event: &runtimeEvent{Type: "task_started"},
-	})
+	a.applyPiEvent(a.connectionGeneration, event)
 	tr.Frame()
-	if tr.HasText("Accepted; waiting for the runtime to start.") {
-		t.Fatal("started task must not keep the pre-start waiting text")
+	if ct.SendState != sendAccepted || !tr.HasText("hello") {
+		t.Fatal("admitted Pi run did not show the submitted message")
 	}
-	if !tr.HasText("Current work") || !tr.HasText("Working") {
-		t.Fatal("started task should show the current work state")
-	}
-
-	a.applyEvent(ct, runtimeEventEnvelope{
-		Version: 1, Type: "event", SessionID: "s1", TaskID: "t1", MessageID: "m1",
-		Event: &runtimeEvent{Type: "response_text_delta", ItemID: "a1", Delta: "Hel"},
-	})
+	event.Name, event.Data = pi.TextDelta, json.RawMessage(`{"text":"Hel"}`)
+	a.applyPiEvent(a.connectionGeneration, event)
 	tr.Frame()
-	if !tr.HasText("Hel") {
-		t.Fatal("streaming delta should render in the conversation")
+	if !tr.HasText("Hel") || ct.ActiveTaskID != event.RunID {
+		t.Fatal("Pi stream did not render while its run remained active")
 	}
-	if !tr.HasText("Current work") || !tr.HasText("Working") {
-		t.Fatal("streaming a message must not end the work state")
-	}
-	a.applyEvent(ct, runtimeEventEnvelope{
-		Version: 1, Type: "event", SessionID: "s1", TaskID: "t1", MessageID: "m1",
-		Event: &runtimeEvent{Type: "response_text", ItemID: "a1", Text: "Hello"},
-	})
+	event.Name, event.Data = pi.RunSettled, json.RawMessage(`{"status":"completed","text":"Hello"}`)
+	a.applyPiEvent(a.connectionGeneration, event)
 	tr.Frame()
-	if !tr.HasText("Hello") || tr.HasText("Hel\n") {
-		t.Fatal("final text should replace the delta projection")
-	}
-
-	a.applyEvent(ct, runtimeEventEnvelope{
-		Version: 1, Type: "event", SessionID: "s1", TaskID: "t1", MessageID: "m1",
-		Event: &runtimeEvent{Type: "tool_started", CallID: "k1", Name: "read", Arguments: `{"path":"probe.txt"}`},
-	})
-	tr.Frame()
-	if !tr.HasText("read") || !tr.HasText("Running") {
-		t.Fatal("tool activity should render in the work panel with its running state")
-	}
-	a.applyEvent(ct, runtimeEventEnvelope{
-		Version: 1, Type: "event", SessionID: "s1", TaskID: "t1", MessageID: "m1",
-		Event: &runtimeEvent{Type: "tool_finished", CallID: "k1", Name: "read", Output: []byte(`{"content":"marker"}`)},
-	})
-	tr.Frame()
-	if !tr.HasText("marker") {
-		t.Fatal("tool output should render in the work panel")
-	}
-
-	a.applyEvent(ct, runtimeEventEnvelope{
-		Version: 1, Type: "event", SessionID: "s1", TaskID: "t1", MessageID: "m1",
-		Event: &runtimeEvent{Type: "task_finished", Status: "completed"},
-	})
-	tr.Frame()
-	if ct.SendState != sendIdle || ct.ActiveTaskID != "" {
-		t.Fatalf("finished state = %+v", ct)
-	}
-	if !tr.HasText("Finished") || len(ct.Messages) != 1 {
-		t.Fatalf("completed work/messages = %+v / %+v", ct.Works, ct.Messages)
-	}
-	if tr.HasText("Accepted; waiting for the runtime to start.") || tr.HasText("Working") {
-		t.Fatal("completed task must not keep waiting/working text")
+	if ct.SendState != sendIdle || ct.ActiveTaskID != "" || !tr.HasText("Hello") || len(ct.Messages) != 2 || ct.Messages[1].Streaming {
+		t.Fatalf("settlement left contradictory chat state: %+v", ct.Messages)
 	}
 }
 
 func TestLiveSendUnknownAfterDisconnectSaysRestart(t *testing.T) {
-	ct := &contact{ID: "bound", Name: "Saki", SessionID: "s1", Loaded: true, SendState: sendUnknown}
+	ct := &contact{ID: "bound", Name: "Nagi", SessionID: "s1", PiBinding: recoveryConversationBinding("bound", "/tmp", "s1"), Loaded: true, SendState: sendUnknown}
 	a := &appModel{demo: false, runtimeStatus: runtimeStateExited, scrollTo: -1, contacts: []*contact{ct}}
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
@@ -681,7 +625,7 @@ func TestLiveSendUnknownAfterDisconnectSaysRestart(t *testing.T) {
 	}
 
 	a.runtimeStatus = runtimeStateReady
-	a.rt = &runtimeClient{}
+	a.pi = &piAppHost{client: &pi.Client{}}
 	tr.Frame()
 	if !tr.HasText(locales.In("en").SendUnknownState()) {
 		t.Fatal("a live connection should keep the Reload instruction")
@@ -718,7 +662,7 @@ func TestLiveSendUnknownAfterDisconnectSaysRestart(t *testing.T) {
 				if !tr.HasText(rawSend) {
 					t.Fatal("unknown-delivery diagnostic cannot be disclosed")
 				}
-				if ct.SendError != rawSend || ct.StatusDetail != rawStatus || ct.SendState != sendUnknown || ct.ActiveTaskID != taskID || ct.SessionID != sessionID || ct.Draft != draft || ct.Messages[0].Text != "original message" || ct.History[0].Text != "original history" || a.rt.nextID != 0 || issue.Executions[0].Status != issueExecutionUnknown {
+				if ct.SendError != rawSend || ct.StatusDetail != rawStatus || ct.SendState != sendUnknown || ct.ActiveTaskID != taskID || ct.SessionID != sessionID || ct.Draft != draft || ct.Messages[0].Text != "original message" || ct.History[0].Text != "original history" || a.contactHistoryInFlight != 0 || issue.Executions[0].Status != issueExecutionUnknown {
 					t.Fatal("disclosure changed unknown state/raw records/history or issued a request")
 				}
 				a.runtimeStatus = runtimeStateReady
@@ -740,7 +684,7 @@ func TestLiveSendUnknownAfterDisconnectSaysRestart(t *testing.T) {
 				if !tr.Focused(msgs.ReloadAction()) {
 					t.Fatal("live Reload is not keyboard reachable")
 				}
-				if ct.SendError != rawSend || ct.StatusDetail != rawStatus || ct.SendState != sendUnknown || ct.Draft != draft || a.rt.nextID != 0 {
+				if ct.SendError != rawSend || ct.StatusDetail != rawStatus || ct.SendState != sendUnknown || ct.Draft != draft || a.contactHistoryInFlight != 0 {
 					t.Fatal("live recovery guidance replayed or rewrote the retained state")
 				}
 			})
@@ -752,8 +696,7 @@ func disconnectedRecoveryTestApp(t *testing.T, cause string) (*appModel, *contac
 	t.Helper()
 	a, ct := workspaceTestApp(t)
 	a.workspaceOpen = false
-	a.runtimeHandshake = true
-	a.rt = &runtimeClient{}
+	a.pi = &piAppHost{client: &pi.Client{}}
 	a.runtimeMaxActiveTasks = 2
 	a.runtimeCapabilitiesLoaded = true
 	ct.ActiveTaskID = "chat-task"
@@ -762,19 +705,19 @@ func disconnectedRecoveryTestApp(t *testing.T, cause string) (*appModel, *contac
 	ct.Draft = "retained unsent draft"
 	ct.Messages = []*message{{Kind: msgUser, Text: "original message"}}
 	ct.History = []historyEntry{{ID: "history-original", Text: "original history"}}
-	issue := &productIssue{ID: "recovery-issue", ContactID: ct.ID, Goal: "Retain original goal", Status: issueStatusInProgress, WorkSessionID: "work-session", Work: issueWorkSession{Loaded: true, ActiveTaskID: "issue-task", SendState: sendAccepted}, Executions: []*issueExecution{{ID: "execution", SessionID: "work-session", TaskID: "issue-task", Status: issueExecutionRunning, Prompt: "original run prompt"}}}
+	issue := &productIssue{ID: "recovery-issue", ContactID: ct.ID, Goal: "Retain original goal", Status: issueStatusInProgress, RequirementsRevision: 1}
+	attachIssueToolTestExecution(issue)
+	issue.Executions[0].Status, issue.Executions[0].Prompt = issueExecutionRunning, "original run prompt"
+	issue.Work = issueWorkSession{Loaded: true, ActiveTaskID: issue.Executions[0].PiRun.RunID, SendState: sendAccepted}
 	ct.Issues = []*productIssue{issue}
 	ct.Works = []*workItem{{TaskID: "chat-task", State: workRunning}, {TaskID: "issue-task", State: workRunning}}
-	switch cause {
-	case "protocol":
-		a.protocolFailed("unsupported runtime protocol version 2")
-	case "exit":
-		a.applyRuntimeExit(nil)
-	default:
-		t.Fatal("unsupported fixture cause")
+	a.pi.onExit(a, pi.ProcessOutcome{})
+	if cause == "protocol" {
+		a.runtimeErr = "Pi worker protocol error"
 	}
-	if ct.SendState != sendUnknown || ct.SendError == "" || issue.Work.SendState != sendUnknown || issue.Work.SendError == "" || issue.Executions[0].Status != issueExecutionUnknown {
-		t.Fatal("actual producer did not establish unknown diagnostics")
+	issue.Work.setSendError("Pi disconnected; activity outcome is unknown.", "send-uncertain", "")
+	if ct.SendState != sendUnknown || ct.SendError == "" || issue.Work.SendState != sendUnknown || issue.Executions[0].Status != issueExecutionUnknown {
+		t.Fatal("Pi exit did not preserve unknown delivery")
 	}
 	return a, ct, issue
 }
@@ -784,20 +727,20 @@ func disconnectedRecoveryTestApp(t *testing.T, cause string) (*appModel, *contac
 // window capture.
 func runtimePreviewApp(scene string) *appModel {
 	bound := &contact{
-		ID: "saki", Name: "Saki", Role: "Assistant", SessionID: "preview-session", Loaded: true,
+		ID: "nagi", Name: "Nagi", Role: "Assistant", SessionID: "preview-session", Loaded: true,
 		Status: statusReady, WorkLabel: "Preparing a reply",
 		Purpose: "Keep earlier decisions in view.", Instructions: "Cite earlier decisions when they shape an answer.",
-		Workspace: "/Users/you/Workspace/saki",
+		Workspace: "/Users/you/Workspace/Nagi",
 		Messages: []*message{
 			{Key: "u1", Kind: msgUser, Text: "Use read to inspect README.md and report its first heading. Do not write files."},
-			{Key: "a1", Kind: msgContact, Text: "The first heading is # Saki."},
+			{Key: "a1", Kind: msgContact, Text: "The first heading is # Nagi."},
 		},
 		Works: []*workItem{{
 			TaskID: "task-preview", MessageID: "message-preview", Prompt: "Use read to inspect README.md and report its first heading.",
 			State: workCompleted,
 			Tools: []*workTool{{
 				CallID: "read-1", Name: "read", Args: `{"path":"README.md"}`,
-				Output:  `{"content":"# Saki\n\nA small agent runtime with a shared core.","start_line":1,"end_line":2}`,
+				Output:  `{"content":"# Nagi\n\nA native MyGo desktop application.","start_line":1,"end_line":2}`,
 				Started: true, Finished: true,
 			}},
 		}},
@@ -832,7 +775,7 @@ func runtimePreviewApp(scene string) *appModel {
 		bound.Works[0].State = workRunning
 		bound.Works[0].Prompt = "Inspect README.md and summarize the project."
 	case "runtime-empty":
-		a.contacts = []*contact{{ID: "saki", Name: "Saki", Role: "Assistant", Status: statusReady}}
+		a.contacts = []*contact{{ID: "nagi", Name: "Nagi", Role: "Assistant", Status: statusReady}}
 		a.selected = 0
 	case "runtime-error":
 		bound.Status = statusAttention
@@ -848,9 +791,9 @@ func runtimePreviewApp(scene string) *appModel {
 }
 
 func TestPreviewRuntimeStates(t *testing.T) {
-	dir := os.Getenv("SAKI_PREVIEW_DIR")
+	dir := os.Getenv("NAGI_PREVIEW_DIR")
 	if dir == "" {
-		t.Skip("set SAKI_PREVIEW_DIR to write runtime-backed headless previews")
+		t.Skip("set NAGI_PREVIEW_DIR to write runtime-backed headless previews")
 	}
 	write := func(scene string, width, height int, dark bool) {
 		theme := "light"
@@ -894,7 +837,7 @@ func TestToolFailureIsVisibleBeforeDetails(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			ct := &contact{ID: "saki", Name: "Saki", Role: "Assistant", Loaded: true}
+			ct := &contact{ID: "nagi", Name: "Nagi", Role: "Assistant", Loaded: true}
 			ct.Works = []*workItem{{
 				TaskID: "t1", State: workRunning,
 				Tools: []*workTool{{CallID: "k1", Name: "bash", Args: `{"command":"false"}`, Output: tc.output, Started: true, Finished: true}},
@@ -957,7 +900,7 @@ func TestComposerInlineContextReturnFocus(t *testing.T) {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if a.aux != "task-context" || !a.composerInlineAux() || !tr.HasText("Chat: Saki") || !tr.HasText("资料一") {
+	if a.aux != "task-context" || !a.composerInlineAux() || !tr.HasText("Chat: Nagi") || !tr.HasText("资料一") {
 		t.Fatalf("inline context = aux=%q panel=%q texts=%v", a.aux, a.composerPanel, tr.Texts())
 	}
 	if err := tr.Click("Close task context"); err != nil {
@@ -1009,7 +952,7 @@ func TestResponsiveComposerAt960WithLoadedSession(t *testing.T) {
 	if a.workOverlay() || !a.avatarRailActive() {
 		t.Fatal("960 should use the avatar three-pane layout")
 	}
-	composer, ok := tr.Find("Composer for Saki")
+	composer, ok := tr.Find("Composer for Nagi")
 	if !ok || composer.W <= 0 || composer.W-4 < 440 {
 		t.Fatalf("960 loaded composer=%+v ok=%v content=%g", composer, ok, composer.W-4)
 	}
@@ -1042,11 +985,11 @@ func TestResponsiveComposerAt960WithLoadedSession(t *testing.T) {
 	}
 
 	a.demo = false
-	a.rt = &runtimeClient{}
+	a.pi = &piAppHost{client: &pi.Client{}}
 	ct.ActiveTaskID = "responsive-loaded-task"
 	ct.Status = statusWorking
 	tr.Frame()
-	composer, ok = tr.Find("Composer for Saki")
+	composer, ok = tr.Find("Composer for Nagi")
 	if !ok || composer.W-4 < 440 {
 		t.Fatalf("960 Stop composer=%+v ok=%v content=%g", composer, ok, composer.W-4)
 	}
@@ -1072,7 +1015,7 @@ func TestComposerKeepsModelScopeAndPrimaryActionAtNarrowCenter(t *testing.T) {
 	if a.workOverlay() {
 		t.Fatal("test setup must keep the three-pane center")
 	}
-	composer, ok := tr.Find("Composer for Saki")
+	composer, ok := tr.Find("Composer for Nagi")
 	if !ok || composer.W <= 0 {
 		t.Fatalf("composer bounds missing: %+v ok=%v", composer, ok)
 	}
@@ -1107,11 +1050,11 @@ func TestComposerKeepsModelScopeAndPrimaryActionAtNarrowCenter(t *testing.T) {
 	a.demo = false
 	a.runtimeStatus = runtimeStateReady
 	a.runtimeCapabilitiesLoaded = true
-	a.rt = &runtimeClient{}
+	a.pi = &piAppHost{client: &pi.Client{}}
 	ct.ActiveTaskID = "conversation-task"
 	ct.Status = statusWorking
 	tr.Frame()
-	composer, ok = tr.Find("Composer for Saki")
+	composer, ok = tr.Find("Composer for Nagi")
 	if !ok || composer.W <= 0 {
 		t.Fatalf("composer bounds missing after stop switch: %+v ok=%v", composer, ok)
 	}
@@ -1128,9 +1071,9 @@ func TestComposerKeepsModelScopeAndPrimaryActionAtNarrowCenter(t *testing.T) {
 }
 
 // TestPreviewComposerTypography always exercises the composer geometry matrix;
-// it writes the review PNGs only when SAKI_PREVIEW_DIR is set.
+// it writes the review PNGs only when NAGI_PREVIEW_DIR is set.
 func TestPreviewComposerTypography(t *testing.T) {
-	dir := os.Getenv("SAKI_PREVIEW_DIR")
+	dir := os.Getenv("NAGI_PREVIEW_DIR")
 	type scene struct {
 		name, draft string
 		context     int
@@ -1163,7 +1106,7 @@ func TestPreviewComposerTypography(t *testing.T) {
 			}
 			if sc.active {
 				a.demo = false
-				a.rt = &runtimeClient{}
+				a.pi = &piAppHost{client: &pi.Client{}}
 				ct.ActiveTaskID = "composer-preview-task"
 				ct.Status = statusWorking
 			}
@@ -1178,7 +1121,7 @@ func TestPreviewComposerTypography(t *testing.T) {
 				}
 				return r
 			}
-			visible("Composer for Saki")
+			visible("Composer for Nagi")
 			visible(contextLabelForTest(sc.context))
 			visible("Chat model")
 			if sc.active {
@@ -1191,7 +1134,7 @@ func TestPreviewComposerTypography(t *testing.T) {
 				t.Fatalf("%s: actual model label missing: %v", sc.name, tr.Texts())
 			}
 			if sc.active && sc.width == 720 {
-				composer := visible("Composer for Saki")
+				composer := visible("Composer for Nagi")
 				context := visible(contextLabelForTest(sc.context))
 				model := visible("Chat model")
 				stop := visible("Stop chat")
@@ -1420,7 +1363,7 @@ func TestRP1ConversationAvailabilityMatrix(t *testing.T) {
 					a.runtimeStatus = state
 					if state == "ready-no-client" {
 						a.runtimeStatus = runtimeStateReady
-						a.rt = nil
+						a.pi = nil
 					}
 					before := recoveryRecordSnapshot(t, ct)
 					tr := recoveryComposerTester(a, 720, 640)
@@ -1499,7 +1442,7 @@ func TestRP1DisclosurePreservesRecords(t *testing.T) {
 				a.closeSettings()
 				a.runtimeStatus = runtimeStateReady
 				tr.Frame()
-				if recoveryRecordSnapshot(t, ct) != before || a.rt.nextID != 0 || a.submissionInFlight != 0 {
+				if recoveryRecordSnapshot(t, ct) != before || a.contactHistoryInFlight != 0 || a.submissionInFlight != 0 {
 					t.Fatal("disclosure/language/navigation/readiness altered original records or issued RPC")
 				}
 			})
@@ -1555,10 +1498,10 @@ func TestComposerDeclaredToolbarKeepsRealEdgeTargets(t *testing.T) {
 						}
 					}
 					items := ct.Context.snapshot()
-					if ct.Draft != "  exact unsaved composer draft 中文  " || len(items) != 1 || items[0].ID != item.ID || items[0].Revision != item.Revision || a.rt != nil || ct.pendingSend != nil || len(ct.Messages) != 0 {
+					if ct.Draft != "  exact unsaved composer draft 中文  " || len(items) != 1 || items[0].ID != item.ID || items[0].Revision != item.Revision || a.pi != nil || ct.pendingSend != nil || len(ct.Messages) != 0 {
 						t.Fatal("edge navigation changed draft/snapshot or admitted execution")
 					}
-					if directory := os.Getenv("SAKI_PREVIEW_DIR"); directory != "" {
+					if directory := os.Getenv("NAGI_PREVIEW_DIR"); directory != "" {
 						name := fmt.Sprintf("composer-declared-%s-%dx%d-dark%t", locale, size[0], size[1], dark)
 						writePreviewPNG(t, filepath.Join(directory, name+".png"), tr.Image())
 						data, _ := json.MarshalIndent(map[string]ui.Rect{"toolbar": bar, "context_target": button}, "", "  ")

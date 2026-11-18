@@ -130,7 +130,6 @@ func TestConnectionRecoveryStatusAndOneClickSettings(t *testing.T) {
 			setup: func(a *appModel, _ *contact) {
 				a.runtimeStatus = runtimeStateExited
 				a.runtimeStage = "Runtime connection"
-				a.connectionLegacy = true
 				a.ensureConnectionForm()
 			},
 			wantHeader: "Not connected",
@@ -214,7 +213,6 @@ func TestConnectionRecoveryStatusAndOneClickSettings(t *testing.T) {
 			name: "legacy connection without current Pi host",
 			setup: func(a *appModel, _ *contact) {
 				a.runtimeStatus = runtimeStateReady
-				a.connectionLegacy = true
 				a.connectionEffective = nil
 			},
 			wantHeader: "Not connected",
@@ -286,7 +284,6 @@ func TestConnectionRecoveryPreservesWorkingAndAttentionStatus(t *testing.T) {
 			ct.Status = tc.status
 			ct.SendState = tc.send
 			a.runtimeStatus = runtimeStateExited
-			a.connectionLegacy = true
 			a.ensureConnectionForm()
 			tr := ui.NewTester(a.view, 1040, 720)
 			tr.Frame()
@@ -372,7 +369,7 @@ func TestRecoveryPresentationTaskFailureDisclosureAndSettings(t *testing.T) {
 			a, ct := workspaceTestApp(t)
 			a.workspaceOpen = false
 			message := "upstream unavailable; API_KEY=never-show-this"
-			raw := taskFailureDetail("model_error", &message)
+			raw := "Model request failed: " + safeDiagnostic(message)
 			ct.StatusDetail = raw
 			ct.Draft = "Keep this unsent text"
 			tr := ui.NewTester(a.view, 1040, 900)
@@ -490,12 +487,11 @@ func TestRecoveryPresentationRendersAndControls(t *testing.T) {
 					case "startup":
 						action = msgs.ConnectionRecoveryOpenSettings()
 						a.runtimeStatus = runtimeStateFailed
-						a.runtimeErrKind = runtimeNoticeHelperMissing
-						a.runtimeErr = "Checked application runtime locations; component absent"
-						a.runtimeStage = "Runtime helper"
+						a.runtimeErr = "The Pi worker could not start."
+						a.runtimeStage = "Runtime startup"
 						tr = ui.NewTester(a.view, size[0], size[1])
 					case "local-save":
-						a.rt = &runtimeClient{}
+						a.pi = presentationPiHost(a)
 						a.runtimeStatus = runtimeStateReady
 						a.localSaveErr = "Controlled local write error; original edits remain in this window."
 						tr = ui.NewTester(a.view, size[0], size[1])
@@ -510,12 +506,12 @@ func TestRecoveryPresentationRendersAndControls(t *testing.T) {
 						action = msgs.SettingsBackAccessible()
 					case "empty-result":
 						message := "Controlled request failure with original bounded details"
-						execution := &issueExecution{ID: "recovery-geometry-run", SessionID: "recovery-geometry-session", TaskID: "recovery-geometry-task",
-							Status: issueExecutionFailed, Detail: taskFailureDetail("model_error", &message)}
-						issue := &productIssue{ID: "recovery-geometry-issue", ContactID: ct.ID, Goal: "Read the saved run failure", Status: issueStatusInProgress,
-							WorkSessionID: execution.SessionID, Work: issueWorkSession{Loaded: true}, Executions: []*issueExecution{execution}}
+						issue := &productIssue{ID: "recovery-geometry-issue", ContactID: ct.ID, Goal: "Read the saved run failure", Status: issueStatusInProgress, RequirementsRevision: 1, Work: issueWorkSession{Loaded: true}}
+						attachIssueToolTestExecution(issue)
+						execution := issue.Executions[0]
+						execution.Status, execution.Detail = issueExecutionFailed, "Model request failed: "+message
 						ct.Issues, ct.SelectedIssueID = []*productIssue{issue}, issue.ID
-						a.rt = nil
+						a.pi = nil
 						recoveryTestStore(t, a)
 						a.openIssueResult(issue.ID, execution.ID)
 						tr = ui.NewTester(a.view, size[0], size[1])
@@ -583,7 +579,7 @@ func TestC8UnavailableDataRestoreEntryKeepsOriginalFile(t *testing.T) {
 		t.Fatal("corrupt canonical file unexpectedly loaded")
 	}
 	a := newUnavailableApp(loadErr)
-	if a.store != nil || a.storeInitAllowed || a.rt != nil || a.localSaveErr != "" || a.runtimeStage != startupStageLocalStore {
+	if a.store != nil || a.storeInitAllowed || a.pi != nil || a.localSaveErr != "" || a.runtimeStage != startupStageLocalStore {
 		t.Fatal("actual unavailable-store startup did not remain quiescent and fail-closed")
 	}
 	ct := a.selectedContact()
@@ -597,7 +593,7 @@ func TestC8UnavailableDataRestoreEntryKeepsOriginalFile(t *testing.T) {
 		if readErr != nil || len(entries) != 1 || entries[0].Name() != "contacts.json" {
 			t.Error("restore navigation created replacement/configuration/archive files before confirmation")
 		}
-		if a.rt != nil || a.runtimeHelperChecked || a.connectionSaved != nil || a.connectionEffective != nil || a.connectionSaveInFlight || a.connectionApplying || a.connectionTesting || a.submissionInFlight != 0 || a.shutdownStarted {
+		if a.pi != nil || a.connectionSaved != nil || a.connectionEffective != nil || a.connectionSaveInFlight || a.connectionApplying || a.connectionTesting || a.submissionInFlight != 0 || a.shutdownStarted {
 			t.Error("restore entry saved/applied/tested a connection or started execution/shutdown")
 		}
 	}()
@@ -658,7 +654,7 @@ func TestC8RecoveryOutcomePresentationUsesOutcomeWithError(t *testing.T) {
 					if outcome == "unconfirmed" {
 						summary = msgs.RecoveryUnconfirmed()
 					}
-					if !tr.HasText(summary) || tr.HasText(s.problem) || tr.HasText(string(result.Outcome)) || a.store != nil || a.storeInitAllowed || a.rt != nil {
+					if !tr.HasText(summary) || tr.HasText(s.problem) || tr.HasText(string(result.Outcome)) || a.store != nil || a.storeInitAllowed || a.pi != nil {
 						t.Fatal("outcome/error was misrepresented or details leaked/activated app")
 					}
 					name := fmt.Sprintf("%s-%d-%s", locale, size[0], outcome)

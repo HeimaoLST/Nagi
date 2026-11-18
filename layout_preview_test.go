@@ -15,11 +15,11 @@ import (
 // TestPreviewAdjustableLayout is an opt-in headless matrix for the global
 // workbench layout. It is not native drag or native window evidence.
 func TestPreviewAdjustableLayout(t *testing.T) {
-	dir := os.Getenv("SAKI_PREVIEW_DIR")
+	dir := os.Getenv("NAGI_PREVIEW_DIR")
 	if dir == "" {
-		t.Skip("set SAKI_PREVIEW_DIR to write adjustable-layout previews")
+		t.Skip("set NAGI_PREVIEW_DIR to write adjustable-layout previews")
 	}
-	if os.Getenv("SAKI_PREVIEW_RESPONSIVE_ONLY") != "1" {
+	if os.Getenv("NAGI_PREVIEW_RESPONSIVE_ONLY") != "1" {
 		scenes := []string{"closed", "open", "dragged"}
 		for _, dark := range []bool{false, true} {
 			theme := "light"
@@ -91,9 +91,9 @@ func writeResponsiveBoundaryPreviews(t *testing.T, dir string) {
 }
 
 func TestPreviewHeaderGrouping(t *testing.T) {
-	dir := os.Getenv("SAKI_PREVIEW_DIR")
+	dir := os.Getenv("NAGI_PREVIEW_DIR")
 	if dir == "" {
-		t.Skip("set SAKI_PREVIEW_DIR for the bounded header grouping previews")
+		t.Skip("set NAGI_PREVIEW_DIR for the bounded header grouping previews")
 	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
@@ -126,7 +126,7 @@ func TestPreviewHeaderGrouping(t *testing.T) {
 		writePreviewPNG(t, filepath.Join(dir, name), img)
 	}
 	write("header-960-light-ready.png", "en", "Assistant", false, func(a *appModel, _ *contact) {
-		a.rt = &runtimeClient{}
+		a.pi = presentationPiHost(a)
 		a.runtimeStatus = runtimeStateReady
 	})
 	write("header-960-dark-not-connected.png", "en", "Assistant", true, func(a *appModel, _ *contact) {
@@ -138,15 +138,15 @@ func TestPreviewHeaderGrouping(t *testing.T) {
 		a.ensureConnectionForm()
 	})
 	write("header-960-dark-en-XA-long-role.png", "en-XA", longRole, true, func(a *appModel, _ *contact) {
-		a.rt = &runtimeClient{}
+		a.pi = presentationPiHost(a)
 		a.runtimeStatus = runtimeStateReady
 	})
 }
 
 func TestPreviewUnifiedTitleBar(t *testing.T) {
-	dir := os.Getenv("SAKI_PREVIEW_DIR")
+	dir := os.Getenv("NAGI_PREVIEW_DIR")
 	if dir == "" {
-		t.Skip("set SAKI_PREVIEW_DIR for headless titlebar previews")
+		t.Skip("set NAGI_PREVIEW_DIR for headless titlebar previews")
 	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
@@ -222,7 +222,7 @@ func TestWorkbenchRoleScenesKeepActionsReachable(t *testing.T) {
 						tr.SetDark(dark)
 						tr.Frame()
 						name := fmt.Sprintf("workbench-%s-%s-%dx%d-dark%t", scene, locale, size[0], size[1], dark)
-						if directory := os.Getenv("SAKI_PREVIEW_DIR"); directory != "" {
+						if directory := os.Getenv("NAGI_PREVIEW_DIR"); directory != "" {
 							writePreviewPNG(t, filepath.Join(directory, name+"-top.png"), tr.Image())
 						}
 						var target ui.Rect
@@ -239,13 +239,13 @@ func TestWorkbenchRoleScenesKeepActionsReachable(t *testing.T) {
 						if !visible {
 							t.Fatalf("%s is not reachable with a full target in %s: %v", label, name, tr.Texts())
 						}
-						if ct.Draft != "  keep this unsaved text 中文  " || ct.Instructions != "  exact profile instruction\n第二行  " || a.selectedContact() != ct || a.rt != nil || ct.pendingSend != nil {
+						if ct.Draft != "  keep this unsaved text 中文  " || ct.Instructions != "  exact profile instruction\n第二行  " || a.selectedContact() != ct || a.pi != nil || ct.pendingSend != nil {
 							t.Fatal("presentation changed owner/drafts or admitted execution")
 						}
 						if scene == "task-context" && (ct.Context.formName != "A draft name 中文" || ct.Context.formPath != "/tmp/Unicode folder/未读取的 draft source.svg" || ct.Context.count() != 0) {
 							t.Fatal("rendering read, saved or normalized a file draft")
 						}
-						if directory := os.Getenv("SAKI_PREVIEW_DIR"); directory != "" {
+						if directory := os.Getenv("NAGI_PREVIEW_DIR"); directory != "" {
 							writePreviewPNG(t, filepath.Join(directory, name+"-reachable.png"), tr.Image())
 							data, _ := json.MarshalIndent(map[string]any{"label": label, "target": target, "width": size[0], "height": size[1], "owner_and_drafts_retained": true}, "", "  ")
 							if err := os.WriteFile(filepath.Join(directory, name+".json"), data, 0600); err != nil {

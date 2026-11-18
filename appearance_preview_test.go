@@ -95,7 +95,7 @@ func TestPreferenceControlFacesKeepHitAndKeyboard(t *testing.T) {
 				}
 				tr.Key(0, ui.KeyEscape)
 				tr.Frame()
-				if directory := os.Getenv("SAKI_PREVIEW_DIR"); directory != "" {
+				if directory := os.Getenv("NAGI_PREVIEW_DIR"); directory != "" {
 					name := fmt.Sprintf("shared-controls-%d-dark-%t", width, dark)
 					writePreviewPNG(t, filepath.Join(directory, name+".png"), tr.Image())
 					data, err := json.MarshalIndent(bounds, "", "  ")
@@ -155,7 +155,7 @@ func TestPreferenceControlShapeReferenceFrames(t *testing.T) {
 					if !ok || box.H < 32 || box.X < 0 || box.X+box.W > float32(width+40) {
 						t.Fatalf("reference control lost its actual bounded interaction box: %+v", box)
 					}
-					if directory := os.Getenv("SAKI_PREVIEW_DIR"); directory != "" {
+					if directory := os.Getenv("NAGI_PREVIEW_DIR"); directory != "" {
 						writePreviewPNG(t, filepath.Join(directory, name+".png"), tr.Image())
 						data, err := json.MarshalIndent(map[string]any{"hit": box, "face": ui.Rect{X: box.X, Y: box.Y + 2, W: box.W, H: box.H - 4}, "region": region, "state": state, "actual_focus": tr.Focused(name), "actual_input": region == 16, "diagnostic": "Region8 isolates the shared face; region16 is the production TextInputBase path. Native/browser text raster is not compared."}, "", "  ")
 						if err != nil {
@@ -257,7 +257,7 @@ func TestPreferenceInputScrolledSelectionKeepsFaceBorder(t *testing.T) {
 				if !active || caret.X < box.X+12 || caret.X+caret.W > box.X+box.W-12+.5 {
 					t.Errorf("caret escaped the same editable content box: caret=%+v input=%+v", caret, box)
 				}
-				if directory := os.Getenv("SAKI_PREVIEW_DIR"); directory != "" {
+				if directory := os.Getenv("NAGI_PREVIEW_DIR"); directory != "" {
 					writePreviewPNG(t, filepath.Join(directory, name+".png"), tr.Image())
 					data, err := json.MarshalIndent(map[string]any{"hit": box, "face": ui.Rect{X: box.X, Y: box.Y + 2, W: box.W, H: 28}, "caret": caret, "changed_border_and_inset_pixels": changed, "raw_text_and_clipboard_preserved": value == text && tr.Clipboard() == text}, "", "  ")
 					if err != nil {
@@ -541,7 +541,7 @@ func TestWorkbenchIconRolesKeepTargetsFocusAndNeighbors(t *testing.T) {
 				if value != "  中文 exact\nsecond line  !" || !tr.Focused("Exact multiline draft") {
 					t.Fatalf("form face stole focus or changed raw text: %q", value)
 				}
-				if directory := os.Getenv("SAKI_PREVIEW_DIR"); directory != "" {
+				if directory := os.Getenv("NAGI_PREVIEW_DIR"); directory != "" {
 					name := fmt.Sprintf("shared-workbench-%d-dark%t", width, dark)
 					writePreviewPNG(t, filepath.Join(directory, name+".png"), tr.Image())
 					data, _ := json.MarshalIndent(bounds, "", "  ")

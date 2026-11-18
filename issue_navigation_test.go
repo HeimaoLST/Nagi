@@ -556,7 +556,7 @@ func TestIssuePrimaryActionsAndPersistentLifecycle(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			a, ct := workspaceTestApp(t)
 			a.windowWidth = 1040
-			a.rt = &runtimeClient{}
+			a.pi = presentationPiHost(a)
 			a.runtimeCapabilitiesLoaded = true
 			a.runtimeMaxActiveTasks = 2
 			tc.issue.ContactID = ct.ID
@@ -641,7 +641,7 @@ func TestIssuePrimaryActionsAndPersistentLifecycle(t *testing.T) {
 func TestPrimaryReadReturnFocusConsumesExactResultOwner(t *testing.T) {
 	a, ct := workspaceTestApp(t)
 	a.windowWidth = 1040
-	a.rt = nil
+	a.pi = nil
 	issue := &productIssue{ID: "issue-primary-read", ContactID: ct.ID, Goal: "Primary readable result",
 		Status: issueStatusCompleted, Evidence: "user completed",
 		Executions: []*issueExecution{{ID: "run-primary-read", TaskID: "task-primary-read", Status: issueExecutionCompleted}},

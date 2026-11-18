@@ -12,7 +12,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
 CONTROL = REPO / 'connection_native_integration_test.go'
-CONTROL_SHA = '199a9202f335d481dfd09d90b55139ad002fd368b2d7f8cb91ed129f6a371091'
+CONTROL_SHA = '0c5c774176ec58f42cddff15391f832d4497bce7ed1224428431a3a1ad24f3e1'
 SELECTOR = '^TestConnectionNativeSecureControlE2E$'
 
 
@@ -169,7 +169,7 @@ def launch(output, case):
     if build_record['helper_exit_code'] != 0 or not build_record['inputs_unchanged'] or sha(Path(case['executable'])) != build_record['executable_sha256']:
         raise ValueError('build failed or the signed executable changed')
     env = os.environ.copy()
-    for name in ('SAKI_TEST_RUNTIME_BIN', 'SAKI_TEST_ISSUE_TOOL_HELPER', 'NAGI_CONNECTION_API_KEY', 'MYGO_GENERATE'):
+    for name in ('NAGI_GUI_STORE', 'NAGI_GUI_WORKDIR', 'NAGI_CONNECTION_API_KEY', 'MYGO_GENERATE'):
         env.pop(name, None)
     env.update(NAGI_NATIVE_CONTROL_DIR=str(output), MYGO_LOCALE='en', TMPDIR=str(output / 'tmp'))
     write_json(output / 'native-env.json', {name: env[name] for name in ('NAGI_NATIVE_CONTROL_DIR', 'MYGO_LOCALE', 'TMPDIR')})

@@ -481,7 +481,7 @@ func TestTaskContextEmptyFilePreviewCopyAndRefresh(t *testing.T) {
 }
 
 func TestTaskContextHeadlessPreviews(t *testing.T) {
-	dir := os.Getenv("SAKI_PREVIEW_DIR")
+	dir := os.Getenv("NAGI_PREVIEW_DIR")
 	if dir == "" {
 		dir = t.TempDir()
 	}

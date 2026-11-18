@@ -130,9 +130,9 @@ func TestConnectionProtocolSegmentedKeepsDraftAndBusyGate(t *testing.T) {
 }
 
 func TestPreviewConnectionSettings(t *testing.T) {
-	dir := os.Getenv("SAKI_PREVIEW_DIR")
+	dir := os.Getenv("NAGI_PREVIEW_DIR")
 	if dir == "" {
-		t.Skip("set SAKI_PREVIEW_DIR for connection form previews")
+		t.Skip("set NAGI_PREVIEW_DIR for connection form previews")
 	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
@@ -401,7 +401,7 @@ func TestRecoveryPresentationExplicitTestUsesDraftAndDisclosesFailure(t *testing
 					t.Fatal(err)
 				}
 				tr.Frame()
-				if len(tested) != 2 || tested[1] != current || s.RecoveryDetailsOpen || s.Draft.Model != current.Model || s.initial != initial || !s.HasSaved || !s.SavedPending || recoveryRecordSnapshot(t, ct) != before || saves != 0 || applies != 0 || saveApplies != 0 || a.rt.nextID != 0 {
+				if len(tested) != 2 || tested[1] != current || s.RecoveryDetailsOpen || s.Draft.Model != current.Model || s.initial != initial || !s.HasSaved || !s.SavedPending || recoveryRecordSnapshot(t, ct) != before || saves != 0 || applies != 0 || saveApplies != 0 || a.submissionInFlight != 0 {
 					t.Fatal("second explicit Test did not consume the edited complete form once or preserve app/history state")
 				}
 			})

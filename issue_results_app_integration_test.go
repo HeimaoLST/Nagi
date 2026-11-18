@@ -98,7 +98,6 @@ func TestIssueResultPageReloadErrorKeepsReadableBody(t *testing.T) {
 		Open: true, OwnerContactID: ct.ID, IssueID: "issue-reload", ExecutionID: "exec-reload",
 		SessionID: "session-reload", TaskID: "task-reload", MessageID: "msg-reload", Generation: 3,
 		LoadError: "Execution history is unavailable: injected",
-		Notice:    "Runtime session working directory is unavailable; file paths are shown as reported.",
 		Panel: issueResultPanelState{
 			RunNumber: 2, RunGoal: "Reload error", RunStatus: issueExecutionCompleted,
 			Response: "previous readable body\n", Files: []issueResultFile{file},
@@ -213,7 +212,7 @@ func TestIssueResultReaderActionsFollowLocale(t *testing.T) {
 }
 
 func TestIssueResultAppPreviewsAlwaysWriteHeadlessPNGs(t *testing.T) {
-	dir := os.Getenv("SAKI_PREVIEW_DIR")
+	dir := os.Getenv("NAGI_PREVIEW_DIR")
 	if dir == "" {
 		dir = t.TempDir()
 	}
@@ -377,7 +376,7 @@ func TestIssueResultAppEmptyStateShowsHonestPanelControls(t *testing.T) {
 
 func TestRecoveryPresentationEmptyResultUsesActualSettingsRoute(t *testing.T) {
 	message := "upstream refused the request"
-	raw := taskFailureDetail("model_error", &message)
+	raw := "Model request failed: " + message
 	a, ct, issue, execution := attentionDisclosureApp(t, issueExecutionFailed, raw)
 	a.openIssueResult(issue.ID, execution.ID)
 	tr := ui.NewTester(func(c *ui.Context) {
@@ -408,7 +407,7 @@ func TestRecoveryPresentationEmptyResultUsesActualSettingsRoute(t *testing.T) {
 		t.Fatal(err)
 	}
 	settings.Frame()
-	if a.settingsTab != settingsTabConnection || a.rt != nil || ct.SendState != sendIdle || a.issueResult.Panel.RunDetail != raw {
+	if a.settingsTab != settingsTabConnection || a.pi != nil || ct.SendState != sendIdle || a.issueResult.Panel.RunDetail != raw {
 		t.Fatal("ordinary result-to-connection route changed records or executed work")
 	}
 }
@@ -503,7 +502,7 @@ func TestIssueAttentionDisclosureVisibleAtMinimumAndDefaultSize(t *testing.T) {
 						geometry[label] = r
 					}
 					t.Logf("reachable entry=%q disclosure=%q size=%dx%d issue=%s", entry, msgs.DetailsAction(), size[0], size[1], issue.ID)
-					if dir := os.Getenv("SAKI_PREVIEW_DIR"); dir != "" {
+					if dir := os.Getenv("NAGI_PREVIEW_DIR"); dir != "" {
 						name := fmt.Sprintf("ad-visible-%s-%dx%d-%s", locale, size[0], size[1], surface)
 						writePreviewPNG(t, filepath.Join(dir, name+".png"), tr.Image())
 						data, err := json.MarshalIndent(geometry, "", "  ")
@@ -538,9 +537,7 @@ func TestIssueAttentionDisclosureSaveRetryDoesNotAcknowledgeRollback(t *testing.
 	if execution.AttentionSeenStatus != "" || a.localSaveErr == "" || !a.issueWorkNotice(a.selectedContact()).Attention || !tr.HasText(execution.Detail) {
 		t.Fatal("failed seen write did not roll back with the disclosed reason and local error")
 	}
-	page := a.issueResult
-	a.applyIssueResultLoaded(nil, 0, page.Generation, page.OwnerContactID, issue.ID, execution.ID,
-		page.SessionID, page.TaskID, issueResultDerivation{}, "retained result body", "")
+	a.issueResult.Panel.Response = "retained result body"
 	tr.Frame()
 	if execution.AttentionSeenStatus != "" || a.localSaveErr == "" {
 		t.Fatal("background result acknowledged or cleared local error")
@@ -586,7 +583,7 @@ func TestIssueAttentionRetainedResultScrollShowsInterruptedTarget(t *testing.T) 
 		for _, size := range [][2]int{{720, 640}, {1040, 720}} {
 			for _, entry := range []string{"open-long-goal", "reload-response", "reload-long-goal"} {
 				t.Run(fmt.Sprintf("%s/%dx%d/%s", locale, size[0], size[1], entry), func(t *testing.T) {
-					a, ct, issue, execution := attentionDisclosureApp(t, issueExecutionCompleted, "")
+					a, _, issue, execution := attentionDisclosureApp(t, issueExecutionCompleted, "")
 					a.windowWidth = size[0]
 					if err := a.persist(); err != nil {
 						t.Fatal(err)
@@ -597,9 +594,7 @@ func TestIssueAttentionRetainedResultScrollShowsInterruptedTarget(t *testing.T) 
 					msgs := locales.In(locale)
 					clickAfterBoundedScroll(t, tr, msgs.WorkReadResult(), size[0], size[1])
 					tr.Frame()
-					page := a.issueResult
-					a.applyIssueResultLoaded(nil, a.connectionGeneration, page.Generation, ct.ID, issue.ID, execution.ID, execution.SessionID, execution.TaskID,
-						issueResultDerivation{}, strings.Repeat("Recorded response paragraph.\n\n", 100), "")
+					a.issueResult.Panel.Response = strings.Repeat("Recorded response paragraph.\n\n", 100)
 					tr.Frame()
 					tr.Scroll(float32(size[0]/2), float32(size[1]/2), 0, 300)
 					tr.Frame()
@@ -632,7 +627,7 @@ func TestIssueAttentionRetainedResultScrollShowsInterruptedTarget(t *testing.T) 
 					}
 					seen := saved.state.Issues[0].Executions[0].AttentionSeenStatus
 					attentionTargetEvidence(t, tr, fmt.Sprintf("result-%s-%d-%s", locale, size[0], entry), issueExecutionText(msgs, execution.Status), execution.Detail, seen, before, a.issueResultScroll.Y, size[0], size[1])
-					if seen != issueExecutionInterrupted || execution.AttentionSeenStatus != seen || a.issueResult.ExecutionID != execution.ID || a.rt != nil || a.resultInFlight != 0 {
+					if seen != issueExecutionInterrupted || execution.AttentionSeenStatus != seen || a.issueResult.ExecutionID != execution.ID || a.pi != nil || a.resultInFlight != 0 {
 						t.Fatal("result entry lost current identity/persisted seen or started Runtime work")
 					}
 				})
@@ -648,7 +643,7 @@ func TestIssueAttentionVisibleTargetKeepsOrdinaryReloadPosition(t *testing.T) {
 			if kind == "completed" {
 				status, reason = issueExecutionCompleted, ""
 			}
-			a, ct, issue, execution := attentionDisclosureApp(t, status, reason)
+			a, _, _, execution := attentionDisclosureApp(t, status, reason)
 			if kind == "seen-interrupted" {
 				execution.AttentionSeenStatus = status
 			}
@@ -659,9 +654,8 @@ func TestIssueAttentionVisibleTargetKeepsOrdinaryReloadPosition(t *testing.T) {
 			tr.Frame()
 			clickAfterBoundedScroll(t, tr, "Read latest result", 1040, 720)
 			tr.Frame()
-			page := a.issueResult
 			response := strings.Repeat("Recorded readable response.\n\n", 100)
-			a.applyIssueResultLoaded(nil, a.connectionGeneration, page.Generation, ct.ID, issue.ID, execution.ID, execution.SessionID, execution.TaskID, issueResultDerivation{}, response, "")
+			a.issueResult.Panel.Response = response
 			tr.Frame()
 			tr.Scroll(520, 360, 0, 300)
 			tr.Frame()
@@ -673,8 +667,6 @@ func TestIssueAttentionVisibleTargetKeepsOrdinaryReloadPosition(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			page = a.issueResult
-			a.applyIssueResultLoaded(nil, a.connectionGeneration, page.Generation, ct.ID, issue.ID, execution.ID, execution.SessionID, execution.TaskID, issueResultDerivation{}, response, "")
 			tr.Frame()
 			if a.issueResultScroll.Y != before {
 				t.Fatal("passive result completion repositioned the view")
@@ -687,7 +679,7 @@ func TestIssueAttentionVisibleTargetKeepsOrdinaryReloadPosition(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if a.issueResultScroll.Y != before || string(saved) != string(after) || a.rt != nil || a.resultInFlight != 0 || a.issueResult.Panel.Response != response {
+			if a.issueResultScroll.Y != before || string(saved) != string(after) || a.pi != nil || a.resultInFlight != 0 || a.issueResult.Panel.Response != response {
 				t.Fatal("ordinary reload scrolled, persisted seen, altered the readable body or started Runtime work")
 			}
 		})

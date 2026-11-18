@@ -3,18 +3,18 @@ package main
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
 
+	"github.com/HeimaoLST/Nagi/internal/pi"
 	"github.com/HeimaoLST/Nagi/locales"
 )
 
 func workspaceTestApp(t *testing.T) (*appModel, *contact) {
 	t.Helper()
-	ct := &contact{ID: "saki", Name: "Saki", Role: "Assistant", SessionID: "s1", Loaded: true}
+	ct := &contact{ID: "nagi", Name: "Nagi", Role: "Assistant", SessionID: "s1", PiBinding: recoveryConversationBinding("nagi", "/tmp", "s1"), Loaded: true}
 	a := &appModel{
 		demo: false, runtimeStatus: runtimeStateReady, workspaceOpen: true,
 		windowWidth: 1040, scrollTo: -1, contacts: []*contact{ct},
@@ -134,172 +134,25 @@ func TestIssueOverviewContentHasPanelInset(t *testing.T) {
 			})
 		}
 	}
-	if dir := os.Getenv("SAKI_PREVIEW_DIR"); dir != "" {
+	if dir := os.Getenv("NAGI_PREVIEW_DIR"); dir != "" {
 		writeIssueOverviewInsetPreviews(t, dir)
 	}
 }
 
-func TestWorkProjectionKeepsTextAndToolsSeparate(t *testing.T) {
-	a, ct := workspaceTestApp(t)
-	other := &contact{ID: "mio", Name: "Mio", Role: "Assistant"}
-	a.contacts = append(a.contacts, other)
-
-	a.applyEvent(ct, runtimeEventEnvelope{
-		Version: 1, Type: "event", SessionID: "s1", TaskID: "t1", MessageID: "m1",
-		Event: &runtimeEvent{Type: "task_started"},
-	})
-	a.applyEvent(ct, runtimeEventEnvelope{
-		Version: 1, Type: "event", SessionID: "s1", TaskID: "t1", MessageID: "m1",
-		Event: &runtimeEvent{Type: "tool_started", CallID: "k1", Name: "read", Arguments: `{"path":"README.md"}`},
-	})
-	a.applyEvent(ct, runtimeEventEnvelope{
-		Version: 1, Type: "event", SessionID: "s1", TaskID: "t1", MessageID: "m1",
-		Event: &runtimeEvent{Type: "tool_finished", CallID: "k1", Name: "read", Output: []byte(`{"content":"marker"}`)},
-	})
-	if len(ct.Messages) != 0 {
-		t.Fatalf("tool-only work created chat messages: %+v", ct.Messages)
-	}
-	if len(ct.Works) != 1 || len(ct.Works[0].Tools) != 1 {
-		t.Fatalf("work projection = %+v", ct.Works)
-	}
-	if ct.Works[0].Tools[0].Output != `{"content":"marker"}` || !ct.Works[0].Tools[0].Finished {
-		t.Fatalf("tool = %+v", ct.Works[0].Tools[0])
-	}
-
-	a.applyEvent(ct, runtimeEventEnvelope{
-		Version: 1, Type: "event", SessionID: "s1", TaskID: "t1", MessageID: "m1",
-		Event: &runtimeEvent{Type: "response_text_delta", ItemID: "a1", Delta: "Hel"},
-	})
-	if ct.Works[0].State != workRunning || len(ct.Messages) != 1 || ct.Messages[0].Text != "Hel" {
-		t.Fatalf("text during work changed state/projection: work=%+v messages=%+v", ct.Works[0], ct.Messages)
-	}
-	a.applyEvent(ct, runtimeEventEnvelope{
-		Version: 1, Type: "event", SessionID: "s1", TaskID: "t1", MessageID: "m1",
-		Event: &runtimeEvent{Type: "response_text", ItemID: "a1", Text: "Hello"},
-	})
-	if len(ct.Messages) != 1 || ct.Messages[0].Text != "Hello" || ct.Works[0].State != workRunning {
-		t.Fatalf("final text aggregated incorrectly: messages=%+v work=%+v", ct.Messages, ct.Works[0])
-	}
-	a.applyEvent(ct, runtimeEventEnvelope{
-		Version: 1, Type: "event", SessionID: "s1", TaskID: "t1", MessageID: "m1",
-		Event: &runtimeEvent{Type: "task_finished", Status: "completed"},
-	})
-	if len(ct.Messages) != 1 || ct.Works[0].State != workCompleted {
-		t.Fatalf("no-message finish added a bubble or lost work: messages=%d work=%+v", len(ct.Messages), ct.Works[0])
-	}
-}
-
-func TestUnreadOnlyForNewAgentMessages(t *testing.T) {
-	a, ct := workspaceTestApp(t)
-	a.selected = 1
-	a.contacts = append(a.contacts, &contact{ID: "mio", Name: "Mio", Role: "Assistant"})
-	ct.ActiveTaskID = "t1"
-	ct.LastTaskID = "t1"
-	a.ensureWork(ct, "t1", "m1")
-	ct.Messages = nil
-
-	a.applyEvent(ct, runtimeEventEnvelope{
-		Version: 1, Type: "event", SessionID: "s1", TaskID: "t1", MessageID: "m1",
-		Event: &runtimeEvent{Type: "response_text_delta", ItemID: "a1", Delta: "hello"},
-	})
-	a.applyEvent(ct, runtimeEventEnvelope{
-		Version: 1, Type: "event", SessionID: "s1", TaskID: "t1", MessageID: "m1",
-		Event: &runtimeEvent{Type: "response_text", ItemID: "a1", Text: "hello"},
-	})
-	if ct.Unread != 1 {
-		t.Fatalf("new agent message unread = %d, want 1", ct.Unread)
-	}
-	a.applyEvent(ct, runtimeEventEnvelope{
-		Version: 1, Type: "event", SessionID: "s1", TaskID: "t1", MessageID: "m1",
-		Event: &runtimeEvent{Type: "task_finished", Status: "completed"},
-	})
-	if ct.Unread != 1 {
-		t.Fatalf("task finish changed chat unread: %d", ct.Unread)
-	}
-}
-
-func TestLateAndStopEventsDoNotCrossTasks(t *testing.T) {
-	a, ct := workspaceTestApp(t)
-	ct.ActiveTaskID = "t1"
-	ct.LastTaskID = "t1"
-	w := a.ensureWork(ct, "t1", "m1")
-	w.State = workRunning
-	a.applyCancelResult(ct.ID, "t2", "requested", nil)
-	if w.State != workRunning {
-		t.Fatal("cancel for another task changed current work")
-	}
-	a.applyCancelResult(ct.ID, "t1", "requested", nil)
-	if w.State != workStopping {
-		t.Fatalf("cancel state = %q, want stopping", w.State)
-	}
-	a.applyEvent(ct, runtimeEventEnvelope{
-		Version: 1, Type: "event", SessionID: "s1", TaskID: "t1", MessageID: "m1",
-		Event: &runtimeEvent{Type: "task_finished", Status: "interrupted"},
-	})
-	if w.State != workInterrupted || ct.ActiveTaskID != "" {
-		t.Fatalf("stop terminal = work %q active %q", w.State, ct.ActiveTaskID)
-	}
-	if got := workStateText(locales.In("en"), w); got != "Stopped" {
-		t.Fatalf("stop terminal label = %q", got)
-	}
-	if got := workNoticeText(locales.In("en"), workNoticeForWork(w), ""); got != "Stopped" {
-		t.Fatalf("stop terminal notice = %q", got)
-	}
-	if got := workNoticeText(locales.In("en"), workNoticeForWork(&workItem{State: workInterrupted}), ""); got != "Interrupted" {
-		t.Fatalf("plain interrupted notice = %q", got)
-	}
-
-	ct.ActiveTaskID = "t2"
-	ct.LastTaskID = "t2"
-	w2 := a.ensureWork(ct, "t2", "m2")
-	w2.State = workRunning
-	a.applyEvent(ct, runtimeEventEnvelope{
-		Version: 1, Type: "event", SessionID: "s1", TaskID: "t1", MessageID: "m1",
-		Event: &runtimeEvent{Type: "tool_started", CallID: "old", Name: "read"},
-	})
-	if len(w.Tools) != 0 || len(w2.Tools) != 0 {
-		t.Fatal("late event from old task polluted another work item")
-	}
-	if ct.Work != "" && !strings.Contains(workNoticeText(locales.In("en"), ct.Work, ct.WorkArg), "Running") {
-		t.Fatalf("unexpected work summary: %q/%q", ct.Work, ct.WorkArg)
-	}
-	beforeMessages := len(ct.Messages)
-	a.applyEvent(ct, runtimeEventEnvelope{
-		Version: 1, Type: "event", SessionID: "s1", TaskID: "t1", MessageID: "m1",
-		Event: &runtimeEvent{Type: "task_finished", Status: "completed"},
-	})
-	if ct.LastTaskID != "t2" || len(ct.Messages) != beforeMessages || w2.State != workRunning {
-		t.Fatalf("late terminal polluted current work: last=%q work=%+v messages=%d", ct.LastTaskID, w2, len(ct.Messages))
-	}
-}
-
-func TestDuplicateStartCannotReviveTerminalWork(t *testing.T) {
-	a, ct := workspaceTestApp(t)
-	ct.ActiveTaskID = ""
-	ct.LastTaskID = "t1"
-	w := a.ensureWork(ct, "t1", "m1")
-	w.State = workCompleted
-	a.applyEvent(ct, runtimeEventEnvelope{
-		Version: 1, Type: "event", SessionID: "s1", TaskID: "t1", MessageID: "m1",
-		Event: &runtimeEvent{Type: "task_started"},
-	})
-	if ct.ActiveTaskID != "" || w.State != workCompleted {
-		t.Fatalf("duplicate start revived terminal task: active=%q work=%+v", ct.ActiveTaskID, w)
-	}
-
-	// A genuinely accepted next task may start, and the old task's terminal
-	// cannot claim it.
-	ct.ActiveTaskID = "t2"
-	a.applyEvent(ct, runtimeEventEnvelope{
-		Version: 1, Type: "event", SessionID: "s1", TaskID: "t2", MessageID: "m2",
-		Event: &runtimeEvent{Type: "task_started"},
-	})
-	a.applyEvent(ct, runtimeEventEnvelope{
-		Version: 1, Type: "event", SessionID: "s1", TaskID: "t1", MessageID: "m1",
-		Event: &runtimeEvent{Type: "task_finished", Status: "failed"},
-	})
-	if ct.ActiveTaskID != "t2" || ct.LastTaskID != "t2" || w.State != workCompleted {
-		t.Fatalf("late old terminal polluted next task: active=%q last=%q old=%q", ct.ActiveTaskID, ct.LastTaskID, w.State)
+func TestPiLateSettlementDoesNotReplaceNewConversationRun(t *testing.T) {
+	a, ct, first := piRunStartedTestApp(t)
+	ct.pendingSend = &pendingSend{Draft: "first", State: "submitting"}
+	a.applyPiEvent(a.connectionGeneration, first)
+	first.Name, first.Data = pi.RunSettled, []byte(`{"status":"completed","text":"first result"}`)
+	a.applyPiEvent(a.connectionGeneration, first)
+	second := first
+	second.Name, second.RunID, second.Data = pi.RunStarted, "second-run", nil
+	ct.ActiveTaskID, ct.SendState = second.RunID, sendSubmitting
+	ct.pendingSend = &pendingSend{Draft: "second", State: "submitting"}
+	a.applyPiEvent(a.connectionGeneration, second)
+	a.applyPiEvent(a.connectionGeneration, first)
+	if ct.ActiveTaskID != second.RunID || ct.SendState != sendAccepted || len(ct.Messages) != 3 || ct.Messages[1].Text != "first result" || ct.Messages[2].Text != "second" {
+		t.Fatalf("late settlement changed the newer run or transcript: %+v", ct.Messages)
 	}
 }
 
@@ -356,7 +209,7 @@ func TestHistoryModalPreservesWorkAndReturnsFocus(t *testing.T) {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if a.workspaceOpen || !tr.Focused("History") || tr.HasText("History: Saki") {
+	if a.workspaceOpen || !tr.Focused("History") || tr.HasText("History: Nagi") {
 		t.Fatal("closing history did not return to chat with the History entry focused")
 	}
 	if ct.ActiveTaskID != "t1" || w.State != workRunning || ct.Draft != "later draft" {
@@ -448,7 +301,7 @@ func TestSingleExecutionSlotBlocksOtherContact(t *testing.T) {
 	other := &contact{ID: "mio", Name: "Mio", Role: "Assistant", SessionID: "s2", Loaded: true}
 	a.contacts = append(a.contacts, other)
 	a.selected = 1
-	a.rt = &runtimeClient{}
+	a.pi = &piAppHost{client: &pi.Client{}}
 	a.runtimeStatus = runtimeStateReady
 	reason := a.canSend(other)
 	if reason != blockAnotherContact {
@@ -514,51 +367,15 @@ func TestWorkSurvivesNavigationSwitchAndDetails(t *testing.T) {
 }
 
 func TestFailedWorkAddsAttentionButNotUnread(t *testing.T) {
-	a, ct := workspaceTestApp(t)
-	other := &contact{ID: "mio", Name: "Mio", Role: "Assistant"}
-	a.contacts = append(a.contacts, other)
+	a, ct, event := piRunStartedTestApp(t)
+	a.contacts = append(a.contacts, &contact{ID: "mio", Name: "Mio", Role: "Assistant"})
 	a.selected = 1
-	ct.ActiveTaskID = "t1"
-	ct.LastTaskID = "t1"
-	w := a.ensureWork(ct, "t1", "m1")
-	w.State = workRunning
-	a.applyEvent(ct, runtimeEventEnvelope{
-		Version: 1, Type: "event", SessionID: "s1", TaskID: "t1", MessageID: "m1",
-		Event: &runtimeEvent{Type: "task_finished", Status: "failed", Error: &runtimeError{Code: "tool_error", Message: "tool failed"}},
-	})
-	if w.State != workFailed || ct.Status != statusAttention || ct.Unread != 0 {
-		t.Fatalf("failed work state=%q contact=%v unread=%d", w.State, ct.Status, ct.Unread)
-	}
-}
-
-func TestUnlinkedHistoryToolsRemainReadable(t *testing.T) {
-	a, ct := workspaceTestApp(t)
-	records := []historyRecord{
-		{Offset: 0, Record: journalRecord{Type: "messages", Items: []inputItem{
-			{Type: "tool_call", CallID: "k1", Name: "read", Arguments: `{"path":"old.txt"}`},
-		}}},
-		{Offset: 1, Record: journalRecord{Type: "messages", Items: []inputItem{
-			{Type: "tool_result", CallID: "k1", Output: `{"content":"old marker"}`},
-		}}},
-		{Offset: 2, Record: journalRecord{Type: "messages", Items: []inputItem{
-			{Type: "message", Role: "assistant", Content: []byte(`"old answer"`)},
-		}}},
-	}
-	a.applyHistory(ct, records, "completed")
-	if len(ct.Works) != 0 || len(ct.UnlinkedTools) != 1 {
-		t.Fatalf("unlinked projection = works %+v tools %+v", ct.Works, ct.UnlinkedTools)
-	}
-	if len(ct.Messages) != 1 || ct.Messages[0].Text != "old answer" {
-		t.Fatalf("text history changed: %+v", ct.Messages)
-	}
-	if ct.UnlinkedTools[0].Output != `{"content":"old marker"}` {
-		t.Fatalf("unlinked output = %+v", ct.UnlinkedTools[0])
-	}
-	tr := ui.NewTester(a.view, 1040, 720)
-	tr.Frame()
-	openConversationWorkPanel(t, tr)
-	if !tr.HasText("Earlier activity") || !tr.HasText("old marker") {
-		t.Fatalf("unlinked tool history not readable: %v", tr.Texts())
+	ct.pendingSend = &pendingSend{Draft: "first", State: "submitting"}
+	a.applyPiEvent(a.connectionGeneration, event)
+	event.Name, event.Data = pi.RunSettled, []byte(`{"status":"failed","error":{"message":"tool failed"}}`)
+	a.applyPiEvent(a.connectionGeneration, event)
+	if ct.Status != statusAttention || ct.Unread != 0 || ct.ActiveTaskID != "" || ct.SendState != sendIdle {
+		t.Fatalf("failed Pi run state=%v unread=%d active=%q send=%v", ct.Status, ct.Unread, ct.ActiveTaskID, ct.SendState)
 	}
 }
 
@@ -698,7 +515,7 @@ func TestWorkRecoveryKeepsRunAndAgentRecords(t *testing.T) {
 		t.Run(locale, func(t *testing.T) {
 			a, ct := workspaceTestApp(t)
 			message := "HTTP 403: suppressed provider body with entitlement guesses"
-			raw := taskFailureDetail("model_error", &message)
+			raw := "Provider authentication failed: HTTP 403. Check API_KEY and provider configuration; the request was denied."
 			w := &workItem{TaskID: "failed-run", State: workFailed, Detail: raw, Prompt: "Original user request"}
 			ct.Works = []*workItem{w}
 			tr := ui.NewTester(func(c *ui.Context) {
@@ -729,58 +546,26 @@ func TestWorkRecoveryKeepsRunAndAgentRecords(t *testing.T) {
 	}
 }
 
-func TestIssueUnknownDeliveryRecoveryMatchesAvailableAction(t *testing.T) {
+func TestIssueUnknownDeliveryKeepsRecordsAndDiagnostic(t *testing.T) {
 	for _, locale := range []string{"en", "zh-Hans"} {
-		for _, cause := range []string{"protocol", "exit"} {
-			t.Run(locale+"/"+cause, func(t *testing.T) {
-				a, ct, issue := disconnectedRecoveryTestApp(t, cause)
-				raw := issue.Work.SendError
-				detail := issue.Executions[0].Detail
-				state := issue.Work
-				execution := *issue.Executions[0]
-				tr := ui.NewTester(func(c *ui.Context) {
-					a.workTheme = resolveWorkbenchTheme(false)
-					c.SetTheme(a.workTheme.Theme)
-					ui.Scroll(c).Fill().Children(func() { a.issueCard(c, c.Theme(), ct, issue); a.issueExecutions(c, c.Theme(), ct, issue) })
-				}, 720, 1200)
-				tr.SetLocale(locale)
-				tr.SetFocused(true)
-				tr.Frame()
-				msgs := locales.In(locale)
-				if !tr.HasText(msgs.SendDisconnectedState()) || tr.HasText(msgs.SendUnknownState()) || tr.HasText(raw) {
-					t.Fatalf("disconnected issue promised unavailable Reload or exposed detail: %v", tr.Texts())
-				}
-				if err := tr.Click(msgs.IssueCheckExecution()); err != nil {
-					t.Fatal(err)
-				}
-				tr.Frame()
-				if issue.Work.SendError != raw || issue.Executions[0].Detail != detail || a.rt.nextID != 0 || a.issueActionError != "" {
-					t.Fatal("disconnected Check run was actionable")
-				}
-				if err := tr.Click(msgs.DetailsAction()); err != nil {
-					t.Fatal(err)
-				}
-				tr.Frame()
-				if !tr.HasText(raw) || issue.Work.SendState != sendUnknown || issue.Executions[0].Status != issueExecutionUnknown {
-					t.Fatal("issue diagnostic was lost or uncertainty was cleared")
-				}
-				a.runtimeStatus = runtimeStateReady
-				tr.Frame()
-				if !tr.HasText(msgs.SupplementUnknown()) || tr.HasText(msgs.SendUnknownState()) || tr.HasText(msgs.SendDisconnectedState()) {
-					t.Fatalf("live issue guidance does not match Check run: %v", tr.Texts())
-				}
-				for i := 0; i < 70 && !tr.Focused(msgs.IssueCheckExecution()); i++ {
-					tr.Key(0, ui.KeyTab)
-					tr.Frame()
-				}
-				if !tr.Focused(msgs.IssueCheckExecution()) {
-					t.Fatal("live Check run control is not keyboard reachable")
-				}
-				if issue.Work.SendError != raw || issue.Work.SendState != state.SendState || issue.Work.ActiveTaskID != state.ActiveTaskID || issue.Executions[0].Status != execution.Status || issue.Executions[0].Detail != execution.Detail || issue.Executions[0].Prompt != execution.Prompt || ct.Messages[0].Text != "original message" || ct.History[0].Text != "original history" || ct.Draft != "retained unsent draft" || a.rt.nextID != 0 {
-					t.Fatal("issue recovery changed raw execution/history or sent work")
-				}
-			})
-		}
+		t.Run(locale, func(t *testing.T) {
+			a, ct, issue := disconnectedRecoveryTestApp(t, "exit")
+			before := recoveryRecordSnapshot(t, ct)
+			tr := recoveryIssueTester(a, ct, issue, 720, 1200)
+			tr.SetLocale(locale)
+			tr.Frame()
+			msgs := locales.In(locale)
+			if tr.HasText(msgs.SendUnknownState()) || !tr.HasText(msgs.SendDisconnectedState()) {
+				t.Fatalf("unavailable issue offered conversation recovery: %v", tr.Texts())
+			}
+			if err := tr.Click(msgs.DetailsAction()); err != nil {
+				t.Fatal(err)
+			}
+			tr.Frame()
+			if !tr.HasText(issue.Work.SendError) || recoveryRecordSnapshot(t, ct) != before || a.submissionInFlight != 0 {
+				t.Fatal("disclosure lost the diagnostic or changed the unknown execution")
+			}
+		})
 	}
 }
 
@@ -790,182 +575,6 @@ func recoveryIssueTester(a *appModel, ct *contact, issue *productIssue, width, h
 		c.SetTheme(a.workTheme.Theme)
 		ui.Scroll(c).Fill().Children(func() { a.issueCard(c, c.Theme(), ct, issue); a.issueExecutions(c, c.Theme(), ct, issue) })
 	}, width, height)
-}
-
-func TestRP1IssueAvailabilityMatrix(t *testing.T) {
-	for _, locale := range []string{"en", "zh-Hans"} {
-		for _, state := range []string{runtimeStateFailed, runtimeStateExited, runtimeStateStarting, "ready-no-client", runtimeStateReady} {
-			for _, diagnostic := range []string{"empty", "protocol", "delivery"} {
-				t.Run(locale+"/"+state+"/"+diagnostic, func(t *testing.T) {
-					cause := "exit"
-					if diagnostic == "protocol" {
-						cause = "protocol"
-					}
-					a, ct, issue := disconnectedRecoveryTestApp(t, cause)
-					if diagnostic == "empty" {
-						issue.Work.clearSendError()
-					}
-					a.runtimeStatus = state
-					if state == "ready-no-client" {
-						a.runtimeStatus = runtimeStateReady
-						a.rt = nil
-					}
-					before := recoveryRecordSnapshot(t, ct)
-					tr := recoveryIssueTester(a, ct, issue, 720, 1200)
-					tr.SetLocale(locale)
-					tr.SetFocused(true)
-					tr.Frame()
-					msgs := locales.In(locale)
-					live := state == runtimeStateReady
-					if tr.HasText(msgs.SendUnknownState()) {
-						t.Fatal("issue work uses the conversation Reload instruction")
-					}
-					if live {
-						if !tr.HasText(msgs.SupplementUnknown()) || tr.HasText(msgs.SendDisconnectedState()) {
-							t.Fatalf("live issue guidance does not match Check run: %v", tr.Texts())
-						}
-						for i := 0; i < 65 && !tr.Focused(msgs.IssueCheckExecution()); i++ {
-							tr.Key(0, ui.KeyTab)
-							tr.Frame()
-						}
-						if !tr.Focused(msgs.IssueCheckExecution()) {
-							t.Fatal("live Check run is not keyboard reachable")
-						}
-					} else {
-						if !tr.HasText(msgs.SendDisconnectedState()) || tr.HasText(msgs.SupplementUnknown()) {
-							t.Fatalf("unavailable issue action has no accurate reason: %v", tr.Texts())
-						}
-						if err := tr.Click(msgs.IssueCheckExecution()); err != nil {
-							t.Fatal(err)
-						}
-						tr.Key(0, ui.KeyEnter)
-						tr.Frame()
-						for i := 0; i < 30; i++ {
-							tr.Key(0, ui.KeyTab)
-							tr.Frame()
-							if tr.Focused(msgs.IssueCheckExecution()) {
-								t.Fatal("disabled Check run took keyboard focus")
-							}
-						}
-					}
-					if recoveryRecordSnapshot(t, ct) != before || a.issueActionError != "" || a.submissionInFlight != 0 {
-						t.Fatal("availability/mouse/keyboard changed unknown records or issued an action")
-					}
-					if a.rt != nil && a.rt.nextID != 0 {
-						t.Fatal("presentation or disabled control issued RPC")
-					}
-					if dir := os.Getenv("NAGI_RP_PREVIEW_DIR"); dir != "" && diagnostic == "delivery" && (state == runtimeStateReady || state == runtimeStateExited) {
-						writePreviewPNG(t, filepath.Join(dir, fmt.Sprintf("issue-%s-%s.png", locale, state)), tr.Image())
-					}
-				})
-			}
-		}
-	}
-}
-
-func TestRP1MissingAssociationPreservesNavigation(t *testing.T) {
-	for _, locale := range []string{"en", "zh-Hans"} {
-		for _, missing := range []string{"session", "task", "wrong-owner", "wrong-contact"} {
-			t.Run(locale+"/"+missing, func(t *testing.T) {
-				a, ct, issue := disconnectedRecoveryTestApp(t, "exit")
-				a.runtimeStatus = runtimeStateReady
-				switch missing {
-				case "session":
-					issue.Executions[0].SessionID = ""
-				case "task":
-					issue.Executions[0].TaskID = ""
-				case "wrong-owner":
-					issue = &productIssue{ID: "another-owner", Goal: "Existing stale owner view", Executions: issue.Executions}
-				case "wrong-contact":
-					a.contacts = append(a.contacts, &contact{ID: "new-current", Name: "Other contact", SessionID: "other-session", Loaded: true})
-					a.selected = 1
-				}
-				before := recoveryRecordSnapshot(t, ct)
-				tr := recoveryIssueTester(a, ct, issue, 720, 1200)
-				tr.SetLocale(locale)
-				tr.SetFocused(true)
-				tr.Frame()
-				msgs := locales.In(locale)
-				if !tr.HasText(msgs.RecoveryTaskAssociationMissing()) || tr.HasText(msgs.SupplementUnknown()) {
-					t.Fatalf("missing association implies a usable action: %v", tr.Texts())
-				}
-				if err := tr.Click(msgs.IssueCheckExecution()); err != nil {
-					t.Fatal(err)
-				}
-				tr.Key(0, ui.KeyEnter)
-				tr.Frame()
-				for i := 0; i < 25; i++ {
-					tr.Key(0, ui.KeyTab)
-					tr.Frame()
-					if tr.Focused(msgs.IssueCheckExecution()) {
-						t.Fatal("untrusted Check run is keyboard enabled")
-					}
-				}
-				if err := tr.Click(msgs.DetailsAction()); err != nil {
-					t.Fatal(err)
-				}
-				tr.Frame()
-				if !tr.HasText(issue.Executions[0].Detail) {
-					t.Fatal("existing execution diagnostic is inaccessible")
-				}
-				a.openHistory()
-				if !a.detailIs(detailHistory) {
-					t.Fatal("history navigation was blocked")
-				}
-				a.closeDetail()
-				if recoveryRecordSnapshot(t, ct) != before || a.rt.nextID != 0 || a.issueActionError != "" {
-					t.Fatal("missing association changed records, read back or sent work")
-				}
-			})
-		}
-	}
-	// An event from a previously enabled row must also recheck its current owner.
-	a, ct, issue := disconnectedRecoveryTestApp(t, "exit")
-	a.runtimeStatus = runtimeStateReady
-	tr := recoveryIssueTester(a, ct, issue, 720, 1200)
-	tr.Frame()
-	a.contacts = append(a.contacts, &contact{ID: "replacement", Name: "Replacement", Loaded: true})
-	a.selected = 1
-	before := recoveryRecordSnapshot(t, ct)
-	if err := tr.Click("Check run"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if recoveryRecordSnapshot(t, ct) != before || a.rt.nextID != 0 || a.issueActionError != "" {
-		t.Fatal("late enabled event bypassed current ownership")
-	}
-}
-
-func TestRP1OriginalNotDispatchedConfirmationGate(t *testing.T) {
-	a, ct, issue := disconnectedRecoveryTestApp(t, "exit")
-	a.runtimeStatus = runtimeStateReady
-	execution := issue.Executions[0]
-	execution.TaskID = ""
-	execution.Status = issueExecutionPending
-	issue.Work.ActiveTaskID = ""
-	issue.Work.SendState = sendIdle
-	recoveryTestStore(t, a)
-	tr := recoveryIssueTester(a, ct, issue, 720, 1200)
-	tr.Frame()
-	if !tr.HasText(locales.In("en").IssueConfirmNotDispatched()) {
-		t.Fatal("original explicit confirmation entry was hidden")
-	}
-	if execution.Status != issueExecutionPending || a.rt.nextID != 0 {
-		t.Fatal("rendering auto-confirmed or read back missing task")
-	}
-	if err := tr.Click(locales.In("en").IssueConfirmNotDispatched()); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if execution.Status != issueExecutionNotDispatched || a.rt.nextID != 0 {
-		t.Fatal("isolated explicit confirmation failed or sent work")
-	}
-	issue.Work.ActiveTaskID = "active-task"
-	execution.Status = issueExecutionUnknown
-	tr.Frame()
-	if tr.HasText(locales.In("en").IssueConfirmNotDispatched()) {
-		t.Fatal("active work exposes not-dispatched confirmation")
-	}
 }
 
 func TestRP1AdjacentStatesKeepAdmission(t *testing.T) {
@@ -979,8 +588,7 @@ func TestRP1AdjacentStatesKeepAdmission(t *testing.T) {
 			issue.Work.SendState = sendIdle
 			issue.Work.clearSendError()
 			if status == issueExecutionFailed {
-				message := "controlled execution failure"
-				execution.Detail = taskFailureDetail("tool_error", &message)
+				execution.Detail = "Task failed: controlled execution failure"
 			}
 			before := recoveryRecordSnapshot(t, ct)
 			tr := ui.NewTester(func(c *ui.Context) {
@@ -1003,7 +611,7 @@ func TestRP1AdjacentStatesKeepAdmission(t *testing.T) {
 			if status == issueExecutionRejected && !tr.HasText(msgs.IssueExecutionRejectedDetail()) {
 				t.Fatal("rejected summary missing")
 			}
-			if recoveryRecordSnapshot(t, ct) != before || issue.Status == issueStatusCompleted || a.rt.nextID != 0 {
+			if recoveryRecordSnapshot(t, ct) != before || issue.Status == issueStatusCompleted || a.submissionInFlight != 0 {
 				t.Fatal("presentation changed admission or task completion")
 			}
 		})

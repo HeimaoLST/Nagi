@@ -15,146 +15,6 @@ import (
 	"github.com/HeimaoLST/Nagi/locales"
 )
 
-func TestDeriveIssueResultFilesOnlyFromSuccessfulWriteEditResults(t *testing.T) {
-	root := t.TempDir()
-	writePath := filepath.Join(root, "created.txt")
-	editPath := filepath.Join(root, "edited.txt")
-	writeResult := fmt.Sprintf(`{ "path": %q, "bytes_written": 7 }`, writePath)
-	editResult := fmt.Sprintf(`{"path":%q,"applied":1}`, editPath)
-	source := issueResultSource{
-		ExecutionID: "exec-1", SessionID: "session-1", TaskID: "task-1", MessageID: "msg-1",
-		WorkingDirectory: root,
-	}
-	history := runtimeHistory{SessionID: "session-1", Records: []historyRecord{
-		{Offset: 0, TimestampMS: 100, Record: journalRecord{Type: "task_started", TaskID: "task-1", MessageID: "msg-1"}},
-		{Offset: 1, TimestampMS: 110, Record: journalRecord{Type: "messages", Items: []inputItem{
-			{Type: "tool_result", CallID: "c-orphan", Output: fmt.Sprintf(`{"path":%q,"bytes_written":1}`, writePath)},
-			{Type: "tool_call", CallID: "c-write", Name: "write", Arguments: `{"path":"created.txt","content":"content"}`},
-		}}},
-		{Offset: 2, TimestampMS: 120, Record: journalRecord{Type: "messages", Items: []inputItem{
-			{Type: "tool_result", CallID: "c-write", Output: writeResult},
-			{Type: "tool_call", CallID: "c-edit", Name: "edit"},
-			{Type: "tool_result", CallID: "c-edit", Output: editResult},
-			{Type: "tool_call", CallID: "c-read", Name: "read"},
-			{Type: "tool_result", CallID: "c-read", Output: "file body"},
-			{Type: "tool_call", CallID: "c-bash", Name: "bash"},
-			{Type: "tool_result", CallID: "c-bash", Output: writePath},
-			{Type: "tool_call", CallID: "c-error", Name: "write"},
-			{Type: "tool_result", CallID: "c-error", Output: `{"error":"permission denied"}`},
-			{Type: "tool_call", CallID: "c-relative", Name: "write"},
-			{Type: "tool_result", CallID: "c-relative", Output: `{"path":"relative.txt","bytes_written":1}`},
-			{Type: "tool_call", CallID: "c-interrupted", Name: "edit"},
-			{Type: "tool_result", CallID: "c-interrupted", Output: `{"error":"Execution interrupted before its result was saved.","interrupted":true}`},
-			{Type: "tool_call", CallID: "c-zero", Name: "edit"},
-			{Type: "tool_result", CallID: "c-zero", Output: fmt.Sprintf(`{"path":%q,"applied":0}`, editPath)},
-			{Type: "message", Role: "assistant", Content: []byte(`"I wrote ` + writePath + `"`)},
-		}}},
-		{Offset: 3, TimestampMS: 130, Record: journalRecord{Type: "task_finished", TaskID: "task-1", Status: "completed"}},
-	}}
-
-	derived := deriveIssueResultFiles(source, history)
-	if derived.UnavailableKind != "" {
-		t.Fatalf("unavailable = %q", derived.UnavailableKind)
-	}
-	if len(derived.Files) != 2 {
-		t.Fatalf("files = %+v, want write and edit only", derived.Files)
-	}
-	write := derived.Files[0]
-	if write.CallID != "c-write" || write.ToolName != "write" || write.Path != writePath {
-		t.Fatalf("write row = %+v", write)
-	}
-	if write.RawResult != writeResult {
-		t.Fatalf("write raw result = %q, want exact %q", write.RawResult, writeResult)
-	}
-	if write.ExecutionID != "exec-1" || write.SessionID != "session-1" || write.TaskID != "task-1" ||
-		write.MessageID != "msg-1" || write.WorkingDirectory != root {
-		t.Fatalf("write identity = %+v", write)
-	}
-	edit := derived.Files[1]
-	if edit.CallID != "c-edit" || edit.ToolName != "edit" || edit.Path != editPath || edit.RawResult != editResult {
-		t.Fatalf("edit row = %+v", edit)
-	}
-}
-
-func TestIssueResultFilesKeepExecutionsAndCallsDistinct(t *testing.T) {
-	root := t.TempDir()
-	sharedPath := filepath.Join(root, "shared.txt")
-	result := fmt.Sprintf(`{"path":%q,"bytes_written":1}`, sharedPath)
-	firstHistory := runtimeHistory{SessionID: "session-a", Records: []historyRecord{
-		{Record: journalRecord{Type: "task_started", TaskID: "task-a", MessageID: "msg-a"}},
-		{Record: journalRecord{Type: "messages", Items: []inputItem{
-			{Type: "tool_call", CallID: "call-same", Name: "write"},
-			{Type: "tool_result", CallID: "call-same", Output: result},
-			{Type: "tool_call", CallID: "call-a2", Name: "write"},
-			{Type: "tool_result", CallID: "call-a2", Output: result},
-		}}},
-		{Record: journalRecord{Type: "task_finished", TaskID: "task-a", Status: "completed"}},
-	}}
-	secondHistory := runtimeHistory{SessionID: "session-b", Records: []historyRecord{
-		{Record: journalRecord{Type: "task_started", TaskID: "task-b", MessageID: "msg-b"}},
-		{Record: journalRecord{Type: "messages", Items: []inputItem{
-			{Type: "tool_call", CallID: "call-same", Name: "write"},
-			{Type: "tool_result", CallID: "call-same", Output: result},
-		}}},
-		{Record: journalRecord{Type: "task_finished", TaskID: "task-b", Status: "completed"}},
-	}}
-	first := deriveIssueResultFiles(issueResultSource{
-		ExecutionID: "exec-a", SessionID: "session-a", TaskID: "task-a", MessageID: "msg-a", WorkingDirectory: root,
-	}, firstHistory)
-	if first.UnavailableKind != "" {
-		t.Fatalf("first unavailable = %q", first.UnavailableKind)
-	}
-	if len(first.Files) != 2 {
-		t.Fatalf("first files = %+v", first.Files)
-	}
-	for _, file := range first.Files {
-		if file.SessionID != "session-a" || file.TaskID != "task-a" || file.ExecutionID != "exec-a" || file.Path != sharedPath {
-			t.Fatalf("first crossed identity: %+v", file)
-		}
-	}
-	if first.Files[0].CallID != "call-same" || first.Files[1].CallID != "call-a2" {
-		t.Fatalf("call rows = %+v", first.Files)
-	}
-	second := deriveIssueResultFiles(issueResultSource{
-		ExecutionID: "exec-b", SessionID: "session-b", TaskID: "task-b", MessageID: "msg-b", WorkingDirectory: root,
-	}, secondHistory)
-	if second.UnavailableKind != "" || len(second.Files) != 1 {
-		t.Fatalf("second = %+v", second)
-	}
-	if second.Files[0].SessionID != "session-b" || second.Files[0].TaskID != "task-b" || second.Files[0].CallID != "call-same" {
-		t.Fatalf("second crossed identity: %+v", second.Files[0])
-	}
-}
-
-func TestDeriveIssueResultFilesReportsUnavailableExecutionIdentity(t *testing.T) {
-	history := runtimeHistory{SessionID: "session-1", Records: []historyRecord{
-		{Record: journalRecord{Type: "task_started", TaskID: "task-1", MessageID: "msg-1"}},
-	}}
-	cases := []struct {
-		name    string
-		source  issueResultSource
-		history runtimeHistory
-		want    string
-	}{
-		{name: "no session", source: issueResultSource{TaskID: "task-1"}, history: history, want: "no-session"},
-		{name: "history session mismatch", source: issueResultSource{SessionID: "session-other", TaskID: "task-1"}, history: history, want: "session-mismatch"},
-		{name: "no task", source: issueResultSource{SessionID: "session-1"}, history: history, want: "no-task"},
-		{name: "task absent", source: issueResultSource{SessionID: "session-1", TaskID: "task-2"}, history: history, want: "task-missing"},
-		{name: "message mismatch", source: issueResultSource{SessionID: "session-1", TaskID: "task-1", MessageID: "msg-2"}, history: history, want: "message-missing"},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			derived := deriveIssueResultFiles(tc.source, tc.history)
-			if derived.UnavailableKind != tc.want {
-				t.Fatalf("unavailable = %q, want %q", derived.UnavailableKind, tc.want)
-			}
-			if len(derived.Files) != 0 {
-				t.Fatalf("files = %+v", derived.Files)
-			}
-		})
-	}
-}
-
 func TestInspectIssueResultFileReadsCurrentFile(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "result.txt")
@@ -310,22 +170,8 @@ func TestIssueResultPathRetainsTrailingSpaceFilename(t *testing.T) {
 	if err := os.WriteFile(path, []byte("trailing space file\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	source := issueResultSource{
-		ExecutionID: "exec-space", SessionID: "session-space", TaskID: "task-space", MessageID: "msg-space",
-		WorkingDirectory: root,
-	}
-	history := runtimeHistory{SessionID: "session-space", Records: []historyRecord{
-		{Record: journalRecord{Type: "task_started", TaskID: "task-space", MessageID: "msg-space"}},
-		{Record: journalRecord{Type: "messages", Items: []inputItem{
-			{Type: "tool_call", CallID: "call-space", Name: "write"},
-			{Type: "tool_result", CallID: "call-space", Output: fmt.Sprintf(`{"path":%q,"bytes_written":20}`, path)},
-		}}},
-	}}
-	derived := deriveIssueResultFiles(source, history)
-	if derived.UnavailableKind != "" || len(derived.Files) != 1 {
-		t.Fatalf("derived = %+v", derived)
-	}
-	file := derived.Files[0]
+	file := issueResultFile{ExecutionID: "exec-space", SessionID: "session-space", TaskID: "task-space", MessageID: "receipt-space", CallID: "call-space", ToolName: "write",
+		Path: piResultReceiptPath(root, piResultToolCall{name: "write", path: "report "}, "Successfully wrote to report "), WorkingDirectory: root}
 	if file.Path != path || !strings.HasSuffix(file.Path, " ") {
 		t.Fatalf("reported path = %q, want exact %q", file.Path, path)
 	}
@@ -718,7 +564,7 @@ func TestIssueResultPanelLongContentWrapsAtNarrowWidth(t *testing.T) {
 }
 
 func TestIssueResultPanelPreviewsAlwaysWriteHeadlessPNGs(t *testing.T) {
-	dir := os.Getenv("SAKI_PREVIEW_DIR")
+	dir := os.Getenv("NAGI_PREVIEW_DIR")
 	if dir == "" {
 		dir = t.TempDir()
 	}
@@ -968,7 +814,7 @@ func TestRecoveryPresentationResultDisclosureKeepsOriginalResponse(t *testing.T)
 	for _, locale := range []string{"en", "zh-Hans"} {
 		t.Run(locale, func(t *testing.T) {
 			message := "connection closed; API_KEY=secret"
-			raw := taskFailureDetail("model_error", &message)
+			raw := "Model request failed: " + safeDiagnostic(message)
 			response := "Original Agent response: API_KEY is a quoted variable.\n"
 			state := &issueResultPanelState{RunStatus: issueExecutionFailed, RunDetail: raw, Response: response}
 			settings, reloads := 0, 0

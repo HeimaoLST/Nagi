@@ -251,7 +251,7 @@ func TestCustomThemeInstallRestoresMissingSelectionWithContrastWarning(t *testin
 	}
 	app.reloadAppearanceThemes()
 	resolved := app.resolveAppearanceTheme(false)
-	if resolved.EffectiveID != "restored" || resolved.Unavailable || len(resolved.Warnings) == 0 || app.appearanceThemeIDs != ids || app.appearanceMode != appearanceSystem || app.resolveAppearanceTheme(true).EffectiveID != "night" || app.store != nil || app.rt != nil {
+	if resolved.EffectiveID != "restored" || resolved.Unavailable || len(resolved.Warnings) == 0 || app.appearanceThemeIDs != ids || app.appearanceMode != appearanceSystem || app.resolveAppearanceTheme(true).EffectiveID != "night" || app.store != nil || app.pi != nil {
 		t.Fatal("reload did not restore the existing request independently of preferences/store/Runtime")
 	}
 }

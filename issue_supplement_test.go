@@ -171,19 +171,20 @@ func TestIssueSupplementAcceptStopAndLateReceipt(t *testing.T) {
 	if restored.Batches[0].State != supplementBatchDispatching || restored.Items[0].State != supplementStateDispatching {
 		t.Fatalf("stop rewrote in-flight batch = %+v / %+v", restored.Batches[0], restored.Items[0])
 	}
+	run := piActivityRun{WorkerEpoch: "epoch", ContextID: "activity", SessionRef: "session", RunID: "run", Admitted: true}
 	if accepted, err := restored.Accept(restored.Batches[0], issueSupplementAssociation{
-		SessionID: "s", TaskID: "t", MessageID: "m", ExecutionID: execution.ID,
+		ExecutionID: execution.ID, PiRun: &run,
 	}, persistLedger(restored, &data)); !accepted || err != nil {
 		t.Fatalf("late accepted = %v / %v", accepted, err)
 	}
 	accepted := reloadLedger(t, data)
-	if accepted.Batches[0].State != supplementBatchAccepted || accepted.Items[0].State != supplementStateSubmitted ||
-		accepted.Batches[0].TaskID != "t" || accepted.AutoContinue {
+	if gotBatch, gotItem := accepted.Batches[0], accepted.Items[0]; gotBatch.State != supplementBatchAccepted || gotItem.State != supplementStateSubmitted ||
+		gotBatch.ExecutionID != execution.ID || gotItem.ExecutionID != execution.ID || gotBatch.PiRun == nil || *gotBatch.PiRun != run || gotItem.PiRun == nil || *gotItem.PiRun != run || accepted.AutoContinue {
 		t.Fatalf("accepted receipt = %+v / %+v auto=%v", accepted.Batches[0], accepted.Items[0], accepted.AutoContinue)
 	}
 }
 
-func TestIssueSupplementUnknownLateAcceptAndMatch(t *testing.T) {
+func TestIssueSupplementUnknownLateAcceptRetainsPiRun(t *testing.T) {
 	l := newIssueSupplementLedger()
 	data := []byte{}
 	target := supplementTarget()
@@ -192,16 +193,16 @@ func TestIssueSupplementUnknownLateAcceptAndMatch(t *testing.T) {
 	if !l.Unknown(batch, "delivery unknown", persistLedger(l, &data)) || l.AutoContinue {
 		t.Fatal("unknown did not stop auto")
 	}
+	run := piActivityRun{WorkerEpoch: "epoch", ContextID: "activity", SessionRef: "session", RunID: "late-run", Admitted: true}
 	if accepted, err := l.Accept(batch, issueSupplementAssociation{
-		SessionID: "s", TaskID: "t", MessageID: "m", ExecutionID: execution.ID,
+		ExecutionID: execution.ID, PiRun: &run,
 	}, persistLedger(l, &data)); !accepted || err != nil {
 		t.Fatalf("unknown late accept = %v / %v", accepted, err)
 	}
-	full := "goal and requirements\nunknown text"
-	if !batch.MatchProvidedHistory(full, []issueSupplementHistory{{
-		Text: full, SessionID: "s", TaskID: "t", MessageID: "m", ExecutionID: execution.ID,
-	}}) {
-		t.Fatal("full provided input did not match")
+	restored := reloadLedger(t, data)
+	if gotBatch, gotItem := restored.Batches[0], restored.Items[0]; gotBatch.State != supplementBatchAccepted || gotItem.State != supplementStateSubmitted ||
+		gotBatch.ExecutionID != execution.ID || gotItem.ExecutionID != execution.ID || gotBatch.PiRun == nil || *gotBatch.PiRun != run || gotItem.PiRun == nil || *gotItem.PiRun != run || restored.AutoContinue {
+		t.Fatalf("late Pi receipt was not persisted: batch=%+v item=%+v", gotBatch, gotItem)
 	}
 }
 

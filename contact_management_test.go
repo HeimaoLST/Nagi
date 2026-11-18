@@ -17,7 +17,6 @@ import (
 func TestUnconfiguredContactWorkspacesFollowFirstConnection(t *testing.T) {
 	launchFolder, connectionFolder, contactFolder := t.TempDir(), t.TempDir(), t.TempDir()
 	isolateConnectionApp(t, launchFolder, filepath.Join(launchFolder, "unused-runtime"))
-	t.Setenv("SAKI_TEST_ISSUE_TOOL_HELPER", "")
 	a, err := newRuntimeApp()
 	if err != nil {
 		t.Fatal(err)
@@ -29,7 +28,7 @@ func TestUnconfiguredContactWorkspacesFollowFirstConnection(t *testing.T) {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	focusComposer(t, tr, "Composer for Saki")
+	focusComposer(t, tr, "Composer for Nagi")
 	tr.Type("Keep the launch-folder draft")
 	tr.Frame()
 	if err := tr.Click("Add contact"); err != nil {
@@ -95,7 +94,7 @@ func TestUnconfiguredContactWorkspacesFollowFirstConnection(t *testing.T) {
 		t.Fatal("explicit contact folder C was replaced by connection folder B")
 	}
 	for _, app := range []*appModel{a, beforeConnection, reopened} {
-		if app.rt != nil || app.runtimeHandshake || app.runtimeHelperChecked || app.runtimeBinary != "" {
+		if app.pi != nil || app.connectionApplying {
 			t.Fatal("local workspace selection started Runtime")
 		}
 	}
@@ -109,7 +108,6 @@ func TestContactWorkspaceDefaultsRespectConnectionSource(t *testing.T) {
 		t.Run(source, func(t *testing.T) {
 			launchFolder := t.TempDir()
 			isolateConnectionApp(t, launchFolder, filepath.Join(launchFolder, "unused-runtime"))
-			t.Setenv("SAKI_TEST_ISSUE_TOOL_HELPER", "")
 			want := launchFolder
 			var a *appModel
 			if source == "demo" {
@@ -144,7 +142,7 @@ func TestContactWorkspaceDefaultsRespectConnectionSource(t *testing.T) {
 			if got := a.selectedContact().Workspace; got != want {
 				t.Errorf("%s added contact workspace=%q, want %q", source, got, want)
 			}
-			if a.rt != nil || a.runtimeHelperChecked {
+			if a.pi != nil || a.connectionApplying {
 				t.Fatal("contact defaults started Runtime")
 			}
 		})
@@ -154,7 +152,6 @@ func TestContactWorkspaceDefaultsRespectConnectionSource(t *testing.T) {
 func TestLocalStateBeforeConnectionCreateSaveAndRestart(t *testing.T) {
 	root := t.TempDir()
 	isolateConnectionApp(t, root, filepath.Join(root, "unused-runtime"))
-	t.Setenv("SAKI_TEST_ISSUE_TOOL_HELPER", "")
 	a, err := newRuntimeApp()
 	if err != nil {
 		t.Fatal(err)
@@ -166,7 +163,7 @@ func TestLocalStateBeforeConnectionCreateSaveAndRestart(t *testing.T) {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	focusComposer(t, tr, "Composer for Saki")
+	focusComposer(t, tr, "Composer for Nagi")
 	tr.Type("Keep the first local draft")
 	tr.Frame()
 	if err := tr.Click("Add contact"); err != nil {
@@ -235,7 +232,7 @@ func TestLocalStateBeforeConnectionCreateSaveAndRestart(t *testing.T) {
 		t.Fatal("connection Save/reopen lost local contact state")
 	}
 	for _, app := range []*appModel{a, restarted, afterConnection} {
-		if app.rt != nil || app.runtimeHandshake || app.runtimeHelperChecked || app.runtimeBinary != "" {
+		if app.pi != nil || app.connectionApplying {
 			t.Fatal("local exploration or connection Save started Runtime")
 		}
 	}
@@ -247,7 +244,6 @@ func TestLocalStateBeforeConnectionCreateSaveAndRestart(t *testing.T) {
 func TestLocalStateBeforeConnectionExplicitProfileSave(t *testing.T) {
 	root := t.TempDir()
 	isolateConnectionApp(t, root, "")
-	t.Setenv("SAKI_TEST_ISSUE_TOOL_HELPER", "")
 	a, err := newRuntimeApp()
 	if err != nil {
 		t.Fatal(err)
@@ -331,12 +327,16 @@ func TestContactManagementInstructionsKeepOriginalWhitespaceInPrompt(t *testing.
 }
 
 func TestContactManagementSaveAndNewDetachesOnlyCurrentConversation(t *testing.T) {
-	a, bound, _ := testRuntimeModel(t)
+	a, bound, _ := piRunStartedTestApp(t)
+	bound.ActiveTaskID, bound.SendState = "", sendIdle
+	bound.Draft = "keep me"
+	previous := clonePiConversationBinding(bound.PiBinding)
 	workspace := t.TempDir()
 	if _, err := bound.Context.AddSnippet("Keep", "unsent context"); err != nil {
 		t.Fatal(err)
 	}
-	issue := &productIssue{ID: "issue-1", ContactID: bound.ID, Goal: "keep issue", WorkSessionID: "issue-session"}
+	issue := &productIssue{ID: "issue-1", ContactID: bound.ID, Goal: "keep issue", RequirementsRevision: 1, Status: issueStatusInProgress}
+	attachIssueToolTestExecution(issue)
 	bound.Issues = []*productIssue{issue}
 	bound.SelectedWorkTaskID = "old-work"
 
@@ -347,13 +347,13 @@ func TestContactManagementSaveAndNewDetachesOnlyCurrentConversation(t *testing.T
 	if bound.SessionID != "" || len(bound.Messages) != 0 || len(bound.History) != 0 {
 		t.Fatalf("current conversation was not detached: %+v", bound)
 	}
-	if len(bound.PreviousSessions) != 1 || bound.PreviousSessions[0] != "s1" {
-		t.Fatalf("old session reference = %+v", bound.PreviousSessions)
+	if len(bound.PreviousPiBindings) != 1 || !reflect.DeepEqual(&bound.PreviousPiBindings[0], previous) {
+		t.Fatalf("old conversation binding = %+v", bound.PreviousPiBindings)
 	}
 	if bound.Draft != "keep me" || len(bound.Context.snapshot()) != 1 {
 		t.Fatal("save and new consumed the unsent draft or context")
 	}
-	if len(bound.Issues) != 1 || bound.Issues[0].WorkSessionID != "issue-session" || bound.Issues[0].Goal != "keep issue" {
+	if len(bound.Issues) != 1 || bound.Issues[0].WorkSessionID != issue.PiBinding.Context.SessionRef || bound.Issues[0].Goal != "keep issue" {
 		t.Fatalf("issues changed: %+v", bound.Issues)
 	}
 	if bound.SelectedWorkTaskID != "" || bound.SendState != sendIdle || bound.Status != statusReady {
@@ -364,7 +364,7 @@ func TestContactManagementSaveAndNewDetachesOnlyCurrentConversation(t *testing.T
 		t.Fatal(err)
 	}
 	stored := reloaded.state.Contacts[0]
-	if stored.SessionID != "" || len(stored.PreviousSessions) != 1 || stored.PreviousSessions[0] != "s1" {
+	if stored.SessionID != "" || stored.PiBinding != nil || len(stored.PreviousPiBindings) != 1 || !reflect.DeepEqual(&stored.PreviousPiBindings[0], previous) {
 		t.Fatalf("stored = %+v", stored)
 	}
 }
@@ -390,7 +390,7 @@ func TestContactManagementSaveFailureRollsBackFieldsAndKeepsDraft(t *testing.T) 
 	if a.saveContactProfileDraft(draft, false) {
 		t.Fatal("save unexpectedly succeeded with an unusable store")
 	}
-	if bound.Name != "Saki" || bound.Purpose != oldPurpose || bound.Workspace != oldWorkspace {
+	if bound.Name != "Nagi" || bound.Purpose != oldPurpose || bound.Workspace != oldWorkspace {
 		t.Fatalf("failed save changed the contact: %+v", bound)
 	}
 	if a.contactProfile == nil || a.contactProfile.Error != profileNoticeErrorSave || a.contactProfile.Draft.Name != "Cannot Save" {
@@ -399,7 +399,7 @@ func TestContactManagementSaveFailureRollsBackFieldsAndKeepsDraft(t *testing.T) 
 	if a.contactProfile.Status != "" {
 		t.Fatal("failed save reported success")
 	}
-	if a.store.state.Contacts[0].Name != "Saki" {
+	if a.store.state.Contacts[0].Name != "Nagi" {
 		t.Fatal("failed save left the store's in-memory snapshot changed")
 	}
 	if bound.Draft != "keep me" || bound.SessionID != sessionRef || !reflect.DeepEqual(bound.PiBinding, binding) {
@@ -426,7 +426,7 @@ func TestContactManagementSaveAndNewFailureKeepsOldSessionReference(t *testing.T
 	if a.saveContactProfileDraft(profileDraft{Name: "Renamed", Workspace: workspace}, true) {
 		t.Fatal("save and new unexpectedly succeeded")
 	}
-	if bound.SessionID != sessionRef || !reflect.DeepEqual(bound.PiBinding, binding) || len(bound.PreviousPiBindings) != 0 || len(bound.PreviousSessions) != 0 || len(bound.Messages) != 1 || len(bound.History) != 1 || bound.Draft != "keep me" {
+	if bound.SessionID != sessionRef || !reflect.DeepEqual(bound.PiBinding, binding) || len(bound.PreviousPiBindings) != 0 || len(bound.Messages) != 1 || len(bound.History) != 1 || bound.Draft != "keep me" {
 		t.Fatalf("failed save and new changed the current conversation: %+v", bound)
 	}
 	if a.contactProfile == nil || a.contactProfile.Error != profileNoticeErrorSave {
@@ -508,26 +508,6 @@ func TestContactManagementSidebarSearchKeepsStableIndices(t *testing.T) {
 	a.contactSearch = "new contact"
 	if got := a.visibleContactIndices(); len(got) != 1 || a.contacts[got[0]] != unbound {
 		t.Fatalf("contact search = %v", got)
-	}
-}
-
-func TestContactStoreReadsVersionSixWithoutNewFields(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "contacts.json")
-	legacy := `{"version":6,"selected":"c1","contacts":[{"id":"c1","name":"Old","session_id":"s1"}]}`
-	if err := os.WriteFile(path, []byte(legacy), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	store, err := openContactStore(path, "/tmp")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if store.state.Version != 6 || len(store.state.Contacts) != 1 {
-		t.Fatalf("state = %+v", store.state)
-	}
-	ct := store.state.Contacts[0]
-	if ct.Archived || len(ct.PreviousSessions) != 0 || ct.SessionID != "s1" {
-		t.Fatalf("legacy contact = %+v", ct)
 	}
 }
 
@@ -615,7 +595,7 @@ func TestContactsFromStoreKeepsEmptyWorkspaceAsInheritedDefault(t *testing.T) {
 }
 
 func TestContactManagementAppPreviews(t *testing.T) {
-	dir := os.Getenv("SAKI_PREVIEW_DIR")
+	dir := os.Getenv("NAGI_PREVIEW_DIR")
 	if dir == "" {
 		dir = t.TempDir()
 	}

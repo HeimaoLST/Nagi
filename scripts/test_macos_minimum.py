@@ -15,7 +15,7 @@ import macos_minimum as mm
 class MinimumTests(unittest.TestCase):
     def test_vtool_output_extracts_real_field(self) -> None:
         output = """
-Saki:
+Nagi:
 Load command 6
       cmd LC_BUILD_VERSION
  platform MACOS

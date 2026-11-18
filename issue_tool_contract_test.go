@@ -9,7 +9,7 @@ import (
 
 func issueToolScopeForTest() IssueToolScope {
 	return IssueToolScope{
-		Ref: "scope-turn-1", ContactID: "contact-x", ConversationSessionID: "conversation-1",
+		Ref: "scope-turn-1", ContactID: "contact-x", RuntimeSessionID: "conversation-1",
 		TurnID: "turn-1", AllowedIssueIDs: []string{"issue-a", "issue-b"}, AllowCreate: true,
 		CreatedAt: 1,
 	}
@@ -222,10 +222,12 @@ func TestIssueToolSetReceiptRequiresCurrentLedgerMemberAndTarget(t *testing.T) {
 	}
 	accepted := &IssueToolReceipt{State: issueToolReceiptAccepted, IssueID: "issue-a", ExecutionID: "e", SessionID: "s", TaskID: "t"}
 	if err := ValidateIssueToolReceipt(accepted); err == nil {
-		t.Fatal("accepted receipt without message id passed")
+		t.Fatal("accepted receipt without an admitted Pi run passed")
 	}
-	accepted.MessageID = "m"
-	if err := ledger.SetReceipt(operation.ID, &IssueToolReceipt{State: issueToolReceiptAccepted, IssueID: "issue-b", ExecutionID: "e", SessionID: "s", TaskID: "t", MessageID: "m"}, save); err == nil {
+	accepted.PiRun = &piActivityRun{WorkerEpoch: "epoch", ContextID: "activity", SessionRef: "s", RunID: "t", Admitted: true}
+	wrongIssue := *accepted
+	wrongIssue.IssueID = "issue-b"
+	if err := ledger.SetReceipt(operation.ID, &wrongIssue, save); err == nil {
 		t.Fatal("receipt for another issue passed")
 	}
 	if err := ledger.SetReceipt(operation.ID, accepted, save); err != nil {

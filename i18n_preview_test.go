@@ -18,9 +18,9 @@ import (
 // Settings and copy slice. It is not native-window evidence and does not
 // expand into the final AC3 preview matrix.
 func TestPreviewI18nSelectedSlice(t *testing.T) {
-	dir := os.Getenv("SAKI_PREVIEW_DIR")
+	dir := os.Getenv("NAGI_PREVIEW_DIR")
 	if dir == "" {
-		t.Skip("set SAKI_PREVIEW_DIR to write the I1 i18n previews")
+		t.Skip("set NAGI_PREVIEW_DIR to write the I1 i18n previews")
 	}
 	for _, locale := range []string{"en", "zh-Hans", "en-XA"} {
 		for _, dark := range []bool{false, true} {
@@ -112,29 +112,10 @@ func showPreviewTooltip(t *testing.T, tr *ui.Tester, label string) {
 	tr.Frame()
 }
 
-func TestPreviewHelperBrand(t *testing.T) {
-	dir := os.Getenv("SAKI_PREVIEW_DIR")
-	if dir == "" {
-		t.Skip("set SAKI_PREVIEW_DIR for the helper brand previews")
-	}
-
-	helper, _ := workspaceTestApp(t)
-	helper.runtimeStatus = runtimeStateFailed
-	helper.runtimeStage = "Runtime helper"
-	helper.runtimeErrKind = runtimeNoticeHelperMissing
-	helper.runtimeHintKind = startupHintHelperInstall
-	helper.runtimeHintArgs = []string{"/Applications/Saki.app/Contents/MacOS/Saki-runtime, /usr/local/bin/Saki-runtime"}
-	helper.openAdvancedSettings()
-	helperTr := ui.NewTester(helper.view, 1040, 720)
-	helperTr.SetLocale("zh-Hans")
-	helperTr.Frame()
-	writePreviewPNG(t, filepath.Join(dir, "runtime-helper-zh-Hans-light-1040x720.png"), helperTr.Image())
-}
-
 func TestPreviewIssueWorkLocalized(t *testing.T) {
-	dir := os.Getenv("SAKI_PREVIEW_DIR")
+	dir := os.Getenv("NAGI_PREVIEW_DIR")
 	if dir == "" {
-		t.Skip("set SAKI_PREVIEW_DIR for the localized issue/work previews")
+		t.Skip("set NAGI_PREVIEW_DIR for the localized issue/work previews")
 	}
 	list := issuePreviewApp("expanded")
 	list.windowWidth = 1040
@@ -158,9 +139,9 @@ func TestPreviewIssueWorkLocalized(t *testing.T) {
 }
 
 func TestPreviewPhase5bLocalized(t *testing.T) {
-	dir := os.Getenv("SAKI_PREVIEW_DIR")
+	dir := os.Getenv("NAGI_PREVIEW_DIR")
 	if dir == "" {
-		t.Skip("set SAKI_PREVIEW_DIR for the localized context/result previews")
+		t.Skip("set NAGI_PREVIEW_DIR for the localized context/result previews")
 	}
 	tc := &taskContext{}
 	if _, err := tc.AddSnippet("Release notes", "Line one"); err != nil {
@@ -188,9 +169,9 @@ func TestPreviewPhase5bLocalized(t *testing.T) {
 // TestPreviewI18nFinalMatrix is the bounded final E preview. It is headless
 // layout evidence only, not a native window, IME, or human visual review.
 func TestPreviewI18nFinalMatrix(t *testing.T) {
-	dir := os.Getenv("SAKI_PREVIEW_DIR")
+	dir := os.Getenv("NAGI_PREVIEW_DIR")
 	if dir == "" {
-		t.Skip("set SAKI_PREVIEW_DIR to write the final bounded i18n previews")
+		t.Skip("set NAGI_PREVIEW_DIR to write the final bounded i18n previews")
 	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
@@ -237,15 +218,15 @@ func TestPreviewI18nFinalMatrix(t *testing.T) {
 			setup: func(locale string) *appModel {
 				a, ct := workspaceTestApp(t)
 				a.workspaceOpen = false
-				a.rt = &runtimeClient{}
+				a.pi = &piAppHost{}
 				a.runtimeStatus = runtimeStateStarting
 				ct.Messages = nil
 				return a
 			},
 			want: func(msgs locales.Messages) []string {
-				return []string{msgs.RuntimeConnecting(), msgs.EmptyNoMessages(), msgs.ComposerLabel("Saki")}
+				return []string{msgs.RuntimeConnecting(), msgs.EmptyNoMessages(), msgs.ComposerLabel("Nagi")}
 			},
-			fit: func(msgs locales.Messages) []string { return []string{msgs.ComposerLabel("Saki")} },
+			fit: func(msgs locales.Messages) []string { return []string{msgs.ComposerLabel("Nagi")} },
 		},
 		{
 			name: "config-failure", width: 1040, height: 720,
@@ -253,10 +234,9 @@ func TestPreviewI18nFinalMatrix(t *testing.T) {
 				a, ct := workspaceTestApp(t)
 				a.workspaceOpen = false
 				a.runtimeStatus = runtimeStateFailed
-				a.runtimeStage = "Runtime configuration"
-				a.runtimeErrKind = runtimeNoticeAPIKey
-				a.runtimeHintKind = startupHintSetAPIKey
-				a.runtimeHintArgs = []string{"/Users/you/Workspace/saki-run"}
+				a.runtimeStage = "Connection configuration"
+				a.runtimeErrKind = runtimeNoticeConnectionRequired
+				a.runtimeHintKind = startupHintEnterConnection
 				ct.Draft = "Keep this draft while I fix configuration."
 				return a
 			},
@@ -264,7 +244,7 @@ func TestPreviewI18nFinalMatrix(t *testing.T) {
 				return []string{msgs.ConnectionStatusNotConnected(), msgs.ConnectionRecoveryNotConnectedHint()}
 			},
 			fit: func(msgs locales.Messages) []string {
-				return []string{msgs.ComposerLabel("Saki"), msgs.ConfigurationDetails()}
+				return []string{msgs.ComposerLabel("Nagi"), msgs.ConfigurationDetails()}
 			},
 		},
 		{
@@ -307,14 +287,14 @@ func TestPreviewI18nFinalMatrix(t *testing.T) {
 				return []string{msgs.WorkTask(), msgs.IssueHideActions(), msgs.IssueExecutionHistory()}
 			},
 			fit: func(msgs locales.Messages) []string {
-				return []string{msgs.WorkClose(), msgs.ComposerLabel("Saki")}
+				return []string{msgs.WorkClose(), msgs.ComposerLabel("Nagi")}
 			},
 			check: func(t *testing.T, a *appModel, tr *ui.Tester, msgs locales.Messages) {
 				t.Helper()
 				if a.detailPageActive() || !a.avatarRailActive() {
 					t.Fatalf("960 detail geometry = page=%v avatar=%v", a.detailPageActive(), a.avatarRailActive())
 				}
-				composer, ok := tr.Find(msgs.ComposerLabel("Saki"))
+				composer, ok := tr.Find(msgs.ComposerLabel("Nagi"))
 				if !ok || composer.W-4 < 440 {
 					t.Fatalf("960 composer content = %+v ok=%v, want a real center of at least 440", composer, ok)
 				}
@@ -328,7 +308,7 @@ func TestPreviewI18nFinalMatrix(t *testing.T) {
 				ct := a.selectedContact()
 				issue := ct.selectedIssue()
 				execution := issue.Executions[0]
-				file := issueResultFile{ExecutionID: execution.ID, SessionID: execution.SessionID, TaskID: execution.TaskID, MessageID: execution.MessageID, CallID: "final-reader", ToolName: "write", Path: "/Users/you/Workspace/saki-run/final-reader-result.md", WorkingDirectory: "/Users/you/Workspace/saki-run", RawResult: `{"path":"/Users/you/Workspace/saki-run/final-reader-result.md","bytes_written":1}`}
+				file := issueResultFile{ExecutionID: execution.ID, SessionID: execution.SessionID, TaskID: execution.TaskID, MessageID: "preview-receipt", CallID: "final-reader", ToolName: "write", Path: "/Users/you/Workspace/nagi-run/final-reader-result.md", WorkingDirectory: "/Users/you/Workspace/nagi-run", RawResult: `{"path":"/Users/you/Workspace/nagi-run/final-reader-result.md","bytes_written":1}`}
 				key := issueResultFileKey(file)
 				longPreview := "# Final reader preview\n\nA long saved file line that must remain readable in both languages.\n"
 				for index := 0; index < 40; index++ {
@@ -404,19 +384,15 @@ func TestPreviewI18nFinalMatrix(t *testing.T) {
 			setup: func(locale string) *appModel {
 				a, _ := workspaceTestApp(t)
 				a.runtimeStatus = runtimeStateFailed
-				a.runtimeStage = "Runtime helper"
-				a.runtimeErrKind = runtimeNoticeHelperMissing
-				a.runtimeHintKind = startupHintHelperInstall
-				a.runtimeHintArgs = []string{"/Applications/Nagi.app/Contents/MacOS/Saki-runtime, /usr/local/bin/Saki-runtime"}
-				a.runtimeBinary = "/Applications/Nagi.app/Contents/MacOS/Saki-runtime"
-				a.storePath = "/Users/you/Library/Application Support/Saki/contacts.json"
-				a.sessionDir = "/Users/you/Library/Application Support/Saki/sessions"
-				a.workDir = "/Users/you/Workspace/saki-run"
+				a.runtimeStage = "Runtime startup"
+				a.runtimeErr = "Pi worker could not start."
+				a.storePath = "/Users/you/Library/Application Support/Nagi/contacts.json"
+				a.workDir = "/Users/you/Workspace/nagi-run"
 				a.openAdvancedSettings()
 				return a
 			},
 			want: func(msgs locales.Messages) []string {
-				return []string{msgs.SettingsAdvanced(), msgs.SettingsAdvancedIntro(), msgs.SettingsHideRuntimeDetails(), msgs.RuntimeStageRuntimeHelper(), msgs.StartupHintHelperInstall("/Applications/Nagi.app/Contents/MacOS/Saki-runtime, /usr/local/bin/Saki-runtime")}
+				return []string{msgs.SettingsAdvanced(), msgs.SettingsAdvancedIntro(), msgs.SettingsHideRuntimeDetails(), msgs.RuntimeStoreLine("/Users/you/Library/Application Support/Nagi/contacts.json")}
 			},
 			fit: settingsFit,
 		},
@@ -499,9 +475,9 @@ func TestPreviewI18nFinalMatrix(t *testing.T) {
 }
 
 func TestPreviewMarkdownLinks(t *testing.T) {
-	dir := os.Getenv("SAKI_PREVIEW_DIR")
+	dir := os.Getenv("NAGI_PREVIEW_DIR")
 	if dir == "" {
-		t.Skip("set SAKI_PREVIEW_DIR to write the whole-app Markdown link previews")
+		t.Skip("set NAGI_PREVIEW_DIR to write the whole-app Markdown link previews")
 	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
@@ -598,9 +574,9 @@ func TestPreviewMarkdownLinks(t *testing.T) {
 }
 
 func TestPreviewInputStates(t *testing.T) {
-	dir := os.Getenv("SAKI_PREVIEW_DIR")
+	dir := os.Getenv("NAGI_PREVIEW_DIR")
 	if dir == "" {
-		t.Skip("set SAKI_PREVIEW_DIR to write whole-app input state previews")
+		t.Skip("set NAGI_PREVIEW_DIR to write whole-app input state previews")
 	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)

@@ -34,7 +34,7 @@ func TestNavigationSurfacesStayMutuallyExclusiveAndKeepState(t *testing.T) {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if !a.detailIs(detailHistory) || !tr.HasText("History: Saki") {
+	if !a.detailIs(detailHistory) || !tr.HasText("History: Nagi") {
 		t.Fatalf("History replaced Work = detail=%q", a.activeDetail())
 	}
 	a.historyQuery = "history marker"
@@ -134,13 +134,13 @@ func TestNarrowDetailPageFocusesVisibleBackAcrossWidthChange(t *testing.T) {
 			if !a.detailPageActive() || !tr.Focused(narrowLabel) {
 				t.Fatalf("narrow %s did not focus the visible Back", kind)
 			}
-			if tr.HasText("Composer for Saki") || tr.HasText("Add contact") {
+			if tr.HasText("Composer for Nagi") || tr.HasText("Add contact") {
 				t.Fatalf("narrow %s left the workbench background mounted: %v", kind, tr.Texts())
 			}
 			for i := 0; i < 3; i++ {
 				tr.Key(0, ui.KeyTab)
 				tr.Frame()
-				if tr.Focused("Composer for Saki") || tr.Focused("Add contact") {
+				if tr.Focused("Composer for Nagi") || tr.Focused("Add contact") {
 					t.Fatalf("narrow %s Tab reached an unmounted background control", kind)
 				}
 			}
@@ -174,7 +174,7 @@ func TestResizeDoesNotStealSettingsFocus(t *testing.T) {
 	if !a.settingsOpen || !tr.Focused("← Back to workbench") {
 		t.Fatalf("resize stole Settings focus: settings=%v texts=%v", a.settingsOpen, tr.Texts())
 	}
-	if tr.HasText("Composer for Saki") || tr.HasText("Add contact") {
+	if tr.HasText("Composer for Nagi") || tr.HasText("Add contact") {
 		t.Fatal("Settings resize mounted the workbench background")
 	}
 }
@@ -361,7 +361,7 @@ func TestSourcesPageBackReturnsToOriginatingControl(t *testing.T) {
 	a.openSources(7)
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	if !a.mainPageActive() || !tr.HasText("source text") || tr.HasText("Composer for Saki") {
+	if !a.mainPageActive() || !tr.HasText("source text") || tr.HasText("Composer for Nagi") {
 		t.Fatalf("sources did not replace the main reading surface: %v", tr.Texts())
 	}
 	if err := tr.Click("← Back"); err != nil {
@@ -493,7 +493,7 @@ func navigationPreviewApp(t *testing.T) (*appModel, *contact) {
 	t.Helper()
 	a, ct := workspaceTestApp(t)
 	a.windowWidth = 1040
-	ct.Name = "Saki"
+	ct.Name = "Nagi"
 	ct.Role = "Research partner"
 	ct.Purpose = "Keep product decisions and evidence together across long conversations."
 	ct.Instructions = "Read the current state before changing it.\nKeep the source and return path visible."
@@ -521,7 +521,7 @@ func navigationPreviewApp(t *testing.T) (*appModel, *contact) {
 }
 
 func TestPreviewNavigation219(t *testing.T) {
-	dir := os.Getenv("SAKI_PREVIEW_DIR")
+	dir := os.Getenv("NAGI_PREVIEW_DIR")
 	if dir == "" {
 		dir = t.TempDir()
 	}
@@ -574,7 +574,7 @@ func TestPreviewNavigation219(t *testing.T) {
 						t.Fatalf("narrow work preview lost creation/overview content: %v", tr.Texts())
 					}
 				case detailHistory:
-					if !tr.HasText("History: Saki") || !tr.HasText("预算与发布证据") {
+					if !tr.HasText("History: Nagi") || !tr.HasText("预算与发布证据") {
 						t.Fatalf("history preview lacks real search/list content: %v", tr.Texts())
 					}
 				case detailProfile:
@@ -583,7 +583,7 @@ func TestPreviewNavigation219(t *testing.T) {
 					}
 				}
 				if width == 720 {
-					if tr.HasText("Composer for Saki") || tr.HasText("Add contact") || !tr.HasText("Back") {
+					if tr.HasText("Composer for Nagi") || tr.HasText("Add contact") || !tr.HasText("Back") {
 						t.Fatalf("%s narrow preview is not the application page: %v", kind, tr.Texts())
 					}
 				}
@@ -624,7 +624,7 @@ func TestPreviewNavigation219(t *testing.T) {
 			if !a.mainPageActive() || !tr.HasText("Run results") || !tr.HasText("发布检查结果") || !tr.HasText("Read file 1: preview-result.md") {
 				t.Fatalf("result preview lacks real main-page body: %v", tr.Texts())
 			}
-			if width == 720 && (tr.HasText("Composer for Saki") || tr.HasText("Add contact")) {
+			if width == 720 && (tr.HasText("Composer for Nagi") || tr.HasText("Add contact")) {
 				t.Fatalf("narrow result preview mounted the workbench background")
 			}
 			writePreviewPNG(t, filepath.Join(dir, fmt.Sprintf("navigation-result-%s-%d.png", theme, width)), tr.Image())
@@ -643,7 +643,7 @@ func TestPreviewNavigation219(t *testing.T) {
 			if !tr.HasText("当前文件预览") || !tr.HasText("完整正文在主区阅读") || !tr.Focused("Close reading") {
 				t.Fatalf("reader preview lacks inspected file body: %v", tr.Texts())
 			}
-			if width == 720 && (tr.HasText("Composer for Saki") || tr.HasText("Add contact")) {
+			if width == 720 && (tr.HasText("Composer for Nagi") || tr.HasText("Add contact")) {
 				t.Fatalf("narrow reader preview mounted the workbench background")
 			}
 			writePreviewPNG(t, filepath.Join(dir, fmt.Sprintf("navigation-reader-%s-%d.png", theme, width)), tr.Image())
@@ -728,13 +728,13 @@ func TestResultMainPageKeepsWorkbenchOutOfTabPath(t *testing.T) {
 	}
 	tr := ui.NewTester(a.view, 720, 640)
 	tr.Frame()
-	if !a.mainPageActive() || tr.HasText("Composer for Saki") || tr.HasText("Add contact") {
+	if !a.mainPageActive() || tr.HasText("Composer for Nagi") || tr.HasText("Add contact") {
 		t.Fatalf("result did not replace the workbench: %v", tr.Texts())
 	}
 	for i := 0; i < 5; i++ {
 		tr.Key(0, ui.KeyTab)
 		tr.Frame()
-		if tr.Focused("Composer for Saki") || tr.Focused("Add contact") {
+		if tr.Focused("Composer for Nagi") || tr.Focused("Add contact") {
 			t.Fatal("result Tab reached an unmounted workbench control")
 		}
 	}

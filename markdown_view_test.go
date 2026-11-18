@@ -12,6 +12,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"github.com/HeimaoLST/Nagi/internal/pi"
 	"github.com/HeimaoLST/Nagi/locales"
 )
 
@@ -24,7 +25,7 @@ func appReadingTestApp(t *testing.T) (*appModel, *contact) {
 }
 
 func scrollToVisibleControl(tr *ui.Tester, label string, dy float32) bool {
-	composer, composerOK := tr.Find("Composer for Saki")
+	composer, composerOK := tr.Find("Composer for Nagi")
 	messages, messagesOK := tr.Find("Chat messages")
 	if !composerOK || !messagesOK || composer.W <= 0 || composer.H <= 0 ||
 		messages.W <= 0 || messages.H <= 0 {
@@ -46,18 +47,17 @@ func scrollToVisibleControl(tr *ui.Tester, label string, dy float32) bool {
 	return false
 }
 
-func TestAppAssistantMarkdownStreamsFinalRestoresAndCopies(t *testing.T) {
+func TestAppAssistantMarkdownStreamsFinalAndCopies(t *testing.T) {
 	const md = "# 标题\n\n列表：\n\n- 第一项\n- 第二项\n\n> 引用\n\n[链接](https://example.com/docs)\n\n" +
 		"```go\n\tfmt.Println(\"x\")\n```\n\n| 名称 | 值 |\n| --- | --- |\n| 语言 | 中文 |\n"
 
 	for _, size := range []struct {
 		width, height int
 	}{{1040, 720}, {720, 640}} {
-		a, ct := appReadingTestApp(t)
+		a, ct, event := piRunStartedTestApp(t)
 		a.windowWidth = size.width
-		ct.ActiveTaskID, ct.LastTaskID = "t1", "t1"
 		ct.Messages = []*message{{
-			Key: "live:t1:text:a1", Kind: msgContact, TaskID: "t1", ItemID: "a1",
+			Key: "live:" + event.RunID + ":text:pi", Kind: msgContact, TaskID: event.RunID, ItemID: "pi",
 			Text: "# 标题\n\n", Streaming: true,
 		}}
 		tr := ui.NewTester(a.view, size.width, size.height)
@@ -66,14 +66,11 @@ func TestAppAssistantMarkdownStreamsFinalRestoresAndCopies(t *testing.T) {
 			t.Fatalf("%dx%d streaming markdown missing: %q", size.width, size.height, tr.Texts())
 		}
 
-		a.applyEvent(ct, runtimeEventEnvelope{
-			Version: 1, Type: "event", SessionID: "s1", TaskID: "t1", MessageID: "m1",
-			Event: &runtimeEvent{Type: "response_text_delta", ItemID: "a1", Delta: "列表：\n\n- 第一项\n- 第二项\n\n"},
-		})
-		a.applyEvent(ct, runtimeEventEnvelope{
-			Version: 1, Type: "event", SessionID: "s1", TaskID: "t1", MessageID: "m1",
-			Event: &runtimeEvent{Type: "response_text", ItemID: "a1", Text: md},
-		})
+		event.Name, event.Data = pi.TextDelta, json.RawMessage(`{"text":"列表：\n\n- 第一项\n- 第二项\n\n"}`)
+		a.applyPiEvent(a.connectionGeneration, event)
+		event.Name = pi.RunSettled
+		event.Data, _ = json.Marshal(pi.RunSettledData{Status: pi.Completed, Text: md})
+		a.applyPiEvent(a.connectionGeneration, event)
 		tr.Frame()
 		for _, want := range []string{"标题", "第一项", "第二项", "引用", "链接", "fmt.Println", "名称", "中文"} {
 			if !tr.HasText(want) {
@@ -107,30 +104,6 @@ func TestAppAssistantMarkdownStreamsFinalRestoresAndCopies(t *testing.T) {
 			t.Fatalf("%dx%d code copy = %q, want %q", size.width, size.height, got, want)
 		}
 
-		content, err := json.Marshal(md)
-		if err != nil {
-			t.Fatal(err)
-		}
-		a.applyHistory(ct, []historyRecord{
-			{Offset: 0, Record: journalRecord{Type: "task_started", TaskID: "t1", MessageID: "m1"}},
-			{Offset: 1, Record: journalRecord{Type: "messages", Items: []inputItem{{
-				Type: "message", Role: "assistant", Content: content,
-			}}}},
-			{Offset: 2, Record: journalRecord{Type: "task_finished", TaskID: "t1", Status: "completed"}},
-		}, "completed")
-		tr.Frame()
-		if !tr.HasText("第一项") || !tr.HasText("引用") || !tr.HasText("fmt.Println") {
-			t.Fatalf("%dx%d restored markdown missing: %q", size.width, size.height, tr.Texts())
-		}
-		if !scrollToVisibleControl(tr, "Copy message", -160) {
-			t.Fatalf("%dx%d restored full-source control is not reachable", size.width, size.height)
-		}
-		if err := tr.Click("Copy message"); err != nil {
-			t.Fatal(err)
-		}
-		if got := tr.Clipboard(); got != md {
-			t.Fatalf("%dx%d restored copy = %q, want exact source", size.width, size.height, got)
-		}
 	}
 }
 
@@ -322,8 +295,11 @@ func TestAppChatScrollUpSurvivesStreamAppendAndBackToLatest(t *testing.T) {
 		})
 	}
 	ct.Messages = append(ct.Messages, &message{
-		Key: "live:t1:text:a1", Kind: msgContact, TaskID: "t1", ItemID: "a1", Text: "live start", Streaming: true,
+		Key: "live:t1:text:pi", Kind: msgContact, TaskID: "t1", ItemID: "pi", Text: "live start", Streaming: true,
 	})
+	ct.ActiveTaskID, ct.SendState = "t1", sendAccepted
+	a.pi = &piAppHost{}
+	event := pi.Event{ContextID: ct.PiBinding.Context.ContextID, RunID: "t1", Name: pi.TextDelta}
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
 	if !ct.list.AtEnd() {
@@ -338,7 +314,7 @@ func TestAppChatScrollUpSurvivesStreamAppendAndBackToLatest(t *testing.T) {
 	}
 	ct.Draft = "draft stays across appearance switch"
 	first, _ := ct.list.Visible()
-	composer, composerOK := tr.Find("Composer for Saki")
+	composer, composerOK := tr.Find("Composer for Nagi")
 	settings, settingsOK := tr.Find("Contact profile")
 	if !composerOK || !settingsOK {
 		t.Fatalf("reading viewport bounds unavailable: composer=%+v/%v settings=%+v/%v", composer, composerOK, settings, settingsOK)
@@ -398,10 +374,8 @@ func TestAppChatScrollUpSurvivesStreamAppendAndBackToLatest(t *testing.T) {
 
 	firstBeforeAppend, _ := ct.list.Visible()
 
-	a.applyEvent(ct, runtimeEventEnvelope{
-		Version: 1, Type: "event", SessionID: "s1", TaskID: "t1", MessageID: "m1",
-		Event: &runtimeEvent{Type: "response_text_delta", ItemID: "a1", Delta: " appended"},
-	})
+	event.Data = json.RawMessage(`{"text":" appended"}`)
+	a.applyPiEvent(a.connectionGeneration, event)
 	tr.Frame()
 	if ct.list.AtEnd() {
 		t.Fatal("appending while scrolled up jumped back to the end")
@@ -416,18 +390,17 @@ func TestAppChatScrollUpSurvivesStreamAppendAndBackToLatest(t *testing.T) {
 		t.Fatalf("append changed the earlier selection: %q -> %q", selected, got)
 	}
 
-	if err := tr.Click("Composer for Saki"); err != nil {
+	composer := locales.In("en").ComposerLabel(ct.Name)
+	if err := tr.Click(composer); err != nil {
 		t.Fatal(err)
 	}
-	if !tr.Focused("Composer for Saki") {
+	if !tr.Focused(composer) {
 		t.Fatal("composer did not take focus")
 	}
-	a.applyEvent(ct, runtimeEventEnvelope{
-		Version: 1, Type: "event", SessionID: "s1", TaskID: "t1", MessageID: "m1",
-		Event: &runtimeEvent{Type: "response_text_delta", ItemID: "a1", Delta: " more"},
-	})
+	event.Data = json.RawMessage(`{"text":" more"}`)
+	a.applyPiEvent(a.connectionGeneration, event)
 	tr.Frame()
-	if !tr.Focused("Composer for Saki") {
+	if !tr.Focused(composer) {
 		t.Fatal("streaming text stole composer focus")
 	}
 
@@ -438,15 +411,13 @@ func TestAppChatScrollUpSurvivesStreamAppendAndBackToLatest(t *testing.T) {
 	if !ct.list.AtEnd() || tr.HasText("Back to latest") {
 		t.Fatal("Back to latest did not resume following")
 	}
-	if !tr.Focused("Composer for Saki") {
+	if !tr.Focused(composer) {
 		t.Fatal("Back to latest did not return meaningful focus to the composer")
 	}
-	a.applyEvent(ct, runtimeEventEnvelope{
-		Version: 1, Type: "event", SessionID: "s1", TaskID: "t1", MessageID: "m1",
-		Event: &runtimeEvent{Type: "response_text_delta", ItemID: "a1", Delta: " after back"},
-	})
+	event.Data = json.RawMessage(`{"text":" after back"}`)
+	a.applyPiEvent(a.connectionGeneration, event)
 	tr.Frame()
-	if !ct.list.AtEnd() || !tr.Focused("Composer for Saki") {
+	if !ct.list.AtEnd() || !tr.Focused(composer) {
 		t.Fatal("following/focus did not persist after returning to the latest")
 	}
 
@@ -461,7 +432,7 @@ func TestAppChatScrollUpSurvivesStreamAppendAndBackToLatest(t *testing.T) {
 	}
 	tr.Key(0, ui.KeyEnter)
 	tr.Frame()
-	if !ct.list.AtEnd() || !tr.Focused("Composer for Saki") {
+	if !ct.list.AtEnd() || !tr.Focused("Composer for Nagi") {
 		t.Fatal("keyboard activation of Back to latest did not resume following with composer focus")
 	}
 }
@@ -469,10 +440,10 @@ func TestAppChatScrollUpSurvivesStreamAppendAndBackToLatest(t *testing.T) {
 func TestAppWorkspaceResultSummaryIsPreview(t *testing.T) {
 	a, ct := workspaceTestApp(t)
 	longResult := strings.Repeat("result-line ", 40) + "tail-marker"
-	ct.Issues = []*productIssue{{ID: "i1", ContactID: "saki", Goal: "First issue", Status: issueStatusNotStarted, Executions: []*issueExecution{{ID: "e1", TaskID: "t1", Status: issueExecutionCompleted}}}}
+	ct.Issues = []*productIssue{{ID: "i1", ContactID: ct.ID, Goal: "First issue", Status: issueStatusNotStarted, Executions: []*issueExecution{{ID: "e1", TaskID: "t1", Status: issueExecutionCompleted}}}}
 	openIssueDetailForTest(a, ct, "i1")
 	ct.Works = []*workItem{{TaskID: "t1", MessageID: "m1", State: workCompleted, Prompt: "prompt"}}
-	ct.Messages = []*message{{ID: 1, Kind: msgContact, TaskID: "t1", MessageID: "m1", Text: longResult}}
+	ct.Issues[0].Work.Messages = []*message{{ID: 1, Kind: msgContact, TaskID: "t1", Text: longResult}}
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
 	preview := ""
@@ -496,9 +467,9 @@ func TestAppWorkspaceResultSummaryIsPreview(t *testing.T) {
 }
 
 func TestIntegratedMarkdownPreview(t *testing.T) {
-	dir := os.Getenv("SAKI_READER_INTEGRATED_DIR")
+	dir := os.Getenv("NAGI_READER_INTEGRATED_DIR")
 	if dir == "" {
-		t.Skip("set SAKI_READER_INTEGRATED_DIR to write integrated headless previews")
+		t.Skip("set NAGI_READER_INTEGRATED_DIR to write integrated headless previews")
 	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
@@ -560,7 +531,7 @@ func TestIntegratedMarkdownPreview(t *testing.T) {
 				width, height int
 			}{{"1040x720", 1040, 720}, {"960x640", 960, 640}} {
 				a, ct := workspaceTestApp(t)
-				a.rt = &runtimeClient{}
+				a.pi = &piAppHost{client: &pi.Client{}}
 				a.windowWidth = size.width
 				a.workspaceOpen = false
 				ct.Messages = []*message{
@@ -604,7 +575,7 @@ func TestIntegratedMarkdownPreview(t *testing.T) {
 				width, height int
 			}{{"1040x720", 1040, 720}, {"960x640", 960, 640}} {
 				a, _ := appReadingTestApp(t)
-				a.rt = &runtimeClient{}
+				a.pi = &piAppHost{client: &pi.Client{}}
 				a.windowWidth = size.width
 				a.openDetail(detailHistory)
 				a.contactHistoryFull = &contactHistoryFull{
@@ -830,7 +801,7 @@ func TestSaveFailureAppearanceKeepsReaderSelection(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if a.localSaveErr != "" || a.rt != nil {
+			if a.localSaveErr != "" || a.pi != nil {
 				t.Fatal("valid isolated-store setup failed")
 			}
 			tr := ui.NewTester(a.view, 1040, 720)
@@ -907,7 +878,7 @@ func TestSaveFailureAppearanceKeepsReaderSelection(t *testing.T) {
 			if got := tr.Clipboard(); got != selected {
 				t.Fatalf("AC-SAVE1: failed-save error reflow lost active reader selection before any stream delta: copied %q, want %q", got, selected)
 			}
-			a.applyEvent(ct, runtimeEventEnvelope{Version: 1, Type: "event", SessionID: "s1", TaskID: "t1", MessageID: "m1", Event: &runtimeEvent{Type: "response_text_delta", ItemID: "a1", Delta: " appended"}})
+			ct.Messages[len(ct.Messages)-1].Text += " appended"
 			tr.Frame()
 			after, _ = ct.list.Visible()
 			tr.SetClipboard("")
@@ -916,7 +887,7 @@ func TestSaveFailureAppearanceKeepsReaderSelection(t *testing.T) {
 			if ct.list.AtEnd() || after != anchor || tr.Clipboard() != selected || a.selectedContact() != ct || ct.ID != ownerID || ct.SessionID != sessionID || ct.Draft != draft {
 				t.Fatal("AC-SAVE1: controlled stream delta changed active selection, anchor or owned draft")
 			}
-			if got, err := os.ReadFile(goodPath); err != nil || string(got) != string(goodBytes) || a.rt != nil {
+			if got, err := os.ReadFile(goodPath); err != nil || string(got) != string(goodBytes) || a.pi != nil {
 				t.Fatal("controlled stream changed original saved file or launched Runtime")
 			}
 		})

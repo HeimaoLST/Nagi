@@ -1,8 +1,6 @@
 package main
 
 import (
-	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -22,9 +20,8 @@ func isolateConnectionApp(t *testing.T, root, payload string) {
 	if payload == "" {
 		payload = filepath.Join(root, "missing-pi-payload")
 	}
-	t.Setenv("SAKI_GUI_STORE", filepath.Join(root, "gui", "contacts.json"))
-	t.Setenv("SAKI_GUI_WORKDIR", root)
-	t.Setenv("SAKI_SESSION_DIR", filepath.Join(root, "sessions"))
+	t.Setenv("NAGI_GUI_STORE", filepath.Join(root, "gui", "contacts.json"))
+	t.Setenv("NAGI_GUI_WORKDIR", root)
 	t.Setenv("NAGI_PI_PAYLOAD", payload)
 }
 
@@ -41,16 +38,8 @@ func TestConnectionFirstUseDoesNotPersistWrongDefaultWorkspace(t *testing.T) {
 	if _, err := os.Stat(guiStorePath()); !os.IsNotExist(err) {
 		t.Fatal("first use persisted a contact before the user selected a working directory")
 	}
-	if a.rt != nil {
-		t.Fatal("first use started an unconfigured helper")
-	}
-}
-
-func TestConnectionLateReadyDoesNotReopenDrainingApp(t *testing.T) {
-	a := &appModel{rt: &runtimeClient{}, runtimeStatus: runtimeStateDraining, shutdownStarted: true}
-	a.handleRuntimeReady(0, runtimeReady{API: connectionAPIResponses})
-	if a.runtimeStatus != runtimeStateDraining || a.runtimeHandshake {
-		t.Fatal("a late ready notification reopened the app during quit")
+	if a.pi != nil {
+		t.Fatal("first use started a worker before configuration")
 	}
 }
 
@@ -71,7 +60,7 @@ func TestConnectionStoreCreationFailureCanBeRepaired(t *testing.T) {
 			t.Error("a failed contact store did not stop Apply")
 		}
 		h.app.applyConnection()
-		if h.app.connectionApplying || h.app.rt != nil {
+		if h.app.connectionApplying || h.app.pi != nil {
 			t.Error("Apply started work without a usable contact store")
 		}
 	})
@@ -152,8 +141,8 @@ func TestConnectionInvalidSavedSourceRemainsRepairable(t *testing.T) {
 	if a.connectionForm == nil || a.connectionForm.Draft.Model != config.Model || a.connectionForm.Draft.WorkingDirectory != config.WorkingDirectory || a.connectionForm.Error == "" {
 		t.Fatal("invalid saved settings must open for correction with their previous values")
 	}
-	if a.rt != nil || !a.settingsOpen || a.settingsTab != settingsTabConnection {
-		t.Fatalf("invalid GUI configuration did not open the repair page: rt=%v open=%v tab=%q", a.rt, a.settingsOpen, a.settingsTab)
+	if a.pi != nil || !a.settingsOpen || a.settingsTab != settingsTabConnection {
+		t.Fatalf("invalid GUI configuration did not open the repair page: pi=%v open=%v tab=%q", a.pi != nil, a.settingsOpen, a.settingsTab)
 	}
 }
 
@@ -175,15 +164,15 @@ func TestConnectionSaveAndApplySaveFailureDoesNotApply(t *testing.T) {
 	h.pump.wait(func() bool { return !h.app.connectionForm.Busy })
 	var saved *connectionConfig
 	var applying bool
-	var rt *runtimeClient
+	var host *piAppHost
 	var formError, errorDetail, draftModel, status string
 	var reloadBlocked string
 	h.pump.do(func() {
-		saved, applying, rt = h.app.connectionSaved, h.app.connectionApplying, h.app.rt
+		saved, applying, host = h.app.connectionSaved, h.app.connectionApplying, h.app.pi
 		formError, errorDetail, draftModel = h.app.connectionForm.Error, h.app.connectionForm.ErrorDetail, h.app.connectionForm.Draft.Model
 		status, reloadBlocked = h.app.connectionForm.Status, h.app.connectionForm.ReloadBlocked
 	})
-	if saved != nil || applying || rt != nil {
+	if saved != nil || applying || host != nil {
 		t.Fatal("save failure reached apply or committed saved state")
 	}
 	if formError == "" || errorDetail == "" || !strings.Contains(errorDetail, "permission") && !strings.Contains(errorDetail, "operation not permitted") {
@@ -243,9 +232,9 @@ func TestConnectionApplyFailureRetryOnlyAppliesWithoutRewriting(t *testing.T) {
 	}
 	var saved *connectionConfig
 	var applying bool
-	var rt *runtimeClient
-	h.pump.do(func() { saved, applying, rt = h.app.connectionSaved, h.app.connectionApplying, h.app.rt })
-	if saved == nil || *saved != config || applying || rt != nil || h.app.pi != nil || h.app.connectionEffective != nil || h.app.connectionForm.Error != connErrorApplyConfig || !strings.Contains(h.app.connectionForm.ErrorDetail, missing) {
+	var host *piAppHost
+	h.pump.do(func() { saved, applying, host = h.app.connectionSaved, h.app.connectionApplying, h.app.pi })
+	if saved == nil || *saved != config || applying || host != nil || h.app.connectionEffective != nil || h.app.connectionForm.Error != connErrorApplyConfig || !strings.Contains(h.app.connectionForm.ErrorDetail, missing) {
 		t.Fatal("retry apply changed saved/runtime state unexpectedly")
 	}
 	h.shutdown(t)
@@ -440,7 +429,7 @@ func TestConnectionFolderChooserDraftCancelErrorAndRetry(t *testing.T) {
 	if form.Draft.WorkingDirectory != chosen || form.Draft.Model != before.Model || form.folderError != "" || form.Errors["WorkingDirectory"] != "" || form.Errors["Model"] == "" {
 		t.Fatalf("retry did not update only the folder draft: %+v", form)
 	}
-	if config.WorkingDirectory == chosen || ct.Workspace == chosen || a.workDir == chosen || ct.SessionID != "s1" || a.connectionApplying || a.connectionTesting || a.rt != nil {
+	if config.WorkingDirectory == chosen || ct.Workspace == chosen || a.workDir == chosen || ct.SessionID != "s1" || a.connectionApplying || a.connectionTesting || a.pi != nil {
 		t.Fatal("folder choice saved/applied configuration or retargeted existing work")
 	}
 }
@@ -512,13 +501,12 @@ func TestConnectionFolderChooserInitialFolderAndInvalidSelection(t *testing.T) {
 func TestFirstUseWorkFolderRequiresExplicitChoiceBeforeActions(t *testing.T) {
 	root := t.TempDir()
 	isolateConnectionApp(t, root, filepath.Join(root, "unused-runtime"))
-	t.Setenv("SAKI_GUI_WORKDIR", "")
+	t.Setenv("NAGI_GUI_WORKDIR", "")
 	t.Chdir(root)
 	a, err := newRuntimeApp()
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = a.closeIssueToolService() })
 	ct := a.selectedContact()
 	ct.Workspace = t.TempDir()
 	originalID, originalFolder := ct.ID, ct.Workspace
@@ -550,7 +538,7 @@ func TestFirstUseWorkFolderRequiresExplicitChoiceBeforeActions(t *testing.T) {
 		if saves != 0 || probes != 0 || applies != 0 {
 			t.Fatalf("fresh GUI silently accepted launch folder %q: saves=%d probes=%d applies=%d", form.Draft.WorkingDirectory, saves, probes, applies)
 		}
-		if form.Errors["WorkingDirectory"] == "" || a.pi != nil || a.rt != nil || a.connectionProbe != nil || a.connectionApplying || a.connectionTesting {
+		if form.Errors["WorkingDirectory"] == "" || a.pi != nil || a.connectionProbe != nil || a.connectionApplying || a.connectionTesting {
 			t.Fatal("unconfirmed work folder did not block GUI actions")
 		}
 	}
@@ -595,7 +583,6 @@ func TestFirstUseWorkFolderRequiresExplicitChoiceBeforeActions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = reopened.closeIssueToolService() })
 	if reopened.connectionForm.Draft.WorkingDirectory != chosen || !reopened.connectionForm.HasSaved || reopened.selectedID() != originalID {
 		t.Fatal("reopening lost the confirmed connection choice or contact identity")
 	}
@@ -603,95 +590,32 @@ func TestFirstUseWorkFolderRequiresExplicitChoiceBeforeActions(t *testing.T) {
 	if retained.Workspace != originalFolder || retained.SessionID != "" || retained.PiBinding != nil || retained.Draft != "Keep local draft" || reopened.contactByID("inherited-contact").Workspace != "" {
 		t.Fatal("connection choice rewrote an existing contact/session folder or inheritance")
 	}
-	if a.pi != nil || reopened.pi != nil || a.rt != nil || reopened.rt != nil || a.connectionProbe != nil || reopened.connectionProbe != nil || a.connectionTesting || reopened.connectionTesting || a.connectionApplying || reopened.connectionApplying || probes != 0 || applies != 0 {
+	if a.pi != nil || reopened.pi != nil || a.connectionProbe != nil || reopened.connectionProbe != nil || a.connectionTesting || reopened.connectionTesting || a.connectionApplying || reopened.connectionApplying || probes != 0 || applies != 0 {
 		t.Fatal("first-use folder workflow started/tested/applied Runtime")
 	}
 }
 
-func TestFirstUseWorkFolderRetainsLegacyAndSavedChoices(t *testing.T) {
-	for _, source := range []string{"saved", "legacy", "invalid-saved"} {
+func TestFirstUseWorkFolderRetainsSavedChoice(t *testing.T) {
+	for _, source := range []string{"saved", "invalid-saved"} {
 		t.Run(source, func(t *testing.T) {
 			root := t.TempDir()
-			isolateConnectionApp(t, root, filepath.Join(root, "unused-runtime"))
-			want := root
-			var legacyBytes []byte
-			legacyFolder := ""
-			if source == "legacy" {
-				want = ""
-				legacyFolder = t.TempDir()
-				legacy := storedState{
-					Version: 9, Selected: "legacy-contact",
-					Contacts: []storedContact{
-						{ID: "legacy-contact", Name: "Legacy", Role: "Assistant", Workspace: legacyFolder, SessionID: "existing-session", Draft: "Keep local draft"},
-						{ID: "inherited-contact", Name: "Inherited", Role: "Assistant"},
-					},
-				}
-				data, err := json.MarshalIndent(legacy, "", "  ")
-				if err != nil {
+			isolateConnectionApp(t, root, "")
+			config := testConnectionConfig(t)
+			if err := saveConnectionConfig(connectionConfigPath(guiStorePath()), config); err != nil {
+				t.Fatal(err)
+			}
+			if source == "invalid-saved" {
+				if err := os.Remove(config.WorkingDirectory); err != nil {
 					t.Fatal(err)
-				}
-				legacyBytes = append(data, '\n')
-				if err := os.MkdirAll(filepath.Dir(guiStorePath()), 0o700); err != nil {
-					t.Fatal(err)
-				}
-				if err := os.WriteFile(guiStorePath(), legacyBytes, 0o600); err != nil {
-					t.Fatal(err)
-				}
-			} else {
-				config := testConnectionConfig(t)
-				want = config.WorkingDirectory
-				if err := saveConnectionConfig(connectionConfigPath(guiStorePath()), config); err != nil {
-					t.Fatal(err)
-				}
-				if source == "invalid-saved" {
-					if err := os.Remove(want); err != nil {
-						t.Fatal(err)
-					}
 				}
 			}
 			a, err := newRuntimeApp()
 			if err != nil {
 				t.Fatal(err)
 			}
-			t.Cleanup(func() { _ = a.closeIssueToolService() })
 			a.openSettingsTab(settingsTabConnection, settingsSourceRail)
-			if a.connectionForm.Draft.WorkingDirectory != want || a.pi != nil || a.rt != nil || a.connectionProbe != nil || a.connectionApplying || a.connectionTesting {
-				t.Fatalf("%s folder choice was cleared or started Runtime: %+v", source, a.connectionForm.Draft)
-			}
-			if source != "legacy" {
-				return
-			}
-			if a.store == nil || !a.piDataReadOnly() || a.store.state.Version != 9 || a.connectionSaved != nil || a.connectionForm.HasSaved || a.connectionManaged {
-				t.Fatal("legacy store was upgraded, activated or treated as a confirmed Pi connection")
-			}
-			ct, inherited := a.contactByID("legacy-contact"), a.contactByID("inherited-contact")
-			if ct == nil || inherited == nil || len(a.contacts) != 2 || a.selectedID() != "legacy-contact" || ct.Workspace != legacyFolder || ct.SessionID != "existing-session" || ct.PiBinding != nil || ct.Draft != "Keep local draft" || inherited.Workspace != "" {
-				t.Fatal("opening legacy data lost contact identity, opaque session, draft, workspace or inheritance")
-			}
-			if err := a.persist(); err == nil || !strings.Contains(err.Error(), "read-only") {
-				t.Fatalf("legacy persistence did not refuse read-only data: %v", err)
-			}
-			reopened, err := newRuntimeApp()
-			if err != nil {
-				t.Fatal(err)
-			}
-			t.Cleanup(func() { _ = reopened.closeIssueToolService() })
-			if reopened.store == nil || !reopened.piDataReadOnly() || reopened.store.state.Version != 9 || reopened.connectionSaved != nil || reopened.connectionForm.HasSaved || reopened.connectionManaged || reopened.connectionForm.Draft.WorkingDirectory != "" {
-				t.Fatal("reopening legacy data upgraded or confirmed its contact folder as a Pi default")
-			}
-			retained, inherited := reopened.contactByID("legacy-contact"), reopened.contactByID("inherited-contact")
-			if retained == nil || inherited == nil || len(reopened.contacts) != 2 || reopened.selectedID() != "legacy-contact" || retained.Workspace != legacyFolder || retained.SessionID != "existing-session" || retained.PiBinding != nil || retained.Draft != "Keep local draft" || inherited.Workspace != "" {
-				t.Fatal("reopening legacy data lost contact identity, opaque session, draft, workspace or inheritance")
-			}
-			preserved, err := os.ReadFile(guiStorePath())
-			if err != nil || !bytes.Equal(preserved, legacyBytes) {
-				t.Fatalf("opening or refusing to save legacy data changed original bytes: %v", err)
-			}
-			if _, err := os.Stat(a.connectionPath); !errors.Is(err, os.ErrNotExist) {
-				t.Fatalf("legacy data created an implicit Pi connection file: %v", err)
-			}
-			if a.pi != nil || reopened.pi != nil || a.rt != nil || reopened.rt != nil || a.connectionProbe != nil || reopened.connectionProbe != nil || a.connectionApplying || reopened.connectionApplying || a.connectionTesting || reopened.connectionTesting {
-				t.Fatal("legacy read-only use started/tested/applied or replayed Runtime")
+			if a.connectionForm.Draft.WorkingDirectory != config.WorkingDirectory || a.pi != nil || a.connectionProbe != nil || a.connectionApplying || a.connectionTesting {
+				t.Fatalf("%s folder choice was cleared or started Pi: %+v", source, a.connectionForm.Draft)
 			}
 		})
 	}
@@ -706,7 +630,6 @@ func TestFirstConnectionSaveQueuedCompletionRetainsLiveLocalState(t *testing.T) 
 			if err != nil {
 				t.Fatal(err)
 			}
-			t.Cleanup(func() { _ = a.closeIssueToolService() })
 			config := testConnectionConfig(t)
 			a.connectionForm.Draft = newConnectionSettings(&config, config.WorkingDirectory).Draft
 			updates := make(chan func(), 1)
@@ -759,10 +682,10 @@ func TestFirstConnectionSaveQueuedCompletionRetainsLiveLocalState(t *testing.T) 
 			}
 			editor := a.ensureSettingsProfileEditor(second.ID)
 			editor.Draft.Name = "Unsaved profile name"
-			var currentRuntime *runtimeClient
+			var currentHost *piAppHost
 			if !fault {
-				currentRuntime = &runtimeClient{done: make(chan struct{})}
-				a.rt = currentRuntime
+				currentHost = &piAppHost{}
+				a.pi = currentHost
 				second.ActiveTaskID, second.SendState = "accepted-task", sendAccepted
 			}
 			firstID, secondID, selected := first.ID, second.ID, a.selectedID()
@@ -783,7 +706,7 @@ func TestFirstConnectionSaveQueuedCompletionRetainsLiveLocalState(t *testing.T) 
 			if editor.Draft.Name != "Unsaved profile name" || second.Name == editor.Draft.Name {
 				t.Fatal("connection Save discarded or force-saved the profile editor")
 			}
-			if a.connectionSaved == nil || a.connectionSaved.WorkingDirectory != config.WorkingDirectory || a.connectionSaveInFlight || a.rt != currentRuntime || a.connectionApplying {
+			if a.connectionSaved == nil || a.connectionSaved.WorkingDirectory != config.WorkingDirectory || a.connectionSaveInFlight || a.pi != currentHost || a.connectionApplying {
 				t.Fatal("Save lost its successful connection write or automatically applied it")
 			}
 			if fault {
@@ -797,7 +720,7 @@ func TestFirstConnectionSaveQueuedCompletionRetainsLiveLocalState(t *testing.T) 
 				}
 				a.connectionForm.Error, a.connectionForm.ErrorDetail = connErrorStart, "unrelated connection failure"
 				tr.Frame()
-				if a.connectionForm.Error != connErrorStart || a.connectionForm.ErrorDetail != "unrelated connection failure" || editor.Draft.Name != "Unsaved profile name" || second.Name == editor.Draft.Name || a.rt != currentRuntime || a.connectionApplying {
+				if a.connectionForm.Error != connErrorStart || a.connectionForm.ErrorDetail != "unrelated connection failure" || editor.Draft.Name != "Unsaved profile name" || second.Name == editor.Draft.Name || a.pi != currentHost || a.connectionApplying {
 					t.Fatal("feedback recovery changed unrelated errors/profile/runtime state")
 				}
 			}
@@ -812,10 +735,6 @@ func TestC8RecoveryOwnedCompletionDrainsQuit(t *testing.T) {
 				a := c8SavedApp(t)
 				if restore {
 					a = c8UnavailableApp(t)
-				}
-				needsServiceClose := a.issueToolServer != nil
-				if restore && needsServiceClose || !restore && os.Getenv("SAKI_TEST_ISSUE_TOOL_HELPER") != "" && !needsServiceClose {
-					t.Fatal("saved/unavailable fixture has the wrong owned host-service precondition")
 				}
 				req, reply, updates := c8ControlledPicker(t, a)
 				source := filepath.Join(t.TempDir(), "copy.json")
@@ -849,13 +768,7 @@ func TestC8RecoveryOwnedCompletionDrainsQuit(t *testing.T) {
 					t.Fatal("Quit escaped owned recovery completion")
 				}
 				completion()
-				if needsServiceClose {
-					if a.quitReady || quitCount != 0 {
-						t.Fatal("Quit escaped the owned host-service close completion")
-					}
-					awaitFolderChoice(t, updates)()
-				}
-				if !a.quitReady || quitCount != 1 || a.dataRecovery.inFlight || ct.Draft != "intervening live edit" || a.rt != nil {
+				if !a.quitReady || quitCount != 1 || a.dataRecovery.inFlight || ct.Draft != "intervening live edit" || a.pi != nil {
 					t.Fatal("final recovery result did not release exactly once and preserve live edits")
 				}
 				if restore {
@@ -899,7 +812,7 @@ func TestC8RecoveryHostAndThemeMutualAdmission(t *testing.T) {
 			a.testConnection(config)
 			a.applyConnection()
 			a.importAppearanceTheme()
-			if a.connectionForm.Draft != form.Draft || a.connectionForm.Error != form.Error || a.connectionForm.Status != form.Status || a.connectionForm.ReloadBlocked != form.ReloadBlocked || a.connectionSaveInFlight || a.connectionApplying || a.connectionTesting || a.runtimeHelperChecked || a.rt != nil || a.themeImport != nil || recoveryRecordSnapshot(t, a.selectedContact()) != before {
+			if a.connectionForm.Draft != form.Draft || a.connectionForm.Error != form.Error || a.connectionForm.Status != form.Status || a.connectionForm.ReloadBlocked != form.ReloadBlocked || a.connectionSaveInFlight || a.connectionApplying || a.connectionTesting || a.pi != nil || a.themeImport != nil || recoveryRecordSnapshot(t, a.selectedContact()) != before {
 				t.Fatal("recovery ownership changed connection/theme/work through an actual entry method")
 			}
 			if _, err := os.Stat(connectionConfigPath(a.storePath)); !os.IsNotExist(err) {
@@ -931,10 +844,6 @@ func TestC8FailedRecoveryCompletionReleasesQuit(t *testing.T) {
 			if restore {
 				a = c8UnavailableApp(t)
 			}
-			needsServiceClose := a.issueToolServer != nil
-			if restore && needsServiceClose || !restore && os.Getenv("SAKI_TEST_ISSUE_TOOL_HELPER") != "" && !needsServiceClose {
-				t.Fatal("saved/unavailable fixture has the wrong owned host-service precondition")
-			}
 			req, reply, updates := c8ControlledPicker(t, a)
 			source := filepath.Join(t.TempDir(), "compatible.json")
 			recoveryWriteState(t, source, recoveryProducedState(t))
@@ -965,25 +874,18 @@ func TestC8FailedRecoveryCompletionReleasesQuit(t *testing.T) {
 				t.Fatal("quit escaped failed I/O completion")
 			}
 			completion()
-			if needsServiceClose {
-				if a.quitReady || quit != 0 {
-					t.Fatal("Quit escaped the owned host-service close completion")
-				}
-				awaitFolderChoice(t, updates)()
-			}
 			if !a.quitReady || quit != 1 || a.dataRecovery.inFlight || a.dataRecovery.problem == "" {
 				t.Fatal("failed completion did not preserve error and release quit")
 			}
 			if restore && a.dataRecovery.result.Outcome != storeRecoveryNotInstalled {
 				t.Fatal("failure outcome lost during shutdown")
 			}
-			t.Logf("host-service close completion required=%t; final Quit callbacks=%d", needsServiceClose, quit)
 		})
 	}
 }
 
 func TestC8RestoreAdmissionPreservesUnavailableEditsAndLocalRetry(t *testing.T) {
-	for _, kind := range []string{"loaded", "local-save", "profile", "connection", "context", "contact-draft", "history", "result", "submission", "metadata", "connection-test", "contact-picker"} {
+	for _, kind := range []string{"loaded", "local-save", "profile", "connection", "context", "contact-draft", "history", "result", "submission", "connection-test", "contact-picker"} {
 		t.Run(kind, func(t *testing.T) {
 			a := c8UnavailableApp(t)
 			if kind == "loaded" || kind == "local-save" {
@@ -1006,8 +908,6 @@ func TestC8RestoreAdmissionPreservesUnavailableEditsAndLocalRetry(t *testing.T) 
 				a.resultInFlight = 1
 			case "submission":
 				a.submissionInFlight = 1
-			case "metadata":
-				a.metadataInFlight = 1
 			case "connection-test":
 				a.connectionTesting = true
 			case "contact-picker":
@@ -1019,7 +919,7 @@ func TestC8RestoreAdmissionPreservesUnavailableEditsAndLocalRetry(t *testing.T) 
 				return nil, nil
 			}
 			a.chooseDataRecovery(true)
-			if a.dataRecovery != nil && (a.dataRecovery.choosing || a.dataRecovery.inFlight) || string(recoverySavedBytes(t, a.storePath)) != string(original) || recoveryRecordSnapshot(t, a.selectedContact()) != record || a.rt != nil {
+			if a.dataRecovery != nil && (a.dataRecovery.choosing || a.dataRecovery.inFlight) || string(recoverySavedBytes(t, a.storePath)) != string(original) || recoveryRecordSnapshot(t, a.selectedContact()) != record || a.pi != nil {
 				t.Fatal("rejected restore lost original/work or started an operation")
 			}
 			if kind == "local-save" {

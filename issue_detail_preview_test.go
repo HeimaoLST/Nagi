@@ -1,7 +1,7 @@
 package main
 
 // Headless previews for the compact issue detail and explicit secondary
-// actions. Inert unless SAKI_PREVIEW_DIR is set; not a native window run.
+// actions. Inert unless NAGI_PREVIEW_DIR is set; not a native window run.
 
 import (
 	"fmt"
@@ -15,7 +15,7 @@ import (
 
 func issueDetailPreviewApp(t *testing.T, expanded bool) (*appModel, *productIssue) {
 	a, ct := workspaceTestApp(t)
-	a.rt = &runtimeClient{}
+	a.pi = presentationPiHost(a)
 	a.runtimeCapabilitiesLoaded = true
 	a.runtimeMaxActiveTasks = 2
 	a.windowWidth = 1040
@@ -47,9 +47,9 @@ func issueDetailPreviewApp(t *testing.T, expanded bool) (*appModel, *productIssu
 }
 
 func TestPreviewIssueReadableDetails(t *testing.T) {
-	dir := os.Getenv("SAKI_PREVIEW_DIR")
+	dir := os.Getenv("NAGI_PREVIEW_DIR")
 	if dir == "" {
-		t.Skip("set SAKI_PREVIEW_DIR to write issue-detail previews")
+		t.Skip("set NAGI_PREVIEW_DIR to write issue-detail previews")
 	}
 	scenes := []string{"compact", "expanded", "completed", "working", "no-assistant", "long-connection", "view-execution"}
 	for _, dark := range []bool{false, true} {

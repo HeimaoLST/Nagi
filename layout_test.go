@@ -10,6 +10,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"github.com/HeimaoLST/Nagi/internal/pi"
 	"github.com/HeimaoLST/Nagi/locales"
 )
 
@@ -62,9 +63,8 @@ func TestLayoutEntryPointsStartWithRightPaneClosed(t *testing.T) {
 	}
 
 	storePath := filepath.Join(t.TempDir(), "contacts.json")
-	t.Setenv("SAKI_GUI_STORE", storePath)
-	t.Setenv("SAKI_SESSION_DIR", t.TempDir())
-	t.Setenv("SAKI_GUI_WORKDIR", t.TempDir())
+	t.Setenv("NAGI_GUI_STORE", storePath)
+	t.Setenv("NAGI_GUI_WORKDIR", t.TempDir())
 	r, err := newRuntimeApp()
 	if err != nil {
 		t.Fatal(err)
@@ -191,7 +191,7 @@ func TestResponsiveWorkbenchGeometryFirstSlice(t *testing.T) {
 				t.Fatalf("mode mismatch width=%d", tc.width)
 			}
 			if !tc.wantPage {
-				composer, ok := tr.Find("Composer for Saki")
+				composer, ok := tr.Find("Composer for Nagi")
 				if !ok || composer.W <= 0 {
 					t.Fatalf("composer missing at %d: %+v/%v", tc.width, composer, ok)
 				}
@@ -199,7 +199,7 @@ func TestResponsiveWorkbenchGeometryFirstSlice(t *testing.T) {
 				mainStart := float32(0)
 				if a.avatarRailActive() {
 					mainStart = avatarRailWidth + paneSeparatorWidth
-					avatar, avatarOK := tr.Find(locales.In("en").AvatarContactLabel("Saki"))
+					avatar, avatarOK := tr.Find(locales.In("en").AvatarContactLabel("Nagi"))
 					if !avatarOK || avatar.W <= 0 || avatar.X < 0 || avatar.X+avatar.W > avatarRailWidth {
 						t.Fatalf("avatar button rect=%+v ok=%v", avatar, avatarOK)
 					}
@@ -224,7 +224,7 @@ func TestResponsiveWorkbenchGeometryFirstSlice(t *testing.T) {
 					if composer.W-4 < 440 {
 						t.Fatalf("960 max pref editable content=%g, want >=440", composer.W-4)
 					}
-					focusComposer(t, tr, "Composer for Saki")
+					focusComposer(t, tr, "Composer for Nagi")
 					caret, caretOK := tr.TextCaret()
 					if !caretOK || caret.X < composer.X+2 || caret.X+caret.W > composer.X+composer.W-2 {
 						t.Fatalf("composer caret/content inset = caret=%+v ok=%v composer=%+v", caret, caretOK, composer)
@@ -235,7 +235,7 @@ func TestResponsiveWorkbenchGeometryFirstSlice(t *testing.T) {
 						t.Fatalf("960 composer did not accept typing: draft=%q", ct.Draft)
 					}
 				}
-			} else if tr.HasText("Composer for Saki") {
+			} else if tr.HasText("Composer for Nagi") {
 				t.Fatal("composer mounted on 899 detail page")
 			}
 		})
@@ -243,9 +243,9 @@ func TestResponsiveWorkbenchGeometryFirstSlice(t *testing.T) {
 }
 
 func TestPreviewAvatarStatusMarkers(t *testing.T) {
-	dir := os.Getenv("SAKI_PREVIEW_DIR")
+	dir := os.Getenv("NAGI_PREVIEW_DIR")
 	if dir == "" {
-		t.Skip("set SAKI_PREVIEW_DIR to write avatar marker previews")
+		t.Skip("set NAGI_PREVIEW_DIR to write avatar marker previews")
 	}
 	for _, dark := range []bool{false, true} {
 		theme := "light"
@@ -309,7 +309,7 @@ func TestResponsiveAvatarRailKeyboardAndStatus(t *testing.T) {
 	if glyph, count, _ := a.avatarRailMarker(idle); count != 0 || glyph != "" {
 		t.Fatalf("idle avatar marker = %q/%d", glyph, count)
 	}
-	for _, label := range []string{locales.In("en").AvatarAddContact(), locales.In("en").AvatarContactLabel("Saki"), locales.In("en").AvatarContactLabel("Waiting"), locales.In("en").AvatarContactLabel("Attention"), locales.In("en").AvatarContactLabel("Active"), "Settings"} {
+	for _, label := range []string{locales.In("en").AvatarAddContact(), locales.In("en").AvatarContactLabel("Nagi"), locales.In("en").AvatarContactLabel("Waiting"), locales.In("en").AvatarContactLabel("Attention"), locales.In("en").AvatarContactLabel("Active"), "Settings"} {
 		if r, ok := tr.Find(label); !ok || r.X < 0 || r.X+r.W > avatarRailWidth {
 			t.Fatalf("avatar rail control %q rect=%+v ok=%v", label, r, ok)
 		}
@@ -317,7 +317,7 @@ func TestResponsiveAvatarRailKeyboardAndStatus(t *testing.T) {
 	saki.Draft = "draft-saki"
 	waiting.Draft = "draft-waiting"
 	attention.Draft = "draft-attention"
-	if err := tr.Click(locales.In("en").AvatarContactLabel("Saki")); err != nil {
+	if err := tr.Click(locales.In("en").AvatarContactLabel("Nagi")); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
@@ -359,7 +359,7 @@ func TestResponsiveAvatarRailKeyboardAndStatus(t *testing.T) {
 	}
 
 	activeLabel := locales.In("en").AvatarContactLabel("Active")
-	sakiLabel := locales.In("en").AvatarContactLabel("Saki")
+	sakiLabel := locales.In("en").AvatarContactLabel("Nagi")
 	tr.Key(0, ui.KeyTab)
 	tr.Frame()
 	if !tr.Focused(activeLabel) {
@@ -415,13 +415,13 @@ func TestResponsiveManualHideAndWideDrag(t *testing.T) {
 			a.rightPaneWidth = 440
 			tr := ui.NewTester(a.view, tc.width, 640)
 			tr.Frame()
-			if _, ok := tr.Find(locales.In("en").AvatarContactLabel("Saki")); ok {
+			if _, ok := tr.Find(locales.In("en").AvatarContactLabel("Nagi")); ok {
 				t.Fatal("manual hide still mounted an avatar")
 			}
 			if a.avatarRailActive() || a.effectiveRailWidth() != 0 || a.effectiveDetailWidth() < tc.wantDetailMin {
 				t.Fatalf("%d hidden geometry avatar=%v rail=%v detail=%v", tc.width, a.avatarRailActive(), a.effectiveRailWidth(), a.effectiveDetailWidth())
 			}
-			composer, ok := tr.Find("Composer for Saki")
+			composer, ok := tr.Find("Composer for Nagi")
 			if !ok || composer.W-4 < 440 {
 				t.Fatalf("%d hidden composer=%+v ok=%v content=%g", tc.width, composer, ok, composer.W-4)
 			}
@@ -439,10 +439,10 @@ func TestResponsiveManualHideAndWideDrag(t *testing.T) {
 			} else if a.avatarRailActive() {
 				t.Fatal("manual Contacts restored avatar rail at full-rail width")
 			}
-			contactLabel := "Contact Saki"
+			contactLabel := "Contact Nagi"
 			addLabel := "Add contact"
 			if tc.width < 1180 {
-				contactLabel = locales.In("en").AvatarContactLabel("Saki")
+				contactLabel = locales.In("en").AvatarContactLabel("Nagi")
 				addLabel = locales.In("en").AvatarAddContact()
 			}
 			if _, ok := tr.Find(contactLabel); !ok {
@@ -557,13 +557,13 @@ func TestResponsiveClosedDetailKeepsFullRailAndNoAutoOpen(t *testing.T) {
 			a.workspaceOpen = false
 			tr := ui.NewTester(a.view, width, 640)
 			tr.Frame()
-			if a.avatarRailActive() || a.detailPageActive() || !tr.HasText("Contact Saki") {
+			if a.avatarRailActive() || a.detailPageActive() || !tr.HasText("Contact Nagi") {
 				t.Fatalf("closed detail at %d mounted avatar/page or lost full rail", width)
 			}
 			if tr.HasText("Close workspace") {
 				t.Fatalf("closed detail at %d rendered a detail close", width)
 			}
-			if r, ok := tr.Find("Composer for Saki"); !ok || r.W-4 < 440 {
+			if r, ok := tr.Find("Composer for Nagi"); !ok || r.W-4 < 440 {
 				t.Fatalf("closed detail composer at %d = %+v ok=%v", width, r, ok)
 			}
 			a.windowWidth = 1180
@@ -572,7 +572,7 @@ func TestResponsiveClosedDetailKeepsFullRailAndNoAutoOpen(t *testing.T) {
 			if a.workspaceOpen || a.avatarRailActive() {
 				t.Fatalf("resize opened detail at %d", width)
 			}
-			if !tr.HasText("Contact Saki") {
+			if !tr.HasText("Contact Nagi") {
 				t.Fatal("closed resize lost full rail")
 			}
 		})
@@ -651,8 +651,8 @@ func TestResponsivePseudoExpandedSettingsLabel(t *testing.T) {
 	tr.Frame()
 	enAdd := locales.In("en").AvatarAddContact()
 	xaAdd := locales.In("en-XA").AvatarAddContact()
-	enContact := locales.In("en").AvatarContactLabel("Saki")
-	xaContact := locales.In("en-XA").AvatarContactLabel("Saki")
+	enContact := locales.In("en").AvatarContactLabel("Nagi")
+	xaContact := locales.In("en-XA").AvatarContactLabel("Nagi")
 	if xaAdd == enAdd || len(xaAdd) <= len(enAdd) || xaContact == enContact || len(xaContact) <= len(enContact) {
 		t.Fatalf("en-XA avatar labels did not expand: add %q/%q contact %q/%q", enAdd, xaAdd, enContact, xaContact)
 	}
@@ -704,27 +704,30 @@ func TestResponsive899To900FocusCounterpart(t *testing.T) {
 }
 
 func TestLayoutEventsAndContactSwitchDoNotToggleWork(t *testing.T) {
-	a, ct := workspaceTestApp(t)
+	a, ct, event := piRunStartedTestApp(t)
 	a.workspaceOpen = false
 	a.contacts = append(a.contacts, &contact{ID: "mio", Name: "Mio", Role: "Assistant"})
 	a.selectContact(1)
 	if a.workspaceOpen {
 		t.Fatal("contact switch opened work")
 	}
-	a.applyEvent(ct, runtimeEventEnvelope{Version: 1, Type: "event", TaskID: "t1",
-		Event: &runtimeEvent{Type: "task_started"}})
+	ct.pendingSend = &pendingSend{Draft: "first", State: "submitting"}
+	a.applyPiEvent(a.connectionGeneration, event)
 	if a.workspaceOpen {
 		t.Fatal("task start opened work")
 	}
-	a.applyEvent(ct, runtimeEventEnvelope{Version: 1, Type: "event", TaskID: "t1",
-		Event: &runtimeEvent{Type: "task_finished", Status: "completed"}})
+	started := event
+	event.Name, event.Data = pi.RunSettled, []byte(`{"status":"completed"}`)
+	a.applyPiEvent(a.connectionGeneration, event)
 	if a.workspaceOpen {
 		t.Fatal("task finish opened work")
 	}
 	a.workspaceOpen = true
 	a.selectContact(0)
-	a.applyEvent(ct, runtimeEventEnvelope{Version: 1, Type: "event", TaskID: "t2",
-		Event: &runtimeEvent{Type: "task_started"}})
+	started.RunID = "second-run"
+	ct.ActiveTaskID, ct.SendState = started.RunID, sendSubmitting
+	ct.pendingSend = &pendingSend{Draft: "second", State: "submitting"}
+	a.applyPiEvent(a.connectionGeneration, started)
 	if !a.workspaceOpen {
 		t.Fatal("task start closed work")
 	}
@@ -912,9 +915,8 @@ func TestLayoutRuntimeEntryLoadsSavedPreference(t *testing.T) {
 	if err := store.saveState(); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("SAKI_GUI_STORE", storePath)
-	t.Setenv("SAKI_SESSION_DIR", filepath.Join(dir, "sessions"))
-	t.Setenv("SAKI_GUI_WORKDIR", dir)
+	t.Setenv("NAGI_GUI_STORE", storePath)
+	t.Setenv("NAGI_GUI_WORKDIR", dir)
 	a, err := newRuntimeApp()
 	if err != nil {
 		t.Fatal(err)
@@ -940,7 +942,7 @@ func TestHeaderGroupsStatusAndRoleWithLongRawText(t *testing.T) {
 		{
 			name: "ready-960", locale: "en", role: shortRole, status: "Ready",
 			setup: func(a *appModel, ct *contact) {
-				a.rt = &runtimeClient{}
+				a.pi = presentationPiHost(a)
 				a.runtimeStatus = runtimeStateReady
 			},
 		},
@@ -958,7 +960,7 @@ func TestHeaderGroupsStatusAndRoleWithLongRawText(t *testing.T) {
 		{
 			name: "attention-long-960", locale: "en", role: longEnglishRole, status: "Needs attention", wrap: true, dark: true,
 			setup: func(a *appModel, ct *contact) {
-				a.rt = &runtimeClient{}
+				a.pi = presentationPiHost(a)
 				a.runtimeStatus = runtimeStateReady
 				ct.Status = statusAttention
 				ct.SendState = sendUnknown
@@ -967,14 +969,14 @@ func TestHeaderGroupsStatusAndRoleWithLongRawText(t *testing.T) {
 		{
 			name: "hans-long-960", locale: "zh-Hans", role: longChineseRole, status: locales.In("zh-Hans").StatusReady(), wrap: true,
 			setup: func(a *appModel, ct *contact) {
-				a.rt = &runtimeClient{}
+				a.pi = presentationPiHost(a)
 				a.runtimeStatus = runtimeStateReady
 			},
 		},
 		{
 			name: "en-XA-owned-status-960", locale: "en-XA", role: longEnglishRole, status: locales.In("en-XA").StatusReady(), wrap: true, dark: true,
 			setup: func(a *appModel, ct *contact) {
-				a.rt = &runtimeClient{}
+				a.pi = presentationPiHost(a)
 				a.runtimeStatus = runtimeStateReady
 			},
 		},

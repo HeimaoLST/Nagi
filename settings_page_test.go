@@ -19,7 +19,7 @@ import (
 
 func TestSettingsPageReplacesWorkbenchAndRoutesEntries(t *testing.T) {
 	a, ct := workspaceTestApp(t)
-	a.rt = &runtimeClient{}
+	a.pi = presentationPiHost(a)
 	ct.Draft = "keep the conversation draft"
 	a.windowWidth = 1040
 	tr := ui.NewTester(a.view, 1040, 720)
@@ -37,7 +37,7 @@ func TestSettingsPageReplacesWorkbenchAndRoutesEntries(t *testing.T) {
 	if a.settingsScroll.Y != 0 {
 		t.Fatalf("settings page opened scrolled: %v", a.settingsScroll.Y)
 	}
-	for _, forbidden := range []string{"Contacts", "Add contact", "Composer for Saki", "Send", "History"} {
+	for _, forbidden := range []string{"Contacts", "Add contact", "Composer for Nagi", "Send", "History"} {
 		if tr.HasText(forbidden) {
 			t.Fatalf("settings page still rendered workbench text %q: %v", forbidden, tr.Texts())
 		}
@@ -83,7 +83,7 @@ func TestCustomThemeSettingsSelectReloadAndReturnKeepsWorkState(t *testing.T) {
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.SetFocused(true)
 	tr.Frame()
-	focusComposer(t, tr, "Composer for Saki")
+	focusComposer(t, tr, "Composer for Nagi")
 	tr.Key(ui.Cmd, ui.KeyComma)
 	tr.Frame()
 	if err := tr.Click("Light theme"); err != nil {
@@ -122,8 +122,8 @@ func TestCustomThemeSettingsSelectReloadAndReturnKeepsWorkState(t *testing.T) {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if !tr.Focused("Composer for Saki") || ct.Draft != "Keep my draft while changing themes" || ct.ActiveTaskID != "active-task" || ct.SessionID != "s1" {
-		t.Fatalf("theme settings changed focus/work state: focus=%v contact=%+v", tr.Focused("Composer for Saki"), ct)
+	if !tr.Focused("Composer for Nagi") || ct.Draft != "Keep my draft while changing themes" || ct.ActiveTaskID != "active-task" || ct.SessionID != "s1" {
+		t.Fatalf("theme settings changed focus/work state: focus=%v contact=%+v", tr.Focused("Composer for Nagi"), ct)
 	}
 }
 
@@ -178,7 +178,7 @@ func TestCustomThemeSettingsLowContrastFailedSaveRetry(t *testing.T) {
 	if ct.Draft != "Keep failed-save draft" || ct.ActiveTaskID != "active-task" || a.runtimeErr != "unrelated Runtime error" {
 		t.Fatal("theme recovery changed work or Runtime state")
 	}
-	if dir := os.Getenv("SAKI_PREVIEW_DIR"); dir != "" {
+	if dir := os.Getenv("NAGI_PREVIEW_DIR"); dir != "" {
 		writeV07AppearancePreview(t, dir, "custom-theme-warning.png", a, 1040, 720, false)
 	}
 }
@@ -279,7 +279,7 @@ func TestSettingsContactDraftsRemainPerContactAndDiscardIsLocal(t *testing.T) {
 	if err := clickSettingsAction(tr, "Discard changes"); err != nil {
 		t.Fatal(err)
 	}
-	if a.settingsContactEditor().Draft.Name != "Saki" || editorB.Draft.Name != "B draft" {
+	if a.settingsContactEditor().Draft.Name != "Nagi" || editorB.Draft.Name != "B draft" {
 		t.Fatalf("discard scope = A=%q B=%q", a.settingsContactEditor().Draft.Name, editorB.Draft.Name)
 	}
 	if ct.Draft != "" {
@@ -368,7 +368,7 @@ func TestSettingsConnectionDirtyDiscardAndAppliedReopen(t *testing.T) {
 	a.connectionForm = newConnectionSettings(&config, config.WorkingDirectory)
 	a.connectionSaved = &config
 	a.connectionEffective = &config
-	a.rt = &runtimeClient{}
+	a.pi = presentationPiHost(a)
 	a.runtimeStatus = runtimeStateReady
 	a.openSettingsTab(settingsTabConnection, settingsSourceRail)
 	if !a.connectionApplied() || a.connectionForm.Dirty() {
@@ -434,7 +434,7 @@ func TestSettingsConnectionEditorsSurviveNavigationAndLocale(t *testing.T) {
 	if a.connectionForm != form || form.Draft != draft || form.ErrorDetail != "original failure detail" || form.Status != connStatusTestCompleted || form.Errors["MaxActiveTasks"] != validationNumeric || !form.Dirty() || !a.connectionSavedPending() {
 		t.Fatal("navigation/locale replaced the form, raw edits or independent feedback")
 	}
-	if *a.connectionSaved != saved || *a.connectionEffective != effective || a.rt != nil || ct.SessionID != "s1" || ct.Draft != "keep conversation text" {
+	if *a.connectionSaved != saved || *a.connectionEffective != effective || a.pi != nil || ct.SessionID != "s1" || ct.Draft != "keep conversation text" {
 		t.Fatal("disclosure/navigation changed saved, effective or conversation state, or started Runtime")
 	}
 	if err := clickSettingsAction(tr, "Edit Default model"); err != nil {
@@ -448,7 +448,7 @@ func TestSettingsConnectionEditorsSurviveNavigationAndLocale(t *testing.T) {
 }
 
 func TestPreferencesListControlsAndPreviews(t *testing.T) {
-	directory := os.Getenv("SAKI_PREVIEW_DIR")
+	directory := os.Getenv("NAGI_PREVIEW_DIR")
 	for _, locale := range []string{"en", "zh-Hans"} {
 		for _, dark := range []bool{false, true} {
 			for _, size := range [][2]int{{720, 640}, {1040, 720}} {
@@ -590,7 +590,7 @@ func TestPreferencesListControlsAndPreviews(t *testing.T) {
 						if scene == "invalid-long" && !fullErrorSeen {
 							t.Fatal("the complete original field error was not reachable by scrolling")
 						}
-						if a.rt != nil || a.connectionTesting || a.connectionApplying || ct.SessionID != "s1" {
+						if a.pi != nil || a.connectionTesting || a.connectionApplying || ct.SessionID != "s1" {
 							t.Fatal("rendering/keyboard traversal started execution or changed the session")
 						}
 						if directory != "" {
@@ -698,14 +698,14 @@ func TestSettingsPageCmdCommaReturnsToFocusedComposer(t *testing.T) {
 	a.focusComposer = true
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	if !tr.Focused("Composer for Saki") {
+	if !tr.Focused("Composer for Nagi") {
 		t.Fatal("composer did not receive initial focus")
 	}
 	tr.Type("settings")
 	if ct.Draft != "before settings" {
 		t.Fatalf("draft before Cmd+, = %q", ct.Draft)
 	}
-	if !tr.Focused("Composer for Saki") {
+	if !tr.Focused("Composer for Nagi") {
 		t.Fatal("typing lost composer focus before Cmd+,")
 	}
 	tr.Key(ui.Cmd, ui.KeyComma)
@@ -720,7 +720,7 @@ func TestSettingsPageCmdCommaReturnsToFocusedComposer(t *testing.T) {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if !tr.Focused("Composer for Saki") {
+	if !tr.Focused("Composer for Nagi") {
 		t.Fatalf("Back did not return focus to the composer: %v", tr.Texts())
 	}
 	tr.Type(" again")
@@ -833,7 +833,7 @@ func TestSettingsConnectionApplyAvailabilityFollowsCurrentWork(t *testing.T) {
 	a.connectionForm = newConnectionSettings(&config, config.WorkingDirectory)
 	a.connectionSaved = &config
 	a.connectionEffective = &config
-	a.rt = &runtimeClient{}
+	a.pi = presentationPiHost(a)
 	a.runtimeStatus = runtimeStateReady
 	ct.ActiveTaskID = "active-task"
 	ct.SendState = sendAccepted
@@ -929,7 +929,7 @@ func TestSettingsPageReturnKeepsChatScrollWorkspaceAndIssueContext(t *testing.T)
 }
 
 func TestPreviewSettingsPage(t *testing.T) {
-	dir := os.Getenv("SAKI_PREVIEW_DIR")
+	dir := os.Getenv("NAGI_PREVIEW_DIR")
 	export := dir != ""
 	if !export {
 		dir = t.TempDir()
@@ -1501,7 +1501,7 @@ func TestSettingsCmdCommaFromRemovedMarkdownLinkFallsBackOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if !tr.Focused("Composer for Saki") {
+	if !tr.Focused("Composer for Nagi") {
 		t.Fatalf("removed link did not fall back to the chat composer: %v", tr.Texts())
 	}
 	if a.markdownLinkFocus != (markdownLinkTarget{}) || a.linkReturnTarget != (markdownLinkTarget{}) {
@@ -1510,7 +1510,7 @@ func TestSettingsCmdCommaFromRemovedMarkdownLinkFallsBackOnce(t *testing.T) {
 	ct.Messages[0].Text = original
 	tr.Frame()
 	tr.Frame()
-	if !tr.Focused("Composer for Saki") {
+	if !tr.Focused("Composer for Nagi") {
 		t.Fatalf("restored old link stole focus from the composer: %v", tr.Texts())
 	}
 	if got := tr.OpenedURLs(); len(got) != 0 {
@@ -1537,13 +1537,13 @@ func TestSettingsCmdCommaFromReplacedMarkdownLinkDoesNotStealFocusWhenOldTargetR
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if !tr.Focused("Composer for Saki") {
+	if !tr.Focused("Composer for Nagi") {
 		t.Fatalf("replaced link did not fall back to the chat composer: %v", tr.Texts())
 	}
 	ct.Messages[0].Text = original
 	tr.Frame()
 	tr.Frame()
-	if !tr.Focused("Composer for Saki") {
+	if !tr.Focused("Composer for Nagi") {
 		t.Fatalf("old link later reappeared and stole focus: %v", tr.Texts())
 	}
 	if a.linkReturnTarget != (markdownLinkTarget{}) || a.markdownLinkFocus != (markdownLinkTarget{}) {
@@ -1590,7 +1590,7 @@ func TestSettingsCmdCommaFromIssueResultMarkdownLinkReturnsToSameLink(t *testing
 	a := issuePreviewApp("issue-detail")
 	issue := a.selectedContact().selectedIssue()
 	execution := issue.Executions[0]
-	a.rt = nil
+	a.pi = nil
 	a.openIssueResultEntry(issue.ID, execution.ID, false)
 	a.issueResult.Loading = false
 	a.issueResult.LoadError = ""
@@ -1631,7 +1631,7 @@ func TestSettingsCmdCommaFromInnerFileMarkdownLinkReturnsToSameLink(t *testing.T
 	}
 	key := issueResultFileKey(file)
 	inspection := issueResultFileInspection{Path: file.Path, WorkingDirectory: "/tmp", Exists: true, Regular: true, Preview: "文件[第一内链](https://example.com/file) 第二[第二内链](https://example.com/file)。"}
-	a.rt = nil
+	a.pi = nil
 	a.openIssueResultEntry(issue.ID, execution.ID, false)
 	a.issueResult.Loading = false
 	a.issueResult.LoadError = ""
@@ -2043,7 +2043,7 @@ func TestSettingsThemeImportChooseSelectAndRestart(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if calls != 1 || a.appearanceThemeIDs != ids || a.appearanceMode != mode || string(after) != string(stored) || recoveryRecordSnapshot(t, ct) != before || a.rt.nextID != 0 {
+				if calls != 1 || a.appearanceThemeIDs != ids || a.appearanceMode != mode || string(after) != string(stored) || recoveryRecordSnapshot(t, ct) != before || a.submissionInFlight != 0 {
 					t.Fatal("import selected/saved a theme or changed work/preferences")
 				}
 				tr.Scroll(float32(width/2), 360, 0, -2000)
@@ -2116,7 +2116,7 @@ func TestSettingsThemeImportCancelErrorAndRetry(t *testing.T) {
 			themeImportCompletion(t, callbacks)()
 			themeImportCompletion(t, callbacks)()
 			tr.Frame()
-			if a.themeImport.Problem != nil || !tr.HasText(msgs.ThemeImportSucceeded("Garden")) || calls != 3 || a.appearanceThemeIDs.Light != "paper" || recoveryRecordSnapshot(t, ct) != before || a.rt.nextID != 0 {
+			if a.themeImport.Problem != nil || !tr.HasText(msgs.ThemeImportSucceeded("Garden")) || calls != 3 || a.appearanceThemeIDs.Light != "paper" || recoveryRecordSnapshot(t, ct) != before || a.submissionInFlight != 0 {
 				t.Fatal("explicit import retry failed or changed current work/selection")
 			}
 		})
@@ -2137,7 +2137,7 @@ func TestC8SaveRecoveryCopyEntryKeepsSavedAndUnsavedState(t *testing.T) {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	focusComposer(t, tr, "Composer for Saki")
+	focusComposer(t, tr, "Composer for Nagi")
 	tr.Type("Saved local work for the recovery copy")
 	tr.Frame()
 	ct := a.selectedContact()
@@ -2161,7 +2161,7 @@ func TestC8SaveRecoveryCopyEntryKeepsSavedAndUnsavedState(t *testing.T) {
 		if readErr != nil || string(after) != string(saved) || recoveryRecordSnapshot(t, ct) != before || editor.Draft.Name != profileName || ct.Name == profileName || a.connectionForm.Draft != modelDraft || a.appearanceThemeIDs != ids || a.appearanceMode != mode || a.store != store {
 			t.Error("recovery-copy entry changed saved bytes, IDs, work, unsaved editors or preferences")
 		}
-		if a.rt != nil || a.runtimeHelperChecked || a.connectionSaved != nil || a.connectionEffective != nil || a.connectionSaveInFlight || a.connectionApplying || a.connectionTesting || a.submissionInFlight != 0 || a.shutdownStarted {
+		if a.pi != nil || a.connectionSaved != nil || a.connectionEffective != nil || a.connectionSaveInFlight || a.connectionApplying || a.connectionTesting || a.submissionInFlight != 0 || a.shutdownStarted {
 			t.Error("recovery-copy entry saved/applied/tested a connection or started execution/shutdown")
 		}
 	}()
@@ -2400,7 +2400,7 @@ func TestC8RestorePreviewConfirmAndReopen(t *testing.T) {
 				if !reflect.DeepEqual(installed, expected) {
 					t.Fatal("UI installation changed facts beyond explicit pause")
 				}
-				if a.store != nil || a.storeInitAllowed || a.rt != nil || a.runtimeHelperChecked {
+				if a.store != nil || a.storeInitAllowed || a.pi != nil {
 					t.Fatal("installed fallback activated")
 				}
 				c8RenderEvidence(t, tr, prefix+"-installed", size[0], size[1], msgs.RecoveryQuitAction())
@@ -2417,7 +2417,7 @@ func TestC8RestorePreviewConfirmAndReopen(t *testing.T) {
 					t.Fatal(err)
 				}
 				restored := reopened.selectedContact()
-				if restored.ID != ct.ID || restored.SessionID != ct.SessionID || restored.Issues[0].Executions[0].Status != issueExecutionUnknown || restored.Issues[0].Supplements.AutoContinue || reopened.rt != nil || reopened.runtimeHelperChecked {
+				if restored.ID != ct.ID || restored.SessionID != ct.SessionID || restored.Issues[0].Executions[0].Status != issueExecutionUnknown || restored.Issues[0].Supplements.AutoContinue || reopened.pi != nil {
 					t.Fatal("ordinary in-process reopen lost IDs/unknown facts or launched Runtime")
 				}
 			})
@@ -2462,7 +2462,7 @@ func TestC8RecoveryCancellationErrorsAndStaleSelection(t *testing.T) {
 				}
 				reply <- result
 				awaitFolderChoice(t, updates)()
-				if s.choosing || s.inFlight || s.copy != nil || s.target != nil || s.output != "" || string(recoverySavedBytes(t, path)) != string(before) || a.rt != nil {
+				if s.choosing || s.inFlight || s.copy != nil || s.target != nil || s.output != "" || string(recoverySavedBytes(t, path)) != string(before) || a.pi != nil {
 					t.Fatal("canceled/stale selection wrote or admitted an operation")
 				}
 				if change == "error" {
@@ -2551,7 +2551,7 @@ func TestC8RecoveryRechecksTargetAndDirtyPreview(t *testing.T) {
 			} else if a.dataRecovery.inFlight {
 				t.Fatal("dirty/stale preview admitted replacement")
 			}
-			if string(recoverySavedBytes(t, a.storePath)) != string(original) || a.store != nil || a.storeInitAllowed || a.rt != nil {
+			if string(recoverySavedBytes(t, a.storePath)) != string(original) || a.store != nil || a.storeInitAllowed || a.pi != nil {
 				t.Fatal("rejected confirmation changed unavailable original or activated app")
 			}
 		})
@@ -2624,7 +2624,7 @@ func TestC8UnsavedRecoveryGuidanceBeforeQuit(t *testing.T) {
 					tr.Type(text)
 					tr.Frame()
 					ct := a.selectedContact()
-					if ct.Draft != text || a.localSaveErr == "" || a.store != nil || a.storeInitAllowed || a.rt != nil {
+					if ct.Draft != text || a.localSaveErr == "" || a.store != nil || a.storeInitAllowed || a.pi != nil {
 						t.Fatal("actual unavailable composer did not retain unsaved text with a failed local save")
 					}
 					if completion != nil {
@@ -2649,7 +2649,7 @@ func TestC8UnsavedRecoveryGuidanceBeforeQuit(t *testing.T) {
 						t.Fatal("unsaved/terminal recovery opened another chooser")
 					default:
 					}
-					if a.dataRecovery.choosing || a.dataRecovery.inFlight || ct.Draft != text || a.store != nil || a.storeInitAllowed || a.rt != nil {
+					if a.dataRecovery.choosing || a.dataRecovery.inFlight || ct.Draft != text || a.store != nil || a.storeInitAllowed || a.pi != nil {
 						t.Fatal("unsaved/terminal recovery admitted another operation or lost open-window text")
 					}
 					if state != "unconfirmed" && string(recoverySavedBytes(t, a.storePath)) != string(original) {
@@ -2758,7 +2758,7 @@ func TestC8UnsavedRecoveryGuidanceBeforeQuit(t *testing.T) {
 					if err != nil {
 						reopened = newUnavailableApp(err)
 					}
-					if reopened.selectedContact().Draft == text || reopened.rt != nil || reopened.runtimeHelperChecked {
+					if reopened.selectedContact().Draft == text || reopened.pi != nil {
 						t.Fatal("fixture unexpectedly durably retained unsaved text or launched execution")
 					}
 				})
@@ -2819,7 +2819,7 @@ func TestSaveFailureTypingKeepsComposerReturnFocus(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if a.localSaveErr != "" || a.rt != nil {
+			if a.localSaveErr != "" || a.pi != nil {
 				t.Fatal("valid isolated-store setup failed")
 			}
 			ownerID, sessionID := ct.ID, ct.SessionID
@@ -2879,7 +2879,7 @@ func TestSaveFailureTypingKeepsComposerReturnFocus(t *testing.T) {
 			}
 			tr.Type(" again")
 			capture("typed-after-back")
-			if ct.Draft != "before settings again" || a.selectedContact() != ct || ct.ID != ownerID || ct.SessionID != sessionID || a.rt != nil || a.localSaveErr == "" {
+			if ct.Draft != "before settings again" || a.selectedContact() != ct || ct.ID != ownerID || ct.SessionID != sessionID || a.pi != nil || a.localSaveErr == "" {
 				t.Fatal("AC-SAVE2: typing after Back lost exact draft, owner or failed-save state")
 			}
 			if got, err := os.ReadFile(goodPath); err != nil || string(got) != string(goodBytes) {
@@ -2910,7 +2910,7 @@ func TestSettingsQoderIntegratedLayout(t *testing.T) {
 					tr.SetLocale(locale)
 					tr.SetDark(dark)
 					tr.Frame()
-					if dir := os.Getenv("SAKI_PREVIEW_DIR"); dir != "" {
+					if dir := os.Getenv("NAGI_PREVIEW_DIR"); dir != "" {
 						writePreviewPNG(t, filepath.Join(dir, fmt.Sprintf("qoder-layout-%s-%dx%d-dark-%t-top.png", locale, width, height, dark)), tr.Image())
 					}
 					msgs := locales.In(locale)
@@ -2934,7 +2934,7 @@ func TestSettingsQoderIntegratedLayout(t *testing.T) {
 					}
 					a.selectSettingsTab(settingsTabAppearance)
 					tr.Frame()
-					if dir := os.Getenv("SAKI_PREVIEW_DIR"); dir != "" {
+					if dir := os.Getenv("NAGI_PREVIEW_DIR"); dir != "" {
 						writePreviewPNG(t, filepath.Join(dir, fmt.Sprintf("qoder-layout-%s-%dx%d-dark-%t-general.png", locale, width, height, dark)), tr.Image())
 					}
 				})

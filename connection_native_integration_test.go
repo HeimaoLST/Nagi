@@ -216,7 +216,7 @@ func TestConnectionNativeSecureControlE2E(t *testing.T) {
 		if scene.testCalls != 1 || scene.saveCalls != 1 || !scene.released || app.connectionForm.Busy || app.connectionSaveInFlight || !scene.savedReopened || app.connectionForm.Draft.APIKey != connectionNativeSentinel {
 			scene.recordFailure("fresh/Test/Save/Close/Edit sequence or exact draft is incomplete")
 		}
-		if app.rt != nil || app.connectionEffective != nil || app.connectionTesting || app.connectionApplying {
+		if app.pi != nil || app.connectionEffective != nil || app.connectionTesting || app.connectionApplying {
 			scene.recordFailure("a provider or Apply path was activated")
 		}
 		if err := scene.writeState(); err != nil {

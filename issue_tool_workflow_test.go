@@ -11,8 +11,7 @@ func TestIssueToolNewSessionPromptCombinesRoleAndProfile(t *testing.T) {
 	if got := a.issueToolConversationSystemPrompt(ct); got != "Purpose: Keep the launch notes.\nInstructions: Cite earlier decisions." {
 		t.Fatalf("disabled issue tools changed the profile prompt: %q", got)
 	}
-	a.issueToolServer = &issueToolIPCServer{}
-	a.issueToolEndpoint, a.issueToolHelper = "/tmp/issue.sock", "/tmp/helper"
+	a.pi = &piAppHost{}
 	a.connectionManaged = true
 	got := a.issueToolConversationSystemPrompt(ct)
 	if !strings.HasPrefix(got, issueToolConversationGuidance+"\n\n") ||
@@ -34,10 +33,7 @@ func TestIssueToolNewSessionPromptCombinesRoleAndProfile(t *testing.T) {
 
 func TestIssueToolWorkflowGuidanceRequiresManagedConnection(t *testing.T) {
 	ct := &contact{Purpose: "Keep profile", Instructions: "Keep instructions"}
-	a := &appModel{
-		issueToolServer: &issueToolIPCServer{}, issueToolEndpoint: "/tmp/issue.sock",
-		issueToolHelper: "/tmp/helper", connectionManaged: false,
-	}
+	a := &appModel{pi: &piAppHost{}}
 	profile := "Purpose: Keep profile\nInstructions: Keep instructions"
 	if got := a.issueToolConversationSystemPrompt(ct); got != profile {
 		t.Fatalf("legacy conversation prompt = %q", got)

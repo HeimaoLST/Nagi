@@ -1,6 +1,6 @@
 package main
 
-// Headless issue/workbench previews. They are inert unless SAKI_PREVIEW_DIR
+// Headless issue/workbench previews. They are inert unless NAGI_PREVIEW_DIR
 // points at a scratch directory; they exercise the layout, not a native window
 // or a real Runtime.
 
@@ -64,10 +64,11 @@ func issuePreviewApp(scene string) *appModel {
 		{Key: "work-2-result", Kind: msgContact, TaskID: "task-3", Text: "Interrupted before a terminal result was recorded."},
 	}
 	a := &appModel{
-		demo: false, runtimeStatus: runtimeStateReady, rt: &runtimeClient{}, workspaceOpen: true,
+		demo: false, runtimeStatus: runtimeStateReady, workspaceOpen: true,
 		windowWidth: 1040, scrollTo: -1, contacts: []*contact{ct}, selected: 0,
 		runtimeCapabilitiesLoaded: true, runtimeMaxActiveTasks: 2,
 	}
+	a.pi = presentationPiHost(a)
 	switch scene {
 	case "issue-working", "issue-question", "closed-work":
 		// Isolate the selected issue's single status: the other synthetic issue
@@ -131,7 +132,8 @@ func issuePreviewApp(scene string) *appModel {
 		if err != nil {
 			panic(err)
 		}
-		if _, err := ledger.Accept(batch1, issueSupplementAssociation{SessionID: "issue-preview-work-1", TaskID: "task-1", MessageID: "msg-1", ExecutionID: "exec-1"}, noSave); err != nil {
+		run := &piActivityRun{WorkerEpoch: "demo-epoch", ContextID: "demo-activity", SessionRef: "issue-preview-work-1", RunID: "task-1", Admitted: true}
+		if _, err := ledger.Accept(batch1, issueSupplementAssociation{ExecutionID: issue.Executions[0].ID, PiRun: run}, noSave); err != nil {
 			panic(err)
 		}
 		if _, err := ledger.Add(target, "Show dispatch and review state", noSave); err != nil {
@@ -191,9 +193,9 @@ func issuePreviewApp(scene string) *appModel {
 }
 
 func TestPreviewIssueStates(t *testing.T) {
-	dir := os.Getenv("SAKI_PREVIEW_DIR")
+	dir := os.Getenv("NAGI_PREVIEW_DIR")
 	if dir == "" {
-		t.Skip("set SAKI_PREVIEW_DIR to write issue/workbench previews")
+		t.Skip("set NAGI_PREVIEW_DIR to write issue/workbench previews")
 	}
 	write := func(scene string, width, height int, dark bool) {
 		theme := "light"
@@ -321,7 +323,7 @@ func writeIssueWorkStatusLocalePreviews(t *testing.T, dir string) {
 }
 
 func TestPreviewSupplementStates(t *testing.T) {
-	dir := os.Getenv("SAKI_PREVIEW_DIR")
+	dir := os.Getenv("NAGI_PREVIEW_DIR")
 	if dir == "" {
 		dir = t.TempDir()
 	} else if err := os.MkdirAll(dir, 0o755); err != nil {

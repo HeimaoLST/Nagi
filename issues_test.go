@@ -13,39 +13,10 @@ import (
 	"github.com/HeimaoLST/Nagi/locales"
 )
 
-func TestIssueStoreRoundTripAndV1Compatibility(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "contacts.json")
-	legacy := storedState{
-		Version:  1,
-		Selected: "contact-old",
-		Contacts: []storedContact{{
-			ID: "contact-old", Name: "Saki", Role: "Assistant",
-			SessionID: "session-old", Draft: "preserved draft",
-		}},
-	}
-	data, err := json.Marshal(legacy)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(path, data, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	store, err := openContactStore(path, "/tmp")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(store.state.Contacts) != 1 || store.state.Contacts[0].Draft != "preserved draft" ||
-		store.state.Contacts[0].SessionID != "session-old" {
-		t.Fatalf("v1 contact was not preserved: %+v", store.state.Contacts)
-	}
-	if len(store.state.Issues) != 0 {
-		t.Fatalf("v1 store unexpectedly gained issues: %+v", store.state.Issues)
-	}
-
-	a := &appModel{store: store, contacts: []*contact{{
-		ID: "contact-old", Name: "Saki", Workspace: "/tmp", SessionID: "session-old", Draft: "preserved draft",
-	}}}
+func TestIssueStoreRoundTripKeepsPiConversationAndDraft(t *testing.T) {
+	a, ct, _ := piRunStartedTestApp(t)
+	ct.ActiveTaskID, ct.SendState, ct.Draft = "", sendIdle, "preserved draft"
+	path, sessionID := a.store.path, ct.SessionID
 	if !a.createIssue("Implement login", "Use SMS verification.") {
 		t.Fatalf("createIssue failed: %s", a.issueFormError)
 	}
@@ -63,14 +34,14 @@ func TestIssueStoreRoundTripAndV1Compatibility(t *testing.T) {
 		t.Fatalf("stored issues = %+v", reloaded.state.Issues)
 	}
 	stored := reloaded.state.Issues[0]
-	if stored.ID == "" || stored.ContactID != "contact-old" || stored.Goal != "Implement login" ||
-		stored.Requirements != "" || len(stored.RequirementItems) != 1 ||
+	if stored.ID == "" || stored.ContactID != ct.ID || stored.Goal != "Implement login" ||
+		len(stored.RequirementItems) != 1 ||
 		stored.RequirementItems[0].Text != "Use SMS verification." ||
 		stored.Status != issueStatusNotStarted {
 		t.Fatalf("stored issue = %+v", stored)
 	}
-	if reloaded.state.Contacts[0].Draft != "preserved draft" || reloaded.state.Contacts[0].SessionID != "session-old" {
-		t.Fatalf("v1 fields changed after issue save: %+v", reloaded.state.Contacts[0])
+	if reloaded.state.Contacts[0].Draft != "preserved draft" || reloaded.state.Contacts[0].SessionID != sessionID || reloaded.state.Contacts[0].PiBinding == nil {
+		t.Fatalf("saved Pi conversation or draft changed: %+v", reloaded.state.Contacts[0])
 	}
 	if reloaded.state.Contacts[0].SelectedIssueID != stored.ID {
 		t.Fatalf("reloaded selected issue = %q, want %q", reloaded.state.Contacts[0].SelectedIssueID, stored.ID)
@@ -305,8 +276,8 @@ func TestIssueResultAttributionFollowsSelectedIssue(t *testing.T) {
 	a, ct := workspaceTestApp(t)
 	ct.Workspace = t.TempDir()
 	ct.Issues = []*productIssue{
-		{ID: "i1", ContactID: "saki", Goal: "First issue", Status: issueStatusInProgress, Executions: []*issueExecution{{ID: "e1", TaskID: "t1", Status: issueExecutionCompleted}}},
-		{ID: "i2", ContactID: "saki", Goal: "Second issue", Status: issueStatusInProgress, Executions: []*issueExecution{{ID: "e2", TaskID: "t2", Status: issueExecutionRunning}}},
+		{ID: "i1", ContactID: ct.ID, Goal: "First issue", Status: issueStatusInProgress, Executions: []*issueExecution{{ID: "e1", TaskID: "t1", Status: issueExecutionCompleted}}},
+		{ID: "i2", ContactID: ct.ID, Goal: "Second issue", Status: issueStatusInProgress, Executions: []*issueExecution{{ID: "e2", TaskID: "t2", Status: issueExecutionRunning}}},
 	}
 	openIssueDetailForTest(a, ct, "i1")
 	ct.ActiveTaskID = "t2"
@@ -315,10 +286,8 @@ func TestIssueResultAttributionFollowsSelectedIssue(t *testing.T) {
 		{TaskID: "t1", MessageID: "m1", State: workCompleted, Prompt: "first prompt"},
 		{TaskID: "t2", MessageID: "m2", State: workRunning, Prompt: "second prompt"},
 	}
-	ct.Messages = []*message{
-		{ID: 1, Kind: msgContact, TaskID: "t1", MessageID: "m1", Text: "first result"},
-		{ID: 2, Kind: msgContact, TaskID: "t2", MessageID: "m2", Text: "second result"},
-	}
+	ct.Issues[0].Work.Messages = []*message{{ID: 1, Kind: msgContact, TaskID: "t1", Text: "first result"}}
+	ct.Issues[1].Work.Messages = []*message{{ID: 2, Kind: msgContact, TaskID: "t2", Text: "second result"}}
 	if w := ct.issueWork(ct.Issues[0]); w == nil || w.TaskID != "t1" {
 		t.Fatalf("selected issue chose unrelated work: %+v", w)
 	}
@@ -431,56 +400,9 @@ func TestIssueFormCannotLeakIntoNewContact(t *testing.T) {
 	}
 }
 
-func TestStoreV2IssuesRemainReadableAndGainWorkSession(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "contacts.json")
-	legacy := storedState{
-		Version: 2, Selected: "c1",
-		Contacts: []storedContact{{ID: "c1", Name: "Saki", SessionID: "conversation-old"}},
-		Issues: []storedIssue{{
-			ID: "i1", ContactID: "c1", Goal: "legacy issue", Status: issueStatusNotStarted,
-			Executions: []storedIssueExecution{{ID: "e1", SessionID: "conversation-old", TaskID: "t1", Status: issueExecutionCompleted}},
-		}},
-	}
-	data, err := json.Marshal(legacy)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(path, data, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	store, err := openContactStore(path, t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	issues := issuesForStoredContact(store.state.Issues, "c1")
-	if len(issues) != 1 || issues[0].WorkSessionID != "" {
-		t.Fatalf("v2 issue gained an invented work session: %+v", issues)
-	}
-	if issues[0].Executions[0].SessionID != "conversation-old" || issues[0].Executions[0].TaskID != "t1" {
-		t.Fatalf("v2 execution was rewritten: %+v", issues[0].Executions[0])
-	}
-	ct := &contact{ID: "c1", Name: "Saki", SessionID: "conversation-old", Issues: issues}
-	issues[0].WorkSessionID = "work-new"
-	issues[0].WorkSessionID = "work-new"
-	if err := store.save([]*contact{ct}, "c1"); err != nil {
-		t.Fatal(err)
-	}
-	reloaded, err := openContactStore(path, t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if reloaded.state.Version != contactStoreVersion {
-		t.Fatalf("saved store version = %d", reloaded.state.Version)
-	}
-	restored := issuesForStoredContact(reloaded.state.Issues, "c1")[0]
-	if restored.WorkSessionID != "work-new" || restored.Executions[0].SessionID != "conversation-old" {
-		t.Fatalf("v3 work session or old execution changed: %+v", restored)
-	}
-}
-
 func TestContactActivityObservesIssueWorkTarget(t *testing.T) {
 	ct := &contact{ID: "x", Name: "X", Loaded: true}
-	a := &appModel{demo: false, contacts: []*contact{ct}, runtimeStatus: runtimeStateReady, rt: &runtimeClient{}}
+	a := &appModel{contacts: []*contact{ct}, runtimeStatus: runtimeStateReady}
 	if active, unknown := a.contactActivity(ct); active || unknown {
 		t.Fatal("contact with no issue work was active")
 	}
@@ -493,42 +415,20 @@ func TestContactActivityObservesIssueWorkTarget(t *testing.T) {
 	}
 }
 
-func TestRuntimeExitMarksAllActiveIssueWorkUnknown(t *testing.T) {
-	ct := &contact{ID: "x", Name: "X", SessionID: "chat-x", Loaded: true, SendState: sendIdle}
-	issue := &productIssue{ID: "i1", ContactID: "x", Goal: "work"}
-	issue.WorkSessionID = "work-i1"
-	issue.Work.ActiveTaskID = "t1"
-	issue.Work.SendState = sendAccepted
-	issue.Executions = []*issueExecution{{ID: "e1", SessionID: "work-i1", TaskID: "t1", Status: issueExecutionRunning}}
+func TestPiExitMarksActiveIssueWorkUnknown(t *testing.T) {
+	a, ct, _ := piRunStartedTestApp(t)
+	ct.ActiveTaskID, ct.SendState = "", sendIdle
+	issue := &productIssue{ID: "i1", ContactID: ct.ID, Goal: "work", RequirementsRevision: 1, Status: issueStatusInProgress}
+	attachIssueToolTestExecution(issue)
+	issue.Executions[0].Status = issueExecutionRunning
+	issue.Work.ActiveTaskID, issue.Work.SendState = issue.Executions[0].TaskID, sendAccepted
 	ct.Issues = []*productIssue{issue}
-	ct.Works = []*workItem{{TaskID: "t1", State: workRunning}}
-	a := &appModel{contacts: []*contact{ct}}
-	a.clearActiveTasksAfterExit()
+	a.pi.onExit(a, pi.ProcessOutcome{})
 	if issue.Work.ActiveTaskID != "" || issue.Work.SendState != sendUnknown || issue.Executions[0].Status != issueExecutionUnknown {
 		t.Fatalf("issue work survived exit as active: work=%+v exec=%+v", issue.Work, issue.Executions[0])
 	}
 	if ct.ActiveTaskID != "" || ct.SendState != sendIdle {
 		t.Fatalf("conversation without active task was rewritten: %+v", ct)
-	}
-}
-
-func TestUnknownIssueExecutionCanBeConfirmedNotDispatched(t *testing.T) {
-	ct := &contact{ID: "c1", Name: "Saki"}
-	issue := &productIssue{ID: "i1", ContactID: "c1", Goal: "work", Status: issueStatusNotStarted}
-	execution := &issueExecution{ID: "e1", SessionID: "work", Prompt: "work", Status: issueExecutionUnknown}
-	issue.Executions = append(issue.Executions, execution)
-	ct.Issues = append(ct.Issues, issue)
-	ct.SelectedIssueID = issue.ID
-	a := &appModel{contacts: []*contact{ct}, selected: 0}
-	recoveryTestStore(t, a)
-	if !a.confirmIssueExecutionNotDispatched(issue.ID, execution.ID) {
-		t.Fatal("unknown execution without task id was not confirmable")
-	}
-	if execution.Status != issueExecutionNotDispatched || !strings.Contains(execution.Detail, "no task was dispatched") {
-		t.Fatalf("not-dispatched confirmation = %+v", execution)
-	}
-	if issueRunBlocked(issue) != "" {
-		t.Fatal("confirmed not-dispatched execution still blocks explicit retry")
 	}
 }
 
@@ -724,64 +624,29 @@ func TestIssueWorkNoticeWinnerScopeAndActive(t *testing.T) {
 	}
 }
 
-func TestIssueAttentionLegacyStoreDefaultsUnseen(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "contacts.json")
-	legacy := storedState{
-		Version:  contactStoreVersion,
-		Selected: "contact-legacy",
-		Contacts: []storedContact{{ID: "contact-legacy", Name: "Saki"}},
-		Issues: []storedIssue{{
-			ID: "issue-legacy", ContactID: "contact-legacy", Goal: "legacy failure", Status: issueStatusNeedsAttention,
-			Executions: []storedIssueExecution{{
-				ID: "exec-legacy", TaskID: "task-legacy", Status: issueExecutionFailed, Detail: "legacy failure",
-			}},
-		}},
+func TestPiIssueAttentionReopensUnseen(t *testing.T) {
+	a, ct, _ := piRunStartedTestApp(t)
+	ct.ActiveTaskID, ct.SendState = "", sendIdle
+	issue := &productIssue{ID: "failed-issue", ContactID: ct.ID, Goal: "Retain failure", RequirementsRevision: 1, Status: issueStatusNeedsAttention}
+	attachIssueToolTestExecution(issue)
+	issue.Executions[0].Status, issue.Executions[0].Detail = issueExecutionFailed, "Pi failed"
+	ct.Issues = []*productIssue{issue}
+	if err := a.persist(); err != nil {
+		t.Fatal(err)
 	}
-	data, err := json.Marshal(legacy)
+	store, err := openContactStore(a.store.path, t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(path, data, 0o600); err != nil {
-		t.Fatal(err)
+	reopened := &appModel{}
+	applyStoreSelection(reopened, store)
+	contact := reopened.selectedContact()
+	restored := contact.issueByID(issue.ID)
+	if restored == nil || len(restored.Executions) != 1 || restored.Executions[0].AttentionSeenStatus != "" || *restored.Executions[0].PiRun != *issue.Executions[0].PiRun {
+		t.Fatalf("reopened Pi result did not preserve its unseen run: %+v", restored)
 	}
-	store, err := openContactStore(path, t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	a := &appModel{}
-	applyStoreSelection(a, store)
-	issue := a.selectedContact().issueByID("issue-legacy")
-	if issue == nil || len(issue.Executions) != 1 || issue.Executions[0].AttentionSeenStatus != "" {
-		t.Fatalf("legacy execution did not load unseen: %+v", issue)
-	}
-	if notice := a.issueWorkNotice(a.selectedContact()); !notice.Attention || notice.IssueID != issue.ID {
-		t.Fatalf("legacy exception did not raise attention: %+v", notice)
-	}
-}
-
-func TestIssueRecoveryRejectsAnotherIssuesExecution(t *testing.T) {
-	ct := &contact{ID: "c1", Name: "Saki"}
-	issueA := &productIssue{ID: "iA", ContactID: "c1", Goal: "A"}
-	execA := &issueExecution{ID: "eA", SessionID: "work-A", TaskID: "tA", Status: issueExecutionCompleted}
-	issueA.Executions = []*issueExecution{execA}
-	issueB := &productIssue{ID: "iB", ContactID: "c1", Goal: "B"}
-	execB := &issueExecution{ID: "eB", SessionID: "work-B", Prompt: "B", Status: issueExecutionUnknown}
-	issueB.Executions = []*issueExecution{execB}
-	ct.Issues = []*productIssue{issueA, issueB}
-	ct.SelectedIssueID = issueB.ID
-	a := &appModel{contacts: []*contact{ct}, selected: 0}
-	if a.reconcileIssueExecution(issueB.ID, execA.ID) {
-		t.Fatal("reconcile accepted another issue's execution")
-	}
-	if a.confirmIssueExecutionNotDispatched(issueB.ID, execA.ID) {
-		t.Fatal("confirm accepted another issue's execution")
-	}
-	if execA.Status != issueExecutionCompleted || execB.Status != issueExecutionUnknown {
-		t.Fatalf("wrong-owner recovery changed executions: A=%+v B=%+v", execA, execB)
-	}
-	issueB.Work.ActiveTaskID = "tB"
-	if a.confirmIssueExecutionNotDispatched(issueB.ID, execB.ID) {
-		t.Fatal("confirm marked not dispatched while work was active")
+	if notice := reopened.issueWorkNotice(contact); !notice.Attention || notice.IssueID != issue.ID {
+		t.Fatalf("reopened Pi failure did not raise attention: %+v", notice)
 	}
 }
 

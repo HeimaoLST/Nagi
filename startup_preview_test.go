@@ -11,12 +11,12 @@ import (
 
 // TestPreviewStartupDiagnostics writes a small, opt-in set of headless images
 // for the G1 startup/configuration UI. It is not a pixel assertion and does not
-// run unless SAKI_PREVIEW_DIR points at a scratch directory; native Finder/IME
+// run unless NAGI_PREVIEW_DIR points at a scratch directory; native Finder/IME
 // evidence remains separate.
 func TestPreviewStartupDiagnostics(t *testing.T) {
-	dir := os.Getenv("SAKI_PREVIEW_DIR")
+	dir := os.Getenv("NAGI_PREVIEW_DIR")
 	if dir == "" {
-		t.Skip("set SAKI_PREVIEW_DIR to write G1 startup/configuration previews")
+		t.Skip("set NAGI_PREVIEW_DIR to write G1 startup/configuration previews")
 	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
@@ -26,17 +26,14 @@ func TestPreviewStartupDiagnostics(t *testing.T) {
 		a := &appModel{
 			demo:            false,
 			runtimeStatus:   runtimeStateFailed,
-			runtimeStage:    "Runtime configuration",
-			runtimeErrKind:  runtimeNoticeAPIKey,
-			runtimeHintKind: startupHintSetAPIKey,
-			runtimeHintArgs: []string{"/Users/you/Workspace/saki-run"},
-			runtimeBinary:   "/Users/you/Applications/Saki.app/Contents/MacOS/Saki-runtime",
-			storePath:       "/Users/you/Library/Application Support/Saki/contacts.json",
-			sessionDir:      "/Users/you/Library/Application Support/Saki/sessions",
-			workDir:         "/Users/you/Workspace/saki-run",
+			runtimeStage:    "Connection configuration",
+			runtimeErrKind:  runtimeNoticeConnectionRequired,
+			runtimeHintKind: startupHintEnterConnection,
+			storePath:       "/Users/you/Library/Application Support/Nagi/contacts.json",
+			workDir:         "/Users/you/Workspace/nagi-run",
 			scrollTo:        -1,
 			contacts: []*contact{{
-				ID: "saki", Name: "Saki", Role: "Assistant",
+				ID: "nagi", Name: "Nagi", Role: "Assistant",
 				Draft: "Keep this draft while I fix configuration.",
 			}},
 		}

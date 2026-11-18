@@ -1,7 +1,7 @@
 package main
 
 // Headless previews for the readable workspace tool card. These are inert
-// unless SAKI_PREVIEW_DIR is set and do not exercise a native window.
+// unless NAGI_PREVIEW_DIR is set and do not exercise a native window.
 
 import (
 	"fmt"
@@ -16,9 +16,9 @@ import (
 )
 
 func TestPreviewWorkspaceToolCardWrapping(t *testing.T) {
-	dir := os.Getenv("SAKI_PREVIEW_DIR")
+	dir := os.Getenv("NAGI_PREVIEW_DIR")
 	if dir == "" {
-		t.Skip("set SAKI_PREVIEW_DIR to write workspace tool-card previews")
+		t.Skip("set NAGI_PREVIEW_DIR to write workspace tool-card previews")
 	}
 	for _, dark := range []bool{false, true} {
 		theme := "light"
@@ -53,9 +53,9 @@ func TestPreviewWorkspaceToolCardWrapping(t *testing.T) {
 // opened through the real Conversation work and Details controls. It writes
 // only the four requested light/dark normal/minimum previews.
 func TestPreviewToolFailureDetails(t *testing.T) {
-	dir := os.Getenv("SAKI_PREVIEW_DIR")
+	dir := os.Getenv("NAGI_PREVIEW_DIR")
 	if dir == "" {
-		t.Skip("set SAKI_PREVIEW_DIR to write tool-failure details previews")
+		t.Skip("set NAGI_PREVIEW_DIR to write tool-failure details previews")
 	}
 	const diagnostic = "tool_error: permission denied while reading customer-report.md"
 	for _, dark := range []bool{false, true} {

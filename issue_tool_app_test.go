@@ -33,61 +33,6 @@ func newIssueToolTestApp(t *testing.T) (*appModel, *contactStore) {
 	return a, store
 }
 
-func TestIssueToolAppInitializesWithLongTemporaryDirectory(t *testing.T) {
-	root, err := os.MkdirTemp("/tmp", "saki-331-")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.RemoveAll(root) })
-	helper, err := os.Executable()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("SAKI_TEST_ISSUE_TOOL_HELPER", helper)
-	t.Setenv("SAKI_GUI_STORE", filepath.Join(root, "contacts.json"))
-	t.Setenv("SAKI_SESSION_DIR", filepath.Join(root, "sessions"))
-	t.Setenv("SAKI_GUI_WORKDIR", filepath.Join(root, "workspace"))
-	for _, test := range []struct{ name, directory string }{
-		{"short", "short"},
-		{"macos64", strings.Repeat("m", 64-len(root)-1)},
-		{"long", strings.Repeat("long", 32)},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			tmp := filepath.Join(root, test.directory)
-			if err := os.Mkdir(tmp, 0o700); err != nil {
-				t.Fatal(err)
-			}
-			t.Setenv("TMPDIR", tmp)
-			a, err := newRuntimeApp()
-			if err != nil {
-				t.Fatal(err)
-			}
-			t.Cleanup(func() { _ = a.closeIssueToolService() })
-			t.Logf("TMPDIR bytes=%d IPC enabled=%v endpoint=%q bytes=%d error=%q", len(tmp), a.issueToolEnabled(), a.issueToolEndpoint, len(a.issueToolEndpoint), a.issueToolErr)
-			if !a.issueToolEnabled() || a.issueToolErr != "" || a.issueToolLaunchSource() == nil {
-				t.Fatalf("application issue collaboration did not initialize: %s", a.issueToolErr)
-			}
-			endpoint, server := a.issueToolEndpoint, a.issueToolServer
-			if err := a.startIssueToolService(); err != nil || a.issueToolServer != server || a.issueToolEndpoint != endpoint {
-				t.Fatalf("initialization did not retain the single service: %v", err)
-			}
-			if a.storePath != filepath.Join(root, "contacts.json") || a.sessionDir != filepath.Join(root, "sessions") || a.workDir != filepath.Join(root, "workspace") || os.TempDir() != tmp {
-				t.Fatal("IPC initialization changed user directories")
-			}
-			info, err := os.Stat(endpoint)
-			if err != nil || info.Mode().Perm() != 0o600 {
-				t.Fatalf("socket permissions: %v / %v", info, err)
-			}
-			if err := a.closeIssueToolService(); err != nil {
-				t.Fatal(err)
-			}
-			if _, err := os.Lstat(endpoint); !os.IsNotExist(err) {
-				t.Fatalf("application socket remained after close: %v", err)
-			}
-		})
-	}
-}
-
 func activateIssueToolTestScope(t *testing.T, a *appModel, scope *IssueToolScope) {
 	t.Helper()
 	if scope == nil || scope.Mode != "" && scope.Mode != issueToolModeConversation {
@@ -96,9 +41,6 @@ func activateIssueToolTestScope(t *testing.T, a *appModel, scope *IssueToolScope
 	ct := a.contactByID(scope.ContactID)
 	if ct == nil {
 		t.Fatal("scope test contact missing")
-	}
-	if a.piDataReadOnly() {
-		t.Fatal("scope fixture cannot change legacy product data")
 	}
 	contextID := "scope-fixture-" + ct.ID
 	if ct.PiBinding == nil {
@@ -123,7 +65,7 @@ func activateIssueToolTestScope(t *testing.T, a *appModel, scope *IssueToolScope
 		ct.PiBinding.Context.SessionRef != ct.SessionID || ct.PiBinding.Context.Used {
 		t.Fatal("scope fixture cannot replace a foreign conversation binding")
 	}
-	ct.SessionID = scope.RuntimeSession()
+	ct.SessionID = scope.RuntimeSessionID
 	ct.PiBinding.Context.SessionRef = ct.SessionID
 	ct.SendState = sendAccepted
 	ct.ActiveTaskID = "task-test"
@@ -157,7 +99,7 @@ func issueToolResponseJSON(t *testing.T, response issueToolForwardResponse) []by
 func TestIssueToolOperationRepeatsAndPersistsAcrossReload(t *testing.T) {
 	a, _ := newIssueToolTestApp(t)
 	ct := a.selectedContact()
-	scope, err := a.issueToolNewScope(ct.ID, "conversation-1", "turn-1", false)
+	scope, err := a.issueToolNewScope(ct.ID, "conversation-1", "turn-1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -207,7 +149,7 @@ func TestIssueToolOperationRepeatsAndPersistsAcrossReload(t *testing.T) {
 func TestIssueToolSaveFailureDoesNotCreateIssue(t *testing.T) {
 	a, _ := newIssueToolTestApp(t)
 	ct := a.selectedContact()
-	scope, err := a.issueToolNewScope(ct.ID, "conversation-2", "turn-2", false)
+	scope, err := a.issueToolNewScope(ct.ID, "conversation-2", "turn-2")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -236,7 +178,7 @@ func TestIssueToolListUsesCursor(t *testing.T) {
 	if _, err := a.createIssueFor(ct, "B", "b"); err != nil {
 		t.Fatal(err)
 	}
-	scope, err := a.issueToolNewScope(ct.ID, "conversation-3", "turn-3", false)
+	scope, err := a.issueToolNewScope(ct.ID, "conversation-3", "turn-3")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -275,7 +217,7 @@ func TestIssueToolQueryDoesNotSwitchSelectedContactOrPage(t *testing.T) {
 		t.Fatal(err)
 	}
 	ct.SelectedIssueID = issue.ID
-	scope, err := a.issueToolNewScope(ct.ID, "conversation-4", "turn-4", false)
+	scope, err := a.issueToolNewScope(ct.ID, "conversation-4", "turn-4")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -298,7 +240,7 @@ func TestIssueToolRunWithoutRuntimeRecordsUnknownAndDoesNotDuplicate(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	scope, err := a.issueToolNewScope(ct.ID, "conversation-5", "turn-5", false)
+	scope, err := a.issueToolNewScope(ct.ID, "conversation-5", "turn-5")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -330,7 +272,7 @@ func TestIssueToolScopeDeniesOtherContactIssue(t *testing.T) {
 		t.Fatal(err)
 	}
 	a.contacts = append(a.contacts, second)
-	scope, err := a.issueToolNewScope(first.ID, "conversation-6", "turn-6", false)
+	scope, err := a.issueToolNewScope(first.ID, "conversation-6", "turn-6")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -358,7 +300,7 @@ func TestIssueToolCapturedCreateLeavesSelectedContactFormAndDraftAlone(t *testin
 	a.issueFormOpen = true
 	a.issueGoal = "form goal"
 	a.issueRequirements = "form requirements"
-	scope, err := a.issueToolNewScope(first.ID, "conversation-7", "turn-7", false)
+	scope, err := a.issueToolNewScope(first.ID, "conversation-7", "turn-7")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -386,7 +328,7 @@ func TestIssueToolScopeUsesLatestTaskBinding(t *testing.T) {
 	ct.SessionID = "conversation-late"
 	ct.SendState = sendSubmitting
 	ct.pendingSend = &pendingSend{ToolScopeRef: ""}
-	scope, err := a.issueToolNewScope(ct.ID, "conversation-late", "turn-late", false)
+	scope, err := a.issueToolNewScope(ct.ID, "conversation-late", "turn-late")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -415,7 +357,7 @@ func TestIssueToolScopeUsesLatestTaskBinding(t *testing.T) {
 func TestIssueToolInactiveScopeKeepsOldReceiptButRejectsNewAction(t *testing.T) {
 	a, _ := newIssueToolTestApp(t)
 	ct := a.selectedContact()
-	scope, err := a.issueToolNewScope(ct.ID, "conversation-old", "turn-old", false)
+	scope, err := a.issueToolNewScope(ct.ID, "conversation-old", "turn-old")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -462,7 +404,7 @@ func TestIssueToolTruncatePreservesUTF8(t *testing.T) {
 func TestIssueToolConcurrentSameCreateDoesNotDuplicate(t *testing.T) {
 	a, _ := newIssueToolTestApp(t)
 	ct := a.selectedContact()
-	scope, err := a.issueToolNewScope(ct.ID, "conversation-concurrent", "turn-concurrent", false)
+	scope, err := a.issueToolNewScope(ct.ID, "conversation-concurrent", "turn-concurrent")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -499,7 +441,7 @@ func TestIssueToolConcurrentSameCreateDoesNotDuplicate(t *testing.T) {
 func TestIssueToolReservedActionRechecksOwnerBeforeSideEffect(t *testing.T) {
 	a, _ := newIssueToolTestApp(t)
 	ct := a.selectedContact()
-	scope, err := a.issueToolNewScope(ct.ID, "conversation-atomic", "turn-atomic", false)
+	scope, err := a.issueToolNewScope(ct.ID, "conversation-atomic", "turn-atomic")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -532,7 +474,7 @@ func TestIssueToolAcceptedSaveFailureKeepsKnownIDs(t *testing.T) {
 	a.issueToolLedger.Operations = append(a.issueToolLedger.Operations, operation)
 	execution := &issueExecution{
 		ID: "execution-known", SessionID: "session-known", TaskID: "task-known",
-		MessageID: "message-known", ToolOperationID: operation.ID,
+		PiIntent: true, PiRun: &piActivityRun{WorkerEpoch: "epoch", ContextID: "activity", SessionRef: "session-known", RunID: "task-known", Admitted: true}, ToolOperationID: operation.ID,
 	}
 	waiter := make(chan IssueToolReceipt, 1)
 	a.issueToolWaiters[operation.ID] = waiter
@@ -541,7 +483,7 @@ func TestIssueToolAcceptedSaveFailureKeepsKnownIDs(t *testing.T) {
 	receipt := <-waiter
 	if receipt.State != issueToolReceiptUnknown || receipt.IssueID != issue.ID ||
 		receipt.ExecutionID != execution.ID || receipt.SessionID != execution.SessionID ||
-		receipt.TaskID != execution.TaskID || receipt.MessageID != execution.MessageID {
+		receipt.TaskID != execution.TaskID || !reflect.DeepEqual(receipt.PiRun, execution.PiRun) {
 		t.Fatalf("accepted save failure receipt lost known identity: %+v", receipt)
 	}
 }
@@ -550,7 +492,7 @@ func TestIssueToolShutdownRejectsNewActionButKeepsReceipt(t *testing.T) {
 	a, _ := newIssueToolTestApp(t)
 	a.issueToolShutdown = make(chan struct{})
 	ct := a.selectedContact()
-	scope, err := a.issueToolNewScope(ct.ID, "conversation-shutdown", "turn-shutdown", false)
+	scope, err := a.issueToolNewScope(ct.ID, "conversation-shutdown", "turn-shutdown")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -576,8 +518,12 @@ func TestIssueToolShutdownRejectsNewActionButKeepsReceipt(t *testing.T) {
 }
 
 func attachIssueToolTestExecution(issue *productIssue) {
+	root := "/tmp"
+	run := &piActivityRun{WorkerEpoch: "fixture", ContextID: "activity-" + issue.ID, SessionRef: "work-session", RunID: "work-task", Admitted: true}
+	issue.PiBinding = &piActivityBinding{Engine: "pi", Context: pi.ContextBinding{ContextID: run.ContextID, BotID: issue.ContactID, Purpose: pi.Activity, ActivityID: issue.ID, SessionRef: run.SessionRef, SelectionRevision: 1, CWD: root}, Selection: piSelection{CWD: root}, Configuration: piConfiguration{CredentialSource: "fixture"}}
+	issue.WorkSessionID = run.SessionRef
 	issue.Executions = append(issue.Executions, &issueExecution{
-		ID: "execution-test", SessionID: "work-session", TaskID: "work-task",
+		ID: "execution-test", SessionID: run.SessionRef, TaskID: run.RunID, PiIntent: true, PiRun: run,
 		Status: issueExecutionCompleted, RequirementsRevision: issue.RequirementsRevision,
 	})
 }
@@ -590,7 +536,7 @@ func TestIssueToolWaitAnswerResumeUsesQuestionAnd142Ledger(t *testing.T) {
 		t.Fatal(err)
 	}
 	attachIssueToolTestExecution(issue)
-	scope, err := a.issueToolNewScope(ct.ID, "conversation-q", "turn-q", false)
+	scope, err := a.issueToolNewScope(ct.ID, "conversation-q", "turn-q")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -649,7 +595,7 @@ func TestIssueToolWaitAnswerResumeUsesQuestionAnd142Ledger(t *testing.T) {
 		t.Fatalf("duplicate answer = %+v err=%v pending=%d", duplicate, err, issue.Supplements.pendingCount())
 	}
 	// A new turn cannot answer the same open question twice.
-	secondScope, err := a.issueToolNewScope(ct.ID, "conversation-q2", "turn-q2", false)
+	secondScope, err := a.issueToolNewScope(ct.ID, "conversation-q2", "turn-q2")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -660,7 +606,7 @@ func TestIssueToolWaitAnswerResumeUsesQuestionAnd142Ledger(t *testing.T) {
 	if err != nil || crossTurn.IsError || issue.Supplements.pendingCount() != 1 {
 		t.Fatalf("cross-turn duplicate answer = %+v err=%v pending=%d", crossTurn, err, issue.Supplements.pendingCount())
 	}
-	changedScope, err := a.issueToolNewScope(ct.ID, "conversation-q3", "turn-q3", false)
+	changedScope, err := a.issueToolNewScope(ct.ID, "conversation-q3", "turn-q3")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -706,7 +652,7 @@ func TestIssueToolWrongOrStaleQuestionRefIsRejected(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			scope, err := a.issueToolNewScope(ct.ID, ct.SessionID, event.RunID, false)
+			scope, err := a.issueToolNewScope(ct.ID, ct.SessionID, event.RunID)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -757,7 +703,7 @@ func TestIssueToolAnswerAfterProductCancelIsRejected(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	scope, err := a.issueToolNewScope(ct.ID, ct.PiBinding.Context.SessionRef, event.RunID, false)
+	scope, err := a.issueToolNewScope(ct.ID, ct.PiBinding.Context.SessionRef, event.RunID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -803,7 +749,7 @@ func TestIssueToolAnsweredQuestionMissingSupplementIsUnknown(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	scope, err := a.issueToolNewScope(ct.ID, ct.PiBinding.Context.SessionRef, event.RunID, false)
+	scope, err := a.issueToolNewScope(ct.ID, ct.PiBinding.Context.SessionRef, event.RunID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -839,7 +785,7 @@ func TestIssueToolAnsweredQuestionMissingSupplementIsUnknown(t *testing.T) {
 		t.Fatalf("previous conversation run did not settle: contact=%+v save=%q", ct, a.localSaveErr)
 	}
 	event.RunID, event.Seq = newIssueToolTurnID(), settled.Seq+1
-	newScope, err := a.issueToolNewScope(ct.ID, ct.PiBinding.Context.SessionRef, newIssueToolTurnID(), false)
+	newScope, err := a.issueToolNewScope(ct.ID, ct.PiBinding.Context.SessionRef, newIssueToolTurnID())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -871,7 +817,7 @@ func TestIssueToolWaitSupersedesChangedQuestionAndRevision(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	scope, err := a.issueToolNewScope(ct.ID, ct.PiBinding.Context.SessionRef, event.RunID, false)
+	scope, err := a.issueToolNewScope(ct.ID, ct.PiBinding.Context.SessionRef, event.RunID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -910,7 +856,7 @@ func TestIssueToolWaitSupersedesChangedQuestionAndRevision(t *testing.T) {
 		t.Fatalf("first conversation run did not settle: contact=%+v save=%q", ct, a.localSaveErr)
 	}
 	event.RunID, event.Seq = newIssueToolTurnID(), settled.Seq+1
-	secondScope, err := a.issueToolNewScope(ct.ID, ct.PiBinding.Context.SessionRef, newIssueToolTurnID(), false)
+	secondScope, err := a.issueToolNewScope(ct.ID, ct.PiBinding.Context.SessionRef, newIssueToolTurnID())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -939,7 +885,7 @@ func TestIssueToolWaitSupersedesChangedQuestionAndRevision(t *testing.T) {
 		t.Fatalf("second conversation run did not settle: contact=%+v save=%q", ct, a.localSaveErr)
 	}
 	event.RunID, event.Seq = newIssueToolTurnID(), settled.Seq+1
-	thirdScope, err := a.issueToolNewScope(ct.ID, ct.PiBinding.Context.SessionRef, newIssueToolTurnID(), false)
+	thirdScope, err := a.issueToolNewScope(ct.ID, ct.PiBinding.Context.SessionRef, newIssueToolTurnID())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -974,7 +920,7 @@ func TestIssueToolResumeWithoutStructuredQuestionStillWorks(t *testing.T) {
 	if !a.markIssueWaitingFor(ct, issue.ID) || issue.Status != issueStatusWaitingUser || issue.openQuestion() != nil {
 		t.Fatalf("manual wait state = status=%q question=%+v", issue.Status, issue.openQuestion())
 	}
-	scope, _ := a.issueToolNewScope(ct.ID, "conversation-manual", "turn-manual", false)
+	scope, _ := a.issueToolNewScope(ct.ID, "conversation-manual", "turn-manual")
 	activateIssueToolTestScope(t, a, scope)
 	resume, err := a.handleIssueToolForward(context.Background(), issueToolForwardRequest{Tool: "issue_action", Arguments: issueToolActionArgs(t, *scope, issueToolActionResume, map[string]any{"issue_id": issue.ID})})
 	if err != nil || resume.IsError || issue.Status != issueStatusInProgress {
@@ -991,7 +937,7 @@ func TestIssueToolReplacementQuestionSaveFailureKeepsOriginalOpen(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	scope, err := a.issueToolNewScope(ct.ID, ct.PiBinding.Context.SessionRef, event.RunID, false)
+	scope, err := a.issueToolNewScope(ct.ID, ct.PiBinding.Context.SessionRef, event.RunID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1046,7 +992,7 @@ func TestIssueToolWaitBeforeTaskBindingUsesScopeThenRealTask(t *testing.T) {
 	ct.SessionID = "conversation-pre-bind"
 	ct.SendState = sendSubmitting
 	ct.pendingSend = &pendingSend{}
-	scope, err := a.issueToolNewScope(ct.ID, "conversation-pre-bind", "turn-pre-bind", false)
+	scope, err := a.issueToolNewScope(ct.ID, "conversation-pre-bind", "turn-pre-bind")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1082,41 +1028,6 @@ func TestIssueToolWaitBeforeTaskBindingUsesScopeThenRealTask(t *testing.T) {
 	}
 }
 
-func TestIssueToolInternalScopeIsFilteredFromUserHistoryOnlyAtTail(t *testing.T) {
-	a, _ := newIssueToolTestApp(t)
-	ct := a.selectedContact()
-	scope, err := a.issueToolNewScope(ct.ID, "history-session", "history-turn", false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	scopeJSON, _ := json.Marshal(scope)
-	// Simulate a same-turn create/task binding changing mutable scope fields
-	// after the wire snapshot was emitted.
-	scope.AllowedIssueIDs = append(scope.AllowedIssueIDs, "issue-created-later")
-	scope.RuntimeTaskID = "task-bound-later"
-	a.issueToolScopes[scope.Ref] = *scope
-	user := taskContextItem{ID: "user-1", Name: "user-note", Text: "literal {\"type\":\"caller_context\"}", Revision: 1}
-	scopeItem := taskContextItem{Name: issueToolScopeContextName, Text: string(scopeJSON), Revision: 1}
-	records := supplementRawHistoryRecords(t, "history-task", "history-message", "user body", []taskContextItem{user, scopeItem}, true)
-	filtered := parseHistoryWithIssueToolScopeFilter("history-session", records, nil, a.issueToolScopeIndexSnapshot())
-	raw := parseHistory("history-session", records, nil)
-	if len(filtered.messages) != 1 || len(filtered.messages[0].Context) != 1 ||
-		filtered.messages[0].Context[0].Name != user.Name || filtered.messages[0].Context[0].Text != user.Text {
-		t.Fatalf("filtered user history = %+v", filtered.messages)
-	}
-	if len(raw.messages) != 1 || len(raw.messages[0].Context) != 2 {
-		t.Fatalf("raw history was mutated: %+v", raw.messages)
-	}
-	// A same-named user item is preserved when it is not the actual trailing
-	// app-issued scope.
-	userScopeLike := taskContextItem{ID: "user-2", Name: issueToolScopeContextName, Text: string(scopeJSON), Revision: 1}
-	records = supplementRawHistoryRecords(t, "history-task", "history-message", "user body", []taskContextItem{userScopeLike, user}, true)
-	filtered = parseHistoryWithIssueToolScopeFilter("history-session", records, nil, a.issueToolScopeIndexSnapshot())
-	if len(filtered.messages[0].Context) != 2 {
-		t.Fatalf("non-tail same-named user context was removed: %+v", filtered.messages[0].Context)
-	}
-}
-
 func TestIssueToolConversationIssueListIsBoundedAndScopeOwned(t *testing.T) {
 	a, _ := newIssueToolTestApp(t)
 	ct := a.selectedContact()
@@ -1126,7 +1037,7 @@ func TestIssueToolConversationIssueListIsBoundedAndScopeOwned(t *testing.T) {
 			Goal: strings.Repeat("有界 garden schedule ", 100), Status: issueStatusNotStarted, RequirementsRevision: 1,
 		})
 	}
-	scope, err := a.issueToolNewScope(ct.ID, "catalog-session", "catalog-turn", false)
+	scope, err := a.issueToolNewScope(ct.ID, "catalog-session", "catalog-turn")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1164,40 +1075,10 @@ func TestIssueToolConversationIssueListIsBoundedAndScopeOwned(t *testing.T) {
 	}
 }
 
-func TestIssueToolIssueListHistoryRequiresPersistedProvenance(t *testing.T) {
-	a, ct, event := piRunStartedTestApp(t)
-	scope, err := a.issueToolNewScope(ct.ID, ct.PiBinding.Context.SessionRef, event.RunID, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	reloaded, err := openContactStore(a.store.path, a.workDir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	b := &appModel{issueToolScopes: reloaded.issueToolScopes}
-	index := b.issueToolScopeIndexSnapshot()
-	user := taskContextItem{Name: issueToolIssueListContextName, Text: "same-named user material"}
-	list := taskContextItem{Name: issueToolIssueListContextName, Text: `{"issues":[],"has_more":false}`}
-	token := taskContextItem{Name: issueToolScopeContextName, Text: scope.Ref}
-	items := []taskContextItem{user, list, token}
-	if got := filterIssueToolContextWithIndex(index, ct.PiBinding.Context.SessionRef, items); !reflect.DeepEqual(got, []taskContextItem{user}) {
-		t.Fatalf("current app items were not hidden after reload: %+v", got)
-	}
-	if got := filterIssueToolContextWithIndex(index, filepath.Join(t.TempDir(), "other-session.jsonl"), items); !reflect.DeepEqual(got, items) {
-		t.Fatalf("foreign-session items were hidden: %+v", got)
-	}
-	identity := index[scope.Ref]
-	identity.IssueListAppended = false
-	index[scope.Ref] = identity
-	if got := filterIssueToolContextWithIndex(index, ct.PiBinding.Context.SessionRef, items); !reflect.DeepEqual(got, items[:2]) {
-		t.Fatalf("unproven list context hid same-named user material: %+v", got)
-	}
-}
-
 func TestIssueToolScopeWireIsOpaqueToken(t *testing.T) {
 	a, _ := newIssueToolTestApp(t)
 	ct := a.selectedContact()
-	scope, err := a.issueToolNewScope(ct.ID, "token-session", "token-turn", false)
+	scope, err := a.issueToolNewScope(ct.ID, "token-session", "token-turn")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1205,26 +1086,12 @@ func TestIssueToolScopeWireIsOpaqueToken(t *testing.T) {
 	if !ok || input.Text != scope.Ref || strings.Contains(input.Text, "{") {
 		t.Fatalf("model-facing scope = %+v scope=%q", input, scope.Ref)
 	}
-	a.issueToolScopes[scope.Ref] = *scope
-	user := taskContextItem{ID: "user-token", Name: "user-note", Text: "user material", Revision: 1}
-	tokenItem := taskContextItem{Name: issueToolScopeContextName, Text: scope.Ref, Revision: 1}
-	records := supplementRawHistoryRecords(t, "token-task", "token-message", "body", []taskContextItem{user, tokenItem}, true)
-	filtered := parseHistoryWithIssueToolScopeFilter("token-session", records, nil, a.issueToolScopeIndexSnapshot())
-	if len(filtered.messages) != 1 || len(filtered.messages[0].Context) != 1 || filtered.messages[0].Context[0].Name != user.Name {
-		t.Fatalf("token wire filter = %+v", filtered.messages)
-	}
-	unknown := taskContextItem{Name: issueToolScopeContextName, Text: "scope-unknown-user", Revision: 1}
-	records = supplementRawHistoryRecords(t, "token-task", "token-message", "body", []taskContextItem{user, unknown}, true)
-	filtered = parseHistoryWithIssueToolScopeFilter("token-session", records, nil, a.issueToolScopeIndexSnapshot())
-	if len(filtered.messages[0].Context) != 2 {
-		t.Fatalf("unknown token was filtered: %+v", filtered.messages[0].Context)
-	}
 }
 
 func TestIssueToolLegacyJSONScopeIsRejected(t *testing.T) {
 	a, _ := newIssueToolTestApp(t)
 	ct := a.selectedContact()
-	scope, err := a.issueToolNewScope(ct.ID, "legacy-json-session", "legacy-json-turn", false)
+	scope, err := a.issueToolNewScope(ct.ID, "legacy-json-session", "legacy-json-turn")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1245,7 +1112,7 @@ func TestIssueToolLegacyJSONScopeIsRejected(t *testing.T) {
 func TestIssueToolContextWireBudgetIncludesInternalScope(t *testing.T) {
 	userText := strings.Repeat("x", taskContextMaxBytes-64)
 	inputs := taskContextInputs([]taskContextItem{{ID: "u", Name: "user", Text: userText, Revision: 1}})
-	scope := runtimeContextInput{Name: issueToolScopeContextName, Text: `{"ref":"scope-budget"}`}
+	scope := pi.ContextInput{Name: issueToolScopeContextName, Text: "scope-budget"}
 	inputs = append(inputs, scope)
 	if err := validateRuntimeContextInputs(inputs); err == nil || !strings.Contains(err.Error(), "1 MiB") {
 		t.Fatalf("wire budget error = %v", err)
@@ -1278,7 +1145,7 @@ func TestIssueToolAnswerBeforeWorkTerminalWaitsForRealTerminal(t *testing.T) {
 	issue.Supplements = newIssueSupplementLedger()
 	issue.Supplements.AutoContinue = false
 	ct.SessionID = "conversation-answer"
-	scope, err := a.issueToolNewScope(ct.ID, "conversation-answer", "answer-turn", false)
+	scope, err := a.issueToolNewScope(ct.ID, "conversation-answer", "answer-turn")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1316,7 +1183,7 @@ func TestIssueToolWorkScopeRejectsConversationAndActionTools(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	scope, err := a.issueToolNewWorkScope(ct.ID, issue.ID, newIssueExecutionID(), filepath.Join(t.TempDir(), "scope-fixture.jsonl"), false)
+	scope, err := a.issueToolNewWorkScope(ct.ID, issue.ID, newIssueExecutionID(), filepath.Join(t.TempDir(), "scope-fixture.jsonl"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1357,16 +1224,16 @@ func TestIssueToolWorkScopeRejectsConversationAndActionTools(t *testing.T) {
 	}
 }
 
-func TestIssueToolReleaseCallbackParticipatesInShutdownDrain(t *testing.T) {
+func TestIssueToolSubmissionCallbackParticipatesInShutdownDrain(t *testing.T) {
 	a, _ := newIssueToolTestApp(t)
 	quit := false
 	a.requestQuit = func() { quit = true }
-	a.issueToolReleaseInFlight = 1
+	a.submissionAsyncStarted()
 	a.beginShutdown()
 	if a.quitReady || quit {
 		t.Fatal("shutdown completed while a work release callback was in flight")
 	}
-	a.issueToolReleaseInFlight = 0
+	a.submissionAsyncFinished()
 	a.finishShutdown()
 	if !a.quitReady || !quit {
 		t.Fatal("shutdown did not complete after the final release callback")
@@ -1394,7 +1261,7 @@ func TestIssueToolQueryResponsesRespectByteBudgetAndUTF8(t *testing.T) {
 		})
 	}
 	issue.RequirementsRevision = 9
-	scope, err := a.issueToolNewScope(ct.ID, "query-budget-session", "query-budget-turn", false)
+	scope, err := a.issueToolNewScope(ct.ID, "query-budget-session", "query-budget-turn")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1496,7 +1363,7 @@ func TestIssueToolRevisionValidationIsActionableAndSideEffectFree(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	scope, err := a.issueToolNewScope(ct.ID, "conversation-revision", "turn-revision", false)
+	scope, err := a.issueToolNewScope(ct.ID, "conversation-revision", "turn-revision")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1566,7 +1433,7 @@ func TestIssueToolRevisionValidationIsActionableAndSideEffectFree(t *testing.T) 
 func TestIssueToolCreateThenUnstartedWaitAndAnswerStayExplicit(t *testing.T) {
 	a, store := newIssueToolTestApp(t)
 	ct := a.selectedContact()
-	scope, err := a.issueToolNewScope(ct.ID, "conversation-unstarted", "turn-unstarted", false)
+	scope, err := a.issueToolNewScope(ct.ID, "conversation-unstarted", "turn-unstarted")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1622,7 +1489,7 @@ func TestIssueToolCreateThenUnstartedWaitAndAnswerStayExplicit(t *testing.T) {
 	if err != nil || duplicateWait.IsError || len(issue.Questions) != 1 {
 		t.Fatalf("duplicate not-started wait = %+v err=%v questions=%d", duplicateWait, err, len(issue.Questions))
 	}
-	staleScope, err := a.issueToolNewScope(ct.ID, "conversation-unstarted-stale", "turn-unstarted-stale", false)
+	staleScope, err := a.issueToolNewScope(ct.ID, "conversation-unstarted-stale", "turn-unstarted-stale")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1647,7 +1514,7 @@ func TestIssueToolCreateThenUnstartedWaitAndAnswerStayExplicit(t *testing.T) {
 	if err != nil || duplicateAnswer.IsError || issue.Supplements.pendingCount() != 1 {
 		t.Fatalf("duplicate not-started answer = %+v err=%v pending=%d", duplicateAnswer, err, issue.Supplements.pendingCount())
 	}
-	updateScope, err := a.issueToolNewScope(ct.ID, "conversation-unstarted-update", "turn-unstarted-update", false)
+	updateScope, err := a.issueToolNewScope(ct.ID, "conversation-unstarted-update", "turn-unstarted-update")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1666,7 +1533,7 @@ func TestIssueToolCreateThenUnstartedWaitAndAnswerStayExplicit(t *testing.T) {
 	if updateReceipt.RequirementsRevision == nil || *updateReceipt.RequirementsRevision <= currentRevision || issue.RequirementsRevision != *updateReceipt.RequirementsRevision || issue.Goal != "updated after answer" {
 		t.Fatalf("update receipt/state = receipt=%+v issue=%+v", updateReceipt, issue)
 	}
-	staleUpdateScope, err := a.issueToolNewScope(ct.ID, "conversation-unstarted-stale-update", "turn-unstarted-stale-update", false)
+	staleUpdateScope, err := a.issueToolNewScope(ct.ID, "conversation-unstarted-stale-update", "turn-unstarted-stale-update")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1685,7 +1552,7 @@ func TestIssueToolCreateThenUnstartedWaitAndAnswerStayExplicit(t *testing.T) {
 		issue.Goal != "updated after answer" || len(issue.Questions) != 1 || len(issue.Executions) != 0 || issue.Supplements.pendingCount() != 1 {
 		t.Fatalf("stale update error/state = err=%+v issue=%+v", staleUpdateErr, issue)
 	}
-	staleWaitScope, err := a.issueToolNewScope(ct.ID, "conversation-unstarted-stale-wait", "turn-unstarted-stale-wait", false)
+	staleWaitScope, err := a.issueToolNewScope(ct.ID, "conversation-unstarted-stale-wait", "turn-unstarted-stale-wait")
 	if err != nil {
 		t.Fatal(err)
 	}

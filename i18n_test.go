@@ -14,6 +14,7 @@ import (
 	"github.com/egoist/mygo/i18n"
 	"github.com/egoist/mygo/ui"
 
+	"github.com/HeimaoLST/Nagi/internal/pi"
 	"github.com/HeimaoLST/Nagi/locales"
 )
 
@@ -612,7 +613,7 @@ func TestShellHistoryAndNewContactFollowLocale(t *testing.T) {
 	if last.Name != "新联系人 1" {
 		t.Fatalf("new contact name = %q, want the frame language", last.Name)
 	}
-	if demo.contacts[0].Name != "Saki" {
+	if demo.contacts[0].Name != "Nagi" {
 		t.Fatalf("existing contact name was rewritten: %q", demo.contacts[0].Name)
 	}
 }
@@ -623,7 +624,7 @@ func TestConnectionFeedbackFollowLocale(t *testing.T) {
 	a.connectionForm = newConnectionSettings(&config, config.WorkingDirectory)
 	a.connectionSaved = &config
 	a.connectionEffective = &config
-	a.rt = &runtimeClient{}
+	a.pi = presentationPiHost(a)
 	a.store = &contactStore{path: filepath.Join(t.TempDir(), "contacts.json")}
 	a.runtimeStatus = runtimeStateReady
 	a.connectionForm.Status = connStatusApplied
@@ -676,15 +677,6 @@ func TestRuntimeStartupFeedbackFollowsLocale(t *testing.T) {
 		t.Fatalf("Chinese runtime startup feedback missing: %v", tr.Texts())
 	}
 
-	a.runtimeStage = "Runtime helper"
-	a.runtimeErrKind = runtimeNoticeHelperMissing
-	a.runtimeHintKind = startupHintHelperInstall
-	a.runtimeHintArgs = []string{"/Applications/Saki.app/Contents/MacOS/Saki-runtime, /usr/local/bin/Saki-runtime"}
-	tr.Frame()
-	if !tr.HasText("运行时辅助进程：未找到运行时辅助进程。") ||
-		!tr.HasText("请将 Saki-runtime 放在 Saki 可执行文件旁（预期：/Applications/Saki.app/Contents/MacOS/Saki-runtime, /usr/local/bin/Saki-runtime），或设置 SAKI_RUNTIME_BIN，然后重启 Nagi。") {
-		t.Fatalf("Chinese helper feedback missing: %v", tr.Texts())
-	}
 }
 
 func TestIssueWorkLabelsFollowLocaleAndKeepTargets(t *testing.T) {
@@ -920,18 +912,20 @@ func TestIssueFormSwitchNoticeReplacesOldAndClears(t *testing.T) {
 	}
 }
 
-func TestSendAndStatusNoticesFollowLocaleWithoutChangingRaw(t *testing.T) {
+func TestPiDisconnectNoticeFollowsLocaleWithoutChangingRaw(t *testing.T) {
 	a, ct := workspaceTestApp(t)
+	a.pi = presentationPiHost(a)
 	ct.ActiveTaskID = "t1"
 	ct.SendState = sendAccepted
 	ct.Status = statusWorking
 	if w := a.ensureWork(ct, "t1", "m1"); w != nil {
 		w.State = workRunning
 	}
-	a.clearActiveTasksAfterExit()
-	if ct.StatusDetailKind != "status-connection-lost" || ct.SendErrorKind != "send-delivery" {
-		t.Fatalf("exit kinds = %q / %q", ct.StatusDetailKind, ct.SendErrorKind)
+	a.pi.onExit(a, pi.ProcessOutcome{})
+	if ct.SendErrorKind != "send-uncertain" || ct.SendError == "" {
+		t.Fatalf("Pi exit did not retain an uncertainty diagnostic: %q / %q", ct.SendErrorKind, ct.SendError)
 	}
+	raw := ct.SendError
 	before := recoveryRecordSnapshot(t, ct)
 	tr := ui.NewTester(a.view, 1040, 720)
 	for _, language := range []string{"en", "zh-Hans"} {
@@ -966,9 +960,6 @@ func TestSendAndStatusNoticesFollowLocaleWithoutChangingRaw(t *testing.T) {
 			if visible := tr.HasText(ct.SendError); visible != stage.expanded {
 				t.Fatalf("%s expanded=%v complete send diagnostic visible=%v: %v", language, stage.expanded, visible, tr.Texts())
 			}
-			if visible := tr.HasText(ct.StatusDetail); visible != stage.expanded {
-				t.Fatalf("%s expanded=%v complete status diagnostic visible=%v: %v", language, stage.expanded, visible, tr.Texts())
-			}
 			detailsBounds, detailsFound := tr.Find(detailsLabel)
 			hideBounds, hideFound := tr.Find(hideLabel)
 			if detailsFound == stage.expanded || hideFound != stage.expanded {
@@ -986,9 +977,8 @@ func TestSendAndStatusNoticesFollowLocaleWithoutChangingRaw(t *testing.T) {
 			}
 		}
 	}
-	if ct.SendError != "Delivery/result not confirmed. Reload before sending again." ||
-		ct.StatusDetail != "Connection lost before the task finished; reload to verify." {
-		t.Fatal("locale switch changed the canonical send/status raw bytes")
+	if ct.SendError != raw {
+		t.Fatal("locale switch changed the original Pi disconnect diagnostic")
 	}
 	if recoveryRecordSnapshot(t, ct) != before || a.submissionInFlight != 0 || ct.SendState != sendUnknown || ct.ActiveTaskID != "" {
 		t.Fatal("disconnected disclosure changed execution facts or replayed work")
@@ -1000,7 +990,7 @@ func TestCancelFailureNoticeReplacesRequestAndClears(t *testing.T) {
 	ct.ActiveTaskID = "t1"
 	ct.SendState = sendAccepted
 	ct.setSendError("Cancellation requested", "send-cancelled", "")
-	a.applyCancelResult(ct.ID, "t1", "requested", errors.New("backend down"))
+	ct.setSendError("Cancel failed: backend down", "send-cancel-failed", "backend down")
 	if ct.SendErrorKind != "send-cancel-failed" || ct.SendErrorDetail != "backend down" {
 		t.Fatalf("cancel failure = %q / %q", ct.SendErrorKind, ct.SendErrorDetail)
 	}
