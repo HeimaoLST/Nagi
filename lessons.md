@@ -50,9 +50,9 @@
 
 ## Export child-process outcomes separately
 
-**Problem:** The lab exported native app/fixture exit zero but not the native worker's individual exit status. The first product-control wrapper also omitted its raw child outcome when interrupted.
-**Cause or correction:** App exit, a mapped helper status and disappearance of a child do not prove that child's exit code. Unexported child outcomes remain unknown.
-**Prevention:** Correlate each owned child with its actual wait result and export raw return code and signal before mapping a helper exit, including interrupted runs. Keep app, worker, provider and cleanup outcomes separate. Release test gates, complete owned process/server cleanup, then snapshot final provider request counts; an earlier snapshot can miss requests during failure cleanup.
+**Problem:** The lab exported native app/fixture exit zero but not the native worker's individual exit status. The first product-control wrapper also omitted its raw child outcome when interrupted. A later lead preview read recorder results before the validation owner announced terminal release.
+**Cause or correction:** App exit, a mapped helper status and disappearance of a child do not prove that child's exit code. Unexported child outcomes remain unknown. Recorder output files can appear before the actual HC terminal receipt and lease release; their existence is not process-completion evidence.
+**Prevention:** Correlate each owned child with its actual wait result and export raw return code and signal before mapping a helper exit, including interrupted runs. Keep app, worker, provider and cleanup outcomes separate. Release test gates, complete owned process/server cleanup, then snapshot final provider request counts; an earlier snapshot can miss requests during failure cleanup. The lead must also wait for the actual terminal and owner release before reading results for manual analysis.
 
 ## Contain the entire optional observer boundary
 
