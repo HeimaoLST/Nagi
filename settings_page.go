@@ -933,7 +933,7 @@ func (a *appModel) settingsContactContent(c *ui.Context, t *ui.Theme) {
 			options = append(options, selectOption{Value: contact.ID, Label: a.settingsContactChoice(msgs, contact)})
 		}
 	}
-	preferenceSection(c, t, msgs.EditContactLabel(), func() {
+	preferenceGroup(c, t, func() {
 		settingsPreferenceRow(c, t, msgs.SettingsContact(), "", func() {
 			picker := preferenceSelect(c, &a.settingsContactID, options, msgs.EditContactLabel())
 			if picker.Changed() {
@@ -943,8 +943,7 @@ func (a *appModel) settingsContactContent(c *ui.Context, t *ui.Theme) {
 			}
 		}, true)
 	})
-	var ct *contact
-	ct = a.contactByID(a.settingsContactID)
+	ct := a.contactByID(a.settingsContactID)
 	editor = a.settingsContactEditor()
 	editor.BuiltinTools = append([]runtimeBuiltinTool(nil), a.runtimeBuiltinTools...)
 	editor.BuiltinDefaults = append([]string{}, a.runtimeBuiltinDefaults...)
@@ -958,6 +957,7 @@ func (a *appModel) settingsContactContent(c *ui.Context, t *ui.Theme) {
 	} else if !editor.BuiltinToolsLoaded && !editor.BuiltinToolsLoading && editor.BuiltinToolsError == "" && !editor.CanRetryBuiltinTools {
 		editor.BuiltinToolsError = msgs.SettingsBuiltinNotReady()
 	}
+	c.Key(ct.ID)
 	preferenceSection(c, t, msgs.SettingsContactTitle(a.settingsContactChoice(msgs, ct)), func() {
 		if !profileDraftEqual(editor.Draft, editor.initial) {
 			ui.Text(c, msgs.SettingsUnsavedChanges()).FontSize(typeMeta).LineHeight(1.5).TextColor(t.Warning)
