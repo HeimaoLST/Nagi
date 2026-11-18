@@ -41,7 +41,7 @@ func (a *appModel) issueSupplementSection(c *ui.Context, t *ui.Theme, ct *contac
 	if pending > 0 {
 		title = msgs.SupplementTitlePending(pending)
 	}
-	ui.Text(c, title).FontSize(typeLabel).FontWeight(400).FixedLineHeight(lineLabel).TextColor(t.Text)
+	sectionHeading(c, title)
 	if auto {
 		ui.Text(c, msgs.SupplementAutoOn()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 	} else {
@@ -115,21 +115,15 @@ func (a *appModel) issueSupplementSection(c *ui.Context, t *ui.Theme, ct *contac
 			if answering {
 				formLabel, inputLabel, saveLabel = msgs.WorkAnswer(), msgs.WorkAnswer(), msgs.WorkAnswer()
 			}
-			ui.Row(c).AlignItems(ui.Center).Children(func() {
-				ui.Text(c, formLabel).FontSize(typeLabel).FontWeight(400).FixedLineHeight(lineLabel).TextColor(t.TextMuted)
-				ui.Spacer(c)
-				secondaryButton(c, msgs.SupplementCancel()).OnClick(func() {
-					a.closeIssueSupplementForm()
-				})
-			})
+			ui.Text(c, formLabel).FontSize(typeAction).FontWeight(500).FixedLineHeight(lineLabel).TextColor(t.Text)
 			c.Key(struct {
 				ContactID, IssueID, QuestionRef string
 				Answering                       bool
 			}{ct.ID, issue.ID, questionRef, answering})
 			formTextArea(c, draft, false, a.workTheme.InputBorder).Label(inputLabel).Height(56).
 				Placeholder(msgs.SupplementFormPlaceholder())
-			ui.Row(c).Gap(6).Children(func() {
-				secondaryButton(c, saveLabel).OnClick(func() {
+			ui.Row(c).Wrap().Gap(8).Children(func() {
+				outlinedAction(c, saveLabel).OnClick(func() {
 					var saved bool
 					if answering {
 						saved = a.saveIssueQuestionAnswer(answerTarget, questionRef, *draft)
@@ -142,6 +136,7 @@ func (a *appModel) issueSupplementSection(c *ui.Context, t *ui.Theme, ct *contac
 					*draft = ""
 					a.closeIssueSupplementForm()
 				})
+				secondaryButton(c, msgs.SupplementCancel()).OnClick(a.closeIssueSupplementForm)
 			})
 			ui.Text(c, msgs.SupplementSaveDisclaimer()).
 				FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)

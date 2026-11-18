@@ -347,7 +347,7 @@ func issueResultRunHeader(c *ui.Context, state *issueResultPanelState, actions i
 	}
 	target.Children(func() {
 		if state.RunStatus != "" {
-			ui.Text(c, issueExecutionText(locales.In(c.Locale()), state.RunStatus)).FontSize(typeAction).FontWeight(500).TextColor(c.Theme().TextMuted)
+			ui.Text(c, issueExecutionText(locales.In(c.Locale()), state.RunStatus)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(c.Theme().TextMuted)
 		}
 		issueResultRunNotice(c, state, actions)
 	})
@@ -358,7 +358,7 @@ func issueResultPanel(c *ui.Context, state *issueResultPanelState, actions issue
 	if state.ResultCodeHandles == nil {
 		state.ResultCodeHandles = map[int]*ui.Handle{}
 	}
-	root := ui.Column(c).AlignSelf(ui.Stretch).MinWidth(0).Gap(12)
+	root := ui.Column(c).AlignSelf(ui.Stretch).MinWidth(0).Padding(0, 0, 32).Gap(16)
 	if actions.OpenSettings != nil {
 		root.OnShortcut(ui.Cmd, ui.KeyComma, func() {
 			state.FocusReturn = issueResultFocusedHandle(c, state, false)
@@ -371,9 +371,9 @@ func issueResultPanel(c *ui.Context, state *issueResultPanelState, actions issue
 		}
 		issueResultRunHeader(c, state, actions, 12)
 
-		result := ui.Column(c).AlignSelf(ui.Stretch).MinWidth(0).Padding(8, 0).Gap(8)
+		result := ui.Column(c).AlignSelf(ui.Stretch).MinWidth(0).Gap(8)
 		result.Children(func() {
-			ui.Text(c, locales.In(c.Locale()).ResultHeading()).FontSize(typeAction).FontWeight(500).TextColor(th.Text)
+			sectionHeading(c, locales.In(c.Locale()).ResultHeading())
 			if state.Response == "" {
 				ui.Text(c, locales.In(c.Locale()).ResultNoAssistant()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(th.TextMuted)
 				return
@@ -397,7 +397,7 @@ func issueResultPanel(c *ui.Context, state *issueResultPanelState, actions issue
 		})
 
 		ui.Column(c).AlignSelf(ui.Stretch).MinWidth(0).Gap(8).Children(func() {
-			ui.Text(c, locales.In(c.Locale()).ResultReportedFiles()).FontSize(typeAction).FontWeight(500).TextColor(th.Text)
+			sectionHeading(c, locales.In(c.Locale()).ResultReportedFiles())
 			if len(state.Files) == 0 {
 				ui.Text(c, locales.In(c.Locale()).ResultNoFiles()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(th.TextMuted)
 				return
@@ -526,17 +526,17 @@ func issueResultReaderPage(c *ui.Context, th *ui.Theme, state *issueResultPanelS
 				state.FocusReader = false
 			}
 			ui.Column(c).MinWidth(0).Shrink(1).Gap(2).Children(func() {
-				ui.Text(c, filepath.Base(file.Path)).FontSize(typePageTitle).FontWeight(500).FixedLineHeight(lineSettingsTitle).TextColor(th.Text).MaxLines(2)
+				pageHeading(c, filepath.Base(file.Path)).MaxLines(2)
 			})
 		})
 		ui.Scroll(c).Grow(1).TrackScroll(&state.ReaderScroll).Padding(0, 16).Children(func() {
-			ui.Column(c).AlignSelf(ui.Stretch).MaxWidth(conversationMaxWidth).MinWidth(0).Gap(10).Children(func() {
+			ui.Column(c).AlignSelf(ui.Stretch).MaxWidth(conversationMaxWidth).MinWidth(0).Padding(0, 0, 32).Gap(12).Children(func() {
 				markdownReader(c, file.Path, markdownReaderOptions{
 					PlainText: true, CopyLabel: locales.In(c.Locale()).CopyPathLabel(), CopyText: actions.CopyText,
 					CopyHandle: &state.CopyPathHandle,
 				})
 				issueResultReaderActions(c, th, state, actions, file)
-				ui.Text(c, locales.In(c.Locale()).ResultCurrentFileDiff()).FontSize(typeAction).TextColor(th.TextMuted)
+				ui.Text(c, locales.In(c.Locale()).ResultCurrentFileDiff()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(th.TextMuted)
 				issueResultReaderPreview(c, th, state, actions, file, issueResultFileKey(file))
 				if state.SourceFor == issueResultFileKey(file) {
 					issueResultSourceView(c, th, state, actions, file)
@@ -552,7 +552,7 @@ func issueResultReaderPage(c *ui.Context, th *ui.Theme, state *issueResultPanelS
 }
 
 func issueResultReaderAction(c *ui.Context, th *ui.Theme, label string) ui.Element {
-	return secondaryButton(c, label).Label(label).Margin(0).TextColor(th.Text)
+	return outlinedAction(c, label).TextColor(th.Text)
 }
 
 func issueResultReaderActions(c *ui.Context, th *ui.Theme, state *issueResultPanelState, actions issueResultPanelActions, file issueResultFile) {
@@ -562,7 +562,7 @@ func issueResultReaderActions(c *ui.Context, th *ui.Theme, state *issueResultPan
 	if state.InspectFor == key {
 		inspection = state.Inspection
 	}
-	ui.Row(c).Wrap().Gap(6).AlignItems(ui.Center).Children(func() {
+	ui.Row(c).FillWidth().MinWidth(0).Wrap().Gap(8).AlignItems(ui.Center).Children(func() {
 		if actions.CheckFile != nil {
 			issueResultReaderAction(c, th, msgs.ReaderCheckAgainLabel()).Bind(&state.ReaderCheckHandle).OnClick(func() { actions.CheckFile(file) })
 		}

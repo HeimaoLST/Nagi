@@ -141,6 +141,29 @@ func paletteContrast(a, b ui.Color) float64 {
 	return (x + 0.05) / (y + 0.05)
 }
 
+var contactAvatarSwatches = [...]struct{ light, dark ui.Color }{
+	{ui.Hex("#CADDEB"), ui.Hex("#2E4961")},
+	{ui.Hex("#D9D1EA"), ui.Hex("#4B3B61")},
+	{ui.Hex("#E9CDD4"), ui.Hex("#633B4B")},
+	{ui.Hex("#EED7BE"), ui.Hex("#634528")},
+	{ui.Hex("#C6E1DB"), ui.Hex("#284E4A")},
+	{ui.Hex("#DDE5C1"), ui.Hex("#47532F")},
+	{ui.Hex("#E4CFBE"), ui.Hex("#5B4338")},
+	{ui.Hex("#CBD2EE"), ui.Hex("#3B456B")},
+}
+
+func contactAvatarColors(t *ui.Theme, name string) (background, ink ui.Color) {
+	hash := uint32(2166136261)
+	for i := 0; i < len(name); i++ {
+		hash = (hash ^ uint32(name[i])) * 16777619
+	}
+	swatch := contactAvatarSwatches[(hash^(hash>>16))%uint32(len(contactAvatarSwatches))]
+	if t.Dark {
+		return swatch.dark, ui.RGB(242, 241, 232)
+	}
+	return swatch.light, ui.RGB(20, 20, 20)
+}
+
 // segmentedSelection keeps MyGo's official SegmentedBase radio group,
 // keyboard semantics and Changed contract, with the app's restrained
 // Selection/Text face instead of the framework pressedColor and shadow.
@@ -257,6 +280,15 @@ func appTooltip(c *ui.Context, anchor ui.Element, text string) ui.Element {
 // secondaryButton uses the shared md ghost face and the existing Button controller.
 func secondaryButton(c *ui.Context, label string) ui.Element {
 	return sharedControlFace(c, ui.Button(c, label).Label(label), 16, 4, false, false, false).FontSize(typeAction).FontWeight(500).FixedLineHeight(lineAction).Padding(8, 12).Gap(6)
+}
+
+func outlinedAction(c *ui.Context, label string) ui.Element {
+	return sharedControlFace(c, ui.Button(c, label).Label(label), 8, 4, true, false, false).
+		Margin(0).MinWidth(controlHit).FontSize(typeAction).FontWeight(500).FixedLineHeight(lineLabel).Padding(6, 12)
+}
+
+func sectionHeading(c *ui.Context, title string) ui.Element {
+	return ui.Text(c, title).Role(ui.RoleHeading).Level(2).FontSize(16).FontWeight(600).FixedLineHeight(lineBody).TextColor(c.Theme().Text)
 }
 
 func navigationControl(c *ui.Context, e ui.Element, palette workbenchTheme, selected bool) ui.Element {

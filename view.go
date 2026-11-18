@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"path/filepath"
 	"strings"
+	"unicode"
 
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/markdown"
@@ -339,14 +340,14 @@ func (a *appModel) avatarRailRow(c *ui.Context, t *ui.Theme, i int) {
 	}
 	row := ui.ButtonBase(c).Key(ct.ID).Label(label).Description(status).
 		Selected(i == a.selected).Width(48).Height(44).Padding(4).Radius(8).
-		Justify(ui.Center).Background(ui.Transparent).BorderWidth(0).TextColor(t.Text)
+		AlignItems(ui.Center).Justify(ui.Start).Background(ui.Transparent).BorderWidth(0).TextColor(t.Text)
 	if i == a.selected {
 		row.Background(t.Selection).TextColor(t.Text)
 	}
 	row = appTooltip(c, row, tip)
 	row.OnClick(func() { a.selectContact(i) })
 	row.Children(func() {
-		a.contactIcon(c, t, 28)
+		contactAvatar(c, t, ct.Name, 24)
 		if glyph, count, color := a.avatarRailMarker(ct); glyph != "" {
 			text := glyph
 			if count > 0 {
@@ -403,25 +404,32 @@ func (a *appModel) openIssueFromRail(index int, issueID string) {
 func (a *appModel) railRow(c *ui.Context, t *ui.Theme, i int) {
 	ct := a.contacts[i]
 	currentMsgs := locales.In(c.Locale())
-	row := ui.ButtonBase(c).Label(currentMsgs.AvatarContactLabel(ct.Name)).Gap(8).Padding(4, 8).MinHeight(controlHit).Radius(0).AlignItems(ui.Start).Background(ui.Transparent).BorderWidth(0).FocusRing(false)
-	row = drawControlFace(c, row, 8, 4, false, false, i == a.selected, 0, 2, a.workTheme.NavHover)
+	selected := i == a.selected
+	row := ui.ButtonBase(c).Key(ct.ID).Label(currentMsgs.AvatarContactLabel(ct.Name)).Selected(selected).
+		Gap(8).Padding(4, 8).MinHeight(controlHit).Radius(8).AlignItems(ui.Center).Background(ui.Transparent).BorderWidth(0)
+	focusFill := a.workTheme.NavHover
+	if selected {
+		focusFill = t.Selection
+	}
+	row = drawControlFace(c, row, 8, 4, false, false, selected, 0, 2, focusFill)
 	row.OnClick(func() { a.selectContact(i) })
 	row.Children(func() {
-		ui.Column(c).Grow(1).Gap(2).Children(func() {
+		contactAvatar(c, t, ct.Name, 28)
+		ui.Column(c).Grow(1).MinWidth(0).Gap(2).Children(func() {
 			ui.Row(c).AlignItems(ui.Center).Gap(4).Children(func() {
 				nameWeight := 400
-				if i == a.selected {
+				if selected {
 					nameWeight = 500
 				}
-				ui.Text(c, ct.Name).FontSize(typeRailName).FontWeight(nameWeight).FixedLineHeight(lineNavigation).TextColor(t.Text)
-				ui.Spacer(c)
+				ui.Text(c, ct.Name).FontSize(typeRailName).FontWeight(nameWeight).FixedLineHeight(lineNavigation).
+					MaxLines(1).Grow(1).MinWidth(0).TextColor(t.Text)
 				msgs := locales.In(c.Locale())
 				notice := a.issueWorkNotice(ct)
 				if notice.ActiveCount > 0 {
-					ui.Text(c, msgs.TaskActiveCount(notice.ActiveCount)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
+					ui.Text(c, msgs.TaskActiveCount(notice.ActiveCount)).FontSize(typeMeta).FixedLineHeight(lineMeta).Shrink(0).TextColor(t.TextMuted)
 				}
 				if ct.Unread > 0 {
-					ui.Text(c, fmt.Sprintf("%d", ct.Unread)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Warning)
+					ui.Text(c, fmt.Sprintf("%d", ct.Unread)).FontSize(typeMeta).FixedLineHeight(lineMeta).Shrink(0).TextColor(t.Warning)
 				}
 			})
 			msgs := locales.In(c.Locale())
@@ -471,8 +479,30 @@ func (a *appModel) railRow(c *ui.Context, t *ui.Theme, i int) {
 }
 
 func (a *appModel) contactIcon(c *ui.Context, t *ui.Theme, size float32) {
-	ui.Box(c).Size(size, size).AlignItems(ui.Center).Justify(ui.Center).Children(func() {
-		ui.Icon(c, navProfileIcon).Size(14, 14).TextColor(t.TextMuted)
+	contactAvatar(c, t, a.selectedContact().Name, size)
+}
+
+func contactAvatar(c *ui.Context, t *ui.Theme, name string, size float32) {
+	name = strings.TrimSpace(name)
+	initials := [2]rune{'?'}
+	n := 0
+	for word := range strings.FieldsSeq(name) {
+		for _, r := range word {
+			if unicode.IsLetter(r) || unicode.IsNumber(r) {
+				initials[n] = unicode.ToUpper(r)
+				n++
+				break
+			}
+		}
+		if n == len(initials) {
+			break
+		}
+	}
+	background, ink := contactAvatarColors(t, name)
+	ui.Box(c).Size(size, size).MinWidth(size).Shrink(0).Radius(8).Background(background).
+		AlignItems(ui.Center).Justify(ui.Center).IgnoreInput(true).Children(func() {
+		ui.Text(c, string(initials[:max(1, n)])).FontSize(typeMeta).FontWeight(600).FixedLineHeight(lineMeta).
+			SingleLine().TextColor(ink).IgnoreInput(true)
 	})
 }
 
@@ -1177,8 +1207,9 @@ func (a *appModel) composer(c *ui.Context, t *ui.Theme) {
 			unknownSummary = msgs.SendUnknownState()
 		}
 	}
-	ui.Column(c).FillWidth().Padding(8, 12).Gap(4).Children(func() {
+	ui.Column(c).FillWidth().Padding(8, 16).Gap(4).Children(func() {
 		ui.Column(c).FillWidth().MinHeight(composerMinHeight).Padding(8, 12, 0).Radius(16).Border(1, t.Border).Background(a.workTheme.Reading).Gap(4).Children(func() {
+			c.Key(ct.ID)
 			input := ui.TextArea(c, &ct.Draft).Bind(&a.composerHandle).Label(msgs.ComposerLabel(ct.Name)).
 				FontSize(typeBody).FixedLineHeight(lineBody).Lines(2, 6).MinHeight(48).
 				Background(ui.Transparent).BorderWidth(0).Padding(2).
@@ -1212,7 +1243,7 @@ func (a *appModel) composer(c *ui.Context, t *ui.Theme) {
 				sendReason = a.canSend(ct)
 				sendDisabled = strings.TrimSpace(ct.Draft) == "" || sendReason != ""
 			}
-			ui.Row(c).FillWidth().Height(composerToolbarHeight).Shrink(0).Padding(10, 6).AlignItems(ui.Center).Gap(6).Role(ui.RoleGroup).Label(msgs.ComposerTools()).Draw(func(p *ui.Painter, r ui.Rect) {
+			ui.Row(c).FillWidth().Height(composerToolbarHeight).Shrink(0).Padding(8, 8).AlignItems(ui.Center).Gap(8).Role(ui.RoleGroup).Label(msgs.ComposerTools()).Draw(func(p *ui.Painter, r ui.Rect) {
 				for x := r.X; x < r.X+r.W; x += 6 {
 					p.Line(x, r.Y+0.5, min(x+3, r.X+r.W), r.Y+0.5, 1, t.Border.Alpha(0.6))
 				}

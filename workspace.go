@@ -570,7 +570,7 @@ func (a *appModel) issueDetailView(c *ui.Context, t *ui.Theme, ct *contact, issu
 		cancelReason = a.canCancelIssue(ct, issue)
 	}
 	ui.Scroll(c).Grow(1).FillWidth().TrackScroll(&nav.DetailScroll).Padding(0, 12).Children(func() {
-		ui.Column(c).Gap(8).Children(func() {
+		ui.Column(c).FillWidth().Padding(0, 0, 32).Gap(12).Children(func() {
 			ui.Row(c).AlignItems(ui.Center).Gap(6).Children(func() {
 				if !narrow {
 					back := detailBackButton(c, t, locales.In(c.Locale()).WorkBackToIssues(), locales.In(c.Locale()).WorkBackToIssues(), locales.In(c.Locale()).WorkBackToIssues()).OnClick(func() { a.backToIssueOverview() })
@@ -586,7 +586,7 @@ func (a *appModel) issueDetailView(c *ui.Context, t *ui.Theme, ct *contact, issu
 						label = locales.In(c.Locale()).WorkStoppingIssue()
 					}
 					taskID := work.TaskID
-					stop := secondaryButton(c, label).TextColor(t.Warning).Disabled(cancelReason != "").OnClick(func() {
+					stop := outlinedAction(c, label).TextColor(t.Danger).Disabled(cancelReason != "").OnClick(func() {
 						a.cancelWorkTask(ct, taskID)
 					})
 					if work.State == workStopping {
@@ -602,6 +602,7 @@ func (a *appModel) issueDetailView(c *ui.Context, t *ui.Theme, ct *contact, issu
 					})
 				})
 			}
+			sectionHeading(c, issue.Goal)
 			if active {
 				ui.Text(c, locales.In(c.Locale()).IssueCurrentRun(workStateText(locales.In(c.Locale()), work))).FontSize(typeMeta).FixedLineHeight(lineMeta).MaxLines(2).TextColor(a.workStateColor(work.State))
 				if cancelReason != "" {
@@ -634,7 +635,7 @@ func (a *appModel) issueDetailView(c *ui.Context, t *ui.Theme, ct *contact, issu
 					})
 				} else {
 					contactID, issueID := ct.ID, issue.ID
-					secondaryButton(c, locales.In(c.Locale()).IssueReloadTask()).Disabled(!a.runtimeAvailableForView()).OnClick(func() {
+					secondaryButton(c, locales.In(c.Locale()).IssueReloadTask()).AlignSelf(ui.Start).Disabled(!a.runtimeAvailableForView()).OnClick(func() {
 						a.inspectPiIssueWork(contactID, issueID)
 					})
 					if issue.Work.LoadErr != "" {
@@ -707,7 +708,7 @@ func (a *appModel) issueFormView(c *ui.Context, t *ui.Theme) {
 			ui.Text(c, text).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Danger)
 		}
 		ui.Row(c).Gap(8).Children(func() {
-			secondaryButton(c, locales.In(c.Locale()).WorkSaveIssue()).OnClick(func() { a.saveIssueForm() })
+			outlinedAction(c, locales.In(c.Locale()).WorkSaveIssue()).OnClick(func() { a.saveIssueForm() })
 		})
 	})
 }
@@ -802,8 +803,8 @@ func (a *appModel) issuePrimaryAction(c *ui.Context, t *ui.Theme, ct *contact, i
 		target := issueSupplementTargetFor(ct, issue)
 		target.RequirementsRevision = question.RequirementsRevision
 		questionRef := question.Ref
-		ui.Row(c).Wrap().Gap(6).AlignItems(ui.Center).Children(func() {
-			secondaryButton(c, msgs.WorkAnswer()).FontWeight(500).OnClick(func() { a.openIssueQuestionAnswerForm(target, questionRef) })
+		ui.Row(c).Wrap().Gap(8).AlignItems(ui.Center).Children(func() {
+			outlinedAction(c, msgs.WorkAnswer()).OnClick(func() { a.openIssueQuestionAnswerForm(target, questionRef) })
 		})
 		return "answer"
 	}
@@ -829,8 +830,8 @@ func (a *appModel) issuePrimaryAction(c *ui.Context, t *ui.Theme, ct *contact, i
 				}
 			}
 			issueID := issue.ID
-			ui.Row(c).Wrap().Gap(6).AlignItems(ui.Center).Children(func() {
-				secondaryButton(c, label).FontWeight(500).OnClick(func() {
+			ui.Row(c).Wrap().Gap(8).AlignItems(ui.Center).Children(func() {
+				outlinedAction(c, label).OnClick(func() {
 					if !a.runIssueFor(ct, issueID) {
 						a.setIssueActionNotice(a.issueFormError, a.issueFormNotice, a.issueFormNoticeDetail)
 					}
@@ -840,8 +841,8 @@ func (a *appModel) issuePrimaryAction(c *ui.Context, t *ui.Theme, ct *contact, i
 		}
 	}
 	if latest := latestIssueExecution(issue); a.demo && issueHasReadableResult(ct, latest) {
-		ui.Row(c).Wrap().Gap(6).AlignItems(ui.Center).Children(func() {
-			read := secondaryButton(c, msgs.WorkReadResult()).FontWeight(500).OnClick(func() {
+		ui.Row(c).Wrap().Gap(8).AlignItems(ui.Center).Children(func() {
+			read := outlinedAction(c, msgs.WorkReadResult()).OnClick(func() {
 				a.openIssueResultFromLatest(issue.ID, latest.ID)
 			})
 			if a.issueResultShouldFocus(issue.ID, latest.ID, true) {
@@ -885,7 +886,7 @@ func (a *appModel) issueLifecycleActions(c *ui.Context, t *ui.Theme, issue *prod
 		return
 	}
 	ui.Row(c).Wrap().AlignItems(ui.Center).Gap(6).Children(func() {
-		secondaryButton(c, msgs.WorkCancel()).TextColor(t.Warning).OnClick(func() {
+		secondaryButton(c, msgs.WorkCancel()).TextColor(t.Danger).OnClick(func() {
 			if !a.cancelIssueProduct(issue.ID) {
 				a.setIssueActionNotice("Could not cancel this issue; its state was not changed.", "cancel-failed", "")
 			}
@@ -894,9 +895,9 @@ func (a *appModel) issueLifecycleActions(c *ui.Context, t *ui.Theme, issue *prod
 	if issue.Work.ActiveTaskID == "" && issue.Work.SendState == sendIdle && issueRunBlocked(issue) == "" {
 		ui.Text(c, msgs.WorkCompletionEvidence()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 		draft := a.completionDraft(issue)
-		ui.Row(c).AlignItems(ui.Center).Gap(6).Children(func() {
-			preferenceInput(c, draft, false, a.workTheme.InputBorder).Label(msgs.WorkCompletionEvidence()).Placeholder(msgs.WorkCompletionEvidencePlaceholder()).Grow(1)
-			secondaryButton(c, msgs.WorkComplete()).OnClick(func() {
+		ui.Row(c).Wrap().AlignItems(ui.Center).Gap(8).Children(func() {
+			preferenceInput(c, draft, false, a.workTheme.InputBorder).Label(msgs.WorkCompletionEvidence()).Placeholder(msgs.WorkCompletionEvidencePlaceholder()).Grow(1).MinWidth(160)
+			secondaryButton(c, msgs.WorkComplete()).Shrink(0).OnClick(func() {
 				if !a.completeIssue(issue.ID, *draft) {
 					a.setIssueActionNotice("Could not complete this issue.", "complete-failed", "")
 				}
@@ -909,35 +910,32 @@ func (a *appModel) issueCard(c *ui.Context, t *ui.Theme, ct *contact, issue *pro
 	msgs := locales.In(c.Locale())
 	editable := !issue.Archived && issue.Status != issueStatusCompleted && issue.Status != issueStatusCanceled
 	expanded := a.issueDetailOpen[issue.ID]
-	ui.Column(c).Key(issue.ID).Padding(8, 0).Gap(8).Children(func() {
-		ui.Column(c).Gap(2).Children(func() {
-			ui.Text(c, issue.Goal).FontSize(typeLabel).FontWeight(400).FixedLineHeight(lineLabel).TextColor(t.Text)
-			for _, question := range issue.Questions {
-				if question == nil || question.PiCall == nil || question.DeliveryState == "" {
-					continue
-				}
-				var delivery string
-				switch question.DeliveryState {
-				case issueQuestionDeliverySaved:
-					delivery = msgs.IssueAnswerSaved()
-				case issueQuestionDeliveryDispatching:
-					delivery = msgs.IssueAnswerDispatching()
-				case issueQuestionDeliveryResolved:
-					delivery = msgs.SupplementReceivedStatus()
-				case issueQuestionDeliveryUnknown:
-					delivery = msgs.SupplementUnknown()
-				case issueQuestionDeliveryCanceled:
-					delivery = msgs.TaskStatusCanceled()
-				default:
-					delivery = msgs.SupplementUnknown()
-				}
-				ui.Column(c).Key(question.Ref).Gap(4).Children(func() {
-					ui.Text(c, question.Text).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text)
-					ui.Text(c, question.AnswerText).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text)
-					ui.Text(c, delivery).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
-				})
+	ui.Column(c).Key(issue.ID).FillWidth().MinWidth(0).Gap(12).Children(func() {
+		for _, question := range issue.Questions {
+			if question == nil || question.PiCall == nil || question.DeliveryState == "" {
+				continue
 			}
-		})
+			var delivery string
+			switch question.DeliveryState {
+			case issueQuestionDeliverySaved:
+				delivery = msgs.IssueAnswerSaved()
+			case issueQuestionDeliveryDispatching:
+				delivery = msgs.IssueAnswerDispatching()
+			case issueQuestionDeliveryResolved:
+				delivery = msgs.SupplementReceivedStatus()
+			case issueQuestionDeliveryUnknown:
+				delivery = msgs.SupplementUnknown()
+			case issueQuestionDeliveryCanceled:
+				delivery = msgs.TaskStatusCanceled()
+			default:
+				delivery = msgs.SupplementUnknown()
+			}
+			ui.Column(c).Key(question.Ref).Gap(4).Children(func() {
+				ui.Text(c, question.Text).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text)
+				ui.Text(c, question.AnswerText).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text)
+				ui.Text(c, delivery).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
+			})
+		}
 		if a.issueActionError != "" {
 			text := a.issueActionError
 			if a.issueActionNotice != "" {
@@ -1037,8 +1035,8 @@ func (a *appModel) issueLatestResult(c *ui.Context, t *ui.Theme, ct *contact, is
 		}
 		return
 	}
-	ui.Text(c, msgs.IssueLatestExecution()).FontSize(typeGroupTitle).FontWeight(500).TextColor(t.TextMuted)
-	ui.Text(c, issueExecutionText(msgs, execution.Status)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
+	sectionHeading(c, msgs.IssueLatestExecution())
+	ui.Text(c, issueExecutionText(msgs, execution.Status)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 	var work *workItem
 	if a.demo {
 		text := strings.TrimSpace(ct.resultTextForExecution(execution))
@@ -1094,8 +1092,8 @@ func (a *appModel) issueLatestResult(c *ui.Context, t *ui.Theme, ct *contact, is
 		}
 	}
 	if showRead {
-		ui.Row(c).Wrap().Gap(6).AlignItems(ui.Center).Children(func() {
-			read := secondaryButton(c, locales.In(c.Locale()).WorkReadResult()).OnClick(func() { a.openIssueResultFromLatest(issue.ID, execution.ID) })
+		ui.Row(c).Wrap().Gap(8).AlignItems(ui.Center).Children(func() {
+			read := outlinedAction(c, msgs.WorkReadResult()).OnClick(func() { a.openIssueResultFromLatest(issue.ID, execution.ID) })
 			if a.issueResultShouldFocus(issue.ID, execution.ID, true) {
 				read.Focus()
 				a.consumeIssueResultReturnFocus()
@@ -1111,18 +1109,18 @@ func (a *appModel) issueLatestResult(c *ui.Context, t *ui.Theme, ct *contact, is
 
 func (a *appModel) issueRequirementSummary(c *ui.Context, t *ui.Theme, issue *productIssue) {
 	if len(issue.Requirements) == 0 {
-		ui.Text(c, locales.In(c.Locale()).IssueRequirements()).FontSize(typeGroupTitle).FontWeight(500).TextColor(t.TextMuted)
+		sectionHeading(c, locales.In(c.Locale()).IssueRequirements())
 		ui.Text(c, locales.In(c.Locale()).IssueNoRequirements()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 		return
 	}
-	ui.Text(c, locales.In(c.Locale()).IssueRequirements()).FontSize(typeGroupTitle).FontWeight(500).TextColor(t.TextMuted)
+	sectionHeading(c, locales.In(c.Locale()).IssueRequirements())
 	for _, requirement := range issue.Requirements {
 		if requirement == nil {
 			continue
 		}
-		ui.Row(c).AlignItems(ui.Center).Gap(6).Children(func() {
-			ui.Text(c, requirement.Text).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text).Grow(1)
-			ui.Text(c, requirementStateText(locales.In(c.Locale()), requirement.State)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(requirementStateColor(t, requirement.State))
+		ui.Row(c).FillWidth().MinWidth(0).Gap(8).AlignItems(ui.Start).Children(func() {
+			ui.Text(c, requirement.Text).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text).Grow(1).MinWidth(0)
+			ui.Text(c, requirementStateText(locales.In(c.Locale()), requirement.State)).FontSize(typeMeta).FixedLineHeight(lineBody).Shrink(0).TextColor(requirementStateColor(t, requirement.State))
 		})
 	}
 }
@@ -1384,36 +1382,16 @@ func (a *appModel) issueWorkViewCurrent(ct *contact, issue *productIssue, work *
 
 func (a *appModel) workCard(c *ui.Context, t *ui.Theme, w *workItem, isCurrent, issueWork bool, disclosure ...func(bool, func())) {
 	msgs := locales.In(c.Locale())
-	ct, taskID := a.selectedContact(), w.TaskID
 	ui.Column(c).Padding(8, 0).BorderWidth(0, 0, 1, 0).BorderColor(t.Border).Gap(4).Children(func() {
 		ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
 			ui.Text(c, workStateText(msgs, w)).FontSize(typeAction).FontWeight(500).TextColor(a.workStateColor(w.State))
 			ui.Spacer(c)
-			if isCurrent && (w.State == workAccepted || w.State == workRunning || w.State == workStopping) {
+			if !issueWork && isCurrent && (w.State == workAccepted || w.State == workRunning || w.State == workStopping) {
 				label := msgs.WorkStopTask()
-				if issueWork {
-					label = msgs.WorkStopIssueTask()
-				}
 				if w.State == workStopping {
 					label = msgs.WorkStoppingTask()
-					if issueWork {
-						label = msgs.WorkStoppingIssue()
-					}
 				}
-				stop := secondaryButton(c, label).FontWeight(500).OnClick(func() {
-					if issueWork {
-						a.cancelWorkTask(ct, taskID)
-					} else {
-						a.cancelSelected()
-					}
-				})
-				if issueWork {
-					issue, _ := ct.issueForTask(taskID)
-					stop.Disabled(a.canCancelIssue(ct, issue) != "")
-				}
-				if w.State == workStopping {
-					stop.Disabled(true)
-				}
+				secondaryButton(c, label).Disabled(w.State == workStopping).OnClick(func() { a.cancelSelected() })
 			}
 		})
 		if w.Prompt != "" {
