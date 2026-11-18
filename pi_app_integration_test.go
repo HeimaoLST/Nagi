@@ -27,6 +27,8 @@ import (
 	"github.com/HeimaoLST/Nagi/locales"
 )
 
+const piAppDefaultReply = "PRODUCT_TURN_COMPLETE"
+
 type piAppCall struct {
 	name string
 	id   string
@@ -41,6 +43,7 @@ type piAppProvider struct {
 	limit    int
 	bodies   []json.RawMessage
 	problems []string
+	reply    string
 	arrived  chan struct{}
 	release  <-chan struct{}
 }
@@ -49,13 +52,13 @@ func piAppArguments(values map[string]any) func(string) map[string]any {
 	return func(string) map[string]any { return values }
 }
 
-func (p *piAppProvider) install(calls []piAppCall, arrived chan struct{}, release <-chan struct{}) error {
+func (p *piAppProvider) install(calls []piAppCall, reply string, arrived chan struct{}, release <-chan struct{}) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.calls != nil && p.step != len(p.calls)+1 {
 		return fmt.Errorf("previous provider turn stopped at %d/%d", p.step, len(p.calls)+1)
 	}
-	p.calls, p.step, p.arrived, p.release = calls, 0, arrived, release
+	p.calls, p.step, p.reply, p.arrived, p.release = calls, 0, reply, arrived, release
 	return nil
 }
 
@@ -114,7 +117,7 @@ func (p *piAppProvider) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			err = fmt.Errorf("real SDK did not offer %s", call.name)
 		}
 	}
-	arrived, release := p.arrived, p.release
+	reply, arrived, release := p.reply, p.arrived, p.release
 	if err != nil {
 		p.problems = append(p.problems, err.Error())
 	} else {
@@ -133,7 +136,7 @@ func (p *piAppProvider) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	delta := map[string]any{"role": "assistant", "content": "PRODUCT_TURN_COMPLETE"}
+	delta := map[string]any{"role": "assistant", "content": reply}
 	finish := "stop"
 	if call.name != "" {
 		arguments, marshalErr := json.Marshal(call.args(previous))
@@ -389,7 +392,7 @@ func (f *piAppFixture) prepare(binding pi.ContextBinding) *piAppRun {
 
 func (f *piAppFixture) start(run *piAppRun, calls []piAppCall, arrived chan struct{}, release <-chan struct{}) {
 	f.t.Helper()
-	if err := f.provider.install(calls, arrived, release); err != nil {
+	if err := f.provider.install(calls, piAppDefaultReply, arrived, release); err != nil {
 		f.t.Fatal(err)
 	}
 	admission, err := f.client.StartRun(f.ctx, run.params)
@@ -1602,7 +1605,7 @@ func (h *piFirstUseHarness) endpoint(name string) string {
 
 func (h *piFirstUseHarness) script(arrived chan struct{}, release <-chan struct{}) {
 	h.t.Helper()
-	if err := h.provider.install([]piAppCall{}, arrived, release); err != nil {
+	if err := h.provider.install([]piAppCall{}, piAppDefaultReply, arrived, release); err != nil {
 		h.t.Fatal(err)
 	}
 }
@@ -2009,6 +2012,7 @@ func (h *piFirstUseHarness) cleanup() {
 }
 
 func TestPiAppConnectionAndConversation(t *testing.T) {
+	const requestLimit = 7
 	inputs := map[string]string{}
 	paths := make([]string, 0, 2)
 	for _, name := range []string{"NAGI_TEST_NODE", "NAGI_TEST_WORKER"} {
@@ -2073,7 +2077,7 @@ func TestPiAppConnectionAndConversation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := &piFirstUseHarness{t: t, app: app, provider: &piAppProvider{limit: 16}}
+	h := &piFirstUseHarness{t: t, app: app, provider: &piAppProvider{limit: requestLimit}}
 	h.pump = newUIPump(t, app)
 	h.tester = ui.NewTester(app.view, 1040, 720)
 	h.tester.SetLocale("en")
@@ -2542,7 +2546,12 @@ func TestPiAppConnectionAndConversation(t *testing.T) {
 	}, 30*time.Second)
 	releaseHeld()
 	if h.provider.count() != 5 {
-		t.Fatalf("unexpected model request count before restart: %d", h.provider.count())
+		t.Fatalf("unexpected model request count before independent Bot runs: %d", h.provider.count())
+	}
+	bots := h.runIndependentBots(firstID, secondID)
+	h.checkIndependentBotHistory(&bots, false)
+	if h.provider.count() != requestLimit {
+		t.Fatalf("independent Bot runs or history used %d requests, want %d", h.provider.count(), requestLimit)
 	}
 	if err := h.shutdown(); err != nil {
 		t.Fatal(err)
@@ -2557,7 +2566,7 @@ func TestPiAppConnectionAndConversation(t *testing.T) {
 	h.tester.SetFocused(true)
 	h.onUI(func() error {
 		ct := app.contactByID(secondID)
-		if ct == nil || ct.PiBinding == nil || !reflect.DeepEqual(ct.PiBinding, newBinding) || len(ct.PreviousPiBindings) == 0 || !reflect.DeepEqual(&ct.PreviousPiBindings[len(ct.PreviousPiBindings)-1], oldBinding) {
+		if ct == nil || ct != app.selectedContact() || ct.PiBinding == nil || !reflect.DeepEqual(ct.PiBinding, newBinding) || len(ct.PreviousPiBindings) == 0 || !reflect.DeepEqual(&ct.PreviousPiBindings[len(ct.PreviousPiBindings)-1], oldBinding) {
 			return errors.New("restart lost current or prior typed binding")
 		}
 		app.startPiHost()
@@ -2577,13 +2586,14 @@ func TestPiAppConnectionAndConversation(t *testing.T) {
 		}
 		return nil
 	})
-	if h.provider.count() != 5 || len(h.hosts)+len(h.probes) != 3 {
+	h.checkIndependentBotHistory(&bots, true)
+	if h.provider.count() != requestLimit || len(h.hosts)+len(h.probes) != 3 {
 		t.Fatalf("restart replayed a request or exceeded worker budget: requests=%d hosts=%d probes=%d", h.provider.count(), len(h.hosts), len(h.probes))
 	}
 	h.mu.Lock()
 	requests := append([]piFirstUseRequest(nil), h.requests...)
 	h.mu.Unlock()
-	if len(requests) != 5 {
+	if len(requests) != requestLimit {
 		t.Fatalf("request receipt count=%d", len(requests))
 	}
 	for i, request := range requests {
@@ -2604,9 +2614,243 @@ func TestPiAppConnectionAndConversation(t *testing.T) {
 			t.Fatalf("actual request %d did not match captured configuration: endpoint=%s path=%s auth=%v body=%s", i, request.Endpoint, request.Path, request.AuthOK, request.Body)
 		}
 	}
-	piAppRecord(t, "first-use-budget", map[string]any{"workers": len(h.hosts) + len(h.probes), "worker_limit": 3, "model_requests": len(requests), "request_limit": 16})
+	for index, bot := range bots {
+		request := requests[5+index]
+		other := bots[1-index]
+		var body struct {
+			Messages []struct {
+				Role    string          `json:"role"`
+				Content json.RawMessage `json:"content"`
+			} `json:"messages"`
+		}
+		if err := json.Unmarshal(request.Body, &body); err != nil || len(body.Messages) == 0 {
+			t.Fatalf("Bot %q request lacks model input: %v", bot.name, err)
+		}
+		last := body.Messages[len(body.Messages)-1]
+		if last.Role != "user" || !bytes.Contains(last.Content, []byte(bot.prompt)) ||
+			bytes.Contains(request.Body, []byte(other.prompt)) || bytes.Contains(request.Body, []byte(other.reply)) ||
+			bytes.Contains(request.Body, []byte(bot.draft)) || bytes.Contains(request.Body, []byte(other.draft)) {
+			t.Fatalf("Bot %q request misrouted prompt, history, or draft: %s", bot.name, request.Body)
+		}
+	}
+	piAppRecord(t, "first-use-budget", map[string]any{"workers": len(h.hosts) + len(h.probes), "worker_limit": 3, "model_requests": len(requests), "request_limit": requestLimit})
 	if err := h.shutdown(); err != nil {
 		t.Fatal(err)
+	}
+	if h.provider.count() != requestLimit {
+		t.Fatalf("final shutdown made an unsolicited model request: %d", h.provider.count())
+	}
+}
+
+type piIndependentBot struct {
+	id, name, prompt, reply, draft, runID string
+	binding                              *piConversationBinding
+	historyIDs                           [2]string
+}
+
+func (h *piFirstUseHarness) runIndependentBots(firstID, secondID string) [2]piIndependentBot {
+	h.t.Helper()
+	bots := [2]piIndependentBot{
+		{id: firstID, prompt: "Summarize the cedar inventory", reply: "Cedar inventory complete", draft: "Unsent cedar follow-up"},
+		{id: secondID, prompt: "Review the copper inventory", reply: "Copper inventory verified", draft: "Unsent copper follow-up"},
+	}
+	h.onUI(func() error {
+		if firstID == "" || firstID == secondID {
+			return errors.New("Add contact did not preserve two Bot identities")
+		}
+		for i := range bots {
+			ct := h.app.contactByID(bots[i].id)
+			if ct == nil || ct.Name == "" {
+				return fmt.Errorf("missing Bot %q", bots[i].id)
+			}
+			bots[i].name = ct.Name
+		}
+		if bots[0].name == bots[1].name {
+			return errors.New("the two Bot controls cannot be distinguished")
+		}
+		return nil
+	})
+	msgs := locales.In("en")
+	var release [2]func()
+	for index := range bots {
+		bot := &bots[index]
+		h.click(msgs.AvatarContactLabel(bot.name))
+		h.onUI(func() error {
+			if h.app.selectedID() != bot.id {
+				return fmt.Errorf("Bot control %q selected %q, want %q", bot.name, h.app.selectedID(), bot.id)
+			}
+			return nil
+		})
+		arrived, held := make(chan struct{}), make(chan struct{})
+		release[index] = sync.OnceFunc(func() { close(held) })
+		defer release[index]()
+		if err := h.provider.install([]piAppCall{}, bot.reply, arrived, held); err != nil {
+			h.t.Fatal(err)
+		}
+		h.send(bot.prompt)
+		select {
+		case <-arrived:
+		case <-time.After(15 * time.Second):
+			h.t.Fatalf("Bot %q did not reach the loopback provider", bot.name)
+		}
+		h.pump.waitTimeout(func() bool {
+			ct := h.app.contactByID(bot.id)
+			return ct != nil && ct.SendState == sendAccepted && ct.ActiveTaskID != "" && ct.PiBinding != nil
+		}, 15*time.Second)
+		h.onUI(func() error {
+			ct := h.app.selectedContact()
+			if ct.Draft != "" {
+				return fmt.Errorf("admitted Bot %q did not clear its submitted draft: %q", bot.name, ct.Draft)
+			}
+			bot.runID, bot.binding = ct.ActiveTaskID, clonePiConversationBinding(ct.PiBinding)
+			if err := h.focus(msgs.ComposerLabel(bot.name), true); err != nil {
+				return err
+			}
+			h.tester.Advance(1100 * time.Millisecond)
+			h.tester.Key(ui.Cmd, ui.KeyA)
+			h.tester.Type(bot.draft)
+			h.tester.Frame()
+			return nil
+		})
+	}
+	a, b := bots[0], bots[1]
+	if a.runID == b.runID || a.binding.Context.ContextID == "" || b.binding.Context.ContextID == "" ||
+		a.binding.Context.ContextID == b.binding.Context.ContextID || a.binding.Context.SessionRef == "" ||
+		b.binding.Context.SessionRef == "" || a.binding.Context.SessionRef == b.binding.Context.SessionRef {
+		h.t.Fatalf("Bot runs did not have distinct durable contexts: %+v / %+v", a.binding, b.binding)
+	}
+	const priorDraftA = "Previous cedar revision"
+	for _, bot := range bots {
+		h.click(msgs.AvatarContactLabel(bot.name))
+		h.onUI(func() error {
+			if h.app.selectedID() != bot.id {
+				return fmt.Errorf("switching back to %q lost the selected Bot", bot.name)
+			}
+			for _, owner := range bots {
+				ct := h.app.contactByID(owner.id)
+				if ct.Draft != owner.draft || ct.ActiveTaskID != owner.runID || ct.SendState != sendAccepted {
+					return fmt.Errorf("switching changed Bot %q draft or admitted run: draft=%q active=%q state=%v", owner.name, ct.Draft, ct.ActiveTaskID, ct.SendState)
+				}
+			}
+			if err := h.focus(msgs.ComposerLabel(bot.name), true); err != nil {
+				return err
+			}
+			ct := h.app.selectedContact()
+			if bot.id == a.id {
+				h.tester.Key(ui.Cmd, ui.KeyA)
+				h.tester.Type(priorDraftA)
+				h.tester.Frame()
+				if ct.Draft != priorDraftA {
+					return fmt.Errorf("Bot A did not retain the first edit: %q", ct.Draft)
+				}
+				h.tester.Advance(1100 * time.Millisecond)
+				h.tester.Key(ui.Cmd, ui.KeyA)
+				h.tester.Type(a.draft)
+				h.tester.Frame()
+				if ct.Draft != a.draft {
+					return fmt.Errorf("Bot A did not retain the second edit: %q", ct.Draft)
+				}
+				return nil
+			}
+			h.tester.Key(ui.Cmd, ui.KeyZ)
+			h.tester.Frame()
+			undone := ct.Draft
+			if undone != b.draft && undone != "" {
+				return fmt.Errorf("Cmd+Z in Bot B loaded text outside B's edit: %q", undone)
+			}
+			if h.app.contactByID(a.id).Draft != a.draft {
+				return errors.New("Cmd+Z in Bot B changed Bot A's draft")
+			}
+			if undone == "" {
+				h.tester.Type(b.draft)
+				h.tester.Frame()
+				if ct.Draft != b.draft {
+					return fmt.Errorf("Bot B could not restore its own draft: %q", ct.Draft)
+				}
+			}
+			piAppRecord(h.t, "independent-bot-undo", map[string]any{"bot_a": a.id, "bot_b": b.id, "bot_a_previous": priorDraftA, "bot_a_draft": a.draft, "bot_b_before": b.draft, "bot_b_after": undone})
+			return nil
+		})
+	}
+	for index, bot := range bots {
+		release[index]()
+		h.pump.waitTimeout(func() bool {
+			ct := h.app.contactByID(bot.id)
+			return ct.SendState == sendIdle && ct.ActiveTaskID == "" && ct.SessionState == string(pi.Completed)
+		}, 30*time.Second)
+		h.onUI(func() error {
+			ct := h.app.contactByID(bot.id)
+			if h.app.selectedID() != b.id || ct.Draft != bot.draft || ct.LastTaskID != bot.runID || ct.pendingSend != nil {
+				return fmt.Errorf("Bot %q settlement changed selection or lost its run or draft", bot.name)
+			}
+			if index == 0 {
+				other := h.app.contactByID(b.id)
+				if other.ActiveTaskID != b.runID || other.SendState != sendAccepted || other.Draft != b.draft {
+					return errors.New("settling the background Bot disturbed the selected Bot's work")
+				}
+			}
+			for _, message := range ct.Messages {
+				if message.Kind == msgContact && message.TaskID == bot.runID && !message.Streaming && message.Text == bot.reply {
+					return nil
+				}
+			}
+			return fmt.Errorf("Bot %q did not receive its completed reply", bot.name)
+		})
+	}
+	h.pump.waitTimeout(func() bool { return h.app.submissionInFlight == 0 }, 30*time.Second)
+	h.onUI(func() error {
+		for _, bot := range bots {
+			h.app.reloadContactByID(bot.id)
+		}
+		return nil
+	})
+	h.pump.waitTimeout(func() bool { return h.app.contactHistoryInFlight == 0 }, 30*time.Second)
+	return bots
+}
+
+func (h *piFirstUseHarness) checkIndependentBotHistory(bots *[2]piIndependentBot, reopened bool) {
+	h.t.Helper()
+	msgs := locales.In("en")
+	for index := range bots {
+		bot, other := &bots[index], &bots[1-index]
+		h.click(msgs.AvatarContactLabel(bot.name))
+		h.click("History")
+		h.onUI(func() error {
+			ct := h.app.selectedContact()
+			if ct == nil || ct.ID != bot.id || ct.Name != bot.name || ct.Draft != bot.draft || !ct.Loaded || ct.LoadErr != "" ||
+				!reflect.DeepEqual(ct.PiBinding, bot.binding) || ct.SessionID != bot.binding.Context.SessionRef || bot.binding.Context.BotID != ct.ID {
+				return fmt.Errorf("Bot %q lost its identity, binding, or saved draft after history load (reopened=%t)", bot.name, reopened)
+			}
+			var ids [2]string
+			for _, entry := range ct.History {
+				switch entry.Text {
+				case other.prompt, other.reply, bot.draft, other.draft:
+					return fmt.Errorf("Bot %q history contains a foreign or unsent entry: %q", bot.name, entry.Text)
+				case bot.prompt:
+					if entry.From == "me" {
+						ids[0] = entry.ID
+					}
+				case bot.reply:
+					if entry.From == "contact" {
+						ids[1] = entry.ID
+					}
+				}
+			}
+			prefix := "pi:" + bot.binding.Context.ContextID + ":"
+			if !strings.HasPrefix(ids[0], prefix) || !strings.HasPrefix(ids[1], prefix) || ids[0] == ids[1] || reopened && ids != bot.historyIDs {
+				return fmt.Errorf("Bot %q prompt/reply history identities changed: got %q, previous %q", bot.name, ids, bot.historyIDs)
+			}
+			if !h.tester.HasText(msgs.HistoryTitle(bot.name)) || !h.tester.HasText(bot.prompt) || !h.tester.HasText(bot.reply) {
+				return fmt.Errorf("Bot %q history is missing its prompt or reply in the UI: %v", bot.name, h.tester.Texts())
+			}
+			bot.historyIDs = ids
+			piAppRecord(h.t, "independent-bot-history", map[string]any{
+				"reopened": reopened, "bot_id": bot.id, "run_id": bot.runID, "context_id": bot.binding.Context.ContextID,
+				"session_ref": bot.binding.Context.SessionRef, "entry_ids": ids, "prompt": bot.prompt, "reply": bot.reply,
+			})
+			return nil
+		})
+		h.click(msgs.CloseHistory())
 	}
 }
 
