@@ -934,29 +934,57 @@ func TestSendAndStatusNoticesFollowLocaleWithoutChangingRaw(t *testing.T) {
 	}
 	before := recoveryRecordSnapshot(t, ct)
 	tr := ui.NewTester(a.view, 1040, 720)
-	tr.SetLocale("en")
-	tr.Frame()
-	if !tr.HasText(locales.In("en").SendDisconnectedState()) || tr.HasText(ct.SendError) || tr.HasText(ct.StatusDetail) || tr.HasText(locales.In("en").ReloadAction()) {
-		t.Fatalf("English send/status notices missing: %v", tr.Texts())
-	}
-	tr.SetLocale("zh-Hans")
-	tr.Frame()
-	if !tr.HasText(locales.In("zh-Hans").SendDisconnectedState()) || tr.HasText(ct.SendError) || tr.HasText(ct.StatusDetail) || tr.HasText(locales.In("zh-Hans").ReloadAction()) {
-		t.Fatalf("Chinese send/status notices missing: %v", tr.Texts())
-	}
-	if err := tr.Click(locales.In("zh-Hans").DetailsAction()); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if !tr.HasText(ct.SendError) || tr.HasText(ct.StatusDetail) {
-		t.Fatalf("send disclosure did not isolate its original diagnostic: %v", tr.Texts())
-	}
-	if err := tr.Click(locales.In("zh-Hans").DetailsAction()); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if !tr.HasText(ct.SendError) || !tr.HasText(ct.StatusDetail) {
-		t.Fatalf("status disclosure did not expose its original diagnostic: %v", tr.Texts())
+	for _, language := range []string{"en", "zh-Hans"} {
+		tr.SetLocale(language)
+		tr.Frame()
+		msgs := locales.In(language)
+		summary := msgs.SendDisconnectedState()
+		detailsLabel, hideLabel, reloadLabel := msgs.DetailsAction(), msgs.HideDetailsAction(), msgs.ReloadAction()
+		for _, stage := range []struct {
+			action   string
+			expanded bool
+		}{
+			{},
+			{action: detailsLabel, expanded: true},
+			{action: hideLabel},
+		} {
+			if stage.action != "" {
+				if err := tr.Click(stage.action); err != nil {
+					t.Fatalf("%s %q activation: %v", language, stage.action, err)
+				}
+				tr.Frame()
+			}
+			summaryCount := 0
+			for _, text := range tr.Texts() {
+				if text == summary {
+					summaryCount++
+				}
+			}
+			if summaryCount != 1 {
+				t.Fatalf("%s expanded=%v uncertainty summaries = %d, want 1: %v", language, stage.expanded, summaryCount, tr.Texts())
+			}
+			if visible := tr.HasText(ct.SendError); visible != stage.expanded {
+				t.Fatalf("%s expanded=%v complete send diagnostic visible=%v: %v", language, stage.expanded, visible, tr.Texts())
+			}
+			if visible := tr.HasText(ct.StatusDetail); visible != stage.expanded {
+				t.Fatalf("%s expanded=%v complete status diagnostic visible=%v: %v", language, stage.expanded, visible, tr.Texts())
+			}
+			detailsBounds, detailsFound := tr.Find(detailsLabel)
+			hideBounds, hideFound := tr.Find(hideLabel)
+			if detailsFound == stage.expanded || hideFound != stage.expanded {
+				t.Fatalf("%s expanded=%v disclosure controls: Details=%v Hide=%v", language, stage.expanded, detailsFound, hideFound)
+			}
+			actionBounds := detailsBounds
+			if stage.expanded {
+				actionBounds = hideBounds
+			}
+			if actionBounds.W <= 0 || actionBounds.H <= 0 || actionBounds.X < 0 || actionBounds.Y < 0 || actionBounds.X+actionBounds.W > 1040 || actionBounds.Y+actionBounds.H > 720 {
+				t.Fatalf("%s expanded=%v disclosure control outside viewport: %+v", language, stage.expanded, actionBounds)
+			}
+			if _, found := tr.Find(reloadLabel); found {
+				t.Fatalf("%s disconnected notice exposed Reload: %v", language, tr.Texts())
+			}
+		}
 	}
 	if ct.SendError != "Delivery/result not confirmed. Reload before sending again." ||
 		ct.StatusDetail != "Connection lost before the task finished; reload to verify." {

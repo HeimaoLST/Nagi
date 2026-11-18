@@ -100,6 +100,7 @@ func TestConnectionRecoveryStatusAndOneClickSettings(t *testing.T) {
 		wantHeader string
 		wantHint   string
 		wantButton bool
+		noStartup  bool
 	}{
 		{
 			name: "setup",
@@ -149,7 +150,7 @@ func TestConnectionRecoveryStatusAndOneClickSettings(t *testing.T) {
 			wantButton: true,
 		},
 		{
-			name: "managed saved connection did not start",
+			name: "exited with stale connection configuration stage",
 			setup: func(a *appModel, _ *contact) {
 				a.runtimeStatus = runtimeStateExited
 				a.runtimeStage = "Connection configuration"
@@ -157,6 +158,19 @@ func TestConnectionRecoveryStatusAndOneClickSettings(t *testing.T) {
 				a.connectionEffective = &config
 			},
 			wantHeader: "Not connected",
+			wantHint:   locales.In("en").ConnectionRecoveryNotConnectedHint(),
+			wantButton: true,
+			noStartup:  true,
+		},
+		{
+			name: "saved connection startup failed",
+			setup: func(a *appModel, _ *contact) {
+				a.runtimeStatus = runtimeStateFailed
+				a.runtimeStage = "Connection configuration"
+				a.connectionSaved = &config
+				a.connectionEffective = &config
+			},
+			wantHeader: locales.In("en").ConnectionRecoveryManagedTitle(),
 			wantHint:   locales.In("en").ConnectionRecoveryManagedHint(),
 			wantButton: true,
 		},
@@ -227,6 +241,14 @@ func TestConnectionRecoveryStatusAndOneClickSettings(t *testing.T) {
 			}
 			if tc.wantHint != "" && !tr.HasText(tc.wantHint) {
 				t.Fatalf("empty-draft connection reason %q missing: %v", tc.wantHint, tr.Texts())
+			}
+			if tc.noStartup {
+				msgs := locales.In("en")
+				for _, text := range []string{msgs.ConnectionRecoveryManagedTitle(), msgs.ConnectionRecoveryManagedHint(), msgs.RecoveryRuntimeStartFailed()} {
+					if tr.HasText(text) {
+						t.Fatalf("exited runtime exposed startup-failure guidance %q: %v", text, tr.Texts())
+					}
+				}
 			}
 			if tc.wantButton {
 				if !tr.HasText("Open connection settings") || !tr.HasText("Configuration details") {
