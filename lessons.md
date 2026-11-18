@@ -358,7 +358,7 @@
 
 **Problem:** A passing activity E2E emitted named answer/save/check scenes whose relevant controls were outside the captured viewport. The Check click returned an outside-window error, so unchanged state did not prove the disabled action or rejection path.
 **Cause or correction:** Stage names and functional state receipts do not establish what the pixels show or whether a control received input. The original images remain valid evidence of their actual scroll positions.
-**Prevention:** Inspect each original and qualify hidden controls explicitly. For a headless resize, update the fixture’s application width as the native resize handler does and check the control bounds against the new viewport. Capture the relevant visible control before claiming its visual or interaction coverage, and distinguish failure to hit a control from a successful no-effect activation. Do not promote a root PASS, filename or image count into whole-app visual acceptance.
+**Prevention:** Inspect each original and qualify hidden controls explicitly. For a headless resize, update the fixture’s application width as the native resize handler does and check the control bounds against the new viewport. Count a control touching a valid content edge as visible. Record bounds and preserve a failure frame when a click cannot be verified. Capture the relevant visible control before claiming its visual or interaction coverage, and distinguish failure to hit a control from a successful no-effect activation. Do not promote a root PASS, filename or image count into whole-app visual acceptance.
 
 ## Allow explicit host recovery without replaying unknown work
 

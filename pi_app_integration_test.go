@@ -5159,7 +5159,33 @@ func TestPiAppContextAndResults(t *testing.T) {
 	h.activate(zh.ResultCloseReading())
 	h.activate(zh.ResultCloseResults())
 	latestLabel := zh.WorkReadResult()
-	h.onUI(func() error {
+	checkNarrowIssue := func(check func() error) {
+		t.Helper()
+		var err error
+		var saveFailure func()
+		h.pump.do(func() {
+			err = check()
+			if err != nil {
+				tr := h.tester
+				tr.Frame()
+				target, targetFound := tr.Find(latestLabel)
+				tabs, tabsFound := tr.Find(zh.WorkTabs())
+				frame := tr.Image()
+				piAppRecord(t, "context-results-narrow-issue-failure", map[string]any{
+					"error": err.Error(), "label": latestLabel, "target": target, "target_found": targetFound,
+					"tabs": tabs, "tabs_found": tabsFound, "viewport": frame.Bounds(),
+				})
+				saveFailure = func() {
+					writePreviewPNG(t, filepath.Join(h.evidence, "activity-result-issue-zh-dark-narrow-failure.png"), frame)
+				}
+			}
+		})
+		if err != nil {
+			saveFailure()
+			t.Fatal(err)
+		}
+	}
+	checkNarrowIssue(func() error {
 		tr := h.tester
 		tr.Frame()
 		ct := app.selectedContact()
@@ -5170,10 +5196,11 @@ func TestPiAppContextAndResults(t *testing.T) {
 		if !found || tabs.H <= 0 {
 			return errors.New("narrow issue detail tabs are not visible")
 		}
+		const detailPadding = 12
 		fullyVisible := func() bool {
 			r, found := tr.Find(latestLabel)
-			return found && r.W > 0 && r.H > 0 && r.X > 12 && r.X+r.W < narrowWidth-12 &&
-				r.Y > tabs.Y+tabs.H+12 && r.Y+r.H < narrowHeight
+			return found && r.W > 0 && r.H > 0 && r.X >= detailPadding && r.X+r.W <= narrowWidth-detailPadding &&
+				r.Y >= tabs.Y+tabs.H && r.Y+r.H <= narrowHeight
 		}
 		if fullyVisible() {
 			return nil
@@ -5189,9 +5216,9 @@ func TestPiAppContextAndResults(t *testing.T) {
 		return fmt.Errorf("%q is not fully visible in the narrow issue detail", latestLabel)
 	})
 	h.screenshot("activity-result-issue-zh-dark-narrow")
-	h.onUI(func() error { return h.tester.Click(latestLabel) })
+	checkNarrowIssue(func() error { return h.tester.Click(latestLabel) })
 	h.wait(func() bool { return !app.issueResult.Loading && app.resultInFlight == 0 })
-	h.onUI(func() error {
+	checkNarrowIssue(func() error {
 		page := &app.issueResult
 		if !page.Open || !page.ReturnLatest || page.OwnerContactID != h.contactID || page.IssueID != issueID || page.ExecutionID != nextRun.ID || page.SessionID != nextRun.SessionID || page.TaskID != nextRun.TaskID || page.Panel.RunNumber != 2 || page.Panel.Response != piResultsNextResponse || page.LoadError != "" {
 			return fmt.Errorf("%q did not load the latest execution %s: got issue=%s execution=%s task=%s error=%s %s", latestLabel, nextRun.ID, page.IssueID, page.ExecutionID, page.TaskID, page.LoadError, page.LoadErrorDetail)
