@@ -1086,62 +1086,70 @@ func (a *appModel) issueLatestResult(c *ui.Context, t *ui.Theme, ct *contact, is
 		ui.Text(c, msgs.IssueNoExecution()).FontSize(typeAction).FontWeight(500).TextColor(t.TextMuted)
 		return
 	}
-	if !a.demo {
-		ui.Text(c, piResultsUnavailable).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Warning)
+	if !a.demo && (a.piDataReadOnly() || !canReadPiIssueResult(ct, issue, execution)) {
+		if !a.issueDetailOpen[issue.ID] {
+			switch execution.Status {
+			case issueExecutionCompleted, issueExecutionFailed, issueExecutionInterrupted:
+				ui.Text(c, piResultsUnavailable).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Warning)
+			}
+		}
 		return
 	}
 	ui.Text(c, msgs.IssueLatestExecution()).FontSize(typeGroupTitle).FontWeight(500).TextColor(t.TextMuted)
 	ui.Text(c, issueExecutionText(msgs, execution.Status)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
-	text := strings.TrimSpace(ct.resultTextForExecution(execution))
-	work := workFor(ct, execution.TaskID)
-	switch {
-	case execution.Status == issueExecutionAccepted || execution.Status == issueExecutionRunning:
-		if text == "" {
-			ui.Text(c, msgs.IssueNoResultRunning()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text).MaxLines(3)
-		} else {
-			ui.Text(c, msgs.IssueCurrentResponse(truncate(text, 300))).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text).MaxLines(3)
-		}
-	case execution.Status == issueExecutionCompleted:
-		if text == "" {
-			if work != nil && len(work.Tools) > 0 {
-				ui.Text(c, msgs.IssueNoAssistantTools()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text).MaxLines(3)
+	var work *workItem
+	if a.demo {
+		text := strings.TrimSpace(ct.resultTextForExecution(execution))
+		work = workFor(ct, execution.TaskID)
+		switch {
+		case execution.Status == issueExecutionAccepted || execution.Status == issueExecutionRunning:
+			if text == "" {
+				ui.Text(c, msgs.IssueNoResultRunning()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text).MaxLines(3)
 			} else {
-				ui.Text(c, msgs.IssueNoAssistant()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text).MaxLines(3)
+				ui.Text(c, msgs.IssueCurrentResponse(truncate(text, 300))).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text).MaxLines(3)
 			}
-		} else {
-			ui.Text(c, msgs.IssueResultPreview(truncate(text, 300))).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text).MaxLines(3)
-		}
-	default:
-		if text != "" {
-			ui.Text(c, msgs.IssueResultPreview(truncate(text, 300))).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text).MaxLines(3)
-		}
-		reason := strings.TrimSpace(execution.Detail)
-		if reason == "" {
-			switch execution.Status {
-			case issueExecutionPending:
-				reason = msgs.IssuePreparedNotDispatched()
-			case issueExecutionNotDispatched:
-				reason = msgs.IssueNoTaskDispatched()
-			case issueExecutionRejected:
-				reason = msgs.IssueExecutionRejectedDetail()
-			case issueExecutionFailed:
-				reason = msgs.IssueExecutionFailedDetail()
-			case issueExecutionInterrupted:
-				reason = msgs.IssueExecutionInterruptedDetail()
-			default:
-				reason = msgs.IssueExecutionUnknownDetail()
+		case execution.Status == issueExecutionCompleted:
+			if text == "" {
+				if work != nil && len(work.Tools) > 0 {
+					ui.Text(c, msgs.IssueNoAssistantTools()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text).MaxLines(3)
+				} else {
+					ui.Text(c, msgs.IssueNoAssistant()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text).MaxLines(3)
+				}
+			} else {
+				ui.Text(c, msgs.IssueResultPreview(truncate(text, 300))).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text).MaxLines(3)
 			}
+		default:
+			if text != "" {
+				ui.Text(c, msgs.IssueResultPreview(truncate(text, 300))).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text).MaxLines(3)
+			}
+			reason := strings.TrimSpace(execution.Detail)
+			if reason == "" {
+				switch execution.Status {
+				case issueExecutionPending:
+					reason = msgs.IssuePreparedNotDispatched()
+				case issueExecutionNotDispatched:
+					reason = msgs.IssueNoTaskDispatched()
+				case issueExecutionRejected:
+					reason = msgs.IssueExecutionRejectedDetail()
+				case issueExecutionFailed:
+					reason = msgs.IssueExecutionFailedDetail()
+				case issueExecutionInterrupted:
+					reason = msgs.IssueExecutionInterruptedDetail()
+				default:
+					reason = msgs.IssueExecutionUnknownDetail()
+				}
+			}
+			summary := reason
+			if execution.Status == issueExecutionFailed {
+				summary = runFailureSummary(msgs, execution.Detail)
+			}
+			if execution.Status == issueExecutionUnknown {
+				summary = msgs.IssueExecutionUnknownDetail()
+			} else if execution.Status == issueExecutionPending {
+				summary = msgs.IssuePreparedNotDispatched()
+			}
+			a.recoveryNotice(c, t, "latest:"+ct.ID+":"+execution.ID, summary, execution.Detail, true)
 		}
-		summary := reason
-		if execution.Status == issueExecutionFailed {
-			summary = runFailureSummary(msgs, execution.Detail)
-		}
-		if execution.Status == issueExecutionUnknown {
-			summary = msgs.IssueExecutionUnknownDetail()
-		} else if execution.Status == issueExecutionPending {
-			summary = msgs.IssuePreparedNotDispatched()
-		}
-		a.recoveryNotice(c, t, "latest:"+ct.ID+":"+execution.ID, summary, execution.Detail, true)
 	}
 	if showRead {
 		ui.Row(c).Wrap().Gap(6).AlignItems(ui.Center).Children(func() {
@@ -1221,9 +1229,6 @@ func (a *appModel) issueExecutions(c *ui.Context, t *ui.Theme, ct *contact, issu
 	}
 	msgs := locales.In(c.Locale())
 	ui.Text(c, locales.In(c.Locale()).IssueExecutionHistory()).FontSize(typeGroupTitle).FontWeight(500).TextColor(t.TextMuted)
-	if !a.demo {
-		ui.Text(c, piResultsUnavailable).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Warning)
-	}
 	for index, execution := range issue.Executions {
 		if execution == nil {
 			continue
@@ -1297,10 +1302,17 @@ func (a *appModel) issueExecutions(c *ui.Context, t *ui.Theme, ct *contact, issu
 				}
 			}
 			ui.Column(c).AlignItems(ui.Start).Gap(6).Children(func() {
-				resultButton := secondaryButton(c, msgs.IssueOpenResultRun(strconv.Itoa(index+1))).Disabled(!a.demo).OnClick(func() { a.openIssueResult(issue.ID, execution.ID) })
-				if a.issueResultShouldFocus(issue.ID, execution.ID, false) {
-					resultButton.Focus()
-					a.consumeIssueResultReturnFocus()
+				if a.demo || !a.piDataReadOnly() && canReadPiIssueResult(ct, issue, execution) {
+					resultButton := secondaryButton(c, msgs.IssueOpenResultRun(strconv.Itoa(index+1))).OnClick(func() { a.openIssueResult(issue.ID, execution.ID) })
+					if a.issueResultShouldFocus(issue.ID, execution.ID, false) {
+						resultButton.Focus()
+						a.consumeIssueResultReturnFocus()
+					}
+				} else {
+					switch execution.Status {
+					case issueExecutionCompleted, issueExecutionFailed, issueExecutionInterrupted:
+						ui.Text(c, piResultsUnavailable).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Warning)
+					}
 				}
 				if w != nil {
 					secondaryButton(c, msgs.IssueViewExecutionRun(strconv.Itoa(index+1))).Disabled(!a.demo).OnClick(func() { a.showIssueWork(issue.ID, execution.TaskID) })

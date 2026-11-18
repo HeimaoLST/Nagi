@@ -4918,3 +4918,540 @@ func TestPiAppCrashRecoveryNoReplay(t *testing.T) {
 		t.Fatalf("restarted app did not drain normally: %v", err)
 	}
 }
+
+const (
+	piResultsGoal          = "ACTIVITY_RESULT_RECEIPTS"
+	piResultsContextName   = "Activity handoff"
+	piResultsFirstContext  = "Use the first saved context snapshot."
+	piResultsSecondContext = "Use the second saved context snapshot."
+	piResultsFile          = "activity-handoff.md"
+	piResultsUnwrittenFile = "unwritten-reference.md"
+	piResultsFileContent   = "# Handoff\n\nVerified activity file.\n"
+	piResultsCallID        = "activity-results-write"
+	piResultsWriteAck      = "Successfully wrote to " + piResultsFile
+	piResultsFirstResponse = "\n## First handoff\n\nSee `" + piResultsUnwrittenFile + "` for reference.\n\nFirst handoff complete.\n\n"
+	piResultsNextResponse  = "\n## Second handoff\n\nContinuation complete.\n\n"
+	piResultsRequestCount  = 3
+)
+
+type piResultsProvider struct {
+	*piAppProvider
+}
+
+func (p piResultsProvider) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 512<<10))
+	var request struct {
+		Model    string `json:"model"`
+		Stream   bool   `json:"stream"`
+		Messages []struct {
+			Role       string          `json:"role"`
+			Content    json.RawMessage `json:"content"`
+			ToolCallID string          `json:"tool_call_id"`
+		} `json:"messages"`
+		Tools []struct {
+			Function struct {
+				Name string `json:"name"`
+			} `json:"function"`
+		} `json:"tools"`
+	}
+	if err == nil {
+		err = json.Unmarshal(body, &request)
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.requests++
+	p.bodies = append(p.bodies, body)
+	if err == nil && (p.requests > p.limit || r.Method != http.MethodPost || r.URL.Path != "/v1/chat/completions" || r.Header.Get("Authorization") != "Bearer nagi-product-loopback" || request.Model != "nagi-product-fixture" || !request.Stream || len(request.Messages) == 0) {
+		err = fmt.Errorf("unexpected activity result request %d", p.requests)
+	}
+	delta := map[string]any{"role": "assistant"}
+	finish := "stop"
+	if err == nil {
+		last := request.Messages[len(request.Messages)-1]
+		contextText := piResultsFirstContext
+		if p.requests == piResultsRequestCount {
+			contextText = piResultsSecondContext
+		}
+		var userContent json.RawMessage
+		for _, message := range request.Messages {
+			if message.Role == "user" {
+				userContent = message.Content
+			}
+		}
+		snapshot := fmt.Sprintf("<context name=%q>\n%s\n</context>", piResultsContextName, contextText)
+		var prompt string
+		if json.Unmarshal(userContent, &prompt) != nil {
+			var parts []pi.ContentBlock
+			if json.Unmarshal(userContent, &parts) == nil {
+				for _, part := range parts {
+					if part.Type == "text" {
+						prompt += part.Text
+					}
+				}
+			}
+		}
+		if !strings.Contains(prompt, piResultsGoal) || !strings.Contains(prompt, snapshot) || p.requests == piResultsRequestCount && strings.Contains(prompt, piResultsFirstContext) {
+			err = fmt.Errorf("request %d has the wrong issue or saved context snapshot: %s", p.requests, userContent)
+		} else {
+			switch p.requests {
+			case 1:
+				writeOffered := false
+				for _, tool := range request.Tools {
+					writeOffered = writeOffered || tool.Function.Name == "write"
+				}
+				if last.Role != "user" || !writeOffered {
+					err = errors.New("first activity prompt did not offer the real write tool")
+					break
+				}
+				arguments, _ := json.Marshal(map[string]string{"path": piResultsFile, "content": piResultsFileContent})
+				delta["tool_calls"] = []any{map[string]any{
+					"index": 0, "id": piResultsCallID, "type": "function",
+					"function": map[string]string{"name": "write", "arguments": string(arguments)},
+				}}
+				finish = "tool_calls"
+			case 2:
+				var acknowledgement string
+				if last.Role != "tool" || last.ToolCallID != piResultsCallID || json.Unmarshal(last.Content, &acknowledgement) != nil || acknowledgement != piResultsWriteAck {
+					err = fmt.Errorf("model did not receive the correlated write acknowledgement: role=%s call=%q text=%q", last.Role, last.ToolCallID, acknowledgement)
+					break
+				}
+				delta["content"] = piResultsFirstResponse
+			case 3:
+				if last.Role != "user" {
+					err = errors.New("continuation did not end in the new activity prompt")
+					break
+				}
+				delta["content"] = piResultsNextResponse
+			}
+		}
+	}
+	if err != nil {
+		p.problems = append(p.problems, err.Error())
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Type", "text/event-stream")
+	for _, choice := range []map[string]any{{"index": 0, "delta": delta, "finish_reason": nil}, {"index": 0, "delta": map[string]any{}, "finish_reason": finish}} {
+		chunk, _ := json.Marshal(map[string]any{"id": "activity-results-loopback", "object": "chat.completion.chunk", "created": 1, "model": "nagi-product-fixture", "choices": []any{choice}})
+		fmt.Fprintf(w, "data: %s\n\n", chunk)
+	}
+	fmt.Fprint(w, "data: [DONE]\n\n")
+}
+
+func TestPiAppContextAndResults(t *testing.T) {
+	inputs := make(map[string]string)
+	paths := make([]string, 0, 2)
+	for _, name := range []string{"NAGI_TEST_NODE", "NAGI_TEST_WORKER"} {
+		path := os.Getenv(name)
+		if !filepath.IsAbs(path) {
+			t.Fatalf("%s must identify a pinned absolute file", name)
+		}
+		resolved, err := filepath.EvalSymlinks(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		info, err := os.Stat(resolved)
+		if err != nil || !info.Mode().IsRegular() {
+			t.Fatalf("%s must identify a regular file: %v", name, err)
+		}
+		paths = append(paths, resolved)
+	}
+	payload := filepath.Dir(filepath.Dir(paths[0]))
+	if paths[0] != filepath.Join(payload, "bin", "node") || paths[1] != filepath.Join(payload, "dist", "worker.js") {
+		t.Fatal("pinned Node and worker are not from the same payload")
+	}
+	for _, path := range append(paths, "pi_app_integration_test.go", "pi_activity.go", "pi_activity_results.go", "issue_results_app.go", "issue_results.go", "workspace.go") {
+		digest, err := piAppFileHash(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		inputs[path] = digest
+	}
+	piAppRecord(t, "context-results-source-inputs", inputs)
+	evidence := piResultsEvidenceDir(t)
+	root := t.TempDir()
+	project, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("SAKI_TEST_ISSUE_TOOL_HELPER", "")
+	isolateConnectionApp(t, root, payload)
+	app, err := newRuntimeApp()
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := &piFirstUseHarness{t: t, app: app, provider: &piAppProvider{limit: piResultsRequestCount}}
+	first.pump = newUIPump(t, app)
+	first.tester = ui.NewTester(app.view, 1040, 720)
+	first.tester.SetLocale("en")
+	first.tester.SetFocused(true)
+	server := httptest.NewServer(piResultsProvider{first.provider})
+	first.servers = append(first.servers, server)
+	t.Cleanup(func() {
+		first.provider.mu.Lock()
+		defer first.provider.mu.Unlock()
+		piAppRecord(t, "context-results-loopback", map[string]any{"requests": first.provider.requests, "bodies": first.provider.bodies, "problems": first.provider.problems, "request_limit": piResultsRequestCount})
+		if !t.Failed() && first.provider.requests != piResultsRequestCount {
+			t.Errorf("final model requests = %d, want %d", first.provider.requests, piResultsRequestCount)
+		}
+	})
+	t.Cleanup(first.cleanup)
+	h := &piActivityHarness{piFirstUseHarness: first, evidence: evidence}
+	h.onUI(func() error {
+		h.contactID = app.selectedContact().ID
+		app.chooseFolder = func(mygo.OpenDialogOptions) ([]string, error) { return []string{project}, nil }
+		return nil
+	})
+	h.input("API endpoint", server.URL+"/v1")
+	h.input("API key", "nagi-product-loopback")
+	h.input("Default model", "nagi-product-fixture")
+	h.activate("Capacity & execution limits")
+	h.input("Context tokens", "65536")
+	h.input("Output tokens", "4096")
+	h.click("Choose folder…")
+	h.wait(func() bool { return !app.connectionForm.Busy })
+	h.click("Save configuration")
+	h.wait(func() bool { return !app.connectionForm.Busy && !app.connectionSaveInFlight })
+	h.click("Apply saved")
+	h.wait(func() bool { return !app.connectionApplying })
+	ready := piResultsReady(h, "initial")
+	h.click("← Back to workbench")
+	h.click("Work")
+	issueID := h.createIssue(piResultsGoal)
+	h.selectIssue(piResultsGoal, issueID)
+	msgs := locales.In("en")
+	firstRun := piResultsRun(h, issueID, msgs.WorkStart(), piResultsFirstContext, 2)
+	nextRun := piResultsRun(h, issueID, msgs.WorkContinue(), piResultsSecondContext, piResultsRequestCount)
+	if firstRun.ID == nextRun.ID || firstRun.PiRun.RunID == nextRun.PiRun.RunID || firstRun.PiRun.ContextID != nextRun.PiRun.ContextID || firstRun.SessionID != nextRun.SessionID || firstRun.PiRun.WorkerEpoch != ready.WorkerEpoch || nextRun.PiRun.WorkerEpoch != ready.WorkerEpoch {
+		t.Fatalf("runs do not identify distinct attempts in the same activity: first=%+v next=%+v", firstRun.PiRun, nextRun.PiRun)
+	}
+	filePath := filepath.Join(project, piResultsFile)
+	if data, err := os.ReadFile(filePath); err != nil || string(data) != piResultsFileContent {
+		t.Fatalf("real SDK write at %s = %q, %v", filePath, data, err)
+	}
+	if _, err := os.Stat(filepath.Join(project, piResultsUnwrittenFile)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("assistant-only file reference unexpectedly exists: %v", err)
+	}
+	h.screenshot("activity-result-issue-en-light")
+	piResultsOpen(h, msgs.WorkReadResult(), issueID, nextRun, 2, piResultsNextResponse, "")
+	h.screenshot("activity-result-latest-en-light")
+	h.activate(msgs.ResultCloseResults())
+	piResultsHistory(h, issueID)
+	piResultsOpen(h, msgs.IssueOpenResultRun("1"), issueID, firstRun, 1, piResultsFirstResponse, filePath)
+	h.screenshot("activity-result-first-en-light")
+	piResultsReload(h, issueID, firstRun, filePath)
+	piResultsReadFile(h, msgs, filePath)
+	h.screenshot("activity-result-file-en-light")
+	h.activate(msgs.ResultCloseReading())
+	h.onUI(func() error {
+		h.tester.SetSize(720, 640)
+		h.tester.SetDark(true)
+		h.tester.SetLocale("zh-Hans")
+		return nil
+	})
+	zh := locales.In("zh-Hans")
+	piResultsCopy(h, zh.CopyResultLabel(), piResultsFirstResponse)
+	h.screenshot("activity-result-first-zh-dark-narrow")
+	piResultsReadFile(h, zh, filePath)
+	h.screenshot("activity-result-file-zh-dark-narrow")
+	h.activate(zh.ResultCloseReading())
+	h.activate(zh.ResultCloseResults())
+	h.screenshot("activity-result-issue-zh-dark-narrow")
+	piResultsRequestBudget(h, piResultsRequestCount)
+	if err := h.shutdown(); err != nil {
+		t.Fatalf("initial app did not drain and reap its worker: %v", err)
+	}
+	piResultsReopen(t, first.provider, evidence, h.contactID, issueID, ready.WorkerEpoch, firstRun, nextRun, filePath)
+}
+
+func piResultsEvidenceDir(t *testing.T) string {
+	t.Helper()
+	dir := os.Getenv("NAGI_ACTIVITY_EVIDENCE_DIR")
+	if !filepath.IsAbs(dir) {
+		t.Fatal("NAGI_ACTIVITY_EVIDENCE_DIR must be an existing absolute directory outside source")
+	}
+	resolved, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	root, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	root, err = filepath.EvalSymlinks(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(resolved)
+	if err != nil || !info.IsDir() || resolved == root || strings.HasPrefix(resolved, root+string(os.PathSeparator)) {
+		t.Fatalf("invalid activity result evidence directory %q: %v", resolved, err)
+	}
+	return resolved
+}
+
+func piResultsReady(h *piActivityHarness, phase string) pi.Ready {
+	h.t.Helper()
+	var host *piAppHost
+	h.onUI(func() error {
+		host = h.app.pi
+		if host != nil && host.client != nil {
+			h.hosts = append(h.hosts, host)
+		}
+		if host == nil || host.client == nil || h.app.runtimeStatus != runtimeStateReady {
+			return fmt.Errorf("%s worker did not become ready: %s", phase, h.app.runtimeErr)
+		}
+		return nil
+	})
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	ready, err := host.client.Ready(ctx)
+	if err != nil || ready.Engine.Version != "1.5.2" || ready.Runtime.Version != "v22.23.5" || ready.WorkerEpoch == "" {
+		h.t.Fatalf("%s pinned worker readiness: %+v, %v", phase, ready, err)
+	}
+	piAppRecord(h.t, "context-results-ready-"+phase, ready)
+	return ready
+}
+
+func piResultsRun(h *piActivityHarness, issueID, label, text string, requests int) *issueExecution {
+	h.t.Helper()
+	var snapshot taskContextItem
+	var before int
+	var requirements []issueRequirement
+	h.onUI(func() error {
+		issue := h.app.contactByID(h.contactID).issueByID(issueID)
+		before = len(issue.Executions)
+		for _, requirement := range issue.Requirements {
+			requirements = append(requirements, *requirement)
+		}
+		if len(requirements) == 0 {
+			return errors.New("activity has no requirement to preserve")
+		}
+		var err error
+		snapshot, err = issue.Context.AddSnippet(piResultsContextName, text)
+		if err != nil {
+			return err
+		}
+		return h.app.persist()
+	})
+	h.startIssue(label, issueID)
+	h.wait(func() bool {
+		issue := h.app.contactByID(h.contactID).issueByID(issueID)
+		return len(issue.Executions) == before+1 && issue.Work.ActiveTaskID == "" && issue.Work.SendState == sendIdle
+	})
+	var execution *issueExecution
+	h.onUI(func() error {
+		issue := h.app.contactByID(h.contactID).issueByID(issueID)
+		execution = latestIssueExecution(issue)
+		if execution.Status != issueExecutionCompleted || execution.PiRun == nil || !execution.PiRun.Admitted || execution.PiRun.RunID == "" || execution.PiRun.ContextID == "" || execution.SessionID == "" || execution.TaskID != execution.PiRun.RunID {
+			return fmt.Errorf("activity did not settle with an admitted, correlated Pi run: %+v", execution)
+		}
+		if !reflect.DeepEqual(execution.Context, []taskContextItem{snapshot}) || issue.Context.count() != 0 {
+			return fmt.Errorf("saved context did not move to the admitted attempt: %+v", execution.Context)
+		}
+		var current []issueRequirement
+		for _, requirement := range issue.Requirements {
+			current = append(current, *requirement)
+		}
+		if issue.Status != issueStatusInProgress || !issueHasRemainingRequirements(issue) || !reflect.DeepEqual(current, requirements) {
+			return fmt.Errorf("worker settlement changed business completion or requirements: %s, %+v", issue.Status, current)
+		}
+		piAppRecord(h.t, "context-results-run", map[string]any{"issue": issueID, "execution": execution.ID, "run": execution.PiRun, "saved_context": execution.Context, "issue_status": issue.Status, "requirements": requirements})
+		return nil
+	})
+	piResultsRequestBudget(h, requests)
+	return execution
+}
+
+func piResultsRequestBudget(h *piActivityHarness, expected int) {
+	h.t.Helper()
+	provider := h.piFirstUseHarness.provider
+	provider.mu.Lock()
+	defer provider.mu.Unlock()
+	if provider.requests != expected || len(provider.problems) != 0 {
+		h.t.Fatalf("loopback calls = %d, want %d, errors = %v", provider.requests, expected, provider.problems)
+	}
+}
+
+func piResultsHistory(h *piActivityHarness, issueID string) {
+	h.t.Helper()
+	var expanded bool
+	h.onUI(func() error {
+		expanded = h.app.issueDetailOpen[issueID]
+		return nil
+	})
+	if !expanded {
+		h.activateActivity(locales.In("en").IssueMoreActions(), func() error {
+			if !h.app.issueDetailOpen[issueID] {
+				return errors.New("issue history was not expanded")
+			}
+			return nil
+		})
+	}
+}
+
+func piResultsOpen(h *piActivityHarness, label, issueID string, execution *issueExecution, number int, response, filePath string) {
+	h.t.Helper()
+	h.activateActivity(label, func() error {
+		page := &h.app.issueResult
+		if !page.Open || page.ExecutionID != execution.ID {
+			return fmt.Errorf("%q opened the wrong execution: %s", label, page.ExecutionID)
+		}
+		return nil
+	})
+	piResultsCheck(h, issueID, execution, number, response, filePath)
+	piResultsCopy(h, locales.In("en").CopyResultLabel(), response)
+}
+
+func piResultsCheck(h *piActivityHarness, issueID string, execution *issueExecution, number int, response, filePath string) {
+	h.t.Helper()
+	h.wait(func() bool { return !h.app.issueResult.Loading && h.app.resultInFlight == 0 })
+	h.onUI(func() error {
+		page := &h.app.issueResult
+		panel := &page.Panel
+		if !page.Open || page.LoadError != "" || page.OwnerContactID != h.contactID || page.IssueID != issueID || page.ExecutionID != execution.ID || page.SessionID != execution.SessionID || page.TaskID != execution.TaskID || panel.RunNumber != number {
+			return fmt.Errorf("incorrect loaded result owner for run %d: issue=%s execution=%s session=%s task=%s error=%s %s", number, page.IssueID, page.ExecutionID, page.SessionID, page.TaskID, page.LoadError, page.LoadErrorDetail)
+		}
+		h.tester.Frame()
+		label := locales.In("en").ResultRunLabel(fmt.Sprint(number), piResultsGoal)
+		if _, found := h.tester.Find(label); !found || panel.Response != response {
+			return fmt.Errorf("run %d label visible=%v response=%q, want %q", number, found, panel.Response, response)
+		}
+		if filePath == "" {
+			if len(panel.Files) != 0 {
+				return fmt.Errorf("a different run's file leaked into run %d: %+v", number, panel.Files)
+			}
+		} else {
+			if len(panel.Files) != 1 {
+				return fmt.Errorf("want exactly one write receipt, got %+v", panel.Files)
+			}
+			file := panel.Files[0]
+			if file.Path != filePath || file.WorkingDirectory != filepath.Dir(filePath) || file.ToolName != "write" || file.CallID != piResultsCallID || file.MessageID == "" || file.ExecutionID != execution.ID || file.SessionID != execution.SessionID || file.TaskID != execution.TaskID {
+				return fmt.Errorf("uncorrelated file receipt: %+v", file)
+			}
+			piAppRecord(h.t, "context-results-file-receipt", file)
+		}
+		return nil
+	})
+}
+
+func piResultsCopy(h *piActivityHarness, label, expected string) {
+	h.t.Helper()
+	h.onUI(func() error {
+		h.tester.SetClipboard("clipboard sentinel")
+		return nil
+	})
+	h.activateActivity(label, func() error {
+		if got := h.tester.Clipboard(); got != expected {
+			return fmt.Errorf("%q copied %q, want exact bytes %q", label, got, expected)
+		}
+		piAppRecord(h.t, "context-results-clipboard", map[string]string{"control": label, "text": expected})
+		return nil
+	})
+}
+
+func piResultsReload(h *piActivityHarness, issueID string, execution *issueExecution, filePath string) {
+	h.t.Helper()
+	var generation int
+	h.onUI(func() error {
+		generation = h.app.issueResult.Generation
+		return nil
+	})
+	h.activateActivity(locales.In("en").ResultReloadResult(), func() error {
+		if h.app.issueResult.Generation <= generation {
+			return errors.New("Reload did not start a new history read")
+		}
+		return nil
+	})
+	piResultsCheck(h, issueID, execution, 1, piResultsFirstResponse, filePath)
+	piResultsCopy(h, locales.In("en").CopyResultLabel(), piResultsFirstResponse)
+}
+
+func piResultsReadFile(h *piActivityHarness, msgs locales.Messages, filePath string) {
+	h.t.Helper()
+	var key string
+	h.onUI(func() error {
+		panel := &h.app.issueResult.Panel
+		if len(panel.Files) != 1 || panel.Files[0].Path != filePath {
+			return fmt.Errorf("verified file is absent from the run result: %+v", panel.Files)
+		}
+		key = issueResultFileKey(panel.Files[0])
+		return nil
+	})
+	h.activateActivity(msgs.ResultFileRowLabel("1", filepath.Base(filePath)), func() error {
+		if h.app.issueResult.Panel.ReaderKey != key {
+			return errors.New("file row did not open its own reader")
+		}
+		return nil
+	})
+	h.wait(func() bool { return !h.app.issueResult.Panel.Checking && h.app.resultInFlight == 0 })
+	h.onUI(func() error {
+		panel := &h.app.issueResult.Panel
+		inspection := panel.Inspection
+		if panel.InspectFor != key || inspection == nil || inspection.Path != filePath || !inspection.Exists || !inspection.Regular || inspection.Preview != piResultsFileContent || inspection.NoticeKind != "" || inspection.ReadErrorKind != "" {
+			return fmt.Errorf("file reader did not inspect exact current content: %+v", inspection)
+		}
+		piAppRecord(h.t, "context-results-current-file", inspection)
+		return nil
+	})
+	piResultsCopy(h, msgs.CopyCurrentFileLabel(), piResultsFileContent)
+}
+
+func piResultsReopen(t *testing.T, provider *piAppProvider, evidence, contactID, issueID, oldEpoch string, firstRun, nextRun *issueExecution, filePath string) {
+	t.Helper()
+	app, err := newRuntimeApp()
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := &piFirstUseHarness{t: t, app: app, provider: provider}
+	first.pump = newUIPump(t, app)
+	first.tester = ui.NewTester(app.view, 1040, 720)
+	first.tester.SetLocale("en")
+	first.tester.SetFocused(true)
+	t.Cleanup(first.cleanup)
+	h := &piActivityHarness{piFirstUseHarness: first, evidence: evidence, contactID: contactID}
+	h.onUI(func() error {
+		ct := app.contactByID(contactID)
+		if ct == nil || ct != app.selectedContact() || app.connectionSaved == nil {
+			return errors.New("reopen did not recover the captured contact and saved connection from the same profile")
+		}
+		issue := ct.issueByID(issueID)
+		if issue == nil || issue.Status != issueStatusInProgress || !issueHasRemainingRequirements(issue) || len(issue.Executions) != 2 {
+			return errors.New("reopen did not recover the open issue with two settled runs")
+		}
+		for index, old := range []*issueExecution{firstRun, nextRun} {
+			restored := issue.Executions[index]
+			if restored.ID != old.ID || restored.Status != issueExecutionCompleted || restored.SessionID != old.SessionID || restored.TaskID != old.TaskID || !reflect.DeepEqual(restored.PiRun, old.PiRun) || !reflect.DeepEqual(restored.Context, old.Context) {
+				return fmt.Errorf("reopen changed execution %s or its saved context: %+v", old.ID, restored)
+			}
+		}
+		app.startPiHost()
+		return nil
+	})
+	h.wait(func() bool { return !app.connectionApplying && app.contactHistoryInFlight == 0 })
+	ready := piResultsReady(h, "reopened")
+	if ready.WorkerEpoch == oldEpoch {
+		t.Fatal("reopened app reused the first worker epoch")
+	}
+	msgs := locales.In("en")
+	var workspaceOpen, detailOpen bool
+	h.onUI(func() error {
+		workspaceOpen = app.detailIs(detailWork)
+		detailOpen = app.selectedContact().issueView.DetailID == issueID
+		return nil
+	})
+	if !workspaceOpen {
+		h.click("Work")
+	}
+	if !detailOpen {
+		h.selectIssue(piResultsGoal, issueID)
+	}
+	piResultsHistory(h, issueID)
+	piResultsOpen(h, msgs.IssueOpenResultRun("1"), issueID, firstRun, 1, piResultsFirstResponse, filePath)
+	piResultsReadFile(h, msgs, filePath)
+	h.screenshot("activity-result-file-reopened-en-light")
+	piResultsRequestBudget(h, piResultsRequestCount)
+	if err := h.shutdown(); err != nil {
+		t.Fatalf("reopened app did not drain and reap its worker: %v", err)
+	}
+	piResultsRequestBudget(h, piResultsRequestCount)
+}

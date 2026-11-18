@@ -100,6 +100,11 @@ func (a *appModel) openIssueResultEntry(issueID, executionID string, latest bool
 
 func (a *appModel) startIssueResultLoad() {
 	page := &a.issueResult
+	snapshot := page.disclosure
+	if execution := snapshot.execution; execution != nil && (execution.PiIntent || execution.PiRun != nil) {
+		a.startPiIssueResultLoad(page.Generation, snapshot)
+		return
+	}
 	if page.SessionID == "" || page.TaskID == "" {
 		page.Loading = false
 		page.LoadError = "load-no-session"
