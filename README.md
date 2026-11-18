@@ -1,6 +1,6 @@
 # Nagi
 
-Nagi is an open-source Bot Team project. Its goal is to let people work with a team of Bots on a shared task. The native desktop app currently supports persistent Bot identities, conversations, activities, follow-up questions and execution results. Pi owns Agent execution, provider/tools and authoritative session transcripts; Nagi owns product identity, routing, state, receipts and the interface. The replacement is in progress; the current tree has not completed product cutover or standalone acceptance.
+Nagi is an open-source Bot Team project. The first milestone is a polished desktop interface where users can switch between multiple Bots and work with each one independently. The native desktop app currently supports persistent Bot identities, conversations, activities, follow-up questions and execution results. Pi owns Agent execution, provider/tools and authoritative session transcripts; Nagi owns product identity, routing, state, receipts and the interface. The replacement is in progress; the current tree has not completed product cutover or standalone acceptance.
 
 This repository preserves the Nagi product exported from Saki candidate `00298ae22bb95afc11366597e517a3b1ceba21e7`, including its existing regressions and tests. Repository separation does not complete the historical MVP, native acceptance, real-model A/B work or user trials. See [the documentation index](docs/README.md) and [import provenance](docs/design/source-import.json).
 

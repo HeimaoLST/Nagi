@@ -2,7 +2,7 @@
 
 ## Product and execution ownership
 
-The product goal is an open-source Bot Team, with Grokbot as the user’s reference. Tie UI and Agent milestones to what a user can accomplish with multiple Bots working together.
+The product goal is an open-source Bot Team, with Grokbot as the user’s reference. The current priorities are polishing the everyday desktop UI against the design checklist and making multiple Bots work independently. Verify that switching between Bots preserves each one’s conversation, draft, running work and results. Cross-Bot coordination is outside this milestone.
 
 Nagi is the native MyGo product in module `github.com/HeimaoLST/Nagi`. The authorized integration replaces Saki execution with pinned Pi 1.5.2. Pi owns its execution loop, provider integration, tools and authoritative session transcripts. Nagi owns persistent Bot identity, routing, activities, questions, delivery/effect receipts and user interaction. Do not implement another Agent loop or retain two permanent execution implementations. Do not add a generic backend-plugin framework.
 

@@ -33,8 +33,8 @@
 ## Report progress against the Bot Team product goal
 
 **Problem:** A product direction update described a single Bot desktop workflow and reported runtime migration as the main milestone.
-**Cause or correction:** The user specified an open-source Bot Team product similar to Grokbot.
-**Prevention:** Describe the user-visible collaboration that a milestone enables. Report individual Pi execution and multi-Bot collaboration separately, and show a shared task completed by multiple Bots before claiming the team workflow works.
+**Cause or correction:** The user specified an open-source Bot Team product similar to Grokbot. I incorrectly inferred that a shared task was the next milestone. The immediate priorities are UI polish and multiple Bots working independently.
+**Prevention:** Evaluate the everyday UI using actual windows or screenshots. Exercise two distinct Bots through selection, work, results and reopen. Treat collaboration and handoff as future scope until explicitly requested.
 
 ## Keep the Pi cutover free of Saki compatibility
 
