@@ -13,6 +13,7 @@ Current work is tracked in the [migration and ownership index](https://github.co
 - [Workbench design foundation](design/desktop-workbench.md): earlier layout and interaction rules, subject to the newer requirements and visual contract.
 - [Implementation and evidence](design/desktop.md): current repository boundary followed by dated implementation and acceptance history.
 - [Source import](design/source-import.json): byte-level import provenance from Saki candidate `00298ae` with original Git history retained.
+- [Nagi product protocol v1](design/product-protocol.md) defines the target MyGo/TypeScript boundary, ownership of durable state, and migration acceptance.
 - [Pi product integration](design/pi-integration.md): active cleanup-first migration tracked in [issue31](https://github.com/HeimaoLST/Nagi/issues/31). The previous Saki service contract remains historical input; the current integration does not authorize Saki development or legacy-history conversion.
 
 The obsolete browser prototype, unused mascot loader, unrelated research stub and Saki-only app packager have been retired. Their original bytes remain in Git history; a browser scene is not a native product implementation.
