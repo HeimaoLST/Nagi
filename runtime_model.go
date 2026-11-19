@@ -536,7 +536,7 @@ func (a *appModel) connectionViewState() connectionViewState {
 	if a.connectionSaved != nil && (a.connectionEffective == nil || *a.connectionSaved != *a.connectionEffective) {
 		return connectionViewSaved
 	}
-	if a.connectionForm != nil && !a.connectionForm.HasSaved && a.connectionSaved == nil {
+	if a.runtimeStatus != runtimeStateExited && a.connectionForm != nil && !a.connectionForm.HasSaved && a.connectionSaved == nil {
 		return connectionViewSetup
 	}
 	return connectionViewNotConnected
