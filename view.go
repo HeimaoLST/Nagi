@@ -575,7 +575,11 @@ func (a *appModel) connectionRecoveryNotice(c *ui.Context, t *ui.Theme, state co
 			a.recoveryNotice(c, t, "startup", runtimeSummary, a.runtimeErrorDisplay(msgs)+"\n"+a.runtimeHintDisplay(msgs), false)
 		}
 		ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
-			secondaryButton(c, msgs.ConnectionRecoveryOpenSettings()).Label(msgs.ConnectionRecoveryOpenSettings()).MinHeight(32).OnClick(func() { a.openConfiguration() })
+			entry := secondaryButton(c, msgs.ConnectionRecoveryOpenSettings()).Label(msgs.ConnectionRecoveryOpenSettings()).MinHeight(32).OnClick(a.openConfiguration)
+			if a.focusConnectionEntry && !c.Focused(a.composerHandle) {
+				entry.Focus()
+				a.focusConnectionEntry = false
+			}
 			secondaryButton(c, msgs.ConfigurationDetails()).OnClick(func() { a.openAdvancedSettings() })
 		})
 	})
@@ -585,23 +589,26 @@ func (a *appModel) main(c *ui.Context, t *ui.Theme) {
 	ct := a.selectedContact()
 	msgs := locales.In(c.Locale())
 	ui.Column(c).Grow(1).MinWidth(0).FillHeight().Margin(4).Background(a.workTheme.Reading).Border(1, t.Border).Radius(16).Clip().Children(func() {
+		a.header(c, t)
+		state := a.connectionViewState()
+		showConnectionSettings := true
 		if !a.demo {
 			if a.localSaveErr != "" {
 				ui.Column(c).Padding(8, 16).Gap(6).Children(func() {
 					a.localSaveNotice(c, t)
 				})
 			}
-			state := a.connectionViewState()
 			switch {
 			case a.runtimeStatus == runtimeStateDraining:
 				ui.Text(c, msgs.RuntimeDraining()).FontSize(typeBody).FixedLineHeight(lineBody).Padding(8, 16).TextColor(t.TextMuted)
 			case state == connectionViewApplying:
 				ui.Column(c).Padding(8, 16).Gap(2).Children(func() {
 					ui.Text(c, msgs.ConnectionStatusApplying()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Warning)
-					ui.Text(c, msgs.ConnectionRecoverySavedHint()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
+					ui.Text(c, msgs.ConnectionRecoveryApplyingHint()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 				})
 			case a.connectionConfigurationBlocked():
 				a.connectionRecoveryNotice(c, t, state)
+				showConnectionSettings = false
 			case a.hasRuntimeError():
 				if a.localSaveErr == "" || a.runtimeErrKind != runtimeNoticeStoreSave {
 					ui.Column(c).Padding(8, 16).Gap(6).Children(func() {
@@ -612,15 +619,22 @@ func (a *appModel) main(c *ui.Context, t *ui.Theme) {
 							a.focusConfiguration = false
 						}
 					})
+					showConnectionSettings = false
 				}
 			case a.runtimeStatus == runtimeStateStarting:
-				ui.Text(c, msgs.RuntimeConnecting()).FontSize(typeBody).FixedLineHeight(lineBody).Padding(8, 16).TextColor(t.TextMuted)
+				ui.Column(c).Padding(8, 16).Gap(2).Children(func() {
+					ui.Text(c, msgs.RuntimeConnecting()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
+					ui.Text(c, msgs.ConnectionRecoveryConnectingHint()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
+				})
 			}
 		}
-		a.connectionErrorBanner(c, t, ct)
+		showConnectionSettings = a.connectionErrorBanner(c, t, ct, showConnectionSettings)
 		if ct.LoadErr != "" {
 			if !knownConnectionFailure(ct.LoadErr) {
-				ui.Column(c).Padding(8, 16).Children(func() { a.recoveryNotice(c, t, "history:"+ct.ID, msgs.HistoryReadFailed(), ct.LoadErr, true) })
+				ui.Column(c).Padding(8, 16).Children(func() {
+					a.recoveryNotice(c, t, "history:"+ct.ID, msgs.HistoryReadFailed(), ct.LoadErr, showConnectionSettings)
+				})
+				showConnectionSettings = false
 			}
 		}
 		if ct.Archived {
@@ -631,8 +645,7 @@ func (a *appModel) main(c *ui.Context, t *ui.Theme) {
 				secondaryButton(c, msgs.ContactProfileAction()).OnClick(func() { a.openContactProfile(ct.ID) })
 			})
 		}
-		a.header(c, t)
-		a.chat(c, t)
+		a.chat(c, t, state, showConnectionSettings)
 	})
 }
 
@@ -667,7 +680,7 @@ type chatItem struct {
 	working bool
 }
 
-func (a *appModel) chat(c *ui.Context, t *ui.Theme) {
+func (a *appModel) chat(c *ui.Context, t *ui.Theme, state connectionViewState, showConnectionSettings bool) {
 	ct := a.selectedContact()
 	items := make([]chatItem, 0, len(ct.Messages)+len(ct.Revealed)+1)
 	for _, e := range a.revealedEntries() {
@@ -719,7 +732,7 @@ func (a *appModel) chat(c *ui.Context, t *ui.Theme) {
 		}
 		ui.Row(c).Key("composer").Justify(ui.Center).Children(func() {
 			ui.Column(c).FillWidth().MaxWidth(conversationMaxWidth).Children(func() {
-				a.composer(c, t)
+				a.composer(c, t, state, showConnectionSettings)
 			})
 		})
 	})
@@ -915,14 +928,14 @@ func (a *appModel) connectionSendFailureKnown(ct *contact) bool {
 	return knownConnectionFailure(ct.SendError)
 }
 
-func (a *appModel) connectionErrorBanner(c *ui.Context, t *ui.Theme, ct *contact) {
+func (a *appModel) connectionErrorBanner(c *ui.Context, t *ui.Theme, ct *contact, showConnectionSettings bool) bool {
 	if ct == nil {
-		return
+		return showConnectionSettings
 	}
 	msgs := locales.In(c.Locale())
 	known := knownConnectionFailure(ct.LoadErr) || knownConnectionFailure(ct.SendError)
 	if !known {
-		return
+		return showConnectionSettings
 	}
 	details := strings.TrimSpace(ct.LoadErr)
 	if details == "" || details == ct.SendError {
@@ -931,8 +944,9 @@ func (a *appModel) connectionErrorBanner(c *ui.Context, t *ui.Theme, ct *contact
 		details = details + "\n\n" + strings.TrimSpace(ct.SendError)
 	}
 	ui.Column(c).Padding(8, 16).Gap(3).Background(t.SurfaceHover).Children(func() {
-		a.recoveryNotice(c, t, "connection:"+ct.ID, msgs.ConnectionMismatchSummary(), details, true)
+		a.recoveryNotice(c, t, "connection:"+ct.ID, msgs.ConnectionMismatchSummary(), details, showConnectionSettings)
 	})
+	return false
 }
 
 // ---------- composer ----------
@@ -1037,7 +1051,7 @@ func contactNoticeText(msgs locales.Messages, kind, detail string) string {
 	}
 }
 
-func (a *appModel) composer(c *ui.Context, t *ui.Theme) {
+func (a *appModel) composer(c *ui.Context, t *ui.Theme, state connectionViewState, showConnectionSettings bool) {
 	ct := a.selectedContact()
 	msgs := locales.In(c.Locale())
 	connected := a.runtimeAvailableForView()
@@ -1136,34 +1150,17 @@ func (a *appModel) composer(c *ui.Context, t *ui.Theme) {
 				sendErrorVisible := ct.SendError != "" && !knownMismatch
 				connectionLostDetail := ct.SendState == sendUnknown && ct.StatusDetail != "" && ct.StatusDetailKind == "status-connection-lost"
 				unknownNotice := ct.SendState == sendUnknown && (sendErrorVisible || connectionLostDetail)
-				if sendReason != "" && strings.TrimSpace(ct.Draft) != "" {
+				switch sendReason {
+				case blockShutdown, blockArchivedSend:
 					ui.Text(c, sendBlockText(msgs, sendReason)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
-				}
-				if sendReason != "" && strings.TrimSpace(ct.Draft) == "" && (!a.runtimeAvailableForView() || a.connectionViewState() == connectionViewApplying) {
-					msgs := locales.In(c.Locale())
-					if a.shutdownStarted || ct.Archived {
+				case blockRuntimeNotReady:
+					if state == connectionViewHealthy && !unknownNotice {
 						ui.Text(c, sendBlockText(msgs, sendReason)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
-					} else if !unknownNotice {
-						hint := msgs.ConnectionRecoverySetupHint()
-						switch a.connectionViewState() {
-						case connectionViewSaved:
-							hint = msgs.ConnectionRecoverySavedHint()
-						case connectionViewNotConnected:
-							hint = msgs.ConnectionRecoveryNotConnectedHint()
-							if a.runtimeStatus != runtimeStateExited && a.runtimeStage == "Connection configuration" && (a.connectionEffective != nil || a.connectionSaved != nil || a.connectionManaged) {
-								hint = msgs.ConnectionRecoveryManagedHint()
-							}
-						case connectionViewApplying:
-							hint = msgs.ConnectionRecoveryApplyingHint()
-						case connectionViewConnecting:
-							hint = msgs.ConnectionRecoveryConnectingHint()
-						}
-						ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
-							ui.Text(c, hint).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted).Grow(1)
-							if a.connectionConfigurationBlocked() {
-								secondaryButton(c, msgs.ConnectionRecoveryOpenSettings()).Label(msgs.ConnectionRecoveryOpenSettings()).OnClick(func() { a.openConfiguration() })
-							}
-						})
+					}
+				case "", blockApplying:
+				default:
+					if strings.TrimSpace(ct.Draft) != "" {
+						ui.Text(c, sendBlockText(msgs, sendReason)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 					}
 				}
 				switch {
@@ -1193,7 +1190,8 @@ func (a *appModel) composer(c *ui.Context, t *ui.Theme) {
 							summary = contactNoticeText(msgs, ct.SendErrorKind, "")
 						}
 					}
-					a.recoveryNotice(c, t, key, summary, detail, true)
+					a.recoveryNotice(c, t, key, summary, detail, showConnectionSettings)
+					showConnectionSettings = false
 				}
 				if canReload && (ct.SendState == sendUnknown || ct.SendError != "") {
 					secondaryButton(c, msgs.ReloadAction()).Label(msgs.ReloadAction()).OnClick(func() { a.reloadSelected() })
@@ -1204,7 +1202,7 @@ func (a *appModel) composer(c *ui.Context, t *ui.Theme) {
 						statusText = contactNoticeText(locales.In(c.Locale()), ct.StatusDetailKind, "")
 					}
 					if ct.StatusDetailKind == "" && formattedRunFailure(ct.StatusDetail) {
-						a.recoveryNotice(c, t, "task:"+ct.ID+":"+ct.SessionID+":"+ct.LastTaskID+":"+ct.ActiveTaskID, runFailureSummary(msgs, ct.StatusDetail), ct.StatusDetail, true)
+						a.recoveryNotice(c, t, "task:"+ct.ID+":"+ct.SessionID+":"+ct.LastTaskID+":"+ct.ActiveTaskID, runFailureSummary(msgs, ct.StatusDetail), ct.StatusDetail, showConnectionSettings)
 					} else {
 						ui.Text(c, statusText).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Warning)
 					}

@@ -44,9 +44,9 @@
 
 ## Distinguish rendered duplication from duplicate business state
 
-**Problem:** The lab's final native screenshot repeated one answered-choice label while saved state and AX contained one answer. Later controlled crash screenshots repeated the same uncertainty guidance in red and amber.
+**Problem:** The lab's final native screenshot repeated one answered-choice label while saved state and AX contained one answer. Later controlled crash screenshots repeated the same uncertainty guidance in red and amber. After a host exit, both the conversation and the empty composer rendered the same connection remedy and Settings action.
 **Cause or correction:** The prototype cause remains Unconfirmed. The earlier composer rendered the unknown summary directly and again through recoveryNotice; that did not establish duplicate execution or receipt state. The approved correction gives one eligible uncertainty notice ownership of both distinct original diagnostics, while preserving folded disclosure, fallback and unknown delivery. Existing locale tests still expected separate disclosures and therefore rejected the new contract.
-**Prevention:** Compare actual product render, AX and persisted question/receipt identities. Trace all visible notice producers before changing ledger logic. Do not copy the prototype wholesale or report a clean native result without checking the product scene. Maintain the existing regression through its test owner when notice ownership changes; require all original diagnostics and no-effect assertions under the new disclosure instead of preserving duplicate presentation.
+**Prevention:** Compare actual product render, AX and persisted question/receipt identities. Trace all visible notice producers before changing ledger logic. Count visible recovery actions across the composed chat and verify distinct local-save and unknown-delivery details remain reachable. Do not copy the prototype wholesale or report a clean native result without checking the product scene. Maintain the existing regression through its test owner when notice ownership changes; require all original diagnostics and no-effect assertions under the new disclosure instead of preserving duplicate presentation.
 
 ## Keep development verification at integration boundaries
 

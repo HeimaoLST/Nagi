@@ -19,10 +19,13 @@ func TestKnownConnectionFailureIsConciseAndKeepsOriginalDetails(t *testing.T) {
 	ct.LoadErr = raw
 	ct.SendError = raw
 	a.windowWidth = 1040
+	settingsAction := locales.In("en").ConnectionRecoveryOpenSettings()
 	tr := ui.NewTester(a.view, 1040, 720)
+	tr.SetLocale("en")
+	tr.SetFocused(true)
 	tr.Frame()
 	if !tr.HasText("Connection unavailable or changed") ||
-		!tr.HasText("Connection settings") || !tr.HasText("Details") {
+		!tr.HasText(settingsAction) || !tr.HasText("Details") {
 		t.Fatalf("known connection failure summary missing: %v", tr.Texts())
 	}
 	if tr.HasText(raw) {
@@ -35,9 +38,14 @@ func TestKnownConnectionFailureIsConciseAndKeepsOriginalDetails(t *testing.T) {
 	if !tr.HasText(raw) || !tr.HasText("Copy error details") {
 		t.Fatalf("connection detail was not accessible: %v", tr.Texts())
 	}
-	if err := tr.Click("Connection settings"); err != nil {
-		t.Fatal(err)
+	for i := 0; i < 60 && !tr.Focused(settingsAction); i++ {
+		tr.Key(0, ui.KeyTab)
 	}
+	if !tr.Focused(settingsAction) {
+		t.Fatalf("recovery Settings action did not take focus: %v", tr.Texts())
+	}
+	tr.Key(0, ui.KeyEnter)
+	tr.Frame()
 	if !a.settingsOpen || a.settingsTab != settingsTabConnection {
 		t.Fatalf("connection settings entry = open=%v tab=%q", a.settingsOpen, a.settingsTab)
 	}
@@ -368,12 +376,45 @@ func TestRecoveryPresentationTaskFailureDisclosureAndSettings(t *testing.T) {
 		t.Run(locale, func(t *testing.T) {
 			a, ct := workspaceTestApp(t)
 			a.workspaceOpen = false
+			a.runtimeStatus = runtimeStateExited
 			message := "upstream unavailable; API_KEY=never-show-this"
 			raw := "Model request failed: " + safeDiagnostic(message)
 			ct.StatusDetail = raw
-			ct.Draft = "Keep this unsent text"
+			msgs := locales.In(locale)
+			settingsAction := msgs.ConnectionRecoveryOpenSettings()
 			tr := ui.NewTester(a.view, 1040, 900)
 			tr.SetLocale(locale)
+			tr.SetFocused(true)
+			tr.Frame()
+			hints := 0
+			for _, text := range tr.Texts() {
+				if text == msgs.ConnectionRecoveryNotConnectedHint() {
+					hints++
+				}
+			}
+			if hints != 1 {
+				t.Fatalf("disconnected guidance occurs %d times in the chat: %v", hints, tr.Texts())
+			}
+			for i := 0; i < 60 && !tr.Focused(msgs.DetailsAction()); i++ {
+				tr.Key(0, ui.KeyTab)
+			}
+			if !tr.Focused(msgs.DetailsAction()) {
+				t.Fatal("could not focus the task failure disclosure")
+			}
+			settingsTargets := 0
+			for i := 0; i < 60; i++ {
+				tr.Key(0, ui.KeyTab)
+				if tr.Focused(msgs.DetailsAction()) {
+					break
+				}
+				if tr.Focused(settingsAction) || tr.Focused(msgs.ConnectionSettingsAction()) {
+					settingsTargets++
+				}
+			}
+			if !tr.Focused(msgs.DetailsAction()) || settingsTargets != 1 {
+				t.Fatalf("expected one recovery Settings action in the focus cycle, found %d", settingsTargets)
+			}
+			ct.Draft = "Keep this unsent text"
 			tr.Frame()
 			summary := "The model request failed."
 			if locale == "zh-Hans" {
@@ -386,7 +427,6 @@ func TestRecoveryPresentationTaskFailureDisclosureAndSettings(t *testing.T) {
 			if !found || tr.HasText(raw) {
 				t.Fatalf("expected plain summary before disclosure: %v", tr.Texts())
 			}
-			msgs := locales.In(locale)
 			if err := tr.Click(msgs.DetailsAction()); err != nil {
 				t.Fatal(err)
 			}
@@ -394,7 +434,7 @@ func TestRecoveryPresentationTaskFailureDisclosureAndSettings(t *testing.T) {
 			if !tr.HasText(raw) || ct.StatusDetail != raw || ct.Draft != "Keep this unsent text" || ct.SendState != sendIdle {
 				t.Fatalf("disclosure changed the record/draft or hid its redacted detail: %v", tr.Texts())
 			}
-			if err := tr.Click(msgs.ConnectionSettingsAction()); err != nil {
+			if err := tr.Click(settingsAction); err != nil {
 				t.Fatal(err)
 			}
 			tr.Frame()

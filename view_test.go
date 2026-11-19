@@ -1316,7 +1316,7 @@ func recoveryComposerTester(a *appModel, width, height int) *ui.Tester {
 	return ui.NewTester(func(c *ui.Context) {
 		a.workTheme = resolveWorkbenchTheme(c.Theme().Dark)
 		c.SetTheme(a.workTheme.Theme)
-		ui.Scroll(c).Fill().Children(func() { a.composer(c, c.Theme()) })
+		ui.Scroll(c).Fill().Children(func() { a.composer(c, c.Theme(), connectionViewHealthy, true) })
 	}, width, height)
 }
 
