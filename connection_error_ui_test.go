@@ -447,9 +447,10 @@ func TestRecoveryPresentationLocalRetryClearsOnlyOwnedFeedback(t *testing.T) {
 	if a.connectionForm.Error != connStatusSavedStoreFailed {
 		t.Fatal("unavailable store falsely cleared feedback")
 	}
-	a.connectionForm.Error, a.connectionForm.ErrorDetail = connErrorStart, "unrelated startup failure"
+	const applyFailure = "Pi worker exited while applying"
+	a.connectionForm.Error, a.connectionForm.ErrorDetail = connErrorApplyConfig, applyFailure
 	tr.Frame()
-	if a.connectionForm.Error != connErrorStart || a.connectionForm.ErrorDetail != "unrelated startup failure" || ct.Draft != "retained local edit" || ct.SessionID != sessionRef || ct.PiBinding != binding || a.selectedContact() != ct {
+	if a.connectionForm.Error != connErrorApplyConfig || a.connectionForm.ErrorDetail != applyFailure || ct.Draft != "retained local edit" || ct.SessionID != sessionRef || ct.PiBinding != binding || a.selectedContact() != ct {
 		t.Fatal("local recovery cleared unrelated state")
 	}
 }

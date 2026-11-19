@@ -26,7 +26,6 @@ const (
 	settingsSourceConfiguration = "configuration"
 	settingsSourceCommand       = "command"
 	settingsSourceComposer      = "composer"
-	settingsSourceHistory       = "history"
 	settingsSourceAux           = "aux"
 	settingsSourceLink          = "link"
 )
@@ -198,15 +197,6 @@ func (a *appModel) closeSettings() {
 		a.focusConfiguration = true
 	case settingsSourceComposer:
 		a.focusComposer = true
-	case settingsSourceHistory:
-		switch {
-		case a.contactHistoryFull != nil:
-			a.focusHistoryFullBack = true
-		case a.detailIs(detailHistory):
-			a.focusDetailClose = true
-		default:
-			a.focusHistory = true
-		}
 	case settingsSourceLink:
 		if a.settingsReturnLink != (markdownLinkTarget{}) {
 			a.markdownLinkFocus = a.settingsReturnLink

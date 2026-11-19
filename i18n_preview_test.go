@@ -56,7 +56,7 @@ func TestPreviewI18nSelectedSlice(t *testing.T) {
 	tr.Frame()
 	writePreviewPNG(t, filepath.Join(dir, "settings-zh-Hans-light-960x640.png"), tr.Image())
 
-	cfg := connectionConfig{Version: 1, API: connectionAPIChatCompletions, Endpoint: "https://provider.example.invalid/v1", APIKey: "fixture", Model: "fixture", ContextTokens: 131072, OutputTokens: 8192, WorkingDirectory: t.TempDir(), MaxActiveTasks: 2}
+	cfg := connectionConfig{API: connectionAPIChatCompletions, Endpoint: "https://provider.example.invalid/v1", APIKey: "fixture", Model: "fixture", ContextTokens: 131072, OutputTokens: 8192, WorkingDirectory: t.TempDir(), MaxActiveTasks: 2}
 	conn, _ := workspaceTestApp(t)
 	conn.connectionForm = newConnectionSettings(&cfg, cfg.WorkingDirectory)
 	conn.connectionForm.Status = connStatusApplied
@@ -189,7 +189,7 @@ func TestPreviewI18nFinalMatrix(t *testing.T) {
 			name: "settings-connection", width: 1040, height: 720,
 			setup: func(locale string) *appModel {
 				a, _ := workspaceTestApp(t)
-				cfg := connectionConfig{Version: 1, API: connectionAPIChatCompletions, Endpoint: "https://provider.example.invalid/v1/very/long/endpoint/for/final/preview", APIKey: "fixture", Model: "provider/very-long-model-name-for-final-preview", ContextTokens: 131072, OutputTokens: 8192, WorkingDirectory: t.TempDir(), MaxActiveTasks: 2}
+				cfg := connectionConfig{API: connectionAPIChatCompletions, Endpoint: "https://provider.example.invalid/v1/very/long/endpoint/for/final/preview", APIKey: "fixture", Model: "provider/very-long-model-name-for-final-preview", ContextTokens: 131072, OutputTokens: 8192, WorkingDirectory: t.TempDir(), MaxActiveTasks: 2}
 				a.connectionForm = newConnectionSettings(&cfg, cfg.WorkingDirectory)
 				a.connectionSaved = &cfg
 				a.connectionEffective = &cfg
@@ -442,7 +442,7 @@ func TestPreviewInputStates(t *testing.T) {
 			a.appearanceMode = item.theme
 			a.languageMode, a.languageModeLoaded = "en", true
 			cfg := connectionConfig{
-				Version: 1, API: connectionAPIChatCompletions,
+				API:      connectionAPIChatCompletions,
 				Endpoint: "https://input-fixture.example.invalid/v1", APIKey: "fixture-not-a-real-key", Model: "input-fixture",
 				ContextTokens: 131072, OutputTokens: 8192, WorkingDirectory: a.workDir, MaxActiveTasks: 2,
 			}

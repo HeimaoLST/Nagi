@@ -325,7 +325,7 @@ func TestGeneralPreferenceSelectorsKeepWidthAndKeyboardChoice(t *testing.T) {
 }
 
 func TestSettingsConnectionDirtyDiscardAndAppliedReopen(t *testing.T) {
-	config := connectionConfig{Version: 1, API: connectionAPIChatCompletions, Endpoint: "http://example.test/v1", APIKey: "fixture", Model: "fixture", ContextTokens: 1000, OutputTokens: 100, WorkingDirectory: t.TempDir(), MaxActiveTasks: 2}
+	config := connectionConfig{API: connectionAPIChatCompletions, Endpoint: "http://example.test/v1", APIKey: "fixture", Model: "fixture", ContextTokens: 1000, OutputTokens: 100, WorkingDirectory: t.TempDir(), MaxActiveTasks: 2}
 	a, _ := workspaceTestApp(t)
 	a.connectionForm = newConnectionSettings(&config, config.WorkingDirectory)
 	a.connectionSaved = &config
@@ -750,7 +750,7 @@ func TestSettingsContactPickerDisambiguatesSameLastIDDigitsAndSavesB(t *testing.
 
 func TestSettingsConnectionApplyAvailabilityFollowsCurrentWork(t *testing.T) {
 	a, ct, _ := testRuntimeModel(t)
-	config := connectionConfig{Version: 1, API: connectionAPIChatCompletions, Endpoint: "http://example.test/v1", APIKey: "fixture", Model: "fixture", ContextTokens: 1000, OutputTokens: 100, WorkingDirectory: t.TempDir(), MaxActiveTasks: 2}
+	config := connectionConfig{API: connectionAPIChatCompletions, Endpoint: "http://example.test/v1", APIKey: "fixture", Model: "fixture", ContextTokens: 1000, OutputTokens: 100, WorkingDirectory: t.TempDir(), MaxActiveTasks: 2}
 	a.connectionForm = newConnectionSettings(&config, config.WorkingDirectory)
 	a.connectionSaved = &config
 	a.connectionEffective = &config
@@ -820,7 +820,7 @@ func TestPreviewSettingsPage(t *testing.T) {
 	longPath := "/Users/you/Workspace/a-very-long-project-directory-name/with/deep/nested/segments"
 	longURL := "https://provider.example.invalid/v1/organizations/team/projects/workspace/models/default"
 	longError := "Connection could not be applied because the saved endpoint is unavailable. Review the endpoint and retry after the current work finishes."
-	config := connectionConfig{Version: 1, API: connectionAPIChatCompletions, Endpoint: longURL, Model: "provider/very-long-model-identifier", ContextTokens: 131072, OutputTokens: 8192, WorkingDirectory: longPath, MaxActiveTasks: 2}
+	config := connectionConfig{API: connectionAPIChatCompletions, Endpoint: longURL, Model: "provider/very-long-model-identifier", ContextTokens: 131072, OutputTokens: 8192, WorkingDirectory: longPath, MaxActiveTasks: 2}
 	for _, dark := range []bool{false, true} {
 		theme := "light"
 		if dark {
@@ -909,7 +909,7 @@ func TestFirstLaunchOpensConnectionSettingsPageWithoutEmptyOverlay(t *testing.T)
 func TestSettingsLongConnectionScrollsThenPrimaryActionIsVisible(t *testing.T) {
 	for _, width := range []int{720, 800} {
 		a, _ := workspaceTestApp(t)
-		config := connectionConfig{Version: 1, API: connectionAPIChatCompletions, Endpoint: "https://provider.example.invalid/v1/very/long/endpoint", APIKey: "fixture", Model: "fixture", ContextTokens: 1000, OutputTokens: 100, WorkingDirectory: t.TempDir(), MaxActiveTasks: 2}
+		config := connectionConfig{API: connectionAPIChatCompletions, Endpoint: "https://provider.example.invalid/v1/very/long/endpoint", APIKey: "fixture", Model: "fixture", ContextTokens: 1000, OutputTokens: 100, WorkingDirectory: t.TempDir(), MaxActiveTasks: 2}
 		a.connectionForm = newConnectionSettings(&config, config.WorkingDirectory)
 		a.connectionSaved = &config
 		a.connectionEffective = &config

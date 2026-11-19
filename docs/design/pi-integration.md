@@ -113,9 +113,9 @@ Synthetic native secure-entry coverage remains separate from headless product E2
 
 ### Reading a task result
 
-Open **Read latest result** in the task detail, or choose a numbered run in the task history. The reader shows the final assistant response for that execution and lets the user copy its original text. A finished run leaves the task and its requirements open until the user takes a business action.
+When a user asks their Bot for a task result, the conversation can call `issue_get` for that activity. The tool reads the latest execution by default. An explicit `execution_id` selects an earlier run. A finished run leaves the task and its requirements open until the user takes a business action.
 
-Reported files come from successful Pi write or edit calls in that same turn. Each file retains its tool receipt and working directory. The reader shows the file’s current contents, which may have changed since the run. Paths mentioned only in the response stay in the response. Reading, reloading and reopening a saved result use the captured activity session without submitting another model turn.
+The tool returns a bounded response excerpt and file references from confirmed Pi write or edit calls in that execution. Each reference identifies the execution, tool call and path. Paths mentioned only in the response stay in the response. The underlying result read uses the captured activity session and submits no model turn of its own.
 
 ## First-use caller unit
 
@@ -128,7 +128,6 @@ The shared root-package seams are:
     func (a *appModel) applyPiEvent(generation int, event pi.Event)
     func (a *appModel) drainPiHost()
     func (h *piAppHost) loadPiHistory(ctx context.Context, binding piConversationBinding) (historyProjection, error)
-    func (ct *contact) piHistoryBindings() []piConversationBinding
     func clonePiConversationBinding(binding *piConversationBinding) *piConversationBinding
     func (a *appModel) piDataReadOnly() bool
 

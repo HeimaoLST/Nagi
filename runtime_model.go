@@ -785,10 +785,8 @@ func (a *appModel) addRuntimeContact() {
 		Workspace: workspace,
 	}
 	c.Context.onChange = a.persist
-	a.rememberHistoryView(a.selectedContact().ID)
 	a.contacts = append(a.contacts, c)
 	a.selected = len(a.contacts) - 1
-	a.restoreHistoryView(c.ID)
 	a.contactSearch = ""
 	a.aux = ""
 	a.focusComposer = true

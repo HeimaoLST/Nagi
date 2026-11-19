@@ -24,7 +24,6 @@ const (
 // connectionConfig is the plaintext local GUI source; connection.json contains
 // a private local value and must stay private to this user.
 type connectionConfig struct {
-	Version          int    `json:"version"`
 	API              string `json:"api"`
 	Endpoint         string `json:"endpoint"`
 	APIKey           string `json:"api_key"`
@@ -85,14 +84,14 @@ func (config privateConnectionConfig) defaults() (connectionConfig, error) {
 	if err != nil {
 		return connectionConfig{}, err
 	}
-	return connectionConfig{Version: 1, API: source.API, Endpoint: source.Endpoint, APIKey: source.APIKey,
+	return connectionConfig{API: source.API, Endpoint: source.Endpoint, APIKey: source.APIKey,
 		Model: config.Model, ContextTokens: config.ContextTokens, OutputTokens: config.OutputTokens,
 		WorkingDirectory: config.WorkingDirectory, MaxActiveTasks: config.MaxActiveTasks}, nil
 }
 
 func defaultConnectionConfig(workDir string) connectionConfig {
 	return connectionConfig{
-		Version: 1, API: connectionAPIChatCompletions,
+		API:           connectionAPIChatCompletions,
 		ContextTokens: 131072, OutputTokens: 8192,
 		WorkingDirectory: workDir, MaxActiveTasks: 2,
 	}
@@ -187,7 +186,6 @@ func saveConnectionConfig(path string, config connectionConfig) error {
 // Stable validation kinds. The form says them again in the current language;
 // internal config errors keep the kinds for diagnostics.
 const (
-	connectionValidationVersion            = "version"
 	connectionValidationAPI                = "api"
 	connectionValidationRequired           = "required"
 	connectionValidationPositive           = "positive"
@@ -204,9 +202,6 @@ const (
 
 func validateConnectionConfig(config connectionConfig) map[string]string {
 	fields := map[string]string{}
-	if config.Version != 1 {
-		fields["Version"] = connectionValidationVersion
-	}
 	if config.API != connectionAPIResponses && config.API != connectionAPIChatCompletions {
 		fields["API"] = connectionValidationAPI
 	}

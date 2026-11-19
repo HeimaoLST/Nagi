@@ -84,7 +84,7 @@ func (s *connectionSettings) ResetDraft() {
 
 func (s *connectionSettings) validated() (connectionConfig, bool) {
 	d := s.Draft
-	config := connectionConfig{Version: 1, API: d.API, Endpoint: strings.TrimSpace(d.Endpoint),
+	config := connectionConfig{API: d.API, Endpoint: strings.TrimSpace(d.Endpoint),
 		APIKey: d.APIKey, Model: strings.TrimSpace(d.Model), WorkingDirectory: strings.TrimSpace(d.WorkingDirectory)}
 	numericErrors := map[string]string{}
 	for _, f := range []struct {
@@ -432,30 +432,22 @@ const (
 	connectionCheckFields = "check-fields"
 	validationNumeric     = "numeric"
 
-	connStatusSaving             = "saving"
-	connStatusSavedApplied       = "saved-applied"
-	connStatusChecking           = "checking-saved"
-	connStatusApplied            = "applied"
-	connStatusTesting            = "testing"
-	connStatusTestCompleted      = "test-completed"
-	connStatusSavedStoreFailed   = "saved-store-failed"
-	connErrorTestFailed          = "test-failed"
-	connErrorSavedNeedsRepair    = "saved-needs-repair"
-	connErrorApplyConfig         = "apply-config"
-	connErrorHelperMissing       = "helper-missing"
-	connErrorPrepare             = "prepare"
-	connErrorStart               = "start"
-	connErrorExitedBeforeReady   = "exited-before-ready"
-	connErrorNotReady            = "not-ready"
-	connErrorNotExposed          = "not-exposed"
-	connErrorExitedWhileChecking = "exited-while-validating"
-	connErrorExitedDuringInstall = "exited-during-validation"
-	connBlockedApplying          = "applying"
-	connBlockedShutdown          = "shutdown"
-	connBlockedNoSaved           = "no-saved"
-	connBlockedStore             = "store"
-	connBlockedActiveWork        = "active-work"
-	connBlockedUntrustedIssue    = "untrusted-issue"
+	connStatusSaving           = "saving"
+	connStatusSavedApplied     = "saved-applied"
+	connStatusChecking         = "checking-saved"
+	connStatusApplied          = "applied"
+	connStatusTesting          = "testing"
+	connStatusTestCompleted    = "test-completed"
+	connStatusSavedStoreFailed = "saved-store-failed"
+	connErrorTestFailed        = "test-failed"
+	connErrorSavedNeedsRepair  = "saved-needs-repair"
+	connErrorApplyConfig       = "apply-config"
+	connBlockedApplying        = "applying"
+	connBlockedShutdown        = "shutdown"
+	connBlockedNoSaved         = "no-saved"
+	connBlockedStore           = "store"
+	connBlockedActiveWork      = "active-work"
+	connBlockedUntrustedIssue  = "untrusted-issue"
 )
 
 func noticeArg(args []string, index int) string {
@@ -495,8 +487,6 @@ func connectionFieldErrorText(msgs locales.Messages, key, kind string) string {
 			return msgs.ValidationLessThanContext()
 		}
 		return msgs.ValidationPositive()
-	case connectionValidationVersion:
-		return msgs.ValidationVersion()
 	case validationNumeric:
 		return msgs.ValidationNumeric()
 	default:
@@ -525,9 +515,7 @@ func connectionStatusText(msgs locales.Messages, kind string, args []string) str
 
 func connectionErrorIsKind(kind string) bool {
 	switch kind {
-	case connErrorTestFailed, connErrorApplyConfig, connErrorHelperMissing, connErrorPrepare, connErrorStart,
-		connErrorExitedBeforeReady, connErrorNotReady, connErrorNotExposed, connErrorExitedWhileChecking,
-		connErrorExitedDuringInstall, connStatusSavedStoreFailed, connErrorSavedNeedsRepair:
+	case connErrorTestFailed, connErrorApplyConfig, connStatusSavedStoreFailed, connErrorSavedNeedsRepair:
 		return true
 	default:
 		return false
@@ -542,24 +530,8 @@ func connectionErrorText(msgs locales.Messages, kind, detail string) string {
 		return msgs.ConnectionErrorSavedNeedsRepair()
 	case connErrorApplyConfig:
 		return msgs.RecoveryConnectionApplyFailed()
-	case connErrorHelperMissing:
-		return msgs.RecoveryRuntimeMissing()
-	case connErrorPrepare:
-		return msgs.RecoveryRuntimeStartFailed()
-	case connErrorStart:
-		return msgs.RecoveryRuntimeStartFailed()
 	case connStatusSavedStoreFailed:
 		return msgs.RecoveryLocalSaveFailed()
-	case connErrorExitedBeforeReady:
-		return msgs.ConnectionErrorExitedBeforeReady()
-	case connErrorNotReady:
-		return msgs.ConnectionErrorNotReady()
-	case connErrorNotExposed:
-		return msgs.ConnectionErrorNotExposed()
-	case connErrorExitedWhileChecking:
-		return msgs.ConnectionErrorExitedWhileValidating()
-	case connErrorExitedDuringInstall:
-		return msgs.ConnectionErrorExitedDuringValidation()
 	default:
 		if detail != "" {
 			return kind + " " + detail

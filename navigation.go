@@ -10,27 +10,10 @@ import (
 
 type detailKind string
 
-const (
-	detailHistory detailKind = "history"
-	detailProfile detailKind = "profile"
-)
-
-// historyViewMemory keeps the per-contact history surface together with its
-// scroll position. The Runtime callback still owns the live result; this only
-// remembers what the user was looking at when another contact is selected.
-type historyViewMemory struct {
-	Query       string
-	Scroll      ui.ScrollState
-	Result      *contactHistoryResult
-	Error       string
-	ErrorDetail string
-}
+const detailProfile detailKind = "profile"
 
 func (a *appModel) activeDetail() detailKind {
-	if !a.workspaceOpen {
-		return ""
-	}
-	if a.detail != detailHistory && a.detail != detailProfile {
+	if !a.workspaceOpen || a.detail != detailProfile {
 		return ""
 	}
 	return a.detail
@@ -46,9 +29,6 @@ func (a *appModel) openDetail(kind detailKind) {
 		a.focusDetailClose = true
 		return
 	}
-	if a.detailIs(detailHistory) && kind != detailHistory {
-		a.cancelHistoryFullDisplay()
-	}
 	a.workspaceOpen = true
 	a.detail = kind
 	a.focusDetailClose = true
@@ -58,19 +38,12 @@ func (a *appModel) openDetail(kind detailKind) {
 }
 
 func (a *appModel) closeDetail() {
-	kind := a.activeDetail()
-	if kind == detailHistory {
-		a.cancelHistoryFullDisplay()
+	if a.activeDetail() == detailProfile {
+		a.focusContactProfile = true
 	}
 	a.workspaceOpen = false
 	a.detail = ""
 	a.focusDetailClose = false
-	switch kind {
-	case detailHistory:
-		a.focusHistory = true
-	case detailProfile:
-		a.focusContactProfile = true
-	}
 	a.persist()
 }
 
@@ -81,9 +54,6 @@ func (a *appModel) detailPageActive() bool {
 }
 
 func (a *appModel) mainPageActive() bool {
-	if a.contactHistoryFull != nil {
-		return true
-	}
 	switch a.aux {
 	case "sources", "task-context":
 		return !a.composerInlineAux()
@@ -115,52 +85,6 @@ func (a *appModel) showContactsButton(c *ui.Context, t *ui.Theme) {
 		a.focusRail = false
 	}
 	contacts.OnClick(a.toggleRail)
-}
-
-func (a *appModel) rememberHistoryView(contactID string) {
-	if contactID == "" {
-		return
-	}
-	if a.historyByContact == nil {
-		a.historyByContact = map[string]historyViewMemory{}
-	}
-	a.historyByContact[contactID] = historyViewMemory{
-		Query: a.historyQuery, Scroll: a.historyScroll,
-		Result: a.contactHistory, Error: a.contactHistoryError, ErrorDetail: a.contactHistoryErrorDetail,
-	}
-}
-
-func (a *appModel) restoreHistoryView(contactID string) {
-	var memory historyViewMemory
-	if a.historyByContact != nil {
-		memory = a.historyByContact[contactID]
-	}
-	a.historyQuery = memory.Query
-	a.historyScroll = memory.Scroll
-	a.contactHistory = memory.Result
-	a.contactHistoryFull = nil
-	a.contactHistoryError = memory.Error
-	a.contactHistoryErrorDetail = memory.ErrorDetail
-	a.contactHistoryBusy = false
-	a.contactHistoryDetailBusy = false
-	a.contactHistoryGen++
-	a.contactHistoryDetailGen++
-	a.focusHistoryFullID = ""
-}
-
-func (a *appModel) historyFullKey() string {
-	if a.contactHistoryFull == nil {
-		return ""
-	}
-	return historyOriginKey(a.contactHistoryFull.Origin, a.contactHistoryFull.SessionID, a.contactHistoryFull.EntryID)
-}
-
-func (a *appModel) closeContactHistoryFull() {
-	if a.contactHistoryFull == nil {
-		return
-	}
-	a.focusHistoryFullID = a.historyFullKey()
-	a.contactHistoryFull = nil
 }
 
 func (a *appModel) profileScrollFor(contactID string) *ui.ScrollState {
@@ -251,8 +175,6 @@ func (a *appModel) profileSummaryField(c *ui.Context, t *ui.Theme, label, value 
 func (a *appModel) mainPage(c *ui.Context, t *ui.Theme) {
 	ui.Column(c).Fill().Background(a.workTheme.Reading).Children(func() {
 		switch {
-		case a.contactHistoryFull != nil:
-			a.historyFullPage(c, t)
 		case a.aux == "sources":
 			a.sourcesPage(c, t)
 		case a.aux == "task-context":
@@ -260,36 +182,6 @@ func (a *appModel) mainPage(c *ui.Context, t *ui.Theme) {
 		default:
 			a.main(c, t)
 		}
-	})
-}
-
-func (a *appModel) historyFullPage(c *ui.Context, t *ui.Theme) {
-	full := a.contactHistoryFull
-	if full == nil {
-		return
-	}
-	msgs := locales.In(c.Locale())
-	ct := a.selectedContact()
-	from := msgs.SpeakerContact()
-	if full.From == "me" {
-		from = msgs.SpeakerYou()
-	}
-	ui.Column(c).Fill().Children(func() {
-		ui.Row(c).Padding(16, 16).AlignItems(ui.Center).Gap(8).Children(func() {
-			back := appTooltip(c, secondaryButton(c, msgs.BackToHistoryVisible()).Label(msgs.CloseFullMessage()), msgs.BackToHistoryTooltip()).OnClick(func() { a.closeContactHistoryFull() })
-			if a.focusHistoryFullBack {
-				back.Focus()
-				a.focusHistoryFullBack = false
-			}
-			ui.Text(c, msgs.FullSavedMessage()).FontSize(typePageTitle).FontWeight(500).FixedLineHeight(lineSettingsTitle).TextColor(t.Text)
-		})
-		ui.Scroll(c).Grow(1).TrackScroll(&a.historyFullScroll).Padding(0, 16).Children(func() {
-			ui.Column(c).FillWidth().MaxWidth(conversationMaxWidth).AlignItems(ui.Start).Gap(8).Children(func() {
-				ui.Text(c, msgs.HistoryMessageMeta(from, full.Date, full.SessionID)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
-				markdownReader(c, full.Text, a.readerOptions(markdownReaderOptions{CopyLabel: msgs.CopySavedMessageLabel(), Theme: messageMarkdownTheme}, historyLinkScope(ct.ID, "full:"+full.SessionID, full.EntryID), full.WorkingDirectory)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text)
-				taskContextReadOnlyView(c, a.workTheme, full.Context)
-			})
-		})
 	})
 }
 
@@ -331,11 +223,6 @@ func (a *appModel) auxPage(c *ui.Context, t *ui.Theme) {
 			})
 		})
 	})
-}
-
-func (a *appModel) cancelHistoryFullDisplay() {
-	a.contactHistoryDetailGen++
-	a.contactHistoryDetailBusy = false
 }
 
 func (a *appModel) syncDetailPageMode() {

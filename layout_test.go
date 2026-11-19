@@ -846,7 +846,7 @@ func TestHeaderGroupsStatusAndRoleWithLongRawText(t *testing.T) {
 		{
 			name: "not-connected-960", locale: "en", role: shortRole, status: "Not connected", dark: true,
 			setup: func(a *appModel, ct *contact) {
-				cfg := connectionConfig{Version: 1, API: connectionAPIChatCompletions, Endpoint: "http://example.test/v1", APIKey: "fixture", Model: "fixture", ContextTokens: 1000, OutputTokens: 100, WorkingDirectory: t.TempDir(), MaxActiveTasks: 2}
+				cfg := connectionConfig{API: connectionAPIChatCompletions, Endpoint: "http://example.test/v1", APIKey: "fixture", Model: "fixture", ContextTokens: 1000, OutputTokens: 100, WorkingDirectory: t.TempDir(), MaxActiveTasks: 2}
 				a.runtimeStatus = runtimeStateExited
 				a.runtimeStage = "Connection configuration"
 				a.connectionSaved = &cfg

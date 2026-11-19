@@ -78,7 +78,7 @@ func TestTitleBarKeepsNavigationOutsideNativeControls(t *testing.T) {
 						}
 						tr.Frame()
 						if a.settingsOpen || a.workspaceOpen || ct.Draft != "keep the titlebar draft" {
-							t.Fatalf("return did not preserve its route and draft: settings=%v detail=%q reading=%v draft=%q", a.settingsOpen, a.activeDetail(), a.contactHistoryFull != nil, ct.Draft)
+							t.Fatalf("return did not preserve its route and draft: settings=%v detail=%q draft=%q", a.settingsOpen, a.activeDetail(), ct.Draft)
 						}
 					}
 				})

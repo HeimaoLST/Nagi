@@ -116,19 +116,6 @@ func TestConsecutiveDefaultContactsAreIsolated(t *testing.T) {
 	}
 }
 
-func TestHistoryIsScopedToCurrentContact(t *testing.T) {
-	a := testApp(t)
-	a.selectContact(0)
-	a.historyQuery = "shared memory"
-	if len(a.historyMatches()) == 0 {
-		t.Fatal("Nagi history should match 'shared memory'")
-	}
-	a.historyQuery = "empty-input"
-	if len(a.historyMatches()) != 0 {
-		t.Fatal("Ren's history must not leak into Nagi's scope")
-	}
-}
-
 // TestReplyStaysInOriginatingContact covers the synchronous demo path (no
 // window): the reply lands in the contact the send started from, and other
 // contacts' messages are untouched. The real timed switch is exercised

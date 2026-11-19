@@ -281,12 +281,7 @@ func (a *appModel) detailPage(c *ui.Context, t *ui.Theme) {
 }
 
 func (a *appModel) detailContent(c *ui.Context, t *ui.Theme, narrow bool) {
-	switch a.activeDetail() {
-	case detailHistory:
-		a.historyDetail(c, t, narrow)
-	case detailProfile:
-		a.profileDetail(c, t, narrow)
-	}
+	a.profileDetail(c, t, narrow)
 }
 
 func (ct *contact) issueWork(issue *productIssue) *workItem {

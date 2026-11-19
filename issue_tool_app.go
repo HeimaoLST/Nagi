@@ -141,8 +141,7 @@ func issueToolScopeInput(scope *IssueToolScope) (pi.ContextInput, bool) {
 	return pi.ContextInput{Name: issueToolScopeContextName, Text: token}, true
 }
 
-// Called on the UI actor alongside scope issuance, before task.send. This is
-// discovery material, not an implicit target or a second authorization source.
+// The list helps discover existing issues. The issued scope controls authorization.
 func (a *appModel) issueToolConversationIssueList(scope *IssueToolScope) (pi.ContextInput, error) {
 	ct := a.contactByID(scope.ContactID)
 	if ct == nil {

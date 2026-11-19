@@ -718,9 +718,10 @@ func TestFirstConnectionSaveQueuedCompletionRetainsLiveLocalState(t *testing.T) 
 				if a.connectionForm.Error != "" || a.connectionForm.ErrorDetail != "" {
 					t.Fatal("local Retry left owned Connection feedback stale")
 				}
-				a.connectionForm.Error, a.connectionForm.ErrorDetail = connErrorStart, "unrelated connection failure"
+				const applyFailure = "Pi worker exited while applying"
+				a.connectionForm.Error, a.connectionForm.ErrorDetail = connErrorApplyConfig, applyFailure
 				tr.Frame()
-				if a.connectionForm.Error != connErrorStart || a.connectionForm.ErrorDetail != "unrelated connection failure" || editor.Draft.Name != "Unsaved profile name" || second.Name == editor.Draft.Name || a.pi != currentHost || a.connectionApplying {
+				if a.connectionForm.Error != connErrorApplyConfig || a.connectionForm.ErrorDetail != applyFailure || editor.Draft.Name != "Unsaved profile name" || second.Name == editor.Draft.Name || a.pi != currentHost || a.connectionApplying {
 					t.Fatal("feedback recovery changed unrelated errors/profile/runtime state")
 				}
 			}

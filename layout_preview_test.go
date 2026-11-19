@@ -129,7 +129,7 @@ func TestPreviewHeaderGrouping(t *testing.T) {
 		a.runtimeStatus = runtimeStateReady
 	})
 	write("header-960-dark-not-connected.png", "en", "Assistant", true, func(a *appModel, _ *contact) {
-		cfg := connectionConfig{Version: 1, API: connectionAPIChatCompletions, Endpoint: "http://example.test/v1", APIKey: "fixture", Model: "fixture", ContextTokens: 1000, OutputTokens: 100, WorkingDirectory: "/Users/you/Workspace/saki-run", MaxActiveTasks: 2}
+		cfg := connectionConfig{API: connectionAPIChatCompletions, Endpoint: "http://example.test/v1", APIKey: "fixture", Model: "fixture", ContextTokens: 1000, OutputTokens: 100, WorkingDirectory: "/Users/you/Workspace/saki-run", MaxActiveTasks: 2}
 		a.runtimeStatus = runtimeStateExited
 		a.runtimeStage = "Connection configuration"
 		a.connectionSaved = &cfg

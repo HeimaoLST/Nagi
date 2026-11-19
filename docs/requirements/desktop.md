@@ -1,10 +1,10 @@
 # Nagi：GUI 产品定义与需求
 
-当前执行系统正在按 [Pi integration](../design/pi-integration.md) 替换旧 Saki 接入。既有产品能力、数据及不确定状态约束继续有效；旧引擎专用传输／打包假设不约束 Pi 新实现。旧会话历史的保留方式仍待用户决定，不由迁移代码静默删除或改释引用。
+当前执行系统正在按 [Pi integration](../design/pi-integration.md) 替换旧 Saki 接入。既有产品能力、数据及不确定状态约束继续有效；旧引擎专用传输／打包假设不约束 Pi 新实现。同一 Bot 的既有 Pi 会话引用随资料保留。当前对话可按绑定读回，重开和恢复均保留未确认的操作状态。
 
 更新日期：2026-11-11。状态：**当前产品定义与行为需求，待分阶段实施与验收**。依据用户本轮关于开源产品、长期联系人、事项与工作分身的讨论修订；Nagi 是已确定的 GUI 名称，现已在独立的 [Nagi Git 仓库](https://github.com/HeimaoLST/Nagi) 维护，根 Go module 为 `github.com/HeimaoLST/Nagi`；原始候选和历史来源见 [导入记录](../design/source-import.json)。本文件是 GUI 产品定义的权威位置，设计稿和实现文档引用本文。需求不表示功能已经完成；完整 MVP 的行为范围已在下文明确；具体接口、迁移和后续版本仍按实际设计处理。
 
-本次定义修订见 [#134](https://github.com/HeimaoLST/Saki/issues/134)，完整 MVP 范围修订见 [#151](https://github.com/HeimaoLST/Saki/issues/151)，交付由 [Nagi #5](https://github.com/HeimaoLST/Nagi/issues/5) 和 [Nagi MVP 里程碑](https://github.com/HeimaoLST/Nagi/milestone/2) 统筹，已有工程交接见 [#111](https://github.com/HeimaoLST/Saki/issues/111)。优先级、执行顺序、负责人和实时状态只在 GitHub 维护。具体实现及已验证限制见 [Desktop design](../design/desktop.md)，公共执行契约见 [Runtime API](https://github.com/HeimaoLST/Saki/blob/dev/docs/design/runtime-api.md)。
+本次定义修订见 [#134](https://github.com/HeimaoLST/Saki/issues/134)，完整 MVP 范围修订见 [#151](https://github.com/HeimaoLST/Saki/issues/151)，交付由 [Nagi #5](https://github.com/HeimaoLST/Nagi/issues/5) 和 [Nagi MVP 里程碑](https://github.com/HeimaoLST/Nagi/milestone/2) 统筹，已有工程交接见 [#111](https://github.com/HeimaoLST/Saki/issues/111)。优先级、执行顺序、负责人和实时状态只在 GitHub 维护。具体实现及已验证限制见 [Desktop design](../design/desktop.md)，现行执行契约见 [Pi 产品接入](../design/pi-integration.md)。
 
 现行视觉与布局以本页 [Qoder 完整 UI 与布局基准](#qoder-complete-ui-20261116) 及其对应设计为准；默认联系人栏 + 对话、详情按需打开、独立 Agent 工作区等产品语义继续保持；宽屏三域与窄窗行为按[规范断点](../design/desktop-workbench.md#布局与右侧详情)执行。#130 实施阶段性的原生闭环；事项/看板/长期轨迹的界面与实现继续细化，原型 fixture 不作为生产功能。旧配色、工具附在聊天回复下的要求不再生效。
 
@@ -74,7 +74,7 @@ PREF-v1 的参考为已检查的 QoderWork 官方偏好图与 Nagi 源码，当�
 
 ## 普通用户配置与恢复契约（新增要求，2026-11-10）
 
-**这是明确的产品要求，尚未实现和完整验收。** 正常支持范围内的安装后配置、验证和恢复必须通过明确、合理的 GUI 设置与默认值完成，**终端命令、环境变量、手改配置文件均为零步**。该标准覆盖所有相关配置，不以修正某一个 context 环境变量或测试 fixture 代替。当前实现盘点与首批三个实施切片见 [配置体验交接](../design/desktop.md#consumer-configuration-20261110)。工程／测试覆盖变量和 legacy 接入可保留内部兼容，不成为普通用户的前置或必需恢复说明。
+**这是明确的产品要求，尚未实现和完整验收。** 正常支持范围内的安装后配置、验证和恢复必须通过明确、合理的 GUI 设置与默认值完成，**终端命令、环境变量、手改配置文件均为零步**。该标准覆盖所有相关配置，不以修正某一个 context 环境变量或测试 fixture 代替。当前实现盘点与首批三个实施切片见 [配置体验交接](../design/desktop.md#consumer-configuration-20261110)。工程／测试可以显式指定受控 Pi 输入，不成为普通用户的前置或必需恢复说明。
 
 继续使用现有唯一 Settings、连接配置和联系人 store；语言沿用 MyGo 的系统偏好路径，不新增设置框架、并行配置真源或自动迁移。字体、布局、Paper/Moss 与交互载体仍以工作台规范为准。
 
@@ -116,7 +116,7 @@ PREF-v1 的参考为已检查的 QoderWork 官方偏好图与 Nagi 源码，当�
 
 ### 本片支持格式与诚实拒绝
 
-普通加载继续兼容原 v1–v9。本片“保存恢复副本／恢复并暂停”只支持**当前写出的 v9 已存格式**，复用 storedState／嵌套类型和共享解码／基础校验；额外严格拒绝未知字段，以及需要普通加载／投影静默修补、丢弃、生成已存事实的形状。不能只检查 version=9 就宣称可无损恢复，不能通过 live contactsFromStore／save／normalizer 准备安装数据。
+普通加载与恢复副本只接受当前 v10 产品数据。恢复须校验 Pi 绑定及产品记录的关联，保留合法的缺省值、引用和原始回执。不支持的格式拒绝读取，原文件保持不变。私有连接配置单独使用 v2。
 
 | 已检查的真实兼容边界 | 本片规则（不是新迁移） |
 | --- | --- |
@@ -131,13 +131,13 @@ PREF-v1 的参考为已检查的 QoderWork 官方偏好图与 Nagi 源码，当�
 
 ### 验收条件（C8-R1–C8-R8）
 
-1. **C8-R1（可产生副本）**：Given 健康静止、兼容 v9 已存数据及不同的未保存 profile／表单编辑；When 从既有 Settings 显式选择文件夹保存；Then 独占输出与已存捕获字节相同，位置可找到，原文件／内存编辑／偏好／ID 不变，无隐式 Save／Apply／Test／task.send，说明未保存编辑与 Runtime 数据未包含。
+1. **C8-R1（可产生副本）**：Given 健康静止、当前 v10 已存数据及不同的未保存 profile／表单编辑；When 从既有 Settings 显式选择文件夹保存；Then 独占输出与已存捕获字节相同，位置可找到，原文件／内存编辑／偏好／ID 不变，无隐式 Save／Apply／Test／提交执行，说明未保存编辑与 Runtime 数据未包含。
 2. **C8-R2（取消与失败）**：Given 导出或恢复选择／文件 I/O；When 取消、同名冲突、读取／写入／清理失败、返回／换选择或迟到回调；Then 不覆盖已有文件、不更改源或另一操作，给当前动作准确结果；局部失败不清除真实未保存状态，不自动重试，不以“按钮存在”代替行为。
-3. **C8-R3（兼容矩阵）**：Given v1–v8／未来版本、顶层与嵌套未知字段、上表每类 repair/drop/synthesis 形状及合法可选缺省／已有 unknown 对照；When 保存副本或预检恢复；Then 不支持的输入无修改且原因可读，合法 v9 记录保持。正例必须包含实际普通 MCP 首事项创建的持久化输出（已有事项而 SelectedIssueID 缺省／空值）、显式空 operation ledger {} 和合法可选缺省；stage／安装不回填事项选择，非空悬空 ID 负例仍拒绝。普通重开可推导 UI 选择；普通 v1–v9 加载原有行为不变，不靠运行 normalizer／live projection 来丢记录后假称通过。
+3. **C8-R3（兼容矩阵）**：Given 旧格式／未来版本、顶层与嵌套未知字段、上表每类 repair/drop/synthesis 形状及合法可选缺省／已有 unknown 对照；When 保存副本或预检恢复；Then 不支持的输入无修改且原因可读，合法 v10 记录保持。正例必须包含实际产品工具首次创建事项的持久化输出（已有事项而 SelectedIssueID 缺省／空值）、显式空 operation ledger {} 和合法可选缺省；stage／安装不回填事项选择，非空悬空 ID 负例仍拒绝。普通重开可推导 UI 选择；普通 v1–v9 加载原有行为不变，不靠运行 normalizer／live projection 来丢记录后假称通过。
 4. **C8-R4（明确暂停与保留）**：Given 不可用且静止的原 store、兼容副本含 pending／unknown 和 AutoContinue=true；When 预览后确认 Restore paused；Then 源副本、归档损坏原件均字节不变，安装数据除确认的 AutoContinue=false 外已知事实等值，保留选择、ID、回执、快照、未知及历史引用；不将“旧副本无记录”推断成从未派发。
 5. **C8-R5（替换结果）**：Given 同一次原件保留／暂存／替换；When 原件不可保留、目标为目录／symlink／变化、或在归档／Sync／Close／Rename／读回处失败；Then 替换前保留原件、无缺文件默认新建窗口；替换后不能确认时保留证据并显示待核对，不盲重试／回滚。退出等待已接纳 I/O 与 UI 结果，不用 fallback 联系人覆盖文件；不扩称任意电源故障／多实例事务保证。
 6. **C8-R6（准入与单一 store）**：Given 已加载／未保存／本地保存失败，或有活动任务、Test／Apply／提交／读取／恢复回调；When 试图恢复；Then 拒绝并保留原输入／活动／未知及导航，原 Retry save 仍可用。仅不可用静止状态能安装，安装后仍保持该实例不保存／执行，GUI 关闭重开后加载原 canonical 路径，无第二 store 或 Runtime 契约。
-7. **C8-R7（完整链与不重放）**：Given 从 C8-R1 得到的实际副本及可核对的独立 Runtime 数据；When 原 canonical 文件不可读→GUI 选择副本→确认暂停→安装→GUI 关闭重开→读取 capabilities／历史；Then 产品 ID／已存文字／pending／unknown／会话引用与对应真实历史保持，自动 Test／模型请求／task.send／未知副作用重放增量为零，AutoContinue 在正常启动前已落盘为 false。缺失／不匹配 Runtime 数据另作反例，准确不可读，不新建替代 session／伪造历史或自动发任务。
+7. **C8-R7（完整链与不重放）**：Given 从 C8-R1 得到的实际副本及可核对的独立 Runtime 数据；When 原 canonical 文件不可读→GUI 选择副本→确认暂停→安装→GUI 关闭重开→读取 capabilities／历史；Then 产品 ID／已存文字／pending／unknown／会话引用与对应真实历史保持，自动 Test／模型请求／提交执行／未知副作用重放增量为零，AutoContinue 在正常启动前已落盘为 false。缺失／不匹配 Runtime 数据另作反例，准确不可读，不新建替代 session／伪造历史或自动发任务。
 8. **C8-R8（普通用户闭环）**：Given 同一可追溯最终 GUI／Runtime 候选及声明支持的格式；When en／zh-Hans 用户实际执行导出、取消／失败、不可用恢复、定位副本与关闭重开；Then 全程零终端／环境变量／手改文件，普通文案与真实结果一致，密钥不进入反馈。原生选择与至少一位未参与开发的非程序员独立完成这条恢复链须真实取证；受控／CI／设计通过不能替代，也不缩减 MVP-12 的 3 使用日／2 类工作／独立首用及真实工作。
 
 <a id="rp1-rp2-20261111"></a>
@@ -159,14 +159,14 @@ PREF-v1 的参考为已检查的 QoderWork 官方偏好图与 Nagi 源码，当�
 
 RP2 摘要固定为 en **“Connection and model test did not complete successfully.”**／zh **“连接与模型测试未能成功完成。”**，只用于 connErrorTestFailed，真正已分类的认证／模型／执行失败保持原含义。事项缺少关联时使用 en **“Nagi has no verified record of which task to check. Review the existing run details and history before continuing; nothing will be resent automatically.”**／zh **“Nagi 没有可核对的任务关联记录。继续前请查看已有执行详情与历史；不会自动重发。”**；断连时先说明连接不可用，不承诺重开能修复关联。
 
-普通摘要表达当前可行操作；原始诊断在明确的 Details／详情中按现有有界、去密规则展示，标作技术记录。其历史 Reload 字样不改写，也不作为当前动作承诺。呈现、披露、导航或语言切换不重写原始 send/status/execution/test 错误、ID、未知状态、草稿、发送快照和历史。恢复呈现不自动 Test、task.send 或重放；显式核对只进入既有读回路径，状态解除与后续准入仍由既有可信读回规则决定。
+普通摘要表达当前可行操作；原始诊断在明确的 Details／详情中按现有有界、去密规则展示，标作技术记录。其历史 Reload 字样不改写，也不作为当前动作承诺。呈现、披露、导航或语言切换不重写原始 send/status/execution/test 错误、ID、未知状态、草稿、发送快照和历史。恢复呈现不自动 Test、提交执行 或重放；显式核对只进入既有读回路径，状态解除与后续准入仍由既有可信读回规则决定。
 
 ### 验收条件（Given／When／Then）
 
 1. **RP-AC1（对话）**：Given 已关联对话且交付未知，诊断分别为空、非空 send-protocol、非空 send-delivery；When 在 en／zh-Hans 查看 failed、exited、ready 无 client、ready 有 client；Then 所有普通提示与 Reload 可用性符合上表，包括退出的 status-connection-lost；可核对时保留可触达的 Reload，无矛盾的第二条指引，不能只检查主状态行。
 2. **RP-AC2（事项）**：Given 同样的未知交付／连接／诊断组合及有效执行关联；When 查看事项卡与执行记录；Then 可核对时推荐事项 Check run 且可用、键盘可达；不可核对时按钮禁用、原因可读，尝试激活无 RPC／错误回写，不混入对话 Reload。空诊断也有准确指引。
 3. **RP-AC3（缺少关联）**：Given 事项执行缺 SessionID 或 TaskID，或执行不属于当前事项；When 查看、尝试 Check run 或导航已有详情／历史；Then 不承诺可核对、不调用读回、不改写执行记录，导航及原有“确认未派发”条件保持，不自动确认或发送。
-4. **RP-AC4（记录与读回）**：Given 实际 headless protocolFailed／applyRuntimeExit 产生两域未知及非空诊断；When 渲染、展开／收起详情、切换语言、导航或连接变为 ready；Then 原始错误／状态详情、关联 ID、未知状态、草稿、发送快照和历史保持，密钥不外露，自动 Test／task.send 与呈现引发的 RPC 增量为零。显式 Reload／Check run 仅走既有读回；可信结果才按原规则更新，失败／陈旧结果不擅自解除未知或重放任务。
+4. **RP-AC4（记录与读回）**：Given 实际 headless protocolFailed／applyRuntimeExit 产生两域未知及非空诊断；When 渲染、展开／收起详情、切换语言、导航或连接变为 ready；Then 原始错误／状态详情、关联 ID、未知状态、草稿、发送快照和历史保持，密钥不外露，自动 Test／提交执行 与呈现引发的 RPC 增量为零。显式 Reload／Check run 仅走既有读回；可信结果才按原规则更新，失败／陈旧结果不擅自解除未知或重放任务。
 5. **RP-AC5（相邻语义）**：Given prepared、not-dispatched、rejected、failed、connection mismatch 或模型更新待核对；When 显示／披露恢复或显式核对；Then 各分类及原有活动工作、归属、revision／读回准入保持，不把 accepted 当完成或把执行完成当事项完成，不增加任务重试入口或自动发送。
 6. **RP-AC6（整体测试错误）**：Given 当前表单 Test 回调返回 connErrorTestFailed，分别以请求前准备／启动／ready 和响应后清理错误为代表；When 显示失败；Then 两语言均为上述中立摘要，不称模型请求失败或从未请求，原诊断可披露；真正已分类的认证／模型／执行失败保持独立语义。
 7. **RP-AC7（显式测试与状态）**：Given 已保存且待应用的设置、不同的当前草稿及已有联系人历史；When 显式 Test 一次、查看详情、再显式 Test 一次；Then 每次只回调一次并传入当时完整表单，计费提示可读；详情、导航、失败展示不再次 Test、不 Save／Apply，不改变草稿、已保存／待应用状态或历史；ErrorDetail 原件不改写、展示去密，新的显式 Test 重置旧披露状态。
@@ -265,7 +265,7 @@ MVP 允许在当前执行结束后的下一次输入应用补充，不要求中�
 
 模型/职责/工具变更沿有效配置契约生效，不能仅修改 profile 显示。既有 session cwd 不可变时，为后续工作明确建立新执行上下文并保留同一联系人/事项及旧执行，不丢历史来伪造切换。新公共契约/迁移缺口由实际调用证据驱动，另行交接，需求文档本身不授权破坏性迁移。
 
-文本资料输入与结果文件展示是两条不同用户流程，分别复用输入快照与实际产出事实。基础历史搜索只在明确范围内返回可定位结果，不冒称跨所有未加载历史或无限记忆。
+文本资料输入与结果文件展示是两条不同用户流程，分别复用输入快照与实际产出事实。当前对话按 Pi 绑定加载；Sources 可以定位已加载的来源消息。
 
 切换联系人、隐藏工作区、最小化窗口不停止执行；退出须明确当前工作和收尾行为，并在重开后恢复实际已落盘状态。首版不承诺退出应用/休眠后继续运行。未知结果保持可核对，不当作失败自动重跑；失败后可从界面修正条件并继续同一事项，无需修改数据库。
 
@@ -339,8 +339,8 @@ macOS arm64 是首个实际验收环境，其他平台支持需单独证据。�
 
 | ID | 场景与通过条件 |
 | --- | --- |
-| G1-1 | 用独立临时用户配置目录从 Finder 打开包含 Runtime helper 的 `.app`，按 C1–C8 通过 GUI 完成缺失配置、显式验证及恢复，再完成一次受控任务；不依赖开发者 shell cwd/env 或手改文件，不把 Runtime ready 当作模型验证 |
-| G1-2 | 分别覆盖 helper 缺失、启动失败、可识别的配置缺失、provider 返回认证失败。用户看到实际阶段、原因及可采取的操作，草稿保留；未知错误保留有界诊断而不猜原因。Runtime ready 只能表示连接就绪，不能显示“模型已验证可用” |
+| G1-1 | 用独立临时用户配置目录从 Finder 打开包含固定 Pi worker 和 Node 的 `.app`，按 C1–C8 通过 GUI 完成缺失配置、显式验证及恢复，再完成一次受控任务；不依赖开发者 shell cwd/env 或手改文件，不把 Runtime ready 当作模型验证 |
+| G1-2 | 分别覆盖随包 Pi 运行文件缺失、启动失败、可识别的配置缺失、provider 返回认证失败。用户看到实际阶段、原因及可采取的操作，草稿保留；未知错误保留有界诊断而不猜原因。Runtime ready 只能表示连接就绪，不能显示“模型已验证可用” |
 | G1-3 | 可查看当前联系人工作目录和已有接口确认的信息。尚未获得的模型／连接信息显示未知或待加载；实际生效模型的完整展示与选择交给 G6，不把环境变量猜测显示成 session 事实 |
 | G1-4 | 打开配置说明、查看状态或启动应用不自动发推理请求。诊断与截图不得包含凭据。配置修正后的重启恢复已有联系人、草稿和历史；不创建替代 store 掩盖读取失败 |
 
@@ -398,18 +398,9 @@ macOS arm64 是首个实际验收环境，其他平台支持需单独证据。�
 
 恢复后状态仍按 Runtime 事实判定，不能为了视觉完整度把未知改成成功。改变重连、重试、后台执行或队列策略需要独立需求，不能藏在本轮“体验优化”里。
 
-## G6 当前模型与空闲切换
+## G6 当前模型与设置
 
-范围：同一连接内的模型选择入口与实际配置展示，依赖 Runtime #105（及其 #104 基础）。跨连接／prompt 修改属于 G7。
-
-| ID | 场景与通过条件 |
-| --- | --- |
-| G6-1 | 读取并展示 Runtime 返回的有效模型／配置；可选模型来源复用 Runtime，目录不可用按实际契约处理，GUI 不维护第二份模型能力表。可见模型摘要保留可识别末段、超长中间省略；完整 ID 放在 tooltip／可访问名称，不改变真实模型选择（[Nagi #16](https://github.com/HeimaoLST/Nagi/issues/16)） |
-| G6-2 | 空闲时 A→B→A，只有更新成功才替换有效模型显示；下一任务、恢复后的显示与真实请求一致。取消设置不提交修改，过去消息和执行事实保持 |
-| G6-3 | 已接纳或正在执行时不可改活动任务配置。即使显示空闲但请求与发送竞态，仍正确处理 Runtime busy／revision conflict；失败、非法配置或不支持的 continuation 保留原有效值并解释原因 |
-| G6-4 | 切换成功但响应丢失时先重读有效配置再显示结果，不盲目重试；不通过重建联系人、丢历史或直接写 Rust 存储规避失败 |
-
-解除依赖：#105 已集成 dev `fd58ec2`；实施前核对接口、目录来源与错误语义，GUI 实际消费仍需验收。证据：Go→实际 Rust→受控 provider 请求模型，覆盖切换／busy／冲突／恢复；仅下拉框截图不算。
+对话内显示当前模型的只读摘要，保留长模型标识的完整值。用户通过「设置 → 连接与模型」修改默认配置。保存与应用分别反馈结果；既有对话和进行中的执行继续使用已捕获的配置。历史的会话模型编辑器需求和验收依据保存在[原 G6 记录](https://github.com/HeimaoLST/Nagi/blob/b7ff2d126d65033eabe15540f90169374ff64074/docs/requirements/desktop.md#g6-当前模型与空闲切换)。
 
 ## G7 连接、工作要求与配置生效
 

@@ -1,8 +1,7 @@
 package main
 
-// GUI-owned contact store. It persists only product fields and the mapping to
-// a runtime session_id; messages/history stay in the runtime and are read via
-// session.history. The JSON file is private to the GUI.
+// The contact store owns product records and Pi session bindings. The Pi
+// worker reads transcripts through Pi's session API.
 
 import (
 	"bytes"

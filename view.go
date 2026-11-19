@@ -86,10 +86,6 @@ func (a *appModel) view(c *ui.Context) {
 }
 
 func (a *appModel) escapeTopLayer() {
-	if a.contactHistoryFull != nil {
-		a.closeContactHistoryFull()
-		return
-	}
 	if a.aux != "" {
 		a.closeAux()
 		return
@@ -113,8 +109,6 @@ func (a *appModel) settingsSourceForVisiblePage() string {
 	switch {
 	case a.aux != "":
 		return settingsSourceAux
-	case a.contactHistoryFull != nil, a.detailIs(detailHistory):
-		return settingsSourceHistory
 	case a.detailIs(detailProfile):
 		return settingsSourceProfile
 	default:
@@ -129,10 +123,6 @@ func (a *appModel) openSettingsFromContext(c *ui.Context, tab, source string) {
 
 func (a *appModel) armActiveSurfaceFallback() {
 	switch {
-	case a.contactHistoryFull != nil:
-		a.focusHistoryFullBack = true
-	case a.detailIs(detailHistory):
-		a.focusDetailClose = true
 	case a.aux == "sources":
 		a.focusSourcesBack = true
 	case a.detailIs(detailProfile):
@@ -1225,112 +1215,6 @@ func (a *appModel) composer(c *ui.Context, t *ui.Theme) {
 			a.composerInlinePanel(c, t)
 		}
 	})
-}
-
-// ---------- history ----------
-
-func (a *appModel) historyDetail(c *ui.Context, t *ui.Theme, narrow bool) {
-	ct := a.selectedContact()
-	if ct == nil {
-		return
-	}
-	msgs := locales.In(c.Locale())
-	ui.Column(c).FillHeight().Padding(16).Gap(8).Children(func() {
-		ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(8).Children(func() {
-			if narrow {
-				back := detailBackButton(c, t, msgs.CloseHistory(), msgs.BackFromHistory()).OnClick(func() { a.closeDetail() })
-				a.focusDetailControl(c, back)
-				ui.Text(c, msgs.HistoryTitle(ct.Name)).FontSize(typePageTitle).FontWeight(500).TextColor(t.Text).MaxLines(2).Grow(1)
-				return
-			}
-			ui.Text(c, msgs.HistoryTitle(ct.Name)).FontSize(typePageTitle).FontWeight(500).TextColor(t.Text).MaxLines(2).Grow(1)
-			close := appTooltip(c, secondaryButton(c, msgs.CloseHistory()), msgs.BackFromHistory()).OnClick(func() { a.closeDetail() })
-			a.focusDetailControl(c, close)
-		})
-		ui.Scroll(c).Grow(1).TrackScroll(&a.historyScroll).Children(func() {
-			ui.Column(c).Gap(8).Children(func() {
-				ui.Text(c, msgs.HistorySearchScopeHint(ct.Name)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
-				if !a.demo && ct.SessionID != "" && !ct.Loaded {
-					ui.Text(c, msgs.HistoryNotLoadedShort()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Warning)
-				}
-				preferenceInput(c, &a.historyQuery, false, a.workTheme.InputBorder).Placeholder(msgs.HistorySearchPlaceholder(ct.Name))
-				if !a.demo {
-					secondaryButton(c, msgs.SearchSavedContexts()).TextColor(t.Text).OnClick(func() { a.searchContactHistoryAsync(a.historyQuery) })
-					if a.contactHistoryBusy {
-						ui.Text(c, msgs.SearchingSavedContexts()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
-					}
-					if a.contactHistoryError != "" {
-						ui.Text(c, contactHistoryNoticeText(msgs, a.contactHistoryError, a.contactHistoryErrorDetail)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Warning)
-					}
-					if a.contactHistory != nil {
-						ui.Text(c, msgs.HistorySummary(len(a.contactHistory.Matches), boolIndex(a.contactHistory.Limited), len(a.contactHistory.Failures))).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
-						if len(a.contactHistory.Failures) > 0 {
-							for _, failure := range a.contactHistory.Failures {
-								ui.Text(c, msgs.SavedContextUnavailable(failure.SessionID)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Warning)
-							}
-						}
-						for _, match := range a.contactHistory.Matches {
-							match := match
-							key := historyOriginKey(historyOriginSaved, match.SessionID, match.EntryID)
-							ui.Column(c).FillWidth().MinWidth(0).Padding(8).Radius(8).Background(t.SurfaceHover).Gap(4).Children(func() {
-								ui.Text(c, msgs.SavedContextMatch(match.Date, match.SessionID)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
-								ui.Text(c, match.Preview).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text)
-								button := secondaryButton(c, msgs.ViewFullMessage()).OnClick(func() { a.openContactHistoryMatch(match) })
-								if a.focusHistoryFullID == key {
-									button.Focus()
-									a.focusHistoryFullID = ""
-								}
-							})
-						}
-					}
-					if a.contactHistoryDetailBusy {
-						ui.Text(c, msgs.OpeningFullSavedMessage()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
-					}
-				}
-				matches := a.historyMatches()
-				if len(matches) == 0 {
-					if strings.TrimSpace(a.historyQuery) == "" {
-						ui.Text(c, msgs.NoSavedMessages(ct.Name)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
-					} else {
-						ui.Text(c, msgs.NoMatchingMessages(ct.Name, a.historyQuery)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
-					}
-				}
-				for _, e := range matches {
-					e := e
-					ui.Column(c).FillWidth().MinWidth(0).Padding(8).Radius(8).Background(t.SurfaceHover).Gap(4).Children(func() {
-						ui.Text(c, e.Date+". "+speakerLabel(msgs, ct, e)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
-						if len([]rune(e.Text)) <= 180 {
-							if e.From == "me" {
-								markdownReader(c, e.Text, markdownReaderOptions{PlainText: true, CopyLabel: msgs.CopyHistoryMessageLabel(), Theme: messageMarkdownTheme}).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text)
-							} else {
-								markdownReader(c, e.Text, a.readerOptions(markdownReaderOptions{CopyLabel: msgs.CopyHistoryMessageLabel(), Theme: messageMarkdownTheme}, historyLinkScope(ct.ID, "history", e.ID), ct.SessionWorkingDir)).FontSize(typeBody).FixedLineHeight(lineBody)
-							}
-						} else {
-							ui.Text(c, truncate(e.Text, 150)).FontSize(typeBody).FixedLineHeight(lineBody).MaxLines(3).TextColor(t.Text)
-						}
-						if len(e.Context) > 0 {
-							ui.Text(c, msgs.ContextCount(len(e.Context))).FontSize(typeAction).TextColor(t.TextMuted)
-						}
-						ui.Row(c).Gap(4).Wrap().Children(func() {
-							read := secondaryButton(c, msgs.ReadFullMessage()).OnClick(func() { a.openHistoryEntryFull(e) })
-							if a.focusHistoryFullID == historyOriginKey(historyOriginLoaded, ct.SessionID, e.ID) {
-								read.Focus()
-								a.focusHistoryFullID = ""
-							}
-							secondaryButton(c, msgs.ViewInConversation()).OnClick(func() { a.viewInConversation(e.ID) })
-						})
-					})
-				}
-			})
-		})
-	})
-}
-
-func boolIndex(value bool) int {
-	if value {
-		return 1
-	}
-	return 0
 }
 
 func speakerLabel(msgs locales.Messages, c *contact, e historyEntry) string {

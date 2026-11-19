@@ -24,8 +24,6 @@
   "languageEnglish": "English",
   "languageHint": "部分系统窗口会在重启后使用新语言。",
   "copyMessageLabel": "复制消息",
-  "copySavedMessageLabel": "复制完整历史消息",
-  "copyHistoryMessageLabel": "复制历史消息",
   "copySourceMessageLabel": "复制来源消息",
   "copyContextTextLabel": "复制资料文本",
   "copyReceivedOutputLabel": "复制收到的输出",
@@ -67,50 +65,9 @@
   "taskRailAttention": "需处理\n{name}",
   "taskRailWaiting": "等你回答\n{name}",
   "taskRailInProgress": "进行中\n{name}",
-  "taskView": "查看事项",
-  "taskActiveCount": "{count, plural, other {# 个进行中事项}}",
-  "workEntryLabel": "事项",
-  "workEntrySummary": "{total, plural, =0 {没有未完成事项} other {# 个未完成事项}}；{attention, plural, =0 {没有需处理事项} other {# 个需处理}}；{waiting, plural, =0 {没有等待事项} other {# 个等待}}；{active, plural, =0 {没有进行中事项} other {# 个进行中}}",
-  "emptyTaskAttention": "{name} 需处理",
-  "emptyTaskWaiting": "{name} 正在等你回答",
-  "emptyTaskInProgress": "{name} 进行中",
-  "taskRunFailed": "失败",
-  "taskRunInterrupted": "已中断",
-  "taskRunUnknown": "结果未知",
-  "taskRunCompleted": "已结束",
-  "taskRunRunning": "运行中",
-  "taskRunAccepted": "等待开始",
-  "taskRunPending": "等待开始",
-  "taskRunNotDispatched": "执行未派发",
-  "taskRunRejected": "已拒绝",
-  "workTabs": "事项视图",
-  "workTasksTab": "事项",
-  "workChatRunsTab": "对话执行",
-  "workClose": "关闭工作区",
-  "workCloseTooltip": "关闭工作区",
-  "workAnswer": "回答",
-  "workContinue": "继续事项",
-  "workStart": "开始事项",
-  "workContinueWithSupplement": "补充要求并继续",
-  "workStartWithSupplement": "补充要求并开始",
-  "workReadResult": "阅读最新结果",
-  "workComplete": "标记完成",
-  "workCancel": "取消事项",
-  "workReopen": "重新打开事项",
-  "workRestore": "恢复事项",
-  "workBackToIssues": "返回事项列表",
-  "workBackToChat": "返回对话",
-  "workNextActionUnavailable": "下一步不可用：{reason}",
-  "workCompletionEvidence": "完成依据",
-  "workCompletionEvidencePlaceholder": "什么能证明此事项已完成？",
-  "workTask": "事项",
-  "issueFilterUnfinished": "未完成",
-  "issueFilterCompleted": "已完成",
-  "issueFilterAll": "全部",
   "searchContacts": "搜索联系人",
   "connectionApplySaved": "应用已保存配置",
   "connectionSaveConfiguration": "保存配置",
-  "modelUpdateModel": "更新模型",
   "workSaveIssue": "保存事项",
   "contactSaveChanges": "保存更改",
   "issueSupplementSave": "保存补充要求",
@@ -134,11 +91,7 @@
   "railContactSearchPlaceholder": "姓名或用途",
   "railNoContactsMatch": "没有符合搜索条件的联系人。",
   "navShowContactsTooltip": "显示联系人",
-  "navHistory": "历史",
-  "navConversationHistoryTooltip": "对话历史",
   "navContactProfile": "联系人资料",
-  "navContactProfileTooltip": "联系人资料摘要",
-  "navWorkspaceDetails": "工作区详情",
   "backToLatest": "回到最新",
   "configurationDetails": "配置详情",
   "runtimeDraining": "正在停止运行时…",
@@ -185,12 +138,6 @@
   "backAction": "← 返回",
   "closeSources": "关闭来源",
   "backFromSources": "从来源返回",
-  "fullSavedMessage": "完整历史消息",
-  "closeFullMessage": "关闭完整历史消息",
-  "backToHistoryTooltip": "返回历史",
-  "backToHistoryVisible": "← 返回历史",
-  "sessionModelTitle": "会话模型",
-  "closeSessionModel": "关闭会话模型",
   "taskContextTitle": "资料",
   "closeTaskContext": "关闭资料",
   "backLabel": "返回",
@@ -204,7 +151,6 @@
   "sessionModelSummary": "会话：{model}",
   "sessionModelNotLoaded": "会话模型未加载",
   "connectionDefaultModel": "连接默认：{model}",
-  "modelDetailsScroll": "模型详情",
   "taskContextDetailsScroll": "资料详情",
   "composerLabel": "{name} 的输入框",
   "composerPlaceholder": "发消息给 {name}",
@@ -227,100 +173,7 @@
   "sendUnknownState": "发送尚未确认。请选择“重新加载”来核对任务与历史；该操作不会重发任务。",
   "sendDisconnectedState": "连接已断开，结果尚未确认。退出前请保存或复制未保存的文字。重新打开 Nagi 后，先核对历史再发送；重新打开不会重发工作。",
   "reloadAction": "重新加载",
-  "historyTitle": "历史：{name}",
-  "@historyTitle": {
-    "description": "The History heading for a contact.",
-    "placeholders": {
-      "name": {
-        "type": "String"
-      }
-    }
-  },
-  "closeHistory": "关闭历史",
-  "backFromHistory": "从历史返回",
-  "historySearchScopeHint": "仅搜索 {name} 的对话历史。其他联系人的消息不会包含在内。",
-  "@historySearchScopeHint": {
-    "description": "Explains that History searches only this contact.",
-    "placeholders": {
-      "name": {
-        "type": "String"
-      }
-    }
-  },
-  "historyNotLoadedShort": "历史尚未加载；现有记录不会显示为不存在。",
-  "historySearchPlaceholder": "搜索 {name} 的历史",
-  "@historySearchPlaceholder": {
-    "description": "The History search field placeholder.",
-    "placeholders": {
-      "name": {
-        "type": "String"
-      }
-    }
-  },
-  "searchSavedContexts": "搜索历史会话",
-  "searchingSavedContexts": "正在搜索历史会话…",
-  "savedContextUnavailable": "历史会话不可用：{session}",
-  "@savedContextUnavailable": {
-    "description": "A saved context that could not be read.",
-    "placeholders": {
-      "session": {
-        "type": "String"
-      }
-    }
-  },
-  "viewFullMessage": "查看完整消息",
-  "openingFullSavedMessage": "正在打开完整历史消息…",
-  "noSavedMessages": "{name} 已加载的历史中没有历史消息。",
-  "@noSavedMessages": {
-    "description": "The empty saved-context result for a contact.",
-    "placeholders": {
-      "name": {
-        "type": "String"
-      }
-    }
-  },
-  "noMatchingMessages": "{name} 已加载的历史中没有与“{query}”匹配的消息。",
-  "@noMatchingMessages": {
-    "description": "The no-match saved-context result.",
-    "placeholders": {
-      "name": {
-        "type": "String"
-      },
-      "query": {
-        "type": "String"
-      }
-    }
-  },
-  "contextCount": "{count, plural, other {资料：# 项}}",
-  "readFullMessage": "阅读完整消息",
   "viewInConversation": "在对话中查看",
-  "savedContextMatch": "{date}：历史会话 {session}",
-  "@savedContextMatch": {
-    "description": "A saved-context search match heading.",
-    "placeholders": {
-      "date": {
-        "type": "String"
-      },
-      "session": {
-        "type": "String"
-      }
-    }
-  },
-  "historySummary": "{matches, plural, =0 {没有匹配记录} other {找到 # 条记录}}{limited, plural, =0 {} other {（已达上限）}}{failures, plural, =0 {} other {；# 个会话不可用}}",
-  "@historySummary": {
-    "description": "The saved-context search summary.",
-    "placeholders": {
-      "matches": {
-        "type": "int"
-      },
-      "limited": {
-        "type": "int"
-      },
-      "failures": {
-        "type": "int"
-      }
-    }
-  },
   "sourcesSummary": "{count, plural, other {# 条来自 {name} 历史的早期消息，被此回复引用。}}",
   "@sourcesSummary": {
     "description": "The sources page summary.",
@@ -333,12 +186,7 @@
       }
     }
   },
-  "historySearchMissingQuery": "请输入要搜索历史会话的词组。",
-  "historySearchUnavailable": "运行时就绪后才能搜索历史会话。",
-  "historySearchPartial": "部分历史会话无法读取。",
-  "historyMessageNotSaved": "该消息不属于此联系人的历史会话。",
   "historyReadFailed": "无法读取此历史消息。",
-  "historyMessageMoved": "该历史消息已移动或不再可用。",
   "profilePurpose": "用途",
   "profileNoPurpose": "未记录用途。",
   "profileInstructions": "指令",
@@ -480,8 +328,6 @@
   "snippetUser": "你：{text}",
   "statusDetail": "{status}：{detail}",
   "conversationMessagesLabel": "对话消息",
-  "speakerContact": "联系人",
-  "historyMessageMeta": "{speaker}。{date}。{session}",
   "settingsLocalThemes": "本地主题",
   "connectionEditAction": "编辑",
   "connectionCloseEditorAction": "收起编辑",
@@ -533,7 +379,6 @@
   "validationPositive": "请输入大于零的整数。",
   "validationLessThanContext": "输出 token 数必须小于上下文 token 数。",
   "validationContextGap": "上下文 token 数在输出后必须至少保留 4 个。",
-  "validationVersion": "配置版本必须为 1。",
   "validationNumeric": "请输入正整数。",
   "connectionStatusSaving": "正在保存配置…",
   "connectionStatusSavedApplied": "已保存。此配置已应用。",
@@ -544,14 +389,6 @@
   "connectionStatusSavedStoreFailed": "连接设置已保存，但本地更改尚未保存。自动保存失败请使用“重试保存”；资料编辑请使用“保存更改”。详情：{error}",
   "connectionErrorTestFailed": "连接测试失败：{error}",
   "connectionErrorApplyConfig": "无法应用已保存配置：{error}",
-  "connectionErrorHelperMissing": "未找到运行时辅助进程。{hint}",
-  "connectionErrorPrepare": "无法准备已保存连接：{error}",
-  "connectionErrorStart": "无法启动新运行时：{error}",
-  "connectionErrorExitedBeforeReady": "新运行时在就绪前退出；已保留先前连接。",
-  "connectionErrorNotReady": "新运行时未就绪；已保留先前连接。",
-  "connectionErrorNotExposed": "新运行时未提供已保存连接；已保留先前连接。",
-  "connectionErrorExitedWhileValidating": "新运行时在验证已保存连接时退出；已保留先前连接。",
-  "connectionErrorExitedDuringValidation": "新运行时在验证期间退出；已保留先前连接。",
   "connectionErrorSavedNeedsRepair": "已保存的连接设置无法使用。请在“连接与模型”中检查各项，然后选择“保存并应用”。",
   "connectionBlockedModelOp": "请等待正在进行的会话模型操作结束后再应用新连接。",
   "connectionBlockedApplying": "新连接已在应用中。",
@@ -583,83 +420,10 @@
   "startupHintRestartUnconfirmed": "请重启 Nagi；交付或结果可能未确认。不会自动重试。",
   "startupHintRestartReload": "请重启 Nagi 并重新加载历史。已接受的工作可能未确认；不会自动重试。",
   "startupHintExistingStore": "Nagi 未改动现有文件，也未创建替代存储。请修复 {path} 的文件或权限，然后重启 Nagi。本地存储不可用期间无法持久化草稿。",
-  "modelSessionTitle": "会话模型",
-  "modelCancel": "取消",
-  "modelTargetLabel": "目标：{target}",
-  "modelSessionLine": "会话：{session}",
-  "modelConnectionLine": "连接：{connection}",
-  "modelEffectiveModel": "生效模型：{model}",
-  "modelLastReadModel": "上次读取模型：{model}",
-  "modelEffectiveLimits": "生效限制：上下文 {context} / 输出 {output}，{source}，修订 {revision}",
-  "modelLastReadLimits": "上次读取限制：上下文 {context} / 输出 {output}，{source}，修订 {revision}",
-  "modelEffectiveTools": "生效内置工具：{tools}",
-  "modelLastReadTools": "上次读取内置工具：{tools}",
-  "modelUnconfirmedHint": "当前设置尚未确认。“刷新”会重新读取设置；若显示“重新加载会话”，请先执行该操作，再发送新工作。",
-  "modelProviderID": "提供方模型 ID",
-  "modelCatalogHint": "目录条目只提供容量；不证明提供方端点支持某模型。",
-  "modelUseCatalog": "使用运行时目录",
-  "modelExplicitLimits": "设置显式限制",
-  "modelCatalogCapacityHint": "容量来自所选运行时目录条目。不暗示端点/模型可用。",
-  "modelContextTokens": "上下文 token 数",
-  "modelOutputTokens": "输出 token 数",
-  "modelCompactionHint": "其他压缩策略值保留自生效配置。",
-  "modelRefresh": "刷新",
-  "modelWaiting": "正在等待运行时…",
-  "modelFilterCandidates": "筛选候选",
-  "modelFilter": "筛选",
-  "modelFilterPlaceholder": "模型或目录 ID",
-  "modelConfiguredModels": "已配置模型",
-  "modelConfiguredHint": "宿主提供的声明，未验证可用性。",
-  "modelConfiguredChoice": "{model}：上下文 {context}",
-  "modelConfiguredMore": "显示 {shown, number} / {total, plural, other {# 个已配置模型}}；细化筛选查看更多。",
-  "modelCatalogCapacity": "运行时目录容量",
-  "modelCatalogChoice": "{name}：上下文 {context}",
-  "modelCatalogMore": "显示 {shown, number} / {total, plural, other {# 个目录条目}}；细化筛选查看更多。",
-  "modelNoCatalog": "没有可用的运行时目录条目；请输入显式限制。",
-  "modelTargetIssueWork": "事项工作",
-  "modelTargetConversation": "对话",
-  "modelTargetSession": "会话",
-  "modelTargetValue": "{kind}：{label}",
-  "modelSourceCatalog": "运行时目录",
-  "modelSourceExplicit": "显式限制",
-  "modelSourceStored": "已存储",
-  "modelSourceUnknown": "未知来源",
-  "modelUnknown": "未知",
-  "modelNotCreated": "未创建",
-  "modelNoSession": "此上下文还没有运行时会话。新工作使用连接设置中的模型；首个任务创建会话后，可单独切换。",
-  "modelRuntimeNotReadyRead": "运行时尚未就绪；无法读取会话模型。",
-  "modelReading": "正在从运行时读取会话模型…",
-  "modelReadFailed": "无法读取此会话的运行时配置：{error}",
-  "modelCatalogNotLoaded": "无法加载运行时目录；可使用显式限制。",
-  "modelQuarantined": "此会话配置已隔离。更改模型前请重新加载会话。",
-  "modelNotConfirmed": "运行时未确认此会话配置。请刷新后重试。",
-  "modelNeedsExplicitReload": "配置已读回，但此会话仍需要显式重新加载后才能接受新任务。",
-  "modelRefreshedNoCatalog": "配置已刷新；无法加载运行时目录。",
-  "modelRefreshed": "运行时配置已刷新。",
-  "modelNotReadyUpdate": "运行时尚未就绪；模型未更新。",
-  "modelNeedReloadUpdate": "此会话需要先显式重新加载，才能再次更新模型。",
-  "modelNeedRefreshUpdate": "请先刷新运行时配置，再更新模型。",
-  "modelRefreshBeforeUpdate": "请先刷新运行时配置，再更新模型。",
-  "modelBusy": "此会话正忙。请等待当前任务结束后再更改模型。",
-  "modelUpdating": "正在更新会话模型…",
-  "modelLoadReleasedFailed": "更新模型前无法加载此已释放的工作会话：{error}",
-  "modelUpdated": "模型已更新。此会话的下一个任务将使用它；历史不变。",
-  "modelConfigApplied": "模型配置已应用。",
-  "modelCommitUnconfirmed": "配置提交未确认。发送下一个任务前请重新加载会话。原始错误：{error}",
-  "modelReadbackUnconfirmed": "运行时未确认当前配置。请刷新后重试。更新错误：{error}",
-  "modelReloading": "正在重新加载会话…",
-  "modelReloadFailed": "会话重新加载失败；会话仍处于隔离状态。{error}",
-  "modelReloaded": "会话已重新加载。下一个任务使用读回的模型。",
-  "modelReloadAction": "重新加载会话",
-  "modelUnconfirmedBanner": "当前设置尚未确认。请先选择“重新加载会话”，再发送新工作；“刷新”只读取设置。",
-  "modelClose": "关闭",
-  "modelDefaultReading": "正在读取会话模型…",
   "builtinNone": "无",
   "builtinListUnavailable": "尚无法从运行时获取内置工具列表。更改选择前请重试。",
   "builtinToolUnavailable": "运行时无法提供内置工具 {name}。",
   "waitingReason": "等待：{reason}",
-  "modelReadingConfig": "正在读取运行时配置…",
-  "modelStatusReadback": "已读回运行时配置。",
   "runtimeStageLocalStore": "本地联系人存储",
   "runtimeStageConnectionConfiguration": "连接配置",
   "runtimeStageRuntimeStart": "运行时启动",
@@ -680,13 +444,6 @@
   "runtimeStatusFailed": "失败",
   "runtimeStatusExited": "已退出",
   "runtimeStatusDraining": "正在停止",
-  "modelValidationUnconfirmed": "更新模型前请刷新运行时配置。当前生效值尚未确认。",
-  "modelValidationModelRequired": "请输入提供方模型 ID。",
-  "modelValidationSessionRequired": "请先选择会话目标。",
-  "modelValidationCatalogRequired": "请选择运行时目录条目或设置显式限制。",
-  "modelValidationContextPositive": "上下文 token 数必须是正整数。",
-  "modelValidationOutputPositive": "输出 token 数必须是正整数。",
-  "modelValidationContextGreater": "上下文 token 数必须大于输出 token 数。",
   "workStateAccepted": "等待开始",
   "workStateWorking": "运行中",
   "workStateStopping": "正在停止…",
@@ -1042,10 +799,7 @@
   "@resultFileRowLabel": {
     "description": "结果中某个已报告文件的辅助名称；序号和文件名是参数。"
   },
-  "modelManage": "管理模型",
-  "modelNoConfigured": "此连接未声明模型。",
   "modelDefaultScope": "默认连接",
-  "modelConversationScope": "当前对话覆盖",
   "markdownFileSourceUnknown": "来源会话的工作目录未知，无法解析这个相对文件链接。",
   "themeLight": "浅色主题",
   "themeDark": "深色主题",
@@ -1073,7 +827,6 @@
   "recoveryModelRequestFailed": "模型请求失败。请在“连接与模型”中检查 API 密钥、服务器地址和模型，再选择“测试连接与模型”。测试可能产生服务商费用。任务不会自动重试。",
   "recoveryRunFailed": "本次执行失败。请查看详情后决定下一步。若是连接问题，可打开“连接与模型”并选择“测试连接与模型”。测试可能产生服务商费用；这不会重试本次执行。",
   "recoveryTechnicalDetailsHint": "技术详情可能包含开发者配置名称。正常配置请使用设置和恢复操作。",
-  "recoveryRuntimeMissing": "Nagi 未找到运行组件。需要包含该组件的完整应用程序包；此页面无法安装或修复它。",
   "recoveryRuntimeStartFailed": "Nagi 未能启动运行组件。请在“连接与模型”中检查工作文件夹，并在“配置详情”中查看已记录的错误。可以退出并重新打开 Nagi，但这不会修复缺失或无法访问的文件。",
   "recoveryLocalSaveFailed": "本地更改尚未保存。请保留此窗口。自动保存失败可选择“重试保存”；联系人资料编辑仍需选择“保存更改”。",
   "recoveryLocalDataUnavailable": "本地联系人和事项数据不可用。Nagi 未替换原有数据。如有兼容的恢复副本，可选择恢复。没有兼容副本，Nagi 无法恢复这些工作台数据。",

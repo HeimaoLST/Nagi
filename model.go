@@ -160,9 +160,8 @@ type appModel struct {
 	selected int
 	aux      string // "", "sources", "settings"
 
-	detail           detailKind
-	historyByContact map[string]historyViewMemory
-	profileScrolls   map[string]*ui.ScrollState
+	detail         detailKind
+	profileScrolls map[string]*ui.ScrollState
 
 	auxMessage           int
 	defaultContactN      int
@@ -190,22 +189,12 @@ type appModel struct {
 	chooseFolder           func(mygo.OpenDialogOptions) ([]string, error)
 	sourcesScroll          ui.ScrollState
 	taskContextScroll      ui.ScrollState
-	historyScroll          ui.ScrollState
-	historyFullScroll      ui.ScrollState
 
-	contactProfile            *contactProfileEditor
-	contactProfileID          string
-	contactSearch             string
-	contactHistory            *contactHistoryResult
-	contactHistoryFull        *contactHistoryFull
-	contactHistoryBusy        bool
-	contactHistoryDetailBusy  bool
-	contactHistoryError       string
-	contactHistoryErrorDetail string
-	contactHistoryGen         int
-	contactHistoryDetailGen   int
-	contactHistoryInFlight    int
-	submissionInFlight        int
+	contactProfile         *contactProfileEditor
+	contactProfileID       string
+	contactSearch          string
+	contactHistoryInFlight int
+	submissionInFlight     int
 
 	appearanceThemeIDs appearanceThemeIDs
 	appearanceThemes   customThemeCatalog
@@ -259,7 +248,6 @@ type appModel struct {
 	requestQuit               func()       // set by main to mygo.App.Quit
 	quitReady                 bool
 	shutdownStarted           bool
-	historyQuery              string
 	highlight                 string
 
 	connectionPath         string
@@ -298,15 +286,12 @@ type appModel struct {
 	railCollapsed        bool
 	focusDetailClose     bool
 	focusRail            bool
-	focusHistory         bool
 	focusSettings        bool
 	focusContactProfile  bool
 	focusProfileEdit     bool
 	focusSources         bool
 	focusSourcesBack     bool
 	focusAuxBack         bool
-	focusHistoryFullID   string
-	focusHistoryFullBack bool
 	detailPageMode       bool
 	focusConnectionEntry bool
 	focusConfiguration   bool
@@ -437,14 +422,11 @@ func (a *appModel) selectContact(i int) {
 		return
 	}
 	a.contextFileGeneration++
-	a.rememberHistoryView(a.selectedContact().ID)
 	a.contacts[i].Unread = 0
 	a.selected = i
-	a.restoreHistoryView(a.contacts[i].ID)
 	if !a.demo {
 		a.persist()
 	}
-	a.contactHistoryFull = nil
 	a.aux = ""
 	a.composerPanel = ""
 	a.composerFocusContext = false
@@ -512,10 +494,8 @@ func (a *appModel) addDefaultContact() {
 		Status:    statusReady,
 		WorkLabel: "Preparing a reply",
 	}
-	a.rememberHistoryView(a.selectedContact().ID)
 	a.contacts = append(a.contacts, c)
 	a.selected = len(a.contacts) - 1
-	a.restoreHistoryView(c.ID)
 	a.contactSearch = ""
 	a.aux = ""
 	a.composerPanel = ""
@@ -556,81 +536,8 @@ func (a *appModel) closeAux() {
 func (a *appModel) openSources(messageID int) {
 	a.aux = "sources"
 	a.composerPanel = ""
-	a.contactHistoryFull = nil
 	a.auxMessage = messageID
 	a.focusSources = false
-}
-
-func (a *appModel) openHistory() {
-	a.aux = ""
-	a.composerPanel = ""
-	a.contactHistoryFull = nil
-	a.openDetail(detailHistory)
-}
-
-func (a *appModel) backToChat() {
-	if a.linkReturnTarget == (markdownLinkTarget{}) {
-		a.markdownLinkFocus = markdownLinkTarget{}
-	}
-	if a.contactHistoryFull != nil {
-		a.contactHistoryFull = nil
-	}
-	if a.aux != "" {
-		a.closeAux()
-	}
-	if a.workspaceOpen {
-		a.closeDetail()
-	}
-	a.highlight = ""
-	a.focusHistory = true
-}
-
-func (a *appModel) historyMatches() []historyEntry {
-	c := a.selectedContact()
-	query := strings.ToLower(strings.TrimSpace(a.historyQuery))
-	entries := make([]historyEntry, 0, len(c.History)+len(c.Messages))
-	seen := map[string]bool{}
-	for i := len(c.History) - 1; i >= 0; i-- {
-		e := c.History[i]
-		if !seen[e.ID] {
-			entries = append(entries, e)
-			seen[e.ID] = true
-		}
-	}
-	// Include live messages that are not yet in the loaded Pi history.
-	for _, m := range c.Messages {
-		if m.Kind != msgUser && m.Kind != msgContact || (strings.TrimSpace(m.Text) == "" && len(m.Context) == 0) {
-			continue
-		}
-		id := m.Key
-		if id == "" {
-			id = fmt.Sprintf("message-%d", m.ID)
-		}
-		if seen[id] {
-			continue
-		}
-		from := "contact"
-		if m.Kind == msgUser {
-			from = "me"
-		}
-		entries = append(entries, historyEntry{ID: id, Date: m.Time, From: from, Text: m.Text, Context: m.Context})
-		seen[id] = true
-	}
-	out := make([]historyEntry, 0, len(entries))
-	for _, e := range entries {
-		if query != "" {
-			speaker := c.Name
-			if e.From == "me" {
-				speaker = "You"
-			}
-			haystack := strings.ToLower(e.Text + " " + e.Date + " " + speaker)
-			if !strings.Contains(haystack, query) {
-				continue
-			}
-		}
-		out = append(out, e)
-	}
-	return out
 }
 
 func (a *appModel) viewInConversation(entryID string) {
@@ -642,9 +549,6 @@ func (a *appModel) viewInConversation(entryID string) {
 			continue
 		}
 		a.highlight = entryID
-		if a.contactHistoryFull != nil {
-			a.contactHistoryFull = nil
-		}
 		if a.aux != "" {
 			a.closeAux()
 		}
@@ -665,9 +569,6 @@ func (a *appModel) viewInConversation(entryID string) {
 		c.Revealed = append(c.Revealed, entryID)
 	}
 	a.highlight = entryID
-	if a.contactHistoryFull != nil {
-		a.contactHistoryFull = nil
-	}
 	if a.aux != "" {
 		a.closeAux()
 	}

@@ -137,17 +137,6 @@ func (ct *contact) piPreviousBindings() []piConversationBinding {
 	return bindings
 }
 
-func (ct *contact) piHistoryBindings() []piConversationBinding {
-	bindings := make([]piConversationBinding, 0, len(ct.PreviousPiBindings)+1)
-	for i := range ct.PreviousPiBindings {
-		bindings = append(bindings, *clonePiConversationBinding(&ct.PreviousPiBindings[i]))
-	}
-	if ct.PiBinding != nil {
-		bindings = append(bindings, *clonePiConversationBinding(ct.PiBinding))
-	}
-	return bindings
-}
-
 func piPayloadPaths() (string, string, error) {
 	root := os.Getenv("NAGI_PI_PAYLOAD")
 	if root == "" {

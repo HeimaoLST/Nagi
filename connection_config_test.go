@@ -11,7 +11,6 @@ import (
 
 func testConnectionConfig(t *testing.T) connectionConfig {
 	return connectionConfig{
-		Version:          1,
 		API:              connectionAPIResponses,
 		Endpoint:         "https://example.com/v1",
 		APIKey:           "test-connection-key",
@@ -124,6 +123,23 @@ func TestConnectionConfigLoadRejectsBadFilesWithoutReplacingThem(t *testing.T) {
 		t.Fatal("bad connection file was replaced")
 	}
 
+	unsupported, err := json.Marshal(privateConnectionConfig{Version: 1, CredentialSource: "saved-source", Model: "m", ContextTokens: 32768,
+		OutputTokens: 8192, WorkingDirectory: dir, MaxActiveTasks: 1,
+		Sources: map[string]connectionCredentialSource{"saved-source": {API: connectionAPIChatCompletions, Endpoint: "https://example.com/v1", APIKey: "fixture"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, unsupported, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loadConnectionConfig(path); err == nil || !strings.Contains(err.Error(), "connection config version 1 is unsupported") {
+		t.Fatalf("load unsupported disk schema: %v", err)
+	}
+	after, err = os.ReadFile(path)
+	if err != nil || !bytes.Equal(after, unsupported) {
+		t.Fatalf("load changed the unsupported connection file: %v", err)
+	}
+
 	secret := "bad-file-secret-value"
 	invalidConfig := privateConnectionConfig{Version: 2, CredentialSource: "saved-source", Model: "m", ContextTokens: 32768,
 		OutputTokens: 8192, WorkingDirectory: dir, MaxActiveTasks: 1,
@@ -178,7 +194,6 @@ func TestConnectionConfigValidationFields(t *testing.T) {
 			t.Fatalf("%s: missing error for %s", name, key)
 		}
 	}
-	check("version", func(c *connectionConfig) { c.Version = 2 }, "Version")
 	check("api shorthand", func(c *connectionConfig) { c.API = "chat" }, "API")
 	check("blank key", func(c *connectionConfig) { c.APIKey = " \t " }, "APIKey")
 	check("blank model", func(c *connectionConfig) { c.Model = " \n" }, "Model")

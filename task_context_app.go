@@ -40,8 +40,6 @@ func (a *appModel) loadStoredTaskContexts(store *contactStore) {
 		ct.pendingSend = clonePendingSend(stored.PendingSend)
 		if ct.pendingSend != nil && (ct.pendingSend.State == "submitting" || ct.pendingSend.State == "unknown") {
 			if ct.SessionID == "" {
-				// The GUI saves the runtime session mapping before task.send, so
-				// a pending send without a session was never dispatched.
 				ct.pendingSend = nil
 			} else {
 				// A restored in-flight intent has the same uncertainty as a
@@ -74,7 +72,6 @@ func (a *appModel) openComposerTaskContext() {
 func (a *appModel) openConversationTaskContext() {
 	a.contextFileGeneration++
 	a.aux = "task-context"
-	a.cancelHistoryFullDisplay()
 }
 
 func (a *appModel) taskContextPanel(c *ui.Context, t *ui.Theme) {
