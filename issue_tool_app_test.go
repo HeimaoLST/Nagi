@@ -223,13 +223,14 @@ func TestIssueToolQueryDoesNotSwitchSelectedContactOrPage(t *testing.T) {
 	}
 	activateIssueToolTestScope(t, a, scope)
 	beforeSelected := ct.SelectedIssueID
+	beforeAux := a.aux
 	args, _ := json.Marshal(map[string]any{"scope": scope.Ref, "issue_id": issue.ID})
 	response, err := a.handleIssueToolForward(context.Background(), issueToolForwardRequest{Tool: "issue_get", Arguments: args})
 	if err != nil || response.IsError {
 		t.Fatalf("get = %+v err=%v", response, err)
 	}
-	if a.selectedContact().ID != ct.ID || ct.SelectedIssueID != beforeSelected || a.issueResult.Open || a.aux == "issue-result" {
-		t.Fatalf("query changed selection/page: contact=%q issue=%q result=%v aux=%q", a.selectedContact().ID, ct.SelectedIssueID, a.issueResult.Open, a.aux)
+	if a.selectedContact().ID != ct.ID || ct.SelectedIssueID != beforeSelected || a.aux != beforeAux {
+		t.Fatalf("query changed selection/page: contact=%q issue=%q aux=%q", a.selectedContact().ID, ct.SelectedIssueID, a.aux)
 	}
 }
 
@@ -291,15 +292,12 @@ func TestIssueToolScopeDeniesOtherContactIssue(t *testing.T) {
 	}
 }
 
-func TestIssueToolCapturedCreateLeavesSelectedContactFormAndDraftAlone(t *testing.T) {
+func TestIssueToolCapturedCreateLeavesSelectedContactDraftAlone(t *testing.T) {
 	a, _ := newIssueToolTestApp(t)
 	first := a.selectedContact()
 	second := &contact{ID: "contact-second", Name: "Second", Workspace: a.workDir, Draft: "second draft", SelectedIssueID: "second-issue"}
 	a.contacts = append(a.contacts, second)
 	a.selected = 1
-	a.issueFormOpen = true
-	a.issueGoal = "form goal"
-	a.issueRequirements = "form requirements"
 	scope, err := a.issueToolNewScope(first.ID, "conversation-7", "turn-7")
 	if err != nil {
 		t.Fatal(err)
@@ -313,9 +311,6 @@ func TestIssueToolCapturedCreateLeavesSelectedContactFormAndDraftAlone(t *testin
 	}
 	if a.selected != 1 || a.selectedContact() != second || second.Draft != "second draft" || second.SelectedIssueID != "second-issue" {
 		t.Fatalf("captured create changed selected contact state: selected=%d contact=%+v", a.selected, a.selectedContact())
-	}
-	if !a.issueFormOpen || a.issueGoal != "form goal" || a.issueRequirements != "form requirements" {
-		t.Fatalf("captured create changed issue form: open=%v goal=%q requirements=%q", a.issueFormOpen, a.issueGoal, a.issueRequirements)
 	}
 	if len(first.Issues) != 1 || first.Issues[0].Goal != "captured goal" {
 		t.Fatalf("captured create did not attach to captured contact: %+v", first.Issues)

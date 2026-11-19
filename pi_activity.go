@@ -537,9 +537,13 @@ func (a *appModel) applyPiActivityEvent(host *piAppHost, bridge *piIssueTools, e
 			}
 			issue.Work.SendState = sendIdle
 			a.applyIssueTerminalLifecycle(issue, event.RunID, string(data.Status))
+			if issue.Handoff != nil {
+				execution.ReturnedAt = nowMillis()
+			}
 		}
 		if err := a.persist(); err != nil {
 			execution.Status = issueExecutionUnknown
+			execution.ReturnedAt = 0
 			execution.Detail = "Pi settled the run, but its local state could not be saved."
 			issue.Work.SendState = sendUnknown
 		}

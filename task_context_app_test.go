@@ -200,7 +200,7 @@ func TestTaskContextUnknownFailurePersistsPendingIntent(t *testing.T) {
 	}
 }
 
-func TestTaskContextAppModalAndReadOnlyHistoryCopy(t *testing.T) {
+func TestTaskContextAppAndReadOnlyChatCopy(t *testing.T) {
 	a, ct := taskContextApp(t)
 	if _, err := ct.Context.AddSnippet("Conversation notes", "conversation body"); err != nil {
 		t.Fatal(err)
@@ -214,55 +214,22 @@ func TestTaskContextAppModalAndReadOnlyHistoryCopy(t *testing.T) {
 		}
 	}
 
-	ct.Messages = nil
-	ct.History = []historyEntry{{
-		ID: "hist:readonly", From: "me", Text: "history prompt",
-		Context: []taskContextItem{{Name: "Doc · file /tmp/doc.txt", Text: "history exact"}},
-	}}
 	ct.Draft = "draft remains local"
-	ownerID := a.selectedContact().ID
-	a.aux = ""
-	a.openHistory()
-	tr.Frame()
-	if !tr.HasText("history prompt") || !tr.HasText("Read full message") {
-		t.Fatalf("history summary/list entry missing: %v", tr.Texts())
-	}
-	if err := tr.Click("Read full message"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if !tr.HasText("history exact") || !tr.HasText("Doc · file /tmp/doc.txt") || a.contactHistoryFull == nil {
-		t.Fatalf("history full message/context missing: full=%+v texts=%v", a.contactHistoryFull, tr.Texts())
-	}
-	if err := tr.Click("Copy context text"); err != nil {
-		t.Fatal(err)
-	}
-	if got := tr.Clipboard(); got != "history exact" {
-		t.Fatalf("history context copy = %q", got)
-	}
-	if err := tr.Click("← Back to history"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if a.contactHistoryFull != nil || !a.detailIs(detailHistory) {
-		t.Fatalf("history Back lost the list: full=%+v detail=%q", a.contactHistoryFull, a.activeDetail())
-	}
-	if ct.Draft != "draft remains local" || a.selectedContact().ID != ownerID {
-		t.Fatalf("history reading changed draft/owner: draft=%q owner=%q", ct.Draft, a.selectedContact().ID)
-	}
-	if err := tr.Click("Close history"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
+	a.closeAux()
 	ct.Messages = []*message{{
 		Key: "live:readonly", Kind: msgUser, Text: "main prompt",
 		Context: []taskContextItem{{Name: "Doc · file /tmp/doc.txt", Text: "read only text"}},
 	}}
-	a.aux = ""
 	tr = ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
 	if !tr.HasText("main prompt") || !tr.HasText("read only text") {
 		t.Fatalf("live context missing: %v", tr.Texts())
+	}
+	if err := tr.Click("Copy context text"); err != nil {
+		t.Fatal(err)
+	}
+	if tr.Clipboard() != "read only text" || ct.Draft != "draft remains local" || a.selectedContact() != ct {
+		t.Fatal("copy changed the submitted context, draft or owning contact")
 	}
 }
 
@@ -361,52 +328,6 @@ func TestTaskContextAppPreviewScreenshots(t *testing.T) {
 	}
 }
 
-func TestTaskContextIssueDetailsOpenOwnEditor(t *testing.T) {
-	a, ct := taskContextApp(t)
-	issue := &productIssue{ID: "i1", ContactID: ct.ID, Goal: "Ship the issue context", Status: issueStatusNotStarted}
-	issue.Context.onChange = a.persist
-	if _, err := issue.Context.AddSnippet("Issue notes", "issue-only body"); err != nil {
-		t.Fatal(err)
-	}
-	ct.Issues = []*productIssue{issue}
-	openIssueDetailForTest(a, ct, issue.ID)
-	a.workspaceOpen = true
-	tr := ui.NewTester(a.view, 1040, 720)
-	tr.Frame()
-	expandIssueDetails(t, tr)
-	if err := tr.Click("Task context: 1"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	for _, want := range []string{"Ship the issue context", "Issue notes", "Close task context"} {
-		if !tr.HasText(want) {
-			t.Fatalf("issue context modal missing %q: %v", want, tr.Texts())
-		}
-	}
-	if ct.Context.count() != 0 {
-		t.Fatalf("issue modal edited conversation context: %+v", ct.Context.snapshot())
-	}
-}
-
-func TestTaskContextExecutionFallbackUsesOnlyItsOwnedSession(t *testing.T) {
-	ct := &contact{ID: "c", SessionID: "conversation-session"}
-	issue := &productIssue{ID: "i", WorkSessionID: "issue-session"}
-	execution := &issueExecution{ID: "e", TaskID: "t1", SessionID: "other-session"}
-	ct.Messages = []*message{{TaskID: "t1", Context: []taskContextItem{{Name: "conversation", Text: "wrong"}}}}
-	issue.Work.Messages = []*message{{TaskID: "t1", Context: []taskContextItem{{Name: "issue", Text: "wrong"}}}}
-	if got := executionTaskContextItems(ct, issue, execution); len(got) != 0 {
-		t.Fatalf("arbitrary session leaked context: %+v", got)
-	}
-	execution.SessionID = "issue-session"
-	if got := executionTaskContextItems(ct, issue, execution); len(got) != 1 || got[0].Name != "issue" {
-		t.Fatalf("issue session fallback = %+v", got)
-	}
-	execution.SessionID = "conversation-session"
-	if got := executionTaskContextItems(ct, issue, execution); len(got) != 1 || got[0].Name != "conversation" {
-		t.Fatalf("conversation session fallback = %+v", got)
-	}
-}
-
 func TestTaskContextRestoredSubmittingIntentRemainsUnknown(t *testing.T) {
 	a, ct := taskContextApp(t)
 	if _, err := ct.Context.AddSnippet("Restored in flight", "crash before reply"); err != nil {
@@ -464,121 +385,14 @@ func TestTaskContextUnknownSendSurvivesStoreRestartWithoutAutoReplay(t *testing.
 	}
 }
 
-func TestTaskContextAppIssueAndReadOnlyPreviewScreenshots(t *testing.T) {
-	dir := os.Getenv("NAGI_PREVIEW_DIR")
-	if dir == "" {
-		dir = t.TempDir()
-	}
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	write := func(scene string) {
-		for _, dark := range []bool{false, true} {
-			theme := "light"
-			if dark {
-				theme = "dark"
-			}
-			for _, size := range []struct {
-				name          string
-				width, height int
-			}{{"narrow", 720, 640}, {"wide", 1040, 720}} {
-				a, ct := taskContextApp(t)
-				issue := &productIssue{ID: "i1", ContactID: ct.ID, Goal: "Show task context", Status: issueStatusInProgress}
-				issue.Context.onChange = a.persist
-				item, err := issue.Context.AddSnippet("Issue notes", "exact issue text\n第二行")
-				if err != nil {
-					t.Fatal(err)
-				}
-				attachIssueToolTestExecution(issue)
-				issue.Executions[0].Prompt = "Sent issue snapshot"
-				issue.Executions[0].Context = []taskContextItem{item}
-				issue.WorkSessionID = "issue-session"
-				ct.Issues = []*productIssue{issue}
-				ct.SelectedIssueID = issue.ID
-				a.workspaceOpen = true
-				a.windowWidth = size.width
-				if scene == "issue" {
-					a.openIssueTaskContext(issue.ID)
-				} else {
-					issue.Executions[0].ContextExpanded = true
-				}
-				tr := ui.NewTester(a.view, size.width, size.height)
-				tr.SetDark(dark)
-				tr.Frame()
-				writePreviewPNG(t, filepath.Join(dir, fmt.Sprintf("task-context-app-%s-%s-%s.png", scene, theme, size.name)), tr.Image())
-			}
-		}
-	}
-	write("issue")
-	write("readonly")
-}
-
-func TestTaskContextFileChooserReachableForBothOwners(t *testing.T) {
-	for _, issueOwner := range []bool{false, true} {
-		t.Run(fmt.Sprintf("issue-%t", issueOwner), func(t *testing.T) {
-			a, ct := taskContextApp(t)
-			callbacks := make(chan func(), 1)
-			a.setUIHook(func(fn func()) { callbacks <- fn })
-			a.chooseContextFile = func(mygo.OpenDialogOptions) ([]string, error) { return nil, nil }
-			target := &ct.Context
-			if issueOwner {
-				issue := &productIssue{ID: "chooser-issue", ContactID: ct.ID, Goal: "Choose issue file", Status: issueStatusNotStarted}
-				issue.Context.onChange = a.persist
-				ct.Issues = []*productIssue{issue}
-				target = &issue.Context
-				a.openIssueTaskContext(issue.ID)
-			} else {
-				a.openConversationTaskContext()
-			}
-			stored := recoverySavedBytes(t, a.store.path)
-			tr := ui.NewTester(a.view, 1040, 720)
-			tr.SetLocale("en")
-			tr.Frame()
-			if err := tr.Click("Add file"); err != nil {
-				t.Fatal(err)
-			}
-			tr.Frame()
-			if err := tr.Click("Context file name"); err != nil {
-				t.Fatal(err)
-			}
-			tr.Type("Latest optional label")
-			if err := tr.Click("Context file path"); err != nil {
-				t.Fatal(err)
-			}
-			tr.Type("keep-the-manual-path")
-			defer func() {
-				if target.formName != "Latest optional label" || target.formPath != "keep-the-manual-path" || target.count() != 0 || a.selectedContact() != ct || a.pi != nil || string(recoverySavedBytes(t, a.store.path)) != string(stored) {
-					t.Error("file discovery mutated owner, input, snapshots/store or started execution")
-				}
-			}()
-			if err := tr.Click("Choose UTF-8 file…"); err != nil {
-				t.Fatalf("TF1: reachable file form has no consumer Choose action: %v", err)
-			}
-			themeImportCompletion(t, callbacks)()
-			tr.Frame()
-			if !tr.Focused("Choose UTF-8 file…") {
-				t.Fatal("cancel did not return chooser focus")
-			}
-		})
-	}
-}
-
-func contextFileChooserTestApp(t *testing.T, issueOwner bool) (*appModel, *contact, *taskContext, *ui.Tester, chan func()) {
+func contextFileChooserTestApp(t *testing.T) (*appModel, *contact, *taskContext, *ui.Tester, chan func()) {
 	t.Helper()
 	a, ct := taskContextApp(t)
 	a.uiLocale = "en"
 	callbacks := make(chan func(), 8)
 	a.setUIHook(func(fn func()) { callbacks <- fn })
 	target := &ct.Context
-	if issueOwner {
-		issue := &productIssue{ID: "file-issue", ContactID: ct.ID, Goal: "File context", Status: issueStatusNotStarted}
-		issue.Context.onChange = a.persist
-		ct.Issues = []*productIssue{issue}
-		target = &issue.Context
-		a.openIssueTaskContext(issue.ID)
-	} else {
-		a.openConversationTaskContext()
-	}
+	a.openConversationTaskContext()
 	tr := ui.NewTester(a.view, 1040, 900)
 	tr.SetLocale("en")
 	tr.Frame()
@@ -592,7 +406,7 @@ func contextFileChooserTestApp(t *testing.T, issueOwner bool) (*appModel, *conta
 func TestTaskContextChooserDefersReadUntilSaveAndRefresh(t *testing.T) {
 	for index, name := range []string{"资料 with spaces", "drawing.svg", "source.go", "empty"} {
 		t.Run(name, func(t *testing.T) {
-			a, _, tc, tr, callbacks := contextFileChooserTestApp(t, index%2 == 1)
+			a, _, tc, tr, callbacks := contextFileChooserTestApp(t)
 			path := filepath.Join(t.TempDir(), name)
 			before := recoverySavedBytes(t, a.store.path)
 			// A missing first path proves no read; other files change between choice and Save.
@@ -663,7 +477,7 @@ func TestTaskContextChooserDefersReadUntilSaveAndRefresh(t *testing.T) {
 func TestTaskContextChooserCancelErrorRetryKeepsEditor(t *testing.T) {
 	for _, language := range []string{"en", "zh-Hans"} {
 		t.Run(language, func(t *testing.T) {
-			a, _, tc, tr, callbacks := contextFileChooserTestApp(t, false)
+			a, _, tc, tr, callbacks := contextFileChooserTestApp(t)
 			a.uiLocale = language
 			tr.SetLocale(language)
 			msgs := locales.In(language)
@@ -708,11 +522,10 @@ func TestTaskContextChooserCancelErrorRetryKeepsEditor(t *testing.T) {
 }
 
 func TestTaskContextChooserStaleResultsNeverMutateOrFocus(t *testing.T) {
-	for _, scenario := range []string{"contact-roundtrip", "contact-replaced", "issue-roundtrip", "issue-replaced", "context-replaced", "cancel-reopen", "close-reopen", "settings-roundtrip", "path-roundtrip", "shutdown"} {
+	for _, scenario := range []string{"contact-roundtrip", "contact-replaced", "context-replaced", "cancel-reopen", "close-reopen", "settings-roundtrip", "path-roundtrip", "shutdown"} {
 		for _, fail := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/error-%t", scenario, fail), func(t *testing.T) {
-				issueOwner := strings.HasPrefix(scenario, "issue-")
-				a, ct, tc, tr, callbacks := contextFileChooserTestApp(t, issueOwner)
+				a, ct, tc, tr, callbacks := contextFileChooserTestApp(t)
 				tc.formName, tc.formPath = "original name", "/original/path"
 				release := make(chan struct{})
 				a.chooseContextFile = func(mygo.OpenDialogOptions) ([]string, error) {
@@ -734,13 +547,6 @@ func TestTaskContextChooserStaleResultsNeverMutateOrFocus(t *testing.T) {
 					a.openConversationTaskContext()
 				case "contact-replaced":
 					a.contacts[0] = &contact{ID: ct.ID, Name: "Replacement"}
-				case "issue-roundtrip":
-					other := &productIssue{ID: "other-issue", ContactID: ct.ID}
-					ct.Issues = append(ct.Issues, other)
-					a.openIssueTaskContext(other.ID)
-					a.openIssueTaskContext("file-issue")
-				case "issue-replaced":
-					ct.Issues[0] = &productIssue{ID: "file-issue", ContactID: ct.ID}
 				case "context-replaced":
 					ct.Context = taskContext{}
 					ct.Context.openFileForm()
@@ -781,7 +587,7 @@ func TestTaskContextChooserStaleResultsNeverMutateOrFocus(t *testing.T) {
 }
 
 func TestTaskContextChooserLatestRequestOwnsPathAndFocus(t *testing.T) {
-	a, ct, tc, tr, callbacks := contextFileChooserTestApp(t, false)
+	a, ct, tc, tr, callbacks := contextFileChooserTestApp(t)
 	first, second := make(chan struct{}), make(chan struct{})
 	request := make(chan struct{}, 1)
 	a.chooseContextFile = func(mygo.OpenDialogOptions) ([]string, error) {
@@ -828,7 +634,7 @@ func TestTaskContextChooserLatestRequestOwnsPathAndFocus(t *testing.T) {
 func TestTaskContextChooserKeepsReadAndSaveFailureBoundaries(t *testing.T) {
 	for _, kind := range []string{"missing", "invalid-utf8", "nul", "unsupported", "oversize", "wrapped-budget", "store-error"} {
 		t.Run(kind, func(t *testing.T) {
-			a, _, tc, tr, callbacks := contextFileChooserTestApp(t, false)
+			a, _, tc, tr, callbacks := contextFileChooserTestApp(t)
 			old, err := tc.AddSnippet("keep", "original saved material")
 			if err != nil {
 				t.Fatal(err)
@@ -891,254 +697,228 @@ func contextFileReach(t *testing.T, tr *ui.Tester, label string, width, height i
 }
 
 func TestTaskContextChooserBilingualFormsAndPreviews(t *testing.T) {
-	for _, issueOwner := range []bool{false, true} {
-		for _, language := range []string{"en", "zh-Hans"} {
-			for _, size := range [][2]int{{720, 640}, {960, 640}, {1040, 720}} {
-				for _, dark := range []bool{false, true} {
-					t.Run(fmt.Sprintf("%s/%d/dark-%t/issue-%t", language, size[0], dark, issueOwner), func(t *testing.T) {
-						a, ct := taskContextApp(t)
-						a.windowWidth = size[0]
-						a.uiLocale = language
-						if dark {
-							a.appearanceMode = appearanceDark
-						} else {
-							a.appearanceMode = appearanceLight
-						}
-						target := &ct.Context
-						if issueOwner {
-							issue := &productIssue{ID: "minimum-issue", ContactID: ct.ID, Goal: "Choose task material", Status: issueStatusNotStarted}
-							issue.Context.onChange = a.persist
-							ct.Issues = []*productIssue{issue}
-							target = &issue.Context
-							a.openIssueTaskContext(issue.ID)
-						} else {
-							a.openConversationTaskContext()
-						}
-						callbacks := make(chan func(), 4)
-						a.setUIHook(func(fn func()) { callbacks <- fn })
-						path := filepath.Join(t.TempDir(), "资料 source.svg")
-						if err := os.WriteFile(path, []byte("<svg>Exact UTF-8 text — 你好</svg>\nsecond line"), 0600); err != nil {
-							t.Fatal(err)
-						}
-						tr := ui.NewTester(a.view, size[0], size[1])
-						tr.SetLocale(language)
-						tr.Frame()
-						msgs := locales.In(language)
-						if err := tr.Click(msgs.TaskContextAddFile()); err != nil {
-							t.Fatal(err)
-						}
-						tr.Frame()
-						for _, state := range []string{"form", "pending", "error", "preview"} {
-							switch state {
-							case "pending":
-								// Hold the picker; capture its real pending form before resolving it.
-							case "error":
-								themeImportCompletion(t, callbacks)()
-								tr.Frame()
-							case "preview":
-								a.chooseContextFile = func(mygo.OpenDialogOptions) ([]string, error) { return []string{path}, nil }
-								if err := tr.Click(msgs.TaskContextChooseFile()); err != nil {
-									t.Fatal(err)
-								}
-								themeImportCompletion(t, callbacks)()
-								tr.Frame()
-								contextFileReach(t, tr, msgs.TaskContextSaveFile(), size[0], size[1], 32)
-								if err := tr.Click(msgs.TaskContextSaveFile()); err != nil {
-									t.Fatal(err)
-								}
-								tr.Frame()
+	for _, language := range []string{"en", "zh-Hans"} {
+		for _, size := range [][2]int{{720, 640}, {960, 640}, {1040, 720}} {
+			for _, dark := range []bool{false, true} {
+				t.Run(fmt.Sprintf("%s/%d/dark-%t", language, size[0], dark), func(t *testing.T) {
+					a, ct := taskContextApp(t)
+					a.windowWidth = size[0]
+					a.uiLocale = language
+					if dark {
+						a.appearanceMode = appearanceDark
+					} else {
+						a.appearanceMode = appearanceLight
+					}
+					target := &ct.Context
+					a.openConversationTaskContext()
+					callbacks := make(chan func(), 4)
+					a.setUIHook(func(fn func()) { callbacks <- fn })
+					path := filepath.Join(t.TempDir(), "资料 source.svg")
+					if err := os.WriteFile(path, []byte("<svg>Exact UTF-8 text — 你好</svg>\nsecond line"), 0600); err != nil {
+						t.Fatal(err)
+					}
+					tr := ui.NewTester(a.view, size[0], size[1])
+					tr.SetLocale(language)
+					tr.Frame()
+					msgs := locales.In(language)
+					if err := tr.Click(msgs.TaskContextAddFile()); err != nil {
+						t.Fatal(err)
+					}
+					tr.Frame()
+					for _, state := range []string{"form", "pending", "error", "preview"} {
+						switch state {
+						case "error":
+							themeImportCompletion(t, callbacks)()
+							tr.Frame()
+						case "preview":
+							a.chooseContextFile = func(mygo.OpenDialogOptions) ([]string, error) { return []string{path}, nil }
+							if err := tr.Click(msgs.TaskContextChooseFile()); err != nil {
+								t.Fatal(err)
 							}
-							bounds := map[string]ui.Rect{"window": {W: float32(size[0]), H: float32(size[1])}}
-							if state != "preview" {
-								bounds["chooser"] = contextFileReach(t, tr, msgs.TaskContextChooseFile(), size[0], size[1], 32)
-								hint := msgs.TaskContextChooseFileHint()
-								r, ok := tr.Find(hint)
+							themeImportCompletion(t, callbacks)()
+							tr.Frame()
+							contextFileReach(t, tr, msgs.TaskContextSaveFile(), size[0], size[1], 32)
+							if err := tr.Click(msgs.TaskContextSaveFile()); err != nil {
+								t.Fatal(err)
+							}
+							tr.Frame()
+						}
+						bounds := map[string]ui.Rect{"window": {W: float32(size[0]), H: float32(size[1])}}
+						if state != "preview" {
+							bounds["chooser"] = contextFileReach(t, tr, msgs.TaskContextChooseFile(), size[0], size[1], 32)
+							hint := msgs.TaskContextChooseFileHint()
+							r, ok := tr.Find(hint)
+							if !ok {
+								t.Fatal("chooser explanation missing")
+							}
+							_, full := ui.ShapeText(hint, ui.Font{Size: typeMeta, LineHeight: lineMeta / typeMeta, Lang: language}, r.W).Size()
+							bounds["hint"] = contextFileReach(t, tr, hint, size[0], size[1], full-0.5)
+							if state == "error" {
+								r, ok := tr.Find(msgs.TaskContextChooseFileFailed())
 								if !ok {
-									t.Fatal("chooser explanation missing")
+									t.Fatal("error missing")
 								}
-								_, full := ui.ShapeText(hint, ui.Font{Size: typeMeta, LineHeight: lineMeta / typeMeta, Lang: language}, r.W).Size()
-								bounds["hint"] = contextFileReach(t, tr, hint, size[0], size[1], full-0.5)
-								if state == "error" {
-									r, ok := tr.Find(msgs.TaskContextChooseFileFailed())
-									if !ok {
-										t.Fatal("error missing")
-									}
-									_, full := ui.ShapeText(msgs.TaskContextChooseFileFailed(), ui.Font{Size: typeMeta, LineHeight: lineMeta / typeMeta, Lang: language}, r.W).Size()
-									bounds["error"] = contextFileReach(t, tr, msgs.TaskContextChooseFileFailed(), size[0], size[1], full-0.5)
-								}
-								bounds["save"] = contextFileReach(t, tr, msgs.TaskContextSaveFile(), size[0], size[1], 32)
-							} else {
-								if target.count() != 1 || target.previewID == "" {
-									t.Fatal("explicit Save did not open the snapshot preview")
-								}
-								bounds["copy"] = contextFileReach(t, tr, msgs.CopyContextTextLabel(), size[0], size[1], 32)
+								_, full := ui.ShapeText(msgs.TaskContextChooseFileFailed(), ui.Font{Size: typeMeta, LineHeight: lineMeta / typeMeta, Lang: language}, r.W).Size()
+								bounds["error"] = contextFileReach(t, tr, msgs.TaskContextChooseFileFailed(), size[0], size[1], full-0.5)
 							}
-							if dir := os.Getenv("NAGI_PREVIEW_DIR"); dir != "" {
-								if err := os.MkdirAll(dir, 0755); err != nil {
-									t.Fatal(err)
-								}
-								name := fmt.Sprintf("chooser-%s-%d-dark-%t-%s", language, size[0], dark, state)
-								if issueOwner {
-									name += "-issue"
-								}
-								writePreviewPNG(t, filepath.Join(dir, name+".png"), tr.Image())
-								raw, _ := json.MarshalIndent(bounds, "", "  ")
-								if err := os.WriteFile(filepath.Join(dir, name+".bounds.json"), raw, 0600); err != nil {
-									t.Fatal(err)
-								}
+							bounds["save"] = contextFileReach(t, tr, msgs.TaskContextSaveFile(), size[0], size[1], 32)
+						} else {
+							if target.count() != 1 || target.previewID == "" {
+								t.Fatal("explicit Save did not open the snapshot preview")
 							}
-							if state == "form" {
-								a.chooseContextFile = func(mygo.OpenDialogOptions) ([]string, error) { return nil, errors.New("controlled panel failure") }
-								// The final callback stays queued while the pending surface is inspected.
-								contextFileReach(t, tr, msgs.TaskContextChooseFile(), size[0], size[1], 32)
-								if err := tr.Click(msgs.TaskContextChooseFile()); err != nil {
-									t.Fatal(err)
-								}
-								tr.Frame()
+							bounds["copy"] = contextFileReach(t, tr, msgs.CopyContextTextLabel(), size[0], size[1], 32)
+						}
+						if dir := os.Getenv("NAGI_PREVIEW_DIR"); dir != "" {
+							if err := os.MkdirAll(dir, 0755); err != nil {
+								t.Fatal(err)
+							}
+							name := fmt.Sprintf("chooser-%s-%d-dark-%t-%s", language, size[0], dark, state)
+							writePreviewPNG(t, filepath.Join(dir, name+".png"), tr.Image())
+							raw, _ := json.MarshalIndent(bounds, "", "  ")
+							if err := os.WriteFile(filepath.Join(dir, name+".bounds.json"), raw, 0600); err != nil {
+								t.Fatal(err)
 							}
 						}
-					})
-				}
+						if state == "form" {
+							a.chooseContextFile = func(mygo.OpenDialogOptions) ([]string, error) { return nil, errors.New("controlled panel failure") }
+							contextFileReach(t, tr, msgs.TaskContextChooseFile(), size[0], size[1], 32)
+							if err := tr.Click(msgs.TaskContextChooseFile()); err != nil {
+								t.Fatal(err)
+							}
+							tr.Frame()
+						}
+					}
+				})
 			}
 		}
 	}
 }
 
 func TestTaskContextChooserKeyboardAtMinimum(t *testing.T) {
-	for _, issueOwner := range []bool{false, true} {
-		for _, language := range []string{"en", "zh-Hans"} {
-			for _, dark := range []bool{false, true} {
-				for _, activation := range []struct {
-					name string
-					key  ui.Key
-				}{{"Enter", ui.KeyEnter}, {"Space", ui.KeySpace}} {
-					for _, outcome := range []string{"selection", "cancel"} {
-						t.Run(fmt.Sprintf("%s/dark-%t/issue-%t/%s/%s", language, dark, issueOwner, activation.name, outcome), func(t *testing.T) {
-							a, ct := taskContextApp(t)
-							a.windowWidth = 720
-							a.uiLocale = language
-							a.win = &mygo.Window{}
-							if dark {
-								a.appearanceMode = appearanceDark
-							} else {
-								a.appearanceMode = appearanceLight
-							}
-							ct.Draft = "Retain this unsent conversation draft — 你好"
-							target := &ct.Context
-							if issueOwner {
-								issue := &productIssue{ID: "keyboard-issue", ContactID: ct.ID, Goal: "Keyboard file choice", Status: issueStatusNotStarted}
-								issue.Context.onChange = a.persist
-								ct.Issues = []*productIssue{issue}
-								target = &issue.Context
-								a.openIssueTaskContext(issue.ID)
-							} else {
-								a.openConversationTaskContext()
-							}
-							original, err := target.AddSnippet("Existing material", "Keep this saved snapshot")
-							if err != nil {
+	for _, language := range []string{"en", "zh-Hans"} {
+		for _, dark := range []bool{false, true} {
+			for _, activation := range []struct {
+				name string
+				key  ui.Key
+			}{{"Enter", ui.KeyEnter}, {"Space", ui.KeySpace}} {
+				for _, outcome := range []string{"selection", "cancel"} {
+					t.Run(fmt.Sprintf("%s/dark-%t/%s/%s", language, dark, activation.name, outcome), func(t *testing.T) {
+						a, ct := taskContextApp(t)
+						a.windowWidth = 720
+						a.uiLocale = language
+						a.win = &mygo.Window{}
+						if dark {
+							a.appearanceMode = appearanceDark
+						} else {
+							a.appearanceMode = appearanceLight
+						}
+						ct.Draft = "Retain this unsent conversation draft — 你好"
+						target := &ct.Context
+						a.openConversationTaskContext()
+						original, err := target.AddSnippet("Existing material", "Keep this saved snapshot")
+						if err != nil {
+							t.Fatal(err)
+						}
+						callbacks := make(chan func(), 4)
+						a.setUIHook(func(fn func()) { callbacks <- fn })
+						requests := make(chan mygo.OpenDialogOptions, 2)
+						results := make(chan []string, 1)
+						var calls atomic.Int32
+						a.chooseContextFile = func(opts mygo.OpenDialogOptions) ([]string, error) {
+							calls.Add(1)
+							requests <- opts
+							return <-results, nil
+						}
+						path := filepath.Join(t.TempDir(), "选择 UTF8 source.svg")
+						if err := os.WriteFile(path, []byte("<svg>not read by choice — 你好</svg>"), 0600); err != nil {
+							t.Fatal(err)
+						}
+						tr := ui.NewTester(a.view, 720, 640)
+						tr.SetLocale(language)
+						tr.SetFocused(true)
+						tr.Frame()
+						msgs := locales.In(language)
+						if err := tr.Click(msgs.TaskContextAddFile()); err != nil {
+							t.Fatal(err)
+						}
+						tr.Frame()
+						if err := tr.Click(msgs.TaskContextFilePathLabel()); err != nil {
+							t.Fatal(err)
+						}
+						tr.Type("/retained/manual")
+						if err := tr.Click(msgs.TaskContextFileLabel()); err != nil {
+							t.Fatal(err)
+						}
+						tr.Type("Keep the optional name")
+						target.formError = errTaskContextRead
+						originalError := target.formError
+						tr.Frame()
+						if tr.Focused(msgs.TaskContextChooseFile()) {
+							t.Fatal("fixture directly focused chooser before Tab")
+						}
+						before := recoverySavedBytes(t, a.store.path)
+						draft := ct.Draft
+						events := []string{"Click path input", "Type /retained/manual", "Click name input", "Type Keep the optional name"}
+						tabs := 0
+						for tabs < 20 && !tr.Focused(msgs.TaskContextChooseFile()) {
+							tr.Key(0, ui.KeyTab)
+							tr.Frame()
+							tabs++
+							events = append(events, "Tab")
+						}
+						if tabs == 0 || !tr.Focused(msgs.TaskContextChooseFile()) {
+							t.Fatal("visible chooser is not reachable through Tab navigation")
+						}
+						bounds, ok := tr.Find(msgs.TaskContextChooseFile())
+						if !ok || bounds.W < 32 || bounds.H < 32 || bounds.X < 0 || bounds.Y < 0 || bounds.X+bounds.W > 720 || bounds.Y+bounds.H > 640 {
+							t.Fatalf("keyboard reached clipped chooser: %+v", bounds)
+						}
+						tr.Key(0, activation.key)
+						tr.Frame()
+						events = append(events, activation.name)
+						var opts mygo.OpenDialogOptions
+						select {
+						case opts = <-requests:
+						case <-time.After(5 * time.Second):
+							t.Fatal("keyboard activation did not invoke the injected chooser")
+						}
+						if calls.Load() != 1 || opts.Parent != a.win || opts.Directory || opts.Multiple || len(opts.Filters) != 0 {
+							t.Fatal("keyboard activation did not invoke exactly one parented single-file chooser")
+						}
+						if outcome == "cancel" {
+							results <- nil
+						} else {
+							results <- []string{path}
+						}
+						themeImportCompletion(t, callbacks)()
+						tr.Frame()
+						wantPath := "/retained/manual"
+						if outcome == "selection" {
+							wantPath = path
+						}
+						if calls.Load() != 1 || target.formPath != wantPath || target.formName != "Keep the optional name" || target.formError != originalError || target.count() != 1 || target.snapshot()[0] != original || ct.Draft != draft || !tr.Focused(msgs.TaskContextChooseFile()) || a.contextFilePickers != 0 || a.pi != nil || a.submissionInFlight != 0 || string(recoverySavedBytes(t, a.store.path)) != string(before) {
+							t.Fatal("keyboard choice/cancel changed saved material, draft, errors, execution or focus")
+						}
+						if dir := os.Getenv("NAGI_PREVIEW_DIR"); dir != "" {
+							if err := os.MkdirAll(dir, 0755); err != nil {
 								t.Fatal(err)
 							}
-							callbacks := make(chan func(), 4)
-							a.setUIHook(func(fn func()) { callbacks <- fn })
-							requests := make(chan mygo.OpenDialogOptions, 2)
-							results := make(chan []string, 1)
-							var calls atomic.Int32
-							a.chooseContextFile = func(opts mygo.OpenDialogOptions) ([]string, error) {
-								calls.Add(1)
-								requests <- opts
-								return <-results, nil
-							}
-							path := filepath.Join(t.TempDir(), "选择 UTF8 source.svg")
-							if err := os.WriteFile(path, []byte("<svg>not read by choice — 你好</svg>"), 0600); err != nil {
+							name := fmt.Sprintf("keyboard-%s-720-dark-%t-%s-%s", language, dark, activation.name, outcome)
+							writePreviewPNG(t, filepath.Join(dir, name+".png"), tr.Image())
+							raw, _ := json.MarshalIndent(struct {
+								Events                                                  []string
+								TabCount                                                int
+								ChooserCalls                                            int32
+								WindowWidth                                             int
+								Width, Height                                           int
+								Chooser                                                 ui.Rect
+								ParentMatched, SingleFile, FocusReturned, DiskUnchanged bool
+							}{events, tabs, calls.Load(), a.windowWidth, 720, 640, bounds, opts.Parent == a.win, !opts.Multiple && !opts.Directory, tr.Focused(msgs.TaskContextChooseFile()), string(recoverySavedBytes(t, a.store.path)) == string(before)}, "", "  ")
+							if err := os.WriteFile(filepath.Join(dir, name+".events.json"), raw, 0600); err != nil {
 								t.Fatal(err)
 							}
-							tr := ui.NewTester(a.view, 720, 640)
-							tr.SetLocale(language)
-							tr.SetFocused(true)
-							tr.Frame()
-							msgs := locales.In(language)
-							if err := tr.Click(msgs.TaskContextAddFile()); err != nil {
-								t.Fatal(err)
-							}
-							tr.Frame()
-							if err := tr.Click(msgs.TaskContextFilePathLabel()); err != nil {
-								t.Fatal(err)
-							}
-							tr.Type("/retained/manual")
-							if err := tr.Click(msgs.TaskContextFileLabel()); err != nil {
-								t.Fatal(err)
-							}
-							tr.Type("Keep the optional name")
-							target.formError = errTaskContextRead
-							originalError := target.formError
-							tr.Frame()
-							if tr.Focused(msgs.TaskContextChooseFile()) {
-								t.Fatal("fixture directly focused chooser before Tab")
-							}
-							before := recoverySavedBytes(t, a.store.path)
-							draft := ct.Draft
-							events := []string{"Click path input", "Type /retained/manual", "Click name input", "Type Keep the optional name"}
-							tabs := 0
-							for tabs < 20 && !tr.Focused(msgs.TaskContextChooseFile()) {
-								tr.Key(0, ui.KeyTab)
-								tr.Frame()
-								tabs++
-								events = append(events, "Tab")
-							}
-							if tabs == 0 || !tr.Focused(msgs.TaskContextChooseFile()) {
-								t.Fatal("visible chooser is not reachable through Tab navigation")
-							}
-							bounds, ok := tr.Find(msgs.TaskContextChooseFile())
-							if !ok || bounds.W < 32 || bounds.H < 32 || bounds.X < 0 || bounds.Y < 0 || bounds.X+bounds.W > 720 || bounds.Y+bounds.H > 640 {
-								t.Fatalf("keyboard reached clipped chooser: %+v", bounds)
-							}
-							tr.Key(0, activation.key)
-							tr.Frame()
-							events = append(events, activation.name)
-							var opts mygo.OpenDialogOptions
-							select {
-							case opts = <-requests:
-							case <-time.After(5 * time.Second):
-								t.Fatal("keyboard activation did not invoke the injected chooser")
-							}
-							if calls.Load() != 1 || opts.Parent != a.win || opts.Directory || opts.Multiple || len(opts.Filters) != 0 {
-								t.Fatal("keyboard activation did not invoke exactly one parented single-file chooser")
-							}
-							if outcome == "cancel" {
-								results <- nil
-							} else {
-								results <- []string{path}
-							}
-							themeImportCompletion(t, callbacks)()
-							tr.Frame()
-							wantPath := "/retained/manual"
-							if outcome == "selection" {
-								wantPath = path
-							}
-							if calls.Load() != 1 || target.formPath != wantPath || target.formName != "Keep the optional name" || target.formError != originalError || target.count() != 1 || target.snapshot()[0] != original || ct.Draft != draft || !tr.Focused(msgs.TaskContextChooseFile()) || a.contextFilePickers != 0 || a.pi != nil || a.submissionInFlight != 0 || string(recoverySavedBytes(t, a.store.path)) != string(before) {
-								t.Fatal("keyboard choice/cancel changed saved material, draft, errors, execution or focus")
-							}
-							if dir := os.Getenv("NAGI_PREVIEW_DIR"); dir != "" {
-								if err := os.MkdirAll(dir, 0755); err != nil {
-									t.Fatal(err)
-								}
-								name := fmt.Sprintf("keyboard-%s-720-dark-%t-issue-%t-%s-%s", language, dark, issueOwner, activation.name, outcome)
-								writePreviewPNG(t, filepath.Join(dir, name+".png"), tr.Image())
-								raw, _ := json.MarshalIndent(struct {
-									Events                                                  []string
-									TabCount                                                int
-									ChooserCalls                                            int32
-									WindowWidth                                             int
-									Width, Height                                           int
-									Chooser                                                 ui.Rect
-									ParentMatched, SingleFile, FocusReturned, DiskUnchanged bool
-								}{events, tabs, calls.Load(), a.windowWidth, 720, 640, bounds, opts.Parent == a.win, !opts.Multiple && !opts.Directory, tr.Focused(msgs.TaskContextChooseFile()), string(recoverySavedBytes(t, a.store.path)) == string(before)}, "", "  ")
-								if err := os.WriteFile(filepath.Join(dir, name+".events.json"), raw, 0600); err != nil {
-									t.Fatal(err)
-								}
-							}
-						})
-					}
+						}
+					})
 				}
 			}
 		}

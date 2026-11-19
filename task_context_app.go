@@ -73,59 +73,30 @@ func (a *appModel) openComposerTaskContext() {
 
 func (a *appModel) openConversationTaskContext() {
 	a.contextFileGeneration++
-	a.taskContextIssueID = ""
 	a.aux = "task-context"
 	a.cancelHistoryFullDisplay()
-}
-
-func (a *appModel) openIssueTaskContext(issueID string) {
-	if a.selectedContact().issueByID(issueID) == nil {
-		return
-	}
-	a.cancelHistoryFullDisplay()
-	a.contextFileGeneration++
-	a.taskContextIssueID = issueID
-	a.aux = "task-context"
-	a.composerPanel = ""
-	a.contactHistoryFull = nil
-	a.focusAuxBack = true
 }
 
 func (a *appModel) taskContextPanel(c *ui.Context, t *ui.Theme) {
 	ct := a.selectedContact()
 	owner := locales.In(c.Locale()).TaskContextOwnerConversation(ct.Name)
 	target := &ct.Context
-	var ownerIssue *productIssue
-	if a.taskContextIssueID != "" {
-		issue := ct.issueByID(a.taskContextIssueID)
-		if issue == nil {
-			ui.Text(c, locales.In(c.Locale()).TaskContextIssueUnavailable()).FontSize(12).TextColor(t.Danger)
-			ui.Button(c, locales.In(c.Locale()).TaskContextClose()).FontSize(12).OnClick(func() { a.closeAux() })
-			return
-		}
-		owner = locales.In(c.Locale()).TaskContextOwnerIssue(issue.Goal)
-		target = &issue.Context
-		ownerIssue = issue
-	}
 	ui.Row(c).AlignItems(ui.Center).Children(func() {
 		ui.Text(c, owner).FontSize(typeSettingsTitle).FontWeight(500).FixedLineHeight(lineSettingsTitle).TextColor(t.Text).MaxLines(2)
 		ui.Spacer(c)
 		secondaryButton(c, locales.In(c.Locale()).TaskContextClose()).OnClick(func() { a.closeAux() })
 	})
-	target.chooseFile = func() { a.chooseTaskContextFile(ct, ownerIssue, target) }
+	target.chooseFile = func() { a.chooseTaskContextFile(ct, target) }
 	target.fileChooserBlocked = a.shutdownStarted || a.dataRecoveryBlocksChanges()
 	target.view(c, a.workTheme)
 }
 
-func (a *appModel) chooseTaskContextFile(ct *contact, issue *productIssue, tc *taskContext) {
+func (a *appModel) chooseTaskContextFile(ct *contact, tc *taskContext) {
 	currentOwner := func() bool {
 		if a.shutdownStarted || a.settingsOpen || a.dataRecoveryBlocksChanges() || a.aux != "task-context" || a.selectedContact() != ct || a.contactByID(ct.ID) != ct {
 			return false
 		}
-		if issue == nil {
-			return a.taskContextIssueID == "" && tc == &ct.Context
-		}
-		return a.taskContextIssueID == issue.ID && ct.issueByID(issue.ID) == issue && tc == &issue.Context
+		return tc == &ct.Context
 	}
 	if !currentOwner() || !tc.formOpen || tc.formMode != "file" || tc.fileChoosing {
 		return
@@ -171,42 +142,4 @@ func (a *appModel) chooseTaskContextFile(ct *contact, issue *productIssue, tc *t
 			tc.fileChoiceFailed = false
 		})
 	}()
-}
-
-func (a *appModel) executionTaskContextView(c *ui.Context, t *ui.Theme, ct *contact, issue *productIssue, execution *issueExecution) {
-	taskContextReadOnlyView(c, a.workTheme, executionTaskContextItems(ct, issue, execution))
-}
-
-func executionTaskContextItems(ct *contact, issue *productIssue, execution *issueExecution) []taskContextItem {
-	items := cloneTaskContextItems(execution.Context)
-	if len(items) > 0 {
-		return items
-	}
-	if execution.SessionID == "" {
-		return nil
-	}
-	switch execution.SessionID {
-	case issue.WorkSessionID:
-		return taskContextMessageItems(issue.Work.Messages, execution)
-	case ct.SessionID:
-		return taskContextMessageItems(ct.Messages, execution)
-	default:
-		return nil
-	}
-}
-
-func taskContextMessageItems(messages []*message, execution *issueExecution) []taskContextItem {
-	for index := len(messages) - 1; index >= 0; index-- {
-		m := messages[index]
-		if len(m.Context) == 0 {
-			continue
-		}
-		if execution.TaskID != "" && m.TaskID == execution.TaskID {
-			return m.Context
-		}
-		if execution.TaskID == "" && execution.MessageID != "" && m.MessageID == execution.MessageID {
-			return m.Context
-		}
-	}
-	return nil
 }

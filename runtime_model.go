@@ -772,9 +772,6 @@ func (a *appModel) reloadSelected() {
 }
 
 func (a *appModel) addRuntimeContact() {
-	if !a.leaveIssueFormForSwitch() {
-		return
-	}
 	workspace := ""
 	if a.demo || a.connectionEffective != nil {
 		workspace = a.workDir

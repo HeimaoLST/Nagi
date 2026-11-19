@@ -20,7 +20,7 @@ func TestViewRendersBothThemes(t *testing.T) {
 	a := testApp(t)
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	for _, want := range []string{"Nagi", "Mio", "Ren", "Send", "History", "Settings"} {
+	for _, want := range []string{"Nagi", "Mio", "Ren", "Send", "Settings"} {
 		if !tr.HasText(want) {
 			t.Fatalf("light frame is missing %q", want)
 		}
@@ -37,33 +37,19 @@ func TestViewRendersBothThemes(t *testing.T) {
 func TestTitleBarKeepsNavigationOutsideNativeControls(t *testing.T) {
 	for _, width := range []int{720, 899, 900, 901, 960, 1040, 1179, 1180, 1181} {
 		for _, right := range []float32{0, 138} {
-			for _, scene := range []string{"chat", "collapsed", "work", "history", "profile", "settings", "reading"} {
+			for _, scene := range []string{"chat", "collapsed", "profile", "settings"} {
 				t.Run(fmt.Sprintf("%d/right-%g/%s", width, right, scene), func(t *testing.T) {
 					a := testApp(t)
 					a.windowWidth = width
 					a.workspaceOpen = false
 					ct := a.selectedContact()
 					ct.Draft = "keep the titlebar draft"
-					labels := []string{"History", "Composer for Nagi", "Chat model", "Send"}
+					labels := []string{"Composer for Nagi", "Chat model", "Send"}
 					closeLabel := ""
 					switch scene {
 					case "collapsed":
 						a.railCollapsed = true
 						labels = append(labels, "Contacts")
-					case "work":
-						a.openDetail(detailWork)
-						closeLabel = "Close workspace"
-						if width < avatarRailBreakpoint {
-							closeLabel = "Back to chat"
-						}
-						labels = []string{closeLabel, "New task"}
-						if width >= avatarRailBreakpoint {
-							labels = append(labels, "Chat model", "Send")
-						}
-					case "history":
-						a.openDetail(detailHistory)
-						closeLabel = "Close history"
-						labels = []string{closeLabel}
 					case "profile":
 						a.openDetail(detailProfile)
 						closeLabel = "Close profile"
@@ -72,11 +58,6 @@ func TestTitleBarKeepsNavigationOutsideNativeControls(t *testing.T) {
 						a.openSettingsTab(settingsTabAppearance, settingsSourceComposer)
 						closeLabel = "← Back to workbench"
 						labels = []string{closeLabel, "General"}
-					case "reading":
-						a.openDetail(detailHistory)
-						a.contactHistoryFull = &contactHistoryFull{SessionID: "saved", EntryID: "entry", Text: "# Saved message\n\nReadable history."}
-						closeLabel = "Close full message"
-						labels = []string{closeLabel, "Copy saved message"}
 					}
 					tr := ui.NewTester(a.view, width, 640)
 					bar := ui.TitleBar{Height: 38, Left: 80, Right: right}
@@ -96,7 +77,7 @@ func TestTitleBarKeepsNavigationOutsideNativeControls(t *testing.T) {
 							t.Fatal(err)
 						}
 						tr.Frame()
-						if a.settingsOpen || a.contactHistoryFull != nil || (scene != "reading" && a.workspaceOpen) || ct.Draft != "keep the titlebar draft" {
+						if a.settingsOpen || a.workspaceOpen || ct.Draft != "keep the titlebar draft" {
 							t.Fatalf("return did not preserve its route and draft: settings=%v detail=%q reading=%v draft=%q", a.settingsOpen, a.activeDetail(), a.contactHistoryFull != nil, ct.Draft)
 						}
 					}
@@ -115,11 +96,11 @@ func TestTitleBarChangesKeepComposerAndSettingsFocus(t *testing.T) {
 	tr.SetTitleBar(bar)
 	focusComposer(t, tr, "Composer for Nagi")
 	tr.Type("draft before fullscreen")
-	work, _ := tr.Find("Work")
+	before, present := tr.Find("Composer for Nagi")
 	tr.SetTitleBar(ui.TitleBar{})
-	fullWork, ok := tr.Find("Work")
-	if !ok || fullWork.Y != work.Y {
-		t.Fatalf("fixed reference chrome moved when native controls changed: before=%+v after=%+v", work, fullWork)
+	after, ok := tr.Find("Composer for Nagi")
+	if !present || !ok || after.W <= 0 || after.H <= 0 {
+		t.Fatalf("composer geometry missing after native metrics changed: before=%+v after=%+v", before, after)
 	}
 	if _, active := tr.TextCaret(); !active {
 		t.Fatal("changing native titlebar metrics lost the composer caret")
@@ -394,11 +375,11 @@ func TestSettingsFieldsReceiveInputAndDoNotStealComposerFocus(t *testing.T) {
 	if ct.Draft != "keep me" {
 		t.Fatalf("composer draft = %q", ct.Draft)
 	}
-	if err := tr.Click("Contact profile"); err != nil {
+	if err := tr.Click("Settings"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if err := tr.Click("Edit full profile"); err != nil {
+	if err := tr.Click(locales.In("en").SettingsContact()); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
@@ -539,7 +520,7 @@ func TestPreviewImages(t *testing.T) {
 		if dark {
 			theme = "dark"
 		}
-		for _, scene := range []string{"chat", "new-contact", "settings", "sources", "history"} {
+		for _, scene := range []string{"chat", "new-contact", "settings", "sources"} {
 			a := testApp(t)
 			switch scene {
 			case "new-contact":
@@ -548,9 +529,6 @@ func TestPreviewImages(t *testing.T) {
 				a.openSettings()
 			case "sources":
 				a.openSources(5)
-			case "history":
-				a.openHistory()
-				a.historyQuery = "memory"
 			}
 			tr := ui.NewTester(a.view, 1040, 720)
 			tr.SetDark(dark)
@@ -733,6 +711,7 @@ func runtimePreviewApp(scene string) *appModel {
 		Workspace: "/Users/you/Workspace/Nagi",
 		Messages: []*message{
 			{Key: "u1", Kind: msgUser, Text: "Use read to inspect README.md and report its first heading. Do not write files."},
+			{Key: "read-1", Kind: msgActivity, ToolName: "read", ToolArgs: `{"path":"README.md"}`, ToolOutput: `{"content":"# Nagi\n\nA native MyGo desktop application."}`},
 			{Key: "a1", Kind: msgContact, Text: "The first heading is # Nagi."},
 		},
 		Works: []*workItem{{
@@ -784,8 +763,6 @@ func runtimePreviewApp(scene string) *appModel {
 		bound.Works[0].Detail = bound.StatusDetail
 	case "runtime-settings":
 		a.openSettings()
-	case "runtime-history":
-		a.openHistory()
 	}
 	return a
 }
@@ -816,7 +793,7 @@ func TestPreviewRuntimeStates(t *testing.T) {
 				write(scene, size.width, size.height, dark)
 			}
 		}
-		for _, scene := range []string{"runtime-error", "runtime-settings", "runtime-history"} {
+		for _, scene := range []string{"runtime-error", "runtime-settings"} {
 			write(scene, 1040, 720, dark)
 		}
 		// Overlay proof at 900; the native minimum is now 720, so this
@@ -838,14 +815,10 @@ func TestToolFailureIsVisibleBeforeDetails(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			ct := &contact{ID: "nagi", Name: "Nagi", Role: "Assistant", Loaded: true}
-			ct.Works = []*workItem{{
-				TaskID: "t1", State: workRunning,
-				Tools: []*workTool{{CallID: "k1", Name: "bash", Args: `{"command":"false"}`, Output: tc.output, Started: true, Finished: true}},
-			}}
-			a := &appModel{demo: false, runtimeStatus: runtimeStateReady, scrollTo: -1, workspaceOpen: true, windowWidth: 1040, contacts: []*contact{ct}}
+			ct.Messages = []*message{{ID: 1, Kind: msgActivity, ToolName: "bash", ToolArgs: `{"command":"false"}`, ToolOutput: tc.output}}
+			a := &appModel{runtimeStatus: runtimeStateReady, scrollTo: -1, windowWidth: 1040, contacts: []*contact{ct}}
 			tr := ui.NewTester(a.view, 1040, 720)
 			tr.Frame()
-			openConversationWorkPanel(t, tr)
 			if !tr.HasText(tc.want) || !tr.HasText("normal text") && !tr.HasText("still working") {
 				t.Fatalf("failure summary not visible: %v", tr.Texts())
 			}
@@ -937,7 +910,7 @@ func TestComposerInlineContextReturnFocus(t *testing.T) {
 func TestResponsiveComposerAt960WithLoadedSession(t *testing.T) {
 	a, ct := appReadingTestApp(t)
 	a.windowWidth = 960
-	a.workspaceOpen = true
+	a.openDetail(detailProfile)
 	a.leftPaneWidth = 280
 	a.rightPaneWidth = 440
 	a.runtimeStatus = runtimeStateReady
@@ -1005,7 +978,7 @@ func TestComposerKeepsModelScopeAndPrimaryActionAtNarrowCenter(t *testing.T) {
 	a.windowWidth = 1040
 	a.leftPaneWidth = defaultLeftPaneWidth
 	a.rightPaneWidth = 358 // leaves the real minimum 480px center beside the work pane
-	a.workspaceOpen = true
+	a.openDetail(detailProfile)
 	ct := a.selectedContact()
 	ct.SessionID = "long-model-session"
 	ct.SessionModel = "provider/very-long-model-name-that-must-not-push-the-action-out-of-the-composer"
@@ -1390,63 +1363,55 @@ func TestRP1ConversationAvailabilityMatrix(t *testing.T) {
 }
 
 func TestRP1DisclosurePreservesRecords(t *testing.T) {
-	for _, domain := range []string{"conversation", "issue"} {
-		for _, cause := range []string{"protocol", "exit"} {
-			t.Run(domain+"/"+cause, func(t *testing.T) {
-				a, ct, issue := disconnectedRecoveryTestApp(t, cause)
-				config := testConnectionConfig(t)
-				config.APIKey = "controlled-record-secret"
-				a.connectionSaved = &config
-				ct.SubmittedDraft = "original submitted text"
-				ct.SubmittedRev = 8
-				ct.SendError += "; API_KEY=" + config.APIKey + "; " + strings.Repeat("long diagnostic ", 80)
-				issue.Work.SendError += "; API_KEY=" + config.APIKey + "; " + strings.Repeat("long diagnostic ", 80)
-				before := recoveryRecordSnapshot(t, ct)
-				var tr *ui.Tester
-				if domain == "conversation" {
-					tr = recoveryComposerTester(a, 1040, 900)
-				} else {
-					tr = recoveryIssueTester(a, ct, issue, 1040, 900)
-				}
-				tr.SetFocused(true)
-				tr.Frame()
-				if err := tr.Click(locales.In("en").DetailsAction()); err != nil {
-					t.Fatal(err)
-				}
-				tr.Frame()
-				if err := tr.Click(locales.In("en").CopyErrorDetailsLabel()); err != nil {
-					t.Fatal(err)
-				}
-				copied := tr.Clipboard()
-				if strings.Contains(copied, config.APIKey) || !strings.Contains(copied, "[redacted]") || len([]rune(copied)) > 501 {
-					t.Fatalf("detail was not bounded/redacted: %q", copied)
-				}
-				if !tr.HasText(locales.In("en").RecoveryTechnicalDetailsHint()) {
-					t.Fatal("diagnostic is not marked as technical")
-				}
-				tr.SetLocale("zh-Hans")
-				tr.Frame()
-				if !tr.HasText(locales.In("zh-Hans").RecoveryTechnicalDetailsHint()) || strings.Contains(strings.Join(tr.Texts(), " "), config.APIKey) {
-					t.Fatal("locale change leaked diagnostic or lost technical label")
-				}
-				if err := tr.Click(locales.In("zh-Hans").HideDetailsAction()); err != nil {
-					t.Fatal(err)
-				}
-				tr.Frame()
-				if err := tr.Click(locales.In("zh-Hans").ConnectionSettingsAction()); err != nil {
-					t.Fatal(err)
-				}
-				if !a.settingsOpen || a.settingsTab != settingsTabConnection {
-					t.Fatal("recovery settings navigation failed")
-				}
-				a.closeSettings()
-				a.runtimeStatus = runtimeStateReady
-				tr.Frame()
-				if recoveryRecordSnapshot(t, ct) != before || a.contactHistoryInFlight != 0 || a.submissionInFlight != 0 {
-					t.Fatal("disclosure/language/navigation/readiness altered original records or issued RPC")
-				}
-			})
-		}
+	for _, cause := range []string{"protocol", "exit"} {
+		t.Run(cause, func(t *testing.T) {
+			a, ct, _ := disconnectedRecoveryTestApp(t, cause)
+			config := testConnectionConfig(t)
+			config.APIKey = "controlled-record-secret"
+			a.connectionSaved = &config
+			ct.SubmittedDraft = "original submitted text"
+			ct.SubmittedRev = 8
+			ct.SendError += "; API_KEY=" + config.APIKey + "; " + strings.Repeat("long diagnostic ", 80)
+			before := recoveryRecordSnapshot(t, ct)
+			tr := recoveryComposerTester(a, 1040, 900)
+			tr.SetFocused(true)
+			tr.Frame()
+			if err := tr.Click(locales.In("en").DetailsAction()); err != nil {
+				t.Fatal(err)
+			}
+			tr.Frame()
+			if err := tr.Click(locales.In("en").CopyErrorDetailsLabel()); err != nil {
+				t.Fatal(err)
+			}
+			copied := tr.Clipboard()
+			if strings.Contains(copied, config.APIKey) || !strings.Contains(copied, "[redacted]") || len([]rune(copied)) > 501 {
+				t.Fatalf("detail was not bounded/redacted: %q", copied)
+			}
+			if !tr.HasText(locales.In("en").RecoveryTechnicalDetailsHint()) {
+				t.Fatal("diagnostic is not marked as technical")
+			}
+			tr.SetLocale("zh-Hans")
+			tr.Frame()
+			if !tr.HasText(locales.In("zh-Hans").RecoveryTechnicalDetailsHint()) || strings.Contains(strings.Join(tr.Texts(), " "), config.APIKey) {
+				t.Fatal("locale change leaked diagnostic or lost technical label")
+			}
+			if err := tr.Click(locales.In("zh-Hans").HideDetailsAction()); err != nil {
+				t.Fatal(err)
+			}
+			tr.Frame()
+			if err := tr.Click(locales.In("zh-Hans").ConnectionSettingsAction()); err != nil {
+				t.Fatal(err)
+			}
+			if !a.settingsOpen || a.settingsTab != settingsTabConnection {
+				t.Fatal("recovery settings navigation failed")
+			}
+			a.closeSettings()
+			a.runtimeStatus = runtimeStateReady
+			tr.Frame()
+			if recoveryRecordSnapshot(t, ct) != before || a.contactHistoryInFlight != 0 || a.submissionInFlight != 0 {
+				t.Fatal("disclosure/language/navigation/readiness altered original records or issued RPC")
+			}
+		})
 	}
 }
 

@@ -5,10 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"path/filepath"
-	"reflect"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/HeimaoLST/Nagi/internal/pi"
 )
@@ -23,8 +21,7 @@ func canReadPiIssueResult(ct *contact, issue *productIssue, execution *issueExec
 		run.ContextID != binding.ContextID || run.SessionRef != binding.SessionRef || execution.SessionID != run.SessionRef || execution.TaskID != run.RunID {
 		return false
 	}
-	switch execution.Status {
-	case issueExecutionCompleted, issueExecutionFailed, issueExecutionInterrupted:
+	if readablePiIssueStatus(execution.Status) {
 		for _, candidate := range issue.Executions {
 			if candidate == execution {
 				return true
@@ -34,67 +31,8 @@ func canReadPiIssueResult(ct *contact, issue *productIssue, execution *issueExec
 	return false
 }
 
-func (a *appModel) startPiIssueResultLoad(generation int, owner issueExecutionDisclosure) {
-	page := &a.issueResult
-	if !canReadPiIssueResult(owner.contact, owner.issue, owner.execution) {
-		page.Loading = false
-		page.LoadError = "load-detached"
-		page.LoadErrorDetail = ""
-		return
-	}
-	host := a.pi
-	if host == nil || !a.runtimeAvailableForView() {
-		page.Loading = false
-		page.LoadError = "load-runtime-not-ready"
-		page.LoadErrorDetail = ""
-		return
-	}
-	page.Loading = true
-	page.LoadError = ""
-	page.LoadErrorDetail = ""
-	binding := clonePiActivityBinding(owner.issue.PiBinding)
-	run := *owner.execution.PiRun
-	a.issueResultAsyncStarted()
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-		result, err := host.readPiIssueResult(ctx, *binding, run, owner.executionID, owner.status)
-		cancel()
-		a.updateUI(func() {
-			defer a.issueResultAsyncFinished()
-			page := &a.issueResult
-			if !page.Open || a.aux != "issue-result" || page.Generation != generation ||
-				page.OwnerContactID != owner.contactID || page.IssueID != owner.issueID || page.ExecutionID != owner.executionID ||
-				page.SessionID != owner.sessionID || page.TaskID != owner.taskID || page.MessageID != owner.messageID {
-				return
-			}
-			page.Loading = false
-			ct, issue, execution := owner.contact, owner.issue, owner.execution
-			if ct != a.selectedContact() || ct != a.contactByID(owner.contactID) ||
-				issue.ID != owner.issueID || execution.ID != owner.executionID || !canReadPiIssueResult(ct, issue, execution) ||
-				execution.Status != owner.status || execution.MessageID != owner.messageID || *execution.PiRun != run ||
-				!reflect.DeepEqual(issue.PiBinding, binding) {
-				page.LoadError = "load-detached"
-				return
-			}
-			if !a.runtimeAvailableForView() {
-				page.LoadError = "load-runtime-not-ready"
-				return
-			}
-			if a.pi != host || a.connectionGeneration != host.generation {
-				page.LoadError = "load-failed"
-				page.LoadErrorDetail = "The connection changed while reading this run."
-				return
-			}
-			if err != nil {
-				page.LoadError = "load-failed"
-				page.LoadErrorDetail = a.connectionSafeMessage(err)
-				return
-			}
-			page.Panel.WorkingDirectory = result.cwd
-			page.Panel.Response = result.response
-			page.Panel.Files = result.files
-		})
-	}()
+func readablePiIssueStatus(status string) bool {
+	return status == issueExecutionCompleted || status == issueExecutionFailed || status == issueExecutionInterrupted
 }
 
 type piIssueResult struct {

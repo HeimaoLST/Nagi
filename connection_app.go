@@ -97,12 +97,12 @@ func applyStoreSelection(a *appModel, store *contactStore) {
 	if layout := store.state.Layout; layout != nil {
 		a.leftPaneWidth = clampPaneWidth(layout.LeftWidth, defaultLeftPaneWidth, minLeftPaneWidth, maxLeftPaneWidth)
 		a.rightPaneWidth = clampPaneWidth(layout.RightWidth, defaultRightPaneWidth, minRightPaneWidth, maxRightPaneWidth)
-		a.workspaceOpen = layout.WorkspaceOpen
 	} else {
 		a.leftPaneWidth = 0
 		a.rightPaneWidth = 0
-		a.workspaceOpen = false
 	}
+	a.workspaceOpen = false
+	a.detail = ""
 	a.appearanceMode = normalizeAppearanceMode(store.state.Appearance)
 	a.appearanceThemeIDs = appearanceThemeIDs{}
 	if store.state.ThemeIDs != nil {
@@ -511,7 +511,7 @@ func (a *appModel) finishShutdown() {
 			return
 		}
 	}
-	if (a.dataRecovery != nil && a.dataRecovery.inFlight) || a.connectionSaveInFlight || a.connectionApplying || a.connectionTesting || a.contactHistoryInFlight > 0 || a.resultInFlight > 0 || a.submissionInFlight > 0 || (a.themeImport != nil && a.themeImport.installInFlight) {
+	if (a.dataRecovery != nil && a.dataRecovery.inFlight) || a.connectionSaveInFlight || a.connectionApplying || a.connectionTesting || a.contactHistoryInFlight > 0 || a.submissionInFlight > 0 || (a.themeImport != nil && a.themeImport.installInFlight) {
 		return
 	}
 	if a.pi != nil {

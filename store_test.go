@@ -130,8 +130,8 @@ func recoveryWriteState(t *testing.T, path string, state storedState) []byte {
 func recoveryProducedState(t *testing.T) storedState {
 	t.Helper()
 	a, _ := newIssueToolTestApp(t)
-	if !a.createIssue("Keep 原文 and IDs", "A real saved requirement") {
-		t.Fatal("normal issue producer failed")
+	if _, err := a.createIssueFor(a.selectedContact(), "Keep 原文 and IDs", "A real saved requirement"); err != nil {
+		t.Fatal(err)
 	}
 	var state storedState
 	if err := json.Unmarshal(recoverySavedBytes(t, a.store.path), &state); err != nil {
@@ -354,10 +354,10 @@ func TestStoreRecoveryExportPausedRestoreAndNormalReopen(t *testing.T) {
 	ct.PreviousPiBindings = []piConversationBinding{*recoveryConversationBinding(ct.ID, root, filepath.Join(root, "previous.jsonl"))}
 	ct.Context.items = []taskContextItem{{ID: "snapshot", Name: "原文", Text: `{"opaque":"text"}`, Revision: 4}}
 	ct.pendingSend = &pendingSend{State: "unknown", Draft: "Maybe dispatched", Context: ct.Context.snapshot()}
-	if !a.createIssue("Keep issue 原文", "Requirement keeps its ID") {
-		t.Fatal("normal issue creation failed")
+	issue, err := a.createIssueFor(ct, "Keep issue 原文", "Requirement keeps its ID")
+	if err != nil {
+		t.Fatal(err)
 	}
-	issue := ct.Issues[0]
 	issue.Executions = []*issueExecution{{ID: "unknown-execution", PiIntent: true, Status: issueExecutionUnknown, Prompt: "Original uncertain task", Detail: "Association remains unknown", Context: ct.Context.snapshot()}}
 	issue.Questions = []*issueQuestion{{Ref: "question", Text: "原始问题", State: issueQuestionOpen, RequirementsRevision: 1}}
 	issue.Supplements.Items = []*issueSupplement{

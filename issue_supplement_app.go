@@ -246,36 +246,6 @@ func issueSupplementBatchForExecution(issue *productIssue, executionID string) *
 	return nil
 }
 
-func (a *appModel) openIssueSupplementForm(issueID string) {
-	a.closeIssueSupplementForm()
-	a.issueSupplementFormID = issueID
-}
-
-func (a *appModel) openIssueQuestionAnswerForm(target issueSupplementTarget, questionRef string) {
-	a.issueSupplementFormID = target.IssueID
-	a.issueSupplementAnswerTarget = target
-	a.issueSupplementQuestionRef = questionRef
-}
-
-func (a *appModel) closeIssueSupplementForm() {
-	a.issueSupplementFormID = ""
-	a.issueSupplementAnswerTarget = issueSupplementTarget{}
-	a.issueSupplementQuestionRef = ""
-}
-
-func (a *appModel) issueSupplementDraft(issueID string) *string {
-	if a.issueSupplementDrafts == nil {
-		a.issueSupplementDrafts = map[string]*string{}
-	}
-	draft, ok := a.issueSupplementDrafts[issueID]
-	if !ok {
-		value := ""
-		draft = &value
-		a.issueSupplementDrafts[issueID] = draft
-	}
-	return draft
-}
-
 func (a *appModel) saveIssueSupplement(ct *contact, issueID, text string) bool {
 	if err := a.addIssueSupplement(ct, issueID, text); err != nil {
 		a.setIssueActionNotice(err.Error(), "", "")

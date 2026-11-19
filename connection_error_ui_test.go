@@ -470,9 +470,9 @@ func TestRecoveryPresentationRendersAndControls(t *testing.T) {
 	records := []geometry{}
 	for _, size := range [][2]int{{720, 640}, {1040, 720}} {
 		for _, locale := range []string{"en", "zh-Hans"} {
-			for _, surface := range []string{"startup", "local-save", "form", "empty-result"} {
+			for _, surface := range []string{"startup", "local-save", "form"} {
 				t.Run(fmt.Sprintf("%s-%s-%d", surface, locale, size[0]), func(t *testing.T) {
-					a, ct := workspaceTestApp(t)
+					a, _ := workspaceTestApp(t)
 					a.windowWidth = size[0]
 					a.workspaceOpen = false
 					dark := locale == "zh-Hans"
@@ -504,18 +504,6 @@ func TestRecoveryPresentationRendersAndControls(t *testing.T) {
 						a.openSettingsTab(settingsTabConnection, settingsSourceRail)
 						tr = ui.NewTester(a.view, size[0], size[1])
 						action = msgs.SettingsBackAccessible()
-					case "empty-result":
-						message := "Controlled request failure with original bounded details"
-						issue := &productIssue{ID: "recovery-geometry-issue", ContactID: ct.ID, Goal: "Read the saved run failure", Status: issueStatusInProgress, RequirementsRevision: 1, Work: issueWorkSession{Loaded: true}}
-						attachIssueToolTestExecution(issue)
-						execution := issue.Executions[0]
-						execution.Status, execution.Detail = issueExecutionFailed, "Model request failed: "+message
-						ct.Issues, ct.SelectedIssueID = []*productIssue{issue}, issue.ID
-						a.pi = nil
-						recoveryTestStore(t, a)
-						a.openIssueResult(issue.ID, execution.ID)
-						tr = ui.NewTester(a.view, size[0], size[1])
-						action = msgs.SettingsTitle()
 					}
 					tr.SetLocale(locale)
 					tr.SetDark(dark)

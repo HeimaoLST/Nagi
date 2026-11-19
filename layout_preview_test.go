@@ -30,7 +30,9 @@ func TestPreviewAdjustableLayout(t *testing.T) {
 				for _, size := range []struct{ width, height int }{{1040, 720}, {1380, 900}, {960, 640}, {720, 640}} {
 					a, ct := workspaceTestApp(t)
 					a.windowWidth = size.width
-					a.workspaceOpen = scene != "closed"
+					if scene != "closed" {
+						a.openDetail(detailProfile)
+					}
 					if scene == "dragged" && size.width >= 1040 {
 						a.leftPaneWidth = defaultLeftPaneWidth
 						a.rightPaneWidth = maxRightPaneWidth - 82
@@ -75,7 +77,9 @@ func writeResponsiveBoundaryPreviews(t *testing.T, dir string) {
 		a.windowWidth = int(sc.width)
 		a.leftPaneWidth = sc.left
 		a.rightPaneWidth = sc.right
-		a.workspaceOpen = sc.workspaceOpen
+		if sc.workspaceOpen {
+			a.openDetail(detailProfile)
+		}
 		ct.Name = sc.longName
 		tr := ui.NewTester(a.view, int(sc.width), 640)
 		tr.SetLocale(sc.locale)
@@ -103,12 +107,7 @@ func TestPreviewHeaderGrouping(t *testing.T) {
 		t.Helper()
 		a, ct := workspaceTestApp(t)
 		a.windowWidth = 960
-		issue := &productIssue{ID: "header-preview", ContactID: ct.ID, Goal: "header grouping preview", Status: issueStatusInProgress}
-		ct.Issues = []*productIssue{issue}
-		ct.SelectedIssueID = issue.ID
 		ct.Role = role
-		ct.issueNavigation().DetailID = issue.ID
-		a.setWorkspaceOpen(true)
 		if setup != nil {
 			setup(a, ct)
 		}
@@ -157,24 +156,17 @@ func TestPreviewUnifiedTitleBar(t *testing.T) {
 			theme = "dark"
 		}
 		for _, size := range []struct{ width, height int }{{720, 640}, {960, 640}, {1040, 720}, {1180, 720}} {
-			for _, scene := range []string{"chat", "work", "history", "settings", "reading"} {
+			for _, scene := range []string{"chat", "settings", "profile"} {
 				a := testApp(t)
 				a.windowWidth = size.width
 				a.workspaceOpen = false
 				a.selectedContact().Draft = "Keep the draft while navigating."
 				switch scene {
-				case "work":
-					a.openDetail(detailWork)
-				case "history":
-					a.openDetail(detailHistory)
 				case "settings":
 					a.openSettingsTab(settingsTabAppearance, settingsSourceRail)
-				case "reading":
-					a.openDetail(detailHistory)
-					a.contactHistoryFull = &contactHistoryFull{
-						SessionID: "saved-preview", EntryID: "entry-preview", From: "contact", Date: "Nov 10",
-						Text: "# Saved message\n\nLong history stays in the reading page, with a return to its original History entry.\n\n```go\nfmt.Println(\"Nagi\")\n```",
-					}
+				case "profile":
+					a.selectedContact().Archived = true
+					a.openContactProfile(a.selectedID())
 				}
 				tr := ui.NewTester(a.view, size.width, size.height)
 				tr.SetDark(dark)
@@ -190,7 +182,7 @@ func TestWorkbenchRoleScenesKeepActionsReachable(t *testing.T) {
 	for _, locale := range []string{"en", "zh-Hans"} {
 		for _, dark := range []bool{false, true} {
 			for _, size := range [][2]int{{720, 640}, {1040, 720}} {
-				for _, scene := range []string{"conversation", "work", "contact", "task-context"} {
+				for _, scene := range []string{"conversation", "contact", "task-context"} {
 					t.Run(fmt.Sprintf("%s/%s/%dx%d/dark%t", scene, locale, size[0], size[1], dark), func(t *testing.T) {
 						a, ct := taskContextApp(t)
 						a.windowWidth, a.workspaceOpen = size[0], false
@@ -204,9 +196,6 @@ func TestWorkbenchRoleScenesKeepActionsReachable(t *testing.T) {
 						switch scene {
 						case "conversation":
 							ct.Messages = []*message{{Key: "user-visual", Kind: msgUser, Text: "A retained user message.\n中文换行。"}, {Key: "reply-visual", Kind: msgContact, Text: "A retained reply with **original emphasis**, a [link](https://example.invalid) and `code`."}}
-						case "work":
-							a.workspaceOpen, a.detail = true, detailWork
-							label = msgs.IssueNewIssue()
 						case "contact":
 							a.openSettingsTab(settingsTabContact, settingsSourceProfile)
 							label = msgs.WorkFolderChoose()

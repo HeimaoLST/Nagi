@@ -25,6 +25,7 @@ type productIssue struct {
 	UpdatedAt            int64
 	Executions           []*issueExecution
 	PiBinding            *piActivityBinding
+	Handoff              *issueHandoff
 	RequirementsRevision int
 
 	// Context is the pending context for the next Run/Continue. Each execution
@@ -153,6 +154,7 @@ type issueExecution struct {
 	ToolScopeRef         string
 	PiIntent             bool
 	PiRun                *piActivityRun
+	ReturnedAt           int64
 	WaitRequested        bool
 }
 
@@ -371,10 +373,13 @@ func (ct *contact) executionByID(id string) (*productIssue, *issueExecution) {
 func issuePrompt(issue *productIssue) string {
 	goal := strings.TrimSpace(issue.Goal)
 	requirements := strings.TrimSpace(issueRequirementsText(issue))
-	if requirements == "" {
-		return goal
+	if requirements != "" {
+		goal += "\n\nRequirements:\n" + requirements
 	}
-	return goal + "\n\nRequirements:\n" + requirements
+	if issue.Handoff != nil && len(issue.Handoff.Files) != 0 {
+		goal += "\n\nFiles supplied for this activity:\n" + strings.Join(issue.Handoff.Files, "\n")
+	}
+	return goal
 }
 
 // createIssue persists an explicit product item and its original requirements.
@@ -403,47 +408,6 @@ func (a *appModel) clearIssueActionNotice() {
 	a.issueActionNoticeDetail = ""
 }
 
-// createIssue persists an explicit product item and its original requirements.
-// It does not dispatch any Runtime work; dispatch is a separate Run action.
-
-func (a *appModel) createIssue(goal, requirements string) bool {
-	if strings.TrimSpace(goal) == "" {
-		a.setIssueFormNotice("Enter an issue goal.", "enter-goal", "")
-		a.issueFormOpen = true
-		return false
-	}
-	ct := a.selectedContact()
-	previousSelected := ct.SelectedIssueID
-	item, err := a.createIssueForWithSave(ct, goal, requirements, func(item *productIssue) error {
-		ct.SelectedIssueID = item.ID
-		if err := a.persist(); err != nil {
-			ct.SelectedIssueID = previousSelected
-			return err
-		}
-		return nil
-	})
-	if err != nil {
-		a.setIssueFormNotice(err.Error(), "save-issue-failed", err.Error())
-		// Keep the user's goal/requirements and form visible so they can retry.
-		a.issueFormOpen = true
-		return false
-	}
-	a.issueFormOpen = false
-	a.clearIssueFormNotice()
-	a.issueGoal = ""
-	a.issueRequirements = ""
-	a.focusIssueNew = true
-	nav := ct.issueNavigation()
-	nav.DetailID = item.ID
-	nav.DetailScroll.Y = 0
-	nav.ShowConversationWork = false
-	nav.FocusBack = true
-	return true
-}
-
-// createIssueFor is the captured-owner creation path. It never changes the
-// selected contact, the issue form or another contact's draft. The UI wrapper
-// above only applies the visible form/selection after this save succeeds.
 func (a *appModel) createIssueFor(ct *contact, goal, requirements string) (*productIssue, error) {
 	return a.createIssueForWithSave(ct, goal, requirements, nil)
 }
@@ -636,6 +600,7 @@ func issuesForStoredContact(all []storedIssue, contactID string) []*productIssue
 			Archived: stored.Archived, RequirementsRevision: stored.RequirementsRevision,
 			Evidence: stored.Evidence, CreatedAt: stored.CreatedAt, UpdatedAt: stored.UpdatedAt,
 			PiBinding:     clonePiActivityBinding(stored.PiBinding),
+			Handoff:       cloneIssueHandoff(stored.Handoff),
 			WorkSessionID: stored.WorkSessionID,
 			Context:       taskContext{items: cloneTaskContextItems(stored.TaskContext)},
 			Supplements:   cloneIssueSupplementLedger(stored.Supplements),
@@ -689,6 +654,7 @@ func issuesForStoredContact(all []storedIssue, contactID string) []*productIssue
 				ToolOperationID: execution.ToolOperationID, ToolScopeRef: execution.ToolScopeRef,
 				WaitRequested: execution.WaitRequested,
 				PiIntent:      execution.PiIntent, PiRun: clonePiActivityRun(execution.PiRun),
+				ReturnedAt: execution.ReturnedAt,
 			})
 		}
 		issue.Status = normalizeIssueStatus(stored.Status, issue.Executions)
@@ -716,11 +682,6 @@ func (a *appModel) runIssueFor(ct *contact, issueID string) bool {
 	if !a.issueRunCaptured(ct, issue) {
 		return false
 	}
-	ct.SelectedIssueID = issue.ID
-	ct.SelectedWorkTaskID = ""
-	nav := ct.issueNavigation()
-	nav.DetailID = issue.ID
-	nav.ShowConversationWork = false
 	return true
 }
 
@@ -754,104 +715,6 @@ func (a *appModel) issueRunCapturedWithOperation(ct *contact, issue *productIssu
 		return false
 	}
 	return a.startIssueRunWithOperation(ct, issue, operationID)
-}
-
-func (a *appModel) selectIssue(issueID string) {
-	ct := a.selectedContact()
-	if ct.issueByID(issueID) == nil {
-		return
-	}
-	nav := ct.issueNavigation()
-	if nav.DetailID != issueID {
-		nav.DetailScroll.Y = 0
-	}
-	nav.DetailID = issueID
-	nav.ShowConversationWork = false
-	nav.FocusBack = false
-	ct.SelectedIssueID = issueID
-	ct.SelectedWorkTaskID = ""
-	a.clearIssueActionNotice()
-}
-
-func (a *appModel) showIssueWork(issueID, taskID string) {
-	ct := a.selectedContact()
-	issue := ct.issueByID(issueID)
-	work := workFor(ct, taskID)
-	if issue == nil || work == nil || !issueHasTask(issue, taskID) {
-		return
-	}
-	nav := ct.issueNavigation()
-	nav.DetailID = issueID
-	nav.ShowConversationWork = false
-	ct.SelectedIssueID = issueID
-	ct.SelectedWorkTaskID = taskID
-	a.setWorkspaceOpen(true)
-	if work.State != workFailed && !formattedRunFailure(work.Detail) {
-		if snapshot, current := a.issueWorkDisclosureSnapshot(ct, issue, work); current() {
-			nav.DetailScroll.Y = 0
-			a.confirmIssueExecutionSeen(snapshot.contact, snapshot.issue, snapshot.execution)
-		}
-	}
-}
-
-// Disclosure callbacks retain the original records, not redacted text or IDs
-// that could now resolve to a replacement record.
-type issueExecutionDisclosure struct {
-	contact                         *contact
-	issue                           *productIssue
-	execution                       *issueExecution
-	contactID, issueID, executionID string
-	status, detail                  string
-	sessionID, taskID, messageID    string
-}
-
-func captureIssueExecutionDisclosure(ct *contact, issue *productIssue, execution *issueExecution) issueExecutionDisclosure {
-	snapshot := issueExecutionDisclosure{contact: ct, issue: issue, execution: execution}
-	if ct != nil && issue != nil && execution != nil {
-		snapshot.contactID, snapshot.issueID, snapshot.executionID = ct.ID, issue.ID, execution.ID
-		snapshot.status, snapshot.detail = execution.Status, execution.Detail
-		snapshot.sessionID, snapshot.taskID, snapshot.messageID = execution.SessionID, execution.TaskID, execution.MessageID
-	}
-	return snapshot
-}
-
-func (a *appModel) issueExecutionDisclosureCurrent(snapshot issueExecutionDisclosure) bool {
-	ct, issue, execution := snapshot.contact, snapshot.issue, snapshot.execution
-	if a.shutdownStarted || ct == nil || issue == nil || execution == nil ||
-		a.selectedContact() != ct || a.contactByID(snapshot.contactID) != ct ||
-		ct.ID != snapshot.contactID || issue.ID != snapshot.issueID || issue.ContactID != ct.ID {
-		return false
-	}
-	owner, found := ct.executionByID(snapshot.executionID)
-	return owner == issue && found == execution && execution.ID == snapshot.executionID &&
-		issueExecutionNeedsAttention(execution.Status) && execution.Status == snapshot.status && execution.Detail == snapshot.detail &&
-		execution.SessionID == snapshot.sessionID && execution.TaskID == snapshot.taskID && execution.MessageID == snapshot.messageID
-}
-
-// confirmIssueExecutionSeen records that the current owner displayed this
-// exception. It persists only the seen status; the execution terminal state,
-// issue lifecycle, requirements, evidence, unread and dispatch state remain
-// unchanged. A failed save leaves the exception unseen and reports the error.
-func (a *appModel) confirmIssueExecutionSeen(ct *contact, issue *productIssue, execution *issueExecution) bool {
-	if a.shutdownStarted || ct == nil || issue == nil || execution == nil || a.selectedContact() != ct ||
-		a.contactByID(ct.ID) != ct || issue.ContactID != ct.ID {
-		return false
-	}
-	owner, found := ct.executionByID(execution.ID)
-	if owner != issue || found != execution || !issueExecutionNeedsAttention(found.Status) {
-		return false
-	}
-	if found.AttentionSeenStatus == found.Status {
-		return true
-	}
-	previous := found.AttentionSeenStatus
-	found.AttentionSeenStatus = found.Status
-	if err := a.persist(); err != nil {
-		found.AttentionSeenStatus = previous
-		a.setIssueActionNotice("Could not save that this execution was viewed: "+err.Error(), "view-save-failed", err.Error())
-		return false
-	}
-	return true
 }
 
 func issueExecutionStatusFromWork(state workState) string {

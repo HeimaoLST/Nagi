@@ -993,128 +993,12 @@ func (f *piAppFixture) question(binding pi.ContextBinding, issue *productIssue, 
 	return question
 }
 
-func (f *piAppFixture) answerForm(issue *productIssue, question *issueQuestion, draft string) *ui.Tester {
-	f.t.Helper()
-	var tr *ui.Tester
-	f.onUI(func() error {
-		f.app.closeIssueSupplementForm()
-		f.app.selectContact(0)
-		f.app.selectIssue(issue.ID)
-		tr = ui.NewTester(f.app.view, 1040, 1600)
-		tr.Frame()
-		if err := tr.Click(locales.WorkAnswer()); err != nil {
-			return err
-		}
-		tr.Frame()
-		captured := f.app.issueSupplementAnswerTarget
-		if captured.ContactID != issue.ContactID || captured.IssueID != issue.ID || captured.RequirementsRevision != question.RequirementsRevision || f.app.issueSupplementQuestionRef != question.Ref {
-			return errors.New("actual rendered Answer callback did not capture its displayed target")
-		}
-		return nil
-	})
-	f.formInput(tr, issue.ID, draft)
-	return tr
-}
-
-func (f *piAppFixture) formInput(tr *ui.Tester, issueID, text string) {
+func (f *piAppFixture) saveAnswer(target issueSupplementTarget, ref, text string, wantSaved bool) {
 	f.t.Helper()
 	f.onUI(func() error {
-		inputLabel := locales.SupplementFormLabel()
-		if f.app.issueSupplementAnswerTarget.IssueID != "" {
-			inputLabel = locales.WorkAnswer()
+		if saved := f.app.saveIssueQuestionAnswer(target, ref, text); saved != wantSaved {
+			return fmt.Errorf("answer save for issue %s = %t, want %t: %s", target.IssueID, saved, wantSaved, f.app.issueActionError)
 		}
-		if err := focusPiControl(tr, inputLabel, true); err != nil {
-			return err
-		}
-		tr.Key(ui.Cmd, ui.KeyA)
-		tr.Type(text)
-		tr.Frame()
-		if *f.app.issueSupplementDraft(issueID) != text {
-			return errors.New("actual form text area did not retain typed text")
-		}
-		return nil
-	})
-}
-
-func (f *piAppFixture) saveForm(tr *ui.Tester, saveLabel string) {
-	f.t.Helper()
-	f.onUI(func() error {
-		formID := f.app.issueSupplementFormID
-		target := f.app.issueSupplementAnswerTarget
-		questionRef := f.app.issueSupplementQuestionRef
-		ownerID := f.app.selectedContact().ID
-		inputLabel := locales.SupplementFormLabel()
-		if saveLabel == locales.WorkAnswer() {
-			inputLabel = locales.WorkAnswer()
-		}
-		if target.IssueID != "" {
-			ownerID = target.ContactID
-		}
-		_, cancelPresent := tr.Find(locales.SupplementCancel())
-		_, inputPresent := tr.Find(inputLabel)
-		_, savePresent := tr.Find(saveLabel)
-		beforeInputActive, _ := tr.TextInputActive()
-		facts := map[string]any{
-			"form_id": formID, "form_open": formID != "", "selected_contact_id": f.app.selectedContact().ID,
-			"target": target, "question_ref": questionRef, "input_label": inputLabel, "save_label": saveLabel,
-			"cancel_present": cancelPresent, "input_present": inputPresent, "save_present": savePresent,
-			"cancel_focused_before": tr.Focused(locales.SupplementCancel()), "input_label_focused_before": tr.Focused(inputLabel), "save_label_focused_before": tr.Focused(saveLabel),
-			"text_input_active_before": beforeInputActive,
-		}
-		piAppRecord(f.t, "form-focus-before", facts)
-		if formID == "" || !cancelPresent || !inputPresent || !savePresent {
-			return errors.New("the actual form or its Cancel/input/Save controls are absent; Save was not activated")
-		}
-		draft := f.app.issueSupplementDraft(formID)
-		beforeDraft := *draft
-		focusErr := focusPiFormSave(tr, inputLabel, saveLabel)
-		saveInputActive, _ := tr.TextInputActive()
-		facts["save_label_focused"] = tr.Focused(saveLabel)
-		facts["text_input_active_at_save"] = saveInputActive
-		facts["draft_before_activation"] = *draft
-		piAppRecord(f.t, "form-save-before", facts)
-		if focusErr != nil {
-			return focusErr
-		}
-		if *draft != beforeDraft {
-			return errors.New("focusing Save changed the draft")
-		}
-		tr.Key(0, ui.KeySpace)
-		tr.Frame()
-		afterInputActive, _ := tr.TextInputActive()
-		association := map[string]any{"owner_id": ownerID, "issue_id": formID, "question_ref": questionRef}
-		issue := issueForContact(f.app.contactByID(ownerID), formID)
-		association["issue_found"] = issue != nil
-		if issue != nil {
-			association["issue_status"] = issue.Status
-			association["supplement_count"] = 0
-			if issue.Supplements != nil {
-				association["supplement_count"] = len(issue.Supplements.Items)
-			}
-			if question := issue.questionByRef(questionRef); question != nil {
-				association["question_state"], association["answer_supplement_id"] = question.State, question.AnswerSupplementID
-			}
-		}
-		piAppRecord(f.t, "form-save-after", map[string]any{
-			"form_id": f.app.issueSupplementFormID, "form_open": f.app.issueSupplementFormID != "",
-			"target": f.app.issueSupplementAnswerTarget, "question_ref": f.app.issueSupplementQuestionRef, "save_label": saveLabel,
-			"cancel_focused_after": tr.Focused(locales.SupplementCancel()), "input_label_focused_after": tr.Focused(inputLabel), "save_label_focused_after": tr.Focused(saveLabel),
-			"text_input_active_after": afterInputActive,
-			"error":                   f.app.issueActionError, "notice": f.app.issueActionNotice, "notice_detail": f.app.issueActionNoticeDetail,
-			"draft": *draft, "association": association,
-		})
-		return nil
-	})
-}
-
-func (f *piAppFixture) rejectedForm(tr *ui.Tester, issue *productIssue, draft string) {
-	f.t.Helper()
-	f.saveForm(tr, locales.WorkAnswer())
-	f.onUI(func() error {
-		if f.app.issueActionError == "" || !tr.HasText(f.app.issueActionError) || *f.app.issueSupplementDraft(issue.ID) != draft || issue.Supplements != nil && len(issue.Supplements.Items) != 0 {
-			return fmt.Errorf("rejected form lost draft or created an answer: error=%q draft=%q", f.app.issueActionError, *f.app.issueSupplementDraft(issue.ID))
-		}
-		piAppRecord(f.t, "rejected-form", map[string]any{"issue": issue.ID, "question": f.app.issueSupplementQuestionRef, "target": f.app.issueSupplementAnswerTarget, "draft": draft, "error": f.app.issueActionError})
 		return nil
 	})
 }
@@ -1127,7 +1011,7 @@ func TestPiAppCapturedQuestionAnswerForm(t *testing.T) {
 	success := f.issue(aID, "Answer exactly once")
 	question := f.question(binding, success, "Which delivery should be used?")
 	answer := "Use the captured delivery.\n保留这一行。"
-	tr := f.answerForm(success, question, answer)
+	target := issueSupplementTarget{ContactID: aID, IssueID: success.ID, RequirementsRevision: question.RequirementsRevision}
 	beforeSave := f.provider.count()
 	storePath := f.app.store.path
 	backupPath := storePath + ".answer-failure-backup"
@@ -1186,7 +1070,7 @@ func TestPiAppCapturedQuestionAnswerForm(t *testing.T) {
 		t.Fatal(err)
 	}
 	obstruction = true
-	f.saveForm(tr, locales.WorkAnswer())
+	f.saveAnswer(target, question.Ref, answer, false)
 	f.onUI(func() error {
 		committedAfter, err := json.Marshal(f.app.store.state)
 		if err != nil {
@@ -1205,9 +1089,9 @@ func TestPiAppCapturedQuestionAnswerForm(t *testing.T) {
 		for id, waiter := range f.app.issueToolWaiters {
 			waitersAfter[id] = len(waiter)
 		}
-		observations["failure"] = map[string]any{"error": f.app.issueActionError, "draft": *f.app.issueSupplementDraft(success.ID), "question": *question, "supplement_count": supplementCount, "committed": json.RawMessage(committedAfter), "operations": json.RawMessage(operationsAfter), "disk_sha256": fmt.Sprintf("%x", sha256.Sum256(diskAfter)), "waiters": waitersAfter, "requests": f.provider.count()}
-		if err != nil || f.app.issueActionError == "" || !tr.HasText(f.app.issueActionError) || *f.app.issueSupplementDraft(success.ID) != answer || f.app.issueSupplementFormID != success.ID || question.State != issueQuestionOpen || question.AnswerSupplementID != "" || success.Supplements != nil && len(success.Supplements.Items) != 0 || !bytes.Equal(committedBefore, committedAfter) || !bytes.Equal(operationsBefore, operationsAfter) || !bytes.Equal(diskBefore, diskAfter) || !reflect.DeepEqual(waitersBefore, waitersAfter) || f.provider.count() != beforeSave {
-			return fmt.Errorf("failed answer save changed durable state or lost its draft: %v", err)
+		observations["failure"] = map[string]any{"error": f.app.issueActionError, "answer": answer, "question": *question, "supplement_count": supplementCount, "committed": json.RawMessage(committedAfter), "operations": json.RawMessage(operationsAfter), "disk_sha256": fmt.Sprintf("%x", sha256.Sum256(diskAfter)), "waiters": waitersAfter, "requests": f.provider.count()}
+		if err != nil || f.app.issueActionError == "" || question.State != issueQuestionOpen || question.AnswerSupplementID != "" || supplementCount != 0 || !bytes.Equal(committedBefore, committedAfter) || !bytes.Equal(operationsBefore, operationsAfter) || !bytes.Equal(diskBefore, diskAfter) || !reflect.DeepEqual(waitersBefore, waitersAfter) || f.provider.count() != beforeSave {
+			return fmt.Errorf("failed answer save changed durable state: %v", err)
 		}
 		return nil
 	})
@@ -1235,14 +1119,14 @@ func TestPiAppCapturedQuestionAnswerForm(t *testing.T) {
 	if err != nil || failedIssue == nil || failedIssue.openQuestion() == nil || failedIssue.openQuestion().Ref != question.Ref || failedIssue.openQuestion().AnswerSupplementID != "" || failedIssue.Supplements != nil && len(failedIssue.Supplements.Items) != 0 || !bytes.Equal(operationsBefore, failedOperations) {
 		t.Fatalf("reopened failed answer changed question or receipt: %v", err)
 	}
-	f.saveForm(tr, locales.WorkAnswer())
+	f.saveAnswer(target, question.Ref, answer, true)
 	var supplementID string
 	f.onUI(func() error {
-		if question.State != issueQuestionAnswered || question.AnswerSupplementID == "" || success.Supplements == nil || len(success.Supplements.Items) != 1 || success.Supplements.Items[0].Text != answer || success.Supplements.Items[0].ID != question.AnswerSupplementID || f.app.issueSupplementFormID != "" || *f.app.issueSupplementDraft(success.ID) != "" {
-			return errors.New("actual GUI save did not make one atomic answer/supplement association")
+		if question.State != issueQuestionAnswered || question.AnswerSupplementID == "" || success.Supplements == nil || len(success.Supplements.Items) != 1 || success.Supplements.Items[0].Text != answer || success.Supplements.Items[0].ID != question.AnswerSupplementID {
+			return errors.New("save did not make one atomic answer/supplement association")
 		}
 		supplementID = question.AnswerSupplementID
-		observations["after"] = map[string]any{"question": *question, "supplement_id": supplementID, "draft": *f.app.issueSupplementDraft(success.ID), "requests": f.provider.count()}
+		observations["after"] = map[string]any{"question": *question, "supplement_id": supplementID, "requests": f.provider.count()}
 		return nil
 	})
 	if f.provider.count() != beforeSave {
@@ -1289,16 +1173,15 @@ func TestPiAppCapturedQuestionAnswerForm(t *testing.T) {
 	superseded := f.issue(aID, "Captured superseded question")
 	old := f.question(binding, superseded, "First question")
 	staleDraft := "Draft for the first question"
-	staleForm := f.answerForm(superseded, old, staleDraft)
+	oldTarget := issueSupplementTarget{ContactID: aID, IssueID: superseded.ID, RequirementsRevision: old.RequirementsRevision}
 	newer := f.question(binding, superseded, "Replacement at the same revision")
 	f.onUI(func() error {
 		if old.State != issueQuestionSuperseded || old.RequirementsRevision != newer.RequirementsRevision || old.Ref == newer.Ref {
 			return errors.New("fixture did not produce a real same-revision replacement question")
 		}
-		staleForm.Frame()
 		return nil
 	})
-	f.rejectedForm(staleForm, superseded, staleDraft)
+	f.saveAnswer(oldTarget, old.Ref, staleDraft, false)
 	f.onUI(func() error {
 		if newer.State != issueQuestionOpen || newer.AnswerSupplementID != "" || old.AnswerSupplementID != "" {
 			return errors.New("old form answered or retargeted a replacement question")
@@ -1307,82 +1190,52 @@ func TestPiAppCapturedQuestionAnswerForm(t *testing.T) {
 	})
 	stale := f.issue(aID, "Captured stale requirements")
 	staleQuestion := f.question(binding, stale, "Answer before requirements change")
-	staleRevisionForm := f.answerForm(stale, staleQuestion, "Preserve stale revision draft")
+	staleTarget := issueSupplementTarget{ContactID: aID, IssueID: stale.ID, RequirementsRevision: staleQuestion.RequirementsRevision}
 	f.onUI(func() error {
 		if !f.app.editIssueFor(f.app.contactByID(aID), stale.ID, stale.Goal, "Changed requirement") {
 			return errors.New(f.app.issueFormError)
 		}
-		staleRevisionForm.Frame()
 		return nil
 	})
-	f.rejectedForm(staleRevisionForm, stale, "Preserve stale revision draft")
+	f.saveAnswer(staleTarget, staleQuestion.Ref, "Preserve stale revision draft", false)
 	completed := f.issue(aID, "Captured completed issue")
 	completedQuestion := f.question(binding, completed, "Answer before explicit completion")
-	completedForm := f.answerForm(completed, completedQuestion, "Preserve completed issue draft")
+	completedTarget := issueSupplementTarget{ContactID: aID, IssueID: completed.ID, RequirementsRevision: completedQuestion.RequirementsRevision}
 	f.onUI(func() error {
 		if !f.app.completeIssueFor(f.app.contactByID(aID), completed.ID, "Completed explicitly by the fixture user") {
 			return errors.New("real product completion was rejected")
 		}
-		completedForm.Frame()
 		return nil
 	})
-	f.rejectedForm(completedForm, completed, "Preserve completed issue draft")
+	f.saveAnswer(completedTarget, completedQuestion.Ref, "Preserve completed issue draft", false)
 	owned := f.issue(aID, "Captured owner")
 	ownedQuestion := f.question(binding, owned, "Only the captured owner may answer")
 	ownedDraft := "Keep the original owner's draft"
-	ownedForm := f.answerForm(owned, ownedQuestion, ownedDraft)
+	ownedTarget := issueSupplementTarget{ContactID: aID, IssueID: owned.ID, RequirementsRevision: ownedQuestion.RequirementsRevision}
 	f.onUI(func() error {
 		f.app.selectContact(1)
-		ownedForm.Frame()
-		if f.app.issueSupplementAnswerTarget.ContactID != aID || *f.app.issueSupplementDraft(owned.ID) != ownedDraft {
-			return errors.New("selection change retargeted or erased the captured answer")
-		}
 		_, err := f.app.answerIssueQuestionFor(f.app.contactByID(bID), owned.ID, ownedQuestion.Ref, &ownedQuestion.RequirementsRevision, ownedDraft, nil, nil)
 		var domain *IssueToolError
 		if !errors.As(err, &domain) || domain.Code != "not_found" || len(f.app.contactByID(bID).Issues) != 0 || ownedQuestion.AnswerSupplementID != "" {
 			return fmt.Errorf("actual shared owner guard did not reject: %v", err)
 		}
-		f.app.selectContact(0)
-		f.app.selectIssue(owned.ID)
-		ownedForm.Frame()
-		if err := ownedForm.Click(locales.SupplementCancel()); err != nil {
-			return err
-		}
-		ownedForm.Frame()
-		if f.app.issueSupplementQuestionRef != "" || f.app.issueSupplementAnswerTarget.IssueID != "" || *f.app.issueSupplementDraft(owned.ID) != ownedDraft {
-			return errors.New("Cancel did not clear only transient answer routing")
-		}
 		return nil
 	})
-	ownedForm = f.answerForm(owned, ownedQuestion, ownedDraft)
-	f.saveForm(ownedForm, locales.WorkAnswer())
+	f.saveAnswer(ownedTarget, ownedQuestion.Ref, ownedDraft, true)
 	f.onUI(func() error {
-		if ownedQuestion.State != issueQuestionAnswered || ownedQuestion.AnswerSupplementID == "" || len(owned.Supplements.Items) != 1 || len(f.app.contactByID(bID).Issues) != 0 {
-			return errors.New("reopened captured owner form failed or mutated the other contact")
+		if f.app.selectedID() != bID || ownedQuestion.State != issueQuestionAnswered || ownedQuestion.AnswerSupplementID == "" || len(owned.Supplements.Items) != 1 || len(f.app.contactByID(bID).Issues) != 0 {
+			return errors.New("captured owner answer changed the selected contact or another owner")
 		}
 		return nil
 	})
 	ordinary := f.issue(aID, "Ordinary follow-up stays ordinary")
 	ordinaryQuestion := f.question(binding, ordinary, "This question must remain unanswered")
-	var ordinaryForm *ui.Tester
 	f.onUI(func() error {
-		f.app.closeIssueSupplementForm()
-		f.app.selectIssue(ordinary.ID)
-		ordinaryForm = ui.NewTester(f.app.view, 1040, 1600)
-		if err := ordinaryForm.Click(locales.IssueMoreActions()); err != nil {
+		const text = "An ordinary follow-up, not a question answer"
+		if err := f.app.addIssueSupplement(f.app.contactByID(aID), ordinary.ID, text); err != nil {
 			return err
 		}
-		ordinaryForm.Frame()
-		if err := ordinaryForm.Click(locales.SupplementAdd()); err != nil {
-			return err
-		}
-		ordinaryForm.Frame()
-		return nil
-	})
-	f.formInput(ordinaryForm, ordinary.ID, "An ordinary follow-up, not a question answer")
-	f.saveForm(ordinaryForm, locales.IssueSupplementSave())
-	f.onUI(func() error {
-		if ordinaryQuestion.State != issueQuestionOpen || ordinaryQuestion.AnswerSupplementID != "" || ordinary.Supplements == nil || len(ordinary.Supplements.Items) != 1 || ordinary.Supplements.Items[0].Text != "An ordinary follow-up, not a question answer" || f.app.issueSupplementFormID != "" {
+		if ordinaryQuestion.State != issueQuestionOpen || ordinaryQuestion.AnswerSupplementID != "" || ordinary.Supplements == nil || len(ordinary.Supplements.Items) != 1 || ordinary.Supplements.Items[0].Text != text {
 			return errors.New("ordinary follow-up was retargeted to a question answer")
 		}
 		return nil
@@ -1475,13 +1328,6 @@ func focusPiControl(tr *ui.Tester, label string, input bool) error {
 		tr.Frame()
 	}
 	return fmt.Errorf("controller %q was not keyboard reachable as text input=%v", label, input)
-}
-
-func focusPiFormSave(tr *ui.Tester, inputLabel, saveLabel string) error {
-	if err := focusPiControl(tr, inputLabel, true); err != nil {
-		return err
-	}
-	return focusPiControl(tr, saveLabel, false)
 }
 
 func (h *piFirstUseHarness) activate(label string) {
@@ -2274,7 +2120,7 @@ func TestPiAppConnectionAndConversation(t *testing.T) {
 		t.Fatalf("actual catalog or Apply request count differs: %+v requests=%d", ready.BuiltinCatalog, h.provider.count())
 	}
 	piAppRecord(t, "actual-ready-catalog", ready)
-	h.click("Contact profile")
+	h.click(locales.In("en").SettingsContact())
 	h.click("Save changes")
 	h.profileSelection(nil)
 	defaultLabel := "Use host defaults (" + strings.Join(ready.BuiltinCatalog.Defaults, ", ") + ")"
@@ -2451,7 +2297,7 @@ func TestPiAppConnectionAndConversation(t *testing.T) {
 	if err != nil || !reflect.DeepEqual(unchanged, oldConfig) {
 		t.Fatalf("Apply changed captured context configuration: before=%+v after=%+v error=%v", oldConfig, unchanged, err)
 	}
-	h.click("Contact profile")
+	h.click(locales.In("en").SettingsContact())
 	h.activate(defaultLabel)
 	for _, name := range []string{"bash", "edit", "write"} {
 		h.activate(name)
@@ -2470,7 +2316,7 @@ func TestPiAppConnectionAndConversation(t *testing.T) {
 		return ct != nil && ct.SendState == sendIdle && ct.SessionState == string(pi.Completed) && ct.ActiveTaskID == "" && app.submissionInFlight == 0
 	}, 30*time.Second)
 	h.click("Settings")
-	h.click("Contact profile")
+	h.click(locales.In("en").SettingsContact())
 	h.click("Save and start new chat")
 	h.onUI(func() error {
 		ct := app.selectedContact()
@@ -2810,8 +2656,8 @@ func (h *piFirstUseHarness) checkIndependentBotHistory(bots *[2]piIndependentBot
 	for index := range bots {
 		bot, other := &bots[index], &bots[1-index]
 		h.click(msgs.AvatarContactLabel(bot.name))
-		h.click("History")
 		h.onUI(func() error {
+			h.tester.Frame()
 			ct := h.app.selectedContact()
 			if ct == nil || ct.ID != bot.id || ct.Name != bot.name || ct.Draft != bot.draft || !ct.Loaded || ct.LoadErr != "" ||
 				!reflect.DeepEqual(ct.PiBinding, bot.binding) || ct.SessionID != bot.binding.Context.SessionRef || bot.binding.Context.BotID != ct.ID {
@@ -2836,8 +2682,8 @@ func (h *piFirstUseHarness) checkIndependentBotHistory(bots *[2]piIndependentBot
 			if !strings.HasPrefix(ids[0], prefix) || !strings.HasPrefix(ids[1], prefix) || ids[0] == ids[1] || reopened && ids != bot.historyIDs {
 				return fmt.Errorf("Bot %q prompt/reply history identities changed: got %q, previous %q", bot.name, ids, bot.historyIDs)
 			}
-			if !h.tester.HasText(msgs.HistoryTitle(bot.name)) || !h.tester.HasText(bot.prompt) || !h.tester.HasText(bot.reply) {
-				return fmt.Errorf("Bot %q history is missing its prompt or reply in the UI: %v", bot.name, h.tester.Texts())
+			if !h.tester.HasText(bot.prompt) || !h.tester.HasText(bot.reply) || h.tester.HasText(other.prompt) || h.tester.HasText(other.reply) {
+				return fmt.Errorf("Bot %q chat has missing or foreign messages: %v", bot.name, h.tester.Texts())
 			}
 			bot.historyIDs = ids
 			piAppRecord(h.t, "independent-bot-history", map[string]any{
@@ -2846,7 +2692,6 @@ func (h *piFirstUseHarness) checkIndependentBotHistory(bots *[2]piIndependentBot
 			})
 			return nil
 		})
-		h.click(msgs.CloseHistory())
 	}
 }
 
@@ -3047,220 +2892,35 @@ func (h *piActivityHarness) screenshot(name string) {
 	save()
 }
 
-func (h *piActivityHarness) activateActivity(label string, check func() error) {
-	h.t.Helper()
-	var actionErr error
-	var save func()
-	h.pump.do(func() {
-		actionErr = h.focus(label, false)
-		if actionErr == nil {
-			h.tester.Key(0, ui.KeySpace)
-			h.tester.Frame()
-			actionErr = check()
-		}
-		if actionErr == nil {
-			return
-		}
-		h.tester.Frame()
-		image := h.tester.Image()
-		save = func() { writePreviewPNG(h.t, filepath.Join(h.evidence, "activity-control-failure.png"), image) }
-		labels := h.tester.Texts()
-		count := len(labels)
-		if len(labels) > 100 {
-			labels = labels[:100]
-		}
-		bounds, found := h.tester.Find(label)
-		active, noInputMethod := h.tester.TextInputActive()
-		selectedContact, selectedIssue, detailIssue := "", "", ""
-		chatWork := false
-		if ct := h.app.selectedContact(); ct != nil {
-			selectedContact, selectedIssue, detailIssue = ct.ID, ct.SelectedIssueID, ct.issueView.DetailID
-			chatWork = ct.issueView.ShowConversationWork
-		}
-		piAppRecord(h.t, "activity-control-failure", map[string]any{
-			"control": label, "error": actionErr.Error(), "expected_contact": h.contactID,
-			"selected_contact": selectedContact, "selected_issue": selectedIssue, "detail_issue": detailIssue,
-			"conversation_work": chatWork, "form_id": h.app.issueSupplementFormID,
-			"answer_target": h.app.issueSupplementAnswerTarget, "question_ref": h.app.issueSupplementQuestionRef,
-			"frame_labels_first_100": labels, "frame_label_count": count, "first_match_found": found,
-			"first_match_bounds": bounds, "controller_focused": h.tester.Focused(label),
-			"text_input_active": active, "no_input_method": noInputMethod, "viewport": image.Bounds(),
-		})
-	})
-	if actionErr != nil {
-		save()
-		h.t.Fatal(actionErr)
-	}
-}
-
-func (h *piActivityHarness) backToIssues() {
-	h.t.Helper()
-	var detailID, selectedID string
-	var conversationWork bool
-	h.onUI(func() error {
-		ct := h.app.selectedContact()
-		if ct == nil || ct.ID != h.contactID {
-			return errors.New("back navigation lost its captured contact")
-		}
-		detailID, selectedID, conversationWork = ct.issueView.DetailID, ct.SelectedIssueID, ct.issueView.ShowConversationWork
-		if detailID == "" && !conversationWork {
-			return errors.New("back navigation has no captured detail or conversation work")
-		}
-		return nil
-	})
-	h.activateActivity(locales.In("en").WorkBackToIssues(), func() error {
-		ct := h.app.selectedContact()
-		if ct == nil || ct.ID != h.contactID || ct.SelectedIssueID != selectedID || ct.issueView.ShowConversationWork {
-			return errors.New("back navigation changed its captured owner or did not leave conversation work")
-		}
-		if conversationWork && ct.issueView.DetailID != detailID || !conversationWork && (ct.issueView.DetailID != "" || ct.SelectedWorkTaskID != "") {
-			return errors.New("back navigation did not reach the expected activity overview")
-		}
-		return nil
-	})
-}
-
-func (h *piActivityHarness) cancelFollowup(issueID, draft string) {
-	h.t.Helper()
-	h.activateActivity(locales.In("en").SupplementCancel(), func() error {
-		ct := h.app.selectedContact()
-		saved := h.app.issueSupplementDrafts[issueID]
-		if ct == nil || ct.ID != h.contactID || ct.SelectedIssueID != issueID || ct.issueView.DetailID != issueID ||
-			h.app.issueSupplementFormID != "" || h.app.issueSupplementAnswerTarget != (issueSupplementTarget{}) ||
-			h.app.issueSupplementQuestionRef != "" || saved == nil || *saved != draft {
-			return errors.New("cancel did not close the captured ordinary form and preserve its draft")
-		}
-		return nil
-	})
-}
-
-func (h *piActivityHarness) openFollowup(issueID, name string) {
-	h.t.Helper()
-	h.screenshot("activity-followup-before-action-" + name)
-	h.onUI(func() error {
-		msgs := locales.In("en")
-		record := func(stage, controller string) {
-			h.tester.Frame()
-			labels := h.tester.Texts()
-			labelCount := len(labels)
-			if len(labels) > 100 {
-				labels = labels[:100]
-			}
-			bounds := map[string]any{}
-			for _, label := range []string{msgs.IssueMoreActions(), msgs.IssueHideActions(), msgs.SupplementAdd(), msgs.SupplementFormLabel()} {
-				rect, found := h.tester.Find(label)
-				bounds[label] = map[string]any{"found": found, "bounds": rect}
-			}
-			active, noInputMethod := h.tester.TextInputActive()
-			selectedContact, selectedIssue, detailIssue := "", "", ""
-			if ct := h.app.selectedContact(); ct != nil {
-				selectedContact, selectedIssue, detailIssue = ct.ID, ct.SelectedIssueID, ct.issueView.DetailID
-			}
-			piAppRecord(h.t, "activity-followup-action", map[string]any{
-				"stage": stage, "expected_contact": h.contactID, "expected_issue": issueID,
-				"selected_contact": selectedContact, "selected_issue": selectedIssue, "detail_issue": detailIssue,
-				"expanded": h.app.issueDetailOpen[issueID], "form_id": h.app.issueSupplementFormID,
-				"answer_target": h.app.issueSupplementAnswerTarget, "question_ref": h.app.issueSupplementQuestionRef,
-				"frame_labels_first_100": labels, "frame_label_count": labelCount, "first_match_bounds": bounds,
-				"expected_controller": controller, "controller_focused": h.tester.Focused(controller),
-				"text_input_active": active, "no_input_method": noInputMethod, "viewport": h.tester.Image().Bounds(),
-			})
-		}
-		owned := func() bool {
-			ct := h.app.selectedContact()
-			return ct != nil && ct.ID == h.contactID && ct.SelectedIssueID == issueID && ct.issueView.DetailID == issueID && ct.issueByID(issueID) != nil
-		}
-		record("before-more-actions", msgs.IssueMoreActions())
-		if !owned() {
-			return errors.New("follow-up action lost its captured contact or issue")
-		}
-		if !h.app.issueDetailOpen[issueID] {
-			if err := h.focus(msgs.IssueMoreActions(), false); err != nil {
-				record("more-actions-focus-failed", msgs.IssueMoreActions())
-				return err
-			}
-			h.tester.Key(0, ui.KeySpace)
-		}
-		record("after-more-actions", msgs.SupplementAdd())
-		if !owned() || !h.app.issueDetailOpen[issueID] || !h.tester.HasText(msgs.IssueHideActions()) {
-			return errors.New("activity actions did not expand for the captured issue")
-		}
-		if err := h.focus(msgs.SupplementAdd(), false); err != nil {
-			record("add-follow-up-focus-failed", msgs.SupplementAdd())
-			return err
-		}
-		h.tester.Key(0, ui.KeySpace)
-		record("after-add-follow-up", msgs.SupplementFormLabel())
-		if !owned() || h.app.issueSupplementFormID != issueID || h.app.issueSupplementAnswerTarget != (issueSupplementTarget{}) || h.app.issueSupplementQuestionRef != "" {
-			return errors.New("ordinary follow-up form did not open for the captured issue")
-		}
-		return nil
-	})
-}
-
 func (h *piActivityHarness) createIssue(goal string) string {
 	h.t.Helper()
-	msgs := locales.In("en")
-	h.activateActivity(msgs.IssueNewIssue(), func() error {
-		if ct := h.app.selectedContact(); ct == nil || ct.ID != h.contactID || !h.app.issueFormOpen || h.app.issueFormEditingID != "" {
-			return errors.New("new issue form did not open for the captured contact")
-		}
-		return nil
-	})
-	h.onUI(func() error {
-		if err := h.focus(msgs.IssueFormGoalLabel(), true); err != nil {
-			return err
-		}
-		h.tester.Type(goal)
-		if err := h.focus(msgs.IssueFormRequirementsLabel(), true); err != nil {
-			return err
-		}
-		h.tester.Type("Keep the captured activity ownership.")
-		return nil
-	})
 	var id string
-	h.activateActivity(msgs.WorkSaveIssue(), func() error {
+	h.onUI(func() error {
 		ct := h.app.contactByID(h.contactID)
-		if ct == nil || h.app.selectedContact() != ct || h.app.issueFormOpen || ct.SelectedIssueID == "" || ct.issueByID(ct.SelectedIssueID) == nil || ct.issueByID(ct.SelectedIssueID).Goal != goal || ct.issueView.DetailID != ct.SelectedIssueID {
-			return fmt.Errorf("GUI did not create captured issue %q", goal)
+		if ct == nil {
+			return errors.New("activity owner is no longer available")
 		}
-		id = ct.SelectedIssueID
+		issue, err := h.app.createIssueFor(ct, goal, "Keep the captured activity ownership.")
+		if err != nil {
+			return err
+		}
+		id = issue.ID
 		return nil
 	})
-	h.backToIssues()
 	return id
 }
 
-func (h *piActivityHarness) selectIssue(goal, id string) {
+func (h *piActivityHarness) startIssue(id string) {
 	h.t.Helper()
-	h.activateActivity(locales.In("en").IssueRowLabel(goal), func() error {
-		ct := h.app.contactByID(h.contactID)
-		if ct == nil || h.app.selectedContact() != ct || ct.SelectedIssueID != id || ct.issueNavigation().DetailID != id || ct.issueView.ShowConversationWork {
-			return errors.New("GUI selected a different activity")
-		}
-		return nil
-	})
-}
-
-func (h *piActivityHarness) startIssue(label, id string) {
-	h.t.Helper()
-	var before int
 	h.onUI(func() error {
-		ct := h.app.selectedContact()
-		if ct == nil || ct.ID != h.contactID || ct.SelectedIssueID != id || ct.issueView.DetailID != id || ct.issueByID(id) == nil {
+		ct := h.app.contactByID(h.contactID)
+		issue := ct.issueByID(id)
+		if issue == nil {
 			return errors.New("run action lost its captured activity")
 		}
-		before = len(ct.issueByID(id).Executions)
-		return nil
-	})
-	h.activateActivity(label, func() error {
-		ct := h.app.selectedContact()
-		if ct == nil || ct.ID != h.contactID || ct.SelectedIssueID != id || ct.issueView.DetailID != id {
-			return errors.New("run action changed its captured activity")
-		}
-		issue := ct.issueByID(id)
-		if issue == nil || len(issue.Executions) != before+1 || latestIssueExecution(issue) == nil || !latestIssueExecution(issue).PiIntent {
-			return errors.New("GUI did not persist an activity intent")
+		before := len(issue.Executions)
+		if !h.app.startIssueRun(ct, issue) || len(issue.Executions) != before+1 || !latestIssueExecution(issue).PiIntent {
+			return fmt.Errorf("activity did not persist a run intent: %s", h.app.issueFormError)
 		}
 		return nil
 	})
@@ -3280,20 +2940,13 @@ func (h *piActivityHarness) waitSignal(signal <-chan struct{}, name string) {
 	}
 }
 
-func (h *piActivityHarness) saveForm(inputLabel, saveLabel string) {
+func (h *piActivityHarness) saveAnswer(issueID, ref string, revision int, text string, wantSaved bool) {
 	h.t.Helper()
 	h.onUI(func() error {
-		formID := h.app.issueSupplementFormID
-		draft := h.app.issueSupplementDraft(formID)
-		beforeDraft := *draft
-		if err := focusPiFormSave(h.tester, inputLabel, saveLabel); err != nil {
-			return err
+		target := issueSupplementTarget{ContactID: h.contactID, IssueID: issueID, RequirementsRevision: revision}
+		if saved := h.app.saveIssueQuestionAnswer(target, ref, text); saved != wantSaved {
+			return fmt.Errorf("answer save for issue %s = %t, want %t: %s", issueID, saved, wantSaved, h.app.issueActionError)
 		}
-		if *draft != beforeDraft {
-			return errors.New("focusing activity form Save changed the draft")
-		}
-		h.tester.Key(0, ui.KeySpace)
-		h.tester.Frame()
 		return nil
 	})
 }
@@ -3436,34 +3089,15 @@ func TestPiAppActivitiesAndQuestions(t *testing.T) {
 	}
 	piAppRecord(t, "activity-ready", ready)
 	h.click("← Back to workbench")
-	h.click("Work")
 	issueA := h.createIssue("ACTIVITY_A")
 	issueB := h.createIssue("ACTIVITY_B")
 	issueC := h.createIssue("ACTIVITY_C_PREATTEMPT")
 	p.mu.Lock()
 	p.issueA, p.issueB = issueA, issueB
 	p.mu.Unlock()
-	msgs := locales.In("en")
-	h.selectIssue("ACTIVITY_A", issueA)
-	h.startIssue(msgs.WorkStart(), issueA)
+	h.startIssue(issueA)
 	h.waitSignal(p.arrivedA, "activity A provider request")
-	h.openFollowup(issueA, "a")
-	const initialDraft = "Keep this follow-up draft"
-	const finalDraft = initialDraft + " while the question arrives"
-	h.onUI(func() error {
-		if err := h.focus(msgs.SupplementFormLabel(), true); err != nil {
-			return err
-		}
-		h.tester.Type(initialDraft)
-		h.tester.Frame()
-		active, _ := h.tester.TextInputActive()
-		if !active || !h.tester.Focused(msgs.SupplementFormLabel()) || *app.issueSupplementDraft(issueA) != initialDraft || app.issueSupplementFormID != issueA {
-			return errors.New("ordinary follow-up did not retain its focused draft")
-		}
-		piAppRecord(t, "activity-followup-before", map[string]any{"issue_id": issueA, "focused": true, "text_input_active": active, "draft": *app.issueSupplementDraft(issueA)})
-		return nil
-	})
-	h.screenshot("activity-followup-before-question")
+	const finalDraft = "Keep this follow-up draft while the question arrives"
 	releaseA.Do(func() { close(p.releaseA) })
 	h.wait(func() bool {
 		issue := app.contactByID(h.contactID).issueByID(issueA)
@@ -3490,27 +3124,9 @@ func TestPiAppActivitiesAndQuestions(t *testing.T) {
 		if operation == nil || operation.PiCall == nil || *operation.PiCall != questionA || operation.Receipt == nil || operation.Receipt.QuestionRef != questionRef {
 			return errors.New("held call operation receipt is not correlated to its question")
 		}
-		h.tester.Frame()
-		active, _ := h.tester.TextInputActive()
-		if !active || !h.tester.Focused(msgs.SupplementFormLabel()) || *app.issueSupplementDraft(issueA) != initialDraft {
-			return errors.New("question arrival changed the focused follow-up controller or draft")
-		}
-		h.tester.Type(" while the question arrives")
-		h.tester.Key(ui.Cmd, ui.KeyA)
-		h.tester.Key(ui.Cmd, ui.KeyC)
-		h.tester.Frame()
-		active, _ = h.tester.TextInputActive()
-		if !active || *app.issueSupplementDraft(issueA) != finalDraft || h.tester.Clipboard() != finalDraft || !h.tester.Focused(msgs.SupplementFormLabel()) {
-			return errors.New("typing or copying after the question lost the focused follow-up")
-		}
-		piAppRecord(t, "activity-followup-after", map[string]any{"question": questionRef, "call": questionA, "run": runA, "focused": true, "text_input_active": active, "draft": *app.issueSupplementDraft(issueA), "copied": h.tester.Clipboard()})
 		return nil
 	})
-	h.screenshot("activity-followup-after-question")
-	h.cancelFollowup(issueA, finalDraft)
-	h.backToIssues()
-	h.selectIssue("ACTIVITY_B", issueB)
-	h.startIssue(msgs.WorkStart(), issueB)
+	h.startIssue(issueB)
 	h.waitSignal(p.arrivedB, "activity B provider request")
 	var runB piActivityRun
 	var bindingB *piActivityBinding
@@ -3555,36 +3171,19 @@ func TestPiAppActivitiesAndQuestions(t *testing.T) {
 		return nil
 	}
 	beforeCapacity := p.count()
-	h.backToIssues()
-	h.selectIssue("ACTIVITY_C_PREATTEMPT", issueC)
-	h.openFollowup(issueC, "c")
 	h.onUI(func() error {
-		if err := h.focus(msgs.SupplementFormLabel(), true); err != nil {
-			return err
-		}
-		h.tester.Type("Material preserved before cancellation")
-		h.tester.Frame()
-		if *app.issueSupplementDraft(issueC) != "Material preserved before cancellation" {
-			return errors.New("activity follow-up did not retain the typed draft")
-		}
-		return nil
+		return app.addIssueSupplement(app.contactByID(h.contactID), issueC, "Material preserved before cancellation")
 	})
-	h.saveForm(msgs.SupplementFormLabel(), msgs.IssueSupplementSave())
 	h.onUI(func() error {
 		ct := app.contactByID(h.contactID)
 		issue := ct.issueByID(issueC)
 		reason := app.canStartIssue(ct, issue)
-		h.tester.Frame()
-		if reason != sendBlockRaw(blockWorkCapacity) || !h.tester.HasText(msgs.WorkNextActionUnavailable(reason)) || latestIssueExecution(issue) != nil || issue.Supplements == nil || issue.Supplements.pendingCount() != 1 || issue.Supplements.Items[0].Text != "Material preserved before cancellation" || p.count() != beforeCapacity {
-			return errors.New("full work capacity did not preserve the unadmitted supplement and visible refusal")
-		}
-		if _, present := h.tester.Find(msgs.WorkStartWithSupplement()); present {
-			return errors.New("full work capacity exposed an available Start action")
+		if reason != sendBlockRaw(blockWorkCapacity) || latestIssueExecution(issue) != nil || issue.Supplements == nil || issue.Supplements.pendingCount() != 1 || issue.Supplements.Items[0].Text != "Material preserved before cancellation" || p.count() != beforeCapacity {
+			return errors.New("full work capacity did not preserve the unadmitted supplement")
 		}
 		piAppRecord(t, "activity-capacity-refusal", map[string]any{"issue_id": issueC, "reason": reason, "requests": p.count(), "supplement": issue.Supplements.Items[0]})
 		return nil
 	})
-	h.screenshot("activity-capacity-refusal")
 	h.send("ACTIVITY_CHAT_QUERY")
 	h.wait(func() bool {
 		ct := app.contactByID(h.contactID)
@@ -3636,34 +3235,20 @@ func TestPiAppActivitiesAndQuestions(t *testing.T) {
 		t.Fatalf("direct issue_get/Inspect changed requests or lost captured activity: response=%+v inspect=%+v errors=%v/%v", getResponse, inspection, err, inspectErr)
 	}
 	piAppRecord(t, "activity-direct-progress", map[string]any{"detail": detail, "inspect": inspection, "requests": beforeInspect})
-	h.backToIssues()
-	h.selectIssue("ACTIVITY_A", issueA)
 	beforeRefresh := p.count()
-	var refreshGeneration int
 	h.onUI(func() error {
-		refreshGeneration = app.contactByID(h.contactID).issueByID(issueA).Work.historyGen
-		return nil
-	})
-	h.activateActivity(msgs.IssueReloadTask(), func() error {
-		ct := app.selectedContact()
-		if ct == nil || ct.ID != h.contactID || ct.issueView.DetailID != issueA || ct.SelectedIssueID != issueA || ct.issueByID(issueA).Work.historyGen != refreshGeneration+1 {
+		issue := app.contactByID(h.contactID).issueByID(issueA)
+		generation := issue.Work.historyGen
+		app.inspectPiIssueWork(h.contactID, issueA)
+		if issue.Work.historyGen != generation+1 {
 			return errors.New("refresh did not start for the captured activity")
 		}
 		return nil
 	})
 	h.wait(func() bool { return app.contactHistoryInFlight == 0 })
 	if p.count() != beforeRefresh {
-		t.Fatal("captured GUI refresh made a model request")
+		t.Fatal("captured progress refresh made a model request")
 	}
-	h.screenshot("activity-question-held")
-	h.activateActivity(msgs.WorkAnswer(), func() error {
-		ct := app.selectedContact()
-		if ct == nil || ct.ID != h.contactID || ct.SelectedIssueID != issueA || ct.issueView.DetailID != issueA || app.issueSupplementFormID != issueA || app.issueSupplementAnswerTarget.ContactID != h.contactID || app.issueSupplementAnswerTarget.IssueID != issueA || app.issueSupplementAnswerTarget.RequirementsRevision != questionRevision || app.issueSupplementQuestionRef != questionRef || *app.issueSupplementDraft(issueA) != finalDraft {
-			return errors.New("GUI answer did not preserve the captured question and ordinary draft")
-		}
-		return nil
-	})
-	h.screenshot("activity-answer-before-save")
 	storePath := app.store.path
 	backupPath := storePath + ".activity-answer-backup"
 	backupHeld, obstructed := false, false
@@ -3715,7 +3300,7 @@ func TestPiAppActivitiesAndQuestions(t *testing.T) {
 		t.Fatal(err)
 	}
 	obstructed = true
-	h.saveForm(msgs.WorkAnswer(), msgs.WorkAnswer())
+	h.saveAnswer(issueA, questionRef, questionRevision, finalDraft, false)
 	h.onUI(func() error {
 		issue := app.contactByID(h.contactID).issueByID(issueA)
 		question := issue.questionByRef(questionRef)
@@ -3728,23 +3313,22 @@ func TestPiAppActivitiesAndQuestions(t *testing.T) {
 			return err
 		}
 		disk, err := os.ReadFile(backupPath)
-		if err != nil || app.issueActionError == "" || app.issueSupplementFormID != issueA || *app.issueSupplementDraft(issueA) != finalDraft || question == nil || question.State != issueQuestionOpen || question.DeliveryState != "" || question.AnswerSupplementID != "" || app.piQuestionWaiters[questionA.OperationID] != waiter || !bytes.Equal(committed, committedBefore) || !bytes.Equal(ledger, ledgerBefore) || !bytes.Equal(disk, diskBefore) || p.count() != beforeSave {
-			return fmt.Errorf("failed captured answer Save changed durable state, waiter or draft: %v", err)
+		if err != nil || app.issueActionError == "" || question == nil || question.State != issueQuestionOpen || question.DeliveryState != "" || question.AnswerSupplementID != "" || app.piQuestionWaiters[questionA.OperationID] != waiter || !bytes.Equal(committed, committedBefore) || !bytes.Equal(ledger, ledgerBefore) || !bytes.Equal(disk, diskBefore) || p.count() != beforeSave {
+			return fmt.Errorf("failed captured answer save changed durable state or waiter: %v", err)
 		}
-		piAppRecord(t, "activity-answer-save-failure", map[string]any{"question_ref": questionRef, "operation_id": questionA.OperationID, "draft": finalDraft, "disk_sha256": fmt.Sprintf("%x", sha256.Sum256(disk)), "requests": beforeSave, "waiter_retained": true, "error": app.issueActionError})
+		piAppRecord(t, "activity-answer-save-failure", map[string]any{"question_ref": questionRef, "operation_id": questionA.OperationID, "answer": finalDraft, "disk_sha256": fmt.Sprintf("%x", sha256.Sum256(disk)), "requests": beforeSave, "waiter_retained": true, "error": app.issueActionError})
 		return nil
 	})
-	h.screenshot("activity-answer-save-failed")
 	if err := restoreStore(); err != nil {
 		t.Fatal(err)
 	}
-	h.saveForm(msgs.WorkAnswer(), msgs.WorkAnswer())
+	h.saveAnswer(issueA, questionRef, questionRevision, finalDraft, true)
 	var supplementID string
 	h.onUI(func() error {
 		issue := app.contactByID(h.contactID).issueByID(issueA)
 		question := issue.questionByRef(questionRef)
-		if question == nil || question.State != issueQuestionAnswered || question.AnswerSupplementID == "" || question.AnswerText != finalDraft || question.DeliveryState == "" || issue.Supplements == nil || len(issue.Supplements.Items) != 1 || issue.Supplements.pendingCount() != 0 || app.issueSupplementFormID != "" {
-			return errors.New("GUI did not save exactly one captured held-call answer")
+		if question == nil || question.State != issueQuestionAnswered || question.AnswerSupplementID == "" || question.AnswerText != finalDraft || question.DeliveryState == "" || issue.Supplements == nil || len(issue.Supplements.Items) != 1 || issue.Supplements.pendingCount() != 0 {
+			return errors.New("save did not record exactly one captured held-call answer")
 		}
 		supplementID = question.AnswerSupplementID
 		item := issue.Supplements.itemByID(supplementID)
@@ -3777,7 +3361,6 @@ func TestPiAppActivitiesAndQuestions(t *testing.T) {
 		piAppRecord(t, "activity-answer-resolved", map[string]any{"question": question, "run": runA, "receipt": receipt, "requests": before, "raw_tool_finished_exported": false, "raw_tool_result_reply_exported": false})
 		return nil
 	})
-	h.screenshot("activity-answer-delivered")
 	p.mu.Lock()
 	answerResult := p.results["activity-wait-a"]
 	p.mu.Unlock()
@@ -3845,12 +3428,10 @@ func TestPiAppActivitiesAndQuestions(t *testing.T) {
 		execution := latestIssueExecution(issue)
 		return execution != nil && execution.Status == issueExecutionCompleted && issue.Work.ActiveTaskID == ""
 	})
-	h.backToIssues()
-	h.selectIssue("ACTIVITY_B", issueB)
 	p.mu.Lock()
 	p.stopB = true
 	p.mu.Unlock()
-	h.startIssue(msgs.WorkContinue(), issueB)
+	h.startIssue(issueB)
 	h.wait(func() bool {
 		issue := app.contactByID(h.contactID).issueByID(issueB)
 		return issue != nil && issue.openQuestion() != nil
@@ -3871,11 +3452,10 @@ func TestPiAppActivitiesAndQuestions(t *testing.T) {
 		}
 		return nil
 	})
-	h.screenshot("activity-second-question-before-stop")
-	h.activateActivity(msgs.WorkStopIssueTask(), func() error {
-		ct := app.selectedContact()
-		if ct == nil || ct.ID != h.contactID || ct.issueView.DetailID != issueB || ct.SelectedIssueID != issueB {
-			return errors.New("Stop changed its captured activity")
+	h.onUI(func() error {
+		ct := app.contactByID(h.contactID)
+		if !app.cancelIssueFor(ct, issueB) {
+			return errors.New("Stop rejected the captured activity")
 		}
 		execution := latestIssueExecution(ct.issueByID(issueB))
 		if execution == nil || execution.PiRun == nil || execution.PiRun.RunID != stopRun.RunID || !execution.PiRun.CancelRequested {
@@ -3904,8 +3484,6 @@ func TestPiAppActivitiesAndQuestions(t *testing.T) {
 	if stopDelivered {
 		t.Fatal("explicit Stop delivered an answer to the canceled held call")
 	}
-	h.backToIssues()
-	h.selectIssue("ACTIVITY_C_PREATTEMPT", issueC)
 	beforeCanceledPreparation := p.count()
 	host.openMu.Lock()
 	openLocked := true
@@ -3914,7 +3492,7 @@ func TestPiAppActivitiesAndQuestions(t *testing.T) {
 			host.openMu.Unlock()
 		}
 	}()
-	h.startIssue(msgs.WorkStartWithSupplement(), issueC)
+	h.startIssue(issueC)
 	h.onUI(func() error {
 		issue := app.contactByID(h.contactID).issueByID(issueC)
 		execution := latestIssueExecution(issue)
@@ -3928,10 +3506,10 @@ func TestPiAppActivitiesAndQuestions(t *testing.T) {
 		piAppRecord(t, "activity-pre-attempt-held", map[string]any{"batch_id": batch.ID, "state": batch.State, "requests": p.count()})
 		return nil
 	})
-	h.activateActivity(msgs.WorkCancel(), func() error {
-		ct := app.selectedContact()
-		if ct == nil || ct.ID != h.contactID || ct.SelectedIssueID != issueC || ct.issueView.DetailID != issueC {
-			return errors.New("cancel changed its captured activity")
+	h.onUI(func() error {
+		ct := app.contactByID(h.contactID)
+		if !app.cancelIssueProductFor(ct, issueC) {
+			return errors.New("cancel rejected the captured activity")
 		}
 		issue := ct.issueByID(issueC)
 		if issue.Status != issueStatusCanceled || !issue.Work.cancelAfterAccept || latestIssueExecution(issue).PiRun != nil {
@@ -4048,8 +3626,8 @@ func TestPiAppActivitiesAndQuestions(t *testing.T) {
 	})
 	var beforeA []byte
 	var stoppedQuestionRef string
+	var stoppedQuestionRevision int
 	var stoppedExecutionCount int
-	var settingsOpen, workOpen, detailOpen, chatWorkOpen bool
 	h.onUI(func() error {
 		ct := app.contactByID(h.contactID)
 		if app.selectedContact() != ct {
@@ -4066,54 +3644,18 @@ func TestPiAppActivitiesAndQuestions(t *testing.T) {
 			return err
 		}
 		stoppedQuestionRef, stoppedExecutionCount = question.Ref, len(b.Executions)
-		settingsOpen, workOpen = app.settingsOpen, app.workspaceOpen
-		detailOpen, chatWorkOpen = ct.issueNavigation().DetailID != "", ct.issueNavigation().ShowConversationWork
-		return nil
-	})
-	if settingsOpen {
-		h.click("← Back to workbench")
-	}
-	if !workOpen {
-		h.click("Work")
-	}
-	if chatWorkOpen {
-		h.backToIssues()
-	}
-	if detailOpen {
-		h.backToIssues()
-	}
-	h.selectIssue("ACTIVITY_B", issueB)
-	h.activateActivity(msgs.WorkAnswer(), func() error {
-		ct := app.selectedContact()
-		if ct == nil || ct.ID != h.contactID || ct.SelectedIssueID != issueB || ct.issueView.DetailID != issueB || app.issueSupplementFormID != issueB || app.issueSupplementAnswerTarget.ContactID != h.contactID || app.issueSupplementAnswerTarget.IssueID != issueB || app.issueSupplementQuestionRef != stoppedQuestionRef || ct.issueByID(issueB).openQuestion() == nil || app.issueSupplementAnswerTarget.RequirementsRevision != ct.issueByID(issueB).openQuestion().RequirementsRevision {
-			return errors.New("GUI did not capture the restarted stopped question")
-		}
+		stoppedQuestionRevision = question.RequirementsRevision
 		return nil
 	})
 	const stoppedAnswer = "Save this answer for the stopped activity."
-	h.onUI(func() error {
-		if app.issueSupplementAnswerTarget.ContactID != h.contactID || app.issueSupplementAnswerTarget.IssueID != issueB || app.issueSupplementQuestionRef != stoppedQuestionRef {
-			return errors.New("GUI did not capture the restarted stopped question")
-		}
-		if err := h.focus(msgs.WorkAnswer(), true); err != nil {
-			return err
-		}
-		h.tester.Key(ui.Cmd, ui.KeyA)
-		h.tester.Type(stoppedAnswer)
-		h.tester.Frame()
-		if *app.issueSupplementDraft(issueB) != stoppedAnswer {
-			return errors.New("restarted answer form did not retain its draft")
-		}
-		return nil
-	})
-	h.saveForm(msgs.WorkAnswer(), msgs.WorkAnswer())
+	h.saveAnswer(issueB, stoppedQuestionRef, stoppedQuestionRevision, stoppedAnswer, true)
 	var stoppedSupplementID string
 	h.onUI(func() error {
 		ct := app.contactByID(h.contactID)
 		a, b := ct.issueByID(issueA), ct.issueByID(issueB)
 		question := b.questionByRef(stoppedQuestionRef)
 		if question == nil || question.PiCall == nil || *question.PiCall != stopCall || question.State != issueQuestionAnswered || question.AnswerText != stoppedAnswer || question.DeliveryState != issueQuestionDeliverySaved || question.AnswerSupplementID == "" || b.Supplements == nil || len(b.Supplements.Items) != 1 || b.Supplements.pendingCount() != 0 || b.Work.ActiveTaskID != "" || len(b.Executions) != stoppedExecutionCount || latestIssueExecution(b).ID != stopCall.ExecutionID || app.piQuestionWaiters[stopCall.OperationID] != nil || len(app.piQuestionWaiters) != 0 || p.count() != requestsBeforeRestart {
-			return errors.New("restarted GUI answer was delivered, replayed or lost its saved association")
+			return errors.New("restarted activity answer was delivered, replayed or lost its saved association")
 		}
 		stoppedSupplementID = question.AnswerSupplementID
 		item := b.Supplements.itemByID(stoppedSupplementID)
@@ -4127,14 +3669,12 @@ func TestPiAppActivitiesAndQuestions(t *testing.T) {
 		app.pi.mu.Lock()
 		bridges := len(app.pi.bridges)
 		app.pi.mu.Unlock()
-		h.tester.Frame()
-		if bridges != 0 || !h.tester.HasText(msgs.IssueAnswerSaved()) || h.tester.HasText(msgs.SupplementSavedPending()) {
-			return errors.New("saved-unconfirmed answer appeared as pending work or created a bridge")
+		if bridges != 0 {
+			return errors.New("answering the stopped question created a bridge")
 		}
 		piAppRecord(t, "activity-saved-without-waiter", map[string]any{"question": question, "supplement": item, "requests": p.count(), "waiters": len(app.piQuestionWaiters), "bridges": bridges, "executions": len(b.Executions)})
 		return nil
 	})
-	h.screenshot("activity-saved-unconfirmed-after-restart")
 	reopenedAnswerStore, err := openContactStore(storePath, project)
 	if err != nil {
 		t.Fatal(err)
@@ -4520,15 +4060,13 @@ func TestPiAppCrashRecoveryNoReplay(t *testing.T) {
 		t.Fatalf("original app worker readiness: %+v %v", ready, err)
 	}
 	h.click("← Back to workbench")
-	h.click("Work")
 	issueA := h.createIssue("ACTIVITY_A")
 	issueB := h.createIssue("ACTIVITY_B")
 	activity.mu.Lock()
 	activity.issueA, activity.issueB = issueA, issueB
 	activity.mu.Unlock()
 	msgs := locales.In("en")
-	h.selectIssue("ACTIVITY_A", issueA)
-	h.startIssue(msgs.WorkStart(), issueA)
+	h.startIssue(issueA)
 	h.waitSignal(activity.arrivedA, "activity A request before held question")
 	h.releaseA.Do(func() { close(activity.releaseA) })
 	h.wait(func() bool {
@@ -4559,9 +4097,7 @@ func TestPiAppCrashRecoveryNoReplay(t *testing.T) {
 		}
 		return nil
 	})
-	h.backToIssues()
-	h.selectIssue("ACTIVITY_B", issueB)
-	h.startIssue(msgs.WorkStart(), issueB)
+	h.startIssue(issueB)
 	h.wait(func() bool {
 		issue := app.contactByID(h.contactID).issueByID(issueB)
 		return issue != nil && issue.openQuestion() != nil
@@ -4583,12 +4119,14 @@ func TestPiAppCrashRecoveryNoReplay(t *testing.T) {
 		}
 		return nil
 	})
-	h.activateActivity(msgs.WorkStopIssueTask(), func() error {
-		ct := app.selectedContact()
-		issue := ct.issueByID(issueB)
-		execution := latestIssueExecution(issue)
-		if ct.ID != h.contactID || ct.issueView.DetailID != issueB || execution == nil || execution.PiRun == nil || execution.PiRun.RunID != runB.RunID || !execution.PiRun.CancelRequested {
-			return errors.New("GUI Stop did not target activity B")
+	h.onUI(func() error {
+		ct := app.contactByID(h.contactID)
+		if !app.cancelIssueFor(ct, issueB) {
+			return errors.New("Stop rejected activity B")
+		}
+		execution := latestIssueExecution(ct.issueByID(issueB))
+		if execution == nil || execution.PiRun == nil || execution.PiRun.RunID != runB.RunID || !execution.PiRun.CancelRequested {
+			return errors.New("Stop did not target activity B")
 		}
 		return nil
 	})
@@ -5003,25 +4541,12 @@ func TestPiAppCrashRecoveryNoReplay(t *testing.T) {
 	}
 	h.screenshot("crash-replacement-settings")
 	h.click("← Back to workbench")
-	var detailOpen bool
 	h.onUI(func() error {
-		ct := app.contactByID(h.contactID)
-		detailOpen = ct.issueView.DetailID != "" || ct.issueView.ShowConversationWork
-		return nil
-	})
-	if detailOpen {
-		h.backToIssues()
-	}
-	h.selectIssue("ACTIVITY_A", issueA)
-	var activityGeneration int
-	h.onUI(func() error {
-		activityGeneration = app.contactByID(h.contactID).issueByID(issueA).Work.historyGen
-		return nil
-	})
-	h.activateActivity(msgs.IssueReloadTask(), func() error {
-		ct := app.selectedContact()
-		if ct == nil || ct.ID != h.contactID || ct.issueView.DetailID != issueA || ct.issueByID(issueA).Work.historyGen != activityGeneration+1 {
-			return errors.New("GUI did not inspect the captured old-epoch activity")
+		issue := app.contactByID(h.contactID).issueByID(issueA)
+		generation := issue.Work.historyGen
+		app.inspectPiIssueWork(h.contactID, issueA)
+		if issue.Work.historyGen != generation+1 {
+			return errors.New("refresh did not inspect the captured old-epoch activity")
 		}
 		return nil
 	})
@@ -5033,7 +4558,6 @@ func TestPiAppCrashRecoveryNoReplay(t *testing.T) {
 		}
 		return verifyUnknown(app)
 	})
-	h.screenshot("crash-old-activity-unavailable")
 	checkPresentation("recovered", func(fail func(error) error) error {
 		ct := app.contactByID(h.contactID)
 		h.tester.Frame()
@@ -5286,7 +4810,7 @@ func TestPiAppContextAndResults(t *testing.T) {
 	if paths[0] != filepath.Join(payload, "bin", "node") || paths[1] != filepath.Join(payload, "dist", "worker.js") {
 		t.Fatal("pinned Node and worker are not from the same payload")
 	}
-	for _, path := range append(paths, "pi_app_integration_test.go", "pi_activity.go", "pi_activity_results.go", "issue_results_app.go", "issue_results.go", "workspace.go") {
+	for _, path := range append(paths, "pi_app_integration_test.go", "pi_activity.go", "pi_activity_results.go", "issue_results.go", "workspace.go") {
 		digest, err := piAppFileHash(path)
 		if err != nil {
 			t.Fatal(err)
@@ -5341,12 +4865,9 @@ func TestPiAppContextAndResults(t *testing.T) {
 	h.wait(func() bool { return !app.connectionApplying })
 	ready := piResultsReady(h, "initial")
 	h.click("← Back to workbench")
-	h.click("Work")
 	issueID := h.createIssue(piResultsGoal)
-	h.selectIssue(piResultsGoal, issueID)
-	msgs := locales.In("en")
-	firstRun := piResultsRun(h, issueID, msgs.WorkStart(), piResultsFirstContext, 2)
-	nextRun := piResultsRun(h, issueID, msgs.WorkContinue(), piResultsSecondContext, piResultsRequestCount)
+	firstRun := piResultsRun(h, issueID, piResultsFirstContext, 2)
+	nextRun := piResultsRun(h, issueID, piResultsSecondContext, piResultsRequestCount)
 	if firstRun.ID == nextRun.ID || firstRun.PiRun.RunID == nextRun.PiRun.RunID || firstRun.PiRun.ContextID != nextRun.PiRun.ContextID || firstRun.SessionID != nextRun.SessionID || firstRun.PiRun.WorkerEpoch != ready.WorkerEpoch || nextRun.PiRun.WorkerEpoch != ready.WorkerEpoch {
 		t.Fatalf("runs do not identify distinct attempts in the same activity: first=%+v next=%+v", firstRun.PiRun, nextRun.PiRun)
 	}
@@ -5357,99 +4878,9 @@ func TestPiAppContextAndResults(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(project, piResultsUnwrittenFile)); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("assistant-only file reference unexpectedly exists: %v", err)
 	}
-	h.screenshot("activity-result-issue-en-light")
-	piResultsOpen(h, msgs.WorkReadResult(), issueID, nextRun, 2, piResultsNextResponse, "")
-	h.screenshot("activity-result-latest-en-light")
-	h.activate(msgs.ResultCloseResults())
-	piResultsHistory(h, issueID)
-	piResultsOpen(h, msgs.IssueOpenResultRun("1"), issueID, firstRun, 1, piResultsFirstResponse, filePath)
-	h.screenshot("activity-result-first-en-light")
-	piResultsReload(h, issueID, firstRun, filePath)
-	piResultsReadFile(h, msgs, filePath)
-	h.screenshot("activity-result-file-en-light")
-	h.activate(msgs.ResultCloseReading())
-	const narrowWidth, narrowHeight = 720, 640
-	h.onUI(func() error {
-		app.windowWidth = narrowWidth
-		h.tester.SetSize(narrowWidth, narrowHeight)
-		h.tester.SetDark(true)
-		h.tester.SetLocale("zh-Hans")
-		return nil
-	})
-	zh := locales.In("zh-Hans")
-	piResultsCopy(h, zh.CopyResultLabel(), piResultsFirstResponse)
-	h.screenshot("activity-result-first-zh-dark-narrow")
-	piResultsReadFile(h, zh, filePath)
-	h.screenshot("activity-result-file-zh-dark-narrow")
-	h.activate(zh.ResultCloseReading())
-	h.activate(zh.ResultCloseResults())
-	latestLabel := zh.WorkReadResult()
-	checkNarrowIssue := func(check func() error) {
-		t.Helper()
-		var err error
-		var saveFailure func()
-		h.pump.do(func() {
-			err = check()
-			if err != nil {
-				tr := h.tester
-				tr.Frame()
-				target, targetFound := tr.Find(latestLabel)
-				tabs, tabsFound := tr.Find(zh.WorkTabs())
-				frame := tr.Image()
-				piAppRecord(t, "context-results-narrow-issue-failure", map[string]any{
-					"error": err.Error(), "label": latestLabel, "target": target, "target_found": targetFound,
-					"tabs": tabs, "tabs_found": tabsFound, "viewport": frame.Bounds(),
-				})
-				saveFailure = func() {
-					writePreviewPNG(t, filepath.Join(h.evidence, "activity-result-issue-zh-dark-narrow-failure.png"), frame)
-				}
-			}
-		})
-		if err != nil {
-			saveFailure()
-			t.Fatal(err)
-		}
-	}
-	checkNarrowIssue(func() error {
-		tr := h.tester
-		tr.Frame()
-		ct := app.selectedContact()
-		if app.mainPageActive() || !app.detailPageActive() || !app.detailIs(detailWork) || ct.ID != h.contactID || ct.issueView.DetailID != issueID || ct.issueView.ShowConversationWork {
-			return errors.New("closing the result did not return to the narrow issue detail")
-		}
-		tabs, found := tr.Find(zh.WorkTabs())
-		if !found || tabs.H <= 0 {
-			return errors.New("narrow issue detail tabs are not visible")
-		}
-		const detailPadding = 12
-		fullyVisible := func() bool {
-			r, found := tr.Find(latestLabel)
-			return found && r.W > 0 && r.H > 0 && r.X >= detailPadding && r.X+r.W <= narrowWidth-detailPadding &&
-				r.Y >= tabs.Y+tabs.H && r.Y+r.H <= narrowHeight
-		}
-		if fullyVisible() {
-			return nil
-		}
-		tr.Scroll(narrowWidth-60, 500, 0, -ct.issueView.DetailScroll.Y)
-		for range 24 {
-			tr.Frame()
-			if fullyVisible() {
-				return nil
-			}
-			tr.Scroll(narrowWidth-60, 500, 0, 120)
-		}
-		return fmt.Errorf("%q is not fully visible in the narrow issue detail", latestLabel)
-	})
-	h.screenshot("activity-result-issue-zh-dark-narrow")
-	checkNarrowIssue(func() error { return h.tester.Click(latestLabel) })
-	h.wait(func() bool { return !app.issueResult.Loading && app.resultInFlight == 0 })
-	checkNarrowIssue(func() error {
-		page := &app.issueResult
-		if !page.Open || !page.ReturnLatest || page.OwnerContactID != h.contactID || page.IssueID != issueID || page.ExecutionID != nextRun.ID || page.SessionID != nextRun.SessionID || page.TaskID != nextRun.TaskID || page.Panel.RunNumber != 2 || page.Panel.Response != piResultsNextResponse || page.LoadError != "" {
-			return fmt.Errorf("%q did not load the latest execution %s: got issue=%s execution=%s task=%s error=%s %s", latestLabel, nextRun.ID, page.IssueID, page.ExecutionID, page.TaskID, page.LoadError, page.LoadErrorDetail)
-		}
-		return nil
-	})
+	piResultsCheck(h, issueID, nextRun, piResultsNextResponse, "")
+	piResultsCheck(h, issueID, firstRun, piResultsFirstResponse, filePath)
+	piResultsCheck(h, issueID, firstRun, piResultsFirstResponse, filePath)
 	piResultsRequestBudget(h, piResultsRequestCount)
 	if err := h.shutdown(); err != nil {
 		t.Fatalf("initial app did not drain and reap its worker: %v", err)
@@ -5505,7 +4936,7 @@ func piResultsReady(h *piActivityHarness, phase string) pi.Ready {
 	return ready
 }
 
-func piResultsRun(h *piActivityHarness, issueID, label, text string, requests int) *issueExecution {
+func piResultsRun(h *piActivityHarness, issueID, text string, requests int) *issueExecution {
 	h.t.Helper()
 	var snapshot taskContextItem
 	var before int
@@ -5526,7 +4957,7 @@ func piResultsRun(h *piActivityHarness, issueID, label, text string, requests in
 		}
 		return h.app.persist()
 	})
-	h.startIssue(label, issueID)
+	h.startIssue(issueID)
 	h.wait(func() bool {
 		issue := h.app.contactByID(h.contactID).issueByID(issueID)
 		return len(issue.Executions) == before+1 && issue.Work.ActiveTaskID == "" && issue.Work.SendState == sendIdle
@@ -5565,128 +4996,45 @@ func piResultsRequestBudget(h *piActivityHarness, expected int) {
 	}
 }
 
-func piResultsHistory(h *piActivityHarness, issueID string) {
+func piResultsCheck(h *piActivityHarness, issueID string, execution *issueExecution, response, filePath string) {
 	h.t.Helper()
-	var expanded bool
+	var host *piAppHost
+	var binding piActivityBinding
 	h.onUI(func() error {
-		expanded = h.app.issueDetailOpen[issueID]
+		ct := h.app.contactByID(h.contactID)
+		issue := ct.issueByID(issueID)
+		currentIssue, current := ct.executionByID(execution.ID)
+		if currentIssue != issue || current == nil || current.Status != execution.Status || current.SessionID != execution.SessionID || current.TaskID != execution.TaskID || !reflect.DeepEqual(current.PiRun, execution.PiRun) || !canReadPiIssueResult(ct, issue, current) {
+			return fmt.Errorf("result is not readable for activity %s and execution %s", issueID, execution.ID)
+		}
+		host, binding = h.app.pi, *clonePiActivityBinding(issue.PiBinding)
 		return nil
 	})
-	if !expanded {
-		h.activateActivity(locales.In("en").IssueMoreActions(), func() error {
-			if !h.app.issueDetailOpen[issueID] {
-				return errors.New("issue history was not expanded")
-			}
-			return nil
-		})
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	result, err := host.readPiIssueResult(ctx, binding, *execution.PiRun, execution.ID, execution.Status)
+	if err != nil || result.response != response || result.cwd != binding.Context.CWD {
+		h.t.Fatalf("execution %s result differs: %q, cwd=%q, error=%v", execution.ID, result.response, result.cwd, err)
 	}
-}
-
-func piResultsOpen(h *piActivityHarness, label, issueID string, execution *issueExecution, number int, response, filePath string) {
-	h.t.Helper()
-	h.activateActivity(label, func() error {
-		page := &h.app.issueResult
-		if !page.Open || page.ExecutionID != execution.ID {
-			return fmt.Errorf("%q opened the wrong execution: %s", label, page.ExecutionID)
+	if filePath == "" {
+		if len(result.files) != 0 {
+			h.t.Fatalf("execution %s attributed a file without its own tool receipt: %+v", execution.ID, result.files)
 		}
-		return nil
-	})
-	piResultsCheck(h, issueID, execution, number, response, filePath)
-	piResultsCopy(h, locales.In("en").CopyResultLabel(), response)
-}
-
-func piResultsCheck(h *piActivityHarness, issueID string, execution *issueExecution, number int, response, filePath string) {
-	h.t.Helper()
-	h.wait(func() bool { return !h.app.issueResult.Loading && h.app.resultInFlight == 0 })
-	h.onUI(func() error {
-		page := &h.app.issueResult
-		panel := &page.Panel
-		if !page.Open || page.LoadError != "" || page.OwnerContactID != h.contactID || page.IssueID != issueID || page.ExecutionID != execution.ID || page.SessionID != execution.SessionID || page.TaskID != execution.TaskID || panel.RunNumber != number {
-			return fmt.Errorf("incorrect loaded result owner for run %d: issue=%s execution=%s session=%s task=%s error=%s %s", number, page.IssueID, page.ExecutionID, page.SessionID, page.TaskID, page.LoadError, page.LoadErrorDetail)
+	} else {
+		if len(result.files) != 1 {
+			h.t.Fatalf("execution %s file receipts = %+v", execution.ID, result.files)
 		}
-		h.tester.Frame()
-		label := locales.In("en").ResultRunLabel(fmt.Sprint(number), piResultsGoal)
-		if _, found := h.tester.Find(label); !found || panel.Response != response {
-			return fmt.Errorf("run %d label visible=%v response=%q, want %q", number, found, panel.Response, response)
+		file := result.files[0]
+		if file.ExecutionID != execution.ID || file.SessionID != execution.SessionID || file.TaskID != execution.TaskID || file.CallID != piResultsCallID || file.ToolName != "write" || file.Path != filePath || file.WorkingDirectory != binding.Context.CWD || file.MessageID == "" || file.RawResult == "" {
+			h.t.Fatalf("execution %s file receipt has the wrong owner or path: %+v", execution.ID, file)
 		}
-		if filePath == "" {
-			if len(panel.Files) != 0 {
-				return fmt.Errorf("a different run's file leaked into run %d: %+v", number, panel.Files)
-			}
-		} else {
-			if len(panel.Files) != 1 {
-				return fmt.Errorf("want exactly one write receipt, got %+v", panel.Files)
-			}
-			file := panel.Files[0]
-			if file.Path != filePath || file.WorkingDirectory != filepath.Dir(filePath) || file.ToolName != "write" || file.CallID != piResultsCallID || file.MessageID == "" || file.ExecutionID != execution.ID || file.SessionID != execution.SessionID || file.TaskID != execution.TaskID {
-				return fmt.Errorf("uncorrelated file receipt: %+v", file)
-			}
-			piAppRecord(h.t, "context-results-file-receipt", file)
-		}
-		return nil
-	})
-}
-
-func piResultsCopy(h *piActivityHarness, label, expected string) {
-	h.t.Helper()
-	h.onUI(func() error {
-		h.tester.SetClipboard("clipboard sentinel")
-		return nil
-	})
-	h.activateActivity(label, func() error {
-		if got := h.tester.Clipboard(); got != expected {
-			return fmt.Errorf("%q copied %q, want exact bytes %q", label, got, expected)
-		}
-		piAppRecord(h.t, "context-results-clipboard", map[string]string{"control": label, "text": expected})
-		return nil
-	})
-}
-
-func piResultsReload(h *piActivityHarness, issueID string, execution *issueExecution, filePath string) {
-	h.t.Helper()
-	var generation int
-	h.onUI(func() error {
-		generation = h.app.issueResult.Generation
-		return nil
-	})
-	h.activateActivity(locales.In("en").ResultReloadResult(), func() error {
-		if h.app.issueResult.Generation <= generation {
-			return errors.New("Reload did not start a new history read")
-		}
-		return nil
-	})
-	piResultsCheck(h, issueID, execution, 1, piResultsFirstResponse, filePath)
-	piResultsCopy(h, locales.In("en").CopyResultLabel(), piResultsFirstResponse)
-}
-
-func piResultsReadFile(h *piActivityHarness, msgs locales.Messages, filePath string) {
-	h.t.Helper()
-	var key string
-	h.onUI(func() error {
-		panel := &h.app.issueResult.Panel
-		if len(panel.Files) != 1 || panel.Files[0].Path != filePath {
-			return fmt.Errorf("verified file is absent from the run result: %+v", panel.Files)
-		}
-		key = issueResultFileKey(panel.Files[0])
-		return nil
-	})
-	h.activateActivity(msgs.ResultFileRowLabel("1", filepath.Base(filePath)), func() error {
-		if h.app.issueResult.Panel.ReaderKey != key {
-			return errors.New("file row did not open its own reader")
-		}
-		return nil
-	})
-	h.wait(func() bool { return !h.app.issueResult.Panel.Checking && h.app.resultInFlight == 0 })
-	h.onUI(func() error {
-		panel := &h.app.issueResult.Panel
-		inspection := panel.Inspection
-		if panel.InspectFor != key || inspection == nil || inspection.Path != filePath || !inspection.Exists || !inspection.Regular || inspection.Preview != piResultsFileContent || inspection.NoticeKind != "" || inspection.ReadErrorKind != "" {
-			return fmt.Errorf("file reader did not inspect exact current content: %+v", inspection)
+		inspection := inspectIssueResultFile(file)
+		if inspection.Path != filePath || !inspection.Exists || !inspection.Regular || inspection.Preview != piResultsFileContent || inspection.NoticeKind != "" || inspection.ReadErrorKind != "" {
+			h.t.Fatalf("file inspection did not return the exact current content: %+v", inspection)
 		}
 		piAppRecord(h.t, "context-results-current-file", inspection)
-		return nil
-	})
-	piResultsCopy(h, msgs.CopyCurrentFileLabel(), piResultsFileContent)
+	}
+	piAppRecord(h.t, "context-results-readback", map[string]any{"issue_id": issueID, "execution_id": execution.ID, "run": execution.PiRun, "response": result.response, "files": result.files})
 }
 
 func piResultsReopen(t *testing.T, provider *piAppProvider, evidence, contactID, issueID, oldEpoch string, firstRun, nextRun *issueExecution, filePath string) {
@@ -5725,23 +5073,8 @@ func piResultsReopen(t *testing.T, provider *piAppProvider, evidence, contactID,
 	if ready.WorkerEpoch == oldEpoch {
 		t.Fatal("reopened app reused the first worker epoch")
 	}
-	msgs := locales.In("en")
-	var workspaceOpen, detailOpen bool
-	h.onUI(func() error {
-		workspaceOpen = app.detailIs(detailWork)
-		detailOpen = app.selectedContact().issueView.DetailID == issueID
-		return nil
-	})
-	if !workspaceOpen {
-		h.click("Work")
-	}
-	if !detailOpen {
-		h.selectIssue(piResultsGoal, issueID)
-	}
-	piResultsHistory(h, issueID)
-	piResultsOpen(h, msgs.IssueOpenResultRun("1"), issueID, firstRun, 1, piResultsFirstResponse, filePath)
-	piResultsReadFile(h, msgs, filePath)
-	h.screenshot("activity-result-file-reopened-en-light")
+	piResultsCheck(h, issueID, firstRun, piResultsFirstResponse, filePath)
+	piResultsCheck(h, issueID, nextRun, piResultsNextResponse, "")
 	piResultsRequestBudget(h, piResultsRequestCount)
 	if err := h.shutdown(); err != nil {
 		t.Fatalf("reopened app did not drain and reap its worker: %v", err)

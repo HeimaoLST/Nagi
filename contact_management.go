@@ -234,7 +234,6 @@ func (a *appModel) saveContactProfileDraftFor(contactID string, draft profileDra
 		ct.History = nil
 		ct.Revealed = nil
 		ct.Works = nil
-		ct.SelectedWorkTaskID = ""
 		ct.Status = statusReady
 		ct.Work = ""
 		ct.WorkLabel = "Preparing a reply"

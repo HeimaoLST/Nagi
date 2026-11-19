@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -183,17 +182,18 @@ func TestCustomThemeSettingsLowContrastFailedSaveRetry(t *testing.T) {
 	}
 }
 
-func TestSettingsPageHeaderAndErrorEntriesRouteToCategories(t *testing.T) {
+func TestSettingsPageArchivedProfileAndErrorEntriesRouteToCategories(t *testing.T) {
 	a, ct := workspaceTestApp(t)
 	a.windowWidth = 1040
+	ct.Archived = true
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	if err := tr.Click("Contact profile"); err != nil {
+	if err := tr.Click(locales.In("en").ContactProfileAction()); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
 	if !a.detailIs(detailProfile) || a.settingsOpen {
-		t.Fatalf("header profile route = detail=%v settings=%v", a.activeDetail(), a.settingsOpen)
+		t.Fatalf("archived profile route = detail=%v settings=%v", a.activeDetail(), a.settingsOpen)
 	}
 	if err := tr.Click("Edit full profile"); err != nil {
 		t.Fatal(err)
@@ -202,7 +202,11 @@ func TestSettingsPageHeaderAndErrorEntriesRouteToCategories(t *testing.T) {
 	if !a.settingsOpen || a.settingsTab != settingsTabContact {
 		t.Fatalf("profile edit route = open=%v tab=%q", a.settingsOpen, a.settingsTab)
 	}
-	tr.Click("← Back to workbench")
+	if err := tr.Click("← Back to workbench"); err != nil {
+		t.Fatal(err)
+	}
+	a.closeDetail()
+	ct.Archived = false
 	tr.Frame()
 
 	ct.LoadErr = "connection_mismatch: session is bound elsewhere"
@@ -213,48 +217,6 @@ func TestSettingsPageHeaderAndErrorEntriesRouteToCategories(t *testing.T) {
 	tr.Frame()
 	if !a.settingsOpen || a.settingsTab != settingsTabConnection {
 		t.Fatalf("connection entry route = open=%v tab=%q", a.settingsOpen, a.settingsTab)
-	}
-}
-
-func TestSettingsPageCmdCommaFromWorkbenchHistoryAndResult(t *testing.T) {
-	a := testApp(t)
-	ct := a.selectedContact()
-	for i := 0; i < 40; i++ {
-		ct.History = append(ct.History, historyEntry{ID: fmt.Sprintf("history-%d", i), Date: "Oct 1", From: "contact", Text: fmt.Sprintf("history entry %d with enough text to make the history panel scroll", i)})
-	}
-	a.windowWidth = 1040
-	tr := ui.NewTester(a.view, 1040, 720)
-	tr.Frame()
-	tr.Key(ui.Cmd, ui.KeyComma)
-	tr.Frame()
-	if !a.settingsOpen || a.settingsTab != settingsTabAppearance {
-		t.Fatalf("Cmd+, workbench = open=%v tab=%q", a.settingsOpen, a.settingsTab)
-	}
-	tr.Click("← Back to workbench")
-	tr.Frame()
-
-	a.openHistory()
-	tr.Frame()
-	tr.Scroll(850, 400, 0, 600)
-	tr.Frame()
-	historyScrollBefore := a.historyScroll.Y
-	if historyScrollBefore <= 0 {
-		t.Fatalf("history did not scroll: %v", historyScrollBefore)
-	}
-	tr.Key(ui.Cmd, ui.KeyComma)
-	tr.Frame()
-	if !a.settingsOpen || !a.detailIs(detailHistory) {
-		t.Fatalf("Cmd+, history = open=%v detail=%v", a.settingsOpen, a.activeDetail())
-	}
-	if err := tr.Click("← Back to workbench"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if !a.detailIs(detailHistory) || a.historyScroll.Y != historyScrollBefore {
-		t.Fatalf("history return = detail=%v scroll=%v want=%v", a.activeDetail(), a.historyScroll.Y, historyScrollBefore)
-	}
-	if !tr.Focused("Close history") {
-		t.Fatalf("history return did not restore the history close control: %v", tr.Texts())
 	}
 }
 
@@ -650,47 +612,6 @@ func TestSettingsContactPickerFollowsEditingIdentityAfterReturnToA(t *testing.T)
 	}
 }
 
-func TestSettingsPageCmdCommaFromIssueResultAndNestedReader(t *testing.T) {
-	a := issuePreviewApp("issue-detail")
-	issue := a.selectedContact().selectedIssue()
-	execution := issue.Executions[0]
-	file := issueResultFile{
-		ExecutionID: execution.ID, SessionID: execution.SessionID, TaskID: execution.TaskID,
-		MessageID: execution.MessageID, CallID: "call-result", ToolName: "write",
-		Path: "/tmp/result.txt", WorkingDirectory: "/tmp", RawResult: `{"path":"/tmp/result.txt","bytes_written":1}`,
-	}
-	key := issueResultFileKey(file)
-	a.aux = "issue-result"
-	a.issueResult = issueResultPage{
-		Open: true, OwnerContactID: a.selectedContact().ID, IssueID: issue.ID, ExecutionID: execution.ID,
-		Panel: issueResultPanelState{
-			RunNumber: 1, RunStatus: issueExecutionCompleted, Files: []issueResultFile{file},
-			ReaderKey: key, FocusReader: true,
-		},
-	}
-	a.windowWidth = 1040
-	tr := ui.NewTester(a.view, 1040, 720)
-	tr.Frame()
-	if !tr.Focused("Close reading") {
-		t.Fatalf("nested reader did not receive focus: %v", tr.Texts())
-	}
-	tr.Key(ui.Cmd, ui.KeyComma)
-	tr.Frame()
-	if !a.settingsOpen || a.settingsTab != settingsTabAppearance || a.aux != "issue-result" || !a.issueResult.Open {
-		t.Fatalf("Cmd+, from reader = open=%v tab=%q aux=%q result=%v", a.settingsOpen, a.settingsTab, a.aux, a.issueResult.Open)
-	}
-	if err := tr.Click("← Back to workbench"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if !a.issueResult.Open || a.aux != "issue-result" || a.issueResult.Panel.ReaderKey != key {
-		t.Fatalf("reader context lost: aux=%q open=%v reader=%q", a.aux, a.issueResult.Open, a.issueResult.Panel.ReaderKey)
-	}
-	if !tr.Focused("Close reading") {
-		t.Fatalf("return did not focus the reader entry: %v", tr.Texts())
-	}
-}
-
 func TestSettingsPageCmdCommaReturnsToFocusedComposer(t *testing.T) {
 	a, ct := workspaceTestApp(t)
 	recoveryTestStore(t, a)
@@ -854,63 +775,23 @@ func TestSettingsConnectionApplyAvailabilityFollowsCurrentWork(t *testing.T) {
 	}
 }
 
-func TestSettingsPageCmdCommaFromIssueResultReturnsToResultControl(t *testing.T) {
-	a := issuePreviewApp("issue-detail")
-	issue := a.selectedContact().selectedIssue()
-	execution := issue.Executions[0]
-	a.aux = "issue-result"
-	a.issueResult = issueResultPage{
-		Open: true, OwnerContactID: a.selectedContact().ID, IssueID: issue.ID, ExecutionID: execution.ID,
-		Panel: issueResultPanelState{RunNumber: 1, RunStatus: issueExecutionCompleted, FocusClose: true},
-	}
-	a.windowWidth = 1040
-	tr := ui.NewTester(a.view, 1040, 720)
-	tr.Frame()
-	if !tr.Focused("Close results") {
-		t.Fatalf("result control was not focused: %v", tr.Texts())
-	}
-	tr.Key(ui.Cmd, ui.KeyComma)
-	tr.Frame()
-	if !a.settingsOpen {
-		t.Fatal("Cmd+, did not open settings from result")
-	}
-	if err := tr.Click("← Back to workbench"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if !a.issueResult.Open || a.aux != "issue-result" || !tr.Focused("Close results") {
-		t.Fatalf("result return lost context or focus: open=%v aux=%q texts=%v", a.issueResult.Open, a.aux, tr.Texts())
-	}
-}
-
-func TestSettingsPageReturnKeepsChatScrollWorkspaceAndIssueContext(t *testing.T) {
+func TestSettingsPageReturnKeepsChatScroll(t *testing.T) {
 	a, ct := workspaceTestApp(t)
 	directory := t.TempDir()
 	writeCustomTheme(t, directory, "light.json", customThemeDocument("garden", appearanceLight))
 	a.appearanceThemes = loadCustomThemes(directory)
-	for i := 0; i < 30; i++ {
+	for i := range 30 {
 		ct.Messages = append(ct.Messages, &message{ID: i + 1, Kind: msgContact, Text: fmt.Sprintf("message %d with enough text to scroll", i)})
 	}
-	a.workspaceOpen = true
-	a.rightPaneWidth = 340
-	issue := &productIssue{ID: "issue-keep", ContactID: ct.ID, Goal: "keep context", Status: issueStatusInProgress, RequirementsRevision: 1}
-	for i := 0; i < 30; i++ {
-		issue.Requirements = append(issue.Requirements, &issueRequirement{ID: fmt.Sprintf("r-%d", i), Text: fmt.Sprintf("requirement %d with enough detail to make the issue pane scroll", i), State: requirementUnverified})
-	}
-	ct.Issues = []*productIssue{issue}
-	openIssueDetailForTest(a, ct, issue.ID)
-	nav := ct.issueNavigation()
+	ct.Draft = "keep the conversation draft"
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	tr.Scroll(900, 300, 0, 400)
+	tr.Scroll(500, 300, 0, -600)
 	tr.Frame()
-	if nav.DetailScroll.Y <= 0 {
-		t.Fatalf("issue detail did not scroll: %v", nav.DetailScroll.Y)
+	first, last := ct.list.Visible()
+	if last >= len(ct.Messages)-1 {
+		t.Fatalf("chat did not scroll away from the latest message: first=%d last=%d", first, last)
 	}
-	detailScrollBefore := nav.DetailScroll.Y
-	tr.Scroll(500, 300, 0, -2000)
-	tr.Frame()
-	first, _ := ct.list.Visible()
 	a.openSettingsTab(settingsTabAppearance, settingsSourceRail)
 	tr.Frame()
 	if !a.settingsOpen {
@@ -922,9 +803,9 @@ func TestSettingsPageReturnKeepsChatScrollWorkspaceAndIssueContext(t *testing.T)
 		t.Fatal(err)
 	}
 	tr.Frame()
-	afterFirst, _ := ct.list.Visible()
-	if afterFirst != first || a.selectedContact().ID != ct.ID || !a.workspaceOpen || a.rightPaneWidth != 340 || nav.DetailID != issue.ID || nav.DetailScroll.Y != detailScrollBefore {
-		t.Fatalf("return state changed: list %d->%d selected=%q work=%v width=%v detail=%q scroll=%v", first, afterFirst, a.selectedContact().ID, a.workspaceOpen, a.rightPaneWidth, nav.DetailID, nav.DetailScroll.Y)
+	afterFirst, afterLast := ct.list.Visible()
+	if afterFirst != first || afterLast != last || a.selectedContact() != ct || ct.Draft != "keep the conversation draft" {
+		t.Fatalf("settings return changed chat: visible=[%d,%d]->[%d,%d] selected=%q draft=%q", first, last, afterFirst, afterLast, a.selectedID(), ct.Draft)
 	}
 }
 
@@ -1048,349 +929,6 @@ func TestSettingsLongConnectionScrollsThenPrimaryActionIsVisible(t *testing.T) {
 				t.Fatalf("%d action %q not reachable after scroll: %+v ok=%v", width, label, r, ok)
 			}
 		}
-	}
-}
-
-func TestSettingsPageCmdCommaFromReaderKeepsLongScrollAndFocusedControl(t *testing.T) {
-	a := issuePreviewApp("issue-detail")
-	issue := a.selectedContact().selectedIssue()
-	execution := issue.Executions[0]
-	file := issueResultFile{ExecutionID: execution.ID, SessionID: execution.SessionID, TaskID: execution.TaskID, MessageID: execution.MessageID, CallID: "call-long", ToolName: "write", Path: "/tmp/long.txt", WorkingDirectory: "/tmp", RawResult: `{"path":"/tmp/long.txt","bytes_written":1}`}
-	key := issueResultFileKey(file)
-	longPreview := strings.Repeat("A long saved file line that must scroll independently in the reader.\n", 120)
-	a.aux = "issue-result"
-	a.issueResult = issueResultPage{
-		Open: true, OwnerContactID: a.selectedContact().ID, IssueID: issue.ID, ExecutionID: execution.ID,
-		Panel: issueResultPanelState{
-			RunNumber: 1, RunStatus: issueExecutionCompleted, Files: []issueResultFile{file},
-			Inspection: &issueResultFileInspection{Exists: true, Regular: true, Preview: longPreview},
-			InspectFor: key, ReaderKey: key,
-		},
-	}
-	a.windowWidth = 1040
-	tr := ui.NewTester(a.view, 1040, 720)
-	tr.Frame()
-	a.issueResult.Panel.ReaderCheckHandle.Focus()
-	tr.Frame()
-	if !tr.Focused("Check again") {
-		t.Fatalf("reader check control did not receive focus: %v", tr.Texts())
-	}
-	tr.Scroll(520, 400, 0, 1200)
-	tr.Frame()
-	scrollBefore := a.issueResult.Panel.ReaderScroll.Y
-	if scrollBefore <= 0 {
-		t.Fatalf("reader preview did not scroll: %v", scrollBefore)
-	}
-	tr.Key(ui.Cmd, ui.KeyComma)
-	tr.Frame()
-	if !a.settingsOpen {
-		t.Fatal("Cmd+, did not open settings from reader")
-	}
-	if err := tr.Click("← Back to workbench"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if !tr.Focused("Check again") {
-		t.Fatalf("reader returned focus to the wrong control: %v", tr.Texts())
-	}
-	if a.issueResult.Panel.ReaderScroll.Y != scrollBefore {
-		t.Fatalf("reader scroll changed: %v -> %v", scrollBefore, a.issueResult.Panel.ReaderScroll.Y)
-	}
-}
-
-func TestSettingsPageCmdCommaFromResultReturnsToReloadControl(t *testing.T) {
-	a := issuePreviewApp("issue-detail")
-	issue := a.selectedContact().selectedIssue()
-	execution := issue.Executions[0]
-	a.aux = "issue-result"
-	a.issueResult = issueResultPage{Open: true, OwnerContactID: a.selectedContact().ID, IssueID: issue.ID, ExecutionID: execution.ID, Panel: issueResultPanelState{RunNumber: 1, RunStatus: issueExecutionCompleted}}
-	a.windowWidth = 1040
-	tr := ui.NewTester(a.view, 1040, 720)
-	tr.Frame()
-	a.issueResult.Panel.ReloadHandle.Focus()
-	tr.Frame()
-	if !tr.Focused("Reload result") {
-		t.Fatalf("result reload control did not receive focus: %v", tr.Texts())
-	}
-	tr.Key(ui.Cmd, ui.KeyComma)
-	tr.Frame()
-	if !a.settingsOpen {
-		t.Fatal("Cmd+, did not open settings from result")
-	}
-	if err := tr.Click("← Back to workbench"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if !tr.Focused("Reload result") {
-		t.Fatalf("result returned focus to the wrong control: %v", tr.Texts())
-	}
-}
-
-func TestSettingsCmdCommaFromDynamicFileRowReturnsToSameRowAndReopens(t *testing.T) {
-	a := issuePreviewApp("issue-detail")
-	issue := a.selectedContact().selectedIssue()
-	execution := issue.Executions[0]
-	files := []issueResultFile{
-		{ExecutionID: execution.ID, SessionID: execution.SessionID, TaskID: execution.TaskID, MessageID: execution.MessageID, CallID: "call-a", ToolName: "write", Path: "/tmp/a.txt", WorkingDirectory: "/tmp", RawResult: `{"path":"/tmp/a.txt"}`},
-		{ExecutionID: execution.ID, SessionID: execution.SessionID, TaskID: execution.TaskID, MessageID: execution.MessageID, CallID: "call-b", ToolName: "write", Path: "/tmp/b.md", WorkingDirectory: "/tmp", RawResult: `{"path":"/tmp/b.md"}`},
-		{ExecutionID: execution.ID, SessionID: execution.SessionID, TaskID: execution.TaskID, MessageID: execution.MessageID, CallID: "call-c", ToolName: "write", Path: "/tmp/c.txt", WorkingDirectory: "/tmp", RawResult: `{"path":"/tmp/c.txt"}`},
-	}
-	target := issueResultFileKey(files[1])
-	inspection := issueResultFileInspection{Path: files[1].Path, WorkingDirectory: "/tmp", Exists: true, Regular: true, Preview: strings.Repeat("Long reader content for the second dynamic file.\n", 60)}
-	a.aux = "issue-result"
-	a.issueResult = issueResultPage{
-		Open: true, OwnerContactID: a.selectedContact().ID, IssueID: issue.ID, ExecutionID: execution.ID,
-		Panel: issueResultPanelState{
-			RunNumber: 1, RunStatus: issueExecutionCompleted,
-			Response: "# Result\n\n" + strings.Repeat("Long result body before reported files.\n\n", 50),
-			Files:    files, Inspection: &inspection, InspectFor: target,
-		},
-	}
-	a.issueResultInspect = func(file issueResultFile) issueResultFileInspection { return inspection }
-	a.selectedContact().Draft = "keep this draft"
-	a.windowWidth = 1040
-	pump := newUIPump(t, a)
-	defer func() {
-		pump.waitTimeout(func() bool { return a.resultInFlight == 0 }, 5*time.Second)
-		pump.close()
-	}()
-	var tr *ui.Tester
-	pump.do(func() {
-		tr = ui.NewTester(a.view, 1040, 720)
-		tr.Frame()
-	})
-	targetLabel := "Read file 2: b.md"
-	for i := 0; i < 12; i++ {
-		var visible bool
-		pump.do(func() {
-			r, ok := tr.Find(targetLabel)
-			visible = ok && r.W > 0 && r.H > 0 && r.Y >= 0 && r.Y+r.H <= 720
-		})
-		if visible {
-			break
-		}
-		pump.do(func() {
-			tr.Scroll(520, 400, 0, 220)
-			tr.Frame()
-		})
-	}
-	var outerScrollBefore float32
-	pump.do(func() { outerScrollBefore = a.issueResultScroll.Y })
-	if outerScrollBefore <= 0 {
-		t.Fatalf("outer result did not scroll to reported files: %v", outerScrollBefore)
-	}
-	var clickErr error
-	pump.do(func() {
-		clickErr = tr.Click(targetLabel)
-		tr.Frame()
-	})
-	if clickErr != nil {
-		t.Fatal(clickErr)
-	}
-	pump.wait(func() bool { return !a.issueResult.Panel.Checking })
-	pump.do(func() { tr.Frame() })
-	var readingOpen bool
-	pump.do(func() { readingOpen = tr.Focused("Close reading") || tr.HasText("Copy path") })
-	if !readingOpen {
-		t.Fatal("reader did not open")
-	}
-	pump.do(func() {
-		tr.Key(0, ui.KeyEscape)
-		tr.Frame()
-	})
-	var rowFocused bool
-	pump.do(func() { rowFocused = tr.Focused(targetLabel) })
-	if !rowFocused {
-		t.Fatalf("Escape did not return focus to dynamic file row: %v", tr.Texts())
-	}
-	pump.do(func() {
-		tr.Key(ui.Cmd, ui.KeyComma)
-		tr.Frame()
-	})
-	var settingsOpen bool
-	pump.do(func() { settingsOpen = a.settingsOpen })
-	if !settingsOpen {
-		t.Fatal("Cmd+, from dynamic file row did not open settings")
-	}
-	pump.do(func() { clickErr = tr.Click("← Back to workbench"); tr.Frame() })
-	if clickErr != nil {
-		t.Fatal(clickErr)
-	}
-	var returnedFocus bool
-	var scrollAfter float32
-	pump.do(func() {
-		returnedFocus = tr.Focused(targetLabel)
-		scrollAfter = a.issueResultScroll.Y
-	})
-	// Do not stop at the focus mismatch: the actual regression must also prove
-	// whether Return invokes the dynamic file row or closes the result page.
-	pump.do(func() {
-		tr.Key(0, ui.KeyEnter)
-		tr.Frame()
-	})
-	pump.wait(func() bool { return !a.issueResult.Panel.Checking })
-	var readerKey string
-	var readerOpen, resultOpen bool
-	var texts []string
-	pump.do(func() {
-		readerKey = a.issueResult.Panel.ReaderKey
-		readerOpen = tr.Focused("Close reading")
-		resultOpen = a.issueResult.Open
-		texts = append([]string(nil), tr.Texts()...)
-	})
-	if !returnedFocus || scrollAfter != outerScrollBefore || !resultOpen || readerKey != target || !readerOpen {
-		t.Fatalf("Back/Return did not restore dynamic file row: focus=%v scroll=%v->%v resultOpen=%v reader=%q target=%q texts=%v",
-			returnedFocus, outerScrollBefore, scrollAfter, resultOpen, readerKey, target, texts)
-	}
-	if a.selectedContact().Draft != "keep this draft" || a.issueResult.IssueID != issue.ID || a.issueResult.ExecutionID != execution.ID {
-		t.Fatal("settings return changed draft or result context")
-	}
-}
-
-func TestSettingsPageCmdCommaReturnsToReaderCopyPath(t *testing.T) {
-	a := issuePreviewApp("issue-detail")
-	issue := a.selectedContact().selectedIssue()
-	execution := issue.Executions[0]
-	file := issueResultFile{ExecutionID: execution.ID, SessionID: execution.SessionID, TaskID: execution.TaskID, MessageID: execution.MessageID, CallID: "copy-path", ToolName: "write", Path: "/tmp/copy-path.md", WorkingDirectory: "/tmp", RawResult: `{"path":"/tmp/copy-path.md"}`}
-	key := issueResultFileKey(file)
-	a.aux = "issue-result"
-	a.issueResult = issueResultPage{Open: true, OwnerContactID: a.selectedContact().ID, IssueID: issue.ID, ExecutionID: execution.ID, Panel: issueResultPanelState{RunNumber: 1, RunStatus: issueExecutionCompleted, Files: []issueResultFile{file}, ReaderKey: key}}
-	a.windowWidth = 1040
-	tr := ui.NewTester(a.view, 1040, 720)
-	tr.Frame()
-	a.issueResult.Panel.CopyPathHandle.Focus()
-	tr.Frame()
-	if !tr.Focused("Copy path") {
-		t.Fatalf("Copy path did not receive focus: %v", tr.Texts())
-	}
-	tr.Key(ui.Cmd, ui.KeyComma)
-	tr.Frame()
-	if !a.settingsOpen {
-		t.Fatal("Cmd+, from Copy path did not open settings")
-	}
-	if err := tr.Click("← Back to workbench"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if !tr.Focused("Copy path") {
-		t.Fatalf("Back did not return focus to Copy path: %v", tr.Texts())
-	}
-}
-
-func TestSettingsReturnKeepsEachCodeCopyTarget(t *testing.T) {
-	for _, reader := range []bool{false, true} {
-		t.Run(fmt.Sprintf("reader=%v", reader), func(t *testing.T) {
-			a := issuePreviewApp("issue-detail")
-			issue := a.selectedContact().selectedIssue()
-			execution := issue.Executions[0]
-			file := issueResultPanelFixtureFile("code-copies", "/tmp/code-copies.md", "{}")
-			key := issueResultFileKey(file)
-			content := "```go\nfirst-copy-content\n```\n\nbetween\n\n```go\nsecond-copy-content\n```"
-			a.aux = "issue-result"
-			a.issueResult = issueResultPage{Open: true, OwnerContactID: a.selectedContact().ID, IssueID: issue.ID, ExecutionID: execution.ID,
-				Panel: issueResultPanelState{Response: content, Files: []issueResultFile{file}}}
-			state := &a.issueResult.Panel
-			if reader {
-				state.ReaderKey, state.InspectFor = key, key
-				state.Inspection = &issueResultFileInspection{Exists: true, Regular: true, Preview: content}
-			}
-			a.windowWidth = 1040
-			tr := ui.NewTester(a.view, 1040, 900)
-			tr.Frame()
-			handles := state.ResultCodeHandles
-			if reader {
-				handles = state.ReaderCodeHandles
-			}
-			keys := make([]int, 0, len(handles))
-			for key := range handles {
-				keys = append(keys, key)
-			}
-			sort.Ints(keys)
-			if len(keys) != 2 {
-				t.Fatalf("expected two independently focusable code copies, got %d", len(keys))
-			}
-			handles[keys[1]].Focus()
-			tr.Frame()
-			tr.Key(ui.Cmd, ui.KeyComma)
-			tr.Frame()
-			if !a.settingsOpen {
-				t.Fatal("Cmd+, from code copy did not open settings")
-			}
-			if err := tr.Click("← Back to workbench"); err != nil {
-				t.Fatal(err)
-			}
-			tr.Frame()
-			tr.Key(0, ui.KeyEnter)
-			tr.Frame()
-			if got := tr.Clipboard(); got != "second-copy-content\n" {
-				t.Fatalf("Return after settings copied %q instead of the second block", got)
-			}
-			if !a.issueResult.Open || (reader && state.ReaderKey != key) {
-				t.Fatal("Return closed the result or reading layer")
-			}
-		})
-	}
-}
-
-func TestSettingsReturnKeepsReaderActions(t *testing.T) {
-	file := issueResultPanelFixtureFile("handles", "/tmp/handles.txt", `{"path":"/tmp/handles.txt"}`)
-	key := issueResultFileKey(file)
-	a := testApp(t)
-	a.aux = "issue-result"
-	a.issueResult.Open = true
-	a.issueResult.Panel = issueResultPanelState{
-		RunNumber: 1, RunStatus: issueExecutionCompleted, Files: []issueResultFile{file},
-		Inspection: &issueResultFileInspection{Path: file.Path, Exists: true, Regular: true, Preview: "preview"},
-		InspectFor: key, ReaderKey: key, SourceFor: key,
-	}
-	state := &a.issueResult.Panel
-	opened, revealed, copied := 0, 0, ""
-	actions := issueResultPanelActions{
-		OpenSettings: func(c *ui.Context) { a.openSettingsFromContext(c, settingsTabAppearance, settingsSourceAux) },
-		CheckFile:    func(issueResultFile) {},
-		OpenFile:     func(issueResultFile) { opened++ },
-		RevealFile:   func(issueResultFile) { revealed++ },
-		CopyText:     func(text string) error { copied = text; return nil },
-	}
-	tr := ui.NewTester(func(c *ui.Context) {
-		if a.settingsOpen {
-			a.settingsPage(c, c.Theme())
-			return
-		}
-		if file, ok := issueResultFileByKey(state.Files, state.ReaderKey); state.ReaderKey != "" && ok {
-			issueResultReaderPage(c, c.Theme(), state, actions, file)
-			return
-		}
-		issueResultPanel(c, state, actions)
-	}, 1040, 900)
-	tr.Frame()
-	for _, control := range []struct {
-		label  string
-		handle *ui.Handle
-	}{
-		{"Open file", &state.ReaderOpenHandle},
-		{"Show in Finder", &state.ReaderRevealHandle},
-		{"Copy tool record", &state.CopyRawHandle},
-	} {
-		control.handle.Focus()
-		tr.Frame()
-		tr.Key(ui.Cmd, ui.KeyComma)
-		tr.Frame()
-		if !a.settingsOpen {
-			t.Fatalf("Cmd+, from %s did not open settings", control.label)
-		}
-		if err := tr.Click("← Back to workbench"); err != nil {
-			t.Fatal(err)
-		}
-		tr.Frame()
-		if !tr.Focused(control.label) {
-			t.Fatalf("Back did not restore %s", control.label)
-		}
-		tr.Key(0, ui.KeyEnter)
-		tr.Frame()
-	}
-	if opened != 1 || revealed != 1 || copied != file.RawResult || state.ReaderKey != key {
-		t.Fatalf("Return actions = open:%d reveal:%d copy:%q reader:%q", opened, revealed, copied, state.ReaderKey)
 	}
 }
 
@@ -1554,173 +1092,6 @@ func TestSettingsCmdCommaFromReplacedMarkdownLinkDoesNotStealFocusWhenOldTargetR
 	}
 }
 
-func TestSettingsCmdCommaFromHistoryMarkdownLinkReturnsToSameLink(t *testing.T) {
-	a, ct := workspaceTestApp(t)
-	ct.History = []historyEntry{{
-		ID: "history-link", Date: "Oct 1", From: "contact",
-		Text: "历史[第一历史链接](https://example.com/history) 第二[第二历史链接](https://example.com/history)。",
-	}}
-	a.windowWidth = 1040
-	tr := ui.NewTester(a.view, 1040, 720)
-	tr.SetFocused(true)
-	tr.Frame()
-	a.openHistory()
-	tr.Frame()
-	tabToFocused(t, tr, "第二历史链接")
-	tr.Key(ui.Cmd, ui.KeyComma)
-	tr.Frame()
-	if !a.settingsOpen || !a.detailIs(detailHistory) {
-		t.Fatalf("Cmd+, from history link = open=%v detail=%v", a.settingsOpen, a.activeDetail())
-	}
-	if err := tr.Click("← Back to workbench"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if !tr.Focused("第二历史链接") {
-		t.Fatalf("history Back did not return to its second repeated inline link: %v", tr.Texts())
-	}
-	tr.Key(0, ui.KeyEnter)
-	tr.Frame()
-	if got := tr.OpenedURLs(); len(got) != 1 || got[0] != "https://example.com/history" {
-		t.Fatalf("history link opened %v, want only its URL", got)
-	}
-}
-
-func TestSettingsCmdCommaFromIssueResultMarkdownLinkReturnsToSameLink(t *testing.T) {
-	a := issuePreviewApp("issue-detail")
-	issue := a.selectedContact().selectedIssue()
-	execution := issue.Executions[0]
-	a.pi = nil
-	a.openIssueResultEntry(issue.ID, execution.ID, false)
-	a.issueResult.Loading = false
-	a.issueResult.LoadError = ""
-	a.issueResult.Panel.Response = "结果[第一结果链接](https://example.com/result) 第二[第二结果链接](https://example.com/result)。"
-	a.windowWidth = 1040
-	tr := ui.NewTester(a.view, 1040, 720)
-	tr.SetFocused(true)
-	tr.Frame()
-	tabToFocused(t, tr, "第二结果链接")
-	tr.Key(ui.Cmd, ui.KeyComma)
-	tr.Frame()
-	if !a.settingsOpen {
-		t.Fatal("Cmd+, from result link did not open settings")
-	}
-	if err := tr.Click("← Back to workbench"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if !a.issueResult.Open || a.aux != "issue-result" || !tr.Focused("第二结果链接") {
-		t.Fatalf("result Back lost context or second repeated link focus: open=%v aux=%q texts=%v", a.issueResult.Open, a.aux, tr.Texts())
-	}
-	tr.Key(0, ui.KeyEnter)
-	tr.Frame()
-	if got := tr.OpenedURLs(); len(got) != 1 || got[0] != "https://example.com/result" {
-		t.Fatalf("result second repeated link opened %v, want only its URL", got)
-	}
-}
-
-func TestSettingsCmdCommaFromInnerFileMarkdownLinkReturnsToSameLink(t *testing.T) {
-	a := issuePreviewApp("issue-detail")
-	issue := a.selectedContact().selectedIssue()
-	execution := issue.Executions[0]
-	file := issueResultFile{
-		ExecutionID: execution.ID, SessionID: execution.SessionID, TaskID: execution.TaskID,
-		MessageID: execution.MessageID, CallID: "call-link", ToolName: "write",
-		Path: "/tmp/link.md", WorkingDirectory: "/tmp", RawResult: `{"path":"/tmp/link.md"}`,
-	}
-	key := issueResultFileKey(file)
-	inspection := issueResultFileInspection{Path: file.Path, WorkingDirectory: "/tmp", Exists: true, Regular: true, Preview: "文件[第一内链](https://example.com/file) 第二[第二内链](https://example.com/file)。"}
-	a.pi = nil
-	a.openIssueResultEntry(issue.ID, execution.ID, false)
-	a.issueResult.Loading = false
-	a.issueResult.LoadError = ""
-	a.issueResult.Panel.Files = []issueResultFile{file}
-	a.issueResult.Panel.ReaderKey = key
-	a.issueResult.Panel.InspectFor = key
-	a.issueResult.Panel.Inspection = &inspection
-	a.windowWidth = 1040
-	tr := ui.NewTester(a.view, 1040, 720)
-	tr.SetFocused(true)
-	tr.Frame()
-	tabToFocused(t, tr, "第二内链")
-	tr.Key(ui.Cmd, ui.KeyComma)
-	tr.Frame()
-	if !a.settingsOpen || !a.issueResult.Open || a.issueResult.Panel.ReaderKey != key {
-		t.Fatalf("Cmd+, from inner file link = settings=%v open=%v reader=%q", a.settingsOpen, a.issueResult.Open, a.issueResult.Panel.ReaderKey)
-	}
-	if err := tr.Click("← Back to workbench"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if !a.issueResult.Open || a.issueResult.Panel.ReaderKey != key || !tr.Focused("第二内链") {
-		t.Fatalf("inner file Back lost context or second repeated link focus: open=%v reader=%q texts=%v", a.issueResult.Open, a.issueResult.Panel.ReaderKey, tr.Texts())
-	}
-	tr.Key(0, ui.KeyEnter)
-	tr.Frame()
-	if got := tr.OpenedURLs(); len(got) != 1 || got[0] != "https://example.com/file" {
-		t.Fatalf("inner file second repeated link opened %v, want only its URL", got)
-	}
-}
-
-func TestSettingsReturnsToExactHistorySummaryAndFullLinkWithSameEntry(t *testing.T) {
-	a, ct := workspaceTestApp(t)
-	const url = "https://example.com/same"
-	ct.History = []historyEntry{{
-		ID: "history-same", Date: "Oct 1", From: "contact",
-		Text: "摘要[摘要链接](" + url + ")。",
-	}}
-	a.windowWidth = 1040
-	a.workspaceOpen = false
-	a.detail = ""
-	a.openHistory()
-	tr := ui.NewTester(a.view, 1040, 720)
-	tr.SetFocused(true)
-	tr.Frame()
-
-	tabToFocused(t, tr, "摘要链接")
-	tr.Key(ui.Cmd, ui.KeyComma)
-	tr.Frame()
-	if !a.settingsOpen {
-		t.Fatal("摘要链接 Cmd+, did not open settings")
-	}
-	if err := tr.Click("← Back to workbench"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if !tr.Focused("摘要链接") {
-		t.Fatalf("Back did not return to the summary link: %v", tr.Texts())
-	}
-	tr.Key(0, ui.KeyEnter)
-	tr.Frame()
-	if got := tr.OpenedURLs(); len(got) != 1 || got[0] != url {
-		t.Fatalf("summary link opened %v, want only its URL", got)
-	}
-
-	a.contactHistoryFull = &contactHistoryFull{
-		SessionID: "s1", EntryID: "history-same", Date: "Oct 1", From: "contact",
-		Text: "完整[完整链接](" + url + ")。",
-	}
-	tr.Frame()
-	tabToFocused(t, tr, "完整链接")
-	tr.Key(ui.Cmd, ui.KeyComma)
-	tr.Frame()
-	if !a.settingsOpen {
-		t.Fatal("完整链接 Cmd+, did not open settings")
-	}
-	if err := tr.Click("← Back to workbench"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if !tr.Focused("完整链接") {
-		t.Fatalf("Back did not return to the full link: %v", tr.Texts())
-	}
-	tr.Key(0, ui.KeyEnter)
-	tr.Frame()
-	if got := tr.OpenedURLs(); len(got) != 2 || got[1] != url {
-		t.Fatalf("full link opened %v, want second exact URL occurrence", got)
-	}
-}
-
 func TestExplicitRailSettingsDoesNotReuseOldMarkdownLinkReturn(t *testing.T) {
 	a, ct := workspaceTestApp(t)
 	ct.Messages = []*message{{
@@ -1756,38 +1127,6 @@ func TestExplicitRailSettingsDoesNotReuseOldMarkdownLinkReturn(t *testing.T) {
 	}
 	if a.markdownLinkFocus != (markdownLinkTarget{}) || a.linkReturnTarget != (markdownLinkTarget{}) {
 		t.Fatalf("rail Settings left the old link request pending: focus=%+v target=%+v", a.markdownLinkFocus, a.linkReturnTarget)
-	}
-}
-
-func TestHistoryCloseReopenKeepsCloseFocusAfterLinkFocus(t *testing.T) {
-	a, ct := workspaceTestApp(t)
-	ct.History = []historyEntry{{
-		ID: "history-stale", Date: "Oct 1", From: "contact",
-		Text: "历史[历史链接](https://example.com/history)。",
-	}}
-	a.windowWidth = 1040
-	tr := ui.NewTester(a.view, 1040, 720)
-	tr.SetFocused(true)
-	tr.Frame()
-	a.openHistory()
-	tr.Frame()
-	tabToFocused(t, tr, "历史链接")
-	if err := tr.Click("Close history"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if a.workspaceOpen {
-		t.Fatalf("Close history did not return to chat: open=%v detail=%v", a.workspaceOpen, a.activeDetail())
-	}
-	if err := tr.Click("History"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if !a.detailIs(detailHistory) {
-		t.Fatalf("History did not reopen: detail=%v", a.activeDetail())
-	}
-	if !tr.Focused("Close history") {
-		t.Fatalf("reopened history lost its default close focus: %v", tr.Texts())
 	}
 }
 
@@ -2175,10 +1514,9 @@ func TestC8SaveRecoveryCopyEntryKeepsSavedAndUnsavedState(t *testing.T) {
 		t.Fatal("existing Settings did not route to General")
 	}
 	ct.Context.formName, ct.Context.formText = "unsaved context name", "unsaved context text"
-	a.issueGoal = "unsaved issue form"
 	defer func() {
-		if ct.Context.formName != "unsaved context name" || ct.Context.formText != "unsaved context text" || a.issueGoal != "unsaved issue form" {
-			t.Error("copy changed unsaved context/issue editor")
+		if ct.Context.formName != "unsaved context name" || ct.Context.formText != "unsaved context text" {
+			t.Error("copy changed the unsaved context editor")
 		}
 	}()
 	if err := clickSettingsAction(tr, "Save recovery copy…"); err != nil {
@@ -2296,10 +1634,10 @@ func TestC8RestorePreviewConfirmAndReopen(t *testing.T) {
 				a.windowWidth = size[0]
 				ct := a.selectedContact()
 				ct.SessionID = "independent-history-reference"
-				if !a.createIssue("Retained task 原文", "Keep requirement") {
-					t.Fatal("ordinary issue producer failed")
+				issue, err := a.createIssueFor(ct, "Retained task 原文", "Keep requirement")
+				if err != nil {
+					t.Fatal(err)
 				}
-				issue := ct.Issues[0]
 				issue.Executions = []*issueExecution{{ID: "unknown-run", Status: issueExecutionUnknown, Detail: "No trusted association"}}
 				issue.Supplements.Items = []*issueSupplement{{ID: "pending", ContactID: ct.ID, IssueID: issue.ID, Text: "Do not replay", RequirementsRevision: 1, State: supplementStatePending}}
 				if err := a.persist(); err != nil {
@@ -2766,7 +2104,7 @@ func TestC8UnsavedRecoveryGuidanceBeforeQuit(t *testing.T) {
 }
 
 func TestTaskContextPickerAndRecoveryMutualAdmission(t *testing.T) {
-	a, ct, tc, tr, callbacks := contextFileChooserTestApp(t, false)
+	a, ct, tc, tr, callbacks := contextFileChooserTestApp(t)
 	a.storePath = a.store.path
 	before := recoverySavedBytes(t, a.store.path)
 	release := make(chan struct{})
@@ -2798,7 +2136,7 @@ func TestTaskContextPickerAndRecoveryMutualAdmission(t *testing.T) {
 		t.Error("context picker bypassed recovery reservation")
 		return nil, nil
 	}
-	a.chooseTaskContextFile(ct, nil, tc)
+	a.chooseTaskContextFile(ct, tc)
 	if a.contextFilePickers != 0 || tc.fileChoosing || string(recoverySavedBytes(t, a.store.path)) != string(before) {
 		t.Fatal("context choice bypassed actual recovery admission")
 	}

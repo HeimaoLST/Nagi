@@ -53,9 +53,6 @@ func (a *appModel) view(c *ui.Context) {
 				source = settingsSourceComposer
 			} else if !a.captureLinkSettingsSource(c, &source) {
 				source = a.settingsSourceForVisiblePage()
-				if source == settingsSourceAux && a.issueResult.Open {
-					a.issueResult.Panel.FocusReturn = issueResultFocusedHandle(c, &a.issueResult.Panel, a.issueResult.Panel.ReaderKey != "")
-				}
 			}
 			a.openSettingsTab(settingsTabAppearance, source)
 		}
@@ -89,14 +86,6 @@ func (a *appModel) view(c *ui.Context) {
 }
 
 func (a *appModel) escapeTopLayer() {
-	if a.issueResult.Open {
-		if a.issueResult.Panel.ReaderKey != "" {
-			a.closeIssueResultReader()
-			return
-		}
-		a.closeIssueResult()
-		return
-	}
 	if a.contactHistoryFull != nil {
 		a.closeContactHistoryFull()
 		return
@@ -105,12 +94,7 @@ func (a *appModel) escapeTopLayer() {
 		a.closeAux()
 		return
 	}
-	if a.workspaceOpen {
-		if a.activeDetail() == detailWork {
-			if a.escapeWorkspaceLayer() {
-				return
-			}
-		}
+	if a.activeDetail() != "" {
 		a.closeDetail()
 	}
 }
@@ -127,14 +111,12 @@ func (a *appModel) captureLinkSettingsSource(c *ui.Context, source *string) bool
 
 func (a *appModel) settingsSourceForVisiblePage() string {
 	switch {
-	case a.issueResult.Open, a.aux != "":
+	case a.aux != "":
 		return settingsSourceAux
 	case a.contactHistoryFull != nil, a.detailIs(detailHistory):
 		return settingsSourceHistory
 	case a.detailIs(detailProfile):
 		return settingsSourceProfile
-	case a.workspaceOpen:
-		return settingsSourceWork
 	default:
 		return settingsSourceCommand
 	}
@@ -147,12 +129,6 @@ func (a *appModel) openSettingsFromContext(c *ui.Context, tab, source string) {
 
 func (a *appModel) armActiveSurfaceFallback() {
 	switch {
-	case a.aux == "issue-result" && a.issueResult.Open:
-		if a.issueResult.Panel.ReaderKey != "" {
-			a.issueResult.Panel.FocusReader = true
-		} else {
-			a.issueResult.Panel.FocusClose = true
-		}
 	case a.contactHistoryFull != nil:
 		a.focusHistoryFullBack = true
 	case a.detailIs(detailHistory):
@@ -310,29 +286,10 @@ func (a *appModel) avatarRail(c *ui.Context, t *ui.Theme) {
 	})
 }
 
-func (a *appModel) avatarRailStatus(msgs locales.Messages, ct *contact) string {
-	notice := a.issueWorkNotice(ct)
-	status := ""
-	switch {
-	case notice.Attention:
-		status = msgs.TaskRailAttention(notice.IssueName)
-	case notice.Waiting:
-		status = msgs.TaskRailWaiting(notice.IssueName)
-	case notice.Active:
-		status = msgs.TaskRailInProgress(notice.IssueName)
-	default:
-		status = a.headerStatusLabel(ct, msgs)
-	}
-	if notice.ActiveCount > 0 {
-		status += "\n" + msgs.TaskActiveCount(notice.ActiveCount)
-	}
-	return status
-}
-
 func (a *appModel) avatarRailRow(c *ui.Context, t *ui.Theme, i int) {
 	ct := a.contacts[i]
 	msgs := locales.In(c.Locale())
-	status := a.avatarRailStatus(msgs, ct)
+	status := a.headerStatusLabel(ct, msgs)
 	label := msgs.AvatarContactLabel(ct.Name)
 	tip := label
 	if status != "" {
@@ -348,12 +305,8 @@ func (a *appModel) avatarRailRow(c *ui.Context, t *ui.Theme, i int) {
 	row.OnClick(func() { a.selectContact(i) })
 	row.Children(func() {
 		contactAvatar(c, t, ct.Name, 24)
-		if glyph, count, color := a.avatarRailMarker(ct); glyph != "" {
-			text := glyph
-			if count > 0 {
-				text = fmt.Sprintf("%s%d", glyph, count)
-			}
-			ui.Text(c, text).
+		if marker, color := a.avatarRailMarker(ct); marker != "" {
+			ui.Text(c, marker).
 				FontSize(typeMeta).FontWeight(500).TextColor(color).
 				Background(t.Surface).Padding(1, 3).Radius(4).SingleLine().
 				Absolute().Right(0).Bottom(0).IgnoreInput(true)
@@ -361,44 +314,15 @@ func (a *appModel) avatarRailRow(c *ui.Context, t *ui.Theme, i int) {
 	})
 }
 
-func (a *appModel) avatarRailMarker(ct *contact) (string, int, ui.Color) {
-	notice := a.issueWorkNotice(ct)
-	switch {
-	case notice.AttentionCount > 0:
-		return "!", notice.AttentionCount, a.workTheme.Theme.Warning
-	case notice.WaitingCount > 0:
-		return "◷", notice.WaitingCount, a.workTheme.Theme.Warning
-	case notice.ActiveCount > 0:
-		return "▶", notice.ActiveCount, a.workTheme.Theme.Success
-	case ct.Status == statusWorking:
-		return "▶", 0, a.workTheme.Theme.Success
-	case ct.Status == statusAttention:
-		return "!", 0, a.workTheme.Theme.Warning
+func (a *appModel) avatarRailMarker(ct *contact) (string, ui.Color) {
+	switch ct.Status {
+	case statusWorking:
+		return "▶", a.workTheme.Theme.Success
+	case statusAttention:
+		return "!", a.workTheme.Theme.Warning
 	default:
-		return "", 0, a.workTheme.Theme.TextMuted
+		return "", ui.Color{}
 	}
-}
-
-func (a *appModel) openIssueTarget(issueID string) {
-	ct := a.selectedContact()
-	if ct == nil || issueID == "" || ct.issueByID(issueID) == nil {
-		return
-	}
-	a.selectIssue(issueID)
-	a.setWorkspaceOpen(true)
-}
-
-func (a *appModel) openIssueFromRail(index int, issueID string) {
-	if index < 0 || index >= len(a.contacts) || issueID == "" {
-		return
-	}
-	ownerID := a.contacts[index].ID
-	a.selectContact(index)
-	ct := a.selectedContact()
-	if ct == nil || ct.ID != ownerID {
-		return
-	}
-	a.openIssueTarget(issueID)
 }
 
 func (a *appModel) railRow(c *ui.Context, t *ui.Theme, i int) {
@@ -423,34 +347,14 @@ func (a *appModel) railRow(c *ui.Context, t *ui.Theme, i int) {
 				}
 				ui.Text(c, ct.Name).FontSize(typeRailName).FontWeight(nameWeight).FixedLineHeight(lineNavigation).
 					MaxLines(1).Grow(1).MinWidth(0).TextColor(t.Text)
-				msgs := locales.In(c.Locale())
-				notice := a.issueWorkNotice(ct)
-				if notice.ActiveCount > 0 {
-					ui.Text(c, msgs.TaskActiveCount(notice.ActiveCount)).FontSize(typeMeta).FixedLineHeight(lineMeta).Shrink(0).TextColor(t.TextMuted)
-				}
 				if ct.Unread > 0 {
 					ui.Text(c, fmt.Sprintf("%d", ct.Unread)).FontSize(typeMeta).FixedLineHeight(lineMeta).Shrink(0).TextColor(t.Warning)
 				}
 			})
 			msgs := locales.In(c.Locale())
-			notice := a.issueWorkNotice(ct)
 			line := a.snippet(ct, msgs)
 			color := t.TextMuted
-			targetID := ""
-			switch {
-			case notice.Attention:
-				line = msgs.TaskRailAttention(notice.IssueName)
-				color = t.Warning
-				targetID = notice.IssueID
-			case notice.Waiting:
-				line = msgs.TaskRailWaiting(notice.IssueName)
-				color = t.Warning
-				targetID = notice.IssueID
-			case notice.Active:
-				line = msgs.TaskRailInProgress(notice.IssueName)
-				color = t.Success
-				targetID = notice.IssueID
-			case ct.Status != statusReady:
+			if ct.Status != statusReady {
 				status := a.statusLabel(ct, msgs)
 				detail := strings.TrimSpace(line)
 				if detail == status {
@@ -463,17 +367,7 @@ func (a *appModel) railRow(c *ui.Context, t *ui.Theme, i int) {
 				}
 				color = a.statusColor(t, ct.Status)
 			}
-			if targetID != "" {
-				summary := ui.Button(c, "").Label(line).FontSize(typeRailSummary).FixedLineHeight(lineNavigation).
-					MinHeight(32).Padding(2, 6).FillWidth().Justify(ui.Start)
-				summary = appTooltip(c, summary, line)
-				summary.OnClick(func() { a.openIssueFromRail(i, targetID) })
-				summary.Children(func() {
-					ui.Text(c, line).FontSize(typeRailSummary).FixedLineHeight(lineNavigation).MaxLines(2).TextColor(color)
-				})
-			} else {
-				ui.Text(c, line).FontSize(typeRailSummary).FixedLineHeight(lineNavigation).MaxLines(1).TextColor(color)
-			}
+			ui.Text(c, line).FontSize(typeRailSummary).FixedLineHeight(lineNavigation).MaxLines(1).TextColor(color)
 		})
 	})
 }
@@ -752,23 +646,6 @@ func (a *appModel) main(c *ui.Context, t *ui.Theme) {
 	})
 }
 
-func (a *appModel) workEntryStatus(ct *contact, msgs locales.Messages) (string, bool) {
-	if ct == nil {
-		return "", false
-	}
-	notice := a.issueWorkNotice(ct)
-	switch {
-	case notice.Attention:
-		return msgs.TaskStatusNeedsAttention(), true
-	case notice.Waiting:
-		return msgs.TaskStatusWaiting(), true
-	case notice.Active:
-		return msgs.TaskStatusInProgress(), false
-	default:
-		return "", false
-	}
-}
-
 func (a *appModel) header(c *ui.Context, t *ui.Theme) {
 	ct := a.selectedContact()
 	msgs := locales.In(c.Locale())
@@ -782,16 +659,11 @@ func (a *appModel) header(c *ui.Context, t *ui.Theme) {
 						ui.Text(c, ct.Role).FontSize(typeHeaderMeta).FontWeight(400).FixedLineHeight(lineHeader).MinWidth(0).Grow(1).TextColor(t.TextMuted)
 					})
 				})
-				ui.Spacer(c)
-				ui.Row(c).Shrink(0).Children(func() { a.navigationToolbar(c, t) })
-			})
-			if status, attention := a.workEntryStatus(ct, msgs); status != "" && !a.workspaceOpen {
-				color := t.Success
-				if attention {
-					color = t.Warning
+				if a.railCollapsed {
+					ui.Spacer(c)
+					a.showContactsButton(c, t)
 				}
-				ui.Text(c, status).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(color)
-			}
+			})
 		})
 	})
 }
@@ -1028,23 +900,6 @@ func (a *appModel) emptyState(c *ui.Context, t *ui.Theme) {
 			if a.runtimeStatus != runtimeStateReady {
 				ui.Text(c, msgs.HistoryRuntimeNotReady()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Warning)
 			}
-			return
-		}
-		notice := a.issueWorkNotice(ct)
-		fact := ""
-		switch {
-		case notice.Attention:
-			fact = msgs.EmptyTaskAttention(notice.IssueName)
-		case notice.Waiting:
-			fact = msgs.EmptyTaskWaiting(notice.IssueName)
-		case notice.Active:
-			fact = msgs.EmptyTaskInProgress(notice.IssueName)
-		}
-		if fact != "" {
-			ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
-				ui.Text(c, fact).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text).Grow(1)
-				secondaryButton(c, msgs.TaskView()).OnClick(func() { a.openIssueTarget(notice.IssueID) })
-			})
 			return
 		}
 		ui.Text(c, msgs.EmptyNoMessages()).FontSize(typePageTitle).FontWeight(500).TextColor(t.Text)

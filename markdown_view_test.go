@@ -130,7 +130,7 @@ func TestAppUserMessageStaysLiteralAndCopiesRaw(t *testing.T) {
 	}
 }
 
-func TestAppHistoryAndSourcesRenderAndCopyMarkdown(t *testing.T) {
+func TestAppSourcesRenderAndCopyMarkdown(t *testing.T) {
 	a, ct := appReadingTestApp(t)
 	assistantHistory := "## 历史标题\n\n- 条目\n\n```go\n\tx := 1\n```"
 	userHistory := "# 用户原文"
@@ -139,27 +139,8 @@ func TestAppHistoryAndSourcesRenderAndCopyMarkdown(t *testing.T) {
 		{ID: "h1", Date: "Oct 1", From: "contact", Text: assistantHistory},
 	}
 	ct.Messages = []*message{{ID: 1, Kind: msgContact, Text: "answer", Sources: []string{"h1", "h2"}}}
-	a.openHistory()
-	tr := ui.NewTester(a.view, 1040, 720)
-	tr.Frame()
-	if !tr.HasText("历史标题") || !tr.HasText("条目") || !tr.HasText("x := 1") {
-		t.Fatalf("history markdown missing: %q", tr.Texts())
-	}
-	if !tr.HasText("# 用户原文") {
-		t.Fatalf("history user text was not literal: %q", tr.Texts())
-	}
-	if !tr.HasText("Copy history message") {
-		t.Fatalf("history copy control missing: %q", tr.Texts())
-	}
-	if err := tr.Click("Copy history message"); err != nil {
-		t.Fatal(err)
-	}
-	if got := tr.Clipboard(); got != assistantHistory {
-		t.Fatalf("history copy = %q, want the assistant source %q", got, assistantHistory)
-	}
-
-	a.backToChat()
 	a.openSources(1)
+	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
 	if !tr.HasText("历史标题") || !tr.HasText("条目") || !tr.HasText("Copy source message") {
 		t.Fatalf("source markdown/copy missing: %q", tr.Texts())
@@ -181,69 +162,6 @@ func TestAppEmptyChatHasNoBackToLatest(t *testing.T) {
 	tr.Frame()
 	if tr.HasText("Back to latest") {
 		t.Fatalf("empty chat showed Back to latest: %q", tr.Texts())
-	}
-}
-
-func TestAppToolDetailsShowAndCopyCompleteReceivedOutput(t *testing.T) {
-	a, ct := workspaceTestApp(t)
-	output := strings.Repeat("received tool line\n", 500) + "# plain tail marker"
-	if len(output) <= 6000 {
-		t.Fatalf("fixture is not long enough: %d", len(output))
-	}
-	ct.Works = []*workItem{{
-		TaskID: "t1", State: workRunning,
-		Tools: []*workTool{{
-			CallID: "k1", Name: "read", Args: `{"path":"README.md"}`,
-			Output: output, Started: true, Finished: true,
-		}},
-	}}
-	ct.ActiveTaskID, ct.LastTaskID = "t1", "t1"
-	tr := ui.NewTester(a.view, 1040, 720)
-	tr.Frame()
-	openConversationWorkPanel(t, tr)
-	if !tr.HasText("Preview: ") {
-		t.Fatalf("collapsed tool summary is not labeled as a preview: %q", tr.Texts())
-	}
-	if err := tr.Click("Copy received output"); err != nil {
-		t.Fatal(err)
-	}
-	if got := tr.Clipboard(); got != output {
-		t.Fatalf("collapsed tool copy = %d bytes, want %d exact bytes", len(got), len(output))
-	}
-	if err := tr.Click("Details"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if !tr.HasText("# plain tail marker") {
-		t.Fatalf("expanded tool detail lost the received tail: %q", tr.Texts())
-	}
-	if tr.HasText("Copy code") {
-		t.Fatalf("expanded tool detail was parsed as Markdown: %q", tr.Texts())
-	}
-	for i := 0; i < 8; i++ {
-		tr.Scroll(860, 400, 0, 2000)
-		tr.Frame()
-	}
-	// Put the caret in the scrolled full-output text, then select/copy the
-	// complete source; the exact output and tail marker must remain reachable.
-	tr.ClickAt(860, 400)
-	tr.Command("selectAll")
-	tr.Command("copy")
-	if got := tr.Clipboard(); got != output {
-		t.Fatalf("scrolled tool Details copy = %d bytes, want %d exact bytes", len(got), len(output))
-	}
-	for i := 0; i < 8; i++ {
-		tr.Scroll(860, 400, 0, -2000)
-		tr.Frame()
-	}
-	if err := tr.Click("Copy received output"); err != nil {
-		t.Fatal(err)
-	}
-	if got := tr.Clipboard(); got != output {
-		t.Fatalf("expanded tool copy = %d bytes, want %d exact bytes", len(got), len(output))
-	}
-	if len(ct.Messages) != 0 {
-		t.Fatalf("tool details added chat messages: %+v", ct.Messages)
 	}
 }
 
@@ -315,10 +233,9 @@ func TestAppChatScrollUpSurvivesStreamAppendAndBackToLatest(t *testing.T) {
 	ct.Draft = "draft stays across appearance switch"
 	first, _ := ct.list.Visible()
 	composerLabel := locales.In("en").ComposerLabel(ct.Name)
-	composer, composerOK := tr.Find(composerLabel)
-	settings, settingsOK := tr.Find("Contact profile")
-	if !composerOK || !settingsOK {
-		t.Fatalf("reading viewport bounds unavailable: composer=%+v/%v settings=%+v/%v", composer, composerOK, settings, settingsOK)
+	viewport, viewportOK := tr.Find(locales.In("en").ConversationMessagesLabel())
+	if !viewportOK || viewport.W <= 0 || viewport.H <= 0 {
+		t.Fatalf("reading viewport bounds unavailable: %+v found=%v", viewport, viewportOK)
 	}
 	// list.Visible may report a partially clipped first row; choose the first
 	// row whose label is fully inside the actual reading viewport and clickable.
@@ -327,14 +244,13 @@ func TestAppChatScrollUpSurvivesStreamAppendAndBackToLatest(t *testing.T) {
 	for i := first; i < len(ct.Messages); i++ {
 		candidate, ok := tr.Find(fmt.Sprintf("message %02d", i))
 		if ok && candidate.W > 0 && candidate.H > 0 &&
-			candidate.Y >= settings.Y+settings.H && candidate.Y+candidate.H <= composer.Y {
+			candidate.Y >= viewport.Y && candidate.Y+candidate.H <= viewport.Y+viewport.H {
 			clicked, row = i, candidate
 			break
 		}
 	}
 	if clicked < 0 {
-		t.Fatalf("no fully visible clickable message row from %d: composer=%+v settings=%+v texts=%q",
-			first, composer, settings, tr.Texts())
+		t.Fatalf("no fully visible clickable message row from %d: viewport=%+v texts=%q", first, viewport, tr.Texts())
 	}
 	// Click the visible text itself (not its left edge) and verify the selected
 	// source actually reaches the clipboard.
@@ -437,35 +353,6 @@ func TestAppChatScrollUpSurvivesStreamAppendAndBackToLatest(t *testing.T) {
 	}
 }
 
-func TestAppWorkspaceResultSummaryIsPreview(t *testing.T) {
-	a, ct := workspaceTestApp(t)
-	longResult := strings.Repeat("result-line ", 40) + "tail-marker"
-	ct.Issues = []*productIssue{{ID: "i1", ContactID: ct.ID, Goal: "First issue", Status: issueStatusNotStarted, Executions: []*issueExecution{{ID: "e1", TaskID: "t1", Status: issueExecutionCompleted}}}}
-	openIssueDetailForTest(a, ct, "i1")
-	ct.Works = []*workItem{{TaskID: "t1", MessageID: "m1", State: workCompleted, Prompt: "prompt"}}
-	ct.Issues[0].Work.Messages = []*message{{ID: 1, Kind: msgContact, TaskID: "t1", Text: longResult}}
-	tr := ui.NewTester(a.view, 1040, 720)
-	tr.Frame()
-	preview := ""
-	for _, text := range tr.Texts() {
-		if strings.HasPrefix(text, "Result preview: ") {
-			preview = strings.TrimPrefix(text, "Result preview: ")
-		}
-	}
-	if preview == "" {
-		t.Fatalf("workspace result summary is not labeled as a preview: %q", tr.Texts())
-	}
-	if strings.Contains(preview, "tail-marker") {
-		t.Fatalf("preview leaked the >300-char result tail: %q", preview)
-	}
-	if !strings.HasSuffix(preview, "…") || len([]rune(preview)) != 301 {
-		t.Fatalf("preview does not honor the 300-char limit: %q (%d runes)", preview, len([]rune(preview)))
-	}
-	if tr.HasText("Result: " + longResult) {
-		t.Fatalf("workspace result summary claims to be the full result: %q", tr.Texts())
-	}
-}
-
 func TestIntegratedMarkdownPreview(t *testing.T) {
 	dir := os.Getenv("NAGI_READER_INTEGRATED_DIR")
 	if dir == "" {
@@ -490,21 +377,17 @@ func TestIntegratedMarkdownPreview(t *testing.T) {
 			}{{"1040x720", 1040, 720}, {"720x640", 720, 640}} {
 				a, ct := workspaceTestApp(t)
 				a.windowWidth = size.width
-				a.workspaceOpen = scene == "details"
+				a.workspaceOpen = false
 				ct.Draft = "Draft kept while reading"
 				ct.Messages = []*message{
 					{ID: 1, Kind: msgUser, Text: "# literal user text"},
 					{ID: 2, Kind: msgContact, Text: md},
 				}
 				if scene == "details" {
-					ct.Works = []*workItem{{
-						TaskID: "t1", State: workRunning,
-						Tools: []*workTool{{
-							CallID: "k1", Name: "read", Args: `{"path":"README.md"}`,
-							Output: strings.Repeat("received line\n", 80) + "# tail", Started: true, Finished: true, Expanded: true,
-						}},
-					}}
-					ct.ActiveTaskID, ct.LastTaskID = "t1", "t1"
+					ct.Messages = append(ct.Messages, &message{
+						Key: "inline-read", Kind: msgActivity, CallID: "k1", ToolName: "read", ToolArgs: `{"path":"README.md"}`,
+						ToolOutput: strings.Repeat("received line\n", 80) + "# tail", Expanded: true,
+					})
 				}
 				tr := ui.NewTester(a.view, size.width, size.height)
 				if dark {
@@ -563,65 +446,6 @@ func TestIntegratedMarkdownPreview(t *testing.T) {
 					fmt.Sprintf("message-affordance-user-focus-%s-%s-%s.png", locale, theme, size.name)), tr.Image())
 			}
 		}
-	}
-	for _, locale := range []string{"en", "zh-Hans"} {
-		for _, dark := range []bool{false, true} {
-			theme := "light"
-			if dark {
-				theme = "dark"
-			}
-			for _, size := range []struct {
-				name          string
-				width, height int
-			}{{"1040x720", 1040, 720}, {"960x640", 960, 640}} {
-				a, _ := appReadingTestApp(t)
-				a.pi = &piAppHost{client: &pi.Client{}}
-				a.windowWidth = size.width
-				a.openDetail(detailHistory)
-				a.contactHistoryFull = &contactHistoryFull{
-					SessionID: "saved-session", EntryID: "saved-entry", Date: "Oct 1", From: "contact", Text: md,
-				}
-				tr := ui.NewTester(a.view, size.width, size.height)
-				tr.SetLocale(locale)
-				tr.SetDark(dark)
-				tr.Frame()
-				writePreviewPNG(t, filepath.Join(dir,
-					fmt.Sprintf("history-full-%s-%s-%s.png", locale, theme, size.name)), tr.Image())
-			}
-		}
-	}
-}
-
-func TestAppFullSavedMessageUsesReaderAndPreservesDraft(t *testing.T) {
-	saved := "## 完整历史\n\n中文长段落需要自然换行，保留[链接](https://example.com/full)。\n\n" +
-		"```go\nfunc saved() {\n\tfmt.Println(\"full\")\n}\n```\n\n" +
-		"| 名称 | 说明 |\n| --- | --- |\n| 历史 | " + strings.Repeat("abcdefghij", 12) + " |\n"
-	a, ct := appReadingTestApp(t)
-	a.windowWidth = 960
-	ct.Draft = "draft survives full history"
-	a.openDetail(detailHistory)
-	a.contactHistoryFull = &contactHistoryFull{
-		SessionID: "saved-session", EntryID: "entry-1", Date: "Oct 1", From: "contact", Text: saved,
-	}
-	tr := ui.NewTester(a.view, 960, 640)
-	tr.Frame()
-	for _, want := range []string{"Full saved message", "完整历史", "中文长段落", "func saved()", "名称", "历史"} {
-		if !tr.HasText(want) {
-			t.Fatalf("full saved message missing %q: %v", want, tr.Texts())
-		}
-	}
-	if err := tr.Click("Copy saved message"); err != nil {
-		t.Fatal(err)
-	}
-	if got := tr.Clipboard(); got != saved {
-		t.Fatalf("full saved copy = %q, want exact raw source", got)
-	}
-	if err := tr.Click("← Back to history"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if a.contactHistoryFull != nil || !a.detailIs(detailHistory) || ct.Draft != "draft survives full history" {
-		t.Fatalf("back from full history = full:%+v detail:%q draft:%q", a.contactHistoryFull, a.activeDetail(), ct.Draft)
 	}
 }
 
@@ -730,57 +554,6 @@ func TestConversationFileLinkOwnersAndErrors(t *testing.T) {
 				t.Fatal("error caused an automatic retry")
 			}
 		})
-	}
-}
-
-func TestSavedMessageFileLinkKeepsOriginalDirectory(t *testing.T) {
-	a, ct := appReadingTestApp(t)
-	root := t.TempDir()
-	if err := os.WriteFile(filepath.Join(root, "saved.md"), []byte("saved"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	ct.SessionWorkingDir = t.TempDir()
-	a.contactHistoryFull = &contactHistoryFull{Origin: historyOriginSaved, SessionID: "old-session", EntryID: "old-entry", From: "contact", Text: "旧消息[文件](saved.md)。", WorkingDirectory: root}
-	var paths []string
-	a.openPath = func(path string) error { paths = append(paths, path); return nil }
-	tr := ui.NewTester(a.view, 1040, 720)
-	if err := tr.Click("文件"); err != nil {
-		t.Fatal(err)
-	}
-	if len(paths) != 1 || paths[0] != filepath.Join(root, "saved.md") {
-		t.Fatalf("historical paths=%q", paths)
-	}
-}
-
-func TestIssueResultMarkdownLinksUseRunAndFileOrigins(t *testing.T) {
-	a, ct := appReadingTestApp(t)
-	runRoot, documentRoot := t.TempDir(), t.TempDir()
-	for _, root := range []string{runRoot, documentRoot} {
-		if err := os.WriteFile(filepath.Join(root, "target.md"), []byte(root), 0600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	ct.SessionWorkingDir = t.TempDir()
-	a.aux = "issue-result"
-	a.issueResult = issueResultPage{Open: true, OwnerContactID: ct.ID, Generation: 1,
-		Panel: issueResultPanelState{WorkingDirectory: runRoot, Response: "结果[目标](target.md)。"}}
-	var paths []string
-	a.openPath = func(path string) error { paths = append(paths, path); return nil }
-	tr := ui.NewTester(a.view, 1040, 720)
-	if err := tr.Click("目标"); err != nil {
-		t.Fatal(err)
-	}
-	file := issueResultFile{SessionID: "work-session", TaskID: "task", CallID: "write", Path: filepath.Join(documentRoot, "report.md"), WorkingDirectory: runRoot}
-	key := issueResultFileKey(file)
-	a.issueResult.Panel.Files = []issueResultFile{file}
-	a.issueResult.Panel.ReaderKey, a.issueResult.Panel.InspectFor = key, key
-	a.issueResult.Panel.Inspection = &issueResultFileInspection{Exists: true, Regular: true, Preview: "文件内[目标](target.md)。"}
-	tr.Frame()
-	if err := tr.Click("目标"); err != nil {
-		t.Fatal(err)
-	}
-	if len(paths) != 2 || paths[0] != filepath.Join(runRoot, "target.md") || paths[1] != filepath.Join(documentRoot, "target.md") {
-		t.Fatalf("run/file reader paths=%q", paths)
 	}
 }
 

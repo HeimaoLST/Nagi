@@ -7,9 +7,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/HeimaoLST/Nagi/internal/pi"
 )
@@ -95,8 +97,9 @@ func (a *appModel) issueToolNewScope(contactID, sessionID, turnID string) (*Issu
 	if ct == nil {
 		return nil, errors.New("contact not found for issue tool scope")
 	}
-	ids := make([]string, 0, len(ct.Issues))
-	for _, issue := range ct.Issues {
+	issues := a.issuesVisibleTo(ct)
+	ids := make([]string, 0, len(issues))
+	for _, issue := range issues {
 		if issue != nil && issue.ID != "" {
 			ids = append(ids, issue.ID)
 		}
@@ -145,7 +148,7 @@ func (a *appModel) issueToolConversationIssueList(scope *IssueToolScope) (pi.Con
 	if ct == nil {
 		return pi.ContextInput{}, errors.New("contact not found for issue list context")
 	}
-	list, err := issueToolList(*scope, ct.Issues, false, 50, "")
+	list, err := issueToolList(*scope, a.issuesVisibleTo(ct), false, 50, "")
 	if err != nil {
 		return pi.ContextInput{}, err
 	}
@@ -353,6 +356,10 @@ func issueToolJSONResponse(value any, isError bool) (issueToolForwardResponse, e
 
 func (a *appModel) handleIssueToolForward(ctx context.Context, request issueToolForwardRequest) (issueToolForwardResponse, error) {
 	switch request.Tool {
+	case "bot_list":
+		return a.issueToolListBots(ctx, request.Arguments)
+	case "delegate_activity":
+		return a.delegateActivity(request.Arguments)
 	case "issue_list", "issue_get", "issue_action":
 	default:
 		return issueToolErrorResponse("unknown_tool", "unknown issue tool")
@@ -423,6 +430,7 @@ func boundIssueToolDetail(detail *IssueToolIssueDetail) *IssueToolIssueDetail {
 	for index := range detail.Executions {
 		detail.Executions[index].Detail = truncateIssueToolText(detail.Executions[index].Detail, issueToolQueryTextLimit)
 	}
+	detail.ResultExcerptHasMore = utf8.RuneCountInString(detail.ResultExcerpt) > issueToolResultExcerptSize
 	detail.ResultExcerpt = truncateIssueToolText(detail.ResultExcerpt, issueToolResultExcerptSize)
 	detail.ResultUnavailable = truncateIssueToolText(detail.ResultUnavailable, issueToolQueryTextLimit)
 	if detail.RequirementCount == 0 {
@@ -484,9 +492,7 @@ func (a *appModel) issueToolHandleList(_ context.Context, raw json.RawMessage) (
 			callErr = errors.New("issue tool scope contact no longer exists")
 			return
 		}
-		all := make([]*productIssue, 0, len(ct.Issues))
-		all = append(all, ct.Issues...)
-		result, callErr = issueToolList(scope, all, args.IncludeArchived, args.Limit, strings.TrimSpace(args.Cursor))
+		result, callErr = issueToolList(scope, a.issuesVisibleTo(ct), args.IncludeArchived, args.Limit, strings.TrimSpace(args.Cursor))
 	})
 	if callErr != nil {
 		return issueToolConsumeError(callErr)
@@ -504,11 +510,16 @@ func (a *appModel) issueToolHandleGet(ctx context.Context, raw json.RawMessage) 
 	if err != nil || issueID == "" {
 		return issueToolErrorResponse("invalid_arguments", "issue_id is required")
 	}
+	executionID, err := issueToolArgumentString(raw, "execution_id")
+	if err != nil {
+		return issueToolErrorResponse("invalid_arguments", err.Error())
+	}
 	var detail *IssueToolIssueDetail
 	var scope IssueToolScope
 	var piHost *piAppHost
 	var piRun *piActivityRun
-	var piExecutionID string
+	var binding *piActivityBinding
+	var status string
 	var callErr error
 	a.runOnUI(func() {
 		if a.shutdownStarted {
@@ -521,24 +532,33 @@ func (a *appModel) issueToolHandleGet(ctx context.Context, raw json.RawMessage) 
 			callErr = err
 			return
 		}
-		ct := a.contactByID(scope.ContactID)
-		if ct == nil {
-			callErr = errors.New("issue tool scope contact no longer exists")
-			return
-		}
-		detail, callErr = issueToolGet(scope, ct.Issues, issueID)
-		if callErr != nil || detail == nil {
-			return
-		}
-		issue := ct.issueByID(issueID)
+		ct, issue := a.issueToolTarget(scope, issueID)
 		if issue == nil {
 			callErr = &IssueToolError{Code: "not_found", Message: "issue was not found"}
 			return
 		}
-		if execution := latestIssueExecution(issue); execution != nil {
-			detail.ResultExecutionID = execution.ID
-			if execution.PiRun != nil && isPiActivityIssue(issue) {
-				piHost, piRun, piExecutionID = a.pi, clonePiActivityRun(execution.PiRun), execution.ID
+		detail, callErr = issueToolGet(scope, []*productIssue{issue}, issueID)
+		if callErr != nil {
+			return
+		}
+		execution := latestIssueExecution(issue)
+		if executionID != "" {
+			owner, selected := ct.executionByID(executionID)
+			if owner != issue {
+				callErr = &IssueToolError{Code: "not_found", Message: "execution was not found in this issue"}
+				return
+			}
+			execution = selected
+		}
+		if execution == nil {
+			return
+		}
+		detail.ResultExecutionID = execution.ID
+		status = execution.Status
+		if execution.PiRun != nil && isPiActivityIssue(issue) {
+			piHost, piRun = a.pi, clonePiActivityRun(execution.PiRun)
+			if canReadPiIssueResult(ct, issue, execution) {
+				binding = clonePiActivityBinding(issue.PiBinding)
 			}
 		}
 	})
@@ -548,47 +568,77 @@ func (a *appModel) issueToolHandleGet(ctx context.Context, raw json.RawMessage) 
 	if detail == nil {
 		return issueToolErrorResponse("not_found", "issue was not found")
 	}
-	if piRun != nil {
-		detail.ResultUnavailable = "Pi activity result history is not available in this view."
-		if piHost == nil {
-			return issueToolJSONResponse(boundIssueToolDetail(detail), false)
-		}
-		ready, readyErr := piHost.client.Ready(ctx)
-		if readyErr != nil {
-			detail.ResultUnavailable = "Pi activity progress is unavailable."
-			return issueToolJSONResponse(boundIssueToolDetail(detail), false)
-		}
-		if ready.WorkerEpoch != piRun.WorkerEpoch {
-			detail.ResultUnavailable = "The recorded activity belongs to a previous Pi worker."
-			return issueToolJSONResponse(boundIssueToolDetail(detail), false)
-		}
-		inspection, inspectErr := piHost.client.Inspect(ctx, piRun.ContextID)
-		current := false
-		a.runOnUI(func() {
-			ct := a.contactByID(scope.ContactID)
-			if ct == nil {
-				return
-			}
-			owner, execution := ct.executionByID(piExecutionID)
-			current = a.pi == piHost && owner != nil && owner.ID == issueID && isPiActivityIssue(owner) && execution != nil && samePiActivityRun(execution.PiRun, piRun)
-		})
-		if inspectErr == nil && current && inspection.ContextID == piRun.ContextID && inspection.SessionRef == piRun.SessionRef {
-			progress := &IssueToolPiProgress{ContextID: piRun.ContextID, RunID: piRun.RunID}
-			if inspection.ActiveRun != nil && inspection.ActiveRun.RunID == piRun.RunID {
-				progress.Active, progress.CancelRequested = true, inspection.ActiveRun.CancelRequested
-			}
-			detail.PiProgress = progress
-		} else if !current {
-			detail.ResultUnavailable = "The activity owner changed while progress was inspected."
-		} else if inspectErr != nil {
-			detail.ResultUnavailable = "Pi activity progress is unavailable."
-		} else {
-			detail.ResultUnavailable = "Pi returned a different activity context."
+	if piRun == nil {
+		if detail.ResultExecutionID != "" {
+			detail.ResultUnavailable = "The execution has no recorded Pi run."
 		}
 		return issueToolJSONResponse(boundIssueToolDetail(detail), false)
 	}
-	if detail.ResultExecutionID != "" {
-		detail.ResultUnavailable = "The latest activity has no recorded Pi run."
+	if piHost == nil {
+		detail.ResultUnavailable = "The Pi connection is unavailable."
+		return issueToolJSONResponse(boundIssueToolDetail(detail), false)
+	}
+	current := func() bool {
+		valid := false
+		a.runOnUI(func() {
+			ct, issue := a.issueToolTarget(scope, issueID)
+			if issue == nil || a.pi != piHost || a.connectionGeneration != piHost.generation {
+				return
+			}
+			owner, execution := ct.executionByID(detail.ResultExecutionID)
+			if owner != issue || !isPiActivityIssue(owner) ||
+				execution.Status != status || !samePiActivityRun(execution.PiRun, piRun) {
+				return
+			}
+			valid = binding == nil || canReadPiIssueResult(ct, owner, execution) && reflect.DeepEqual(owner.PiBinding, binding)
+		})
+		return valid
+	}
+	if binding != nil {
+		readCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+		result, err := piHost.readPiIssueResult(readCtx, *binding, *piRun, detail.ResultExecutionID, status)
+		cancel()
+		switch {
+		case !current():
+			detail.ResultUnavailable = "The activity owner or connection changed while reading the result."
+		case err != nil:
+			detail.ResultUnavailable = "Pi activity result history is unavailable."
+		default:
+			detail.ResultExcerpt = result.response
+			detail.ResultFileCount = len(result.files)
+			detail.ResultFiles = make([]IssueToolResultFileView, 0, len(result.files))
+			for _, file := range result.files {
+				detail.ResultFiles = append(detail.ResultFiles, IssueToolResultFileView{
+					ExecutionID: file.ExecutionID, CallID: file.CallID, ToolName: file.ToolName, Path: file.Path,
+				})
+			}
+		}
+		return issueToolJSONResponse(boundIssueToolDetail(detail), false)
+	}
+	detail.ResultUnavailable = "This execution has no confirmed result."
+	ready, readyErr := piHost.client.Ready(ctx)
+	if readyErr != nil {
+		detail.ResultUnavailable = "Pi activity progress is unavailable."
+		return issueToolJSONResponse(boundIssueToolDetail(detail), false)
+	}
+	if ready.WorkerEpoch != piRun.WorkerEpoch {
+		detail.ResultUnavailable = "The recorded activity belongs to a previous Pi worker."
+		return issueToolJSONResponse(boundIssueToolDetail(detail), false)
+	}
+	inspection, inspectErr := piHost.client.Inspect(ctx, piRun.ContextID)
+	switch {
+	case !current():
+		detail.ResultUnavailable = "The activity changed while progress was inspected."
+	case inspectErr != nil:
+		detail.ResultUnavailable = "Pi activity progress is unavailable."
+	case inspection.ContextID != piRun.ContextID || inspection.SessionRef != piRun.SessionRef:
+		detail.ResultUnavailable = "Pi returned a different activity context."
+	default:
+		progress := &IssueToolPiProgress{ContextID: piRun.ContextID, RunID: piRun.RunID}
+		if inspection.ActiveRun != nil && inspection.ActiveRun.RunID == piRun.RunID {
+			progress.Active, progress.CancelRequested = true, inspection.ActiveRun.CancelRequested
+		}
+		detail.PiProgress = progress
 	}
 	return issueToolJSONResponse(boundIssueToolDetail(detail), false)
 }
@@ -695,6 +745,13 @@ func (a *appModel) issueToolHandleAction(_ context.Context, raw json.RawMessage)
 		}
 		return issueToolErrorResponse("invalid_arguments", message)
 	}
+	if request.AssigneeID != "" || len(request.Files) != 0 {
+		return issueToolErrorResponse("invalid_arguments", "use delegate_activity to pass work to another Bot")
+	}
+	return a.applyIssueToolAction(request)
+}
+
+func (a *appModel) applyIssueToolAction(request IssueToolActionRequest) (issueToolForwardResponse, error) {
 	request.ScopeRef = strings.TrimSpace(request.ScopeRef)
 	var scope IssueToolScope
 	var scopeErr error
@@ -840,18 +897,31 @@ func (a *appModel) issueToolCreate(scope IssueToolScope, request IssueToolAction
 			callErr = errors.New("issue tool scope contact no longer exists")
 			return
 		}
-		previousAllowed := append([]string(nil), scope.AllowedIssueIDs...)
 		latestScope, latestErr := a.issueToolScopeByRef(scope.Ref)
 		if latestErr != nil {
 			callErr = latestErr
 			return
+		}
+		recipient := ct
+		var handoff *issueHandoff
+		if request.AssigneeID != "" {
+			recipient = a.contactByID(request.AssigneeID)
+			if recipient == nil || recipient.Archived {
+				callErr = &IssueToolError{Code: "recipient_unavailable", Message: "the requested Bot is unavailable"}
+				return
+			}
+			handoff = &issueHandoff{
+				SourceBotID: ct.ID, SourceSessionRef: latestScope.RuntimeSessionID, SourceTurnID: latestScope.TurnID,
+				Files: request.Files,
+			}
 		}
 		capturedContext := a.issueToolTurnContext(ct, latestScope)
 		if err := validateTaskContext(capturedContext); err != nil {
 			callErr = err
 			return
 		}
-		_, callErr = a.createIssueForWithSave(ct, request.Goal, strings.Join(request.Requirements, "\n"), func(created *productIssue) error {
+		_, callErr = a.createIssueForWithSave(recipient, request.Goal, strings.Join(request.Requirements, "\n"), func(created *productIssue) error {
+			created.Handoff = handoff
 			created.Context.items = capturedContext
 			receipt = &IssueToolReceipt{
 				State: issueToolReceiptSaved, IssueID: created.ID, IssueStatus: created.Status,
@@ -861,8 +931,7 @@ func (a *appModel) issueToolCreate(scope IssueToolScope, request IssueToolAction
 			a.issueToolAddScopeIssue(scope.Ref, created.ID)
 			if err := a.persist(); err != nil {
 				operation.Receipt = nil
-				scope.AllowedIssueIDs = previousAllowed
-				a.issueToolScopes[scope.Ref] = scope
+				a.issueToolScopes[scope.Ref] = latestScope
 				return err
 			}
 			receipt = cloneIssueToolReceipt(operation.Receipt)
@@ -883,8 +952,7 @@ func (a *appModel) issueToolUpdate(scope IssueToolScope, request IssueToolAction
 			callErr = err
 			return
 		}
-		ct := a.contactByID(scope.ContactID)
-		issue := issueForContact(ct, request.IssueID)
+		ct, issue := a.issueToolTarget(scope, request.IssueID)
 		if issue == nil {
 			callErr = errors.New("issue not found")
 			return
@@ -921,12 +989,7 @@ func (a *appModel) issueToolSupplement(scope IssueToolScope, request IssueToolAc
 			callErr = err
 			return
 		}
-		ct := a.contactByID(scope.ContactID)
-		if ct == nil {
-			callErr = errors.New("issue tool scope contact no longer exists")
-			return
-		}
-		issue := issueForContact(ct, request.IssueID)
+		ct, issue := a.issueToolTarget(scope, request.IssueID)
 		if issue == nil {
 			callErr = errors.New("issue not found")
 			return
@@ -936,7 +999,7 @@ func (a *appModel) issueToolSupplement(scope IssueToolScope, request IssueToolAc
 			callErr = latestErr
 			return
 		}
-		captured, captureErr := a.issueToolCaptureTurnContext(ct, latestScope)
+		captured, captureErr := a.issueToolCaptureTurnContext(a.contactByID(scope.ContactID), latestScope)
 		if captureErr != nil {
 			callErr = captureErr
 			return
@@ -1039,8 +1102,7 @@ func (a *appModel) issueToolResume(scope IssueToolScope, request IssueToolAction
 			callErr = err
 			return
 		}
-		ct := a.contactByID(scope.ContactID)
-		issue := issueForContact(ct, request.IssueID)
+		ct, issue := a.issueToolTarget(scope, request.IssueID)
 		if issue == nil {
 			callErr = errors.New("issue not found")
 			return
@@ -1072,13 +1134,17 @@ func (a *appModel) issueToolAnswerQuestion(scope IssueToolScope, request IssueTo
 			callErr = err
 			return
 		}
-		ct := a.contactByID(scope.ContactID)
+		ct, issue := a.issueToolTarget(scope, request.IssueID)
+		if issue == nil {
+			callErr = errors.New("issue not found")
+			return
+		}
 		latestScope, err := a.issueToolScopeByRef(scope.Ref)
 		if err != nil {
 			callErr = err
 			return
 		}
-		receipt, callErr = a.answerIssueQuestionFor(ct, request.IssueID, request.QuestionRef, request.ExpectedRevision, request.Text, a.issueToolTurnContext(ct, latestScope), operation)
+		receipt, callErr = a.answerIssueQuestionFor(ct, request.IssueID, request.QuestionRef, request.ExpectedRevision, request.Text, a.issueToolTurnContext(a.contactByID(scope.ContactID), latestScope), operation)
 	})
 	if callErr != nil {
 		return issueActionErrorResponse(callErr)
@@ -1209,8 +1275,7 @@ func (a *appModel) issueToolRun(scope IssueToolScope, _ IssueToolActionRequest, 
 			callErr = err
 			return
 		}
-		ct := a.contactByID(scope.ContactID)
-		issue := issueForContact(ct, operation.TargetIssueID)
+		ct, issue := a.issueToolTarget(scope, operation.TargetIssueID)
 		if issue == nil {
 			callErr = errors.New("issue not found")
 			return
@@ -1254,8 +1319,7 @@ func (a *appModel) issueToolStop(scope IssueToolScope, request IssueToolActionRe
 			callErr = err
 			return
 		}
-		ct := a.contactByID(scope.ContactID)
-		issue := issueForContact(ct, request.IssueID)
+		ct, issue := a.issueToolTarget(scope, request.IssueID)
 		if issue == nil {
 			callErr = errors.New("issue not found")
 			return

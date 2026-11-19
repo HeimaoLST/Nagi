@@ -12,6 +12,8 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo/ui"
+
+	"github.com/HeimaoLST/Nagi/locales"
 )
 
 func TestUnconfiguredContactWorkspacesFollowFirstConnection(t *testing.T) {
@@ -172,11 +174,11 @@ func TestLocalStateBeforeConnectionCreateSaveAndRestart(t *testing.T) {
 	tr.Frame()
 	second := a.selectedContact()
 	secondID := second.ID
-	if err := tr.Click("Contact profile"); err != nil {
+	if err := tr.Click("Settings"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if err := tr.Click("Edit full profile"); err != nil {
+	if err := tr.Click(locales.In("en").SettingsContact()); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
@@ -338,7 +340,6 @@ func TestContactManagementSaveAndNewDetachesOnlyCurrentConversation(t *testing.T
 	issue := &productIssue{ID: "issue-1", ContactID: bound.ID, Goal: "keep issue", RequirementsRevision: 1, Status: issueStatusInProgress}
 	attachIssueToolTestExecution(issue)
 	bound.Issues = []*productIssue{issue}
-	bound.SelectedWorkTaskID = "old-work"
 
 	a.openSettings()
 	if !a.saveContactProfileDraft(profileDraft{Name: "Renamed", Purpose: "new purpose", Workspace: workspace}, true) {
@@ -356,7 +357,7 @@ func TestContactManagementSaveAndNewDetachesOnlyCurrentConversation(t *testing.T
 	if len(bound.Issues) != 1 || bound.Issues[0].WorkSessionID != issue.PiBinding.Context.SessionRef || bound.Issues[0].Goal != "keep issue" {
 		t.Fatalf("issues changed: %+v", bound.Issues)
 	}
-	if bound.SelectedWorkTaskID != "" || bound.SendState != sendIdle || bound.Status != statusReady {
+	if bound.SendState != sendIdle || bound.Status != statusReady {
 		t.Fatalf("stale conversation state kept: %+v", bound)
 	}
 	reloaded, err := openContactStore(a.store.path, "/tmp")
@@ -655,21 +656,16 @@ func TestContactManagementAppPreviews(t *testing.T) {
 	}
 	writePreviewPNG(t, filepath.Join(dir, "app-empty-filter-1280.png"), tr.Image())
 
-	history := testApp(t)
-	history.demo = false
-	history.runtimeStatus = runtimeStateReady
-	history.selectedContact().SessionID = "saved-session"
-	history.selectedContact().Loaded = true
-	history.openHistory()
-	history.contactHistoryFull = &contactHistoryFull{
-		SessionID: "saved-session", EntryID: "entry-1", Date: "Oct 1", From: "me",
-		Text:    "The retained message with its submitted context.",
+	conversation := testApp(t)
+	ct := conversation.selectedContact()
+	ct.Messages = []*message{{
+		Key: "retained-message", Kind: msgUser, Text: "The retained message with its submitted context.",
 		Context: []taskContextItem{{ID: "ctx-1", Name: "Retained input", Text: "old context", Revision: 1}},
-	}
-	tr = ui.NewTester(history.view, 1280, 720)
+	}}
+	tr = ui.NewTester(conversation.view, 1280, 720)
 	tr.Frame()
-	if !tr.HasText("Full saved message") || !tr.HasText("Retained input") {
-		t.Fatal("history preview did not render the full message and Context")
+	if !tr.HasText("The retained message with its submitted context.") {
+		t.Fatal("chat preview did not render the retained message")
 	}
-	writePreviewPNG(t, filepath.Join(dir, "app-history-full-context-1280.png"), tr.Image())
+	writePreviewPNG(t, filepath.Join(dir, "app-chat-retained-context-1280.png"), tr.Image())
 }

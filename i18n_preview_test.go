@@ -56,28 +56,6 @@ func TestPreviewI18nSelectedSlice(t *testing.T) {
 	tr.Frame()
 	writePreviewPNG(t, filepath.Join(dir, "settings-zh-Hans-light-960x640.png"), tr.Image())
 
-	history, first := workspaceTestApp(t)
-	first.History = []historyEntry{
-		{ID: "h1", Date: "10月30日", From: "contact", Text: "这是一段足够长的中文历史内容，用来检查右侧历史列表的换行、密度与按钮是否完整。"},
-	}
-	history.openHistory()
-	historyTr := ui.NewTester(history.view, 1040, 720)
-	historyTr.SetLocale("zh-Hans")
-	historyTr.Frame()
-	writePreviewPNG(t, filepath.Join(dir, "history-zh-Hans-light-1040x720.png"), historyTr.Image())
-
-	fullApp, fullContact := workspaceTestApp(t)
-	fullEntry := historyEntry{ID: "h-full", Date: "10月30日", From: "contact", Text: "完整历史原文，保持原样，不做任何翻译。"}
-	fullContact.History = []historyEntry{fullEntry}
-	fullApp.openHistoryEntryFull(fullEntry)
-	fullTr := ui.NewTester(fullApp.view, 1040, 720)
-	fullTr.SetLocale("zh-Hans")
-	fullTr.Frame()
-	writePreviewPNG(t, filepath.Join(dir, "history-full-zh-Hans-light-1040x720.png"), fullTr.Image())
-	fullTr.SetLocale("en")
-	fullTr.Frame()
-	writePreviewPNG(t, filepath.Join(dir, "history-full-en-light-1040x720.png"), fullTr.Image())
-
 	cfg := connectionConfig{Version: 1, API: connectionAPIChatCompletions, Endpoint: "https://provider.example.invalid/v1", APIKey: "fixture", Model: "fixture", ContextTokens: 131072, OutputTokens: 8192, WorkingDirectory: t.TempDir(), MaxActiveTasks: 2}
 	conn, _ := workspaceTestApp(t)
 	conn.connectionForm = newConnectionSettings(&cfg, cfg.WorkingDirectory)
@@ -112,36 +90,10 @@ func showPreviewTooltip(t *testing.T, tr *ui.Tester, label string) {
 	tr.Frame()
 }
 
-func TestPreviewIssueWorkLocalized(t *testing.T) {
+func TestPreviewTaskContextLocalized(t *testing.T) {
 	dir := os.Getenv("NAGI_PREVIEW_DIR")
 	if dir == "" {
-		t.Skip("set NAGI_PREVIEW_DIR for the localized issue/work previews")
-	}
-	list := issuePreviewApp("expanded")
-	list.windowWidth = 1040
-	list.selectedContact().issueNavigation().Filter = issueFilterAll
-	list.setWorkspaceOpen(true)
-	listTr := ui.NewTester(list.view, 1040, 720)
-	listTr.SetLocale("zh-Hans")
-	listTr.Frame()
-	writePreviewPNG(t, filepath.Join(dir, "issue-overview-zh-Hans-light-1040x720.png"), listTr.Image())
-
-	detail := issuePreviewApp("expanded")
-	detail.windowWidth = 1040
-	issue := detail.selectedContact().Issues[0]
-	detail.selectedContact().issueNavigation().DetailID = issue.ID
-	detail.issueDetailOpen = map[string]bool{issue.ID: true}
-	detail.setWorkspaceOpen(true)
-	detailTr := ui.NewTester(detail.view, 1040, 720)
-	detailTr.SetLocale("zh-Hans")
-	detailTr.Frame()
-	writePreviewPNG(t, filepath.Join(dir, "issue-detail-zh-Hans-light-1040x720.png"), detailTr.Image())
-}
-
-func TestPreviewPhase5bLocalized(t *testing.T) {
-	dir := os.Getenv("NAGI_PREVIEW_DIR")
-	if dir == "" {
-		t.Skip("set NAGI_PREVIEW_DIR for the localized context/result previews")
+		t.Skip("set NAGI_PREVIEW_DIR for the localized task context preview")
 	}
 	tc := &taskContext{}
 	if _, err := tc.AddSnippet("Release notes", "Line one"); err != nil {
@@ -154,16 +106,6 @@ func TestPreviewPhase5bLocalized(t *testing.T) {
 	contextTr.SetLocale("zh-Hans")
 	contextTr.Frame()
 	writePreviewPNG(t, filepath.Join(dir, "task-context-error-zh-Hans-light-1040x720.png"), contextTr.Image())
-
-	state := &issueResultPanelState{
-		RunNumber: 1, RunGoal: "Ship results", RunStatus: issueExecutionCompleted,
-		Response: "Recorded result body.",
-		Files:    []issueResultFile{{Path: "/tmp/result.md", WorkingDirectory: "/tmp", ToolName: "write", CallID: "call-1"}},
-	}
-	resultTr := issueResultPanelTester(state, issueResultPanelActions{}, 1040, 720, false)
-	resultTr.SetLocale("zh-Hans")
-	resultTr.Frame()
-	writePreviewPNG(t, filepath.Join(dir, "result-panel-zh-Hans-light-1040x720.png"), resultTr.Image())
 }
 
 // TestPreviewI18nFinalMatrix is the bounded final E preview. It is headless
@@ -183,7 +125,6 @@ func TestPreviewI18nFinalMatrix(t *testing.T) {
 		setup         func(locale string) *appModel
 		want          func(locales.Messages) []string
 		fit           func(locales.Messages) []string
-		check         func(t *testing.T, a *appModel, tr *ui.Tester, msgs locales.Messages)
 	}
 	settingsFit := func(msgs locales.Messages) []string {
 		return []string{msgs.SettingsBackAccessible(), msgs.SettingsTitle()}
@@ -193,23 +134,6 @@ func TestPreviewI18nFinalMatrix(t *testing.T) {
 			return "zh-Hans"
 		}
 		return "en"
-	}
-
-	overviewRows := func(a *appModel) {
-		ct := a.selectedContact()
-		ct.SelectedIssueID = ""
-		nav := ct.issueNavigation()
-		nav.DetailID = ""
-		nav.Filter = issueFilterAll
-		for index := 0; index < 10; index++ {
-			ct.Issues = append(ct.Issues, &productIssue{
-				ID: fmt.Sprintf("final-overview-%02d", index), ContactID: ct.ID, Status: issueStatusInProgress,
-				Goal:          fmt.Sprintf("Longer overview goal %02d for the final language and theme matrix", index+1),
-				Requirements:  parseIssueRequirements("Keep this representative row visible."),
-				WorkSessionID: "final-overview", RequirementsRevision: 1,
-			})
-		}
-		a.setWorkspaceOpen(true)
 	}
 
 	scenes := []scene{
@@ -245,91 +169,6 @@ func TestPreviewI18nFinalMatrix(t *testing.T) {
 			},
 			fit: func(msgs locales.Messages) []string {
 				return []string{msgs.ComposerLabel("Nagi"), msgs.ConfigurationDetails()}
-			},
-		},
-		{
-			name: "question", width: 1040, height: 720,
-			setup: func(locale string) *appModel {
-				a := issuePreviewApp("issue-question")
-				a.windowWidth = 1040
-				return a
-			},
-			want: func(msgs locales.Messages) []string {
-				return []string{msgs.WorkAnswer(), "Which verification method should I use before continuing this implementation?"}
-			},
-			fit: func(msgs locales.Messages) []string { return []string{msgs.WorkClose(), msgs.WorkAnswer()} },
-		},
-		{
-			name: "trueoverview", width: 1040, height: 720,
-			setup: func(locale string) *appModel {
-				a := issuePreviewApp("issue-overview")
-				a.windowWidth = 1040
-				overviewRows(a)
-				return a
-			},
-			want: func(msgs locales.Messages) []string {
-				return []string{msgs.IssueNewIssue(), msgs.IssueFilterAll(), "Longer overview goal 01 for the final language and theme matrix"}
-			},
-			fit: func(msgs locales.Messages) []string { return []string{msgs.IssueNewIssue(), msgs.IssueFilterAll()} },
-		},
-		{
-			name: "960detail", width: 960, height: 640,
-			setup: func(locale string) *appModel {
-				a := issuePreviewApp("issue-detail")
-				a.windowWidth = 960
-				ct := a.selectedContact()
-				issue := ct.selectedIssue()
-				a.issueDetailOpen = map[string]bool{issue.ID: true}
-				a.setWorkspaceOpen(true)
-				return a
-			},
-			want: func(msgs locales.Messages) []string {
-				return []string{msgs.WorkTask(), msgs.IssueHideActions(), msgs.IssueExecutionHistory()}
-			},
-			fit: func(msgs locales.Messages) []string {
-				return []string{msgs.WorkClose(), msgs.ComposerLabel("Nagi")}
-			},
-			check: func(t *testing.T, a *appModel, tr *ui.Tester, msgs locales.Messages) {
-				t.Helper()
-				if a.detailPageActive() || !a.avatarRailActive() {
-					t.Fatalf("960 detail geometry = page=%v avatar=%v", a.detailPageActive(), a.avatarRailActive())
-				}
-				composer, ok := tr.Find(msgs.ComposerLabel("Nagi"))
-				if !ok || composer.W-4 < 440 {
-					t.Fatalf("960 composer content = %+v ok=%v, want a real center of at least 440", composer, ok)
-				}
-			},
-		},
-		{
-			name: "navigation-reader", width: 1040, height: 720,
-			setup: func(locale string) *appModel {
-				a := issuePreviewApp("issue-detail")
-				a.windowWidth = 1040
-				ct := a.selectedContact()
-				issue := ct.selectedIssue()
-				execution := issue.Executions[0]
-				file := issueResultFile{ExecutionID: execution.ID, SessionID: execution.SessionID, TaskID: execution.TaskID, MessageID: "preview-receipt", CallID: "final-reader", ToolName: "write", Path: "/Users/you/Workspace/nagi-run/final-reader-result.md", WorkingDirectory: "/Users/you/Workspace/nagi-run", RawResult: `{"path":"/Users/you/Workspace/nagi-run/final-reader-result.md","bytes_written":1}`}
-				key := issueResultFileKey(file)
-				longPreview := "# Final reader preview\n\nA long saved file line that must remain readable in both languages.\n"
-				for index := 0; index < 40; index++ {
-					longPreview += fmt.Sprintf("- reader line %02d keeps the raw saved content visible\n", index+1)
-				}
-				a.aux = "issue-result"
-				a.issueResult = issueResultPage{
-					Open: true, OwnerContactID: ct.ID, IssueID: issue.ID, ExecutionID: execution.ID,
-					Panel: issueResultPanelState{
-						RunNumber: 1, RunStatus: issueExecutionCompleted, Files: []issueResultFile{file},
-						Inspection: &issueResultFileInspection{Exists: true, Regular: true, Preview: longPreview},
-						InspectFor: key, ReaderKey: key,
-					},
-				}
-				return a
-			},
-			want: func(msgs locales.Messages) []string {
-				return []string{msgs.ReaderCheckAgainLabel(), msgs.ResultBackResults(), msgs.ResultCurrentFileDiff()}
-			},
-			fit: func(msgs locales.Messages) []string {
-				return []string{msgs.ResultBackResults(), msgs.ReaderCheckAgainLabel()}
 			},
 		},
 		{
@@ -420,23 +259,13 @@ func TestPreviewI18nFinalMatrix(t *testing.T) {
 				t.Fatalf("scene %s locale=%s label %q outside %d: %+v", base.name, locale, label, base.width, r)
 			}
 		}
-		if base.check != nil {
-			base.check(t, a, tr, msgs)
-		}
 		img := tr.Image()
 		if img.Bounds().Dx() != base.width || img.Bounds().Dy() != base.height {
 			t.Fatalf("scene %s image = %dx%d, want %dx%d", base.name, img.Bounds().Dx(), img.Bounds().Dy(), base.width, base.height)
 		}
 		path := filepath.Join(dir, fmt.Sprintf("final-%s-%s-%s-%dx%d.png", locale, theme, base.name, base.width, base.height))
 		writePreviewPNG(t, path, img)
-		settingsScroll, overviewScroll, detailScroll, readerScroll := float32(0), float32(0), float32(0), float32(0)
-		if ct := a.selectedContact(); ct != nil {
-			nav := ct.issueNavigation()
-			overviewScroll, detailScroll = nav.OverviewScroll.Y, nav.DetailScroll.Y
-		}
-		settingsScroll = a.settingsScroll.Y
-		readerScroll = a.issueResult.Panel.ReaderScroll.Y
-		t.Logf("final preview path=%s width=%d height=%d locale=%s theme=%s scene=%s settingsScroll=%v overviewScroll=%v detailScroll=%v readerScroll=%v", path, base.width, base.height, locale, theme, base.name, settingsScroll, overviewScroll, detailScroll, readerScroll)
+		t.Logf("final preview path=%s width=%d height=%d locale=%s theme=%s scene=%s settingsScroll=%v", path, base.width, base.height, locale, theme, base.name, a.settingsScroll.Y)
 	}
 
 	for _, base := range scenes {
@@ -454,11 +283,8 @@ func TestPreviewI18nFinalMatrix(t *testing.T) {
 		theme string
 		dark  bool
 	}{
-		{"trueoverview", "dark", true},
-		{"960detail", "light", false},
 		{"settings-contact", "dark", true},
 		{"settings-connection", "light", false},
-		{"navigation-reader", "dark", true},
 		{"settings-general", "light", false},
 	}
 	byName := map[string]scene{}

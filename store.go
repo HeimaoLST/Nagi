@@ -59,6 +59,7 @@ type storedIssueExecution struct {
 	ToolScopeRef         string            `json:"tool_scope_ref,omitempty"`
 	PiIntent             bool              `json:"pi_intent,omitempty"`
 	PiRun                *piActivityRun    `json:"pi_run,omitempty"`
+	ReturnedAt           int64             `json:"returned_at,omitempty"`
 	WaitRequested        bool              `json:"wait_requested,omitempty"`
 }
 
@@ -83,6 +84,7 @@ type storedIssue struct {
 	CreatedAt            int64                  `json:"created_at,omitempty"`
 	UpdatedAt            int64                  `json:"updated_at,omitempty"`
 	PiBinding            *piActivityBinding     `json:"pi_binding,omitempty"`
+	Handoff              *issueHandoff          `json:"handoff,omitempty"`
 	WorkSessionID        string                 `json:"work_session_id,omitempty"`
 	TaskContext          []taskContextItem      `json:"task_context,omitempty"`
 	Supplements          *issueSupplementLedger `json:"supplements,omitempty"`
@@ -204,6 +206,9 @@ func (state storedState) validatePiBindings() error {
 		if !storedPiIssueValid(issue, state.IssueToolOperations) {
 			return fmt.Errorf("issue %s has an invalid Pi execution record", issue.ID)
 		}
+		if issue.Handoff != nil && !storedIssueHandoffValid(issue, state) {
+			return fmt.Errorf("issue %s has an invalid handoff", issue.ID)
+		}
 	}
 	return nil
 }
@@ -224,6 +229,9 @@ func storedPiIssueValid(issue storedIssue, ledger *IssueToolOperationLedger) boo
 		}
 	}
 	for _, execution := range issue.Executions {
+		if execution.ReturnedAt != 0 && (issue.Handoff == nil || execution.ReturnedAt < issue.CreatedAt || execution.PiRun == nil || !execution.PiRun.Admitted || !readablePiIssueStatus(execution.Status)) {
+			return false
+		}
 		if !execution.PiIntent || execution.ID == "" || execution.MessageID != "" {
 			return false
 		}
@@ -476,6 +484,7 @@ func (s *contactStore) saveWithPreferences(contacts []*contact, selected, appear
 				Status: issue.Status, Archived: issue.Archived,
 				Evidence: issue.Evidence, CreatedAt: issue.CreatedAt, UpdatedAt: issue.UpdatedAt,
 				PiBinding:     clonePiActivityBinding(issue.PiBinding),
+				Handoff:       cloneIssueHandoff(issue.Handoff),
 				WorkSessionID: issue.WorkSessionID, RequirementsRevision: issue.RequirementsRevision,
 				TaskContext: issue.Context.snapshot(), Supplements: cloneIssueSupplementLedger(issue.Supplements),
 				Questions: cloneIssueQuestions(issue.Questions),
@@ -501,6 +510,7 @@ func (s *contactStore) saveWithPreferences(contacts []*contact, selected, appear
 					ToolOperationID:      execution.ToolOperationID,
 					ToolScopeRef:         execution.ToolScopeRef,
 					PiIntent:             execution.PiIntent, PiRun: clonePiActivityRun(execution.PiRun),
+					ReturnedAt:    execution.ReturnedAt,
 					WaitRequested: execution.WaitRequested,
 				})
 			}

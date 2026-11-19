@@ -203,8 +203,8 @@ func (h *guiHarness) shutdownSnapshot() shutdownDiagnostic {
 	a := h.app
 	var b strings.Builder
 	fmt.Fprintf(&b, "shutdown_started=%v quit_ready=%v runtime_status=%q pi_present=%v\n", a.shutdownStarted, a.quitReady, a.runtimeStatus, a.pi != nil)
-	fmt.Fprintf(&b, "gates.connection_save_in_flight=%v connection_applying=%v connection_testing=%v contact_history_in_flight=%d result_in_flight=%d submission_in_flight=%d\n",
-		a.connectionSaveInFlight, a.connectionApplying, a.connectionTesting, a.contactHistoryInFlight, a.resultInFlight, a.submissionInFlight)
+	fmt.Fprintf(&b, "gates.connection_save_in_flight=%v connection_applying=%v connection_testing=%v contact_history_in_flight=%d submission_in_flight=%d\n",
+		a.connectionSaveInFlight, a.connectionApplying, a.connectionTesting, a.contactHistoryInFlight, a.submissionInFlight)
 	var clientDone, callbacksDone <-chan struct{}
 	if a.pi != nil && a.pi.client != nil {
 		clientDone, callbacksDone = a.pi.client.Done(), a.pi.client.CallbacksDone()

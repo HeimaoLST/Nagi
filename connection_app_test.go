@@ -884,7 +884,7 @@ func TestC8FailedRecoveryCompletionReleasesQuit(t *testing.T) {
 }
 
 func TestC8RestoreAdmissionPreservesUnavailableEditsAndLocalRetry(t *testing.T) {
-	for _, kind := range []string{"loaded", "local-save", "profile", "connection", "context", "contact-draft", "history", "result", "submission", "connection-test", "contact-picker"} {
+	for _, kind := range []string{"loaded", "local-save", "profile", "connection", "context", "contact-draft", "history", "submission", "connection-test", "contact-picker"} {
 		t.Run(kind, func(t *testing.T) {
 			a := c8UnavailableApp(t)
 			if kind == "loaded" || kind == "local-save" {
@@ -903,8 +903,6 @@ func TestC8RestoreAdmissionPreservesUnavailableEditsAndLocalRetry(t *testing.T) 
 				a.selectedContact().Draft = "keep draft"
 			case "history":
 				a.contactHistoryInFlight = 1
-			case "result":
-				a.resultInFlight = 1
 			case "submission":
 				a.submissionInFlight = 1
 			case "connection-test":

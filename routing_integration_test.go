@@ -115,6 +115,7 @@ func TestSettingsContactPickerIsolatesProfileUndo(t *testing.T) {
 	tr.SetLocale("en")
 	tr.SetFocused(true)
 	tr.Frame()
+	click("Settings")
 	click("Contact profile")
 	expectProfile(a.ID, nameA)
 	pickProfile(savedNameB)

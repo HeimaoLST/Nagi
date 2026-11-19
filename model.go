@@ -121,8 +121,6 @@ type contact struct {
 	Works                []*workItem
 	Issues               []*productIssue
 	SelectedIssueID      string
-	SelectedWorkTaskID   string
-	issueView            issueViewState
 	shutdownCancelTaskID string
 
 	// A Pi conversation is opened lazily on its first send.
@@ -192,7 +190,6 @@ type appModel struct {
 	chooseFolder           func(mygo.OpenDialogOptions) ([]string, error)
 	sourcesScroll          ui.ScrollState
 	taskContextScroll      ui.ScrollState
-	issueResultScroll      ui.ScrollState
 	historyScroll          ui.ScrollState
 	historyFullScroll      ui.ScrollState
 
@@ -208,7 +205,6 @@ type appModel struct {
 	contactHistoryGen         int
 	contactHistoryDetailGen   int
 	contactHistoryInFlight    int
-	resultInFlight            int
 	submissionInFlight        int
 
 	appearanceThemeIDs appearanceThemeIDs
@@ -230,28 +226,12 @@ type appModel struct {
 	localSavePrevErr   string
 	localSavePrevKind  string
 
-	issueFormOpen                 bool
-	issueDetailOpen               map[string]bool
-	issueFormEditingID            string
-	issueGoal                     string
-	issueRequirements             string
-	issueFormError                string
-	issueFormNotice               string
-	issueFormNoticeDetail         string
-	taskContextIssueID            string
-	focusIssueGoal                bool
-	focusIssueNew                 bool
-	issueActionError              string
-	issueActionNotice             string
-	issueActionNoticeDetail       string
-	issueRequirementDrafts        map[string]*string
-	issueCompletionDrafts         map[string]*string
-	issueSupplementDrafts         map[string]*string
-	issueSupplementFormID         string
-	issueSupplementAnswerTarget   issueSupplementTarget
-	issueSupplementQuestionRef    string
-	issueSupplementPreviewID      string
-	issueSupplementShowAllBatches bool
+	issueFormError          string
+	issueFormNotice         string
+	issueFormNoticeDetail   string
+	issueActionError        string
+	issueActionNotice      string
+	issueActionNoticeDetail string
 
 	// Runtime mode. demo keeps the local fixture path for tests/screenshots;
 	// the shipped app is runtime-backed.
@@ -297,10 +277,7 @@ type appModel struct {
 	startupDetailsOpen     bool
 	shutdownDrainStarted   bool
 
-	issueResult        issueResultPage
-	issueResultInspect func(issueResultFile) issueResultFileInspection
-	openPath           func(string) error
-	issueResultReveal  func(string) error
+	openPath func(string) error
 
 	// #154 conversation issue tools. The scope/operation records live in the
 	// same contact store, not in a second database or queue.
@@ -319,7 +296,6 @@ type appModel struct {
 	centerPaneWidth      float32
 	workspaceOpen        bool
 	railCollapsed        bool
-	focusWorkspace       bool
 	focusDetailClose     bool
 	focusRail            bool
 	focusHistory         bool
@@ -329,7 +305,6 @@ type appModel struct {
 	focusSources         bool
 	focusSourcesBack     bool
 	focusAuxBack         bool
-	focusIssueContext    bool
 	focusHistoryFullID   string
 	focusHistoryFullBack bool
 	detailPageMode       bool
@@ -457,24 +432,8 @@ func (a *appModel) contactByID(id string) *contact {
 	return nil
 }
 
-func (a *appModel) leaveIssueFormForSwitch() bool {
-	if !a.issueFormOpen {
-		return true
-	}
-	if strings.TrimSpace(a.issueGoal) != "" || strings.TrimSpace(a.issueRequirements) != "" {
-		a.setIssueFormNotice("Finish or cancel the current issue form before switching contacts.", "form-switch", "")
-		return false
-	}
-	a.issueFormOpen = false
-	a.clearIssueFormNotice()
-	return true
-}
-
 func (a *appModel) selectContact(i int) {
 	if i < 0 || i >= len(a.contacts) || i == a.selected {
-		return
-	}
-	if !a.leaveIssueFormForSwitch() {
 		return
 	}
 	a.contextFileGeneration++
@@ -484,9 +443,6 @@ func (a *appModel) selectContact(i int) {
 	a.restoreHistoryView(a.contacts[i].ID)
 	if !a.demo {
 		a.persist()
-	}
-	if a.issueResult.Open {
-		a.cancelIssueResultView()
 	}
 	a.contactHistoryFull = nil
 	a.aux = ""
@@ -543,9 +499,6 @@ func (a *appModel) statusLabel(c *contact, msgs locales.Messages) string {
 // addDefaultContact creates and selects a ready contact with a usable
 // default name, then asks the composer to take focus once.
 func (a *appModel) addDefaultContact() {
-	if !a.leaveIssueFormForSwitch() {
-		return
-	}
 	if !a.demo {
 		a.addRuntimeContact()
 		return
@@ -586,7 +539,6 @@ func (a *appModel) closeAux() {
 		return
 	}
 	was := a.aux
-	wasContextIssue := a.taskContextIssueID
 	switch a.composerPanel {
 	case composerPanelContext:
 		a.composerFocusContext = true
@@ -597,15 +549,8 @@ func (a *appModel) closeAux() {
 		a.focusSources = true
 	case "task-context":
 		a.contextFileGeneration++
-		if wasContextIssue != "" {
-			a.focusIssueContext = true
-		}
-	case "issue-result":
-		a.closeIssueResult()
-		return
 	}
 	a.aux = ""
-	a.taskContextIssueID = ""
 }
 
 func (a *appModel) openSources(messageID int) {

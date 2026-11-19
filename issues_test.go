@@ -7,8 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/egoist/mygo/ui"
-
 	"github.com/HeimaoLST/Nagi/internal/pi"
 	"github.com/HeimaoLST/Nagi/locales"
 )
@@ -17,11 +15,9 @@ func TestIssueStoreRoundTripKeepsPiConversationAndDraft(t *testing.T) {
 	a, ct, _ := piRunStartedTestApp(t)
 	ct.ActiveTaskID, ct.SendState, ct.Draft = "", sendIdle, "preserved draft"
 	path, sessionID := a.store.path, ct.SessionID
-	if !a.createIssue("Implement login", "Use SMS verification.") {
-		t.Fatalf("createIssue failed: %s", a.issueFormError)
-	}
-	if len(a.contacts[0].Issues) != 1 || a.contacts[0].SelectedIssueID == "" {
-		t.Fatalf("issue not attached/selected: %+v", a.contacts[0])
+	issue, err := a.createIssueFor(ct, "Implement login", "Use SMS verification.")
+	if err != nil {
+		t.Fatal(err)
 	}
 	reloaded, err := openContactStore(path, "/tmp")
 	if err != nil {
@@ -43,8 +39,8 @@ func TestIssueStoreRoundTripKeepsPiConversationAndDraft(t *testing.T) {
 	if reloaded.state.Contacts[0].Draft != "preserved draft" || reloaded.state.Contacts[0].SessionID != sessionID || reloaded.state.Contacts[0].PiBinding == nil {
 		t.Fatalf("saved Pi conversation or draft changed: %+v", reloaded.state.Contacts[0])
 	}
-	if reloaded.state.Contacts[0].SelectedIssueID != stored.ID {
-		t.Fatalf("reloaded selected issue = %q, want %q", reloaded.state.Contacts[0].SelectedIssueID, stored.ID)
+	if stored.ID != issue.ID {
+		t.Fatalf("reloaded issue ID = %q, want %q", stored.ID, issue.ID)
 	}
 }
 
@@ -55,24 +51,26 @@ func TestCreateIssueRequiresGoalAndPersistsBeforeAnyRun(t *testing.T) {
 		t.Fatal(err)
 	}
 	a := &appModel{store: store, contacts: []*contact{{ID: "c1", Name: "Saki", Workspace: "/tmp"}}}
-	if a.createIssue("", "requirement") {
-		t.Fatal("empty goal must fail")
+	ct := a.selectedContact()
+	if _, err := a.createIssueFor(ct, "", "requirement"); err == nil || len(ct.Issues) != 0 {
+		t.Fatalf("empty goal left state: issues=%v error=%v", ct.Issues, err)
 	}
-	if len(a.contacts[0].Issues) != 0 || a.issueFormError == "" {
-		t.Fatalf("empty goal left state: %+v error=%q", a.contacts[0].Issues, a.issueFormError)
+	issue, err := a.createIssueFor(ct, "Implement login", "Must support SMS.")
+	if err != nil {
+		t.Fatal(err)
 	}
-	if !a.createIssue("Implement login", "Must support SMS.") {
-		t.Fatalf("createIssue failed: %s", a.issueFormError)
-	}
-	issue := a.contacts[0].Issues[0]
 	if issue.ContactID != "c1" || issue.Goal != "Implement login" || issueRequirementsText(issue) != "Must support SMS." {
 		t.Fatalf("issue fields = %+v", issue)
 	}
 	if len(issue.Executions) != 0 {
 		t.Fatalf("creating an item must not create an execution: %+v", issue.Executions)
 	}
-	if a.contacts[0].SelectedIssueID != issue.ID || a.issueFormOpen {
-		t.Fatalf("issue selection/form = %q/%v", a.contacts[0].SelectedIssueID, a.issueFormOpen)
+	reopened, err := openContactStore(path, "/tmp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(reopened.state.Issues) != 1 || reopened.state.Issues[0].ID != issue.ID || len(reopened.state.Issues[0].Executions) != 0 {
+		t.Fatalf("saved issues = %+v", reopened.state.Issues)
 	}
 }
 
@@ -88,27 +86,14 @@ func TestIssueEvidenceDoesNotInferCompletion(t *testing.T) {
 	}
 }
 
-func TestCreateIssueFailureKeepsFormAndSelection(t *testing.T) {
-	// A directory at the store path makes the atomic rename fail after the
-	// in-memory item was appended.
-	badStorePath := t.TempDir()
-	a := &appModel{
-		store:         &contactStore{path: badStorePath},
-		contacts:      []*contact{{ID: "c1", Name: "Saki", SelectedIssueID: "previous"}},
-		issueFormOpen: true, issueGoal: "Implement login", issueRequirements: "SMS required",
+func TestCreateIssueFailureKeepsExistingIssues(t *testing.T) {
+	ct := &contact{ID: "c1", Name: "Nagi", Draft: "unsent chat"}
+	a := &appModel{store: &contactStore{path: t.TempDir()}, contacts: []*contact{ct}}
+	if _, err := a.createIssueFor(ct, "Implement login", "SMS required"); err == nil {
+		t.Fatal("createIssueFor unexpectedly succeeded with a failing store")
 	}
-	if a.createIssue("Implement login", "SMS required") {
-		t.Fatal("createIssue unexpectedly succeeded with a failing store")
-	}
-	ct := a.contacts[0]
-	if len(ct.Issues) != 0 || ct.SelectedIssueID != "previous" {
-		t.Fatalf("failed save changed issues/selection: %+v", ct)
-	}
-	if !a.issueFormOpen || a.issueGoal != "Implement login" || a.issueRequirements != "SMS required" {
-		t.Fatalf("failed save lost form state: form=%v goal=%q requirements=%q", a.issueFormOpen, a.issueGoal, a.issueRequirements)
-	}
-	if !strings.Contains(a.issueFormError, "Could not save") {
-		t.Fatalf("save error not visible: %q", a.issueFormError)
+	if len(ct.Issues) != 0 || ct.Draft != "unsent chat" {
+		t.Fatalf("failed save changed issues or chat draft: %+v", ct)
 	}
 }
 
@@ -144,52 +129,6 @@ func TestStoredPendingExecutionIsUnknownAfterRestart(t *testing.T) {
 	}
 	if reason := issueRunBlocked(issues[0]); reason == "" {
 		t.Fatal("unknown execution must block blind Run")
-	}
-}
-
-func TestIssueFormCreatesExplicitItemWithoutTouchingComposer(t *testing.T) {
-	a := testApp(t)
-	a.workspaceOpen = true
-	ct := a.selectedContact()
-	ct.Draft = "ordinary composer draft"
-	tr := ui.NewTester(a.view, 1040, 720)
-	tr.Frame()
-	if err := tr.Click("New task"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if !tr.Focused("Task goal") {
-		t.Fatal("opening the issue form did not focus Goal")
-	}
-	if err := tr.Click("Task goal"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Type("Implement login")
-	if err := tr.Click("Task requirements"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Type("Must use SMS.")
-	if err := tr.Click("Save task"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if len(ct.Issues) != 1 || ct.SelectedIssueID != ct.Issues[0].ID {
-		t.Fatalf("issue form did not create/select item: %+v", ct.Issues)
-	}
-	issue := ct.Issues[0]
-	if issue.Goal != "Implement login" || issueRequirementsText(issue) != "Must use SMS." {
-		t.Fatalf("issue fields = %+v", issue)
-	}
-	if ct.Draft != "ordinary composer draft" {
-		t.Fatalf("issue form changed composer draft: %q", ct.Draft)
-	}
-	if !tr.Focused("Back to tasks") {
-		t.Fatal("saving the issue did not open detail with Back focus")
-	}
-	for _, want := range []string{"Implement login", "Must use SMS.", "Requirements", "Unverified", "Start task"} {
-		if !tr.HasText(want) {
-			t.Errorf("workspace missing %q", want)
-		}
 	}
 }
 
@@ -253,69 +192,6 @@ func TestIssueConfirmedRejectIsPersistedAndRerunnable(t *testing.T) {
 	}
 }
 
-func TestIssueFormContactSwitchCannotLeakInput(t *testing.T) {
-	a := testApp(t)
-	a.workspaceOpen = true
-	a.issueFormOpen = true
-	a.issueGoal = "only for Saki"
-	tr := ui.NewTester(a.view, 1040, 720)
-	tr.Frame()
-	otherLabel := locales.In("en").AvatarContactLabel(a.contacts[1].Name)
-	if _, ok := tr.Find(otherLabel); !ok {
-		t.Fatalf("accessible contact activation target %q missing: %v", otherLabel, tr.Texts())
-	}
-	if err := tr.Click(otherLabel); err != nil {
-		t.Fatal(err)
-	}
-	if a.selected != 0 || a.issueGoal != "only for Saki" || !strings.Contains(a.issueFormError, "switching contacts") {
-		t.Fatalf("contact switch leaked form: selected=%d goal=%q error=%q", a.selected, a.issueGoal, a.issueFormError)
-	}
-}
-
-func TestIssueResultAttributionFollowsSelectedIssue(t *testing.T) {
-	a, ct := workspaceTestApp(t)
-	ct.Workspace = t.TempDir()
-	ct.Issues = []*productIssue{
-		{ID: "i1", ContactID: ct.ID, Goal: "First issue", Status: issueStatusInProgress, Executions: []*issueExecution{{ID: "e1", TaskID: "t1", Status: issueExecutionCompleted}}},
-		{ID: "i2", ContactID: ct.ID, Goal: "Second issue", Status: issueStatusInProgress, Executions: []*issueExecution{{ID: "e2", TaskID: "t2", Status: issueExecutionRunning}}},
-	}
-	openIssueDetailForTest(a, ct, "i1")
-	ct.ActiveTaskID = "t2"
-	ct.LastTaskID = "t2"
-	ct.Works = []*workItem{
-		{TaskID: "t1", MessageID: "m1", State: workCompleted, Prompt: "first prompt"},
-		{TaskID: "t2", MessageID: "m2", State: workRunning, Prompt: "second prompt"},
-	}
-	ct.Issues[0].Work.Messages = []*message{{ID: 1, Kind: msgContact, TaskID: "t1", Text: "first result"}}
-	ct.Issues[1].Work.Messages = []*message{{ID: 2, Kind: msgContact, TaskID: "t2", Text: "second result"}}
-	if w := ct.issueWork(ct.Issues[0]); w == nil || w.TaskID != "t1" {
-		t.Fatalf("selected issue chose unrelated work: %+v", w)
-	}
-	a.windowWidth = 320
-	tr := ui.NewTester(a.view, 320, 640)
-	tr.Frame()
-	if !tr.HasText("Result preview: first result") {
-		t.Fatal("selected issue did not show its own known result")
-	}
-	if tr.HasText("No current work") {
-		t.Fatal("selected issue fell back to unrelated empty work")
-	}
-	if err := tr.Click("Back to tasks"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if err := tr.Click("Second issue"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if w := ct.issueWork(ct.Issues[1]); w == nil || w.TaskID != "t2" {
-		t.Fatalf("second selected issue chose unrelated work: %+v", w)
-	}
-	if !tr.HasText("Current response (run still running): second result") {
-		t.Fatal("selecting the second issue did not switch result attribution")
-	}
-}
-
 func TestIssueNotDispatchedIsPersistedAndRerunnable(t *testing.T) {
 	a, ct, _ := piRunStartedTestApp(t)
 	ct.ActiveTaskID, ct.SendState = "", sendIdle
@@ -351,24 +227,6 @@ func TestIssueNotDispatchedIsPersistedAndRerunnable(t *testing.T) {
 	}
 }
 
-func TestIssueFormCancelReturnsFocusToNewIssue(t *testing.T) {
-	a := testApp(t)
-	a.workspaceOpen = true
-	tr := ui.NewTester(a.view, 1040, 720)
-	tr.Frame()
-	if err := tr.Click("New task"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if err := tr.Click("Cancel"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if a.issueFormOpen || !tr.Focused("New task") {
-		t.Fatal("cancel did not close the issue form and return focus")
-	}
-}
-
 func TestRestoredNonterminalExecutionWithoutTaskIsUnknown(t *testing.T) {
 	for _, status := range []string{issueExecutionPending, issueExecutionAccepted, issueExecutionRunning} {
 		issues := issuesForStoredContact([]storedIssue{{
@@ -386,17 +244,6 @@ func TestRestoredNonterminalExecutionWithoutTaskIsUnknown(t *testing.T) {
 	}}, "c1")
 	if issues[0].Executions[0].Status != issueExecutionRunning || issueRunBlocked(issues[0]) == "" {
 		t.Fatalf("associated running execution lost its task identity: %+v", issues[0].Executions[0])
-	}
-}
-
-func TestIssueFormCannotLeakIntoNewContact(t *testing.T) {
-	a := testApp(t)
-	a.issueFormOpen = true
-	a.issueGoal = "only for the current contact"
-	before := len(a.contacts)
-	a.addDefaultContact()
-	if len(a.contacts) != before || !strings.Contains(a.issueFormError, "switching contacts") {
-		t.Fatalf("add contact leaked issue form: contacts=%d error=%q", len(a.contacts), a.issueFormError)
 	}
 }
 

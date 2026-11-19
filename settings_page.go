@@ -22,7 +22,6 @@ const (
 
 	settingsSourceRail          = "rail"
 	settingsSourceProfile       = "profile"
-	settingsSourceWork          = "work"
 	settingsSourceConnection    = "connection"
 	settingsSourceConfiguration = "configuration"
 	settingsSourceCommand       = "command"
@@ -193,12 +192,6 @@ func (a *appModel) closeSettings() {
 		} else {
 			a.focusContactProfile = true
 		}
-	case settingsSourceWork:
-		if a.detailPageActive() {
-			a.focusDetailClose = true
-		} else {
-			a.focusWorkspace = true
-		}
 	case settingsSourceConnection:
 		a.focusConnectionEntry = true
 	case settingsSourceConfiguration:
@@ -224,14 +217,6 @@ func (a *appModel) closeSettings() {
 		a.settingsReturnLink = markdownLinkTarget{}
 	case settingsSourceAux:
 		switch {
-		case a.issueResult.Open:
-			if a.issueResult.Panel.FocusReturn == nil {
-				if a.issueResult.Panel.ReaderKey != "" {
-					a.issueResult.Panel.FocusReader = true
-				} else {
-					a.issueResult.Panel.FocusClose = true
-				}
-			}
 		case a.aux == "sources":
 			a.focusSourcesBack = true
 		case a.aux == "task-context":
@@ -241,11 +226,7 @@ func (a *appModel) closeSettings() {
 				a.focusAuxBack = true
 			}
 		default:
-			if a.detailPageActive() {
-				a.focusDetailClose = true
-			} else {
-				a.focusWorkspace = true
-			}
+			a.focusComposer = true
 		}
 	default:
 		a.focusSettings = true
@@ -574,7 +555,7 @@ func (a *appModel) dataRecoveryBlocked(restore bool) string {
 	if a.contactProfile != nil && a.contactProfile.Busy {
 		return "busy"
 	}
-	if a.contextFilePickers > 0 || a.shutdownStarted || a.connectionSaveInFlight || a.connectionApplying || a.connectionTesting || a.contactHistoryInFlight > 0 || a.resultInFlight > 0 || a.submissionInFlight > 0 || a.activeTaskCount() > 0 || a.themeImport != nil && a.themeImport.Busy || a.connectionForm != nil && a.connectionForm.Busy {
+	if a.contextFilePickers > 0 || a.shutdownStarted || a.connectionSaveInFlight || a.connectionApplying || a.connectionTesting || a.contactHistoryInFlight > 0 || a.submissionInFlight > 0 || a.activeTaskCount() > 0 || a.themeImport != nil && a.themeImport.Busy || a.connectionForm != nil && a.connectionForm.Busy {
 		return "busy"
 	}
 	if a.dataRecovery != nil && (a.dataRecovery.choosing || a.dataRecovery.inFlight || a.dataRecovery.result.Outcome == storeRecoveryVerifiedInstalled || a.dataRecovery.result.Outcome == storeRecoveryInstallUnconfirmed) {
@@ -589,7 +570,7 @@ func (a *appModel) dataRecoveryBlocked(restore bool) string {
 	if a.store != nil || a.storeInitAllowed || a.pi != nil || a.runtimeStage != startupStageLocalStore || a.storePath == "" {
 		return "unavailable"
 	}
-	if a.localSaveErr != "" || len(a.contacts) != 1 || a.issueFormOpen || a.issueGoal != "" || a.issueRequirements != "" || len(a.issueRequirementDrafts)+len(a.issueCompletionDrafts)+len(a.issueSupplementDrafts) > 0 || a.connectionForm != nil && a.connectionForm.Dirty() {
+	if a.localSaveErr != "" || len(a.contacts) != 1 || a.connectionForm != nil && a.connectionForm.Dirty() {
 		return "unsaved"
 	}
 	ct := a.selectedContact()
@@ -1088,8 +1069,6 @@ func (a *appModel) auxScrollFor(kind string) *ui.ScrollState {
 		return &a.sourcesScroll
 	case "task-context":
 		return &a.taskContextScroll
-	case "issue-result":
-		return &a.issueResultScroll
 	default:
 		return &a.sourcesScroll
 	}

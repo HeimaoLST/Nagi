@@ -4,18 +4,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/egoist/mygo/ui"
-
 	"github.com/HeimaoLST/Nagi/locales"
 )
-
-func expandIssueDetails(t *testing.T, tr *ui.Tester) {
-	t.Helper()
-	if err := tr.Click("More task actions"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-}
 
 func TestIssueLifecycleIllegalBoundariesDoNotRewriteState(t *testing.T) {
 	a, _, issue := lifecycleTestIssue()
@@ -99,101 +89,6 @@ func TestIssueTerminalLifecycleDoesNotAutoComplete(t *testing.T) {
 	}
 }
 
-func TestIssueUITargetsLifecycleActions(t *testing.T) {
-	a, ct := workspaceTestApp(t)
-	issue := &productIssue{ID: "i1", ContactID: ct.ID, Goal: "lifecycle", Status: issueStatusInProgress, RequirementsRevision: 1,
-		Requirements: parseIssueRequirements("one requirement"),
-		Executions:   []*issueExecution{{ID: "e1", SessionID: "chat", TaskID: "t1", Status: issueExecutionCompleted}}}
-	ct.Issues = []*productIssue{issue}
-	ct.SelectedIssueID = issue.ID
-	openIssueDetailForTest(a, ct, issue.ID)
-	a.pi = presentationPiHost(a)
-	a.store = &contactStore{path: filepath.Join(t.TempDir(), "contacts.json")}
-	a.windowWidth = 1040
-	tr := ui.NewTester(a.view, 1040, 720)
-	tr.Frame()
-	for _, want := range []string{"In progress", "Requirements", "Unverified", "Continue task"} {
-		if !tr.HasText(want) {
-			t.Errorf("lifecycle default UI missing %q: %v", want, tr.Texts())
-		}
-	}
-	expandIssueDetails(t, tr)
-	for _, want := range []string{"Met", "Not met", "Unverified", "Mark waiting", "Cancel task", "Archive", "Mark done"} {
-		if !tr.HasText(want) {
-			t.Errorf("lifecycle details UI missing %q: %v", want, tr.Texts())
-		}
-	}
-	if err := tr.Click("Mark waiting"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if issue.Status != issueStatusWaitingUser {
-		t.Fatalf("Mark waiting status = %q", issue.Status)
-	}
-	if !tr.HasText("Waiting for you") || !tr.HasText("Resume") {
-		t.Fatal("waiting state controls not visible")
-	}
-}
-
-func TestIssueUIFilterArchiveAndRestore(t *testing.T) {
-	a, ct := workspaceTestApp(t)
-	a.store = &contactStore{path: filepath.Join(t.TempDir(), "contacts.json")}
-	issue := &productIssue{ID: "i1", ContactID: ct.ID, Goal: "archive me", Status: issueStatusInProgress, RequirementsRevision: 1}
-	ct.Issues = []*productIssue{issue}
-	ct.SelectedIssueID = issue.ID
-	openIssueDetailForTest(a, ct, issue.ID)
-	a.windowWidth = 1040
-	tr := ui.NewTester(a.view, 1040, 720)
-	tr.Frame()
-	expandIssueDetails(t, tr)
-	if err := tr.Click("Archive"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if !issue.Archived || ct.issueNavigation().Filter != issueFilterUnfinished || !tr.HasText("Restore task") || !tr.HasText("Archived") {
-		t.Fatalf("archive UI = archived=%v filter=%q texts=%v", issue.Archived, ct.issueNavigation().Filter, tr.Texts())
-	}
-	if err := tr.Click("Restore task"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if issue.Archived || ct.issueNavigation().Filter != issueFilterUnfinished {
-		t.Fatalf("restore UI changed the current filter: archived=%v filter=%q", issue.Archived, ct.issueNavigation().Filter)
-	}
-}
-
-func TestIssueUIEditPrefillsRequirementsAndSavesRevision(t *testing.T) {
-	a, ct := workspaceTestApp(t)
-	a.store = &contactStore{path: filepath.Join(t.TempDir(), "contacts.json")}
-	issue := &productIssue{ID: "i1", ContactID: ct.ID, Goal: "old goal", Status: issueStatusInProgress, RequirementsRevision: 1,
-		Requirements: parseIssueRequirements("old requirement")}
-	ct.Issues = []*productIssue{issue}
-	ct.SelectedIssueID = issue.ID
-	openIssueDetailForTest(a, ct, issue.ID)
-	a.windowWidth = 1040
-	tr := ui.NewTester(a.view, 1040, 720)
-	tr.Frame()
-	expandIssueDetails(t, tr)
-	if err := tr.Click("Edit task"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if !tr.HasText("Edit task") || a.issueFormEditingID != issue.ID || a.issueGoal != "old goal" ||
-		a.issueRequirements != "old requirement" {
-		t.Fatalf("edit form prefill = %q / %q", a.issueGoal, a.issueRequirements)
-	}
-	a.issueGoal = "new goal"
-	a.issueRequirements = "old requirement\nnew requirement"
-	if err := tr.Click("Save task"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if issue.Goal != "new goal" || issue.RequirementsRevision != 2 || len(issue.Requirements) != 2 ||
-		issue.Evidence != "" || issue.Requirements[1].State != requirementUnverified {
-		t.Fatalf("edited UI issue = %+v", issue)
-	}
-}
-
 func TestIssueEditSaveFailureRestoresCompleteVisibleState(t *testing.T) {
 	a, _, issue := lifecycleTestIssue()
 	a.store = &contactStore{path: t.TempDir()}
@@ -240,91 +135,5 @@ func TestIssuePersistentActionsRollbackOnSaveFailure(t *testing.T) {
 	}
 	if issue.Status != issueStatusInProgress || issue.Archived || issue.UpdatedAt != oldUpdated {
 		t.Fatalf("failed actions left partial state: %+v", issue)
-	}
-}
-
-func TestIssueUICompleteAndReopenActions(t *testing.T) {
-	a, ct := workspaceTestApp(t)
-	a.store = &contactStore{path: filepath.Join(t.TempDir(), "contacts.json")}
-	issue := &productIssue{ID: "i1", ContactID: ct.ID, Goal: "finish me", Status: issueStatusInProgress, RequirementsRevision: 1}
-	ct.Issues = []*productIssue{issue}
-	ct.SelectedIssueID = issue.ID
-	openIssueDetailForTest(a, ct, issue.ID)
-	a.windowWidth = 1040
-	tr := ui.NewTester(a.view, 1040, 720)
-	tr.Frame()
-	expandIssueDetails(t, tr)
-	completion := a.completionDraft(issue)
-	*completion = "user verified the saved result"
-	if err := tr.Click("Mark done"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if issue.Status != issueStatusCompleted || issue.Evidence != "user verified the saved result" {
-		t.Fatalf("UI completion = %q evidence=%q", issue.Status, issue.Evidence)
-	}
-	if !tr.HasText("Completion evidence") || !tr.HasText("user verified the saved result") {
-		t.Fatalf("completion evidence is not readable after completion: %v", tr.Texts())
-	}
-	if err := tr.Click("Reopen task"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if issue.Status != issueStatusNotStarted {
-		t.Fatalf("UI reopen = %q", issue.Status)
-	}
-	if !tr.HasText("Previous completion evidence: user verified the saved result") {
-		t.Fatalf("previous completion evidence is not readable after reopen: %v", tr.Texts())
-	}
-}
-
-func TestIssueUIRequirementEvidenceActionPersists(t *testing.T) {
-	a, ct := workspaceTestApp(t)
-	a.store = &contactStore{path: filepath.Join(t.TempDir(), "contacts.json")}
-	issue := &productIssue{ID: "i1", ContactID: ct.ID, Goal: "goal", Status: issueStatusInProgress, RequirementsRevision: 1,
-		Requirements: parseIssueRequirements("one checked requirement")}
-	ct.Issues = []*productIssue{issue}
-	ct.SelectedIssueID = issue.ID
-	openIssueDetailForTest(a, ct, issue.ID)
-	a.windowWidth = 1040
-	tr := ui.NewTester(a.view, 1040, 720)
-	tr.Frame()
-	expandIssueDetails(t, tr)
-	requirement := issue.Requirements[0]
-	draft := a.requirementDraft(requirement)
-	*draft = "checked by the user"
-	clickAfterBoundedScroll(t, tr, "Met", 1040, 720)
-	tr.Frame()
-	if requirement.State != requirementSatisfied || requirement.Evidence != "checked by the user" {
-		t.Fatalf("requirement UI evidence = %+v", requirement)
-	}
-}
-
-func TestIssueUIStatusFilterSelection(t *testing.T) {
-	a, ct := workspaceTestApp(t)
-	a.store = &contactStore{path: filepath.Join(t.TempDir(), "contacts.json")}
-	issue := &productIssue{ID: "i1", ContactID: ct.ID, Goal: "filtered issue", Status: issueStatusCompleted, RequirementsRevision: 1}
-	ct.Issues = []*productIssue{issue}
-	openIssueDetailForTest(a, ct, issue.ID)
-	a.windowWidth = 1040
-	tr := ui.NewTester(a.view, 1040, 720)
-	tr.Frame()
-	if err := tr.Click("Back to tasks"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if err := tr.Click("Not done"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if err := tr.Click("Done"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if ct.issueNavigation().Filter != issueFilterCompleted {
-		t.Fatalf("status filter = %q", ct.issueNavigation().Filter)
-	}
-	if !tr.HasText("filtered issue") || !tr.HasText("Done") {
-		t.Fatalf("completed filter did not list issue: %v", tr.Texts())
 	}
 }
