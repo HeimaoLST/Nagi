@@ -17,7 +17,15 @@ REQUIRED_GROUPS = {
             "TestPiClientProcessMCPToolsLifecycle",
         ),
     ),
-    "product": (
+    "product_rpc": (
+        CORE,
+        (
+            "TestPiProductProcessAdmitsCurrentProfileAndRestoresDrafts",
+            "TestPiProductProcessTargetsConcurrentActivityQuestions",
+            "TestPiProductProcessRetainsUnknownSendWithoutReplay",
+        ),
+    ),
+    "desktop": (
         DESKTOP,
         (
             "TestPiAppConnectionAndConversation",
@@ -29,6 +37,7 @@ REQUIRED_GROUPS = {
         ),
     ),
 }
+SUPPLEMENTAL_TESTS = ("TestPiAppCapturedQuestionAnswerForm",)
 
 
 def main(path: str) -> int:
@@ -111,7 +120,11 @@ def main(path: str) -> int:
 
 
 if __name__ == "__main__":
+    if sys.argv[1:] == ["--selector"]:
+        names = [name for _, tests in REQUIRED_GROUPS.values() for name in tests]
+        print("^(" + "|".join([*names, *SUPPLEMENTAL_TESTS]) + ")$")
+        raise SystemExit(0)
     if len(sys.argv) != 2:
-        print(f"usage: {sys.argv[0]} <go-test-jsonl>", file=sys.stderr)
+        print(f"usage: {sys.argv[0]} <go-test-jsonl> | --selector", file=sys.stderr)
         raise SystemExit(2)
     raise SystemExit(main(sys.argv[1]))

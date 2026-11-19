@@ -25,7 +25,7 @@ Choose or create a contact and enter a request in its conversation. **General** 
 
 For a UTF-8 file, open **Task context → Add file → Choose UTF-8 file…**. Selection fills the path draft. **Save file** reads and saves the snapshot for preview; submission is a separate action. Later disk changes leave that snapshot intact until **Refresh from file**. Text can also be added with **Add snippet**. Review or remove materials before sending.
 
-Use the corresponding issue/work/result and history views to inspect actual runs and outputs. A finished execution can leave its issue open. On failed or uncertain work, inspect the available details/history before explicitly continuing.
+Ask the Bot in its conversation to check a task, follow up or retrieve a result. One Bot can handle several tasks. Stopping a chat targets that conversation execution. A finished execution can leave its task open. If delivery is uncertain, use the available details or history to check the original work before deciding whether to continue.
 
 ### Save failures and recovery
 

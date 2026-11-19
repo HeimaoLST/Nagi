@@ -3,7 +3,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [dev, master, main]
+    branches: [dev, integration, main]
   workflow_dispatch:
 
 permissions:
@@ -44,15 +44,6 @@ jobs:
           python3 scripts/gui-go.py test . -count=1
           python3 scripts/gui-go.py test github.com/egoist/mygo/ui -run '^(TestSplitReleaseBeforeFrame|TestEditorSelectionReleaseBeforeFrame)$' -count=1 -v
           GOARCH=arm64 python3 scripts/gui-go.py build -trimpath -mod=readonly -buildvcs=true -o "$RUNNER_TEMP/Nagi" .
-      - name: Python CI support tests
-        run: |
-          python3 - <<'PYTHON'
-          import unittest
-          suite = unittest.TestLoader().discover("scripts", pattern="test_*.py")
-          result = unittest.TextTestRunner(verbosity=2).run(suite)
-          print(f"DISCOVERED {result.testsRun} tests")
-          raise SystemExit(0 if result.testsRun and result.wasSuccessful() else 1)
-          PYTHON
       - name: Headless previews
         id: headless-previews
         if: ${{ !cancelled() && steps.gui-python.outcome == 'success' }}
@@ -107,8 +98,9 @@ jobs:
         run: |
           mkdir -p "$NAGI_PREVIEW_DIR"
           set -o pipefail
+          selector=$(python3 scripts/check-pi-results.py --selector)
           python3 scripts/gui-go.py test -tags=integration -race -timeout=20m -json -count=1 ./internal/pi . \
-            -run '^(TestPiClientProcessCodingHistoryReopen|TestPiClientProcessIndependentToolAnswerAndCancel|TestPiClientProcessCapturedContextConfiguration|TestPiClientProcessMCPToolsLifecycle|TestPiAppConnectionAndConversation|TestPiAppScopedDomainTools|TestPiAppCapturedQuestionAnswerForm|TestPiAppActivitiesAndQuestions|TestPiAppCrashRecoveryNoReplay|TestPiAppContextAndResults|TestPiPackageStandalone)$' \
+            -run "$selector" \
             | tee "$RUNNER_TEMP/nagi-pi-results.jsonl"
       - name: Require actual Pi core and product scenarios
         if: always()

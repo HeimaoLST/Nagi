@@ -219,7 +219,7 @@ type appModel struct {
 	issueFormNotice         string
 	issueFormNoticeDetail   string
 	issueActionError        string
-	issueActionNotice      string
+	issueActionNotice       string
 	issueActionNoticeDetail string
 
 	// Runtime mode. demo keeps the local fixture path for tests/screenshots;

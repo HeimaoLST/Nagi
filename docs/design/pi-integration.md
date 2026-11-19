@@ -98,7 +98,17 @@ Acceptance proceeds on the actual combined tree: (1) dead-code cleanup/static/bu
 
 Real-process product tests use the `integration` build tag. The Pi lane explicitly selects that tag and supplies the pinned Node/worker; missing inputs remain fatal. Default GUI tests do not select the process file. `TestPiAppCapturedQuestionAnswerForm` is an additional bounded form scenario and does not satisfy `TestPiAppActivitiesAndQuestions` or its activity-call lifecycle.
 
-The protected `ci-required` aggregate requires both the retained GUI lane and the Pi integration lane. The latter must execute all four `internal/pi` process roots (`TestPiClientProcessCodingHistoryReopen`, `TestPiClientProcessIndependentToolAnswerAndCancel`, `TestPiClientProcessCapturedContextConfiguration`, `TestPiClientProcessMCPToolsLifecycle`) and every root below in the product package. Every required root and both packages must finish PASS; a missing root, skipped case, failed case or failed package fails the gate. Module results cannot substitute for product behavior. Keep the migration Draft incomplete until the actual product scenarios exist and pass on its combined source.
+The protected `ci-required` check requires both GUI and Pi integration. The Pi job obtains its Go test selector from `python3 scripts/check-pi-results.py --selector`. The same script checks terminal results by package and test name. It requires the four existing Pi client process cases, the three product RPC cases below and all desktop cases in the table. A missing required test or package, failure, or skip fails verification.
+
+The product RPC cases use a pinned worker and a controlled local provider. Their first frozen pass used candidate `86066a67ff824d0b79ad30aa283653a81881032d` and worker manifest SHA-256 `e56826a27166e0b35af8881a597ed8a576e2134bed081d898f89c5d33a47fdc0`.
+
+| Product RPC scenario | Observed result on the frozen worker |
+| --- | --- |
+| Current profile admission and drafts | One setup request created the transcript. Import, draft restoration and history readback issued zero further requests. |
+| Concurrent activity questions | Four provider requests covered two activities and a separate chat. The answer went to its target, the other activity stopped, and reopening its peer’s result issued zero requests. |
+| Process loss after send admission | One held request was admitted. After the owned worker was killed, reopening, an identical duplicate, and a conflicting reuse of the operation ID issued zero further requests. |
+
+The last case covers process loss after admission. Losing only the RPC response while the worker stays alive needs separate evidence. The standalone package case remains required until a built bundle passes its normal-entry check with Node absent from PATH.
 
 | Required product E2E root | Observable acceptance boundary |
 | --- | --- |
