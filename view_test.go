@@ -613,8 +613,10 @@ func TestLiveSendUnknownAfterDisconnectSaysRestart(t *testing.T) {
 		for _, cause := range []string{"protocol", "exit"} {
 			t.Run(locale+"/"+cause, func(t *testing.T) {
 				a, ct, issue := disconnectedRecoveryTestApp(t, cause)
+				ct.pendingSend = &pendingSend{Draft: "original message", State: "unknown"}
 				rawSend, rawStatus := ct.SendError, ct.StatusDetail
 				taskID, sessionID, draft := ct.ActiveTaskID, ct.SessionID, ct.Draft
+				record := recoveryRecordSnapshot(t, ct)
 				tr := ui.NewTester(a.view, 1040, 1200)
 				tr.SetLocale(locale)
 				tr.SetFocused(true)
@@ -623,25 +625,32 @@ func TestLiveSendUnknownAfterDisconnectSaysRestart(t *testing.T) {
 				if !tr.HasText(msgs.SendDisconnectedState()) || tr.HasText(msgs.SendUnknownState()) || tr.HasText(msgs.ReloadAction()) || tr.HasText(msgs.SendNoticeConnectionLost()) {
 					t.Fatalf("disconnected producer state offered unusable Reload guidance: %v", tr.Texts())
 				}
-				if tr.HasText(rawSend) {
+				if rawSend == "" || rawStatus == "" || rawSend == rawStatus || tr.HasText(rawSend) || tr.HasText(rawStatus) {
 					t.Fatal("diagnostic shown before explicit disclosure")
 				}
-				if err := tr.Click(msgs.DetailsAction()); err != nil {
+				composer := msgs.ComposerLabel(ct.Name)
+				if err := tr.Click(composer); err != nil {
 					t.Fatal(err)
 				}
-				tr.Frame()
-				// The startup notice may precede the contact notice in the full app.
-				if !tr.HasText(rawSend) {
-					if err := tr.Click(msgs.DetailsAction()); err != nil {
-						t.Fatal(err)
-					}
-					tr.Frame()
+				if !tr.Focused(composer) {
+					t.Fatalf("conversation composer did not take focus: %v", tr.Texts())
 				}
-				if !tr.HasText(rawSend) {
-					t.Fatal("unknown-delivery diagnostic cannot be disclosed")
+				for i := 0; i < 60 && !tr.Focused(msgs.DetailsAction()); i++ {
+					tr.Key(0, ui.KeyTab)
+				}
+				if !tr.Focused(msgs.DetailsAction()) {
+					t.Fatalf("unknown-delivery disclosure was unreachable from the composer: %v", tr.Texts())
+				}
+				tr.Key(0, ui.KeySpace)
+				tr.Frame()
+				if !tr.HasText(rawSend) || !tr.HasText(rawStatus) {
+					t.Fatalf("composer disclosure did not reveal both original diagnostics: %v", tr.Texts())
 				}
 				if ct.SendError != rawSend || ct.StatusDetail != rawStatus || ct.SendState != sendUnknown || ct.ActiveTaskID != taskID || ct.SessionID != sessionID || ct.Draft != draft || ct.Messages[0].Text != "original message" || ct.History[0].Text != "original history" || a.contactHistoryInFlight != 0 || issue.Executions[0].Status != issueExecutionUnknown {
 					t.Fatal("disclosure changed unknown state/raw records/history or issued a request")
+				}
+				if recoveryRecordSnapshot(t, ct) != record || a.submissionInFlight != 0 {
+					t.Fatal("disclosure changed the retained receipt or submitted work")
 				}
 				a.runtimeStatus = runtimeStateReady
 				a.runtimeErr, a.runtimeErrKind, a.runtimeStage, a.runtimeHintKind = "", "", "", ""
@@ -1322,7 +1331,7 @@ func recoveryComposerTester(a *appModel, width, height int) *ui.Tester {
 
 func TestRP1ConversationAvailabilityMatrix(t *testing.T) {
 	for _, locale := range []string{"en", "zh-Hans"} {
-		for _, state := range []string{runtimeStateFailed, runtimeStateExited, runtimeStateStarting, "ready-no-client", runtimeStateReady} {
+		for _, state := range []string{runtimeStateFailed, runtimeStateExited, runtimeStateStarting, "ready-no-client", "ready-unbound", runtimeStateReady} {
 			for _, diagnostic := range []string{"empty", "protocol", "delivery"} {
 				t.Run(locale+"/"+state+"/"+diagnostic, func(t *testing.T) {
 					cause := "exit"
@@ -1330,13 +1339,18 @@ func TestRP1ConversationAvailabilityMatrix(t *testing.T) {
 						cause = "protocol"
 					}
 					a, ct, _ := disconnectedRecoveryTestApp(t, cause)
+					ct.pendingSend = &pendingSend{Draft: "original message", State: "unknown"}
 					if diagnostic == "empty" {
 						ct.clearSendError()
 					}
 					a.runtimeStatus = state
-					if state == "ready-no-client" {
+					switch state {
+					case "ready-no-client":
 						a.runtimeStatus = runtimeStateReady
 						a.pi = nil
+					case "ready-unbound":
+						a.runtimeStatus = runtimeStateReady
+						ct.PiBinding = nil
 					}
 					before := recoveryRecordSnapshot(t, ct)
 					tr := recoveryComposerTester(a, 720, 640)
@@ -1344,14 +1358,23 @@ func TestRP1ConversationAvailabilityMatrix(t *testing.T) {
 					tr.SetFocused(true)
 					tr.Frame()
 					msgs := locales.In(locale)
-					if !tr.HasText(msgs.SendDisconnectedState()) || tr.HasText(msgs.SendUnknownState()) || tr.HasText(msgs.SendNoticeConnectionLost()) {
-						t.Fatalf("unbound conversation guidance contradicts action availability: %v", tr.Texts())
+					wantSummary := msgs.SendDisconnectedState()
+					switch state {
+					case runtimeStateReady:
+						wantSummary = msgs.SendUnknownState()
+					case "ready-unbound":
+						wantSummary = msgs.IssueExecutionUnknownDetail()
 					}
-					if _, ok := tr.Find(msgs.ReloadAction()); ok {
-						t.Fatal("unbound conversation exposes Reload")
+					for _, summary := range []string{msgs.SendDisconnectedState(), msgs.SendUnknownState(), msgs.IssueExecutionUnknownDetail(), msgs.SendNoticeConnectionLost()} {
+						if tr.HasText(summary) != (summary == wantSummary) {
+							t.Fatalf("want only %q for %s: %v", wantSummary, state, tr.Texts())
+						}
 					}
-					if recoveryRecordSnapshot(t, ct) != before || a.submissionInFlight != 0 {
-						t.Fatal("presentation/focus changed original records or started submission")
+					if _, ok := tr.Find(msgs.ReloadAction()); ok != (state == runtimeStateReady) {
+						t.Fatalf("Reload availability contradicts %s: %v", state, tr.Texts())
+					}
+					if recoveryRecordSnapshot(t, ct) != before || a.submissionInFlight != 0 || a.contactHistoryInFlight != 0 {
+						t.Fatal("presentation changed original records or issued a request")
 					}
 					if dir := os.Getenv("NAGI_RP_PREVIEW_DIR"); dir != "" && diagnostic == "delivery" && (state == runtimeStateReady || state == runtimeStateExited) {
 						writePreviewPNG(t, filepath.Join(dir, fmt.Sprintf("conversation-%s-%s.png", locale, state)), tr.Image())
