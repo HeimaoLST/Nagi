@@ -7,6 +7,7 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -609,11 +610,26 @@ func TestLiveSendUnknownAfterDisconnectSaysRestart(t *testing.T) {
 		t.Fatal("a live connection should keep the Reload instruction")
 	}
 
+	cases := []struct {
+		name, cause string
+		clearSend   bool
+		status      string
+	}{
+		{name: "protocol", cause: "protocol"},
+		{name: "exit", cause: "exit"},
+		{name: "no-detail", cause: "exit", clearSend: true},
+		{name: "distinct-details", cause: "exit", status: "Retained transport status diagnostic"},
+	}
 	for _, locale := range []string{"en", "zh-Hans"} {
-		for _, cause := range []string{"protocol", "exit"} {
-			t.Run(locale+"/"+cause, func(t *testing.T) {
-				a, ct, issue := disconnectedRecoveryTestApp(t, cause)
-				ct.pendingSend = &pendingSend{Draft: "original message", State: "unknown"}
+		for _, tc := range cases {
+			t.Run(locale+"/"+tc.name, func(t *testing.T) {
+				a, ct, issue := disconnectedRecoveryTestApp(t, tc.cause)
+				if tc.clearSend {
+					ct.clearSendError()
+				}
+				if tc.status != "" {
+					ct.StatusDetail, ct.StatusDetailKind = tc.status, "status-connection-lost"
+				}
 				rawSend, rawStatus := ct.SendError, ct.StatusDetail
 				taskID, sessionID, draft := ct.ActiveTaskID, ct.SessionID, ct.Draft
 				record := recoveryRecordSnapshot(t, ct)
@@ -625,26 +641,42 @@ func TestLiveSendUnknownAfterDisconnectSaysRestart(t *testing.T) {
 				if !tr.HasText(msgs.SendDisconnectedState()) || tr.HasText(msgs.SendUnknownState()) || tr.HasText(msgs.ReloadAction()) || tr.HasText(msgs.SendNoticeConnectionLost()) {
 					t.Fatalf("disconnected producer state offered unusable Reload guidance: %v", tr.Texts())
 				}
-				if rawSend == "" || rawStatus == "" || rawSend == rawStatus || tr.HasText(rawSend) || tr.HasText(rawStatus) {
-					t.Fatal("diagnostic shown before explicit disclosure")
+				diagnostics := []string{}
+				for _, diagnostic := range []string{rawSend, rawStatus} {
+					if diagnostic == "" || slices.Contains(diagnostics, diagnostic) {
+						continue
+					}
+					diagnostics = append(diagnostics, diagnostic)
+					if tr.HasText(diagnostic) {
+						t.Fatalf("diagnostic shown before explicit disclosure: %q", diagnostic)
+					}
 				}
 				composer := msgs.ComposerLabel(ct.Name)
-				if err := tr.Click(composer); err != nil {
-					t.Fatal(err)
+				texts := tr.Texts()
+				composerIndex := slices.Index(texts, composer)
+				if composerIndex < 0 || slices.Contains(texts[composerIndex+1:], msgs.DetailsAction()) != (len(diagnostics) != 0) {
+					t.Fatalf("composer disclosure does not match the retained diagnostics: %v", texts)
 				}
-				if !tr.Focused(composer) {
-					t.Fatalf("conversation composer did not take focus: %v", tr.Texts())
-				}
-				for i := 0; i < 60 && !tr.Focused(msgs.DetailsAction()); i++ {
-					tr.Key(0, ui.KeyTab)
-				}
-				if !tr.Focused(msgs.DetailsAction()) {
-					t.Fatalf("unknown-delivery disclosure was unreachable from the composer: %v", tr.Texts())
-				}
-				tr.Key(0, ui.KeySpace)
-				tr.Frame()
-				if !tr.HasText(rawSend) || !tr.HasText(rawStatus) {
-					t.Fatalf("composer disclosure did not reveal both original diagnostics: %v", tr.Texts())
+				if len(diagnostics) != 0 {
+					if err := tr.Click(composer); err != nil {
+						t.Fatal(err)
+					}
+					if !tr.Focused(composer) {
+						t.Fatalf("conversation composer did not take focus: %v", tr.Texts())
+					}
+					for i := 0; i < 60 && !tr.Focused(msgs.DetailsAction()); i++ {
+						tr.Key(0, ui.KeyTab)
+					}
+					if !tr.Focused(msgs.DetailsAction()) {
+						t.Fatalf("unknown-delivery disclosure was unreachable from the composer: %v", tr.Texts())
+					}
+					tr.Key(0, ui.KeySpace)
+					tr.Frame()
+					for _, diagnostic := range diagnostics {
+						if !tr.HasText(diagnostic) {
+							t.Fatalf("composer disclosure did not reveal %q: %v", diagnostic, tr.Texts())
+						}
+					}
 				}
 				if ct.SendError != rawSend || ct.StatusDetail != rawStatus || ct.SendState != sendUnknown || ct.ActiveTaskID != taskID || ct.SessionID != sessionID || ct.Draft != draft || ct.Messages[0].Text != "original message" || ct.History[0].Text != "original history" || a.contactHistoryInFlight != 0 || issue.Executions[0].Status != issueExecutionUnknown {
 					t.Fatal("disclosure changed unknown state/raw records/history or issued a request")
@@ -671,7 +703,7 @@ func TestLiveSendUnknownAfterDisconnectSaysRestart(t *testing.T) {
 				if !tr.Focused(msgs.ReloadAction()) {
 					t.Fatal("live Reload is not keyboard reachable")
 				}
-				if ct.SendError != rawSend || ct.StatusDetail != rawStatus || ct.SendState != sendUnknown || ct.Draft != draft || a.contactHistoryInFlight != 0 {
+				if recoveryRecordSnapshot(t, ct) != record || a.contactHistoryInFlight != 0 || a.submissionInFlight != 0 {
 					t.Fatal("live recovery guidance replayed or rewrote the retained state")
 				}
 			})
