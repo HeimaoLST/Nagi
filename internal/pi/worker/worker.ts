@@ -12,9 +12,11 @@ import { InMemoryCredentialStore, type AssistantMessage } from '@earendil-works/
 import { StdioTransport, StreamableHttpTransport, validateMcpServerConfig, mcpNamespace } from '@earendil-works/pi-mcp';
 import type { TSchema } from 'typebox';
 import {
-  MAX_FRAME, RequestError, Writer, frameBytes, message, parseRequest,
-  type Command, type ConfigureParams, type OpenParams, type StartParams, type ToolResult,
+  MAX_FRAME, RequestError, Writer, canonicalJSON, frameBytes, message, parseProductRequest, parseRequest,
+  type Command, type ConfigureParams, type Connection, type Draft, type OpenParams, type StartParams, type ToolResult,
 } from './protocol.js';
+import { Product, confirmedFileEffect, type ProductRunObservers, type ProductSession } from './product.js';
+import type { ProductProfilePaths } from './product-profile.js';
 
 const BINDING_TYPE = 'nagi-context-v1';
 const CONFIGURATION_TYPE = 'nagi-configuration-v1';
@@ -26,21 +28,13 @@ type Run = {
   id: string; seq: number; cancelled: boolean; sdkStarted: boolean; sdkSettled: boolean; sdkAborted: boolean;
   final?: AssistantMessage; correlation: StartParams['correlation']; done: Promise<void>;
   pending: Map<string, (result: ToolResult) => void>; inputs: Map<string, unknown>;
+  product?: { observers: ProductRunObservers; draft: Draft };
 };
 type Context = {
   binding: Binding; configuration: ConfigureParams; instructions: string; codingTools: OpenParams['codingTools']; domainTools: OpenParams['domainTools']; mcpServers: NonNullable<OpenParams['mcpServers']>;
   manager: SessionManager; runtime: AgentSessionRuntime; used: boolean; runIds: Set<string>;
   active?: Run; observationSeq: number;
 };
-
-function canonicalConfig(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(canonicalConfig);
-  if (value !== null && typeof value === 'object') {
-    const fields = value as Record<string, unknown>;
-    return Object.fromEntries(Object.keys(fields).sort().map(key => [key, canonicalConfig(fields[key])]));
-  }
-  return value;
-}
 
 class Worker {
   readonly epoch = randomUUID();
@@ -51,14 +45,22 @@ class Worker {
   private closing = false;
   private disconnected = false;
   private shutdownComplete = false;
+  private readonly product?: Product;
   readonly builtinCatalog: { supported: { name: string; description: string }[]; defaults: string[] };
   private readonly knownBuiltinTools: Set<string>;
-  constructor(private stateDir: string) {
+  constructor(private stateDir: string, productPaths?: ProductProfilePaths) {
     const definitions = [createReadToolDefinition, createBashToolDefinition, createEditToolDefinition, createWriteToolDefinition,
       createGrepToolDefinition, createFindToolDefinition, createLsToolDefinition].map(factory => factory(stateDir));
     this.builtinCatalog = { supported: definitions.map(({ name, description }) => ({ name, description })),
       defaults: definitions.slice(0, 4).map(({ name }) => name) };
     this.knownBuiltinTools = new Set(this.builtinCatalog.supported.map(tool => tool.name));
+    if (productPaths) this.product = new Product(productPaths, {
+      open: (params, tools) => this.openProductSession(params, tools),
+      test: configuration => this.testProductConnection(configuration),
+      drain: () => this.drainProduct(),
+      disconnect: () => { void this.disconnect(true); },
+      cleanMessage: error => this.cleanMessage(error),
+    }, frame => this.writer.send(frame));
   }
   private response(id: string, result: object): Promise<void> {
     return this.writer.send({ v: 1, type: 'response', id, ok: true, result });
@@ -67,6 +69,7 @@ class Worker {
     return this.writer.send({ v: 1, type: 'response', id, ok: false, error: {
       code: error instanceof RequestError ? error.code : 'request_failed',
       message: this.cleanMessage(error),
+      ...(error instanceof RequestError && error.details ? { details: error.details } : {}),
     } });
   }
   private cleanMessage(error: unknown): string {
@@ -94,16 +97,26 @@ class Worker {
     if (!run) return;
     if (event.type === 'agent_start') {
       run.sdkStarted = true;
+      run.product?.observers.started();
       if (run.cancelled || this.disconnected) void context.runtime.session.abort().catch(() => this.disconnect(true));
     }
     if (event.type === 'agent_settled') { run.sdkSettled = true; run.sdkAborted = event.aborted; }
     if (event.type === 'message_end' && event.message.role === 'assistant') run.final = event.message;
     if (event.type === 'message_update' && event.assistantMessageEvent.type === 'text_delta') {
-      this.event(context, run, 'text.delta', { text: event.assistantMessageEvent.delta });
+      const text = event.assistantMessageEvent.delta;
+      if (run.product) run.product.observers.text(text);
+      else this.event(context, run, 'text.delta', { text });
     }
     if (event.type === 'tool_execution_start') run.inputs.set(event.toolCallId, event.args);
     if (event.type === 'tool_execution_end') {
-      this.event(context, run, 'tool.finished', { callId: event.toolCallId, name: event.toolName, input: run.inputs.get(event.toolCallId), isError: event.isError, result: event.result });
+      const input = run.inputs.get(event.toolCallId);
+      if (!run.product) {
+        this.event(context, run, 'tool.finished', { callId: event.toolCallId, name: event.toolName, input, isError: event.isError, result: event.result });
+      } else if (!event.isError && event.result && typeof event.result === 'object' && 'content' in event.result) {
+        const path = confirmedFileEffect(context.binding.cwd, event.toolName, input, event.result.content);
+        if (path) run.product.observers.file(path, event.toolCallId);
+      }
+      run.product?.observers.toolFinished(event.toolName, event.toolCallId, event.isError);
       run.inputs.delete(event.toolCallId);
     }
   }
@@ -220,7 +233,7 @@ class Worker {
       updateConfig: () => { throw new RequestError('unsupported_operation', 'Change MCP configuration through Nagi'); },
     });
   }
-  private async open(params: OpenParams): Promise<Context> {
+  private async open(params: OpenParams, productTools: ToolDefinition[] = [], inMemory = false): Promise<Context> {
     const source = params.configuration ?? this.configured;
     if (!source) throw new RequestError('not_configured', 'Configure first');
     const config = this.validatedConfiguration(source);
@@ -230,7 +243,7 @@ class Worker {
     const mcpServers = params.mcpServers ?? [];
     const mcpEntries = this.mcpEntries(mcpServers);
     const mcpBinding = mcpServers.map(server => ({ name: server.name, sourceId: server.sourceId,
-      configSha256: createHash('sha256').update(JSON.stringify(canonicalConfig(server.config))).digest('hex') }));
+      configSha256: createHash('sha256').update(canonicalJSON(server.config)).digest('hex') }));
     const existing = this.contexts.get(params.contextId);
     if (existing) {
       if (existing.active) throw new RequestError('busy', 'Context is running');
@@ -240,7 +253,9 @@ class Worker {
     const directory = join(this.stateDir, 'sessions');
     let manager: SessionManager;
     let used = params.used;
-    if (params.resumeRef) {
+    if (inMemory) {
+      manager = SessionManager.inMemory(cwd);
+    } else if (params.resumeRef) {
       const path = resolve(params.resumeRef);
       if (dirname(path) !== directory) throw new RequestError('invalid_resume', 'Session reference is outside the owned directory');
       let unavailable = false;
@@ -282,7 +297,7 @@ class Worker {
     await models.setRuntimeApiKey(PROVIDER, config.apiKey);
     const model = models.getModel(PROVIDER, config.model);
     if (!model) throw new Error('Configured model is unavailable');
-    const customTools = (params.domainTools ?? []).map(tool => this.domainTool(params.contextId, tool));
+    const customTools = [...(params.domainTools ?? []).map(tool => this.domainTool(params.contextId, tool)), ...productTools];
     const codingTools = params.codingTools ?? this.builtinCatalog.defaults;
     if (codingTools.some(name => !this.knownBuiltinTools.has(name))) throw new RequestError('unsupported_tool', 'Unsupported coding tool selection');
     if (new Set(customTools.map(tool => tool.name)).size !== customTools.length || customTools.some(tool => this.knownBuiltinTools.has(tool.name))) throw new RequestError('invalid_params', 'Conflicting domain tool name');
@@ -306,21 +321,117 @@ class Worker {
   }
   private async execute(context: Context, run: Run, params: StartParams): Promise<void> {
     let failure: unknown;
-    this.event(context, run, 'run.started', { correlation: run.correlation });
+    if (!run.product) this.event(context, run, 'run.started', { correlation: run.correlation });
     try {
-      context.manager.appendCustomEntry(TURN_TYPE, { runId: run.id, text: params.text, context: params.context ?? [], correlation: run.correlation });
+      context.manager.appendCustomEntry(TURN_TYPE, { runId: run.id, text: params.text, context: params.context ?? [], correlation: run.correlation,
+        ...(run.product ? { materials: run.product.draft.materials } : {}) });
       const snapshots = (params.context ?? []).map(item => `\n\n<context name=${JSON.stringify(item.name)}>\n${item.text}\n</context>`).join('');
       if (!run.cancelled && !this.disconnected) await context.runtime.session.prompt(params.text + snapshots);
       await context.runtime.session.waitForIdle();
     } catch (error) { failure = error; }
     const last = run.final;
-    const status = run.cancelled || run.sdkAborted || last?.stopReason === 'aborted' ? 'interrupted'
-      : failure || !run.sdkSettled || !last || last.stopReason !== 'stop' ? 'failed' : 'completed';
+    const completed = !failure && run.sdkSettled && !run.sdkAborted && last?.stopReason === 'stop';
+    const status = run.product && completed ? 'completed' : run.cancelled || run.sdkAborted || last?.stopReason === 'aborted' ? 'interrupted'
+      : completed ? 'completed' : 'failed';
     const text = last?.content.filter(item => item.type === 'text').map(item => item.text).join('') ?? '';
     const error = status === 'failed' ? { code: 'execution_failed', message: failure ? this.cleanMessage(failure) : this.cleanMessage(last?.errorMessage ?? `SDK outcome: ${last?.stopReason ?? 'missing settlement'}`) } : undefined;
     context.active = undefined;
     context.observationSeq++;
-    this.event(context, run, 'run.settled', { status, text, ...(error ? { error } : {}), ...(last?.usage ? { usage: { ...last.usage, cost: undefined, scope: 'final_assistant', pricingKnown: false } } : {}) });
+    if (run.product) run.product.observers.settled(status, text, error?.message);
+    else this.event(context, run, 'run.settled', { status, text, ...(error ? { error } : {}), ...(last?.usage ? { usage: { ...last.usage, cost: undefined, scope: 'final_assistant', pricingKnown: false } } : {}) });
+  }
+  private async openProductSession(params: OpenParams, tools: ToolDefinition[]): Promise<ProductSession> {
+    const context = await this.open(params, tools);
+    const sessionRef = context.manager.getSessionFile();
+    if (!sessionRef) throw new RequestError('history_unavailable', 'Pi did not provide a session reference');
+    return {
+      sessionRef,
+      history: () => context.manager.getEntries(),
+      start: (executionId, draft, observers) => this.startProductRun(context, executionId, draft, observers),
+      stop: executionId => {
+        if (context.active?.id !== executionId) throw new RequestError('not_found', 'The execution has settled');
+        context.active.cancelled = true;
+        void context.runtime.session.abort().catch(() => this.disconnect(true));
+      },
+    };
+  }
+
+  private startProductRun(context: Context, executionId: string, draft: Draft, observers: ProductRunObservers): Run {
+    if (context.active || this.closing) throw new RequestError('busy', 'The execution context is unavailable');
+    const run: Run = { id: executionId, seq: 0, cancelled: false, sdkStarted: false, sdkSettled: false, sdkAborted: false,
+      correlation: undefined, done: Promise.resolve(), pending: new Map(), inputs: new Map(), product: { draft, observers } };
+    context.active = run;
+    context.used = true;
+    context.runIds.add(executionId);
+    context.observationSeq++;
+    run.done = this.execute(context, run, { contextId: context.binding.contextId, runId: executionId,
+      text: draft.text, context: draft.materials.map(({ name, text }) => ({ name, text })) });
+    return run;
+  }
+
+  private async testProductConnection(configuration: Connection): Promise<void> {
+    const id = randomUUID();
+    const context = await this.open({ contextId: id, botId: id, purpose: 'conversation', selectionRevision: 1,
+      cwd: configuration.workingDirectory, used: false, instructions: '', codingTools: [], domainTools: null,
+      configuration: { ...configuration, credentialSource: id } }, [], true);
+    const { promise, resolve, reject } = Promise.withResolvers<void>();
+    const run = this.startProductRun(context, id, { revision: 0, text: 'Reply with OK.', materials: [] }, {
+      started: () => {}, text: () => {}, file: () => {}, toolFinished: () => {},
+      settled: (status, _text, error) => {
+        if (status === 'completed') resolve();
+        else reject(new RequestError('connection_test_failed', error ?? 'The test request did not complete'));
+      },
+    });
+    const timeout = setTimeout(() => {
+      run.cancelled = true;
+      void context.runtime.session.abort().catch(() => this.disconnect(true));
+      reject(new RequestError('connection_test_failed', 'The test request expired'));
+    }, 15_000);
+    try { await promise; }
+    finally {
+      clearTimeout(timeout);
+      try { await context.runtime.dispose(); }
+      finally { this.contexts.delete(id); }
+    }
+  }
+
+  private async drainProduct(): Promise<void> {
+    this.closing = true;
+    for (const context of this.contexts.values()) {
+      const run = context.active;
+      if (run) {
+        run.cancelled = true;
+        await context.runtime.session.abort();
+        await run.done;
+      }
+      await context.runtime.dispose();
+    }
+  }
+
+  private async completeShutdown(): Promise<void> {
+    await this.writer.flush();
+    this.shutdownComplete = true;
+    process.stdin.destroy();
+  }
+
+  private async handleFrame(data: Buffer): Promise<void> {
+    let id: string | undefined;
+    try {
+      if (this.product) {
+        const request = parseProductRequest(data);
+        id = request.id;
+        await this.product.dispatch(request.command, result => this.response(request.id, result));
+        if (request.command.method === 'app.shutdown') await this.completeShutdown();
+      } else {
+        const request = parseRequest(data);
+        id = request.id;
+        await this.handle(id, request.command);
+      }
+    } catch (error) {
+      id ??= error instanceof RequestError ? error.requestId : undefined;
+      if (!id) throw error;
+      await this.failure(id, error);
+    }
   }
   private history(context: Context, cursor: string | undefined, limit: number): object {
     const entries = context.manager.getEntries();
@@ -417,9 +528,7 @@ class Worker {
         this.closing = true;
         for (const context of this.contexts.values()) await context.runtime.dispose();
         await this.response(id, { shuttingDown: true });
-        await this.writer.flush();
-        this.shutdownComplete = true;
-        process.stdin.destroy();
+        await this.completeShutdown();
         break;
     }
   }
@@ -450,17 +559,7 @@ class Worker {
           if (newline + 1 > MAX_FRAME) throw new Error('Input frame limit exceeded');
           const data = partial.subarray(0, newline);
           partial = partial.subarray(newline + 1);
-          commands = commands.then(async () => {
-            let request: ReturnType<typeof parseRequest>;
-            try { request = parseRequest(data); }
-            catch (error) {
-              if (!(error instanceof RequestError) || !error.requestId) throw error;
-              await this.failure(error.requestId, error);
-              return;
-            }
-            try { await this.handle(request.id, request.command); }
-            catch (error) { await this.failure(request.id, error); }
-          });
+          commands = commands.then(() => this.handleFrame(data));
           commands = commands.catch(() => this.disconnect(true));
         }
         if (partial.length >= MAX_FRAME) throw new Error('Input frame limit exceeded');
@@ -474,13 +573,21 @@ class Worker {
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
-  if (args.length !== 2 || args[0] !== '--state-dir' || !isAbsolute(args[1])) throw new Error('Usage: node worker.js --state-dir <absolute owned directory>');
+  const productPath = args[3];
+  const credentialsPath = args[5];
+  const fresh = args[6] === '--fresh-product-profile';
+  if (args[0] !== '--state-dir' || !args[1] || !isAbsolute(args[1]) ||
+      (args.length !== 2 && ((args.length !== 6 && !(args.length === 7 && fresh)) || args[2] !== '--product-profile' ||
+        args[4] !== '--credentials' || !productPath || !credentialsPath || !isAbsolute(productPath) || !isAbsolute(credentialsPath) || resolve(productPath) === resolve(credentialsPath)))) {
+    throw new Error('Invalid worker state or product profile arguments');
+  }
   await mkdir(args[1], { recursive: true });
   const stateDir = await realpath(args[1]);
   process.env.PI_CODING_AGENT_DIR = join(stateDir, 'agent');
   await mkdir(join(stateDir, 'sessions'), { recursive: true });
   await mkdir(join(stateDir, 'agent'), { recursive: true });
-  const worker = new Worker(stateDir);
+  if (fresh) await mkdir(dirname(productPath), { recursive: true });
+  const worker = new Worker(stateDir, productPath ? { profilePath: productPath, credentialsPath, fresh } : undefined);
   await worker.writer.send({ v: 1, type: 'ready', workerEpoch: worker.epoch, engine: { name: 'pi', version: '1.5.2' }, runtime: { name: 'node', version: process.version }, builtinCatalog: worker.builtinCatalog });
   await worker.read();
 }

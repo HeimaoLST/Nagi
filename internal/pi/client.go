@@ -18,15 +18,16 @@ import (
 var ErrDisconnected = errors.New("Pi worker disconnected")
 
 type response struct {
-	Version int             `json:"v"`
-	Type    string          `json:"type"`
-	ID      string          `json:"id"`
-	OK      *bool           `json:"ok"`
-	Result  json.RawMessage `json:"result"`
-	Error   *RemoteError    `json:"error"`
+	Version int                 `json:"v"`
+	Type    string              `json:"type"`
+	ID      string              `json:"id"`
+	OK      *bool               `json:"ok"`
+	Result  json.RawMessage     `json:"result"`
+	Error   *ProductRemoteError `json:"error"`
 }
 
 type pendingRequest struct {
+	method    string
 	response  chan response
 	attempted bool
 }
@@ -42,6 +43,10 @@ type Client struct {
 	stdinOnce sync.Once
 	handlers  Handlers
 	writeGate chan struct{}
+	product   *ProductHandlers
+	streamID  string
+	streamSeq uint64
+	streamGap bool
 
 	mu        sync.Mutex
 	nextID    uint64
@@ -64,10 +69,24 @@ type Client struct {
 }
 
 func Start(options Options) (*Client, error) {
+	return start(options, nil)
+}
+
+func start(options Options, product *ProductOptions) (*Client, error) {
 	if !filepath.IsAbs(options.NodePath) || !filepath.IsAbs(options.WorkerPath) || !filepath.IsAbs(options.StateDir) {
 		return nil, errors.New("Pi Node, worker and state paths must be explicit absolute paths")
 	}
-	cmd := exec.Command(options.NodePath, options.WorkerPath, "--state-dir", options.StateDir)
+	args := []string{options.WorkerPath, "--state-dir", options.StateDir}
+	if product != nil {
+		if !filepath.IsAbs(product.ProfilePath) || !filepath.IsAbs(product.CredentialsPath) || filepath.Clean(product.ProfilePath) == filepath.Clean(product.CredentialsPath) {
+			return nil, errors.New("product profile and credential paths must be distinct absolute paths")
+		}
+		args = append(args, "--product-profile", product.ProfilePath, "--credentials", product.CredentialsPath)
+		if product.FreshProfile {
+			args = append(args, "--fresh-product-profile")
+		}
+	}
+	cmd := exec.Command(options.NodePath, args...)
 	cmd.Dir = filepath.Dir(options.WorkerPath)
 	cmd.Stderr = io.Discard
 	stdout, err := cmd.StdoutPipe()
@@ -91,6 +110,9 @@ func Start(options Options) (*Client, error) {
 		readyDone: make(chan struct{}), failed: make(chan struct{}), done: make(chan struct{}),
 		callbackWake: make(chan struct{}, 1), callbacksDone: make(chan struct{}),
 		outcome: ProcessOutcome{PID: cmd.Process.Pid, ExitCode: -1},
+	}
+	if product != nil {
+		c.product = &product.Handlers
 	}
 	c.writeGate <- struct{}{}
 	go c.dispatchCallbacks()
@@ -237,8 +259,18 @@ func (c *Client) Shutdown(ctx context.Context) (ProcessOutcome, error) {
 	c.mu.Unlock()
 	var commandErr error
 	if !alreadyClosing {
-		var result ShutdownResult
-		commandErr = c.call(ctx, "shutdown", struct{}{}, &result)
+		if c.product == nil {
+			var result ShutdownResult
+			commandErr = c.call(ctx, "shutdown", struct{}{}, &result)
+		} else {
+			var result struct {
+				Drained bool `json:"drained"`
+			}
+			commandErr = c.call(ctx, "app.shutdown", struct{}{}, &result)
+			if commandErr == nil && !result.Drained {
+				commandErr = c.invalidResult("app.shutdown")
+			}
+		}
 		var command *CommandError
 		var remote *RemoteError
 		if errors.As(commandErr, &command) && command.Delivery == Rejected && errors.As(commandErr, &remote) && remote.Code == "busy" {
@@ -298,7 +330,7 @@ func (c *Client) call(ctx context.Context, method string, params, result any) er
 		return &CommandError{Method: method, Delivery: NotSent, Err: err}
 	}
 	c.mu.Lock()
-	if c.failure != nil || c.closing && method != "shutdown" {
+	if c.failure != nil || c.closing && method != "shutdown" && method != "app.shutdown" {
 		err := c.failure
 		if err == nil {
 			err = errors.New("Pi worker is shutting down")
@@ -308,7 +340,7 @@ func (c *Client) call(ctx context.Context, method string, params, result any) er
 	}
 	c.nextID++
 	id := "nagi-" + strconv.FormatUint(c.nextID, 10)
-	pending := &pendingRequest{response: make(chan response, 1)}
+	pending := &pendingRequest{method: method, response: make(chan response, 1)}
 	c.pending[id] = pending
 	c.issued[id] = true
 	c.mu.Unlock()
@@ -319,10 +351,11 @@ func (c *Client) call(ctx context.Context, method string, params, result any) er
 	}()
 	data, err := json.Marshal(struct {
 		Version int    `json:"v"`
+		Type    string `json:"type,omitempty"`
 		ID      string `json:"id"`
 		Method  string `json:"method"`
 		Params  any    `json:"params"`
-	}{Version: 1, ID: id, Method: method, Params: params})
+	}{Version: 1, Type: c.requestType(), ID: id, Method: method, Params: params})
 	if err != nil {
 		return &CommandError{Method: method, RequestID: id, Delivery: NotSent, Err: errors.New("cannot encode Pi command")}
 	}
@@ -347,7 +380,11 @@ func (c *Client) call(ctx context.Context, method string, params, result any) er
 		}
 	}
 	if !*reply.OK {
-		return &CommandError{Method: method, RequestID: id, Delivery: Rejected, Err: reply.Error}
+		var remote error = reply.Error
+		if c.product == nil {
+			remote = &reply.Error.RemoteError
+		}
+		return &CommandError{Method: method, RequestID: id, Delivery: Rejected, Err: remote}
 	}
 	if err := json.Unmarshal(reply.Result, result); err != nil {
 		failure := errors.New("Pi response result does not match the command type")
@@ -497,6 +534,12 @@ func (c *Client) handle(line []byte) error {
 		}
 		c.mu.Lock()
 		pending, issued := c.pending[reply.ID], c.issued[reply.ID]
+		if pending != nil && pending.method == "app.open" && *reply.OK {
+			if err := c.acceptProductStream(reply.Result); err != nil {
+				c.mu.Unlock()
+				return err
+			}
+		}
 		c.mu.Unlock()
 		if !issued {
 			return errors.New("Pi response has an unknown request ID")
@@ -508,6 +551,9 @@ func (c *Client) handle(line []byte) error {
 			}
 		}
 	case "event":
+		if c.product != nil {
+			return c.handleProductEvent(line)
+		}
 		var event Event
 		if json.Unmarshal(line, &event) != nil || event.ContextID == "" || event.Seq == 0 || len(event.Data) == 0 {
 			return errors.New("invalid Pi event envelope")
