@@ -95,32 +95,37 @@ func TestConnectionSettingsValidationKeepsDraftAndFocus(t *testing.T) {
 }
 
 func TestConnectionProtocolSegmentedKeepsDraftAndBusyGate(t *testing.T) {
+	msgs := locales.In("en")
+	chatCompletions, responses := msgs.ProtocolChatCompletionsLabel(), msgs.ProtocolResponsesLabel()
 	config := testConnectionConfig(t)
 	config.API = connectionAPIChatCompletions
 	s := newConnectionSettings(&config, "")
 	tr := connectionSettingsTester(s, connectionSettingsActions{}, 580, 1600)
 	tr.Frame()
-	if err := tr.Click("Protocol"); err != nil {
+	if err := tr.Click(chatCompletions); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if !tr.HasText("Protocol") || !tr.HasText("Chat completions") || !tr.HasText("Responses") {
+	if !tr.HasText(msgs.ProtocolLabel()) || !tr.HasText(chatCompletions) || !tr.HasText(responses) {
 		t.Fatalf("protocol choices missing: %v", tr.Texts())
 	}
-	if err := tr.Click("Responses"); err != nil {
+	if err := tr.Click(responses); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
 	if s.Draft.API != connectionAPIResponses {
 		t.Fatalf("protocol draft = %q, want Responses", s.Draft.API)
 	}
-	if err := tr.Click("Protocol"); err != nil {
+	if err := tr.Click(responses); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
+	if _, ok := tr.Find(chatCompletions); !ok {
+		t.Fatalf("protocol menu did not reopen: %v", tr.Texts())
+	}
 	s.Busy = true
 	tr.Frame()
-	if err := tr.Click("Chat completions"); err != nil {
+	if err := tr.Click(chatCompletions); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()

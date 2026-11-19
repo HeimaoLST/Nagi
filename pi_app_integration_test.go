@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -2682,8 +2683,21 @@ func (h *piFirstUseHarness) checkIndependentBotHistory(bots *[2]piIndependentBot
 			if !strings.HasPrefix(ids[0], prefix) || !strings.HasPrefix(ids[1], prefix) || ids[0] == ids[1] || reopened && ids != bot.historyIDs {
 				return fmt.Errorf("Bot %q prompt/reply history identities changed: got %q, previous %q", bot.name, ids, bot.historyIDs)
 			}
-			if !h.tester.HasText(bot.prompt) || !h.tester.HasText(bot.reply) || h.tester.HasText(other.prompt) || h.tester.HasText(other.reply) {
-				return fmt.Errorf("Bot %q chat has missing or foreign messages: %v", bot.name, h.tester.Texts())
+			texts := h.tester.Texts()
+			chatStart := slices.Index(texts, msgs.ConversationMessagesLabel())
+			chatEnd := slices.Index(texts, msgs.ComposerLabel(bot.name))
+			if chatStart < 0 || chatEnd <= chatStart {
+				return fmt.Errorf("Bot %q chat viewport or composer missing: %v", bot.name, texts)
+			}
+			chatTexts := texts[chatStart+1 : chatEnd]
+			if backToLatest := slices.Index(chatTexts, msgs.BackToLatest()); backToLatest >= 0 {
+				chatTexts = chatTexts[:backToLatest]
+			}
+			chatHasText := func(text string) bool {
+				return slices.ContainsFunc(chatTexts, func(label string) bool { return strings.Contains(label, text) })
+			}
+			if !chatHasText(bot.prompt) || !chatHasText(bot.reply) || chatHasText(other.prompt) || chatHasText(other.reply) {
+				return fmt.Errorf("Bot %q chat has missing or foreign messages: %v", bot.name, chatTexts)
 			}
 			bot.historyIDs = ids
 			piAppRecord(h.t, "independent-bot-history", map[string]any{
