@@ -724,7 +724,7 @@ func TestSettingsContactPickerDisambiguatesSameLastIDDigitsAndSavesB(t *testing.
 	}
 	aContact := &contact{ID: "contact-aaaa1111", Name: "Saki", Role: "Assistant", Status: statusReady, Workspace: t.TempDir()}
 	bContact := &contact{ID: "contact-bbbb1111", Name: "Saki", Role: "Assistant", Status: statusReady, Workspace: t.TempDir()}
-	a := &appModel{store: store, storePath: store.path, contacts: []*contact{aContact, bContact}, selected: 0, scrollTo: -1, windowWidth: 1040}
+	a := &appModel{store: store, storePath: store.path, contacts: []*contact{aContact, bContact}, selected: 0, windowWidth: 1040}
 	a.openSettingsTab(settingsTabContact, settingsSourceRail)
 	if a.settingsContactChoice(locales.In("en"), aContact) == a.settingsContactChoice(locales.In("en"), bContact) {
 		t.Fatal("same-name contacts did not get distinct labels")
@@ -1210,7 +1210,7 @@ func TestSettingsContactPickerSameLabelSelectsStableID(t *testing.T) {
 	aContact := &contact{ID: "contact-aaaa", Name: "甲", Role: "Assistant", Status: statusReady, Workspace: t.TempDir()}
 	bContact := &contact{ID: "contact-bbbb", Name: "甲", Role: "Assistant", Status: statusReady, Workspace: t.TempDir()}
 	cContact := &contact{ID: "contact-cccc", Name: "甲（1）", Role: "Assistant", Status: statusReady, Workspace: t.TempDir()}
-	a := &appModel{store: store, storePath: store.path, contacts: []*contact{aContact, bContact, cContact}, selected: 0, scrollTo: -1, windowWidth: 1040}
+	a := &appModel{store: store, storePath: store.path, contacts: []*contact{aContact, bContact, cContact}, selected: 0, windowWidth: 1040}
 	a.ensureSettingsProfileEditor(aContact.ID).Draft.Purpose = "draft A"
 	a.ensureSettingsProfileEditor(bContact.ID).Draft.Purpose = "draft B"
 	a.ensureSettingsProfileEditor(cContact.ID).Draft.Purpose = "draft C"

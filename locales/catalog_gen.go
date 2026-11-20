@@ -370,20 +370,6 @@ func (msgs Messages) CopyMessageLabel() string {
 	return Catalog.Format(msgs.locale, "copyMessageLabel", nil)
 }
 
-// CopySourceMessageLabel says "Copy source message"
-// in the language the app shows.
-//
-// The accessible name of the copy control for a source message.
-func CopySourceMessageLabel() string { return In(i18n.Locale()).CopySourceMessageLabel() }
-
-// CopySourceMessageLabel says "Copy source message"
-// in the language of msgs.
-//
-// The accessible name of the copy control for a source message.
-func (msgs Messages) CopySourceMessageLabel() string {
-	return Catalog.Format(msgs.locale, "copySourceMessageLabel", nil)
-}
-
 // CopyContextTextLabel says "Copy context text"
 // in the language the app shows.
 //
@@ -1500,36 +1486,6 @@ func (msgs Messages) HideDetailsAction() string {
 	return Catalog.Format(msgs.locale, "hideDetailsAction", nil)
 }
 
-// LocatedInHistory says "Located in history"
-// in the language the app shows.
-func LocatedInHistory() string { return In(i18n.Locale()).LocatedInHistory() }
-
-// LocatedInHistory says "Located in history"
-// in the language of msgs.
-func (msgs Messages) LocatedInHistory() string {
-	return Catalog.Format(msgs.locale, "locatedInHistory", nil)
-}
-
-// EarlierMessagesCount says "{count, plural, one {# earlier message} other {# earlier messages}}"
-// in the language the app shows.
-func EarlierMessagesCount(count int) string { return In(i18n.Locale()).EarlierMessagesCount(count) }
-
-// EarlierMessagesCount says "{count, plural, one {# earlier message} other {# earlier messages}}"
-// in the language of msgs.
-func (msgs Messages) EarlierMessagesCount(count int) string {
-	return Catalog.Format(msgs.locale, "earlierMessagesCount", map[string]any{"count": count})
-}
-
-// LookedUpEarlier says "Looked up earlier chats"
-// in the language the app shows.
-func LookedUpEarlier() string { return In(i18n.Locale()).LookedUpEarlier() }
-
-// LookedUpEarlier says "Looked up earlier chats"
-// in the language of msgs.
-func (msgs Messages) LookedUpEarlier() string {
-	return Catalog.Format(msgs.locale, "lookedUpEarlier", nil)
-}
-
 // PreviousChats says "Previous chats"
 // in the language the app shows.
 func PreviousChats() string { return In(i18n.Locale()).PreviousChats() }
@@ -1590,16 +1546,6 @@ func (msgs Messages) LoadMoreChats() string {
 	return Catalog.Format(msgs.locale, "loadMoreChats", nil)
 }
 
-// OpenSources says "Open sources"
-// in the language the app shows.
-func OpenSources() string { return In(i18n.Locale()).OpenSources() }
-
-// OpenSources says "Open sources"
-// in the language of msgs.
-func (msgs Messages) OpenSources() string {
-	return Catalog.Format(msgs.locale, "openSources", nil)
-}
-
 // TryAgain says "Try again"
 // in the language the app shows.
 func TryAgain() string { return In(i18n.Locale()).TryAgain() }
@@ -1620,26 +1566,6 @@ func (msgs Messages) Retried() string {
 	return Catalog.Format(msgs.locale, "retried", nil)
 }
 
-// SpeakerYou says "You"
-// in the language the app shows.
-func SpeakerYou() string { return In(i18n.Locale()).SpeakerYou() }
-
-// SpeakerYou says "You"
-// in the language of msgs.
-func (msgs Messages) SpeakerYou() string {
-	return Catalog.Format(msgs.locale, "speakerYou", nil)
-}
-
-// SourcesTitle says "Sources"
-// in the language the app shows.
-func SourcesTitle() string { return In(i18n.Locale()).SourcesTitle() }
-
-// SourcesTitle says "Sources"
-// in the language of msgs.
-func (msgs Messages) SourcesTitle() string {
-	return Catalog.Format(msgs.locale, "sourcesTitle", nil)
-}
-
 // BackAction says "← Back"
 // in the language the app shows.
 func BackAction() string { return In(i18n.Locale()).BackAction() }
@@ -1648,26 +1574,6 @@ func BackAction() string { return In(i18n.Locale()).BackAction() }
 // in the language of msgs.
 func (msgs Messages) BackAction() string {
 	return Catalog.Format(msgs.locale, "backAction", nil)
-}
-
-// CloseSources says "Close sources"
-// in the language the app shows.
-func CloseSources() string { return In(i18n.Locale()).CloseSources() }
-
-// CloseSources says "Close sources"
-// in the language of msgs.
-func (msgs Messages) CloseSources() string {
-	return Catalog.Format(msgs.locale, "closeSources", nil)
-}
-
-// BackFromSources says "Back from sources"
-// in the language the app shows.
-func BackFromSources() string { return In(i18n.Locale()).BackFromSources() }
-
-// BackFromSources says "Back from sources"
-// in the language of msgs.
-func (msgs Messages) BackFromSources() string {
-	return Catalog.Format(msgs.locale, "backFromSources", nil)
 }
 
 // TaskContextTitle says "Task context"
@@ -1948,32 +1854,6 @@ func ReloadAction() string { return In(i18n.Locale()).ReloadAction() }
 // in the language of msgs.
 func (msgs Messages) ReloadAction() string {
 	return Catalog.Format(msgs.locale, "reloadAction", nil)
-}
-
-// ViewInConversation says "View in chat"
-// in the language the app shows.
-func ViewInConversation() string { return In(i18n.Locale()).ViewInConversation() }
-
-// ViewInConversation says "View in chat"
-// in the language of msgs.
-func (msgs Messages) ViewInConversation() string {
-	return Catalog.Format(msgs.locale, "viewInConversation", nil)
-}
-
-// SourcesSummary says "{count, plural, one {# earlier message from {name}'s history, cited in this reply.} other {# earlier messages from {n…"
-// in the language the app shows.
-//
-// The sources page summary.
-func SourcesSummary(count int, name string) string {
-	return In(i18n.Locale()).SourcesSummary(count, name)
-}
-
-// SourcesSummary says "{count, plural, one {# earlier message from {name}'s history, cited in this reply.} other {# earlier messages from {n…"
-// in the language of msgs.
-//
-// The sources page summary.
-func (msgs Messages) SourcesSummary(count int, name string) string {
-	return Catalog.Format(msgs.locale, "sourcesSummary", map[string]any{"count": count, "name": name})
 }
 
 // HistoryReadFailed says "Could not read this saved context."

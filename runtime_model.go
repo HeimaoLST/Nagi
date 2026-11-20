@@ -65,7 +65,6 @@ func newRuntimeApp() (*appModel, error) {
 		workDir:             workDir,
 		runtimeStatus:       runtimeStateStarting,
 		workspaceOpen:       false,
-		scrollTo:            -1,
 		connectionPath:      startup.Path,
 		connectionSaved:     startup.Config,
 		connectionEffective: startup.Config,
@@ -142,7 +141,7 @@ func newProductRuntimeApp() (*appModel, error) {
 	}
 	a := &appModel{
 		storePath: storePath, connectionPath: connectionConfigPath(storePath), workDir: guiWorkDir(),
-		runtimeStatus: runtimeStateStarting, scrollTo: -1,
+		runtimeStatus: runtimeStateStarting,
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -198,7 +197,6 @@ func newUnavailableApp(err error) *appModel {
 		connectionSaved: startup.Config,
 		workDir:         workDir,
 		workspaceOpen:   false,
-		scrollTo:        -1,
 		contacts: []*contact{{
 			ID:        newContactID(),
 			Name:      "Nagi",

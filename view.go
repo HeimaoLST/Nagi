@@ -134,8 +134,6 @@ func (a *appModel) armActiveSurfaceFallback() {
 	switch {
 	case a.priorChats != nil:
 		a.priorChats.focusBack = true
-	case a.aux == "sources":
-		a.focusSourcesBack = true
 	case a.detailIs(detailProfile):
 		a.focusProfileEdit = true
 	default:
@@ -700,36 +698,19 @@ func (a *appModel) header(c *ui.Context, t *ui.Theme) {
 
 // ---------- chat ----------
 
-type chatItem struct {
-	id      string
-	entry   *historyEntry
-	msg     *message
-	working bool
-}
-
 func (a *appModel) chat(c *ui.Context, t *ui.Theme, state connectionViewState, showConnectionSettings bool) {
 	ct := a.selectedContact()
-	items := make([]chatItem, 0, len(ct.Messages)+len(ct.Revealed)+1)
-	for _, e := range a.revealedEntries() {
-		e := e
-		items = append(items, chatItem{id: "h-" + e.ID, entry: &e})
-	}
-	for _, m := range ct.Messages {
-		m := m
-		key := fmt.Sprintf("m-%d", m.ID)
+	messages := ct.Messages
+	ct.list.Key = func(i int) any {
+		m := messages[i]
 		if m.Key != "" {
-			key = m.Key
+			return m.Key
 		}
-		items = append(items, chatItem{id: key, msg: m})
+		return m.ID
 	}
-	ct.list.Key = func(i int) any { return items[i].id }
 	ct.list.FollowEnd = true
-	if a.scrollTo >= 0 {
-		ct.list.ScrollTo(a.scrollTo, ui.Start)
-		a.scrollTo = -1
-	}
 	ui.Column(c).Key("chat").Grow(1).Children(func() {
-		if len(items) == 0 {
+		if len(messages) == 0 {
 			ui.Row(c).Grow(1).FillHeight().Justify(ui.Center).Children(func() {
 				ui.Scroll(c).FillHeight().FillWidth().MaxWidth(conversationMaxWidth).Padding(16).Children(func() {
 					a.emptyState(c, t)
@@ -737,18 +718,12 @@ func (a *appModel) chat(c *ui.Context, t *ui.Theme, state connectionViewState, s
 			})
 		} else {
 			ui.Row(c).Grow(1).FillHeight().Justify(ui.Center).Children(func() {
-				ui.List(c, &ct.list, len(items), func(i int) {
-					it := items[i]
-					switch {
-					case it.entry != nil:
-						a.historyMessage(c, t, *it.entry, it.entry.ID == a.highlight)
-					default:
-						a.message(c, t, ct, it.msg)
-					}
+				ui.List(c, &ct.list, len(messages), func(i int) {
+					a.message(c, t, ct, messages[i])
 				}).Label(locales.In(c.Locale()).ConversationMessagesLabel()).FillHeight().FillWidth().MaxWidth(conversationMaxWidth).Padding(16).Gap(12)
 			})
 		}
-		if len(items) > 0 && !ct.list.AtEnd() {
+		if len(messages) > 0 && !ct.list.AtEnd() {
 			ui.Row(c).Key("back-to-latest").Justify(ui.Center).Children(func() {
 				back := secondaryButton(c, locales.In(c.Locale()).BackToLatest())
 				back.OnClick(func() {
@@ -1052,11 +1027,6 @@ func (a *appModel) productActivityResultView(c *ui.Context, t *ui.Theme, p *prod
 	}
 }
 
-func (a *appModel) historyMessage(c *ui.Context, t *ui.Theme, e historyEntry, highlight bool) {
-	ct := a.selectedContact()
-	a.renderHistoryEntry(c, t, e, highlight, ct.Name, historyLinkScope(ct.ID, "conversation", e.ID), ct.SessionWorkingDir)
-}
-
 func (a *appModel) productReadOnlyTranscript(c *ui.Context, t *ui.Theme, browser *productConversationBrowser, name string) {
 	entries := browser.history.entries
 	msgs := locales.In(c.Locale())
@@ -1073,24 +1043,18 @@ func (a *appModel) productReadOnlyTranscript(c *ui.Context, t *ui.Theme, browser
 		ui.List(c, &browser.transcript, len(entries), func(i int) {
 			entry := entries[i]
 			scope := historyLinkScope(browser.ownerID, browser.selectedID, entry.ID)
-			a.renderHistoryEntry(c, t, entry, false, name, scope, "")
+			a.renderHistoryEntry(c, t, entry, name, scope)
 		}).Label(msgs.ConversationMessagesLabel()).Fill().MaxWidth(conversationMaxWidth).Padding(16).Gap(12)
 	})
 }
 
-func (a *appModel) renderHistoryEntry(c *ui.Context, t *ui.Theme, e historyEntry, highlight bool, name, scope, workDir string) {
-	bg := ui.Transparent
-	if e.From == "me" {
-		bg = a.workTheme.BubbleUser
-	} else if highlight {
-		bg = t.Selection
-	}
+func (a *appModel) renderHistoryEntry(c *ui.Context, t *ui.Theme, e historyEntry, name, scope string) {
 	if e.From == "me" {
 		ui.Row(c).FillWidth().Justify(ui.End).Children(func() {
 			ui.Column(c).MaxWidth(userMessageMaxWidth).MinWidth(0).Gap(4).Children(func() {
 				if e.Text != "" {
 					opts := messageReaderOptions(c, true)
-					opts.MessageBubble = &markdownMessageBubble{Background: bg, PaddingX: 12, PaddingY: 8, Radius: 12, ContextualCopy: true}
+					opts.MessageBubble = &markdownMessageBubble{Background: a.workTheme.BubbleUser, PaddingX: 12, PaddingY: 8, Radius: 12, ContextualCopy: true}
 					markdownReader(c, e.Text, opts).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text)
 				}
 				taskContextReadOnlyView(c, a.workTheme, e.Context)
@@ -1100,9 +1064,9 @@ func (a *appModel) renderHistoryEntry(c *ui.Context, t *ui.Theme, e historyEntry
 	}
 	ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Start).Children(func() {
 		ui.Column(c).MaxWidth(conversationMaxWidth).MinWidth(0).Shrink(1).Children(func() {
-			opts := a.readerOptions(messageReaderOptions(c, false), scope, workDir)
+			opts := a.readerOptions(messageReaderOptions(c, false), scope, "")
 			opts.MessageBubble = &markdownMessageBubble{
-				Background: bg, PaddingX: 0, PaddingY: 0, Radius: 0,
+				Background: ui.Transparent,
 				Header: func(hc *ui.Context) {
 					ui.Text(hc, name+"  "+e.Date).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 				},
@@ -1143,39 +1107,9 @@ func (a *appModel) message(c *ui.Context, t *ui.Theme, ct *contact, m *message) 
 			})
 			return
 		}
-		ui.Row(c).Gap(8).AlignItems(ui.Start).Children(func() {
-			ui.Column(c).Gap(4).Children(func() {
-				label := msgs.LookedUpEarlier()
-				if m.Expanded {
-					label = "– " + label
-				} else {
-					label = "+ " + label
-				}
-				ui.Row(c).Children(func() {
-					secondaryButton(c, label).OnClick(func() { m.Expanded = !m.Expanded })
-				})
-				if m.Expanded {
-					for _, step := range m.Steps {
-						ui.Text(c, step).FontSize(typeLabel).FixedLineHeight(lineLabel).TextColor(t.TextMuted)
-					}
-					if len(m.Sources) > 0 {
-						ui.Row(c).Children(func() {
-							button := secondaryButton(c, msgs.OpenSources()).OnClick(func() { a.openSources(m.ID) })
-							if a.focusSources && a.auxMessage == m.ID {
-								button.Focus()
-								a.focusSources = false
-							}
-						})
-					}
-				}
-			})
-		})
 	case msgUser:
 		ui.Row(c).FillWidth().Justify(ui.End).Children(func() {
 			ui.Column(c).MaxWidth(userMessageMaxWidth).MinWidth(0).Shrink(1).Gap(2).Children(func() {
-				if m.Key != "" && m.Key == a.highlight {
-					ui.Text(c, msgs.LocatedInHistory()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
-				}
 				if m.Text != "" {
 					opts := messageReaderOptions(c, true)
 					opts.MessageBubble = &markdownMessageBubble{Background: a.workTheme.BubbleUser, PaddingX: 12, PaddingY: 8, Radius: 12, ContextualCopy: true}
@@ -1190,23 +1124,9 @@ func (a *appModel) message(c *ui.Context, t *ui.Theme, ct *contact, m *message) 
 				opts := a.readerOptions(markdownReaderOptions{Streaming: m.Streaming, CopyLabel: locales.In(c.Locale()).CopyMessageLabel(), Theme: messageMarkdownTheme}, messageLinkScope(ct.ID, m), ct.SessionWorkingDir)
 				opts.MessageBubble = &markdownMessageBubble{
 					Background: ui.Transparent, PaddingX: 0, PaddingY: 0, Radius: 0,
-					Header: func(hc *ui.Context) {
-						if m.Key != "" && m.Key == a.highlight {
-							ui.Text(hc, msgs.LocatedInHistory()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
-						}
-					},
 					Footer: func(fc *ui.Context) {
 						if m.AlertTitle != "" {
 							a.alert(fc, t, m)
-						}
-						if len(m.Sources) > 0 {
-							ui.Row(fc).Children(func() {
-								button := secondaryButton(fc, msgs.EarlierMessagesCount(len(m.Sources))).OnClick(func() { a.openSources(m.ID) })
-								if a.focusSources && a.auxMessage == m.ID {
-									button.Focus()
-									a.focusSources = false
-								}
-							})
 						}
 					},
 				}
@@ -1321,7 +1241,7 @@ func (a *appModel) composerInlinePanel(c *ui.Context, t *ui.Theme) {
 	msgs := locales.In(c.Locale())
 	c.OnShortcut(0, ui.KeyEscape, func() { a.closeAux() })
 	ui.Column(c).FillWidth().Children(func() {
-		ui.Scroll(c).Label(msgs.TaskContextDetailsScroll()).MaxHeight(300).TrackScroll(a.auxScrollFor(a.aux)).Children(func() {
+		ui.Scroll(c).Label(msgs.TaskContextDetailsScroll()).MaxHeight(300).TrackScroll(&a.taskContextScroll).Children(func() {
 			ui.Column(c).Padding(8, 0).Gap(8).Children(func() {
 				a.taskContextPanel(c, t)
 			})
@@ -1555,35 +1475,7 @@ func (a *appModel) composer(c *ui.Context, t *ui.Theme, state connectionViewStat
 	})
 }
 
-func speakerLabel(msgs locales.Messages, c *contact, e historyEntry) string {
-	if e.From == "me" {
-		return msgs.SpeakerYou()
-	}
-	return c.Name
-}
-
 // ---------- main pages ----------
-
-func (a *appModel) sourcesPanel(c *ui.Context, t *ui.Theme) {
-	ct := a.selectedContact()
-	msgs := locales.In(c.Locale())
-	entries := a.sourceEntries(a.auxMessage)
-	ui.Text(c, msgs.SourcesSummary(len(entries), ct.Name)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
-	for _, e := range entries {
-		e := e
-		ui.Column(c).FillWidth().MinWidth(0).Padding(8).Radius(8).Background(t.SurfaceHover).Gap(4).Children(func() {
-			ui.Text(c, e.Date+". "+speakerLabel(msgs, ct, e)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
-			if e.From == "me" {
-				markdownReader(c, e.Text, markdownReaderOptions{PlainText: true, CopyLabel: msgs.CopySourceMessageLabel(), Theme: messageMarkdownTheme}).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text)
-			} else {
-				markdownReader(c, e.Text, a.readerOptions(markdownReaderOptions{CopyLabel: msgs.CopySourceMessageLabel(), Theme: messageMarkdownTheme}, historyLinkScope(ct.ID, "sources", e.ID), ct.SessionWorkingDir)).FontSize(typeBody).FixedLineHeight(lineBody)
-			}
-			ui.Row(c).Children(func() {
-				secondaryButton(c, msgs.ViewInConversation()).OnClick(func() { a.viewInConversation(e.ID) })
-			})
-		})
-	}
-}
 
 func (a *appModel) openConfiguration() {
 	a.ensureConnectionForm()

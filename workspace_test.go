@@ -14,7 +14,7 @@ func workspaceTestApp(t *testing.T) (*appModel, *contact) {
 	ct := &contact{ID: "nagi", Name: "Nagi", Role: "Assistant", SessionID: "s1", PiBinding: recoveryConversationBinding("nagi", "/tmp", "s1"), Loaded: true}
 	a := &appModel{
 		demo: false, runtimeStatus: runtimeStateReady, workspaceOpen: true,
-		windowWidth: 1040, scrollTo: -1, contacts: []*contact{ct},
+		windowWidth: 1040, contacts: []*contact{ct},
 	}
 	return a, ct
 }

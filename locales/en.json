@@ -108,10 +108,6 @@
   "@copyMessageLabel": {
     "description": "The accessible name of the copy control for a conversation message."
   },
-  "copySourceMessageLabel": "Copy source message",
-  "@copySourceMessageLabel": {
-    "description": "The accessible name of the copy control for a source message."
-  },
   "copyContextTextLabel": "Copy context text",
   "@copyContextTextLabel": {
     "description": "The accessible name of the copy control for Context text."
@@ -400,23 +396,15 @@
   "detailsAction": "Details",
   "hideAction": "Hide",
   "hideDetailsAction": "Hide details",
-  "locatedInHistory": "Located in history",
-  "earlierMessagesCount": "{count, plural, one {# earlier message} other {# earlier messages}}",
-  "lookedUpEarlier": "Looked up earlier chats",
   "previousChats": "Previous chats",
   "sourceChat": "Source chat",
   "readOnlyChat": "Read-only chat",
   "noPreviousChats": "No previous chats",
   "loadingChatHistory": "Loading chat history…",
   "loadMoreChats": "Load more chats",
-  "openSources": "Open sources",
   "tryAgain": "Try again",
   "retried": "Retried",
-  "speakerYou": "You",
-  "sourcesTitle": "Sources",
   "backAction": "← Back",
-  "closeSources": "Close sources",
-  "backFromSources": "Back from sources",
   "taskContextTitle": "Task context",
   "closeTaskContext": "Close task context",
   "backLabel": "Back",
@@ -452,19 +440,6 @@
   "sendUnknownState": "Delivery is unconfirmed. Choose Reload to check the task and history. Nothing will be resent by Reload.",
   "sendDisconnectedState": "The connection was lost and the result is unconfirmed. Save or copy any unsaved text before quitting. Reopen Nagi and check history before sending again; reopening does not resend work.",
   "reloadAction": "Reload",
-  "viewInConversation": "View in chat",
-  "sourcesSummary": "{count, plural, one {# earlier message from {name}'s history, cited in this reply.} other {# earlier messages from {name}'s history, cited in this reply.}}",
-  "@sourcesSummary": {
-    "description": "The sources page summary.",
-    "placeholders": {
-      "count": {
-        "type": "int"
-      },
-      "name": {
-        "type": "String"
-      }
-    }
-  },
   "historyReadFailed": "Could not read this saved context.",
   "profilePurpose": "Purpose",
   "profileNoPurpose": "No purpose recorded.",

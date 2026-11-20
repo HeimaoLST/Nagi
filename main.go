@@ -75,9 +75,3 @@ func main() {
 		log.Fatal(err)
 	}
 }
-
-func newApp() (*appModel, error) {
-	a := seededApp()
-	a.demo = true
-	return a, nil
-}

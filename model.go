@@ -67,8 +67,6 @@ type message struct {
 	Kind        messageKind
 	Text        string
 	Time        string
-	Steps       []string
-	Sources     []string
 	AlertTitle  string
 	AlertDetail string
 	Retry       bool
@@ -109,7 +107,6 @@ type contact struct {
 	WorkLabel            string
 	Messages             []*message
 	History              []historyEntry
-	Revealed             []string
 	Draft                string
 	Archived             bool
 	ArchivedAt           int64
@@ -159,12 +156,11 @@ type profileDraft struct {
 type appModel struct {
 	contacts []*contact
 	selected int
-	aux      string // "", "sources", "settings"
+	aux      string
 
 	detail         detailKind
 	profileScrolls map[string]*ui.ScrollState
 
-	auxMessage           int
 	defaultContactN      int
 	focusComposer        bool
 	priorChats           *productConversationBrowser
@@ -190,7 +186,6 @@ type appModel struct {
 	chooseContextFile      func(mygo.OpenDialogOptions) ([]string, error)
 	folderChoiceGeneration uint64
 	chooseFolder           func(mygo.OpenDialogOptions) ([]string, error)
-	sourcesScroll          ui.ScrollState
 	taskContextScroll      ui.ScrollState
 
 	contactProfile         *contactProfileEditor
@@ -252,7 +247,6 @@ type appModel struct {
 	requestQuit               func()       // set by main to mygo.App.Quit
 	quitReady                 bool
 	shutdownStarted           bool
-	highlight                 string
 
 	connectionPath         string
 	connectionForm         *connectionSettings
@@ -293,8 +287,6 @@ type appModel struct {
 	focusSettings        bool
 	focusContactProfile  bool
 	focusProfileEdit     bool
-	focusSources         bool
-	focusSourcesBack     bool
 	focusAuxBack         bool
 	detailPageMode       bool
 	focusConnectionEntry bool
@@ -303,9 +295,6 @@ type appModel struct {
 
 	seq int
 	win *mygo.Window
-	// scrollTo is a one-shot list scroll request consumed by the next frame:
-	// -1 means no pending request.
-	scrollTo int
 }
 
 var cannedReplies = map[string][]string{
@@ -323,94 +312,7 @@ var cannedReplies = map[string][]string{
 	},
 }
 
-func seededApp() *appModel {
-	return &appModel{
-		contacts: []*contact{
-			{
-				ID: "nagi", Name: "Nagi", Role: "Research partner",
-				Purpose:      "Long-running product and research questions, with earlier decisions kept in view.",
-				Instructions: "Cite earlier decisions when they shape an answer. Keep replies short and concrete.",
-				WorkLabel:    "Looking through this thread",
-				Status:       statusReady,
-				Messages: []*message{
-					{ID: 1, Kind: msgUser, Text: "Where did we land on the MyGo decision before the desktop work starts?", Time: "9:42"},
-					{ID: 2, Kind: msgActivity, Text: "Looked up earlier conversations", Time: "9:43", Sources: []string{"nagi-h1", "nagi-h2"},
-						Steps: []string{
-							"Searched this contact's history for “MyGo”",
-							"Read 3 earlier messages from Sep 27 and Oct 3",
-							"Cited 2 messages in the reply",
-						}},
-					{ID: 3, Kind: msgContact, Time: "9:43",
-						Text:    "We agreed to use MyGo for the desktop and Pi for execution. Each contact keeps its own profile and history.",
-						Sources: []string{"nagi-h1", "nagi-h2"}},
-					{ID: 4, Kind: msgUser, Text: "Good. Then the desktop shell should show exactly that: contacts, drafts, and cited history.", Time: "9:44"},
-					{ID: 5, Kind: msgContact, Time: "9:44",
-						Text:    "Yes — and profile edits should only affect later replies, never rewrite old ones. I kept the earlier decision in view.",
-						Sources: []string{"nagi-h2", "nagi-h5"}},
-				},
-				History: []historyEntry{
-					{ID: "nagi-h1", Date: "Sep 27", From: "me", Text: "Let's settle the first scope for the MyGo desktop."},
-					{ID: "nagi-h2", Date: "Sep 27", From: "contact", Text: "Use Pi for execution and MyGo for the desktop. Each contact keeps its own profile and history."},
-					{ID: "nagi-h3", Date: "Oct 3", From: "me", Text: "So no shared memory between contacts yet."},
-					{ID: "nagi-h4", Date: "Oct 3", From: "contact", Text: "Right. Each contact keeps its own history. Revisit collaboration after the single-contact workflow is useful."},
-					{ID: "nagi-h5", Date: "Oct 5", From: "contact", Text: "Profile edits affect future replies; saved history stays intact."},
-				},
-			},
-			{
-				ID: "mio", Name: "Mio", Role: "Writing partner",
-				Purpose:      "Tightening launch notes while keeping the voice consistent.",
-				Instructions: "Prefer shorter sentences and concrete claims. Flag open questions at the end.",
-				WorkLabel:    "Tightening the draft",
-				Status:       statusReady,
-				Unread:       1,
-				Messages: []*message{
-					{ID: 1, Kind: msgUser, Text: "Can you tighten the opening of the launch note? It still feels slow.", Time: "Yesterday"},
-					{ID: 2, Kind: msgContact, Text: "Done. I cut the first paragraph in half and kept the two-sentence rhythm you liked. One open question: does the title still need the word “notes”?", Time: "Yesterday"},
-					{ID: 3, Kind: msgUser, Text: "Keep the word for now. I will read the rest tonight.", Time: "Yesterday"},
-					{ID: 4, Kind: msgContact, Text: "Sounds good. The draft stays where it is until you say otherwise.", Time: "8:15"},
-				},
-				History: []historyEntry{
-					{ID: "mio-h1", Date: "Sep 30", From: "contact", Text: "I kept the closing short so the ask stands out."},
-					{ID: "mio-h2", Date: "Oct 10", From: "me", Text: "The intro should promise less and show more."},
-					{ID: "mio-h3", Date: "Oct 10", From: "contact", Text: "Agreed — I will lead with the concrete example."},
-				},
-			},
-			{
-				ID: "ren", Name: "Ren", Role: "Coding partner",
-				Purpose:      "Small parser and runtime changes, reported as test results rather than guesses.",
-				Instructions: "Report failing cases with the diff context. Do not claim a fix until the tests pass.",
-				Workspace:    "~/Workspace/Nagi",
-				WorkLabel:    "Running the parser tests",
-				Status:       statusWorking,
-				Work:         "Running the parser tests",
-				Messages: []*message{
-					{ID: 1, Kind: msgUser, Text: "Run the parser tests again after the trailing-newline change.", Time: "10:02"},
-					{ID: 2, Kind: msgContact, Text: "Starting now. I will come back with the failing cases and the diff context.", Time: "10:02"},
-				},
-				History: []historyEntry{
-					{ID: "ren-h1", Date: "Oct 8", From: "me", Text: "The empty-input case still crashes."},
-					{ID: "ren-h2", Date: "Oct 8", From: "contact", Text: "Fixed — the parser now returns an empty list instead of unwrapping."},
-					{ID: "ren-h3", Date: "Oct 11", From: "contact", Text: "I added a regression test for the roundtrip case."},
-				},
-			},
-		},
-		selected:       0,
-		workspaceOpen:  false,
-		appearanceMode: appearanceSystem,
-		seq:            100,
-		scrollTo:       -1,
-	}
-}
-
 func (a *appModel) selectedContact() *contact { return a.contacts[a.selected] }
-
-func (a *appModel) startSeeded() {
-	ren := a.contactByID("ren")
-	if ren == nil || a.win == nil {
-		return
-	}
-	a.startWork(ren, "Running the parser tests", 12*time.Second, func() { a.failRun(ren) })
-}
 
 func (a *appModel) contactByID(id string) *contact {
 	for _, c := range a.contacts {
@@ -436,8 +338,6 @@ func (a *appModel) selectContact(i int) {
 	a.aux = ""
 	a.composerPanel = ""
 	a.composerFocusContext = false
-	a.highlight = ""
-	a.scrollTo = -1
 	ct := a.contacts[i]
 	if !ct.Loaded && ct.ActiveTaskID == "" && a.canReloadPiConversation(ct) {
 		a.reloadContactByID(ct.ID)
@@ -523,108 +423,15 @@ func (a *appModel) closeAux() {
 		a.closeSettings()
 		return
 	}
-	was := a.aux
 	switch a.composerPanel {
 	case composerPanelContext:
 		a.composerFocusContext = true
 	}
 	a.composerPanel = ""
-	switch was {
-	case "sources":
-		a.focusSources = true
-	case "task-context":
+	if a.aux == "task-context" {
 		a.contextFileGeneration++
 	}
 	a.aux = ""
-}
-
-func (a *appModel) openSources(messageID int) {
-	a.aux = "sources"
-	a.composerPanel = ""
-	a.auxMessage = messageID
-	a.focusSources = false
-}
-
-func (a *appModel) viewInConversation(entryID string) {
-	c := a.selectedContact()
-	// Real history entries are already in the transcript under stable
-	// offset+item keys; do not duplicate them through the demo reveal list.
-	for i, m := range c.Messages {
-		if m.Key != entryID {
-			continue
-		}
-		a.highlight = entryID
-		if a.aux != "" {
-			a.closeAux()
-		}
-		if a.workspaceOpen {
-			a.closeDetail()
-		}
-		a.scrollTo = len(a.revealedEntries()) + i
-		return
-	}
-	found := false
-	for _, id := range c.Revealed {
-		if id == entryID {
-			found = true
-			break
-		}
-	}
-	if !found {
-		c.Revealed = append(c.Revealed, entryID)
-	}
-	a.highlight = entryID
-	if a.aux != "" {
-		a.closeAux()
-	}
-	if a.workspaceOpen {
-		a.closeDetail()
-	}
-	a.scrollTo = a.revealIndex()
-}
-
-// revealIndex is the row of the highlighted entry among the revealed
-// entries that open the chat list; -1 when there is none.
-func (a *appModel) revealIndex() int {
-	entries := a.revealedEntries()
-	for i, e := range entries {
-		if e.ID == a.highlight {
-			return i
-		}
-	}
-	return -1
-}
-
-func (a *appModel) revealedEntries() []historyEntry {
-	c := a.selectedContact()
-	out := make([]historyEntry, 0, len(c.Revealed))
-	for _, e := range c.History {
-		for _, id := range c.Revealed {
-			if e.ID == id {
-				out = append(out, e)
-			}
-		}
-	}
-	return out
-}
-
-func (a *appModel) sourceEntries(messageID int) []historyEntry {
-	c := a.selectedContact()
-	for _, m := range c.Messages {
-		if m.ID != messageID {
-			continue
-		}
-		out := make([]historyEntry, 0, len(m.Sources))
-		for _, id := range m.Sources {
-			for _, e := range c.History {
-				if e.ID == id {
-					out = append(out, e)
-				}
-			}
-		}
-		return out
-	}
-	return nil
 }
 
 func (a *appModel) send(ct *contact, text string) bool {

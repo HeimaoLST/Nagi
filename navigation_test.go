@@ -110,27 +110,8 @@ func TestStopConversationKeepsVisibleTextAndModelScope(t *testing.T) {
 	}
 }
 
-func TestSourcesPageBackReturnsToOriginatingControl(t *testing.T) {
-	a, ct := workspaceTestApp(t)
-	ct.Messages = []*message{{ID: 7, Kind: msgContact, Text: "answer", Expanded: true, Sources: []string{"h1"}}}
-	ct.History = []historyEntry{{ID: "h1", Date: "Yesterday", From: "contact", Text: "source text"}}
-	a.openSources(7)
-	tr := ui.NewTester(a.view, 1040, 720)
-	tr.Frame()
-	if !a.mainPageActive() || !tr.HasText("source text") || tr.HasText("Composer for Nagi") {
-		t.Fatalf("sources did not replace the main reading surface: %v", tr.Texts())
-	}
-	if err := tr.Click("← Back"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if a.aux != "" || a.mainPageActive() || !tr.Focused("1 earlier message") {
-		t.Fatalf("sources Back = aux=%q focused=%v", a.aux, tr.Focused("1 earlier messages"))
-	}
-}
-
-func TestProfileAndSourcesSettingsReturnToVisibleOrigin(t *testing.T) {
-	a, ct := workspaceTestApp(t)
+func TestProfileSettingsReturnToVisibleOrigin(t *testing.T) {
+	a, _ := workspaceTestApp(t)
 	a.windowWidth = 1040
 	a.workspaceOpen = false
 	a.detail = ""
@@ -148,21 +129,5 @@ func TestProfileAndSourcesSettingsReturnToVisibleOrigin(t *testing.T) {
 	tr.Frame()
 	if !a.detailIs(detailProfile) || !tr.Focused("Edit full profile") {
 		t.Fatalf("profile settings return did not focus its visible Edit: %v", tr.Texts())
-	}
-
-	ct.Messages = []*message{{ID: 9, Kind: msgContact, Text: "sources", Sources: []string{"h1"}}}
-	a.openSources(9)
-	tr.Frame()
-	tr.Key(ui.Cmd, ui.KeyComma)
-	tr.Frame()
-	if !a.settingsOpen {
-		t.Fatal("Cmd+, did not open Settings from sources")
-	}
-	if err := tr.Click("← Back to workbench"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if a.aux != "sources" || !tr.Focused("Close sources") {
-		t.Fatalf("sources settings return = aux=%q focused=%v", a.aux, tr.Focused("Close sources"))
 	}
 }

@@ -341,7 +341,7 @@ func TestPreviewMarkdownLinks(t *testing.T) {
 			a, ct, _ := piRunStartedTestApp(t)
 			ct.ActiveTaskID, ct.SendState = "", sendIdle
 			a.storePath, a.workDir = a.store.path, filepath.Dir(a.store.path)
-			a.windowWidth, a.scrollTo, a.workspaceOpen = item.width, -1, false
+			a.windowWidth, a.workspaceOpen = item.width, false
 			a.appearanceMode = item.theme
 			a.languageMode, a.languageModeLoaded = item.locale, true
 			wantThemeID := "paper"
@@ -438,7 +438,7 @@ func TestPreviewInputStates(t *testing.T) {
 			ct.Draft = "Pending conversation draft / 待发送草稿"
 			a.pi = nil
 			a.storePath, a.workDir = a.store.path, filepath.Dir(a.store.path)
-			a.windowWidth, a.scrollTo, a.workspaceOpen = 1040, -1, false
+			a.windowWidth, a.workspaceOpen = 1040, false
 			a.appearanceMode = item.theme
 			a.languageMode, a.languageModeLoaded = "en", true
 			cfg := connectionConfig{

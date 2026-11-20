@@ -153,12 +153,7 @@ func (a *appModel) productConversationsView(c *ui.Context, t *ui.Theme, browser 
 }
 
 func (a *appModel) mainPageActive() bool {
-	switch a.aux {
-	case "sources", "task-context":
-		return !a.composerInlineAux()
-	default:
-		return false
-	}
+	return a.aux == "task-context" && !a.composerInlineAux()
 }
 
 func (a *appModel) focusDetailControl(c *ui.Context, button ui.Element) {
@@ -274,32 +269,11 @@ func (a *appModel) profileSummaryField(c *ui.Context, t *ui.Theme, label, value 
 func (a *appModel) mainPage(c *ui.Context, t *ui.Theme) {
 	ui.Column(c).Fill().Background(a.workTheme.Reading).Children(func() {
 		switch {
-		case a.aux == "sources":
-			a.sourcesPage(c, t)
 		case a.aux == "task-context":
 			a.auxPage(c, t)
 		default:
 			a.main(c, t)
 		}
-	})
-}
-
-func (a *appModel) sourcesPage(c *ui.Context, t *ui.Theme) {
-	msgs := locales.In(c.Locale())
-	ui.Column(c).Fill().Children(func() {
-		ui.Row(c).Padding(16, 16).AlignItems(ui.Center).Gap(8).Children(func() {
-			back := appTooltip(c, secondaryButton(c, msgs.BackAction()).Label(msgs.CloseSources()), msgs.BackFromSources()).OnClick(func() { a.closeAux() })
-			if a.focusSourcesBack {
-				back.Focus()
-				a.focusSourcesBack = false
-			}
-			ui.Text(c, msgs.SourcesTitle()).FontSize(typePageTitle).FontWeight(500).FixedLineHeight(lineSettingsTitle).TextColor(t.Text)
-		})
-		ui.Scroll(c).Grow(1).TrackScroll(&a.sourcesScroll).Padding(0, 16).Children(func() {
-			ui.Column(c).FillWidth().MaxWidth(conversationMaxWidth).AlignItems(ui.Start).Gap(8).Children(func() {
-				a.sourcesPanel(c, t)
-			})
-		})
 	})
 }
 
@@ -316,7 +290,7 @@ func (a *appModel) auxPage(c *ui.Context, t *ui.Theme) {
 			}
 			ui.Text(c, title).FontSize(typeContactTitle).FontWeight(500).FixedLineHeight(lineHeader).TextColor(t.Text)
 		})
-		ui.Scroll(c).Grow(1).TrackScroll(a.auxScrollFor(a.aux)).Padding(0, 16).Children(func() {
+		ui.Scroll(c).Grow(1).TrackScroll(&a.taskContextScroll).Padding(0, 16).Children(func() {
 			ui.Column(c).FillWidth().MaxWidth(conversationMaxWidth).AlignItems(ui.Start).Gap(8).Children(func() {
 				a.taskContextPanel(c, t)
 			})

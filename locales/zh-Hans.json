@@ -24,7 +24,6 @@
   "languageEnglish": "English",
   "languageHint": "部分系统窗口会在重启后使用新语言。",
   "copyMessageLabel": "复制消息",
-  "copySourceMessageLabel": "复制来源消息",
   "copyContextTextLabel": "复制资料文本",
   "copyReceivedOutputLabel": "复制收到的输出",
   "copySupplementTextLabel": "复制补充要求文本",
@@ -127,23 +126,15 @@
   "detailsAction": "详情",
   "hideAction": "隐藏",
   "hideDetailsAction": "隐藏详情",
-  "locatedInHistory": "已定位到历史",
-  "earlierMessagesCount": "{count, plural, other {# 条早期消息}}",
   "previousChats": "以往对话",
   "sourceChat": "来源对话",
   "readOnlyChat": "只读对话",
   "noPreviousChats": "没有以往对话",
   "loadingChatHistory": "正在加载对话历史…",
   "loadMoreChats": "加载更多对话",
-  "lookedUpEarlier": "查阅了早期对话",
-  "openSources": "打开来源",
   "tryAgain": "重试",
   "retried": "已重试",
-  "speakerYou": "你",
-  "sourcesTitle": "来源",
   "backAction": "← 返回",
-  "closeSources": "关闭来源",
-  "backFromSources": "从来源返回",
   "taskContextTitle": "资料",
   "closeTaskContext": "关闭资料",
   "backLabel": "返回",
@@ -179,19 +170,6 @@
   "sendUnknownState": "发送尚未确认。请选择“重新加载”来核对任务与历史；该操作不会重发任务。",
   "sendDisconnectedState": "连接已断开，结果尚未确认。退出前请保存或复制未保存的文字。重新打开 Nagi 后，先核对历史再发送；重新打开不会重发工作。",
   "reloadAction": "重新加载",
-  "viewInConversation": "在对话中查看",
-  "sourcesSummary": "{count, plural, other {# 条来自 {name} 历史的早期消息，被此回复引用。}}",
-  "@sourcesSummary": {
-    "description": "The sources page summary.",
-    "placeholders": {
-      "count": {
-        "type": "int"
-      },
-      "name": {
-        "type": "String"
-      }
-    }
-  },
   "historyReadFailed": "无法读取此历史消息。",
   "profilePurpose": "用途",
   "profileNoPurpose": "未记录用途。",

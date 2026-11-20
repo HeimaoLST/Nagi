@@ -149,7 +149,7 @@ func TestRuntimePanelShowsPathsAndMetadata(t *testing.T) {
 	a := &appModel{
 		demo: false, runtimeStatus: runtimeStateReady,
 		storePath: "/tmp/contacts.json", workDir: "/tmp/work",
-		scrollTo: -1, contacts: []*contact{ct},
+		contacts: []*contact{ct},
 	}
 	a.openAdvancedSettings()
 	tr := ui.NewTester(a.view, 960, 640)
@@ -178,7 +178,7 @@ func TestConfigurationEntryKeepsContactSettingsUsable(t *testing.T) {
 	ct := &contact{ID: "nagi", Name: "Nagi", Role: "Assistant", Draft: "keep"}
 	a := &appModel{
 		runtimeStatus: runtimeStateReady, storePath: "/tmp/contacts.json",
-		workDir: "/tmp/work", scrollTo: -1,
+		workDir: "/tmp/work",
 		contacts: []*contact{ct},
 	}
 	a.openSettings()
@@ -219,7 +219,6 @@ func TestStartupBannerKeepsComposerFocusAndDraft(t *testing.T) {
 		demo: false, runtimeStatus: runtimeStateFailed,
 		runtimeStage: "Runtime startup", runtimeErr: "Pi worker could not start.",
 		runtimeHint: "Check the installed Nagi app.",
-		scrollTo:    -1,
 		contacts:    []*contact{ct},
 	}
 	tr := ui.NewTester(a.view, 1040, 720)

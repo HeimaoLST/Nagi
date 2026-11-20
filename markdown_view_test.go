@@ -130,32 +130,6 @@ func TestAppUserMessageStaysLiteralAndCopiesRaw(t *testing.T) {
 	}
 }
 
-func TestAppSourcesRenderAndCopyMarkdown(t *testing.T) {
-	a, ct := appReadingTestApp(t)
-	assistantHistory := "## 历史标题\n\n- 条目\n\n```go\n\tx := 1\n```"
-	userHistory := "# 用户原文"
-	ct.History = []historyEntry{
-		{ID: "h2", Date: "Oct 1", From: "me", Text: userHistory},
-		{ID: "h1", Date: "Oct 1", From: "contact", Text: assistantHistory},
-	}
-	ct.Messages = []*message{{ID: 1, Kind: msgContact, Text: "answer", Sources: []string{"h1", "h2"}}}
-	a.openSources(1)
-	tr := ui.NewTester(a.view, 1040, 720)
-	tr.Frame()
-	if !tr.HasText("历史标题") || !tr.HasText("条目") || !tr.HasText("Copy source message") {
-		t.Fatalf("source markdown/copy missing: %q", tr.Texts())
-	}
-	if !tr.HasText("# 用户原文") {
-		t.Fatalf("source user text was not literal: %q", tr.Texts())
-	}
-	if err := tr.Click("Copy source message"); err != nil {
-		t.Fatal(err)
-	}
-	if got := tr.Clipboard(); got != assistantHistory {
-		t.Fatalf("source copy = %q, want %q", got, assistantHistory)
-	}
-}
-
 func TestAppEmptyChatHasNoBackToLatest(t *testing.T) {
 	a, _ := appReadingTestApp(t)
 	tr := ui.NewTester(a.view, 720, 640)

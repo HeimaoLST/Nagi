@@ -211,8 +211,6 @@ func (a *appModel) closeSettings() {
 		a.settingsReturnLink = markdownLinkTarget{}
 	case settingsSourceAux:
 		switch {
-		case a.aux == "sources":
-			a.focusSourcesBack = true
 		case a.aux == "task-context":
 			if a.composerInlineAux() {
 				a.composerFocusContext = true
@@ -1077,15 +1075,4 @@ func (a *appModel) settingsAdvancedContent(c *ui.Context, t *ui.Theme) {
 			secondaryButton(c, msgs.SettingsOpenConnection()).OnClick(func() { a.selectSettingsTab(settingsTabConnection) })
 		})
 	})
-}
-
-func (a *appModel) auxScrollFor(kind string) *ui.ScrollState {
-	switch kind {
-	case "sources":
-		return &a.sourcesScroll
-	case "task-context":
-		return &a.taskContextScroll
-	default:
-		return &a.sourcesScroll
-	}
 }

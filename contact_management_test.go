@@ -113,7 +113,7 @@ func TestContactWorkspaceDefaultsRespectConnectionSource(t *testing.T) {
 			want := launchFolder
 			var a *appModel
 			if source == "demo" {
-				a = &appModel{demo: true, workDir: launchFolder, contacts: []*contact{{ID: "demo-contact", Name: "Saki"}}, scrollTo: -1}
+				a = &appModel{demo: true, workDir: launchFolder, contacts: []*contact{{ID: "demo-contact", Name: "Saki"}}}
 			} else {
 				want = ""
 				if source == "managed" || source == "invalid" {
@@ -512,7 +512,7 @@ func TestContactManagementSidebarSearchKeepsStableIndices(t *testing.T) {
 
 func TestContactManagementNonDemoWithoutStoreNeverClaimsPersistence(t *testing.T) {
 	ct := &contact{ID: "c1", Name: "Saki", Workspace: t.TempDir(), Status: statusReady}
-	a := &appModel{contacts: []*contact{ct}, selected: 0, scrollTo: -1}
+	a := &appModel{contacts: []*contact{ct}, selected: 0}
 	a.openSettings()
 	if a.saveContactProfileDraft(profileDraft{Name: "Renamed", Workspace: ct.Workspace}, false) {
 		t.Fatal("save without a contact store claimed success")
@@ -577,7 +577,7 @@ func TestContactsFromStoreKeepsEmptyWorkspaceAsInheritedDefault(t *testing.T) {
 	if len(contacts) != 1 || contacts[0].Workspace != "" {
 		t.Fatalf("empty workspace was materialized on load: %+v", contacts)
 	}
-	a := &appModel{store: store, contacts: contacts, selected: 0, workDir: "/applied", scrollTo: -1}
+	a := &appModel{store: store, contacts: contacts, selected: 0, workDir: "/applied"}
 	if got := a.effectiveContactWorkspace(contacts[0]); got != "/applied" {
 		t.Fatalf("effective workspace = %q", got)
 	}

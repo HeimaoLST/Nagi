@@ -31,7 +31,6 @@ func TestPreviewStartupDiagnostics(t *testing.T) {
 			runtimeHintKind: startupHintEnterConnection,
 			storePath:       "/Users/you/Library/Application Support/Nagi/contacts.json",
 			workDir:         "/Users/you/Workspace/nagi-run",
-			scrollTo:        -1,
 			contacts: []*contact{{
 				ID: "nagi", Name: "Nagi", Role: "Assistant",
 				Draft: "Keep this draft while I fix configuration.",

@@ -146,7 +146,7 @@ func testRuntimeModel(t *testing.T) (*appModel, *contact, *contact) {
 	}
 	unbound := &contact{ID: "new", Name: "New contact 1", Role: "Assistant", Workspace: "/tmp", Status: statusReady}
 	a := &appModel{
-		store: store, runtimeStatus: runtimeStateStarting, scrollTo: -1,
+		store: store, runtimeStatus: runtimeStateStarting,
 		contacts: []*contact{bound, unbound}, selected: 0,
 	}
 	if err := store.save(a.contacts, a.selectedID()); err != nil {

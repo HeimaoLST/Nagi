@@ -16,7 +16,7 @@ func lifecycleTestIssue() (*appModel, *contact, *productIssue) {
 	}
 	ct.Issues = []*productIssue{issue}
 	ct.SelectedIssueID = issue.ID
-	a := &appModel{contacts: []*contact{ct}, selected: 0, scrollTo: -1, runtimeStatus: runtimeStateReady}
+	a := &appModel{contacts: []*contact{ct}, selected: 0, runtimeStatus: runtimeStateReady}
 	return a, ct, issue
 }
 

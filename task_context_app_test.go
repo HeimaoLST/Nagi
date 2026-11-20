@@ -27,7 +27,7 @@ func taskContextApp(t *testing.T) (*appModel, *contact) {
 	ct := &contact{ID: "nagi-context", Name: "Nagi", Role: "Assistant", SessionID: "s1", PiBinding: recoveryConversationBinding("nagi-context", "/tmp", "s1"), Loaded: true}
 	a := &appModel{
 		store: store, runtimeStatus: runtimeStateReady, workspaceOpen: true,
-		windowWidth: 1040, scrollTo: -1, contacts: []*contact{ct}, selected: 0,
+		windowWidth: 1040, contacts: []*contact{ct}, selected: 0,
 	}
 	a.bindTaskContexts()
 	return a, ct

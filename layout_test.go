@@ -52,13 +52,6 @@ func TestLayoutNewAndCurrentStoresUseClosedRightPaneDefaults(t *testing.T) {
 }
 
 func TestLayoutEntryPointsStartWithRightPaneClosed(t *testing.T) {
-	a, err := newApp()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if a.workspaceOpen {
-		t.Fatal("demo app started with the right pane open")
-	}
 	u := newUnavailableApp(errors.New("unreadable contact store"))
 	if u.workspaceOpen {
 		t.Fatal("unavailable app started with the right pane open")

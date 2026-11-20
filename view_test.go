@@ -470,45 +470,6 @@ func TestSettingsSavePreservesMessagesHistoryAndDraft(t *testing.T) {
 	}
 }
 
-// TestSourceRevealScrollsOnceAndCanMoveAway covers the regression: with a
-// long transcript the reveal requests one list scroll to the entry, keeps
-// the highlight, and a later manual scroll can move the source out of view.
-func TestSourceRevealScrollsOnceAndCanMoveAway(t *testing.T) {
-	a := testApp(t)
-	ct := a.selectedContact()
-	for i := 0; i < 60; i++ {
-		a.seq++
-		ct.Messages = append(ct.Messages, &message{ID: a.seq, Kind: msgContact, Text: "filler line"})
-	}
-	a.selectContact(0)
-	a.viewInConversation("nagi-h1")
-	a.viewInConversation("nagi-h2")
-	if a.scrollTo != 1 || a.scrollTo != a.revealIndex() {
-		t.Fatalf("reveal should request the entry row once: scrollTo=%d revealIndex=%d", a.scrollTo, a.revealIndex())
-	}
-	tr := ui.NewTester(a.view, 1040, 720)
-	tr.Frame()
-	if a.scrollTo != -1 {
-		t.Fatalf("scroll request should be consumed by one frame, got %d", a.scrollTo)
-	}
-	if !tr.HasText("Use Pi for execution and MyGo for the desktop. Each contact keeps its own profile and history.") {
-		t.Fatal("the revealed source should be rendered in the list")
-	}
-	first, last := ct.list.Visible()
-	tr.Scroll(400, 300, 0, 4000)
-	tr.Frame()
-	first2, last2 := ct.list.Visible()
-	if first2 == first && last2 == last {
-		t.Fatalf("manual scroll should move the visible window: %d..%d", first, last)
-	}
-	if a.scrollTo != -1 {
-		t.Fatal("manual scrolling must not re-issue the reveal scroll")
-	}
-	if a.highlight != "nagi-h2" {
-		t.Fatal("the highlight must survive a manual scroll away")
-	}
-}
-
 // TestPreviewImages writes headless preview PNGs for design review. It is
 // inert unless NAGI_PREVIEW_DIR points at a scratch directory.
 func TestPreviewImages(t *testing.T) {
@@ -521,15 +482,13 @@ func TestPreviewImages(t *testing.T) {
 		if dark {
 			theme = "dark"
 		}
-		for _, scene := range []string{"chat", "new-contact", "settings", "sources"} {
+		for _, scene := range []string{"chat", "new-contact", "settings"} {
 			a := testApp(t)
 			switch scene {
 			case "new-contact":
 				a.addDefaultContact()
 			case "settings":
 				a.openSettings()
-			case "sources":
-				a.openSources(5)
 			}
 			tr := ui.NewTester(a.view, 1040, 720)
 			tr.SetDark(dark)
@@ -593,7 +552,7 @@ func TestLiveTaskStatesRenderWithoutWaitingConflict(t *testing.T) {
 
 func TestLiveSendUnknownAfterDisconnectSaysRestart(t *testing.T) {
 	ct := &contact{ID: "bound", Name: "Nagi", SessionID: "s1", PiBinding: recoveryConversationBinding("bound", "/tmp", "s1"), Loaded: true, SendState: sendUnknown}
-	a := &appModel{demo: false, runtimeStatus: runtimeStateExited, scrollTo: -1, contacts: []*contact{ct}}
+	a := &appModel{demo: false, runtimeStatus: runtimeStateExited, contacts: []*contact{ct}}
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
 	if !tr.HasText(locales.In("en").SendDisconnectedState()) {
@@ -741,108 +700,6 @@ func disconnectedRecoveryTestApp(t *testing.T, cause string) (*appModel, *contac
 	return a, ct, issue
 }
 
-// runtimePreviewApp builds a runtime-backed model state without starting a
-// process. It is a headless layout fixture, not an online model or native
-// window capture.
-func runtimePreviewApp(scene string) *appModel {
-	bound := &contact{
-		ID: "nagi", Name: "Nagi", Role: "Assistant", SessionID: "preview-session", Loaded: true,
-		Status: statusReady, WorkLabel: "Preparing a reply",
-		Purpose: "Keep earlier decisions in view.", Instructions: "Cite earlier decisions when they shape an answer.",
-		Workspace: "/Users/you/Workspace/Nagi",
-		Messages: []*message{
-			{Key: "u1", Kind: msgUser, Text: "Use read to inspect README.md and report its first heading. Do not write files."},
-			{Key: "read-1", Kind: msgActivity, ToolName: "read", ToolArgs: `{"path":"README.md"}`, ToolOutput: `{"content":"# Nagi\n\nA native MyGo desktop application."}`},
-			{Key: "a1", Kind: msgContact, Text: "The first heading is # Nagi."},
-		},
-		Works: []*workItem{{
-			TaskID: "task-preview", MessageID: "message-preview", Prompt: "Use read to inspect README.md and report its first heading.",
-			State: workCompleted,
-			Tools: []*workTool{{
-				CallID: "read-1", Name: "read", Args: `{"path":"README.md"}`,
-				Output:  `{"content":"# Nagi\n\nA native MyGo desktop application.","start_line":1,"end_line":2}`,
-				Started: true, Finished: true,
-			}},
-		}},
-	}
-	unbound := &contact{ID: "mio", Name: "Mio", Role: "Assistant", Draft: "draft for Mio"}
-	a := &appModel{
-		demo: false, runtimeStatus: runtimeStateReady, workspaceOpen: true, windowWidth: 1040,
-		scrollTo: -1, contacts: []*contact{bound, unbound}, selected: 0,
-	}
-	switch scene {
-	case "runtime-working":
-		bound.Status = statusWorking
-		bound.Work = "Running read"
-		bound.ActiveTaskID = "task-preview"
-		bound.SendState = sendAccepted
-		bound.Messages = []*message{
-			{Key: "u2", Kind: msgUser, Text: "Inspect README.md and summarize the project."},
-		}
-		bound.Works[0].State = workRunning
-		bound.Works[0].Prompt = "Inspect README.md and summarize the project."
-		bound.Works[0].Tools[0].Finished = false
-		bound.Works[0].Tools[0].Output = ""
-	case "runtime-progress":
-		bound.Status = statusWorking
-		bound.Work = "Waiting for model"
-		bound.ActiveTaskID = "task-preview"
-		bound.SendState = sendAccepted
-		bound.Messages = append(bound.Messages, &message{
-			Key: "live:task-preview:progress", Kind: msgContact,
-			Text: "I found the first heading; checking the rest of the file before summarizing.",
-		})
-		bound.Works[0].State = workRunning
-		bound.Works[0].Prompt = "Inspect README.md and summarize the project."
-	case "runtime-empty":
-		a.contacts = []*contact{{ID: "nagi", Name: "Nagi", Role: "Assistant", Status: statusReady}}
-		a.selected = 0
-	case "runtime-error":
-		bound.Status = statusAttention
-		bound.StatusDetail = "Task failed: model_error: upstream request failed"
-		bound.Works[0].State = workFailed
-		bound.Works[0].Detail = bound.StatusDetail
-	case "runtime-settings":
-		a.openSettings()
-	}
-	return a
-}
-
-func TestPreviewRuntimeStates(t *testing.T) {
-	dir := os.Getenv("NAGI_PREVIEW_DIR")
-	if dir == "" {
-		t.Skip("set NAGI_PREVIEW_DIR to write runtime-backed headless previews")
-	}
-	write := func(scene string, width, height int, dark bool) {
-		theme := "light"
-		if dark {
-			theme = "dark"
-		}
-		a := runtimePreviewApp(scene)
-		a.windowWidth = width
-		tr := ui.NewTester(a.view, width, height)
-		tr.SetDark(dark)
-		tr.Frame()
-		writePreviewPNG(t, filepath.Join(dir,
-			fmt.Sprintf("headless-%s-%s-%dx%d.png", theme, scene, width, height)), tr.Image())
-	}
-	for _, dark := range []bool{false, true} {
-		for _, size := range []struct {
-			width, height int
-		}{{1040, 720}, {960, 640}, {1380, 900}} {
-			for _, scene := range []string{"runtime-chat", "runtime-working", "runtime-progress", "runtime-empty"} {
-				write(scene, size.width, size.height, dark)
-			}
-		}
-		for _, scene := range []string{"runtime-error", "runtime-settings"} {
-			write(scene, 1040, 720, dark)
-		}
-		// Overlay proof at 900; the native minimum is now 720, so this
-		// presentation is reachable in the real window.
-		write("runtime-working", 900, 640, dark)
-	}
-}
-
 func TestToolFailureIsVisibleBeforeDetails(t *testing.T) {
 	cases := []struct {
 		name   string
@@ -857,7 +714,7 @@ func TestToolFailureIsVisibleBeforeDetails(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ct := &contact{ID: "nagi", Name: "Nagi", Role: "Assistant", Loaded: true}
 			ct.Messages = []*message{{ID: 1, Kind: msgActivity, ToolName: "bash", ToolArgs: `{"command":"false"}`, ToolOutput: tc.output}}
-			a := &appModel{runtimeStatus: runtimeStateReady, scrollTo: -1, windowWidth: 1040, contacts: []*contact{ct}}
+			a := &appModel{runtimeStatus: runtimeStateReady, windowWidth: 1040, contacts: []*contact{ct}}
 			tr := ui.NewTester(a.view, 1040, 720)
 			tr.Frame()
 			if !tr.HasText(tc.want) || !tr.HasText("normal text") && !tr.HasText("still working") {

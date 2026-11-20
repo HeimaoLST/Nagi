@@ -9,11 +9,70 @@ import (
 
 func testApp(t *testing.T) *appModel {
 	t.Helper()
-	a, err := newApp()
-	if err != nil {
-		t.Fatal(err)
+	return &appModel{
+		demo: true,
+		contacts: []*contact{
+			{
+				ID: "nagi", Name: "Nagi", Role: "Research partner",
+				Purpose:      "Long-running product and research questions.",
+				Instructions: "Keep replies short and concrete.",
+				WorkLabel:    "Looking through this thread",
+				Status:       statusReady,
+				Messages: []*message{
+					{ID: 1, Kind: msgUser, Text: "Where did we land on the MyGo decision before the desktop work starts?", Time: "9:42"},
+					{ID: 3, Kind: msgContact, Text: "We agreed to use MyGo for the desktop and Pi for execution. Each contact keeps its own profile and history.", Time: "9:43"},
+					{ID: 4, Kind: msgUser, Text: "Let's keep the contact list and drafts visible.", Time: "9:44"},
+					{ID: 5, Kind: msgContact, Text: "Profile edits affect later replies and leave saved messages intact.", Time: "9:44"},
+				},
+				History: []historyEntry{
+					{ID: "nagi-h1", Date: "Sep 27", From: "me", Text: "Let's settle the first scope for the MyGo desktop."},
+					{ID: "nagi-h2", Date: "Sep 27", From: "contact", Text: "Use Pi for execution and MyGo for the desktop. Each contact keeps its own profile and history."},
+					{ID: "nagi-h3", Date: "Oct 3", From: "me", Text: "So no shared memory between contacts yet."},
+					{ID: "nagi-h4", Date: "Oct 3", From: "contact", Text: "Right. Each contact keeps its own history. Revisit collaboration after the single-contact workflow is useful."},
+					{ID: "nagi-h5", Date: "Oct 5", From: "contact", Text: "Profile edits affect future replies; saved history stays intact."},
+				},
+			},
+			{
+				ID: "mio", Name: "Mio", Role: "Writing partner",
+				Purpose:      "Tightening launch notes while keeping the voice consistent.",
+				Instructions: "Prefer shorter sentences and concrete claims. Flag open questions at the end.",
+				WorkLabel:    "Tightening the draft",
+				Status:       statusReady,
+				Unread:       1,
+				Messages: []*message{
+					{ID: 1, Kind: msgUser, Text: "Can you tighten the opening of the launch note? It still feels slow.", Time: "Yesterday"},
+					{ID: 2, Kind: msgContact, Text: "Done. I cut the first paragraph in half and kept the two-sentence rhythm you liked. One open question: does the title still need the word “notes”?", Time: "Yesterday"},
+					{ID: 3, Kind: msgUser, Text: "Keep the word for now. I will read the rest tonight.", Time: "Yesterday"},
+					{ID: 4, Kind: msgContact, Text: "Sounds good. The draft stays where it is until you say otherwise.", Time: "8:15"},
+				},
+				History: []historyEntry{
+					{ID: "mio-h1", Date: "Sep 30", From: "contact", Text: "I kept the closing short so the ask stands out."},
+					{ID: "mio-h2", Date: "Oct 10", From: "me", Text: "The intro should promise less and show more."},
+					{ID: "mio-h3", Date: "Oct 10", From: "contact", Text: "Agreed — I will lead with the concrete example."},
+				},
+			},
+			{
+				ID: "ren", Name: "Ren", Role: "Coding partner",
+				Purpose:      "Small parser and runtime changes, reported as test results rather than guesses.",
+				Instructions: "Report failing cases with the diff context. Do not claim a fix until the tests pass.",
+				Workspace:    "~/Workspace/Nagi",
+				WorkLabel:    "Running the parser tests",
+				Status:       statusWorking,
+				Work:         "Running the parser tests",
+				Messages: []*message{
+					{ID: 1, Kind: msgUser, Text: "Run the parser tests again after the trailing-newline change.", Time: "10:02"},
+					{ID: 2, Kind: msgContact, Text: "Starting now. I will come back with the failing cases and the diff context.", Time: "10:02"},
+				},
+				History: []historyEntry{
+					{ID: "ren-h1", Date: "Oct 8", From: "me", Text: "The empty-input case still crashes."},
+					{ID: "ren-h2", Date: "Oct 8", From: "contact", Text: "Fixed — the parser now returns an empty list instead of unwrapping."},
+					{ID: "ren-h3", Date: "Oct 11", From: "contact", Text: "I added a regression test for the roundtrip case."},
+				},
+			},
+		},
+		appearanceMode: appearanceSystem,
+		seq:            100,
 	}
-	return a
 }
 
 func TestDraftsAreScopedPerContact(t *testing.T) {
@@ -97,7 +156,7 @@ func TestConsecutiveDefaultContactsAreIsolated(t *testing.T) {
 	second.Draft = "second draft"
 	a.seq++
 	first.Messages = append(first.Messages, &message{ID: a.seq, Kind: msgUser, Text: "first message", Time: "10:00"})
-	if len(second.Messages) != 0 || len(second.History) != 0 || len(second.Revealed) != 0 {
+	if len(second.Messages) != 0 || len(second.History) != 0 {
 		t.Fatal("new contacts must not share mutable state")
 	}
 	a.selectContact(len(a.contacts) - 2)
@@ -154,38 +213,6 @@ func TestBackgroundWorkMarksUnread(t *testing.T) {
 	a.startWork(ren, "Re-running the parser tests", 0, func() { ren.Status = statusReady })
 	if ren.Unread != before+1 {
 		t.Fatalf("background completion should mark unread: %d -> %d", before, ren.Unread)
-	}
-}
-
-func TestSourceScopeAndReveal(t *testing.T) {
-	a := testApp(t)
-	a.selectContact(0)
-	entries := a.sourceEntries(5)
-	if len(entries) != 2 {
-		t.Fatalf("want 2 sources, got %d", len(entries))
-	}
-	for _, e := range entries {
-		if e.ID != "nagi-h2" && e.ID != "nagi-h5" {
-			t.Fatalf("unexpected source %s", e.ID)
-		}
-	}
-	a.viewInConversation("nagi-h2")
-	if a.highlight != "nagi-h2" || a.workspaceOpen {
-		t.Fatal("reveal should highlight the entry in the conversation")
-	}
-	found := false
-	for _, e := range a.revealedEntries() {
-		if e.ID == "nagi-h2" {
-			found = true
-		}
-	}
-	if !found {
-		t.Fatal("revealed entry missing from the transcript set")
-	}
-	for _, e := range a.revealedEntries() {
-		if strings.HasPrefix(e.ID, "ren-") {
-			t.Fatal("revealed entries must stay in the current contact scope")
-		}
 	}
 }
 

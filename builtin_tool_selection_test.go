@@ -55,7 +55,7 @@ func freshBuiltinProfileTestApp(t *testing.T) (*appModel, *contact) {
 	}
 	syntheticBuiltinDefaults := []string{"bash", "edit", "read", "write"}
 	a := &appModel{
-		storePath: store.path, workDir: root, windowWidth: 1040, scrollTo: -1,
+		storePath: store.path, workDir: root, windowWidth: 1040,
 		connectionManaged: true, runtimeStatus: runtimeStateReady,
 		runtimeBuiltinTools: builtinToolsForTest(), runtimeBuiltinToolsLoaded: true,
 		runtimeBuiltinDefaults: syntheticBuiltinDefaults,
