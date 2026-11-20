@@ -22,7 +22,7 @@
 
 **Problem:** Individual Bot profiles appeared under global Settings, and a cached selection could send a profile edit to the wrong Bot.
 **Cause or correction:** The user manages a Bot by right-clicking its entire row in the left Bot Team list. Names, previews, avatars and row padding share the target. Conversations serve chat and Settings holds global preferences.
-**Prevention:** Bind every menu and profile action to the row's stable Bot ID. Right-click a different Bot from the one displayed and verify the edited Bot, both drafts and the return focus. Use Bot Team for the collection, Bot for a member, and Materials for text and files attached to a message.
+**Prevention:** Bind every menu and profile action to the row's stable Bot ID. Right-click a different Bot from the one displayed and verify the edited Bot, both drafts and the return focus. Use Bot Team for the collection, Bot for a member, and Materials for text and files attached to a message. When a folder chooser returns, verify that the originating editor is still active. The Bot ID can match even after its original editor was replaced.
 
 ## Distinguish unknown sends from live work during backup
 
