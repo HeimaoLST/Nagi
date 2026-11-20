@@ -686,7 +686,9 @@ func TestPiAppSettingsBackupRestore(t *testing.T) {
 		restore.pump.do(func() { chosen = backup })
 		preview := func() {
 			restore.click(msg.RestorePausedAction())
-			restore.wait(func() bool { return restore.view.HasText(msg.RecoveryPreviewCounts(2, 1)) && restore.view.Focused(msg.RecoveryConfirmAction()) })
+			restore.wait(func() bool {
+				return restore.view.HasText(msg.RecoveryPreviewCounts(2, 1)) && restore.view.Focused(msg.RecoveryConfirmAction())
+			})
 			if !bytes.Equal(read(profile), damaged) || !bytes.Equal(read(private), credentials) {
 				t.Fatal("preview changed the original profile or credentials")
 			}
@@ -762,8 +764,8 @@ func TestPiAppRestoresExistingV10Copy(t *testing.T) {
 			TaskContext: []taskContextItem{material}, PendingSend: &pendingSend{Draft: "Earlier uncertain send", State: "unknown", ToolScopeRef: "backup-scope"}}},
 		Issues: []storedIssue{{ID: activityID, ContactID: botID, Goal: "Restore retained findings", Status: issueStatusNeedsAttention, RequirementsRevision: 2,
 			RequirementItems: []storedRequirement{{ID: "retained-requirement", Text: "Keep the findings", State: requirementUnverified}},
-			Executions: []storedIssueExecution{{ID: activityExecution, PiIntent: true, Status: issueExecutionUnknown, Prompt: "Original activity input"}}}},
-		IssueToolScopes: []IssueToolScope{{Ref: "backup-scope", ContactID: botID, RuntimeSessionID: session, TurnID: sendOperation, RuntimeTaskID: sendExecution}},
+			Executions:       []storedIssueExecution{{ID: activityExecution, PiIntent: true, Status: issueExecutionUnknown, Prompt: "Original activity input"}}}},
+		IssueToolScopes:     []IssueToolScope{{Ref: "backup-scope", ContactID: botID, RuntimeSessionID: session, TurnID: sendOperation, RuntimeTaskID: sendExecution}},
 		IssueToolOperations: &IssueToolOperationLedger{},
 	}); err != nil {
 		t.Fatal(err)
@@ -786,7 +788,9 @@ func TestPiAppRestoresExistingV10Copy(t *testing.T) {
 		unavailable.openDataRecovery()
 	})
 	restore.click(msg.RestorePausedAction())
-	restore.wait(func() bool { return restore.view.HasText(msg.RecoveryPreviewCounts(1, 1)) && restore.view.Focused(msg.RecoveryConfirmAction()) })
+	restore.wait(func() bool {
+		return restore.view.HasText(msg.RecoveryPreviewCounts(1, 1)) && restore.view.Focused(msg.RecoveryConfirmAction())
+	})
 	if !bytes.Equal(recoverySavedBytes(t, profile), damaged) {
 		t.Fatal("preview changed the damaged profile")
 	}

@@ -178,7 +178,7 @@ func TestConfigurationEntryKeepsContactSettingsUsable(t *testing.T) {
 	ct := &contact{ID: "nagi", Name: "Nagi", Role: "Assistant", Draft: "keep"}
 	a := &appModel{
 		runtimeStatus: runtimeStateReady, storePath: "/tmp/contacts.json",
-		workDir: "/tmp/work",
+		workDir:  "/tmp/work",
 		contacts: []*contact{ct},
 	}
 	a.openSettings()
