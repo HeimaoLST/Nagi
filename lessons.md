@@ -28,7 +28,7 @@
 
 **Problem:** The main checkout is an old baseline with preexisting dirty documents and is not the current delivered UI candidate.
 **Cause or correction:** A repository path does not establish current source or writer ownership. PR30 contains the later UI work; its source and gate status must be treated explicitly.
-**Prevention:** Read remote branch/PR identity, local status and active writers first. Use a clean task worktree from the selected source and preserve the root's dirty work and other owners' worktrees.
+**Prevention:** Read remote branch/PR identity, local status and active writers first. Use a clean task worktree from the selected source and preserve the root's dirty work and other owners' worktrees. Wait for UI, backend and QA owners to release shared code before building it. A missing symbol in a partially edited worktree is not a frozen-candidate failure.
 
 ## Keep hypotheses separate from product decisions
 
@@ -394,7 +394,7 @@
 
 **Problem:** Source review found that worker exit marks admitted activity records unknown, while the Apply predicate rejects every unresolved execution and therefore blocks the documented dead-host replacement path.
 **Cause or correction:** Replacing a fully observed exited host is a connection operation, not permission to resend unknown work. Live admission and preserved uncertainty need distinct eligibility checks. Controlled C3 on4ed3cb1 passed with three requests and three workers, preserving unknown through explicit Apply, history readback and restart. Its deliberate owned Kill does not establish spontaneous crash or ToolResult reply-loss recovery.
-**Prevention:** Permit explicit recovery only for the current owned host after actual reaping, callback completion and applied exit state, while retaining live/pending work, store and legacy guards. Keep unknown records and captured sources unchanged, and verify Apply/reopen produces no model request or automatic replay. Record deliberate abnormal test exits separately from normal drain.
+**Prevention:** Permit explicit recovery only for the current owned host after actual reaping, callback completion and applied exit state, while retaining live/pending work, store and legacy guards. Keep unknown records and captured sources unchanged, and verify Apply/reopen produces no model request or automatic replay. Record deliberate abnormal test exits separately from normal drain. Exercise initial admission failure with no worker as well as exit of an admitted worker. A retry must reopen the configured profile and retain unknown operations.
 
 ## Generate locale accessors from the project root
 

@@ -182,7 +182,11 @@ func (a *appModel) applyProductPreferences(preferences *pi.ProductPreferences) {
 // keeps store=nil, and never silently creates a replacement store.
 func newUnavailableApp(err error) *appModel {
 	storePath := guiStorePath()
+	if absolute, err := filepath.Abs(storePath); err == nil {
+		storePath = absolute
+	}
 	workDir := guiWorkDir()
+	startup := readConnectionStartup(storePath)
 	a := &appModel{
 		runtimeStatus:   runtimeStateFailed,
 		runtimeStage:    startupStageLocalStore,
@@ -190,6 +194,8 @@ func newUnavailableApp(err error) *appModel {
 		runtimeHintKind: startupHintExistingStore,
 		runtimeHintArgs: []string{storePath},
 		storePath:       storePath,
+		connectionPath:  startup.Path,
+		connectionSaved: startup.Config,
 		workDir:         workDir,
 		workspaceOpen:   false,
 		scrollTo:        -1,

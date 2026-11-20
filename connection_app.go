@@ -345,7 +345,15 @@ func (a *appModel) saveConnectionWithApply(config connectionConfig, applyAfterSa
 		return
 	}
 	if host := a.productHost(); host != nil {
+		if a.runtimeStatus == runtimeStateExited {
+			a.reopenProductConnection(host, &config, applyAfterSave)
+			return
+		}
 		a.changeProductConnection(host, &config, applyAfterSave)
+		return
+	}
+	if a.runtimeStage == startupStageLocalStore {
+		a.reopenProductConnection(nil, &config, applyAfterSave)
 		return
 	}
 	path := a.connectionPath
@@ -428,6 +436,9 @@ func (a *appModel) connectionReloadBlocked() string {
 		}
 		return ""
 	}
+	if a.runtimeStage == startupStageLocalStore {
+		return ""
+	}
 	if a.store == nil || a.localSaveErr != "" {
 		return connBlockedStore
 	}
@@ -491,10 +502,14 @@ func (a *appModel) applyConnection() {
 	form.ErrorDetail = ""
 	if host := a.productHost(); host != nil {
 		if a.runtimeStatus == runtimeStateExited {
-			a.reopenProductConnection(host)
+			a.reopenProductConnection(host, nil, true)
 			return
 		}
 		a.changeProductConnection(host, nil, true)
+		return
+	}
+	if a.runtimeStage == startupStageLocalStore {
+		a.reopenProductConnection(nil, nil, true)
 		return
 	}
 	a.startPiHost()

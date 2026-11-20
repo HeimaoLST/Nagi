@@ -328,6 +328,9 @@ func (a *appModel) openProductProfile(ctx context.Context, fresh bool, generatio
 	}
 	a.runOnUI(func() {
 		a.pi, a.connectionGeneration, a.contacts = host, host.generation, contacts
+		a.runtimeStage, a.runtimeHint, a.runtimeHintKind = "", "", ""
+		a.runtimeHintArgs = nil
+		a.localSaveErr, a.localSavePrevErr, a.localSavePrevKind = "", "", ""
 		a.applyProductPreferences(opened.Snapshot.Preferences)
 		a.selected = slices.Index(contacts, selected)
 		a.activityIntents = nil
@@ -340,6 +343,7 @@ func (a *appModel) openProductProfile(ctx context.Context, fresh bool, generatio
 		}
 		a.applyProductConnection(opened.Snapshot.Connection)
 		a.connectionForm = newConnectionSettings(a.connectionSaved, a.workDir)
+		a.connectionForm.Busy = a.connectionApplying
 		a.applyBuiltinCatalog(ready)
 		for _, ct := range contacts {
 			ct.Context.onChange = func() error { return a.saveProductDraft(ct) }
@@ -658,29 +662,45 @@ func (a *appModel) observeProductExit(host *piAppHost) {
 	})
 }
 
-func (a *appModel) reopenProductConnection(host *piAppHost) {
+func (a *appModel) reopenProductConnection(host *piAppHost, config *connectionConfig, apply bool) {
 	form := a.connectionForm
 	form.Busy, a.connectionApplying = true, true
 	form.Status = connStatusChecking
+	form.Error, form.ErrorDetail, form.ReloadBlocked = "", "", ""
+	generation := a.connectionGeneration + 1
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
-		outcome, _ := host.product.Wait(ctx)
 		var err error
-		if outcome.Reaped {
-			err = a.openProductProfile(ctx, false, host.generation+1)
-		} else {
-			err = errors.New("the previous product worker is still running")
+		if host != nil {
+			outcome, _ := host.product.Wait(ctx)
+			if !outcome.Reaped {
+				err = errors.New("the previous product worker is still running")
+			}
+		}
+		if err == nil {
+			err = a.openProductProfile(ctx, false, generation)
 		}
 		a.updateUI(func() {
-			a.connectionApplying, form.Busy = false, false
+			a.connectionApplying, a.connectionForm.Busy = false, false
+			a.connectionForm.Status = ""
 			if err != nil {
-				form.Status, form.Error = "", a.connectionSafeMessage(err)
+				a.connectionForm.Error = a.connectionSafeMessage(err)
 			} else {
 				current := a.productHost()
 				go a.observeProductExit(current)
-				if !a.shutdownStarted && a.productConnectionPending() {
-					a.changeProductConnection(current, nil, true)
+				if !a.shutdownStarted {
+					switch {
+					case config != nil:
+						a.connectionForm.Draft = form.Draft
+						a.changeProductConnection(current, config, apply)
+					case apply && a.productConnectionPending():
+						a.changeProductConnection(current, nil, true)
+					case apply && a.connectionSaved == nil:
+						a.connectionForm.ReloadBlocked = connBlockedNoSaved
+					case apply:
+						a.connectionForm.Status = connStatusApplied
+					}
 				}
 			}
 			if a.shutdownStarted {
