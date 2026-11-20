@@ -541,6 +541,7 @@ func (a *appModel) dataRecoveryBlocksChanges() bool {
 }
 
 func (a *appModel) dataRecoveryBlocked(restore bool) string {
+	productBackup := !restore && a.productHost() != nil
 	for _, editor := range a.settingsProfiles {
 		if editor.Busy {
 			return "busy"
@@ -549,14 +550,17 @@ func (a *appModel) dataRecoveryBlocked(restore bool) string {
 	if a.contactProfile != nil && a.contactProfile.Busy {
 		return "busy"
 	}
-	if a.contextFilePickers > 0 || a.shutdownStarted || a.connectionSaveInFlight || a.connectionApplying || a.connectionTesting || a.contactHistoryInFlight > 0 || a.submissionInFlight > 0 || a.activeTaskCount() > 0 || a.themeImport != nil && a.themeImport.Busy || a.connectionForm != nil && a.connectionForm.Busy {
+	if a.contextFilePickers > 0 || a.shutdownStarted || a.connectionSaveInFlight || a.connectionApplying || a.connectionTesting || a.contactHistoryInFlight > 0 || a.submissionInFlight > 0 || a.themeImport != nil && a.themeImport.Busy || a.connectionForm != nil && a.connectionForm.Busy {
+		return "busy"
+	}
+	if !productBackup && a.activeTaskCount() > 0 {
 		return "busy"
 	}
 	if a.dataRecovery != nil && (a.dataRecovery.choosing || a.dataRecovery.inFlight || a.dataRecovery.result.Outcome == storeRecoveryVerifiedInstalled || a.dataRecovery.result.Outcome == storeRecoveryInstallUnconfirmed) {
 		return "busy"
 	}
 	if !restore {
-		if a.productHost() != nil {
+		if productBackup {
 			if a.productActivityClient() == nil || a.localSaveErr != "" {
 				return "saved"
 			}
