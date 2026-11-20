@@ -139,6 +139,9 @@ func (a *appModel) openSettingsTab(tab, source string) {
 	if !wasOpen {
 		a.settingsReturnFocus = source
 		a.settingsFocusBack = true
+		if source != settingsSourceProfile {
+			a.settingsContactID = a.selectedContact().ID
+		}
 	}
 	a.settingsOpen = true
 	a.settingsTab = tab
