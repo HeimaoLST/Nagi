@@ -32,6 +32,8 @@ REQUIRED_GROUPS = {
             "TestPiAppPreviousAndSourceChat",
             "TestPiAppConcurrentActivities",
             "TestPiAppSettingsBackupRestore",
+            "TestPiAppRestoresExistingV10Copy",
+            "TestPiAppProductScopedDelegation",
             "TestPiAppScopedDomainTools",
             "TestPiAppActivitiesAndQuestions",
             "TestPiAppCrashRecoveryNoReplay",
