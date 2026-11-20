@@ -126,9 +126,11 @@ func (a *appModel) productConversationsView(c *ui.Context, t *ui.Theme, browser 
 			a.productReadOnlyTranscript(c, t, browser, name)
 			return
 		}
+		listTheme := *t
+		listTheme.Focus = t.Accent
 		ui.Scroll(c).Grow(1).FillWidth().TrackScroll(&browser.listScroll).Children(func() {
 			ui.Row(c).FillWidth().Justify(ui.Center).Children(func() {
-				ui.Column(c).FillWidth().MaxWidth(conversationMaxWidth).Padding(8, 16).AlignItems(ui.Start).Gap(4).Children(func() {
+				ui.Themed(c, &listTheme).Background(ui.Transparent).FillWidth().MaxWidth(conversationMaxWidth).Padding(8, 16).AlignItems(ui.Start).Gap(4).Children(func() {
 					if len(browser.items) == 0 && browser.nextCursor == nil && !browser.reading && browser.problem == "" && a.productProfileReady() {
 						a.activityText(c, t, msgs.NoPreviousChats())
 					}
@@ -143,6 +145,11 @@ func (a *appModel) productConversationsView(c *ui.Context, t *ui.Theme, browser 
 							FillWidth().MinWidth(0).Disabled(browser.reading || !a.productProfileReady())
 						row.OnClick(func() {
 							a.loadProductTranscript(browser, id)
+						})
+						row.DrawOver(func(p *ui.Painter, r ui.Rect) {
+							if row.Focused() {
+								p.FocusRing(ui.Rect{X: r.X + 3, Y: r.Y + 3, W: r.W - 6, H: r.H - 6}, [4]float32{13, 13, 13, 13})
+							}
 						})
 						row.Children(func() {
 							ui.Row(c).FillWidth().MinWidth(0).AlignItems(ui.Center).Gap(12).Children(func() {
