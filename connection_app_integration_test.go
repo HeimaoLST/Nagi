@@ -2,22 +2,9 @@ package main
 
 import (
 	"fmt"
-	"testing"
 
 	"github.com/egoist/mygo/ui"
 )
-
-func openConnectionHarness(t *testing.T) *guiHarness {
-	t.Helper()
-	a, err := newRuntimeApp()
-	if err != nil {
-		t.Fatal(err)
-	}
-	h := &guiHarness{app: a, pump: newUIPump(t, a)}
-	t.Cleanup(func() { h.shutdown(t) })
-	h.pump.do(func() { a.startPiHost() })
-	return h
-}
 
 func clickSettingsAction(tr *ui.Tester, action string) error {
 	for i := 0; i < 12; i++ {
@@ -28,19 +15,4 @@ func clickSettingsAction(tr *ui.Tester, action string) error {
 		tr.Frame()
 	}
 	return fmt.Errorf("connection action %q was not reachable by scrolling", action)
-}
-
-func saveAppConnection(t *testing.T, h *guiHarness, config connectionConfig) {
-	t.Helper()
-	h.pump.do(func() {
-		h.app.openConfiguration()
-		h.app.connectionForm.Draft = newConnectionSettings(&config, "").Draft
-		h.app.saveConnection(config)
-	})
-	h.pump.wait(func() bool { return !h.app.connectionForm.Busy })
-	h.pump.do(func() {
-		if h.app.connectionForm.Error != "" {
-			t.Error("configuration save failed: " + h.app.connectionForm.Error)
-		}
-	})
 }

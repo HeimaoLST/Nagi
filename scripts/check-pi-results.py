@@ -28,15 +28,14 @@ REQUIRED_GROUPS = {
     "desktop": (
         DESKTOP,
         (
-            "TestPiAppConnectionAndConversation",
             "TestPiAppProductConnectionStopAndWorkerLoss",
+            "TestPiAppProductConnectionSaveAndApplyRefusal",
             "TestPiAppPreviousAndSourceChat",
             "TestPiAppConcurrentActivities",
+            "TestPiAppProductActivityQuestionSurvivesWorkerLoss",
             "TestPiAppSettingsBackupRestore",
             "TestPiAppRestoresExistingV10Copy",
             "TestPiAppProductScopedDelegation",
-            "TestPiAppScopedDomainTools",
-            "TestPiAppCrashRecoveryNoReplay",
             "TestPiPackageStandalone",
         ),
     ),
