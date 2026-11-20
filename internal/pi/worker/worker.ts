@@ -1,11 +1,12 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdir, realpath, stat } from 'node:fs/promises';
+import { mkdir, readFile, realpath, stat } from 'node:fs/promises';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import {
   createAgentSessionFromServices, createAgentSessionRuntime, createAgentSessionServices,
   createReadToolDefinition, createBashToolDefinition, createEditToolDefinition, createWriteToolDefinition,
   createGrepToolDefinition, createFindToolDefinition, createLsToolDefinition,
   ModelRuntime, SessionManager, SettingsManager, createMcpExtension, McpOAuthCredentialStore, InMemoryAuthStorageBackend,
+  parseSessionEntries,
   type AgentSessionEvent, type AgentSessionRuntime, type ToolDefinition, type McpServerEntry, type McpTransportFactory,
 } from '@earendil-works/pi-coding-agent';
 import { InMemoryCredentialStore, type AssistantMessage } from '@earendil-works/pi-ai';
@@ -56,6 +57,7 @@ class Worker {
     this.knownBuiltinTools = new Set(this.builtinCatalog.supported.map(tool => tool.name));
     if (productPaths) this.product = new Product(productPaths, {
       open: (params, tools) => this.openProductSession(params, tools),
+      conversationPreview: (sessionRef, contextId, botId) => this.conversationPreview(sessionRef, contextId, botId),
       test: configuration => this.testProductConnection(configuration),
       drain: () => this.drainProduct(),
       disconnect: () => { void this.disconnect(true); },
@@ -339,6 +341,46 @@ class Worker {
     context.observationSeq++;
     if (run.product) run.product.observers.settled(status, text, error?.message);
     else this.event(context, run, 'run.settled', { status, text, ...(error ? { error } : {}), ...(last?.usage ? { usage: { ...last.usage, cost: undefined, scope: 'final_assistant', pricingKnown: false } } : {}) });
+  }
+  private async conversationPreview(sessionRef: string, contextId: string, botId: string) {
+    const path = resolve(sessionRef);
+    if (dirname(path) !== join(this.stateDir, 'sessions')) return {};
+    const entries = await this.readConversationEntries(path);
+    if (entries[0]?.type !== 'session') return {};
+    const owner = entries.find(entry => entry?.type === 'custom' && entry.customType === BINDING_TYPE);
+    if (owner?.type !== 'custom') return {};
+    const binding = owner.data as Partial<Binding> | undefined;
+    if (binding?.contextId !== contextId || binding.botId !== botId || binding.purpose !== 'conversation') return {};
+    const turn = entries.find(entry => entry?.type === 'custom' && entry.customType === TURN_TYPE);
+    if (turn?.type !== 'custom') return {};
+    const text = (turn.data as { text?: unknown } | undefined)?.text;
+    if (typeof text !== 'string') return {};
+    let preview = '';
+    let bytes = 0;
+    let space = false;
+    for (const char of text) {
+      if (/\s/u.test(char)) {
+        space = bytes > 0;
+        continue;
+      }
+      bytes += Buffer.byteLength(char) + Number(space);
+      if (bytes > 256) break;
+      if (space) preview += ' ';
+      preview += char;
+      space = false;
+    }
+    if (!preview) return {};
+    const time = typeof turn.timestamp === 'string' ? Date.parse(turn.timestamp) : NaN;
+    const timestamp = Number.isFinite(time) ? new Date(time).toISOString() : undefined;
+    return timestamp && /^\d{4}-/.test(timestamp) ? { preview, timestamp } : { preview };
+  }
+  private async readConversationEntries(path: string) {
+    try {
+      if (await realpath(path) !== path || !(await stat(path)).isFile()) return [];
+      return parseSessionEntries(await readFile(path, 'utf8'));
+    } catch {
+      return [];
+    }
   }
   private async openProductSession(params: OpenParams, tools: ToolDefinition[]): Promise<ProductSession> {
     const context = await this.open(params, tools);

@@ -397,6 +397,15 @@
   "hideAction": "Hide",
   "hideDetailsAction": "Hide details",
   "previousChats": "Previous chats",
+  "previousChatFallback": "Previous chat {number, number}",
+  "@previousChatFallback": {
+    "description": "List label for a previous conversation without a recorded opening message preview.",
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  },
   "sourceChat": "Source chat",
   "readOnlyChat": "Read-only chat",
   "noPreviousChats": "No previous chats",

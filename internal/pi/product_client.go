@@ -146,6 +146,8 @@ type ProductConversationSummary struct {
 	BotID          string `json:"botId"`
 	Mode           string `json:"mode"`
 	Revision       uint64 `json:"revision"`
+	Preview        string `json:"preview,omitempty"`
+	Timestamp      string `json:"timestamp,omitempty"`
 }
 
 type ProductConversation struct {

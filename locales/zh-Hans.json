@@ -127,6 +127,7 @@
   "hideAction": "隐藏",
   "hideDetailsAction": "隐藏详情",
   "previousChats": "以往对话",
+  "previousChatFallback": "以往对话 {number, number}",
   "sourceChat": "来源对话",
   "readOnlyChat": "只读对话",
   "noPreviousChats": "没有以往对话",
