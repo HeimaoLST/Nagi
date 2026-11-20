@@ -45,18 +45,14 @@ func TestContactRailHideAndReopenRestoresFocus(t *testing.T) {
 }
 
 func TestPiLateSettlementDoesNotReplaceNewConversationRun(t *testing.T) {
-	a, ct, first := piRunStartedTestApp(t)
-	ct.pendingSend = &pendingSend{Draft: "first", State: "submitting"}
-	a.applyPiEvent(a.connectionGeneration, first)
-	first.Name, first.Data = pi.RunSettled, []byte(`{"status":"completed","text":"first result"}`)
-	a.applyPiEvent(a.connectionGeneration, first)
-	second := first
-	second.Name, second.RunID, second.Data = pi.RunStarted, "second-run", nil
-	ct.ActiveTaskID, ct.SendState = second.RunID, sendSubmitting
-	ct.pendingSend = &pendingSend{Draft: "second", State: "submitting"}
-	a.applyPiEvent(a.connectionGeneration, second)
-	a.applyPiEvent(a.connectionGeneration, first)
-	if ct.ActiveTaskID != second.RunID || ct.SendState != sendAccepted || len(ct.Messages) != 3 || ct.Messages[1].Text != "first result" || ct.Messages[2].Text != "second" {
+	a, ct, _ := piRunStartedTestApp(t)
+	ct.Messages = []*message{{Key: "saved-result", Kind: msgContact, Text: "first result", History: true}}
+	first := pi.ProductExecutionEvent{ConversationID: ct.SessionID, ExecutionID: ct.ActiveTaskID, State: "completed"}
+	ct.ActiveTaskID, ct.SendState, ct.SubmittedDraft = "second-run", sendSubmitting, "second"
+	second := pi.ProductExecutionEvent{ConversationID: ct.SessionID, ExecutionID: ct.ActiveTaskID}
+	applyTestProductEvent(t, a, "execution.started", second)
+	applyTestProductEvent(t, a, "execution.settled", first)
+	if ct.ActiveTaskID != second.ExecutionID || ct.SendState != sendAccepted || len(ct.Messages) != 2 || ct.Messages[0].Text != "first result" || ct.Messages[1].Text != "second" {
 		t.Fatalf("late settlement changed the newer run or transcript: %+v", ct.Messages)
 	}
 }
@@ -83,24 +79,6 @@ func TestSettingsPageEscapeDoesNotLeavePageAndBackReturnsToChat(t *testing.T) {
 	tr.Frame()
 	if a.settingsOpen || !tr.Focused("Settings") || !tr.HasText("Composer for "+ct.Name) {
 		t.Fatal("Back did not return to chat with Settings focused")
-	}
-}
-
-func TestSingleExecutionSlotBlocksOtherContact(t *testing.T) {
-	a, ct := workspaceTestApp(t)
-	ct.ActiveTaskID = "t1"
-	ct.Loaded = true
-	other := &contact{ID: "mio", Name: "Mio", Role: "Assistant", SessionID: "s2", Loaded: true}
-	a.contacts = append(a.contacts, other)
-	a.selected = 1
-	a.pi = &piAppHost{client: &pi.Client{}}
-	a.runtimeStatus = runtimeStateReady
-	reason := a.canSend(other)
-	if reason != blockAnotherContact {
-		t.Fatalf("second contact reason = %q", reason)
-	}
-	if other.Draft != "" || ct.ActiveTaskID != "t1" {
-		t.Fatal("busy guard changed drafts or active task")
 	}
 }
 
@@ -149,13 +127,12 @@ func TestRunningChatSurvivesContactAndSettingsSwitch(t *testing.T) {
 }
 
 func TestFailedWorkAddsAttentionButNotUnread(t *testing.T) {
-	a, ct, event := piRunStartedTestApp(t)
+	a, ct, _ := piRunStartedTestApp(t)
 	a.contacts = append(a.contacts, &contact{ID: "mio", Name: "Mio", Role: "Assistant"})
 	a.selected = 1
-	ct.pendingSend = &pendingSend{Draft: "first", State: "submitting"}
-	a.applyPiEvent(a.connectionGeneration, event)
-	event.Name, event.Data = pi.RunSettled, []byte(`{"status":"failed","error":{"message":"tool failed"}}`)
-	a.applyPiEvent(a.connectionGeneration, event)
+	applyTestProductEvent(t, a, "execution.settled", pi.ProductExecutionEvent{
+		ConversationID: ct.SessionID, ExecutionID: ct.ActiveTaskID, State: "failed", Error: "tool failed",
+	})
 	if ct.Status != statusAttention || ct.Unread != 0 || ct.ActiveTaskID != "" || ct.SendState != sendIdle {
 		t.Fatalf("failed Pi run state=%v unread=%d active=%q send=%v", ct.Status, ct.Unread, ct.ActiveTaskID, ct.SendState)
 	}

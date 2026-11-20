@@ -86,12 +86,6 @@ func newRuntimeApp() (*appModel, error) {
 	if a.issueToolScopes == nil {
 		a.issueToolScopes = map[string]IssueToolScope{}
 	}
-	if a.issueToolWaiters == nil {
-		a.issueToolWaiters = map[string]chan IssueToolReceipt{}
-	}
-	if a.issueToolShutdown == nil {
-		a.issueToolShutdown = make(chan struct{})
-	}
 	formConfig := startup.Config
 	if formConfig == nil {
 		formConfig = startup.FormConfig
@@ -370,9 +364,6 @@ func (a *appModel) beginShutdown() {
 		return
 	}
 	a.shutdownStarted = true
-	if a.issueToolShutdown != nil {
-		close(a.issueToolShutdown)
-	}
 	a.persist()
 	if a.connectionTestCancel != nil {
 		a.connectionTestCancel()
@@ -416,13 +407,6 @@ func (a *appModel) maxActiveTasks() int {
 	return 1
 }
 
-func (a *appModel) workTaskLimit() int {
-	if max := a.maxActiveTasks(); max > 1 {
-		return max - 1
-	}
-	return 1
-}
-
 func sessionBusy(send sendState, activeTaskID string) bool {
 	return activeTaskID != "" || send != sendIdle
 }
@@ -444,77 +428,14 @@ func (a *appModel) activeTaskCount() int {
 	return count
 }
 
-func (a *appModel) activeWorkTaskCount() int {
-	count := 0
-	for _, ct := range a.contacts {
-		for _, issue := range ct.Issues {
-			if sessionBusy(issue.Work.SendState, issue.Work.ActiveTaskID) {
-				count++
-			}
-		}
-	}
-	return count
-}
-
 func (a *appModel) canReloadPiConversation(ct *contact) bool {
-	if a.productHost() != nil {
-		return a.productProfileReady() && ct != nil && a.contactByID(ct.ID) == ct && ct.SessionID != ""
-	}
-	if a.demo || !a.runtimeAvailableForView() || ct == nil || a.contactByID(ct.ID) != ct || ct.PiBinding == nil {
-		return false
-	}
-	binding := ct.PiBinding
-	return binding.Engine == "pi" && binding.Context.BotID == ct.ID && binding.Context.Purpose == pi.Conversation &&
-		binding.Context.ContextID != "" && binding.Context.SessionRef != "" && binding.Context.SessionRef == ct.SessionID
+	return a.productProfileReady() && ct != nil && a.contactByID(ct.ID) == ct && ct.SessionID != ""
 }
 
 func (a *appModel) reloadContactByID(contactID string) {
 	if host := a.productHost(); host != nil {
 		a.reloadProductConversation(host, a.contactByID(contactID))
-		return
 	}
-	ct := a.contactByID(contactID)
-	if !a.canReloadPiConversation(ct) {
-		return
-	}
-	ct.historyGen++
-	historyGen := ct.historyGen
-	host, generation, bindingOwner := a.pi, a.connectionGeneration, ct.PiBinding
-	binding := *clonePiConversationBinding(bindingOwner)
-	a.historyAsyncStarted()
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		projection, err := host.loadPiHistory(ctx, binding)
-		cancel()
-		a.updateUI(func() {
-			defer a.historyAsyncFinished()
-			if a.pi != host || a.connectionGeneration != generation || a.contactByID(contactID) != ct ||
-				ct.historyGen != historyGen || !a.canReloadPiConversation(ct) || ct.PiBinding != bindingOwner {
-				return
-			}
-			current := ct.PiBinding
-			if current.Context != binding.Context || current.Configuration != binding.Configuration ||
-				current.Selection.CWD != binding.Selection.CWD || current.Selection.Instructions != binding.Selection.Instructions ||
-				(current.Selection.CodingTools == nil) != (binding.Selection.CodingTools == nil) ||
-				len(current.Selection.CodingTools) != len(binding.Selection.CodingTools) {
-				return
-			}
-			for i, tool := range binding.Selection.CodingTools {
-				if current.Selection.CodingTools[i] != tool {
-					return
-				}
-			}
-			if err != nil {
-				ct.LoadErr = a.connectionSafeMessage(err)
-				ct.Unavailable = ct.LoadErr
-				ct.Loaded = false
-				return
-			}
-			ct.Messages, ct.History = projection.messages, projection.entries
-			ct.Loaded, ct.LoadErr, ct.Unavailable = true, "", ""
-			ct.setStatusDetail(projection.detail, "")
-		})
-	}()
 }
 
 type historyProjection struct {
@@ -562,23 +483,7 @@ const (
 )
 
 func (a *appModel) runtimeAvailableForView() bool {
-	if a.demo {
-		return true
-	}
-	if a.productHost() != nil {
-		return a.productProfileReady() && !a.connectionApplying && a.connectionEffective != nil
-	}
-	host := a.pi
-	if a.shutdownStarted || a.connectionApplying || host == nil || host.client == nil ||
-		a.runtimeStatus != runtimeStateReady || host.generation != a.connectionGeneration {
-		return false
-	}
-	select {
-	case <-host.client.Done():
-		return false
-	default:
-		return true
-	}
+	return a.demo || a.productProfileReady() && !a.connectionApplying && a.connectionEffective != nil
 }
 
 func (a *appModel) connectionViewState() connectionViewState {
@@ -729,53 +634,6 @@ func (a *appModel) canSend(ct *contact) string {
 	return ""
 }
 
-func (a *appModel) canStartIssue(ct *contact, issue *productIssue) string {
-	if ct == nil || issue == nil || a.contactByID(ct.ID) != ct || ct.issueByID(issue.ID) != issue {
-		return "The issue owner is no longer available."
-	}
-	if a.shutdownStarted {
-		return blockShutdown
-	}
-	if ct.Archived {
-		return blockArchivedIssue
-	}
-	if a.demo {
-		return ""
-	}
-	if a.connectionApplying {
-		return blockApplying
-	}
-	if !a.runtimeAvailableForView() {
-		return blockRuntimeNotReady
-	}
-	if sessionBusy(issue.Work.SendState, issue.Work.ActiveTaskID) {
-		return blockIssueActive
-	}
-	if a.activeTaskCount() >= a.maxActiveTasks() {
-		return blockCapacity
-	}
-	if a.activeWorkTaskCount() >= a.workTaskLimit() {
-		return blockWorkCapacity
-	}
-	return ""
-}
-
-func (a *appModel) startIssueTask(ct *contact, issue *productIssue, execution *issueExecution, prompt string) bool {
-	if a.shutdownStarted {
-		issue.Work.setSendError("The app is shutting down.", "shutdown", "")
-		return false
-	}
-	if a.demo {
-		issue.Work.setSendError("Runtime is not ready.", "runtime-not-ready", "")
-		return false
-	}
-	return a.startPiIssueTask(ct, issue, execution, prompt)
-}
-
-// submissionAsyncStarted/Finished keep the submission owner visible to the
-// shutdown drain until the final accepted/rejected/unknown callback has run.
-// Both submit paths start after their admission state is saved and finish only
-// inside their final UI callback, including early-return paths.
 func (a *appModel) submissionAsyncStarted() {
 	a.submissionInFlight++
 }
@@ -799,42 +657,7 @@ func (a *appModel) cancelSelected() {
 func (a *appModel) cancelRuntimeTask(ct *contact, taskID string) {
 	if host := a.productHost(); host != nil {
 		a.stopProductConversation(host, ct, taskID)
-		return
 	}
-	if a.pi == nil || ct == nil || a.contactByID(ct.ID) != ct || ct.PiBinding == nil || taskID == "" || ct.ActiveTaskID != taskID {
-		return
-	}
-	if a.shutdownStarted {
-		if ct.shutdownCancelTaskID == taskID {
-			return
-		}
-		ct.shutdownCancelTaskID = taskID
-	}
-	host, contactID, contextID := a.pi, ct.ID, ct.PiBinding.Context.ContextID
-	generation := a.connectionGeneration
-	ct.setSendError("Cancellation requested", "send-cancelled", "")
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		_, err := host.client.CancelRun(ctx, pi.CancelRunParams{ContextID: contextID, RunID: taskID})
-		cancel()
-		a.updateUI(func() {
-			ct := a.contactByID(contactID)
-			if a.pi == host && a.connectionGeneration == generation && ct != nil && ct.PiBinding != nil && ct.PiBinding.Context.ContextID == contextID && ct.ActiveTaskID == taskID && err != nil {
-				ct.setSendError(a.connectionSafeMessage(err), "", "")
-			}
-		})
-	}()
-}
-
-func (a *appModel) cancelIssue(issueID string) bool {
-	return a.cancelIssueFor(a.selectedContact(), issueID)
-}
-
-func (a *appModel) cancelIssueFor(ct *contact, issueID string) bool {
-	if a.pi == nil || ct == nil {
-		return false
-	}
-	return a.cancelPiIssue(ct, ct.issueByID(issueID))
 }
 
 func (a *appModel) reloadSelected() {
@@ -889,15 +712,42 @@ func (a *appModel) addRuntimeContact() {
 	a.persist()
 }
 
-func profileSystemPrompt(ct *contact) string {
-	var parts []string
-	if strings.TrimSpace(ct.Purpose) != "" {
-		parts = append(parts, "Purpose: "+strings.TrimSpace(ct.Purpose))
+func (a *appModel) normalizeRestoredSupplementBatches() {
+	changed := false
+	for _, ct := range a.contacts {
+		for _, issue := range ct.Issues {
+			ledger := issue.Supplements
+			if ledger == nil {
+				continue
+			}
+			for _, batch := range ledger.Batches {
+				if batch == nil {
+					continue
+				}
+				switch batch.State {
+				case supplementBatchDispatching, supplementBatchUnknown:
+					if ledger.AutoContinue {
+						ledger.AutoContinue = false
+						changed = true
+					}
+					if batch.ExecutionID == "" && batch.State == supplementBatchDispatching {
+						batch.State = supplementBatchUnknown
+						for _, snapshot := range batch.Snapshot {
+							if item := ledger.itemByID(snapshot.ID); item != nil && item.State == supplementStateDispatching {
+								item.State = supplementStateUnknown
+							}
+						}
+						changed = true
+					}
+				}
+			}
+		}
 	}
-	if strings.TrimSpace(ct.Instructions) != "" {
-		parts = append(parts, "Instructions: "+ct.Instructions)
+	if changed {
+		if err := a.persist(); err != nil {
+			a.setIssueActionNotice("Could not save restored supplement integrity state: "+err.Error(), "supplement-restore-failed", err.Error())
+		}
 	}
-	return strings.Join(parts, "\n")
 }
 
 func (a *appModel) effectiveContactWorkspace(ct *contact) string {

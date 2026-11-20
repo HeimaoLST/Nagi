@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"errors"
 	"os"
@@ -129,8 +128,9 @@ func recoveryWriteState(t *testing.T, path string, state storedState) []byte {
 
 func recoveryProducedState(t *testing.T) storedState {
 	t.Helper()
-	a, _ := newIssueToolTestApp(t)
-	if _, err := a.createIssueFor(a.selectedContact(), "Keep 原文 and IDs", "A real saved requirement"); err != nil {
+	a, ct := taskContextApp(t)
+	ct.SessionID, ct.PiBinding = "", nil
+	if _, err := a.createIssueFor(ct, "Keep 原文 and IDs", "A real saved requirement"); err != nil {
 		t.Fatal(err)
 	}
 	var state storedState
@@ -141,7 +141,7 @@ func recoveryProducedState(t *testing.T) storedState {
 }
 
 func TestStoreRecoveryAcceptsOrdinaryProducerCopies(t *testing.T) {
-	for _, producer := range []string{"local", "configured", "mcp-first-issue"} {
+	for _, producer := range []string{"local", "configured"} {
 		t.Run(producer, func(t *testing.T) {
 			root := t.TempDir()
 			isolateConnectionApp(t, root, filepath.Join(root, "never-launched"))
@@ -162,26 +162,12 @@ func TestStoreRecoveryAcceptsOrdinaryProducerCopies(t *testing.T) {
 					t.Fatal(a.localSaveErr)
 				}
 			}
-			if producer == "mcp-first-issue" {
-				scope, err := a.issueToolNewScope(ct.ID, "saved-conversation", "saved-turn")
-				if err != nil {
-					t.Fatal(err)
-				}
-				activateIssueToolTestScope(t, a, scope)
-				response, err := a.handleIssueToolForward(context.Background(), issueToolForwardRequest{
-					Tool: "issue_action", Arguments: issueToolActionArgs(t, *scope, issueToolActionCreate, map[string]any{"goal": "MCP first issue 原文"}),
-				})
-				if err != nil || response.IsError || len(ct.Issues) != 1 || ct.SelectedIssueID != "" {
-					t.Fatalf("ordinary MCP producer did not retain its optional selection: response=%+v err=%v", response, err)
-				}
-				ct.ActiveTaskID, ct.SendState = "", sendIdle
-			}
 			original := recoverySavedBytes(t, guiStorePath())
 			copy, err := inspectStoreRecoveryCopy(guiStorePath())
 			if err != nil || copy.Contacts != 1 || copy.Issues != len(ct.Issues) {
 				t.Fatalf("ordinary %s copy rejected: %+v %v", producer, copy, err)
 			}
-			if producer != "mcp-first-issue" && !bytes.Contains(original, []byte(`"issue_tool_operations": {}`)) {
+			if !bytes.Contains(original, []byte(`"issue_tool_operations": {}`)) {
 				t.Fatal("test did not exercise an actual emitted empty operation ledger")
 			}
 			editor := newContactProfileEditor(contactProfileDraft(ct))

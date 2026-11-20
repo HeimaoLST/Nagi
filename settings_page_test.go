@@ -773,33 +773,6 @@ func TestSettingsContactPickerDisambiguatesSameLastIDDigitsAndSavesB(t *testing.
 	}
 }
 
-func TestSettingsConnectionApplyAvailabilityFollowsCurrentWork(t *testing.T) {
-	a, ct, _ := testRuntimeModel(t)
-	config := connectionConfig{API: connectionAPIChatCompletions, Endpoint: "http://example.test/v1", APIKey: "fixture", Model: "fixture", ContextTokens: 1000, OutputTokens: 100, WorkingDirectory: t.TempDir(), MaxActiveTasks: 2}
-	a.connectionForm = newConnectionSettings(&config, config.WorkingDirectory)
-	a.connectionSaved = &config
-	a.connectionEffective = &config
-	a.pi = presentationPiHost(a)
-	a.runtimeStatus = runtimeStateReady
-	ct.ActiveTaskID = "active-task"
-	ct.SendState = sendAccepted
-	a.openSettingsTab(settingsTabConnection, settingsSourceRail)
-	tr := ui.NewTester(a.view, 1040, 720)
-	tr.Frame()
-	if a.connectionForm.ReloadBlocked == "" || !tr.HasText("Wait for all chat and task work to finish before applying a new connection.") {
-		t.Fatalf("active work did not block Apply: %q / %v", a.connectionForm.ReloadBlocked, tr.Texts())
-	}
-	ct.ActiveTaskID = ""
-	ct.SendState = sendIdle
-	tr.Frame()
-	if a.connectionForm.ReloadBlocked != "" {
-		t.Fatalf("Apply did not recover after work completed: %q", a.connectionForm.ReloadBlocked)
-	}
-	if tr.HasText("Wait for all chat and task work to finish before applying a new connection.") {
-		t.Fatal("stale Apply block remained after work completed")
-	}
-}
-
 func TestSettingsPageReturnKeepsChatScroll(t *testing.T) {
 	a, ct := workspaceTestApp(t)
 	directory := t.TempDir()

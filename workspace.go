@@ -492,20 +492,6 @@ func issueHasUnconfirmedRun(issue *productIssue) bool {
 	return false
 }
 
-func (a *appModel) cancelWorkTask(ct *contact, taskID string) {
-	if issue, _ := ct.issueForTask(taskID); issue != nil {
-		if issue.Work.ActiveTaskID == taskID {
-			a.cancelIssueFor(ct, issue.ID)
-		}
-		return
-	}
-	if a.demo {
-		a.cancelSelected()
-		return
-	}
-	a.cancelRuntimeTask(ct, taskID)
-}
-
 type productActivityIntent struct {
 	OperationID string               `json:"operation_id"`
 	BotID       string               `json:"bot_id"`

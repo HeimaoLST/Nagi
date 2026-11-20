@@ -14,7 +14,6 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	"github.com/HeimaoLST/Nagi/internal/pi"
 	"github.com/HeimaoLST/Nagi/locales"
 )
 
@@ -76,127 +75,6 @@ func TestTaskContextStoreRoundTripAndOwnedLists(t *testing.T) {
 	reloadedIssue := reloaded.contacts[0].issueByID("i1")
 	if reloadedIssue == nil || len(reloadedIssue.Context.snapshot()) != 1 || reloadedIssue.Executions[0].Context[0].Text != "issue text" {
 		t.Fatalf("reloaded issue = %+v", reloadedIssue)
-	}
-}
-
-func TestTaskContextAcceptedSendClearsOnlyExactSubmittedVersions(t *testing.T) {
-	a, ct, event := piRunStartedTestApp(t)
-	first, err := ct.Context.AddSnippet("First", "old first")
-	if err != nil {
-		t.Fatal(err)
-	}
-	second, err := ct.Context.AddSnippet("Second", "remove me")
-	if err != nil {
-		t.Fatal(err)
-	}
-	submitted := ct.Context.snapshot()
-	if _, err := ct.Context.Edit(first.ID, first.Name, "newer first"); err != nil {
-		t.Fatal(err)
-	}
-	ct.Draft = "prompt"
-	ct.SubmittedDraft, ct.SubmittedRev = "prompt", ct.draftRev
-	ct.pendingSend = &pendingSend{Draft: "prompt", Context: submitted, State: "submitting"}
-	a.applyPiEvent(a.connectionGeneration, event)
-
-	left := ct.Context.snapshot()
-	if len(left) != 1 || left[0].ID != first.ID || left[0].Text != "newer first" || left[0].Revision != 2 {
-		t.Fatalf("accepted clear changed newer context: %+v", left)
-	}
-	if _, ok := ct.Context.itemByID(second.ID); ok {
-		t.Fatal("exact submitted sibling was not removed")
-	}
-	if len(ct.Messages) != 1 || len(ct.Messages[0].Context) != 2 || ct.Messages[0].Context[0].Text != "old first" {
-		t.Fatalf("live message context = %+v", ct.Messages)
-	}
-	if ct.Messages[0].Context[0] != submitted[0] || ct.Messages[0].Context[1] != submitted[1] {
-		t.Fatalf("message did not retain the exact submitted values: %+v", ct.Messages[0].Context)
-	}
-	if ct.pendingSend == nil || ct.pendingSend.State != "unknown" || ct.pendingSend.Draft != "prompt" {
-		t.Fatalf("admitted send lost unsettled intent: %+v", ct.pendingSend)
-	}
-	saved := a.store.state.Contacts[0].PendingSend
-	if saved == nil || saved.State != "unknown" || len(saved.Context) != 2 || saved.Context[0] != submitted[0] || saved.Context[1] != submitted[1] {
-		t.Fatalf("saved intent lost admitted materials before settlement: %+v", saved)
-	}
-}
-
-func TestTaskContextAcceptedSaveFailureKeepsNextDraftVisible(t *testing.T) {
-	a, ct, event := piRunStartedTestApp(t)
-	item, err := ct.Context.AddSnippet("Keep", "keep after acceptance")
-	if err != nil {
-		t.Fatal(err)
-	}
-	ct.Draft, ct.SubmittedDraft = "next draft", "prompt"
-	ct.SubmittedRev = ct.draftRev
-	ct.draftRev++
-	ct.pendingSend = &pendingSend{Draft: "prompt", Context: ct.Context.snapshot(), State: "submitting"}
-	a.store.path = t.TempDir()
-	a.applyPiEvent(a.connectionGeneration, event)
-	if got := ct.Context.snapshot(); len(got) != 1 || got[0] != item {
-		t.Fatalf("admitted+savefailure cleared user data: %+v", got)
-	}
-	if ct.Draft != "next draft" {
-		t.Fatalf("admitted+savefailure changed the later draft: %q", ct.Draft)
-	}
-	if !strings.Contains(ct.SendError, "admitted") || ct.SendErrorKind != "send-uncertain" {
-		t.Fatalf("admitted save failure was not explicit: %q / %q", ct.SendError, ct.SendErrorKind)
-	}
-	if ct.SendState != sendUnknown || ct.ActiveTaskID != event.RunID || ct.LastTaskID != event.RunID {
-		t.Fatalf("save failure lost the known run: state=%v active=%q last=%q", ct.SendState, ct.ActiveTaskID, ct.LastTaskID)
-	}
-	if ct.pendingSend == nil || ct.pendingSend.State != "unknown" || len(ct.pendingSend.Context) != 1 || ct.pendingSend.Context[0] != item {
-		t.Fatalf("save failure lost unsettled materials: %+v", ct.pendingSend)
-	}
-	if len(ct.Messages) != 1 || ct.Messages[0].Text != "prompt" || ct.Messages[0].TaskID != event.RunID || len(ct.Messages[0].Context) != 1 || ct.Messages[0].Context[0] != item {
-		t.Fatalf("save failure lost admitted message context: %+v", ct.Messages)
-	}
-}
-
-func TestTaskContextRejectedSendKeepsMaterials(t *testing.T) {
-	a, ct, event := piRunStartedTestApp(t)
-	item, err := ct.Context.AddSnippet("Keep", "rejected context")
-	if err != nil {
-		t.Fatal(err)
-	}
-	ct.Draft = "rejected"
-	ct.SubmittedDraft = ct.Draft
-	ct.pendingSend = &pendingSend{Draft: ct.Draft, Context: ct.Context.snapshot(), State: "submitting"}
-	a.failPiSubmission(a.pi, ct.ID, event.RunID,
-		&pi.CommandError{Method: "run.start", Delivery: pi.Rejected, Err: &pi.RemoteError{Code: "capacity", Message: "full"}}, false)
-	items := ct.Context.snapshot()
-	if len(items) != 1 || items[0] != item || ct.pendingSend != nil || ct.Draft != "rejected" {
-		t.Fatalf("rejected send changed materials: context=%+v draft=%q pending=%+v", items, ct.Draft, ct.pendingSend)
-	}
-	if ct.SendState != sendIdle {
-		t.Fatalf("confirmed rejection state = %v", ct.SendState)
-	}
-}
-
-func TestTaskContextUnknownFailurePersistsPendingIntent(t *testing.T) {
-	a, ct, event := piRunStartedTestApp(t)
-	item, err := ct.Context.AddSnippet("Maybe sent", "possibly delivered")
-	if err != nil {
-		t.Fatal(err)
-	}
-	ct.Draft = "uncertain prompt"
-	ct.pendingSend = &pendingSend{Draft: ct.Draft, Context: ct.Context.snapshot(), State: "submitting"}
-	ct.SubmittedDraft = ct.Draft
-	a.failPiSubmission(a.pi, ct.ID, event.RunID,
-		&pi.CommandError{Method: "run.start", Delivery: pi.Unanswered, Err: errors.New("disconnected")}, true)
-	if ct.SendState != sendUnknown || ct.pendingSend == nil || ct.pendingSend.State != "unknown" {
-		t.Fatalf("unknown failure = state %v pending %+v", ct.SendState, ct.pendingSend)
-	}
-	items := ct.Context.snapshot()
-	if len(items) != 1 || items[0] != item || ct.Draft != "uncertain prompt" {
-		t.Fatalf("unknown failure lost materials: context=%+v draft=%q", items, ct.Draft)
-	}
-	store, err := openContactStore(a.store.path, "/tmp")
-	if err != nil {
-		t.Fatal(err)
-	}
-	saved := store.state.Contacts[0].PendingSend
-	if saved == nil || saved.State != "unknown" || saved.Draft != "uncertain prompt" || len(saved.Context) != 1 || saved.Context[0] != item {
-		t.Fatalf("unknown intent or its materials were not persisted: %+v", saved)
 	}
 }
 

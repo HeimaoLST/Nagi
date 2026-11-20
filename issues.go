@@ -639,55 +639,6 @@ func issuesForStoredContact(all []storedIssue, contactID string) []*productIssue
 	return out
 }
 
-// issueRunCaptured validates and dispatches using captured objects only. The
-// automatic continuation path uses this directly so it never depends on, or
-// steals, the UI's selected issue.
-func (a *appModel) issueRunCaptured(ct *contact, issue *productIssue) bool {
-	return a.issueRunCapturedWithOperation(ct, issue, "")
-}
-
-func (a *appModel) issueRunCapturedWithOperation(ct *contact, issue *productIssue, operationID string) bool {
-	if ct == nil || issue == nil {
-		a.setIssueFormNotice("Issue not found for this contact.", "issue-missing", "")
-		return false
-	}
-	if reason := issueLifecycleStartBlocked(issue); reason != "" {
-		a.setIssueFormNotice(issueBlockRaw(reason), reason, "")
-		return false
-	}
-	if reason := issueRunBlocked(issue); reason != "" {
-		a.setIssueFormNotice(issueBlockRaw(reason), reason, "")
-		return false
-	}
-	if reason := a.canStartIssue(ct, issue); reason != "" {
-		a.setIssueFormNotice(issueBlockRaw(reason), reason, "")
-		issue.Work.setSendError(sendBlockRaw(reason), reason, "")
-		return false
-	}
-	if strings.TrimSpace(issuePrompt(issue)) == "" {
-		a.setIssueFormNotice("This issue has no goal to run.", "no-goal", "")
-		return false
-	}
-	return a.startIssueRunWithOperation(ct, issue, operationID)
-}
-
-func issueExecutionStatusFromWork(state workState) string {
-	switch state {
-	case workAccepted:
-		return issueExecutionAccepted
-	case workRunning:
-		return issueExecutionRunning
-	case workCompleted:
-		return issueExecutionCompleted
-	case workFailed:
-		return issueExecutionFailed
-	case workInterrupted:
-		return issueExecutionInterrupted
-	default:
-		return issueExecutionUnknown
-	}
-}
-
 func unresolvedExecution(execution *issueExecution) bool {
 	switch execution.Status {
 	case issueExecutionPending, issueExecutionAccepted, issueExecutionRunning, issueExecutionUnknown:

@@ -1,10 +1,9 @@
 package main
 
 import (
-	"errors"
+	"encoding/json"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -156,7 +155,7 @@ func testRuntimeModel(t *testing.T) (*appModel, *contact, *contact) {
 }
 
 func presentationPiHost(a *appModel) *piAppHost {
-	return &piAppHost{generation: a.connectionGeneration, client: &pi.Client{}}
+	return &piAppHost{generation: a.connectionGeneration}
 }
 
 func TestProfileEditsFutureDefaultsWithoutReplacingCurrentSession(t *testing.T) {
@@ -200,9 +199,6 @@ func TestSettingsUnboundProfileIsUsedBeforeFirstSession(t *testing.T) {
 	if unbound.SessionID != "" {
 		t.Fatal("saving settings must not create a session")
 	}
-	if got := profileSystemPrompt(unbound); !strings.Contains(got, "Purpose: p") || !strings.Contains(got, "Instructions: i") {
-		t.Fatalf("system prompt = %q", got)
-	}
 }
 
 func TestSettingsDuringFirstCreateKeepsSubmittedSnapshot(t *testing.T) {
@@ -220,33 +216,6 @@ func TestSettingsDuringFirstCreateKeepsSubmittedSnapshot(t *testing.T) {
 	}
 	if unbound.SubmittedDraft != "submitted snapshot" || unbound.pendingSend == nil || unbound.pendingSend.Draft != "submitted snapshot" {
 		t.Fatalf("submitted request snapshot changed: %+v", unbound.pendingSend)
-	}
-}
-
-func TestPiSubmissionFailureKeepsDraftForUnknownDelivery(t *testing.T) {
-	a, bound, event := piRunStartedTestApp(t)
-	bound.Draft = "keep"
-	bound.SubmittedDraft = bound.Draft
-	bound.pendingSend = &pendingSend{Draft: bound.Draft, State: "submitting"}
-	a.failPiSubmission(a.pi, bound.ID, event.RunID,
-		&pi.CommandError{Method: "run.start", Delivery: pi.Unanswered, Err: errors.New("bad wire")}, true)
-	if bound.SendState != sendUnknown || bound.Draft != "keep" {
-		t.Fatalf("state=%v draft=%q", bound.SendState, bound.Draft)
-	}
-	if bound.pendingSend == nil || bound.pendingSend.State != "unknown" || bound.pendingSend.Draft != "keep" {
-		t.Fatalf("unconfirmed failure lost pending intent: %+v", bound.pendingSend)
-	}
-	a, bound, event = piRunStartedTestApp(t)
-	bound.Draft = "keep"
-	bound.SubmittedDraft = bound.Draft
-	bound.pendingSend = &pendingSend{Draft: bound.Draft, State: "submitting"}
-	a.failPiSubmission(a.pi, bound.ID, event.RunID,
-		&pi.CommandError{Method: "run.start", Delivery: pi.Rejected, Err: &pi.RemoteError{Code: "busy", Message: "slot occupied"}}, false)
-	if bound.SendState != sendIdle || !strings.Contains(bound.SendError, "busy") {
-		t.Fatalf("state=%v error=%q", bound.SendState, bound.SendError)
-	}
-	if bound.Draft != "keep" || bound.pendingSend != nil {
-		t.Fatalf("confirmed rejection changed draft or retained pending intent: draft=%q pending=%+v", bound.Draft, bound.pendingSend)
 	}
 }
 
@@ -288,26 +257,13 @@ func piRunStartedTestApp(t *testing.T) (*appModel, *contact, pi.Event) {
 	return a, ct, event
 }
 
-func TestPiRunStartedKeepsLaterDraftEdits(t *testing.T) {
-	a, ct, event := piRunStartedTestApp(t)
-	ct.Draft = "edited later"
-	ct.SubmittedDraft = "sent"
-	ct.SubmittedRev = 1
-	ct.draftRev = 2
-	ct.pendingSend = &pendingSend{Draft: "sent", State: "submitting"}
-	a.applyPiEvent(a.connectionGeneration, event)
-	if ct.Draft != "edited later" {
-		t.Fatalf("late admission cleared the later draft: %q", ct.Draft)
+func applyTestProductEvent(t *testing.T, a *appModel, name string, event pi.ProductExecutionEvent) {
+	t.Helper()
+	data, err := json.Marshal(event)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if ct.ActiveTaskID != event.RunID || ct.SendState != sendAccepted || ct.LastTaskID != event.RunID {
-		t.Fatalf("run state = %+v", ct)
-	}
-	if len(ct.Messages) != 1 || ct.Messages[0].Key != "pi:"+event.RunID+":user" || ct.Messages[0].TaskID != event.RunID || ct.Messages[0].Text != "sent" || ct.Messages[0].Kind != msgUser {
-		t.Fatalf("admitted user message not retained: %+v", ct.Messages)
-	}
-	if ct.pendingSend == nil || ct.pendingSend.State != "unknown" || ct.pendingSend.Draft != "sent" {
-		t.Fatalf("admission lost unsettled intent: %+v", ct.pendingSend)
-	}
+	a.applyProductEvent(a.pi, pi.ProductEvent{Name: name, Data: data})
 }
 
 func TestBeginShutdownIsIdempotentWithoutRuntime(t *testing.T) {
@@ -342,15 +298,9 @@ func TestReloadSelectedRequiresLiveRuntime(t *testing.T) {
 
 func TestCanSendRejectsDisconnectedOrDrainingRuntime(t *testing.T) {
 	a, bound, _ := testRuntimeModel(t)
-	a.pi = &piAppHost{client: &pi.Client{}}
+	a.pi = presentationPiHost(a)
 	a.runtimeStatus = runtimeStateDraining
-	if reason := a.canSend(bound); reason == "" {
-		t.Fatal("draining runtime must not accept a send")
-	}
-	a.runtimeStatus = runtimeStateReady
-	bound.SessionID = "s1"
-	bound.Loaded = false
-	if reason := a.canSend(bound); reason != blockHistoryLoading {
-		t.Fatalf("unloaded session reason = %q", reason)
+	if reason := a.canSend(bound); reason != blockRuntimeNotReady {
+		t.Fatalf("draining runtime send guard = %q", reason)
 	}
 }

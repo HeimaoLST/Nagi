@@ -165,10 +165,7 @@ func TestIssueResultPathRetainsTrailingSpaceFilename(t *testing.T) {
 		t.Fatal(err)
 	}
 	file := issueResultFile{ExecutionID: "exec-space", SessionID: "session-space", TaskID: "task-space", MessageID: "receipt-space", CallID: "call-space", ToolName: "write",
-		Path: piResultReceiptPath(root, piResultToolCall{name: "write", path: "report "}, "Successfully wrote to report "), WorkingDirectory: root}
-	if file.Path != path || !strings.HasSuffix(file.Path, " ") {
-		t.Fatalf("reported path = %q, want exact %q", file.Path, path)
-	}
+		Path: path, WorkingDirectory: root}
 	inspection := inspectIssueResultFile(file)
 	if !inspection.Exists || inspection.Preview != "trailing space file\n" {
 		t.Fatalf("inspection = %+v", inspection)

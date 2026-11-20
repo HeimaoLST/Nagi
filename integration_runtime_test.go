@@ -32,7 +32,7 @@ type uiPump struct {
 	done            chan struct{}
 	app             *appModel
 	createdAt       time.Time
-	observedPi      *pi.Client
+	observedPi      *pi.ProductClient
 	processIdentity atomic.Pointer[shutdownProcessIdentity]
 }
 
@@ -56,17 +56,17 @@ func (p *uiPump) run() {
 // Called only by the UI pump, before any shutdown wait. No OS command runs here.
 func (p *uiPump) captureProcessIdentity() {
 	if host := p.app.pi; host != nil {
-		if host.client == nil || host.client == p.observedPi {
+		if host.product == nil || host.product == p.observedPi {
 			return
 		}
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
-		outcome, _ := host.client.Wait(ctx)
+		outcome, _ := host.product.Wait(ctx)
 		node, _, err := piPayloadPaths()
 		if outcome.PID <= 0 || err != nil {
 			return
 		}
-		p.observedPi = host.client
+		p.observedPi = host.product
 		p.processIdentity.Store(&shutdownProcessIdentity{pid: outcome.PID, executable: node, notBefore: p.createdAt, observedAt: time.Now().UTC()})
 		return
 	}
@@ -129,7 +129,7 @@ type guiHarness struct {
 	pump      *uiPump
 	root      string
 	closed    bool
-	piClient  *pi.Client
+	piClient  *pi.ProductClient
 	piProbe   *piConnectionProbe
 	piOutcome pi.ProcessOutcome
 
@@ -206,8 +206,8 @@ func (h *guiHarness) shutdownSnapshot() shutdownDiagnostic {
 	fmt.Fprintf(&b, "gates.connection_save_in_flight=%v connection_applying=%v connection_testing=%v contact_history_in_flight=%d submission_in_flight=%d\n",
 		a.connectionSaveInFlight, a.connectionApplying, a.connectionTesting, a.contactHistoryInFlight, a.submissionInFlight)
 	var clientDone, callbacksDone <-chan struct{}
-	if a.pi != nil && a.pi.client != nil {
-		clientDone, callbacksDone = a.pi.client.Done(), a.pi.client.CallbacksDone()
+	if host := a.productHost(); host != nil {
+		clientDone, callbacksDone = host.product.Done(), host.product.CallbacksDone()
 	}
 	return shutdownDiagnostic{capturedAt: time.Now(), state: b.String(), clientDone: clientDone, callbacksDone: callbacksDone}
 }
@@ -569,8 +569,8 @@ func (h *guiHarness) shutdown(t *testing.T) {
 		}
 	}()
 	h.pump.do(func() {
-		if h.app.pi != nil {
-			h.piClient = h.app.pi.client
+		if host := h.app.productHost(); host != nil {
+			h.piClient = host.product
 		}
 		h.piProbe = h.app.connectionProbe
 		h.app.beginShutdown()
@@ -634,5 +634,21 @@ func TestGUIShutdownAfterManualBeginIsIdempotent(t *testing.T) {
 	}
 	if observations != 0 {
 		t.Fatalf("normal shutdown ran OS observation %d times", observations)
+	}
+}
+
+func TestSubmissionCallbackParticipatesInShutdownDrain(t *testing.T) {
+	a := &appModel{}
+	quit := false
+	a.requestQuit = func() { quit = true }
+	a.submissionAsyncStarted()
+	a.beginShutdown()
+	if a.quitReady || quit {
+		t.Fatal("shutdown completed while a work release callback was in flight")
+	}
+	a.submissionAsyncFinished()
+	a.finishShutdown()
+	if !a.quitReady || !quit {
+		t.Fatal("shutdown did not complete after the final release callback")
 	}
 }

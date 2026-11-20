@@ -522,28 +522,27 @@ func writePreviewPNG(t *testing.T, path string, img image.Image) {
 	}
 }
 
-// TestLiveTaskStatesRenderWithoutWaitingConflict drives the real event
-// application and the view together: accepted-but-not-started, started,
-// streaming, tool activity, and completed must not show contradictory text.
 func TestLiveTaskStatesRenderWithoutWaitingConflict(t *testing.T) {
-	a, ct, event := piRunStartedTestApp(t)
+	a, ct, _ := piRunStartedTestApp(t)
 	a.windowWidth = 1040
-	ct.pendingSend = &pendingSend{Draft: "hello", State: "submitting"}
+	ct.SubmittedDraft = "hello"
+	event := pi.ProductExecutionEvent{ConversationID: ct.SessionID, ExecutionID: ct.ActiveTaskID}
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	a.applyPiEvent(a.connectionGeneration, event)
+	applyTestProductEvent(t, a, "execution.started", event)
 	tr.Frame()
 	if ct.SendState != sendAccepted || !tr.HasText("hello") {
 		t.Fatal("admitted Pi run did not show the submitted message")
 	}
-	event.Name, event.Data = pi.TextDelta, json.RawMessage(`{"text":"Hel"}`)
-	a.applyPiEvent(a.connectionGeneration, event)
+	event.Text = "Hel"
+	applyTestProductEvent(t, a, "execution.textDelta", event)
 	tr.Frame()
-	if !tr.HasText("Hel") || ct.ActiveTaskID != event.RunID {
+	if !tr.HasText("Hel") || ct.ActiveTaskID != event.ExecutionID {
 		t.Fatal("Pi stream did not render while its run remained active")
 	}
-	event.Name, event.Data = pi.RunSettled, json.RawMessage(`{"status":"completed","text":"Hello"}`)
-	a.applyPiEvent(a.connectionGeneration, event)
+	event.State = "completed"
+	applyTestProductEvent(t, a, "execution.settled", event)
+	ct.Messages = []*message{{Key: "saved-user", Kind: msgUser, Text: "hello", History: true}, {Key: "saved-reply", Kind: msgContact, Text: "Hello", History: true}}
 	tr.Frame()
 	if ct.SendState != sendIdle || ct.ActiveTaskID != "" || !tr.HasText("Hello") || len(ct.Messages) != 2 || ct.Messages[1].Streaming {
 		t.Fatalf("settlement left contradictory chat state: %+v", ct.Messages)
@@ -560,13 +559,6 @@ func TestLiveSendUnknownAfterDisconnectSaysRestart(t *testing.T) {
 	}
 	if tr.HasText(locales.In("en").SendUnknownState()) {
 		t.Fatal("disconnected client must not offer an ineffective Reload instruction")
-	}
-
-	a.runtimeStatus = runtimeStateReady
-	a.pi = &piAppHost{client: &pi.Client{}}
-	tr.Frame()
-	if !tr.HasText(locales.In("en").SendUnknownState()) {
-		t.Fatal("a live connection should keep the Reload instruction")
 	}
 
 	cases := []struct {
@@ -643,28 +635,6 @@ func TestLiveSendUnknownAfterDisconnectSaysRestart(t *testing.T) {
 				if recoveryRecordSnapshot(t, ct) != record || a.submissionInFlight != 0 {
 					t.Fatal("disclosure changed the retained receipt or submitted work")
 				}
-				a.runtimeStatus = runtimeStateReady
-				a.runtimeErr, a.runtimeErrKind, a.runtimeStage, a.runtimeHintKind = "", "", "", ""
-				tr = ui.NewTester(a.view, 1040, 1200)
-				tr.SetLocale(locale)
-				tr.SetFocused(true)
-				tr.Frame()
-				if !tr.HasText(msgs.SendUnknownState()) || tr.HasText(msgs.SendDisconnectedState()) {
-					t.Fatal("live unknown state lost usable Reload guidance")
-				}
-				if _, ok := tr.Find(msgs.ReloadAction()); !ok {
-					t.Fatal("live Reload control missing")
-				}
-				for i := 0; i < 70 && !tr.Focused(msgs.ReloadAction()); i++ {
-					tr.Key(0, ui.KeyTab)
-					tr.Frame()
-				}
-				if !tr.Focused(msgs.ReloadAction()) {
-					t.Fatal("live Reload is not keyboard reachable")
-				}
-				if recoveryRecordSnapshot(t, ct) != record || a.contactHistoryInFlight != 0 || a.submissionInFlight != 0 {
-					t.Fatal("live recovery guidance replayed or rewrote the retained state")
-				}
 			})
 		}
 	}
@@ -674,29 +644,21 @@ func disconnectedRecoveryTestApp(t *testing.T, cause string) (*appModel, *contac
 	t.Helper()
 	a, ct := workspaceTestApp(t)
 	a.workspaceOpen = false
-	a.pi = &piAppHost{client: &pi.Client{}}
-	a.runtimeMaxActiveTasks = 2
-	a.runtimeCapabilitiesLoaded = true
-	ct.ActiveTaskID = "chat-task"
-	ct.SendState = sendAccepted
-	ct.Status = statusWorking
+	a.runtimeStatus = runtimeStateExited
+	a.runtimeErrKind = runtimeNoticeConnectionLost
+	applyProductExecution(ct, &pi.ProductExecution{ExecutionID: "chat-task", State: "unknown"})
 	ct.Draft = "retained unsent draft"
 	ct.Messages = []*message{{Kind: msgUser, Text: "original message"}}
 	ct.History = []historyEntry{{ID: "history-original", Text: "original history"}}
 	issue := &productIssue{ID: "recovery-issue", ContactID: ct.ID, Goal: "Retain original goal", Status: issueStatusInProgress, RequirementsRevision: 1}
 	attachIssueToolTestExecution(issue)
-	issue.Executions[0].Status, issue.Executions[0].Prompt = issueExecutionRunning, "original run prompt"
-	issue.Work = issueWorkSession{Loaded: true, ActiveTaskID: issue.Executions[0].PiRun.RunID, SendState: sendAccepted}
+	issue.Executions[0].Status, issue.Executions[0].Prompt = issueExecutionUnknown, "original run prompt"
+	issue.Work = issueWorkSession{Loaded: true, SendState: sendUnknown}
 	ct.Issues = []*productIssue{issue}
-	ct.Works = []*workItem{{TaskID: "chat-task", State: workRunning}, {TaskID: "issue-task", State: workRunning}}
-	a.pi.onExit(a, pi.ProcessOutcome{})
 	if cause == "protocol" {
 		a.runtimeErr = "Pi worker protocol error"
 	}
 	issue.Work.setSendError("Pi disconnected; activity outcome is unknown.", "send-uncertain", "")
-	if ct.SendState != sendUnknown || ct.SendError == "" || issue.Work.SendState != sendUnknown || issue.Executions[0].Status != issueExecutionUnknown {
-		t.Fatal("Pi exit did not preserve unknown delivery")
-	}
 	return a, ct, issue
 }
 
@@ -857,7 +819,6 @@ func TestResponsiveComposerAt960WithLoadedSession(t *testing.T) {
 	}
 
 	a.demo = false
-	a.pi = &piAppHost{client: &pi.Client{}}
 	ct.ActiveTaskID = "responsive-loaded-task"
 	ct.Status = statusWorking
 	tr.Frame()
@@ -922,7 +883,6 @@ func TestComposerKeepsModelScopeAndPrimaryActionAtNarrowCenter(t *testing.T) {
 	a.demo = false
 	a.runtimeStatus = runtimeStateReady
 	a.runtimeCapabilitiesLoaded = true
-	a.pi = &piAppHost{client: &pi.Client{}}
 	ct.ActiveTaskID = "conversation-task"
 	ct.Status = statusWorking
 	tr.Frame()
@@ -978,7 +938,6 @@ func TestPreviewComposerTypography(t *testing.T) {
 			}
 			if sc.active {
 				a.demo = false
-				a.pi = &piAppHost{client: &pi.Client{}}
 				ct.ActiveTaskID = "composer-preview-task"
 				ct.Status = statusWorking
 			}

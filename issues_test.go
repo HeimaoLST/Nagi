@@ -10,6 +10,17 @@ import (
 	"github.com/HeimaoLST/Nagi/internal/pi"
 )
 
+func attachIssueToolTestExecution(issue *productIssue) {
+	root := "/tmp"
+	run := &piActivityRun{WorkerEpoch: "fixture", ContextID: "activity-" + issue.ID, SessionRef: "work-session", RunID: "work-task", Admitted: true}
+	issue.PiBinding = &piActivityBinding{Engine: "pi", Context: pi.ContextBinding{ContextID: run.ContextID, BotID: issue.ContactID, Purpose: pi.Activity, ActivityID: issue.ID, SessionRef: run.SessionRef, SelectionRevision: 1, CWD: root}, Selection: piSelection{CWD: root}, Configuration: piConfiguration{CredentialSource: "fixture"}}
+	issue.WorkSessionID = run.SessionRef
+	issue.Executions = append(issue.Executions, &issueExecution{
+		ID: "execution-test", SessionID: run.SessionRef, TaskID: run.RunID, PiIntent: true, PiRun: run,
+		Status: issueExecutionCompleted, RequirementsRevision: issue.RequirementsRevision,
+	})
+}
+
 func TestIssueStoreRoundTripKeepsPiConversationAndDraft(t *testing.T) {
 	a, ct, _ := piRunStartedTestApp(t)
 	ct.ActiveTaskID, ct.SendState, ct.Draft = "", sendIdle, "preserved draft"
@@ -119,101 +130,6 @@ func TestStoredPendingExecutionIsUnknownAfterRestart(t *testing.T) {
 	}
 }
 
-func TestPiConversationRunStartedClearsSubmittedDraft(t *testing.T) {
-	a, ct, event := piRunStartedTestApp(t)
-	ct.Draft = "sent"
-	ct.SubmittedDraft = "sent"
-	ct.SubmittedRev = ct.draftRev
-	ct.pendingSend = &pendingSend{Draft: "sent", State: "submitting"}
-	a.applyPiEvent(a.connectionGeneration, event)
-	if ct.Draft != "" {
-		t.Fatalf("ordinary admitted send did not clear its draft: %q", ct.Draft)
-	}
-	if ct.SendState != sendAccepted || ct.ActiveTaskID != event.RunID || ct.pendingSend == nil || ct.pendingSend.State != "unknown" {
-		t.Fatalf("admitted send lost its run or unsettled intent: state=%v run=%q pending=%+v", ct.SendState, ct.ActiveTaskID, ct.pendingSend)
-	}
-}
-
-func TestIssueConfirmedRejectIsPersistedAndRerunnable(t *testing.T) {
-	a, ct, _ := piRunStartedTestApp(t)
-	ct.ActiveTaskID, ct.SendState = "", sendIdle
-	issue, err := a.createIssueFor(ct, "work", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	execution := &issueExecution{ID: newIssueExecutionID(), PiIntent: true, Prompt: "work", Status: issueExecutionPending, RequirementsRevision: issue.RequirementsRevision}
-	issue.Executions = append(issue.Executions, execution)
-	ct.SelectedIssueID = issue.ID
-	issue.Work.pendingExecutionID = execution.ID
-	issue.Work.SendState = sendSubmitting
-	path := a.store.path
-	if err := a.persist(); err != nil {
-		t.Fatal(err)
-	}
-	a.failPiActivity(a.pi, ct.ID, issue.ID, execution.ID, &pi.CommandError{
-		Method: "run.start", Delivery: pi.Rejected,
-		Err: &pi.RemoteError{Code: "invalid_request", Message: "not accepted"},
-	}, false)
-	if execution.Status != issueExecutionRejected || issue.Work.SendState != sendIdle || ct.SendState != sendIdle {
-		t.Fatalf("confirmed reject state = %+v / %v / %v", execution, issue.Work.SendState, ct.SendState)
-	}
-	if reason := issueRunBlocked(issue); reason != "" {
-		t.Fatalf("rejected execution blocked an explicit rerun: %q", reason)
-	}
-	loaded, err := openContactStore(path, t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(loaded.state.Issues) != 1 || len(loaded.state.Issues[0].Executions) != 1 {
-		t.Fatalf("persisted issues = %+v", loaded.state.Issues)
-	}
-	if loaded.state.Issues[0].ID != issue.ID || loaded.state.Issues[0].ContactID != ct.ID || loaded.state.Issues[0].Executions[0].ID != execution.ID {
-		t.Fatalf("persisted rejection lost its issue association: %+v", loaded.state.Issues[0])
-	}
-	if got := loaded.state.Issues[0].Executions[0].Status; got != issueExecutionRejected {
-		t.Fatalf("persisted reject status = %q", got)
-	}
-	restored := issuesForStoredContact(loaded.state.Issues, ct.ID)
-	if len(restored) != 1 || restored[0].Executions[0].Status != issueExecutionRejected || issueRunBlocked(restored[0]) != "" {
-		t.Fatalf("restored reject = %+v", restored)
-	}
-}
-
-func TestIssueNotDispatchedIsPersistedAndRerunnable(t *testing.T) {
-	a, ct, _ := piRunStartedTestApp(t)
-	ct.ActiveTaskID, ct.SendState = "", sendIdle
-	issue, err := a.createIssueFor(ct, "work", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	execution := &issueExecution{ID: newIssueExecutionID(), PiIntent: true, Prompt: "work", Status: issueExecutionPending, RequirementsRevision: issue.RequirementsRevision}
-	issue.Executions = append(issue.Executions, execution)
-	ct.SelectedIssueID = issue.ID
-	issue.Work.pendingExecutionID = execution.ID
-	issue.Work.SendState = sendSubmitting
-	path := a.store.path
-	if err := a.persist(); err != nil {
-		t.Fatal(err)
-	}
-	a.failPiActivity(a.pi, ct.ID, issue.ID, execution.ID, &pi.CommandError{
-		Method: "run.start", Delivery: pi.NotSent, Err: os.ErrClosed,
-	}, false)
-	if execution.Status != issueExecutionNotDispatched || issue.Work.SendState != sendIdle || issueRunBlocked(issue) != "" {
-		t.Fatalf("not-dispatched state = %+v", execution)
-	}
-	loaded, err := openContactStore(path, t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	restored := issuesForStoredContact(loaded.state.Issues, ct.ID)
-	if len(restored) != 1 || restored[0].Executions[0].Status != issueExecutionNotDispatched || issueRunBlocked(restored[0]) != "" {
-		t.Fatalf("restored not-dispatched = %+v", restored)
-	}
-	if restored[0].ID != issue.ID || restored[0].ContactID != ct.ID || restored[0].Executions[0].ID != execution.ID {
-		t.Fatalf("persisted non-dispatch lost its issue association: %+v", restored[0])
-	}
-}
-
 func TestRestoredNonterminalExecutionWithoutTaskIsUnknown(t *testing.T) {
 	for _, status := range []string{issueExecutionPending, issueExecutionAccepted, issueExecutionRunning} {
 		issues := issuesForStoredContact([]storedIssue{{
@@ -246,23 +162,6 @@ func TestContactActivityObservesIssueWorkTarget(t *testing.T) {
 	ct.Issues = []*productIssue{issue}
 	if active, unknown := a.contactActivity(ct); !active || unknown {
 		t.Fatalf("active issue work was not observed: active=%v unknown=%v", active, unknown)
-	}
-}
-
-func TestPiExitMarksActiveIssueWorkUnknown(t *testing.T) {
-	a, ct, _ := piRunStartedTestApp(t)
-	ct.ActiveTaskID, ct.SendState = "", sendIdle
-	issue := &productIssue{ID: "i1", ContactID: ct.ID, Goal: "work", RequirementsRevision: 1, Status: issueStatusInProgress}
-	attachIssueToolTestExecution(issue)
-	issue.Executions[0].Status = issueExecutionRunning
-	issue.Work.ActiveTaskID, issue.Work.SendState = issue.Executions[0].TaskID, sendAccepted
-	ct.Issues = []*productIssue{issue}
-	a.pi.onExit(a, pi.ProcessOutcome{})
-	if issue.Work.ActiveTaskID != "" || issue.Work.SendState != sendUnknown || issue.Executions[0].Status != issueExecutionUnknown {
-		t.Fatalf("issue work survived exit as active: work=%+v exec=%+v", issue.Work, issue.Executions[0])
-	}
-	if ct.ActiveTaskID != "" || ct.SendState != sendIdle {
-		t.Fatalf("conversation without active task was rewritten: %+v", ct)
 	}
 }
 

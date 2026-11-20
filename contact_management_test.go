@@ -318,14 +318,6 @@ func TestContactManagementSaveUpdatesFutureProfileWithoutReplacingSession(t *tes
 	}
 }
 
-func TestContactManagementInstructionsKeepOriginalWhitespaceInPrompt(t *testing.T) {
-	ct := &contact{Name: "Saki", Instructions: "  Keep indentation\n\tand this line exactly.  "}
-	prompt := profileSystemPrompt(ct)
-	if !strings.Contains(prompt, "Instructions: "+ct.Instructions) {
-		t.Fatalf("profile prompt rewrote instructions: %q", prompt)
-	}
-}
-
 func TestContactManagementSaveAndNewDetachesOnlyCurrentConversation(t *testing.T) {
 	a, bound, _ := piRunStartedTestApp(t)
 	bound.ActiveTaskID, bound.SendState = "", sendIdle

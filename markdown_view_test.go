@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
@@ -54,10 +53,11 @@ func TestAppAssistantMarkdownStreamsFinalAndCopies(t *testing.T) {
 	for _, size := range []struct {
 		width, height int
 	}{{1040, 720}, {720, 640}} {
-		a, ct, event := piRunStartedTestApp(t)
+		a, ct, _ := piRunStartedTestApp(t)
+		execution := ct.ActiveTaskID
 		a.windowWidth = size.width
 		ct.Messages = []*message{{
-			Key: "live:" + event.RunID + ":text:pi", Kind: msgContact, TaskID: event.RunID, ItemID: "pi",
+			Key: "live:" + execution + ":text:pi", Kind: msgContact, TaskID: execution, ItemID: "pi",
 			Text: "# 标题\n\n", Streaming: true,
 		}}
 		tr := ui.NewTester(a.view, size.width, size.height)
@@ -66,11 +66,15 @@ func TestAppAssistantMarkdownStreamsFinalAndCopies(t *testing.T) {
 			t.Fatalf("%dx%d streaming markdown missing: %q", size.width, size.height, tr.Texts())
 		}
 
-		event.Name, event.Data = pi.TextDelta, json.RawMessage(`{"text":"列表：\n\n- 第一项\n- 第二项\n\n"}`)
-		a.applyPiEvent(a.connectionGeneration, event)
-		event.Name = pi.RunSettled
-		event.Data, _ = json.Marshal(pi.RunSettledData{Status: pi.Completed, Text: md})
-		a.applyPiEvent(a.connectionGeneration, event)
+		applyTestProductEvent(t, a, "execution.textDelta", pi.ProductExecutionEvent{
+			ConversationID: ct.SessionID, ExecutionID: execution, Offset: uint64(len("# 标题\n\n")), Text: "列表：\n\n- 第一项\n- 第二项\n\n",
+		})
+		tr.Frame()
+		if !tr.HasText("第一项") {
+			t.Fatal("the Product delta did not extend the rendered Markdown")
+		}
+		applyTestProductEvent(t, a, "execution.settled", pi.ProductExecutionEvent{ConversationID: ct.SessionID, ExecutionID: execution, State: "completed"})
+		ct.Messages = []*message{{Key: "saved-markdown", Kind: msgContact, Text: md, History: true}}
 		tr.Frame()
 		for _, want := range []string{"标题", "第一项", "第二项", "引用", "链接", "fmt.Println", "名称", "中文"} {
 			if !tr.HasText(want) {
@@ -191,7 +195,12 @@ func TestAppChatScrollUpSurvivesStreamAppendAndBackToLatest(t *testing.T) {
 	})
 	ct.ActiveTaskID, ct.SendState = "t1", sendAccepted
 	a.pi = &piAppHost{}
-	event := pi.Event{ContextID: ct.PiBinding.Context.ContextID, RunID: "t1", Name: pi.TextDelta}
+	appendDelta := func(text string) {
+		message := ct.Messages[len(ct.Messages)-1]
+		applyTestProductEvent(t, a, "execution.textDelta", pi.ProductExecutionEvent{
+			ConversationID: ct.SessionID, ExecutionID: "t1", Offset: uint64(len(message.Text)), Text: text,
+		})
+	}
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
 	if !ct.list.AtEnd() {
@@ -265,8 +274,7 @@ func TestAppChatScrollUpSurvivesStreamAppendAndBackToLatest(t *testing.T) {
 
 	firstBeforeAppend, _ := ct.list.Visible()
 
-	event.Data = json.RawMessage(`{"text":" appended"}`)
-	a.applyPiEvent(a.connectionGeneration, event)
+	appendDelta(" appended")
 	tr.Frame()
 	if ct.list.AtEnd() {
 		t.Fatal("appending while scrolled up jumped back to the end")
@@ -287,8 +295,7 @@ func TestAppChatScrollUpSurvivesStreamAppendAndBackToLatest(t *testing.T) {
 	if !tr.Focused(composerLabel) {
 		t.Fatal("composer did not take focus")
 	}
-	event.Data = json.RawMessage(`{"text":" more"}`)
-	a.applyPiEvent(a.connectionGeneration, event)
+	appendDelta(" more")
 	tr.Frame()
 	if !tr.Focused(composerLabel) {
 		t.Fatal("streaming text stole composer focus")
@@ -304,8 +311,7 @@ func TestAppChatScrollUpSurvivesStreamAppendAndBackToLatest(t *testing.T) {
 	if !tr.Focused(composerLabel) {
 		t.Fatal("Back to latest did not return meaningful focus to the composer")
 	}
-	event.Data = json.RawMessage(`{"text":" after back"}`)
-	a.applyPiEvent(a.connectionGeneration, event)
+	appendDelta(" after back")
 	tr.Frame()
 	if !ct.list.AtEnd() || !tr.Focused(composerLabel) {
 		t.Fatal("following/focus did not persist after returning to the latest")
@@ -388,7 +394,6 @@ func TestIntegratedMarkdownPreview(t *testing.T) {
 				width, height int
 			}{{"1040x720", 1040, 720}, {"960x640", 960, 640}} {
 				a, ct := workspaceTestApp(t)
-				a.pi = &piAppHost{client: &pi.Client{}}
 				a.windowWidth = size.width
 				a.workspaceOpen = false
 				ct.Messages = []*message{

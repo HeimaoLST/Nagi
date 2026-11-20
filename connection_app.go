@@ -354,70 +354,7 @@ func (a *appModel) saveConnectionWithApply(config connectionConfig, applyAfterSa
 	}
 	if a.runtimeStage == startupStageLocalStore {
 		a.reopenProductConnection(nil, &config, applyAfterSave)
-		return
 	}
-	path := a.connectionPath
-	if path == "" {
-		path = connectionConfigPath(a.storePath)
-		a.connectionPath = path
-	}
-	needStore := a.store == nil
-	if needStore || a.localSaveErr != "" {
-		// persist owns local state and its error; the connection write reports independently.
-		_ = a.persist()
-	}
-	form.Busy = true
-	form.Error = ""
-	form.ErrorDetail = ""
-	form.ReloadBlocked = ""
-	form.Status = connStatusSaving
-	a.connectionSaveInFlight = true
-	go func() {
-		err := saveConnectionConfig(path, config)
-		if err != nil {
-			a.updateUI(func() {
-				a.connectionSaveInFlight = false
-				form.Busy = false
-				form.Status = ""
-				form.ErrorDetail = a.connectionSafeMessage(err)
-				form.Error = form.ErrorDetail
-				if a.shutdownStarted {
-					a.finishShutdown()
-				}
-			})
-			return
-		}
-		a.updateUI(func() {
-			a.connectionSaveInFlight = false
-			form.Busy = false
-			a.connectionSaved = &config
-			a.connectionForm.HasSaved = true
-			a.connectionForm.initial = a.connectionForm.Draft
-			a.connectionForm.Status = ""
-			if a.connectionApplied() && *a.connectionEffective == config {
-				a.connectionForm.Status = connStatusSavedApplied
-			}
-			a.connectionForm.Error = ""
-			a.connectionForm.ErrorDetail = ""
-			if a.localSaveErr != "" {
-				a.connectionForm.Error = connStatusSavedStoreFailed
-				a.connectionForm.ErrorDetail = a.redactConnectionText(a.localSaveErr)
-			} else if needStore {
-				a.workDir = config.WorkingDirectory
-				a.startupDetailsOpen = false
-			}
-			if applyAfterSave && !a.shutdownStarted {
-				if reason := a.connectionReloadBlocked(); reason != "" {
-					form.ReloadBlocked = reason
-				} else {
-					a.applyConnection()
-				}
-			}
-			if a.shutdownStarted {
-				a.finishShutdown()
-			}
-		})
-	}()
 }
 
 func (a *appModel) connectionReloadBlocked() string {
@@ -439,52 +376,7 @@ func (a *appModel) connectionReloadBlocked() string {
 	if a.runtimeStage == startupStageLocalStore {
 		return ""
 	}
-	if a.store == nil || a.localSaveErr != "" {
-		return connBlockedStore
-	}
-	recoverable := false
-	if host := a.pi; host != nil && host.client != nil && host.generation == a.connectionGeneration && a.runtimeStatus == runtimeStateExited && host.exitApplied != nil {
-		select {
-		case <-host.client.Done():
-			select {
-			case <-host.client.CallbacksDone():
-				select {
-				case <-host.exitApplied:
-					if host.mu.TryLock() {
-						recoverable = host.outcome.Reaped && host.outcome.PID > 0
-						host.mu.Unlock()
-					}
-				default:
-				}
-			default:
-			}
-		default:
-		}
-	}
-	for _, ct := range a.contacts {
-		if ct.ActiveTaskID != "" || ct.SendState == sendSubmitting || ct.SendState == sendAccepted {
-			return connBlockedActiveWork
-		}
-		if recoverable && ct.SendState == sendUnknown && (ct.pendingSend == nil || ct.pendingSend.State != "unknown" || ct.PiBinding == nil || ct.PiBinding.Engine != "pi" || ct.PiBinding.Context.Purpose != "conversation" || ct.PiBinding.Context.BotID != ct.ID || ct.PiBinding.Context.ContextID == "" || ct.PiBinding.Context.SessionRef == "" || ct.PiBinding.Context.SessionRef != ct.SessionID || ct.PiBinding.Configuration.CredentialSource == "") {
-			return connBlockedActiveWork
-		}
-	}
-	for _, ct := range a.contacts {
-		for _, issue := range ct.Issues {
-			if issue.Work.ActiveTaskID != "" || issue.Work.SendState == sendSubmitting || issue.Work.SendState == sendAccepted {
-				return connBlockedUntrustedIssue
-			}
-			for _, execution := range issue.Executions {
-				if !unresolvedExecution(execution) {
-					continue
-				}
-				if !recoverable || execution.Status != issueExecutionUnknown || !execution.PiIntent || !isPiActivityIssue(issue) || issue.ContactID != ct.ID || execution.PiRun == nil || execution.ID == "" || execution.PiRun.WorkerEpoch == "" || execution.PiRun.RunID == "" || execution.PiRun.ContextID != issue.PiBinding.Context.ContextID || execution.PiRun.SessionRef != issue.PiBinding.Context.SessionRef {
-					return connBlockedUntrustedIssue
-				}
-			}
-		}
-	}
-	return ""
+	return connBlockedStore
 }
 
 func (a *appModel) applyConnection() {
@@ -510,9 +402,7 @@ func (a *appModel) applyConnection() {
 	}
 	if a.runtimeStage == startupStageLocalStore {
 		a.reopenProductConnection(nil, nil, true)
-		return
 	}
-	a.startPiHost()
 }
 
 func (a *appModel) runOnUI(fn func()) {
@@ -657,38 +547,7 @@ func (a *appModel) finishShutdown() {
 		go a.finishProductShutdown(host)
 		return
 	}
-	if a.pi != nil {
-		active := false
-		for _, ct := range a.contacts {
-			for _, issue := range ct.Issues {
-				if issue.Work.ActiveTaskID != "" {
-					active = true
-					if !issue.Work.StopRequestedTasks[issue.Work.ActiveTaskID] {
-						a.cancelPiIssue(ct, issue)
-					}
-				}
-			}
-			if ct.ActiveTaskID != "" {
-				active = true
-				if ct.SendState != sendSubmitting || a.submissionInFlight == 0 {
-					a.cancelRuntimeTask(ct, ct.ActiveTaskID)
-				}
-			} else if ct.SendState == sendSubmitting {
-				active = true
-			}
-		}
-		if active {
-			return
-		}
-	}
 	if (a.dataRecovery != nil && a.dataRecovery.inFlight) || a.connectionSaveInFlight || a.connectionApplying || a.connectionTesting || a.contactHistoryInFlight > 0 || a.submissionInFlight > 0 || (a.themeImport != nil && a.themeImport.installInFlight) {
-		return
-	}
-	if a.pi != nil {
-		a.shutdownDrainStarted = true
-		a.runtimeStatus = runtimeStateDraining
-		host := a.pi
-		go a.finishPiShutdown(host)
 		return
 	}
 	a.quitReady = true

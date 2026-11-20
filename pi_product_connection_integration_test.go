@@ -138,6 +138,8 @@ func TestPiAppProductConnectionStopAndWorkerLoss(t *testing.T) {
 	enter(msg.ConnectionFieldEndpoint(), firstEndpoint)
 	enter(msg.ConnectionFieldAPIKey(), key)
 	enter(msg.ConnectionFieldModel(), model)
+	settingsAction(msg.ConnectionCapacityShow())
+	enter(msg.ConnectionFieldMaxActiveTasks(), "1")
 	settingsAction(msg.WorkFolderChoose())
 	w.wait(func() bool { return !w.app.connectionForm.Busy && w.app.connectionForm.Draft.WorkingDirectory == root })
 	install(primary, "OK", nil)
@@ -146,11 +148,33 @@ func TestPiAppProductConnectionStopAndWorkerLoss(t *testing.T) {
 	if checked := connection(); checked.SavedRevision != nil || checked.EffectiveRevision != nil || primary.count() != 1 {
 		t.Fatalf("Test should make one request without saving or applying: %+v, requests=%d", checked, primary.count())
 	}
+	var entered connectionDraft
+	w.pump.do(func() { entered = w.app.connectionForm.Draft })
+	credentials := connectionConfigPath(guiStorePath())
+	if _, err := os.Lstat(credentials); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("first Save must begin without credentials: %v", err)
+	}
+	if err := os.Mkdir(credentials, 0700); err != nil {
+		t.Fatal(err)
+	}
+	settingsAction(msg.ConnectionSaveConfiguration())
+	w.wait(func() bool { return !w.app.connectionForm.Busy && w.view.HasText(msg.RecoveryConnectionSaveFailed()) })
+	w.pump.do(func() {
+		if form := w.app.connectionForm; form.Draft != entered || !form.Dirty() || form.HasSaved {
+			t.Error("first Save refusal changed the editable values or reported a saved connection")
+		}
+	})
+	if refused := connection(); refused.SavedRevision != nil || refused.EffectiveRevision != nil || primary.count() != 1 {
+		t.Fatalf("first Save refusal changed a connection revision or contacted the provider: %+v", refused)
+	}
+	if err := os.Remove(credentials); err != nil {
+		t.Fatal(err)
+	}
 	settingsAction(msg.ConnectionSaveConfiguration())
 	w.wait(func() bool { return !w.app.connectionForm.Busy && w.app.connectionForm.SavedPending })
 	saved := connection()
 	if saved.SavedRevision == nil || saved.EffectiveRevision != nil || saved.Saved == nil || saved.Saved.BaseURL != firstEndpoint ||
-		saved.Saved.Model != model || saved.Saved.WorkingDirectory != root || !saved.Saved.CredentialPresent || primary.count() != 1 {
+		saved.Saved.Model != model || saved.Saved.WorkingDirectory != root || saved.Saved.MaxActiveTasks != 1 || !saved.Saved.CredentialPresent || primary.count() != 1 {
 		t.Fatalf("Save should persist the entered settings without applying: %+v, requests=%d", saved, primary.count())
 	}
 	settingsAction(msg.ConnectionApplySaved())
@@ -196,6 +220,29 @@ func TestPiAppProductConnectionStopAndWorkerLoss(t *testing.T) {
 	if stopped == nil || stopped.State != "running" || stopped.OperationID == "" {
 		t.Fatalf("could not identify the captured conversation stream: %+v", stopped)
 	}
+	w.click(msg.AvatarAddContact())
+	w.wait(func() bool { return len(w.app.contacts) == 2 && w.app.selectedID() != firstID })
+	var second *contact
+	w.pump.do(func() { second = w.app.selectedContact() })
+	secondID, secondChat := second.ID, second.SessionID
+	if secondChat == firstChat {
+		t.Fatal("the second Bot shares the first conversation")
+	}
+	enter(msg.ComposerLabel(second.Name), lossInput)
+	blocked := conversation(secondChat)
+	if blocked.Draft == nil || blocked.Draft.Text != lossInput || blocked.LatestExecution != nil {
+		t.Fatalf("the second Bot did not retain its unsubmitted draft: %+v", blocked)
+	}
+	_, err := w.client.Send(ctx, pi.ProductSendParams{
+		ProductConversationParams: pi.ProductConversationParams{ConversationID: secondChat},
+		OperationID:               "second-bot-capacity-refusal", DraftRevision: blocked.Draft.Revision,
+	})
+	var busy *pi.RemoteError
+	if !errors.As(err, &busy) || busy.Code != "busy" || !reflect.DeepEqual(conversation(secondChat), blocked) || primary.count() != 3 || secondary.count() != 0 {
+		t.Fatalf("the full slot did not refuse the second Bot without submitting: %v", err)
+	}
+	w.click(msg.AvatarContactLabel(first.Name))
+	w.wait(func() bool { return w.app.selectedID() == firstID && w.view.HasText(msg.StopConversation()) })
 	w.click(msg.StopConversation())
 	select {
 	case cancelled := <-streamCancelled:
@@ -210,16 +257,11 @@ func TestPiAppProductConnectionStopAndWorkerLoss(t *testing.T) {
 	})
 	assertExecution(firstChat, stopped, "interrupted")
 
-	w.click(msg.AvatarAddContact())
-	w.wait(func() bool { return len(w.app.contacts) == 2 && w.app.selectedID() != firstID })
-	var second *contact
-	w.pump.do(func() { second = w.app.selectedContact() })
-	secondID, secondChat := second.ID, second.SessionID
-	if secondChat == firstChat {
-		t.Fatal("the second Bot shares the first conversation")
-	}
+	w.click(msg.AvatarContactLabel(second.Name))
+	w.wait(func() bool {
+		return w.app.selectedID() == secondID && second.Draft == lossInput && w.app.contactHistoryInFlight == 0
+	})
 	install(secondary, "Unexpected completed response", lossArrived)
-	enter(msg.ComposerLabel(second.Name), lossInput)
 	w.click(msg.SendAction())
 	await(lossArrived, "the second Bot send")
 	w.wait(func() bool { return second.ActiveTaskID != "" && w.app.submissionInFlight == 0 && second.Draft == "" })
@@ -269,6 +311,30 @@ func TestPiAppProductConnectionStopAndWorkerLoss(t *testing.T) {
 		}
 	}
 	assertRecovered()
+	w.click(msg.SettingsBackAccessible())
+	w.wait(func() bool { return w.view.HasText(msg.SendUnknownState()) && w.app.contactHistoryInFlight == 0 })
+	var reloadErr error
+	var reloadGeneration int
+	w.frame(func() {
+		current := w.app.selectedContact()
+		reloadGeneration = current.historyGen
+		reloadErr = focusPiControl(w.view, msg.ReloadAction(), false)
+		if reloadErr == nil {
+			w.view.Key(0, ui.KeySpace)
+		}
+	})
+	if reloadErr != nil {
+		t.Fatal(reloadErr)
+	}
+	w.wait(func() bool {
+		current := w.app.selectedContact()
+		return current.historyGen > reloadGeneration && w.app.contactHistoryInFlight == 0 && current.LoadErr == "" && current.Loaded
+	})
+	assertRecovered()
+	if primary.count() != 3 || secondary.count() != 1 {
+		t.Fatal("keyboard Reload contacted the provider")
+	}
+	t.Log("First Save refusal preserved the fresh draft and empty revisions. The second Bot sent after capacity cleared, and keyboard Reload read history without a provider request.")
 	w.shutdown(ctx)
 	w = openProductWorkbench(t)
 	assertRecovered()

@@ -595,31 +595,25 @@ func TestShellAndNewContactFollowLocale(t *testing.T) {
 }
 
 func TestConnectionFeedbackFollowLocale(t *testing.T) {
-	a, ct := workspaceTestApp(t)
+	a, _ := workspaceTestApp(t)
 	config := connectionConfig{API: connectionAPIChatCompletions, Endpoint: "https://provider.example.invalid/v1", APIKey: "fixture", Model: "fixture", ContextTokens: 131072, OutputTokens: 8192, WorkingDirectory: t.TempDir(), MaxActiveTasks: 2}
 	a.connectionForm = newConnectionSettings(&config, config.WorkingDirectory)
 	a.connectionSaved = &config
-	a.connectionEffective = &config
-	a.pi = presentationPiHost(a)
-	a.store = &contactStore{path: filepath.Join(t.TempDir(), "contacts.json")}
-	a.runtimeStatus = runtimeStateReady
 	a.connectionForm.Status = connStatusApplied
 	a.connectionForm.Errors = map[string]string{"Endpoint": connectionValidationEndpointURL}
-	ct.ActiveTaskID = "active-task"
-	ct.SendState = sendAccepted
 	a.openSettingsTab(settingsTabConnection, settingsSourceRail)
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.SetLocale("en")
 	tr.Frame()
 	if !tr.HasText(locales.In("en").ConnectionStatusApplied()) ||
-		!tr.HasText("Wait for all chat and task work to finish before applying a new connection.") ||
+		!tr.HasText(locales.In("en").ConnectionBlockedStore()) ||
 		!tr.HasText("Enter an absolute http(s) URL with a host.") {
 		t.Fatalf("English connection feedback missing: %v", tr.Texts())
 	}
 	tr.SetLocale("zh-Hans")
 	tr.Frame()
 	if !tr.HasText(locales.In("zh-Hans").ConnectionStatusApplied()) ||
-		!tr.HasText("请等待所有对话和事项工作结束后再应用新连接。") ||
+		!tr.HasText(locales.In("zh-Hans").ConnectionBlockedStore()) ||
 		!tr.HasText("请输入带主机的绝对 http(s) URL。") {
 		t.Fatalf("Chinese connection feedback missing: %v", tr.Texts())
 	}
@@ -714,20 +708,8 @@ func TestTaskContextLabelsFollowLocale(t *testing.T) {
 func TestPiDisconnectNoticeFollowsLocaleWithoutChangingRaw(t *testing.T) {
 	a, ct := workspaceTestApp(t)
 	recoveryTestStore(t, a)
-	a.pi = presentationPiHost(a)
-	ct.ActiveTaskID = "t1"
-	ct.SendState = sendAccepted
-	ct.Status = statusWorking
-	if w := a.ensureWork(ct, "t1", "m1"); w != nil {
-		w.State = workRunning
-	}
-	a.pi.onExit(a, pi.ProcessOutcome{})
-	if a.localSaveErr != "" {
-		t.Fatalf("could not persist the disconnected send: %s", a.localSaveErr)
-	}
-	if ct.SendErrorKind != "send-uncertain" || ct.SendError == "" {
-		t.Fatalf("Pi exit did not retain an uncertainty diagnostic: %q / %q", ct.SendErrorKind, ct.SendError)
-	}
+	a.runtimeStatus = runtimeStateExited
+	applyProductExecution(ct, &pi.ProductExecution{ExecutionID: "t1", State: "unknown"})
 	raw := ct.SendError
 	before := recoveryRecordSnapshot(t, ct)
 	tr := ui.NewTester(a.view, 1040, 720)
@@ -855,18 +837,6 @@ func TestGuardedActionsKeepCanonicalRawAndKind(t *testing.T) {
 	}
 	if ct.SendError != "This contact is archived. Restore it before sending a message." || ct.SendErrorKind != blockArchivedSend {
 		t.Fatalf("send guard raw/kind = %q / %q", ct.SendError, ct.SendErrorKind)
-	}
-	issue := &productIssue{ID: "issue-guard", ContactID: ct.ID, Goal: "guard", Status: issueStatusInProgress}
-	ct.Issues = []*productIssue{issue}
-	ct.SelectedIssueID = issue.ID
-	if a.issueRunCapturedWithOperation(ct, issue, "") {
-		t.Fatal("archived issue run was accepted")
-	}
-	if issue.Work.SendError != "This contact is archived. Restore it before starting issue work." || issue.Work.SendErrorKind != blockArchivedIssue {
-		t.Fatalf("issue guard raw/kind = %q / %q", issue.Work.SendError, issue.Work.SendErrorKind)
-	}
-	if a.issueFormError != "This contact is archived. Restore it before starting issue work." || a.issueFormNotice != blockArchivedIssue {
-		t.Fatalf("issue form guard raw/kind = %q / %q", a.issueFormError, a.issueFormNotice)
 	}
 }
 

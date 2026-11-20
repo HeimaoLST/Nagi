@@ -214,6 +214,32 @@ func (state storedState) validatePiBindings() error {
 	return nil
 }
 
+func readablePiIssueStatus(status string) bool {
+	return status == issueExecutionCompleted || status == issueExecutionFailed || status == issueExecutionInterrupted
+}
+
+func cloneIssueToolReceipt(receipt *IssueToolReceipt) *IssueToolReceipt {
+	if receipt == nil {
+		return nil
+	}
+	copy := *receipt
+	copy.PiRun = clonePiActivityRun(receipt.PiRun)
+	if receipt.RequirementsRevision != nil {
+		value := *receipt.RequirementsRevision
+		copy.RequirementsRevision = &value
+	}
+	if receipt.Error != nil {
+		errorCopy := *receipt.Error
+		errorCopy.Candidates = append([]string(nil), receipt.Error.Candidates...)
+		if receipt.Error.CurrentRevision != nil {
+			value := *receipt.Error.CurrentRevision
+			errorCopy.CurrentRevision = &value
+		}
+		copy.Error = &errorCopy
+	}
+	return &copy
+}
+
 func storedPiIssueValid(issue storedIssue, ledger *IssueToolOperationLedger) bool {
 	if issue.PiBinding == nil {
 		if issue.WorkSessionID != "" {

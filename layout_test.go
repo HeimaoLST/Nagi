@@ -615,30 +615,29 @@ func TestResponsive899To900FocusCounterpart(t *testing.T) {
 }
 
 func TestLayoutEventsAndContactSwitchDoNotToggleWork(t *testing.T) {
-	a, ct, event := piRunStartedTestApp(t)
+	a, ct, _ := piRunStartedTestApp(t)
 	a.workspaceOpen = false
 	a.contacts = append(a.contacts, &contact{ID: "mio", Name: "Mio", Role: "Assistant"})
 	a.selectContact(1)
 	if a.workspaceOpen {
 		t.Fatal("contact switch opened work")
 	}
-	ct.pendingSend = &pendingSend{Draft: "first", State: "submitting"}
-	a.applyPiEvent(a.connectionGeneration, event)
+	ct.SubmittedDraft = "first"
+	event := pi.ProductExecutionEvent{ConversationID: ct.SessionID, ExecutionID: ct.ActiveTaskID}
+	applyTestProductEvent(t, a, "execution.started", event)
 	if a.workspaceOpen {
 		t.Fatal("task start opened work")
 	}
-	started := event
-	event.Name, event.Data = pi.RunSettled, []byte(`{"status":"completed"}`)
-	a.applyPiEvent(a.connectionGeneration, event)
+	event.State = "completed"
+	applyTestProductEvent(t, a, "execution.settled", event)
 	if a.workspaceOpen {
 		t.Fatal("task finish opened work")
 	}
 	a.selectContact(0)
 	a.openDetail(detailProfile)
-	started.RunID = "second-run"
-	ct.ActiveTaskID, ct.SendState = started.RunID, sendSubmitting
-	ct.pendingSend = &pendingSend{Draft: "second", State: "submitting"}
-	a.applyPiEvent(a.connectionGeneration, started)
+	event.ExecutionID = "second-run"
+	ct.ActiveTaskID, ct.SendState, ct.SubmittedDraft = event.ExecutionID, sendSubmitting, "second"
+	applyTestProductEvent(t, a, "execution.started", event)
 	if !a.detailIs(detailProfile) {
 		t.Fatal("task start closed the profile")
 	}

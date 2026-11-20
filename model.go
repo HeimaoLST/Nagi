@@ -93,33 +93,32 @@ type runtimeBuiltinTool struct {
 }
 
 type contact struct {
-	ID                   string
-	Name                 string
-	Role                 string
-	Purpose              string
-	Instructions         string
-	Workspace            string
-	BuiltinTools         *[]string
-	Status               contactStatus
-	Unread               int
-	Work                 string
-	WorkArg              string
-	WorkLabel            string
-	Messages             []*message
-	History              []historyEntry
-	Draft                string
-	Archived             bool
-	ArchivedAt           int64
-	PiBinding            *piConversationBinding
-	PreviousPiBindings   []piConversationBinding
-	Context              taskContext
-	activity             productActivityPanel
-	replyIndex           int
-	list                 ui.ListState
-	Works                []*workItem
-	Issues               []*productIssue
-	SelectedIssueID      string
-	shutdownCancelTaskID string
+	ID                 string
+	Name               string
+	Role               string
+	Purpose            string
+	Instructions       string
+	Workspace          string
+	BuiltinTools       *[]string
+	Status             contactStatus
+	Unread             int
+	Work               string
+	WorkArg            string
+	WorkLabel          string
+	Messages           []*message
+	History            []historyEntry
+	Draft              string
+	Archived           bool
+	ArchivedAt         int64
+	PiBinding          *piConversationBinding
+	PreviousPiBindings []piConversationBinding
+	Context            taskContext
+	activity           productActivityPanel
+	replyIndex         int
+	list               ui.ListState
+	Works              []*workItem
+	Issues             []*productIssue
+	SelectedIssueID    string
 
 	// A Pi conversation is opened lazily on its first send.
 	SessionID         string
@@ -265,13 +264,8 @@ type appModel struct {
 
 	openPath func(string) error
 
-	// #154 conversation issue tools. The scope/operation records live in the
-	// same contact store, not in a second database or queue.
-	issueToolLedger   *IssueToolOperationLedger
-	issueToolScopes   map[string]IssueToolScope
-	issueToolWaiters  map[string]chan IssueToolReceipt
-	piQuestionWaiters map[string]chan struct{}
-	issueToolShutdown chan struct{}
+	issueToolLedger *IssueToolOperationLedger
+	issueToolScopes map[string]IssueToolScope
 
 	// Layout is a GUI-wide preference, not a contact or runtime fact. Widths
 	// are persisted in the contact store; windowWidth is only the current
@@ -440,7 +434,18 @@ func (a *appModel) send(ct *contact, text string) bool {
 		return false
 	}
 	if !a.demo {
-		return a.sendPiConversation(ct, text)
+		if ct == nil || a.contactByID(ct.ID) != ct {
+			return false
+		}
+		if reason := a.canSend(ct); reason != "" {
+			ct.setSendError(sendBlockRaw(reason), reason, "")
+			return false
+		}
+		if err := validateTaskContext(ct.Context.items); err != nil {
+			ct.setSendError(err.Error(), "", "")
+			return false
+		}
+		return a.sendProductConversation(a.productHost(), ct)
 	}
 	if ct.Status == statusWorking {
 		return false
