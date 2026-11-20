@@ -12,6 +12,12 @@
 **Cause or correction:** The user requires the revised UI design checklist to govern reviews. Capturing a screenshot and inspecting it are separate steps, and native interaction claims require the applicable native evidence.
 **Prevention:** Scope the checklist items, capture original evidence from the frozen candidate, and record the reviewer and verdict before merge. Keep the existing preview capture available after earlier CI test failures. Apply the checklist verdict to missing evidence and open findings.
 
+## Verify native file selection through the visible sheet
+
+**Problem:** Three native review processes exited during scripted confirmation. The launcher returned success and the observer disconnected before recording an accepted path.
+**Cause or correction:** The review observer invoked `ok:` directly on the panel. AppKit raised an uncaught exception. Changing the displayed directory had also left a different item selected.
+**Prevention:** Select the intended item and activate the visible confirmation button. Use the observer to read the chosen path in Nagi after the sheet closes. Compare focus with the control that actually opened that sheet and verify the original application PID survived. For recovery, verify the resulting backup or restore preview.
+
 ## Keep the launch directory out of the fresh connection form
 
 **Problem:** With no folder selected, the first-use form tested a connection and saved the process working directory. An earlier refusal fixture had already seeded effective credentials and could only exercise edits.
