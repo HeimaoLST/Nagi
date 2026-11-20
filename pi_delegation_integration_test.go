@@ -3,6 +3,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -12,11 +13,14 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/egoist/mygo/ui"
 
 	"github.com/HeimaoLST/Nagi/internal/pi"
 	"github.com/HeimaoLST/Nagi/locales"
@@ -516,7 +520,8 @@ func TestPiAppProductScopedDelegation(t *testing.T) {
 	w := openProductWorkbench(t)
 	owner := w.app.contactByID(origin)
 	source := owner.SessionID
-	w.click(locales.In("en").SendAction())
+	msg := locales.In("en")
+	w.click(msg.SendAction())
 	w.wait(func() bool {
 		return owner.SendState == sendIdle && len(owner.History) == 2 && owner.History[1].Text == chatReply
 	})
@@ -538,8 +543,89 @@ func TestPiAppProductScopedDelegation(t *testing.T) {
 		t.Fatalf("source conversation did not settle: %+v, %v", conversation, err)
 	}
 	operation := conversation.LatestExecution.ExecutionID + ":delegate:" + key
+	listBots := func(client *pi.ProductClient) []pi.ProductBot {
+		t.Helper()
+		page, err := client.ListBots(ctx, pi.ProductPageParams{})
+		if err != nil || page.NextCursor != nil {
+			t.Fatalf("read fixture Bots: %+v, %v", page, err)
+		}
+		return page.Items
+	}
+	botsBefore := listBots(w.client)
+	recipientIndex := slices.IndexFunc(botsBefore, func(bot pi.ProductBot) bool { return bot.BotID == recipient })
+	if recipientIndex < 0 {
+		t.Fatal("delegation recipient is missing from the Bot list")
+	}
+	recipientConversation := botsBefore[recipientIndex].CurrentConversationID
+	draftBefore, err := w.client.GetConversation(ctx, recipientConversation)
+	if err != nil || draftBefore.Draft == nil || draftBefore.Draft.Text != "Recipient draft" {
+		t.Fatalf("read recipient draft before profile save: %+v, %v", draftBefore, err)
+	}
+	const savedName = "Inventory Bot"
+	w.frame(func() { w.app.openSettingsTab(settingsTabContact, settingsSourceRail) })
+	w.click(msg.EditContactLabel())
+	w.click(botsBefore[recipientIndex].Profile.Name)
+	w.click(msg.FieldNameAccessible())
+	w.frame(func() {
+		w.view.Key(ui.Cmd, ui.KeyA)
+		w.view.Type(savedName)
+	})
+	saveProfile := func(wantError, wantName string) {
+		t.Helper()
+		var clickErr error
+		w.frame(func() { clickErr = clickSettingsAction(w.view, msg.ContactSaveChanges()) })
+		if clickErr != nil {
+			t.Fatal(clickErr)
+		}
+		w.pump.do(func() {
+			editor := w.app.settingsContactEditor()
+			if editor == nil || editor.Error != wantError || editor.Draft.Name != savedName || w.app.settingsContactID != recipient ||
+				w.app.contactByID(recipient).Name != wantName || w.app.selectedID() != origin {
+				t.Error("profile save changed the selected conversation, lost the draft, or had the wrong outcome")
+			}
+		})
+	}
+	profile := guiStorePath()
+	profileBefore := recoverySavedBytes(t, profile)
+	func() {
+		backup := filepath.Join(root, "profile-before-bot-save.json")
+		if err := os.Rename(profile, backup); err != nil {
+			t.Fatal(err)
+		}
+		defer func() {
+			if err := os.Rename(backup, profile); err != nil {
+				t.Errorf("restore the fixture profile: %v", err)
+			}
+		}()
+		if err := os.Mkdir(profile, 0700); err != nil {
+			t.Fatal(err)
+		}
+		defer func() {
+			if err := os.Remove(profile); err != nil {
+				t.Errorf("remove the fixture write obstruction: %v", err)
+			}
+		}()
+		saveProfile(profileNoticeErrorSave, botsBefore[recipientIndex].Profile.Name)
+		if !reflect.DeepEqual(listBots(w.client), botsBefore) || !bytes.Equal(recoverySavedBytes(t, backup), profileBefore) {
+			t.Fatal("failed Bot profile save changed the live Bots or durable profile")
+		}
+	}()
+	saveProfile("", savedName)
+	botsWant := slices.Clone(botsBefore)
+	botsWant[recipientIndex].Profile.Name = savedName
+	botsWant[recipientIndex].ProfileRevision++
+	if bots := listBots(w.client); !reflect.DeepEqual(bots, botsWant) {
+		t.Fatalf("profile retry did not update only the recipient Bot: %+v", bots)
+	}
 	w.shutdown(ctx)
 	reopened := openProductWorkbench(t)
+	if bots := listBots(reopened.client); !reflect.DeepEqual(bots, botsWant) {
+		t.Fatalf("reopen lost the saved Bot profile or changed another Bot: %+v", bots)
+	}
+	draft, err := reopened.client.GetConversation(ctx, recipientConversation)
+	if err != nil || !reflect.DeepEqual(draft, draftBefore) {
+		t.Fatalf("profile save changed the recipient's reopened conversation: %+v, %v", draft, err)
+	}
 	for _, check := range []struct{ bot, activity string }{{origin, activityID}, {recipient, activityID}, {unrelated, foreignActivity}} {
 		items, err := reopened.client.ListActivities(ctx, pi.ProductActivityListParams{BotID: check.bot})
 		if err != nil || len(items.Items) != 1 || items.Items[0].ActivityID != check.activity {
