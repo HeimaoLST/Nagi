@@ -119,20 +119,46 @@ func standaloneWorkerPID(t *testing.T, ctx context.Context, parent int, commandP
 const standaloneQuitProgram = `import AppKit
 import Darwin
 
+func processExecutable(_ pid: Int32, expected: String) -> String {
+    var path = [CChar](repeating: 0, count: 4096)
+    errno = 0
+    let count = proc_pidpath(pid, &path, UInt32(path.count))
+    let error = errno
+    let reported = count > 0 ? path.withUnsafeBufferPointer { String(cString: $0.baseAddress!) } : ""
+    let resolved = reported.isEmpty ? "" : URL(fileURLWithPath: reported).resolvingSymlinksInPath().path
+    print("proc_pidpath pid=\(pid) return=\(count) errno=\(error) reported=\(reported) resolved=\(resolved) expected=\(expected)")
+    return reported
+}
+
+func sameFile(_ reported: String, _ expected: String) -> Bool {
+    var actual = stat()
+    var wanted = stat()
+    let actualResult = stat(reported, &actual)
+    let actualError = actualResult == 0 ? 0 : errno
+    let wantedResult = stat(expected, &wanted)
+    let wantedError = wantedResult == 0 ? 0 : errno
+    print("stat reported=\(reported) errno=\(actualError) dev=\(actual.st_dev) inode=\(actual.st_ino) expected=\(expected) errno=\(wantedError) dev=\(wanted.st_dev) inode=\(wanted.st_ino)")
+    return actualResult == 0 && wantedResult == 0 && actual.st_dev == wanted.st_dev && actual.st_ino == wanted.st_ino
+}
+
 let pid = Int32(CommandLine.arguments[1])!
 let worker = Int32(CommandLine.arguments[2])!
-let executable = CommandLine.arguments[3]
-let appURL = URL(fileURLWithPath: CommandLine.arguments[4]).resolvingSymlinksInPath()
-var path = [CChar](repeating: 0, count: 4096)
-guard proc_pidpath(worker, &path, UInt32(path.count)) > 0,
-      URL(fileURLWithPath: String(cString: path)).resolvingSymlinksInPath().path == executable else {
+let node = CommandLine.arguments[3]
+let executable = CommandLine.arguments[4]
+let bundle = CommandLine.arguments[5]
+guard sameFile(processExecutable(worker, expected: node), node) else {
     fputs("owned worker executable does not match the packaged Node\n", stderr)
+    exit(2)
+}
+guard sameFile(processExecutable(pid, expected: executable), executable) else {
+    fputs("owned app executable does not match the signed bundle\n", stderr)
     exit(2)
 }
 let deadline = Date().addingTimeInterval(15)
 while Date() < deadline {
     if let app = NSRunningApplication(processIdentifier: pid),
-       app.isFinishedLaunching, app.bundleURL?.resolvingSymlinksInPath() == appURL {
+       app.isFinishedLaunching, let reportedBundle = app.bundleURL?.path,
+       sameFile(reportedBundle, bundle) {
         guard app.terminate() else {
             fputs("AppKit refused normal quit\n", stderr)
             exit(3)
@@ -329,7 +355,7 @@ func TestPiPackageStandalone(t *testing.T) {
 	if err := os.WriteFile(quitHelper, []byte(standaloneQuitProgram), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	standaloneCommand(t, ctx, "/usr/bin/swift", quitHelper, strconv.Itoa(pid), strconv.Itoa(workerPID), node, bundle)
+	t.Log(standaloneCommand(t, ctx, "/usr/bin/swift", quitHelper, strconv.Itoa(pid), strconv.Itoa(workerPID), node, app, bundle))
 	select {
 	case err := <-exited:
 		finished = true

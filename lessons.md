@@ -78,6 +78,12 @@
 **Cause or correction:** They are disposable development environments, not the authoritative project record.
 **Prevention:** Commit/push coherent safe checkpoints, retain essential contracts and actual validation summaries in Git/PR records, and merge completed work after required gates. Export controlled process receipts before test TempDir cleanup, including on failure. Do not rely on a temporary evidence path alone.
 
+## Identify the packaged executable by file identity
+
+**Problem:** Standalone validation rejected the running bundled Node before checking normal quit.
+**Cause or correction:** Foundation resolved the observed executable to /tmp while the package path used /private/tmp. Both names identified the same file.
+**Prevention:** Match the child to the app PID and compare the device and inode of the kernel-reported executable with the bundled file. Check normal quit and worker disappearance separately.
+
 ## Inspect process path dependencies beyond executable names
 
 **Problem:** Historical cleanup filtering by expected executable names missed a Python process whose working directory referenced a retained task path.
