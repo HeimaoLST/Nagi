@@ -287,7 +287,6 @@ func (a *appModel) detailPage(c *ui.Context, t *ui.Theme) {
 	})
 }
 
-
 func (ct *contact) issueWork(issue *productIssue) *workItem {
 	if issue == nil {
 		return nil
