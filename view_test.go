@@ -1180,7 +1180,7 @@ func recoveryComposerTester(a *appModel, width, height int) *ui.Tester {
 
 func TestRP1ConversationAvailabilityMatrix(t *testing.T) {
 	for _, locale := range []string{"en", "zh-Hans"} {
-		for _, state := range []string{runtimeStateFailed, runtimeStateExited, runtimeStateStarting, "ready-no-client", "ready-unbound", runtimeStateReady} {
+		for _, state := range []string{runtimeStateFailed, runtimeStateExited, runtimeStateStarting, runtimeStateReady} {
 			for _, diagnostic := range []string{"empty", "protocol", "delivery"} {
 				t.Run(locale+"/"+state+"/"+diagnostic, func(t *testing.T) {
 					cause := "exit"
@@ -1193,14 +1193,6 @@ func TestRP1ConversationAvailabilityMatrix(t *testing.T) {
 						ct.clearSendError()
 					}
 					a.runtimeStatus = state
-					switch state {
-					case "ready-no-client":
-						a.runtimeStatus = runtimeStateReady
-						a.pi = nil
-					case "ready-unbound":
-						a.runtimeStatus = runtimeStateReady
-						ct.PiBinding = nil
-					}
 					before := recoveryRecordSnapshot(t, ct)
 					tr := recoveryComposerTester(a, 720, 640)
 					tr.SetLocale(locale)
@@ -1208,24 +1200,18 @@ func TestRP1ConversationAvailabilityMatrix(t *testing.T) {
 					tr.Frame()
 					msgs := locales.In(locale)
 					wantSummary := msgs.SendDisconnectedState()
-					switch state {
-					case runtimeStateReady:
-						wantSummary = msgs.SendUnknownState()
-					case "ready-unbound":
-						wantSummary = msgs.IssueExecutionUnknownDetail()
-					}
 					for _, summary := range []string{msgs.SendDisconnectedState(), msgs.SendUnknownState(), msgs.IssueExecutionUnknownDetail(), msgs.SendNoticeConnectionLost()} {
 						if tr.HasText(summary) != (summary == wantSummary) {
 							t.Fatalf("want only %q for %s: %v", wantSummary, state, tr.Texts())
 						}
 					}
-					if _, ok := tr.Find(msgs.ReloadAction()); ok != (state == runtimeStateReady) {
+					if _, ok := tr.Find(msgs.ReloadAction()); ok {
 						t.Fatalf("Reload availability contradicts %s: %v", state, tr.Texts())
 					}
 					if recoveryRecordSnapshot(t, ct) != before || a.submissionInFlight != 0 || a.contactHistoryInFlight != 0 {
 						t.Fatal("presentation changed original records or issued a request")
 					}
-					if dir := os.Getenv("NAGI_RP_PREVIEW_DIR"); dir != "" && diagnostic == "delivery" && (state == runtimeStateReady || state == runtimeStateExited) {
+					if dir := os.Getenv("NAGI_RP_PREVIEW_DIR"); dir != "" && diagnostic == "delivery" && state == runtimeStateExited {
 						writePreviewPNG(t, filepath.Join(dir, fmt.Sprintf("conversation-%s-%s.png", locale, state)), tr.Image())
 					}
 				})

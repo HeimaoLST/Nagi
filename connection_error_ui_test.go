@@ -478,19 +478,43 @@ func TestRecoveryPresentationLocalRetryClearsOnlyOwnedFeedback(t *testing.T) {
 	tr.Frame()
 	a.openSettingsTab(settingsTabConnection, settingsSourceRail)
 	tr.Frame()
-	if a.localSaveErr != "" || a.connectionForm.Error != "" || a.connectionForm.ErrorDetail != "" || a.connectionReloadBlocked() != "" {
+	if a.localSaveErr != "" || a.connectionForm.Error != "" || a.connectionForm.ErrorDetail != "" || tr.HasText(locales.In("en").RecoveryLocalSaveFailed()) {
 		t.Fatalf("successful local retry left stale form feedback: local=%q form=%q detail=%q", a.localSaveErr, a.connectionForm.Error, a.connectionForm.ErrorDetail)
 	}
+	store := a.store
 	a.store = nil
 	a.connectionForm.Error, a.connectionForm.ErrorDetail = connStatusSavedStoreFailed, "unavailable local data"
 	tr.Frame()
 	if a.connectionForm.Error != connStatusSavedStoreFailed {
 		t.Fatal("unavailable store falsely cleared feedback")
 	}
+	a.store = store
+	a.closeSettings()
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(path, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.persist(); err == nil {
+		t.Fatal("expected a second controlled write failure")
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
 	const applyFailure = "Pi worker exited while applying"
 	a.connectionForm.Error, a.connectionForm.ErrorDetail = connErrorApplyConfig, applyFailure
 	tr.Frame()
-	if a.connectionForm.Error != connErrorApplyConfig || a.connectionForm.ErrorDetail != applyFailure || ct.Draft != "retained local edit" || ct.SessionID != sessionRef || ct.PiBinding != binding || a.selectedContact() != ct {
+	if err := tr.Click(locales.In("en").SettingsRetrySave()); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	a.openSettingsTab(settingsTabConnection, settingsSourceRail)
+	tr.Frame()
+	if !tr.HasText(locales.In("en").RecoveryConnectionApplyFailed()) {
+		t.Fatal("successful local retry hid the unrelated Apply diagnostic")
+	}
+	if a.localSaveErr != "" || a.connectionForm.Error != connErrorApplyConfig || a.connectionForm.ErrorDetail != applyFailure || ct.Draft != "retained local edit" || ct.SessionID != sessionRef || ct.PiBinding != binding || a.selectedContact() != ct {
 		t.Fatal("local recovery cleared unrelated state")
 	}
 }

@@ -36,8 +36,10 @@ func TestPiAppProductConnectionStopAndWorkerLoss(t *testing.T) {
 	if !filepath.IsAbs(node) || node != filepath.Join(payload, "bin", "node") || worker != filepath.Join(payload, "dist", "worker.js") {
 		t.Fatal("NAGI_TEST_NODE and NAGI_TEST_WORKER must identify one pinned payload")
 	}
-	root := t.TempDir()
+	root, launchFolder, explicitFolder := t.TempDir(), t.TempDir(), t.TempDir()
+	t.Chdir(launchFolder)
 	isolateConnectionApp(t, root, payload)
+	t.Setenv("NAGI_GUI_WORKDIR", "")
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
@@ -132,6 +134,28 @@ func TestPiAppProductConnectionStopAndWorkerLoss(t *testing.T) {
 	if initial := connection(); initial.SavedRevision != nil || initial.EffectiveRevision != nil {
 		t.Fatalf("fresh profile already has connection settings: %+v", initial)
 	}
+	w.click(msg.SettingsBackAccessible())
+	var first, second *contact
+	w.pump.do(func() { first = w.app.selectedContact() })
+	firstID, firstChat := first.ID, first.SessionID
+	enter(msg.ComposerLabel(first.Name), firstInput)
+	w.click(msg.AvatarAddContact())
+	w.wait(func() bool { return len(w.app.contacts) == 2 && w.app.selectedID() != firstID })
+	var profileSaved bool
+	w.frame(func() {
+		second = w.app.selectedContact()
+		profile := contactProfileDraft(second)
+		profile.Workspace = explicitFolder
+		profileSaved = w.app.saveContactProfileDraftFor(second.ID, profile, false)
+	})
+	if !profileSaved || second.SessionID == firstChat {
+		t.Fatal("could not establish an independent Bot with an explicit workspace before connection setup")
+	}
+	secondID, secondChat := second.ID, second.SessionID
+	const setupDraft = "Draft prepared before the first connection Save"
+	enter(msg.ComposerLabel(second.Name), setupDraft)
+	w.frame(func() { w.app.openSettingsTab(settingsTabConnection, settingsSourceConnection) })
+	profileBeforeSetup := recoverySavedBytes(t, guiStorePath())
 	w.frame(func() {
 		w.app.chooseFolder = func(mygo.OpenDialogOptions) ([]string, error) { return []string{root}, nil }
 	})
@@ -140,6 +164,24 @@ func TestPiAppProductConnectionStopAndWorkerLoss(t *testing.T) {
 	enter(msg.ConnectionFieldModel(), model)
 	settingsAction(msg.ConnectionCapacityShow())
 	enter(msg.ConnectionFieldMaxActiveTasks(), "1")
+	credentials := connectionConfigPath(guiStorePath())
+	for _, label := range []string{msg.ConnectionTestAction(), msg.ConnectionSaveConfiguration(), msg.ConnectionSaveAndApply()} {
+		settingsAction(label)
+		var blocked bool
+		w.pump.do(func() {
+			form := w.app.connectionForm
+			blocked = !form.Busy && form.Errors["WorkingDirectory"] != "" && w.view.HasText(msg.WorkFolderRequiredHint())
+		})
+		if !blocked {
+			t.Fatalf("%q did not require an explicit working folder", label)
+		}
+	}
+	if status := connection(); status.SavedRevision != nil || status.EffectiveRevision != nil || primary.count() != 0 || !bytes.Equal(profileBeforeSetup, recoverySavedBytes(t, guiStorePath())) {
+		t.Fatalf("unchosen folder changed the Product profile or contacted the provider: %+v, requests=%d", status, primary.count())
+	}
+	if _, err := os.Lstat(credentials); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("unchosen folder created a credential file: %v", err)
+	}
 	settingsAction(msg.WorkFolderChoose())
 	w.wait(func() bool { return !w.app.connectionForm.Busy && w.app.connectionForm.Draft.WorkingDirectory == root })
 	install(primary, "OK", nil)
@@ -150,7 +192,6 @@ func TestPiAppProductConnectionStopAndWorkerLoss(t *testing.T) {
 	}
 	var entered connectionDraft
 	w.pump.do(func() { entered = w.app.connectionForm.Draft })
-	credentials := connectionConfigPath(guiStorePath())
 	if _, err := os.Lstat(credentials); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("first Save must begin without credentials: %v", err)
 	}
@@ -170,7 +211,64 @@ func TestPiAppProductConnectionStopAndWorkerLoss(t *testing.T) {
 	if err := os.Remove(credentials); err != nil {
 		t.Fatal(err)
 	}
+	completion := make(chan func(), 1)
+	var previousHook func(func())
+	w.pump.do(func() {
+		previousHook = w.app.getUIHook()
+		w.app.setUIHook(func(fn func()) { completion <- fn })
+	})
 	settingsAction(msg.ConnectionSaveConfiguration())
+	finishSave := awaitFolderChoice(t, completion)
+	w.pump.do(func() { w.app.setUIHook(previousHook) })
+	if status := connection(); status.SavedRevision == nil || status.EffectiveRevision != nil {
+		t.Fatalf("the explicit retry did not save before UI completion: %+v", status)
+	}
+	var editor *contactProfileEditor
+	var completionPending bool
+	w.pump.do(func() {
+		completionPending = w.app.connectionSaveInFlight && w.app.connectionSaved == nil
+		editor = w.app.ensureSettingsProfileEditor(secondID)
+		editor.Draft.Name = "Uncommitted profile name"
+	})
+	if !completionPending {
+		t.Fatal("the successful Save completion was not held at the UI boundary")
+	}
+	w.click(msg.SettingsBackAccessible())
+	enter(msg.ComposerLabel(second.Name), lossInput)
+	uiPath := productUIPath(guiStorePath())
+	if err := os.Remove(uiPath); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(uiPath, 0700); err != nil {
+		t.Fatal(err)
+	}
+	w.click(msg.AvatarContactLabel(first.Name))
+	var beforeError string
+	w.pump.do(func() {
+		if w.view.HasText(msg.RecoveryLocalSaveFailed()) {
+			beforeError = w.app.localSaveErr
+		}
+	})
+	if beforeError == "" {
+		t.Fatal("the intervening Bot selection did not report the local Save failure")
+	}
+	w.frame(finishSave)
+	var retained bool
+	w.pump.do(func() {
+		retained = w.app.selectedContact() == first && w.app.contactByID(secondID) == second &&
+			first.Draft == firstInput && second.Draft == lossInput && w.app.localSaveErr == beforeError &&
+			editor.Draft.Name == "Uncommitted profile name" && second.Name != editor.Draft.Name &&
+			w.app.productHost() != nil && w.app.productHost().product == initialClient && w.view.HasText(msg.RecoveryLocalSaveFailed())
+	})
+	if !retained {
+		t.Fatal("connection Save changed the intervening Bot selection, drafts, diagnostic, or unsaved profile")
+	}
+	if err := os.Remove(uiPath); err != nil {
+		t.Fatal(err)
+	}
+	w.click(msg.SettingsRetrySave())
+	w.wait(func() bool { return w.app.localSaveErr == "" && !w.view.HasText(msg.RecoveryLocalSaveFailed()) })
+	w.frame(func() { w.app.openSettingsTab(settingsTabConnection, settingsSourceConnection) })
 	w.wait(func() bool { return !w.app.connectionForm.Busy && w.app.connectionForm.SavedPending })
 	saved := connection()
 	if saved.SavedRevision == nil || saved.EffectiveRevision != nil || saved.Saved == nil || saved.Saved.BaseURL != firstEndpoint ||
@@ -182,12 +280,25 @@ func TestPiAppProductConnectionStopAndWorkerLoss(t *testing.T) {
 	if applied := connection(); !reflect.DeepEqual(saved.SavedRevision, applied.EffectiveRevision) || primary.count() != 1 {
 		t.Fatalf("Apply should activate the saved revision without a request: %+v", applied)
 	}
+	assertWorkspaces := func() {
+		t.Helper()
+		w.pump.do(func() {
+			inherited, explicit := w.app.contactByID(firstID), w.app.contactByID(secondID)
+			if inherited == nil || explicit == nil || inherited.SessionID != firstChat || explicit.SessionID != secondChat ||
+				inherited.Workspace != "" || explicit.Workspace != explicitFolder || w.app.effectiveContactWorkspace(inherited) != root ||
+				w.app.effectiveContactWorkspace(explicit) != explicitFolder {
+				t.Error("the applied default replaced a Bot workspace override or changed inherited workspace and conversation identity")
+			}
+		})
+	}
+	assertWorkspaces()
+	for id, want := range map[string]string{firstChat: firstInput, secondChat: lossInput} {
+		if state := conversation(id); state.Draft == nil || state.Draft.Text != want || state.LatestExecution != nil {
+			t.Fatalf("first connection Apply changed a preconfiguration draft or admitted work: %+v", state)
+		}
+	}
 	w.click(msg.SettingsBackAccessible())
-	var first *contact
-	w.pump.do(func() { first = w.app.selectedContact() })
-	firstID, firstChat := first.ID, first.SessionID
 	install(primary, firstReply, nil)
-	enter(msg.ComposerLabel(first.Name), firstInput)
 	w.click(msg.SendAction())
 	w.wait(func() bool { return first.SendState == sendIdle && w.view.HasText(firstReply) })
 
@@ -220,15 +331,8 @@ func TestPiAppProductConnectionStopAndWorkerLoss(t *testing.T) {
 	if stopped == nil || stopped.State != "running" || stopped.OperationID == "" {
 		t.Fatalf("could not identify the captured conversation stream: %+v", stopped)
 	}
-	w.click(msg.AvatarAddContact())
-	w.wait(func() bool { return len(w.app.contacts) == 2 && w.app.selectedID() != firstID })
-	var second *contact
-	w.pump.do(func() { second = w.app.selectedContact() })
-	secondID, secondChat := second.ID, second.SessionID
-	if secondChat == firstChat {
-		t.Fatal("the second Bot shares the first conversation")
-	}
-	enter(msg.ComposerLabel(second.Name), lossInput)
+	w.click(msg.AvatarContactLabel(second.Name))
+	w.wait(func() bool { return w.app.selectedID() == secondID && second.Loaded })
 	blocked := conversation(secondChat)
 	if blocked.Draft == nil || blocked.Draft.Text != lossInput || blocked.LatestExecution != nil {
 		t.Fatalf("the second Bot did not retain its unsubmitted draft: %+v", blocked)
@@ -338,6 +442,7 @@ func TestPiAppProductConnectionStopAndWorkerLoss(t *testing.T) {
 	w.shutdown(ctx)
 	w = openProductWorkbench(t)
 	assertRecovered()
+	assertWorkspaces()
 	w.shutdown(ctx)
 
 	assertProvider := func(p *piAppProvider, prompts ...string) {

@@ -284,8 +284,13 @@ func TestBuiltinToolCatalogErrorDoesNotOfferDeadRetry(t *testing.T) {
 	a.connectionSaved = &saved
 	a.runtimeBuiltinToolsErr = "Catalog could not be read."
 	tr.Frame()
+	if !tr.HasText("Catalog could not be read.") || tr.HasText("Retry built-in tools") {
+		t.Fatalf("saved settings without a recovery path rendered a dead retry: %v", tr.Texts())
+	}
+	a.runtimeStage = startupStageLocalStore
+	tr.Frame()
 	if !tr.HasText("Catalog could not be read.") || !tr.HasText("Retry built-in tools") {
-		t.Fatalf("configured idle connection did not expose retry: %v", tr.Texts())
+		t.Fatalf("configured startup recovery did not expose retry: %v", tr.Texts())
 	}
 	if a.pi != nil || a.connectionProbe != nil || a.connectionApplying || a.connectionTesting || a.runtimeAvailableForView() {
 		t.Fatal("catalog error presentation started a host/probe/apply or fabricated runtime readiness")

@@ -279,10 +279,11 @@ func TestFirstUseWorkFolderRequiresExplicitChoiceBeforeActions(t *testing.T) {
 	fixture := testConnectionConfig(t)
 	form.Draft.Endpoint, form.Draft.APIKey, form.Draft.Model = fixture.Endpoint, fixture.APIKey, fixture.Model
 	requests, replies, updates := controlledFolderChoice(t, a)
-	saves, probes, applies := 0, 0, 0
+	var saved, tested, applied []connectionConfig
 	actions := connectionSettingsActions{
-		Save: func(connectionConfig) { saves++ }, Test: func(connectionConfig) { probes++ },
-		SaveAndApply: func(connectionConfig) { applies++ }, Apply: func() { applies++ },
+		Save:         func(config connectionConfig) { saved = append(saved, config) },
+		Test:         func(config connectionConfig) { tested = append(tested, config) },
+		SaveAndApply: func(config connectionConfig) { applied = append(applied, config) },
 		ChooseFolder: a.chooseConnectionWorkFolder,
 	}
 	tr := connectionSettingsTester(form, actions, 580, 1800)
@@ -295,8 +296,8 @@ func TestFirstUseWorkFolderRequiresExplicitChoiceBeforeActions(t *testing.T) {
 			}
 			tr.Frame()
 		}
-		if saves != 0 || probes != 0 || applies != 0 {
-			t.Fatalf("fresh GUI silently accepted launch folder %q: saves=%d probes=%d applies=%d", form.Draft.WorkingDirectory, saves, probes, applies)
+		if len(saved)+len(tested)+len(applied) != 0 {
+			t.Fatalf("fresh GUI silently accepted launch folder %q", form.Draft.WorkingDirectory)
 		}
 		if form.Errors["WorkingDirectory"] == "" || a.pi != nil || a.connectionProbe != nil || a.connectionApplying || a.connectionTesting {
 			t.Fatal("unconfirmed work folder did not block GUI actions")
@@ -324,34 +325,20 @@ func TestFirstUseWorkFolderRequiresExplicitChoiceBeforeActions(t *testing.T) {
 	awaitFolderChoice(t, requests)
 	replies <- folderChoiceReply{paths: []string{chosen}}
 	awaitFolderChoice(t, updates)()
-	// Use the real save boundary now; no Test/Apply callback or Runtime is invoked.
-	actions.Save = a.saveConnection
-	tr = connectionSettingsTester(form, actions, 580, 1800)
 	tr.Frame()
-	if err := tr.Click("Save configuration"); err != nil {
-		t.Fatal(err)
+	for _, action := range []string{"Save configuration", "Test connection and model", "Save and apply"} {
+		if err := tr.Click(action); err != nil {
+			t.Fatal(err)
+		}
+		tr.Frame()
 	}
-	awaitFolderChoice(t, updates)()
-	if form.Busy || form.Error != "" {
-		t.Fatalf("chosen folder could not be saved: %+v", form)
+	for _, configs := range [][]connectionConfig{saved, tested, applied} {
+		if len(configs) != 1 || configs[0].WorkingDirectory != chosen {
+			t.Fatal("the confirmed folder did not reach a connection action")
+		}
 	}
-	saved, err := loadConnectionConfig(a.connectionPath)
-	if err != nil || saved.WorkingDirectory != chosen {
-		t.Fatalf("saved explicit folder = %q: %v", saved.WorkingDirectory, err)
-	}
-	reopened, err := newRuntimeApp()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if reopened.connectionForm.Draft.WorkingDirectory != chosen || !reopened.connectionForm.HasSaved || reopened.selectedID() != originalID {
-		t.Fatal("reopening lost the confirmed connection choice or contact identity")
-	}
-	retained := reopened.contactByID(originalID)
-	if retained.Workspace != originalFolder || retained.SessionID != "" || retained.PiBinding != nil || retained.Draft != "Keep local draft" || reopened.contactByID("inherited-contact").Workspace != "" {
-		t.Fatal("connection choice rewrote an existing contact/session folder or inheritance")
-	}
-	if a.pi != nil || reopened.pi != nil || a.connectionProbe != nil || reopened.connectionProbe != nil || a.connectionTesting || reopened.connectionTesting || a.connectionApplying || reopened.connectionApplying || probes != 0 || applies != 0 {
-		t.Fatal("first-use folder workflow started/tested/applied Runtime")
+	if a.selectedContact() != ct || ct.ID != originalID || ct.Workspace != originalFolder || ct.Draft != "Keep local draft" || a.contactByID("inherited-contact").Workspace != "" {
+		t.Fatal("choosing the default folder changed an existing contact, draft or workspace override")
 	}
 }
 
@@ -376,114 +363,6 @@ func TestFirstUseWorkFolderRetainsSavedChoice(t *testing.T) {
 			a.openSettingsTab(settingsTabConnection, settingsSourceRail)
 			if a.connectionForm.Draft.WorkingDirectory != config.WorkingDirectory || a.pi != nil || a.connectionProbe != nil || a.connectionApplying || a.connectionTesting {
 				t.Fatalf("%s folder choice was cleared or started Pi: %+v", source, a.connectionForm.Draft)
-			}
-		})
-	}
-}
-
-func TestFirstConnectionSaveQueuedCompletionRetainsLiveLocalState(t *testing.T) {
-	for _, fault := range []bool{false, true} {
-		t.Run(fmt.Sprintf("local-save-failure=%v", fault), func(t *testing.T) {
-			root := t.TempDir()
-			isolateConnectionApp(t, root, filepath.Join(root, "unused-runtime"))
-			a, err := newRuntimeApp()
-			if err != nil {
-				t.Fatal(err)
-			}
-			config := testConnectionConfig(t)
-			a.connectionForm.Draft = newConnectionSettings(&config, config.WorkingDirectory).Draft
-			updates := make(chan func(), 1)
-			a.setUIHook(func(fn func()) { updates <- fn })
-			a.saveConnection(config)
-			complete := awaitFolderChoice(t, updates)
-			// The worker has returned, but the queued completion has not touched live UI state.
-			if a.connectionSaved != nil || !a.connectionSaveInFlight {
-				t.Fatal("test did not stop at the first-save completion boundary")
-			}
-			if fault {
-				// Remove only this test's old worker file so live autosave can own the store before a write fault.
-				if err := os.Remove(a.storePath); err != nil && !os.IsNotExist(err) {
-					t.Fatal(err)
-				}
-			}
-			tr := ui.NewTester(a.view, 1040, 720)
-			tr.Frame()
-			if err := tr.Click("← Back to workbench"); err != nil {
-				t.Fatal(err)
-			}
-			tr.Frame()
-			first := a.selectedContact()
-			focusComposer(t, tr, locales.In("en").ComposerLabel(first.Name))
-			tr.Type("Draft typed after the connection worker")
-			tr.Frame()
-			if err := tr.Click("Add contact"); err != nil {
-				t.Fatal(err)
-			}
-			tr.Frame()
-			second := a.selectedContact()
-			focusComposer(t, tr, locales.In("en").ComposerLabel(second.Name))
-			tr.Type("Second live draft")
-			tr.Frame()
-			if fault {
-				if err := os.Remove(a.storePath); err != nil {
-					t.Fatal(err)
-				}
-				if err := os.Mkdir(a.storePath, 0o700); err != nil {
-					t.Fatal(err)
-				}
-				second.Draft = "Retain this unsaved edit"
-				a.draftChanged(second)
-				if a.localSaveErr == "" {
-					t.Fatal("directory collision did not produce the controlled local-save error")
-				}
-				if err := os.Remove(a.storePath); err != nil {
-					t.Fatal(err)
-				}
-			}
-			editor := a.ensureSettingsProfileEditor(second.ID)
-			editor.Draft.Name = "Unsaved profile name"
-			var currentHost *piAppHost
-			if !fault {
-				currentHost = &piAppHost{}
-				a.pi = currentHost
-				second.ActiveTaskID, second.SendState = "accepted-task", sendAccepted
-			}
-			firstID, secondID, selected := first.ID, second.ID, a.selectedID()
-			firstDraft, secondDraft, localError := first.Draft, second.Draft, a.localSaveErr
-			complete()
-			if len(a.contacts) != 2 || a.contactByID(firstID) != first || a.contactByID(secondID) != second || a.selectedID() != selected || first.Draft != firstDraft || second.Draft != secondDraft {
-				t.Fatal("first connection-save completion replaced live contact IDs, drafts or selection with its worker snapshot")
-			}
-			if a.localSaveErr != localError {
-				t.Fatal("connection completion discarded/retried an independent local-save failure")
-			}
-			if fault && (a.connectionForm.Error != connStatusSavedStoreFailed || a.connectionReloadBlocked() != connBlockedStore) {
-				t.Fatal("saved connection did not retain the local-store error and block Apply")
-			}
-			if !fault && a.connectionReloadBlocked() != connBlockedActiveWork {
-				t.Fatal("completion lost intervening activity and enabled Apply")
-			}
-			if editor.Draft.Name != "Unsaved profile name" || second.Name == editor.Draft.Name {
-				t.Fatal("connection Save discarded or force-saved the profile editor")
-			}
-			if a.connectionSaved == nil || a.connectionSaved.WorkingDirectory != config.WorkingDirectory || a.connectionSaveInFlight || a.pi != currentHost || a.connectionApplying {
-				t.Fatal("Save lost its successful connection write or automatically applied it")
-			}
-			if fault {
-				if err := a.persist(); err != nil || a.localSaveErr != "" || a.connectionReloadBlocked() != "" {
-					t.Fatalf("explicit local Retry save did not recover: %v", err)
-				}
-				tr := ui.NewTester(a.view, 1040, 900)
-				tr.Frame()
-				if a.connectionForm.Error != "" || a.connectionForm.ErrorDetail != "" {
-					t.Fatal("local Retry left owned Connection feedback stale")
-				}
-				const applyFailure = "Pi worker exited while applying"
-				a.connectionForm.Error, a.connectionForm.ErrorDetail = connErrorApplyConfig, applyFailure
-				tr.Frame()
-				if a.connectionForm.Error != connErrorApplyConfig || a.connectionForm.ErrorDetail != applyFailure || editor.Draft.Name != "Unsaved profile name" || second.Name == editor.Draft.Name || a.pi != currentHost || a.connectionApplying {
-					t.Fatal("feedback recovery changed unrelated errors/profile/runtime state")
-				}
 			}
 		})
 	}
