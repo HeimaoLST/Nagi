@@ -320,7 +320,7 @@ func (a *appModel) openProductProfile(ctx context.Context, fresh bool, generatio
 			a.appearanceMode = normalizeAppearanceMode(local.Appearance)
 		}
 		a.applyProductConnection(opened.Snapshot.Connection)
-		a.connectionForm = newConnectionSettings(a.connectionSaved, a.workDir)
+		a.connectionForm = newConnectionSettings(a.connectionSaved, "")
 		a.connectionForm.Busy = a.connectionApplying
 		a.applyBuiltinCatalog(ready)
 		for _, ct := range contacts {
