@@ -16,10 +16,6 @@ func issueForContact(ct *contact, issueID string) *productIssue {
 	return ct.issueByID(issueID)
 }
 
-func (a *appModel) issueForSelected(issueID string) *productIssue {
-	return issueForContact(a.selectedContact(), issueID)
-}
-
 func issueLifecycleStartBlocked(issue *productIssue) string {
 	if issue == nil {
 		return "Issue not found."
@@ -119,43 +115,11 @@ func (a *appModel) editIssueFor(ct *contact, issueID, goal, requirementsText str
 	return true
 }
 
-func (a *appModel) setIssueRequirementStateFor(ct *contact, issueID, requirementID, state, evidence string) bool {
-	issue := issueForContact(ct, issueID)
-	requirement := issueRequirementByID(issue, requirementID)
-	if issue == nil || requirement == nil {
-		return false
-	}
-	if issue.Archived || issue.Status == issueStatusCompleted || issue.Status == issueStatusCanceled {
-		return false
-	}
-	if state != requirementUnverified && state != requirementSatisfied && state != requirementUnmet {
-		return false
-	}
-	oldState, oldEvidence, oldUpdated := requirement.State, requirement.Evidence, requirement.UpdatedAt
-	oldIssueUpdated := issue.UpdatedAt
-	requirement.State = state
-	requirement.Evidence = strings.TrimSpace(evidence)
-	if state != requirementUnverified && requirement.Evidence == "" {
-		requirement.Evidence = "User marked " + strings.ReplaceAll(state, "_", " ") + "."
-	}
-	requirement.UpdatedAt = nowMillis()
-	issue.UpdatedAt = requirement.UpdatedAt
-	if err := a.persist(); err != nil {
-		requirement.State, requirement.Evidence, requirement.UpdatedAt = oldState, oldEvidence, oldUpdated
-		issue.UpdatedAt = oldIssueUpdated
-		return false
-	}
-	return true
-}
-
 func (a *appModel) markIssueWaitingFor(ct *contact, issueID string) bool {
 	return a.markIssueWaitingForQuestion(ct, issueID, "", nil, nil, nil)
 }
 
-// markIssueWaitingForQuestion is the one waiting application save. It validates
-// the active/unknown boundary before touching an existing question, then writes
-// status, AutoContinue, the optional supersede/new question and its operation
-// receipt in one persist. UI mark-waiting and tool wait share this path.
+// markIssueWaitingForQuestion saves the status, optional question transition, and receipt together.
 func (a *appModel) markIssueWaitingForQuestion(ct *contact, issueID, supersedeRef string, question *issueQuestion, operation *IssueToolOperation, receipt *IssueToolReceipt) bool {
 	return a.markIssueWaitingForQuestionActive(ct, issueID, supersedeRef, question, operation, receipt, false)
 }
@@ -288,63 +252,6 @@ func (a *appModel) completeIssueFor(ct *contact, issueID, evidence string) bool 
 	return true
 }
 
-func (a *appModel) reopenIssueFor(ct *contact, issueID string) bool {
-	issue := issueForContact(ct, issueID)
-	if issue == nil || issue.Archived {
-		return false
-	}
-	if issue.Status != issueStatusCompleted && issue.Status != issueStatusCanceled {
-		return false
-	}
-	if issue.Work.ActiveTaskID != "" || issue.Work.SendState != sendIdle || issueRunBlocked(issue) != "" {
-		return false
-	}
-	next := issueStatusInProgress
-	if len(issue.Executions) == 0 {
-		next = issueStatusNotStarted
-	}
-	return a.setIssueStatus(issue, next)
-}
-
-func (a *appModel) editIssue(issueID, goal, requirementsText string) bool {
-	return a.editIssueFor(a.selectedContact(), issueID, goal, requirementsText)
-}
-
-func (a *appModel) setIssueRequirementState(issueID, requirementID, state, evidence string) bool {
-	return a.setIssueRequirementStateFor(a.selectedContact(), issueID, requirementID, state, evidence)
-}
-
-func (a *appModel) markIssueWaiting(issueID string) bool {
-	return a.markIssueWaitingFor(a.selectedContact(), issueID)
-}
-
-func (a *appModel) resumeIssue(issueID string) bool {
-	return a.resumeIssueFor(a.selectedContact(), issueID)
-}
-
-func (a *appModel) completeIssue(issueID, evidence string) bool {
-	return a.completeIssueFor(a.selectedContact(), issueID, evidence)
-}
-
-func (a *appModel) reopenIssue(issueID string) bool {
-	return a.reopenIssueFor(a.selectedContact(), issueID)
-}
-
-func (a *appModel) archiveIssue(issueID string) bool {
-	return a.archiveIssueFor(a.selectedContact(), issueID)
-}
-
-func (a *appModel) restoreIssue(issueID string) bool {
-	return a.restoreIssueFor(a.selectedContact(), issueID)
-}
-
-// cancelIssueProduct is separate from cancelIssue (stop execution): it records
-// the product-level canceled state, then asks the existing execution path to
-// stop any real active task. The task terminal remains whatever Runtime reports.
-func (a *appModel) cancelIssueProduct(issueID string) bool {
-	return a.cancelIssueProductFor(a.selectedContact(), issueID)
-}
-
 func (a *appModel) cancelIssueProductFor(ct *contact, issueID string) bool {
 	if ct == nil {
 		return false
@@ -381,39 +288,6 @@ func (a *appModel) cancelIssueProductFor(ct *contact, issueID string) bool {
 			_ = a.persist()
 			return false
 		}
-	}
-	return true
-}
-
-func (a *appModel) archiveIssueFor(ct *contact, issueID string) bool {
-	issue := issueForContact(ct, issueID)
-	if issue == nil || issue.Archived {
-		return false
-	}
-	if !a.setIssueSupplementAuto(ct, issue.ID, false) {
-		return false
-	}
-	old, oldUpdated := issue.Archived, issue.UpdatedAt
-	issue.Archived = true
-	issue.UpdatedAt = nowMillis()
-	if err := a.persist(); err != nil {
-		issue.Archived, issue.UpdatedAt = old, oldUpdated
-		return false
-	}
-	return true
-}
-
-func (a *appModel) restoreIssueFor(ct *contact, issueID string) bool {
-	issue := issueForContact(ct, issueID)
-	if issue == nil || !issue.Archived {
-		return false
-	}
-	old, oldUpdated := issue.Archived, issue.UpdatedAt
-	issue.Archived = false
-	issue.UpdatedAt = nowMillis()
-	if err := a.persist(); err != nil {
-		issue.Archived, issue.UpdatedAt = old, oldUpdated
-		return false
 	}
 	return true
 }

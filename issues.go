@@ -223,18 +223,6 @@ func issueRequirementsText(issue *productIssue) string {
 	return strings.Join(parts, "\n")
 }
 
-func issueRequirementByID(issue *productIssue, id string) *issueRequirement {
-	if issue == nil {
-		return nil
-	}
-	for _, requirement := range issue.Requirements {
-		if requirement != nil && requirement.ID == id {
-			return requirement
-		}
-	}
-	return nil
-}
-
 func normalizeIssueStatus(status string, executions []*issueExecution) string {
 	switch status {
 	case issueStatusNotStarted, issueStatusInProgress, issueStatusWaitingUser,
@@ -455,8 +443,6 @@ func issueHasRemainingRequirements(issue *productIssue) bool {
 	return false
 }
 
-// issueEvidenceText is a factual summary only. It does not turn a completed
-// Runtime task into a completed product item or infer deliverable files.
 const (
 	issueBlockNoIssue   = "no-issue"
 	issueBlockArchived  = "archived"
@@ -552,16 +538,6 @@ func issueNoticeText(msgs locales.Messages, notice, detail string) string {
 	default:
 		return sendBlockText(msgs, notice)
 	}
-}
-
-// issueEvidenceText is a factual summary only. It does not turn a completed
-// Runtime task into a completed product item or infer deliverable files.
-
-func issueEvidenceText(msgs locales.Messages, issue *productIssue) string {
-	if strings.TrimSpace(issue.Evidence) != "" {
-		return issue.Evidence
-	}
-	return msgs.IssueEvidenceUnverified()
 }
 
 func issueExecutionText(msgs locales.Messages, status string) string {
@@ -661,28 +637,6 @@ func issuesForStoredContact(all []storedIssue, contactID string) []*productIssue
 		out = append(out, issue)
 	}
 	return out
-}
-
-// runIssue persists a prepared execution snapshot before any Runtime dispatch.
-// The issue remains open regardless of the eventual runtime task state.
-func (a *appModel) runIssue(issueID string) bool {
-	return a.runIssueFor(a.selectedContact(), issueID)
-}
-
-func (a *appModel) runIssueFor(ct *contact, issueID string) bool {
-	issue := issueForContact(ct, issueID)
-	if issue == nil {
-		if ct == nil {
-			a.setIssueFormNotice("Contact not found.", "contact-missing", "")
-		} else {
-			a.setIssueFormNotice("Issue not found for this contact.", "issue-missing", "")
-		}
-		return false
-	}
-	if !a.issueRunCaptured(ct, issue) {
-		return false
-	}
-	return true
 }
 
 // issueRunCaptured validates and dispatches using captured objects only. The

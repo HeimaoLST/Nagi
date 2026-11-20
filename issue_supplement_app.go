@@ -265,21 +265,6 @@ func (a *appModel) saveIssueQuestionAnswer(target issueSupplementTarget, questio
 	return true
 }
 
-func (a *appModel) retryIssueSupplementBatch(ct *contact, issue *productIssue, batch *issueSupplementBatch) bool {
-	if issue == nil || batch == nil || issue.Supplements == nil {
-		return false
-	}
-	if !issue.Supplements.RetryUnaccepted(batch, a.persist) {
-		a.setIssueActionNotice("Could not save the retry intent; the old supplement receipt was left unchanged.", "supplement-retry-save-failed", "")
-		return false
-	}
-	if !a.issueRunCaptured(ct, issue) {
-		a.setIssueActionNotice(a.issueFormError, a.issueFormNotice, a.issueFormNoticeDetail)
-		return false
-	}
-	return true
-}
-
 func (a *appModel) normalizeRestoredSupplementBatches() {
 	changed := false
 	for _, ct := range a.contacts {

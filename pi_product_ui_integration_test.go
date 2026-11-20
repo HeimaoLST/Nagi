@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -401,6 +402,33 @@ func TestPiAppConcurrentActivities(t *testing.T) {
 		return item != nil && len(item.Executions) == 1 && item.Executions[0].State == "running" && !cedar.activity.reading
 	})
 	secondRun := get(w, secondID).Executions[0].ExecutionID
+	connection, err := w.client.Connection(ctx)
+	if err != nil || connection.EffectiveRevision == nil || connection.Effective == nil {
+		t.Fatalf("read effective connection before Apply: %+v, %v", connection, err)
+	}
+	configuration := connection.Effective.ProductConnectionSettings
+	configuration.Model = "unapplied-fixture-model"
+	savedConnection, err := w.client.SaveConnection(ctx, pi.ProductConnectionSaveParams{
+		OperationID:   "save-while-activity-held",
+		Configuration: pi.ProductConnectionInput{ProductConnectionSettings: configuration, APIKey: "nagi-product-loopback"},
+	})
+	if err != nil || savedConnection.SavedRevision == nil || *savedConnection.SavedRevision == *connection.EffectiveRevision {
+		t.Fatalf("save separate connection revision: %+v, %v", savedConnection, err)
+	}
+	_, err = w.client.ApplyConnection(ctx, pi.ProductConnectionApplyParams{SavedRevision: *savedConnection.SavedRevision, OperationID: "apply-while-activity-held"})
+	var rejection *pi.RemoteError
+	if !errors.As(err, &rejection) || rejection.Code != "busy" {
+		t.Fatalf("Apply during active work should return busy: %v", err)
+	}
+	current, err := w.client.Connection(ctx)
+	if err != nil || !reflect.DeepEqual(current.EffectiveRevision, connection.EffectiveRevision) ||
+		!reflect.DeepEqual(current.Effective, connection.Effective) || !reflect.DeepEqual(current.SavedRevision, savedConnection.SavedRevision) {
+		t.Fatalf("busy Apply changed saved or effective connection: %+v, %v", current, err)
+	}
+	running := get(w, secondID).Executions
+	if len(running) != 1 || running[0].ExecutionID != secondRun || running[0].State != "running" {
+		t.Fatalf("busy Apply affected the active execution: %+v", running)
+	}
 	back()
 	selectActivity(w, cedar, firstGoal, firstID)
 	bottom()
@@ -409,7 +437,11 @@ func TestPiAppConcurrentActivities(t *testing.T) {
 		item := cedar.activity.activity
 		return item != nil && len(item.Executions) == 1 && item.Executions[0].State == "completed" && len(item.Questions) == 1 && item.Questions[0].Delivery == "delivered" && !cedar.activity.reading
 	})
-	answered := get(w, firstID).Questions[0]
+	completedRun := get(w, firstID)
+	if completedRun.State != "needsAttention" {
+		t.Fatalf("completed execution changed activity to %q", completedRun.State)
+	}
+	answered := completedRun.Questions[0]
 	if answered.QuestionID != question.QuestionID || answered.ExecutionID != question.ExecutionID || answered.Answer == nil ||
 		answered.Answer.Text != answer || len(answered.Answer.Materials) != 1 || answered.Answer.Materials[0].Name != material || answered.Answer.Materials[0].Text != excerpt {
 		t.Fatalf("the answer and captured material changed across the activity switch: %+v", answered)
@@ -444,8 +476,8 @@ func TestPiAppConcurrentActivities(t *testing.T) {
 		t.Fatalf("result changed after restart: %+v", got)
 	}
 	firstAfter, secondAfter := get(reopened, firstID), get(reopened, secondID)
-	if len(firstAfter.Questions) != 1 || !reflect.DeepEqual(firstAfter.Questions[0], answered) || len(secondAfter.Executions) != 1 ||
-		secondAfter.Executions[0].ExecutionID != secondRun || secondAfter.Executions[0].State != "interrupted" {
+	if firstAfter.State != "needsAttention" || len(firstAfter.Questions) != 1 || !reflect.DeepEqual(firstAfter.Questions[0], answered) ||
+		len(secondAfter.Executions) != 1 || secondAfter.Executions[0].ExecutionID != secondRun || secondAfter.Executions[0].State != "interrupted" {
 		t.Fatal("restart changed the answered question or the stopped execution")
 	}
 	var drafts [2]string
@@ -630,11 +662,20 @@ func TestPiAppSettingsBackupRestore(t *testing.T) {
 			t.Fatal("a foreign execution association changed the target profile")
 		}
 		restore.pump.do(func() { chosen = backup })
-		restore.click(msg.RestorePausedAction())
-		restore.wait(func() bool { return restore.view.HasText(msg.RecoveryPreviewCounts(2, 1)) })
-		if !bytes.Equal(read(profile), damaged) {
-			t.Fatal("preview changed the profile before confirmation")
+		preview := func() {
+			restore.click(msg.RestorePausedAction())
+			restore.wait(func() bool { return restore.view.HasText(msg.RecoveryPreviewCounts(2, 1)) && restore.view.Focused(msg.RecoveryConfirmAction()) })
+			if !bytes.Equal(read(profile), damaged) || !bytes.Equal(read(private), credentials) {
+				t.Fatal("preview changed the original profile or credentials")
+			}
 		}
+		preview()
+		restore.click(msg.RecoveryCancelAction())
+		restore.wait(func() bool { return !restore.view.HasText(msg.RecoveryPreviewTitle()) })
+		if !bytes.Equal(read(profile), damaged) || !bytes.Equal(read(backup), captured) || !bytes.Equal(read(private), credentials) {
+			t.Fatal("canceling the preview changed the original, backup or credentials")
+		}
+		preview()
 		restore.click(msg.RecoveryConfirmAction())
 		restore.wait(func() bool { return restore.view.HasText(msg.RecoveryInstalled()) })
 		var archive string

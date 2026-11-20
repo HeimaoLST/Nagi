@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/HeimaoLST/Nagi/internal/pi"
-	"github.com/HeimaoLST/Nagi/locales"
 )
 
 func TestIssueStoreRoundTripKeepsPiConversationAndDraft(t *testing.T) {
@@ -71,18 +70,6 @@ func TestCreateIssueRequiresGoalAndPersistsBeforeAnyRun(t *testing.T) {
 	}
 	if len(reopened.state.Issues) != 1 || reopened.state.Issues[0].ID != issue.ID || len(reopened.state.Issues[0].Executions) != 0 {
 		t.Fatalf("saved issues = %+v", reopened.state.Issues)
-	}
-}
-
-func TestIssueEvidenceDoesNotInferCompletion(t *testing.T) {
-	issue := &productIssue{ID: "i1", Goal: "draft", Requirements: parseIssueRequirements("needs approval")}
-	text := issueEvidenceText(locales.In("en"), issue)
-	if !strings.Contains(text, "Completion not verified") {
-		t.Fatalf("evidence text = %q", text)
-	}
-	issue.Evidence = "user supplied: reviewer approved"
-	if got := issueEvidenceText(locales.In("en"), issue); got != issue.Evidence {
-		t.Fatalf("explicit evidence changed: %q", got)
 	}
 }
 
