@@ -1530,6 +1530,66 @@ func (msgs Messages) LookedUpEarlier() string {
 	return Catalog.Format(msgs.locale, "lookedUpEarlier", nil)
 }
 
+// PreviousChats says "Previous chats"
+// in the language the app shows.
+func PreviousChats() string { return In(i18n.Locale()).PreviousChats() }
+
+// PreviousChats says "Previous chats"
+// in the language of msgs.
+func (msgs Messages) PreviousChats() string {
+	return Catalog.Format(msgs.locale, "previousChats", nil)
+}
+
+// SourceChat says "Source chat"
+// in the language the app shows.
+func SourceChat() string { return In(i18n.Locale()).SourceChat() }
+
+// SourceChat says "Source chat"
+// in the language of msgs.
+func (msgs Messages) SourceChat() string {
+	return Catalog.Format(msgs.locale, "sourceChat", nil)
+}
+
+// ReadOnlyChat says "Read-only chat"
+// in the language the app shows.
+func ReadOnlyChat() string { return In(i18n.Locale()).ReadOnlyChat() }
+
+// ReadOnlyChat says "Read-only chat"
+// in the language of msgs.
+func (msgs Messages) ReadOnlyChat() string {
+	return Catalog.Format(msgs.locale, "readOnlyChat", nil)
+}
+
+// NoPreviousChats says "No previous chats"
+// in the language the app shows.
+func NoPreviousChats() string { return In(i18n.Locale()).NoPreviousChats() }
+
+// NoPreviousChats says "No previous chats"
+// in the language of msgs.
+func (msgs Messages) NoPreviousChats() string {
+	return Catalog.Format(msgs.locale, "noPreviousChats", nil)
+}
+
+// LoadingChatHistory says "Loading chat history…"
+// in the language the app shows.
+func LoadingChatHistory() string { return In(i18n.Locale()).LoadingChatHistory() }
+
+// LoadingChatHistory says "Loading chat history…"
+// in the language of msgs.
+func (msgs Messages) LoadingChatHistory() string {
+	return Catalog.Format(msgs.locale, "loadingChatHistory", nil)
+}
+
+// LoadMoreChats says "Load more chats"
+// in the language the app shows.
+func LoadMoreChats() string { return In(i18n.Locale()).LoadMoreChats() }
+
+// LoadMoreChats says "Load more chats"
+// in the language of msgs.
+func (msgs Messages) LoadMoreChats() string {
+	return Catalog.Format(msgs.locale, "loadMoreChats", nil)
+}
+
 // OpenSources says "Open sources"
 // in the language the app shows.
 func OpenSources() string { return In(i18n.Locale()).OpenSources() }

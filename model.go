@@ -167,6 +167,8 @@ type appModel struct {
 	auxMessage           int
 	defaultContactN      int
 	focusComposer        bool
+	priorChats           *productConversationBrowser
+	focusPreviousChats   bool
 	composerHandle       ui.Handle
 	composerPanel        string
 	composerFocusContext bool
@@ -426,6 +428,8 @@ func (a *appModel) selectContact(i int) {
 	a.contextFileGeneration++
 	a.contacts[i].Unread = 0
 	a.selected = i
+	a.priorChats = nil
+	a.focusPreviousChats = false
 	if !a.demo {
 		a.persist()
 	}

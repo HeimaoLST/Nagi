@@ -87,6 +87,10 @@ func (a *appModel) view(c *ui.Context) {
 }
 
 func (a *appModel) escapeTopLayer() {
+	if a.priorChats != nil {
+		a.backProductConversations()
+		return
+	}
 	if a.aux != "" {
 		a.closeAux()
 		return
@@ -128,6 +132,8 @@ func (a *appModel) openSettingsFromContext(c *ui.Context, tab, source string) {
 
 func (a *appModel) armActiveSurfaceFallback() {
 	switch {
+	case a.priorChats != nil:
+		a.priorChats.focusBack = true
 	case a.aux == "sources":
 		a.focusSourcesBack = true
 	case a.detailIs(detailProfile):
@@ -593,6 +599,10 @@ func (a *appModel) main(c *ui.Context, t *ui.Theme) {
 	ct := a.selectedContact()
 	msgs := locales.In(c.Locale())
 	ui.Column(c).Grow(1).MinWidth(0).FillHeight().Margin(4).Background(a.workTheme.Reading).Border(1, t.Border).Radius(16).Clip().Children(func() {
+		if browser := a.priorChats; browser != nil && browser.contact == ct {
+			a.productConversationsView(c, t, browser)
+			return
+		}
 		a.header(c, t)
 		state := a.connectionViewState()
 		showConnectionSettings := true
@@ -668,8 +678,19 @@ func (a *appModel) header(c *ui.Context, t *ui.Theme) {
 						ui.Text(c, ct.Role).FontSize(typeHeaderMeta).FontWeight(400).FixedLineHeight(lineHeader).MinWidth(0).Grow(1).TextColor(t.TextMuted)
 					})
 				})
-				if a.railCollapsed {
+				if a.productHost() != nil {
 					ui.Spacer(c)
+					previous := secondaryButton(c, msgs.PreviousChats()).Shrink(0).Disabled(!a.productProfileReady()).OnClick(func() {
+						a.browseProductConversations(ct, "")
+					})
+					if a.focusPreviousChats {
+						previous.Focus()
+						a.focusPreviousChats = false
+					}
+				} else if a.railCollapsed {
+					ui.Spacer(c)
+				}
+				if a.railCollapsed {
 					a.showContactsButton(c, t)
 				}
 			})
@@ -873,6 +894,13 @@ func (a *appModel) productActivityDetails(c *ui.Context, t *ui.Theme, ct *contac
 	blocked := client == nil || p.changing || pending.OperationID != "" || a.dataRecoveryBlocksChanges()
 	ui.Text(c, activity.Goal).FontSize(typeSettingsTitle).FontWeight(500).FixedLineHeight(lineSettingsTitle).TextColor(t.Text)
 	a.activityText(c, t, productActivityStateLabel(msgs, activity.State))
+	if origin := activity.OriginConversationID; origin != "" {
+		source := secondaryButton(c, msgs.SourceChat()).Disabled(client == nil).OnClick(func() { a.browseProductConversations(ct, origin) })
+		if p.focusSource {
+			source.Focus().ScrollIntoView()
+			p.focusSource = false
+		}
+	}
 	for _, requirement := range activity.Requirements {
 		a.activityText(c, t, requirement)
 	}
@@ -1025,6 +1053,32 @@ func (a *appModel) productActivityResultView(c *ui.Context, t *ui.Theme, p *prod
 }
 
 func (a *appModel) historyMessage(c *ui.Context, t *ui.Theme, e historyEntry, highlight bool) {
+	ct := a.selectedContact()
+	a.renderHistoryEntry(c, t, e, highlight, ct.Name, historyLinkScope(ct.ID, "conversation", e.ID), ct.SessionWorkingDir)
+}
+
+func (a *appModel) productReadOnlyTranscript(c *ui.Context, t *ui.Theme, browser *productConversationBrowser, name string) {
+	entries := browser.history.entries
+	msgs := locales.In(c.Locale())
+	if len(entries) == 0 {
+		if browser.ownerID != "" {
+			ui.Row(c).FillWidth().Justify(ui.Center).Children(func() {
+				a.activityText(c, t, msgs.EmptyNoMessages())
+			})
+		}
+		return
+	}
+	browser.transcript.Key = func(i int) any { return entries[i].ID }
+	ui.Row(c).Grow(1).FillWidth().MinHeight(0).Justify(ui.Center).Children(func() {
+		ui.List(c, &browser.transcript, len(entries), func(i int) {
+			entry := entries[i]
+			scope := historyLinkScope(browser.ownerID, browser.selectedID, entry.ID)
+			a.renderHistoryEntry(c, t, entry, false, name, scope, "")
+		}).Label(msgs.ConversationMessagesLabel()).Fill().MaxWidth(conversationMaxWidth).Padding(16).Gap(12)
+	})
+}
+
+func (a *appModel) renderHistoryEntry(c *ui.Context, t *ui.Theme, e historyEntry, highlight bool, name, scope, workDir string) {
 	bg := ui.Transparent
 	if e.From == "me" {
 		bg = a.workTheme.BubbleUser
@@ -1046,11 +1100,11 @@ func (a *appModel) historyMessage(c *ui.Context, t *ui.Theme, e historyEntry, hi
 	}
 	ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Start).Children(func() {
 		ui.Column(c).MaxWidth(conversationMaxWidth).MinWidth(0).Shrink(1).Children(func() {
-			opts := a.readerOptions(messageReaderOptions(c, false), historyLinkScope(a.selectedContact().ID, "conversation", e.ID), a.selectedContact().SessionWorkingDir)
+			opts := a.readerOptions(messageReaderOptions(c, false), scope, workDir)
 			opts.MessageBubble = &markdownMessageBubble{
 				Background: bg, PaddingX: 0, PaddingY: 0, Radius: 0,
 				Header: func(hc *ui.Context) {
-					ui.Text(hc, a.selectedContact().Name+"  "+e.Date).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
+					ui.Text(hc, name+"  "+e.Date).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 				},
 			}
 			markdownReader(c, e.Text, opts).FontSize(typeBody).FixedLineHeight(lineBody)
