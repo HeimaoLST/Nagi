@@ -484,7 +484,7 @@ func (a *appModel) chooseContactWorkFolder(contactID string, editor *contactProf
 		path, err := chooseWorkFolder(pick, opts)
 		a.updateUI(func() {
 			editor.Busy = false
-			if a.shutdownStarted || generation != a.folderChoiceGeneration || a.contactByID(contactID) != ct || ct.Archived || a.contactProfileID != contactID || a.settingsOpen || !a.detailIs(detailProfile) {
+			if a.shutdownStarted || generation != a.folderChoiceGeneration || a.contactByID(contactID) != ct || ct.Archived || a.profileEditorFor(contactID) != editor || a.contactProfileID != contactID || a.settingsOpen || !a.detailIs(detailProfile) {
 				return
 			}
 			editor.focusFolder = true
