@@ -78,6 +78,12 @@
 **Cause or correction:** They are disposable development environments, not the authoritative project record.
 **Prevention:** Commit/push coherent safe checkpoints, retain essential contracts and actual validation summaries in Git/PR records, and merge completed work after required gates. Export controlled process receipts before test TempDir cleanup, including on failure. Do not rely on a temporary evidence path alone.
 
+## Identify the packaged executable by file identity
+
+**Problem:** Standalone validation rejected the running bundled Node before checking normal quit.
+**Cause or correction:** Foundation resolved the observed executable to /tmp while the package path used /private/tmp. Both names identified the same file.
+**Prevention:** Match the child to the app PID and compare the device and inode of the kernel-reported executable with the bundled file. Check normal quit and worker disappearance separately.
+
 ## Inspect process path dependencies beyond executable names
 
 **Problem:** Historical cleanup filtering by expected executable names missed a Python process whose working directory referenced a retained task path.
@@ -209,6 +215,12 @@
 **Problem:** Handoffs announced placeholder digests, and readbacks assumed a compiler version or complete SDK inventory instead of reading the actual records. A later payload report stored displayed redaction placeholders in digest fields. An inverse-source verification also reported a mismatch after its reconstruction inserted an extra newline.
 **Cause or correction:** These were metadata or verification errors. The prepared SDK tree covered113 matching files; the fresh package also contained3 unchanged documentation/notice files. Correcting the inverse reconstruction restored the expected hash without changing source.
 **Prevention:** Freeze actual bytes, derive versions/counts/digests programmatically from records and compare explicit file sets, reporting additional files. Finish all ownership and budget checks before exporting and hashing their evidence object; a preparation review caught a later check omitted from an earlier export. Preserve exact block separators in source reconstruction and diagnose the verifier before editing already-correct code. Keep machine-readable digest fields exact; suppress display when necessary instead of replacing stored data with transcript placeholders. Inspect captured image magic bytes and dimensions before selecting an extension or MIME type; the native capture API returned JPEG despite an initial PNG assumption. Label incomplete work without a digest and preserve metadata corrections without rerunning unchanged production work.
+
+## Match packaging helpers to the build interpreter
+
+**Problem:** App assembly stopped before compilation when hashing the worker payload under macOS system Python 3.9.
+**Cause or correction:** The assembler called hashlib.file_digest, which requires Python 3.11. The worker builder already uses incremental SHA-256.
+**Prevention:** Use the supported hashing pattern and verify the helper with the interpreter used by the packaging job.
 
 ## Keep worker build payloads outside the checkout
 
