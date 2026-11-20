@@ -26,6 +26,8 @@ The built worker exports JSON Schema 2020-12 from `dist/protocol.js` as `product
 ./bin/node --input-type=module -e 'import { productWireSchema } from "./dist/protocol.js"; console.log(JSON.stringify(productWireSchema, null, 2))'
 ```
 
+The left Bot Team list opens a management menu on a secondary click anywhere in a Bot row. The editor captures that row’s `botId` for reads and mutations. Global Settings contains app-wide preferences.
+
 ## Methods
 
 User actions with durable effects use `operationId`. `expectedRevision` is the caller's observed version of an editable object. List and history methods accept `cursor?` and `limit?` and return `{ items, nextCursor }`, with `null` at the end. Cursors are opaque and bound to the query. A cursor belonging to a different query or an unavailable anchor yields `invalid_cursor`.
@@ -66,7 +68,7 @@ The worker opens product mode with explicit absolute `--product-profile <contact
 
 | Current stored records | Product representation |
 | --- | --- |
-| Contacts, current and previous Pi bindings, selected contact | Bot identity and current/read-only conversation IDs. Existing Pi context, session and captured configuration associations are retained. Native preferences carry the existing selection, layout, theme IDs and appearance. |
+| Stored v10 Bot records, current and previous Pi bindings, selected Bot | Bot identity and current/read-only conversation IDs. Existing Pi context, session and captured configuration associations are retained. Native preferences carry the existing selection, layout, theme IDs and appearance. |
 | Draft and pending send | Exact draft text and saved material snapshots. Pending sends use known operation and execution IDs from the original scope where available. An uncertain send remains unknown and is never submitted during admission. |
 | Activities, questions, recorded operations and handoffs | Activities preserve execution IDs, questions and receipt associations. Imported questions require a verified original execution. Handoffs require the original source conversation session, Bot and issuing turn. Admission rejects unresolved or mismatched associations before replacing the original file. |
 | Saved v2 connection and captured source records | The private credential file remains the source of keys. The product profile retains nonsecret configuration versions and credential source IDs. No key enters a receipt or returned projection. |

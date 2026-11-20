@@ -19,11 +19,11 @@ Obtain API access from your model service, including its API base URL, key, exac
 
 Saved fields appear as value rows; **Edit** opens their current draft. Closing an editor retains edits. **Save configuration** saves defaults without interrupting active work, while **Apply saved** applies the saved values when safe. Existing sessions keep their bound model, limits and working directory; inspect the displayed scope before starting new work. The API key is saved in a private local connection file without encryption.
 
-### Contacts, files and results
+### Bot Team, materials and results
 
-Choose or create a contact and enter a request in its conversation. **General** settings contain appearance, theme and language choices; follow any restart note shown for system windows.
+Choose or create a Bot in the left **Bot Team** list. Right-click anywhere on a Bot’s row and choose **Bot profile** to manage that member. Global Settings holds app-wide preferences. **General** settings contain appearance, theme and language choices; follow any restart note shown for system windows.
 
-For a UTF-8 file, open **Task context → Add file → Choose UTF-8 file…**. Selection fills the path draft. **Save file** reads and saves the snapshot for preview; submission is a separate action. Later disk changes leave that snapshot intact until **Refresh from file**. Text can also be added with **Add snippet**. Review or remove materials before sending.
+For a UTF-8 file, open **Materials → Add file → Choose UTF-8 file…**. Selection fills the path draft. **Save file** reads and saves the snapshot for preview; submission is a separate action. Later disk changes leave that snapshot intact until **Refresh from file**. Text can also be added with **Add snippet**. Review or remove materials before sending.
 
 Ask the Bot in its conversation to check a task, follow up or retrieve a result. One Bot can handle several tasks. Stopping a chat targets that conversation execution. A finished execution can leave its task open. If delivery is uncertain, use the available details or history to check the original work before deciding whether to continue.
 
@@ -31,7 +31,7 @@ Ask the Bot in its conversation to check a task, follow up or retrieve a result.
 
 For a local save error, retain the open draft, correct the reported condition and use **Retry save**. Connection errors belong in **Connection & model**. Opening settings or details does not repeat a model request.
 
-In **Settings → General → Workbench data**, **Save recovery copy…** exports saved contact/task records, saved drafts, requirements and attached text snapshots. It excludes unsaved edits, actual chat/tool history, API settings and keys, work files, theme files and language preferences; it is not a complete backup.
+In **Settings → General → Workbench data**, **Save recovery copy…** exports saved Bot and task records, saved drafts, requirements and attached text snapshots. It excludes unsaved edits, actual chat/tool history, API settings and keys, work files, theme files and language preferences; it is not a complete backup.
 
 When startup cannot load workbench data, **Restore paused…** lets you select a compatible copy, review its preview and explicitly confirm **Restore paused**. An existing original is archived before replacement. Read the outcome before taking another action:
 

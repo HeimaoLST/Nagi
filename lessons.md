@@ -18,11 +18,11 @@
 **Cause or correction:** The fresh form treated the process launch directory as a user-selected workspace. An empty first-use form must require the folder choice.
 **Prevention:** Exercise the normal Product entry with no saved credentials or folder override. Check that Test and Save leave provider count and connection revisions unchanged until the user chooses a folder, then verify inheritance and explicit Bot overrides across reopen.
 
-## Bind the Settings profile editor when opening Settings
+## Bind Bot management to the row in the left Bot Team list
 
-**Problem:** After adding a Bot before configuring a connection, reopening Settings and saving a profile renamed the previously selected Bot.
-**Cause or correction:** Initial connection setup cached the first Bot ID. A later Settings session reused it even after workbench selection changed. Explicitly opening a Bot profile used the correct ID.
-**Prevention:** Bind a fresh generic Settings session to the selected Bot and preserve explicit profile targets and picker choices within that session. Check both Bots by stable ID after saving and reopening. In first-use connection tests, populate the already open editor before invoking its save or test action.
+**Problem:** Individual Bot profiles appeared under global Settings, and a cached selection could send a profile edit to the wrong Bot.
+**Cause or correction:** The user manages a Bot by right-clicking its entire row in the left Bot Team list. Names, previews, avatars and row padding share the target. Conversations serve chat and Settings holds global preferences.
+**Prevention:** Bind every menu and profile action to the row's stable Bot ID. Right-click a different Bot from the one displayed and verify the edited Bot, both drafts and the return focus. Use Bot Team for the collection, Bot for a member, and Materials for text and files attached to a message.
 
 ## Distinguish unknown sends from live work during backup
 

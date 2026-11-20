@@ -2,7 +2,7 @@
 
 ## Product and execution ownership
 
-Nagi is a native MyGo desktop application for long-lived Bot conversations. Use the [desktop v1 user flows](docs/requirements/desktop.md#v1) for product scope. One Bot can own several activities. Switching Bots, starting a new chat or completing a chat turn preserves already admitted work. Keep each draft, activity, question, cancellation, result and file bound to its recorded owner. Preserve an uncertain operation on restart and never replay it automatically.
+Nagi is a native MyGo desktop application for long-lived Bot conversations. Use the [desktop v1 user flows](docs/requirements/desktop.md#v1) for product scope. The left list is the Bot Team. A secondary click anywhere in a Bot row opens management for that row’s stable Bot ID. Keep individual Bot profiles in that flow and global preferences in Settings. Call attached text and files Materials. One Bot can own several activities. Switching Bots, starting a new chat or completing a chat turn preserves already admitted work. Keep each draft, activity, question, cancellation, result and file bound to its recorded owner. Preserve an uncertain operation on restart and never replay it automatically.
 
 The [product protocol](docs/design/product-protocol.md) defines the Go and TypeScript boundary. Pi owns execution, providers, tools and session transcripts. Nagi owns product identity, activity routing, questions, receipts and interaction. Protect current Nagi profiles, supported data admission, backups and reference integrity. App exit drains and reaps the owned worker. Retire fixtures and callers specific to removed features. A stored field, past implementation or old test alone cannot define a new v1 requirement.
 
