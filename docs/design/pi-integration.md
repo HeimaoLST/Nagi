@@ -1,6 +1,6 @@
 # Pi product integration
 
-This is the current migration contract for [Nagi #31](https://github.com/HeimaoLST/Nagi/issues/31). The native Qoder-derived interface and product requirements remain authoritative in [desktop.md](desktop.md) and [the requirements](../requirements/desktop.md). This contract replaces execution-specific Saki assumptions; it is not an acceptance report.
+This is the current migration contract for [Nagi #31](https://github.com/HeimaoLST/Nagi/issues/31). Use the [v1 user flows](../requirements/desktop.md#v1) for feature scope and the [adopted desktop visual contract](desktop.md#qoder-complete-layout-20261116) for presentation. This contract replaces execution-specific Saki assumptions; it is not an acceptance report.
 
 ## Source and product boundary
 

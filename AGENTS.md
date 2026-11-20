@@ -4,6 +4,8 @@
 
 The product goal is an open-source Bot Team, with Grokbot as the user’s reference. The current priorities are polishing the everyday desktop UI against the design checklist and making multiple Bots work independently. Verify that switching between Bots preserves each one’s conversation, draft, running work and results. Cross-Bot coordination is outside this milestone.
 
+Use the [v1 desktop user flows](docs/requirements/desktop.md#v1) for feature scope and the [product protocol](docs/design/product-protocol.md) for the associated interfaces. Treat reference products, old MVP documents, prototype scenes and legacy fixtures as historical evidence. A passing test or a field already present in a profile describes existing behavior. Before extending it or making it a release criterion, identify the current user action or supported data contract it protects. Surface unresolved product choices to the PM.
+
 Nagi is the native MyGo product in module `github.com/HeimaoLST/Nagi`. The authorized integration replaces Saki execution with pinned Pi 1.5.2. Pi owns its execution loop, provider integration, tools and authoritative session transcripts. Nagi owns persistent Bot identity, routing, activities, questions, delivery/effect receipts and user interaction. Do not implement another Agent loop or retain two permanent execution implementations. Do not add a generic backend-plugin framework.
 
 Nagi uses only Pi and its current product store. Retire Saki adapters, legacy session readers, old schema migration and dedicated fixtures. Start with the Nagi profile. Preserve current Pi contacts, drafts, receipts, backups and restart semantics. Keep changes and data cleanup confined to the Nagi product; the Saki project is outside this checkout.

@@ -34,7 +34,7 @@
 
 **Problem:** A primary-Bot/child-Agent conjecture was incorrectly acknowledged as a user-selected product architecture.
 **Cause or correction:** The user withdrew that interpretation. The accepted experience does not select permanent hierarchy, Worker/Branch names, fork policy or migration architecture.
-**Prevention:** Record the exact accepted behavior and authorization scope. Preserve retractions alongside history; do not promote an experiment, proposal or coordinator interpretation into a requirement.
+**Prevention:** Record the exact accepted behavior and authorization scope. Preserve retractions alongside history; do not promote an experiment, proposal or coordinator interpretation into a requirement. Retire conflicting instructions at their entry points. Trace proposed features and test expectations to a current user action or supported data contract before using older designs as implementation guidance.
 
 ## Visual password masking does not establish secure accessibility
 

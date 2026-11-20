@@ -1,8 +1,8 @@
 # Nagi
 
-Nagi is an open-source Bot Team project. The first milestone is a polished desktop interface where users can switch between multiple Bots and work with each one independently. The native desktop app currently supports persistent Bot identities, conversations, activities, follow-up questions and execution results. Pi owns Agent execution, provider/tools and authoritative session transcripts; Nagi owns product identity, routing, state, receipts and the interface. The replacement is in progress; the current tree has not completed product cutover or standalone acceptance.
+Nagi is an open-source native desktop app for working with long-lived Bots. Configure a connection, give a Bot several tasks in conversation, follow up, stop a specific execution and retrieve its results. After reopening the app, check the original work and any uncertain delivery. See the [v1 user flows](docs/requirements/desktop.md#v1).
 
-This repository preserves the Nagi product exported from Saki candidate `00298ae22bb95afc11366597e517a3b1ceba21e7`, including its existing regressions and tests. Repository separation does not complete the historical MVP, native acceptance, real-model A/B work or user trials. See [the documentation index](docs/README.md) and [import provenance](docs/design/source-import.json).
+The current integration uses Pi for execution, tools and transcripts. Nagi owns Bot identity, routing, state, receipts and the MyGo interface. The [documentation index](docs/README.md) links the product contract, visual review criteria and historical sources.
 
 ## Using Nagi
 
