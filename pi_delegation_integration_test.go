@@ -17,6 +17,9 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/HeimaoLST/Nagi/internal/pi"
+	"github.com/HeimaoLST/Nagi/locales"
 )
 
 var delegationScopePattern = regexp.MustCompile(`scope-[a-f0-9]+`)
@@ -453,4 +456,111 @@ func TestPiConversationDelegation(t *testing.T) {
 		t.Fatal(err)
 	}
 	piAppRecord(t, "delegation-run-owners", map[string]any{"research": a, "continuation": next, "stopped": b, "review": reviewRun, "revision": revised, "unknown": restored, "requests": p.requests.Load()})
+}
+
+func TestPiAppProductScopedDelegation(t *testing.T) {
+	const origin, recipient, unrelated = "origin", "recipient", "unrelated"
+	const foreignActivity = "foreign-activity"
+	const key, goal = "inventory", "DELEGATION_PRODUCT_WORK"
+	const chatReply, resultText = "I delegated the inventory", "Inventory findings"
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	p := &delegationProvider{t: t, routes: make(map[string]func(delegationRequest) delegationReply)}
+	root := prepareProductWorkbench(t, p)
+	if err := writeProfileJSON(guiStorePath(), storedState{Version: contactStoreVersion, Selected: origin,
+		Contacts: []storedContact{
+			{ID: origin, Name: "Origin Bot", Workspace: root, Draft: "DELEGATION_PRODUCT_CHAT"},
+			{ID: recipient, Name: "Recipient Bot", Workspace: root, Draft: "Recipient draft"},
+			{ID: unrelated, Name: "Unrelated Bot", Workspace: root},
+		},
+		Issues: []storedIssue{{ID: foreignActivity, ContactID: unrelated, Goal: "Unrelated inventory", Status: issueStatusNotStarted, RequirementsRevision: 1}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	delegate := map[string]any{"key": key, "goal": goal, "assignee_id": recipient, "requirements": []string{"Use the saved inventory"}}
+	var admitted atomic.Value
+	p.routes["DELEGATION_PRODUCT_CHAT"] = func(request delegationRequest) delegationReply {
+		switch request.callID {
+		case "":
+			return delegationReply{tool: "issue_get", id: "foreign-read", args: map[string]any{"issue_id": foreignActivity}}
+		case "foreign-read":
+			if !strings.Contains(request.result, "outside this conversation scope") || strings.Contains(request.result, "Unrelated inventory") {
+				t.Errorf("foreign activity lookup leaked or returned the wrong refusal: %s", request.result)
+			}
+			return delegationReply{tool: "delegate_activity", id: "delegate-first", args: delegate}
+		case "delegate-first":
+			var receipt pi.ProductReceipt
+			if err := json.Unmarshal([]byte(request.result), &receipt); err != nil || receipt.Target.ActivityID == "" || receipt.Execution == nil || receipt.Execution.ExecutionID == "" {
+				t.Errorf("Product did not admit the delegated activity: %s, %v", request.result, err)
+			}
+			admitted.Store(receipt)
+			return delegationReply{tool: "delegate_activity", id: "delegate-repeat", args: delegate}
+		case "delegate-repeat":
+			first := admitted.Load().(pi.ProductReceipt)
+			var receipt pi.ProductReceipt
+			if err := json.Unmarshal([]byte(request.result), &receipt); err != nil || receipt.State != "accepted" || receipt.Target != first.Target {
+				t.Errorf("duplicate delegation changed its target: %s, %v", request.result, err)
+			}
+			return delegationReply{text: chatReply}
+		default:
+			t.Errorf("unexpected delegation tool result %q", request.callID)
+			return delegationReply{text: "Unexpected tool result"}
+		}
+	}
+	p.routes[goal] = func(request delegationRequest) delegationReply {
+		if request.callID != "" || !strings.Contains(request.input, "Use the saved inventory") {
+			t.Errorf("the delegated execution received the wrong requirements: %+v", request)
+		}
+		return delegationReply{text: resultText}
+	}
+	w := openProductWorkbench(t)
+	owner := w.app.contactByID(origin)
+	source := owner.SessionID
+	w.click(locales.In("en").SendAction())
+	w.wait(func() bool {
+		return owner.SendState == sendIdle && len(owner.History) == 2 && owner.History[1].Text == chatReply
+	})
+	first, ok := admitted.Load().(pi.ProductReceipt)
+	if !ok || first.Execution == nil || first.Target.ActivityID == "" {
+		t.Fatal("the conversation did not produce an activity receipt")
+	}
+	activityID, executionID := first.Target.ActivityID, first.Execution.ExecutionID
+	w.wait(func() bool {
+		for _, activity := range owner.activity.items {
+			if activity.ActivityID == activityID && activity.State == "needsAttention" {
+				return true
+			}
+		}
+		return false
+	})
+	conversation, err := w.client.GetConversation(ctx, source)
+	if err != nil || conversation.LatestExecution == nil || conversation.LatestExecution.State != "completed" {
+		t.Fatalf("source conversation did not settle: %+v, %v", conversation, err)
+	}
+	operation := conversation.LatestExecution.ExecutionID + ":delegate:" + key
+	w.shutdown(ctx)
+	reopened := openProductWorkbench(t)
+	for _, check := range []struct{ bot, activity string }{{origin, activityID}, {recipient, activityID}, {unrelated, foreignActivity}} {
+		items, err := reopened.client.ListActivities(ctx, pi.ProductActivityListParams{BotID: check.bot})
+		if err != nil || len(items.Items) != 1 || items.Items[0].ActivityID != check.activity {
+			t.Fatalf("Bot %s activity scope after restart: %+v, %v", check.bot, items, err)
+		}
+	}
+	activity, err := reopened.client.GetActivity(ctx, activityID)
+	if err != nil || activity.OwnerBotID != recipient || activity.OriginConversationID != source || len(activity.Executions) != 1 ||
+		activity.Executions[0].ExecutionID != executionID || activity.Executions[0].State != "completed" {
+		t.Fatalf("delegation lost its receiving Bot, source conversation, or execution: %+v, %v", activity, err)
+	}
+	receipt, err := reopened.client.Operation(ctx, operation)
+	if err != nil || receipt.OperationID != operation || receipt.State != "accepted" || receipt.Target != first.Target {
+		t.Fatalf("restored delegation receipt: %+v, %v", receipt, err)
+	}
+	result, err := reopened.client.ActivityResult(ctx, productActivityExecution(activityID, executionID))
+	if err != nil || result.ActivityID != activityID || result.ExecutionID != executionID || result.Text != resultText || result.Delivery != "available" {
+		t.Fatalf("origin lost the exact delegated result: %+v, %v", result, err)
+	}
+	reopened.shutdown(ctx)
+	if got := p.requests.Load(); got != 5 {
+		t.Fatalf("delegation, duplicate or restart contacted the provider %d times, want 5", got)
+	}
 }
