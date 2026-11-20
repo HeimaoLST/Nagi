@@ -29,6 +29,9 @@ REQUIRED_GROUPS = {
         DESKTOP,
         (
             "TestPiAppConnectionAndConversation",
+            "TestPiAppPreviousAndSourceChat",
+            "TestPiAppConcurrentActivities",
+            "TestPiAppSettingsBackupRestore",
             "TestPiAppScopedDomainTools",
             "TestPiAppActivitiesAndQuestions",
             "TestPiAppCrashRecoveryNoReplay",
