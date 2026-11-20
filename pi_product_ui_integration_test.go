@@ -278,11 +278,14 @@ func TestPiAppConcurrentActivities(t *testing.T) {
 	const heldPrompt = "Hold separate inventory"
 	const answer, resultText = "Use sample fourteen", "Exact Cedar output"
 	const material, excerpt = "Cedar answer evidence", "Fourteen is in the reference inventory"
+	const resultName, resultCall = "inventory-result.txt", "write-inventory-result"
+	const resultContent, revisedContent = "Original inventory file", "Current inventory file"
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	primary := &piAppProvider{limit: 2}
+	primary := &piAppProvider{limit: 3}
 	questionCall := piAppCall{name: "issue_wait", id: "activity-question", args: piAppArguments(map[string]any{"text": "Which sample?"})}
-	if err := primary.install([]piAppCall{questionCall}, resultText, nil, nil); err != nil {
+	writeCall := piAppCall{name: "write", id: resultCall, args: piAppArguments(map[string]any{"path": resultName, "content": resultContent})}
+	if err := primary.install([]piAppCall{questionCall, writeCall}, resultText, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	held, stopped := make(chan struct{}), make(chan bool, 1)
@@ -310,6 +313,11 @@ func TestPiAppConcurrentActivities(t *testing.T) {
 		r.Body = io.NopCloser(bytes.NewReader(body))
 		primary.ServeHTTP(w, r)
 	}))
+	workspace, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resultPath := filepath.Join(workspace, resultName)
 	if err := writeProfileJSON(guiStorePath(), storedState{Version: contactStoreVersion, Selected: "cedar", Contacts: []storedContact{
 		{ID: "cedar", Name: "Cedar", Workspace: root, Draft: "Cedar draft"},
 		{ID: "copper", Name: "Copper", Workspace: root, Draft: "Copper draft"},
@@ -468,13 +476,27 @@ func TestPiAppConcurrentActivities(t *testing.T) {
 	if result.ActivityID != firstID || result.ExecutionID != question.ExecutionID || result.Text != resultText {
 		t.Fatalf("result opened against the wrong execution: %+v", result)
 	}
+	if len(result.Files) != 1 || result.Files[0].Path != resultPath || result.Files[0].CallID != resultCall {
+		t.Fatalf("result lost the exact confirmed file effect: %+v", result.Files)
+	}
+	readCurrentFile := func(w *productWorkbench, owner *contact, expected string) {
+		t.Helper()
+		w.frame(func() { owner.activity.scroll.Y = 1000 })
+		w.click(msg.ResultFileRowLabel("1", resultName))
+		w.wait(func() bool { return w.view.HasText(expected) && w.view.HasText(msg.ResultCurrentFileDiff()) })
+	}
+	readCurrentFile(w, cedar, resultContent)
 	w.shutdown(ctx)
+	if err := os.WriteFile(resultPath, []byte(revisedContent), 0600); err != nil {
+		t.Fatal(err)
+	}
 
 	reopened, cedar := open()
 	selectActivity(reopened, cedar, firstGoal, firstID)
 	if got := readResult(reopened, cedar); !reflect.DeepEqual(got, result) {
 		t.Fatalf("result changed after restart: %+v", got)
 	}
+	readCurrentFile(reopened, cedar, revisedContent)
 	firstAfter, secondAfter := get(reopened, firstID), get(reopened, secondID)
 	if firstAfter.State != "needsAttention" || len(firstAfter.Questions) != 1 || !reflect.DeepEqual(firstAfter.Questions[0], answered) ||
 		len(secondAfter.Executions) != 1 || secondAfter.Executions[0].ExecutionID != secondRun || secondAfter.Executions[0].State != "interrupted" {
@@ -488,7 +510,7 @@ func TestPiAppConcurrentActivities(t *testing.T) {
 	reopened.shutdown(ctx)
 	primary.mu.Lock()
 	defer primary.mu.Unlock()
-	if heldRequests.Load() != 1 || primary.requests != 2 || len(primary.problems) != 0 ||
+	if heldRequests.Load() != 1 || primary.requests != 3 || len(primary.problems) != 0 ||
 		!bytes.Contains(primary.bodies[1], []byte(answer)) || !bytes.Contains(primary.bodies[1], []byte(excerpt)) {
 		t.Fatalf("provider request routing or replay mismatch: answered=%d held=%d errors=%v", primary.requests, heldRequests.Load(), primary.problems)
 	}
@@ -709,5 +731,96 @@ func TestPiAppSettingsBackupRestore(t *testing.T) {
 	reopened.shutdown(ctx)
 	if requests := provider.count(); requests != 1 {
 		t.Fatalf("backup, restore or reopen replayed a send: %d requests", requests)
+	}
+}
+
+func TestPiAppRestoresExistingV10Copy(t *testing.T) {
+	const botID, activityID = "restored-bot", "restored-activity"
+	const sendOperation, sendExecution = "restore-send", "restore-send-execution"
+	const activityExecution = "restored-activity-execution"
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	provider := &piAppProvider{}
+	root := prepareProductWorkbench(t, provider)
+	profile := guiStorePath()
+	private := connectionConfigPath(profile)
+	credentials := recoverySavedBytes(t, private)
+	config, err := readPrivateConnectionConfig(private)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const session = "saved-v10-session.jsonl"
+	binding := recoveryConversationBinding(botID, root, session)
+	binding.Context.Used = false
+	binding.Configuration = piConfiguration{WireAPI: pi.OpenAICompletions, BaseURL: config.Sources[config.CredentialSource].Endpoint,
+		Model: config.Model, ContextTokens: config.ContextTokens, OutputTokens: config.OutputTokens, CredentialSource: config.CredentialSource}
+	const text = "Preserve the saved draft 原文"
+	material := taskContextItem{ID: "saved-material", Name: "Retained note", Text: "Captured before backup", Revision: 2}
+	copyPath := filepath.Join(root, "v10-backup.json")
+	if err := writeProfileJSON(copyPath, storedState{Version: contactStoreVersion, Selected: botID,
+		Contacts: []storedContact{{ID: botID, Name: "Restored Bot", Workspace: root, SessionID: session, PiBinding: binding, Draft: text,
+			TaskContext: []taskContextItem{material}, PendingSend: &pendingSend{Draft: "Earlier uncertain send", State: "unknown", ToolScopeRef: "backup-scope"}}},
+		Issues: []storedIssue{{ID: activityID, ContactID: botID, Goal: "Restore retained findings", Status: issueStatusNeedsAttention, RequirementsRevision: 2,
+			RequirementItems: []storedRequirement{{ID: "retained-requirement", Text: "Keep the findings", State: requirementUnverified}},
+			Executions: []storedIssueExecution{{ID: activityExecution, PiIntent: true, Status: issueExecutionUnknown, Prompt: "Original activity input"}}}},
+		IssueToolScopes: []IssueToolScope{{Ref: "backup-scope", ContactID: botID, RuntimeSessionID: session, TurnID: sendOperation, RuntimeTaskID: sendExecution}},
+		IssueToolOperations: &IssueToolOperationLedger{},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	captured := recoverySavedBytes(t, copyPath)
+	damaged := []byte("{damaged original")
+	if err := os.WriteFile(profile, damaged, 0600); err != nil {
+		t.Fatal(err)
+	}
+	opened, err := newProductRuntimeApp()
+	if err == nil || opened != nil {
+		t.Fatal("Product startup admitted the damaged profile")
+	}
+	unavailable := newUnavailableApp(err)
+	restore := newProductWorkbench(t, unavailable)
+	t.Cleanup(restore.pump.close)
+	msg := locales.In("en")
+	restore.frame(func() {
+		unavailable.chooseRecoveryFile = func(mygo.OpenDialogOptions) ([]string, error) { return []string{copyPath}, nil }
+		unavailable.openDataRecovery()
+	})
+	restore.click(msg.RestorePausedAction())
+	restore.wait(func() bool { return restore.view.HasText(msg.RecoveryPreviewCounts(1, 1)) && restore.view.Focused(msg.RecoveryConfirmAction()) })
+	if !bytes.Equal(recoverySavedBytes(t, profile), damaged) {
+		t.Fatal("preview changed the damaged profile")
+	}
+	restore.click(msg.RecoveryConfirmAction())
+	restore.wait(func() bool { return restore.view.HasText(msg.RecoveryInstalled()) })
+	var archive string
+	restore.pump.do(func() { archive = unavailable.dataRecovery.result.ArchivePath })
+	if !bytes.Equal(recoverySavedBytes(t, archive), damaged) || !bytes.Equal(recoverySavedBytes(t, copyPath), captured) ||
+		!bytes.Equal(recoverySavedBytes(t, private), credentials) {
+		t.Fatal("restore changed the backup, archived bytes, or credentials")
+	}
+	restore.click(msg.RecoveryQuitAction())
+	restore.wait(func() bool { return unavailable.quitReady })
+	reopened := openProductWorkbench(t)
+	reopened.pump.do(func() {
+		owner := reopened.app.selectedContact()
+		if owner == nil || owner.ID != botID || owner.SessionID != binding.Context.ContextID || owner.Draft != text || owner.SendState != sendUnknown ||
+			!reflect.DeepEqual(owner.Context.items, []taskContextItem{material}) {
+			t.Error("Product reopen lost the selected Bot, conversation, draft, material, or uncertain send")
+		}
+	})
+	receipt, err := reopened.client.Operation(ctx, sendOperation)
+	if err != nil || receipt.State != "unknown" || receipt.Target.ConversationID != binding.Context.ContextID || receipt.Execution == nil ||
+		receipt.Execution.ExecutionID != sendExecution || receipt.Execution.State != "unknown" {
+		t.Fatalf("Product reopen lost the original uncertain send receipt: %+v, %v", receipt, err)
+	}
+	activity, err := reopened.client.GetActivity(ctx, activityID)
+	if err != nil || activity.OwnerBotID != botID || activity.OriginConversationID != binding.Context.ContextID || activity.State != "needsAttention" ||
+		!reflect.DeepEqual(activity.Requirements, []string{"Keep the findings"}) || len(activity.Executions) != 1 ||
+		activity.Executions[0].ExecutionID != activityExecution || activity.Executions[0].State != "unknown" {
+		t.Fatalf("Product reopen lost the original activity or its execution: %+v, %v", activity, err)
+	}
+	reopened.shutdown(ctx)
+	if requests := provider.count(); requests != 0 {
+		t.Fatalf("restoring or reopening the v10 backup dispatched %d model requests", requests)
 	}
 }
