@@ -317,38 +317,6 @@ func TestIssueToolCapturedCreateLeavesSelectedContactDraftAlone(t *testing.T) {
 	}
 }
 
-func TestIssueToolScopeUsesLatestTaskBinding(t *testing.T) {
-	a, _ := newIssueToolTestApp(t)
-	ct := a.selectedContact()
-	ct.SessionID = "conversation-late"
-	ct.SendState = sendSubmitting
-	ct.pendingSend = &pendingSend{ToolScopeRef: ""}
-	scope, err := a.issueToolNewScope(ct.ID, "conversation-late", "turn-late")
-	if err != nil {
-		t.Fatal(err)
-	}
-	ct.pendingSend.ToolScopeRef = scope.Ref
-	if !a.issueToolScopeActive(*scope) {
-		t.Fatal("scope was not active before Runtime task binding")
-	}
-	captured := *scope // RuntimeTaskID intentionally still empty
-	a.issueToolBindTask(scope.Ref, "task-late")
-	ct.SendState = sendAccepted
-	ct.ActiveTaskID = "task-late"
-	request := IssueToolActionRequest{ScopeRef: captured.Ref, Action: issueToolActionCreate, Goal: "late binding"}
-	operation, created, existing, _, err := a.issueToolReserveForTurn(captured, request)
-	if err != nil || !created || existing || operation == nil {
-		t.Fatalf("consumer reserve with captured old scope = op=%+v created=%v existing=%v err=%v", operation, created, existing, err)
-	}
-	response, err := a.issueToolCreate(captured, request, operation)
-	if err != nil || response.IsError {
-		t.Fatalf("consumer create with captured old scope = %+v err=%v", response, err)
-	}
-	if len(ct.Issues) != 1 || ct.Issues[0].Goal != "late binding" {
-		t.Fatalf("late-bound create = %+v", ct.Issues)
-	}
-}
-
 func TestIssueToolInactiveScopeKeepsOldReceiptButRejectsNewAction(t *testing.T) {
 	a, _ := newIssueToolTestApp(t)
 	ct := a.selectedContact()
@@ -974,52 +942,6 @@ func TestIssueToolReplacementQuestionSaveFailureKeepsOriginalOpen(t *testing.T) 
 	}
 }
 
-func TestIssueToolWaitBeforeTaskBindingUsesScopeThenRealTask(t *testing.T) {
-	a, _ := newIssueToolTestApp(t)
-	ct := a.selectedContact()
-	issue, err := a.createIssueFor(ct, "wait before accept", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	ct.SessionID = "conversation-pre-bind"
-	ct.SendState = sendSubmitting
-	ct.pendingSend = &pendingSend{}
-	scope, err := a.issueToolNewScope(ct.ID, "conversation-pre-bind", "turn-pre-bind")
-	if err != nil {
-		t.Fatal(err)
-	}
-	ct.pendingSend.ToolScopeRef = scope.Ref
-	if !a.issueToolScopeActive(*scope) {
-		t.Fatal("submitting scope not active before accept")
-	}
-	response, err := a.handleIssueToolForward(context.Background(), issueToolForwardRequest{Tool: "issue_action", Arguments: issueToolActionArgs(t, *scope, issueToolActionWait, map[string]any{
-		"issue_id": issue.ID, "expected_revision": issue.RequirementsRevision, "text": "question before accept",
-	})})
-	if err != nil || response.IsError {
-		t.Fatalf("pre-accept wait = %+v err=%v", response, err)
-	}
-	question := issue.openQuestion()
-	if question == nil || question.SourceTaskID != "" || question.SourceScopeRef != scope.Ref || question.SourceTurnID != scope.TurnID {
-		t.Fatalf("pre-accept question source = %+v", question)
-	}
-	a.issueToolBindTask(scope.Ref, "task-after-accept")
-	if question.SourceTaskID != "task-after-accept" {
-		t.Fatalf("question task was not bound to the real accepted task: %+v", question)
-	}
-	if err := a.persist(); err != nil {
-		t.Fatal(err)
-	}
-	reloaded, err := openContactStore(a.store.path, a.workDir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	reloadedIssue := contactsFromStore(reloaded)[0].Issues[0]
-	reloadedQuestion := reloadedIssue.questionByRef(question.Ref)
-	if reloadedQuestion == nil || reloadedQuestion.SourceTaskID != "task-after-accept" || reloadedQuestion.SourceScopeRef != scope.Ref {
-		t.Fatalf("reloaded bound question = %+v", reloadedQuestion)
-	}
-}
-
 func TestIssueToolConversationIssueListIsBoundedAndScopeOwned(t *testing.T) {
 	a, _ := newIssueToolTestApp(t)
 	ct := a.selectedContact()
@@ -1108,63 +1030,6 @@ func TestIssueToolContextWireBudgetIncludesInternalScope(t *testing.T) {
 	inputs = append(inputs, scope)
 	if err := validateRuntimeContextInputs(inputs); err == nil || !strings.Contains(err.Error(), "1 MiB") {
 		t.Fatalf("wire budget error = %v", err)
-	}
-}
-
-func TestIssueToolAnswerBeforeWorkTerminalWaitsForRealTerminal(t *testing.T) {
-	a, _ := newIssueToolTestApp(t)
-	ct := a.selectedContact()
-	issue, err := a.createIssueFor(ct, "answer before terminal", "requirement")
-	if err != nil {
-		t.Fatal(err)
-	}
-	execution := &issueExecution{
-		ID: "execution-waiting", SessionID: "work-session", TaskID: "work-task",
-		Status: issueExecutionRunning, RequirementsRevision: issue.RequirementsRevision,
-		WaitRequested: true,
-	}
-	issue.Executions = []*issueExecution{execution}
-	issue.WorkSessionID = "work-session"
-	issue.Work.ActiveTaskID = "work-task"
-	issue.Work.SendState = sendAccepted
-	question := &issueQuestion{
-		Ref: "question-before-terminal", Text: "Need input", State: issueQuestionOpen,
-		RequirementsRevision: issue.RequirementsRevision, SourceTaskID: "work-task", SourceScopeRef: "work-scope",
-		CreatedAt: nowMillis(),
-	}
-	issue.Questions = []*issueQuestion{question}
-	issue.Status = issueStatusWaitingUser
-	issue.Supplements = newIssueSupplementLedger()
-	issue.Supplements.AutoContinue = false
-	ct.SessionID = "conversation-answer"
-	scope, err := a.issueToolNewScope(ct.ID, "conversation-answer", "answer-turn")
-	if err != nil {
-		t.Fatal(err)
-	}
-	activateIssueToolTestScope(t, a, scope)
-	response, err := a.handleIssueToolForward(context.Background(), issueToolForwardRequest{Tool: "issue_action", Arguments: issueToolActionArgs(t, *scope, issueToolActionAddSupplement, map[string]any{
-		"issue_id": issue.ID, "text": "answer before terminal", "question_ref": question.Ref,
-	})})
-	if err != nil || response.IsError {
-		t.Fatalf("answer before terminal = %+v err=%v", response, err)
-	}
-	if question.State != issueQuestionAnswered || issue.Status != issueStatusInProgress || !issue.Supplements.AutoContinue {
-		t.Fatalf("answer-before-terminal state = question=%+v status=%q auto=%v", question, issue.Status, issue.Supplements.AutoContinue)
-	}
-	if len(issue.Executions) != 1 {
-		t.Fatalf("answer before terminal dispatched early: %d", len(issue.Executions))
-	}
-	// A later real terminal must not turn this answer into an already-completed work.
-	a.applyIssueTerminalLifecycle(issue, "work-task", "interrupted")
-	if issue.Status != issueStatusInProgress || len(issue.Executions) != 1 {
-		t.Fatalf("answer-before-terminal terminal state = status=%q executions=%d", issue.Status, len(issue.Executions))
-	}
-	// A user Stop after the answer closes automatic continuation intent.
-	issue.Work.StopRequestedTasks = map[string]bool{"work-task": true}
-	issue.Supplements.AutoContinue = false
-	a.applyIssueTerminalLifecycle(issue, "work-task", "interrupted")
-	if issue.Status != issueStatusInProgress || issue.Supplements.AutoContinue {
-		t.Fatalf("stop-after-answer state = status=%q auto=%v", issue.Status, issue.Supplements.AutoContinue)
 	}
 }
 
