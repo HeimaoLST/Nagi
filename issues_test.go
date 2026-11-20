@@ -100,8 +100,8 @@ func TestCreateIssueFailureKeepsExistingIssues(t *testing.T) {
 func TestStoreRejectsIssueWithoutValidContact(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "contacts.json")
 	state := storedState{
-		Version: 2, Selected: "c1",
-		Contacts: []storedContact{{ID: "c1", Name: "Saki"}},
+		Version: contactStoreVersion, Selected: "c1",
+		Contacts: []storedContact{{ID: "c1", Name: "Cedar"}},
 		Issues:   []storedIssue{{ID: "i1", Goal: "orphan"}},
 	}
 	data, err := json.Marshal(state)
@@ -242,8 +242,8 @@ func TestRestoredNonterminalExecutionWithoutTaskIsUnknown(t *testing.T) {
 		ID: "i1", ContactID: "c1", Goal: "work", Status: issueStatusNotStarted,
 		Executions: []storedIssueExecution{{ID: "e1", TaskID: "t1", Prompt: "work", Status: issueExecutionRunning}},
 	}}, "c1")
-	if issues[0].Executions[0].Status != issueExecutionRunning || issueRunBlocked(issues[0]) == "" {
-		t.Fatalf("associated running execution lost its task identity: %+v", issues[0].Executions[0])
+	if e := issues[0].Executions[0]; e.TaskID != "t1" || e.Status != issueExecutionUnknown || issueRunBlocked(issues[0]) == "" {
+		t.Fatalf("unbound execution did not preserve its task ID and block replay: %+v", e)
 	}
 }
 

@@ -211,7 +211,7 @@ func TestSettingsPageArchivedProfileAndErrorEntriesRouteToCategories(t *testing.
 
 	ct.LoadErr = "connection_mismatch: session is bound elsewhere"
 	tr.Frame()
-	if err := tr.Click("Connection settings"); err != nil {
+	if err := tr.Click(locales.In("en").ConnectionRecoveryOpenSettings()); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
@@ -784,6 +784,7 @@ func TestSettingsPageReturnKeepsChatScroll(t *testing.T) {
 		ct.Messages = append(ct.Messages, &message{ID: i + 1, Kind: msgContact, Text: fmt.Sprintf("message %d with enough text to scroll", i)})
 	}
 	ct.Draft = "keep the conversation draft"
+	recoveryTestStore(t, a)
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
 	tr.Scroll(500, 300, 0, -600)
@@ -792,6 +793,14 @@ func TestSettingsPageReturnKeepsChatScroll(t *testing.T) {
 	if last >= len(ct.Messages)-1 {
 		t.Fatalf("chat did not scroll away from the latest message: first=%d last=%d", first, last)
 	}
+	label := locales.In("en").ConversationMessagesLabel()
+	anchor := ct.Messages[first].Text
+	viewport, viewportFound := tr.Find(label)
+	row, rowFound := tr.Find(anchor)
+	if !viewportFound || !rowFound || row.H <= 0 {
+		t.Fatalf("missing visible scroll anchor %q: row=%+v viewport=%+v", anchor, row, viewport)
+	}
+	offset := row.Y - viewport.Y
 	a.openSettingsTab(settingsTabAppearance, settingsSourceRail)
 	tr.Frame()
 	if !a.settingsOpen {
@@ -803,9 +812,12 @@ func TestSettingsPageReturnKeepsChatScroll(t *testing.T) {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	afterFirst, afterLast := ct.list.Visible()
-	if afterFirst != first || afterLast != last || a.selectedContact() != ct || ct.Draft != "keep the conversation draft" {
-		t.Fatalf("settings return changed chat: visible=[%d,%d]->[%d,%d] selected=%q draft=%q", first, last, afterFirst, afterLast, a.selectedID(), ct.Draft)
+	afterViewport, viewportFound := tr.Find(label)
+	afterRow, rowFound := tr.Find(anchor)
+	afterOffset := afterRow.Y - afterViewport.Y
+	if !viewportFound || !rowFound || afterRow.H <= 0 || afterOffset < offset-1 || afterOffset > offset+1 ||
+		a.selectedContact() != ct || ct.Draft != "keep the conversation draft" || a.localSaveErr != "" {
+		t.Fatalf("settings return changed chat anchor %q: offset=%v→%v selected=%q draft=%q saveError=%q", anchor, offset, afterOffset, a.selectedID(), ct.Draft, a.localSaveErr)
 	}
 }
 

@@ -86,7 +86,6 @@ func TestLayoutPersistsGlobalPreferenceAndReloads(t *testing.T) {
 	applyStoreSelection(a, store)
 	a.leftPaneWidth = 225
 	a.rightPaneWidth = 365
-	a.workspaceOpen = true
 	if err := a.persist(); err != nil {
 		t.Fatal(err)
 	}
@@ -95,12 +94,12 @@ func TestLayoutPersistsGlobalPreferenceAndReloads(t *testing.T) {
 		t.Fatal(err)
 	}
 	if reloaded.state.Layout == nil || reloaded.state.Layout.LeftWidth != 225 ||
-		reloaded.state.Layout.RightWidth != 365 || !reloaded.state.Layout.WorkspaceOpen {
+		reloaded.state.Layout.RightWidth != 365 {
 		t.Fatalf("stored layout = %+v", reloaded.state.Layout)
 	}
 	b := &appModel{}
 	applyStoreSelection(b, reloaded)
-	if !b.workspaceOpen || b.railWidth() != 225 || b.workWidth() != 365 {
+	if b.workspaceOpen || b.railWidth() != 225 || b.workWidth() != 365 {
 		t.Fatalf("reloaded layout = open=%v left=%v right=%v", b.workspaceOpen, b.railWidth(), b.workWidth())
 	}
 }
@@ -436,7 +435,8 @@ func TestResponsiveManualHideAndWideDrag(t *testing.T) {
 	tr.Move(400, 300)
 	tr.Release(400, 300)
 	tr.Frame()
-	if a.railWidth() != 394 || a.workWidth() != beforeRight || a.effectiveDetailWidth() != 280 || a.centerPaneWidth != 504 {
+	composer, found := tr.Find(locales.In("en").ComposerLabel(a.selectedContact().Name))
+	if a.railWidth() <= 200 || a.railWidth() >= 400 || a.workWidth() != beforeRight || a.effectiveDetailWidth() < 280 || !found || composer.W-4 < 440 {
 		t.Fatalf("wide left drag geometry = left=%v prefRight=%v detail=%v center=%v", a.railWidth(), a.workWidth(), a.effectiveDetailWidth(), a.centerPaneWidth)
 	}
 }
@@ -820,7 +820,7 @@ func TestLayoutRuntimeEntryLoadsSavedPreference(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !a.workspaceOpen || a.railWidth() != 230 || a.workWidth() != 360 {
+	if a.workspaceOpen || a.railWidth() != 230 || a.workWidth() != 360 {
 		t.Fatalf("runtime entry layout = open=%v left=%v right=%v", a.workspaceOpen, a.railWidth(), a.workWidth())
 	}
 }

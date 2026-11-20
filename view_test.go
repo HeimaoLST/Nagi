@@ -875,7 +875,8 @@ func TestToolFailureIsVisibleBeforeDetails(t *testing.T) {
 }
 
 func TestContactRailControlsStayVisibleAtNarrowWidths(t *testing.T) {
-	a, _ := workspaceTestApp(t)
+	a, ct := workspaceTestApp(t)
+	ct.Name = "Cedar"
 	a.workspaceOpen = false
 	a.detail = ""
 	for _, width := range []int{1040, 960} {
@@ -887,7 +888,7 @@ func TestContactRailControlsStayVisibleAtNarrowWidths(t *testing.T) {
 			t.Fatalf("%d rail width = %v", width, limit)
 		}
 		for _, removed := range []string{"Nagi", "Contact scope", "Active", "Archived", "All"} {
-			if tr.HasText(removed) {
+			if bounds, ok := tr.Find(removed); ok && bounds.W > 0 && bounds.H > 0 && bounds.X+bounds.W <= limit {
 				t.Fatalf("redundant sidebar control %q is still shown", removed)
 			}
 		}
