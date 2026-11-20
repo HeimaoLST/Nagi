@@ -12,6 +12,12 @@
 **Cause or correction:** The user requires the revised UI design checklist to govern reviews. Capturing a screenshot and inspecting it are separate steps, and native interaction claims require the applicable native evidence.
 **Prevention:** Scope the checklist items, capture original evidence from the frozen candidate, and record the reviewer and verdict before merge. Keep the existing preview capture available after earlier CI test failures. Apply the checklist verdict to missing evidence and open findings.
 
+## Keep the launch directory out of the fresh connection form
+
+**Problem:** With no folder selected, the first-use form tested a connection and saved the process working directory. An earlier refusal fixture had already seeded effective credentials and could only exercise edits.
+**Cause or correction:** The fresh form treated the process launch directory as a user-selected workspace. An empty first-use form must require the folder choice.
+**Prevention:** Exercise the normal Product entry with no saved credentials or folder override. Check that Test and Save leave provider count and connection revisions unchanged until the user chooses a folder, then verify inheritance and explicit Bot overrides across reopen.
+
 ## Bind the Settings profile editor when opening Settings
 
 **Problem:** After adding a Bot before configuring a connection, reopening Settings and saving a profile renamed the previously selected Bot.
@@ -388,7 +394,7 @@
 
 **Problem:** A passing activity E2E emitted named answer/save/check scenes whose relevant controls were outside the captured viewport. The Check click returned an outside-window error, so unchanged state did not prove the disabled action or rejection path.
 **Cause or correction:** Stage names and functional state receipts do not establish what the pixels show or whether a control received input. The original images remain valid evidence of their actual scroll positions.
-**Prevention:** Inspect each original and qualify hidden controls explicitly. For a headless resize, update the fixture’s application width as the native resize handler does and check the control bounds against the new viewport. Count a control touching a valid content edge as visible. Record bounds and preserve a failure frame when a click cannot be verified. Capture the relevant visible control before claiming its visual or interaction coverage, and distinguish failure to hit a control from a successful no-effect activation. Do not promote a root PASS, filename or image count into whole-app visual acceptance. Compare the focused and unfocused row in the actual minimum window. Logical focus returned to the history row while its visible pixels stayed unchanged.
+**Prevention:** Inspect each original and qualify hidden controls explicitly. For a headless resize, update the fixture’s application width as the native resize handler does and check the control bounds against the new viewport. Count a control touching a valid content edge as visible. Record bounds and preserve a failure frame when a click cannot be verified. Capture the relevant visible control before claiming its visual or interaction coverage, and distinguish failure to hit a control from a successful no-effect activation. Do not promote a root PASS, filename or image count into whole-app visual acceptance. Compare the focused and unfocused row in the actual minimum window. Logical focus returned to the history row while its visible pixels stayed unchanged. Measure the stroke against its adjacent fill in the same frame to exclude hover differences.
 
 ## Allow explicit host recovery without replaying unknown work
 
