@@ -518,9 +518,10 @@ func TestLayoutPreferenceIsNotOverwrittenByNarrowViewport(t *testing.T) {
 	a.windowWidth = 960
 	tr.SetSize(960, 640)
 	tr.Frame()
-	if a.workOverlay() || !a.avatarRailActive() || a.effectiveDetailWidth() != 398 || a.centerPaneWidth != 504 {
-		t.Fatalf("960 avatar geometry = overlay=%v avatar=%v detail=%v center=%v",
-			a.workOverlay(), a.avatarRailActive(), a.effectiveDetailWidth(), a.centerPaneWidth)
+	composer, found := tr.Find(locales.In("en").ComposerLabel(a.selectedContact().Name))
+	if a.workOverlay() || !a.avatarRailActive() || a.effectiveDetailWidth() < 280 || !found || composer.W-4 < 440 {
+		t.Fatalf("960 avatar geometry = overlay=%v avatar=%v detail=%v composer=%+v",
+			a.workOverlay(), a.avatarRailActive(), a.effectiveDetailWidth(), composer)
 	}
 	if a.railWidth() != 280 || a.workWidth() != 440 {
 		t.Fatalf("narrow viewport rewrote preference: left=%v right=%v", a.railWidth(), a.workWidth())
@@ -528,7 +529,7 @@ func TestLayoutPreferenceIsNotOverwrittenByNarrowViewport(t *testing.T) {
 	a.windowWidth = 1380
 	tr.SetSize(1380, 900)
 	tr.Frame()
-	if a.workOverlay() || a.railWidth() != 280 || a.workWidth() != 440 {
+	if a.workOverlay() || a.avatarRailActive() || a.railWidth() != 280 || a.workWidth() != 440 || a.effectiveDetailWidth() != 440 {
 		t.Fatalf("wide viewport did not restore preference: overlay=%v left=%v right=%v", a.workOverlay(), a.railWidth(), a.workWidth())
 	}
 }

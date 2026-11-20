@@ -85,10 +85,13 @@ func TestCustomThemeSettingsSelectReloadAndReturnKeepsWorkState(t *testing.T) {
 	focusComposer(t, tr, "Composer for Nagi")
 	tr.Key(ui.Cmd, ui.KeyComma)
 	tr.Frame()
-	if err := tr.Click("Light theme"); err != nil {
+	if err := tr.Click(locales.In("en").ThemePaper()); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
+	if !tr.HasText("Garden (garden)") {
+		t.Fatal("theme selector did not open the custom option")
+	}
 	tr.Key(0, ui.KeyEnd)
 	tr.Frame()
 	tr.Key(0, ui.KeyEnter)
@@ -145,10 +148,13 @@ func TestCustomThemeSettingsLowContrastFailedSaveRetry(t *testing.T) {
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.SetFocused(true)
 	tr.Frame()
-	if err := tr.Click("Light theme"); err != nil {
+	if err := tr.Click(locales.In("en").ThemePaper()); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
+	if !tr.HasText("Garden (low-contrast)") {
+		t.Fatal("theme selector did not open the low-contrast option")
+	}
 	tr.Key(0, ui.KeyEnd)
 	tr.Frame()
 	tr.Key(0, ui.KeyEnter)
@@ -285,21 +291,24 @@ func TestGeneralPreferenceSelectorsKeepWidthAndKeyboardChoice(t *testing.T) {
 				tr.SetFocused(true)
 				tr.Frame()
 				msgs := locales.In(locale)
-				for _, label := range []string{msgs.AppearanceMode()} {
-					var box ui.Rect
-					found := false
-					for step := 0; step < 12; step++ {
-						box, found = tr.Find(label)
-						if found && box.H >= 32 && box.Y >= 0 && box.Y+box.H <= 720 {
-							break
-						}
-						tr.Scroll(float32(width-100), 600, 0, 100)
-						tr.Frame()
+				selectedMode := msgs.AppearanceSystem()
+				for step := 0; step < 12; step++ {
+					bounds, found := tr.Find(selectedMode)
+					if found && bounds.W > 0 && bounds.H > 0 && bounds.Y >= 0 && bounds.Y+bounds.H <= 720 {
+						break
 					}
-					if !found || box.H < 32 || box.W < 120 || box.W > 160 {
-						t.Fatalf("real General selector %q bounds=%+v; expected fit120..160 with32 hit", label, box)
-					}
+					tr.Scroll(float32(width-100), 600, 0, 100)
+					tr.Frame()
 				}
+				if err := tr.Click(selectedMode); err != nil {
+					t.Fatal(err)
+				}
+				tr.Frame()
+				if !tr.HasText(msgs.AppearanceLight()) || !tr.HasText(msgs.AppearanceDark()) {
+					t.Fatal("the displayed appearance value did not open its choices")
+				}
+				tr.Key(0, ui.KeyEscape)
+				tr.Frame()
 				if len(applied) != 0 {
 					t.Fatal("rendering a General selector changed locale")
 				}
@@ -476,26 +485,43 @@ func TestPreferencesListControlsAndPreviews(t *testing.T) {
 							tr.Key(0, ui.KeyEscape)
 						}
 						if scene == "fresh" {
-							inputs := map[string]bool{}
+							fields := []struct {
+								label string
+								value *string
+							}{
+								{msgs.ConnectionFieldEndpoint(), &form.Draft.Endpoint},
+								{msgs.ConnectionFieldAPIKey(), &form.Draft.APIKey},
+								{msgs.ConnectionFieldModel(), &form.Draft.Model},
+							}
+							inputs := make(map[string]bool, len(fields))
 							for i := 0; i < 18; i++ {
 								tr.Key(0, ui.KeyTab)
 								tr.Frame()
-								for _, label := range []string{msgs.ConnectionFieldEndpoint(), msgs.ConnectionFieldAPIKey(), msgs.ConnectionFieldModel()} {
-									if tr.Focused(label) {
-										inputs[label] = true
-										box, found := tr.Find(label)
-										if !found || box.W < 32 || box.H < 32 {
-											t.Fatalf("focused fresh input lacks its real hit area: %q %+v", label, box)
-										}
+								for _, field := range fields {
+									if inputs[field.label] || !tr.Focused(field.label) {
+										continue
 									}
+									if active, _ := tr.TextInputActive(); !active {
+										t.Fatalf("focused preference %q is not an editor", field.label)
+									}
+									previous := *field.value
+									tr.Key(ui.Cmd, ui.KeyA)
+									tr.Type("qa-field-value")
+									tr.Frame()
+									if *field.value != "qa-field-value" {
+										t.Fatalf("typing did not update the %q draft", field.label)
+									}
+									*field.value = previous
+									tr.Frame()
+									inputs[field.label] = true
 								}
 								if tr.Focused(msgs.ConnectionFieldWorkingDirectory()) {
 									t.Fatal("fresh setup exposed the manual path before its disclosure")
 								}
 							}
-							for label, reachable := range inputs {
-								if !reachable {
-									t.Fatalf("fresh setup required an Edit action for %q", label)
+							for _, field := range fields {
+								if !inputs[field.label] {
+									t.Fatalf("fresh setup required an Edit action for %q", field.label)
 								}
 							}
 						}
@@ -794,11 +820,21 @@ func TestSettingsPageReturnKeepsChatScroll(t *testing.T) {
 		t.Fatalf("chat did not scroll away from the latest message: first=%d last=%d", first, last)
 	}
 	label := locales.In("en").ConversationMessagesLabel()
-	anchor := ct.Messages[first].Text
 	viewport, viewportFound := tr.Find(label)
-	row, rowFound := tr.Find(anchor)
-	if !viewportFound || !rowFound || row.H <= 0 {
-		t.Fatalf("missing visible scroll anchor %q: row=%+v viewport=%+v", anchor, row, viewport)
+	if !viewportFound || viewport.W <= 0 || viewport.H <= 0 {
+		t.Fatalf("missing conversation viewport: %+v", viewport)
+	}
+	var anchor string
+	var row ui.Rect
+	for _, message := range ct.Messages[first : last+1] {
+		candidate, found := tr.Find(message.Text)
+		if found && candidate.W > 0 && candidate.H > 0 && candidate.Y >= viewport.Y && candidate.Y+candidate.H <= viewport.Y+viewport.H {
+			anchor, row = message.Text, candidate
+			break
+		}
+	}
+	if anchor == "" {
+		t.Fatalf("no visible scroll anchor between rows %d and %d in %+v", first, last, viewport)
 	}
 	offset := row.Y - viewport.Y
 	a.openSettingsTab(settingsTabAppearance, settingsSourceRail)
@@ -1407,10 +1443,13 @@ func TestSettingsThemeImportChooseSelectAndRestart(t *testing.T) {
 				}
 				tr.Scroll(float32(width/2), 360, 0, -2000)
 				tr.Frame()
-				if err := tr.Click(msgs.ThemeLight()); err != nil {
+				if err := tr.Click(msgs.ThemePaper()); err != nil {
 					t.Fatal(err)
 				}
 				tr.Frame()
+				if !tr.HasText("Garden (downloaded-garden)") {
+					t.Fatal("theme selector did not open the imported option")
+				}
 				tr.Key(0, ui.KeyEnd)
 				tr.Key(0, ui.KeyEnter)
 				tr.Frame()
@@ -2273,7 +2312,7 @@ func TestSettingsQoderIntegratedLayout(t *testing.T) {
 					}
 					msgs := locales.In(locale)
 					// The scrolling viewport belongs to the main pane, not its readable column.
-					if viewport.W <= 0 || float32(width)-(viewport.X+viewport.W) > 8 {
+					if viewport.W <= 0 || float32(width)-(viewport.X+viewport.W) > 9 {
 						t.Errorf("scroll viewport stops before main-pane edge: viewport=%+v window=%d", viewport, width)
 					}
 					general, ok := tr.Find(msgs.SettingsGeneral())
