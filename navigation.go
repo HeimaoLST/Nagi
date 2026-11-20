@@ -1,9 +1,7 @@
 package main
 
 import (
-	"fmt"
-	"strings"
-
+	"github.com/egoist/mygo/i18n"
 	"github.com/egoist/mygo/ui"
 
 	"github.com/HeimaoLST/Nagi/locales"
@@ -11,29 +9,11 @@ import (
 
 type detailKind string
 
-const (
-	detailWork    detailKind = "work"
-	detailHistory detailKind = "history"
-	detailProfile detailKind = "profile"
-)
-
-// historyViewMemory keeps the per-contact history surface together with its
-// scroll position. The Runtime callback still owns the live result; this only
-// remembers what the user was looking at when another contact is selected.
-type historyViewMemory struct {
-	Query       string
-	Scroll      ui.ScrollState
-	Result      *contactHistoryResult
-	Error       string
-	ErrorDetail string
-}
+const detailProfile detailKind = "profile"
 
 func (a *appModel) activeDetail() detailKind {
-	if !a.workspaceOpen {
+	if !a.workspaceOpen || a.detail != detailProfile {
 		return ""
-	}
-	if a.detail == "" {
-		return detailWork
 	}
 	return a.detail
 }
@@ -43,91 +23,155 @@ func (a *appModel) detailIs(kind detailKind) bool {
 }
 
 func (a *appModel) openDetail(kind detailKind) {
-	wasOpen := a.workspaceOpen
-	if wasOpen && a.activeDetail() == kind {
-		a.focusDetailClose = true
-		return
-	}
-	if a.detailIs(detailHistory) && kind != detailHistory {
-		a.cancelHistoryFullDisplay()
-	}
 	a.workspaceOpen = true
 	a.detail = kind
 	a.focusDetailClose = true
-	if !wasOpen {
-		a.persist()
-	}
-}
-
-func (a *appModel) toggleDetail(kind detailKind) {
-	if a.workspaceOpen && a.activeDetail() == kind {
-		a.closeDetail()
-		return
-	}
-	a.openDetail(kind)
 }
 
 func (a *appModel) closeDetail() {
-	kind := a.activeDetail()
-	if kind == detailHistory {
-		a.cancelHistoryFullDisplay()
+	if a.railCollapsed {
+		a.focusRail = true
+	} else {
+		a.focusProfileRow = a.contactProfileID
 	}
+	a.contactProfileID = ""
+	a.folderChoiceGeneration++
 	a.workspaceOpen = false
 	a.detail = ""
 	a.focusDetailClose = false
-	switch kind {
-	case detailHistory:
-		a.focusHistory = true
-	case detailProfile:
-		a.focusContactProfile = true
-	default:
-		a.focusWorkspace = true
-	}
-	a.persist()
 }
-
-func (a *appModel) setWorkspaceOpen(open bool) {
-	if !open {
-		if a.workspaceOpen {
-			a.closeDetail()
-		}
-		return
-	}
-	wasOpen := a.workspaceOpen
-	if a.detailIs(detailHistory) {
-		a.cancelHistoryFullDisplay()
-	}
-	a.workspaceOpen = true
-	a.detail = detailWork
-	a.focusDetailClose = true
-	if !wasOpen {
-		a.persist()
-	}
-}
-
-func (a *appModel) toggleWorkspace() { a.toggleDetail(detailWork) }
-
-func (a *appModel) closeWorkspace() { a.closeDetail() }
 
 // detailPageActive means the right surface is the whole application page
 // because the three-pane layout cannot keep its 480px reading column.
 func (a *appModel) detailPageActive() bool {
-	return a.workspaceOpen && a.workOverlay()
+	return a.activeDetail() != "" && a.workOverlay()
 }
 
-// mainPageActive means a result, reader, source list or non-composer model
-// surface has taken over the main area. The right detail remains available in
-// state, but is not squeezed beside the reading surface.
+func (a *appModel) backProductConversations() {
+	browser := a.priorChats
+	if browser.sourceID == "" && browser.selectedID != "" {
+		browser.focusID, browser.selectedID = browser.selectedID, ""
+		browser.ownerID, browser.problem = "", ""
+		browser.history = historyProjection{}
+		return
+	}
+	a.priorChats = nil
+	if browser.sourceID != "" {
+		browser.contact.activity.focusSource = true
+	} else {
+		a.focusPreviousChats = true
+	}
+}
+
+func (a *appModel) productConversationsView(c *ui.Context, t *ui.Theme, browser *productConversationBrowser) {
+	msgs := locales.In(c.Locale())
+	title := msgs.PreviousChats()
+	if browser.sourceID != "" {
+		title = msgs.SourceChat()
+	} else if browser.selectedID != "" {
+		title = msgs.ReadOnlyChat()
+	}
+	owner := browser.contact
+	if browser.ownerID != "" {
+		owner = a.contactByID(browser.ownerID)
+	}
+	name := browser.ownerID
+	if owner != nil {
+		name = owner.Name
+	}
+	ui.Column(c).Key("conversation-browser").Fill().MinHeight(0).Children(func() {
+		ui.Row(c).FillWidth().MinHeight(40).Padding(4, 6).AlignItems(ui.Center).Gap(8).Children(func() {
+			back := secondaryButton(c, msgs.BackAction()).Label(msgs.BackLabel()).OnClick(a.backProductConversations)
+			if browser.focusBack {
+				back.Focus()
+				browser.focusBack = false
+			}
+			ui.Text(c, title).FontSize(typeContactTitle).FontWeight(500).FixedLineHeight(lineHeader).TextColor(t.Text).Grow(1).MinWidth(0)
+			if a.railCollapsed {
+				a.showContactsButton(c, t)
+			}
+		})
+		ui.Row(c).FillWidth().Justify(ui.Center).Children(func() {
+			ui.Column(c).FillWidth().MaxWidth(conversationMaxWidth).Padding(8, 16).Gap(4).Children(func() {
+				a.activityText(c, t, name)
+				if browser.sourceID != "" {
+					a.activityText(c, t, msgs.ReadOnlyChat())
+				}
+				if browser.reading {
+					a.activityText(c, t, msgs.LoadingChatHistory())
+				} else if browser.problem != "" || !a.productProfileReady() {
+					summary := msgs.HistoryReadFailed()
+					if !a.productProfileReady() {
+						summary = msgs.HistoryRuntimeNotReady()
+					}
+					a.recoveryNotice(c, t, "prior-chat:"+browser.selectedID, summary, browser.problem, false)
+					secondaryButton(c, msgs.ReloadAction()).Disabled(!a.productProfileReady()).OnClick(func() {
+						if browser.selectedID == "" {
+							a.loadProductConversations(browser, "")
+						} else {
+							a.loadProductTranscript(browser, browser.selectedID)
+						}
+					})
+				}
+			})
+		})
+		if browser.selectedID != "" {
+			a.productReadOnlyTranscript(c, t, browser, name)
+			return
+		}
+		listTheme := *t
+		listTheme.Focus = t.Accent
+		ui.Scroll(c).Grow(1).FillWidth().TrackScroll(&browser.listScroll).Children(func() {
+			ui.Row(c).FillWidth().Justify(ui.Center).Children(func() {
+				ui.Themed(c, &listTheme).Background(ui.Transparent).FillWidth().MaxWidth(conversationMaxWidth).Padding(8, 16).AlignItems(ui.Start).Gap(4).Children(func() {
+					if len(browser.items) == 0 && browser.nextCursor == nil && !browser.reading && browser.problem == "" && a.productProfileReady() {
+						a.activityText(c, t, msgs.NoPreviousChats())
+					}
+					for index, item := range browser.items {
+						id := item.ConversationID
+						label := item.Preview
+						if label == "" {
+							label = msgs.PreviousChatFallback(index + 1)
+						}
+						c.Key(id)
+						row := appTooltip(c, secondaryButton(c, "").Label(label), label).
+							FillWidth().MinWidth(0).Disabled(browser.reading || !a.productProfileReady())
+						row.OnClick(func() {
+							a.loadProductTranscript(browser, id)
+						})
+						row.DrawOver(func(p *ui.Painter, r ui.Rect) {
+							if row.Focused() {
+								p.FocusRing(ui.Rect{X: r.X + 3, Y: r.Y + 3, W: r.W - 6, H: r.H - 6}, [4]float32{13, 13, 13, 13})
+							}
+						})
+						row.Children(func() {
+							ui.Row(c).FillWidth().MinWidth(0).AlignItems(ui.Center).Gap(12).Children(func() {
+								ui.Text(c, label).FontSize(typeAction).FontWeight(500).FixedLineHeight(lineAction).
+									Grow(1).MinWidth(0).SingleLine().Ellipsis("…").TextColor(t.Text)
+								if !item.Timestamp.IsZero() {
+									date := i18n.FormatDate(c.Locale(), item.Timestamp.Local(), i18n.DateOptions{Date: i18n.MediumStyle, Time: i18n.ShortStyle})
+									ui.Text(c, date).FontSize(typeMeta).FixedLineHeight(lineMeta).Shrink(0).SingleLine().TextColor(t.TextMuted)
+								}
+							})
+						})
+						if browser.focusID == id {
+							row.Focus().ScrollIntoView()
+							browser.focusID = ""
+						}
+					}
+					if cursor := browser.nextCursor; cursor != nil {
+						secondaryButton(c, msgs.LoadMoreChats()).Disabled(browser.reading || !a.productProfileReady()).OnClick(func() {
+							a.loadProductConversations(browser, *cursor)
+						})
+					}
+				})
+			})
+		})
+	})
+}
+
 func (a *appModel) mainPageActive() bool {
-	if a.issueResult.Open || a.contactHistoryFull != nil {
-		return true
-	}
-	switch a.aux {
-	case "sources", "model", "task-context":
-		return !a.composerInlineAux()
-	default:
-		return false
-	}
+	return a.aux == "task-context" && !a.composerInlineAux()
 }
 
 func (a *appModel) focusDetailControl(c *ui.Context, button ui.Element) {
@@ -137,166 +181,22 @@ func (a *appModel) focusDetailControl(c *ui.Context, button ui.Element) {
 	}
 }
 
-func (a *appModel) navigationToolbar(c *ui.Context, t *ui.Theme) {
+func (a *appModel) showContactsButton(c *ui.Context, t *ui.Theme) {
 	msgs := locales.In(c.Locale())
-	ui.Toolbar(c, func() {
-		if a.railCollapsed {
-			contacts := appTooltip(c, secondaryButton(c, "").Label(msgs.RailContactsTitle()), msgs.NavShowContactsTooltip()).
-				Margin(0).Padding(8).FontSize(typeNavigation).FontWeight(400).FixedLineHeight(lineNavigation)
-			contacts.Children(func() {
-				ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
-					controlIcon(c, navContactsIcon, iconChrome).TextColor(t.TextMuted)
-					ui.Text(c, msgs.RailContactsTitle()).FontSize(typeNavigation).FixedLineHeight(lineNavigation).TextColor(t.Text)
-				})
-			})
-			if a.focusRail {
-				contacts.Focus()
-				a.focusRail = false
-			}
-			if contacts.Clicked() {
-				a.toggleRail()
-			}
-		}
-		a.navigationWorkEntry(c, t)
-		a.navigationToggle(c, t, detailHistory, msgs.NavHistory(), msgs.NavConversationHistoryTooltip(), navHistoryIcon, &a.focusHistory)
-		a.navigationToggle(c, t, detailProfile, msgs.NavContactProfile(), msgs.NavContactProfileTooltip(), navProfileIcon, &a.focusContactProfile)
-	}).Label(msgs.NavWorkspaceDetails())
-}
-
-func (a *appModel) navigationWorkEntry(c *ui.Context, t *ui.Theme) {
-	ct := a.selectedContact()
-	msgs := locales.In(c.Locale())
-	notice := a.issueWorkNotice(ct)
-	total := issueOpenCount(ct)
-	targetID := ""
-	if notice.Attention || notice.Waiting {
-		targetID = notice.IssueID
-	}
-	on := a.detailIs(detailWork)
-	summary := msgs.WorkEntrySummary(total, notice.AttentionCount, notice.WaitingCount, notice.ActiveCount)
-	toggle := appTooltip(c, ui.Toggle(c, &on, "").Label(msgs.WorkEntryLabel()), summary).
-		MinWidth(44).Height(32).Padding(2, 4)
-	if total > 0 {
-		toggle = sharedControlFace(c, toggle, 16, 4, false, false, on).Margin(0).MinWidth(44).Padding(8)
-	} else {
-		toggle = iconControlFace(c, toggle, iconChrome, on)
-	}
-	toggle.Children(func() {
-		color := t.TextMuted
-		if on {
-			color = t.Text
-		}
-		if total > 0 {
-			ui.Row(c).AlignItems(ui.Center).Gap(2).Children(func() {
-				controlIcon(c, navWorkIcon, iconChrome).TextColor(color)
-				countColor := t.TextMuted
-				if on {
-					countColor = t.Text
-				}
-				if notice.AttentionCount > 0 {
-					ui.Text(c, "!").FontSize(typeMeta).FixedLineHeight(lineMeta).FontWeight(600).TextColor(t.Warning)
-				}
-				ui.Text(c, fmt.Sprintf("%d", total)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(countColor)
-			})
-		} else {
-			controlIcon(c, navWorkIcon, iconChrome).TextColor(color)
-		}
+	label := msgs.RailContactsTitle()
+	contacts := appTooltip(c, secondaryButton(c, "").Label(label), msgs.NavShowContactsTooltip()).
+		Margin(0).Padding(8).FontSize(typeNavigation).FontWeight(400).FixedLineHeight(lineNavigation)
+	contacts.Children(func() {
+		ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
+			controlIcon(c, navContactsIcon, iconChrome).TextColor(t.TextMuted)
+			ui.Text(c, label).FontSize(typeNavigation).FixedLineHeight(lineNavigation).TextColor(t.Text)
+		})
 	})
-	if on {
-		toggle.Selected(true)
+	if a.focusRail {
+		contacts.Focus()
+		a.focusRail = false
 	}
-	if a.focusWorkspace {
-		toggle.Focus()
-		a.focusWorkspace = false
-	}
-	if toggle.Changed() {
-		if !on {
-			a.closeDetail()
-			return
-		}
-		if targetID != "" {
-			a.openIssueTarget(targetID)
-			return
-		}
-		a.toggleDetail(detailWork)
-	}
-}
-
-func (a *appModel) navigationToggle(c *ui.Context, t *ui.Theme, kind detailKind, label, tooltip string, icon *ui.SVG, focus *bool) {
-	active := a.detailIs(kind)
-	on := active
-	toggle := iconControlFace(c, appTooltip(c, ui.Toggle(c, &on, "").Label(label), tooltip), iconChrome, active)
-	toggle.Children(func() {
-		color := t.TextMuted
-		if active {
-			color = t.Text
-		}
-		controlIcon(c, icon, iconChrome).TextColor(color)
-	})
-	if active {
-		toggle.Selected(true)
-	}
-	if focus != nil && *focus {
-		toggle.Focus()
-		*focus = false
-	}
-	if toggle.Changed() {
-		a.toggleDetail(kind)
-	}
-}
-
-func (a *appModel) rememberHistoryView(contactID string) {
-	if contactID == "" {
-		return
-	}
-	if a.historyByContact == nil {
-		a.historyByContact = map[string]historyViewMemory{}
-	}
-	a.historyByContact[contactID] = historyViewMemory{
-		Query: a.historyQuery, Scroll: a.historyScroll,
-		Result: a.contactHistory, Error: a.contactHistoryError, ErrorDetail: a.contactHistoryErrorDetail,
-	}
-}
-
-func (a *appModel) restoreHistoryView(contactID string) {
-	var memory historyViewMemory
-	if a.historyByContact != nil {
-		memory = a.historyByContact[contactID]
-	}
-	a.historyQuery = memory.Query
-	a.historyScroll = memory.Scroll
-	a.contactHistory = memory.Result
-	a.contactHistoryFull = nil
-	a.contactHistoryError = memory.Error
-	a.contactHistoryErrorDetail = memory.ErrorDetail
-	a.contactHistoryBusy = false
-	a.contactHistoryDetailBusy = false
-	a.contactHistoryGen++
-	a.contactHistoryDetailGen++
-	a.focusHistoryFullID = ""
-}
-
-func (a *appModel) historyFullKey() string {
-	if a.contactHistoryFull == nil {
-		return ""
-	}
-	return historyOriginKey(a.contactHistoryFull.Origin, a.contactHistoryFull.SessionID, a.contactHistoryFull.EntryID)
-}
-
-func (a *appModel) closeContactHistoryFull() {
-	if a.contactHistoryFull == nil {
-		return
-	}
-	a.focusHistoryFullID = a.historyFullKey()
-	a.contactHistoryFull = nil
-}
-
-func (a *appModel) closeIssueResultReader() {
-	state := &a.issueResult.Panel
-	if state.ReaderKey != "" {
-		state.ReaderReturnKey = state.ReaderKey
-	}
-	state.ReaderKey = ""
+	contacts.OnClick(a.toggleRail)
 }
 
 func (a *appModel) profileScrollFor(contactID string) *ui.ScrollState {
@@ -309,92 +209,34 @@ func (a *appModel) profileScrollFor(contactID string) *ui.ScrollState {
 	return a.profileScrolls[contactID]
 }
 
-func (a *appModel) profileDetail(c *ui.Context, t *ui.Theme, narrow bool) {
-	ct := a.selectedContact()
+func (a *appModel) profileDetail(c *ui.Context, t *ui.Theme) {
+	ct := a.contactByID(a.contactProfileID)
 	if ct == nil {
 		return
 	}
+	editor := a.profileEditorFor(ct.ID)
 	msgs := locales.In(c.Locale())
-	ui.Column(c).FillHeight().Padding(16).Gap(8).Children(func() {
+	ui.Column(c).Key(ct.ID).Fill().MinWidth(0).MinHeight(0).Padding(16).Gap(8).Children(func() {
 		ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(8).Children(func() {
-			if narrow {
-				back := detailBackButton(c, t, msgs.ProfileClose(), msgs.ProfileBackTooltip()).OnClick(func() { a.closeDetail() })
-				a.focusDetailControl(c, back)
-				ui.Text(c, msgs.NavContactProfile()).FontSize(typePageTitle).FontWeight(500).FixedLineHeight(lineSettingsTitle).TextColor(t.Text).Grow(1)
-				return
-			}
-			ui.Text(c, msgs.NavContactProfile()).FontSize(typePageTitle).FontWeight(500).FixedLineHeight(lineSettingsTitle).TextColor(t.Text).Grow(1)
-			close := appTooltip(c, secondaryButton(c, msgs.ProfileClose()), msgs.ProfileBackTooltip()).OnClick(func() { a.closeDetail() })
-			a.focusDetailControl(c, close)
+			back := detailBackButton(c, t, msgs.ProfileClose(), msgs.ProfileBackTooltip()).OnClick(a.closeDetail)
+			a.focusDetailControl(c, back)
+			ui.Text(c, msgs.ContactProfileAction()).FontSize(typePageTitle).FontWeight(500).FixedLineHeight(lineSettingsTitle).TextColor(t.Text).Grow(1)
 		})
-		ui.Scroll(c).Grow(1).TrackScroll(a.profileScrollFor(ct.ID)).Children(func() {
-			ui.Column(c).Gap(8).Children(func() {
+		ui.Scroll(c).FillWidth().Grow(1).MinHeight(0).TrackScroll(a.profileScrollFor(ct.ID)).Children(func() {
+			ui.Column(c).FillWidth().MaxWidth(settingsContentWidth).AlignSelf(ui.Center).Gap(8).Children(func() {
 				ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
-					a.avatarTile(c, t, 32)
-					ui.Column(c).MinWidth(0).Shrink(1).Gap(1).Children(func() {
-						ui.Text(c, ct.Name).FontSize(typePageTitle).FontWeight(500).FixedLineHeight(lineSettingsTitle).TextColor(t.Text).MaxLines(2)
-						ui.Text(c, msgs.StatusDetail(a.statusLabel(ct, msgs), ct.Role)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(a.statusColor(t, ct.Status))
-					})
+					contactAvatar(c, t, ct.Name, 32)
+					ui.Text(c, ct.Name).FontSize(typePageTitle).FontWeight(500).FixedLineHeight(lineSettingsTitle).TextColor(t.Text).MinWidth(0).MaxLines(2)
 				})
-				if ct.Archived {
-					ui.Text(c, msgs.ProfileArchivedNotice()).FontSize(typeLabel).FixedLineHeight(lineLabel).TextColor(t.Warning)
-				}
-				a.profileSummaryField(c, t, msgs.ProfilePurpose(), valueOr(ct.Purpose, msgs.ProfileNoPurpose()))
-				instructions := strings.TrimSpace(ct.Instructions)
-				if instructions == "" {
-					instructions = msgs.ProfileNoInstructions()
-				}
-				a.profileSummaryField(c, t, msgs.ProfileInstructions(), instructions)
-				workspace := strings.TrimSpace(ct.Workspace)
-				if workspace == "" {
-					workspace = msgs.ProfileWorkspaceInherited()
-				}
-				a.profileSummaryField(c, t, msgs.ProfileWorkspace(), workspace)
-				session := msgs.ProfileNoSession()
-				if ct.SessionID != "" {
-					session = msgs.ProfileSession(ct.SessionID)
-					if !ct.Loaded {
-						session = msgs.ProfileSessionNotLoaded(ct.SessionID)
-					}
-				}
-				a.profileSummaryField(c, t, msgs.ProfileConversation(), session)
-				active, unknown := a.contactActivity(ct)
-				activity := msgs.ProfileNoActivity()
-				switch {
-				case unknown:
-					activity = msgs.ProfileActivityUnknown()
-				case active:
-					activity = msgs.ProfileActivityActive()
-				}
-				a.profileSummaryField(c, t, msgs.ProfileActivity(), activity)
-				edit := secondaryButton(c, msgs.ProfileEditFull()).TextColor(t.Text).OnClick(func() { a.editContactProfile() })
-				if a.focusProfileEdit {
-					edit.Focus()
-					a.focusProfileEdit = false
-				}
+				a.contactProfileForm(c, t, ct, editor)
 			})
 		})
-	})
-}
-
-func (a *appModel) profileSummaryField(c *ui.Context, t *ui.Theme, label, value string) {
-	ui.Column(c).FillWidth().MinWidth(0).Gap(2).Children(func() {
-		ui.Text(c, label).FontSize(typeMeta).FontWeight(500).TextColor(t.TextMuted)
-		ui.Text(c, value).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text)
 	})
 }
 
 func (a *appModel) mainPage(c *ui.Context, t *ui.Theme) {
 	ui.Column(c).Fill().Background(a.workTheme.Reading).Children(func() {
 		switch {
-		case a.issueResult.Open:
-			a.issueResultMainPage(c, t)
-		case a.contactHistoryFull != nil:
-			a.historyFullPage(c, t)
-		case a.aux == "sources":
-			a.sourcesPage(c, t)
-		case a.aux == "model":
-			a.auxPage(c, t)
 		case a.aux == "task-context":
 			a.auxPage(c, t)
 		default:
@@ -403,63 +245,10 @@ func (a *appModel) mainPage(c *ui.Context, t *ui.Theme) {
 	})
 }
 
-func (a *appModel) historyFullPage(c *ui.Context, t *ui.Theme) {
-	full := a.contactHistoryFull
-	if full == nil {
-		return
-	}
-	msgs := locales.In(c.Locale())
-	ct := a.selectedContact()
-	from := msgs.SpeakerContact()
-	if full.From == "me" {
-		from = msgs.SpeakerYou()
-	}
-	ui.Column(c).Fill().Children(func() {
-		ui.Row(c).Padding(16, 16).AlignItems(ui.Center).Gap(8).Children(func() {
-			back := appTooltip(c, secondaryButton(c, msgs.BackToHistoryVisible()).Label(msgs.CloseFullMessage()), msgs.BackToHistoryTooltip()).OnClick(func() { a.closeContactHistoryFull() })
-			if a.focusHistoryFullBack {
-				back.Focus()
-				a.focusHistoryFullBack = false
-			}
-			ui.Text(c, msgs.FullSavedMessage()).FontSize(typePageTitle).FontWeight(500).FixedLineHeight(lineSettingsTitle).TextColor(t.Text)
-		})
-		ui.Scroll(c).Grow(1).TrackScroll(&a.historyFullScroll).Padding(0, 16).Children(func() {
-			ui.Column(c).FillWidth().MaxWidth(conversationMaxWidth).AlignItems(ui.Start).Gap(8).Children(func() {
-				ui.Text(c, msgs.HistoryMessageMeta(from, full.Date, full.SessionID)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
-				markdownReader(c, full.Text, a.readerOptions(markdownReaderOptions{CopyLabel: msgs.CopySavedMessageLabel(), Theme: messageMarkdownTheme}, historyLinkScope(ct.ID, "full:"+full.SessionID, full.EntryID), full.WorkingDirectory)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text)
-				taskContextReadOnlyView(c, a.workTheme, full.Context)
-			})
-		})
-	})
-}
-
-func (a *appModel) sourcesPage(c *ui.Context, t *ui.Theme) {
-	msgs := locales.In(c.Locale())
-	ui.Column(c).Fill().Children(func() {
-		ui.Row(c).Padding(16, 16).AlignItems(ui.Center).Gap(8).Children(func() {
-			back := appTooltip(c, secondaryButton(c, msgs.BackAction()).Label(msgs.CloseSources()), msgs.BackFromSources()).OnClick(func() { a.closeAux() })
-			if a.focusSourcesBack {
-				back.Focus()
-				a.focusSourcesBack = false
-			}
-			ui.Text(c, msgs.SourcesTitle()).FontSize(typePageTitle).FontWeight(500).FixedLineHeight(lineSettingsTitle).TextColor(t.Text)
-		})
-		ui.Scroll(c).Grow(1).TrackScroll(&a.sourcesScroll).Padding(0, 16).Children(func() {
-			ui.Column(c).FillWidth().MaxWidth(conversationMaxWidth).AlignItems(ui.Start).Gap(8).Children(func() {
-				a.sourcesPanel(c, t)
-			})
-		})
-	})
-}
-
 func (a *appModel) auxPage(c *ui.Context, t *ui.Theme) {
 	msgs := locales.In(c.Locale())
-	title := msgs.SessionModelTitle()
-	closeLabel := msgs.CloseSessionModel()
-	if a.aux == "task-context" {
-		title = msgs.TaskContextTitle()
-		closeLabel = msgs.CloseTaskContext()
-	}
+	title := msgs.TaskContextTitle()
+	closeLabel := msgs.CloseTaskContext()
 	ui.Column(c).Fill().Children(func() {
 		ui.Row(c).MinHeight(40).Padding(4, 6).AlignItems(ui.Center).Gap(12).Children(func() {
 			back := appTooltip(c, secondaryButton(c, msgs.BackAction()).Label(closeLabel), msgs.BackFromAux(title)).OnClick(func() { a.closeAux() })
@@ -469,22 +258,12 @@ func (a *appModel) auxPage(c *ui.Context, t *ui.Theme) {
 			}
 			ui.Text(c, title).FontSize(typeContactTitle).FontWeight(500).FixedLineHeight(lineHeader).TextColor(t.Text)
 		})
-		ui.Scroll(c).Grow(1).TrackScroll(a.auxScrollFor(a.aux)).Padding(0, 16).Children(func() {
+		ui.Scroll(c).Grow(1).TrackScroll(&a.taskContextScroll).Padding(0, 16).Children(func() {
 			ui.Column(c).FillWidth().MaxWidth(conversationMaxWidth).AlignItems(ui.Start).Gap(8).Children(func() {
-				switch a.aux {
-				case "model":
-					a.modelPanel(c, t)
-				case "task-context":
-					a.taskContextPanel(c, t)
-				}
+				a.taskContextPanel(c, t)
 			})
 		})
 	})
-}
-
-func (a *appModel) cancelHistoryFullDisplay() {
-	a.contactHistoryDetailGen++
-	a.contactHistoryDetailBusy = false
 }
 
 func (a *appModel) syncDetailPageMode() {

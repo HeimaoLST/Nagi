@@ -251,7 +251,7 @@ func TestCustomThemeInstallRestoresMissingSelectionWithContrastWarning(t *testin
 	}
 	app.reloadAppearanceThemes()
 	resolved := app.resolveAppearanceTheme(false)
-	if resolved.EffectiveID != "restored" || resolved.Unavailable || len(resolved.Warnings) == 0 || app.appearanceThemeIDs != ids || app.appearanceMode != appearanceSystem || app.resolveAppearanceTheme(true).EffectiveID != "night" || app.store != nil || app.rt != nil {
+	if resolved.EffectiveID != "restored" || resolved.Unavailable || len(resolved.Warnings) == 0 || app.appearanceThemeIDs != ids || app.appearanceMode != appearanceSystem || app.resolveAppearanceTheme(true).EffectiveID != "night" || app.store != nil || app.pi != nil {
 		t.Fatal("reload did not restore the existing request independently of preferences/store/Runtime")
 	}
 }
@@ -426,9 +426,10 @@ func TestCustomThemeLowContrastStillAppliesAndRetriesFailedSave(t *testing.T) {
 		t.Fatal(err)
 	}
 	ct := &contact{ID: "contact-keep", Draft: "draft-keep", ActiveTaskID: "task-keep", SessionID: "session-keep"}
+	ct.PiBinding = recoveryConversationBinding(ct.ID, t.TempDir(), ct.SessionID)
 	a := &appModel{store: &contactStore{path: filepath.Join(blocked, "contacts.json")}, contacts: []*contact{ct}, appearanceThemes: catalog, runtimeErr: "unrelated Runtime error"}
 	a.setAppearanceTheme(appearanceLight, "low-contrast")
-	if a.appearanceError != appearanceStatusSaveFailed || a.resolveAppearanceTheme(false).EffectiveID != "low-contrast" {
+	if a.appearanceError != appearanceStatusSaveFailed || a.resolveAppearanceTheme(false).EffectiveID != "low-contrast" || !strings.Contains(a.localSaveErr, "create profile store directory") {
 		t.Fatal("failed save reverted the applied low-contrast palette")
 	}
 	if a.resolveAppearanceTheme(false).Palette.Theme.Text != ui.Hex("#FFFFFF") {
@@ -436,7 +437,7 @@ func TestCustomThemeLowContrastStillAppliesAndRetriesFailedSave(t *testing.T) {
 	}
 	a.store.path = filepath.Join(t.TempDir(), "contacts.json")
 	a.setAppearanceTheme(appearanceLight, "low-contrast")
-	if a.appearanceError != "" || a.runtimeErr != "unrelated Runtime error" || ct.Draft != "draft-keep" || ct.ActiveTaskID != "task-keep" || ct.SessionID != "session-keep" {
+	if a.appearanceError != "" || a.runtimeErr != "unrelated Runtime error" || ct.Draft != "draft-keep" || ct.ActiveTaskID != "task-keep" || ct.SessionID != "session-keep" || ct.PiBinding == nil || ct.PiBinding.Context.SessionRef != ct.SessionID {
 		t.Fatalf("retry changed unrelated state: %+v %+v", a, ct)
 	}
 	reloaded, err := openContactStore(a.store.path, "/ignored")

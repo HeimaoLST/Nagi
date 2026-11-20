@@ -560,15 +560,15 @@ func TestMarkdownReaderCompactSourceCopyAddsNoShortMessageHeight(t *testing.T) {
 }
 
 // TestMarkdownReaderScreenshot is opt-in because it writes images. Run it
-// with SAKI_MARKDOWN_READER_SCREENSHOT_DIR, or the Go test cache may reuse
+// with NAGI_MARKDOWN_READER_SCREENSHOT_DIR, or the Go test cache may reuse
 // an older result:
 //
-//	SAKI_MARKDOWN_READER_SCREENSHOT_DIR=/tmp/nagi-reader-113 \
+//	NAGI_MARKDOWN_READER_SCREENSHOT_DIR=/tmp/nagi-reader-113 \
 //	  go test -count=1 -run TestMarkdownReaderScreenshot ./...
 func TestMarkdownReaderScreenshot(t *testing.T) {
-	dir := os.Getenv("SAKI_MARKDOWN_READER_SCREENSHOT_DIR")
+	dir := os.Getenv("NAGI_MARKDOWN_READER_SCREENSHOT_DIR")
 	if dir == "" {
-		t.Skip("set SAKI_MARKDOWN_READER_SCREENSHOT_DIR to write headless previews")
+		t.Skip("set NAGI_MARKDOWN_READER_SCREENSHOT_DIR to write headless previews")
 	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)

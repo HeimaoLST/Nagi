@@ -95,7 +95,7 @@ func TestPreferenceControlFacesKeepHitAndKeyboard(t *testing.T) {
 				}
 				tr.Key(0, ui.KeyEscape)
 				tr.Frame()
-				if directory := os.Getenv("SAKI_PREVIEW_DIR"); directory != "" {
+				if directory := os.Getenv("NAGI_PREVIEW_DIR"); directory != "" {
 					name := fmt.Sprintf("shared-controls-%d-dark-%t", width, dark)
 					writePreviewPNG(t, filepath.Join(directory, name+".png"), tr.Image())
 					data, err := json.MarshalIndent(bounds, "", "  ")
@@ -155,7 +155,7 @@ func TestPreferenceControlShapeReferenceFrames(t *testing.T) {
 					if !ok || box.H < 32 || box.X < 0 || box.X+box.W > float32(width+40) {
 						t.Fatalf("reference control lost its actual bounded interaction box: %+v", box)
 					}
-					if directory := os.Getenv("SAKI_PREVIEW_DIR"); directory != "" {
+					if directory := os.Getenv("NAGI_PREVIEW_DIR"); directory != "" {
 						writePreviewPNG(t, filepath.Join(directory, name+".png"), tr.Image())
 						data, err := json.MarshalIndent(map[string]any{"hit": box, "face": ui.Rect{X: box.X, Y: box.Y + 2, W: box.W, H: box.H - 4}, "region": region, "state": state, "actual_focus": tr.Focused(name), "actual_input": region == 16, "diagnostic": "Region8 isolates the shared face; region16 is the production TextInputBase path. Native/browser text raster is not compared."}, "", "  ")
 						if err != nil {
@@ -257,7 +257,7 @@ func TestPreferenceInputScrolledSelectionKeepsFaceBorder(t *testing.T) {
 				if !active || caret.X < box.X+12 || caret.X+caret.W > box.X+box.W-12+.5 {
 					t.Errorf("caret escaped the same editable content box: caret=%+v input=%+v", caret, box)
 				}
-				if directory := os.Getenv("SAKI_PREVIEW_DIR"); directory != "" {
+				if directory := os.Getenv("NAGI_PREVIEW_DIR"); directory != "" {
 					writePreviewPNG(t, filepath.Join(directory, name+".png"), tr.Image())
 					data, err := json.MarshalIndent(map[string]any{"hit": box, "face": ui.Rect{X: box.X, Y: box.Y + 2, W: box.W, H: 28}, "caret": caret, "changed_border_and_inset_pixels": changed, "raw_text_and_clipboard_preserved": value == text && tr.Clipboard() == text}, "", "  ")
 					if err != nil {
@@ -328,9 +328,6 @@ func writeV07AppearancePreview(t *testing.T, dir, name string, a *appModel, widt
 // entry; it adds no new opt-in skip and no second preview test.
 func writeV07AppearancePreviews(t *testing.T, dir string) {
 	t.Helper()
-	if err := loadAvatar(); err != nil {
-		t.Fatal(err)
-	}
 	// First review gate: main, Appearance panel, and the minimum composer.
 	for _, mode := range []struct {
 		name    string
@@ -386,31 +383,50 @@ func TestGeneralPageHeadingKeepsDraftAndThemeAction(t *testing.T) {
 	for _, language := range []string{"en", "zh-Hans"} {
 		t.Run(language, func(t *testing.T) {
 			a, ct := workspaceTestApp(t)
+			ct.SessionID, ct.Loaded = "", false
 			recoveryTestStore(t, a)
 			ct.Draft = "Keep this exact unsaved text"
+			before := recoveryRecordSnapshot(t, ct)
+			store := a.store
+			a.openSettingsTab(settingsTabAppearance, settingsSourceRail)
 			tr := ui.NewTester(func(c *ui.Context) {
 				a.workTheme = resolveWorkbenchTheme(a.appearanceMode == appearanceDark)
 				c.SetTheme(a.workTheme.Theme)
-				ui.Scroll(c).Fill().Padding(20).Children(func() { a.settingsAppearanceContent(c, c.Theme()) })
-			}, 420, 640)
+				ui.Row(c).Fill().Children(func() { a.settingsMain(c, c.Theme(), false) })
+			}, 720, 640)
 			tr.SetLocale(language)
 			tr.SetFocused(true)
 			tr.Frame()
 			msgs := locales.In(language)
 			heading, ok := tr.Find(msgs.SettingsGeneral())
-			if !ok || heading.H != 32 {
-				t.Fatalf("General page title has no full declared 32-unit line box: %+v", heading)
+			content, contentOK := tr.Find(msgs.AppearanceMode())
+			if !ok || !contentOK || heading.W <= 0 || heading.H <= 0 || heading.X < 0 || heading.Y < 0 || heading.X+heading.W > 720 || heading.Y+heading.H > content.Y {
+				t.Fatalf("composed General heading is missing or not above its controls: heading=%+v content=%+v texts=%v", heading, content, tr.Texts())
 			}
-			if err := tr.Click(msgs.AppearanceMode()); err != nil {
-				t.Fatal(err)
+			for attempt := 0; attempt < 8 && !tr.Focused(msgs.AppearanceSystem()); attempt++ {
+				tr.Key(0, ui.KeyTab)
+				tr.Frame()
 			}
+			if !tr.Focused(msgs.AppearanceSystem()) {
+				t.Fatalf("appearance current-value trigger is not keyboard reachable: %v", tr.Texts())
+			}
+			tr.Key(0, ui.KeySpace)
 			tr.Frame()
+			if !tr.HasText(msgs.AppearanceDark()) {
+				t.Fatalf("focused appearance trigger did not open its real options: %v", tr.Texts())
+			}
 			if err := tr.Click(msgs.AppearanceDark()); err != nil {
 				t.Fatal(err)
 			}
 			tr.Frame()
+			if !tr.Focused(msgs.AppearanceDark()) {
+				t.Fatalf("theme selection lost focus: %v", tr.Texts())
+			}
 			if a.appearanceMode != appearanceDark || ct.Draft != "Keep this exact unsaved text" || a.localSaveErr != "" {
 				t.Fatalf("shared title change disturbed the actual theme action/draft: mode=%s draft=%q error=%q", a.appearanceMode, ct.Draft, a.localSaveErr)
+			}
+			if a.selectedContact() != ct || a.store != store || recoveryRecordSnapshot(t, ct) != before {
+				t.Fatal("General theme action changed unrelated contact state or store ownership")
 			}
 		})
 	}
@@ -525,7 +541,7 @@ func TestWorkbenchIconRolesKeepTargetsFocusAndNeighbors(t *testing.T) {
 				if value != "  中文 exact\nsecond line  !" || !tr.Focused("Exact multiline draft") {
 					t.Fatalf("form face stole focus or changed raw text: %q", value)
 				}
-				if directory := os.Getenv("SAKI_PREVIEW_DIR"); directory != "" {
+				if directory := os.Getenv("NAGI_PREVIEW_DIR"); directory != "" {
 					name := fmt.Sprintf("shared-workbench-%d-dark%t", width, dark)
 					writePreviewPNG(t, filepath.Join(directory, name+".png"), tr.Image())
 					data, _ := json.MarshalIndent(bounds, "", "  ")

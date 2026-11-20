@@ -9,6 +9,8 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo/ui"
+
+	"github.com/HeimaoLST/Nagi/locales"
 )
 
 func TestTaskContextFileSnapshotRefreshAndDiskIsolation(t *testing.T) {
@@ -301,18 +303,18 @@ func exerciseTaskContextView(t *testing.T, dark bool) {
 	tr := taskContextTester(tc, dark)
 
 	tr.Frame()
-	if !tr.HasText("Task context") || !tr.HasText("No saved context") {
+	if !tr.HasText(locales.In("en").TaskContextHeading()) || !tr.HasText(locales.In("en").TaskContextEmpty()) {
 		t.Fatalf("empty component state missing: %v", tr.Texts())
 	}
 	if err := tr.Click("Add snippet"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if err := tr.Click("Context name"); err != nil {
+	if err := tr.Click(locales.In("en").TaskContextNameLabel()); err != nil {
 		t.Fatal(err)
 	}
 	tr.Type("Release notes")
-	if err := tr.Click("Context text"); err != nil {
+	if err := tr.Click(locales.In("en").TaskContextTextLabel()); err != nil {
 		t.Fatal(err)
 	}
 	tr.Type("Line one · 你好")
@@ -338,7 +340,7 @@ func exerciseTaskContextView(t *testing.T, dark bool) {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if err := tr.Click("Context name"); err != nil {
+	if err := tr.Click(locales.In("en").TaskContextNameLabel()); err != nil {
 		t.Fatal(err)
 	}
 	tr.Command("selectAll")
@@ -358,7 +360,7 @@ func exerciseTaskContextView(t *testing.T, dark bool) {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if err := tr.Click("Context file path"); err != nil {
+	if err := tr.Click(locales.In("en").TaskContextFilePathLabel()); err != nil {
 		t.Fatal(err)
 	}
 	tr.Type(path)
@@ -395,7 +397,7 @@ func exerciseTaskContextView(t *testing.T, dark bool) {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if !tr.HasText("Enter a context name.") || !tr.HasText("Save snippet") {
+	if !tr.HasText(locales.In("en").TaskContextErrName()) || !tr.HasText("Save snippet") {
 		t.Fatalf("validation error did not preserve the form: %v", tr.Texts())
 	}
 	if len(tc.snapshot()) != 2 {
@@ -417,7 +419,7 @@ func exerciseTaskContextView(t *testing.T, dark bool) {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if len(tc.snapshot()) != 0 || !tr.HasText("No saved context") {
+	if len(tc.snapshot()) != 0 || !tr.HasText(locales.In("en").TaskContextEmpty()) {
 		t.Fatalf("final remove = %+v / %v", tc.snapshot(), tr.Texts())
 	}
 }
@@ -452,7 +454,7 @@ func TestTaskContextEmptyFilePreviewCopyAndRefresh(t *testing.T) {
 	if !tr.HasText("Preview: Empty brief") || !tr.HasText("Source: "+path) {
 		t.Fatalf("empty snapshot preview missing: %v", tr.Texts())
 	}
-	if err := tr.Click("Copy context text"); err != nil {
+	if err := tr.Click(locales.In("en").CopyContextTextLabel()); err != nil {
 		t.Fatal(err)
 	}
 	if got := tr.Clipboard(); got != "" {
@@ -472,7 +474,7 @@ func TestTaskContextEmptyFilePreviewCopyAndRefresh(t *testing.T) {
 	if !tr.HasText("filled later") {
 		t.Fatalf("refreshed empty file preview missing: %v", tr.Texts())
 	}
-	if err := tr.Click("Copy context text"); err != nil {
+	if err := tr.Click(locales.In("en").CopyContextTextLabel()); err != nil {
 		t.Fatal(err)
 	}
 	if got := tr.Clipboard(); got != "filled later" {
@@ -481,7 +483,7 @@ func TestTaskContextEmptyFilePreviewCopyAndRefresh(t *testing.T) {
 }
 
 func TestTaskContextHeadlessPreviews(t *testing.T) {
-	dir := os.Getenv("SAKI_PREVIEW_DIR")
+	dir := os.Getenv("NAGI_PREVIEW_DIR")
 	if dir == "" {
 		dir = t.TempDir()
 	}
@@ -519,11 +521,11 @@ func TestTaskContextSaveFailureKeepsEditorAndValues(t *testing.T) {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if err := tr.Click("Context name"); err != nil {
+	if err := tr.Click(locales.In("en").TaskContextNameLabel()); err != nil {
 		t.Fatal(err)
 	}
 	tr.Type("Unsaved name")
-	if err := tr.Click("Context text"); err != nil {
+	if err := tr.Click(locales.In("en").TaskContextTextLabel()); err != nil {
 		t.Fatal(err)
 	}
 	tr.Type("Unsaved body")

@@ -1,0 +1,115 @@
+--- a/ui/access.go
++++ b/ui/access.go
+@@ -465,6 +465,9 @@
+ 	if st := e.st; (st.vw <= 0 || st.vh <= 0) && e.w > 0 && e.h > 0 {
+ 		n.States |= platform.AccessOffscreen
+ 	}
++	if ed := e.st.editor; ed != nil && e.flags&flagEditable != 0 && ed.password {
++		n.States |= platform.AccessPassword
++	}
+ 	if disabled {
+ 		return
+ 	}
+@@ -495,9 +498,7 @@
+ 			n.States |= platform.AccessMultiline
+ 		}
+ 		n.Placeholder = ed.placeholder
+-		if ed.password {
+-			n.States |= platform.AccessPassword
+-		} else {
++		if !ed.password {
+ 			n.Value = ed.buf.string()
+ 			n.SelStart, n.SelEnd = ed.selection()
+ 		}
+--- a/internal/darwin/access.go
++++ b/internal/darwin/access.go
+@@ -231,8 +231,17 @@
+ // element, and reports whether its value changed.
+ func (el *accessElement) apply(n platform.AccessNode, fresh bool) (valueChanged bool) {
+ 	o := el.node
++	if n.States&platform.AccessPassword != 0 {
++		n.Value = ""
++		n.SelStart, n.SelEnd = 0, 0
++	}
+ 	el.node = n
+ 	obj := el.obj
++	passwordChanged := (n.States^o.States)&platform.AccessPassword != 0
++	if passwordChanged {
++		sendSuper(obj, "MyGoAccessibilityElement", sel("setAccessibilityValue:"), uintptr(nsString("")))
++		sendSuper(obj, "MyGoAccessibilityElement", sel("setAccessibilitySelectedText:"), uintptr(nsString("")))
++	}
+ 	r, sr := roleOf(n)
+ 	if or, osr := roleOf(o); fresh || r != or || sr != osr {
+ 		send(obj, "setAccessibilityRole:", uintptr(nsString(r)))
+@@ -277,7 +286,7 @@
+ 	// table tells (AXSelectedRowsChanged).
+ 	toggled := toggle(n.Role) && n.States&(platform.AccessChecked|platform.AccessMixed) != o.States&(platform.AccessChecked|platform.AccessMixed) ||
+ 		n.Role == platform.RoleDisclosure && n.States&platform.AccessExpanded != o.States&platform.AccessExpanded
+-	if fresh || n.Value != o.Value || n.Now != o.Now || toggled || n.Role == platform.RoleText && n.Label != o.Label ||
++	if fresh || passwordChanged || n.Value != o.Value || n.Now != o.Now || toggled || n.Role == platform.RoleText && n.Label != o.Label ||
+ 		n.Role == platform.RoleHeading && n.Level != o.Level {
+ 		send(obj, "setAccessibilityValue:", uintptr(valueOf(n)))
+ 		valueChanged = !fresh
+@@ -321,7 +330,7 @@
+ 		}
+ 		send(obj, "setAccessibilityHelp:", uintptr(d))
+ 	}
+-	if textual(n.Role) && (fresh || n.Value != o.Value || n.SelStart != o.SelStart || n.SelEnd != o.SelEnd) {
++	if textual(n.Role) && (fresh || passwordChanged || n.Value != o.Value || n.SelStart != o.SelStart || n.SelEnd != o.SelEnd) {
+ 		text := []rune(n.Value)
+ 		a, b := max(0, min(n.SelStart, len(text))), max(0, min(n.SelEnd, len(text)))
+ 		send(obj, "setAccessibilityNumberOfCharacters:", uintptr(units(text)))
+@@ -601,6 +610,9 @@
+ 		}),
+ 		method("accessibilityAttributeValue:", func(self id, cmd objc.SEL, attr id) id {
+ 			if el := b().accessElementOf(self); el != nil {
++				if el.node.States&platform.AccessPassword != 0 && (stringOf(attr) == "AXValue" || stringOf(attr) == "AXSelectedText") {
++					return nsString("")
++				}
+ 				switch stringOf(attr) {
+ 				case "AXInvalid":
+ 					if el.node.States&platform.AccessInvalid != 0 {
+@@ -708,17 +720,39 @@
+ 				el.act(platform.AccessFocus, "")
+ 			}
+ 		}),
++		method("accessibilityValue", func(self id, cmd objc.SEL) id {
++			if el := b().accessElementOf(self); el != nil && el.node.States&platform.AccessPassword != 0 {
++				return nsString("")
++			}
++			return sendSuper(self, "MyGoAccessibilityElement", cmd)
++		}),
++		method("accessibilitySelectedText", func(self id, cmd objc.SEL) id {
++			if el := b().accessElementOf(self); el != nil && el.node.States&platform.AccessPassword != 0 {
++				return nsString("")
++			}
++			return sendSuper(self, "MyGoAccessibilityElement", cmd)
++		}),
+ 		method("setAccessibilityValue:", func(self id, cmd objc.SEL, value id) {
+-			sendSuper(self, "MyGoAccessibilityElement", cmd, uintptr(value))
+-			if el := b().accessElementOf(self); el != nil && textual(el.node.Role) {
++			el := b().accessElementOf(self)
++			cached := value
++			if el != nil && el.node.States&platform.AccessPassword != 0 {
++				cached = nsString("")
++			}
++			sendSuper(self, "MyGoAccessibilityElement", cmd, uintptr(cached))
++			if el != nil && textual(el.node.Role) {
+ 				el.act(platform.AccessSetValue, stringOf(value))
+ 			}
+ 		}),
+ 		// Typing into a text field over its selection, as Voice Control,
+ 		// dictation and automation insert text (kAXSelectedTextAttribute).
+ 		method("setAccessibilitySelectedText:", func(self id, cmd objc.SEL, text id) {
+-			sendSuper(self, "MyGoAccessibilityElement", cmd, uintptr(text))
+-			if el := b().accessElementOf(self); el != nil && textual(el.node.Role) && el.node.Actions&platform.ActionSetValue != 0 {
++			el := b().accessElementOf(self)
++			cached := text
++			if el != nil && el.node.States&platform.AccessPassword != 0 {
++				cached = nsString("")
++			}
++			sendSuper(self, "MyGoAccessibilityElement", cmd, uintptr(cached))
++			if el != nil && textual(el.node.Role) && el.node.Actions&platform.ActionSetValue != 0 {
+ 				el.act(platform.AccessInsertText, stringOf(text))
+ 			}
+ 		}),

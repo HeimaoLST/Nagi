@@ -2,15 +2,15 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/HeimaoLST/Nagi/internal/pi"
 )
 
 func TestContactStoreCreatesDefaultAndStableID(t *testing.T) {
@@ -23,7 +23,7 @@ func TestContactStoreCreatesDefaultAndStableID(t *testing.T) {
 		t.Fatalf("contacts = %d", len(store.state.Contacts))
 	}
 	first := store.state.Contacts[0]
-	if first.Name != "Saki" || first.SessionID != "" || first.Workspace != "/tmp/workspace" {
+	if first.Name != "Nagi" || first.SessionID != "" || first.Workspace != "/tmp/workspace" {
 		t.Fatalf("default contact = %+v", first)
 	}
 	if store.state.Selected != first.ID {
@@ -45,7 +45,7 @@ func TestContactStoreRoundTripKeepsProductState(t *testing.T) {
 		t.Fatal(err)
 	}
 	contacts := []*contact{
-		{ID: "a", Name: "Saki", Role: "Assistant", Purpose: "p", Instructions: "i", Workspace: "/work", SessionID: "s-1", Draft: "draft a"},
+		{ID: "a", Name: "Nagi", Role: "Assistant", Purpose: "p", Instructions: "i", Workspace: "/work", SessionID: "s-1", PiBinding: recoveryConversationBinding("a", "/work", "s-1"), Draft: "draft a"},
 		{ID: "b", Name: "New contact 2", Role: "Assistant", Draft: "draft b"},
 	}
 	if err := store.save(contacts, "b"); err != nil {
@@ -59,7 +59,7 @@ func TestContactStoreRoundTripKeepsProductState(t *testing.T) {
 		t.Fatalf("state = %+v", reloaded.state)
 	}
 	got := reloaded.state.Contacts[0]
-	if got.SessionID != "s-1" || got.Draft != "draft a" || got.Workspace != "/work" {
+	if got.SessionID != "s-1" || !reflect.DeepEqual(got.PiBinding, contacts[0].PiBinding) || got.Draft != "draft a" || got.Workspace != "/work" {
 		t.Fatalf("contact = %+v", got)
 	}
 }
@@ -128,9 +128,10 @@ func recoveryWriteState(t *testing.T, path string, state storedState) []byte {
 
 func recoveryProducedState(t *testing.T) storedState {
 	t.Helper()
-	a, _ := newIssueToolTestApp(t)
-	if !a.createIssue("Keep 原文 and IDs", "A real saved requirement") {
-		t.Fatal("normal issue producer failed")
+	a, ct := taskContextApp(t)
+	ct.SessionID, ct.PiBinding = "", nil
+	if _, err := a.createIssueFor(ct, "Keep 原文 and IDs", "A real saved requirement"); err != nil {
+		t.Fatal(err)
 	}
 	var state storedState
 	if err := json.Unmarshal(recoverySavedBytes(t, a.store.path), &state); err != nil {
@@ -140,11 +141,10 @@ func recoveryProducedState(t *testing.T) storedState {
 }
 
 func TestStoreRecoveryAcceptsOrdinaryProducerCopies(t *testing.T) {
-	for _, producer := range []string{"local", "configured", "mcp-first-issue"} {
+	for _, producer := range []string{"local", "configured"} {
 		t.Run(producer, func(t *testing.T) {
 			root := t.TempDir()
 			isolateConnectionApp(t, root, filepath.Join(root, "never-launched"))
-			t.Setenv("SAKI_TEST_ISSUE_TOOL_HELPER", "")
 			if producer == "configured" {
 				if err := saveConnectionConfig(connectionConfigPath(guiStorePath()), testConnectionConfig(t)); err != nil {
 					t.Fatal(err)
@@ -162,26 +162,12 @@ func TestStoreRecoveryAcceptsOrdinaryProducerCopies(t *testing.T) {
 					t.Fatal(a.localSaveErr)
 				}
 			}
-			if producer == "mcp-first-issue" {
-				scope, err := a.issueToolNewScope(ct.ID, "saved-conversation", "saved-turn", false)
-				if err != nil {
-					t.Fatal(err)
-				}
-				activateIssueToolTestScope(t, a, scope)
-				response, err := a.handleIssueToolForward(context.Background(), issueToolForwardRequest{
-					Tool: "issue_action", Arguments: issueToolActionArgs(t, *scope, issueToolActionCreate, map[string]any{"goal": "MCP first issue 原文"}),
-				})
-				if err != nil || response.IsError || len(ct.Issues) != 1 || ct.SelectedIssueID != "" {
-					t.Fatalf("ordinary MCP producer did not retain its optional selection: response=%+v err=%v", response, err)
-				}
-				ct.ActiveTaskID, ct.SendState = "", sendIdle
-			}
 			original := recoverySavedBytes(t, guiStorePath())
 			copy, err := inspectStoreRecoveryCopy(guiStorePath())
 			if err != nil || copy.Contacts != 1 || copy.Issues != len(ct.Issues) {
 				t.Fatalf("ordinary %s copy rejected: %+v %v", producer, copy, err)
 			}
-			if producer != "mcp-first-issue" && !bytes.Contains(original, []byte(`"issue_tool_operations": {}`)) {
+			if !bytes.Contains(original, []byte(`"issue_tool_operations": {}`)) {
 				t.Fatal("test did not exercise an actual emitted empty operation ledger")
 			}
 			editor := newContactProfileEditor(contactProfileDraft(ct))
@@ -211,14 +197,14 @@ func TestStoreRecoveryAcceptsOrdinaryProducerCopies(t *testing.T) {
 			if err != nil || reopened.state.Selected != ct.ID {
 				t.Fatal("normal reopen lost the original selected contact")
 			}
-			if a.rt != nil || a.runtimeHandshake || a.runtimeHelperChecked || a.runtimeBinary != "" {
-				t.Fatal("copy/restore launched Runtime")
+			if a.pi != nil || a.connectionApplying {
+				t.Fatal("copy or restore started a Pi worker")
 			}
 		})
 	}
 }
 
-func TestStoreRecoveryStrictCompatibilityAndLegacyLoading(t *testing.T) {
+func TestStoreRecoveryRejectsUnsupportedCopies(t *testing.T) {
 	for _, kind := range []string{"old-version", "future-version", "unknown-top", "unknown-nested", "invalid-utf8", "multiple-values", "selected-contact", "duplicate-contact", "duplicate-issue", "unknown-owner", "dangling-issue", "missing-ledger", "invalid-scope", "duplicate-scope", "legacy-requirements", "revision", "requirement-state", "blank-requirement", "nil-question", "blank-question", "issue-status", "execution-id", "execution-status", "pending-execution", "accepted-without-task", "running-without-task", "submitting-intent", "unknown-intent-without-session", "dispatching-batch", "appearance", "layout"} {
 		t.Run(kind, func(t *testing.T) {
 			state := recoveryProducedState(t)
@@ -228,7 +214,7 @@ func TestStoreRecoveryStrictCompatibilityAndLegacyLoading(t *testing.T) {
 			case "old-version":
 				state.Version = 8
 			case "future-version":
-				state.Version = 10
+				state.Version = contactStoreVersion + 1
 			case "unknown-top":
 				extra = "top"
 			case "unknown-nested":
@@ -253,7 +239,7 @@ func TestStoreRecoveryStrictCompatibilityAndLegacyLoading(t *testing.T) {
 				scope := IssueToolScope{Ref: "same", ContactID: state.Selected, RuntimeSessionID: "session", TurnID: "turn"}
 				state.IssueToolScopes = []IssueToolScope{scope, scope}
 			case "legacy-requirements":
-				issue.RequirementItems, issue.Requirements = nil, "legacy requirement"
+				extra = kind
 			case "revision":
 				issue.RequirementsRevision = 0
 			case "requirement-state":
@@ -305,13 +291,15 @@ func TestStoreRecoveryStrictCompatibilityAndLegacyLoading(t *testing.T) {
 					object["future_field"] = "do not drop me"
 				case "nested":
 					object["contacts"].([]any)[0].(map[string]any)["future_field"] = "do not drop me"
+				case "legacy-requirements":
+					object["issues"].([]any)[0].(map[string]any)["requirements"] = "legacy requirement"
 				}
 				original, _ = json.Marshal(object)
 				if extra == "multiple-values" {
 					original = append(original, []byte(" {}")...)
 				}
 				if extra == "invalid-utf8" {
-					original = bytes.Replace(original, []byte("Saki"), []byte{0xff}, 1)
+					original = bytes.Replace(original, []byte("Nagi"), []byte{0xff}, 1)
 				}
 				if err := os.WriteFile(path, original, 0600); err != nil {
 					t.Fatal(err)
@@ -325,131 +313,14 @@ func TestStoreRecoveryStrictCompatibilityAndLegacyLoading(t *testing.T) {
 			}
 		})
 	}
-	for version := 1; version <= contactStoreVersion; version++ {
-		t.Run(fmt.Sprintf("ordinary-v%d", version), func(t *testing.T) {
-			state := recoveryProducedState(t)
-			state.Version, state.Selected, state.IssueToolOperations = version, "missing", nil
-			state.IssueToolScopes = []IssueToolScope{{Ref: "invalid"}}
-			path := filepath.Join(t.TempDir(), "legacy.json")
-			original := recoveryWriteState(t, path, state)
-			store, err := openContactStore(path, "/ignored")
-			if err != nil || store.state.Selected != state.Contacts[0].ID || store.issueToolLedger == nil || len(store.issueToolScopes) != 0 || !bytes.Equal(original, recoverySavedBytes(t, path)) {
-				t.Fatalf("ordinary legacy behavior changed: %+v %v", store, err)
-			}
-		})
-	}
 }
 
-func TestStoreRecoveryExportPausedRestoreAndNormalReopen(t *testing.T) {
-	root := t.TempDir()
-	isolateConnectionApp(t, root, filepath.Join(root, "never-launched"))
-	t.Setenv("SAKI_TEST_ISSUE_TOOL_HELPER", "")
-	if err := saveConnectionConfig(connectionConfigPath(guiStorePath()), testConnectionConfig(t)); err != nil {
-		t.Fatal(err)
-	}
-	a, err := newRuntimeApp()
-	if err != nil {
-		t.Fatal(err)
-	}
-	ct := a.selectedContact()
-	ct.SessionID, ct.Draft = "independent-missing-conversation", "Saved draft 原文"
-	ct.PreviousSessions = []string{"independent-previous-session"}
-	ct.Context.items = []taskContextItem{{ID: "snapshot", Name: "原文", Text: `{"opaque":"text"}`, Revision: 4}}
-	ct.pendingSend = &pendingSend{State: "unknown", Draft: "Maybe dispatched", Context: ct.Context.snapshot()}
-	if !a.createIssue("Keep issue 原文", "Requirement keeps its ID") {
-		t.Fatal("normal issue creation failed")
-	}
-	issue := ct.Issues[0]
-	issue.WorkSessionID = "independent-missing-work"
-	issue.Executions = []*issueExecution{{ID: "unknown-execution", Status: issueExecutionUnknown, Prompt: "Original uncertain task", Detail: "Association remains unknown", Context: ct.Context.snapshot()}}
-	issue.Questions = []*issueQuestion{{Ref: "question", Text: "原始问题", State: issueQuestionOpen, RequirementsRevision: 1}}
-	issue.Supplements.Items = []*issueSupplement{
-		{ID: "pending", ContactID: ct.ID, IssueID: issue.ID, Text: "Not automatically sent", RequirementsRevision: 1, State: supplementStatePending},
-		{ID: "unknown", ContactID: ct.ID, IssueID: issue.ID, Text: "May already have effects", RequirementsRevision: 1, State: supplementStateUnknown},
-	}
-	issue.Supplements.Batches = []*issueSupplementBatch{{ID: "unknown-batch", State: supplementBatchUnknown, Text: "原文", ExecutionID: "unknown-execution"}}
-	a.appearanceThemeIDs = appearanceThemeIDs{Light: "missing-custom-theme"}
-	if err := a.persist(); err != nil {
-		t.Fatal(err)
-	}
-	original := recoverySavedBytes(t, guiStorePath())
-	var expected storedState
-	if err := json.Unmarshal(original, &expected); err != nil {
-		t.Fatal(err)
-	}
-	if !expected.Issues[0].Supplements.AutoContinue {
-		t.Fatal("fixture did not begin with automatic continuation enabled")
-	}
-	copy, err := inspectStoreRecoveryCopy(guiStorePath())
-	if err != nil {
-		t.Fatal(err)
-	}
-	output := filepath.Join(t.TempDir(), "Nagi 恢复副本.json")
-	if _, err := writeStoreRecoveryCopy(copy, output); err != nil {
-		t.Fatal(err)
-	}
-	selected, err := inspectStoreRecoveryCopy(output)
-	if err != nil {
-		t.Fatal(err)
-	}
-	damaged := []byte{'{', 'b', 'r', 'o', 'k', 'e', 'n', 0xff, '\n'}
-	if err := os.WriteFile(guiStorePath(), damaged, 0600); err != nil {
-		t.Fatal(err)
-	}
-	_, startupErr := newRuntimeApp()
-	if startupErr == nil {
-		t.Fatal("damaged canonical store did not enter unavailable startup")
-	}
-	fallback := newUnavailableApp(startupErr)
-	target, err := inspectStoreRecoveryTarget(guiStorePath())
-	if err != nil {
-		t.Fatal(err)
-	}
-	result, err := restoreStoreRecoveryCopy(selected, target)
-	if err != nil || result.Outcome != storeRecoveryVerifiedInstalled || result.OutputPath != guiStorePath() || result.ArchivePath == "" {
-		t.Fatalf("paused restore = %+v %v", result, err)
-	}
-	if !bytes.Equal(recoverySavedBytes(t, result.ArchivePath), damaged) || !bytes.Equal(recoverySavedBytes(t, output), original) {
-		t.Fatal("restore changed selected source or archived original bytes")
-	}
-	installed := recoverySavedBytes(t, guiStorePath())
-	var got storedState
-	if err := json.Unmarshal(installed, &got); err != nil {
-		t.Fatal(err)
-	}
-	for i := range expected.Issues {
-		if expected.Issues[i].Supplements != nil {
-			expected.Issues[i].Supplements.AutoContinue = false
-		}
-	}
-	if !reflect.DeepEqual(got, expected) {
-		t.Fatalf("installed facts changed beyond confirmed pause:\ngot=%+v\nexpected=%+v", got, expected)
-	}
-	if fallback.store != nil || fallback.storeInitAllowed || fallback.rt != nil || fallback.persist() == nil || !bytes.Equal(installed, recoverySavedBytes(t, guiStorePath())) {
-		t.Fatal("old unavailable instance activated or overwrote installed data")
-	}
-	reopened, err := newRuntimeApp()
-	if err != nil {
-		t.Fatal(err)
-	}
-	restored := reopened.selectedContact()
-	if restored.ID != ct.ID || restored.Draft != ct.Draft || restored.SessionID != ct.SessionID || restored.SelectedIssueID != ct.SelectedIssueID || restored.pendingSend == nil || restored.pendingSend.State != "unknown" || restored.SendState != sendUnknown {
-		t.Fatal("normal reopen lost IDs, draft, references or uncertain intent")
-	}
-	if reopened.rt != nil || reopened.runtimeHandshake || reopened.runtimeHelperChecked || !bytes.Equal(installed, recoverySavedBytes(t, guiStorePath())) {
-		t.Fatal("reopen launched Runtime or rewrote the supported paused copy")
-	}
-	if restored.Issues[0].Executions[0].Status != issueExecutionUnknown || restored.Issues[0].Executions[0].TaskID != "" || restored.Issues[0].Supplements.pendingCount() != 1 {
-		t.Fatal("reopen cleared uncertainty or invented dispatch association")
-	}
-	// Exercise the host's continuation entry after a controlled readiness/readback
-	// boundary; there is no subprocess or live Runtime behind this client.
-	reopened.rt = &runtimeClient{}
-	reopened.runtimeStatus = runtimeStateReady
-	reopened.runtimeCapabilitiesLoaded, reopened.runtimeMaxActiveTasks = true, 2
-	reopened.maybeAutoContinueAllIssues()
-	if reopened.rt.nextID != 0 || len(restored.Issues[0].Executions) != 1 || restored.Issues[0].Supplements.AutoContinue {
-		t.Fatal("paused restored work automatically dispatched")
+func recoveryConversationBinding(contactID, cwd, session string) *piConversationBinding {
+	return &piConversationBinding{
+		Engine:        "pi",
+		Context:       pi.ContextBinding{ContextID: session + "-context", BotID: contactID, Purpose: pi.Conversation, SessionRef: session, CWD: cwd, SelectionRevision: 1, Used: true},
+		Selection:     piSelection{CWD: cwd, CodingTools: []string{}},
+		Configuration: piConfiguration{WireAPI: pi.OpenAICompletions, BaseURL: "http://127.0.0.1:1/v1", Model: "recovery-fixture", ContextTokens: 65536, OutputTokens: 4096, CredentialSource: "recovery-fixture"},
 	}
 }
 
@@ -493,15 +364,16 @@ func TestStoreRecoveryOptionalDefaultsAndUnknownRecords(t *testing.T) {
 			issue := &state.Issues[0]
 			switch kind {
 			case "unknown-execution":
-				issue.Executions = []storedIssueExecution{{ID: "unknown", Status: issueExecutionUnknown, Detail: "No trusted association"}}
+				issue.Executions = []storedIssueExecution{{ID: "unknown", PiIntent: true, Status: issueExecutionUnknown, Detail: "No trusted association"}}
 			case "accepted-no-session", "running-no-session":
 				status := issueExecutionAccepted
 				if kind == "running-no-session" {
 					status = issueExecutionRunning
 				}
-				issue.Executions = []storedIssueExecution{{ID: "known-task", Status: status, TaskID: "task"}}
+				issue.Executions = []storedIssueExecution{{ID: "known-task", PiIntent: true, Status: status, TaskID: "task"}}
 			case "unknown-intent":
 				state.Contacts[0].SessionID = "session"
+				state.Contacts[0].PiBinding = recoveryConversationBinding(state.Contacts[0].ID, t.TempDir(), state.Contacts[0].SessionID)
 				state.Contacts[0].PendingSend = &pendingSend{State: "unknown", Draft: "May have been sent"}
 			case "unknown-batch":
 				issue.Supplements.Batches = []*issueSupplementBatch{{ID: "unknown", State: supplementBatchUnknown}}
@@ -511,6 +383,12 @@ func TestStoreRecoveryOptionalDefaultsAndUnknownRecords(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "copy.json")
 			original := recoveryWriteState(t, path, state)
 			copy, err := inspectStoreRecoveryCopy(path)
+			if kind == "accepted-no-session" || kind == "running-no-session" {
+				if err == nil || !strings.Contains(err.Error(), "invalid Pi execution record") || !bytes.Equal(recoverySavedBytes(t, path), original) {
+					t.Fatalf("unbound active execution %s was not rejected without changing the copy: %v", kind, err)
+				}
+				return
+			}
 			if err != nil {
 				t.Fatalf("representable %s was rejected: %v", kind, err)
 			}

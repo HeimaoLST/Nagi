@@ -5,13 +5,13 @@
   "@settingsOpenTooltip": {
     "description": "The tooltip of the Settings action."
   },
-  "avatarContactLabel": "Contact {name}",
+  "avatarContactLabel": "Bot {name}",
   "@avatarContactLabel": {
-    "description": "The accessible name of an avatar-rail contact."
+    "description": "The accessible name of an avatar-rail Bot."
   },
-  "avatarAddContact": "Add contact",
+  "avatarAddContact": "Add Bot",
   "@avatarAddContact": {
-    "description": "The accessible name and tooltip of the avatar-rail Add contact action."
+    "description": "The accessible name and tooltip of the avatar-rail Add Bot action."
   },
   "settingsRailActions": "App actions",
   "@settingsRailActions": {
@@ -35,20 +35,6 @@
   "settingsConnection": "Connection & model",
   "@settingsConnection": {
     "description": "The Connection & model category in Settings."
-  },
-  "settingsContact": "Contact profile",
-  "settingsContactTitle": "Contact profile: {name}",
-  "@settingsContactTitle": {
-    "description": "The heading of the selected Contact profile.",
-    "placeholders": {
-      "name": {
-        "type": "String",
-        "example": "Saki"
-      }
-    }
-  },
-  "@settingsContact": {
-    "description": "The Contact profile category in Settings."
   },
   "settingsAdvanced": "Advanced",
   "settingsNavigationLabel": "Settings navigation",
@@ -108,21 +94,9 @@
   "@copyMessageLabel": {
     "description": "The accessible name of the copy control for a conversation message."
   },
-  "copySavedMessageLabel": "Copy saved message",
-  "@copySavedMessageLabel": {
-    "description": "The accessible name of the copy control for a full saved message."
-  },
-  "copyHistoryMessageLabel": "Copy history message",
-  "@copyHistoryMessageLabel": {
-    "description": "The accessible name of the copy control for a history entry."
-  },
-  "copySourceMessageLabel": "Copy source message",
-  "@copySourceMessageLabel": {
-    "description": "The accessible name of the copy control for a source message."
-  },
-  "copyContextTextLabel": "Copy context text",
+  "copyContextTextLabel": "Copy material text",
   "@copyContextTextLabel": {
-    "description": "The accessible name of the copy control for Context text."
+    "description": "The accessible name of the copy control for Material text."
   },
   "copyReceivedOutputLabel": "Copy received output",
   "@copyReceivedOutputLabel": {
@@ -292,181 +266,9 @@
   "@taskRailInProgress": {
     "description": "Nagi taskRailInProgress UI copy."
   },
-  "taskView": "View task",
-  "@taskView": {
-    "description": "Nagi taskView UI copy."
-  },
-  "taskActiveCount": "{count, plural, one {# active task} other {# active tasks}}",
-  "@taskActiveCount": {
-    "description": "Nagi taskActiveCount UI copy."
-  },
-  "workEntryLabel": "Work",
-  "@workEntryLabel": {
-    "description": "Nagi workEntryLabel UI copy."
-  },
-  "workEntrySummary": "{total, plural, =0 {No open tasks} one {# open task} other {# open tasks}}; {attention, plural, =0 {no tasks need attention} one {# task needs attention} other {# tasks need attention}}; {waiting, plural, =0 {none waiting} one {# waiting} other {# waiting}}; {active, plural, =0 {none in progress} one {# in progress} other {# in progress}}",
-  "@workEntrySummary": {
-    "description": "Nagi workEntrySummary UI copy."
-  },
-  "emptyTaskAttention": "{name} needs attention",
-  "@emptyTaskAttention": {
-    "description": "Nagi emptyTaskAttention UI copy."
-  },
-  "emptyTaskWaiting": "{name} is waiting for you",
-  "@emptyTaskWaiting": {
-    "description": "Nagi emptyTaskWaiting UI copy."
-  },
-  "emptyTaskInProgress": "{name} is in progress",
-  "@emptyTaskInProgress": {
-    "description": "Nagi emptyTaskInProgress UI copy."
-  },
-  "taskRunFailed": "Run failed",
-  "@taskRunFailed": {
-    "description": "Nagi taskRunFailed UI copy."
-  },
-  "taskRunInterrupted": "Run interrupted",
-  "@taskRunInterrupted": {
-    "description": "Nagi taskRunInterrupted UI copy."
-  },
-  "taskRunUnknown": "Run result unknown",
-  "@taskRunUnknown": {
-    "description": "Nagi taskRunUnknown UI copy."
-  },
-  "taskRunCompleted": "Run finished",
-  "@taskRunCompleted": {
-    "description": "Nagi taskRunCompleted UI copy."
-  },
-  "taskRunRunning": "Running",
-  "@taskRunRunning": {
-    "description": "Nagi taskRunRunning UI copy."
-  },
-  "taskRunAccepted": "Waiting to start",
-  "@taskRunAccepted": {
-    "description": "Nagi taskRunAccepted UI copy."
-  },
-  "taskRunPending": "Waiting to start",
-  "@taskRunPending": {
-    "description": "Nagi taskRunPending UI copy."
-  },
-  "taskRunNotDispatched": "Run not dispatched",
-  "@taskRunNotDispatched": {
-    "description": "Nagi taskRunNotDispatched UI copy."
-  },
-  "taskRunRejected": "Run rejected",
-  "@taskRunRejected": {
-    "description": "Nagi taskRunRejected UI copy."
-  },
-  "workTabs": "Task view",
-  "@workTabs": {
-    "description": "Nagi workTabs UI copy."
-  },
-  "workTasksTab": "Tasks",
-  "@workTasksTab": {
-    "description": "Nagi workTasksTab UI copy."
-  },
-  "workChatRunsTab": "Chat runs",
-  "@workChatRunsTab": {
-    "description": "Nagi workChatRunsTab UI copy."
-  },
-  "workClose": "Close workspace",
-  "@workClose": {
-    "description": "Nagi workClose UI copy."
-  },
-  "workCloseTooltip": "Close workspace",
-  "@workCloseTooltip": {
-    "description": "Nagi workCloseTooltip UI copy."
-  },
-  "workAnswer": "Answer question",
-  "@workAnswer": {
-    "description": "Nagi workAnswer UI copy."
-  },
-  "workContinue": "Continue task",
-  "@workContinue": {
-    "description": "Nagi workContinue UI copy."
-  },
-  "workStart": "Start task",
-  "@workStart": {
-    "description": "Nagi workStart UI copy."
-  },
-  "workContinueWithSupplement": "Continue with follow-up",
-  "@workContinueWithSupplement": {
-    "description": "Nagi workContinueWithSupplement UI copy."
-  },
-  "workStartWithSupplement": "Start with follow-up",
-  "@workStartWithSupplement": {
-    "description": "Nagi workStartWithSupplement UI copy."
-  },
-  "workReadResult": "Read latest result",
-  "@workReadResult": {
-    "description": "Nagi workReadResult UI copy."
-  },
-  "workComplete": "Mark done",
-  "@workComplete": {
-    "description": "Nagi workComplete UI copy."
-  },
-  "workCancel": "Cancel task",
-  "@workCancel": {
-    "description": "Nagi workCancel UI copy."
-  },
-  "workReopen": "Reopen task",
-  "@workReopen": {
-    "description": "Nagi workReopen UI copy."
-  },
-  "workRestore": "Restore task",
-  "@workRestore": {
-    "description": "Nagi workRestore UI copy."
-  },
-  "workBackToIssues": "Back to tasks",
-  "@workBackToIssues": {
-    "description": "Nagi workBackToIssues UI copy."
-  },
-  "workBackToChat": "Back to chat",
-  "@workBackToChat": {
-    "description": "Nagi workBackToChat UI copy."
-  },
-  "workNextActionUnavailable": "Next action unavailable: {reason}",
-  "@workNextActionUnavailable": {
-    "description": "Nagi workNextActionUnavailable UI copy."
-  },
-  "workCompletionEvidence": "Completion evidence",
-  "@workCompletionEvidence": {
-    "description": "Nagi workCompletionEvidence UI copy."
-  },
-  "workCompletionEvidencePlaceholder": "What proves this task is done?",
-  "@workCompletionEvidencePlaceholder": {
-    "description": "Nagi workCompletionEvidencePlaceholder UI copy."
-  },
-  "workTask": "Task",
-  "@workTask": {
-    "description": "Nagi workTask UI copy."
-  },
-  "contactScopeActive": "Active",
-  "@contactScopeActive": {
-    "description": "The Active contact scope."
-  },
-  "contactScopeArchived": "Archived",
-  "@contactScopeArchived": {
-    "description": "The Archived contact scope."
-  },
-  "contactScopeAll": "All",
-  "@contactScopeAll": {
-    "description": "The All contact scope."
-  },
-  "issueFilterUnfinished": "Not done",
-  "@issueFilterUnfinished": {
-    "description": "The Unfinished issue filter."
-  },
-  "issueFilterCompleted": "Done",
-  "@issueFilterCompleted": {
-    "description": "The Completed issue filter."
-  },
-  "issueFilterAll": "All",
-  "@issueFilterAll": {
-    "description": "The All issue filter."
-  },
-  "searchContacts": "Search contacts",
+  "searchContacts": "Search Bots",
   "@searchContacts": {
-    "description": "The contact search field label."
+    "description": "The Bot search field label."
   },
   "connectionApplySaved": "Apply saved",
   "@connectionApplySaved": {
@@ -476,17 +278,13 @@
   "@connectionSaveConfiguration": {
     "description": "The action saving connection settings without applying."
   },
-  "modelUpdateModel": "Update model",
-  "@modelUpdateModel": {
-    "description": "The action updating the selected session model."
-  },
   "workSaveIssue": "Save task",
   "@workSaveIssue": {
     "description": "The action saving the issue form."
   },
   "contactSaveChanges": "Save changes",
   "@contactSaveChanges": {
-    "description": "The action saving contact profile changes."
+    "description": "The action saving Bot profile changes."
   },
   "issueSupplementSave": "Save follow-up",
   "@issueSupplementSave": {
@@ -494,19 +292,15 @@
   },
   "taskContextSaveSnippet": "Save snippet",
   "@taskContextSaveSnippet": {
-    "description": "The action saving a task context snippet."
+    "description": "The action saving a material snippet."
   },
   "taskContextSaveFile": "Save file",
   "@taskContextSaveFile": {
-    "description": "The action saving a task context file."
+    "description": "The action saving a material file."
   },
   "taskContextSaveChanges": "Save changes",
   "@taskContextSaveChanges": {
-    "description": "The action saving task context changes."
-  },
-  "editContactLabel": "Edit contact",
-  "@editContactLabel": {
-    "description": "The label and accessible name of the contact picker in Settings."
+    "description": "The action saving materials changes."
   },
   "protocolLabel": "Protocol",
   "@protocolLabel": {
@@ -541,31 +335,26 @@
     "description": "The action hiding the source and raw record for a result."
   },
   "railHide": "Hide",
-  "railHideContactsTooltip": "Hide contacts",
+  "railHideContactsTooltip": "Hide Bot Team",
   "railWindowActions": "Window actions",
-  "railContactsTitle": "Contacts",
-  "railContactListActions": "Contact list actions",
+  "railContactsTitle": "Bot Team",
+  "railContactListActions": "Bot Team actions",
   "railContactSearchPlaceholder": "Name or purpose",
-  "railNoContactsMatch": "No contacts match this scope and search.",
-  "contactScopeLabel": "Contact scope",
-  "navShowContactsTooltip": "Show contacts",
-  "navHistory": "History",
-  "navConversationHistoryTooltip": "Chat history",
-  "navContactProfile": "Contact profile",
-  "navContactProfileTooltip": "Contact profile summary",
-  "navWorkspaceDetails": "Workspace details",
+  "railNoContactsMatch": "No Bots match your search.",
+  "navShowContactsTooltip": "Show Bot Team",
+  "navContactProfile": "Bot profile",
   "backToLatest": "Back to latest",
   "configurationDetails": "Configuration details",
   "runtimeDraining": "Draining the runtime…",
   "runtimeConnecting": "Connecting to runtime…",
   "runtimeLabel": "Runtime",
-  "archiveNotice": "Archived contact: sending and new task runs are disabled. History, drafts and task data are retained.",
-  "restoreContactAction": "Restore contact",
-  "contactProfileAction": "Contact profile",
+  "archiveNotice": "Archived Bot: sending and new task runs are disabled. History, drafts and task data are retained.",
+  "restoreContactAction": "Restore Bot",
+  "contactProfileAction": "Bot profile",
   "emptyNoMessages": "No messages yet",
   "emptyConversationStart": "Start a chat with {name}.",
   "@emptyConversationStart": {
-    "description": "The empty-state hint for a contact without messages.",
+    "description": "The empty-state hint for a Bot without messages.",
     "placeholders": {
       "name": {
         "type": "String"
@@ -582,32 +371,33 @@
     }
   },
   "historyNotLoadedTitle": "Chat history is not loaded",
-  "historyNotLoadedHint": "This contact already has a session, but its history has not been read yet; it is not shown as empty.",
+  "historyNotLoadedHint": "This Bot already has a session, but its history has not been read yet; it is not shown as empty.",
   "historyRuntimeNotReady": "Runtime is not ready; history cannot be read yet.",
   "connectionMismatchSummary": "Connection unavailable or changed. Review connection settings, or start a new chat from the profile.",
   "connectionSettingsAction": "Connection settings",
   "detailsAction": "Details",
   "hideAction": "Hide",
   "hideDetailsAction": "Hide details",
-  "locatedInHistory": "Located in history",
-  "earlierMessagesCount": "{count, plural, one {# earlier message} other {# earlier messages}}",
-  "lookedUpEarlier": "Looked up earlier chats",
-  "openSources": "Open sources",
+  "previousChats": "Previous chats",
+  "previousChatFallback": "Previous chat {number, number}",
+  "@previousChatFallback": {
+    "description": "List label for a previous conversation without a recorded opening message preview.",
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  },
+  "sourceChat": "Source chat",
+  "readOnlyChat": "Read-only chat",
+  "noPreviousChats": "No previous chats",
+  "loadingChatHistory": "Loading chat history…",
+  "loadMoreChats": "Load more chats",
   "tryAgain": "Try again",
   "retried": "Retried",
-  "speakerYou": "You",
-  "sourcesTitle": "Sources",
   "backAction": "← Back",
-  "closeSources": "Close sources",
-  "backFromSources": "Back from sources",
-  "fullSavedMessage": "Full saved message",
-  "closeFullMessage": "Close full message",
-  "backToHistoryTooltip": "Back to History",
-  "backToHistoryVisible": "← Back to history",
-  "sessionModelTitle": "Session model",
-  "closeSessionModel": "Close session model",
-  "taskContextTitle": "Task context",
-  "closeTaskContext": "Close task context",
+  "taskContextTitle": "Materials",
+  "closeTaskContext": "Close materials",
   "backLabel": "Back",
   "backFromAux": "Back from {title}",
   "conversationBadge": "Chat",
@@ -619,13 +409,12 @@
   "sessionModelSummary": "Session: {model}",
   "sessionModelNotLoaded": "Session model not loaded",
   "connectionDefaultModel": "Connection default: {model}",
-  "modelDetailsScroll": "Model details",
-  "taskContextDetailsScroll": "Task context details",
+  "taskContextDetailsScroll": "Materials details",
   "composerLabel": "Composer for {name}",
   "composerPlaceholder": "Message {name}",
-  "taskContextCount": "{count, plural, =0 {Task context} one {Task context: #} other {Task context: #}}",
+  "taskContextCount": "{count, plural, =0 {Materials} one {Materials: #} other {Materials: #}}",
   "@taskContextCount": {
-    "description": "The composer Task context button with its item count.",
+    "description": "The composer Materials button with its item count.",
     "placeholders": {
       "count": {
         "type": "int"
@@ -637,125 +426,12 @@
   "stopConversationTooltip": "Stop this chat",
   "sendAction": "Send",
   "sendTooltip": "Send message. Enter to send; Shift + Enter for a new line.",
-  "capacityUnknown": "Runtime task capacity is not loaded; using the conservative single-slot behavior.",
-  "retryCapacity": "Retry capacity",
   "sendingState": "Sending…",
   "sendAcceptedState": "Accepted; waiting for the runtime to start.",
   "sendUnknownState": "Delivery is unconfirmed. Choose Reload to check the task and history. Nothing will be resent by Reload.",
   "sendDisconnectedState": "The connection was lost and the result is unconfirmed. Save or copy any unsaved text before quitting. Reopen Nagi and check history before sending again; reopening does not resend work.",
   "reloadAction": "Reload",
-  "historyTitle": "History: {name}",
-  "@historyTitle": {
-    "description": "The History heading for a contact.",
-    "placeholders": {
-      "name": {
-        "type": "String"
-      }
-    }
-  },
-  "closeHistory": "Close history",
-  "backFromHistory": "Back from History",
-  "historySearchScopeHint": "Searching only {name}'s chat history. Messages from other contacts are never included.",
-  "@historySearchScopeHint": {
-    "description": "Explains that History searches only this contact.",
-    "placeholders": {
-      "name": {
-        "type": "String"
-      }
-    }
-  },
-  "historyNotLoadedShort": "History is not loaded yet; existing records are not shown as absent.",
-  "historySearchPlaceholder": "Search {name}'s history",
-  "@historySearchPlaceholder": {
-    "description": "The History search field placeholder.",
-    "placeholders": {
-      "name": {
-        "type": "String"
-      }
-    }
-  },
-  "searchSavedContexts": "Search saved contexts",
-  "searchingSavedContexts": "Searching saved contexts…",
-  "savedContextUnavailable": "Saved context unavailable: {session}",
-  "@savedContextUnavailable": {
-    "description": "A saved context that could not be read.",
-    "placeholders": {
-      "session": {
-        "type": "String"
-      }
-    }
-  },
-  "viewFullMessage": "View full message",
-  "openingFullSavedMessage": "Opening the full saved message…",
-  "noSavedMessages": "No saved messages in {name}'s loaded history.",
-  "@noSavedMessages": {
-    "description": "The empty saved-context result for a contact.",
-    "placeholders": {
-      "name": {
-        "type": "String"
-      }
-    }
-  },
-  "noMatchingMessages": "No messages in {name}'s loaded history match “{query}”.",
-  "@noMatchingMessages": {
-    "description": "The no-match saved-context result.",
-    "placeholders": {
-      "name": {
-        "type": "String"
-      },
-      "query": {
-        "type": "String"
-      }
-    }
-  },
-  "contextCount": "{count, plural, one {Context: # item} other {Context: # items}}",
-  "readFullMessage": "Read full message",
-  "viewInConversation": "View in chat",
-  "savedContextMatch": "{date}: saved context {session}",
-  "@savedContextMatch": {
-    "description": "A saved-context search match heading.",
-    "placeholders": {
-      "date": {
-        "type": "String"
-      },
-      "session": {
-        "type": "String"
-      }
-    }
-  },
-  "historySummary": "{matches, plural, =0 {No saved matches} one {# saved match} other {# saved matches}}{limited, plural, =0 {} one { (limit reached)} other { (limit reached)}}{failures, plural, =0 {} one {; # chat unavailable} other {; # chats unavailable}}",
-  "@historySummary": {
-    "description": "The saved-context search summary.",
-    "placeholders": {
-      "matches": {
-        "type": "int"
-      },
-      "limited": {
-        "type": "int"
-      },
-      "failures": {
-        "type": "int"
-      }
-    }
-  },
-  "sourcesSummary": "{count, plural, one {# earlier message from {name}'s history, cited in this reply.} other {# earlier messages from {name}'s history, cited in this reply.}}",
-  "@sourcesSummary": {
-    "description": "The sources page summary.",
-    "placeholders": {
-      "count": {
-        "type": "int"
-      },
-      "name": {
-        "type": "String"
-      }
-    }
-  },
-  "historySearchMissingQuery": "Enter a phrase to search saved contexts.",
-  "historySearchUnavailable": "Saved-context search is unavailable until the runtime is ready.",
-  "historySearchPartial": "Some saved contexts could not be read.",
-  "historyMessageNotSaved": "That message is not part of this contact's saved contexts.",
-  "historyReadFailed": "Could not read this saved context.",
-  "historyMessageMoved": "The saved message moved or is no longer available.",
+  "historyReadFailed": "Could not read this saved message.",
   "profilePurpose": "Purpose",
   "profileNoPurpose": "No purpose recorded.",
   "profileInstructions": "Instructions",
@@ -764,16 +440,16 @@
   "profileWorkspaceInherited": "Inherited from the connection default",
   "profileConversation": "Chat",
   "profileNoSession": "No chat session yet.",
-  "profileSession": "Chat session {session}",
-  "profileSessionNotLoaded": "Chat session {session}: history not loaded",
+  "profileSession": "Chat session available",
+  "profileSessionNotLoaded": "Chat history has not loaded",
   "profileActivity": "Activity",
   "profileNoActivity": "No active work.",
   "profileActivityUnknown": "Work status is unresolved; reload before changing or archiving.",
-  "profileActivityActive": "Work is active for this contact.",
+  "profileActivityActive": "Work is active for this Bot.",
   "profileEditFull": "Edit full profile",
   "profileClose": "Close profile",
-  "profileBackTooltip": "Back from Contact profile",
-  "profileArchivedNotice": "Archived contact. Existing history, drafts and task data remain available.",
+  "profileBackTooltip": "Back from Bot profile",
+  "profileArchivedNotice": "Archived Bot. Existing history, drafts and task data remain available.",
   "statusWorking": "Working",
   "statusNeedsAttention": "Needs attention",
   "statusReady": "Ready",
@@ -787,9 +463,7 @@
   "connectionNoneApplied": "No connection is currently applied.",
   "connectionUnsavedForm": "Unsaved form changes.",
   "connectionSavedAwaitingApply": "Saved, but not applied. When applying is available, choose Apply saved. Running work keeps its settings.",
-  "settingsNoContactToEdit": "No contact is available to edit.",
   "settingsUnsavedChanges": "Unsaved changes.",
-  "settingsBuiltinLegacyError": "Built-in tool selection requires a managed Nagi connection; this Runtime uses legacy environment configuration.",
   "settingsBuiltinManagedError": "Save and Apply a managed Nagi connection before customizing built-in tools.",
   "settingsBuiltinNotReady": "Built-in tools are available after Runtime is ready.",
   "settingsRetrySave": "Retry save",
@@ -797,15 +471,15 @@
   "appearanceStatusPreview": "Applied for this preview; the fixture is not persisted.",
   "appearanceStatusSaved": "Applied and saved.",
   "appearanceStatusSaveFailed": "Applied but not saved. Retry save to try again.",
-  "profileSaveIntro": "Saving updates this contact's name. Other settings apply when a chat or task work session is first created; existing sessions keep their configuration.",
+  "profileSaveIntro": "Saving updates this Bot's name. Other settings apply when a chat or task work session is first created; existing sessions keep their configuration.",
   "profileArchivedBadge": "Archived",
   "fieldName": "Name",
-  "fieldNameAccessible": "Contact name",
+  "fieldNameAccessible": "Bot name",
   "fieldNamePlaceholder": "Name",
-  "fieldPurposeAccessible": "Contact purpose",
-  "fieldInstructionsAccessible": "Contact instructions",
+  "fieldPurposeAccessible": "Bot purpose",
+  "fieldInstructionsAccessible": "Bot instructions",
   "fieldWorkspacePlaceholder": "/absolute/path/to/workspace (empty uses default)",
-  "fieldWorkspaceAccessible": "Contact workspace",
+  "fieldWorkspaceAccessible": "Bot workspace",
   "profileWorkspaceHint": "Leave Workspace empty to use the applied default directory.",
   "profileBuiltinTools": "Built-in tools",
   "profileBuiltinLoading": "Loading built-in tools from Runtime…",
@@ -816,74 +490,55 @@
   "profileBuiltinNone": "No built-in tools are enabled. Nagi task tools remain available for their own workflows.",
   "profileSaveAndNew": "Save and start new chat",
   "profileDiscard": "Discard changes",
-  "profileContactManagement": "Contact management",
+  "profileContactManagement": "Manage Bot",
   "profileRestore": "Restore",
   "profileArchive": "Archive",
   "profileSaving": "Saving…",
-  "validationNameRequired": "Enter a contact name.",
+  "validationNameRequired": "Enter a Bot name.",
   "validationWorkspaceAbsolute": "Workspace must be an absolute path, or empty to use the applied default.",
   "validationWorkspaceDirectory": "Workspace must be an existing directory.",
   "profileErrorBusy": "Saving is already in progress.",
-  "profileErrorArchived": "Restore this contact before saving its profile.",
+  "profileErrorArchived": "Restore this Bot before saving its profile.",
   "profileErrorNoConversation": "A new chat can be started only when an existing chat exists.",
-  "profileReasonArchived": "This contact is archived. Restore it before editing or starting new work.",
+  "profileReasonArchived": "This Bot is archived. Restore it before editing or starting new work.",
   "profileReasonUnknown": "Work is still unresolved. Reload to confirm its status before archiving or starting a new chat.",
   "profileReasonActive": "Active work must finish or stop before archiving or starting a new chat.",
-  "profileErrorStoreUnavailable": "Could not save this profile: the local contact store is unavailable.",
+  "profileErrorStoreUnavailable": "Could not save this profile: the local profile store is unavailable.",
   "profileErrorSaveFailed": "Could not save this profile. Your changes are still here.",
   "profileSavedDefaults": "Profile saved. New chats and new task work sessions use these defaults; existing work is unchanged.",
   "profileSavedNextMessage": "Profile saved. The next message starts a new chat with these defaults.",
   "archiveErrorUnknown": "Work is still unresolved. Reload to confirm its status before archiving.",
-  "archiveErrorActive": "Active work must finish or stop before archiving this contact.",
-  "archiveErrorAlready": "This contact is already archived.",
-  "archiveErrorStore": "Could not archive this contact: the local contact store is unavailable.",
-  "archiveErrorSave": "Could not archive this contact. Its previous state is unchanged.",
-  "archiveSaved": "Contact archived. Sending and new task runs are disabled; history and task data are retained.",
-  "restoreErrorStore": "Could not restore this contact: the local contact store is unavailable.",
-  "restoreErrorSave": "Could not restore this contact. Its archived state is unchanged.",
-  "restoreSaved": "Contact restored.",
-  "newContactName": "New contact {number}",
+  "archiveErrorActive": "Active work must finish or stop before archiving this Bot.",
+  "archiveErrorAlready": "This Bot is already archived.",
+  "archiveErrorStore": "Could not archive this Bot: the local profile store is unavailable.",
+  "archiveErrorSave": "Could not archive this Bot. Its previous state is unchanged.",
+  "archiveSaved": "Bot archived. Sending and new task runs are disabled; history and task data are retained.",
+  "restoreErrorStore": "Could not restore this Bot: the local profile store is unavailable.",
+  "restoreErrorSave": "Could not restore this Bot. Its archived state is unchanged.",
+  "restoreSaved": "Bot restored.",
+  "newContactName": "New Bot {number}",
   "@newContactName": {
-    "description": "The default name of a newly added contact.",
+    "description": "The default name of a newly added Bot.",
     "placeholders": {
       "number": {
         "type": "int"
       }
     }
   },
-  "contactChoiceDuplicate": "{name} ({number})",
-  "@contactChoiceDuplicate": {
-    "description": "A contact picker label disambiguated by its position.",
-    "placeholders": {
-      "name": {
-        "type": "String"
-      },
-      "number": {
-        "type": "int"
-      }
-    }
-  },
-  "runtimeNotStartedLocalStore": "Runtime: not started (local contact store unavailable)",
-  "runtimeLocalStoreUnavailable": "Local contact store: unavailable; the runtime was not started.",
+  "runtimeNotStartedLocalStore": "Runtime: not started (local profile store unavailable)",
+  "runtimeLocalStoreUnavailable": "Local profile store: unavailable; the runtime was not started.",
   "runtimeStatusLine": "Runtime: {status}",
   "runtimeStatusNotLoaded": "unknown",
   "runtimeStatusConnectionOnly": "{status} (connection only)",
-  "runtimeHelperNotStartedLocalStore": "not started because local data is unavailable",
-  "runtimeHelperNotFound": "not found in the checked runtime locations",
-  "runtimeHelperNotApplied": "not started yet; apply the saved connection to check the helper",
-  "runtimeHelperNotChecked": "not checked yet; configure and apply a connection first",
-  "runtimeHelperLine": "Helper: {helper}",
+  "runtimeHelperLine": "Pi runtime: {helper}",
   "runtimeStoreLine": "Store: {path}",
-  "runtimeSessionDirLine": "Session directory: {path}",
   "runtimeWorkDirLine": "GUI work directory: {path}",
-  "runtimeContactWorkspaceLine": "Contact workspace: {path}",
+  "runtimeContactWorkspaceLine": "Bot workspace: {path}",
   "runtimeSessionLine": "Session: {session}: state: {state}",
   "runtimeSessionAPILine": "Session API: {api}",
-  "runtimeAPIConnectedLine": "Runtime API (connected): {api}; no session API loaded",
   "runtimeSessionAPIUnknown": "Session API: unknown until the runtime session is loaded",
   "runtimeSessionModelLine": "Session model: {model}",
   "runtimeConnectionManagedNote": "Connection settings are managed by Nagi; the runtime reads its endpoint, model and key from that saved connection.",
-  "runtimeHostConfigNote": "This launch uses external developer connection settings. Connection & model can save a Nagi-managed connection.",
   "runtimeValueNotConfigured": "not configured",
   "runtimeValueUnknown": "unknown",
   "runtimeSessionNotCreated": "not created until the first message",
@@ -913,7 +568,7 @@
     }
   },
   "@statusDetail": {
-    "description": "A contact status with its detail.",
+    "description": "A Bot status with its detail.",
     "placeholders": {
       "status": {
         "type": "String"
@@ -926,25 +581,6 @@
   "conversationMessagesLabel": "Chat messages",
   "@conversationMessagesLabel": {
     "description": "The accessible name of the conversation message list."
-  },
-  "speakerContact": "Contact",
-  "@speakerContact": {
-    "description": "The contact as the speaker of a full saved history message."
-  },
-  "historyMessageMeta": "{speaker}. {date}. {session}",
-  "@historyMessageMeta": {
-    "description": "The speaker, date and session above a full saved history message.",
-    "placeholders": {
-      "speaker": {
-        "type": "String"
-      },
-      "date": {
-        "type": "String"
-      },
-      "session": {
-        "type": "String"
-      }
-    }
   },
   "settingsLocalThemes": "Local themes",
   "connectionEditAction": "Edit",
@@ -967,7 +603,7 @@
   "connectionEndpointHint": "Use the API base URL. Nagi adds the protocol path.",
   "connectionFieldAPIKey": "API key",
   "connectionAPIKeyPlaceholder": "Paste your API key",
-  "connectionAPIKeyHint": "Saved in a private local file without encryption; not added to contact settings or model prompts.",
+  "connectionAPIKeyHint": "Saved in a private local file without encryption; not added to Bot settings or model prompts.",
   "connectionFieldModel": "Default model",
   "connectionModelPlaceholder": "Provider model ID",
   "connectionCapacityDisclosure": "Capacity disclosure",
@@ -999,25 +635,16 @@
   "validationPositive": "Enter a whole number greater than zero.",
   "validationLessThanContext": "Output tokens must be less than context tokens.",
   "validationContextGap": "Context tokens must leave at least 4 tokens after output tokens.",
-  "validationVersion": "Configuration version must be 1.",
   "validationNumeric": "Enter a positive whole number.",
   "connectionStatusSaving": "Saving configuration…",
   "connectionStatusSavedApplied": "Saved. This configuration is already applied.",
   "connectionStatusCheckingSaved": "Checking the saved connection…",
-  "connectionStatusApplied": "Connection applied. New conversations and work use its defaults; existing contexts keep their settings. Applying does not test model access.",
+  "connectionStatusApplied": "Connection applied. New conversations and tasks use these settings. Existing conversations and tasks keep their settings.",
   "connectionStatusTesting": "Testing connection and model…",
   "connectionStatusTestCompleted": "Connection test completed: {model}, {endpoint}, context {context} / output {output}",
   "connectionStatusSavedStoreFailed": "Connection settings are saved, but local changes are not saved. Use Retry save for local autosave; profile edits use Save changes. Details: {error}",
   "connectionErrorTestFailed": "Connection test failed: {error}",
   "connectionErrorApplyConfig": "Could not apply saved configuration: {error}",
-  "connectionErrorHelperMissing": "Runtime helper not found. {hint}",
-  "connectionErrorPrepare": "Could not prepare the saved connection: {error}",
-  "connectionErrorStart": "Could not start the new runtime: {error}",
-  "connectionErrorExitedBeforeReady": "The new runtime exited before it was ready; the previous connection was kept.",
-  "connectionErrorNotReady": "The new runtime did not become ready; the previous connection was kept.",
-  "connectionErrorNotExposed": "The new runtime did not expose the saved connection; the previous connection was kept.",
-  "connectionErrorExitedWhileValidating": "The new runtime exited while validating the saved connection; the previous connection was kept.",
-  "connectionErrorExitedDuringValidation": "The new runtime exited during validation; the previous connection was kept.",
   "connectionErrorSavedNeedsRepair": "Saved connection settings could not be used. Review the fields in Connection & model, then choose Save and apply.",
   "connectionBlockedModelOp": "Wait for the in-flight session model operation to finish before applying a new connection.",
   "connectionBlockedApplying": "A new connection is already being applied.",
@@ -1025,20 +652,20 @@
   "connectionBlockedNoSaved": "Save a valid connection configuration first.",
   "connectionBlockedStore": "Local data is unavailable or has unsaved changes, so applying is blocked. Review the local save warning and Configuration details.",
   "connectionBlockedActiveWork": "Wait for all chat and task work to finish before applying a new connection.",
-  "connectionBlockedUntrustedIssue": "A run has an unconfirmed result. Open its task and choose Check run before applying a new connection.",
+  "connectionBlockedUntrustedIssue": "A run has an unconfirmed result. Nagi cannot apply a new connection while this run is unresolved.",
   "canSendShutdown": "The app is shutting down.",
-  "canSendArchived": "This contact is archived. Restore it before sending a message.",
+  "canSendArchived": "This Bot is archived. Restore it before sending a message.",
   "canSendApplying": "Connection settings are being applied; wait for the new helper to become ready.",
   "canSendRuntimeNotReady": "Runtime is not ready.",
   "canSendModelReload": "Session configuration is unconfirmed; Reload the session before sending.",
   "canSendModelRefresh": "Session configuration is unconfirmed; Refresh before sending.",
   "canSendModelUpdating": "The session model is being updated; this session cannot accept a new task yet.",
-  "canSendHistoryLoading": "This contact is still loading its history.",
-  "canSendBusy": "This contact is busy.",
+  "canSendHistoryLoading": "This Bot is still loading its history.",
+  "canSendBusy": "This Bot is busy.",
   "canSendSingleSlot": "The single runtime slot is in use; retry after the chat or work task finishes.",
   "canSendCapacity": "Runtime task capacity is full; retry after a task finishes.",
-  "canSendAnotherContact": "Another contact is working; wait for its task to finish before sending here.",
-  "canStartArchived": "This contact is archived. Restore it before starting task work.",
+  "canSendAnotherContact": "Another Bot is working; wait for its task to finish before sending here.",
+  "canStartArchived": "This Bot is archived. Restore it before starting task work.",
   "canStartIssueActive": "This task already has an active run.",
   "canStartIssueReleasing": "This task's work session is still being released; retry after it completes.",
   "canStartIssueHistoryLoading": "This task's work history is still loading.",
@@ -1046,95 +673,15 @@
   "startupHintFixConnection": "Fix the saved values in Connection settings, then save and apply.",
   "startupHintEnterConnection": "Enter a connection, model and working directory, then save and apply.",
   "startupHintFixThenApply": "Fix Connection settings, then save and apply.",
-  "startupHintHelperPath": "Check the helper path and permissions at {path}, then try Apply saved.",
-  "startupHintHelperPathStart": "Check the helper path and the startup diagnostic, then restart Nagi.",
   "startupHintRestartUnconfirmed": "Restart Nagi; delivery or result may be unconfirmed. No automatic retry.",
   "startupHintRestartReload": "Restart Nagi and reload history. Accepted work may be unconfirmed; no automatic retry.",
-  "startupHintSetAPIKey": "Set API_KEY in the environment or in {path}/.env, then restart Nagi.",
-  "startupHintFixEnv": "Fix or replace the .env file in {path}, then restart Nagi.",
   "startupHintExistingStore": "Nagi left the existing file untouched and did not create a replacement store. Fix the file or its permissions at {path}, then restart Nagi. Drafts cannot be persisted while the local store is unavailable.",
-  "startupHintHelperInstall": "Place Saki-runtime next to the Saki executable (expected: {candidates}) or set SAKI_RUNTIME_BIN, then restart Nagi.",
-  "startupHintHelperInstallNoList": "Place Saki-runtime next to the Saki executable or set SAKI_RUNTIME_BIN, then restart Nagi.",
-  "modelSessionTitle": "Session model",
-  "modelCancel": "Cancel",
-  "modelTargetLabel": "Target: {target}",
-  "modelSessionLine": "Session: {session}",
-  "modelConnectionLine": "Connection: {connection}",
-  "modelEffectiveModel": "Effective model: {model}",
-  "modelLastReadModel": "Last read model: {model}",
-  "modelEffectiveLimits": "Effective limits: context {context} / output {output}, {source}, revision {revision}",
-  "modelLastReadLimits": "Last read limits: context {context} / output {output}, {source}, revision {revision}",
-  "modelEffectiveTools": "Effective built-in tools: {tools}",
-  "modelLastReadTools": "Last read built-in tools: {tools}",
-  "modelUnconfirmedHint": "The current settings are unconfirmed. Refresh reads them again; if Reload session is shown, use it before sending more work.",
-  "modelProviderID": "Provider model ID",
-  "modelCatalogHint": "Catalog entries supply capacity only; they do not prove that the provider endpoint supports a model.",
-  "modelUseCatalog": "Use Runtime catalog",
-  "modelExplicitLimits": "Set explicit limits",
-  "modelCatalogCapacityHint": "Capacity comes from the selected Runtime catalog entry. Endpoint/model availability is not implied.",
-  "modelContextTokens": "Context tokens",
-  "modelOutputTokens": "Output tokens",
-  "modelCompactionHint": "Other compaction strategy values are preserved from the effective config.",
-  "modelRefresh": "Refresh",
-  "modelWaiting": "Waiting for Runtime…",
-  "modelFilterCandidates": "Filter candidates",
-  "modelFilter": "Filter",
-  "modelFilterPlaceholder": "Model or catalog ID",
-  "modelConfiguredModels": "Configured models",
-  "modelConfiguredHint": "Host-provided declarations, not verified availability.",
-  "modelConfiguredChoice": "{model}: context {context}",
-  "modelConfiguredMore": "Showing {shown, number} of {total, plural, one {# configured model} other {# configured models}}; refine Filter to see more.",
-  "modelCatalogCapacity": "Runtime catalog capacity",
-  "modelCatalogChoice": "{name}: context {context}",
-  "modelCatalogMore": "Showing {shown, number} of {total, plural, one {# catalog entry} other {# catalog entries}}; refine Filter to see more.",
-  "modelNoCatalog": "No Runtime catalog entries are available; enter explicit limits.",
-  "modelTargetIssueWork": "Task work",
-  "modelTargetConversation": "Chat",
-  "modelTargetSession": "Session",
-  "modelTargetValue": "{kind}: {label}",
-  "modelSourceCatalog": "Runtime catalog",
-  "modelSourceExplicit": "explicit limits",
-  "modelSourceStored": "stored",
-  "modelSourceUnknown": "unknown source",
-  "modelUnknown": "unknown",
-  "modelNotCreated": "not created",
-  "modelNoSession": "This context has no Runtime session yet. New work uses the model from Connection settings; after the first task creates a session you can switch it independently.",
-  "modelRuntimeNotReadyRead": "Runtime is not ready; the session model cannot be read.",
-  "modelReading": "Reading the session model from Runtime…",
-  "modelReadFailed": "Could not read this session's Runtime configuration: {error}",
-  "modelCatalogNotLoaded": "Runtime catalog could not be loaded; explicit limits are available.",
-  "modelQuarantined": "This session's configuration is quarantined. Reload the session before changing the model.",
-  "modelNotConfirmed": "Runtime did not confirm this session's configuration. Refresh to read it again.",
-  "modelNeedsExplicitReload": "Configuration was read back, but this session still needs an explicit Reload before new tasks.",
-  "modelRefreshedNoCatalog": "Configuration refreshed; Runtime catalog could not be loaded.",
-  "modelRefreshed": "Runtime configuration refreshed.",
-  "modelNotReadyUpdate": "Runtime is not ready; the model was not updated.",
-  "modelNeedReloadUpdate": "This session needs an explicit Reload before another model update.",
-  "modelNeedRefreshUpdate": "Refresh the Runtime configuration before another model update.",
-  "modelRefreshBeforeUpdate": "Refresh the Runtime configuration before updating the model.",
-  "modelBusy": "This session is busy. Wait for its current task to finish before changing the model.",
-  "modelUpdating": "Updating the session model…",
-  "modelLoadReleasedFailed": "Could not load this released work session before updating the model: {error}",
-  "modelUpdated": "Model updated. The next task on this session uses it; history is unchanged.",
-  "modelConfigApplied": "Model configuration applied.",
-  "modelCommitUnconfirmed": "Configuration commit is unconfirmed. Reload the session before sending another task. The original error was: {error}",
-  "modelReadbackUnconfirmed": "Runtime did not confirm the current configuration. Refresh to read it again. The update error was: {error}",
-  "modelReloading": "Reloading the session…",
-  "modelReloadFailed": "Session reload failed; the session remains quarantined. {error}",
-  "modelReloaded": "Session reloaded. The next task uses the read-back model.",
-  "modelReloadAction": "Reload session",
-  "modelUnconfirmedBanner": "Current settings are unconfirmed. Choose Reload session before sending more work; Refresh only reads the settings.",
-  "modelClose": "Close",
-  "modelDefaultReading": "Reading session model…",
   "builtinNone": "none",
   "builtinListUnavailable": "The built-in tool list is not available from Runtime yet. Retry before changing the selection.",
   "builtinToolUnavailable": "Built-in tool {name} is not available from Runtime.",
   "waitingReason": "Waiting: {reason}",
-  "modelReadingConfig": "Reading Runtime configuration…",
-  "modelStatusReadback": "Runtime configuration read back.",
-  "runtimeStageLocalStore": "Local contact store",
+  "runtimeStageLocalStore": "Local profile store",
   "runtimeStageConnectionConfiguration": "Connection configuration",
-  "runtimeStageRuntimeHelper": "Runtime helper",
   "runtimeStageRuntimeStart": "Runtime start",
   "runtimeStageRuntimeProtocol": "Runtime protocol",
   "runtimeStageRuntimeConnection": "Runtime connection",
@@ -1143,31 +690,16 @@
   "runtimeStageRuntimeLabel": "Runtime",
   "runtimeErrorSavedNeedsRepair": "Saved connection settings need repair.",
   "runtimeErrorConnectionRequired": "Connection settings are required before the runtime can start.",
-  "runtimeErrorHelperMissing": "Runtime helper not found.",
-  "runtimeErrorPrepare": "Could not prepare the saved connection: {detail}",
   "runtimeErrorStart": "Could not start runtime: {detail}",
-  "runtimeErrorProtocol": "Runtime protocol error: {detail}",
   "runtimeErrorConnectionLost": "Runtime connection lost",
   "runtimeErrorConnectionLostDetail": "Runtime connection lost: {detail}",
-  "runtimeErrorAPIKey": "API_KEY is not set.",
-  "runtimeErrorEnvParse": ".env could not be parsed.",
-  "runtimeErrorExitedBeforeReady": "Runtime exited before ready",
-  "runtimeErrorExitedBeforeReadyDetail": "Runtime exited before ready: {detail}",
-  "runtimeErrorStoreSave": "Could not save contacts: {detail}",
-  "runtimeErrorIssueToolShutdown": "Task tool service shutdown: {detail}",
+  "runtimeErrorStoreSave": "Could not save Bots: {detail}",
   "runtimeErrorRuntimeShutdown": "Runtime shutdown: {detail}",
   "runtimeStatusStarting": "Starting",
   "runtimeStatusReady": "Ready",
   "runtimeStatusFailed": "Failed",
   "runtimeStatusExited": "Exited",
   "runtimeStatusDraining": "Stopping",
-  "modelValidationUnconfirmed": "Refresh the Runtime configuration before updating the model. The current effective value is not confirmed.",
-  "modelValidationModelRequired": "Enter the provider model ID.",
-  "modelValidationSessionRequired": "Choose a session target first.",
-  "modelValidationCatalogRequired": "Choose a Runtime catalog entry or set explicit limits.",
-  "modelValidationContextPositive": "Context tokens must be a positive whole number.",
-  "modelValidationOutputPositive": "Output tokens must be a positive whole number.",
-  "modelValidationContextGreater": "Context tokens must be greater than output tokens.",
   "workStateAccepted": "Waiting to start",
   "workStateWorking": "Running",
   "workStateStopping": "Stopping…",
@@ -1177,7 +709,7 @@
   "workStateUnknown": "Result unknown",
   "workStateStoppedInterrupted": "Stopped",
   "workLoadingHistoryTitle": "Session history is not loaded",
-  "workLoadingHistoryHint": "This contact already has a session, but its history has not been loaded yet; existing work is not shown as absent.",
+  "workLoadingHistoryHint": "This Bot already has a session, but its history has not been loaded yet; existing work is not shown as absent.",
   "workHistoryNotReady": "Runtime is not ready; work history cannot be read yet.",
   "workUnavailableTitle": "Work is unavailable while Runtime is not ready",
   "workUnavailableHint": "No work is shown until the Runtime connection is ready; this is not a claim that no work exists.",
@@ -1185,8 +717,6 @@
   "workNoCurrentHint": "Work will appear here when {name} starts a task. Tool activity and results stay out of the chat.",
   "workActivity": "Activity",
   "workNoToolActivity": "No tool activity yet.",
-  "workEarlierActivity": "Earlier activity",
-  "workNoTaskIDHint": "No task ID was recorded; these tool results are shown as readable history, without a claimed task.",
   "workPreview": "Preview: {text}",
   "workToolRunning": "Tool is running.",
   "issueExecutionPending": "Waiting to start",
@@ -1200,6 +730,7 @@
   "issueExecutionUnknown": "Result unknown",
   "issueNoExecution": "No runs yet",
   "issueLatestExecution": "Latest run",
+  "issueRunResultUnavailable": "Results are unavailable for this run.",
   "issueNoResultRunning": "No result yet; this run is still running.",
   "issueCurrentResponse": "Current response (run still running): {text}",
   "issueNoAssistantTools": "No assistant message was recorded; open the run to inspect tool output.",
@@ -1212,7 +743,6 @@
   "issueExecutionInterruptedDetail": "Run interrupted; inspect the run details for the recorded terminal state.",
   "issueExecutionUnknownDetail": "The terminal state is unknown; inspect the run details before continuing.",
   "issueEndedOpen": "This run finished; the task remains open.",
-  "issueRecoveryAvailable": "Recovery is available for a run without a trusted terminal state.",
   "issuePreviousEvidence": "Previous completion evidence: {evidence}",
   "issueMoreActions": "More task actions",
   "issueHideActions": "Hide task actions",
@@ -1241,8 +771,6 @@
   "issueEvidencePrefix": "Evidence: {evidence}",
   "issueExecutionHistory": "Run history",
   "issueSentSnapshot": "Sent snapshot: {text}",
-  "issueCheckExecution": "Check run",
-  "issueConfirmNotDispatched": "Confirm not dispatched",
   "issueResume": "Resume",
   "issueMarkWaiting": "Mark waiting",
   "issueArchive": "Archive",
@@ -1281,11 +809,11 @@
   "resultReloadResult": "Reload result",
   "resultNoDetailRecorded": "No run detail was recorded for this run.",
   "resultRunLabel": "Run {number}: {goal}",
-  "taskContextHeading": "Task context",
-  "taskContextIntro": "Saved text is sent as caller-provided context with the next send. A file snapshot changes only when you refresh it.",
+  "taskContextHeading": "Materials",
+  "taskContextIntro": "Saved text is included with your next message. Refresh a file to update its snapshot.",
   "taskContextAddSnippet": "Add snippet",
   "taskContextAddFile": "Add file",
-  "taskContextEmpty": "No saved context. The next send will not include caller context.",
+  "taskContextEmpty": "No materials attached.",
   "taskContextSource": "Source: {source}",
   "taskContextPreview": "Preview",
   "taskContextEdit": "Edit",
@@ -1293,42 +821,42 @@
   "taskContextRemove": "Remove",
   "taskContextFormCancel": "Cancel",
   "taskContextFileNameOptional": "Name (optional)",
-  "taskContextFileLabel": "Context file name",
+  "taskContextFileLabel": "Material file name",
   "taskContextFilePlaceholder": "Defaults to the file name",
   "taskContextPath": "Path",
-  "taskContextFilePathLabel": "Context file path",
+  "taskContextFilePathLabel": "Material file path",
   "taskContextFilePathPlaceholder": "/absolute/path/to/file.txt",
   "taskContextFileRules": "Only UTF-8 text files are supported; PDF, Office, and other binary files are rejected. Save file reads it once; later changes need Refresh.",
   "taskContextName": "Name",
-  "taskContextNameLabel": "Context name",
+  "taskContextNameLabel": "Material name",
   "taskContextNamePlaceholder": "Release notes",
   "taskContextText": "Text",
-  "taskContextTextLabel": "Context text",
+  "taskContextTextLabel": "Material text",
   "taskContextTextPlaceholder": "Text to include exactly as written",
   "taskContextEditHint": "Editing the snapshot does not change the source file. Refresh re-reads it.",
   "taskContextPreviewTitle": "Preview: {name}",
   "taskContextClosePreview": "Close preview",
   "taskContextFormSnippet": "Add snippet",
   "taskContextFormFile": "Add file snapshot",
-  "taskContextFormEdit": "Edit context",
-  "taskContextItemsLabel": "{count, plural, one {Task context: # item} other {Task context: # items}}",
+  "taskContextFormEdit": "Edit material",
+  "taskContextItemsLabel": "{count, plural, one {Materials: # item} other {Materials: # items}}",
   "taskContextSize": "{count, plural, one {# item: {size} / 1 MiB} other {# items: {size} / 1 MiB}}",
   "taskContextSourceNamed": "Named snippet",
   "taskContextSourceFile": "File snapshot: revision {revision}",
-  "taskContextErrName": "Enter a context name.",
-  "taskContextErrUTF8": "Context text is not valid UTF-8.",
+  "taskContextErrName": "Enter a name for this material.",
+  "taskContextErrUTF8": "Material text is not valid UTF-8.",
   "taskContextErrNotText": "The file is not UTF-8 text.",
-  "taskContextErrOversize": "Context exceeds the 1 MiB send limit.",
+  "taskContextErrOversize": "Materials exceed the 1 MiB send limit.",
   "taskContextErrUnsupported": "Unsupported file format; only UTF-8 text files are supported.",
-  "taskContextErrRead": "Could not read the context file.",
-  "taskContextErrMissing": "The context item no longer exists.",
-  "taskContextErrNoSource": "This context item has no file source.",
+  "taskContextErrRead": "Could not read the material file.",
+  "taskContextErrMissing": "This material is no longer available.",
+  "taskContextErrNoSource": "This material has no source file.",
   "taskContextIssueUnavailable": "This task is no longer available.",
-  "taskContextClose": "Close task context",
+  "taskContextClose": "Close materials",
   "supplementAutoOn": "Automatic continuation on",
   "supplementAutoStopped": "Automatic continuation stopped",
   "supplementDispatching": "Dispatching; waiting for the Runtime receipt. Automatic continuation will not start another batch yet.",
-  "supplementUnknown": "Delivery is unknown; check the run. Nothing will be resent automatically.",
+  "supplementUnknown": "Delivery is unconfirmed. Nothing will be resent automatically.",
   "supplementNoExecution": "No run yet. Use Start with follow-up to authorize the first run.",
   "supplementReady": "Ready at the next safe boundary.",
   "supplementPendingPreserved": "Pending text is preserved. Resume automatic continuation or use Continue explicitly.",
@@ -1346,14 +874,12 @@
   "supplementReceiptFailed": "Local receipt save failed: {detail}",
   "supplementSubmitted": "Sent to run {execution}, Runtime task {task}.",
   "supplementRetry": "Retry follow-up",
-  "supplementNeedsCheck": "Needs delivery check; this is not a completion claim.",
-  "supplementCheck": "Check run",
   "supplementShowRecent": "Show recent batches",
   "supplementShowAll": "Show all batches",
-  "taskContextErrReadDetail": "Could not read the context file: {detail}",
-  "taskContextErrOversizeDetail": "Context exceeds the 1 MiB send limit: {detail}",
+  "taskContextErrReadDetail": "Could not read the material file: {detail}",
+  "taskContextErrOversizeDetail": "Materials exceed the 1 MiB send limit: {detail}",
   "taskContextErrUnsupportedDetail": "Unsupported file format; only UTF-8 text files are supported: {detail}",
-  "taskContextErrUTF8Detail": "Context text is not valid UTF-8: {detail}",
+  "taskContextErrUTF8Detail": "Material text is not valid UTF-8: {detail}",
   "taskContextErrNotTextDetail": "The file is not UTF-8 text: {detail}",
   "markdownCodeGroup": "Code",
   "markdownTableGroup": "Table, wrapped plain text",
@@ -1385,12 +911,12 @@
   "workStatusResuming": "Resuming",
   "workStatusRunning": "Running",
   "workStatusStarting": "Starting",
-  "workStatusCompacting": "Compacting context",
+  "workStatusCompacting": "Compacting conversation history",
   "workStatusWaitingModel": "Waiting for model",
   "workStatusThinking": "Thinking",
   "workStatusWriting": "Writing",
-  "issueNoticeContactMissing": "Contact not found.",
-  "issueNoticeIssueMissing": "Task not found for this contact.",
+  "issueNoticeContactMissing": "Bot not found.",
+  "issueNoticeIssueMissing": "Task not found for this Bot.",
   "issueNoticeNoGoal": "This task has no goal to run.",
   "issueNoticeEnterGoal": "Enter a task goal.",
   "issueNoticeArchivedEdit": "Restore this archived task before editing it.",
@@ -1425,44 +951,38 @@
   "resultReadFailed": "Could not read the current file: {detail}",
   "resultOpenFailed": "Could not open the current file: {detail}",
   "resultRevealFailed": "Could not reveal the current file: {detail}",
-  "issueNoticeFormSwitch": "Finish or cancel the current task form before switching contacts.",
+  "issueNoticeFormSwitch": "Finish or cancel the current task form before switching Bots.",
   "issueNoticeSupplementAutoStop": "Could not save the automatic-continuation stop.",
   "issueNoticeSupplementAutoResume": "Could not save the automatic-continuation resume.",
   "issueNoticeSupplementRetry": "Could not retry this follow-up.",
-  "issueNoticeSupplementCheck": "Could not check this follow-up run.",
   "resultLoadNoSession": "This run has no recorded Runtime session/task; results cannot be inspected.",
   "resultLoadRuntimeNotReady": "Runtime is not ready; reopen this result after history is available.",
   "resultLoadOwnerMissing": "The task owner is no longer available; reload cannot continue.",
   "resultLoadDetached": "This run is no longer attached to the task; reload cannot continue.",
   "resultLoadFailed": "Could not load this result: {detail}",
   "resultNoticeWorkingDirMissing": "Runtime session working directory is unavailable; file paths are shown as reported.",
-  "resultDeriveNoSession": "Run has no recorded Runtime session; results cannot be inspected.",
-  "resultDeriveSessionMismatch": "Runtime history belongs to a different session; results cannot be inspected.",
-  "resultDeriveNoTask": "Run has no recorded Runtime task; results cannot be inspected.",
-  "resultDeriveTaskMissing": "Runtime history does not contain the run's task; the session may be unavailable or legacy.",
-  "resultDeriveMessageMissing": "Runtime history does not record the supplied run message.",
   "sendNoticeProtocol": "Protocol failure; delivery not confirmed. Reload before sending again.",
   "sendNoticeDelivery": "Delivery/result not confirmed. Reload before sending again.",
   "sendNoticeCancelled": "Cancellation requested",
   "sendNoticePreviousIncomplete": "Previous task did not complete.",
-  "sendNoticeHistoryReloaded": "History reloaded; no retry was sent. Inspect the recorded messages before explicitly sending or removing retained task context.",
+  "sendNoticeHistoryReloaded": "History reloaded; no retry was sent. Inspect the recorded messages before explicitly sending or removing retained materials.",
   "sendNoticeUncertain": "A previous message may have been sent; delivery was not confirmed before restart. Reload history to verify. No automatic retry.",
   "sendNoticeIssueAssociation": "Task accepted, but its task association could not be saved; reload before retrying.",
-  "sendNoticeDraftNotCleared": "Task accepted, but its sent context could not be cleared from the next-message draft; reload before sending again.",
+  "sendNoticeDraftNotCleared": "Task accepted, but its sent materials could not be cleared from the next-message draft; reload before sending again.",
   "sendNoticeDeliveryUnknown": "Delivery not confirmed ({detail}). Reload to check before sending again.",
-  "sendNoticeContactSave": "Could not save this contact; the message was not sent. {detail}",
+  "sendNoticeContactSave": "Could not save this Bot; the message was not sent. {detail}",
   "sendNoticeConnectionLost": "Connection lost before the task finished; reload to verify.",
   "issueSendProtocol": "Protocol failure; delivery not confirmed. Reload before sending again.",
   "issueSendDelivery": "Delivery/result not confirmed. Reload before sending again.",
   "issueSendShutdown": "The app is shutting down.",
-  "issueSendArchived": "This contact is archived. Restore it before starting task work.",
+  "issueSendArchived": "This Bot is archived. Restore it before starting task work.",
   "issueSendApplying": "Connection settings are being applied; wait for the new helper to become ready.",
   "issueSendRuntimeNotReady": "Runtime is not ready.",
   "issueSendReceiptFailed": "Runtime accepted this follow-up, but its local receipt could not be saved; reload before sending again.",
   "issueSendReceiptSaveFailed": "Could not save the follow-up acceptance: {detail}",
   "issueSendAssociation": "The follow-up dispatch association was not in a recordable state; reload before sending again.",
   "issueSendTaskAssociation": "Task accepted, but its task association could not be saved; reload before retrying.",
-  "issueSendDraftNotCleared": "Task accepted, but its sent context could not be cleared from the next-run draft; reload before sending again.",
+  "issueSendDraftNotCleared": "Task accepted, but its sent materials could not be cleared from the next-run draft; reload before sending again.",
   "issueSendAcceptedCancel": "The accepted task could not be cancelled; do not retry it automatically.",
   "issueSendWaitingRuntime": "Waiting for runtime availability: {detail}",
   "issueSendSupplementDelivery": "Follow-up delivery not confirmed ({detail}). Reload to check before sending again.",
@@ -1475,6 +995,8 @@
   "issueSendReloadDisconnected": "Runtime disconnected; restart Nagi to reload history.",
   "issueSendUncertain": "A previous message may have been sent; delivery was not confirmed before restart. Reload history to verify. No automatic retry.",
   "issueSendAnswerStopping": "Waiting for your answer; stopping the current run.",
+  "issueAnswerSaved": "Answer saved. Delivery has not been confirmed.",
+  "issueAnswerDispatching": "Answer saved. Waiting for delivery confirmation.",
   "workStateRunning": "Running",
   "issueRunHeader": "Run {number}: {status}",
   "issueRunRevision": "revision {number}",
@@ -1509,11 +1031,11 @@
   "@issueHideSentSnapshot": {
     "description": "The action hiding the captured prompt of a run."
   },
-  "issueSentContextCount": "{count, plural, one {Sent task context: #} other {Sent task context: #}}",
+  "issueSentContextCount": "{count, plural, one {Sent materials: #} other {Sent materials: #}}",
   "@issueSentContextCount": {
     "description": "The action showing a run's captured caller context with its item count."
   },
-  "issueHideSentContext": "Hide sent task context",
+  "issueHideSentContext": "Hide sent materials",
   "@issueHideSentContext": {
     "description": "The action hiding a run's captured caller context."
   },
@@ -1533,13 +1055,8 @@
   "@resultFileRowLabel": {
     "description": "The accessible name of one reported result file; its index and file name are arguments."
   },
-  "modelManage": "Manage models",
-  "modelNoConfigured": "No models declared for this connection.",
   "modelDefaultScope": "Default connection",
-  "modelConversationScope": "Current conversation override",
   "markdownFileSourceUnknown": "The source session working directory is unknown; this relative file link cannot be resolved.",
-  "issueCollaborationUnavailable": "Issue collaboration unavailable",
-  "issueCollaborationRepairHint": "Task coordination is unavailable. Review Connection & model; if Apply saved is available, use it to try starting coordination again. Configuration details shows the recorded error. No task is resent.",
   "themeLight": "Light theme",
   "@themeLight": {
     "description": "General settings local theme selection, discovery and non-blocking diagnostics."
@@ -1548,11 +1065,11 @@
   "@themeDark": {
     "description": "General settings local theme selection, discovery and non-blocking diagnostics."
   },
-  "themePaper": "Paper",
+  "themePaper": "Bee Light",
   "@themePaper": {
     "description": "General settings local theme selection, discovery and non-blocking diagnostics."
   },
-  "themeMoss": "Moss",
+  "themeMoss": "Bee Dark",
   "@themeMoss": {
     "description": "General settings local theme selection, discovery and non-blocking diagnostics."
   },
@@ -1629,10 +1146,9 @@
   "recoveryModelRequestFailed": "The model request failed. In Connection & model, check the API key, server address and model, then choose Test connection and model. Testing may incur provider charges. The task is not retried automatically.",
   "recoveryRunFailed": "This run failed. Review its details to choose the next step. For a connection problem, open Connection & model and choose Test connection and model. Testing may incur provider charges; this does not retry the run.",
   "recoveryTechnicalDetailsHint": "Technical details may mention developer settings. Use Settings and the recovery actions for normal setup.",
-  "recoveryRuntimeMissing": "Nagi could not find its runtime component. A complete application package with that component is needed; this screen cannot install or repair it.",
   "recoveryRuntimeStartFailed": "Nagi could not start its runtime component. Review the work folder in Connection & model and open Configuration details for the recorded error. You can quit and reopen Nagi; this does not repair missing or inaccessible files.",
   "recoveryLocalSaveFailed": "Local changes are not saved. Keep this window open. Choose Retry save for local autosave, or Save changes for profile edits.",
-  "recoveryLocalDataUnavailable": "Local contacts and tasks are unavailable. Nagi has not replaced existing data. Choose a compatible recovery copy if you have one. Without a compatible copy, Nagi cannot restore this workbench data.",
+  "recoveryLocalDataUnavailable": "Local Bots and tasks are unavailable. Nagi has not replaced existing data. Choose a compatible recovery copy if you have one. Without a compatible copy, Nagi cannot restore this workbench data.",
   "recoveryConnectionSaveFailed": "Connection settings could not be saved. Your edits are still here; review the details, then try Save again.",
   "recoveryConnectionApplyFailed": "Saved connection settings could not be applied. Review the fields and Configuration details. No work is resent.",
   "recoveryRequestFailed": "The request could not be completed. Review its details before trying again. Nothing is retried automatically.",
@@ -1673,7 +1189,7 @@
   "@recoveryCancelAction": {
     "description": "C8 workbench recovery GUI: recoveryCancelAction."
   },
-  "recoveryDataIncluded": "Save a recovery copy of contact and task records, saved drafts, requirements and attached text snapshots. Their saved conversation references are kept.",
+  "recoveryDataIncluded": "Save a recovery copy of Bot and task records, saved drafts, requirements and attached text snapshots. Their saved conversation references are kept.",
   "@recoveryDataIncluded": {
     "description": "C8 workbench recovery GUI: recoveryDataIncluded."
   },
@@ -1717,7 +1233,7 @@
   "@recoveryPreviewTitle": {
     "description": "C8 workbench recovery GUI: recoveryPreviewTitle."
   },
-  "recoveryPreviewCounts": "{contacts, plural, one {# saved contact} other {# saved contacts}} · {issues, plural, one {# saved task} other {# saved tasks}}",
+  "recoveryPreviewCounts": "{contacts, plural, one {# saved Bot} other {# saved Bots}} · {issues, plural, one {# saved task} other {# saved tasks}}",
   "@recoveryPreviewCounts": {
     "description": "C8 workbench recovery GUI: recoveryPreviewCounts."
   },

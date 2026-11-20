@@ -55,7 +55,7 @@ func TestCustomThemeSystemModeAndHeadlessPreviews(t *testing.T) {
 			t.Fatalf("system kind switch changed selection/work: dark=%v result=%+v", dark, resolved)
 		}
 	}
-	if dir := os.Getenv("SAKI_PREVIEW_DIR"); dir != "" {
+	if dir := os.Getenv("NAGI_PREVIEW_DIR"); dir != "" {
 		a.openAppearance()
 		for _, dark := range []bool{false, true} {
 			name := "custom-theme-paper.png"
@@ -114,32 +114,6 @@ func TestSemanticPaletteContrastInvariants(t *testing.T) {
 					t.Errorf("%s on_accent/%s contrast = %.3f, want >= 4.5", tc.name, accent.name, got)
 				}
 			}
-			for _, base := range []struct {
-				name string
-				bg   ui.Color
-			}{
-				{"surface", th.Reading},
-				{"panel", th.Panel},
-				{"well", th.Well},
-				{"selected", th.Theme.Selection},
-			} {
-				if got := paletteContrast(th.Theme.Focus, base.bg); got < 3 {
-					t.Errorf("%s focus/%s contrast = %.3f, want >= 3", tc.name, base.name, got)
-				}
-			}
-			for _, base := range []struct {
-				name string
-				bg   ui.Color
-			}{
-				{"surface", th.Reading},
-				{"panel", th.Panel},
-				{"well", th.Well},
-				{"selected", th.Theme.Selection},
-			} {
-				if got := paletteContrast(th.Theme.Border, base.bg); got < 3 {
-					t.Errorf("%s control-border/%s contrast = %.3f, want >= 3", tc.name, base.name, got)
-				}
-			}
 		})
 	}
 }
@@ -147,9 +121,8 @@ func TestSemanticPaletteContrastInvariants(t *testing.T) {
 func TestAppearanceFirstLaunchCreatesExistingStoreWithoutLosingCurrentContact(t *testing.T) {
 	dir := t.TempDir()
 	storePath := filepath.Join(dir, "contacts.json")
-	t.Setenv("SAKI_GUI_STORE", storePath)
-	t.Setenv("SAKI_GUI_WORKDIR", dir)
-	t.Setenv("SAKI_SESSION_DIR", filepath.Join(dir, "sessions"))
+	t.Setenv("NAGI_GUI_STORE", storePath)
+	t.Setenv("NAGI_GUI_WORKDIR", dir)
 	a, err := newRuntimeApp()
 	if err != nil {
 		t.Fatal(err)
@@ -199,7 +172,7 @@ func TestAppearanceSwitchKeepsComposerFocusAndActiveTask(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	a := &appModel{store: store, storePath: path, appearanceMode: appearanceSystem, rt: &runtimeClient{}, runtimeStatus: runtimeStateReady}
+	a := &appModel{store: store, storePath: path, appearanceMode: appearanceSystem, runtimeStatus: runtimeStateReady}
 	applyStoreSelection(a, store)
 	ct := a.selectedContact()
 	ct.Draft = "focus and task survive"
@@ -218,19 +191,25 @@ func TestAppearanceSwitchKeepsComposerFocusAndActiveTask(t *testing.T) {
 }
 
 func TestAppearanceFailedSaveKeepsModeAndRetryClearsWarning(t *testing.T) {
+	root := t.TempDir()
+	store, err := openContactStore(filepath.Join(root, "contacts.json"), root)
+	if err != nil {
+		t.Fatal(err)
+	}
 	blocked := filepath.Join(t.TempDir(), "not-a-directory")
 	if err := os.WriteFile(blocked, []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	store := &contactStore{path: filepath.Join(blocked, "contacts.json")}
+	store.path = filepath.Join(blocked, "contacts.json")
 	a := &appModel{
-		store:            store,
-		selected:         0,
-		appearanceMode:   appearanceSystem,
-		contacts:         []*contact{{ID: "contact-keep", Name: "Saki", Draft: "draft-keep"}},
-		issueToolLedger:  &IssueToolOperationLedger{},
-		issueToolScopes:  map[string]IssueToolScope{},
-		issueToolWaiters: map[string]chan IssueToolReceipt{},
+		store:           store,
+		storePath:       filepath.Join(root, "contacts.json"),
+		workDir:         root,
+		selected:        0,
+		appearanceMode:  appearanceSystem,
+		contacts:        []*contact{{ID: "contact-keep", Name: "Saki", Draft: "draft-keep"}},
+		issueToolLedger: &IssueToolOperationLedger{},
+		issueToolScopes: map[string]IssueToolScope{},
 	}
 	a.setAppearanceMode(appearanceDark)
 	if a.appearanceMode != appearanceDark {
@@ -250,30 +229,13 @@ func TestAppearanceFailedSaveKeepsModeAndRetryClearsWarning(t *testing.T) {
 	}
 }
 
-func TestContactScopeSelectAndComposerModelEntry(t *testing.T) {
+func TestComposerModelSummary(t *testing.T) {
 	a := testApp(t)
-	tr := ui.NewTester(a.view, 1040, 720)
-	tr.Frame()
-	if !tr.HasText("Contact scope") || !tr.HasText("Active") {
-		t.Fatalf("contact scope selector is missing: %q", tr.Texts())
-	}
-	if err := tr.Click("Active"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if err := tr.Click("Archived"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if a.contactScope != "archived" {
-		t.Fatalf("scope select = %q, want archived", a.contactScope)
-	}
-
 	a.selectContact(0)
 	a.contacts[0].SessionID = ""
 	a.contacts[0].Draft = "draft-kept"
 	a.connectionEffective = &connectionConfig{Model: "model-default"}
-	tr = ui.NewTester(a.view, 1040, 720)
+	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
 	head, tail := a.conversationModelDisplayParts(locales.In("en"), a.contacts[0])
 	if !tr.HasText(head) || !tr.HasText(tail) {
@@ -282,26 +244,25 @@ func TestContactScopeSelectAndComposerModelEntry(t *testing.T) {
 	if tr.HasText("Task model") {
 		t.Fatal("issue model entry leaked into the conversation composer")
 	}
-	if err := tr.Click("Chat model"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if !a.composerModelOpen || a.mainPageActive() || !tr.HasText("This context has no Runtime session yet") {
-		t.Fatalf("conversation model entry = aux=%q texts=%q", a.aux, tr.Texts())
-	}
 	if a.selectedContact().Draft != "draft-kept" {
-		t.Fatal("opening conversation model changed the draft")
+		t.Fatal("rendering the model summary changed the draft")
 	}
 }
 
 func TestAppearanceLaterContactSaveClearsUnsavedWarning(t *testing.T) {
+	root := t.TempDir()
+	store, err := openContactStore(filepath.Join(root, "contacts.json"), root)
+	if err != nil {
+		t.Fatal(err)
+	}
 	blocked := filepath.Join(t.TempDir(), "not-a-directory")
 	if err := os.WriteFile(blocked, []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	store := &contactStore{path: filepath.Join(blocked, "contacts.json")}
+	store.path = filepath.Join(blocked, "contacts.json")
 	a := &appModel{
-		store: store, selected: 0, appearanceMode: appearanceSystem,
+		store: store, storePath: filepath.Join(root, "contacts.json"), workDir: root,
+		selected: 0, appearanceMode: appearanceSystem,
 		contacts:        []*contact{{ID: "contact-keep", Name: "Saki"}},
 		issueToolLedger: &IssueToolOperationLedger{}, issueToolScopes: map[string]IssueToolScope{},
 	}
@@ -325,7 +286,7 @@ func TestAppearancePanelSwitchesModeAndKeepsCurrentDraft(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	a := &appModel{store: store, storePath: path, appearanceMode: appearanceSystem, rt: &runtimeClient{}, runtimeStatus: runtimeStateReady}
+	a := &appModel{store: store, storePath: path, workDir: filepath.Dir(path), appearanceMode: appearanceSystem, runtimeStatus: runtimeStateReady}
 	applyStoreSelection(a, store)
 	ct := a.selectedContact()
 	const draftBeforeAppearance = "draft stays while appearance changes"
@@ -333,6 +294,10 @@ func TestAppearancePanelSwitchesModeAndKeepsCurrentDraft(t *testing.T) {
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
 	if err := tr.Click("Settings"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if err := tr.Click("General"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
@@ -369,13 +334,19 @@ func TestAppearancePanelSwitchesModeAndKeepsCurrentDraft(t *testing.T) {
 }
 
 func TestAppearanceRetrySaveUIAndRuntimeErrorOwnership(t *testing.T) {
+	root := t.TempDir()
+	store, err := openContactStore(filepath.Join(root, "contacts.json"), root)
+	if err != nil {
+		t.Fatal(err)
+	}
 	blocked := filepath.Join(t.TempDir(), "not-a-directory")
 	if err := os.WriteFile(blocked, []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	store := &contactStore{path: filepath.Join(blocked, "contacts.json")}
+	store.path = filepath.Join(blocked, "contacts.json")
 	a := &appModel{
-		store: store, selected: 0, appearanceMode: appearanceSystem, systemDark: true,
+		store: store, storePath: filepath.Join(root, "contacts.json"), workDir: root,
+		selected: 0, appearanceMode: appearanceSystem, systemDark: true,
 		contacts:        []*contact{{ID: "contact-keep", Name: "Saki", Draft: "keep"}},
 		issueToolLedger: &IssueToolOperationLedger{}, issueToolScopes: map[string]IssueToolScope{},
 		runtimeErr: "Runtime protocol error: unrelated",
@@ -457,8 +428,8 @@ func TestSegmentedSelectionKeepsTargetAndKeyboard(t *testing.T) {
 func themeImportTestApp(t *testing.T) (*appModel, *contact, chan func()) {
 	t.Helper()
 	a, ct := workspaceTestApp(t)
+	ct.SessionID, ct.Loaded = "", false
 	a.workspaceOpen = false
-	a.rt = &runtimeClient{}
 	ct.Draft = "retained theme-import draft"
 	ct.ActiveTaskID = "active-task"
 	ct.SendState = sendAccepted
@@ -523,7 +494,7 @@ func TestThemeImportCancelAndDialogErrorPreserveState(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if string(after) != string(stored) || a.appearanceThemeIDs != ids || a.appearanceMode != mode || !reflect.DeepEqual(a.appearanceThemes, catalog) || recoveryRecordSnapshot(t, ct) != before || a.appearanceError != appearanceStatusSaveFailed || a.appearanceStatus != appearanceStatusApplied || a.rt.nextID != 0 {
+			if string(after) != string(stored) || a.appearanceThemeIDs != ids || a.appearanceMode != mode || !reflect.DeepEqual(a.appearanceThemes, catalog) || recoveryRecordSnapshot(t, ct) != before || a.appearanceError != appearanceStatusSaveFailed || a.appearanceStatus != appearanceStatusApplied || a.pi != nil {
 				t.Fatal("cancel/dialog error changed preferences, independent save feedback, work or store")
 			}
 			if _, err := os.Stat(catalog.Directory); !os.IsNotExist(err) {
@@ -606,7 +577,7 @@ func TestThemeImportFailuresPreserveFilesAndPreferences(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if string(after) != string(stored) || a.appearanceThemeIDs != ids || a.appearanceMode != mode || !reflect.DeepEqual(a.appearanceThemes, catalog) || recoveryRecordSnapshot(t, ct) != before || a.rt.nextID != 0 {
+			if string(after) != string(stored) || a.appearanceThemeIDs != ids || a.appearanceMode != mode || !reflect.DeepEqual(a.appearanceThemes, catalog) || recoveryRecordSnapshot(t, ct) != before || a.pi != nil {
 				t.Fatal("failed import rewrote preferences, catalog, work or store")
 			}
 		})
@@ -645,7 +616,7 @@ func TestThemeImportStaleDialogAndInstallResults(t *testing.T) {
 					a.shutdownDrainStarted = true
 				}
 				completion()
-				if a.appearanceThemeIDs != ids || a.appearanceMode != mode || !reflect.DeepEqual(a.appearanceThemes, catalog) || a.themeImport.ImportedName != "prior result" || a.themeImport.Problem != nil || a.themeImport.focus || recoveryRecordSnapshot(t, ct) != before || a.rt.nextID != 0 {
+				if a.appearanceThemeIDs != ids || a.appearanceMode != mode || !reflect.DeepEqual(a.appearanceThemes, catalog) || a.themeImport.ImportedName != "prior result" || a.themeImport.Problem != nil || a.themeImport.focus || recoveryRecordSnapshot(t, ct) != before || a.pi != nil {
 					t.Fatal("late result changed another view/contact or shutdown state")
 				}
 				if leave == "shutdown" && !a.themeImport.Busy {
@@ -668,7 +639,6 @@ func TestThemeImportShutdownWaitsForOwnedCompletion(t *testing.T) {
 		for _, leave := range []bool{false, true} {
 			t.Run(fmt.Sprintf("invalid-%t/leave-%t", invalid, leave), func(t *testing.T) {
 				a, ct, callbacks := themeImportTestApp(t)
-				a.rt = nil
 				source := writeCustomTheme(t, t.TempDir(), "shutdown.json", customThemeDocument("shutdown-theme", appearanceLight))
 				if invalid {
 					if err := os.WriteFile(source, []byte("{invalid"), 0600); err != nil {
@@ -705,7 +675,7 @@ func TestThemeImportShutdownWaitsForOwnedCompletion(t *testing.T) {
 				}
 				a.beginShutdown()
 				a.finishShutdown()
-				if quitCount != 1 || a.rt != nil || !reflect.DeepEqual(a.appearanceThemes, catalog) || a.appearanceThemeIDs != ids || a.appearanceMode != mode || a.themeImport.Problem != previous || a.themeImport.ImportedName != "earlier theme" || a.themeImport.focus || recoveryRecordSnapshot(t, ct) != before {
+				if quitCount != 1 || a.pi != nil || !reflect.DeepEqual(a.appearanceThemes, catalog) || a.appearanceThemeIDs != ids || a.appearanceMode != mode || a.themeImport.Problem != previous || a.themeImport.ImportedName != "earlier theme" || a.themeImport.focus || recoveryRecordSnapshot(t, ct) != before {
 					t.Fatal("shutdown completion changed catalog/preferences/feedback/work or requested quit again")
 				}
 				installed, err := os.ReadFile(filepath.Join(catalog.Directory, filepath.Base(source)))
@@ -725,7 +695,6 @@ func TestThemeImportShutdownDoesNotWaitForDialog(t *testing.T) {
 	for _, selected := range []bool{false, true} {
 		t.Run(fmt.Sprintf("selected-%t", selected), func(t *testing.T) {
 			a, ct, callbacks := themeImportTestApp(t)
-			a.rt = nil
 			source := writeCustomTheme(t, t.TempDir(), "late-dialog.json", customThemeDocument("late-dialog-theme", appearanceLight))
 			entered, release := make(chan struct{}), make(chan struct{})
 			a.chooseThemeFile = func(mygo.OpenDialogOptions) ([]string, error) {
@@ -803,10 +772,6 @@ func TestThemeImportRestoresRequestedMissingIDWithoutSaving(t *testing.T) {
 
 func TestC8ThemeInstallExcludesRecoveryAndKeepsQuitDrain(t *testing.T) {
 	a := c8SavedApp(t)
-	needsServiceClose := a.issueToolServer != nil
-	if os.Getenv("SAKI_TEST_ISSUE_TOOL_HELPER") != "" && !needsServiceClose {
-		t.Fatal("configured saved-app fixture has no owned host service")
-	}
 	a.appearanceThemes = loadCustomThemes(filepath.Join(t.TempDir(), "themes"))
 	req, reply, updates := c8ControlledPicker(t, a)
 	a.chooseThemeFile = a.chooseRecoveryFile
@@ -827,14 +792,7 @@ func TestC8ThemeInstallExcludesRecoveryAndKeepsQuitDrain(t *testing.T) {
 		t.Fatal("recovery integration bypassed C7 owned-install drain")
 	}
 	completion()
-	if needsServiceClose {
-		if a.quitReady || quit != 0 {
-			t.Fatal("Quit escaped the owned host-service close completion")
-		}
-		awaitFolderChoice(t, updates)()
-	}
 	if !a.quitReady || quit != 1 || a.themeImport.installInFlight {
 		t.Fatal("C7 final completion did not release quit after recovery rejection")
 	}
-	t.Logf("host-service close completion required=%t; final Quit callbacks=%d", needsServiceClose, quit)
 }

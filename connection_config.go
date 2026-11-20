@@ -2,29 +2,28 @@ package main
 
 import (
 	"bytes"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 )
 
 const (
 	connectionAPIResponses       = "openai-responses"
 	connectionAPIChatCompletions = "openai-chat-completions"
-	connectionAPIKeyEnv          = "NAGI_CONNECTION_API_KEY"
 	connectionID                 = "default"
-	connectionHostConfigName     = "host.json"
 )
 
 // connectionConfig is the plaintext local GUI source; connection.json contains
 // a private local value and must stay private to this user.
 type connectionConfig struct {
-	Version          int    `json:"version"`
 	API              string `json:"api"`
 	Endpoint         string `json:"endpoint"`
 	APIKey           string `json:"api_key"`
@@ -35,49 +34,77 @@ type connectionConfig struct {
 	MaxActiveTasks   int    `json:"max_active_tasks"`
 }
 
+type connectionCredentialSource struct {
+	API      string `json:"api"`
+	Endpoint string `json:"endpoint"`
+	APIKey   string `json:"api_key"`
+}
+
+type privateConnectionConfig struct {
+	Version          int                                   `json:"version"`
+	CredentialSource string                                `json:"credential_source"`
+	Model            string                                `json:"model"`
+	ContextTokens    int                                   `json:"context_tokens"`
+	OutputTokens     int                                   `json:"output_tokens"`
+	WorkingDirectory string                                `json:"working_directory"`
+	MaxActiveTasks   int                                   `json:"max_active_tasks"`
+	Sources          map[string]connectionCredentialSource `json:"sources"`
+}
+
+func readPrivateConnectionConfig(path string) (privateConnectionConfig, error) {
+	var config privateConnectionConfig
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return config, fmt.Errorf("read connection config %s: %w", path, err)
+	}
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&config); err != nil {
+		return config, fmt.Errorf("parse private connection config %s: %w", path, err)
+	}
+	if err := decoder.Decode(new(any)); err != io.EOF {
+		return config, fmt.Errorf("parse private connection config %s: trailing data", path)
+	}
+	if config.Version != 2 {
+		return config, fmt.Errorf("connection config version %d is unsupported", config.Version)
+	}
+	return config, nil
+}
+
+func (config privateConnectionConfig) resolve(sourceID string) (connectionCredentialSource, error) {
+	source, ok := config.Sources[sourceID]
+	if !ok || sourceID == "" {
+		return connectionCredentialSource{}, fmt.Errorf("captured connection credential source is unavailable")
+	}
+	return source, nil
+}
+
+func (config privateConnectionConfig) defaults() (connectionConfig, error) {
+	source, err := config.resolve(config.CredentialSource)
+	if err != nil {
+		return connectionConfig{}, err
+	}
+	return connectionConfig{API: source.API, Endpoint: source.Endpoint, APIKey: source.APIKey,
+		Model: config.Model, ContextTokens: config.ContextTokens, OutputTokens: config.OutputTokens,
+		WorkingDirectory: config.WorkingDirectory, MaxActiveTasks: config.MaxActiveTasks}, nil
+}
+
 func defaultConnectionConfig(workDir string) connectionConfig {
 	return connectionConfig{
-		Version: 1, API: connectionAPIChatCompletions,
+		API:           connectionAPIChatCompletions,
 		ContextTokens: 131072, OutputTokens: 8192,
 		WorkingDirectory: workDir, MaxActiveTasks: 2,
 	}
 }
 
-type connectionLaunch struct {
-	Dir            string
-	Env            []string
-	HostConfigPath string
-	tempDir        string
-}
-
-func (l *connectionLaunch) Cleanup() error {
-	if l == nil || l.tempDir == "" {
-		return nil
-	}
-	if err := os.RemoveAll(l.tempDir); err != nil {
-		return fmt.Errorf("remove connection launch directory: %w", err)
-	}
-	l.tempDir = ""
-	return nil
-}
-
 func loadConnectionConfig(path string) (connectionConfig, error) {
-	data, err := os.ReadFile(path)
+	private, err := readPrivateConnectionConfig(path)
 	if err != nil {
-		return connectionConfig{}, fmt.Errorf("read connection config %s: %w", path, err)
+		return connectionConfig{}, err
 	}
-	var config connectionConfig
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&config); err != nil {
-		return connectionConfig{}, fmt.Errorf("parse connection config %s: %w", path, err)
-	}
-	var extra json.RawMessage
-	if err := decoder.Decode(&extra); err != io.EOF {
-		if err == nil {
-			return connectionConfig{}, fmt.Errorf("parse connection config %s: trailing data", path)
-		}
-		return connectionConfig{}, fmt.Errorf("parse connection config %s: %w", path, err)
+	config, err := private.defaults()
+	if err != nil {
+		return connectionConfig{}, err
 	}
 	if fields := validateConnectionConfig(config); len(fields) > 0 {
 		return config, fmt.Errorf("invalid connection config %s: %s", path, connectionValidationSummary(fields))
@@ -89,7 +116,38 @@ func saveConnectionConfig(path string, config connectionConfig) error {
 	if fields := validateConnectionConfig(config); len(fields) > 0 {
 		return fmt.Errorf("invalid connection config: %s", connectionValidationSummary(fields))
 	}
-	data, err := json.MarshalIndent(config, "", "  ")
+	private, err := readPrivateConnectionConfig(path)
+	if errors.Is(err, os.ErrNotExist) {
+		private = privateConnectionConfig{Version: 2, Sources: make(map[string]connectionCredentialSource)}
+	} else if err != nil {
+		return err
+	}
+	source := connectionCredentialSource{API: config.API, Endpoint: config.Endpoint, APIKey: config.APIKey}
+	sourceID := ""
+	for id, existing := range private.Sources {
+		if existing == source {
+			sourceID = id
+			break
+		}
+	}
+	if sourceID == "" {
+		var id [16]byte
+		if _, err := rand.Read(id[:]); err != nil {
+			return fmt.Errorf("generate connection source: %w", err)
+		}
+		sourceID = hex.EncodeToString(id[:])
+		if private.Sources == nil {
+			private.Sources = make(map[string]connectionCredentialSource)
+		}
+		if _, exists := private.Sources[sourceID]; exists {
+			return fmt.Errorf("generated connection source already exists")
+		}
+		private.Sources[sourceID] = source
+	}
+	private.CredentialSource = sourceID
+	private.Model, private.ContextTokens, private.OutputTokens = config.Model, config.ContextTokens, config.OutputTokens
+	private.WorkingDirectory, private.MaxActiveTasks = config.WorkingDirectory, config.MaxActiveTasks
+	data, err := json.MarshalIndent(private, "", "  ")
 	if err != nil {
 		return fmt.Errorf("encode connection config: %w", err)
 	}
@@ -125,126 +183,9 @@ func saveConnectionConfig(path string, config connectionConfig) error {
 	return nil
 }
 
-type runtimeToolSource struct {
-	ID               string   `json:"id"`
-	Transport        string   `json:"transport"`
-	Command          string   `json:"command"`
-	Args             []string `json:"args,omitempty"`
-	EnvFrom          []string `json:"env_from,omitempty"`
-	Protocol         string   `json:"protocol,omitempty"`
-	StartupTimeoutMS int      `json:"startup_timeout_ms,omitempty"`
-	CallTimeoutMS    int      `json:"call_timeout_ms,omitempty"`
-	CancelGraceMS    int      `json:"cancel_grace_ms,omitempty"`
-	Endpoint         string   `json:"-"`
-}
-
-func prepareConnectionLaunch(config connectionConfig, parentEnv []string, sessionDir, tempRoot string) (*connectionLaunch, error) {
-	return prepareConnectionLaunchWithTools(config, parentEnv, sessionDir, tempRoot, nil)
-}
-
-func prepareConnectionLaunchWithTools(config connectionConfig, parentEnv []string, sessionDir, tempRoot string, toolSource *runtimeToolSource) (*connectionLaunch, error) {
-	if fields := validateConnectionConfig(config); len(fields) > 0 {
-		return nil, fmt.Errorf("invalid connection config: %s", connectionValidationSummary(fields))
-	}
-	if tempRoot == "" {
-		tempRoot = os.TempDir()
-	}
-	absoluteRoot, err := filepath.Abs(tempRoot)
-	if err != nil {
-		return nil, fmt.Errorf("resolve connection temp root: %w", err)
-	}
-	if err := os.MkdirAll(absoluteRoot, 0o700); err != nil {
-		return nil, fmt.Errorf("create connection temp root: %w", err)
-	}
-	tempDir, err := os.MkdirTemp(absoluteRoot, "nagi-connection-*")
-	if err != nil {
-		return nil, fmt.Errorf("create connection launch directory: %w", err)
-	}
-	fail := func(err error) (*connectionLaunch, error) {
-		_ = os.RemoveAll(tempDir)
-		return nil, err
-	}
-
-	toolSources := []runtimeToolSource(nil)
-	if toolSource != nil && strings.TrimSpace(toolSource.Command) != "" {
-		toolSources = append(toolSources, *toolSource)
-	}
-	hostConfig := struct {
-		DefaultConnectionID string               `json:"default_connection_id"`
-		Connections         []connectionHostItem `json:"connections"`
-		MaxActiveTasks      int                  `json:"max_active_tasks"`
-		MaxToolProcesses    int                  `json:"max_tool_processes,omitempty"`
-		ToolSources         []runtimeToolSource  `json:"tool_sources,omitempty"`
-	}{
-		DefaultConnectionID: connectionID,
-		Connections: []connectionHostItem{{
-			ID:           connectionID,
-			API:          config.API,
-			BaseURL:      config.Endpoint,
-			APIKeyEnv:    connectionAPIKeyEnv,
-			DefaultModel: config.Model,
-		}},
-		MaxActiveTasks: config.MaxActiveTasks,
-		ToolSources:    toolSources,
-	}
-	hostData, err := json.MarshalIndent(hostConfig, "", "  ")
-	if err != nil {
-		return fail(fmt.Errorf("encode runtime host config: %w", err))
-	}
-	hostData = append(hostData, '\n')
-	// The runtime host config is a derived snapshot and never contains that value;
-	// it is injected only through the child environment.
-	hostPath := filepath.Join(tempDir, connectionHostConfigName)
-	hostFile, err := os.OpenFile(hostPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
-	if err != nil {
-		return fail(fmt.Errorf("create runtime host config: %w", err))
-	}
-	if err := hostFile.Chmod(0o600); err != nil {
-		hostFile.Close()
-		return fail(fmt.Errorf("set runtime host config permissions: %w", err))
-	}
-	if _, err := hostFile.Write(hostData); err != nil {
-		hostFile.Close()
-		return fail(fmt.Errorf("write runtime host config: %w", err))
-	}
-	if err := hostFile.Sync(); err != nil {
-		hostFile.Close()
-		return fail(fmt.Errorf("sync runtime host config: %w", err))
-	}
-	if err := hostFile.Close(); err != nil {
-		return fail(fmt.Errorf("close runtime host config: %w", err))
-	}
-
-	// Keep both compaction limits explicit so an old environment or the model
-	// catalog cannot change the configured budget at runtime.
-	remaining := config.ContextTokens - config.OutputTokens
-	keepRecent := min(8192, remaining/4)
-	summaryTokens := min(4096, config.OutputTokens, remaining/4)
-	env := filterConnectionEnv(parentEnv)
-	env = append(env,
-		"SAKI_RUNTIME_CONFIG="+hostPath,
-		"SAKI_SESSION_DIR="+sessionDir,
-		connectionAPIKeyEnv+"="+config.APIKey,
-		"SAKI_CONTEXT_TOKENS="+strconv.Itoa(config.ContextTokens),
-		"SAKI_OUTPUT_TOKENS="+strconv.Itoa(config.OutputTokens),
-		"SAKI_COMPACT_KEEP_TOKENS="+strconv.Itoa(keepRecent),
-		"SAKI_COMPACT_SUMMARY_TOKENS="+strconv.Itoa(summaryTokens),
-	)
-	if toolSource != nil && toolSource.Endpoint != "" {
-		env = append(env, issueToolIPCSocketEnv+"="+toolSource.Endpoint)
-	}
-	return &connectionLaunch{
-		Dir:            config.WorkingDirectory,
-		Env:            env,
-		HostConfigPath: hostPath,
-		tempDir:        tempDir,
-	}, nil
-}
-
 // Stable validation kinds. The form says them again in the current language;
 // internal config errors keep the kinds for diagnostics.
 const (
-	connectionValidationVersion            = "version"
 	connectionValidationAPI                = "api"
 	connectionValidationRequired           = "required"
 	connectionValidationPositive           = "positive"
@@ -261,9 +202,6 @@ const (
 
 func validateConnectionConfig(config connectionConfig) map[string]string {
 	fields := map[string]string{}
-	if config.Version != 1 {
-		fields["Version"] = connectionValidationVersion
-	}
 	if config.API != connectionAPIResponses && config.API != connectionAPIChatCompletions {
 		fields["API"] = connectionValidationAPI
 	}
@@ -275,10 +213,10 @@ func validateConnectionConfig(config connectionConfig) map[string]string {
 		fields["Model"] = connectionValidationRequired
 	}
 	validateConnectionWorkingDirectory(config.WorkingDirectory, fields)
-	if config.ContextTokens <= 0 {
+	if config.ContextTokens <= 0 || int64(config.ContextTokens) > 9007199254740991 {
 		fields["ContextTokens"] = connectionValidationPositive
 	}
-	if config.OutputTokens <= 0 {
+	if config.OutputTokens <= 0 || int64(config.OutputTokens) > 9007199254740991 {
 		fields["OutputTokens"] = connectionValidationPositive
 	} else if config.ContextTokens > 0 {
 		if config.ContextTokens <= config.OutputTokens {
@@ -345,40 +283,4 @@ func connectionValidationSummary(fields map[string]string) string {
 		parts = append(parts, key+": "+fields[key])
 	}
 	return strings.Join(parts, "; ")
-}
-
-type connectionHostItem struct {
-	ID           string `json:"id"`
-	API          string `json:"api"`
-	BaseURL      string `json:"base_url"`
-	APIKeyEnv    string `json:"api_key_env"`
-	DefaultModel string `json:"default_model"`
-}
-
-var filteredConnectionEnv = map[string]bool{
-	"API_KEY":                     true,
-	"SAKI_API":                    true,
-	"SAKI_BASE_URL":               true,
-	"SAKI_MODEL":                  true,
-	"SAKI_MODEL_ID":               true,
-	"SAKI_CONTEXT_TOKENS":         true,
-	"SAKI_OUTPUT_TOKENS":          true,
-	"SAKI_COMPACT_KEEP_TOKENS":    true,
-	"SAKI_COMPACT_SUMMARY_TOKENS": true,
-	"SAKI_SESSION_DIR":            true,
-	"SAKI_RUNTIME_CONFIG":         true,
-	issueToolIPCSocketEnv:         true,
-	connectionAPIKeyEnv:           true,
-}
-
-func filterConnectionEnv(parent []string) []string {
-	filtered := make([]string, 0, len(parent))
-	for _, entry := range parent {
-		key, _, ok := strings.Cut(entry, "=")
-		if ok && filteredConnectionEnv[key] {
-			continue
-		}
-		filtered = append(filtered, entry)
-	}
-	return filtered
 }

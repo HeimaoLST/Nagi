@@ -95,32 +95,37 @@ func TestConnectionSettingsValidationKeepsDraftAndFocus(t *testing.T) {
 }
 
 func TestConnectionProtocolSegmentedKeepsDraftAndBusyGate(t *testing.T) {
+	msgs := locales.In("en")
+	chatCompletions, responses := msgs.ProtocolChatCompletionsLabel(), msgs.ProtocolResponsesLabel()
 	config := testConnectionConfig(t)
 	config.API = connectionAPIChatCompletions
 	s := newConnectionSettings(&config, "")
 	tr := connectionSettingsTester(s, connectionSettingsActions{}, 580, 1600)
 	tr.Frame()
-	if err := tr.Click("Protocol"); err != nil {
+	if err := tr.Click(chatCompletions); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if !tr.HasText("Protocol") || !tr.HasText("Chat completions") || !tr.HasText("Responses") {
+	if !tr.HasText(msgs.ProtocolLabel()) || !tr.HasText(chatCompletions) || !tr.HasText(responses) {
 		t.Fatalf("protocol choices missing: %v", tr.Texts())
 	}
-	if err := tr.Click("Responses"); err != nil {
+	if err := tr.Click(responses); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
 	if s.Draft.API != connectionAPIResponses {
 		t.Fatalf("protocol draft = %q, want Responses", s.Draft.API)
 	}
-	if err := tr.Click("Protocol"); err != nil {
+	if err := tr.Click(responses); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
+	if _, ok := tr.Find(chatCompletions); !ok {
+		t.Fatalf("protocol menu did not reopen: %v", tr.Texts())
+	}
 	s.Busy = true
 	tr.Frame()
-	if err := tr.Click("Chat completions"); err != nil {
+	if err := tr.Click(chatCompletions); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
@@ -130,9 +135,9 @@ func TestConnectionProtocolSegmentedKeepsDraftAndBusyGate(t *testing.T) {
 }
 
 func TestPreviewConnectionSettings(t *testing.T) {
-	dir := os.Getenv("SAKI_PREVIEW_DIR")
+	dir := os.Getenv("NAGI_PREVIEW_DIR")
 	if dir == "" {
-		t.Skip("set SAKI_PREVIEW_DIR for connection form previews")
+		t.Skip("set NAGI_PREVIEW_DIR for connection form previews")
 	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
@@ -401,7 +406,7 @@ func TestRecoveryPresentationExplicitTestUsesDraftAndDisclosesFailure(t *testing
 					t.Fatal(err)
 				}
 				tr.Frame()
-				if len(tested) != 2 || tested[1] != current || s.RecoveryDetailsOpen || s.Draft.Model != current.Model || s.initial != initial || !s.HasSaved || !s.SavedPending || recoveryRecordSnapshot(t, ct) != before || saves != 0 || applies != 0 || saveApplies != 0 || a.rt.nextID != 0 {
+				if len(tested) != 2 || tested[1] != current || s.RecoveryDetailsOpen || s.Draft.Model != current.Model || s.initial != initial || !s.HasSaved || !s.SavedPending || recoveryRecordSnapshot(t, ct) != before || saves != 0 || applies != 0 || saveApplies != 0 || a.submissionInFlight != 0 {
 					t.Fatal("second explicit Test did not consume the edited complete form once or preserve app/history state")
 				}
 			})

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
@@ -12,6 +11,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"github.com/HeimaoLST/Nagi/internal/pi"
 	"github.com/HeimaoLST/Nagi/locales"
 )
 
@@ -24,7 +24,7 @@ func appReadingTestApp(t *testing.T) (*appModel, *contact) {
 }
 
 func scrollToVisibleControl(tr *ui.Tester, label string, dy float32) bool {
-	composer, composerOK := tr.Find("Composer for Saki")
+	composer, composerOK := tr.Find("Composer for Nagi")
 	messages, messagesOK := tr.Find("Chat messages")
 	if !composerOK || !messagesOK || composer.W <= 0 || composer.H <= 0 ||
 		messages.W <= 0 || messages.H <= 0 {
@@ -46,18 +46,18 @@ func scrollToVisibleControl(tr *ui.Tester, label string, dy float32) bool {
 	return false
 }
 
-func TestAppAssistantMarkdownStreamsFinalRestoresAndCopies(t *testing.T) {
+func TestAppAssistantMarkdownStreamsFinalAndCopies(t *testing.T) {
 	const md = "# 标题\n\n列表：\n\n- 第一项\n- 第二项\n\n> 引用\n\n[链接](https://example.com/docs)\n\n" +
 		"```go\n\tfmt.Println(\"x\")\n```\n\n| 名称 | 值 |\n| --- | --- |\n| 语言 | 中文 |\n"
 
 	for _, size := range []struct {
 		width, height int
 	}{{1040, 720}, {720, 640}} {
-		a, ct := appReadingTestApp(t)
+		a, ct, _ := piRunStartedTestApp(t)
+		execution := ct.ActiveTaskID
 		a.windowWidth = size.width
-		ct.ActiveTaskID, ct.LastTaskID = "t1", "t1"
 		ct.Messages = []*message{{
-			Key: "live:t1:text:a1", Kind: msgContact, TaskID: "t1", ItemID: "a1",
+			Key: "live:" + execution + ":text:pi", Kind: msgContact, TaskID: execution, ItemID: "pi",
 			Text: "# 标题\n\n", Streaming: true,
 		}}
 		tr := ui.NewTester(a.view, size.width, size.height)
@@ -66,14 +66,15 @@ func TestAppAssistantMarkdownStreamsFinalRestoresAndCopies(t *testing.T) {
 			t.Fatalf("%dx%d streaming markdown missing: %q", size.width, size.height, tr.Texts())
 		}
 
-		a.applyEvent(ct, runtimeEventEnvelope{
-			Version: 1, Type: "event", SessionID: "s1", TaskID: "t1", MessageID: "m1",
-			Event: &runtimeEvent{Type: "response_text_delta", ItemID: "a1", Delta: "列表：\n\n- 第一项\n- 第二项\n\n"},
+		applyTestProductEvent(t, a, "execution.textDelta", pi.ProductExecutionEvent{
+			ConversationID: ct.SessionID, ExecutionID: execution, Offset: uint64(len("# 标题\n\n")), Text: "列表：\n\n- 第一项\n- 第二项\n\n",
 		})
-		a.applyEvent(ct, runtimeEventEnvelope{
-			Version: 1, Type: "event", SessionID: "s1", TaskID: "t1", MessageID: "m1",
-			Event: &runtimeEvent{Type: "response_text", ItemID: "a1", Text: md},
-		})
+		tr.Frame()
+		if !tr.HasText("第一项") {
+			t.Fatal("the Product delta did not extend the rendered Markdown")
+		}
+		applyTestProductEvent(t, a, "execution.settled", pi.ProductExecutionEvent{ConversationID: ct.SessionID, ExecutionID: execution, State: "completed"})
+		ct.Messages = []*message{{Key: "saved-markdown", Kind: msgContact, Text: md, History: true}}
 		tr.Frame()
 		for _, want := range []string{"标题", "第一项", "第二项", "引用", "链接", "fmt.Println", "名称", "中文"} {
 			if !tr.HasText(want) {
@@ -107,30 +108,6 @@ func TestAppAssistantMarkdownStreamsFinalRestoresAndCopies(t *testing.T) {
 			t.Fatalf("%dx%d code copy = %q, want %q", size.width, size.height, got, want)
 		}
 
-		content, err := json.Marshal(md)
-		if err != nil {
-			t.Fatal(err)
-		}
-		a.applyHistory(ct, []historyRecord{
-			{Offset: 0, Record: journalRecord{Type: "task_started", TaskID: "t1", MessageID: "m1"}},
-			{Offset: 1, Record: journalRecord{Type: "messages", Items: []inputItem{{
-				Type: "message", Role: "assistant", Content: content,
-			}}}},
-			{Offset: 2, Record: journalRecord{Type: "task_finished", TaskID: "t1", Status: "completed"}},
-		}, "completed")
-		tr.Frame()
-		if !tr.HasText("第一项") || !tr.HasText("引用") || !tr.HasText("fmt.Println") {
-			t.Fatalf("%dx%d restored markdown missing: %q", size.width, size.height, tr.Texts())
-		}
-		if !scrollToVisibleControl(tr, "Copy message", -160) {
-			t.Fatalf("%dx%d restored full-source control is not reachable", size.width, size.height)
-		}
-		if err := tr.Click("Copy message"); err != nil {
-			t.Fatal(err)
-		}
-		if got := tr.Clipboard(); got != md {
-			t.Fatalf("%dx%d restored copy = %q, want exact source", size.width, size.height, got)
-		}
 	}
 }
 
@@ -157,120 +134,12 @@ func TestAppUserMessageStaysLiteralAndCopiesRaw(t *testing.T) {
 	}
 }
 
-func TestAppHistoryAndSourcesRenderAndCopyMarkdown(t *testing.T) {
-	a, ct := appReadingTestApp(t)
-	assistantHistory := "## 历史标题\n\n- 条目\n\n```go\n\tx := 1\n```"
-	userHistory := "# 用户原文"
-	ct.History = []historyEntry{
-		{ID: "h2", Date: "Oct 1", From: "me", Text: userHistory},
-		{ID: "h1", Date: "Oct 1", From: "contact", Text: assistantHistory},
-	}
-	ct.Messages = []*message{{ID: 1, Kind: msgContact, Text: "answer", Sources: []string{"h1", "h2"}}}
-	a.openHistory()
-	tr := ui.NewTester(a.view, 1040, 720)
-	tr.Frame()
-	if !tr.HasText("历史标题") || !tr.HasText("条目") || !tr.HasText("x := 1") {
-		t.Fatalf("history markdown missing: %q", tr.Texts())
-	}
-	if !tr.HasText("# 用户原文") {
-		t.Fatalf("history user text was not literal: %q", tr.Texts())
-	}
-	if !tr.HasText("Copy history message") {
-		t.Fatalf("history copy control missing: %q", tr.Texts())
-	}
-	if err := tr.Click("Copy history message"); err != nil {
-		t.Fatal(err)
-	}
-	if got := tr.Clipboard(); got != assistantHistory {
-		t.Fatalf("history copy = %q, want the assistant source %q", got, assistantHistory)
-	}
-
-	a.backToChat()
-	a.openSources(1)
-	tr.Frame()
-	if !tr.HasText("历史标题") || !tr.HasText("条目") || !tr.HasText("Copy source message") {
-		t.Fatalf("source markdown/copy missing: %q", tr.Texts())
-	}
-	if !tr.HasText("# 用户原文") {
-		t.Fatalf("source user text was not literal: %q", tr.Texts())
-	}
-	if err := tr.Click("Copy source message"); err != nil {
-		t.Fatal(err)
-	}
-	if got := tr.Clipboard(); got != assistantHistory {
-		t.Fatalf("source copy = %q, want %q", got, assistantHistory)
-	}
-}
-
 func TestAppEmptyChatHasNoBackToLatest(t *testing.T) {
 	a, _ := appReadingTestApp(t)
 	tr := ui.NewTester(a.view, 720, 640)
 	tr.Frame()
 	if tr.HasText("Back to latest") {
 		t.Fatalf("empty chat showed Back to latest: %q", tr.Texts())
-	}
-}
-
-func TestAppToolDetailsShowAndCopyCompleteReceivedOutput(t *testing.T) {
-	a, ct := workspaceTestApp(t)
-	output := strings.Repeat("received tool line\n", 500) + "# plain tail marker"
-	if len(output) <= 6000 {
-		t.Fatalf("fixture is not long enough: %d", len(output))
-	}
-	ct.Works = []*workItem{{
-		TaskID: "t1", State: workRunning,
-		Tools: []*workTool{{
-			CallID: "k1", Name: "read", Args: `{"path":"README.md"}`,
-			Output: output, Started: true, Finished: true,
-		}},
-	}}
-	ct.ActiveTaskID, ct.LastTaskID = "t1", "t1"
-	tr := ui.NewTester(a.view, 1040, 720)
-	tr.Frame()
-	openConversationWorkPanel(t, tr)
-	if !tr.HasText("Preview: ") {
-		t.Fatalf("collapsed tool summary is not labeled as a preview: %q", tr.Texts())
-	}
-	if err := tr.Click("Copy received output"); err != nil {
-		t.Fatal(err)
-	}
-	if got := tr.Clipboard(); got != output {
-		t.Fatalf("collapsed tool copy = %d bytes, want %d exact bytes", len(got), len(output))
-	}
-	if err := tr.Click("Details"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if !tr.HasText("# plain tail marker") {
-		t.Fatalf("expanded tool detail lost the received tail: %q", tr.Texts())
-	}
-	if tr.HasText("Copy code") {
-		t.Fatalf("expanded tool detail was parsed as Markdown: %q", tr.Texts())
-	}
-	for i := 0; i < 8; i++ {
-		tr.Scroll(860, 400, 0, 2000)
-		tr.Frame()
-	}
-	// Put the caret in the scrolled full-output text, then select/copy the
-	// complete source; the exact output and tail marker must remain reachable.
-	tr.ClickAt(860, 400)
-	tr.Command("selectAll")
-	tr.Command("copy")
-	if got := tr.Clipboard(); got != output {
-		t.Fatalf("scrolled tool Details copy = %d bytes, want %d exact bytes", len(got), len(output))
-	}
-	for i := 0; i < 8; i++ {
-		tr.Scroll(860, 400, 0, -2000)
-		tr.Frame()
-	}
-	if err := tr.Click("Copy received output"); err != nil {
-		t.Fatal(err)
-	}
-	if got := tr.Clipboard(); got != output {
-		t.Fatalf("expanded tool copy = %d bytes, want %d exact bytes", len(got), len(output))
-	}
-	if len(ct.Messages) != 0 {
-		t.Fatalf("tool details added chat messages: %+v", ct.Messages)
 	}
 }
 
@@ -322,8 +191,16 @@ func TestAppChatScrollUpSurvivesStreamAppendAndBackToLatest(t *testing.T) {
 		})
 	}
 	ct.Messages = append(ct.Messages, &message{
-		Key: "live:t1:text:a1", Kind: msgContact, TaskID: "t1", ItemID: "a1", Text: "live start", Streaming: true,
+		Key: "live:t1:text:pi", Kind: msgContact, TaskID: "t1", ItemID: "pi", Text: "live start", Streaming: true,
 	})
+	ct.ActiveTaskID, ct.SendState = "t1", sendAccepted
+	a.pi = &piAppHost{}
+	appendDelta := func(text string) {
+		message := ct.Messages[len(ct.Messages)-1]
+		applyTestProductEvent(t, a, "execution.textDelta", pi.ProductExecutionEvent{
+			ConversationID: ct.SessionID, ExecutionID: "t1", Offset: uint64(len(message.Text)), Text: text,
+		})
+	}
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
 	if !ct.list.AtEnd() {
@@ -338,10 +215,10 @@ func TestAppChatScrollUpSurvivesStreamAppendAndBackToLatest(t *testing.T) {
 	}
 	ct.Draft = "draft stays across appearance switch"
 	first, _ := ct.list.Visible()
-	composer, composerOK := tr.Find("Composer for Saki")
-	settings, settingsOK := tr.Find("Contact profile")
-	if !composerOK || !settingsOK {
-		t.Fatalf("reading viewport bounds unavailable: composer=%+v/%v settings=%+v/%v", composer, composerOK, settings, settingsOK)
+	composerLabel := locales.In("en").ComposerLabel(ct.Name)
+	viewport, viewportOK := tr.Find(locales.In("en").ConversationMessagesLabel())
+	if !viewportOK || viewport.W <= 0 || viewport.H <= 0 {
+		t.Fatalf("reading viewport bounds unavailable: %+v found=%v", viewport, viewportOK)
 	}
 	// list.Visible may report a partially clipped first row; choose the first
 	// row whose label is fully inside the actual reading viewport and clickable.
@@ -350,14 +227,13 @@ func TestAppChatScrollUpSurvivesStreamAppendAndBackToLatest(t *testing.T) {
 	for i := first; i < len(ct.Messages); i++ {
 		candidate, ok := tr.Find(fmt.Sprintf("message %02d", i))
 		if ok && candidate.W > 0 && candidate.H > 0 &&
-			candidate.Y >= settings.Y+settings.H && candidate.Y+candidate.H <= composer.Y {
+			candidate.Y >= viewport.Y && candidate.Y+candidate.H <= viewport.Y+viewport.H {
 			clicked, row = i, candidate
 			break
 		}
 	}
 	if clicked < 0 {
-		t.Fatalf("no fully visible clickable message row from %d: composer=%+v settings=%+v texts=%q",
-			first, composer, settings, tr.Texts())
+		t.Fatalf("no fully visible clickable message row from %d: viewport=%+v texts=%q", first, viewport, tr.Texts())
 	}
 	// Click the visible text itself (not its left edge) and verify the selected
 	// source actually reaches the clipboard.
@@ -398,10 +274,7 @@ func TestAppChatScrollUpSurvivesStreamAppendAndBackToLatest(t *testing.T) {
 
 	firstBeforeAppend, _ := ct.list.Visible()
 
-	a.applyEvent(ct, runtimeEventEnvelope{
-		Version: 1, Type: "event", SessionID: "s1", TaskID: "t1", MessageID: "m1",
-		Event: &runtimeEvent{Type: "response_text_delta", ItemID: "a1", Delta: " appended"},
-	})
+	appendDelta(" appended")
 	tr.Frame()
 	if ct.list.AtEnd() {
 		t.Fatal("appending while scrolled up jumped back to the end")
@@ -416,18 +289,15 @@ func TestAppChatScrollUpSurvivesStreamAppendAndBackToLatest(t *testing.T) {
 		t.Fatalf("append changed the earlier selection: %q -> %q", selected, got)
 	}
 
-	if err := tr.Click("Composer for Saki"); err != nil {
+	if err := tr.Click(composerLabel); err != nil {
 		t.Fatal(err)
 	}
-	if !tr.Focused("Composer for Saki") {
+	if !tr.Focused(composerLabel) {
 		t.Fatal("composer did not take focus")
 	}
-	a.applyEvent(ct, runtimeEventEnvelope{
-		Version: 1, Type: "event", SessionID: "s1", TaskID: "t1", MessageID: "m1",
-		Event: &runtimeEvent{Type: "response_text_delta", ItemID: "a1", Delta: " more"},
-	})
+	appendDelta(" more")
 	tr.Frame()
-	if !tr.Focused("Composer for Saki") {
+	if !tr.Focused(composerLabel) {
 		t.Fatal("streaming text stole composer focus")
 	}
 
@@ -438,15 +308,12 @@ func TestAppChatScrollUpSurvivesStreamAppendAndBackToLatest(t *testing.T) {
 	if !ct.list.AtEnd() || tr.HasText("Back to latest") {
 		t.Fatal("Back to latest did not resume following")
 	}
-	if !tr.Focused("Composer for Saki") {
+	if !tr.Focused(composerLabel) {
 		t.Fatal("Back to latest did not return meaningful focus to the composer")
 	}
-	a.applyEvent(ct, runtimeEventEnvelope{
-		Version: 1, Type: "event", SessionID: "s1", TaskID: "t1", MessageID: "m1",
-		Event: &runtimeEvent{Type: "response_text_delta", ItemID: "a1", Delta: " after back"},
-	})
+	appendDelta(" after back")
 	tr.Frame()
-	if !ct.list.AtEnd() || !tr.Focused("Composer for Saki") {
+	if !ct.list.AtEnd() || !tr.Focused(composerLabel) {
 		t.Fatal("following/focus did not persist after returning to the latest")
 	}
 
@@ -461,44 +328,15 @@ func TestAppChatScrollUpSurvivesStreamAppendAndBackToLatest(t *testing.T) {
 	}
 	tr.Key(0, ui.KeyEnter)
 	tr.Frame()
-	if !ct.list.AtEnd() || !tr.Focused("Composer for Saki") {
+	if !ct.list.AtEnd() || !tr.Focused(composerLabel) {
 		t.Fatal("keyboard activation of Back to latest did not resume following with composer focus")
 	}
 }
 
-func TestAppWorkspaceResultSummaryIsPreview(t *testing.T) {
-	a, ct := workspaceTestApp(t)
-	longResult := strings.Repeat("result-line ", 40) + "tail-marker"
-	ct.Issues = []*productIssue{{ID: "i1", ContactID: "saki", Goal: "First issue", Status: issueStatusNotStarted, Executions: []*issueExecution{{ID: "e1", TaskID: "t1", Status: issueExecutionCompleted}}}}
-	openIssueDetailForTest(a, ct, "i1")
-	ct.Works = []*workItem{{TaskID: "t1", MessageID: "m1", State: workCompleted, Prompt: "prompt"}}
-	ct.Messages = []*message{{ID: 1, Kind: msgContact, TaskID: "t1", MessageID: "m1", Text: longResult}}
-	tr := ui.NewTester(a.view, 1040, 720)
-	tr.Frame()
-	preview := ""
-	for _, text := range tr.Texts() {
-		if strings.HasPrefix(text, "Result preview: ") {
-			preview = strings.TrimPrefix(text, "Result preview: ")
-		}
-	}
-	if preview == "" {
-		t.Fatalf("workspace result summary is not labeled as a preview: %q", tr.Texts())
-	}
-	if strings.Contains(preview, "tail-marker") {
-		t.Fatalf("preview leaked the >300-char result tail: %q", preview)
-	}
-	if !strings.HasSuffix(preview, "…") || len([]rune(preview)) != 301 {
-		t.Fatalf("preview does not honor the 300-char limit: %q (%d runes)", preview, len([]rune(preview)))
-	}
-	if tr.HasText("Result: " + longResult) {
-		t.Fatalf("workspace result summary claims to be the full result: %q", tr.Texts())
-	}
-}
-
 func TestIntegratedMarkdownPreview(t *testing.T) {
-	dir := os.Getenv("SAKI_READER_INTEGRATED_DIR")
+	dir := os.Getenv("NAGI_READER_INTEGRATED_DIR")
 	if dir == "" {
-		t.Skip("set SAKI_READER_INTEGRATED_DIR to write integrated headless previews")
+		t.Skip("set NAGI_READER_INTEGRATED_DIR to write integrated headless previews")
 	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
@@ -519,21 +357,17 @@ func TestIntegratedMarkdownPreview(t *testing.T) {
 			}{{"1040x720", 1040, 720}, {"720x640", 720, 640}} {
 				a, ct := workspaceTestApp(t)
 				a.windowWidth = size.width
-				a.workspaceOpen = scene == "details"
+				a.workspaceOpen = false
 				ct.Draft = "Draft kept while reading"
 				ct.Messages = []*message{
 					{ID: 1, Kind: msgUser, Text: "# literal user text"},
 					{ID: 2, Kind: msgContact, Text: md},
 				}
 				if scene == "details" {
-					ct.Works = []*workItem{{
-						TaskID: "t1", State: workRunning,
-						Tools: []*workTool{{
-							CallID: "k1", Name: "read", Args: `{"path":"README.md"}`,
-							Output: strings.Repeat("received line\n", 80) + "# tail", Started: true, Finished: true, Expanded: true,
-						}},
-					}}
-					ct.ActiveTaskID, ct.LastTaskID = "t1", "t1"
+					ct.Messages = append(ct.Messages, &message{
+						Key: "inline-read", Kind: msgActivity, CallID: "k1", ToolName: "read", ToolArgs: `{"path":"README.md"}`,
+						ToolOutput: strings.Repeat("received line\n", 80) + "# tail", Expanded: true,
+					})
 				}
 				tr := ui.NewTester(a.view, size.width, size.height)
 				if dark {
@@ -560,7 +394,6 @@ func TestIntegratedMarkdownPreview(t *testing.T) {
 				width, height int
 			}{{"1040x720", 1040, 720}, {"960x640", 960, 640}} {
 				a, ct := workspaceTestApp(t)
-				a.rt = &runtimeClient{}
 				a.windowWidth = size.width
 				a.workspaceOpen = false
 				ct.Messages = []*message{
@@ -592,65 +425,6 @@ func TestIntegratedMarkdownPreview(t *testing.T) {
 					fmt.Sprintf("message-affordance-user-focus-%s-%s-%s.png", locale, theme, size.name)), tr.Image())
 			}
 		}
-	}
-	for _, locale := range []string{"en", "zh-Hans"} {
-		for _, dark := range []bool{false, true} {
-			theme := "light"
-			if dark {
-				theme = "dark"
-			}
-			for _, size := range []struct {
-				name          string
-				width, height int
-			}{{"1040x720", 1040, 720}, {"960x640", 960, 640}} {
-				a, _ := appReadingTestApp(t)
-				a.rt = &runtimeClient{}
-				a.windowWidth = size.width
-				a.openDetail(detailHistory)
-				a.contactHistoryFull = &contactHistoryFull{
-					SessionID: "saved-session", EntryID: "saved-entry", Date: "Oct 1", From: "contact", Text: md,
-				}
-				tr := ui.NewTester(a.view, size.width, size.height)
-				tr.SetLocale(locale)
-				tr.SetDark(dark)
-				tr.Frame()
-				writePreviewPNG(t, filepath.Join(dir,
-					fmt.Sprintf("history-full-%s-%s-%s.png", locale, theme, size.name)), tr.Image())
-			}
-		}
-	}
-}
-
-func TestAppFullSavedMessageUsesReaderAndPreservesDraft(t *testing.T) {
-	saved := "## 完整历史\n\n中文长段落需要自然换行，保留[链接](https://example.com/full)。\n\n" +
-		"```go\nfunc saved() {\n\tfmt.Println(\"full\")\n}\n```\n\n" +
-		"| 名称 | 说明 |\n| --- | --- |\n| 历史 | " + strings.Repeat("abcdefghij", 12) + " |\n"
-	a, ct := appReadingTestApp(t)
-	a.windowWidth = 960
-	ct.Draft = "draft survives full history"
-	a.openDetail(detailHistory)
-	a.contactHistoryFull = &contactHistoryFull{
-		SessionID: "saved-session", EntryID: "entry-1", Date: "Oct 1", From: "contact", Text: saved,
-	}
-	tr := ui.NewTester(a.view, 960, 640)
-	tr.Frame()
-	for _, want := range []string{"Full saved message", "完整历史", "中文长段落", "func saved()", "名称", "历史"} {
-		if !tr.HasText(want) {
-			t.Fatalf("full saved message missing %q: %v", want, tr.Texts())
-		}
-	}
-	if err := tr.Click("Copy saved message"); err != nil {
-		t.Fatal(err)
-	}
-	if got := tr.Clipboard(); got != saved {
-		t.Fatalf("full saved copy = %q, want exact raw source", got)
-	}
-	if err := tr.Click("← Back to history"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if a.contactHistoryFull != nil || !a.detailIs(detailHistory) || ct.Draft != "draft survives full history" {
-		t.Fatalf("back from full history = full:%+v detail:%q draft:%q", a.contactHistoryFull, a.activeDetail(), ct.Draft)
 	}
 }
 
@@ -762,57 +536,6 @@ func TestConversationFileLinkOwnersAndErrors(t *testing.T) {
 	}
 }
 
-func TestSavedMessageFileLinkKeepsOriginalDirectory(t *testing.T) {
-	a, ct := appReadingTestApp(t)
-	root := t.TempDir()
-	if err := os.WriteFile(filepath.Join(root, "saved.md"), []byte("saved"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	ct.SessionWorkingDir = t.TempDir()
-	a.contactHistoryFull = &contactHistoryFull{Origin: historyOriginSaved, SessionID: "old-session", EntryID: "old-entry", From: "contact", Text: "旧消息[文件](saved.md)。", WorkingDirectory: root}
-	var paths []string
-	a.openPath = func(path string) error { paths = append(paths, path); return nil }
-	tr := ui.NewTester(a.view, 1040, 720)
-	if err := tr.Click("文件"); err != nil {
-		t.Fatal(err)
-	}
-	if len(paths) != 1 || paths[0] != filepath.Join(root, "saved.md") {
-		t.Fatalf("historical paths=%q", paths)
-	}
-}
-
-func TestIssueResultMarkdownLinksUseRunAndFileOrigins(t *testing.T) {
-	a, ct := appReadingTestApp(t)
-	runRoot, documentRoot := t.TempDir(), t.TempDir()
-	for _, root := range []string{runRoot, documentRoot} {
-		if err := os.WriteFile(filepath.Join(root, "target.md"), []byte(root), 0600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	ct.SessionWorkingDir = t.TempDir()
-	a.aux = "issue-result"
-	a.issueResult = issueResultPage{Open: true, OwnerContactID: ct.ID, Generation: 1,
-		Panel: issueResultPanelState{WorkingDirectory: runRoot, Response: "结果[目标](target.md)。"}}
-	var paths []string
-	a.openPath = func(path string) error { paths = append(paths, path); return nil }
-	tr := ui.NewTester(a.view, 1040, 720)
-	if err := tr.Click("目标"); err != nil {
-		t.Fatal(err)
-	}
-	file := issueResultFile{SessionID: "work-session", TaskID: "task", CallID: "write", Path: filepath.Join(documentRoot, "report.md"), WorkingDirectory: runRoot}
-	key := issueResultFileKey(file)
-	a.issueResult.Panel.Files = []issueResultFile{file}
-	a.issueResult.Panel.ReaderKey, a.issueResult.Panel.InspectFor = key, key
-	a.issueResult.Panel.Inspection = &issueResultFileInspection{Exists: true, Regular: true, Preview: "文件内[目标](target.md)。"}
-	tr.Frame()
-	if err := tr.Click("目标"); err != nil {
-		t.Fatal(err)
-	}
-	if len(paths) != 2 || paths[0] != filepath.Join(runRoot, "target.md") || paths[1] != filepath.Join(documentRoot, "target.md") {
-		t.Fatalf("run/file reader paths=%q", paths)
-	}
-}
-
 func TestSaveFailureAppearanceKeepsReaderSelection(t *testing.T) {
 	for _, locale := range []string{"en", "zh-Hans"} {
 		t.Run(locale, func(t *testing.T) {
@@ -830,7 +553,7 @@ func TestSaveFailureAppearanceKeepsReaderSelection(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if a.localSaveErr != "" || a.rt != nil {
+			if a.localSaveErr != "" || a.pi != nil {
 				t.Fatal("valid isolated-store setup failed")
 			}
 			tr := ui.NewTester(a.view, 1040, 720)
@@ -907,7 +630,7 @@ func TestSaveFailureAppearanceKeepsReaderSelection(t *testing.T) {
 			if got := tr.Clipboard(); got != selected {
 				t.Fatalf("AC-SAVE1: failed-save error reflow lost active reader selection before any stream delta: copied %q, want %q", got, selected)
 			}
-			a.applyEvent(ct, runtimeEventEnvelope{Version: 1, Type: "event", SessionID: "s1", TaskID: "t1", MessageID: "m1", Event: &runtimeEvent{Type: "response_text_delta", ItemID: "a1", Delta: " appended"}})
+			ct.Messages[len(ct.Messages)-1].Text += " appended"
 			tr.Frame()
 			after, _ = ct.list.Visible()
 			tr.SetClipboard("")
@@ -916,7 +639,7 @@ func TestSaveFailureAppearanceKeepsReaderSelection(t *testing.T) {
 			if ct.list.AtEnd() || after != anchor || tr.Clipboard() != selected || a.selectedContact() != ct || ct.ID != ownerID || ct.SessionID != sessionID || ct.Draft != draft {
 				t.Fatal("AC-SAVE1: controlled stream delta changed active selection, anchor or owned draft")
 			}
-			if got, err := os.ReadFile(goodPath); err != nil || string(got) != string(goodBytes) || a.rt != nil {
+			if got, err := os.ReadFile(goodPath); err != nil || string(got) != string(goodBytes) || a.pi != nil {
 				t.Fatal("controlled stream changed original saved file or launched Runtime")
 			}
 		})

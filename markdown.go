@@ -169,9 +169,13 @@ func markdownReader(c *ui.Context, source string, options markdownReaderOptions)
 	}
 	st.opts.Theme = normalizedMarkdownTheme(c, options.Theme)
 	st.opts.LinkElement = nil
-	if !options.PlainText && options.LinkScope != "" && options.LinkFocus != nil {
+	if !options.PlainText {
 		scope, focus, returnTarget, returnSeen := options.LinkScope, options.LinkFocus, options.LinkReturn, options.LinkReturnSeen
 		st.opts.LinkElement = func(c *ui.Context, block, inline int, dest string, element ui.Element) {
+			element.Underline()
+			if scope == "" || focus == nil {
+				return
+			}
 			value := markdownLinkTarget{Scope: scope, Block: block, Inline: inline, Dest: dest}
 			element.FocusBind(focus, value)
 			if returnTarget != nil && *returnTarget == value {
@@ -468,6 +472,12 @@ func normalizedMarkdownTheme(c *ui.Context, override *markdown.Theme) *markdown.
 	th := markdown.Theme{}
 	if override != nil {
 		th = *override
+	}
+	if th.Link == (markdown.Color{}) {
+		th.Link = ui.Hex("#2D6A4A")
+		if c.Theme().Dark {
+			th.Link = ui.Hex("#E0C65C")
+		}
 	}
 	th.FontSize = typeBody
 	th.Font = "system-ui"

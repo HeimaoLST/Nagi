@@ -15,14 +15,11 @@ import (
 // TestPreviewAdjustableLayout is an opt-in headless matrix for the global
 // workbench layout. It is not native drag or native window evidence.
 func TestPreviewAdjustableLayout(t *testing.T) {
-	dir := os.Getenv("SAKI_PREVIEW_DIR")
+	dir := os.Getenv("NAGI_PREVIEW_DIR")
 	if dir == "" {
-		t.Skip("set SAKI_PREVIEW_DIR to write adjustable-layout previews")
+		t.Skip("set NAGI_PREVIEW_DIR to write adjustable-layout previews")
 	}
-	if err := loadAvatar(); err != nil {
-		t.Fatal(err)
-	}
-	if os.Getenv("SAKI_PREVIEW_RESPONSIVE_ONLY") != "1" {
+	if os.Getenv("NAGI_PREVIEW_RESPONSIVE_ONLY") != "1" {
 		scenes := []string{"closed", "open", "dragged"}
 		for _, dark := range []bool{false, true} {
 			theme := "light"
@@ -33,7 +30,9 @@ func TestPreviewAdjustableLayout(t *testing.T) {
 				for _, size := range []struct{ width, height int }{{1040, 720}, {1380, 900}, {960, 640}, {720, 640}} {
 					a, ct := workspaceTestApp(t)
 					a.windowWidth = size.width
-					a.workspaceOpen = scene != "closed"
+					if scene != "closed" {
+						a.openContactProfile(a.selectedID())
+					}
 					if scene == "dragged" && size.width >= 1040 {
 						a.leftPaneWidth = defaultLeftPaneWidth
 						a.rightPaneWidth = maxRightPaneWidth - 82
@@ -78,7 +77,9 @@ func writeResponsiveBoundaryPreviews(t *testing.T, dir string) {
 		a.windowWidth = int(sc.width)
 		a.leftPaneWidth = sc.left
 		a.rightPaneWidth = sc.right
-		a.workspaceOpen = sc.workspaceOpen
+		if sc.workspaceOpen {
+			a.openContactProfile(a.selectedID())
+		}
 		ct.Name = sc.longName
 		tr := ui.NewTester(a.view, int(sc.width), 640)
 		tr.SetLocale(sc.locale)
@@ -94,14 +95,11 @@ func writeResponsiveBoundaryPreviews(t *testing.T, dir string) {
 }
 
 func TestPreviewHeaderGrouping(t *testing.T) {
-	dir := os.Getenv("SAKI_PREVIEW_DIR")
+	dir := os.Getenv("NAGI_PREVIEW_DIR")
 	if dir == "" {
-		t.Skip("set SAKI_PREVIEW_DIR for the bounded header grouping previews")
+		t.Skip("set NAGI_PREVIEW_DIR for the bounded header grouping previews")
 	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := loadAvatar(); err != nil {
 		t.Fatal(err)
 	}
 	const longRole = "Assistant for release engineering, cross-functional verification and runtime diagnostics"
@@ -109,12 +107,7 @@ func TestPreviewHeaderGrouping(t *testing.T) {
 		t.Helper()
 		a, ct := workspaceTestApp(t)
 		a.windowWidth = 960
-		issue := &productIssue{ID: "header-preview", ContactID: ct.ID, Goal: "header grouping preview", Status: issueStatusInProgress}
-		ct.Issues = []*productIssue{issue}
-		ct.SelectedIssueID = issue.ID
 		ct.Role = role
-		ct.issueNavigation().DetailID = issue.ID
-		a.setWorkspaceOpen(true)
 		if setup != nil {
 			setup(a, ct)
 		}
@@ -132,11 +125,11 @@ func TestPreviewHeaderGrouping(t *testing.T) {
 		writePreviewPNG(t, filepath.Join(dir, name), img)
 	}
 	write("header-960-light-ready.png", "en", "Assistant", false, func(a *appModel, _ *contact) {
-		a.rt = &runtimeClient{}
+		a.pi = presentationPiHost(a)
 		a.runtimeStatus = runtimeStateReady
 	})
 	write("header-960-dark-not-connected.png", "en", "Assistant", true, func(a *appModel, _ *contact) {
-		cfg := connectionConfig{Version: 1, API: connectionAPIChatCompletions, Endpoint: "http://example.test/v1", APIKey: "fixture", Model: "fixture", ContextTokens: 1000, OutputTokens: 100, WorkingDirectory: "/Users/you/Workspace/saki-run", MaxActiveTasks: 2}
+		cfg := connectionConfig{API: connectionAPIChatCompletions, Endpoint: "http://example.test/v1", APIKey: "fixture", Model: "fixture", ContextTokens: 1000, OutputTokens: 100, WorkingDirectory: "/Users/you/Workspace/saki-run", MaxActiveTasks: 2}
 		a.runtimeStatus = runtimeStateExited
 		a.runtimeStage = "Connection configuration"
 		a.connectionSaved = &cfg
@@ -144,15 +137,15 @@ func TestPreviewHeaderGrouping(t *testing.T) {
 		a.ensureConnectionForm()
 	})
 	write("header-960-dark-en-XA-long-role.png", "en-XA", longRole, true, func(a *appModel, _ *contact) {
-		a.rt = &runtimeClient{}
+		a.pi = presentationPiHost(a)
 		a.runtimeStatus = runtimeStateReady
 	})
 }
 
 func TestPreviewUnifiedTitleBar(t *testing.T) {
-	dir := os.Getenv("SAKI_PREVIEW_DIR")
+	dir := os.Getenv("NAGI_PREVIEW_DIR")
 	if dir == "" {
-		t.Skip("set SAKI_PREVIEW_DIR for headless titlebar previews")
+		t.Skip("set NAGI_PREVIEW_DIR for headless titlebar previews")
 	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
@@ -163,24 +156,17 @@ func TestPreviewUnifiedTitleBar(t *testing.T) {
 			theme = "dark"
 		}
 		for _, size := range []struct{ width, height int }{{720, 640}, {960, 640}, {1040, 720}, {1180, 720}} {
-			for _, scene := range []string{"chat", "work", "history", "settings", "reading"} {
+			for _, scene := range []string{"chat", "settings", "profile"} {
 				a := testApp(t)
 				a.windowWidth = size.width
 				a.workspaceOpen = false
 				a.selectedContact().Draft = "Keep the draft while navigating."
 				switch scene {
-				case "work":
-					a.openDetail(detailWork)
-				case "history":
-					a.openDetail(detailHistory)
 				case "settings":
 					a.openSettingsTab(settingsTabAppearance, settingsSourceRail)
-				case "reading":
-					a.openDetail(detailHistory)
-					a.contactHistoryFull = &contactHistoryFull{
-						SessionID: "saved-preview", EntryID: "entry-preview", From: "contact", Date: "Nov 10",
-						Text: "# Saved message\n\nLong history stays in the reading page, with a return to its original History entry.\n\n```go\nfmt.Println(\"Nagi\")\n```",
-					}
+				case "profile":
+					a.selectedContact().Archived = true
+					a.openContactProfile(a.selectedID())
 				}
 				tr := ui.NewTester(a.view, size.width, size.height)
 				tr.SetDark(dark)
@@ -196,7 +182,7 @@ func TestWorkbenchRoleScenesKeepActionsReachable(t *testing.T) {
 	for _, locale := range []string{"en", "zh-Hans"} {
 		for _, dark := range []bool{false, true} {
 			for _, size := range [][2]int{{720, 640}, {1040, 720}} {
-				for _, scene := range []string{"conversation", "work", "contact", "task-context", "model", "model-loading", "model-error"} {
+				for _, scene := range []string{"conversation", "contact", "task-context"} {
 					t.Run(fmt.Sprintf("%s/%s/%dx%d/dark%t", scene, locale, size[0], size[1], dark), func(t *testing.T) {
 						a, ct := taskContextApp(t)
 						a.windowWidth, a.workspaceOpen = size[0], false
@@ -210,11 +196,8 @@ func TestWorkbenchRoleScenesKeepActionsReachable(t *testing.T) {
 						switch scene {
 						case "conversation":
 							ct.Messages = []*message{{Key: "user-visual", Kind: msgUser, Text: "A retained user message.\n中文换行。"}, {Key: "reply-visual", Kind: msgContact, Text: "A retained reply with **original emphasis**, a [link](https://example.invalid) and `code`."}}
-						case "work":
-							a.workspaceOpen, a.detail = true, detailWork
-							label = msgs.IssueNewIssue()
 						case "contact":
-							a.openSettingsTab(settingsTabContact, settingsSourceProfile)
+							a.openContactProfile(ct.ID)
 							label = msgs.WorkFolderChoose()
 						case "task-context":
 							a.openConversationTaskContext()
@@ -222,26 +205,13 @@ func TestWorkbenchRoleScenesKeepActionsReachable(t *testing.T) {
 							ct.Context.formName = "A draft name 中文"
 							ct.Context.formPath = "/tmp/Unicode folder/未读取的 draft source.svg"
 							label = msgs.TaskContextChooseFile()
-						case "model":
-							a.aux = "model"
-							a.modelForm = newModelSelection(selectionTarget(), selectionCatalog())
-							a.modelForm.Draft.Model = "provider/long-model-value-that-must-remain-an-exact-draft"
-							label = msgs.ModelUpdateModel()
-						case "model-loading":
-							a.aux = "model"
-							a.modelPanelMessage = modelPanelMessageReading
-							label = msgs.ModelClose()
-						case "model-error":
-							a.aux = "model"
-							a.modelPanelError, a.modelPanelErrorDetail = modelPanelErrorReadFailed, "A retained, long local readback diagnostic 中文. It remains unchanged while this renderer is measured."
-							label = msgs.ModelClose()
 						}
 						tr := ui.NewTester(a.view, size[0], size[1])
 						tr.SetLocale(locale)
 						tr.SetDark(dark)
 						tr.Frame()
 						name := fmt.Sprintf("workbench-%s-%s-%dx%d-dark%t", scene, locale, size[0], size[1], dark)
-						if directory := os.Getenv("SAKI_PREVIEW_DIR"); directory != "" {
+						if directory := os.Getenv("NAGI_PREVIEW_DIR"); directory != "" {
 							writePreviewPNG(t, filepath.Join(directory, name+"-top.png"), tr.Image())
 						}
 						var target ui.Rect
@@ -258,13 +228,13 @@ func TestWorkbenchRoleScenesKeepActionsReachable(t *testing.T) {
 						if !visible {
 							t.Fatalf("%s is not reachable with a full target in %s: %v", label, name, tr.Texts())
 						}
-						if ct.Draft != "  keep this unsaved text 中文  " || ct.Instructions != "  exact profile instruction\n第二行  " || a.selectedContact() != ct || a.rt != nil || ct.pendingSend != nil {
+						if ct.Draft != "  keep this unsaved text 中文  " || ct.Instructions != "  exact profile instruction\n第二行  " || a.selectedContact() != ct || a.pi != nil || ct.pendingSend != nil {
 							t.Fatal("presentation changed owner/drafts or admitted execution")
 						}
 						if scene == "task-context" && (ct.Context.formName != "A draft name 中文" || ct.Context.formPath != "/tmp/Unicode folder/未读取的 draft source.svg" || ct.Context.count() != 0) {
 							t.Fatal("rendering read, saved or normalized a file draft")
 						}
-						if directory := os.Getenv("SAKI_PREVIEW_DIR"); directory != "" {
+						if directory := os.Getenv("NAGI_PREVIEW_DIR"); directory != "" {
 							writePreviewPNG(t, filepath.Join(directory, name+"-reachable.png"), tr.Image())
 							data, _ := json.MarshalIndent(map[string]any{"label": label, "target": target, "width": size[0], "height": size[1], "owner_and_drafts_retained": true}, "", "  ")
 							if err := os.WriteFile(filepath.Join(directory, name+".json"), data, 0600); err != nil {

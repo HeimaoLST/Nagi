@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -83,7 +84,7 @@ func (s *connectionSettings) ResetDraft() {
 
 func (s *connectionSettings) validated() (connectionConfig, bool) {
 	d := s.Draft
-	config := connectionConfig{Version: 1, API: d.API, Endpoint: strings.TrimSpace(d.Endpoint),
+	config := connectionConfig{API: d.API, Endpoint: strings.TrimSpace(d.Endpoint),
 		APIKey: d.APIKey, Model: strings.TrimSpace(d.Model), WorkingDirectory: strings.TrimSpace(d.WorkingDirectory)}
 	numericErrors := map[string]string{}
 	for _, f := range []struct {
@@ -133,7 +134,11 @@ func (s *connectionSettings) validated() (connectionConfig, bool) {
 
 // The host owns persistence, process lifetime and UI-thread updates. Rendering
 // and editing this form never starts a model request or writes configuration.
-func (s *connectionSettings) view(c *ui.Context, t *ui.Theme, actions connectionSettingsActions) {
+func (s *connectionSettings) view(c *ui.Context, t *ui.Theme, actions connectionSettingsActions, inputBorder ...ui.Color) {
+	border := c.Theme().Border
+	if len(inputBorder) > 0 {
+		border = inputBorder[0]
+	}
 	msgs := locales.In(c.Locale())
 	if s.focusField != "" {
 		s.editOpen[s.focusField] = true
@@ -168,9 +173,9 @@ func (s *connectionSettings) view(c *ui.Context, t *ui.Theme, actions connection
 			if s.Errors["API"] != "" {
 				ui.Text(c, connectionFieldErrorText(msgs, "API", s.Errors["API"])).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Danger)
 			}
-			s.editableField(c, t, "Endpoint", msgs.ConnectionFieldEndpoint(), msgs.ConnectionEndpointPlaceholder(), &s.Draft.Endpoint, false, msgs.ConnectionEndpointHint())
-			s.editableField(c, t, "APIKey", msgs.ConnectionFieldAPIKey(), msgs.ConnectionAPIKeyPlaceholder(), &s.Draft.APIKey, true, msgs.ConnectionAPIKeyHint())
-			s.editableField(c, t, "Model", msgs.ConnectionFieldModel(), msgs.ConnectionModelPlaceholder(), &s.Draft.Model, false, "")
+			s.editableField(c, t, "Endpoint", msgs.ConnectionFieldEndpoint(), msgs.ConnectionEndpointPlaceholder(), &s.Draft.Endpoint, false, msgs.ConnectionEndpointHint(), border)
+			s.editableField(c, t, "APIKey", msgs.ConnectionFieldAPIKey(), msgs.ConnectionAPIKeyPlaceholder(), &s.Draft.APIKey, true, msgs.ConnectionAPIKeyHint(), border)
+			s.editableField(c, t, "Model", msgs.ConnectionFieldModel(), msgs.ConnectionModelPlaceholder(), &s.Draft.Model, false, "", border)
 			ui.Column(c).Key("connection-limits").FillWidth().Gap(8).Children(func() {
 				limitsLabel := msgs.ConnectionCapacityShow()
 				limitsTooltip := msgs.ConnectionCapacityShowTooltip()
@@ -194,9 +199,9 @@ func (s *connectionSettings) view(c *ui.Context, t *ui.Theme, actions connection
 				}).Label(msgs.ConnectionCapacityDisclosure()).Padding(0)
 				if s.LimitsOpen {
 					ui.Text(c, msgs.ConnectionLimitsHint()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
-					s.field(c, t, "ContextTokens", msgs.ConnectionFieldContextTokens(), "131072", &s.Draft.ContextTokens, false, "")
-					s.field(c, t, "OutputTokens", msgs.ConnectionFieldOutputTokens(), "8192", &s.Draft.OutputTokens, false, "")
-					s.field(c, t, "MaxActiveTasks", msgs.ConnectionFieldMaxActiveTasks(), "2", &s.Draft.Slots, false, "")
+					s.field(c, t, "ContextTokens", msgs.ConnectionFieldContextTokens(), "131072", &s.Draft.ContextTokens, false, "", border)
+					s.field(c, t, "OutputTokens", msgs.ConnectionFieldOutputTokens(), "8192", &s.Draft.OutputTokens, false, "", border)
+					s.field(c, t, "MaxActiveTasks", msgs.ConnectionFieldMaxActiveTasks(), "2", &s.Draft.Slots, false, "", border)
 				} else {
 					ui.Text(c, s.valueSource(msgs)).FontSize(typeMeta).TextColor(t.TextMuted)
 					for _, field := range []struct{ key, label, value string }{
@@ -240,7 +245,7 @@ func (s *connectionSettings) view(c *ui.Context, t *ui.Theme, actions connection
 					}
 				})
 				if s.editOpen["WorkingDirectory"] {
-					s.field(c, t, "WorkingDirectory", msgs.ConnectionFieldWorkingDirectory(), msgs.ConnectionWorkingDirectoryPlaceholder(), &s.Draft.WorkingDirectory, false, "")
+					s.field(c, t, "WorkingDirectory", msgs.ConnectionFieldWorkingDirectory(), msgs.ConnectionWorkingDirectoryPlaceholder(), &s.Draft.WorkingDirectory, false, "", border)
 				} else if message := s.Errors["WorkingDirectory"]; message != "" {
 					ui.Text(c, connectionFieldErrorText(msgs, "WorkingDirectory", message)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Danger)
 				}
@@ -311,12 +316,16 @@ func (s *connectionSettings) valueSource(msgs locales.Messages) string {
 	return msgs.ConnectionValueDraft()
 }
 
-func (s *connectionSettings) editableField(c *ui.Context, t *ui.Theme, key, label, placeholder string, value *string, secret bool, helper string) {
+func (s *connectionSettings) editableField(c *ui.Context, t *ui.Theme, key, label, placeholder string, value *string, secret bool, helper string, inputBorder ...ui.Color) {
+	border := c.Theme().Border
+	if len(inputBorder) > 0 {
+		border = inputBorder[0]
+	}
 	msgs := locales.In(c.Locale())
 	ui.Column(c).Key("connection-editor-" + key).FillWidth().Gap(8).Children(func() {
 		if !s.HasSaved {
 			s.editOpen[key] = true
-			s.field(c, t, key, label, placeholder, value, secret, helper)
+			s.field(c, t, key, label, placeholder, value, secret, helper, border)
 			return
 		}
 		open := s.editOpen[key]
@@ -347,18 +356,22 @@ func (s *connectionSettings) editableField(c *ui.Context, t *ui.Theme, key, labe
 			}
 		})
 		if open {
-			s.field(c, t, key, label, placeholder, value, secret, helper)
+			s.field(c, t, key, label, placeholder, value, secret, helper, border)
 		} else if message := s.Errors[key]; message != "" {
 			ui.Text(c, connectionFieldErrorText(msgs, key, message)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Danger)
 		}
 	})
 }
 
-func (s *connectionSettings) field(c *ui.Context, t *ui.Theme, key, label, placeholder string, value *string, secret bool, helper string) {
+func (s *connectionSettings) field(c *ui.Context, t *ui.Theme, key, label, placeholder string, value *string, secret bool, helper string, inputBorder ...ui.Color) {
+	border := c.Theme().Border
+	if len(inputBorder) > 0 {
+		border = inputBorder[0]
+	}
 	ui.Column(c).Key("connection-field-" + key).FillWidth().Gap(4).Children(func() {
 		input := func() ui.Element {
 			c.Key("input-" + key)
-			field := preferenceInput(c, value, s.Errors[key] != "").Label(label).Placeholder(placeholder).Disabled(s.Busy)
+			field := preferenceInput(c, value, s.Errors[key] != "", border).Label(label).Placeholder(placeholder).Disabled(s.Busy)
 			if secret {
 				field.Password()
 			}
@@ -383,6 +396,14 @@ func (s *connectionSettings) field(c *ui.Context, t *ui.Theme, key, label, place
 			ui.Text(c, connectionFieldErrorText(locales.In(c.Locale()), key, message)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Danger)
 		}
 	})
+}
+
+func positiveInt(value string) (int, error) {
+	parsed, err := strconv.Atoi(strings.TrimSpace(value))
+	if err != nil || parsed <= 0 {
+		return 0, fmt.Errorf("not a positive integer")
+	}
+	return parsed, nil
 }
 
 func (s *connectionSettings) slotStep(c *ui.Context, delta int) {
@@ -411,31 +432,22 @@ const (
 	connectionCheckFields = "check-fields"
 	validationNumeric     = "numeric"
 
-	connStatusSaving             = "saving"
-	connStatusSavedApplied       = "saved-applied"
-	connStatusChecking           = "checking-saved"
-	connStatusApplied            = "applied"
-	connStatusTesting            = "testing"
-	connStatusTestCompleted      = "test-completed"
-	connStatusSavedStoreFailed   = "saved-store-failed"
-	connErrorTestFailed          = "test-failed"
-	connErrorSavedNeedsRepair    = "saved-needs-repair"
-	connErrorApplyConfig         = "apply-config"
-	connErrorHelperMissing       = "helper-missing"
-	connErrorPrepare             = "prepare"
-	connErrorStart               = "start"
-	connErrorExitedBeforeReady   = "exited-before-ready"
-	connErrorNotReady            = "not-ready"
-	connErrorNotExposed          = "not-exposed"
-	connErrorExitedWhileChecking = "exited-while-validating"
-	connErrorExitedDuringInstall = "exited-during-validation"
-	connBlockedModelOp           = "model-op"
-	connBlockedApplying          = "applying"
-	connBlockedShutdown          = "shutdown"
-	connBlockedNoSaved           = "no-saved"
-	connBlockedStore             = "store"
-	connBlockedActiveWork        = "active-work"
-	connBlockedUntrustedIssue    = "untrusted-issue"
+	connStatusSaving           = "saving"
+	connStatusSavedApplied     = "saved-applied"
+	connStatusChecking         = "checking-saved"
+	connStatusApplied          = "applied"
+	connStatusTesting          = "testing"
+	connStatusTestCompleted    = "test-completed"
+	connStatusSavedStoreFailed = "saved-store-failed"
+	connErrorTestFailed        = "test-failed"
+	connErrorSavedNeedsRepair  = "saved-needs-repair"
+	connErrorApplyConfig       = "apply-config"
+	connBlockedApplying        = "applying"
+	connBlockedShutdown        = "shutdown"
+	connBlockedNoSaved         = "no-saved"
+	connBlockedStore           = "store"
+	connBlockedActiveWork      = "active-work"
+	connBlockedUntrustedIssue  = "untrusted-issue"
 )
 
 func noticeArg(args []string, index int) string {
@@ -475,8 +487,6 @@ func connectionFieldErrorText(msgs locales.Messages, key, kind string) string {
 			return msgs.ValidationLessThanContext()
 		}
 		return msgs.ValidationPositive()
-	case connectionValidationVersion:
-		return msgs.ValidationVersion()
 	case validationNumeric:
 		return msgs.ValidationNumeric()
 	default:
@@ -505,9 +515,7 @@ func connectionStatusText(msgs locales.Messages, kind string, args []string) str
 
 func connectionErrorIsKind(kind string) bool {
 	switch kind {
-	case connErrorTestFailed, connErrorApplyConfig, connErrorHelperMissing, connErrorPrepare, connErrorStart,
-		connErrorExitedBeforeReady, connErrorNotReady, connErrorNotExposed, connErrorExitedWhileChecking,
-		connErrorExitedDuringInstall, connStatusSavedStoreFailed, connErrorSavedNeedsRepair:
+	case connErrorTestFailed, connErrorApplyConfig, connStatusSavedStoreFailed, connErrorSavedNeedsRepair:
 		return true
 	default:
 		return false
@@ -522,24 +530,8 @@ func connectionErrorText(msgs locales.Messages, kind, detail string) string {
 		return msgs.ConnectionErrorSavedNeedsRepair()
 	case connErrorApplyConfig:
 		return msgs.RecoveryConnectionApplyFailed()
-	case connErrorHelperMissing:
-		return msgs.RecoveryRuntimeMissing()
-	case connErrorPrepare:
-		return msgs.RecoveryRuntimeStartFailed()
-	case connErrorStart:
-		return msgs.RecoveryRuntimeStartFailed()
 	case connStatusSavedStoreFailed:
 		return msgs.RecoveryLocalSaveFailed()
-	case connErrorExitedBeforeReady:
-		return msgs.ConnectionErrorExitedBeforeReady()
-	case connErrorNotReady:
-		return msgs.ConnectionErrorNotReady()
-	case connErrorNotExposed:
-		return msgs.ConnectionErrorNotExposed()
-	case connErrorExitedWhileChecking:
-		return msgs.ConnectionErrorExitedWhileValidating()
-	case connErrorExitedDuringInstall:
-		return msgs.ConnectionErrorExitedDuringValidation()
 	default:
 		if detail != "" {
 			return kind + " " + detail
@@ -550,8 +542,6 @@ func connectionErrorText(msgs locales.Messages, kind, detail string) string {
 
 func connectionBlockedText(msgs locales.Messages, kind string) string {
 	switch kind {
-	case connBlockedModelOp:
-		return msgs.ConnectionBlockedModelOp()
 	case connBlockedApplying:
 		return msgs.ConnectionBlockedApplying()
 	case connBlockedShutdown:

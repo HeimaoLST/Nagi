@@ -7,14 +7,13 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
-	"reflect"
+	"slices"
 	"strings"
-	"sync"
 	"testing"
-	"time"
 
 	"github.com/egoist/mygo/ui"
 
+	"github.com/HeimaoLST/Nagi/internal/pi"
 	"github.com/HeimaoLST/Nagi/locales"
 )
 
@@ -22,14 +21,14 @@ func TestViewRendersBothThemes(t *testing.T) {
 	a := testApp(t)
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	for _, want := range []string{"Saki", "Mio", "Ren", "Send", "History", "Settings"} {
+	for _, want := range []string{"Nagi", "Mio", "Ren", "Send", "Settings"} {
 		if !tr.HasText(want) {
 			t.Fatalf("light frame is missing %q", want)
 		}
 	}
 	tr.SetDark(true)
 	tr.Frame()
-	if !tr.HasText("Saki") {
+	if !tr.HasText("Nagi") {
 		t.Fatal("dark frame should render the selected contact")
 	}
 	tr.SetDark(false)
@@ -38,69 +37,53 @@ func TestViewRendersBothThemes(t *testing.T) {
 
 func TestTitleBarKeepsNavigationOutsideNativeControls(t *testing.T) {
 	for _, width := range []int{720, 899, 900, 901, 960, 1040, 1179, 1180, 1181} {
-		for _, scene := range []string{"chat", "collapsed", "work", "history", "profile", "settings", "reading"} {
-			t.Run(fmt.Sprintf("%d/%s", width, scene), func(t *testing.T) {
-				a := testApp(t)
-				a.windowWidth = width
-				a.workspaceOpen = false
-				ct := a.selectedContact()
-				ct.Draft = "keep the titlebar draft"
-				labels := []string{"History", "Composer for Saki", "Chat model", "Send"}
-				closeLabel := ""
-				switch scene {
-				case "collapsed":
-					a.railCollapsed = true
-					labels = append(labels, "Contacts")
-				case "work":
-					a.openDetail(detailWork)
-					closeLabel = "Close workspace"
-					if width < avatarRailBreakpoint {
-						closeLabel = "Back to chat"
+		for _, right := range []float32{0, 138} {
+			for _, scene := range []string{"chat", "collapsed", "profile", "settings"} {
+				t.Run(fmt.Sprintf("%d/right-%g/%s", width, right, scene), func(t *testing.T) {
+					a := testApp(t)
+					a.windowWidth = width
+					a.workspaceOpen = false
+					ct := a.selectedContact()
+					ct.Draft = "keep the titlebar draft"
+					labels := []string{"Composer for Nagi", "Chat model", "Send"}
+					closeLabel := ""
+					switch scene {
+					case "collapsed":
+						a.railCollapsed = true
+						labels = append(labels, locales.In("en").RailContactsTitle())
+					case "profile":
+						a.openContactProfile(ct.ID)
+						closeLabel = "Close profile"
+						labels = []string{closeLabel}
+					case "settings":
+						a.openSettingsTab(settingsTabAppearance, settingsSourceComposer)
+						closeLabel = "← Back to workbench"
+						labels = []string{closeLabel, "General"}
 					}
-					labels = []string{closeLabel, "New task"}
-					if width >= avatarRailBreakpoint {
-						labels = append(labels, "Chat model", "Send")
+					tr := ui.NewTester(a.view, width, 640)
+					bar := ui.TitleBar{Height: 38, Left: 80, Right: right}
+					tr.SetTitleBar(bar)
+					for _, label := range labels {
+						r, ok := tr.Find(label)
+						overlapsControls := r.Y < bar.Height && (r.X < bar.Left || r.X+r.W > float32(width)-bar.Right)
+						if !ok || r.W <= 0 || r.H <= 0 || r.X < 0 || r.X+r.W > float32(width) || r.Y < 0 || overlapsControls || r.Y+r.H > 640 {
+							t.Fatalf("%q collides with native controls or leaves the window: visible=%v bounds=%+v", label, ok, r)
+						}
+						if label == "Send" && (r.W < 32 || r.H < 32) {
+							t.Fatalf("Send target was clipped: %+v", r)
+						}
 					}
-				case "history":
-					a.openDetail(detailHistory)
-					closeLabel = "Close history"
-					labels = []string{closeLabel}
-				case "profile":
-					a.openDetail(detailProfile)
-					closeLabel = "Close profile"
-					labels = []string{closeLabel}
-				case "settings":
-					a.openSettingsTab(settingsTabAppearance, settingsSourceComposer)
-					closeLabel = "← Back to workbench"
-					labels = []string{closeLabel, "General"}
-				case "reading":
-					a.openDetail(detailHistory)
-					a.contactHistoryFull = &contactHistoryFull{SessionID: "saved", EntryID: "entry", Text: "# Saved message\n\nReadable history."}
-					closeLabel = "Close full message"
-					labels = []string{closeLabel, "Copy saved message"}
-				}
-				tr := ui.NewTester(a.view, width, 640)
-				bar := ui.TitleBar{Height: 38, Left: 80, Right: 138}
-				tr.SetTitleBar(bar)
-				for _, label := range labels {
-					r, ok := tr.Find(label)
-					if !ok || r.W <= 0 || r.H <= 0 || r.X < 0 || r.X+r.W > float32(width) || r.Y < bar.Height || r.Y+r.H > 640 {
-						t.Fatalf("%q collides with native controls or leaves the window: visible=%v bounds=%+v", label, ok, r)
+					if closeLabel != "" {
+						if err := tr.Click(closeLabel); err != nil {
+							t.Fatal(err)
+						}
+						tr.Frame()
+						if a.settingsOpen || a.workspaceOpen || ct.Draft != "keep the titlebar draft" {
+							t.Fatalf("return did not preserve its route and draft: settings=%v detail=%q draft=%q", a.settingsOpen, a.activeDetail(), ct.Draft)
+						}
 					}
-					if label == "Send" && (r.W < 32 || r.H < 32) {
-						t.Fatalf("Send target was clipped: %+v", r)
-					}
-				}
-				if closeLabel != "" {
-					if err := tr.Click(closeLabel); err != nil {
-						t.Fatal(err)
-					}
-					tr.Frame()
-					if a.settingsOpen || a.contactHistoryFull != nil || (scene != "reading" && a.workspaceOpen) || ct.Draft != "keep the titlebar draft" {
-						t.Fatalf("return did not preserve its route and draft: settings=%v detail=%q reading=%v draft=%q", a.settingsOpen, a.activeDetail(), a.contactHistoryFull != nil, ct.Draft)
-					}
-				}
-			})
+				})
+			}
 		}
 	}
 }
@@ -112,13 +95,13 @@ func TestTitleBarChangesKeepComposerAndSettingsFocus(t *testing.T) {
 	tr.SetFocused(true)
 	bar := ui.TitleBar{Height: 38, Left: 80}
 	tr.SetTitleBar(bar)
-	focusComposer(t, tr, "Composer for Saki")
+	focusComposer(t, tr, "Composer for Nagi")
 	tr.Type("draft before fullscreen")
-	work, _ := tr.Find("Work")
+	before, present := tr.Find("Composer for Nagi")
 	tr.SetTitleBar(ui.TitleBar{})
-	fullWork, ok := tr.Find("Work")
-	if !ok || fullWork.Y != work.Y-bar.Height {
-		t.Fatalf("fullscreen did not release the native control band: before=%+v after=%+v", work, fullWork)
+	after, ok := tr.Find("Composer for Nagi")
+	if !present || !ok || after.W <= 0 || after.H <= 0 {
+		t.Fatalf("composer geometry missing after native metrics changed: before=%+v after=%+v", before, after)
 	}
 	if _, active := tr.TextCaret(); !active {
 		t.Fatal("changing native titlebar metrics lost the composer caret")
@@ -153,19 +136,19 @@ func TestMinimumWindowRenders(t *testing.T) {
 	a := testApp(t)
 	tr := ui.NewTester(a.view, 960, 640)
 	tr.Frame()
-	if !tr.HasText("Send") || !tr.HasText("Saki") {
+	if !tr.HasText("Send") || !tr.HasText("Nagi") {
 		t.Fatal("chat should render at the 960x640 minimum")
 	}
-	a.openSettings()
+	a.openSettingsTab(settingsTabAppearance, settingsSourceRail)
 	tr.Frame()
-	if !tr.HasText("Save changes") {
-		t.Fatal("settings should render at the 960x640 minimum")
+	if !tr.HasText(locales.In("en").SettingsGeneral()) {
+		t.Fatal("global Settings should render at the 960x640 minimum")
 	}
 	a.closeSettings()
 	tr.Frame()
 	a.addDefaultContact()
 	tr.Frame()
-	if !tr.HasText("New contact 1") {
+	if !tr.HasText(locales.In("en").NewContactName(1)) {
 		t.Fatal("the default contact should render at the 960x640 minimum")
 	}
 }
@@ -190,7 +173,7 @@ func TestComposerCompositionDoesNotSendUntilCommit(t *testing.T) {
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.SetFocused(true)
 	tr.Frame()
-	focusComposer(t, tr, "Composer for Saki")
+	focusComposer(t, tr, "Composer for Nagi")
 	before := len(a.selectedContact().Messages)
 	tr.Compose("你好 Saki", 4)
 	tr.Frame()
@@ -235,7 +218,7 @@ func TestDraftSwitchThroughTester(t *testing.T) {
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.SetFocused(true)
 	tr.Frame()
-	if err := tr.Click("Contact Mio"); err != nil {
+	if err := tr.Click(locales.In("en").AvatarContactLabel("Mio")); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
@@ -248,14 +231,14 @@ func TestDraftSwitchThroughTester(t *testing.T) {
 	if a.contacts[1].Draft != "draft for mio" {
 		t.Fatalf("Mio draft = %q", a.contacts[1].Draft)
 	}
-	if err := tr.Click("Contact Saki"); err != nil {
+	if err := tr.Click(locales.In("en").AvatarContactLabel("Nagi")); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
 	if a.selected != 0 {
-		t.Fatal("did not switch to Saki")
+		t.Fatal("did not switch to Nagi")
 	}
-	focusComposer(t, tr, "Composer for Saki")
+	focusComposer(t, tr, "Composer for Nagi")
 	tr.Type("saki draft")
 	tr.Frame()
 	if a.contacts[0].Draft != "saki draft" {
@@ -264,7 +247,7 @@ func TestDraftSwitchThroughTester(t *testing.T) {
 	if a.contacts[1].Draft != "draft for mio" {
 		t.Fatal("typing for Saki changed Mio's draft")
 	}
-	if err := tr.Click("Contact Mio"); err != nil {
+	if err := tr.Click(locales.In("en").AvatarContactLabel("Mio")); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
@@ -317,12 +300,12 @@ func TestAddContactFocusesComposerAndSends(t *testing.T) {
 	}
 
 	// First creation.
-	if err := tr.Click("Add contact"); err != nil {
+	if err := tr.Click(locales.In("en").AvatarAddContact()); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
 	first := a.selectedContact()
-	if first.Name != "New contact 1" || first.Role != "Assistant" {
+	if first.Name != locales.In("en").NewContactName(1) || first.Role != "Assistant" {
 		t.Fatalf("created contact = %q role=%q", first.Name, first.Role)
 	}
 	if !tr.Focused("Composer for " + first.Name) {
@@ -340,7 +323,7 @@ func TestAddContactFocusesComposerAndSends(t *testing.T) {
 	assertExistingUnchanged("after first send")
 
 	// Second creation through the same UI path, again with no extra click.
-	if err := tr.Click("Add contact"); err != nil {
+	if err := tr.Click(locales.In("en").AvatarAddContact()); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
@@ -348,7 +331,7 @@ func TestAddContactFocusesComposerAndSends(t *testing.T) {
 	if second == first {
 		t.Fatal("the second Add contact must create a new contact")
 	}
-	if second.Name != "New contact 2" || second.Role != "Assistant" {
+	if second.Name != locales.In("en").NewContactName(2) || second.Role != "Assistant" {
 		t.Fatalf("second contact = %q role=%q", second.Name, second.Role)
 	}
 	if !tr.Focused("Composer for " + second.Name) {
@@ -374,16 +357,12 @@ func TestAddContactFocusesComposerAndSends(t *testing.T) {
 	assertExistingUnchanged("after second send")
 }
 
-// TestSettingsFieldsReceiveInputAndDoNotStealComposerFocus verifies through
-// the UI, not private flags, that a Settings field really takes typed input
-// while the composer keeps its draft, and that Tab plus further frames do not
-// pull focus back to the composer.
-func TestSettingsFieldsReceiveInputAndDoNotStealComposerFocus(t *testing.T) {
+func TestBotProfileFieldsReceiveInputAndPreserveComposerDraft(t *testing.T) {
 	a := testApp(t)
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.SetFocused(true)
 	tr.Frame()
-	if err := tr.Click("Add contact"); err != nil {
+	if err := tr.Click(locales.In("en").AvatarAddContact()); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
@@ -393,32 +372,27 @@ func TestSettingsFieldsReceiveInputAndDoNotStealComposerFocus(t *testing.T) {
 	if ct.Draft != "keep me" {
 		t.Fatalf("composer draft = %q", ct.Draft)
 	}
-	if err := tr.Click("Contact profile"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if err := tr.Click("Edit full profile"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
+	msgs := locales.In("en")
+	openBotProfileFromRail(t, tr, msgs.AvatarContactLabel(ct.Name))
+	editor := a.profileEditorFor(ct.ID)
 	tr.Frame() // a second frame must not re-focus the composer
 	if tr.Focused("Composer for " + ct.Name) {
 		t.Fatal("opening Settings must not keep composer focus")
 	}
 
 	// Explicitly focus the Settings name field through the UI and type.
-	nameBefore := a.contactProfile.Draft.Name
-	if err := tr.Click("Contact name"); err != nil {
+	nameBefore := editor.Draft.Name
+	if err := tr.Click(msgs.FieldNameAccessible()); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if !tr.Focused("Contact name") {
+	if !tr.Focused(msgs.FieldNameAccessible()) {
 		t.Fatal("clicking the Settings name field should focus it")
 	}
 	tr.Type(" edited")
 	tr.Frame()
-	if a.contactProfile.Draft.Name != nameBefore+" edited" {
-		t.Fatalf("Settings name field did not receive the typed input: %q", a.contactProfile.Draft.Name)
+	if editor.Draft.Name != nameBefore+" edited" {
+		t.Fatalf("Bot name field did not receive the typed input: %q", editor.Draft.Name)
 	}
 	if ct.Draft != "keep me" {
 		t.Fatalf("typing in Settings changed the composer draft: %q", ct.Draft)
@@ -437,8 +411,8 @@ func TestSettingsFieldsReceiveInputAndDoNotStealComposerFocus(t *testing.T) {
 	if ct.Draft != "keep me" {
 		t.Fatalf("typing after Tab leaked into the composer: %q", ct.Draft)
 	}
-	if a.contactProfile.Draft.Name != nameBefore+" edited" {
-		t.Fatalf("typing after Tab changed the name field: %q", a.contactProfile.Draft.Name)
+	if editor.Draft.Name != nameBefore+" edited" {
+		t.Fatalf("typing after Tab changed the name field: %q", editor.Draft.Name)
 	}
 }
 
@@ -456,12 +430,13 @@ func TestSettingsSavePreservesMessagesHistoryAndDraft(t *testing.T) {
 	beforeHist := len(ct.History)
 	beforeLast := ct.Messages[beforeMsgs-1].Text
 
-	a.openSettings()
-	draft := a.contactProfile.Draft
+	a.openContactProfile(ct.ID)
+	editor := a.profileEditorFor(ct.ID)
+	draft := editor.Draft
 	draft.Name = "Saki Renamed"
 	draft.Purpose = "Keeps earlier decisions in view."
 	draft.Workspace = t.TempDir()
-	if !a.saveContactProfileDraft(draft, false) {
+	if !a.saveContactProfileDraftFor(ct.ID, draft, false) {
 		t.Fatal("settings save should succeed with a name")
 	}
 	if ct.Name != "Saki Renamed" {
@@ -477,9 +452,8 @@ func TestSettingsSavePreservesMessagesHistoryAndDraft(t *testing.T) {
 		t.Fatalf("saving settings cleared the draft: %q", ct.Draft)
 	}
 
-	a.openSettings()
-	a.contactProfile.Draft.Name = "  "
-	if a.saveContactProfileDraft(a.contactProfile.Draft, false) || a.contactProfile.Errors["Name"] == "" {
+	editor.Draft.Name = "  "
+	if a.saveContactProfileDraftFor(ct.ID, editor.Draft, false) || editor.Errors["Name"] == "" {
 		t.Fatal("empty settings name must be rejected")
 	}
 	if ct.Name != "Saki Renamed" {
@@ -487,69 +461,25 @@ func TestSettingsSavePreservesMessagesHistoryAndDraft(t *testing.T) {
 	}
 }
 
-// TestSourceRevealScrollsOnceAndCanMoveAway covers the regression: with a
-// long transcript the reveal requests one list scroll to the entry, keeps
-// the highlight, and a later manual scroll can move the source out of view.
-func TestSourceRevealScrollsOnceAndCanMoveAway(t *testing.T) {
-	a := testApp(t)
-	ct := a.selectedContact()
-	for i := 0; i < 60; i++ {
-		a.seq++
-		ct.Messages = append(ct.Messages, &message{ID: a.seq, Kind: msgContact, Text: "filler line"})
-	}
-	a.selectContact(0)
-	a.viewInConversation("saki-h1")
-	a.viewInConversation("saki-h2") // the target is the second revealed entry
-	if a.scrollTo != 1 || a.scrollTo != a.revealIndex() {
-		t.Fatalf("reveal should request the entry row once: scrollTo=%d revealIndex=%d", a.scrollTo, a.revealIndex())
-	}
-	tr := ui.NewTester(a.view, 1040, 720)
-	tr.Frame()
-	if a.scrollTo != -1 {
-		t.Fatalf("scroll request should be consumed by one frame, got %d", a.scrollTo)
-	}
-	if !tr.HasText("Keep Saki as the Rust agent core") {
-		t.Fatal("the revealed source should be rendered in the list")
-	}
-	first, last := ct.list.Visible()
-	tr.Scroll(400, 300, 0, 4000)
-	tr.Frame()
-	first2, last2 := ct.list.Visible()
-	if first2 == first && last2 == last {
-		t.Fatalf("manual scroll should move the visible window: %d..%d", first, last)
-	}
-	if a.scrollTo != -1 {
-		t.Fatal("manual scrolling must not re-issue the reveal scroll")
-	}
-	if a.highlight != "saki-h2" {
-		t.Fatal("the highlight must survive a manual scroll away")
-	}
-}
-
 // TestPreviewImages writes headless preview PNGs for design review. It is
-// inert unless SAKI_PREVIEW_DIR points at a scratch directory.
+// inert unless NAGI_PREVIEW_DIR points at a scratch directory.
 func TestPreviewImages(t *testing.T) {
-	dir := os.Getenv("SAKI_PREVIEW_DIR")
+	dir := os.Getenv("NAGI_PREVIEW_DIR")
 	if dir == "" {
-		t.Skip("set SAKI_PREVIEW_DIR to write native preview PNGs")
+		t.Skip("set NAGI_PREVIEW_DIR to write native preview PNGs")
 	}
 	for _, dark := range []bool{false, true} {
 		theme := "light"
 		if dark {
 			theme = "dark"
 		}
-		for _, scene := range []string{"chat", "new-contact", "settings", "sources", "history"} {
+		for _, scene := range []string{"chat", "new-contact", "settings"} {
 			a := testApp(t)
 			switch scene {
 			case "new-contact":
 				a.addDefaultContact()
 			case "settings":
-				a.openSettings()
-			case "sources":
-				a.openSources(5)
-			case "history":
-				a.openHistory()
-				a.historyQuery = "memory"
+				a.openSettingsTab(settingsTabAppearance, settingsSourceRail)
 			}
 			tr := ui.NewTester(a.view, 1040, 720)
 			tr.SetDark(dark)
@@ -563,7 +493,7 @@ func TestPreviewImages(t *testing.T) {
 	for _, scene := range []string{"chat", "settings"} {
 		a := testApp(t)
 		if scene == "settings" {
-			a.openSettings()
+			a.openSettingsTab(settingsTabAppearance, settingsSourceRail)
 		}
 		tr := ui.NewTester(a.view, 960, 640)
 		tr.Frame()
@@ -583,94 +513,36 @@ func writePreviewPNG(t *testing.T, path string, img image.Image) {
 	}
 }
 
-// TestLiveTaskStatesRenderWithoutWaitingConflict drives the real event
-// application and the view together: accepted-but-not-started, started,
-// streaming, tool activity, and completed must not show contradictory text.
 func TestLiveTaskStatesRenderWithoutWaitingConflict(t *testing.T) {
-	ct := &contact{
-		ID: "bound", Name: "Saki", Role: "Assistant", SessionID: "s1", Loaded: true,
-		Status: statusReady, SendState: sendAccepted, ActiveTaskID: "t1", Draft: "hello",
-	}
-	a := &appModel{
-		demo: false, runtimeStatus: runtimeStateReady, scrollTo: -1,
-		workspaceOpen: true, windowWidth: 1040,
-		contacts: []*contact{ct},
-	}
+	a, ct, _ := piRunStartedTestApp(t)
+	a.windowWidth = 1040
+	ct.SubmittedDraft = "hello"
+	event := pi.ProductExecutionEvent{ConversationID: ct.SessionID, ExecutionID: ct.ActiveTaskID}
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	openConversationWorkPanel(t, tr)
-	if !tr.HasText("Accepted; waiting for the runtime to start.") {
-		t.Fatal("accepted task should show the pre-start waiting state")
-	}
-
-	a.applyEvent(ct, runtimeEventEnvelope{
-		Version: 1, Type: "event", SessionID: "s1", TaskID: "t1", MessageID: "m1",
-		Event: &runtimeEvent{Type: "task_started"},
-	})
+	applyTestProductEvent(t, a, "execution.started", event)
 	tr.Frame()
-	if tr.HasText("Accepted; waiting for the runtime to start.") {
-		t.Fatal("started task must not keep the pre-start waiting text")
+	if ct.SendState != sendAccepted || !tr.HasText("hello") {
+		t.Fatal("admitted Pi run did not show the submitted message")
 	}
-	if !tr.HasText("Current work") || !tr.HasText("Working") {
-		t.Fatal("started task should show the current work state")
-	}
-
-	a.applyEvent(ct, runtimeEventEnvelope{
-		Version: 1, Type: "event", SessionID: "s1", TaskID: "t1", MessageID: "m1",
-		Event: &runtimeEvent{Type: "response_text_delta", ItemID: "a1", Delta: "Hel"},
-	})
+	event.Text = "Hel"
+	applyTestProductEvent(t, a, "execution.textDelta", event)
 	tr.Frame()
-	if !tr.HasText("Hel") {
-		t.Fatal("streaming delta should render in the conversation")
+	if !tr.HasText("Hel") || ct.ActiveTaskID != event.ExecutionID {
+		t.Fatal("Pi stream did not render while its run remained active")
 	}
-	if !tr.HasText("Current work") || !tr.HasText("Working") {
-		t.Fatal("streaming a message must not end the work state")
-	}
-	a.applyEvent(ct, runtimeEventEnvelope{
-		Version: 1, Type: "event", SessionID: "s1", TaskID: "t1", MessageID: "m1",
-		Event: &runtimeEvent{Type: "response_text", ItemID: "a1", Text: "Hello"},
-	})
+	event.State = "completed"
+	applyTestProductEvent(t, a, "execution.settled", event)
+	ct.Messages = []*message{{Key: "saved-user", Kind: msgUser, Text: "hello", History: true}, {Key: "saved-reply", Kind: msgContact, Text: "Hello", History: true}}
 	tr.Frame()
-	if !tr.HasText("Hello") || tr.HasText("Hel\n") {
-		t.Fatal("final text should replace the delta projection")
-	}
-
-	a.applyEvent(ct, runtimeEventEnvelope{
-		Version: 1, Type: "event", SessionID: "s1", TaskID: "t1", MessageID: "m1",
-		Event: &runtimeEvent{Type: "tool_started", CallID: "k1", Name: "read", Arguments: `{"path":"probe.txt"}`},
-	})
-	tr.Frame()
-	if !tr.HasText("read") || !tr.HasText("Running") {
-		t.Fatal("tool activity should render in the work panel with its running state")
-	}
-	a.applyEvent(ct, runtimeEventEnvelope{
-		Version: 1, Type: "event", SessionID: "s1", TaskID: "t1", MessageID: "m1",
-		Event: &runtimeEvent{Type: "tool_finished", CallID: "k1", Name: "read", Output: []byte(`{"content":"marker"}`)},
-	})
-	tr.Frame()
-	if !tr.HasText("marker") {
-		t.Fatal("tool output should render in the work panel")
-	}
-
-	a.applyEvent(ct, runtimeEventEnvelope{
-		Version: 1, Type: "event", SessionID: "s1", TaskID: "t1", MessageID: "m1",
-		Event: &runtimeEvent{Type: "task_finished", Status: "completed"},
-	})
-	tr.Frame()
-	if ct.SendState != sendIdle || ct.ActiveTaskID != "" {
-		t.Fatalf("finished state = %+v", ct)
-	}
-	if !tr.HasText("Finished") || len(ct.Messages) != 1 {
-		t.Fatalf("completed work/messages = %+v / %+v", ct.Works, ct.Messages)
-	}
-	if tr.HasText("Accepted; waiting for the runtime to start.") || tr.HasText("Working") {
-		t.Fatal("completed task must not keep waiting/working text")
+	if ct.SendState != sendIdle || ct.ActiveTaskID != "" || !tr.HasText("Hello") || len(ct.Messages) != 2 || ct.Messages[1].Streaming {
+		t.Fatalf("settlement left contradictory chat state: %+v", ct.Messages)
 	}
 }
 
 func TestLiveSendUnknownAfterDisconnectSaysRestart(t *testing.T) {
-	ct := &contact{ID: "bound", Name: "Saki", SessionID: "s1", Loaded: true, SendState: sendUnknown}
-	a := &appModel{demo: false, runtimeStatus: runtimeStateExited, scrollTo: -1, contacts: []*contact{ct}}
+	ct := &contact{ID: "bound", Name: "Nagi", SessionID: "s1", PiBinding: recoveryConversationBinding("bound", "/tmp", "s1"), Loaded: true, SendState: sendUnknown}
+	a := &appModel{demo: false, runtimeStatus: runtimeStateExited, contacts: []*contact{ct}}
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
 	if !tr.HasText(locales.In("en").SendDisconnectedState()) {
@@ -680,19 +552,29 @@ func TestLiveSendUnknownAfterDisconnectSaysRestart(t *testing.T) {
 		t.Fatal("disconnected client must not offer an ineffective Reload instruction")
 	}
 
-	a.runtimeStatus = runtimeStateReady
-	a.rt = &runtimeClient{}
-	tr.Frame()
-	if !tr.HasText(locales.In("en").SendUnknownState()) {
-		t.Fatal("a live connection should keep the Reload instruction")
+	cases := []struct {
+		name, cause string
+		clearSend   bool
+		status      string
+	}{
+		{name: "protocol", cause: "protocol"},
+		{name: "exit", cause: "exit"},
+		{name: "no-detail", cause: "exit", clearSend: true},
+		{name: "distinct-details", cause: "exit", status: "Retained transport status diagnostic"},
 	}
-
 	for _, locale := range []string{"en", "zh-Hans"} {
-		for _, cause := range []string{"protocol", "exit"} {
-			t.Run(locale+"/"+cause, func(t *testing.T) {
-				a, ct, issue := disconnectedRecoveryTestApp(t, cause)
+		for _, tc := range cases {
+			t.Run(locale+"/"+tc.name, func(t *testing.T) {
+				a, ct, issue := disconnectedRecoveryTestApp(t, tc.cause)
+				if tc.clearSend {
+					ct.clearSendError()
+				}
+				if tc.status != "" {
+					ct.StatusDetail, ct.StatusDetailKind = tc.status, "status-connection-lost"
+				}
 				rawSend, rawStatus := ct.SendError, ct.StatusDetail
 				taskID, sessionID, draft := ct.ActiveTaskID, ct.SessionID, ct.Draft
+				record := recoveryRecordSnapshot(t, ct)
 				tr := ui.NewTester(a.view, 1040, 1200)
 				tr.SetLocale(locale)
 				tr.SetFocused(true)
@@ -701,47 +583,48 @@ func TestLiveSendUnknownAfterDisconnectSaysRestart(t *testing.T) {
 				if !tr.HasText(msgs.SendDisconnectedState()) || tr.HasText(msgs.SendUnknownState()) || tr.HasText(msgs.ReloadAction()) || tr.HasText(msgs.SendNoticeConnectionLost()) {
 					t.Fatalf("disconnected producer state offered unusable Reload guidance: %v", tr.Texts())
 				}
-				if tr.HasText(rawSend) {
-					t.Fatal("diagnostic shown before explicit disclosure")
+				diagnostics := []string{}
+				for _, diagnostic := range []string{rawSend, rawStatus} {
+					if diagnostic == "" || slices.Contains(diagnostics, diagnostic) {
+						continue
+					}
+					diagnostics = append(diagnostics, diagnostic)
+					if tr.HasText(diagnostic) {
+						t.Fatalf("diagnostic shown before explicit disclosure: %q", diagnostic)
+					}
 				}
-				if err := tr.Click(msgs.DetailsAction()); err != nil {
-					t.Fatal(err)
+				composer := msgs.ComposerLabel(ct.Name)
+				texts := tr.Texts()
+				composerIndex := slices.Index(texts, composer)
+				if composerIndex < 0 || slices.Contains(texts[composerIndex+1:], msgs.DetailsAction()) != (len(diagnostics) != 0) {
+					t.Fatalf("composer disclosure does not match the retained diagnostics: %v", texts)
 				}
-				tr.Frame()
-				// The startup notice may precede the contact notice in the full app.
-				if !tr.HasText(rawSend) {
-					if err := tr.Click(msgs.DetailsAction()); err != nil {
+				if len(diagnostics) != 0 {
+					if err := tr.Click(composer); err != nil {
 						t.Fatal(err)
 					}
+					if !tr.Focused(composer) {
+						t.Fatalf("conversation composer did not take focus: %v", tr.Texts())
+					}
+					for i := 0; i < 60 && !tr.Focused(msgs.DetailsAction()); i++ {
+						tr.Key(0, ui.KeyTab)
+					}
+					if !tr.Focused(msgs.DetailsAction()) {
+						t.Fatalf("unknown-delivery disclosure was unreachable from the composer: %v", tr.Texts())
+					}
+					tr.Key(0, ui.KeySpace)
 					tr.Frame()
+					for _, diagnostic := range diagnostics {
+						if !tr.HasText(diagnostic) {
+							t.Fatalf("composer disclosure did not reveal %q: %v", diagnostic, tr.Texts())
+						}
+					}
 				}
-				if !tr.HasText(rawSend) {
-					t.Fatal("unknown-delivery diagnostic cannot be disclosed")
-				}
-				if ct.SendError != rawSend || ct.StatusDetail != rawStatus || ct.SendState != sendUnknown || ct.ActiveTaskID != taskID || ct.SessionID != sessionID || ct.Draft != draft || ct.Messages[0].Text != "original message" || ct.History[0].Text != "original history" || a.rt.nextID != 0 || issue.Executions[0].Status != issueExecutionUnknown {
+				if ct.SendError != rawSend || ct.StatusDetail != rawStatus || ct.SendState != sendUnknown || ct.ActiveTaskID != taskID || ct.SessionID != sessionID || ct.Draft != draft || ct.Messages[0].Text != "original message" || ct.History[0].Text != "original history" || a.contactHistoryInFlight != 0 || issue.Executions[0].Status != issueExecutionUnknown {
 					t.Fatal("disclosure changed unknown state/raw records/history or issued a request")
 				}
-				a.runtimeStatus = runtimeStateReady
-				a.runtimeErr, a.runtimeErrKind, a.runtimeStage, a.runtimeHintKind = "", "", "", ""
-				tr = ui.NewTester(a.view, 1040, 1200)
-				tr.SetLocale(locale)
-				tr.SetFocused(true)
-				tr.Frame()
-				if !tr.HasText(msgs.SendUnknownState()) || tr.HasText(msgs.SendDisconnectedState()) {
-					t.Fatal("live unknown state lost usable Reload guidance")
-				}
-				if _, ok := tr.Find(msgs.ReloadAction()); !ok {
-					t.Fatal("live Reload control missing")
-				}
-				for i := 0; i < 70 && !tr.Focused(msgs.ReloadAction()); i++ {
-					tr.Key(0, ui.KeyTab)
-					tr.Frame()
-				}
-				if !tr.Focused(msgs.ReloadAction()) {
-					t.Fatal("live Reload is not keyboard reachable")
-				}
-				if ct.SendError != rawSend || ct.StatusDetail != rawStatus || ct.SendState != sendUnknown || ct.Draft != draft || a.rt.nextID != 0 {
-					t.Fatal("live recovery guidance replayed or rewrote the retained state")
+				if recoveryRecordSnapshot(t, ct) != record || a.submissionInFlight != 0 {
+					t.Fatal("disclosure changed the retained receipt or submitted work")
 				}
 			})
 		}
@@ -752,137 +635,22 @@ func disconnectedRecoveryTestApp(t *testing.T, cause string) (*appModel, *contac
 	t.Helper()
 	a, ct := workspaceTestApp(t)
 	a.workspaceOpen = false
-	a.runtimeHandshake = true
-	a.rt = &runtimeClient{}
-	a.runtimeMaxActiveTasks = 2
-	a.runtimeCapabilitiesLoaded = true
-	ct.ActiveTaskID = "chat-task"
-	ct.SendState = sendAccepted
-	ct.Status = statusWorking
+	a.runtimeStatus = runtimeStateExited
+	a.runtimeErrKind = runtimeNoticeConnectionLost
+	applyProductExecution(ct, &pi.ProductExecution{ExecutionID: "chat-task", State: "unknown"})
 	ct.Draft = "retained unsent draft"
 	ct.Messages = []*message{{Kind: msgUser, Text: "original message"}}
 	ct.History = []historyEntry{{ID: "history-original", Text: "original history"}}
-	issue := &productIssue{ID: "recovery-issue", ContactID: ct.ID, Goal: "Retain original goal", Status: issueStatusInProgress, WorkSessionID: "work-session", Work: issueWorkSession{Loaded: true, ActiveTaskID: "issue-task", SendState: sendAccepted}, Executions: []*issueExecution{{ID: "execution", SessionID: "work-session", TaskID: "issue-task", Status: issueExecutionRunning, Prompt: "original run prompt"}}}
+	issue := &productIssue{ID: "recovery-issue", ContactID: ct.ID, Goal: "Retain original goal", Status: issueStatusInProgress, RequirementsRevision: 1}
+	attachIssueToolTestExecution(issue)
+	issue.Executions[0].Status, issue.Executions[0].Prompt = issueExecutionUnknown, "original run prompt"
+	issue.Work = issueWorkSession{Loaded: true, SendState: sendUnknown}
 	ct.Issues = []*productIssue{issue}
-	ct.Works = []*workItem{{TaskID: "chat-task", State: workRunning}, {TaskID: "issue-task", State: workRunning}}
-	switch cause {
-	case "protocol":
-		a.protocolFailed("unsupported runtime protocol version 2")
-	case "exit":
-		a.applyRuntimeExit(nil)
-	default:
-		t.Fatal("unsupported fixture cause")
+	if cause == "protocol" {
+		a.runtimeErr = "Pi worker protocol error"
 	}
-	if ct.SendState != sendUnknown || ct.SendError == "" || issue.Work.SendState != sendUnknown || issue.Work.SendError == "" || issue.Executions[0].Status != issueExecutionUnknown {
-		t.Fatal("actual producer did not establish unknown diagnostics")
-	}
+	issue.Work.setSendError("Pi disconnected; activity outcome is unknown.", "send-uncertain", "")
 	return a, ct, issue
-}
-
-// runtimePreviewApp builds a runtime-backed model state without starting a
-// process. It is a headless layout fixture, not an online model or native
-// window capture.
-func runtimePreviewApp(scene string) *appModel {
-	bound := &contact{
-		ID: "saki", Name: "Saki", Role: "Assistant", SessionID: "preview-session", Loaded: true,
-		Status: statusReady, WorkLabel: "Preparing a reply",
-		Purpose: "Keep earlier decisions in view.", Instructions: "Cite earlier decisions when they shape an answer.",
-		Workspace: "/Users/you/Workspace/saki",
-		Messages: []*message{
-			{Key: "u1", Kind: msgUser, Text: "Use read to inspect README.md and report its first heading. Do not write files."},
-			{Key: "a1", Kind: msgContact, Text: "The first heading is # Saki."},
-		},
-		Works: []*workItem{{
-			TaskID: "task-preview", MessageID: "message-preview", Prompt: "Use read to inspect README.md and report its first heading.",
-			State: workCompleted,
-			Tools: []*workTool{{
-				CallID: "read-1", Name: "read", Args: `{"path":"README.md"}`,
-				Output:  `{"content":"# Saki\n\nA small agent runtime with a shared core.","start_line":1,"end_line":2}`,
-				Started: true, Finished: true,
-			}},
-		}},
-	}
-	unbound := &contact{ID: "mio", Name: "Mio", Role: "Assistant", Draft: "draft for Mio"}
-	a := &appModel{
-		demo: false, runtimeStatus: runtimeStateReady, workspaceOpen: true, windowWidth: 1040,
-		scrollTo: -1, contacts: []*contact{bound, unbound}, selected: 0,
-	}
-	switch scene {
-	case "runtime-working":
-		bound.Status = statusWorking
-		bound.Work = "Running read"
-		bound.ActiveTaskID = "task-preview"
-		bound.SendState = sendAccepted
-		bound.Messages = []*message{
-			{Key: "u2", Kind: msgUser, Text: "Inspect README.md and summarize the project."},
-		}
-		bound.Works[0].State = workRunning
-		bound.Works[0].Prompt = "Inspect README.md and summarize the project."
-		bound.Works[0].Tools[0].Finished = false
-		bound.Works[0].Tools[0].Output = ""
-	case "runtime-progress":
-		bound.Status = statusWorking
-		bound.Work = "Waiting for model"
-		bound.ActiveTaskID = "task-preview"
-		bound.SendState = sendAccepted
-		bound.Messages = append(bound.Messages, &message{
-			Key: "live:task-preview:progress", Kind: msgContact,
-			Text: "I found the first heading; checking the rest of the file before summarizing.",
-		})
-		bound.Works[0].State = workRunning
-		bound.Works[0].Prompt = "Inspect README.md and summarize the project."
-	case "runtime-empty":
-		a.contacts = []*contact{{ID: "saki", Name: "Saki", Role: "Assistant", Status: statusReady}}
-		a.selected = 0
-	case "runtime-error":
-		bound.Status = statusAttention
-		bound.StatusDetail = "Task failed: model_error: upstream request failed"
-		bound.Works[0].State = workFailed
-		bound.Works[0].Detail = bound.StatusDetail
-	case "runtime-settings":
-		a.openSettings()
-	case "runtime-history":
-		a.openHistory()
-	}
-	return a
-}
-
-func TestPreviewRuntimeStates(t *testing.T) {
-	dir := os.Getenv("SAKI_PREVIEW_DIR")
-	if dir == "" {
-		t.Skip("set SAKI_PREVIEW_DIR to write runtime-backed headless previews")
-	}
-	if err := loadAvatar(); err != nil {
-		t.Fatal(err)
-	}
-	write := func(scene string, width, height int, dark bool) {
-		theme := "light"
-		if dark {
-			theme = "dark"
-		}
-		a := runtimePreviewApp(scene)
-		a.windowWidth = width
-		tr := ui.NewTester(a.view, width, height)
-		tr.SetDark(dark)
-		tr.Frame()
-		writePreviewPNG(t, filepath.Join(dir,
-			fmt.Sprintf("headless-%s-%s-%dx%d.png", theme, scene, width, height)), tr.Image())
-	}
-	for _, dark := range []bool{false, true} {
-		for _, size := range []struct {
-			width, height int
-		}{{1040, 720}, {960, 640}, {1380, 900}} {
-			for _, scene := range []string{"runtime-chat", "runtime-working", "runtime-progress", "runtime-empty"} {
-				write(scene, size.width, size.height, dark)
-			}
-		}
-		for _, scene := range []string{"runtime-error", "runtime-settings", "runtime-history"} {
-			write(scene, 1040, 720, dark)
-		}
-		// Overlay proof at 900; the native minimum is now 720, so this
-		// presentation is reachable in the real window.
-		write("runtime-working", 900, 640, dark)
-	}
 }
 
 func TestToolFailureIsVisibleBeforeDetails(t *testing.T) {
@@ -897,15 +665,11 @@ func TestToolFailureIsVisibleBeforeDetails(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			ct := &contact{ID: "saki", Name: "Saki", Role: "Assistant", Loaded: true}
-			ct.Works = []*workItem{{
-				TaskID: "t1", State: workRunning,
-				Tools: []*workTool{{CallID: "k1", Name: "bash", Args: `{"command":"false"}`, Output: tc.output, Started: true, Finished: true}},
-			}}
-			a := &appModel{demo: false, runtimeStatus: runtimeStateReady, scrollTo: -1, workspaceOpen: true, windowWidth: 1040, contacts: []*contact{ct}}
+			ct := &contact{ID: "nagi", Name: "Nagi", Role: "Assistant", Loaded: true}
+			ct.Messages = []*message{{ID: 1, Kind: msgActivity, ToolName: "bash", ToolArgs: `{"command":"false"}`, ToolOutput: tc.output}}
+			a := &appModel{runtimeStatus: runtimeStateReady, windowWidth: 1040, contacts: []*contact{ct}}
 			tr := ui.NewTester(a.view, 1040, 720)
 			tr.Frame()
-			openConversationWorkPanel(t, tr)
 			if !tr.HasText(tc.want) || !tr.HasText("normal text") && !tr.HasText("still working") {
 				t.Fatalf("failure summary not visible: %v", tr.Texts())
 			}
@@ -921,7 +685,8 @@ func TestToolFailureIsVisibleBeforeDetails(t *testing.T) {
 }
 
 func TestContactRailControlsStayVisibleAtNarrowWidths(t *testing.T) {
-	a, _ := workspaceTestApp(t)
+	a, ct := workspaceTestApp(t)
+	ct.Name = "Cedar"
 	a.workspaceOpen = false
 	a.detail = ""
 	for _, width := range []int{1040, 960} {
@@ -932,7 +697,12 @@ func TestContactRailControlsStayVisibleAtNarrowWidths(t *testing.T) {
 		if limit != defaultLeftPaneWidth {
 			t.Fatalf("%d rail width = %v", width, limit)
 		}
-		for _, label := range []string{"Add contact", "Contact scope", "Active"} {
+		for _, removed := range []string{"Nagi", "Contact scope", "Active", "Archived", "All"} {
+			if bounds, ok := tr.Find(removed); ok && bounds.W > 0 && bounds.H > 0 && bounds.X+bounds.W <= limit {
+				t.Fatalf("redundant sidebar control %q is still shown", removed)
+			}
+		}
+		for _, label := range []string{locales.In("en").AvatarAddContact(), locales.In("en").SearchContacts(), "Settings"} {
 			r, ok := tr.Find(label)
 			if !ok || r.W <= 0 || r.H <= 0 || r.X < 0 || r.X+r.W > limit || r.Y < 0 || r.Y+r.H > 720 {
 				t.Fatalf("%dx720 contact rail %q out of rail: ok=%v rect=%+v", width, label, ok, r)
@@ -941,7 +711,7 @@ func TestContactRailControlsStayVisibleAtNarrowWidths(t *testing.T) {
 	}
 }
 
-func TestComposerModelPopoverAndInlineContextReturnFocus(t *testing.T) {
+func TestComposerInlineContextReturnFocus(t *testing.T) {
 	a := testApp(t)
 	ct := a.selectedContact()
 	ct.Context.items = []taskContextItem{
@@ -950,92 +720,30 @@ func TestComposerModelPopoverAndInlineContextReturnFocus(t *testing.T) {
 	}
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	if err := tr.Click("Chat model"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if !a.composerModelOpen || a.mainPageActive() {
-		t.Fatalf("conversation model aux=%q panel=%q inline=%v", a.aux, a.composerPanel, a.composerInlineAux())
-	}
-	if !tr.HasText("This context has no Runtime session yet") {
-		t.Fatalf("inline model panel missing actual target state: %v", tr.Texts())
-	}
-	tr.Key(0, ui.KeyEscape)
-	tr.Frame()
-	if a.composerModelOpen || !tr.Focused("Chat model") {
-		t.Fatalf("model close = aux=%q panel=%q focused=%v", a.aux, a.composerPanel, tr.Focused("Chat model"))
-	}
 
-	if err := tr.Click("Task context: 2"); err != nil {
+	if err := tr.Click(contextLabelForTest(2)); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if a.aux != "task-context" || !a.composerInlineAux() || !tr.HasText("Chat: Saki") || !tr.HasText("资料一") {
+	if a.aux != "task-context" || !a.composerInlineAux() || !tr.HasText("Chat: Nagi") || !tr.HasText("资料一") {
 		t.Fatalf("inline context = aux=%q panel=%q texts=%v", a.aux, a.composerPanel, tr.Texts())
 	}
-	if err := tr.Click("Close task context"); err != nil {
+	if err := tr.Click(locales.In("en").CloseTaskContext()); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if a.aux != "" || a.composerPanel != "" || !tr.Focused("Task context: 2") {
-		t.Fatalf("context close = aux=%q panel=%q focused=%v", a.aux, a.composerPanel, tr.Focused("Task context: 2"))
+	if a.aux != "" || a.composerPanel != "" || !tr.Focused(contextLabelForTest(2)) {
+		t.Fatalf("Materials close = aux=%q panel=%q focused=%v", a.aux, a.composerPanel, tr.Focused(contextLabelForTest(2)))
 	}
 
-	// A model open request refused by an active model transaction must not
-	// expose a model panel flag while the context panel remains the owner.
-	for _, reject := range []struct {
-		name  string
-		set   func(*appModel)
-		clear func(*appModel)
-	}{
-		{name: "model-busy", set: func(a *appModel) { a.modelOpActive = true }, clear: func(a *appModel) { a.modelOpActive = false }},
-		{name: "connection-applying", set: func(a *appModel) { a.connectionApplying = true }, clear: func(a *appModel) { a.connectionApplying = false }},
-	} {
-		t.Run(reject.name, func(t *testing.T) {
-			a := testApp(t)
-			ct := a.selectedContact()
-			ct.Context.items = []taskContextItem{{ID: "reject-1", Name: "资料", Text: "保留"}}
-			tr := ui.NewTester(a.view, 1040, 720)
-			tr.Frame()
-			if err := tr.Click("Task context: 1"); err != nil {
-				t.Fatal(err)
-			}
-			tr.Frame()
-			reject.set(a)
-			if err := tr.Click("Chat model"); err != nil {
-				t.Fatal(err)
-			}
-			tr.Frame()
-			if a.aux != "task-context" || a.composerPanel != composerPanelContext || !a.composerInlineAux() || tr.HasText("Session model") {
-				t.Fatalf("rejected model open changed owner: aux=%q panel=%q inline=%v texts=%v", a.aux, a.composerPanel, a.composerInlineAux(), tr.Texts())
-			}
-			reject.clear(a)
-			if err := tr.Click("Chat model"); err != nil {
-				t.Fatal(err)
-			}
-			tr.Frame()
-			if !a.composerModelOpen || a.aux != "task-context" || a.composerPanel != composerPanelContext {
-				t.Fatalf("model could not open after rejection cleared: aux=%q panel=%q inline=%v", a.aux, a.composerPanel, a.composerInlineAux())
-			}
-			tr.Key(0, ui.KeyEscape)
-			tr.Frame()
-			if a.composerModelOpen || a.aux != "task-context" || !a.composerInlineAux() {
-				t.Fatal("model Escape also closed the separate task context")
-			}
-
-		})
-	}
-
-	// Switching contacts while the inline model entry is open must drop the
-	// owner-specific panel rather than leaving it attached to the new target.
-	if err := tr.Click("Chat model"); err != nil {
+	if err := tr.Click(contextLabelForTest(2)); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
 	a.selectContact(1)
 	tr.Frame()
-	if a.composerModelOpen || a.aux != "" || a.composerPanel != "" || a.composerInlineAux() {
-		t.Fatalf("contact switch kept stale inline model panel: aux=%q panel=%q texts=%v", a.aux, a.composerPanel, tr.Texts())
+	if a.aux != "" || a.composerPanel != "" || a.composerInlineAux() {
+		t.Fatalf("contact switch kept stale inline context: aux=%q panel=%q texts=%v", a.aux, a.composerPanel, tr.Texts())
 	}
 	a.selectContact(0)
 	tr.Frame()
@@ -1054,7 +762,7 @@ func TestComposerModelPopoverAndInlineContextReturnFocus(t *testing.T) {
 func TestResponsiveComposerAt960WithLoadedSession(t *testing.T) {
 	a, ct := appReadingTestApp(t)
 	a.windowWidth = 960
-	a.workspaceOpen = true
+	a.openContactProfile(a.selectedID())
 	a.leftPaneWidth = 280
 	a.rightPaneWidth = 440
 	a.runtimeStatus = runtimeStateReady
@@ -1069,7 +777,7 @@ func TestResponsiveComposerAt960WithLoadedSession(t *testing.T) {
 	if a.workOverlay() || !a.avatarRailActive() {
 		t.Fatal("960 should use the avatar three-pane layout")
 	}
-	composer, ok := tr.Find("Composer for Saki")
+	composer, ok := tr.Find("Composer for Nagi")
 	if !ok || composer.W <= 0 || composer.W-4 < 440 {
 		t.Fatalf("960 loaded composer=%+v ok=%v content=%g", composer, ok, composer.W-4)
 	}
@@ -1102,11 +810,10 @@ func TestResponsiveComposerAt960WithLoadedSession(t *testing.T) {
 	}
 
 	a.demo = false
-	a.rt = &runtimeClient{}
 	ct.ActiveTaskID = "responsive-loaded-task"
 	ct.Status = statusWorking
 	tr.Frame()
-	composer, ok = tr.Find("Composer for Saki")
+	composer, ok = tr.Find("Composer for Nagi")
 	if !ok || composer.W-4 < 440 {
 		t.Fatalf("960 Stop composer=%+v ok=%v content=%g", composer, ok, composer.W-4)
 	}
@@ -1122,7 +829,7 @@ func TestComposerKeepsModelScopeAndPrimaryActionAtNarrowCenter(t *testing.T) {
 	a.windowWidth = 1040
 	a.leftPaneWidth = defaultLeftPaneWidth
 	a.rightPaneWidth = 358 // leaves the real minimum 480px center beside the work pane
-	a.workspaceOpen = true
+	a.openContactProfile(a.selectedID())
 	ct := a.selectedContact()
 	ct.SessionID = "long-model-session"
 	ct.SessionModel = "provider/very-long-model-name-that-must-not-push-the-action-out-of-the-composer"
@@ -1132,7 +839,7 @@ func TestComposerKeepsModelScopeAndPrimaryActionAtNarrowCenter(t *testing.T) {
 	if a.workOverlay() {
 		t.Fatal("test setup must keep the three-pane center")
 	}
-	composer, ok := tr.Find("Composer for Saki")
+	composer, ok := tr.Find("Composer for Nagi")
 	if !ok || composer.W <= 0 {
 		t.Fatalf("composer bounds missing: %+v ok=%v", composer, ok)
 	}
@@ -1167,11 +874,10 @@ func TestComposerKeepsModelScopeAndPrimaryActionAtNarrowCenter(t *testing.T) {
 	a.demo = false
 	a.runtimeStatus = runtimeStateReady
 	a.runtimeCapabilitiesLoaded = true
-	a.rt = &runtimeClient{}
 	ct.ActiveTaskID = "conversation-task"
 	ct.Status = statusWorking
 	tr.Frame()
-	composer, ok = tr.Find("Composer for Saki")
+	composer, ok = tr.Find("Composer for Nagi")
 	if !ok || composer.W <= 0 {
 		t.Fatalf("composer bounds missing after stop switch: %+v ok=%v", composer, ok)
 	}
@@ -1185,29 +891,12 @@ func TestComposerKeepsModelScopeAndPrimaryActionAtNarrowCenter(t *testing.T) {
 		t.Fatal("running conversation kept the Send action instead of Stop chat")
 	}
 
-	// The same view shows the real send guard reason when the model recovery
-	// state blocks a non-empty draft; it is not hidden only in the button tip.
-	a = testApp(t)
-	a.demo = false
-	a.runtimeStatus = runtimeStateReady
-	a.runtimeCapabilitiesLoaded = true
-	a.rt = &runtimeClient{}
-	ct = a.selectedContact()
-	ct.SessionID = "recovery-session"
-	ct.Loaded = true
-	ct.Draft = "保留并提示原因"
-	a.modelRecovery = map[string]modelRecoveryState{ct.SessionID: modelRecoveryNeedsReload}
-	tr = ui.NewTester(a.view, 1040, 720)
-	tr.Frame()
-	if !tr.HasText("Reload the session before sending") {
-		t.Fatalf("send guard reason missing: %v", tr.Texts())
-	}
 }
 
 // TestPreviewComposerTypography always exercises the composer geometry matrix;
-// it writes the review PNGs only when SAKI_PREVIEW_DIR is set.
+// it writes the review PNGs only when NAGI_PREVIEW_DIR is set.
 func TestPreviewComposerTypography(t *testing.T) {
-	dir := os.Getenv("SAKI_PREVIEW_DIR")
+	dir := os.Getenv("NAGI_PREVIEW_DIR")
 	type scene struct {
 		name, draft string
 		context     int
@@ -1240,7 +929,6 @@ func TestPreviewComposerTypography(t *testing.T) {
 			}
 			if sc.active {
 				a.demo = false
-				a.rt = &runtimeClient{}
 				ct.ActiveTaskID = "composer-preview-task"
 				ct.Status = statusWorking
 			}
@@ -1255,7 +943,7 @@ func TestPreviewComposerTypography(t *testing.T) {
 				}
 				return r
 			}
-			visible("Composer for Saki")
+			visible("Composer for Nagi")
 			visible(contextLabelForTest(sc.context))
 			visible("Chat model")
 			if sc.active {
@@ -1268,7 +956,7 @@ func TestPreviewComposerTypography(t *testing.T) {
 				t.Fatalf("%s: actual model label missing: %v", sc.name, tr.Texts())
 			}
 			if sc.active && sc.width == 720 {
-				composer := visible("Composer for Saki")
+				composer := visible("Composer for Nagi")
 				context := visible(contextLabelForTest(sc.context))
 				model := visible("Chat model")
 				stop := visible("Stop chat")
@@ -1334,10 +1022,7 @@ func TestPreviewComposerTypography(t *testing.T) {
 }
 
 func contextLabelForTest(count int) string {
-	if count > 0 {
-		return fmt.Sprintf("Task context: %d", count)
-	}
-	return "Task context"
+	return locales.In("en").TaskContextCount(count)
 }
 
 func TestComposerZeroContextKeepsIconWithoutZeroText(t *testing.T) {
@@ -1348,21 +1033,21 @@ func TestComposerZeroContextKeepsIconWithoutZeroText(t *testing.T) {
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.SetFocused(true)
 	tr.Frame()
-	if tr.HasText("Task context: 0") {
+	if tr.HasText(locales.In("en").TaskContextTitle() + ": 0") {
 		t.Fatalf("zero context rendered an independent zero label: %v", tr.Texts())
 	}
 	if zero, ok := tr.Find("0"); ok {
 		t.Fatalf("zero context rendered an independent zero: %+v texts=%v", zero, tr.Texts())
 	}
-	button, ok := tr.Find("Task context")
+	button, ok := tr.Find(contextLabelForTest(0))
 	if !ok || button.W < 32 || button.H < 32 {
 		t.Fatalf("zero-context control missing or under 32px: %+v ok=%v", button, ok)
 	}
-	for i := 0; i < 24 && !tr.Focused("Task context"); i++ {
+	for i := 0; i < 24 && !tr.Focused(contextLabelForTest(0)); i++ {
 		tr.Key(0, ui.KeyTab)
 		tr.Frame()
 	}
-	if !tr.Focused("Task context") {
+	if !tr.Focused(contextLabelForTest(0)) {
 		t.Fatalf("zero-context control is not keyboard reachable: %v", tr.Texts())
 	}
 	tr.Key(0, ui.KeyEnter)
@@ -1370,11 +1055,11 @@ func TestComposerZeroContextKeepsIconWithoutZeroText(t *testing.T) {
 	if a.aux != "task-context" || !a.composerInlineAux() {
 		t.Fatalf("keyboard did not open task context: aux=%q panel=%q", a.aux, a.composerPanel)
 	}
-	if err := tr.Click("Close task context"); err != nil {
+	if err := tr.Click(locales.In("en").CloseTaskContext()); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if !tr.Focused("Task context") {
+	if !tr.Focused(contextLabelForTest(0)) {
 		t.Fatalf("task context did not restore keyboard focus: %v", tr.Texts())
 	}
 	ct.Messages = append(ct.Messages, &message{
@@ -1391,7 +1076,7 @@ func TestComposerZeroContextKeepsIconWithoutZeroText(t *testing.T) {
 	}
 	ct.Context.items = []taskContextItem{{ID: "c1", Name: "资料", Text: "已有会话不计入草稿"}}
 	tr.Frame()
-	if !tr.HasText("Task context: 1") {
+	if !tr.HasText(contextLabelForTest(1)) {
 		t.Fatalf("non-zero context count missing: %v", tr.Texts())
 	}
 }
@@ -1442,98 +1127,6 @@ func TestComposerModelsKeepActualSuffixAt720And960(t *testing.T) {
 	}
 }
 
-type recoveryReadRequest struct {
-	ID     string          `json:"id"`
-	Method string          `json:"method"`
-	Params json.RawMessage `json:"params"`
-	reply  chan runtimeResponse
-}
-
-type recoveryMemoryClient struct {
-	client   *runtimeClient
-	requests chan *recoveryReadRequest
-	mu       sync.Mutex
-	methods  []string
-	once     sync.Once
-}
-
-func newRecoveryMemoryClient(t *testing.T) *recoveryMemoryClient {
-	t.Helper()
-	m := &recoveryMemoryClient{client: &runtimeClient{pending: map[string]chan runtimeResponse{}, issued: map[string]bool{}, done: make(chan struct{})}, requests: make(chan *recoveryReadRequest, 16)}
-	m.client.stdin = m
-	t.Cleanup(func() { _ = m.Close() })
-	return m
-}
-
-func (m *recoveryMemoryClient) Write(data []byte) (int, error) {
-	request := &recoveryReadRequest{reply: make(chan runtimeResponse, 1)}
-	if err := json.Unmarshal(data, request); err != nil {
-		return 0, err
-	}
-	m.mu.Lock()
-	m.methods = append(m.methods, request.Method)
-	m.mu.Unlock()
-	select {
-	case m.requests <- request:
-	case <-m.client.done:
-		return 0, errRuntimeDisconnected
-	}
-	select {
-	case response := <-request.reply:
-		m.client.stateMu.Lock()
-		pending := m.client.pending[request.ID]
-		m.client.stateMu.Unlock()
-		if pending == nil {
-			return 0, fmt.Errorf("no pending request %s", request.ID)
-		}
-		pending <- response
-		return len(data), nil
-	case <-m.client.done:
-		return 0, errRuntimeDisconnected
-	}
-}
-
-func (m *recoveryMemoryClient) Close() error { m.once.Do(func() { close(m.client.done) }); return nil }
-
-func (m *recoveryMemoryClient) next(t *testing.T, method string) *recoveryReadRequest {
-	t.Helper()
-	select {
-	case request := <-m.requests:
-		if request.Method != method {
-			t.Fatalf("readback method=%q, want %q", request.Method, method)
-		}
-		return request
-	case <-time.After(5 * time.Second):
-		t.Fatalf("no controlled %s request", method)
-		return nil
-	}
-}
-
-func (m *recoveryMemoryClient) methodNames() []string {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return append([]string(nil), m.methods...)
-}
-
-func (r *recoveryReadRequest) respond(t *testing.T, result any, err *runtimeError) {
-	t.Helper()
-	data, marshalErr := json.Marshal(result)
-	if marshalErr != nil {
-		t.Fatal(marshalErr)
-	}
-	r.reply <- runtimeResponse{ID: r.ID, Result: data, Error: err}
-}
-
-func recoveryCallback(t *testing.T, callbacks <-chan func()) {
-	t.Helper()
-	select {
-	case fn := <-callbacks:
-		fn()
-	case <-time.After(5 * time.Second):
-		t.Fatal("controlled UI completion was not queued")
-	}
-}
-
 func recoveryRecordSnapshot(t *testing.T, ct *contact) string {
 	t.Helper()
 	issues := []any{}
@@ -1569,13 +1162,13 @@ func recoveryComposerTester(a *appModel, width, height int) *ui.Tester {
 	return ui.NewTester(func(c *ui.Context) {
 		a.workTheme = resolveWorkbenchTheme(c.Theme().Dark)
 		c.SetTheme(a.workTheme.Theme)
-		ui.Scroll(c).Fill().Children(func() { a.composer(c, c.Theme()) })
+		ui.Scroll(c).Fill().Children(func() { a.composer(c, c.Theme(), connectionViewHealthy, true) })
 	}, width, height)
 }
 
 func TestRP1ConversationAvailabilityMatrix(t *testing.T) {
 	for _, locale := range []string{"en", "zh-Hans"} {
-		for _, state := range []string{runtimeStateFailed, runtimeStateExited, runtimeStateStarting, "ready-no-client", runtimeStateReady} {
+		for _, state := range []string{runtimeStateFailed, runtimeStateExited, runtimeStateStarting, runtimeStateReady} {
 			for _, diagnostic := range []string{"empty", "protocol", "delivery"} {
 				t.Run(locale+"/"+state+"/"+diagnostic, func(t *testing.T) {
 					cause := "exit"
@@ -1583,44 +1176,30 @@ func TestRP1ConversationAvailabilityMatrix(t *testing.T) {
 						cause = "protocol"
 					}
 					a, ct, _ := disconnectedRecoveryTestApp(t, cause)
+					ct.pendingSend = &pendingSend{Draft: "original message", State: "unknown"}
 					if diagnostic == "empty" {
 						ct.clearSendError()
 					}
 					a.runtimeStatus = state
-					if state == "ready-no-client" {
-						a.runtimeStatus = runtimeStateReady
-						a.rt = nil
-					}
 					before := recoveryRecordSnapshot(t, ct)
 					tr := recoveryComposerTester(a, 720, 640)
 					tr.SetLocale(locale)
 					tr.SetFocused(true)
 					tr.Frame()
 					msgs := locales.In(locale)
-					live := state == runtimeStateReady
-					if live {
-						if !tr.HasText(msgs.SendUnknownState()) || tr.HasText(msgs.SendDisconnectedState()) {
-							t.Fatalf("live summary disagrees with Reload: %v", tr.Texts())
-						}
-						for i := 0; i < 45 && !tr.Focused(msgs.ReloadAction()); i++ {
-							tr.Key(0, ui.KeyTab)
-							tr.Frame()
-						}
-						if !tr.Focused(msgs.ReloadAction()) {
-							t.Fatal("live Reload is not reachable")
-						}
-					} else {
-						if !tr.HasText(msgs.SendDisconnectedState()) || tr.HasText(msgs.SendUnknownState()) || tr.HasText(msgs.SendNoticeConnectionLost()) {
-							t.Fatalf("ordinary disconnected guidance contradicts action availability: %v", tr.Texts())
-						}
-						if _, ok := tr.Find(msgs.ReloadAction()); ok {
-							t.Fatal("unavailable conversation exposes Reload")
+					wantSummary := msgs.SendDisconnectedState()
+					for _, summary := range []string{msgs.SendDisconnectedState(), msgs.SendUnknownState(), msgs.IssueExecutionUnknownDetail(), msgs.SendNoticeConnectionLost()} {
+						if tr.HasText(summary) != (summary == wantSummary) {
+							t.Fatalf("want only %q for %s: %v", wantSummary, state, tr.Texts())
 						}
 					}
-					if recoveryRecordSnapshot(t, ct) != before || a.submissionInFlight != 0 {
-						t.Fatal("presentation/focus changed original records or started submission")
+					if _, ok := tr.Find(msgs.ReloadAction()); ok {
+						t.Fatalf("Reload availability contradicts %s: %v", state, tr.Texts())
 					}
-					if dir := os.Getenv("NAGI_RP_PREVIEW_DIR"); dir != "" && diagnostic == "delivery" && (state == runtimeStateReady || state == runtimeStateExited) {
+					if recoveryRecordSnapshot(t, ct) != before || a.submissionInFlight != 0 || a.contactHistoryInFlight != 0 {
+						t.Fatal("presentation changed original records or issued a request")
+					}
+					if dir := os.Getenv("NAGI_RP_PREVIEW_DIR"); dir != "" && diagnostic == "delivery" && state == runtimeStateExited {
 						writePreviewPNG(t, filepath.Join(dir, fmt.Sprintf("conversation-%s-%s.png", locale, state)), tr.Image())
 					}
 				})
@@ -1630,225 +1209,53 @@ func TestRP1ConversationAvailabilityMatrix(t *testing.T) {
 }
 
 func TestRP1DisclosurePreservesRecords(t *testing.T) {
-	for _, domain := range []string{"conversation", "issue"} {
-		for _, cause := range []string{"protocol", "exit"} {
-			t.Run(domain+"/"+cause, func(t *testing.T) {
-				a, ct, issue := disconnectedRecoveryTestApp(t, cause)
-				config := testConnectionConfig(t)
-				config.APIKey = "controlled-record-secret"
-				a.connectionSaved = &config
-				ct.SubmittedDraft = "original submitted text"
-				ct.SubmittedRev = 8
-				ct.SendError += "; API_KEY=" + config.APIKey + "; " + strings.Repeat("long diagnostic ", 80)
-				issue.Work.SendError += "; API_KEY=" + config.APIKey + "; " + strings.Repeat("long diagnostic ", 80)
-				before := recoveryRecordSnapshot(t, ct)
-				var tr *ui.Tester
-				if domain == "conversation" {
-					tr = recoveryComposerTester(a, 1040, 900)
-				} else {
-					tr = recoveryIssueTester(a, ct, issue, 1040, 900)
-				}
-				tr.SetFocused(true)
-				tr.Frame()
-				if err := tr.Click(locales.In("en").DetailsAction()); err != nil {
-					t.Fatal(err)
-				}
-				tr.Frame()
-				if err := tr.Click(locales.In("en").CopyErrorDetailsLabel()); err != nil {
-					t.Fatal(err)
-				}
-				copied := tr.Clipboard()
-				if strings.Contains(copied, config.APIKey) || !strings.Contains(copied, "[redacted]") || len([]rune(copied)) > 501 {
-					t.Fatalf("detail was not bounded/redacted: %q", copied)
-				}
-				if !tr.HasText(locales.In("en").RecoveryTechnicalDetailsHint()) {
-					t.Fatal("diagnostic is not marked as technical")
-				}
-				tr.SetLocale("zh-Hans")
-				tr.Frame()
-				if !tr.HasText(locales.In("zh-Hans").RecoveryTechnicalDetailsHint()) || strings.Contains(strings.Join(tr.Texts(), " "), config.APIKey) {
-					t.Fatal("locale change leaked diagnostic or lost technical label")
-				}
-				if err := tr.Click(locales.In("zh-Hans").HideDetailsAction()); err != nil {
-					t.Fatal(err)
-				}
-				tr.Frame()
-				if err := tr.Click(locales.In("zh-Hans").ConnectionSettingsAction()); err != nil {
-					t.Fatal(err)
-				}
-				if !a.settingsOpen || a.settingsTab != settingsTabConnection {
-					t.Fatal("recovery settings navigation failed")
-				}
-				a.closeSettings()
-				a.runtimeStatus = runtimeStateReady
-				tr.Frame()
-				if recoveryRecordSnapshot(t, ct) != before || a.rt.nextID != 0 || a.submissionInFlight != 0 {
-					t.Fatal("disclosure/language/navigation/readiness altered original records or issued RPC")
-				}
-			})
-		}
-	}
-}
-
-func TestRP1ControlledReadback(t *testing.T) {
-	for _, domain := range []string{"conversation", "issue"} {
-		for _, outcome := range []string{"trusted", "error", "stale-client", "stale-association"} {
-			t.Run(domain+"/"+outcome, func(t *testing.T) {
-				a, ct, issue := disconnectedRecoveryTestApp(t, "exit")
-				recoveryTestStore(t, a)
-				if domain == "conversation" {
-					ct.Issues = nil
-				}
-				memory := newRecoveryMemoryClient(t)
-				a.rt = memory.client
-				a.runtimeStatus = runtimeStateReady
-				callbacks := make(chan func(), 8)
-				a.setUIHook(func(fn func()) { callbacks <- fn })
-				before := recoveryRecordSnapshot(t, ct)
-				var tr *ui.Tester
-				if domain == "conversation" {
-					tr = recoveryComposerTester(a, 1040, 900)
-				} else {
-					tr = recoveryIssueTester(a, ct, issue, 1040, 1600)
-				}
-				tr.Frame()
-				if len(memory.methodNames()) != 0 {
-					t.Fatal("rendering invoked Runtime")
-				}
-				action := "Reload"
-				firstMethod := "session.load"
-				sessionID := ct.SessionID
-				if domain == "issue" {
-					action = "Check run"
-					firstMethod = "task.status"
-					sessionID = issue.Executions[0].SessionID
-				}
-				if err := tr.Click(action); err != nil {
-					t.Fatal(err)
-				}
-				request := memory.next(t, firstMethod)
-				var params map[string]any
-				if err := json.Unmarshal(request.Params, &params); err != nil {
-					t.Fatal(err)
-				}
-				if params["session_id"] != sessionID {
-					t.Fatal("readback used another session")
-				}
-				var load any = runtimeSession{SessionID: sessionID, State: "idle", Status: "completed", Loaded: true}
-				if domain == "issue" {
-					if params["task_id"] != issue.Executions[0].TaskID {
-						t.Fatal("Check run used another task")
-					}
-					load = runtimeTaskState{SessionID: sessionID, TaskID: issue.Executions[0].TaskID, Status: "completed"}
-				}
-				var readErr *runtimeError
-				if outcome == "error" {
-					readErr = &runtimeError{Code: "read_failure", Message: "controlled unavailable readback"}
-				}
-				request.respond(t, load, readErr)
-				history := runtimeHistory{SessionID: sessionID, Status: "completed", Records: []historyRecord{{Offset: 0, Record: journalRecord{Type: "task_started", TaskID: "issue-task", MessageID: "m1"}}, {Offset: 1, Record: journalRecord{Type: "task_finished", TaskID: "issue-task", Status: "completed"}}}}
-				memory.next(t, "session.history").respond(t, history, nil)
-				if domain == "conversation" && outcome == "error" {
-					memory.next(t, "session.config.get").respond(t, runtimeConnectionConfig{SessionID: sessionID}, nil)
-				}
-				if outcome == "stale-client" {
-					a.rt = &runtimeClient{}
-				} else if outcome == "stale-association" {
-					if domain == "conversation" {
-						ct.historyGen++
-					} else {
-						issue.Executions[0].TaskID = "replacement-task"
-					}
-					before = recoveryRecordSnapshot(t, ct)
-				}
-				recoveryCallback(t, callbacks)
-				expected := []string{firstMethod, "session.history"}
-				if domain == "conversation" && outcome == "error" {
-					expected = append(expected, "session.config.get")
-				}
-				if outcome == "trusted" && domain == "issue" {
-					memory.next(t, "session.load").respond(t, runtimeSession{SessionID: sessionID, State: "idle", Status: "completed", Loaded: true}, nil)
-					memory.next(t, "session.history").respond(t, history, nil)
-					recoveryCallback(t, callbacks)
-					expected = append(expected, "session.load", "session.history")
-				}
-				if !reflect.DeepEqual(memory.methodNames(), expected) {
-					t.Fatalf("readback methods=%v want %v", memory.methodNames(), expected)
-				}
-				if outcome == "trusted" {
-					if domain == "conversation" && ct.SendState != sendIdle {
-						t.Fatal("trusted explicit Reload did not resolve unknown")
-					}
-					if domain == "issue" && (issue.Executions[0].Status != issueExecutionCompleted || issue.Status == issueStatusCompleted) {
-						t.Fatal("trusted Check run failed or incorrectly completed the product task")
-					}
-				} else if strings.HasPrefix(outcome, "stale") {
-					if recoveryRecordSnapshot(t, ct) != before {
-						t.Fatal("stale readback changed the current records")
-					}
-				} else {
-					if domain == "conversation" && ct.SendState != sendUnknown {
-						t.Fatal("failed Reload cleared uncertainty")
-					}
-					if domain == "issue" && issue.Executions[0].Status != issueExecutionUnknown {
-						t.Fatal("failed Check run cleared uncertainty")
-					}
-				}
-				if ct.Draft != "retained unsent draft" || a.submissionInFlight != 0 {
-					t.Fatal("explicit readback sent work or lost the draft")
-				}
-			})
-		}
-	}
-}
-
-func TestRP1MismatchReadbackKeepsConnectionGate(t *testing.T) {
-	for _, locale := range []string{"en", "zh-Hans"} {
-		t.Run(locale, func(t *testing.T) {
-			a, ct, _ := disconnectedRecoveryTestApp(t, "exit")
-			ct.Issues = nil
-			recoveryTestStore(t, a)
-			memory := newRecoveryMemoryClient(t)
-			a.rt = memory.client
-			a.runtimeStatus = runtimeStateReady
-			a.runtimeErr, a.runtimeErrKind, a.runtimeStage, a.runtimeHintKind = "", "", "", ""
-			callbacks := make(chan func(), 4)
-			a.setUIHook(func(fn func()) { callbacks <- fn })
-			tr := ui.NewTester(a.view, 1040, 1000)
-			tr.SetLocale(locale)
-			tr.Frame()
-			msgs := locales.In(locale)
-			if err := tr.Click(msgs.ReloadAction()); err != nil {
-				t.Fatal(err)
-			}
-			memory.next(t, "session.load").respond(t, runtimeSession{SessionID: ct.SessionID, State: "idle", Loaded: true}, nil)
-			memory.next(t, "session.history").respond(t, nil, &runtimeError{Code: "connection_mismatch", Message: "saved context belongs to another connection"})
-			recoveryCallback(t, callbacks)
-			raw := ct.SendError
-			if !knownConnectionFailure(raw) || ct.SendState != sendUnknown || ct.SessionID != "s1" || ct.Draft != "retained unsent draft" {
-				t.Fatal("existing readback error did not preserve unknown/mismatch overlap")
-			}
+	for _, cause := range []string{"protocol", "exit"} {
+		t.Run(cause, func(t *testing.T) {
+			a, ct, _ := disconnectedRecoveryTestApp(t, cause)
+			config := testConnectionConfig(t)
+			config.APIKey = "controlled-record-secret"
+			a.connectionSaved = &config
+			ct.SubmittedDraft = "original submitted text"
+			ct.SubmittedRev = 8
+			ct.SendError += "; API_KEY=" + config.APIKey + "; " + strings.Repeat("long diagnostic ", 80)
 			before := recoveryRecordSnapshot(t, ct)
+			tr := recoveryComposerTester(a, 1040, 900)
+			tr.SetFocused(true)
 			tr.Frame()
-			if _, visible := tr.Find(msgs.ReloadAction()); visible || tr.HasText(msgs.SendUnknownState()) || !tr.HasText(msgs.ConnectionMismatchSummary()) {
-				t.Fatalf("known mismatch bypassed original connection gate: %v", tr.Texts())
-			}
-			if tr.HasText(raw) {
-				t.Fatal("mismatch raw detail shown without disclosure")
-			}
-			if err := tr.Click(msgs.DetailsAction()); err != nil {
+			if err := tr.Click(locales.In("en").DetailsAction()); err != nil {
 				t.Fatal(err)
 			}
 			tr.Frame()
-			if !tr.HasText(raw) {
-				t.Fatal("typed mismatch detail was lost")
+			if err := tr.Click(locales.In("en").CopyErrorDetailsLabel()); err != nil {
+				t.Fatal(err)
 			}
-			if err := tr.Click(msgs.ConnectionSettingsAction()); err != nil {
+			copied := tr.Clipboard()
+			if strings.Contains(copied, config.APIKey) || !strings.Contains(copied, "[redacted]") || len([]rune(copied)) > 501 {
+				t.Fatalf("detail was not bounded/redacted: %q", copied)
+			}
+			if !tr.HasText(locales.In("en").RecoveryTechnicalDetailsHint()) {
+				t.Fatal("diagnostic is not marked as technical")
+			}
+			tr.SetLocale("zh-Hans")
+			tr.Frame()
+			if !tr.HasText(locales.In("zh-Hans").RecoveryTechnicalDetailsHint()) || strings.Contains(strings.Join(tr.Texts(), " "), config.APIKey) {
+				t.Fatal("locale change leaked diagnostic or lost technical label")
+			}
+			if err := tr.Click(locales.In("zh-Hans").HideDetailsAction()); err != nil {
 				t.Fatal(err)
 			}
 			tr.Frame()
-			if !a.settingsOpen || a.settingsTab != settingsTabConnection || recoveryRecordSnapshot(t, ct) != before || !reflect.DeepEqual(memory.methodNames(), []string{"session.load", "session.history"}) {
-				t.Fatal("mismatch recovery rewrote unknown/raw/history state, replayed, or lost Settings routing")
+			if err := tr.Click(locales.In("zh-Hans").ConnectionSettingsAction()); err != nil {
+				t.Fatal(err)
+			}
+			if !a.settingsOpen || a.settingsTab != settingsTabConnection {
+				t.Fatal("recovery settings navigation failed")
+			}
+			a.closeSettings()
+			a.runtimeStatus = runtimeStateReady
+			tr.Frame()
+			if recoveryRecordSnapshot(t, ct) != before || a.contactHistoryInFlight != 0 || a.submissionInFlight != 0 {
+				t.Fatal("disclosure/language/navigation/readiness altered original records or issued RPC")
 			}
 		})
 	}
@@ -1902,10 +1309,10 @@ func TestComposerDeclaredToolbarKeepsRealEdgeTargets(t *testing.T) {
 						}
 					}
 					items := ct.Context.snapshot()
-					if ct.Draft != "  exact unsaved composer draft 中文  " || len(items) != 1 || items[0].ID != item.ID || items[0].Revision != item.Revision || a.rt != nil || ct.pendingSend != nil || len(ct.Messages) != 0 {
+					if ct.Draft != "  exact unsaved composer draft 中文  " || len(items) != 1 || items[0].ID != item.ID || items[0].Revision != item.Revision || a.pi != nil || ct.pendingSend != nil || len(ct.Messages) != 0 {
 						t.Fatal("edge navigation changed draft/snapshot or admitted execution")
 					}
-					if directory := os.Getenv("SAKI_PREVIEW_DIR"); directory != "" {
+					if directory := os.Getenv("NAGI_PREVIEW_DIR"); directory != "" {
 						name := fmt.Sprintf("composer-declared-%s-%dx%d-dark%t", locale, size[0], size[1], dark)
 						writePreviewPNG(t, filepath.Join(directory, name+".png"), tr.Image())
 						data, _ := json.MarshalIndent(map[string]ui.Rect{"toolbar": bar, "context_target": button}, "", "  ")
