@@ -421,6 +421,8 @@ type productUIState struct {
 	ThemeIDs   appearanceThemeIDs            `json:"themeIds"`
 	Appearance string                        `json:"appearance,omitempty"`
 	Pending    map[string]productPendingSend `json:"pending,omitempty"`
+
+	PendingActivities map[string]productActivityIntent `json:"pending_activities,omitempty"`
 }
 
 func productUIPath(profilePath string) string { return profilePath + ".ui.json" }

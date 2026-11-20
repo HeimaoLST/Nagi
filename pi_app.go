@@ -120,6 +120,8 @@ type piAppHost struct {
 	outcome        pi.ProcessOutcome
 	exitApplied    chan struct{}
 	defaults       piConfiguration
+
+	activityRevision uint64
 }
 
 func clonePiConversationBinding(binding *piConversationBinding) *piConversationBinding {
@@ -177,6 +179,20 @@ func (a *appModel) productProfileReady() bool {
 	default:
 		return true
 	}
+}
+
+func (a *appModel) productActivityClient() *pi.ProductClient {
+	if !a.productProfileReady() {
+		return nil
+	}
+	return a.productHost().product
+}
+
+func (a *appModel) productActivityRevision() uint64 {
+	if host := a.productHost(); host != nil {
+		return uint64(host.generation)<<32 | host.activityRevision
+	}
+	return 0
 }
 
 func (a *appModel) openProductProfile(ctx context.Context, fresh bool, generation int) error {
@@ -301,7 +317,9 @@ func (a *appModel) openProductProfile(ctx context.Context, fresh bool, generatio
 		a.pi, a.connectionGeneration, a.contacts = host, host.generation, contacts
 		a.applyProductPreferences(opened.Snapshot.Preferences)
 		a.selected = slices.Index(contacts, selected)
+		a.activityIntents = nil
 		if local != nil {
+			a.activityIntents = local.PendingActivities
 			a.leftPaneWidth = clampPaneWidth(local.Layout.LeftWidth, defaultLeftPaneWidth, minLeftPaneWidth, maxLeftPaneWidth)
 			a.rightPaneWidth = clampPaneWidth(local.Layout.RightWidth, defaultRightPaneWidth, minRightPaneWidth, maxRightPaneWidth)
 			a.appearanceThemeIDs = local.ThemeIDs
@@ -323,6 +341,7 @@ func (a *appModel) persistProductUI(host *piAppHost) error {
 	return writeProfileJSON(productUIPath(a.storePath), productUIState{
 		Selected: a.selectedID(), Layout: storedLayout{LeftWidth: a.railWidth(), RightWidth: a.workWidth(), WorkspaceOpen: a.workspaceOpen},
 		ThemeIDs: a.appearanceThemeIDs, Appearance: normalizeAppearanceMode(a.appearanceMode), Pending: host.productPending,
+		PendingActivities: a.activityIntents,
 	})
 }
 
@@ -489,7 +508,14 @@ func (a *appModel) applyProductEvent(host *piAppHost, event pi.ProductEvent) {
 		return
 	}
 	var data pi.ProductExecutionEvent
-	if json.Unmarshal(event.Data, &data) != nil || data.ConversationID == "" {
+	if json.Unmarshal(event.Data, &data) != nil {
+		return
+	}
+	if data.ActivityID != "" && (event.Name == "activity.changed" || event.Name == "execution.started" || event.Name == "execution.settled") {
+		host.activityRevision++
+		return
+	}
+	if data.ConversationID == "" {
 		return
 	}
 	for _, ct := range a.contacts {
@@ -557,6 +583,7 @@ func (a *appModel) reconcileProductStream(host *piAppHost) {
 		}
 		a.updateUI(func() {
 			if a.pi == host {
+				host.activityRevision++
 				for _, ct := range a.contacts {
 					a.refreshProductConversation(host, ct, ct.draftRev)
 					a.reloadProductConversation(host, ct)
@@ -606,6 +633,7 @@ func (a *appModel) observeProductExit(host *piAppHost) {
 			return
 		}
 		a.runtimeStatus = runtimeStateExited
+		host.activityRevision++
 		a.runtimeErrKind = runtimeNoticeConnectionLost
 		a.clearBuiltinToolCatalog()
 		for _, ct := range a.contacts {

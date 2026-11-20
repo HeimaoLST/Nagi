@@ -185,6 +185,7 @@ type ProductActivitySummary struct {
 type ProductActivity struct {
 	ProductActivitySummary
 	Requirements []string           `json:"requirements"`
+	Materials    []ProductMaterial  `json:"materials"`
 	Questions    []ProductQuestion  `json:"questions"`
 	Executions   []ProductExecution `json:"executions"`
 }

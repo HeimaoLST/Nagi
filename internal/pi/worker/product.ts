@@ -288,7 +288,7 @@ export class Product {
 
   private activityDetails(activity: Activity) {
     return {
-      ...this.activityView(activity), requirements: activity.requirements, questions: activity.questions,
+      ...this.activityView(activity), requirements: activity.requirements, materials: activity.materials, questions: activity.questions,
       executions: activity.executionIds.map(id => this.viewExecution(this.execution(this.profile, id))),
     };
   }
@@ -775,7 +775,7 @@ export class Product {
     if (bot.archived || live(last) || unknown(last)) stateError('busy', 'The activity is not ready to continue');
     this.capacity();
     const input = { revision: activity.revision, text: [activity.goal, ...activity.requirements, params.text, ...activity.inputFiles.map(path => `Input file: ${path}`)].filter(Boolean).join('\n'),
-      materials: params.materials.length ? params.materials : activity.materials };
+      materials: params.materials };
     validateDraft(input);
     const { session, binding } = await this.prepareSession(owner, activity.binding, bot);
     this.capacity();
@@ -895,7 +895,7 @@ export class Product {
       this.record(candidate, 'activity.delegate', params, { operationId, state: 'accepted', target }, target);
     });
     this.emit('activity.changed', this.activityView(activity));
-    return this.startActivity('activity.continue', { activityId: activity.activityId, operationId: `${operationId}:execution`, expectedRevision: 1, text: '', materials: [] });
+    return this.startActivity('activity.continue', { activityId: activity.activityId, operationId: `${operationId}:execution`, expectedRevision: 1, text: '', materials: activity.materials });
   }
 
   private async waitForAnswer(activityId: string, callId: string, text: string, signal?: AbortSignal) {

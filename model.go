@@ -116,6 +116,7 @@ type contact struct {
 	PiBinding            *piConversationBinding
 	PreviousPiBindings   []piConversationBinding
 	Context              taskContext
+	activity             productActivityPanel
 	replyIndex           int
 	list                 ui.ListState
 	Works                []*workItem
@@ -200,6 +201,7 @@ type appModel struct {
 	appearanceThemes   customThemeCatalog
 	themeImport        *appearanceThemeImport
 	dataRecovery       *dataRecoveryState
+	activityIntents    map[string]productActivityIntent
 	chooseRecoveryFile func(mygo.OpenDialogOptions) ([]string, error)
 	revealRecoveryFile func(string) error
 	chooseThemeFile    func(mygo.OpenDialogOptions) ([]string, error)

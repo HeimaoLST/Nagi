@@ -1,11 +1,18 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
+	"os"
+	"path/filepath"
 	"strings"
+	"time"
 
+	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
+	"github.com/HeimaoLST/Nagi/internal/pi"
 	"github.com/HeimaoLST/Nagi/locales"
 )
 
@@ -497,4 +504,364 @@ func (a *appModel) cancelWorkTask(ct *contact, taskID string) {
 		return
 	}
 	a.cancelRuntimeTask(ct, taskID)
+}
+
+type productActivityIntent struct {
+	OperationID string               `json:"operation_id"`
+	BotID       string               `json:"bot_id"`
+	ActivityID  string               `json:"activity_id"`
+	Action      string               `json:"action"`
+	Revision    uint64               `json:"revision"`
+	ExecutionID string               `json:"execution_id,omitempty"`
+	QuestionID  string               `json:"question_id,omitempty"`
+	Text        string               `json:"text,omitempty"`
+	Materials   []pi.ProductMaterial `json:"materials,omitempty"`
+}
+
+type productActivityForm struct {
+	target    productActivityIntent
+	text      string
+	materials taskContext
+	focus     bool
+}
+
+type productActivityPanel struct {
+	client        *pi.ProductClient
+	revision      uint64
+	loaded        bool
+	reading       bool
+	changing      bool
+	open          bool
+	focusToggle   bool
+	focusBack     bool
+	items         []pi.ProductActivitySummary
+	nextCursor    *string
+	activityID    string
+	activity      *pi.ProductActivity
+	forms         map[string]*productActivityForm
+	result        *pi.ProductActivityResult
+	file          *issueResultFileInspection
+	problem       string
+	actionProblem string
+	stopping      string
+	scroll        ui.ScrollState
+}
+
+func (a *appModel) refreshProductActivities(ct *contact, more bool) {
+	client := a.productActivityClient()
+	if client == nil || a.dataRecoveryBlocksChanges() || a.selectedContact() != ct {
+		return
+	}
+	p := &ct.activity
+	if p.reading || p.changing {
+		return
+	}
+	revision := a.productActivityRevision()
+	params := pi.ProductActivityListParams{BotID: ct.ID, ProductPageParams: pi.ProductPageParams{Limit: 30}}
+	if more && p.nextCursor != nil && p.client == client && p.revision == revision {
+		params.Cursor = *p.nextCursor
+	}
+	p.reading = true
+	id := p.activityID
+	a.contactHistoryInFlight++
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		page, err := client.ListActivities(ctx, params)
+		var detail pi.ProductActivity
+		var detailErr error
+		if id != "" {
+			detail, detailErr = client.GetActivity(ctx, id)
+		}
+		a.updateUI(func() {
+			defer a.finishActivityRead()
+			p.reading = false
+			if !a.currentActivityClient(ct, client) {
+				return
+			}
+			p.client, p.revision, p.loaded = client, revision, true
+			p.problem = a.connectionSafeMessage(err)
+			if err == nil {
+				if params.Cursor == "" {
+					p.items = page.Items
+				} else {
+					p.items = append(p.items, page.Items...)
+				}
+				p.nextCursor = page.NextCursor
+			}
+			if id != "" && p.activityID == id {
+				if detailErr != nil {
+					p.activity = nil
+					p.problem = a.connectionSafeMessage(detailErr)
+				} else {
+					p.activity = &detail
+				}
+			}
+		})
+	}()
+}
+
+func (a *appModel) currentActivityClient(ct *contact, client *pi.ProductClient) bool {
+	return a.contactByID(ct.ID) == ct && a.productHost() != nil && a.productHost().product == client
+}
+
+func (a *appModel) finishActivityRead() {
+	a.contactHistoryInFlight--
+	if a.shutdownStarted {
+		a.finishShutdown()
+	}
+}
+
+func (a *appModel) openProductActivity(ct *contact, activityID string) {
+	p := &ct.activity
+	p.activityID, p.activity, p.result, p.file = activityID, nil, nil, nil
+	p.scroll.Y = 0
+	p.actionProblem, p.problem = "", ""
+	p.focusBack = true
+	a.refreshProductActivities(ct, false)
+}
+
+func (a *appModel) readProductActivityResult(ct *contact, activityID, executionID string) {
+	p, client := &ct.activity, a.productActivityClient()
+	if client == nil || p.reading || p.activityID != activityID || a.dataRecoveryBlocksChanges() {
+		return
+	}
+	p.reading, p.problem, p.result, p.file = true, "", nil, nil
+	a.contactHistoryInFlight++
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		result, err := client.ActivityResult(ctx, productActivityExecution(activityID, executionID))
+		a.updateUI(func() {
+			defer a.finishActivityRead()
+			p.reading = false
+			if !a.currentActivityClient(ct, client) || p.activityID != activityID {
+				return
+			}
+			p.problem = a.connectionSafeMessage(err)
+			if err == nil && result.ActivityID == activityID && result.ExecutionID == executionID {
+				p.result, p.scroll.Y = &result, 0
+				p.focusBack = true
+			}
+		})
+	}()
+}
+
+func productActivityExecution(activityID, executionID string) pi.ProductActivityExecutionParams {
+	return pi.ProductActivityExecutionParams{ProductActivityParams: pi.ProductActivityParams{ActivityID: activityID}, ExecutionID: executionID}
+}
+
+func (a *appModel) editProductActivity(ct *contact, target productActivityIntent) {
+	p := &ct.activity
+	if p.forms == nil {
+		p.forms = make(map[string]*productActivityForm)
+	}
+	form := p.forms[target.ActivityID]
+	if form == nil {
+		form = &productActivityForm{target: target}
+		p.forms[target.ActivityID] = form
+	}
+	form.focus = true
+}
+
+func (a *appModel) chooseActivityMaterial(ct *contact, form *productActivityForm) {
+	p, tc := &ct.activity, &form.materials
+	if tc.fileChoosing || a.dataRecoveryBlocksChanges() || a.shutdownStarted {
+		return
+	}
+	tc.fileRequest++
+	request, editor, revision := tc.fileRequest, tc.fileForm, tc.fileForm.pathRevision
+	viewGeneration := a.folderChoiceGeneration
+	tc.fileChoosing = true
+	a.contextFilePickers++
+	pick := a.chooseContextFile
+	if pick == nil {
+		pick = mygo.Dialog.Open
+	}
+	label := locales.In(a.uiLocale).TaskContextChooseFile()
+	opts := mygo.OpenDialogOptions{Parent: a.win, Title: label, ButtonLabel: label, DefaultPath: tc.formPath}
+	go func() {
+		if !filepath.IsAbs(opts.DefaultPath) {
+			opts.DefaultPath, _ = os.UserHomeDir()
+		}
+		paths, err := pick(opts)
+		a.updateUI(func() {
+			a.contextFilePickers--
+			if tc.fileRequest != request || tc.fileForm != editor {
+				return
+			}
+			tc.fileChoosing = false
+			if a.shutdownStarted || a.settingsOpen || a.folderChoiceGeneration != viewGeneration || a.selectedContact() != ct || !p.open || p.activityID != form.target.ActivityID || p.forms[p.activityID] != form || editor.pathRevision != revision {
+				return
+			}
+			tc.focusFileChooser, tc.fileChoiceFailed = true, err != nil
+			if err == nil && len(paths) > 0 {
+				tc.formPath = paths[0]
+				editor.pathRevision++
+			}
+		})
+	}()
+}
+
+func (a *appModel) submitProductActivity(ct *contact, target productActivityIntent, form *productActivityForm) {
+	p, client := &ct.activity, a.productActivityClient()
+	if client == nil || a.selectedContact() != ct || p.activityID != target.ActivityID || p.changing || a.dataRecoveryBlocksChanges() || a.activityIntents[target.ActivityID].OperationID != "" {
+		return
+	}
+	if form != nil {
+		target.Text = form.text
+		target.Materials = make([]pi.ProductMaterial, len(form.materials.items))
+		for i, item := range form.materials.items {
+			target.Materials[i] = pi.ProductMaterial{ID: item.ID, Name: item.Name, Text: item.Text, Source: item.Source, Revision: item.Revision}
+		}
+	}
+	target.OperationID = newContactID()
+	if a.activityIntents == nil {
+		a.activityIntents = make(map[string]productActivityIntent)
+	}
+	a.activityIntents[target.ActivityID] = target
+	if err := a.persist(); err != nil {
+		delete(a.activityIntents, target.ActivityID)
+		p.actionProblem = a.connectionSafeMessage(err)
+		return
+	}
+	a.runProductActivityAction(ct, client, target, true)
+}
+
+func (a *appModel) runProductActivityAction(ct *contact, client *pi.ProductClient, target productActivityIntent, dispatch bool) {
+	p := &ct.activity
+	p.changing, p.actionProblem = true, ""
+	a.submissionAsyncStarted()
+	go func() {
+		var accepted, rejected bool
+		var err error
+		if dispatch {
+			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			accepted, err = target.dispatch(ctx, client)
+			cancel()
+			var command *pi.CommandError
+			rejected = errors.As(err, &command) && (command.Delivery == pi.NotSent || command.Delivery == pi.Rejected)
+		}
+		if !accepted && !rejected {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			receipt, lookupErr := client.Operation(ctx, target.OperationID)
+			cancel()
+			if lookupErr == nil && target.matchesReceipt(receipt) {
+				accepted, rejected = receipt.State == "accepted", receipt.State == "rejected"
+			} else if err == nil {
+				err = lookupErr
+			}
+		}
+		a.updateUI(func() {
+			defer a.submissionAsyncFinished()
+			p.changing = false
+			if !a.currentActivityClient(ct, client) || a.activityIntents[target.ActivityID].OperationID != target.OperationID {
+				return
+			}
+			if p.activityID == target.ActivityID {
+				p.actionProblem = a.connectionSafeMessage(err)
+			}
+			if accepted || rejected {
+				delete(a.activityIntents, target.ActivityID)
+				if err := a.persist(); err != nil {
+					a.activityIntents[target.ActivityID] = target
+					if p.activityID == target.ActivityID {
+						p.actionProblem = a.connectionSafeMessage(err)
+					}
+				} else if accepted {
+					if owner := a.contactByID(target.BotID); owner != nil && target.Action != "stop" {
+						delete(owner.activity.forms, target.ActivityID)
+					}
+					if target.Action == "stop" {
+						p.stopping = target.ExecutionID
+					}
+					p.actionProblem = ""
+				} else if target.Action != "stop" && p.forms[target.ActivityID] == nil {
+					a.editProductActivity(ct, target)
+					form := p.forms[target.ActivityID]
+					form.text = target.Text
+					form.materials.items = productTaskContext(target.Materials)
+				}
+			}
+			p.loaded = false
+		})
+	}()
+}
+
+func (target productActivityIntent) dispatch(ctx context.Context, client *pi.ProductClient) (bool, error) {
+	execution := productActivityExecution(target.ActivityID, target.ExecutionID)
+	text := pi.ProductText{Text: target.Text, Materials: target.Materials}
+	switch target.Action {
+	case "continue":
+		receipt, err := client.ContinueActivity(ctx, pi.ProductActivityContinueParams{ProductActivityParams: execution.ProductActivityParams, ProductText: text, OperationID: target.OperationID, ExpectedRevision: target.Revision})
+		return err == nil && target.matchesReceipt(receipt) && receipt.State == "accepted", err
+	case "answer":
+		answer, err := client.AnswerQuestion(ctx, pi.ProductAnswerParams{ProductActivityExecutionParams: execution, ProductText: text, QuestionID: target.QuestionID, QuestionRevision: target.Revision, OperationID: target.OperationID})
+		return err == nil && answer.AnswerSaved && answer.ActivityID == target.ActivityID && answer.ExecutionID == target.ExecutionID && answer.QuestionID == target.QuestionID, err
+	case "stop":
+		stop, err := client.StopActivity(ctx, pi.ProductActivityStopParams{ProductActivityExecutionParams: execution, OperationID: target.OperationID})
+		return err == nil && stop.CancelRequested && stop.ExecutionID == target.ExecutionID, err
+	default:
+		return false, nil
+	}
+}
+
+func (target productActivityIntent) matchesReceipt(receipt pi.ProductReceipt) bool {
+	if receipt.OperationID != target.OperationID || receipt.Target.ActivityID != target.ActivityID || receipt.Target.QuestionID != target.QuestionID {
+		return false
+	}
+	if receipt.State != "accepted" {
+		return true
+	}
+	switch target.Action {
+	case "stop":
+		var result pi.ProductStopResult
+		return json.Unmarshal(receipt.Result, &result) == nil && result.CancelRequested && result.ExecutionID == target.ExecutionID
+	case "answer":
+		var result pi.ProductAnswerResult
+		return json.Unmarshal(receipt.Result, &result) == nil && result.AnswerSaved && result.ActivityID == target.ActivityID && result.ExecutionID == target.ExecutionID && result.QuestionID == target.QuestionID
+	case "continue":
+		return receipt.Execution != nil && receipt.Execution.ExecutionID != ""
+	default:
+		return false
+	}
+}
+
+func (a *appModel) inspectProductActivityFile(p *productActivityPanel, path string) {
+	result := p.result
+	go func() {
+		inspection := inspectIssueResultFile(issueResultFile{Path: path})
+		a.updateUI(func() {
+			if p.result == result {
+				p.file, p.scroll.Y, p.focusBack = &inspection, 0, true
+			}
+		})
+	}()
+}
+
+func (a *appModel) openProductActivityFile(p *productActivityPanel, path string, reveal bool) {
+	result := p.result
+	open := a.openPath
+	if open == nil {
+		open = openFileWithSystem
+	}
+	go func() {
+		file := issueResultFile{Path: path}
+		var outcome issueResultFileAction
+		if reveal {
+			outcome = requestRevealIssueResultFile(file, requestRevealIssueResultWithSystem)
+		} else {
+			outcome = requestOpenIssueResultFile(file, open)
+		}
+		a.updateUI(func() {
+			if p.result != result {
+				return
+			}
+			msgs := locales.In(a.uiLocale)
+			p.problem = issueResultNoticeText(msgs, outcome.NoticeKind, outcome.NoticeDetail)
+			if outcome.ErrKind != "" {
+				p.problem = issueResultNoticeText(msgs, outcome.ErrKind, outcome.ErrDetail)
+			}
+		})
+	}()
 }

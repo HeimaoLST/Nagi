@@ -147,7 +147,7 @@ export const productResults = {
   'conversation.history': productPage(Type.Object({ messageId: id, role: Type.Union([Type.Literal('user'), Type.Literal('assistant')]),
     timestamp: id, text: Type.String(), materials: Type.Array(materialSchema) })),
   'activity.list': productPage(Type.Object(activityFields)),
-  'activity.get': Type.Object({ ...activityFields, requirements: stringList, questions: Type.Array(questionResult), executions: Type.Array(activeExecution) }),
+  'activity.get': Type.Object({ ...activityFields, requirements: stringList, materials: Type.Array(materialSchema), questions: Type.Array(questionResult), executions: Type.Array(activeExecution) }),
   'activity.result': Type.Object({ activityId: id, executionId: id, text: Type.String(), delivery: Type.Literal('available'), files: Type.Array(Type.Object({ path: id, callId: id })) }),
   'activity.continue': operationSchema,
   'activity.stop': stopResult,
