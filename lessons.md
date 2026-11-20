@@ -34,7 +34,7 @@
 
 **Problem:** A primary-Bot/child-Agent conjecture was incorrectly acknowledged as a user-selected product architecture.
 **Cause or correction:** The user withdrew that interpretation. The accepted experience does not select permanent hierarchy, Worker/Branch names, fork policy or migration architecture.
-**Prevention:** Record the exact accepted behavior and authorization scope. Preserve retractions alongside history; do not promote an experiment, proposal or coordinator interpretation into a requirement. Retire conflicting instructions at their entry points. Trace proposed features and test expectations to a current user action or supported data contract before using older designs as implementation guidance.
+**Prevention:** Record the exact accepted behavior and authorization scope. Preserve retractions alongside history; do not promote an experiment, proposal or coordinator interpretation into a requirement. Remove superseded designs and dedicated acceptance cases from the active tree. Use Git history for provenance. Trace proposed features and test expectations to a current user action or supported data contract before using older designs as implementation guidance.
 
 ## Visual password masking does not establish secure accessibility
 
@@ -42,11 +42,11 @@
 **Cause or correction:** Product-native exposure is Unconfirmed. Product TextInputBase.Password and lab TextInput.Password share the same editor. Read-only inspection found a Darwin superclass value-cache path and a disabled-state secure-trait gap; visual bullets do not establish secure AX semantics.
 **Prevention:** Inspect the actual product control and matching accessibility bridge, then validate with a synthetic key under an exact native scope. Do not enter real credentials or claim readiness until that path is established.
 
-## Report progress against the Bot Team product goal
+## Report progress against user-visible Bot workflows
 
-**Problem:** A product direction update described a single Bot desktop workflow and reported runtime migration as the main milestone.
-**Cause or correction:** The user specified an open-source Bot Team product similar to Grokbot. I incorrectly inferred that a shared task was the next milestone. The immediate priorities are UI polish and multiple Bots working independently.
-**Prevention:** Evaluate the everyday UI using actual windows or screenshots. Exercise two distinct Bots through selection, work, results and reopen. Treat collaboration and handoff as future scope until explicitly requested.
+**Problem:** A progress update emphasized source changes without showing what the user could do in the app.
+**Cause or correction:** The user needs whole-project progress for the current Bot conversation workflow.
+**Prevention:** Report completed user actions, outstanding blockers, owners and next steps every 20 minutes during sustained work. Distinguish native, integration and unit evidence.
 
 ## Keep the Pi cutover free of Saki compatibility
 

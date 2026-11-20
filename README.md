@@ -2,11 +2,11 @@
 
 Nagi is an open-source native desktop app for working with long-lived Bots. Configure a connection, give a Bot several tasks in conversation, follow up, stop a specific execution and retrieve its results. After reopening the app, check the original work and any uncertain delivery. See the [v1 user flows](docs/requirements/desktop.md#v1).
 
-The current integration uses Pi for execution, tools and transcripts. Nagi owns Bot identity, routing, state, receipts and the MyGo interface. The [documentation index](docs/README.md) links the product contract, visual review criteria and historical sources.
+The current integration uses Pi for execution, tools and transcripts. Nagi owns Bot identity, routing, state, receipts and the MyGo interface. The [documentation index](docs/README.md) links the product contract, native UI and review criteria.
 
 ## Using Nagi
 
-Nagi targets Apple Silicon on macOS 13 or later. The standalone Pi package is still in development. CI publishes the tested source, screenshots and worker build evidence. [Current CI](https://github.com/HeimaoLST/Nagi/actions/workflows/ci.yml)
+Nagi targets Apple Silicon on macOS 13 or later. The standalone app bundles its own Node and Pi worker. CI builds the app and verifies startup with an isolated profile. [Current CI](https://github.com/HeimaoLST/Nagi/actions/workflows/ci.yml)
 
 ### First connection
 
@@ -43,11 +43,7 @@ When startup cannot load workbench data, **Restore paused…** lets you select a
 
 If the current window cannot save, copy any unsaved text you need elsewhere before quitting. A loaded workbench or failed local save uses its existing save/retry path instead of replacement. Missing Runtime history is reported separately; restoring workbench records does not recreate it or resend work.
 
-## Development during the Pi migration
-
-The cleanup-first Pi integration is in progress under [issue31](https://github.com/HeimaoLST/Nagi/issues/31). The [integration contract](docs/design/pi-integration.md) defines the concrete client/worker, product ownership, current profile format and acceptance gates. This branch is an incomplete migration, not a usable Pi release. Existing consumer flows above remain the capabilities to preserve; provider/native acceptance has not been established for this changed tree.
-
-Development uses `dev`; frozen integration/E2E candidates use `integration`; stable releases use `main`. The normal checkout is `~/Workspace/Nagi`, with the integration checkout at `~/Workspace/worktrees/Nagi/integration`. Additional worktrees are temporary task isolation, with an owner and cleanup condition. Do not modify a tested checkout during validation.
+## Development
 
 Use Go1.27.3, Python3 and `patch`. The MyGo launcher composes pinned patches in a temporary module copy without changing the module cache. The product target remains macOS13.0/ARM64. Pi1.5.2 requires Node>=22.19.0; the package owns a separately pinned runtime rather than relying on the consumer's PATH.
 
@@ -60,8 +56,4 @@ python3 scripts/build-macos-app.py --payload /private/tmp/nagi-pi-worker --outpu
 
 Run the assembler from a clean checkout with a fresh output directory. It writes an ad hoc signed `Nagi.app` and an adjacent `manifest.json`. For standalone acceptance, set `NAGI_TEST_APP_BUNDLE` to the absolute path of that app and keep its manifest alongside it.
 
-A static build does not establish a working Pi-backed native app. Actual integration/E2E, synthetic-key accessibility, product tool/MCP, lifecycle and Node-independent package gates must pass on the combined tree. Developers do not add or modify unit tests; necessary unit maintenance belongs to the test owner.
-
-Nagi starts with its own profile. On macOS the default directory is `~/Library/Application Support/Nagi`. It contains `contacts.json`, the private `connection.json` and Pi session data under `pi/`. Isolated developer fixtures can set `NAGI_GUI_STORE` and `NAGI_GUI_WORKDIR`. The application uses the current store format and current-format backups. Saki imports, session replay and legacy data recovery are retired.
-
-The protected CI aggregate must use replacement Pi integration and package proofs before this migration is accepted. Missing replacement gates are not optional skips. Nagi version, Pi/dependency locks, Node archive/binary, signed package identity and notices are separate provenance. No Release or deployment follows from an intermediate build.
+The [Pi integration](docs/design/pi-integration.md) describes the runtime and [desktop v1](docs/requirements/desktop.md#v1) defines user-visible behavior. On macOS the default profile directory is `~/Library/Application Support/Nagi`. It holds the product profile, UI selection and preferences, private connection configuration and Pi session data. Use an isolated profile for development and acceptance.
