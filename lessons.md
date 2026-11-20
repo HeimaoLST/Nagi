@@ -166,7 +166,7 @@
 
 **Problem:** A package-only build stopped before compilation because GOTOOLCHAIN=local selected Go1.27.1; a second bootstrap attempt failed with GOSUMDB disabled. A later formatting phase probed the system1.27.1 formatter instead of using the already established cached1.27.3 executable and stopped before formatting. Subsequent QA maintenance used /usr/local/go/bin/gofmt under a cached label, without establishing that it was the assigned formatter.
 **Cause or correction:** The module requires Go1.27.3, which was already cached. Environment restrictions changed toolchain selection and verification before source compilation. The system and assigned formatter binaries differed; root's explicit cached formatter check produced no source diff, without establishing a version for the system binary.
-**Prevention:** Resolve the required cached compiler and formatter paths before an offline phase, reuse their exact argv in subsequent owner fences, put the compiler bin directory on PATH and keep normal checksum handling. Record the actual executable path rather than treating a system installation or a cached label as pinned-tool evidence. Preserve setup failures separately from format, compiler or behavior failures.
+**Prevention:** Resolve the required cached compiler and formatter paths before an offline phase, reuse their exact argv in subsequent owner fences, put the compiler bin directory on PATH and keep normal checksum handling. Record the actual executable path rather than treating a system installation or a cached label as pinned-tool evidence. Preserve setup failures separately from format, compiler or behavior failures. Check the effective Go version inside the job before setting GOTOOLCHAIN=local.
 
 ## Separate isolated declaration setup from SDK defects
 
@@ -370,7 +370,7 @@
 
 **Problem:** A new subset-persistence assertion rejected a valid saved array because its JSON was indented rather than compact. A later source review incorrectly called a batch snapshot's empty/null distinction irrelevant after misreading its JSON tag as omitempty.
 **Cause or correction:** Whitespace is not part of the selection contract; decoded presence, nullability and values are. The snapshot has no omitempty tag, so cloning must retain its nil versus nonnil-empty distinction. Original legacy-file preservation remains a byte-level contract.
-**Prevention:** Inspect the actual serialization tag and decode current JSON to assert the required values and omitted/null/empty distinctions. Use the existing clone path with nil-preserving copies rather than wrappers or restoration scans. Reserve exact byte comparisons for contracts that preserve the original bytes.
+**Prevention:** Inspect the actual serialization tag and decode current JSON to assert the required values and omitted/null/empty distinctions. Use the existing clone path with nil-preserving copies rather than wrappers or restoration scans. Reserve exact byte comparisons for contracts that preserve the original bytes. Match normalized empty material arrays when checking saved answers after reopen.
 
 ## Keep supported tool catalogs separate from defaults
 

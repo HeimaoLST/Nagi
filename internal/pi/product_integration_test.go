@@ -682,7 +682,8 @@ func TestPiProductProcessTargetsConcurrentActivityQuestions(t *testing.T) {
 	_, err = reopened.client.StopActivity(ctx, stop)
 	piRejected(t, err, "operation_conflict")
 	stoppedAnswer := pi.ProductAnswerParams{ProductActivityExecutionParams: pi.ProductActivityExecutionParams{ProductActivityParams: pi.ProductActivityParams{ActivityID: copper}, ExecutionID: copperRun},
-		QuestionID: copperQuestion.QuestionID, QuestionRevision: copperQuestion.Revision, OperationID: "answer-stopped-copper", ProductText: pi.ProductText{Text: "Keep the answer on the interrupted execution"}}
+		QuestionID: copperQuestion.QuestionID, QuestionRevision: copperQuestion.Revision, OperationID: "answer-stopped-copper",
+		ProductText: pi.ProductText{Text: "Keep the answer on the interrupted execution", Materials: []pi.ProductMaterial{}}}
 	saved, err := reopened.client.AnswerQuestion(ctx, stoppedAnswer)
 	if err != nil || !saved.AnswerSaved || saved.Delivery != "saved" || saved.ExecutionID != copperRun || saved.QuestionID != copperQuestion.QuestionID {
 		t.Fatalf("answer to interrupted execution=%+v error=%v", saved, err)
