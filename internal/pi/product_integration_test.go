@@ -597,11 +597,22 @@ func TestPiProductProcessTargetsConcurrentActivityQuestions(t *testing.T) {
 			Materials: []pi.ProductMaterial{{ID: "cedar-answer-capture", Revision: 1, Name: "Answer evidence", Text: "captured answer material"}}}}
 	_, err = process.client.AnswerQuestion(ctx, answer)
 	piRejected(t, err, "stale_revision")
+	foreign := answer
+	foreign.QuestionRevision = question.Revision
+	foreign.ActivityID, foreign.ExecutionID, foreign.OperationID = copper, copperRun, "answer-foreign-question"
+	_, err = process.client.AnswerQuestion(ctx, foreign)
+	piRejected(t, err, "not_found")
+	foreign.ActivityID, foreign.OperationID = cedar, "answer-foreign-execution"
+	_, err = process.client.AnswerQuestion(ctx, foreign)
+	piRejected(t, err, "question_conflict")
 	stop := pi.ProductActivityStopParams{ProductActivityExecutionParams: pi.ProductActivityExecutionParams{ProductActivityParams: pi.ProductActivityParams{ActivityID: cedar}, ExecutionID: copperRun}, OperationID: "wrong-stop"}
 	_, err = process.client.StopActivity(ctx, stop)
 	piRejected(t, err, "not_found")
 	if after := get(copper); len(after.Executions) != 1 || after.Executions[0].ExecutionID != copperRun || after.Executions[0].State != "running" {
 		t.Fatalf("wrong-owner Stop changed the held execution: %+v", after.Executions)
+	}
+	if after := get(copper); after.State != "waitingForAnswer" || len(after.Questions) != 1 || !reflect.DeepEqual(after.Questions[0], copperQuestion) {
+		t.Fatalf("refused answer changed the other activity's question: %+v", after)
 	}
 	if after := get(cedar); after.State != "waitingForAnswer" || len(after.Questions) != 1 || !reflect.DeepEqual(after.Questions[0], question) {
 		t.Fatalf("refused commands changed the waiting activity: %+v", after)

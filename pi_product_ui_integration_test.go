@@ -330,15 +330,19 @@ func TestPiAppConcurrentActivities(t *testing.T) {
 	const material, excerpt = "Cedar answer evidence", "Fourteen is in the reference inventory"
 	const resultName, resultCall = "inventory-result.txt", "write-inventory-result"
 	const resultContent, revisedContent = "Original inventory file", "Current inventory file"
+	const nextPrompt, nextResult = "Recheck the inventory", "Recheck complete, see inventory-result.txt"
+	const nextExcerpt, quitPrompt = "Only review the revised inventory", "Copper draft"
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	primary := &piAppProvider{limit: 3}
+	primary := &piAppProvider{limit: 4}
 	questionCall := piAppCall{name: "issue_wait", id: "activity-question", args: piAppArguments(map[string]any{"text": "Which sample?"})}
 	writeCall := piAppCall{name: "write", id: resultCall, args: piAppArguments(map[string]any{"path": resultName, "content": resultContent})}
 	if err := primary.install([]piAppCall{questionCall, writeCall}, resultText, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	held, stopped := make(chan struct{}), make(chan bool, 1)
+	quitHeld, quitCanceled := make(chan struct{}), make(chan struct{})
+	var quitRequests atomic.Int32
 	var heldRequests atomic.Int32
 	root := prepareProductWorkbench(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 512<<10))
@@ -360,6 +364,16 @@ func TestPiAppConcurrentActivities(t *testing.T) {
 			}
 			return
 		}
+		if bytes.Contains(body, []byte(quitPrompt)) {
+			if quitRequests.Add(1) != 1 {
+				http.Error(w, "unexpected repeat of the Quit request", http.StatusBadRequest)
+				return
+			}
+			close(quitHeld)
+			<-r.Context().Done()
+			close(quitCanceled)
+			return
+		}
 		r.Body = io.NopCloser(bytes.NewReader(body))
 		primary.ServeHTTP(w, r)
 	}))
@@ -370,7 +384,7 @@ func TestPiAppConcurrentActivities(t *testing.T) {
 	resultPath := filepath.Join(workspace, resultName)
 	if err := writeProfileJSON(guiStorePath(), storedState{Version: contactStoreVersion, Selected: "cedar", Contacts: []storedContact{
 		{ID: "cedar", Name: "Cedar", Workspace: root, Draft: "Cedar draft"},
-		{ID: "copper", Name: "Copper", Workspace: root, Draft: "Copper draft"},
+		{ID: "copper", Name: "Copper", Workspace: root, Draft: quitPrompt},
 	}, Issues: []storedIssue{
 		{ID: firstID, ContactID: "cedar", Goal: firstGoal, Status: "not_started", RequirementsRevision: 1},
 		{ID: secondID, ContactID: "cedar", Goal: secondGoal, Status: "not_started", RequirementsRevision: 1},
@@ -399,10 +413,11 @@ func TestPiAppConcurrentActivities(t *testing.T) {
 			return cedar.activity.activity != nil && cedar.activity.activity.ActivityID == id && !cedar.activity.reading
 		})
 	}
-	readResult := func(w *productWorkbench, cedar *contact) pi.ProductActivityResult {
+	readResult := func(w *productWorkbench, cedar *contact, run, text string) pi.ProductActivityResult {
+		t.Helper()
 		w.frame(func() { cedar.activity.scroll.Y = 1000 })
-		w.click(msg.IssueOpenResultRun("1"))
-		w.wait(func() bool { return cedar.activity.result != nil && w.view.HasText(resultText) })
+		w.click(msg.IssueOpenResultRun(run))
+		w.wait(func() bool { return cedar.activity.result != nil && w.view.HasText(text) })
 		var result pi.ProductActivityResult
 		w.pump.do(func() { result = *cedar.activity.result })
 		return result
@@ -490,6 +505,50 @@ func TestPiAppConcurrentActivities(t *testing.T) {
 	back()
 	selectActivity(w, cedar, firstGoal, firstID)
 	bottom()
+	profile := guiStorePath()
+	activityBefore := get(w, firstID)
+	durableBefore := recoverySavedBytes(t, profile)
+	requestsBefore := primary.count()
+	func() {
+		backup := filepath.Join(root, "profile-before-answer.json")
+		if err := os.Rename(profile, backup); err != nil {
+			t.Fatal(err)
+		}
+		defer func() {
+			if err := os.Rename(backup, profile); err != nil {
+				t.Fatalf("restore the test profile: %v", err)
+			}
+		}()
+		if err := os.Mkdir(profile, 0700); err != nil {
+			t.Fatal(err)
+		}
+		defer func() {
+			if err := os.Remove(profile); err != nil {
+				t.Errorf("remove the write obstruction: %v", err)
+			}
+		}()
+		w.click(msg.ContactSaveChanges())
+		w.wait(func() bool {
+			p := &cedar.activity
+			if p.changing || !strings.Contains(p.actionProblem, "rename") {
+				return false
+			}
+			p.scroll.Y = 0
+			w.view.Frame()
+			return w.view.HasText(p.actionProblem)
+		})
+		var formRetained bool
+		w.pump.do(func() {
+			form := cedar.activity.forms[firstID]
+			formRetained = form != nil && form.target.QuestionID == question.QuestionID && form.target.ExecutionID == question.ExecutionID &&
+				form.text == answer && len(form.materials.items) == 1 && form.materials.items[0].Name == material && form.materials.items[0].Text == excerpt
+		})
+		if !formRetained || !reflect.DeepEqual(get(w, firstID), activityBefore) || primary.count() != requestsBefore ||
+			!bytes.Equal(recoverySavedBytes(t, backup), durableBefore) {
+			t.Fatal("failed answer write changed the form, question, durable profile, or provider requests")
+		}
+	}()
+	bottom()
 	w.click(msg.ContactSaveChanges())
 	w.wait(func() bool {
 		item := cedar.activity.activity
@@ -522,7 +581,31 @@ func TestPiAppConcurrentActivities(t *testing.T) {
 	})
 	back()
 	selectActivity(w, cedar, firstGoal, firstID)
-	result := readResult(w, cedar)
+	if err := primary.install([]piAppCall{}, nextResult, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	next, err := w.client.ContinueActivity(ctx, pi.ProductActivityContinueParams{
+		ProductActivityParams: pi.ProductActivityParams{ActivityID: firstID},
+		ExpectedRevision:      get(w, firstID).Revision,
+		OperationID:           "continue-cedar-again",
+		ProductText: pi.ProductText{Text: nextPrompt, Materials: []pi.ProductMaterial{
+			{ID: "recheck-input", Revision: 1, Name: "Recheck evidence", Text: nextExcerpt},
+		}},
+	})
+	if err != nil || next.Execution == nil || next.Execution.ExecutionID == question.ExecutionID {
+		t.Fatalf("continuing the same activity did not admit a distinct execution: %+v, %v", next, err)
+	}
+	nextID := next.Execution.ExecutionID
+	w.wait(func() bool {
+		item := cedar.activity.activity
+		return item != nil && len(item.Executions) == 2 && item.Executions[1].ExecutionID == nextID && item.Executions[1].State == "completed" && !cedar.activity.reading
+	})
+	secondResult := readResult(w, cedar, "2", nextResult)
+	if secondResult.ActivityID != firstID || secondResult.ExecutionID != nextID || secondResult.Text != nextResult || len(secondResult.Files) != 0 {
+		t.Fatalf("the second execution inherited a result or file effect: %+v", secondResult)
+	}
+	w.click(msg.BackLabel())
+	result := readResult(w, cedar, "1", resultText)
 	if result.ActivityID != firstID || result.ExecutionID != question.ExecutionID || result.Text != resultText {
 		t.Fatalf("result opened against the wrong execution: %+v", result)
 	}
@@ -543,7 +626,11 @@ func TestPiAppConcurrentActivities(t *testing.T) {
 
 	reopened, cedar := open()
 	selectActivity(reopened, cedar, firstGoal, firstID)
-	if got := readResult(reopened, cedar); !reflect.DeepEqual(got, result) {
+	if got := readResult(reopened, cedar, "2", nextResult); !reflect.DeepEqual(got, secondResult) {
+		t.Fatalf("second result changed after restart: %+v", got)
+	}
+	reopened.click(msg.BackLabel())
+	if got := readResult(reopened, cedar, "1", resultText); !reflect.DeepEqual(got, result) {
 		t.Fatalf("result changed after restart: %+v", got)
 	}
 	readCurrentFile(reopened, cedar, revisedContent)
@@ -554,15 +641,72 @@ func TestPiAppConcurrentActivities(t *testing.T) {
 	}
 	var drafts [2]string
 	reopened.pump.do(func() { drafts = [2]string{cedar.Draft, reopened.app.contactByID("copper").Draft} })
-	if drafts != [2]string{"Cedar draft", "Copper draft"} {
+	if drafts != [2]string{"Cedar draft", quitPrompt} {
 		t.Fatalf("restart changed the two Bot drafts: %q", drafts)
 	}
-	reopened.shutdown(ctx)
+	copper := reopened.app.contactByID("copper")
+	reopened.frame(func() { reopened.app.selectContact(1) })
+	reopened.wait(func() bool { return reopened.app.selectedContact() == copper && copper.Loaded })
+	reopened.click(msg.SendAction())
+	select {
+	case <-quitHeld:
+	case <-ctx.Done():
+		t.Fatal("the conversation did not reach the provider before Quit")
+	}
+	reopened.wait(func() bool {
+		return copper.SendState == sendAccepted && copper.ActiveTaskID != "" && reopened.app.submissionInFlight == 0
+	})
+	var quitExecution, quitConversation string
+	var quitCalls int
+	reopened.pump.do(func() {
+		quitExecution, quitConversation = copper.ActiveTaskID, copper.SessionID
+		reopened.app.requestQuit = func() { quitCalls++ }
+		reopened.app.drainPiHost()
+	})
+	reopened.pump.wait(func() bool { return reopened.app.quitReady })
+	outcome, err := reopened.client.Wait(ctx)
+	if err != nil || !outcome.Reaped || outcome.ExitCode != 0 {
+		t.Fatalf("active desktop Quit did not reap the worker: %+v, %v", outcome, err)
+	}
+	select {
+	case <-reopened.client.CallbacksDone():
+	default:
+		t.Fatal("desktop Quit completed with worker callbacks still running")
+	}
+	select {
+	case <-quitCanceled:
+	case <-ctx.Done():
+		t.Fatal("desktop Quit did not cancel the provider request")
+	}
+	reopened.pump.do(func() {
+		if quitCalls != 1 || reopened.app.pi != nil || copper.ActiveTaskID != "" || copper.LastTaskID != quitExecution || copper.SessionState != "interrupted" {
+			t.Errorf("desktop Quit did not settle the captured execution before releasing the worker: calls=%d execution=%s state=%s", quitCalls, copper.LastTaskID, copper.SessionState)
+		}
+	})
+	afterQuit := openProductWorkbench(t)
+	conversation, err := afterQuit.client.GetConversation(ctx, quitConversation)
+	if err != nil || conversation.LatestExecution == nil || conversation.LatestExecution.ExecutionID != quitExecution || conversation.LatestExecution.State != "interrupted" {
+		t.Fatalf("reopen after Quit lost the interrupted execution: %+v, %v", conversation, err)
+	}
+	afterQuit.shutdown(ctx)
 	primary.mu.Lock()
 	defer primary.mu.Unlock()
-	if heldRequests.Load() != 1 || primary.requests != 3 || len(primary.problems) != 0 ||
+	if heldRequests.Load() != 1 || quitRequests.Load() != 1 || primary.requests != 4 || len(primary.problems) != 0 ||
 		!bytes.Contains(primary.bodies[1], []byte(answer)) || !bytes.Contains(primary.bodies[1], []byte(excerpt)) {
 		t.Fatalf("provider request routing or replay mismatch: answered=%d held=%d errors=%v", primary.requests, heldRequests.Load(), primary.problems)
+	}
+	var continuation struct {
+		Messages []struct {
+			Role    string          `json:"role"`
+			Content json.RawMessage `json:"content"`
+		} `json:"messages"`
+	}
+	if err := json.Unmarshal(primary.bodies[3], &continuation); err != nil || len(continuation.Messages) == 0 {
+		t.Fatalf("invalid second execution request: %v", err)
+	}
+	input := continuation.Messages[len(continuation.Messages)-1]
+	if input.Role != "user" || !bytes.Contains(input.Content, []byte(nextPrompt)) || !bytes.Contains(input.Content, []byte(nextExcerpt)) || bytes.Contains(input.Content, []byte(excerpt)) {
+		t.Fatalf("second execution received the wrong captured input: %s", input.Content)
 	}
 }
 
