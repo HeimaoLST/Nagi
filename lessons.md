@@ -234,11 +234,11 @@
 **Cause or correction:** The assembler called hashlib.file_digest, which requires Python 3.11. The worker builder already uses incremental SHA-256.
 **Prevention:** Use the supported hashing pattern and verify the helper with the interpreter used by the packaging job.
 
-## Keep worker build payloads outside the checkout
+## Distinguish worker build inputs from packaged outputs
 
-**Problem:** The initial worker build copied the lab convention and emitted an ignored dist directory inside the task worktree despite the project rule requiring external outputs.
-**Cause or correction:** A disposable ignored directory is not a delivery workspace. Package provenance must bind actual external compiled/runtime/dependency inputs.
-**Prevention:** Require an explicit fresh external worker output, record its source/runtime/lock/notice hashes and use that payload for integration and packaging. Archive verified prior outputs before retiring the old generated directory; never substitute its historical test paths into later results.
+**Problem:** One worker build wrote its output inside the checkout. Another supplied a finished worker payload as the runtime input and failed while reading the runtime verification receipt.
+**Cause or correction:** The worker builder requires a staged Node distribution with its verified archive receipt and original LICENSE. The output contains the assembled worker and a different manifest.
+**Prevention:** Pass the verified Node staging directory to `build-pi-worker.py --runtime` and a fresh external directory to `--output`. Use the resulting payload and its source, runtime and dependency hashes for integration tests and app assembly.
 
 ## Bind the compiler that actually produces the payload
 
