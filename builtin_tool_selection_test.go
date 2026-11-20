@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo/ui"
+
+	"github.com/HeimaoLST/Nagi/locales"
 )
 
 func builtinToolsForTest() []runtimeBuiltinTool {
@@ -40,7 +42,7 @@ func storedBuiltinToolsForTest(t *testing.T, path string) (present bool, raw str
 
 func clickProfileAction(t *testing.T, tr *ui.Tester, label string) {
 	t.Helper()
-	if err := clickSettingsAction(tr, label); err != nil {
+	if err := clickBotProfileAction(tr, label); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
@@ -69,9 +71,10 @@ func freshBuiltinProfileTestApp(t *testing.T) (*appModel, *contact) {
 // the draft field. The old UI fails because it has no built-in-tool entry.
 func TestContactProfileShowsBuiltinToolSelection(t *testing.T) {
 	a, ct := freshBuiltinProfileTestApp(t)
-	a.openSettingsTab(settingsTabContact, settingsSourceRail)
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
+	openBotProfileFromRail(t, tr, locales.In("en").AvatarContactLabel(ct.Name))
+	editor := a.profileEditorFor(ct.ID)
 	if !tr.HasText("Built-in tools") || !tr.HasText("Use host defaults (bash, edit, read, write)") {
 		t.Fatalf("contact profile has no built-in tool selection entry: %v", tr.Texts())
 	}
@@ -81,7 +84,7 @@ func TestContactProfileShowsBuiltinToolSelection(t *testing.T) {
 
 	// Save the omitted/default value: the store must keep the field absent.
 	clickProfileAction(t, tr, "Save changes")
-	if editor := a.settingsContactEditor(); editor.Error != "" || editor.Status != profileNoticeSavedDefaults || a.localSaveErr != "" {
+	if editor.Error != "" || editor.Status != profileNoticeSavedDefaults || a.localSaveErr != "" {
 		t.Fatalf("default profile save failed: editor=%+v local=%q", editor, a.localSaveErr)
 	}
 	if ct.BuiltinTools != nil {
@@ -96,11 +99,11 @@ func TestContactProfileShowsBuiltinToolSelection(t *testing.T) {
 	for _, name := range []string{"bash", "edit", "write"} {
 		clickProfileAction(t, tr, name)
 	}
-	if got := a.settingsContactEditor().Draft.BuiltinTools; got == nil || len(*got) != 1 || (*got)[0] != "read" {
+	if got := editor.Draft.BuiltinTools; got == nil || len(*got) != 1 || (*got)[0] != "read" {
 		t.Fatalf("UI subset draft = %v", got)
 	}
 	clickProfileAction(t, tr, "Save changes")
-	if editor := a.settingsContactEditor(); editor.Error != "" || editor.Status != profileNoticeSavedDefaults || a.localSaveErr != "" {
+	if editor.Error != "" || editor.Status != profileNoticeSavedDefaults || a.localSaveErr != "" {
 		t.Fatalf("subset profile save failed: editor=%+v local=%q", editor, a.localSaveErr)
 	}
 	if ct.BuiltinTools == nil || len(*ct.BuiltinTools) != 1 || (*ct.BuiltinTools)[0] != "read" {
@@ -121,11 +124,11 @@ func TestContactProfileShowsBuiltinToolSelection(t *testing.T) {
 	// Empty the explicit subset. This is not the host default and must persist
 	// as a non-nil empty slice.
 	clickProfileAction(t, tr, "read")
-	if got := a.settingsContactEditor().Draft.BuiltinTools; got == nil || len(*got) != 0 {
+	if got := editor.Draft.BuiltinTools; got == nil || len(*got) != 0 {
 		t.Fatalf("UI empty draft = %v", got)
 	}
 	clickProfileAction(t, tr, "Save changes")
-	if editor := a.settingsContactEditor(); editor.Error != "" || editor.Status != profileNoticeSavedDefaults || a.localSaveErr != "" {
+	if editor.Error != "" || editor.Status != profileNoticeSavedDefaults || a.localSaveErr != "" {
 		t.Fatalf("empty profile save failed: editor=%+v local=%q", editor, a.localSaveErr)
 	}
 	if ct.BuiltinTools == nil || len(*ct.BuiltinTools) != 0 {
@@ -219,7 +222,8 @@ func TestContactProfileBuiltinSelectionIsPerContact(t *testing.T) {
 	read := []string{"read"}
 	second.BuiltinTools = &read
 	a.contacts = append(a.contacts, second)
-	editor := a.ensureSettingsProfileEditor(first.ID)
+	a.openContactProfile(first.ID)
+	editor := a.profileEditorFor(first.ID)
 	if editor == nil {
 		t.Fatal("first contact profile editor is unavailable")
 	}
@@ -238,13 +242,14 @@ func TestContactProfileBuiltinSelectionIsPerContact(t *testing.T) {
 func TestContactProfileBuiltinSaveFailureKeepsDraft(t *testing.T) {
 	a, ct := freshBuiltinProfileTestApp(t)
 	a.store.path = t.TempDir()
-	a.openSettingsTab(settingsTabContact, settingsSourceRail)
-	editor := a.settingsContactEditor()
-	read := []string{"read"}
-	editor.Draft.BuiltinTools = &read
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	if err := clickSettingsAction(tr, "Save changes"); err != nil {
+	openBotProfileFromRail(t, tr, locales.In("en").AvatarContactLabel(ct.Name))
+	editor := a.profileEditorFor(ct.ID)
+	read := []string{"read"}
+	editor.Draft.BuiltinTools = &read
+	tr.Frame()
+	if err := clickBotProfileAction(tr, locales.In("en").ContactSaveChanges()); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
@@ -260,12 +265,12 @@ func TestContactProfileBuiltinSaveFailureKeepsDraft(t *testing.T) {
 }
 
 func TestBuiltinToolCatalogErrorDoesNotOfferDeadRetry(t *testing.T) {
-	a, _ := freshBuiltinProfileTestApp(t)
+	a, ct := freshBuiltinProfileTestApp(t)
 	a.connectionManaged = true
 	a.runtimeStatus = runtimeStateFailed
 	a.runtimeBuiltinToolsLoaded = false
 	a.runtimeBuiltinToolsErr = "Runtime tool list unavailable."
-	a.openSettingsTab(settingsTabContact, settingsSourceRail)
+	a.openContactProfile(ct.ID)
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
 	if !tr.HasText("Runtime tool list unavailable.") || tr.HasText("Retry built-in tools") {
@@ -300,7 +305,8 @@ func TestBuiltinToolCatalogErrorDoesNotOfferDeadRetry(t *testing.T) {
 func TestFirstUseBuiltinSelectionRequiresManagedConnection(t *testing.T) {
 	a, ct := freshBuiltinProfileTestApp(t)
 	a.connectionManaged = false
-	editor := a.ensureSettingsProfileEditor(ct.ID)
+	a.openContactProfile(ct.ID)
+	editor := a.profileEditorFor(ct.ID)
 	if editor == nil {
 		t.Fatal("first-use contact profile editor is unavailable")
 	}
@@ -314,7 +320,6 @@ func TestFirstUseBuiltinSelectionRequiresManagedConnection(t *testing.T) {
 	if ct.BuiltinTools != nil {
 		t.Fatalf("legacy rejection changed profile: %v", ct.BuiltinTools)
 	}
-	a.openSettingsTab(settingsTabContact, settingsSourceRail)
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
 	if !tr.HasText("Save and Apply a managed Nagi connection") || tr.HasText("Use host defaults") {
@@ -341,9 +346,9 @@ func TestPreviewBuiltinToolSelection(t *testing.T) {
 		}{{"1040x720", 1040, 720}, {"720x640", 720, 640}} {
 			a, _ := freshBuiltinProfileTestApp(t)
 			a.windowWidth = size.w
-			a.openSettingsTab(settingsTabContact, settingsSourceRail)
+			a.openContactProfile(a.selectedID())
 			read := []string{"read"}
-			a.settingsContactEditor().Draft.BuiltinTools = &read
+			a.profileEditorFor(a.selectedID()).Draft.BuiltinTools = &read
 			tr := ui.NewTester(a.view, size.w, size.h)
 			tr.SetDark(dark)
 			tr.Frame()
@@ -353,7 +358,7 @@ func TestPreviewBuiltinToolSelection(t *testing.T) {
 				if headerOK && header.Y >= 0 && header.Y < 120 && lastOK && last.Y >= 0 && last.Y+last.H <= float32(size.h) {
 					break
 				}
-				tr.Scroll(float32(size.w)/2, float32(size.h)/2, 0, 120)
+				tr.Scroll(float32(size.w-40), float32(size.h)/2, 0, 120)
 				tr.Frame()
 			}
 			writePreviewPNG(t, filepath.Join(dir, "builtin-tool-selection-"+theme+"-"+size.name+".png"), tr.Image())

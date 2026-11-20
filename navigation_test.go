@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo/ui"
+
+	"github.com/HeimaoLST/Nagi/locales"
 )
 
 func TestResizeDoesNotStealSettingsFocus(t *testing.T) {
@@ -12,7 +14,7 @@ func TestResizeDoesNotStealSettingsFocus(t *testing.T) {
 	a.windowWidth = 1040
 	a.workspaceOpen = false
 	a.detail = ""
-	a.openDetail(detailProfile)
+	a.openContactProfile(a.selectedID())
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
 	tr.Key(ui.Cmd, ui.KeyComma)
@@ -26,7 +28,7 @@ func TestResizeDoesNotStealSettingsFocus(t *testing.T) {
 	if !a.settingsOpen || !tr.Focused("← Back to workbench") {
 		t.Fatalf("resize stole Settings focus: settings=%v texts=%v", a.settingsOpen, tr.Texts())
 	}
-	if tr.HasText("Composer for Nagi") || tr.HasText("Add contact") {
+	if tr.HasText("Composer for Nagi") || tr.HasText(locales.In("en").AvatarAddContact()) {
 		t.Fatal("Settings resize mounted the workbench background")
 	}
 }
@@ -35,7 +37,7 @@ func TestAvatarSettingsResizeBackFocus(t *testing.T) {
 	t.Run("roundtrip-back-to-settings", func(t *testing.T) {
 		a, _ := workspaceTestApp(t)
 		a.windowWidth = 960
-		a.openDetail(detailProfile)
+		a.openContactProfile(a.selectedID())
 		tr := ui.NewTester(a.view, 960, 640)
 		tr.Frame()
 		if err := tr.Click("Settings"); err != nil {
@@ -66,7 +68,7 @@ func TestAvatarSettingsResizeBackFocus(t *testing.T) {
 	t.Run("settings-to-899-back-visible", func(t *testing.T) {
 		a, _ := workspaceTestApp(t)
 		a.windowWidth = 960
-		a.openDetail(detailProfile)
+		a.openContactProfile(a.selectedID())
 		tr := ui.NewTester(a.view, 960, 640)
 		tr.Frame()
 		if err := tr.Click("Settings"); err != nil {
@@ -115,7 +117,7 @@ func TestProfileSettingsReturnToVisibleOrigin(t *testing.T) {
 	a.windowWidth = 1040
 	a.workspaceOpen = false
 	a.detail = ""
-	a.openDetail(detailProfile)
+	a.openContactProfile(a.selectedID())
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
 	tr.Key(ui.Cmd, ui.KeyComma)
@@ -127,7 +129,7 @@ func TestProfileSettingsReturnToVisibleOrigin(t *testing.T) {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if !a.detailIs(detailProfile) || !tr.Focused("Edit full profile") {
-		t.Fatalf("profile settings return did not focus its visible Edit: %v", tr.Texts())
+	if !a.detailIs(detailProfile) || !tr.Focused(locales.In("en").ProfileClose()) {
+		t.Fatalf("Settings Back did not restore focus to the visible Bot profile Back control: %v", tr.Texts())
 	}
 }

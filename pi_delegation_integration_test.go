@@ -204,9 +204,15 @@ func TestPiAppProductScopedDelegation(t *testing.T) {
 		t.Fatalf("read recipient draft before profile save: %+v, %v", draftBefore, err)
 	}
 	const savedName = "Inventory Bot"
-	w.frame(func() { w.app.openSettingsTab(settingsTabContact, settingsSourceRail) })
-	w.click(msg.EditContactLabel())
-	w.click(botsBefore[recipientIndex].Profile.Name)
+	openProfile := func(workbench *productWorkbench, name string) {
+		t.Helper()
+		var openErr error
+		workbench.frame(func() { openErr = chooseBotProfileFromRail(workbench.view, msg.AvatarContactLabel(name)) })
+		if openErr != nil {
+			t.Fatal(openErr)
+		}
+	}
+	openProfile(w, botsBefore[recipientIndex].Profile.Name)
 	w.click(msg.FieldNameAccessible())
 	w.frame(func() {
 		w.view.Key(ui.Cmd, ui.KeyA)
@@ -215,14 +221,14 @@ func TestPiAppProductScopedDelegation(t *testing.T) {
 	saveProfile := func(wantError, wantName string) {
 		t.Helper()
 		var clickErr error
-		w.frame(func() { clickErr = clickSettingsAction(w.view, msg.ContactSaveChanges()) })
+		w.frame(func() { clickErr = clickBotProfileAction(w.view, msg.ContactSaveChanges()) })
 		if clickErr != nil {
 			t.Fatal(clickErr)
 		}
 		w.pump.do(func() {
-			editor := w.app.settingsContactEditor()
-			if editor == nil || editor.Error != wantError || editor.Draft.Name != savedName || w.app.settingsContactID != recipient ||
-				w.app.contactByID(recipient).Name != wantName || w.app.selectedID() != origin {
+			editor := w.app.profileEditorFor(recipient)
+			if editor == nil || editor.Error != wantError || editor.Draft.Name != savedName || w.app.contactProfileID != recipient ||
+				w.app.contactByID(recipient).Name != wantName || w.app.selectedID() != origin || w.app.settingsOpen {
 				t.Error("profile save changed the selected conversation, lost the draft, or had the wrong outcome")
 			}
 		})
@@ -287,6 +293,53 @@ func TestPiAppProductScopedDelegation(t *testing.T) {
 	if err != nil || result.ActivityID != activityID || result.ExecutionID != executionID || result.Text != resultText || result.Delivery != "available" {
 		t.Fatalf("origin lost the exact delegated result: %+v, %v", result, err)
 	}
+	profileAction := func(label string) {
+		t.Helper()
+		var actionErr error
+		reopened.frame(func() { actionErr = clickBotProfileAction(reopened.view, label) })
+		if actionErr != nil {
+			t.Fatal(actionErr)
+		}
+	}
+	currentRecipient := func() pi.ProductBot {
+		t.Helper()
+		bots := listBots(reopened.client)
+		index := slices.IndexFunc(bots, func(bot pi.ProductBot) bool { return bot.BotID == recipient })
+		if index < 0 {
+			t.Fatal("the recipient disappeared from the Bot Team")
+		}
+		return bots[index]
+	}
+	openProfile(reopened, savedName)
+	profileAction(msg.ProfileArchive())
+	archived := currentRecipient()
+	if !archived.Archived || archived.CurrentConversationID != recipientConversation {
+		t.Fatalf("Archive changed the wrong Bot or conversation: %+v", archived)
+	}
+	reopened.click(msg.ProfileClose())
+	reopened.wait(func() bool {
+		return reopened.view.Focused(msg.AvatarContactLabel(savedName)) && reopened.app.selectedID() == origin
+	})
+	openProfile(reopened, savedName)
+	profileAction(msg.ProfileRestore())
+	restored := currentRecipient()
+	if restored.Archived || restored.CurrentConversationID != recipientConversation {
+		t.Fatalf("Restore did not keep the recipient's conversation: %+v", restored)
+	}
+	profileAction(msg.ProfileSaveAndNew())
+	updated := currentRecipient()
+	if updated.CurrentConversationID == "" || updated.CurrentConversationID == recipientConversation {
+		t.Fatalf("Save and start new chat retained the old current conversation: %+v", updated)
+	}
+	newChat, err := reopened.client.GetConversation(ctx, updated.CurrentConversationID)
+	if err != nil || newChat.BotID != recipient || !reflect.DeepEqual(newChat.Draft, draftBefore.Draft) || newChat.LatestExecution != nil {
+		t.Fatalf("new chat did not preserve the recipient draft without sending: %+v, %v", newChat, err)
+	}
+	reopened.pump.do(func() {
+		if reopened.app.selectedID() != origin {
+			t.Error("recipient profile actions changed the selected chat")
+		}
+	})
 	reopened.shutdown(ctx)
 	if got := p.requests.Load(); got != 5 {
 		t.Fatalf("delegation, duplicate or restart contacted the provider %d times, want 5", got)

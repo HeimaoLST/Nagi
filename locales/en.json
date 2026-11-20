@@ -36,20 +36,6 @@
   "@settingsConnection": {
     "description": "The Connection & model category in Settings."
   },
-  "settingsContact": "Bot profile",
-  "settingsContactTitle": "Bot profile: {name}",
-  "@settingsContactTitle": {
-    "description": "The heading of the selected Bot profile.",
-    "placeholders": {
-      "name": {
-        "type": "String",
-        "example": "Research assistant"
-      }
-    }
-  },
-  "@settingsContact": {
-    "description": "The Bot profile category in Settings."
-  },
   "settingsAdvanced": "Advanced",
   "settingsNavigationLabel": "Settings navigation",
   "@settingsNavigationLabel": {
@@ -316,10 +302,6 @@
   "@taskContextSaveChanges": {
     "description": "The action saving materials changes."
   },
-  "editContactLabel": "Edit Bot",
-  "@editContactLabel": {
-    "description": "The label and accessible name of the Bot picker in Settings."
-  },
   "protocolLabel": "Protocol",
   "@protocolLabel": {
     "description": "The label of the connection protocol selection."
@@ -481,7 +463,6 @@
   "connectionNoneApplied": "No connection is currently applied.",
   "connectionUnsavedForm": "Unsaved form changes.",
   "connectionSavedAwaitingApply": "Saved, but not applied. When applying is available, choose Apply saved. Running work keeps its settings.",
-  "settingsNoContactToEdit": "No Bot is available to edit.",
   "settingsUnsavedChanges": "Unsaved changes.",
   "settingsBuiltinManagedError": "Save and Apply a managed Nagi connection before customizing built-in tools.",
   "settingsBuiltinNotReady": "Built-in tools are available after Runtime is ready.",
@@ -539,18 +520,6 @@
   "@newContactName": {
     "description": "The default name of a newly added Bot.",
     "placeholders": {
-      "number": {
-        "type": "int"
-      }
-    }
-  },
-  "contactChoiceDuplicate": "{name} ({number})",
-  "@contactChoiceDuplicate": {
-    "description": "A Bot picker label disambiguated by its position.",
-    "placeholders": {
-      "name": {
-        "type": "String"
-      },
       "number": {
         "type": "int"
       }

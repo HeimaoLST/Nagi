@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -18,109 +19,116 @@ func containsText(values []string, needle string) bool {
 	return false
 }
 
-func TestSettingsContactPickerIsolatesProfileUndo(t *testing.T) {
-	isolateConnectionApp(t, t.TempDir(), "")
-	app, err := newRuntimeApp()
-	if err != nil {
+func openBotProfileFromRail(t *testing.T, tr *ui.Tester, label string) {
+	t.Helper()
+	if err := chooseBotProfileFromRail(tr, label); err != nil {
 		t.Fatal(err)
 	}
-	tr := ui.NewTester(app.view, 1040, 720)
-	tr.SetLocale("en")
-	tr.SetFocused(true)
+}
+
+func chooseBotProfileFromRail(tr *ui.Tester, label string) error {
+	if err := tr.RightClick(label); err != nil {
+		return err
+	}
+	if err := tr.ChooseMenuItem(locales.In("en").ContactProfileAction()); err != nil {
+		return fmt.Errorf("open %q profile: %w", label, err)
+	}
 	tr.Frame()
-	click := func(label string) {
-		t.Helper()
-		if err := tr.Click(label); err != nil {
-			t.Fatal(err)
+	return nil
+}
+
+func clickBotProfileAction(tr *ui.Tester, label string) error {
+	width, height := tr.Image().Bounds().Dx(), tr.Image().Bounds().Dy()
+	for range 12 {
+		if row, found := tr.Find(label); found && row.W > 0 && row.H > 0 && row.Y >= 0 && row.Y+row.H <= float32(height) {
+			return tr.Click(label)
 		}
+		tr.Scroll(float32(width-40), float32(height/2), 0, 210)
 		tr.Frame()
 	}
-	pickProfile := func(name string) {
-		t.Helper()
-		click("Edit contact")
-		click(name)
-	}
-	expectProfile := func(id, name string) {
-		t.Helper()
-		if app.settingsContactID != id {
-			t.Fatalf("profile picker selected %q, want %q", app.settingsContactID, id)
-		}
-		if got := app.settingsContactEditor().Draft.Name; got != name {
-			t.Fatalf("profile %q name draft = %q, want %q", id, got, name)
-		}
-	}
-	editName := func(name string) {
-		tr.Key(ui.Cmd, ui.KeyA)
-		tr.Type(name)
-		tr.Frame()
-	}
+	return fmt.Errorf("Bot profile action %q is outside the viewport", label)
+}
 
-	const conversationDraft = "Unsent message for A"
-	const profileDraftA = "Unsaved profile name for A"
-	const savedNameB = "Saved profile name for B"
-	msgs := locales.In("en")
-	a := app.selectedContact()
-	nameA := a.Name
-	click("← Back to workbench")
-	focusComposer(t, tr, msgs.ComposerLabel(nameA))
-	tr.Type(conversationDraft)
-	tr.Frame()
-	click("Add contact")
-	b := app.selectedContact()
-	nameB := b.Name
-	if a.ID == b.ID || a.Draft != conversationDraft || b.Draft != "" {
-		t.Fatalf("adding B did not isolate drafts: A (%q) = %q, B (%q) = %q", a.ID, a.Draft, b.ID, b.Draft)
-	}
-	click(msgs.AvatarContactLabel(nameA))
-	click("Settings")
-	click("Contact profile")
-	expectProfile(a.ID, nameA)
-	click("Contact name")
-	editName(profileDraftA)
-	expectProfile(a.ID, profileDraftA)
-	tr.Key(ui.Cmd, ui.KeyZ)
-	tr.Frame()
-	expectProfile(a.ID, nameA)
-	tr.Key(ui.Cmd|ui.Shift, ui.KeyZ)
-	tr.Frame()
-	expectProfile(a.ID, profileDraftA)
-
-	pickProfile(nameB)
-	expectProfile(b.ID, nameB)
-	click("Contact name")
-	if active, _ := tr.TextInputActive(); !tr.Focused("Contact name") || !active {
-		t.Fatal("B's name input did not receive keyboard focus")
-	}
-	tr.Key(ui.Cmd, ui.KeyZ)
-	tr.Frame()
-	expectProfile(b.ID, nameB)
-	pickProfile(nameA)
-	expectProfile(a.ID, profileDraftA)
-	pickProfile(nameB)
-	click("Contact name")
-	editName(savedNameB)
-	if err := clickSettingsAction(tr, "Save changes"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if a.Name != nameA || b.Name != savedNameB || app.selectedID() != a.ID || a.Draft != conversationDraft || b.Draft != "" {
-		t.Fatalf("B save crossed Bot boundaries: A name=%q draft=%q, B name=%q draft=%q, selected=%q", a.Name, a.Draft, b.Name, b.Draft, app.selectedID())
-	}
-
-	app, err = newRuntimeApp()
-	if err != nil {
-		t.Fatal(err)
-	}
-	tr = ui.NewTester(app.view, 1040, 720)
-	tr.SetLocale("en")
-	tr.SetFocused(true)
-	tr.Frame()
-	click("Settings")
-	click("Contact profile")
-	expectProfile(a.ID, nameA)
-	pickProfile(savedNameB)
-	expectProfile(b.ID, savedNameB)
-	if reopenedA, reopenedB := app.contactByID(a.ID), app.contactByID(b.ID); reopenedA.Draft != conversationDraft || reopenedB.Draft != "" {
-		t.Fatalf("reopened drafts crossed Bot boundaries: A=%q B=%q", reopenedA.Draft, reopenedB.Draft)
+func TestBotRailSecondaryClickTargetsNonselectedBot(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		width   int
+		compact bool
+	}{{"full row padding", 1280, false}, {"compact row slot", 1040, true}} {
+		t.Run(tc.name, func(t *testing.T) {
+			isolateConnectionApp(t, t.TempDir(), "")
+			app, err := newRuntimeApp()
+			if err != nil {
+				t.Fatal(err)
+			}
+			app.windowWidth = tc.width
+			app.closeSettings()
+			first := app.selectedContact()
+			app.addDefaultContact()
+			second := app.selectedContact()
+			first.Draft, second.Draft = "First unsent draft", "Second unsent draft"
+			app.selectContact(0)
+			if tc.compact {
+				app.openContactProfile(first.ID)
+			}
+			tr := ui.NewTester(app.view, tc.width, 720)
+			tr.SetLocale("en")
+			tr.SetFocused(true)
+			tr.Frame()
+			msgs := locales.In("en")
+			label := msgs.AvatarContactLabel(second.Name)
+			row, ok := tr.Find(label)
+			if !ok || app.avatarRailActive() != tc.compact || row.W < 32 || row.H < 32 {
+				t.Fatalf("missing Bot row in intended rail: %+v, compact=%t", row, app.avatarRailActive())
+			}
+			x, y := row.X+row.W/2, row.Y+row.H/2
+			if !tc.compact {
+				x = row.X + row.W - 12
+			}
+			tr.RightClickAt(x, y)
+			if app.selectedContact() != first {
+				t.Fatal("secondary click changed the selected chat")
+			}
+			if err := tr.ChooseMenuItem(msgs.ContactProfileAction()); err != nil {
+				t.Fatal(err)
+			}
+			tr.Frame()
+			if app.settingsOpen || app.selectedContact() != first || !tr.HasText(msgs.FieldNameAccessible()) {
+				t.Fatalf("the profile replaced Settings or switched the chat: %v", tr.Texts())
+			}
+			if err := tr.Click(msgs.FieldNameAccessible()); err != nil {
+				t.Fatal(err)
+			}
+			tr.Key(ui.Cmd, ui.KeyA)
+			tr.Type("Saved second Bot")
+			tr.Key(ui.Cmd, ui.KeyZ)
+			tr.Frame()
+			if editor := app.profileEditorFor(second.ID); editor == nil || editor.Draft.Name != second.Name {
+				t.Fatal("undo did not restore the second Bot's profile draft")
+			}
+			tr.Key(ui.Cmd|ui.Shift, ui.KeyZ)
+			if err := clickBotProfileAction(tr, msgs.ContactSaveChanges()); err != nil {
+				t.Fatal(err)
+			}
+			tr.Frame()
+			if second.Name != "Saved second Bot" || first.Name != "Nagi" || app.selectedContact() != first {
+				t.Fatalf("profile save targeted the wrong Bot: first=%q second=%q selected=%q", first.Name, second.Name, app.selectedID())
+			}
+			if err := tr.Click(msgs.ProfileClose()); err != nil {
+				t.Fatal(err)
+			}
+			tr.Frame()
+			label = msgs.AvatarContactLabel(second.Name)
+			if !tr.Focused(label) || !tr.HasText(msgs.ComposerLabel(first.Name)) {
+				t.Fatalf("Back did not restore the originating Bot row and original chat: %v", tr.Texts())
+			}
+			if err := tr.Click(label); err != nil {
+				t.Fatal(err)
+			}
+			tr.Frame()
+			if app.selectedContact() != second || !tr.HasText(msgs.ComposerLabel(second.Name)) || first.Draft != "First unsent draft" || second.Draft != "Second unsent draft" {
+				t.Fatalf("left click or chat drafts changed: %v", tr.Texts())
+			}
+		})
 	}
 }

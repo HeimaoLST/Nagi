@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
 	"github.com/HeimaoLST/Nagi/locales"
@@ -431,4 +432,69 @@ func (e *contactProfileEditor) view(c *ui.Context, t *ui.Theme, actions contactP
 			ui.Text(c, profileNoticeText(msgs, e.Status)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Text)
 		}
 	})
+}
+
+func (a *appModel) contactProfileForm(c *ui.Context, t *ui.Theme, ct *contact, editor *contactProfileEditor) {
+	msgs := locales.In(c.Locale())
+	editor.Archived = ct.Archived
+	editor.HasConversation = ct.SessionID != ""
+	editor.ActiveWork, editor.UnknownWork = a.contactActivity(ct)
+	editor.BuiltinTools = a.runtimeBuiltinTools
+	editor.BuiltinDefaults = a.runtimeBuiltinDefaults
+	editor.BuiltinToolsLoaded = a.runtimeBuiltinToolsLoaded
+	editor.BuiltinToolsLoading = a.connectionApplying
+	editor.BuiltinToolsError = a.runtimeBuiltinToolsErr
+	editor.BuiltinToolsSupported = a.connectionManaged
+	editor.CanRetryBuiltinTools = editor.BuiltinToolsSupported && !a.connectionApplying && a.connectionReloadBlocked() == ""
+	if !editor.BuiltinToolsSupported {
+		editor.BuiltinToolsError = msgs.SettingsBuiltinManagedError()
+	} else if !editor.BuiltinToolsLoaded && !editor.BuiltinToolsLoading && editor.BuiltinToolsError == "" && !editor.CanRetryBuiltinTools {
+		editor.BuiltinToolsError = msgs.SettingsBuiltinNotReady()
+	}
+	if !profileDraftEqual(editor.Draft, editor.initial) {
+		ui.Text(c, msgs.SettingsUnsavedChanges()).FontSize(typeMeta).LineHeight(1.5).TextColor(t.Warning)
+	}
+	id := ct.ID
+	editor.view(c, t, contactProfileActions{
+		Save:              func(draft profileDraft) { a.saveContactProfileDraftFor(id, draft, false) },
+		SaveAndNew:        func(draft profileDraft) { a.saveContactProfileDraftFor(id, draft, true) },
+		Archive:           func() { a.archiveContact(id) },
+		Restore:           func() { a.restoreContact(id) },
+		Discard:           editor.ResetDraft,
+		RetryBuiltinTools: func() { a.applyConnection() },
+		ChooseFolder:      func() { a.chooseContactWorkFolder(id, editor) },
+	}, a.workTheme.InputBorder)
+}
+
+func (a *appModel) chooseContactWorkFolder(contactID string, editor *contactProfileEditor) {
+	ct := a.contactByID(contactID)
+	if ct == nil || editor.Busy || ct.Archived || a.shutdownStarted || a.settingsOpen || a.contactProfileID != contactID || !a.detailIs(detailProfile) {
+		return
+	}
+	a.folderChoiceGeneration++
+	generation := a.folderChoiceGeneration
+	msgs := locales.In(a.uiLocale)
+	opts := mygo.OpenDialogOptions{Parent: a.win, Directory: true,
+		Title: msgs.WorkFolderChooseTitle(), ButtonLabel: msgs.WorkFolderChoose()}
+	draft, effective := editor.Draft.Workspace, a.effectiveContactWorkspace(ct)
+	pick := a.chooseFolder
+	editor.Busy = true
+	go func() {
+		opts.DefaultPath = workFolderStart(draft, effective)
+		path, err := chooseWorkFolder(pick, opts)
+		a.updateUI(func() {
+			editor.Busy = false
+			if a.shutdownStarted || generation != a.folderChoiceGeneration || a.contactByID(contactID) != ct || ct.Archived || a.contactProfileID != contactID || a.settingsOpen || !a.detailIs(detailProfile) {
+				return
+			}
+			editor.focusFolder = true
+			if err != nil {
+				editor.folderError = err.Error()
+			} else if path != "" {
+				editor.Draft.Workspace = path
+				delete(editor.Errors, "Workspace")
+				editor.folderError = ""
+			}
+		})
+	}()
 }

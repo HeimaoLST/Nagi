@@ -18,7 +18,6 @@ import (
 const (
 	settingsTabAppearance = "appearance"
 	settingsTabConnection = "connection"
-	settingsTabContact    = "contact"
 	settingsTabAdvanced   = "advanced"
 
 	settingsSourceRail          = "rail"
@@ -71,55 +70,6 @@ func (a *appModel) setLanguageMode(mode string) {
 	a.languageModeLoaded = true
 }
 
-func (a *appModel) ensureSettingsProfileEditor(contactID string) *contactProfileEditor {
-	ct := a.contactByID(contactID)
-	if ct == nil {
-		return nil
-	}
-	if a.settingsProfiles == nil {
-		a.settingsProfiles = map[string]*contactProfileEditor{}
-	}
-	editor := a.settingsProfiles[contactID]
-	if editor == nil {
-		editor = newContactProfileEditor(contactProfileDraft(ct))
-		a.settingsProfiles[contactID] = editor
-	}
-	a.contactProfile = editor
-	a.contactProfileID = contactID
-	return editor
-}
-
-func (a *appModel) profileEditorFor(contactID string) *contactProfileEditor {
-	if a.settingsProfiles != nil {
-		if editor := a.settingsProfiles[contactID]; editor != nil {
-			return editor
-		}
-	}
-	if a.contactProfile != nil && a.contactProfileID == contactID {
-		return a.contactProfile
-	}
-	return nil
-}
-
-func (a *appModel) settingsContactEditor() *contactProfileEditor {
-	if a.settingsContactID == "" {
-		a.settingsContactID = a.selectedContact().ID
-	}
-	editor := a.ensureSettingsProfileEditor(a.settingsContactID)
-	if editor == nil {
-		a.settingsContactID = a.selectedContact().ID
-		editor = a.ensureSettingsProfileEditor(a.settingsContactID)
-	}
-	if editor == nil {
-		return nil
-	}
-	ct := a.contactByID(a.settingsContactID)
-	editor.Archived = ct.Archived
-	editor.HasConversation = ct.SessionID != ""
-	editor.ActiveWork, editor.UnknownWork = a.contactActivity(ct)
-	return editor
-}
-
 func (a *appModel) openSettingsTab(tab, source string) {
 	if source != settingsSourceLink {
 		a.settingsReturnLink = markdownLinkTarget{}
@@ -128,7 +78,7 @@ func (a *appModel) openSettingsTab(tab, source string) {
 		a.markdownLinkFocus = markdownLinkTarget{}
 	}
 	switch tab {
-	case settingsTabAppearance, settingsTabConnection, settingsTabContact, settingsTabAdvanced:
+	case settingsTabAppearance, settingsTabConnection, settingsTabAdvanced:
 	default:
 		tab = settingsTabAppearance
 	}
@@ -139,9 +89,6 @@ func (a *appModel) openSettingsTab(tab, source string) {
 	if !wasOpen {
 		a.settingsReturnFocus = source
 		a.settingsFocusBack = true
-		if source != settingsSourceProfile {
-			a.settingsContactID = a.selectedContact().ID
-		}
 	}
 	a.settingsOpen = true
 	a.settingsTab = tab
@@ -156,14 +103,6 @@ func (a *appModel) openSettingsTab(tab, source string) {
 		a.settingsFocusTab = ""
 	} else {
 		a.settingsFocusTab = tab
-	}
-	if a.settingsContactID == "" {
-		a.settingsContactID = a.selectedContact().ID
-	}
-	if tab == settingsTabContact {
-		if editor := a.settingsContactEditor(); editor != nil {
-			editor.focusField = ""
-		}
 	}
 	a.ensureConnectionForm()
 	if a.connectionForm != nil {
@@ -190,11 +129,7 @@ func (a *appModel) closeSettings() {
 	a.settingsFocusTab = ""
 	switch a.settingsReturnFocus {
 	case settingsSourceProfile:
-		if a.detailIs(detailProfile) {
-			a.focusProfileEdit = true
-		} else {
-			a.focusContactProfile = true
-		}
+		a.focusDetailClose = true
 	case settingsSourceConnection:
 		a.focusConnectionEntry = true
 	case settingsSourceConfiguration:
@@ -241,9 +176,6 @@ func (a *appModel) settingsPage(c *ui.Context, t *ui.Theme) {
 	if a.settingsTab == "" {
 		a.settingsTab = a.settingsLandingTab()
 	}
-	if a.settingsContactID == "" {
-		a.settingsContactID = a.selectedContact().ID
-	}
 	a.ensureConnectionForm()
 	if a.layoutWidth() < int(preferenceBreakpoint) {
 		ui.Column(c).Fill().Background(ui.Transparent).Children(func() {
@@ -257,6 +189,8 @@ func (a *appModel) settingsPage(c *ui.Context, t *ui.Theme) {
 		a.settingsMain(c, t, false)
 	})
 }
+
+var settingsConnectionIcon = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12C22 17.5228 17.5228 22 12 22ZM9.71002 19.6674C8.74743 17.6259 8.15732 15.3742 8.02731 13H4.06189C4.458 16.1765 6.71639 18.7747 9.71002 19.6674ZM10.0307 13C10.1811 15.4388 10.8778 17.7297 12 19.752C13.1222 17.7297 13.8189 15.4388 13.9693 13H10.0307ZM19.9381 13H15.9727C15.8427 15.3742 15.2526 17.6259 14.29 19.6674C17.2836 18.7747 19.542 16.1765 19.9381 13ZM4.06189 11H8.02731C8.15732 8.62577 8.74743 6.37407 9.71002 4.33256C6.71639 5.22533 4.458 7.8235 4.06189 11ZM10.0307 11H13.9693C13.8189 8.56122 13.1222 6.27025 12 4.24799C10.8778 6.27025 10.1811 8.56122 10.0307 11ZM14.29 4.33256C15.2526 6.37407 15.8427 8.62577 15.9727 11H19.9381C19.542 7.8235 17.2836 5.22533 14.29 4.33256Z"/></svg>`))
 
 func (a *appModel) settingsSidebar(c *ui.Context, t *ui.Theme, narrow bool) {
 	msgs := locales.In(c.Locale())
@@ -286,7 +220,7 @@ func (a *appModel) settingsSidebar(c *ui.Context, t *ui.Theme, narrow bool) {
 				a.settingsFocusBack = false
 			}
 		}).Label(msgs.SettingsNavigationLabel()).FillWidth().Padding(12)
-		ui.Text(c, msgs.SettingsTitle()).FontSize(typeNavigation).FontWeight(500).FixedLineHeight(lineNavigation).TextColor(a.workTheme.Tertiary).Opacity(.6).Height(18).Padding(0, 16)
+		ui.Text(c, msgs.SettingsTitle()).FontSize(typeNavigation).FontWeight(500).FixedLineHeight(lineNavigation).TextColor(t.TextMuted).Height(18).Padding(0, 16)
 		nav := func(label, tab string) {
 			selected := a.settingsTab == tab
 			button := navigationControl(c, ui.ButtonBase(c).Label(label), a.workTheme, selected).
@@ -300,10 +234,10 @@ func (a *appModel) settingsSidebar(c *ui.Context, t *ui.Theme, narrow bool) {
 			}
 			button.Children(func() {
 				glyph := glyphSettings4Line
-				if tab == settingsTabContact {
-					glyph = navProfileIcon
-				}
-				if tab == settingsTabAdvanced {
+				switch tab {
+				case settingsTabConnection:
+					glyph = settingsConnectionIcon
+				case settingsTabAdvanced:
 					glyph = glyphMoreLine
 				}
 				ui.Box(c).Size(16, 16).AlignItems(ui.Center).Justify(ui.Center).Children(func() { ui.Icon(c, glyph).Size(14, 14) })
@@ -319,14 +253,12 @@ func (a *appModel) settingsSidebar(c *ui.Context, t *ui.Theme, narrow bool) {
 			ui.Row(c).FillWidth().Padding(0, 8).Gap(2).Wrap().Children(func() {
 				nav(msgs.SettingsGeneral(), settingsTabAppearance)
 				nav(msgs.SettingsConnection(), settingsTabConnection)
-				nav(msgs.SettingsContact(), settingsTabContact)
 				nav(msgs.SettingsAdvanced(), settingsTabAdvanced)
 			})
 		} else {
 			ui.Column(c).FillWidth().Padding(0, 8).Gap(2).Children(func() {
 				nav(msgs.SettingsGeneral(), settingsTabAppearance)
 				nav(msgs.SettingsConnection(), settingsTabConnection)
-				nav(msgs.SettingsContact(), settingsTabContact)
 				nav(msgs.SettingsAdvanced(), settingsTabAdvanced)
 			})
 		}
@@ -341,8 +273,6 @@ func (a *appModel) settingsMain(c *ui.Context, t *ui.Theme, narrow bool) {
 		title = msgs.SettingsGeneral()
 	case settingsTabConnection:
 		title = msgs.SettingsConnection()
-	case settingsTabContact:
-		title = msgs.SettingsContact()
 	}
 	ui.Column(c).Grow(1).MinWidth(0).MinHeight(0).AlignSelf(ui.Stretch).Margin(8).Background(a.workTheme.Reading).Border(1, t.Border).Radius(16).Clip().Children(func() {
 		ui.Row(c).FillWidth().MaxWidth(settingsContentWidth).AlignSelf(ui.Center).Height(40).Shrink(0).Padding(0, 32).AlignItems(ui.Center).DragWindow().Children(func() {
@@ -355,8 +285,6 @@ func (a *appModel) settingsMain(c *ui.Context, t *ui.Theme, narrow bool) {
 					a.settingsAppearanceContent(c, t)
 				case settingsTabConnection:
 					a.settingsConnectionContent(c, t)
-				case settingsTabContact:
-					a.settingsContactContent(c, t)
 				default:
 					a.settingsAdvancedContent(c, t)
 				}
@@ -540,13 +468,10 @@ func (a *appModel) dataRecoveryBlocksChanges() bool {
 
 func (a *appModel) dataRecoveryBlocked(restore bool) string {
 	productBackup := !restore && a.productHost() != nil
-	for _, editor := range a.settingsProfiles {
+	for _, editor := range a.profileEditors {
 		if editor.Busy {
 			return "busy"
 		}
-	}
-	if a.contactProfile != nil && a.contactProfile.Busy {
-		return "busy"
 	}
 	if a.contextFilePickers > 0 || a.shutdownStarted || a.connectionSaveInFlight || a.connectionApplying || a.connectionTesting || a.contactHistoryInFlight > 0 || a.submissionInFlight > 0 || a.themeImport != nil && a.themeImport.Busy || a.connectionForm != nil && a.connectionForm.Busy {
 		return "busy"
@@ -579,13 +504,8 @@ func (a *appModel) dataRecoveryBlocked(restore bool) string {
 	if ct.Unavailable == "" || ct.SessionID != "" || ct.Draft != "" || len(ct.Messages)+len(ct.History)+len(ct.Issues)+len(ct.PreviousPiBindings) > 0 || ct.pendingSend != nil || len(ct.Context.items) > 0 || ct.Context.formOpen || ct.Context.formName != "" || ct.Context.formText != "" || ct.Context.formPath != "" {
 		return "unsaved"
 	}
-	for id, editor := range a.settingsProfiles {
+	for id, editor := range a.profileEditors {
 		if owner := a.contactByID(id); owner == nil || !profileDraftEqual(editor.Draft, contactProfileDraft(owner)) {
-			return "unsaved"
-		}
-	}
-	if a.contactProfile != nil {
-		if owner := a.contactByID(a.contactProfileID); owner == nil || !profileDraftEqual(a.contactProfile.Draft, contactProfileDraft(owner)) {
 			return "unsaved"
 		}
 	}
@@ -908,116 +828,6 @@ func (a *appModel) settingsConnectionContent(c *ui.Context, t *ui.Theme) {
 		actions.Discard = func() { form.ResetDraft() }
 		form.view(c, t, actions, a.workTheme.InputBorder)
 	})
-}
-
-func (a *appModel) settingsContactContent(c *ui.Context, t *ui.Theme) {
-	msgs := locales.In(c.Locale())
-	editor := a.settingsContactEditor()
-	if editor == nil {
-		preferenceSection(c, t, msgs.EditContactLabel(), func() {
-			ui.Text(c, msgs.SettingsNoContactToEdit()).FontSize(14).TextColor(t.Warning)
-		})
-		return
-	}
-	options := make([]selectOption, 0, len(a.contacts))
-	for _, contact := range a.contacts {
-		if contact != nil {
-			options = append(options, selectOption{Value: contact.ID, Label: a.settingsContactChoice(msgs, contact)})
-		}
-	}
-	preferenceGroup(c, t, func() {
-		settingsPreferenceRow(c, t, msgs.SettingsContact(), "", func() {
-			picker := preferenceSelect(c, &a.settingsContactID, options, msgs.EditContactLabel())
-			if picker.Changed() {
-				a.folderChoiceGeneration++
-				a.ensureSettingsProfileEditor(a.settingsContactID)
-				a.settingsScroll.Y = 0
-			}
-		}, true)
-	})
-	ct := a.contactByID(a.settingsContactID)
-	editor = a.settingsContactEditor()
-	editor.BuiltinTools = append([]runtimeBuiltinTool(nil), a.runtimeBuiltinTools...)
-	editor.BuiltinDefaults = append([]string{}, a.runtimeBuiltinDefaults...)
-	editor.BuiltinToolsLoaded = a.runtimeBuiltinToolsLoaded
-	editor.BuiltinToolsLoading = a.connectionApplying
-	editor.BuiltinToolsError = a.runtimeBuiltinToolsErr
-	editor.BuiltinToolsSupported = a.connectionManaged
-	editor.CanRetryBuiltinTools = editor.BuiltinToolsSupported && !a.connectionApplying && a.connectionReloadBlocked() == ""
-	if !editor.BuiltinToolsSupported {
-		editor.BuiltinToolsError = msgs.SettingsBuiltinManagedError()
-	} else if !editor.BuiltinToolsLoaded && !editor.BuiltinToolsLoading && editor.BuiltinToolsError == "" && !editor.CanRetryBuiltinTools {
-		editor.BuiltinToolsError = msgs.SettingsBuiltinNotReady()
-	}
-	c.Key(ct.ID)
-	preferenceSection(c, t, msgs.SettingsContactTitle(a.settingsContactChoice(msgs, ct)), func() {
-		if !profileDraftEqual(editor.Draft, editor.initial) {
-			ui.Text(c, msgs.SettingsUnsavedChanges()).FontSize(typeMeta).LineHeight(1.5).TextColor(t.Warning)
-		}
-		editor.view(c, t, contactProfileActions{
-			Save:              func(draft profileDraft) { a.saveContactProfileDraftFor(ct.ID, draft, false) },
-			SaveAndNew:        func(draft profileDraft) { a.saveContactProfileDraftFor(ct.ID, draft, true) },
-			Archive:           func() { a.archiveContact(ct.ID) },
-			Restore:           func() { a.restoreContact(ct.ID) },
-			Discard:           func() { editor.ResetDraft() },
-			RetryBuiltinTools: func() { a.applyConnection() },
-			ChooseFolder:      func() { a.chooseContactWorkFolder(ct.ID, editor) },
-		}, a.workTheme.InputBorder)
-	})
-}
-
-func (a *appModel) chooseContactWorkFolder(contactID string, editor *contactProfileEditor) {
-	ct := a.contactByID(contactID)
-	if ct == nil || editor == nil || editor.Busy || ct.Archived || a.shutdownStarted || !a.settingsOpen || a.settingsTab != settingsTabContact || a.settingsContactID != contactID || a.profileEditorFor(contactID) != editor {
-		return
-	}
-	a.folderChoiceGeneration++
-	generation := a.folderChoiceGeneration
-	msgs := locales.In(a.uiLocale)
-	opts := mygo.OpenDialogOptions{Parent: a.win, Directory: true,
-		Title: msgs.WorkFolderChooseTitle(), ButtonLabel: msgs.WorkFolderChoose()}
-	draft, effective := editor.Draft.Workspace, a.effectiveContactWorkspace(ct)
-	pick := a.chooseFolder
-	editor.Busy = true
-	go func() {
-		opts.DefaultPath = workFolderStart(draft, effective)
-		path, err := chooseWorkFolder(pick, opts)
-		a.updateUI(func() {
-			editor.Busy = false
-			if a.shutdownStarted || generation != a.folderChoiceGeneration || a.contactByID(contactID) != ct || ct.Archived || a.profileEditorFor(contactID) != editor || !a.settingsOpen || a.settingsTab != settingsTabContact || a.settingsContactID != contactID {
-				return
-			}
-			editor.focusFolder = true
-			if err != nil {
-				editor.folderError = err.Error()
-			} else if path != "" {
-				editor.Draft.Workspace = path
-				delete(editor.Errors, "Workspace")
-				editor.folderError = ""
-			}
-		})
-	}()
-}
-
-func (a *appModel) settingsContactChoice(msgs locales.Messages, contact *contact) string {
-	if contact == nil {
-		return ""
-	}
-	sameName := 0
-	for _, other := range a.contacts {
-		if other != nil && other.Name == contact.Name {
-			sameName++
-		}
-	}
-	if sameName <= 1 {
-		return contact.Name
-	}
-	for index, other := range a.contacts {
-		if other == contact {
-			return msgs.ContactChoiceDuplicate(contact.Name, index+1)
-		}
-	}
-	return contact.Name
 }
 
 func connectionCurrentSummary(config *connectionConfig) string {

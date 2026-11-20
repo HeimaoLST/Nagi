@@ -29,18 +29,22 @@ func (a *appModel) openContactProfile(contactID string) {
 	if ct == nil {
 		return
 	}
-	a.settingsContactID = ct.ID
+	if a.contactProfileID != contactID {
+		a.folderChoiceGeneration++
+	}
+	if a.profileEditors == nil {
+		a.profileEditors = make(map[string]*contactProfileEditor)
+	}
+	if a.profileEditors[contactID] == nil {
+		a.profileEditors[contactID] = newContactProfileEditor(contactProfileDraft(ct))
+	}
+	a.profileEditors[contactID].focusField = ""
+	a.contactProfileID = contactID
 	a.openDetail(detailProfile)
 }
 
-func (a *appModel) editContactProfile() {
-	ct := a.selectedContact()
-	if ct == nil || a.activeDetail() != detailProfile {
-		return
-	}
-	a.settingsContactID = ct.ID
-	a.ensureSettingsProfileEditor(ct.ID)
-	a.openSettingsTab(settingsTabContact, settingsSourceProfile)
+func (a *appModel) profileEditorFor(contactID string) *contactProfileEditor {
+	return a.profileEditors[contactID]
 }
 
 func (a *appModel) contactActivity(ct *contact) (active, unknown bool) {
@@ -85,14 +89,6 @@ func (a *appModel) contactArchiveBlocked(ct *contact) string {
 		return archiveNoticeActive
 	}
 	return ""
-}
-
-func (a *appModel) saveContactProfileDraft(draft profileDraft, startNew bool) bool {
-	ct := a.selectedContact()
-	if ct == nil {
-		return false
-	}
-	return a.saveContactProfileDraftFor(ct.ID, draft, startNew)
 }
 
 func (a *appModel) updateProductBot(host *piAppHost, ct *contact, entered profileDraft, startNew bool) bool {

@@ -258,12 +258,12 @@ func TestProfileEditsFutureDefaultsWithoutReplacingCurrentSession(t *testing.T) 
 	a, bound, _ := testRuntimeModel(t)
 	workspace := t.TempDir()
 	bound.SessionWorkingDir = "/old"
-	a.openSettings()
-	if !a.saveContactProfileDraft(profileDraft{
+	a.openContactProfile(bound.ID)
+	if !a.saveContactProfileDraftFor(bound.ID, profileDraft{
 		Name: "Renamed", Purpose: "new purpose", Instructions: "new instructions",
 		Workspace: workspace,
 	}, false) {
-		t.Fatalf("save failed: %+v", a.contactProfile)
+		t.Fatalf("save failed: %+v", a.profileEditorFor(bound.ID))
 	}
 	if bound.Name != "Renamed" || bound.Purpose != "new purpose" || bound.Instructions != "new instructions" || bound.Workspace != workspace {
 		t.Fatalf("future profile = %+v", bound)
@@ -285,9 +285,9 @@ func TestSettingsUnboundProfileIsUsedBeforeFirstSession(t *testing.T) {
 	a, _, unbound := testRuntimeModel(t)
 	workspace := t.TempDir()
 	a.selected = 1
-	a.openSettings()
-	if !a.saveContactProfileDraft(profileDraft{Name: unbound.Name, Purpose: "p", Instructions: "i", Workspace: workspace}, false) {
-		t.Fatalf("save failed: %+v", a.contactProfile)
+	a.openContactProfile(unbound.ID)
+	if !a.saveContactProfileDraftFor(unbound.ID, profileDraft{Name: unbound.Name, Purpose: "p", Instructions: "i", Workspace: workspace}, false) {
+		t.Fatalf("save failed: %+v", a.profileEditorFor(unbound.ID))
 	}
 	if unbound.Purpose != "p" || unbound.Instructions != "i" || unbound.Workspace != workspace {
 		t.Fatalf("profile = %+v", unbound)
@@ -303,9 +303,9 @@ func TestSettingsDuringFirstCreateKeepsSubmittedSnapshot(t *testing.T) {
 	unbound.SendState = sendSubmitting
 	unbound.SubmittedDraft = "submitted snapshot"
 	unbound.pendingSend = &pendingSend{Draft: "submitted snapshot", State: "submitting"}
-	a.openSettings()
-	if !a.saveContactProfileDraft(profileDraft{Name: "Still Editable", Purpose: "later edit", Workspace: unbound.Workspace}, false) {
-		t.Fatalf("save failed: %+v", a.contactProfile)
+	a.openContactProfile(unbound.ID)
+	if !a.saveContactProfileDraftFor(unbound.ID, profileDraft{Name: "Still Editable", Purpose: "later edit", Workspace: unbound.Workspace}, false) {
+		t.Fatalf("save failed: %+v", a.profileEditorFor(unbound.ID))
 	}
 	if unbound.Name != "Still Editable" || unbound.Purpose != "later edit" {
 		t.Fatalf("future profile was not saved: %+v", unbound)
@@ -387,7 +387,7 @@ func TestReloadSelectedRequiresLiveRuntime(t *testing.T) {
 	a, bound, _ := testRuntimeModel(t)
 	a.runtimeStatus = runtimeStateExited
 	a.reloadSelected()
-	if bound.SendError != "Conversation history is unavailable for this contact or connection." || a.contactHistoryInFlight != 0 {
+	if bound.SendError != "Conversation history is unavailable for this Bot or connection." || a.contactHistoryInFlight != 0 {
 		t.Fatalf("disconnected reload message = %q", bound.SendError)
 	}
 }

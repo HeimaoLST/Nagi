@@ -203,20 +203,22 @@ func TestPreviewI18nFinalMatrix(t *testing.T) {
 			fit: settingsFit,
 		},
 		{
-			name: "settings-contact", width: 1040, height: 720,
+			name: "bot-profile", width: 1040, height: 720,
 			setup: func(locale string) *appModel {
 				a, ct := workspaceTestApp(t)
 				ct.Name = "Alexandria-Longname-Contact-For-Final-Review"
 				ct.Purpose = "Keep a long contact purpose visible without horizontal clipping in the final preview."
 				ct.Instructions = "Keep the exact contact instructions and workspace values readable in both languages."
 				ct.Workspace = "/Users/you/Workspace/a/very/long/contact/workspace/path/for/final/preview"
-				a.openSettingsTab(settingsTabContact, settingsSourceRail)
+				a.workspaceOpen = false
 				return a
 			},
 			want: func(msgs locales.Messages) []string {
-				return []string{msgs.SettingsContact(), msgs.FieldNameAccessible(), msgs.ProfilePurpose()}
+				return []string{msgs.ContactProfileAction(), msgs.FieldNameAccessible(), msgs.ProfilePurpose()}
 			},
-			fit: settingsFit,
+			fit: func(msgs locales.Messages) []string {
+				return []string{msgs.ProfileClose(), msgs.FieldNameAccessible()}
+			},
 		},
 		{
 			name: "settings-runtime", width: 1040, height: 720,
@@ -245,6 +247,15 @@ func TestPreviewI18nFinalMatrix(t *testing.T) {
 		tr.SetDark(dark)
 		tr.Frame()
 		msgs := locales.In(locale)
+		if base.name == "bot-profile" {
+			if err := tr.RightClick(msgs.AvatarContactLabel(a.selectedContact().Name)); err != nil {
+				t.Fatal(err)
+			}
+			if err := tr.ChooseMenuItem(msgs.ContactProfileAction()); err != nil {
+				t.Fatal(err)
+			}
+			tr.Frame()
+		}
 		for _, want := range base.want(msgs) {
 			if !tr.HasText(want) {
 				t.Fatalf("scene %s locale=%s missing %q: %v", base.name, locale, want, tr.Texts())
@@ -283,7 +294,7 @@ func TestPreviewI18nFinalMatrix(t *testing.T) {
 		theme string
 		dark  bool
 	}{
-		{"settings-contact", "dark", true},
+		{"bot-profile", "dark", true},
 		{"settings-connection", "light", false},
 		{"settings-general", "light", false},
 	}
@@ -465,12 +476,12 @@ func TestPreviewInputStates(t *testing.T) {
 				}
 				a.appearanceThemeIDs = appearanceThemeIDs{Light: wantThemeID}
 			}
-			tab := settingsTabContact
+			a.ensureConnectionForm()
+			a.openContactProfile(ct.ID)
+			editor := a.profileEditorFor(ct.ID)
 			if item.field == "connection-endpoint" {
-				tab = settingsTabConnection
+				a.openSettingsTab(settingsTabConnection, settingsSourceRail)
 			}
-			a.openSettingsTab(tab, settingsSourceRail)
-			editor := a.ensureSettingsProfileEditor(ct.ID)
 			if item.state == "invalid-focus" {
 				editor.Errors = map[string]string{"Name": profileNoticeNameRequired}
 			}

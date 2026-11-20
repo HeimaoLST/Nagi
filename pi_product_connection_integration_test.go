@@ -144,9 +144,11 @@ func TestPiAppProductConnectionStopAndWorkerLoss(t *testing.T) {
 	var profileSaved bool
 	w.frame(func() {
 		second = w.app.selectedContact()
+		w.app.openContactProfile(second.ID)
 		profile := contactProfileDraft(second)
 		profile.Workspace = explicitFolder
 		profileSaved = w.app.saveContactProfileDraftFor(second.ID, profile, false)
+		w.app.closeDetail()
 	})
 	if !profileSaved || second.SessionID == firstChat {
 		t.Fatal("could not establish an independent Bot with an explicit workspace before connection setup")
@@ -227,7 +229,7 @@ func TestPiAppProductConnectionStopAndWorkerLoss(t *testing.T) {
 	var completionPending bool
 	w.pump.do(func() {
 		completionPending = w.app.connectionSaveInFlight && w.app.connectionSaved == nil
-		editor = w.app.ensureSettingsProfileEditor(secondID)
+		editor = w.app.profileEditorFor(secondID)
 		editor.Draft.Name = "Uncommitted profile name"
 	})
 	if !completionPending {

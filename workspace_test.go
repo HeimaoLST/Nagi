@@ -24,23 +24,24 @@ func TestContactRailHideAndReopenRestoresFocus(t *testing.T) {
 	a.windowWidth = 1180
 	tr := ui.NewTester(a.view, 1180, 720)
 	tr.Frame()
+	team := locales.In("en").RailContactsTitle()
 
 	if err := tr.Click("Hide"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if _, visible := tr.Find("Hide"); visible || !tr.HasText("Contacts") {
-		t.Fatal("hiding the contact rail should expose a Contacts entry")
+	if _, visible := tr.Find("Hide"); visible || !tr.HasText(team) {
+		t.Fatal("hiding the Bot Team rail should expose a way to reopen it")
 	}
-	if !tr.Focused("Contacts") {
-		t.Fatal("collapsing the rail should return focus to Contacts")
+	if !tr.Focused(team) {
+		t.Fatal("collapsing the rail should return focus to Bot Team")
 	}
-	if err := tr.Click("Contacts"); err != nil {
+	if err := tr.Click(team); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
 	if _, visible := tr.Find("Hide"); !visible {
-		t.Fatal("Contacts did not reopen the rail")
+		t.Fatal("Bot Team did not reopen the rail")
 	}
 }
 

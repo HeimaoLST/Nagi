@@ -77,33 +77,27 @@ func TestLocalStateBeforeConnectionCreateSaveAndRestart(t *testing.T) {
 	focusComposer(t, tr, "Composer for Nagi")
 	tr.Type("Keep the first local draft")
 	tr.Frame()
-	if err := tr.Click("Add contact"); err != nil {
+	if err := tr.Click(locales.In("en").AvatarAddContact()); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
 	second := a.selectedContact()
 	secondID := second.ID
-	if err := tr.Click("Settings"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if err := tr.Click(locales.In("en").SettingsContact()); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if err := tr.Click("Contact name"); err != nil {
+	openBotProfileFromRail(t, tr, locales.In("en").AvatarContactLabel(second.Name))
+	if err := tr.Click(locales.In("en").FieldNameAccessible()); err != nil {
 		t.Fatal(err)
 	}
 	tr.Key(ui.Cmd, ui.KeyA)
 	tr.Type("Local contact")
-	if err := clickSettingsAction(tr, "Save changes"); err != nil {
+	if err := clickBotProfileAction(tr, locales.In("en").ContactSaveChanges()); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if second.Name != "Local contact" || a.settingsContactEditor().Error != "" {
-		t.Fatalf("pre-connection profile save failed: name=%q editor=%+v", second.Name, a.settingsContactEditor())
+	editor := a.profileEditorFor(secondID)
+	if second.Name != "Local contact" || editor.Error != "" {
+		t.Fatalf("pre-connection profile save failed: name=%q editor=%+v", second.Name, editor)
 	}
-	a.settingsContactEditor().Draft.Name = "Intentionally unsaved editor"
+	editor.Draft.Name = "Intentionally unsaved editor"
 	second.Draft = "Keep the second local draft"
 	a.draftChanged(second)
 	restarted, err := newRuntimeApp()
@@ -160,10 +154,11 @@ func TestLocalStateBeforeConnectionExplicitProfileSave(t *testing.T) {
 		t.Fatal(err)
 	}
 	id := a.selectedID()
-	a.openSettingsTab(settingsTabContact, settingsSourceRail)
+	a.closeSettings()
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	if err := tr.Click("Contact name"); err != nil {
+	openBotProfileFromRail(t, tr, locales.In("en").AvatarContactLabel(a.selectedContact().Name))
+	if err := tr.Click(locales.In("en").FieldNameAccessible()); err != nil {
 		t.Fatal(err)
 	}
 	tr.Key(ui.Cmd, ui.KeyA)
@@ -172,12 +167,12 @@ func TestLocalStateBeforeConnectionExplicitProfileSave(t *testing.T) {
 	if _, err := os.Stat(a.storePath); !os.IsNotExist(err) {
 		t.Fatal("unsaved profile-editor input unexpectedly wrote a store")
 	}
-	if err := clickSettingsAction(tr, "Save changes"); err != nil {
+	if err := clickBotProfileAction(tr, locales.In("en").ContactSaveChanges()); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if a.settingsContactEditor().Error != "" {
-		t.Fatalf("explicit local profile Save was refused: %q", a.settingsContactEditor().Error)
+	if editor := a.profileEditorFor(id); editor.Error != "" {
+		t.Fatalf("explicit local profile Save was refused: %q", editor.Error)
 	}
 	restarted, err := newRuntimeApp()
 	if err != nil {
@@ -203,12 +198,12 @@ func TestContactManagementSaveUpdatesFutureProfileWithoutReplacingSession(t *tes
 	}
 	before := len(bound.Messages)
 
-	a.openSettings()
-	if !a.saveContactProfileDraft(profileDraft{
+	a.openContactProfile(bound.ID)
+	if !a.saveContactProfileDraftFor(bound.ID, profileDraft{
 		Name: "  Renamed  ", Purpose: "future purpose",
 		Instructions: "line one\n  indented line", Workspace: workspace,
 	}, false) {
-		t.Fatalf("save failed: %+v", a.contactProfile)
+		t.Fatalf("save failed: %+v", a.profileEditorFor(bound.ID))
 	}
 	if bound.Name != "Renamed" || bound.Purpose != "future purpose" || bound.Workspace != workspace {
 		t.Fatalf("profile = %+v", bound)
@@ -242,9 +237,9 @@ func TestContactManagementSaveAndNewDetachesOnlyCurrentConversation(t *testing.T
 	attachIssueToolTestExecution(issue)
 	bound.Issues = []*productIssue{issue}
 
-	a.openSettings()
-	if !a.saveContactProfileDraft(profileDraft{Name: "Renamed", Purpose: "new purpose", Workspace: workspace}, true) {
-		t.Fatalf("save and new failed: %+v", a.contactProfile)
+	a.openContactProfile(bound.ID)
+	if !a.saveContactProfileDraftFor(bound.ID, profileDraft{Name: "Renamed", Purpose: "new purpose", Workspace: workspace}, true) {
+		t.Fatalf("save and new failed: %+v", a.profileEditorFor(bound.ID))
 	}
 	if bound.SessionID != "" || len(bound.Messages) != 0 || len(bound.History) != 0 {
 		t.Fatalf("current conversation was not detached: %+v", bound)
@@ -287,18 +282,19 @@ func TestContactManagementSaveFailureRollsBackFieldsAndKeepsDraft(t *testing.T) 
 	a.store.path = broken
 	workspace := t.TempDir()
 
-	a.openSettings()
+	a.openContactProfile(bound.ID)
 	draft := profileDraft{Name: "Cannot Save", Purpose: "new purpose", Workspace: workspace}
-	if a.saveContactProfileDraft(draft, false) {
+	if a.saveContactProfileDraftFor(bound.ID, draft, false) {
 		t.Fatal("save unexpectedly succeeded with an unusable store")
 	}
 	if bound.Name != "Nagi" || bound.Purpose != oldPurpose || bound.Workspace != oldWorkspace {
 		t.Fatalf("failed save changed the contact: %+v", bound)
 	}
-	if a.contactProfile == nil || a.contactProfile.Error != profileNoticeErrorSave || a.contactProfile.Draft.Name != "Cannot Save" {
-		t.Fatalf("failed save did not report an error or preserve the draft: %+v", a.contactProfile)
+	editor := a.profileEditorFor(bound.ID)
+	if editor == nil || editor.Error != profileNoticeErrorSave || editor.Draft.Name != "Cannot Save" {
+		t.Fatalf("failed save did not report an error or preserve the draft: %+v", editor)
 	}
-	if a.contactProfile.Status != "" {
+	if editor.Status != "" {
 		t.Fatal("failed save reported success")
 	}
 	if a.store.state.Contacts[0].Name != "Nagi" {
@@ -324,15 +320,15 @@ func TestContactManagementSaveAndNewFailureKeepsOldSessionReference(t *testing.T
 	broken := t.TempDir()
 	a.store.path = broken
 	workspace := t.TempDir()
-	a.openSettings()
-	if a.saveContactProfileDraft(profileDraft{Name: "Renamed", Workspace: workspace}, true) {
+	a.openContactProfile(bound.ID)
+	if a.saveContactProfileDraftFor(bound.ID, profileDraft{Name: "Renamed", Workspace: workspace}, true) {
 		t.Fatal("save and new unexpectedly succeeded")
 	}
 	if bound.SessionID != sessionRef || !reflect.DeepEqual(bound.PiBinding, binding) || len(bound.PreviousPiBindings) != 0 || len(bound.Messages) != 1 || len(bound.History) != 1 || bound.Draft != "keep me" {
 		t.Fatalf("failed save and new changed the current conversation: %+v", bound)
 	}
-	if a.contactProfile == nil || a.contactProfile.Error != profileNoticeErrorSave {
-		t.Fatalf("save and new failed outside the intended filesystem boundary: %+v", a.contactProfile)
+	if editor := a.profileEditorFor(bound.ID); editor == nil || editor.Error != profileNoticeErrorSave {
+		t.Fatalf("save and new failed outside the intended filesystem boundary: %+v", editor)
 	}
 }
 
@@ -342,7 +338,7 @@ func TestContactManagementArchiveRestorePersistsAndBlocksActiveWork(t *testing.T
 	sessionRef := bound.SessionID
 	binding := clonePiConversationBinding(bound.PiBinding)
 	bound.SendState = sendSubmitting
-	a.openSettings()
+	a.openContactProfile(bound.ID)
 	if a.archiveContact(bound.ID) {
 		t.Fatal("archive unexpectedly succeeded with an active conversation")
 	}
@@ -356,12 +352,12 @@ func TestContactManagementArchiveRestorePersistsAndBlocksActiveWork(t *testing.T
 
 	bound.ActiveTaskID, bound.SendState = "", sendIdle
 	if !a.archiveContact(bound.ID) {
-		t.Fatalf("archive failed: %+v", a.contactProfile)
+		t.Fatalf("archive failed: %+v", a.profileEditorFor(bound.ID))
 	}
 	if !bound.Archived || bound.ArchivedAt == 0 {
 		t.Fatal("contact was not archived")
 	}
-	if !a.contactProfile.Archived {
+	if !a.profileEditorFor(bound.ID).Archived {
 		t.Fatal("archive did not update the visible read-only state")
 	}
 	reloaded, err := openContactStore(a.store.path, "/tmp")
@@ -416,12 +412,12 @@ func TestContactManagementSidebarSearchKeepsStableIndices(t *testing.T) {
 func TestContactManagementNonDemoWithoutStoreNeverClaimsPersistence(t *testing.T) {
 	ct := &contact{ID: "c1", Name: "Saki", Workspace: t.TempDir(), Status: statusReady}
 	a := &appModel{contacts: []*contact{ct}, selected: 0}
-	a.openSettings()
-	if a.saveContactProfileDraft(profileDraft{Name: "Renamed", Workspace: ct.Workspace}, false) {
+	a.openContactProfile(ct.ID)
+	if a.saveContactProfileDraftFor(ct.ID, profileDraft{Name: "Renamed", Workspace: ct.Workspace}, false) {
 		t.Fatal("save without a contact store claimed success")
 	}
-	if ct.Name != "Saki" || a.contactProfile == nil || a.contactProfile.Error == "" {
-		t.Fatalf("save without a store mutated or failed to report: ct=%+v editor=%+v", ct, a.contactProfile)
+	if editor := a.profileEditorFor(ct.ID); ct.Name != "Saki" || editor == nil || editor.Error == "" {
+		t.Fatalf("save without a store mutated or failed to report: ct=%+v editor=%+v", ct, editor)
 	}
 	ct.Archived = true
 	if a.restoreContact(ct.ID) || !ct.Archived {
@@ -509,16 +505,18 @@ func TestContactManagementAppPreviews(t *testing.T) {
 	for _, dark := range []bool{false, true} {
 		for _, width := range []int{720, 1280} {
 			a := testApp(t)
-			a.openSettings()
-			a.contactProfile.Draft.Name = "Research partner with a long name"
-			a.contactProfile.Draft.Purpose = longPurpose
-			a.contactProfile.Draft.Instructions = longInstructions
-			a.contactProfile.Draft.Workspace = t.TempDir()
+			a.windowWidth = width
+			a.openContactProfile(a.selectedID())
+			editor := a.profileEditorFor(a.selectedID())
+			editor.Draft.Name = "Research partner with a long name"
+			editor.Draft.Purpose = longPurpose
+			editor.Draft.Instructions = longInstructions
+			editor.Draft.Workspace = t.TempDir()
 			tr := ui.NewTester(a.view, width, 720)
 			tr.SetDark(dark)
 			tr.Frame()
-			if !tr.HasText("Contact profile") || !tr.HasText("Save changes") {
-				t.Fatalf("settings preview missing content at width %d", width)
+			if !tr.HasText(locales.In("en").ContactProfileAction()) || !tr.HasText(locales.In("en").ContactSaveChanges()) {
+				t.Fatalf("Bot profile preview missing content at width %d", width)
 			}
 			theme := "light"
 			if dark {
@@ -530,7 +528,8 @@ func TestContactManagementAppPreviews(t *testing.T) {
 
 	archived := testApp(t)
 	archived.selectedContact().Archived = true
-	archived.openSettings()
+	archived.windowWidth = 1280
+	archived.openContactProfile(archived.selectedID())
 	tr := ui.NewTester(archived.view, 1280, 720)
 	tr.Frame()
 	if !tr.HasText("Archived") || !tr.HasText("Restore") {
@@ -543,7 +542,7 @@ func TestContactManagementAppPreviews(t *testing.T) {
 	}
 	tr = ui.NewTester(archived.view, 1280, 720)
 	tr.Frame()
-	if !tr.HasText("Settings") || archived.selectedContact().Archived {
+	if !tr.HasText(locales.In("en").FieldNameAccessible()) || archived.selectedContact().Archived {
 		t.Fatal("restored preview did not return to the editable app")
 	}
 	writePreviewPNG(t, filepath.Join(dir, "app-archive-restored-1280.png"), tr.Image())
@@ -552,7 +551,7 @@ func TestContactManagementAppPreviews(t *testing.T) {
 	empty.contactSearch = "no-such-contact"
 	tr = ui.NewTester(empty.view, 1280, 720)
 	tr.Frame()
-	if !tr.HasText("No contacts match your search.") {
+	if !tr.HasText(locales.In("en").RailNoContactsMatch()) {
 		t.Fatal("empty filter preview does not explain the result")
 	}
 	writePreviewPNG(t, filepath.Join(dir, "app-empty-filter-1280.png"), tr.Image())

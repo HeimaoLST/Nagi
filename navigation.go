@@ -1,8 +1,6 @@
 package main
 
 import (
-	"strings"
-
 	"github.com/egoist/mygo/i18n"
 	"github.com/egoist/mygo/ui"
 
@@ -25,27 +23,22 @@ func (a *appModel) detailIs(kind detailKind) bool {
 }
 
 func (a *appModel) openDetail(kind detailKind) {
-	wasOpen := a.workspaceOpen
-	if wasOpen && a.activeDetail() == kind {
-		a.focusDetailClose = true
-		return
-	}
 	a.workspaceOpen = true
 	a.detail = kind
 	a.focusDetailClose = true
-	if !wasOpen {
-		a.persist()
-	}
 }
 
 func (a *appModel) closeDetail() {
-	if a.activeDetail() == detailProfile {
-		a.focusContactProfile = true
+	if a.railCollapsed {
+		a.focusRail = true
+	} else {
+		a.focusProfileRow = a.contactProfileID
 	}
+	a.contactProfileID = ""
+	a.folderChoiceGeneration++
 	a.workspaceOpen = false
 	a.detail = ""
 	a.focusDetailClose = false
-	a.persist()
 }
 
 // detailPageActive means the right surface is the whole application page
@@ -216,78 +209,28 @@ func (a *appModel) profileScrollFor(contactID string) *ui.ScrollState {
 	return a.profileScrolls[contactID]
 }
 
-func (a *appModel) profileDetail(c *ui.Context, t *ui.Theme, narrow bool) {
-	ct := a.selectedContact()
+func (a *appModel) profileDetail(c *ui.Context, t *ui.Theme) {
+	ct := a.contactByID(a.contactProfileID)
 	if ct == nil {
 		return
 	}
+	editor := a.profileEditorFor(ct.ID)
 	msgs := locales.In(c.Locale())
-	ui.Column(c).FillHeight().Padding(16).Gap(8).Children(func() {
+	ui.Column(c).Key(ct.ID).Fill().MinWidth(0).MinHeight(0).Padding(16).Gap(8).Children(func() {
 		ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(8).Children(func() {
-			if narrow {
-				back := detailBackButton(c, t, msgs.ProfileClose(), msgs.ProfileBackTooltip()).OnClick(func() { a.closeDetail() })
-				a.focusDetailControl(c, back)
-				ui.Text(c, msgs.NavContactProfile()).FontSize(typePageTitle).FontWeight(500).FixedLineHeight(lineSettingsTitle).TextColor(t.Text).Grow(1)
-				return
-			}
-			ui.Text(c, msgs.NavContactProfile()).FontSize(typePageTitle).FontWeight(500).FixedLineHeight(lineSettingsTitle).TextColor(t.Text).Grow(1)
-			close := appTooltip(c, secondaryButton(c, msgs.ProfileClose()), msgs.ProfileBackTooltip()).OnClick(func() { a.closeDetail() })
-			a.focusDetailControl(c, close)
+			back := detailBackButton(c, t, msgs.ProfileClose(), msgs.ProfileBackTooltip()).OnClick(a.closeDetail)
+			a.focusDetailControl(c, back)
+			ui.Text(c, msgs.ContactProfileAction()).FontSize(typePageTitle).FontWeight(500).FixedLineHeight(lineSettingsTitle).TextColor(t.Text).Grow(1)
 		})
-		ui.Scroll(c).Grow(1).TrackScroll(a.profileScrollFor(ct.ID)).Children(func() {
-			ui.Column(c).Gap(8).Children(func() {
+		ui.Scroll(c).FillWidth().Grow(1).MinHeight(0).TrackScroll(a.profileScrollFor(ct.ID)).Children(func() {
+			ui.Column(c).FillWidth().MaxWidth(settingsContentWidth).AlignSelf(ui.Center).Gap(8).Children(func() {
 				ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
-					a.contactIcon(c, t, 32)
-					ui.Column(c).MinWidth(0).Shrink(1).Gap(1).Children(func() {
-						ui.Text(c, ct.Name).FontSize(typePageTitle).FontWeight(500).FixedLineHeight(lineSettingsTitle).TextColor(t.Text).MaxLines(2)
-						ui.Text(c, msgs.StatusDetail(a.statusLabel(ct, msgs), ct.Role)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(a.statusColor(t, ct.Status))
-					})
+					contactAvatar(c, t, ct.Name, 32)
+					ui.Text(c, ct.Name).FontSize(typePageTitle).FontWeight(500).FixedLineHeight(lineSettingsTitle).TextColor(t.Text).MinWidth(0).MaxLines(2)
 				})
-				if ct.Archived {
-					ui.Text(c, msgs.ProfileArchivedNotice()).FontSize(typeLabel).FixedLineHeight(lineLabel).TextColor(t.Warning)
-				}
-				a.profileSummaryField(c, t, msgs.ProfilePurpose(), valueOr(ct.Purpose, msgs.ProfileNoPurpose()))
-				instructions := strings.TrimSpace(ct.Instructions)
-				if instructions == "" {
-					instructions = msgs.ProfileNoInstructions()
-				}
-				a.profileSummaryField(c, t, msgs.ProfileInstructions(), instructions)
-				workspace := strings.TrimSpace(ct.Workspace)
-				if workspace == "" {
-					workspace = msgs.ProfileWorkspaceInherited()
-				}
-				a.profileSummaryField(c, t, msgs.ProfileWorkspace(), workspace)
-				session := msgs.ProfileNoSession()
-				if ct.SessionID != "" {
-					session = msgs.ProfileSession()
-					if !ct.Loaded {
-						session = msgs.ProfileSessionNotLoaded()
-					}
-				}
-				a.profileSummaryField(c, t, msgs.ProfileConversation(), session)
-				active, unknown := a.contactActivity(ct)
-				activity := msgs.ProfileNoActivity()
-				switch {
-				case unknown:
-					activity = msgs.ProfileActivityUnknown()
-				case active:
-					activity = msgs.ProfileActivityActive()
-				}
-				a.profileSummaryField(c, t, msgs.ProfileActivity(), activity)
-				edit := secondaryButton(c, msgs.ProfileEditFull()).TextColor(t.Text).OnClick(func() { a.editContactProfile() })
-				if a.focusProfileEdit {
-					edit.Focus()
-					a.focusProfileEdit = false
-				}
+				a.contactProfileForm(c, t, ct, editor)
 			})
 		})
-	})
-}
-
-func (a *appModel) profileSummaryField(c *ui.Context, t *ui.Theme, label, value string) {
-	ui.Column(c).FillWidth().MinWidth(0).Gap(2).Children(func() {
-		ui.Text(c, label).FontSize(typeMeta).FontWeight(500).TextColor(t.TextMuted)
-		ui.Text(c, value).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text)
 	})
 }
 

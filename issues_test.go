@@ -109,7 +109,7 @@ func TestStoreRejectsIssueWithoutValidContact(t *testing.T) {
 	if err := os.WriteFile(path, data, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := openContactStore(path, "/tmp"); err == nil || !strings.Contains(err.Error(), "unknown contact id") {
+	if _, err := openContactStore(path, "/tmp"); err == nil || !strings.Contains(err.Error(), "unknown Bot ID") {
 		t.Fatalf("orphan issue error = %v", err)
 	}
 }

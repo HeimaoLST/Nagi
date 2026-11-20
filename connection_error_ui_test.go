@@ -359,7 +359,7 @@ func TestConnectionRecoveryEmptyDraftKeepsHigherPriorityReason(t *testing.T) {
 	ct.Archived = true
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	if !tr.HasText("This contact is archived. Restore it before sending a message.") {
+	if !tr.HasText(locales.In("en").CanSendArchived()) {
 		t.Fatalf("archived reason missing from composer: %v", tr.Texts())
 	}
 	ct.Archived = false

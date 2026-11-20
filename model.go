@@ -175,8 +175,6 @@ type appModel struct {
 	markdownLinkFocus      markdownLinkTarget
 	linkReturnTarget       markdownLinkTarget
 	linkReturnSeen         bool
-	settingsContactID      string
-	settingsProfiles       map[string]*contactProfileEditor
 	settingsScroll         ui.ScrollState
 	settingsFocusBack      bool
 	settingsFocusTab       string
@@ -187,7 +185,7 @@ type appModel struct {
 	chooseFolder           func(mygo.OpenDialogOptions) ([]string, error)
 	taskContextScroll      ui.ScrollState
 
-	contactProfile         *contactProfileEditor
+	profileEditors         map[string]*contactProfileEditor
 	contactProfileID       string
 	contactSearch          string
 	contactHistoryInFlight int
@@ -279,8 +277,7 @@ type appModel struct {
 	focusDetailClose     bool
 	focusRail            bool
 	focusSettings        bool
-	focusContactProfile  bool
-	focusProfileEdit     bool
+	focusProfileRow      string
 	focusAuxBack         bool
 	detailPageMode       bool
 	focusConnectionEntry bool
@@ -400,11 +397,6 @@ func (a *appModel) addDefaultContact() {
 	a.composerPanel = ""
 	a.composerFocusContext = false
 	a.focusComposer = true
-}
-
-func (a *appModel) openSettings() {
-	a.settingsContactID = a.selectedContact().ID
-	a.openSettingsTab(settingsTabContact, settingsSourceRail)
 }
 
 func (a *appModel) openAdvancedSettings() {

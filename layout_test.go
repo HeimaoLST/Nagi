@@ -18,7 +18,7 @@ func layoutAppAt(t *testing.T, width int) (*appModel, *contact) {
 	t.Helper()
 	a, ct := workspaceTestApp(t)
 	a.windowWidth = width
-	a.openDetail(detailProfile)
+	a.openContactProfile(ct.ID)
 	return a, ct
 }
 
@@ -175,7 +175,7 @@ func TestResponsiveWorkbenchGeometryFirstSlice(t *testing.T) {
 			a.windowWidth = tc.width
 			a.leftPaneWidth = tc.left
 			a.rightPaneWidth = tc.right
-			a.openDetail(detailProfile)
+			a.openContactProfile(a.selectedID())
 			tr := ui.NewTester(a.view, tc.width, 640)
 			tr.Frame()
 			t.Logf("width=%d left=%g right=%g overlay=%v avatar=%v page=%v effectiveRail=%g effectiveDetail=%g center=%g",
@@ -245,7 +245,7 @@ func TestPreviewAvatarStatusMarkers(t *testing.T) {
 		}
 		a, saki := workspaceTestApp(t)
 		a.windowWidth = 960
-		a.openDetail(detailProfile)
+		a.openContactProfile(a.selectedID())
 		saki.Status = statusWorking
 		waiting := &contact{ID: "contact-waiting", Name: "Waiting", Role: "Assistant", Status: statusReady, Loaded: true}
 		attention := &contact{ID: "contact-attention", Name: "Attention", Role: "Assistant", Status: statusAttention, Loaded: true}
@@ -261,7 +261,7 @@ func TestPreviewAvatarStatusMarkers(t *testing.T) {
 func TestResponsiveAvatarRailKeyboardAndStatus(t *testing.T) {
 	a, saki := workspaceTestApp(t)
 	a.windowWidth = 960
-	a.openDetail(detailProfile)
+	a.openContactProfile(a.selectedID())
 	a.pi = presentationPiHost(a)
 	saki.Status = statusWorking
 	saki.Unread = 7
@@ -366,7 +366,7 @@ func TestResponsiveManualHideAndWideDrag(t *testing.T) {
 		t.Run(fmt.Sprintf("hidden-%d", tc.width), func(t *testing.T) {
 			a, _ := workspaceTestApp(t)
 			a.windowWidth = tc.width
-			a.openDetail(detailProfile)
+			a.openContactProfile(a.selectedID())
 			a.railCollapsed = true
 			a.rightPaneWidth = 440
 			tr := ui.NewTester(a.view, tc.width, 640)
@@ -381,7 +381,7 @@ func TestResponsiveManualHideAndWideDrag(t *testing.T) {
 			if !ok || composer.W-4 < 440 {
 				t.Fatalf("%d hidden composer=%+v ok=%v content=%g", tc.width, composer, ok, composer.W-4)
 			}
-			if err := tr.Click("Contacts"); err != nil {
+			if err := tr.Click(locales.In("en").RailContactsTitle()); err != nil {
 				t.Fatal(err)
 			}
 			tr.Frame()
@@ -395,12 +395,8 @@ func TestResponsiveManualHideAndWideDrag(t *testing.T) {
 			} else if a.avatarRailActive() {
 				t.Fatal("manual Contacts restored avatar rail at full-rail width")
 			}
-			contactLabel := "Contact Nagi"
-			addLabel := "Add contact"
-			if tc.width < 1180 {
-				contactLabel = locales.In("en").AvatarContactLabel("Nagi")
-				addLabel = locales.In("en").AvatarAddContact()
-			}
+			contactLabel := locales.In("en").AvatarContactLabel("Nagi")
+			addLabel := locales.In("en").AvatarAddContact()
 			if _, ok := tr.Find(contactLabel); !ok {
 				t.Fatal("restored rail lacks its contact")
 			}
@@ -420,7 +416,7 @@ func TestResponsiveManualHideAndWideDrag(t *testing.T) {
 	a.windowWidth = 1180
 	a.leftPaneWidth = 200
 	a.rightPaneWidth = 440
-	a.openDetail(detailProfile)
+	a.openContactProfile(a.selectedID())
 	tr := ui.NewTester(a.view, 1180, 720)
 	tr.Frame()
 	beforeRight := a.workWidth()
@@ -436,7 +432,7 @@ func TestResponsiveManualHideAndWideDrag(t *testing.T) {
 func TestResponsiveChatScrollSurvivesResizeAndDetailClose(t *testing.T) {
 	a, ct := workspaceTestApp(t)
 	a.windowWidth = 960
-	a.openDetail(detailProfile)
+	a.openContactProfile(a.selectedID())
 	for i := range 40 {
 		ct.Messages = append(ct.Messages, &message{Key: fmt.Sprintf("message-%02d", i), Kind: msgContact,
 			Text: fmt.Sprintf("visible responsive message %02d", i)})
@@ -477,7 +473,7 @@ func TestResponsiveClosedDetailKeepsFullRailAndNoAutoOpen(t *testing.T) {
 			a.workspaceOpen = false
 			tr := ui.NewTester(a.view, width, 640)
 			tr.Frame()
-			if a.avatarRailActive() || a.detailPageActive() || !tr.HasText("Contact Nagi") {
+			if a.avatarRailActive() || a.detailPageActive() || !tr.HasText(locales.In("en").AvatarContactLabel("Nagi")) {
 				t.Fatalf("closed detail at %d mounted avatar/page or lost full rail", width)
 			}
 			if tr.HasText("Close profile") {
@@ -492,7 +488,7 @@ func TestResponsiveClosedDetailKeepsFullRailAndNoAutoOpen(t *testing.T) {
 			if a.workspaceOpen || a.avatarRailActive() {
 				t.Fatalf("resize opened detail at %d", width)
 			}
-			if !tr.HasText("Contact Nagi") {
+			if !tr.HasText(locales.In("en").AvatarContactLabel("Nagi")) {
 				t.Fatal("closed resize lost full rail")
 			}
 		})
@@ -546,7 +542,7 @@ func TestLayoutOverlayBelow900ClosesWithEscape(t *testing.T) {
 func TestResponsivePseudoExpandedSettingsLabel(t *testing.T) {
 	a, _ := workspaceTestApp(t)
 	a.windowWidth = 1180
-	a.openDetail(detailProfile)
+	a.openContactProfile(a.selectedID())
 	tr := ui.NewTester(a.view, 1180, 640)
 	tr.SetLocale("en")
 	tr.Frame()
@@ -634,7 +630,7 @@ func TestLayoutEventsAndContactSwitchDoNotToggleWork(t *testing.T) {
 		t.Fatal("task finish opened work")
 	}
 	a.selectContact(0)
-	a.openDetail(detailProfile)
+	a.openContactProfile(ct.ID)
 	event.ExecutionID = "second-run"
 	ct.ActiveTaskID, ct.SendState, ct.SubmittedDraft = event.ExecutionID, sendSubmitting, "second"
 	applyTestProductEvent(t, a, "execution.started", event)
@@ -768,7 +764,7 @@ func TestLayoutDragHonorsMinimumPaneWidths(t *testing.T) {
 	}
 }
 
-func TestLayoutExplicitTogglePersistsOpenAndClosed(t *testing.T) {
+func TestBotProfileNavigationDoesNotWriteLayout(t *testing.T) {
 	storePath := filepath.Join(t.TempDir(), "contacts.json")
 	store, err := openContactStore(storePath, t.TempDir())
 	if err != nil {
@@ -779,20 +775,14 @@ func TestLayoutExplicitTogglePersistsOpenAndClosed(t *testing.T) {
 	if a.workspaceOpen {
 		t.Fatal("new layout app must start closed")
 	}
-	a.openDetail(detailProfile)
-	if store.state.Layout == nil || !store.state.Layout.WorkspaceOpen {
-		t.Fatalf("open was not persisted: %+v", store.state.Layout)
+	before := recoverySavedBytes(t, storePath)
+	a.openContactProfile(a.selectedID())
+	if !a.detailIs(detailProfile) || string(recoverySavedBytes(t, storePath)) != string(before) {
+		t.Fatal("opening the Bot profile failed or wrote the store")
 	}
 	a.closeDetail()
-	if store.state.Layout == nil || store.state.Layout.WorkspaceOpen {
-		t.Fatalf("close was not persisted: %+v", store.state.Layout)
-	}
-	reloaded, err := openContactStore(storePath, t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if reloaded.state.Layout == nil || reloaded.state.Layout.WorkspaceOpen {
-		t.Fatalf("reloaded closed layout = %+v", reloaded.state.Layout)
+	if a.workspaceOpen || string(recoverySavedBytes(t, storePath)) != string(before) {
+		t.Fatal("closing the Bot profile failed or wrote the store")
 	}
 }
 
@@ -878,7 +868,7 @@ func TestHeaderGroupsStatusAndRoleWithLongRawText(t *testing.T) {
 			a, ct := workspaceTestApp(t)
 			a.windowWidth = 960
 			ct.Role = tc.role
-			a.openDetail(detailProfile)
+			a.openContactProfile(ct.ID)
 			tc.setup(a, ct)
 			tr := ui.NewTester(a.view, 960, 640)
 			tr.SetLocale(tc.locale)

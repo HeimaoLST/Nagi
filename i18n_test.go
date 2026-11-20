@@ -246,22 +246,22 @@ func TestCatalogLanguageMatchingAndFallback(t *testing.T) {
 func TestUIStringsFollowTesterLocaleAndKeepDraftAndFocus(t *testing.T) {
 	a, ct := workspaceTestApp(t)
 	ct.Draft = "keep the conversation draft"
-	a.openSettingsTab(settingsTabContact, settingsSourceRail)
-	editor := a.settingsContactEditor()
+	a.openContactProfile(ct.ID)
+	editor := a.profileEditorFor(ct.ID)
 	editor.Draft.Name = "Locale draft"
-	a.settingsContactID = ct.ID
+	en, zh := locales.In("en"), locales.In("zh-Hans")
 
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.SetLocale("en")
 	tr.Frame()
-	if !tr.HasText("Settings") || !tr.HasText("Contact profile") {
+	if !tr.HasText(en.ContactProfileAction()) || !tr.HasText(ct.Name) || a.settingsOpen {
 		t.Fatalf("English settings labels missing: %v", tr.Texts())
 	}
-	if err := tr.Click("Contact name"); err != nil {
+	if err := tr.Click(en.FieldNameAccessible()); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if !tr.Focused("Contact name") {
+	if !tr.Focused(en.FieldNameAccessible()) {
 		t.Fatalf("contact field did not take focus: %v", tr.Texts())
 	}
 	if _, active := tr.TextCaret(); !active {
@@ -270,16 +270,16 @@ func TestUIStringsFollowTesterLocaleAndKeepDraftAndFocus(t *testing.T) {
 
 	tr.SetLocale("zh-Hans")
 	tr.Frame()
-	if !tr.HasText("设置") || !tr.HasText("联系人资料") || !tr.HasText("联系人资料："+ct.Name) {
+	if !tr.HasText(zh.ContactProfileAction()) || !tr.HasText(ct.Name) || a.settingsOpen {
 		t.Fatalf("Chinese settings labels missing: %v", tr.Texts())
 	}
-	if a.settingsContactEditor().Draft.Name != "Locale draft" {
-		t.Fatalf("locale change rebuilt the profile draft: %q", a.settingsContactEditor().Draft.Name)
+	if editor.Draft.Name != "Locale draft" {
+		t.Fatalf("locale change rebuilt the profile draft: %q", editor.Draft.Name)
 	}
 	if ct.Draft != "keep the conversation draft" {
 		t.Fatalf("locale change rebuilt the conversation draft: %q", ct.Draft)
 	}
-	if !tr.Focused("联系人名称") {
+	if !tr.Focused(zh.FieldNameAccessible()) {
 		t.Fatalf("locale change lost field focus: %v", tr.Texts())
 	}
 	if _, active := tr.TextCaret(); !active {
@@ -288,10 +288,10 @@ func TestUIStringsFollowTesterLocaleAndKeepDraftAndFocus(t *testing.T) {
 
 	tr.SetLocale("en")
 	tr.Frame()
-	if !tr.HasText("Settings") || !tr.HasText("Contact profile") {
+	if !tr.HasText(en.ContactProfileAction()) || !tr.HasText(ct.Name) || a.settingsOpen {
 		t.Fatalf("English labels did not return: %v", tr.Texts())
 	}
-	if !tr.Focused("Contact name") || a.settingsContactEditor().Draft.Name != "Locale draft" {
+	if !tr.Focused(en.FieldNameAccessible()) || editor.Draft.Name != "Locale draft" {
 		t.Fatal("switching back rebuilt the field or draft")
 	}
 }
@@ -566,13 +566,13 @@ func TestShellAndNewContactFollowLocale(t *testing.T) {
 	a.closeSettings()
 	a.openContactProfile(ct.ID)
 	tr.Frame()
-	if !tr.HasText("联系人资料") || !tr.HasText("用途") || !tr.HasText("指令") ||
-		!tr.HasText("工作目录") || !tr.HasText("编辑完整资料") {
+	if msgs := locales.In("zh-Hans"); !tr.HasText(msgs.ContactProfileAction()) || !tr.HasText(msgs.FieldPurposeAccessible()) ||
+		!tr.HasText(msgs.FieldInstructionsAccessible()) || !tr.HasText(msgs.FieldWorkspaceAccessible()) {
 		t.Fatalf("Chinese contact profile missing: %v", tr.Texts())
 	}
 	a.closeDetail()
 	tr.Frame()
-	if !tr.HasText("联系人") || !tr.HasText(locales.In("zh-Hans").ComposerLabel(ct.Name)) || !tr.HasText("还没有消息") {
+	if !tr.HasText("Bot Team") || !tr.HasText(locales.In("zh-Hans").ComposerLabel(ct.Name)) || !tr.HasText("还没有消息") {
 		t.Fatalf("Chinese workbench shell missing: %v", tr.Texts())
 	}
 	if ct.Draft != "keep the draft" {
@@ -586,7 +586,7 @@ func TestShellAndNewContactFollowLocale(t *testing.T) {
 	demo.addDefaultContact()
 	demoTr.Frame()
 	last := demo.contacts[len(demo.contacts)-1]
-	if last.Name != "新联系人 1" {
+	if last.Name != locales.In("zh-Hans").NewContactName(1) {
 		t.Fatalf("new contact name = %q, want the frame language", last.Name)
 	}
 	if demo.contacts[0].Name != "Nagi" {
@@ -689,7 +689,7 @@ func TestTaskContextLabelsFollowLocale(t *testing.T) {
 	}
 	tr.SetLocale("en")
 	tr.Frame()
-	if !tr.HasText("Task context") || !tr.HasText("Add snippet") || !tr.HasText("Save snippet") {
+	if !tr.HasText("Materials") || !tr.HasText("Add snippet") || !tr.HasText("Save snippet") {
 		t.Fatalf("English task context labels did not return: %v", tr.Texts())
 	}
 
@@ -700,7 +700,7 @@ func TestTaskContextLabelsFollowLocale(t *testing.T) {
 	missingTr := taskContextTester(missing, false)
 	missingTr.SetLocale("zh-Hans")
 	missingTr.Frame()
-	if !missingTr.HasText("无法读取资料文件：open /definitely/missing/context.txt") {
+	if !missingTr.HasText(locales.In("zh-Hans").TaskContextErrReadDetail("open /definitely/missing/context.txt")) {
 		t.Fatalf("task context read detail was lost: %v", missingTr.Texts())
 	}
 }
@@ -835,7 +835,7 @@ func TestGuardedActionsKeepCanonicalRawAndKind(t *testing.T) {
 	if a.send(ct, "blocked") {
 		t.Fatal("archived send was accepted")
 	}
-	if ct.SendError != "This contact is archived. Restore it before sending a message." || ct.SendErrorKind != blockArchivedSend {
+	if ct.SendError != locales.In("en").CanSendArchived() || ct.SendErrorKind != blockArchivedSend {
 		t.Fatalf("send guard raw/kind = %q / %q", ct.SendError, ct.SendErrorKind)
 	}
 }
@@ -903,26 +903,29 @@ func TestSelectedTextSurvivesLocaleSwitchInContactField(t *testing.T) {
 	a, ct := workspaceTestApp(t)
 	other := &contact{ID: "contact-b", Name: "B contact", Role: "Assistant", Status: statusReady, Loaded: true, Workspace: t.TempDir()}
 	a.contacts = append(a.contacts, other)
-	a.ensureSettingsProfileEditor(ct.ID).Draft.Purpose = "keep A purpose"
-	a.ensureSettingsProfileEditor(ct.ID).Draft.Instructions = "keep A instructions"
-	a.ensureSettingsProfileEditor(other.ID).Draft.Purpose = "keep B purpose"
+	a.openContactProfile(other.ID)
+	otherEditor := a.profileEditorFor(other.ID)
+	otherEditor.Draft.Purpose = "keep B purpose"
+	a.openContactProfile(ct.ID)
+	editor := a.profileEditorFor(ct.ID)
+	editor.Draft.Purpose = "keep A purpose"
+	editor.Draft.Instructions = "keep A instructions"
+	nameLabel := locales.In("en").FieldNameAccessible()
 	ct.Draft = "keep conversation draft"
 	ct.Context.openSnippetForm()
 	ct.Context.formName = "keep context form name"
 	ct.Context.formText = "keep context form text"
-	a.openSettingsTab(settingsTabContact, settingsSourceRail)
-	a.settingsContactID = ct.ID
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.SetLocale("en")
 	tr.Frame()
-	if !tr.HasText("Contact purpose") || a.settingsContactEditor().Draft.Purpose != "keep A purpose" {
+	if !tr.HasText(locales.In("en").FieldPurposeAccessible()) || editor.Draft.Purpose != "keep A purpose" {
 		t.Fatalf("contact profile purpose is not visible: %v", tr.Texts())
 	}
-	if err := tr.Click("Contact name"); err != nil {
+	if err := tr.Click(nameLabel); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if !tr.Focused("Contact name") {
+	if !tr.Focused(nameLabel) {
 		t.Fatalf("contact name field did not take focus: %v", tr.Texts())
 	}
 	if _, active := tr.TextCaret(); !active {
@@ -938,7 +941,7 @@ func TestSelectedTextSurvivesLocaleSwitchInContactField(t *testing.T) {
 	tr.Frame()
 	tr.Type("替换")
 	tr.Frame()
-	if got := a.settingsContactEditor().Draft.Name; got != "替换" {
+	if got := editor.Draft.Name; got != "替换" {
 		t.Fatalf("typing after the locale switch did not replace the selection: %q", got)
 	}
 	if ct.Name != originalName {
@@ -946,17 +949,16 @@ func TestSelectedTextSurvivesLocaleSwitchInContactField(t *testing.T) {
 	}
 	tr.SetLocale("en")
 	tr.Frame()
-	if !tr.Focused("Contact name") {
+	if !tr.Focused(nameLabel) {
 		t.Fatalf("switching back lost the contact field focus: %v", tr.Texts())
 	}
 	if _, active := tr.TextCaret(); !active {
 		t.Fatal("switching back lost the text caret")
 	}
-	if a.settingsContactEditor().Draft.Name != "替换" || a.settingsContactID != ct.ID || a.settingsTab != settingsTabContact {
-		t.Fatalf("selection/focus repair changed target or draft: name=%q contact=%q tab=%q", a.settingsContactEditor().Draft.Name, a.settingsContactID, a.settingsTab)
+	if editor.Draft.Name != "替换" || a.contactProfileID != ct.ID || a.settingsOpen {
+		t.Fatalf("selection/focus repair changed target or draft: name=%q Bot=%q", editor.Draft.Name, a.contactProfileID)
 	}
-	if a.ensureSettingsProfileEditor(ct.ID).Draft.Purpose != "keep A purpose" || a.ensureSettingsProfileEditor(ct.ID).Draft.Instructions != "keep A instructions" ||
-		a.ensureSettingsProfileEditor(other.ID).Draft.Purpose != "keep B purpose" {
+	if editor.Draft.Purpose != "keep A purpose" || editor.Draft.Instructions != "keep A instructions" || otherEditor.Draft.Purpose != "keep B purpose" {
 		t.Fatal("locale switch changed A/B profile drafts")
 	}
 	if ct.Draft != "keep conversation draft" {

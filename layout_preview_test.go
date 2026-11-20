@@ -31,7 +31,7 @@ func TestPreviewAdjustableLayout(t *testing.T) {
 					a, ct := workspaceTestApp(t)
 					a.windowWidth = size.width
 					if scene != "closed" {
-						a.openDetail(detailProfile)
+						a.openContactProfile(a.selectedID())
 					}
 					if scene == "dragged" && size.width >= 1040 {
 						a.leftPaneWidth = defaultLeftPaneWidth
@@ -78,7 +78,7 @@ func writeResponsiveBoundaryPreviews(t *testing.T, dir string) {
 		a.leftPaneWidth = sc.left
 		a.rightPaneWidth = sc.right
 		if sc.workspaceOpen {
-			a.openDetail(detailProfile)
+			a.openContactProfile(a.selectedID())
 		}
 		ct.Name = sc.longName
 		tr := ui.NewTester(a.view, int(sc.width), 640)
@@ -197,7 +197,7 @@ func TestWorkbenchRoleScenesKeepActionsReachable(t *testing.T) {
 						case "conversation":
 							ct.Messages = []*message{{Key: "user-visual", Kind: msgUser, Text: "A retained user message.\n中文换行。"}, {Key: "reply-visual", Kind: msgContact, Text: "A retained reply with **original emphasis**, a [link](https://example.invalid) and `code`."}}
 						case "contact":
-							a.openSettingsTab(settingsTabContact, settingsSourceProfile)
+							a.openContactProfile(ct.ID)
 							label = msgs.WorkFolderChoose()
 						case "task-context":
 							a.openConversationTaskContext()

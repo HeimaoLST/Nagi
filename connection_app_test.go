@@ -534,7 +534,8 @@ func TestC8RestoreAdmissionPreservesUnavailableEditsAndLocalRetry(t *testing.T) 
 			case "local-save":
 				a.localSaveErr = "existing write failure"
 			case "profile":
-				a.ensureSettingsProfileEditor(a.selectedID()).Draft.Name = "keep profile"
+				a.openContactProfile(a.selectedID())
+				a.profileEditorFor(a.selectedID()).Draft.Name = "keep profile"
 			case "connection":
 				a.connectionForm.Draft.Model = "keep model"
 			case "context":
@@ -548,7 +549,8 @@ func TestC8RestoreAdmissionPreservesUnavailableEditsAndLocalRetry(t *testing.T) 
 			case "connection-test":
 				a.connectionTesting = true
 			case "contact-picker":
-				a.ensureSettingsProfileEditor(a.selectedID()).Busy = true
+				a.openContactProfile(a.selectedID())
+				a.profileEditorFor(a.selectedID()).Busy = true
 			}
 			original, record := recoverySavedBytes(t, a.storePath), recoveryRecordSnapshot(t, a.selectedContact())
 			a.chooseRecoveryFile = func(mygo.OpenDialogOptions) ([]string, error) {

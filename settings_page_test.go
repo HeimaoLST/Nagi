@@ -35,12 +35,13 @@ func TestSettingsPageReplacesWorkbenchAndRoutesEntries(t *testing.T) {
 	if a.settingsScroll.Y != 0 {
 		t.Fatalf("settings page opened scrolled: %v", a.settingsScroll.Y)
 	}
-	for _, forbidden := range []string{"Contacts", "Add contact", "Composer for Nagi", "Send", "History"} {
+	msgs := locales.In("en")
+	for _, forbidden := range []string{msgs.RailContactsTitle(), msgs.AvatarAddContact(), msgs.ComposerLabel(ct.Name), "Send", "History", msgs.ContactProfileAction()} {
 		if tr.HasText(forbidden) {
 			t.Fatalf("settings page still rendered workbench text %q: %v", forbidden, tr.Texts())
 		}
 	}
-	for _, want := range []string{"Settings", "Appearance", "Connection & model", "Contact profile", "Advanced"} {
+	for _, want := range []string{msgs.SettingsTitle(), msgs.SettingsGeneral(), msgs.SettingsConnection(), msgs.SettingsAdvanced()} {
 		if !tr.HasText(want) {
 			t.Fatalf("settings page missing %q: %v", want, tr.Texts())
 		}
@@ -187,34 +188,12 @@ func TestCustomThemeSettingsLowContrastFailedSaveRetry(t *testing.T) {
 	}
 }
 
-func TestSettingsPageArchivedProfileAndErrorEntriesRouteToCategories(t *testing.T) {
+func TestSettingsPageConnectionErrorRoutesToConnectionCategory(t *testing.T) {
 	a, ct := workspaceTestApp(t)
 	a.windowWidth = 1040
-	ct.Archived = true
-	tr := ui.NewTester(a.view, 1040, 720)
-	tr.Frame()
-	if err := tr.Click(locales.In("en").ContactProfileAction()); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if !a.detailIs(detailProfile) || a.settingsOpen {
-		t.Fatalf("archived profile route = detail=%v settings=%v", a.activeDetail(), a.settingsOpen)
-	}
-	if err := tr.Click("Edit full profile"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if !a.settingsOpen || a.settingsTab != settingsTabContact {
-		t.Fatalf("profile edit route = open=%v tab=%q", a.settingsOpen, a.settingsTab)
-	}
-	if err := tr.Click("← Back to workbench"); err != nil {
-		t.Fatal(err)
-	}
-	a.closeDetail()
-	ct.Archived = false
-	tr.Frame()
 
 	ct.LoadErr = "connection_mismatch: session is bound elsewhere"
+	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
 	if err := tr.Click(locales.In("en").ConnectionRecoveryOpenSettings()); err != nil {
 		t.Fatal(err)
@@ -225,48 +204,18 @@ func TestSettingsPageArchivedProfileAndErrorEntriesRouteToCategories(t *testing.
 	}
 }
 
-func TestSettingsContactDraftsRemainPerContactAndDiscardIsLocal(t *testing.T) {
-	a, ct := workspaceTestApp(t)
-	other := &contact{ID: "other", Name: "Mio", Role: "Assistant", Status: statusReady}
-	a.contacts = append(a.contacts, other)
-	a.openSettingsTab(settingsTabContact, settingsSourceRail)
-	editorA := a.settingsContactEditor()
-	editorA.Draft.Name = "A draft"
-	a.settingsContactID = other.ID
-	editorB := a.settingsContactEditor()
-	editorB.Draft.Name = "B draft"
-	a.settingsContactID = ct.ID
-	if got := a.settingsContactEditor().Draft.Name; got != "A draft" {
-		t.Fatalf("A draft = %q", got)
-	}
-	if a.selectedContact().ID != ct.ID {
-		t.Fatal("settings contact picker changed the workbench selection")
-	}
-	tr := ui.NewTester(a.view, 1040, 720)
-	if err := clickSettingsAction(tr, "Discard changes"); err != nil {
-		t.Fatal(err)
-	}
-	if a.settingsContactEditor().Draft.Name != "Nagi" || editorB.Draft.Name != "B draft" {
-		t.Fatalf("discard scope = A=%q B=%q", a.settingsContactEditor().Draft.Name, editorB.Draft.Name)
-	}
-	if ct.Draft != "" {
-		t.Fatalf("settings discard cleared conversation draft: %q", ct.Draft)
-	}
-}
-
 func TestSettingsCategoryChangeResetsContentScrollAndKeepsDraft(t *testing.T) {
 	a, _ := workspaceTestApp(t)
-	a.openSettingsTab(settingsTabContact, settingsSourceRail)
-	editor := a.settingsContactEditor()
-	editor.Draft.Name = "unsaved name"
+	a.openSettingsTab(settingsTabConnection, settingsSourceRail)
+	a.connectionForm.Draft.Model = "unsaved model"
 	a.settingsScroll.Y = 200
-	a.settingsFocusTab = settingsTabContact
 	a.selectSettingsTab(settingsTabAdvanced)
 	if a.settingsScroll.Y != 0 || a.settingsTab != settingsTabAdvanced {
 		t.Fatalf("category switch = scroll=%v tab=%q", a.settingsScroll.Y, a.settingsTab)
 	}
-	if !strings.Contains(editor.Draft.Name, "unsaved") {
-		t.Fatal("category switch discarded the contact draft")
+	a.selectSettingsTab(settingsTabConnection)
+	if a.connectionForm.Draft.Model != "unsaved model" {
+		t.Fatal("category switch discarded the connection draft")
 	}
 }
 
@@ -596,47 +545,6 @@ func TestPreferencesListControlsAndPreviews(t *testing.T) {
 	}
 }
 
-func TestSettingsContactPickerFollowsEditingIdentityAfterReturnToA(t *testing.T) {
-	a, aContact := workspaceTestApp(t)
-	bContact := &contact{ID: "contact-bbbb2222", Name: aContact.Name, Role: "Assistant", Status: statusReady}
-	a.contacts = append(a.contacts, bContact)
-	a.openSettingsTab(settingsTabContact, settingsSourceRail)
-	a.settingsContactID = bContact.ID
-	tr := ui.NewTester(a.view, 1040, 720)
-	tr.Frame()
-	if !strings.Contains(strings.Join(tr.Texts(), "\n"), a.settingsContactChoice(locales.In("en"), bContact)) {
-		t.Fatalf("picker/title did not show B: %v", tr.Texts())
-	}
-	a.closeSettings()
-	a.openContactProfile(bContact.ID)
-	tr.Frame()
-	tr.Key(ui.Cmd, ui.KeyComma)
-	tr.Frame()
-	if err := tr.Click("Contact profile"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if a.settingsContactID != bContact.ID || a.settingsTab != settingsTabContact {
-		t.Fatalf("Cmd+, from B profile lost the picker target: id=%q tab=%q", a.settingsContactID, a.settingsTab)
-	}
-	a.closeSettings()
-	tr.Frame()
-	if err := tr.Click("Edit full profile"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if a.settingsContactID != aContact.ID {
-		t.Fatalf("A profile entry kept B target: id=%q want=%q", a.settingsContactID, aContact.ID)
-	}
-	texts := strings.Join(tr.Texts(), "\n")
-	if !strings.Contains(texts, "Contact profile: "+a.settingsContactChoice(locales.In("en"), aContact)) {
-		t.Fatalf("A profile title/picker mismatch: %v", tr.Texts())
-	}
-	if a.settingsContactChoice(locales.In("en"), aContact) == a.settingsContactChoice(locales.In("en"), bContact) {
-		t.Fatal("same-name contacts did not get distinct readable labels")
-	}
-}
-
 func TestSettingsPageCmdCommaReturnsToFocusedComposer(t *testing.T) {
 	a, ct := workspaceTestApp(t)
 	recoveryTestStore(t, a)
@@ -672,104 +580,6 @@ func TestSettingsPageCmdCommaReturnsToFocusedComposer(t *testing.T) {
 	tr.Type(" again")
 	if ct.Draft != "before settings again" {
 		t.Fatalf("typing after Back = %q", ct.Draft)
-	}
-}
-
-func TestSettingsContactPickerLongListReachesSelectedLastOption(t *testing.T) {
-	a, _ := workspaceTestApp(t)
-	a.contacts = nil
-	for i := 0; i < 20; i++ {
-		a.contacts = append(a.contacts, &contact{ID: fmt.Sprintf("contact-long-%02d", i), Name: fmt.Sprintf("Person %02d", i), Role: "Assistant", Status: statusReady})
-	}
-	first, last := a.contacts[0], a.contacts[len(a.contacts)-1]
-	a.openSettingsTab(settingsTabContact, settingsSourceRail)
-	a.settingsContactID = first.ID
-	tr := ui.NewTester(a.view, 1040, 720)
-	tr.Frame()
-	if a.settingsContactID != first.ID {
-		t.Fatalf("picker fixture started at %q, want first %q", a.settingsContactID, first.ID)
-	}
-	if err := tr.Click("Edit contact"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	// SelectBase owns the open popup; End highlights the last option, Enter
-	// chooses it. This exercises the real long-list keyboard path rather than
-	// clicking the already-selected trigger text.
-	tr.Key(0, ui.KeyEnd)
-	tr.Frame()
-	tr.Key(0, ui.KeyEnter)
-	tr.Frame()
-	if a.settingsContactID != last.ID {
-		t.Fatalf("long picker keyboard chose %q, want last %q", a.settingsContactID, last.ID)
-	}
-	if tr.HasText(a.settingsContactChoice(locales.In("en"), a.contacts[len(a.contacts)-2])) {
-		t.Fatalf("picker popup remained open after Enter: %v", tr.Texts())
-	}
-	// Down from the closed trigger proves the trigger kept focus; it must
-	// reopen the real popup rather than being lost after Enter.
-	tr.Key(0, ui.KeyDown)
-	tr.Frame()
-	if !tr.HasText(a.settingsContactChoice(locales.In("en"), a.contacts[len(a.contacts)-2])) {
-		t.Fatalf("picker trigger did not retain keyboard focus after Enter: %v", tr.Texts())
-	}
-	tr.Key(0, ui.KeyEscape)
-	tr.Frame()
-}
-func TestSettingsContactPickerDisambiguatesSameLastIDDigitsAndSavesB(t *testing.T) {
-	store, err := openContactStore(filepath.Join(t.TempDir(), "contacts.json"), t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	aContact := &contact{ID: "contact-aaaa1111", Name: "Saki", Role: "Assistant", Status: statusReady, Workspace: t.TempDir()}
-	bContact := &contact{ID: "contact-bbbb1111", Name: "Saki", Role: "Assistant", Status: statusReady, Workspace: t.TempDir()}
-	a := &appModel{store: store, storePath: store.path, contacts: []*contact{aContact, bContact}, selected: 0, windowWidth: 1040}
-	a.openSettingsTab(settingsTabContact, settingsSourceRail)
-	if a.settingsContactChoice(locales.In("en"), aContact) == a.settingsContactChoice(locales.In("en"), bContact) {
-		t.Fatal("same-name contacts did not get distinct labels")
-	}
-	tr := ui.NewTester(a.view, 1040, 720)
-	tr.Frame()
-	if texts := strings.Join(tr.Texts(), "\n"); strings.Contains(texts, aContact.ID) || strings.Contains(texts, bContact.ID) {
-		t.Fatalf("contact picker exposed raw IDs: %v", tr.Texts())
-	}
-	if !tr.HasText("Edit contact") {
-		t.Fatalf("contact picker label prefix missing: %v", tr.Texts())
-	}
-	if _, ok := tr.Find(a.settingsContactChoice(locales.In("en"), aContact)); !ok {
-		t.Fatalf("contact picker current choice missing: %v", tr.Texts())
-	}
-	showPreviewTooltip(t, tr, "Edit contact")
-	if full := "Edit contact: " + a.settingsContactChoice(locales.In("en"), aContact); !tr.HasText(full) {
-		t.Fatalf("contact picker full tooltip/AX missing %q: %v", full, tr.Texts())
-	}
-	tr.Move(1, 1)
-	tr.Frame()
-	if err := tr.Click("Edit contact"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if err := tr.Click(a.settingsContactChoice(locales.In("en"), bContact)); err != nil {
-		t.Fatalf("picker B option: %v; texts=%v", err, tr.Texts())
-	}
-	tr.Frame()
-	if a.settingsContactID != bContact.ID {
-		t.Fatalf("picker chose id %q, want B %q", a.settingsContactID, bContact.ID)
-	}
-	if err := tr.Click("Contact name"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Key(ui.Cmd, ui.KeyA)
-	tr.Type("Saved B")
-	if err := clickSettingsAction(tr, "Save changes"); err != nil {
-		t.Fatal(err)
-	}
-	if r, ok := tr.Find("Save changes"); !ok || r.H < 32 {
-		t.Fatal("Save changes does not provide the minimum click target")
-	}
-	tr.Frame()
-	if aContact.Name != "Saki" || bContact.Name != "Saved B" || a.selectedContact().ID != aContact.ID {
-		t.Fatalf("B save scope changed: A=%q B=%q selected=%q", aContact.Name, bContact.Name, a.selectedContact().ID)
 	}
 }
 
@@ -847,7 +657,7 @@ func TestPreviewSettingsPage(t *testing.T) {
 			theme = "dark"
 		}
 		for _, size := range []struct{ width, height int }{{720, 640}, {1040, 720}, {1380, 900}} {
-			for _, tab := range []string{settingsTabAppearance, settingsTabConnection, settingsTabContact, settingsTabAdvanced} {
+			for _, tab := range []string{settingsTabAppearance, settingsTabConnection, settingsTabAdvanced} {
 				a, ct, _ := piRunStartedTestApp(t)
 				ct.ActiveTaskID, ct.SendState = "", sendIdle
 				a.storePath = a.store.path
@@ -862,21 +672,13 @@ func TestPreviewSettingsPage(t *testing.T) {
 					a.connectionForm.HasSaved = true
 					a.connectionForm.Error = longError
 					a.runtimeStatus = runtimeStateReady
-				case settingsTabContact:
-					a.openSettingsTab(settingsTabContact, settingsSourceRail)
-					editor := a.settingsContactEditor()
-					editor.Draft.Name = "Research partner with a long readable name"
-					editor.Draft.Purpose = "Long-running product and research questions that need a clear, durable reference."
-					editor.Draft.Instructions = "  Preserve indentation.\n" + strings.Repeat("Verify the actual state before reporting success. ", 4)
-					editor.Draft.Workspace = longPath
-					a.settingsScroll.Y = 0
 				case settingsTabAdvanced:
 					a.runtimeStatus = runtimeStateFailed
 					a.runtimeStage = "Runtime helper"
 					a.runtimeErr = longError
 					a.openAdvancedSettings()
 				}
-				if tab != settingsTabContact && tab != settingsTabAdvanced {
+				if tab != settingsTabAdvanced {
 					a.openSettingsTab(tab, settingsSourceRail)
 				}
 				tr := ui.NewTester(a.view, size.width, size.height)
@@ -1174,105 +976,20 @@ func TestSettingsPendingBannerSurvivesDistinctTestStatus(t *testing.T) {
 	}
 }
 
-func TestSettingsContactPickerSameLabelSelectsStableID(t *testing.T) {
-	store, err := openContactStore(filepath.Join(t.TempDir(), "contacts.json"), t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	aContact := &contact{ID: "contact-aaaa", Name: "甲", Role: "Assistant", Status: statusReady, Workspace: t.TempDir()}
-	bContact := &contact{ID: "contact-bbbb", Name: "甲", Role: "Assistant", Status: statusReady, Workspace: t.TempDir()}
-	cContact := &contact{ID: "contact-cccc", Name: "甲（1）", Role: "Assistant", Status: statusReady, Workspace: t.TempDir()}
-	a := &appModel{store: store, storePath: store.path, contacts: []*contact{aContact, bContact, cContact}, selected: 0, windowWidth: 1040}
-	a.ensureSettingsProfileEditor(aContact.ID).Draft.Purpose = "draft A"
-	a.ensureSettingsProfileEditor(bContact.ID).Draft.Purpose = "draft B"
-	a.ensureSettingsProfileEditor(cContact.ID).Draft.Purpose = "draft C"
-	a.openSettingsTab(settingsTabContact, settingsSourceRail)
-	tr := ui.NewTester(a.view, 1040, 720)
-	tr.SetLocale("zh-Hans")
-	tr.Frame()
-	msgs := locales.In("zh-Hans")
-	aLabel, cLabel := a.settingsContactChoice(msgs, aContact), a.settingsContactChoice(msgs, cContact)
-	if aLabel != cLabel {
-		t.Fatalf("fixture labels must collide, got %q / %q", aLabel, cLabel)
-	}
-	if texts := strings.Join(tr.Texts(), "\n"); strings.Contains(texts, aContact.ID) || strings.Contains(texts, cContact.ID) {
-		t.Fatalf("contact picker exposed raw IDs: %v", tr.Texts())
-	}
-	if err := tr.Click("编辑联系人"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	tr.Key(0, ui.KeyEnd)
-	tr.Frame()
-	tr.Key(0, ui.KeyEnter)
-	tr.Frame()
-	if a.settingsContactID != cContact.ID {
-		t.Fatalf("picker End/Enter chose %q, want C %q", a.settingsContactID, cContact.ID)
-	}
-	if a.ensureSettingsProfileEditor(cContact.ID).Draft.Purpose != "draft C" {
-		t.Fatal("picker changed C draft")
-	}
-	if a.ensureSettingsProfileEditor(aContact.ID).Draft.Purpose != "draft A" ||
-		a.ensureSettingsProfileEditor(bContact.ID).Draft.Purpose != "draft B" {
-		t.Fatal("picker changed A/B drafts")
-	}
-	if err := tr.Click("联系人名称"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Key(ui.Cmd, ui.KeyA)
-	tr.Type("Only C")
-	tr.Frame()
-	tr.SetLocale("en")
-	tr.Frame()
-	tr.SetLocale("zh-Hans")
-	tr.Frame()
-	if a.settingsContactID != cContact.ID || a.ensureSettingsProfileEditor(cContact.ID).Draft.Name != "Only C" ||
-		a.ensureSettingsProfileEditor(aContact.ID).Draft.Purpose != "draft A" ||
-		a.ensureSettingsProfileEditor(bContact.ID).Draft.Purpose != "draft B" {
-		t.Fatalf("locale switch lost target or drafts: id=%q", a.settingsContactID)
-	}
-	if err := clickSettingsAction(tr, "保存更改"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if aContact.Name != "甲" || bContact.Name != "甲" || cContact.Name != "Only C" {
-		t.Fatalf("save scope changed A=%q B=%q C=%q", aContact.Name, bContact.Name, cContact.Name)
-	}
-	stored, err := openContactStore(store.path, aContact.Workspace)
-	if err != nil {
-		t.Fatal(err)
-	}
-	storedByID := map[string]storedContact{}
-	for _, item := range stored.state.Contacts {
-		storedByID[item.ID] = item
-	}
-	if len(storedByID) != 3 || storedByID[aContact.ID].Name != "甲" ||
-		storedByID[bContact.ID].Name != "甲" || storedByID[cContact.ID].Name != "Only C" {
-		t.Fatalf("saved contact set/names = %+v", storedByID)
-	}
-	if storedByID[aContact.ID].Purpose != aContact.Purpose || storedByID[bContact.ID].Purpose != bContact.Purpose {
-		t.Fatalf("unsaved A/B profile purposes leaked into the store: %+v", storedByID)
-	}
-	if storedByID[cContact.ID].Purpose != "draft C" {
-		t.Fatalf("saved C purpose = %q, want draft C", storedByID[cContact.ID].Purpose)
-	}
-}
-
-func TestSettingsContactFolderChooserKeepsContactAndSessionUntilSave(t *testing.T) {
+func TestBotProfileFolderChooserKeepsBotAndSessionUntilSave(t *testing.T) {
 	a, ct := workspaceTestApp(t)
 	a.uiLocale = "en"
 	a.workDir = t.TempDir()
 	ct.Workspace = t.TempDir()
 	ct.SendState = sendUnknown
-	a.settingsContactID = ct.ID
-	a.openSettingsTab(settingsTabContact, settingsSourceRail)
-	editor := a.settingsContactEditor()
+	a.openContactProfile(ct.ID)
+	editor := a.profileEditorFor(ct.ID)
 	editor.Draft.Name = "Unsaved name"
 	before := editor.Draft
 	requests, replies, updates := controlledFolderChoice(t, a)
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	if err := clickSettingsAction(tr, "Choose folder…"); err != nil {
+	if err := clickBotProfileAction(tr, locales.In("en").WorkFolderChoose()); err != nil {
 		t.Fatal(err)
 	}
 	if got := awaitFolderChoice(t, requests).DefaultPath; got != ct.Workspace {
@@ -1298,15 +1015,14 @@ func TestSettingsContactFolderChooserKeepsContactAndSessionUntilSave(t *testing.
 	}
 }
 
-func TestSettingsContactFolderChooserCancelErrorAndStaleIdentity(t *testing.T) {
-	for _, change := range []string{"cancel", "error", "contact", "editor", "tab-roundtrip", "closed", "shutdown"} {
+func TestBotProfileFolderChooserCancelErrorAndStaleIdentity(t *testing.T) {
+	for _, change := range []string{"cancel", "error", "bot", "editor", "profile-roundtrip", "closed", "shutdown"} {
 		t.Run(change, func(t *testing.T) {
 			a, ct := workspaceTestApp(t)
 			a.workDir = t.TempDir()
 			ct.Workspace = t.TempDir()
-			a.settingsContactID = ct.ID
-			a.openSettingsTab(settingsTabContact, settingsSourceRail)
-			editor := a.settingsContactEditor()
+			a.openContactProfile(ct.ID)
+			editor := a.profileEditorFor(ct.ID)
 			editor.Error = "existing profile error"
 			editor.folderError = "existing chooser error"
 			before := cloneProfileDraft(editor.Draft)
@@ -1319,18 +1035,17 @@ func TestSettingsContactFolderChooserCancelErrorAndStaleIdentity(t *testing.T) {
 				reply = folderChoiceReply{}
 			case "error":
 				reply = folderChoiceReply{paths: []string{filepath.Join(t.TempDir(), "removed")}}
-			case "contact":
+			case "bot":
 				other := &contact{ID: "other", Name: "Other"}
 				a.contacts = append(a.contacts, other)
-				a.settingsContactID = other.ID
-				a.settingsContactEditor()
+				a.openContactProfile(other.ID)
 			case "editor":
-				a.settingsProfiles[ct.ID] = newContactProfileEditor(before)
-			case "tab-roundtrip":
-				a.selectSettingsTab(settingsTabAppearance)
-				a.selectSettingsTab(settingsTabContact)
+				a.profileEditors[ct.ID] = newContactProfileEditor(before)
+			case "profile-roundtrip":
+				a.closeDetail()
+				a.openContactProfile(ct.ID)
 			case "closed":
-				a.closeSettings()
+				a.closeDetail()
 			case "shutdown":
 				a.shutdownStarted = true
 			}
@@ -1518,7 +1233,8 @@ func TestC8SaveRecoveryCopyEntryKeepsSavedAndUnsavedState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	editor := a.ensureSettingsProfileEditor(ct.ID)
+	openBotProfileFromRail(t, tr, locales.In("en").AvatarContactLabel(ct.Name))
+	editor := a.profileEditorFor(ct.ID)
 	editor.Draft.Name = "Unsaved profile name excluded from the copy"
 	a.connectionForm.Draft.Model = "unsaved-connection-model"
 	profileName, modelDraft := editor.Draft.Name, a.connectionForm.Draft
@@ -1759,7 +1475,8 @@ func TestC8RecoveryRechecksTargetAndDirtyPreview(t *testing.T) {
 					t.Fatal(err)
 				}
 			case "profile":
-				a.ensureSettingsProfileEditor(a.selectedID()).Draft.Name = "keep unsaved profile"
+				a.openContactProfile(a.selectedID())
+				a.profileEditorFor(a.selectedID()).Draft.Name = "keep unsaved profile"
 			case "form":
 				a.connectionForm.Draft.Model = "keep unsaved model"
 			case "context":

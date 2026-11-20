@@ -113,8 +113,8 @@ func TestUnavailableStoreFallbackKeepsPathsAndFile(t *testing.T) {
 	tr.Frame()
 	for _, want := range []string{
 		"Startup & configuration",
-		"Local contact store:",
-		"Runtime: not started (local contact store unavailable)",
+		locales.In("en").RuntimeStageLocalStore() + ":",
+		locales.In("en").RuntimeNotStartedLocalStore(),
 		"Store: " + storePath,
 		"GUI work directory: " + workDir,
 	} {
@@ -159,7 +159,7 @@ func TestRuntimePanelShowsPathsAndMetadata(t *testing.T) {
 		"Startup & configuration",
 		"Store: /tmp/contacts.json",
 		"GUI work directory: /tmp/work",
-		"Contact workspace: /tmp/session-ws",
+		locales.In("en").RuntimeContactWorkspaceLine("/tmp/session-ws"),
 		"Session: session-1",
 		"state: running",
 		"Session API: openai-chat-completions",
@@ -174,19 +174,20 @@ func TestRuntimePanelShowsPathsAndMetadata(t *testing.T) {
 	}
 }
 
-func TestConfigurationEntryKeepsContactSettingsUsable(t *testing.T) {
+func TestConfigurationEntryKeepsGlobalSettingsUsable(t *testing.T) {
 	ct := &contact{ID: "nagi", Name: "Nagi", Role: "Assistant", Draft: "keep"}
 	a := &appModel{
 		runtimeStatus: runtimeStateReady, storePath: "/tmp/contacts.json",
 		workDir:  "/tmp/work",
 		contacts: []*contact{ct},
 	}
-	a.openSettings()
+	a.openSettingsTab(settingsTabAppearance, settingsSourceRail)
 	tr := ui.NewTester(a.view, 960, 640)
 	tr.Frame()
-	for _, want := range []string{"Contact profile", "Contact name", "Save changes", "← Back to workbench"} {
+	msgs := locales.In("en")
+	for _, want := range []string{msgs.SettingsGeneral(), msgs.SettingsConnection(), msgs.SettingsAdvanced(), msgs.SettingsBackAccessible()} {
 		if !tr.HasText(want) {
-			t.Fatalf("contact profile page missing %q", want)
+			t.Fatalf("global Settings missing %q", want)
 		}
 	}
 	if err := tr.Click("Advanced"); err != nil {

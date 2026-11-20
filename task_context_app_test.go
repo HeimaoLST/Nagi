@@ -86,7 +86,7 @@ func TestTaskContextAppAndReadOnlyChatCopy(t *testing.T) {
 	a.openConversationTaskContext()
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	for _, want := range []string{"Task context", "Chat: Nagi", "Conversation notes", "Close task context"} {
+	for _, want := range []string{locales.In("en").TaskContextTitle(), "Chat: Nagi", "Conversation notes", locales.In("en").CloseTaskContext()} {
 		if !tr.HasText(want) {
 			t.Fatalf("conversation modal missing %q: %v", want, tr.Texts())
 		}
@@ -103,7 +103,7 @@ func TestTaskContextAppAndReadOnlyChatCopy(t *testing.T) {
 	if !tr.HasText("main prompt") || !tr.HasText("read only text") {
 		t.Fatalf("live context missing: %v", tr.Texts())
 	}
-	if err := tr.Click("Copy context text"); err != nil {
+	if err := tr.Click(locales.In("en").CopyContextTextLabel()); err != nil {
 		t.Fatal(err)
 	}
 	if tr.Clipboard() != "read only text" || ct.Draft != "draft remains local" || a.selectedContact() != ct {
@@ -304,7 +304,7 @@ func TestTaskContextChooserDefersReadUntilSaveAndRefresh(t *testing.T) {
 			if opts.Parent != a.win || opts.Directory || opts.Multiple || len(opts.Filters) != 0 {
 				t.Fatal("chooser is not parented, single-file and unrestricted by extension")
 			}
-			if err := tr.Click("Context file name"); err != nil {
+			if err := tr.Click(locales.In("en").TaskContextFileLabel()); err != nil {
 				t.Fatal(err)
 			}
 			tr.Type("Latest edited name")
@@ -439,7 +439,7 @@ func TestTaskContextChooserStaleResultsNeverMutateOrFocus(t *testing.T) {
 					a.openAppearance()
 					a.closeSettings()
 				case "path-roundtrip":
-					if err := tr.Click("Context file path"); err != nil {
+					if err := tr.Click(locales.In("en").TaskContextFilePathLabel()); err != nil {
 						t.Fatal(err)
 					}
 					tr.Key(ui.Cmd, ui.KeyA)
@@ -477,7 +477,7 @@ func TestTaskContextChooserLatestRequestOwnsPathAndFocus(t *testing.T) {
 		t.Fatal(err)
 	}
 	<-request
-	if err := tr.Click("Context file path"); err != nil {
+	if err := tr.Click(locales.In("en").TaskContextFilePathLabel()); err != nil {
 		t.Fatal(err)
 	}
 	tr.Type("/new draft")
@@ -497,14 +497,14 @@ func TestTaskContextChooserLatestRequestOwnsPathAndFocus(t *testing.T) {
 	if tc.formPath != "/new-result" || !tr.Focused("Choose UTF-8 file…") {
 		t.Fatal("newer choice did not own path/focus")
 	}
-	if err := tr.Click("Context file name"); err != nil {
+	if err := tr.Click(locales.In("en").TaskContextFileLabel()); err != nil {
 		t.Fatal(err)
 	}
 	tr.Type("last name")
 	close(first)
 	themeImportCompletion(t, callbacks)()
 	tr.Frame()
-	if tc.formPath != "/new-result" || tc.formName != "last name" || !tr.Focused("Context file name") || a.contextFilePickers != 0 || ct.Context.count() != 0 {
+	if tc.formPath != "/new-result" || tc.formName != "last name" || !tr.Focused(locales.In("en").TaskContextFileLabel()) || a.contextFilePickers != 0 || ct.Context.count() != 0 {
 		t.Fatal("older result overwrote path/name/focus")
 	}
 }

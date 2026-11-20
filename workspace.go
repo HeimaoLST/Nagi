@@ -274,7 +274,7 @@ func (a *appModel) layoutMainArea(c *ui.Context, t *ui.Theme, left float32, oute
 // workspaceFrame draws the current right detail in its own column.
 func (a *appModel) workspaceFrame(c *ui.Context, t *ui.Theme) {
 	ui.Column(c).FillWidth().FillHeight().Background(a.workTheme.Panel).BorderWidth(0, 0, 0, 1).BorderColor(t.Border).Children(func() {
-		a.detailContent(c, t, false)
+		a.profileDetail(c, t)
 	})
 }
 
@@ -283,13 +283,10 @@ func (a *appModel) workspaceFrame(c *ui.Context, t *ui.Theme) {
 // squeezed or covered by a backdrop/focus trap.
 func (a *appModel) detailPage(c *ui.Context, t *ui.Theme) {
 	ui.Column(c).Fill().Background(a.workTheme.Panel).Children(func() {
-		a.detailContent(c, t, true)
+		a.profileDetail(c, t)
 	})
 }
 
-func (a *appModel) detailContent(c *ui.Context, t *ui.Theme, narrow bool) {
-	a.profileDetail(c, t, narrow)
-}
 
 func (ct *contact) issueWork(issue *productIssue) *workItem {
 	if issue == nil {

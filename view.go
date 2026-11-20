@@ -87,6 +87,10 @@ func (a *appModel) view(c *ui.Context) {
 }
 
 func (a *appModel) escapeTopLayer() {
+	if a.detailPageActive() {
+		a.closeDetail()
+		return
+	}
 	if a.priorChats != nil {
 		a.backProductConversations()
 		return
@@ -135,7 +139,7 @@ func (a *appModel) armActiveSurfaceFallback() {
 	case a.priorChats != nil:
 		a.priorChats.focusBack = true
 	case a.detailIs(detailProfile):
-		a.focusProfileEdit = true
+		a.focusDetailClose = true
 	default:
 		a.focusComposer = true
 	}
@@ -289,19 +293,23 @@ func (a *appModel) avatarRailRow(c *ui.Context, t *ui.Theme, i int) {
 	ct := a.contacts[i]
 	msgs := locales.In(c.Locale())
 	status := a.headerStatusLabel(ct, msgs)
+	if ct.Archived {
+		status = msgs.ProfileArchivedBadge()
+	}
 	label := msgs.AvatarContactLabel(ct.Name)
 	tip := label
 	if status != "" {
 		tip += "\n" + status
 	}
 	row := ui.ButtonBase(c).Key(ct.ID).Label(label).Description(status).
-		Selected(i == a.selected).Width(48).Height(44).Padding(4).Radius(8).
+		Selected(i == a.selected).FillWidth().Height(44).Padding(4).Radius(8).
 		AlignItems(ui.Center).Justify(ui.Start).Background(ui.Transparent).BorderWidth(0).TextColor(t.Text)
 	if i == a.selected {
 		row.Background(t.Selection).TextColor(t.Text)
 	}
 	row = appTooltip(c, row, tip)
 	row.OnClick(func() { a.selectContact(i) })
+	a.bindBotRowMenu(row, ct.ID, msgs)
 	row.Children(func() {
 		contactAvatar(c, t, ct.Name, 24)
 		if marker, color := a.avatarRailMarker(ct); marker != "" {
@@ -324,18 +332,34 @@ func (a *appModel) avatarRailMarker(ct *contact) (string, ui.Color) {
 	}
 }
 
+func (a *appModel) bindBotRowMenu(row ui.Element, contactID string, msgs locales.Messages) {
+	row.ContextMenu(func(menu *ui.Menu) {
+		if menu.Item(msgs.ContactProfileAction()).Chosen() {
+			a.openContactProfile(contactID)
+		}
+	})
+	if a.focusProfileRow == contactID {
+		row.Focus().ScrollIntoView()
+		a.focusProfileRow = ""
+	}
+}
+
 func (a *appModel) railRow(c *ui.Context, t *ui.Theme, i int) {
 	ct := a.contacts[i]
 	currentMsgs := locales.In(c.Locale())
 	selected := i == a.selected
 	row := ui.ButtonBase(c).Key(ct.ID).Label(currentMsgs.AvatarContactLabel(ct.Name)).Selected(selected).
-		Gap(8).Padding(4, 8).MinHeight(controlHit).Radius(8).AlignItems(ui.Center).Background(ui.Transparent).BorderWidth(0)
+		FillWidth().Gap(8).Padding(4, 8).MinHeight(controlHit).Radius(8).AlignItems(ui.Center).Background(ui.Transparent).BorderWidth(0)
 	focusFill := a.workTheme.NavHover
 	if selected {
 		focusFill = t.Selection
 	}
 	row = drawControlFace(c, row, 8, 4, false, false, selected, 0, 2, focusFill)
 	row.OnClick(func() { a.selectContact(i) })
+	if ct.Archived {
+		row.Description(currentMsgs.ProfileArchivedBadge())
+	}
+	a.bindBotRowMenu(row, ct.ID, currentMsgs)
 	row.Children(func() {
 		contactAvatar(c, t, ct.Name, 28)
 		ui.Column(c).Grow(1).MinWidth(0).Gap(2).Children(func() {
@@ -353,7 +377,10 @@ func (a *appModel) railRow(c *ui.Context, t *ui.Theme, i int) {
 			msgs := locales.In(c.Locale())
 			line := a.snippet(ct, msgs)
 			color := t.TextMuted
-			if ct.Status != statusReady {
+			if ct.Archived {
+				line = msgs.ProfileArchivedBadge()
+				color = t.Warning
+			} else if ct.Status != statusReady {
 				status := a.statusLabel(ct, msgs)
 				detail := strings.TrimSpace(line)
 				if detail == status {
@@ -369,10 +396,6 @@ func (a *appModel) railRow(c *ui.Context, t *ui.Theme, i int) {
 			ui.Text(c, line).FontSize(typeRailSummary).FixedLineHeight(lineNavigation).MaxLines(1).TextColor(color)
 		})
 	})
-}
-
-func (a *appModel) contactIcon(c *ui.Context, t *ui.Theme, size float32) {
-	contactAvatar(c, t, a.selectedContact().Name, size)
 }
 
 func contactAvatar(c *ui.Context, t *ui.Theme, name string, size float32) {
@@ -575,7 +598,9 @@ func (a *appModel) connectionRecoveryNotice(c *ui.Context, t *ui.Theme, state co
 		runtimeSummary = a.runtimeRecoverySummary(msgs)
 	}
 	ui.Column(c).Padding(8, 16).Gap(3).Children(func() {
-		ui.Text(c, title).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Warning)
+		if state != connectionViewSaved || title != a.headerStatusLabel(a.selectedContact(), msgs) {
+			ui.Text(c, title).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Warning)
+		}
 		if hint != "" && hint != runtimeSummary {
 			ui.Text(c, hint).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 		}
@@ -654,9 +679,6 @@ func (a *appModel) main(c *ui.Context, t *ui.Theme) {
 		if ct.Archived {
 			ui.Row(c).AlignItems(ui.Center).Gap(8).Padding(6, 16).Background(t.SurfaceHover).Children(func() {
 				ui.Text(c, msgs.ArchiveNotice()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Warning)
-				ui.Spacer(c)
-				secondaryButton(c, msgs.RestoreContactAction()).TextColor(t.Text).OnClick(func() { a.restoreContact(ct.ID) })
-				secondaryButton(c, msgs.ContactProfileAction()).OnClick(func() { a.openContactProfile(ct.ID) })
 			})
 		}
 		a.chat(c, t, state, showConnectionSettings)

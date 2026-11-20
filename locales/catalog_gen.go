@@ -160,34 +160,6 @@ func (msgs Messages) SettingsConnection() string {
 	return Catalog.Format(msgs.locale, "settingsConnection", nil)
 }
 
-// SettingsContact says "Bot profile"
-// in the language the app shows.
-//
-// The Bot profile category in Settings.
-func SettingsContact() string { return In(i18n.Locale()).SettingsContact() }
-
-// SettingsContact says "Bot profile"
-// in the language of msgs.
-//
-// The Bot profile category in Settings.
-func (msgs Messages) SettingsContact() string {
-	return Catalog.Format(msgs.locale, "settingsContact", nil)
-}
-
-// SettingsContactTitle says "Bot profile: {name}"
-// in the language the app shows.
-//
-// The heading of the selected Bot profile.
-func SettingsContactTitle(name string) string { return In(i18n.Locale()).SettingsContactTitle(name) }
-
-// SettingsContactTitle says "Bot profile: {name}"
-// in the language of msgs.
-//
-// The heading of the selected Bot profile.
-func (msgs Messages) SettingsContactTitle(name string) string {
-	return Catalog.Format(msgs.locale, "settingsContactTitle", map[string]any{"name": name})
-}
-
 // SettingsAdvanced says "Advanced"
 // in the language the app shows.
 //
@@ -1066,20 +1038,6 @@ func TaskContextSaveChanges() string { return In(i18n.Locale()).TaskContextSaveC
 // The action saving materials changes.
 func (msgs Messages) TaskContextSaveChanges() string {
 	return Catalog.Format(msgs.locale, "taskContextSaveChanges", nil)
-}
-
-// EditContactLabel says "Edit Bot"
-// in the language the app shows.
-//
-// The label and accessible name of the Bot picker in Settings.
-func EditContactLabel() string { return In(i18n.Locale()).EditContactLabel() }
-
-// EditContactLabel says "Edit Bot"
-// in the language of msgs.
-//
-// The label and accessible name of the Bot picker in Settings.
-func (msgs Messages) EditContactLabel() string {
-	return Catalog.Format(msgs.locale, "editContactLabel", nil)
 }
 
 // ProtocolLabel says "Protocol"
@@ -2192,16 +2150,6 @@ func (msgs Messages) ConnectionSavedAwaitingApply() string {
 	return Catalog.Format(msgs.locale, "connectionSavedAwaitingApply", nil)
 }
 
-// SettingsNoContactToEdit says "No Bot is available to edit."
-// in the language the app shows.
-func SettingsNoContactToEdit() string { return In(i18n.Locale()).SettingsNoContactToEdit() }
-
-// SettingsNoContactToEdit says "No Bot is available to edit."
-// in the language of msgs.
-func (msgs Messages) SettingsNoContactToEdit() string {
-	return Catalog.Format(msgs.locale, "settingsNoContactToEdit", nil)
-}
-
 // SettingsUnsavedChanges says "Unsaved changes."
 // in the language the app shows.
 func SettingsUnsavedChanges() string { return In(i18n.Locale()).SettingsUnsavedChanges() }
@@ -2746,22 +2694,6 @@ func NewContactName(number int) string { return In(i18n.Locale()).NewContactName
 // The default name of a newly added Bot.
 func (msgs Messages) NewContactName(number int) string {
 	return Catalog.Format(msgs.locale, "newContactName", map[string]any{"number": number})
-}
-
-// ContactChoiceDuplicate says "{name} ({number})"
-// in the language the app shows.
-//
-// A Bot picker label disambiguated by its position.
-func ContactChoiceDuplicate(name string, number int) string {
-	return In(i18n.Locale()).ContactChoiceDuplicate(name, number)
-}
-
-// ContactChoiceDuplicate says "{name} ({number})"
-// in the language of msgs.
-//
-// A Bot picker label disambiguated by its position.
-func (msgs Messages) ContactChoiceDuplicate(name string, number int) string {
-	return Catalog.Format(msgs.locale, "contactChoiceDuplicate", map[string]any{"name": name, "number": number})
 }
 
 // RuntimeNotStartedLocalStore says "Runtime: not started (local profile store unavailable)"

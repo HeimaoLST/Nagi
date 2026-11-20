@@ -429,7 +429,7 @@ func TestCustomThemeLowContrastStillAppliesAndRetriesFailedSave(t *testing.T) {
 	ct.PiBinding = recoveryConversationBinding(ct.ID, t.TempDir(), ct.SessionID)
 	a := &appModel{store: &contactStore{path: filepath.Join(blocked, "contacts.json")}, contacts: []*contact{ct}, appearanceThemes: catalog, runtimeErr: "unrelated Runtime error"}
 	a.setAppearanceTheme(appearanceLight, "low-contrast")
-	if a.appearanceError != appearanceStatusSaveFailed || a.resolveAppearanceTheme(false).EffectiveID != "low-contrast" || !strings.Contains(a.localSaveErr, "create contact store directory") {
+	if a.appearanceError != appearanceStatusSaveFailed || a.resolveAppearanceTheme(false).EffectiveID != "low-contrast" || !strings.Contains(a.localSaveErr, "create profile store directory") {
 		t.Fatal("failed save reverted the applied low-contrast palette")
 	}
 	if a.resolveAppearanceTheme(false).Palette.Theme.Text != ui.Hex("#FFFFFF") {

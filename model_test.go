@@ -127,7 +127,7 @@ func TestAddDefaultContactIsReadyAndUnique(t *testing.T) {
 	a := testApp(t)
 	a.addDefaultContact()
 	first := a.selectedContact()
-	if first.Name != "New contact 1" || first.Role != "Assistant" || first.Status != statusReady {
+	if first.Name != locales.In("en").NewContactName(1) || first.Role != "Assistant" || first.Status != statusReady {
 		t.Fatalf("default contact = %q role=%q status=%v", first.Name, first.Role, first.Status)
 	}
 	if a.workspaceOpen || !a.focusComposer {
@@ -135,7 +135,7 @@ func TestAddDefaultContactIsReadyAndUnique(t *testing.T) {
 	}
 	a.addDefaultContact()
 	second := a.selectedContact()
-	if second.Name != "New contact 2" {
+	if second.Name != locales.In("en").NewContactName(2) {
 		t.Fatalf("second default name = %q", second.Name)
 	}
 	if first.ID == second.ID || first == second {

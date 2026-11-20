@@ -9,8 +9,6 @@
   "settingsBackAccessible": "← 返回工作台",
   "settingsAppearance": "外观",
   "settingsConnection": "连接与模型",
-  "settingsContact": "Bot 资料",
-  "settingsContactTitle": "Bot 资料：{name}",
   "settingsAdvanced": "高级",
   "settingsNavigationLabel": "设置导航",
   "settingsGeneral": "通用",
@@ -73,7 +71,6 @@
   "taskContextSaveSnippet": "保存资料片段",
   "taskContextSaveFile": "保存文件",
   "taskContextSaveChanges": "保存更改",
-  "editContactLabel": "编辑 Bot",
   "protocolLabel": "协议",
   "protocolChatCompletionsLabel": "Chat completions",
   "protocolResponsesLabel": "Responses",
@@ -203,7 +200,6 @@
   "connectionNoneApplied": "当前没有已应用的连接。",
   "connectionUnsavedForm": "表单有未保存的更改。",
   "connectionSavedAwaitingApply": "已保存，但尚未应用。允许应用时，请选择“应用已保存配置”。运行中的工作保留原设置。",
-  "settingsNoContactToEdit": "没有可编辑的 Bot。",
   "settingsUnsavedChanges": "有未保存的更改。",
   "settingsBuiltinManagedError": "自定义内置工具前，请保存并应用受管理的 Nagi 连接。",
   "settingsBuiltinNotReady": "运行时就绪后即可使用内置工具。",
@@ -261,18 +257,6 @@
   "@newContactName": {
     "description": "The default name of a newly added Bot.",
     "placeholders": {
-      "number": {
-        "type": "int"
-      }
-    }
-  },
-  "contactChoiceDuplicate": "{name}（{number}）",
-  "@contactChoiceDuplicate": {
-    "description": "A Bot picker label disambiguated by its position.",
-    "placeholders": {
-      "name": {
-        "type": "String"
-      },
       "number": {
         "type": "int"
       }

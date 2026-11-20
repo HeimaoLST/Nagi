@@ -50,9 +50,9 @@ func TestTitleBarKeepsNavigationOutsideNativeControls(t *testing.T) {
 					switch scene {
 					case "collapsed":
 						a.railCollapsed = true
-						labels = append(labels, "Contacts")
+						labels = append(labels, locales.In("en").RailContactsTitle())
 					case "profile":
-						a.openDetail(detailProfile)
+						a.openContactProfile(ct.ID)
 						closeLabel = "Close profile"
 						labels = []string{closeLabel}
 					case "settings":
@@ -139,16 +139,16 @@ func TestMinimumWindowRenders(t *testing.T) {
 	if !tr.HasText("Send") || !tr.HasText("Nagi") {
 		t.Fatal("chat should render at the 960x640 minimum")
 	}
-	a.openSettings()
+	a.openSettingsTab(settingsTabAppearance, settingsSourceRail)
 	tr.Frame()
-	if !tr.HasText("Save changes") {
-		t.Fatal("settings should render at the 960x640 minimum")
+	if !tr.HasText(locales.In("en").SettingsGeneral()) {
+		t.Fatal("global Settings should render at the 960x640 minimum")
 	}
 	a.closeSettings()
 	tr.Frame()
 	a.addDefaultContact()
 	tr.Frame()
-	if !tr.HasText("New contact 1") {
+	if !tr.HasText(locales.In("en").NewContactName(1)) {
 		t.Fatal("the default contact should render at the 960x640 minimum")
 	}
 }
@@ -218,7 +218,7 @@ func TestDraftSwitchThroughTester(t *testing.T) {
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.SetFocused(true)
 	tr.Frame()
-	if err := tr.Click("Contact Mio"); err != nil {
+	if err := tr.Click(locales.In("en").AvatarContactLabel("Mio")); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
@@ -231,7 +231,7 @@ func TestDraftSwitchThroughTester(t *testing.T) {
 	if a.contacts[1].Draft != "draft for mio" {
 		t.Fatalf("Mio draft = %q", a.contacts[1].Draft)
 	}
-	if err := tr.Click("Contact Nagi"); err != nil {
+	if err := tr.Click(locales.In("en").AvatarContactLabel("Nagi")); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
@@ -247,7 +247,7 @@ func TestDraftSwitchThroughTester(t *testing.T) {
 	if a.contacts[1].Draft != "draft for mio" {
 		t.Fatal("typing for Saki changed Mio's draft")
 	}
-	if err := tr.Click("Contact Mio"); err != nil {
+	if err := tr.Click(locales.In("en").AvatarContactLabel("Mio")); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
@@ -300,12 +300,12 @@ func TestAddContactFocusesComposerAndSends(t *testing.T) {
 	}
 
 	// First creation.
-	if err := tr.Click("Add contact"); err != nil {
+	if err := tr.Click(locales.In("en").AvatarAddContact()); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
 	first := a.selectedContact()
-	if first.Name != "New contact 1" || first.Role != "Assistant" {
+	if first.Name != locales.In("en").NewContactName(1) || first.Role != "Assistant" {
 		t.Fatalf("created contact = %q role=%q", first.Name, first.Role)
 	}
 	if !tr.Focused("Composer for " + first.Name) {
@@ -323,7 +323,7 @@ func TestAddContactFocusesComposerAndSends(t *testing.T) {
 	assertExistingUnchanged("after first send")
 
 	// Second creation through the same UI path, again with no extra click.
-	if err := tr.Click("Add contact"); err != nil {
+	if err := tr.Click(locales.In("en").AvatarAddContact()); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
@@ -331,7 +331,7 @@ func TestAddContactFocusesComposerAndSends(t *testing.T) {
 	if second == first {
 		t.Fatal("the second Add contact must create a new contact")
 	}
-	if second.Name != "New contact 2" || second.Role != "Assistant" {
+	if second.Name != locales.In("en").NewContactName(2) || second.Role != "Assistant" {
 		t.Fatalf("second contact = %q role=%q", second.Name, second.Role)
 	}
 	if !tr.Focused("Composer for " + second.Name) {
@@ -357,16 +357,12 @@ func TestAddContactFocusesComposerAndSends(t *testing.T) {
 	assertExistingUnchanged("after second send")
 }
 
-// TestSettingsFieldsReceiveInputAndDoNotStealComposerFocus verifies through
-// the UI, not private flags, that a Settings field really takes typed input
-// while the composer keeps its draft, and that Tab plus further frames do not
-// pull focus back to the composer.
-func TestSettingsFieldsReceiveInputAndDoNotStealComposerFocus(t *testing.T) {
+func TestBotProfileFieldsReceiveInputAndPreserveComposerDraft(t *testing.T) {
 	a := testApp(t)
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.SetFocused(true)
 	tr.Frame()
-	if err := tr.Click("Add contact"); err != nil {
+	if err := tr.Click(locales.In("en").AvatarAddContact()); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
@@ -376,32 +372,27 @@ func TestSettingsFieldsReceiveInputAndDoNotStealComposerFocus(t *testing.T) {
 	if ct.Draft != "keep me" {
 		t.Fatalf("composer draft = %q", ct.Draft)
 	}
-	if err := tr.Click("Settings"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if err := tr.Click(locales.In("en").SettingsContact()); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
+	msgs := locales.In("en")
+	openBotProfileFromRail(t, tr, msgs.AvatarContactLabel(ct.Name))
+	editor := a.profileEditorFor(ct.ID)
 	tr.Frame() // a second frame must not re-focus the composer
 	if tr.Focused("Composer for " + ct.Name) {
 		t.Fatal("opening Settings must not keep composer focus")
 	}
 
 	// Explicitly focus the Settings name field through the UI and type.
-	nameBefore := a.contactProfile.Draft.Name
-	if err := tr.Click("Contact name"); err != nil {
+	nameBefore := editor.Draft.Name
+	if err := tr.Click(msgs.FieldNameAccessible()); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if !tr.Focused("Contact name") {
+	if !tr.Focused(msgs.FieldNameAccessible()) {
 		t.Fatal("clicking the Settings name field should focus it")
 	}
 	tr.Type(" edited")
 	tr.Frame()
-	if a.contactProfile.Draft.Name != nameBefore+" edited" {
-		t.Fatalf("Settings name field did not receive the typed input: %q", a.contactProfile.Draft.Name)
+	if editor.Draft.Name != nameBefore+" edited" {
+		t.Fatalf("Bot name field did not receive the typed input: %q", editor.Draft.Name)
 	}
 	if ct.Draft != "keep me" {
 		t.Fatalf("typing in Settings changed the composer draft: %q", ct.Draft)
@@ -420,8 +411,8 @@ func TestSettingsFieldsReceiveInputAndDoNotStealComposerFocus(t *testing.T) {
 	if ct.Draft != "keep me" {
 		t.Fatalf("typing after Tab leaked into the composer: %q", ct.Draft)
 	}
-	if a.contactProfile.Draft.Name != nameBefore+" edited" {
-		t.Fatalf("typing after Tab changed the name field: %q", a.contactProfile.Draft.Name)
+	if editor.Draft.Name != nameBefore+" edited" {
+		t.Fatalf("typing after Tab changed the name field: %q", editor.Draft.Name)
 	}
 }
 
@@ -439,12 +430,13 @@ func TestSettingsSavePreservesMessagesHistoryAndDraft(t *testing.T) {
 	beforeHist := len(ct.History)
 	beforeLast := ct.Messages[beforeMsgs-1].Text
 
-	a.openSettings()
-	draft := a.contactProfile.Draft
+	a.openContactProfile(ct.ID)
+	editor := a.profileEditorFor(ct.ID)
+	draft := editor.Draft
 	draft.Name = "Saki Renamed"
 	draft.Purpose = "Keeps earlier decisions in view."
 	draft.Workspace = t.TempDir()
-	if !a.saveContactProfileDraft(draft, false) {
+	if !a.saveContactProfileDraftFor(ct.ID, draft, false) {
 		t.Fatal("settings save should succeed with a name")
 	}
 	if ct.Name != "Saki Renamed" {
@@ -460,9 +452,8 @@ func TestSettingsSavePreservesMessagesHistoryAndDraft(t *testing.T) {
 		t.Fatalf("saving settings cleared the draft: %q", ct.Draft)
 	}
 
-	a.openSettings()
-	a.contactProfile.Draft.Name = "  "
-	if a.saveContactProfileDraft(a.contactProfile.Draft, false) || a.contactProfile.Errors["Name"] == "" {
+	editor.Draft.Name = "  "
+	if a.saveContactProfileDraftFor(ct.ID, editor.Draft, false) || editor.Errors["Name"] == "" {
 		t.Fatal("empty settings name must be rejected")
 	}
 	if ct.Name != "Saki Renamed" {
@@ -488,7 +479,7 @@ func TestPreviewImages(t *testing.T) {
 			case "new-contact":
 				a.addDefaultContact()
 			case "settings":
-				a.openSettings()
+				a.openSettingsTab(settingsTabAppearance, settingsSourceRail)
 			}
 			tr := ui.NewTester(a.view, 1040, 720)
 			tr.SetDark(dark)
@@ -502,7 +493,7 @@ func TestPreviewImages(t *testing.T) {
 	for _, scene := range []string{"chat", "settings"} {
 		a := testApp(t)
 		if scene == "settings" {
-			a.openSettings()
+			a.openSettingsTab(settingsTabAppearance, settingsSourceRail)
 		}
 		tr := ui.NewTester(a.view, 960, 640)
 		tr.Frame()
@@ -711,7 +702,7 @@ func TestContactRailControlsStayVisibleAtNarrowWidths(t *testing.T) {
 				t.Fatalf("redundant sidebar control %q is still shown", removed)
 			}
 		}
-		for _, label := range []string{"Add contact", "Search contacts", "Settings"} {
+		for _, label := range []string{locales.In("en").AvatarAddContact(), locales.In("en").SearchContacts(), "Settings"} {
 			r, ok := tr.Find(label)
 			if !ok || r.W <= 0 || r.H <= 0 || r.X < 0 || r.X+r.W > limit || r.Y < 0 || r.Y+r.H > 720 {
 				t.Fatalf("%dx720 contact rail %q out of rail: ok=%v rect=%+v", width, label, ok, r)
@@ -730,22 +721,22 @@ func TestComposerInlineContextReturnFocus(t *testing.T) {
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
 
-	if err := tr.Click("Task context: 2"); err != nil {
+	if err := tr.Click(contextLabelForTest(2)); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
 	if a.aux != "task-context" || !a.composerInlineAux() || !tr.HasText("Chat: Nagi") || !tr.HasText("资料一") {
 		t.Fatalf("inline context = aux=%q panel=%q texts=%v", a.aux, a.composerPanel, tr.Texts())
 	}
-	if err := tr.Click("Close task context"); err != nil {
+	if err := tr.Click(locales.In("en").CloseTaskContext()); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if a.aux != "" || a.composerPanel != "" || !tr.Focused("Task context: 2") {
-		t.Fatalf("context close = aux=%q panel=%q focused=%v", a.aux, a.composerPanel, tr.Focused("Task context: 2"))
+	if a.aux != "" || a.composerPanel != "" || !tr.Focused(contextLabelForTest(2)) {
+		t.Fatalf("Materials close = aux=%q panel=%q focused=%v", a.aux, a.composerPanel, tr.Focused(contextLabelForTest(2)))
 	}
 
-	if err := tr.Click("Task context: 2"); err != nil {
+	if err := tr.Click(contextLabelForTest(2)); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
@@ -771,7 +762,7 @@ func TestComposerInlineContextReturnFocus(t *testing.T) {
 func TestResponsiveComposerAt960WithLoadedSession(t *testing.T) {
 	a, ct := appReadingTestApp(t)
 	a.windowWidth = 960
-	a.openDetail(detailProfile)
+	a.openContactProfile(a.selectedID())
 	a.leftPaneWidth = 280
 	a.rightPaneWidth = 440
 	a.runtimeStatus = runtimeStateReady
@@ -838,7 +829,7 @@ func TestComposerKeepsModelScopeAndPrimaryActionAtNarrowCenter(t *testing.T) {
 	a.windowWidth = 1040
 	a.leftPaneWidth = defaultLeftPaneWidth
 	a.rightPaneWidth = 358 // leaves the real minimum 480px center beside the work pane
-	a.openDetail(detailProfile)
+	a.openContactProfile(a.selectedID())
 	ct := a.selectedContact()
 	ct.SessionID = "long-model-session"
 	ct.SessionModel = "provider/very-long-model-name-that-must-not-push-the-action-out-of-the-composer"
@@ -1031,10 +1022,7 @@ func TestPreviewComposerTypography(t *testing.T) {
 }
 
 func contextLabelForTest(count int) string {
-	if count > 0 {
-		return fmt.Sprintf("Task context: %d", count)
-	}
-	return "Task context"
+	return locales.In("en").TaskContextCount(count)
 }
 
 func TestComposerZeroContextKeepsIconWithoutZeroText(t *testing.T) {
@@ -1045,21 +1033,21 @@ func TestComposerZeroContextKeepsIconWithoutZeroText(t *testing.T) {
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.SetFocused(true)
 	tr.Frame()
-	if tr.HasText("Task context: 0") {
+	if tr.HasText(locales.In("en").TaskContextTitle() + ": 0") {
 		t.Fatalf("zero context rendered an independent zero label: %v", tr.Texts())
 	}
 	if zero, ok := tr.Find("0"); ok {
 		t.Fatalf("zero context rendered an independent zero: %+v texts=%v", zero, tr.Texts())
 	}
-	button, ok := tr.Find("Task context")
+	button, ok := tr.Find(contextLabelForTest(0))
 	if !ok || button.W < 32 || button.H < 32 {
 		t.Fatalf("zero-context control missing or under 32px: %+v ok=%v", button, ok)
 	}
-	for i := 0; i < 24 && !tr.Focused("Task context"); i++ {
+	for i := 0; i < 24 && !tr.Focused(contextLabelForTest(0)); i++ {
 		tr.Key(0, ui.KeyTab)
 		tr.Frame()
 	}
-	if !tr.Focused("Task context") {
+	if !tr.Focused(contextLabelForTest(0)) {
 		t.Fatalf("zero-context control is not keyboard reachable: %v", tr.Texts())
 	}
 	tr.Key(0, ui.KeyEnter)
@@ -1067,11 +1055,11 @@ func TestComposerZeroContextKeepsIconWithoutZeroText(t *testing.T) {
 	if a.aux != "task-context" || !a.composerInlineAux() {
 		t.Fatalf("keyboard did not open task context: aux=%q panel=%q", a.aux, a.composerPanel)
 	}
-	if err := tr.Click("Close task context"); err != nil {
+	if err := tr.Click(locales.In("en").CloseTaskContext()); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if !tr.Focused("Task context") {
+	if !tr.Focused(contextLabelForTest(0)) {
 		t.Fatalf("task context did not restore keyboard focus: %v", tr.Texts())
 	}
 	ct.Messages = append(ct.Messages, &message{
@@ -1088,7 +1076,7 @@ func TestComposerZeroContextKeepsIconWithoutZeroText(t *testing.T) {
 	}
 	ct.Context.items = []taskContextItem{{ID: "c1", Name: "资料", Text: "已有会话不计入草稿"}}
 	tr.Frame()
-	if !tr.HasText("Task context: 1") {
+	if !tr.HasText(contextLabelForTest(1)) {
 		t.Fatalf("non-zero context count missing: %v", tr.Texts())
 	}
 }
