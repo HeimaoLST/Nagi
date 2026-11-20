@@ -106,7 +106,7 @@ func TestUnconfiguredContactWorkspacesFollowFirstConnection(t *testing.T) {
 }
 
 func TestContactWorkspaceDefaultsRespectConnectionSource(t *testing.T) {
-	for _, source := range []string{"managed", "legacy", "invalid", "demo"} {
+	for _, source := range []string{"managed", "unconfigured", "invalid", "demo"} {
 		t.Run(source, func(t *testing.T) {
 			launchFolder := t.TempDir()
 			isolateConnectionApp(t, launchFolder, filepath.Join(launchFolder, "unused-runtime"))
@@ -115,9 +115,7 @@ func TestContactWorkspaceDefaultsRespectConnectionSource(t *testing.T) {
 			if source == "demo" {
 				a = &appModel{demo: true, workDir: launchFolder, contacts: []*contact{{ID: "demo-contact", Name: "Saki"}}, scrollTo: -1}
 			} else {
-				if source == "legacy" || source == "invalid" {
-					t.Setenv("API_KEY", "offline-fixture")
-				}
+				want = ""
 				if source == "managed" || source == "invalid" {
 					config := testConnectionConfig(t)
 					if err := saveConnectionConfig(connectionConfigPath(guiStorePath()), config); err != nil {

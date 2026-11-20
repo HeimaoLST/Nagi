@@ -22,7 +22,7 @@ func layoutAppAt(t *testing.T, width int) (*appModel, *contact) {
 	return a, ct
 }
 
-func TestLayoutNewAndLegacyStoresUseClosedRightPaneDefaults(t *testing.T) {
+func TestLayoutNewAndCurrentStoresUseClosedRightPaneDefaults(t *testing.T) {
 	storePath := filepath.Join(t.TempDir(), "contacts.json")
 	store, err := openContactStore(storePath, t.TempDir())
 	if err != nil {
@@ -38,14 +38,16 @@ func TestLayoutNewAndLegacyStoresUseClosedRightPaneDefaults(t *testing.T) {
 	}
 
 	store.state.Layout = &storedLayout{LeftWidth: 240, RightWidth: 380, WorkspaceOpen: true}
-	applyStoreSelection(a, store)
-	if !a.workspaceOpen || a.railWidth() != 240 || a.workWidth() != 380 {
-		t.Fatalf("stored layout = open=%v left=%v right=%v", a.workspaceOpen, a.railWidth(), a.workWidth())
+	if err := store.saveState(); err != nil {
+		t.Fatal(err)
 	}
-	store.state.Layout = nil
-	applyStoreSelection(a, store)
-	if a.workspaceOpen {
-		t.Fatal("legacy store without layout must start with the right pane closed")
+	reopened, err := openContactStore(storePath, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	applyStoreSelection(a, reopened)
+	if a.workspaceOpen || a.railWidth() != 240 || a.workWidth() != 380 {
+		t.Fatalf("current-store layout = open=%v left=%v right=%v", a.workspaceOpen, a.railWidth(), a.workWidth())
 	}
 }
 

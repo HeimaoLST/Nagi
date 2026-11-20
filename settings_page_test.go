@@ -899,10 +899,20 @@ func TestFirstLaunchOpensConnectionSettingsPageWithoutEmptyOverlay(t *testing.T)
 	if !tr.HasText("Connection & model") || !tr.HasText("Save configuration") || tr.HasText("No messages yet") {
 		t.Fatalf("first launch did not show the connection page alone: %v", tr.Texts())
 	}
-	a.openAdvancedSettings()
+	msgs := locales.In("en")
+	if err := tr.Click(msgs.SettingsAdvanced()); err != nil {
+		t.Fatal(err)
+	}
 	tr.Frame()
-	if !tr.HasText("not checked yet; configure and apply a connection first") || tr.HasText("Runtime helper not found") {
-		t.Fatalf("unconfigured Advanced misreported helper discovery: %v", tr.Texts())
+	if !tr.HasText(msgs.StartupHintEnterConnection()) {
+		t.Fatalf("unconfigured Advanced did not explain setup: %v", tr.Texts())
+	}
+	if err := tr.Click(msgs.SettingsOpenConnection()); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if a.settingsTab != settingsTabConnection || !tr.HasText("Save configuration") || tr.HasText("No messages yet") {
+		t.Fatalf("Advanced did not return to the connection page alone: %v", tr.Texts())
 	}
 }
 
