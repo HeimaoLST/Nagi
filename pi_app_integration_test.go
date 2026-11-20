@@ -3192,7 +3192,7 @@ func TestPiAppActivitiesAndQuestions(t *testing.T) {
 		ct := app.contactByID(h.contactID)
 		issue := ct.issueByID(issueC)
 		reason := app.canStartIssue(ct, issue)
-		if reason != sendBlockRaw(blockWorkCapacity) || latestIssueExecution(issue) != nil || issue.Supplements == nil || issue.Supplements.pendingCount() != 1 || issue.Supplements.Items[0].Text != "Material preserved before cancellation" || p.count() != beforeCapacity {
+		if reason != blockWorkCapacity || latestIssueExecution(issue) != nil || issue.Supplements == nil || issue.Supplements.pendingCount() != 1 || issue.Supplements.Items[0].Text != "Material preserved before cancellation" || p.count() != beforeCapacity {
 			return errors.New("full work capacity did not preserve the unadmitted supplement")
 		}
 		piAppRecord(t, "activity-capacity-refusal", map[string]any{"issue_id": issueC, "reason": reason, "requests": p.count(), "supplement": issue.Supplements.Items[0]})

@@ -487,15 +487,16 @@ func TestStoreRecoveryOptionalDefaultsAndUnknownRecords(t *testing.T) {
 			issue := &state.Issues[0]
 			switch kind {
 			case "unknown-execution":
-				issue.Executions = []storedIssueExecution{{ID: "unknown", Status: issueExecutionUnknown, Detail: "No trusted association"}}
+				issue.Executions = []storedIssueExecution{{ID: "unknown", PiIntent: true, Status: issueExecutionUnknown, Detail: "No trusted association"}}
 			case "accepted-no-session", "running-no-session":
 				status := issueExecutionAccepted
 				if kind == "running-no-session" {
 					status = issueExecutionRunning
 				}
-				issue.Executions = []storedIssueExecution{{ID: "known-task", Status: status, TaskID: "task"}}
+				issue.Executions = []storedIssueExecution{{ID: "known-task", PiIntent: true, Status: status, TaskID: "task"}}
 			case "unknown-intent":
 				state.Contacts[0].SessionID = "session"
+				state.Contacts[0].PiBinding = recoveryConversationBinding(state.Contacts[0].ID, t.TempDir(), state.Contacts[0].SessionID)
 				state.Contacts[0].PendingSend = &pendingSend{State: "unknown", Draft: "May have been sent"}
 			case "unknown-batch":
 				issue.Supplements.Batches = []*issueSupplementBatch{{ID: "unknown", State: supplementBatchUnknown}}
@@ -505,6 +506,12 @@ func TestStoreRecoveryOptionalDefaultsAndUnknownRecords(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "copy.json")
 			original := recoveryWriteState(t, path, state)
 			copy, err := inspectStoreRecoveryCopy(path)
+			if kind == "accepted-no-session" || kind == "running-no-session" {
+				if err == nil || !strings.Contains(err.Error(), "invalid Pi execution record") || !bytes.Equal(recoverySavedBytes(t, path), original) {
+					t.Fatalf("unbound active execution %s was not rejected without changing the copy: %v", kind, err)
+				}
+				return
+			}
 			if err != nil {
 				t.Fatalf("representable %s was rejected: %v", kind, err)
 			}

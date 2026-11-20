@@ -713,6 +713,7 @@ func TestTaskContextLabelsFollowLocale(t *testing.T) {
 
 func TestPiDisconnectNoticeFollowsLocaleWithoutChangingRaw(t *testing.T) {
 	a, ct := workspaceTestApp(t)
+	recoveryTestStore(t, a)
 	a.pi = presentationPiHost(a)
 	ct.ActiveTaskID = "t1"
 	ct.SendState = sendAccepted
@@ -721,6 +722,9 @@ func TestPiDisconnectNoticeFollowsLocaleWithoutChangingRaw(t *testing.T) {
 		w.State = workRunning
 	}
 	a.pi.onExit(a, pi.ProcessOutcome{})
+	if a.localSaveErr != "" {
+		t.Fatalf("could not persist the disconnected send: %s", a.localSaveErr)
+	}
 	if ct.SendErrorKind != "send-uncertain" || ct.SendError == "" {
 		t.Fatalf("Pi exit did not retain an uncertainty diagnostic: %q / %q", ct.SendErrorKind, ct.SendError)
 	}

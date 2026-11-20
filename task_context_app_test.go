@@ -45,7 +45,7 @@ func TestTaskContextStoreRoundTripAndOwnedLists(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	execution := &issueExecution{ID: "e1", Context: []taskContextItem{issueItem}}
+	execution := &issueExecution{ID: "e1", PiIntent: true, Status: issueExecutionUnknown, Context: []taskContextItem{issueItem}}
 	issue.Executions = []*issueExecution{execution}
 	ct.Issues = []*productIssue{issue}
 	if err := a.persist(); err != nil {
