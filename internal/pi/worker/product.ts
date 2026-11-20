@@ -152,7 +152,7 @@ function page<T>(items: T[], key: (item: T) => string, owner: string, cursor?: s
 }
 
 function validateDraft(draft: Draft): void {
-  if (!Value.Check(draftSchema, draft) || frameBytes(draft) > maxDraftBytes) stateError('invalid_params', 'The draft exceeds the saved text and materials limit');
+  if (!Value.Check(draftSchema, draft) || frameBytes(draft) > maxDraftBytes) stateError('invalid_params', 'The draft exceeds the size limit for saved text and Materials');
   if (new Set(draft.materials.map(item => item.id)).size !== draft.materials.length) stateError('invalid_params', 'Material IDs must be unique');
 }
 
@@ -902,7 +902,7 @@ export class Product {
     if (bot.archived) stateError('scope_denied', 'The receiving Bot is archived');
     const files = input.files ?? [];
     const permitted = new Set([...source.input.materials.map(item => item.source), ...this.visibleActivities(conversation.botId).flatMap(activity => activity.results.flatMap(result => result.files.map(file => file.path)))]);
-    if (files.some(path => !isAbsolute(path) || !permitted.has(path))) stateError('scope_denied', 'A delegated input file must come from user materials or a visible result');
+    if (files.some(path => !isAbsolute(path) || !permitted.has(path))) stateError('scope_denied', 'A delegated input file must come from user-provided Materials or a visible result');
     const activity: Activity = { activityId: newId(), ownerBotId: bot.botId, originConversationId, revision: 1, state: 'notStarted',
       goal: input.goal, requirements: input.requirements ?? [], questions: [], materials: source.input.materials, inputFiles: files, executionIds: [], results: [] };
     this.commit(candidate => {

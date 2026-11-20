@@ -62,30 +62,30 @@ func (msgs Messages) SettingsOpenTooltip() string {
 	return Catalog.Format(msgs.locale, "settingsOpenTooltip", nil)
 }
 
-// AvatarContactLabel says "Contact {name}"
+// AvatarContactLabel says "Bot {name}"
 // in the language the app shows.
 //
-// The accessible name of an avatar-rail contact.
+// The accessible name of an avatar-rail Bot.
 func AvatarContactLabel(name string) string { return In(i18n.Locale()).AvatarContactLabel(name) }
 
-// AvatarContactLabel says "Contact {name}"
+// AvatarContactLabel says "Bot {name}"
 // in the language of msgs.
 //
-// The accessible name of an avatar-rail contact.
+// The accessible name of an avatar-rail Bot.
 func (msgs Messages) AvatarContactLabel(name string) string {
 	return Catalog.Format(msgs.locale, "avatarContactLabel", map[string]any{"name": name})
 }
 
-// AvatarAddContact says "Add contact"
+// AvatarAddContact says "Add Bot"
 // in the language the app shows.
 //
-// The accessible name and tooltip of the avatar-rail Add contact action.
+// The accessible name and tooltip of the avatar-rail Add Bot action.
 func AvatarAddContact() string { return In(i18n.Locale()).AvatarAddContact() }
 
-// AvatarAddContact says "Add contact"
+// AvatarAddContact says "Add Bot"
 // in the language of msgs.
 //
-// The accessible name and tooltip of the avatar-rail Add contact action.
+// The accessible name and tooltip of the avatar-rail Add Bot action.
 func (msgs Messages) AvatarAddContact() string {
 	return Catalog.Format(msgs.locale, "avatarAddContact", nil)
 }
@@ -160,30 +160,30 @@ func (msgs Messages) SettingsConnection() string {
 	return Catalog.Format(msgs.locale, "settingsConnection", nil)
 }
 
-// SettingsContact says "Contact profile"
+// SettingsContact says "Bot profile"
 // in the language the app shows.
 //
-// The Contact profile category in Settings.
+// The Bot profile category in Settings.
 func SettingsContact() string { return In(i18n.Locale()).SettingsContact() }
 
-// SettingsContact says "Contact profile"
+// SettingsContact says "Bot profile"
 // in the language of msgs.
 //
-// The Contact profile category in Settings.
+// The Bot profile category in Settings.
 func (msgs Messages) SettingsContact() string {
 	return Catalog.Format(msgs.locale, "settingsContact", nil)
 }
 
-// SettingsContactTitle says "Contact profile: {name}"
+// SettingsContactTitle says "Bot profile: {name}"
 // in the language the app shows.
 //
-// The heading of the selected Contact profile.
+// The heading of the selected Bot profile.
 func SettingsContactTitle(name string) string { return In(i18n.Locale()).SettingsContactTitle(name) }
 
-// SettingsContactTitle says "Contact profile: {name}"
+// SettingsContactTitle says "Bot profile: {name}"
 // in the language of msgs.
 //
-// The heading of the selected Contact profile.
+// The heading of the selected Bot profile.
 func (msgs Messages) SettingsContactTitle(name string) string {
 	return Catalog.Format(msgs.locale, "settingsContactTitle", map[string]any{"name": name})
 }
@@ -370,16 +370,16 @@ func (msgs Messages) CopyMessageLabel() string {
 	return Catalog.Format(msgs.locale, "copyMessageLabel", nil)
 }
 
-// CopyContextTextLabel says "Copy context text"
+// CopyContextTextLabel says "Copy material text"
 // in the language the app shows.
 //
-// The accessible name of the copy control for Context text.
+// The accessible name of the copy control for Material text.
 func CopyContextTextLabel() string { return In(i18n.Locale()).CopyContextTextLabel() }
 
-// CopyContextTextLabel says "Copy context text"
+// CopyContextTextLabel says "Copy material text"
 // in the language of msgs.
 //
-// The accessible name of the copy control for Context text.
+// The accessible name of the copy control for Material text.
 func (msgs Messages) CopyContextTextLabel() string {
 	return Catalog.Format(msgs.locale, "copyContextTextLabel", nil)
 }
@@ -942,16 +942,16 @@ func (msgs Messages) TaskRailInProgress(name string) string {
 	return Catalog.Format(msgs.locale, "taskRailInProgress", map[string]any{"name": name})
 }
 
-// SearchContacts says "Search contacts"
+// SearchContacts says "Search Bots"
 // in the language the app shows.
 //
-// The contact search field label.
+// The Bot search field label.
 func SearchContacts() string { return In(i18n.Locale()).SearchContacts() }
 
-// SearchContacts says "Search contacts"
+// SearchContacts says "Search Bots"
 // in the language of msgs.
 //
-// The contact search field label.
+// The Bot search field label.
 func (msgs Messages) SearchContacts() string {
 	return Catalog.Format(msgs.locale, "searchContacts", nil)
 }
@@ -1001,13 +1001,13 @@ func (msgs Messages) WorkSaveIssue() string {
 // ContactSaveChanges says "Save changes"
 // in the language the app shows.
 //
-// The action saving contact profile changes.
+// The action saving Bot profile changes.
 func ContactSaveChanges() string { return In(i18n.Locale()).ContactSaveChanges() }
 
 // ContactSaveChanges says "Save changes"
 // in the language of msgs.
 //
-// The action saving contact profile changes.
+// The action saving Bot profile changes.
 func (msgs Messages) ContactSaveChanges() string {
 	return Catalog.Format(msgs.locale, "contactSaveChanges", nil)
 }
@@ -1029,13 +1029,13 @@ func (msgs Messages) IssueSupplementSave() string {
 // TaskContextSaveSnippet says "Save snippet"
 // in the language the app shows.
 //
-// The action saving a task context snippet.
+// The action saving a material snippet.
 func TaskContextSaveSnippet() string { return In(i18n.Locale()).TaskContextSaveSnippet() }
 
 // TaskContextSaveSnippet says "Save snippet"
 // in the language of msgs.
 //
-// The action saving a task context snippet.
+// The action saving a material snippet.
 func (msgs Messages) TaskContextSaveSnippet() string {
 	return Catalog.Format(msgs.locale, "taskContextSaveSnippet", nil)
 }
@@ -1043,13 +1043,13 @@ func (msgs Messages) TaskContextSaveSnippet() string {
 // TaskContextSaveFile says "Save file"
 // in the language the app shows.
 //
-// The action saving a task context file.
+// The action saving a material file.
 func TaskContextSaveFile() string { return In(i18n.Locale()).TaskContextSaveFile() }
 
 // TaskContextSaveFile says "Save file"
 // in the language of msgs.
 //
-// The action saving a task context file.
+// The action saving a material file.
 func (msgs Messages) TaskContextSaveFile() string {
 	return Catalog.Format(msgs.locale, "taskContextSaveFile", nil)
 }
@@ -1057,27 +1057,27 @@ func (msgs Messages) TaskContextSaveFile() string {
 // TaskContextSaveChanges says "Save changes"
 // in the language the app shows.
 //
-// The action saving task context changes.
+// The action saving materials changes.
 func TaskContextSaveChanges() string { return In(i18n.Locale()).TaskContextSaveChanges() }
 
 // TaskContextSaveChanges says "Save changes"
 // in the language of msgs.
 //
-// The action saving task context changes.
+// The action saving materials changes.
 func (msgs Messages) TaskContextSaveChanges() string {
 	return Catalog.Format(msgs.locale, "taskContextSaveChanges", nil)
 }
 
-// EditContactLabel says "Edit contact"
+// EditContactLabel says "Edit Bot"
 // in the language the app shows.
 //
-// The label and accessible name of the contact picker in Settings.
+// The label and accessible name of the Bot picker in Settings.
 func EditContactLabel() string { return In(i18n.Locale()).EditContactLabel() }
 
-// EditContactLabel says "Edit contact"
+// EditContactLabel says "Edit Bot"
 // in the language of msgs.
 //
-// The label and accessible name of the contact picker in Settings.
+// The label and accessible name of the Bot picker in Settings.
 func (msgs Messages) EditContactLabel() string {
 	return Catalog.Format(msgs.locale, "editContactLabel", nil)
 }
@@ -1204,11 +1204,11 @@ func (msgs Messages) RailHide() string {
 	return Catalog.Format(msgs.locale, "railHide", nil)
 }
 
-// RailHideContactsTooltip says "Hide contacts"
+// RailHideContactsTooltip says "Hide Bot Team"
 // in the language the app shows.
 func RailHideContactsTooltip() string { return In(i18n.Locale()).RailHideContactsTooltip() }
 
-// RailHideContactsTooltip says "Hide contacts"
+// RailHideContactsTooltip says "Hide Bot Team"
 // in the language of msgs.
 func (msgs Messages) RailHideContactsTooltip() string {
 	return Catalog.Format(msgs.locale, "railHideContactsTooltip", nil)
@@ -1224,21 +1224,21 @@ func (msgs Messages) RailWindowActions() string {
 	return Catalog.Format(msgs.locale, "railWindowActions", nil)
 }
 
-// RailContactsTitle says "Contacts"
+// RailContactsTitle says "Bot Team"
 // in the language the app shows.
 func RailContactsTitle() string { return In(i18n.Locale()).RailContactsTitle() }
 
-// RailContactsTitle says "Contacts"
+// RailContactsTitle says "Bot Team"
 // in the language of msgs.
 func (msgs Messages) RailContactsTitle() string {
 	return Catalog.Format(msgs.locale, "railContactsTitle", nil)
 }
 
-// RailContactListActions says "Contact list actions"
+// RailContactListActions says "Bot Team actions"
 // in the language the app shows.
 func RailContactListActions() string { return In(i18n.Locale()).RailContactListActions() }
 
-// RailContactListActions says "Contact list actions"
+// RailContactListActions says "Bot Team actions"
 // in the language of msgs.
 func (msgs Messages) RailContactListActions() string {
 	return Catalog.Format(msgs.locale, "railContactListActions", nil)
@@ -1254,31 +1254,31 @@ func (msgs Messages) RailContactSearchPlaceholder() string {
 	return Catalog.Format(msgs.locale, "railContactSearchPlaceholder", nil)
 }
 
-// RailNoContactsMatch says "No contacts match your search."
+// RailNoContactsMatch says "No Bots match your search."
 // in the language the app shows.
 func RailNoContactsMatch() string { return In(i18n.Locale()).RailNoContactsMatch() }
 
-// RailNoContactsMatch says "No contacts match your search."
+// RailNoContactsMatch says "No Bots match your search."
 // in the language of msgs.
 func (msgs Messages) RailNoContactsMatch() string {
 	return Catalog.Format(msgs.locale, "railNoContactsMatch", nil)
 }
 
-// NavShowContactsTooltip says "Show contacts"
+// NavShowContactsTooltip says "Show Bot Team"
 // in the language the app shows.
 func NavShowContactsTooltip() string { return In(i18n.Locale()).NavShowContactsTooltip() }
 
-// NavShowContactsTooltip says "Show contacts"
+// NavShowContactsTooltip says "Show Bot Team"
 // in the language of msgs.
 func (msgs Messages) NavShowContactsTooltip() string {
 	return Catalog.Format(msgs.locale, "navShowContactsTooltip", nil)
 }
 
-// NavContactProfile says "Contact profile"
+// NavContactProfile says "Bot profile"
 // in the language the app shows.
 func NavContactProfile() string { return In(i18n.Locale()).NavContactProfile() }
 
-// NavContactProfile says "Contact profile"
+// NavContactProfile says "Bot profile"
 // in the language of msgs.
 func (msgs Messages) NavContactProfile() string {
 	return Catalog.Format(msgs.locale, "navContactProfile", nil)
@@ -1334,31 +1334,31 @@ func (msgs Messages) RuntimeLabel() string {
 	return Catalog.Format(msgs.locale, "runtimeLabel", nil)
 }
 
-// ArchiveNotice says "Archived contact: sending and new task runs are disabled. History, drafts and task data are retained."
+// ArchiveNotice says "Archived Bot: sending and new task runs are disabled. History, drafts and task data are retained."
 // in the language the app shows.
 func ArchiveNotice() string { return In(i18n.Locale()).ArchiveNotice() }
 
-// ArchiveNotice says "Archived contact: sending and new task runs are disabled. History, drafts and task data are retained."
+// ArchiveNotice says "Archived Bot: sending and new task runs are disabled. History, drafts and task data are retained."
 // in the language of msgs.
 func (msgs Messages) ArchiveNotice() string {
 	return Catalog.Format(msgs.locale, "archiveNotice", nil)
 }
 
-// RestoreContactAction says "Restore contact"
+// RestoreContactAction says "Restore Bot"
 // in the language the app shows.
 func RestoreContactAction() string { return In(i18n.Locale()).RestoreContactAction() }
 
-// RestoreContactAction says "Restore contact"
+// RestoreContactAction says "Restore Bot"
 // in the language of msgs.
 func (msgs Messages) RestoreContactAction() string {
 	return Catalog.Format(msgs.locale, "restoreContactAction", nil)
 }
 
-// ContactProfileAction says "Contact profile"
+// ContactProfileAction says "Bot profile"
 // in the language the app shows.
 func ContactProfileAction() string { return In(i18n.Locale()).ContactProfileAction() }
 
-// ContactProfileAction says "Contact profile"
+// ContactProfileAction says "Bot profile"
 // in the language of msgs.
 func (msgs Messages) ContactProfileAction() string {
 	return Catalog.Format(msgs.locale, "contactProfileAction", nil)
@@ -1377,7 +1377,7 @@ func (msgs Messages) EmptyNoMessages() string {
 // EmptyConversationStart says "Start a chat with {name}."
 // in the language the app shows.
 //
-// The empty-state hint for a contact without messages.
+// The empty-state hint for a Bot without messages.
 func EmptyConversationStart(name string) string {
 	return In(i18n.Locale()).EmptyConversationStart(name)
 }
@@ -1385,7 +1385,7 @@ func EmptyConversationStart(name string) string {
 // EmptyConversationStart says "Start a chat with {name}."
 // in the language of msgs.
 //
-// The empty-state hint for a contact without messages.
+// The empty-state hint for a Bot without messages.
 func (msgs Messages) EmptyConversationStart(name string) string {
 	return Catalog.Format(msgs.locale, "emptyConversationStart", map[string]any{"name": name})
 }
@@ -1416,11 +1416,11 @@ func (msgs Messages) HistoryNotLoadedTitle() string {
 	return Catalog.Format(msgs.locale, "historyNotLoadedTitle", nil)
 }
 
-// HistoryNotLoadedHint says "This contact already has a session, but its history has not been read yet; it is not shown as empty."
+// HistoryNotLoadedHint says "This Bot already has a session, but its history has not been read yet; it is not shown as empty."
 // in the language the app shows.
 func HistoryNotLoadedHint() string { return In(i18n.Locale()).HistoryNotLoadedHint() }
 
-// HistoryNotLoadedHint says "This contact already has a session, but its history has not been read yet; it is not shown as empty."
+// HistoryNotLoadedHint says "This Bot already has a session, but its history has not been read yet; it is not shown as empty."
 // in the language of msgs.
 func (msgs Messages) HistoryNotLoadedHint() string {
 	return Catalog.Format(msgs.locale, "historyNotLoadedHint", nil)
@@ -1592,21 +1592,21 @@ func (msgs Messages) BackAction() string {
 	return Catalog.Format(msgs.locale, "backAction", nil)
 }
 
-// TaskContextTitle says "Task context"
+// TaskContextTitle says "Materials"
 // in the language the app shows.
 func TaskContextTitle() string { return In(i18n.Locale()).TaskContextTitle() }
 
-// TaskContextTitle says "Task context"
+// TaskContextTitle says "Materials"
 // in the language of msgs.
 func (msgs Messages) TaskContextTitle() string {
 	return Catalog.Format(msgs.locale, "taskContextTitle", nil)
 }
 
-// CloseTaskContext says "Close task context"
+// CloseTaskContext says "Close materials"
 // in the language the app shows.
 func CloseTaskContext() string { return In(i18n.Locale()).CloseTaskContext() }
 
-// CloseTaskContext says "Close task context"
+// CloseTaskContext says "Close materials"
 // in the language of msgs.
 func (msgs Messages) CloseTaskContext() string {
 	return Catalog.Format(msgs.locale, "closeTaskContext", nil)
@@ -1728,11 +1728,11 @@ func (msgs Messages) ConnectionDefaultModel(model string) string {
 	return Catalog.Format(msgs.locale, "connectionDefaultModel", map[string]any{"model": model})
 }
 
-// TaskContextDetailsScroll says "Task context details"
+// TaskContextDetailsScroll says "Materials details"
 // in the language the app shows.
 func TaskContextDetailsScroll() string { return In(i18n.Locale()).TaskContextDetailsScroll() }
 
-// TaskContextDetailsScroll says "Task context details"
+// TaskContextDetailsScroll says "Materials details"
 // in the language of msgs.
 func (msgs Messages) TaskContextDetailsScroll() string {
 	return Catalog.Format(msgs.locale, "taskContextDetailsScroll", nil)
@@ -1758,16 +1758,16 @@ func (msgs Messages) ComposerPlaceholder(name string) string {
 	return Catalog.Format(msgs.locale, "composerPlaceholder", map[string]any{"name": name})
 }
 
-// TaskContextCount says "{count, plural, =0 {Task context} one {Task context: #} other {Task context: #}}"
+// TaskContextCount says "{count, plural, =0 {Materials} one {Materials: #} other {Materials: #}}"
 // in the language the app shows.
 //
-// The composer Task context button with its item count.
+// The composer Materials button with its item count.
 func TaskContextCount(count int) string { return In(i18n.Locale()).TaskContextCount(count) }
 
-// TaskContextCount says "{count, plural, =0 {Task context} one {Task context: #} other {Task context: #}}"
+// TaskContextCount says "{count, plural, =0 {Materials} one {Materials: #} other {Materials: #}}"
 // in the language of msgs.
 //
-// The composer Task context button with its item count.
+// The composer Materials button with its item count.
 func (msgs Messages) TaskContextCount(count int) string {
 	return Catalog.Format(msgs.locale, "taskContextCount", map[string]any{"count": count})
 }
@@ -1872,11 +1872,11 @@ func (msgs Messages) ReloadAction() string {
 	return Catalog.Format(msgs.locale, "reloadAction", nil)
 }
 
-// HistoryReadFailed says "Could not read this saved context."
+// HistoryReadFailed says "Could not read this saved message."
 // in the language the app shows.
 func HistoryReadFailed() string { return In(i18n.Locale()).HistoryReadFailed() }
 
-// HistoryReadFailed says "Could not read this saved context."
+// HistoryReadFailed says "Could not read this saved message."
 // in the language of msgs.
 func (msgs Messages) HistoryReadFailed() string {
 	return Catalog.Format(msgs.locale, "historyReadFailed", nil)
@@ -2012,11 +2012,11 @@ func (msgs Messages) ProfileActivityUnknown() string {
 	return Catalog.Format(msgs.locale, "profileActivityUnknown", nil)
 }
 
-// ProfileActivityActive says "Work is active for this contact."
+// ProfileActivityActive says "Work is active for this Bot."
 // in the language the app shows.
 func ProfileActivityActive() string { return In(i18n.Locale()).ProfileActivityActive() }
 
-// ProfileActivityActive says "Work is active for this contact."
+// ProfileActivityActive says "Work is active for this Bot."
 // in the language of msgs.
 func (msgs Messages) ProfileActivityActive() string {
 	return Catalog.Format(msgs.locale, "profileActivityActive", nil)
@@ -2042,21 +2042,21 @@ func (msgs Messages) ProfileClose() string {
 	return Catalog.Format(msgs.locale, "profileClose", nil)
 }
 
-// ProfileBackTooltip says "Back from Contact profile"
+// ProfileBackTooltip says "Back from Bot profile"
 // in the language the app shows.
 func ProfileBackTooltip() string { return In(i18n.Locale()).ProfileBackTooltip() }
 
-// ProfileBackTooltip says "Back from Contact profile"
+// ProfileBackTooltip says "Back from Bot profile"
 // in the language of msgs.
 func (msgs Messages) ProfileBackTooltip() string {
 	return Catalog.Format(msgs.locale, "profileBackTooltip", nil)
 }
 
-// ProfileArchivedNotice says "Archived contact. Existing history, drafts and task data remain available."
+// ProfileArchivedNotice says "Archived Bot. Existing history, drafts and task data remain available."
 // in the language the app shows.
 func ProfileArchivedNotice() string { return In(i18n.Locale()).ProfileArchivedNotice() }
 
-// ProfileArchivedNotice says "Archived contact. Existing history, drafts and task data remain available."
+// ProfileArchivedNotice says "Archived Bot. Existing history, drafts and task data remain available."
 // in the language of msgs.
 func (msgs Messages) ProfileArchivedNotice() string {
 	return Catalog.Format(msgs.locale, "profileArchivedNotice", nil)
@@ -2192,11 +2192,11 @@ func (msgs Messages) ConnectionSavedAwaitingApply() string {
 	return Catalog.Format(msgs.locale, "connectionSavedAwaitingApply", nil)
 }
 
-// SettingsNoContactToEdit says "No contact is available to edit."
+// SettingsNoContactToEdit says "No Bot is available to edit."
 // in the language the app shows.
 func SettingsNoContactToEdit() string { return In(i18n.Locale()).SettingsNoContactToEdit() }
 
-// SettingsNoContactToEdit says "No contact is available to edit."
+// SettingsNoContactToEdit says "No Bot is available to edit."
 // in the language of msgs.
 func (msgs Messages) SettingsNoContactToEdit() string {
 	return Catalog.Format(msgs.locale, "settingsNoContactToEdit", nil)
@@ -2282,11 +2282,11 @@ func (msgs Messages) AppearanceStatusSaveFailed() string {
 	return Catalog.Format(msgs.locale, "appearanceStatusSaveFailed", nil)
 }
 
-// ProfileSaveIntro says "Saving updates this contact's name. Other settings apply when a chat or task work session is first created; existing …"
+// ProfileSaveIntro says "Saving updates this Bot's name. Other settings apply when a chat or task work session is first created; existing sess…"
 // in the language the app shows.
 func ProfileSaveIntro() string { return In(i18n.Locale()).ProfileSaveIntro() }
 
-// ProfileSaveIntro says "Saving updates this contact's name. Other settings apply when a chat or task work session is first created; existing …"
+// ProfileSaveIntro says "Saving updates this Bot's name. Other settings apply when a chat or task work session is first created; existing sess…"
 // in the language of msgs.
 func (msgs Messages) ProfileSaveIntro() string {
 	return Catalog.Format(msgs.locale, "profileSaveIntro", nil)
@@ -2312,11 +2312,11 @@ func (msgs Messages) FieldName() string {
 	return Catalog.Format(msgs.locale, "fieldName", nil)
 }
 
-// FieldNameAccessible says "Contact name"
+// FieldNameAccessible says "Bot name"
 // in the language the app shows.
 func FieldNameAccessible() string { return In(i18n.Locale()).FieldNameAccessible() }
 
-// FieldNameAccessible says "Contact name"
+// FieldNameAccessible says "Bot name"
 // in the language of msgs.
 func (msgs Messages) FieldNameAccessible() string {
 	return Catalog.Format(msgs.locale, "fieldNameAccessible", nil)
@@ -2332,21 +2332,21 @@ func (msgs Messages) FieldNamePlaceholder() string {
 	return Catalog.Format(msgs.locale, "fieldNamePlaceholder", nil)
 }
 
-// FieldPurposeAccessible says "Contact purpose"
+// FieldPurposeAccessible says "Bot purpose"
 // in the language the app shows.
 func FieldPurposeAccessible() string { return In(i18n.Locale()).FieldPurposeAccessible() }
 
-// FieldPurposeAccessible says "Contact purpose"
+// FieldPurposeAccessible says "Bot purpose"
 // in the language of msgs.
 func (msgs Messages) FieldPurposeAccessible() string {
 	return Catalog.Format(msgs.locale, "fieldPurposeAccessible", nil)
 }
 
-// FieldInstructionsAccessible says "Contact instructions"
+// FieldInstructionsAccessible says "Bot instructions"
 // in the language the app shows.
 func FieldInstructionsAccessible() string { return In(i18n.Locale()).FieldInstructionsAccessible() }
 
-// FieldInstructionsAccessible says "Contact instructions"
+// FieldInstructionsAccessible says "Bot instructions"
 // in the language of msgs.
 func (msgs Messages) FieldInstructionsAccessible() string {
 	return Catalog.Format(msgs.locale, "fieldInstructionsAccessible", nil)
@@ -2362,11 +2362,11 @@ func (msgs Messages) FieldWorkspacePlaceholder() string {
 	return Catalog.Format(msgs.locale, "fieldWorkspacePlaceholder", nil)
 }
 
-// FieldWorkspaceAccessible says "Contact workspace"
+// FieldWorkspaceAccessible says "Bot workspace"
 // in the language the app shows.
 func FieldWorkspaceAccessible() string { return In(i18n.Locale()).FieldWorkspaceAccessible() }
 
-// FieldWorkspaceAccessible says "Contact workspace"
+// FieldWorkspaceAccessible says "Bot workspace"
 // in the language of msgs.
 func (msgs Messages) FieldWorkspaceAccessible() string {
 	return Catalog.Format(msgs.locale, "fieldWorkspaceAccessible", nil)
@@ -2474,11 +2474,11 @@ func (msgs Messages) ProfileDiscard() string {
 	return Catalog.Format(msgs.locale, "profileDiscard", nil)
 }
 
-// ProfileContactManagement says "Contact management"
+// ProfileContactManagement says "Manage Bot"
 // in the language the app shows.
 func ProfileContactManagement() string { return In(i18n.Locale()).ProfileContactManagement() }
 
-// ProfileContactManagement says "Contact management"
+// ProfileContactManagement says "Manage Bot"
 // in the language of msgs.
 func (msgs Messages) ProfileContactManagement() string {
 	return Catalog.Format(msgs.locale, "profileContactManagement", nil)
@@ -2514,11 +2514,11 @@ func (msgs Messages) ProfileSaving() string {
 	return Catalog.Format(msgs.locale, "profileSaving", nil)
 }
 
-// ValidationNameRequired says "Enter a contact name."
+// ValidationNameRequired says "Enter a Bot name."
 // in the language the app shows.
 func ValidationNameRequired() string { return In(i18n.Locale()).ValidationNameRequired() }
 
-// ValidationNameRequired says "Enter a contact name."
+// ValidationNameRequired says "Enter a Bot name."
 // in the language of msgs.
 func (msgs Messages) ValidationNameRequired() string {
 	return Catalog.Format(msgs.locale, "validationNameRequired", nil)
@@ -2554,11 +2554,11 @@ func (msgs Messages) ProfileErrorBusy() string {
 	return Catalog.Format(msgs.locale, "profileErrorBusy", nil)
 }
 
-// ProfileErrorArchived says "Restore this contact before saving its profile."
+// ProfileErrorArchived says "Restore this Bot before saving its profile."
 // in the language the app shows.
 func ProfileErrorArchived() string { return In(i18n.Locale()).ProfileErrorArchived() }
 
-// ProfileErrorArchived says "Restore this contact before saving its profile."
+// ProfileErrorArchived says "Restore this Bot before saving its profile."
 // in the language of msgs.
 func (msgs Messages) ProfileErrorArchived() string {
 	return Catalog.Format(msgs.locale, "profileErrorArchived", nil)
@@ -2574,11 +2574,11 @@ func (msgs Messages) ProfileErrorNoConversation() string {
 	return Catalog.Format(msgs.locale, "profileErrorNoConversation", nil)
 }
 
-// ProfileReasonArchived says "This contact is archived. Restore it before editing or starting new work."
+// ProfileReasonArchived says "This Bot is archived. Restore it before editing or starting new work."
 // in the language the app shows.
 func ProfileReasonArchived() string { return In(i18n.Locale()).ProfileReasonArchived() }
 
-// ProfileReasonArchived says "This contact is archived. Restore it before editing or starting new work."
+// ProfileReasonArchived says "This Bot is archived. Restore it before editing or starting new work."
 // in the language of msgs.
 func (msgs Messages) ProfileReasonArchived() string {
 	return Catalog.Format(msgs.locale, "profileReasonArchived", nil)
@@ -2604,11 +2604,11 @@ func (msgs Messages) ProfileReasonActive() string {
 	return Catalog.Format(msgs.locale, "profileReasonActive", nil)
 }
 
-// ProfileErrorStoreUnavailable says "Could not save this profile: the local contact store is unavailable."
+// ProfileErrorStoreUnavailable says "Could not save this profile: the local profile store is unavailable."
 // in the language the app shows.
 func ProfileErrorStoreUnavailable() string { return In(i18n.Locale()).ProfileErrorStoreUnavailable() }
 
-// ProfileErrorStoreUnavailable says "Could not save this profile: the local contact store is unavailable."
+// ProfileErrorStoreUnavailable says "Could not save this profile: the local profile store is unavailable."
 // in the language of msgs.
 func (msgs Messages) ProfileErrorStoreUnavailable() string {
 	return Catalog.Format(msgs.locale, "profileErrorStoreUnavailable", nil)
@@ -2654,96 +2654,96 @@ func (msgs Messages) ArchiveErrorUnknown() string {
 	return Catalog.Format(msgs.locale, "archiveErrorUnknown", nil)
 }
 
-// ArchiveErrorActive says "Active work must finish or stop before archiving this contact."
+// ArchiveErrorActive says "Active work must finish or stop before archiving this Bot."
 // in the language the app shows.
 func ArchiveErrorActive() string { return In(i18n.Locale()).ArchiveErrorActive() }
 
-// ArchiveErrorActive says "Active work must finish or stop before archiving this contact."
+// ArchiveErrorActive says "Active work must finish or stop before archiving this Bot."
 // in the language of msgs.
 func (msgs Messages) ArchiveErrorActive() string {
 	return Catalog.Format(msgs.locale, "archiveErrorActive", nil)
 }
 
-// ArchiveErrorAlready says "This contact is already archived."
+// ArchiveErrorAlready says "This Bot is already archived."
 // in the language the app shows.
 func ArchiveErrorAlready() string { return In(i18n.Locale()).ArchiveErrorAlready() }
 
-// ArchiveErrorAlready says "This contact is already archived."
+// ArchiveErrorAlready says "This Bot is already archived."
 // in the language of msgs.
 func (msgs Messages) ArchiveErrorAlready() string {
 	return Catalog.Format(msgs.locale, "archiveErrorAlready", nil)
 }
 
-// ArchiveErrorStore says "Could not archive this contact: the local contact store is unavailable."
+// ArchiveErrorStore says "Could not archive this Bot: the local profile store is unavailable."
 // in the language the app shows.
 func ArchiveErrorStore() string { return In(i18n.Locale()).ArchiveErrorStore() }
 
-// ArchiveErrorStore says "Could not archive this contact: the local contact store is unavailable."
+// ArchiveErrorStore says "Could not archive this Bot: the local profile store is unavailable."
 // in the language of msgs.
 func (msgs Messages) ArchiveErrorStore() string {
 	return Catalog.Format(msgs.locale, "archiveErrorStore", nil)
 }
 
-// ArchiveErrorSave says "Could not archive this contact. Its previous state is unchanged."
+// ArchiveErrorSave says "Could not archive this Bot. Its previous state is unchanged."
 // in the language the app shows.
 func ArchiveErrorSave() string { return In(i18n.Locale()).ArchiveErrorSave() }
 
-// ArchiveErrorSave says "Could not archive this contact. Its previous state is unchanged."
+// ArchiveErrorSave says "Could not archive this Bot. Its previous state is unchanged."
 // in the language of msgs.
 func (msgs Messages) ArchiveErrorSave() string {
 	return Catalog.Format(msgs.locale, "archiveErrorSave", nil)
 }
 
-// ArchiveSaved says "Contact archived. Sending and new task runs are disabled; history and task data are retained."
+// ArchiveSaved says "Bot archived. Sending and new task runs are disabled; history and task data are retained."
 // in the language the app shows.
 func ArchiveSaved() string { return In(i18n.Locale()).ArchiveSaved() }
 
-// ArchiveSaved says "Contact archived. Sending and new task runs are disabled; history and task data are retained."
+// ArchiveSaved says "Bot archived. Sending and new task runs are disabled; history and task data are retained."
 // in the language of msgs.
 func (msgs Messages) ArchiveSaved() string {
 	return Catalog.Format(msgs.locale, "archiveSaved", nil)
 }
 
-// RestoreErrorStore says "Could not restore this contact: the local contact store is unavailable."
+// RestoreErrorStore says "Could not restore this Bot: the local profile store is unavailable."
 // in the language the app shows.
 func RestoreErrorStore() string { return In(i18n.Locale()).RestoreErrorStore() }
 
-// RestoreErrorStore says "Could not restore this contact: the local contact store is unavailable."
+// RestoreErrorStore says "Could not restore this Bot: the local profile store is unavailable."
 // in the language of msgs.
 func (msgs Messages) RestoreErrorStore() string {
 	return Catalog.Format(msgs.locale, "restoreErrorStore", nil)
 }
 
-// RestoreErrorSave says "Could not restore this contact. Its archived state is unchanged."
+// RestoreErrorSave says "Could not restore this Bot. Its archived state is unchanged."
 // in the language the app shows.
 func RestoreErrorSave() string { return In(i18n.Locale()).RestoreErrorSave() }
 
-// RestoreErrorSave says "Could not restore this contact. Its archived state is unchanged."
+// RestoreErrorSave says "Could not restore this Bot. Its archived state is unchanged."
 // in the language of msgs.
 func (msgs Messages) RestoreErrorSave() string {
 	return Catalog.Format(msgs.locale, "restoreErrorSave", nil)
 }
 
-// RestoreSaved says "Contact restored."
+// RestoreSaved says "Bot restored."
 // in the language the app shows.
 func RestoreSaved() string { return In(i18n.Locale()).RestoreSaved() }
 
-// RestoreSaved says "Contact restored."
+// RestoreSaved says "Bot restored."
 // in the language of msgs.
 func (msgs Messages) RestoreSaved() string {
 	return Catalog.Format(msgs.locale, "restoreSaved", nil)
 }
 
-// NewContactName says "New contact {number}"
+// NewContactName says "New Bot {number}"
 // in the language the app shows.
 //
-// The default name of a newly added contact.
+// The default name of a newly added Bot.
 func NewContactName(number int) string { return In(i18n.Locale()).NewContactName(number) }
 
-// NewContactName says "New contact {number}"
+// NewContactName says "New Bot {number}"
 // in the language of msgs.
 //
-// The default name of a newly added contact.
+// The default name of a newly added Bot.
 func (msgs Messages) NewContactName(number int) string {
 	return Catalog.Format(msgs.locale, "newContactName", map[string]any{"number": number})
 }
@@ -2751,7 +2751,7 @@ func (msgs Messages) NewContactName(number int) string {
 // ContactChoiceDuplicate says "{name} ({number})"
 // in the language the app shows.
 //
-// A contact picker label disambiguated by its position.
+// A Bot picker label disambiguated by its position.
 func ContactChoiceDuplicate(name string, number int) string {
 	return In(i18n.Locale()).ContactChoiceDuplicate(name, number)
 }
@@ -2759,26 +2759,26 @@ func ContactChoiceDuplicate(name string, number int) string {
 // ContactChoiceDuplicate says "{name} ({number})"
 // in the language of msgs.
 //
-// A contact picker label disambiguated by its position.
+// A Bot picker label disambiguated by its position.
 func (msgs Messages) ContactChoiceDuplicate(name string, number int) string {
 	return Catalog.Format(msgs.locale, "contactChoiceDuplicate", map[string]any{"name": name, "number": number})
 }
 
-// RuntimeNotStartedLocalStore says "Runtime: not started (local contact store unavailable)"
+// RuntimeNotStartedLocalStore says "Runtime: not started (local profile store unavailable)"
 // in the language the app shows.
 func RuntimeNotStartedLocalStore() string { return In(i18n.Locale()).RuntimeNotStartedLocalStore() }
 
-// RuntimeNotStartedLocalStore says "Runtime: not started (local contact store unavailable)"
+// RuntimeNotStartedLocalStore says "Runtime: not started (local profile store unavailable)"
 // in the language of msgs.
 func (msgs Messages) RuntimeNotStartedLocalStore() string {
 	return Catalog.Format(msgs.locale, "runtimeNotStartedLocalStore", nil)
 }
 
-// RuntimeLocalStoreUnavailable says "Local contact store: unavailable; the runtime was not started."
+// RuntimeLocalStoreUnavailable says "Local profile store: unavailable; the runtime was not started."
 // in the language the app shows.
 func RuntimeLocalStoreUnavailable() string { return In(i18n.Locale()).RuntimeLocalStoreUnavailable() }
 
-// RuntimeLocalStoreUnavailable says "Local contact store: unavailable; the runtime was not started."
+// RuntimeLocalStoreUnavailable says "Local profile store: unavailable; the runtime was not started."
 // in the language of msgs.
 func (msgs Messages) RuntimeLocalStoreUnavailable() string {
 	return Catalog.Format(msgs.locale, "runtimeLocalStoreUnavailable", nil)
@@ -2846,13 +2846,13 @@ func (msgs Messages) RuntimeWorkDirLine(path string) string {
 	return Catalog.Format(msgs.locale, "runtimeWorkDirLine", map[string]any{"path": path})
 }
 
-// RuntimeContactWorkspaceLine says "Contact workspace: {path}"
+// RuntimeContactWorkspaceLine says "Bot workspace: {path}"
 // in the language the app shows.
 func RuntimeContactWorkspaceLine(path string) string {
 	return In(i18n.Locale()).RuntimeContactWorkspaceLine(path)
 }
 
-// RuntimeContactWorkspaceLine says "Contact workspace: {path}"
+// RuntimeContactWorkspaceLine says "Bot workspace: {path}"
 // in the language of msgs.
 func (msgs Messages) RuntimeContactWorkspaceLine(path string) string {
 	return Catalog.Format(msgs.locale, "runtimeContactWorkspaceLine", map[string]any{"path": path})
@@ -3007,7 +3007,7 @@ func (msgs Messages) SnippetUser(text string) string {
 // StatusDetail says "{status}: {detail}"
 // in the language the app shows.
 //
-// A contact status with its detail.
+// A Bot status with its detail.
 func StatusDetail(status string, detail string) string {
 	return In(i18n.Locale()).StatusDetail(status, detail)
 }
@@ -3015,7 +3015,7 @@ func StatusDetail(status string, detail string) string {
 // StatusDetail says "{status}: {detail}"
 // in the language of msgs.
 //
-// A contact status with its detail.
+// A Bot status with its detail.
 func (msgs Messages) StatusDetail(status string, detail string) string {
 	return Catalog.Format(msgs.locale, "statusDetail", map[string]any{"status": status, "detail": detail})
 }
@@ -3224,11 +3224,11 @@ func (msgs Messages) ConnectionAPIKeyPlaceholder() string {
 	return Catalog.Format(msgs.locale, "connectionAPIKeyPlaceholder", nil)
 }
 
-// ConnectionAPIKeyHint says "Saved in a private local file without encryption; not added to contact settings or model prompts."
+// ConnectionAPIKeyHint says "Saved in a private local file without encryption; not added to Bot settings or model prompts."
 // in the language the app shows.
 func ConnectionAPIKeyHint() string { return In(i18n.Locale()).ConnectionAPIKeyHint() }
 
-// ConnectionAPIKeyHint says "Saved in a private local file without encryption; not added to contact settings or model prompts."
+// ConnectionAPIKeyHint says "Saved in a private local file without encryption; not added to Bot settings or model prompts."
 // in the language of msgs.
 func (msgs Messages) ConnectionAPIKeyHint() string {
 	return Catalog.Format(msgs.locale, "connectionAPIKeyHint", nil)
@@ -3596,11 +3596,11 @@ func (msgs Messages) ConnectionStatusCheckingSaved() string {
 	return Catalog.Format(msgs.locale, "connectionStatusCheckingSaved", nil)
 }
 
-// ConnectionStatusApplied says "Connection applied. New conversations and work use its defaults; existing contexts keep their settings. Applying does…"
+// ConnectionStatusApplied says "Connection applied. New conversations and tasks use these settings. Existing conversations and tasks keep their setti…"
 // in the language the app shows.
 func ConnectionStatusApplied() string { return In(i18n.Locale()).ConnectionStatusApplied() }
 
-// ConnectionStatusApplied says "Connection applied. New conversations and work use its defaults; existing contexts keep their settings. Applying does…"
+// ConnectionStatusApplied says "Connection applied. New conversations and tasks use these settings. Existing conversations and tasks keep their setti…"
 // in the language of msgs.
 func (msgs Messages) ConnectionStatusApplied() string {
 	return Catalog.Format(msgs.locale, "connectionStatusApplied", nil)
@@ -3758,11 +3758,11 @@ func (msgs Messages) CanSendShutdown() string {
 	return Catalog.Format(msgs.locale, "canSendShutdown", nil)
 }
 
-// CanSendArchived says "This contact is archived. Restore it before sending a message."
+// CanSendArchived says "This Bot is archived. Restore it before sending a message."
 // in the language the app shows.
 func CanSendArchived() string { return In(i18n.Locale()).CanSendArchived() }
 
-// CanSendArchived says "This contact is archived. Restore it before sending a message."
+// CanSendArchived says "This Bot is archived. Restore it before sending a message."
 // in the language of msgs.
 func (msgs Messages) CanSendArchived() string {
 	return Catalog.Format(msgs.locale, "canSendArchived", nil)
@@ -3818,21 +3818,21 @@ func (msgs Messages) CanSendModelUpdating() string {
 	return Catalog.Format(msgs.locale, "canSendModelUpdating", nil)
 }
 
-// CanSendHistoryLoading says "This contact is still loading its history."
+// CanSendHistoryLoading says "This Bot is still loading its history."
 // in the language the app shows.
 func CanSendHistoryLoading() string { return In(i18n.Locale()).CanSendHistoryLoading() }
 
-// CanSendHistoryLoading says "This contact is still loading its history."
+// CanSendHistoryLoading says "This Bot is still loading its history."
 // in the language of msgs.
 func (msgs Messages) CanSendHistoryLoading() string {
 	return Catalog.Format(msgs.locale, "canSendHistoryLoading", nil)
 }
 
-// CanSendBusy says "This contact is busy."
+// CanSendBusy says "This Bot is busy."
 // in the language the app shows.
 func CanSendBusy() string { return In(i18n.Locale()).CanSendBusy() }
 
-// CanSendBusy says "This contact is busy."
+// CanSendBusy says "This Bot is busy."
 // in the language of msgs.
 func (msgs Messages) CanSendBusy() string {
 	return Catalog.Format(msgs.locale, "canSendBusy", nil)
@@ -3858,21 +3858,21 @@ func (msgs Messages) CanSendCapacity() string {
 	return Catalog.Format(msgs.locale, "canSendCapacity", nil)
 }
 
-// CanSendAnotherContact says "Another contact is working; wait for its task to finish before sending here."
+// CanSendAnotherContact says "Another Bot is working; wait for its task to finish before sending here."
 // in the language the app shows.
 func CanSendAnotherContact() string { return In(i18n.Locale()).CanSendAnotherContact() }
 
-// CanSendAnotherContact says "Another contact is working; wait for its task to finish before sending here."
+// CanSendAnotherContact says "Another Bot is working; wait for its task to finish before sending here."
 // in the language of msgs.
 func (msgs Messages) CanSendAnotherContact() string {
 	return Catalog.Format(msgs.locale, "canSendAnotherContact", nil)
 }
 
-// CanStartArchived says "This contact is archived. Restore it before starting task work."
+// CanStartArchived says "This Bot is archived. Restore it before starting task work."
 // in the language the app shows.
 func CanStartArchived() string { return In(i18n.Locale()).CanStartArchived() }
 
-// CanStartArchived says "This contact is archived. Restore it before starting task work."
+// CanStartArchived says "This Bot is archived. Restore it before starting task work."
 // in the language of msgs.
 func (msgs Messages) CanStartArchived() string {
 	return Catalog.Format(msgs.locale, "canStartArchived", nil)
@@ -4022,11 +4022,11 @@ func (msgs Messages) WaitingReason(reason string) string {
 	return Catalog.Format(msgs.locale, "waitingReason", map[string]any{"reason": reason})
 }
 
-// RuntimeStageLocalStore says "Local contact store"
+// RuntimeStageLocalStore says "Local profile store"
 // in the language the app shows.
 func RuntimeStageLocalStore() string { return In(i18n.Locale()).RuntimeStageLocalStore() }
 
-// RuntimeStageLocalStore says "Local contact store"
+// RuntimeStageLocalStore says "Local profile store"
 // in the language of msgs.
 func (msgs Messages) RuntimeStageLocalStore() string {
 	return Catalog.Format(msgs.locale, "runtimeStageLocalStore", nil)
@@ -4160,13 +4160,13 @@ func (msgs Messages) RuntimeErrorConnectionLostDetail(detail string) string {
 	return Catalog.Format(msgs.locale, "runtimeErrorConnectionLostDetail", map[string]any{"detail": detail})
 }
 
-// RuntimeErrorStoreSave says "Could not save contacts: {detail}"
+// RuntimeErrorStoreSave says "Could not save Bots: {detail}"
 // in the language the app shows.
 func RuntimeErrorStoreSave(detail string) string {
 	return In(i18n.Locale()).RuntimeErrorStoreSave(detail)
 }
 
-// RuntimeErrorStoreSave says "Could not save contacts: {detail}"
+// RuntimeErrorStoreSave says "Could not save Bots: {detail}"
 // in the language of msgs.
 func (msgs Messages) RuntimeErrorStoreSave(detail string) string {
 	return Catalog.Format(msgs.locale, "runtimeErrorStoreSave", map[string]any{"detail": detail})
@@ -4324,11 +4324,11 @@ func (msgs Messages) WorkLoadingHistoryTitle() string {
 	return Catalog.Format(msgs.locale, "workLoadingHistoryTitle", nil)
 }
 
-// WorkLoadingHistoryHint says "This contact already has a session, but its history has not been loaded yet; existing work is not shown as absent."
+// WorkLoadingHistoryHint says "This Bot already has a session, but its history has not been loaded yet; existing work is not shown as absent."
 // in the language the app shows.
 func WorkLoadingHistoryHint() string { return In(i18n.Locale()).WorkLoadingHistoryHint() }
 
-// WorkLoadingHistoryHint says "This contact already has a session, but its history has not been loaded yet; existing work is not shown as absent."
+// WorkLoadingHistoryHint says "This Bot already has a session, but its history has not been loaded yet; existing work is not shown as absent."
 // in the language of msgs.
 func (msgs Messages) WorkLoadingHistoryHint() string {
 	return Catalog.Format(msgs.locale, "workLoadingHistoryHint", nil)
@@ -5340,21 +5340,21 @@ func (msgs Messages) ResultRunLabel(number string, goal string) string {
 	return Catalog.Format(msgs.locale, "resultRunLabel", map[string]any{"number": number, "goal": goal})
 }
 
-// TaskContextHeading says "Task context"
+// TaskContextHeading says "Materials"
 // in the language the app shows.
 func TaskContextHeading() string { return In(i18n.Locale()).TaskContextHeading() }
 
-// TaskContextHeading says "Task context"
+// TaskContextHeading says "Materials"
 // in the language of msgs.
 func (msgs Messages) TaskContextHeading() string {
 	return Catalog.Format(msgs.locale, "taskContextHeading", nil)
 }
 
-// TaskContextIntro says "Saved text is sent as caller-provided context with the next send. A file snapshot changes only when you refresh it."
+// TaskContextIntro says "Saved text is included with your next message. Refresh a file to update its snapshot."
 // in the language the app shows.
 func TaskContextIntro() string { return In(i18n.Locale()).TaskContextIntro() }
 
-// TaskContextIntro says "Saved text is sent as caller-provided context with the next send. A file snapshot changes only when you refresh it."
+// TaskContextIntro says "Saved text is included with your next message. Refresh a file to update its snapshot."
 // in the language of msgs.
 func (msgs Messages) TaskContextIntro() string {
 	return Catalog.Format(msgs.locale, "taskContextIntro", nil)
@@ -5380,11 +5380,11 @@ func (msgs Messages) TaskContextAddFile() string {
 	return Catalog.Format(msgs.locale, "taskContextAddFile", nil)
 }
 
-// TaskContextEmpty says "No saved context. The next send will not include caller context."
+// TaskContextEmpty says "No materials attached."
 // in the language the app shows.
 func TaskContextEmpty() string { return In(i18n.Locale()).TaskContextEmpty() }
 
-// TaskContextEmpty says "No saved context. The next send will not include caller context."
+// TaskContextEmpty says "No materials attached."
 // in the language of msgs.
 func (msgs Messages) TaskContextEmpty() string {
 	return Catalog.Format(msgs.locale, "taskContextEmpty", nil)
@@ -5460,11 +5460,11 @@ func (msgs Messages) TaskContextFileNameOptional() string {
 	return Catalog.Format(msgs.locale, "taskContextFileNameOptional", nil)
 }
 
-// TaskContextFileLabel says "Context file name"
+// TaskContextFileLabel says "Material file name"
 // in the language the app shows.
 func TaskContextFileLabel() string { return In(i18n.Locale()).TaskContextFileLabel() }
 
-// TaskContextFileLabel says "Context file name"
+// TaskContextFileLabel says "Material file name"
 // in the language of msgs.
 func (msgs Messages) TaskContextFileLabel() string {
 	return Catalog.Format(msgs.locale, "taskContextFileLabel", nil)
@@ -5490,11 +5490,11 @@ func (msgs Messages) TaskContextPath() string {
 	return Catalog.Format(msgs.locale, "taskContextPath", nil)
 }
 
-// TaskContextFilePathLabel says "Context file path"
+// TaskContextFilePathLabel says "Material file path"
 // in the language the app shows.
 func TaskContextFilePathLabel() string { return In(i18n.Locale()).TaskContextFilePathLabel() }
 
-// TaskContextFilePathLabel says "Context file path"
+// TaskContextFilePathLabel says "Material file path"
 // in the language of msgs.
 func (msgs Messages) TaskContextFilePathLabel() string {
 	return Catalog.Format(msgs.locale, "taskContextFilePathLabel", nil)
@@ -5532,11 +5532,11 @@ func (msgs Messages) TaskContextName() string {
 	return Catalog.Format(msgs.locale, "taskContextName", nil)
 }
 
-// TaskContextNameLabel says "Context name"
+// TaskContextNameLabel says "Material name"
 // in the language the app shows.
 func TaskContextNameLabel() string { return In(i18n.Locale()).TaskContextNameLabel() }
 
-// TaskContextNameLabel says "Context name"
+// TaskContextNameLabel says "Material name"
 // in the language of msgs.
 func (msgs Messages) TaskContextNameLabel() string {
 	return Catalog.Format(msgs.locale, "taskContextNameLabel", nil)
@@ -5562,11 +5562,11 @@ func (msgs Messages) TaskContextText() string {
 	return Catalog.Format(msgs.locale, "taskContextText", nil)
 }
 
-// TaskContextTextLabel says "Context text"
+// TaskContextTextLabel says "Material text"
 // in the language the app shows.
 func TaskContextTextLabel() string { return In(i18n.Locale()).TaskContextTextLabel() }
 
-// TaskContextTextLabel says "Context text"
+// TaskContextTextLabel says "Material text"
 // in the language of msgs.
 func (msgs Messages) TaskContextTextLabel() string {
 	return Catalog.Format(msgs.locale, "taskContextTextLabel", nil)
@@ -5634,21 +5634,21 @@ func (msgs Messages) TaskContextFormFile() string {
 	return Catalog.Format(msgs.locale, "taskContextFormFile", nil)
 }
 
-// TaskContextFormEdit says "Edit context"
+// TaskContextFormEdit says "Edit material"
 // in the language the app shows.
 func TaskContextFormEdit() string { return In(i18n.Locale()).TaskContextFormEdit() }
 
-// TaskContextFormEdit says "Edit context"
+// TaskContextFormEdit says "Edit material"
 // in the language of msgs.
 func (msgs Messages) TaskContextFormEdit() string {
 	return Catalog.Format(msgs.locale, "taskContextFormEdit", nil)
 }
 
-// TaskContextItemsLabel says "{count, plural, one {Task context: # item} other {Task context: # items}}"
+// TaskContextItemsLabel says "{count, plural, one {Materials: # item} other {Materials: # items}}"
 // in the language the app shows.
 func TaskContextItemsLabel(count int) string { return In(i18n.Locale()).TaskContextItemsLabel(count) }
 
-// TaskContextItemsLabel says "{count, plural, one {Task context: # item} other {Task context: # items}}"
+// TaskContextItemsLabel says "{count, plural, one {Materials: # item} other {Materials: # items}}"
 // in the language of msgs.
 func (msgs Messages) TaskContextItemsLabel(count int) string {
 	return Catalog.Format(msgs.locale, "taskContextItemsLabel", map[string]any{"count": count})
@@ -5688,21 +5688,21 @@ func (msgs Messages) TaskContextSourceFile(revision string) string {
 	return Catalog.Format(msgs.locale, "taskContextSourceFile", map[string]any{"revision": revision})
 }
 
-// TaskContextErrName says "Enter a context name."
+// TaskContextErrName says "Enter a name for this material."
 // in the language the app shows.
 func TaskContextErrName() string { return In(i18n.Locale()).TaskContextErrName() }
 
-// TaskContextErrName says "Enter a context name."
+// TaskContextErrName says "Enter a name for this material."
 // in the language of msgs.
 func (msgs Messages) TaskContextErrName() string {
 	return Catalog.Format(msgs.locale, "taskContextErrName", nil)
 }
 
-// TaskContextErrUTF8 says "Context text is not valid UTF-8."
+// TaskContextErrUTF8 says "Material text is not valid UTF-8."
 // in the language the app shows.
 func TaskContextErrUTF8() string { return In(i18n.Locale()).TaskContextErrUTF8() }
 
-// TaskContextErrUTF8 says "Context text is not valid UTF-8."
+// TaskContextErrUTF8 says "Material text is not valid UTF-8."
 // in the language of msgs.
 func (msgs Messages) TaskContextErrUTF8() string {
 	return Catalog.Format(msgs.locale, "taskContextErrUTF8", nil)
@@ -5718,11 +5718,11 @@ func (msgs Messages) TaskContextErrNotText() string {
 	return Catalog.Format(msgs.locale, "taskContextErrNotText", nil)
 }
 
-// TaskContextErrOversize says "Context exceeds the 1 MiB send limit."
+// TaskContextErrOversize says "Materials exceed the 1 MiB send limit."
 // in the language the app shows.
 func TaskContextErrOversize() string { return In(i18n.Locale()).TaskContextErrOversize() }
 
-// TaskContextErrOversize says "Context exceeds the 1 MiB send limit."
+// TaskContextErrOversize says "Materials exceed the 1 MiB send limit."
 // in the language of msgs.
 func (msgs Messages) TaskContextErrOversize() string {
 	return Catalog.Format(msgs.locale, "taskContextErrOversize", nil)
@@ -5738,31 +5738,31 @@ func (msgs Messages) TaskContextErrUnsupported() string {
 	return Catalog.Format(msgs.locale, "taskContextErrUnsupported", nil)
 }
 
-// TaskContextErrRead says "Could not read the context file."
+// TaskContextErrRead says "Could not read the material file."
 // in the language the app shows.
 func TaskContextErrRead() string { return In(i18n.Locale()).TaskContextErrRead() }
 
-// TaskContextErrRead says "Could not read the context file."
+// TaskContextErrRead says "Could not read the material file."
 // in the language of msgs.
 func (msgs Messages) TaskContextErrRead() string {
 	return Catalog.Format(msgs.locale, "taskContextErrRead", nil)
 }
 
-// TaskContextErrMissing says "The context item no longer exists."
+// TaskContextErrMissing says "This material is no longer available."
 // in the language the app shows.
 func TaskContextErrMissing() string { return In(i18n.Locale()).TaskContextErrMissing() }
 
-// TaskContextErrMissing says "The context item no longer exists."
+// TaskContextErrMissing says "This material is no longer available."
 // in the language of msgs.
 func (msgs Messages) TaskContextErrMissing() string {
 	return Catalog.Format(msgs.locale, "taskContextErrMissing", nil)
 }
 
-// TaskContextErrNoSource says "This context item has no file source."
+// TaskContextErrNoSource says "This material has no source file."
 // in the language the app shows.
 func TaskContextErrNoSource() string { return In(i18n.Locale()).TaskContextErrNoSource() }
 
-// TaskContextErrNoSource says "This context item has no file source."
+// TaskContextErrNoSource says "This material has no source file."
 // in the language of msgs.
 func (msgs Messages) TaskContextErrNoSource() string {
 	return Catalog.Format(msgs.locale, "taskContextErrNoSource", nil)
@@ -5778,11 +5778,11 @@ func (msgs Messages) TaskContextIssueUnavailable() string {
 	return Catalog.Format(msgs.locale, "taskContextIssueUnavailable", nil)
 }
 
-// TaskContextClose says "Close task context"
+// TaskContextClose says "Close materials"
 // in the language the app shows.
 func TaskContextClose() string { return In(i18n.Locale()).TaskContextClose() }
 
-// TaskContextClose says "Close task context"
+// TaskContextClose says "Close materials"
 // in the language of msgs.
 func (msgs Messages) TaskContextClose() string {
 	return Catalog.Format(msgs.locale, "taskContextClose", nil)
@@ -6022,25 +6022,25 @@ func (msgs Messages) SupplementShowAll() string {
 	return Catalog.Format(msgs.locale, "supplementShowAll", nil)
 }
 
-// TaskContextErrReadDetail says "Could not read the context file: {detail}"
+// TaskContextErrReadDetail says "Could not read the material file: {detail}"
 // in the language the app shows.
 func TaskContextErrReadDetail(detail string) string {
 	return In(i18n.Locale()).TaskContextErrReadDetail(detail)
 }
 
-// TaskContextErrReadDetail says "Could not read the context file: {detail}"
+// TaskContextErrReadDetail says "Could not read the material file: {detail}"
 // in the language of msgs.
 func (msgs Messages) TaskContextErrReadDetail(detail string) string {
 	return Catalog.Format(msgs.locale, "taskContextErrReadDetail", map[string]any{"detail": detail})
 }
 
-// TaskContextErrOversizeDetail says "Context exceeds the 1 MiB send limit: {detail}"
+// TaskContextErrOversizeDetail says "Materials exceed the 1 MiB send limit: {detail}"
 // in the language the app shows.
 func TaskContextErrOversizeDetail(detail string) string {
 	return In(i18n.Locale()).TaskContextErrOversizeDetail(detail)
 }
 
-// TaskContextErrOversizeDetail says "Context exceeds the 1 MiB send limit: {detail}"
+// TaskContextErrOversizeDetail says "Materials exceed the 1 MiB send limit: {detail}"
 // in the language of msgs.
 func (msgs Messages) TaskContextErrOversizeDetail(detail string) string {
 	return Catalog.Format(msgs.locale, "taskContextErrOversizeDetail", map[string]any{"detail": detail})
@@ -6058,13 +6058,13 @@ func (msgs Messages) TaskContextErrUnsupportedDetail(detail string) string {
 	return Catalog.Format(msgs.locale, "taskContextErrUnsupportedDetail", map[string]any{"detail": detail})
 }
 
-// TaskContextErrUTF8Detail says "Context text is not valid UTF-8: {detail}"
+// TaskContextErrUTF8Detail says "Material text is not valid UTF-8: {detail}"
 // in the language the app shows.
 func TaskContextErrUTF8Detail(detail string) string {
 	return In(i18n.Locale()).TaskContextErrUTF8Detail(detail)
 }
 
-// TaskContextErrUTF8Detail says "Context text is not valid UTF-8: {detail}"
+// TaskContextErrUTF8Detail says "Material text is not valid UTF-8: {detail}"
 // in the language of msgs.
 func (msgs Messages) TaskContextErrUTF8Detail(detail string) string {
 	return Catalog.Format(msgs.locale, "taskContextErrUTF8Detail", map[string]any{"detail": detail})
@@ -6394,11 +6394,11 @@ func (msgs Messages) WorkStatusStarting() string {
 	return Catalog.Format(msgs.locale, "workStatusStarting", nil)
 }
 
-// WorkStatusCompacting says "Compacting context"
+// WorkStatusCompacting says "Compacting conversation history"
 // in the language the app shows.
 func WorkStatusCompacting() string { return In(i18n.Locale()).WorkStatusCompacting() }
 
-// WorkStatusCompacting says "Compacting context"
+// WorkStatusCompacting says "Compacting conversation history"
 // in the language of msgs.
 func (msgs Messages) WorkStatusCompacting() string {
 	return Catalog.Format(msgs.locale, "workStatusCompacting", nil)
@@ -6434,21 +6434,21 @@ func (msgs Messages) WorkStatusWriting() string {
 	return Catalog.Format(msgs.locale, "workStatusWriting", nil)
 }
 
-// IssueNoticeContactMissing says "Contact not found."
+// IssueNoticeContactMissing says "Bot not found."
 // in the language the app shows.
 func IssueNoticeContactMissing() string { return In(i18n.Locale()).IssueNoticeContactMissing() }
 
-// IssueNoticeContactMissing says "Contact not found."
+// IssueNoticeContactMissing says "Bot not found."
 // in the language of msgs.
 func (msgs Messages) IssueNoticeContactMissing() string {
 	return Catalog.Format(msgs.locale, "issueNoticeContactMissing", nil)
 }
 
-// IssueNoticeIssueMissing says "Task not found for this contact."
+// IssueNoticeIssueMissing says "Task not found for this Bot."
 // in the language the app shows.
 func IssueNoticeIssueMissing() string { return In(i18n.Locale()).IssueNoticeIssueMissing() }
 
-// IssueNoticeIssueMissing says "Task not found for this contact."
+// IssueNoticeIssueMissing says "Task not found for this Bot."
 // in the language of msgs.
 func (msgs Messages) IssueNoticeIssueMissing() string {
 	return Catalog.Format(msgs.locale, "issueNoticeIssueMissing", nil)
@@ -6810,11 +6810,11 @@ func (msgs Messages) ResultRevealFailed(detail string) string {
 	return Catalog.Format(msgs.locale, "resultRevealFailed", map[string]any{"detail": detail})
 }
 
-// IssueNoticeFormSwitch says "Finish or cancel the current task form before switching contacts."
+// IssueNoticeFormSwitch says "Finish or cancel the current task form before switching Bots."
 // in the language the app shows.
 func IssueNoticeFormSwitch() string { return In(i18n.Locale()).IssueNoticeFormSwitch() }
 
-// IssueNoticeFormSwitch says "Finish or cancel the current task form before switching contacts."
+// IssueNoticeFormSwitch says "Finish or cancel the current task form before switching Bots."
 // in the language of msgs.
 func (msgs Messages) IssueNoticeFormSwitch() string {
 	return Catalog.Format(msgs.locale, "issueNoticeFormSwitch", nil)
@@ -6952,11 +6952,11 @@ func (msgs Messages) SendNoticePreviousIncomplete() string {
 	return Catalog.Format(msgs.locale, "sendNoticePreviousIncomplete", nil)
 }
 
-// SendNoticeHistoryReloaded says "History reloaded; no retry was sent. Inspect the recorded messages before explicitly sending or removing retained tas…"
+// SendNoticeHistoryReloaded says "History reloaded; no retry was sent. Inspect the recorded messages before explicitly sending or removing retained mat…"
 // in the language the app shows.
 func SendNoticeHistoryReloaded() string { return In(i18n.Locale()).SendNoticeHistoryReloaded() }
 
-// SendNoticeHistoryReloaded says "History reloaded; no retry was sent. Inspect the recorded messages before explicitly sending or removing retained tas…"
+// SendNoticeHistoryReloaded says "History reloaded; no retry was sent. Inspect the recorded messages before explicitly sending or removing retained mat…"
 // in the language of msgs.
 func (msgs Messages) SendNoticeHistoryReloaded() string {
 	return Catalog.Format(msgs.locale, "sendNoticeHistoryReloaded", nil)
@@ -6982,11 +6982,11 @@ func (msgs Messages) SendNoticeIssueAssociation() string {
 	return Catalog.Format(msgs.locale, "sendNoticeIssueAssociation", nil)
 }
 
-// SendNoticeDraftNotCleared says "Task accepted, but its sent context could not be cleared from the next-message draft; reload before sending again."
+// SendNoticeDraftNotCleared says "Task accepted, but its sent materials could not be cleared from the next-message draft; reload before sending again."
 // in the language the app shows.
 func SendNoticeDraftNotCleared() string { return In(i18n.Locale()).SendNoticeDraftNotCleared() }
 
-// SendNoticeDraftNotCleared says "Task accepted, but its sent context could not be cleared from the next-message draft; reload before sending again."
+// SendNoticeDraftNotCleared says "Task accepted, but its sent materials could not be cleared from the next-message draft; reload before sending again."
 // in the language of msgs.
 func (msgs Messages) SendNoticeDraftNotCleared() string {
 	return Catalog.Format(msgs.locale, "sendNoticeDraftNotCleared", nil)
@@ -7004,13 +7004,13 @@ func (msgs Messages) SendNoticeDeliveryUnknown(detail string) string {
 	return Catalog.Format(msgs.locale, "sendNoticeDeliveryUnknown", map[string]any{"detail": detail})
 }
 
-// SendNoticeContactSave says "Could not save this contact; the message was not sent. {detail}"
+// SendNoticeContactSave says "Could not save this Bot; the message was not sent. {detail}"
 // in the language the app shows.
 func SendNoticeContactSave(detail string) string {
 	return In(i18n.Locale()).SendNoticeContactSave(detail)
 }
 
-// SendNoticeContactSave says "Could not save this contact; the message was not sent. {detail}"
+// SendNoticeContactSave says "Could not save this Bot; the message was not sent. {detail}"
 // in the language of msgs.
 func (msgs Messages) SendNoticeContactSave(detail string) string {
 	return Catalog.Format(msgs.locale, "sendNoticeContactSave", map[string]any{"detail": detail})
@@ -7056,11 +7056,11 @@ func (msgs Messages) IssueSendShutdown() string {
 	return Catalog.Format(msgs.locale, "issueSendShutdown", nil)
 }
 
-// IssueSendArchived says "This contact is archived. Restore it before starting task work."
+// IssueSendArchived says "This Bot is archived. Restore it before starting task work."
 // in the language the app shows.
 func IssueSendArchived() string { return In(i18n.Locale()).IssueSendArchived() }
 
-// IssueSendArchived says "This contact is archived. Restore it before starting task work."
+// IssueSendArchived says "This Bot is archived. Restore it before starting task work."
 // in the language of msgs.
 func (msgs Messages) IssueSendArchived() string {
 	return Catalog.Format(msgs.locale, "issueSendArchived", nil)
@@ -7128,11 +7128,11 @@ func (msgs Messages) IssueSendTaskAssociation() string {
 	return Catalog.Format(msgs.locale, "issueSendTaskAssociation", nil)
 }
 
-// IssueSendDraftNotCleared says "Task accepted, but its sent context could not be cleared from the next-run draft; reload before sending again."
+// IssueSendDraftNotCleared says "Task accepted, but its sent materials could not be cleared from the next-run draft; reload before sending again."
 // in the language the app shows.
 func IssueSendDraftNotCleared() string { return In(i18n.Locale()).IssueSendDraftNotCleared() }
 
-// IssueSendDraftNotCleared says "Task accepted, but its sent context could not be cleared from the next-run draft; reload before sending again."
+// IssueSendDraftNotCleared says "Task accepted, but its sent materials could not be cleared from the next-run draft; reload before sending again."
 // in the language of msgs.
 func (msgs Messages) IssueSendDraftNotCleared() string {
 	return Catalog.Format(msgs.locale, "issueSendDraftNotCleared", nil)
@@ -7532,13 +7532,13 @@ func (msgs Messages) IssueHideSentSnapshot() string {
 	return Catalog.Format(msgs.locale, "issueHideSentSnapshot", nil)
 }
 
-// IssueSentContextCount says "{count, plural, one {Sent task context: #} other {Sent task context: #}}"
+// IssueSentContextCount says "{count, plural, one {Sent materials: #} other {Sent materials: #}}"
 // in the language the app shows.
 //
 // The action showing a run's captured caller context with its item count.
 func IssueSentContextCount(count int) string { return In(i18n.Locale()).IssueSentContextCount(count) }
 
-// IssueSentContextCount says "{count, plural, one {Sent task context: #} other {Sent task context: #}}"
+// IssueSentContextCount says "{count, plural, one {Sent materials: #} other {Sent materials: #}}"
 // in the language of msgs.
 //
 // The action showing a run's captured caller context with its item count.
@@ -7546,13 +7546,13 @@ func (msgs Messages) IssueSentContextCount(count int) string {
 	return Catalog.Format(msgs.locale, "issueSentContextCount", map[string]any{"count": count})
 }
 
-// IssueHideSentContext says "Hide sent task context"
+// IssueHideSentContext says "Hide sent materials"
 // in the language the app shows.
 //
 // The action hiding a run's captured caller context.
 func IssueHideSentContext() string { return In(i18n.Locale()).IssueHideSentContext() }
 
-// IssueHideSentContext says "Hide sent task context"
+// IssueHideSentContext says "Hide sent materials"
 // in the language of msgs.
 //
 // The action hiding a run's captured caller context.
@@ -7914,11 +7914,11 @@ func (msgs Messages) RecoveryLocalSaveFailed() string {
 	return Catalog.Format(msgs.locale, "recoveryLocalSaveFailed", nil)
 }
 
-// RecoveryLocalDataUnavailable says "Local contacts and tasks are unavailable. Nagi has not replaced existing data. Choose a compatible recovery copy if y…"
+// RecoveryLocalDataUnavailable says "Local Bots and tasks are unavailable. Nagi has not replaced existing data. Choose a compatible recovery copy if you h…"
 // in the language the app shows.
 func RecoveryLocalDataUnavailable() string { return In(i18n.Locale()).RecoveryLocalDataUnavailable() }
 
-// RecoveryLocalDataUnavailable says "Local contacts and tasks are unavailable. Nagi has not replaced existing data. Choose a compatible recovery copy if y…"
+// RecoveryLocalDataUnavailable says "Local Bots and tasks are unavailable. Nagi has not replaced existing data. Choose a compatible recovery copy if you h…"
 // in the language of msgs.
 func (msgs Messages) RecoveryLocalDataUnavailable() string {
 	return Catalog.Format(msgs.locale, "recoveryLocalDataUnavailable", nil)
@@ -8122,13 +8122,13 @@ func (msgs Messages) RecoveryCancelAction() string {
 	return Catalog.Format(msgs.locale, "recoveryCancelAction", nil)
 }
 
-// RecoveryDataIncluded says "Save a recovery copy of contact and task records, saved drafts, requirements and attached text snapshots. Their saved…"
+// RecoveryDataIncluded says "Save a recovery copy of Bot and task records, saved drafts, requirements and attached text snapshots. Their saved con…"
 // in the language the app shows.
 //
 // C8 workbench recovery GUI: recoveryDataIncluded.
 func RecoveryDataIncluded() string { return In(i18n.Locale()).RecoveryDataIncluded() }
 
-// RecoveryDataIncluded says "Save a recovery copy of contact and task records, saved drafts, requirements and attached text snapshots. Their saved…"
+// RecoveryDataIncluded says "Save a recovery copy of Bot and task records, saved drafts, requirements and attached text snapshots. Their saved con…"
 // in the language of msgs.
 //
 // C8 workbench recovery GUI: recoveryDataIncluded.
@@ -8278,7 +8278,7 @@ func (msgs Messages) RecoveryPreviewTitle() string {
 	return Catalog.Format(msgs.locale, "recoveryPreviewTitle", nil)
 }
 
-// RecoveryPreviewCounts says "{contacts, plural, one {# saved contact} other {# saved contacts}} · {issues, plural, one {# saved task} other {# sa…"
+// RecoveryPreviewCounts says "{contacts, plural, one {# saved Bot} other {# saved Bots}} · {issues, plural, one {# saved task} other {# saved tasks}}"
 // in the language the app shows.
 //
 // C8 workbench recovery GUI: recoveryPreviewCounts.
@@ -8286,7 +8286,7 @@ func RecoveryPreviewCounts(contacts int, issues int) string {
 	return In(i18n.Locale()).RecoveryPreviewCounts(contacts, issues)
 }
 
-// RecoveryPreviewCounts says "{contacts, plural, one {# saved contact} other {# saved contacts}} · {issues, plural, one {# saved task} other {# sa…"
+// RecoveryPreviewCounts says "{contacts, plural, one {# saved Bot} other {# saved Bots}} · {issues, plural, one {# saved task} other {# saved tasks}}"
 // in the language of msgs.
 //
 // C8 workbench recovery GUI: recoveryPreviewCounts.

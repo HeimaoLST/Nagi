@@ -182,7 +182,7 @@ func (l *issueSupplementLedger) add(target issueSupplementTarget, text string, b
 
 func validateSupplementTarget(target issueSupplementTarget) error {
 	if strings.TrimSpace(target.ContactID) == "" || strings.TrimSpace(target.IssueID) == "" {
-		return errors.New("supplement target must include contact and issue")
+		return errors.New("supplement target must include a Bot and an issue")
 	}
 	if target.RequirementsRevision < 0 {
 		return errors.New("supplement target revision must not be negative")

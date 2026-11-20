@@ -57,7 +57,7 @@ func issueToolDefinitions() []issueToolDefinition {
 			},
 		},
 		{
-			Name: "delegate_activity", Description: "Start one independently tracked activity for an authorized user request. Omit assignee_id to delegate to this Bot's own worker. To hand it to another Bot, use an explicit recipient from bot_list and include the materials they need. Reuse the same key to check the same delegation in this turn. A saved activity and a started run are distinct.",
+			Name: "delegate_activity", Description: "Start one independently tracked activity for an authorized user request. Omit assignee_id to delegate to this Bot's own worker. To hand it to another Bot, use an explicit recipient from bot_list and include the Materials they need. Reuse the same key to check the same delegation in this turn. A saved activity and a started run are distinct.",
 			InputSchema: map[string]any{
 				"type": "object", "additionalProperties": false,
 				"properties": map[string]any{

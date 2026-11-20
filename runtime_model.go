@@ -26,7 +26,7 @@ const (
 	runtimeStateExited   = "exited"
 	runtimeStateDraining = "draining"
 
-	startupStageLocalStore = "Local contact store"
+	startupStageLocalStore = "Local profile store"
 )
 
 func newProductRuntimeApp() (*appModel, error) {
@@ -455,21 +455,21 @@ func sendBlockRaw(reason string) string {
 	case blockShutdown:
 		return "The app is shutting down."
 	case blockArchivedSend:
-		return "This contact is archived. Restore it before sending a message."
+		return "This Bot is archived. Restore it before sending a message."
 	case blockApplying:
 		return "Connection settings are being applied. Wait for Pi to become ready."
 	case blockRuntimeNotReady:
 		return "Runtime is not ready."
 	case blockHistoryLoading:
-		return "This contact is still loading its history."
+		return "This Bot is still loading its history."
 	case blockBusy:
-		return "This contact is busy."
+		return "This Bot is busy."
 	case blockCapacity:
 		return "Runtime task capacity is full; retry after a task finishes."
 	case blockAnotherContact:
-		return "Another contact is working; wait for its task to finish before sending here."
+		return "Another Bot is working. Wait for its task to finish before sending here."
 	case blockArchivedIssue:
-		return "This contact is archived. Restore it before starting issue work."
+		return "This Bot is archived. Restore it before starting activity work."
 	case blockIssueActive:
 		return "This issue already has an active execution."
 	case blockWorkCapacity:
@@ -569,7 +569,7 @@ func (a *appModel) reloadSelected() {
 	ct := a.selectedContact()
 	if !a.canReloadPiConversation(ct) {
 		if ct != nil {
-			ct.setSendError("Conversation history is unavailable for this contact or connection.", "", "")
+			ct.setSendError("Conversation history is unavailable for this Bot or connection.", "", "")
 		}
 		return
 	}
@@ -674,13 +674,13 @@ func (a *appModel) ensureContactStore() error {
 		return nil
 	}
 	if !a.storeInitAllowed || strings.TrimSpace(a.storePath) == "" {
-		return errors.New("the local contact store is unavailable")
+		return errors.New("the local profile store is unavailable")
 	}
 	if len(a.contacts) == 0 {
-		return errors.New("there is no current contact to save")
+		return errors.New("there is no current Bot to save")
 	}
 	if _, err := os.Stat(a.storePath); err == nil {
-		return fmt.Errorf("local contact store %s exists but has not been loaded", a.storePath)
+		return fmt.Errorf("local profile store %s exists but has not been loaded", a.storePath)
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
 	}

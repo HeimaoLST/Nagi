@@ -407,7 +407,7 @@ func (a *appModel) createIssueForWithSave(ct *contact, goal, requirements string
 		return nil, errors.New("Enter an issue goal.")
 	}
 	if ct == nil {
-		return nil, errors.New("Contact not found.")
+		return nil, errors.New("Bot not found.")
 	}
 	now := nowMillis()
 	item := &productIssue{

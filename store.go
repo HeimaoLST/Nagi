@@ -165,7 +165,7 @@ func openContactStore(path, defaultWorkspace string) (*contactStore, error) {
 		}
 		return store, nil
 	default:
-		return nil, fmt.Errorf("contact store %s is not accessible: %w", path, err)
+		return nil, fmt.Errorf("profile store %s is not accessible: %w", path, err)
 	}
 }
 
@@ -200,7 +200,7 @@ func (s *contactStore) setIssueToolState(ledger *IssueToolOperationLedger, scope
 func (state storedState) validatePiBindings() error {
 	for _, ct := range state.Contacts {
 		if ct.SessionID != "" && (ct.PiBinding == nil || ct.PiBinding.Engine != "pi" || ct.PiBinding.Context.SessionRef != ct.SessionID) {
-			return fmt.Errorf("contact %s has an invalid Pi session binding", ct.ID)
+			return fmt.Errorf("Bot %s has an invalid Pi session binding", ct.ID)
 		}
 	}
 	for _, issue := range state.Issues {
@@ -474,7 +474,7 @@ func readProductUI(profilePath string) (*productUIState, error) {
 func writeProfileJSON(path string, value any) error {
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return fmt.Errorf("create contact store directory: %w", err)
+		return fmt.Errorf("create profile store directory: %w", err)
 	}
 	data, err := json.MarshalIndent(value, "", "  ")
 	if err != nil {
@@ -622,7 +622,7 @@ func decodeStoredState(path string, data []byte, strict bool) (storedState, erro
 	var err error
 	if strict {
 		if !utf8.Valid(data) {
-			return state, fmt.Errorf("contact store %s is not readable: expected UTF-8 JSON", path)
+			return state, fmt.Errorf("profile store %s is not readable: expected UTF-8 JSON", path)
 		}
 		decoder := json.NewDecoder(bytes.NewReader(data))
 		decoder.DisallowUnknownFields()
@@ -636,27 +636,27 @@ func decodeStoredState(path string, data []byte, strict bool) (storedState, erro
 		err = json.Unmarshal(data, &state)
 	}
 	if err != nil {
-		return state, fmt.Errorf("contact store %s is not readable: %w", path, err)
+		return state, fmt.Errorf("profile store %s is not readable: %w", path, err)
 	}
 	if state.Version != contactStoreVersion {
-		return state, fmt.Errorf("contact store %s has unsupported version %d", path, state.Version)
+		return state, fmt.Errorf("profile store %s has unsupported version %d", path, state.Version)
 	}
 	if len(state.Contacts) == 0 {
-		return state, fmt.Errorf("contact store %s has no contacts", path)
+		return state, fmt.Errorf("profile store %s has no Bots", path)
 	}
 	contacts, issues := map[string]bool{}, map[string]bool{}
 	for _, contact := range state.Contacts {
 		if contact.ID == "" || contacts[contact.ID] {
-			return state, fmt.Errorf("contact store %s has an empty or duplicate contact id", path)
+			return state, fmt.Errorf("profile store %s has an empty or duplicate Bot ID", path)
 		}
 		contacts[contact.ID] = true
 	}
 	for _, issue := range state.Issues {
 		if issue.ID == "" || issues[issue.ID] {
-			return state, fmt.Errorf("contact store %s has an empty or duplicate issue id", path)
+			return state, fmt.Errorf("profile store %s has an empty or duplicate issue ID", path)
 		}
 		if issue.ContactID == "" || !contacts[issue.ContactID] {
-			return state, fmt.Errorf("contact store %s issue %s has an unknown contact id", path, issue.ID)
+			return state, fmt.Errorf("profile store %s issue %s has an unknown Bot ID", path, issue.ID)
 		}
 		issues[issue.ID] = true
 	}
@@ -677,7 +677,7 @@ func validateRecoveryState(state storedState) error {
 				found = found || issue.ID == contact.SelectedIssueID && issue.ContactID == contact.ID
 			}
 			if !found {
-				return fail(fmt.Sprintf("contacts[%d].selected_issue_id", i), "selected issue does not belong to this contact")
+				return fail(fmt.Sprintf("contacts[%d].selected_issue_id", i), "selected issue does not belong to this Bot")
 			}
 		}
 		if pending := contact.PendingSend; pending != nil && (pending.State == "submitting" || pending.State == "unknown" && contact.SessionID == "") {
@@ -685,7 +685,7 @@ func validateRecoveryState(state storedState) error {
 		}
 	}
 	if !selected {
-		return fail("selected", "selected contact is missing")
+		return fail("selected", "selected Bot is missing")
 	}
 	if state.IssueToolOperations == nil {
 		return fail("issue_tool_operations", "missing operation ledger would be synthesized on ordinary load")

@@ -31,14 +31,14 @@ const (
 )
 
 var (
-	errTaskContextName        = errors.New("context name is required")
-	errTaskContextUTF8        = errors.New("context text is not valid UTF-8")
+	errTaskContextName        = errors.New("a Material name is required")
+	errTaskContextUTF8        = errors.New("Material text is not valid UTF-8")
 	errTaskContextNotText     = errors.New("file is not a UTF-8 text file")
-	errTaskContextOversize    = errors.New("context exceeds the 1 MiB send limit")
+	errTaskContextOversize    = errors.New("Materials exceed the 1 MiB send limit")
 	errTaskContextUnsupported = errors.New("unsupported file format; only UTF-8 text files are supported")
-	errTaskContextRead        = errors.New("could not read context file")
-	errTaskContextMissing     = errors.New("context item no longer exists")
-	errTaskContextNoSource    = errors.New("this context item has no file source")
+	errTaskContextRead        = errors.New("could not read the Material file")
+	errTaskContextMissing     = errors.New("the Material no longer exists")
+	errTaskContextNoSource    = errors.New("this Material has no file source")
 )
 
 type taskContextError struct {
@@ -364,7 +364,7 @@ func validateTaskContext(items []taskContextItem) error {
 		}
 		total += taskContextWrapperBytes(item.inputName(), item.Text)
 		if total > taskContextMaxBytes {
-			return taskContextDetail(errTaskContextOversize, fmt.Sprintf("combined context needs %d bytes", total))
+			return taskContextDetail(errTaskContextOversize, fmt.Sprintf("combined Materials need %d bytes", total))
 		}
 	}
 	return nil
