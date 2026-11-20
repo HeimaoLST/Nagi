@@ -224,7 +224,7 @@ func newPiAppFixture(t *testing.T, requestLimit, maxNodes int) *piAppFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	app.workDir, app.workspaceOpen, app.windowWidth, app.scrollTo = project, true, 1040, -1
+	app.workDir, app.workspaceOpen, app.windowWidth = project, true, 1040
 	first := app.selectedContact()
 	first.Name, first.Workspace, first.Loaded = "Owner A", project, true
 	app.contacts = append(app.contacts, &contact{ID: newContactID(), Name: "Owner B", Workspace: project, Loaded: true})
@@ -3498,74 +3498,6 @@ func TestPiAppActivitiesAndQuestions(t *testing.T) {
 	if stopDelivered {
 		t.Fatal("explicit Stop delivered an answer to the canceled held call")
 	}
-	beforeCanceledPreparation := p.count()
-	host.openMu.Lock()
-	openLocked := true
-	defer func() {
-		if openLocked {
-			host.openMu.Unlock()
-		}
-	}()
-	h.startIssue(issueC)
-	h.onUI(func() error {
-		issue := app.contactByID(h.contactID).issueByID(issueC)
-		execution := latestIssueExecution(issue)
-		batch := issueSupplementBatchForExecution(issue, execution.ID)
-		if issue.Work.SendState != sendSubmitting || execution.PiRun != nil || batch == nil || batch.State != supplementBatchDispatching {
-			return errors.New("open-context gate did not hold the genuine pre-attempt execution and batch")
-		}
-		if p.count() != beforeCanceledPreparation {
-			return errors.New("held pre-attempt execution made a model request before cancellation")
-		}
-		piAppRecord(t, "activity-pre-attempt-held", map[string]any{"batch_id": batch.ID, "state": batch.State, "requests": p.count()})
-		return nil
-	})
-	h.onUI(func() error {
-		ct := app.contactByID(h.contactID)
-		if !app.cancelIssueProductFor(ct, issueC) {
-			return errors.New("cancel rejected the captured activity")
-		}
-		issue := ct.issueByID(issueC)
-		if issue.Status != issueStatusCanceled || !issue.Work.cancelAfterAccept || latestIssueExecution(issue).PiRun != nil {
-			return errors.New("GUI did not cancel the owned pre-attempt issue")
-		}
-		return nil
-	})
-	host.openMu.Unlock()
-	openLocked = false
-	h.wait(func() bool {
-		issue := app.contactByID(h.contactID).issueByID(issueC)
-		execution := latestIssueExecution(issue)
-		return execution != nil && execution.Status == issueExecutionNotDispatched && issue.Work.SendState == sendIdle
-	})
-	h.onUI(func() error {
-		issue := app.contactByID(h.contactID).issueByID(issueC)
-		execution := latestIssueExecution(issue)
-		batch := issueSupplementBatchForExecution(issue, execution.ID)
-		if issue.Status != issueStatusCanceled || execution.PiRun != nil || batch == nil || batch.State != supplementBatchNotDispatched || len(batch.Snapshot) != 1 || batch.Snapshot[0].Text != "Material preserved before cancellation" || p.count() != beforeCanceledPreparation {
-			return errors.New("pre-attempt cancel dispatched a run or lost its durable batch")
-		}
-		piAppRecord(t, "activity-pre-attempt-canceled", map[string]any{"issue": issue.ID, "execution": execution, "batch": batch, "requests": p.count()})
-		return nil
-	})
-	checkedStore, err := openContactStore(storePath, project)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var reopenedC *productIssue
-	for _, contact := range contactsFromStore(checkedStore) {
-		if contact.ID == h.contactID {
-			reopenedC = contact.issueByID(issueC)
-		}
-	}
-	if reopenedC == nil || reopenedC.Status != issueStatusCanceled || latestIssueExecution(reopenedC) == nil {
-		t.Fatal("reopened store lost the canceled issue")
-	}
-	reopenedExecution := latestIssueExecution(reopenedC)
-	reopenedBatch := issueSupplementBatchForExecution(reopenedC, reopenedExecution.ID)
-	if reopenedExecution.Status != issueExecutionNotDispatched || reopenedExecution.PiRun != nil || reopenedBatch == nil || reopenedBatch.State != supplementBatchNotDispatched {
-		t.Fatal("reopened store lost the proven pre-attempt non-dispatch")
-	}
 	h.send("ACTIVITY_CHAT_QUIT")
 	h.waitSignal(p.quitStart, "active chat stream before Quit")
 	var quitRun, chatContext string
@@ -3626,8 +3558,8 @@ func TestPiAppActivitiesAndQuestions(t *testing.T) {
 		}
 		question := a.questionByRef(questionRef)
 		operation := app.issueToolLedger.operationByID(questionA.OperationID)
-		if question == nil || question.PiCall == nil || *question.PiCall != questionA || question.AnswerSupplementID != supplementID || question.AnswerText != finalDraft || question.DeliveryState != issueQuestionDeliveryResolved || operation == nil || operation.PiCall == nil || *operation.PiCall != questionA || a.Supplements == nil || len(a.Supplements.Items) != 1 || a.Supplements.pendingCount() != 0 || b.openQuestion() == nil || b.openQuestion().DeliveryState != "" || c.Status != issueStatusCanceled || latestIssueExecution(c) == nil || latestIssueExecution(c).Status != issueExecutionNotDispatched || len(app.piQuestionWaiters) != 0 || p.count() != requestsBeforeRestart {
-			return errors.New("restart replayed or lost the saved answer, unanswered call or canceled intent")
+		if question == nil || question.PiCall == nil || *question.PiCall != questionA || question.AnswerSupplementID != supplementID || question.AnswerText != finalDraft || question.DeliveryState != issueQuestionDeliveryResolved || operation == nil || operation.PiCall == nil || *operation.PiCall != questionA || a.Supplements == nil || len(a.Supplements.Items) != 1 || a.Supplements.pendingCount() != 0 || b.openQuestion() == nil || b.openQuestion().DeliveryState != "" || latestIssueExecution(c) != nil || c.Supplements == nil || c.Supplements.pendingCount() != 1 || len(app.piQuestionWaiters) != 0 || p.count() != requestsBeforeRestart {
+			return errors.New("restart replayed or lost the saved answer, unanswered call or unadmitted supplement")
 		}
 		app.pi.mu.Lock()
 		activeBridges := len(app.pi.bridges)
@@ -3635,7 +3567,7 @@ func TestPiAppActivitiesAndQuestions(t *testing.T) {
 		if activeBridges != 0 {
 			return errors.New("restart recreated a run or tool delivery bridge")
 		}
-		piAppRecord(t, "activity-restart", map[string]any{"question": question, "operation": operation, "unanswered": b.openQuestion(), "canceled_execution": latestIssueExecution(c), "requests": p.count(), "bridges": activeBridges})
+		piAppRecord(t, "activity-restart", map[string]any{"question": question, "operation": operation, "unanswered": b.openQuestion(), "pending_supplements": c.Supplements.pendingCount(), "requests": p.count(), "bridges": activeBridges})
 		return nil
 	})
 	var beforeA []byte

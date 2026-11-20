@@ -62,20 +62,20 @@ func (p *productProvider) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				problem = "provider did not receive the exact Cedar tool answer"
 			}
 		} else if last.Role == "user" {
-			for _, marker := range []string{"SEED_HISTORY", "ASK_CEDAR", "HOLD_COPPER", "CHAT_WHILE_WAITING", "HOLD_SEND"} {
+			for _, marker := range []string{"SEED_HISTORY", "ASK_CEDAR", "ASK_COPPER", "CHAT_WHILE_WAITING", "HOLD_SEND"} {
 				if strings.Contains(string(last.Content), marker) {
 					kind = marker
 					break
 				}
 			}
 		}
-		if kind == "ASK_CEDAR" {
+		if kind == "ASK_CEDAR" || kind == "ASK_COPPER" {
 			waitOffered := false
 			for _, tool := range body.Tools {
 				waitOffered = waitOffered || tool.Function.Name == "issue_wait"
 			}
 			if !waitOffered {
-				problem = "Cedar execution did not offer the product question tool"
+				problem = "activity execution did not offer the product question tool"
 			}
 		}
 		if kind == "" {
@@ -97,7 +97,9 @@ func (p *productProvider) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		piChatResponse(w, "SEEDED_REPLY", "", "", "")
 	case "ASK_CEDAR":
 		piChatResponse(w, "", "issue_wait", "qa-question-cedar", `{"text":"Which cedar should I use?"}`)
-	case "HOLD_COPPER", "HOLD_SEND":
+	case "ASK_COPPER":
+		piChatResponse(w, "", "issue_wait", "qa-question-copper", `{"text":"Which copper should I use?"}`)
+	case "HOLD_SEND":
 		select {
 		case p.arrivals <- kind:
 		case <-r.Context().Done():
@@ -546,30 +548,39 @@ func TestPiProductProcessTargetsConcurrentActivityQuestions(t *testing.T) {
 			ExpectedRevision: get(activityID).Revision, OperationID: operation, ProductText: pi.ProductText{Text: text}})
 		return productExecution(t, productResult(t, got, err), operation, pi.ProductReceiptTarget{ActivityID: activityID})
 	}
+	awaitQuestion := func(activityID, executionID, text string) pi.ProductQuestion {
+		t.Helper()
+		for {
+			event := process.event(t, ctx)
+			if event.Name != "activity.changed" {
+				continue
+			}
+			var change pi.ProductObjectChanged
+			if err := json.Unmarshal(event.Data, &change); err != nil {
+				t.Fatal(err)
+			}
+			if change.ActivityID != activityID {
+				continue
+			}
+			activity := get(activityID)
+			if activity.State != "waitingForAnswer" {
+				continue
+			}
+			if len(activity.Questions) != 1 {
+				t.Fatalf("activity %s did not retain exactly one question: %+v", activityID, activity.Questions)
+			}
+			question := activity.Questions[0]
+			if question.State != "open" || question.Delivery != "" || question.ExecutionID != executionID || question.Text != text || question.Revision == 0 {
+				t.Fatalf("the question did not identify its owning execution: %+v", question)
+			}
+			return question
+		}
+	}
 	f.provider.check(t)
 	cedarRun := start(cedar, "continue-cedar", "ASK_CEDAR")
-	var question pi.ProductQuestion
-	for question.QuestionID == "" {
-		event := process.event(t, ctx)
-		if event.Name != "activity.changed" {
-			continue
-		}
-		var change pi.ProductObjectChanged
-		if err := json.Unmarshal(event.Data, &change); err != nil {
-			t.Fatal(err)
-		}
-		if change.ActivityID == cedar {
-			activity := get(cedar)
-			if activity.State == "waitingForAnswer" && len(activity.Questions) == 1 {
-				question = activity.Questions[0]
-			}
-		}
-	}
-	if question.State != "open" || question.Delivery != "" || question.ExecutionID != cedarRun || question.Text != "Which cedar should I use?" || question.Revision == 0 {
-		t.Fatalf("the Cedar question did not identify its owning run: %+v", question)
-	}
-	copperRun := start(copper, "continue-copper", "HOLD_COPPER")
-	f.provider.await(t, ctx, "HOLD_COPPER")
+	question := awaitQuestion(cedar, cedarRun, "Which cedar should I use?")
+	copperRun := start(copper, "continue-copper", "ASK_COPPER")
+	copperQuestion := awaitQuestion(copper, copperRun, "Which copper should I use?")
 	draft := productSave(t, process, ctx, conversationID, "save-waiting-chat", 0, "CHAT_WHILE_WAITING", nil)
 	chatTarget := pi.ProductReceiptTarget{ConversationID: conversationID}
 	chat, err := process.client.Send(ctx, pi.ProductSendParams{ProductConversationParams: pi.ProductConversationParams{ConversationID: conversationID}, OperationID: "send-waiting-chat", DraftRevision: draft.Revision})
@@ -589,6 +600,12 @@ func TestPiProductProcessTargetsConcurrentActivityQuestions(t *testing.T) {
 	stop := pi.ProductActivityStopParams{ProductActivityExecutionParams: pi.ProductActivityExecutionParams{ProductActivityParams: pi.ProductActivityParams{ActivityID: cedar}, ExecutionID: copperRun}, OperationID: "wrong-stop"}
 	_, err = process.client.StopActivity(ctx, stop)
 	piRejected(t, err, "not_found")
+	if after := get(copper); len(after.Executions) != 1 || after.Executions[0].ExecutionID != copperRun || after.Executions[0].State != "running" {
+		t.Fatalf("wrong-owner Stop changed the held execution: %+v", after.Executions)
+	}
+	if after := get(cedar); after.State != "waitingForAnswer" || len(after.Questions) != 1 || !reflect.DeepEqual(after.Questions[0], question) {
+		t.Fatalf("refused commands changed the waiting activity: %+v", after)
+	}
 	answer.OperationID, answer.QuestionRevision = "answer-cedar", question.Revision
 	answered, err := process.client.AnswerQuestion(ctx, answer)
 	if err != nil || !answered.AnswerSaved || answered.ActivityID != cedar || answered.ExecutionID != cedarRun || answered.QuestionID != question.QuestionID || answered.Revision <= question.Revision {
@@ -628,12 +645,16 @@ func TestPiProductProcessTargetsConcurrentActivityQuestions(t *testing.T) {
 	if err != nil || result.ActivityID != cedar || result.ExecutionID != cedarRun || result.Text != "CEDAR_RESULT" || result.Delivery != "available" {
 		t.Fatalf("exact activity result=%+v error=%v", result, err)
 	}
+	repeatedAnswer, err := process.client.AnswerQuestion(ctx, answer)
+	if err != nil || repeatedAnswer != answered {
+		t.Fatalf("duplicate answer returned %+v, %v, want %+v", repeatedAnswer, err, answered)
+	}
 	wrong := resultParams
 	wrong.ExecutionID = copperRun
 	_, err = process.client.ActivityResult(ctx, wrong)
 	piRejected(t, err, "not_found")
 	process.shutdown(t, ctx)
-	budget := []string{"ASK_CEDAR", "HOLD_COPPER", "CHAT_WHILE_WAITING", "answer-cedar"}
+	budget := []string{"ASK_CEDAR", "ASK_COPPER", "CHAT_WHILE_WAITING", "answer-cedar"}
 	f.provider.check(t, budget...)
 	reopened := startProductProcess(t, f.options)
 	if again := reopened.open(t, ctx); again.StreamID == opened.StreamID {
@@ -647,7 +668,39 @@ func TestPiProductProcessTargetsConcurrentActivityQuestions(t *testing.T) {
 	if err != nil || answerReceipt.State != "accepted" || answerReceipt.Target.ActivityID != cedar || answerReceipt.Target.QuestionID != question.QuestionID {
 		t.Fatalf("reopened answer receipt=%+v error=%v", answerReceipt, err)
 	}
+	stopReceipt, err := reopened.client.Operation(ctx, stop.OperationID)
+	var recordedStop pi.ProductStopResult
+	if err != nil || stopReceipt.OperationID != stop.OperationID || stopReceipt.State != "accepted" ||
+		stopReceipt.Target != (pi.ProductReceiptTarget{ActivityID: copper}) || json.Unmarshal(stopReceipt.Result, &recordedStop) != nil || recordedStop != stopped {
+		t.Fatalf("reopened Stop receipt=%+v error=%v", stopReceipt, err)
+	}
+	duplicateStop, err := reopened.client.StopActivity(ctx, stop)
+	if err != nil || duplicateStop != stopped {
+		t.Fatalf("duplicate Stop after restart returned %+v, %v, want %+v", duplicateStop, err, stopped)
+	}
+	stop.ExecutionID = cedarRun
+	_, err = reopened.client.StopActivity(ctx, stop)
+	piRejected(t, err, "operation_conflict")
+	stoppedAnswer := pi.ProductAnswerParams{ProductActivityExecutionParams: pi.ProductActivityExecutionParams{ProductActivityParams: pi.ProductActivityParams{ActivityID: copper}, ExecutionID: copperRun},
+		QuestionID: copperQuestion.QuestionID, QuestionRevision: copperQuestion.Revision, OperationID: "answer-stopped-copper", ProductText: pi.ProductText{Text: "Keep the answer on the interrupted execution"}}
+	saved, err := reopened.client.AnswerQuestion(ctx, stoppedAnswer)
+	if err != nil || !saved.AnswerSaved || saved.Delivery != "saved" || saved.ExecutionID != copperRun || saved.QuestionID != copperQuestion.QuestionID {
+		t.Fatalf("answer to interrupted execution=%+v error=%v", saved, err)
+	}
 	reopened.shutdown(t, ctx)
+	afterSaved := startProductProcess(t, f.options)
+	afterSaved.open(t, ctx)
+	stoppedActivity, err := afterSaved.client.GetActivity(ctx, copper)
+	if err != nil || len(stoppedActivity.Executions) != 1 || stoppedActivity.Executions[0].ExecutionID != copperRun || stoppedActivity.Executions[0].State != "interrupted" ||
+		len(stoppedActivity.Questions) != 1 || stoppedActivity.Questions[0].QuestionID != copperQuestion.QuestionID || stoppedActivity.Questions[0].Delivery != "saved" ||
+		!reflect.DeepEqual(stoppedActivity.Questions[0].Answer, &stoppedAnswer.ProductText) {
+		t.Fatalf("reopening changed the saved answer or its interrupted execution: %+v, %v", stoppedActivity, err)
+	}
+	duplicateAnswer, err := afterSaved.client.AnswerQuestion(ctx, stoppedAnswer)
+	if err != nil || duplicateAnswer != saved {
+		t.Fatalf("duplicate answer after restart returned %+v, %v, want %+v", duplicateAnswer, err, saved)
+	}
+	afterSaved.shutdown(t, ctx)
 	f.provider.check(t, budget...)
 }
 
