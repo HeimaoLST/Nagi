@@ -730,28 +730,28 @@ func (a *appModel) canStartIssue(ct *contact, issue *productIssue) string {
 		return "The issue owner is no longer available."
 	}
 	if a.shutdownStarted {
-		return sendBlockRaw(blockShutdown)
+		return blockShutdown
 	}
 	if ct.Archived {
-		return sendBlockRaw(blockArchivedIssue)
+		return blockArchivedIssue
 	}
 	if a.demo {
 		return ""
 	}
 	if a.connectionApplying {
-		return sendBlockRaw(blockApplying)
+		return blockApplying
 	}
 	if !a.runtimeAvailableForView() {
-		return sendBlockRaw(blockRuntimeNotReady)
+		return blockRuntimeNotReady
 	}
 	if sessionBusy(issue.Work.SendState, issue.Work.ActiveTaskID) {
-		return sendBlockRaw(blockIssueActive)
+		return blockIssueActive
 	}
 	if a.activeTaskCount() >= a.maxActiveTasks() {
-		return sendBlockRaw(blockCapacity)
+		return blockCapacity
 	}
 	if a.activeWorkTaskCount() >= a.workTaskLimit() {
-		return sendBlockRaw(blockWorkCapacity)
+		return blockWorkCapacity
 	}
 	return ""
 }
