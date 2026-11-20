@@ -413,11 +413,34 @@ func TestPiAppConcurrentActivities(t *testing.T) {
 			return cedar.activity.activity != nil && cedar.activity.activity.ActivityID == id && !cedar.activity.reading
 		})
 	}
-	readResult := func(w *productWorkbench, cedar *contact, run, text string) pi.ProductActivityResult {
+	readResult := func(w *productWorkbench, cedar *contact, run int, executionID, text string) pi.ProductActivityResult {
 		t.Helper()
-		w.frame(func() { cedar.activity.scroll.Y = 1000 })
-		w.click(msg.IssueOpenResultRun(run))
-		w.wait(func() bool { return cedar.activity.result != nil && w.view.HasText(text) })
+		label := msg.IssueOpenResultRun(fmt.Sprint(run))
+		var clickErr error
+		var started bool
+		w.wait(func() bool {
+			p := &cedar.activity
+			if p.reading || p.activityID != firstID || p.activity == nil || len(p.activity.Executions) < run ||
+				p.activity.Executions[run-1].ExecutionID != executionID {
+				return false
+			}
+			p.scroll.Y = 1000
+			w.view.Frame()
+			if p.reading {
+				return false
+			}
+			clickErr = w.view.Click(label)
+			w.view.Frame()
+			started = p.reading
+			return true
+		})
+		if clickErr != nil || !started {
+			t.Fatalf("open result %d for activity %s execution %s: click error=%v read started=%v", run, firstID, executionID, clickErr, started)
+		}
+		w.wait(func() bool {
+			result := cedar.activity.result
+			return result != nil && result.ActivityID == firstID && result.ExecutionID == executionID && w.view.HasText(text)
+		})
 		var result pi.ProductActivityResult
 		w.pump.do(func() { result = *cedar.activity.result })
 		return result
@@ -600,12 +623,12 @@ func TestPiAppConcurrentActivities(t *testing.T) {
 		item := cedar.activity.activity
 		return item != nil && len(item.Executions) == 2 && item.Executions[1].ExecutionID == nextID && item.Executions[1].State == "completed" && !cedar.activity.reading
 	})
-	secondResult := readResult(w, cedar, "2", nextResult)
+	secondResult := readResult(w, cedar, 2, nextID, nextResult)
 	if secondResult.ActivityID != firstID || secondResult.ExecutionID != nextID || secondResult.Text != nextResult || len(secondResult.Files) != 0 {
 		t.Fatalf("the second execution inherited a result or file effect: %+v", secondResult)
 	}
 	w.click(msg.BackLabel())
-	result := readResult(w, cedar, "1", resultText)
+	result := readResult(w, cedar, 1, question.ExecutionID, resultText)
 	if result.ActivityID != firstID || result.ExecutionID != question.ExecutionID || result.Text != resultText {
 		t.Fatalf("result opened against the wrong execution: %+v", result)
 	}
@@ -626,11 +649,11 @@ func TestPiAppConcurrentActivities(t *testing.T) {
 
 	reopened, cedar := open()
 	selectActivity(reopened, cedar, firstGoal, firstID)
-	if got := readResult(reopened, cedar, "2", nextResult); !reflect.DeepEqual(got, secondResult) {
+	if got := readResult(reopened, cedar, 2, nextID, nextResult); !reflect.DeepEqual(got, secondResult) {
 		t.Fatalf("second result changed after restart: %+v", got)
 	}
 	reopened.click(msg.BackLabel())
-	if got := readResult(reopened, cedar, "1", resultText); !reflect.DeepEqual(got, result) {
+	if got := readResult(reopened, cedar, 1, question.ExecutionID, resultText); !reflect.DeepEqual(got, result) {
 		t.Fatalf("result changed after restart: %+v", got)
 	}
 	readCurrentFile(reopened, cedar, revisedContent)
