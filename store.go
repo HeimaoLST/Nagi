@@ -5,6 +5,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -12,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -421,6 +423,7 @@ type productUIState struct {
 	ThemeIDs   appearanceThemeIDs            `json:"themeIds"`
 	Appearance string                        `json:"appearance,omitempty"`
 	Pending    map[string]productPendingSend `json:"pending,omitempty"`
+	RecoveryID string                        `json:"recoveryId,omitempty"`
 
 	PendingActivities map[string]productActivityIntent `json:"pending_activities,omitempty"`
 }
@@ -721,6 +724,64 @@ type storeRecoveryCopy struct {
 	info       os.FileInfo
 }
 
+func productProfileVersion(data []byte) bool {
+	var marker struct {
+		Version int `json:"version"`
+	}
+	return json.Unmarshal(data, &marker) == nil && marker.Version == 1
+}
+
+var errInvalidProductRecovery = errors.New("the current product profile contains unsupported or inconsistent records")
+
+func inspectProductProfileBytes(data []byte, copy bool) (contacts, activities int, err error) {
+	node, worker, err := piPayloadPaths()
+	if err != nil {
+		return 0, 0, err
+	}
+	module := filepath.Join(filepath.Dir(worker), "product-profile.js")
+	const script = `
+import { readFileSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
+const { decodeProductProfile, inspectProductRecovery } = await import(pathToFileURL(process.argv[1]).href);
+try {
+  const data = JSON.parse(readFileSync(0, 'utf8'));
+  if (process.argv[2] === 'copy') {
+    process.stdout.write(JSON.stringify(inspectProductRecovery(data)));
+  } else {
+    decodeProductProfile(data);
+  }
+} catch {
+  process.exitCode = 2;
+}`
+	mode := "profile"
+	if copy {
+		mode = "copy"
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	command := exec.CommandContext(ctx, node, "--input-type=module", "-e", script, module, mode)
+	command.Stdin = bytes.NewReader(data)
+	output, err := command.Output()
+	if err != nil {
+		var exit *exec.ExitError
+		if errors.As(err, &exit) && exit.ExitCode() == 2 {
+			return 0, 0, errInvalidProductRecovery
+		}
+		return 0, 0, fmt.Errorf("could not check the recovery profile: %w", err)
+	}
+	if !copy {
+		return 0, 0, nil
+	}
+	var counts struct {
+		Contacts   int `json:"contacts"`
+		Activities int `json:"activities"`
+	}
+	if err := json.Unmarshal(output, &counts); err != nil {
+		return 0, 0, fmt.Errorf("could not read the recovery profile summary: %w", err)
+	}
+	return counts.Contacts, counts.Activities, nil
+}
+
 type storeRecoveryTarget struct {
 	path string
 	data []byte
@@ -751,6 +812,13 @@ func inspectStoreRecoveryCopy(path string) (*storeRecoveryCopy, error) {
 	data, info, err := readRecoveryFile(path)
 	if err != nil {
 		return nil, err
+	}
+	if productProfileVersion(data) {
+		contacts, activities, err := inspectProductProfileBytes(data, true)
+		if err != nil {
+			return nil, fmt.Errorf("unsupported recovery copy %s: %w", path, err)
+		}
+		return &storeRecoveryCopy{Path: path, Contacts: contacts, Issues: activities, ModifiedAt: info.ModTime(), data: data, info: info}, nil
 	}
 	state, err := decodeStoredState(path, data, true)
 	if err == nil {
@@ -868,6 +936,15 @@ func inspectStoreRecoveryTarget(path string) (*storeRecoveryTarget, error) {
 	if _, err := decodeStoredState(path, data, false); err == nil {
 		return nil, fmt.Errorf("%s: the store is readable; recovery replacement is not allowed", path)
 	}
+	if productProfileVersion(data) {
+		_, _, err := inspectProductProfileBytes(data, false)
+		if err == nil {
+			return nil, fmt.Errorf("%s: the store is readable; recovery replacement is not allowed", path)
+		}
+		if !errors.Is(err, errInvalidProductRecovery) {
+			return nil, err
+		}
+	}
 	return &storeRecoveryTarget{path: path, data: data, info: info}, nil
 }
 
@@ -902,23 +979,54 @@ func restoreStoreRecoveryCopyWithRename(copy *storeRecoveryCopy, target *storeRe
 	if err := target.unchanged(); err != nil {
 		return result, err
 	}
-	state, err := decodeStoredState(copy.Path, copy.data, true)
-	if err == nil {
-		err = validateRecoveryState(state)
-	}
-	if err != nil {
-		return result, err
-	}
-	for i := range state.Issues {
-		if ledger := state.Issues[i].Supplements; ledger != nil {
-			ledger.AutoContinue = false
+	paused := copy.data
+	if productProfileVersion(copy.data) {
+		if _, _, err := inspectProductProfileBytes(copy.data, true); err != nil {
+			return result, err
 		}
+		var saved map[string]json.RawMessage
+		if err := json.Unmarshal(copy.data, &saved); err != nil {
+			return result, err
+		}
+		var recovery struct {
+			ID string          `json:"id"`
+			UI json.RawMessage `json:"ui,omitempty"`
+		}
+		if data := saved["recovery"]; len(data) != 0 {
+			if err := json.Unmarshal(data, &recovery); err != nil {
+				return result, err
+			}
+		}
+		recovery.ID = newContactID()
+		metadata, err := json.Marshal(recovery)
+		if err != nil {
+			return result, err
+		}
+		saved["recovery"] = metadata
+		paused, err = json.Marshal(saved)
+		if err != nil {
+			return result, err
+		}
+		paused = append(paused, '\n')
+	} else {
+		state, err := decodeStoredState(copy.Path, copy.data, true)
+		if err != nil {
+			return result, err
+		}
+		if err := validateRecoveryState(state); err != nil {
+			return result, err
+		}
+		for i := range state.Issues {
+			if ledger := state.Issues[i].Supplements; ledger != nil {
+				ledger.AutoContinue = false
+			}
+		}
+		paused, err = json.MarshalIndent(state, "", "  ")
+		if err != nil {
+			return result, err
+		}
+		paused = append(paused, '\n')
 	}
-	paused, err := json.MarshalIndent(state, "", "  ")
-	if err != nil {
-		return result, err
-	}
-	paused = append(paused, '\n')
 	dir := filepath.Dir(target.path)
 	archive, err := os.CreateTemp(dir, "nagi-unreadable-*.json")
 	if err != nil {

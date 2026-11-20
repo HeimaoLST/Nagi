@@ -12,7 +12,7 @@ import {
   type ActivityState, type BotProfile, type Connection, type Draft, type Execution,
   type Material, type OpenParams, type Operation, type ProductCommand,
 } from './protocol.js';
-import { openProductProfile, readPrivateConnection, saveCredential, writeProductFile, type PrivateConnection, type ProductProfilePaths, type StoredConnection } from './product-profile.js';
+import { backupProductProfile, openProductProfile, readPrivateConnection, saveCredential, writeProductFile, type PrivateConnection, type ProductProfilePaths, type StoredConnection } from './product-profile.js';
 
 const emptyDraft = (): Draft => ({ revision: 0, text: '', materials: [] });
 const newId = randomUUID;
@@ -71,6 +71,7 @@ type StoredExecution = Execution & {
   input: Draft;
   error?: string;
   engineRunId?: string;
+  importedActivityId?: string;
   retained?: object;
 };
 type Conversation = {
@@ -113,6 +114,7 @@ export type ProductProfile = {
   preferences?: { selectedBotId?: string; layout?: object; themeIds?: object; appearance?: string };
   issueToolScopes?: object[];
   untargetedReceipts?: object[];
+  recovery?: { id: string; ui?: object };
 };
 type ProductActor = { conversationId: string } | { activityId: string };
 type LiveExecution = {
@@ -348,6 +350,7 @@ export class Product {
       await respond({ version: 1, streamId: stream.streamId, eventSeq: stream.seq, snapshot: {
         bots: bots.items, nextBotCursor: bots.nextCursor, connection: this.connectionState(),
         ...(this.profile.preferences ? { preferences: this.profile.preferences } : {}),
+        ...(this.profile.recovery ? { recovery: this.profile.recovery } : {}),
       } });
       return;
     }
@@ -494,6 +497,9 @@ export class Product {
         this.effectiveRevision = params.savedRevision;
         return reply;
       }
+      case 'profile.backup':
+        if (this.active.size) stateError('busy', 'Finish or stop active work before saving a recovery copy');
+        return backupProductProfile(this.paths, command.params.destination);
       case 'operation.get':
         return this.operation(command.params.operationId);
     }

@@ -634,7 +634,7 @@ func (a *appModel) finishShutdown() {
 		return
 	}
 	if host := a.productHost(); host != nil {
-		if a.connectionApplying || a.connectionSaveInFlight || a.connectionTesting || a.submissionInFlight > 0 || a.contactHistoryInFlight > 0 {
+		if (a.dataRecovery != nil && a.dataRecovery.inFlight) || a.connectionApplying || a.connectionSaveInFlight || a.connectionTesting || a.submissionInFlight > 0 || a.contactHistoryInFlight > 0 {
 			return
 		}
 		a.shutdownDrainStarted = true

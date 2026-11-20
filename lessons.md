@@ -171,8 +171,8 @@
 ## Accept authoritative binding facts without losing ownership
 
 **Problem:** Source review found exact-string cwd and used-flag comparisons that rejected canonical path aliases or an SDK-proven unused-to-used upgrade.
-**Cause or correction:** A same-host canonical path can represent the selected directory, and saved public entries can establish use beyond the host's conservative knowledge. Owner/context/purpose correlation must still match.
-**Prevention:** Compare canonical path identity, accept only monotonic use evidence, and keep missing used sessions unavailable. Test actual temporary-directory reopen instead of mirroring raw request fields.
+**Cause or correction:** A same-host canonical path can represent the selected directory, and saved public entries can establish use beyond the host's conservative knowledge. Owner/context/purpose correlation must still match. Recovery admission accepted foreign execution IDs because it checked only that each ID existed.
+**Prevention:** Compare canonical path identity, accept only monotonic use evidence, and keep missing used sessions unavailable. Test actual temporary-directory reopen instead of mirroring raw request fields. Correlate execution links with creating receipts or preserved import ownership, reject duplicate associations, and exercise both a foreign link and a valid delegated result.
 
 ## Preserve context notification sequences across reopen
 

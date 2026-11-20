@@ -102,6 +102,12 @@ type ProductSnapshot struct {
 	NextBotCursor *string                 `json:"nextBotCursor"`
 	Connection    ProductConnectionStatus `json:"connection"`
 	Preferences   *ProductPreferences     `json:"preferences,omitempty"`
+	Recovery      *ProductRecovery        `json:"recovery,omitempty"`
+}
+
+type ProductRecovery struct {
+	ID string          `json:"id"`
+	UI json.RawMessage `json:"ui,omitempty"`
 }
 
 type ProductPreferences struct {
@@ -494,6 +500,18 @@ func (p *ProductClient) Operation(ctx context.Context, operationID string) (Prod
 	return productCall[ProductReceipt](ctx, p, "operation.get", struct {
 		ID string `json:"operationId"`
 	}{operationID})
+}
+
+func (p *ProductClient) BackupProfile(ctx context.Context, destination string) (string, error) {
+	result, err := productCall[struct {
+		Path string `json:"path"`
+	}](ctx, p, "profile.backup", struct {
+		Destination string `json:"destination"`
+	}{destination})
+	if err == nil && result.Path == "" {
+		err = p.client.invalidResult("profile.backup")
+	}
+	return result.Path, err
 }
 
 func (c *Client) requestType() string {

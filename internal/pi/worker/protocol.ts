@@ -88,6 +88,7 @@ export const productCommands = Type.Union([
   Type.Object({ method: Type.Literal('connection.save'), params: Type.Object({ configuration: connectionSchema, operationId: id }) }),
   Type.Object({ method: Type.Literal('connection.apply'), params: Type.Object({ savedRevision: revision, operationId: id }) }),
   Type.Object({ method: Type.Literal('operation.get'), params: Type.Object({ operationId: id }) }),
+  Type.Object({ method: Type.Literal('profile.backup'), params: Type.Object({ destination: id }) }),
   Type.Object({ method: Type.Literal('app.shutdown'), params: Type.Object({}) }),
 ]);
 const executionOwner = Type.Union([Type.Object({ conversationId: id }), Type.Object({ activityId: id })]);
@@ -133,7 +134,8 @@ export const productResults = {
   'app.open': Type.Object({ version: Type.Literal(1), streamId: id, eventSeq: revision, snapshot: Type.Object({ bots: Type.Array(botResult),
     nextBotCursor: nullable(id), connection: connectionResult, preferences: Type.Optional(Type.Object({ selectedBotId: Type.Optional(id),
       layout: Type.Optional(Type.Record(Type.String(), Type.Unknown())), themeIds: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
-      appearance: Type.Optional(Type.String()) })) }) }),
+      appearance: Type.Optional(Type.String()) })),
+    recovery: Type.Optional(Type.Object({ id, ui: Type.Optional(Type.Record(Type.String(), Type.Unknown())) })) }) }),
   'bot.list': productPage(botResult),
   'bot.create': botResult,
   'bot.update': botResult,
@@ -157,6 +159,7 @@ export const productResults = {
   'connection.save': Type.Object(connectionRevisions),
   'connection.apply': Type.Object(connectionRevisions),
   'operation.get': operationSchema,
+  'profile.backup': Type.Object({ path: id }),
   'app.shutdown': Type.Object({ drained: Type.Literal(true) }),
 } satisfies Record<Static<typeof productCommands>['method'], object>;
 export const productWireSchema = {

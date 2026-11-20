@@ -122,6 +122,7 @@ type piAppHost struct {
 	defaults       piConfiguration
 
 	activityRevision uint64
+	recoveryID       string
 }
 
 func clonePiConversationBinding(binding *piConversationBinding) *piConversationBinding {
@@ -208,10 +209,6 @@ func (a *appModel) openProductProfile(ctx context.Context, fresh bool, generatio
 	if err != nil {
 		return err
 	}
-	host.productPending = make(map[string]productPendingSend)
-	if local != nil && local.Pending != nil {
-		host.productPending = local.Pending
-	}
 	host.product, err = pi.StartProduct(pi.ProductOptions{
 		NodePath: node, WorkerPath: worker, StateDir: filepath.Join(filepath.Dir(a.storePath), "pi"),
 		ProfilePath: a.storePath, CredentialsPath: a.connectionPath, FreshProfile: fresh,
@@ -251,6 +248,22 @@ func (a *appModel) openProductProfile(ctx context.Context, fresh bool, generatio
 		return err
 	}
 	bots := opened.Snapshot.Bots
+	if recovery := opened.Snapshot.Recovery; recovery != nil {
+		host.recoveryID = recovery.ID
+		if local == nil || local.RecoveryID != recovery.ID {
+			local = nil
+			if len(recovery.UI) != 0 {
+				local = &productUIState{}
+				if err := json.Unmarshal(recovery.UI, local); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	host.productPending = make(map[string]productPendingSend)
+	if local != nil && local.Pending != nil {
+		host.productPending = local.Pending
+	}
 	for cursor := opened.Snapshot.NextBotCursor; cursor != nil; {
 		page, err := host.product.ListBots(ctx, pi.ProductPageParams{Cursor: *cursor})
 		if err != nil {
@@ -340,7 +353,7 @@ func (a *appModel) openProductProfile(ctx context.Context, fresh bool, generatio
 func (a *appModel) persistProductUI(host *piAppHost) error {
 	return writeProfileJSON(productUIPath(a.storePath), productUIState{
 		Selected: a.selectedID(), Layout: storedLayout{LeftWidth: a.railWidth(), RightWidth: a.workWidth(), WorkspaceOpen: a.workspaceOpen},
-		ThemeIDs: a.appearanceThemeIDs, Appearance: normalizeAppearanceMode(a.appearanceMode), Pending: host.productPending,
+		ThemeIDs: a.appearanceThemeIDs, Appearance: normalizeAppearanceMode(a.appearanceMode), Pending: host.productPending, RecoveryID: host.recoveryID,
 		PendingActivities: a.activityIntents,
 	})
 }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -495,9 +496,7 @@ func (a *appModel) settingsAppearanceContent(c *ui.Context, t *ui.Theme) {
 			}
 		}, true)
 	})
-	if a.productHost() == nil {
-		a.settingsDataRecoveryContent(c, t)
-	}
+	a.settingsDataRecoveryContent(c, t)
 }
 
 type dataRecoveryState struct {
@@ -539,9 +538,6 @@ func (a *appModel) dataRecoveryBlocksChanges() bool {
 }
 
 func (a *appModel) dataRecoveryBlocked(restore bool) string {
-	if a.productHost() != nil {
-		return "unavailable"
-	}
 	for _, editor := range a.settingsProfiles {
 		if editor.Busy {
 			return "busy"
@@ -557,6 +553,12 @@ func (a *appModel) dataRecoveryBlocked(restore bool) string {
 		return "busy"
 	}
 	if !restore {
+		if a.productHost() != nil {
+			if a.productActivityClient() == nil || a.localSaveErr != "" {
+				return "saved"
+			}
+			return ""
+		}
 		if a.store == nil || a.localSaveErr != "" || a.storePath == "" {
 			return "saved"
 		}
@@ -663,11 +665,20 @@ func (a *appModel) chooseDataRecovery(restore bool) {
 			selected := paths[0]
 			if !restore {
 				destination := filepath.Join(selected, s.filename)
+				host := a.productHost()
 				go func() {
-					captured, err := inspectStoreRecoveryCopy(path)
-					output := ""
-					if err == nil {
-						output, err = writeStoreRecoveryCopy(captured, destination)
+					var output string
+					var err error
+					if host != nil {
+						ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+						defer cancel()
+						output, err = host.product.BackupProfile(ctx, destination)
+					} else {
+						var captured *storeRecoveryCopy
+						captured, err = inspectStoreRecoveryCopy(path)
+						if err == nil {
+							output, err = writeStoreRecoveryCopy(captured, destination)
+						}
 					}
 					a.updateUI(func() {
 						defer a.finishDataRecoveryIO(s)
@@ -761,7 +772,7 @@ func (a *appModel) settingsDataRecoveryContent(c *ui.Context, t *ui.Theme) {
 					}
 				}
 			})
-			if reason := a.dataRecoveryBlocked(a.store == nil); reason != "" && s.result.Outcome != storeRecoveryVerifiedInstalled && s.result.Outcome != storeRecoveryInstallUnconfirmed {
+			if reason := a.dataRecoveryBlocked(a.store == nil && a.productHost() == nil); reason != "" && s.result.Outcome != storeRecoveryVerifiedInstalled && s.result.Outcome != storeRecoveryInstallUnconfirmed {
 				ui.Text(c, dataRecoveryBlockedText(msgs, reason)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 			}
 			if s.choosing || s.inFlight {

@@ -1,6 +1,10 @@
 import { randomUUID } from 'node:crypto';
-import { readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
-import { RequestError, type ActivityState, type Connection, type Draft, type Execution, type Material, type Operation } from './protocol.js';
+import { closeSync, fstatSync, lstatSync, openSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { isAbsolute } from 'node:path';
+import { Type } from 'typebox';
+import { Value } from 'typebox/value';
+import { RequestError, activityStateSchema, connectionSchema, draftSchema, executionSchema, materialSchema, operationSchema, profileSchema,
+  type ActivityState, type Connection, type Draft, type Execution, type Material, type Operation } from './protocol.js';
 import type { ProductProfile } from './product.js';
 
 export type ProductProfilePaths = {
@@ -53,6 +57,178 @@ type OldProfile = {
   layout?: object; theme_ids?: object; appearance?: string;
 };
 
+const recoveryID = Type.String({ minLength: 1 });
+const counter = Type.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER });
+const revisionRef = Type.Union([counter, Type.Null()]);
+const opaque = Type.Record(Type.String(), Type.Unknown());
+const strict = { additionalProperties: false };
+const bindingSchema = Type.Object({ contextId: recoveryID, sessionRef: recoveryID, connectionRevision: counter,
+  profileRevision: counter, cwd: recoveryID, instructions: Type.String(), codingTools: profileSchema.properties.codingTools, used: Type.Boolean() }, strict);
+const executionRecord = Type.Object({ ...executionSchema.properties, operationId: recoveryID,
+  input: draftSchema, error: Type.Optional(Type.String()), engineRunId: Type.Optional(recoveryID),
+  importedActivityId: Type.Optional(recoveryID), retained: Type.Optional(opaque) }, strict);
+const questionRecord = Type.Object({ questionId: recoveryID, executionId: recoveryID, text: Type.String(), revision: counter,
+  state: Type.Union([Type.Literal('open'), Type.Literal('answered'), Type.Literal('superseded')]),
+  answer: Type.Optional(Type.Object({ text: Type.String(), materials: Type.Array(materialSchema) }, strict)),
+  delivery: Type.Optional(Type.Union([Type.Literal('saved'), Type.Literal('dispatching'), Type.Literal('delivered'),
+    Type.Literal('unknown'), Type.Literal('canceled'), Type.Literal('unavailable')])) }, strict);
+const activityRecord = Type.Object({ activityId: recoveryID, ownerBotId: recoveryID, originConversationId: recoveryID,
+  revision: counter, state: activityStateSchema, goal: Type.String(), requirements: Type.Array(Type.String()),
+  questions: Type.Array(questionRecord), materials: Type.Array(materialSchema), inputFiles: Type.Array(Type.String()),
+  executionIds: Type.Array(recoveryID), binding: Type.Optional(bindingSchema), retained: Type.Optional(opaque),
+  results: Type.Array(Type.Object({ activityId: recoveryID, executionId: recoveryID, text: Type.String(), delivery: Type.Literal('available'),
+    files: Type.Array(Type.Object({ path: recoveryID, callId: recoveryID }, strict)) }, strict)) }, strict);
+const recoveryUISchema = Type.Object({ selected: Type.Optional(recoveryID), layout: opaque, themeIds: opaque,
+  appearance: Type.Optional(Type.String()), recoveryId: Type.Optional(recoveryID),
+  pending: Type.Optional(Type.Record(recoveryID, Type.Object({ conversationId: recoveryID, operationId: recoveryID }, strict))),
+  pending_activities: Type.Optional(Type.Record(recoveryID, Type.Object({ operation_id: recoveryID, bot_id: recoveryID, activity_id: recoveryID,
+    action: Type.Union([Type.Literal('continue'), Type.Literal('answer'), Type.Literal('stop')]), revision: counter,
+    execution_id: Type.Optional(recoveryID), question_id: Type.Optional(recoveryID), text: Type.Optional(Type.String()),
+    materials: Type.Optional(Type.Array(materialSchema)) }, strict))) }, strict);
+const savedProfileSchema = Type.Object({ version: Type.Literal(1),
+  bots: Type.Array(Type.Object({ botId: recoveryID, profile: profileSchema, profileRevision: counter, archived: Type.Boolean(),
+    currentConversationId: recoveryID, retained: Type.Optional(opaque) }, strict)),
+  conversations: Type.Array(Type.Object({ conversationId: recoveryID, botId: recoveryID, revision: counter, draft: draftSchema,
+    binding: Type.Optional(bindingSchema), latestExecutionId: Type.Optional(recoveryID) }, strict)),
+  activities: Type.Array(activityRecord), executions: Type.Array(executionRecord),
+  operations: Type.Array(Type.Object({ method: recoveryID, fingerprint: Type.String(), receipt: operationSchema, reply: opaque,
+    replyError: Type.Optional(Type.Object({ code: recoveryID, message: Type.String(), details: Type.Optional(opaque) }, strict)),
+    connectionRevision: Type.Optional(counter), retained: Type.Optional(opaque) }, strict)),
+  connections: Type.Array(Type.Object({ revision: counter, sourceId: recoveryID, configuration: Type.Omit(connectionSchema, ['apiKey'], strict) }, strict)),
+  savedRevision: revisionRef, appliedRevision: revisionRef,
+  preferences: Type.Optional(Type.Object({ selectedBotId: Type.Optional(recoveryID), layout: Type.Optional(opaque),
+    themeIds: Type.Optional(opaque), appearance: Type.Optional(Type.String()) }, strict)),
+  issueToolScopes: Type.Optional(Type.Array(opaque)), untargetedReceipts: Type.Optional(Type.Array(opaque)),
+  recovery: Type.Optional(Type.Object({ id: recoveryID, ui: Type.Optional(recoveryUISchema) }, strict)),
+}, strict);
+
+export function decodeProductProfile(data: unknown): ProductProfile {
+  if (!Value.Check(savedProfileSchema, data)) {
+    throw new RequestError('profile_unavailable', 'The saved product profile has an unsupported record shape');
+  }
+  const invalid = (): never => { throw new RequestError('profile_unavailable', 'The saved product profile has an invalid record association'); };
+  const bots = new Map(data.bots.map(bot => [bot.botId, bot]));
+  const conversations = new Map(data.conversations.map(conversation => [conversation.conversationId, conversation]));
+  const executions = new Map(data.executions.map(execution => [execution.executionId, execution]));
+  const operations = new Map(data.operations.map(operation => [operation.receipt.operationId, operation]));
+  const activities = new Map(data.activities.map(activity => [activity.activityId, activity]));
+  const connections = new Set(data.connections.map(connection => connection.revision));
+  if (bots.size !== data.bots.length || conversations.size !== data.conversations.length || activities.size !== data.activities.length ||
+      executions.size !== data.executions.length || operations.size !== data.operations.length || connections.size !== data.connections.length ||
+      [data.savedRevision, data.appliedRevision].some(revision => revision !== null && !connections.has(revision))) invalid();
+  type Owner = typeof data.conversations[number] | typeof data.activities[number];
+  const owners = new Map<string, Owner>();
+  const assignOwner = (executionId: string, owner: Owner | undefined) => {
+    const previous = owners.get(executionId);
+    if (!owner || !executions.has(executionId) || (previous && previous !== owner)) return invalid();
+    owners.set(executionId, owner);
+  };
+  for (const { receipt: { target, execution } } of data.operations) {
+    if (!execution) continue;
+    const owner = 'conversationId' in target ? conversations.get(target.conversationId) :
+      'activityId' in target ? activities.get(target.activityId) : undefined;
+    assignOwner(execution.executionId, owner);
+  }
+  for (const execution of data.executions) {
+    if (execution.importedActivityId) assignOwner(execution.executionId, activities.get(execution.importedActivityId));
+    if (execution.retained?.id === execution.executionId) continue;
+    const admission = operations.get(execution.operationId);
+    if (!admission || admission.receipt.execution?.executionId !== execution.executionId) return invalid();
+    const owner = owners.get(execution.executionId);
+    const isActivityStart = admission.method === 'activity.continue';
+    const isConversationSend = admission.method === 'conversation.send' || admission.method === 'imported.conversation.send';
+    if (!owner || ('activityId' in owner ? !isActivityStart : !isConversationSend)) invalid();
+  }
+  const linkedExecutions = new Set<string>();
+  const linkExecution = (executionId: string, owner: Owner) => {
+    if (linkedExecutions.has(executionId) || (!owners.has(executionId) && 'conversationId' in owner)) invalid();
+    assignOwner(executionId, owner);
+    linkedExecutions.add(executionId);
+  };
+  const contextIds = new Set<string>();
+  const sessionRefs = new Set<string>();
+  const binding = (value?: typeof data.conversations[number]['binding']) => {
+    if (!value) return;
+    if (!connections.has(value.connectionRevision) || contextIds.has(value.contextId) || sessionRefs.has(value.sessionRef)) invalid();
+    contextIds.add(value.contextId);
+    sessionRefs.add(value.sessionRef);
+  };
+  for (const bot of data.bots) {
+    if (conversations.get(bot.currentConversationId)?.botId !== bot.botId) invalid();
+  }
+  for (const conversation of data.conversations) {
+    if (!bots.has(conversation.botId)) invalid();
+    if (conversation.latestExecutionId) linkExecution(conversation.latestExecutionId, conversation);
+    binding(conversation.binding);
+  }
+  for (const activity of data.activities) {
+    const ids = new Set(activity.executionIds);
+    const questionIds = new Set(activity.questions.map(question => question.questionId));
+    if (!bots.has(activity.ownerBotId) || !conversations.has(activity.originConversationId) || ids.size !== activity.executionIds.length ||
+        questionIds.size !== activity.questions.length ||
+        activity.questions.some(question => !ids.has(question.executionId)) ||
+        activity.results.some(result => result.activityId !== activity.activityId || !ids.has(result.executionId))) invalid();
+    for (const id of ids) linkExecution(id, activity);
+    binding(activity.binding);
+  }
+  for (const id of executions.keys()) {
+    const owner = owners.get(id);
+    if (!owner || ('activityId' in owner && !linkedExecutions.has(id))) invalid();
+  }
+  for (const [botId, pending] of Object.entries(data.recovery?.ui?.pending ?? {})) {
+    if (conversations.get(pending.conversationId)?.botId !== botId) invalid();
+  }
+  for (const [id, pending] of Object.entries(data.recovery?.ui?.pending_activities ?? {})) {
+    const activity = activities.get(id);
+    if (!activity || pending.activity_id !== id ||
+        (pending.bot_id !== activity.ownerBotId && pending.bot_id !== conversations.get(activity.originConversationId)?.botId) ||
+        (pending.action === 'continue' ? pending.execution_id !== undefined : !pending.execution_id || !activity.executionIds.includes(pending.execution_id)) ||
+        (pending.action === 'answer' ? !activity.questions.some(question => question.questionId === pending.question_id && question.executionId === pending.execution_id) : pending.question_id !== undefined)) invalid();
+  }
+  if (data.recovery?.ui?.selected && !bots.has(data.recovery.ui.selected)) invalid();
+  return data;
+}
+
+export function inspectProductRecovery(data: unknown): { contacts: number; activities: number } {
+  const profile = decodeProductProfile(data);
+  if (!profile.bots.length || profile.executions.some(execution => execution.state === 'running' || execution.state === 'starting') ||
+      profile.activities.some(activity => activity.questions.some(question => question.delivery === 'dispatching'))) {
+    throw new RequestError('profile_unavailable', 'The recovery copy contains work that had not reached a saved boundary');
+  }
+  return { contacts: profile.bots.length, activities: profile.activities.length };
+}
+
+export function backupProductProfile(paths: ProductProfilePaths, destination: string): { path: string } {
+  if (!isAbsolute(destination)) throw new RequestError('invalid_params', 'Choose an absolute location for the recovery copy');
+  const profile = decodeProductProfile(JSON.parse(readFileSync(paths.profilePath, 'utf8')));
+  let ui = profile.recovery?.ui;
+  try {
+    const saved: unknown = JSON.parse(readFileSync(`${paths.profilePath}.ui.json`, 'utf8'));
+    if (!Value.Check(recoveryUISchema, saved)) throw new RequestError('profile_unavailable', 'The saved workbench preferences cannot be backed up');
+    if (saved.recoveryId === profile.recovery?.id) ui = saved;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+  }
+  const snapshot = { ...profile, recovery: { id: randomUUID(), ui } };
+  inspectProductRecovery(snapshot);
+  const data = Buffer.from(JSON.stringify(snapshot) + '\n');
+  const fd = openSync(destination, 'wx', 0o600);
+  const identity = fstatSync(fd);
+  try {
+    try { writeFileSync(fd, data, { flush: true }); }
+    finally { closeSync(fd); }
+    const saved = lstatSync(destination);
+    if (!saved.isFile() || saved.dev !== identity.dev || saved.ino !== identity.ino || !data.equals(readFileSync(destination))) {
+      throw new Error('Recovery copy readback did not match the saved profile');
+    }
+  } catch (error) {
+    const current = lstatSync(destination, { throwIfNoEntry: false });
+    if (current?.dev === identity.dev && current.ino === identity.ino) rmSync(destination);
+    throw error;
+  }
+  return { path: destination };
+}
+
 export function writeProductFile(path: string, value: object): void {
   const temp = `${path}.${randomUUID()}.tmp`;
   try {
@@ -102,7 +278,7 @@ export function openProductProfile(paths: ProductProfilePaths, credentials: Priv
     return empty;
   }
   if (!data || typeof data !== 'object' || !('version' in data)) throw new RequestError('profile_unavailable', 'The product profile has an invalid format');
-  if (data.version === 1 && ['bots', 'conversations', 'activities', 'executions', 'operations', 'connections'].every(key => Array.isArray((data as Record<string, unknown>)[key]))) return data as ProductProfile;
+  if (data.version === 1) return decodeProductProfile(data);
   if (data.version !== 10 || paths.fresh || !('contacts' in data) || !Array.isArray(data.contacts) || !data.contacts.length) {
     throw new RequestError('profile_unavailable', 'The product profile format is unsupported');
   }
@@ -207,7 +383,7 @@ function importCurrentProfile(old: OldProfile, profile: ProductProfile, credenti
         execution.status === 'failed' || execution.status === 'rejected' || execution.status === 'not_dispatched' ? 'failed' : 'unknown';
       profile.executions.push({ executionId: execution.id, operationId: execution.tool_operation_id || randomUUID(), revision: 1, state,
         input: { revision: execution.requirements_revision ?? 0, text: execution.prompt ?? '', materials: execution.context ?? [] },
-        engineRunId: execution.pi_run?.run_id ?? execution.task_id, retained: execution });
+        engineRunId: execution.pi_run?.run_id ?? execution.task_id, importedActivityId: issue.id, retained: execution });
     }
     const questions = (issue.questions ?? []).map(question => {
       const originalTask = question.pi_call?.run_id ?? question.source_task_id;
