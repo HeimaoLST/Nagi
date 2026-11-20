@@ -12,6 +12,7 @@ import (
 
 	"github.com/egoist/mygo"
 
+	"github.com/HeimaoLST/Nagi/internal/pi"
 	"github.com/HeimaoLST/Nagi/locales"
 )
 
@@ -24,6 +25,129 @@ type connectionStartup struct {
 
 func connectionConfigPath(storePath string) string {
 	return filepath.Join(filepath.Dir(storePath), "connection.json")
+}
+
+func productConnectionConfig(view *pi.ProductConnectionView) *connectionConfig {
+	if view == nil {
+		return nil
+	}
+	api := connectionAPIChatCompletions
+	if view.WireAPI == pi.OpenAIResponses {
+		api = connectionAPIResponses
+	}
+	return &connectionConfig{API: api, Endpoint: view.BaseURL, Model: view.Model, ContextTokens: view.ContextTokens,
+		OutputTokens: view.OutputTokens, WorkingDirectory: view.WorkingDirectory, MaxActiveTasks: view.MaxActiveTasks}
+}
+
+func (a *appModel) applyProductConnection(status pi.ProductConnectionStatus) {
+	host := a.productHost()
+	host.productConn = status
+	a.connectionSaved, a.connectionEffective = productConnectionConfig(status.Saved), productConnectionConfig(status.Effective)
+	a.connectionManaged = status.Saved != nil
+	a.runtimeStatus = runtimeStateReady
+	a.runtimeErr, a.runtimeErrKind = "", ""
+	if effective := a.connectionEffective; effective != nil {
+		a.workDir = effective.WorkingDirectory
+		a.runtimeMaxActiveTasks = effective.MaxActiveTasks
+		a.runtimeCapabilitiesLoaded = true
+		return
+	}
+	a.runtimeCapabilitiesLoaded = false
+	if status.Saved == nil {
+		a.runtimeErrKind = runtimeNoticeConnectionRequired
+	}
+}
+
+func (a *appModel) productConnectionPending() bool {
+	host := a.productHost()
+	if host == nil || host.productConn.SavedRevision == nil {
+		return false
+	}
+	effective := host.productConn.EffectiveRevision
+	return effective == nil || *effective != *host.productConn.SavedRevision
+}
+
+func productConnectionInput(config connectionConfig) pi.ProductConnectionInput {
+	return pi.ProductConnectionInput{APIKey: config.APIKey, ProductConnectionSettings: pi.ProductConnectionSettings{
+		WireAPI: piWireAPI(config.API), BaseURL: config.Endpoint, Model: config.Model, ContextTokens: config.ContextTokens,
+		OutputTokens: config.OutputTokens, WorkingDirectory: config.WorkingDirectory, MaxActiveTasks: config.MaxActiveTasks,
+	}}
+}
+
+func (a *appModel) changeProductConnection(host *piAppHost, config *connectionConfig, apply bool) {
+	form := a.connectionForm
+	form.Busy = true
+	form.Error, form.ErrorDetail, form.ReloadBlocked = "", "", ""
+	if config != nil {
+		form.Status = connStatusSaving
+	} else {
+		form.Status = connStatusChecking
+	}
+	a.connectionSaveInFlight = true
+	known := host.productConn.SavedRevision
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		var err error
+		saved := known
+		if config != nil {
+			result, failure := host.product.SaveConnection(ctx, pi.ProductConnectionSaveParams{OperationID: newContactID(), Configuration: productConnectionInput(*config)})
+			saved, err = result.SavedRevision, failure
+		}
+		if err == nil && apply && saved != nil {
+			_, err = host.product.ApplyConnection(ctx, pi.ProductConnectionApplyParams{OperationID: newContactID(), SavedRevision: *saved})
+		}
+		projection, readErr := host.product.Connection(ctx)
+		a.updateUI(func() {
+			a.connectionSaveInFlight = false
+			form.Busy = false
+			form.Status = ""
+			if a.pi != host {
+				return
+			}
+			if readErr == nil {
+				a.applyProductConnection(projection)
+			}
+			if config != nil && saved != nil {
+				form.HasSaved = true
+				form.initial = form.Draft
+			}
+			if err != nil {
+				form.Error = a.connectionSafeMessage(err)
+			} else if readErr != nil {
+				form.Error = a.connectionSafeMessage(readErr)
+			} else if apply {
+				form.Status = connStatusApplied
+			}
+			if a.shutdownStarted {
+				a.finishShutdown()
+			}
+		})
+	}()
+}
+
+func (a *appModel) testProductConnection(host *piAppHost, config connectionConfig) {
+	form := a.connectionForm
+	form.Busy, a.connectionTesting = true, true
+	form.Error, form.ErrorDetail, form.Status = "", "", connStatusTesting
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	a.connectionTestCancel = cancel
+	go func() {
+		err := host.product.TestConnection(ctx, productConnectionInput(config))
+		cancel()
+		a.updateUI(func() {
+			a.connectionTesting, form.Busy, a.connectionTestCancel = false, false, nil
+			if err != nil {
+				form.Status, form.Error, form.ErrorDetail = "", connErrorTestFailed, a.connectionSafeMessage(err)
+			} else {
+				form.Status = connStatusTestCompleted
+				form.StatusArgs = []string{config.Model, config.Endpoint, fmt.Sprint(config.ContextTokens), fmt.Sprint(config.OutputTokens)}
+			}
+			if a.shutdownStarted {
+				a.finishShutdown()
+			}
+		})
+	}()
 }
 
 func readConnectionStartup(storePath string) connectionStartup {
@@ -220,6 +344,10 @@ func (a *appModel) saveConnectionWithApply(config connectionConfig, applyAfterSa
 	if form.Busy || a.shutdownStarted || a.dataRecoveryBlocksChanges() {
 		return
 	}
+	if host := a.productHost(); host != nil {
+		a.changeProductConnection(host, &config, applyAfterSave)
+		return
+	}
 	path := a.connectionPath
 	if path == "" {
 		path = connectionConfigPath(a.storePath)
@@ -294,6 +422,12 @@ func (a *appModel) connectionReloadBlocked() string {
 	if a.connectionSaved == nil {
 		return connBlockedNoSaved
 	}
+	if a.productHost() != nil {
+		if !a.productProfileReady() && a.runtimeStatus != runtimeStateExited {
+			return connBlockedStore
+		}
+		return ""
+	}
 	if a.store == nil || a.localSaveErr != "" {
 		return connBlockedStore
 	}
@@ -355,6 +489,14 @@ func (a *appModel) applyConnection() {
 	form.ReloadBlocked = ""
 	form.Error = ""
 	form.ErrorDetail = ""
+	if host := a.productHost(); host != nil {
+		if a.runtimeStatus == runtimeStateExited {
+			a.reopenProductConnection(host)
+			return
+		}
+		a.changeProductConnection(host, nil, true)
+		return
+	}
 	a.startPiHost()
 }
 
@@ -371,6 +513,10 @@ func (a *appModel) testConnection(config connectionConfig) {
 	a.ensureConnectionForm()
 	form := a.connectionForm
 	if form.Busy || a.connectionTesting || a.shutdownStarted || a.dataRecoveryBlocksChanges() {
+		return
+	}
+	if host := a.productHost(); host != nil {
+		a.testProductConnection(host, config)
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
@@ -485,6 +631,15 @@ func (a *appModel) redactConnectionText(text string) string {
 // finishShutdown waits for admitted operations and their final UI callbacks before draining Pi.
 func (a *appModel) finishShutdown() {
 	if a.quitReady || a.shutdownDrainStarted {
+		return
+	}
+	if host := a.productHost(); host != nil {
+		if a.connectionApplying || a.connectionSaveInFlight || a.connectionTesting || a.submissionInFlight > 0 || a.contactHistoryInFlight > 0 {
+			return
+		}
+		a.shutdownDrainStarted = true
+		a.runtimeStatus = runtimeStateDraining
+		go a.finishProductShutdown(host)
 		return
 	}
 	if a.pi != nil {

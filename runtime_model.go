@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -128,6 +129,52 @@ func newRuntimeApp() (*appModel, error) {
 	}
 	a.reloadAppearanceThemes()
 	return a, nil
+}
+
+func newProductRuntimeApp() (*appModel, error) {
+	storePath, err := filepath.Abs(guiStorePath())
+	if err != nil {
+		return nil, err
+	}
+	_, err = os.Stat(storePath)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return nil, err
+	}
+	a := &appModel{
+		storePath: storePath, connectionPath: connectionConfigPath(storePath), workDir: guiWorkDir(),
+		runtimeStatus: runtimeStateStarting, scrollTo: -1,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := a.openProductProfile(ctx, errors.Is(err, os.ErrNotExist), 1); err != nil {
+		return nil, err
+	}
+	if a.connectionSaved == nil {
+		a.openSettingsTab(settingsTabConnection, settingsSourceConnection)
+	}
+	a.reloadAppearanceThemes()
+	return a, nil
+}
+
+func (a *appModel) applyProductPreferences(preferences *pi.ProductPreferences) {
+	if preferences == nil {
+		return
+	}
+	for i, ct := range a.contacts {
+		if ct.ID == preferences.SelectedBotID {
+			a.selected = i
+			break
+		}
+	}
+	var layout storedLayout
+	if len(preferences.Layout) != 0 && json.Unmarshal(preferences.Layout, &layout) == nil {
+		a.leftPaneWidth = clampPaneWidth(layout.LeftWidth, defaultLeftPaneWidth, minLeftPaneWidth, maxLeftPaneWidth)
+		a.rightPaneWidth = clampPaneWidth(layout.RightWidth, defaultRightPaneWidth, minRightPaneWidth, maxRightPaneWidth)
+	}
+	if len(preferences.ThemeIDs) != 0 {
+		_ = json.Unmarshal(preferences.ThemeIDs, &a.appearanceThemeIDs)
+	}
+	a.appearanceMode = normalizeAppearanceMode(preferences.Appearance)
 }
 
 // newUnavailableApp keeps the window usable when the local contact store cannot
@@ -406,6 +453,9 @@ func (a *appModel) activeWorkTaskCount() int {
 }
 
 func (a *appModel) canReloadPiConversation(ct *contact) bool {
+	if a.productHost() != nil {
+		return a.productProfileReady() && ct != nil && a.contactByID(ct.ID) == ct && ct.SessionID != ""
+	}
 	if a.demo || !a.runtimeAvailableForView() || ct == nil || a.contactByID(ct.ID) != ct || ct.PiBinding == nil {
 		return false
 	}
@@ -415,6 +465,10 @@ func (a *appModel) canReloadPiConversation(ct *contact) bool {
 }
 
 func (a *appModel) reloadContactByID(contactID string) {
+	if host := a.productHost(); host != nil {
+		a.reloadProductConversation(host, a.contactByID(contactID))
+		return
+	}
 	ct := a.contactByID(contactID)
 	if !a.canReloadPiConversation(ct) {
 		return
@@ -507,6 +561,9 @@ func (a *appModel) runtimeAvailableForView() bool {
 	if a.demo {
 		return true
 	}
+	if a.productHost() != nil {
+		return a.productProfileReady() && !a.connectionApplying && a.connectionEffective != nil
+	}
 	host := a.pi
 	if a.shutdownStarted || a.connectionApplying || host == nil || host.client == nil ||
 		a.runtimeStatus != runtimeStateReady || host.generation != a.connectionGeneration {
@@ -526,6 +583,18 @@ func (a *appModel) connectionViewState() connectionViewState {
 	}
 	if a.connectionApplying {
 		return connectionViewApplying
+	}
+	if a.productHost() != nil {
+		switch {
+		case !a.productProfileReady():
+			return connectionViewNotConnected
+		case a.productConnectionPending():
+			return connectionViewSaved
+		case a.connectionEffective != nil:
+			return connectionViewHealthy
+		default:
+			return connectionViewSetup
+		}
 	}
 	if a.pi != nil && a.runtimeStatus == runtimeStateReady {
 		return connectionViewHealthy
@@ -724,6 +793,10 @@ func (a *appModel) cancelSelected() {
 }
 
 func (a *appModel) cancelRuntimeTask(ct *contact, taskID string) {
+	if host := a.productHost(); host != nil {
+		a.stopProductConversation(host, ct, taskID)
+		return
+	}
 	if a.pi == nil || ct == nil || a.contactByID(ct.ID) != ct || ct.PiBinding == nil || taskID == "" || ct.ActiveTaskID != taskID {
 		return
 	}
@@ -775,6 +848,25 @@ func (a *appModel) addRuntimeContact() {
 	workspace := ""
 	if a.demo || a.connectionEffective != nil {
 		workspace = a.workDir
+	}
+	if host := a.productHost(); host != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		bot, err := host.product.CreateBot(ctx, pi.ProductBotCreateParams{OperationID: newContactID(),
+			Profile: pi.ProductBotProfile{Name: locales.In(a.uiLocale).NewContactName(len(a.contacts) + 1), Role: "Assistant", Workspace: workspace},
+		})
+		if err != nil {
+			a.selectedContact().setSendError(a.connectionSafeMessage(err), "", "")
+			return
+		}
+		ct := productContact(bot)
+		ct.Loaded = true
+		ct.Context.onChange = func() error { return a.saveProductDraft(ct) }
+		host.productBots[ct.ID] = bot
+		a.contacts = append(a.contacts, ct)
+		a.selectContact(len(a.contacts) - 1)
+		a.contactSearch, a.focusComposer = "", true
+		return
 	}
 	c := &contact{
 		ID:        newContactID(),
@@ -841,8 +933,10 @@ func (a *appModel) persist() error {
 	if a.demo && a.store == nil {
 		return nil
 	}
-	err := a.ensureContactStore()
-	if err == nil {
+	var err error
+	if host := a.productHost(); host != nil {
+		err = a.persistProductUI(host)
+	} else if err = a.ensureContactStore(); err == nil {
 		a.store.setIssueToolState(a.issueToolLedger, a.issueToolScopes)
 		var themeIDs *appearanceThemeIDs
 		if a.appearanceThemeIDs != (appearanceThemeIDs{}) {
@@ -883,6 +977,13 @@ func (a *appModel) persist() error {
 }
 
 func (a *appModel) draftChanged(ct *contact) {
+	if a.productHost() != nil {
+		ct.draftRev++
+		if err := a.saveProductDraft(ct); err != nil {
+			ct.setSendError(a.connectionSafeMessage(err), "", "")
+		}
+		return
+	}
 	ct.draftRev++
 	a.persist()
 }

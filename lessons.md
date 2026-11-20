@@ -134,9 +134,9 @@
 
 ## Verify exact SDK types before implementing an adapter
 
-**Problem:** The first worker compile used a nonexistent settings setter and treated credential metadata as credential contents. A lab-only TypeScript erasure restriction also conflicted with the compiled-JavaScript delivery path.
-**Cause or correction:** Pinned Pi provides SettingsManager.applyOverrides and an exported InMemoryCredentialStore; credential enumeration is metadata only. Production delivers compiled JavaScript rather than the lab's direct TypeScript entry.
-**Prevention:** Read exact pinned declarations and scan existing exported helpers before coding an adapter. Compile the smallest boundary, preserve actual compiler failures, and align compiler options with the delivered runtime entry.
+**Problem:** The first worker compile used a nonexistent settings setter and treated credential metadata as credential contents. A lab-only TypeScript erasure restriction also conflicted with the compiled-JavaScript delivery path. The product protocol also duplicated transcript types and manually managed file-descriptor flushing.
+**Cause or correction:** Pinned Pi provides SettingsManager.applyOverrides and an exported InMemoryCredentialStore; credential enumeration is metadata only. Production delivers compiled JavaScript rather than the lab's direct TypeScript entry. The user requires reuse of maintained public APIs when they provide the required behavior.
+**Prevention:** Read exact pinned declarations and scan existing exported helpers before coding an adapter. Compile the smallest boundary, preserve actual compiler failures, and align compiler options with the delivered runtime entry. Check existing repository helpers and pinned exports before implementing primitives. Use Pi transcript types, TypeBox schemas and the Node file writer’s flush option where applicable.
 
 ## Bind extension defaults to the owned SDK directory
 
@@ -377,3 +377,9 @@
 **Problem:** Passing the locales directory to the MyGo generator failed to find the project configuration.
 **Cause or correction:** MyGo reads mygo.json from the supplied project directory. The locale catalogs are inputs declared in that file.
 **Prevention:** Run python3 scripts/gui-go.py run github.com/egoist/mygo/cmd/mygo generate . from the checkout and verify the generated accessors against both source catalogs.
+
+## Compare shared execution fields across product views
+
+**Problem:** A no-replay check compared the full conversation execution with the narrower execution embedded in an operation receipt.
+**Cause or correction:** The conversation view adds an operation ID. The receipt reports that ID on the operation itself.
+**Prevention:** Compare the operation and execution IDs at their documented locations and compare the shared state and revision. Count provider calls or durable effects before and after recovery to detect replay.

@@ -61,7 +61,7 @@ Events and replies may arrive in either order. Deduplicate by operation and exec
 
 ## Current profile admission
 
-The worker opens product mode with explicit absolute `--product-profile <contacts.json>` and `--credentials <connection.json>` paths, alongside `--state-dir`. Existing `contacts.json` v10 is admitted in place through a validated candidate and atomic rename. A missing profile is initialized only when the isolated caller explicitly enables `--fresh-product-profile`. The live caller must switch the profile writer and the active wire path together.
+The worker opens product mode with explicit absolute `--product-profile <contacts.json>` and `--credentials <connection.json>` paths, alongside `--state-dir`. Existing `contacts.json` v10 is admitted in place through a validated candidate and atomic rename. The caller explicitly enables `--fresh-product-profile` after observing that the selected path is missing. The live caller switches the profile writer and the active wire path together.
 
 | Current stored records | Product representation |
 | --- | --- |
@@ -71,6 +71,8 @@ The worker opens product mode with explicit absolute `--product-profile <contact
 | Saved v2 connection and captured source records | The private credential file remains the source of keys. The product profile retains nonsecret configuration versions and credential source IDs. No key enters a receipt or returned projection. |
 
 An unanswered question can omit `delivery`. A saved answer returns `saved`. Delivery transitions through `dispatching`, then `delivered` when Pi confirms the exact tool result, or `unknown` when delivery is unsettled. An imported known cancellation retains `canceled`. Restart preserves `saved`, `delivered`, `unknown`, `canceled` and the absence of a receipt. Only an unsettled `dispatching` state resolves to `unknown` on restart.
+
+`main.go` opens the selected profile through the product client before rendering the workbench. The initial snapshot and conversation reads restore each Bot’s draft, captured materials and current conversation ID. The app reads the selected Bot’s history before the first frame. `contacts.json.ui.json` holds the selected Bot, native presentation preferences and pending operation lookup markers. The worker owns the profile and private credential files. Apply can reopen a reaped worker, then reads durable state by its original IDs. Reopening never submits a captured send.
 
 ## Migration and acceptance
 

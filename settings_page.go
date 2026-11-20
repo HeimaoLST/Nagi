@@ -495,7 +495,9 @@ func (a *appModel) settingsAppearanceContent(c *ui.Context, t *ui.Theme) {
 			}
 		}, true)
 	})
-	a.settingsDataRecoveryContent(c, t)
+	if a.productHost() == nil {
+		a.settingsDataRecoveryContent(c, t)
+	}
 }
 
 type dataRecoveryState struct {
@@ -537,6 +539,9 @@ func (a *appModel) dataRecoveryBlocksChanges() bool {
 }
 
 func (a *appModel) dataRecoveryBlocked(restore bool) string {
+	if a.productHost() != nil {
+		return "unavailable"
+	}
 	for _, editor := range a.settingsProfiles {
 		if editor.Busy {
 			return "busy"
@@ -1017,6 +1022,9 @@ func connectionCurrentSummary(config *connectionConfig) string {
 }
 
 func (a *appModel) connectionSavedPending() bool {
+	if a.productHost() != nil {
+		return a.productConnectionPending()
+	}
 	if a.connectionSaved == nil {
 		return false
 	}

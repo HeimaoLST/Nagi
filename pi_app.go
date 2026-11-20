@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -104,6 +105,12 @@ func isPiActivityIssue(issue *productIssue) bool {
 
 type piAppHost struct {
 	client         *pi.Client
+	product        *pi.ProductClient
+	productBots    map[string]pi.ProductBot
+	productDrafts  map[string]pi.ProductDraft
+	productConn    pi.ProductConnectionStatus
+	productEvents  chan struct{}
+	productPending map[string]productPendingSend
 	generation     int
 	mu             sync.Mutex
 	bridges        map[string]*piIssueTools
@@ -150,6 +157,546 @@ func piPayloadPaths() (string, string, error) {
 		return "", "", errors.New("Pi payload directory must be absolute")
 	}
 	return filepath.Join(root, "bin", "node"), filepath.Join(root, "dist", "worker.js"), nil
+}
+
+func (a *appModel) productHost() *piAppHost {
+	if a.pi != nil && a.pi.product != nil {
+		return a.pi
+	}
+	return nil
+}
+
+func (a *appModel) productProfileReady() bool {
+	host := a.productHost()
+	if host == nil || a.shutdownStarted {
+		return false
+	}
+	select {
+	case <-host.product.Done():
+		return false
+	default:
+		return true
+	}
+}
+
+func (a *appModel) openProductProfile(ctx context.Context, fresh bool, generation int) error {
+	node, worker, err := piPayloadPaths()
+	if err != nil {
+		return err
+	}
+	host := &piAppHost{
+		generation: generation, productBots: make(map[string]pi.ProductBot),
+		productDrafts: make(map[string]pi.ProductDraft), productEvents: make(chan struct{}),
+	}
+	local, err := readProductUI(a.storePath)
+	if err != nil {
+		return err
+	}
+	host.productPending = make(map[string]productPendingSend)
+	if local != nil && local.Pending != nil {
+		host.productPending = local.Pending
+	}
+	host.product, err = pi.StartProduct(pi.ProductOptions{
+		NodePath: node, WorkerPath: worker, StateDir: filepath.Join(filepath.Dir(a.storePath), "pi"),
+		ProfilePath: a.storePath, CredentialsPath: a.connectionPath, FreshProfile: fresh,
+		Handlers: pi.ProductHandlers{
+			OnEvent: func(event pi.ProductEvent) {
+				select {
+				case <-host.productEvents:
+					a.updateUI(func() { a.applyProductEvent(host, event) })
+				default:
+				}
+			},
+			OnStreamGap: func() {
+				a.updateUI(func() { a.reconcileProductStream(host) })
+			},
+		},
+	})
+	if err != nil {
+		return err
+	}
+	installed := false
+	defer func() {
+		if !installed {
+			cleanup, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			_, _ = host.product.Kill(cleanup)
+		}
+	}()
+	ready, err := host.product.Ready(ctx)
+	if err != nil {
+		return err
+	}
+	if ready.Runtime.Version != "v22.23.5" {
+		return fmt.Errorf("Pi worker requires Node 22.23.5; got %s", ready.Runtime.Version)
+	}
+	opened, err := host.product.Open(ctx, []int{pi.ProductVersion})
+	if err != nil {
+		return err
+	}
+	bots := opened.Snapshot.Bots
+	for cursor := opened.Snapshot.NextBotCursor; cursor != nil; {
+		page, err := host.product.ListBots(ctx, pi.ProductPageParams{Cursor: *cursor})
+		if err != nil {
+			return err
+		}
+		bots = append(bots, page.Items...)
+		cursor = page.NextCursor
+	}
+	if len(bots) == 0 {
+		bot, err := host.product.CreateBot(ctx, pi.ProductBotCreateParams{
+			OperationID: "initial-bot", Profile: pi.ProductBotProfile{Name: "Nagi", Role: "Assistant"},
+		})
+		if err != nil {
+			return err
+		}
+		bots = append(bots, bot)
+	}
+	contacts := make([]*contact, 0, len(bots))
+	for _, bot := range bots {
+		conversation, err := host.product.GetConversation(ctx, bot.CurrentConversationID)
+		if err != nil {
+			return err
+		}
+		ct := productContact(bot)
+		host.productBots[ct.ID] = bot
+		if draft := conversation.Draft; draft != nil {
+			host.productDrafts[ct.ID] = *draft
+			ct.Draft = draft.Text
+			ct.Context.items = productTaskContext(draft.Materials)
+		}
+		applyProductExecution(ct, conversation.LatestExecution)
+		if pending, ok := host.productPending[ct.ID]; ok && pending.ConversationID == ct.SessionID {
+			receipt, lookupErr := host.product.Operation(ctx, pending.OperationID)
+			if lookupErr == nil && receipt.Target.ConversationID == ct.SessionID && receipt.State != "pending" && receipt.State != "unknown" {
+				delete(host.productPending, ct.ID)
+			} else if ct.SendState == sendIdle {
+				ct.SendState, ct.Status = sendUnknown, statusAttention
+				ct.setSendError(taskContextUncertainSendError, "send-uncertain", "")
+			}
+		}
+		contacts = append(contacts, ct)
+	}
+	selectedID := ""
+	if opened.Snapshot.Preferences != nil {
+		selectedID = opened.Snapshot.Preferences.SelectedBotID
+	}
+	if local != nil && local.Selected != "" {
+		selectedID = local.Selected
+	}
+	selected := contacts[0]
+	for _, ct := range contacts {
+		if ct.ID == selectedID {
+			selected = ct
+			break
+		}
+	}
+	if projection, err := productHistory(ctx, host.product, selected.SessionID); err == nil {
+		selected.Messages, selected.History, selected.Loaded = projection.messages, projection.entries, true
+	} else {
+		selected.LoadErr = safeDiagnostic(err.Error())
+		selected.Unavailable = selected.LoadErr
+	}
+	a.runOnUI(func() {
+		a.pi, a.connectionGeneration, a.contacts = host, host.generation, contacts
+		a.applyProductPreferences(opened.Snapshot.Preferences)
+		a.selected = slices.Index(contacts, selected)
+		if local != nil {
+			a.leftPaneWidth = clampPaneWidth(local.Layout.LeftWidth, defaultLeftPaneWidth, minLeftPaneWidth, maxLeftPaneWidth)
+			a.rightPaneWidth = clampPaneWidth(local.Layout.RightWidth, defaultRightPaneWidth, minRightPaneWidth, maxRightPaneWidth)
+			a.appearanceThemeIDs = local.ThemeIDs
+			a.appearanceMode = normalizeAppearanceMode(local.Appearance)
+		}
+		a.applyProductConnection(opened.Snapshot.Connection)
+		a.connectionForm = newConnectionSettings(a.connectionSaved, a.workDir)
+		a.applyBuiltinCatalog(ready)
+		for _, ct := range contacts {
+			ct.Context.onChange = func() error { return a.saveProductDraft(ct) }
+		}
+		installed = true
+		close(host.productEvents)
+	})
+	return nil
+}
+
+func (a *appModel) persistProductUI(host *piAppHost) error {
+	return writeProfileJSON(productUIPath(a.storePath), productUIState{
+		Selected: a.selectedID(), Layout: storedLayout{LeftWidth: a.railWidth(), RightWidth: a.workWidth(), WorkspaceOpen: a.workspaceOpen},
+		ThemeIDs: a.appearanceThemeIDs, Appearance: normalizeAppearanceMode(a.appearanceMode), Pending: host.productPending,
+	})
+}
+
+func (a *appModel) saveProductDraft(ct *contact) error {
+	host := a.productHost()
+	if !a.productProfileReady() || ct == nil || ct.Archived {
+		return errors.New("the product conversation is unavailable")
+	}
+	materials := make([]pi.ProductMaterial, len(ct.Context.items))
+	for i, item := range ct.Context.items {
+		materials[i] = pi.ProductMaterial{ID: item.ID, Name: item.Name, Source: item.Source, Text: item.Text, Revision: item.Revision}
+	}
+	previous := host.productDrafts[ct.ID]
+	if previous.Text == ct.Draft && slices.Equal(previous.Materials, materials) {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	draft, err := host.product.SaveDraft(ctx, pi.ProductSaveDraftParams{
+		ProductConversationParams: pi.ProductConversationParams{ConversationID: ct.SessionID},
+		ProductText:               pi.ProductText{Text: ct.Draft, Materials: materials}, ExpectedRevision: previous.Revision, OperationID: newContactID(),
+	})
+	if err == nil {
+		host.productDrafts[ct.ID] = draft
+	}
+	return err
+}
+
+func (a *appModel) sendProductConversation(host *piAppHost, ct *contact) bool {
+	if err := a.saveProductDraft(ct); err != nil {
+		ct.setSendError(a.connectionSafeMessage(err), "", "")
+		return false
+	}
+	pending := productPendingSend{ConversationID: ct.SessionID, OperationID: newContactID()}
+	host.productPending[ct.ID] = pending
+	if err := a.persist(); err != nil {
+		delete(host.productPending, ct.ID)
+		ct.setSendError(a.connectionSafeMessage(err), "", "")
+		return false
+	}
+	draft := host.productDrafts[ct.ID]
+	ct.SubmittedDraft, ct.SubmittedRev = draft.Text, ct.draftRev
+	ct.SendState = sendSubmitting
+	ct.clearSendError()
+	a.submissionAsyncStarted()
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		receipt, err := host.product.Send(ctx, pi.ProductSendParams{
+			ProductConversationParams: pi.ProductConversationParams{ConversationID: pending.ConversationID},
+			DraftRevision:             draft.Revision, OperationID: pending.OperationID,
+		})
+		var remote *pi.RemoteError
+		rejected := errors.As(err, &remote)
+		if err != nil && !rejected {
+			lookup, done := context.WithTimeout(context.Background(), 3*time.Second)
+			receipt, _ = host.product.Operation(lookup, pending.OperationID)
+			done()
+		}
+		a.updateUI(func() {
+			defer a.submissionAsyncFinished()
+			if a.pi != host || a.contactByID(ct.ID) != ct || ct.SessionID != pending.ConversationID {
+				return
+			}
+			if receipt.State == "accepted" && receipt.Execution != nil {
+				if ct.SendState == sendSubmitting {
+					applyProductExecution(ct, receipt.Execution)
+				}
+				delete(host.productPending, ct.ID)
+				_ = a.persist()
+				return
+			}
+			if rejected {
+				delete(host.productPending, ct.ID)
+				_ = a.persist()
+				ct.SendState = sendIdle
+				ct.setSendError(a.connectionSafeMessage(err), "", "")
+				return
+			}
+			ct.SendState, ct.Status = sendUnknown, statusAttention
+			ct.setSendError(taskContextUncertainSendError, "send-uncertain", "")
+		})
+	}()
+	return true
+}
+
+func (a *appModel) stopProductConversation(host *piAppHost, ct *contact, execution string) {
+	if ct == nil || execution == "" || ct.ActiveTaskID != execution {
+		return
+	}
+	id := ct.SessionID
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		_, err := host.product.StopConversation(ctx, pi.ProductConversationStopParams{
+			ProductConversationParams: pi.ProductConversationParams{ConversationID: id}, ExecutionID: execution, OperationID: newContactID(),
+		})
+		if err != nil {
+			a.updateUI(func() {
+				if a.pi == host && ct.SessionID == id && ct.ActiveTaskID == execution {
+					ct.setSendError(a.connectionSafeMessage(err), "", "")
+				}
+			})
+		}
+	}()
+}
+
+func (a *appModel) reloadProductConversation(host *piAppHost, ct *contact) {
+	if !a.canReloadPiConversation(ct) {
+		return
+	}
+	ct.historyGen++
+	generation, id := ct.historyGen, ct.SessionID
+	a.historyAsyncStarted()
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		projection, err := productHistory(ctx, host.product, id)
+		a.updateUI(func() {
+			defer a.historyAsyncFinished()
+			if a.pi != host || ct.historyGen != generation || ct.SessionID != id {
+				return
+			}
+			if err != nil {
+				ct.Loaded = false
+				ct.LoadErr = a.connectionSafeMessage(err)
+				ct.Unavailable = ct.LoadErr
+				return
+			}
+			ct.Messages, ct.History = projection.messages, projection.entries
+			ct.Loaded, ct.LoadErr, ct.Unavailable = true, "", ""
+		})
+	}()
+}
+
+func productHistory(ctx context.Context, client *pi.ProductClient, id string) (historyProjection, error) {
+	params := pi.ProductHistoryParams{ProductConversationParams: pi.ProductConversationParams{ConversationID: id}}
+	var projection historyProjection
+	for {
+		page, err := client.History(ctx, params)
+		if err != nil {
+			return historyProjection{}, err
+		}
+		for _, row := range page.Items {
+			kind, from := msgContact, "contact"
+			if row.Role == "user" {
+				kind, from = msgUser, "me"
+			}
+			stamp, _ := time.Parse(time.RFC3339Nano, row.Timestamp)
+			when := formatMillis(stamp.UnixMilli())
+			materials := productTaskContext(row.Materials)
+			projection.messages = append(projection.messages, &message{Key: row.MessageID, MessageID: row.MessageID, Kind: kind, Text: row.Text, Time: when, Context: materials, History: true})
+			projection.entries = append(projection.entries, historyEntry{ID: row.MessageID, Date: when, From: from, Text: row.Text, Context: materials})
+		}
+		if page.NextCursor == nil {
+			return projection, nil
+		}
+		params.Cursor = *page.NextCursor
+	}
+}
+
+func (a *appModel) applyProductEvent(host *piAppHost, event pi.ProductEvent) {
+	if a.pi != host {
+		return
+	}
+	var data pi.ProductExecutionEvent
+	if json.Unmarshal(event.Data, &data) != nil || data.ConversationID == "" {
+		return
+	}
+	for _, ct := range a.contacts {
+		if ct.SessionID != data.ConversationID {
+			continue
+		}
+		switch event.Name {
+		case "execution.started":
+			if ct.ActiveTaskID != data.ExecutionID && host.productPending[ct.ID].OperationID != data.OperationID {
+				return
+			}
+			applyProductExecution(ct, &pi.ProductExecution{ExecutionID: data.ExecutionID, State: "running"})
+			ct.Messages = append(ct.Messages, &message{Key: data.ExecutionID + ":user", Kind: msgUser, Text: ct.SubmittedDraft, Time: nowTime(), TaskID: data.ExecutionID, Context: productTaskContext(host.productDrafts[ct.ID].Materials)})
+		case "execution.textDelta":
+			if ct.ActiveTaskID == data.ExecutionID {
+				item := a.liveText(ct, data.ExecutionID, "pi")
+				if uint64(len(item.Text)) == data.Offset {
+					item.Text += data.Text
+					item.Streaming = true
+				}
+			}
+		case "execution.settled":
+			if ct.ActiveTaskID == data.ExecutionID {
+				applyProductExecution(ct, &pi.ProductExecution{ExecutionID: data.ExecutionID, State: data.State, Error: data.Error})
+				a.reloadProductConversation(host, ct)
+			}
+		case "conversation.changed":
+			a.refreshProductConversation(host, ct, ct.SubmittedRev)
+		}
+		return
+	}
+}
+
+func (a *appModel) refreshProductConversation(host *piAppHost, ct *contact, edit int) {
+	id := ct.SessionID
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		value, err := host.product.GetConversation(ctx, id)
+		if err != nil || value.Draft == nil {
+			return
+		}
+		a.updateUI(func() {
+			if a.pi != host || ct.SessionID != id || value.Draft.Revision < host.productDrafts[ct.ID].Revision {
+				return
+			}
+			host.productDrafts[ct.ID] = *value.Draft
+			if ct.draftRev == edit {
+				ct.Draft = value.Draft.Text
+				ct.Context.items = productTaskContext(value.Draft.Materials)
+			}
+		})
+	}()
+}
+
+func (a *appModel) reconcileProductStream(host *piAppHost) {
+	if a.pi != host {
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if _, err := host.product.Open(ctx, []int{pi.ProductVersion}); err != nil {
+			return
+		}
+		a.updateUI(func() {
+			if a.pi == host {
+				for _, ct := range a.contacts {
+					a.refreshProductConversation(host, ct, ct.draftRev)
+					a.reloadProductConversation(host, ct)
+				}
+			}
+		})
+	}()
+}
+
+func (a *appModel) finishProductShutdown(host *piAppHost) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	outcome, err := host.product.Shutdown(ctx)
+	drained := false
+	select {
+	case <-host.product.CallbacksDone():
+		drained = true
+	case <-ctx.Done():
+		err = errors.Join(err, ctx.Err())
+	}
+	a.updateUI(func() {
+		if a.pi != host {
+			return
+		}
+		if err != nil || !outcome.Reaped || !drained {
+			a.runtimeErrKind = runtimeNoticeRuntimeShutdown
+			if err != nil {
+				a.runtimeErr = a.connectionSafeMessage(err)
+			}
+		}
+		if !outcome.Reaped || !drained {
+			a.shutdownDrainStarted = false
+			return
+		}
+		a.pi, a.quitReady = nil, true
+		if a.requestQuit != nil {
+			a.requestQuit()
+		}
+	})
+}
+
+func (a *appModel) observeProductExit(host *piAppHost) {
+	<-host.product.Done()
+	<-host.product.CallbacksDone()
+	a.updateUI(func() {
+		if a.pi != host || a.shutdownStarted {
+			return
+		}
+		a.runtimeStatus = runtimeStateExited
+		a.runtimeErrKind = runtimeNoticeConnectionLost
+		a.clearBuiltinToolCatalog()
+		for _, ct := range a.contacts {
+			if ct.ActiveTaskID != "" || ct.SendState == sendSubmitting {
+				ct.ActiveTaskID, ct.SendState, ct.Status = "", sendUnknown, statusAttention
+				ct.setSendError(taskContextUncertainSendError, "send-uncertain", "")
+			}
+		}
+	})
+}
+
+func (a *appModel) reopenProductConnection(host *piAppHost) {
+	form := a.connectionForm
+	form.Busy, a.connectionApplying = true, true
+	form.Status = connStatusChecking
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		outcome, _ := host.product.Wait(ctx)
+		var err error
+		if outcome.Reaped {
+			err = a.openProductProfile(ctx, false, host.generation+1)
+		} else {
+			err = errors.New("the previous product worker is still running")
+		}
+		a.updateUI(func() {
+			a.connectionApplying, form.Busy = false, false
+			if err != nil {
+				form.Status, form.Error = "", a.connectionSafeMessage(err)
+			} else {
+				current := a.productHost()
+				go a.observeProductExit(current)
+				if !a.shutdownStarted && a.productConnectionPending() {
+					a.changeProductConnection(current, nil, true)
+				}
+			}
+			if a.shutdownStarted {
+				a.finishShutdown()
+			}
+		})
+	}()
+}
+
+func productContact(bot pi.ProductBot) *contact {
+	profile := bot.Profile
+	var tools *[]string
+	if profile.CodingTools != nil {
+		tools = &profile.CodingTools
+	}
+	return &contact{
+		ID: bot.BotID, Name: profile.Name, Role: profile.Role, Purpose: profile.Purpose,
+		Instructions: profile.Instructions, Workspace: profile.Workspace, BuiltinTools: tools,
+		Archived: bot.Archived, SessionID: bot.CurrentConversationID, Status: statusReady,
+	}
+}
+
+func productTaskContext(materials []pi.ProductMaterial) []taskContextItem {
+	items := make([]taskContextItem, len(materials))
+	for i, item := range materials {
+		items[i] = taskContextItem{ID: item.ID, Name: item.Name, Source: item.Source, Text: item.Text, Revision: item.Revision}
+	}
+	return items
+}
+
+func applyProductExecution(ct *contact, execution *pi.ProductExecution) {
+	ct.ActiveTaskID, ct.SendState, ct.Status = "", sendIdle, statusReady
+	if execution == nil {
+		return
+	}
+	ct.LastTaskID = execution.ExecutionID
+	ct.SessionState = execution.State
+	switch execution.State {
+	case "starting", "running":
+		ct.ActiveTaskID, ct.SendState, ct.Status = execution.ExecutionID, sendAccepted, statusWorking
+	case "unknown":
+		ct.SendState, ct.Status = sendUnknown, statusAttention
+		ct.setSendError(taskContextUncertainSendError, "send-uncertain", "")
+	case "failed":
+		ct.Status = statusAttention
+		ct.setSendError(execution.Error, "", "")
+	}
+}
+
+func (a *appModel) applyBuiltinCatalog(ready pi.Ready) {
+	a.runtimeBuiltinTools = make([]runtimeBuiltinTool, len(ready.BuiltinCatalog.Supported))
+	for i, tool := range ready.BuiltinCatalog.Supported {
+		a.runtimeBuiltinTools[i] = runtimeBuiltinTool{Name: tool.Name, Description: tool.Description}
+	}
+	a.runtimeBuiltinDefaults = append([]string{}, ready.BuiltinCatalog.Defaults...)
+	a.runtimeBuiltinToolsLoaded = true
+	a.runtimeBuiltinToolsErr = ""
 }
 
 func piWireAPI(api string) pi.WireAPI {
@@ -315,13 +862,7 @@ func (a *appModel) startPiHost() {
 				Model: config.Model, ContextTokens: config.ContextTokens, OutputTokens: config.OutputTokens,
 				CredentialSource: private.CredentialSource}
 			host.mu.Unlock()
-			a.runtimeBuiltinTools = make([]runtimeBuiltinTool, len(ready.BuiltinCatalog.Supported))
-			for i, tool := range ready.BuiltinCatalog.Supported {
-				a.runtimeBuiltinTools[i] = runtimeBuiltinTool{Name: tool.Name, Description: tool.Description}
-			}
-			a.runtimeBuiltinDefaults = append([]string{}, ready.BuiltinCatalog.Defaults...)
-			a.runtimeBuiltinToolsLoaded = true
-			a.runtimeBuiltinToolsErr = ""
+			a.applyBuiltinCatalog(ready)
 			a.connectionEffective = &config
 			a.connectionManaged = true
 			a.workDir = config.WorkingDirectory
@@ -472,6 +1013,9 @@ func (a *appModel) sendPiConversation(ct *contact, text string) bool {
 	if err := validateTaskContext(ct.Context.items); err != nil {
 		ct.setSendError(err.Error(), "", "")
 		return false
+	}
+	if host := a.productHost(); host != nil {
+		return a.sendProductConversation(host, ct)
 	}
 	ct.SubmittedDraft, ct.SubmittedRev = text, ct.draftRev
 	ct.pendingSend = &pendingSend{Draft: text, Context: ct.Context.snapshot(), State: "submitting"}

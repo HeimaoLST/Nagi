@@ -139,7 +139,7 @@ func (a *appModel) profileDetail(c *ui.Context, t *ui.Theme, narrow bool) {
 				}
 				a.profileSummaryField(c, t, msgs.ProfileWorkspace(), workspace)
 				session := msgs.ProfileNoSession()
-				if ct.PiBinding != nil {
+				if ct.SessionID != "" {
 					session = msgs.ProfileSession()
 					if !ct.Loaded {
 						session = msgs.ProfileSessionNotLoaded()

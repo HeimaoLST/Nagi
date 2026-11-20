@@ -431,11 +431,10 @@ func (a *appModel) selectContact(i int) {
 	a.composerPanel = ""
 	a.composerFocusContext = false
 	a.highlight = ""
-	if !a.demo {
-		ct := a.contacts[i]
-		if ct.PiBinding != nil && !ct.Loaded && ct.ActiveTaskID == "" {
-			a.reloadContactByID(ct.ID)
-		}
+	a.scrollTo = -1
+	ct := a.contacts[i]
+	if !ct.Loaded && ct.ActiveTaskID == "" && a.canReloadPiConversation(ct) {
+		a.reloadContactByID(ct.ID)
 	}
 }
 

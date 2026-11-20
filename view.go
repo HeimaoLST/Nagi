@@ -482,7 +482,7 @@ func recoveryNotice(c *ui.Context, t *ui.Theme, summary, detail string, expanded
 }
 
 func (a *appModel) recoveryNotice(c *ui.Context, t *ui.Theme, key, summary, detail string, settings bool, disclosure ...func(bool, func())) {
-	localData := key == "startup" && a.runtimeStage == startupStageLocalStore
+	localData := key == "startup" && a.runtimeStage == startupStageLocalStore && a.productHost() == nil
 	detail = a.redactConnectionText(detail)
 	key = "recovery:" + key + ":" + detail
 	var openSettings func()
@@ -549,7 +549,7 @@ func (a *appModel) localSaveNotice(c *ui.Context, t *ui.Theme) {
 	secondaryButton(c, locales.In(c.Locale()).SettingsRetrySave()).Label(locales.In(c.Locale()).SettingsRetrySave()).OnClick(func() { _ = a.persist() })
 }
 
-func (a *appModel) connectionRecoveryNotice(c *ui.Context, t *ui.Theme, state connectionViewState) {
+func (a *appModel) connectionRecoveryNotice(c *ui.Context, t *ui.Theme, state connectionViewState, showRuntimeError bool) {
 	msgs := locales.In(c.Locale())
 	title, hint := msgs.ConnectionStatusSetupNeeded(), msgs.ConnectionRecoverySetupHint()
 	switch state {
@@ -561,7 +561,6 @@ func (a *appModel) connectionRecoveryNotice(c *ui.Context, t *ui.Theme, state co
 			title, hint = msgs.ConnectionRecoveryManagedTitle(), msgs.ConnectionRecoveryManagedHint()
 		}
 	}
-	showRuntimeError := a.hasRuntimeError() && a.runtimeErrKind != runtimeNoticeConnectionRequired
 	runtimeSummary := ""
 	if showRuntimeError {
 		runtimeSummary = a.runtimeRecoverySummary(msgs)
@@ -598,6 +597,8 @@ func (a *appModel) main(c *ui.Context, t *ui.Theme) {
 					a.localSaveNotice(c, t)
 				})
 			}
+			duplicateLocalSave := a.localSaveErr != "" && a.runtimeErrKind == runtimeNoticeStoreSave && a.runtimeErr == a.localSaveErr
+			showRuntimeError := a.hasRuntimeError() && (!duplicateLocalSave || a.runtimeStage == startupStageLocalStore)
 			switch {
 			case a.runtimeStatus == runtimeStateDraining:
 				ui.Text(c, msgs.RuntimeDraining()).FontSize(typeBody).FixedLineHeight(lineBody).Padding(8, 16).TextColor(t.TextMuted)
@@ -607,10 +608,10 @@ func (a *appModel) main(c *ui.Context, t *ui.Theme) {
 					ui.Text(c, msgs.ConnectionRecoveryApplyingHint()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 				})
 			case a.connectionConfigurationBlocked():
-				a.connectionRecoveryNotice(c, t, state)
+				a.connectionRecoveryNotice(c, t, state, showRuntimeError && a.runtimeErrKind != runtimeNoticeConnectionRequired)
 				showConnectionSettings = false
 			case a.hasRuntimeError():
-				if a.localSaveErr == "" || a.runtimeErrKind != runtimeNoticeStoreSave {
+				if showRuntimeError {
 					ui.Column(c).Padding(8, 16).Gap(6).Children(func() {
 						a.recoveryNotice(c, t, "startup", a.runtimeRecoverySummary(msgs), a.runtimeErrorDisplay(msgs)+"\n"+a.runtimeHintDisplay(msgs), true)
 						details := secondaryButton(c, msgs.ConfigurationDetails()).OnClick(func() { a.openAdvancedSettings() })
@@ -900,7 +901,7 @@ func (a *appModel) emptyState(c *ui.Context, t *ui.Theme) {
 		if !a.demo && ct.SessionID != "" && !ct.Loaded {
 			ui.Text(c, msgs.HistoryNotLoadedTitle()).FontSize(typeBody).FontWeight(400).FixedLineHeight(lineBody).TextColor(t.Text)
 			ui.Text(c, msgs.HistoryNotLoadedHint()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
-			if a.runtimeStatus != runtimeStateReady {
+			if !a.canReloadPiConversation(ct) {
 				ui.Text(c, msgs.HistoryRuntimeNotReady()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Warning)
 			}
 			return

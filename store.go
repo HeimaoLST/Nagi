@@ -403,11 +403,49 @@ func (s *contactStore) commitState(candidate storedState) error {
 	if err := candidate.validatePiBindings(); err != nil {
 		return err
 	}
-	dir := filepath.Dir(s.path)
+	if err := writeProfileJSON(s.path, candidate); err != nil {
+		return err
+	}
+	s.state = candidate
+	return nil
+}
+
+type productPendingSend struct {
+	ConversationID string `json:"conversationId"`
+	OperationID    string `json:"operationId"`
+}
+
+type productUIState struct {
+	Selected   string                        `json:"selected,omitempty"`
+	Layout     storedLayout                  `json:"layout"`
+	ThemeIDs   appearanceThemeIDs            `json:"themeIds"`
+	Appearance string                        `json:"appearance,omitempty"`
+	Pending    map[string]productPendingSend `json:"pending,omitempty"`
+}
+
+func productUIPath(profilePath string) string { return profilePath + ".ui.json" }
+
+func readProductUI(profilePath string) (*productUIState, error) {
+	data, err := os.ReadFile(productUIPath(profilePath))
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var state productUIState
+	if err := json.Unmarshal(data, &state); err != nil {
+		return nil, err
+	}
+	return &state, nil
+}
+
+func writeProfileJSON(path string, value any) error {
+	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return fmt.Errorf("create contact store directory: %w", err)
 	}
-	data, err := json.MarshalIndent(candidate, "", "  ")
+	data, err := json.MarshalIndent(value, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -425,11 +463,7 @@ func (s *contactStore) commitState(candidate storedState) error {
 	if err := writeStoreBytes(temp, data); err != nil {
 		return err
 	}
-	if err := os.Rename(tempName, s.path); err != nil {
-		return err
-	}
-	s.state = candidate
-	return nil
+	return os.Rename(tempName, path)
 }
 
 // save writes the current in-memory contacts. It is called from the change

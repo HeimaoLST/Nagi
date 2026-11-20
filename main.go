@@ -30,7 +30,7 @@ func main() {
 		windowOptions.UseContentSize = true
 	}
 	mygo.App.SetName("Nagi")
-	a, err := newRuntimeApp()
+	a, err := newProductRuntimeApp()
 	if err != nil {
 		a = newUnavailableApp(err)
 	}
@@ -67,7 +67,9 @@ func main() {
 			e.PreventDefault()
 			a.drainPiHost()
 		})
-		a.startPiHost()
+		if host := a.productHost(); host != nil {
+			go a.observeProductExit(host)
+		}
 	})
 	if err := mygo.App.Run(); err != nil {
 		log.Fatal(err)

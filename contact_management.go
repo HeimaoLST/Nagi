@@ -1,6 +1,12 @@
 package main
 
-import "strings"
+import (
+	"context"
+	"strings"
+	"time"
+
+	"github.com/HeimaoLST/Nagi/internal/pi"
+)
 
 const (
 	archiveNoticeAlready = "archive-already"
@@ -89,12 +95,89 @@ func (a *appModel) saveContactProfileDraft(draft profileDraft, startNew bool) bo
 	return a.saveContactProfileDraftFor(ct.ID, draft, startNew)
 }
 
+func (a *appModel) updateProductBot(host *piAppHost, ct *contact, entered profileDraft, startNew bool) bool {
+	editor := a.profileEditorFor(ct.ID)
+	draft, problems := validateProfileDraft(entered)
+	if len(problems) != 0 {
+		if editor != nil {
+			editor.Draft, editor.Errors = entered, problems
+		}
+		return false
+	}
+	if problem := a.validateBuiltinToolSelection(ct.BuiltinTools, draft.BuiltinTools); problem != "" {
+		if editor != nil {
+			editor.SetError(problem)
+		}
+		return false
+	}
+	var codingTools []string
+	if draft.BuiltinTools != nil {
+		codingTools = *draft.BuiltinTools
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	bot, err := host.product.UpdateBot(ctx, pi.ProductBotUpdateParams{
+		ProductBotRevisionParams: pi.ProductBotRevisionParams{BotID: ct.ID, ExpectedRevision: host.productBots[ct.ID].ProfileRevision, OperationID: newContactID()},
+		Profile: pi.ProductBotProfile{Name: draft.Name, Role: ct.Role, Purpose: draft.Purpose, Instructions: draft.Instructions,
+			Workspace: draft.Workspace, CodingTools: codingTools}, StartNewConversation: startNew,
+	})
+	if err != nil {
+		if editor != nil {
+			editor.SetError(profileNoticeErrorSave)
+		}
+		return false
+	}
+	projected := productContact(bot)
+	ct.Name, ct.Purpose, ct.Instructions, ct.Workspace, ct.BuiltinTools = projected.Name, projected.Purpose, projected.Instructions, projected.Workspace, projected.BuiltinTools
+	host.productBots[ct.ID] = bot
+	if ct.SessionID != bot.CurrentConversationID {
+		ct.SessionID = bot.CurrentConversationID
+		ct.Messages, ct.History, ct.Loaded = nil, nil, false
+		ct.LoadErr, ct.Unavailable = "", ""
+		applyProductExecution(ct, nil)
+		a.refreshProductConversation(host, ct, ct.draftRev)
+		a.reloadProductConversation(host, ct)
+	}
+	if editor != nil {
+		editor.SetProfile(draft)
+		editor.HasConversation = true
+		editor.Status = profileNoticeSavedDefaults
+	}
+	return true
+}
+
+func (a *appModel) setProductBotArchived(host *piAppHost, ct *contact, archived bool) bool {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	params := pi.ProductBotRevisionParams{BotID: ct.ID, ExpectedRevision: host.productBots[ct.ID].ProfileRevision, OperationID: newContactID()}
+	change, failure, success := host.product.RestoreBot, restoreNoticeSave, restoreNoticeSaved
+	if archived {
+		change, failure, success = host.product.ArchiveBot, archiveNoticeSave, archiveNoticeSaved
+	}
+	bot, err := change(ctx, params)
+	editor := a.profileEditorFor(ct.ID)
+	if err != nil {
+		if editor != nil {
+			editor.SetError(failure)
+		}
+		return false
+	}
+	host.productBots[ct.ID], ct.Archived = bot, bot.Archived
+	if editor != nil {
+		editor.Archived, editor.Status = bot.Archived, success
+	}
+	return true
+}
+
 func (a *appModel) saveContactProfileDraftFor(contactID string, draft profileDraft, startNew bool) bool {
 	ct := a.contactByID(contactID)
 	editor := a.profileEditorFor(contactID)
 	entered := draft
 	if ct == nil {
 		return false
+	}
+	if host := a.productHost(); host != nil {
+		return a.updateProductBot(host, ct, draft, startNew)
 	}
 	if !a.demo && a.ensureContactStore() != nil {
 		if editor != nil {
@@ -210,6 +293,9 @@ func (a *appModel) archiveContact(contactID string) bool {
 	if ct == nil || ct.Archived {
 		return false
 	}
+	if host := a.productHost(); host != nil {
+		return a.setProductBotArchived(host, ct, true)
+	}
 	if !a.demo && a.ensureContactStore() != nil {
 		if editor := a.profileEditorFor(contactID); editor != nil {
 			editor.SetError(archiveNoticeStore)
@@ -250,6 +336,9 @@ func (a *appModel) restoreContact(contactID string) bool {
 	ct := a.contactByID(contactID)
 	if ct == nil || !ct.Archived {
 		return false
+	}
+	if host := a.productHost(); host != nil {
+		return a.setProductBotArchived(host, ct, false)
 	}
 	if !a.demo && a.ensureContactStore() != nil {
 		if editor := a.profileEditorFor(contactID); editor != nil {
