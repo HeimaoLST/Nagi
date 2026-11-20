@@ -12,6 +12,18 @@
 **Cause or correction:** The user requires the revised UI design checklist to govern reviews. Capturing a screenshot and inspecting it are separate steps, and native interaction claims require the applicable native evidence.
 **Prevention:** Scope the checklist items, capture original evidence from the frozen candidate, and record the reviewer and verdict before merge. Keep the existing preview capture available after earlier CI test failures. Apply the checklist verdict to missing evidence and open findings.
 
+## Bind the Settings profile editor when opening Settings
+
+**Problem:** After adding a Bot before configuring a connection, reopening Settings and saving a profile renamed the previously selected Bot.
+**Cause or correction:** Initial connection setup cached the first Bot ID. A later Settings session reused it even after workbench selection changed. Explicitly opening a Bot profile used the correct ID.
+**Prevention:** Bind a fresh generic Settings session to the selected Bot and preserve explicit profile targets and picker choices within that session. Check both Bots by stable ID after saving and reopening.
+
+## Distinguish unknown sends from live work during backup
+
+**Problem:** Settings disabled backup for an imported unknown send that the worker could safely export.
+**Cause or correction:** The UI reused a task count that treats unresolved delivery as busy. The worker permits a snapshot once execution has reached a saved boundary.
+**Prevention:** Exercise backup both with live work and with a settled unknown receipt. Check that reopen preserves the receipt without replay.
+
 ## Use the current candidate without disturbing dirty ownership
 
 **Problem:** The main checkout is an old baseline with preexisting dirty documents and is not the current delivered UI candidate.

@@ -46,7 +46,7 @@ User actions with durable effects use `operationId`. `expectedRevision` is the c
 
 This matrix specifies the target. Verification status is recorded separately for the TypeScript worker, Go client, live MyGo caller and frozen product E2E.
 
-Natural-language instructions enter through `conversation.send`. Product tools invoke the backend's activity handlers inside the TypeScript process. Conversations and activities own independent execution contexts and keep their original product IDs. Starting a new conversation preserves work attached to the earlier conversation. Cross-Bot handoff keeps its existing behavior and uses a separate acceptance scenario from the current independent-Bot milestone. Nagi provides a read-only conversation list rather than the retired History search drawer. Pi context, run and tool-call IDs are internal to the backend.
+Natural-language instructions enter through `conversation.send`. Product tools invoke the backend's activity handlers inside the TypeScript process. Conversations and activities own independent execution contexts and keep their original product IDs. Starting a new conversation preserves work attached to the earlier conversation. Cross-Bot handoff keeps its existing behavior and uses a separate acceptance scenario from the current independent-Bot milestone. Previous chats lists earlier conversations for the selected Bot in pages. Source chat opens the conversation identified by the activity’s originConversationId. Both use a read-only history view. Returning to the current conversation preserves its unsent draft, materials and send target. Pi context, run and tool-call IDs are internal to the backend.
 
 ## Receipts and events
 
