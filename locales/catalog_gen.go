@@ -1496,6 +1496,22 @@ func (msgs Messages) PreviousChats() string {
 	return Catalog.Format(msgs.locale, "previousChats", nil)
 }
 
+// PreviousChatFallback says "Previous chat {number, number}"
+// in the language the app shows.
+//
+// List label for a previous conversation without a recorded opening message
+// preview.
+func PreviousChatFallback(number int) string { return In(i18n.Locale()).PreviousChatFallback(number) }
+
+// PreviousChatFallback says "Previous chat {number, number}"
+// in the language of msgs.
+//
+// List label for a previous conversation without a recorded opening message
+// preview.
+func (msgs Messages) PreviousChatFallback(number int) string {
+	return Catalog.Format(msgs.locale, "previousChatFallback", map[string]any{"number": number})
+}
+
 // SourceChat says "Source chat"
 // in the language the app shows.
 func SourceChat() string { return In(i18n.Locale()).SourceChat() }

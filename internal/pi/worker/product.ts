@@ -38,6 +38,7 @@ export type ProductSession = {
 
 export type ProductEngine = {
   open: (params: OpenParams, tools: ToolDefinition[]) => Promise<ProductSession>;
+  conversationPreview: (sessionRef: string, contextId: string, botId: string) => Promise<{ preview?: string; timestamp?: string }>;
   test: (configuration: Connection) => Promise<void>;
   drain: () => Promise<void>;
   disconnect: () => void;
@@ -430,11 +431,20 @@ export class Product {
       case 'conversation.list': {
         const { botId, cursor, limit } = command.params;
         const bot = this.bot(this.profile, botId);
-        const items = this.profile.conversations.filter(item => item.botId === botId).map(item => ({
-          conversationId: item.conversationId, botId, revision: item.revision,
-          mode: item.conversationId === bot.currentConversationId && !bot.archived ? 'current' : 'readOnly',
-        }));
-        return page(items, item => item.conversationId, `conversations:${botId}`, cursor, limit);
+        const items = this.profile.conversations.filter(item => item.botId === botId);
+        const result = page(items, item => item.conversationId, `conversations:${botId}`, cursor, limit);
+        const summaries = [];
+        for (const item of result.items) {
+          const preview = item.binding?.used
+            ? await this.engine.conversationPreview(item.binding.sessionRef, item.binding.contextId, botId)
+            : {};
+          summaries.push({
+            conversationId: item.conversationId, botId, revision: item.revision,
+            mode: item.conversationId === bot.currentConversationId && !bot.archived ? 'current' : 'readOnly',
+            ...preview,
+          });
+        }
+        return { items: summaries, nextCursor: result.nextCursor };
       }
       case 'conversation.get':
         return this.conversationView(this.conversation(this.profile, command.params.conversationId));

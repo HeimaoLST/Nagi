@@ -789,6 +789,12 @@ func (a *appModel) runProductActivityAction(ct *contact, client *pi.ProductClien
 	}()
 }
 
+type productConversationRow struct {
+	ConversationID string
+	Preview        string
+	Timestamp      time.Time
+}
+
 type productConversationBrowser struct {
 	contact    *contact
 	sourceID   string
@@ -796,7 +802,7 @@ type productConversationBrowser struct {
 	focusBack  bool
 	focusID    string
 	problem    string
-	ids        []string
+	items      []productConversationRow
 	nextCursor *string
 	selectedID string
 	ownerID    string
@@ -844,11 +850,12 @@ func (a *appModel) loadProductConversations(browser *productConversationBrowser,
 				return
 			}
 			if cursor == "" {
-				browser.ids = browser.ids[:0]
+				browser.items = browser.items[:0]
 			}
 			for _, item := range page.Items {
 				if item.BotID == ct.ID && item.Mode == "readOnly" && item.ConversationID != currentID {
-					browser.ids = append(browser.ids, item.ConversationID)
+					timestamp, _ := time.Parse(time.RFC3339Nano, item.Timestamp)
+					browser.items = append(browser.items, productConversationRow{ConversationID: item.ConversationID, Preview: item.Preview, Timestamp: timestamp})
 				}
 			}
 			browser.nextCursor = page.NextCursor

@@ -3,6 +3,7 @@ package main
 import (
 	"strings"
 
+	"github.com/egoist/mygo/i18n"
 	"github.com/egoist/mygo/ui"
 
 	"github.com/HeimaoLST/Nagi/locales"
@@ -128,13 +129,30 @@ func (a *appModel) productConversationsView(c *ui.Context, t *ui.Theme, browser 
 		ui.Scroll(c).Grow(1).FillWidth().TrackScroll(&browser.listScroll).Children(func() {
 			ui.Row(c).FillWidth().Justify(ui.Center).Children(func() {
 				ui.Column(c).FillWidth().MaxWidth(conversationMaxWidth).Padding(8, 16).AlignItems(ui.Start).Gap(4).Children(func() {
-					if len(browser.ids) == 0 && browser.nextCursor == nil && !browser.reading && browser.problem == "" && a.productProfileReady() {
+					if len(browser.items) == 0 && browser.nextCursor == nil && !browser.reading && browser.problem == "" && a.productProfileReady() {
 						a.activityText(c, t, msgs.NoPreviousChats())
 					}
-					for _, id := range browser.ids {
+					for index, item := range browser.items {
+						id := item.ConversationID
+						label := item.Preview
+						if label == "" {
+							label = msgs.PreviousChatFallback(index + 1)
+						}
 						c.Key(id)
-						row := secondaryButton(c, id).Label(id).Disabled(browser.reading || !a.productProfileReady()).OnClick(func() {
+						row := appTooltip(c, secondaryButton(c, "").Label(label), label).
+							FillWidth().MinWidth(0).Disabled(browser.reading || !a.productProfileReady())
+						row.OnClick(func() {
 							a.loadProductTranscript(browser, id)
+						})
+						row.Children(func() {
+							ui.Row(c).FillWidth().MinWidth(0).AlignItems(ui.Center).Gap(12).Children(func() {
+								ui.Text(c, label).FontSize(typeAction).FontWeight(500).FixedLineHeight(lineAction).
+									Grow(1).MinWidth(0).SingleLine().Ellipsis("…").TextColor(t.Text)
+								if !item.Timestamp.IsZero() {
+									date := i18n.FormatDate(c.Locale(), item.Timestamp.Local(), i18n.DateOptions{Date: i18n.MediumStyle, Time: i18n.ShortStyle})
+									ui.Text(c, date).FontSize(typeMeta).FixedLineHeight(lineMeta).Shrink(0).SingleLine().TextColor(t.TextMuted)
+								}
+							})
 						})
 						if browser.focusID == id {
 							row.Focus().ScrollIntoView()
