@@ -340,7 +340,7 @@
 
 **Problem:** A post-Quit window observation returned a new window after the owned visual app had exited0; an exact-path check found a distinct no-argument process with parent1.
 **Cause or correction:** Unconfirmed. The original app exit does not identify the new instance or prove its profile binding. No further UI input was sent; the additional task-owned executable was identity-checked and stopped, with its exit code left unknown.
-**Prevention:** Record the launch PID and verify identity changes around close/observation. Keep isolated profile selection in the bundle entrypoint so an independent launch cannot fall back to user data; do not resume native cases until that boundary is established. Preserve actual process outcomes and distinguish bounded visual observations from lifecycle acceptance.
+**Prevention:** Record the launch PID and verify identity changes around close/observation. Keep isolated profile selection in the bundle entrypoint so an independent launch cannot fall back to user data; do not resume native cases until that boundary is established. Preserve actual process outcomes and distinguish bounded visual observations from lifecycle acceptance. For interactive macOS checks, use LaunchServices activation and verify focus before judging a frame. When copying a synthetic history fixture, rebind its session references to the copied worker state directory so that opening a row exercises the original transcript.
 
 ## Resolve compatibility callers before claiming compilation
 
