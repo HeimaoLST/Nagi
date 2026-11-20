@@ -16,7 +16,7 @@
 
 **Problem:** After adding a Bot before configuring a connection, reopening Settings and saving a profile renamed the previously selected Bot.
 **Cause or correction:** Initial connection setup cached the first Bot ID. A later Settings session reused it even after workbench selection changed. Explicitly opening a Bot profile used the correct ID.
-**Prevention:** Bind a fresh generic Settings session to the selected Bot and preserve explicit profile targets and picker choices within that session. Check both Bots by stable ID after saving and reopening.
+**Prevention:** Bind a fresh generic Settings session to the selected Bot and preserve explicit profile targets and picker choices within that session. Check both Bots by stable ID after saving and reopening. In first-use connection tests, populate the already open editor before invoking its save or test action.
 
 ## Distinguish unknown sends from live work during backup
 
@@ -76,7 +76,7 @@
 
 **Problem:** The lab exported native app/fixture exit zero but not the native worker's individual exit status. The first product-control wrapper also omitted its raw child outcome when interrupted. A later lead preview read recorder results before the validation owner announced terminal release.
 **Cause or correction:** App exit, a mapped helper status and disappearance of a child do not prove that child's exit code. Unexported child outcomes remain unknown. Recorder output files can appear before the actual HC terminal receipt and lease release; their existence is not process-completion evidence.
-**Prevention:** Correlate each owned child with its actual wait result and export raw return code and signal before mapping a helper exit, including interrupted runs. Keep app, worker, provider and cleanup outcomes separate. Release test gates, complete owned process/server cleanup, then snapshot final provider request counts; an earlier snapshot can miss requests during failure cleanup. The lead must also wait for the actual terminal and owner release before reading results for manual analysis.
+**Prevention:** Correlate each owned child with its actual wait result and export raw return code and signal before mapping a helper exit, including interrupted runs. Keep app, worker, provider and cleanup outcomes separate. Release test gates, complete owned process/server cleanup, then snapshot final provider request counts; an earlier snapshot can miss requests during failure cleanup. The lead must also wait for the actual terminal and owner release before reading results for manual analysis. For intentional process loss, assert that the signaled worker was reaped and the desktop observed its exit before using Apply to reconnect.
 
 ## Contain the entire optional observer boundary
 
@@ -134,9 +134,9 @@
 
 ## Complete the worktree lifecycle
 
-**Problem:** Completed tasks left historical worktrees and local branches behind. A proposed fixed two-worktree limit also misread the user's intent.
+**Problem:** Completed tasks left historical worktrees and local branches behind. A proposed fixed two-worktree limit also misread the user's intent. A tagged Go build generated its test runner while another writer removed test functions, leaving references to names that no longer existed.
 **Cause or correction:** Worktrees isolate conflicting features, fixes and validation; their number follows actual needs. Testing must use a committed frozen candidate. The user requested direct deletion of confirmed obsolete resources without new archives.
-**Prevention:** Assign every temporary worktree an owner, purpose and completion condition. Stop writes before validation, collect the result, then remove completed worktrees and temporary branches after checking live path dependencies. Preserve product data and original acceptance evidence.
+**Prevention:** Assign every temporary worktree an owner, purpose and completion condition. Stop writes before validation, collect the result, then remove completed worktrees and temporary branches after checking live path dependencies. Preserve product data and original acceptance evidence. Run from the committed, immutable checkout even when the build has exclusive use of the local Go toolchain.
 
 ## Show requested team sessions in the product Space
 
