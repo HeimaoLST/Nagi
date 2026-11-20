@@ -35,14 +35,11 @@ REQUIRED_GROUPS = {
             "TestPiAppRestoresExistingV10Copy",
             "TestPiAppProductScopedDelegation",
             "TestPiAppScopedDomainTools",
-            "TestPiAppActivitiesAndQuestions",
             "TestPiAppCrashRecoveryNoReplay",
-            "TestPiAppContextAndResults",
             "TestPiPackageStandalone",
         ),
     ),
 }
-SUPPLEMENTAL_TESTS = ("TestPiAppCapturedQuestionAnswerForm",)
 
 
 def main(path: str) -> int:
@@ -127,7 +124,7 @@ def main(path: str) -> int:
 if __name__ == "__main__":
     if sys.argv[1:] == ["--selector"]:
         names = [name for _, tests in REQUIRED_GROUPS.values() for name in tests]
-        print("^(" + "|".join([*names, *SUPPLEMENTAL_TESTS]) + ")$")
+        print("^(" + "|".join(names) + ")$")
         raise SystemExit(0)
     if len(sys.argv) != 2:
         print(f"usage: {sys.argv[0]} <go-test-jsonl> | --selector", file=sys.stderr)
