@@ -580,33 +580,27 @@ func TestResponsivePseudoExpandedSettingsLabel(t *testing.T) {
 	}
 }
 func TestResponsive899To900FocusCounterpart(t *testing.T) {
-	for _, kind := range []detailKind{detailProfile} {
-		t.Run(string(kind), func(t *testing.T) {
-			a, _ := workspaceTestApp(t)
-			a.windowWidth = 899
-			a.workspaceOpen = false
-			a.detail = ""
-			a.openDetail(kind)
-			tr := ui.NewTester(a.view, 899, 640)
-			tr.Frame()
-			pageLabel := "Close profile"
-			if !a.detailPageActive() || !tr.Focused(pageLabel) {
-				t.Fatalf("899 %s page focus = page=%v focused=%v", kind, a.detailPageActive(), tr.Focused(pageLabel))
-			}
-			a.windowWidth = 900
-			tr.SetSize(900, 640)
-			tr.Frame()
-			wideLabel := "Close profile"
-			if a.detailPageActive() || a.workOverlay() || !tr.Focused(wideLabel) {
-				t.Fatalf("900 %s counterpart focus = page=%v overlay=%v focused=%v", kind, a.detailPageActive(), a.workOverlay(), tr.Focused(wideLabel))
-			}
-			a.windowWidth = 899
-			tr.SetSize(899, 640)
-			tr.Frame()
-			if !a.detailPageActive() || !tr.Focused(pageLabel) {
-				t.Fatalf("899 return %s focus = page=%v focused=%v", kind, a.detailPageActive(), tr.Focused(pageLabel))
-			}
-		})
+	a, ct := workspaceTestApp(t)
+	a.windowWidth = 899
+	a.workspaceOpen = false
+	a.openContactProfile(ct.ID)
+	tr := ui.NewTester(a.view, 899, 640)
+	tr.Frame()
+	closeLabel := locales.In("en").ProfileClose()
+	if !a.detailPageActive() || !tr.Focused(closeLabel) {
+		t.Fatalf("899 profile page focus: page=%v focused=%v", a.detailPageActive(), tr.Focused(closeLabel))
+	}
+	a.windowWidth = 900
+	tr.SetSize(900, 640)
+	tr.Frame()
+	if a.detailPageActive() || a.workOverlay() || !tr.Focused(closeLabel) {
+		t.Fatalf("900 profile close focus: page=%v overlay=%v focused=%v", a.detailPageActive(), a.workOverlay(), tr.Focused(closeLabel))
+	}
+	a.windowWidth = 899
+	tr.SetSize(899, 640)
+	tr.Frame()
+	if !a.detailPageActive() || !tr.Focused(closeLabel) {
+		t.Fatalf("899 return focus: page=%v focused=%v", a.detailPageActive(), tr.Focused(closeLabel))
 	}
 }
 
@@ -664,7 +658,7 @@ func TestLayoutDragIsNotPersistedPerMove(t *testing.T) {
 	a := &appModel{store: store}
 	applyStoreSelection(a, store)
 	a.windowWidth = 1180
-	a.workspaceOpen, a.detail = true, detailProfile
+	a.openContactProfile(a.selectedID())
 	tr := ui.NewTester(a.view, 1180, 720)
 	tr.Frame()
 	leftDivider := a.railWidth()
@@ -679,8 +673,12 @@ func TestLayoutDragIsNotPersistedPerMove(t *testing.T) {
 		t.Fatal("dragging wrote the store before an explicit boundary")
 	}
 	a.closeDetail()
+	if store.state.Layout != nil {
+		t.Fatal("closing the profile persisted the layout before quit")
+	}
+	a.beginShutdown()
 	if store.state.Layout == nil || store.state.Layout.WorkspaceOpen || store.state.Layout.LeftWidth != a.railWidth() {
-		t.Fatalf("explicit close layout = %+v", store.state.Layout)
+		t.Fatalf("layout after quit = %+v", store.state.Layout)
 	}
 	reloaded, err := openContactStore(storePath, t.TempDir())
 	if err != nil {
