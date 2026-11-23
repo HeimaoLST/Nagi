@@ -14,9 +14,9 @@
 
 ## Verify native file selection through the visible sheet
 
-**Problem:** Three native review processes exited during scripted confirmation. The launcher returned success and the observer disconnected before recording an accepted path.
-**Cause or correction:** The review observer invoked `ok:` directly on the panel. AppKit raised an uncaught exception. Changing the displayed directory had also left a different item selected.
-**Prevention:** Select the intended item and activate the visible confirmation button. Use the observer to read the chosen path in Nagi after the sheet closes. Compare focus with the control that actually opened that sheet and verify the original application PID survived. For recovery, verify the resulting backup or restore preview.
+**Problem:** Native chooser reviews lost the original app process before recording an accepted path. The launcher returned success in both crash and normal-quit cases.
+**Cause or correction:** The original observer invoked `ok:` directly and AppKit raised an exception. Later runs used a launcher that requested Quit after 30 seconds while the chooser driver allowed 240 seconds for selection. A second process with the same bundle ID could then show an unrelated window.
+**Prevention:** Check the executable the driver actually starts and its lifetime. Bind the disposable profile and observer to the same launch. Select the intended item, click the visible confirmation button, and verify the exact returned path, originating focus and original PID before cleanup. For recovery, verify the resulting backup or restore preview.
 
 ## Keep the launch directory out of the fresh connection form
 
