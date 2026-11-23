@@ -581,7 +581,7 @@ func (a *appModel) localSaveNotice(c *ui.Context, t *ui.Theme) {
 	secondaryButton(c, locales.In(c.Locale()).SettingsRetrySave()).Label(locales.In(c.Locale()).SettingsRetrySave()).OnClick(func() { _ = a.persist() })
 }
 
-func (a *appModel) connectionRecoveryNotice(c *ui.Context, t *ui.Theme, state connectionViewState, showRuntimeError bool) {
+func (a *appModel) connectionRecoveryNotice(c *ui.Context, t *ui.Theme, state connectionViewState, headerStatus string, showRuntimeError bool) {
 	msgs := locales.In(c.Locale())
 	title, hint := msgs.ConnectionStatusSetupNeeded(), msgs.ConnectionRecoverySetupHint()
 	switch state {
@@ -598,7 +598,7 @@ func (a *appModel) connectionRecoveryNotice(c *ui.Context, t *ui.Theme, state co
 		runtimeSummary = a.runtimeRecoverySummary(msgs)
 	}
 	ui.Column(c).Padding(8, 16).Gap(3).Children(func() {
-		if state != connectionViewSaved || title != a.headerStatusLabel(a.selectedContact(), msgs) {
+		if title != headerStatus {
 			ui.Text(c, title).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Warning)
 		}
 		if hint != "" && hint != runtimeSummary {
@@ -626,7 +626,8 @@ func (a *appModel) main(c *ui.Context, t *ui.Theme) {
 			a.productConversationsView(c, t, browser)
 			return
 		}
-		a.header(c, t)
+		headerStatus := a.headerStatusLabel(ct, msgs)
+		a.header(c, t, ct, headerStatus)
 		state := a.connectionViewState()
 		showConnectionSettings := true
 		if !a.demo {
@@ -642,11 +643,13 @@ func (a *appModel) main(c *ui.Context, t *ui.Theme) {
 				ui.Text(c, msgs.RuntimeDraining()).FontSize(typeBody).FixedLineHeight(lineBody).Padding(8, 16).TextColor(t.TextMuted)
 			case state == connectionViewApplying:
 				ui.Column(c).Padding(8, 16).Gap(2).Children(func() {
-					ui.Text(c, msgs.ConnectionStatusApplying()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Warning)
+					if title := msgs.ConnectionStatusApplying(); title != headerStatus {
+						ui.Text(c, title).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Warning)
+					}
 					ui.Text(c, msgs.ConnectionRecoveryApplyingHint()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 				})
 			case a.connectionConfigurationBlocked():
-				a.connectionRecoveryNotice(c, t, state, showRuntimeError && a.runtimeErrKind != runtimeNoticeConnectionRequired)
+				a.connectionRecoveryNotice(c, t, state, headerStatus, showRuntimeError && a.runtimeErrKind != runtimeNoticeConnectionRequired)
 				showConnectionSettings = false
 			case a.hasRuntimeError():
 				if showRuntimeError {
@@ -662,7 +665,9 @@ func (a *appModel) main(c *ui.Context, t *ui.Theme) {
 				}
 			case a.runtimeStatus == runtimeStateStarting:
 				ui.Column(c).Padding(8, 16).Gap(2).Children(func() {
-					ui.Text(c, msgs.RuntimeConnecting()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
+					if title := msgs.RuntimeConnecting(); title != headerStatus {
+						ui.Text(c, title).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
+					}
 					ui.Text(c, msgs.ConnectionRecoveryConnectingHint()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 				})
 			}
@@ -685,8 +690,7 @@ func (a *appModel) main(c *ui.Context, t *ui.Theme) {
 	})
 }
 
-func (a *appModel) header(c *ui.Context, t *ui.Theme) {
-	ct := a.selectedContact()
+func (a *appModel) header(c *ui.Context, t *ui.Theme, ct *contact, status string) {
 	msgs := locales.In(c.Locale())
 	ui.Row(c).Key("header").Justify(ui.Center).Children(func() {
 		ui.Column(c).FillWidth().Padding(4, 6).Gap(4).Children(func() {
@@ -694,7 +698,7 @@ func (a *appModel) header(c *ui.Context, t *ui.Theme) {
 				ui.Column(c).MinWidth(0).Shrink(1).Gap(0).Children(func() {
 					ui.Text(c, ct.Name).FontSize(typeContactTitle).FontWeight(500).FixedLineHeight(lineHeader).TextColor(t.Text).MaxLines(2)
 					ui.Row(c).AlignItems(ui.Center).Gap(12).Wrap().Children(func() {
-						ui.Text(c, a.headerStatusLabel(ct, msgs)).FontSize(typeHeaderMeta).FixedLineHeight(lineHeader).FontWeight(400).TextColor(a.headerStatusColor(t, ct))
+						ui.Text(c, status).FontSize(typeHeaderMeta).FixedLineHeight(lineHeader).FontWeight(400).TextColor(a.headerStatusColor(t, ct))
 						ui.Text(c, ct.Role).FontSize(typeHeaderMeta).FontWeight(400).FixedLineHeight(lineHeader).MinWidth(0).Grow(1).TextColor(t.TextMuted)
 					})
 				})
