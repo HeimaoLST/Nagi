@@ -1,15 +1,13 @@
 package main
 
 import (
+	"context"
 	"strings"
+	"time"
 
-	"github.com/egoist/mygo/ui"
-
-	"github.com/HeimaoLST/Nagi/locales"
+	"github.com/HeimaoLST/Nagi/internal/pi"
 )
 
-// Contact management and saved-context notices are stored by kind and said
-// again at render time in the current language.
 const (
 	archiveNoticeAlready = "archive-already"
 	archiveNoticeUnknown = "archive-unknown"
@@ -20,58 +18,7 @@ const (
 	restoreNoticeStore   = "restore-store"
 	restoreNoticeSave    = "restore-save"
 	restoreNoticeSaved   = "restore-saved"
-
-	historyNoticeMissingQuery = "history-missing-query"
-	historyNoticeRuntime      = "history-runtime"
-	historyNoticePartial      = "history-partial"
-	historyNoticeNotSaved     = "history-not-saved"
-	historyNoticeReadFailed   = "history-read-failed"
-	historyNoticeMoved        = "history-moved"
 )
-
-func contactHistoryNoticeText(msgs locales.Messages, notice, detail string) string {
-	text := ""
-	switch notice {
-	case historyNoticeMissingQuery:
-		text = msgs.HistorySearchMissingQuery()
-	case historyNoticeRuntime:
-		text = msgs.HistorySearchUnavailable()
-	case historyNoticePartial:
-		text = msgs.HistorySearchPartial()
-	case historyNoticeNotSaved:
-		text = msgs.HistoryMessageNotSaved()
-	case historyNoticeReadFailed:
-		text = msgs.HistoryReadFailed()
-	case historyNoticeMoved:
-		text = msgs.HistoryMessageMoved()
-	default:
-		text = notice
-	}
-	if detail != "" {
-		text += " " + detail
-	}
-	return text
-}
-
-type contactHistoryFull struct {
-	WorkingDirectory string
-	Origin           string
-	SessionID        string
-	EntryID          string
-	Date             string
-	From             string
-	Text             string
-	Context          []taskContextItem
-}
-
-const (
-	historyOriginSaved  = "saved"
-	historyOriginLoaded = "loaded"
-)
-
-func historyOriginKey(origin, sessionID, entryID string) string {
-	return origin + "\x00" + sessionID + "\x00" + entryID
-}
 
 func contactProfileDraft(ct *contact) profileDraft {
 	return profileDraft{Name: ct.Name, Purpose: ct.Purpose, Instructions: ct.Instructions, Workspace: ct.Workspace, BuiltinTools: cloneBuiltinTools(ct.BuiltinTools)}
@@ -82,29 +29,30 @@ func (a *appModel) openContactProfile(contactID string) {
 	if ct == nil {
 		return
 	}
-	a.settingsContactID = ct.ID
+	if a.contactProfileID != contactID {
+		a.folderChoiceGeneration++
+	}
+	if a.profileEditors == nil {
+		a.profileEditors = make(map[string]*contactProfileEditor)
+	}
+	if a.profileEditors[contactID] == nil {
+		a.profileEditors[contactID] = newContactProfileEditor(contactProfileDraft(ct))
+	}
+	a.profileEditors[contactID].focusField = ""
+	a.contactProfileID = contactID
 	a.openDetail(detailProfile)
 }
 
-func (a *appModel) editContactProfile() {
-	ct := a.selectedContact()
-	if ct == nil || a.activeDetail() != detailProfile {
-		return
-	}
-	a.settingsContactID = ct.ID
-	a.ensureSettingsProfileEditor(ct.ID)
-	a.openSettingsTab(settingsTabContact, settingsSourceProfile)
+func (a *appModel) profileEditorFor(contactID string) *contactProfileEditor {
+	return a.profileEditors[contactID]
 }
 
 func (a *appModel) contactActivity(ct *contact) (active, unknown bool) {
-	if sessionBusy(ct.SendState, ct.ActiveTaskID) || ct.pendingSend != nil || ct.pendingIssueExecution != "" {
+	if sessionBusy(ct.SendState, ct.ActiveTaskID) || ct.pendingSend != nil {
 		active = true
 	}
 	if ct.SendState == sendUnknown || (ct.pendingSend != nil && ct.pendingSend.State == "unknown") {
 		unknown = true
-	}
-	if a.modelOpActive && ct.SessionID != "" && a.modelOpSessionID == ct.SessionID {
-		active = true
 	}
 	for _, issue := range ct.Issues {
 		if sessionBusy(issue.Work.SendState, issue.Work.ActiveTaskID) || issue.Work.pendingExecutionID != "" {
@@ -125,9 +73,6 @@ func (a *appModel) contactActivity(ct *contact) (active, unknown bool) {
 				unknown = true
 			}
 		}
-		if a.modelOpActive && issue.WorkSessionID != "" && a.modelOpSessionID == issue.WorkSessionID {
-			active = true
-		}
 	}
 	return active, unknown
 }
@@ -146,12 +91,78 @@ func (a *appModel) contactArchiveBlocked(ct *contact) string {
 	return ""
 }
 
-func (a *appModel) saveContactProfileDraft(draft profileDraft, startNew bool) bool {
-	ct := a.selectedContact()
-	if ct == nil {
+func (a *appModel) updateProductBot(host *piAppHost, ct *contact, entered profileDraft, startNew bool) bool {
+	editor := a.profileEditorFor(ct.ID)
+	draft, problems := validateProfileDraft(entered)
+	if len(problems) != 0 {
+		if editor != nil {
+			editor.Draft, editor.Errors = entered, problems
+		}
 		return false
 	}
-	return a.saveContactProfileDraftFor(ct.ID, draft, startNew)
+	if problem := a.validateBuiltinToolSelection(ct.BuiltinTools, draft.BuiltinTools); problem != "" {
+		if editor != nil {
+			editor.SetError(problem)
+		}
+		return false
+	}
+	var codingTools []string
+	if draft.BuiltinTools != nil {
+		codingTools = *draft.BuiltinTools
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	bot, err := host.product.UpdateBot(ctx, pi.ProductBotUpdateParams{
+		ProductBotRevisionParams: pi.ProductBotRevisionParams{BotID: ct.ID, ExpectedRevision: host.productBots[ct.ID].ProfileRevision, OperationID: newContactID()},
+		Profile: pi.ProductBotProfile{Name: draft.Name, Role: ct.Role, Purpose: draft.Purpose, Instructions: draft.Instructions,
+			Workspace: draft.Workspace, CodingTools: codingTools}, StartNewConversation: startNew,
+	})
+	if err != nil {
+		if editor != nil {
+			editor.SetError(profileNoticeErrorSave)
+		}
+		return false
+	}
+	projected := productContact(bot)
+	ct.Name, ct.Purpose, ct.Instructions, ct.Workspace, ct.BuiltinTools = projected.Name, projected.Purpose, projected.Instructions, projected.Workspace, projected.BuiltinTools
+	host.productBots[ct.ID] = bot
+	if ct.SessionID != bot.CurrentConversationID {
+		ct.SessionID = bot.CurrentConversationID
+		ct.Messages, ct.History, ct.Loaded = nil, nil, false
+		ct.LoadErr, ct.Unavailable = "", ""
+		applyProductExecution(ct, nil)
+		a.refreshProductConversation(host, ct, ct.draftRev)
+		a.reloadProductConversation(host, ct)
+	}
+	if editor != nil {
+		editor.SetProfile(draft)
+		editor.HasConversation = true
+		editor.Status = profileNoticeSavedDefaults
+	}
+	return true
+}
+
+func (a *appModel) setProductBotArchived(host *piAppHost, ct *contact, archived bool) bool {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	params := pi.ProductBotRevisionParams{BotID: ct.ID, ExpectedRevision: host.productBots[ct.ID].ProfileRevision, OperationID: newContactID()}
+	change, failure, success := host.product.RestoreBot, restoreNoticeSave, restoreNoticeSaved
+	if archived {
+		change, failure, success = host.product.ArchiveBot, archiveNoticeSave, archiveNoticeSaved
+	}
+	bot, err := change(ctx, params)
+	editor := a.profileEditorFor(ct.ID)
+	if err != nil {
+		if editor != nil {
+			editor.SetError(failure)
+		}
+		return false
+	}
+	host.productBots[ct.ID], ct.Archived = bot, bot.Archived
+	if editor != nil {
+		editor.Archived, editor.Status = bot.Archived, success
+	}
+	return true
 }
 
 func (a *appModel) saveContactProfileDraftFor(contactID string, draft profileDraft, startNew bool) bool {
@@ -160,6 +171,9 @@ func (a *appModel) saveContactProfileDraftFor(contactID string, draft profileDra
 	entered := draft
 	if ct == nil {
 		return false
+	}
+	if host := a.productHost(); host != nil {
+		return a.updateProductBot(host, ct, draft, startNew)
 	}
 	if !a.demo && a.ensureContactStore() != nil {
 		if editor != nil {
@@ -182,7 +196,7 @@ func (a *appModel) saveContactProfileDraftFor(contactID string, draft profileDra
 			}
 			return false
 		}
-		if ct.SessionID == "" {
+		if ct.PiBinding == nil && (!a.demo || ct.SessionID == "") {
 			if editor != nil {
 				editor.SetError(profileNoticeNoConversation)
 			}
@@ -209,7 +223,6 @@ func (a *appModel) saveContactProfileDraftFor(contactID string, draft profileDra
 		return false
 	}
 	previous := *ct
-	previousSessions := append([]string(nil), ct.PreviousSessions...)
 	var oldState storedState
 	if a.store != nil {
 		oldState = a.store.state
@@ -221,8 +234,9 @@ func (a *appModel) saveContactProfileDraftFor(contactID string, draft profileDra
 	ct.Workspace = draft.Workspace
 	ct.BuiltinTools = cloneBuiltinTools(draft.BuiltinTools)
 	if startNew {
-		if ct.SessionID != "" {
-			ct.PreviousSessions = append(ct.PreviousSessions, ct.SessionID)
+		if binding := clonePiConversationBinding(ct.PiBinding); binding != nil {
+			ct.PreviousPiBindings = append(ct.PreviousPiBindings, *binding)
+			ct.PiBinding = nil
 		}
 		ct.SessionID = ""
 		ct.Loaded = false
@@ -237,16 +251,10 @@ func (a *appModel) saveContactProfileDraftFor(contactID string, draft profileDra
 		ct.pendingSend = nil
 		ct.Messages = nil
 		ct.History = nil
-		ct.Revealed = nil
 		ct.Works = nil
-		ct.SelectedWorkTaskID = ""
 		ct.Status = statusReady
 		ct.Work = ""
 		ct.WorkLabel = "Preparing a reply"
-		ct.UnlinkedTools = nil
-		ct.StopRequestedTasks = nil
-		ct.pendingEvents = nil
-		ct.HistoryDirty = false
 		ct.SessionWorkingDir = ""
 		ct.SessionModel = ""
 		ct.SessionAPI = ""
@@ -254,7 +262,6 @@ func (a *appModel) saveContactProfileDraftFor(contactID string, draft profileDra
 	}
 	if err := a.persist(); err != nil {
 		*ct = previous
-		ct.PreviousSessions = previousSessions
 		if a.store != nil {
 			a.store.state = oldState
 		}
@@ -266,7 +273,7 @@ func (a *appModel) saveContactProfileDraftFor(contactID string, draft profileDra
 	}
 	if editor != nil {
 		editor.SetProfile(draft)
-		editor.HasConversation = ct.SessionID != ""
+		editor.HasConversation = ct.PiBinding != nil || a.demo && ct.SessionID != ""
 		editor.Status = profileNoticeSavedDefaults
 		if startNew {
 			editor.HasConversation = false
@@ -280,6 +287,9 @@ func (a *appModel) archiveContact(contactID string) bool {
 	ct := a.contactByID(contactID)
 	if ct == nil || ct.Archived {
 		return false
+	}
+	if host := a.productHost(); host != nil {
+		return a.setProductBotArchived(host, ct, true)
 	}
 	if !a.demo && a.ensureContactStore() != nil {
 		if editor := a.profileEditorFor(contactID); editor != nil {
@@ -314,9 +324,6 @@ func (a *appModel) archiveContact(contactID string) bool {
 		editor.Archived = true
 		editor.Status = archiveNoticeSaved
 	}
-	if a.selectedContact().ID == contactID {
-		a.contactScope = "archived"
-	}
 	return true
 }
 
@@ -324,6 +331,9 @@ func (a *appModel) restoreContact(contactID string) bool {
 	ct := a.contactByID(contactID)
 	if ct == nil || !ct.Archived {
 		return false
+	}
+	if host := a.productHost(); host != nil {
+		return a.setProductBotArchived(host, ct, false)
 	}
 	if !a.demo && a.ensureContactStore() != nil {
 		if editor := a.profileEditorFor(contactID); editor != nil {
@@ -352,83 +362,19 @@ func (a *appModel) restoreContact(contactID string) bool {
 		editor.Archived = false
 		editor.Status = restoreNoticeSaved
 	}
-	if a.selectedContact().ID == contactID {
-		a.contactScope = "active"
-	}
 	return true
 }
 
 func (a *appModel) visibleContactIndices() []int {
-	return a.visibleContactIndicesForScope(a.contactScope, a.contactSearch)
-}
-
-func (a *appModel) visibleContactIndicesForScope(scope, search string) []int {
-	query := strings.ToLower(strings.TrimSpace(search))
-	if scope == "" {
-		scope = "active"
-	}
+	query := strings.ToLower(strings.TrimSpace(a.contactSearch))
 	out := make([]int, 0, len(a.contacts))
 	for i, ct := range a.contacts {
-		switch scope {
-		case "archived":
-			if !ct.Archived {
-				continue
-			}
-		case "all":
-		default:
-			if ct.Archived {
-				continue
-			}
-		}
 		if query != "" && !strings.Contains(strings.ToLower(ct.Name+" "+ct.Purpose), query) {
 			continue
 		}
 		out = append(out, i)
 	}
 	return out
-}
-
-func (a *appModel) setContactScope(scope string) {
-	if scope != "active" && scope != "archived" && scope != "all" {
-		return
-	}
-	indices := a.visibleContactIndicesForScope(scope, a.contactSearch)
-	if len(indices) == 0 {
-		a.contactScope = scope
-		return
-	}
-	target := indices[0]
-	for _, i := range indices {
-		if i == a.selected {
-			target = a.selected
-			break
-		}
-	}
-	if target != a.selected {
-		if !a.leaveIssueFormForSwitch() {
-			return
-		}
-		a.contactScope = scope
-		a.selectContact(target)
-		return
-	}
-	a.contactScope = scope
-}
-
-func (a *appModel) contactHistorySessionIDs(ct *contact) []string {
-	ids := make([]string, 0, 1+len(ct.PreviousSessions))
-	seen := map[string]bool{}
-	if ct.SessionID != "" {
-		ids = append(ids, ct.SessionID)
-		seen[ct.SessionID] = true
-	}
-	for _, id := range ct.PreviousSessions {
-		if id != "" && !seen[id] {
-			ids = append(ids, id)
-			seen[id] = true
-		}
-	}
-	return ids
 }
 
 func (a *appModel) historyAsyncStarted() {
@@ -442,162 +388,4 @@ func (a *appModel) historyAsyncFinished() {
 	if a.shutdownStarted && !a.quitReady {
 		a.finishShutdown()
 	}
-}
-
-// Bind results to the contact, Runtime generation and query that started them.
-func (a *appModel) searchContactHistoryAsync(query string) {
-	if a.shutdownStarted {
-		return
-	}
-	ct := a.selectedContact()
-	query = strings.TrimSpace(query)
-	if query == "" {
-		a.contactHistoryError = historyNoticeMissingQuery
-		a.contactHistoryErrorDetail = ""
-		return
-	}
-	if ct == nil || a.rt == nil || a.runtimeStatus != runtimeStateReady {
-		a.contactHistoryError = historyNoticeRuntime
-		a.contactHistoryErrorDetail = ""
-		return
-	}
-	a.contactHistoryGen++
-	a.contactHistoryDetailGen++
-	generation := a.contactHistoryGen
-	contactID := ct.ID
-	rt, runtimeGeneration := a.rt, a.connectionGeneration
-	sessionIDs := a.contactHistorySessionIDs(ct)
-	scopeIndex := a.issueToolScopeIndexSnapshot()
-	a.contactHistoryBusy = true
-	a.contactHistoryDetailBusy = false
-	a.contactHistoryFull = nil
-	a.contactHistoryError = ""
-	a.contactHistoryErrorDetail = ""
-	a.historyAsyncStarted()
-	go func() {
-		result := a.searchContactHistory(rt, sessionIDs, query, scopeIndex)
-		a.updateUI(func() {
-			a.historyAsyncFinished()
-			if a.rt != rt || a.connectionGeneration != runtimeGeneration || generation != a.contactHistoryGen || a.selectedContact().ID != contactID {
-				return
-			}
-			a.contactHistory = &result
-			a.contactHistoryBusy = false
-			if len(result.Failures) > 0 {
-				a.contactHistoryError = historyNoticePartial
-				a.contactHistoryErrorDetail = ""
-			}
-		})
-	}()
-}
-
-func (a *appModel) openContactHistoryMatch(match contactHistoryMatch) bool {
-	if a.shutdownStarted {
-		return false
-	}
-	ct := a.selectedContact()
-	if ct == nil || a.rt == nil || a.runtimeStatus != runtimeStateReady {
-		a.contactHistoryError = historyNoticeRuntime
-		a.contactHistoryErrorDetail = ""
-		return false
-	}
-	inScope := false
-	for _, sessionID := range a.contactHistorySessionIDs(ct) {
-		if sessionID == match.SessionID {
-			inScope = true
-			break
-		}
-	}
-	if !inScope {
-		a.contactHistoryError = historyNoticeNotSaved
-		a.contactHistoryErrorDetail = ""
-		return false
-	}
-	contactID := ct.ID
-	rt, runtimeGeneration := a.rt, a.connectionGeneration
-	scopeIndex := a.issueToolScopeIndexSnapshot()
-	searchGen := a.contactHistoryGen
-	a.contactHistoryDetailGen++
-	detailGen := a.contactHistoryDetailGen
-	a.contactHistoryDetailBusy = true
-	a.contactHistoryFull = nil
-	a.contactHistoryError = ""
-	a.contactHistoryErrorDetail = ""
-	a.historyAsyncStarted()
-	go func() {
-		records, _, err := a.historyAllFor(rt, match.SessionID)
-		var full *contactHistoryFull
-		errorText := ""
-		if err != nil {
-			errorText = historyNoticeReadFailed
-		} else {
-			for _, entry := range parseHistoryWithIssueToolScopeFilter(match.SessionID, records, nil, scopeIndex).entries {
-				if entry.ID == match.EntryID {
-					full = &contactHistoryFull{
-						Origin: historyOriginSaved, SessionID: match.SessionID, EntryID: match.EntryID, Date: entry.Date,
-						From: entry.From, Text: entry.Text, Context: entry.Context,
-					}
-					break
-				}
-			}
-			if full == nil {
-				errorText = historyNoticeMoved
-			}
-		}
-		if full != nil {
-			if config, configErr := rt.connectionConfig(match.SessionID); configErr == nil {
-				full.WorkingDirectory = config.EffectiveConfig.WorkingDirectory
-			}
-		}
-		a.updateUI(func() {
-			defer a.historyAsyncFinished()
-			a.applyContactHistoryFull(rt, runtimeGeneration, contactID, searchGen, detailGen, full, errorText, err)
-		})
-	}()
-	return true
-}
-
-func (a *appModel) applyContactHistoryFull(rt *runtimeClient, runtimeGeneration int, contactID string,
-	searchGen, detailGen int, full *contactHistoryFull, errorText string, readErr error) {
-	if a.rt != rt || a.connectionGeneration != runtimeGeneration ||
-		a.contactHistoryGen != searchGen || a.contactHistoryDetailGen != detailGen ||
-		a.selectedContact().ID != contactID {
-		return
-	}
-	// A saved-message click is allowed to keep an inline model/task-context
-	// carrier that was already open when the request started. Any accepted
-	// model/context entry after the request cancels through
-	// cancelHistoryFullDisplay and invalidates detailGen; a refused entry does
-	// not.
-	carrierOK := a.aux == "" || a.composerInlineAux()
-	if !a.detailIs(detailHistory) || !carrierOK || a.settingsOpen {
-		a.contactHistoryDetailBusy = false
-		return
-	}
-	a.contactHistoryDetailBusy = false
-	if errorText != "" {
-		a.contactHistoryError = errorText
-		if readErr != nil {
-			a.contactHistoryErrorDetail = a.connectionRuntimeMessage(readErr)
-		} else {
-			a.contactHistoryErrorDetail = ""
-		}
-		return
-	}
-	a.contactHistoryFull = full
-	a.historyFullScroll = ui.ScrollState{}
-	a.focusHistoryFullBack = full != nil
-}
-
-func (a *appModel) openHistoryEntryFull(e historyEntry) {
-	ct := a.selectedContact()
-	if ct == nil {
-		return
-	}
-	a.contactHistoryFull = &contactHistoryFull{
-		WorkingDirectory: ct.SessionWorkingDir, Origin: historyOriginLoaded, SessionID: ct.SessionID, EntryID: e.ID, Date: e.Date, From: e.From,
-		Text: e.Text, Context: cloneTaskContextItems(e.Context),
-	}
-	a.historyFullScroll = ui.ScrollState{}
-	a.focusHistoryFullBack = true
 }

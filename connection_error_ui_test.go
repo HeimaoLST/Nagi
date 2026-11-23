@@ -19,10 +19,13 @@ func TestKnownConnectionFailureIsConciseAndKeepsOriginalDetails(t *testing.T) {
 	ct.LoadErr = raw
 	ct.SendError = raw
 	a.windowWidth = 1040
+	settingsAction := locales.In("en").ConnectionRecoveryOpenSettings()
 	tr := ui.NewTester(a.view, 1040, 720)
+	tr.SetLocale("en")
+	tr.SetFocused(true)
 	tr.Frame()
 	if !tr.HasText("Connection unavailable or changed") ||
-		!tr.HasText("Connection settings") || !tr.HasText("Details") {
+		!tr.HasText(settingsAction) || !tr.HasText("Details") {
 		t.Fatalf("known connection failure summary missing: %v", tr.Texts())
 	}
 	if tr.HasText(raw) {
@@ -35,9 +38,14 @@ func TestKnownConnectionFailureIsConciseAndKeepsOriginalDetails(t *testing.T) {
 	if !tr.HasText(raw) || !tr.HasText("Copy error details") {
 		t.Fatalf("connection detail was not accessible: %v", tr.Texts())
 	}
-	if err := tr.Click("Connection settings"); err != nil {
-		t.Fatal(err)
+	for i := 0; i < 60 && !tr.Focused(settingsAction); i++ {
+		tr.Key(0, ui.KeyTab)
 	}
+	if !tr.Focused(settingsAction) {
+		t.Fatalf("recovery Settings action did not take focus: %v", tr.Texts())
+	}
+	tr.Key(0, ui.KeyEnter)
+	tr.Frame()
 	if !a.settingsOpen || a.settingsTab != settingsTabConnection {
 		t.Fatalf("connection settings entry = open=%v tab=%q", a.settingsOpen, a.settingsTab)
 	}
@@ -96,9 +104,11 @@ func TestConnectionRecoveryStatusAndOneClickSettings(t *testing.T) {
 	for _, tc := range []struct {
 		name       string
 		setup      func(*appModel, *contact)
+		hasPiHost  bool
 		wantHeader string
 		wantHint   string
 		wantButton bool
+		noStartup  bool
 	}{
 		{
 			name: "setup",
@@ -128,7 +138,6 @@ func TestConnectionRecoveryStatusAndOneClickSettings(t *testing.T) {
 			setup: func(a *appModel, _ *contact) {
 				a.runtimeStatus = runtimeStateExited
 				a.runtimeStage = "Runtime connection"
-				a.connectionLegacy = true
 				a.ensureConnectionForm()
 			},
 			wantHeader: "Not connected",
@@ -148,7 +157,7 @@ func TestConnectionRecoveryStatusAndOneClickSettings(t *testing.T) {
 			wantButton: true,
 		},
 		{
-			name: "managed saved connection did not start",
+			name: "exited with stale connection configuration stage",
 			setup: func(a *appModel, _ *contact) {
 				a.runtimeStatus = runtimeStateExited
 				a.runtimeStage = "Connection configuration"
@@ -156,13 +165,26 @@ func TestConnectionRecoveryStatusAndOneClickSettings(t *testing.T) {
 				a.connectionEffective = &config
 			},
 			wantHeader: "Not connected",
+			wantHint:   locales.In("en").ConnectionRecoveryNotConnectedHint(),
+			wantButton: true,
+			noStartup:  true,
+		},
+		{
+			name: "saved connection startup failed",
+			setup: func(a *appModel, _ *contact) {
+				a.runtimeStatus = runtimeStateFailed
+				a.runtimeStage = "Connection configuration"
+				a.connectionSaved = &config
+				a.connectionEffective = &config
+			},
+			wantHeader: locales.In("en").ConnectionRecoveryManagedTitle(),
 			wantHint:   locales.In("en").ConnectionRecoveryManagedHint(),
 			wantButton: true,
 		},
 		{
-			name: "starting with saved connection",
+			name:      "starting with saved connection",
+			hasPiHost: true,
 			setup: func(a *appModel, _ *contact) {
-				a.rt = &runtimeClient{}
 				a.runtimeStatus = runtimeStateStarting
 				a.connectionSaved = &config
 			},
@@ -181,12 +203,12 @@ func TestConnectionRecoveryStatusAndOneClickSettings(t *testing.T) {
 			wantButton: false,
 		},
 		{
-			name: "healthy old runtime with pending saved candidate",
+			name:      "healthy Pi runtime with pending saved candidate",
+			hasPiHost: true,
 			setup: func(a *appModel, _ *contact) {
 				old, next := config, config
 				old.Model = "old-model"
 				next.Model = "pending-model"
-				a.rt = &runtimeClient{}
 				a.runtimeStatus = runtimeStateReady
 				a.connectionEffective = &old
 				a.connectionSaved = &next
@@ -196,19 +218,27 @@ func TestConnectionRecoveryStatusAndOneClickSettings(t *testing.T) {
 			wantButton: false,
 		},
 		{
-			name: "healthy legacy runtime without effective config",
+			name: "legacy connection without current Pi host",
 			setup: func(a *appModel, _ *contact) {
-				a.rt = &runtimeClient{}
 				a.runtimeStatus = runtimeStateReady
-				a.connectionLegacy = true
 				a.connectionEffective = nil
 			},
-			wantHeader: "Ready",
-			wantButton: false,
+			wantHeader: "Not connected",
+			wantHint:   "The runtime is not connected. Review the connection settings.",
+			wantButton: true,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			a, ct := workspaceTestApp(t)
+			a, ct, _ := piRunStartedTestApp(t)
+			ct.ActiveTaskID, ct.SendState = "", sendIdle
+			a.storePath, a.workDir = a.store.path, filepath.Dir(a.store.path)
+			host := a.pi
+			a.pi = nil
+			if tc.hasPiHost {
+				a.pi = host
+			}
+			record := recoveryRecordSnapshot(t, ct)
+			binding := ct.PiBinding
 			tc.setup(a, ct)
 			tr := ui.NewTester(a.view, 1040, 720)
 			tr.Frame()
@@ -217,6 +247,14 @@ func TestConnectionRecoveryStatusAndOneClickSettings(t *testing.T) {
 			}
 			if tc.wantHint != "" && !tr.HasText(tc.wantHint) {
 				t.Fatalf("empty-draft connection reason %q missing: %v", tc.wantHint, tr.Texts())
+			}
+			if tc.noStartup {
+				msgs := locales.In("en")
+				for _, text := range []string{msgs.ConnectionRecoveryManagedTitle(), msgs.ConnectionRecoveryManagedHint(), msgs.RecoveryRuntimeStartFailed()} {
+					if tr.HasText(text) {
+						t.Fatalf("exited runtime exposed startup-failure guidance %q: %v", text, tr.Texts())
+					}
+				}
 			}
 			if tc.wantButton {
 				if !tr.HasText("Open connection settings") || !tr.HasText("Configuration details") {
@@ -231,6 +269,9 @@ func TestConnectionRecoveryStatusAndOneClickSettings(t *testing.T) {
 				}
 			} else if tr.HasText("Open connection settings") {
 				t.Fatalf("non-actionable state exposed a recovery entry: %v", tr.Texts())
+			}
+			if a.selectedContact() != ct || ct.PiBinding != binding || recoveryRecordSnapshot(t, ct) != record {
+				t.Fatal("connection recovery changed the selected conversation or draft")
 			}
 		})
 	}
@@ -251,7 +292,6 @@ func TestConnectionRecoveryPreservesWorkingAndAttentionStatus(t *testing.T) {
 			ct.Status = tc.status
 			ct.SendState = tc.send
 			a.runtimeStatus = runtimeStateExited
-			a.connectionLegacy = true
 			a.ensureConnectionForm()
 			tr := ui.NewTester(a.view, 1040, 720)
 			tr.Frame()
@@ -319,7 +359,7 @@ func TestConnectionRecoveryEmptyDraftKeepsHigherPriorityReason(t *testing.T) {
 	ct.Archived = true
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	if !tr.HasText("This contact is archived. Restore it before sending a message.") {
+	if !tr.HasText(locales.In("en").CanSendArchived()) {
 		t.Fatalf("archived reason missing from composer: %v", tr.Texts())
 	}
 	ct.Archived = false
@@ -336,12 +376,45 @@ func TestRecoveryPresentationTaskFailureDisclosureAndSettings(t *testing.T) {
 		t.Run(locale, func(t *testing.T) {
 			a, ct := workspaceTestApp(t)
 			a.workspaceOpen = false
+			a.runtimeStatus = runtimeStateExited
 			message := "upstream unavailable; API_KEY=never-show-this"
-			raw := taskFailureDetail("model_error", &message)
+			raw := "Model request failed: " + safeDiagnostic(message)
 			ct.StatusDetail = raw
-			ct.Draft = "Keep this unsent text"
+			msgs := locales.In(locale)
+			settingsAction := msgs.ConnectionRecoveryOpenSettings()
 			tr := ui.NewTester(a.view, 1040, 900)
 			tr.SetLocale(locale)
+			tr.SetFocused(true)
+			tr.Frame()
+			hints := 0
+			for _, text := range tr.Texts() {
+				if text == msgs.ConnectionRecoveryNotConnectedHint() {
+					hints++
+				}
+			}
+			if hints != 1 {
+				t.Fatalf("disconnected guidance occurs %d times in the chat: %v", hints, tr.Texts())
+			}
+			for i := 0; i < 60 && !tr.Focused(msgs.DetailsAction()); i++ {
+				tr.Key(0, ui.KeyTab)
+			}
+			if !tr.Focused(msgs.DetailsAction()) {
+				t.Fatal("could not focus the task failure disclosure")
+			}
+			settingsTargets := 0
+			for i := 0; i < 60; i++ {
+				tr.Key(0, ui.KeyTab)
+				if tr.Focused(msgs.DetailsAction()) {
+					break
+				}
+				if tr.Focused(settingsAction) || tr.Focused(msgs.ConnectionSettingsAction()) {
+					settingsTargets++
+				}
+			}
+			if !tr.Focused(msgs.DetailsAction()) || settingsTargets != 1 {
+				t.Fatalf("expected one recovery Settings action in the focus cycle, found %d", settingsTargets)
+			}
+			ct.Draft = "Keep this unsent text"
 			tr.Frame()
 			summary := "The model request failed."
 			if locale == "zh-Hans" {
@@ -354,7 +427,6 @@ func TestRecoveryPresentationTaskFailureDisclosureAndSettings(t *testing.T) {
 			if !found || tr.HasText(raw) {
 				t.Fatalf("expected plain summary before disclosure: %v", tr.Texts())
 			}
-			msgs := locales.In(locale)
 			if err := tr.Click(msgs.DetailsAction()); err != nil {
 				t.Fatal(err)
 			}
@@ -362,7 +434,7 @@ func TestRecoveryPresentationTaskFailureDisclosureAndSettings(t *testing.T) {
 			if !tr.HasText(raw) || ct.StatusDetail != raw || ct.Draft != "Keep this unsent text" || ct.SendState != sendIdle {
 				t.Fatalf("disclosure changed the record/draft or hid its redacted detail: %v", tr.Texts())
 			}
-			if err := tr.Click(msgs.ConnectionSettingsAction()); err != nil {
+			if err := tr.Click(settingsAction); err != nil {
 				t.Fatal(err)
 			}
 			tr.Frame()
@@ -374,14 +446,13 @@ func TestRecoveryPresentationTaskFailureDisclosureAndSettings(t *testing.T) {
 }
 
 func TestRecoveryPresentationLocalRetryClearsOnlyOwnedFeedback(t *testing.T) {
-	a, ct := workspaceTestApp(t)
-	root := t.TempDir()
-	path := filepath.Join(root, "contacts.json")
-	store, err := openContactStore(path, root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	a.store, a.storePath, a.workDir = store, path, root
+	a, ct, _ := piRunStartedTestApp(t)
+	ct.ActiveTaskID, ct.SendState = "", sendIdle
+	a.pi = nil
+	path := a.store.path
+	root := filepath.Dir(path)
+	a.storePath, a.workDir = path, root
+	sessionRef, binding := ct.SessionID, ct.PiBinding
 	if err := os.Remove(path); err != nil {
 		t.Fatal(err)
 	}
@@ -407,18 +478,43 @@ func TestRecoveryPresentationLocalRetryClearsOnlyOwnedFeedback(t *testing.T) {
 	tr.Frame()
 	a.openSettingsTab(settingsTabConnection, settingsSourceRail)
 	tr.Frame()
-	if a.localSaveErr != "" || a.connectionForm.Error != "" || a.connectionForm.ErrorDetail != "" || a.connectionReloadBlocked() != "" {
+	if a.localSaveErr != "" || a.connectionForm.Error != "" || a.connectionForm.ErrorDetail != "" || tr.HasText(locales.In("en").RecoveryLocalSaveFailed()) {
 		t.Fatalf("successful local retry left stale form feedback: local=%q form=%q detail=%q", a.localSaveErr, a.connectionForm.Error, a.connectionForm.ErrorDetail)
 	}
+	store := a.store
 	a.store = nil
 	a.connectionForm.Error, a.connectionForm.ErrorDetail = connStatusSavedStoreFailed, "unavailable local data"
 	tr.Frame()
 	if a.connectionForm.Error != connStatusSavedStoreFailed {
 		t.Fatal("unavailable store falsely cleared feedback")
 	}
-	a.connectionForm.Error, a.connectionForm.ErrorDetail = connErrorStart, "unrelated startup failure"
+	a.store = store
+	a.closeSettings()
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(path, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.persist(); err == nil {
+		t.Fatal("expected a second controlled write failure")
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	const applyFailure = "Pi worker exited while applying"
+	a.connectionForm.Error, a.connectionForm.ErrorDetail = connErrorApplyConfig, applyFailure
 	tr.Frame()
-	if a.connectionForm.Error != connErrorStart || a.connectionForm.ErrorDetail != "unrelated startup failure" || ct.Draft != "retained local edit" {
+	if err := tr.Click(locales.In("en").SettingsRetrySave()); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	a.openSettingsTab(settingsTabConnection, settingsSourceRail)
+	tr.Frame()
+	if !tr.HasText(locales.In("en").RecoveryConnectionApplyFailed()) {
+		t.Fatal("successful local retry hid the unrelated Apply diagnostic")
+	}
+	if a.localSaveErr != "" || a.connectionForm.Error != connErrorApplyConfig || a.connectionForm.ErrorDetail != applyFailure || ct.Draft != "retained local edit" || ct.SessionID != sessionRef || ct.PiBinding != binding || a.selectedContact() != ct {
 		t.Fatal("local recovery cleared unrelated state")
 	}
 }
@@ -439,9 +535,9 @@ func TestRecoveryPresentationRendersAndControls(t *testing.T) {
 	records := []geometry{}
 	for _, size := range [][2]int{{720, 640}, {1040, 720}} {
 		for _, locale := range []string{"en", "zh-Hans"} {
-			for _, surface := range []string{"startup", "local-save", "form", "empty-result"} {
+			for _, surface := range []string{"startup", "local-save", "form"} {
 				t.Run(fmt.Sprintf("%s-%s-%d", surface, locale, size[0]), func(t *testing.T) {
-					a, ct := workspaceTestApp(t)
+					a, _ := workspaceTestApp(t)
 					a.windowWidth = size[0]
 					a.workspaceOpen = false
 					dark := locale == "zh-Hans"
@@ -456,12 +552,11 @@ func TestRecoveryPresentationRendersAndControls(t *testing.T) {
 					case "startup":
 						action = msgs.ConnectionRecoveryOpenSettings()
 						a.runtimeStatus = runtimeStateFailed
-						a.runtimeErrKind = runtimeNoticeHelperMissing
-						a.runtimeErr = "Checked application runtime locations; component absent"
-						a.runtimeStage = "Runtime helper"
+						a.runtimeErr = "The Pi worker could not start."
+						a.runtimeStage = "Runtime startup"
 						tr = ui.NewTester(a.view, size[0], size[1])
 					case "local-save":
-						a.rt = &runtimeClient{}
+						a.pi = presentationPiHost(a)
 						a.runtimeStatus = runtimeStateReady
 						a.localSaveErr = "Controlled local write error; original edits remain in this window."
 						tr = ui.NewTester(a.view, size[0], size[1])
@@ -474,18 +569,6 @@ func TestRecoveryPresentationRendersAndControls(t *testing.T) {
 						a.openSettingsTab(settingsTabConnection, settingsSourceRail)
 						tr = ui.NewTester(a.view, size[0], size[1])
 						action = msgs.SettingsBackAccessible()
-					case "empty-result":
-						message := "Controlled request failure with original bounded details"
-						execution := &issueExecution{ID: "recovery-geometry-run", SessionID: "recovery-geometry-session", TaskID: "recovery-geometry-task",
-							Status: issueExecutionFailed, Detail: taskFailureDetail("model_error", &message)}
-						issue := &productIssue{ID: "recovery-geometry-issue", ContactID: ct.ID, Goal: "Read the saved run failure", Status: issueStatusInProgress,
-							WorkSessionID: execution.SessionID, Work: issueWorkSession{Loaded: true}, Executions: []*issueExecution{execution}}
-						ct.Issues, ct.SelectedIssueID = []*productIssue{issue}, issue.ID
-						a.rt = nil
-						recoveryTestStore(t, a)
-						a.openIssueResult(issue.ID, execution.ID)
-						tr = ui.NewTester(a.view, size[0], size[1])
-						action = msgs.SettingsTitle()
 					}
 					tr.SetLocale(locale)
 					tr.SetDark(dark)
@@ -549,7 +632,7 @@ func TestC8UnavailableDataRestoreEntryKeepsOriginalFile(t *testing.T) {
 		t.Fatal("corrupt canonical file unexpectedly loaded")
 	}
 	a := newUnavailableApp(loadErr)
-	if a.store != nil || a.storeInitAllowed || a.rt != nil || a.localSaveErr != "" || a.runtimeStage != startupStageLocalStore {
+	if a.store != nil || a.storeInitAllowed || a.pi != nil || a.localSaveErr != "" || a.runtimeStage != startupStageLocalStore {
 		t.Fatal("actual unavailable-store startup did not remain quiescent and fail-closed")
 	}
 	ct := a.selectedContact()
@@ -563,7 +646,7 @@ func TestC8UnavailableDataRestoreEntryKeepsOriginalFile(t *testing.T) {
 		if readErr != nil || len(entries) != 1 || entries[0].Name() != "contacts.json" {
 			t.Error("restore navigation created replacement/configuration/archive files before confirmation")
 		}
-		if a.rt != nil || a.runtimeHelperChecked || a.connectionSaved != nil || a.connectionEffective != nil || a.connectionSaveInFlight || a.connectionApplying || a.connectionTesting || a.modelOpActive || a.submissionInFlight != 0 || a.shutdownStarted {
+		if a.pi != nil || a.connectionSaved != nil || a.connectionEffective != nil || a.connectionSaveInFlight || a.connectionApplying || a.connectionTesting || a.submissionInFlight != 0 || a.shutdownStarted {
 			t.Error("restore entry saved/applied/tested a connection or started execution/shutdown")
 		}
 	}()
@@ -624,7 +707,7 @@ func TestC8RecoveryOutcomePresentationUsesOutcomeWithError(t *testing.T) {
 					if outcome == "unconfirmed" {
 						summary = msgs.RecoveryUnconfirmed()
 					}
-					if !tr.HasText(summary) || tr.HasText(s.problem) || tr.HasText(string(result.Outcome)) || a.store != nil || a.storeInitAllowed || a.rt != nil {
+					if !tr.HasText(summary) || tr.HasText(s.problem) || tr.HasText(string(result.Outcome)) || a.store != nil || a.storeInitAllowed || a.pi != nil {
 						t.Fatal("outcome/error was misrepresented or details leaked/activated app")
 					}
 					name := fmt.Sprintf("%s-%d-%s", locale, size[0], outcome)

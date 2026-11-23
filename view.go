@@ -7,10 +7,12 @@ import (
 	"net/url"
 	"path/filepath"
 	"strings"
+	"unicode"
 
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/markdown"
 
+	"github.com/HeimaoLST/Nagi/internal/pi"
 	"github.com/HeimaoLST/Nagi/locales"
 )
 
@@ -36,9 +38,6 @@ func (a *appModel) view(c *ui.Context) {
 		form.RecoveryDetailsOpen = false
 	}
 	a.syncDetailPageMode()
-	if a.settingsOpen || a.mainPageActive() || a.detailPageActive() {
-		a.closeComposerModel()
-	}
 	if !a.settingsOpen {
 		a.linkReturnSeen = false
 	}
@@ -55,9 +54,6 @@ func (a *appModel) view(c *ui.Context) {
 				source = settingsSourceComposer
 			} else if !a.captureLinkSettingsSource(c, &source) {
 				source = a.settingsSourceForVisiblePage()
-				if source == settingsSourceAux && a.issueResult.Open {
-					a.issueResult.Panel.FocusReturn = issueResultFocusedHandle(c, &a.issueResult.Panel, a.issueResult.Panel.ReaderKey != "")
-				}
 			}
 			a.openSettingsTab(settingsTabAppearance, source)
 		}
@@ -65,10 +61,14 @@ func (a *appModel) view(c *ui.Context) {
 	if !a.settingsOpen {
 		c.OnShortcut(0, ui.KeyEscape, func() { a.escapeTopLayer() })
 	}
-	ui.Column(c).Fill().Background(a.workTheme.Reading).Children(func() {
-		// Reserve the native controls' whole band on every route. Keeping this
-		// node at zero height in fullscreen preserves the content's UI identity.
-		ui.Row(c).FillWidth().Height(c.TitleBar().Height).Shrink(0).DragWindow()
+	ui.Column(c).Fill().LinearGradient(ui.LinearGradient{From: a.workTheme.ChromeFrom, To: a.workTheme.ChromeTo, Angle: 180}).Children(func() {
+		// The reference chrome shares the controls' band on macOS. Full pages,
+		// narrow rails and platforms with right-side controls reserve it.
+		titleBarHeight := c.TitleBar().Height
+		if a.settingsOpen || c.TitleBar().Right == 0 && !a.mainPageActive() && !a.detailPageActive() && !a.railCollapsed && !a.avatarRailActive() {
+			titleBarHeight = 0
+		}
+		ui.Row(c).FillWidth().Height(titleBarHeight).Shrink(0).DragWindow()
 		ui.Box(c).FillWidth().Grow(1).MinHeight(0).Children(func() {
 			if a.settingsOpen {
 				a.settingsPage(c, t)
@@ -87,28 +87,23 @@ func (a *appModel) view(c *ui.Context) {
 }
 
 func (a *appModel) escapeTopLayer() {
-	if a.issueResult.Open {
-		if a.issueResult.Panel.ReaderKey != "" {
-			a.closeIssueResultReader()
-			return
-		}
-		a.closeIssueResult()
+	if a.detailPageActive() {
+		a.closeDetail()
 		return
 	}
-	if a.contactHistoryFull != nil {
-		a.closeContactHistoryFull()
+	if a.priorChats != nil {
+		a.backProductConversations()
 		return
 	}
 	if a.aux != "" {
 		a.closeAux()
 		return
 	}
-	if a.workspaceOpen {
-		if a.activeDetail() == detailWork {
-			if a.escapeWorkspaceLayer() {
-				return
-			}
-		}
+	if ct := a.selectedContact(); ct != nil && ct.activity.open {
+		a.backProductActivity(ct)
+		return
+	}
+	if a.activeDetail() != "" {
 		a.closeDetail()
 	}
 }
@@ -125,14 +120,10 @@ func (a *appModel) captureLinkSettingsSource(c *ui.Context, source *string) bool
 
 func (a *appModel) settingsSourceForVisiblePage() string {
 	switch {
-	case a.issueResult.Open, a.aux != "":
+	case a.aux != "":
 		return settingsSourceAux
-	case a.contactHistoryFull != nil, a.detailIs(detailHistory):
-		return settingsSourceHistory
 	case a.detailIs(detailProfile):
 		return settingsSourceProfile
-	case a.workspaceOpen:
-		return settingsSourceWork
 	default:
 		return settingsSourceCommand
 	}
@@ -145,20 +136,10 @@ func (a *appModel) openSettingsFromContext(c *ui.Context, tab, source string) {
 
 func (a *appModel) armActiveSurfaceFallback() {
 	switch {
-	case a.aux == "issue-result" && a.issueResult.Open:
-		if a.issueResult.Panel.ReaderKey != "" {
-			a.issueResult.Panel.FocusReader = true
-		} else {
-			a.issueResult.Panel.FocusClose = true
-		}
-	case a.contactHistoryFull != nil:
-		a.focusHistoryFullBack = true
-	case a.detailIs(detailHistory):
-		a.focusDetailClose = true
-	case a.aux == "sources":
-		a.focusSourcesBack = true
+	case a.priorChats != nil:
+		a.priorChats.focusBack = true
 	case a.detailIs(detailProfile):
-		a.focusProfileEdit = true
+		a.focusDetailClose = true
 	default:
 		a.focusComposer = true
 	}
@@ -166,6 +147,14 @@ func (a *appModel) armActiveSurfaceFallback() {
 
 func (a *appModel) readerOptions(options markdownReaderOptions, scope, base string) markdownReaderOptions {
 	options.OpenLocalFile = func(dest string) error { return a.openMarkdownFile(base, dest) }
+	if !options.PlainText && (options.Theme == nil || options.Theme.Link == (markdown.Color{})) {
+		var theme markdown.Theme
+		if options.Theme != nil {
+			theme = *options.Theme
+		}
+		theme.Link = a.workTheme.Link
+		options.Theme = &theme
+	}
 	if !options.PlainText && scope != "" {
 		options.LinkScope = scope
 		options.LinkFocus = &a.markdownLinkFocus
@@ -214,9 +203,8 @@ func (a *appModel) finishMarkdownLinkReturn() {
 
 func (a *appModel) rail(c *ui.Context, t *ui.Theme) {
 	msgs := locales.In(c.Locale())
-	ui.Column(c).FillWidth().FillHeight().Padding(8).Gap(8).Background(a.workTheme.Rail).Children(func() {
-		ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
-			ui.Text(c, "Nagi").FontSize(typePageTitle).FontWeight(500).TextColor(t.Text)
+	ui.Column(c).FillWidth().FillHeight().Padding(8).Gap(8).Background(ui.Transparent).Children(func() {
+		ui.Row(c).FillWidth().Height(40).Shrink(0).DragWindow().AlignItems(ui.Center).Children(func() {
 			ui.Spacer(c)
 			ui.Toolbar(c, func() {
 				hide := iconControlFace(c, appTooltip(c, ui.Button(c, "").Label(msgs.RailHide()), msgs.RailHideContactsTooltip()), iconChrome, false)
@@ -242,7 +230,6 @@ func (a *appModel) rail(c *ui.Context, t *ui.Theme) {
 			}).Label(msgs.RailContactListActions()).Padding(0)
 		})
 		ui.SearchField(c, &a.contactSearch).Label(msgs.SearchContacts()).FontSize(typeAction).Placeholder(msgs.RailContactSearchPlaceholder())
-		a.contactScopeSelect(c)
 		visible := a.visibleContactIndices()
 		if len(visible) == 0 {
 			ui.Text(c, msgs.RailNoContactsMatch()).FontSize(typeLabel).FixedLineHeight(lineLabel).TextColor(t.TextMuted)
@@ -272,7 +259,7 @@ func (a *appModel) rail(c *ui.Context, t *ui.Theme) {
 }
 
 func (a *appModel) avatarRail(c *ui.Context, t *ui.Theme) {
-	ui.Column(c).Width(avatarRailWidth).Shrink(0).FillHeight().Padding(4).Gap(4).Background(a.workTheme.Rail).Children(func() {
+	ui.Column(c).Width(avatarRailWidth).Shrink(0).FillHeight().Padding(4).Gap(4).Background(ui.Transparent).Children(func() {
 		addLabel := locales.In(c.Locale()).AvatarAddContact()
 		add := appTooltip(c, ui.Button(c, "").Label(addLabel).
 			MinWidth(32).MinHeight(32).Width(32).Height(32).Padding(0).Justify(ui.Center), addLabel)
@@ -302,50 +289,31 @@ func (a *appModel) avatarRail(c *ui.Context, t *ui.Theme) {
 	})
 }
 
-func (a *appModel) avatarRailStatus(msgs locales.Messages, ct *contact) string {
-	notice := a.issueWorkNotice(ct)
-	status := ""
-	switch {
-	case notice.Attention:
-		status = msgs.TaskRailAttention(notice.IssueName)
-	case notice.Waiting:
-		status = msgs.TaskRailWaiting(notice.IssueName)
-	case notice.Active:
-		status = msgs.TaskRailInProgress(notice.IssueName)
-	default:
-		status = a.headerStatusLabel(ct, msgs)
-	}
-	if notice.ActiveCount > 0 {
-		status += "\n" + msgs.TaskActiveCount(notice.ActiveCount)
-	}
-	return status
-}
-
 func (a *appModel) avatarRailRow(c *ui.Context, t *ui.Theme, i int) {
 	ct := a.contacts[i]
 	msgs := locales.In(c.Locale())
-	status := a.avatarRailStatus(msgs, ct)
+	status := a.headerStatusLabel(ct, msgs)
+	if ct.Archived {
+		status = msgs.ProfileArchivedBadge()
+	}
 	label := msgs.AvatarContactLabel(ct.Name)
 	tip := label
 	if status != "" {
 		tip += "\n" + status
 	}
 	row := ui.ButtonBase(c).Key(ct.ID).Label(label).Description(status).
-		Selected(i == a.selected).Width(48).Height(44).Padding(4).Radius(8).
-		Justify(ui.Center).Background(ui.Transparent).BorderWidth(0).TextColor(t.Text)
+		Selected(i == a.selected).FillWidth().Height(44).Padding(4).Radius(8).
+		AlignItems(ui.Center).Justify(ui.Start).Background(ui.Transparent).BorderWidth(0).TextColor(t.Text)
 	if i == a.selected {
 		row.Background(t.Selection).TextColor(t.Text)
 	}
 	row = appTooltip(c, row, tip)
 	row.OnClick(func() { a.selectContact(i) })
+	a.bindBotRowMenu(row, ct.ID, msgs)
 	row.Children(func() {
-		a.avatarTile(c, t, 28)
-		if glyph, count, color := a.avatarRailMarker(ct); glyph != "" {
-			text := glyph
-			if count > 0 {
-				text = fmt.Sprintf("%s%d", glyph, count)
-			}
-			ui.Text(c, text).
+		contactAvatar(c, t, ct.Name, 24)
+		if marker, color := a.avatarRailMarker(ct); marker != "" {
+			ui.Text(c, marker).
 				FontSize(typeMeta).FontWeight(500).TextColor(color).
 				Background(t.Surface).Padding(1, 3).Radius(4).SingleLine().
 				Absolute().Right(0).Bottom(0).IgnoreInput(true)
@@ -353,122 +321,66 @@ func (a *appModel) avatarRailRow(c *ui.Context, t *ui.Theme, i int) {
 	})
 }
 
-func (a *appModel) avatarRailMarker(ct *contact) (string, int, ui.Color) {
-	notice := a.issueWorkNotice(ct)
-	switch {
-	case notice.AttentionCount > 0:
-		return "!", notice.AttentionCount, a.workTheme.Theme.Warning
-	case notice.WaitingCount > 0:
-		return "◷", notice.WaitingCount, a.workTheme.Theme.Warning
-	case notice.ActiveCount > 0:
-		return "▶", notice.ActiveCount, a.workTheme.Theme.Success
-	case ct.Status == statusWorking:
-		return "▶", 0, a.workTheme.Theme.Success
-	case ct.Status == statusAttention:
-		return "!", 0, a.workTheme.Theme.Warning
+func (a *appModel) avatarRailMarker(ct *contact) (string, ui.Color) {
+	switch ct.Status {
+	case statusWorking:
+		return "▶", a.workTheme.Theme.Success
+	case statusAttention:
+		return "!", a.workTheme.Theme.Warning
 	default:
-		return "", 0, a.workTheme.Theme.TextMuted
+		return "", ui.Color{}
 	}
 }
 
-func contactScopeIndex(scope string) int {
-	switch scope {
-	case "archived":
-		return 1
-	case "all":
-		return 2
-	default:
-		return 0
+func (a *appModel) bindBotRowMenu(row ui.Element, contactID string, msgs locales.Messages) {
+	row.ContextMenu(func(menu *ui.Menu) {
+		if menu.Item(msgs.ContactProfileAction()).Chosen() {
+			a.openContactProfile(contactID)
+		}
+	})
+	if a.focusProfileRow == contactID {
+		row.Focus().ScrollIntoView()
+		a.focusProfileRow = ""
 	}
-}
-
-func contactScopeFromIndex(index int) string {
-	switch index {
-	case 1:
-		return "archived"
-	case 2:
-		return "all"
-	default:
-		return "active"
-	}
-}
-
-func (a *appModel) contactScopeSelect(c *ui.Context) {
-	msgs := locales.In(c.Locale())
-	index := contactScopeIndex(a.contactScope)
-	choice := segmentedSelection(c, &index, msgs.ContactScopeActive(), msgs.ContactScopeArchived(), msgs.ContactScopeAll()).
-		Label(msgs.ContactScopeLabel()).FontSize(typeAction).FillWidth()
-	if choice.Changed() {
-		a.setContactScope(contactScopeFromIndex(index))
-	}
-}
-
-func (a *appModel) openIssueTarget(issueID string) {
-	ct := a.selectedContact()
-	if ct == nil || issueID == "" || ct.issueByID(issueID) == nil {
-		return
-	}
-	a.selectIssue(issueID)
-	a.setWorkspaceOpen(true)
-}
-
-func (a *appModel) openIssueFromRail(index int, issueID string) {
-	if index < 0 || index >= len(a.contacts) || issueID == "" {
-		return
-	}
-	ownerID := a.contacts[index].ID
-	a.selectContact(index)
-	ct := a.selectedContact()
-	if ct == nil || ct.ID != ownerID {
-		return
-	}
-	a.openIssueTarget(issueID)
 }
 
 func (a *appModel) railRow(c *ui.Context, t *ui.Theme, i int) {
 	ct := a.contacts[i]
 	currentMsgs := locales.In(c.Locale())
-	row := ui.ButtonBase(c).Label(currentMsgs.AvatarContactLabel(ct.Name)).Gap(8).Padding(4, 8).MinHeight(controlHit).Radius(0).AlignItems(ui.Start).Background(ui.Transparent).BorderWidth(0).FocusRing(false)
-	row = drawControlFace(c, row, 8, 4, false, false, i == a.selected, 0, 2)
+	selected := i == a.selected
+	row := ui.ButtonBase(c).Key(ct.ID).Label(currentMsgs.AvatarContactLabel(ct.Name)).Selected(selected).
+		FillWidth().Gap(8).Padding(4, 8).MinHeight(controlHit).Radius(8).AlignItems(ui.Center).Background(ui.Transparent).BorderWidth(0)
+	focusFill := a.workTheme.NavHover
+	if selected {
+		focusFill = t.Selection
+	}
+	row = drawControlFace(c, row, 8, 4, false, false, selected, 0, 2, focusFill)
 	row.OnClick(func() { a.selectContact(i) })
+	if ct.Archived {
+		row.Description(currentMsgs.ProfileArchivedBadge())
+	}
+	a.bindBotRowMenu(row, ct.ID, currentMsgs)
 	row.Children(func() {
-		a.avatarTile(c, t, 28)
-		ui.Column(c).Grow(1).Gap(2).Children(func() {
+		contactAvatar(c, t, ct.Name, 28)
+		ui.Column(c).Grow(1).MinWidth(0).Gap(2).Children(func() {
 			ui.Row(c).AlignItems(ui.Center).Gap(4).Children(func() {
 				nameWeight := 400
-				if i == a.selected {
+				if selected {
 					nameWeight = 500
 				}
-				ui.Text(c, ct.Name).FontSize(typeRailName).FontWeight(nameWeight).FixedLineHeight(lineNavigation).TextColor(t.Text)
-				ui.Spacer(c)
-				msgs := locales.In(c.Locale())
-				notice := a.issueWorkNotice(ct)
-				if notice.ActiveCount > 0 {
-					ui.Text(c, msgs.TaskActiveCount(notice.ActiveCount)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
-				}
+				ui.Text(c, ct.Name).FontSize(typeRailName).FontWeight(nameWeight).FixedLineHeight(lineNavigation).
+					MaxLines(1).Grow(1).MinWidth(0).TextColor(t.Text)
 				if ct.Unread > 0 {
-					ui.Text(c, fmt.Sprintf("%d", ct.Unread)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Warning)
+					ui.Text(c, fmt.Sprintf("%d", ct.Unread)).FontSize(typeMeta).FixedLineHeight(lineMeta).Shrink(0).TextColor(t.Warning)
 				}
 			})
 			msgs := locales.In(c.Locale())
-			notice := a.issueWorkNotice(ct)
 			line := a.snippet(ct, msgs)
 			color := t.TextMuted
-			targetID := ""
-			switch {
-			case notice.Attention:
-				line = msgs.TaskRailAttention(notice.IssueName)
+			if ct.Archived {
+				line = msgs.ProfileArchivedBadge()
 				color = t.Warning
-				targetID = notice.IssueID
-			case notice.Waiting:
-				line = msgs.TaskRailWaiting(notice.IssueName)
-				color = t.Warning
-				targetID = notice.IssueID
-			case notice.Active:
-				line = msgs.TaskRailInProgress(notice.IssueName)
-				color = t.Success
-				targetID = notice.IssueID
-			case ct.Status != statusReady:
+			} else if ct.Status != statusReady {
 				status := a.statusLabel(ct, msgs)
 				detail := strings.TrimSpace(line)
 				if detail == status {
@@ -481,27 +393,32 @@ func (a *appModel) railRow(c *ui.Context, t *ui.Theme, i int) {
 				}
 				color = a.statusColor(t, ct.Status)
 			}
-			if targetID != "" {
-				summary := ui.Button(c, "").Label(line).FontSize(typeRailSummary).FixedLineHeight(lineNavigation).
-					MinHeight(32).Padding(2, 6).FillWidth().Justify(ui.Start)
-				summary = appTooltip(c, summary, line)
-				summary.OnClick(func() { a.openIssueFromRail(i, targetID) })
-				summary.Children(func() {
-					ui.Text(c, line).FontSize(typeRailSummary).FixedLineHeight(lineNavigation).MaxLines(2).TextColor(color)
-				})
-			} else {
-				ui.Text(c, line).FontSize(typeRailSummary).FixedLineHeight(lineNavigation).MaxLines(1).TextColor(color)
-			}
+			ui.Text(c, line).FontSize(typeRailSummary).FixedLineHeight(lineNavigation).MaxLines(1).TextColor(color)
 		})
 	})
 }
 
-func (a *appModel) avatarTile(c *ui.Context, t *ui.Theme, size float32) {
-	tile := ui.Column(c).Width(size).Height(size).Radius(size / 3).Background(t.SurfaceHover)
-	tile.Children(func() {
-		if avatarBMP != nil {
-			ui.Image(c, avatarBMP).Width(size).Height(size).Radius(size / 3)
+func contactAvatar(c *ui.Context, t *ui.Theme, name string, size float32) {
+	name = strings.TrimSpace(name)
+	initials := [2]rune{'?'}
+	n := 0
+	for word := range strings.FieldsSeq(name) {
+		for _, r := range word {
+			if unicode.IsLetter(r) || unicode.IsNumber(r) {
+				initials[n] = unicode.ToUpper(r)
+				n++
+				break
+			}
 		}
+		if n == len(initials) {
+			break
+		}
+	}
+	background, ink := contactAvatarColors(t, name)
+	ui.Box(c).Size(size, size).MinWidth(size).Shrink(0).Radius(8).Background(background).
+		AlignItems(ui.Center).Justify(ui.Center).IgnoreInput(true).Children(func() {
+		ui.Text(c, string(initials[:max(1, n)])).FontSize(typeMeta).FontWeight(600).FixedLineHeight(lineMeta).
+			SingleLine().TextColor(ink).IgnoreInput(true)
 	})
 }
 
@@ -597,7 +514,7 @@ func recoveryNotice(c *ui.Context, t *ui.Theme, summary, detail string, expanded
 }
 
 func (a *appModel) recoveryNotice(c *ui.Context, t *ui.Theme, key, summary, detail string, settings bool, disclosure ...func(bool, func())) {
-	localData := key == "startup" && a.runtimeStage == startupStageLocalStore
+	localData := key == "startup" && a.runtimeStage == startupStageLocalStore && a.productHost() == nil
 	detail = a.redactConnectionText(detail)
 	key = "recovery:" + key + ":" + detail
 	var openSettings func()
@@ -640,17 +557,18 @@ func (a *appModel) runtimeRecoverySummary(msgs locales.Messages) string {
 		return msgs.RecoveryLocalDataUnavailable()
 	}
 	switch a.runtimeErrKind {
-	case runtimeNoticeHelperMissing:
-		return msgs.RecoveryRuntimeMissing()
-	case runtimeNoticePrepare, runtimeNoticeStart:
+	case runtimeNoticeStart:
 		return msgs.RecoveryRuntimeStartFailed()
 	case runtimeNoticeSavedNeedsRepair:
 		return msgs.ConnectionErrorSavedNeedsRepair()
-	case runtimeNoticeConnectionRequired, runtimeNoticeAPIKey, runtimeNoticeEnvParse:
+	case runtimeNoticeConnectionRequired:
 		return msgs.ConnectionRecoverySetupHint()
 	case runtimeNoticeStoreSave:
 		return msgs.RecoveryLocalSaveFailed()
 	default:
+		if a.runtimeStatus == runtimeStateExited {
+			return msgs.ConnectionRecoveryNotConnectedHint()
+		}
 		return msgs.ConnectionRecoveryManagedHint()
 	}
 }
@@ -663,7 +581,7 @@ func (a *appModel) localSaveNotice(c *ui.Context, t *ui.Theme) {
 	secondaryButton(c, locales.In(c.Locale()).SettingsRetrySave()).Label(locales.In(c.Locale()).SettingsRetrySave()).OnClick(func() { _ = a.persist() })
 }
 
-func (a *appModel) connectionRecoveryNotice(c *ui.Context, t *ui.Theme, state connectionViewState) {
+func (a *appModel) connectionRecoveryNotice(c *ui.Context, t *ui.Theme, state connectionViewState, headerStatus string, showRuntimeError bool) {
 	msgs := locales.In(c.Locale())
 	title, hint := msgs.ConnectionStatusSetupNeeded(), msgs.ConnectionRecoverySetupHint()
 	switch state {
@@ -671,20 +589,30 @@ func (a *appModel) connectionRecoveryNotice(c *ui.Context, t *ui.Theme, state co
 		title, hint = msgs.ConnectionStatusSavedAwaitingApply(), msgs.ConnectionRecoverySavedHint()
 	case connectionViewNotConnected:
 		title, hint = msgs.ConnectionStatusNotConnected(), msgs.ConnectionRecoveryNotConnectedHint()
-		if a.runtimeStage == "Connection configuration" && (a.connectionEffective != nil || a.connectionSaved != nil || a.connectionManaged) {
+		if a.runtimeStatus != runtimeStateExited && a.runtimeStage == "Connection configuration" && (a.connectionEffective != nil || a.connectionSaved != nil || a.connectionManaged) {
 			title, hint = msgs.ConnectionRecoveryManagedTitle(), msgs.ConnectionRecoveryManagedHint()
 		}
 	}
+	runtimeSummary := ""
+	if showRuntimeError {
+		runtimeSummary = a.runtimeRecoverySummary(msgs)
+	}
 	ui.Column(c).Padding(8, 16).Gap(3).Children(func() {
-		ui.Text(c, title).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Warning)
-		if hint != "" {
+		if title != headerStatus {
+			ui.Text(c, title).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Warning)
+		}
+		if hint != "" && hint != runtimeSummary {
 			ui.Text(c, hint).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 		}
-		if a.hasRuntimeError() && a.runtimeErrKind != runtimeNoticeConnectionRequired {
-			a.recoveryNotice(c, t, "startup", a.runtimeRecoverySummary(msgs), a.runtimeErrorDisplay(msgs)+"\n"+a.runtimeHintDisplay(msgs), false)
+		if showRuntimeError {
+			a.recoveryNotice(c, t, "startup", runtimeSummary, a.runtimeErrorDisplay(msgs)+"\n"+a.runtimeHintDisplay(msgs), false)
 		}
 		ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
-			secondaryButton(c, msgs.ConnectionRecoveryOpenSettings()).Label(msgs.ConnectionRecoveryOpenSettings()).MinHeight(32).OnClick(func() { a.openConfiguration() })
+			entry := secondaryButton(c, msgs.ConnectionRecoveryOpenSettings()).Label(msgs.ConnectionRecoveryOpenSettings()).MinHeight(32).OnClick(a.openConfiguration)
+			if a.focusConnectionEntry && !c.Focused(a.composerHandle) {
+				entry.Focus()
+				a.focusConnectionEntry = false
+			}
 			secondaryButton(c, msgs.ConfigurationDetails()).OnClick(func() { a.openAdvancedSettings() })
 		})
 	})
@@ -693,26 +621,38 @@ func (a *appModel) connectionRecoveryNotice(c *ui.Context, t *ui.Theme, state co
 func (a *appModel) main(c *ui.Context, t *ui.Theme) {
 	ct := a.selectedContact()
 	msgs := locales.In(c.Locale())
-	ui.Column(c).Grow(1).FillHeight().Background(a.workTheme.Reading).Children(func() {
+	ui.Column(c).Grow(1).MinWidth(0).FillHeight().Margin(4).Background(a.workTheme.Reading).Border(1, t.Border).Radius(16).Clip().Children(func() {
+		if browser := a.priorChats; browser != nil && browser.contact == ct {
+			a.productConversationsView(c, t, browser)
+			return
+		}
+		headerStatus := a.headerStatusLabel(ct, msgs)
+		a.header(c, t, ct, headerStatus)
+		state := a.connectionViewState()
+		showConnectionSettings := true
 		if !a.demo {
 			if a.localSaveErr != "" {
 				ui.Column(c).Padding(8, 16).Gap(6).Children(func() {
 					a.localSaveNotice(c, t)
 				})
 			}
-			state := a.connectionViewState()
+			duplicateLocalSave := a.localSaveErr != "" && a.runtimeErrKind == runtimeNoticeStoreSave && a.runtimeErr == a.localSaveErr
+			showRuntimeError := a.hasRuntimeError() && (!duplicateLocalSave || a.runtimeStage == startupStageLocalStore)
 			switch {
 			case a.runtimeStatus == runtimeStateDraining:
 				ui.Text(c, msgs.RuntimeDraining()).FontSize(typeBody).FixedLineHeight(lineBody).Padding(8, 16).TextColor(t.TextMuted)
 			case state == connectionViewApplying:
 				ui.Column(c).Padding(8, 16).Gap(2).Children(func() {
-					ui.Text(c, msgs.ConnectionStatusApplying()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Warning)
-					ui.Text(c, msgs.ConnectionRecoverySavedHint()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
+					if title := msgs.ConnectionStatusApplying(); title != headerStatus {
+						ui.Text(c, title).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Warning)
+					}
+					ui.Text(c, msgs.ConnectionRecoveryApplyingHint()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 				})
 			case a.connectionConfigurationBlocked():
-				a.connectionRecoveryNotice(c, t, state)
+				a.connectionRecoveryNotice(c, t, state, headerStatus, showRuntimeError && a.runtimeErrKind != runtimeNoticeConnectionRequired)
+				showConnectionSettings = false
 			case a.hasRuntimeError():
-				if a.localSaveErr == "" || a.runtimeErrKind != runtimeNoticeStoreSave {
+				if showRuntimeError {
 					ui.Column(c).Padding(8, 16).Gap(6).Children(func() {
 						a.recoveryNotice(c, t, "startup", a.runtimeRecoverySummary(msgs), a.runtimeErrorDisplay(msgs)+"\n"+a.runtimeHintDisplay(msgs), true)
 						details := secondaryButton(c, msgs.ConfigurationDetails()).OnClick(func() { a.openAdvancedSettings() })
@@ -721,113 +661,82 @@ func (a *appModel) main(c *ui.Context, t *ui.Theme) {
 							a.focusConfiguration = false
 						}
 					})
+					showConnectionSettings = false
 				}
 			case a.runtimeStatus == runtimeStateStarting:
-				ui.Text(c, msgs.RuntimeConnecting()).FontSize(typeBody).FixedLineHeight(lineBody).Padding(8, 16).TextColor(t.TextMuted)
-			}
-			if a.issueToolErr != "" {
-				ui.Row(c).Padding(8, 16).Gap(8).AlignItems(ui.Center).Children(func() {
-					a.recoveryNotice(c, t, "coordination", msgs.IssueCollaborationRepairHint(), a.issueToolErr, true)
-					secondaryButton(c, msgs.ConfigurationDetails()).OnClick(func() { a.openAdvancedSettings() })
+				ui.Column(c).Padding(8, 16).Gap(2).Children(func() {
+					if title := msgs.RuntimeConnecting(); title != headerStatus {
+						ui.Text(c, title).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
+					}
+					ui.Text(c, msgs.ConnectionRecoveryConnectingHint()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 				})
 			}
 		}
-		a.connectionErrorBanner(c, t, ct)
+		showConnectionSettings = a.connectionErrorBanner(c, t, ct, showConnectionSettings)
 		if ct.LoadErr != "" {
 			if !knownConnectionFailure(ct.LoadErr) {
-				ui.Column(c).Padding(8, 16).Children(func() { a.recoveryNotice(c, t, "history:"+ct.ID, msgs.HistoryReadFailed(), ct.LoadErr, true) })
+				ui.Column(c).Padding(8, 16).Children(func() {
+					a.recoveryNotice(c, t, "history:"+ct.ID, msgs.HistoryReadFailed(), ct.LoadErr, showConnectionSettings)
+				})
+				showConnectionSettings = false
 			}
 		}
 		if ct.Archived {
 			ui.Row(c).AlignItems(ui.Center).Gap(8).Padding(6, 16).Background(t.SurfaceHover).Children(func() {
 				ui.Text(c, msgs.ArchiveNotice()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Warning)
-				ui.Spacer(c)
-				secondaryButton(c, msgs.RestoreContactAction()).TextColor(t.Text).OnClick(func() { a.restoreContact(ct.ID) })
-				secondaryButton(c, msgs.ContactProfileAction()).OnClick(func() { a.openContactProfile(ct.ID) })
 			})
 		}
-		a.header(c, t)
-		a.chat(c, t)
+		a.chat(c, t, state, showConnectionSettings)
 	})
 }
 
-func (a *appModel) workEntryStatus(ct *contact, msgs locales.Messages) (string, bool) {
-	if ct == nil {
-		return "", false
-	}
-	notice := a.issueWorkNotice(ct)
-	switch {
-	case notice.Attention:
-		return msgs.TaskStatusNeedsAttention(), true
-	case notice.Waiting:
-		return msgs.TaskStatusWaiting(), true
-	case notice.Active:
-		return msgs.TaskStatusInProgress(), false
-	default:
-		return "", false
-	}
-}
-
-func (a *appModel) header(c *ui.Context, t *ui.Theme) {
-	ct := a.selectedContact()
+func (a *appModel) header(c *ui.Context, t *ui.Theme, ct *contact, status string) {
 	msgs := locales.In(c.Locale())
 	ui.Row(c).Key("header").Justify(ui.Center).Children(func() {
-		ui.Column(c).FillWidth().MaxWidth(conversationMaxWidth).Padding(4, 6).Gap(4).Children(func() {
+		ui.Column(c).FillWidth().Padding(4, 6).Gap(4).Children(func() {
 			ui.Row(c).FillWidth().MinHeight(32).AlignItems(ui.Center).Gap(12).Children(func() {
-				a.avatarTile(c, t, 28)
 				ui.Column(c).MinWidth(0).Shrink(1).Gap(0).Children(func() {
 					ui.Text(c, ct.Name).FontSize(typeContactTitle).FontWeight(500).FixedLineHeight(lineHeader).TextColor(t.Text).MaxLines(2)
 					ui.Row(c).AlignItems(ui.Center).Gap(12).Wrap().Children(func() {
-						ui.Text(c, a.headerStatusLabel(ct, msgs)).FontSize(typeHeaderMeta).FixedLineHeight(lineHeader).FontWeight(400).TextColor(a.headerStatusColor(t, ct))
+						ui.Text(c, status).FontSize(typeHeaderMeta).FixedLineHeight(lineHeader).FontWeight(400).TextColor(a.headerStatusColor(t, ct))
 						ui.Text(c, ct.Role).FontSize(typeHeaderMeta).FontWeight(400).FixedLineHeight(lineHeader).MinWidth(0).Grow(1).TextColor(t.TextMuted)
 					})
 				})
-				ui.Spacer(c)
-				ui.Row(c).Shrink(0).Children(func() { a.navigationToolbar(c, t) })
-			})
-			if status, attention := a.workEntryStatus(ct, msgs); status != "" && !a.workspaceOpen {
-				color := t.Success
-				if attention {
-					color = t.Warning
+				if a.productHost() != nil {
+					ui.Spacer(c)
+					previous := secondaryButton(c, msgs.PreviousChats()).Shrink(0).Disabled(!a.productProfileReady()).OnClick(func() {
+						a.browseProductConversations(ct, "")
+					})
+					if a.focusPreviousChats {
+						previous.Focus()
+						a.focusPreviousChats = false
+					}
+				} else if a.railCollapsed {
+					ui.Spacer(c)
 				}
-				ui.Text(c, status).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(color)
-			}
+				if a.railCollapsed {
+					a.showContactsButton(c, t)
+				}
+			})
 		})
 	})
 }
 
 // ---------- chat ----------
 
-type chatItem struct {
-	id      string
-	entry   *historyEntry
-	msg     *message
-	working bool
-}
-
-func (a *appModel) chat(c *ui.Context, t *ui.Theme) {
+func (a *appModel) chat(c *ui.Context, t *ui.Theme, state connectionViewState, showConnectionSettings bool) {
 	ct := a.selectedContact()
-	items := make([]chatItem, 0, len(ct.Messages)+len(ct.Revealed)+1)
-	for _, e := range a.revealedEntries() {
-		e := e
-		items = append(items, chatItem{id: "h-" + e.ID, entry: &e})
-	}
-	for _, m := range ct.Messages {
-		m := m
-		key := fmt.Sprintf("m-%d", m.ID)
+	messages := ct.Messages
+	ct.list.Key = func(i int) any {
+		m := messages[i]
 		if m.Key != "" {
-			key = m.Key
+			return m.Key
 		}
-		items = append(items, chatItem{id: key, msg: m})
+		return m.ID
 	}
-	ct.list.Key = func(i int) any { return items[i].id }
 	ct.list.FollowEnd = true
-	if a.scrollTo >= 0 {
-		ct.list.ScrollTo(a.scrollTo, ui.Start)
-		a.scrollTo = -1
-	}
 	ui.Column(c).Key("chat").Grow(1).Children(func() {
-		if len(items) == 0 {
+		if len(messages) == 0 {
 			ui.Row(c).Grow(1).FillHeight().Justify(ui.Center).Children(func() {
 				ui.Scroll(c).FillHeight().FillWidth().MaxWidth(conversationMaxWidth).Padding(16).Children(func() {
 					a.emptyState(c, t)
@@ -835,18 +744,12 @@ func (a *appModel) chat(c *ui.Context, t *ui.Theme) {
 			})
 		} else {
 			ui.Row(c).Grow(1).FillHeight().Justify(ui.Center).Children(func() {
-				ui.List(c, &ct.list, len(items), func(i int) {
-					it := items[i]
-					switch {
-					case it.entry != nil:
-						a.historyMessage(c, t, *it.entry, it.entry.ID == a.highlight)
-					default:
-						a.message(c, t, ct, it.msg)
-					}
+				ui.List(c, &ct.list, len(messages), func(i int) {
+					a.message(c, t, ct, messages[i])
 				}).Label(locales.In(c.Locale()).ConversationMessagesLabel()).FillHeight().FillWidth().MaxWidth(conversationMaxWidth).Padding(16).Gap(12)
 			})
 		}
-		if len(items) > 0 && !ct.list.AtEnd() {
+		if len(messages) > 0 && !ct.list.AtEnd() {
 			ui.Row(c).Key("back-to-latest").Justify(ui.Center).Children(func() {
 				back := secondaryButton(c, locales.In(c.Locale()).BackToLatest())
 				back.OnClick(func() {
@@ -855,27 +758,329 @@ func (a *appModel) chat(c *ui.Context, t *ui.Theme) {
 				})
 			})
 		}
+		a.conversationActivities(c, t, ct)
 		ui.Row(c).Key("composer").Justify(ui.Center).Children(func() {
 			ui.Column(c).FillWidth().MaxWidth(conversationMaxWidth).Children(func() {
-				a.composer(c, t)
+				a.composer(c, t, state, showConnectionSettings)
 			})
 		})
 	})
 }
 
-func (a *appModel) historyMessage(c *ui.Context, t *ui.Theme, e historyEntry, highlight bool) {
-	bg := ui.Transparent
-	if e.From == "me" {
-		bg = a.workTheme.BubbleUser
-	} else if highlight {
-		bg = t.Selection
+func (a *appModel) backProductActivity(ct *contact) {
+	p := &ct.activity
+	switch {
+	case p.file != nil:
+		p.file = nil
+	case p.result != nil:
+		p.result = nil
+	case p.activityID != "":
+		p.activityID, p.activity = "", nil
+		p.problem, p.actionProblem = "", ""
+	default:
+		p.open, p.focusToggle = false, true
+		return
 	}
+	p.scroll.Y, p.focusBack = 0, true
+}
+
+func (a *appModel) conversationActivities(c *ui.Context, t *ui.Theme, ct *contact) {
+	p, client := &ct.activity, a.productActivityClient()
+	if a.productHost() == nil && !p.loaded {
+		return
+	}
+	if client != nil && (!p.loaded || p.client != client || p.revision != a.productActivityRevision()) {
+		a.refreshProductActivities(ct, false)
+	}
+	if len(p.items) == 0 && p.problem == "" && !p.open && client != nil {
+		return
+	}
+	msgs := locales.In(c.Locale())
+	ui.Row(c).Key("conversation-activities").Justify(ui.Center).Children(func() {
+		ui.Column(c).Key(ct.ID).FillWidth().MaxWidth(conversationMaxWidth).Padding(0, 16).Gap(4).Children(func() {
+			ui.Row(c).FillWidth().AlignItems(ui.Center).Children(func() {
+				if p.open && p.activityID != "" {
+					back := secondaryButton(c, msgs.BackAction()).Label(msgs.BackLabel()).OnClick(func() { a.backProductActivity(ct) })
+					if p.focusBack {
+						back.Focus()
+						p.focusBack = false
+					}
+				}
+				toggle := secondaryButton(c, msgs.WorkActivity()).Label(msgs.WorkActivity()).OnClick(func() {
+					p.open = !p.open
+					p.scroll.Y = 0
+				})
+				if p.focusToggle || p.focusBack && p.activityID == "" {
+					toggle.Focus()
+					p.focusToggle, p.focusBack = false, false
+				}
+				if p.open {
+					ui.Spacer(c)
+					secondaryButton(c, msgs.ReloadAction()).Disabled(client == nil || p.reading || p.changing).OnClick(func() {
+						a.refreshProductActivities(ct, false)
+					})
+				}
+			})
+			if p.open {
+				ui.Scroll(c).FillWidth().Height(230).TrackScroll(&p.scroll).Children(func() {
+					ui.Column(c).FillWidth().MinWidth(0).Gap(8).Padding(4, 8).Children(func() {
+						if client == nil {
+							a.activityText(c, t, msgs.WorkHistoryNotReady())
+						}
+						if p.problem != "" {
+							ui.Text(c, p.problem).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Warning)
+						}
+						if p.actionProblem != "" {
+							ui.Text(c, p.actionProblem).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Warning)
+						}
+						switch {
+						case p.result != nil:
+							a.productActivityResultView(c, t, p)
+						case p.activity != nil:
+							a.productActivityDetails(c, t, ct, client)
+						case p.activityID == "":
+							for _, item := range p.items {
+								ui.Row(c).Key(item.ActivityID).Wrap().AlignItems(ui.Center).Gap(8).Children(func() {
+									secondaryButton(c, item.Goal).Label(msgs.IssueRowLabel(item.Goal)).Disabled(client == nil || p.reading).OnClick(func() {
+										a.openProductActivity(ct, item.ActivityID)
+									})
+									a.activityText(c, t, productActivityStateLabel(msgs, item.State))
+								})
+							}
+							if p.nextCursor != nil {
+								secondaryButton(c, msgs.SupplementShowAll()).Disabled(client == nil || p.reading).OnClick(func() { a.refreshProductActivities(ct, true) })
+							}
+							if client != nil && p.loaded && !p.reading && len(p.items) == 0 && p.problem == "" {
+								a.activityText(c, t, msgs.WorkNoCurrent())
+							}
+						}
+						if p.reading {
+							a.activityText(c, t, msgs.ResultLoadingHistory())
+						}
+					})
+				})
+			}
+		})
+	})
+}
+
+func productActivityStateLabel(msgs locales.Messages, state string) string {
+	switch state {
+	case "notStarted":
+		return msgs.TaskStatusNotStarted()
+	case "running":
+		return msgs.TaskStatusInProgress()
+	case "waitingForAnswer":
+		return msgs.TaskStatusWaiting()
+	case "needsAttention":
+		return msgs.TaskStatusNeedsAttention()
+	case "completed":
+		return msgs.TaskStatusCompleted()
+	case "cancelled":
+		return msgs.TaskStatusCanceled()
+	default:
+		return state
+	}
+}
+
+func (a *appModel) activityText(c *ui.Context, t *ui.Theme, text string) {
+	ui.Text(c, text).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
+}
+
+func (a *appModel) productActivityDetails(c *ui.Context, t *ui.Theme, ct *contact, client *pi.ProductClient) {
+	p, msgs := &ct.activity, locales.In(c.Locale())
+	activity := p.activity
+	target := productActivityIntent{BotID: ct.ID, ActivityID: activity.ActivityID}
+	pending := a.activityIntents[activity.ActivityID]
+	blocked := client == nil || p.changing || pending.OperationID != "" || a.dataRecoveryBlocksChanges()
+	ui.Text(c, activity.Goal).FontSize(typeSettingsTitle).FontWeight(500).FixedLineHeight(lineSettingsTitle).TextColor(t.Text)
+	a.activityText(c, t, productActivityStateLabel(msgs, activity.State))
+	if origin := activity.OriginConversationID; origin != "" {
+		source := secondaryButton(c, msgs.SourceChat()).Disabled(client == nil).OnClick(func() { a.browseProductConversations(ct, origin) })
+		if p.focusSource {
+			source.Focus().ScrollIntoView()
+			p.focusSource = false
+		}
+	}
+	for _, requirement := range activity.Requirements {
+		a.activityText(c, t, requirement)
+	}
+	taskContextReadOnlyView(c, a.workTheme, productTaskContext(activity.Materials))
+	if pending.OperationID != "" {
+		a.activityText(c, t, msgs.SupplementUnknown())
+		if p.forms[activity.ActivityID] == nil {
+			a.activityText(c, t, pending.Text)
+			taskContextReadOnlyView(c, a.workTheme, productTaskContext(pending.Materials))
+		}
+		secondaryButton(c, msgs.ReloadAction()).Disabled(client == nil || p.changing || a.dataRecoveryBlocksChanges()).OnClick(func() {
+			a.runProductActivityAction(ct, client, pending, false)
+		})
+	}
+	for _, question := range activity.Questions {
+		ui.Column(c).Key(question.QuestionID).FillWidth().Gap(4).Children(func() {
+			a.activityText(c, t, question.Text)
+			if question.State == "open" {
+				answer := target
+				answer.Action, answer.Revision = "answer", question.Revision
+				answer.ExecutionID, answer.QuestionID = question.ExecutionID, question.QuestionID
+				secondaryButton(c, msgs.IssueNoticeWaiting(activity.Goal)).Disabled(blocked).OnClick(func() { a.editProductActivity(ct, answer) })
+			}
+			if question.Answer != nil {
+				a.activityText(c, t, question.Answer.Text)
+				taskContextReadOnlyView(c, a.workTheme, productTaskContext(question.Answer.Materials))
+				switch question.Delivery {
+				case "saved":
+					a.activityText(c, t, msgs.IssueAnswerSaved())
+				case "dispatching":
+					a.activityText(c, t, msgs.IssueAnswerDispatching())
+				case "unknown":
+					a.activityText(c, t, msgs.SupplementUnknown())
+				default:
+					a.activityText(c, t, question.Delivery)
+				}
+			}
+		})
+	}
+	canContinue := len(activity.OpenQuestionIDs) == 0
+	for i := len(activity.Executions) - 1; i >= 0; i-- {
+		execution := activity.Executions[i]
+		label := msgs.IssueCurrentRun(workNoticeText(msgs, execution.State, ""))
+		ui.Column(c).Key(execution.ExecutionID).Gap(4).Children(func() {
+			if i != len(activity.Executions)-1 {
+				label = workNoticeText(msgs, execution.State, "")
+			}
+			a.activityText(c, t, label)
+			if execution.Partial != nil && *execution.Partial != "" {
+				a.activityText(c, t, msgs.IssueCurrentResponse(*execution.Partial))
+			}
+			if execution.Error != "" {
+				a.activityText(c, t, a.redactConnectionText(execution.Error))
+			}
+			switch execution.State {
+			case "starting", "running":
+				canContinue = false
+				stop := target
+				stop.Action, stop.Revision, stop.ExecutionID = "stop", execution.Revision, execution.ExecutionID
+				if p.stopping == execution.ExecutionID {
+					a.activityText(c, t, msgs.IssueSendCancelRequested())
+				}
+				secondaryButton(c, msgs.WorkStopIssueTask()).Disabled(blocked || p.stopping == execution.ExecutionID).OnClick(func() { a.submitProductActivity(ct, stop, nil) })
+			case "unknown":
+				if i == len(activity.Executions)-1 {
+					canContinue = false
+				}
+			default:
+				label := msgs.IssueOpenResultRun(fmt.Sprint(i + 1))
+				secondaryButton(c, label).Label(label).Disabled(client == nil || p.reading).OnClick(func() {
+					a.readProductActivityResult(ct, activity.ActivityID, execution.ExecutionID)
+				})
+			}
+		})
+	}
+	if canContinue && p.forms[activity.ActivityID] == nil {
+		target.Action, target.Revision = "continue", activity.Revision
+		secondaryButton(c, msgs.SupplementAdd()).Disabled(blocked || ct.Archived).OnClick(func() { a.editProductActivity(ct, target) })
+	}
+	if form := p.forms[activity.ActivityID]; form != nil {
+		a.productActivityEditView(c, t, ct, form, blocked)
+	}
+}
+
+func (a *appModel) productActivityEditView(c *ui.Context, t *ui.Theme, ct *contact, form *productActivityForm, blocked bool) {
+	p, msgs := &ct.activity, locales.In(c.Locale())
+	label, submit := msgs.SupplementFormLabel(), msgs.IssueResume()
+	if form.target.Action == "answer" {
+		label, submit = msgs.IssueNoticeWaiting(p.activity.Goal), msgs.ContactSaveChanges()
+	}
+	ui.Column(c).Key(form.target.ActivityID + ":" + form.target.QuestionID).FillWidth().Gap(8).Children(func() {
+		input := formTextArea(c, &form.text, false, a.workTheme.InputBorder).Label(label).Disabled(blocked).Height(80)
+		if form.focus {
+			input.Focus().ScrollIntoView()
+			form.focus = false
+		}
+		if !blocked {
+			form.materials.chooseFile = func() { a.chooseActivityMaterial(ct, form) }
+			form.materials.view(c, a.workTheme)
+		} else {
+			taskContextReadOnlyView(c, a.workTheme, form.materials.items)
+		}
+		ui.Row(c).Wrap().Gap(8).Children(func() {
+			empty := strings.TrimSpace(form.text) == "" && (form.target.Action == "answer" || form.materials.count() == 0)
+			secondaryButton(c, submit).Disabled(blocked || empty || form.materials.formOpen).OnClick(func() { a.submitProductActivity(ct, form.target, form) })
+			secondaryButton(c, msgs.SupplementCancel()).Disabled(blocked).OnClick(func() { delete(p.forms, form.target.ActivityID) })
+		})
+	})
+}
+
+func (a *appModel) productActivityResultView(c *ui.Context, t *ui.Theme, p *productActivityPanel) {
+	msgs := locales.In(c.Locale())
+	result := p.result
+	if file := p.file; file != nil {
+		a.activityText(c, t, file.Path)
+		a.activityText(c, t, msgs.ResultCurrentFileDiff())
+		if notice := issueResultInspectionNoticeText(msgs, *file); notice != "" {
+			a.activityText(c, t, notice)
+		} else if file.ReadErrorKind != "" {
+			a.activityText(c, t, issueResultNoticeText(msgs, file.ReadErrorKind, file.ReadErrorDetail))
+		} else if file.Size == 0 {
+			a.activityText(c, t, msgs.ResultEmptyFile())
+		} else {
+			markdownReader(c, file.Preview, markdownReaderOptions{PlainText: true, CopyLabel: msgs.CopyResultLabel()}).FontSize(typeBody).FixedLineHeight(lineBody)
+		}
+		return
+	}
+	ui.Text(c, msgs.ResultHeading()).FontSize(typeSettingsTitle).FontWeight(500).FixedLineHeight(lineSettingsTitle).TextColor(t.Text)
+	if result.Text == "" {
+		a.activityText(c, t, msgs.ResultNoAssistant())
+	} else {
+		markdownReader(c, result.Text, markdownReaderOptions{CopyLabel: msgs.CopyResultLabel()}).FontSize(typeBody).FixedLineHeight(lineBody)
+	}
+	a.activityText(c, t, msgs.ResultReportedFiles())
+	if len(result.Files) == 0 {
+		a.activityText(c, t, msgs.ResultNoFiles())
+	}
+	for i, file := range result.Files {
+		ui.Column(c).Key(fmt.Sprintf("%s/%d", file.CallID, i)).Gap(4).Children(func() {
+			a.activityText(c, t, file.Path)
+			ui.Row(c).Wrap().Gap(8).Children(func() {
+				secondaryButton(c, msgs.ResultReadFile()).Label(msgs.ResultFileRowLabel(fmt.Sprint(i+1), filepath.Base(file.Path))).OnClick(func() {
+					a.inspectProductActivityFile(p, file.Path)
+				})
+				secondaryButton(c, msgs.ReaderOpenFileLabel()).OnClick(func() { a.openProductActivityFile(p, file.Path, false) })
+				secondaryButton(c, msgs.ReaderShowInFinderLabel()).OnClick(func() { a.openProductActivityFile(p, file.Path, true) })
+			})
+		})
+	}
+}
+
+func (a *appModel) productReadOnlyTranscript(c *ui.Context, t *ui.Theme, browser *productConversationBrowser, name string) {
+	entries := browser.history.entries
+	msgs := locales.In(c.Locale())
+	if len(entries) == 0 {
+		if browser.ownerID != "" {
+			ui.Row(c).FillWidth().Justify(ui.Center).Children(func() {
+				a.activityText(c, t, msgs.EmptyNoMessages())
+			})
+		}
+		return
+	}
+	browser.transcript.Key = func(i int) any { return entries[i].ID }
+	ui.Row(c).Grow(1).FillWidth().MinHeight(0).Justify(ui.Center).Children(func() {
+		ui.List(c, &browser.transcript, len(entries), func(i int) {
+			entry := entries[i]
+			scope := historyLinkScope(browser.ownerID, browser.selectedID, entry.ID)
+			a.renderHistoryEntry(c, t, entry, name, scope)
+		}).Label(msgs.ConversationMessagesLabel()).Fill().MaxWidth(conversationMaxWidth).Padding(16).Gap(12)
+	})
+}
+
+func (a *appModel) renderHistoryEntry(c *ui.Context, t *ui.Theme, e historyEntry, name, scope string) {
 	if e.From == "me" {
 		ui.Row(c).FillWidth().Justify(ui.End).Children(func() {
 			ui.Column(c).MaxWidth(userMessageMaxWidth).MinWidth(0).Gap(4).Children(func() {
 				if e.Text != "" {
 					opts := messageReaderOptions(c, true)
-					opts.MessageBubble = &markdownMessageBubble{Background: bg, PaddingX: 12, PaddingY: 8, Radius: 12, ContextualCopy: true}
+					opts.MessageBubble = &markdownMessageBubble{Background: a.workTheme.BubbleUser, PaddingX: 12, PaddingY: 8, Radius: 12, ContextualCopy: true}
 					markdownReader(c, e.Text, opts).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text)
 				}
 				taskContextReadOnlyView(c, a.workTheme, e.Context)
@@ -884,13 +1089,12 @@ func (a *appModel) historyMessage(c *ui.Context, t *ui.Theme, e historyEntry, hi
 		return
 	}
 	ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Start).Children(func() {
-		a.avatarTile(c, t, 28)
 		ui.Column(c).MaxWidth(conversationMaxWidth).MinWidth(0).Shrink(1).Children(func() {
-			opts := a.readerOptions(messageReaderOptions(c, false), historyLinkScope(a.selectedContact().ID, "conversation", e.ID), a.selectedContact().SessionWorkingDir)
+			opts := a.readerOptions(messageReaderOptions(c, false), scope, "")
 			opts.MessageBubble = &markdownMessageBubble{
-				Background: bg, PaddingX: 0, PaddingY: 0, Radius: 0,
+				Background: ui.Transparent,
 				Header: func(hc *ui.Context) {
-					ui.Text(hc, a.selectedContact().Name+"  "+e.Date).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
+					ui.Text(hc, name+"  "+e.Date).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 				},
 			}
 			markdownReader(c, e.Text, opts).FontSize(typeBody).FixedLineHeight(lineBody)
@@ -929,39 +1133,9 @@ func (a *appModel) message(c *ui.Context, t *ui.Theme, ct *contact, m *message) 
 			})
 			return
 		}
-		ui.Row(c).Gap(8).AlignItems(ui.Start).Children(func() {
-			ui.Column(c).Gap(4).Children(func() {
-				label := msgs.LookedUpEarlier()
-				if m.Expanded {
-					label = "– " + label
-				} else {
-					label = "+ " + label
-				}
-				ui.Row(c).Children(func() {
-					secondaryButton(c, label).OnClick(func() { m.Expanded = !m.Expanded })
-				})
-				if m.Expanded {
-					for _, step := range m.Steps {
-						ui.Text(c, step).FontSize(typeLabel).FixedLineHeight(lineLabel).TextColor(t.TextMuted)
-					}
-					if len(m.Sources) > 0 {
-						ui.Row(c).Children(func() {
-							button := secondaryButton(c, msgs.OpenSources()).OnClick(func() { a.openSources(m.ID) })
-							if a.focusSources && a.auxMessage == m.ID {
-								button.Focus()
-								a.focusSources = false
-							}
-						})
-					}
-				}
-			})
-		})
 	case msgUser:
 		ui.Row(c).FillWidth().Justify(ui.End).Children(func() {
 			ui.Column(c).MaxWidth(userMessageMaxWidth).MinWidth(0).Shrink(1).Gap(2).Children(func() {
-				if m.Key != "" && m.Key == a.highlight {
-					ui.Text(c, msgs.LocatedInHistory()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
-				}
 				if m.Text != "" {
 					opts := messageReaderOptions(c, true)
 					opts.MessageBubble = &markdownMessageBubble{Background: a.workTheme.BubbleUser, PaddingX: 12, PaddingY: 8, Radius: 12, ContextualCopy: true}
@@ -972,28 +1146,13 @@ func (a *appModel) message(c *ui.Context, t *ui.Theme, ct *contact, m *message) 
 		})
 	default:
 		ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Start).Children(func() {
-			a.avatarTile(c, t, 28)
 			ui.Column(c).MaxWidth(userMessageMaxWidth).MinWidth(0).Shrink(1).Children(func() {
 				opts := a.readerOptions(markdownReaderOptions{Streaming: m.Streaming, CopyLabel: locales.In(c.Locale()).CopyMessageLabel(), Theme: messageMarkdownTheme}, messageLinkScope(ct.ID, m), ct.SessionWorkingDir)
 				opts.MessageBubble = &markdownMessageBubble{
 					Background: ui.Transparent, PaddingX: 0, PaddingY: 0, Radius: 0,
-					Header: func(hc *ui.Context) {
-						if m.Key != "" && m.Key == a.highlight {
-							ui.Text(hc, msgs.LocatedInHistory()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
-						}
-					},
 					Footer: func(fc *ui.Context) {
 						if m.AlertTitle != "" {
 							a.alert(fc, t, m)
-						}
-						if len(m.Sources) > 0 {
-							ui.Row(fc).Children(func() {
-								button := secondaryButton(fc, msgs.EarlierMessagesCount(len(m.Sources))).OnClick(func() { a.openSources(m.ID) })
-								if a.focusSources && a.auxMessage == m.ID {
-									button.Focus()
-									a.focusSources = false
-								}
-							})
 						}
 					},
 				}
@@ -1027,26 +1186,9 @@ func (a *appModel) emptyState(c *ui.Context, t *ui.Theme) {
 		if !a.demo && ct.SessionID != "" && !ct.Loaded {
 			ui.Text(c, msgs.HistoryNotLoadedTitle()).FontSize(typeBody).FontWeight(400).FixedLineHeight(lineBody).TextColor(t.Text)
 			ui.Text(c, msgs.HistoryNotLoadedHint()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
-			if a.runtimeStatus != runtimeStateReady {
+			if !a.canReloadPiConversation(ct) {
 				ui.Text(c, msgs.HistoryRuntimeNotReady()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Warning)
 			}
-			return
-		}
-		notice := a.issueWorkNotice(ct)
-		fact := ""
-		switch {
-		case notice.Attention:
-			fact = msgs.EmptyTaskAttention(notice.IssueName)
-		case notice.Waiting:
-			fact = msgs.EmptyTaskWaiting(notice.IssueName)
-		case notice.Active:
-			fact = msgs.EmptyTaskInProgress(notice.IssueName)
-		}
-		if fact != "" {
-			ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
-				ui.Text(c, fact).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text).Grow(1)
-				secondaryButton(c, msgs.TaskView()).OnClick(func() { a.openIssueTarget(notice.IssueID) })
-			})
 			return
 		}
 		ui.Text(c, msgs.EmptyNoMessages()).FontSize(typePageTitle).FontWeight(500).TextColor(t.Text)
@@ -1072,14 +1214,14 @@ func (a *appModel) connectionSendFailureKnown(ct *contact) bool {
 	return knownConnectionFailure(ct.SendError)
 }
 
-func (a *appModel) connectionErrorBanner(c *ui.Context, t *ui.Theme, ct *contact) {
+func (a *appModel) connectionErrorBanner(c *ui.Context, t *ui.Theme, ct *contact, showConnectionSettings bool) bool {
 	if ct == nil {
-		return
+		return showConnectionSettings
 	}
 	msgs := locales.In(c.Locale())
 	known := knownConnectionFailure(ct.LoadErr) || knownConnectionFailure(ct.SendError)
 	if !known {
-		return
+		return showConnectionSettings
 	}
 	details := strings.TrimSpace(ct.LoadErr)
 	if details == "" || details == ct.SendError {
@@ -1088,8 +1230,9 @@ func (a *appModel) connectionErrorBanner(c *ui.Context, t *ui.Theme, ct *contact
 		details = details + "\n\n" + strings.TrimSpace(ct.SendError)
 	}
 	ui.Column(c).Padding(8, 16).Gap(3).Background(t.SurfaceHover).Children(func() {
-		a.recoveryNotice(c, t, "connection:"+ct.ID, msgs.ConnectionMismatchSummary(), details, true)
+		a.recoveryNotice(c, t, "connection:"+ct.ID, msgs.ConnectionMismatchSummary(), details, showConnectionSettings)
 	})
+	return false
 }
 
 // ---------- composer ----------
@@ -1098,142 +1241,23 @@ func (a *appModel) composerInlineAux() bool {
 	return a.aux == composerPanelContext && a.composerPanel == composerPanelContext
 }
 
-func (a *appModel) composerModelButton(c *ui.Context, t *ui.Theme, ct *contact) ui.Element {
+func (a *appModel) composerModelSummary(c *ui.Context, t *ui.Theme, ct *contact) {
 	msgs := locales.In(c.Locale())
-	summary := a.conversationModelSummary(msgs, ct)
-	button := appTooltip(c, sharedControlFace(c, ui.Button(c, "").Label(msgs.ConversationModelLabel()), 16, 4, false, false, false).
-		Margin(0).MinWidth(0).MaxWidth(230).Shrink(1).Padding(8),
-		msgs.ConversationModelTooltip(summary))
 	head, tail := a.conversationModelDisplayParts(msgs, ct)
-	button.Children(func() {
-		ui.Row(c).Grow(1).MinWidth(0).AlignItems(ui.Center).Gap(3).Children(func() {
-			ui.Text(c, msgs.ConversationBadge()).FontSize(typeMeta).FontWeight(400).FixedLineHeight(lineNavigation).
-				MaxLines(1).Shrink(0).TextColor(t.TextMuted)
-			ui.Row(c).Grow(1).MinWidth(0).AlignItems(ui.Center).Gap(0).Children(func() {
-				if head != "" {
-					ui.Text(c, head).FontSize(typeAction).FontWeight(500).
-						Grow(1).Shrink(1).MinWidth(0).MaxLines(1).Ellipsis("…").TextColor(t.Text)
-				}
-				if tail != "" {
-					ui.Text(c, tail).FontSize(typeAction).FontWeight(500).
-						MaxLines(1).Shrink(0).TextColor(t.Text)
-				}
-			})
-		})
-	})
-	return button
-}
-
-func (a *appModel) composerModelPopover(c *ui.Context, t *ui.Theme, anchor ui.Element) {
-	msgs := locales.In(c.Locale())
-	panel := ui.PopoverBase(c, anchor, &a.composerModelOpen, func(panel ui.Element) {
-		panel.Label(msgs.ConversationModelLabel()).Role(ui.RoleMenu).FocusGroup(ui.Vertical).
-			Width(320).MaxHeight(360).Padding(menuCompactPadding).Gap(menuCompactGap).Margin(4, 0, 0, 0).
-			Radius(menuCompactRadius).Background(t.Background).Border(1, t.Border).
-			Shadow(0, 0, 0, 0, ui.Transparent)
-		if panel.OverlayShortcut(0, ui.KeyEscape) {
-			a.closeComposerModel()
-			a.composerFocusModel = true
-		}
-		leaveOnTab := func(ev ui.InputEvent) bool {
-			if ev.Kind == ui.InputKeyDown && ev.Key == ui.KeyTab {
-				a.closeComposerModel()
+	appTooltip(c, ui.Row(c).Label(msgs.ConversationModelLabel()), msgs.ConversationModelTooltip(a.conversationModelSummary(msgs, ct))).MinWidth(0).MaxWidth(230).Shrink(1).Padding(8).AlignItems(ui.Center).Gap(3).Children(func() {
+		ui.Text(c, msgs.ConversationBadge()).FontSize(typeMeta).FontWeight(400).FixedLineHeight(lineNavigation).
+			MaxLines(1).Shrink(0).TextColor(t.TextMuted)
+		ui.Row(c).Grow(1).MinWidth(0).AlignItems(ui.Center).Gap(0).Children(func() {
+			if head != "" {
+				ui.Text(c, head).FontSize(typeAction).FontWeight(400).
+					Grow(1).Shrink(1).MinWidth(0).MaxLines(1).Ellipsis("…").TextColor(t.Text)
 			}
-			return false
-		}
-		ui.Scroll(c).FillWidth().MaxHeight(280).Children(func() {
-			ui.Column(c).FillWidth().Gap(4).Children(func() {
-				form := a.modelForm
-				if form == nil {
-					text := modelPanelMessageText(msgs, a.modelPanelMessage)
-					color := t.TextMuted
-					if a.modelPanelError != "" {
-						text = modelPanelErrorText(msgs, a.modelPanelError, a.modelPanelErrorDetail)
-						color = t.Danger
-					}
-					ui.Text(c, text).FontSize(typeAction).FixedLineHeight(lineCompact).TextColor(color)
-				} else {
-					current := form.Effective.Config.EffectiveConfig.Model
-					declared := false
-					for _, entry := range form.Catalog.ConfiguredModels {
-						declared = declared || entry.Model == current
-					}
-					if !declared || form.Unconfirmed {
-						label := msgs.ModelEffectiveModel(current)
-						if form.Unconfirmed {
-							label = msgs.ModelLastReadModel(current)
-						}
-						ui.Text(c, label).FontSize(typeAction).FixedLineHeight(lineCompact).TextColor(t.TextMuted)
-					}
-					if form.Status == modelStatusCatalogUnavailable || form.Status == modelStatusRefreshedNoCatalog {
-						ui.Text(c, msgs.ModelCatalogNotLoaded()).FontSize(typeAction).FixedLineHeight(lineCompact).TextColor(t.Warning)
-					} else if len(form.Catalog.ConfiguredModels) == 0 {
-						ui.Text(c, msgs.ModelNoConfigured()).FontSize(typeAction).FixedLineHeight(lineCompact).TextColor(t.TextMuted)
-					}
-					ui.Column(c).FillWidth().Children(func() {
-						ui.Column(c).FillWidth().Gap(2).Children(func() {
-							for index, entry := range form.Catalog.ConfiguredModels {
-								selected := !form.Unconfirmed && entry.Model == current
-								row := appTooltip(c, ui.ButtonBase(c).Radius(menuCompactRadius).TextColor(t.Text).Label(entry.Model).Role(ui.RoleMenuItemRadio).Checked(selected).
-									FillWidth().MinHeight(32).Padding(menuCompactPadding).HandleInput(leaveOnTab), entry.Model)
-								if selected || row.Hovered() || row.FocusVisible() {
-									row.Background(t.SurfaceHover)
-								}
-								if row.Pressed() {
-									row.Background(t.SurfacePressed)
-								}
-								row.Children(func() {
-									ui.Row(c).FillWidth().MinWidth(0).Gap(6).AlignItems(ui.Center).Children(func() {
-										ui.Text(c, entry.Model).FontSize(typeMeta).FixedLineHeight(lineNavigation).Grow(1).MinWidth(0).MaxLines(1).Ellipsis("…")
-										if selected {
-											ui.Icon(c, modelSelectedIcon).Size(glyphMenu, glyphMenu).Shrink(0)
-										}
-									})
-								})
-								row.Disabled(form.Busy || form.Unconfirmed || a.modelOpActive).
-									OnClick(func() { a.chooseComposerModel(index) })
-								if a.composerModelFocus && !form.Busy && !form.Unconfirmed {
-									row.Focus()
-									a.composerModelFocus = false
-								}
-							}
-						})
-					})
-					if form.Error != "" {
-						ui.Text(c, modelErrorText(msgs, form.Error, form.ErrorDetail)).FontSize(typeAction).FixedLineHeight(lineCompact).TextColor(t.Danger)
-					}
-					if form.UnconfirmedKind != "" {
-						ui.Text(c, modelUnconfirmedText(msgs, form.UnconfirmedKind, form.UnconfirmedDetail)).FontSize(typeAction).FixedLineHeight(lineCompact).TextColor(t.Warning)
-					}
-					if form.Busy {
-						ui.Text(c, modelStatusText(msgs, form.Status)).FontSize(typeMeta).TextColor(t.TextMuted)
-					}
-				}
-			})
+			if tail != "" {
+				ui.Text(c, tail).FontSize(typeAction).FontWeight(400).
+					MaxLines(1).Shrink(0).TextColor(t.Text)
+			}
 		})
-		ui.Divider(c)
-		manage := ui.ButtonBase(c).MinHeight(32).Padding(menuCompactPadding).Radius(menuCompactRadius).TextColor(t.Text).Label(msgs.ModelManage()).FillWidth().Justify(ui.Start).HandleInput(leaveOnTab).Children(func() {
-			ui.Row(c).AlignItems(ui.Center).Gap(6).Children(func() {
-				ui.Icon(c, railSettingsIcon).Size(glyphMenu, glyphMenu)
-				ui.Text(c, msgs.ModelManage()).FontSize(typeMeta).FixedLineHeight(lineNavigation)
-			})
-		}).OnClick(func() {
-			a.openSettingsTab(settingsTabConnection, settingsSourceModel)
-		})
-		if manage.Hovered() || manage.FocusVisible() {
-			manage.Background(t.SurfaceHover)
-		}
-		if manage.Pressed() {
-			manage.Background(t.SurfacePressed)
-		}
-		if a.composerModelFocus {
-			manage.Focus()
-			a.composerModelFocus = false
-		}
 	})
-	if panel.Dismissed() {
-		a.closeComposerModel()
-	}
 }
 
 func (a *appModel) composerInlinePanel(c *ui.Context, t *ui.Theme) {
@@ -1243,7 +1267,7 @@ func (a *appModel) composerInlinePanel(c *ui.Context, t *ui.Theme) {
 	msgs := locales.In(c.Locale())
 	c.OnShortcut(0, ui.KeyEscape, func() { a.closeAux() })
 	ui.Column(c).FillWidth().Children(func() {
-		ui.Scroll(c).Label(msgs.TaskContextDetailsScroll()).MaxHeight(300).TrackScroll(a.auxScrollFor(a.aux)).Children(func() {
+		ui.Scroll(c).Label(msgs.TaskContextDetailsScroll()).MaxHeight(300).TrackScroll(&a.taskContextScroll).Children(func() {
 			ui.Column(c).Padding(8, 0).Gap(8).Children(func() {
 				a.taskContextPanel(c, t)
 			})
@@ -1313,12 +1337,12 @@ func contactNoticeText(msgs locales.Messages, kind, detail string) string {
 	}
 }
 
-func (a *appModel) composer(c *ui.Context, t *ui.Theme) {
+func (a *appModel) composer(c *ui.Context, t *ui.Theme, state connectionViewState, showConnectionSettings bool) {
 	ct := a.selectedContact()
 	msgs := locales.In(c.Locale())
-	connected := a.runtimeStatus == runtimeStateReady && a.rt != nil && !a.shutdownStarted
+	connected := a.runtimeAvailableForView()
 	knownMismatch := a.connectionSendFailureKnown(ct)
-	canReload := connected && ct.SessionID != "" && !knownMismatch
+	canReload := a.canReloadPiConversation(ct) && !knownMismatch
 	unknownSummary := msgs.SendDisconnectedState()
 	if knownMismatch {
 		unknownSummary = msgs.ConnectionMismatchSummary()
@@ -1328,8 +1352,9 @@ func (a *appModel) composer(c *ui.Context, t *ui.Theme) {
 			unknownSummary = msgs.SendUnknownState()
 		}
 	}
-	ui.Column(c).FillWidth().Padding(8, 12).Gap(4).Children(func() {
+	ui.Column(c).FillWidth().Padding(8, 16).Gap(4).Children(func() {
 		ui.Column(c).FillWidth().MinHeight(composerMinHeight).Padding(8, 12, 0).Radius(16).Border(1, t.Border).Background(a.workTheme.Reading).Gap(4).Children(func() {
+			c.Key(ct.ID)
 			input := ui.TextArea(c, &ct.Draft).Bind(&a.composerHandle).Label(msgs.ComposerLabel(ct.Name)).
 				FontSize(typeBody).FixedLineHeight(lineBody).Lines(2, 6).MinHeight(48).
 				Background(ui.Transparent).BorderWidth(0).Padding(2).
@@ -1352,6 +1377,9 @@ func (a *appModel) composer(c *ui.Context, t *ui.Theme) {
 				input.Focus()
 				a.focusComposer = false
 			}
+			if a.focusConnectionEntry && c.Focused(a.composerHandle) {
+				a.focusConnectionEntry = false
+			}
 			contextCount := ct.Context.count()
 			contextLabel := msgs.TaskContextCount(contextCount)
 			sendDisabled := strings.TrimSpace(ct.Draft) == "" || ct.Status == statusWorking
@@ -1360,7 +1388,11 @@ func (a *appModel) composer(c *ui.Context, t *ui.Theme) {
 				sendReason = a.canSend(ct)
 				sendDisabled = strings.TrimSpace(ct.Draft) == "" || sendReason != ""
 			}
-			ui.Row(c).FillWidth().Height(composerToolbarHeight).Shrink(0).Padding(10, 6).AlignItems(ui.Center).Gap(6).Role(ui.RoleGroup).Label(msgs.ComposerTools()).Children(func() {
+			ui.Row(c).FillWidth().Height(composerToolbarHeight).Shrink(0).Padding(8, 8).AlignItems(ui.Center).Gap(8).Role(ui.RoleGroup).Label(msgs.ComposerTools()).Draw(func(p *ui.Painter, r ui.Rect) {
+				for x := r.X; x < r.X+r.W; x += 6 {
+					p.Line(x, r.Y+0.5, min(x+3, r.X+r.W), r.Y+0.5, 1, t.Border.Alpha(0.6))
+				}
+			}).Children(func() {
 				ui.Toolbar(c, func() {
 					contextButton := iconControlFace(c, appTooltip(c, ui.Button(c, "").Label(contextLabel), contextLabel), iconContext, false)
 					contextButton.Children(func() {
@@ -1376,16 +1408,7 @@ func (a *appModel) composer(c *ui.Context, t *ui.Theme) {
 					}
 				}).Label(msgs.ComposerTools()).Shrink(0).Padding(0)
 				ui.Spacer(c)
-				modelButton := a.composerModelButton(c, t, ct)
-				modelButton.OnClick(func() { a.openComposerModel() })
-				if modelButton.Shortcut(0, ui.KeyDown) {
-					a.openComposerModel()
-				}
-				a.composerModelPopover(c, t, modelButton)
-				if a.composerFocusModel {
-					modelButton.Focus()
-					a.composerFocusModel = false
-				}
+				a.composerModelSummary(c, t, ct)
 				// Send/Stop are outside the Toolbar: the main action must never
 				// disappear into a toolbar overflow menu at narrow widths.
 				if !a.demo && ct.ActiveTaskID != "" {
@@ -1410,44 +1433,20 @@ func (a *appModel) composer(c *ui.Context, t *ui.Theme) {
 				}
 			})
 			if !a.demo {
-				if a.rt != nil && a.runtimeStatus == runtimeStateReady && !a.capacityKnown() {
-					ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
-						message := a.runtimeCapabilitiesErr
-						if message == "" {
-							message = msgs.CapacityUnknown()
-						}
-						ui.Text(c, message).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Warning).Grow(1)
-						secondaryButton(c, msgs.RetryCapacity()).OnClick(func() { a.retryCapabilities() })
-					})
-				}
-				if sendReason != "" && strings.TrimSpace(ct.Draft) != "" {
+				sendErrorVisible := ct.SendError != "" && !knownMismatch
+				connectionLostDetail := ct.SendState == sendUnknown && ct.StatusDetail != "" && ct.StatusDetailKind == "status-connection-lost"
+				unknownNotice := ct.SendState == sendUnknown && (sendErrorVisible || connectionLostDetail)
+				switch sendReason {
+				case blockShutdown, blockArchivedSend:
 					ui.Text(c, sendBlockText(msgs, sendReason)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
-				}
-				if sendReason != "" && strings.TrimSpace(ct.Draft) == "" && (!a.runtimeAvailableForView() || a.connectionViewState() == connectionViewApplying) {
-					msgs := locales.In(c.Locale())
-					if a.shutdownStarted || ct.Archived {
+				case blockRuntimeNotReady:
+					if state == connectionViewHealthy && !unknownNotice {
 						ui.Text(c, sendBlockText(msgs, sendReason)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
-					} else {
-						hint := msgs.ConnectionRecoverySetupHint()
-						switch a.connectionViewState() {
-						case connectionViewSaved:
-							hint = msgs.ConnectionRecoverySavedHint()
-						case connectionViewNotConnected:
-							hint = msgs.ConnectionRecoveryNotConnectedHint()
-							if a.runtimeStage == "Connection configuration" && (a.connectionEffective != nil || a.connectionSaved != nil || a.connectionManaged) {
-								hint = msgs.ConnectionRecoveryManagedHint()
-							}
-						case connectionViewApplying:
-							hint = msgs.ConnectionRecoveryApplyingHint()
-						case connectionViewConnecting:
-							hint = msgs.ConnectionRecoveryConnectingHint()
-						}
-						ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
-							ui.Text(c, hint).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted).Grow(1)
-							if a.connectionConfigurationBlocked() {
-								secondaryButton(c, msgs.ConnectionRecoveryOpenSettings()).Label(msgs.ConnectionRecoveryOpenSettings()).OnClick(func() { a.openConfiguration() })
-							}
-						})
+					}
+				case "", blockApplying:
+				default:
+					if strings.TrimSpace(ct.Draft) != "" {
+						ui.Text(c, sendBlockText(msgs, sendReason)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 					}
 				}
 				switch {
@@ -1455,34 +1454,41 @@ func (a *appModel) composer(c *ui.Context, t *ui.Theme) {
 					ui.Text(c, msgs.SendingState()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 				case ct.SendState == sendAccepted && ct.Status != statusWorking:
 					ui.Text(c, msgs.SendAcceptedState()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
-				case ct.SendState == sendUnknown:
+				case ct.SendState == sendUnknown && !unknownNotice:
 					ui.Text(c, unknownSummary).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Danger)
 				}
-				if ct.SendError != "" && !knownMismatch {
-					ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
-						summary := msgs.RecoveryRequestFailed()
+				if sendErrorVisible || connectionLostDetail {
+					var key, detail string
+					if sendErrorVisible {
+						key = "send:" + ct.ID + ":" + ct.SessionID + ":" + ct.LastTaskID + ":" + ct.ActiveTaskID
+						detail = ct.SendError
+						if connectionLostDetail && ct.StatusDetail != ct.SendError {
+							detail += "\n\n" + ct.StatusDetail
+						}
+					} else {
+						key = "status:" + ct.ID + ":" + ct.SessionID + ":" + ct.LastTaskID
+						detail = ct.StatusDetail
+					}
+					summary := unknownSummary
+					if !unknownNotice {
+						summary = msgs.RecoveryRequestFailed()
 						if ct.SendErrorKind != "" {
 							summary = contactNoticeText(msgs, ct.SendErrorKind, "")
 						}
-						if ct.SendState == sendUnknown {
-							summary = unknownSummary
-						}
-						a.recoveryNotice(c, t, "send:"+ct.ID+":"+ct.SessionID+":"+ct.LastTaskID+":"+ct.ActiveTaskID, summary, ct.SendError, true)
-
-					})
+					}
+					a.recoveryNotice(c, t, key, summary, detail, showConnectionSettings)
+					showConnectionSettings = false
 				}
 				if canReload && (ct.SendState == sendUnknown || ct.SendError != "") {
 					secondaryButton(c, msgs.ReloadAction()).Label(msgs.ReloadAction()).OnClick(func() { a.reloadSelected() })
 				}
-				if ct.StatusDetail != "" {
+				if ct.StatusDetail != "" && !connectionLostDetail {
 					statusText := ct.StatusDetail
 					if ct.StatusDetailKind != "" {
 						statusText = contactNoticeText(locales.In(c.Locale()), ct.StatusDetailKind, "")
 					}
-					if ct.SendState == sendUnknown && ct.StatusDetailKind == "status-connection-lost" {
-						a.recoveryNotice(c, t, "status:"+ct.ID+":"+ct.SessionID+":"+ct.LastTaskID, unknownSummary, ct.StatusDetail, true)
-					} else if ct.StatusDetailKind == "" && formattedRunFailure(ct.StatusDetail) {
-						a.recoveryNotice(c, t, "task:"+ct.ID+":"+ct.SessionID+":"+ct.LastTaskID+":"+ct.ActiveTaskID, runFailureSummary(msgs, ct.StatusDetail), ct.StatusDetail, true)
+					if ct.StatusDetailKind == "" && formattedRunFailure(ct.StatusDetail) {
+						a.recoveryNotice(c, t, "task:"+ct.ID+":"+ct.SessionID+":"+ct.LastTaskID+":"+ct.ActiveTaskID, runFailureSummary(msgs, ct.StatusDetail), ct.StatusDetail, showConnectionSettings)
 					} else {
 						ui.Text(c, statusText).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Warning)
 					}
@@ -1495,141 +1501,7 @@ func (a *appModel) composer(c *ui.Context, t *ui.Theme) {
 	})
 }
 
-// ---------- history ----------
-
-func (a *appModel) historyDetail(c *ui.Context, t *ui.Theme, narrow bool) {
-	ct := a.selectedContact()
-	if ct == nil {
-		return
-	}
-	msgs := locales.In(c.Locale())
-	ui.Column(c).FillHeight().Padding(16).Gap(8).Children(func() {
-		ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(8).Children(func() {
-			if narrow {
-				back := detailBackButton(c, t, msgs.CloseHistory(), msgs.BackFromHistory()).OnClick(func() { a.closeDetail() })
-				a.focusDetailControl(c, back)
-				ui.Text(c, msgs.HistoryTitle(ct.Name)).FontSize(typePageTitle).FontWeight(500).TextColor(t.Text).MaxLines(2).Grow(1)
-				return
-			}
-			ui.Text(c, msgs.HistoryTitle(ct.Name)).FontSize(typePageTitle).FontWeight(500).TextColor(t.Text).MaxLines(2).Grow(1)
-			close := appTooltip(c, secondaryButton(c, msgs.CloseHistory()), msgs.BackFromHistory()).OnClick(func() { a.closeDetail() })
-			a.focusDetailControl(c, close)
-		})
-		ui.Scroll(c).Grow(1).TrackScroll(&a.historyScroll).Children(func() {
-			ui.Column(c).Gap(8).Children(func() {
-				ui.Text(c, msgs.HistorySearchScopeHint(ct.Name)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
-				if !a.demo && ct.SessionID != "" && !ct.Loaded {
-					ui.Text(c, msgs.HistoryNotLoadedShort()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Warning)
-				}
-				preferenceInput(c, &a.historyQuery, false).Placeholder(msgs.HistorySearchPlaceholder(ct.Name))
-				if !a.demo {
-					secondaryButton(c, msgs.SearchSavedContexts()).TextColor(t.Text).OnClick(func() { a.searchContactHistoryAsync(a.historyQuery) })
-					if a.contactHistoryBusy {
-						ui.Text(c, msgs.SearchingSavedContexts()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
-					}
-					if a.contactHistoryError != "" {
-						ui.Text(c, contactHistoryNoticeText(msgs, a.contactHistoryError, a.contactHistoryErrorDetail)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Warning)
-					}
-					if a.contactHistory != nil {
-						ui.Text(c, msgs.HistorySummary(len(a.contactHistory.Matches), boolIndex(a.contactHistory.Limited), len(a.contactHistory.Failures))).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
-						if len(a.contactHistory.Failures) > 0 {
-							for _, failure := range a.contactHistory.Failures {
-								ui.Text(c, msgs.SavedContextUnavailable(failure.SessionID)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Warning)
-							}
-						}
-						for _, match := range a.contactHistory.Matches {
-							match := match
-							key := historyOriginKey(historyOriginSaved, match.SessionID, match.EntryID)
-							ui.Column(c).FillWidth().MinWidth(0).Padding(8).Radius(8).Background(t.SurfaceHover).Gap(4).Children(func() {
-								ui.Text(c, msgs.SavedContextMatch(match.Date, match.SessionID)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Success)
-								ui.Text(c, match.Preview).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text)
-								button := secondaryButton(c, msgs.ViewFullMessage()).OnClick(func() { a.openContactHistoryMatch(match) })
-								if a.focusHistoryFullID == key {
-									button.Focus()
-									a.focusHistoryFullID = ""
-								}
-							})
-						}
-					}
-					if a.contactHistoryDetailBusy {
-						ui.Text(c, msgs.OpeningFullSavedMessage()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
-					}
-				}
-				matches := a.historyMatches()
-				if len(matches) == 0 {
-					if strings.TrimSpace(a.historyQuery) == "" {
-						ui.Text(c, msgs.NoSavedMessages(ct.Name)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
-					} else {
-						ui.Text(c, msgs.NoMatchingMessages(ct.Name, a.historyQuery)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
-					}
-				}
-				for _, e := range matches {
-					e := e
-					ui.Column(c).FillWidth().MinWidth(0).Padding(8).Radius(8).Background(t.SurfaceHover).Gap(4).Children(func() {
-						ui.Text(c, e.Date+". "+speakerLabel(msgs, ct, e)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Success)
-						if len([]rune(e.Text)) <= 180 {
-							if e.From == "me" {
-								markdownReader(c, e.Text, markdownReaderOptions{PlainText: true, CopyLabel: msgs.CopyHistoryMessageLabel(), Theme: messageMarkdownTheme}).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text)
-							} else {
-								markdownReader(c, e.Text, a.readerOptions(markdownReaderOptions{CopyLabel: msgs.CopyHistoryMessageLabel(), Theme: messageMarkdownTheme}, historyLinkScope(ct.ID, "history", e.ID), ct.SessionWorkingDir)).FontSize(typeBody).FixedLineHeight(lineBody)
-							}
-						} else {
-							ui.Text(c, truncate(e.Text, 150)).FontSize(typeBody).FixedLineHeight(lineBody).MaxLines(3).TextColor(t.Text)
-						}
-						if len(e.Context) > 0 {
-							ui.Text(c, msgs.ContextCount(len(e.Context))).FontSize(typeAction).TextColor(t.TextMuted)
-						}
-						ui.Row(c).Gap(4).Wrap().Children(func() {
-							read := secondaryButton(c, msgs.ReadFullMessage()).OnClick(func() { a.openHistoryEntryFull(e) })
-							if a.focusHistoryFullID == historyOriginKey(historyOriginLoaded, ct.SessionID, e.ID) {
-								read.Focus()
-								a.focusHistoryFullID = ""
-							}
-							secondaryButton(c, msgs.ViewInConversation()).OnClick(func() { a.viewInConversation(e.ID) })
-						})
-					})
-				}
-			})
-		})
-	})
-}
-
-func boolIndex(value bool) int {
-	if value {
-		return 1
-	}
-	return 0
-}
-
-func speakerLabel(msgs locales.Messages, c *contact, e historyEntry) string {
-	if e.From == "me" {
-		return msgs.SpeakerYou()
-	}
-	return c.Name
-}
-
 // ---------- main pages ----------
-
-func (a *appModel) sourcesPanel(c *ui.Context, t *ui.Theme) {
-	ct := a.selectedContact()
-	msgs := locales.In(c.Locale())
-	entries := a.sourceEntries(a.auxMessage)
-	ui.Text(c, msgs.SourcesSummary(len(entries), ct.Name)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
-	for _, e := range entries {
-		e := e
-		ui.Column(c).FillWidth().MinWidth(0).Padding(8).Radius(8).Background(t.SurfaceHover).Gap(4).Children(func() {
-			ui.Text(c, e.Date+". "+speakerLabel(msgs, ct, e)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Success)
-			if e.From == "me" {
-				markdownReader(c, e.Text, markdownReaderOptions{PlainText: true, CopyLabel: msgs.CopySourceMessageLabel(), Theme: messageMarkdownTheme}).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text)
-			} else {
-				markdownReader(c, e.Text, a.readerOptions(markdownReaderOptions{CopyLabel: msgs.CopySourceMessageLabel(), Theme: messageMarkdownTheme}, historyLinkScope(ct.ID, "sources", e.ID), ct.SessionWorkingDir)).FontSize(typeBody).FixedLineHeight(lineBody)
-			}
-			ui.Row(c).Children(func() {
-				secondaryButton(c, msgs.ViewInConversation()).OnClick(func() { a.viewInConversation(e.ID) })
-			})
-		})
-	}
-}
 
 func (a *appModel) openConfiguration() {
 	a.ensureConnectionForm()
@@ -1652,27 +1524,10 @@ func (a *appModel) runtimePanel(c *ui.Context, t *ui.Theme, ct *contact) {
 	if a.runtimeHintDisplay(msgs) != "" {
 		ui.Text(c, a.runtimeHintDisplay(msgs)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 	}
-	if a.issueToolErr != "" {
-		ui.Text(c, msgs.IssueCollaborationUnavailable()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Warning)
-		ui.Text(c, a.redactConnectionText(a.issueToolErr)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text)
-		ui.Text(c, msgs.IssueCollaborationRepairHint()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
+	if a.runtimeBinary != "" {
+		ui.Text(c, msgs.RuntimeHelperLine(a.runtimeBinary)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 	}
-	helper := a.runtimeBinary
-	if helper == "" {
-		switch {
-		case localStore:
-			helper = msgs.RuntimeHelperNotStartedLocalStore()
-		case a.runtimeHelperChecked || a.runtimeStage == "Runtime helper":
-			helper = msgs.RuntimeHelperNotFound()
-		case a.connectionForm != nil && a.connectionForm.HasSaved:
-			helper = msgs.RuntimeHelperNotApplied()
-		default:
-			helper = msgs.RuntimeHelperNotChecked()
-		}
-	}
-	ui.Text(c, msgs.RuntimeHelperLine(helper)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 	ui.Text(c, msgs.RuntimeStoreLine(valueOr(a.storePath, msgs.RuntimeValueNotConfigured()))).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
-	ui.Text(c, msgs.RuntimeSessionDirLine(valueOr(a.sessionDir, msgs.RuntimeValueNotConfigured()))).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 	ui.Text(c, msgs.RuntimeWorkDirLine(valueOr(a.workDir, msgs.RuntimeValueNotConfigured()))).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 	workspace := ct.SessionWorkingDir
 	if workspace == "" {
@@ -1691,16 +1546,12 @@ func (a *appModel) runtimePanel(c *ui.Context, t *ui.Theme, ct *contact) {
 	switch {
 	case ct.SessionAPI != "":
 		ui.Text(c, msgs.RuntimeSessionAPILine(ct.SessionAPI)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
-	case a.runtimeAPI != "":
-		ui.Text(c, msgs.RuntimeAPIConnectedLine(a.runtimeAPI)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 	default:
 		ui.Text(c, msgs.RuntimeSessionAPIUnknown()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 	}
 	ui.Text(c, msgs.RuntimeSessionModelLine(valueOr(ct.SessionModel, msgs.RuntimeSessionModelUnknown()))).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 	if a.connectionManaged || (a.connectionForm != nil && a.connectionForm.HasSaved) {
 		ui.Text(c, msgs.RuntimeConnectionManagedNote()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
-	} else {
-		ui.Text(c, msgs.RuntimeHostConfigNote()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 	}
 }
 

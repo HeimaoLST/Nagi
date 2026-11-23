@@ -6,11 +6,8 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
-// workbenchTheme is the one per-frame resolution of the Paper & Moss
-// appearance. Theme keeps the framework's control roles semantic; the small
-// app-only set names reading surfaces that must not be reused as button faces.
+// workbenchTheme resolves the Qoder reference palette and product surfaces.
 // CSS roles use the adopted rem16/scale1 profile, independent of Theme.Rem.
-// Existing workbench title aliases remain an S2 binding seam.
 const (
 	preferenceSelectMinWidth float32 = 120
 	preferenceSelectMaxWidth float32 = 160
@@ -19,10 +16,10 @@ const (
 	controlHeight            float32 = 28
 	controlHit               float32 = 32
 	typeSettingsTitle        float32 = 20
-	lineSettingsTitle        float32 = 32
+	lineSettingsTitle        float32 = 28
 	lineCompact              float32 = 22
 	lineForm                 float32 = 20
-	typeHeaderMeta           float32 = 10
+	typeHeaderMeta           float32 = 12
 	lineHeader               float32 = 16
 	menuCompactRadius        float32 = 6
 	menuCompactPadding       float32 = 6
@@ -41,7 +38,7 @@ const (
 	settingsSidebarWidth     float32 = 248
 	settingsContentWidth     float32 = 820
 	preferenceBreakpoint     float32 = 40 * cssRem
-	typeContactTitle         float32 = 12
+	typeContactTitle         float32 = 13
 	typePageTitle            float32 = typeSettingsTitle
 	typeGroupTitle           float32 = 13
 	typeBody                 float32 = 14
@@ -53,6 +50,13 @@ const (
 
 type workbenchTheme struct {
 	Theme         *ui.Theme
+	Link          ui.Color
+	InputBorder   ui.Color
+	ChromeFrom    ui.Color
+	ChromeTo      ui.Color
+	Tertiary      ui.Color
+	NavHover      ui.Color
+	NavSelected   ui.Color
 	Rail          ui.Color
 	Reading       ui.Color
 	Panel         ui.Color
@@ -68,70 +72,54 @@ type workbenchTheme struct {
 
 func resolveWorkbenchTheme(dark bool) workbenchTheme {
 	t := ui.LightTheme()
-	t.FontSize = typeLabel
-	t.Font = "system-ui"
-	t.Spacing = 4
-	t.Radius = 8
 	if dark {
 		t = ui.DarkTheme()
-		t.FontSize = typeLabel
-		t.Font = "system-ui"
-		t.Spacing = 4
-		t.Radius = 8
-		// #218 palette: the same theme fields, populated from the researched
-		// semantic roles. Border is the control/input boundary; the decorative
-		// line role has no separate Theme field in v0.7.3.
-		t.Background = ui.Hex("#1D2520")
-		t.Surface = ui.Hex("#29362D")
-		t.SurfaceHover = ui.Hex("#314D3B")
-		t.SurfacePressed = ui.Hex("#303B33")
-		t.Border = ui.Hex("#879B8D")
-		t.Text = ui.Hex("#EDF3EE")
-		t.TextMuted = ui.Hex("#B0BFB3")
-		t.Accent = ui.Hex("#B5D5BE")
-		t.AccentHover = ui.Hex("#C7E3CF")
-		t.AccentPressed = ui.Hex("#D8EDDE")
-		t.AccentText = ui.Hex("#183624")
-		t.Selection = ui.Hex("#314D3B")
-		t.Focus = ui.Hex("#A7D6B8")
-		t.Danger = ui.Hex("#F2A8AF")
-		t.Warning = ui.Hex("#F0C38E")
-		t.Success = ui.Hex("#A2D5AF")
-		t.Scrollbar = ui.Hex("#B0BFB3")
-		return workbenchTheme{
-			Theme: t,
-			Rail:  ui.Hex("#171E19"), Reading: ui.Hex("#1D2520"), Panel: ui.Hex("#202A23"),
-			Well: ui.Hex("#29362D"), BubbleUser: ui.Hex("#324A3B"), BubbleContact: ui.Hex("#28332B"),
-			WorkSurface: ui.Hex("#202A23"), WorkText: ui.Hex("#EDF3EE"),
-			WorkMuted: ui.Hex("#B0BFB3"), WorkAttention: ui.Hex("#F0C38E"),
-			WorkWarningBg: ui.Hex("#403222"),
-		}
 	}
+	t.FontSize, t.Font, t.Spacing, t.Radius = typeLabel, "system-ui", 4, 8
 	t.Background = ui.Hex("#FFFFFF")
-	t.Surface = ui.Hex("#EEF2EF")
-	t.SurfaceHover = ui.Hex("#E5EFE8")
-	t.SurfacePressed = ui.Hex("#E5EAE6")
-	t.Border = ui.Hex("#7C8A7F")
-	t.Text = ui.Hex("#252E28")
-	t.TextMuted = ui.Hex("#5D6B61")
-	t.Accent = ui.Hex("#365E4D")
-	t.AccentHover = ui.Hex("#2D5242")
-	t.AccentPressed = ui.Hex("#244536")
-	t.AccentText = ui.Hex("#FFFFFF")
-	t.Selection = ui.Hex("#E5EFE8")
-	t.Focus = ui.Hex("#3C7155")
-	t.Danger = ui.Hex("#9B3C43")
-	t.Warning = ui.Hex("#80501F")
-	t.Success = ui.Hex("#31684A")
-	t.Scrollbar = ui.Hex("#5D6B61")
-	return workbenchTheme{
+	t.Surface = ui.Hex("#FFFFFF")
+	t.SurfaceHover = ui.Hex("#EFEFEF")
+	t.SurfacePressed = ui.Hex("#DFDFDF")
+	t.Border = ui.Hex("#E6E6E6")
+	t.Text = ui.Hex("#141414")
+	t.TextMuted = ui.Hex("#636261")
+	t.Accent = ui.Hex("#0D0D0D")
+	t.AccentHover = ui.Hex("#2B2B2A")
+	t.AccentPressed = ui.Hex("#3A3A38")
+	t.AccentText = ui.Hex("#FDFDFD")
+	t.Selection = ui.Hex("#EFEFEF")
+	t.Focus = ui.Hex("#BCBBBA")
+	t.Danger = ui.Hex("#B4232C")
+	t.Warning = ui.Hex("#8A5300")
+	t.Success = ui.Hex("#2E6B45")
+	t.Scrollbar, t.ScrollbarWidth = ui.Hex("#DFDFDF"), 6
+	palette := workbenchTheme{
 		Theme: t,
-		Rail:  ui.Hex("#F5F7F5"), Reading: ui.Hex("#FFFFFF"), Panel: ui.Hex("#F8FAF8"),
-		Well: ui.Hex("#EEF2EF"), BubbleUser: ui.Hex("#E5EFE8"), BubbleContact: ui.Hex("#F2F5F2"),
-		WorkSurface: ui.Hex("#F8FAF8"), WorkText: ui.Hex("#252E28"),
-		WorkMuted: ui.Hex("#5D6B61"), WorkAttention: ui.Hex("#80501F"),
-		WorkWarningBg: ui.Hex("#FFF2DF"),
+		Link:  ui.Hex("#2D6A4A"), InputBorder: ui.Hex("#8F8E8B"),
+		ChromeFrom: ui.Hex("#F2F2E2"), ChromeTo: ui.Hex("#E6EBEF"), Tertiary: ui.Hex("#838280"),
+		NavHover: ui.Hex("#0000000A"), NavSelected: ui.Hex("#00000012"),
+		Rail: ui.Hex("#F2F2E2"), Reading: t.Background, Panel: t.Background,
+		Well: t.Surface, BubbleUser: ui.Hex("#F2F4F2"), BubbleContact: t.Background,
+		WorkSurface: t.Background, WorkText: t.Text, WorkMuted: t.TextMuted,
+		WorkAttention: t.Warning, WorkWarningBg: ui.Hex("#FEFBE8"),
 	}
+	if dark {
+		t.Background, t.Surface = ui.Hex("#171814"), ui.Hex("#171814")
+		t.SurfaceHover, t.SurfacePressed = ui.Hex("#2C2E28"), ui.Hex("#363830")
+		t.Border, t.Text, t.TextMuted = ui.Hex("#30322D"), ui.Hex("#F2F1E8"), ui.Hex("#C1BFB1")
+		t.Accent, t.AccentHover, t.AccentPressed = ui.Hex("#E0C65C"), ui.Hex("#F0DA78"), ui.Hex("#E8D06E")
+		t.AccentText, t.Selection, t.Focus = ui.Hex("#171407"), t.SurfaceHover, ui.Hex("#47483F")
+		t.Danger, t.Warning, t.Success, t.Scrollbar = ui.Hex("#FF4D4F"), ui.Hex("#FAAD14"), ui.Hex("#73CD94"), ui.Hex("#363830")
+		palette.ChromeFrom, palette.ChromeTo, palette.Rail = ui.Hex("#10110E"), ui.Hex("#10110E"), ui.Hex("#10110E")
+		palette.Tertiary = ui.Hex("#89877A")
+		palette.Link, palette.InputBorder = ui.Hex("#E0C65C"), ui.Hex("#76776C")
+		palette.NavHover, palette.NavSelected = ui.Hex("#3D3F39"), ui.Hex("#454741")
+		palette.Reading, palette.Panel, palette.Well = t.Background, t.Background, t.Surface
+		palette.BubbleUser, palette.BubbleContact = ui.Hex("#2E2916"), t.Background
+		palette.WorkSurface, palette.WorkText, palette.WorkMuted = t.Background, t.Text, t.TextMuted
+		palette.WorkAttention, palette.WorkWarningBg = t.Warning, ui.Hex("#4A4019")
+	}
+	return palette
 }
 
 func paletteLuminance(c ui.Color) float64 {
@@ -151,6 +139,29 @@ func paletteContrast(a, b ui.Color) float64 {
 		x, y = y, x
 	}
 	return (x + 0.05) / (y + 0.05)
+}
+
+var contactAvatarSwatches = [...]struct{ light, dark ui.Color }{
+	{ui.Hex("#CADDEB"), ui.Hex("#2E4961")},
+	{ui.Hex("#D9D1EA"), ui.Hex("#4B3B61")},
+	{ui.Hex("#E9CDD4"), ui.Hex("#633B4B")},
+	{ui.Hex("#EED7BE"), ui.Hex("#634528")},
+	{ui.Hex("#C6E1DB"), ui.Hex("#284E4A")},
+	{ui.Hex("#DDE5C1"), ui.Hex("#47532F")},
+	{ui.Hex("#E4CFBE"), ui.Hex("#5B4338")},
+	{ui.Hex("#CBD2EE"), ui.Hex("#3B456B")},
+}
+
+func contactAvatarColors(t *ui.Theme, name string) (background, ink ui.Color) {
+	hash := uint32(2166136261)
+	for i := 0; i < len(name); i++ {
+		hash = (hash ^ uint32(name[i])) * 16777619
+	}
+	swatch := contactAvatarSwatches[(hash^(hash>>16))%uint32(len(contactAvatarSwatches))]
+	if t.Dark {
+		return swatch.dark, ui.RGB(242, 241, 232)
+	}
+	return swatch.light, ui.RGB(20, 20, 20)
 }
 
 // segmentedSelection keeps MyGo's official SegmentedBase radio group,
@@ -271,16 +282,36 @@ func secondaryButton(c *ui.Context, label string) ui.Element {
 	return sharedControlFace(c, ui.Button(c, label).Label(label), 16, 4, false, false, false).FontSize(typeAction).FontWeight(500).FixedLineHeight(lineAction).Padding(8, 12).Gap(6)
 }
 
-// The transparent interaction box extends two DIPs past the visible face.
-// Negative block margins keep its layout contribution at the declared 28 DIPs.
-func sharedControlFace(c *ui.Context, e ui.Element, region float32, exponent float64, outlined, invalid, selected bool) ui.Element {
-	e.Height(controlHit).MinHeight(controlHit).Margin(-2, 0).Radius(0).
-		Background(ui.Transparent).Border(0, ui.Transparent).FocusRing(false)
-	return drawControlFace(c, e, region, exponent, outlined, invalid, selected, 0, 2)
+func navigationControl(c *ui.Context, e ui.Element, palette workbenchTheme, selected bool) ui.Element {
+	e = sharedControlFace(c, e, 8, 4, false, false, false)
+	e.Draw(func(p *ui.Painter, r ui.Rect) {
+		r.Y, r.H = r.Y+2, r.H-4
+		fill := ui.Transparent
+		if selected {
+			fill = palette.NavSelected
+		} else if e.Hovered() || e.Focused() {
+			fill = palette.NavHover
+		}
+		paintPreferenceFace(p, r, 8, 4, fill, ui.Transparent)
+	})
+	return e
 }
 
-func drawControlFace(c *ui.Context, e ui.Element, region float32, exponent float64, outlined, invalid, selected bool, insetX, insetY float32) ui.Element {
+// The transparent interaction box extends two DIPs past the visible face.
+// Negative block margins keep its layout contribution at the declared 28 DIPs.
+func sharedControlFace(c *ui.Context, e ui.Element, region float32, exponent float64, outlined, invalid, selected bool, inputBorder ...ui.Color) ui.Element {
+	e.Height(controlHit).MinHeight(controlHit).Margin(-2, 0).Radius(0).
+		Background(ui.Transparent).Border(0, ui.Transparent).FocusRing(false)
+	return drawControlFace(c, e, region, exponent, outlined, invalid, selected, 0, 2, c.Theme().SurfaceHover, inputBorder...)
+}
+
+func drawControlFace(c *ui.Context, e ui.Element, region float32, exponent float64, outlined, invalid, selected bool, insetX, insetY float32, focusFill ui.Color, inputBorder ...ui.Color) ui.Element {
 	t := c.Theme()
+	textInput := len(inputBorder) > 0
+	var inputBoundary ui.Color
+	if textInput {
+		inputBoundary = inputBorder[0]
+	}
 	e.Draw(func(p *ui.Painter, r ui.Rect) {
 		r.X, r.Y = r.X+insetX, r.Y+insetY
 		r.W, r.H = r.W-2*insetX, r.H-2*insetY
@@ -291,21 +322,38 @@ func drawControlFace(c *ui.Context, e ui.Element, region float32, exponent float
 		if selected {
 			fill = t.Selection
 		}
-		if !e.IsDisabled() {
+		if textInput {
+			fill, border = t.Surface, inputBoundary
+		}
+		if !textInput && !e.IsDisabled() {
 			if e.Pressed() {
 				fill = t.SurfacePressed
 			} else if e.Hovered() {
 				fill = t.SurfaceHover
 			}
+			if !outlined && e.FocusVisible() {
+				fill = focusFill
+			}
 		}
+		inputFocused := textInput && !invalid && !e.IsDisabled() && e.Focused()
 		if invalid {
 			border = t.Danger
-		} else if e.Focused() {
+		} else if inputFocused {
+			border = t.Accent
+		} else if !textInput && outlined && e.Focused() {
 			border = t.Focus
 		}
-		paintPreferenceFace(p, r, region, exponent, fill, border)
-		if !outlined && e.FocusVisible() {
-			p.StrokePath(controlPath(r, region, exponent), 2, t.Focus)
+		if inputFocused {
+			interior, interiorRegion := r, region
+			if border.A > 0 {
+				interior = ui.Rect{X: r.X + 2, Y: r.Y + 2, W: r.W - 4, H: r.H - 4}
+				interiorRegion -= 2
+			}
+			p.FillPath(controlPath(interior, interiorRegion, exponent), fill)
+			inside := ui.Rect{X: r.X + 1, Y: r.Y + 1, W: r.W - 2, H: r.H - 2}
+			p.StrokePath(controlPath(inside, region-1, exponent), 2, border)
+		} else {
+			paintPreferenceFace(p, r, region, exponent, fill, border)
 		}
 	})
 	return e
@@ -350,7 +398,11 @@ func iconControlFace(c *ui.Context, e ui.Element, role iconControlRole, selected
 		exponent = 2
 	}
 	inset := (controlHit - face) / 2
-	return drawControlFace(c, e, region, exponent, false, false, selected, inset, inset)
+	focusFill := c.Theme().SurfaceHover
+	if role == iconPrimary {
+		focusFill = c.Theme().AccentPressed
+	}
+	return drawControlFace(c, e, region, exponent, false, false, selected, inset, inset, focusFill)
 }
 
 func controlIcon(c *ui.Context, glyph *ui.SVG, role iconControlRole) ui.Element {
@@ -360,7 +412,7 @@ func controlIcon(c *ui.Context, glyph *ui.SVG, role iconControlRole) ui.Element 
 
 func pageHeading(c *ui.Context, title string) ui.Element {
 	return ui.Text(c, title).Role(ui.RoleHeading).Level(1).Font("system-ui").
-		FontSize(typeSettingsTitle).FontWeight(500).FixedLineHeight(lineSettingsTitle).TextColor(c.Theme().Text)
+		FontSize(typeSettingsTitle).FontWeight(600).FixedLineHeight(lineSettingsTitle).TextColor(c.Theme().Text)
 }
 
 type markdownHeadingTone uint8
@@ -399,11 +451,15 @@ func (tone markdownHeadingTone) color(t *ui.Theme) ui.Color {
 	return t.TextMuted
 }
 
-func formTextArea(c *ui.Context, value *string, invalid bool) ui.Element {
+func formTextArea(c *ui.Context, value *string, invalid bool, inputBorder ...ui.Color) ui.Element {
+	border := c.Theme().Border
+	if len(inputBorder) > 0 {
+		border = inputBorder[0]
+	}
 	e := ui.TextAreaBase(c, value).Font("system-ui").FontSize(typeAction).FontWeight(400).
 		FixedLineHeight(lineForm).MinHeight(80).BorderWidth(8, 12).BorderColor(ui.Transparent).
 		Padding(0).Radius(0).Background(ui.Transparent).TextColor(c.Theme().Text).FocusRing(false)
-	return drawControlFace(c, e, 16, 4, true, invalid, false, 0, 0)
+	return drawControlFace(c, e, 16, 4, true, invalid, false, 0, 0, c.Theme().SurfaceHover, border)
 }
 
 func paintPreferenceFace(p *ui.Painter, r ui.Rect, region float32, exponent float64, fill, border ui.Color) {
@@ -438,10 +494,14 @@ func controlPath(r ui.Rect, region float32, exponent float64) *ui.Path {
 	return path.Close()
 }
 
-func preferenceInput(c *ui.Context, value *string, invalid bool) ui.Element {
+func preferenceInput(c *ui.Context, value *string, invalid bool, inputBorder ...ui.Color) ui.Element {
+	border := c.Theme().Border
+	if len(inputBorder) > 0 {
+		border = inputBorder[0]
+	}
 	e := ui.TextInputBase(c, value).Font("system-ui").FontSize(typeAction).FontWeight(400).
 		FixedLineHeight(lineAction).TextColor(c.Theme().Text)
-	e = sharedControlFace(c, e, 16, 4, true, invalid, false)
+	e = sharedControlFace(c, e, 16, 4, true, invalid, false, border)
 	// The editor scrolls inside its real border clip, not its padding.
 	// Reserve the same content inset without letting glyphs paint over the face.
 	return e.BorderWidth(0, 12, 0, 12).Padding(8, 0)
@@ -464,13 +524,9 @@ var (
 	glyphSearchLine      = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M18.031 16.6168L22.3137 20.8995L20.8995 22.3137L16.6168 18.031C15.0769 19.263 13.124 20 11 20C6.032 20 2 15.968 2 11C2 6.032 6.032 2 11 2C15.968 2 20 6.032 20 11C20 13.124 19.263 15.0769 18.031 16.6168ZM16.0247 15.8748C17.2475 14.6146 18 12.8956 18 11C18 7.1325 14.8675 4 11 4C7.1325 4 4 7.1325 4 11C4 14.8675 7.1325 18 11 18C12.8956 18 14.6146 17.2475 15.8748 16.0247L16.0247 15.8748Z"/></svg>`))
 	glyphStopFill        = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M6 5H18C18.5523 5 19 5.44772 19 6V18C19 18.5523 18.5523 19 18 19H6C5.44772 19 5 18.5523 5 18V6C5 5.44772 5.44772 5 6 5Z"/></svg>`))
 	glyphFolderLine      = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M4 5V19H20V7H11.5858L9.58579 5H4ZM12.4142 5H21C21.5523 5 22 5.44772 22 6V20C22 20.5523 21.5523 21 21 21H3C2.44772 21 2 20.5523 2 20V4C2 3.44772 2.44772 3 3 3H10.4142L12.4142 5Z"/></svg>`))
-	glyphTimeLine        = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12C22 17.5228 17.5228 22 12 22ZM12 20C16.4183 20 20 16.4183 20 12C20 7.58172 16.4183 4 12 4C7.58172 4 4 7.58172 4 12C4 16.4183 7.58172 20 12 20ZM13 12H17V14H11V7H13V12Z"/></svg>`))
 	glyphSelectChevron   = ui.MustParseSVG([]byte(`<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true">
   <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
 </svg>`))
-	navWorkIcon     = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M7 5V2C7 1.44772 7.44772 1 8 1H16C16.5523 1 17 1.44772 17 2V5H21C21.5523 5 22 5.44772 22 6V20C22 20.5523 21.5523 21 21 21H3C2.44772 21 2 20.5523 2 20V6C2 5.44772 2.44772 5 3 5H7ZM4 16V19H20V16H4ZM4 14H20V7H4V14ZM9 3V5H15V3H9ZM11 11H13V13H11V11Z"/></svg>`))
-	navHistoryIcon  = glyphTimeLine
-	navProfileIcon  = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M4 22C4 17.5817 7.58172 14 12 14C16.4183 14 20 17.5817 20 22H18C18 18.6863 15.3137 16 12 16C8.68629 16 6 18.6863 6 22H4ZM12 13C8.685 13 6 10.315 6 7C6 3.685 8.685 1 12 1C15.315 1 18 3.685 18 7C18 10.315 15.315 13 12 13ZM12 11C14.21 11 16 9.21 16 7C16 4.79 14.21 3 12 3C9.79 3 8 4.79 8 7C8 9.21 9.79 11 12 11Z"/></svg>`))
 	navBackIcon     = glyphArrowLeftLine
 	navContactsIcon = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M2 22C2 17.5817 5.58172 14 10 14C14.4183 14 18 17.5817 18 22H16C16 18.6863 13.3137 16 10 16C6.68629 16 4 18.6863 4 22H2ZM10 13C6.685 13 4 10.315 4 7C4 3.685 6.685 1 10 1C13.315 1 16 3.685 16 7C16 10.315 13.315 13 10 13ZM10 11C12.21 11 14 9.21 14 7C14 4.79 12.21 3 10 3C7.79 3 6 4.79 6 7C6 9.21 7.79 11 10 11ZM18.2837 14.7028C21.0644 15.9561 23 18.752 23 22H21C21 19.564 19.5483 17.4671 17.4628 16.5271L18.2837 14.7028ZM17.5962 3.41321C19.5944 4.23703 21 6.20361 21 8.5C21 11.3702 18.8042 13.7252 16 13.9776V11.9646C17.6967 11.7222 19 10.264 19 8.5C19 7.11935 18.2016 5.92603 17.041 5.35635L17.5962 3.41321Z"/></svg>`))
 	navCloseIcon    = glyphCloseLine
@@ -487,5 +543,4 @@ var (
 	markdownCopyIcon       = glyphFileCopyLine
 	markdownCopiedIcon     = glyphCheckLine
 	markdownCopyFailedIcon = glyphCloseLine
-	modelSelectedIcon      = glyphCheckLine
 )

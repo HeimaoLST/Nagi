@@ -12,6 +12,7 @@ import (
 
 	"github.com/egoist/mygo"
 
+	"github.com/HeimaoLST/Nagi/internal/pi"
 	"github.com/HeimaoLST/Nagi/locales"
 )
 
@@ -20,38 +21,136 @@ type connectionStartup struct {
 	Config     *connectionConfig
 	FormConfig *connectionConfig
 	LoadErr    error
-	Missing    bool
-	External   bool
 }
 
 func connectionConfigPath(storePath string) string {
 	return filepath.Join(filepath.Dir(storePath), "connection.json")
 }
 
-func externalConnectionSource(workDir string) bool {
-	if strings.TrimSpace(os.Getenv("API_KEY")) != "" {
-		return true
+func productConnectionConfig(view *pi.ProductConnectionView) *connectionConfig {
+	if view == nil {
+		return nil
 	}
-	if strings.TrimSpace(os.Getenv("SAKI_RUNTIME_CONFIG")) != "" {
-		return true
+	api := connectionAPIChatCompletions
+	if view.WireAPI == pi.OpenAIResponses {
+		api = connectionAPIResponses
 	}
-	dir, err := filepath.Abs(workDir)
-	if err != nil {
-		return false
+	return &connectionConfig{API: api, Endpoint: view.BaseURL, Model: view.Model, ContextTokens: view.ContextTokens,
+		OutputTokens: view.OutputTokens, WorkingDirectory: view.WorkingDirectory, MaxActiveTasks: view.MaxActiveTasks}
+}
+
+func (a *appModel) applyProductConnection(status pi.ProductConnectionStatus) {
+	host := a.productHost()
+	host.productConn = status
+	a.connectionSaved, a.connectionEffective = productConnectionConfig(status.Saved), productConnectionConfig(status.Effective)
+	a.connectionManaged = status.Saved != nil
+	a.runtimeStatus = runtimeStateReady
+	a.runtimeErr, a.runtimeErrKind = "", ""
+	if effective := a.connectionEffective; effective != nil {
+		a.workDir = effective.WorkingDirectory
+		a.runtimeMaxActiveTasks = effective.MaxActiveTasks
+		a.runtimeCapabilitiesLoaded = true
+		return
 	}
-	for {
-		if _, err := os.Stat(filepath.Join(dir, ".env")); err == nil {
-			return true
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			return false
-		}
-		dir = parent
+	a.runtimeCapabilitiesLoaded = false
+	if status.Saved == nil {
+		a.runtimeErrKind = runtimeNoticeConnectionRequired
 	}
 }
 
-func readConnectionStartup(storePath string, workDir string) connectionStartup {
+func (a *appModel) productConnectionPending() bool {
+	host := a.productHost()
+	if host == nil || host.productConn.SavedRevision == nil {
+		return false
+	}
+	effective := host.productConn.EffectiveRevision
+	return effective == nil || *effective != *host.productConn.SavedRevision
+}
+
+func productConnectionInput(config connectionConfig) pi.ProductConnectionInput {
+	return pi.ProductConnectionInput{APIKey: config.APIKey, ProductConnectionSettings: pi.ProductConnectionSettings{
+		WireAPI: piWireAPI(config.API), BaseURL: config.Endpoint, Model: config.Model, ContextTokens: config.ContextTokens,
+		OutputTokens: config.OutputTokens, WorkingDirectory: config.WorkingDirectory, MaxActiveTasks: config.MaxActiveTasks,
+	}}
+}
+
+func (a *appModel) changeProductConnection(host *piAppHost, config *connectionConfig, apply bool) {
+	form := a.connectionForm
+	form.Busy = true
+	form.Error, form.ErrorDetail, form.ReloadBlocked = "", "", ""
+	if config != nil {
+		form.Status = connStatusSaving
+	} else {
+		form.Status = connStatusChecking
+	}
+	a.connectionSaveInFlight = true
+	known := host.productConn.SavedRevision
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		var err error
+		saved := known
+		if config != nil {
+			result, failure := host.product.SaveConnection(ctx, pi.ProductConnectionSaveParams{OperationID: newContactID(), Configuration: productConnectionInput(*config)})
+			saved, err = result.SavedRevision, failure
+		}
+		if err == nil && apply && saved != nil {
+			_, err = host.product.ApplyConnection(ctx, pi.ProductConnectionApplyParams{OperationID: newContactID(), SavedRevision: *saved})
+		}
+		projection, readErr := host.product.Connection(ctx)
+		a.updateUI(func() {
+			a.connectionSaveInFlight = false
+			form.Busy = false
+			form.Status = ""
+			if a.pi != host {
+				return
+			}
+			if readErr == nil {
+				a.applyProductConnection(projection)
+			}
+			if config != nil && saved != nil {
+				form.HasSaved = true
+				form.initial = form.Draft
+			}
+			if err != nil {
+				form.Error = a.connectionSafeMessage(err)
+			} else if readErr != nil {
+				form.Error = a.connectionSafeMessage(readErr)
+			} else if apply {
+				form.Status = connStatusApplied
+			}
+			if a.shutdownStarted {
+				a.finishShutdown()
+			}
+		})
+	}()
+}
+
+func (a *appModel) testProductConnection(host *piAppHost, config connectionConfig) {
+	form := a.connectionForm
+	form.Busy, a.connectionTesting = true, true
+	form.Error, form.ErrorDetail, form.Status = "", "", connStatusTesting
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	a.connectionTestCancel = cancel
+	go func() {
+		err := host.product.TestConnection(ctx, productConnectionInput(config))
+		cancel()
+		a.updateUI(func() {
+			a.connectionTesting, form.Busy, a.connectionTestCancel = false, false, nil
+			if err != nil {
+				form.Status, form.Error, form.ErrorDetail = "", connErrorTestFailed, a.connectionSafeMessage(err)
+			} else {
+				form.Status = connStatusTestCompleted
+				form.StatusArgs = []string{config.Model, config.Endpoint, fmt.Sprint(config.ContextTokens), fmt.Sprint(config.OutputTokens)}
+			}
+			if a.shutdownStarted {
+				a.finishShutdown()
+			}
+		})
+	}()
+}
+
+func readConnectionStartup(storePath string) connectionStartup {
 	startup := connectionStartup{Path: connectionConfigPath(storePath)}
 	config, err := loadConnectionConfig(startup.Path)
 	if err == nil {
@@ -60,13 +159,8 @@ func readConnectionStartup(storePath string, workDir string) connectionStartup {
 		return startup
 	}
 	if errors.Is(err, os.ErrNotExist) {
-		startup.Missing = true
-		startup.External = externalConnectionSource(workDir)
-		if !startup.External {
-			initial := defaultConnectionConfig("")
-			startup.FormConfig = &initial
-		}
-		startup.LoadErr = nil
+		initial := defaultConnectionConfig("")
+		startup.FormConfig = &initial
 		return startup
 	}
 	startup.LoadErr = err
@@ -85,8 +179,9 @@ func contactsFromStore(store *contactStore) []*contact {
 			Workspace: stored.Workspace, BuiltinTools: cloneBuiltinTools(stored.BuiltinTools),
 			SessionID: stored.SessionID, Draft: stored.Draft,
 			Archived: stored.Archived, ArchivedAt: stored.ArchivedAt,
-			PreviousSessions: append([]string(nil), stored.PreviousSessions...),
-			Status:           statusReady, WorkLabel: "Preparing a reply",
+			PiBinding:          clonePiConversationBinding(stored.PiBinding),
+			PreviousPiBindings: clonePiConversationBindings(stored.PreviousPiBindings),
+			Status:             statusReady, WorkLabel: "Preparing a reply",
 		}
 		ct.Issues = issuesForStoredContact(store.state.Issues, ct.ID)
 		if stored.SelectedIssueID != "" {
@@ -102,7 +197,7 @@ func contactsFromStore(store *contactStore) []*contact {
 
 func placeholderContact(workDir string) *contact {
 	return &contact{
-		ID: newContactID(), Name: "Saki", Role: "Assistant",
+		ID: newContactID(), Name: "Nagi", Role: "Assistant",
 		Workspace: workDir, Status: statusReady, WorkLabel: "Preparing a reply",
 	}
 }
@@ -123,18 +218,15 @@ func applyStoreSelection(a *appModel, store *contactStore) {
 		a.contacts = []*contact{placeholderContact(a.workDir)}
 		a.selected = 0
 	}
-	if a.selectedContact().Archived {
-		a.contactScope = "archived"
-	}
 	if layout := store.state.Layout; layout != nil {
 		a.leftPaneWidth = clampPaneWidth(layout.LeftWidth, defaultLeftPaneWidth, minLeftPaneWidth, maxLeftPaneWidth)
 		a.rightPaneWidth = clampPaneWidth(layout.RightWidth, defaultRightPaneWidth, minRightPaneWidth, maxRightPaneWidth)
-		a.workspaceOpen = layout.WorkspaceOpen
 	} else {
 		a.leftPaneWidth = 0
 		a.rightPaneWidth = 0
-		a.workspaceOpen = false
 	}
+	a.workspaceOpen = false
+	a.detail = ""
 	a.appearanceMode = normalizeAppearanceMode(store.state.Appearance)
 	a.appearanceThemeIDs = appearanceThemeIDs{}
 	if store.state.ThemeIDs != nil {
@@ -148,7 +240,7 @@ func (a *appModel) ensureConnectionForm() {
 	}
 	config := a.connectionSaved
 	if config == nil {
-		config = readConnectionStartup(a.storePath, a.workDir).FormConfig
+		config = readConnectionStartup(a.storePath).FormConfig
 	}
 	a.connectionForm = newConnectionSettings(config, a.workDir)
 	if a.connectionSaved == nil {
@@ -213,7 +305,7 @@ func (a *appModel) chooseConnectionWorkFolder() {
 	opts := mygo.OpenDialogOptions{Parent: a.win, Directory: true,
 		Title: msgs.WorkFolderChooseTitle(), ButtonLabel: msgs.WorkFolderChoose()}
 	draft, effective := form.Draft.WorkingDirectory, a.workDir
-	if form.initial.WorkingDirectory == "" && a.connectionSaved == nil && !a.connectionLegacy {
+	if form.initial.WorkingDirectory == "" && a.connectionSaved == nil {
 		effective = ""
 	}
 	pick := a.chooseFolder
@@ -252,86 +344,20 @@ func (a *appModel) saveConnectionWithApply(config connectionConfig, applyAfterSa
 	if form.Busy || a.shutdownStarted || a.dataRecoveryBlocksChanges() {
 		return
 	}
-	path := a.connectionPath
-	if path == "" {
-		path = connectionConfigPath(a.storePath)
-		a.connectionPath = path
-	}
-	needStore := a.store == nil
-	if needStore || a.localSaveErr != "" {
-		// persist owns local state and its error; the connection write reports independently.
-		_ = a.persist()
-	}
-	form.Busy = true
-	form.Error = ""
-	form.ErrorDetail = ""
-	form.ReloadBlocked = ""
-	form.Status = connStatusSaving
-	a.connectionSaveInFlight = true
-	go func() {
-		err := saveConnectionConfig(path, config)
-		if err != nil {
-			a.updateUI(func() {
-				a.connectionSaveInFlight = false
-				form.Busy = false
-				form.Status = ""
-				form.ErrorDetail = a.connectionSafeMessage(err)
-				form.Error = form.ErrorDetail
-				if a.shutdownStarted {
-					a.finishShutdown()
-				}
-			})
+	if host := a.productHost(); host != nil {
+		if a.runtimeStatus == runtimeStateExited {
+			a.reopenProductConnection(host, &config, applyAfterSave)
 			return
 		}
-		a.updateUI(func() {
-			a.connectionSaveInFlight = false
-			form.Busy = false
-			a.connectionSaved = &config
-			a.connectionForm.HasSaved = true
-			a.connectionForm.initial = a.connectionForm.Draft
-			a.connectionForm.Status = ""
-			if a.connectionApplied() && *a.connectionEffective == config {
-				a.connectionForm.Status = connStatusSavedApplied
-			}
-			a.connectionForm.Error = ""
-			a.connectionForm.ErrorDetail = ""
-			if a.localSaveErr != "" {
-				a.connectionForm.Error = connStatusSavedStoreFailed
-				a.connectionForm.ErrorDetail = a.redactConnectionText(a.localSaveErr)
-			} else if needStore {
-				a.workDir = config.WorkingDirectory
-				a.startupDetailsOpen = false
-			}
-			if applyAfterSave && !a.shutdownStarted {
-				if reason := a.connectionReloadBlocked(); reason != "" {
-					form.ReloadBlocked = reason
-				} else {
-					a.applyConnection()
-				}
-			}
-			if a.shutdownStarted {
-				a.finishShutdown()
-			}
-		})
-	}()
-}
-
-func runtimeHasExited(rt *runtimeClient) bool {
-	if rt == nil {
-		return true
+		a.changeProductConnection(host, &config, applyAfterSave)
+		return
 	}
-	select {
-	case <-rt.done:
-		return true
-	default:
-		return false
+	if a.runtimeStage == startupStageLocalStore {
+		a.reopenProductConnection(nil, &config, applyAfterSave)
 	}
 }
 
 func (a *appModel) connectionReloadBlocked() string {
-	if a.modelOpActive {
-		return connBlockedModelOp
-	}
 	if a.connectionApplying {
 		return connBlockedApplying
 	}
@@ -341,23 +367,16 @@ func (a *appModel) connectionReloadBlocked() string {
 	if a.connectionSaved == nil {
 		return connBlockedNoSaved
 	}
-	if a.store == nil || a.localSaveErr != "" {
-		return connBlockedStore
-	}
-	if runtimeHasExited(a.rt) {
+	if a.productHost() != nil {
+		if !a.productProfileReady() && a.runtimeStatus != runtimeStateExited {
+			return connBlockedStore
+		}
 		return ""
 	}
-	if a.activeTaskCount() > 0 {
-		return connBlockedActiveWork
+	if a.runtimeStage == startupStageLocalStore {
+		return ""
 	}
-	for _, ct := range a.contacts {
-		for _, issue := range ct.Issues {
-			if reason := issueRunBlocked(issue); reason != "" {
-				return connBlockedUntrustedIssue
-			}
-		}
-	}
-	return ""
+	return connBlockedStore
 }
 
 func (a *appModel) applyConnection() {
@@ -368,178 +387,22 @@ func (a *appModel) applyConnection() {
 	}
 	if reason := a.connectionReloadBlocked(); reason != "" {
 		form.ReloadBlocked = reason
-		form.Error = ""
-		form.ErrorDetail = ""
-		form.Busy = false
 		return
 	}
 	form.ReloadBlocked = ""
 	form.Error = ""
 	form.ErrorDetail = ""
-	if a.issueToolErr != "" {
-		if err := a.startIssueToolService(); err != nil {
-			a.issueToolErr = err.Error()
-		}
-	}
-	form.Busy = true
-	form.Status = connStatusChecking
-	a.connectionApplying = true
-	oldRT := a.rt
-	oldLaunch := a.connectionLaunch
-	path := a.connectionPath
-	sessionDir := a.sessionDir
-	gen := a.connectionGeneration + 1
-	go a.applyConnectionWorker(gen, path, sessionDir, oldRT, oldLaunch, a.issueToolLaunchSource())
-}
-
-func (a *appModel) applyConnectionWorker(gen int, path, sessionDir string, oldRT *runtimeClient, oldLaunch *connectionLaunch, toolSource *runtimeToolSource) {
-	fail := func(kind, detail string) {
-		a.updateUI(func() {
-			a.connectionApplying = false
-			a.connectionForm.Busy = false
-			a.connectionForm.Status = ""
-			a.connectionForm.Error = kind
-			a.connectionForm.ErrorDetail = a.redactConnectionText(detail)
-			if a.shutdownStarted {
-				a.finishShutdown()
-			}
-		})
-	}
-	config, err := loadConnectionConfig(path)
-	if err != nil {
-		fail(connErrorApplyConfig, err.Error())
-		return
-	}
-	binary := findRuntimeBinary()
-	a.updateUI(func() {
-		if a.rt == nil {
-			a.runtimeHelperChecked = true
-			a.runtimeBinary = binary
-		}
-	})
-	if binary == "" {
-		fail(connErrorHelperMissing, "")
-		return
-	}
-	launch, err := prepareConnectionLaunchWithTools(config, os.Environ(), sessionDir, os.TempDir(), toolSource)
-	if err != nil {
-		fail(connErrorPrepare, err.Error())
-		return
-	}
-	ready := make(chan runtimeReady, 1)
-	rt, err := startRuntime(runtimeOptions{
-		Binary: binary, Dir: launch.Dir, Env: launch.Env,
-		Handlers: a.runtimeHandlers(gen, ready),
-	})
-	if err != nil {
-		launch.Cleanup()
-		fail(connErrorStart, err.Error())
-		return
-	}
-	var readyValue runtimeReady
-	select {
-	case readyValue = <-ready:
-	case <-rt.done:
-		launch.Cleanup()
-		fail(connErrorExitedBeforeReady, "")
-		return
-	case <-time.After(runtimeControlTimeout):
-		_ = rt.shutdown()
-		launch.Cleanup()
-		fail(connErrorNotReady, "")
-		return
-	}
-	connections, err := rt.connections()
-	if err != nil || len(connections) != 1 || connections[0].ID != connectionID {
-		_ = rt.shutdown()
-		launch.Cleanup()
-		fail(connErrorNotExposed, "")
-		return
-	}
-	select {
-	case <-rt.done:
-		launch.Cleanup()
-		fail(connErrorExitedWhileChecking, "")
-		return
-	default:
-	}
-	installed := false
-	a.runOnUI(func() {
-		if runtimeHasExited(rt) {
+	if host := a.productHost(); host != nil {
+		if a.runtimeStatus == runtimeStateExited {
+			a.reopenProductConnection(host, nil, true)
 			return
 		}
-		installed = true
-		a.connectionGeneration = gen
-		a.modelRecovery = nil
-		a.modelForm = nil
-		a.conversationModelForms = nil
-		a.modelPanelKind = ""
-		a.modelPanelSessionID = ""
-		a.modelPanelLabel = ""
-		a.settingsReturnModel = nil
-		a.modelOpenToken++
-		a.rt = rt
-		a.connectionLaunch = launch
-		a.connectionEffective = &config
-		a.connectionManaged = true
-		a.connectionLegacy = false
-		if toolSource != nil {
-			a.issueToolErr = ""
-		}
-		a.workDir = config.WorkingDirectory
-		a.runtimeBinary = binary
-		a.runtimeStatus = runtimeStateReady
-		a.runtimeAPI = readyValue.API
-		a.runtimeHandshake = true
-		a.runtimeErr = ""
-		a.runtimeErrKind = ""
-		a.runtimeStage = ""
-		a.runtimeHint = ""
-		a.runtimeHintKind = ""
-		a.runtimeHintArgs = nil
-		a.connectionForm.Error = ""
-		a.connectionForm.ReloadBlocked = ""
-		a.runtimeCapabilitiesLoaded = false
-		a.runtimeMaxActiveTasks = 0
-		a.runtimeCapabilitiesErr = ""
-		a.runtimeBuiltinTools = nil
-		a.runtimeBuiltinToolsLoaded = false
-		a.runtimeBuiltinToolsLoading = false
-		a.runtimeBuiltinToolsErr = ""
-	})
-	if !installed {
-		launch.Cleanup()
-		fail(connErrorExitedDuringInstall, "")
+		a.changeProductConnection(host, nil, true)
 		return
 	}
-	if oldRT != nil {
-		_ = oldRT.shutdown()
+	if a.runtimeStage == startupStageLocalStore {
+		a.reopenProductConnection(nil, nil, true)
 	}
-	if oldLaunch != nil {
-		_ = oldLaunch.Cleanup()
-	}
-	a.runOnUI(func() {
-		a.connectionApplying = false
-		a.connectionForm.Busy = false
-		if a.runtimeStatus != runtimeStateReady {
-			a.connectionForm.Error = connErrorApplyConfig
-			a.connectionForm.ErrorDetail = a.runtimeErr
-			a.connectionForm.Status = ""
-		} else {
-			a.connectionForm.Status = connStatusApplied
-		}
-		if !a.shutdownStarted && a.runtimeStatus == runtimeStateReady {
-			a.restoreContacts(rt, gen)
-			a.restoreIssueWorks(rt, gen)
-			a.startCapabilitiesLoad(rt, gen)
-			if a.connectionManaged {
-				a.startBuiltinToolsLoad(rt, gen)
-			}
-		}
-		if a.shutdownStarted {
-			a.finishShutdown()
-		}
-	})
 }
 
 func (a *appModel) runOnUI(fn func()) {
@@ -554,32 +417,42 @@ func (a *appModel) runOnUI(fn func()) {
 func (a *appModel) testConnection(config connectionConfig) {
 	a.ensureConnectionForm()
 	form := a.connectionForm
-	if form.Busy || a.shutdownStarted || a.dataRecoveryBlocksChanges() {
+	if form.Busy || a.connectionTesting || a.shutdownStarted || a.dataRecoveryBlocksChanges() {
 		return
 	}
-	binary := findRuntimeBinary()
-	if a.rt == nil {
-		a.runtimeHelperChecked = true
-		a.runtimeBinary = binary
-	}
-	if binary == "" {
-		form.Error = connErrorHelperMissing
-		form.ErrorDetail = ""
+	if host := a.productHost(); host != nil {
+		a.testProductConnection(host, config)
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	a.connectionTesting = true
 	a.connectionTestCancel = cancel
+	probe := &piConnectionProbe{}
+	a.connectionProbe = probe
 	form.Busy = true
 	form.Error = ""
 	form.ErrorDetail = ""
 	form.Status = connStatusTesting
 	go func() {
-		result, err := probeConnection(ctx, binary, config, os.Environ(), os.TempDir())
+		err := probePiConnection(ctx, config, probe)
 		cancel()
 		a.updateUI(func() {
-			a.connectionTesting = false
+			if a.connectionProbe != probe {
+				return
+			}
 			a.connectionTestCancel = nil
+			if !probe.cleanupComplete() {
+				form.Status = ""
+				form.Error = connErrorTestFailed
+				form.ErrorDetail = a.connectionSafeMessage(err)
+				if a.shutdownStarted {
+					a.runtimeErrKind = runtimeNoticeRuntimeShutdown
+					a.runtimeErr = form.ErrorDetail
+				}
+				go a.awaitPiConnectionProbe(probe)
+				return
+			}
+			a.connectionTesting = false
 			form.Busy = false
 			if a.shutdownStarted {
 				a.finishShutdown()
@@ -592,77 +465,49 @@ func (a *appModel) testConnection(config connectionConfig) {
 				return
 			}
 			form.Status = connStatusTestCompleted
-			form.StatusArgs = []string{result.Config.EffectiveConfig.Model, result.Connection.Endpoint,
-				fmt.Sprintf("%d", result.Config.EffectiveConfig.Compaction.ContextTokens),
-				fmt.Sprintf("%d", result.Config.EffectiveConfig.Compaction.OutputTokens)}
+			form.StatusArgs = []string{config.Model, config.Endpoint, fmt.Sprint(config.ContextTokens), fmt.Sprint(config.OutputTokens)}
 			form.Error = ""
 		})
 	}()
 }
 
-func (a *appModel) runtimeHandlers(gen int, ready chan<- runtimeReady) runtimeHandlers {
-	return runtimeHandlers{
-		OnReady: func(value runtimeReady) {
-			if ready != nil {
-				select {
-				case ready <- value:
-				default:
-				}
-			}
-			a.updateUI(func() { a.handleRuntimeReady(gen, value) })
-		},
-		OnEvent: func(event runtimeEventEnvelope) {
-			a.updateUI(func() { a.handleRuntimeEvent(gen, event) })
-		},
-		OnExit: func(err error) {
-			a.updateUI(func() { a.handleRuntimeExit(gen, err) })
-		},
-		OnProtocolError: func(message string) {
-			a.updateUI(func() { a.handleRuntimeProtocolError(gen, message) })
-		},
+func (a *appModel) awaitPiConnectionProbe(probe *piConnectionProbe) {
+	probe.mu.Lock()
+	client, dir := probe.client, probe.stateDir
+	probe.mu.Unlock()
+	outcome, waitErr := client.Wait(context.Background())
+	<-client.CallbacksDone()
+	var removeErr error
+	if outcome.Reaped {
+		removeErr = os.RemoveAll(dir)
 	}
-}
-
-func (a *appModel) handleRuntimeReady(gen int, ready runtimeReady) {
-	if gen != a.connectionGeneration || a.rt == nil || a.shutdownStarted {
-		return
-	}
-	a.runtimeStatus = runtimeStateReady
-	a.runtimeErr = ""
-	a.runtimeErrKind = ""
-	a.runtimeStage = ""
-	a.runtimeHint = ""
-	a.runtimeHintKind = ""
-	a.runtimeHintArgs = nil
-	a.runtimeAPI = ready.API
-	a.runtimeHandshake = true
-	a.restoreContacts(a.rt, gen)
-	a.restoreIssueWorks(a.rt, gen)
-	a.startCapabilitiesLoad(a.rt, gen)
-	if a.connectionManaged {
-		a.startBuiltinToolsLoad(a.rt, gen)
-	}
-}
-
-func (a *appModel) handleRuntimeEvent(gen int, event runtimeEventEnvelope) {
-	if gen != a.connectionGeneration {
-		return
-	}
-	a.applyRuntimeEvent(event)
-}
-
-func (a *appModel) handleRuntimeExit(gen int, err error) {
-	if gen != a.connectionGeneration {
-		return
-	}
-	a.applyRuntimeExit(err)
-}
-
-func (a *appModel) handleRuntimeProtocolError(gen int, message string) {
-	if gen != a.connectionGeneration {
-		return
-	}
-	a.protocolFailed(message)
+	probe.mu.Lock()
+	probe.outcome = outcome
+	probe.callbacksDone = true
+	probe.waitErr = errors.Join(probe.waitErr, waitErr)
+	probe.removeErr = errors.Join(probe.removeErr, removeErr)
+	probe.cleanupErr = errors.Join(probe.cleanupErr, waitErr, removeErr)
+	probe.testErr = errors.Join(probe.testErr, waitErr, removeErr)
+	testErr := probe.testErr
+	probe.mu.Unlock()
+	a.updateUI(func() {
+		if a.connectionProbe != probe {
+			return
+		}
+		if !outcome.Reaped {
+			a.connectionForm.ErrorDetail = a.connectionSafeMessage(errors.Join(testErr, errors.New("connection test worker was not reaped")))
+			return
+		}
+		a.connectionTesting = false
+		a.connectionTestCancel = nil
+		a.connectionForm.Busy = false
+		a.connectionForm.Status = ""
+		a.connectionForm.Error = connErrorTestFailed
+		a.connectionForm.ErrorDetail = a.connectionSafeMessage(testErr)
+		if a.shutdownStarted {
+			a.finishShutdown()
+		}
+	})
 }
 
 func (a *appModel) connectionSafeMessage(err error) string {
@@ -688,143 +533,25 @@ func (a *appModel) redactConnectionText(text string) string {
 	return safeDiagnostic(text)
 }
 
-func (a *appModel) connectionRuntimeMessage(err error) string {
-	return a.redactConnectionText(runtimeMessage(err))
-}
-
-func (a *appModel) connectionTaskFinishedDetail(payload *runtimeEvent) string {
-	if payload == nil {
-		return ""
-	}
-	copyPayload := *payload
-	if payload.Error != nil {
-		errorCopy := *payload.Error
-		errorCopy.Message = a.redactConnectionText(payload.Error.Message)
-		errorCopy.Reason = a.redactConnectionText(payload.Error.Reason)
-		copyPayload.Error = &errorCopy
-	}
-	return taskFinishedDetail(&copyPayload)
-}
-
-func (a *appModel) configuredConversationCreate(rt *runtimeClient, configured bool, workspace, system string, builtin *[]string, issueTools bool) (runtimeSession, error) {
-	if configured {
-		selection, err := runtimeConversationSelection(rt, builtin, issueTools)
-		if err != nil {
-			return runtimeSession{}, err
-		}
-		return rt.createConfiguredConversationSession(workspace, system, selection)
-	}
-	if builtin != nil {
-		return runtimeSession{}, errors.New("Built-in tool selection requires a managed Nagi connection; save and Apply a connection before creating a new conversation.")
-	}
-	return rt.createSession(workspace, system)
-}
-
-func (a *appModel) configuredWorkCreate(rt *runtimeClient, configured bool, workspace, system string, builtin *[]string, issueTools bool) (runtimeSession, error) {
-	if configured {
-		selection, err := runtimeWorkSelection(rt, builtin, issueTools)
-		if err != nil {
-			return runtimeSession{}, err
-		}
-		return rt.createConfiguredConversationSession(workspace, system, selection)
-	}
-	if builtin != nil {
-		return runtimeSession{}, errors.New("Built-in tool selection requires a managed Nagi connection; save and Apply a connection before creating a new work session.")
-	}
-	return rt.createSession(workspace, system)
-}
-
-func (c *runtimeClient) createConfiguredSession(workingDir, systemPrompt string) (runtimeSession, error) {
-	return c.createConfiguredSessionWithTools(workingDir, systemPrompt, nil)
-}
-
-func (c *runtimeClient) createConfiguredConversationSession(workingDir, systemPrompt string, toolSelection map[string]any) (runtimeSession, error) {
-	return c.createConfiguredSessionWithTools(workingDir, systemPrompt, toolSelection)
-}
-
-func (c *runtimeClient) createConfiguredSessionWithTools(workingDir, systemPrompt string, toolSelection map[string]any) (runtimeSession, error) {
-	config := map[string]any{
-		"connection_id": connectionID,
-	}
-	if workingDir != "" {
-		config["working_directory"] = workingDir
-	}
-	if systemPrompt != "" {
-		config["system_prompt"] = systemPrompt
-	}
-	if toolSelection != nil {
-		config["tool_selection"] = toolSelection
-	}
-	var session runtimeSession
-	err := c.call("session.create", map[string]any{
-		"storage_schema": 2,
-		"config":         config,
-	}, &session, runtimeControlTimeout)
-	if err != nil {
-		return runtimeSession{}, err
-	}
-	if session.SessionID == "" {
-		return runtimeSession{}, errors.New("runtime returned a session without session_id")
-	}
-	return session, nil
-}
-
-// finishShutdown drains Runtime only after in-flight history, metadata,
-// issue/conversation submission, result reads, and theme installs have delivered
-// their final UI callbacks; those callbacks re-enter this function.
+// finishShutdown waits for admitted operations and their final UI callbacks before draining Pi.
 func (a *appModel) finishShutdown() {
-	if a.quitReady || a.shutdownDrainStarted || (a.dataRecovery != nil && a.dataRecovery.inFlight) || a.connectionSaveInFlight || a.connectionApplying || a.connectionTesting || a.modelOpActive || a.contactHistoryInFlight > 0 || a.resultInFlight > 0 || a.submissionInFlight > 0 || a.issueToolReleaseInFlight > 0 || a.metadataInFlight > 0 || (a.themeImport != nil && a.themeImport.installInFlight) {
+	if a.quitReady || a.shutdownDrainStarted {
 		return
 	}
-	if a.rt == nil {
-		if a.issueToolServer == nil {
-			a.quitReady = true
-			if a.requestQuit != nil {
-				a.requestQuit()
-			}
+	if host := a.productHost(); host != nil {
+		if (a.dataRecovery != nil && a.dataRecovery.inFlight) || a.connectionApplying || a.connectionSaveInFlight || a.connectionTesting || a.submissionInFlight > 0 || a.contactHistoryInFlight > 0 {
 			return
 		}
 		a.shutdownDrainStarted = true
-		go func() {
-			err := a.closeIssueToolService()
-			a.updateUI(func() {
-				a.quitReady = true
-				if err != nil {
-					a.runtimeErrKind = runtimeNoticeIssueToolShutdown
-					a.runtimeErr = a.connectionSafeMessage(err)
-				}
-				if a.requestQuit != nil {
-					a.requestQuit()
-				}
-			})
-		}()
+		a.runtimeStatus = runtimeStateDraining
+		go a.finishProductShutdown(host)
 		return
 	}
-	a.shutdownDrainStarted = true
-	a.runtimeStatus = runtimeStateDraining
-	a.runtimeErr = ""
-	a.runtimeErrKind = ""
-	rt := a.rt
-	launch := a.connectionLaunch
-	go func() {
-		err := rt.shutdown()
-		if launch != nil {
-			_ = launch.Cleanup()
-		}
-		toolErr := a.closeIssueToolService()
-		a.updateUI(func() {
-			a.quitReady = true
-			if err != nil {
-				a.runtimeErrKind = runtimeNoticeRuntimeShutdown
-				a.runtimeErr = a.connectionSafeMessage(err)
-			}
-			if toolErr != nil {
-				a.runtimeErrKind = runtimeNoticeIssueToolShutdown
-				a.runtimeErr = a.connectionSafeMessage(toolErr)
-			}
-			if a.requestQuit != nil {
-				a.requestQuit()
-			}
-		})
-	}()
+	if (a.dataRecovery != nil && a.dataRecovery.inFlight) || a.connectionSaveInFlight || a.connectionApplying || a.connectionTesting || a.contactHistoryInFlight > 0 || a.submissionInFlight > 0 || (a.themeImport != nil && a.themeImport.installInFlight) {
+		return
+	}
+	a.quitReady = true
+	if a.requestQuit != nil {
+		a.requestQuit()
+	}
 }

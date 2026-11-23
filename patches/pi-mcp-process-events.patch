@@ -1,0 +1,154 @@
+--- a/dist/index.d.ts
++++ b/dist/index.d.ts
+@@ -8,7 +8,7 @@
+ export { isJsonRpcNotification, isJsonRpcRequest, isJsonRpcResponse, JSON_RPC_ERROR_CODES, type JsonRpcErrorObject, type JsonRpcErrorResponse, type JsonRpcId, type JsonRpcMessage, type JsonRpcNotification, type JsonRpcRequest, type JsonRpcResponse, type JsonRpcSuccessResponse, McpAbortError, McpConnectionClosedError, McpError, McpTimeoutError, parseJsonRpcMessage, } from "./protocol/jsonrpc.ts";
+ export { type CancelledNotification, type ClientCapabilities, type Implementation, type InitializeParams, type InitializeResult, LATEST_PROTOCOL_VERSION, type ListResourcesResult, type ListResourceTemplatesResult, type ListToolsResult, type ProgressNotification, type ReadResourceResult, type Resource, type ResourceTemplate, type Root, type ServerCapabilities, SUPPORTED_PROTOCOL_VERSIONS, type SupportedProtocolVersion, type Tool, type ToolAnnotations, type ToolExecution, } from "./protocol/types.ts";
+ export { type McpPipe, type McpPipeHandlers, PipeTransport, type PipeTransportOptions, } from "./transports/pipe.ts";
+-export { StdioTransport, type StdioTransportOptions } from "./transports/stdio.ts";
++export { StdioTransport, type StdioTransportOptions, type StdioProcessEvent } from "./transports/stdio.ts";
+ export { McpAuthRequiredError, McpHttpError, McpSessionExpiredError, StreamableHttpTransport, type StreamableHttpTransportOptions, } from "./transports/streamable-http.ts";
+ export type { McpTransport, McpTransportCloseListener, McpTransportErrorListener, McpTransportMessageListener, McpTransportSendOptions, } from "./transports/transport.ts";
+ //# sourceMappingURL=index.d.ts.map
+\ No newline at end of file
+--- a/dist/transports/stdio.d.ts
++++ b/dist/transports/stdio.d.ts
+@@ -1,5 +1,26 @@
+ import { type JsonRpcMessage } from "../protocol/jsonrpc.ts";
+ import { type McpTransport, TransportEvents } from "./transport.ts";
++export type StdioProcessEvent = {
++    readonly kind: "spawn_error";
++    readonly pid: number | undefined;
++    readonly error: {
++        readonly name: string;
++        readonly message: string;
++        readonly code?: string;
++    };
++} | {
++    readonly kind: "exit";
++    readonly pid: number | undefined;
++    readonly code: number | null;
++    readonly signal: string | null;
++} | {
++    readonly kind: "child_close";
++    readonly pid: number | undefined;
++    readonly code: number | null;
++    readonly signal: string | null;
++    readonly spawnObserved: boolean;
++    readonly exitObserved: boolean;
++};
+ export interface StdioTransportOptions {
+     command: string;
+     args?: readonly string[];
+@@ -8,6 +29,7 @@
+     inheritEnv?: boolean;
+     stderr?: "pipe" | "inherit";
+     onStderr?: (chunk: string) => void;
++    onProcessEvent?: (event: StdioProcessEvent) => void | PromiseLike<void>;
+     maxMessageBytes?: number;
+     maxStderrBytes?: number;
+     /** Time to wait for the server to exit after SIGTERM before sending SIGKILL. Default: 2000. */
+@@ -22,6 +44,8 @@
+     constructor(options: StdioTransportOptions);
+     get pid(): number | undefined;
+     get stderr(): string;
++    private emitProcessEvent;
++    private spawnChild;
+     start(): Promise<void>;
+     send(message: JsonRpcMessage): Promise<void>;
+     close(): Promise<void>;
+--- a/dist/transports/stdio.js
++++ b/dist/transports/stdio.js
+@@ -72,6 +72,47 @@
+     get stderr() {
+         return this.lines.stderr;
+     }
++    emitProcessEvent(event) {
++        try {
++            const observer = this.options.onProcessEvent;
++            if (observer === undefined)
++                return;
++            let snapshot;
++            if (event.kind === "spawn_error") {
++                const error = event.error;
++                const name = error?.name;
++                const message = error?.message;
++                const code = error?.code;
++                snapshot = Object.freeze({
++                    ...event,
++                    error: Object.freeze({
++                        name: typeof name === "string" ? name : "Error",
++                        message: typeof message === "string" ? message : String(error),
++                        ...(typeof code === "string" ? { code } : {}),
++                    }),
++                });
++            }
++            else {
++                snapshot = Object.freeze({ ...event });
++            }
++            queueMicrotask(() => {
++                try {
++                    Promise.resolve(observer(snapshot)).catch(() => { });
++                }
++                catch { }
++            });
++        }
++        catch { }
++    }
++    spawnChild(command, args, options) {
++        try {
++            return crossSpawn(command, args, options);
++        }
++        catch (error) {
++            this.emitProcessEvent({ kind: "spawn_error", pid: undefined, error });
++            throw error;
++        }
++    }
+     async start() {
+         if (this.started)
+             throw new Error("MCP stdio transport already started");
+@@ -79,7 +120,7 @@
+             throw new McpConnectionClosedError();
+         this.started = true;
+         const env = this.options.inheritEnv === false ? { ...this.options.env } : { ...process.env, ...this.options.env };
+-        const child = crossSpawn(this.options.command, this.options.args ?? [], {
++        const child = this.spawnChild(this.options.command, this.options.args ?? [], {
+             cwd: this.options.cwd,
+             env,
+             stdio: ["pipe", "pipe", this.options.stderr === "inherit" ? "inherit" : "pipe"],
+@@ -89,6 +130,8 @@
+         });
+         this.child = child;
+         const pid = child.pid;
++        let spawnObserved = false;
++        let exitObserved = false;
+         if (USE_PROCESS_GROUPS && pid !== undefined) {
+             installExitHook();
+             liveProcessGroups.add(pid);
+@@ -103,19 +146,26 @@
+         });
+         child.stderr?.on("data", (chunk) => this.lines.readStderr(chunk));
+         child.stderr?.on("error", (error) => this.emitError(error));
+-        child.on("close", () => {
++        child.once("exit", (code, signal) => {
++            exitObserved = true;
++            this.emitProcessEvent({ kind: "exit", pid, code, signal });
++        });
++        child.on("close", (code, signal) => {
++            this.emitProcessEvent({ kind: "child_close", pid, code, signal, spawnObserved, exitObserved });
+             this.child = undefined;
+             this.lines.end();
+             this.emitClose();
+         });
+         await new Promise((resolve, reject) => {
+             const onSpawn = () => {
++                spawnObserved = true;
+                 child.off("error", onError);
+                 resolve();
+             };
+             const onError = (error) => {
+                 child.off("spawn", onSpawn);
+                 reject(error);
++                this.emitProcessEvent({ kind: "spawn_error", pid, error });
+             };
+             child.once("spawn", onSpawn);
+             child.once("error", onError);

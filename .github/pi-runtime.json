@@ -1,0 +1,74 @@
+{
+  "schema": 1,
+  "node": {
+    "version": "22.23.5",
+    "platform": "darwin",
+    "arch": "arm64",
+    "archive_url": "https://nodejs.org/dist/v22.23.5/node-v22.23.5-darwin-arm64.tar.gz",
+    "archive_sha256": "e7131995759b61a0170b646010d2ad35a5d37b4cb0d471f3e8317eac6f742f3d",
+    "declared_minimum_macos": "11.0",
+    "checksums_url": "https://nodejs.org/dist/v22.23.5/SHASUMS256.txt",
+    "source_url": "https://github.com/nodejs/node/tree/v22.23.5"
+  },
+  "pi": {
+    "version": "1.5.2",
+    "declared_source_sha": "b4afdddf44e059c67ccf5097e5317d913521b470",
+    "package_json": "internal/pi/worker/package.json",
+    "package_json_sha256": "bb8d6052c08f945af49a77f89f038085b3b652220daab872be50068f126638fb",
+    "lock_file": "internal/pi/worker/package-lock.json",
+    "lock_sha256": "64facdd6a566654244434bba414eea27ae4d3a452336ccdb24d73770f4804035",
+    "packages": {
+      "@earendil-works/pi-coding-agent": {
+        "version": "1.5.2",
+        "resolved": "https://registry.npmjs.org/@earendil-works/pi-coding-agent/-/pi-coding-agent-1.5.2.tgz",
+        "integrity": "sha512-mUWI04rqF1Vd/m1q+Ps1XeWsTXEVvRUnsmRa83I3Dzua0Tx5bYS93imeqtIfrXf7PkkaR6ERz+AuQhIJlom5yA=="
+      },
+      "@earendil-works/pi-ai": {
+        "version": "1.5.2",
+        "resolved": "https://registry.npmjs.org/@earendil-works/pi-ai/-/pi-ai-1.5.2.tgz",
+        "integrity": "sha512-2tWPSnV3qzfiDIY3aWluBag3vC++Vs+VsXt/UquSU5onPMohPih72FUhIhaqmDdMYubOgB3Byl9uF4Vk40JLvQ=="
+      },
+      "@earendil-works/pi-mcp": {
+        "version": "1.5.2",
+        "resolved": "https://registry.npmjs.org/@earendil-works/pi-mcp/-/pi-mcp-1.5.2.tgz",
+        "integrity": "sha512-zU1UgeXDlbixPqGEWD7Ql0brEMIpYr7aEWjoEE5h5enJbM/kQ2jIr7lN8JoR80oUnq1fJSU7SC8kLx2Fx/IZYg=="
+      }
+    },
+    "patches": [
+      {
+        "package": "@earendil-works/pi-mcp",
+        "path": "patches/pi-mcp-process-events.patch",
+        "sha256": "48c4c0b7a5c683ac6c37d5f3fbfc3cdd1f09faec8b76a281bd53b86dbf802eb6",
+        "files": {
+          "dist/index.d.ts": {
+            "before_sha256": "c94f0ae177161cf847eac7536b9334d188878fff876bd7d826a30b18642cd3e3",
+            "after_sha256": "ef9399accaf32f73a1ac924a33b3622eec7ba41395aa79c8354f8dcffb795016"
+          },
+          "dist/transports/stdio.d.ts": {
+            "before_sha256": "07d10ffbe6347975e49c6bb0e80d60bcf49baae7499c1f213c1182d5172ca25e",
+            "after_sha256": "d86ea7111ba7592c0735f3f18fef3205befc05652ebd7e2f437eec1daa9970f5"
+          },
+          "dist/transports/stdio.js": {
+            "before_sha256": "25186bb2a9d6142928b03cd79ae4f8c881ab7af755e1e4d1425f3aa27d936c42",
+            "after_sha256": "57820607bcf00512b30d6accbd47ddcd566d032d8b80bba153f6277f857edb31"
+          }
+        }
+      },
+      {
+        "package": "@earendil-works/pi-coding-agent",
+        "path": "patches/pi-memory-credentials.patch",
+        "sha256": "f9624b45eaf59a16cc5ac0c37fb9b7a82edee5fdb54387c9b7ed7269fe39308e",
+        "files": {
+          "dist/index.d.ts": {
+            "before_sha256": "b896b72effa2ee729087181a294cf93c45abc323daad2aadbda5f449acafa54a",
+            "after_sha256": "d6b073415f30203f73b949e35174325fa2d4abb9bc7e4cd45c077a02dc50df6a"
+          },
+          "dist/index.js": {
+            "before_sha256": "4569157e6038be9840fa514db4b00a27fd0be9e3622cc7b49a281de6c027d7ff",
+            "after_sha256": "6ca5421ee4d9720b68d0b744212a619fe398c7d1cb07be372b5b5eab33165b3d"
+          }
+        }
+      }
+    ]
+  }
+}

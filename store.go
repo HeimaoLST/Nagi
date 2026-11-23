@@ -1,11 +1,11 @@
 package main
 
-// GUI-owned contact store. It persists only product fields and the mapping to
-// a runtime session_id; messages/history stay in the runtime and are read via
-// session.history. The JSON file is private to the GUI.
+// The contact store owns product records and Pi session bindings. The Pi
+// worker reads transcripts through Pi's session API.
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -20,32 +21,27 @@ import (
 	"unicode/utf8"
 )
 
-// v3 added issue.work_session_id. v4 made structured requirements the
-// persisted truth. v5 added owned task-context snapshots and pending-send
-// intent. v6 added the issue supplement ledger. v7 adds contact archive state
-// and explicit references to conversations replaced by Save and start new.
-// v8 adds the conversation issue-tool scope/operation ledger. v9 adds
-// persistent missing-information questions and their answer associations.
-// v1-v8 remain readable here. Older apps reject v9 instead of dropping fields.
-const contactStoreVersion = 9
+const contactStoreVersion = 10
 
 type storedContact struct {
-	ID               string            `json:"id"`
-	Name             string            `json:"name"`
-	Role             string            `json:"role,omitempty"`
-	Purpose          string            `json:"purpose,omitempty"`
-	Instructions     string            `json:"instructions,omitempty"`
-	Workspace        string            `json:"workspace,omitempty"`
-	BuiltinTools     *[]string         `json:"builtin_tools,omitempty"`
-	SessionID        string            `json:"session_id,omitempty"`
-	Draft            string            `json:"draft,omitempty"`
-	TaskContext      []taskContextItem `json:"task_context,omitempty"`
-	Archived         bool              `json:"archived,omitempty"`
-	ArchivedAt       int64             `json:"archived_at,omitempty"`
-	PreviousSessions []string          `json:"previous_sessions,omitempty"`
-	PendingSend      *pendingSend      `json:"pending_send,omitempty"`
-	SelectedIssueID  string            `json:"selected_issue_id,omitempty"`
-	UpdatedAt        int64             `json:"updated_at,omitempty"`
+	ID           string            `json:"id"`
+	Name         string            `json:"name"`
+	Role         string            `json:"role,omitempty"`
+	Purpose      string            `json:"purpose,omitempty"`
+	Instructions string            `json:"instructions,omitempty"`
+	Workspace    string            `json:"workspace,omitempty"`
+	BuiltinTools *[]string         `json:"builtin_tools,omitempty"`
+	SessionID    string            `json:"session_id,omitempty"`
+	Draft        string            `json:"draft,omitempty"`
+	TaskContext  []taskContextItem `json:"task_context,omitempty"`
+	Archived     bool              `json:"archived,omitempty"`
+	ArchivedAt   int64             `json:"archived_at,omitempty"`
+
+	PiBinding          *piConversationBinding  `json:"pi_binding,omitempty"`
+	PreviousPiBindings []piConversationBinding `json:"previous_pi_bindings,omitempty"`
+	PendingSend        *pendingSend            `json:"pending_send,omitempty"`
+	SelectedIssueID    string                  `json:"selected_issue_id,omitempty"`
+	UpdatedAt          int64                   `json:"updated_at,omitempty"`
 }
 
 type storedIssueExecution struct {
@@ -62,7 +58,9 @@ type storedIssueExecution struct {
 	SupplementBatchID    string            `json:"supplement_batch_id,omitempty"`
 	ToolOperationID      string            `json:"tool_operation_id,omitempty"`
 	ToolScopeRef         string            `json:"tool_scope_ref,omitempty"`
-	ToolScopeInput       string            `json:"tool_scope_input,omitempty"`
+	PiIntent             bool              `json:"pi_intent,omitempty"`
+	PiRun                *piActivityRun    `json:"pi_run,omitempty"`
+	ReturnedAt           int64             `json:"returned_at,omitempty"`
 	WaitRequested        bool              `json:"wait_requested,omitempty"`
 }
 
@@ -75,10 +73,10 @@ type storedRequirement struct {
 }
 
 type storedIssue struct {
-	ID                   string                 `json:"id"`
-	ContactID            string                 `json:"contact_id"`
-	Goal                 string                 `json:"goal"`
-	Requirements         string                 `json:"requirements,omitempty"` // legacy v1-v3 only
+	ID        string `json:"id"`
+	ContactID string `json:"contact_id"`
+	Goal      string `json:"goal"`
+
 	RequirementsRevision int                    `json:"requirements_revision,omitempty"`
 	RequirementItems     []storedRequirement    `json:"requirement_items,omitempty"`
 	Status               string                 `json:"status,omitempty"`
@@ -86,6 +84,8 @@ type storedIssue struct {
 	Evidence             string                 `json:"evidence,omitempty"`
 	CreatedAt            int64                  `json:"created_at,omitempty"`
 	UpdatedAt            int64                  `json:"updated_at,omitempty"`
+	PiBinding            *piActivityBinding     `json:"pi_binding,omitempty"`
+	Handoff              *issueHandoff          `json:"handoff,omitempty"`
 	WorkSessionID        string                 `json:"work_session_id,omitempty"`
 	TaskContext          []taskContextItem      `json:"task_context,omitempty"`
 	Supplements          *issueSupplementLedger `json:"supplements,omitempty"`
@@ -130,7 +130,7 @@ func newContactID() string {
 
 func nowMillis() int64 { return time.Now().UnixMilli() }
 
-// openContactStore loads the store, or creates and persists a default Saki
+// openContactStore loads the store, or creates and persists a default Nagi
 // contact when the file does not exist. A corrupt or unsupported file is
 // reported and left untouched; the app must not silently replace it.
 func openContactStore(path, defaultWorkspace string) (*contactStore, error) {
@@ -152,7 +152,7 @@ func openContactStore(path, defaultWorkspace string) (*contactStore, error) {
 			Version: contactStoreVersion,
 			Contacts: []storedContact{{
 				ID:        newContactID(),
-				Name:      "Saki",
+				Name:      "Nagi",
 				Role:      "Assistant",
 				Workspace: defaultWorkspace,
 				UpdatedAt: nowMillis(),
@@ -165,13 +165,13 @@ func openContactStore(path, defaultWorkspace string) (*contactStore, error) {
 		}
 		return store, nil
 	default:
-		return nil, fmt.Errorf("contact store %s is not accessible: %w", path, err)
+		return nil, fmt.Errorf("profile store %s is not accessible: %w", path, err)
 	}
 }
 
 func (s *contactStore) restoreIssueToolState() {
 	if s.issueToolLedger == nil {
-		s.issueToolLedger = s.state.IssueToolOperations
+		s.issueToolLedger = cloneIssueToolLedger(s.state.IssueToolOperations)
 	}
 	if s.issueToolLedger == nil {
 		s.issueToolLedger = &IssueToolOperationLedger{}
@@ -181,7 +181,7 @@ func (s *contactStore) restoreIssueToolState() {
 	}
 	for _, scope := range s.state.IssueToolScopes {
 		if scope.Validate() == nil {
-			s.issueToolScopes[scope.Ref] = scope
+			s.issueToolScopes[scope.Ref] = cloneIssueToolScope(scope)
 		}
 	}
 }
@@ -193,18 +193,290 @@ func (s *contactStore) setIssueToolState(ledger *IssueToolOperationLedger, scope
 	s.issueToolLedger = ledger
 	s.issueToolScopes = make(map[string]IssueToolScope, len(scopes))
 	for ref, scope := range scopes {
-		s.issueToolScopes[ref] = scope
+		s.issueToolScopes[ref] = cloneIssueToolScope(scope)
 	}
 }
 
-func (s *contactStore) saveState() error {
-	s.state.IssueToolOperations = s.issueToolLedger
-	s.state.IssueToolScopes = s.issueToolScopesList()
-	dir := filepath.Dir(s.path)
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return fmt.Errorf("create contact store directory: %w", err)
+func (state storedState) validatePiBindings() error {
+	for _, ct := range state.Contacts {
+		if ct.SessionID != "" && (ct.PiBinding == nil || ct.PiBinding.Engine != "pi" || ct.PiBinding.Context.SessionRef != ct.SessionID) {
+			return fmt.Errorf("Bot %s has an invalid Pi session binding", ct.ID)
+		}
 	}
-	data, err := json.MarshalIndent(s.state, "", "  ")
+	for _, issue := range state.Issues {
+		if !storedPiIssueValid(issue, state.IssueToolOperations) {
+			return fmt.Errorf("issue %s has an invalid Pi execution record", issue.ID)
+		}
+		if issue.Handoff != nil && !storedIssueHandoffValid(issue, state) {
+			return fmt.Errorf("issue %s has an invalid handoff", issue.ID)
+		}
+	}
+	return nil
+}
+
+func readablePiIssueStatus(status string) bool {
+	return status == issueExecutionCompleted || status == issueExecutionFailed || status == issueExecutionInterrupted
+}
+
+func cloneIssueToolReceipt(receipt *IssueToolReceipt) *IssueToolReceipt {
+	if receipt == nil {
+		return nil
+	}
+	copy := *receipt
+	copy.PiRun = clonePiActivityRun(receipt.PiRun)
+	if receipt.RequirementsRevision != nil {
+		value := *receipt.RequirementsRevision
+		copy.RequirementsRevision = &value
+	}
+	if receipt.Error != nil {
+		errorCopy := *receipt.Error
+		errorCopy.Candidates = append([]string(nil), receipt.Error.Candidates...)
+		if receipt.Error.CurrentRevision != nil {
+			value := *receipt.Error.CurrentRevision
+			errorCopy.CurrentRevision = &value
+		}
+		copy.Error = &errorCopy
+	}
+	return &copy
+}
+
+func storedPiIssueValid(issue storedIssue, ledger *IssueToolOperationLedger) bool {
+	if issue.PiBinding == nil {
+		if issue.WorkSessionID != "" {
+			return false
+		}
+	} else {
+		binding := issue.PiBinding
+		if binding.Engine != "pi" || binding.Context.Purpose != "activity" ||
+			binding.Context.BotID != issue.ContactID || binding.Context.ActivityID != issue.ID ||
+			binding.Context.ContextID == "" || binding.Context.SessionRef == "" || binding.Context.SelectionRevision == 0 || binding.Context.CWD == "" ||
+			binding.Selection.CWD == "" || binding.Configuration.CredentialSource == "" ||
+			issue.WorkSessionID != binding.Context.SessionRef {
+			return false
+		}
+	}
+	for _, execution := range issue.Executions {
+		if execution.ReturnedAt != 0 && (issue.Handoff == nil || execution.ReturnedAt < issue.CreatedAt || execution.PiRun == nil || !execution.PiRun.Admitted || !readablePiIssueStatus(execution.Status)) {
+			return false
+		}
+		if !execution.PiIntent || execution.ID == "" || execution.MessageID != "" {
+			return false
+		}
+		if execution.PiRun == nil {
+			if execution.SessionID != "" || execution.TaskID != "" || execution.Status == issueExecutionAccepted || execution.Status == issueExecutionRunning || execution.Status == issueExecutionCompleted {
+				return false
+			}
+			continue
+		}
+		run := execution.PiRun
+		if issue.PiBinding == nil || run.WorkerEpoch == "" || run.ContextID != issue.PiBinding.Context.ContextID ||
+			run.SessionRef != issue.PiBinding.Context.SessionRef || run.RunID == "" ||
+			execution.SessionID != "" && execution.SessionID != run.SessionRef ||
+			execution.TaskID != "" && execution.TaskID != run.RunID ||
+			run.Admitted && (execution.SessionID != run.SessionRef || execution.TaskID != run.RunID) ||
+			!run.Admitted && (execution.Status == issueExecutionAccepted || execution.Status == issueExecutionRunning || execution.Status == issueExecutionCompleted) {
+			return false
+		}
+	}
+	for _, question := range issue.Questions {
+		if question == nil || question.PiCall == nil {
+			continue
+		}
+		call := question.PiCall
+		if issue.PiBinding == nil || call.ContactID != issue.ContactID || call.IssueID != issue.ID || call.WorkerEpoch == "" || call.ContextID != issue.PiBinding.Context.ContextID || call.SessionRef != issue.PiBinding.Context.SessionRef || call.RunID == "" || call.CallID == "" || call.OperationID == "" || call.ExecutionID == "" || ledger == nil {
+			return false
+		}
+		operation := ledger.operationByID(call.OperationID)
+		if operation == nil || operation.PiCall == nil || *operation.PiCall != *call {
+			return false
+		}
+		matched := false
+		for _, execution := range issue.Executions {
+			if execution.ID == call.ExecutionID && execution.PiRun != nil && execution.PiRun.WorkerEpoch == call.WorkerEpoch && execution.PiRun.ContextID == call.ContextID && execution.PiRun.RunID == call.RunID {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return false
+		}
+		if question.State == issueQuestionAnswered {
+			if question.AnswerSupplementID == "" || issue.Supplements == nil {
+				return false
+			}
+			item := issue.Supplements.itemByID(question.AnswerSupplementID)
+			if item == nil || item.PiQuestionOperationID != call.OperationID || item.Text != question.AnswerText {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func cloneIssueToolLedger(ledger *IssueToolOperationLedger) *IssueToolOperationLedger {
+	if ledger == nil {
+		return nil
+	}
+	cloned := *ledger
+	if ledger.Operations != nil {
+		cloned.Operations = make([]*IssueToolOperation, len(ledger.Operations))
+		for i, operation := range ledger.Operations {
+			if operation != nil {
+				copy := *operation
+				copy.PiCall = clonePiQuestionCall(operation.PiCall)
+				copy.Receipt = cloneIssueToolReceipt(operation.Receipt)
+				cloned.Operations[i] = &copy
+			}
+		}
+	}
+	return &cloned
+}
+
+func cloneIssueToolScope(scope IssueToolScope) IssueToolScope {
+	if scope.AllowedIssueIDs != nil {
+		scope.AllowedIssueIDs = append([]string{}, scope.AllowedIssueIDs...)
+	}
+	return scope
+}
+
+func cloneIssueQuestions(questions []*issueQuestion) []*issueQuestion {
+	if questions == nil {
+		return nil
+	}
+	cloned := make([]*issueQuestion, len(questions))
+	for i, question := range questions {
+		if question != nil {
+			copy := *question
+			copy.PiCall = clonePiQuestionCall(question.PiCall)
+			copy.AnswerContext = cloneTaskContextItems(question.AnswerContext)
+			cloned[i] = &copy
+		}
+	}
+	return cloned
+}
+
+func clonePiConversationBindings(bindings []piConversationBinding) []piConversationBinding {
+	if bindings == nil {
+		return nil
+	}
+	cloned := make([]piConversationBinding, len(bindings))
+	for i := range bindings {
+		cloned[i] = *clonePiConversationBinding(&bindings[i])
+	}
+	return cloned
+}
+
+func cloneStoredState(state storedState) storedState {
+	cloned := state
+	if state.Contacts != nil {
+		cloned.Contacts = append([]storedContact{}, state.Contacts...)
+		for i := range cloned.Contacts {
+			ct := &cloned.Contacts[i]
+			ct.BuiltinTools = cloneBuiltinTools(ct.BuiltinTools)
+			ct.TaskContext = cloneTaskContextItems(ct.TaskContext)
+			ct.PiBinding = clonePiConversationBinding(ct.PiBinding)
+			ct.PreviousPiBindings = clonePiConversationBindings(ct.PreviousPiBindings)
+			ct.PendingSend = clonePendingSend(ct.PendingSend)
+		}
+	}
+	if state.Issues != nil {
+		cloned.Issues = append([]storedIssue{}, state.Issues...)
+		for i := range cloned.Issues {
+			issue := &cloned.Issues[i]
+			if issue.RequirementItems != nil {
+				issue.RequirementItems = append([]storedRequirement{}, issue.RequirementItems...)
+			}
+			issue.TaskContext = cloneTaskContextItems(issue.TaskContext)
+			issue.PiBinding = clonePiActivityBinding(issue.PiBinding)
+			issue.Supplements = cloneIssueSupplementLedger(issue.Supplements)
+			issue.Questions = cloneIssueQuestions(issue.Questions)
+			if issue.Executions != nil {
+				issue.Executions = append([]storedIssueExecution{}, issue.Executions...)
+				for j := range issue.Executions {
+					issue.Executions[j].PiRun = clonePiActivityRun(issue.Executions[j].PiRun)
+					issue.Executions[j].Context = cloneTaskContextItems(issue.Executions[j].Context)
+				}
+			}
+		}
+	}
+	cloned.IssueToolOperations = cloneIssueToolLedger(state.IssueToolOperations)
+	if state.IssueToolScopes != nil {
+		cloned.IssueToolScopes = make([]IssueToolScope, len(state.IssueToolScopes))
+		for i, scope := range state.IssueToolScopes {
+			cloned.IssueToolScopes[i] = cloneIssueToolScope(scope)
+		}
+	}
+	if state.Layout != nil {
+		layout := *state.Layout
+		cloned.Layout = &layout
+	}
+	if state.ThemeIDs != nil {
+		themeIDs := *state.ThemeIDs
+		cloned.ThemeIDs = &themeIDs
+	}
+	return cloned
+}
+
+func (s *contactStore) saveState() error {
+	state := s.state
+	state.IssueToolOperations = nil
+	state.IssueToolScopes = nil
+	candidate := cloneStoredState(state)
+	candidate.IssueToolOperations = cloneIssueToolLedger(s.issueToolLedger)
+	candidate.IssueToolScopes = s.issueToolScopesList()
+	return s.commitState(candidate)
+}
+
+func (s *contactStore) commitState(candidate storedState) error {
+	if err := candidate.validatePiBindings(); err != nil {
+		return err
+	}
+	if err := writeProfileJSON(s.path, candidate); err != nil {
+		return err
+	}
+	s.state = candidate
+	return nil
+}
+
+type productPendingSend struct {
+	ConversationID string `json:"conversationId"`
+	OperationID    string `json:"operationId"`
+}
+
+type productUIState struct {
+	Selected   string                        `json:"selected,omitempty"`
+	Layout     storedLayout                  `json:"layout"`
+	ThemeIDs   appearanceThemeIDs            `json:"themeIds"`
+	Appearance string                        `json:"appearance,omitempty"`
+	Pending    map[string]productPendingSend `json:"pending,omitempty"`
+	RecoveryID string                        `json:"recoveryId,omitempty"`
+
+	PendingActivities map[string]productActivityIntent `json:"pending_activities,omitempty"`
+}
+
+func productUIPath(profilePath string) string { return profilePath + ".ui.json" }
+
+func readProductUI(profilePath string) (*productUIState, error) {
+	data, err := os.ReadFile(productUIPath(profilePath))
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var state productUIState
+	if err := json.Unmarshal(data, &state); err != nil {
+		return nil, err
+	}
+	return &state, nil
+}
+
+func writeProfileJSON(path string, value any) error {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return fmt.Errorf("create profile store directory: %w", err)
+	}
+	data, err := json.MarshalIndent(value, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -222,50 +494,64 @@ func (s *contactStore) saveState() error {
 	if err := writeStoreBytes(temp, data); err != nil {
 		return err
 	}
-	return os.Rename(tempName, s.path)
+	return os.Rename(tempName, path)
 }
 
 // save writes the current in-memory contacts. It is called from the change
 // event (drafts) and from explicit product edits; it does not rewrite messages.
 func (s *contactStore) save(contacts []*contact, selected string) error {
-	s.state = storedState{
+	return s.saveWithPreferences(contacts, selected, s.state.Appearance, s.state.ThemeIDs, s.state.Layout)
+}
+
+func (s *contactStore) saveWithPreferences(contacts []*contact, selected, appearance string, themeIDs *appearanceThemeIDs, layout *storedLayout) error {
+	candidate := storedState{
 		Version:             contactStoreVersion,
 		Selected:            selected,
 		Contacts:            make([]storedContact, 0, len(contacts)),
-		IssueToolOperations: s.issueToolLedger,
+		IssueToolOperations: cloneIssueToolLedger(s.issueToolLedger),
 		IssueToolScopes:     s.issueToolScopesList(),
-		Layout:              s.state.Layout,
-		Appearance:          s.state.Appearance,
-		ThemeIDs:            s.state.ThemeIDs,
+		Appearance:          appearance,
+	}
+	if layout != nil {
+		value := *layout
+		candidate.Layout = &value
+	}
+	if themeIDs != nil {
+		value := *themeIDs
+		candidate.ThemeIDs = &value
 	}
 	for _, c := range contacts {
 		storedContact := storedContact{
-			ID:               c.ID,
-			Name:             c.Name,
-			Role:             c.Role,
-			Purpose:          c.Purpose,
-			Instructions:     c.Instructions,
-			Workspace:        c.Workspace,
-			BuiltinTools:     cloneBuiltinTools(c.BuiltinTools),
-			SessionID:        c.SessionID,
-			Draft:            c.Draft,
-			TaskContext:      c.Context.snapshot(),
-			Archived:         c.Archived,
-			ArchivedAt:       c.ArchivedAt,
-			PreviousSessions: append([]string(nil), c.PreviousSessions...),
-			PendingSend:      clonePendingSend(c.pendingSend),
-			SelectedIssueID:  c.SelectedIssueID,
-			UpdatedAt:        nowMillis(),
+			ID:           c.ID,
+			Name:         c.Name,
+			Role:         c.Role,
+			Purpose:      c.Purpose,
+			Instructions: c.Instructions,
+			Workspace:    c.Workspace,
+			BuiltinTools: cloneBuiltinTools(c.BuiltinTools),
+			SessionID:    c.SessionID,
+			Draft:        c.Draft,
+			TaskContext:  c.Context.snapshot(),
+			Archived:     c.Archived,
+			ArchivedAt:   c.ArchivedAt,
+
+			PiBinding:          clonePiConversationBinding(c.PiBinding),
+			PreviousPiBindings: c.piPreviousBindings(),
+			PendingSend:        clonePendingSend(c.pendingSend),
+			SelectedIssueID:    c.SelectedIssueID,
+			UpdatedAt:          nowMillis(),
 		}
-		s.state.Contacts = append(s.state.Contacts, storedContact)
+		candidate.Contacts = append(candidate.Contacts, storedContact)
 		for _, issue := range c.Issues {
 			stored := storedIssue{
 				ID: issue.ID, ContactID: issue.ContactID, Goal: issue.Goal,
 				Status: issue.Status, Archived: issue.Archived,
 				Evidence: issue.Evidence, CreatedAt: issue.CreatedAt, UpdatedAt: issue.UpdatedAt,
+				PiBinding:     clonePiActivityBinding(issue.PiBinding),
+				Handoff:       cloneIssueHandoff(issue.Handoff),
 				WorkSessionID: issue.WorkSessionID, RequirementsRevision: issue.RequirementsRevision,
-				TaskContext: issue.Context.snapshot(), Supplements: issue.Supplements,
-				Questions: issue.Questions,
+				TaskContext: issue.Context.snapshot(), Supplements: cloneIssueSupplementLedger(issue.Supplements),
+				Questions: cloneIssueQuestions(issue.Questions),
 			}
 			for _, requirement := range issue.Requirements {
 				if requirement == nil || strings.TrimSpace(requirement.Text) == "" {
@@ -287,17 +573,27 @@ func (s *contactStore) save(contacts []*contact, selected string) error {
 					SupplementBatchID:    execution.SupplementBatchID,
 					ToolOperationID:      execution.ToolOperationID,
 					ToolScopeRef:         execution.ToolScopeRef,
-					ToolScopeInput:       execution.ToolScopeInput,
-					WaitRequested:        execution.WaitRequested,
+					PiIntent:             execution.PiIntent, PiRun: clonePiActivityRun(execution.PiRun),
+					ReturnedAt:    execution.ReturnedAt,
+					WaitRequested: execution.WaitRequested,
 				})
 			}
-			s.state.Issues = append(s.state.Issues, stored)
+			candidate.Issues = append(candidate.Issues, stored)
 		}
 	}
-	if !s.hasContact(selected) && len(contacts) > 0 {
-		s.state.Selected = contacts[0].ID
+	if len(contacts) > 0 {
+		found := false
+		for _, ct := range candidate.Contacts {
+			if ct.ID == selected {
+				found = true
+				break
+			}
+		}
+		if !found {
+			candidate.Selected = contacts[0].ID
+		}
 	}
-	return s.saveState()
+	return s.commitState(candidate)
 }
 
 func (s *contactStore) issueToolScopesList() []IssueToolScope {
@@ -306,7 +602,7 @@ func (s *contactStore) issueToolScopesList() []IssueToolScope {
 	}
 	out := make([]IssueToolScope, 0, len(s.issueToolScopes))
 	for _, scope := range s.issueToolScopes {
-		out = append(out, scope)
+		out = append(out, cloneIssueToolScope(scope))
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt < out[j].CreatedAt })
 	return out
@@ -326,7 +622,7 @@ func decodeStoredState(path string, data []byte, strict bool) (storedState, erro
 	var err error
 	if strict {
 		if !utf8.Valid(data) {
-			return state, fmt.Errorf("contact store %s is not readable: expected UTF-8 JSON", path)
+			return state, fmt.Errorf("profile store %s is not readable: expected UTF-8 JSON", path)
 		}
 		decoder := json.NewDecoder(bytes.NewReader(data))
 		decoder.DisallowUnknownFields()
@@ -340,37 +636,37 @@ func decodeStoredState(path string, data []byte, strict bool) (storedState, erro
 		err = json.Unmarshal(data, &state)
 	}
 	if err != nil {
-		return state, fmt.Errorf("contact store %s is not readable: %w", path, err)
+		return state, fmt.Errorf("profile store %s is not readable: %w", path, err)
 	}
-	if state.Version < 1 || state.Version > contactStoreVersion {
-		return state, fmt.Errorf("contact store %s has unsupported version %d", path, state.Version)
+	if state.Version != contactStoreVersion {
+		return state, fmt.Errorf("profile store %s has unsupported version %d", path, state.Version)
 	}
 	if len(state.Contacts) == 0 {
-		return state, fmt.Errorf("contact store %s has no contacts", path)
+		return state, fmt.Errorf("profile store %s has no Bots", path)
 	}
 	contacts, issues := map[string]bool{}, map[string]bool{}
 	for _, contact := range state.Contacts {
 		if contact.ID == "" || contacts[contact.ID] {
-			return state, fmt.Errorf("contact store %s has an empty or duplicate contact id", path)
+			return state, fmt.Errorf("profile store %s has an empty or duplicate Bot ID", path)
 		}
 		contacts[contact.ID] = true
 	}
 	for _, issue := range state.Issues {
 		if issue.ID == "" || issues[issue.ID] {
-			return state, fmt.Errorf("contact store %s has an empty or duplicate issue id", path)
+			return state, fmt.Errorf("profile store %s has an empty or duplicate issue ID", path)
 		}
 		if issue.ContactID == "" || !contacts[issue.ContactID] {
-			return state, fmt.Errorf("contact store %s issue %s has an unknown contact id", path, issue.ID)
+			return state, fmt.Errorf("profile store %s issue %s has an unknown Bot ID", path, issue.ID)
 		}
 		issues[issue.ID] = true
 	}
-	return state, nil
+	return state, state.validatePiBindings()
 }
 
 func validateRecoveryState(state storedState) error {
 	fail := func(field, message string) error { return fmt.Errorf("%s: %s", field, message) }
 	if state.Version != contactStoreVersion {
-		return fail("version", "only current version 9 recovery copies are supported")
+		return fail("version", "only current version 10 recovery copies are supported")
 	}
 	selected := false
 	for i, contact := range state.Contacts {
@@ -381,7 +677,7 @@ func validateRecoveryState(state storedState) error {
 				found = found || issue.ID == contact.SelectedIssueID && issue.ContactID == contact.ID
 			}
 			if !found {
-				return fail(fmt.Sprintf("contacts[%d].selected_issue_id", i), "selected issue does not belong to this contact")
+				return fail(fmt.Sprintf("contacts[%d].selected_issue_id", i), "selected issue does not belong to this Bot")
 			}
 		}
 		if pending := contact.PendingSend; pending != nil && (pending.State == "submitting" || pending.State == "unknown" && contact.SessionID == "") {
@@ -389,7 +685,7 @@ func validateRecoveryState(state storedState) error {
 		}
 	}
 	if !selected {
-		return fail("selected", "selected contact is missing")
+		return fail("selected", "selected Bot is missing")
 	}
 	if state.IssueToolOperations == nil {
 		return fail("issue_tool_operations", "missing operation ledger would be synthesized on ordinary load")
@@ -403,9 +699,6 @@ func validateRecoveryState(state storedState) error {
 	}
 	for i, issue := range state.Issues {
 		field := fmt.Sprintf("issues[%d]", i)
-		if issue.Requirements != "" {
-			return fail(field+".requirements", "legacy requirements are not supported in a version 9 recovery copy")
-		}
 		if issue.RequirementsRevision < 1 {
 			return fail(field+".requirements_revision", "revision would be repaired on ordinary load")
 		}
@@ -457,6 +750,64 @@ type storeRecoveryCopy struct {
 	info       os.FileInfo
 }
 
+func productProfileVersion(data []byte) bool {
+	var marker struct {
+		Version int `json:"version"`
+	}
+	return json.Unmarshal(data, &marker) == nil && marker.Version == 1
+}
+
+var errInvalidProductRecovery = errors.New("the current product profile contains unsupported or inconsistent records")
+
+func inspectProductProfileBytes(data []byte, copy bool) (contacts, activities int, err error) {
+	node, worker, err := piPayloadPaths()
+	if err != nil {
+		return 0, 0, err
+	}
+	module := filepath.Join(filepath.Dir(worker), "product-profile.js")
+	const script = `
+import { readFileSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
+const { decodeProductProfile, inspectProductRecovery } = await import(pathToFileURL(process.argv[1]).href);
+try {
+  const data = JSON.parse(readFileSync(0, 'utf8'));
+  if (process.argv[2] === 'copy') {
+    process.stdout.write(JSON.stringify(inspectProductRecovery(data)));
+  } else {
+    decodeProductProfile(data);
+  }
+} catch {
+  process.exitCode = 2;
+}`
+	mode := "profile"
+	if copy {
+		mode = "copy"
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	command := exec.CommandContext(ctx, node, "--input-type=module", "-e", script, module, mode)
+	command.Stdin = bytes.NewReader(data)
+	output, err := command.Output()
+	if err != nil {
+		var exit *exec.ExitError
+		if errors.As(err, &exit) && exit.ExitCode() == 2 {
+			return 0, 0, errInvalidProductRecovery
+		}
+		return 0, 0, fmt.Errorf("could not check the recovery profile: %w", err)
+	}
+	if !copy {
+		return 0, 0, nil
+	}
+	var counts struct {
+		Contacts   int `json:"contacts"`
+		Activities int `json:"activities"`
+	}
+	if err := json.Unmarshal(output, &counts); err != nil {
+		return 0, 0, fmt.Errorf("could not read the recovery profile summary: %w", err)
+	}
+	return counts.Contacts, counts.Activities, nil
+}
+
 type storeRecoveryTarget struct {
 	path string
 	data []byte
@@ -487,6 +838,13 @@ func inspectStoreRecoveryCopy(path string) (*storeRecoveryCopy, error) {
 	data, info, err := readRecoveryFile(path)
 	if err != nil {
 		return nil, err
+	}
+	if productProfileVersion(data) {
+		contacts, activities, err := inspectProductProfileBytes(data, true)
+		if err != nil {
+			return nil, fmt.Errorf("unsupported recovery copy %s: %w", path, err)
+		}
+		return &storeRecoveryCopy{Path: path, Contacts: contacts, Issues: activities, ModifiedAt: info.ModTime(), data: data, info: info}, nil
 	}
 	state, err := decodeStoredState(path, data, true)
 	if err == nil {
@@ -604,6 +962,15 @@ func inspectStoreRecoveryTarget(path string) (*storeRecoveryTarget, error) {
 	if _, err := decodeStoredState(path, data, false); err == nil {
 		return nil, fmt.Errorf("%s: the store is readable; recovery replacement is not allowed", path)
 	}
+	if productProfileVersion(data) {
+		_, _, err := inspectProductProfileBytes(data, false)
+		if err == nil {
+			return nil, fmt.Errorf("%s: the store is readable; recovery replacement is not allowed", path)
+		}
+		if !errors.Is(err, errInvalidProductRecovery) {
+			return nil, err
+		}
+	}
 	return &storeRecoveryTarget{path: path, data: data, info: info}, nil
 }
 
@@ -638,23 +1005,54 @@ func restoreStoreRecoveryCopyWithRename(copy *storeRecoveryCopy, target *storeRe
 	if err := target.unchanged(); err != nil {
 		return result, err
 	}
-	state, err := decodeStoredState(copy.Path, copy.data, true)
-	if err == nil {
-		err = validateRecoveryState(state)
-	}
-	if err != nil {
-		return result, err
-	}
-	for i := range state.Issues {
-		if ledger := state.Issues[i].Supplements; ledger != nil {
-			ledger.AutoContinue = false
+	paused := copy.data
+	if productProfileVersion(copy.data) {
+		if _, _, err := inspectProductProfileBytes(copy.data, true); err != nil {
+			return result, err
 		}
+		var saved map[string]json.RawMessage
+		if err := json.Unmarshal(copy.data, &saved); err != nil {
+			return result, err
+		}
+		var recovery struct {
+			ID string          `json:"id"`
+			UI json.RawMessage `json:"ui,omitempty"`
+		}
+		if data := saved["recovery"]; len(data) != 0 {
+			if err := json.Unmarshal(data, &recovery); err != nil {
+				return result, err
+			}
+		}
+		recovery.ID = newContactID()
+		metadata, err := json.Marshal(recovery)
+		if err != nil {
+			return result, err
+		}
+		saved["recovery"] = metadata
+		paused, err = json.Marshal(saved)
+		if err != nil {
+			return result, err
+		}
+		paused = append(paused, '\n')
+	} else {
+		state, err := decodeStoredState(copy.Path, copy.data, true)
+		if err != nil {
+			return result, err
+		}
+		if err := validateRecoveryState(state); err != nil {
+			return result, err
+		}
+		for i := range state.Issues {
+			if ledger := state.Issues[i].Supplements; ledger != nil {
+				ledger.AutoContinue = false
+			}
+		}
+		paused, err = json.MarshalIndent(state, "", "  ")
+		if err != nil {
+			return result, err
+		}
+		paused = append(paused, '\n')
 	}
-	paused, err := json.MarshalIndent(state, "", "  ")
-	if err != nil {
-		return result, err
-	}
-	paused = append(paused, '\n')
 	dir := filepath.Dir(target.path)
 	archive, err := os.CreateTemp(dir, "nagi-unreadable-*.json")
 	if err != nil {

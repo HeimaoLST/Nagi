@@ -67,16 +67,13 @@ type message struct {
 	Kind        messageKind
 	Text        string
 	Time        string
-	Steps       []string
-	Sources     []string
 	AlertTitle  string
 	AlertDetail string
 	Retry       bool
 	RetryDone   bool
 	Expanded    bool
 
-	// Runtime-backed display identity. Key is stable for a journal record
-	// item (offset+index) or a live (task,item/call) tuple.
+	// Key identifies a Pi history entry or a live run item.
 	Key        string
 	TaskID     string
 	MessageID  string
@@ -90,40 +87,40 @@ type message struct {
 	Context    []taskContextItem
 }
 
-type contact struct {
-	ID                    string
-	Name                  string
-	Role                  string
-	Purpose               string
-	Instructions          string
-	Workspace             string
-	BuiltinTools          *[]string
-	Status                contactStatus
-	Unread                int
-	Work                  string
-	WorkArg               string
-	WorkLabel             string
-	Messages              []*message
-	History               []historyEntry
-	Revealed              []string
-	Draft                 string
-	Archived              bool
-	ArchivedAt            int64
-	PreviousSessions      []string
-	Context               taskContext
-	replyIndex            int
-	list                  ui.ListState
-	Works                 []*workItem
-	Issues                []*productIssue
-	SelectedIssueID       string
-	SelectedWorkTaskID    string
-	UnlinkedTools         []*workTool
-	issueView             issueViewState
-	StopRequestedTasks    map[string]bool
-	pendingIssueExecution string
+type runtimeBuiltinTool struct {
+	Name        string
+	Description string
+}
 
-	// Runtime-backed state. Empty SessionID means the contact has no runtime
-	// session yet; it is created lazily before the first task.send.
+type contact struct {
+	ID                 string
+	Name               string
+	Role               string
+	Purpose            string
+	Instructions       string
+	Workspace          string
+	BuiltinTools       *[]string
+	Status             contactStatus
+	Unread             int
+	Work               string
+	WorkArg            string
+	WorkLabel          string
+	Messages           []*message
+	History            []historyEntry
+	Draft              string
+	Archived           bool
+	ArchivedAt         int64
+	PiBinding          *piConversationBinding
+	PreviousPiBindings []piConversationBinding
+	Context            taskContext
+	activity           productActivityPanel
+	replyIndex         int
+	list               ui.ListState
+	Works              []*workItem
+	Issues             []*productIssue
+	SelectedIssueID    string
+
+	// A Pi conversation is opened lazily on its first send.
 	SessionID         string
 	Loaded            bool
 	LoadErr           string
@@ -138,7 +135,6 @@ type contact struct {
 	SubmittedRev      int
 	pendingSend       *pendingSend
 	draftRev          int
-	HistoryDirty      bool
 	StatusDetail      string
 	StatusDetailKind  string
 	SessionWorkingDir string
@@ -146,7 +142,6 @@ type contact struct {
 	SessionAPI        string
 	SessionState      string
 	historyGen        int
-	pendingEvents     []runtimeEventEnvelope
 }
 
 type profileDraft struct {
@@ -160,20 +155,17 @@ type profileDraft struct {
 type appModel struct {
 	contacts []*contact
 	selected int
-	aux      string // "", "sources", "settings"
+	aux      string
 
-	detail           detailKind
-	historyByContact map[string]historyViewMemory
-	profileScrolls   map[string]*ui.ScrollState
+	detail         detailKind
+	profileScrolls map[string]*ui.ScrollState
 
-	auxMessage           int
 	defaultContactN      int
 	focusComposer        bool
+	priorChats           *productConversationBrowser
+	focusPreviousChats   bool
 	composerHandle       ui.Handle
 	composerPanel        string
-	composerModelOpen    bool
-	composerModelFocus   bool
-	composerFocusModel   bool
 	composerFocusContext bool
 
 	settingsOpen           bool
@@ -183,8 +175,6 @@ type appModel struct {
 	markdownLinkFocus      markdownLinkTarget
 	linkReturnTarget       markdownLinkTarget
 	linkReturnSeen         bool
-	settingsContactID      string
-	settingsProfiles       map[string]*contactProfileEditor
 	settingsScroll         ui.ScrollState
 	settingsFocusBack      bool
 	settingsFocusTab       string
@@ -193,37 +183,19 @@ type appModel struct {
 	chooseContextFile      func(mygo.OpenDialogOptions) ([]string, error)
 	folderChoiceGeneration uint64
 	chooseFolder           func(mygo.OpenDialogOptions) ([]string, error)
-	sourcesScroll          ui.ScrollState
-	modelScroll            ui.ScrollState
 	taskContextScroll      ui.ScrollState
-	issueResultScroll      ui.ScrollState
-	historyScroll          ui.ScrollState
-	historyFullScroll      ui.ScrollState
 
-	settingsReturnModel       *modelSelection
-	settingsReturnModelTarget *modelSelectionTarget
-
-	contactProfile            *contactProfileEditor
-	contactProfileID          string
-	contactSearch             string
-	contactScope              string
-	contactHistory            *contactHistoryResult
-	contactHistoryFull        *contactHistoryFull
-	contactHistoryBusy        bool
-	contactHistoryDetailBusy  bool
-	contactHistoryError       string
-	contactHistoryErrorDetail string
-	contactHistoryGen         int
-	contactHistoryDetailGen   int
-	contactHistoryInFlight    int
-	resultInFlight            int
-	submissionInFlight        int
-	metadataInFlight          int
+	profileEditors         map[string]*contactProfileEditor
+	contactProfileID       string
+	contactSearch          string
+	contactHistoryInFlight int
+	submissionInFlight     int
 
 	appearanceThemeIDs appearanceThemeIDs
 	appearanceThemes   customThemeCatalog
 	themeImport        *appearanceThemeImport
 	dataRecovery       *dataRecoveryState
+	activityIntents    map[string]productActivityIntent
 	chooseRecoveryFile func(mygo.OpenDialogOptions) ([]string, error)
 	revealRecoveryFile func(string) error
 	chooseThemeFile    func(mygo.OpenDialogOptions) ([]string, error)
@@ -239,109 +211,59 @@ type appModel struct {
 	localSavePrevErr   string
 	localSavePrevKind  string
 
-	issueFormOpen                 bool
-	issueDetailOpen               map[string]bool
-	issueFormEditingID            string
-	issueGoal                     string
-	issueRequirements             string
-	issueFormError                string
-	issueFormNotice               string
-	issueFormNoticeDetail         string
-	taskContextIssueID            string
-	focusIssueGoal                bool
-	focusIssueNew                 bool
-	issueActionError              string
-	issueActionNotice             string
-	issueActionNoticeDetail       string
-	issueRequirementDrafts        map[string]*string
-	issueCompletionDrafts         map[string]*string
-	issueSupplementDrafts         map[string]*string
-	issueSupplementFormID         string
-	issueSupplementPreviewID      string
-	issueSupplementShowAllBatches bool
+	issueFormError          string
+	issueFormNotice         string
+	issueFormNoticeDetail   string
+	issueActionError        string
+	issueActionNotice       string
+	issueActionNoticeDetail string
 
 	// Runtime mode. demo keeps the local fixture path for tests/screenshots;
 	// the shipped app is runtime-backed.
-	demo                       bool
-	store                      *contactStore
-	rt                         *runtimeClient
-	runtimeStatus              string
-	runtimeErr                 string
-	runtimeErrKind             string
-	runtimeStage               string
-	runtimeHint                string
-	runtimeHintKind            string
-	runtimeHintArgs            []string
-	runtimeBinary              string
-	runtimeHelperChecked       bool
-	runtimeAPI                 string
-	runtimeHandshake           bool
-	runtimeMaxActiveTasks      int
-	runtimeCapabilitiesLoaded  bool
-	runtimeCapabilitiesErr     string
-	runtimeBuiltinTools        []runtimeBuiltinTool
-	runtimeBuiltinToolsLoaded  bool
-	runtimeBuiltinToolsLoading bool
-	runtimeBuiltinToolsErr     string
-	workDir                    string
-	sessionDir                 string
-	storePath                  string
-	uiHookMu                   sync.Mutex
-	uiHook                     func(func()) // test seam for deterministic UI-thread ordering
-	requestQuit                func()       // set by main to mygo.App.Quit
-	quitReady                  bool
-	shutdownStarted            bool
-	historyQuery               string
-	highlight                  string
+	demo                      bool
+	store                     *contactStore
+	pi                        *piAppHost
+	runtimeStatus             string
+	runtimeErr                string
+	runtimeErrKind            string
+	runtimeStage              string
+	runtimeHint               string
+	runtimeHintKind           string
+	runtimeHintArgs           []string
+	runtimeBinary             string
+	runtimeMaxActiveTasks     int
+	runtimeCapabilitiesLoaded bool
+	runtimeBuiltinTools       []runtimeBuiltinTool
+	runtimeBuiltinDefaults    []string
+	runtimeBuiltinToolsLoaded bool
+	runtimeBuiltinToolsErr    string
+	workDir                   string
+	storePath                 string
+	uiHookMu                  sync.Mutex
+	uiHook                    func(func()) // test seam for deterministic UI-thread ordering
+	requestQuit               func()       // set by main to mygo.App.Quit
+	quitReady                 bool
+	shutdownStarted           bool
 
 	connectionPath         string
 	connectionForm         *connectionSettings
 	connectionSaved        *connectionConfig
 	connectionEffective    *connectionConfig
-	connectionLaunch       *connectionLaunch
 	connectionManaged      bool
-	connectionLegacy       bool
 	connectionGeneration   int
 	connectionApplying     bool
 	connectionDetailsOpen  map[string]bool
 	connectionSaveInFlight bool
 	connectionTesting      bool
 	connectionTestCancel   func()
+	connectionProbe        *piConnectionProbe
 	startupDetailsOpen     bool
 	shutdownDrainStarted   bool
 
-	issueResult        issueResultPage
-	issueResultInspect func(issueResultFile) issueResultFileInspection
-	openPath           func(string) error
-	issueResultReveal  func(string) error
+	openPath func(string) error
 
-	// #154 conversation issue tools. The scope/operation records live in the
-	// same contact store, not in a second database or queue.
-	issueToolLedger          *IssueToolOperationLedger
-	issueToolScopes          map[string]IssueToolScope
-	issueToolServer          *issueToolIPCServer
-	issueToolEndpoint        string
-	issueToolHelper          string
-	issueToolErr             string
-	issueToolWaiters         map[string]chan IssueToolReceipt
-	issueToolShutdown        chan struct{}
-	issueToolMu              sync.Mutex
-	issueToolRefresh         map[string]issueToolRefreshMark
-	issueToolReleaseInFlight int
-
-	modelForm             *modelSelection
-	modelPanelKind        string
-	modelPanelSessionID   string
-	modelPanelLabel       string
-	modelOpenToken        int
-	modelPanelMessage     string
-	modelPanelError       string
-	modelPanelErrorDetail string
-	modelOpActive         bool
-	modelOpSessionID      string
-	modelRecovery         map[string]modelRecoveryState
-
-	conversationModelForms map[string]*modelSelection
+	issueToolLedger *IssueToolOperationLedger
+	issueToolScopes map[string]IssueToolScope
 
 	// Layout is a GUI-wide preference, not a contact or runtime fact. Widths
 	// are persisted in the contact store; windowWidth is only the current
@@ -352,20 +274,11 @@ type appModel struct {
 	centerPaneWidth      float32
 	workspaceOpen        bool
 	railCollapsed        bool
-	focusWorkspace       bool
 	focusDetailClose     bool
 	focusRail            bool
-	focusHistory         bool
 	focusSettings        bool
-	focusContactProfile  bool
-	focusProfileEdit     bool
-	focusSources         bool
-	focusSourcesBack     bool
+	focusProfileRow      string
 	focusAuxBack         bool
-	focusIssueModel      bool
-	focusIssueContext    bool
-	focusHistoryFullID   string
-	focusHistoryFullBack bool
 	detailPageMode       bool
 	focusConnectionEntry bool
 	focusConfiguration   bool
@@ -373,13 +286,10 @@ type appModel struct {
 
 	seq int
 	win *mygo.Window
-	// scrollTo is a one-shot list scroll request consumed by the next frame:
-	// -1 means no pending request.
-	scrollTo int
 }
 
 var cannedReplies = map[string][]string{
-	"saki": {
+	"nagi": {
 		"Noted — I kept the earlier MyGo scope in view while answering, and nothing earlier was rewritten.",
 		"That fits the current scope. I will treat it as the next check-in point rather than a new decision.",
 	},
@@ -393,94 +303,7 @@ var cannedReplies = map[string][]string{
 	},
 }
 
-func seededApp() *appModel {
-	return &appModel{
-		contacts: []*contact{
-			{
-				ID: "saki", Name: "Saki", Role: "Research partner",
-				Purpose:      "Long-running product and research questions, with earlier decisions kept in view.",
-				Instructions: "Cite earlier decisions when they shape an answer. Keep replies short and concrete.",
-				WorkLabel:    "Looking through this thread",
-				Status:       statusReady,
-				Messages: []*message{
-					{ID: 1, Kind: msgUser, Text: "Where did we land on the MyGo decision before the desktop work starts?", Time: "9:42"},
-					{ID: 2, Kind: msgActivity, Text: "Looked up earlier conversations", Time: "9:43", Sources: []string{"saki-h1", "saki-h2"},
-						Steps: []string{
-							"Searched this contact's history for “MyGo”",
-							"Read 3 earlier messages from Sep 27 and Oct 3",
-							"Cited 2 messages in the reply",
-						}},
-					{ID: 3, Kind: msgContact, Time: "9:43",
-						Text:    "We agreed to try MyGo for the desktop shell while keeping Saki in Rust. Each contact keeps its own profile and history.",
-						Sources: []string{"saki-h1", "saki-h2"}},
-					{ID: 4, Kind: msgUser, Text: "Good. Then the desktop shell should show exactly that: contacts, drafts, and cited history.", Time: "9:44"},
-					{ID: 5, Kind: msgContact, Time: "9:44",
-						Text:    "Yes — and profile edits should only affect later replies, never rewrite old ones. I kept the earlier decision in view.",
-						Sources: []string{"saki-h2", "saki-h5"}},
-				},
-				History: []historyEntry{
-					{ID: "saki-h1", Date: "Sep 27", From: "me", Text: "Let's settle the first scope for the MyGo desktop shell."},
-					{ID: "saki-h2", Date: "Sep 27", From: "contact", Text: "Keep Saki as the Rust agent core and let MyGo be the desktop shell. Each contact keeps its own profile and history."},
-					{ID: "saki-h3", Date: "Oct 3", From: "me", Text: "So no shared memory between contacts yet."},
-					{ID: "saki-h4", Date: "Oct 3", From: "contact", Text: "Right — scoped history only. Revisit collaboration after the single-contact loop is useful."},
-					{ID: "saki-h5", Date: "Oct 5", From: "contact", Text: "Profile edits affect future replies; saved history stays intact."},
-				},
-			},
-			{
-				ID: "mio", Name: "Mio", Role: "Writing partner",
-				Purpose:      "Tightening launch notes while keeping the voice consistent.",
-				Instructions: "Prefer shorter sentences and concrete claims. Flag open questions at the end.",
-				WorkLabel:    "Tightening the draft",
-				Status:       statusReady,
-				Unread:       1,
-				Messages: []*message{
-					{ID: 1, Kind: msgUser, Text: "Can you tighten the opening of the launch note? It still feels slow.", Time: "Yesterday"},
-					{ID: 2, Kind: msgContact, Text: "Done. I cut the first paragraph in half and kept the two-sentence rhythm you liked. One open question: does the title still need the word “notes”?", Time: "Yesterday"},
-					{ID: 3, Kind: msgUser, Text: "Keep the word for now. I will read the rest tonight.", Time: "Yesterday"},
-					{ID: 4, Kind: msgContact, Text: "Sounds good. The draft stays where it is until you say otherwise.", Time: "8:15"},
-				},
-				History: []historyEntry{
-					{ID: "mio-h1", Date: "Sep 30", From: "contact", Text: "I kept the closing short so the ask stands out."},
-					{ID: "mio-h2", Date: "Oct 10", From: "me", Text: "The intro should promise less and show more."},
-					{ID: "mio-h3", Date: "Oct 10", From: "contact", Text: "Agreed — I will lead with the concrete example."},
-				},
-			},
-			{
-				ID: "ren", Name: "Ren", Role: "Coding partner",
-				Purpose:      "Small parser and runtime changes, reported as test results rather than guesses.",
-				Instructions: "Report failing cases with the diff context. Do not claim a fix until the tests pass.",
-				Workspace:    "~/Workspace/saki",
-				WorkLabel:    "Running the parser tests",
-				Status:       statusWorking,
-				Work:         "Running the parser tests",
-				Messages: []*message{
-					{ID: 1, Kind: msgUser, Text: "Run the parser tests again after the trailing-newline change.", Time: "10:02"},
-					{ID: 2, Kind: msgContact, Text: "Starting now. I will come back with the failing cases and the diff context.", Time: "10:02"},
-				},
-				History: []historyEntry{
-					{ID: "ren-h1", Date: "Oct 8", From: "me", Text: "The empty-input case still crashes."},
-					{ID: "ren-h2", Date: "Oct 8", From: "contact", Text: "Fixed — the parser now returns an empty list instead of unwrapping."},
-					{ID: "ren-h3", Date: "Oct 11", From: "contact", Text: "I added a regression test for the roundtrip case."},
-				},
-			},
-		},
-		selected:       0,
-		workspaceOpen:  false,
-		appearanceMode: appearanceSystem,
-		seq:            100,
-		scrollTo:       -1,
-	}
-}
-
 func (a *appModel) selectedContact() *contact { return a.contacts[a.selected] }
-
-func (a *appModel) startSeeded() {
-	ren := a.contactByID("ren")
-	if ren == nil || a.win == nil {
-		return
-	}
-	a.startWork(ren, "Running the parser tests", 12*time.Second, func() { a.failRun(ren) })
-}
 
 func (a *appModel) contactByID(id string) *contact {
 	for _, c := range a.contacts {
@@ -491,49 +314,24 @@ func (a *appModel) contactByID(id string) *contact {
 	return nil
 }
 
-func (a *appModel) leaveIssueFormForSwitch() bool {
-	if !a.issueFormOpen {
-		return true
-	}
-	if strings.TrimSpace(a.issueGoal) != "" || strings.TrimSpace(a.issueRequirements) != "" {
-		a.setIssueFormNotice("Finish or cancel the current issue form before switching contacts.", "form-switch", "")
-		return false
-	}
-	a.issueFormOpen = false
-	a.clearIssueFormNotice()
-	return true
-}
-
 func (a *appModel) selectContact(i int) {
 	if i < 0 || i >= len(a.contacts) || i == a.selected {
 		return
 	}
-	if !a.leaveIssueFormForSwitch() {
-		return
-	}
 	a.contextFileGeneration++
-	a.rememberHistoryView(a.selectedContact().ID)
 	a.contacts[i].Unread = 0
 	a.selected = i
-	a.restoreHistoryView(a.contacts[i].ID)
+	a.priorChats = nil
+	a.focusPreviousChats = false
 	if !a.demo {
 		a.persist()
 	}
-	if a.issueResult.Open {
-		a.cancelIssueResultView()
-	}
-	a.contactHistoryFull = nil
 	a.aux = ""
 	a.composerPanel = ""
-	a.composerModelOpen = false
-	a.composerFocusModel = false
 	a.composerFocusContext = false
-	a.highlight = ""
-	if !a.demo {
-		ct := a.contacts[i]
-		if ct.SessionID != "" && (!ct.Loaded || ct.HistoryDirty) && ct.ActiveTaskID == "" {
-			a.reloadContactByID(ct.ID, false)
-		}
+	ct := a.contacts[i]
+	if !ct.Loaded && ct.ActiveTaskID == "" && a.canReloadPiConversation(ct) {
+		a.reloadContactByID(ct.ID)
 	}
 }
 
@@ -579,9 +377,6 @@ func (a *appModel) statusLabel(c *contact, msgs locales.Messages) string {
 // addDefaultContact creates and selects a ready contact with a usable
 // default name, then asks the composer to take focus once.
 func (a *appModel) addDefaultContact() {
-	if !a.leaveIssueFormForSwitch() {
-		return
-	}
 	if !a.demo {
 		a.addRuntimeContact()
 		return
@@ -595,23 +390,13 @@ func (a *appModel) addDefaultContact() {
 		Status:    statusReady,
 		WorkLabel: "Preparing a reply",
 	}
-	a.rememberHistoryView(a.selectedContact().ID)
 	a.contacts = append(a.contacts, c)
 	a.selected = len(a.contacts) - 1
-	a.restoreHistoryView(c.ID)
-	a.contactScope = "active"
 	a.contactSearch = ""
 	a.aux = ""
 	a.composerPanel = ""
-	a.composerModelOpen = false
-	a.composerFocusModel = false
 	a.composerFocusContext = false
 	a.focusComposer = true
-}
-
-func (a *appModel) openSettings() {
-	a.settingsContactID = a.selectedContact().ID
-	a.openSettingsTab(settingsTabContact, settingsSourceRail)
 }
 
 func (a *appModel) openAdvancedSettings() {
@@ -624,212 +409,15 @@ func (a *appModel) closeAux() {
 		a.closeSettings()
 		return
 	}
-	if a.aux == "model" && a.modelOpActive {
-		return
-	}
-	was := a.aux
-	wasModelKind := a.modelPanelKind
-	wasContextIssue := a.taskContextIssueID
 	switch a.composerPanel {
 	case composerPanelContext:
 		a.composerFocusContext = true
 	}
 	a.composerPanel = ""
-	a.composerModelOpen = false
-	a.modelPanelKind = ""
-	switch was {
-	case "sources":
-		a.focusSources = true
-	case "model":
-		a.modelForm = nil
-		a.modelPanelMessage = ""
-		a.modelPanelError = ""
-		a.modelPanelErrorDetail = ""
-		if wasModelKind == "work" {
-			a.focusIssueModel = true
-		}
-	case "task-context":
+	if a.aux == "task-context" {
 		a.contextFileGeneration++
-		if wasContextIssue != "" {
-			a.focusIssueContext = true
-		}
-	case "issue-result":
-		a.closeIssueResult()
-		return
 	}
 	a.aux = ""
-	a.taskContextIssueID = ""
-}
-
-func (a *appModel) openSources(messageID int) {
-	a.aux = "sources"
-	a.composerPanel = ""
-	a.composerModelOpen = false
-	a.contactHistoryFull = nil
-	a.auxMessage = messageID
-	a.focusSources = false
-}
-
-func (a *appModel) openHistory() {
-	a.aux = ""
-	a.composerPanel = ""
-	a.composerModelOpen = false
-	a.contactHistoryFull = nil
-	a.openDetail(detailHistory)
-}
-
-func (a *appModel) backToChat() {
-	if a.linkReturnTarget == (markdownLinkTarget{}) {
-		a.markdownLinkFocus = markdownLinkTarget{}
-	}
-	if a.contactHistoryFull != nil {
-		a.contactHistoryFull = nil
-	}
-	if a.aux != "" {
-		a.closeAux()
-	}
-	if a.workspaceOpen {
-		a.closeDetail()
-	}
-	a.highlight = ""
-	a.focusHistory = true
-}
-
-func (a *appModel) historyMatches() []historyEntry {
-	c := a.selectedContact()
-	query := strings.ToLower(strings.TrimSpace(a.historyQuery))
-	entries := make([]historyEntry, 0, len(c.History)+len(c.Messages))
-	seen := map[string]bool{}
-	for i := len(c.History) - 1; i >= 0; i-- {
-		e := c.History[i]
-		if !seen[e.ID] {
-			entries = append(entries, e)
-			seen[e.ID] = true
-		}
-	}
-	// Live text can exist before the journal projection is reloaded. Keep it
-	// readable in History without duplicating an already-projected item.
-	for _, m := range c.Messages {
-		if m.Kind != msgUser && m.Kind != msgContact || (strings.TrimSpace(m.Text) == "" && len(m.Context) == 0) {
-			continue
-		}
-		id := m.Key
-		if id == "" {
-			id = fmt.Sprintf("message-%d", m.ID)
-		}
-		if seen[id] {
-			continue
-		}
-		from := "contact"
-		if m.Kind == msgUser {
-			from = "me"
-		}
-		entries = append(entries, historyEntry{ID: id, Date: m.Time, From: from, Text: m.Text, Context: m.Context})
-		seen[id] = true
-	}
-	out := make([]historyEntry, 0, len(entries))
-	for _, e := range entries {
-		if query != "" {
-			speaker := c.Name
-			if e.From == "me" {
-				speaker = "You"
-			}
-			haystack := strings.ToLower(e.Text + " " + e.Date + " " + speaker)
-			if !strings.Contains(haystack, query) {
-				continue
-			}
-		}
-		out = append(out, e)
-	}
-	return out
-}
-
-func (a *appModel) viewInConversation(entryID string) {
-	c := a.selectedContact()
-	// Real history entries are already in the transcript under stable
-	// offset+item keys; do not duplicate them through the demo reveal list.
-	for i, m := range c.Messages {
-		if m.Key != entryID {
-			continue
-		}
-		a.highlight = entryID
-		if a.contactHistoryFull != nil {
-			a.contactHistoryFull = nil
-		}
-		if a.aux != "" {
-			a.closeAux()
-		}
-		if a.workspaceOpen {
-			a.closeDetail()
-		}
-		a.scrollTo = len(a.revealedEntries()) + i
-		return
-	}
-	found := false
-	for _, id := range c.Revealed {
-		if id == entryID {
-			found = true
-			break
-		}
-	}
-	if !found {
-		c.Revealed = append(c.Revealed, entryID)
-	}
-	a.highlight = entryID
-	if a.contactHistoryFull != nil {
-		a.contactHistoryFull = nil
-	}
-	if a.aux != "" {
-		a.closeAux()
-	}
-	if a.workspaceOpen {
-		a.closeDetail()
-	}
-	a.scrollTo = a.revealIndex()
-}
-
-// revealIndex is the row of the highlighted entry among the revealed
-// entries that open the chat list; -1 when there is none.
-func (a *appModel) revealIndex() int {
-	entries := a.revealedEntries()
-	for i, e := range entries {
-		if e.ID == a.highlight {
-			return i
-		}
-	}
-	return -1
-}
-
-func (a *appModel) revealedEntries() []historyEntry {
-	c := a.selectedContact()
-	out := make([]historyEntry, 0, len(c.Revealed))
-	for _, e := range c.History {
-		for _, id := range c.Revealed {
-			if e.ID == id {
-				out = append(out, e)
-			}
-		}
-	}
-	return out
-}
-
-func (a *appModel) sourceEntries(messageID int) []historyEntry {
-	c := a.selectedContact()
-	for _, m := range c.Messages {
-		if m.ID != messageID {
-			continue
-		}
-		out := make([]historyEntry, 0, len(m.Sources))
-		for _, id := range m.Sources {
-			for _, e := range c.History {
-				if e.ID == id {
-					out = append(out, e)
-				}
-			}
-		}
-		return out
-	}
-	return nil
 }
 
 func (a *appModel) send(ct *contact, text string) bool {
@@ -838,7 +426,18 @@ func (a *appModel) send(ct *contact, text string) bool {
 		return false
 	}
 	if !a.demo {
-		return a.sendRuntime(ct, text)
+		if ct == nil || a.contactByID(ct.ID) != ct {
+			return false
+		}
+		if reason := a.canSend(ct); reason != "" {
+			ct.setSendError(sendBlockRaw(reason), reason, "")
+			return false
+		}
+		if err := validateTaskContext(ct.Context.items); err != nil {
+			ct.setSendError(err.Error(), "", "")
+			return false
+		}
+		return a.sendProductConversation(a.productHost(), ct)
 	}
 	if ct.Status == statusWorking {
 		return false

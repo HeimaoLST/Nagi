@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"reflect"
-	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -19,7 +17,7 @@ import (
 
 func TestSettingsPageReplacesWorkbenchAndRoutesEntries(t *testing.T) {
 	a, ct := workspaceTestApp(t)
-	a.rt = &runtimeClient{}
+	a.pi = presentationPiHost(a)
 	ct.Draft = "keep the conversation draft"
 	a.windowWidth = 1040
 	tr := ui.NewTester(a.view, 1040, 720)
@@ -37,12 +35,13 @@ func TestSettingsPageReplacesWorkbenchAndRoutesEntries(t *testing.T) {
 	if a.settingsScroll.Y != 0 {
 		t.Fatalf("settings page opened scrolled: %v", a.settingsScroll.Y)
 	}
-	for _, forbidden := range []string{"Contacts", "Add contact", "Composer for Saki", "Send", "History"} {
+	msgs := locales.In("en")
+	for _, forbidden := range []string{msgs.RailContactsTitle(), msgs.AvatarAddContact(), msgs.ComposerLabel(ct.Name), "Send", "History", msgs.ContactProfileAction()} {
 		if tr.HasText(forbidden) {
 			t.Fatalf("settings page still rendered workbench text %q: %v", forbidden, tr.Texts())
 		}
 	}
-	for _, want := range []string{"Settings", "Appearance", "Connection & model", "Contact profile", "Advanced"} {
+	for _, want := range []string{msgs.SettingsTitle(), msgs.SettingsGeneral(), msgs.SettingsConnection(), msgs.SettingsAdvanced()} {
 		if !tr.HasText(want) {
 			t.Fatalf("settings page missing %q: %v", want, tr.Texts())
 		}
@@ -83,13 +82,16 @@ func TestCustomThemeSettingsSelectReloadAndReturnKeepsWorkState(t *testing.T) {
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.SetFocused(true)
 	tr.Frame()
-	focusComposer(t, tr, "Composer for Saki")
+	focusComposer(t, tr, "Composer for Nagi")
 	tr.Key(ui.Cmd, ui.KeyComma)
 	tr.Frame()
-	if err := tr.Click("Light theme"); err != nil {
+	if err := tr.Click(locales.In("en").ThemePaper()); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
+	if !tr.HasText("Garden (garden)") {
+		t.Fatal("theme selector did not open the custom option")
+	}
 	tr.Key(0, ui.KeyEnd)
 	tr.Frame()
 	tr.Key(0, ui.KeyEnter)
@@ -107,7 +109,7 @@ func TestCustomThemeSettingsSelectReloadAndReturnKeepsWorkState(t *testing.T) {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if a.appearanceThemeIDs.Light != "garden" || !a.resolveAppearanceTheme(false).Unavailable || !tr.HasText("garden unavailable — using Paper") {
+	if a.appearanceThemeIDs.Light != "garden" || !a.resolveAppearanceTheme(false).Unavailable || !tr.HasText("garden unavailable — using Bee Light") {
 		t.Fatalf("reload forgot or hid missing selection: %v", tr.Texts())
 	}
 	writeCustomTheme(t, directory, "restored-name.json", document)
@@ -122,8 +124,8 @@ func TestCustomThemeSettingsSelectReloadAndReturnKeepsWorkState(t *testing.T) {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if !tr.Focused("Composer for Saki") || ct.Draft != "Keep my draft while changing themes" || ct.ActiveTaskID != "active-task" || ct.SessionID != "s1" {
-		t.Fatalf("theme settings changed focus/work state: focus=%v contact=%+v", tr.Focused("Composer for Saki"), ct)
+	if !tr.Focused("Composer for Nagi") || ct.Draft != "Keep my draft while changing themes" || ct.ActiveTaskID != "active-task" || ct.SessionID != "s1" {
+		t.Fatalf("theme settings changed focus/work state: focus=%v contact=%+v", tr.Focused("Composer for Nagi"), ct)
 	}
 }
 
@@ -146,10 +148,13 @@ func TestCustomThemeSettingsLowContrastFailedSaveRetry(t *testing.T) {
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.SetFocused(true)
 	tr.Frame()
-	if err := tr.Click("Light theme"); err != nil {
+	if err := tr.Click(locales.In("en").ThemePaper()); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
+	if !tr.HasText("Garden (low-contrast)") {
+		t.Fatal("theme selector did not open the low-contrast option")
+	}
 	tr.Key(0, ui.KeyEnd)
 	tr.Frame()
 	tr.Key(0, ui.KeyEnter)
@@ -178,36 +183,19 @@ func TestCustomThemeSettingsLowContrastFailedSaveRetry(t *testing.T) {
 	if ct.Draft != "Keep failed-save draft" || ct.ActiveTaskID != "active-task" || a.runtimeErr != "unrelated Runtime error" {
 		t.Fatal("theme recovery changed work or Runtime state")
 	}
-	if dir := os.Getenv("SAKI_PREVIEW_DIR"); dir != "" {
+	if dir := os.Getenv("NAGI_PREVIEW_DIR"); dir != "" {
 		writeV07AppearancePreview(t, dir, "custom-theme-warning.png", a, 1040, 720, false)
 	}
 }
 
-func TestSettingsPageHeaderAndErrorEntriesRouteToCategories(t *testing.T) {
+func TestSettingsPageConnectionErrorRoutesToConnectionCategory(t *testing.T) {
 	a, ct := workspaceTestApp(t)
 	a.windowWidth = 1040
-	tr := ui.NewTester(a.view, 1040, 720)
-	tr.Frame()
-	if err := tr.Click("Contact profile"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if !a.detailIs(detailProfile) || a.settingsOpen {
-		t.Fatalf("header profile route = detail=%v settings=%v", a.activeDetail(), a.settingsOpen)
-	}
-	if err := tr.Click("Edit full profile"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if !a.settingsOpen || a.settingsTab != settingsTabContact {
-		t.Fatalf("profile edit route = open=%v tab=%q", a.settingsOpen, a.settingsTab)
-	}
-	tr.Click("← Back to workbench")
-	tr.Frame()
 
 	ct.LoadErr = "connection_mismatch: session is bound elsewhere"
+	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	if err := tr.Click("Connection settings"); err != nil {
+	if err := tr.Click(locales.In("en").ConnectionRecoveryOpenSettings()); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
@@ -216,90 +204,18 @@ func TestSettingsPageHeaderAndErrorEntriesRouteToCategories(t *testing.T) {
 	}
 }
 
-func TestSettingsPageCmdCommaFromWorkbenchHistoryAndResult(t *testing.T) {
-	a := testApp(t)
-	ct := a.selectedContact()
-	for i := 0; i < 40; i++ {
-		ct.History = append(ct.History, historyEntry{ID: fmt.Sprintf("history-%d", i), Date: "Oct 1", From: "contact", Text: fmt.Sprintf("history entry %d with enough text to make the history panel scroll", i)})
-	}
-	a.windowWidth = 1040
-	tr := ui.NewTester(a.view, 1040, 720)
-	tr.Frame()
-	tr.Key(ui.Cmd, ui.KeyComma)
-	tr.Frame()
-	if !a.settingsOpen || a.settingsTab != settingsTabAppearance {
-		t.Fatalf("Cmd+, workbench = open=%v tab=%q", a.settingsOpen, a.settingsTab)
-	}
-	tr.Click("← Back to workbench")
-	tr.Frame()
-
-	a.openHistory()
-	tr.Frame()
-	tr.Scroll(850, 400, 0, 600)
-	tr.Frame()
-	historyScrollBefore := a.historyScroll.Y
-	if historyScrollBefore <= 0 {
-		t.Fatalf("history did not scroll: %v", historyScrollBefore)
-	}
-	tr.Key(ui.Cmd, ui.KeyComma)
-	tr.Frame()
-	if !a.settingsOpen || !a.detailIs(detailHistory) {
-		t.Fatalf("Cmd+, history = open=%v detail=%v", a.settingsOpen, a.activeDetail())
-	}
-	if err := tr.Click("← Back to workbench"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if !a.detailIs(detailHistory) || a.historyScroll.Y != historyScrollBefore {
-		t.Fatalf("history return = detail=%v scroll=%v want=%v", a.activeDetail(), a.historyScroll.Y, historyScrollBefore)
-	}
-	if !tr.Focused("Close history") {
-		t.Fatalf("history return did not restore the history close control: %v", tr.Texts())
-	}
-}
-
-func TestSettingsContactDraftsRemainPerContactAndDiscardIsLocal(t *testing.T) {
-	a, ct := workspaceTestApp(t)
-	other := &contact{ID: "other", Name: "Mio", Role: "Assistant", Status: statusReady}
-	a.contacts = append(a.contacts, other)
-	a.openSettingsTab(settingsTabContact, settingsSourceRail)
-	editorA := a.settingsContactEditor()
-	editorA.Draft.Name = "A draft"
-	a.settingsContactID = other.ID
-	editorB := a.settingsContactEditor()
-	editorB.Draft.Name = "B draft"
-	a.settingsContactID = ct.ID
-	if got := a.settingsContactEditor().Draft.Name; got != "A draft" {
-		t.Fatalf("A draft = %q", got)
-	}
-	if a.selectedContact().ID != ct.ID {
-		t.Fatal("settings contact picker changed the workbench selection")
-	}
-	tr := ui.NewTester(a.view, 1040, 720)
-	if err := clickSettingsAction(tr, "Discard changes"); err != nil {
-		t.Fatal(err)
-	}
-	if a.settingsContactEditor().Draft.Name != "Saki" || editorB.Draft.Name != "B draft" {
-		t.Fatalf("discard scope = A=%q B=%q", a.settingsContactEditor().Draft.Name, editorB.Draft.Name)
-	}
-	if ct.Draft != "" {
-		t.Fatalf("settings discard cleared conversation draft: %q", ct.Draft)
-	}
-}
-
 func TestSettingsCategoryChangeResetsContentScrollAndKeepsDraft(t *testing.T) {
 	a, _ := workspaceTestApp(t)
-	a.openSettingsTab(settingsTabContact, settingsSourceRail)
-	editor := a.settingsContactEditor()
-	editor.Draft.Name = "unsaved name"
+	a.openSettingsTab(settingsTabConnection, settingsSourceRail)
+	a.connectionForm.Draft.Model = "unsaved model"
 	a.settingsScroll.Y = 200
-	a.settingsFocusTab = settingsTabContact
 	a.selectSettingsTab(settingsTabAdvanced)
 	if a.settingsScroll.Y != 0 || a.settingsTab != settingsTabAdvanced {
 		t.Fatalf("category switch = scroll=%v tab=%q", a.settingsScroll.Y, a.settingsTab)
 	}
-	if !strings.Contains(editor.Draft.Name, "unsaved") {
-		t.Fatal("category switch discarded the contact draft")
+	a.selectSettingsTab(settingsTabConnection)
+	if a.connectionForm.Draft.Model != "unsaved model" {
+		t.Fatal("category switch discarded the connection draft")
 	}
 }
 
@@ -323,21 +239,24 @@ func TestGeneralPreferenceSelectorsKeepWidthAndKeyboardChoice(t *testing.T) {
 				tr.SetFocused(true)
 				tr.Frame()
 				msgs := locales.In(locale)
-				for _, label := range []string{msgs.AppearanceMode()} {
-					var box ui.Rect
-					found := false
-					for step := 0; step < 12; step++ {
-						box, found = tr.Find(label)
-						if found && box.H >= 32 && box.Y >= 0 && box.Y+box.H <= 720 {
-							break
-						}
-						tr.Scroll(float32(width-100), 600, 0, 100)
-						tr.Frame()
+				selectedMode := msgs.AppearanceSystem()
+				for step := 0; step < 12; step++ {
+					bounds, found := tr.Find(selectedMode)
+					if found && bounds.W > 0 && bounds.H > 0 && bounds.Y >= 0 && bounds.Y+bounds.H <= 720 {
+						break
 					}
-					if !found || box.H < 32 || box.W < 120 || box.W > 160 {
-						t.Fatalf("real General selector %q bounds=%+v; expected fit120..160 with32 hit", label, box)
-					}
+					tr.Scroll(float32(width-100), 600, 0, 100)
+					tr.Frame()
 				}
+				if err := tr.Click(selectedMode); err != nil {
+					t.Fatal(err)
+				}
+				tr.Frame()
+				if !tr.HasText(msgs.AppearanceLight()) || !tr.HasText(msgs.AppearanceDark()) {
+					t.Fatal("the displayed appearance value did not open its choices")
+				}
+				tr.Key(0, ui.KeyEscape)
+				tr.Frame()
 				if len(applied) != 0 {
 					t.Fatal("rendering a General selector changed locale")
 				}
@@ -363,12 +282,12 @@ func TestGeneralPreferenceSelectorsKeepWidthAndKeyboardChoice(t *testing.T) {
 }
 
 func TestSettingsConnectionDirtyDiscardAndAppliedReopen(t *testing.T) {
-	config := connectionConfig{Version: 1, API: connectionAPIChatCompletions, Endpoint: "http://example.test/v1", APIKey: "fixture", Model: "fixture", ContextTokens: 1000, OutputTokens: 100, WorkingDirectory: t.TempDir(), MaxActiveTasks: 2}
+	config := connectionConfig{API: connectionAPIChatCompletions, Endpoint: "http://example.test/v1", APIKey: "fixture", Model: "fixture", ContextTokens: 1000, OutputTokens: 100, WorkingDirectory: t.TempDir(), MaxActiveTasks: 2}
 	a, _ := workspaceTestApp(t)
 	a.connectionForm = newConnectionSettings(&config, config.WorkingDirectory)
 	a.connectionSaved = &config
 	a.connectionEffective = &config
-	a.rt = &runtimeClient{}
+	a.pi = presentationPiHost(a)
 	a.runtimeStatus = runtimeStateReady
 	a.openSettingsTab(settingsTabConnection, settingsSourceRail)
 	if !a.connectionApplied() || a.connectionForm.Dirty() {
@@ -434,7 +353,7 @@ func TestSettingsConnectionEditorsSurviveNavigationAndLocale(t *testing.T) {
 	if a.connectionForm != form || form.Draft != draft || form.ErrorDetail != "original failure detail" || form.Status != connStatusTestCompleted || form.Errors["MaxActiveTasks"] != validationNumeric || !form.Dirty() || !a.connectionSavedPending() {
 		t.Fatal("navigation/locale replaced the form, raw edits or independent feedback")
 	}
-	if *a.connectionSaved != saved || *a.connectionEffective != effective || a.rt != nil || ct.SessionID != "s1" || ct.Draft != "keep conversation text" {
+	if *a.connectionSaved != saved || *a.connectionEffective != effective || a.pi != nil || ct.SessionID != "s1" || ct.Draft != "keep conversation text" {
 		t.Fatal("disclosure/navigation changed saved, effective or conversation state, or started Runtime")
 	}
 	if err := clickSettingsAction(tr, "Edit Default model"); err != nil {
@@ -448,7 +367,7 @@ func TestSettingsConnectionEditorsSurviveNavigationAndLocale(t *testing.T) {
 }
 
 func TestPreferencesListControlsAndPreviews(t *testing.T) {
-	directory := os.Getenv("SAKI_PREVIEW_DIR")
+	directory := os.Getenv("NAGI_PREVIEW_DIR")
 	for _, locale := range []string{"en", "zh-Hans"} {
 		for _, dark := range []bool{false, true} {
 			for _, size := range [][2]int{{720, 640}, {1040, 720}} {
@@ -514,26 +433,43 @@ func TestPreferencesListControlsAndPreviews(t *testing.T) {
 							tr.Key(0, ui.KeyEscape)
 						}
 						if scene == "fresh" {
-							inputs := map[string]bool{}
+							fields := []struct {
+								label string
+								value *string
+							}{
+								{msgs.ConnectionFieldEndpoint(), &form.Draft.Endpoint},
+								{msgs.ConnectionFieldAPIKey(), &form.Draft.APIKey},
+								{msgs.ConnectionFieldModel(), &form.Draft.Model},
+							}
+							inputs := make(map[string]bool, len(fields))
 							for i := 0; i < 18; i++ {
 								tr.Key(0, ui.KeyTab)
 								tr.Frame()
-								for _, label := range []string{msgs.ConnectionFieldEndpoint(), msgs.ConnectionFieldAPIKey(), msgs.ConnectionFieldModel()} {
-									if tr.Focused(label) {
-										inputs[label] = true
-										box, found := tr.Find(label)
-										if !found || box.W < 32 || box.H < 32 {
-											t.Fatalf("focused fresh input lacks its real hit area: %q %+v", label, box)
-										}
+								for _, field := range fields {
+									if inputs[field.label] || !tr.Focused(field.label) {
+										continue
 									}
+									if active, _ := tr.TextInputActive(); !active {
+										t.Fatalf("focused preference %q is not an editor", field.label)
+									}
+									previous := *field.value
+									tr.Key(ui.Cmd, ui.KeyA)
+									tr.Type("qa-field-value")
+									tr.Frame()
+									if *field.value != "qa-field-value" {
+										t.Fatalf("typing did not update the %q draft", field.label)
+									}
+									*field.value = previous
+									tr.Frame()
+									inputs[field.label] = true
 								}
 								if tr.Focused(msgs.ConnectionFieldWorkingDirectory()) {
 									t.Fatal("fresh setup exposed the manual path before its disclosure")
 								}
 							}
-							for label, reachable := range inputs {
-								if !reachable {
-									t.Fatalf("fresh setup required an Edit action for %q", label)
+							for _, field := range fields {
+								if !inputs[field.label] {
+									t.Fatalf("fresh setup required an Edit action for %q", field.label)
 								}
 							}
 						}
@@ -590,7 +526,7 @@ func TestPreferencesListControlsAndPreviews(t *testing.T) {
 						if scene == "invalid-long" && !fullErrorSeen {
 							t.Fatal("the complete original field error was not reachable by scrolling")
 						}
-						if a.rt != nil || a.connectionTesting || a.connectionApplying || ct.SessionID != "s1" {
+						if a.pi != nil || a.connectionTesting || a.connectionApplying || ct.SessionID != "s1" {
 							t.Fatal("rendering/keyboard traversal started execution or changed the session")
 						}
 						if directory != "" {
@@ -609,88 +545,6 @@ func TestPreferencesListControlsAndPreviews(t *testing.T) {
 	}
 }
 
-func TestSettingsContactPickerFollowsEditingIdentityAfterReturnToA(t *testing.T) {
-	a, aContact := workspaceTestApp(t)
-	bContact := &contact{ID: "contact-bbbb2222", Name: aContact.Name, Role: "Assistant", Status: statusReady}
-	a.contacts = append(a.contacts, bContact)
-	a.openSettingsTab(settingsTabContact, settingsSourceRail)
-	a.settingsContactID = bContact.ID
-	tr := ui.NewTester(a.view, 1040, 720)
-	tr.Frame()
-	if !strings.Contains(strings.Join(tr.Texts(), "\n"), a.settingsContactChoice(locales.In("en"), bContact)) {
-		t.Fatalf("picker/title did not show B: %v", tr.Texts())
-	}
-	a.closeSettings()
-	a.openContactProfile(bContact.ID)
-	tr.Frame()
-	tr.Key(ui.Cmd, ui.KeyComma)
-	tr.Frame()
-	if err := tr.Click("Contact profile"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if a.settingsContactID != bContact.ID || a.settingsTab != settingsTabContact {
-		t.Fatalf("Cmd+, from B profile lost the picker target: id=%q tab=%q", a.settingsContactID, a.settingsTab)
-	}
-	a.closeSettings()
-	tr.Frame()
-	if err := tr.Click("Edit full profile"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if a.settingsContactID != aContact.ID {
-		t.Fatalf("A profile entry kept B target: id=%q want=%q", a.settingsContactID, aContact.ID)
-	}
-	texts := strings.Join(tr.Texts(), "\n")
-	if !strings.Contains(texts, "Contact profile: "+a.settingsContactChoice(locales.In("en"), aContact)) {
-		t.Fatalf("A profile title/picker mismatch: %v", tr.Texts())
-	}
-	if a.settingsContactChoice(locales.In("en"), aContact) == a.settingsContactChoice(locales.In("en"), bContact) {
-		t.Fatal("same-name contacts did not get distinct readable labels")
-	}
-}
-
-func TestSettingsPageCmdCommaFromIssueResultAndNestedReader(t *testing.T) {
-	a := issuePreviewApp("issue-detail")
-	issue := a.selectedContact().selectedIssue()
-	execution := issue.Executions[0]
-	file := issueResultFile{
-		ExecutionID: execution.ID, SessionID: execution.SessionID, TaskID: execution.TaskID,
-		MessageID: execution.MessageID, CallID: "call-result", ToolName: "write",
-		Path: "/tmp/result.txt", WorkingDirectory: "/tmp", RawResult: `{"path":"/tmp/result.txt","bytes_written":1}`,
-	}
-	key := issueResultFileKey(file)
-	a.aux = "issue-result"
-	a.issueResult = issueResultPage{
-		Open: true, OwnerContactID: a.selectedContact().ID, IssueID: issue.ID, ExecutionID: execution.ID,
-		Panel: issueResultPanelState{
-			RunNumber: 1, RunStatus: issueExecutionCompleted, Files: []issueResultFile{file},
-			ReaderKey: key, FocusReader: true,
-		},
-	}
-	a.windowWidth = 1040
-	tr := ui.NewTester(a.view, 1040, 720)
-	tr.Frame()
-	if !tr.Focused("Close reading") {
-		t.Fatalf("nested reader did not receive focus: %v", tr.Texts())
-	}
-	tr.Key(ui.Cmd, ui.KeyComma)
-	tr.Frame()
-	if !a.settingsOpen || a.settingsTab != settingsTabAppearance || a.aux != "issue-result" || !a.issueResult.Open {
-		t.Fatalf("Cmd+, from reader = open=%v tab=%q aux=%q result=%v", a.settingsOpen, a.settingsTab, a.aux, a.issueResult.Open)
-	}
-	if err := tr.Click("← Back to workbench"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if !a.issueResult.Open || a.aux != "issue-result" || a.issueResult.Panel.ReaderKey != key {
-		t.Fatalf("reader context lost: aux=%q open=%v reader=%q", a.aux, a.issueResult.Open, a.issueResult.Panel.ReaderKey)
-	}
-	if !tr.Focused("Close reading") {
-		t.Fatalf("return did not focus the reader entry: %v", tr.Texts())
-	}
-}
-
 func TestSettingsPageCmdCommaReturnsToFocusedComposer(t *testing.T) {
 	a, ct := workspaceTestApp(t)
 	recoveryTestStore(t, a)
@@ -698,14 +552,14 @@ func TestSettingsPageCmdCommaReturnsToFocusedComposer(t *testing.T) {
 	a.focusComposer = true
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	if !tr.Focused("Composer for Saki") {
+	if !tr.Focused("Composer for Nagi") {
 		t.Fatal("composer did not receive initial focus")
 	}
 	tr.Type("settings")
 	if ct.Draft != "before settings" {
 		t.Fatalf("draft before Cmd+, = %q", ct.Draft)
 	}
-	if !tr.Focused("Composer for Saki") {
+	if !tr.Focused("Composer for Nagi") {
 		t.Fatal("typing lost composer focus before Cmd+,")
 	}
 	tr.Key(ui.Cmd, ui.KeyComma)
@@ -720,7 +574,7 @@ func TestSettingsPageCmdCommaReturnsToFocusedComposer(t *testing.T) {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if !tr.Focused("Composer for Saki") {
+	if !tr.Focused("Composer for Nagi") {
 		t.Fatalf("Back did not return focus to the composer: %v", tr.Texts())
 	}
 	tr.Type(" again")
@@ -729,188 +583,42 @@ func TestSettingsPageCmdCommaReturnsToFocusedComposer(t *testing.T) {
 	}
 }
 
-func TestSettingsContactPickerLongListReachesSelectedLastOption(t *testing.T) {
-	a, _ := workspaceTestApp(t)
-	a.contacts = nil
-	for i := 0; i < 20; i++ {
-		a.contacts = append(a.contacts, &contact{ID: fmt.Sprintf("contact-long-%02d", i), Name: fmt.Sprintf("Person %02d", i), Role: "Assistant", Status: statusReady})
-	}
-	first, last := a.contacts[0], a.contacts[len(a.contacts)-1]
-	a.openSettingsTab(settingsTabContact, settingsSourceRail)
-	a.settingsContactID = first.ID
-	tr := ui.NewTester(a.view, 1040, 720)
-	tr.Frame()
-	if a.settingsContactID != first.ID {
-		t.Fatalf("picker fixture started at %q, want first %q", a.settingsContactID, first.ID)
-	}
-	if err := tr.Click("Edit contact"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	// SelectBase owns the open popup; End highlights the last option, Enter
-	// chooses it. This exercises the real long-list keyboard path rather than
-	// clicking the already-selected trigger text.
-	tr.Key(0, ui.KeyEnd)
-	tr.Frame()
-	tr.Key(0, ui.KeyEnter)
-	tr.Frame()
-	if a.settingsContactID != last.ID {
-		t.Fatalf("long picker keyboard chose %q, want last %q", a.settingsContactID, last.ID)
-	}
-	if tr.HasText(a.settingsContactChoice(locales.In("en"), a.contacts[len(a.contacts)-2])) {
-		t.Fatalf("picker popup remained open after Enter: %v", tr.Texts())
-	}
-	// Down from the closed trigger proves the trigger kept focus; it must
-	// reopen the real popup rather than being lost after Enter.
-	tr.Key(0, ui.KeyDown)
-	tr.Frame()
-	if !tr.HasText(a.settingsContactChoice(locales.In("en"), a.contacts[len(a.contacts)-2])) {
-		t.Fatalf("picker trigger did not retain keyboard focus after Enter: %v", tr.Texts())
-	}
-	tr.Key(0, ui.KeyEscape)
-	tr.Frame()
-}
-func TestSettingsContactPickerDisambiguatesSameLastIDDigitsAndSavesB(t *testing.T) {
-	store, err := openContactStore(filepath.Join(t.TempDir(), "contacts.json"), t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	aContact := &contact{ID: "contact-aaaa1111", Name: "Saki", Role: "Assistant", Status: statusReady, Workspace: t.TempDir()}
-	bContact := &contact{ID: "contact-bbbb1111", Name: "Saki", Role: "Assistant", Status: statusReady, Workspace: t.TempDir()}
-	a := &appModel{store: store, storePath: store.path, contacts: []*contact{aContact, bContact}, selected: 0, scrollTo: -1, windowWidth: 1040}
-	a.openSettingsTab(settingsTabContact, settingsSourceRail)
-	if a.settingsContactChoice(locales.In("en"), aContact) == a.settingsContactChoice(locales.In("en"), bContact) {
-		t.Fatal("same-name contacts did not get distinct labels")
-	}
-	tr := ui.NewTester(a.view, 1040, 720)
-	tr.Frame()
-	if texts := strings.Join(tr.Texts(), "\n"); strings.Contains(texts, aContact.ID) || strings.Contains(texts, bContact.ID) {
-		t.Fatalf("contact picker exposed raw IDs: %v", tr.Texts())
-	}
-	if !tr.HasText("Edit contact") {
-		t.Fatalf("contact picker label prefix missing: %v", tr.Texts())
-	}
-	if _, ok := tr.Find(a.settingsContactChoice(locales.In("en"), aContact)); !ok {
-		t.Fatalf("contact picker current choice missing: %v", tr.Texts())
-	}
-	showPreviewTooltip(t, tr, "Edit contact")
-	if full := "Edit contact: " + a.settingsContactChoice(locales.In("en"), aContact); !tr.HasText(full) {
-		t.Fatalf("contact picker full tooltip/AX missing %q: %v", full, tr.Texts())
-	}
-	tr.Move(1, 1)
-	tr.Frame()
-	if err := tr.Click("Edit contact"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if err := tr.Click(a.settingsContactChoice(locales.In("en"), bContact)); err != nil {
-		t.Fatalf("picker B option: %v; texts=%v", err, tr.Texts())
-	}
-	tr.Frame()
-	if a.settingsContactID != bContact.ID {
-		t.Fatalf("picker chose id %q, want B %q", a.settingsContactID, bContact.ID)
-	}
-	if err := tr.Click("Contact name"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Key(ui.Cmd, ui.KeyA)
-	tr.Type("Saved B")
-	if err := clickSettingsAction(tr, "Save changes"); err != nil {
-		t.Fatal(err)
-	}
-	if r, ok := tr.Find("Save changes"); !ok || r.H < 32 {
-		t.Fatal("Save changes does not provide the minimum click target")
-	}
-	tr.Frame()
-	if aContact.Name != "Saki" || bContact.Name != "Saved B" || a.selectedContact().ID != aContact.ID {
-		t.Fatalf("B save scope changed: A=%q B=%q selected=%q", aContact.Name, bContact.Name, a.selectedContact().ID)
-	}
-}
-
-func TestSettingsConnectionApplyAvailabilityFollowsCurrentWork(t *testing.T) {
-	a, ct, _ := testRuntimeModel(t)
-	config := connectionConfig{Version: 1, API: connectionAPIChatCompletions, Endpoint: "http://example.test/v1", APIKey: "fixture", Model: "fixture", ContextTokens: 1000, OutputTokens: 100, WorkingDirectory: t.TempDir(), MaxActiveTasks: 2}
-	a.connectionForm = newConnectionSettings(&config, config.WorkingDirectory)
-	a.connectionSaved = &config
-	a.connectionEffective = &config
-	a.rt = &runtimeClient{}
-	a.runtimeStatus = runtimeStateReady
-	ct.ActiveTaskID = "active-task"
-	ct.SendState = sendAccepted
-	a.openSettingsTab(settingsTabConnection, settingsSourceRail)
-	tr := ui.NewTester(a.view, 1040, 720)
-	tr.Frame()
-	if a.connectionForm.ReloadBlocked == "" || !tr.HasText("Wait for all chat and task work to finish before applying a new connection.") {
-		t.Fatalf("active work did not block Apply: %q / %v", a.connectionForm.ReloadBlocked, tr.Texts())
-	}
-	ct.ActiveTaskID = ""
-	ct.SendState = sendIdle
-	tr.Frame()
-	if a.connectionForm.ReloadBlocked != "" {
-		t.Fatalf("Apply did not recover after work completed: %q", a.connectionForm.ReloadBlocked)
-	}
-	if tr.HasText("Wait for all chat and task work to finish before applying a new connection.") {
-		t.Fatal("stale Apply block remained after work completed")
-	}
-}
-
-func TestSettingsPageCmdCommaFromIssueResultReturnsToResultControl(t *testing.T) {
-	a := issuePreviewApp("issue-detail")
-	issue := a.selectedContact().selectedIssue()
-	execution := issue.Executions[0]
-	a.aux = "issue-result"
-	a.issueResult = issueResultPage{
-		Open: true, OwnerContactID: a.selectedContact().ID, IssueID: issue.ID, ExecutionID: execution.ID,
-		Panel: issueResultPanelState{RunNumber: 1, RunStatus: issueExecutionCompleted, FocusClose: true},
-	}
-	a.windowWidth = 1040
-	tr := ui.NewTester(a.view, 1040, 720)
-	tr.Frame()
-	if !tr.Focused("Close results") {
-		t.Fatalf("result control was not focused: %v", tr.Texts())
-	}
-	tr.Key(ui.Cmd, ui.KeyComma)
-	tr.Frame()
-	if !a.settingsOpen {
-		t.Fatal("Cmd+, did not open settings from result")
-	}
-	if err := tr.Click("← Back to workbench"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if !a.issueResult.Open || a.aux != "issue-result" || !tr.Focused("Close results") {
-		t.Fatalf("result return lost context or focus: open=%v aux=%q texts=%v", a.issueResult.Open, a.aux, tr.Texts())
-	}
-}
-
-func TestSettingsPageReturnKeepsChatScrollWorkspaceAndIssueContext(t *testing.T) {
+func TestSettingsPageReturnKeepsChatScroll(t *testing.T) {
 	a, ct := workspaceTestApp(t)
 	directory := t.TempDir()
 	writeCustomTheme(t, directory, "light.json", customThemeDocument("garden", appearanceLight))
 	a.appearanceThemes = loadCustomThemes(directory)
-	for i := 0; i < 30; i++ {
+	for i := range 30 {
 		ct.Messages = append(ct.Messages, &message{ID: i + 1, Kind: msgContact, Text: fmt.Sprintf("message %d with enough text to scroll", i)})
 	}
-	a.workspaceOpen = true
-	a.rightPaneWidth = 340
-	issue := &productIssue{ID: "issue-keep", ContactID: ct.ID, Goal: "keep context", Status: issueStatusInProgress, RequirementsRevision: 1}
-	for i := 0; i < 30; i++ {
-		issue.Requirements = append(issue.Requirements, &issueRequirement{ID: fmt.Sprintf("r-%d", i), Text: fmt.Sprintf("requirement %d with enough detail to make the issue pane scroll", i), State: requirementUnverified})
-	}
-	ct.Issues = []*productIssue{issue}
-	openIssueDetailForTest(a, ct, issue.ID)
-	nav := ct.issueNavigation()
+	ct.Draft = "keep the conversation draft"
+	recoveryTestStore(t, a)
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	tr.Scroll(900, 300, 0, 400)
+	tr.Scroll(500, 300, 0, -600)
 	tr.Frame()
-	if nav.DetailScroll.Y <= 0 {
-		t.Fatalf("issue detail did not scroll: %v", nav.DetailScroll.Y)
+	first, last := ct.list.Visible()
+	if last >= len(ct.Messages)-1 {
+		t.Fatalf("chat did not scroll away from the latest message: first=%d last=%d", first, last)
 	}
-	detailScrollBefore := nav.DetailScroll.Y
-	tr.Scroll(500, 300, 0, -2000)
-	tr.Frame()
-	first, _ := ct.list.Visible()
+	label := locales.In("en").ConversationMessagesLabel()
+	viewport, viewportFound := tr.Find(label)
+	if !viewportFound || viewport.W <= 0 || viewport.H <= 0 {
+		t.Fatalf("missing conversation viewport: %+v", viewport)
+	}
+	var anchor string
+	var row ui.Rect
+	for _, message := range ct.Messages[first : last+1] {
+		candidate, found := tr.Find(message.Text)
+		if found && candidate.W > 0 && candidate.H > 0 && candidate.Y >= viewport.Y && candidate.Y+candidate.H <= viewport.Y+viewport.H {
+			anchor, row = message.Text, candidate
+			break
+		}
+	}
+	if anchor == "" {
+		t.Fatalf("no visible scroll anchor between rows %d and %d in %+v", first, last, viewport)
+	}
+	offset := row.Y - viewport.Y
 	a.openSettingsTab(settingsTabAppearance, settingsSourceRail)
 	tr.Frame()
 	if !a.settingsOpen {
@@ -922,42 +630,39 @@ func TestSettingsPageReturnKeepsChatScrollWorkspaceAndIssueContext(t *testing.T)
 		t.Fatal(err)
 	}
 	tr.Frame()
-	afterFirst, _ := ct.list.Visible()
-	if afterFirst != first || a.selectedContact().ID != ct.ID || !a.workspaceOpen || a.rightPaneWidth != 340 || nav.DetailID != issue.ID || nav.DetailScroll.Y != detailScrollBefore {
-		t.Fatalf("return state changed: list %d->%d selected=%q work=%v width=%v detail=%q scroll=%v", first, afterFirst, a.selectedContact().ID, a.workspaceOpen, a.rightPaneWidth, nav.DetailID, nav.DetailScroll.Y)
+	afterViewport, viewportFound := tr.Find(label)
+	afterRow, rowFound := tr.Find(anchor)
+	afterOffset := afterRow.Y - afterViewport.Y
+	if !viewportFound || !rowFound || afterRow.H <= 0 || afterOffset < offset-1 || afterOffset > offset+1 ||
+		a.selectedContact() != ct || ct.Draft != "keep the conversation draft" || a.localSaveErr != "" {
+		t.Fatalf("settings return changed chat anchor %q: offset=%v→%v selected=%q draft=%q saveError=%q", anchor, offset, afterOffset, a.selectedID(), ct.Draft, a.localSaveErr)
 	}
 }
 
 func TestPreviewSettingsPage(t *testing.T) {
-	dir := os.Getenv("SAKI_PREVIEW_DIR")
+	dir := os.Getenv("NAGI_PREVIEW_DIR")
 	export := dir != ""
 	if !export {
 		dir = t.TempDir()
 	} else if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := loadAvatar(); err != nil {
-		t.Fatal(err)
-	}
-	previewStore, err := openContactStore(filepath.Join(t.TempDir(), "contacts.json"), t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
 	longPath := "/Users/you/Workspace/a-very-long-project-directory-name/with/deep/nested/segments"
 	longURL := "https://provider.example.invalid/v1/organizations/team/projects/workspace/models/default"
 	longError := "Connection could not be applied because the saved endpoint is unavailable. Review the endpoint and retry after the current work finishes."
-	config := connectionConfig{Version: 1, API: connectionAPIChatCompletions, Endpoint: longURL, Model: "provider/very-long-model-identifier", ContextTokens: 131072, OutputTokens: 8192, WorkingDirectory: longPath, MaxActiveTasks: 2}
+	config := connectionConfig{API: connectionAPIChatCompletions, Endpoint: longURL, Model: "provider/very-long-model-identifier", ContextTokens: 131072, OutputTokens: 8192, WorkingDirectory: longPath, MaxActiveTasks: 2}
 	for _, dark := range []bool{false, true} {
 		theme := "light"
 		if dark {
 			theme = "dark"
 		}
 		for _, size := range []struct{ width, height int }{{720, 640}, {1040, 720}, {1380, 900}} {
-			for _, tab := range []string{settingsTabAppearance, settingsTabConnection, settingsTabContact, settingsTabAdvanced} {
-				a := testApp(t)
-				a.demo = false
-				a.store = previewStore
-				a.storePath = previewStore.path
+			for _, tab := range []string{settingsTabAppearance, settingsTabConnection, settingsTabAdvanced} {
+				a, ct, _ := piRunStartedTestApp(t)
+				ct.ActiveTaskID, ct.SendState = "", sendIdle
+				a.storePath = a.store.path
+				a.connectionPath = connectionConfigPath(a.storePath)
+				a.workDir = filepath.Dir(a.storePath)
 				a.windowWidth = size.width
 				switch tab {
 				case settingsTabConnection:
@@ -967,22 +672,13 @@ func TestPreviewSettingsPage(t *testing.T) {
 					a.connectionForm.HasSaved = true
 					a.connectionForm.Error = longError
 					a.runtimeStatus = runtimeStateReady
-					a.rt = &runtimeClient{}
-				case settingsTabContact:
-					a.openSettingsTab(settingsTabContact, settingsSourceRail)
-					editor := a.settingsContactEditor()
-					editor.Draft.Name = "Research partner with a long readable name"
-					editor.Draft.Purpose = "Long-running product and research questions that need a clear, durable reference."
-					editor.Draft.Instructions = "  Preserve indentation.\n" + strings.Repeat("Verify the actual state before reporting success. ", 4)
-					editor.Draft.Workspace = longPath
-					a.settingsScroll.Y = 0
 				case settingsTabAdvanced:
 					a.runtimeStatus = runtimeStateFailed
 					a.runtimeStage = "Runtime helper"
 					a.runtimeErr = longError
 					a.openAdvancedSettings()
 				}
-				if tab != settingsTabContact && tab != settingsTabAdvanced {
+				if tab != settingsTabAdvanced {
 					a.openSettingsTab(tab, settingsSourceRail)
 				}
 				tr := ui.NewTester(a.view, size.width, size.height)
@@ -1025,17 +721,27 @@ func TestFirstLaunchOpensConnectionSettingsPageWithoutEmptyOverlay(t *testing.T)
 	if !tr.HasText("Connection & model") || !tr.HasText("Save configuration") || tr.HasText("No messages yet") {
 		t.Fatalf("first launch did not show the connection page alone: %v", tr.Texts())
 	}
-	a.openAdvancedSettings()
+	msgs := locales.In("en")
+	if err := tr.Click(msgs.SettingsAdvanced()); err != nil {
+		t.Fatal(err)
+	}
 	tr.Frame()
-	if !tr.HasText("not checked yet; configure and apply a connection first") || tr.HasText("Runtime helper not found") {
-		t.Fatalf("unconfigured Advanced misreported helper discovery: %v", tr.Texts())
+	if !tr.HasText(msgs.StartupHintEnterConnection()) {
+		t.Fatalf("unconfigured Advanced did not explain setup: %v", tr.Texts())
+	}
+	if err := tr.Click(msgs.SettingsOpenConnection()); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if a.settingsTab != settingsTabConnection || !tr.HasText("Save configuration") || tr.HasText("No messages yet") {
+		t.Fatalf("Advanced did not return to the connection page alone: %v", tr.Texts())
 	}
 }
 
 func TestSettingsLongConnectionScrollsThenPrimaryActionIsVisible(t *testing.T) {
 	for _, width := range []int{720, 800} {
 		a, _ := workspaceTestApp(t)
-		config := connectionConfig{Version: 1, API: connectionAPIChatCompletions, Endpoint: "https://provider.example.invalid/v1/very/long/endpoint", APIKey: "fixture", Model: "fixture", ContextTokens: 1000, OutputTokens: 100, WorkingDirectory: t.TempDir(), MaxActiveTasks: 2}
+		config := connectionConfig{API: connectionAPIChatCompletions, Endpoint: "https://provider.example.invalid/v1/very/long/endpoint", APIKey: "fixture", Model: "fixture", ContextTokens: 1000, OutputTokens: 100, WorkingDirectory: t.TempDir(), MaxActiveTasks: 2}
 		a.connectionForm = newConnectionSettings(&config, config.WorkingDirectory)
 		a.connectionSaved = &config
 		a.connectionEffective = &config
@@ -1055,349 +761,6 @@ func TestSettingsLongConnectionScrollsThenPrimaryActionIsVisible(t *testing.T) {
 				t.Fatalf("%d action %q not reachable after scroll: %+v ok=%v", width, label, r, ok)
 			}
 		}
-	}
-}
-
-func TestSettingsPageCmdCommaFromReaderKeepsLongScrollAndFocusedControl(t *testing.T) {
-	a := issuePreviewApp("issue-detail")
-	issue := a.selectedContact().selectedIssue()
-	execution := issue.Executions[0]
-	file := issueResultFile{ExecutionID: execution.ID, SessionID: execution.SessionID, TaskID: execution.TaskID, MessageID: execution.MessageID, CallID: "call-long", ToolName: "write", Path: "/tmp/long.txt", WorkingDirectory: "/tmp", RawResult: `{"path":"/tmp/long.txt","bytes_written":1}`}
-	key := issueResultFileKey(file)
-	longPreview := strings.Repeat("A long saved file line that must scroll independently in the reader.\n", 120)
-	a.aux = "issue-result"
-	a.issueResult = issueResultPage{
-		Open: true, OwnerContactID: a.selectedContact().ID, IssueID: issue.ID, ExecutionID: execution.ID,
-		Panel: issueResultPanelState{
-			RunNumber: 1, RunStatus: issueExecutionCompleted, Files: []issueResultFile{file},
-			Inspection: &issueResultFileInspection{Exists: true, Regular: true, Preview: longPreview},
-			InspectFor: key, ReaderKey: key,
-		},
-	}
-	a.windowWidth = 1040
-	tr := ui.NewTester(a.view, 1040, 720)
-	tr.Frame()
-	a.issueResult.Panel.ReaderCheckHandle.Focus()
-	tr.Frame()
-	if !tr.Focused("Check again") {
-		t.Fatalf("reader check control did not receive focus: %v", tr.Texts())
-	}
-	tr.Scroll(520, 400, 0, 1200)
-	tr.Frame()
-	scrollBefore := a.issueResult.Panel.ReaderScroll.Y
-	if scrollBefore <= 0 {
-		t.Fatalf("reader preview did not scroll: %v", scrollBefore)
-	}
-	tr.Key(ui.Cmd, ui.KeyComma)
-	tr.Frame()
-	if !a.settingsOpen {
-		t.Fatal("Cmd+, did not open settings from reader")
-	}
-	if err := tr.Click("← Back to workbench"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if !tr.Focused("Check again") {
-		t.Fatalf("reader returned focus to the wrong control: %v", tr.Texts())
-	}
-	if a.issueResult.Panel.ReaderScroll.Y != scrollBefore {
-		t.Fatalf("reader scroll changed: %v -> %v", scrollBefore, a.issueResult.Panel.ReaderScroll.Y)
-	}
-}
-
-func TestSettingsPageCmdCommaFromResultReturnsToReloadControl(t *testing.T) {
-	a := issuePreviewApp("issue-detail")
-	issue := a.selectedContact().selectedIssue()
-	execution := issue.Executions[0]
-	a.aux = "issue-result"
-	a.issueResult = issueResultPage{Open: true, OwnerContactID: a.selectedContact().ID, IssueID: issue.ID, ExecutionID: execution.ID, Panel: issueResultPanelState{RunNumber: 1, RunStatus: issueExecutionCompleted}}
-	a.windowWidth = 1040
-	tr := ui.NewTester(a.view, 1040, 720)
-	tr.Frame()
-	a.issueResult.Panel.ReloadHandle.Focus()
-	tr.Frame()
-	if !tr.Focused("Reload result") {
-		t.Fatalf("result reload control did not receive focus: %v", tr.Texts())
-	}
-	tr.Key(ui.Cmd, ui.KeyComma)
-	tr.Frame()
-	if !a.settingsOpen {
-		t.Fatal("Cmd+, did not open settings from result")
-	}
-	if err := tr.Click("← Back to workbench"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if !tr.Focused("Reload result") {
-		t.Fatalf("result returned focus to the wrong control: %v", tr.Texts())
-	}
-}
-
-func TestSettingsCmdCommaFromDynamicFileRowReturnsToSameRowAndReopens(t *testing.T) {
-	a := issuePreviewApp("issue-detail")
-	issue := a.selectedContact().selectedIssue()
-	execution := issue.Executions[0]
-	files := []issueResultFile{
-		{ExecutionID: execution.ID, SessionID: execution.SessionID, TaskID: execution.TaskID, MessageID: execution.MessageID, CallID: "call-a", ToolName: "write", Path: "/tmp/a.txt", WorkingDirectory: "/tmp", RawResult: `{"path":"/tmp/a.txt"}`},
-		{ExecutionID: execution.ID, SessionID: execution.SessionID, TaskID: execution.TaskID, MessageID: execution.MessageID, CallID: "call-b", ToolName: "write", Path: "/tmp/b.md", WorkingDirectory: "/tmp", RawResult: `{"path":"/tmp/b.md"}`},
-		{ExecutionID: execution.ID, SessionID: execution.SessionID, TaskID: execution.TaskID, MessageID: execution.MessageID, CallID: "call-c", ToolName: "write", Path: "/tmp/c.txt", WorkingDirectory: "/tmp", RawResult: `{"path":"/tmp/c.txt"}`},
-	}
-	target := issueResultFileKey(files[1])
-	inspection := issueResultFileInspection{Path: files[1].Path, WorkingDirectory: "/tmp", Exists: true, Regular: true, Preview: strings.Repeat("Long reader content for the second dynamic file.\n", 60)}
-	a.aux = "issue-result"
-	a.issueResult = issueResultPage{
-		Open: true, OwnerContactID: a.selectedContact().ID, IssueID: issue.ID, ExecutionID: execution.ID,
-		Panel: issueResultPanelState{
-			RunNumber: 1, RunStatus: issueExecutionCompleted,
-			Response: "# Result\n\n" + strings.Repeat("Long result body before reported files.\n\n", 50),
-			Files:    files, Inspection: &inspection, InspectFor: target,
-		},
-	}
-	a.issueResultInspect = func(file issueResultFile) issueResultFileInspection { return inspection }
-	a.selectedContact().Draft = "keep this draft"
-	a.windowWidth = 1040
-	pump := newUIPump(t, a)
-	defer func() {
-		pump.waitTimeout(func() bool { return a.resultInFlight == 0 }, 5*time.Second)
-		pump.close()
-	}()
-	var tr *ui.Tester
-	pump.do(func() {
-		tr = ui.NewTester(a.view, 1040, 720)
-		tr.Frame()
-	})
-	targetLabel := "Read file 2: b.md"
-	for i := 0; i < 12; i++ {
-		var visible bool
-		pump.do(func() {
-			r, ok := tr.Find(targetLabel)
-			visible = ok && r.W > 0 && r.H > 0 && r.Y >= 0 && r.Y+r.H <= 720
-		})
-		if visible {
-			break
-		}
-		pump.do(func() {
-			tr.Scroll(520, 400, 0, 220)
-			tr.Frame()
-		})
-	}
-	var outerScrollBefore float32
-	pump.do(func() { outerScrollBefore = a.issueResultScroll.Y })
-	if outerScrollBefore <= 0 {
-		t.Fatalf("outer result did not scroll to reported files: %v", outerScrollBefore)
-	}
-	var clickErr error
-	pump.do(func() {
-		clickErr = tr.Click(targetLabel)
-		tr.Frame()
-	})
-	if clickErr != nil {
-		t.Fatal(clickErr)
-	}
-	pump.wait(func() bool { return !a.issueResult.Panel.Checking })
-	pump.do(func() { tr.Frame() })
-	var readingOpen bool
-	pump.do(func() { readingOpen = tr.Focused("Close reading") || tr.HasText("Copy path") })
-	if !readingOpen {
-		t.Fatal("reader did not open")
-	}
-	pump.do(func() {
-		tr.Key(0, ui.KeyEscape)
-		tr.Frame()
-	})
-	var rowFocused bool
-	pump.do(func() { rowFocused = tr.Focused(targetLabel) })
-	if !rowFocused {
-		t.Fatalf("Escape did not return focus to dynamic file row: %v", tr.Texts())
-	}
-	pump.do(func() {
-		tr.Key(ui.Cmd, ui.KeyComma)
-		tr.Frame()
-	})
-	var settingsOpen bool
-	pump.do(func() { settingsOpen = a.settingsOpen })
-	if !settingsOpen {
-		t.Fatal("Cmd+, from dynamic file row did not open settings")
-	}
-	pump.do(func() { clickErr = tr.Click("← Back to workbench"); tr.Frame() })
-	if clickErr != nil {
-		t.Fatal(clickErr)
-	}
-	var returnedFocus bool
-	var scrollAfter float32
-	pump.do(func() {
-		returnedFocus = tr.Focused(targetLabel)
-		scrollAfter = a.issueResultScroll.Y
-	})
-	// Do not stop at the focus mismatch: the actual regression must also prove
-	// whether Return invokes the dynamic file row or closes the result page.
-	pump.do(func() {
-		tr.Key(0, ui.KeyEnter)
-		tr.Frame()
-	})
-	pump.wait(func() bool { return !a.issueResult.Panel.Checking })
-	var readerKey string
-	var readerOpen, resultOpen bool
-	var texts []string
-	pump.do(func() {
-		readerKey = a.issueResult.Panel.ReaderKey
-		readerOpen = tr.Focused("Close reading")
-		resultOpen = a.issueResult.Open
-		texts = append([]string(nil), tr.Texts()...)
-	})
-	if !returnedFocus || scrollAfter != outerScrollBefore || !resultOpen || readerKey != target || !readerOpen {
-		t.Fatalf("Back/Return did not restore dynamic file row: focus=%v scroll=%v->%v resultOpen=%v reader=%q target=%q texts=%v",
-			returnedFocus, outerScrollBefore, scrollAfter, resultOpen, readerKey, target, texts)
-	}
-	if a.selectedContact().Draft != "keep this draft" || a.issueResult.IssueID != issue.ID || a.issueResult.ExecutionID != execution.ID {
-		t.Fatal("settings return changed draft or result context")
-	}
-}
-
-func TestSettingsPageCmdCommaReturnsToReaderCopyPath(t *testing.T) {
-	a := issuePreviewApp("issue-detail")
-	issue := a.selectedContact().selectedIssue()
-	execution := issue.Executions[0]
-	file := issueResultFile{ExecutionID: execution.ID, SessionID: execution.SessionID, TaskID: execution.TaskID, MessageID: execution.MessageID, CallID: "copy-path", ToolName: "write", Path: "/tmp/copy-path.md", WorkingDirectory: "/tmp", RawResult: `{"path":"/tmp/copy-path.md"}`}
-	key := issueResultFileKey(file)
-	a.aux = "issue-result"
-	a.issueResult = issueResultPage{Open: true, OwnerContactID: a.selectedContact().ID, IssueID: issue.ID, ExecutionID: execution.ID, Panel: issueResultPanelState{RunNumber: 1, RunStatus: issueExecutionCompleted, Files: []issueResultFile{file}, ReaderKey: key}}
-	a.windowWidth = 1040
-	tr := ui.NewTester(a.view, 1040, 720)
-	tr.Frame()
-	a.issueResult.Panel.CopyPathHandle.Focus()
-	tr.Frame()
-	if !tr.Focused("Copy path") {
-		t.Fatalf("Copy path did not receive focus: %v", tr.Texts())
-	}
-	tr.Key(ui.Cmd, ui.KeyComma)
-	tr.Frame()
-	if !a.settingsOpen {
-		t.Fatal("Cmd+, from Copy path did not open settings")
-	}
-	if err := tr.Click("← Back to workbench"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if !tr.Focused("Copy path") {
-		t.Fatalf("Back did not return focus to Copy path: %v", tr.Texts())
-	}
-}
-
-func TestSettingsReturnKeepsEachCodeCopyTarget(t *testing.T) {
-	for _, reader := range []bool{false, true} {
-		t.Run(fmt.Sprintf("reader=%v", reader), func(t *testing.T) {
-			a := issuePreviewApp("issue-detail")
-			issue := a.selectedContact().selectedIssue()
-			execution := issue.Executions[0]
-			file := issueResultPanelFixtureFile("code-copies", "/tmp/code-copies.md", "{}")
-			key := issueResultFileKey(file)
-			content := "```go\nfirst-copy-content\n```\n\nbetween\n\n```go\nsecond-copy-content\n```"
-			a.aux = "issue-result"
-			a.issueResult = issueResultPage{Open: true, OwnerContactID: a.selectedContact().ID, IssueID: issue.ID, ExecutionID: execution.ID,
-				Panel: issueResultPanelState{Response: content, Files: []issueResultFile{file}}}
-			state := &a.issueResult.Panel
-			if reader {
-				state.ReaderKey, state.InspectFor = key, key
-				state.Inspection = &issueResultFileInspection{Exists: true, Regular: true, Preview: content}
-			}
-			a.windowWidth = 1040
-			tr := ui.NewTester(a.view, 1040, 900)
-			tr.Frame()
-			handles := state.ResultCodeHandles
-			if reader {
-				handles = state.ReaderCodeHandles
-			}
-			keys := make([]int, 0, len(handles))
-			for key := range handles {
-				keys = append(keys, key)
-			}
-			sort.Ints(keys)
-			if len(keys) != 2 {
-				t.Fatalf("expected two independently focusable code copies, got %d", len(keys))
-			}
-			handles[keys[1]].Focus()
-			tr.Frame()
-			tr.Key(ui.Cmd, ui.KeyComma)
-			tr.Frame()
-			if !a.settingsOpen {
-				t.Fatal("Cmd+, from code copy did not open settings")
-			}
-			if err := tr.Click("← Back to workbench"); err != nil {
-				t.Fatal(err)
-			}
-			tr.Frame()
-			tr.Key(0, ui.KeyEnter)
-			tr.Frame()
-			if got := tr.Clipboard(); got != "second-copy-content\n" {
-				t.Fatalf("Return after settings copied %q instead of the second block", got)
-			}
-			if !a.issueResult.Open || (reader && state.ReaderKey != key) {
-				t.Fatal("Return closed the result or reading layer")
-			}
-		})
-	}
-}
-
-func TestSettingsReturnKeepsReaderActions(t *testing.T) {
-	file := issueResultPanelFixtureFile("handles", "/tmp/handles.txt", `{"path":"/tmp/handles.txt"}`)
-	key := issueResultFileKey(file)
-	a := testApp(t)
-	a.aux = "issue-result"
-	a.issueResult.Open = true
-	a.issueResult.Panel = issueResultPanelState{
-		RunNumber: 1, RunStatus: issueExecutionCompleted, Files: []issueResultFile{file},
-		Inspection: &issueResultFileInspection{Path: file.Path, Exists: true, Regular: true, Preview: "preview"},
-		InspectFor: key, ReaderKey: key, SourceFor: key,
-	}
-	state := &a.issueResult.Panel
-	opened, revealed, copied := 0, 0, ""
-	actions := issueResultPanelActions{
-		OpenSettings: func(c *ui.Context) { a.openSettingsFromContext(c, settingsTabAppearance, settingsSourceAux) },
-		CheckFile:    func(issueResultFile) {},
-		OpenFile:     func(issueResultFile) { opened++ },
-		RevealFile:   func(issueResultFile) { revealed++ },
-		CopyText:     func(text string) error { copied = text; return nil },
-	}
-	tr := ui.NewTester(func(c *ui.Context) {
-		if a.settingsOpen {
-			a.settingsPage(c, c.Theme())
-			return
-		}
-		if file, ok := issueResultFileByKey(state.Files, state.ReaderKey); state.ReaderKey != "" && ok {
-			issueResultReaderPage(c, c.Theme(), state, actions, file)
-			return
-		}
-		issueResultPanel(c, state, actions)
-	}, 1040, 900)
-	tr.Frame()
-	for _, control := range []struct {
-		label  string
-		handle *ui.Handle
-	}{
-		{"Open file", &state.ReaderOpenHandle},
-		{"Show in Finder", &state.ReaderRevealHandle},
-		{"Copy tool record", &state.CopyRawHandle},
-	} {
-		control.handle.Focus()
-		tr.Frame()
-		tr.Key(ui.Cmd, ui.KeyComma)
-		tr.Frame()
-		if !a.settingsOpen {
-			t.Fatalf("Cmd+, from %s did not open settings", control.label)
-		}
-		if err := tr.Click("← Back to workbench"); err != nil {
-			t.Fatal(err)
-		}
-		tr.Frame()
-		if !tr.Focused(control.label) {
-			t.Fatalf("Back did not restore %s", control.label)
-		}
-		tr.Key(0, ui.KeyEnter)
-		tr.Frame()
-	}
-	if opened != 1 || revealed != 1 || copied != file.RawResult || state.ReaderKey != key {
-		t.Fatalf("Return actions = open:%d reveal:%d copy:%q reader:%q", opened, revealed, copied, state.ReaderKey)
 	}
 }
 
@@ -1508,7 +871,7 @@ func TestSettingsCmdCommaFromRemovedMarkdownLinkFallsBackOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if !tr.Focused("Composer for Saki") {
+	if !tr.Focused("Composer for Nagi") {
 		t.Fatalf("removed link did not fall back to the chat composer: %v", tr.Texts())
 	}
 	if a.markdownLinkFocus != (markdownLinkTarget{}) || a.linkReturnTarget != (markdownLinkTarget{}) {
@@ -1517,7 +880,7 @@ func TestSettingsCmdCommaFromRemovedMarkdownLinkFallsBackOnce(t *testing.T) {
 	ct.Messages[0].Text = original
 	tr.Frame()
 	tr.Frame()
-	if !tr.Focused("Composer for Saki") {
+	if !tr.Focused("Composer for Nagi") {
 		t.Fatalf("restored old link stole focus from the composer: %v", tr.Texts())
 	}
 	if got := tr.OpenedURLs(); len(got) != 0 {
@@ -1544,13 +907,13 @@ func TestSettingsCmdCommaFromReplacedMarkdownLinkDoesNotStealFocusWhenOldTargetR
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if !tr.Focused("Composer for Saki") {
+	if !tr.Focused("Composer for Nagi") {
 		t.Fatalf("replaced link did not fall back to the chat composer: %v", tr.Texts())
 	}
 	ct.Messages[0].Text = original
 	tr.Frame()
 	tr.Frame()
-	if !tr.Focused("Composer for Saki") {
+	if !tr.Focused("Composer for Nagi") {
 		t.Fatalf("old link later reappeared and stole focus: %v", tr.Texts())
 	}
 	if a.linkReturnTarget != (markdownLinkTarget{}) || a.markdownLinkFocus != (markdownLinkTarget{}) {
@@ -1558,175 +921,6 @@ func TestSettingsCmdCommaFromReplacedMarkdownLinkDoesNotStealFocusWhenOldTargetR
 	}
 	if got := tr.OpenedURLs(); len(got) != 0 {
 		t.Fatalf("replaced or restored link activated a URL: %v", got)
-	}
-}
-
-func TestSettingsCmdCommaFromHistoryMarkdownLinkReturnsToSameLink(t *testing.T) {
-	a, ct := workspaceTestApp(t)
-	ct.History = []historyEntry{{
-		ID: "history-link", Date: "Oct 1", From: "contact",
-		Text: "历史[第一历史链接](https://example.com/history) 第二[第二历史链接](https://example.com/history)。",
-	}}
-	a.windowWidth = 1040
-	tr := ui.NewTester(a.view, 1040, 720)
-	tr.SetFocused(true)
-	tr.Frame()
-	a.openHistory()
-	tr.Frame()
-	tabToFocused(t, tr, "第二历史链接")
-	tr.Key(ui.Cmd, ui.KeyComma)
-	tr.Frame()
-	if !a.settingsOpen || !a.detailIs(detailHistory) {
-		t.Fatalf("Cmd+, from history link = open=%v detail=%v", a.settingsOpen, a.activeDetail())
-	}
-	if err := tr.Click("← Back to workbench"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if !tr.Focused("第二历史链接") {
-		t.Fatalf("history Back did not return to its second repeated inline link: %v", tr.Texts())
-	}
-	tr.Key(0, ui.KeyEnter)
-	tr.Frame()
-	if got := tr.OpenedURLs(); len(got) != 1 || got[0] != "https://example.com/history" {
-		t.Fatalf("history link opened %v, want only its URL", got)
-	}
-}
-
-func TestSettingsCmdCommaFromIssueResultMarkdownLinkReturnsToSameLink(t *testing.T) {
-	a := issuePreviewApp("issue-detail")
-	issue := a.selectedContact().selectedIssue()
-	execution := issue.Executions[0]
-	a.rt = nil
-	a.openIssueResultEntry(issue.ID, execution.ID, false)
-	a.issueResult.Loading = false
-	a.issueResult.LoadError = ""
-	a.issueResult.Notice = ""
-	a.issueResult.Panel.Response = "结果[第一结果链接](https://example.com/result) 第二[第二结果链接](https://example.com/result)。"
-	a.windowWidth = 1040
-	tr := ui.NewTester(a.view, 1040, 720)
-	tr.SetFocused(true)
-	tr.Frame()
-	tabToFocused(t, tr, "第二结果链接")
-	tr.Key(ui.Cmd, ui.KeyComma)
-	tr.Frame()
-	if !a.settingsOpen {
-		t.Fatal("Cmd+, from result link did not open settings")
-	}
-	if err := tr.Click("← Back to workbench"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if !a.issueResult.Open || a.aux != "issue-result" || !tr.Focused("第二结果链接") {
-		t.Fatalf("result Back lost context or second repeated link focus: open=%v aux=%q texts=%v", a.issueResult.Open, a.aux, tr.Texts())
-	}
-	tr.Key(0, ui.KeyEnter)
-	tr.Frame()
-	if got := tr.OpenedURLs(); len(got) != 1 || got[0] != "https://example.com/result" {
-		t.Fatalf("result second repeated link opened %v, want only its URL", got)
-	}
-}
-
-func TestSettingsCmdCommaFromInnerFileMarkdownLinkReturnsToSameLink(t *testing.T) {
-	a := issuePreviewApp("issue-detail")
-	issue := a.selectedContact().selectedIssue()
-	execution := issue.Executions[0]
-	file := issueResultFile{
-		ExecutionID: execution.ID, SessionID: execution.SessionID, TaskID: execution.TaskID,
-		MessageID: execution.MessageID, CallID: "call-link", ToolName: "write",
-		Path: "/tmp/link.md", WorkingDirectory: "/tmp", RawResult: `{"path":"/tmp/link.md"}`,
-	}
-	key := issueResultFileKey(file)
-	inspection := issueResultFileInspection{Path: file.Path, WorkingDirectory: "/tmp", Exists: true, Regular: true, Preview: "文件[第一内链](https://example.com/file) 第二[第二内链](https://example.com/file)。"}
-	a.rt = nil
-	a.openIssueResultEntry(issue.ID, execution.ID, false)
-	a.issueResult.Loading = false
-	a.issueResult.LoadError = ""
-	a.issueResult.Notice = ""
-	a.issueResult.Panel.Files = []issueResultFile{file}
-	a.issueResult.Panel.ReaderKey = key
-	a.issueResult.Panel.InspectFor = key
-	a.issueResult.Panel.Inspection = &inspection
-	a.windowWidth = 1040
-	tr := ui.NewTester(a.view, 1040, 720)
-	tr.SetFocused(true)
-	tr.Frame()
-	tabToFocused(t, tr, "第二内链")
-	tr.Key(ui.Cmd, ui.KeyComma)
-	tr.Frame()
-	if !a.settingsOpen || !a.issueResult.Open || a.issueResult.Panel.ReaderKey != key {
-		t.Fatalf("Cmd+, from inner file link = settings=%v open=%v reader=%q", a.settingsOpen, a.issueResult.Open, a.issueResult.Panel.ReaderKey)
-	}
-	if err := tr.Click("← Back to workbench"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if !a.issueResult.Open || a.issueResult.Panel.ReaderKey != key || !tr.Focused("第二内链") {
-		t.Fatalf("inner file Back lost context or second repeated link focus: open=%v reader=%q texts=%v", a.issueResult.Open, a.issueResult.Panel.ReaderKey, tr.Texts())
-	}
-	tr.Key(0, ui.KeyEnter)
-	tr.Frame()
-	if got := tr.OpenedURLs(); len(got) != 1 || got[0] != "https://example.com/file" {
-		t.Fatalf("inner file second repeated link opened %v, want only its URL", got)
-	}
-}
-
-func TestSettingsReturnsToExactHistorySummaryAndFullLinkWithSameEntry(t *testing.T) {
-	a, ct := workspaceTestApp(t)
-	const url = "https://example.com/same"
-	ct.History = []historyEntry{{
-		ID: "history-same", Date: "Oct 1", From: "contact",
-		Text: "摘要[摘要链接](" + url + ")。",
-	}}
-	a.windowWidth = 1040
-	a.workspaceOpen = false
-	a.detail = ""
-	a.openHistory()
-	tr := ui.NewTester(a.view, 1040, 720)
-	tr.SetFocused(true)
-	tr.Frame()
-
-	tabToFocused(t, tr, "摘要链接")
-	tr.Key(ui.Cmd, ui.KeyComma)
-	tr.Frame()
-	if !a.settingsOpen {
-		t.Fatal("摘要链接 Cmd+, did not open settings")
-	}
-	if err := tr.Click("← Back to workbench"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if !tr.Focused("摘要链接") {
-		t.Fatalf("Back did not return to the summary link: %v", tr.Texts())
-	}
-	tr.Key(0, ui.KeyEnter)
-	tr.Frame()
-	if got := tr.OpenedURLs(); len(got) != 1 || got[0] != url {
-		t.Fatalf("summary link opened %v, want only its URL", got)
-	}
-
-	a.contactHistoryFull = &contactHistoryFull{
-		SessionID: "s1", EntryID: "history-same", Date: "Oct 1", From: "contact",
-		Text: "完整[完整链接](" + url + ")。",
-	}
-	tr.Frame()
-	tabToFocused(t, tr, "完整链接")
-	tr.Key(ui.Cmd, ui.KeyComma)
-	tr.Frame()
-	if !a.settingsOpen {
-		t.Fatal("完整链接 Cmd+, did not open settings")
-	}
-	if err := tr.Click("← Back to workbench"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if !tr.Focused("完整链接") {
-		t.Fatalf("Back did not return to the full link: %v", tr.Texts())
-	}
-	tr.Key(0, ui.KeyEnter)
-	tr.Frame()
-	if got := tr.OpenedURLs(); len(got) != 2 || got[1] != url {
-		t.Fatalf("full link opened %v, want second exact URL occurrence", got)
 	}
 }
 
@@ -1768,38 +962,6 @@ func TestExplicitRailSettingsDoesNotReuseOldMarkdownLinkReturn(t *testing.T) {
 	}
 }
 
-func TestHistoryCloseReopenKeepsCloseFocusAfterLinkFocus(t *testing.T) {
-	a, ct := workspaceTestApp(t)
-	ct.History = []historyEntry{{
-		ID: "history-stale", Date: "Oct 1", From: "contact",
-		Text: "历史[历史链接](https://example.com/history)。",
-	}}
-	a.windowWidth = 1040
-	tr := ui.NewTester(a.view, 1040, 720)
-	tr.SetFocused(true)
-	tr.Frame()
-	a.openHistory()
-	tr.Frame()
-	tabToFocused(t, tr, "历史链接")
-	if err := tr.Click("Close history"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if a.workspaceOpen {
-		t.Fatalf("Close history did not return to chat: open=%v detail=%v", a.workspaceOpen, a.activeDetail())
-	}
-	if err := tr.Click("History"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if !a.detailIs(detailHistory) {
-		t.Fatalf("History did not reopen: detail=%v", a.activeDetail())
-	}
-	if !tr.Focused("Close history") {
-		t.Fatalf("reopened history lost its default close focus: %v", tr.Texts())
-	}
-}
-
 func TestSettingsPendingBannerSurvivesDistinctTestStatus(t *testing.T) {
 	a, _ := workspaceTestApp(t)
 	config := testConnectionConfig(t)
@@ -1814,105 +976,20 @@ func TestSettingsPendingBannerSurvivesDistinctTestStatus(t *testing.T) {
 	}
 }
 
-func TestSettingsContactPickerSameLabelSelectsStableID(t *testing.T) {
-	store, err := openContactStore(filepath.Join(t.TempDir(), "contacts.json"), t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	aContact := &contact{ID: "contact-aaaa", Name: "甲", Role: "Assistant", Status: statusReady, Workspace: t.TempDir()}
-	bContact := &contact{ID: "contact-bbbb", Name: "甲", Role: "Assistant", Status: statusReady, Workspace: t.TempDir()}
-	cContact := &contact{ID: "contact-cccc", Name: "甲（1）", Role: "Assistant", Status: statusReady, Workspace: t.TempDir()}
-	a := &appModel{store: store, storePath: store.path, contacts: []*contact{aContact, bContact, cContact}, selected: 0, scrollTo: -1, windowWidth: 1040}
-	a.ensureSettingsProfileEditor(aContact.ID).Draft.Purpose = "draft A"
-	a.ensureSettingsProfileEditor(bContact.ID).Draft.Purpose = "draft B"
-	a.ensureSettingsProfileEditor(cContact.ID).Draft.Purpose = "draft C"
-	a.openSettingsTab(settingsTabContact, settingsSourceRail)
-	tr := ui.NewTester(a.view, 1040, 720)
-	tr.SetLocale("zh-Hans")
-	tr.Frame()
-	msgs := locales.In("zh-Hans")
-	aLabel, cLabel := a.settingsContactChoice(msgs, aContact), a.settingsContactChoice(msgs, cContact)
-	if aLabel != cLabel {
-		t.Fatalf("fixture labels must collide, got %q / %q", aLabel, cLabel)
-	}
-	if texts := strings.Join(tr.Texts(), "\n"); strings.Contains(texts, aContact.ID) || strings.Contains(texts, cContact.ID) {
-		t.Fatalf("contact picker exposed raw IDs: %v", tr.Texts())
-	}
-	if err := tr.Click("编辑联系人"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	tr.Key(0, ui.KeyEnd)
-	tr.Frame()
-	tr.Key(0, ui.KeyEnter)
-	tr.Frame()
-	if a.settingsContactID != cContact.ID {
-		t.Fatalf("picker End/Enter chose %q, want C %q", a.settingsContactID, cContact.ID)
-	}
-	if a.ensureSettingsProfileEditor(cContact.ID).Draft.Purpose != "draft C" {
-		t.Fatal("picker changed C draft")
-	}
-	if a.ensureSettingsProfileEditor(aContact.ID).Draft.Purpose != "draft A" ||
-		a.ensureSettingsProfileEditor(bContact.ID).Draft.Purpose != "draft B" {
-		t.Fatal("picker changed A/B drafts")
-	}
-	if err := tr.Click("联系人名称"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Key(ui.Cmd, ui.KeyA)
-	tr.Type("Only C")
-	tr.Frame()
-	tr.SetLocale("en")
-	tr.Frame()
-	tr.SetLocale("zh-Hans")
-	tr.Frame()
-	if a.settingsContactID != cContact.ID || a.ensureSettingsProfileEditor(cContact.ID).Draft.Name != "Only C" ||
-		a.ensureSettingsProfileEditor(aContact.ID).Draft.Purpose != "draft A" ||
-		a.ensureSettingsProfileEditor(bContact.ID).Draft.Purpose != "draft B" {
-		t.Fatalf("locale switch lost target or drafts: id=%q", a.settingsContactID)
-	}
-	if err := clickSettingsAction(tr, "保存更改"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if aContact.Name != "甲" || bContact.Name != "甲" || cContact.Name != "Only C" {
-		t.Fatalf("save scope changed A=%q B=%q C=%q", aContact.Name, bContact.Name, cContact.Name)
-	}
-	stored, err := openContactStore(store.path, aContact.Workspace)
-	if err != nil {
-		t.Fatal(err)
-	}
-	storedByID := map[string]storedContact{}
-	for _, item := range stored.state.Contacts {
-		storedByID[item.ID] = item
-	}
-	if len(storedByID) != 3 || storedByID[aContact.ID].Name != "甲" ||
-		storedByID[bContact.ID].Name != "甲" || storedByID[cContact.ID].Name != "Only C" {
-		t.Fatalf("saved contact set/names = %+v", storedByID)
-	}
-	if storedByID[aContact.ID].Purpose != aContact.Purpose || storedByID[bContact.ID].Purpose != bContact.Purpose {
-		t.Fatalf("unsaved A/B profile purposes leaked into the store: %+v", storedByID)
-	}
-	if storedByID[cContact.ID].Purpose != "draft C" {
-		t.Fatalf("saved C purpose = %q, want draft C", storedByID[cContact.ID].Purpose)
-	}
-}
-
-func TestSettingsContactFolderChooserKeepsContactAndSessionUntilSave(t *testing.T) {
+func TestBotProfileFolderChooserKeepsBotAndSessionUntilSave(t *testing.T) {
 	a, ct := workspaceTestApp(t)
 	a.uiLocale = "en"
 	a.workDir = t.TempDir()
 	ct.Workspace = t.TempDir()
 	ct.SendState = sendUnknown
-	a.settingsContactID = ct.ID
-	a.openSettingsTab(settingsTabContact, settingsSourceRail)
-	editor := a.settingsContactEditor()
+	a.openContactProfile(ct.ID)
+	editor := a.profileEditorFor(ct.ID)
 	editor.Draft.Name = "Unsaved name"
 	before := editor.Draft
 	requests, replies, updates := controlledFolderChoice(t, a)
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	if err := clickSettingsAction(tr, "Choose folder…"); err != nil {
+	if err := clickBotProfileAction(tr, locales.In("en").WorkFolderChoose()); err != nil {
 		t.Fatal(err)
 	}
 	if got := awaitFolderChoice(t, requests).DefaultPath; got != ct.Workspace {
@@ -1938,15 +1015,14 @@ func TestSettingsContactFolderChooserKeepsContactAndSessionUntilSave(t *testing.
 	}
 }
 
-func TestSettingsContactFolderChooserCancelErrorAndStaleIdentity(t *testing.T) {
-	for _, change := range []string{"cancel", "error", "contact", "editor", "tab-roundtrip", "closed", "shutdown"} {
+func TestBotProfileFolderChooserCancelErrorAndStaleIdentity(t *testing.T) {
+	for _, change := range []string{"cancel", "error", "bot", "editor", "profile-roundtrip", "closed", "shutdown"} {
 		t.Run(change, func(t *testing.T) {
 			a, ct := workspaceTestApp(t)
 			a.workDir = t.TempDir()
 			ct.Workspace = t.TempDir()
-			a.settingsContactID = ct.ID
-			a.openSettingsTab(settingsTabContact, settingsSourceRail)
-			editor := a.settingsContactEditor()
+			a.openContactProfile(ct.ID)
+			editor := a.profileEditorFor(ct.ID)
 			editor.Error = "existing profile error"
 			editor.folderError = "existing chooser error"
 			before := cloneProfileDraft(editor.Draft)
@@ -1959,18 +1035,17 @@ func TestSettingsContactFolderChooserCancelErrorAndStaleIdentity(t *testing.T) {
 				reply = folderChoiceReply{}
 			case "error":
 				reply = folderChoiceReply{paths: []string{filepath.Join(t.TempDir(), "removed")}}
-			case "contact":
+			case "bot":
 				other := &contact{ID: "other", Name: "Other"}
 				a.contacts = append(a.contacts, other)
-				a.settingsContactID = other.ID
-				a.settingsContactEditor()
+				a.openContactProfile(other.ID)
 			case "editor":
-				a.settingsProfiles[ct.ID] = newContactProfileEditor(before)
-			case "tab-roundtrip":
-				a.selectSettingsTab(settingsTabAppearance)
-				a.selectSettingsTab(settingsTabContact)
+				a.profileEditors[ct.ID] = newContactProfileEditor(before)
+			case "profile-roundtrip":
+				a.closeDetail()
+				a.openContactProfile(ct.ID)
 			case "closed":
-				a.closeSettings()
+				a.closeDetail()
 			case "shutdown":
 				a.shutdownStarted = true
 			}
@@ -2050,15 +1125,18 @@ func TestSettingsThemeImportChooseSelectAndRestart(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if calls != 1 || a.appearanceThemeIDs != ids || a.appearanceMode != mode || string(after) != string(stored) || recoveryRecordSnapshot(t, ct) != before || a.rt.nextID != 0 {
+				if calls != 1 || a.appearanceThemeIDs != ids || a.appearanceMode != mode || string(after) != string(stored) || recoveryRecordSnapshot(t, ct) != before || a.submissionInFlight != 0 {
 					t.Fatal("import selected/saved a theme or changed work/preferences")
 				}
 				tr.Scroll(float32(width/2), 360, 0, -2000)
 				tr.Frame()
-				if err := tr.Click(msgs.ThemeLight()); err != nil {
+				if err := tr.Click(msgs.ThemePaper()); err != nil {
 					t.Fatal(err)
 				}
 				tr.Frame()
+				if !tr.HasText("Garden (downloaded-garden)") {
+					t.Fatal("theme selector did not open the imported option")
+				}
 				tr.Key(0, ui.KeyEnd)
 				tr.Key(0, ui.KeyEnter)
 				tr.Frame()
@@ -2123,7 +1201,7 @@ func TestSettingsThemeImportCancelErrorAndRetry(t *testing.T) {
 			themeImportCompletion(t, callbacks)()
 			themeImportCompletion(t, callbacks)()
 			tr.Frame()
-			if a.themeImport.Problem != nil || !tr.HasText(msgs.ThemeImportSucceeded("Garden")) || calls != 3 || a.appearanceThemeIDs.Light != "paper" || recoveryRecordSnapshot(t, ct) != before || a.rt.nextID != 0 {
+			if a.themeImport.Problem != nil || !tr.HasText(msgs.ThemeImportSucceeded("Garden")) || calls != 3 || a.appearanceThemeIDs.Light != "paper" || recoveryRecordSnapshot(t, ct) != before || a.submissionInFlight != 0 {
 				t.Fatal("explicit import retry failed or changed current work/selection")
 			}
 		})
@@ -2144,7 +1222,7 @@ func TestC8SaveRecoveryCopyEntryKeepsSavedAndUnsavedState(t *testing.T) {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	focusComposer(t, tr, "Composer for Saki")
+	focusComposer(t, tr, "Composer for Nagi")
 	tr.Type("Saved local work for the recovery copy")
 	tr.Frame()
 	ct := a.selectedContact()
@@ -2155,7 +1233,8 @@ func TestC8SaveRecoveryCopyEntryKeepsSavedAndUnsavedState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	editor := a.ensureSettingsProfileEditor(ct.ID)
+	openBotProfileFromRail(t, tr, locales.In("en").AvatarContactLabel(ct.Name))
+	editor := a.profileEditorFor(ct.ID)
 	editor.Draft.Name = "Unsaved profile name excluded from the copy"
 	a.connectionForm.Draft.Model = "unsaved-connection-model"
 	profileName, modelDraft := editor.Draft.Name, a.connectionForm.Draft
@@ -2168,7 +1247,7 @@ func TestC8SaveRecoveryCopyEntryKeepsSavedAndUnsavedState(t *testing.T) {
 		if readErr != nil || string(after) != string(saved) || recoveryRecordSnapshot(t, ct) != before || editor.Draft.Name != profileName || ct.Name == profileName || a.connectionForm.Draft != modelDraft || a.appearanceThemeIDs != ids || a.appearanceMode != mode || a.store != store {
 			t.Error("recovery-copy entry changed saved bytes, IDs, work, unsaved editors or preferences")
 		}
-		if a.rt != nil || a.runtimeHelperChecked || a.connectionSaved != nil || a.connectionEffective != nil || a.connectionSaveInFlight || a.connectionApplying || a.connectionTesting || a.modelOpActive || a.submissionInFlight != 0 || a.shutdownStarted {
+		if a.pi != nil || a.connectionSaved != nil || a.connectionEffective != nil || a.connectionSaveInFlight || a.connectionApplying || a.connectionTesting || a.submissionInFlight != 0 || a.shutdownStarted {
 			t.Error("recovery-copy entry saved/applied/tested a connection or started execution/shutdown")
 		}
 	}()
@@ -2184,10 +1263,9 @@ func TestC8SaveRecoveryCopyEntryKeepsSavedAndUnsavedState(t *testing.T) {
 		t.Fatal("existing Settings did not route to General")
 	}
 	ct.Context.formName, ct.Context.formText = "unsaved context name", "unsaved context text"
-	a.issueGoal = "unsaved issue form"
 	defer func() {
-		if ct.Context.formName != "unsaved context name" || ct.Context.formText != "unsaved context text" || a.issueGoal != "unsaved issue form" {
-			t.Error("copy changed unsaved context/issue editor")
+		if ct.Context.formName != "unsaved context name" || ct.Context.formText != "unsaved context text" {
+			t.Error("copy changed the unsaved context editor")
 		}
 	}()
 	if err := clickSettingsAction(tr, "Save recovery copy…"); err != nil {
@@ -2297,141 +1375,6 @@ func c8RenderEvidence(t *testing.T, tr *ui.Tester, name string, width, height in
 	}
 }
 
-func TestC8RestorePreviewConfirmAndReopen(t *testing.T) {
-	for _, locale := range []string{"en", "zh-Hans"} {
-		for _, size := range [][2]int{{720, 640}, {1040, 720}} {
-			t.Run(fmt.Sprintf("%s-%d", locale, size[0]), func(t *testing.T) {
-				a := c8SavedApp(t)
-				a.windowWidth = size[0]
-				ct := a.selectedContact()
-				ct.SessionID = "independent-history-reference"
-				if !a.createIssue("Retained task 原文", "Keep requirement") {
-					t.Fatal("ordinary issue producer failed")
-				}
-				issue := ct.Issues[0]
-				issue.Executions = []*issueExecution{{ID: "unknown-run", Status: issueExecutionUnknown, Detail: "No trusted association"}}
-				issue.Supplements.Items = []*issueSupplement{{ID: "pending", ContactID: ct.ID, IssueID: issue.ID, Text: "Do not replay", RequirementsRevision: 1, State: supplementStatePending}}
-				if err := a.persist(); err != nil {
-					t.Fatal(err)
-				}
-				saved := recoverySavedBytes(t, a.storePath)
-				req, reply, updates := c8ControlledPicker(t, a)
-				tr := ui.NewTester(a.view, size[0], size[1])
-				tr.SetLocale(locale)
-				tr.SetFocused(true)
-				tr.SetDark(locale == "zh-Hans")
-				tr.Frame()
-				msgs := locales.In(locale)
-				c8ReachAction(t, tr, msgs.SaveRecoveryCopyAction(), size[0], size[1])
-				if err := tr.Click(msgs.SaveRecoveryCopyAction()); err != nil {
-					t.Fatal(err)
-				}
-				awaitFolderChoice(t, req)
-				reply <- folderChoiceReply{paths: []string{t.TempDir()}}
-				awaitFolderChoice(t, updates)()
-				awaitFolderChoice(t, updates)()
-				tr.Frame()
-				output := a.dataRecovery.output
-				if output == "" || string(recoverySavedBytes(t, output)) != string(saved) {
-					t.Fatal("UI did not create the actual saved recovery copy")
-				}
-				prefix := fmt.Sprintf("%s-%d", locale, size[0])
-				c8RenderEvidence(t, tr, prefix+"-copy-summary", size[0], size[1], msgs.RecoveryShowCopy())
-				var expected storedState
-				if err := json.Unmarshal(saved, &expected); err != nil {
-					t.Fatal(err)
-				}
-				original := []byte("{unavailable original")
-				if err := os.WriteFile(a.storePath, original, 0600); err != nil {
-					t.Fatal(err)
-				}
-				_, loadErr := newRuntimeApp()
-				if loadErr == nil {
-					t.Fatal("damaged file loaded")
-				}
-				a = newUnavailableApp(loadErr)
-				a.windowWidth = size[0]
-				req, reply, updates = c8ControlledPicker(t, a)
-				tr = ui.NewTester(a.view, size[0], size[1])
-				tr.SetLocale(locale)
-				tr.SetFocused(true)
-				tr.SetDark(locale == "zh-Hans")
-				tr.Frame()
-				if err := tr.Click(msgs.RestorePausedAction()); err != nil {
-					t.Fatal(err)
-				}
-				tr.Frame()
-				tr.Frame()
-				c8ReachAction(t, tr, msgs.RestorePausedAction(), size[0], size[1])
-				if err := tr.Click(msgs.RestorePausedAction()); err != nil {
-					t.Fatal(err)
-				}
-				opts := awaitFolderChoice(t, req)
-				if opts.Parent != a.win || opts.Directory {
-					t.Fatal("restore did not use its parented file chooser")
-				}
-				reply <- folderChoiceReply{paths: []string{output}}
-				awaitFolderChoice(t, updates)()
-				awaitFolderChoice(t, updates)()
-				tr.Frame()
-				tr.Frame()
-				if !a.dataRecoveryPreviewCurrent(a.dataRecovery) || !tr.HasText(msgs.RecoveryPreviewCounts(1, 1)) || !tr.HasText(msgs.RecoveryPauseWarning()) || string(recoverySavedBytes(t, a.storePath)) != string(original) {
-					t.Fatal("preview did not retain captured facts without installing")
-				}
-				c8RenderEvidence(t, tr, prefix+"-preview", size[0], size[1], msgs.RecoveryConfirmAction(), msgs.RecoveryCancelAction())
-				// The preview remains the inspected snapshot even if the selected file later changes.
-				if err := os.WriteFile(output, []byte("later unrelated source bytes"), 0600); err != nil {
-					t.Fatal(err)
-				}
-				if !tr.Focused(msgs.RecoveryConfirmAction()) {
-					t.Fatal("preview did not focus its explicit confirmation")
-				}
-				if locale == "en" {
-					tr.Key(0, ui.KeyEnter)
-					tr.Frame()
-				} else if err := tr.Click(msgs.RecoveryConfirmAction()); err != nil {
-					t.Fatal(err)
-				}
-				awaitFolderChoice(t, updates)()
-				tr.Frame()
-				tr.Frame()
-				s := a.dataRecovery
-				if s.result.Outcome != storeRecoveryVerifiedInstalled || s.problem != "" || string(recoverySavedBytes(t, s.result.ArchivePath)) != string(original) || string(recoverySavedBytes(t, output)) != "later unrelated source bytes" {
-					t.Fatal("confirmed installation lost its captured source, archive or outcome")
-				}
-				var installed storedState
-				if err := json.Unmarshal(recoverySavedBytes(t, a.storePath), &installed); err != nil {
-					t.Fatal(err)
-				}
-				expected.Issues[0].Supplements.AutoContinue = false
-				if !reflect.DeepEqual(installed, expected) {
-					t.Fatal("UI installation changed facts beyond explicit pause")
-				}
-				if a.store != nil || a.storeInitAllowed || a.rt != nil || a.runtimeHelperChecked {
-					t.Fatal("installed fallback activated")
-				}
-				c8RenderEvidence(t, tr, prefix+"-installed", size[0], size[1], msgs.RecoveryQuitAction())
-				quit := 0
-				a.requestQuit = func() { quit++ }
-				if err := tr.Click(msgs.RecoveryQuitAction()); err != nil {
-					t.Fatal(err)
-				}
-				if quit != 1 || !a.quitReady {
-					t.Fatal("GUI Quit did not use the existing shutdown path")
-				}
-				reopened, err := newRuntimeApp()
-				if err != nil {
-					t.Fatal(err)
-				}
-				restored := reopened.selectedContact()
-				if restored.ID != ct.ID || restored.SessionID != ct.SessionID || restored.Issues[0].Executions[0].Status != issueExecutionUnknown || restored.Issues[0].Supplements.AutoContinue || reopened.rt != nil || reopened.runtimeHelperChecked {
-					t.Fatal("ordinary in-process reopen lost IDs/unknown facts or launched Runtime")
-				}
-			})
-		}
-	}
-}
-
 func TestC8RecoveryCancellationErrorsAndStaleSelection(t *testing.T) {
 	for _, restore := range []bool{false, true} {
 		for _, change := range []string{"cancel", "error", "back", "tab-return", "contact", "path", "shutdown"} {
@@ -2469,7 +1412,7 @@ func TestC8RecoveryCancellationErrorsAndStaleSelection(t *testing.T) {
 				}
 				reply <- result
 				awaitFolderChoice(t, updates)()
-				if s.choosing || s.inFlight || s.copy != nil || s.target != nil || s.output != "" || string(recoverySavedBytes(t, path)) != string(before) || a.rt != nil {
+				if s.choosing || s.inFlight || s.copy != nil || s.target != nil || s.output != "" || string(recoverySavedBytes(t, path)) != string(before) || a.pi != nil {
 					t.Fatal("canceled/stale selection wrote or admitted an operation")
 				}
 				if change == "error" {
@@ -2532,7 +1475,8 @@ func TestC8RecoveryRechecksTargetAndDirtyPreview(t *testing.T) {
 					t.Fatal(err)
 				}
 			case "profile":
-				a.ensureSettingsProfileEditor(a.selectedID()).Draft.Name = "keep unsaved profile"
+				a.openContactProfile(a.selectedID())
+				a.profileEditorFor(a.selectedID()).Draft.Name = "keep unsaved profile"
 			case "form":
 				a.connectionForm.Draft.Model = "keep unsaved model"
 			case "context":
@@ -2558,7 +1502,7 @@ func TestC8RecoveryRechecksTargetAndDirtyPreview(t *testing.T) {
 			} else if a.dataRecovery.inFlight {
 				t.Fatal("dirty/stale preview admitted replacement")
 			}
-			if string(recoverySavedBytes(t, a.storePath)) != string(original) || a.store != nil || a.storeInitAllowed || a.rt != nil {
+			if string(recoverySavedBytes(t, a.storePath)) != string(original) || a.store != nil || a.storeInitAllowed || a.pi != nil {
 				t.Fatal("rejected confirmation changed unavailable original or activated app")
 			}
 		})
@@ -2631,7 +1575,7 @@ func TestC8UnsavedRecoveryGuidanceBeforeQuit(t *testing.T) {
 					tr.Type(text)
 					tr.Frame()
 					ct := a.selectedContact()
-					if ct.Draft != text || a.localSaveErr == "" || a.store != nil || a.storeInitAllowed || a.rt != nil {
+					if ct.Draft != text || a.localSaveErr == "" || a.store != nil || a.storeInitAllowed || a.pi != nil {
 						t.Fatal("actual unavailable composer did not retain unsaved text with a failed local save")
 					}
 					if completion != nil {
@@ -2656,7 +1600,7 @@ func TestC8UnsavedRecoveryGuidanceBeforeQuit(t *testing.T) {
 						t.Fatal("unsaved/terminal recovery opened another chooser")
 					default:
 					}
-					if a.dataRecovery.choosing || a.dataRecovery.inFlight || ct.Draft != text || a.store != nil || a.storeInitAllowed || a.rt != nil {
+					if a.dataRecovery.choosing || a.dataRecovery.inFlight || ct.Draft != text || a.store != nil || a.storeInitAllowed || a.pi != nil {
 						t.Fatal("unsaved/terminal recovery admitted another operation or lost open-window text")
 					}
 					if state != "unconfirmed" && string(recoverySavedBytes(t, a.storePath)) != string(original) {
@@ -2765,7 +1709,7 @@ func TestC8UnsavedRecoveryGuidanceBeforeQuit(t *testing.T) {
 					if err != nil {
 						reopened = newUnavailableApp(err)
 					}
-					if reopened.selectedContact().Draft == text || reopened.rt != nil || reopened.runtimeHelperChecked {
+					if reopened.selectedContact().Draft == text || reopened.pi != nil {
 						t.Fatal("fixture unexpectedly durably retained unsaved text or launched execution")
 					}
 				})
@@ -2775,7 +1719,7 @@ func TestC8UnsavedRecoveryGuidanceBeforeQuit(t *testing.T) {
 }
 
 func TestTaskContextPickerAndRecoveryMutualAdmission(t *testing.T) {
-	a, ct, tc, tr, callbacks := contextFileChooserTestApp(t, false)
+	a, ct, tc, tr, callbacks := contextFileChooserTestApp(t)
 	a.storePath = a.store.path
 	before := recoverySavedBytes(t, a.store.path)
 	release := make(chan struct{})
@@ -2807,7 +1751,7 @@ func TestTaskContextPickerAndRecoveryMutualAdmission(t *testing.T) {
 		t.Error("context picker bypassed recovery reservation")
 		return nil, nil
 	}
-	a.chooseTaskContextFile(ct, nil, tc)
+	a.chooseTaskContextFile(ct, tc)
 	if a.contextFilePickers != 0 || tc.fileChoosing || string(recoverySavedBytes(t, a.store.path)) != string(before) {
 		t.Fatal("context choice bypassed actual recovery admission")
 	}
@@ -2826,7 +1770,7 @@ func TestSaveFailureTypingKeepsComposerReturnFocus(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if a.localSaveErr != "" || a.rt != nil {
+			if a.localSaveErr != "" || a.pi != nil {
 				t.Fatal("valid isolated-store setup failed")
 			}
 			ownerID, sessionID := ct.ID, ct.SessionID
@@ -2886,12 +1830,66 @@ func TestSaveFailureTypingKeepsComposerReturnFocus(t *testing.T) {
 			}
 			tr.Type(" again")
 			capture("typed-after-back")
-			if ct.Draft != "before settings again" || a.selectedContact() != ct || ct.ID != ownerID || ct.SessionID != sessionID || a.rt != nil || a.localSaveErr == "" {
+			if ct.Draft != "before settings again" || a.selectedContact() != ct || ct.ID != ownerID || ct.SessionID != sessionID || a.pi != nil || a.localSaveErr == "" {
 				t.Fatal("AC-SAVE2: typing after Back lost exact draft, owner or failed-save state")
 			}
 			if got, err := os.ReadFile(goodPath); err != nil || string(got) != string(goodBytes) {
 				t.Fatal("failed follow-up autosave changed original good disk bytes")
 			}
 		})
+	}
+}
+
+func TestSettingsQoderIntegratedLayout(t *testing.T) {
+	for _, size := range [][2]int{{720, 640}, {1040, 720}, {1380, 900}} {
+		width, height := size[0], size[1]
+		for _, locale := range []string{"en", "zh-Hans"} {
+			for _, dark := range []bool{false, true} {
+				t.Run(fmt.Sprintf("%s-%dx%d-dark-%t", locale, width, height, dark), func(t *testing.T) {
+					a, ct := workspaceTestApp(t)
+					recoveryTestStore(t, a)
+					a.windowWidth = width
+					config := testConnectionConfig(t)
+					a.connectionSaved, a.connectionEffective = &config, &config
+					a.connectionForm = newConnectionSettings(&config, config.WorkingDirectory)
+					ct.Draft = "Keep the actual draft while inspecting settings layout"
+					a.openSettingsTab(settingsTabConnection, settingsSourceRail)
+					var viewport ui.Rect
+					tr := ui.NewTester(func(c *ui.Context) {
+						ui.Box(c).Fill().DrawOver(func(_ *ui.Painter, _ ui.Rect) { viewport = a.settingsScroll.Bounds(c) }).Children(func() { a.view(c) })
+					}, width, height)
+					tr.SetLocale(locale)
+					tr.SetDark(dark)
+					tr.Frame()
+					if dir := os.Getenv("NAGI_PREVIEW_DIR"); dir != "" {
+						writePreviewPNG(t, filepath.Join(dir, fmt.Sprintf("qoder-layout-%s-%dx%d-dark-%t-top.png", locale, width, height, dark)), tr.Image())
+					}
+					msgs := locales.In(locale)
+					// The scrolling viewport belongs to the main pane, not its readable column.
+					if viewport.W <= 0 || float32(width)-(viewport.X+viewport.W) > 9 {
+						t.Errorf("scroll viewport stops before main-pane edge: viewport=%+v window=%d", viewport, width)
+					}
+					general, ok := tr.Find(msgs.SettingsGeneral())
+					if !ok {
+						t.Fatal("General navigation row missing")
+					}
+					connection, ok := tr.Find(msgs.SettingsConnection())
+					if !ok {
+						t.Fatal("Connection navigation row missing")
+					}
+					if general.X != connection.X || general.W != connection.W || viewport.X-(connection.X+connection.W) > 24 {
+						t.Errorf("navigation rows do not fill the sidebar group: general=%+v connection=%+v viewport=%+v", general, connection, viewport)
+					}
+					if ct.Draft != "Keep the actual draft while inspecting settings layout" || ct.pendingSend != nil {
+						t.Fatal("rendering settings changed the conversation draft")
+					}
+					a.selectSettingsTab(settingsTabAppearance)
+					tr.Frame()
+					if dir := os.Getenv("NAGI_PREVIEW_DIR"); dir != "" {
+						writePreviewPNG(t, filepath.Join(dir, fmt.Sprintf("qoder-layout-%s-%dx%d-dark-%t-general.png", locale, width, height, dark)), tr.Image())
+					}
+				})
+			}
+		}
 	}
 }

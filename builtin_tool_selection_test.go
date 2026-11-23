@@ -6,9 +6,10 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/egoist/mygo/ui"
+
+	"github.com/HeimaoLST/Nagi/locales"
 )
 
 func builtinToolsForTest() []runtimeBuiltinTool {
@@ -41,23 +42,39 @@ func storedBuiltinToolsForTest(t *testing.T, path string) (present bool, raw str
 
 func clickProfileAction(t *testing.T, tr *ui.Tester, label string) {
 	t.Helper()
-	if err := clickSettingsAction(tr, label); err != nil {
+	if err := clickBotProfileAction(tr, label); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
 }
 
+func freshBuiltinProfileTestApp(t *testing.T) (*appModel, *contact) {
+	t.Helper()
+	root := t.TempDir()
+	store, err := openContactStore(filepath.Join(root, "contacts.json"), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	syntheticBuiltinDefaults := []string{"bash", "edit", "read", "write"}
+	a := &appModel{
+		storePath: store.path, workDir: root, windowWidth: 1040,
+		connectionManaged: true, runtimeStatus: runtimeStateReady,
+		runtimeBuiltinTools: builtinToolsForTest(), runtimeBuiltinToolsLoaded: true,
+		runtimeBuiltinDefaults: syntheticBuiltinDefaults,
+	}
+	applyStoreSelection(a, store)
+	a.bindTaskContexts()
+	return a, a.selectedContact()
+}
+
 // This regression is expressed through the actual profile UI, not by assigning
 // the draft field. The old UI fails because it has no built-in-tool entry.
 func TestContactProfileShowsBuiltinToolSelection(t *testing.T) {
-	a, ct := taskContextApp(t)
-	a.connectionManaged = true
-	a.runtimeStatus = runtimeStateReady
-	a.runtimeBuiltinTools = builtinToolsForTest()
-	a.runtimeBuiltinToolsLoaded = true
-	a.openSettingsTab(settingsTabContact, settingsSourceRail)
+	a, ct := freshBuiltinProfileTestApp(t)
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
+	openBotProfileFromRail(t, tr, locales.In("en").AvatarContactLabel(ct.Name))
+	editor := a.profileEditorFor(ct.ID)
 	if !tr.HasText("Built-in tools") || !tr.HasText("Use host defaults (bash, edit, read, write)") {
 		t.Fatalf("contact profile has no built-in tool selection entry: %v", tr.Texts())
 	}
@@ -67,6 +84,9 @@ func TestContactProfileShowsBuiltinToolSelection(t *testing.T) {
 
 	// Save the omitted/default value: the store must keep the field absent.
 	clickProfileAction(t, tr, "Save changes")
+	if editor.Error != "" || editor.Status != profileNoticeSavedDefaults || a.localSaveErr != "" {
+		t.Fatalf("default profile save failed: editor=%+v local=%q", editor, a.localSaveErr)
+	}
 	if ct.BuiltinTools != nil {
 		t.Fatalf("saving default changed it into an explicit selection: %v", ct.BuiltinTools)
 	}
@@ -79,21 +99,38 @@ func TestContactProfileShowsBuiltinToolSelection(t *testing.T) {
 	for _, name := range []string{"bash", "edit", "write"} {
 		clickProfileAction(t, tr, name)
 	}
-	if got := a.settingsContactEditor().Draft.BuiltinTools; got == nil || len(*got) != 1 || (*got)[0] != "read" {
+	if got := editor.Draft.BuiltinTools; got == nil || len(*got) != 1 || (*got)[0] != "read" {
 		t.Fatalf("UI subset draft = %v", got)
 	}
 	clickProfileAction(t, tr, "Save changes")
+	if editor.Error != "" || editor.Status != profileNoticeSavedDefaults || a.localSaveErr != "" {
+		t.Fatalf("subset profile save failed: editor=%+v local=%q", editor, a.localSaveErr)
+	}
 	if ct.BuiltinTools == nil || len(*ct.BuiltinTools) != 1 || (*ct.BuiltinTools)[0] != "read" {
 		t.Fatalf("saved subset = %v", ct.BuiltinTools)
+	}
+	present, raw := storedBuiltinToolsForTest(t, a.store.path)
+	if !present {
+		t.Fatal("explicit subset store field is missing")
+	}
+	var subset []string
+	if err := json.Unmarshal([]byte(raw), &subset); err != nil {
+		t.Fatalf("explicit subset is not a string array: raw=%q err=%v", raw, err)
+	}
+	if subset == nil || len(subset) != 1 || subset[0] != "read" {
+		t.Fatalf("explicit subset store shape = %#v", subset)
 	}
 
 	// Empty the explicit subset. This is not the host default and must persist
 	// as a non-nil empty slice.
 	clickProfileAction(t, tr, "read")
-	if got := a.settingsContactEditor().Draft.BuiltinTools; got == nil || len(*got) != 0 {
+	if got := editor.Draft.BuiltinTools; got == nil || len(*got) != 0 {
 		t.Fatalf("UI empty draft = %v", got)
 	}
 	clickProfileAction(t, tr, "Save changes")
+	if editor.Error != "" || editor.Status != profileNoticeSavedDefaults || a.localSaveErr != "" {
+		t.Fatalf("empty profile save failed: editor=%+v local=%q", editor, a.localSaveErr)
+	}
 	if ct.BuiltinTools == nil || len(*ct.BuiltinTools) != 0 {
 		t.Fatalf("saved empty selection = %v", ct.BuiltinTools)
 	}
@@ -112,6 +149,7 @@ func TestContactProfileShowsBuiltinToolSelection(t *testing.T) {
 func TestContactProfileBuiltinChecksAreKeyboardReachable(t *testing.T) {
 	editor := newContactProfileEditor(profileDraftForTest(t))
 	editor.BuiltinTools = builtinToolsForTest()
+	editor.BuiltinDefaults = []string{"bash", "edit", "read", "write"}
 	editor.BuiltinToolsLoaded = true
 	editor.BuiltinToolsSupported = true
 	tr := contactProfileTester(editor, contactProfileActions{}, 560, 1200)
@@ -143,12 +181,9 @@ func TestContactProfileBuiltinChecksAreKeyboardReachable(t *testing.T) {
 }
 
 func TestContactStorePreservesDefaultAndExplicitEmptyBuiltinTools(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "contacts.json")
-	legacy := storedState{Version: 9, Selected: "c1", Contacts: []storedContact{{ID: "c1", Name: "Saki"}}}
-	if err := writeStoredState(path, legacy); err != nil {
-		t.Fatal(err)
-	}
-	store, err := openContactStore(path, "/tmp")
+	root := t.TempDir()
+	path := filepath.Join(root, "contacts.json")
+	store, err := openContactStore(path, root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -156,7 +191,7 @@ func TestContactStorePreservesDefaultAndExplicitEmptyBuiltinTools(t *testing.T) 
 	if ct.BuiltinTools != nil {
 		t.Fatalf("missing field did not use Runtime default: %v", ct.BuiltinTools)
 	}
-	if err := store.save([]*contact{ct}, "c1"); err != nil {
+	if err := store.save([]*contact{ct}, ct.ID); err != nil {
 		t.Fatal(err)
 	}
 	if present, raw := storedBuiltinToolsForTest(t, path); present {
@@ -165,7 +200,7 @@ func TestContactStorePreservesDefaultAndExplicitEmptyBuiltinTools(t *testing.T) 
 
 	empty := []string{}
 	ct.BuiltinTools = &empty
-	if err := store.save([]*contact{ct}, "c1"); err != nil {
+	if err := store.save([]*contact{ct}, ct.ID); err != nil {
 		t.Fatal(err)
 	}
 	if present, raw := storedBuiltinToolsForTest(t, path); !present || strings.TrimSpace(raw) != "[]" {
@@ -182,18 +217,19 @@ func TestContactStorePreservesDefaultAndExplicitEmptyBuiltinTools(t *testing.T) 
 }
 
 func TestContactProfileBuiltinSelectionIsPerContact(t *testing.T) {
-	a, first := taskContextApp(t)
-	a.connectionManaged = true
+	a, first := freshBuiltinProfileTestApp(t)
 	second := &contact{ID: "second", Name: "Mio", Role: "Assistant"}
 	read := []string{"read"}
 	second.BuiltinTools = &read
 	a.contacts = append(a.contacts, second)
-	a.runtimeStatus = runtimeStateReady
-	a.runtimeBuiltinTools = builtinToolsForTest()
-	a.runtimeBuiltinToolsLoaded = true
+	a.openContactProfile(first.ID)
+	editor := a.profileEditorFor(first.ID)
+	if editor == nil {
+		t.Fatal("first contact profile editor is unavailable")
+	}
 	empty := []string{}
 	if !a.saveContactProfileDraftFor(first.ID, profileDraft{Name: first.Name, BuiltinTools: &empty}, false) {
-		t.Fatalf("save first = %s", a.profileEditorFor(first.ID).Error)
+		t.Fatalf("save first = %q; local=%q", editor.Error, a.localSaveErr)
 	}
 	if second.BuiltinTools == nil || len(*second.BuiltinTools) != 1 || (*second.BuiltinTools)[0] != "read" {
 		t.Fatalf("saving first changed second: %v", second.BuiltinTools)
@@ -204,19 +240,16 @@ func TestContactProfileBuiltinSelectionIsPerContact(t *testing.T) {
 }
 
 func TestContactProfileBuiltinSaveFailureKeepsDraft(t *testing.T) {
-	a, ct := taskContextApp(t)
-	a.connectionManaged = true
-	a.runtimeStatus = runtimeStateReady
-	a.runtimeBuiltinTools = builtinToolsForTest()
-	a.runtimeBuiltinToolsLoaded = true
+	a, ct := freshBuiltinProfileTestApp(t)
 	a.store.path = t.TempDir()
-	a.openSettingsTab(settingsTabContact, settingsSourceRail)
-	editor := a.settingsContactEditor()
-	read := []string{"read"}
-	editor.Draft.BuiltinTools = &read
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	if err := clickSettingsAction(tr, "Save changes"); err != nil {
+	openBotProfileFromRail(t, tr, locales.In("en").AvatarContactLabel(ct.Name))
+	editor := a.profileEditorFor(ct.ID)
+	read := []string{"read"}
+	editor.Draft.BuiltinTools = &read
+	tr.Frame()
+	if err := clickBotProfileAction(tr, locales.In("en").ContactSaveChanges()); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
@@ -232,70 +265,61 @@ func TestContactProfileBuiltinSaveFailureKeepsDraft(t *testing.T) {
 }
 
 func TestBuiltinToolCatalogErrorDoesNotOfferDeadRetry(t *testing.T) {
-	a, _ := workspaceTestApp(t)
+	a, ct := freshBuiltinProfileTestApp(t)
 	a.connectionManaged = true
 	a.runtimeStatus = runtimeStateFailed
+	a.runtimeBuiltinToolsLoaded = false
 	a.runtimeBuiltinToolsErr = "Runtime tool list unavailable."
-	a.openSettingsTab(settingsTabContact, settingsSourceRail)
+	a.openContactProfile(ct.ID)
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
 	if !tr.HasText("Runtime tool list unavailable.") || tr.HasText("Retry built-in tools") {
 		t.Fatalf("unavailable runtime rendered a dead retry: %v", tr.Texts())
 	}
 
-	a.runtimeStatus = runtimeStateReady
-	a.rt = &runtimeClient{}
-	a.runtimeBuiltinToolsLoaded = false
+	config := testConnectionConfig(t)
+	a.connectionPath = connectionConfigPath(a.store.path)
+	if err := saveConnectionConfig(a.connectionPath, config); err != nil {
+		t.Fatal(err)
+	}
+	saved, err := loadConnectionConfig(a.connectionPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.connectionSaved = &saved
 	a.runtimeBuiltinToolsErr = "Catalog could not be read."
 	tr.Frame()
+	if !tr.HasText("Catalog could not be read.") || tr.HasText("Retry built-in tools") {
+		t.Fatalf("saved settings without a recovery path rendered a dead retry: %v", tr.Texts())
+	}
+	a.runtimeStage = startupStageLocalStore
+	tr.Frame()
 	if !tr.HasText("Catalog could not be read.") || !tr.HasText("Retry built-in tools") {
-		t.Fatalf("available runtime did not expose retry: %v", tr.Texts())
+		t.Fatalf("configured startup recovery did not expose retry: %v", tr.Texts())
 	}
-}
-
-func TestModelPanelShowsEffectiveBuiltinTools(t *testing.T) {
-	render := func(builtin []string) *ui.Tester {
-		config := runtimeConnectionConfig{SessionID: "s1", ConfigRevision: 3}
-		config.EffectiveConfig.Model = "fixture"
-		config.EffectiveConfig.ToolSelection.Builtin = builtin
-		selection := newModelSelection(modelSelectionTarget{Kind: "conversation", Label: "Saki", Config: config}, runtimeModelCatalog{})
-		return ui.NewTester(func(c *ui.Context) {
-			theme := resolveWorkbenchTheme(false).Theme
-			c.SetTheme(theme)
-			ui.Scroll(c).Fill().Padding(16).Children(func() {
-				selection.view(c, theme, modelSelectionActions{})
-			})
-		}, 1040, 720)
-	}
-	tr := render([]string{"read"})
-	tr.Frame()
-	if !tr.HasText("Effective built-in tools: read") {
-		t.Fatalf("effective tool selection missing: %v", tr.Texts())
-	}
-	tr = render(nil)
-	tr.Frame()
-	if !tr.HasText("Effective built-in tools: none") {
-		t.Fatalf("empty effective tool selection missing: %v", tr.Texts())
+	if a.pi != nil || a.connectionProbe != nil || a.connectionApplying || a.connectionTesting || a.runtimeAvailableForView() {
+		t.Fatal("catalog error presentation started a host/probe/apply or fabricated runtime readiness")
 	}
 }
 
 func TestFirstUseBuiltinSelectionRequiresManagedConnection(t *testing.T) {
-	a, ct := taskContextApp(t)
+	a, ct := freshBuiltinProfileTestApp(t)
 	a.connectionManaged = false
-	a.runtimeStatus = runtimeStateReady
-	a.runtimeBuiltinTools = builtinToolsForTest()
-	a.runtimeBuiltinToolsLoaded = true
+	a.openContactProfile(ct.ID)
+	editor := a.profileEditorFor(ct.ID)
+	if editor == nil {
+		t.Fatal("first-use contact profile editor is unavailable")
+	}
 	read := []string{"read"}
 	if a.saveContactProfileDraftFor(ct.ID, profileDraft{Name: ct.Name, BuiltinTools: &read}, false) {
 		t.Fatal("legacy connection accepted an explicit built-in selection")
 	}
+	if editor.Error != builtinNoticeManaged {
+		t.Fatalf("first-use selection rejected for the wrong reason: %q", editor.Error)
+	}
 	if ct.BuiltinTools != nil {
 		t.Fatalf("legacy rejection changed profile: %v", ct.BuiltinTools)
 	}
-	if got := a.capturedBuiltinSelection(ct); got != nil {
-		t.Fatalf("legacy nil default became explicit: %v", got)
-	}
-	a.openSettingsTab(settingsTabContact, settingsSourceRail)
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
 	if !tr.HasText("Save and Apply a managed Nagi connection") || tr.HasText("Use host defaults") {
@@ -304,7 +328,7 @@ func TestFirstUseBuiltinSelectionRequiresManagedConnection(t *testing.T) {
 }
 
 func TestPreviewBuiltinToolSelection(t *testing.T) {
-	dir := os.Getenv("SAKI_PREVIEW_DIR")
+	dir := os.Getenv("NAGI_PREVIEW_DIR")
 	if dir == "" {
 		dir = t.TempDir()
 	}
@@ -320,15 +344,11 @@ func TestPreviewBuiltinToolSelection(t *testing.T) {
 			name string
 			w, h int
 		}{{"1040x720", 1040, 720}, {"720x640", 720, 640}} {
-			a, _ := taskContextApp(t)
-			a.connectionManaged = true
+			a, _ := freshBuiltinProfileTestApp(t)
 			a.windowWidth = size.w
-			a.runtimeStatus = runtimeStateReady
-			a.runtimeBuiltinTools = builtinToolsForTest()
-			a.runtimeBuiltinToolsLoaded = true
-			a.openSettingsTab(settingsTabContact, settingsSourceRail)
+			a.openContactProfile(a.selectedID())
 			read := []string{"read"}
-			a.settingsContactEditor().Draft.BuiltinTools = &read
+			a.profileEditorFor(a.selectedID()).Draft.BuiltinTools = &read
 			tr := ui.NewTester(a.view, size.w, size.h)
 			tr.SetDark(dark)
 			tr.Frame()
@@ -338,75 +358,10 @@ func TestPreviewBuiltinToolSelection(t *testing.T) {
 				if headerOK && header.Y >= 0 && header.Y < 120 && lastOK && last.Y >= 0 && last.Y+last.H <= float32(size.h) {
 					break
 				}
-				tr.Scroll(float32(size.w)/2, float32(size.h)/2, 0, 120)
+				tr.Scroll(float32(size.w-40), float32(size.h)/2, 0, 120)
 				tr.Frame()
 			}
 			writePreviewPNG(t, filepath.Join(dir, "builtin-tool-selection-"+theme+"-"+size.name+".png"), tr.Image())
 		}
 	}
-}
-
-func TestBuiltinCatalogRetryUsesRuntimeAndKeepsDraft(t *testing.T) {
-	a, ct := taskContextApp(t)
-	a.connectionManaged = true
-	a.runtimeStatus = runtimeStateReady
-	selected := []string{"fixture-read"}
-	ct.BuiltinTools = &selected
-	a.openSettingsTab(settingsTabContact, settingsSourceRail)
-	editor := a.settingsContactEditor()
-	editor.Draft.Name = "Unsaved profile"
-	callbacks := make(chan func(), 8)
-	a.setUIHook(func(fn func()) { callbacks <- fn })
-	runtime := startTestRuntime(t, "RUNTIME_TOOLS_FAIL_FIRST=1")
-	a.rt = runtime.client
-	consume := func() {
-		t.Helper()
-		select {
-		case fn := <-callbacks:
-			fn()
-		case <-time.After(5 * time.Second):
-			t.Fatal("tool catalog UI callback did not arrive")
-		}
-	}
-	request := func(want string) {
-		t.Helper()
-		select {
-		case got := <-runtime.stderr:
-			if got != "tools-fixture:"+want {
-				t.Fatalf("unexpected RPC: %q, want %q", got, want)
-			}
-		case <-time.After(5 * time.Second):
-			t.Fatal("tool catalog RPC trace did not arrive")
-		}
-	}
-	a.startBuiltinToolsLoad(runtime.client, a.connectionGeneration)
-	consume()
-	if a.metadataInFlight != 0 {
-		t.Fatalf("catalog error callback left metadata in flight: %d", a.metadataInFlight)
-	}
-	request("tool.list")
-	tr := ui.NewTester(a.view, 1040, 720)
-	tr.Frame()
-	if a.runtimeBuiltinToolsLoaded || !tr.HasText("controlled tool catalog failure") || !tr.HasText("Retry built-in tools") {
-		t.Fatalf("catalog failure is not recoverable: %v", tr.Texts())
-	}
-	if err := clickSettingsAction(tr, "Retry built-in tools"); err != nil {
-		t.Fatal(err)
-	}
-	consume()
-	if a.metadataInFlight != 0 {
-		t.Fatalf("catalog success callback left metadata in flight: %d", a.metadataInFlight)
-	}
-	request("tool.list")
-	tr.Frame()
-	if !a.runtimeBuiltinToolsLoaded || a.runtimeBuiltinToolsErr != "" || !tr.HasText("fixture-read") || tr.HasText("Retry built-in tools") {
-		t.Fatalf("retry did not use the returned catalog: %v", tr.Texts())
-	}
-	if editor.Draft.Name != "Unsaved profile" || !builtinToolsEqual(editor.Draft.BuiltinTools, &selected) || ct.Name == editor.Draft.Name {
-		t.Fatal("catalog failure/retry changed the draft or saved profile")
-	}
-	if err := runtime.client.shutdown(); err != nil {
-		t.Fatal(err)
-	}
-	request("runtime.shutdown")
 }

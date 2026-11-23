@@ -31,7 +31,7 @@ func appearanceThemeDirectory(directory string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(configDir, "Saki", "themes"), nil
+	return filepath.Join(configDir, "Nagi", "themes"), nil
 }
 
 func (a *appModel) reloadAppearanceThemes() {
@@ -154,6 +154,10 @@ func (a *appModel) resolveAppearanceTheme(dark bool) appearanceThemeResolution {
 			palette := theme.Palette
 			controls := *palette.Theme
 			palette.Theme = &controls
+			palette.Link = palette.Theme.Accent
+			palette.InputBorder = palette.Theme.Border
+			palette.ChromeFrom, palette.ChromeTo, palette.Tertiary = palette.Rail, palette.Rail, palette.Theme.TextMuted
+			palette.NavHover, palette.NavSelected = palette.Theme.SurfaceHover, palette.Theme.Selection
 			result.Palette, result.EffectiveID, result.Warnings = palette, id, theme.Warnings
 			return result
 		}
@@ -192,8 +196,7 @@ const (
 	appearanceStatusSaveFailed = "save-failed"
 )
 
-// normalizeAppearanceMode treats every absent or unknown stored value as the
-// legacy system-following default. It never writes a new preference file.
+// normalizeAppearanceMode treats absent or unknown values as system-following.
 func normalizeAppearanceMode(mode string) string {
 	switch strings.TrimSpace(mode) {
 	case appearanceLight:
