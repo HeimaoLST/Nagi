@@ -12,7 +12,8 @@ import {
   type ActivityState, type BotProfile, type Connection, type Draft, type Execution,
   type Material, type OpenParams, type Operation, type ProductCommand,
 } from './protocol.js';
-import { backupProductProfile, openProductProfile, readPrivateConnection, saveCredential, writeProductFile, type PrivateConnection, type ProductProfilePaths, type StoredConnection } from './product-profile.js';
+import { backupProductProfile, readPrivateConnection, saveCredential, type PrivateConnection, type ProductProfilePaths, type StoredConnection } from './product-profile.js';
+import { ProductSQLite } from './product-sqlite.js';
 
 const emptyDraft = (): Draft => ({ revision: 0, text: '', materials: [] });
 const newId = randomUUID;
@@ -172,6 +173,8 @@ function toolText(value: unknown, isError = false): ToolTextResult {
 }
 
 export class Product {
+  private readonly storage: ProductSQLite;
+  private storageClosed = false;
   private profile: ProductProfile;
   private credentials: PrivateConnection | undefined;
   private stream?: { streamId: string; seq: number };
@@ -183,8 +186,18 @@ export class Product {
 
   constructor(private paths: ProductProfilePaths, private engine: ProductEngine, private sendFrame: (frame: object) => Promise<void>) {
     this.credentials = readPrivateConnection(paths.credentialsPath);
-    this.profile = openProductProfile(paths, this.credentials);
-    this.effectiveRevision = this.profile.appliedRevision;
+    this.storage = new ProductSQLite(paths.profilePath);
+    try {
+      this.profile = this.storage.open(paths, this.credentials);
+      this.effectiveRevision = this.profile.appliedRevision;
+      this.recoverInterruptedWork();
+    } catch (error) {
+      this.close();
+      throw error;
+    }
+  }
+
+  private recoverInterruptedWork(): void {
     if (this.profile.executions.some(live) || this.profile.activities.some(activity => activity.questions.some(question => question.delivery === 'dispatching'))) {
       this.commit(candidate => {
         for (const execution of candidate.executions.filter(live)) {
@@ -211,10 +224,17 @@ export class Product {
     }
   }
 
+  close(): void {
+    if (!this.storageClosed) {
+      this.storage.close();
+      this.storageClosed = true;
+    }
+  }
+
   private commit<T>(mutate: (candidate: ProductProfile) => T): T {
     const candidate = structuredClone(this.profile);
     const result = mutate(candidate);
-    writeProductFile(this.paths.profilePath, candidate);
+    this.storage.write(candidate);
     this.profile = candidate;
     return result;
   }
@@ -359,11 +379,12 @@ export class Product {
     if (method === 'app.shutdown') {
       this.closing = true;
       await this.engine.drain();
+      this.close();
       await respond({ drained: true });
       return;
     }
     if (method === 'connection.test') {
-      await this.engine.test(command.params.configuration);
+      await this.engine.test(this.resolveCredential(command.params.configuration));
       await respond({ verified: true });
       return;
     }
@@ -396,7 +417,7 @@ export class Product {
           const bot = this.bot(candidate, params.botId);
           requireRevision(bot.profileRevision, params.expectedRevision);
           if (bot.archived) stateError('conversation_read_only', 'Restore this Bot before editing');
-          this.validateProfile(params.profile);
+          this.validateProfile(params.profile, bot.profile.workspace);
           if (params.startNewConversation) {
             const old = this.conversation(candidate, bot.currentConversationId);
             const execution = this.execution(candidate, old.latestExecutionId);
@@ -509,20 +530,29 @@ export class Product {
       }
       case 'profile.backup':
         if (this.active.size) stateError('busy', 'Finish or stop active work before saving a recovery copy');
-        return backupProductProfile(this.paths, command.params.destination);
+        return backupProductProfile(this.paths, this.profile, command.params.destination);
       case 'operation.get':
         return this.operation(command.params.operationId);
     }
   }
 
-  private validateProfile(profile: BotProfile): void {
-    if (!Value.Check(profileSchema, profile) || !profile.name.trim() || profile.workspace && !isAbsolute(profile.workspace)) {
+  private validateProfile(profile: BotProfile, savedWorkspace = ''): void {
+    if (!Value.Check(profileSchema, profile) || !profile.name.trim() ||
+        profile.workspace && profile.workspace !== savedWorkspace && !isAbsolute(profile.workspace)) {
       stateError('invalid_params', 'The Bot requires a name and an absolute workspace when specified');
     }
   }
 
+  private resolveCredential(configuration: Connection): Connection {
+    if (configuration.apiKey.trim()) return configuration;
+    const saved = this.connection(this.profile, this.profile.savedRevision);
+    const apiKey = saved && this.credentials?.sources[saved.sourceId]?.api_key;
+    if (!apiKey?.trim()) stateError('invalid_params', 'An API key is required');
+    return { ...configuration, apiKey };
+  }
+
   private saveConnection(params: { operationId: string; configuration: Connection }) {
-    const config = params.configuration;
+    const config = this.resolveCredential(params.configuration);
     const visible = { operationId: params.operationId, configuration: nonsecret(config) };
     const prior = this.sameOperation('connection.save', params.operationId, visible, config.apiKey);
     if (prior) return prior.reply;
@@ -549,6 +579,17 @@ export class Product {
     if (this.active.size >= configuration.maxActiveTasks) stateError('busy', 'The configured execution capacity is full');
   }
 
+  private composeInitialInstructions(profile: BotProfile, cwd: string): string {
+    const name = profile.name.trim();
+    const purpose = profile.purpose.trim();
+    const sections = [];
+    if (name) sections.push(`You are ${name}.`);
+    if (purpose) sections.push(`Purpose:\n${purpose}`);
+    sections.push(profile.instructions.trim(),
+      `Default working directory: ${cwd}. Do not modify or write files outside this directory unless the user explicitly asks.`);
+    return sections.filter(Boolean).join('\n\n');
+  }
+
   private async prepareSession(owner: ProductActor, existing: SessionBinding | undefined, bot: Bot) {
     const contextId = existing?.contextId ?? newId();
     const cached = this.sessions.get(contextId);
@@ -561,7 +602,7 @@ export class Product {
     const activityId = 'activityId' in owner ? owner.activityId : undefined;
     const profileRevision = existing?.profileRevision ?? bot.profileRevision;
     const cwd = existing?.cwd ?? (bot.profile.workspace || configuration.workingDirectory);
-    const instructions = existing?.instructions ?? [bot.profile.purpose, bot.profile.instructions].filter(Boolean).join('\n\n');
+    const instructions = existing?.instructions ?? this.composeInitialInstructions(bot.profile, cwd);
     const codingTools = existing ? existing.codingTools : bot.profile.codingTools;
     const session = await this.engine.open({
       contextId, botId: bot.botId, purpose: activityId ? 'activity' : 'conversation', activityId,

@@ -566,15 +566,19 @@ func (a *appModel) addRuntimeContact() {
 	if a.demo || a.connectionEffective != nil {
 		workspace = a.workDir
 	}
+	profile := pi.ProductBotProfile{Name: locales.In(a.uiLocale).NewContactName(len(a.contacts) + 1), Role: "Assistant", Workspace: workspace}
+	if err := a.createContact(profile, newContactID()); err != nil {
+		a.selectedContact().setSendError(a.connectionSafeMessage(err), "", "")
+	}
+}
+
+func (a *appModel) createContact(profile pi.ProductBotProfile, operationID string) error {
 	if host := a.productHost(); host != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		bot, err := host.product.CreateBot(ctx, pi.ProductBotCreateParams{OperationID: newContactID(),
-			Profile: pi.ProductBotProfile{Name: locales.In(a.uiLocale).NewContactName(len(a.contacts) + 1), Role: "Assistant", Workspace: workspace},
-		})
+		bot, err := host.product.CreateBot(ctx, pi.ProductBotCreateParams{OperationID: operationID, Profile: profile})
 		if err != nil {
-			a.selectedContact().setSendError(a.connectionSafeMessage(err), "", "")
-			return
+			return err
 		}
 		ct := productContact(bot)
 		ct.Loaded = true
@@ -582,24 +586,25 @@ func (a *appModel) addRuntimeContact() {
 		host.productBots[ct.ID] = bot
 		a.contacts = append(a.contacts, ct)
 		a.selectContact(len(a.contacts) - 1)
-		a.contactSearch, a.focusComposer = "", true
-		return
+	} else {
+		ct := productContact(pi.ProductBot{BotID: newContactID(), Profile: profile})
+		ct.WorkLabel = "Preparing a reply"
+		ct.Context.OnChange = a.persist
+		contacts, selected, store := a.contacts, a.selected, a.store
+		a.contacts = append(a.contacts, ct)
+		a.selected = len(a.contacts) - 1
+		if err := a.persist(); err != nil {
+			a.contacts, a.selected, a.store = contacts, selected, store
+			return err
+		}
+		a.contextFileGeneration++
+		a.priorChats = nil
+		a.focusPreviousChats = false
+		a.aux, a.composerPanel = "", ""
+		a.composerFocusContext = false
 	}
-	c := &contact{
-		ID:        newContactID(),
-		Name:      locales.In(a.uiLocale).NewContactName(len(a.contacts) + 1),
-		Role:      "Assistant",
-		Status:    statusReady,
-		WorkLabel: "Preparing a reply",
-		Workspace: workspace,
-	}
-	c.Context.OnChange = a.persist
-	a.contacts = append(a.contacts, c)
-	a.selected = len(a.contacts) - 1
-	a.contactSearch = ""
-	a.aux = ""
-	a.focusComposer = true
-	a.persist()
+	a.contactSearch, a.focusComposer = "", true
+	return nil
 }
 
 func (a *appModel) normalizeRestoredSupplementBatches() {

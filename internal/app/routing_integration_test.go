@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -26,14 +27,48 @@ func openBotProfileFromRail(t *testing.T, tr *ui.Tester, label string) {
 	}
 }
 
+func choosePopoverMenuItem(tr *ui.Tester, item string) error {
+	count := 0
+	for _, text := range tr.Texts() {
+		if text == item {
+			count++
+		}
+	}
+	if count == 0 {
+		return fmt.Errorf("popover menu item %q not shown: %v", item, tr.Texts())
+	}
+	if count <= 2 {
+		if err := tr.Click(item); err != nil {
+			return err
+		}
+		tr.Frame()
+		return nil
+	}
+	tr.Advance(2 * time.Second)
+	typed := false
+	for _, r := range strings.ToLower(item) {
+		if r >= 'a' && r <= 'z' {
+			tr.TypeKey(0, ui.KeyA+ui.Key(r-'a'), string(r))
+			typed = true
+			continue
+		}
+		break
+	}
+	if !typed {
+		return fmt.Errorf("popover menu item %q duplicated outside menu without ASCII prefix: %v", item, tr.Texts())
+	}
+	tr.Key(0, ui.KeyEnter)
+	tr.Frame()
+	return nil
+}
+
 func chooseBotProfileFromRail(tr *ui.Tester, label string) error {
 	if err := tr.RightClick(label); err != nil {
 		return err
 	}
-	if err := tr.ChooseMenuItem(locales.In("en").ContactProfileAction()); err != nil {
+	if err := choosePopoverMenuItem(tr, locales.In("en").ContactProfileAction()); err != nil {
 		return fmt.Errorf("open %q profile: %w", label, err)
 	}
-	tr.Frame()
 	return nil
 }
 
@@ -89,10 +124,9 @@ func TestBotRailSecondaryClickTargetsNonselectedBot(t *testing.T) {
 			if app.selectedContact() != first {
 				t.Fatal("secondary click changed the selected chat")
 			}
-			if err := tr.ChooseMenuItem(msgs.ContactProfileAction()); err != nil {
+			if err := choosePopoverMenuItem(tr, msgs.ContactProfileAction()); err != nil {
 				t.Fatal(err)
 			}
-			tr.Frame()
 			if app.settingsOpen || app.selectedContact() != first || !tr.HasText(msgs.FieldNameAccessible()) {
 				t.Fatalf("the profile replaced Settings or switched the chat: %v", tr.Texts())
 			}

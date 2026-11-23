@@ -26,6 +26,14 @@
 
 **Prevention:** Reuse pinned components, official examples and shared helpers; record the concrete unsupported behavior before custom UI. Reacquire the action after navigation, verify expansion/current editor state and actual text-input versus button focus, and use exact labels with positive viewport geometry. Prefer the real pane or bounded keyboard traversal, and inspect all affected helpers rather than fixing one control.
 
+### Drive PopoverMenu overlays and modal opener focus explicitly
+
+**Problem:** Switching a row menu from native `ContextMenu` to MyGo’s themed `PopoverMenu` broke `Tester.ChooseMenuItem` fixtures, duplicate panel headings captured `Tester.Click`, and dismissing a `DialogBase`/`Modal` lost return focus to the opener.
+
+**Cause or correction:** `Tester.ChooseMenuItem` queries only the native host menu, whereas `PopoverMenu` renders ordinary in-window overlay elements. `DialogBase`/`Modal` restores focus to whichever control held focus when it opened.
+
+**Prevention:** Drive `PopoverMenu` through in-window pointer clicks (or keyboard navigation / menu geometry when another surface shares an item label). Focus the triggering button before opening a modal so Cancel, Escape and backdrop dismissal automatically restore focus cleanly.
+
 ### Handle SegmentedBase clamping, focus and border jitter
 
 **Problem:** An invalid stored segment can silently appear as option 0 while the repair path is suppressed, so clicking option 0 cannot correct it. Focus can target the track instead of a segment, and a focus border can change layout width.
@@ -123,6 +131,22 @@
 **Cause or correction:** Supported tools and default selections are distinct ready facts. Configured idle Retry presentation does not require a live host; a retired stub proves neither configuration nor Pi readiness.
 
 **Prevention:** Supply explicit independent defaults, preserve nil/empty/subset semantics and exercise actual keyboard controls. Use a fresh current store with saved valid configuration for offline Retry presentation, and keep unconfigured blocking separate from process-level Retry evidence.
+
+### Track saved worker credentials separately from plaintext form drafts
+
+**Problem:** Reopening Settings displayed a saved API key as unset and forced users to re-enter it before saving or testing other fields, while relaxing validation globally weakened standalone plaintext forms.
+
+**Cause or correction:** The product worker omits plaintext keys from IPC snapshots and reports `credentialPresent`, whereas standalone forms supply plaintext keys directly.
+
+**Prevention:** Propagate `CredentialPresent` into the form independently of `Draft.APIKey`, render masked summary bullets and a blank keep-key password input when present, resolve blank keys against the stored credential inside the worker on Save and Test, clear submitted plaintext keys from the form after an accepted Save, and keep blank-key rejection strict whenever a form starts from plaintext or lacks a saved credential.
+
+### Guard SQLite WAL permissions, NUL-safe IDs and mirror recovery
+
+**Problem:** Enabling SQLite WAL mode did not immediately create `-wal`/`-shm` sidecars for permission tightening, raw SQLite text bindings do not preserve embedded NULs in arbitrary IDs, and an interrupted JSON mirror publish after a SQLite commit could look like an external recovery edit.
+
+**Cause or correction:** WAL sidecar files appear on the first write transaction, pinned Node SQLite text bindings require safe encoding for arbitrary IDs, and a durable mirror needs a pre-publish digest marker to distinguish crash recovery from user-restored snapshots.
+
+**Prevention:** Ensure newly created profile directories use `0700` and apply `0600` to the database plus `-wal`/`-shm` after the first WAL write transaction. JSON-encode arbitrary ID columns, refuse databases whose `PRAGMA user_version` exceeds the supported schema version, commit SQLite before publishing the recovery mirror, and record the prior mirror digest so reopen repairs interrupted publishes while still admitting genuine external recovery copies.
 
 ## Pi, SDK, and Process Integration
 

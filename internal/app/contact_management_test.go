@@ -81,6 +81,10 @@ func TestLocalStateBeforeConnectionCreateSaveAndRestart(t *testing.T) {
 		t.Fatal(err)
 	}
 	tr.Frame()
+	if err := tr.Click(locales.In("en").CreateBotAction()); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
 	second := a.selectedContact()
 	secondID := second.ID
 	openBotProfileFromRail(t, tr, locales.In("en").AvatarContactLabel(second.Name))

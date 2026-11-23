@@ -1322,6 +1322,106 @@ func (msgs Messages) ContactProfileAction() string {
 	return Catalog.Format(msgs.locale, "contactProfileAction", nil)
 }
 
+// BotMenuNewChat says "New chat"
+// in the language the app shows.
+func BotMenuNewChat() string { return In(i18n.Locale()).BotMenuNewChat() }
+
+// BotMenuNewChat says "New chat"
+// in the language of msgs.
+func (msgs Messages) BotMenuNewChat() string {
+	return Catalog.Format(msgs.locale, "botMenuNewChat", nil)
+}
+
+// BotMenuNewChatFailed says "Could not confirm a new chat. Check this Bot’s current chat before trying again."
+// in the language the app shows.
+func BotMenuNewChatFailed() string { return In(i18n.Locale()).BotMenuNewChatFailed() }
+
+// BotMenuNewChatFailed says "Could not confirm a new chat. Check this Bot’s current chat before trying again."
+// in the language of msgs.
+func (msgs Messages) BotMenuNewChatFailed() string {
+	return Catalog.Format(msgs.locale, "botMenuNewChatFailed", nil)
+}
+
+// BotMenuActivities says "{count, plural, =0 {Activities} one {Activities (#)} other {Activities (#)}}"
+// in the language the app shows.
+func BotMenuActivities(count int) string { return In(i18n.Locale()).BotMenuActivities(count) }
+
+// BotMenuActivities says "{count, plural, =0 {Activities} one {Activities (#)} other {Activities (#)}}"
+// in the language of msgs.
+func (msgs Messages) BotMenuActivities(count int) string {
+	return Catalog.Format(msgs.locale, "botMenuActivities", map[string]any{"count": count})
+}
+
+// BotMenuStopReply says "Stop reply"
+// in the language the app shows.
+func BotMenuStopReply() string { return In(i18n.Locale()).BotMenuStopReply() }
+
+// BotMenuStopReply says "Stop reply"
+// in the language of msgs.
+func (msgs Messages) BotMenuStopReply() string {
+	return Catalog.Format(msgs.locale, "botMenuStopReply", nil)
+}
+
+// BotMenuArchive says "Archive Bot"
+// in the language the app shows.
+func BotMenuArchive() string { return In(i18n.Locale()).BotMenuArchive() }
+
+// BotMenuArchive says "Archive Bot"
+// in the language of msgs.
+func (msgs Messages) BotMenuArchive() string {
+	return Catalog.Format(msgs.locale, "botMenuArchive", nil)
+}
+
+// CreateBotTitle says "New Bot"
+// in the language the app shows.
+func CreateBotTitle() string { return In(i18n.Locale()).CreateBotTitle() }
+
+// CreateBotTitle says "New Bot"
+// in the language of msgs.
+func (msgs Messages) CreateBotTitle() string {
+	return Catalog.Format(msgs.locale, "createBotTitle", nil)
+}
+
+// CreateBotAction says "Create Bot"
+// in the language the app shows.
+func CreateBotAction() string { return In(i18n.Locale()).CreateBotAction() }
+
+// CreateBotAction says "Create Bot"
+// in the language of msgs.
+func (msgs Messages) CreateBotAction() string {
+	return Catalog.Format(msgs.locale, "createBotAction", nil)
+}
+
+// CreateBotCancel says "Cancel"
+// in the language the app shows.
+func CreateBotCancel() string { return In(i18n.Locale()).CreateBotCancel() }
+
+// CreateBotCancel says "Cancel"
+// in the language of msgs.
+func (msgs Messages) CreateBotCancel() string {
+	return Catalog.Format(msgs.locale, "createBotCancel", nil)
+}
+
+// CreateBotPurposePlaceholder says "What should this Bot do?"
+// in the language the app shows.
+func CreateBotPurposePlaceholder() string { return In(i18n.Locale()).CreateBotPurposePlaceholder() }
+
+// CreateBotPurposePlaceholder says "What should this Bot do?"
+// in the language of msgs.
+func (msgs Messages) CreateBotPurposePlaceholder() string {
+	return Catalog.Format(msgs.locale, "createBotPurposePlaceholder", nil)
+}
+
+// CreateBotFailed says "Could not create the Bot. Try again."
+// in the language the app shows.
+func CreateBotFailed() string { return In(i18n.Locale()).CreateBotFailed() }
+
+// CreateBotFailed says "Could not create the Bot. Try again."
+// in the language of msgs.
+func (msgs Messages) CreateBotFailed() string {
+	return Catalog.Format(msgs.locale, "createBotFailed", nil)
+}
+
 // EmptyNoMessages says "No messages yet"
 // in the language the app shows.
 func EmptyNoMessages() string { return In(i18n.Locale()).EmptyNoMessages() }
@@ -1880,26 +1980,6 @@ func (msgs Messages) ProfileNoInstructions() string {
 	return Catalog.Format(msgs.locale, "profileNoInstructions", nil)
 }
 
-// ProfileWorkspace says "Workspace"
-// in the language the app shows.
-func ProfileWorkspace() string { return In(i18n.Locale()).ProfileWorkspace() }
-
-// ProfileWorkspace says "Workspace"
-// in the language of msgs.
-func (msgs Messages) ProfileWorkspace() string {
-	return Catalog.Format(msgs.locale, "profileWorkspace", nil)
-}
-
-// ProfileWorkspaceInherited says "Inherited from the connection default"
-// in the language the app shows.
-func ProfileWorkspaceInherited() string { return In(i18n.Locale()).ProfileWorkspaceInherited() }
-
-// ProfileWorkspaceInherited says "Inherited from the connection default"
-// in the language of msgs.
-func (msgs Messages) ProfileWorkspaceInherited() string {
-	return Catalog.Format(msgs.locale, "profileWorkspaceInherited", nil)
-}
-
 // ProfileConversation says "Chat"
 // in the language the app shows.
 func ProfileConversation() string { return In(i18n.Locale()).ProfileConversation() }
@@ -2170,16 +2250,6 @@ func (msgs Messages) SettingsBuiltinManagedError() string {
 	return Catalog.Format(msgs.locale, "settingsBuiltinManagedError", nil)
 }
 
-// SettingsBuiltinNotReady says "Built-in tools are available after Runtime is ready."
-// in the language the app shows.
-func SettingsBuiltinNotReady() string { return In(i18n.Locale()).SettingsBuiltinNotReady() }
-
-// SettingsBuiltinNotReady says "Built-in tools are available after Runtime is ready."
-// in the language of msgs.
-func (msgs Messages) SettingsBuiltinNotReady() string {
-	return Catalog.Format(msgs.locale, "settingsBuiltinNotReady", nil)
-}
-
 // SettingsRetrySave says "Retry save"
 // in the language the app shows.
 func SettingsRetrySave() string { return In(i18n.Locale()).SettingsRetrySave() }
@@ -2300,16 +2370,6 @@ func (msgs Messages) FieldInstructionsAccessible() string {
 	return Catalog.Format(msgs.locale, "fieldInstructionsAccessible", nil)
 }
 
-// FieldWorkspacePlaceholder says "/absolute/path/to/workspace (empty uses default)"
-// in the language the app shows.
-func FieldWorkspacePlaceholder() string { return In(i18n.Locale()).FieldWorkspacePlaceholder() }
-
-// FieldWorkspacePlaceholder says "/absolute/path/to/workspace (empty uses default)"
-// in the language of msgs.
-func (msgs Messages) FieldWorkspacePlaceholder() string {
-	return Catalog.Format(msgs.locale, "fieldWorkspacePlaceholder", nil)
-}
-
 // FieldWorkspaceAccessible says "Bot workspace"
 // in the language the app shows.
 func FieldWorkspaceAccessible() string { return In(i18n.Locale()).FieldWorkspaceAccessible() }
@@ -2318,88 +2378,6 @@ func FieldWorkspaceAccessible() string { return In(i18n.Locale()).FieldWorkspace
 // in the language of msgs.
 func (msgs Messages) FieldWorkspaceAccessible() string {
 	return Catalog.Format(msgs.locale, "fieldWorkspaceAccessible", nil)
-}
-
-// ProfileWorkspaceHint says "Leave blank to use the default folder."
-// in the language the app shows.
-func ProfileWorkspaceHint() string { return In(i18n.Locale()).ProfileWorkspaceHint() }
-
-// ProfileWorkspaceHint says "Leave blank to use the default folder."
-// in the language of msgs.
-func (msgs Messages) ProfileWorkspaceHint() string {
-	return Catalog.Format(msgs.locale, "profileWorkspaceHint", nil)
-}
-
-// ProfileBuiltinTools says "Built-in tools"
-// in the language the app shows.
-func ProfileBuiltinTools() string { return In(i18n.Locale()).ProfileBuiltinTools() }
-
-// ProfileBuiltinTools says "Built-in tools"
-// in the language of msgs.
-func (msgs Messages) ProfileBuiltinTools() string {
-	return Catalog.Format(msgs.locale, "profileBuiltinTools", nil)
-}
-
-// ProfileBuiltinLoading says "Loading built-in tools from Runtime…"
-// in the language the app shows.
-func ProfileBuiltinLoading() string { return In(i18n.Locale()).ProfileBuiltinLoading() }
-
-// ProfileBuiltinLoading says "Loading built-in tools from Runtime…"
-// in the language of msgs.
-func (msgs Messages) ProfileBuiltinLoading() string {
-	return Catalog.Format(msgs.locale, "profileBuiltinLoading", nil)
-}
-
-// ProfileBuiltinNotLoaded says "Built-in tools have not been loaded from Runtime yet."
-// in the language the app shows.
-func ProfileBuiltinNotLoaded() string { return In(i18n.Locale()).ProfileBuiltinNotLoaded() }
-
-// ProfileBuiltinNotLoaded says "Built-in tools have not been loaded from Runtime yet."
-// in the language of msgs.
-func (msgs Messages) ProfileBuiltinNotLoaded() string {
-	return Catalog.Format(msgs.locale, "profileBuiltinNotLoaded", nil)
-}
-
-// ProfileBuiltinRetry says "Retry built-in tools"
-// in the language the app shows.
-func ProfileBuiltinRetry() string { return In(i18n.Locale()).ProfileBuiltinRetry() }
-
-// ProfileBuiltinRetry says "Retry built-in tools"
-// in the language of msgs.
-func (msgs Messages) ProfileBuiltinRetry() string {
-	return Catalog.Format(msgs.locale, "profileBuiltinRetry", nil)
-}
-
-// ProfileBuiltinUseDefaults says "Use host defaults"
-// in the language the app shows.
-func ProfileBuiltinUseDefaults() string { return In(i18n.Locale()).ProfileBuiltinUseDefaults() }
-
-// ProfileBuiltinUseDefaults says "Use host defaults"
-// in the language of msgs.
-func (msgs Messages) ProfileBuiltinUseDefaults() string {
-	return Catalog.Format(msgs.locale, "profileBuiltinUseDefaults", nil)
-}
-
-// ProfileBuiltinUseDefaultsTooltip says "Use the built-in tools supplied by Runtime's host default."
-// in the language the app shows.
-func ProfileBuiltinUseDefaultsTooltip() string {
-	return In(i18n.Locale()).ProfileBuiltinUseDefaultsTooltip()
-}
-
-// ProfileBuiltinUseDefaultsTooltip says "Use the built-in tools supplied by Runtime's host default."
-// in the language of msgs.
-func (msgs Messages) ProfileBuiltinUseDefaultsTooltip() string {
-	return Catalog.Format(msgs.locale, "profileBuiltinUseDefaultsTooltip", nil)
-}
-
-// ProfileBuiltinNone says "No built-in tools are enabled. Nagi task tools remain available for their own workflows."
-// in the language the app shows.
-func ProfileBuiltinNone() string { return In(i18n.Locale()).ProfileBuiltinNone() }
-
-// ProfileBuiltinNone says "No built-in tools are enabled. Nagi task tools remain available for their own workflows."
-// in the language of msgs.
-func (msgs Messages) ProfileBuiltinNone() string {
-	return Catalog.Format(msgs.locale, "profileBuiltinNone", nil)
 }
 
 // ProfileSaveAndNew says "Save and start new chat"
@@ -3154,6 +3132,18 @@ func ConnectionAPIKeyPlaceholder() string { return In(i18n.Locale()).ConnectionA
 // in the language of msgs.
 func (msgs Messages) ConnectionAPIKeyPlaceholder() string {
 	return Catalog.Format(msgs.locale, "connectionAPIKeyPlaceholder", nil)
+}
+
+// ConnectionSavedAPIKeyPlaceholder says "Key saved. Leave blank to keep it."
+// in the language the app shows.
+func ConnectionSavedAPIKeyPlaceholder() string {
+	return In(i18n.Locale()).ConnectionSavedAPIKeyPlaceholder()
+}
+
+// ConnectionSavedAPIKeyPlaceholder says "Key saved. Leave blank to keep it."
+// in the language of msgs.
+func (msgs Messages) ConnectionSavedAPIKeyPlaceholder() string {
+	return Catalog.Format(msgs.locale, "connectionSavedAPIKeyPlaceholder", nil)
 }
 
 // ConnectionAPIKeyHint says "Stored locally and kept out of prompts"
@@ -7788,16 +7778,6 @@ func WorkFolderChooseTitle() string { return In(i18n.Locale()).WorkFolderChooseT
 // in the language of msgs.
 func (msgs Messages) WorkFolderChooseTitle() string {
 	return Catalog.Format(msgs.locale, "workFolderChooseTitle", nil)
-}
-
-// WorkFolderUseDefault says "Use default"
-// in the language the app shows.
-func WorkFolderUseDefault() string { return In(i18n.Locale()).WorkFolderUseDefault() }
-
-// WorkFolderUseDefault says "Use default"
-// in the language of msgs.
-func (msgs Messages) WorkFolderUseDefault() string {
-	return Catalog.Format(msgs.locale, "workFolderUseDefault", nil)
 }
 
 // WorkFolderChooseFailed says "Could not choose this folder. Your edits are unchanged. Choose folder again. Details: {detail}"

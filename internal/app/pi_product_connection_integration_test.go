@@ -140,6 +140,7 @@ func TestPiAppProductConnectionStopAndWorkerLoss(t *testing.T) {
 	firstID, firstChat := first.ID, first.SessionID
 	enter(msg.ComposerLabel(first.Name), firstInput)
 	w.click(msg.AvatarAddContact())
+	w.click(msg.CreateBotAction())
 	w.wait(func() bool { return len(w.app.contacts) == 2 && w.app.selectedID() != firstID })
 	var profileSaved bool
 	w.frame(func() {

@@ -566,9 +566,10 @@ func TestShellAndNewContactFollowLocale(t *testing.T) {
 	a.closeSettings()
 	a.openContactProfile(ct.ID)
 	tr.Frame()
-	if msgs := locales.In("zh-Hans"); !tr.HasText(msgs.ContactProfileAction()) || !tr.HasText(msgs.FieldPurposeAccessible()) ||
-		!tr.HasText(msgs.FieldInstructionsAccessible()) || !tr.HasText(msgs.FieldWorkspaceAccessible()) {
-		t.Fatalf("Chinese contact profile missing: %v", tr.Texts())
+	if msgs := locales.In("zh-Hans"); !tr.HasText(msgs.ContactProfileAction()) || !tr.HasText(msgs.FieldNameAccessible()) ||
+		!tr.HasText(msgs.FieldPurposeAccessible()) || !tr.HasText(msgs.FieldInstructionsAccessible()) ||
+		!tr.HasText(msgs.ContactSaveChanges()) || tr.HasText(msgs.FieldWorkspaceAccessible()) {
+		t.Fatalf("Chinese contact profile missing or retained retired workspace field: %v", tr.Texts())
 	}
 	a.closeDetail()
 	tr.Frame()

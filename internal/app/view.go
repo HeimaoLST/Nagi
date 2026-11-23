@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"path/filepath"
+	"slices"
 	"strings"
 	"unicode"
 
@@ -84,6 +85,7 @@ func (a *appModel) view(c *ui.Context) {
 			a.finishMarkdownLinkReturn()
 		})
 	})
+	a.createBotDialogView(c, t)
 }
 
 func (a *appModel) escapeTopLayer() {
@@ -226,7 +228,10 @@ func (a *appModel) rail(c *ui.Context, t *ui.Theme) {
 				add.Children(func() {
 					controlIcon(c, railAddIcon, iconChrome).TextColor(t.TextMuted)
 				})
-				add.OnClick(func() { a.addDefaultContact() })
+				add.OnClick(func() {
+					add.Focus()
+					a.openCreateBotDialog()
+				})
 			}).Label(msgs.RailContactListActions()).Padding(0)
 		})
 		ui.SearchField(c, &a.contactSearch).Label(msgs.SearchContacts()).FontSize(typeAction).Placeholder(msgs.RailContactSearchPlaceholder())
@@ -264,7 +269,10 @@ func (a *appModel) avatarRail(c *ui.Context, t *ui.Theme) {
 		add := appTooltip(c, ui.Button(c, "").Label(addLabel).
 			MinWidth(32).MinHeight(32).Width(32).Height(32).Padding(0).Justify(ui.Center), addLabel)
 		add.Children(func() { controlIcon(c, railAddIcon, iconChrome).TextColor(t.TextMuted) })
-		add.OnClick(func() { a.addDefaultContact() })
+		add.OnClick(func() {
+			add.Focus()
+			a.openCreateBotDialog()
+		})
 		visible := a.visibleContactIndices()
 		if len(visible) == 0 {
 			ui.Spacer(c).Grow(1)
@@ -333,9 +341,53 @@ func (a *appModel) avatarRailMarker(ct *contact) (string, ui.Color) {
 }
 
 func (a *appModel) bindBotRowMenu(row ui.Element, contactID string, msgs locales.Messages) {
-	row.ContextMenu(func(menu *ui.Menu) {
+	row.PopoverMenu(func(menu *ui.Menu) {
+		ct := a.contactByID(contactID)
+		if ct == nil {
+			return
+		}
+		ready := a.productProfileReady() && !a.dataRecoveryBlocksChanges()
+		mutable := ready || a.demo
+		active, unknown := a.contactActivity(ct)
+		if menu.Item(msgs.BotMenuNewChat()).Disabled(!mutable || ct.Archived || active || unknown || ct.SessionID == "").Chosen() {
+			if !a.saveContactProfile(ct, nil, contactProfileDraft(ct), true) {
+				a.openContactProfile(contactID)
+				a.profileEditorFor(contactID).SetError(profileNoticeNewChatFailed)
+			}
+		}
+		previous := menu.Item(msgs.PreviousChats()).Disabled(!ready || ct.SessionID == "").Chosen()
+		count := len(ct.Issues)
+		if ct.activity.loaded && ct.activity.nextCursor == nil {
+			count = max(count, len(ct.activity.items))
+		}
+		activities := menu.Item(msgs.BotMenuActivities(count)).Disabled(!ready && !ct.activity.loaded).Chosen()
+		if previous || activities {
+			a.selectContact(slices.Index(a.contacts, ct))
+			if previous {
+				a.browseProductConversations(ct, "")
+			} else {
+				a.priorChats = nil
+				a.aux = ""
+				ct.activity.open, ct.activity.focusToggle = true, true
+				ct.activity.scroll.Y = 0
+			}
+		}
+		menu.Separator()
 		if menu.Item(msgs.ContactProfileAction()).Chosen() {
 			a.openContactProfile(contactID)
+		}
+		menu.Separator()
+		if sessionBusy(ct.SendState, ct.ActiveTaskID) {
+			if menu.Item(msgs.BotMenuStopReply()).Disabled(!ready || ct.ActiveTaskID == "").Chosen() {
+				a.cancelRuntimeTask(ct, ct.ActiveTaskID)
+			}
+		}
+		if ct.Archived {
+			if menu.Item(msgs.RestoreContactAction()).Disabled(!mutable).Chosen() {
+				a.restoreContact(contactID)
+			}
+		} else if menu.Item(msgs.BotMenuArchive()).Disabled(!mutable || a.contactArchiveBlocked(ct) != "").Chosen() {
+			a.archiveContact(contactID)
 		}
 	})
 	if a.focusProfileRow == contactID {

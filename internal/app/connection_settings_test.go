@@ -780,3 +780,60 @@ func TestConnectionSettingsCapacityPreservesExactValues(t *testing.T) {
 		})
 	}
 }
+
+func TestConnectionSettingsSavedCredentialBulletsBlankReuseAndRedaction(t *testing.T) {
+	for _, locale := range []string{"en", "zh-Hans"} {
+		t.Run(locale, func(t *testing.T) {
+			msgs := locales.In(locale)
+			config := testConnectionConfig(t)
+			config.APIKey = ""
+			s := newConnectionSettings(&config, "")
+			s.CredentialPresent = true
+			var saved, tested []connectionConfig
+			tr := connectionSettingsTester(s, connectionSettingsActions{
+				Save: func(cfg connectionConfig) { saved = append(saved, cfg) },
+				Test: func(cfg connectionConfig) { tested = append(tested, cfg) },
+			}, 640, 1600)
+			tr.SetLocale(locale)
+			tr.SetFocused(true)
+			tr.Frame()
+			if !tr.HasText("••••••••") || tr.HasText(msgs.ConnectionValueUnset()) {
+				t.Fatalf("saved credential did not render bullets: %v", tr.Texts())
+			}
+			if err := tr.Click(msgs.ConnectionEditField(msgs.ConnectionFieldAPIKey())); err != nil {
+				t.Fatal(err)
+			}
+			tr.Frame()
+			active, _ := tr.TextInputActive()
+			if !s.EditOpen["APIKey"] || s.Draft.APIKey != "" || !tr.Focused(msgs.ConnectionFieldAPIKey()) || !active || msgs.ConnectionSavedAPIKeyPlaceholder() == "" {
+				t.Fatalf("saved API key editor did not open focused blank input: open=%t draft=%q active=%t", s.EditOpen["APIKey"], s.Draft.APIKey, active)
+			}
+			if err := tr.Click(msgs.ConnectionTestAction()); err != nil {
+				t.Fatal(err)
+			}
+			tr.Frame()
+			if err := tr.Click(msgs.ConnectionSaveConfiguration()); err != nil {
+				t.Fatal(err)
+			}
+			tr.Frame()
+			if len(tested) != 1 || len(saved) != 1 || tested[0].APIKey != "" || saved[0].APIKey != "" || len(s.Errors) != 0 {
+				t.Fatalf("blank-key reuse failed: tested=%+v saved=%+v errors=%v", tested, saved, s.Errors)
+			}
+			const secret = "sk-synthetic-redact-987654321"
+			s.Draft.APIKey = secret
+			s.Error = connErrorTestFailed
+			s.ErrorDetail = "HTTP 401 unauthorized for key " + secret
+			s.RecoveryDetailsOpen = true
+			tr.Frame()
+			if tr.HasText(secret) || !tr.HasText("[redacted]") {
+				t.Fatalf("entered key leaked into rendered recovery details: %v", tr.Texts())
+			}
+		})
+	}
+	standalone := testConnectionConfig(t)
+	s := newConnectionSettings(&standalone, "")
+	s.Draft.APIKey = ""
+	if _, ok := s.Validated(); ok || s.Errors["APIKey"] == "" {
+		t.Fatalf("standalone plaintext form unexpectedly allowed clearing APIKey: errors=%v", s.Errors)
+	}
+}

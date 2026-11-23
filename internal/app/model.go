@@ -171,6 +171,7 @@ type appModel struct {
 	profileEditors         map[string]*contactProfileEditor
 	contactProfileID       string
 	contactSearch          string
+	createBot              *createBotForm
 	contactHistoryInFlight int
 	submissionInFlight     int
 

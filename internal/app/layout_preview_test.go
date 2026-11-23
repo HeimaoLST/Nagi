@@ -198,7 +198,7 @@ func TestWorkbenchRoleScenesKeepActionsReachable(t *testing.T) {
 							ct.Messages = []*message{{Key: "user-visual", Kind: msgUser, Text: "A retained user message.\n中文换行。"}, {Key: "reply-visual", Kind: msgContact, Text: "A retained reply with **original emphasis**, a [link](https://example.invalid) and `code`."}}
 						case "contact":
 							a.openContactProfile(ct.ID)
-							label = msgs.WorkFolderChoose()
+							label = msgs.ContactSaveChanges()
 						case "task-context":
 							a.openConversationTaskContext()
 							ct.Context.OpenFileForm()

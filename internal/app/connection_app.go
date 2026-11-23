@@ -44,6 +44,9 @@ func (a *appModel) applyProductConnection(status pi.ProductConnectionStatus) {
 	host.productConn = status
 	a.connectionSaved, a.connectionEffective = productConnectionConfig(status.Saved), productConnectionConfig(status.Effective)
 	a.connectionManaged = status.Saved != nil
+	if a.connectionForm != nil {
+		a.connectionForm.CredentialPresent = status.Saved != nil && status.Saved.CredentialPresent
+	}
 	a.runtimeStatus = runtimeStateReady
 	a.runtimeErr, a.runtimeErrKind = "", ""
 	if effective := a.connectionEffective; effective != nil {
@@ -90,9 +93,11 @@ func (a *appModel) changeProductConnection(host *piAppHost, config *connectionCo
 		defer cancel()
 		var err error
 		saved := known
+		var savedDraft bool
 		if config != nil {
 			result, failure := host.product.SaveConnection(ctx, pi.ProductConnectionSaveParams{OperationID: newContactID(), Configuration: productConnectionInput(*config)})
 			saved, err = result.SavedRevision, failure
+			savedDraft = failure == nil && saved != nil
 		}
 		if err == nil && apply && saved != nil {
 			_, err = host.product.ApplyConnection(ctx, pi.ProductConnectionApplyParams{OperationID: newContactID(), SavedRevision: *saved})
@@ -108,8 +113,10 @@ func (a *appModel) changeProductConnection(host *piAppHost, config *connectionCo
 			if readErr == nil {
 				a.applyProductConnection(projection)
 			}
-			if config != nil && saved != nil {
+			if savedDraft {
 				form.HasSaved = true
+				form.CredentialPresent = true
+				form.Draft.APIKey = ""
 				form.Initial = form.Draft
 			}
 			if err != nil {
@@ -239,6 +246,11 @@ func (a *appModel) ensureConnectionForm() {
 		return
 	}
 	config := a.connectionSaved
+	if host := a.productHost(); host != nil {
+		a.connectionForm = newConnectionSettings(config, "")
+		a.connectionForm.CredentialPresent = host.productConn.Saved != nil && host.productConn.Saved.CredentialPresent
+		return
+	}
 	if config == nil {
 		config = readConnectionStartup(a.storePath).FormConfig
 	}

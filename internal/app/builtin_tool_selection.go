@@ -4,10 +4,7 @@ package app
 // optional selection so a missing field means "use the Runtime default" while a
 // present, empty slice means "explicitly no built-in tools".
 
-import (
-	"slices"
-	"strings"
-)
+import "slices"
 
 const (
 	builtinNoticeManaged         = "builtin-managed"
@@ -30,25 +27,17 @@ func profileDraftEqual(left, right profileDraft) bool {
 		builtinToolsEqual(left.BuiltinTools, right.BuiltinTools)
 }
 
-func builtinToolSelectionContains(selection *[]string, name string) bool {
-	return selection != nil && slices.Contains(*selection, name)
-}
-
-func builtinToolSelectionLabel(names []string) string {
-	return strings.Join(names, ", ")
-}
-
 func (a *appModel) validateBuiltinToolSelection(current, next *[]string) string {
-	if !a.connectionManaged && !builtinToolsEqual(current, next) {
+	if builtinToolsEqual(current, next) {
+		return ""
+	}
+	if !a.connectionManaged {
 		return builtinNoticeManaged
 	}
 	if next == nil || len(*next) == 0 {
 		return ""
 	}
 	if !a.runtimeBuiltinToolsLoaded {
-		if current != nil && slices.Equal(*next, *current) {
-			return ""
-		}
 		return builtinNoticeListUnavailable
 	}
 	available := make(map[string]bool, len(a.runtimeBuiltinTools))

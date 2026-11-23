@@ -84,6 +84,11 @@ func (a *appModel) openProductProfile(ctx context.Context, fresh bool, generatio
 	if err != nil {
 		return err
 	}
+	if fresh {
+		if err := os.MkdirAll(filepath.Dir(a.storePath), 0700); err != nil {
+			return err
+		}
+	}
 	host.product, err = pi.StartProduct(pi.ProductOptions{
 		NodePath: node, WorkerPath: worker, StateDir: filepath.Join(filepath.Dir(a.storePath), "pi"),
 		ProfilePath: a.storePath, CredentialsPath: a.connectionPath, FreshProfile: fresh,
@@ -217,7 +222,8 @@ func (a *appModel) openProductProfile(ctx context.Context, fresh bool, generatio
 			a.appearanceMode = normalizeAppearanceMode(local.Appearance)
 		}
 		a.applyProductConnection(opened.Snapshot.Connection)
-		a.connectionForm = newConnectionSettings(a.connectionSaved, "")
+		a.connectionForm = nil
+		a.ensureConnectionForm()
 		a.connectionForm.Busy = a.connectionApplying
 		a.applyBuiltinCatalog(ready)
 		for _, ct := range contacts {

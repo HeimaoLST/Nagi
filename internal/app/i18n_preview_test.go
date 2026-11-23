@@ -251,10 +251,9 @@ func TestPreviewI18nFinalMatrix(t *testing.T) {
 			if err := tr.RightClick(msgs.AvatarContactLabel(a.selectedContact().Name)); err != nil {
 				t.Fatal(err)
 			}
-			if err := tr.ChooseMenuItem(msgs.ContactProfileAction()); err != nil {
+			if err := choosePopoverMenuItem(tr, msgs.ContactProfileAction()); err != nil {
 				t.Fatal(err)
 			}
-			tr.Frame()
 		}
 		for _, want := range base.want(msgs) {
 			if !tr.HasText(want) {

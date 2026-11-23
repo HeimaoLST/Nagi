@@ -299,13 +299,18 @@ func TestAddContactFocusesComposerAndSends(t *testing.T) {
 		}
 	}
 
-	// First creation.
-	if err := tr.Click(locales.In("en").AvatarAddContact()); err != nil {
+	msgs := locales.In("en")
+	beforeCount := len(a.contacts)
+	if err := tr.Click(msgs.AvatarAddContact()); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if err := tr.Click(msgs.CreateBotAction()); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
 	first := a.selectedContact()
-	if first.Name != locales.In("en").NewContactName(1) || first.Role != "Assistant" {
+	if first.Name != msgs.NewContactName(beforeCount+1) || first.Role != "" {
 		t.Fatalf("created contact = %q role=%q", first.Name, first.Role)
 	}
 	if !tr.Focused("Composer for " + first.Name) {
@@ -322,8 +327,11 @@ func TestAddContactFocusesComposerAndSends(t *testing.T) {
 	}
 	assertExistingUnchanged("after first send")
 
-	// Second creation through the same UI path, again with no extra click.
-	if err := tr.Click(locales.In("en").AvatarAddContact()); err != nil {
+	if err := tr.Click(msgs.AvatarAddContact()); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if err := tr.Click(msgs.CreateBotAction()); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
@@ -331,7 +339,7 @@ func TestAddContactFocusesComposerAndSends(t *testing.T) {
 	if second == first {
 		t.Fatal("the second Add contact must create a new contact")
 	}
-	if second.Name != locales.In("en").NewContactName(2) || second.Role != "Assistant" {
+	if second.Name != msgs.NewContactName(beforeCount+2) || second.Role != "" {
 		t.Fatalf("second contact = %q role=%q", second.Name, second.Role)
 	}
 	if !tr.Focused("Composer for " + second.Name) {
@@ -362,7 +370,12 @@ func TestBotProfileFieldsReceiveInputAndPreserveComposerDraft(t *testing.T) {
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.SetFocused(true)
 	tr.Frame()
-	if err := tr.Click(locales.In("en").AvatarAddContact()); err != nil {
+	msgs := locales.In("en")
+	if err := tr.Click(msgs.AvatarAddContact()); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if err := tr.Click(msgs.CreateBotAction()); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
@@ -372,7 +385,6 @@ func TestBotProfileFieldsReceiveInputAndPreserveComposerDraft(t *testing.T) {
 	if ct.Draft != "keep me" {
 		t.Fatalf("composer draft = %q", ct.Draft)
 	}
-	msgs := locales.In("en")
 	openBotProfileFromRail(t, tr, msgs.AvatarContactLabel(ct.Name))
 	editor := a.profileEditorFor(ct.ID)
 	tr.Frame() // a second frame must not re-focus the composer

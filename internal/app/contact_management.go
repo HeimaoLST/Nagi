@@ -91,9 +91,8 @@ func (a *appModel) contactArchiveBlocked(ct *contact) string {
 	return ""
 }
 
-func (a *appModel) updateProductBot(host *piAppHost, ct *contact, entered profileDraft, startNew bool) bool {
-	editor := a.profileEditorFor(ct.ID)
-	draft, problems := validateProfileDraft(entered)
+func (a *appModel) updateProductBot(host *piAppHost, ct *contact, editor *contactProfileEditor, entered profileDraft, startNew bool) bool {
+	draft, problems := validateProfileDraft(entered, ct.Workspace)
 	if len(problems) != 0 {
 		if editor != nil {
 			editor.Draft, editor.Errors = entered, problems
@@ -166,14 +165,16 @@ func (a *appModel) setProductBotArchived(host *piAppHost, ct *contact, archived 
 }
 
 func (a *appModel) saveContactProfileDraftFor(contactID string, draft profileDraft, startNew bool) bool {
-	ct := a.contactByID(contactID)
-	editor := a.profileEditorFor(contactID)
+	return a.saveContactProfile(a.contactByID(contactID), a.profileEditorFor(contactID), draft, startNew)
+}
+
+func (a *appModel) saveContactProfile(ct *contact, editor *contactProfileEditor, draft profileDraft, startNew bool) bool {
 	entered := draft
 	if ct == nil {
 		return false
 	}
 	if host := a.productHost(); host != nil {
-		return a.updateProductBot(host, ct, draft, startNew)
+		return a.updateProductBot(host, ct, editor, draft, startNew)
 	}
 	if !a.demo && a.ensureContactStore() != nil {
 		if editor != nil {
@@ -204,7 +205,7 @@ func (a *appModel) saveContactProfileDraftFor(contactID string, draft profileDra
 		}
 	}
 
-	draft, problems := validateProfileDraft(entered)
+	draft, problems := validateProfileDraft(entered, ct.Workspace)
 	if len(problems) > 0 {
 		if editor != nil {
 			editor.Draft = entered

@@ -252,7 +252,7 @@ func TestPiAppProductConnectionSaveAndApplyRefusal(t *testing.T) {
 	if draft.Model != model || draft.APIKey != "nagi-product-loopback" {
 		t.Fatal("Settings did not capture the edited model and synthetic key")
 	}
-	blocked := func(action string, dirty bool) {
+	blocked := func(action string, expected connectionDraft, dirty, credentialPresent bool) {
 		t.Helper()
 		backup := profile + ".fixture-backup"
 		if err := os.Rename(profile, backup); err != nil {
@@ -275,12 +275,12 @@ func TestPiAppProductConnectionSaveAndApplyRefusal(t *testing.T) {
 		w.wait(func() bool { return !w.app.connectionForm.Busy })
 		w.pump.do(func() {
 			form := w.app.connectionForm
-			if form.Draft != draft || form.Dirty() != dirty || !w.view.HasText(msg.RecoveryConnectionSaveFailed()) {
-				t.Errorf("%s refusal did not preserve the editable values or show its error", action)
+			if form.Draft != expected || form.Dirty() != dirty || form.CredentialPresent != credentialPresent || !w.view.HasText(msg.RecoveryConnectionSaveFailed()) {
+				t.Errorf("%s refusal did not preserve the editable values or show its error: draft=%+v want=%+v dirty=%t cred=%t", action, form.Draft, expected, form.Dirty(), form.CredentialPresent)
 			}
 		})
 	}
-	blocked(msg.ConnectionSaveAndApply(), true)
+	blocked(msg.ConnectionSaveAndApply(), draft, true, true)
 	if refused := readConnection(); !reflect.DeepEqual(refused, before) {
 		t.Fatalf("Save refusal changed saved or effective revisions: %+v", refused)
 	}
@@ -291,7 +291,14 @@ func TestPiAppProductConnectionSaveAndApplyRefusal(t *testing.T) {
 		!reflect.DeepEqual(saved.EffectiveRevision, before.EffectiveRevision) {
 		t.Fatalf("Save did not leave the new revision pending Apply: %+v", saved)
 	}
-	blocked(msg.ConnectionApplySaved(), false)
+	savedDraft := draft
+	savedDraft.APIKey = ""
+	w.pump.do(func() {
+		if form := w.app.connectionForm; form.Draft != savedDraft || form.Initial != savedDraft || !form.CredentialPresent || form.Dirty() {
+			t.Fatalf("accepted Save did not clear plaintext key and retain credential flag: draft=%+v initial=%+v cred=%t", form.Draft, form.Initial, form.CredentialPresent)
+		}
+	})
+	blocked(msg.ConnectionApplySaved(), savedDraft, false, true)
 	if refused := readConnection(); !reflect.DeepEqual(refused, saved) {
 		t.Fatalf("Apply refusal changed the pending or effective revision: %+v", refused)
 	}
@@ -303,7 +310,7 @@ func TestPiAppProductConnectionSaveAndApplyRefusal(t *testing.T) {
 		t.Fatalf("Apply retry did not activate the existing saved revision: %+v", applied)
 	}
 	w.pump.do(func() {
-		if form := w.app.connectionForm; form.Draft != draft || form.Dirty() || form.Error != "" {
+		if form := w.app.connectionForm; form.Draft != savedDraft || form.Initial != savedDraft || !form.CredentialPresent || form.Dirty() || form.Error != "" {
 			t.Error("Apply retry changed the editor or retained the prior error")
 		}
 	})

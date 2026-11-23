@@ -29,6 +29,7 @@ type Settings struct {
 	ReloadBlocked       string
 	Busy                bool
 	HasSaved            bool
+	CredentialPresent   bool
 	SavedPending        bool
 	LimitsOpen          bool
 	RecoveryDetailsOpen bool
@@ -59,7 +60,7 @@ func NewSettings(config *Config, workDir string) *Settings {
 		API: initial.API, Endpoint: initial.Endpoint, APIKey: initial.APIKey, Model: initial.Model,
 		ContextTokens: strconv.Itoa(initial.ContextTokens), OutputTokens: strconv.Itoa(initial.OutputTokens),
 		WorkingDirectory: initial.WorkingDirectory, Slots: strconv.Itoa(initial.MaxActiveTasks),
-	}, HasSaved: config != nil, EditOpen: map[string]bool{}}
+	}, HasSaved: config != nil, CredentialPresent: strings.TrimSpace(initial.APIKey) != "", EditOpen: map[string]bool{}}
 	if config == nil {
 		s.FocusField = "Endpoint"
 	}
@@ -111,6 +112,10 @@ func (s *Settings) Validated() (Config, bool) {
 	s.Errors = ValidateConfig(config)
 	if s.Errors == nil {
 		s.Errors = map[string]string{}
+	}
+	if s.CredentialPresent && s.Initial.APIKey == "" && strings.TrimSpace(config.APIKey) == "" {
+		config.APIKey = ""
+		delete(s.Errors, "APIKey")
 	}
 	for key, message := range numericErrors {
 		s.Errors[key] = message
@@ -398,10 +403,13 @@ func (s *Settings) editableField(c *ui.Context, t *ui.Theme, key, label, placeho
 		}
 		open := s.EditOpen[key]
 		text := *value
-		if text == "" {
-			text = msgs.ConnectionValueUnset()
-		} else if secret {
+		if secret && s.CredentialPresent && s.Initial.APIKey == "" {
+			placeholder = msgs.ConnectionSavedAPIKeyPlaceholder()
+		}
+		if secret && (text != "" || s.CredentialPresent) {
 			text = "••••••••"
+		} else if text == "" {
+			text = msgs.ConnectionValueUnset()
 		} else if key == "Endpoint" {
 			text = markdown.SafeDiagnostic(text)
 		}
