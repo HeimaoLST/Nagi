@@ -253,7 +253,7 @@ func TestContactFolderDefaultControlRetainsExplicitSaveSemantics(t *testing.T) {
 		}, SaveAndNew: func(profileDraft) { replacements++ },
 	}, 560, 1800)
 	tr.Frame()
-	if err := tr.Click("Use default folder"); err != nil {
+	if err := tr.Click("Use default"); err != nil {
 		t.Fatal(err)
 	}
 	if original == "" || editor.Draft.Workspace != "" || saves != 0 || replacements != 0 {

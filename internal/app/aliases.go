@@ -269,6 +269,9 @@ func appTooltip(c *ui.Context, anchor ui.Element, text string) ui.Element {
 func secondaryButton(c *ui.Context, label string) ui.Element {
 	return theme.SecondaryButton(c, label)
 }
+func primaryButton(c *ui.Context, label string) ui.Element { return theme.PrimaryButton(c, label) }
+func dangerButton(c *ui.Context, label string) ui.Element  { return theme.DangerButton(c, label) }
+func linkButton(c *ui.Context, label string) ui.Element    { return theme.LinkButton(c, label) }
 func navigationControl(c *ui.Context, e ui.Element, palette workbenchTheme, selected bool) ui.Element {
 	return theme.NavigationControl(c, e, palette, selected)
 }
@@ -316,8 +319,8 @@ func installCustomTheme(sourcePath, directory string) (customTheme, *themeFileEr
 func markdownReader(c *ui.Context, source string, options markdownReaderOptions) ui.Element {
 	return markdown.Reader(c, source, options)
 }
-func recoveryNoticeView(c *ui.Context, t *ui.Theme, summary, detail string, expanded bool, toggle, settings func(), settingsLabel string) ui.Element {
-	return markdown.RecoveryNotice(c, t, summary, detail, expanded, toggle, settings, settingsLabel)
+func recoveryNoticeView(c *ui.Context, t *ui.Theme, summary, detail string, expanded bool, toggle, settings func(), settingsLabel string, actions ...func()) ui.Element {
+	return markdown.RecoveryNotice(c, t, summary, detail, expanded, toggle, settings, settingsLabel, actions...)
 }
 func truncate(text string, max int) string { return markdown.Truncate(text, max) }
 func safeDiagnostic(text string) string    { return markdown.SafeDiagnostic(text) }

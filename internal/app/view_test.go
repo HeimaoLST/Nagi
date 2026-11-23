@@ -1247,7 +1247,7 @@ func TestRP1DisclosurePreservesRecords(t *testing.T) {
 				t.Fatal(err)
 			}
 			tr.Frame()
-			if err := tr.Click(locales.In("zh-Hans").ConnectionSettingsAction()); err != nil {
+			if err := tr.Click(locales.In("zh-Hans").ConnectionRecoveryOpenSettings()); err != nil {
 				t.Fatal(err)
 			}
 			if !a.settingsOpen || a.settingsTab != settingsTabConnection {

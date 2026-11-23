@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -45,7 +46,7 @@ func TestConnectionSettingsRequireExplicitSaveAndTest(t *testing.T) {
 	if saved != 0 || tested != 0 || applied != 0 {
 		t.Fatal("rendering performed an action")
 	}
-	if err := tr.Click("Save configuration"); err != nil {
+	if err := tr.Click("Save"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
@@ -61,7 +62,7 @@ func TestConnectionSettingsRequireExplicitSaveAndTest(t *testing.T) {
 	if applied != 0 {
 		t.Fatal("blocked apply restarted the connection")
 	}
-	if err := tr.Click("Test connection and model"); err != nil {
+	if err := tr.Click("Test"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
@@ -79,7 +80,7 @@ func TestConnectionSettingsValidationKeepsDraftAndFocus(t *testing.T) {
 	tr := connectionSettingsTester(s, connectionSettingsActions{Save: func(connectionConfig) { calls++ }}, 580, 1600)
 	tr.SetFocused(true)
 	tr.Frame()
-	if err := tr.Click("Save configuration"); err != nil {
+	if err := tr.Click("Save"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
@@ -102,12 +103,8 @@ func TestConnectionProtocolSegmentedKeepsDraftAndBusyGate(t *testing.T) {
 	s := newConnectionSettings(&config, "")
 	tr := connectionSettingsTester(s, connectionSettingsActions{}, 580, 1600)
 	tr.Frame()
-	if err := tr.Click(chatCompletions); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
 	if !tr.HasText(msgs.ProtocolLabel()) || !tr.HasText(chatCompletions) || !tr.HasText(responses) {
-		t.Fatalf("protocol choices missing: %v", tr.Texts())
+		t.Fatalf("protocol segments were not independently visible: %v", tr.Texts())
 	}
 	if err := tr.Click(responses); err != nil {
 		t.Fatal(err)
@@ -116,21 +113,51 @@ func TestConnectionProtocolSegmentedKeepsDraftAndBusyGate(t *testing.T) {
 	if s.Draft.API != connectionAPIResponses {
 		t.Fatalf("protocol draft = %q, want Responses", s.Draft.API)
 	}
-	if err := tr.Click(responses); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if _, ok := tr.Find(chatCompletions); !ok {
-		t.Fatalf("protocol menu did not reopen: %v", tr.Texts())
-	}
-	s.Busy = true
-	tr.Frame()
 	if err := tr.Click(chatCompletions); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if s.Draft.API != connectionAPIResponses {
+	if s.Draft.API != connectionAPIChatCompletions || s.Initial.API != config.API {
+		t.Fatal("switching back did not restore the draft protocol or changed the saved selection")
+	}
+	s.Busy = true
+	tr.Frame()
+	if err := tr.Click(responses); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if s.Draft.API != connectionAPIChatCompletions {
 		t.Fatalf("busy protocol changed draft to %q", s.Draft.API)
+	}
+	s.Busy = false
+	s.Draft.API = "unsupported-protocol"
+	saves := 0
+	tr = connectionSettingsTester(s, connectionSettingsActions{Save: func(connectionConfig) { saves++ }}, 580, 1600)
+	tr.SetFocused(true)
+	tr.Frame()
+	if err := tr.Click(msgs.ConnectionSaveConfiguration()); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if saves != 0 || s.Errors["API"] == "" || !tr.Focused(chatCompletions) || !tr.HasText(msgs.ValidationAPI()) {
+		t.Fatalf("invalid protocol did not block Save or focus first segment: errors=%v focused=%v", s.Errors, tr.Focused(chatCompletions))
+	}
+	if err := tr.Click(chatCompletions); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if s.Draft.API != connectionAPIChatCompletions || s.Errors["API"] != "" {
+		t.Fatalf("clicking Chat completions did not repair invalid protocol: draft=%q errors=%v", s.Draft.API, s.Errors)
+	}
+	beforeBox, ok := tr.Find(responses)
+	if !ok {
+		t.Fatal("Responses segment missing")
+	}
+	tr.Key(0, ui.KeyRight)
+	tr.Frame()
+	afterBox, ok := tr.Find(responses)
+	if !ok || s.Draft.API != connectionAPIResponses || !tr.Focused(responses) || beforeBox != afterBox {
+		t.Fatalf("keyboard Right did not focus Responses without geometry shift: api=%q before=%+v after=%+v", s.Draft.API, beforeBox, afterBox)
 	}
 }
 
@@ -277,14 +304,16 @@ func TestFirstUseWorkFolderManualEntryAndReset(t *testing.T) {
 			fixture := testConnectionConfig(t)
 			form.Draft.Endpoint, form.Draft.APIKey, form.Draft.Model = fixture.Endpoint, fixture.APIKey, fixture.Model
 			var saved connectionConfig
-			tr := connectionSettingsTester(form, connectionSettingsActions{Save: func(config connectionConfig) { saved = config }}, 580, 1800)
+			saves := 0
+			tr := connectionSettingsTester(form, connectionSettingsActions{Save: func(config connectionConfig) {
+				saved = config
+				saves++
+			}}, 580, 1800)
 			tr.SetLocale(locale)
 			tr.SetFocused(true)
 			tr.Frame()
 			msgs := locales.In(locale)
-			if !tr.HasText(msgs.WorkFolderRequiredHint()) {
-				t.Fatal("fresh work-folder instruction is not visible")
-			}
+			assertConnectionTooltip(t, tr, msgs.WorkFolderChoose(), msgs.WorkFolderRequiredHint())
 			if err := tr.Click(msgs.ConnectionFolderEnterPath()); err != nil {
 				t.Fatal(err)
 			}
@@ -302,7 +331,7 @@ func TestFirstUseWorkFolderManualEntryAndReset(t *testing.T) {
 			if err := tr.Click(msgs.ConnectionSaveConfiguration()); err != nil {
 				t.Fatal(err)
 			}
-			if saved.WorkingDirectory != fixture.WorkingDirectory {
+			if saved.WorkingDirectory != fixture.WorkingDirectory || saves != 1 {
 				t.Fatal("explicit text selection could not be saved")
 			}
 			form.ResetDraft()
@@ -310,10 +339,41 @@ func TestFirstUseWorkFolderManualEntryAndReset(t *testing.T) {
 			if err := tr.Click(msgs.ConnectionSaveConfiguration()); err != nil {
 				t.Fatal(err)
 			}
-			if form.Errors["WorkingDirectory"] == "" || !tr.HasText(msgs.WorkFolderRequiredHint()) {
-				t.Fatal("reset silently reconfirmed a default work folder")
+			tr.Frame()
+			if form.Draft.WorkingDirectory != "" || form.Errors["WorkingDirectory"] == "" || !tr.HasText(msgs.ValidationWorkspaceAbsolutePath()) || saves != 1 {
+				t.Fatalf("reset did not require a new folder choice: path=%q saves=%d errors=%v", form.Draft.WorkingDirectory, saves, form.Errors)
 			}
 		})
+	}
+}
+
+func assertConnectionTooltip(t *testing.T, tr *ui.Tester, action, description string) {
+	t.Helper()
+	if tr.HasText(description) {
+		t.Fatalf("tooltip for %q was expanded before interaction", action)
+	}
+	box, found := tr.Find(action)
+	if !found || box.W <= 0 || box.H <= 0 {
+		t.Fatalf("tooltip target %q was not available: %+v", action, box)
+	}
+	tr.Move(box.X+box.W/2, box.Y+box.H/2)
+	tr.Advance(time.Second)
+	if !tr.HasText(description) {
+		t.Fatalf("tooltip for %q did not show %q", action, description)
+	}
+	tr.Move(0, 0)
+	tr.Frame()
+	for i := 0; i < 24 && !tr.Focused(action); i++ {
+		tr.Key(0, ui.KeyTab)
+		tr.Frame()
+	}
+	if !tr.Focused(action) || !tr.HasText(description) {
+		t.Fatalf("keyboard focus did not show the tooltip for %q", action)
+	}
+	tr.Key(0, ui.KeyEscape)
+	tr.Frame()
+	if !tr.Focused(action) || tr.HasText(description) {
+		t.Fatalf("Escape did not hide the tooltip and retain focus on %q", action)
 	}
 }
 
@@ -358,9 +418,7 @@ func TestRecoveryPresentationExplicitTestUsesDraftAndDisclosesFailure(t *testing
 				tr.SetFocused(true)
 				tr.Frame()
 				msgs := locales.In(locale)
-				if !tr.HasText(msgs.ConnectionTestHint()) {
-					t.Fatal("possibly charged explicit Test warning is hidden")
-				}
+				assertConnectionTooltip(t, tr, msgs.ConnectionTestAction(), msgs.ConnectionTestHint())
 				if err := tr.Click(msgs.ConnectionTestAction()); err != nil {
 					t.Fatal(err)
 				}
@@ -453,14 +511,14 @@ func TestConnectionSettingsEditCollapsePreservesCurrentDraftAndActionScopes(t *t
 	if tests+saves+applies != 0 || s.Initial.Endpoint != saved.Endpoint {
 		t.Fatal("editing performed a confirmation action or advanced the saved baseline")
 	}
-	if err := tr.Click("Test connection and model"); err != nil {
+	if err := tr.Click("Test"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
 	if tested != current || tests != 1 || saves+applies != 0 {
 		t.Fatal("Test did not consume the complete collapsed draft exactly once")
 	}
-	if err := tr.Click("Save configuration"); err != nil {
+	if err := tr.Click("Save"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
@@ -505,7 +563,7 @@ func TestConnectionSettingsValidationRevealsCollapsedDraft(t *testing.T) {
 	s.Draft.ContextTokens = "9007199254740993suffix"
 	s.Draft.WorkingDirectory = "relative-path"
 	tr.Frame()
-	if err := tr.Click("Save configuration"); err != nil {
+	if err := tr.Click("Save"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
@@ -521,57 +579,203 @@ func TestConnectionSettingsValidationRevealsCollapsedDraft(t *testing.T) {
 	if s.Errors["APIKey"] == "" || !tr.HasText(locales.In("en").ValidationRequired()) {
 		t.Fatal("explicit collapse erased the pending field error")
 	}
-	s.Draft.ContextTokens = "131072"
-	if err := tr.Click("Save configuration"); err != nil {
+	if err := tr.Click(locales.In("en").SettingsHideRuntimeDetails()); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if !tr.Focused("Default working directory") || s.Draft.WorkingDirectory != "relative-path" || calls != 0 {
+	if s.LimitsOpen || s.Errors["ContextTokens"] != validationNumeric || !tr.HasText(locales.In("en").ValidationNumeric()) {
+		t.Fatal("collapsing capacity hid the pending token error")
+	}
+	s.Draft.ContextTokens = "131072"
+	if err := tr.Click("Save"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if !tr.Focused(locales.In("en").ConnectionFieldWorkingDirectory()) || s.Draft.WorkingDirectory != "relative-path" || calls != 0 {
 		t.Fatal("validation did not reveal and focus the manual folder input")
+	}
+	if err := tr.Click(locales.In("en").ConnectionFolderHidePath()); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if s.EditOpen["WorkingDirectory"] || s.Errors["WorkingDirectory"] == "" || !tr.HasText(locales.In("en").ValidationWorkspaceAbsolutePath()) {
+		t.Fatal("collapsing working directory hid the pending folder error")
 	}
 }
 
-func TestConnectionSettingsSlotsStepPreservesInvalidAndOverflow(t *testing.T) {
+func TestConnectionSettingsCapacityPreservesExactValues(t *testing.T) {
+	msgs := locales.In("en")
+	t.Run("segments", func(t *testing.T) {
+		config := testConnectionConfig(t)
+		s := newConnectionSettings(&config, config.WorkingDirectory)
+		var saved connectionConfig
+		saves := 0
+		tr := connectionSettingsTester(s, connectionSettingsActions{Save: func(candidate connectionConfig) {
+			saved = candidate
+			saves++
+		}}, 600, 2000)
+		tr.Frame()
+		if _, found := tr.Find(msgs.ConnectionFieldMaxActiveTasks()); found {
+			t.Fatal("task count controls were visible before expanding capacity")
+		}
+		if err := tr.Click(msgs.SettingsShowRuntimeDetails()); err != nil {
+			t.Fatal(err)
+		}
+		tr.Frame()
+		s.Errors = map[string]string{"MaxActiveTasks": validationNumeric}
+		for _, count := range []string{"4", "3", "2", "1"} {
+			if err := tr.Click(count); err != nil {
+				t.Fatal(err)
+			}
+			tr.Frame()
+			if s.Draft.Slots != count || saves != 0 || s.Errors["MaxActiveTasks"] != "" {
+				t.Fatalf("selecting task count %s changed saved state or kept a validation error: %q %v", count, s.Draft.Slots, s.Errors)
+			}
+		}
+		s.Busy = true
+		tr.Frame()
+		if err := tr.Click("4"); err != nil {
+			t.Fatal(err)
+		}
+		if s.Draft.Slots != "1" {
+			t.Fatal("busy task segments changed the draft")
+		}
+		s.Busy = false
+		tr.Frame()
+		if err := tr.Click(msgs.SettingsHideRuntimeDetails()); err != nil {
+			t.Fatal(err)
+		}
+		tr.Frame()
+		if s.LimitsOpen || !tr.HasText(msgs.ConnectionCapacitySummary("64K", "8K", "1")) {
+			t.Fatalf("collapsed capacity did not retain the draft count: %v", tr.Texts())
+		}
+		if err := tr.Click(msgs.ConnectionSaveConfiguration()); err != nil {
+			t.Fatal(err)
+		}
+		config.MaxActiveTasks = 1
+		if saves != 1 || saved != config {
+			t.Fatalf("explicit Save did not consume the selected draft once: %+v", saved)
+		}
+	})
+	t.Run("token preset and custom", func(t *testing.T) {
+		config := testConnectionConfig(t)
+		config.ContextTokens = 131072
+		s := newConnectionSettings(&config, config.WorkingDirectory)
+		path := filepath.Join(t.TempDir(), "connection.json")
+		tr := connectionSettingsTester(s, connectionSettingsActions{Save: func(candidate connectionConfig) {
+			if err := saveConnectionConfig(path, candidate); err != nil {
+				t.Fatal(err)
+			}
+		}}, 600, 1600)
+		tr.SetFocused(true)
+		tr.Frame()
+		for _, label := range []string{msgs.SettingsShowRuntimeDetails(), msgs.ConnectionTokenPresetDefault("128K / 8K"), "256K / 16K"} {
+			if err := tr.Click(label); err != nil {
+				t.Fatal(err)
+			}
+			tr.Frame()
+		}
+		if s.Draft.ContextTokens != "262144" || s.Draft.OutputTokens != "16384" || !tr.HasText(msgs.ConnectionCapacitySummary("256K", "16K", "2")) {
+			t.Fatalf("token preset did not update both draft limits: %q / %q", s.Draft.ContextTokens, s.Draft.OutputTokens)
+		}
+		for _, label := range []string{"256K / 16K", msgs.ConnectionTokenPresetCustom()} {
+			if err := tr.Click(label); err != nil {
+				t.Fatal(err)
+			}
+			tr.Frame()
+		}
+		for _, field := range []struct{ label, value string }{
+			{msgs.ConnectionFieldContextTokens(), "9007199254740991"},
+			{msgs.ConnectionFieldOutputTokens(), "16385"},
+		} {
+			for i := 0; i < 24 && !tr.Focused(field.label); i++ {
+				tr.Key(0, ui.KeyTab)
+				tr.Frame()
+			}
+			if active, _ := tr.TextInputActive(); !tr.Focused(field.label) || !active {
+				t.Fatalf("custom token field %q is not keyboard editable", field.label)
+			}
+			tr.Key(ui.Cmd, ui.KeyA)
+			tr.Type(field.value)
+			tr.Frame()
+		}
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatalf("editing capacity performed a write before Save: %v", err)
+		}
+		if err := tr.Click(msgs.ConnectionSaveConfiguration()); err != nil {
+			t.Fatal(err)
+		}
+		loaded, err := loadConnectionConfig(path)
+		config.ContextTokens, config.OutputTokens = 9007199254740991, 16385
+		if err != nil || loaded != config {
+			t.Fatalf("custom token limits did not round-trip exactly: context=%d output=%d error=%v", loaded.ContextTokens, loaded.OutputTokens, err)
+		}
+	})
 	maxInt := int(^uint(0) >> 1)
-	for _, tc := range []struct{ raw, increase, decrease string }{
-		{"2", "3", "1"}, {"  +2  ", "3", "1"}, {"0002", "3", "1"},
-		{"1", "2", "1"}, {strconv.Itoa(maxInt), strconv.Itoa(maxInt), strconv.Itoa(maxInt - 1)},
-		{"", "", ""}, {" ", " ", " "}, {"1.5", "1.5", "1.5"},
-		{"2tasks", "2tasks", "2tasks"}, {"0x2", "0x2", "0x2"}, {"0", "0", "0"},
-		{"999999999999999999999999", "999999999999999999999999", "999999999999999999999999"},
-		{"9007199254740993", "9007199254740994", "9007199254740992"},
+	for _, tc := range []struct {
+		raw  string
+		want int
+	}{
+		{"2", 2}, {"  +2  ", 2}, {"0002", 2}, {"1", 1}, {strconv.Itoa(maxInt), maxInt},
+		{"", 0}, {" ", 0}, {"1.5", 0}, {"2tasks", 0}, {"0x2", 0}, {"0", 0},
+		{"999999999999999999999999", 0}, {"9007199254740993", 9007199254740993},
 	} {
 		t.Run(tc.raw, func(t *testing.T) {
 			config := testConnectionConfig(t)
+			config.MaxActiveTasks = 5
 			s := newConnectionSettings(&config, config.WorkingDirectory)
-			s.Draft.Slots, s.LimitsOpen = tc.raw, true
-			s.Errors = map[string]string{"MaxActiveTasks": validationNumeric}
-			tr := connectionSettingsTester(s, connectionSettingsActions{}, 600, 2000)
+			path := filepath.Join(t.TempDir(), "connection.json")
+			saves := 0
+			tr := connectionSettingsTester(s, connectionSettingsActions{Save: func(candidate connectionConfig) {
+				saves++
+				if err := saveConnectionConfig(path, candidate); err != nil {
+					t.Fatal(err)
+				}
+			}}, 600, 2000)
+			tr.SetFocused(true)
 			tr.Frame()
-			if err := tr.Click("Increase maximum active tasks"); err != nil {
+			if err := tr.Click(msgs.SettingsShowRuntimeDetails()); err != nil {
 				t.Fatal(err)
 			}
 			tr.Frame()
-			if s.Draft.Slots != tc.increase || s.Errors["MaxActiveTasks"] != validationNumeric {
-				t.Fatalf("increase %q = %q, want %q; pending error=%q", tc.raw, s.Draft.Slots, tc.increase, s.Errors["MaxActiveTasks"])
+			field := msgs.ConnectionFieldMaxActiveTasks()
+			for i := 0; i < 24 && !tr.Focused(field); i++ {
+				tr.Key(0, ui.KeyTab)
+				tr.Frame()
 			}
-			s.Draft.Slots = tc.raw
+			if active, _ := tr.TextInputActive(); !active || !tr.Focused(field) {
+				t.Fatal("a saved count outside the segments was not editable")
+			}
+			tr.Key(ui.Cmd, ui.KeyA)
+			tr.Key(0, ui.KeyBackspace)
+			tr.Type(tc.raw)
 			tr.Frame()
-			if err := tr.Click("Decrease maximum active tasks"); err != nil {
-				t.Fatal(err)
-			}
-			tr.Frame()
-			if s.Draft.Slots != tc.decrease {
-				t.Fatalf("decrease %q = %q, want %q", tc.raw, s.Draft.Slots, tc.decrease)
-			}
 			s.Busy = true
-			s.Draft.Slots = tc.raw
 			tr.Frame()
-			if err := tr.Click("Increase maximum active tasks"); err != nil {
+			tr.Type("7")
+			if err := tr.Click(msgs.ConnectionSaveConfiguration()); err != nil {
 				t.Fatal(err)
 			}
-			if s.Draft.Slots != tc.raw {
-				t.Fatal("busy slot step changed the draft")
+			tr.Frame()
+			if s.Draft.Slots != tc.raw || saves != 0 {
+				t.Fatalf("editing or busy actions changed the raw task count or saved: %q, saves=%d", s.Draft.Slots, saves)
+			}
+			s.Busy = false
+			tr.Frame()
+			if err := tr.Click(msgs.ConnectionSaveConfiguration()); err != nil {
+				t.Fatal(err)
+			}
+			tr.Frame()
+			if tc.want == 0 {
+				if saves != 0 || s.Draft.Slots != tc.raw || s.Errors["MaxActiveTasks"] != validationNumeric || !tr.Focused(field) || !tr.HasText(msgs.ValidationNumeric()) {
+					t.Fatalf("invalid count did not preserve its draft, block Save and focus the error: %q %v", s.Draft.Slots, s.Errors)
+				}
+				return
+			}
+			loaded, err := loadConnectionConfig(path)
+			config.MaxActiveTasks = tc.want
+			if err != nil || saves != 1 || loaded != config || s.Draft.Slots != tc.raw || len(s.Errors) != 0 {
+				t.Fatalf("saved count did not round-trip exactly: loaded=%+v draft=%q saves=%d error=%v", loaded, s.Draft.Slots, saves, err)
 			}
 		})
 	}

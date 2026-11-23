@@ -2,6 +2,7 @@ package connection
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -36,6 +37,8 @@ type Settings struct {
 	FolderError         string
 	EditOpen            map[string]bool
 	FocusEdit           string
+	customTokens        bool
+	customSlots         bool
 }
 
 type SettingsActions struct {
@@ -82,6 +85,8 @@ func (s *Settings) ResetDraft() {
 	s.FocusField = "Endpoint"
 	s.FolderError = ""
 	s.RecoveryDetailsOpen = false
+	s.customTokens = false
+	s.customSlots = false
 }
 
 func (s *Settings) Validated() (Config, bool) {
@@ -169,154 +174,214 @@ func (s *Settings) View(c *ui.Context, t *ui.Theme, actions SettingsActions, inp
 		}
 		c.Key("connection-fields")
 		theme.PreferenceGroup(c, t, func() {
+			protocols := [...]string{APIChatCompletions, APIResponses}
+			selected := slices.Index(protocols[:], s.Draft.API)
 			theme.SettingsPreferenceRow(c, t, msgs.ProtocolLabel(), "", func() {
 				c.Key("connection-protocol")
-				theme.PreferenceSelect(c, &s.Draft.API, []theme.SelectOption{{Value: APIChatCompletions, Label: msgs.ProtocolChatCompletionsLabel()}, {Value: APIResponses, Label: msgs.ProtocolResponsesLabel()}}, msgs.ProtocolLabel(), s.Busy)
+				focus := s.FocusField == "API" && !s.Busy
+				protocol := theme.PreferenceSegmentedSelection(c, &selected, msgs.ProtocolLabel(), s.Busy, focus, msgs.ProtocolChatCompletionsLabel(), msgs.ProtocolResponsesLabel())
+				protocol.OnChange(func() {
+					s.Draft.API = protocols[selected]
+					delete(s.Errors, "API")
+				})
+				if focus {
+					s.FocusField = ""
+				}
 			})
 			if s.Errors["API"] != "" {
-				ui.Text(c, FieldErrorText(msgs, "API", s.Errors["API"])).FontSize(theme.TypeBody).FixedLineHeight(theme.LineBody).TextColor(t.Danger)
+				ui.Text(c, FieldErrorText(msgs, "API", s.Errors["API"])).FontSize(theme.TypeMeta).FixedLineHeight(theme.LineMeta).TextColor(t.Danger)
 			}
 			s.editableField(c, t, "Endpoint", msgs.ConnectionFieldEndpoint(), msgs.ConnectionEndpointPlaceholder(), &s.Draft.Endpoint, false, msgs.ConnectionEndpointHint(), border)
 			s.editableField(c, t, "APIKey", msgs.ConnectionFieldAPIKey(), msgs.ConnectionAPIKeyPlaceholder(), &s.Draft.APIKey, true, msgs.ConnectionAPIKeyHint(), border)
 			s.editableField(c, t, "Model", msgs.ConnectionFieldModel(), msgs.ConnectionModelPlaceholder(), &s.Draft.Model, false, "", border)
-			ui.Column(c).Key("connection-limits").FillWidth().Gap(8).Children(func() {
-				limitsLabel := msgs.ConnectionCapacityShow()
-				limitsTooltip := msgs.ConnectionCapacityShowTooltip()
-				if s.LimitsOpen {
-					limitsLabel = msgs.ConnectionCapacityHide()
-					limitsTooltip = msgs.ConnectionCapacityHideTooltip()
-				}
-				ui.Toolbar(c, func() {
-					c.Key("limits-disclosure")
-					limits := theme.AppTooltip(c, theme.SecondaryButton(c, "").Label(limitsLabel), limitsTooltip).
-						MinHeight(32).Padding(4, 8).Gap(6)
-					limits.Children(func() {
-						arrow := float32(180)
-						if s.LimitsOpen {
-							arrow = -90
-						}
-						ui.Icon(c, theme.GlyphArrowRightSLine).Width(16).Height(16).Rotate(arrow - 180).TextColor(t.TextMuted)
-						ui.Text(c, limitsLabel).FontSize(theme.TypeAction).TextColor(t.Text)
-					})
-					limits.OnClick(func() { s.LimitsOpen = !s.LimitsOpen })
-				}).Label(msgs.ConnectionCapacityDisclosure()).Padding(0)
-				if s.LimitsOpen {
-					ui.Text(c, msgs.ConnectionLimitsHint()).FontSize(theme.TypeMeta).FixedLineHeight(theme.LineMeta).TextColor(t.TextMuted)
-					s.Field(c, t, "ContextTokens", msgs.ConnectionFieldContextTokens(), "131072", &s.Draft.ContextTokens, false, "", border)
-					s.Field(c, t, "OutputTokens", msgs.ConnectionFieldOutputTokens(), "8192", &s.Draft.OutputTokens, false, "", border)
-					s.Field(c, t, "MaxActiveTasks", msgs.ConnectionFieldMaxActiveTasks(), "2", &s.Draft.Slots, false, "", border)
-				} else {
-					ui.Text(c, s.valueSource(msgs)).FontSize(theme.TypeMeta).TextColor(t.TextMuted)
-					for _, field := range []struct{ key, label, value string }{
-						{"ContextTokens", msgs.ConnectionFieldContextTokens(), s.Draft.ContextTokens},
-						{"OutputTokens", msgs.ConnectionFieldOutputTokens(), s.Draft.OutputTokens},
-						{"MaxActiveTasks", msgs.ConnectionFieldMaxActiveTasks(), s.Draft.Slots},
-					} {
-						ui.Text(c, field.label+": "+field.value).FontSize(theme.TypeMeta).FixedLineHeight(theme.LineMeta).TextColor(t.TextMuted)
-						if message := s.Errors[field.key]; message != "" {
-							ui.Text(c, FieldErrorText(msgs, field.key, message)).FontSize(theme.TypeBody).FixedLineHeight(theme.LineBody).TextColor(t.Danger)
-						}
-					}
-				}
-			})
-			ui.Column(c).Key("connection-folder").FillWidth().Gap(8).Children(func() {
-				folderHint := msgs.ConnectionWorkingDirectoryHint()
-				path := s.Draft.WorkingDirectory
-				if strings.TrimSpace(path) == "" {
-					path = msgs.ConnectionValueUnset()
-					folderHint = msgs.WorkFolderRequiredHint()
-				}
-				theme.SettingsPreferenceRow(c, t, msgs.ConnectionFieldWorkingDirectory(), s.valueSource(msgs), func() {
-					ui.Text(c, path).FontSize(theme.TypeLabel).FixedLineHeight(theme.LineLabel).TextColor(t.Text)
-					c.Key("choose-connection-folder")
-					folder := theme.SecondaryButton(c, msgs.WorkFolderChoose()).Label(msgs.WorkFolderChoose()).Disabled(s.Busy).OnClick(actions.ChooseFolder)
-					if s.FocusFolder {
-						folder.Focus()
-						s.FocusFolder = false
-					}
-				}, true)
-				ui.Text(c, folderHint).FontSize(theme.TypeMeta).FixedLineHeight(theme.LineMeta).TextColor(t.TextMuted)
-				label := msgs.ConnectionFolderEnterPath()
-				if s.EditOpen["WorkingDirectory"] {
-					label = msgs.ConnectionFolderHidePath()
-				}
-				c.Key("folder-path-disclosure")
-				theme.SecondaryButton(c, label).Label(label).AlignSelf(ui.Start).OnClick(func() {
-					s.EditOpen["WorkingDirectory"] = !s.EditOpen["WorkingDirectory"]
-					if s.EditOpen["WorkingDirectory"] {
-						s.FocusField = "WorkingDirectory"
-					}
-				})
-				if s.EditOpen["WorkingDirectory"] {
-					s.Field(c, t, "WorkingDirectory", msgs.ConnectionFieldWorkingDirectory(), msgs.ConnectionWorkingDirectoryPlaceholder(), &s.Draft.WorkingDirectory, false, "", border)
-				} else if message := s.Errors["WorkingDirectory"]; message != "" {
-					ui.Text(c, FieldErrorText(msgs, "WorkingDirectory", message)).FontSize(theme.TypeBody).FixedLineHeight(theme.LineBody).TextColor(t.Danger)
-				}
-				if s.FolderError != "" {
-					ui.Text(c, msgs.WorkFolderChooseFailed(s.FolderError)).FontSize(theme.TypeBody).FixedLineHeight(theme.LineBody).TextColor(t.Danger)
-				}
-			})
+			s.capacity(c, t, msgs, border)
+			s.workingDirectory(c, t, msgs, actions.ChooseFolder, border)
 		})
 		ui.Column(c).Key("connection-actions").FillWidth().Gap(8).Children(func() {
 			ui.Row(c).Gap(8).Wrap().Children(func() {
-				if s.SavedPending && !s.Dirty() {
-					theme.SecondaryButton(c, msgs.ConnectionApplySaved()).Label(msgs.ConnectionApplySaved()).Disabled(s.Busy || s.ReloadBlocked != "").OnClick(actions.Apply)
-					theme.SecondaryButton(c, msgs.ConnectionSaveConfiguration()).Label(msgs.ConnectionSaveConfiguration()).FontSize(theme.TypeAction).MinHeight(32).Disabled(s.Busy).OnClick(func() {
-						if config, ok := s.Validated(); ok && actions.Save != nil {
-							actions.Save(config)
-						}
-					})
+				applySaved := s.SavedPending && !s.Dirty()
+				if applySaved {
+					theme.PrimaryButton(c, msgs.ConnectionApplySaved()).Disabled(s.Busy || s.ReloadBlocked != "").OnClick(actions.Apply)
 				} else {
-					theme.SecondaryButton(c, msgs.ConnectionSaveAndApply()).Label(msgs.ConnectionSaveAndApply()).Disabled(s.Busy).OnClick(func() {
+					theme.PrimaryButton(c, msgs.ConnectionSaveAndApply()).Disabled(s.Busy).OnClick(func() {
 						if config, ok := s.Validated(); ok && actions.SaveAndApply != nil {
 							actions.SaveAndApply(config)
 						}
 					})
-					theme.SecondaryButton(c, msgs.ConnectionSaveConfiguration()).Label(msgs.ConnectionSaveConfiguration()).FontSize(theme.TypeAction).MinHeight(32).Disabled(s.Busy).OnClick(func() {
-						if config, ok := s.Validated(); ok && actions.Save != nil {
-							actions.Save(config)
-						}
-					})
-					if s.HasSaved {
-						theme.SecondaryButton(c, msgs.ConnectionApplySaved()).Label(msgs.ConnectionApplySaved()).Disabled(s.Busy || s.ReloadBlocked != "").OnClick(actions.Apply)
+				}
+				theme.SecondaryButton(c, msgs.ConnectionSaveConfiguration()).Disabled(s.Busy).OnClick(func() {
+					if config, ok := s.Validated(); ok && actions.Save != nil {
+						actions.Save(config)
 					}
-				}
-				if s.Dirty() && actions.Discard != nil {
-					theme.SecondaryButton(c, msgs.ConnectionDiscard()).Label(msgs.ConnectionDiscard()).Disabled(s.Busy).OnClick(actions.Discard)
-				}
-			})
-			if s.ReloadBlocked != "" {
-				ui.Text(c, BlockedText(msgs, s.ReloadBlocked)).FontSize(theme.TypeLabel).FixedLineHeight(theme.LineLabel).TextColor(t.Warning)
-			}
-			ui.Text(c, msgs.ConnectionSaveDoesNotInterrupt()).
-				FontSize(theme.TypeMeta).LineHeight(1.5).TextColor(t.TextMuted)
-			ui.Row(c).Gap(8).Wrap().Children(func() {
-				theme.SecondaryButton(c, msgs.ConnectionTestAction()).Label(msgs.ConnectionTestAction()).Disabled(s.Busy).OnClick(func() {
+				})
+				test := theme.SecondaryButton(c, msgs.ConnectionTestAction()).Disabled(s.Busy).OnClick(func() {
 					if config, ok := s.Validated(); ok && actions.Test != nil {
 						actions.Test(config)
 					}
 				})
+				theme.AppTooltip(c, test, msgs.ConnectionTestHint())
+				if !applySaved && s.HasSaved {
+					theme.SecondaryButton(c, msgs.ConnectionApplySaved()).Disabled(s.Busy || s.ReloadBlocked != "").OnClick(actions.Apply)
+				}
+				if s.Dirty() && actions.Discard != nil {
+					theme.GhostButton(c, msgs.ConnectionDiscard()).Disabled(s.Busy).OnClick(actions.Discard)
+				}
 			})
-			ui.Text(c, msgs.ConnectionTestHint()).
-				FontSize(theme.TypeMeta).LineHeight(1.5).TextColor(t.TextMuted)
+			if s.Dirty() {
+				ui.Text(c, msgs.ConnectionUnsavedForm()).FontSize(theme.TypeMeta).FixedLineHeight(theme.LineMeta).TextColor(t.Warning)
+			}
+			if s.SavedPending {
+				ui.Text(c, msgs.ConnectionSavedAwaitingApply()).FontSize(theme.TypeMeta).FixedLineHeight(theme.LineMeta).TextColor(t.TextMuted)
+			}
+			if s.ReloadBlocked != "" {
+				ui.Text(c, BlockedText(msgs, s.ReloadBlocked)).FontSize(theme.TypeMeta).FixedLineHeight(theme.LineMeta).TextColor(t.Warning)
+			}
 			if s.Status != "" {
-				ui.Text(c, StatusText(msgs, s.Status, s.StatusArgs)).FontSize(theme.TypeLabel).FixedLineHeight(theme.LineLabel).TextColor(t.Text)
+				ui.Text(c, StatusText(msgs, s.Status, s.StatusArgs)).FontSize(theme.TypeMeta).FixedLineHeight(theme.LineMeta).TextColor(t.Text)
 			}
 		})
 	})
 }
 
-func (s *Settings) valueSource(msgs locales.Messages) string {
-	if len(s.Errors) > 0 {
-		return msgs.ConnectionValueInvalidDraft()
+func compactTokens(raw string) string {
+	value, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err == nil && value >= 1024 && value%1024 == 0 {
+		return strconv.Itoa(value/1024) + "K"
 	}
-	if s.Dirty() {
-		return msgs.ConnectionValueUnsavedDraft()
+	return raw
+}
+
+func (s *Settings) capacity(c *ui.Context, t *ui.Theme, msgs locales.Messages, border ui.Color) {
+	ui.Column(c).Key("connection-limits").FillWidth().Gap(4).Children(func() {
+		theme.SettingsPreferenceRow(c, t, msgs.ConnectionCapacityShow(), "", func() {
+			ui.Row(c).Wrap().AlignItems(ui.Center).Gap(8).Children(func() {
+				ui.Text(c, msgs.ConnectionCapacitySummary(compactTokens(s.Draft.ContextTokens), compactTokens(s.Draft.OutputTokens), s.Draft.Slots)).
+					FontSize(theme.TypeMeta).FixedLineHeight(theme.LineMeta).TextColor(t.TextMuted)
+				label, hint := msgs.SettingsShowRuntimeDetails(), msgs.ConnectionCapacityShowTooltip()
+				if s.LimitsOpen {
+					label, hint = msgs.SettingsHideRuntimeDetails(), msgs.ConnectionCapacityHideTooltip()
+				}
+				c.Key("limits-disclosure")
+				theme.AppTooltip(c, theme.LinkButton(c, label), hint).OnClick(func() {
+					s.LimitsOpen = !s.LimitsOpen
+					if !s.LimitsOpen {
+						s.customSlots = false
+					}
+				})
+			})
+		})
+		if !s.LimitsOpen {
+			for _, key := range [...]string{"ContextTokens", "OutputTokens", "MaxActiveTasks"} {
+				if message := s.Errors[key]; message != "" {
+					ui.Text(c, FieldErrorText(msgs, key, message)).FontSize(theme.TypeMeta).LineHeight(1.5).TextColor(t.Danger)
+				}
+			}
+			return
+		}
+		s.tokenLimits(c, t, msgs, border)
+		slots, _ := strconv.Atoi(strings.TrimSpace(s.Draft.Slots))
+		if s.customSlots || slots < 1 || slots > 4 {
+			s.customSlots = true
+			s.Field(c, t, "MaxActiveTasks", msgs.ConnectionFieldMaxActiveTasks(), "2", &s.Draft.Slots, false, "", border)
+			return
+		}
+		selected := slots - 1
+		theme.SettingsPreferenceRow(c, t, msgs.ConnectionFieldMaxActiveTasks(), "", func() {
+			c.Key("active-task-presets")
+			theme.PreferenceSegmentedSelection(c, &selected, msgs.ConnectionFieldMaxActiveTasks(), s.Busy, false, "1", "2", "3", "4").OnChange(func() {
+				s.Draft.Slots = strconv.Itoa(selected + 1)
+				delete(s.Errors, "MaxActiveTasks")
+			})
+		})
+	})
+}
+
+func (s *Settings) tokenLimits(c *ui.Context, t *ui.Theme, msgs locales.Messages, border ui.Color) {
+	defaults := DefaultConfig("")
+	presets := [...]struct {
+		id              string
+		context, output int
+	}{
+		{"default", defaults.ContextTokens, defaults.OutputTokens},
+		{"256k", 256 * 1024, 16 * 1024},
+		{"512k", 512 * 1024, 32 * 1024},
 	}
-	if s.HasSaved && !s.Busy && s.Error == "" && s.ErrorDetail == "" {
-		return msgs.ConnectionValueSaved()
+	contextTokens, _ := strconv.Atoi(strings.TrimSpace(s.Draft.ContextTokens))
+	outputTokens, _ := strconv.Atoi(strings.TrimSpace(s.Draft.OutputTokens))
+	selected := "custom"
+	options := make([]theme.SelectOption, 0, len(presets)+1)
+	for _, preset := range presets {
+		label := fmt.Sprintf("%dK / %dK", preset.context/1024, preset.output/1024)
+		if preset.id == "default" {
+			label = msgs.ConnectionTokenPresetDefault(label)
+		}
+		options = append(options, theme.SelectOption{Value: preset.id, Label: label})
+		if !s.customTokens && contextTokens == preset.context && outputTokens == preset.output {
+			selected = preset.id
+		}
 	}
-	return msgs.ConnectionValueDraft()
+	options = append(options, theme.SelectOption{Value: "custom", Label: msgs.ConnectionTokenPresetCustom()})
+	theme.SettingsPreferenceRow(c, t, msgs.ConnectionTokenLimits(), "", func() {
+		c.Key("token-limit-presets")
+		preset := theme.PreferenceSelect(c, &selected, options, msgs.ConnectionTokenLimits(), s.Busy)
+		if preset.Changed() {
+			s.customTokens = selected == "custom"
+			for _, choice := range presets {
+				if choice.id == selected {
+					s.Draft.ContextTokens = strconv.Itoa(choice.context)
+					s.Draft.OutputTokens = strconv.Itoa(choice.output)
+					delete(s.Errors, "ContextTokens")
+					delete(s.Errors, "OutputTokens")
+				}
+			}
+		}
+	})
+	if selected == "custom" {
+		s.customTokens = true
+		s.Field(c, t, "ContextTokens", msgs.ConnectionFieldContextTokens(), "131072", &s.Draft.ContextTokens, false, "", border)
+		s.Field(c, t, "OutputTokens", msgs.ConnectionFieldOutputTokens(), "8192", &s.Draft.OutputTokens, false, "", border)
+	}
+}
+
+func (s *Settings) workingDirectory(c *ui.Context, t *ui.Theme, msgs locales.Messages, choose func(), border ui.Color) {
+	ui.Column(c).Key("connection-folder").FillWidth().Gap(4).Children(func() {
+		path := strings.TrimSpace(s.Draft.WorkingDirectory)
+		if path == "" {
+			path = msgs.ConnectionValueUnset()
+		}
+		theme.SettingsPreferenceRow(c, t, msgs.ConnectionFieldWorkingDirectory(), path, func() {
+			ui.Row(c).Wrap().AlignItems(ui.Center).Gap(8).Children(func() {
+				c.Key("choose-connection-folder")
+				folder := theme.SecondaryButton(c, msgs.WorkFolderChoose()).Disabled(s.Busy).OnClick(choose)
+				if strings.TrimSpace(s.Draft.WorkingDirectory) == "" {
+					theme.AppTooltip(c, folder, msgs.WorkFolderRequiredHint())
+				}
+				if s.FocusFolder {
+					folder.Focus()
+					s.FocusFolder = false
+				}
+				label := msgs.ConnectionFolderEnterPath()
+				if s.EditOpen["WorkingDirectory"] {
+					label = msgs.ConnectionFolderHidePath()
+				}
+				c.Key("folder-path-disclosure")
+				theme.LinkButton(c, label).Disabled(s.Busy).OnClick(func() {
+					s.EditOpen["WorkingDirectory"] = !s.EditOpen["WorkingDirectory"]
+					if s.EditOpen["WorkingDirectory"] {
+						s.FocusField = "WorkingDirectory"
+					}
+				})
+			})
+		}, true)
+		if s.EditOpen["WorkingDirectory"] {
+			s.Field(c, t, "WorkingDirectory", msgs.ConnectionFieldWorkingDirectory(), msgs.ConnectionWorkingDirectoryPlaceholder(), &s.Draft.WorkingDirectory, false, "", border)
+		} else if message := s.Errors["WorkingDirectory"]; message != "" {
+			ui.Text(c, FieldErrorText(msgs, "WorkingDirectory", message)).FontSize(theme.TypeMeta).LineHeight(1.5).TextColor(t.Danger)
+		}
+		if s.FolderError != "" {
+			ui.Text(c, msgs.WorkFolderChooseFailed(s.FolderError)).FontSize(theme.TypeMeta).FixedLineHeight(theme.LineMeta).TextColor(t.Danger)
+		}
+	})
 }
 
 func (s *Settings) editableField(c *ui.Context, t *ui.Theme, key, label, placeholder string, value *string, secret bool, helper string, inputBorder ...ui.Color) {
@@ -332,20 +397,21 @@ func (s *Settings) editableField(c *ui.Context, t *ui.Theme, key, label, placeho
 			return
 		}
 		open := s.EditOpen[key]
-		theme.SettingsPreferenceRow(c, t, label, s.valueSource(msgs), func() {
-			text := *value
-			if text == "" {
-				text = msgs.ConnectionValueUnset()
-			} else if secret {
-				text = "••••••••"
-			}
-			ui.Text(c, text).FontSize(theme.TypeLabel).FixedLineHeight(theme.LineLabel).TextColor(t.Text)
+		text := *value
+		if text == "" {
+			text = msgs.ConnectionValueUnset()
+		} else if secret {
+			text = "••••••••"
+		} else if key == "Endpoint" {
+			text = markdown.SafeDiagnostic(text)
+		}
+		theme.SettingsPreferenceRow(c, t, label, text, func() {
 			buttonText, accessible := msgs.ConnectionEditAction(), msgs.ConnectionEditField(label)
 			if open {
 				buttonText, accessible = msgs.ConnectionCloseEditorAction(), msgs.ConnectionCloseField(label)
 			}
 			c.Key("editor-disclosure")
-			button := theme.SecondaryButton(c, buttonText).Label(accessible).OnClick(func() {
+			button := theme.SecondaryButton(c, buttonText).Label(accessible).Disabled(s.Busy).OnClick(func() {
 				s.EditOpen[key] = !open
 				if !open {
 					s.FocusField = key
@@ -361,7 +427,7 @@ func (s *Settings) editableField(c *ui.Context, t *ui.Theme, key, label, placeho
 		if open {
 			s.Field(c, t, key, label, placeholder, value, secret, helper, border)
 		} else if message := s.Errors[key]; message != "" {
-			ui.Text(c, FieldErrorText(msgs, key, message)).FontSize(theme.TypeBody).FixedLineHeight(theme.LineBody).TextColor(t.Danger)
+			ui.Text(c, FieldErrorText(msgs, key, message)).FontSize(theme.TypeMeta).LineHeight(1.5).TextColor(t.Danger)
 		}
 	})
 }
@@ -385,47 +451,11 @@ func (s *Settings) Field(c *ui.Context, t *ui.Theme, key, label, placeholder str
 			return field
 		}
 		theme.SettingsPreferenceRow(c, t, label, helper, func() {
-			if key == "MaxActiveTasks" {
-				ui.Row(c).FillWidth().MinWidth(0).AlignItems(ui.Center).Gap(4).Children(func() {
-					s.slotStep(c, -1)
-					input().Width(180).MinWidth(0).Shrink(1)
-					s.slotStep(c, 1)
-				})
-			} else {
-				input().FillWidth()
-			}
+			input().FillWidth()
 		})
 		if message := s.Errors[key]; message != "" {
-			ui.Text(c, FieldErrorText(locales.In(c.Locale()), key, message)).FontSize(theme.TypeBody).FixedLineHeight(theme.LineBody).TextColor(t.Danger)
+			ui.Text(c, FieldErrorText(locales.In(c.Locale()), key, message)).FontSize(theme.TypeMeta).LineHeight(1.5).TextColor(t.Danger)
 		}
-	})
-}
-
-func positiveInt(value string) (int, error) {
-	parsed, err := strconv.Atoi(strings.TrimSpace(value))
-	if err != nil || parsed <= 0 {
-		return 0, fmt.Errorf("not a positive integer")
-	}
-	return parsed, nil
-}
-
-func (s *Settings) slotStep(c *ui.Context, delta int) {
-	msgs := locales.In(c.Locale())
-	text, label := "−", msgs.ConnectionSlotsDecrease()
-	if delta > 0 {
-		text, label = "+", msgs.ConnectionSlotsIncrease()
-	}
-	value, err := positiveInt(s.Draft.Slots)
-	blocked := err != nil || delta < 0 && value == 1 || delta > 0 && value == int(^uint(0)>>1)
-	c.Key("slot-step-" + text)
-	button := theme.SecondaryButton(c, "").Label(label).Width(40).Padding(8, 12).Disabled(s.Busy || blocked)
-	icon := theme.GlyphSubtractLine
-	if delta > 0 {
-		icon = theme.GlyphAddLine
-	}
-	button.Children(func() { ui.Icon(c, icon).Width(16).Height(16) })
-	button.OnClick(func() {
-		s.Draft.Slots = strconv.Itoa(value + delta)
 	})
 }
 

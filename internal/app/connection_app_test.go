@@ -290,7 +290,7 @@ func TestFirstUseWorkFolderRequiresExplicitChoiceBeforeActions(t *testing.T) {
 	tr.Frame()
 	assertBlocked := func() {
 		t.Helper()
-		for _, action := range []string{"Save configuration", "Test connection and model", "Save and apply"} {
+		for _, action := range []string{"Save", "Test", "Save and apply"} {
 			if err := tr.Click(action); err != nil {
 				t.Fatal(err)
 			}
@@ -326,7 +326,7 @@ func TestFirstUseWorkFolderRequiresExplicitChoiceBeforeActions(t *testing.T) {
 	replies <- folderChoiceReply{paths: []string{chosen}}
 	awaitFolderChoice(t, updates)()
 	tr.Frame()
-	for _, action := range []string{"Save configuration", "Test connection and model", "Save and apply"} {
+	for _, action := range []string{"Save", "Test", "Save and apply"} {
 		if err := tr.Click(action); err != nil {
 			t.Fatal(err)
 		}

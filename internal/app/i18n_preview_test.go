@@ -233,7 +233,7 @@ func TestPreviewI18nFinalMatrix(t *testing.T) {
 				return a
 			},
 			want: func(msgs locales.Messages) []string {
-				return []string{msgs.SettingsAdvanced(), msgs.SettingsAdvancedIntro(), msgs.SettingsHideRuntimeDetails(), msgs.RuntimeStoreLine("/Users/you/Library/Application Support/Nagi/contacts.json")}
+				return []string{msgs.SettingsAdvanced(), msgs.SettingsStartupSection(), msgs.SettingsHideRuntimeDetails(), msgs.RuntimeStoreLine("/Users/you/Library/Application Support/Nagi/contacts.json")}
 			},
 			fit: settingsFit,
 		},

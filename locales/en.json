@@ -86,7 +86,7 @@
   "@languageEnglish": {
     "description": "The English language name."
   },
-  "languageHint": "Some system windows use the new language after restarting.",
+  "languageHint": "System dialogs update after restart.",
   "@languageHint": {
     "description": "The hint below the Language heading."
   },
@@ -176,7 +176,7 @@
   "@connectionStatusConnecting": {
     "description": "The header status while the runtime is starting."
   },
-  "connectionRecoverySetupHint": "Open Connection & model in Settings. Enter your API connection, model and work folder, then choose Save and apply. You can explore Nagi before connecting.",
+  "connectionRecoverySetupHint": "Add a provider, model and work folder to connect.",
   "@connectionRecoverySetupHint": {
     "description": "The recovery hint for a first-use setup with no connection."
   },
@@ -184,7 +184,7 @@
   "@connectionRecoverySavedHint": {
     "description": "The recovery hint when a saved connection is not applied."
   },
-  "connectionRecoveryNotConnectedHint": "The runtime is not connected. Review the connection settings.",
+  "connectionRecoveryNotConnectedHint": "The runtime is disconnected.",
   "@connectionRecoveryNotConnectedHint": {
     "description": "The recovery hint when the runtime failed or exited."
   },
@@ -200,7 +200,7 @@
   "@connectionRecoveryManagedTitle": {
     "description": "The recovery title for a managed saved connection that could not start."
   },
-  "connectionRecoveryManagedHint": "Connection startup did not finish. Review Connection & model; Configuration details shows the recorded error. Applying settings does not test model access.",
+  "connectionRecoveryManagedHint": "Nagi could not start the connection.",
   "@connectionRecoveryManagedHint": {
     "description": "The recovery hint for a managed saved connection that could not start."
   },
@@ -274,7 +274,7 @@
   "@connectionApplySaved": {
     "description": "The action applying the saved connection."
   },
-  "connectionSaveConfiguration": "Save configuration",
+  "connectionSaveConfiguration": "Save",
   "@connectionSaveConfiguration": {
     "description": "The action saving connection settings without applying."
   },
@@ -454,15 +454,15 @@
   "statusNeedsAttention": "Needs attention",
   "statusReady": "Ready",
   "settingsAdvancedIntro": "Read-only Runtime and startup diagnostics. Open connection settings to repair configuration.",
-  "settingsStartupSection": "Startup & configuration",
-  "settingsShowRuntimeDetails": "Show runtime, paths and session",
-  "settingsHideRuntimeDetails": "Hide runtime, paths and session",
+  "settingsStartupSection": "Runtime & diagnostics",
+  "settingsShowRuntimeDetails": "Show details",
+  "settingsHideRuntimeDetails": "Hide details",
   "settingsOpenConnection": "Open connection & model",
   "connectionCurrent": "Current: {summary}",
-  "connectionKeptOnFailure": "The current connection remains in use; this attempt did not replace it.",
-  "connectionNoneApplied": "No connection is currently applied.",
-  "connectionUnsavedForm": "Unsaved form changes.",
-  "connectionSavedAwaitingApply": "Saved, but not applied. When applying is available, choose Apply saved. Running work keeps its settings.",
+  "connectionKeptOnFailure": "The active connection is still in use.",
+  "connectionNoneApplied": "No active connection",
+  "connectionUnsavedForm": "Unsaved changes",
+  "connectionSavedAwaitingApply": "Saved and awaiting application",
   "settingsUnsavedChanges": "Unsaved changes.",
   "settingsBuiltinManagedError": "Save and Apply a managed Nagi connection before customizing built-in tools.",
   "settingsBuiltinNotReady": "Built-in tools are available after Runtime is ready.",
@@ -480,7 +480,7 @@
   "fieldInstructionsAccessible": "Bot instructions",
   "fieldWorkspacePlaceholder": "/absolute/path/to/workspace (empty uses default)",
   "fieldWorkspaceAccessible": "Bot workspace",
-  "profileWorkspaceHint": "Leave Workspace empty to use the applied default directory.",
+  "profileWorkspaceHint": "Leave blank to use the default folder.",
   "profileBuiltinTools": "Built-in tools",
   "profileBuiltinLoading": "Loading built-in tools from Runtime…",
   "profileBuiltinNotLoaded": "Built-in tools have not been loaded from Runtime yet.",
@@ -594,34 +594,38 @@
   "connectionValueUnsavedDraft": "Unsaved current draft",
   "connectionValueInvalidDraft": "Invalid current draft",
   "connectionValueUnset": "Not set",
-  "connectionFolderEnterPath": "Enter folder path",
-  "connectionFolderHidePath": "Hide folder path",
+  "connectionFolderEnterPath": "Enter path",
+  "connectionFolderHidePath": "Hide path",
   "connectionSlotsIncrease": "Increase maximum active tasks",
   "connectionSlotsDecrease": "Decrease maximum active tasks",
   "connectionFieldEndpoint": "API endpoint",
   "connectionEndpointPlaceholder": "https://api.example.com/v1",
-  "connectionEndpointHint": "Use the API base URL. Nagi adds the protocol path.",
+  "connectionEndpointHint": "Base URL (e.g. https://api.example.com/v1)",
   "connectionFieldAPIKey": "API key",
   "connectionAPIKeyPlaceholder": "Paste your API key",
-  "connectionAPIKeyHint": "Saved in a private local file without encryption; not added to Bot settings or model prompts.",
+  "connectionAPIKeyHint": "Stored locally and kept out of prompts",
   "connectionFieldModel": "Default model",
   "connectionModelPlaceholder": "Provider model ID",
   "connectionCapacityDisclosure": "Capacity disclosure",
-  "connectionCapacityShow": "Capacity & execution limits",
+  "connectionCapacityShow": "Capacity & limits",
+  "connectionCapacitySummary": "{context} · {output} · {tasks} tasks",
+  "connectionTokenLimits": "Context & output tokens",
+  "connectionTokenPresetDefault": "{limits} (Default)",
+  "connectionTokenPresetCustom": "Custom…",
   "connectionCapacityShowTooltip": "Show capacity and execution limits",
   "connectionCapacityHide": "Hide capacity & execution limits",
   "connectionCapacityHideTooltip": "Hide capacity and execution limits",
   "connectionLimitsHint": "Enter limits supported by this model; they are not inferred from its name.",
   "connectionFieldContextTokens": "Context tokens",
   "connectionFieldOutputTokens": "Output tokens",
-  "connectionFieldMaxActiveTasks": "Maximum active tasks",
-  "connectionFieldWorkingDirectory": "Default working directory",
+  "connectionFieldMaxActiveTasks": "Max active tasks",
+  "connectionFieldWorkingDirectory": "Working directory",
   "connectionWorkingDirectoryPlaceholder": "/absolute/path/to/project",
   "connectionWorkingDirectoryHint": "New work uses these defaults; existing sessions keep their model, limits and working directory.",
   "connectionDiscard": "Discard changes",
   "connectionSaveDoesNotInterrupt": "Save does not interrupt work. Apply saved after all work finishes.",
-  "connectionTestAction": "Test connection and model",
-  "connectionTestHint": "Tests the values above and may incur provider charges. It does not save or apply; Save and Apply do not test model access.",
+  "connectionTestAction": "Test",
+  "connectionTestHint": "May incur provider charges",
   "connectionCheckFields": "Check the highlighted fields. Your changes are still here.",
   "validationAPI": "Choose a supported protocol.",
   "validationRequired": "This field is required.",
@@ -1089,7 +1093,7 @@
   "@themeFilesHint": {
     "description": "General settings local theme selection, discovery and non-blocking diagnostics."
   },
-  "themeReload": "Reload themes",
+  "themeReload": "Reload",
   "@themeReload": {
     "description": "General settings local theme selection, discovery and non-blocking diagnostics."
   },
@@ -1131,10 +1135,10 @@
   },
   "workFolderChoose": "Choose folder…",
   "workFolderChooseTitle": "Choose a work folder",
-  "workFolderUseDefault": "Use default folder",
+  "workFolderUseDefault": "Use default",
   "workFolderChooseFailed": "Could not choose this folder. Your edits are unchanged. Choose folder again. Details: {detail}",
-  "workFolderRequiredHint": "Choose where Nagi will keep work files, or enter a folder path. Choose a folder before saving, testing, or applying this connection.",
-  "recoveryProviderDenied": "The provider rejected this request ({status}). In Connection & model, check the API key and model access, then choose Test connection and model. Testing may incur provider charges. The task is not retried automatically.",
+  "workFolderRequiredHint": "Choose a folder before saving or testing.",
+  "recoveryProviderDenied": "The provider rejected this request ({status}). Check the API key and model access in Connection & model, then choose Test. Testing may incur provider charges. Nagi will not retry the task automatically.",
   "@recoveryProviderDenied": {
     "description": "Recovery guidance for an existing exact HTTP authentication classification.",
     "placeholders": {
@@ -1143,10 +1147,10 @@
       }
     }
   },
-  "recoveryModelRequestFailed": "The model request failed. In Connection & model, check the API key, server address and model, then choose Test connection and model. Testing may incur provider charges. The task is not retried automatically.",
-  "recoveryRunFailed": "This run failed. Review its details to choose the next step. For a connection problem, open Connection & model and choose Test connection and model. Testing may incur provider charges; this does not retry the run.",
+  "recoveryModelRequestFailed": "The model request failed. Check the API key, endpoint and model in Connection & model, then choose Test. Testing may incur provider charges. Nagi will not retry the task automatically.",
+  "recoveryRunFailed": "The run failed. Open Details to see what happened. For connection problems, choose Test in Connection & model. Testing may incur provider charges and leaves the run unchanged.",
   "recoveryTechnicalDetailsHint": "Technical details may mention developer settings. Use Settings and the recovery actions for normal setup.",
-  "recoveryRuntimeStartFailed": "Nagi could not start its runtime component. Review the work folder in Connection & model and open Configuration details for the recorded error. You can quit and reopen Nagi; this does not repair missing or inaccessible files.",
+  "recoveryRuntimeStartFailed": "Nagi could not start its runtime. Open Details to see the error and check the work folder in Connection & model.",
   "recoveryLocalSaveFailed": "Local changes are not saved. Keep this window open. Choose Retry save for local autosave, or Save changes for profile edits.",
   "recoveryLocalDataUnavailable": "Local Bots and tasks are unavailable. Nagi has not replaced existing data. Choose a compatible recovery copy if you have one. Without a compatible copy, Nagi cannot restore this workbench data.",
   "recoveryConnectionSaveFailed": "Connection settings could not be saved. Your edits are still here; review the details, then try Save again.",
@@ -1157,7 +1161,7 @@
   "themeImportAction": "Import theme…",
   "themeImportTitle": "Choose a downloaded theme",
   "themeImportFilter": "JSON theme files",
-  "themeImportHint": "Choose a downloaded .json theme file. Nagi validates and installs it for you; then choose it from the light or dark theme list. Built-in themes remain available.",
+  "themeImportHint": "Import a local .json theme file.",
   "themeImportBusy": "Choosing or importing a theme…",
   "themeImportFailed": "The theme could not be imported. Existing files and settings are unchanged. Choose another file or try again; built-in themes remain available.",
   "themeImportSucceeded": "Imported {name}. Choose it from the light or dark theme list. Your appearance mode and selected theme IDs were kept.",
@@ -1173,11 +1177,14 @@
   "@recoveryDataTitle": {
     "description": "C8 workbench recovery GUI: recoveryDataTitle."
   },
-  "saveRecoveryCopyAction": "Save recovery copy…",
+  "recoveryBackupLabel": "Recovery backup",
+  "recoveryBackupHint": "Export or restore saved workbench data.",
+  "recoveryBackupDetails": "What's included",
+  "saveRecoveryCopyAction": "Export backup…",
   "@saveRecoveryCopyAction": {
     "description": "C8 workbench recovery GUI: saveRecoveryCopyAction."
   },
-  "restorePausedAction": "Restore paused…",
+  "restorePausedAction": "Restore…",
   "@restorePausedAction": {
     "description": "C8 workbench recovery GUI: restorePausedAction."
   },

@@ -18,25 +18,27 @@ func TestKnownConnectionFailureIsConciseAndKeepsOriginalDetails(t *testing.T) {
 	raw := "connection_mismatch: session was created for another connection; credential details omitted"
 	ct.LoadErr = raw
 	ct.SendError = raw
+	a.runtimeStatus = runtimeStateExited
+	a.runtimeErr = "The worker stopped while reopening the conversation."
 	a.windowWidth = 1040
 	settingsAction := locales.In("en").ConnectionRecoveryOpenSettings()
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.SetLocale("en")
 	tr.SetFocused(true)
 	tr.Frame()
-	if !tr.HasText("Connection unavailable or changed") ||
+	if !tr.HasText(locales.In("en").ConnectionRecoveryNotConnectedHint()) ||
 		!tr.HasText(settingsAction) || !tr.HasText("Details") {
 		t.Fatalf("known connection failure summary missing: %v", tr.Texts())
 	}
-	if tr.HasText(raw) {
-		t.Fatal("raw connection diagnostic was shown without Details")
+	if tr.HasText(raw) || tr.HasText(a.runtimeErr) {
+		t.Fatal("raw runtime or connection diagnostic was shown without Details")
 	}
 	if err := tr.Click("Details"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if !tr.HasText(raw) || !tr.HasText("Copy error details") {
-		t.Fatalf("connection detail was not accessible: %v", tr.Texts())
+	if !tr.HasText(raw) || !tr.HasText(a.runtimeErr) || !tr.HasText("Copy error details") || tr.HasText("Connection unavailable or changed") {
+		t.Fatalf("runtime and connection diagnostics did not share one disclosure: %v", tr.Texts())
 	}
 	for i := 0; i < 60 && !tr.Focused(settingsAction); i++ {
 		tr.Key(0, ui.KeyTab)
@@ -77,7 +79,7 @@ func TestMixedConnectionDiagnosticsStayIndependent(t *testing.T) {
 	a.windowWidth = 1040
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	if !tr.HasText("Connection unavailable or changed") || !tr.HasText(locales.In("en").RecoveryRequestFailed()) || tr.HasText(ct.SendError) {
+	if !tr.HasText(locales.In("en").ConnectionRecoveryNotConnectedHint()) || !tr.HasText(locales.In("en").RecoveryRequestFailed()) || tr.HasText(ct.SendError) {
 		t.Fatalf("mixed known/unknown diagnostics were not both visible: %v", tr.Texts())
 	}
 	if tr.HasText(ct.LoadErr) {
@@ -87,6 +89,9 @@ func TestMixedConnectionDiagnosticsStayIndependent(t *testing.T) {
 		t.Fatal(err)
 	}
 	tr.Frame()
+	if !tr.HasText(ct.LoadErr) || tr.HasText(ct.SendError) {
+		t.Fatal("connection details exposed or lost the independent send diagnostic")
+	}
 	if err := tr.Click("Details"); err != nil {
 		t.Fatal(err)
 	}
@@ -141,7 +146,7 @@ func TestConnectionRecoveryStatusAndOneClickSettings(t *testing.T) {
 				a.ensureConnectionForm()
 			},
 			wantHeader: "Not connected",
-			wantHint:   "The runtime is not connected. Review the connection settings.",
+			wantHint:   locales.In("en").ConnectionRecoveryNotConnectedHint(),
 			wantButton: true,
 		},
 		{
@@ -153,7 +158,7 @@ func TestConnectionRecoveryStatusAndOneClickSettings(t *testing.T) {
 				a.connectionEffective = &config
 			},
 			wantHeader: "Not connected",
-			wantHint:   "The runtime is not connected. Review the connection settings.",
+			wantHint:   locales.In("en").ConnectionRecoveryNotConnectedHint(),
 			wantButton: true,
 		},
 		{
@@ -178,7 +183,6 @@ func TestConnectionRecoveryStatusAndOneClickSettings(t *testing.T) {
 				a.connectionEffective = &config
 			},
 			wantHeader: locales.In("en").ConnectionRecoveryManagedTitle(),
-			wantHint:   locales.In("en").ConnectionRecoveryManagedHint(),
 			wantButton: true,
 		},
 		{
@@ -224,7 +228,7 @@ func TestConnectionRecoveryStatusAndOneClickSettings(t *testing.T) {
 				a.connectionEffective = nil
 			},
 			wantHeader: "Not connected",
-			wantHint:   "The runtime is not connected. Review the connection settings.",
+			wantHint:   locales.In("en").ConnectionRecoveryNotConnectedHint(),
 			wantButton: true,
 		},
 	} {
@@ -247,6 +251,9 @@ func TestConnectionRecoveryStatusAndOneClickSettings(t *testing.T) {
 			}
 			if tc.wantHint != "" && !tr.HasText(tc.wantHint) {
 				t.Fatalf("empty-draft connection reason %q missing: %v", tc.wantHint, tr.Texts())
+			}
+			if tc.wantHeader == locales.In("en").ConnectionRecoveryManagedTitle() && tr.HasText(locales.In("en").ConnectionRecoveryManagedHint()) {
+				t.Fatal("saved startup failure repeated its diagnosis")
 			}
 			if tc.noStartup {
 				msgs := locales.In("en")
@@ -656,12 +663,12 @@ func TestC8UnavailableDataRestoreEntryKeepsOriginalFile(t *testing.T) {
 	if !tr.HasText(locales.In("en").RecoveryLocalDataUnavailable()) {
 		t.Fatal("actual unavailable-data notice was not rendered")
 	}
-	if err := tr.Click("Restore paused…"); err != nil {
-		t.Fatalf("C8-R4/R6: unavailable-data notice has no Restore paused route: %v", err)
+	if err := tr.Click(locales.In("en").RestorePausedAction()); err != nil {
+		t.Fatalf("C8-R4/R6: unavailable-data notice has no Restore route: %v", err)
 	}
 	tr.Frame()
 	if !a.settingsOpen || a.settingsTab != settingsTabAppearance {
-		t.Fatal("Restore paused did not route to the existing General Settings recovery surface")
+		t.Fatal("Restore did not route to the existing General Settings recovery surface")
 	}
 }
 

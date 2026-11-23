@@ -53,7 +53,7 @@ func TestSettingsPageReplacesWorkbenchAndRoutesEntries(t *testing.T) {
 	if a.settingsScroll.Y != 0 {
 		t.Fatalf("connection category opened scrolled: %v", a.settingsScroll.Y)
 	}
-	if a.settingsTab != settingsTabConnection || !tr.HasText("No connection is currently applied.") {
+	if a.settingsTab != settingsTabConnection || !tr.HasText(msgs.ConnectionNoneApplied()) {
 		t.Fatalf("connection category = %q texts=%v", a.settingsTab, tr.Texts())
 	}
 	if err := tr.Click("← Back to workbench"); err != nil {
@@ -105,7 +105,7 @@ func TestCustomThemeSettingsSelectReloadAndReturnKeepsWorkState(t *testing.T) {
 	if err := os.Remove(file); err != nil {
 		t.Fatal(err)
 	}
-	if err := tr.Click("Reload themes"); err != nil {
+	if err := tr.Click("Reload"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
@@ -113,7 +113,7 @@ func TestCustomThemeSettingsSelectReloadAndReturnKeepsWorkState(t *testing.T) {
 		t.Fatalf("reload forgot or hid missing selection: %v", tr.Texts())
 	}
 	writeCustomTheme(t, directory, "restored-name.json", document)
-	if err := tr.Click("Reload themes"); err != nil {
+	if err := tr.Click("Reload"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
@@ -239,26 +239,23 @@ func TestGeneralPreferenceSelectorsKeepWidthAndKeyboardChoice(t *testing.T) {
 				tr.SetFocused(true)
 				tr.Frame()
 				msgs := locales.In(locale)
-				selectedMode := msgs.AppearanceSystem()
 				for step := 0; step < 12; step++ {
-					bounds, found := tr.Find(selectedMode)
+					bounds, found := tr.Find(msgs.AppearanceDark())
 					if found && bounds.W > 0 && bounds.H > 0 && bounds.Y >= 0 && bounds.Y+bounds.H <= 720 {
 						break
 					}
 					tr.Scroll(float32(width-100), 600, 0, 100)
 					tr.Frame()
 				}
-				if err := tr.Click(selectedMode); err != nil {
+				if _, ok := tr.Find(msgs.AppearanceLight()); !ok {
+					t.Fatal("appearance segments were not visible without opening a menu")
+				}
+				if err := tr.Click(msgs.AppearanceDark()); err != nil {
 					t.Fatal(err)
 				}
 				tr.Frame()
-				if !tr.HasText(msgs.AppearanceLight()) || !tr.HasText(msgs.AppearanceDark()) {
-					t.Fatal("the displayed appearance value did not open its choices")
-				}
-				tr.Key(0, ui.KeyEscape)
-				tr.Frame()
-				if len(applied) != 0 {
-					t.Fatal("rendering a General selector changed locale")
+				if a.appearanceMode != appearanceDark || len(applied) != 0 || ct.Draft != "preserve current text 原文" {
+					t.Fatal("appearance selection failed or changed language or draft")
 				}
 				for step := 0; step < 16 && !tr.Focused(msgs.SettingsLanguage()); step++ {
 					tr.Key(0, ui.KeyTab)
@@ -495,7 +492,7 @@ func TestPreferencesListControlsAndPreviews(t *testing.T) {
 							if scene == "invalid-long" {
 								text := form.Errors["Endpoint"]
 								r, ok := tr.Find(text)
-								_, height := ui.ShapeText(text, ui.Font{Size: typeBody, LineHeight: 1.5, Lang: locale}, r.W).Size()
+								_, height := ui.ShapeText(text, ui.Font{Size: typeMeta, LineHeight: 1.5, Lang: locale}, r.W).Size()
 								visible := ok && r.H+0.5 >= height && r.Y >= 0 && r.Y+r.H <= float32(size[1])
 								if visible && !fullErrorSeen && directory != "" {
 									writePreviewPNG(t, filepath.Join(directory, name+"-full-error.png"), tr.Image())
@@ -718,7 +715,7 @@ func TestFirstLaunchOpensConnectionSettingsPageWithoutEmptyOverlay(t *testing.T)
 	}
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	if !tr.HasText("Connection & model") || !tr.HasText("Save configuration") || tr.HasText("No messages yet") {
+	if !tr.HasText("Connection & model") || !tr.HasText("Save and apply") || tr.HasText("No messages yet") {
 		t.Fatalf("first launch did not show the connection page alone: %v", tr.Texts())
 	}
 	msgs := locales.In("en")
@@ -727,13 +724,19 @@ func TestFirstLaunchOpensConnectionSettingsPageWithoutEmptyOverlay(t *testing.T)
 	}
 	tr.Frame()
 	if !tr.HasText(msgs.StartupHintEnterConnection()) {
+		if err := tr.Click(msgs.SettingsShowRuntimeDetails()); err != nil {
+			t.Fatal(err)
+		}
+		tr.Frame()
+	}
+	if !tr.HasText(msgs.StartupHintEnterConnection()) {
 		t.Fatalf("unconfigured Advanced did not explain setup: %v", tr.Texts())
 	}
 	if err := tr.Click(msgs.SettingsOpenConnection()); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if a.settingsTab != settingsTabConnection || !tr.HasText("Save configuration") || tr.HasText("No messages yet") {
+	if a.settingsTab != settingsTabConnection || !tr.HasText("Save and apply") || tr.HasText("No messages yet") {
 		t.Fatalf("Advanced did not return to the connection page alone: %v", tr.Texts())
 	}
 }
@@ -755,9 +758,9 @@ func TestSettingsLongConnectionScrollsThenPrimaryActionIsVisible(t *testing.T) {
 		if a.settingsScroll.Y <= 0 {
 			t.Fatalf("%d long settings content did not scroll: %v", width, a.settingsScroll.Y)
 		}
-		for _, label := range []string{"Save configuration", "Apply saved", "Test connection and model"} {
+		for _, label := range []string{"Apply saved", "Save", "Test"} {
 			r, ok := tr.Find(label)
-			if !ok || r.W <= 0 || r.H <= 0 || r.X < 0 || r.X+r.W > float32(width) || r.Y < 0 || r.Y+r.H > 640 {
+			if !ok || r.W <= 0 || r.H < 32 || r.X < 0 || r.X+r.W > float32(width) || r.Y < 0 || r.Y+r.H > 640 {
 				t.Fatalf("%d action %q not reachable after scroll: %+v ok=%v", width, label, r, ok)
 			}
 		}
@@ -1002,7 +1005,7 @@ func TestBotProfileFolderChooserKeepsBotAndSessionUntilSave(t *testing.T) {
 	if editor.Draft.Workspace != chosen || editor.Draft.Name != before.Name || ct.Workspace != before.Workspace || ct.Name == before.Name || ct.SessionID != "s1" || ct.SendState != sendUnknown || !tr.Focused("Choose folder…") {
 		t.Fatal("contact choice changed persisted identity/session or lost focus/draft")
 	}
-	if err := tr.Click("Use default folder"); err != nil {
+	if err := tr.Click("Use default"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
@@ -1268,8 +1271,26 @@ func TestC8SaveRecoveryCopyEntryKeepsSavedAndUnsavedState(t *testing.T) {
 			t.Error("copy changed the unsaved context editor")
 		}
 	}()
-	if err := clickSettingsAction(tr, "Save recovery copy…"); err != nil {
-		t.Fatalf("C8-R1: healthy saved workbench has no reachable Save recovery copy action: %v", err)
+	msgs := locales.In("en")
+	if tr.HasText(msgs.RecoveryDataIncluded()) || tr.HasText(msgs.RecoveryDataExcluded()) {
+		t.Fatal("backup scope was expanded on entry")
+	}
+	if err := clickSettingsAction(tr, msgs.RecoveryBackupDetails()); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if !tr.HasText(msgs.RecoveryDataIncluded()) || !tr.HasText(msgs.RecoveryDataExcluded()) {
+		t.Fatal("backup scope did not disclose included and excluded data")
+	}
+	if err := clickSettingsAction(tr, msgs.HideDetailsAction()); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if tr.HasText(msgs.RecoveryDataIncluded()) || tr.HasText(msgs.RecoveryDataExcluded()) {
+		t.Fatal("backup scope remained visible after closing")
+	}
+	if err := clickSettingsAction(tr, msgs.SaveRecoveryCopyAction()); err != nil {
+		t.Fatalf("C8-R1: healthy saved workbench has no reachable Export backup action: %v", err)
 	}
 	options := awaitFolderChoice(t, requests)
 	if options.Parent != a.win || !options.Directory {
@@ -1642,15 +1663,11 @@ func TestC8UnsavedRecoveryGuidanceBeforeQuit(t *testing.T) {
 					}
 					visible := false
 					bounds := map[string]ui.Rect{}
-					fontSize := typeBody
-					if state == "blocked" {
-						fontSize = typeMeta
-					}
 					fullWarningHeight := float32(0)
 					for i := 0; i < 25; i++ {
 						r, ok := tr.Find(summary)
 						if ok && r.W > 0 {
-							_, fullWarningHeight = ui.ShapeText(summary, ui.Font{Size: fontSize, LineHeight: 1.5, Lang: locale}, r.W).Size()
+							_, fullWarningHeight = ui.ShapeText(summary, ui.Font{Size: typeMeta, LineHeight: 1.5, Lang: locale}, r.W).Size()
 						}
 						visible = ok && r.H+0.5 >= fullWarningHeight && r.Y >= top && r.Y+r.H <= float32(size[1])
 						bounds["warning"] = r

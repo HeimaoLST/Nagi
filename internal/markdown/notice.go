@@ -35,12 +35,12 @@ func SafeDiagnostic(text string) string {
 	return Truncate(text, 500)
 }
 
-func RecoveryNotice(c *ui.Context, t *ui.Theme, summary, detail string, expanded bool, toggle, settings func(), settingsLabel string) ui.Element {
+func RecoveryNotice(c *ui.Context, t *ui.Theme, summary, detail string, expanded bool, toggle, settings func(), settingsLabel string, actions ...func()) ui.Element {
 	msgs := locales.In(c.Locale())
 	detail = SafeDiagnostic(detail)
 	var entry ui.Element
-	ui.Column(c).FillWidth().MinWidth(0).Gap(6).Children(func() {
-		ui.Text(c, summary).FontSize(theme.TypeBody).FixedLineHeight(theme.LineBody).TextColor(t.Warning)
+	ui.Column(c).FillWidth().MinWidth(0).Padding(12).Gap(8).Radius(12).Border(1, t.Border).Background(t.SurfaceHover).Children(func() {
+		ui.Text(c, summary).FontSize(theme.TypeLabel).FontWeight(500).FixedLineHeight(theme.LineLabel).TextColor(t.Warning)
 		ui.Row(c).Wrap().Gap(8).Children(func() {
 			if settings != nil {
 				entry = theme.SecondaryButton(c, settingsLabel).Label(settingsLabel).OnClick(settings)
@@ -50,13 +50,16 @@ func RecoveryNotice(c *ui.Context, t *ui.Theme, summary, detail string, expanded
 				if expanded {
 					label = msgs.HideDetailsAction()
 				}
-				theme.SecondaryButton(c, label).Label(label).OnClick(toggle)
+				theme.LinkButton(c, label).OnClick(toggle)
+			}
+			for _, action := range actions {
+				action()
 			}
 		})
 		if expanded && detail != "" {
 			ui.Text(c, msgs.RecoveryTechnicalDetailsHint()).FontSize(theme.TypeMeta).FixedLineHeight(theme.LineMeta).TextColor(t.TextMuted)
 			Reader(c, detail, ReaderOptions{PlainText: true, CopyLabel: msgs.CopyErrorDetailsLabel()}).
-				FontSize(theme.TypeBody).FixedLineHeight(theme.LineBody).TextColor(t.TextMuted)
+				FontSize(theme.TypeMeta).FixedLineHeight(theme.LineMeta).TextColor(t.TextMuted)
 		}
 	})
 	return entry

@@ -112,7 +112,7 @@ func TestUnavailableStoreFallbackKeepsPathsAndFile(t *testing.T) {
 	tr.Frame()
 	tr.Frame()
 	for _, want := range []string{
-		"Startup & configuration",
+		"Runtime & diagnostics",
 		locales.In("en").RuntimeStageLocalStore() + ":",
 		locales.In("en").RuntimeNotStartedLocalStore(),
 		"Store: " + storePath,
@@ -156,7 +156,7 @@ func TestRuntimePanelShowsPathsAndMetadata(t *testing.T) {
 	tr.Frame()
 	tr.Frame()
 	for _, want := range []string{
-		"Startup & configuration",
+		"Runtime & diagnostics",
 		"Store: /tmp/contacts.json",
 		"GUI work directory: /tmp/work",
 		locales.In("en").RuntimeContactWorkspaceLine("/tmp/session-ws"),
@@ -198,7 +198,15 @@ func TestConfigurationEntryKeepsGlobalSettingsUsable(t *testing.T) {
 	if !a.settingsOpen || a.settingsTab != settingsTabAdvanced {
 		t.Fatalf("advanced route = open=%v tab=%q", a.settingsOpen, a.settingsTab)
 	}
-	for _, want := range []string{"Startup & configuration", locales.In("en").RuntimeStoreLine("/tmp/contacts.json")} {
+	storeLine := msgs.RuntimeStoreLine("/tmp/contacts.json")
+	if !tr.HasText(msgs.SettingsStartupSection()) || tr.HasText(storeLine) {
+		t.Fatalf("healthy Advanced diagnostics were missing or expanded on entry: %v", tr.Texts())
+	}
+	if err := tr.Click(msgs.SettingsShowRuntimeDetails()); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	for _, want := range []string{msgs.SettingsHideRuntimeDetails(), storeLine} {
 		if !tr.HasText(want) {
 			t.Fatalf("advanced page missing %q", want)
 		}
@@ -225,7 +233,8 @@ func TestStartupBannerKeepsComposerFocusAndDraft(t *testing.T) {
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.SetFocused(true)
 	tr.Frame()
-	if !tr.HasText("Configuration details") || !tr.HasText(locales.In("en").ConnectionRecoveryManagedHint()) || tr.HasText(a.runtimeErr) || tr.HasText(a.runtimeHint) {
+	msgs := locales.In("en")
+	if !tr.HasText(msgs.DetailsAction()) || !tr.HasText(msgs.ConnectionRecoveryManagedHint()) || tr.HasText(a.runtimeErr) || tr.HasText(a.runtimeHint) {
 		t.Fatal("startup failure should show an actionable banner")
 	}
 	if err := tr.Click("Composer for Nagi"); err != nil {
@@ -238,14 +247,20 @@ func TestStartupBannerKeepsComposerFocusAndDraft(t *testing.T) {
 	if ct.Draft != "keep" {
 		t.Fatalf("startup banner changed the draft: %q", ct.Draft)
 	}
-	if err := tr.Click("Configuration details"); err != nil {
+	if err := tr.Click(msgs.DetailsAction()); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if !a.settingsOpen || a.settingsTab != settingsTabAdvanced || !tr.HasText(a.runtimeErr) || !tr.HasText(a.runtimeHint) {
-		t.Fatalf("banner opened settings=%v tab=%q, want Advanced", a.settingsOpen, a.settingsTab)
+	if a.settingsOpen || !tr.HasText(msgs.HideDetailsAction()) || !tr.HasText(a.runtimeErr) || !tr.HasText(a.runtimeHint) {
+		t.Fatalf("startup diagnostics did not open in the workbench: %v", tr.Texts())
 	}
-	a.closeSettings()
+	if err := tr.Click(msgs.HideDetailsAction()); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if tr.HasText(a.runtimeErr) || tr.HasText(a.runtimeHint) {
+		t.Fatal("startup details remained visible after closing")
+	}
 	if ct.Draft != "keep" || a.runtimeStatus != runtimeStateFailed || a.runtimeErr != "Pi worker could not start." ||
 		a.runtimeHint != "Check the installed Nagi app." || a.submissionInFlight != 0 {
 		t.Fatal("startup disclosure changed the draft or original failure facts")

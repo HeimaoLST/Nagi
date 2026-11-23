@@ -408,16 +408,14 @@ func TestGeneralPageHeadingKeepsDraftAndThemeAction(t *testing.T) {
 				tr.Frame()
 			}
 			if !tr.Focused(msgs.AppearanceSystem()) {
-				t.Fatalf("appearance current-value trigger is not keyboard reachable: %v", tr.Texts())
+				t.Fatalf("current appearance segment is not keyboard reachable: %v", tr.Texts())
 			}
-			tr.Key(0, ui.KeySpace)
+			tr.Key(0, ui.KeyRight)
 			tr.Frame()
-			if !tr.HasText(msgs.AppearanceDark()) {
-				t.Fatalf("focused appearance trigger did not open its real options: %v", tr.Texts())
+			if a.appearanceMode != appearanceLight || !tr.Focused(msgs.AppearanceLight()) {
+				t.Fatalf("Right did not select and focus the next appearance segment: %v", tr.Texts())
 			}
-			if err := tr.Click(msgs.AppearanceDark()); err != nil {
-				t.Fatal(err)
-			}
+			tr.Key(0, ui.KeyRight)
 			tr.Frame()
 			if !tr.Focused(msgs.AppearanceDark()) {
 				t.Fatalf("theme selection lost focus: %v", tr.Texts())

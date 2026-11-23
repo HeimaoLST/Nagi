@@ -164,15 +164,15 @@ func TestPiAppProductConnectionStopAndWorkerLoss(t *testing.T) {
 	enter(msg.ConnectionFieldEndpoint(), firstEndpoint)
 	enter(msg.ConnectionFieldAPIKey(), key)
 	enter(msg.ConnectionFieldModel(), model)
-	settingsAction(msg.ConnectionCapacityShow())
-	enter(msg.ConnectionFieldMaxActiveTasks(), "1")
+	settingsAction(msg.SettingsShowRuntimeDetails())
+	settingsAction("1")
 	credentials := connectionConfigPath(guiStorePath())
 	for _, label := range []string{msg.ConnectionTestAction(), msg.ConnectionSaveConfiguration(), msg.ConnectionSaveAndApply()} {
 		settingsAction(label)
 		var blocked bool
 		w.pump.do(func() {
 			form := w.app.connectionForm
-			blocked = !form.Busy && form.Errors["WorkingDirectory"] != "" && w.view.HasText(msg.WorkFolderRequiredHint())
+			blocked = !form.Busy && form.Draft.Slots == "1" && form.Errors["WorkingDirectory"] != "" && w.view.HasText(msg.ValidationWorkspaceAbsolutePath())
 		})
 		if !blocked {
 			t.Fatalf("%q did not require an explicit working folder", label)

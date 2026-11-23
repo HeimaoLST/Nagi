@@ -314,13 +314,13 @@ func (msgs Messages) LanguageEnglish() string {
 	return Catalog.Format(msgs.locale, "languageEnglish", nil)
 }
 
-// LanguageHint says "Some system windows use the new language after restarting."
+// LanguageHint says "System dialogs update after restart."
 // in the language the app shows.
 //
 // The hint below the Language heading.
 func LanguageHint() string { return In(i18n.Locale()).LanguageHint() }
 
-// LanguageHint says "Some system windows use the new language after restarting."
+// LanguageHint says "System dialogs update after restart."
 // in the language of msgs.
 //
 // The hint below the Language heading.
@@ -610,13 +610,13 @@ func (msgs Messages) ConnectionStatusConnecting() string {
 	return Catalog.Format(msgs.locale, "connectionStatusConnecting", nil)
 }
 
-// ConnectionRecoverySetupHint says "Open Connection & model in Settings. Enter your API connection, model and work folder, then choose Save and apply. Yo…"
+// ConnectionRecoverySetupHint says "Add a provider, model and work folder to connect."
 // in the language the app shows.
 //
 // The recovery hint for a first-use setup with no connection.
 func ConnectionRecoverySetupHint() string { return In(i18n.Locale()).ConnectionRecoverySetupHint() }
 
-// ConnectionRecoverySetupHint says "Open Connection & model in Settings. Enter your API connection, model and work folder, then choose Save and apply. Yo…"
+// ConnectionRecoverySetupHint says "Add a provider, model and work folder to connect."
 // in the language of msgs.
 //
 // The recovery hint for a first-use setup with no connection.
@@ -638,7 +638,7 @@ func (msgs Messages) ConnectionRecoverySavedHint() string {
 	return Catalog.Format(msgs.locale, "connectionRecoverySavedHint", nil)
 }
 
-// ConnectionRecoveryNotConnectedHint says "The runtime is not connected. Review the connection settings."
+// ConnectionRecoveryNotConnectedHint says "The runtime is disconnected."
 // in the language the app shows.
 //
 // The recovery hint when the runtime failed or exited.
@@ -646,7 +646,7 @@ func ConnectionRecoveryNotConnectedHint() string {
 	return In(i18n.Locale()).ConnectionRecoveryNotConnectedHint()
 }
 
-// ConnectionRecoveryNotConnectedHint says "The runtime is not connected. Review the connection settings."
+// ConnectionRecoveryNotConnectedHint says "The runtime is disconnected."
 // in the language of msgs.
 //
 // The recovery hint when the runtime failed or exited.
@@ -702,13 +702,13 @@ func (msgs Messages) ConnectionRecoveryManagedTitle() string {
 	return Catalog.Format(msgs.locale, "connectionRecoveryManagedTitle", nil)
 }
 
-// ConnectionRecoveryManagedHint says "Connection startup did not finish. Review Connection & model; Configuration details shows the recorded error. Applyin…"
+// ConnectionRecoveryManagedHint says "Nagi could not start the connection."
 // in the language the app shows.
 //
 // The recovery hint for a managed saved connection that could not start.
 func ConnectionRecoveryManagedHint() string { return In(i18n.Locale()).ConnectionRecoveryManagedHint() }
 
-// ConnectionRecoveryManagedHint says "Connection startup did not finish. Review Connection & model; Configuration details shows the recorded error. Applyin…"
+// ConnectionRecoveryManagedHint says "Nagi could not start the connection."
 // in the language of msgs.
 //
 // The recovery hint for a managed saved connection that could not start.
@@ -942,13 +942,13 @@ func (msgs Messages) ConnectionApplySaved() string {
 	return Catalog.Format(msgs.locale, "connectionApplySaved", nil)
 }
 
-// ConnectionSaveConfiguration says "Save configuration"
+// ConnectionSaveConfiguration says "Save"
 // in the language the app shows.
 //
 // The action saving connection settings without applying.
 func ConnectionSaveConfiguration() string { return In(i18n.Locale()).ConnectionSaveConfiguration() }
 
-// ConnectionSaveConfiguration says "Save configuration"
+// ConnectionSaveConfiguration says "Save"
 // in the language of msgs.
 //
 // The action saving connection settings without applying.
@@ -2060,31 +2060,31 @@ func (msgs Messages) SettingsAdvancedIntro() string {
 	return Catalog.Format(msgs.locale, "settingsAdvancedIntro", nil)
 }
 
-// SettingsStartupSection says "Startup & configuration"
+// SettingsStartupSection says "Runtime & diagnostics"
 // in the language the app shows.
 func SettingsStartupSection() string { return In(i18n.Locale()).SettingsStartupSection() }
 
-// SettingsStartupSection says "Startup & configuration"
+// SettingsStartupSection says "Runtime & diagnostics"
 // in the language of msgs.
 func (msgs Messages) SettingsStartupSection() string {
 	return Catalog.Format(msgs.locale, "settingsStartupSection", nil)
 }
 
-// SettingsShowRuntimeDetails says "Show runtime, paths and session"
+// SettingsShowRuntimeDetails says "Show details"
 // in the language the app shows.
 func SettingsShowRuntimeDetails() string { return In(i18n.Locale()).SettingsShowRuntimeDetails() }
 
-// SettingsShowRuntimeDetails says "Show runtime, paths and session"
+// SettingsShowRuntimeDetails says "Show details"
 // in the language of msgs.
 func (msgs Messages) SettingsShowRuntimeDetails() string {
 	return Catalog.Format(msgs.locale, "settingsShowRuntimeDetails", nil)
 }
 
-// SettingsHideRuntimeDetails says "Hide runtime, paths and session"
+// SettingsHideRuntimeDetails says "Hide details"
 // in the language the app shows.
 func SettingsHideRuntimeDetails() string { return In(i18n.Locale()).SettingsHideRuntimeDetails() }
 
-// SettingsHideRuntimeDetails says "Hide runtime, paths and session"
+// SettingsHideRuntimeDetails says "Hide details"
 // in the language of msgs.
 func (msgs Messages) SettingsHideRuntimeDetails() string {
 	return Catalog.Format(msgs.locale, "settingsHideRuntimeDetails", nil)
@@ -2110,41 +2110,41 @@ func (msgs Messages) ConnectionCurrent(summary string) string {
 	return Catalog.Format(msgs.locale, "connectionCurrent", map[string]any{"summary": summary})
 }
 
-// ConnectionKeptOnFailure says "The current connection remains in use; this attempt did not replace it."
+// ConnectionKeptOnFailure says "The active connection is still in use."
 // in the language the app shows.
 func ConnectionKeptOnFailure() string { return In(i18n.Locale()).ConnectionKeptOnFailure() }
 
-// ConnectionKeptOnFailure says "The current connection remains in use; this attempt did not replace it."
+// ConnectionKeptOnFailure says "The active connection is still in use."
 // in the language of msgs.
 func (msgs Messages) ConnectionKeptOnFailure() string {
 	return Catalog.Format(msgs.locale, "connectionKeptOnFailure", nil)
 }
 
-// ConnectionNoneApplied says "No connection is currently applied."
+// ConnectionNoneApplied says "No active connection"
 // in the language the app shows.
 func ConnectionNoneApplied() string { return In(i18n.Locale()).ConnectionNoneApplied() }
 
-// ConnectionNoneApplied says "No connection is currently applied."
+// ConnectionNoneApplied says "No active connection"
 // in the language of msgs.
 func (msgs Messages) ConnectionNoneApplied() string {
 	return Catalog.Format(msgs.locale, "connectionNoneApplied", nil)
 }
 
-// ConnectionUnsavedForm says "Unsaved form changes."
+// ConnectionUnsavedForm says "Unsaved changes"
 // in the language the app shows.
 func ConnectionUnsavedForm() string { return In(i18n.Locale()).ConnectionUnsavedForm() }
 
-// ConnectionUnsavedForm says "Unsaved form changes."
+// ConnectionUnsavedForm says "Unsaved changes"
 // in the language of msgs.
 func (msgs Messages) ConnectionUnsavedForm() string {
 	return Catalog.Format(msgs.locale, "connectionUnsavedForm", nil)
 }
 
-// ConnectionSavedAwaitingApply says "Saved, but not applied. When applying is available, choose Apply saved. Running work keeps its settings."
+// ConnectionSavedAwaitingApply says "Saved and awaiting application"
 // in the language the app shows.
 func ConnectionSavedAwaitingApply() string { return In(i18n.Locale()).ConnectionSavedAwaitingApply() }
 
-// ConnectionSavedAwaitingApply says "Saved, but not applied. When applying is available, choose Apply saved. Running work keeps its settings."
+// ConnectionSavedAwaitingApply says "Saved and awaiting application"
 // in the language of msgs.
 func (msgs Messages) ConnectionSavedAwaitingApply() string {
 	return Catalog.Format(msgs.locale, "connectionSavedAwaitingApply", nil)
@@ -2320,11 +2320,11 @@ func (msgs Messages) FieldWorkspaceAccessible() string {
 	return Catalog.Format(msgs.locale, "fieldWorkspaceAccessible", nil)
 }
 
-// ProfileWorkspaceHint says "Leave Workspace empty to use the applied default directory."
+// ProfileWorkspaceHint says "Leave blank to use the default folder."
 // in the language the app shows.
 func ProfileWorkspaceHint() string { return In(i18n.Locale()).ProfileWorkspaceHint() }
 
-// ProfileWorkspaceHint says "Leave Workspace empty to use the applied default directory."
+// ProfileWorkspaceHint says "Leave blank to use the default folder."
 // in the language of msgs.
 func (msgs Messages) ProfileWorkspaceHint() string {
 	return Catalog.Format(msgs.locale, "profileWorkspaceHint", nil)
@@ -3066,21 +3066,21 @@ func (msgs Messages) ConnectionValueUnset() string {
 	return Catalog.Format(msgs.locale, "connectionValueUnset", nil)
 }
 
-// ConnectionFolderEnterPath says "Enter folder path"
+// ConnectionFolderEnterPath says "Enter path"
 // in the language the app shows.
 func ConnectionFolderEnterPath() string { return In(i18n.Locale()).ConnectionFolderEnterPath() }
 
-// ConnectionFolderEnterPath says "Enter folder path"
+// ConnectionFolderEnterPath says "Enter path"
 // in the language of msgs.
 func (msgs Messages) ConnectionFolderEnterPath() string {
 	return Catalog.Format(msgs.locale, "connectionFolderEnterPath", nil)
 }
 
-// ConnectionFolderHidePath says "Hide folder path"
+// ConnectionFolderHidePath says "Hide path"
 // in the language the app shows.
 func ConnectionFolderHidePath() string { return In(i18n.Locale()).ConnectionFolderHidePath() }
 
-// ConnectionFolderHidePath says "Hide folder path"
+// ConnectionFolderHidePath says "Hide path"
 // in the language of msgs.
 func (msgs Messages) ConnectionFolderHidePath() string {
 	return Catalog.Format(msgs.locale, "connectionFolderHidePath", nil)
@@ -3126,11 +3126,11 @@ func (msgs Messages) ConnectionEndpointPlaceholder() string {
 	return Catalog.Format(msgs.locale, "connectionEndpointPlaceholder", nil)
 }
 
-// ConnectionEndpointHint says "Use the API base URL. Nagi adds the protocol path."
+// ConnectionEndpointHint says "Base URL (e.g. https://api.example.com/v1)"
 // in the language the app shows.
 func ConnectionEndpointHint() string { return In(i18n.Locale()).ConnectionEndpointHint() }
 
-// ConnectionEndpointHint says "Use the API base URL. Nagi adds the protocol path."
+// ConnectionEndpointHint says "Base URL (e.g. https://api.example.com/v1)"
 // in the language of msgs.
 func (msgs Messages) ConnectionEndpointHint() string {
 	return Catalog.Format(msgs.locale, "connectionEndpointHint", nil)
@@ -3156,11 +3156,11 @@ func (msgs Messages) ConnectionAPIKeyPlaceholder() string {
 	return Catalog.Format(msgs.locale, "connectionAPIKeyPlaceholder", nil)
 }
 
-// ConnectionAPIKeyHint says "Saved in a private local file without encryption; not added to Bot settings or model prompts."
+// ConnectionAPIKeyHint says "Stored locally and kept out of prompts"
 // in the language the app shows.
 func ConnectionAPIKeyHint() string { return In(i18n.Locale()).ConnectionAPIKeyHint() }
 
-// ConnectionAPIKeyHint says "Saved in a private local file without encryption; not added to Bot settings or model prompts."
+// ConnectionAPIKeyHint says "Stored locally and kept out of prompts"
 // in the language of msgs.
 func (msgs Messages) ConnectionAPIKeyHint() string {
 	return Catalog.Format(msgs.locale, "connectionAPIKeyHint", nil)
@@ -3196,14 +3196,58 @@ func (msgs Messages) ConnectionCapacityDisclosure() string {
 	return Catalog.Format(msgs.locale, "connectionCapacityDisclosure", nil)
 }
 
-// ConnectionCapacityShow says "Capacity & execution limits"
+// ConnectionCapacityShow says "Capacity & limits"
 // in the language the app shows.
 func ConnectionCapacityShow() string { return In(i18n.Locale()).ConnectionCapacityShow() }
 
-// ConnectionCapacityShow says "Capacity & execution limits"
+// ConnectionCapacityShow says "Capacity & limits"
 // in the language of msgs.
 func (msgs Messages) ConnectionCapacityShow() string {
 	return Catalog.Format(msgs.locale, "connectionCapacityShow", nil)
+}
+
+// ConnectionCapacitySummary says "{context} · {output} · {tasks} tasks"
+// in the language the app shows.
+func ConnectionCapacitySummary(context string, output string, tasks string) string {
+	return In(i18n.Locale()).ConnectionCapacitySummary(context, output, tasks)
+}
+
+// ConnectionCapacitySummary says "{context} · {output} · {tasks} tasks"
+// in the language of msgs.
+func (msgs Messages) ConnectionCapacitySummary(context string, output string, tasks string) string {
+	return Catalog.Format(msgs.locale, "connectionCapacitySummary", map[string]any{"context": context, "output": output, "tasks": tasks})
+}
+
+// ConnectionTokenLimits says "Context & output tokens"
+// in the language the app shows.
+func ConnectionTokenLimits() string { return In(i18n.Locale()).ConnectionTokenLimits() }
+
+// ConnectionTokenLimits says "Context & output tokens"
+// in the language of msgs.
+func (msgs Messages) ConnectionTokenLimits() string {
+	return Catalog.Format(msgs.locale, "connectionTokenLimits", nil)
+}
+
+// ConnectionTokenPresetDefault says "{limits} (Default)"
+// in the language the app shows.
+func ConnectionTokenPresetDefault(limits string) string {
+	return In(i18n.Locale()).ConnectionTokenPresetDefault(limits)
+}
+
+// ConnectionTokenPresetDefault says "{limits} (Default)"
+// in the language of msgs.
+func (msgs Messages) ConnectionTokenPresetDefault(limits string) string {
+	return Catalog.Format(msgs.locale, "connectionTokenPresetDefault", map[string]any{"limits": limits})
+}
+
+// ConnectionTokenPresetCustom says "Custom…"
+// in the language the app shows.
+func ConnectionTokenPresetCustom() string { return In(i18n.Locale()).ConnectionTokenPresetCustom() }
+
+// ConnectionTokenPresetCustom says "Custom…"
+// in the language of msgs.
+func (msgs Messages) ConnectionTokenPresetCustom() string {
+	return Catalog.Format(msgs.locale, "connectionTokenPresetCustom", nil)
 }
 
 // ConnectionCapacityShowTooltip says "Show capacity and execution limits"
@@ -3266,23 +3310,23 @@ func (msgs Messages) ConnectionFieldOutputTokens() string {
 	return Catalog.Format(msgs.locale, "connectionFieldOutputTokens", nil)
 }
 
-// ConnectionFieldMaxActiveTasks says "Maximum active tasks"
+// ConnectionFieldMaxActiveTasks says "Max active tasks"
 // in the language the app shows.
 func ConnectionFieldMaxActiveTasks() string { return In(i18n.Locale()).ConnectionFieldMaxActiveTasks() }
 
-// ConnectionFieldMaxActiveTasks says "Maximum active tasks"
+// ConnectionFieldMaxActiveTasks says "Max active tasks"
 // in the language of msgs.
 func (msgs Messages) ConnectionFieldMaxActiveTasks() string {
 	return Catalog.Format(msgs.locale, "connectionFieldMaxActiveTasks", nil)
 }
 
-// ConnectionFieldWorkingDirectory says "Default working directory"
+// ConnectionFieldWorkingDirectory says "Working directory"
 // in the language the app shows.
 func ConnectionFieldWorkingDirectory() string {
 	return In(i18n.Locale()).ConnectionFieldWorkingDirectory()
 }
 
-// ConnectionFieldWorkingDirectory says "Default working directory"
+// ConnectionFieldWorkingDirectory says "Working directory"
 // in the language of msgs.
 func (msgs Messages) ConnectionFieldWorkingDirectory() string {
 	return Catalog.Format(msgs.locale, "connectionFieldWorkingDirectory", nil)
@@ -3334,21 +3378,21 @@ func (msgs Messages) ConnectionSaveDoesNotInterrupt() string {
 	return Catalog.Format(msgs.locale, "connectionSaveDoesNotInterrupt", nil)
 }
 
-// ConnectionTestAction says "Test connection and model"
+// ConnectionTestAction says "Test"
 // in the language the app shows.
 func ConnectionTestAction() string { return In(i18n.Locale()).ConnectionTestAction() }
 
-// ConnectionTestAction says "Test connection and model"
+// ConnectionTestAction says "Test"
 // in the language of msgs.
 func (msgs Messages) ConnectionTestAction() string {
 	return Catalog.Format(msgs.locale, "connectionTestAction", nil)
 }
 
-// ConnectionTestHint says "Tests the values above and may incur provider charges. It does not save or apply; Save and Apply do not test model ac…"
+// ConnectionTestHint says "May incur provider charges"
 // in the language the app shows.
 func ConnectionTestHint() string { return In(i18n.Locale()).ConnectionTestHint() }
 
-// ConnectionTestHint says "Tests the values above and may incur provider charges. It does not save or apply; Save and Apply do not test model ac…"
+// ConnectionTestHint says "May incur provider charges"
 // in the language of msgs.
 func (msgs Messages) ConnectionTestHint() string {
 	return Catalog.Format(msgs.locale, "connectionTestHint", nil)
@@ -7674,14 +7718,14 @@ func (msgs Messages) ThemeFilesHint() string {
 	return Catalog.Format(msgs.locale, "themeFilesHint", nil)
 }
 
-// ThemeReload says "Reload themes"
+// ThemeReload says "Reload"
 // in the language the app shows.
 //
 // General settings local theme selection, discovery and non-blocking
 // diagnostics.
 func ThemeReload() string { return In(i18n.Locale()).ThemeReload() }
 
-// ThemeReload says "Reload themes"
+// ThemeReload says "Reload"
 // in the language of msgs.
 //
 // General settings local theme selection, discovery and non-blocking
@@ -7746,11 +7790,11 @@ func (msgs Messages) WorkFolderChooseTitle() string {
 	return Catalog.Format(msgs.locale, "workFolderChooseTitle", nil)
 }
 
-// WorkFolderUseDefault says "Use default folder"
+// WorkFolderUseDefault says "Use default"
 // in the language the app shows.
 func WorkFolderUseDefault() string { return In(i18n.Locale()).WorkFolderUseDefault() }
 
-// WorkFolderUseDefault says "Use default folder"
+// WorkFolderUseDefault says "Use default"
 // in the language of msgs.
 func (msgs Messages) WorkFolderUseDefault() string {
 	return Catalog.Format(msgs.locale, "workFolderUseDefault", nil)
@@ -7768,17 +7812,17 @@ func (msgs Messages) WorkFolderChooseFailed(detail string) string {
 	return Catalog.Format(msgs.locale, "workFolderChooseFailed", map[string]any{"detail": detail})
 }
 
-// WorkFolderRequiredHint says "Choose where Nagi will keep work files, or enter a folder path. Choose a folder before saving, testing, or applying t…"
+// WorkFolderRequiredHint says "Choose a folder before saving or testing."
 // in the language the app shows.
 func WorkFolderRequiredHint() string { return In(i18n.Locale()).WorkFolderRequiredHint() }
 
-// WorkFolderRequiredHint says "Choose where Nagi will keep work files, or enter a folder path. Choose a folder before saving, testing, or applying t…"
+// WorkFolderRequiredHint says "Choose a folder before saving or testing."
 // in the language of msgs.
 func (msgs Messages) WorkFolderRequiredHint() string {
 	return Catalog.Format(msgs.locale, "workFolderRequiredHint", nil)
 }
 
-// RecoveryProviderDenied says "The provider rejected this request ({status}). In Connection & model, check the API key and model access, then choose…"
+// RecoveryProviderDenied says "The provider rejected this request ({status}). Check the API key and model access in Connection & model, then choose …"
 // in the language the app shows.
 //
 // Recovery guidance for an existing exact HTTP authentication
@@ -7787,7 +7831,7 @@ func RecoveryProviderDenied(status string) string {
 	return In(i18n.Locale()).RecoveryProviderDenied(status)
 }
 
-// RecoveryProviderDenied says "The provider rejected this request ({status}). In Connection & model, check the API key and model access, then choose…"
+// RecoveryProviderDenied says "The provider rejected this request ({status}). Check the API key and model access in Connection & model, then choose …"
 // in the language of msgs.
 //
 // Recovery guidance for an existing exact HTTP authentication
@@ -7796,21 +7840,21 @@ func (msgs Messages) RecoveryProviderDenied(status string) string {
 	return Catalog.Format(msgs.locale, "recoveryProviderDenied", map[string]any{"status": status})
 }
 
-// RecoveryModelRequestFailed says "The model request failed. In Connection & model, check the API key, server address and model, then choose Test connec…"
+// RecoveryModelRequestFailed says "The model request failed. Check the API key, endpoint and model in Connection & model, then choose Test. Testing may …"
 // in the language the app shows.
 func RecoveryModelRequestFailed() string { return In(i18n.Locale()).RecoveryModelRequestFailed() }
 
-// RecoveryModelRequestFailed says "The model request failed. In Connection & model, check the API key, server address and model, then choose Test connec…"
+// RecoveryModelRequestFailed says "The model request failed. Check the API key, endpoint and model in Connection & model, then choose Test. Testing may …"
 // in the language of msgs.
 func (msgs Messages) RecoveryModelRequestFailed() string {
 	return Catalog.Format(msgs.locale, "recoveryModelRequestFailed", nil)
 }
 
-// RecoveryRunFailed says "This run failed. Review its details to choose the next step. For a connection problem, open Connection & model and ch…"
+// RecoveryRunFailed says "The run failed. Open Details to see what happened. For connection problems, choose Test in Connection & model. Testin…"
 // in the language the app shows.
 func RecoveryRunFailed() string { return In(i18n.Locale()).RecoveryRunFailed() }
 
-// RecoveryRunFailed says "This run failed. Review its details to choose the next step. For a connection problem, open Connection & model and ch…"
+// RecoveryRunFailed says "The run failed. Open Details to see what happened. For connection problems, choose Test in Connection & model. Testin…"
 // in the language of msgs.
 func (msgs Messages) RecoveryRunFailed() string {
 	return Catalog.Format(msgs.locale, "recoveryRunFailed", nil)
@@ -7826,11 +7870,11 @@ func (msgs Messages) RecoveryTechnicalDetailsHint() string {
 	return Catalog.Format(msgs.locale, "recoveryTechnicalDetailsHint", nil)
 }
 
-// RecoveryRuntimeStartFailed says "Nagi could not start its runtime component. Review the work folder in Connection & model and open Configuration detai…"
+// RecoveryRuntimeStartFailed says "Nagi could not start its runtime. Open Details to see the error and check the work folder in Connection & model."
 // in the language the app shows.
 func RecoveryRuntimeStartFailed() string { return In(i18n.Locale()).RecoveryRuntimeStartFailed() }
 
-// RecoveryRuntimeStartFailed says "Nagi could not start its runtime component. Review the work folder in Connection & model and open Configuration detai…"
+// RecoveryRuntimeStartFailed says "Nagi could not start its runtime. Open Details to see the error and check the work folder in Connection & model."
 // in the language of msgs.
 func (msgs Messages) RecoveryRuntimeStartFailed() string {
 	return Catalog.Format(msgs.locale, "recoveryRuntimeStartFailed", nil)
@@ -7938,11 +7982,11 @@ func (msgs Messages) ThemeImportFilter() string {
 	return Catalog.Format(msgs.locale, "themeImportFilter", nil)
 }
 
-// ThemeImportHint says "Choose a downloaded .json theme file. Nagi validates and installs it for you; then choose it from the light or dark t…"
+// ThemeImportHint says "Import a local .json theme file."
 // in the language the app shows.
 func ThemeImportHint() string { return In(i18n.Locale()).ThemeImportHint() }
 
-// ThemeImportHint says "Choose a downloaded .json theme file. Nagi validates and installs it for you; then choose it from the light or dark t…"
+// ThemeImportHint says "Import a local .json theme file."
 // in the language of msgs.
 func (msgs Messages) ThemeImportHint() string {
 	return Catalog.Format(msgs.locale, "themeImportHint", nil)
@@ -7998,13 +8042,43 @@ func (msgs Messages) RecoveryDataTitle() string {
 	return Catalog.Format(msgs.locale, "recoveryDataTitle", nil)
 }
 
-// SaveRecoveryCopyAction says "Save recovery copy…"
+// RecoveryBackupLabel says "Recovery backup"
+// in the language the app shows.
+func RecoveryBackupLabel() string { return In(i18n.Locale()).RecoveryBackupLabel() }
+
+// RecoveryBackupLabel says "Recovery backup"
+// in the language of msgs.
+func (msgs Messages) RecoveryBackupLabel() string {
+	return Catalog.Format(msgs.locale, "recoveryBackupLabel", nil)
+}
+
+// RecoveryBackupHint says "Export or restore saved workbench data."
+// in the language the app shows.
+func RecoveryBackupHint() string { return In(i18n.Locale()).RecoveryBackupHint() }
+
+// RecoveryBackupHint says "Export or restore saved workbench data."
+// in the language of msgs.
+func (msgs Messages) RecoveryBackupHint() string {
+	return Catalog.Format(msgs.locale, "recoveryBackupHint", nil)
+}
+
+// RecoveryBackupDetails says "What's included"
+// in the language the app shows.
+func RecoveryBackupDetails() string { return In(i18n.Locale()).RecoveryBackupDetails() }
+
+// RecoveryBackupDetails says "What's included"
+// in the language of msgs.
+func (msgs Messages) RecoveryBackupDetails() string {
+	return Catalog.Format(msgs.locale, "recoveryBackupDetails", nil)
+}
+
+// SaveRecoveryCopyAction says "Export backup…"
 // in the language the app shows.
 //
 // C8 workbench recovery GUI: saveRecoveryCopyAction.
 func SaveRecoveryCopyAction() string { return In(i18n.Locale()).SaveRecoveryCopyAction() }
 
-// SaveRecoveryCopyAction says "Save recovery copy…"
+// SaveRecoveryCopyAction says "Export backup…"
 // in the language of msgs.
 //
 // C8 workbench recovery GUI: saveRecoveryCopyAction.
@@ -8012,13 +8086,13 @@ func (msgs Messages) SaveRecoveryCopyAction() string {
 	return Catalog.Format(msgs.locale, "saveRecoveryCopyAction", nil)
 }
 
-// RestorePausedAction says "Restore paused…"
+// RestorePausedAction says "Restore…"
 // in the language the app shows.
 //
 // C8 workbench recovery GUI: restorePausedAction.
 func RestorePausedAction() string { return In(i18n.Locale()).RestorePausedAction() }
 
-// RestorePausedAction says "Restore paused…"
+// RestorePausedAction says "Restore…"
 // in the language of msgs.
 //
 // C8 workbench recovery GUI: restorePausedAction.

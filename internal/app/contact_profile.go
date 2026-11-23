@@ -335,7 +335,6 @@ func (e *contactProfileEditor) view(c *ui.Context, t *ui.Theme, actions contactP
 	msgs := locales.In(c.Locale())
 	editable := !e.Busy && !e.Archived
 	ui.Column(c).Key("contact-profile-editor").FillWidth().MinWidth(0).Gap(8).Children(func() {
-		ui.Text(c, msgs.ProfileSaveIntro()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 		if reason := e.activityReason(); reason != "" {
 			ui.Text(c, profileNoticeText(msgs, reason)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Warning)
 		}
@@ -389,7 +388,7 @@ func (e *contactProfileEditor) view(c *ui.Context, t *ui.Theme, actions contactP
 
 		ui.Column(c).Gap(6).Children(func() {
 			ui.Row(c).Gap(8).Wrap().Children(func() {
-				secondaryButton(c, msgs.ContactSaveChanges()).Label(msgs.ContactSaveChanges()).Disabled(!editable).OnClick(func() {
+				primaryButton(c, msgs.ContactSaveChanges()).Label(msgs.ContactSaveChanges()).Disabled(!editable).OnClick(func() {
 					if draft, ok := e.Request(false); ok && actions.Save != nil {
 						actions.Save(draft)
 					}
@@ -405,7 +404,21 @@ func (e *contactProfileEditor) view(c *ui.Context, t *ui.Theme, actions contactP
 					secondaryButton(c, msgs.ProfileDiscard()).OnClick(actions.Discard)
 				}
 			})
-			ui.Text(c, msgs.ProfileContactManagement()).FontSize(typeLabel).FontWeight(400).FixedLineHeight(lineLabel).TextColor(t.TextMuted)
+			if !profileDraftEqual(e.Draft, e.initial) {
+				ui.Text(c, msgs.SettingsUnsavedChanges()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Warning)
+			}
+			if e.Busy {
+				ui.Text(c, msgs.ProfileSaving()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
+			}
+			if e.Error != "" {
+				ui.Text(c, profileNoticeText(msgs, e.Error)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Danger)
+			}
+			if e.Status != "" {
+				ui.Text(c, profileNoticeText(msgs, e.Status)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Text)
+			}
+		})
+		ui.Column(c).Gap(8).Padding(8, 0, 0).Children(func() {
+			ui.Text(c, msgs.ProfileContactManagement()).FontSize(typeLabel).FontWeight(500).FixedLineHeight(lineLabel).TextColor(t.Text)
 			ui.Row(c).Gap(8).Wrap().Children(func() {
 				if e.Archived {
 					secondaryButton(c, msgs.ProfileRestore()).Disabled(e.Busy).OnClick(func() {
@@ -414,7 +427,7 @@ func (e *contactProfileEditor) view(c *ui.Context, t *ui.Theme, actions contactP
 						}
 					})
 				} else {
-					secondaryButton(c, msgs.ProfileArchive()).Disabled(e.Busy || e.ActiveWork || e.UnknownWork).OnClick(func() {
+					dangerButton(c, msgs.ProfileArchive()).Disabled(e.Busy || e.ActiveWork || e.UnknownWork).OnClick(func() {
 						if actions.Archive != nil {
 							actions.Archive()
 						}
@@ -422,15 +435,6 @@ func (e *contactProfileEditor) view(c *ui.Context, t *ui.Theme, actions contactP
 				}
 			})
 		})
-		if e.Busy {
-			ui.Text(c, msgs.ProfileSaving()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
-		}
-		if e.Error != "" {
-			ui.Text(c, profileNoticeText(msgs, e.Error)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Danger)
-		}
-		if e.Status != "" {
-			ui.Text(c, profileNoticeText(msgs, e.Status)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Text)
-		}
 	})
 }
 
@@ -450,9 +454,6 @@ func (a *appModel) contactProfileForm(c *ui.Context, t *ui.Theme, ct *contact, e
 		editor.BuiltinToolsError = msgs.SettingsBuiltinManagedError()
 	} else if !editor.BuiltinToolsLoaded && !editor.BuiltinToolsLoading && editor.BuiltinToolsError == "" && !editor.CanRetryBuiltinTools {
 		editor.BuiltinToolsError = msgs.SettingsBuiltinNotReady()
-	}
-	if !profileDraftEqual(editor.Draft, editor.initial) {
-		ui.Text(c, msgs.SettingsUnsavedChanges()).FontSize(typeMeta).LineHeight(1.5).TextColor(t.Warning)
 	}
 	id := ct.ID
 	editor.view(c, t, contactProfileActions{

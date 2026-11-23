@@ -77,7 +77,7 @@ func TestUnconfiguredLaunchExposesConfigurationDetails(t *testing.T) {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if !a.settingsOpen || a.settingsTab != settingsTabAdvanced || !tr.HasText("Startup & configuration") || !tr.HasText(startupError) {
+	if !a.settingsOpen || a.settingsTab != settingsTabAdvanced || !tr.HasText("Runtime & diagnostics") || !tr.HasText(startupError) {
 		t.Fatalf("Configuration details did not open raw Advanced diagnostics: open=%v tab=%q texts=%v", a.settingsOpen, a.settingsTab, tr.Texts())
 	}
 }

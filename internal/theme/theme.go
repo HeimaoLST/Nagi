@@ -38,7 +38,7 @@ const (
 	CSSRem                   float32 = 16
 	ControlHeight            float32 = 28
 	ControlHit               float32 = 32
-	TypeSettingsTitle        float32 = 20
+	TypeSettingsTitle        float32 = 22
 	LineSettingsTitle        float32 = 28
 	LineCompact              float32 = 22
 	LineForm                 float32 = 20
@@ -52,9 +52,9 @@ const (
 	ComposerToolbarHeight    float32 = 42
 	ConversationMaxWidth     float32 = 768
 	UserMessageMaxWidth      float32 = 752
-	TypeLabel                float32 = 13
+	TypeLabel                float32 = 14
 	LineLabel                float32 = 20
-	LineMeta                 float32 = 18
+	LineMeta                 float32 = 17
 	LineAction               float32 = 16
 	TypeNavigation           float32 = 12
 	LineNavigation           float32 = 16
@@ -64,6 +64,7 @@ const (
 	TypeContactTitle         float32 = 13
 	TypePageTitle            float32 = TypeSettingsTitle
 	TypeGroupTitle           float32 = 13
+	LineGroupTitle           float32 = 18
 	TypeBody                 float32 = 14
 	TypeAction               float32 = 13
 	TypeMeta                 float32 = 12
@@ -98,7 +99,7 @@ func ResolveWorkbenchTheme(dark bool) WorkbenchTheme {
 	if dark {
 		t = ui.DarkTheme()
 	}
-	t.FontSize, t.Font, t.Spacing, t.Radius = TypeLabel, "system-ui", 4, 8
+	t.FontSize, t.Font, t.Spacing, t.Radius = TypeAction, "system-ui", 4, 8
 	t.Background = ui.Hex("#FFFFFF")
 	t.Surface = ui.Hex("#FFFFFF")
 	t.SurfaceHover = ui.Hex("#EFEFEF")
@@ -191,27 +192,46 @@ func ContactAvatarColors(t *ui.Theme, name string) (background, ink ui.Color) {
 // keyboard semantics and Changed contract, with the app's restrained
 // Selection/Text face instead of the framework pressedColor and shadow.
 func SegmentedSelection(c *ui.Context, selected *int, labels ...string) ui.Element {
+	return segmentedSelection(c, selected, false, false, labels)
+}
+
+func PreferenceSegmentedSelection(c *ui.Context, selected *int, label string, disabled, focus bool, labels ...string) ui.Element {
+	return segmentedSelection(c, selected, disabled, focus, labels).Label(label)
+}
+
+func segmentedSelection(c *ui.Context, selected *int, disabled, focus bool, labels []string) ui.Element {
 	t := c.Theme()
+	initial := *selected
 	parts := ui.SegmentedBase(c, selected, len(labels))
+	if initial == -1 {
+		*selected = initial
+	}
 	track := parts.Track.MinHeight(32).AlignItems(ui.Stretch).Padding(t.Space(0.5)).Gap(t.Space(0.5)).
 		Radius(t.Radius).Background(t.Surface).Border(1, t.Border)
 	track.Children(func() {
 		for i, label := range labels {
-			segment := parts.Segment(i).Label(label).MinHeight(32).Padding(t.Space(1), t.Space(2)).
-				Radius(t.Radius).Background(ui.Transparent).BorderWidth(0).TextColor(t.TextMuted)
+			segment := parts.Segment(i).Label(label).Disabled(disabled).MinWidth(ControlHit).MinHeight(ControlHit).Padding(t.Space(1), t.Space(2)).
+				Radius(t.Radius).Background(ui.Transparent).Border(2, ui.Transparent).FocusRing(false).TextColor(t.TextMuted)
 			if i == *selected {
 				segment.Background(t.Selection).TextColor(t.Text)
 			}
 			if segment.Pressed() {
 				segment.Background(t.SurfacePressed)
 			} else if segment.Hovered() && i != *selected {
-				segment.Background(t.SurfaceHover)
+				if t.Dark {
+					segment.Background(ui.RGBA(255, 255, 255, 14.0/255))
+				} else {
+					segment.Background(ui.RGBA(0, 0, 0, 10.0/255))
+				}
 			}
-			if segment.Focused() {
-				segment.BorderWidth(1).BorderColor(t.Focus)
+			if focus && !disabled && i == max(0, *selected) {
+				segment.Focus().ScrollIntoView()
+			}
+			if segment.FocusVisible() {
+				segment.BorderColor(t.Accent)
 			}
 			segment.Children(func() {
-				ui.Text(c, label).FontSize(TypeAction).SingleLine()
+				ui.Text(c, label).FontSize(TypeAction).FontWeight(500).FixedLineHeight(LineAction).SingleLine()
 			})
 		}
 	})
@@ -301,9 +321,60 @@ func AppTooltip(c *ui.Context, anchor ui.Element, text string) ui.Element {
 	return anchor
 }
 
-// SecondaryButton uses the shared md ghost face and the existing Button controller.
+func PrimaryButton(c *ui.Context, label string) ui.Element {
+	t := c.Theme()
+	return actionButton(c, label, t.AccentText, t.Accent, t.AccentHover, t.AccentPressed, ui.Transparent, true)
+}
+
 func SecondaryButton(c *ui.Context, label string) ui.Element {
-	return SharedControlFace(c, ui.Button(c, label).Label(label), 16, 4, false, false, false).FontSize(TypeAction).FontWeight(500).FixedLineHeight(LineAction).Padding(8, 12).Gap(6)
+	t := c.Theme()
+	return actionButton(c, label, t.Text, t.Surface, t.SurfaceHover, t.SurfacePressed, t.Focus, false)
+}
+
+func DangerButton(c *ui.Context, label string) ui.Element {
+	t := c.Theme()
+	return actionButton(c, label, t.Danger, t.Surface, t.Surface.Mix(t.Danger, 0.08), t.Surface.Mix(t.Danger, 0.14), t.Focus.Mix(t.Danger, 0.35), false)
+}
+
+func GhostButton(c *ui.Context, label string) ui.Element {
+	t := c.Theme()
+	return actionButton(c, label, t.TextMuted, ui.Transparent, t.SurfaceHover, t.SurfacePressed, ui.Transparent, false)
+}
+
+func LinkButton(c *ui.Context, label string) ui.Element {
+	t := c.Theme()
+	button := actionButton(c, "", t.TextMuted, ui.Transparent, t.SurfaceHover, t.SurfacePressed, ui.Transparent, false).Label(label)
+	button.Children(func() { ui.Text(c, label).Underline().SingleLine() })
+	return button
+}
+
+func actionButton(c *ui.Context, label string, ink, background, hover, pressed, border ui.Color, primary bool) ui.Element {
+	t := c.Theme()
+	button := ui.Button(c, label).Label(label).Height(ControlHit).MinHeight(ControlHit).MinWidth(ControlHit).
+		Radius(0).Background(ui.Transparent).Border(0, ui.Transparent).FocusRing(false).
+		FontSize(TypeAction).FontWeight(500).FixedLineHeight(LineAction).TextColor(ink).Padding(8, 12).Gap(6)
+	return button.Draw(func(p *ui.Painter, r ui.Rect) {
+		r.Y, r.H = r.Y+2, r.H-4
+		fill := background
+		switch {
+		case button.IsDisabled() && primary:
+			fill = background.Mix(t.Surface, 0.35)
+		case button.IsDisabled():
+		case button.Pressed():
+			fill = pressed
+		case button.Hovered():
+			fill = hover
+		}
+		PaintPreferenceFace(p, r, 16, 4, fill, border)
+		if button.FocusVisible() && !button.IsDisabled() {
+			ring := t.Accent
+			if primary {
+				ring = t.AccentText
+			}
+			inside := ui.Rect{X: r.X + 2, Y: r.Y + 2, W: r.W - 4, H: r.H - 4}
+			p.StrokePath(ControlPath(inside, 14, 4), 2, ring)
+		}
+	})
 }
 
 func NavigationControl(c *ui.Context, e ui.Element, palette WorkbenchTheme, selected bool) ui.Element {
