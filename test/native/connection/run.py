@@ -11,8 +11,8 @@ import uuid
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
-CONTROL = REPO / 'connection_native_integration_test.go'
-CONTROL_SHA = '0c5c774176ec58f42cddff15391f832d4497bce7ed1224428431a3a1ad24f3e1'
+CONTROL = REPO / 'internal/app/connection_native_integration_test.go'
+CONTROL_SHA = '730361c4f47456ea8b84adbe1786862272cb87d443c023a9925bf2415125bb74'
 SELECTOR = '^TestConnectionNativeSecureControlE2E$'
 
 
@@ -132,7 +132,7 @@ def build(output, case, go_bin):
         ('toolchain', [str(go_bin / 'go'), 'version']),
         ('compile-native', [sys.executable, str(REPO / 'scripts/gui-go.py'), 'test',
                             '-mod=readonly', '-c', '-tags=nagi_native_integration',
-                            '-o', case['executable'], '.']),
+                            '-o', case['executable'], './internal/app']),
         ('compile-probe', ['/usr/bin/swiftc', str(Path(__file__).with_name('probe.swift')),
                            '-o', str(output / 'bin/ax-probe')]),
         ('sign', ['/usr/bin/codesign', '--force', '--sign', '-', case['app']]),

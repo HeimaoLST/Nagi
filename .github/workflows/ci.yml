@@ -41,9 +41,9 @@ jobs:
           NAGI_TEST_ONLINE: '0'
         run: |
           python3 scripts/gui-go.py vet ./...
-          python3 scripts/gui-go.py test . -count=1
+          python3 scripts/gui-go.py test ./cmd/nagi ./internal/app ./internal/connection ./internal/locale ./internal/markdown ./internal/materials ./internal/store ./internal/theme ./locales -count=1
           python3 scripts/gui-go.py test github.com/egoist/mygo/ui -run '^(TestSplitReleaseBeforeFrame|TestEditorSelectionReleaseBeforeFrame)$' -count=1 -v
-          GOARCH=arm64 python3 scripts/gui-go.py build -trimpath -mod=readonly -buildvcs=true -o "$RUNNER_TEMP/Nagi" .
+          GOARCH=arm64 python3 scripts/gui-go.py build -trimpath -mod=readonly -buildvcs=true -o "$RUNNER_TEMP/Nagi" ./cmd/nagi
       - name: Headless previews
         id: headless-previews
         if: ${{ !cancelled() && steps.gui-python.outcome == 'success' }}
@@ -102,7 +102,7 @@ jobs:
           mkdir -p "$NAGI_PREVIEW_DIR"
           set -o pipefail
           selector=$(python3 scripts/check-pi-results.py --selector)
-          python3 scripts/gui-go.py test -tags=integration -race -timeout=20m -json -count=1 ./internal/pi . \
+          python3 scripts/gui-go.py test -tags=integration -race -timeout=20m -json -count=1 ./internal/pi ./internal/app \
             -run "$selector" \
             | tee "$RUNNER_TEMP/nagi-pi-results.jsonl"
       - name: Require actual Pi core and product scenarios

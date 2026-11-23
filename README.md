@@ -48,7 +48,7 @@ If the current window cannot save, copy any unsaved text you need elsewhere befo
 Use Go1.27.3, Python3 and `patch`. The MyGo launcher composes pinned patches in a temporary module copy without changing the module cache. The product target remains macOS13.0/ARM64. Pi1.5.2 requires Node>=22.19.0; the package owns a separately pinned runtime rather than relying on the consumer's PATH.
 
 ```sh
-python3 scripts/gui-go.py build -o /private/tmp/Nagi .
+python3 scripts/gui-go.py build -o /private/tmp/Nagi ./cmd/nagi
 python3 scripts/fetch-node-runtime.py --pin .github/pi-runtime.json --output /private/tmp/nagi-node
 python3 scripts/build-pi-worker.py --runtime /private/tmp/nagi-node --output /private/tmp/nagi-pi-worker
 python3 scripts/build-macos-app.py --payload /private/tmp/nagi-pi-worker --output /private/tmp/nagi-app
