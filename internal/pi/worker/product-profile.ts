@@ -198,9 +198,8 @@ export function inspectProductRecovery(data: unknown): { contacts: number; activ
   return { contacts: profile.bots.length, activities: profile.activities.length };
 }
 
-export function backupProductProfile(paths: ProductProfilePaths, destination: string): { path: string } {
+export function backupProductProfile(paths: ProductProfilePaths, profile: ProductProfile, destination: string): { path: string } {
   if (!isAbsolute(destination)) throw new RequestError('invalid_params', 'Choose an absolute location for the recovery copy');
-  const profile = decodeProductProfile(JSON.parse(readFileSync(paths.profilePath, 'utf8')));
   let ui = profile.recovery?.ui;
   try {
     const saved: unknown = JSON.parse(readFileSync(`${paths.profilePath}.ui.json`, 'utf8'));
@@ -266,25 +265,17 @@ export function saveCredential(path: string, existing: PrivateConnection | undef
   return next;
 }
 
-export function openProductProfile(paths: ProductProfilePaths, credentials: PrivateConnection | undefined): ProductProfile {
+export function importProductSnapshot(data: unknown, credentials: PrivateConnection | undefined): ProductProfile {
   const empty: ProductProfile = {
     version: 1, bots: [], conversations: [], activities: [], executions: [], operations: [], connections: [], savedRevision: null, appliedRevision: null,
   };
-  let data: unknown;
-  try { data = JSON.parse(readFileSync(paths.profilePath, 'utf8')); }
-  catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT' || !paths.fresh) throw error;
-    writeProductFile(paths.profilePath, empty);
-    return empty;
-  }
+  if (data === undefined) return empty;
   if (!data || typeof data !== 'object' || !('version' in data)) throw new RequestError('profile_unavailable', 'The product profile has an invalid format');
   if (data.version === 1) return decodeProductProfile(data);
-  if (data.version !== 10 || paths.fresh || !('contacts' in data) || !Array.isArray(data.contacts) || !data.contacts.length) {
+  if (data.version !== 10 || !('contacts' in data) || !Array.isArray(data.contacts) || !data.contacts.length) {
     throw new RequestError('profile_unavailable', 'The product profile format is unsupported');
   }
-  const profile = importCurrentProfile(data as OldProfile, empty, credentials);
-  writeProductFile(paths.profilePath, profile);
-  return profile;
+  return decodeProductProfile(importCurrentProfile(data as OldProfile, empty, credentials));
 }
 
 function importCurrentProfile(old: OldProfile, profile: ProductProfile, credentials: PrivateConnection | undefined): ProductProfile {

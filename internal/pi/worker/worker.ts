@@ -74,9 +74,9 @@ class Worker {
       ...(error instanceof RequestError && error.details ? { details: error.details } : {}),
     } });
   }
-  private cleanMessage(error: unknown): string {
+  private cleanMessage(error: unknown, apiKey?: string): string {
     const text = message(error);
-    const keys = [this.configured?.apiKey, ...[...this.contexts.values()].flatMap(context => [context.configuration.apiKey,
+    const keys = [apiKey, this.configured?.apiKey, ...[...this.contexts.values()].flatMap(context => [context.configuration.apiKey,
       ...context.mcpServers.flatMap(server => [server.config.env, server.config.headers].flatMap(values => values && typeof values === 'object' ? Object.values(values).filter((value): value is string => typeof value === 'string') : []))])];
     return keys.reduce<string>((value, key) => key ? value.split(key).join('[credential]') : value, text);
   }
@@ -412,6 +412,14 @@ class Worker {
   }
 
   private async testProductConnection(configuration: Connection): Promise<void> {
+    try { await this.runProductConnectionTest(configuration); }
+    catch (error) {
+      const code = error instanceof RequestError ? error.code : 'connection_test_failed';
+      throw new RequestError(code, this.cleanMessage(error, configuration.apiKey));
+    }
+  }
+
+  private async runProductConnectionTest(configuration: Connection): Promise<void> {
     const id = randomUUID();
     const context = await this.open({ contextId: id, botId: id, purpose: 'conversation', selectionRevision: 1,
       cwd: configuration.workingDirectory, used: false, instructions: '', codingTools: [], domainTools: null,
@@ -587,6 +595,8 @@ class Worker {
       } finally { await context.runtime.dispose(); }
     }));
     if (outcomes.some(outcome => outcome.status === 'rejected')) process.exitCode = 1;
+    try { this.product?.close(); }
+    catch { process.exitCode = 1; }
     await this.writer.flush().catch(() => {});
     process.stdin.destroy();
   }

@@ -1,421 +1,323 @@
 # Nagi development lessons
 
-## Validate composed pages rather than isolated controls
+## UI and Native Interaction
 
-**Problem:** Settings navigation shrank to label width, the scrollbar followed a narrow content column, and an embedded editor had a different width despite passing component checks. A later UI progress report emphasized source/test maintenance instead of visual inspection. Recovery action labels still appeared adjoining after their notice container became full-width. A 504-DIP center allocation left only 432 DIP for typing. A Settings return fixture without a writable store reduced the transcript viewport with save-error notices.
-**Cause or correction:** Start alignment, a non-filling scroll viewport and an auto-width nested form lacked a shared page-width contract. The user requires visual inspection; source, geometry and test results do not establish visual quality. The obsolete session editor is now removed. A later native 720-DIP review confirmed that settings rows compared the whole window width from MyGo Context.Size with the breakpoint instead of the width remaining after the sidebar. The user subsequently approved all phase1 readability, hierarchy and layout corrections in the UI checklist, superseding the corresponding Qoder values; phase2 styling remains a proposal. The first corrected headless render still showed flush vertical edges: percent100 FillHeight plus margins under MyGo's default centered Row oversized the card and canceled the visible vertical margins. The remaining recovery action-spacing cause is Unconfirmed.
-**Prevention:** Inspect actual rendered page combinations against the current Qoder-based contract with one full-pane scroll viewport and a separate bounded content column. Let parent flex allocation account for outer margins with explicit stretch and MinHeight0 rather than combining percent100 height with extra margins. Use the row's available width for responsive composition and one title/content skeleton across Settings categories. Inspect actual action separation; a declared gap or full-width container does not establish it. Synchronize approved corrections into the existing contract before implementation, preserving source-reference facts and historical evidence. Inspect the selected fixture source before running previews: a rich-table or copy screenshot may contain no ordinary parsed link and cannot validate body-link styling. Measure the editable control inside the composed page, including all insets. For Settings save and return, use a writable current store and compare the transcript viewport height and the offset of its anchored message. Check minimum/default/wide layouts, scrolling and relevant states. Distinguish inspected headless images from native-window observations and preserve screenshots; do not infer visual acceptance from assertions or screenshot counts. A MyGo click on an in-bounds disabled result button can return nil. Check readiness and click in the same UI callback, then verify that the requested execution actually opened.
+### Review composed pages and record a verdict
 
-## Record a visual verdict before accepting UI changes
+**Problem:** Component checks, geometry and captures can pass while the composed page is misaligned, hides a control, repeats a notice, collapses primary/secondary/danger buttons into borderless ghost text, or lets 14px helper prose overpower setting labels and section headers. An uninspected capture is not evidence.
 
-**Problem:** UI checks depended on ad hoc screenshot handoffs, and a default test failure could prevent CI from producing the headless preview artifact.
-**Cause or correction:** The user requires the revised UI design checklist to govern reviews. Capturing a screenshot and inspecting it are separate steps, and native interaction claims require the applicable native evidence.
-**Prevention:** Scope the checklist items, capture original evidence from the frozen candidate, and record the reviewer and verdict before merge. Keep the existing preview capture available after earlier CI test failures. Apply the checklist verdict to missing evidence and open findings.
+**Cause or correction:** Visual acceptance depends on the rendered page, not source, test status or image count. Capture and review are separate steps, and unbordered ghost actions plus verbose disclaimers destroy visual hierarchy.
 
-## Verify native file selection through the visible sheet
+**Prevention:** Inspect screenshots of actual composed pages at applicable sizes, themes, languages and states against `docs/design/desktop.md` and `docs/design/ui-checklist.md`. Enforce explicit four-tier typography (page title > section header > setting label > muted 1-line helper), distinct Primary/bordered Secondary/red Danger/Link controls, control-first Settings (segmented switches, presets and concise disclosures over stacked textboxes/prose), and centered wide-screen alignment. Check control bounds and scroll position, keep a failure frame when a click cannot be verified, and record the reviewer and verdict against the frozen candidate.
 
-**Problem:** Native chooser reviews lost the original app process before recording an accepted path. The launcher returned success in both crash and normal-quit cases.
-**Cause or correction:** The original observer invoked `ok:` directly and AppKit raised an exception. Later runs used a launcher that requested Quit after 30 seconds while the chooser driver allowed 240 seconds for selection. A second process with the same bundle ID could then show an unrelated window.
-**Prevention:** Check the executable the driver actually starts and its lifetime. Bind the disposable profile and observer to the same launch. Select the intended item, click the visible confirmation button, and verify the exact returned path, originating focus and original PID before cleanup. For recovery, verify the resulting backup or restore preview.
+### Verify native app, window and chooser identity
 
-## Keep the launch directory out of the fresh connection form
+**Problem:** A new window can appear after the owned app exits, a chooser launcher can lose the original process, and a duplicate bundle identifier can show an unrelated window. The same file can appear as `/tmp` or `/private/tmp`.
 
-**Problem:** With no folder selected, the first-use form tested a connection and saved the process working directory. An earlier refusal fixture had already seeded effective credentials and could only exercise edits.
-**Cause or correction:** The fresh form treated the process launch directory as a user-selected workspace. An empty first-use form must require the folder choice.
-**Prevention:** Exercise the normal Product entry with no saved credentials or folder override. Check that Test and Save leave provider count and connection revisions unchanged until the user chooses a folder, then verify inheritance and explicit Bot overrides across reopen.
+**Cause or correction:** Window existence, launcher success and path spelling do not identify a process or prove profile binding. A new window after an owned exit has an Unconfirmed cause.
 
-## Bind Bot management to the row in the left Bot Team list
+**Prevention:** Record the launch PID and compare the device/inode of the kernel-reported executable with the bundled file. Bind the disposable profile and chooser driver to one launch, verify the visible confirmation, returned path, originating focus and original PID, and check normal quit and child disappearance separately. Recheck identity after close observations; do not retry an unchanged binding.
 
-**Problem:** Individual Bot profiles appeared under global Settings, and a cached selection could send a profile edit to the wrong Bot.
-**Cause or correction:** The user manages a Bot by right-clicking its entire row in the left Bot Team list. Names, previews, avatars and row padding share the target. Conversations serve chat and Settings holds global preferences.
-**Prevention:** Bind every menu and profile action to the row's stable Bot ID. Right-click a different Bot from the one displayed and verify the edited Bot, both drafts and the return focus. Use Bot Team for the collection, Bot for a member, and Materials for text and files attached to a message. When a folder chooser returns, verify that the originating editor is still active. The Bot ID can match even after its original editor was replaced.
+### Use pinned MyGo components and reacquire controls
 
-## Distinguish unknown sends from live work during backup
+**Problem:** Unkeyed controls can change identity after a structural update, causing tests to activate captions, wrong rows or stale editors. Handwritten rendering can duplicate an existing MyGo control.
 
-**Problem:** Settings disabled backup for an imported unknown send that the worker could safely export.
-**Cause or correction:** The UI reused a task count that treats unresolved delivery as busy. The worker permits a snapshot once execution has reached a saved boundary.
-**Prevention:** Exercise backup both with live work and with a settled unknown receipt. Check that reopen preserves the receipt without replay.
+**Cause or correction:** MyGo derives unkeyed element identities from sibling position. `Tester.Find` can return clipped captions and `HasText` uses substring matching. Navigation can replace the editor while preserving the Bot ID.
 
-## Use the current candidate without disturbing dirty ownership
+**Prevention:** Reuse pinned components, official examples and shared helpers; record the concrete unsupported behavior before custom UI. Reacquire the action after navigation, verify expansion/current editor state and actual text-input versus button focus, and use exact labels with positive viewport geometry. Prefer the real pane or bounded keyboard traversal, and inspect all affected helpers rather than fixing one control.
 
-**Problem:** The main checkout is an old baseline with preexisting dirty documents and is not the current delivered UI candidate.
-**Cause or correction:** A repository path does not establish current source or writer ownership. PR30 contains the later UI work; its source and gate status must be treated explicitly.
-**Prevention:** Read remote branch/PR identity, local status and active writers first. Use a clean task worktree from the selected source and preserve the root's dirty work and other owners' worktrees. Wait for UI, backend and QA owners to release shared code before building it. A missing symbol in a partially edited worktree is not a frozen-candidate failure.
+### Drive PopoverMenu overlays and modal opener focus explicitly
 
-## Keep hypotheses separate from product decisions
+**Problem:** Switching a row menu from native `ContextMenu` to MyGo’s themed `PopoverMenu` broke `Tester.ChooseMenuItem` fixtures, duplicate panel headings captured `Tester.Click`, and dismissing a `DialogBase`/`Modal` lost return focus to the opener.
 
-**Problem:** A primary-Bot/child-Agent conjecture was incorrectly acknowledged as a user-selected product architecture.
-**Cause or correction:** The user withdrew that interpretation. The accepted experience does not select permanent hierarchy, Worker/Branch names, fork policy or migration architecture.
-**Prevention:** Record the exact accepted behavior and authorization scope. Preserve retractions alongside history; do not promote an experiment, proposal or coordinator interpretation into a requirement. Remove superseded designs and dedicated acceptance cases from the active tree. For example, v1 Stop identifies an accepted execution. Verify its identity, idempotency and the independence of other work; a fixture that canceled an unpublished Go intent does not define an extra UI operation. Use Git history for provenance. Trace proposed features and test expectations to a current user action or supported data contract before using older designs as implementation guidance.
+**Cause or correction:** `Tester.ChooseMenuItem` queries only the native host menu, whereas `PopoverMenu` renders ordinary in-window overlay elements. `DialogBase`/`Modal` restores focus to whichever control held focus when it opened.
 
-## Visual password masking does not establish secure accessibility
+**Prevention:** Drive `PopoverMenu` through in-window pointer clicks (or keyboard navigation / menu geometry when another surface shares an item label). Focus the triggering button before opening a modal so Cancel, Escape and backdrop dismissal automatically restore focus cleanly.
 
-**Problem:** A synthetic key was visually masked in the Pi lab but remained literal in its accessibility snapshot.
-**Cause or correction:** Product-native exposure is Unconfirmed. Product TextInputBase.Password and lab TextInput.Password share the same editor. Read-only inspection found a Darwin superclass value-cache path and a disabled-state secure-trait gap; visual bullets do not establish secure AX semantics.
-**Prevention:** Inspect the actual product control and matching accessibility bridge, then validate with a synthetic key under an exact native scope. Do not enter real credentials or claim readiness until that path is established.
+### Handle SegmentedBase clamping, focus and border jitter
 
-## Report progress against user-visible Bot workflows
+**Problem:** An invalid stored segment can silently appear as option 0 while the repair path is suppressed, so clicking option 0 cannot correct it. Focus can target the track instead of a segment, and a focus border can change layout width.
 
-**Problem:** A progress update emphasized source changes without showing what the user could do in the app.
-**Cause or correction:** The user needs whole-project progress for the current Bot conversation workflow.
-**Prevention:** Report completed user actions, outstanding blockers, owners and next steps every 20 minutes during sustained work. Distinguish native, integration and unit evidence.
+**Cause or correction:** `coreSegmentedBase` clamps `*selected` into `[0, n-1]` and suppresses `OnChange` when the index does not change. Focus must target a focusable segment radio button, not `parts.Track`. A `FocusVisible` border implemented as `0 -> 2` changes layout. Separately, MyGo `ui.RGBA` takes normalized alpha (`0..1`) rather than byte alpha (`0..255`).
 
-## Keep the Pi cutover free of Saki compatibility
+**Prevention:** Represent an invalid selection explicitly or provide a repair path independent of an unchanged index. Focus a segment radio button and keep constant border width (transparent at rest) or draw the ring inside `Draw`. Pass normalized `0..1` alpha to `ui.RGBA` and verify rendered hover pixels, option-0 repair and stable focus geometry.
 
-**Problem:** The migration retained an unused engine client and treated legacy history recovery as a release requirement.
-**Cause or correction:** The user chose a clean Pi-only product and explicitly authorized deleting the old local workbench data without archiving it.
-**Prevention:** Use the Nagi profile and current Pi schema. Remove retired adapters, recovery gates and dedicated fixtures together. Continue testing current Pi backups, captured bindings and restart without replay. For an explicitly retired profile, check the user configuration directory, workspace-local `.saki` directories, temporary test profiles and the branded preferences domain. Verify the paths are absent after cleanup because preference writes can be asynchronous.
+### Keep validation errors visible and standalone actions aligned
 
-## Distinguish rendered duplication from duplicate business state
+**Problem:** Collapsing an optional path or capacity disclosure can hide active field errors while the summary banner still says fields are highlighted. A direct button child of `ui.Column(c).FillWidth()` stretches across the card.
 
-**Problem:** The lab's final native screenshot repeated one answered-choice label while saved state and AX contained one answer. Later controlled crash screenshots repeated the same uncertainty guidance in red and amber. After a host exit, both the conversation and the empty composer rendered the same connection remedy and Settings action.
-**Cause or correction:** The prototype cause remains Unconfirmed. The earlier composer rendered the unknown summary directly and again through recoveryNotice; that did not establish duplicate execution or receipt state. The approved correction gives one eligible uncertainty notice ownership of both distinct original diagnostics, while preserving folded disclosure, fallback and unknown delivery. Existing locale tests still expected separate disclosures and therefore rejected the new contract.
-**Prevention:** Compare actual product render, AX and persisted question/receipt identities. Trace all visible notice producers before changing ledger logic. Count visible recovery actions across the composed chat and verify distinct local-save and unknown-delivery details remain reachable. Do not copy the prototype wholesale or report a clean native result without checking the product scene. Maintain the existing regression through its test owner when notice ownership changes; require all original diagnostics and no-effect assertions under the new disclosure instead of preserving duplicate presentation.
+**Cause or correction:** Disclosure visibility and field-error visibility are independent. A `FillWidth` column stretches direct button children unless alignment is constrained.
 
-## Keep development verification at integration boundaries
+**Prevention:** Keep the error region visible or repeat exact field errors when a section collapses, and verify summary and fields agree. Wrap a standalone action in a left-aligned `Row` or set `AlignSelf(ui.Start)`; check width after collapse and at minimum window size.
 
-**Problem:** Earlier development included failure-first unit edits and unit-suite validation under the previous process.
-**Cause or correction:** The current user rules prohibit developer TDD and developer unit-test edits; development verification is integration/E2E only. Necessary unit maintenance belongs to the test owner.
-**Prevention:** Fence test ownership explicitly, reuse observable integration/E2E cases and send unit compatibility work to the test owner. Do not weaken required gates to hide an incomplete migration.
+### Bind Bot management and first-use folder choice
 
-## Keep explanations outside implementation bodies
+**Problem:** Bot profiles can appear under global Settings and a cached selection can edit the wrong Bot. An empty first-use form can treat the launch directory as the selected work folder.
 
-**Problem:** Earlier code conventions allowed inline and implementation-body explanations. A patch report also mistook unchanged upstream comment context for newly added comments.
-**Cause or correction:** The current user rules prohibit new end-of-line and implementation-body comments. Necessary contract documentation must explain what callers cannot infer from names/types/signatures.
-**Prevention:** Use clear names and small cohesive functions; inspect added source for prohibited comments and place only necessary independent explanations outside implementation bodies. In patch files distinguish added lines from unchanged upstream context; patch syntax adds a leading space before Go tabs, so verify source whitespace after application rather than rejecting required context prefixes.
+**Cause or correction:** Management belongs to the clicked Bot Team row; Settings owns global preferences. A fresh connection form must require an explicit folder and must not inherit the launch directory.
 
-## Export child-process outcomes separately
+**Prevention:** Bind menus, profile actions and drafts to the row’s stable Bot ID; right-click a different Bot and verify the edited Bot, drafts and return focus. Exercise a fresh form with no saved credentials or folder override: Test and Save must not change provider counts or revisions until a folder is chosen, then verify inheritance and overrides across reopen.
 
-**Problem:** The lab exported native app/fixture exit zero but not the native worker's individual exit status. The first product-control wrapper also omitted its raw child outcome when interrupted. A later lead preview read recorder results before the validation owner announced terminal release.
-**Cause or correction:** App exit, a mapped helper status and disappearance of a child do not prove that child's exit code. Unexported child outcomes remain unknown. Recorder output files can appear before the actual HC terminal receipt and lease release; their existence is not process-completion evidence.
-**Prevention:** Correlate each owned child with its actual wait result and export raw return code and signal before mapping a helper exit, including interrupted runs. Keep app, worker, provider and cleanup outcomes separate. Release test gates, complete owned process/server cleanup, then snapshot final provider request counts; an earlier snapshot can miss requests during failure cleanup. The lead must also wait for the actual terminal and owner release before reading results for manual analysis. For intentional process loss, assert that the signaled worker was reaped and the desktop observed its exit before using Apply to reconnect.
+### Preserve notice ownership and remove machine codes
 
-## Contain the entire optional observer boundary
+**Problem:** One uncertainty or recovery condition can render through several producers, repeating guidance, while ordinary notices expose internal stage or engine-history wording. Removing one prefix can leave related messages inconsistent.
 
-**Problem:** Source review of the MCP hook found that optional-hook lookup and its undefined fast-path initially sat outside error containment.
-**Cause or correction:** Reading an instrumentation property can throw before dispatch. The final isolated patch moves lookup, capture and scheduled dispatch into one contained boundary; this was source review, not a reproduced runtime failure.
-**Prevention:** Keep optional instrumentation from changing the observed operation's error path. State scheduling and loss limits, observe actual direct-child event fields and verify behavior separately from static patch replay.
+**Cause or correction:** Visible notices have multiple producers, and the composer can select a summary independently of stored diagnostic text. Capability holds need plain copy; machine codes belong in technical contracts.
 
-## Persist completed work beyond worktrees
+**Prevention:** Trace each producer through its formatter to the rendered surface, assign one eligible notice, and keep distinct local-save and unknown-delivery diagnostics reachable. Remove internal codes and stage wording together, preserve saved/delivered distinctions and callbacks, and verify exact inverse substitutions across related notices.
 
-**Problem:** Temporary files and worktrees can be removed during routine workspace cleanup.
-**Cause or correction:** They are disposable development environments, not the authoritative project record.
-**Prevention:** Commit/push coherent safe checkpoints, retain essential contracts and actual validation summaries in Git/PR records, and merge completed work after required gates. Export controlled process receipts before test TempDir cleanup, including on failure. Do not rely on a temporary evidence path alone.
+### Do not infer secure credentials from masking
 
-## Identify the packaged executable by file identity
+**Problem:** A synthetic key was visually masked but remained readable in the accessibility snapshot.
 
-**Problem:** Standalone validation rejected the running bundled Node before checking normal quit.
-**Cause or correction:** Foundation resolved the observed executable to /tmp while the package path used /private/tmp. Both names identified the same file.
-**Prevention:** Match the child to the app PID and compare the device and inode of the kernel-reported executable with the bundled file. Check normal quit and worker disappearance separately.
+**Cause or correction:** The product and lab password controls share the editor. Source inspection found a Darwin superclass value-cache path and a disabled secure-trait gap; product-native exposure is Unconfirmed.
 
-## Inspect process path dependencies beyond executable names
+**Prevention:** Inspect the actual product control and accessibility bridge, then validate a synthetic key under the exact native scope. Visual bullets are not secure AX semantics; do not enter real credentials or claim readiness until value/selection/range reads are verified.
 
-**Problem:** Historical cleanup filtering by expected executable names missed a Python process whose working directory referenced a retained task path.
-**Cause or correction:** A dependency can exist in any process's cwd, executable, arguments or open files. Nonempty lsof output still matters when lsof exits nonzero.
-**Prevention:** Inspect all-process exact-path references before retirement. Preserve any observed live dependency, evaluate lsof output separately from its exit code, and never signal an uncertain owner process.
+### Retire obsolete panels and their tests
 
-## Decode maintenance metadata as data
+**Problem:** A retired panel and its tests were adapted into capability-hold behavior instead of removed, and a surviving read-only summary lost its full-value tooltip.
 
-**Problem:** A cleanup classifier embedded JSON booleans directly in Python source and failed with NameError before any deletion. A raw Product RPC probe omitted the request type, and its HC wait wrapper supplied an unsupported flag.
-**Cause or correction:** JSON true/false are not Python literals; serializing data did not make it executable Python. HC also rejects program names over32characters before launch. A later CI collector received empty logs because gh rejected terminal escape sequences; retrieving the same immutable jobs with its explicit raw-output option succeeded without a CI retry.
-**Prevention:** Build raw Product probes from the request envelope in docs/design/product-protocol.md, including `"type":"request"`. Check `hc wait --help` before supplying wait flags. Read metadata with json.loads or a data file and validate HC name constraints before launch. Collect escape-bearing CI logs directly into evidence files with the CLI's explicit raw-output option; keep the original collection error separate from CI outcomes. Produce the bounded inventory before mutations and preserve actual failures. Follow the current explicit resource scope: the user now requests direct deletion of confirmed obsolete worktrees and branches without new archives; preserve reserved data, live resources and original evidence. Avoid expanding an empty optional argument array under nounset in the macOS system Bash; invoke each command variant explicitly.
+**Cause or correction:** Removed features are not requirements to maintain during migration. Source review can miss surviving read-only information.
 
-## Verify owner identity from actual metadata
+**Prevention:** Remove the retired panel, entry points, state and dedicated tests together. Inspect remaining read-only information separately and retain its full-value tooltip, shared helpers and live behavior. Do not add placeholder panels or replacement tests for a feature the user no longer wants.
 
-**Problem:** A coordination message copied a displayed redaction token as its sender identity. A later color assignment also included a display placeholder instead of the approved value and was corrected before treating it as source data. A separate check guessed a role value and stopped before sending because the actual metadata differed. One root-launched recorder also declared a task-owner parent although its actual HC parent was null.
-**Cause or correction:** Display substitutions are not routable identities, and role values must come from the current owner metadata rather than a naming assumption.
-**Prevention:** Read the current HC identity, project, role, task and state before dispatch. Never copy a displayed redaction token into a message or command; use the verified owner description and current address when the identity cannot be displayed literally.
+## Product State and Recovery
 
-## Prefer MyGo components and examples
+### Keep admitted work, backup and unknown delivery distinct
 
-**Problem:** UI work lacked an explicit requirement to begin with the component library and examples rather than custom rendering.
-**Cause or correction:** The user requires reuse of MyGo components and matching examples; handwritten UI is justified only when necessary.
-**Prevention:** Inspect the pinned component API, official examples and existing shared product path before implementation. Record the concrete unsupported behavior and keep any necessary custom code narrow.
+**Problem:** Backup was disabled for a settled unknown send, and worker exit marked admitted activity records unknown while host replacement rejected every unresolved execution. A stalled chat could also block drain.
 
-## Verify the active model after switching
+**Cause or correction:** Live work, a settled unknown receipt and an exited host are different states. Replacing an exited host is a connection operation, not permission to resend unknown work.
 
-**Problem:** A cleanup brief and HC labels claimed Flash while the UI owner observed Sol in the actual OMP session and correctly stopped before editing.
-**Cause or correction:** Unconfirmed why the runtime selection changed. Launch arguments and descriptive labels do not establish the current model after an interactive switch.
-**Prevention:** Verify the live model footer or current session metadata immediately before model-specific work. Keep mismatch and correction receipts; do not relabel an unexecuted task as a Flash result.
+**Prevention:** Permit backup once execution reaches a saved boundary, preserving the unknown receipt without replay. Permit explicit Apply only for the current owned host after reaping, callback completion and exit state; retain live, pending, store and legacy guards. Verify Apply and reopen make no model request, and count provider calls or durable effects before and after recovery.
 
-## Use concise product and branch names
+### Bind mutations and answers to captured ownership
 
-**Problem:** Worktree and branch names repeated the product, runtime implementation, date and task prefixes. The first proposed replacements still named the product workspace after Pi or the runtime role.
-**Cause or correction:** Nagi is one product. The user selected main for stable releases, dev for development and integration for integration testing; runtime identity is not a workspace naming requirement.
-**Prevention:** Use the product checkout and short conventional branch names. Name necessary temporary worktrees for their actual task and remove them when that task ends.
+**Problem:** The Answer action opened a generic supplement form, a superseded question could receive an answer, and Pi callers retained retired client checks or replaced canonical rejection reasons.
 
-## Complete the worktree lifecycle
+**Cause or correction:** A supplement is not an answer. Readiness, history reload and send admission are distinct, and a held question has no delivery state until an answer is saved.
 
-**Problem:** Completed tasks left historical worktrees and local branches behind. A proposed fixed two-worktree limit also misread the user's intent. A tagged Go build generated its test runner while another writer removed test functions, leaving references to names that no longer existed.
-**Cause or correction:** Worktrees isolate conflicting features, fixes and validation; their number follows actual needs. Testing must use a committed frozen candidate. The user requested direct deletion of confirmed obsolete resources without new archives.
-**Prevention:** Assign every temporary worktree an owner, purpose and completion condition. Stop writes before validation, collect the result, then remove completed worktrees and temporary branches after checking live path dependencies. Preserve product data and original acceptance evidence. Run from the committed, immutable checkout even when the build has exclusive use of the local Go toolchain.
+**Prevention:** Capture owner, issue, question reference, revision and origin call; reject noncurrent targets before saving and preserve the draft. Persist answer and receipt before showing saved, dispatching, resolved, unknown or canceled; resolve only the exact held call and never deliver to a replacement run. Reuse canonical admission and readiness decisions, keep exited-host and first-use setup distinct, and render the raw reason rather than English diagnostic text. Compare operation and execution IDs at their documented locations, and count provider calls or durable effects before and after recovery.
 
-## Show requested team sessions in the product Space
+### Separate product decisions, domain persistence and legacy admission
 
-**Problem:** The rebuilt OMP team initially ran only as background HC children and was not visible in the user's Space.
-**Cause or correction:** Starting an HC terminal does not give it a visible Herdr tab. The user expects the existing team to be visible and involved in delivering the product.
-**Prevention:** Inspect the current Space, create or attach named team tabs there, and verify the actual visible layout. Put each role, model and thinking level in its tab name. For a feature that spans the team, assign the existing backend, UI and QA owners distinct work and verify their combined result.
+**Problem:** A conjecture was treated as architecture, and legacy-shaped fixtures were admitted without checking current persistence. Opaque legacy records can fail before the intended assertion or mask a missing-session case.
 
-## Reserve Astra for difficult work
+**Cause or correction:** Product decisions come from accepted user behavior or a current action, not proposals, old tests or past implementations. Legacy executions remain read-only; current activity admission requires explicitly marked fresh Pi intent, binding and run facts.
 
-**Problem:** Astra was assigned routine onboarding and quality inventory work despite being the user's most expensive model.
-**Cause or correction:** The user reserves Astra for the most challenging tasks or problems that other models repeatedly fail to solve.
-**Prevention:** Use the shared DeepSeek Flash model for bounded mechanical operations, Sol for routine work and Terra for demanding implementation. UI remains a peer Sol implementation role; use the separate user-created Flash operator for shared quick work. Keep the visible role/model labels accurate. Escalate a concrete difficult problem to Astra with the existing failure evidence rather than staffing routine tasks with it.
+**Prevention:** Record accepted behavior and retractions, and trace features/tests to a current action or supported contract. Check admission, save errors and reopen/rerun assertions. Use current synthetic records only for their stated boundary; never retag legacy data, bypass the guard, change history policy for green tests, or infer folder/credential state from launch environment. Set session presence explicitly in recovery fixtures. Remove retired adapters, callers, gates and fixtures together; verify asynchronous preference writes do not recreate deleted domains while preserving current Pi backups and no-replay.
 
-## Verify exact SDK types before implementing an adapter
+### Restore materials when persistence fails
 
-**Problem:** The first worker compile used a nonexistent settings setter and treated credential metadata as credential contents. A lab-only TypeScript erasure restriction also conflicted with the compiled-JavaScript delivery path. The product protocol also duplicated transcript types and manually managed file-descriptor flushing.
-**Cause or correction:** Pinned Pi provides SettingsManager.applyOverrides and an exported InMemoryCredentialStore; credential enumeration is metadata only. Production delivers compiled JavaScript rather than the lab's direct TypeScript entry. The user requires reuse of maintained public APIs when they provide the required behavior.
-**Prevention:** Read exact pinned declarations and scan existing exported helpers before coding an adapter. Compile the smallest boundary, preserve actual compiler failures, and align compiler options with the delivered runtime entry. Check existing repository helpers and pinned exports before implementing primitives. Use Pi transcript types, TypeBox schemas and the Node file writer’s flush option where applicable.
+**Problem:** Pi RunStarted cleared the draft and submitted context before saving; a failed save left unknown state without restoring the user’s materials.
 
-## Bind extension defaults to the owned SDK directory
+**Cause or correction:** The clear path compacts its backing slice and changes preview selection, so a shallow copy cannot restore the original.
 
-**Problem:** The public MCP extension has separate default credential/log paths. Source review initially missed the worker's owned-directory override, then retained the narrower implicit OAuth-from-owned-file finding.
-**Cause or correction:** The directory override confines paths but does not isolate authentication. Inject the SDK's empty in-memory MCP credential store separately from the model store; no unrelated credential access or runtime failure was observed.
-**Prevention:** Inspect extension defaults and complete startup ordering. Keep paths owned and credentials explicit, then verify anonymous/static-header HTTP against synthetic saved tokens without claiming that memory disables OAuth protocol.
+**Prevention:** Capture independent context items and the current draft/preview before clearing. Restore them on save failure while retaining admitted facts, pending intent and unknown/no-replay semantics. Preserve later edits and verify through the actual reducer and process E2E.
 
-## Select the cached compiler explicitly for offline phases
+### Compare persisted state by its contract
 
-**Problem:** A package-only build stopped before compilation because GOTOOLCHAIN=local selected Go1.27.1; a second bootstrap attempt failed with GOSUMDB disabled. A later formatting phase probed the system1.27.1 formatter instead of using the already established cached1.27.3 executable and stopped before formatting. Subsequent QA maintenance used /usr/local/go/bin/gofmt under a cached label, without establishing that it was the assigned formatter.
-**Cause or correction:** The module requires Go1.27.3, which was already cached. Environment restrictions changed toolchain selection and verification before source compilation. The system and assigned formatter binaries differed; root's explicit cached formatter check produced no source diff, without establishing a version for the system binary.
-**Prevention:** Resolve the required cached compiler and formatter paths before an offline phase, reuse their exact argv in subsequent owner fences, put the compiler bin directory on PATH and keep normal checksum handling. Record the actual executable path rather than treating a system installation or a cached label as pinned-tool evidence. Preserve setup failures separately from format, compiler or behavior failures. Check the effective Go version inside the job before setting GOTOOLCHAIN=local.
+**Problem:** A subset-persistence assertion rejected valid indented JSON, and a review misread an empty/null snapshot distinction as irrelevant.
 
-## Separate isolated declaration setup from SDK defects
+**Cause or correction:** Whitespace is not part of the selection contract; decoded presence, nullability and values are. A missing `omitempty` keeps nil and nonnil-empty distinct. Original legacy files are a byte-level contract.
 
-**Problem:** The memory-credential export preparation first typechecked isolated copies without dependency resolution and produced124 missing-module diagnostics.
-**Cause or correction:** Packet-local resolution fixed setup. Strict baseline/proposed checks then had the same44 diagnostics; the public caller passed with upstream library checking skipped. No full declaration or runtime PASS was established.
-**Prevention:** Resolve isolated dependencies read-only, compare baseline and proposed diagnostics, and report setup, caller and runtime results separately. Do not change SDK code or versions to conceal an unchanged baseline failure.
+**Prevention:** Inspect serialization tags and decode current data to assert values plus omitted/null/empty distinctions. Use the existing nil-preserving clone path, not wrappers or restoration scans. Reserve exact byte comparisons for byte-preserving contracts, and normalize empty material arrays when checking saved answers.
 
-## Keep the IPC type map in one declaration set
+### Keep supported tool catalogs separate from defaults
 
-**Problem:** The first compiled Go client contained duplicate MaxFrameBytes and history/inspection type declarations.
-**Cause or correction:** The duplicate declarations were in the assembled types.go source, not a Runtime or product behavior failure.
-**Prevention:** Keep one canonical typed wire map, check symbol uniqueness after assembling edits, and compile the actual package before assigning its consumers. Preserve compiler failures without presenting them as behavioral RED evidence.
+**Problem:** A keyboard regression supplied supported tools but expected a host-default label without the independent default list; a Retry fixture used a retired stub.
 
-## Preserve active work after a rejected shutdown
+**Cause or correction:** Supported tools and default selections are distinct ready facts. Configured idle Retry presentation does not require a live host; a retired stub proves neither configuration nor Pi readiness.
 
-**Problem:** Source review found that the first Pi client closed stdin after every shutdown reply, including a proved busy rejection; this would abort admitted work. No dynamic failure was claimed. A later actual activity run reaped its worker successfully but retained a tool.result not_found bridge-drain error during failure cleanup.
-**Cause or correction:** Request rejection is not permission to terminate the worker. A busy reply must leave the client usable for the existing run's answer/cancel/drain path. A later product Quit path requested activity cancellation but only waited for active chat, so a stalled chat could prevent drain indefinitely; this was also found in source review before execution. The actual tool-result failure ordering is Unconfirmed; source inspection found that asynchronous authorization could return after stop and still originate a domain-error reply.
-**Prevention:** Keep busy shutdown rejection separate from transport-unknown teardown. Product Quit must request cancellation through each captured active owner, including a chat admitted during shutdown, then observe settlement, callback completion and reaping. Keep cancellation ownership idempotent without suppressing ordinary retry after a failed Stop. Recheck the captured bridge stop signal after asynchronous authorization before originating an error reply, while retaining every error from an attempted RPC. A pre-send check does not close the in-flight race or justify treating arbitrary not_found as successful delivery. Exercise a held tool call, rejected shutdown, targeted answer and later successful shutdown in actual process integration.
+**Prevention:** Supply explicit independent defaults, preserve nil/empty/subset semantics and exercise actual keyboard controls. Use a fresh current store with saved valid configuration for offline Retry presentation, and keep unconfigured blocking separate from process-level Retry evidence.
 
-## Accept authoritative binding facts without losing ownership
+### Track saved worker credentials separately from plaintext form drafts
 
-**Problem:** Source review found exact-string cwd and used-flag comparisons that rejected canonical path aliases or an SDK-proven unused-to-used upgrade.
-**Cause or correction:** A same-host canonical path can represent the selected directory, and saved public entries can establish use beyond the host's conservative knowledge. Owner/context/purpose correlation must still match. Recovery admission accepted foreign execution IDs because it checked only that each ID existed.
-**Prevention:** Compare canonical path identity, accept only monotonic use evidence, and keep missing used sessions unavailable. Test actual temporary-directory reopen instead of mirroring raw request fields. Correlate execution links with creating receipts or preserved import ownership, reject duplicate associations, and exercise both a foreign link and a valid delegated result.
+**Problem:** Reopening Settings displayed a saved API key as unset and forced users to re-enter it before saving or testing other fields, while relaxing validation globally weakened standalone plaintext forms.
 
-## Preserve context notification sequences across reopen
+**Cause or correction:** The product worker omits plaintext keys from IPC snapshots and reports `credentialPresent`, whereas standalone forms supply plaintext keys directly.
 
-**Problem:** Source review of the new MCP integration found a notification counter created for each open, while the client validates sequence monotonicity for the whole worker epoch and context ID.
-**Cause or correction:** Closing and reopening that context would reset the producer counter while the consumer retained its last value. No dynamic failure was claimed.
-**Prevention:** Keep context notification counters with the worker until its epoch ends, and exercise close/reopen with actual process events. Distinguish attempts with explicit IDs instead of resetting or weakening sequence validation.
+**Prevention:** Propagate `CredentialPresent` into the form independently of `Draft.APIKey`, render masked summary bullets and a blank keep-key password input when present, resolve blank keys against the stored credential inside the worker on Save and Test, clear submitted plaintext keys from the form after an accepted Save, and keep blank-key rejection strict whenever a form starts from plaintext or lacks a saved credential.
 
-## Bind MCP configuration beyond an open-context cache
+### Guard SQLite WAL permissions, NUL-safe IDs and mirror recovery
 
-**Problem:** Source review found that used MCP reopen compared saved server/source labels, while full configuration checks covered only currently open contexts.
-**Cause or correction:** After close/restart, reusing a source label could retarget the old context to different configuration. No dynamic failure was claimed.
-**Prevention:** Store a canonical configuration integrity digest with the existing public binding metadata, retain opaque source identity separately and reject drift before creating transports. Keep raw private values outside history and exercise same-label/different-configuration reopen.
+**Problem:** Enabling SQLite WAL mode did not immediately create `-wal`/`-shm` sidecars for permission tightening, raw SQLite text bindings do not preserve embedded NULs in arbitrary IDs, and an interrupted JSON mirror publish after a SQLite commit could look like an external recovery edit.
 
-## Decode public SDK history by message role
+**Cause or correction:** WAL sidecar files appear on the first write transaction, pinned Node SQLite text bindings require safe encoding for arbitrary IDs, and a durable mirror needs a pre-publish digest marker to distinguish crash recovery from user-restored snapshots.
 
-**Problem:** The first MCP process E2E failed while decoding every public message with a tool-result content-array schema, after the real MCP call succeeded.
-**Cause or correction:** The SDK emitted a valid system message with string content and tool-declaration metadata. This was a fixture decoder failure, not a demonstrated worker or MCP defect.
-**Prevention:** Read the entry/message discriminator first, then decode the matching role's content. Keep strict call/receipt assertions for tool results and preserve heterogeneous SDK records instead of fabricating a legacy transcript shape.
+**Prevention:** Ensure newly created profile directories use `0700` and apply `0600` to the database plus `-wal`/`-shm` after the first WAL write transaction. JSON-encode arbitrary ID columns, refuse databases whose `PRAGMA user_version` exceeds the supported schema version, commit SQLite before publishing the recovery mirror, and record the prior mirror digest so reopen repairs interrupted publishes while still admitting genuine external recovery copies.
 
-## Keep new defaults separate from bound context settings
+## Pi, SDK, and Process Integration
 
-**Problem:** The initial worker globally updated every existing context when defaults changed and lacked effective per-context configuration readback.
-**Cause or correction:** Existing product callers require bound model/limits; endpoint, wire and credential source must not be silently repointed either.
-**Prevention:** Capture an immutable connection source and independent SDK configuration per context. Change model/limits only through an explicit idle-target operation, report actual nonsecret readback, and observe A remaining bound after B/default changes.
+### Verify exact SDK types and owned defaults
 
-## Reject unavailable history before a mutating SDK open
+**Problem:** An adapter used a nonexistent settings setter, treated credential metadata as contents, duplicated transcript types and manually flushed file descriptors. Default changes globally updated existing contexts.
 
-**Problem:** Source review found that opening an existing empty used Pi session caused the SDK to write a fresh header before Nagi rejected its missing binding.
-**Cause or correction:** SessionManager.open intentionally initializes empty files. Nonempty invalid files already fail unchanged; Nagi must classify used missing/empty references before this call.
-**Prevention:** Check file metadata first, report used history unavailable and preserve original bytes. Recreate only durably proven-unused bindings with a new reference, using public SDK APIs without parsing journals.
+**Cause or correction:** Pinned Pi exposes `SettingsManager.applyOverrides`, an `InMemoryCredentialStore`, public transcript types and a file-writer flush option. Production runs compiled JavaScript. Callers require bound model/limits and an immutable endpoint, wire and credential source per context.
 
-## Report digests only after freezing actual bytes
+**Prevention:** Read exact declarations and exported helpers before implementing an adapter. Compile the smallest boundary against the delivered runtime, use Pi types and TypeBox schemas, and preserve compiler failures. Capture connection source and per-context configuration; change model/limits only through an explicit idle-target operation, report nonsecret readback, and verify one context stays bound when defaults change.
 
-**Problem:** Handoffs announced placeholder digests, and readbacks assumed a compiler version or complete SDK inventory instead of reading the actual records. A later payload report stored displayed redaction placeholders in digest fields. An inverse-source verification also reported a mismatch after its reconstruction inserted an extra newline.
-**Cause or correction:** These were metadata or verification errors. The prepared SDK tree covered113 matching files; the fresh package also contained3 unchanged documentation/notice files. Correcting the inverse reconstruction restored the expected hash without changing source.
-**Prevention:** Freeze actual bytes, derive versions/counts/digests programmatically from records and compare explicit file sets, reporting additional files. Finish all ownership and budget checks before exporting and hashing their evidence object; a preparation review caught a later check omitted from an earlier export. Preserve exact block separators in source reconstruction and diagnose the verifier before editing already-correct code. Keep machine-readable digest fields exact; suppress display when necessary instead of replacing stored data with transcript placeholders. Inspect captured image magic bytes and dimensions before selecting an extension or MIME type; the native capture API returned JPEG despite an initial PNG assumption. Label incomplete work without a digest and preserve metadata corrections without rerunning unchanged production work.
+### Keep one IPC type map and authoritative binding facts
 
-## Match packaging helpers to the build interpreter
+**Problem:** The assembled Go client had duplicate frame/history types. Binding checks rejected canonical path aliases and SDK-proven unused-to-used upgrades, while recovery admission accepted foreign execution IDs.
 
-**Problem:** App assembly stopped before compilation when hashing the worker payload under macOS system Python 3.9.
-**Cause or correction:** The assembler called hashlib.file_digest, which requires Python 3.11. The worker builder already uses incremental SHA-256.
-**Prevention:** Use the supported hashing pattern and verify the helper with the interpreter used by the packaging job.
+**Cause or correction:** Duplicate declarations came from assembled source. A canonical path can represent one directory, and saved public entries can prove use; ownership correlation must still match.
 
-## Distinguish worker build inputs from packaged outputs
+**Prevention:** Keep one canonical typed wire map, check symbol uniqueness and compile the package before assigning consumers. Compare canonical path identity, accept only monotonic use evidence and keep missing used sessions unavailable. Correlate execution links with creating receipts or preserved import ownership, reject duplicate/foreign associations, and test actual temporary-directory reopen.
 
-**Problem:** One worker build wrote its output inside the checkout. Another supplied a finished worker payload as the runtime input and failed while reading the runtime verification receipt.
-**Cause or correction:** The worker builder requires a staged Node distribution with its verified archive receipt and original LICENSE. The output contains the assembled worker and a different manifest.
-**Prevention:** Pass the verified Node staging directory to `build-pi-worker.py --runtime` and a fresh external directory to `--output`. Use the resulting payload and its source, runtime and dependency hashes for integration tests and app assembly.
+### Preserve active work through shutdown, cancellation and probe cleanup
 
-## Bind the compiler that actually produces the payload
+**Problem:** The Pi client closed stdin after a proved-busy shutdown, Quit waited only for chat, and a stalled chat could block drain. Async authorization could emit a bridge-drain error after stop. A timed-out probe could receive busy and remain unretired. Readiness and cancellation used wrong values.
 
-**Problem:** Source review found that the external builder still used a source-side installed TypeScript compiler and declarations without recording their actual identity.
-**Cause or correction:** A tracked dependency lock describes intended inputs; it does not identify an existing mutable node_modules tree. No incorrect payload was observed.
-**Prevention:** Install the locked dependency set in the fresh external build directory, compile against that tree, record the actual compiler/version/files and install receipt, then prune development dependencies. Do not claim the corrected builder is validated by a prior build.
+**Cause or correction:** A rejected shutdown is not permission to terminate the worker. Quit must cancel every captured owner; a pre-send check does not close an in-flight race. The worker reports `process.version` with a `v` prefix; cancellation must use the admitted owner/context/run.
 
-## Parse orchestration code before launching a phase
+**Prevention:** Keep busy rejection separate from transport-unknown teardown. Quit must cancel every captured owner, including chat admitted during shutdown, then observe settlement, callback completion and reaping. Recheck the stop signal after async authorization while retaining attempted-RPC errors. Retain a probe until actual reaping and callback completion. Match canonical readiness and exact cancellation targets.
 
-**Problem:** A native build wrapper had a missing closing parenthesis and failed before invoking Go. A shell orchestration expression also failed before executing its intended commands.
-**Cause or correction:** These were wrapper syntax failures, not product compilation or behavior failures.
-**Prevention:** Parse generated Python and check shell/JavaScript quoting before starting a long HC phase. Preserve the failed wrapper and raw result, then make a bounded correction without relabeling the first attempt.
+### Preserve notification sequences and bind MCP configuration integrity
 
-## Check formatting for tagged integration sources before pushing
+**Problem:** A notification counter was recreated per open while the consumer validated monotonicity across the worker epoch/context. Reusing an MCP source label after reopen could retarget an old context.
 
-**Problem:** The first Pi Draft's GUI lane stopped at formatting in the native-control integration file, before vet, tests or build ran.
-**Cause or correction:** A successful tagged compilation and whitespace diff check did not establish canonical Go formatting. The correction changed only whitespace and the harness's bound source hash.
-**Prevention:** Run the pinned gofmt listing over the actual committed tree, including tagged integration files and files whose last declaration was removed, before pushing. A last-function deletion can leave an extra EOF blank line even when retained declaration bytes are exact. Preserve original failures and do not count unexecuted later steps as passed.
+**Cause or correction:** Reopen must not reset producer sequence. Saved source labels are not full configuration identity; raw values must stay outside history.
 
-## Keep window-binding failures separate from control observations
+**Prevention:** Keep context counters with the worker until its epoch ends and use explicit attempt IDs instead of weakening sequence validation. Store a canonical configuration digest with public binding metadata, retain opaque source identity separately and reject drift before transports. Exercise close/reopen and same-label/different-configuration reopen with actual events.
 
-**Problem:** The desktop inventory succeeded but binding the unique synthetic-control app returned cgWindowNotFound. The fixture was stopped without input, Test or Save.
-**Cause or correction:** Unconfirmed. No AX value or secure-entry assertion was reached; the failed controlled attempt does not establish credential exposure or a passing native control.
-**Prevention:** Retain the exact app/PID, tool error and controlled stop outcome. Await a real environment change before a new isolated case; do not retry the unchanged binding, operate a reserved app or treat missing observations as success.
+### Decode and admit public history safely
 
-## Answer the captured current question
+**Problem:** A decoder applied a tool-result schema to every SDK message, timestamps were dropped, an empty used session was opened before rejection, and app-context suffixes could be mistaken for user text.
 
-**Problem:** The GUI Answer action opened a generic supplement form, and answer extraction needed an explicit guard against a superseded question at the same requirements revision.
-**Cause or correction:** A supplement is not a question answer. Capture the displayed owner, issue, question reference and revision, then share the existing atomic question/supplement mutation and receipt.
-**Prevention:** Reject noncurrent unanswered targets before saving; preserve drafts on rejection and deduplicate identical saved answers. A held question has an empty delivery state until an answer is durably saved, including when an unanswered call is canceled or its worker exits. Show saved, dispatching, resolved, unknown or canceled only for a recorded answer, and never infer delivery from saved text. Verify the actual GUI save and model-tool path against one durable association without claiming that form coverage proves the separate activity-call lifecycle.
+**Cause or correction:** Public messages are discriminated by role. `SessionManager.open` initializes an empty file, so used missing/empty references must be rejected first. Model input and original user input differ.
 
-## Discover source paths before targeted inspection
+**Prevention:** Read the entry/message discriminator before decoding content, and preserve heterogeneous SDK records. Map public timestamps through the existing formatter. Classify used missing/empty references before open and preserve bytes; recreate only durably proven-unused bindings. Project original input from proven public custom-entry metadata, retain actual entry IDs, and do not parse journals or strip user text heuristically.
 
-**Problem:** Initial symbol searches named absent guessed question files, and later inspections assumed absent source, SDK, official example and external recorder paths. An edit anchor was also rejected before mutation because the relevant range had not been read. An activity review later cited the wrong commit, a nonexistent draft and store/event names absent from the reviewed source.
-**Cause or correction:** Repository symbol/path discovery located the actual files; none of these failed lookups established a product defect. The activity report contained unsupported source claims and was held for correction rather than imported as a contract.
-**Prevention:** Use rg --files and symbol discovery before targeted reads or edits, including pinned SDK examples, payloads and external evidence directories. Resolve the exact declaration and read the actual callee before replacing a symbol: a keyword match found a profile notice, but the tested archive guard returned a different enum. Include methods when mapping call sites to their enclosing declarations, and inspect completed search output before publishing an exact caller count or writer fence. Verify the full supplied commit and each cited existing symbol/event against the actual producer; label proposed names as proposals. Observe the discovered path before issuing the dependent read, then replace a complete balanced block when changing its delimiters. Do not assume an example directory from a component name. Pass filename patterns through quoted rg --glob filters rather than unmatched shell globs. Keep lookup/setup failures separate from compilation and behavior results.
+### Contain optional observers and export child outcomes
 
-## Select process tests explicitly in CI
+**Problem:** Optional-hook lookup initially sat outside error containment. App/fixture exit did not prove worker exit, and recorder files could appear before terminal receipt and lease release.
 
-**Problem:** The GUI lane runs default root tests without pinned worker inputs, while new process E2E roots require those inputs and must fail when they are missing.
-**Cause or correction:** Test selection and runtime-input requirements are different contracts. The new product process file uses the integration build tag, selected explicitly by the Pi lane; it does not skip on missing inputs.
-**Prevention:** Review every caller when adding process tests. Keep the ordinary GUI lane independent, execute supplemental form coverage explicitly, and leave all required product roots and missing/failure rules unchanged.
+**Cause or correction:** Reading an instrumentation property can throw before dispatch. A mapped helper status, missing child or existing file is not process completion.
 
-## Reacquire form targets after structural updates
+**Prevention:** Contain lookup, capture and scheduled dispatch in one boundary, and state scheduling/loss limits. Correlate each owned child with its actual wait result and raw code/signal, including interruption, and keep app, worker, provider and cleanup outcomes separate. Release gates and complete cleanup before final provider counts; wait for terminal/owner release before manual analysis.
 
-**Problem:** GUI tests missed Save/Edit/Add follow-up/Back controls, copied empty text despite retained drafts, and failed compound focus/presentation guards without identifying the failed condition. A recovery-control assertion also used a substring match for Reload while the drawer contained Reload task. A whole-window foreign-message assertion treated the other Bot’s legitimate sidebar preview as part of the selected transcript.
-**Cause or correction:** For Bot isolation checks, inspect prompt and reply text within the chat surface and separately verify persisted identities. First activation and unreported guard conditions remain Unconfirmed. Pinned MyGo derives unkeyed controller identities from sibling position; an unsaved notice exposed an unkeyed Contact form. Save retains an open connection editor, repeated captions can precede real controllers, and a fixed wheel coordinate can scroll another pane. Current chat/composer ancestors are already keyed; a separate deferred Settings return-focus request can outlive manual composer focus. Tester.Find returns the first exact text/label record, including clipped captions, while HasText uses strings.Contains.
-**Prevention:** Reacquire the intended action target after navigation, verify expansion/current editor state and actual text-input versus button focus, and retain activation/copy receipts. Observe continuous typing without refocusing to hide a transition failure. Inspect existing keys and focus requests before adding identity machinery; consume an obsolete return-focus request once the actual composer already owns focus. Use exact labels and positive viewport geometry for control assertions; reserve substring checks for diagnostic content. Keep caption bounds separate from uniquely identifiable editor bounds. Prefer the actual pane or bounded keyboard traversal, and inspect every affected helper call rather than fixing one button per run. Export each compound condition and a post-transition frame before Fatal across all related new guards. Preserve drafts, rejection/no-effect assertions and original failures; missing activation alone does not establish a toolkit defect.
+### Build worker payloads from verified inputs and compiler
 
-## Reassemble streamed test output before parsing receipts
+**Problem:** App assembly used a hashing API unavailable in the packaging interpreter. One build wrote inside the checkout; another treated a finished payload as the runtime input. The compiler came from an unrecorded mutable tree.
 
-**Problem:** Receipt analysis tried decoding individual Go JSONL Output chunks and failed on an unterminated JSON string; partial-chunk filtering also emitted unrelated continuation data. A later pre-launch recorder copied obsolete receipt names and a provider limit field absent from the current producer.
-**Cause or correction:** One test log message can span multiple Output events. Reassembling saved chunks by test recovered the original receipt lines without another execution. The activity producer emits activity-loopback and activity-budget with different fields from the earlier fixture; the recorder mismatch was corrected before execution.
-**Prevention:** Concatenate each test's output before splitting complete log lines and decoding bounded receipt records. Check current producer names and fields before reusing a recorder. Retain observed request bodies and counts even when an early failure prevents the final budget receipt; leave unobserved worker totals unknown. Preserve raw JSONL and distinguish analysis/setup errors from test or product failures.
+**Cause or correction:** The worker needs a verified staged Node runtime and fresh external output. A lock describes intended inputs, not the actual compiler tree; output is not a runtime input.
 
-## Match evidence to the observable product boundary
+**Prevention:** Use supported incremental hashing. Pass verified Node staging and a fresh external output; install locked dependencies externally and compile against that tree. Record actual compiler version/files/install receipt, verify pre/post input bytes, prune development dependencies, and do not claim a prior payload validates a corrected builder.
 
-**Problem:** An activity E2E brief demanded separate raw tool.finished and ToolResult response exports from the actual app-owned client, whose host exposes no independent event subscriber.
-**Cause or correction:** The product gate requires an owner-correlated answer and settlement. Exact public SDK tool-result history, the actual model request carrying that result, captured delivery state and owned settlement can establish that outcome. They do not independently export either raw protocol packet.
-**Prevention:** Specify the business assertion and its actual evidence sources before requiring instrumentation. Keep unobserved packets explicit, never import another fixture client's receipts, and avoid a production test-hook framework solely for redundant logging. Verify continued typing, selection and copying through public UI APIs rather than reflecting into private controller fields solely to compare identities.
+### Select pinned compiler and formatter, then parse wrappers
 
-## Preserve original input beside model context
+**Problem:** Offline phases selected system Go 1.27.1 instead of cached 1.27.3, and a formatting phase probed the wrong formatter. A wrapper had a missing parenthesis; a last-function deletion left an EOF blank line; shell quoting failed before execution.
 
-**Problem:** The worker appends named app-context suffixes to its SDK prompt. A normal conversation-history caller would otherwise display those suffixes or try stripping user text heuristically.
-**Cause or correction:** Model input and original user input are distinct. The worker can retain the original run text/context/correlation with the existing public SDK custom-entry API before prompting; no second transcript store is needed.
-**Prevention:** Project original input from proven nagi-turn-v1 metadata and retain actual public entry IDs. Do not parse engine journals, strip arbitrary user-authored tags, or label recorded input as successful execution. Validate this changed worker in a fresh external payload with the real first-use flow.
+**Cause or correction:** Cached labels and system installations are not pinned-tool evidence. Wrapper syntax and formatting are prerequisites, not product failures.
 
-## Bound isolated probe cleanup by actual reaping
+**Prevention:** Resolve required cached compiler/formatter paths, record exact executables and argv, and reuse them in owner fences. Run the pinned gofmt listing over the committed tree, including tagged files and final-declaration removals. Parse Python AST and check shell/JS quoting before a long phase; preserve failed wrappers and do not count unexecuted steps as passed.
 
-**Problem:** Source inspection found that a timed-out connection Test could receive busy from Shutdown while the client exposed only Shutdown/Wait, leaving its isolated worker and state unretired.
-**Cause or correction:** These are source gaps, not observed process failures. An owned-process Kill/wait fallback does not itself retain a failed probe owner or prove callback completion. Clearing the UI Test flag after an error-only return could release quit with cleanup unproved.
-**Prevention:** Retain the specific probe client and state until actual reaping and callback completion, including after a bounded cleanup failure. Keep the existing quit barrier until both are observed. Exercise held synthetic cleanup, preserve raw outcomes and keep ordinary business cancellation and busy shutdown unchanged; a killed test is not successful or proof of descendant termination.
+## Verification and Evidence
 
-## Preserve public history timestamps in product projections
+### Keep development verification at integration boundaries
 
-**Problem:** Source review found the first Pi history projection preserved entry IDs and text but left message times and history dates blank.
-**Cause or correction:** The public SDK entry timestamp was omitted from decoding and projection even though the existing product renderer and search use those fields. No dynamic failure was claimed.
-**Prevention:** Map actual public timestamps through the existing product formatter alongside original text, context and IDs. Include reopen, search and full-message display in first-use E2E; do not substitute the current time for missing history facts.
+**Problem:** Earlier development used failure-first unit edits and unit-suite validation under the previous process.
 
-## Match actual readiness values and captured cancellation targets
+**Cause or correction:** Current rules prohibit developer TDD and developer-written/modified unit tests. Development verification is integration/E2E; unit maintenance belongs to the test owner.
 
-**Problem:** Source review found Node readiness compared against an unprefixed version and a bridge-error cancellation using the rejected incoming event's context/run IDs.
-**Cause or correction:** The worker reports process.version with its v prefix. Cancellation after a rejected event must use the admitted bridge's captured owner/context/run, not the rejected packet. Both corrections preceded execution.
-**Prevention:** Read the actual producer and admitted caller identity before implementing checks or failure handling. Validate canonical readiness and exact cancellation ownership in the frozen product E2E.
+**Prevention:** Fence test ownership explicitly, reuse observable integration/E2E cases, and send unit compatibility work to the test owner. Do not weaken required gates to hide an incomplete migration.
 
-## Keep machine codes out of capability notices
+### Freeze actual bytes before reporting digests
 
-**Problem:** A coordination brief used unsupported_stage ambiguously, and six user-visible notices included that literal machine-style prefix. A copy-only edit briefly added stray suffix characters before static parsing caught them. Later activity originals still exposed engineering-stage and engine-history wording in ordinary notices. Changing a raw exit detail did not change the visible localized recovery summary.
-**Cause or correction:** Capability holds require plain explanatory copy; internal codes belong in machine contracts and technical details in explicit diagnostics. Removing a prefix alone did not address the related ordinary profile, task and history messages. For sendUnknown, composer selects unknownSummary independently of the stored diagnostic text.
-**Prevention:** Trace each producer through its formatter to the actual rendered surface and apply the approved wording rule across related ordinary notices, including projection warnings; a helper named addDetail is not necessarily folded. Preserve diagnostic contracts, capability guards, saved/delivered distinctions and callbacks. Verify exact inverse substitutions and qualify English-only work separately from localization and visual acceptance.
+**Problem:** Handoffs announced placeholder digests, assumed compiler/SDK inventory, and stored displayed placeholders in digest fields. Inverse reconstruction and image-type checks were misdiagnosed.
 
-## Retire obsolete panels instead of porting their tests
+**Cause or correction:** These were metadata or verifier errors; the corrected reconstruction matched without changing source.
 
-**Problem:** The first-use compatibility task adapted the obsolete session-model panel and its tests into capability-hold behavior instead of removing them.
-**Cause or correction:** The user explicitly requested direct removal. The old editor is not a feature to maintain during Pi integration; normal connection model configuration remains required. Source review of removal also found the retained read-only model summary had lost its existing full-value tooltip.
-**Prevention:** Remove the retired panel, its entry points/state and dedicated tests together. Inspect surviving read-only information separately; retain its full-value tooltip and shared configuration helpers. Avoid placeholder panels or replacement tests for a feature the user no longer wants.
+**Prevention:** Freeze actual bytes, derive versions/counts/digests programmatically, and compare explicit file sets while reporting extras. Preserve exact block separators and diagnose the verifier before changing source. Keep machine-readable digest fields exact; suppress display instead of substituting placeholders. Check image magic bytes and dimensions before choosing an extension or MIME type.
 
-## Bind window observations to the launched process
+### Separate setup failures from declaration or SDK defects
 
-**Problem:** A post-Quit window observation returned a new window after the owned visual app had exited0; an exact-path check found a distinct no-argument process with parent1.
-**Cause or correction:** Unconfirmed. The original app exit does not identify the new instance or prove its profile binding. No further UI input was sent; the additional task-owned executable was identity-checked and stopped, with its exit code left unknown.
-**Prevention:** Record the launch PID and verify identity changes around close/observation. Keep isolated profile selection in the bundle entrypoint so an independent launch cannot fall back to user data; do not resume native cases until that boundary is established. Preserve actual process outcomes and distinguish bounded visual observations from lifecycle acceptance. For interactive macOS checks, use LaunchServices activation and verify focus before judging a frame. When copying a synthetic history fixture, rebind its session references to the copied worker state directory so that opening a row exercises the original transcript.
+**Problem:** Isolated declaration checks first produced missing-module diagnostics, then equal strict diagnostics on baseline and proposed trees; the public caller passed only with upstream checking skipped.
 
-## Resolve compatibility callers before claiming compilation
+**Cause or correction:** Packet-local resolution fixed setup. Baseline and proposed diagnostics were otherwise equal; neither established a full declaration/runtime PASS.
 
-**Problem:** Test retirement passed formatting and a scoped import heuristic but the frozen compile failed on a retained launcher call, two missing imports and additional deleted-method callers outside the original fence. A later lead-only replacement of a valid purpose string with pi.Conversation failed compilation because its file did not import pi.
-**Cause or correction:** Parsing and selected symbol searches do not resolve the complete test package. The first compiler page stopped after too many errors; its first closure left deleted failure-helper calls and changed history signatures unresolved. An uncapped root-package diagnostic established the complete remaining compiler list. A later shared activity type rename also collided with an existing package-level configuration factory; source review caught it before compilation, and the factory plus both callers received a distinct name. The later qualified purpose reference was unnecessary; restoring the existing valid string comparison removed the missing-import error without changing behavior.
-**Prevention:** Preserve failed commands and source snapshots. When diagnostics are truncated, collect the complete root-package errors before assigning another closure; cached Go supports root-only -gcflags=-e. Check imports for every new package-qualified reference and avoid unnecessary cosmetic changes after an owner freeze. Check each removed declaration's callers, maintain accurate test names, and compile a committed unchanged candidate before executing tests. Give the test owner exact paths; do not restore an emulator or discard business assertions for green compilation. Verify every reported missing input in the exact candidate worktree. An earlier commit removed two files that are present in the current Pi test manifests and checkout. Compilation does not establish behavior or resolve an explicit domain/data-policy blocker. Check imports against surviving test bodies and compile both default and integration-tagged suites after partial fixture removal. Compile the tagged test package from the exact checkpoint before publishing a fixture handoff. A profile test used reflect.DeepEqual without importing reflect in that file, which prevented unrelated desktop roots from running. Trace hostless connection probes as independent callers during dispatcher retirement. One probe still generated IDs through the removed dispatcher helper.
+**Prevention:** Resolve isolated dependencies read-only, compare baseline and proposed diagnostics, and report setup, caller and runtime separately. Do not change SDK code/versions to conceal an unchanged baseline failure.
 
-## Separate domain persistence from legacy-data admission
+### Select process tests and guard preview outputs
 
-**Problem:** Caller maintenance initially assumed that mapping a domain helper made rejection/non-dispatch persistence exercisable without checking legacy-data admission. Later fixtures added opaque work references and executions, ignored a scope-save error, then dereferenced the nil scope in default CI.
-**Cause or correction:** Opaque legacy executions remain read-only. The new activity source admits explicitly marked fresh Pi intent, binding and run facts; it does not reinterpret old or ambiguous records. A legacy-shaped fixture can therefore fail before its intended authorization assertion. Ignoring that persistence error causes a test panic rather than evidence of a native-app failure.
-**Prevention:** Inspect data admission and persistence results alongside domain callers before claiming a mapping is complete. Check creation/save errors and preserve persistence/reopen/rerun assertions. Use explicitly current synthetic records only for their stated regression boundary; never count them as actual SDK admission, retag legacy data, bypass the guard or change the pending history policy for green tests. Keep fresh first-use folder selection separate from held legacy-byte preservation; launch-directory or credential environment variables are not a persisted legacy configuration or a confirmed Pi folder. Set session presence explicitly when constructing v10 unknown-intent fixtures. A seeded session can mask the missing-session case.
+**Problem:** Default headless CI ran without pinned Node/Pi inputs while process E2E roots require them and fail when absent. Moving tests into `internal/app` exposed an unguarded preview write that leaked `headless-*.png` into the source tree and broke clean-checkout checks.
 
-## Reuse current ownership and canonical admission reasons
+**Cause or correction:** Headless package tests, Pi process integration and preview export have distinct runtime contracts; root-only ignores hid the leak.
 
-**Problem:** Pi conversation callers retained Saki-client checks in composer Reload while the Pi Send path replaced canonical rejection reasons with one generic message. A later recovery banner described an observed running-worker loss as a startup failure. An activity start guard stored English diagnostic text in the reason-code field.
-**Cause or correction:** Readiness, owned history reload and send admission have different conditions. Existing runtimeAvailableForView, canSend and sendBlockRaw already own related decisions; the new path did not consistently use them. Exit copy incorrectly implied that history reload would permit sending, while the Pi path preserves sendUnknown. The admission issues were source findings; C3 originals later directly showed the recovery-copy mismatch caused by a configuration-stage predicate overriding the exited state. The caller already renders the raw message from the canonical code.
-**Prevention:** Keep one live-host readiness decision and revalidate the captured Pi conversation at history dispatch/completion. Classify an observed exit separately from first-time setup even when the connection form has no saved configuration. The exited-host GUI case displayed “Setup needed” because the setup predicate checked only that form. Retain specific startup and local-store failures. Keep both genuine failed-start and exited-with-stale-configuration-stage cases in recovery regressions; do not label an exited fixture as a startup failure. Reuse canonical admission reasons for owned contacts. Recheck durable cancellation before an activity crosses its first run-attempt boundary; a canceled preparation must not start work merely to cancel it after admission. Keep actually attempted or uncertain commands distinct from known non-dispatch. Preserve drafts and unknown delivery; never infer Pi ownership from an opaque legacy session reference or let history refresh replay Send. Describe history readback without promising that it resolves an unknown send or selecting a new recovery policy. Return the existing reason code from coded guards and verify the stored code and displayed message independently.
+**Prevention:** Scope the headless GUI job to non-Node packages and run Pi integration with `-tags=integration`, pinned inputs and required roots. Guard every preview write with `NAGI_PREVIEW_DIR != ""` and ignore `headless-*.png` in every directory. Do not skip missing inputs or weaken failure rules.
 
-## Restore materials when admitted-run persistence fails
+### Reassemble logs and match evidence to the product boundary
 
-**Problem:** Pi RunStarted cleared the draft and submitted context before saving; a failed save changed the send state to unknown without restoring those materials.
-**Cause or correction:** Source inspection found missing rollback. clearSubmitted also compacts its backing slice and changes preview selection, so a shallow context copy cannot preserve the original contents.
-**Prevention:** Capture independent context items and the current draft/preview before clearing. Restore user materials on save failure while retaining known admitted run facts, pending intent and unknown/no-replay semantics. Preserve later edits and verify the existing business assertions through the actual Pi reducer and process E2E.
+**Problem:** Receipt analysis decoded individual Go JSONL chunks and failed on strings split across events; a recorder copied obsolete field names. A brief demanded raw packets the product client does not expose.
 
-## Compare persisted JSON by its contract
+**Cause or correction:** One log message can span events, and producers differ. Public SDK history, the model request carrying the result, delivery state and owned settlement can establish an outcome without an event subscriber.
 
-**Problem:** A new subset-persistence assertion rejected a valid saved array because its JSON was indented rather than compact. A later source review incorrectly called a batch snapshot's empty/null distinction irrelevant after misreading its JSON tag as omitempty.
-**Cause or correction:** Whitespace is not part of the selection contract; decoded presence, nullability and values are. The snapshot has no omitempty tag, so cloning must retain its nil versus nonnil-empty distinction. Original legacy-file preservation remains a byte-level contract.
-**Prevention:** Inspect the actual serialization tag and decode current JSON to assert the required values and omitted/null/empty distinctions. Use the existing clone path with nil-preserving copies rather than wrappers or restoration scans. Reserve exact byte comparisons for contracts that preserve the original bytes. Match normalized empty material arrays when checking saved answers after reopen.
+**Prevention:** Concatenate each test’s output before decoding bounded records. Check current producer fields, retain observed counts when a final receipt is absent, and separate analysis errors from product failures. Specify the assertion and actual evidence before requiring instrumentation; keep unobserved packets explicit and do not add a test hook or import another fixture’s receipts.
 
-## Keep supported tool catalogs separate from defaults
+### Decode tool metadata and inspect process dependencies
 
-**Problem:** A keyboard regression supplied supported tools but expected a host-default label without supplying the independent default list; a Retry fixture used a retired client stub instead of current configuration eligibility.
-**Cause or correction:** Supported tools and default selections are distinct ready-envelope facts. Configured idle Retry presentation does not require a live host, while a legacy client stub establishes neither configuration nor Pi readiness.
-**Prevention:** Supply explicit independent fixture defaults, preserve nil/empty/subset semantics and exercise actual keyboard controls. Use a fresh current store and saved valid configuration for offline Retry presentation; keep unconfigured blocking and actual process-level Retry evidence separate.
+**Problem:** A cleanup classifier embedded JSON booleans as Python literals. A raw probe omitted the request type, an HC wait used an unsupported flag, and CI logs were empty after gh rejected escape sequences. Cleanup filtering by executable name missed a Python process whose cwd referenced a retained path.
 
-## Preserve human drafts before terminal delivery
+**Cause or correction:** Serialized data is not executable code; HC has name/flag constraints. A dependency can exist in cwd, executable, arguments or open files, and nonempty `lsof` matters even on nonzero exit.
 
-**Problem:** Sending screenshot materials through hc cleared an old unsent human draft. A preceding --if idle attempt rejected the observed done status without typing; a later default send delivered the materials but replaced the draft.
-**Cause or correction:** HC's draft hold expires after a finite interval; it does not preserve an old draft indefinitely. The original text was restored through raw bracketed paste without Enter, and the unchanged message turn, exact unsent input and original terminal size were verified. Named-key input rejected Unicode without typing.
-**Prevention:** Inspect the actual input before delivery. When a human draft exists, share material files and links without sending another terminal prompt; elapsed quiet time is not consent to replace it. Preserve the exact original and restore only that text without submission after an accidental replacement. Match original terminal dimensions before attaching.
+**Prevention:** Read metadata with a JSON loader or data file and validate tool names before launch. Build probes from the documented envelope, check wait flags, and collect escape-bearing logs with raw output while separating collection errors. Inspect all-process exact-path references before retirement, preserve live dependencies, and never signal an uncertain owner.
 
-## Inspect the control actually shown in a screenshot
+### Discover actual paths, close callers and run root tooling
 
-**Problem:** A passing activity E2E emitted named answer/save/check scenes whose relevant controls were outside the captured viewport. The Check click returned an outside-window error, so unchanged state did not prove the disabled action or rejection path.
-**Cause or correction:** Stage names and functional state receipts do not establish what the pixels show or whether a control received input. The original images remain valid evidence of their actual scroll positions.
-**Prevention:** Inspect each original and qualify hidden controls explicitly. For a headless resize, update the fixture’s application width as the native resize handler does and check the control bounds against the new viewport. Count a control touching a valid content edge as visible. Record bounds and preserve a failure frame when a click cannot be verified. Capture the relevant visible control before claiming its visual or interaction coverage, and distinguish failure to hit a control from a successful no-effect activation. Do not promote a root PASS, filename or image count into whole-app visual acceptance. Compare the focused and unfocused row in the actual minimum window. Logical focus returned to the history row while its visible pixels stayed unchanged. Measure the stroke against its adjacent fill in the same frame to exclude hover differences.
+**Problem:** Searches named absent files, edit anchors were used before reading the range, and changes passed selected checks but failed compilation on missing callers/imports.
 
-## Allow explicit host recovery without replaying unknown work
+**Cause or correction:** Path/symbol discovery and complete diagnostics locate the real surface; selected searches do not resolve the package.
 
-**Problem:** Source review found that worker exit marks admitted activity records unknown, while the Apply predicate rejects every unresolved execution and therefore blocks the documented dead-host replacement path.
-**Cause or correction:** Replacing a fully observed exited host is a connection operation, not permission to resend unknown work. Live admission and preserved uncertainty need distinct eligibility checks. Controlled C3 on4ed3cb1 passed with three requests and three workers, preserving unknown through explicit Apply, history readback and restart. Its deliberate owned Kill does not establish spontaneous crash or ToolResult reply-loss recovery.
-**Prevention:** Permit explicit recovery only for the current owned host after actual reaping, callback completion and applied exit state, while retaining live/pending work, store and legacy guards. Keep unknown records and captured sources unchanged, and verify Apply/reopen produces no model request or automatic replay. Record deliberate abnormal test exits separately from normal drain. Exercise initial admission failure with no worker as well as exit of an admitted worker. A retry must reopen the configured profile and retain unknown operations.
+**Prevention:** Discover files/symbols before targeted reads and verify cited symbols against their producer. Read the exact declaration and callee before replacement, include methods when mapping callers, and avoid keyword matches that find a different guard. Collect complete root-package diagnostics before another closure; check imports and avoid cosmetic changes after freeze. Run locale generation from the checkout root (`mygo.json`) and verify accessors against both catalogs.
 
-## Generate locale accessors from the project root
+## Ownership and Delivery
 
-**Problem:** Passing the locales directory to the MyGo generator failed to find the project configuration.
-**Cause or correction:** MyGo reads mygo.json from the supplied project directory. The locale catalogs are inputs declared in that file.
-**Prevention:** Run python3 scripts/gui-go.py run github.com/egoist/mygo/cmd/mygo generate . from the checkout and verify the generated accessors against both source catalogs.
+### Respect frozen candidates and writer ownership
 
-## Compare shared execution fields across product views
+**Problem:** A repository path was treated as the current candidate, and edits were attempted in a dirty root shared with other writers. A partially edited worktree was mistaken for a frozen-candidate failure.
 
-**Problem:** A no-replay check compared the full conversation execution with the narrower execution embedded in an operation receipt.
-**Cause or correction:** The conversation view adds an operation ID. The receipt reports that ID on the operation itself.
-**Prevention:** Compare the operation and execution IDs at their documented locations and compare the shared state and revision. Count provider calls or durable effects before and after recovery to detect replay.
+**Cause or correction:** A path does not establish source identity or writer ownership. The selected branch, status and active owners define the usable candidate; missing symbols can reflect an in-progress edit.
+
+**Prevention:** Read branch/PR identity, status and active writers first, then use a clean task worktree from the selected committed source while preserving dirty work and other owners’ worktrees. Wait for shared-code owners to release paths before building/editing, and treat frozen-candidate bytes as the verification basis.
+
+### Complete the worktree lifecycle
+
+**Problem:** Completed tasks left worktrees and branches behind, and a tagged build generated test runners while another writer removed test functions.
+
+**Cause or correction:** Worktrees isolate conflicting work; their number follows actual need. Moving source cannot serve as frozen test input, and disposable resources are not project records.
+
+**Prevention:** Assign every temporary worktree/branch an owner, purpose, source and completion condition. Stop writes before validation, collect the result, then remove resources after checking live path dependencies; preserve data, profiles and evidence. Build from the committed checkout, not a changing worktree.
+
+### Persist completed work and evidence
+
+**Problem:** Temporary files and worktrees can be removed during routine cleanup, losing contracts and validation summaries.
+
+**Cause or correction:** Temporary paths are disposable, not the authoritative project record.
+
+**Prevention:** Commit and push coherent checkpoints, keep contracts and validation summaries in Git/PR records, and merge after required gates. Export process receipts before test temporary directories are cleaned, including failures; do not rely on a temporary evidence path.
+
+### Verify owner/model identity and use concise names
+
+**Problem:** A displayed redaction token was copied as identity, a role was guessed, and a model label disagreed with the live session. Branch names repeated product/runtime/date/role prefixes. Team sessions ran invisibly, and expensive models handled routine inventory.
+
+**Cause or correction:** Display substitutions and labels are not routable identity. Live model metadata defines the active model; branch identity is not a naming requirement. Team roles must be visible, with allocation proportional to difficulty.
+
+**Prevention:** Read current HC identity, project, role, task, state and live model before dispatch; never copy redaction tokens or relabel an unexecuted task. Use short branch names. Keep team agents visible as named tabs in the product Space with role/model/thinking labels rather than hidden background subagents, using one full-stack writer per checkout plus an independent reviewer/QA verifier (Antigravity) and a shared DeepSeek Flash scout; spawn a second Dev worker in an isolated temporary worktree only for genuinely disjoint parallel tracks. Reserve Astra for escalated, evidence-backed blockers; bound xhigh screenshot batches and steer long workers once evidence is collected. Report completed user actions, blockers, owners and next steps, distinguishing native, integration and unit evidence.
+
+### Keep explanations outside implementation bodies
+
+**Problem:** Earlier code allowed inline/body explanations, and a patch report mistook unchanged upstream context for new comments.
+
+**Cause or correction:** Rules prohibit end-of-line and implementation-body comments. Contract documentation is allowed only where naming, types and signatures cannot express the caller-visible requirement.
+
+**Prevention:** Use clear names and small functions, inspect added source for prohibited comments, and place necessary independent explanations outside implementation bodies. In patches, distinguish added lines from upstream context and verify whitespace after application.
+
+### Preserve human drafts before terminal delivery
+
+**Problem:** Sending screenshot materials through HC replaced an old unsent human draft; an idle attempt had rejected the observed status without typing.
+
+**Cause or correction:** HC’s draft hold expires; it does not preserve an old draft indefinitely. Elapsed quiet time is not consent to replace input.
+
+**Prevention:** Inspect actual terminal input before delivery. When a human draft exists, share material files/links without sending another prompt. If replacement occurs, restore the exact original without submission and verify the unchanged turn, unsent input and terminal size; named-key input cannot replace raw Unicode paste.

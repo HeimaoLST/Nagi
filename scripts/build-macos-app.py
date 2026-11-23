@@ -140,7 +140,7 @@ def build(destination: Path, payload: Path) -> dict:
         shutil.copy2(PIN_PATH, resources / "pi-runtime.json")
         gui = contents / "MacOS/Nagi"
         gui.parent.mkdir()
-        command = [sys.executable, "scripts/gui-go.py", "build", "-mod=readonly", "-trimpath", "-buildvcs=true", "-o", str(gui), "."]
+        command = [sys.executable, "scripts/gui-go.py", "build", "-mod=readonly", "-trimpath", "-buildvcs=true", "-o", str(gui), "./cmd/nagi"]
         build_env = {"GOOS": "darwin", "GOARCH": "arm64", "CGO_ENABLED": "0", "MACOSX_DEPLOYMENT_TARGET": MINIMUM_OS}
         with (destination / "build.log").open("w") as log:
             subprocess.run(command, cwd=ROOT, env={**os.environ, **build_env}, stdout=log, stderr=subprocess.STDOUT, check=True)

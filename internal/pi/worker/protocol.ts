@@ -22,7 +22,7 @@ export const profileSchema = Type.Object({
 });
 export const connectionSchema = Type.Object({
   wireApi: Type.Union([Type.Literal('openai-completions'), Type.Literal('openai-responses')]),
-  baseUrl: id, apiKey: id, model: id, contextTokens: positiveInteger, outputTokens: positiveInteger,
+  baseUrl: id, apiKey: Type.String(), model: id, contextTokens: positiveInteger, outputTokens: positiveInteger,
   workingDirectory: id, maxActiveTasks: positiveInteger,
 });
 export const activityStateSchema = Type.Union([

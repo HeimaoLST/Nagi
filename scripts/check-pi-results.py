@@ -5,8 +5,8 @@ import json
 import sys
 
 
-DESKTOP = "github.com/HeimaoLST/Nagi"
-CORE = DESKTOP + "/internal/pi"
+DESKTOP = "github.com/HeimaoLST/Nagi/internal/app"
+CORE = "github.com/HeimaoLST/Nagi/internal/pi"
 REQUIRED_GROUPS = {
     "core": (
         CORE,
