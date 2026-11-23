@@ -1544,6 +1544,42 @@ func (msgs Messages) ReadOnlyChat() string {
 	return Catalog.Format(msgs.locale, "readOnlyChat", nil)
 }
 
+// ChatTimestampYesterday says "Yesterday {time}"
+// in the language the app shows.
+func ChatTimestampYesterday(time_ string) string {
+	return In(i18n.Locale()).ChatTimestampYesterday(time_)
+}
+
+// ChatTimestampYesterday says "Yesterday {time}"
+// in the language of msgs.
+func (msgs Messages) ChatTimestampYesterday(time_ string) string {
+	return Catalog.Format(msgs.locale, "chatTimestampYesterday", map[string]any{"time": time_})
+}
+
+// ChatTimestampWeekday says "{day} {time}"
+// in the language the app shows.
+func ChatTimestampWeekday(day string, time_ string) string {
+	return In(i18n.Locale()).ChatTimestampWeekday(day, time_)
+}
+
+// ChatTimestampWeekday says "{day} {time}"
+// in the language of msgs.
+func (msgs Messages) ChatTimestampWeekday(day string, time_ string) string {
+	return Catalog.Format(msgs.locale, "chatTimestampWeekday", map[string]any{"day": day, "time": time_})
+}
+
+// ChatTimestampDate says "{date}, {time}"
+// in the language the app shows.
+func ChatTimestampDate(date string, time_ string) string {
+	return In(i18n.Locale()).ChatTimestampDate(date, time_)
+}
+
+// ChatTimestampDate says "{date}, {time}"
+// in the language of msgs.
+func (msgs Messages) ChatTimestampDate(date string, time_ string) string {
+	return Catalog.Format(msgs.locale, "chatTimestampDate", map[string]any{"date": date, "time": time_})
+}
+
 // LoadingChatHistory says "Loading chat history…"
 // in the language the app shows.
 func LoadingChatHistory() string { return In(i18n.Locale()).LoadingChatHistory() }

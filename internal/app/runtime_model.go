@@ -353,7 +353,8 @@ func (a *appModel) liveText(ct *contact, taskID, itemID string) *message {
 			return m
 		}
 	}
-	m := &message{Key: key, Kind: msgContact, TaskID: taskID, ItemID: itemID, Time: nowTime()}
+	stamp := time.Now()
+	m := &message{Key: key, Kind: msgContact, TaskID: taskID, ItemID: itemID, Time: stamp.Format("15:04"), Timestamp: stamp}
 	ct.Messages = append(ct.Messages, m)
 	if ct != a.selectedContact() {
 		ct.Unread++

@@ -50,6 +50,7 @@ type message struct {
 	Kind        messageKind
 	Text        string
 	Time        string
+	Timestamp   time.Time
 	AlertTitle  string
 	AlertDetail string
 	Retry       bool
@@ -329,7 +330,15 @@ func (a *appModel) snippet(c *contact, msgs locales.Messages) string {
 		if m.Kind == msgActivity {
 			continue
 		}
-		text := strings.Join(strings.Fields(m.Text), " ")
+		source := m.Text
+		if m.Kind == msgContact {
+			bubbles := splitReplyBubbles(m.Text, m.Streaming)
+			if len(bubbles) == 0 {
+				continue
+			}
+			source = bubbles[0]
+		}
+		text := strings.Join(strings.Fields(source), " ")
 		if text == "" {
 			continue
 		}
@@ -425,7 +434,8 @@ func (a *appModel) send(ct *contact, text string) bool {
 		return false
 	}
 	a.seq++
-	ct.Messages = append(ct.Messages, &message{ID: a.seq, Kind: msgUser, Text: text, Time: nowTime()})
+	stamp := time.Now()
+	ct.Messages = append(ct.Messages, &message{ID: a.seq, Kind: msgUser, Text: text, Time: stamp.Format("15:04"), Timestamp: stamp})
 	label := ct.WorkLabel
 	if label == "" {
 		label = "Preparing a reply"
@@ -433,7 +443,8 @@ func (a *appModel) send(ct *contact, text string) bool {
 	a.startWork(ct, label, 1500*time.Millisecond, func() {
 		ct.Status = statusReady
 		a.seq++
-		ct.Messages = append(ct.Messages, &message{ID: a.seq, Kind: msgContact, Text: a.canned(ct), Time: nowTime()})
+		stamp := time.Now()
+		ct.Messages = append(ct.Messages, &message{ID: a.seq, Kind: msgContact, Text: a.canned(ct), Time: stamp.Format("15:04"), Timestamp: stamp})
 	})
 	return true
 }
@@ -509,8 +520,9 @@ func (a *appModel) startWork(ct *contact, label string, d time.Duration, finish 
 func (a *appModel) failRun(ct *contact) {
 	ct.Status = statusAttention
 	a.seq++
+	stamp := time.Now()
 	ct.Messages = append(ct.Messages, &message{
-		ID: a.seq, Kind: msgContact, Time: nowTime(),
+		ID: a.seq, Kind: msgContact, Time: stamp.Format("15:04"), Timestamp: stamp,
 		Text:        "Two failures in parser_roundtrip: expected eof, got newline. The trailing-newline change is the likely cause.",
 		AlertTitle:  "Run failed: 2 failing tests",
 		AlertDetail: "cargo test — parser_roundtrip",
@@ -527,11 +539,8 @@ func (a *appModel) retry(m *message) bool {
 	a.startWork(ct, "Re-running the parser tests", 2*time.Second, func() {
 		ct.Status = statusReady
 		a.seq++
-		ct.Messages = append(ct.Messages, &message{ID: a.seq, Kind: msgContact, Text: "Fixed the trailing-newline branch. Parser tests pass now: 64 passed, 0 failed.", Time: nowTime()})
+		stamp := time.Now()
+		ct.Messages = append(ct.Messages, &message{ID: a.seq, Kind: msgContact, Text: "Fixed the trailing-newline branch. Parser tests pass now: 64 passed, 0 failed.", Time: stamp.Format("15:04"), Timestamp: stamp})
 	})
 	return true
-}
-
-func nowTime() string {
-	return time.Now().Format("15:04")
 }

@@ -391,7 +391,7 @@ func productHistory(ctx context.Context, client *pi.ProductClient, id string) (h
 			stamp, _ := time.Parse(time.RFC3339Nano, row.Timestamp)
 			when := formatMillis(stamp.UnixMilli())
 			materials := productTaskContext(row.Materials)
-			projection.messages = append(projection.messages, &message{Key: row.MessageID, MessageID: row.MessageID, Kind: kind, Text: row.Text, Time: when, Context: materials, History: true})
+			projection.messages = append(projection.messages, &message{Key: row.MessageID, MessageID: row.MessageID, Kind: kind, Text: row.Text, Time: when, Timestamp: stamp, Context: materials, History: true})
 			projection.entries = append(projection.entries, historyEntry{ID: row.MessageID, Date: when, From: from, Text: row.Text, Context: materials})
 		}
 		if page.NextCursor == nil {
@@ -426,7 +426,8 @@ func (a *appModel) applyProductEvent(host *piAppHost, event pi.ProductEvent) {
 				return
 			}
 			applyProductExecution(ct, &pi.ProductExecution{ExecutionID: data.ExecutionID, State: "running"})
-			ct.Messages = append(ct.Messages, &message{Key: data.ExecutionID + ":user", Kind: msgUser, Text: ct.SubmittedDraft, Time: nowTime(), TaskID: data.ExecutionID, Context: productTaskContext(host.productDrafts[ct.ID].Materials)})
+			stamp := time.Now()
+			ct.Messages = append(ct.Messages, &message{Key: data.ExecutionID + ":user", Kind: msgUser, Text: ct.SubmittedDraft, Time: stamp.Format("15:04"), Timestamp: stamp, TaskID: data.ExecutionID, Context: productTaskContext(host.productDrafts[ct.ID].Materials)})
 		case "execution.textDelta":
 			if ct.ActiveTaskID == data.ExecutionID {
 				item := a.liveText(ct, data.ExecutionID, "pi")

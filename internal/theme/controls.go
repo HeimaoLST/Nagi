@@ -1,6 +1,19 @@
 package theme
 
-import "github.com/egoist/mygo/ui"
+import (
+	"github.com/egoist/mygo/plugins/glass"
+	"github.com/egoist/mygo/ui"
+)
+
+func StyleFrostedModalBackdrop(backdrop ui.Element, t *ui.Theme) {
+	tint := ui.RGBA(246, 246, 243, 0.45)
+	if t.Dark {
+		tint = ui.RGBA(14, 15, 12, 0.45)
+	}
+	backdrop.Material(glass.Blur{Radius: 12}).Draw(func(p *ui.Painter, r ui.Rect) {
+		p.Fill(r, tint, 0)
+	})
+}
 
 func PreferenceGroup(c *ui.Context, t *ui.Theme, children func()) {
 	ui.Column(c).FillWidth().MinWidth(0).Padding(6, 18).Background(t.Surface).Border(1, t.Border).Radius(12).Children(children)

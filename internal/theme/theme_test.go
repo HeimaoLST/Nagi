@@ -1,6 +1,7 @@
 package theme
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -85,6 +86,80 @@ func TestSettingsThemeContrastAndSurfaceSeparation(t *testing.T) {
 			} {
 				if ratio := PaletteContrast(got.AccentText, accent.color); ratio < 4.5 {
 					t.Fatalf("AccentText on %s contrast = %.3f, want >= 4.5", accent.name, ratio)
+				}
+			}
+		})
+	}
+}
+
+func TestBubbleContactContrastAndTonalSeparation(t *testing.T) {
+	makeCustom := func(id, kind, reading, bubbleContact, text, muted string) WorkbenchTheme {
+		t.Helper()
+		payload := map[string]any{
+			"version": 1,
+			"id":      id,
+			"name":    id,
+			"kind":    kind,
+			"colors": map[string]string{
+				"background":      reading,
+				"surface":         reading,
+				"surface_hover":   "#2C2E28",
+				"surface_pressed": "#363830",
+				"border":          "#555555",
+				"text":            text,
+				"text_muted":      muted,
+				"accent":          "#3B6EA5",
+				"accent_hover":    "#487BB2",
+				"accent_pressed":  "#2D5A8B",
+				"accent_text":     "#FFFFFF",
+				"selection":       "#333333",
+				"focus":           "#777777",
+				"danger":          "#C43D44",
+				"warning":         "#A66D00",
+				"success":         "#2E6B45",
+				"rail":            reading,
+				"panel":           reading,
+				"bubble_user":     "#DDE8DD",
+				"bubble_contact":  bubbleContact,
+			},
+		}
+		data, err := json.Marshal(payload)
+		if err != nil {
+			t.Fatal(err)
+		}
+		custom, fileErr := decodeCustomTheme(id+".json", data)
+		if fileErr != nil {
+			t.Fatalf("decodeCustomTheme(%s): %+v", id, fileErr)
+		}
+		return custom.Palette
+	}
+
+	cases := []struct {
+		name    string
+		palette WorkbenchTheme
+	}{
+		{"builtin light", ResolveWorkbenchTheme(false)},
+		{"builtin dark", ResolveWorkbenchTheme(true)},
+		{"custom light matching reading derives tint", makeCustom("custom-light-same", AppearanceLight, "#F8F8F6", "#F8F8F6", "#7A7A75", "#9B9B96")},
+		{"custom dark explicit low-contrast inks", makeCustom("custom-dark-explicit", AppearanceDark, "#14161A", "#232730", "#687080", "#555C6A")},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := tc.palette
+			if p.BubbleContact == p.Reading {
+				t.Fatalf("BubbleContact did not separate from Reading: %+v", p.BubbleContact)
+			}
+			for _, ink := range []struct {
+				name  string
+				color ui.Color
+			}{
+				{"ContactText", p.ContactText},
+				{"ContactMuted", p.ContactMuted},
+				{"ContactLink", p.ContactLink},
+			} {
+				if ratio := PaletteContrast(ink.color, p.BubbleContact); ratio < 4.5 {
+					t.Fatalf("%s on BubbleContact contrast = %.3f, want >= 4.5", ink.name, ratio)
 				}
 			}
 		})

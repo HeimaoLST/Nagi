@@ -87,6 +87,9 @@ type WorkbenchTheme struct {
 	Well          ui.Color
 	BubbleUser    ui.Color
 	BubbleContact ui.Color
+	ContactText   ui.Color
+	ContactMuted  ui.Color
+	ContactLink   ui.Color
 	WorkSurface   ui.Color
 	WorkText      ui.Color
 	WorkMuted     ui.Color
@@ -123,7 +126,7 @@ func ResolveWorkbenchTheme(dark bool) WorkbenchTheme {
 		ChromeFrom: ui.Hex("#F2F2E2"), ChromeTo: ui.Hex("#E6EBEF"), Tertiary: ui.Hex("#838280"),
 		NavHover: ui.Hex("#0000000A"), NavSelected: ui.Hex("#00000012"),
 		Rail: ui.Hex("#F2F2E2"), Reading: t.Background, Panel: t.Background,
-		Well: t.Surface, BubbleUser: ui.Hex("#F2F4F2"), BubbleContact: t.Background,
+		Well: t.Surface, BubbleUser: ui.Hex("#F2F4F2"), BubbleContact: ui.Hex("#F3F3EF"),
 		WorkSurface: t.Background, WorkText: t.Text, WorkMuted: t.TextMuted,
 		WorkAttention: t.Warning, WorkWarningBg: ui.Hex("#FEFBE8"),
 	}
@@ -139,10 +142,11 @@ func ResolveWorkbenchTheme(dark bool) WorkbenchTheme {
 		palette.Link, palette.InputBorder = ui.Hex("#E0C65C"), ui.Hex("#76776C")
 		palette.NavHover, palette.NavSelected = ui.Hex("#3D3F39"), ui.Hex("#454741")
 		palette.Reading, palette.Panel, palette.Well = t.Background, t.Background, t.Surface
-		palette.BubbleUser, palette.BubbleContact = ui.Hex("#2E2916"), t.Background
+		palette.BubbleUser, palette.BubbleContact = ui.Hex("#2E2916"), ui.Hex("#22241F")
 		palette.WorkSurface, palette.WorkText, palette.WorkMuted = t.Background, t.Text, t.TextMuted
 		palette.WorkAttention, palette.WorkWarningBg = t.Warning, ui.Hex("#4A4019")
 	}
+	palette.ContactText, palette.ContactMuted, palette.ContactLink = t.Text, t.TextMuted, palette.Link
 	return palette
 }
 
@@ -170,7 +174,7 @@ func SettingsTheme(base *ui.Theme) ui.Theme {
 		t.Border = t.Surface.Mix(ink, .11)
 	}
 	for _, color := range []*ui.Color{&t.Text, &t.TextMuted, &t.Success, &t.Warning, &t.Danger} {
-		*color = settingsTextColor(*color, ink, t.Background, t.Surface, t.SurfaceHover, t.SurfacePressed)
+		*color = contrastTextColor(*color, ink, t.Background, t.Surface, t.SurfaceHover, t.SurfacePressed)
 	}
 	if PaletteContrast(t.AccentText, t.Accent) < 4.5 {
 		if black := ui.RGB(0, 0, 0); PaletteContrast(black, t.Accent) >= 4.5 {
@@ -187,14 +191,14 @@ func SettingsTheme(base *ui.Theme) ui.Theme {
 	return t
 }
 
-func settingsTextColor(color, ink ui.Color, backgrounds ...ui.Color) ui.Color {
+func contrastTextColor(color, ink ui.Color, backgrounds ...ui.Color) ui.Color {
 	for _, background := range backgrounds {
 		if PaletteContrast(color, background) < 4.5 {
 			mixed := color.Mix(ink, .25)
 			if mixed == color {
 				return ink
 			}
-			return settingsTextColor(mixed, ink, backgrounds...)
+			return contrastTextColor(mixed, ink, backgrounds...)
 		}
 	}
 	return color

@@ -34,6 +34,14 @@
 
 **Prevention:** Drive `PopoverMenu` through in-window pointer clicks (or keyboard navigation / menu geometry when another surface shares an item label). Focus the triggering button before opening a modal so Cancel, Escape and backdrop dismissal automatically restore focus cleanly.
 
+### Keep multi-bubble projection consistent across transcript, rail and width bounds
+
+**Problem:** Projecting a streamed reply into multiple bubbles hid an incomplete trailing separator in the chat transcript while leaking it in the Bot Team rail preview, and unconstrained bubble markdown readers overflowed wide four-column tables at 1040 and 720 widths.
+
+**Cause or correction:** The transcript and rail summary read separate projections of the same raw reply string, and a bubble container without a chat-width ceiling lets wide tables expand past the column.
+
+**Prevention:** Keep raw persisted/streamed text intact for byte-offset and history contracts, project both the chat transcript and Bot Team preview through the same fence-aware, incomplete-marker-suppressing splitter, and constrain bubble markdown readers to their containing chat width across minimum and medium viewports.
+
 ### Handle SegmentedBase clamping, focus and border jitter
 
 **Problem:** An invalid stored segment can silently appear as option 0 while the repair path is suppressed, so clicking option 0 cannot correct it. Focus can target the track instead of a segment, and a focus border can change layout width.

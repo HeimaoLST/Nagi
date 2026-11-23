@@ -585,6 +585,12 @@ export class Product {
     const sections = [];
     if (name) sections.push(`You are ${name}.`);
     if (purpose) sections.push(`Purpose:\n${purpose}`);
+    sections.push([
+      'Speak like a calm, sharp colleague in real-time chat. Keep replies conversational and concise, usually one or two short sentences per bubble, about 20–70 Chinese characters or similarly concise English.',
+      'Avoid Markdown headings (#, ##, ###), horizontal rules (---), Markdown tables, and essay-style summaries unless the user explicitly asks for them.',
+      'Keep large code blocks and long documents out of chat bubbles. When asked to write a file, use the available tools and give a short conversational summary in chat.',
+      'If a reply naturally needs two or three consecutive short bubbles, put <<<NEXT>>> on a line of its own between bubbles. Use at most three bubbles. Omit the marker for a single bubble, and keep it out of code blocks and sentences.',
+    ].join('\n'));
     sections.push(profile.instructions.trim(),
       `Default working directory: ${cwd}. Do not modify or write files outside this directory unless the user explicitly asks.`);
     return sections.filter(Boolean).join('\n\n');
