@@ -53,6 +53,10 @@ func TestConnectionSettingsRequireExplicitSaveAndTest(t *testing.T) {
 	if saved != 1 || tested != 0 || s.Draft.Model != "changed-model" || s.Error == "" {
 		t.Fatal("save failure must retain editing and must not test or apply")
 	}
+	if tr.HasText("Apply saved") {
+		t.Fatalf("failed save without pending revision should not show Apply saved: %v", tr.Texts())
+	}
+	s.SavedPending = true
 	s.ReloadBlocked = "Wait for all active work to finish."
 	tr.Frame()
 	if err := tr.Click("Apply saved"); err != nil {
@@ -835,5 +839,96 @@ func TestConnectionSettingsSavedCredentialBulletsBlankReuseAndRedaction(t *testi
 	s.Draft.APIKey = ""
 	if _, ok := s.Validated(); ok || s.Errors["APIKey"] == "" {
 		t.Fatalf("standalone plaintext form unexpectedly allowed clearing APIKey: errors=%v", s.Errors)
+	}
+}
+
+func TestConnectionSettingsGroupedPolishInPlaceEditAndActions(t *testing.T) {
+	for _, locale := range []string{"en", "zh-Hans"} {
+		t.Run(locale, func(t *testing.T) {
+			msgs := locales.In(locale)
+			config := testConnectionConfig(t)
+			s := newConnectionSettings(&config, "")
+			s.CurrentSummary = config.Model + " · " + msgs.ProtocolChatCompletionsLabel() + " · " + config.Endpoint
+			discarded := 0
+			tr := connectionSettingsTester(s, connectionSettingsActions{
+				Discard: func() {
+					discarded++
+					s.ResetDraft()
+				},
+			}, 720, 1600)
+			tr.SetLocale(locale)
+			tr.SetFocused(true)
+			tr.Frame()
+
+			for _, want := range []string{
+				msgs.ConnectionStatusInUse(),
+				msgs.ConnectionCurrent(s.CurrentSummary),
+				msgs.ConnectionTestAction(),
+				msgs.ConnectionCredentialsSection(),
+				msgs.ConnectionModelCapacitySection(),
+				msgs.ConnectionDirectorySection(),
+				msgs.ConnectionSaveAndApply(),
+				msgs.ConnectionSaveConfiguration(),
+			} {
+				if !tr.HasText(want) {
+					t.Fatalf("resting applied form missing %q: %v", want, tr.Texts())
+				}
+			}
+			if tr.HasText(msgs.ConnectionApplySaved()) || tr.HasText(msgs.ConnectionDiscard()) {
+				t.Fatalf("resting applied form unexpectedly showed Apply saved or Discard: %v", tr.Texts())
+			}
+
+			fieldLabel := msgs.ConnectionFieldEndpoint()
+			if err := tr.Click(msgs.ConnectionEditField(fieldLabel)); err != nil {
+				t.Fatal(err)
+			}
+			tr.Frame()
+			titleCount := 0
+			for _, text := range tr.Texts() {
+				if text == fieldLabel {
+					titleCount++
+				}
+			}
+			active, _ := tr.TextInputActive()
+			if titleCount != 2 || !s.EditOpen["Endpoint"] || !tr.Focused(fieldLabel) || !active || !tr.HasText(msgs.ConnectionCloseEditorAction()) {
+				t.Fatalf("in-place field edit mismatch: titleCount=%d open=%t focused=%t active=%t texts=%v",
+					titleCount, s.EditOpen["Endpoint"], tr.Focused(fieldLabel), active, tr.Texts())
+			}
+			if err := tr.Click(msgs.ConnectionCloseField(fieldLabel)); err != nil {
+				t.Fatal(err)
+			}
+			tr.Frame()
+			if s.EditOpen["Endpoint"] || !tr.Focused(msgs.ConnectionEditField(fieldLabel)) {
+				t.Fatalf("closing in-place editor did not restore focus to Edit: open=%t texts=%v", s.EditOpen["Endpoint"], tr.Texts())
+			}
+
+			s.SavedPending = true
+			tr.Frame()
+			if !tr.HasText(msgs.ConnectionSavedAwaitingApply()) || !tr.HasText(msgs.ConnectionApplySaved()) || tr.HasText(msgs.ConnectionSaveAndApply()) {
+				t.Fatalf("clean pending form did not promote Apply saved as primary: %v", tr.Texts())
+			}
+
+			s.Draft.Model = "edited-model"
+			tr.Frame()
+			for _, want := range []string{
+				msgs.ConnectionUnsavedForm(),
+				msgs.ConnectionSaveAndApply(),
+				msgs.ConnectionSaveConfiguration(),
+				msgs.ConnectionApplySaved(),
+				msgs.ConnectionDiscard(),
+				msgs.ConnectionSavedAwaitingApply(),
+			} {
+				if !tr.HasText(want) {
+					t.Fatalf("dirty pending form missing %q: %v", want, tr.Texts())
+				}
+			}
+			if err := tr.Click(msgs.ConnectionDiscard()); err != nil {
+				t.Fatal(err)
+			}
+			tr.Frame()
+			if discarded != 1 || s.Dirty() {
+				t.Fatalf("Discard did not reset dirty draft: discarded=%d dirty=%t", discarded, s.Dirty())
+			}
+		})
 	}
 }

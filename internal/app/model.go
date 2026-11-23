@@ -146,7 +146,6 @@ type appModel struct {
 	defaultContactN      int
 	focusComposer        bool
 	priorChats           *productConversationBrowser
-	focusPreviousChats   bool
 	composerHandle       ui.Handle
 	composerPanel        string
 	composerFocusContext bool
@@ -306,7 +305,6 @@ func (a *appModel) selectContact(i int) {
 	a.contacts[i].Unread = 0
 	a.selected = i
 	a.priorChats = nil
-	a.focusPreviousChats = false
 	if !a.demo {
 		a.persist()
 	}

@@ -146,6 +146,60 @@ func ResolveWorkbenchTheme(dark bool) WorkbenchTheme {
 	return palette
 }
 
+func SettingsTheme(base *ui.Theme) ui.Theme {
+	t := *base
+	ink, shade := ui.RGB(0, 0, 0), ui.RGB(255, 255, 255)
+	if t.Dark {
+		ink, shade = shade, ink
+	}
+	switch {
+	case t.Dark && t.Background == ui.Hex("#171814") && t.Surface == t.Background:
+		t.Background, t.Surface, t.Border = ui.Hex("#141512"), ui.Hex("#1C1E19"), ui.Hex("#2B2D28")
+	case !t.Dark && t.Background == ui.Hex("#FFFFFF") && t.Surface == t.Background:
+		t.Background, t.Surface, t.Border = ui.Hex("#F6F6F3"), ui.Hex("#FFFFFF"), ui.Hex("#E4E4E0")
+	default:
+		if t.Dark {
+			t.Surface = t.Surface.Mix(ink, .04)
+		}
+		for PaletteContrast(ink, t.Surface.Mix(ink, .10)) < 4.5 {
+			t.Surface = t.Surface.Mix(shade, .18)
+		}
+		t.Background = t.Surface.Mix(ui.RGB(0, 0, 0), .06)
+		t.SurfaceHover, t.SurfacePressed = t.Surface.Mix(ink, .06), t.Surface.Mix(ink, .10)
+		t.Selection = t.SurfaceHover
+		t.Border = t.Surface.Mix(ink, .11)
+	}
+	for _, color := range []*ui.Color{&t.Text, &t.TextMuted, &t.Success, &t.Warning, &t.Danger} {
+		*color = settingsTextColor(*color, ink, t.Background, t.Surface, t.SurfaceHover, t.SurfacePressed)
+	}
+	if PaletteContrast(t.AccentText, t.Accent) < 4.5 {
+		if black := ui.RGB(0, 0, 0); PaletteContrast(black, t.Accent) >= 4.5 {
+			t.AccentText = black
+		} else {
+			t.AccentText = ui.RGB(255, 255, 255)
+		}
+	}
+	for _, color := range []*ui.Color{&t.AccentHover, &t.AccentPressed} {
+		if PaletteContrast(t.AccentText, *color) < 4.5 {
+			*color = t.Accent
+		}
+	}
+	return t
+}
+
+func settingsTextColor(color, ink ui.Color, backgrounds ...ui.Color) ui.Color {
+	for _, background := range backgrounds {
+		if PaletteContrast(color, background) < 4.5 {
+			mixed := color.Mix(ink, .25)
+			if mixed == color {
+				return ink
+			}
+			return settingsTextColor(mixed, ink, backgrounds...)
+		}
+	}
+	return color
+}
+
 func PaletteLuminance(c ui.Color) float64 {
 	linear := func(v uint8) float64 {
 		f := float64(v) / 255

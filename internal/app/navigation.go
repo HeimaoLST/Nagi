@@ -1,7 +1,6 @@
 package app
 
 import (
-	"github.com/egoist/mygo/i18n"
 	"github.com/egoist/mygo/ui"
 
 	"github.com/HeimaoLST/Nagi/locales"
@@ -49,28 +48,13 @@ func (a *appModel) detailPageActive() bool {
 
 func (a *appModel) backProductConversations() {
 	browser := a.priorChats
-	if browser.sourceID == "" && browser.selectedID != "" {
-		browser.focusID, browser.selectedID = browser.selectedID, ""
-		browser.ownerID, browser.problem = "", ""
-		browser.history = historyProjection{}
-		return
-	}
 	a.priorChats = nil
-	if browser.sourceID != "" {
-		browser.contact.activity.focusSource = true
-	} else {
-		a.focusPreviousChats = true
-	}
+	browser.contact.activity.focusSource = true
 }
 
 func (a *appModel) productConversationsView(c *ui.Context, t *ui.Theme, browser *productConversationBrowser) {
 	msgs := locales.In(c.Locale())
-	title := msgs.PreviousChats()
-	if browser.sourceID != "" {
-		title = msgs.SourceChat()
-	} else if browser.selectedID != "" {
-		title = msgs.ReadOnlyChat()
-	}
+	title := msgs.SourceChat()
 	owner := browser.contact
 	if browser.ownerID != "" {
 		owner = a.contactByID(browser.ownerID)
@@ -94,9 +78,7 @@ func (a *appModel) productConversationsView(c *ui.Context, t *ui.Theme, browser 
 		ui.Row(c).FillWidth().Justify(ui.Center).Children(func() {
 			ui.Column(c).FillWidth().MaxWidth(conversationMaxWidth).Padding(8, 16).Gap(4).Children(func() {
 				a.activityText(c, t, name)
-				if browser.sourceID != "" {
-					a.activityText(c, t, msgs.ReadOnlyChat())
-				}
+				a.activityText(c, t, msgs.ReadOnlyChat())
 				if browser.reading {
 					a.activityText(c, t, msgs.LoadingChatHistory())
 				} else if browser.problem != "" || !a.productProfileReady() {
@@ -106,67 +88,12 @@ func (a *appModel) productConversationsView(c *ui.Context, t *ui.Theme, browser 
 					}
 					a.recoveryNotice(c, t, "prior-chat:"+browser.selectedID, summary, browser.problem, false)
 					secondaryButton(c, msgs.ReloadAction()).Disabled(!a.productProfileReady()).OnClick(func() {
-						if browser.selectedID == "" {
-							a.loadProductConversations(browser, "")
-						} else {
-							a.loadProductTranscript(browser, browser.selectedID)
-						}
+						a.loadProductTranscript(browser, browser.sourceID)
 					})
 				}
 			})
 		})
-		if browser.selectedID != "" {
-			a.productReadOnlyTranscript(c, t, browser, name)
-			return
-		}
-		listTheme := *t
-		listTheme.Focus = t.Accent
-		ui.Scroll(c).Grow(1).FillWidth().TrackScroll(&browser.listScroll).Children(func() {
-			ui.Row(c).FillWidth().Justify(ui.Center).Children(func() {
-				ui.Themed(c, &listTheme).Background(ui.Transparent).FillWidth().MaxWidth(conversationMaxWidth).Padding(8, 16).AlignItems(ui.Start).Gap(4).Children(func() {
-					if len(browser.items) == 0 && browser.nextCursor == nil && !browser.reading && browser.problem == "" && a.productProfileReady() {
-						a.activityText(c, t, msgs.NoPreviousChats())
-					}
-					for index, item := range browser.items {
-						id := item.ConversationID
-						label := item.Preview
-						if label == "" {
-							label = msgs.PreviousChatFallback(index + 1)
-						}
-						c.Key(id)
-						row := appTooltip(c, secondaryButton(c, "").Label(label), label).
-							FillWidth().MinWidth(0).Disabled(browser.reading || !a.productProfileReady())
-						row.OnClick(func() {
-							a.loadProductTranscript(browser, id)
-						})
-						row.DrawOver(func(p *ui.Painter, r ui.Rect) {
-							if row.Focused() {
-								p.FocusRing(ui.Rect{X: r.X + 3, Y: r.Y + 3, W: r.W - 6, H: r.H - 6}, [4]float32{13, 13, 13, 13})
-							}
-						})
-						row.Children(func() {
-							ui.Row(c).FillWidth().MinWidth(0).AlignItems(ui.Center).Gap(12).Children(func() {
-								ui.Text(c, label).FontSize(typeAction).FontWeight(500).FixedLineHeight(lineAction).
-									Grow(1).MinWidth(0).SingleLine().Ellipsis("…").TextColor(t.Text)
-								if !item.Timestamp.IsZero() {
-									date := i18n.FormatDate(c.Locale(), item.Timestamp.Local(), i18n.DateOptions{Date: i18n.MediumStyle, Time: i18n.ShortStyle})
-									ui.Text(c, date).FontSize(typeMeta).FixedLineHeight(lineMeta).Shrink(0).SingleLine().TextColor(t.TextMuted)
-								}
-							})
-						})
-						if browser.focusID == id {
-							row.Focus().ScrollIntoView()
-							browser.focusID = ""
-						}
-					}
-					if cursor := browser.nextCursor; cursor != nil {
-						secondaryButton(c, msgs.LoadMoreChats()).Disabled(browser.reading || !a.productProfileReady()).OnClick(func() {
-							a.loadProductConversations(browser, *cursor)
-						})
-					}
-				})
-			})
-		})
+		a.productReadOnlyTranscript(c, t, browser, name)
 	})
 }
 

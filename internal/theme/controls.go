@@ -3,9 +3,7 @@ package theme
 import "github.com/egoist/mygo/ui"
 
 func PreferenceGroup(c *ui.Context, t *ui.Theme, children func()) {
-	ui.Column(c).FillWidth().Padding(16).Draw(func(p *ui.Painter, r ui.Rect) {
-		PaintPreferenceFace(p, r, 12, 2, t.Background, t.Border)
-	}).Children(children)
+	ui.Column(c).FillWidth().MinWidth(0).Padding(6, 18).Background(t.Surface).Border(1, t.Border).Radius(12).Children(children)
 }
 
 func PreferenceSection(c *ui.Context, t *ui.Theme, title string, children func()) {
@@ -16,7 +14,7 @@ func PreferenceSection(c *ui.Context, t *ui.Theme, title string, children func()
 }
 
 func PreferenceSectionHeader(c *ui.Context, t *ui.Theme, title string) {
-	ui.Row(c).FillWidth().Padding(12, 16, 0).AlignItems(ui.Center).Children(func() {
+	ui.Row(c).FillWidth().Padding(0, 18).AlignItems(ui.Center).Children(func() {
 		ui.Text(c, title).Role(ui.RoleHeading).Level(2).FontSize(TypeGroupTitle).FontWeight(600).FixedLineHeight(LineGroupTitle).TextColor(t.Text)
 	})
 }
@@ -24,7 +22,7 @@ func PreferenceSectionHeader(c *ui.Context, t *ui.Theme, title string) {
 func SettingsPreferenceRow(c *ui.Context, t *ui.Theme, label, description string, control func(), last ...bool) {
 	row := ui.Row(c).FillWidth().MinWidth(0).Wrap().AlignItems(ui.Center).Gap(12).Padding(12, 0)
 	if len(last) == 0 || !last[0] {
-		row.BorderWidth(0, 0, 1, 0).BorderColor(t.Border).BorderStyle(ui.BorderDashed)
+		row.BorderWidth(0, 0, 1, 0).BorderColor(t.Border).BorderStyle(ui.BorderSolid)
 	}
 	row.Children(func() {
 		ui.Column(c).Basis(280).Grow(1).Shrink(1).MinWidth(0).Gap(4).Children(func() {

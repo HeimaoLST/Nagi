@@ -13,25 +13,23 @@ import (
 )
 
 type contactProfileActions struct {
-	Save       func(profileDraft)
-	SaveAndNew func(profileDraft)
-	Archive    func()
-	Restore    func()
-	Discard    func()
+	Save    func(profileDraft)
+	Archive func()
+	Restore func()
+	Discard func()
 }
 
 type contactProfileEditor struct {
-	Draft           profileDraft
-	Archived        bool
-	HasConversation bool
-	ActiveWork      bool
-	UnknownWork     bool
-	Busy            bool
-	Errors          map[string]string
-	Error           string
-	Status          string
-	focusField      string
-	initial         profileDraft
+	Draft       profileDraft
+	Archived    bool
+	ActiveWork  bool
+	UnknownWork bool
+	Busy        bool
+	Errors      map[string]string
+	Error       string
+	Status      string
+	focusField  string
+	initial     profileDraft
 }
 
 // Profile notices are stored by kind so the page can say them again in the
@@ -45,7 +43,6 @@ const (
 	profileNoticeReasonActive       = "profile-reason-active"
 	profileNoticeErrorStore         = "profile-error-store"
 	profileNoticeErrorSave          = "profile-error-save"
-	profileNoticeNewChatFailed      = "profile-new-chat-failed"
 	profileNoticeSavedDefaults      = "profile-saved-defaults"
 	profileNoticeSavedNextMessage   = "profile-saved-next-message"
 	profileNoticeNameRequired       = "profile-name-required"
@@ -71,8 +68,6 @@ func profileNoticeText(msgs locales.Messages, notice string) string {
 		return msgs.ProfileErrorStoreUnavailable()
 	case profileNoticeErrorSave:
 		return msgs.ProfileErrorSaveFailed()
-	case profileNoticeNewChatFailed:
-		return msgs.BotMenuNewChatFailed()
 	case profileNoticeSavedDefaults:
 		return msgs.ProfileSavedDefaults()
 	case profileNoticeSavedNextMessage:
@@ -181,16 +176,6 @@ func (e *contactProfileEditor) Request(saveAndNew bool) (profileDraft, bool) {
 		e.Error = profileNoticeArchived
 		return profileDraft{}, false
 	}
-	if saveAndNew {
-		if !e.HasConversation {
-			e.Error = profileNoticeNoConversation
-			return profileDraft{}, false
-		}
-		if e.ActiveWork || e.UnknownWork {
-			e.Error = e.activityReason()
-			return profileDraft{}, false
-		}
-	}
 	draft, errors := validateProfileDraft(e.Draft, e.initial.Workspace)
 	e.Errors = errors
 	e.Error = ""
@@ -256,13 +241,6 @@ func (e *contactProfileEditor) view(c *ui.Context, t *ui.Theme, actions contactP
 						actions.Save(draft)
 					}
 				})
-				if e.HasConversation && !e.Archived {
-					secondaryButton(c, msgs.ProfileSaveAndNew()).Disabled(!editable || e.ActiveWork || e.UnknownWork).OnClick(func() {
-						if draft, ok := e.Request(true); ok && actions.SaveAndNew != nil {
-							actions.SaveAndNew(draft)
-						}
-					})
-				}
 				if !profileDraftEqual(e.Draft, e.initial) && !e.Busy && actions.Discard != nil {
 					secondaryButton(c, msgs.ProfileDiscard()).OnClick(actions.Discard)
 				}
@@ -303,14 +281,12 @@ func (e *contactProfileEditor) view(c *ui.Context, t *ui.Theme, actions contactP
 
 func (a *appModel) contactProfileForm(c *ui.Context, t *ui.Theme, ct *contact, editor *contactProfileEditor) {
 	editor.Archived = ct.Archived
-	editor.HasConversation = ct.SessionID != ""
 	editor.ActiveWork, editor.UnknownWork = a.contactActivity(ct)
 	id := ct.ID
 	editor.view(c, t, contactProfileActions{
-		Save:       func(draft profileDraft) { a.saveContactProfileDraftFor(id, draft, false) },
-		SaveAndNew: func(draft profileDraft) { a.saveContactProfileDraftFor(id, draft, true) },
-		Archive:    func() { a.archiveContact(id) },
-		Restore:    func() { a.restoreContact(id) },
-		Discard:    editor.ResetDraft,
+		Save:    func(draft profileDraft) { a.saveContactProfileDraftFor(id, draft, false) },
+		Archive: func() { a.archiveContact(id) },
+		Restore: func() { a.restoreContact(id) },
+		Discard: editor.ResetDraft,
 	}, a.workTheme.InputBorder)
 }

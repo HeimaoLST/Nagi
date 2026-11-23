@@ -326,14 +326,19 @@ func TestPiAppProductScopedDelegation(t *testing.T) {
 	if restored.Archived || restored.CurrentConversationID != recipientConversation {
 		t.Fatalf("Restore did not keep the recipient's conversation: %+v", restored)
 	}
-	profileAction(msg.ProfileSaveAndNew())
+	reopened.pump.do(func() {
+		if reopened.view.HasText("Save and start new chat") {
+			t.Errorf("retired Save and start new chat rendered in Bot profile: %v", reopened.view.Texts())
+		}
+	})
+	profileAction(msg.ContactSaveChanges())
 	updated := currentRecipient()
-	if updated.CurrentConversationID == "" || updated.CurrentConversationID == recipientConversation {
-		t.Fatalf("Save and start new chat retained the old current conversation: %+v", updated)
+	if updated.CurrentConversationID != recipientConversation {
+		t.Fatalf("Save changes rotated the recipient conversation: got %q want %q", updated.CurrentConversationID, recipientConversation)
 	}
-	newChat, err := reopened.client.GetConversation(ctx, updated.CurrentConversationID)
-	if err != nil || newChat.BotID != recipient || !reflect.DeepEqual(newChat.Draft, draftBefore.Draft) || newChat.LatestExecution != nil {
-		t.Fatalf("new chat did not preserve the recipient draft without sending: %+v, %v", newChat, err)
+	sameChat, err := reopened.client.GetConversation(ctx, updated.CurrentConversationID)
+	if err != nil || sameChat.BotID != recipient || !reflect.DeepEqual(sameChat.Draft, draftBefore.Draft) || sameChat.LatestExecution != nil {
+		t.Fatalf("profile/lifecycle actions did not preserve the recipient conversation and draft without sending: %+v, %v", sameChat, err)
 	}
 	reopened.pump.do(func() {
 		if reopened.app.selectedID() != origin {

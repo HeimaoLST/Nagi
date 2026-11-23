@@ -742,78 +742,25 @@ func (a *appModel) runProductActivityAction(ct *contact, client *pi.ProductClien
 	}()
 }
 
-type productConversationRow struct {
-	ConversationID string
-	Preview        string
-	Timestamp      time.Time
-}
-
 type productConversationBrowser struct {
 	contact    *contact
 	sourceID   string
 	reading    bool
 	focusBack  bool
-	focusID    string
 	problem    string
-	items      []productConversationRow
-	nextCursor *string
 	selectedID string
 	ownerID    string
 	history    historyProjection
-	listScroll ui.ScrollState
 	transcript ui.ListState
 }
 
 func (a *appModel) browseProductConversations(ct *contact, sourceID string) {
-	if a.selectedContact() != ct || !a.productProfileReady() || a.dataRecoveryBlocksChanges() {
+	if sourceID == "" || a.selectedContact() != ct || !a.productProfileReady() || a.dataRecoveryBlocksChanges() {
 		return
 	}
 	browser := &productConversationBrowser{contact: ct, sourceID: sourceID, focusBack: true}
 	a.priorChats = browser
-	if sourceID == "" {
-		a.loadProductConversations(browser, "")
-	} else {
-		a.loadProductTranscript(browser, sourceID)
-	}
-}
-
-func (a *appModel) loadProductConversations(browser *productConversationBrowser, cursor string) {
-	if browser.reading || !a.productProfileReady() || a.dataRecoveryBlocksChanges() {
-		return
-	}
-	client := a.productHost().product
-	ct := browser.contact
-	currentID := ct.SessionID
-	browser.reading, browser.problem = true, ""
-	a.historyAsyncStarted()
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-		defer cancel()
-		page, err := client.ListConversations(ctx, pi.ProductConversationListParams{
-			BotID: ct.ID, ProductPageParams: pi.ProductPageParams{Cursor: cursor, Limit: 25},
-		})
-		a.updateUI(func() {
-			defer a.historyAsyncFinished()
-			browser.reading = false
-			if a.priorChats != browser || !a.currentActivityClient(ct, client) {
-				return
-			}
-			if err != nil {
-				browser.problem = a.connectionSafeMessage(err)
-				return
-			}
-			if cursor == "" {
-				browser.items = browser.items[:0]
-			}
-			for _, item := range page.Items {
-				if item.BotID == ct.ID && item.Mode == "readOnly" && item.ConversationID != currentID {
-					timestamp, _ := time.Parse(time.RFC3339Nano, item.Timestamp)
-					browser.items = append(browser.items, productConversationRow{ConversationID: item.ConversationID, Preview: item.Preview, Timestamp: timestamp})
-				}
-			}
-			browser.nextCursor = page.NextCursor
-		})
-	}()
+	a.loadProductTranscript(browser, sourceID)
 }
 
 func (a *appModel) loadProductTranscript(browser *productConversationBrowser, id string) {
@@ -831,8 +778,8 @@ func (a *appModel) loadProductTranscript(browser *productConversationBrowser, id
 		defer cancel()
 		conversation, err := client.GetConversation(ctx, id)
 		var history historyProjection
-		if err == nil && (conversation.ConversationID != id || browser.sourceID == "" && (conversation.BotID != ct.ID || conversation.Mode != "readOnly")) {
-			err = errors.New("the requested previous chat is unavailable")
+		if err == nil && conversation.ConversationID != id {
+			err = errors.New("the activity's source chat is unavailable")
 		}
 		if err == nil {
 			history, err = productHistory(ctx, client, id)

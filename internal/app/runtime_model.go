@@ -599,7 +599,6 @@ func (a *appModel) createContact(profile pi.ProductBotProfile, operationID strin
 		}
 		a.contextFileGeneration++
 		a.priorChats = nil
-		a.focusPreviousChats = false
 		a.aux, a.composerPanel = "", ""
 		a.composerFocusContext = false
 	}

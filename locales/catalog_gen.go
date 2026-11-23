@@ -1322,26 +1322,6 @@ func (msgs Messages) ContactProfileAction() string {
 	return Catalog.Format(msgs.locale, "contactProfileAction", nil)
 }
 
-// BotMenuNewChat says "New chat"
-// in the language the app shows.
-func BotMenuNewChat() string { return In(i18n.Locale()).BotMenuNewChat() }
-
-// BotMenuNewChat says "New chat"
-// in the language of msgs.
-func (msgs Messages) BotMenuNewChat() string {
-	return Catalog.Format(msgs.locale, "botMenuNewChat", nil)
-}
-
-// BotMenuNewChatFailed says "Could not confirm a new chat. Check this Bot’s current chat before trying again."
-// in the language the app shows.
-func BotMenuNewChatFailed() string { return In(i18n.Locale()).BotMenuNewChatFailed() }
-
-// BotMenuNewChatFailed says "Could not confirm a new chat. Check this Bot’s current chat before trying again."
-// in the language of msgs.
-func (msgs Messages) BotMenuNewChatFailed() string {
-	return Catalog.Format(msgs.locale, "botMenuNewChatFailed", nil)
-}
-
 // BotMenuActivities says "{count, plural, =0 {Activities} one {Activities (#)} other {Activities (#)}}"
 // in the language the app shows.
 func BotMenuActivities(count int) string { return In(i18n.Locale()).BotMenuActivities(count) }
@@ -1494,11 +1474,11 @@ func (msgs Messages) HistoryRuntimeNotReady() string {
 	return Catalog.Format(msgs.locale, "historyRuntimeNotReady", nil)
 }
 
-// ConnectionMismatchSummary says "Connection unavailable or changed. Review connection settings, or start a new chat from the profile."
+// ConnectionMismatchSummary says "Connection unavailable or changed. Review connection settings."
 // in the language the app shows.
 func ConnectionMismatchSummary() string { return In(i18n.Locale()).ConnectionMismatchSummary() }
 
-// ConnectionMismatchSummary says "Connection unavailable or changed. Review connection settings, or start a new chat from the profile."
+// ConnectionMismatchSummary says "Connection unavailable or changed. Review connection settings."
 // in the language of msgs.
 func (msgs Messages) ConnectionMismatchSummary() string {
 	return Catalog.Format(msgs.locale, "connectionMismatchSummary", nil)
@@ -1544,32 +1524,6 @@ func (msgs Messages) HideDetailsAction() string {
 	return Catalog.Format(msgs.locale, "hideDetailsAction", nil)
 }
 
-// PreviousChats says "Previous chats"
-// in the language the app shows.
-func PreviousChats() string { return In(i18n.Locale()).PreviousChats() }
-
-// PreviousChats says "Previous chats"
-// in the language of msgs.
-func (msgs Messages) PreviousChats() string {
-	return Catalog.Format(msgs.locale, "previousChats", nil)
-}
-
-// PreviousChatFallback says "Previous chat {number, number}"
-// in the language the app shows.
-//
-// List label for a previous conversation without a recorded opening message
-// preview.
-func PreviousChatFallback(number int) string { return In(i18n.Locale()).PreviousChatFallback(number) }
-
-// PreviousChatFallback says "Previous chat {number, number}"
-// in the language of msgs.
-//
-// List label for a previous conversation without a recorded opening message
-// preview.
-func (msgs Messages) PreviousChatFallback(number int) string {
-	return Catalog.Format(msgs.locale, "previousChatFallback", map[string]any{"number": number})
-}
-
 // SourceChat says "Source chat"
 // in the language the app shows.
 func SourceChat() string { return In(i18n.Locale()).SourceChat() }
@@ -1590,16 +1544,6 @@ func (msgs Messages) ReadOnlyChat() string {
 	return Catalog.Format(msgs.locale, "readOnlyChat", nil)
 }
 
-// NoPreviousChats says "No previous chats"
-// in the language the app shows.
-func NoPreviousChats() string { return In(i18n.Locale()).NoPreviousChats() }
-
-// NoPreviousChats says "No previous chats"
-// in the language of msgs.
-func (msgs Messages) NoPreviousChats() string {
-	return Catalog.Format(msgs.locale, "noPreviousChats", nil)
-}
-
 // LoadingChatHistory says "Loading chat history…"
 // in the language the app shows.
 func LoadingChatHistory() string { return In(i18n.Locale()).LoadingChatHistory() }
@@ -1608,16 +1552,6 @@ func LoadingChatHistory() string { return In(i18n.Locale()).LoadingChatHistory()
 // in the language of msgs.
 func (msgs Messages) LoadingChatHistory() string {
 	return Catalog.Format(msgs.locale, "loadingChatHistory", nil)
-}
-
-// LoadMoreChats says "Load more chats"
-// in the language the app shows.
-func LoadMoreChats() string { return In(i18n.Locale()).LoadMoreChats() }
-
-// LoadMoreChats says "Load more chats"
-// in the language of msgs.
-func (msgs Messages) LoadMoreChats() string {
-	return Catalog.Format(msgs.locale, "loadMoreChats", nil)
 }
 
 // TryAgain says "Try again"
@@ -2210,6 +2144,58 @@ func (msgs Messages) ConnectionNoneApplied() string {
 	return Catalog.Format(msgs.locale, "connectionNoneApplied", nil)
 }
 
+// ConnectionStatusUnconfigured says "Connection status"
+// in the language the app shows.
+func ConnectionStatusUnconfigured() string { return In(i18n.Locale()).ConnectionStatusUnconfigured() }
+
+// ConnectionStatusUnconfigured says "Connection status"
+// in the language of msgs.
+func (msgs Messages) ConnectionStatusUnconfigured() string {
+	return Catalog.Format(msgs.locale, "connectionStatusUnconfigured", nil)
+}
+
+// ConnectionStatusInUse says "Connection applied"
+// in the language the app shows.
+func ConnectionStatusInUse() string { return In(i18n.Locale()).ConnectionStatusInUse() }
+
+// ConnectionStatusInUse says "Connection applied"
+// in the language of msgs.
+func (msgs Messages) ConnectionStatusInUse() string {
+	return Catalog.Format(msgs.locale, "connectionStatusInUse", nil)
+}
+
+// ConnectionCredentialsSection says "Connection & credentials"
+// in the language the app shows.
+func ConnectionCredentialsSection() string { return In(i18n.Locale()).ConnectionCredentialsSection() }
+
+// ConnectionCredentialsSection says "Connection & credentials"
+// in the language of msgs.
+func (msgs Messages) ConnectionCredentialsSection() string {
+	return Catalog.Format(msgs.locale, "connectionCredentialsSection", nil)
+}
+
+// ConnectionModelCapacitySection says "Model & capacity"
+// in the language the app shows.
+func ConnectionModelCapacitySection() string {
+	return In(i18n.Locale()).ConnectionModelCapacitySection()
+}
+
+// ConnectionModelCapacitySection says "Model & capacity"
+// in the language of msgs.
+func (msgs Messages) ConnectionModelCapacitySection() string {
+	return Catalog.Format(msgs.locale, "connectionModelCapacitySection", nil)
+}
+
+// ConnectionDirectorySection says "Workspace"
+// in the language the app shows.
+func ConnectionDirectorySection() string { return In(i18n.Locale()).ConnectionDirectorySection() }
+
+// ConnectionDirectorySection says "Workspace"
+// in the language of msgs.
+func (msgs Messages) ConnectionDirectorySection() string {
+	return Catalog.Format(msgs.locale, "connectionDirectorySection", nil)
+}
+
 // ConnectionUnsavedForm says "Unsaved changes"
 // in the language the app shows.
 func ConnectionUnsavedForm() string { return In(i18n.Locale()).ConnectionUnsavedForm() }
@@ -2380,16 +2366,6 @@ func (msgs Messages) FieldWorkspaceAccessible() string {
 	return Catalog.Format(msgs.locale, "fieldWorkspaceAccessible", nil)
 }
 
-// ProfileSaveAndNew says "Save and start new chat"
-// in the language the app shows.
-func ProfileSaveAndNew() string { return In(i18n.Locale()).ProfileSaveAndNew() }
-
-// ProfileSaveAndNew says "Save and start new chat"
-// in the language of msgs.
-func (msgs Messages) ProfileSaveAndNew() string {
-	return Catalog.Format(msgs.locale, "profileSaveAndNew", nil)
-}
-
 // ProfileDiscard says "Discard changes"
 // in the language the app shows.
 func ProfileDiscard() string { return In(i18n.Locale()).ProfileDiscard() }
@@ -2510,21 +2486,21 @@ func (msgs Messages) ProfileReasonArchived() string {
 	return Catalog.Format(msgs.locale, "profileReasonArchived", nil)
 }
 
-// ProfileReasonUnknown says "Work is still unresolved. Reload to confirm its status before archiving or starting a new chat."
+// ProfileReasonUnknown says "Work is still unresolved. Reload to confirm its status before archiving."
 // in the language the app shows.
 func ProfileReasonUnknown() string { return In(i18n.Locale()).ProfileReasonUnknown() }
 
-// ProfileReasonUnknown says "Work is still unresolved. Reload to confirm its status before archiving or starting a new chat."
+// ProfileReasonUnknown says "Work is still unresolved. Reload to confirm its status before archiving."
 // in the language of msgs.
 func (msgs Messages) ProfileReasonUnknown() string {
 	return Catalog.Format(msgs.locale, "profileReasonUnknown", nil)
 }
 
-// ProfileReasonActive says "Active work must finish or stop before archiving or starting a new chat."
+// ProfileReasonActive says "Active work must finish or stop before archiving."
 // in the language the app shows.
 func ProfileReasonActive() string { return In(i18n.Locale()).ProfileReasonActive() }
 
-// ProfileReasonActive says "Active work must finish or stop before archiving or starting a new chat."
+// ProfileReasonActive says "Active work must finish or stop before archiving."
 // in the language of msgs.
 func (msgs Messages) ProfileReasonActive() string {
 	return Catalog.Format(msgs.locale, "profileReasonActive", nil)
@@ -2550,11 +2526,11 @@ func (msgs Messages) ProfileErrorSaveFailed() string {
 	return Catalog.Format(msgs.locale, "profileErrorSaveFailed", nil)
 }
 
-// ProfileSavedDefaults says "Profile saved. New chats and new task work sessions use these defaults; existing work is unchanged."
+// ProfileSavedDefaults says "Profile saved. New activity sessions use these defaults."
 // in the language the app shows.
 func ProfileSavedDefaults() string { return In(i18n.Locale()).ProfileSavedDefaults() }
 
-// ProfileSavedDefaults says "Profile saved. New chats and new task work sessions use these defaults; existing work is unchanged."
+// ProfileSavedDefaults says "Profile saved. New activity sessions use these defaults."
 // in the language of msgs.
 func (msgs Messages) ProfileSavedDefaults() string {
 	return Catalog.Format(msgs.locale, "profileSavedDefaults", nil)
@@ -3562,11 +3538,11 @@ func (msgs Messages) ConnectionStatusCheckingSaved() string {
 	return Catalog.Format(msgs.locale, "connectionStatusCheckingSaved", nil)
 }
 
-// ConnectionStatusApplied says "Connection applied. New conversations and tasks use these settings. Existing conversations and tasks keep their setti…"
+// ConnectionStatusApplied says "Connection applied. New work uses these settings. Existing sessions keep their connection."
 // in the language the app shows.
 func ConnectionStatusApplied() string { return In(i18n.Locale()).ConnectionStatusApplied() }
 
-// ConnectionStatusApplied says "Connection applied. New conversations and tasks use these settings. Existing conversations and tasks keep their setti…"
+// ConnectionStatusApplied says "Connection applied. New work uses these settings. Existing sessions keep their connection."
 // in the language of msgs.
 func (msgs Messages) ConnectionStatusApplied() string {
 	return Catalog.Format(msgs.locale, "connectionStatusApplied", nil)
@@ -7588,16 +7564,6 @@ func ResultFileRowLabel(index string, name string) string {
 // are arguments.
 func (msgs Messages) ResultFileRowLabel(index string, name string) string {
 	return Catalog.Format(msgs.locale, "resultFileRowLabel", map[string]any{"index": index, "name": name})
-}
-
-// ModelDefaultScope says "Default connection"
-// in the language the app shows.
-func ModelDefaultScope() string { return In(i18n.Locale()).ModelDefaultScope() }
-
-// ModelDefaultScope says "Default connection"
-// in the language of msgs.
-func (msgs Messages) ModelDefaultScope() string {
-	return Catalog.Format(msgs.locale, "modelDefaultScope", nil)
 }
 
 // MarkdownFileSourceUnknown says "The source session working directory is unknown; this relative file link cannot be resolved."

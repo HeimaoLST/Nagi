@@ -104,7 +104,6 @@ func (s *connectionNativeScene) view(c *ui.Context) {
 	ui.Scroll(c).Fill().Background(theme.Reading).Children(func() {
 		ui.Column(c).FillWidth().MaxWidth(settingsContentWidth).AlignSelf(ui.Center).AlignItems(ui.Start).Padding(8, 32, 48).Gap(8).Children(func() {
 			pageHeading(c, locales.In(c.Locale()).SettingsConnection()).Padding(0, 16)
-			preferenceSectionHeader(c, theme.Theme, locales.In(c.Locale()).ModelDefaultScope())
 			form.View(c, theme.Theme, actions)
 		})
 	})

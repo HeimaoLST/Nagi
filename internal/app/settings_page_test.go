@@ -742,27 +742,46 @@ func TestFirstLaunchOpensConnectionSettingsPageWithoutEmptyOverlay(t *testing.T)
 }
 
 func TestSettingsLongConnectionScrollsThenPrimaryActionIsVisible(t *testing.T) {
-	for _, width := range []int{720, 800} {
-		a, _ := workspaceTestApp(t)
-		config := connectionConfig{API: connectionAPIChatCompletions, Endpoint: "https://provider.example.invalid/v1/very/long/endpoint", APIKey: "fixture", Model: "fixture", ContextTokens: 1000, OutputTokens: 100, WorkingDirectory: t.TempDir(), MaxActiveTasks: 2}
-		a.connectionForm = newConnectionSettings(&config, config.WorkingDirectory)
-		a.connectionSaved = &config
-		a.connectionEffective = &config
-		a.connectionForm.Error = strings.Repeat("A long form error that wraps without pushing controls out of the page. ", 8)
-		a.windowWidth = width
-		a.openSettingsTab(settingsTabConnection, settingsSourceRail)
-		tr := ui.NewTester(a.view, width, 640)
-		tr.Frame()
-		tr.Scroll(float32(width/2), 400, 0, 2000)
-		tr.Frame()
-		if a.settingsScroll.Y <= 0 {
-			t.Fatalf("%d long settings content did not scroll: %v", width, a.settingsScroll.Y)
+	msgs := locales.In("en")
+	assertVisible := func(t *testing.T, tr *ui.Tester, width int, label string) {
+		t.Helper()
+		r, ok := tr.Find(label)
+		if !ok || r.W <= 0 || r.H < 32 || r.X < 0 || r.X+r.W > float32(width) || r.Y < 0 || r.Y+r.H > 640 {
+			t.Fatalf("%d action %q not visible in viewport: %+v ok=%v", width, label, r, ok)
 		}
-		for _, label := range []string{"Apply saved", "Save", "Test"} {
-			r, ok := tr.Find(label)
-			if !ok || r.W <= 0 || r.H < 32 || r.X < 0 || r.X+r.W > float32(width) || r.Y < 0 || r.Y+r.H > 640 {
-				t.Fatalf("%d action %q not reachable after scroll: %+v ok=%v", width, label, r, ok)
-			}
+	}
+	for _, width := range []int{720, 800} {
+		for _, tc := range []struct {
+			name   string
+			dirty  bool
+			bottom []string
+		}{
+			{"clean pending", false, []string{msgs.ConnectionApplySaved(), msgs.ConnectionSaveConfiguration()}},
+			{"dirty pending", true, []string{msgs.ConnectionSaveAndApply(), msgs.ConnectionSaveConfiguration(), msgs.ConnectionApplySaved(), msgs.ConnectionDiscard()}},
+		} {
+			t.Run(fmt.Sprintf("%d-%s", width, tc.name), func(t *testing.T) {
+				a, _ := workspaceTestApp(t)
+				config := connectionConfig{API: connectionAPIChatCompletions, Endpoint: "https://provider.example.invalid/v1/very/long/endpoint", APIKey: "fixture", Model: "fixture", ContextTokens: 1000, OutputTokens: 100, WorkingDirectory: t.TempDir(), MaxActiveTasks: 2}
+				a.connectionForm = newConnectionSettings(&config, config.WorkingDirectory)
+				a.connectionSaved = &config
+				if tc.dirty {
+					a.connectionForm.Draft.Model = "edited-fixture"
+				}
+				a.connectionForm.Error = strings.Repeat("A long form error that wraps without pushing controls out of the page. ", 8)
+				a.windowWidth = width
+				a.openSettingsTab(settingsTabConnection, settingsSourceRail)
+				tr := ui.NewTester(a.view, width, 640)
+				tr.Frame()
+				assertVisible(t, tr, width, msgs.ConnectionTestAction())
+				tr.Scroll(float32(width/2), 400, 0, 2000)
+				tr.Frame()
+				if a.settingsScroll.Y <= 0 {
+					t.Fatalf("%d long settings content did not scroll: %v", width, a.settingsScroll.Y)
+				}
+				for _, label := range tc.bottom {
+					assertVisible(t, tr, width, label)
+				}
+			})
 		}
 	}
 }

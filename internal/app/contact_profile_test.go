@@ -30,20 +30,18 @@ func profileDraftForTest(t *testing.T) profileDraft {
 
 func TestContactProfileDiscardDoesNotSaveNewOrArchive(t *testing.T) {
 	editor := newContactProfileEditor(profileDraftForTest(t))
-	editor.HasConversation = true
 	editor.Draft.Name = "Changed"
 	editor.Draft.Purpose = "Changed purpose"
-	saved, newed, archived := 0, 0, 0
+	saved, archived := 0, 0
 	actions := contactProfileActions{
-		Save:       func(profileDraft) { saved++ },
-		SaveAndNew: func(profileDraft) { newed++ },
-		Archive:    func() { archived++ },
+		Save:    func(profileDraft) { saved++ },
+		Archive: func() { archived++ },
 	}
 	tr := contactProfileTester(editor, actions, 320, 720)
 	tr.Frame()
 	editor.ResetDraft()
-	if saved != 0 || newed != 0 || archived != 0 {
-		t.Fatalf("discard callbacks save=%d new=%d archive=%d", saved, newed, archived)
+	if saved != 0 || archived != 0 {
+		t.Fatalf("discard callbacks save=%d archive=%d", saved, archived)
 	}
 	if editor.Draft.Name != "Writer" || editor.Draft.Purpose != "Keep product notes concise." {
 		t.Fatal("discard did not restore the draft")
@@ -86,16 +84,17 @@ func TestContactProfileValidationCorrectsWorkspaceAndPreservesInstructions(t *te
 
 func TestContactProfileActiveAndUnknownWorkLimitOnlyNewAndArchive(t *testing.T) {
 	editor := newContactProfileEditor(profileDraftForTest(t))
-	editor.HasConversation = true
 	editor.ActiveWork = true
-	saved, newed, archived := 0, 0, 0
+	saved, archived := 0, 0
 	actions := contactProfileActions{
-		Save:       func(profileDraft) { saved++ },
-		SaveAndNew: func(profileDraft) { newed++ },
-		Archive:    func() { archived++ },
+		Save:    func(profileDraft) { saved++ },
+		Archive: func() { archived++ },
 	}
 	tr := contactProfileTester(editor, actions, 560, 1600)
 	tr.Frame()
+	if tr.HasText("Save and start new chat") {
+		t.Fatalf("retired Save and start new chat button still rendered: %v", tr.Texts())
+	}
 	if !tr.HasText("Active work must finish or stop") {
 		t.Fatal("active work reason missing")
 	}
@@ -105,34 +104,24 @@ func TestContactProfileActiveAndUnknownWorkLimitOnlyNewAndArchive(t *testing.T) 
 	if saved != 1 {
 		t.Fatal("profile save was blocked by active work")
 	}
-	if err := tr.Click("Save and start new chat"); err != nil {
-		t.Fatal(err)
-	}
 	if err := tr.Click("Archive"); err != nil {
 		t.Fatal(err)
 	}
-	if newed != 0 || archived != 0 {
-		t.Fatalf("active work allowed new=%d archive=%d", newed, archived)
+	if archived != 0 {
+		t.Fatalf("active work allowed archive=%d", archived)
 	}
 
-	editor.HasConversation = true
 	editor.ActiveWork = false
 	editor.UnknownWork = true
 	tr.Frame()
 	if !tr.HasText("Work is still unresolved") {
 		t.Fatal("unknown work reason missing")
 	}
-	if _, ok := editor.Request(true); ok || editor.Error == "" {
-		t.Fatal("Request accepted save-and-new while work was unknown")
-	}
-	if err := tr.Click("Save and start new chat"); err != nil {
-		t.Fatal(err)
-	}
 	if err := tr.Click("Archive"); err != nil {
 		t.Fatal(err)
 	}
-	if newed != 0 || archived != 0 {
-		t.Fatal("unknown work allowed new or archive")
+	if archived != 0 {
+		t.Fatal("unknown work allowed archive")
 	}
 }
 
@@ -224,7 +213,6 @@ func TestPreviewContactProfile(t *testing.T) {
 			label         string
 		}{{560, 720, "560x720"}, {320, 720, "320x720"}} {
 			editor := newContactProfileEditor(profileDraftForTest(t))
-			editor.HasConversation = true
 			editor.Draft.Purpose = "A long purpose line that should wrap clearly at narrow width without hiding the primary action."
 			editor.SetError("Saving failed. The previous profile is still intact and this draft is editable.")
 			tr := contactProfileTester(editor, contactProfileActions{}, size.width, size.height)

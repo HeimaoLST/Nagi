@@ -192,13 +192,12 @@ func TestPreviewI18nFinalMatrix(t *testing.T) {
 				cfg := connectionConfig{API: connectionAPIChatCompletions, Endpoint: "https://provider.example.invalid/v1/very/long/endpoint/for/final/preview", APIKey: "fixture", Model: "provider/very-long-model-name-for-final-preview", ContextTokens: 131072, OutputTokens: 8192, WorkingDirectory: t.TempDir(), MaxActiveTasks: 2}
 				a.connectionForm = newConnectionSettings(&cfg, cfg.WorkingDirectory)
 				a.connectionSaved = &cfg
-				a.connectionEffective = &cfg
-				a.connectionForm.Status = connStatusApplied
+				a.connectionForm.SavedPending = true
 				a.openSettingsTab(settingsTabConnection, settingsSourceRail)
 				return a
 			},
 			want: func(msgs locales.Messages) []string {
-				return []string{msgs.SettingsConnection(), msgs.ConnectionSaveConfiguration(), msgs.ConnectionApplySaved()}
+				return []string{msgs.SettingsConnection(), msgs.ConnectionCredentialsSection(), msgs.ConnectionModelCapacitySection(), msgs.ConnectionDirectorySection(), msgs.ConnectionTestAction(), msgs.ConnectionApplySaved(), msgs.ConnectionSaveConfiguration()}
 			},
 			fit: settingsFit,
 		},

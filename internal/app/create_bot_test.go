@@ -176,12 +176,12 @@ func TestBotRowPopoverMenuActionsOnFullAndCompactRails(t *testing.T) {
 				t.Fatal(err)
 			}
 			tr.Frame()
-			for _, want := range []string{msgs.BotMenuNewChat(), msgs.PreviousChats(), msgs.BotMenuActivities(1), msgs.ContactProfileAction(), msgs.BotMenuArchive()} {
+			for _, want := range []string{msgs.BotMenuActivities(1), msgs.ContactProfileAction(), msgs.BotMenuArchive()} {
 				if !tr.HasText(want) {
 					t.Fatalf("popover menu missing %q: %v", want, tr.Texts())
 				}
 			}
-			for _, absent := range []string{msgs.BotMenuStopReply(), "Copy workspace", "Open workspace", "Show in Finder"} {
+			for _, absent := range []string{"New chat", "Previous chats", msgs.BotMenuStopReply(), "Copy workspace", "Open workspace", "Show in Finder"} {
 				if tr.HasText(absent) {
 					t.Fatalf("idle popover menu unexpectedly showed %q: %v", absent, tr.Texts())
 				}
@@ -200,22 +200,11 @@ func TestBotRowPopoverMenuActionsOnFullAndCompactRails(t *testing.T) {
 				t.Fatal(err)
 			}
 			tr.Frame()
-			if err := choosePopoverMenuItem(tr, msgs.BotMenuNewChat()); err != nil {
-				t.Fatal(err)
-			}
-			if second.SessionID != "" || len(second.Messages) != 0 || editor.Draft.Purpose != "Unsaved profile edit" {
-				t.Fatalf("New chat failed or clobbered unsaved profile edit: session=%q msgs=%d purpose=%q", second.SessionID, len(second.Messages), editor.Draft.Purpose)
-			}
-
-			if err := tr.RightClick(rowLabel); err != nil {
-				t.Fatal(err)
-			}
-			tr.Frame()
 			if err := choosePopoverMenuItem(tr, msgs.BotMenuArchive()); err != nil {
 				t.Fatal(err)
 			}
-			if !second.Archived {
-				t.Fatal("Archive Bot menu item did not archive target Bot")
+			if !second.Archived || second.SessionID != "sess-second" || len(second.Messages) != 1 || editor.Draft.Purpose != "Unsaved profile edit" {
+				t.Fatalf("Archive Bot failed or altered conversation/draft: archived=%t session=%q msgs=%d purpose=%q", second.Archived, second.SessionID, len(second.Messages), editor.Draft.Purpose)
 			}
 
 			if err := tr.RightClick(rowLabel); err != nil {

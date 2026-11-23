@@ -228,48 +228,6 @@ func TestContactManagementSaveUpdatesFutureProfileWithoutReplacingSession(t *tes
 	}
 }
 
-func TestContactManagementSaveAndNewDetachesOnlyCurrentConversation(t *testing.T) {
-	a, bound, _ := piRunStartedTestApp(t)
-	bound.ActiveTaskID, bound.SendState = "", sendIdle
-	bound.Draft = "keep me"
-	previous := clonePiConversationBinding(bound.PiBinding)
-	workspace := t.TempDir()
-	if _, err := bound.Context.AddSnippet("Keep", "unsent context"); err != nil {
-		t.Fatal(err)
-	}
-	issue := &productIssue{ID: "issue-1", ContactID: bound.ID, Goal: "keep issue", RequirementsRevision: 1, Status: issueStatusInProgress}
-	attachIssueToolTestExecution(issue)
-	bound.Issues = []*productIssue{issue}
-
-	a.openContactProfile(bound.ID)
-	if !a.saveContactProfileDraftFor(bound.ID, profileDraft{Name: "Renamed", Purpose: "new purpose", Workspace: workspace}, true) {
-		t.Fatalf("save and new failed: %+v", a.profileEditorFor(bound.ID))
-	}
-	if bound.SessionID != "" || len(bound.Messages) != 0 || len(bound.History) != 0 {
-		t.Fatalf("current conversation was not detached: %+v", bound)
-	}
-	if len(bound.PreviousPiBindings) != 1 || !reflect.DeepEqual(&bound.PreviousPiBindings[0], previous) {
-		t.Fatalf("old conversation binding = %+v", bound.PreviousPiBindings)
-	}
-	if bound.Draft != "keep me" || len(bound.Context.Snapshot()) != 1 {
-		t.Fatal("save and new consumed the unsent draft or context")
-	}
-	if len(bound.Issues) != 1 || bound.Issues[0].WorkSessionID != issue.PiBinding.Context.SessionRef || bound.Issues[0].Goal != "keep issue" {
-		t.Fatalf("issues changed: %+v", bound.Issues)
-	}
-	if bound.SendState != sendIdle || bound.Status != statusReady {
-		t.Fatalf("stale conversation state kept: %+v", bound)
-	}
-	reloaded, err := openContactStore(a.store.Path, "/tmp")
-	if err != nil {
-		t.Fatal(err)
-	}
-	stored := reloaded.State.Contacts[0]
-	if stored.SessionID != "" || stored.PiBinding != nil || len(stored.PreviousPiBindings) != 1 || !reflect.DeepEqual(&stored.PreviousPiBindings[0], previous) {
-		t.Fatalf("stored = %+v", stored)
-	}
-}
-
 func TestContactManagementSaveFailureRollsBackFieldsAndKeepsDraft(t *testing.T) {
 	a, bound, _ := piRunStartedTestApp(t)
 	bound.ActiveTaskID, bound.SendState = "", sendIdle
@@ -306,33 +264,6 @@ func TestContactManagementSaveFailureRollsBackFieldsAndKeepsDraft(t *testing.T) 
 	}
 	if bound.Draft != "keep me" || bound.SessionID != sessionRef || !reflect.DeepEqual(bound.PiBinding, binding) {
 		t.Fatalf("failed save changed conversation identity or draft: %+v", bound)
-	}
-}
-
-func TestContactManagementSaveAndNewFailureKeepsOldSessionReference(t *testing.T) {
-	a, bound, _ := piRunStartedTestApp(t)
-	bound.ActiveTaskID, bound.SendState = "", sendIdle
-	a.storePath, a.workDir = a.store.Path, filepath.Dir(a.store.Path)
-	bound.Draft = "keep me"
-	bound.Messages = []*message{{Kind: msgUser, Text: "old message"}}
-	bound.History = []historyEntry{{ID: "history-kept", Text: "old message"}}
-	sessionRef := bound.SessionID
-	binding := clonePiConversationBinding(bound.PiBinding)
-	if err := a.persist(); err != nil {
-		t.Fatal(err)
-	}
-	broken := t.TempDir()
-	a.store.Path = broken
-	workspace := t.TempDir()
-	a.openContactProfile(bound.ID)
-	if a.saveContactProfileDraftFor(bound.ID, profileDraft{Name: "Renamed", Workspace: workspace}, true) {
-		t.Fatal("save and new unexpectedly succeeded")
-	}
-	if bound.SessionID != sessionRef || !reflect.DeepEqual(bound.PiBinding, binding) || len(bound.PreviousPiBindings) != 0 || len(bound.Messages) != 1 || len(bound.History) != 1 || bound.Draft != "keep me" {
-		t.Fatalf("failed save and new changed the current conversation: %+v", bound)
-	}
-	if editor := a.profileEditorFor(bound.ID); editor == nil || editor.Error != profileNoticeErrorSave {
-		t.Fatalf("save and new failed outside the intended filesystem boundary: %+v", editor)
 	}
 }
 

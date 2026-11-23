@@ -31,6 +31,7 @@ type Settings struct {
 	HasSaved            bool
 	CredentialPresent   bool
 	SavedPending        bool
+	CurrentSummary      string
 	LimitsOpen          bool
 	RecoveryDetailsOpen bool
 	FocusField          string
@@ -156,7 +157,8 @@ func (s *Settings) View(c *ui.Context, t *ui.Theme, actions SettingsActions, inp
 	if s.FocusField != "" {
 		s.EditOpen[s.FocusField] = true
 	}
-	ui.Column(c).Key("connection-form").FillWidth().AlignItems(ui.Start).Gap(24).Children(func() {
+	ui.Column(c).Key("connection-form").FillWidth().AlignItems(ui.Start).Gap(20).Children(func() {
+		s.statusCard(c, t, msgs, actions.Test)
 		if s.Error != "" || s.ErrorDetail != "" {
 			summary := ErrorText(msgs, s.Error, "")
 			detail := s.ErrorDetail
@@ -177,8 +179,8 @@ func (s *Settings) View(c *ui.Context, t *ui.Theme, actions SettingsActions, inp
 		} else {
 			s.RecoveryDetailsOpen = false
 		}
-		c.Key("connection-fields")
-		theme.PreferenceGroup(c, t, func() {
+		c.Key("connection-credentials")
+		theme.PreferenceSection(c, t, msgs.ConnectionCredentialsSection(), func() {
 			protocols := [...]string{APIChatCompletions, APIResponses}
 			selected := slices.Index(protocols[:], s.Draft.API)
 			theme.SettingsPreferenceRow(c, t, msgs.ProtocolLabel(), "", func() {
@@ -192,14 +194,20 @@ func (s *Settings) View(c *ui.Context, t *ui.Theme, actions SettingsActions, inp
 				if focus {
 					s.FocusField = ""
 				}
+				if message := s.Errors["API"]; message != "" {
+					ui.Text(c, FieldErrorText(msgs, "API", message)).FontSize(theme.TypeMeta).LineHeight(1.5).TextColor(t.Danger)
+				}
 			})
-			if s.Errors["API"] != "" {
-				ui.Text(c, FieldErrorText(msgs, "API", s.Errors["API"])).FontSize(theme.TypeMeta).FixedLineHeight(theme.LineMeta).TextColor(t.Danger)
-			}
-			s.editableField(c, t, "Endpoint", msgs.ConnectionFieldEndpoint(), msgs.ConnectionEndpointPlaceholder(), &s.Draft.Endpoint, false, msgs.ConnectionEndpointHint(), border)
-			s.editableField(c, t, "APIKey", msgs.ConnectionFieldAPIKey(), msgs.ConnectionAPIKeyPlaceholder(), &s.Draft.APIKey, true, msgs.ConnectionAPIKeyHint(), border)
-			s.editableField(c, t, "Model", msgs.ConnectionFieldModel(), msgs.ConnectionModelPlaceholder(), &s.Draft.Model, false, "", border)
+			s.editableField(c, t, "Endpoint", msgs.ConnectionFieldEndpoint(), msgs.ConnectionEndpointPlaceholder(), &s.Draft.Endpoint, false, msgs.ConnectionEndpointHint(), border, false)
+			s.editableField(c, t, "APIKey", msgs.ConnectionFieldAPIKey(), msgs.ConnectionAPIKeyPlaceholder(), &s.Draft.APIKey, true, msgs.ConnectionAPIKeyHint(), border, true)
+		})
+		c.Key("connection-model-capacity")
+		theme.PreferenceSection(c, t, msgs.ConnectionModelCapacitySection(), func() {
+			s.editableField(c, t, "Model", msgs.ConnectionFieldModel(), msgs.ConnectionModelPlaceholder(), &s.Draft.Model, false, "", border, false)
 			s.capacity(c, t, msgs, border)
+		})
+		c.Key("connection-directory")
+		theme.PreferenceSection(c, t, msgs.ConnectionDirectorySection(), func() {
 			s.workingDirectory(c, t, msgs, actions.ChooseFolder, border)
 		})
 		ui.Column(c).Key("connection-actions").FillWidth().Gap(8).Children(func() {
@@ -219,31 +227,57 @@ func (s *Settings) View(c *ui.Context, t *ui.Theme, actions SettingsActions, inp
 						actions.Save(config)
 					}
 				})
-				test := theme.SecondaryButton(c, msgs.ConnectionTestAction()).Disabled(s.Busy).OnClick(func() {
-					if config, ok := s.Validated(); ok && actions.Test != nil {
-						actions.Test(config)
-					}
-				})
-				theme.AppTooltip(c, test, msgs.ConnectionTestHint())
-				if !applySaved && s.HasSaved {
+				if !applySaved && s.HasSaved && s.SavedPending {
 					theme.SecondaryButton(c, msgs.ConnectionApplySaved()).Disabled(s.Busy || s.ReloadBlocked != "").OnClick(actions.Apply)
 				}
 				if s.Dirty() && actions.Discard != nil {
 					theme.GhostButton(c, msgs.ConnectionDiscard()).Disabled(s.Busy).OnClick(actions.Discard)
 				}
 			})
-			if s.Dirty() {
-				ui.Text(c, msgs.ConnectionUnsavedForm()).FontSize(theme.TypeMeta).FixedLineHeight(theme.LineMeta).TextColor(t.Warning)
-			}
-			if s.SavedPending {
-				ui.Text(c, msgs.ConnectionSavedAwaitingApply()).FontSize(theme.TypeMeta).FixedLineHeight(theme.LineMeta).TextColor(t.TextMuted)
-			}
 			if s.ReloadBlocked != "" {
-				ui.Text(c, BlockedText(msgs, s.ReloadBlocked)).FontSize(theme.TypeMeta).FixedLineHeight(theme.LineMeta).TextColor(t.Warning)
+				ui.Text(c, BlockedText(msgs, s.ReloadBlocked)).FontSize(theme.TypeMeta).LineHeight(1.5).TextColor(t.Warning)
 			}
 			if s.Status != "" {
-				ui.Text(c, StatusText(msgs, s.Status, s.StatusArgs)).FontSize(theme.TypeMeta).FixedLineHeight(theme.LineMeta).TextColor(t.Text)
+				ui.Text(c, StatusText(msgs, s.Status, s.StatusArgs)).FontSize(theme.TypeMeta).LineHeight(1.5).TextColor(t.Text)
 			}
+			if s.SavedPending && s.Dirty() {
+				ui.Text(c, msgs.ConnectionSavedAwaitingApply()).FontSize(theme.TypeMeta).LineHeight(1.5).TextColor(t.Warning)
+			}
+		})
+	})
+}
+
+func (s *Settings) statusCard(c *ui.Context, t *ui.Theme, msgs locales.Messages, test func(Config)) {
+	label, summary, dot := msgs.ConnectionStatusUnconfigured(), msgs.ConnectionNoneApplied(), t.TextMuted
+	if s.CurrentSummary != "" {
+		label, summary, dot = msgs.ConnectionStatusInUse(), msgs.ConnectionCurrent(s.CurrentSummary), t.Success
+	}
+	switch {
+	case s.Dirty():
+		label, dot = msgs.ConnectionUnsavedForm(), t.Warning
+	case s.SavedPending:
+		label, dot = msgs.ConnectionSavedAwaitingApply(), t.Warning
+	}
+	c.Key("connection-status")
+	theme.PreferenceGroup(c, t, func() {
+		ui.Row(c).FillWidth().MinWidth(0).Padding(8, 0).Gap(16).AlignItems(ui.Center).Children(func() {
+			ui.Column(c).Grow(1).MinWidth(0).Gap(4).Children(func() {
+				ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
+					ui.Box(c).Size(8, 8).Shrink(0).Radius(4).Background(dot)
+					ui.Text(c, label).FontSize(theme.TypeLabel).FontWeight(500).LineHeight(1.4).TextColor(t.Text).MinWidth(0)
+				})
+				text := ui.Text(c, summary).FontSize(theme.TypeMeta).FixedLineHeight(theme.LineMeta).TextColor(t.TextMuted).MaxLines(1).Ellipsis("…")
+				theme.AppTooltip(c, text, summary)
+				if s.CurrentSummary != "" && s.Error != "" && s.Error != CheckFields {
+					ui.Text(c, msgs.ConnectionKeptOnFailure()).FontSize(theme.TypeMeta).LineHeight(1.5).TextColor(t.Warning)
+				}
+			})
+			button := theme.SecondaryButton(c, msgs.ConnectionTestAction()).Shrink(0).Disabled(s.Busy).OnClick(func() {
+				if config, ok := s.Validated(); ok && test != nil {
+					test(config)
+				}
+			})
+			theme.AppTooltip(c, button, msgs.ConnectionTestHint())
 		})
 	})
 }
@@ -274,7 +308,7 @@ func (s *Settings) capacity(c *ui.Context, t *ui.Theme, msgs locales.Messages, b
 					}
 				})
 			})
-		})
+		}, !s.LimitsOpen)
 		if !s.LimitsOpen {
 			for _, key := range [...]string{"ContextTokens", "OutputTokens", "MaxActiveTasks"} {
 				if message := s.Errors[key]; message != "" {
@@ -287,7 +321,7 @@ func (s *Settings) capacity(c *ui.Context, t *ui.Theme, msgs locales.Messages, b
 		slots, _ := strconv.Atoi(strings.TrimSpace(s.Draft.Slots))
 		if s.customSlots || slots < 1 || slots > 4 {
 			s.customSlots = true
-			s.Field(c, t, "MaxActiveTasks", msgs.ConnectionFieldMaxActiveTasks(), "2", &s.Draft.Slots, false, "", border)
+			s.fieldRow(c, t, "MaxActiveTasks", msgs.ConnectionFieldMaxActiveTasks(), "2", &s.Draft.Slots, false, "", border, true)
 			return
 		}
 		selected := slots - 1
@@ -297,7 +331,7 @@ func (s *Settings) capacity(c *ui.Context, t *ui.Theme, msgs locales.Messages, b
 				s.Draft.Slots = strconv.Itoa(selected + 1)
 				delete(s.Errors, "MaxActiveTasks")
 			})
-		})
+		}, true)
 	})
 }
 
@@ -343,8 +377,8 @@ func (s *Settings) tokenLimits(c *ui.Context, t *ui.Theme, msgs locales.Messages
 	})
 	if selected == "custom" {
 		s.customTokens = true
-		s.Field(c, t, "ContextTokens", msgs.ConnectionFieldContextTokens(), "131072", &s.Draft.ContextTokens, false, "", border)
-		s.Field(c, t, "OutputTokens", msgs.ConnectionFieldOutputTokens(), "8192", &s.Draft.OutputTokens, false, "", border)
+		s.fieldRow(c, t, "ContextTokens", msgs.ConnectionFieldContextTokens(), "131072", &s.Draft.ContextTokens, false, "", border, false)
+		s.fieldRow(c, t, "OutputTokens", msgs.ConnectionFieldOutputTokens(), "8192", &s.Draft.OutputTokens, false, "", border, false)
 	}
 }
 
@@ -377,49 +411,52 @@ func (s *Settings) workingDirectory(c *ui.Context, t *ui.Theme, msgs locales.Mes
 					}
 				})
 			})
+			if s.EditOpen["WorkingDirectory"] {
+				s.fieldInput(c, "WorkingDirectory", msgs.ConnectionFieldWorkingDirectory(), msgs.ConnectionWorkingDirectoryPlaceholder(), &s.Draft.WorkingDirectory, false, border).FillWidth()
+			}
+			s.fieldError(c, t, "WorkingDirectory")
 		}, true)
-		if s.EditOpen["WorkingDirectory"] {
-			s.Field(c, t, "WorkingDirectory", msgs.ConnectionFieldWorkingDirectory(), msgs.ConnectionWorkingDirectoryPlaceholder(), &s.Draft.WorkingDirectory, false, "", border)
-		} else if message := s.Errors["WorkingDirectory"]; message != "" {
-			ui.Text(c, FieldErrorText(msgs, "WorkingDirectory", message)).FontSize(theme.TypeMeta).LineHeight(1.5).TextColor(t.Danger)
-		}
 		if s.FolderError != "" {
-			ui.Text(c, msgs.WorkFolderChooseFailed(s.FolderError)).FontSize(theme.TypeMeta).FixedLineHeight(theme.LineMeta).TextColor(t.Danger)
+			ui.Text(c, msgs.WorkFolderChooseFailed(s.FolderError)).FontSize(theme.TypeMeta).LineHeight(1.5).TextColor(t.Danger)
 		}
 	})
 }
 
-func (s *Settings) editableField(c *ui.Context, t *ui.Theme, key, label, placeholder string, value *string, secret bool, helper string, inputBorder ...ui.Color) {
-	border := c.Theme().Border
-	if len(inputBorder) > 0 {
-		border = inputBorder[0]
+func (s *Settings) editableField(c *ui.Context, t *ui.Theme, key, label, placeholder string, value *string, secret bool, helper string, border ui.Color, last bool) {
+	c.Key("connection-editor-" + key)
+	if !s.HasSaved {
+		s.EditOpen[key] = true
+		s.fieldRow(c, t, key, label, placeholder, value, secret, helper, border, last)
+		return
 	}
 	msgs := locales.In(c.Locale())
-	ui.Column(c).Key("connection-editor-" + key).FillWidth().Gap(8).Children(func() {
-		if !s.HasSaved {
-			s.EditOpen[key] = true
-			s.Field(c, t, key, label, placeholder, value, secret, helper, border)
-			return
+	open := s.EditOpen[key]
+	text := *value
+	if secret && s.CredentialPresent && s.Initial.APIKey == "" {
+		placeholder = msgs.ConnectionSavedAPIKeyPlaceholder()
+	}
+	if open {
+		text = ""
+	} else if secret && (text != "" || s.CredentialPresent) {
+		text = "••••••••"
+	} else if text == "" {
+		text = msgs.ConnectionValueUnset()
+	} else if key == "Endpoint" {
+		text = markdown.SafeDiagnostic(text)
+	}
+	theme.SettingsPreferenceRow(c, t, label, text, func() {
+		row := ui.Row(c).MinWidth(0).Gap(8).AlignItems(ui.Center)
+		if open {
+			row.FillWidth()
 		}
-		open := s.EditOpen[key]
-		text := *value
-		if secret && s.CredentialPresent && s.Initial.APIKey == "" {
-			placeholder = msgs.ConnectionSavedAPIKeyPlaceholder()
-		}
-		if secret && (text != "" || s.CredentialPresent) {
-			text = "••••••••"
-		} else if text == "" {
-			text = msgs.ConnectionValueUnset()
-		} else if key == "Endpoint" {
-			text = markdown.SafeDiagnostic(text)
-		}
-		theme.SettingsPreferenceRow(c, t, label, text, func() {
+		row.Children(func() {
 			buttonText, accessible := msgs.ConnectionEditAction(), msgs.ConnectionEditField(label)
 			if open {
+				s.fieldInput(c, key, label, placeholder, value, secret, border).Grow(1).MinWidth(0)
 				buttonText, accessible = msgs.ConnectionCloseEditorAction(), msgs.ConnectionCloseField(label)
 			}
 			c.Key("editor-disclosure")
-			button := theme.SecondaryButton(c, buttonText).Label(accessible).Disabled(s.Busy).OnClick(func() {
+			button := theme.SecondaryButton(c, buttonText).Shrink(0).Label(accessible).Disabled(s.Busy).OnClick(func() {
 				s.EditOpen[key] = !open
 				if !open {
 					s.FocusField = key
@@ -432,39 +469,38 @@ func (s *Settings) editableField(c *ui.Context, t *ui.Theme, key, label, placeho
 				s.FocusEdit = ""
 			}
 		})
-		if open {
-			s.Field(c, t, key, label, placeholder, value, secret, helper, border)
-		} else if message := s.Errors[key]; message != "" {
-			ui.Text(c, FieldErrorText(msgs, key, message)).FontSize(theme.TypeMeta).LineHeight(1.5).TextColor(t.Danger)
+		if open && helper != "" {
+			ui.Text(c, helper).AlignSelf(ui.Stretch).FontSize(theme.TypeMeta).LineHeight(1.5).TextColor(t.TextMuted)
 		}
-	})
+		s.fieldError(c, t, key)
+	}, last)
 }
 
-func (s *Settings) Field(c *ui.Context, t *ui.Theme, key, label, placeholder string, value *string, secret bool, helper string, inputBorder ...ui.Color) {
-	border := c.Theme().Border
-	if len(inputBorder) > 0 {
-		border = inputBorder[0]
+func (s *Settings) fieldRow(c *ui.Context, t *ui.Theme, key, label, placeholder string, value *string, secret bool, helper string, border ui.Color, last bool) {
+	c.Key("connection-field-" + key)
+	theme.SettingsPreferenceRow(c, t, label, helper, func() {
+		s.fieldInput(c, key, label, placeholder, value, secret, border).FillWidth()
+		s.fieldError(c, t, key)
+	}, last)
+}
+
+func (s *Settings) fieldInput(c *ui.Context, key, label, placeholder string, value *string, secret bool, border ui.Color) ui.Element {
+	c.Key("input-" + key)
+	field := theme.PreferenceInput(c, value, s.Errors[key] != "", border).Label(label).Placeholder(placeholder).Disabled(s.Busy)
+	if secret {
+		field.Password()
 	}
-	ui.Column(c).Key("connection-field-" + key).FillWidth().Gap(4).Children(func() {
-		input := func() ui.Element {
-			c.Key("input-" + key)
-			field := theme.PreferenceInput(c, value, s.Errors[key] != "", border).Label(label).Placeholder(placeholder).Disabled(s.Busy)
-			if secret {
-				field.Password()
-			}
-			if s.FocusField == key {
-				field.Focus().ScrollIntoView()
-				s.FocusField = ""
-			}
-			return field
-		}
-		theme.SettingsPreferenceRow(c, t, label, helper, func() {
-			input().FillWidth()
-		})
-		if message := s.Errors[key]; message != "" {
-			ui.Text(c, FieldErrorText(locales.In(c.Locale()), key, message)).FontSize(theme.TypeMeta).LineHeight(1.5).TextColor(t.Danger)
-		}
-	})
+	if s.FocusField == key {
+		field.Focus().ScrollIntoView()
+		s.FocusField = ""
+	}
+	return field
+}
+
+func (s *Settings) fieldError(c *ui.Context, t *ui.Theme, key string) {
+	if message := s.Errors[key]; message != "" {
+		ui.Text(c, FieldErrorText(locales.In(c.Locale()), key, message)).AlignSelf(ui.Stretch).FontSize(theme.TypeMeta).LineHeight(1.5).TextColor(t.Danger)
+	}
 }
 
 // Form feedback is stored by kind (and raw detail where one exists) so the

@@ -348,29 +348,16 @@ func (a *appModel) bindBotRowMenu(row ui.Element, contactID string, msgs locales
 		}
 		ready := a.productProfileReady() && !a.dataRecoveryBlocksChanges()
 		mutable := ready || a.demo
-		active, unknown := a.contactActivity(ct)
-		if menu.Item(msgs.BotMenuNewChat()).Disabled(!mutable || ct.Archived || active || unknown || ct.SessionID == "").Chosen() {
-			if !a.saveContactProfile(ct, nil, contactProfileDraft(ct), true) {
-				a.openContactProfile(contactID)
-				a.profileEditorFor(contactID).SetError(profileNoticeNewChatFailed)
-			}
-		}
-		previous := menu.Item(msgs.PreviousChats()).Disabled(!ready || ct.SessionID == "").Chosen()
 		count := len(ct.Issues)
 		if ct.activity.loaded && ct.activity.nextCursor == nil {
 			count = max(count, len(ct.activity.items))
 		}
-		activities := menu.Item(msgs.BotMenuActivities(count)).Disabled(!ready && !ct.activity.loaded).Chosen()
-		if previous || activities {
+		if menu.Item(msgs.BotMenuActivities(count)).Disabled(!ready && !ct.activity.loaded).Chosen() {
 			a.selectContact(slices.Index(a.contacts, ct))
-			if previous {
-				a.browseProductConversations(ct, "")
-			} else {
-				a.priorChats = nil
-				a.aux = ""
-				ct.activity.open, ct.activity.focusToggle = true, true
-				ct.activity.scroll.Y = 0
-			}
+			a.priorChats = nil
+			a.aux = ""
+			ct.activity.open, ct.activity.focusToggle = true, true
+			ct.activity.scroll.Y = 0
 		}
 		menu.Separator()
 		if menu.Item(msgs.ContactProfileAction()).Chosen() {
@@ -734,7 +721,6 @@ func (a *appModel) main(c *ui.Context, t *ui.Theme) {
 }
 
 func (a *appModel) header(c *ui.Context, t *ui.Theme, ct *contact, status string) {
-	msgs := locales.In(c.Locale())
 	ui.Row(c).Key("header").FillWidth().BorderWidth(0, 0, 1, 0).BorderColor(t.Border).Children(func() {
 		ui.Column(c).FillWidth().Padding(12, 16).Children(func() {
 			ui.Row(c).FillWidth().MinHeight(32).AlignItems(ui.Center).Gap(12).Children(func() {
@@ -745,19 +731,8 @@ func (a *appModel) header(c *ui.Context, t *ui.Theme, ct *contact, status string
 						ui.Text(c, ct.Role).FontSize(typeHeaderMeta).FontWeight(400).FixedLineHeight(lineHeader).MinWidth(0).Grow(1).TextColor(t.TextMuted)
 					})
 				})
-				if a.productHost() != nil {
-					ui.Spacer(c)
-					previous := secondaryButton(c, msgs.PreviousChats()).Shrink(0).Disabled(!a.productProfileReady()).OnClick(func() {
-						a.browseProductConversations(ct, "")
-					})
-					if a.focusPreviousChats {
-						previous.Focus()
-						a.focusPreviousChats = false
-					}
-				} else if a.railCollapsed {
-					ui.Spacer(c)
-				}
 				if a.railCollapsed {
+					ui.Spacer(c)
 					a.showContactsButton(c, t)
 				}
 			})

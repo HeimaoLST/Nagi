@@ -12,6 +12,7 @@ import (
 	"github.com/egoist/mygo/i18n"
 	"github.com/egoist/mygo/ui"
 
+	"github.com/HeimaoLST/Nagi/internal/theme"
 	"github.com/HeimaoLST/Nagi/locales"
 )
 
@@ -172,21 +173,24 @@ func (a *appModel) settingsLandingTab() string {
 	return settingsTabAppearance
 }
 
-func (a *appModel) settingsPage(c *ui.Context, t *ui.Theme) {
+func (a *appModel) settingsPage(c *ui.Context, base *ui.Theme) {
 	if a.settingsTab == "" {
 		a.settingsTab = a.settingsLandingTab()
 	}
 	a.ensureConnectionForm()
-	if a.layoutWidth() < int(preferenceBreakpoint) {
-		ui.Column(c).Fill().Background(ui.Transparent).Children(func() {
-			a.settingsSidebar(c, t, true)
-			a.settingsMain(c, t, true)
+	t := theme.SettingsTheme(base)
+	ui.Themed(c, &t).Fill().Background(t.Background).Children(func() {
+		if a.layoutWidth() < int(preferenceBreakpoint) {
+			ui.Column(c).Fill().Children(func() {
+				a.settingsSidebar(c, &t, true)
+				a.settingsMain(c, &t, true)
+			})
+			return
+		}
+		ui.Row(c).Fill().Children(func() {
+			a.settingsSidebar(c, &t, false)
+			a.settingsMain(c, &t, false)
 		})
-		return
-	}
-	ui.Row(c).Fill().Background(ui.Transparent).Children(func() {
-		a.settingsSidebar(c, t, false)
-		a.settingsMain(c, t, false)
 	})
 }
 
@@ -194,24 +198,23 @@ var settingsConnectionIcon = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fi
 
 func (a *appModel) settingsSidebar(c *ui.Context, t *ui.Theme, narrow bool) {
 	msgs := locales.In(c.Locale())
-	width := settingsSidebarWidth
-	if narrow {
-		width = 0
-	}
-	column := ui.Column(c).MinWidth(0).Shrink(0)
+	column := ui.Column(c).MinWidth(0).Shrink(0).Background(t.Surface)
 	if narrow {
 		column.FillWidth()
 	} else {
-		column.FillHeight().Width(width)
+		column.FillHeight().Width(settingsSidebarWidth)
 	}
+	navPalette := a.workTheme
+	navPalette.NavHover = t.Surface.Mix(t.Text, .06)
+	navPalette.NavSelected = t.Surface.Mix(t.Text, .10)
 	column.Children(func() {
 		if !narrow {
 			ui.Row(c).FillWidth().Height(max(float32(40), c.TitleBar().Height)).Shrink(0).DragWindow()
 		}
 		ui.Toolbar(c, func() {
-			back := navigationControl(c, ui.ButtonBase(c).Label(msgs.SettingsBackAccessible()), a.workTheme, false).Padding(8).Gap(8).TextColor(t.Text)
+			back := secondaryButton(c, "").Label(msgs.SettingsBackAccessible()).Padding(8, 12).Gap(8).TextColor(t.Text)
 			back.Children(func() {
-				ui.Icon(c, navBackIcon).Width(16).Height(16).TextColor(t.TextMuted)
+				ui.Icon(c, navBackIcon).Size(16, 16).TextColor(t.TextMuted)
 				ui.Text(c, msgs.SettingsBack()).FontSize(typeAction).FontWeight(500).FixedLineHeight(lineAction).TextColor(t.Text)
 			})
 			back.OnClick(func() { a.closeSettings() })
@@ -220,17 +223,18 @@ func (a *appModel) settingsSidebar(c *ui.Context, t *ui.Theme, narrow bool) {
 				a.settingsFocusBack = false
 			}
 		}).Label(msgs.SettingsNavigationLabel()).FillWidth().Padding(12)
-		ui.Text(c, msgs.SettingsTitle()).FontSize(typeNavigation).FontWeight(500).FixedLineHeight(lineNavigation).TextColor(t.TextMuted).Height(18).Padding(0, 16)
+		ui.Text(c, msgs.SettingsTitle()).FontSize(typeLabel).FontWeight(600).FixedLineHeight(lineLabel).TextColor(t.Text).Padding(4, 16)
 		nav := func(label, tab string) {
 			selected := a.settingsTab == tab
-			button := navigationControl(c, ui.ButtonBase(c).Label(label), a.workTheme, selected).
-				FontSize(typeNavigation).FontWeight(400).FixedLineHeight(lineNavigation).
-				Padding(8).Gap(8).Justify(ui.Start).TextColor(t.TextMuted)
+			weight, ink := 400, t.TextMuted
+			if selected {
+				weight, ink = 500, t.Text
+			}
+			button := navigationControl(c, ui.ButtonBase(c).Label(label).Selected(selected), navPalette, selected).
+				FontSize(typeNavigation).FontWeight(weight).FixedLineHeight(lineNavigation).
+				Padding(8, 12).Gap(8).Justify(ui.Start).TextColor(ink)
 			if !narrow {
 				button.FillWidth()
-			}
-			if selected {
-				button.TextColor(t.Text)
 			}
 			button.Children(func() {
 				glyph := glyphSettings4Line
@@ -241,7 +245,7 @@ func (a *appModel) settingsSidebar(c *ui.Context, t *ui.Theme, narrow bool) {
 					glyph = glyphMoreLine
 				}
 				ui.Box(c).Size(16, 16).AlignItems(ui.Center).Justify(ui.Center).Children(func() { ui.Icon(c, glyph).Size(14, 14) })
-				ui.Text(c, label).FontSize(typeNavigation).FontWeight(400).FixedLineHeight(lineNavigation)
+				ui.Text(c, label).FontSize(typeNavigation).FontWeight(weight).FixedLineHeight(lineNavigation).TextColor(ink)
 			})
 			button.OnClick(func() { a.selectSettingsTab(tab) })
 			if a.settingsFocusTab == tab {
@@ -274,12 +278,18 @@ func (a *appModel) settingsMain(c *ui.Context, t *ui.Theme, narrow bool) {
 	case settingsTabConnection:
 		title = msgs.SettingsConnection()
 	}
-	ui.Column(c).Grow(1).MinWidth(0).MinHeight(0).AlignSelf(ui.Stretch).Margin(8).Background(a.workTheme.Reading).Border(1, t.Border).Radius(16).Clip().Children(func() {
-		ui.Row(c).FillWidth().MaxWidth(settingsContentWidth).AlignSelf(ui.Center).Height(40).Shrink(0).Padding(0, 32).AlignItems(ui.Center).DragWindow().Children(func() {
+	main := ui.Column(c).Grow(1).MinWidth(0).MinHeight(0).AlignSelf(ui.Stretch).BorderColor(t.Border).Clip()
+	if narrow {
+		main.BorderWidth(1, 0, 0, 0)
+	} else {
+		main.BorderWidth(0, 0, 0, 1)
+	}
+	main.Children(func() {
+		ui.Row(c).FillWidth().MaxWidth(settingsContentWidth).AlignSelf(ui.Center).Height(max(float32(48), c.TitleBar().Height)).Shrink(0).Padding(0, 32).AlignItems(ui.Center).DragWindow().Children(func() {
 			pageHeading(c, title)
 		})
 		ui.Scroll(c).FillWidth().MinWidth(0).Grow(1).MinHeight(0).TrackScroll(&a.settingsScroll).Children(func() {
-			ui.Column(c).FillWidth().MaxWidth(settingsContentWidth).MinWidth(0).AlignSelf(ui.Center).Padding(16, 32, 32).Gap(16).Children(func() {
+			ui.Column(c).FillWidth().MaxWidth(settingsContentWidth).MinWidth(0).AlignSelf(ui.Center).Padding(12, 32, 32).Gap(20).Children(func() {
 				switch a.settingsTab {
 				case settingsTabAppearance:
 					a.settingsAppearanceContent(c, t)
@@ -777,27 +787,15 @@ func (a *appModel) settingsDataRecoveryContent(c *ui.Context, t *ui.Theme) {
 func (a *appModel) settingsConnectionContent(c *ui.Context, t *ui.Theme) {
 	msgs := locales.In(c.Locale())
 	form := a.connectionForm
-	ui.Column(c).FillWidth().MinWidth(0).Gap(8).Children(func() {
-		preferenceSectionHeader(c, t, msgs.ModelDefaultScope())
-		ui.Column(c).FillWidth().MinWidth(0).Padding(0, 16).Gap(8).Children(func() {
-			if a.connectionApplied() && a.connectionEffective != nil {
-				ui.Column(c).FillWidth().Gap(4).Children(func() {
-					current := msgs.ConnectionCurrent(a.redactConnectionText(connectionCurrentSummary(msgs, a.connectionEffective)))
-					appTooltip(c, ui.Text(c, current).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted).MaxLines(1).Ellipsis("…"), current)
-					if form.Error != "" {
-						ui.Text(c, msgs.ConnectionKeptOnFailure()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Warning)
-					}
-				})
-			} else {
-				ui.Text(c, msgs.ConnectionNoneApplied()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
-			}
-		})
-		form.ReloadBlocked = a.connectionReloadBlocked()
-		form.SavedPending = a.connectionSavedPending()
-		actions := a.connectionActions()
-		actions.Discard = func() { form.ResetDraft() }
-		form.View(c, t, actions, a.workTheme.InputBorder)
-	})
+	form.CurrentSummary = ""
+	if a.connectionApplied() {
+		form.CurrentSummary = a.redactConnectionText(connectionCurrentSummary(msgs, a.connectionEffective))
+	}
+	form.ReloadBlocked = a.connectionReloadBlocked()
+	form.SavedPending = a.connectionSavedPending()
+	actions := a.connectionActions()
+	actions.Discard = form.ResetDraft
+	form.View(c, t, actions, a.workTheme.InputBorder)
 }
 
 func connectionCurrentSummary(msgs locales.Messages, config *connectionConfig) string {
@@ -808,19 +806,22 @@ func connectionCurrentSummary(msgs locales.Messages, config *connectionConfig) s
 	if strings.TrimSpace(config.Model) != "" {
 		parts = append(parts, config.Model)
 	}
-	if strings.TrimSpace(config.Endpoint) != "" {
-		parts = append(parts, config.Endpoint)
-	}
 	switch config.API {
 	case connectionAPIChatCompletions:
 		parts = append(parts, msgs.ProtocolChatCompletionsLabel())
 	case connectionAPIResponses:
 		parts = append(parts, msgs.ProtocolResponsesLabel())
 	}
-	return strings.Join(parts, ", ")
+	if strings.TrimSpace(config.Endpoint) != "" {
+		parts = append(parts, config.Endpoint)
+	}
+	return strings.Join(parts, " · ")
 }
 
 func (a *appModel) connectionSavedPending() bool {
+	if a.runtimeStatus == runtimeStateExited {
+		return a.connectionSaved != nil
+	}
 	if a.productHost() != nil {
 		return a.productConnectionPending()
 	}

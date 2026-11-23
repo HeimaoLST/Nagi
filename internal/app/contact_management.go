@@ -135,7 +135,6 @@ func (a *appModel) updateProductBot(host *piAppHost, ct *contact, editor *contac
 	}
 	if editor != nil {
 		editor.SetProfile(draft)
-		editor.HasConversation = true
 		editor.Status = profileNoticeSavedDefaults
 	}
 	return true
@@ -274,10 +273,8 @@ func (a *appModel) saveContactProfile(ct *contact, editor *contactProfileEditor,
 	}
 	if editor != nil {
 		editor.SetProfile(draft)
-		editor.HasConversation = ct.PiBinding != nil || a.demo && ct.SessionID != ""
 		editor.Status = profileNoticeSavedDefaults
 		if startNew {
-			editor.HasConversation = false
 			editor.Status = profileNoticeSavedNextMessage
 		}
 	}

@@ -134,13 +134,11 @@ func (w *productWorkbench) shutdown(ctx context.Context) {
 
 func TestPiAppPreviousAndSourceChat(t *testing.T) {
 	const oldPrompt, oldReply = "Original Cedar prompt", "Original Cedar reply"
-	const laterPrompt, laterReply = "Follow-up Cedar\ninventory", "Follow-up Cedar reply"
-	const laterLabel = "Follow-up Cedar inventory"
 	const newPrompt, newReply = "Current Cedar draft", "Current Cedar reply"
 	const otherDraft = "Independent Copper draft"
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	provider := &piAppProvider{limit: 3}
+	provider := &piAppProvider{limit: 2}
 	if err := provider.install([]piAppCall{}, oldReply, nil, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -164,48 +162,12 @@ func TestPiAppPreviousAndSourceChat(t *testing.T) {
 		t.Fatalf("original chat readback: %+v, %v", oldHistory.entries, err)
 	}
 	bot := first.app.productHost().productBots[cedar.ID]
-	var laterID string
-	var laterHistory historyProjection
-	for i := range 26 {
-		bot, err = first.client.UpdateBot(ctx, pi.ProductBotUpdateParams{
-			ProductBotRevisionParams: pi.ProductBotRevisionParams{BotID: bot.BotID, ExpectedRevision: bot.ProfileRevision, OperationID: fmt.Sprintf("fixture-chat-%d", i)},
-			Profile:                  bot.Profile, StartNewConversation: true,
-		})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if i != 24 {
-			continue
-		}
-		laterID = bot.CurrentConversationID
-		if err := provider.install([]piAppCall{}, laterReply, nil, nil); err != nil {
-			t.Fatal(err)
-		}
-		params := pi.ProductConversationParams{ConversationID: laterID}
-		conversation, err := first.client.GetConversation(ctx, laterID)
-		if err != nil || conversation.Draft == nil {
-			t.Fatalf("follow-up draft readback: %+v, %v", conversation, err)
-		}
-		draft, err := first.client.SaveDraft(ctx, pi.ProductSaveDraftParams{
-			ProductConversationParams: params, ExpectedRevision: conversation.Draft.Revision, OperationID: "seed-follow-up-draft",
-			ProductText: pi.ProductText{Text: laterPrompt},
-		})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if _, err := first.client.Send(ctx, pi.ProductSendParams{
-			ProductConversationParams: params, DraftRevision: draft.Revision, OperationID: "seed-follow-up-send",
-		}); err != nil {
-			t.Fatal(err)
-		}
-		first.wait(func() bool {
-			conversation, err := first.client.GetConversation(ctx, laterID)
-			return err == nil && conversation.LatestExecution != nil && conversation.LatestExecution.State == "completed"
-		})
-		laterHistory, err = productHistory(ctx, first.client, laterID)
-		if err != nil || len(laterHistory.entries) != 2 || laterHistory.entries[0].Text != laterPrompt || laterHistory.entries[1].Text != laterReply {
-			t.Fatalf("follow-up chat readback: %+v, %v", laterHistory.entries, err)
-		}
+	bot, err = first.client.UpdateBot(ctx, pi.ProductBotUpdateParams{
+		ProductBotRevisionParams: pi.ProductBotRevisionParams{BotID: bot.BotID, ExpectedRevision: bot.ProfileRevision, OperationID: "fixture-historical-origin"},
+		Profile:                  bot.Profile, StartNewConversation: true,
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
 	currentID := bot.CurrentConversationID
 	current, err := first.client.GetConversation(ctx, currentID)
@@ -223,30 +185,7 @@ func TestPiAppPreviousAndSourceChat(t *testing.T) {
 	}
 	first.shutdown(ctx)
 
-	second := openProductWorkbench(t)
-	cedar = second.app.contactByID("cedar")
-	second.wait(func() bool { return cedar.activity.loaded && len(cedar.activity.items) == 1 })
-	second.click(msg.PreviousChats())
-	second.wait(func() bool {
-		p := second.app.priorChats
-		return p != nil && !p.reading && p.nextCursor != nil
-	})
-	second.pump.do(func() {
-		_, oldRow := second.view.Find(oldPrompt)
-		_, oldIDLabel := second.view.Find(oldID)
-		_, laterRow := second.view.Find(laterLabel)
-		_, emptyRow := second.view.Find(msg.PreviousChatFallback(2))
-		if !oldRow || oldIDLabel || laterRow || !emptyRow {
-			t.Errorf("first page does not expose the original prompt and numbered empty chat: %v", second.view.Texts())
-		}
-	})
-	second.frame(func() { second.app.priorChats.listScroll.Y = 10000 })
-	second.click(msg.LoadMoreChats())
-	second.wait(func() bool {
-		p := second.app.priorChats
-		return p != nil && !p.reading && p.nextCursor == nil && len(p.items) == 26
-	})
-	assertPrior := func(w *productWorkbench, bot *contact, draft, id, reply string, expected historyProjection) {
+	assertSource := func(w *productWorkbench, bot *contact, draft, id, reply string, expected historyProjection) {
 		t.Helper()
 		w.wait(func() bool {
 			p := w.app.priorChats
@@ -257,30 +196,29 @@ func TestPiAppPreviousAndSourceChat(t *testing.T) {
 			p := w.app.priorChats
 			_, composer := w.view.Find(msg.ComposerLabel(bot.Name))
 			correct = p.ownerID == bot.ID && p.selectedID == id && reflect.DeepEqual(p.history.entries, expected.entries) &&
-				w.view.HasText(reply) && !composer && bot.SessionID == currentID && bot.Draft == draft
+				w.view.HasText(msg.SourceChat()) && w.view.HasText(msg.ReadOnlyChat()) && w.view.HasText(reply) &&
+				!composer && bot.SessionID == currentID && bot.Draft == draft
 		})
 		if !correct {
-			t.Fatalf("opening chat %s changed the transcript, draft, or current send target", id)
+			t.Fatalf("opening source chat %s changed the transcript, draft, or current send target", id)
 		}
 	}
-	second.frame(func() { second.app.priorChats.listScroll.Y = 10000 })
-	second.click(laterLabel)
-	assertPrior(second, cedar, newPrompt, laterID, laterReply, laterHistory)
-	second.frame(func() { second.view.Key(0, ui.KeyEscape) })
-	second.wait(func() bool { return second.view.Focused(laterLabel) })
-	second.frame(func() { second.app.priorChats.listScroll.Y = 0 })
-	second.click(oldPrompt)
-	assertPrior(second, cedar, newPrompt, oldID, oldReply, oldHistory)
-	second.frame(func() { second.view.Key(0, ui.KeyEscape) })
-	second.wait(func() bool { return second.view.Focused(oldPrompt) })
-	second.frame(func() { second.view.Key(0, ui.KeyEscape) })
+
+	second := openProductWorkbench(t)
+	cedar = second.app.contactByID("cedar")
+	second.wait(func() bool { return cedar.activity.loaded && len(cedar.activity.items) == 1 })
+	second.pump.do(func() {
+		if second.view.HasText("Previous chats") {
+			t.Errorf("retired Previous chats header button still rendered: %v", second.view.Texts())
+		}
+	})
 	second.click(msg.WorkActivity())
 	second.click(msg.IssueRowLabel("Original activity"))
 	second.wait(func() bool {
 		return cedar.activity.activity != nil && cedar.activity.activity.OriginConversationID == oldID
 	})
 	second.click(msg.SourceChat())
-	assertPrior(second, cedar, newPrompt, oldID, oldReply, oldHistory)
+	assertSource(second, cedar, newPrompt, oldID, oldReply, oldHistory)
 	second.frame(func() { second.view.Key(0, ui.KeyEscape) })
 	second.wait(func() bool { return second.view.Focused(msg.SourceChat()) })
 	second.frame(func() { second.app.selectContact(1) })
@@ -288,8 +226,8 @@ func TestPiAppPreviousAndSourceChat(t *testing.T) {
 		ct := second.app.selectedContact()
 		return ct.ID == "copper" && ct.Loaded && ct.Draft == otherDraft
 	})
-	if provider.count() != 2 {
-		t.Fatal("opening previous or source chat requested the provider")
+	if provider.count() != 1 {
+		t.Fatal("opening source chat requested the provider")
 	}
 	second.frame(func() { second.app.selectContact(0) })
 	if err := provider.install([]piAppCall{}, newReply, nil, nil); err != nil {
@@ -310,15 +248,20 @@ func TestPiAppPreviousAndSourceChat(t *testing.T) {
 	second.shutdown(ctx)
 
 	third := openProductWorkbench(t)
-	third.click(msg.PreviousChats())
+	cedar = third.app.contactByID("cedar")
+	third.wait(func() bool { return cedar.activity.loaded && len(cedar.activity.items) == 1 })
+	third.click(msg.WorkActivity())
+	third.click(msg.IssueRowLabel("Original activity"))
 	third.wait(func() bool {
-		return third.app.priorChats != nil && !third.app.priorChats.reading && len(third.app.priorChats.items) > 0
+		return cedar.activity.activity != nil && cedar.activity.activity.OriginConversationID == oldID
 	})
-	third.click(oldPrompt)
-	assertPrior(third, third.app.contactByID("cedar"), "", oldID, oldReply, oldHistory)
+	third.click(msg.SourceChat())
+	assertSource(third, cedar, "", oldID, oldReply, oldHistory)
+	third.frame(func() { third.view.Key(0, ui.KeyEscape) })
+	third.wait(func() bool { return third.view.Focused(msg.SourceChat()) })
 	third.shutdown(ctx)
-	if requests := provider.count(); requests != 3 {
-		t.Fatalf("expected just the three intentional sends, saw %d requests", requests)
+	if requests := provider.count(); requests != 2 {
+		t.Fatalf("expected just the two intentional sends, saw %d requests", requests)
 	}
 }
 
