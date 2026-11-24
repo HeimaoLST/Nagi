@@ -192,10 +192,19 @@ type ProductMaterial struct {
 	Source   string `json:"source,omitempty"`
 }
 
+type ProductQuote struct {
+	MessageID   string `json:"messageId"`
+	BubbleIndex *int   `json:"bubbleIndex,omitempty"`
+	Sender      string `json:"sender"`
+	AuthorName  string `json:"authorName"`
+	Text        string `json:"text"`
+}
+
 type ProductDraft struct {
 	Revision  uint64            `json:"revision"`
 	Text      string            `json:"text"`
 	Materials []ProductMaterial `json:"materials"`
+	Quote     *ProductQuote     `json:"quote,omitempty"`
 }
 
 type ProductExecution struct {
@@ -229,6 +238,7 @@ type ProductMessage struct {
 	Timestamp string            `json:"timestamp"`
 	Text      string            `json:"text"`
 	Materials []ProductMaterial `json:"materials"`
+	Quote     *ProductQuote     `json:"quote,omitempty"`
 }
 
 type ProductReceiptTarget struct {
@@ -425,8 +435,9 @@ type ProductHistoryParams struct {
 type ProductSaveDraftParams struct {
 	ProductConversationParams
 	ProductText
-	ExpectedRevision uint64 `json:"expectedRevision"`
-	OperationID      string `json:"operationId"`
+	ExpectedRevision uint64        `json:"expectedRevision"`
+	OperationID      string        `json:"operationId"`
+	Quote            *ProductQuote `json:"quote,omitempty"`
 }
 
 type ProductSendParams struct {

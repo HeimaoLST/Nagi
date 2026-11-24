@@ -5,7 +5,7 @@ import { closeSync, fstatSync, lstatSync, openSync, readFileSync, renameSync, rm
 import { extname, isAbsolute } from 'node:path';
 import { Type } from 'typebox';
 import { Value } from 'typebox/value';
-import { RequestError, activityStateSchema, botSystemKindSchema, connectionSchema, draftSchema, executionSchema, materialSchema,
+import { RequestError, activityStateSchema, botSystemKindSchema, connectionSchema, draftSchema, executionSchema, hasCanonicalQuoteText, materialSchema,
   operationSchema, profileSchema, type ActivityState, type Connection, type Draft, type Execution, type Material, type Operation } from './protocol.js';
 import type { ProductProfile } from './product.js';
 import { lastingRulesFit, MAX_LOG_BYTES, MAX_PENDING_LEARNINGS, MAX_RULE_BYTES, MAX_WORK_LOGS,
@@ -121,6 +121,12 @@ export function decodeProductProfile(data: unknown): ProductProfile {
     throw new RequestError('profile_unavailable', 'The saved product profile has an unsupported record shape');
   }
   const invalid = (): never => { throw new RequestError('profile_unavailable', 'The saved product profile has an invalid record association'); };
+  const admitDraftQuote = (draft: Draft) => {
+    if (draft.quote === null) delete draft.quote;
+    else if (draft.quote && !hasCanonicalQuoteText(draft.quote)) {
+      throw new RequestError('profile_unavailable', 'The saved product profile has an invalid quote');
+    }
+  };
   const bots = new Map(data.bots.map(bot => [bot.botId, bot]));
   for (const { profile } of data.bots) {
     const mounted = profile.mountedSkills ?? [];
@@ -148,6 +154,7 @@ export function decodeProductProfile(data: unknown): ProductProfile {
     assignOwner(execution.executionId, owner);
   }
   for (const execution of data.executions) {
+    admitDraftQuote(execution.input);
     if (execution.importedActivityId) assignOwner(execution.executionId, activities.get(execution.importedActivityId));
     if (execution.retained?.id === execution.executionId) continue;
     const admission = operations.get(execution.operationId);
@@ -175,6 +182,7 @@ export function decodeProductProfile(data: unknown): ProductProfile {
     if (conversations.get(bot.currentConversationId)?.botId !== bot.botId) invalid();
   }
   for (const conversation of data.conversations) {
+    admitDraftQuote(conversation.draft);
     if (!bots.has(conversation.botId)) invalid();
     if (conversation.latestExecutionId) linkExecution(conversation.latestExecutionId, conversation);
     binding(conversation.binding);

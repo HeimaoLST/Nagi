@@ -1,6 +1,7 @@
 import { createHash, createHmac } from 'node:crypto';
 import type { SessionEntry } from '@earendil-works/pi-coding-agent';
-import { RequestError, type Material } from './protocol.js';
+import { Value } from 'typebox/value';
+import { RequestError, hasCanonicalQuoteText, productQuote, quoteAuthorMaxBytes, quoteTextMaxBytes, type Material, type ProductQuote } from './protocol.js';
 import { clipEncodedText, clipUTF8 } from './product-redactor.js';
 import { turnEntryType, type Transcript } from './product-transcript.js';
 
@@ -52,14 +53,15 @@ export function encodeCursor(scope: string, { high, position, tail, highEdge = '
   return cursor;
 }
 
-type Message = { messageId: string; role: 'user' | 'assistant'; timestamp: string; text: string; materials: Material[] };
+type Message = { messageId: string; role: 'user' | 'assistant'; timestamp: string; text: string; materials: Material[]; quote?: ProductQuote };
 
 export function publicConversationMessage(entry: SessionEntry): Message | undefined {
   const base = { messageId: entry.id, timestamp: entry.timestamp };
   if (entry.type === 'custom' && entry.customType === turnEntryType) {
-    const turn = entry.data as { text: string; materials?: Material[]; context?: { name: string; text: string }[] };
+    const turn = entry.data as { text: string; materials?: Material[]; context?: { name: string; text: string }[]; quote?: unknown };
     const materials = turn.materials ?? (turn.context ?? []).filter(item => !item.name.startsWith('nagi.issue_tools.')).map((item, index) => ({ id: `${entry.id}:${index}`, revision: 0, name: item.name, text: item.text }));
-    return { ...base, role: 'user' as const, text: turn.text, materials };
+    const quote = Value.Check(productQuote, turn.quote) && hasCanonicalQuoteText(turn.quote) ? turn.quote : undefined;
+    return { ...base, role: 'user' as const, text: turn.text, materials, ...(quote ? { quote } : {}) };
   }
   if (entry.type === 'message' && entry.message.role === 'assistant') {
     const text = entry.message.content.filter(part => part.type === 'text').map(part => part.text).join('');
@@ -70,14 +72,22 @@ export function publicConversationMessage(entry: SessionEntry): Message | undefi
 type Turn = Omit<Message, 'materials'> & { materials: (Omit<Material, 'source'> & { truncated: boolean })[]; truncated: boolean };
 type Hit = Pick<Message, 'messageId' | 'role' | 'timestamp'> & { field: 'text' | 'material'; materialId?: string; snippet: string; truncated: boolean };
 
-function redactMessage(message: Message, redact: (text: string) => string): Message {
-  if (redact(message.messageId) !== message.messageId || message.materials.some(item => redact(item.id) !== item.id)) return oversizedEntry();
-  return { ...message, text: redact(message.text), materials: message.materials.map(({ id, revision, name, text }) => ({ id, revision, name: redact(name), text: redact(text) })) };
+export function redactQuote(quote: ProductQuote, redact: (text: string) => string): ProductQuote | undefined {
+  if (redact(quote.messageId) !== quote.messageId) return;
+  const authorName = clipUTF8(redact(quote.authorName).trim(), quoteAuthorMaxBytes);
+  const text = clipUTF8(redact(quote.text).trim(), quoteTextMaxBytes);
+  if (authorName && text) return { ...quote, authorName, text };
 }
 
-
+function redactMessage(message: Message, redact: (text: string) => string): Message {
+  if (redact(message.messageId) !== message.messageId || message.materials.some(item => redact(item.id) !== item.id)) return oversizedEntry();
+  const { quote, ...row } = message;
+  const publicQuote = quote && redactQuote(quote, redact);
+  return { ...row, text: redact(row.text), materials: row.materials.map(({ id, revision, name, text }) => ({ id, revision, name: redact(name), text: redact(text) })),
+    ...(publicQuote ? { quote: publicQuote } : {}) };
+}
 function fitTurn(message: Message, budget: number): Turn | undefined {
-  const { text, materials, ...identity } = message;
+  const { text, materials, quote, ...identity } = message;
   const turn: Turn = { ...identity, text: '', materials: [], truncated: true };
   let remaining = budget - encodedBytes(turn) - 1;
   if (remaining < 0) return;
@@ -95,7 +105,8 @@ function fitTurn(message: Message, budget: number): Turn | undefined {
     material.truncated = material.name !== name || material.text !== text;
     turn.materials.push(material);
   }
-  turn.truncated = turn.text !== text || turn.materials.length !== materials.length || turn.materials.some(material => material.truncated);
+  if (quote && encodedBytes({ quote }) - 1 <= remaining) turn.quote = quote;
+  turn.truncated = turn.text !== text || turn.materials.length !== materials.length || turn.materials.some(material => material.truncated) || turn.quote !== quote;
   return turn;
 }
 
@@ -169,7 +180,8 @@ export async function inspectConversation(transcript: Transcript | undefined, co
       const message = step.entry && publicConversationMessage(step.entry);
       if (message) {
         const clean = redactMessage(message, redact);
-        if (!step.bytes) scannedBytes += Buffer.byteLength(clean.text) + clean.materials.reduce((size, item) => size + Buffer.byteLength(item.name) + Buffer.byteLength(item.text), 0);
+        if (!step.bytes) scannedBytes += Buffer.byteLength(clean.text) + (clean.quote ? encodedBytes(clean.quote) : 0) +
+          clean.materials.reduce((size, item) => size + Buffer.byteLength(item.name) + Buffer.byteLength(item.text), 0);
         const available = remaining - Number(items.length > 0);
         const hit = query === undefined ? undefined : searchMessage(clean, query);
         if (hit && encodedBytes(hit) > available && !items.length) {

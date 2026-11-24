@@ -18,6 +18,7 @@ import {
 } from './protocol.js';
 import { Product, confirmedFileEffect, type ProductRunObservers, type ProductSession } from './product.js';
 import type { ProductProfilePaths } from './product-profile.js';
+import { redactQuote } from './product-inspection.js';
 import { isNagiBotSystemPrompt } from './bot-template.js';
 import { bindingEntryType as BINDING_TYPE, turnEntryType as TURN_TYPE, liveTranscript, matchesTranscriptOwner,
   openDiskTranscript, transcriptEntries, type TranscriptOwner } from './product-transcript.js';
@@ -26,6 +27,7 @@ import { clipUTF8, projectionRedactor, streamingProjectionRedactor } from './pro
 const CONFIGURATION_TYPE = 'nagi-configuration-v1';
 const MCP_TYPE = 'nagi-mcp-v1';
 const PROVIDER = 'nagi';
+const escapeQuoteMarkup = (text: string) => text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');
 type Binding = Pick<OpenParams, 'contextId' | 'botId' | 'purpose' | 'activityId' | 'selectionRevision' | 'cwd'>;
 type Run = {
   id: string; seq: number; cancelled: boolean; sdkStarted: boolean; sdkSettled: boolean; sdkAborted: boolean;
@@ -350,10 +352,13 @@ class Worker {
     let failure: unknown;
     if (!run.product) this.event(context, run, 'run.started', { correlation: run.correlation });
     try {
+      const draft = run.product?.draft;
       context.manager.appendCustomEntry(TURN_TYPE, { runId: run.id, text: params.text, context: params.context ?? [], correlation: run.correlation,
-        ...(run.product ? { materials: run.product.draft.materials } : {}) });
+        ...(draft ? { materials: draft.materials } : {}), ...(draft?.quote ? { quote: draft.quote } : {}) });
       const snapshots = (params.context ?? []).map(item => `\n\n<context name=${JSON.stringify(item.name)}>\n${item.text}\n</context>`).join('');
-      if (!run.cancelled && !this.disconnected) await context.runtime.session.prompt(params.text + snapshots);
+      const quote = draft?.quote && redactQuote(draft.quote, projectionRedactor(this.credentialKeys(this.product?.credentialKeys())));
+      const quotedMessage = quote ? `\n\n<quoted_message sender="${quote.sender}" author="${escapeQuoteMarkup(quote.authorName)}">\n${escapeQuoteMarkup(quote.text)}\n</quoted_message>` : '';
+      if (!run.cancelled && !this.disconnected) await context.runtime.session.prompt(params.text + snapshots + quotedMessage);
       await context.runtime.session.waitForIdle();
     } catch (error) { failure = error; }
     const last = run.final;
