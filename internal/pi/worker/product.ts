@@ -5,15 +5,17 @@ import { stat } from 'node:fs/promises';
 import { isAbsolute, resolve } from 'node:path';
 import type { SessionEntry, ToolDefinition } from '@earendil-works/pi-coding-agent';
 import type { AssistantMessage, ToolCall } from '@earendil-works/pi-ai';
-import { Type } from 'typebox';
+import { Type, type Static, type TSchema } from 'typebox';
 import { Value } from 'typebox/value';
 import {
   MAX_FRAME, RequestError, canonicalJSON, draftSchema, frameBytes, profileSchema,
-  type ActivityState, type BotProfile, type Connection, type Draft, type Execution,
+  type ActivityState, type BotChange, type BotProfile, type Connection, type Draft, type Execution,
   type Material, type OpenParams, type Operation, type ProductCommand,
 } from './protocol.js';
 import { backupProductProfile, readPrivateConnection, saveCredential, type PrivateConnection, type ProductProfilePaths, type StoredConnection } from './product-profile.js';
 import { ProductSQLite } from './product-sqlite.js';
+import { composeBotSystemPrompt, formatTightBotInstructions, readTightBotInstructions,
+  PANDORABOX_BOT_ID, SYSTEM_KIND_BOT_ARCHITECT, type BotSystemKind } from './bot-template.js';
 
 const emptyDraft = (): Draft => ({ revision: 0, text: '', materials: [] });
 const newId = randomUUID;
@@ -80,7 +82,8 @@ type Conversation = {
   conversationId: string; botId: string; revision: number; draft: Draft; binding?: SessionBinding;
   latestExecutionId?: string;
 };
-type Bot = { botId: string; profile: BotProfile; profileRevision: number; archived: boolean; currentConversationId: string; retained?: object };
+type Bot = { botId: string; profile: BotProfile; profileRevision: number; archived: boolean; currentConversationId: string;
+  systemKind?: BotSystemKind; retained?: object };
 type Question = {
   questionId: string; executionId: string; text: string; revision: number;
   state: 'open' | 'answered' | 'superseded';
@@ -170,6 +173,25 @@ type ToolTextResult = { content: { type: 'text'; text: string }[]; details: Reco
 
 function toolText(value: unknown, isError = false): ToolTextResult {
   return { content: [{ type: 'text' as const, text: typeof value === 'string' ? value : JSON.stringify(value) }], details: {}, isError };
+}
+
+const architectProfile: BotProfile = {
+  name: 'PandoraBox', role: 'Bot Architect', purpose: 'Design, create, and refine focused Nagi Bots through conversation.',
+  instructions: '', workspace: '', codingTools: [],
+};
+
+const requiredText = Type.String({ minLength: 1, pattern: '\\S' });
+const architectInspect = Type.Object({}, { additionalProperties: false });
+const architectCreate = Type.Object({ name: requiredText, purpose: requiredText, job: requiredText, voice: requiredText,
+  anti_jobs: Type.Array(requiredText, { minItems: 1 }), workflow: Type.Optional(Type.String()), role: Type.Optional(Type.String()),
+}, { additionalProperties: false });
+const architectUpdate = Type.Object({ bot_id: requiredText, name: Type.Optional(requiredText), purpose: Type.Optional(Type.String()),
+  role: Type.Optional(Type.String()), job: Type.Optional(requiredText), voice: Type.Optional(requiredText),
+  anti_jobs: Type.Optional(Type.Array(requiredText)), workflow: Type.Optional(Type.String()), instructions: Type.Optional(Type.String()),
+}, { additionalProperties: false });
+
+function architectResult(bot: Bot) {
+  return { bot_id: bot.botId, name: bot.profile.name, purpose: bot.profile.purpose, profile_revision: bot.profileRevision };
 }
 
 export class Product {
@@ -354,6 +376,52 @@ export class Product {
     });
   }
 
+  private changeBot<P extends { operationId: string }>(method: string, params: P, mutate: (candidate: ProductProfile) => { bot: Bot; change?: BotChange }): Bot {
+    const prior = this.sameOperation(method, params.operationId, params);
+    if (prior) return prior.reply as Bot;
+    const { bot, change } = this.commit(candidate => {
+      const result = mutate(candidate);
+      const { retained, ...publicBot } = result.bot;
+      this.record(candidate, method, params, { operationId: params.operationId, state: 'accepted', target: { botId: publicBot.botId }, result: publicBot }, publicBot);
+      return { bot: publicBot, change: result.change };
+    });
+    if (change) this.emit('bot.changed', { bot, change });
+    return bot;
+  }
+
+  private insertBot(candidate: ProductProfile, profile: BotProfile, systemKind?: BotSystemKind): Bot {
+    this.validateProfile(profile);
+    const botId = systemKind ? PANDORABOX_BOT_ID : newId();
+    const conversationId = newId();
+    const bot: Bot = { botId, profile, profileRevision: 1, archived: false, currentConversationId: conversationId };
+    if (systemKind) {
+      if (candidate.bots.some(existing => existing.botId === botId)) stateError('operation_conflict', 'A saved Bot already uses the reserved built-in ID');
+      bot.systemKind = systemKind;
+      candidate.bots.unshift(bot);
+    } else {
+      candidate.bots.push(bot);
+    }
+    candidate.conversations.push({ conversationId, botId, revision: 1, draft: emptyDraft() });
+    return bot;
+  }
+
+  private updateBotProfile(candidate: ProductProfile, bot: Bot, profile: BotProfile, startNewConversation = false): void {
+    if (bot.archived) stateError('conversation_read_only', 'Restore this Bot before editing');
+    this.validateProfile(profile, bot.profile.workspace);
+    if (startNewConversation) {
+      const old = this.conversation(candidate, bot.currentConversationId);
+      const execution = this.execution(candidate, old.latestExecutionId);
+      if (live(execution) || unknown(execution)) stateError('busy', 'The current conversation execution is unresolved');
+      const conversationId = newId();
+      candidate.conversations.push({ conversationId, botId: bot.botId, revision: 1, draft: old.draft });
+      old.draft = emptyDraft();
+      old.revision++;
+      bot.currentConversationId = conversationId;
+    }
+    bot.profile = profile;
+    bot.profileRevision++;
+  }
+
   private emit(event: string, data: object): void {
     const stream = this.stream;
     if (!stream) return;
@@ -397,47 +465,30 @@ export class Product {
     switch (method) {
       case 'bot.list':
         return page(this.profile.bots, bot => bot.botId, 'bots', command.params.cursor, command.params.limit);
-      case 'bot.create': {
+      case 'bot.ensureBuiltin': {
         const params = command.params;
-        const prior = this.sameOperation(method, params.operationId, params);
-        if (prior) return prior.reply;
-        this.validateProfile(params.profile);
-        return this.commit(candidate => {
-          const botId = newId();
-          const conversationId = newId();
-          const bot = { botId, profile: params.profile, profileRevision: 1, archived: false, currentConversationId: conversationId };
-          candidate.bots.push(bot);
-          candidate.conversations.push({ conversationId, botId, revision: 1, draft: emptyDraft() });
-          return this.record(candidate, method, params, { operationId: params.operationId, state: 'accepted', target: { botId }, result: bot }, bot);
+        return this.changeBot(method, params, candidate => {
+          const existing = candidate.bots.find(bot => bot.systemKind === params.kind);
+          return existing ? { bot: existing } : { bot: this.insertBot(candidate, architectProfile, params.kind), change: 'created' };
         });
       }
+      case 'bot.create':
+        return this.changeBot(method, command.params, candidate => ({ bot: this.insertBot(candidate, command.params.profile), change: 'created' }));
       case 'bot.update': {
         const params = command.params;
-        return this.change(method, params, { botId: params.botId }, candidate => {
+        return this.changeBot(method, params, candidate => {
           const bot = this.bot(candidate, params.botId);
           requireRevision(bot.profileRevision, params.expectedRevision);
-          if (bot.archived) stateError('conversation_read_only', 'Restore this Bot before editing');
-          this.validateProfile(params.profile, bot.profile.workspace);
-          if (params.startNewConversation) {
-            const old = this.conversation(candidate, bot.currentConversationId);
-            const execution = this.execution(candidate, old.latestExecutionId);
-            if (live(execution) || unknown(execution)) stateError('busy', 'The current conversation execution is unresolved');
-            const conversationId = newId();
-            candidate.conversations.push({ conversationId, botId: bot.botId, revision: 1, draft: old.draft });
-            old.draft = emptyDraft();
-            old.revision++;
-            bot.currentConversationId = conversationId;
-          }
-          bot.profile = params.profile;
-          bot.profileRevision++;
-          return bot;
+          this.updateBotProfile(candidate, bot, params.profile, params.startNewConversation);
+          return { bot, change: 'updated' };
         });
       }
       case 'bot.archive':
       case 'bot.restore': {
         const params = command.params;
-        return this.change(method, params, { botId: params.botId }, candidate => {
+        return this.changeBot(method, params, candidate => {
           const bot = this.bot(candidate, params.botId);
+          if (method === 'bot.archive' && bot.systemKind) stateError('scope_denied', 'Built-in system Bots cannot be archived');
           requireRevision(bot.profileRevision, params.expectedRevision);
           if (method === 'bot.archive') {
             const conversation = this.conversation(candidate, bot.currentConversationId);
@@ -446,7 +497,7 @@ export class Product {
           }
           bot.archived = method === 'bot.archive';
           bot.profileRevision++;
-          return bot;
+          return { bot, change: bot.archived ? 'archived' : 'restored' };
         });
       }
       case 'conversation.list': {
@@ -579,23 +630,6 @@ export class Product {
     if (this.active.size >= configuration.maxActiveTasks) stateError('busy', 'The configured execution capacity is full');
   }
 
-  private composeInitialInstructions(profile: BotProfile, cwd: string): string {
-    const name = profile.name.trim();
-    const purpose = profile.purpose.trim();
-    const sections = [];
-    if (name) sections.push(`You are ${name}.`);
-    if (purpose) sections.push(`Purpose:\n${purpose}`);
-    sections.push([
-      'Speak like a calm, sharp colleague in real-time chat. Keep replies conversational and concise, usually one or two short sentences per bubble, about 20–70 Chinese characters or similarly concise English.',
-      'Avoid Markdown headings (#, ##, ###), horizontal rules (---), Markdown tables, and essay-style summaries unless the user explicitly asks for them.',
-      'Keep large code blocks and long documents out of chat bubbles. When asked to write a file, use the available tools and give a short conversational summary in chat.',
-      'If a reply naturally needs two or three consecutive short bubbles, put <<<NEXT>>> on a line of its own between bubbles. Use at most three bubbles. Omit the marker for a single bubble, and keep it out of code blocks and sentences.',
-    ].join('\n'));
-    sections.push(profile.instructions.trim(),
-      `Default working directory: ${cwd}. Do not modify or write files outside this directory unless the user explicitly asks.`);
-    return sections.filter(Boolean).join('\n\n');
-  }
-
   private async prepareSession(owner: ProductActor, existing: SessionBinding | undefined, bot: Bot) {
     const contextId = existing?.contextId ?? newId();
     const cached = this.sessions.get(contextId);
@@ -608,7 +642,7 @@ export class Product {
     const activityId = 'activityId' in owner ? owner.activityId : undefined;
     const profileRevision = existing?.profileRevision ?? bot.profileRevision;
     const cwd = existing?.cwd ?? (bot.profile.workspace || configuration.workingDirectory);
-    const instructions = existing?.instructions ?? this.composeInitialInstructions(bot.profile, cwd);
+    const instructions = existing?.instructions ?? composeBotSystemPrompt({ profile: bot.profile, cwd, systemKind: bot.systemKind });
     const codingTools = existing ? existing.codingTools : bot.profile.codingTools;
     const session = await this.engine.open({
       contextId, botId: bot.botId, purpose: activityId ? 'activity' : 'conversation', activityId,
@@ -904,7 +938,8 @@ export class Product {
     const change = Type.Object({ issue_id: Type.String({ minLength: 1 }), action: Type.Union([Type.Literal('stop'), Type.Literal('add_supplement'), Type.Literal('resume')]), text: Type.Optional(Type.String()) });
     const botId = () => this.conversation(this.profile, owner.conversationId).botId;
     const authorized = (activityId: string) => this.visibleActivities(botId()).find(activity => activity.activityId === activityId) ?? stateError('scope_denied', 'The activity is outside this conversation scope');
-    return [
+    const architect = this.bot(this.profile, botId()).systemKind === SYSTEM_KIND_BOT_ARCHITECT;
+    const tools: ToolDefinition[] = [
       { name: 'bot_list', label: 'List Bots', description: 'Find the exact ID of an available Bot before an explicit handoff.', parameters: list,
         execute: async () => toolText(this.profile.bots.filter(bot => !bot.archived && bot.botId !== botId()).map(({ botId, profile }) => ({ bot_id: botId, name: profile.name, role: profile.role }))) },
       { name: 'issue_list', label: 'List activities', description: 'Read activity state for this Bot.', parameters: list,
@@ -934,6 +969,57 @@ export class Product {
           return toolText(await this.continueActivity({ operationId, activityId: activity.activityId, expectedRevision: activity.revision,
             text: input.text ?? '', materials: this.execution(this.profile, source.latestExecutionId)?.input.materials ?? [] }));
         } },
+    ];
+    if (architect) tools.push(...this.architectTools(owner.conversationId));
+    return tools.sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  private architectTools(conversationId: string): ToolDefinition[] {
+    const execute = <T extends TSchema>(schema: T, action: (input: Static<T>, executionId: string, callId: string) => unknown): ToolDefinition<T>['execute'] =>
+      async (callId, input, signal) => {
+        if (!Value.Check(schema, input)) return toolText({ code: 'invalid_params', message: 'Invalid Bot Architect tool parameters' }, true);
+        try {
+          const source = this.conversation(this.profile, conversationId);
+          const bot = this.bot(this.profile, source.botId);
+          const executionId = source.latestExecutionId;
+          if (signal?.aborted || bot.systemKind !== SYSTEM_KIND_BOT_ARCHITECT || bot.archived || bot.currentConversationId !== conversationId ||
+              !executionId || !this.active.has(executionId)) stateError('scope_denied', 'The Bot Architect conversation no longer owns this call');
+          return toolText(action(input, executionId, callId));
+        } catch (error) {
+          if (!(error instanceof RequestError)) throw error;
+          return toolText({ code: error.code, message: error.message }, true);
+        }
+      };
+    return [
+      { name: 'bot_inspect_team', label: 'Inspect Bot Team', description: 'Read the saved profiles of the available Bots before auditing or refining them.', parameters: architectInspect,
+        execute: execute(architectInspect, () => this.profile.bots.filter(bot => !bot.archived).map(({ botId, profile, systemKind }) => ({
+          bot_id: botId, name: profile.name, role: profile.role, purpose: profile.purpose, instructions: profile.instructions, system_kind: systemKind ?? null,
+        }))) },
+      { name: 'bot_create', label: 'Create specialist Bot', description: 'Create the focused Bot blueprint after the user confirms it.', parameters: architectCreate,
+        execute: execute(architectCreate, (input, executionId, callId) => {
+          const params = { operationId: `${executionId}:bot_create:${callId}`, input };
+          const profile: BotProfile = { name: input.name.trim(), purpose: input.purpose.trim(), role: input.role?.trim() ?? '', workspace: '', codingTools: null,
+            instructions: formatTightBotInstructions({ job: input.job, voice: input.voice, antiJobs: input.anti_jobs, workflow: input.workflow }) };
+          return architectResult(this.changeBot('bot_create', params, candidate => ({ bot: this.insertBot(candidate, profile), change: 'created' })));
+        }) },
+      { name: 'bot_update', label: 'Update specialist Bot', description: 'Update a saved specialist Bot after inspecting its profile and getting user confirmation.', parameters: architectUpdate,
+        execute: execute(architectUpdate, (input, executionId, callId) => {
+          const params = { operationId: `${executionId}:bot_update:${callId}`, input };
+          return architectResult(this.changeBot('bot_update', params, candidate => {
+            const bot = this.bot(candidate, input.bot_id);
+            if (bot.systemKind || bot.archived) stateError('scope_denied', 'Only active specialist Bots can be updated by the Bot Architect');
+            const { name, purpose, role, job, voice, anti_jobs, workflow } = input;
+            let instructions = input.instructions ?? bot.profile.instructions;
+            if (job !== undefined || voice !== undefined || anti_jobs !== undefined || workflow !== undefined) {
+              const saved = readTightBotInstructions(bot.profile.instructions);
+              instructions = formatTightBotInstructions({ job: job ?? saved.job, voice: voice ?? saved.voice,
+                antiJobs: anti_jobs ?? saved.antiJobs, workflow: workflow ?? saved.workflow });
+            }
+            this.updateBotProfile(candidate, bot, { ...bot.profile, name: name?.trim() ?? bot.profile.name,
+              purpose: purpose?.trim() ?? bot.profile.purpose, role: role?.trim() ?? bot.profile.role, instructions });
+            return { bot, change: 'updated' };
+          }));
+        }) },
     ];
   }
 

@@ -3,8 +3,8 @@ import { closeSync, fstatSync, lstatSync, openSync, readFileSync, renameSync, rm
 import { isAbsolute } from 'node:path';
 import { Type } from 'typebox';
 import { Value } from 'typebox/value';
-import { RequestError, activityStateSchema, connectionSchema, draftSchema, executionSchema, materialSchema, operationSchema, profileSchema,
-  type ActivityState, type Connection, type Draft, type Execution, type Material, type Operation } from './protocol.js';
+import { RequestError, activityStateSchema, botSystemKindSchema, connectionSchema, draftSchema, executionSchema, materialSchema,
+  operationSchema, profileSchema, type ActivityState, type Connection, type Draft, type Execution, type Material, type Operation } from './protocol.js';
 import type { ProductProfile } from './product.js';
 
 export type ProductProfilePaths = {
@@ -87,7 +87,7 @@ const recoveryUISchema = Type.Object({ selected: Type.Optional(recoveryID), layo
     materials: Type.Optional(Type.Array(materialSchema)) }, strict))) }, strict);
 const savedProfileSchema = Type.Object({ version: Type.Literal(1),
   bots: Type.Array(Type.Object({ botId: recoveryID, profile: profileSchema, profileRevision: counter, archived: Type.Boolean(),
-    currentConversationId: recoveryID, retained: Type.Optional(opaque) }, strict)),
+    currentConversationId: recoveryID, systemKind: Type.Optional(botSystemKindSchema), retained: Type.Optional(opaque) }, strict)),
   conversations: Type.Array(Type.Object({ conversationId: recoveryID, botId: recoveryID, revision: counter, draft: draftSchema,
     binding: Type.Optional(bindingSchema), latestExecutionId: Type.Optional(recoveryID) }, strict)),
   activities: Type.Array(activityRecord), executions: Type.Array(executionRecord),

@@ -359,6 +359,7 @@
   "createBotCancel": "Cancel",
   "createBotPurposePlaceholder": "What should this Bot do?",
   "createBotFailed": "Could not create the Bot. Try again.",
+  "createBotWithPandoraBox": "Create with PandoraBox",
   "emptyNoMessages": "No messages yet",
   "emptyConversationStart": "Start a chat with {name}.",
   "@emptyConversationStart": {
@@ -490,6 +491,9 @@
   "appearanceStatusSaveFailed": "Applied but not saved. Retry save to try again.",
   "profileSaveIntro": "Saving updates this Bot's name. Other settings apply when a chat or task work session is first created; existing sessions keep their configuration.",
   "profileArchivedBadge": "Archived",
+  "profileBuiltinBadge": "Built-in",
+  "profileBuiltinArchitectNote": "PandoraBox is the built-in Bot Architect.",
+  "profileChangedElsewhere": "This Bot’s profile changed. Discard your draft to load the saved profile.",
   "fieldName": "Name",
   "fieldNameAccessible": "Bot name",
   "fieldNamePlaceholder": "Name",

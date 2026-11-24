@@ -1,6 +1,7 @@
 import { Type, type Static, type TSchema } from 'typebox';
 import { Value } from 'typebox/value';
 import type { Writable } from 'node:stream';
+import { SYSTEM_KIND_BOT_ARCHITECT } from './bot-template.js';
 
 export const MAX_FRAME = 8 * 1024 * 1024;
 const id = Type.String({ minLength: 1 });
@@ -20,6 +21,11 @@ export const profileSchema = Type.Object({
   name: id, role: Type.String(), purpose: Type.String(), instructions: Type.String(),
   workspace: Type.String(), codingTools: Type.Union([Type.Null(), stringList]),
 });
+export const botSystemKindSchema = Type.Literal(SYSTEM_KIND_BOT_ARCHITECT);
+const botResult = Type.Object({ botId: id, profile: profileSchema, profileRevision: revision, archived: Type.Boolean(),
+  currentConversationId: id, systemKind: Type.Optional(botSystemKindSchema) });
+const botChangeSchema = Type.Union([Type.Literal('created'), Type.Literal('updated'), Type.Literal('archived'), Type.Literal('restored')]);
+export type BotChange = Static<typeof botChangeSchema>;
 export const connectionSchema = Type.Object({
   wireApi: Type.Union([Type.Literal('openai-completions'), Type.Literal('openai-responses')]),
   baseUrl: id, apiKey: Type.String(), model: id, contextTokens: positiveInteger, outputTokens: positiveInteger,
@@ -58,6 +64,7 @@ export const operationSchema = Type.Object({
 export const productCommands = Type.Union([
   Type.Object({ method: Type.Literal('app.open'), params: Type.Object({ supportedVersions: Type.Array(positiveInteger, { minItems: 1 }) }) }),
   Type.Object({ method: Type.Literal('bot.list'), params: Type.Object(page) }),
+  Type.Object({ method: Type.Literal('bot.ensureBuiltin'), params: Type.Object({ kind: botSystemKindSchema, operationId: id }) }),
   Type.Object({ method: Type.Literal('bot.create'), params: Type.Object({ profile: profileSchema, operationId: id }) }),
   Type.Object({ method: Type.Literal('bot.update'), params: Type.Object({
     botId: id, ...operationTarget, profile: profileSchema, startNewConversation: Type.Boolean(),
@@ -95,6 +102,7 @@ const executionOwner = Type.Union([Type.Object({ conversationId: id }), Type.Obj
 const executionIdentity = { executionId: id, operationId: id };
 const executionEvent = (fields: object) => Type.Intersect([executionOwner, Type.Object({ ...executionIdentity, ...fields })]);
 export const productEvents = Type.Union([
+  Type.Object({ event: Type.Literal('bot.changed'), data: Type.Object({ bot: botResult, change: botChangeSchema }) }),
   Type.Object({ event: Type.Literal('execution.started'), data: executionEvent({ revision }) }),
   Type.Object({ event: Type.Literal('execution.textDelta'), data: executionEvent({ offset: revision, text: Type.String() }) }),
   Type.Object({ event: Type.Literal('execution.settled'), data: executionEvent({
@@ -115,7 +123,6 @@ export const productEventSchema = Type.Intersect([
 ]);
 const nullable = <T extends TSchema>(schema: T) => Type.Union([schema, Type.Null()]);
 const productPage = <T extends TSchema>(item: T) => Type.Object({ items: Type.Array(item), nextCursor: nullable(id) });
-const botResult = Type.Object({ botId: id, profile: profileSchema, profileRevision: revision, archived: Type.Boolean(), currentConversationId: id });
 const conversationFields = { conversationId: id, botId: id, revision, mode: Type.Union([Type.Literal('current'), Type.Literal('readOnly')]) };
 const activeExecution = Type.Object({ ...executionSchema.properties, operationId: id, partial: Type.Optional(nullable(Type.String())),
   textOffset: Type.Optional(revision), error: Type.Optional(Type.String()) });
@@ -137,6 +144,7 @@ export const productResults = {
       appearance: Type.Optional(Type.String()) })),
     recovery: Type.Optional(Type.Object({ id, ui: Type.Optional(Type.Record(Type.String(), Type.Unknown())) })) }) }),
   'bot.list': productPage(botResult),
+  'bot.ensureBuiltin': botResult,
   'bot.create': botResult,
   'bot.update': botResult,
   'bot.archive': botResult,

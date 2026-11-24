@@ -104,6 +104,7 @@
   "createBotCancel": "取消",
   "createBotPurposePlaceholder": "这个 Bot 要做什么？",
   "createBotFailed": "无法创建 Bot，请重试。",
+  "createBotWithPandoraBox": "用 PandoraBox 对话创建",
   "emptyNoMessages": "还没有消息",
   "emptyConversationStart": "与 {name} 开始对话。",
   "@emptyConversationStart": {
@@ -235,6 +236,9 @@
   "appearanceStatusSaveFailed": "已应用但未保存。重试保存可再次尝试。",
   "profileSaveIntro": "保存会更新此 Bot 的名称。其他设置在新对话或事项工作会话首次创建时应用；现有会话保持其配置。",
   "profileArchivedBadge": "已归档",
+  "profileBuiltinBadge": "内置",
+  "profileBuiltinArchitectNote": "PandoraBox 是内置 Bot 架构师。",
+  "profileChangedElsewhere": "此 Bot 的资料已更新。放弃草稿即可加载已保存的资料。",
   "fieldName": "名称",
   "fieldNameAccessible": "Bot 名称",
   "fieldNamePlaceholder": "姓名",

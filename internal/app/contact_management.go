@@ -37,6 +37,7 @@ func (a *appModel) openContactProfile(contactID string) {
 	}
 	if a.profileEditors[contactID] == nil {
 		a.profileEditors[contactID] = newContactProfileEditor(contactProfileDraft(ct))
+		a.profileEditors[contactID].profileRevision = ct.ProfileRevision
 	}
 	a.profileEditors[contactID].focusField = ""
 	a.contactProfileID = contactID
@@ -111,8 +112,12 @@ func (a *appModel) updateProductBot(host *piAppHost, ct *contact, editor *contac
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+	if editor != nil && editor.profileRevision != 0 && editor.profileRevision != ct.ProfileRevision {
+		editor.SetError(profileNoticeChangedElsewhere)
+		return false
+	}
 	bot, err := host.product.UpdateBot(ctx, pi.ProductBotUpdateParams{
-		ProductBotRevisionParams: pi.ProductBotRevisionParams{BotID: ct.ID, ExpectedRevision: host.productBots[ct.ID].ProfileRevision, OperationID: newContactID()},
+		ProductBotRevisionParams: pi.ProductBotRevisionParams{BotID: ct.ID, ExpectedRevision: ct.ProfileRevision, OperationID: newContactID()},
 		Profile: pi.ProductBotProfile{Name: draft.Name, Role: ct.Role, Purpose: draft.Purpose, Instructions: draft.Instructions,
 			Workspace: draft.Workspace, CodingTools: codingTools}, StartNewConversation: startNew,
 	})
@@ -122,19 +127,10 @@ func (a *appModel) updateProductBot(host *piAppHost, ct *contact, editor *contac
 		}
 		return false
 	}
-	projected := productContact(bot)
-	ct.Name, ct.Purpose, ct.Instructions, ct.Workspace, ct.BuiltinTools = projected.Name, projected.Purpose, projected.Instructions, projected.Workspace, projected.BuiltinTools
-	host.productBots[ct.ID] = bot
-	if ct.SessionID != bot.CurrentConversationID {
-		ct.SessionID = bot.CurrentConversationID
-		ct.Messages, ct.History, ct.Loaded = nil, nil, false
-		ct.LoadErr, ct.Unavailable = "", ""
-		applyProductExecution(ct, nil)
-		a.refreshProductConversation(host, ct, ct.draftRev)
-		a.reloadProductConversation(host, ct)
-	}
+	a.applyProductBot(host, bot, false)
 	if editor != nil {
-		editor.SetProfile(draft)
+		editor.SetProfile(contactProfileDraft(ct))
+		editor.profileRevision = ct.ProfileRevision
 		editor.Status = profileNoticeSavedDefaults
 	}
 	return true
@@ -143,7 +139,7 @@ func (a *appModel) updateProductBot(host *piAppHost, ct *contact, editor *contac
 func (a *appModel) setProductBotArchived(host *piAppHost, ct *contact, archived bool) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	params := pi.ProductBotRevisionParams{BotID: ct.ID, ExpectedRevision: host.productBots[ct.ID].ProfileRevision, OperationID: newContactID()}
+	params := pi.ProductBotRevisionParams{BotID: ct.ID, ExpectedRevision: ct.ProfileRevision, OperationID: newContactID()}
 	change, failure, success := host.product.RestoreBot, restoreNoticeSave, restoreNoticeSaved
 	if archived {
 		change, failure, success = host.product.ArchiveBot, archiveNoticeSave, archiveNoticeSaved
@@ -156,7 +152,7 @@ func (a *appModel) setProductBotArchived(host *piAppHost, ct *contact, archived 
 		}
 		return false
 	}
-	host.productBots[ct.ID], ct.Archived = bot, bot.Archived
+	a.applyProductBot(host, bot, false)
 	if editor != nil {
 		editor.Archived, editor.Status = bot.Archived, success
 	}
@@ -283,7 +279,7 @@ func (a *appModel) saveContactProfile(ct *contact, editor *contactProfileEditor,
 
 func (a *appModel) archiveContact(contactID string) bool {
 	ct := a.contactByID(contactID)
-	if ct == nil || ct.Archived {
+	if ct == nil || ct.isBuiltin() || ct.Archived {
 		return false
 	}
 	if host := a.productHost(); host != nil {

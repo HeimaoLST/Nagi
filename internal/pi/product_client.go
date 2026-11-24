@@ -8,6 +8,8 @@ import (
 
 const ProductVersion = 1
 
+const SystemKindBotArchitect = "bot_architect"
+
 var ErrProductStreamGap = errors.New("product event stream has a sequence gap")
 
 type ProductOptions struct {
@@ -88,6 +90,12 @@ type ProductBot struct {
 	ProfileRevision       uint64            `json:"profileRevision"`
 	Archived              bool              `json:"archived"`
 	CurrentConversationID string            `json:"currentConversationId"`
+	SystemKind            string            `json:"systemKind,omitempty"`
+}
+
+type ProductBotChangedEvent struct {
+	Bot    ProductBot `json:"bot"`
+	Change string     `json:"change"`
 }
 
 type ProductOpenResult struct {
@@ -257,6 +265,11 @@ type ProductConnectionStatus struct {
 	Effective *ProductConnectionView `json:"effective"`
 }
 
+type ProductBotEnsureBuiltinParams struct {
+	Kind        string `json:"kind"`
+	OperationID string `json:"operationId"`
+}
+
 type ProductBotCreateParams struct {
 	OperationID string            `json:"operationId"`
 	Profile     ProductBotProfile `json:"profile"`
@@ -399,6 +412,10 @@ func (p *ProductClient) Open(ctx context.Context, versions []int) (ProductOpenRe
 
 func (p *ProductClient) ListBots(ctx context.Context, params ProductPageParams) (ProductPage[ProductBot], error) {
 	return productCall[ProductPage[ProductBot]](ctx, p, "bot.list", params)
+}
+
+func (p *ProductClient) EnsureBuiltinBot(ctx context.Context, params ProductBotEnsureBuiltinParams) (ProductBot, error) {
+	return productCall[ProductBot](ctx, p, "bot.ensureBuiltin", params)
 }
 
 func (p *ProductClient) CreateBot(ctx context.Context, params ProductBotCreateParams) (ProductBot, error) {

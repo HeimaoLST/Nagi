@@ -127,7 +127,6 @@ func (a *appModel) openProductProfile(ctx context.Context, fresh bool, generatio
 	if err != nil {
 		return err
 	}
-	bots := opened.Snapshot.Bots
 	if recovery := opened.Snapshot.Recovery; recovery != nil {
 		host.recoveryID = recovery.ID
 		if local == nil || local.RecoveryID != recovery.ID {
@@ -144,23 +143,21 @@ func (a *appModel) openProductProfile(ctx context.Context, fresh bool, generatio
 	if local != nil && local.Pending != nil {
 		host.productPending = local.Pending
 	}
-	for cursor := opened.Snapshot.NextBotCursor; cursor != nil; {
-		page, err := host.product.ListBots(ctx, pi.ProductPageParams{Cursor: *cursor})
-		if err != nil {
-			return err
-		}
-		bots = append(bots, page.Items...)
-		cursor = page.NextCursor
+	bots, err := listProductBots(ctx, host.product, opened.Snapshot)
+	if err != nil {
+		return err
 	}
-	if len(bots) == 0 {
-		bot, err := host.product.CreateBot(ctx, pi.ProductBotCreateParams{
-			OperationID: "initial-bot", Profile: pi.ProductBotProfile{Name: "Nagi", Role: "Assistant"},
-		})
-		if err != nil {
-			return err
-		}
-		bots = append(bots, bot)
+	architect, err := host.product.EnsureBuiltinBot(ctx, pi.ProductBotEnsureBuiltinParams{
+		Kind: pi.SystemKindBotArchitect, OperationID: "builtin-pandorabox",
+	})
+	if err != nil {
+		return err
 	}
+	if i := slices.IndexFunc(bots, func(bot pi.ProductBot) bool { return bot.BotID == architect.BotID }); i >= 0 {
+		architect = bots[i]
+		bots = slices.Delete(bots, i, i+1)
+	}
+	bots = slices.Insert(bots, 0, architect)
 	contacts := make([]*contact, 0, len(bots))
 	for _, bot := range bots {
 		conversation, err := host.product.GetConversation(ctx, bot.CurrentConversationID)
@@ -233,6 +230,19 @@ func (a *appModel) openProductProfile(ctx context.Context, fresh bool, generatio
 		close(host.productEvents)
 	})
 	return nil
+}
+
+func listProductBots(ctx context.Context, product *pi.ProductClient, snapshot pi.ProductSnapshot) ([]pi.ProductBot, error) {
+	bots := snapshot.Bots
+	for cursor := snapshot.NextBotCursor; cursor != nil; {
+		page, err := product.ListBots(ctx, pi.ProductPageParams{Cursor: *cursor})
+		if err != nil {
+			return nil, err
+		}
+		bots = append(bots, page.Items...)
+		cursor = page.NextCursor
+	}
+	return bots, nil
 }
 
 func (a *appModel) persistProductUI(host *piAppHost) error {
@@ -405,6 +415,22 @@ func (a *appModel) applyProductEvent(host *piAppHost, event pi.ProductEvent) {
 	if a.pi != host {
 		return
 	}
+	if event.Name == "bot.changed" {
+		var data pi.ProductBotChangedEvent
+		if json.Unmarshal(event.Data, &data) != nil || data.Bot.BotID == "" {
+			return
+		}
+		switch data.Change {
+		case "created", "updated", "archived", "restored":
+			known := a.contactByID(data.Bot.BotID) != nil
+			ct := a.applyProductBot(host, data.Bot, data.Change == "created")
+			if !known && data.Change != "created" {
+				a.refreshProductConversation(host, ct, ct.draftRev)
+				a.reloadProductConversation(host, ct)
+			}
+		}
+		return
+	}
 	var data pi.ProductExecutionEvent
 	if json.Unmarshal(event.Data, &data) != nil {
 		return
@@ -448,6 +474,53 @@ func (a *appModel) applyProductEvent(host *piAppHost, event pi.ProductEvent) {
 	}
 }
 
+func (a *appModel) applyProductBot(host *piAppHost, bot pi.ProductBot, created bool) *contact {
+	ct := a.contactByID(bot.BotID)
+	if ct == nil {
+		ct = productContact(bot)
+		ct.Loaded = created
+		ct.Context.OnChange = func() error { return a.saveProductDraft(ct) }
+		host.productBots[ct.ID] = bot
+		host.productDrafts[ct.ID] = pi.ProductDraft{}
+		if ct.isBuiltin() {
+			selected := a.selectedID()
+			a.contacts = slices.Insert(a.contacts, 0, ct)
+			if selected != "" {
+				a.selected++
+			}
+		} else {
+			a.contacts = append(a.contacts, ct)
+		}
+		return ct
+	}
+	if bot.ProfileRevision <= ct.ProfileRevision {
+		return ct
+	}
+	ct.applyProductBotProfile(bot)
+	host.productBots[ct.ID] = bot
+	if editor := a.profileEditorFor(ct.ID); editor != nil {
+		editor.Archived = ct.Archived
+		current := contactProfileDraft(ct)
+		if profileDraftEqual(editor.Draft, editor.initial) {
+			if !profileDraftEqual(editor.initial, current) {
+				editor.SetProfile(current)
+			}
+			editor.profileRevision = ct.ProfileRevision
+		} else if profileDraftEqual(editor.initial, current) {
+			editor.profileRevision = ct.ProfileRevision
+		}
+	}
+	if ct.SessionID != bot.CurrentConversationID {
+		ct.SessionID = bot.CurrentConversationID
+		ct.Messages, ct.History, ct.Loaded = nil, nil, false
+		ct.LoadErr, ct.Unavailable = "", ""
+		applyProductExecution(ct, nil)
+		a.refreshProductConversation(host, ct, ct.draftRev)
+		a.reloadProductConversation(host, ct)
+	}
+	return ct
+}
+
 func (a *appModel) refreshProductConversation(host *piAppHost, ct *contact, edit int) {
 	id := ct.SessionID
 	go func() {
@@ -477,12 +550,20 @@ func (a *appModel) reconcileProductStream(host *piAppHost) {
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		if _, err := host.product.Open(ctx, []int{pi.ProductVersion}); err != nil {
+		opened, err := host.product.Open(ctx, []int{pi.ProductVersion})
+		if err != nil {
+			return
+		}
+		bots, err := listProductBots(ctx, host.product, opened.Snapshot)
+		if err != nil {
 			return
 		}
 		a.updateUI(func() {
 			if a.pi == host {
 				host.activityRevision++
+				for _, bot := range bots {
+					a.applyProductBot(host, bot, false)
+				}
 				for _, ct := range a.contacts {
 					a.refreshProductConversation(host, ct, ct.draftRev)
 					a.reloadProductConversation(host, ct)
@@ -593,16 +674,20 @@ func (a *appModel) reopenProductConnection(host *piAppHost, config *connectionCo
 }
 
 func productContact(bot pi.ProductBot) *contact {
+	ct := &contact{ID: bot.BotID, SessionID: bot.CurrentConversationID, Status: statusReady}
+	ct.applyProductBotProfile(bot)
+	return ct
+}
+
+func (ct *contact) applyProductBotProfile(bot pi.ProductBot) {
 	profile := bot.Profile
-	var tools *[]string
+	ct.Name, ct.Role, ct.Purpose = profile.Name, profile.Role, profile.Purpose
+	ct.Instructions, ct.Workspace = profile.Instructions, profile.Workspace
+	ct.BuiltinTools = nil
 	if profile.CodingTools != nil {
-		tools = &profile.CodingTools
+		ct.BuiltinTools = &profile.CodingTools
 	}
-	return &contact{
-		ID: bot.BotID, Name: profile.Name, Role: profile.Role, Purpose: profile.Purpose,
-		Instructions: profile.Instructions, Workspace: profile.Workspace, BuiltinTools: tools,
-		Archived: bot.Archived, SessionID: bot.CurrentConversationID, Status: statusReady,
-	}
+	ct.Archived, ct.SystemKind, ct.ProfileRevision = bot.Archived, bot.SystemKind, bot.ProfileRevision
 }
 
 func productTaskContext(materials []pi.ProductMaterial) []taskContextItem {

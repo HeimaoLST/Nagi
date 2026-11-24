@@ -1402,6 +1402,16 @@ func (msgs Messages) CreateBotFailed() string {
 	return Catalog.Format(msgs.locale, "createBotFailed", nil)
 }
 
+// CreateBotWithPandoraBox says "Create with PandoraBox"
+// in the language the app shows.
+func CreateBotWithPandoraBox() string { return In(i18n.Locale()).CreateBotWithPandoraBox() }
+
+// CreateBotWithPandoraBox says "Create with PandoraBox"
+// in the language of msgs.
+func (msgs Messages) CreateBotWithPandoraBox() string {
+	return Catalog.Format(msgs.locale, "createBotWithPandoraBox", nil)
+}
+
 // EmptyNoMessages says "No messages yet"
 // in the language the app shows.
 func EmptyNoMessages() string { return In(i18n.Locale()).EmptyNoMessages() }
@@ -2506,6 +2516,36 @@ func ProfileArchivedBadge() string { return In(i18n.Locale()).ProfileArchivedBad
 // in the language of msgs.
 func (msgs Messages) ProfileArchivedBadge() string {
 	return Catalog.Format(msgs.locale, "profileArchivedBadge", nil)
+}
+
+// ProfileBuiltinBadge says "Built-in"
+// in the language the app shows.
+func ProfileBuiltinBadge() string { return In(i18n.Locale()).ProfileBuiltinBadge() }
+
+// ProfileBuiltinBadge says "Built-in"
+// in the language of msgs.
+func (msgs Messages) ProfileBuiltinBadge() string {
+	return Catalog.Format(msgs.locale, "profileBuiltinBadge", nil)
+}
+
+// ProfileBuiltinArchitectNote says "PandoraBox is the built-in Bot Architect."
+// in the language the app shows.
+func ProfileBuiltinArchitectNote() string { return In(i18n.Locale()).ProfileBuiltinArchitectNote() }
+
+// ProfileBuiltinArchitectNote says "PandoraBox is the built-in Bot Architect."
+// in the language of msgs.
+func (msgs Messages) ProfileBuiltinArchitectNote() string {
+	return Catalog.Format(msgs.locale, "profileBuiltinArchitectNote", nil)
+}
+
+// ProfileChangedElsewhere says "This Bot’s profile changed. Discard your draft to load the saved profile."
+// in the language the app shows.
+func ProfileChangedElsewhere() string { return In(i18n.Locale()).ProfileChangedElsewhere() }
+
+// ProfileChangedElsewhere says "This Bot’s profile changed. Discard your draft to load the saved profile."
+// in the language of msgs.
+func (msgs Messages) ProfileChangedElsewhere() string {
+	return Catalog.Format(msgs.locale, "profileChangedElsewhere", nil)
 }
 
 // FieldName says "Name"

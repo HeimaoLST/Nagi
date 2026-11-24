@@ -303,6 +303,10 @@ func (a *appModel) avatarRailRow(c *ui.Context, t *ui.Theme, i int) {
 	if ct.Archived {
 		status = msgs.ProfileArchivedBadge()
 	}
+	if ct.isBuiltin() {
+		status = msgs.ProfileBuiltinBadge() + "\n" + status
+		status = strings.TrimSpace(status)
+	}
 	label := msgs.AvatarContactLabel(ct.Name)
 	tip := label
 	if status != "" {
@@ -368,6 +372,9 @@ func (a *appModel) bindBotRowMenu(row ui.Element, contactID string, msgs locales
 				a.cancelRuntimeTask(ct, ct.ActiveTaskID)
 			}
 		}
+		if ct.isBuiltin() {
+			return
+		}
 		if ct.Archived {
 			if menu.Item(msgs.RestoreContactAction()).Disabled(!mutable).Chosen() {
 				a.restoreContact(contactID)
@@ -396,6 +403,10 @@ func (a *appModel) railRow(c *ui.Context, t *ui.Theme, i int) {
 	row.OnClick(func() { a.selectContact(i) })
 	if ct.Archived {
 		row.Description(currentMsgs.ProfileArchivedBadge())
+	} else if ct.isBuiltin() {
+		badge := currentMsgs.ProfileBuiltinBadge()
+		row.Description(badge)
+		row = appTooltip(c, row, ct.Name+"\n"+badge)
 	}
 	a.bindBotRowMenu(row, ct.ID, currentMsgs)
 	row.Children(func() {
@@ -406,8 +417,17 @@ func (a *appModel) railRow(c *ui.Context, t *ui.Theme, i int) {
 				if selected {
 					nameWeight = 500
 				}
-				ui.Text(c, ct.Name).FontSize(typeRailName).FontWeight(nameWeight).FixedLineHeight(lineNavigation).
-					MaxLines(1).Grow(1).MinWidth(0).TextColor(t.Text)
+				name := ui.Text(c, ct.Name).FontSize(typeRailName).FontWeight(nameWeight).FixedLineHeight(lineNavigation).
+					MaxLines(1).MinWidth(0).TextColor(t.Text)
+				if ct.isBuiltin() {
+					ui.Text(c, currentMsgs.ProfileBuiltinBadge()).FontSize(typeMeta).FixedLineHeight(lineMeta).
+						SingleLine().Shrink(0).TextColor(t.TextMuted).Background(t.Surface).Padding(0, 4).Radius(4)
+					if ct.Unread > 0 {
+						ui.Box(c).Grow(1)
+					}
+				} else {
+					name.Grow(1)
+				}
 				if ct.Unread > 0 {
 					ui.Text(c, fmt.Sprintf("%d", ct.Unread)).FontSize(typeMeta).FixedLineHeight(lineMeta).Shrink(0).TextColor(t.Warning)
 				}

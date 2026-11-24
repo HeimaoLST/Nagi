@@ -42,7 +42,7 @@ const MIGRATIONS = [`
     revision INTEGER PRIMARY KEY, sort_order INTEGER NOT NULL UNIQUE, source_id TEXT NOT NULL,
     configuration_json TEXT NOT NULL
   ) STRICT;
-`];
+`, 'ALTER TABLE bots ADD COLUMN system_kind TEXT;'];
 const LATEST_SCHEMA_VERSION = MIGRATIONS.length;
 
 type Snapshot = { data: Buffer; digest: string };
@@ -209,6 +209,7 @@ export class ProductSQLite {
     const bots = this.db.prepare('SELECT * FROM bots ORDER BY sort_order').all().map(row => ({
       botId: decode(row.bot_id), profile: decode(row.profile_json), profileRevision: row.profile_revision,
       archived: row.archived === 1, currentConversationId: decode(row.current_conversation_id), retained: decode(row.retained_json),
+      systemKind: row.system_kind ?? undefined,
     }));
     const conversations = this.db.prepare('SELECT * FROM conversations ORDER BY sort_order').all().map(row => ({
       conversationId: decode(row.conversation_id), botId: decode(row.bot_id), revision: row.revision, draft: decode(row.draft_json),
@@ -242,9 +243,9 @@ export class ProductSQLite {
   private replaceProfile(profile: ProductProfile, mirror: Mirror): void {
     this.db.exec(`DELETE FROM operations; DELETE FROM activities; DELETE FROM conversations;
       DELETE FROM executions; DELETE FROM bots; DELETE FROM connections;`);
-    const bots = this.db.prepare('INSERT INTO bots VALUES (?, ?, ?, ?, ?, ?, ?)');
+    const bots = this.db.prepare('INSERT INTO bots VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
     profile.bots.forEach((row, order) => bots.run(encode(row.botId), order, encode(row.profile), row.profileRevision,
-      Number(row.archived), encode(row.currentConversationId), encode(row.retained)));
+      Number(row.archived), encode(row.currentConversationId), encode(row.retained), row.systemKind ?? null));
     const conversations = this.db.prepare('INSERT INTO conversations VALUES (?, ?, ?, ?, ?, ?, ?)');
     profile.conversations.forEach((row, order) => conversations.run(encode(row.conversationId), order, encode(row.botId), row.revision,
       encode(row.draft), encode(row.binding), encode(row.latestExecutionId)));
