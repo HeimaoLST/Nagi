@@ -415,6 +415,18 @@ func (a *appModel) applyProductEvent(host *piAppHost, event pi.ProductEvent) {
 	if a.pi != host {
 		return
 	}
+	if event.Name == "memory.changed" {
+		var changed pi.ProductMemoryChangedEvent
+		if json.Unmarshal(event.Data, &changed) == nil {
+			if ct := a.contactByID(changed.BotID); ct != nil {
+				ct.PendingLearnings = changed.PendingCount
+				if a.contactProfileID == ct.ID {
+					a.loadBotMemory(ct)
+				}
+			}
+		}
+		return
+	}
 	if event.Name == "bot.changed" {
 		var data pi.ProductBotChangedEvent
 		if json.Unmarshal(event.Data, &data) != nil || data.Bot.BotID == "" {
@@ -562,7 +574,11 @@ func (a *appModel) reconcileProductStream(host *piAppHost) {
 			if a.pi == host {
 				host.activityRevision++
 				for _, bot := range bots {
-					a.applyProductBot(host, bot, false)
+					ct := a.applyProductBot(host, bot, false)
+					ct.PendingLearnings = bot.PendingLearnings
+					if a.contactProfileID == ct.ID {
+						a.loadBotMemory(ct)
+					}
 				}
 				for _, ct := range a.contacts {
 					a.refreshProductConversation(host, ct, ct.draftRev)
@@ -676,6 +692,7 @@ func (a *appModel) reopenProductConnection(host *piAppHost, config *connectionCo
 func productContact(bot pi.ProductBot) *contact {
 	ct := &contact{ID: bot.BotID, SessionID: bot.CurrentConversationID, Status: statusReady}
 	ct.applyProductBotProfile(bot)
+	ct.PendingLearnings = bot.PendingLearnings
 	return ct
 }
 

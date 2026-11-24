@@ -1,3 +1,5 @@
+/// <reference lib="es2024.collection" />
+
 import { randomUUID } from 'node:crypto';
 import { closeSync, fstatSync, lstatSync, openSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { isAbsolute } from 'node:path';
@@ -6,6 +8,8 @@ import { Value } from 'typebox/value';
 import { RequestError, activityStateSchema, botSystemKindSchema, connectionSchema, draftSchema, executionSchema, materialSchema,
   operationSchema, profileSchema, type ActivityState, type Connection, type Draft, type Execution, type Material, type Operation } from './protocol.js';
 import type { ProductProfile } from './product.js';
+import { lastingRulesFit, MAX_LOG_BYTES, MAX_PENDING_LEARNINGS, MAX_RULE_BYTES, MAX_WORK_LOGS,
+  memorySnapshotSchema, validMemoryDate } from './bot-memory.js';
 
 export type ProductProfilePaths = {
   profilePath: string;
@@ -63,7 +67,8 @@ const revisionRef = Type.Union([counter, Type.Null()]);
 const opaque = Type.Record(Type.String(), Type.Unknown());
 const strict = { additionalProperties: false };
 const bindingSchema = Type.Object({ contextId: recoveryID, sessionRef: recoveryID, connectionRevision: counter,
-  profileRevision: counter, cwd: recoveryID, instructions: Type.String(), codingTools: profileSchema.properties.codingTools, used: Type.Boolean() }, strict);
+  profileRevision: counter, cwd: recoveryID, instructions: Type.String(), codingTools: profileSchema.properties.codingTools,
+  used: Type.Boolean(), memoryRulesRevision: Type.Optional(counter) }, strict);
 const executionRecord = Type.Object({ ...executionSchema.properties, operationId: recoveryID,
   input: draftSchema, error: Type.Optional(Type.String()), engineRunId: Type.Optional(recoveryID),
   importedActivityId: Type.Optional(recoveryID), retained: Type.Optional(opaque) }, strict);
@@ -100,6 +105,7 @@ const savedProfileSchema = Type.Object({ version: Type.Literal(1),
     themeIds: Type.Optional(opaque), appearance: Type.Optional(Type.String()) }, strict)),
   issueToolScopes: Type.Optional(Type.Array(opaque)), untargetedReceipts: Type.Optional(Type.Array(opaque)),
   recovery: Type.Optional(Type.Object({ id: recoveryID, ui: Type.Optional(recoveryUISchema) }, strict)),
+  memory: Type.Optional(memorySnapshotSchema),
 }, strict);
 
 export function decodeProductProfile(data: unknown): ProductProfile {
@@ -175,6 +181,32 @@ export function decodeProductProfile(data: unknown): ProductProfile {
     const owner = owners.get(id);
     if (!owner || ('activityId' in owner && !linkedExecutions.has(id))) invalid();
   }
+  if (data.memory) {
+    const { rules, workLogs, pendingLearnings, meta } = data.memory;
+    const knownMeta = new Map(meta.map(row => [row.botId, row]));
+    const foreign = (row: { botId: string; executionId?: string }) => {
+      if (!bots.has(row.botId)) return true;
+      if (row.executionId === undefined) return false;
+      const owner = owners.get(row.executionId);
+      return !owner || ('conversationId' in owner ? owner.botId : owner.ownerBotId) !== row.botId;
+    };
+    if (knownMeta.size !== meta.length || meta.some(foreign) ||
+        new Set(rules.map(row => row.ruleId)).size !== rules.length || rules.some(row => foreign(row) || Buffer.byteLength(row.text) > MAX_RULE_BYTES) ||
+        new Set(workLogs.map(row => row.logId)).size !== workLogs.length || workLogs.some(row => foreign(row) || !validMemoryDate(row.date) || Buffer.byteLength(row.summary) > MAX_LOG_BYTES) ||
+        new Set(pendingLearnings.map(row => row.learningId)).size !== pendingLearnings.length ||
+        pendingLearnings.some(row => foreign(row) || (row.state === 'pending') !== (row.reviewedAt === undefined))) invalid();
+    const rulesByBot = Map.groupBy(rules, row => row.botId);
+    const logsByBot = Map.groupBy(workLogs, row => row.botId);
+    const pendingByBot = Map.groupBy(pendingLearnings.filter(row => row.state === 'pending'), row => row.botId);
+    for (const [botId, owned] of rulesByBot) {
+      if (!knownMeta.get(botId)?.rulesRevision || !lastingRulesFit(owned)) invalid();
+    }
+    if ([...logsByBot.values()].some(items => items.length > MAX_WORK_LOGS) ||
+        [...pendingByBot.values()].some(items => items.length > MAX_PENDING_LEARNINGS)) invalid();
+    for (const conversation of data.conversations) {
+      if ((conversation.binding?.memoryRulesRevision ?? 0) > (knownMeta.get(conversation.botId)?.rulesRevision ?? 0)) invalid();
+    }
+  } else if (data.conversations.some(row => (row.binding?.memoryRulesRevision ?? 0) > 0)) invalid();
   for (const [botId, pending] of Object.entries(data.recovery?.ui?.pending ?? {})) {
     if (conversations.get(pending.conversationId)?.botId !== botId) invalid();
   }

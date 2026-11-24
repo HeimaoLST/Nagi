@@ -86,6 +86,7 @@ type contact struct {
 	BuiltinTools       *[]string
 	SystemKind         string
 	ProfileRevision    uint64
+	PendingLearnings   int
 	Status             contactStatus
 	Unread             int
 	Work               string
@@ -100,6 +101,7 @@ type contact struct {
 	PreviousPiBindings []piConversationBinding
 	Context            taskContext
 	activity           productActivityPanel
+	memory             botMemoryViewState
 	replyIndex         int
 	list               ui.ListState
 	Works              []*workItem

@@ -91,11 +91,57 @@ type ProductBot struct {
 	Archived              bool              `json:"archived"`
 	CurrentConversationID string            `json:"currentConversationId"`
 	SystemKind            string            `json:"systemKind,omitempty"`
+	PendingLearnings      int               `json:"pendingLearnings,omitempty"`
 }
 
 type ProductBotChangedEvent struct {
 	Bot    ProductBot `json:"bot"`
 	Change string     `json:"change"`
+}
+
+type ProductMemoryRule struct {
+	RuleID    string `json:"ruleId"`
+	BotID     string `json:"botId"`
+	Text      string `json:"text"`
+	Source    string `json:"source"`
+	CreatedAt string `json:"createdAt"`
+	UpdatedAt string `json:"updatedAt"`
+}
+
+type ProductWorkLog struct {
+	LogID       string   `json:"logId"`
+	BotID       string   `json:"botId"`
+	Date        string   `json:"date"`
+	Summary     string   `json:"summary"`
+	Tags        []string `json:"tags"`
+	ExecutionID string   `json:"executionId,omitempty"`
+	CreatedAt   string   `json:"createdAt"`
+}
+
+type ProductPendingLearning struct {
+	LearningID  string `json:"learningId"`
+	BotID       string `json:"botId"`
+	Kind        string `json:"kind"`
+	Text        string `json:"text"`
+	Reason      string `json:"reason"`
+	ExecutionID string `json:"executionId,omitempty"`
+	State       string `json:"state"`
+	CreatedAt   string `json:"createdAt"`
+	ReviewedAt  string `json:"reviewedAt,omitempty"`
+}
+
+type ProductBotMemory struct {
+	BotID            string                   `json:"botId"`
+	RulesRevision    uint64                   `json:"rulesRevision"`
+	Rules            []ProductMemoryRule      `json:"rules"`
+	PendingLearnings []ProductPendingLearning `json:"pendingLearnings"`
+	WorkLogs         []ProductWorkLog         `json:"workLogs"`
+}
+
+type ProductMemoryChangedEvent struct {
+	BotID         string `json:"botId"`
+	RulesRevision uint64 `json:"rulesRevision"`
+	PendingCount  int    `json:"pendingCount"`
 }
 
 type ProductOpenResult struct {
@@ -287,6 +333,46 @@ type ProductBotUpdateParams struct {
 	StartNewConversation bool              `json:"startNewConversation"`
 }
 
+type ProductMemoryOperation struct {
+	BotID       string `json:"botId"`
+	OperationID string `json:"operationId"`
+}
+
+type ProductMemoryAddRuleParams struct {
+	ProductMemoryOperation
+	Text string `json:"text"`
+}
+
+type ProductMemoryUpdateRuleParams struct {
+	ProductMemoryAddRuleParams
+	RuleID string `json:"ruleId"`
+}
+
+type ProductMemoryDeleteRuleParams struct {
+	ProductMemoryOperation
+	RuleID string `json:"ruleId"`
+}
+
+type ProductMemoryReviewLearningParams struct {
+	ProductMemoryOperation
+	LearningID string  `json:"learningId"`
+	Decision   string  `json:"decision"`
+	Text       *string `json:"text,omitempty"`
+}
+
+type ProductMemoryDeleteLogParams struct {
+	ProductMemoryOperation
+	LogID string `json:"logId"`
+}
+
+type ProductMemorySearchParams struct {
+	BotID    string `json:"botId"`
+	Query    string `json:"query"`
+	DateFrom string `json:"dateFrom,omitempty"`
+	DateTo   string `json:"dateTo,omitempty"`
+	Limit    int    `json:"limit,omitempty"`
+}
+
 type ProductConversationListParams struct {
 	ProductPageParams
 	BotID string `json:"botId"`
@@ -432,6 +518,39 @@ func (p *ProductClient) ArchiveBot(ctx context.Context, params ProductBotRevisio
 
 func (p *ProductClient) RestoreBot(ctx context.Context, params ProductBotRevisionParams) (ProductBot, error) {
 	return productCall[ProductBot](ctx, p, "bot.restore", params)
+}
+
+func (p *ProductClient) GetBotMemory(ctx context.Context, botID string) (ProductBotMemory, error) {
+	return productCall[ProductBotMemory](ctx, p, "memory.get", struct {
+		BotID string `json:"botId"`
+	}{botID})
+}
+
+func (p *ProductClient) AddMemoryRule(ctx context.Context, params ProductMemoryAddRuleParams) (ProductMemoryChangedEvent, error) {
+	return productCall[ProductMemoryChangedEvent](ctx, p, "memory.addRule", params)
+}
+
+func (p *ProductClient) UpdateMemoryRule(ctx context.Context, params ProductMemoryUpdateRuleParams) (ProductMemoryChangedEvent, error) {
+	return productCall[ProductMemoryChangedEvent](ctx, p, "memory.updateRule", params)
+}
+
+func (p *ProductClient) DeleteMemoryRule(ctx context.Context, params ProductMemoryDeleteRuleParams) (ProductMemoryChangedEvent, error) {
+	return productCall[ProductMemoryChangedEvent](ctx, p, "memory.deleteRule", params)
+}
+
+func (p *ProductClient) ReviewLearning(ctx context.Context, params ProductMemoryReviewLearningParams) (ProductMemoryChangedEvent, error) {
+	return productCall[ProductMemoryChangedEvent](ctx, p, "memory.reviewLearning", params)
+}
+
+func (p *ProductClient) DeleteMemoryLog(ctx context.Context, params ProductMemoryDeleteLogParams) (ProductMemoryChangedEvent, error) {
+	return productCall[ProductMemoryChangedEvent](ctx, p, "memory.deleteLog", params)
+}
+
+func (p *ProductClient) SearchMemoryLogs(ctx context.Context, params ProductMemorySearchParams) ([]ProductWorkLog, error) {
+	result, err := productCall[struct {
+		Items []ProductWorkLog `json:"items"`
+	}](ctx, p, "memory.searchLogs", params)
+	return result.Items, err
 }
 
 func (p *ProductClient) ListConversations(ctx context.Context, params ProductConversationListParams) (ProductPage[ProductConversationSummary], error) {

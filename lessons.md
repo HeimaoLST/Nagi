@@ -166,11 +166,19 @@
 
 ### Guard SQLite WAL permissions, NUL-safe IDs and mirror recovery
 
-**Problem:** Enabling SQLite WAL mode did not immediately create `-wal`/`-shm` sidecars for permission tightening, raw SQLite text bindings do not preserve embedded NULs in arbitrary IDs, and an interrupted JSON mirror publish after a SQLite commit could look like an external recovery edit.
+**Problem:** Enabling SQLite WAL mode did not immediately create `-wal`/`-shm` sidecars for permission tightening, CLI startup created a fresh profile parent directory as `0755` before SQLite ran, raw SQLite text bindings do not preserve embedded NULs in arbitrary IDs, and an interrupted JSON mirror publish after a SQLite commit could look like an external recovery edit.
 
-**Cause or correction:** WAL sidecar files appear on the first write transaction, pinned Node SQLite text bindings require safe encoding for arbitrary IDs, and a durable mirror needs a pre-publish digest marker to distinguish crash recovery from user-restored snapshots.
+**Cause or correction:** WAL sidecar files appear on the first write transaction, worker CLI directory setup runs before `ProductSQLite`, pinned Node SQLite text bindings require safe encoding for arbitrary IDs, and a durable mirror needs a pre-publish digest marker to distinguish crash recovery from user-restored snapshots.
 
-**Prevention:** Ensure newly created profile directories use `0700` and apply `0600` to the database plus `-wal`/`-shm` after the first WAL write transaction. JSON-encode arbitrary ID columns, refuse databases whose `PRAGMA user_version` exceeds the supported schema version, commit SQLite before publishing the recovery mirror, and record the prior mirror digest so reopen repairs interrupted publishes while still admitting genuine external recovery copies.
+**Prevention:** Ensure both worker CLI startup and `ProductSQLite` create profile directories with `0700` and apply `0600` to the database plus `-wal`/`-shm` after the first WAL write transaction. JSON-encode arbitrary ID columns, refuse databases whose `PRAGMA user_version` exceeds the supported schema version, commit SQLite before publishing the recovery mirror, and record the prior mirror digest so reopen repairs interrupted publishes while still admitting genuine external recovery copies.
+
+### Protect KV prefix caching and async profile footers for Bot memory
+
+**Problem:** Placing per-Bot identity ahead of shared instructions or sorting tool arrays inconsistently busts LLM KV prefix cache across Bots and turns; hot-reloading memory mid-conversation busts active cache; and rendering an async Memory section above the Archive button shifts the destructive button mid-click.
+
+**Cause or correction:** Providers hash prompts in strict `Tools -> System -> Messages` prefix order, and an asynchronous `memory.get` response expands the scrollable profile content height when loaded.
+
+**Prevention:** Sort all SDK and product tool definitions alphabetically, keep the static L0 Nagi Bot master template first before per-Bot L1 profile and thin L1.5 lasting rules, reload L1.5 only at cold idle boundaries, compaction or explicit user rule edits/approvals while preserving the same Pi transcript, and anchor Bot management (Archive/Restore) in a fixed footer outside the scrolling memory region.
 
 ## Pi, SDK, and Process Integration
 

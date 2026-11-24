@@ -2548,6 +2548,346 @@ func (msgs Messages) ProfileChangedElsewhere() string {
 	return Catalog.Format(msgs.locale, "profileChangedElsewhere", nil)
 }
 
+// MemoryTitle says "Memory & Learnings"
+// in the language the app shows.
+func MemoryTitle() string { return In(i18n.Locale()).MemoryTitle() }
+
+// MemoryTitle says "Memory & Learnings"
+// in the language of msgs.
+func (msgs Messages) MemoryTitle() string {
+	return Catalog.Format(msgs.locale, "memoryTitle", nil)
+}
+
+// MemoryProfileAction says "{count, plural, one {Bot profile (#)} other {Bot profile (#)}}"
+// in the language the app shows.
+func MemoryProfileAction(count int) string { return In(i18n.Locale()).MemoryProfileAction(count) }
+
+// MemoryProfileAction says "{count, plural, one {Bot profile (#)} other {Bot profile (#)}}"
+// in the language of msgs.
+func (msgs Messages) MemoryProfileAction(count int) string {
+	return Catalog.Format(msgs.locale, "memoryProfileAction", map[string]any{"count": count})
+}
+
+// MemoryReviewCount says "{count, plural, one {Review learnings (#)} other {Review learnings (#)}}"
+// in the language the app shows.
+func MemoryReviewCount(count int) string { return In(i18n.Locale()).MemoryReviewCount(count) }
+
+// MemoryReviewCount says "{count, plural, one {Review learnings (#)} other {Review learnings (#)}}"
+// in the language of msgs.
+func (msgs Messages) MemoryReviewCount(count int) string {
+	return Catalog.Format(msgs.locale, "memoryReviewCount", map[string]any{"count": count})
+}
+
+// MemoryApprove says "Approve"
+// in the language the app shows.
+func MemoryApprove() string { return In(i18n.Locale()).MemoryApprove() }
+
+// MemoryApprove says "Approve"
+// in the language of msgs.
+func (msgs Messages) MemoryApprove() string {
+	return Catalog.Format(msgs.locale, "memoryApprove", nil)
+}
+
+// MemoryReject says "Reject"
+// in the language the app shows.
+func MemoryReject() string { return In(i18n.Locale()).MemoryReject() }
+
+// MemoryReject says "Reject"
+// in the language of msgs.
+func (msgs Messages) MemoryReject() string {
+	return Catalog.Format(msgs.locale, "memoryReject", nil)
+}
+
+// MemoryRules says "Lasting rules"
+// in the language the app shows.
+func MemoryRules() string { return In(i18n.Locale()).MemoryRules() }
+
+// MemoryRules says "Lasting rules"
+// in the language of msgs.
+func (msgs Messages) MemoryRules() string {
+	return Catalog.Format(msgs.locale, "memoryRules", nil)
+}
+
+// MemoryAddPlaceholder says "Add a lasting rule…"
+// in the language the app shows.
+func MemoryAddPlaceholder() string { return In(i18n.Locale()).MemoryAddPlaceholder() }
+
+// MemoryAddPlaceholder says "Add a lasting rule…"
+// in the language of msgs.
+func (msgs Messages) MemoryAddPlaceholder() string {
+	return Catalog.Format(msgs.locale, "memoryAddPlaceholder", nil)
+}
+
+// MemoryAdd says "Add"
+// in the language the app shows.
+func MemoryAdd() string { return In(i18n.Locale()).MemoryAdd() }
+
+// MemoryAdd says "Add"
+// in the language of msgs.
+func (msgs Messages) MemoryAdd() string {
+	return Catalog.Format(msgs.locale, "memoryAdd", nil)
+}
+
+// MemoryEditRule says "Edit lasting rule"
+// in the language the app shows.
+func MemoryEditRule() string { return In(i18n.Locale()).MemoryEditRule() }
+
+// MemoryEditRule says "Edit lasting rule"
+// in the language of msgs.
+func (msgs Messages) MemoryEditRule() string {
+	return Catalog.Format(msgs.locale, "memoryEditRule", nil)
+}
+
+// MemoryEdit says "Edit"
+// in the language the app shows.
+func MemoryEdit() string { return In(i18n.Locale()).MemoryEdit() }
+
+// MemoryEdit says "Edit"
+// in the language of msgs.
+func (msgs Messages) MemoryEdit() string {
+	return Catalog.Format(msgs.locale, "memoryEdit", nil)
+}
+
+// MemorySave says "Save"
+// in the language the app shows.
+func MemorySave() string { return In(i18n.Locale()).MemorySave() }
+
+// MemorySave says "Save"
+// in the language of msgs.
+func (msgs Messages) MemorySave() string {
+	return Catalog.Format(msgs.locale, "memorySave", nil)
+}
+
+// MemoryCancelEdit says "Cancel rule edit"
+// in the language the app shows.
+func MemoryCancelEdit() string { return In(i18n.Locale()).MemoryCancelEdit() }
+
+// MemoryCancelEdit says "Cancel rule edit"
+// in the language of msgs.
+func (msgs Messages) MemoryCancelEdit() string {
+	return Catalog.Format(msgs.locale, "memoryCancelEdit", nil)
+}
+
+// MemoryRemoveRule says "Remove lasting rule"
+// in the language the app shows.
+func MemoryRemoveRule() string { return In(i18n.Locale()).MemoryRemoveRule() }
+
+// MemoryRemoveRule says "Remove lasting rule"
+// in the language of msgs.
+func (msgs Messages) MemoryRemoveRule() string {
+	return Catalog.Format(msgs.locale, "memoryRemoveRule", nil)
+}
+
+// MemoryNoRules says "No lasting rules yet."
+// in the language the app shows.
+func MemoryNoRules() string { return In(i18n.Locale()).MemoryNoRules() }
+
+// MemoryNoRules says "No lasting rules yet."
+// in the language of msgs.
+func (msgs Messages) MemoryNoRules() string {
+	return Catalog.Format(msgs.locale, "memoryNoRules", nil)
+}
+
+// MemorySourceExplicit says "Explicit"
+// in the language the app shows.
+func MemorySourceExplicit() string { return In(i18n.Locale()).MemorySourceExplicit() }
+
+// MemorySourceExplicit says "Explicit"
+// in the language of msgs.
+func (msgs Messages) MemorySourceExplicit() string {
+	return Catalog.Format(msgs.locale, "memorySourceExplicit", nil)
+}
+
+// MemorySourceApproved says "Approved"
+// in the language the app shows.
+func MemorySourceApproved() string { return In(i18n.Locale()).MemorySourceApproved() }
+
+// MemorySourceApproved says "Approved"
+// in the language of msgs.
+func (msgs Messages) MemorySourceApproved() string {
+	return Catalog.Format(msgs.locale, "memorySourceApproved", nil)
+}
+
+// MemorySourceManual says "Manual"
+// in the language the app shows.
+func MemorySourceManual() string { return In(i18n.Locale()).MemorySourceManual() }
+
+// MemorySourceManual says "Manual"
+// in the language of msgs.
+func (msgs Messages) MemorySourceManual() string {
+	return Catalog.Format(msgs.locale, "memorySourceManual", nil)
+}
+
+// MemoryWorkLog says "Work log"
+// in the language the app shows.
+func MemoryWorkLog() string { return In(i18n.Locale()).MemoryWorkLog() }
+
+// MemoryWorkLog says "Work log"
+// in the language of msgs.
+func (msgs Messages) MemoryWorkLog() string {
+	return Catalog.Format(msgs.locale, "memoryWorkLog", nil)
+}
+
+// MemorySearchPlaceholder says "Search work log…"
+// in the language the app shows.
+func MemorySearchPlaceholder() string { return In(i18n.Locale()).MemorySearchPlaceholder() }
+
+// MemorySearchPlaceholder says "Search work log…"
+// in the language of msgs.
+func (msgs Messages) MemorySearchPlaceholder() string {
+	return Catalog.Format(msgs.locale, "memorySearchPlaceholder", nil)
+}
+
+// MemoryRemoveLog says "Remove log entry"
+// in the language the app shows.
+func MemoryRemoveLog() string { return In(i18n.Locale()).MemoryRemoveLog() }
+
+// MemoryRemoveLog says "Remove log entry"
+// in the language of msgs.
+func (msgs Messages) MemoryRemoveLog() string {
+	return Catalog.Format(msgs.locale, "memoryRemoveLog", nil)
+}
+
+// MemoryNoWorkLogs says "No work logged yet."
+// in the language the app shows.
+func MemoryNoWorkLogs() string { return In(i18n.Locale()).MemoryNoWorkLogs() }
+
+// MemoryNoWorkLogs says "No work logged yet."
+// in the language of msgs.
+func (msgs Messages) MemoryNoWorkLogs() string {
+	return Catalog.Format(msgs.locale, "memoryNoWorkLogs", nil)
+}
+
+// MemoryNoMatches says "No matching entries."
+// in the language the app shows.
+func MemoryNoMatches() string { return In(i18n.Locale()).MemoryNoMatches() }
+
+// MemoryNoMatches says "No matching entries."
+// in the language of msgs.
+func (msgs Messages) MemoryNoMatches() string {
+	return Catalog.Format(msgs.locale, "memoryNoMatches", nil)
+}
+
+// MemorySearching says "Searching…"
+// in the language the app shows.
+func MemorySearching() string { return In(i18n.Locale()).MemorySearching() }
+
+// MemorySearching says "Searching…"
+// in the language of msgs.
+func (msgs Messages) MemorySearching() string {
+	return Catalog.Format(msgs.locale, "memorySearching", nil)
+}
+
+// MemoryLoading says "Loading memory…"
+// in the language the app shows.
+func MemoryLoading() string { return In(i18n.Locale()).MemoryLoading() }
+
+// MemoryLoading says "Loading memory…"
+// in the language of msgs.
+func (msgs Messages) MemoryLoading() string {
+	return Catalog.Format(msgs.locale, "memoryLoading", nil)
+}
+
+// MemoryRetry says "Retry"
+// in the language the app shows.
+func MemoryRetry() string { return In(i18n.Locale()).MemoryRetry() }
+
+// MemoryRetry says "Retry"
+// in the language of msgs.
+func (msgs Messages) MemoryRetry() string {
+	return Catalog.Format(msgs.locale, "memoryRetry", nil)
+}
+
+// MemoryErrorLoad says "Could not load this Bot’s memory."
+// in the language the app shows.
+func MemoryErrorLoad() string { return In(i18n.Locale()).MemoryErrorLoad() }
+
+// MemoryErrorLoad says "Could not load this Bot’s memory."
+// in the language of msgs.
+func (msgs Messages) MemoryErrorLoad() string {
+	return Catalog.Format(msgs.locale, "memoryErrorLoad", nil)
+}
+
+// MemoryErrorSearch says "Could not search the work log. Try a different query."
+// in the language the app shows.
+func MemoryErrorSearch() string { return In(i18n.Locale()).MemoryErrorSearch() }
+
+// MemoryErrorSearch says "Could not search the work log. Try a different query."
+// in the language of msgs.
+func (msgs Messages) MemoryErrorSearch() string {
+	return Catalog.Format(msgs.locale, "memoryErrorSearch", nil)
+}
+
+// MemoryErrorSecret says "Remove credentials or secrets before saving."
+// in the language the app shows.
+func MemoryErrorSecret() string { return In(i18n.Locale()).MemoryErrorSecret() }
+
+// MemoryErrorSecret says "Remove credentials or secrets before saving."
+// in the language of msgs.
+func (msgs Messages) MemoryErrorSecret() string {
+	return Catalog.Format(msgs.locale, "memoryErrorSecret", nil)
+}
+
+// MemoryErrorTemporary says "Save a lasting rule or completed work."
+// in the language the app shows.
+func MemoryErrorTemporary() string { return In(i18n.Locale()).MemoryErrorTemporary() }
+
+// MemoryErrorTemporary says "Save a lasting rule or completed work."
+// in the language of msgs.
+func (msgs Messages) MemoryErrorTemporary() string {
+	return Catalog.Format(msgs.locale, "memoryErrorTemporary", nil)
+}
+
+// MemoryErrorDuplicate says "This memory is already recorded."
+// in the language the app shows.
+func MemoryErrorDuplicate() string { return In(i18n.Locale()).MemoryErrorDuplicate() }
+
+// MemoryErrorDuplicate says "This memory is already recorded."
+// in the language of msgs.
+func (msgs Messages) MemoryErrorDuplicate() string {
+	return Catalog.Format(msgs.locale, "memoryErrorDuplicate", nil)
+}
+
+// MemoryErrorInvalid says "Enter a short, meaningful memory entry."
+// in the language the app shows.
+func MemoryErrorInvalid() string { return In(i18n.Locale()).MemoryErrorInvalid() }
+
+// MemoryErrorInvalid says "Enter a short, meaningful memory entry."
+// in the language of msgs.
+func (msgs Messages) MemoryErrorInvalid() string {
+	return Catalog.Format(msgs.locale, "memoryErrorInvalid", nil)
+}
+
+// MemoryErrorRuleLimit says "Remove or shorten a lasting rule before adding more."
+// in the language the app shows.
+func MemoryErrorRuleLimit() string { return In(i18n.Locale()).MemoryErrorRuleLimit() }
+
+// MemoryErrorRuleLimit says "Remove or shorten a lasting rule before adding more."
+// in the language of msgs.
+func (msgs Messages) MemoryErrorRuleLimit() string {
+	return Catalog.Format(msgs.locale, "memoryErrorRuleLimit", nil)
+}
+
+// MemoryErrorChanged says "This memory changed. Reopen the profile to refresh it."
+// in the language the app shows.
+func MemoryErrorChanged() string { return In(i18n.Locale()).MemoryErrorChanged() }
+
+// MemoryErrorChanged says "This memory changed. Reopen the profile to refresh it."
+// in the language of msgs.
+func (msgs Messages) MemoryErrorChanged() string {
+	return Catalog.Format(msgs.locale, "memoryErrorChanged", nil)
+}
+
+// MemoryErrorSave says "Could not save the memory change. Try again."
+// in the language the app shows.
+func MemoryErrorSave() string { return In(i18n.Locale()).MemoryErrorSave() }
+
+// MemoryErrorSave says "Could not save the memory change. Try again."
+// in the language of msgs.
+func (msgs Messages) MemoryErrorSave() string {
+	return Catalog.Format(msgs.locale, "memoryErrorSave", nil)
+}
+
 // FieldName says "Name"
 // in the language the app shows.
 func FieldName() string { return In(i18n.Locale()).FieldName() }

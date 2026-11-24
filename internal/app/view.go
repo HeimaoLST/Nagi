@@ -363,7 +363,11 @@ func (a *appModel) bindBotRowMenu(row ui.Element, contactID string, msgs locales
 			ct.activity.scroll.Y = 0
 		}
 		menu.Separator()
-		if menu.Item(msgs.ContactProfileAction()).Chosen() {
+		profile := msgs.ContactProfileAction()
+		if ct.PendingLearnings > 0 {
+			profile = msgs.MemoryProfileAction(ct.PendingLearnings)
+		}
+		if menu.Item(profile).Chosen() {
 			a.openContactProfile(contactID)
 		}
 		menu.Separator()

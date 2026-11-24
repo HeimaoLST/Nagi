@@ -154,8 +154,8 @@ const fk = db.prepare('PRAGMA foreign_key_check').all().length;
 db.close();
 console.log(JSON.stringify({ version, hasSystemKind: cols.includes('system_kind'), fk }));
 `)
-	if !strings.Contains(versionAfter, `"version":2`) || !strings.Contains(versionAfter, `"hasSystemKind":true`) || !strings.Contains(versionAfter, `"fk":0`) {
-		t.Fatalf("v1->v2 SQLite upgrade state = %s", versionAfter)
+	if !strings.Contains(versionAfter, `"version":3`) || !strings.Contains(versionAfter, `"hasSystemKind":true`) || !strings.Contains(versionAfter, `"fk":0`) {
+		t.Fatalf("v1->v3 SQLite upgrade state = %s", versionAfter)
 	}
 
 	first, err := proc.client.EnsureBuiltinBot(ctx, pi.ProductBotEnsureBuiltinParams{

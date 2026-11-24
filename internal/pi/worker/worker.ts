@@ -18,7 +18,7 @@ import {
 } from './protocol.js';
 import { Product, confirmedFileEffect, type ProductRunObservers, type ProductSession } from './product.js';
 import type { ProductProfilePaths } from './product-profile.js';
-import { NAGI_BOT_MASTER_TEMPLATE } from './bot-template.js';
+import { isNagiBotSystemPrompt } from './bot-template.js';
 
 const BINDING_TYPE = 'nagi-context-v1';
 const CONFIGURATION_TYPE = 'nagi-configuration-v1';
@@ -58,6 +58,7 @@ class Worker {
     this.knownBuiltinTools = new Set(this.builtinCatalog.supported.map(tool => tool.name));
     if (productPaths) this.product = new Product(productPaths, {
       open: (params, tools) => this.openProductSession(params, tools),
+      refreshSession: (params, tools) => this.refreshProductSession(params, tools),
       conversationPreview: (sessionRef, contextId, botId) => this.conversationPreview(sessionRef, contextId, botId),
       test: configuration => this.testProductConnection(configuration),
       drain: () => this.drainProduct(),
@@ -307,7 +308,7 @@ class Worker {
     if (new Set(customTools.map(tool => tool.name)).size !== customTools.length || customTools.some(tool => this.knownBuiltinTools.has(tool.name))) throw new RequestError('invalid_params', 'Conflicting domain tool name');
     const tools = [...codingTools, ...customTools.map(tool => tool.name)].sort((a, b) => a.localeCompare(b));
     if (mcpEntries.length) tools.push('mcp__*');
-    const productPrompt = productTools.length > 0 && params.instructions.startsWith(NAGI_BOT_MASTER_TEMPLATE);
+    const productPrompt = productTools.length > 0 && isNagiBotSystemPrompt(params.instructions);
     const settings = SettingsManager.inMemory({ retry: { enabled: false, provider: { maxRetries: 0 } }, cacheWarming: 'off' });
     this.configureSettings(settings, config);
     const agentDir = join(this.stateDir, 'agent');
@@ -403,6 +404,14 @@ class Worker {
         void context.runtime.session.abort().catch(() => this.disconnect(true));
       },
     };
+  }
+
+  private async refreshProductSession(params: OpenParams, tools: ToolDefinition[]): Promise<ProductSession> {
+    const current = this.context(params.contextId);
+    if (current.active) throw new RequestError('busy', 'Context is running');
+    await current.runtime.dispose();
+    this.contexts.delete(params.contextId);
+    return this.openProductSession(params, tools);
   }
 
   private startProductRun(context: Context, executionId: string, draft: Draft, observers: ProductRunObservers): Run {

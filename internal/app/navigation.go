@@ -142,6 +142,11 @@ func (a *appModel) profileDetail(c *ui.Context, t *ui.Theme) {
 		return
 	}
 	editor := a.profileEditorFor(ct.ID)
+	actions := a.contactProfileActions(ct, editor)
+	formActions := actions
+	if a.productHost() != nil {
+		formActions.Archive, formActions.Restore = nil, nil
+	}
 	msgs := locales.In(c.Locale())
 	ui.Column(c).Key(ct.ID).Fill().MinWidth(0).MinHeight(0).Padding(16).Gap(8).Children(func() {
 		ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(8).Children(func() {
@@ -149,15 +154,23 @@ func (a *appModel) profileDetail(c *ui.Context, t *ui.Theme) {
 			a.focusDetailControl(c, back)
 			ui.Text(c, msgs.ContactProfileAction()).FontSize(typePageTitle).FontWeight(500).FixedLineHeight(lineSettingsTitle).TextColor(t.Text).Grow(1)
 		})
-		ui.Scroll(c).FillWidth().Grow(1).MinHeight(0).TrackScroll(a.profileScrollFor(ct.ID)).Children(func() {
+		profileScroll := ui.Scroll(c).FillWidth().Grow(1).MinHeight(0).TrackScroll(a.profileScrollFor(ct.ID))
+		if a.productHost() != nil {
+			profileScroll.Padding(0, 8, 0, 0)
+		}
+		profileScroll.Children(func() {
 			ui.Column(c).FillWidth().MaxWidth(settingsContentWidth).AlignSelf(ui.Center).Gap(8).Children(func() {
 				ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
 					contactAvatar(c, t, ct.Name, 32)
 					ui.Text(c, ct.Name).FontSize(typePageTitle).FontWeight(500).FixedLineHeight(lineSettingsTitle).TextColor(t.Text).MinWidth(0).MaxLines(2)
 				})
-				a.contactProfileForm(c, t, ct, editor)
+				editor.view(c, t, formActions, a.workTheme.InputBorder)
+				a.botMemoryView(c, t, ct)
 			})
 		})
+		if a.productHost() != nil {
+			editor.managementView(c, t, actions)
+		}
 	})
 }
 

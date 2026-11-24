@@ -267,35 +267,30 @@ func (e *contactProfileEditor) view(c *ui.Context, t *ui.Theme, actions contactP
 				ui.Text(c, profileNoticeText(msgs, e.Status)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Text)
 			}
 		})
-		if e.builtin {
-			return
-		}
-		ui.Column(c).Gap(8).Padding(8, 0, 0).Children(func() {
-			ui.Text(c, msgs.ProfileContactManagement()).FontSize(typeLabel).FontWeight(500).FixedLineHeight(lineLabel).TextColor(t.Text)
-			ui.Row(c).Gap(8).Wrap().Children(func() {
-				if e.Archived {
-					secondaryButton(c, msgs.ProfileRestore()).Disabled(e.Busy).OnClick(func() {
-						if actions.Restore != nil {
-							actions.Restore()
-						}
-					})
-				} else {
-					dangerButton(c, msgs.ProfileArchive()).Disabled(e.Busy || e.ActiveWork || e.UnknownWork).OnClick(func() {
-						if actions.Archive != nil {
-							actions.Archive()
-						}
-					})
-				}
-			})
-		})
+		e.managementView(c, t, actions)
 	})
 }
 
-func (a *appModel) contactProfileForm(c *ui.Context, t *ui.Theme, ct *contact, editor *contactProfileEditor) {
+func (e *contactProfileEditor) managementView(c *ui.Context, t *ui.Theme, actions contactProfileActions) {
+	if e.builtin || (actions.Archive == nil && actions.Restore == nil) {
+		return
+	}
+	msgs := locales.In(c.Locale())
+	ui.Row(c).Key("profile-management").FillWidth().AlignItems(ui.Center).Justify(ui.SpaceBetween).Gap(8).Padding(8, 0, 0).Children(func() {
+		ui.Text(c, msgs.ProfileContactManagement()).FontSize(typeLabel).FontWeight(500).FixedLineHeight(lineLabel).TextColor(t.Text)
+		if e.Archived && actions.Restore != nil {
+			secondaryButton(c, msgs.ProfileRestore()).Disabled(e.Busy).OnClick(actions.Restore)
+		} else if !e.Archived && actions.Archive != nil {
+			dangerButton(c, msgs.ProfileArchive()).Disabled(e.Busy || e.ActiveWork || e.UnknownWork).OnClick(actions.Archive)
+		}
+	})
+}
+
+func (a *appModel) contactProfileActions(ct *contact, editor *contactProfileEditor) contactProfileActions {
 	editor.Archived, editor.builtin = ct.Archived, ct.isBuiltin()
 	editor.ActiveWork, editor.UnknownWork = a.contactActivity(ct)
 	id := ct.ID
-	editor.view(c, t, contactProfileActions{
+	return contactProfileActions{
 		Save:    func(draft profileDraft) { a.saveContactProfileDraftFor(id, draft, false) },
 		Archive: func() { a.archiveContact(id) },
 		Restore: func() { a.restoreContact(id) },
@@ -304,5 +299,5 @@ func (a *appModel) contactProfileForm(c *ui.Context, t *ui.Theme, ct *contact, e
 			editor.profileRevision = ct.ProfileRevision
 			editor.ResetDraft()
 		},
-	}, a.workTheme.InputBorder)
+	}
 }

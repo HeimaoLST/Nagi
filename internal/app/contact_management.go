@@ -42,6 +42,7 @@ func (a *appModel) openContactProfile(contactID string) {
 	a.profileEditors[contactID].focusField = ""
 	a.contactProfileID = contactID
 	a.openDetail(detailProfile)
+	a.loadBotMemory(ct)
 }
 
 func (a *appModel) profileEditorFor(contactID string) *contactProfileEditor {
