@@ -1412,6 +1412,150 @@ func (msgs Messages) CreateBotWithPandoraBox() string {
 	return Catalog.Format(msgs.locale, "createBotWithPandoraBox", nil)
 }
 
+// EmptyBotGreeting says "What’s next with {name}?"
+// in the language the app shows.
+func EmptyBotGreeting(name string) string { return In(i18n.Locale()).EmptyBotGreeting(name) }
+
+// EmptyBotGreeting says "What’s next with {name}?"
+// in the language of msgs.
+func (msgs Messages) EmptyBotGreeting(name string) string {
+	return Catalog.Format(msgs.locale, "emptyBotGreeting", map[string]any{"name": name})
+}
+
+// StarterFollowUp says "Follow up on: {summary}"
+// in the language the app shows.
+func StarterFollowUp(summary string) string { return In(i18n.Locale()).StarterFollowUp(summary) }
+
+// StarterFollowUp says "Follow up on: {summary}"
+// in the language of msgs.
+func (msgs Messages) StarterFollowUp(summary string) string {
+	return Catalog.Format(msgs.locale, "starterFollowUp", map[string]any{"summary": summary})
+}
+
+// StarterHelpWithPurpose says "Help me with: {purpose}"
+// in the language the app shows.
+func StarterHelpWithPurpose(purpose string) string {
+	return In(i18n.Locale()).StarterHelpWithPurpose(purpose)
+}
+
+// StarterHelpWithPurpose says "Help me with: {purpose}"
+// in the language of msgs.
+func (msgs Messages) StarterHelpWithPurpose(purpose string) string {
+	return Catalog.Format(msgs.locale, "starterHelpWithPurpose", map[string]any{"purpose": purpose})
+}
+
+// PandoraBoxPurpose says "Design, create, and refine focused Nagi Bots through conversation."
+// in the language the app shows.
+func PandoraBoxPurpose() string { return In(i18n.Locale()).PandoraBoxPurpose() }
+
+// PandoraBoxPurpose says "Design, create, and refine focused Nagi Bots through conversation."
+// in the language of msgs.
+func (msgs Messages) PandoraBoxPurpose() string {
+	return Catalog.Format(msgs.locale, "pandoraBoxPurpose", nil)
+}
+
+// PandoraBoxStarterWriting says "Create a writing and editing Bot"
+// in the language the app shows.
+func PandoraBoxStarterWriting() string { return In(i18n.Locale()).PandoraBoxStarterWriting() }
+
+// PandoraBoxStarterWriting says "Create a writing and editing Bot"
+// in the language of msgs.
+func (msgs Messages) PandoraBoxStarterWriting() string {
+	return Catalog.Format(msgs.locale, "pandoraBoxStarterWriting", nil)
+}
+
+// PandoraBoxStarterCodeReview says "Build a strict code review Bot"
+// in the language the app shows.
+func PandoraBoxStarterCodeReview() string { return In(i18n.Locale()).PandoraBoxStarterCodeReview() }
+
+// PandoraBoxStarterCodeReview says "Build a strict code review Bot"
+// in the language of msgs.
+func (msgs Messages) PandoraBoxStarterCodeReview() string {
+	return Catalog.Format(msgs.locale, "pandoraBoxStarterCodeReview", nil)
+}
+
+// PandoraBoxStarterAudit says "Audit and refine my existing Bot Team"
+// in the language the app shows.
+func PandoraBoxStarterAudit() string { return In(i18n.Locale()).PandoraBoxStarterAudit() }
+
+// PandoraBoxStarterAudit says "Audit and refine my existing Bot Team"
+// in the language of msgs.
+func (msgs Messages) PandoraBoxStarterAudit() string {
+	return Catalog.Format(msgs.locale, "pandoraBoxStarterAudit", nil)
+}
+
+// SettingsPandoraBoxVisibility says "PandoraBox in Bot Team"
+// in the language the app shows.
+func SettingsPandoraBoxVisibility() string { return In(i18n.Locale()).SettingsPandoraBoxVisibility() }
+
+// SettingsPandoraBoxVisibility says "PandoraBox in Bot Team"
+// in the language of msgs.
+func (msgs Messages) SettingsPandoraBoxVisibility() string {
+	return Catalog.Format(msgs.locale, "settingsPandoraBoxVisibility", nil)
+}
+
+// SettingsPandoraBoxVisibilityHint says "You can still open PandoraBox from New Bot when it’s hidden."
+// in the language the app shows.
+func SettingsPandoraBoxVisibilityHint() string {
+	return In(i18n.Locale()).SettingsPandoraBoxVisibilityHint()
+}
+
+// SettingsPandoraBoxVisibilityHint says "You can still open PandoraBox from New Bot when it’s hidden."
+// in the language of msgs.
+func (msgs Messages) SettingsPandoraBoxVisibilityHint() string {
+	return Catalog.Format(msgs.locale, "settingsPandoraBoxVisibilityHint", nil)
+}
+
+// SettingsPandoraBoxShow says "Show"
+// in the language the app shows.
+func SettingsPandoraBoxShow() string { return In(i18n.Locale()).SettingsPandoraBoxShow() }
+
+// SettingsPandoraBoxShow says "Show"
+// in the language of msgs.
+func (msgs Messages) SettingsPandoraBoxShow() string {
+	return Catalog.Format(msgs.locale, "settingsPandoraBoxShow", nil)
+}
+
+// SettingsPandoraBoxHide says "Hide"
+// in the language the app shows.
+func SettingsPandoraBoxHide() string { return In(i18n.Locale()).SettingsPandoraBoxHide() }
+
+// SettingsPandoraBoxHide says "Hide"
+// in the language of msgs.
+func (msgs Messages) SettingsPandoraBoxHide() string {
+	return Catalog.Format(msgs.locale, "settingsPandoraBoxHide", nil)
+}
+
+// BotMenuShowInTeam says "Show in Bot Team"
+// in the language the app shows.
+func BotMenuShowInTeam() string { return In(i18n.Locale()).BotMenuShowInTeam() }
+
+// BotMenuShowInTeam says "Show in Bot Team"
+// in the language of msgs.
+func (msgs Messages) BotMenuShowInTeam() string {
+	return Catalog.Format(msgs.locale, "botMenuShowInTeam", nil)
+}
+
+// BotMenuHideFromTeam says "Hide from Bot Team"
+// in the language the app shows.
+func BotMenuHideFromTeam() string { return In(i18n.Locale()).BotMenuHideFromTeam() }
+
+// BotMenuHideFromTeam says "Hide from Bot Team"
+// in the language of msgs.
+func (msgs Messages) BotMenuHideFromTeam() string {
+	return Catalog.Format(msgs.locale, "botMenuHideFromTeam", nil)
+}
+
+// RailShowPandoraBox says "Show PandoraBox"
+// in the language the app shows.
+func RailShowPandoraBox() string { return In(i18n.Locale()).RailShowPandoraBox() }
+
+// RailShowPandoraBox says "Show PandoraBox"
+// in the language of msgs.
+func (msgs Messages) RailShowPandoraBox() string {
+	return Catalog.Format(msgs.locale, "railShowPandoraBox", nil)
+}
+
 // EmptyNoMessages says "No messages yet"
 // in the language the app shows.
 func EmptyNoMessages() string { return In(i18n.Locale()).EmptyNoMessages() }
@@ -2114,6 +2258,36 @@ func ProfileInstructions() string { return In(i18n.Locale()).ProfileInstructions
 // in the language of msgs.
 func (msgs Messages) ProfileInstructions() string {
 	return Catalog.Format(msgs.locale, "profileInstructions", nil)
+}
+
+// ProfileStarterPrompts says "Starter prompts"
+// in the language the app shows.
+func ProfileStarterPrompts() string { return In(i18n.Locale()).ProfileStarterPrompts() }
+
+// ProfileStarterPrompts says "Starter prompts"
+// in the language of msgs.
+func (msgs Messages) ProfileStarterPrompts() string {
+	return Catalog.Format(msgs.locale, "profileStarterPrompts", nil)
+}
+
+// ProfileStarterPromptsHint says "One prompt per line, up to four."
+// in the language the app shows.
+func ProfileStarterPromptsHint() string { return In(i18n.Locale()).ProfileStarterPromptsHint() }
+
+// ProfileStarterPromptsHint says "One prompt per line, up to four."
+// in the language of msgs.
+func (msgs Messages) ProfileStarterPromptsHint() string {
+	return Catalog.Format(msgs.locale, "profileStarterPromptsHint", nil)
+}
+
+// FieldStarterPromptsAccessible says "Bot starter prompts"
+// in the language the app shows.
+func FieldStarterPromptsAccessible() string { return In(i18n.Locale()).FieldStarterPromptsAccessible() }
+
+// FieldStarterPromptsAccessible says "Bot starter prompts"
+// in the language of msgs.
+func (msgs Messages) FieldStarterPromptsAccessible() string {
+	return Catalog.Format(msgs.locale, "fieldStarterPromptsAccessible", nil)
 }
 
 // ProfileNoInstructions says "No instructions recorded."

@@ -2,10 +2,12 @@ package app
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/HeimaoLST/Nagi/internal/pi"
+	"github.com/HeimaoLST/Nagi/locales"
 )
 
 const (
@@ -21,7 +23,8 @@ const (
 )
 
 func contactProfileDraft(ct *contact) profileDraft {
-	return profileDraft{Name: ct.Name, Purpose: ct.Purpose, Instructions: ct.Instructions, Workspace: ct.Workspace, BuiltinTools: cloneBuiltinTools(ct.BuiltinTools)}
+	return profileDraft{Name: ct.Name, Purpose: ct.Purpose, Instructions: ct.Instructions, StarterPrompts: slices.Clone(ct.StarterPrompts),
+		Workspace: ct.Workspace, BuiltinTools: cloneBuiltinTools(ct.BuiltinTools)}
 }
 
 func (a *appModel) openContactProfile(contactID string) {
@@ -120,7 +123,7 @@ func (a *appModel) updateProductBot(host *piAppHost, ct *contact, editor *contac
 	bot, err := host.product.UpdateBot(ctx, pi.ProductBotUpdateParams{
 		ProductBotRevisionParams: pi.ProductBotRevisionParams{BotID: ct.ID, ExpectedRevision: ct.ProfileRevision, OperationID: newContactID()},
 		Profile: pi.ProductBotProfile{Name: draft.Name, Role: ct.Role, Purpose: draft.Purpose, Instructions: draft.Instructions,
-			Workspace: draft.Workspace, CodingTools: codingTools}, StartNewConversation: startNew,
+			StarterPrompts: draft.StarterPrompts, Workspace: draft.Workspace, CodingTools: codingTools}, StartNewConversation: startNew,
 	})
 	if err != nil {
 		if editor != nil {
@@ -228,6 +231,7 @@ func (a *appModel) saveContactProfile(ct *contact, editor *contactProfileEditor,
 	ct.Name = draft.Name
 	ct.Purpose = draft.Purpose
 	ct.Instructions = draft.Instructions
+	ct.StarterPrompts = slices.Clone(draft.StarterPrompts)
 	ct.Workspace = draft.Workspace
 	ct.BuiltinTools = cloneBuiltinTools(draft.BuiltinTools)
 	if startNew {
@@ -364,12 +368,47 @@ func (a *appModel) visibleContactIndices() []int {
 	query := strings.ToLower(strings.TrimSpace(a.contactSearch))
 	out := make([]int, 0, len(a.contacts))
 	for i, ct := range a.contacts {
+		if a.hideBuiltinArchitect && ct.isBuiltin() {
+			continue
+		}
 		if query != "" && !strings.Contains(strings.ToLower(ct.Name+" "+ct.Purpose), query) {
 			continue
 		}
 		out = append(out, i)
 	}
 	return out
+}
+
+func (a *appModel) setBuiltinArchitectHidden(hidden bool) {
+	if hidden == a.hideBuiltinArchitect || !a.canChangeBuiltinArchitectVisibility() {
+		return
+	}
+	a.hideBuiltinArchitect = hidden
+	if hidden && len(a.contacts) > 0 && a.selectedContact().isBuiltin() {
+		for _, index := range a.visibleContactIndices() {
+			if !a.contacts[index].Archived {
+				a.selectContact(index)
+				return
+			}
+		}
+	}
+	a.persist()
+}
+
+func (a *appModel) canChangeBuiltinArchitectVisibility() bool {
+	return !a.shutdownStarted && !a.dataRecoveryBlocksChanges() && (a.demo || a.productHost() != nil)
+}
+
+func (a *appModel) builtinArchitectVisibilityLabel(msgs locales.Messages) string {
+	if a.hideBuiltinArchitect {
+		return msgs.BotMenuShowInTeam()
+	}
+	return msgs.BotMenuHideFromTeam()
+}
+
+func (a *appModel) showBuiltinArchitectInRail() {
+	a.contactSearch = ""
+	a.setBuiltinArchitectHidden(false)
 }
 
 func (a *appModel) historyAsyncStarted() {

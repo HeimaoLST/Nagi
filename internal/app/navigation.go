@@ -146,6 +146,7 @@ func (a *appModel) profileDetail(c *ui.Context, t *ui.Theme) {
 	formActions := actions
 	if a.productHost() != nil {
 		formActions.Archive, formActions.Restore = nil, nil
+		formActions.ToggleVisibility = nil
 	}
 	msgs := locales.In(c.Locale())
 	ui.Column(c).Key(ct.ID).Fill().MinWidth(0).MinHeight(0).Padding(16).Gap(8).Children(func() {

@@ -15,6 +15,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/HeimaoLST/Nagi/internal/pi"
 )
@@ -627,4 +628,215 @@ func TestPiProductPandoraBoxKVCachingToolsAndMutations(t *testing.T) {
 		t.Fatalf("missing bot.changed lifecycle events for specialist: create=%v update=%v archive=%v all=%+v",
 			sawAuditorCreate, sawAuditorUpdate, sawAuditorArchive, botEvents)
 	}
+}
+
+func TestPiProductPandoraBoxStarterPromptsAndVisibility(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	var mu sync.Mutex
+	var createdID string
+	var inspectPayload string
+	step := 0
+
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Messages []struct {
+				Role    string          `json:"role"`
+				Content json.RawMessage `json:"content"`
+			} `json:"messages"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			http.Error(w, "bad body", http.StatusBadRequest)
+			return
+		}
+		last := body.Messages[len(body.Messages)-1]
+		mu.Lock()
+		step++
+		cur := step
+		mu.Unlock()
+		switch cur {
+		case 1:
+			piChatResponse(w, "", "bot_create", "call-sp-create", `{"name":"Prompt Specialist","purpose":"Craft concise checklists","job":"Draft concise checklists","voice":"Direct","anti_jobs":["No fluff"],"starter_prompts":["  Draft checklist  ","","Draft checklist","Review release notes","Check rollback plan","Audit test coverage","Fifth prompt dropped"]}`)
+		case 2:
+			var parsed struct {
+				BotID string `json:"bot_id"`
+			}
+			var inner string
+			if json.Unmarshal(last.Content, &inner) == nil {
+				_ = json.Unmarshal([]byte(inner), &parsed)
+			}
+			mu.Lock()
+			createdID = parsed.BotID
+			mu.Unlock()
+			piChatResponse(w, "", "bot_inspect_team", "call-sp-inspect", `{}`)
+		case 3:
+			mu.Lock()
+			inspectPayload = string(last.Content)
+			targetID := createdID
+			mu.Unlock()
+			longMultibyte := strings.Repeat("审查", 19) + "🚀" + strings.Repeat("端", 10)
+			args, _ := json.Marshal(map[string]any{
+				"bot_id":          targetID,
+				"starter_prompts": []string{longMultibyte, "  Updated second prompt  "},
+			})
+			piChatResponse(w, "", "bot_update", "call-sp-update", string(args))
+		default:
+			piChatResponse(w, "Prompt Specialist created and updated.", "", "", "")
+		}
+	}))
+	t.Cleanup(provider.Close)
+
+	root := t.TempDir()
+	workspace, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	opts := pi.ProductOptions{
+		NodePath:        os.Getenv("NAGI_TEST_NODE"),
+		WorkerPath:      os.Getenv("NAGI_TEST_WORKER"),
+		StateDir:        filepath.Join(root, "pi"),
+		ProfilePath:     filepath.Join(root, "profile", "contacts.json"),
+		CredentialsPath: filepath.Join(root, "profile", "connection.json"),
+		FreshProfile:    true,
+	}
+	proc := startProductProcess(t, opts)
+	_ = proc.open(t, ctx)
+
+	saved, err := proc.client.SaveConnection(ctx, pi.ProductConnectionSaveParams{
+		OperationID: "op-sp-conn-save",
+		Configuration: pi.ProductConnectionInput{
+			APIKey: productKey,
+			ProductConnectionSettings: pi.ProductConnectionSettings{
+				WireAPI: pi.OpenAICompletions, BaseURL: provider.URL + "/v1", Model: productModel,
+				ContextTokens: 65536, OutputTokens: 4096, WorkingDirectory: workspace, MaxActiveTasks: 2,
+			},
+		},
+	})
+	if err != nil || saved.SavedRevision == nil {
+		t.Fatalf("SaveConnection = %+v, %v", saved, err)
+	}
+	if _, err := proc.client.ApplyConnection(ctx, pi.ProductConnectionApplyParams{OperationID: "op-sp-conn-apply", SavedRevision: *saved.SavedRevision}); err != nil {
+		t.Fatalf("ApplyConnection = %v", err)
+	}
+
+	pandora, err := proc.client.EnsureBuiltinBot(ctx, pi.ProductBotEnsureBuiltinParams{
+		Kind: pi.SystemKindBotArchitect, OperationID: "op-sp-ensure",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pandora.Profile.StarterPrompts) != 3 {
+		t.Fatalf("PandoraBox default starterPrompts = %q, want 3", pandora.Profile.StarterPrompts)
+	}
+
+	longUTF8 := strings.Repeat("测试", 25) + "🚀tail"
+	direct, err := proc.client.CreateBot(ctx, pi.ProductBotCreateParams{
+		OperationID: "op-sp-direct",
+		Profile: pi.ProductBotProfile{
+			Name:    "Direct Bot",
+			Purpose: "Verify starter normalization",
+			StarterPrompts: []string{
+				"  First prompt  ",
+				"   ",
+				"First prompt",
+				longUTF8,
+				"Third prompt",
+				"Fourth prompt",
+				"Fifth dropped",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(direct.Profile.StarterPrompts) != 4 || direct.Profile.StarterPrompts[0] != "First prompt" ||
+		direct.Profile.StarterPrompts[2] != "Third prompt" || direct.Profile.StarterPrompts[3] != "Fourth prompt" {
+		t.Fatalf("normalized direct starterPrompts = %q", direct.Profile.StarterPrompts)
+	}
+	cut := direct.Profile.StarterPrompts[1]
+	if !utf8.ValidString(cut) || len(cut) == 0 || len(cut) > 120 {
+		t.Fatalf("UTF-8 120-byte truncation invalid: valid=%v bytes=%d text=%q", utf8.ValidString(cut), len(cut), cut)
+	}
+
+	conv, err := proc.client.GetConversation(ctx, pandora.CurrentConversationID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	draft, err := proc.client.SaveDraft(ctx, pi.ProductSaveDraftParams{
+		ProductConversationParams: pi.ProductConversationParams{ConversationID: pandora.CurrentConversationID},
+		ProductText:               pi.ProductText{Text: "Create and update Prompt Specialist"},
+		ExpectedRevision:          conv.Draft.Revision,
+		OperationID:               "d-sp-1",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	receipt, err := proc.client.Send(ctx, pi.ProductSendParams{
+		ProductConversationParams: pi.ProductConversationParams{ConversationID: pandora.CurrentConversationID},
+		DraftRevision:             draft.Revision,
+		OperationID:               "s-sp-1",
+	})
+	if err != nil || receipt.Execution == nil {
+		t.Fatalf("Send = %+v, %v", receipt, err)
+	}
+	deadline := time.Now().Add(20 * time.Second)
+	for time.Now().Before(deadline) {
+		cur, err := proc.client.GetConversation(ctx, pandora.CurrentConversationID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cur.LatestExecution != nil && cur.LatestExecution.ExecutionID == receipt.Execution.ExecutionID && cur.LatestExecution.State == "completed" {
+			break
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+
+	mu.Lock()
+	targetID := createdID
+	inspected := inspectPayload
+	mu.Unlock()
+	if targetID == "" || !strings.Contains(inspected, "starter_prompts") || !strings.Contains(inspected, "Draft checklist") || strings.Contains(inspected, "Fifth prompt dropped") {
+		t.Fatalf("bot_inspect_team starter_prompts mismatch: id=%q payload=%s", targetID, inspected)
+	}
+
+	dbPath := filepath.Join(root, "profile", "nagi.db")
+	version := runNodeSQLite(t, opts.NodePath, dbPath, `
+const { DatabaseSync } = require('node:sqlite');
+const db = new DatabaseSync(process.argv[1]);
+console.log(db.prepare('PRAGMA user_version').get().user_version);
+db.close();
+`)
+	if version != "3" {
+		t.Fatalf("SQLite schema version = %q, want 3", version)
+	}
+
+	backupPath := filepath.Join(root, "sp-backup.json")
+	if _, err := proc.client.BackupProfile(ctx, backupPath); err != nil {
+		t.Fatal(err)
+	}
+	outcome, err := proc.client.Shutdown(ctx)
+	proc.closed = true
+	proc.exit(t, ctx, outcome, true, err)
+
+	if err := os.Remove(opts.ProfilePath); err != nil {
+		t.Fatal(err)
+	}
+	proc2 := startProductProcess(t, opts)
+	reopened := proc2.open(t, ctx)
+	var foundSpec *pi.ProductBot
+	for i := range reopened.Snapshot.Bots {
+		if reopened.Snapshot.Bots[i].BotID == targetID {
+			foundSpec = &reopened.Snapshot.Bots[i]
+		}
+	}
+	if foundSpec == nil || len(foundSpec.Profile.StarterPrompts) != 2 || foundSpec.Profile.StarterPrompts[1] != "Updated second prompt" {
+		t.Fatalf("reopened specialist starterPrompts = %+v", foundSpec)
+	}
+	if !utf8.ValidString(foundSpec.Profile.StarterPrompts[0]) || len(foundSpec.Profile.StarterPrompts[0]) > 120 {
+		t.Fatalf("reopened UTF-8 starter prompt exceeded 120 bytes: %q (%d)", foundSpec.Profile.StarterPrompts[0], len(foundSpec.Profile.StarterPrompts[0]))
+	}
+	outcome, err = proc2.client.Shutdown(ctx)
+	proc2.closed = true
+	proc2.exit(t, ctx, outcome, true, err)
 }

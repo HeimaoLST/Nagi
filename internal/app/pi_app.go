@@ -208,6 +208,7 @@ func (a *appModel) openProductProfile(ctx context.Context, fresh bool, generatio
 		a.runtimeStage, a.runtimeHint, a.runtimeHintKind = "", "", ""
 		a.runtimeHintArgs = nil
 		a.localSaveErr, a.localSavePrevErr, a.localSavePrevKind = "", "", ""
+		a.hideBuiltinArchitect = false
 		a.applyProductPreferences(opened.Snapshot.Preferences)
 		a.selected = slices.Index(contacts, selected)
 		a.activityIntents = nil
@@ -217,6 +218,7 @@ func (a *appModel) openProductProfile(ctx context.Context, fresh bool, generatio
 			a.rightPaneWidth = clampPaneWidth(local.Layout.RightWidth, defaultRightPaneWidth, minRightPaneWidth, maxRightPaneWidth)
 			a.appearanceThemeIDs = local.ThemeIDs
 			a.appearanceMode = normalizeAppearanceMode(local.Appearance)
+			a.hideBuiltinArchitect = local.HideBuiltinArchitect
 		}
 		a.applyProductConnection(opened.Snapshot.Connection)
 		a.connectionForm = nil
@@ -249,7 +251,8 @@ func (a *appModel) persistProductUI(host *piAppHost) error {
 	return writeProfileJSON(productUIPath(a.storePath), productUIState{
 		Selected: a.selectedID(), Layout: storedLayout{LeftWidth: a.railWidth(), RightWidth: a.workWidth(), WorkspaceOpen: a.workspaceOpen},
 		ThemeIDs: a.appearanceThemeIDs, Appearance: normalizeAppearanceMode(a.appearanceMode), Pending: host.productPending, RecoveryID: host.recoveryID,
-		PendingActivities: a.activityIntents,
+		PendingActivities:    a.activityIntents,
+		HideBuiltinArchitect: a.hideBuiltinArchitect,
 	})
 }
 
@@ -420,7 +423,7 @@ func (a *appModel) applyProductEvent(host *piAppHost, event pi.ProductEvent) {
 		if json.Unmarshal(event.Data, &changed) == nil {
 			if ct := a.contactByID(changed.BotID); ct != nil {
 				ct.PendingLearnings = changed.PendingCount
-				if a.contactProfileID == ct.ID {
+				if a.contactProfileID == ct.ID || ct.memory.loaded || ct.memory.loading || ct.memory.loadFailed {
 					a.loadBotMemory(ct)
 				}
 			}
@@ -576,7 +579,7 @@ func (a *appModel) reconcileProductStream(host *piAppHost) {
 				for _, bot := range bots {
 					ct := a.applyProductBot(host, bot, false)
 					ct.PendingLearnings = bot.PendingLearnings
-					if a.contactProfileID == ct.ID {
+					if a.contactProfileID == ct.ID || ct.memory.loaded || ct.memory.loading || ct.memory.loadFailed {
 						a.loadBotMemory(ct)
 					}
 				}
@@ -700,6 +703,7 @@ func (ct *contact) applyProductBotProfile(bot pi.ProductBot) {
 	profile := bot.Profile
 	ct.Name, ct.Role, ct.Purpose = profile.Name, profile.Role, profile.Purpose
 	ct.Instructions, ct.Workspace = profile.Instructions, profile.Workspace
+	ct.StarterPrompts = profile.StarterPrompts
 	ct.BuiltinTools = nil
 	if profile.CodingTools != nil {
 		ct.BuiltinTools = &profile.CodingTools

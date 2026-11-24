@@ -23,6 +23,7 @@ func profileDraftEqual(left, right profileDraft) bool {
 	return left.Name == right.Name &&
 		left.Purpose == right.Purpose &&
 		left.Instructions == right.Instructions &&
+		slices.Equal(left.StarterPrompts, right.StarterPrompts) &&
 		left.Workspace == right.Workspace &&
 		builtinToolsEqual(left.BuiltinTools, right.BuiltinTools)
 }
