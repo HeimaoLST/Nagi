@@ -757,6 +757,7 @@ type productConversationBrowser struct {
 	ownerID    string
 	history    historyProjection
 	transcript ui.ListState
+	recall     quoteRecall
 }
 
 func (a *appModel) browseProductConversations(ct *contact, sourceID string) {
@@ -777,6 +778,7 @@ func (a *appModel) loadProductTranscript(browser *productConversationBrowser, id
 	browser.selectedID, browser.ownerID, browser.problem = id, "", ""
 	browser.reading, browser.focusBack = true, true
 	browser.history, browser.transcript = historyProjection{}, ui.ListState{}
+	browser.recall = quoteRecall{}
 	a.historyAsyncStarted()
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)

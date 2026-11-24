@@ -169,8 +169,7 @@ func (a *appModel) openProductProfile(ctx context.Context, fresh bool, generatio
 		host.productBots[ct.ID] = bot
 		if draft := conversation.Draft; draft != nil {
 			host.productDrafts[ct.ID] = *draft
-			ct.Draft = draft.Text
-			ct.Context.Items = productTaskContext(draft.Materials)
+			applyProductDraft(ct, draft)
 		}
 		applyProductExecution(ct, conversation.LatestExecution)
 		if !ct.Archived {
@@ -260,6 +259,53 @@ func (a *appModel) persistProductUI(host *piAppHost) error {
 	})
 }
 
+func applyProductDraft(ct *contact, draft *pi.ProductDraft) {
+	ct.Draft = draft.Text
+	ct.Context.Items = productTaskContext(draft.Materials)
+	ct.DraftQuote = cloneQuote(draft.Quote)
+}
+
+func cloneQuote(quote *pi.ProductQuote) *pi.ProductQuote {
+	if quote == nil {
+		return nil
+	}
+	copy := *quote
+	if quote.BubbleIndex != nil {
+		index := *quote.BubbleIndex
+		copy.BubbleIndex = &index
+	}
+	return &copy
+}
+
+func sameQuote(a, b *pi.ProductQuote) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	if a.MessageID != b.MessageID || a.Sender != b.Sender || a.AuthorName != b.AuthorName || a.Text != b.Text {
+		return false
+	}
+	if a.BubbleIndex == nil || b.BubbleIndex == nil {
+		return a.BubbleIndex == b.BubbleIndex
+	}
+	return *a.BubbleIndex == *b.BubbleIndex
+}
+
+func (a *appModel) updateDraftQuoteReference(ct *contact) {
+	quote := ct.DraftQuote
+	if quote == nil || !a.quoteDraftEditable(ct) || ct.SendState == sendSubmitting {
+		return
+	}
+	for _, m := range ct.Messages {
+		if m.Key == quote.MessageID && m.MessageID != "" && m.MessageID != m.Key {
+			resolved := *quote
+			resolved.MessageID = m.MessageID
+			ct.DraftQuote = &resolved
+			a.draftChanged(ct)
+			return
+		}
+	}
+}
+
 func (a *appModel) saveProductDraft(ct *contact) error {
 	host := a.productHost()
 	if !a.productProfileReady() || ct == nil || ct.Archived {
@@ -270,7 +316,7 @@ func (a *appModel) saveProductDraft(ct *contact) error {
 		materials[i] = pi.ProductMaterial{ID: item.ID, Name: item.Name, Source: item.Source, Text: item.Text, Revision: item.Revision}
 	}
 	previous := host.productDrafts[ct.ID]
-	if previous.Text == ct.Draft && slices.Equal(previous.Materials, materials) {
+	if previous.Text == ct.Draft && slices.Equal(previous.Materials, materials) && sameQuote(previous.Quote, ct.DraftQuote) {
 		return nil
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -278,6 +324,7 @@ func (a *appModel) saveProductDraft(ct *contact) error {
 	draft, err := host.product.SaveDraft(ctx, pi.ProductSaveDraftParams{
 		ProductConversationParams: pi.ProductConversationParams{ConversationID: ct.SessionID},
 		ProductText:               pi.ProductText{Text: ct.Draft, Materials: materials}, ExpectedRevision: previous.Revision, OperationID: newContactID(),
+		Quote: ct.DraftQuote,
 	})
 	if err == nil {
 		host.productDrafts[ct.ID] = draft
@@ -299,6 +346,7 @@ func (a *appModel) sendProductConversation(host *piAppHost, ct *contact) bool {
 	}
 	draft := host.productDrafts[ct.ID]
 	ct.SubmittedDraft, ct.SubmittedRev = draft.Text, ct.draftRev
+	ct.SubmittedQuote = cloneQuote(draft.Quote)
 	ct.SendState = sendSubmitting
 	ct.clearSendError()
 	a.submissionAsyncStarted()
@@ -392,6 +440,7 @@ func (a *appModel) reloadProductConversation(host *piAppHost, ct *contact) {
 			ct.Messages = mergeLiveConversation(ct.Messages, projection.messages)
 			ct.History = projection.entries
 			ct.Loaded, ct.LoadErr, ct.Unavailable = true, "", ""
+			a.updateDraftQuoteReference(ct)
 		})
 	}()
 }
@@ -438,6 +487,9 @@ func mergeLiveConversation(previous, history []*message) []*message {
 		if end < len(history) && history[end].Kind == msgContact {
 			continue
 		}
+		if end == position+1 && remaining == "" {
+			reply.MessageID = history[position].MessageID
+		}
 		history = slices.Replace(history, position, end, reply)
 		position++
 	}
@@ -457,6 +509,7 @@ func finishLiveReply(ct *contact, executionID string) {
 func productHistory(ctx context.Context, client *pi.ProductClient, id string) (historyProjection, error) {
 	params := pi.ProductHistoryParams{ProductConversationParams: pi.ProductConversationParams{ConversationID: id}}
 	var projection historyProjection
+	var reply strings.Builder
 	for {
 		page, err := client.History(ctx, params)
 		if err != nil {
@@ -470,7 +523,18 @@ func productHistory(ctx context.Context, client *pi.ProductClient, id string) (h
 			stamp, _ := time.Parse(time.RFC3339Nano, row.Timestamp)
 			when := formatMillis(stamp.UnixMilli())
 			materials := productTaskContext(row.Materials)
-			projection.messages = append(projection.messages, &message{Key: row.MessageID, MessageID: row.MessageID, Kind: kind, Text: row.Text, Time: when, Timestamp: stamp, Context: materials, History: true})
+			messages := projection.messages
+			if kind == msgContact && len(messages) > 0 && messages[len(messages)-1].Kind == msgContact {
+				previous := messages[len(messages)-1]
+				if reply.Len() == 0 {
+					reply.WriteString(previous.Text)
+				}
+				reply.WriteString(row.Text)
+				previous.Text = reply.String()
+			} else {
+				reply.Reset()
+				projection.messages = append(messages, &message{Key: row.MessageID, MessageID: row.MessageID, Kind: kind, Text: row.Text, Time: when, Timestamp: stamp, Context: materials, Quote: row.Quote, History: true})
+			}
 			projection.entries = append(projection.entries, historyEntry{ID: row.MessageID, Date: when, From: from, Text: row.Text, Context: materials})
 		}
 		if page.NextCursor == nil {
@@ -542,7 +606,8 @@ func (a *appModel) applyProductEvent(host *piAppHost, event pi.ProductEvent) {
 			}
 			applyProductExecution(ct, &pi.ProductExecution{ExecutionID: data.ExecutionID, State: "running"})
 			stamp := time.Now()
-			ct.Messages = append(ct.Messages, &message{Key: data.ExecutionID + ":user", Kind: msgUser, Text: ct.SubmittedDraft, Time: stamp.Format("15:04"), Timestamp: stamp, TaskID: data.ExecutionID, Context: productTaskContext(host.productDrafts[ct.ID].Materials)})
+			ct.Messages = append(ct.Messages, &message{Key: data.ExecutionID + ":user", Kind: msgUser, Text: ct.SubmittedDraft, Time: stamp.Format("15:04"), Timestamp: stamp, TaskID: data.ExecutionID, Context: productTaskContext(host.productDrafts[ct.ID].Materials), Quote: ct.SubmittedQuote})
+			ct.SubmittedQuote = nil
 		case "execution.textDelta":
 			if ct.ActiveTaskID == data.ExecutionID {
 				item := a.liveText(ct, data.ExecutionID, "pi")
@@ -606,6 +671,8 @@ func (a *appModel) applyProductBot(host *piAppHost, bot pi.ProductBot, created b
 	if ct.SessionID != bot.CurrentConversationID {
 		ct.SessionID = bot.CurrentConversationID
 		ct.Messages, ct.History, ct.Loaded = nil, nil, false
+		ct.recall = quoteRecall{}
+		ct.SubmittedQuote = nil
 		ct.LoadErr, ct.Unavailable = "", ""
 		applyProductExecution(ct, nil)
 		a.refreshProductConversation(host, ct, ct.draftRev)
@@ -629,8 +696,8 @@ func (a *appModel) refreshProductConversation(host *piAppHost, ct *contact, edit
 			}
 			host.productDrafts[ct.ID] = *value.Draft
 			if ct.draftRev == edit {
-				ct.Draft = value.Draft.Text
-				ct.Context.Items = productTaskContext(value.Draft.Materials)
+				applyProductDraft(ct, value.Draft)
+				a.updateDraftQuoteReference(ct)
 			}
 		})
 	}()

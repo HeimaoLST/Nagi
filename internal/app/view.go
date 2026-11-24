@@ -55,7 +55,9 @@ func (a *appModel) view(c *ui.Context) {
 			a.openSettingsTab(settingsTabAppearance, source)
 		}
 	})
-	if !a.settingsOpen {
+	ct := a.selectedContact()
+	composerHandlesEscape := a.quoteDraftEditable(ct) && ct.DraftQuote != nil && strings.TrimSpace(ct.Draft) == "" && c.Focused(a.composerHandle)
+	if !a.settingsOpen && !composerHandlesEscape {
 		c.OnShortcut(0, ui.KeyEscape, func() { a.escapeTopLayer() })
 	}
 	ui.Column(c).Fill().LinearGradient(ui.LinearGradient{From: a.workTheme.ChromeFrom, To: a.workTheme.ChromeTo, Angle: 180}).Children(func() {
@@ -1120,11 +1122,13 @@ func (a *appModel) productReadOnlyTranscript(c *ui.Context, t *ui.Theme, browser
 			m := messages[i]
 			chatMessageRow(c, t, messages, dividers, i, func() {
 				if m.Kind == msgUser {
-					a.userChatBubble(c, t, m)
+					a.userChatBubble(c, t, m, nil, &browser.recall, func() {
+						recallQuotedMessage(c, messages, &browser.transcript, &browser.recall, m.Quote)
+					})
 					return
 				}
 				scope := historyLinkScope(browser.ownerID, browser.selectedID, m.Key)
-				a.botReplyBubbles(c, t, m, scope, "")
+				a.botReplyBubbles(c, t, m, scope, "", nil, &browser.recall)
 			})
 		}).Label(msgs.ConversationMessagesLabel()).Fill().MaxWidth(conversationMaxWidth).Padding(16, 16, 32)
 	})
@@ -1162,18 +1166,25 @@ func (a *appModel) message(c *ui.Context, t *ui.Theme, ct *contact, m *message) 
 			return
 		}
 	case msgUser:
-		a.userChatBubble(c, t, m)
+		a.userChatBubble(c, t, m, ct, &ct.recall, func() {
+			recallQuotedMessage(c, ct.Messages, &ct.list, &ct.recall, m.Quote)
+		})
 	default:
-		a.botReplyBubbles(c, t, m, messageLinkScope(ct.ID, m), ct.SessionWorkingDir)
+		a.botReplyBubbles(c, t, m, messageLinkScope(ct.ID, m), ct.SessionWorkingDir, ct, &ct.recall)
 	}
 }
 
-func (a *appModel) userChatBubble(c *ui.Context, t *ui.Theme, m *message) {
+func (a *appModel) userChatBubble(c *ui.Context, t *ui.Theme, m *message, ct *contact, recall *quoteRecall, jump func()) {
 	ui.Row(c).FillWidth().Justify(ui.End).Children(func() {
 		ui.Column(c).MaxWidth(userMessageMaxWidth).MinWidth(0).Shrink(1).Gap(2).Children(func() {
+			if m.Quote != nil {
+				a.sentQuote(c, t, m.Quote, jump)
+			}
 			if m.Text != "" {
 				opts := messageReaderOptions(c, true)
 				opts.MessageBubble = &markdownMessageBubble{Background: a.workTheme.BubbleUser, PaddingX: 12, PaddingY: 8, Radius: 12, MenuOnlyCopy: true}
+				opts.MessageBubble.BeforeCopyMenu = a.quoteMenu(c, ct, m, userQuoteBubble, m.Text)
+				opts.MessageBubble.Highlight = recall.highlight(c, m, userQuoteBubble)
 				markdownReader(c, m.Text, opts).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text)
 			}
 			taskContextReadOnlyView(c, a.workTheme, m.Context)
@@ -1342,6 +1353,9 @@ func (a *appModel) composer(c *ui.Context, t *ui.Theme, state connectionViewStat
 			card.Shadow(0, 2, 10, 0, ui.RGBA(0, 0, 0, .05))
 		}
 		card.Children(func() {
+			if ct.DraftQuote != nil {
+				a.composerQuote(c, t, ct)
+			}
 			if ct.Context.Count() > 0 {
 				a.composerAttachments(c, t, ct)
 			}
@@ -1355,6 +1369,9 @@ func (a *appModel) composer(c *ui.Context, t *ui.Theme, state connectionViewStat
 				Placeholder(msgs.ComposerPlaceholder(ct.Name)).PlaceholderColor(wb.ComposerMuted).FillWidth().OnChange(func() {
 				a.draftChanged(ct)
 			}).OnTextKey(func(k ui.TextKey) bool {
+				if k.Key == ui.KeyEscape && strings.TrimSpace(k.Text()) == "" && a.removeDraftQuote(ct) {
+					return true
+				}
 				if k.Key != ui.KeyEnter || k.Mods&ui.Shift != 0 {
 					return false
 				}
