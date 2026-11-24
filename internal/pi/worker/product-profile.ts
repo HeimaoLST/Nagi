@@ -5,13 +5,14 @@ import { closeSync, fstatSync, lstatSync, openSync, readFileSync, renameSync, rm
 import { extname, isAbsolute } from 'node:path';
 import { Type } from 'typebox';
 import { Value } from 'typebox/value';
-import { RequestError, activityStateSchema, botSystemKindSchema, connectionSchema, draftSchema, executionSchema, hasCanonicalQuoteText, materialSchema,
+import { RequestError, activityStateSchema, botSystemKindSchema, connectionSchema, draftSchema, executionSchema, hasCanonicalQuoteText, materialSchema, mcpServerRecord,
   operationSchema, profileSchema, type ActivityState, type Connection, type Draft, type Execution, type Material, type Operation } from './protocol.js';
 import type { ProductProfile } from './product.js';
 import { lastingRulesFit, MAX_LOG_BYTES, MAX_PENDING_LEARNINGS, MAX_RULE_BYTES, MAX_WORK_LOGS,
   memorySnapshotSchema, validMemoryDate } from './bot-memory.js';
 import { decodeTraceBackup, directlyOwns, normalizeActivityGrants, type TraceBackup } from './product-trace.js';
 import { privateSkillBundleSchema, validateSkillBundles, type PrivateSkillBundle } from './bot-skills.js';
+import { maxMcpServers, uniqueMcpRegistry, validMcpBindings, validMcpServer } from './mcp-broker.js';
 
 export type ProductProfilePaths = {
   profilePath: string;
@@ -111,6 +112,7 @@ const savedProfileSchema = Type.Object({ version: Type.Literal(1),
   preferences: Type.Optional(Type.Object({ selectedBotId: Type.Optional(recoveryID), layout: Type.Optional(opaque),
     themeIds: Type.Optional(opaque), appearance: Type.Optional(Type.String()), hideBuiltinArchitect: Type.Optional(Type.Boolean()),
     discoverLocalSkills: Type.Optional(Type.Boolean()) }, strict)),
+  mcpServers: Type.Optional(Type.Array(mcpServerRecord, { maxItems: maxMcpServers })),
   issueToolScopes: Type.Optional(Type.Array(opaque)), untargetedReceipts: Type.Optional(Type.Array(opaque)),
   recovery: Type.Optional(Type.Object({ id: recoveryID, ui: Type.Optional(recoveryUISchema) }, strict)),
   memory: Type.Optional(memorySnapshotSchema),
@@ -127,10 +129,19 @@ export function decodeProductProfile(data: unknown): ProductProfile {
       throw new RequestError('profile_unavailable', 'The saved product profile has an invalid quote');
     }
   };
+  if (data.mcpServers) {
+    if (!uniqueMcpRegistry(data.mcpServers) || data.mcpServers.some(({ catalog, ...server }) => !validMcpServer(server))) invalid();
+    if (data.mcpServers.length === 0) delete data.mcpServers;
+  }
+  const serverIds = new Set(data.mcpServers?.map(server => server.serverId));
   const bots = new Map(data.bots.map(bot => [bot.botId, bot]));
   for (const { profile } of data.bots) {
     const mounted = profile.mountedSkills ?? [];
     if (new Set(mounted.map(ref => `${ref.source}:${ref.skillId}`)).size !== mounted.length) invalid();
+    if (profile.mcpBindings) {
+      if (!validMcpBindings(profile.mcpBindings) || profile.mcpBindings.some(binding => !serverIds.has(binding.serverId))) invalid();
+      if (!profile.mcpBindings.length) delete profile.mcpBindings;
+    }
   }
   const conversations = new Map(data.conversations.map(conversation => [conversation.conversationId, conversation]));
   const executions = new Map(data.executions.map(execution => [execution.executionId, execution]));

@@ -14,7 +14,7 @@ This document is the single authoritative domain vocabulary for Nagi across prod
 | **Material** | Shipped | Captured text snippets and file-reference snapshots attached to a Conversation draft or Activity. | `materialId` | `Draft.materials`, `Activity.materials` |
 | **Memory** | Shipped | Strictly per-Bot lasting rules (L1.5), pending review learnings, and searchable dated work logs. | `ruleId`, `learningId`, `logId` | SQLite `bot_memory_*`, wire `memory.*`, tools `memory_*` |
 | **Skill** | Shipped (M1 text `SKILL.md`; M3 sandboxed scripts planned in [RFC-0001](../rfcs/0001-multi-brain-and-capabilities.md)) | A reusable playbook (`SKILL.md`, M1) with optional OS-sandboxed Node 22 scripts (`scripts/*.mjs`, M3); global, workspace-scoped, or Bot-authored. | `skillId` | Skill catalog + `bots/<botId>/skills/`, wire `skill.*`, tools `skill_list`, `skill_read`, `skill_save`, `skill_delete` |
-| **MCP** | Planned ([RFC-0001](../rfcs/0001-multi-brain-and-capabilities.md)) | A globally configured external service connector (`stdio` or Streamable HTTP), pooled by the worker and mounted per Bot with scoped tool permissions. | `serverId` | SQLite `mcp_servers` (nonsecret) + private credential vault, wire `mcp.*` |
+| **MCP** | Shipped (M2 backend; UI handoff to `t1vb`) | A globally configured external service connector (`stdio` or Streamable HTTP), pooled by the worker (`shared` / `per_workspace` / `per_bot`) and mounted per Bot with scoped tool permissions (`all` / `readonly` / `allowlist`). | `serverId` | SQLite `mcp_servers` (nonsecret) + private `0600` `mcp-secrets.json` vault, wire `mcp.*`, event `mcp.changed` |
 
 ## Naming Conventions
 

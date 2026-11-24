@@ -11,7 +11,7 @@ import { Value } from 'typebox/value';
 import {
   MAX_FRAME, RequestError, canonicalJSON, draftSchema, frameBytes, hasCanonicalQuoteText, id, inspectionPage, profileSchema, resolveCodingTools, skillID, skillSource, skillText, toolPresetSchema,
   type ActivityState, type BotChange, type BotProfile, type Connection, type Draft, type Execution,
-  type Material, type OpenParams, type Operation, type ProductCommand, type ProductParams, type SkillChange, type SkillSource, type TraceItem,
+  type Material, type McpServerRecord, type McpServerView, type OpenParams, type Operation, type ProductCommand, type ProductParams, type SkillChange, type SkillSource, type TraceItem,
 } from './protocol.js';
 import { backupProductProfile, readPrivateConnection, saveCredential, type PrivateConnection, type ProductProfilePaths, type StoredConnection } from './product-profile.js';
 import { ProductSQLite } from './product-sqlite.js';
@@ -26,6 +26,9 @@ import { cursorScope, decodeCursor, encodeCursor, encodedBytes, inspectConversat
   publicConversationMessage, redactQuote, type InspectionParams } from './product-inspection.js';
 import { transcriptEntries, turnEntryType, type Transcript, type TranscriptOwner } from './product-transcript.js';
 import { BotSkills, formatSkill, type SkillWrite } from './bot-skills.js';
+import { containsMcpSecret, maxMcpServers, McpConnectionManager, uniqueMcpRegistry, validMcpBindings, validMcpServer } from './mcp-broker.js';
+import { McpVault, mcpSecretKeys, mcpSecretsComplete, mergeMcpSecrets, type McpVaultWrite } from './mcp-vault.js';
+import { projectionRedactor } from './product-redactor.js';
 
 const emptyDraft = (): Draft => ({ revision: 0, text: '', materials: [] });
 const newId = randomUUID;
@@ -137,6 +140,7 @@ export type ProductProfile = {
   untargetedReceipts?: object[];
   recovery?: { id: string; ui?: object };
   memory?: BotMemory;
+  mcpServers?: McpServerRecord[];
 };
 type ProductActor = { conversationId: string } | { activityId: string };
 type LiveExecution = {
@@ -243,6 +247,8 @@ function architectResult(bot: Bot) {
 export class Product {
   private readonly storage: ProductSQLite;
   private readonly skills: BotSkills;
+  private readonly vault: McpVault;
+  private readonly mcp = new McpConnectionManager();
   private readonly skillReload = new Set<string>();
   private readonly backgroundTasks = new Set<Promise<void>>();
   private storageClosed = false;
@@ -252,7 +258,7 @@ export class Product {
   private effectiveRevision: number | null;
   private closing = false;
   private readonly active = new Map<string, LiveExecution>();
-  private readonly sessions = new Map<string, { session: ProductSession; instructions: string }>();
+  private readonly sessions = new Map<string, { session: ProductSession; instructions: string; mcpSignature: string }>();
   private readonly waiters = new Map<string, AnswerWaiter>();
   private readonly pendingTraceUpdates = new Map<string, TraceUpdate>();
   private traceUpdateTimer?: ReturnType<typeof globalThis.setImmediate>;
@@ -260,7 +266,8 @@ export class Product {
   constructor(private paths: ProductProfilePaths, private engine: ProductEngine, private sendFrame: (frame: object) => Promise<void>) {
     this.credentials = readPrivateConnection(paths.credentialsPath);
     this.skills = new BotSkills(dirname(paths.profilePath));
-    this.storage = new ProductSQLite(paths.profilePath, this.skills);
+    this.vault = new McpVault(paths.credentialsPath);
+    this.storage = new ProductSQLite(paths.profilePath, this.skills, this.vault);
     try {
       this.profile = this.storage.open(paths, this.credentials);
       this.effectiveRevision = this.profile.appliedRevision;
@@ -307,10 +314,14 @@ export class Product {
     }
   }
 
-  private commit<T>(mutate: (candidate: ProductProfile) => T, skillWrite?: SkillWrite): T {
+  drainMcp(): Promise<void> { return this.mcp.shutdown(); }
+
+  killMcpOnExit(): void { this.mcp.killOnExit(); }
+
+  private commit<T>(mutate: (candidate: ProductProfile) => T, skillWrite?: SkillWrite, mcpWrite?: McpVaultWrite): T {
     const candidate = structuredClone(this.profile);
     const result = mutate(candidate);
-    const updates = this.storage.write(candidate, this.profile, skillWrite);
+    const updates = this.storage.write(candidate, this.profile, skillWrite, mcpWrite);
     this.profile = candidate;
     for (const update of updates) this.queueTraceUpdate(update);
     return result;
@@ -747,16 +758,126 @@ export class Product {
         this.emit('skill.changed', changed);
         return result;
       }
+      case 'mcp.list': {
+        const pools = this.mcp.status();
+        return { servers: (this.profile.mcpServers ?? []).map(server => this.mcpView(server, pools)) };
+      }
+      case 'mcp.status':
+        return { pools: this.mcp.status() };
+      case 'mcp.save':
+        return this.saveMcpServer(command.params);
+      case 'mcp.delete':
+        return this.deleteMcpServer(command.params);
+      case 'mcp.test':
+        return this.testMcpServer(command.params);
       case 'profile.backup': {
         if (this.active.size) stateError('busy', 'Finish or stop active work before saving a recovery copy');
         const redact = this.engine.redactor(this.credentialKeys());
         const { profile, backup } = this.storage.captureBackup(redact);
         const bundles = this.skills.backup(profile.bots, redact);
+        const vaultKeys = this.vault.keys();
+        if (vaultKeys.length && containsMcpSecret(profile, projectionRedactor(vaultKeys))) {
+          stateError('mcp_secret', 'Remove the MCP credential from saved product data before making a recovery copy');
+        }
         return backupProductProfile(this.paths, profile, { ...backup, ...(bundles.length ? { privateSkillBundles: bundles } : {}) }, command.params.destination);
       }
       case 'operation.get':
         return this.operation(command.params.operationId);
     }
+  }
+
+  private mcpView(server: McpServerRecord, pools: ReturnType<McpConnectionManager['status']>): McpServerView {
+    return { ...server, credentialStatus: mcpSecretsComplete(server, this.vault.get(server.serverId)) ? 'ok' : 'credential_missing',
+      pools: pools.filter(pool => pool.serverId === server.serverId) };
+  }
+
+  private mcpServer(serverId: string): McpServerRecord {
+    return this.profile.mcpServers?.find(server => server.serverId === serverId) ?? stateError('not_found', 'The MCP server does not exist');
+  }
+
+  private async saveMcpServer({ server, secrets, operationId }: ProductParams<'mcp.save'>): Promise<object> {
+    const method = 'mcp.save';
+    const { serverId } = server;
+    const params = { server, operationId };
+    const prior = this.sameOperation(method, operationId, params);
+    const servers = this.profile.mcpServers ?? [];
+    const previous = servers.find(row => row.serverId === serverId);
+    const savedSecrets = this.vault.get(serverId);
+    const values = mergeMcpSecrets(server, previous?.transport === server.transport ? savedSecrets : {}, secrets);
+    if (prior) {
+      const reply = prior.reply as { server: McpServerView };
+      if (previous?.revision === reply.server.revision && secrets !== undefined && canonicalJSON(values) !== canonicalJSON(savedSecrets)) {
+        stateError('operation_conflict', 'The operation ID belongs to different MCP credential input');
+      }
+      return reply;
+    }
+    if (server.revision !== undefined) requireRevision(previous?.revision ?? 0, server.revision);
+    if (!validMcpServer(server)) stateError('invalid_params', 'The MCP server configuration is invalid');
+    const redact = this.engine.redactor([...this.credentialKeys(), ...mcpSecretKeys(values)]);
+    if (containsMcpSecret(server, redact)) stateError('mcp_secret', 'Put credential values only in the MCP secret fields');
+    const { catalog, ...previousConfig } = previous ?? {};
+    const changedSecrets = canonicalJSON(values) !== canonicalJSON(savedSecrets);
+    const changedConfig = canonicalJSON({ ...server, revision: undefined }) !== canonicalJSON({ ...previousConfig, revision: undefined });
+    const record = { ...server, revision: (previous?.revision ?? 0) + 1, ...(!changedConfig && !changedSecrets && catalog ? { catalog } : {}) };
+    const next = previous ? servers.map(row => row.serverId === serverId ? record : row) : [...servers, record];
+    if (next.length > maxMcpServers || !uniqueMcpRegistry(next)) stateError('invalid_params', 'MCP server namespaces must be unique and the registry is limited to 64 servers');
+    const result = { server: { ...record, credentialStatus: mcpSecretsComplete(record, values) ? 'ok' : 'credential_missing', pools: [] } };
+    this.commit(candidate => {
+      candidate.mcpServers = next;
+      this.record(candidate, method, params, { operationId, target: { connection: true }, state: 'accepted', result }, result);
+    }, undefined, changedSecrets ? { serverId, values } : undefined);
+    await this.mcp.invalidate(serverId);
+    this.emit('mcp.changed', { serverId, change: 'saved' });
+    return result;
+  }
+
+  private async deleteMcpServer(params: ProductParams<'mcp.delete'>): Promise<object> {
+    const method = 'mcp.delete';
+    const { serverId, operationId } = params;
+    const prior = this.sameOperation(method, operationId, params);
+    if (prior) return prior.reply;
+    this.mcpServer(serverId);
+    const result = { deleted: true };
+    const changedBots = this.commit(candidate => {
+      const remaining = candidate.mcpServers!.filter(server => server.serverId !== serverId);
+      if (remaining.length) candidate.mcpServers = remaining;
+      else delete candidate.mcpServers;
+      const changed: Bot[] = [];
+      for (const bot of candidate.bots) {
+        const bindings = bot.profile.mcpBindings;
+        if (!bindings?.some(binding => binding.serverId === serverId)) continue;
+        const retained = bindings.filter(binding => binding.serverId !== serverId);
+        if (retained.length) bot.profile.mcpBindings = retained;
+        else delete bot.profile.mcpBindings;
+        bot.profileRevision++;
+        changed.push(bot);
+      }
+      this.record(candidate, method, params, { operationId, target: { connection: true }, state: 'accepted', result }, result);
+      return changed;
+    }, undefined, Object.keys(this.vault.get(serverId)).length ? { serverId, values: {} } : undefined);
+    await this.mcp.invalidate(serverId);
+    for (const { retained, ...bot } of changedBots) this.emit('bot.changed', { bot, change: 'updated' });
+    this.emit('mcp.changed', { serverId, change: 'deleted' });
+    return result;
+  }
+
+  private async testMcpServer({ serverId, server, secrets }: ProductParams<'mcp.test'>): Promise<object> {
+    if (Boolean(serverId) === Boolean(server)) stateError('invalid_params', 'Choose exactly one saved MCP server ID or draft configuration');
+    const saved = serverId === undefined ? undefined : this.mcpServer(serverId);
+    const draft = saved ?? { ...server!, revision: server!.revision ?? 0 };
+    if (server && !validMcpServer(server)) stateError('invalid_params', 'The MCP server configuration is invalid');
+    const previous = this.profile.mcpServers?.find(row => row.serverId === draft.serverId);
+    const values = mergeMcpSecrets(draft, previous?.transport === draft.transport ? this.vault.get(draft.serverId) : {}, secrets);
+    const redact = this.engine.redactor([...this.credentialKeys(), ...mcpSecretKeys(values)]);
+    const result = await this.mcp.test(draft, values, this.connection(this.profile, this.effectiveRevision)?.configuration.workingDirectory ?? dirname(this.paths.profilePath), redact);
+    if (saved) {
+      this.commit(candidate => {
+        const record = candidate.mcpServers!.find(row => row.serverId === saved.serverId)!;
+        record.catalog = { tools: result.tools, fetchedAt: new Date().toISOString(), ...(result.error ? { error: result.error } : {}) };
+      });
+      this.emit('mcp.changed', { serverId: saved.serverId, change: 'tested' });
+    }
+    return result;
   }
 
   private validateProfile(profile: BotProfile, savedWorkspace = ''): BotProfile {
@@ -766,6 +887,15 @@ export class Product {
     }
     const mounts = profile.mountedSkills ?? [];
     if (new Set(mounts.map(ref => `${ref.source}:${ref.skillId}`)).size !== mounts.length) stateError('invalid_params', 'A skill can be mounted only once per source');
+    if (profile.mcpBindings) {
+      if (!validMcpBindings(profile.mcpBindings) || profile.mcpBindings.some(binding => !this.profile.mcpServers?.some(server => server.serverId === binding.serverId))) {
+        stateError('invalid_params', 'MCP bindings must name distinct registered servers with a valid tool policy');
+      }
+      if (!profile.mcpBindings.length) {
+        const { mcpBindings, ...rest } = profile;
+        profile = rest;
+      }
+    }
     if (profile.mountedSkills?.length === 0) {
       const { mountedSkills, ...rest } = profile;
       profile = rest;
@@ -873,7 +1003,7 @@ export class Product {
   }
 
   credentialKeys(): string[] {
-    return Object.values(this.credentials?.sources ?? {}).map(source => source.api_key);
+    return [...Object.values(this.credentials?.sources ?? {}).map(source => source.api_key), ...this.vault.keys()];
   }
 
   private memoryCandidate(memory: BotMemory, bot: Bot, input: string, maxBytes: number,
@@ -951,7 +1081,9 @@ export class Product {
     const cold = !cached || !meta?.lastTurnAt || Date.now() - Date.parse(meta.lastTurnAt) >= MEMORY_COLD_TTL_MS;
     const reload = !!(existing && conversationBoundary && (this.skillReload.has(bot.botId) || cold ||
       meta?.forceReload && meta.rulesRevision !== (existing.memoryRulesRevision ?? 0)));
-    if (cached && existing && !reload && cached.instructions === existing.instructions) return { session: cached.session, binding: existing };
+    if (cached && existing && !reload && cached.instructions === existing.instructions && !cached.mcpSignature && !bot.profile.mcpBindings?.length) {
+      return { session: cached.session, binding: existing };
+    }
     const configured = this.connection(this.profile, existing?.connectionRevision ?? this.effectiveRevision);
     if (!configured) stateError('not_configured', 'The captured connection is unavailable');
     const { configuration, revision: connectionRevision } = configured;
@@ -976,11 +1108,25 @@ export class Product {
         credentialSource: configured.sourceId,
       },
     };
-    const tools = this.tools(owner);
-    const refresh = !!(cached && cached.instructions !== instructions);
+    const mounts = (bot.profile.mcpBindings ?? []).flatMap(binding => {
+      const server = this.profile.mcpServers?.find(item => item.serverId === binding.serverId);
+      return server ? [{ server, binding, secrets: this.vault.get(server.serverId) }] : [];
+    });
+    const mcp = await this.mcp.tools({ botId: bot.botId, cwd }, mounts, serverId => {
+      const current = this.profile.bots.find(item => item.botId === bot.botId && !item.archived);
+      const target = 'activityId' in owner ? this.profile.activities.find(item => item.activityId === owner.activityId) :
+        this.profile.conversations.find(item => item.conversationId === owner.conversationId);
+      const executionId = target && ('ownerBotId' in target ? target.executionIds.at(-1) : target.latestExecutionId);
+      if (!current || !executionId || !this.active.has(executionId)) return;
+      const binding = current.profile.mcpBindings?.find(item => item.serverId === serverId);
+      const server = this.profile.mcpServers?.find(item => item.serverId === serverId);
+      if (binding && server) return { server, binding, secrets: this.vault.get(serverId) };
+    }, () => this.engine.redactor(this.credentialKeys()));
+    const tools = [...this.tools(owner), ...mcp.tools];
+    const refresh = !!(cached && (cached.instructions !== instructions || cached.mcpSignature !== mcp.signature));
     if (refresh) this.sessions.delete(contextId);
     const session = refresh ? await this.engine.refreshSession(params, tools) : await this.engine.open(params, tools);
-    this.sessions.set(contextId, { session, instructions });
+    this.sessions.set(contextId, { session, instructions, mcpSignature: mcp.signature });
     if (conversationBoundary) this.skillReload.delete(bot.botId);
     return { session, binding: { contextId, sessionRef: session.sessionRef, connectionRevision, profileRevision, cwd, instructions, codingTools,
       used: existing?.used ?? false, memoryRulesRevision } };
