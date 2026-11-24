@@ -7,28 +7,28 @@ import (
 	"testing"
 )
 
-func issueToolScopeForTest() IssueToolScope {
-	return IssueToolScope{
+func issueToolScopeForTest() ActivityToolScope {
+	return ActivityToolScope{
 		Ref: "scope-turn-1", ContactID: "contact-x", RuntimeSessionID: "conversation-1",
 		TurnID: "turn-1", AllowedIssueIDs: []string{"issue-a", "issue-b"}, AllowCreate: true,
 		CreatedAt: 1,
 	}
 }
 
-func issueToolTestIssue(id, contactID, status string) *productIssue {
-	return &productIssue{
+func issueToolTestIssue(id, contactID, status string) *productActivity {
+	return &productActivity{
 		ID: id, ContactID: contactID, Goal: "goal " + id, Status: status, RequirementsRevision: 3,
-		Requirements: []*issueRequirement{{ID: "req-" + id, Text: "requirement " + id, State: requirementUnverified}},
+		Requirements: []*activityRequirement{{ID: "req-" + id, Text: "requirement " + id, State: requirementUnverified}},
 	}
 }
 
-func issueToolCreateRequest(scope IssueToolScope, goal string) IssueToolActionRequest {
-	return IssueToolActionRequest{ScopeRef: scope.Ref, Action: issueToolActionCreate, Goal: goal}
+func issueToolCreateRequest(scope ActivityToolScope, goal string) ActivityToolActionRequest {
+	return ActivityToolActionRequest{ScopeRef: scope.Ref, Action: activityToolActionCreate, Goal: goal}
 }
 
 // runReserved is the module consumer: it runs the side effect only after a new
 // operation was durably reserved. Duplicate/unknown/error paths do not call it.
-func runReserved(ledger *IssueToolOperationLedger, scope IssueToolScope, request IssueToolActionRequest, save func() error, execute func(*IssueToolOperation)) (*IssueToolOperation, bool, error) {
+func runReserved(ledger *ActivityToolOperationLedger, scope ActivityToolScope, request ActivityToolActionRequest, save func() error, execute func(*ActivityToolOperation)) (*ActivityToolOperation, bool, error) {
 	operation, isNew, err := ledger.Reserve(scope, request, save)
 	if err != nil {
 		return nil, false, err
@@ -47,48 +47,48 @@ func TestIssueToolScopeIsOwnerBoundBeforeRuntimeTask(t *testing.T) {
 	if scope.RuntimeTaskID != "" {
 		t.Fatal("scope unexpectedly requires a Runtime task ID")
 	}
-	if !scopeAllowsIssue(scope, issueToolTestIssue("issue-a", "contact-x", issueStatusInProgress)) {
+	if !scopeAllowsActivity(scope, issueToolTestIssue("issue-a", "contact-x", activityStatusInProgress)) {
 		t.Fatal("owner issue was not allowed")
 	}
-	if scopeAllowsIssue(scope, issueToolTestIssue("issue-c", "contact-x", issueStatusInProgress)) {
+	if scopeAllowsActivity(scope, issueToolTestIssue("issue-c", "contact-x", activityStatusInProgress)) {
 		t.Fatal("unlisted same-owner issue was allowed")
 	}
-	if scopeAllowsIssue(scope, issueToolTestIssue("issue-a", "contact-y", issueStatusInProgress)) {
+	if scopeAllowsActivity(scope, issueToolTestIssue("issue-a", "contact-y", activityStatusInProgress)) {
 		t.Fatal("other owner's issue was allowed")
 	}
-	if err := (IssueToolActionRequest{ScopeRef: scope.Ref, Action: issueToolActionRun, IssueID: "issue-c"}).Validate(scope); err == nil {
+	if err := (ActivityToolActionRequest{ScopeRef: scope.Ref, Action: activityToolActionRun, IssueID: "issue-c"}).Validate(scope); err == nil {
 		t.Fatal("cross-issue action validation succeeded")
 	}
 }
 
 func TestIssueToolListAndGetAreBoundedAndUseExistingFacts(t *testing.T) {
 	scope := issueToolScopeForTest()
-	issues := []*productIssue{
-		issueToolTestIssue("issue-a", "contact-x", issueStatusInProgress),
-		issueToolTestIssue("issue-b", "contact-x", issueStatusCompleted),
-		issueToolTestIssue("issue-c", "contact-y", issueStatusInProgress),
+	issues := []*productActivity{
+		issueToolTestIssue("issue-a", "contact-x", activityStatusInProgress),
+		issueToolTestIssue("issue-b", "contact-x", activityStatusCompleted),
+		issueToolTestIssue("issue-c", "contact-y", activityStatusInProgress),
 	}
-	first, err := issueToolList(scope, issues, false, 1, "")
+	first, err := activityToolList(scope, issues, false, 1, "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(first.Issues) != 1 || !first.HasMore || first.NextCursor == "" {
 		t.Fatalf("first page = %+v", first)
 	}
-	second, err := issueToolList(scope, issues, false, 10, first.NextCursor)
+	second, err := activityToolList(scope, issues, false, 10, first.NextCursor)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(second.Issues) != 1 || second.HasMore {
 		t.Fatalf("second page = %+v", second)
 	}
-	if _, err := issueToolList(scope, issues, false, 1, "not-a-cursor"); err == nil {
+	if _, err := activityToolList(scope, issues, false, 1, "not-a-cursor"); err == nil {
 		t.Fatal("invalid cursor was accepted")
 	}
-	if _, err := issueToolGet(scope, issues, "issue-c"); err == nil {
+	if _, err := activityToolGet(scope, issues, "issue-c"); err == nil {
 		t.Fatal("cross-owner get succeeded")
 	}
-	detail, err := issueToolGet(scope, issues, "issue-a")
+	detail, err := activityToolGet(scope, issues, "issue-a")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,26 +96,26 @@ func TestIssueToolListAndGetAreBoundedAndUseExistingFacts(t *testing.T) {
 		t.Fatalf("get detail = %+v", detail)
 	}
 
-	issue := issueToolTestIssue("issue-long", "contact-x", issueStatusInProgress)
+	issue := issueToolTestIssue("issue-long", "contact-x", activityStatusInProgress)
 	scope.AllowedIssueIDs = append(scope.AllowedIssueIDs, issue.ID)
 	for i := 0; i < 21; i++ {
-		issue.Executions = append(issue.Executions, &issueExecution{ID: "exec-" + string(rune('a'+i)), Status: issueExecutionCompleted})
+		issue.Executions = append(issue.Executions, &activityExecution{ID: "exec-" + string(rune('a'+i)), Status: activityExecutionCompleted})
 	}
-	longDetail, err := issueToolGet(scope, []*productIssue{issue}, issue.ID)
+	longDetail, err := activityToolGet(scope, []*productActivity{issue}, issue.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if longDetail.ExecutionCount != 21 || len(longDetail.Executions) != 20 || !longDetail.ExecutionsHasMore {
 		t.Fatalf("execution bound = count %d returned %d hasMore %v", longDetail.ExecutionCount, len(longDetail.Executions), longDetail.ExecutionsHasMore)
 	}
-	if issues[0].Status != issueStatusInProgress || issues[0].Requirements[0].State != requirementUnverified {
+	if issues[0].Status != activityStatusInProgress || issues[0].Requirements[0].State != requirementUnverified {
 		t.Fatalf("query mutated issue facts = %+v", issues[0])
 	}
 }
 
 func TestIssueToolReservationConsumerDoesNotRepeatOrReusePayload(t *testing.T) {
 	scope := issueToolScopeForTest()
-	ledger := &IssueToolOperationLedger{}
+	ledger := &ActivityToolOperationLedger{}
 	saves, executions := 0, 0
 	executedIDs := []string{}
 	save := func() error {
@@ -123,7 +123,7 @@ func TestIssueToolReservationConsumerDoesNotRepeatOrReusePayload(t *testing.T) {
 		_, err := json.Marshal(ledger)
 		return err
 	}
-	execute := func(operation *IssueToolOperation) {
+	execute := func(operation *ActivityToolOperation) {
 		executions++
 		executedIDs = append(executedIDs, operation.ID)
 	}
@@ -145,7 +145,7 @@ func TestIssueToolReservationConsumerDoesNotRepeatOrReusePayload(t *testing.T) {
 		!strings.Contains(err.Error(), "different payload") {
 		t.Fatalf("different payload = %v", err)
 	}
-	if _, _, err := runReserved(ledger, scope, IssueToolActionRequest{ScopeRef: scope.Ref, Action: issueToolActionRun, IssueID: "issue-c"}, save, execute); err == nil ||
+	if _, _, err := runReserved(ledger, scope, ActivityToolActionRequest{ScopeRef: scope.Ref, Action: activityToolActionRun, IssueID: "issue-c"}, save, execute); err == nil ||
 		!strings.Contains(err.Error(), "scope") {
 		t.Fatalf("cross-issue = %v", err)
 	}
@@ -156,25 +156,25 @@ func TestIssueToolReservationConsumerDoesNotRepeatOrReusePayload(t *testing.T) {
 
 func TestIssueToolOperationPersistsAndDoesNotReplay(t *testing.T) {
 	scope := issueToolScopeForTest()
-	ledger := &IssueToolOperationLedger{}
+	ledger := &ActivityToolOperationLedger{}
 	saves, executions := 0, 0
 	save := func() error {
 		saves++
 		_, err := json.Marshal(ledger)
 		return err
 	}
-	first, isNew, err := runReserved(ledger, scope, issueToolCreateRequest(scope, "reload goal"), save, func(*IssueToolOperation) { executions++ })
+	first, isNew, err := runReserved(ledger, scope, issueToolCreateRequest(scope, "reload goal"), save, func(*ActivityToolOperation) { executions++ })
 	if err != nil || !isNew || first == nil {
 		t.Fatalf("first = %+v new=%v err=%v", first, isNew, err)
 	}
-	if err := ledger.SetReceipt(first.ID, &IssueToolReceipt{State: issueToolReceiptUnknown}, save); err != nil {
+	if err := ledger.SetReceipt(first.ID, &ActivityToolReceipt{State: activityToolReceiptUnknown}, save); err != nil {
 		t.Fatal(err)
 	}
 	data, err := json.Marshal(ledger)
 	if err != nil {
 		t.Fatal(err)
 	}
-	var reloaded IssueToolOperationLedger
+	var reloaded ActivityToolOperationLedger
 	if err := json.Unmarshal(data, &reloaded); err != nil {
 		t.Fatal(err)
 	}
@@ -182,23 +182,23 @@ func TestIssueToolOperationPersistsAndDoesNotReplay(t *testing.T) {
 	existing, isNew, err := runReserved(&reloaded, scope, issueToolCreateRequest(scope, "reload goal"), func() error {
 		reloadedSaves++
 		return nil
-	}, func(*IssueToolOperation) { reloadedExecutions++ })
+	}, func(*ActivityToolOperation) { reloadedExecutions++ })
 	if err != nil || isNew || existing.ID != first.ID || reloadedSaves != 0 || reloadedExecutions != 0 {
 		t.Fatalf("reloaded duplicate = %+v new=%v saves=%d executions=%d err=%v", existing, isNew, reloadedSaves, reloadedExecutions, err)
 	}
-	if existing.Receipt == nil || existing.Receipt.State != issueToolReceiptUnknown {
+	if existing.Receipt == nil || existing.Receipt.State != activityToolReceiptUnknown {
 		t.Fatalf("receipt after reload = %+v", existing.Receipt)
 	}
 }
 
 func TestIssueToolReserveSaveFailureDoesNotConsumeAction(t *testing.T) {
 	scope := issueToolScopeForTest()
-	ledger := &IssueToolOperationLedger{}
+	ledger := &ActivityToolOperationLedger{}
 	saves, executions := 0, 0
 	_, isNew, err := runReserved(ledger, scope, issueToolCreateRequest(scope, "save failure"), func() error {
 		saves++
-		return errIssueToolSaveRequired
-	}, func(*IssueToolOperation) { executions++ })
+		return errActivityToolSaveRequired
+	}, func(*ActivityToolOperation) { executions++ })
 	if err == nil || isNew || len(ledger.Operations) != 0 || saves != 1 || executions != 0 {
 		t.Fatalf("save failure = new=%v operations=%d saves=%d executions=%d err=%v", isNew, len(ledger.Operations), saves, executions, err)
 	}
@@ -206,22 +206,22 @@ func TestIssueToolReserveSaveFailureDoesNotConsumeAction(t *testing.T) {
 
 func TestIssueToolSetReceiptRequiresCurrentLedgerMemberAndTarget(t *testing.T) {
 	scope := issueToolScopeForTest()
-	ledger := &IssueToolOperationLedger{}
+	ledger := &ActivityToolOperationLedger{}
 	saves := 0
 	save := func() error { saves++; return nil }
-	operation, _, err := runReserved(ledger, scope, IssueToolActionRequest{ScopeRef: scope.Ref, Action: issueToolActionRun, IssueID: "issue-a"}, save, func(*IssueToolOperation) {})
+	operation, _, err := runReserved(ledger, scope, ActivityToolActionRequest{ScopeRef: scope.Ref, Action: activityToolActionRun, IssueID: "issue-a"}, save, func(*ActivityToolOperation) {})
 	if err != nil {
 		t.Fatal(err)
 	}
-	wrong := &IssueToolOperationLedger{}
-	if err := wrong.SetReceipt(operation.ID, &IssueToolReceipt{State: issueToolReceiptUnknown}, save); err == nil {
+	wrong := &ActivityToolOperationLedger{}
+	if err := wrong.SetReceipt(operation.ID, &ActivityToolReceipt{State: activityToolReceiptUnknown}, save); err == nil {
 		t.Fatal("foreign ledger accepted a receipt")
 	}
 	if saves != 1 {
 		t.Fatalf("foreign receipt save count = %d", saves)
 	}
-	accepted := &IssueToolReceipt{State: issueToolReceiptAccepted, IssueID: "issue-a", ExecutionID: "e", SessionID: "s", TaskID: "t"}
-	if err := ValidateIssueToolReceipt(accepted); err == nil {
+	accepted := &ActivityToolReceipt{State: activityToolReceiptAccepted, IssueID: "issue-a", ExecutionID: "e", SessionID: "s", TaskID: "t"}
+	if err := ValidateActivityToolReceipt(accepted); err == nil {
 		t.Fatal("accepted receipt without an admitted Pi run passed")
 	}
 	accepted.PiRun = &piActivityRun{WorkerEpoch: "epoch", ContextID: "activity", SessionRef: "s", RunID: "t", Admitted: true}
@@ -240,13 +240,13 @@ func TestIssueToolSetReceiptRequiresCurrentLedgerMemberAndTarget(t *testing.T) {
 
 func TestIssueToolRevisionValidationKeepsInvalidActionSentinel(t *testing.T) {
 	scope := issueToolScopeForTest()
-	for _, action := range []string{issueToolActionUpdate, issueToolActionWait} {
-		request := IssueToolActionRequest{
+	for _, action := range []string{activityToolActionUpdate, activityToolActionWait} {
+		request := ActivityToolActionRequest{
 			ScopeRef: scope.Ref, Action: action, IssueID: "issue-a", Goal: "goal", Text: "text",
 		}
 		err := request.Validate(scope)
-		if !errors.Is(err, errIssueToolAction) {
-			t.Fatalf("%s revision error = %v, want errIssueToolAction", action, err)
+		if !errors.Is(err, errActivityToolAction) {
+			t.Fatalf("%s revision error = %v, want errActivityToolAction", action, err)
 		}
 	}
 }

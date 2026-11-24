@@ -45,22 +45,22 @@ func saveContactsWithPreferences(s *contactStore, contacts []*contact, selected,
 			PiBinding:          clonePiConversationBinding(c.PiBinding),
 			PreviousPiBindings: c.piPreviousBindings(),
 			PendingSend:        clonePendingSend(c.pendingSend),
-			SelectedIssueID:    c.SelectedIssueID,
+			SelectedIssueID:    c.SelectedActivityID,
 			UpdatedAt:          nowMillis(),
 		}
 		candidate.Contacts = append(candidate.Contacts, storedCt)
-		for _, issue := range c.Issues {
-			stored := storedIssue{
-				ID: issue.ID, ContactID: issue.ContactID, Goal: issue.Goal,
-				Status: issue.Status, Archived: issue.Archived,
-				Evidence: issue.Evidence, CreatedAt: issue.CreatedAt, UpdatedAt: issue.UpdatedAt,
-				PiBinding:     clonePiActivityBinding(issue.PiBinding),
-				Handoff:       cloneIssueHandoff(issue.Handoff),
-				WorkSessionID: issue.WorkSessionID, RequirementsRevision: issue.RequirementsRevision,
-				TaskContext: issue.Context.Snapshot(), Supplements: cloneIssueSupplementLedger(issue.Supplements),
-				Questions: store.CloneIssueQuestions(issue.Questions),
+		for _, activity := range c.Activities {
+			stored := storedActivity{
+				ID: activity.ID, ContactID: activity.ContactID, Goal: activity.Goal,
+				Status: activity.Status, Archived: activity.Archived,
+				Evidence: activity.Evidence, CreatedAt: activity.CreatedAt, UpdatedAt: activity.UpdatedAt,
+				PiBinding:     clonePiActivityBinding(activity.PiBinding),
+				Handoff:       cloneActivityHandoff(activity.Handoff),
+				WorkSessionID: activity.WorkSessionID, RequirementsRevision: activity.RequirementsRevision,
+				TaskContext: activity.Context.Snapshot(), Supplements: cloneActivitySupplementLedger(activity.Supplements),
+				Questions: store.CloneIssueQuestions(activity.Questions),
 			}
-			for _, requirement := range issue.Requirements {
+			for _, requirement := range activity.Requirements {
 				if requirement == nil || strings.TrimSpace(requirement.Text) == "" {
 					continue
 				}
@@ -69,8 +69,8 @@ func saveContactsWithPreferences(s *contactStore, contacts []*contact, selected,
 					Evidence: requirement.Evidence, UpdatedAt: requirement.UpdatedAt,
 				})
 			}
-			for _, execution := range issue.Executions {
-				stored.Executions = append(stored.Executions, storedIssueExecution{
+			for _, execution := range activity.Executions {
+				stored.Executions = append(stored.Executions, storedActivityExecution{
 					ID: execution.ID, SessionID: execution.SessionID, TaskID: execution.TaskID,
 					MessageID: execution.MessageID, Prompt: execution.Prompt,
 					Status: execution.Status, Detail: execution.Detail,

@@ -359,7 +359,7 @@ func (a *appModel) bindBotRowMenu(row ui.Element, contactID string, msgs locales
 		}
 		ready := a.productProfileReady() && !a.dataRecoveryBlocksChanges()
 		mutable := ready || a.demo
-		count := len(ct.Issues)
+		count := len(ct.Activities)
 		if ct.activity.loaded && ct.activity.nextCursor == nil {
 			count = max(count, len(ct.activity.items))
 		}
@@ -1064,10 +1064,10 @@ func (a *appModel) productActivityResultView(c *ui.Context, t *ui.Theme, p *prod
 	if file := p.file; file != nil {
 		a.activityText(c, t, file.Path)
 		a.activityText(c, t, msgs.ResultCurrentFileDiff())
-		if notice := issueResultInspectionNoticeText(msgs, *file); notice != "" {
+		if notice := activityResultInspectionNoticeText(msgs, *file); notice != "" {
 			a.activityText(c, t, notice)
 		} else if file.ReadErrorKind != "" {
-			a.activityText(c, t, issueResultNoticeText(msgs, file.ReadErrorKind, file.ReadErrorDetail))
+			a.activityText(c, t, activityResultNoticeText(msgs, file.ReadErrorKind, file.ReadErrorDetail))
 		} else if file.Size == 0 {
 			a.activityText(c, t, msgs.ResultEmptyFile())
 		} else {
@@ -1577,12 +1577,12 @@ func (a *appModel) openMarkdownFile(base, destination string) error {
 	if open == nil {
 		open = openFileWithSystem
 	}
-	action := requestOpenIssueResultFile(issueResultFile{Path: filepath.Clean(path)}, open)
+	action := requestOpenActivityResultFile(activityResultFile{Path: filepath.Clean(path)}, open)
 	if action.NoticeKind != "" {
-		return errors.New(issueResultNoticeText(msgs, action.NoticeKind, action.NoticeDetail))
+		return errors.New(activityResultNoticeText(msgs, action.NoticeKind, action.NoticeDetail))
 	}
 	if action.ErrKind != "" {
-		return errors.New(issueResultNoticeText(msgs, action.ErrKind, action.ErrDetail))
+		return errors.New(activityResultNoticeText(msgs, action.ErrKind, action.ErrDetail))
 	}
 	return nil
 }

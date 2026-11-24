@@ -65,63 +65,63 @@ const (
 	iconContext  = theme.IconContext
 	iconPrimary  = theme.IconPrimary
 
-	contactStoreVersion              = store.ContactStoreVersion
-	storeRecoveryNotInstalled        = store.StoreRecoveryNotInstalled
-	storeRecoveryVerifiedInstalled   = store.StoreRecoveryVerifiedInstalled
-	storeRecoveryInstallUnconfirmed  = store.StoreRecoveryInstallUnconfirmed
-	issueQuestionOpen                = store.IssueQuestionOpen
-	issueQuestionAnswered            = store.IssueQuestionAnswered
-	issueQuestionSuperseded          = store.IssueQuestionSuperseded
-	issueQuestionDeliverySaved       = store.IssueQuestionDeliverySaved
-	issueQuestionDeliveryDispatching = store.IssueQuestionDeliveryDispatching
-	issueQuestionDeliveryResolved    = store.IssueQuestionDeliveryResolved
-	issueQuestionDeliveryUnknown     = store.IssueQuestionDeliveryUnknown
-	issueQuestionDeliveryCanceled    = store.IssueQuestionDeliveryCanceled
-	issueStatusNotStarted            = store.IssueStatusNotStarted
-	issueStatusInProgress            = store.IssueStatusInProgress
-	issueStatusWaitingUser           = store.IssueStatusWaitingUser
-	issueStatusNeedsAttention        = store.IssueStatusNeedsAttention
-	issueStatusCompleted             = store.IssueStatusCompleted
-	issueStatusCanceled              = store.IssueStatusCanceled
-	requirementUnverified            = store.RequirementUnverified
-	requirementSatisfied             = store.RequirementSatisfied
-	requirementUnmet                 = store.RequirementUnmet
-	issueExecutionPending            = store.IssueExecutionPending
-	issueExecutionNotDispatched      = store.IssueExecutionNotDispatched
-	issueExecutionRejected           = store.IssueExecutionRejected
-	issueExecutionAccepted           = store.IssueExecutionAccepted
-	issueExecutionRunning            = store.IssueExecutionRunning
-	issueExecutionCompleted          = store.IssueExecutionCompleted
-	issueExecutionFailed             = store.IssueExecutionFailed
-	issueExecutionInterrupted        = store.IssueExecutionInterrupted
-	issueExecutionUnknown            = store.IssueExecutionUnknown
-	supplementStatePending           = store.SupplementStatePending
-	supplementStateDispatching       = store.SupplementStateDispatching
-	supplementStateSubmitted         = store.SupplementStateSubmitted
-	supplementStateRejected          = store.SupplementStateRejected
-	supplementStateNotDispatched     = store.SupplementStateNotDispatched
-	supplementStateUnknown           = store.SupplementStateUnknown
-	supplementBatchDispatching       = store.SupplementBatchDispatching
-	supplementBatchAccepted          = store.SupplementBatchAccepted
-	supplementBatchRejected          = store.SupplementBatchRejected
-	supplementBatchNotDispatched     = store.SupplementBatchNotDispatched
-	supplementBatchUnknown           = store.SupplementBatchUnknown
-	supplementBatchCanceled          = store.SupplementBatchCanceled
-	issueToolActionCreate            = store.IssueToolActionCreate
-	issueToolActionUpdate            = store.IssueToolActionUpdate
-	issueToolActionRun               = store.IssueToolActionRun
-	issueToolActionStop              = store.IssueToolActionStop
-	issueToolActionAddSupplement     = store.IssueToolActionAddSupplement
-	issueToolActionWait              = store.IssueToolActionWait
-	issueToolActionResume            = store.IssueToolActionResume
-	issueToolReceiptSaved            = store.IssueToolReceiptSaved
-	issueToolReceiptDispatching      = store.IssueToolReceiptDispatching
-	issueToolReceiptAccepted         = store.IssueToolReceiptAccepted
-	issueToolReceiptStopRequested    = store.IssueToolReceiptStopRequested
-	issueToolReceiptUnknown          = store.IssueToolReceiptUnknown
-	issueToolModeConversation        = store.IssueToolModeConversation
-	issueToolModeWork                = store.IssueToolModeWork
-	issueToolExecutionPageLimit      = store.IssueToolExecutionPageLimit
+	contactStoreVersion                 = store.ContactStoreVersion
+	storeRecoveryNotInstalled           = store.StoreRecoveryNotInstalled
+	storeRecoveryVerifiedInstalled      = store.StoreRecoveryVerifiedInstalled
+	storeRecoveryInstallUnconfirmed     = store.StoreRecoveryInstallUnconfirmed
+	activityQuestionOpen                = store.IssueQuestionOpen
+	activityQuestionAnswered            = store.IssueQuestionAnswered
+	activityQuestionSuperseded          = store.IssueQuestionSuperseded
+	activityQuestionDeliverySaved       = store.IssueQuestionDeliverySaved
+	activityQuestionDeliveryDispatching = store.IssueQuestionDeliveryDispatching
+	activityQuestionDeliveryResolved    = store.IssueQuestionDeliveryResolved
+	activityQuestionDeliveryUnknown     = store.IssueQuestionDeliveryUnknown
+	activityQuestionDeliveryCanceled    = store.IssueQuestionDeliveryCanceled
+	activityStatusNotStarted            = store.IssueStatusNotStarted
+	activityStatusInProgress            = store.IssueStatusInProgress
+	activityStatusWaitingUser           = store.IssueStatusWaitingUser
+	activityStatusNeedsAttention        = store.IssueStatusNeedsAttention
+	activityStatusCompleted             = store.IssueStatusCompleted
+	activityStatusCanceled              = store.IssueStatusCanceled
+	requirementUnverified               = store.RequirementUnverified
+	requirementSatisfied                = store.RequirementSatisfied
+	requirementUnmet                    = store.RequirementUnmet
+	activityExecutionPending            = store.IssueExecutionPending
+	activityExecutionNotDispatched      = store.IssueExecutionNotDispatched
+	activityExecutionRejected           = store.IssueExecutionRejected
+	activityExecutionAccepted           = store.IssueExecutionAccepted
+	activityExecutionRunning            = store.IssueExecutionRunning
+	activityExecutionCompleted          = store.IssueExecutionCompleted
+	activityExecutionFailed             = store.IssueExecutionFailed
+	activityExecutionInterrupted        = store.IssueExecutionInterrupted
+	activityExecutionUnknown            = store.IssueExecutionUnknown
+	supplementStatePending              = store.SupplementStatePending
+	supplementStateDispatching          = store.SupplementStateDispatching
+	supplementStateSubmitted            = store.SupplementStateSubmitted
+	supplementStateRejected             = store.SupplementStateRejected
+	supplementStateNotDispatched        = store.SupplementStateNotDispatched
+	supplementStateUnknown              = store.SupplementStateUnknown
+	supplementBatchDispatching          = store.SupplementBatchDispatching
+	supplementBatchAccepted             = store.SupplementBatchAccepted
+	supplementBatchRejected             = store.SupplementBatchRejected
+	supplementBatchNotDispatched        = store.SupplementBatchNotDispatched
+	supplementBatchUnknown              = store.SupplementBatchUnknown
+	supplementBatchCanceled             = store.SupplementBatchCanceled
+	activityToolActionCreate            = store.IssueToolActionCreate
+	activityToolActionUpdate            = store.IssueToolActionUpdate
+	activityToolActionRun               = store.IssueToolActionRun
+	activityToolActionStop              = store.IssueToolActionStop
+	activityToolActionAddSupplement     = store.IssueToolActionAddSupplement
+	activityToolActionWait              = store.IssueToolActionWait
+	activityToolActionResume            = store.IssueToolActionResume
+	activityToolReceiptSaved            = store.IssueToolReceiptSaved
+	activityToolReceiptDispatching      = store.IssueToolReceiptDispatching
+	activityToolReceiptAccepted         = store.IssueToolReceiptAccepted
+	activityToolReceiptStopRequested    = store.IssueToolReceiptStopRequested
+	activityToolReceiptUnknown          = store.IssueToolReceiptUnknown
+	activityToolModeConversation        = store.IssueToolModeConversation
+	activityToolModeWork                = store.IssueToolModeWork
+	activityToolExecutionPageLimit      = store.IssueToolExecutionPageLimit
 
 	connectionAPIResponses                 = connection.APIResponses
 	connectionAPIChatCompletions           = connection.APIChatCompletions
@@ -144,7 +144,6 @@ const (
 	connBlockedNoSaved                     = connection.BlockedNoSaved
 	connBlockedStore                       = connection.BlockedStore
 	connBlockedActiveWork                  = connection.BlockedActiveWork
-	connBlockedUntrustedIssue              = connection.BlockedUntrustedIssue
 
 	taskContextMaxBytes = materials.MaxBytes
 )
@@ -163,54 +162,50 @@ type (
 	markdownMessageBubble = markdown.MessageBubble
 	markdownLinkTarget    = markdown.LinkTarget
 
-	taskContextItem            = store.TaskContextItem
-	pendingSend                = store.PendingSend
-	piSelection                = store.PiSelection
-	piConfiguration            = store.PiConfiguration
-	piConversationBinding      = store.PiConversationBinding
-	piActivityBinding          = store.PiActivityBinding
-	piActivityRun              = store.PiActivityRun
-	piQuestionCall             = store.PiQuestionCall
-	issueQuestion              = store.IssueQuestion
-	issueRequirement           = store.IssueRequirement
-	issueExecution             = store.IssueExecution
-	productActivityIntent      = store.ProductActivityIntent
-	issueHandoff               = store.IssueHandoff
-	issueSupplementTarget      = store.IssueSupplementTarget
-	issueSupplement            = store.IssueSupplement
-	issueSupplementBatch       = store.IssueSupplementBatch
-	issueSupplementAssociation = store.IssueSupplementAssociation
-	issueSupplementLedger      = store.IssueSupplementLedger
-	IssueToolContent           = store.IssueToolContent
-	IssueToolForwardRequest    = store.IssueToolForwardRequest
-	IssueToolForwardResponse   = store.IssueToolForwardResponse
-	IssueToolDefinition        = store.IssueToolDefinition
-	IssueToolScope             = store.IssueToolScope
-	IssueToolError             = store.IssueToolError
-	IssueToolActionRequest     = store.IssueToolActionRequest
-	IssueToolReceipt           = store.IssueToolReceipt
-	IssueToolOperation         = store.IssueToolOperation
-	IssueToolOperationLedger   = store.IssueToolOperationLedger
-	IssueToolIssueListResult   = store.IssueToolIssueListResult
-	IssueToolIssueSummary      = store.IssueToolIssueSummary
-	IssueToolRequirementView   = store.IssueToolRequirementView
-	IssueToolExecutionView     = store.IssueToolExecutionView
-	IssueToolResultFileView    = store.IssueToolResultFileView
-	IssueToolPiProgress        = store.IssueToolPiProgress
-	IssueToolIssueDetail       = store.IssueToolIssueDetail
-	storedContact              = store.StoredContact
-	storedIssueExecution       = store.StoredIssueExecution
-	storedRequirement          = store.StoredRequirement
-	storedIssue                = store.StoredIssue
-	storedLayout               = store.StoredLayout
-	storedState                = store.StoredState
-	contactStore               = store.ContactStore
-	productPendingSend         = store.ProductPendingSend
-	productUIState             = store.ProductUIState
-	storeRecoveryCopy          = store.StoreRecoveryCopy
-	storeRecoveryTarget        = store.StoreRecoveryTarget
-	storeRecoveryOutcome       = store.StoreRecoveryOutcome
-	storeRecoveryResult        = store.StoreRecoveryResult
+	taskContextItem               = store.TaskContextItem
+	pendingSend                   = store.PendingSend
+	piSelection                   = store.PiSelection
+	piConfiguration               = store.PiConfiguration
+	piConversationBinding         = store.PiConversationBinding
+	piActivityBinding             = store.PiActivityBinding
+	piActivityRun                 = store.PiActivityRun
+	piQuestionCall                = store.PiQuestionCall
+	activityQuestion              = store.IssueQuestion
+	activityRequirement           = store.IssueRequirement
+	activityExecution             = store.IssueExecution
+	productActivityIntent         = store.ProductActivityIntent
+	activityHandoff               = store.IssueHandoff
+	activitySupplementTarget      = store.IssueSupplementTarget
+	activitySupplement            = store.IssueSupplement
+	activitySupplementBatch       = store.IssueSupplementBatch
+	activitySupplementAssociation = store.IssueSupplementAssociation
+	activitySupplementLedger      = store.IssueSupplementLedger
+	ActivityToolScope             = store.IssueToolScope
+	ActivityToolError             = store.IssueToolError
+	ActivityToolActionRequest     = store.IssueToolActionRequest
+	ActivityToolReceipt           = store.IssueToolReceipt
+	ActivityToolOperation         = store.IssueToolOperation
+	ActivityToolOperationLedger   = store.IssueToolOperationLedger
+	ActivityToolListResult        = store.IssueToolIssueListResult
+	ActivityToolSummary           = store.IssueToolIssueSummary
+	ActivityToolRequirementView   = store.IssueToolRequirementView
+	ActivityToolExecutionView     = store.IssueToolExecutionView
+	ActivityToolResultFileView    = store.IssueToolResultFileView
+	ActivityToolPiProgress        = store.IssueToolPiProgress
+	ActivityToolDetail            = store.IssueToolIssueDetail
+	storedContact                 = store.StoredContact
+	storedActivityExecution       = store.StoredIssueExecution
+	storedRequirement             = store.StoredRequirement
+	storedActivity                = store.StoredIssue
+	storedLayout                  = store.StoredLayout
+	storedState                   = store.StoredState
+	contactStore                  = store.ContactStore
+	productPendingSend            = store.ProductPendingSend
+	productUIState                = store.ProductUIState
+	storeRecoveryCopy             = store.StoreRecoveryCopy
+	storeRecoveryTarget           = store.StoreRecoveryTarget
+	storeRecoveryOutcome          = store.StoreRecoveryOutcome
+	storeRecoveryResult           = store.StoreRecoveryResult
 
 	connectionConfig          = connection.Config
 	privateConnectionConfig   = connection.PrivateConfig
@@ -239,8 +234,8 @@ var (
 	railAddIcon          = theme.RailAddIcon
 	railSettingsIcon     = theme.RailSettingsIcon
 
-	errIssueToolAction       = store.ErrIssueToolAction
-	errIssueToolSaveRequired = store.ErrIssueToolSaveRequired
+	errActivityToolAction       = store.ErrIssueToolAction
+	errActivityToolSaveRequired = store.ErrIssueToolSaveRequired
 
 	errTaskContextName = materials.ErrName
 	errTaskContextRead = materials.ErrRead
@@ -341,17 +336,17 @@ func clonePiActivityRun(r *piActivityRun) *piActivityRun { return store.ClonePiA
 func clonePiQuestionCall(c *piQuestionCall) *piQuestionCall {
 	return store.ClonePiQuestionCall(c)
 }
-func cloneIssueHandoff(h *issueHandoff) *issueHandoff { return store.CloneIssueHandoff(h) }
-func cloneIssueSupplementLedger(l *issueSupplementLedger) *issueSupplementLedger {
+func cloneActivityHandoff(h *activityHandoff) *activityHandoff { return store.CloneIssueHandoff(h) }
+func cloneActivitySupplementLedger(l *activitySupplementLedger) *activitySupplementLedger {
 	return store.CloneIssueSupplementLedger(l)
 }
-func newContactID() string                             { return store.NewContactID() }
-func nowMillis() int64                                 { return store.NowMillis() }
-func newIssueID() string                               { return store.NewIssueID() }
-func newRequirementID() string                         { return store.NewRequirementID() }
-func newIssueQuestionRef() string                      { return store.NewIssueQuestionRef() }
-func newIssueSupplementLedger() *issueSupplementLedger { return store.NewIssueSupplementLedger() }
-func parseIssueRequirements(text string) []*issueRequirement {
+func newContactID() string                                   { return store.NewContactID() }
+func nowMillis() int64                                       { return store.NowMillis() }
+func newActivityID() string                                  { return store.NewIssueID() }
+func newRequirementID() string                               { return store.NewRequirementID() }
+func newActivityQuestionRef() string                         { return store.NewIssueQuestionRef() }
+func newActivitySupplementLedger() *activitySupplementLedger { return store.NewIssueSupplementLedger() }
+func parseActivityRequirements(text string) []*activityRequirement {
 	return store.ParseIssueRequirements(text)
 }
 func openContactStore(path, defaultWorkspace string) (*contactStore, error) {
@@ -377,7 +372,7 @@ func restoreStoreRecoveryCopy(copy *storeRecoveryCopy, target *storeRecoveryTarg
 func restoreStoreRecoveryCopyWithRename(copy *storeRecoveryCopy, target *storeRecoveryTarget, rename func(string, string) error) (storeRecoveryResult, error) {
 	return store.RestoreStoreRecoveryCopyWithRename(copy, target, rename)
 }
-func ValidateIssueToolReceipt(receipt *IssueToolReceipt) error {
+func ValidateActivityToolReceipt(receipt *ActivityToolReceipt) error {
 	return store.ValidateIssueToolReceipt(receipt)
 }
 

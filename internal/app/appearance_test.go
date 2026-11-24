@@ -200,14 +200,14 @@ func TestAppearanceFailedSaveKeepsModeAndRetryClearsWarning(t *testing.T) {
 	}
 	store.Path = filepath.Join(blocked, "contacts.json")
 	a := &appModel{
-		store:           store,
-		storePath:       filepath.Join(root, "contacts.json"),
-		workDir:         root,
-		selected:        0,
-		appearanceMode:  appearanceSystem,
-		contacts:        []*contact{{ID: "contact-keep", Name: "Saki", Draft: "draft-keep"}},
-		issueToolLedger: &IssueToolOperationLedger{},
-		issueToolScopes: map[string]IssueToolScope{},
+		store:              store,
+		storePath:          filepath.Join(root, "contacts.json"),
+		workDir:            root,
+		selected:           0,
+		appearanceMode:     appearanceSystem,
+		contacts:           []*contact{{ID: "contact-keep", Name: "Saki", Draft: "draft-keep"}},
+		activityToolLedger: &ActivityToolOperationLedger{},
+		activityToolScopes: map[string]ActivityToolScope{},
 	}
 	a.setAppearanceMode(appearanceDark)
 	if a.appearanceMode != appearanceDark {
@@ -241,8 +241,8 @@ func TestAppearanceLaterContactSaveClearsUnsavedWarning(t *testing.T) {
 	a := &appModel{
 		store: store, storePath: filepath.Join(root, "contacts.json"), workDir: root,
 		selected: 0, appearanceMode: appearanceSystem,
-		contacts:        []*contact{{ID: "contact-keep", Name: "Saki"}},
-		issueToolLedger: &IssueToolOperationLedger{}, issueToolScopes: map[string]IssueToolScope{},
+		contacts:           []*contact{{ID: "contact-keep", Name: "Saki"}},
+		activityToolLedger: &ActivityToolOperationLedger{}, activityToolScopes: map[string]ActivityToolScope{},
 	}
 	a.setAppearanceMode(appearanceDark)
 	if a.appearanceError == "" {
@@ -325,8 +325,8 @@ func TestAppearanceRetrySaveUIAndRuntimeErrorOwnership(t *testing.T) {
 	a := &appModel{
 		store: store, storePath: filepath.Join(root, "contacts.json"), workDir: root,
 		selected: 0, appearanceMode: appearanceSystem, systemDark: true,
-		contacts:        []*contact{{ID: "contact-keep", Name: "Saki", Draft: "keep"}},
-		issueToolLedger: &IssueToolOperationLedger{}, issueToolScopes: map[string]IssueToolScope{},
+		contacts:           []*contact{{ID: "contact-keep", Name: "Saki", Draft: "keep"}},
+		activityToolLedger: &ActivityToolOperationLedger{}, activityToolScopes: map[string]ActivityToolScope{},
 		runtimeErr: "Runtime protocol error: unrelated",
 	}
 	a.openAppearance()

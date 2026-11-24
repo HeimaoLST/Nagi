@@ -190,12 +190,12 @@ func contactsFromStore(store *contactStore) []*contact {
 			PreviousPiBindings: clonePiConversationBindings(stored.PreviousPiBindings),
 			Status:             statusReady, WorkLabel: "Preparing a reply",
 		}
-		ct.Issues = issuesForStoredContact(store.State.Issues, ct.ID)
+		ct.Activities = activitiesForStoredContact(store.State.Issues, ct.ID)
 		if stored.SelectedIssueID != "" {
-			ct.SelectedIssueID = stored.SelectedIssueID
+			ct.SelectedActivityID = stored.SelectedIssueID
 		}
-		if issue := ct.selectedIssue(); issue != nil {
-			ct.SelectedIssueID = issue.ID
+		if activity := ct.selectedActivity(); activity != nil {
+			ct.SelectedActivityID = activity.ID
 		}
 		contacts = append(contacts, ct)
 	}
@@ -211,8 +211,8 @@ func placeholderContact(workDir string) *contact {
 
 func applyStoreSelection(a *appModel, store *contactStore) {
 	a.store = store
-	a.issueToolLedger = store.IssueToolLedger
-	a.issueToolScopes = store.IssueToolScopes
+	a.activityToolLedger = store.IssueToolLedger
+	a.activityToolScopes = store.IssueToolScopes
 	a.contacts = contactsFromStore(store)
 	a.selected = 0
 	for i, ct := range a.contacts {

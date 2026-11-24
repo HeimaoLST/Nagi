@@ -156,7 +156,7 @@ func TestBotRowPopoverMenuActionsOnFullAndCompactRails(t *testing.T) {
 			first.Draft = "Keep first draft"
 			second.SessionID = "sess-second"
 			second.Messages = []*message{{ID: 1, Kind: msgUser, Text: "prior turn"}}
-			second.Issues = []*productIssue{{ID: "act-1", Goal: "Track release", Status: issueStatusNotStarted}}
+			second.Activities = []*productActivity{{ID: "act-1", Goal: "Track release", Status: activityStatusNotStarted}}
 			second.activity.loaded = true
 			a.selectContact(0)
 			if tc.compact {
