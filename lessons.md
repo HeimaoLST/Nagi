@@ -377,3 +377,19 @@
 **Cause or correction:** Existing bindings capture L0 and L1 identity/behavior instructions through the working-directory block; only dynamic trailing blocks (`<available_skills>` metadata catalog and L1.5 `Lasting Rules`) may refresh at cold or explicit-reload boundaries, and unchanged composed prompts should skip runtime refresh altogether.
 
 **Prevention:** Keep cold-reload prompt composition strictly additive over the captured L0+L1 prefix of `existing.instructions`, and run `TestPiProductSQLiteSavedKeyAndInitialInstructions` alongside new cold-reload integration tests.
+
+### Redact detached backup snapshots before residual secret checks
+
+**Problem:** Running a whole-profile secret scan directly inside `profile.backup` rejected backup creation whenever immutable append-only history (`operations`, `executions`, `activities`) contained a previously pasted active, inactive, or retired Provider/MCP credential, permanently locking the user out of recovery exports while earlier unredacted operation replies could otherwise carry raw secrets into backup files.
+
+**Cause or correction:** Historical operation replies and execution inputs cannot be edited by the user, so defense-in-depth secret checks must inspect a detached export copy whose free-text user/historical payloads have already been redacted (with bounded UTF-8 quote normalization and strict `decodeProductProfile` preservation) rather than blocking on raw history or mutating live SQLite/mirror bytes.
+
+**Prevention:** Redact free-text historical and draft fields on a detached export snapshot before running residual MCP/Provider secret checks across the complete backup envelope, verify strict readback and zero leaked secret bytes in the written backup file, and confirm the live `contacts.json` mirror stays byte-identical across backup.
+
+### Read large Node stdin pipes asynchronously on macOS
+
+**Problem:** Piping large single-JSON recovery backups (68 KiB+) from Go into a short-lived Node validator using `readFileSync(0, 'utf8')` failed intermittently on macOS with `EAGAIN`, even though validating the exact same bytes from disk succeeded.
+
+**Cause or correction:** Synchronous `readFileSync(0, ...)` does not handle non-blocking partial reads on large OS pipe buffers on Darwin.
+
+**Prevention:** Consume `process.stdin` asynchronously (for example with `await text(process.stdin)` from `node:stream/consumers`) in any Node helper invoked over Go `exec.Cmd` stdin pipes, and exercise recovery validation with multi-record 60 KiB+ single-JSON payloads.

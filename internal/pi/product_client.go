@@ -34,13 +34,14 @@ type ProductClient struct {
 }
 
 type ProductEvent struct {
-	StreamID     string                       `json:"streamId"`
-	Seq          uint64                       `json:"seq"`
-	Name         string                       `json:"event"`
-	Data         json.RawMessage              `json:"data"`
-	TraceUpdated *ProductActivityTraceUpdated `json:"-"`
-	SkillChanged *ProductSkillChange          `json:"-"`
-	McpChanged   *ProductMcpChange            `json:"-"`
+	StreamID        string                       `json:"streamId"`
+	Seq             uint64                       `json:"seq"`
+	Name            string                       `json:"event"`
+	Data            json.RawMessage              `json:"data"`
+	TraceUpdated    *ProductActivityTraceUpdated `json:"-"`
+	SkillChanged    *ProductSkillChange          `json:"-"`
+	McpChanged      *ProductMcpChange            `json:"-"`
+	ProviderChanged *ProductProviderChange       `json:"-"`
 }
 
 type ProductActivityTraceUpdated struct {
@@ -271,6 +272,9 @@ type ProductActivitySummary struct {
 
 type ProductActivity struct {
 	ProductActivitySummary
+	Kind         string             `json:"kind,omitempty"`
+	Complexity   string             `json:"complexity,omitempty"`
+	Constraints  []string           `json:"constraints,omitempty"`
 	Requirements []string           `json:"requirements"`
 	Materials    []ProductMaterial  `json:"materials"`
 	Questions    []ProductQuestion  `json:"questions"`
@@ -283,13 +287,14 @@ type ProductText struct {
 }
 
 type ProductQuestion struct {
-	QuestionID  string       `json:"questionId"`
-	ExecutionID string       `json:"executionId"`
-	Text        string       `json:"text"`
-	Revision    uint64       `json:"revision"`
-	State       string       `json:"state"`
-	Answer      *ProductText `json:"answer,omitempty"`
-	Delivery    string       `json:"delivery,omitempty"`
+	QuestionID      string                 `json:"questionId"`
+	ExecutionID     string                 `json:"executionId"`
+	Text            string                 `json:"text"`
+	Revision        uint64                 `json:"revision"`
+	State           string                 `json:"state"`
+	Answer          *ProductText           `json:"answer,omitempty"`
+	Delivery        string                 `json:"delivery,omitempty"`
+	DeliveryBlocker ProductDeliveryBlocker `json:"deliveryBlocker,omitempty"`
 }
 
 type ProductResultFile struct {
@@ -503,10 +508,11 @@ type ProductAnswerParams struct {
 
 type ProductAnswerResult struct {
 	ProductActivityExecutionParams
-	QuestionID  string `json:"questionId"`
-	Revision    uint64 `json:"revision"`
-	AnswerSaved bool   `json:"answerSaved"`
-	Delivery    string `json:"delivery"`
+	QuestionID      string                 `json:"questionId"`
+	Revision        uint64                 `json:"revision"`
+	AnswerSaved     bool                   `json:"answerSaved"`
+	Delivery        string                 `json:"delivery"`
+	DeliveryBlocker ProductDeliveryBlocker `json:"deliveryBlocker,omitempty"`
 }
 
 type ProductConnectionSaveParams struct {
@@ -752,6 +758,13 @@ func (c *Client) handleProductEvent(line []byte) error {
 			return errors.New("invalid MCP change")
 		}
 		event.McpChanged = &change
+	}
+	if event.Name == "provider.changed" {
+		var change ProductProviderChange
+		if json.Unmarshal(event.Data, &change) != nil || !change.valid() {
+			return errors.New("invalid provider change")
+		}
+		event.ProviderChanged = &change
 	}
 	c.mu.Lock()
 	if event.StreamID != c.streamID || c.streamGap || event.Seq <= c.streamSeq {

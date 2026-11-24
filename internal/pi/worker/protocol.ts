@@ -4,6 +4,7 @@ import type { Writable } from 'node:stream';
 import { SYSTEM_KIND_BOT_ARCHITECT } from './bot-template.js';
 import { memoryChangedSchema, memoryDate, memoryRuleSchema, memorySearchLimit, memorySearchQuery, memoryText,
   pendingLearningSchema, workLogSchema } from './bot-memory.js';
+import { activityRouting, policySchema, providerAccountView, providerInput, routeSchema, thinkingSchema } from './model-router.js';
 
 export const MAX_FRAME = 8 * 1024 * 1024;
 export const id = Type.String({ minLength: 1 });
@@ -238,6 +239,14 @@ export const productCommands = Type.Union([
   Type.Object({ method: Type.Literal('connection.test'), params: Type.Object({ configuration: connectionSchema }) }),
   Type.Object({ method: Type.Literal('connection.save'), params: Type.Object({ configuration: connectionSchema, operationId: id }) }),
   Type.Object({ method: Type.Literal('connection.apply'), params: Type.Object({ savedRevision: revision, operationId: id }) }),
+  Type.Object({ method: Type.Literal('provider.list'), params: Type.Object({}, mcpStrict) }),
+  Type.Object({ method: Type.Literal('provider.test'), params: Type.Object({ account: providerInput, apiKey: Type.Optional(Type.String()) }, mcpStrict) }),
+  Type.Object({ method: Type.Literal('provider.save'), params: Type.Object({ account: providerInput, apiKey: Type.Optional(Type.String()), operationId: id }, mcpStrict) }),
+  Type.Object({ method: Type.Literal('provider.delete'), params: Type.Object({ providerId: providerInput.properties.providerId, operationId: id }, mcpStrict) }),
+  Type.Object({ method: Type.Literal('provider.apply'), params: Type.Object({ savedRevision: revision, operationId: id }, mcpStrict) }),
+  Type.Object({ method: Type.Literal('provider.revokeCredential'), params: Type.Object({ providerId: providerInput.properties.providerId, operationId: id }, mcpStrict) }),
+  Type.Object({ method: Type.Literal('routing.get'), params: Type.Object({}, mcpStrict) }),
+  Type.Object({ method: Type.Literal('routing.setPolicy'), params: Type.Object({ policy: policySchema, operationId: id }, mcpStrict) }),
   Type.Object({ method: Type.Literal('mcp.list'), params: Type.Object({}, mcpStrict) }),
   Type.Object({ method: Type.Literal('mcp.save'), params: Type.Object({ server: mcpServerInput, secrets: mcpSecretInput, operationId: id }, mcpStrict) }),
   Type.Object({ method: Type.Literal('mcp.delete'), params: Type.Object({ serverId: mcpServerId, operationId: id }, mcpStrict) }),
@@ -251,6 +260,9 @@ const executionOwner = Type.Union([Type.Object({ conversationId: id }), Type.Obj
 const executionIdentity = { executionId: id, operationId: id };
 const executionEvent = (fields: object) => Type.Intersect([executionOwner, Type.Object({ ...executionIdentity, ...fields })]);
 export const productEvents = Type.Union([
+  Type.Object({ event: Type.Literal('provider.changed'), data: Type.Object({ savedRevision: Type.Union([revision, Type.Null()]),
+    effectiveRevision: Type.Union([revision, Type.Null()]), change: Type.Union([Type.Literal('saved'), Type.Literal('deleted'),
+      Type.Literal('applied'), Type.Literal('revoked'), Type.Literal('policy')]) }) }),
   Type.Object({ event: Type.Literal('bot.changed'), data: Type.Object({ bot: botResult, change: botChangeSchema }) }),
   Type.Object({ event: Type.Literal('memory.changed'), data: memoryChangedSchema }),
   Type.Object({ event: Type.Literal('skill.changed'), data: skillChange }),
@@ -285,8 +297,12 @@ const questionDelivery = Type.Union([Type.Literal('saved'), Type.Literal('dispat
   Type.Literal('unknown'), Type.Literal('canceled'), Type.Literal('unavailable')]);
 const questionResult = Type.Object({ questionId: id, executionId: id, text: Type.String(), revision,
   state: Type.Union([Type.Literal('open'), Type.Literal('answered'), Type.Literal('superseded')]),
-  answer: Type.Optional(Type.Object({ text: Type.String(), materials: Type.Array(materialSchema) })), delivery: Type.Optional(questionDelivery) });
+  answer: Type.Optional(Type.Object({ text: Type.String(), materials: Type.Array(materialSchema) })), delivery: Type.Optional(questionDelivery),
+  deliveryBlocker: Type.Optional(Type.Literal('credential_unavailable')) });
 const connectionRevisions = { savedRevision: nullable(revision), effectiveRevision: nullable(revision) };
+const routingFields = { ...connectionRevisions, policy: policySchema, effectivePolicy: policySchema,
+  resolvedRoles: Type.Object({ dialogue: nullable(routeSchema), coding: nullable(routeSchema), reasoning: nullable(routeSchema), utility: nullable(routeSchema) }) };
+const deliveryBlocker = Type.Optional(Type.Literal('credential_unavailable'));
 const connectionView = Type.Object({ ...Type.Omit(connectionSchema, ['apiKey']).properties, credentialPresent: Type.Boolean() });
 const connectionResult = Type.Object({ ...connectionRevisions, saved: Type.Union([connectionView, Type.Null()]), effective: Type.Union([connectionView, Type.Null()]) });
 const stopResult = Type.Object({ executionId: id, cancelRequested: Type.Literal(true) });
@@ -327,17 +343,25 @@ export const productResults = {
   'conversation.history': productPage(Type.Object({ messageId: id, role: Type.Union([Type.Literal('user'), Type.Literal('assistant')]),
     timestamp: id, text: Type.String(), materials: Type.Array(materialSchema), quote: optionalQuote })),
   'activity.list': productPage(Type.Object(activityFields)),
-  'activity.get': Type.Object({ ...activityFields, requirements: stringList, materials: Type.Array(materialSchema), questions: Type.Array(questionResult), executions: Type.Array(activeExecution) }),
+  'activity.get': Type.Object({ ...activityFields, ...activityRouting.properties, requirements: stringList, materials: Type.Array(materialSchema), questions: Type.Array(questionResult), executions: Type.Array(activeExecution) }),
   'activity.result': Type.Object({ activityId: id, executionId: id, text: Type.String(), delivery: Type.Literal('available'), files: Type.Array(Type.Object({ path: id, callId: id })) }),
   'activity.trace': Type.Object({ ...productPage(traceItemSchema).properties, historyTruncated: Type.Boolean(),
     coverage: Type.Union([Type.Literal('recorded'), Type.Literal('unrecorded'), Type.Literal('mixed')]) }),
   'activity.continue': operationSchema,
   'activity.stop': stopResult,
-  'question.answer': Type.Object({ activityId: id, executionId: id, questionId: id, revision, answerSaved: Type.Literal(true), delivery: questionDelivery }),
+  'question.answer': Type.Object({ activityId: id, executionId: id, questionId: id, revision, answerSaved: Type.Literal(true), delivery: questionDelivery, deliveryBlocker }),
   'connection.get': connectionResult,
   'connection.test': Type.Object({ verified: Type.Literal(true) }),
   'connection.save': Type.Object(connectionRevisions),
   'connection.apply': Type.Object(connectionRevisions),
+  'provider.list': Type.Object({ ...routingFields, accounts: Type.Array(providerAccountView) }),
+  'provider.test': Type.Object({ ok: Type.Boolean(), models: stringList, latencyMs: revision, error: Type.Optional(id) }),
+  'provider.save': Type.Object(connectionRevisions),
+  'provider.delete': Type.Object(connectionRevisions),
+  'provider.apply': Type.Object(connectionRevisions),
+  'provider.revokeCredential': Type.Object(connectionRevisions),
+  'routing.get': Type.Object(routingFields),
+  'routing.setPolicy': Type.Object(connectionRevisions),
   'mcp.list': Type.Object({ servers: Type.Array(mcpServerView) }),
   'mcp.save': Type.Object({ server: mcpServerView }),
   'mcp.delete': Type.Object({ deleted: Type.Literal(true) }),
@@ -378,7 +402,8 @@ export type Connection = Static<typeof connectionSchema>;
 export type ActivityState = Static<typeof activityStateSchema>;
 export type ProductParams<M extends ProductCommand['method']> = Extract<ProductCommand, { method: M }>['params'];
 const modelSettings = Type.Object({ model: id, contextTokens: positiveInteger, outputTokens: positiveInteger });
-const configuration = Type.Object({ wireApi: Type.Union([Type.Literal('openai-completions'), Type.Literal('openai-responses')]), baseUrl: id, apiKey: id, credentialSource: id, ...modelSettings.properties });
+const configuration = Type.Object({ wireApi: connectionSchema.properties.wireApi, baseUrl: id, apiKey: id, credentialSource: id,
+  ...modelSettings.properties, thinkingLevel: Type.Optional(thinkingSchema), reasoning: Type.Optional(Type.Boolean()) });
 const commands = Type.Union([
   Type.Object({ method: Type.Literal('configure'), params: configuration }),
   Type.Object({ method: Type.Literal('context.open'), params: Type.Object({ contextId: id, botId: id, purpose: Type.Union([Type.Literal('conversation'), Type.Literal('activity')]), activityId: Type.Optional(id), selectionRevision: Type.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER }), instructions: Type.String(), cwd: id, resumeRef: Type.Optional(id), used: Type.Boolean(), codingTools: Type.Union([Type.Null(), stringList]), domainTools: Type.Union([Type.Null(), Type.Array(domainTool)]), mcpServers: Type.Optional(Type.Array(mcpServer)), configuration: Type.Optional(configuration) }) }),

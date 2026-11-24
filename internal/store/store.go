@@ -669,11 +669,11 @@ func InspectProductProfileBytes(data []byte, copy bool) (contacts, activities in
 	}
 	module := filepath.Join(filepath.Dir(worker), "product-profile.js")
 	const script = `
-import { readFileSync } from 'node:fs';
+import { text } from 'node:stream/consumers';
 import { pathToFileURL } from 'node:url';
 const { decodeProductBackup, inspectProductRecovery } = await import(pathToFileURL(process.argv[1]).href);
 try {
-  const data = JSON.parse(readFileSync(0, 'utf8'));
+  const data = JSON.parse(await text(process.stdin));
   if (process.argv[2] === 'copy') {
     process.stdout.write(JSON.stringify(inspectProductRecovery(data)));
   } else {

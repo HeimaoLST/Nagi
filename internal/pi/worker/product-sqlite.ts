@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { chmodSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { DatabaseSync, type SQLOutputValue } from 'node:sqlite';
-import { decodeProductProfile, importProductSnapshot, type PrivateConnection, type ProductProfilePaths } from './product-profile.js';
+import { decodeProductProfile, importProductSnapshot, privateCredentialKeys, readPrivateConnection, type PrivateConnection, type ProductBackup, type ProductProfilePaths } from './product-profile.js';
 import type { ProductProfile } from './product.js';
 import { canonicalJSON, RequestError, type SkillApproval, type SkillSource, type TraceItem } from './protocol.js';
 import { type BotMemory, type BotWorkLog } from './bot-memory.js';
@@ -11,6 +11,7 @@ import { projectionRedactor } from './product-redactor.js';
 import { backupSkillFiles, checkedSkillFiles, type BotSkills, type SkillWrite } from './bot-skills.js';
 import type { McpVault, McpVaultWrite } from './mcp-vault.js';
 
+import type { Escalation } from './model-router.js';
 const MIGRATIONS = [`
   CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT;
   CREATE TABLE bots (
@@ -95,6 +96,27 @@ const MIGRATIONS = [`
   CREATE TABLE skill_approvals (grant_key TEXT PRIMARY KEY, owner_bot_id TEXT NOT NULL, source TEXT NOT NULL, skill_id TEXT NOT NULL,
     approval_digest TEXT NOT NULL, permissions_digest TEXT NOT NULL, mode TEXT NOT NULL CHECK (mode IN ('pure_compute_tested','user_approved')),
     installation_id TEXT NOT NULL, approved_at TEXT NOT NULL, record_json TEXT NOT NULL) STRICT;
+`, `
+  CREATE TABLE provider_accounts (provider_id TEXT PRIMARY KEY, sort_order INTEGER NOT NULL UNIQUE, config_json TEXT NOT NULL) STRICT;
+  INSERT OR IGNORE INTO meta VALUES ('routing_policy', '"balanced"');
+  ALTER TABLE activities ADD COLUMN routing_json TEXT;
+  CREATE TABLE execution_mutation_admissions (
+    admission_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    execution_id TEXT NOT NULL REFERENCES executions(execution_id) DEFERRABLE INITIALLY DEFERRED,
+    activity_id TEXT REFERENCES activities(activity_id) DEFERRABLE INITIALLY DEFERRED,
+    call_id TEXT NOT NULL, tool_name TEXT NOT NULL, tool_class TEXT NOT NULL CHECK (tool_class IN ('readonly','mutating')),
+    state TEXT NOT NULL CHECK (state IN ('admitted','non_dispatched','settled_ok','settled_error','unknown')), at TEXT NOT NULL
+  ) STRICT;
+  CREATE INDEX mutation_admissions_by_execution ON execution_mutation_admissions(execution_id, tool_class, call_id);
+  CREATE TABLE execution_admission_coverage (
+    execution_id TEXT PRIMARY KEY REFERENCES executions(execution_id) DEFERRABLE INITIALLY DEFERRED
+  ) STRICT;
+  CREATE TABLE activity_escalations (
+    activity_id TEXT PRIMARY KEY REFERENCES activities(activity_id) DEFERRABLE INITIALLY DEFERRED,
+    prior_execution_id TEXT NOT NULL REFERENCES executions(execution_id) DEFERRABLE INITIALLY DEFERRED,
+    escalated_execution_id TEXT NOT NULL REFERENCES executions(execution_id) DEFERRABLE INITIALLY DEFERRED,
+    from_role TEXT NOT NULL, to_role TEXT NOT NULL, at TEXT NOT NULL
+  ) STRICT;
 `];
 const LATEST_SCHEMA_VERSION = MIGRATIONS.length;
 
@@ -106,6 +128,7 @@ const encode = (value: unknown): string | null => JSON.stringify(value) ?? null;
 const decode = (value: SQLOutputValue): unknown => value === null ? undefined : JSON.parse(String(value));
 const sha256 = (data: Buffer) => createHash('sha256').update(data).digest('hex');
 
+export type RoutingWrite = { credentials?: PrivateConnection; escalation?: Escalation };
 function snapshotFor(profile: ProductProfile): Snapshot {
   const data = Buffer.from(canonicalJSON(profile) + '\n');
   return { data, digest: sha256(data) };
@@ -116,7 +139,7 @@ export class ProductSQLite {
   private readonly db: DatabaseSync;
   private digest?: string;
 
-  constructor(private readonly profilePath: string, private readonly skills?: BotSkills, private readonly vault?: McpVault) {
+  constructor(private readonly profilePath: string, private readonly credentialsPath: string, private readonly skills?: BotSkills, private readonly vault?: McpVault) {
     const directory = dirname(profilePath);
     mkdirSync(directory, { recursive: true, mode: 0o700 });
     this.databasePath = basename(profilePath) === 'contacts.json' ? join(directory, 'nagi.db') : `${profilePath}.sqlite`;
@@ -132,11 +155,30 @@ export class ProductSQLite {
           this.db.exec(`PRAGMA user_version = ${index + 1}`);
         }
       });
-      this.db.exec('PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;');
+      this.db.exec('PRAGMA journal_mode = WAL; PRAGMA synchronous = FULL;');
     } catch (error) {
       this.close();
       throw error;
     }
+  }
+
+  credentials(): PrivateConnection | undefined {
+    this.publishCredentials();
+    return readPrivateConnection(this.credentialsPath);
+  }
+
+  private publishCredentials(): void {
+    this.transaction(() => {
+      const token = this.meta('pending_provider_credentials');
+      if (!token) return;
+      if (!/^[0-9a-f-]{36}$/.test(token)) throw new RequestError('profile_unavailable', 'Invalid credential publication reference');
+      const staged = `${this.credentialsPath}.${token}.tmp`;
+      try { renameSync(staged, this.credentialsPath); }
+      catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT' || readPrivateConnection(this.credentialsPath)?.publicationId !== token) throw error;
+      }
+      this.db.exec("DELETE FROM meta WHERE key = 'pending_provider_credentials'");
+    });
   }
 
   open(paths: ProductProfilePaths, credentials: PrivateConnection | undefined, installationId: string): ProductProfile {
@@ -170,8 +212,10 @@ export class ProductSQLite {
         if (!snapshot && !paths.fresh) throw new RequestError('profile_unavailable', 'The product profile is missing');
         const { profile, backup } = importProductSnapshot(snapshot && JSON.parse(snapshot.data.toString('utf8')), credentials);
         mirror = this.stageMirror(snapshotFor(profile), previous);
+        this.db.exec('DELETE FROM execution_mutation_admissions; DELETE FROM execution_admission_coverage; DELETE FROM activity_escalations;');
         this.replaceProfile(profile, mirror);
-        const redact = projectionRedactor([...Object.values(credentials?.sources ?? {}).map(source => source.api_key), ...this.vault?.keys() ?? []]);
+        for (const row of backup?.activityEscalations ?? []) this.putEscalation(row);
+        const redact = projectionRedactor([...privateCredentialKeys(credentials), ...this.vault?.keys() ?? []]);
         const writes: SkillWrite[] = (backup?.privateSkillBundles ?? []).map(row => {
           const { 'SKILL.md': markdown, ...files } = backupSkillFiles(row);
           checkedSkillFiles({ ...files, 'SKILL.md': markdown }, redact);
@@ -203,10 +247,12 @@ export class ProductSQLite {
     }
   }
 
-  write(profile: ProductProfile, before: ProductProfile, skillWrite?: SkillWrite, mcpWrite?: McpVaultWrite, approval?: SkillApprovalChange): TraceUpdate[] {
+  write(profile: ProductProfile, before: ProductProfile, skillWrite?: SkillWrite, mcpWrite?: McpVaultWrite, approval?: SkillApprovalChange,
+    routing?: RoutingWrite): TraceUpdate[] {
     let mirror: Mirror | undefined;
     let staged: string | undefined;
     let stagedVault: string | undefined;
+    let stagedCredentials: string | undefined;
     let committed = false;
     try {
       const updates = this.transaction(() => {
@@ -223,8 +269,19 @@ export class ProductSQLite {
           stagedVault = this.vault.stage(mcpWrite);
           this.db.prepare("INSERT INTO meta (key, value) VALUES ('pending_mcp_vault', ?)").run(stagedVault);
         }
+        if (routing?.credentials) {
+          const token = randomUUID();
+          const path = `${this.credentialsPath}.${token}.tmp`;
+          stagedCredentials = path;
+          writeFileSync(path, JSON.stringify({ ...routing.credentials, publicationId: token }) + '\n', { flag: 'wx', mode: 0o600, flush: true });
+          this.db.prepare("INSERT INTO meta (key, value) VALUES ('pending_provider_credentials', ?)").run(token);
+        }
+        if (routing?.escalation && !this.canEscalate(routing.escalation.activityId, routing.escalation.priorExecutionId)) {
+          throw new RequestError('escalation_unavailable', 'The prior execution does not admit escalation');
+        }
         mirror = this.stageMirror(snapshotFor(profile), previous);
         this.replaceProfile(profile, mirror);
+        if (routing?.escalation) this.putEscalation(routing.escalation);
         if (approval) this.changeApproval(approval);
         const workspaces = new Map(before.bots.map(bot => [bot.botId, bot.profile.workspace]));
         for (const bot of profile.bots) {
@@ -233,6 +290,7 @@ export class ProductSQLite {
         return this.recordTransitions(before, profile);
       });
       committed = true;
+      if (stagedCredentials) this.publishCredentials();
       this.publishMcpVault();
       this.publishSkills();
       this.publish(mirror!);
@@ -240,6 +298,7 @@ export class ProductSQLite {
     } catch (error) {
       if (staged && !committed) this.skills?.discard(staged);
       if (stagedVault && !committed) this.vault?.discard(stagedVault);
+      if (stagedCredentials && !committed) rmSync(stagedCredentials, { force: true });
       if (mirror) rmSync(mirror.temp, { force: true });
       throw error;
     }
@@ -290,6 +349,36 @@ export class ProductSQLite {
     return { generation: this.meta('trace_generation')!, high: Number(head?.seq ?? 0),
       recorded: Number(meta?.recorded ?? 0), evicted: Number(meta?.evicted ?? 0) };
   }
+  admitTool(executionId: string, activityId: string | undefined, callId: string, tool: string, toolClass: 'readonly' | 'mutating'): void {
+    this.transaction(() => {
+      if (this.meta('snapshot_sha256') !== this.digest ||
+          !this.db.prepare("SELECT 1 FROM executions WHERE execution_id = ? AND state IN ('starting', 'running')").get(encode(executionId))) {
+        throw new RequestError('profile_unavailable', 'The execution is no longer admitted');
+      }
+      this.db.prepare(`INSERT INTO execution_mutation_admissions (execution_id, activity_id, call_id, tool_name, tool_class, state, at)
+        VALUES (?, ?, ?, ?, ?, 'admitted', ?)`).run(encode(executionId), encode(activityId), callId, tool, toolClass, new Date().toISOString());
+    });
+  }
+
+  settleTool(executionId: string, callId: string, isError: boolean): void {
+    this.db.prepare(`UPDATE execution_mutation_admissions SET state = ? WHERE admission_id = (SELECT max(admission_id)
+      FROM execution_mutation_admissions WHERE execution_id = ? AND call_id = ? AND state = 'admitted')`)
+      .run(isError ? 'settled_error' : 'settled_ok', encode(executionId), callId);
+  }
+
+  canEscalate(activityId: string, executionId: string): boolean {
+    return !!this.db.prepare(`SELECT 1 FROM executions e JOIN execution_admission_coverage c USING (execution_id)
+      JOIN activity_trace_meta t USING (execution_id)
+      WHERE e.execution_id = ? AND t.activity_id = ? AND t.coverage = 'recorded' AND e.state IN ('failed', 'interrupted')
+      AND NOT EXISTS (SELECT 1 FROM execution_mutation_admissions WHERE execution_id = e.execution_id AND tool_class = 'mutating')
+      AND NOT EXISTS (SELECT 1 FROM activity_escalations WHERE activity_id = t.activity_id)`).get(encode(executionId), encode(activityId));
+  }
+
+  private putEscalation(row: Escalation): void {
+    this.db.prepare('INSERT INTO activity_escalations VALUES (?, ?, ?, ?, ?, ?)').run(encode(row.activityId), encode(row.priorExecutionId),
+      encode(row.escalatedExecutionId), row.fromRole, row.toRole, row.at);
+  }
+
 
   traceRows(activityId: string, executionId: string | undefined, after: number, through: number, limit: number): TraceItem[] {
     const where = executionId === undefined ? 'activity_id = ?' : 'activity_id = ? AND execution_id = ?';
@@ -327,7 +416,7 @@ export class ProductSQLite {
     }
   }
 
-  captureBackup(redact: (text: string) => string): { profile: ProductProfile; backup: TraceBackup } {
+  captureBackup(redact: (text: string) => string): { profile: ProductProfile; backup: ProductBackup } {
     return this.transaction(() => {
       if (this.meta('snapshot_sha256') !== this.digest) throw new RequestError('profile_unavailable', 'The SQLite profile changed in another worker');
       const profile = this.readProfile();
@@ -336,7 +425,11 @@ export class ProductSQLite {
         activityId: decode(row.activity_id) as string, executionId: decode(row.execution_id) as string,
         coverage: row.coverage as 'recorded' | 'unrecorded', evictedThroughSeq: Number(row.evicted_through_seq),
       }));
-      return { profile, backup: { version: 1, traces, traceCoverage } };
+      const activityEscalations = this.db.prepare('SELECT * FROM activity_escalations ORDER BY activity_id').all().map(row => ({
+        activityId: decode(row.activity_id), priorExecutionId: decode(row.prior_execution_id), escalatedExecutionId: decode(row.escalated_execution_id),
+        fromRole: row.from_role, toRole: row.to_role, at: row.at,
+      })) as Escalation[];
+      return { profile, backup: { version: 1, traces, traceCoverage, ...(activityEscalations.length ? { activityEscalations } : {}) } };
     });
   }
 
@@ -369,6 +462,13 @@ export class ProductSQLite {
     const oldActivities = new Map(before.activities.map(row => [row.activityId, row]));
     const oldExecutions = new Map(before.executions.map(row => [row.executionId, row.state]));
     const executions = new Map(profile.executions.map(row => [row.executionId, row.state]));
+    const admitExecution = this.db.prepare('INSERT INTO execution_admission_coverage VALUES (?)');
+    const markUnknown = this.db.prepare("UPDATE execution_mutation_admissions SET state = 'unknown' WHERE execution_id = ? AND state = 'admitted'");
+    for (const [executionId, state] of executions) {
+      const prior = oldExecutions.get(executionId);
+      if (prior === undefined) admitExecution.run(encode(executionId));
+      else if (prior !== state && state !== 'starting' && state !== 'running') markUnknown.run(encode(executionId));
+    }
     const coverage = this.db.prepare("SELECT 1 FROM activity_trace_meta WHERE execution_id = ? AND coverage = 'recorded'");
     const admit = this.db.prepare("INSERT INTO activity_trace_meta (execution_id, activity_id, coverage) VALUES (?, ?, 'recorded')");
     const updates: TraceUpdate[] = [];
@@ -517,6 +617,7 @@ export class ProductSQLite {
       questions: decode(row.questions_json), materials: decode(row.materials_json), inputFiles: decode(row.input_files_json),
       executionIds: decode(row.execution_ids_json), results: decode(row.results_json), binding: decode(row.binding_json), retained: decode(row.retained_json),
       grantedLinkedActivityIds: row.granted_linked_activity_ids_json === '[]' ? undefined : decode(row.granted_linked_activity_ids_json),
+      routing: decode(row.routing_json),
     }));
     const executions = this.db.prepare('SELECT * FROM executions ORDER BY sort_order').all().map(row => ({
       executionId: decode(row.execution_id), revision: row.revision, state: row.state, operationId: decode(row.operation_id),
@@ -534,17 +635,23 @@ export class ProductSQLite {
       ...decode(row.config_json) as object, catalog: decode(row.catalog_json),
     }));
     const read = (key: string) => decode(this.meta(key) ?? null);
+    const providerAccounts = this.db.prepare('SELECT config_json FROM provider_accounts ORDER BY sort_order').all().map(row => decode(row.config_json));
+    const providerSavedRevision = read('provider_saved_revision');
     return decodeProductProfile({ version: 1, bots, conversations, activities, executions, operations, connections,
       savedRevision: read('saved_revision'), appliedRevision: read('applied_revision'), preferences: read('preferences_json'),
       issueToolScopes: read('issue_tool_scopes_json'), untargetedReceipts: read('untargeted_receipts_json'), recovery: read('recovery_json'),
       memory: this.readMemory(),
       ...(mcpServers.length ? { mcpServers } : {}),
+      ...(providerAccounts.length ? { providerAccounts } : {}),
+      providerEffectiveAccounts: read('provider_effective_accounts'), providerEffectivePolicy: read('provider_effective_policy'),
+      routingPolicy: providerSavedRevision === undefined ? undefined : read('routing_policy'),
+      providerSavedRevision, providerEffectiveRevision: read('provider_effective_revision'),
     });
   }
 
   private replaceProfile(profile: ProductProfile, mirror: Mirror): void {
     this.db.exec(`DELETE FROM operations; DELETE FROM activities; DELETE FROM conversations;
-      DELETE FROM executions; DELETE FROM bots; DELETE FROM connections; DELETE FROM mcp_servers;`);
+      DELETE FROM executions; DELETE FROM bots; DELETE FROM connections; DELETE FROM mcp_servers; DELETE FROM provider_accounts;`);
     const bots = this.db.prepare('INSERT INTO bots VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
     profile.bots.forEach((row, order) => bots.run(encode(row.botId), order, encode(row.profile), row.profileRevision,
       Number(row.archived), encode(row.currentConversationId), encode(row.retained), row.systemKind ?? null));
@@ -553,10 +660,10 @@ export class ProductSQLite {
       encode(row.draft), encode(row.binding), encode(row.latestExecutionId)));
     const activities = this.db.prepare(`INSERT INTO activities (activity_id, sort_order, owner_bot_id, origin_conversation_id,
       revision, state, goal_json, requirements_json, questions_json, materials_json, input_files_json, execution_ids_json,
-      results_json, binding_json, retained_json, granted_linked_activity_ids_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+      results_json, binding_json, retained_json, granted_linked_activity_ids_json, routing_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
     profile.activities.forEach((row, order) => activities.run(encode(row.activityId), order, encode(row.ownerBotId), encode(row.originConversationId),
       row.revision, row.state, encode(row.goal), encode(row.requirements), encode(row.questions), encode(row.materials), encode(row.inputFiles),
-      encode(row.executionIds), encode(row.results), encode(row.binding), encode(row.retained), encode(row.grantedLinkedActivityIds ?? [])));
+      encode(row.executionIds), encode(row.results), encode(row.binding), encode(row.retained), encode(row.grantedLinkedActivityIds ?? []), encode(row.routing)));
     const executions = this.db.prepare('INSERT INTO executions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
     profile.executions.forEach((row, order) => executions.run(encode(row.executionId), order, row.revision, row.state, encode(row.operationId),
       encode(row.input), encode(row.error), encode(row.engineRunId), encode(row.importedActivityId), encode(row.retained)));
@@ -566,6 +673,8 @@ export class ProductSQLite {
       const servers = this.db.prepare('INSERT INTO mcp_servers VALUES (?, ?, ?, ?)');
       profile.mcpServers.forEach(({ catalog, ...config }, order) => servers.run(config.serverId, order, encode(config), encode(catalog)));
     }
+    const providers = this.db.prepare('INSERT INTO provider_accounts VALUES (?, ?, ?)');
+    profile.providerAccounts?.forEach((row, order) => providers.run(row.providerId, order, encode(row)));
     const operations = this.db.prepare('INSERT INTO operations VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
     profile.operations.forEach((row, order) => operations.run(encode(row.receipt.operationId), order, encode(row.method), row.fingerprint,
       encode(row.receipt), encode(row.reply), encode(row.replyError), row.connectionRevision ?? null, encode(row.retained)));
@@ -576,6 +685,9 @@ export class ProductSQLite {
       saved_revision: encode(profile.savedRevision), applied_revision: encode(profile.appliedRevision), preferences_json: encode(profile.preferences),
       issue_tool_scopes_json: encode(profile.issueToolScopes), untargeted_receipts_json: encode(profile.untargetedReceipts), recovery_json: encode(profile.recovery),
       memory_present: profile.memory ? '1' : null,
+      routing_policy: encode(profile.routingPolicy ?? 'balanced'), provider_effective_policy: encode(profile.providerEffectivePolicy),
+      provider_saved_revision: encode(profile.providerSavedRevision), provider_effective_revision: encode(profile.providerEffectiveRevision),
+      provider_effective_accounts: encode(profile.providerEffectiveAccounts),
       snapshot_sha256: mirror.snapshot.digest, pending_snapshot_previous: encode(mirror.previous), updated_at: new Date().toISOString(),
     })) {
       if (value === null) remove.run(key);

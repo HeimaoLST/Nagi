@@ -1,9 +1,9 @@
 /// <reference lib="es2024.promise" />
 
 import { createHash, randomUUID } from 'node:crypto';
-import { stat } from 'node:fs/promises';
+import { mkdir, stat } from 'node:fs/promises';
 import { realpathSync } from 'node:fs';
-import { dirname, isAbsolute, resolve } from 'node:path';
+import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { setImmediate } from 'node:timers/promises';
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
 import type { AssistantMessage, ToolCall } from '@earendil-works/pi-ai';
@@ -15,8 +15,8 @@ import {
   type Material, type McpServerRecord, type McpServerView, type OpenParams, type Operation, type ProductCommand, type ProductParams, type SkillApproval,
   type SkillChange, type SkillDetail, type SkillListing, type SkillPermissions, type SkillSource, type TraceItem,
 } from './protocol.js';
-import { backupProductProfile, readPrivateConnection, saveCredential, type PrivateConnection, type ProductProfilePaths, type StoredConnection } from './product-profile.js';
-import { ProductSQLite, type SkillApprovalChange } from './product-sqlite.js';
+import { backupProductProfile, privateCredentialKeys, redactBackupProfile, saveCredential, type PrivateConnection, type ProductProfilePaths, type StoredConnection } from './product-profile.js';
+import { ProductSQLite, type RoutingWrite, type SkillApprovalChange } from './product-sqlite.js';
 import { composeBotSystemPrompt, formatTightBotInstructions, readTightBotInstructions,
   PANDORABOX_BOT_ID, SYSTEM_KIND_BOT_ARCHITECT, type BotSystemKind } from './bot-template.js';
 import { completedWorkSummary, formatLastingRulesBlock, lastingRulesFit, MEMORY_COLD_TTL_MS, MAX_LOG_BYTES, MAX_PENDING_LEARNINGS,
@@ -33,6 +33,8 @@ import { containsMcpSecret, maxMcpServers, McpConnectionManager, uniqueMcpRegist
 import { McpVault, mcpSecretKeys, mcpSecretsComplete, mergeMcpSecrets, type McpVaultWrite } from './mcp-vault.js';
 import { projectionRedactor } from './product-redactor.js';
 import { loadSkillInstallation, SkillSandbox } from './skill-sandbox.js';
+import { activityRole, activityRouting, providerCacheTtlMs, providerEndpoint, resolveRole, resolvedRoles, validProvider,
+  type ActivityRouting, type CapturedRoute, type ModelRole, type ProviderAccount, type RoutingPolicy } from './model-router.js';
 
 const emptyDraft = (): Draft => ({ revision: 0, text: '', materials: [] });
 const newId = randomUUID;
@@ -40,6 +42,12 @@ const live = (execution?: StoredExecution) => execution?.state === 'starting' ||
 const unknown = (execution?: StoredExecution) => execution?.state === 'unknown';
 const maxDraftBytes = 512 * 1024;
 const maxPartialBytes = 512 * 1024;
+const readOnlyTools: Record<string, true> = { read: true, grep: true, find: true, ls: true, activity_list: true, activity_get: true,
+  activity_trace_read: true, conversation_read: true, conversation_search: true, memory_list_rules: true, memory_search_log: true,
+  skill_list: true, skill_read: true, bot_list: true, bot_inspect_team: true };
+const providerChanges = { 'provider.save': 'saved', 'provider.delete': 'deleted', 'provider.apply': 'applied',
+  'provider.revokeCredential': 'revoked', 'routing.setPolicy': 'policy' } as const;
+type ProviderMutation = Extract<ProductCommand, { method: keyof typeof providerChanges }>;
 
 export type ProductRunObservers = {
   started: () => void;
@@ -48,6 +56,9 @@ export type ProductRunObservers = {
   confirmedFileEffect: (path: string, callId: string) => void;
   toolStarted: (name: string, callId: string, target?: string) => void;
   toolFinished: (name: string, callId: string, isError: boolean, excerpt?: string) => void;
+  authorizeProvider?: () => void;
+  credentialRejected?: () => void;
+  admitTool?: (name: string, callId: string) => void;
 };
 
 export type ProductSession = {
@@ -88,9 +99,10 @@ export function confirmedFileEffect(cwd: string, name: string, input: unknown, c
 }
 
 type SessionBinding = {
-  contextId: string; sessionRef: string; connectionRevision: number; profileRevision: number;
+  contextId: string; sessionRef: string; connectionRevision?: number; route?: CapturedRoute; profileRevision: number;
   cwd: string; instructions: string; codingTools: string[] | null; used: boolean;
   memoryRulesRevision?: number;
+  lastTurnAt?: string;
 };
 type StoredExecution = Execution & {
   operationId: string;
@@ -111,6 +123,7 @@ type Question = {
   state: 'open' | 'answered' | 'superseded';
   answer?: { text: string; materials: Material[] };
   delivery?: 'saved' | 'dispatching' | 'delivered' | 'unknown' | 'canceled' | 'unavailable';
+  deliveryBlocker?: 'credential_unavailable';
 };
 type ResultFile = { path: string; callId: string };
 type ActivityResult = {
@@ -122,6 +135,7 @@ type Activity = {
   materials: Material[]; inputFiles: string[]; executionIds: string[]; results: ActivityResult[]; binding?: SessionBinding;
   grantedLinkedActivityIds?: string[];
   retained?: object;
+  routing?: ActivityRouting;
 };
 type StoredOperation = {
   method: string; fingerprint: string; receipt: Operation; reply: object;
@@ -145,6 +159,12 @@ export type ProductProfile = {
   recovery?: { id: string; ui?: object };
   memory?: BotMemory;
   mcpServers?: McpServerRecord[];
+  providerAccounts?: ProviderAccount[];
+  providerEffectiveAccounts?: ProviderAccount[];
+  routingPolicy?: RoutingPolicy;
+  providerEffectivePolicy?: RoutingPolicy;
+  providerSavedRevision?: number;
+  providerEffectiveRevision?: number;
 };
 type ProductActor = { conversationId: string } | { activityId: string };
 type LiveExecution = {
@@ -205,7 +225,8 @@ const readToolParams = Type.Object({ conversation_id: id, ...modelInspectionPage
 const searchToolParams = Type.Object({ conversation_id: id, ...modelInspectionPage, query: Type.String() }, strictTool);
 const delegateInput = Type.Object({ goal: id, key: id,
   assignee_id: Type.Optional(Type.String()), requirements: Type.Optional(Type.Array(Type.String())),
-  files: Type.Optional(Type.Array(Type.String(), { maxItems: 16 })), linked_activity_ids: Type.Optional(Type.Array(id)) }, strictTool);
+  files: Type.Optional(Type.Array(Type.String(), { maxItems: 16 })), linked_activity_ids: Type.Optional(Type.Array(id)),
+  ...activityRouting.properties }, strictTool);
 
 function projectionJSON(value: unknown, redact: (text: string) => string, key = ''): unknown {
   if (typeof value === 'string') {
@@ -260,6 +281,8 @@ export class Product {
   private storageClosed = false;
   private profile: ProductProfile;
   private credentials: PrivateConnection | undefined;
+  private readonly retiredKeys = new Set<string>();
+  private readonly rejectedSources = new Set<string>();
   private stream?: { streamId: string; seq: number };
   private effectiveRevision: number | null;
   private closing = false;
@@ -269,12 +292,12 @@ export class Product {
   private readonly pendingTraceUpdates = new Map<string, TraceUpdate>();
   private traceUpdateTimer?: ReturnType<typeof globalThis.setImmediate>;
 
-  constructor(private paths: ProductProfilePaths, private engine: ProductEngine, private sendFrame: (frame: object) => Promise<void>, stateDir: string) {
-    this.credentials = readPrivateConnection(paths.credentialsPath);
+  constructor(private paths: ProductProfilePaths, private engine: ProductEngine, private sendFrame: (frame: object) => Promise<void>, private stateDir: string) {
     this.skills = new BotSkills(dirname(paths.profilePath));
     this.vault = new McpVault(paths.credentialsPath);
-    this.storage = new ProductSQLite(paths.profilePath, this.skills, this.vault);
+    this.storage = new ProductSQLite(paths.profilePath, paths.credentialsPath, this.skills, this.vault);
     try {
+      this.credentials = this.storage.credentials();
       this.installationId = loadSkillInstallation(dirname(paths.profilePath));
       this.sandbox = new SkillSandbox([dirname(paths.profilePath), dirname(paths.credentialsPath), stateDir]);
       this.profile = this.storage.open(paths, this.credentials, this.installationId);
@@ -326,10 +349,19 @@ export class Product {
 
   killChildrenOnExit(): void { this.mcp.killOnExit(); this.sandbox.killOnExit(); }
 
-  private commit<T>(mutate: (candidate: ProductProfile) => T, skillWrite?: SkillWrite, mcpWrite?: McpVaultWrite, approval?: SkillApprovalChange): T {
+  private commit<T>(mutate: (candidate: ProductProfile) => T, skillWrite?: SkillWrite, mcpWrite?: McpVaultWrite, approval?: SkillApprovalChange,
+    routing?: RoutingWrite): T {
     const candidate = structuredClone(this.profile);
     const result = mutate(candidate);
-    const updates = this.storage.write(candidate, this.profile, skillWrite, mcpWrite, approval);
+    let updates: TraceUpdate[];
+    try { updates = this.storage.write(candidate, this.profile, skillWrite, mcpWrite, approval, routing); }
+    catch (error) {
+      if (routing?.credentials) {
+        this.closing = true;
+        this.engine.disconnect();
+      }
+      throw error;
+    }
     this.profile = candidate;
     for (const update of updates) this.queueTraceUpdate(update);
     return result;
@@ -364,6 +396,153 @@ export class Product {
 
   private connection(profile: ProductProfile, revision: number | null) {
     return profile.connections.find(item => item.revision === revision);
+  }
+
+  private providerKey(binding: Pick<CapturedRoute, 'providerId' | 'credentialSourceId' | 'baseUrl' | 'wireApi'>): string | undefined {
+    if (this.rejectedSources.has(binding.credentialSourceId)) return;
+    return this.credentials?.accounts?.find(row => row.credentialSourceId === binding.credentialSourceId &&
+      row.providerId === binding.providerId && row.baseUrl === binding.baseUrl && row.wireApi === binding.wireApi)?.apiKey;
+  }
+
+  private bindingKey(binding: SessionBinding): string | undefined {
+    if (binding.route) return this.providerKey(binding.route);
+    const connection = this.connection(this.profile, binding.connectionRevision ?? null);
+    return connection && !this.rejectedSources.has(connection.sourceId) ? this.credentials?.sources[connection.sourceId]?.api_key : undefined;
+  }
+
+  private providerRevisions(profile = this.profile) {
+    return { savedRevision: profile.providerSavedRevision ?? null, effectiveRevision: profile.providerEffectiveRevision ?? null };
+  }
+
+  private routingState() {
+    const { providerEffectiveAccounts, providerEffectiveRevision, providerEffectivePolicy, routingPolicy } = this.profile;
+    const effectivePolicy = providerEffectivePolicy ?? 'balanced';
+    return { ...this.providerRevisions(), policy: routingPolicy ?? 'balanced', effectivePolicy,
+      resolvedRoles: resolvedRoles(providerEffectiveAccounts ?? [], providerEffectiveRevision ?? 0, effectivePolicy, account => !!this.providerKey(account)) };
+  }
+
+  private changeProvider(command: ProviderMutation) {
+    const { method, params } = command;
+    const { operationId } = params;
+    const visible = command.method === 'provider.save' ? { operationId, account: command.params.account } : params;
+    const prior = this.sameOperation(method, operationId, visible);
+    if (prior) return prior.reply;
+    const next = { ...this.credentials, version: 3 as const, sources: this.credentials?.sources ?? {}, accounts: this.credentials?.accounts ?? [] };
+    const routing: RoutingWrite = {};
+    const reply = this.commit(candidate => {
+      switch (command.method) {
+        case 'provider.save': {
+          const { account, apiKey } = command.params;
+          const previous = candidate.providerAccounts?.find(row => row.providerId === account.providerId);
+          const sameEndpoint = previous?.wireApi === account.wireApi && previous.baseUrl === account.baseUrl;
+          const existingKey = sameEndpoint ? this.providerKey(previous) : undefined;
+          const key = apiKey?.trim() ? apiKey : existingKey;
+          if (!validProvider(account) || containsMcpSecret(account, projectionRedactor([...this.credentialKeys(), ...(key ? [key] : [])]))) {
+            stateError('invalid_params', 'The Provider requires an HTTP(S) endpoint, nonsecret metadata and valid model limits');
+          }
+          if (!previous && (candidate.providerAccounts?.length ?? 0) >= 64) stateError('busy', 'The Provider pool is full');
+          const credentialSourceId = sameEndpoint && key === existingKey ? previous.credentialSourceId : newId();
+          const row = { ...account, credentialSourceId };
+          candidate.providerAccounts = previous ? candidate.providerAccounts!.map(item => item.providerId === account.providerId ? row : item) :
+            [...candidate.providerAccounts ?? [], row];
+          if (key) {
+            next.accounts = [...next.accounts.filter(item => item.credentialSourceId !== credentialSourceId), { ...row, apiKey: key }];
+            routing.credentials = next;
+          }
+          break;
+        }
+        case 'provider.delete': {
+          const accounts = candidate.providerAccounts?.filter(row => row.providerId !== command.params.providerId);
+          if (!candidate.providerAccounts || accounts?.length === candidate.providerAccounts.length) stateError('not_found', 'The Provider does not exist');
+          candidate.providerAccounts = accounts?.length ? accounts : undefined;
+          break;
+        }
+        case 'routing.setPolicy':
+          candidate.routingPolicy = command.params.policy;
+          break;
+        case 'provider.apply': {
+          const saved = candidate.providerSavedRevision;
+          requireRevision(saved ?? 0, command.params.savedRevision);
+          if (saved === undefined) stateError('not_found', 'There is no saved Provider revision');
+          candidate.providerEffectiveRevision = saved;
+          candidate.providerEffectivePolicy = candidate.routingPolicy ?? 'balanced';
+          candidate.providerEffectiveAccounts = candidate.providerAccounts;
+          const savedIds = new Set(candidate.providerAccounts?.map(row => row.providerId));
+          next.accounts = next.accounts.filter(row => savedIds.has(row.providerId));
+          break;
+        }
+        case 'provider.revokeCredential': {
+          const { providerId } = command.params;
+          if (![...candidate.providerAccounts ?? [], ...candidate.providerEffectiveAccounts ?? []].some(row => row.providerId === providerId)) {
+            stateError('not_found', 'The Provider does not exist');
+          }
+          next.accounts = next.accounts.filter(row => row.providerId !== providerId);
+          break;
+        }
+      }
+      if (method === 'provider.apply' || method === 'provider.revokeCredential') {
+        if (next.accounts.length !== (this.credentials?.accounts?.length ?? 0)) routing.credentials = next;
+      } else {
+        candidate.routingPolicy ??= 'balanced';
+        candidate.providerSavedRevision = (candidate.providerSavedRevision ?? 0) + 1;
+      }
+      const result = this.providerRevisions(candidate);
+      return this.record(candidate, method, visible, { operationId, state: 'accepted', target: { connection: true }, result }, result);
+    }, undefined, undefined, undefined, routing);
+    if (routing.credentials) {
+      const retained = new Set(privateCredentialKeys(next));
+      for (const key of privateCredentialKeys(this.credentials)) if (!retained.has(key)) this.retiredKeys.add(key);
+      this.credentials = next;
+    }
+    this.emit('provider.changed', { ...this.providerRevisions(), change: providerChanges[method] });
+    return reply;
+  }
+
+  private async testProvider({ account, apiKey }: ProductParams<'provider.test'>) {
+    if (!validProvider(account)) stateError('invalid_params', 'The Provider requires an HTTP(S) endpoint and valid model limits');
+    const previous = this.profile.providerAccounts?.find(row => row.providerId === account.providerId);
+    const key = apiKey?.trim() ? apiKey : previous?.baseUrl === account.baseUrl && previous.wireApi === account.wireApi ? this.providerKey(previous) : undefined;
+    if (!key) stateError('credential_unavailable', 'The Provider credential is unavailable');
+    const started = Date.now();
+    try {
+      const endpoint = providerEndpoint(account.baseUrl)!;
+      endpoint.pathname = endpoint.pathname.replace(/\/$/, '') + '/models';
+      const response = await fetch(endpoint, { redirect: 'manual', signal: AbortSignal.timeout(5000), headers: { Authorization: `Bearer ${key}` } });
+      if (response.ok && response.body) {
+        const reader = response.body.getReader();
+        const chunks: Uint8Array[] = [];
+        let size = 0;
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          size += value.byteLength;
+          if (size > 1024 * 1024) {
+            await reader.cancel();
+            stateError('provider_test_failed', 'The Provider model catalog exceeds the probe limit');
+          }
+          chunks.push(value);
+        }
+        const catalog: unknown = JSON.parse(Buffer.concat(chunks, size).toString('utf8'));
+        if (!catalog || typeof catalog !== 'object' || !('data' in catalog) || !Array.isArray(catalog.data)) stateError('provider_test_failed', 'The Provider model catalog is invalid');
+        const redact = this.engine.redactor([...this.credentialKeys(), key]);
+        const models = [...new Set(catalog.data.map(row => row?.id).filter((model): model is string =>
+          typeof model === 'string' && model.length <= 256 && !!model.trim() && redact(model) === model))].slice(0, 128);
+        return { ok: true, models, latencyMs: Date.now() - started };
+      }
+      await response.body?.cancel();
+      if (response.status !== 404 && response.status !== 405 && response.status !== 501) stateError('provider_test_failed', `The Provider rejected the probe (HTTP ${response.status})`);
+      await this.engine.test({ ...account, model: account.defaultModel, apiKey: key, workingDirectory: this.stateDir, maxActiveTasks: 1 });
+      return { ok: true, models: [], latencyMs: Date.now() - started };
+    } catch (error) {
+      const redact = this.engine.redactor([...this.credentialKeys(), key]);
+      return { ok: false, models: [], latencyMs: Date.now() - started,
+        error: error instanceof RequestError ? redact(error.message) : 'The Provider probe could not be completed' };
+    }
+  }
+
+  private selectRoute(role: ModelRole, deep = false): CapturedRoute | null {
+    return resolveRole(this.profile.providerEffectiveAccounts ?? [], this.profile.providerEffectiveRevision ?? 0,
+      this.profile.providerEffectivePolicy ?? 'balanced', role, account => !!this.providerKey(account), deep);
   }
 
   private connectionState(profile = this.profile) {
@@ -407,7 +586,7 @@ export class Product {
 
   private activityDetails(activity: Activity) {
     return {
-      ...this.activityView(activity), requirements: activity.requirements, materials: activity.materials, questions: activity.questions,
+      ...this.activityView(activity), ...activity.routing, requirements: activity.requirements, materials: activity.materials, questions: activity.questions,
       executions: activity.executionIds.map(id => this.viewExecution(this.execution(this.profile, id))),
     };
   }
@@ -726,6 +905,19 @@ export class Product {
         this.effectiveRevision = params.savedRevision;
         return reply;
       }
+      case 'routing.get':
+        return this.routingState();
+      case 'provider.list':
+        return { ...this.routingState(), accounts: (this.profile.providerAccounts ?? []).map(account => ({ ...account,
+          credentialStatus: this.providerKey(account) ? 'ok' : 'credential_missing' })) };
+      case 'provider.test':
+        return this.testProvider(command.params);
+      case 'provider.save':
+      case 'provider.delete':
+      case 'provider.apply':
+      case 'provider.revokeCredential':
+      case 'routing.setPolicy':
+        return this.changeProvider(command);
       case 'skill.list': {
         const owner = command.params.botId === undefined ? undefined : this.bot(this.profile, command.params.botId);
         return this.modelProjection(this.skillListing(owner));
@@ -791,11 +983,8 @@ export class Product {
         if (this.active.size) stateError('busy', 'Finish or stop active work before saving a recovery copy');
         const redact = this.engine.redactor(this.credentialKeys());
         const { profile, backup } = this.storage.captureBackup(redact);
+        redactBackupProfile(profile, redact);
         const bundles = this.skills.backup(profile.bots, redact);
-        const vaultKeys = this.vault.keys();
-        if (vaultKeys.length && containsMcpSecret(profile, projectionRedactor(vaultKeys))) {
-          stateError('mcp_secret', 'Remove the MCP credential from saved product data before making a recovery copy');
-        }
         const files = new Map(bundles.map(row => [canonicalJSON([row.ownerBotId, row.skillId]), backupSkillFiles(row)]));
         const skillApprovals = this.storage.skillApprovals().filter(row => {
           if (row.source !== 'private') return true;
@@ -803,7 +992,16 @@ export class Product {
           return bundle && bundleDigest(row.ownerBotId, row.source, row.skillId, bundle) === row.approvalDigest;
         });
         return backupProductProfile(this.paths, profile, { ...backup, ...(bundles.length ? { privateSkillBundles: bundles } : {}),
-          ...(skillApprovals.length ? { skillApprovals } : {}) }, command.params.destination);
+          ...(skillApprovals.length ? { skillApprovals } : {}) }, command.params.destination, snapshot => {
+          const vaultKeys = this.vault.keys();
+          if (vaultKeys.length && containsMcpSecret(snapshot, projectionRedactor(vaultKeys))) {
+            stateError('mcp_secret', 'Remove the MCP credential from saved product data before making a recovery copy');
+          }
+          const providerKeys = [...privateCredentialKeys(this.credentials), ...this.retiredKeys];
+          if (providerKeys.length && containsMcpSecret(snapshot, projectionRedactor(providerKeys))) {
+            stateError('provider_secret', 'Remove the Provider credential from saved product data before making a recovery copy');
+          }
+        });
       }
       case 'operation.get':
         return this.operation(command.params.operationId);
@@ -958,9 +1156,10 @@ export class Product {
         config.contextTokens - config.outputTokens < 4 || !isAbsolute(config.workingDirectory)) {
       stateError('invalid_params', 'The connection requires an HTTP(S) endpoint, a working directory and valid limits');
     }
-    this.credentials = saveCredential(this.paths.credentialsPath, this.credentials, config);
+    const credentials = saveCredential(this.paths.credentialsPath, this.credentials, config);
+    this.credentials = credentials;
     const { apiKey: _, ...configuration } = config;
-    const sourceId = this.credentials.credential_source;
+    const sourceId = credentials.credential_source;
     return this.commit(candidate => {
       const revision = (candidate.connections.at(-1)?.revision ?? 0) + 1;
       candidate.connections.push({ revision, sourceId, configuration });
@@ -972,8 +1171,8 @@ export class Product {
 
   private capacity(): void {
     const configuration = this.connection(this.profile, this.effectiveRevision)?.configuration;
-    if (!configuration) stateError('not_configured', 'Apply a connection first');
-    if (this.active.size >= configuration.maxActiveTasks) stateError('busy', 'The configured execution capacity is full');
+    if (!configuration && this.profile.providerEffectiveRevision === undefined) stateError('not_configured', 'Apply a connection first');
+    if (this.active.size >= (configuration?.maxActiveTasks ?? 2)) stateError('busy', 'The configured execution capacity is full');
   }
 
   private listBots(cursor?: string, limit?: number) {
@@ -1027,7 +1226,7 @@ export class Product {
   }
 
   credentialKeys(): string[] {
-    return [...Object.values(this.credentials?.sources ?? {}).map(source => source.api_key), ...this.vault.keys()];
+    return [...privateCredentialKeys(this.credentials), ...this.retiredKeys, ...this.vault.keys()];
   }
 
   private memoryCandidate(memory: BotMemory, bot: Bot, input: string, maxBytes: number,
@@ -1098,24 +1297,36 @@ export class Product {
     return this.storage.searchWorkLogs(botId, query, dateFrom, dateTo, limit);
   }
 
-  private async prepareSession(owner: ProductActor, existing: SessionBinding | undefined, bot: Bot, conversationBoundary = false) {
+  private async prepareSession(owner: ProductActor, existing: SessionBinding | undefined, bot: Bot, conversationBoundary = false,
+    newRoute?: CapturedRoute) {
+    if (existing && !this.bindingKey(existing)) stateError('credential_unavailable', 'The captured credential source is unavailable');
     const contextId = existing?.contextId ?? newId();
     const cached = this.sessions.get(contextId);
     const meta = 'conversationId' in owner ? this.profile.memory?.meta.find(row => row.botId === bot.botId) : undefined;
     const cold = !cached || !meta?.lastTurnAt || Date.now() - Date.parse(meta.lastTurnAt) >= MEMORY_COLD_TTL_MS;
     const reload = !!(existing && conversationBoundary && (this.skillReload.has(bot.botId) || cold ||
       meta?.forceReload && meta.rulesRevision !== (existing.memoryRulesRevision ?? 0)));
-    if (cached && existing && !reload && cached.instructions === existing.instructions && !cached.mcpSignature && !bot.profile.mcpBindings?.length) {
+    const activityId = 'activityId' in owner ? owner.activityId : undefined;
+    const activity = activityId ? this.activity(this.profile, activityId) : undefined;
+    const role = activity ? activityRole(activity.routing, !!bot.profile.mcpBindings?.length) : 'dialogue';
+    const lastTurnAt = existing?.lastTurnAt ?? meta?.lastTurnAt;
+    const coldRoute = conversationBoundary && (!lastTurnAt || Date.now() - Date.parse(lastTurnAt) >= providerCacheTtlMs);
+    const route = newRoute ?? ((existing ? coldRoute : true) ? this.selectRoute(role, activity?.routing?.complexity === 'deep') : null) ?? existing?.route;
+    const routeChanged = canonicalJSON(route ?? null) !== canonicalJSON(existing?.route ?? null);
+    if (cached && existing && !routeChanged && !reload && cached.instructions === existing.instructions && !cached.mcpSignature && !bot.profile.mcpBindings?.length) {
       return { session: cached.session, binding: existing };
     }
-    const configured = this.connection(this.profile, existing?.connectionRevision ?? this.effectiveRevision);
-    if (!configured) stateError('not_configured', 'The captured connection is unavailable');
-    const { configuration, revision: connectionRevision } = configured;
-    const source = this.credentials?.sources[configured.sourceId];
-    if (!source?.api_key) stateError('connection_unavailable', 'The captured credential source is unavailable');
-    const activityId = 'activityId' in owner ? owner.activityId : undefined;
+    const legacy = this.connection(this.profile, existing?.connectionRevision ?? this.effectiveRevision);
+    const connectionRevision = route ? undefined : legacy?.revision;
+    if (!route && (!legacy || !existing && this.profile.providerEffectiveRevision !== undefined)) {
+      stateError(this.profile.providerEffectiveRevision === undefined ? 'not_configured' : 'credential_unavailable', 'No eligible Provider credential is available');
+    }
+    const apiKey = route ? this.providerKey(route) : this.credentials?.sources[legacy!.sourceId]?.api_key;
+    if (!apiKey) stateError('credential_unavailable', 'The captured credential source is unavailable');
     const profileRevision = existing?.profileRevision ?? bot.profileRevision;
-    const cwd = existing?.cwd ?? (bot.profile.workspace || configuration.workingDirectory);
+    const configuredCwd = existing?.cwd || bot.profile.workspace || legacy?.configuration.workingDirectory;
+    const cwd = configuredCwd || join(this.stateDir, 'workspace');
+    if (!configuredCwd) await mkdir(cwd, { recursive: true, mode: 0o700 });
     const instructions = existing && !reload ? existing.instructions : composeBotSystemPrompt({ profile: bot.profile, cwd, systemKind: bot.systemKind,
       capturedInstructions: existing?.instructions,
       lastingRules: meta ? formatLastingRulesBlock(this.lastingRules(bot.botId)) : undefined,
@@ -1126,10 +1337,11 @@ export class Product {
       contextId, botId: bot.botId, purpose: activityId ? 'activity' : 'conversation', activityId,
       selectionRevision: profileRevision, cwd, instructions, resumeRef: existing?.sessionRef,
       used: existing?.used ?? false, codingTools, domainTools: null,
-      configuration: {
-        wireApi: configuration.wireApi, baseUrl: configuration.baseUrl, apiKey: source.api_key,
-        model: configuration.model, contextTokens: configuration.contextTokens, outputTokens: configuration.outputTokens,
-        credentialSource: configured.sourceId,
+      configuration: route ? { wireApi: route.wireApi, baseUrl: route.baseUrl, apiKey, model: route.resolvedModel,
+        contextTokens: route.contextTokens, outputTokens: route.outputTokens, credentialSource: route.credentialSourceId,
+        thinkingLevel: route.thinkingLevel, reasoning: route.thinkingLevel !== 'off' } : {
+        wireApi: legacy!.configuration.wireApi, baseUrl: legacy!.configuration.baseUrl, apiKey, model: legacy!.configuration.model,
+        contextTokens: legacy!.configuration.contextTokens, outputTokens: legacy!.configuration.outputTokens, credentialSource: legacy!.sourceId,
       },
     };
     const mounts = (bot.profile.mcpBindings ?? []).flatMap(binding => {
@@ -1147,13 +1359,13 @@ export class Product {
       if (binding && server) return { server, binding, secrets: this.vault.get(serverId) };
     }, () => this.engine.redactor(this.credentialKeys()));
     const tools = [...this.tools(owner), ...mcp.tools];
-    const refresh = !!(cached && (cached.instructions !== instructions || cached.mcpSignature !== mcp.signature));
+    const refresh = !!(cached && (routeChanged || cached.instructions !== instructions || cached.mcpSignature !== mcp.signature));
     if (refresh) this.sessions.delete(contextId);
     const session = refresh ? await this.engine.refreshSession(params, tools) : await this.engine.open(params, tools);
     this.sessions.set(contextId, { session, instructions, mcpSignature: mcp.signature });
     if (conversationBoundary) this.skillReload.delete(bot.botId);
-    return { session, binding: { contextId, sessionRef: session.sessionRef, connectionRevision, profileRevision, cwd, instructions, codingTools,
-      used: existing?.used ?? false, memoryRulesRevision } };
+    return { session, binding: { contextId, sessionRef: session.sessionRef, connectionRevision, route, profileRevision, cwd, instructions, codingTools,
+      used: existing?.used ?? false, memoryRulesRevision, lastTurnAt: existing?.lastTurnAt } };
   }
 
   private newExecution(operationId: string, input: Draft): StoredExecution {
@@ -1170,8 +1382,15 @@ export class Product {
     }
     requireRevision(conversation.draft.revision, params.draftRevision);
     if (!conversation.draft.text.trim()) stateError('invalid_params', 'A message requires text');
+    const rejectCredential = () => this.commit(candidate => {
+      const result = { code: 'credential_unavailable', delivery: 'non_dispatched' };
+      const receipt: Operation = { operationId: params.operationId, state: 'rejected', target: owner, result };
+      return this.record(candidate, 'conversation.send', params, receipt, receipt);
+    });
+    if (conversation.binding && !this.bindingKey(conversation.binding)) return rejectCredential();
     this.capacity();
     const { session, binding } = await this.prepareSession(owner, conversation.binding, this.bot(this.profile, conversation.botId), true);
+    if (!this.bindingKey(binding)) return rejectCredential();
     this.capacity();
     const execution = this.newExecution(params.operationId, conversation.draft);
     const receipt: Operation = { operationId: params.operationId, state: 'accepted', target: owner, execution: publicExecution(execution) };
@@ -1200,6 +1419,7 @@ export class Product {
       catch { this.engine.disconnect(); }
     };
     const redactChunk = this.engine.streamingRedactor(this.credentialKeys());
+    const redactAdmission = this.engine.redactor(this.credentialKeys());
     const publishText = (text: string) => {
       if (!text) return;
       const offset = current.offset;
@@ -1208,7 +1428,15 @@ export class Product {
       this.emit('execution.textDelta', { ...target, offset, text });
     };
     try {
+      const binding = 'activityId' in owner ? this.activity(this.profile, owner.activityId).binding! : this.conversation(this.profile, owner.conversationId).binding!;
+      const sourceId = binding.route?.credentialSourceId ?? this.connection(this.profile, binding.connectionRevision ?? null)?.sourceId;
       session.start(executionId, execution.input, {
+        authorizeProvider: () => {
+          if (this.closing || !this.active.has(executionId) || !this.bindingKey(binding)) stateError('credential_unavailable', 'The captured credential source is unavailable');
+        },
+        credentialRejected: () => { if (sourceId) this.rejectedSources.add(sourceId); },
+        admitTool: (name, callId) => this.storage.admitTool(executionId, 'activityId' in owner ? owner.activityId : undefined,
+          redactAdmission(callId), redactAdmission(name), Object.hasOwn(readOnlyTools, name) ? 'readonly' : 'mutating'),
         started: () => guarded(() => {
           const update = this.commit(candidate => {
             const run = this.execution(candidate, executionId)!;
@@ -1244,6 +1472,7 @@ export class Product {
           if ('activityId' in owner) this.observeTrace({ ...owner, executionId, kind: 'tool_started', tool, callId, target });
         }),
         toolFinished: (tool, callId, isError, excerpt) => guarded(() => {
+          this.storage.settleTool(executionId, redactAdmission(callId), isError);
           if ('activityId' in owner) {
             this.observeTrace({ ...owner, executionId, kind: 'tool_finished', tool, callId, ok: !isError, excerpt });
             if (tool === 'activity_ask') this.finishAnswerDelivery(owner.activityId, executionId, callId, isError);
@@ -1293,15 +1522,33 @@ export class Product {
         activity.revision++;
         activity.results.push({ activityId: owner.activityId, executionId, text: redact(text), delivery: 'available', files: active?.files ?? [] });
       } else {
-        const botId = this.conversation(candidate, owner.conversationId).botId;
-        this.memoryMeta(this.ensureMemory(candidate), botId).lastTurnAt = settledAt;
+        const conversation = this.conversation(candidate, owner.conversationId);
+        if (conversation.binding) conversation.binding.lastTurnAt = settledAt;
+        this.memoryMeta(this.ensureMemory(candidate), conversation.botId).lastTurnAt = settledAt;
       }
       return execution;
     });
     this.active.delete(executionId);
     this.emit('execution.settled', { ...owner, executionId, operationId: run.operationId, revision: run.revision, state, ...(run.error ? { error: run.error } : {}) });
-    if ('activityId' in owner) this.emit('activity.changed', this.activityView(this.activity(this.profile, owner.activityId)));
+    if ('activityId' in owner) {
+      const activity = this.activity(this.profile, owner.activityId);
+      this.emit('activity.changed', this.activityView(activity));
+      if (state === 'failed') this.escalateActivity(activity, run);
+    }
     if (state === 'completed') this.consolidateMemory(owner, run, text, settledAt, active?.learningToolUsed);
+  }
+
+  private escalateActivity(activity: Activity, run: StoredExecution): void {
+    const original = activity.binding?.route;
+    if (this.closing || original?.role !== 'utility' || !this.providerKey(original) ||
+        !this.storage.canEscalate(activity.activityId, run.executionId)) return;
+    const role = activity.routing?.kind === 'coding' ? 'coding' : 'reasoning';
+    const route = this.selectRoute(role, true);
+    if (!route) return;
+    void this.startActivity('activity.continue', { activityId: activity.activityId, expectedRevision: activity.revision,
+      operationId: `${run.executionId}:escalation`, text: '', materials: run.input.materials }, { route, prior: run }).catch(error => {
+      if (!(error instanceof RequestError)) this.engine.disconnect();
+    });
   }
 
   private consolidateMemory(owner: ProductActor, run: StoredExecution, result: string, settledAt: string, learningToolUsed?: boolean): void {
@@ -1502,7 +1749,8 @@ export class Product {
     return this.startActivity('activity.continue', params);
   }
 
-  private async startActivity(method: string, params: { activityId: string; operationId: string; expectedRevision: number; text: string; materials: Material[] }) {
+  private async startActivity(method: string, params: { activityId: string; operationId: string; expectedRevision: number; text: string; materials: Material[] },
+    escalation?: { route: CapturedRoute; prior: StoredExecution }) {
     const prior = this.sameOperation(method, params.operationId, params);
     if (prior) return this.operation(params.operationId);
     const owner = { activityId: params.activityId };
@@ -1512,10 +1760,17 @@ export class Product {
     const last = this.execution(this.profile, activity.executionIds.at(-1));
     if (bot.archived || live(last) || unknown(last)) stateError('busy', 'The activity is not ready to continue');
     this.capacity();
-    const input = { revision: activity.revision, text: [activity.goal, ...activity.requirements, params.text, ...activity.inputFiles.map(path => `Input file: ${path}`)].filter(Boolean).join('\n'),
-      materials: params.materials };
+    const input = escalation?.prior.input ?? { revision: activity.revision,
+      text: [activity.goal, ...activity.requirements, ...activity.routing?.constraints ?? [], params.text,
+        ...activity.inputFiles.map(path => `Input file: ${path}`)].filter(Boolean).join('\n'), materials: params.materials };
     validateDraft(input);
-    const { session, binding } = await this.prepareSession(owner, activity.binding, bot);
+    const { session, binding } = await this.prepareSession(owner, escalation ? undefined : activity.binding, bot, false, escalation?.route);
+    if (this.closing) stateError('closing', 'The app is shutting down');
+    const latest = this.activity(this.profile, params.activityId);
+    if (escalation && (!latest.binding || !this.bindingKey(latest.binding) || escalation.prior.executionId !== latest.executionIds.at(-1))) {
+      stateError('escalation_unavailable', 'The prior execution is no longer eligible to escalate');
+    }
+    if (!this.bindingKey(binding)) stateError('credential_unavailable', 'The captured credential source is unavailable');
     this.capacity();
     const execution = this.newExecution(params.operationId, input);
     const receipt: Operation = { operationId: params.operationId, state: 'accepted', target: owner, execution: publicExecution(execution) };
@@ -1528,7 +1783,9 @@ export class Product {
       current.state = 'running';
       candidate.executions.push(execution);
       this.record(candidate, method, params, receipt, receipt);
-    });
+    }, undefined, undefined, undefined, escalation ? { escalation: { activityId: owner.activityId, priorExecutionId: escalation.prior.executionId,
+      escalatedExecutionId: execution.executionId, fromRole: 'utility', toRole: escalation.route.role === 'coding' ? 'coding' : 'reasoning',
+      at: new Date().toISOString() } } : undefined);
     this.emit('activity.changed', this.activityView(this.activity(this.profile, owner.activityId)));
     this.start(session, owner, execution);
     return receipt;
@@ -1543,6 +1800,8 @@ export class Product {
     if (!text.trim()) stateError('invalid_params', 'An answer requires text');
     const waiter = this.waiters.get(questionId);
     const target = { activityId, questionId };
+    const binding = this.activity(this.profile, activityId).binding;
+    const deliveryBlocker = binding && !this.bindingKey(binding) ? 'credential_unavailable' : undefined;
     const result = this.change(method, params, target, candidate => {
       const activity = this.activity(candidate, activityId);
       const question = this.question(activity, questionId);
@@ -1551,14 +1810,16 @@ export class Product {
       question.answer = { text, materials };
       question.state = 'answered';
       question.delivery = 'saved';
+      if (deliveryBlocker) question.deliveryBlocker = deliveryBlocker;
       question.revision++;
       activity.revision++;
-      return { ...target, executionId, revision: question.revision, answerSaved: true, delivery: question.delivery };
+      return { ...target, executionId, revision: question.revision, answerSaved: true, delivery: question.delivery, ...(deliveryBlocker ? { deliveryBlocker } : {}) };
     });
     this.emit('activity.changed', this.activityView(this.activity(this.profile, activityId)));
     if (waiter) {
       this.waiters.delete(questionId);
-      waiter.resolve({ text, materials });
+      if (deliveryBlocker) this.active.get(executionId)?.session.stop(executionId);
+      else if (live(this.execution(this.profile, executionId))) waiter.resolve({ text, materials });
     }
     return result;
   }
@@ -1568,7 +1829,8 @@ export class Product {
   }
 
   private skillWorkspace(owner?: Bot): string {
-    return owner?.profile.workspace || this.connection(this.profile, this.effectiveRevision)?.configuration.workingDirectory || '';
+    return owner?.profile.workspace || this.connection(this.profile, this.effectiveRevision)?.configuration.workingDirectory ||
+      (this.profile.providerEffectiveRevision === undefined ? '' : join(this.stateDir, 'workspace'));
   }
 
   private skillOwner(source: SkillSource, botId?: string, writable = false): Bot | undefined {
@@ -1858,7 +2120,7 @@ export class Product {
           const activity = this.scopedActivity(input.activity_id, undefined, owner);
           return this.modelResult({ ...this.activityDetails(activity), results: activity.results });
         } },
-      { name: 'activity_delegate', label: 'Delegate activity', description: 'Start independently tracked work only when the user assigns it. Use the optional receiving Bot ID and link only directly accessible Activity IDs.', parameters: delegateInput,
+      { name: 'activity_delegate', label: 'Delegate activity', description: 'Start independently tracked work only when the user assigns it. Use kind, complexity and constraints to describe the work. Link only directly accessible Activity IDs.', parameters: delegateInput,
         execute: async (_callId, input) => {
           if (!Value.Check(delegateInput, input)) return toolText('A stable key and a goal are required', true);
           return this.modelResult(await this.delegate(owner.conversationId, input));
@@ -2012,6 +2274,7 @@ export class Product {
     if (files.some(path => !isAbsolute(path) || !permitted.has(path))) stateError('scope_denied', 'A delegated input file must come from user-provided Materials or a visible result');
     const activity: Activity = { activityId, ownerBotId: bot.botId, originConversationId, revision: 1, state: 'notStarted',
       ...(grants.length ? { grantedLinkedActivityIds: grants } : {}),
+      routing: input.kind || input.complexity || input.constraints?.length ? { kind: input.kind, complexity: input.complexity, constraints: input.constraints } : undefined,
       goal: input.goal, requirements: input.requirements ?? [], questions: [], materials: source.input.materials, inputFiles: files, executionIds: [], results: [] };
     this.commit(candidate => {
       candidate.activities.push(activity);
