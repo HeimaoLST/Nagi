@@ -80,8 +80,17 @@ const operationTarget = { operationId: id, expectedRevision: revision };
 export const materialSchema = Type.Object({
   id, revision, name: id, text: Type.String(), source: Type.Optional(Type.String()),
 });
+export const quoteAuthorMaxBytes = 120;
+export const quoteTextMaxBytes = 1024;
+export const productQuote = Type.Object({
+  messageId: id, bubbleIndex: Type.Optional(revision), sender: Type.Union([Type.Literal('user'), Type.Literal('bot')]),
+  authorName: Type.String({ pattern: '\\S', maxLength: quoteAuthorMaxBytes }),
+  text: Type.String({ pattern: '\\S', maxLength: quoteTextMaxBytes }),
+}, { additionalProperties: false });
+const optionalQuote = Type.Optional(Type.Union([productQuote, Type.Null()]));
 export const draftSchema = Type.Object({
   revision, text: Type.String(), materials: Type.Array(materialSchema),
+  quote: optionalQuote,
 });
 export const executionSchema = Type.Object({
   executionId: id,
@@ -141,6 +150,7 @@ export const productCommands = Type.Union([
   Type.Object({ method: Type.Literal('conversation.get'), params: Type.Object({ conversationId: id }) }),
   Type.Object({ method: Type.Literal('conversation.saveDraft'), params: Type.Object({
     conversationId: id, operationId: id, expectedRevision: revision, text: Type.String(), materials: Type.Array(materialSchema),
+    quote: optionalQuote,
   }) }),
   Type.Object({ method: Type.Literal('conversation.send'), params: Type.Object({ conversationId: id, operationId: id, draftRevision: revision }) }),
   Type.Object({ method: Type.Literal('conversation.stop'), params: Type.Object({ conversationId: id, executionId: id, operationId: id }) }),
@@ -240,7 +250,7 @@ export const productResults = {
   'conversation.send': operationSchema,
   'conversation.stop': stopResult,
   'conversation.history': productPage(Type.Object({ messageId: id, role: Type.Union([Type.Literal('user'), Type.Literal('assistant')]),
-    timestamp: id, text: Type.String(), materials: Type.Array(materialSchema) })),
+    timestamp: id, text: Type.String(), materials: Type.Array(materialSchema), quote: optionalQuote })),
   'activity.list': productPage(Type.Object(activityFields)),
   'activity.get': Type.Object({ ...activityFields, requirements: stringList, materials: Type.Array(materialSchema), questions: Type.Array(questionResult), executions: Type.Array(activeExecution) }),
   'activity.result': Type.Object({ activityId: id, executionId: id, text: Type.String(), delivery: Type.Literal('available'), files: Type.Array(Type.Object({ path: id, callId: id })) }),
@@ -270,6 +280,11 @@ export const productWireSchema = {
 };
 export type ProductCommand = Static<typeof productCommands>;
 export type Material = Static<typeof materialSchema>;
+export type ProductQuote = Static<typeof productQuote>;
+export function hasCanonicalQuoteText({ authorName, text }: ProductQuote): boolean {
+  return authorName.length > 0 && authorName === authorName.trim() && Buffer.byteLength(authorName) <= quoteAuthorMaxBytes &&
+    text.length > 0 && text === text.trim() && Buffer.byteLength(text) <= quoteTextMaxBytes;
+}
 export type Draft = Static<typeof draftSchema>;
 export type Execution = Static<typeof executionSchema>;
 export type Operation = Static<typeof operationSchema>;

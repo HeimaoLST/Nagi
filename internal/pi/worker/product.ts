@@ -9,7 +9,7 @@ import type { AssistantMessage, ToolCall } from '@earendil-works/pi-ai';
 import { Type, type Static, type TSchema } from 'typebox';
 import { Value } from 'typebox/value';
 import {
-  MAX_FRAME, RequestError, canonicalJSON, draftSchema, frameBytes, id, inspectionPage, profileSchema, resolveCodingTools, skillID, skillSource, skillText, toolPresetSchema,
+  MAX_FRAME, RequestError, canonicalJSON, draftSchema, frameBytes, hasCanonicalQuoteText, id, inspectionPage, profileSchema, resolveCodingTools, skillID, skillSource, skillText, toolPresetSchema,
   type ActivityState, type BotChange, type BotProfile, type Connection, type Draft, type Execution,
   type Material, type OpenParams, type Operation, type ProductCommand, type ProductParams, type SkillChange, type SkillSource, type TraceItem,
 } from './protocol.js';
@@ -23,7 +23,7 @@ import { completedWorkSummary, formatLastingRulesBlock, lastingRulesFit, MEMORY_
   type BotPendingLearning, type BotWorkLog } from './bot-memory.js';
 import { directlyOwns, normalizeActivityGrants, redactTrace, type TraceObservation, type TraceUpdate } from './product-trace.js';
 import { cursorScope, decodeCursor, encodeCursor, encodedBytes, inspectConversation, inspectionQuery, invalidCursor, oversizedEntry,
-  publicConversationMessage, type InspectionParams } from './product-inspection.js';
+  publicConversationMessage, redactQuote, type InspectionParams } from './product-inspection.js';
 import { transcriptEntries, turnEntryType, type Transcript, type TranscriptOwner } from './product-transcript.js';
 import { BotSkills, formatSkill, type SkillWrite } from './bot-skills.js';
 
@@ -175,6 +175,7 @@ function page<T>(items: T[], key: (item: T) => string, owner: string, cursor?: s
 
 function validateDraft(draft: Draft): void {
   if (!Value.Check(draftSchema, draft) || frameBytes(draft) > maxDraftBytes) stateError('invalid_params', 'The draft exceeds the size limit for saved text and Materials');
+  if (draft.quote && !hasCanonicalQuoteText(draft.quote)) stateError('invalid_params', 'The quote exceeds the size limit for its author or text');
   if (new Set(draft.materials.map(item => item.id)).size !== draft.materials.length) stateError('invalid_params', 'Material IDs must be unique');
 }
 
@@ -644,11 +645,13 @@ export class Product {
       case 'conversation.get':
         return this.conversationView(this.conversation(this.profile, command.params.conversationId));
       case 'conversation.saveDraft': {
-        const params = command.params;
+        const { quote, ...fields } = command.params;
+        const params = { ...fields, ...(quote ? { quote: { ...quote, authorName: quote.authorName.trim(), text: quote.text.trim() } } : {}) };
         return this.change(method, params, { conversationId: params.conversationId }, candidate => {
           const conversation = this.current(candidate, params.conversationId);
           requireRevision(conversation.draft.revision, params.expectedRevision);
-          const draft = { revision: conversation.draft.revision + 1, text: params.text, materials: params.materials };
+          const draft: Draft = { revision: conversation.draft.revision + 1, text: params.text, materials: params.materials,
+            ...(params.quote ? { quote: params.quote } : {}) };
           validateDraft(draft);
           conversation.draft = draft;
           conversation.revision++;
@@ -1217,9 +1220,12 @@ export class Product {
     const messages = [];
     for await (const entry of transcriptEntries(transcript)) {
       const message = publicConversationMessage(entry);
-      if (message) messages.push({ ...message, text: redact(message.text), materials: message.materials.map(material => ({ ...material,
+      if (!message) continue;
+      const { quote, ...row } = message;
+      const publicQuote = quote && redactQuote(quote, redact);
+      messages.push({ ...row, text: redact(row.text), materials: row.materials.map(material => ({ ...material,
         text: redact(material.text), name: redact(material.name), source: material.source === undefined ? undefined : redact(material.source),
-      })) });
+      })), ...(publicQuote ? { quote: publicQuote } : {}) });
     }
     for (let count = limit; count > 0; count--) {
       const result = page(messages, item => item.messageId, `history:${conversationId}`, cursor, count);

@@ -276,7 +276,7 @@ console.log(JSON.stringify({ mode, version, fkCount: fk.length, digest }));
 	idxPurpose := strings.Index(firstSys, "Purpose:\nTrack releases")
 	idxInst := strings.Index(firstSys, "Behavior Instructions:\nBe brief.")
 	idxDir := strings.Index(firstSys, expectedBoundary)
-	if idxL0 != 0 || idxIM <= idxL0 || idxIdentity <= idxIM || idxPurpose <= idxIdentity || idxInst <= idxPurpose || idxDir <= idxInst || !strings.Contains(firstSys, "at most three bubbles") {
+	if idxL0 != 0 || idxIM <= idxL0 || idxIdentity <= idxIM || idxPurpose <= idxIdentity || idxInst <= idxPurpose || idxDir <= idxInst || !strings.Contains(firstSys, "Default to a single concise bubble") || !strings.Contains(firstSys, "Only split into 2 (rarely 3) bubbles") {
 		t.Fatalf("initial system prompt missing ordered L0/L1 sections: %q", firstSys)
 	}
 
