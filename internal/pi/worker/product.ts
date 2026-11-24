@@ -2,16 +2,16 @@
 
 import { createHash, randomUUID } from 'node:crypto';
 import { stat } from 'node:fs/promises';
-import { isAbsolute, resolve } from 'node:path';
+import { dirname, isAbsolute, resolve } from 'node:path';
 import { setImmediate } from 'node:timers/promises';
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
 import type { AssistantMessage, ToolCall } from '@earendil-works/pi-ai';
 import { Type, type Static, type TSchema } from 'typebox';
 import { Value } from 'typebox/value';
 import {
-  MAX_FRAME, RequestError, canonicalJSON, draftSchema, frameBytes, id, inspectionPage, profileSchema,
+  MAX_FRAME, RequestError, canonicalJSON, draftSchema, frameBytes, id, inspectionPage, profileSchema, resolveCodingTools, skillID, skillSource, skillText, toolPresetSchema,
   type ActivityState, type BotChange, type BotProfile, type Connection, type Draft, type Execution,
-  type Material, type OpenParams, type Operation, type ProductCommand, type ProductParams, type TraceItem,
+  type Material, type OpenParams, type Operation, type ProductCommand, type ProductParams, type SkillChange, type SkillSource, type TraceItem,
 } from './protocol.js';
 import { backupProductProfile, readPrivateConnection, saveCredential, type PrivateConnection, type ProductProfilePaths, type StoredConnection } from './product-profile.js';
 import { ProductSQLite } from './product-sqlite.js';
@@ -25,6 +25,7 @@ import { directlyOwns, normalizeActivityGrants, redactTrace, type TraceObservati
 import { cursorScope, decodeCursor, encodeCursor, encodedBytes, inspectConversation, inspectionQuery, invalidCursor, oversizedEntry,
   publicConversationMessage, type InspectionParams } from './product-inspection.js';
 import { transcriptEntries, turnEntryType, type Transcript, type TranscriptOwner } from './product-transcript.js';
+import { BotSkills, formatSkill, type SkillWrite } from './bot-skills.js';
 
 const emptyDraft = (): Draft => ({ revision: 0, text: '', materials: [] });
 const newId = randomUUID;
@@ -131,7 +132,7 @@ export type ProductProfile = {
   connections: StoredConnection[];
   savedRevision: number | null;
   appliedRevision: number | null;
-  preferences?: { selectedBotId?: string; layout?: object; themeIds?: object; appearance?: string; hideBuiltinArchitect?: boolean };
+  preferences?: { selectedBotId?: string; layout?: object; themeIds?: object; appearance?: string; hideBuiltinArchitect?: boolean; discoverLocalSkills?: boolean };
   issueToolScopes?: object[];
   untargetedReceipts?: object[];
   recovery?: { id: string; ui?: object };
@@ -221,14 +222,17 @@ const architectProfile: BotProfile = {
 
 const requiredText = Type.String({ minLength: 1, pattern: '\\S' });
 const architectInspect = Type.Object({}, { additionalProperties: false });
+const architectCapabilities = { tool_preset: Type.Optional(toolPresetSchema), skill_ids: Type.Optional(Type.Array(skillID, { maxItems: 200 })) };
 const architectCreate = Type.Object({ name: requiredText, purpose: requiredText, job: requiredText, voice: requiredText,
   anti_jobs: Type.Array(requiredText, { minItems: 1 }), workflow: Type.Optional(Type.String()), role: Type.Optional(Type.String()),
   starter_prompts: Type.Optional(Type.Array(Type.String())),
+  ...architectCapabilities,
 }, { additionalProperties: false });
 const architectUpdate = Type.Object({ bot_id: requiredText, name: Type.Optional(requiredText), purpose: Type.Optional(Type.String()),
   role: Type.Optional(Type.String()), job: Type.Optional(requiredText), voice: Type.Optional(requiredText),
   anti_jobs: Type.Optional(Type.Array(requiredText)), workflow: Type.Optional(Type.String()), instructions: Type.Optional(Type.String()),
   starter_prompts: Type.Optional(Type.Array(Type.String())),
+  ...architectCapabilities,
 }, { additionalProperties: false });
 
 function architectResult(bot: Bot) {
@@ -237,6 +241,8 @@ function architectResult(bot: Bot) {
 
 export class Product {
   private readonly storage: ProductSQLite;
+  private readonly skills: BotSkills;
+  private readonly skillReload = new Set<string>();
   private readonly backgroundTasks = new Set<Promise<void>>();
   private storageClosed = false;
   private profile: ProductProfile;
@@ -252,7 +258,8 @@ export class Product {
 
   constructor(private paths: ProductProfilePaths, private engine: ProductEngine, private sendFrame: (frame: object) => Promise<void>) {
     this.credentials = readPrivateConnection(paths.credentialsPath);
-    this.storage = new ProductSQLite(paths.profilePath);
+    this.skills = new BotSkills(dirname(paths.profilePath));
+    this.storage = new ProductSQLite(paths.profilePath, this.skills);
     try {
       this.profile = this.storage.open(paths, this.credentials);
       this.effectiveRevision = this.profile.appliedRevision;
@@ -299,10 +306,10 @@ export class Product {
     }
   }
 
-  private commit<T>(mutate: (candidate: ProductProfile) => T): T {
+  private commit<T>(mutate: (candidate: ProductProfile) => T, skillWrite?: SkillWrite): T {
     const candidate = structuredClone(this.profile);
     const result = mutate(candidate);
-    const updates = this.storage.write(candidate, this.profile);
+    const updates = this.storage.write(candidate, this.profile, skillWrite);
     this.profile = candidate;
     for (const update of updates) this.queueTraceUpdate(update);
     return result;
@@ -426,12 +433,15 @@ export class Product {
   private changeBot<P extends { operationId: string }>(method: string, params: P, mutate: (candidate: ProductProfile) => { bot: Bot; change?: BotChange }): Bot {
     const prior = this.sameOperation(method, params.operationId, params);
     if (prior) return prior.reply as Bot;
+    const before = this.profile;
     const { bot, change } = this.commit(candidate => {
       const result = mutate(candidate);
       const { retained, ...publicBot } = result.bot;
       this.record(candidate, method, params, { operationId: params.operationId, state: 'accepted', target: { botId: publicBot.botId }, result: publicBot }, publicBot);
       return { bot: publicBot, change: result.change };
     });
+    const old = before.bots.find(row => row.botId === bot.botId);
+    if (old && canonicalJSON(old.profile.mountedSkills) !== canonicalJSON(bot.profile.mountedSkills)) this.skillReload.add(bot.botId);
     if (change) this.emit('bot.changed', { bot, change });
     return bot;
   }
@@ -694,10 +704,52 @@ export class Product {
         this.effectiveRevision = params.savedRevision;
         return reply;
       }
+      case 'skill.list': {
+        const owner = command.params.botId === undefined ? undefined : this.bot(this.profile, command.params.botId);
+        return this.modelProjection(this.skills.list(owner, this.skillWorkspace(owner), this.discoverLocalSkills));
+      }
+      case 'skill.get': {
+        const { source, botId, skillId } = command.params;
+        const owner = this.skillOwner(source, botId);
+        const skill = this.skills.get({ source, botId, skillId }, this.skillWorkspace(owner), this.discoverLocalSkills);
+        if (!skill) return stateError('skill_missing', 'The skill is missing');
+        return { skill: this.modelProjection(skill) };
+      }
+      case 'skill.save':
+        return this.saveSkill(command.params);
+      case 'skill.delete':
+        return this.deleteSkill(command.params);
+      case 'skill.promoteGlobal': {
+        const params = command.params;
+        const prior = this.sameOperation(method, params.operationId, params);
+        if (prior) return prior.reply;
+        const { botId, skillId, targetSkillId = skillId } = params;
+        this.skillOwner('private', botId);
+        const skill = this.skills.get({ source: 'private', botId, skillId }, '', false);
+        if (!skill) return stateError('skill_missing', 'The private skill is missing');
+        const redact = this.engine.redactor(this.credentialKeys());
+        if ([skill.name, skill.description, skill.content].some(text => redact(text) !== text)) return stateError('skill_secret', 'Remove saved credentials before promoting the skill');
+        const write = this.skills.plan('global', undefined, targetSkillId, redact, skill.markdown, true);
+        return this.changeSkill(method, params, { source: 'global', botId, skillId: targetSkillId, change: 'promoted' }, write);
+      }
+      case 'skill.setPreferences': {
+        const params = command.params;
+        const prior = this.sameOperation(method, params.operationId, params);
+        if (prior) return prior.reply;
+        const changed: SkillChange = { source: 'global', skillId: '', change: 'preferences' };
+        const result = this.change(method, params, { connection: true }, candidate => {
+          candidate.preferences = { ...candidate.preferences, discoverLocalSkills: params.discoverLocalSkills };
+          return changed;
+        });
+        this.emit('skill.changed', changed);
+        return result;
+      }
       case 'profile.backup': {
         if (this.active.size) stateError('busy', 'Finish or stop active work before saving a recovery copy');
-        const { profile, backup } = this.storage.captureBackup(this.engine.redactor(this.credentialKeys()));
-        return backupProductProfile(this.paths, profile, backup, command.params.destination);
+        const redact = this.engine.redactor(this.credentialKeys());
+        const { profile, backup } = this.storage.captureBackup(redact);
+        const bundles = this.skills.backup(profile.bots, redact);
+        return backupProductProfile(this.paths, profile, { ...backup, ...(bundles.length ? { privateSkillBundles: bundles } : {}) }, command.params.destination);
       }
       case 'operation.get':
         return this.operation(command.params.operationId);
@@ -708,6 +760,12 @@ export class Product {
     if (!Value.Check(profileSchema, profile) || !profile.name.trim() ||
         profile.workspace && profile.workspace !== savedWorkspace && !isAbsolute(profile.workspace)) {
       stateError('invalid_params', 'The Bot requires a name and an absolute workspace when specified');
+    }
+    const mounts = profile.mountedSkills ?? [];
+    if (new Set(mounts.map(ref => `${ref.source}:${ref.skillId}`)).size !== mounts.length) stateError('invalid_params', 'A skill can be mounted only once per source');
+    if (profile.mountedSkills?.length === 0) {
+      const { mountedSkills, ...rest } = profile;
+      profile = rest;
     }
     if (!profile.starterPrompts) return profile;
     const starterPrompts = new Set<string>();
@@ -883,12 +941,13 @@ export class Product {
     return this.storage.searchWorkLogs(botId, query, dateFrom, dateTo, limit);
   }
 
-  private async prepareSession(owner: ProductActor, existing: SessionBinding | undefined, bot: Bot, allowMemoryReload = false) {
+  private async prepareSession(owner: ProductActor, existing: SessionBinding | undefined, bot: Bot, conversationBoundary = false) {
     const contextId = existing?.contextId ?? newId();
     const cached = this.sessions.get(contextId);
     const meta = 'conversationId' in owner ? this.profile.memory?.meta.find(row => row.botId === bot.botId) : undefined;
-    const reload = !!(existing && allowMemoryReload && meta && meta.rulesRevision !== (existing.memoryRulesRevision ?? 0) &&
-      (meta.forceReload || !meta.lastTurnAt || Date.now() - Date.parse(meta.lastTurnAt) >= MEMORY_COLD_TTL_MS));
+    const cold = !cached || !meta?.lastTurnAt || Date.now() - Date.parse(meta.lastTurnAt) >= MEMORY_COLD_TTL_MS;
+    const reload = !!(existing && conversationBoundary && (this.skillReload.has(bot.botId) || cold ||
+      meta?.forceReload && meta.rulesRevision !== (existing.memoryRulesRevision ?? 0)));
     if (cached && existing && !reload && cached.instructions === existing.instructions) return { session: cached.session, binding: existing };
     const configured = this.connection(this.profile, existing?.connectionRevision ?? this.effectiveRevision);
     if (!configured) stateError('not_configured', 'The captured connection is unavailable');
@@ -899,9 +958,11 @@ export class Product {
     const profileRevision = existing?.profileRevision ?? bot.profileRevision;
     const cwd = existing?.cwd ?? (bot.profile.workspace || configuration.workingDirectory);
     const instructions = existing && !reload ? existing.instructions : composeBotSystemPrompt({ profile: bot.profile, cwd, systemKind: bot.systemKind,
-      lastingRules: meta ? formatLastingRulesBlock(this.lastingRules(bot.botId)) : undefined });
+      capturedInstructions: existing?.instructions,
+      lastingRules: meta ? formatLastingRulesBlock(this.lastingRules(bot.botId)) : undefined,
+      skills: conversationBoundary ? this.skills.catalog(bot, cwd, this.discoverLocalSkills, this.engine.redactor(this.credentialKeys())) : undefined });
     const memoryRulesRevision = existing && !reload ? existing.memoryRulesRevision : meta?.rulesRevision;
-    const codingTools = existing ? existing.codingTools : bot.profile.codingTools;
+    const codingTools = existing ? existing.codingTools : resolveCodingTools(bot.profile);
     const params: OpenParams = {
       contextId, botId: bot.botId, purpose: activityId ? 'activity' : 'conversation', activityId,
       selectionRevision: profileRevision, cwd, instructions, resumeRef: existing?.sessionRef,
@@ -917,6 +978,7 @@ export class Product {
     if (refresh) this.sessions.delete(contextId);
     const session = refresh ? await this.engine.refreshSession(params, tools) : await this.engine.open(params, tools);
     this.sessions.set(contextId, { session, instructions });
+    if (conversationBoundary) this.skillReload.delete(bot.botId);
     return { session, binding: { contextId, sessionRef: session.sessionRef, connectionRevision, profileRevision, cwd, instructions, codingTools,
       used: existing?.used ?? false, memoryRulesRevision } };
   }
@@ -1325,6 +1387,109 @@ export class Product {
     return result;
   }
 
+  private get discoverLocalSkills(): boolean {
+    return this.profile.preferences?.discoverLocalSkills ?? false;
+  }
+
+  private skillWorkspace(owner?: Bot): string {
+    return owner?.profile.workspace || this.connection(this.profile, this.effectiveRevision)?.configuration.workingDirectory || '';
+  }
+
+  private skillOwner(source: SkillSource, botId?: string, writable = false): Bot | undefined {
+    if ((source === 'private' || source === 'workspace') && !botId) return stateError('invalid_params', 'A Bot ID is required for this skill source');
+    const bot = botId === undefined ? undefined : this.bot(this.profile, botId);
+    if (writable && bot?.archived) return stateError('scope_denied', 'Restore this Bot before changing its private skills');
+    return bot;
+  }
+
+  private modelProjection<T>(value: T): T {
+    return projectionJSON(value, this.engine.redactor(this.credentialKeys())) as T;
+  }
+
+  private changeSkill(method: string, params: { operationId: string }, result: SkillChange, write: SkillWrite): SkillChange {
+    const target = result.botId ? { botId: result.botId } : { connection: true as const };
+    this.commit(candidate => this.record(candidate, method, params,
+      { operationId: params.operationId, target, state: 'accepted', result }, result), write);
+    this.emit('skill.changed', result);
+    return result;
+  }
+
+  private saveSkill(params: ProductParams<'skill.save'>): object {
+    const prior = this.sameOperation('skill.save', params.operationId, params);
+    if (prior) return prior.reply;
+    const { source, botId, skillId, name, description, content } = params;
+    this.skillOwner(source, botId, true);
+    const redact = this.engine.redactor(this.credentialKeys());
+    if ([name, description, content].some(text => redact(text) !== text)) return stateError('skill_secret', 'Remove saved credentials before saving the skill');
+    const write = this.skills.plan(source, botId, skillId, redact, formatSkill(name, description, content));
+    return this.changeSkill('skill.save', params, { source, botId, skillId, change: 'saved' }, write);
+  }
+
+  private deleteSkill(params: ProductParams<'skill.delete'>, model = false): object {
+    const prior = this.sameOperation('skill.delete', params.operationId, params);
+    if (prior) return prior.reply;
+    const { source, botId, skillId } = params;
+    this.skillOwner(source, botId, true);
+    if (model && !this.skills.get({ source, botId, skillId }, '', false)) return stateError('scope_denied', 'The skill is outside the authorized scope');
+    const write = this.skills.plan(source, botId, skillId, this.engine.redactor(this.credentialKeys()));
+    return this.changeSkill('skill.delete', params, { source, botId, skillId, change: 'deleted' }, write);
+  }
+
+  private architectMounts(ids: string[], workspace: string): NonNullable<BotProfile['mountedSkills']> {
+    const mounts: NonNullable<BotProfile['mountedSkills']> = [];
+    const cwd = workspace || this.skillWorkspace();
+    for (const skillId of new Set(ids)) {
+      for (const source of ['global', 'workspace', 'local'] as const) {
+        if (!this.skills.get({ source, skillId }, cwd, this.discoverLocalSkills)) continue;
+        mounts.push({ source, skillId });
+        break;
+      }
+      if (mounts.at(-1)?.skillId !== skillId) stateError('skill_missing', 'An assigned skill is unavailable');
+    }
+    return mounts;
+  }
+
+  private skillTools(conversationId: string): ToolDefinition[] {
+    const list = Type.Object({}, strictTool);
+    const read = Type.Object({ skill_id: Type.String(), source: Type.Optional(skillSource) }, strictTool);
+    const save = Type.Object({ skill_id: Type.String(), ...skillText }, strictTool);
+    const remove = Type.Object({ skill_id: Type.String() }, strictTool);
+    const tool = <T extends TSchema>(name: string, description: string, parameters: T,
+      handler: (input: Static<T>, owner: Bot, workspace: string, operationId: string) => object): ToolDefinition<T> => ({
+      name, label: description, description, parameters,
+      execute: async (callId, args, signal) => {
+        const conversation = this.conversation(this.profile, conversationId);
+        const owner = this.bot(this.profile, conversation.botId);
+        const executionId = conversation.latestExecutionId;
+        if (signal?.aborted || !executionId || !this.active.has(executionId)) stateError('scope_denied', 'The conversation no longer owns this call');
+        if (!Value.Check(parameters, args)) stateError('invalid_params', 'Invalid skill parameters');
+        if ('skill_id' in args && !Value.Check(skillID, args.skill_id)) stateError('scope_denied', 'The skill is outside the authorized scope');
+        return this.modelResult(handler(args, owner, conversation.binding?.cwd ?? this.skillWorkspace(owner), `${executionId}:${name}:${callId}`));
+      },
+    });
+    return [
+      tool('skill_list', 'List mounted text skills and private skills for this Bot.', list, (_, owner, cwd) => ({
+        mounted: this.skills.mounted(owner, cwd, this.discoverLocalSkills), private: this.skills.private(owner.botId),
+      })),
+      tool('skill_read', 'Read an authorized mounted or private SKILL.md on demand.', read, ({ skill_id, source }, owner, cwd) => {
+        const candidate = source === undefined || source === 'private'
+          ? this.skills.get({ source: 'private', botId: owner.botId, skillId: skill_id }, cwd, false) : undefined;
+        if (candidate) return { skill: candidate };
+        const refs = (owner.profile.mountedSkills ?? []).filter(ref => ref.skillId === skill_id && (source === undefined || ref.source === source));
+        if (!refs.length) return stateError('scope_denied', 'The skill is outside the authorized scope');
+        if (refs.length > 1) return stateError('invalid_params', 'Specify the source for this skill ID');
+        const ref = refs[0];
+        const skill = this.skills.get(ref, cwd, this.discoverLocalSkills);
+        if (!skill || ref.expectedDigest && ref.expectedDigest !== skill.sha256) return stateError('skill_missing', 'The mounted skill is missing');
+        return { skill };
+      }),
+      tool('skill_save', 'Save a text-only SKILL.md to this Bot’s private skills.', save, ({ skill_id, ...text }, owner, _cwd, operationId) =>
+        this.saveSkill({ ...text, source: 'private', botId: owner.botId, skillId: skill_id, operationId })),
+      tool('skill_delete', 'Delete a private skill of this Bot when the user explicitly requests it.', remove, ({ skill_id }, owner, _cwd, operationId) =>
+        this.deleteSkill({ source: 'private', botId: owner.botId, skillId: skill_id, operationId }, true)),
+    ];
+  }
+
   private tools(owner: ProductActor): ToolDefinition[] {
     const inspection = this.inspectionTools(owner);
     if ('activityId' in owner) {
@@ -1376,7 +1541,7 @@ export class Product {
         } },
     ];
     if (architect) tools.push(...this.architectTools(owner.conversationId));
-    tools.push(...this.memoryTools(owner.conversationId));
+    tools.push(...this.memoryTools(owner.conversationId), ...this.skillTools(owner.conversationId));
     return tools.sort((a, b) => a.name.localeCompare(b.name)).map(tool => ({ ...tool, execute: async (...args) => {
       try { return await tool.execute(...args); }
       catch (error) {
@@ -1451,12 +1616,15 @@ export class Product {
         execute: execute(architectInspect, () => this.profile.bots.filter(bot => !bot.archived).map(({ botId, profile, systemKind }) => ({
           bot_id: botId, name: profile.name, role: profile.role, purpose: profile.purpose, instructions: profile.instructions,
           starter_prompts: profile.starterPrompts, system_kind: systemKind ?? null,
+          tool_preset: profile.toolPreset, skill_ids: profile.mountedSkills?.map(ref => ref.skillId),
         }))) },
       { name: 'bot_create', label: 'Create specialist Bot', description: 'Create the focused Bot blueprint after the user confirms it.', parameters: architectCreate,
         execute: execute(architectCreate, (input, executionId, callId) => {
           const params = { operationId: `${executionId}:bot_create:${callId}`, input };
           const profile: BotProfile = { name: input.name.trim(), purpose: input.purpose.trim(), role: input.role?.trim() ?? '', workspace: '', codingTools: null,
             ...(input.starter_prompts === undefined ? {} : { starterPrompts: input.starter_prompts }),
+            ...(input.tool_preset === undefined ? {} : { toolPreset: input.tool_preset }),
+            ...(input.skill_ids === undefined ? {} : { mountedSkills: this.architectMounts(input.skill_ids, '') }),
             instructions: formatTightBotInstructions({ job: input.job, voice: input.voice, antiJobs: input.anti_jobs, workflow: input.workflow }) };
           return architectResult(this.changeBot('bot_create', params, candidate => ({ bot: this.insertBot(candidate, profile), change: 'created' })));
         }) },
@@ -1475,6 +1643,8 @@ export class Product {
             }
             this.updateBotProfile(candidate, bot, { ...bot.profile, name: name?.trim() ?? bot.profile.name,
               purpose: purpose?.trim() ?? bot.profile.purpose, role: role?.trim() ?? bot.profile.role, instructions,
+              ...(input.tool_preset === undefined ? {} : { toolPreset: input.tool_preset, codingTools: null }),
+              ...(input.skill_ids === undefined ? {} : { mountedSkills: this.architectMounts(input.skill_ids, bot.profile.workspace) }),
               ...(input.starter_prompts === undefined ? {} : { starterPrompts: input.starter_prompts }) });
             return { bot, change: 'updated' };
           }));

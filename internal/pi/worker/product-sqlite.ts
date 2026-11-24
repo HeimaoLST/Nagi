@@ -8,6 +8,7 @@ import { canonicalJSON, RequestError, type TraceItem } from './protocol.js';
 import { type BotMemory, type BotWorkLog } from './bot-memory.js';
 import { maxExecutionTraces, maxProfileTraces, traceDetail, redactTrace, type TraceBackup, type TraceObservation, type TraceUpdate } from './product-trace.js';
 import { projectionRedactor } from './product-redactor.js';
+import { assertSkillSecretFree, type BotSkills, type SkillWrite } from './bot-skills.js';
 
 const MIGRATIONS = [`
   CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT;
@@ -107,7 +108,7 @@ export class ProductSQLite {
   private readonly db: DatabaseSync;
   private digest?: string;
 
-  constructor(private readonly profilePath: string) {
+  constructor(private readonly profilePath: string, private readonly skills?: BotSkills) {
     const directory = dirname(profilePath);
     mkdirSync(directory, { recursive: true, mode: 0o700 });
     this.databasePath = basename(profilePath) === 'contacts.json' ? join(directory, 'nagi.db') : `${profilePath}.sqlite`;
@@ -132,7 +133,10 @@ export class ProductSQLite {
 
   open(paths: ProductProfilePaths, credentials: PrivateConnection | undefined): ProductProfile {
     let mirror: Mirror | undefined;
+    let staged: string | undefined;
+    let committed = false;
     try {
+      this.publishSkills();
       const profile = this.transaction(() => {
         for (const suffix of ['-wal', '-shm']) {
           try { chmodSync(this.databasePath + suffix, 0o600); } catch {}
@@ -158,20 +162,33 @@ export class ProductSQLite {
         mirror = this.stageMirror(snapshotFor(profile), previous);
         this.replaceProfile(profile, mirror);
         const redact = projectionRedactor(Object.values(credentials?.sources ?? {}).map(source => source.api_key));
+        const writes: SkillWrite[] = (backup?.privateSkillBundles ?? []).map(row => {
+          assertSkillSecretFree(row.content, redact);
+          return { source: 'private', botId: row.ownerBotId, skillId: row.skillId, markdown: row.content };
+        });
+        if (writes.length) {
+          staged = this.skills!.stage(writes);
+          this.db.prepare("INSERT INTO meta (key, value) VALUES ('pending_skill_stage', ?)").run(staged);
+        }
         this.replaceTraces(backup, redact);
         return profile;
       });
+      committed = true;
+      this.publishSkills();
       if (mirror) this.publish(mirror);
       return profile;
     } catch (error) {
+      if (staged && !committed) this.skills?.discard(staged);
       if (mirror) rmSync(mirror.temp, { force: true });
       if (error instanceof RequestError) throw error;
       throw new RequestError('profile_unavailable', 'The saved product profile could not be read or imported');
     }
   }
 
-  write(profile: ProductProfile, before: ProductProfile): TraceUpdate[] {
+  write(profile: ProductProfile, before: ProductProfile, skillWrite?: SkillWrite): TraceUpdate[] {
     let mirror: Mirror | undefined;
+    let staged: string | undefined;
+    let committed = false;
     try {
       const updates = this.transaction(() => {
         if (this.meta('snapshot_sha256') !== this.digest) throw new RequestError('profile_unavailable', 'The SQLite profile changed in another worker');
@@ -179,13 +196,20 @@ export class ProductSQLite {
         if (previous !== null && previous !== this.digest && this.meta('pending_snapshot_previous') !== encode(previous)) {
           throw new RequestError('profile_unavailable', 'The recovery snapshot changed while the profile was open');
         }
+        if (skillWrite) {
+          staged = this.skills!.stage([skillWrite]);
+          this.db.prepare("INSERT INTO meta (key, value) VALUES ('pending_skill_stage', ?)").run(staged);
+        }
         mirror = this.stageMirror(snapshotFor(profile), previous);
         this.replaceProfile(profile, mirror);
         return this.recordTransitions(before, profile);
       });
+      committed = true;
+      this.publishSkills();
       this.publish(mirror!);
       return updates;
     } catch (error) {
+      if (staged && !committed) this.skills?.discard(staged);
       if (mirror) rmSync(mirror.temp, { force: true });
       throw error;
     }
@@ -193,6 +217,19 @@ export class ProductSQLite {
 
   close(): void {
     this.db.close();
+  }
+
+  private publishSkills(): void {
+    if (this.meta('pending_skill_stage') === undefined) return;
+    const staged = this.transaction(() => {
+      const name = this.meta('pending_skill_stage');
+      if (name === undefined) return;
+      if (!this.skills) throw new RequestError('profile_unavailable', 'A staged skill update requires the profile skill library');
+      this.skills.publish(name);
+      this.db.exec("DELETE FROM meta WHERE key = 'pending_skill_stage'");
+      return name;
+    });
+    if (staged) this.skills!.discard(staged);
   }
 
   appendTrace(row: TraceObservation): TraceUpdate | undefined {

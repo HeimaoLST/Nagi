@@ -11,12 +11,15 @@ import type { ProductProfile } from './product.js';
 import { lastingRulesFit, MAX_LOG_BYTES, MAX_PENDING_LEARNINGS, MAX_RULE_BYTES, MAX_WORK_LOGS,
   memorySnapshotSchema, validMemoryDate } from './bot-memory.js';
 import { decodeTraceBackup, directlyOwns, normalizeActivityGrants, type TraceBackup } from './product-trace.js';
+import { privateSkillBundleSchema, validateSkillBundles, type PrivateSkillBundle } from './bot-skills.js';
 
 export type ProductProfilePaths = {
   profilePath: string;
   credentialsPath: string;
   fresh: boolean;
 };
+
+export type ProductBackup = TraceBackup & { privateSkillBundles?: PrivateSkillBundle[] };
 
 type Credential = { api: 'openai-responses' | 'openai-chat-completions'; endpoint: string; api_key: string };
 export type PrivateConnection = {
@@ -70,6 +73,7 @@ const strict = { additionalProperties: false };
 const bindingSchema = Type.Object({ contextId: recoveryID, sessionRef: recoveryID, connectionRevision: counter,
   profileRevision: counter, cwd: recoveryID, instructions: Type.String(), codingTools: profileSchema.properties.codingTools,
   used: Type.Boolean(), memoryRulesRevision: Type.Optional(counter) }, strict);
+const privateSkillBundles = Type.Array(privateSkillBundleSchema, { maxItems: 8192 });
 const executionRecord = Type.Object({ ...executionSchema.properties, operationId: recoveryID,
   input: draftSchema, error: Type.Optional(Type.String()), engineRunId: Type.Optional(recoveryID),
   importedActivityId: Type.Optional(recoveryID), retained: Type.Optional(opaque) }, strict);
@@ -105,7 +109,8 @@ const savedProfileSchema = Type.Object({ version: Type.Literal(1),
   connections: Type.Array(Type.Object({ revision: counter, sourceId: recoveryID, configuration: Type.Omit(connectionSchema, ['apiKey'], strict) }, strict)),
   savedRevision: revisionRef, appliedRevision: revisionRef,
   preferences: Type.Optional(Type.Object({ selectedBotId: Type.Optional(recoveryID), layout: Type.Optional(opaque),
-    themeIds: Type.Optional(opaque), appearance: Type.Optional(Type.String()), hideBuiltinArchitect: Type.Optional(Type.Boolean()) }, strict)),
+    themeIds: Type.Optional(opaque), appearance: Type.Optional(Type.String()), hideBuiltinArchitect: Type.Optional(Type.Boolean()),
+    discoverLocalSkills: Type.Optional(Type.Boolean()) }, strict)),
   issueToolScopes: Type.Optional(Type.Array(opaque)), untargetedReceipts: Type.Optional(Type.Array(opaque)),
   recovery: Type.Optional(Type.Object({ id: recoveryID, ui: Type.Optional(recoveryUISchema) }, strict)),
   memory: Type.Optional(memorySnapshotSchema),
@@ -117,6 +122,10 @@ export function decodeProductProfile(data: unknown): ProductProfile {
   }
   const invalid = (): never => { throw new RequestError('profile_unavailable', 'The saved product profile has an invalid record association'); };
   const bots = new Map(data.bots.map(bot => [bot.botId, bot]));
+  for (const { profile } of data.bots) {
+    const mounted = profile.mountedSkills ?? [];
+    if (new Set(mounted.map(ref => `${ref.source}:${ref.skillId}`)).size !== mounted.length) invalid();
+  }
   const conversations = new Map(data.conversations.map(conversation => [conversation.conversationId, conversation]));
   const executions = new Map(data.executions.map(execution => [execution.executionId, execution]));
   const operations = new Map(data.operations.map(operation => [operation.receipt.operationId, operation]));
@@ -234,10 +243,16 @@ export function decodeProductProfile(data: unknown): ProductProfile {
   return data;
 }
 
-export function decodeProductBackup(data: unknown): { profile: ProductProfile; backup?: TraceBackup } {
+export function decodeProductBackup(data: unknown): { profile: ProductProfile; backup?: ProductBackup } {
   if (data && typeof data === 'object' && 'backup' in data) {
     const { backup, ...records } = data;
     const profile = decodeProductProfile(records);
+    if (backup && typeof backup === 'object' && 'privateSkillBundles' in backup) {
+      const { privateSkillBundles: bundles, ...traces } = backup;
+      if (!Value.Check(privateSkillBundles, bundles)) throw new RequestError('profile_unavailable', 'The recovery copy has an invalid private skill list');
+      validateSkillBundles(bundles, new Set(profile.bots.map(bot => bot.botId)));
+      return { profile, backup: { ...decodeTraceBackup(profile, traces), privateSkillBundles: bundles } };
+    }
     return { profile, backup: decodeTraceBackup(profile, backup) };
   }
   return { profile: decodeProductProfile(data) };
@@ -252,7 +267,7 @@ export function inspectProductRecovery(data: unknown): { contacts: number; activ
   return { contacts: profile.bots.length, activities: profile.activities.length };
 }
 
-export function backupProductProfile(paths: ProductProfilePaths, profile: ProductProfile, backup: TraceBackup, destination: string): { path: string } {
+export function backupProductProfile(paths: ProductProfilePaths, profile: ProductProfile, backup: ProductBackup, destination: string): { path: string } {
   if (!isAbsolute(destination) || extname(destination).toLowerCase() !== '.json') {
     throw new RequestError('invalid_params', 'Choose an absolute JSON location for the recovery copy');
   }
@@ -323,7 +338,7 @@ export function saveCredential(path: string, existing: PrivateConnection | undef
   return next;
 }
 
-export function importProductSnapshot(data: unknown, credentials: PrivateConnection | undefined): { profile: ProductProfile; backup?: TraceBackup } {
+export function importProductSnapshot(data: unknown, credentials: PrivateConnection | undefined): { profile: ProductProfile; backup?: ProductBackup } {
   const empty: ProductProfile = {
     version: 1, bots: [], conversations: [], activities: [], executions: [], operations: [], connections: [], savedRevision: null, appliedRevision: null,
   };

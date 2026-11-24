@@ -24,10 +24,38 @@ const page = {
   cursor: Type.Optional(id),
   limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 200 })),
 };
+export const codingToolPresets = {
+  none: [], readonly: ['find', 'grep', 'ls', 'read'], workspace: ['bash', 'edit', 'find', 'grep', 'ls', 'read', 'write'],
+};
+export const toolPresetSchema = Type.Union([Type.Literal('none'), Type.Literal('readonly'), Type.Literal('workspace')]);
+export const skillSlugPattern = '^[a-z0-9][a-z0-9-]{0,62}$';
+export const skillID = Type.String({ pattern: skillSlugPattern });
+const digest = Type.String({ pattern: '^[a-f0-9]{64}$' });
+const externalSkillSource = Type.Union([Type.Literal('global'), Type.Literal('workspace'), Type.Literal('local')]);
+export const writableSkillSource = Type.Union([Type.Literal('global'), Type.Literal('private')]);
+export const skillSource = Type.Union([externalSkillSource, Type.Literal('private')]);
+const mountedSkill = Type.Object({ source: externalSkillSource, skillId: skillID, expectedDigest: Type.Optional(digest) }, { additionalProperties: false });
+export const skillText = { name: Type.String({ minLength: 1, maxLength: 128 }), description: Type.String({ minLength: 1, maxLength: 256 }),
+  content: Type.String({ maxLength: 32768 }) };
+const skillKey = { source: skillSource, botId: Type.Optional(id), skillId: skillID };
+const skillSummary = Type.Object({ source: skillSource, skillId: skillID, name: id, description: id, sha256: digest });
+const skillDetail = Type.Object({ ...skillSummary.properties, content: Type.String(), markdown: Type.String() });
+const skillListing = Type.Object({ global: Type.Array(skillSummary), workspace: Type.Array(skillSummary), local: Type.Array(skillSummary),
+  private: Type.Array(skillSummary), mounted: Type.Array(Type.Object({ ...mountedSkill.properties,
+    status: Type.Union([Type.Literal('available'), Type.Literal('missing')]), skill: Type.Optional(skillSummary) })), discoverLocalSkills: Type.Boolean() });
+const skillChange = Type.Object({ source: writableSkillSource, botId: Type.Optional(id), skillId: Type.String(),
+  change: Type.Union([Type.Literal('saved'), Type.Literal('deleted'), Type.Literal('promoted'), Type.Literal('preferences')]) });
+export type SkillSource = Static<typeof skillSource>;
+export type MountedSkill = Static<typeof mountedSkill>;
+export type SkillDetail = Static<typeof skillDetail>;
+export type SkillListing = Static<typeof skillListing>;
+export type SkillChange = Static<typeof skillChange>;
 export const profileSchema = Type.Object({
   name: id, role: Type.String(), purpose: Type.String(), instructions: Type.String(),
   workspace: Type.String(), codingTools: Type.Union([Type.Null(), stringList]),
   starterPrompts: Type.Optional(Type.Array(Type.String())),
+  toolPreset: Type.Optional(Type.Union([toolPresetSchema, Type.Literal('custom')])),
+  mountedSkills: Type.Optional(Type.Array(mountedSkill, { maxItems: 200 })),
 });
 export const botSystemKindSchema = Type.Literal(SYSTEM_KIND_BOT_ARCHITECT);
 const botResult = Type.Object({ botId: id, profile: profileSchema, profileRevision: revision, archived: Type.Boolean(),
@@ -103,6 +131,12 @@ export const productCommands = Type.Union([
     decision: Type.Union([Type.Literal('approve'), Type.Literal('reject')]), text: Type.Optional(memoryText) }) }),
   Type.Object({ method: Type.Literal('memory.deleteLog'), params: Type.Object({ ...memoryOperation, logId: id }) }),
   Type.Object({ method: Type.Literal('memory.searchLogs'), params: Type.Object(memorySearch) }),
+  Type.Object({ method: Type.Literal('skill.list'), params: Type.Object({ botId: Type.Optional(id) }, { additionalProperties: false }) }),
+  Type.Object({ method: Type.Literal('skill.get'), params: Type.Object(skillKey, { additionalProperties: false }) }),
+  Type.Object({ method: Type.Literal('skill.save'), params: Type.Object({ ...skillKey, source: writableSkillSource, ...skillText, operationId: id }, { additionalProperties: false }) }),
+  Type.Object({ method: Type.Literal('skill.delete'), params: Type.Object({ ...skillKey, source: writableSkillSource, operationId: id }, { additionalProperties: false }) }),
+  Type.Object({ method: Type.Literal('skill.promoteGlobal'), params: Type.Object({ botId: id, skillId: skillID, targetSkillId: Type.Optional(skillID), operationId: id }, { additionalProperties: false }) }),
+  Type.Object({ method: Type.Literal('skill.setPreferences'), params: Type.Object({ discoverLocalSkills: Type.Boolean(), operationId: id }, { additionalProperties: false }) }),
   Type.Object({ method: Type.Literal('conversation.list'), params: Type.Object({ botId: id, ...page }) }),
   Type.Object({ method: Type.Literal('conversation.get'), params: Type.Object({ conversationId: id }) }),
   Type.Object({ method: Type.Literal('conversation.saveDraft'), params: Type.Object({
@@ -137,6 +171,7 @@ const executionEvent = (fields: object) => Type.Intersect([executionOwner, Type.
 export const productEvents = Type.Union([
   Type.Object({ event: Type.Literal('bot.changed'), data: Type.Object({ bot: botResult, change: botChangeSchema }) }),
   Type.Object({ event: Type.Literal('memory.changed'), data: memoryChangedSchema }),
+  Type.Object({ event: Type.Literal('skill.changed'), data: skillChange }),
   Type.Object({ event: Type.Literal('execution.started'), data: executionEvent({ revision }) }),
   Type.Object({ event: Type.Literal('execution.textDelta'), data: executionEvent({ offset: revision, text: Type.String() }) }),
   Type.Object({ event: Type.Literal('execution.settled'), data: executionEvent({
@@ -176,7 +211,7 @@ export const productResults = {
   'app.open': Type.Object({ version: Type.Literal(1), streamId: id, eventSeq: revision, snapshot: Type.Object({ bots: Type.Array(botResult),
     nextBotCursor: nullable(id), connection: connectionResult, preferences: Type.Optional(Type.Object({ selectedBotId: Type.Optional(id),
       layout: Type.Optional(Type.Record(Type.String(), Type.Unknown())), themeIds: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
-      appearance: Type.Optional(Type.String()), hideBuiltinArchitect: Type.Optional(Type.Boolean()) })),
+      appearance: Type.Optional(Type.String()), hideBuiltinArchitect: Type.Optional(Type.Boolean()), discoverLocalSkills: Type.Optional(Type.Boolean()) })),
     recovery: Type.Optional(Type.Object({ id, ui: Type.Optional(Type.Record(Type.String(), Type.Unknown())) })) }) }),
   'bot.list': productPage(botResult),
   'bot.ensureBuiltin': botResult,
@@ -192,6 +227,12 @@ export const productResults = {
   'memory.reviewLearning': memoryChangedSchema,
   'memory.deleteLog': memoryChangedSchema,
   'memory.searchLogs': Type.Object({ items: Type.Array(workLogSchema) }),
+  'skill.list': skillListing,
+  'skill.get': Type.Object({ skill: skillDetail }),
+  'skill.save': skillChange,
+  'skill.delete': skillChange,
+  'skill.promoteGlobal': skillChange,
+  'skill.setPreferences': skillChange,
   'conversation.list': productPage(Type.Object({ ...conversationFields,
     preview: Type.Optional(id), timestamp: Type.Optional(id) })),
   'conversation.get': Type.Object({ ...conversationFields, draft: Type.Union([draftSchema, Type.Null()]), latestExecution: Type.Union([activeExecution, Type.Null()]) }),
@@ -233,6 +274,11 @@ export type Draft = Static<typeof draftSchema>;
 export type Execution = Static<typeof executionSchema>;
 export type Operation = Static<typeof operationSchema>;
 export type BotProfile = Static<typeof profileSchema>;
+export function resolveCodingTools(profile: Pick<BotProfile, 'codingTools' | 'toolPreset'>): string[] | null {
+  if (profile.codingTools !== null) return profile.codingTools;
+  const preset = profile.toolPreset;
+  return preset && preset !== 'custom' ? codingToolPresets[preset] : null;
+}
 export type Connection = Static<typeof connectionSchema>;
 export type ActivityState = Static<typeof activityStateSchema>;
 export type ProductParams<M extends ProductCommand['method']> = Extract<ProductCommand, { method: M }>['params'];
