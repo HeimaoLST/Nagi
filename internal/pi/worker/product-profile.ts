@@ -6,14 +6,17 @@ import { extname, isAbsolute } from 'node:path';
 import { Type } from 'typebox';
 import { Value } from 'typebox/value';
 import { RequestError, activityStateSchema, botSystemKindSchema, connectionSchema, draftSchema, executionSchema, hasCanonicalQuoteText, materialSchema, mcpServerRecord,
-  operationSchema, profileSchema, type ActivityState, type Connection, type Draft, type Execution, type Material, type Operation } from './protocol.js';
+  operationSchema, productQuote, profileSchema, quoteAuthorMaxBytes, quoteTextMaxBytes, type ActivityState, type Connection, type Draft,
+  type Execution, type Material, type Operation, type ProductQuote } from './protocol.js';
 import type { ProductProfile } from './product.js';
 import { skillApprovalRecord, type SkillApproval } from './protocol.js';
 import { lastingRulesFit, MAX_LOG_BYTES, MAX_PENDING_LEARNINGS, MAX_RULE_BYTES, MAX_WORK_LOGS,
   memorySnapshotSchema, validMemoryDate } from './bot-memory.js';
 import { decodeTraceBackup, directlyOwns, normalizeActivityGrants, type TraceBackup } from './product-trace.js';
 import { backupSkillFiles, bundleDigest, executableBundle, privateSkillBundleSchema, pureSkill, skillGrantKey, validateSkillBundles, type PrivateSkillBundle } from './bot-skills.js';
+import { activityRouting, capturedRoute, escalationSchema, policySchema, providerAccount, validProvider, type Escalation, type ProviderAccount } from './model-router.js';
 import { maxMcpServers, uniqueMcpRegistry, validMcpBindings, validMcpServer } from './mcp-broker.js';
+import { clipUTF8 } from './product-redactor.js';
 
 export type ProductProfilePaths = {
   profilePath: string;
@@ -21,13 +24,19 @@ export type ProductProfilePaths = {
   fresh: boolean;
 };
 
-export type ProductBackup = TraceBackup & { privateSkillBundles?: PrivateSkillBundle[]; skillApprovals?: SkillApproval[] };
+export type ProductBackup = TraceBackup & { privateSkillBundles?: PrivateSkillBundle[]; skillApprovals?: SkillApproval[]; activityEscalations?: Escalation[] };
 
 type Credential = { api: 'openai-responses' | 'openai-chat-completions'; endpoint: string; api_key: string };
-export type PrivateConnection = {
-  version: 2; credential_source: string; model: string; context_tokens: number; output_tokens: number;
-  working_directory: string; max_active_tasks: number; sources: Record<string, Credential>;
+type LegacyConnection = {
+  credential_source: string; model: string; context_tokens: number; output_tokens: number;
+  working_directory: string; max_active_tasks: number;
 };
+export type PrivateConnection = Partial<LegacyConnection> & {
+  version: 2 | 3; sources: Record<string, Credential>; accounts?: (ProviderAccount & { apiKey: string })[]; publicationId?: string;
+};
+export const privateCredentialKeys = (store?: PrivateConnection) => [
+  ...Object.values(store?.sources ?? {}).map(source => source.api_key), ...store?.accounts?.map(account => account.apiKey) ?? [],
+];
 
 export type StoredConnection = {
   revision: number; sourceId: string; configuration: Omit<Connection, 'apiKey'>;
@@ -72,9 +81,9 @@ const counter = Type.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER });
 const revisionRef = Type.Union([counter, Type.Null()]);
 const opaque = Type.Record(Type.String(), Type.Unknown());
 const strict = { additionalProperties: false };
-const bindingSchema = Type.Object({ contextId: recoveryID, sessionRef: recoveryID, connectionRevision: counter,
+const bindingSchema = Type.Object({ contextId: recoveryID, sessionRef: recoveryID, connectionRevision: Type.Optional(counter), route: Type.Optional(capturedRoute),
   profileRevision: counter, cwd: recoveryID, instructions: Type.String(), codingTools: profileSchema.properties.codingTools,
-  used: Type.Boolean(), memoryRulesRevision: Type.Optional(counter) }, strict);
+  used: Type.Boolean(), memoryRulesRevision: Type.Optional(counter), lastTurnAt: Type.Optional(recoveryID) }, strict);
 const privateSkillBundles = Type.Array(privateSkillBundleSchema, { maxItems: 8192 });
 const executionRecord = Type.Object({ ...executionSchema.properties, operationId: recoveryID,
   input: draftSchema, error: Type.Optional(Type.String()), engineRunId: Type.Optional(recoveryID),
@@ -83,8 +92,10 @@ const questionRecord = Type.Object({ questionId: recoveryID, executionId: recove
   state: Type.Union([Type.Literal('open'), Type.Literal('answered'), Type.Literal('superseded')]),
   answer: Type.Optional(Type.Object({ text: Type.String(), materials: Type.Array(materialSchema) }, strict)),
   delivery: Type.Optional(Type.Union([Type.Literal('saved'), Type.Literal('dispatching'), Type.Literal('delivered'),
-    Type.Literal('unknown'), Type.Literal('canceled'), Type.Literal('unavailable')])) }, strict);
+    Type.Literal('unknown'), Type.Literal('canceled'), Type.Literal('unavailable')])),
+  deliveryBlocker: Type.Optional(Type.Literal('credential_unavailable')) }, strict);
 const activityRecord = Type.Object({ activityId: recoveryID, ownerBotId: recoveryID, originConversationId: recoveryID,
+  routing: Type.Optional(activityRouting),
   revision: counter, state: activityStateSchema, goal: Type.String(), requirements: Type.Array(Type.String()),
   questions: Type.Array(questionRecord), materials: Type.Array(materialSchema), inputFiles: Type.Array(Type.String()),
   executionIds: Type.Array(recoveryID), binding: Type.Optional(bindingSchema), retained: Type.Optional(opaque),
@@ -114,6 +125,10 @@ const savedProfileSchema = Type.Object({ version: Type.Literal(1),
     themeIds: Type.Optional(opaque), appearance: Type.Optional(Type.String()), hideBuiltinArchitect: Type.Optional(Type.Boolean()),
     discoverLocalSkills: Type.Optional(Type.Boolean()) }, strict)),
   mcpServers: Type.Optional(Type.Array(mcpServerRecord, { maxItems: maxMcpServers })),
+  providerAccounts: Type.Optional(Type.Array(providerAccount, { maxItems: 64 })),
+  providerEffectiveAccounts: Type.Optional(Type.Array(providerAccount, { maxItems: 64 })),
+  routingPolicy: Type.Optional(policySchema), providerEffectivePolicy: Type.Optional(policySchema),
+  providerSavedRevision: Type.Optional(counter), providerEffectiveRevision: Type.Optional(counter),
   issueToolScopes: Type.Optional(Type.Array(opaque)), untargetedReceipts: Type.Optional(Type.Array(opaque)),
   recovery: Type.Optional(Type.Object({ id: recoveryID, ui: Type.Optional(recoveryUISchema) }, strict)),
   memory: Type.Optional(memorySnapshotSchema),
@@ -134,6 +149,12 @@ export function decodeProductProfile(data: unknown): ProductProfile {
     if (!uniqueMcpRegistry(data.mcpServers) || data.mcpServers.some(({ catalog, ...server }) => !validMcpServer(server))) invalid();
     if (data.mcpServers.length === 0) delete data.mcpServers;
   }
+  for (const accounts of [data.providerAccounts, data.providerEffectiveAccounts]) {
+    if (accounts && (new Set(accounts.map(row => row.providerId)).size !== accounts.length || accounts.some(row => !validProvider(row)))) invalid();
+  }
+  if (data.providerSavedRevision === undefined ? !!(data.providerAccounts || data.routingPolicy || data.providerEffectiveRevision) :
+      data.providerSavedRevision < 1 || (data.providerEffectiveRevision ?? 0) > data.providerSavedRevision) invalid();
+  if (data.providerEffectiveRevision === undefined && (data.providerEffectiveAccounts || data.providerEffectivePolicy)) invalid();
   const serverIds = new Set(data.mcpServers?.map(server => server.serverId));
   const bots = new Map(data.bots.map(bot => [bot.botId, bot]));
   for (const { profile } of data.bots) {
@@ -186,7 +207,10 @@ export function decodeProductProfile(data: unknown): ProductProfile {
   const sessionRefs = new Set<string>();
   const binding = (value?: typeof data.conversations[number]['binding']) => {
     if (!value) return;
-    if (!connections.has(value.connectionRevision) || contextIds.has(value.contextId) || sessionRefs.has(value.sessionRef)) invalid();
+    if ((value.route ? value.connectionRevision !== undefined || value.route.effectiveRevision > (data.providerEffectiveRevision ?? 0) || !validProvider({
+      ...value.route, name: value.route.providerId, defaultModel: value.route.resolvedModel, enabled: true,
+    }) : value.connectionRevision === undefined || !connections.has(value.connectionRevision)) ||
+      contextIds.has(value.contextId) || sessionRefs.has(value.sessionRef)) invalid();
     contextIds.add(value.contextId);
     sessionRefs.add(value.sessionRef);
   };
@@ -268,7 +292,20 @@ export function decodeProductBackup(data: unknown): { profile: ProductProfile; b
     const { backup, ...records } = data;
     const profile = decodeProductProfile(records);
     if (!backup || typeof backup !== 'object') return { profile, backup: decodeTraceBackup(profile, backup) };
-    const { privateSkillBundles: bundles, skillApprovals: approvals, ...traces } = backup as Record<string, unknown>;
+    const { privateSkillBundles: bundles, skillApprovals: approvals, activityEscalations, ...traces } = backup as Record<string, unknown>;
+    if (activityEscalations !== undefined) {
+      if (!Value.Check(Type.Array(escalationSchema), activityEscalations) ||
+          new Set(activityEscalations.map(row => row.activityId)).size !== activityEscalations.length) {
+        throw new RequestError('profile_unavailable', 'The recovery copy has invalid activity escalations');
+      }
+      for (const row of activityEscalations) {
+        const ids = profile.activities.find(activity => activity.activityId === row.activityId)?.executionIds;
+        const prior = ids?.indexOf(row.priorExecutionId) ?? -1;
+        const state = profile.executions.find(run => run.executionId === row.priorExecutionId)?.state;
+        if (prior < 0 || ids?.[prior + 1] !== row.escalatedExecutionId || !Number.isFinite(Date.parse(row.at)) ||
+            state !== 'failed' && state !== 'interrupted') throw new RequestError('profile_unavailable', 'An escalation does not match its executions');
+      }
+    }
     const botIds = new Set(profile.bots.map(bot => bot.botId));
     if (bundles !== undefined) {
       if (!Value.Check(privateSkillBundles, bundles)) throw new RequestError('profile_unavailable', 'The recovery copy has an invalid private skill list');
@@ -291,7 +328,7 @@ export function decodeProductBackup(data: unknown): { profile: ProductProfile; b
         }
       }
     }
-    return { profile, backup: { ...decodeTraceBackup(profile, traces), privateSkillBundles: bundles, skillApprovals: approvals } };
+    return { profile, backup: { ...decodeTraceBackup(profile, traces), privateSkillBundles: bundles, skillApprovals: approvals, activityEscalations } };
   }
   return { profile: decodeProductProfile(data) };
 }
@@ -305,7 +342,81 @@ export function inspectProductRecovery(data: unknown): { contacts: number; activ
   return { contacts: profile.bots.length, activities: profile.activities.length };
 }
 
-export function backupProductProfile(paths: ProductProfilePaths, profile: ProductProfile, backup: ProductBackup, destination: string): { path: string } {
+export function redactBackupProfile(profile: ProductProfile, redact: (text: string) => string): void {
+  const label = (text: string) => redact(text) || redact('…') || '�';
+  const material = (row: Material) => {
+    row.name = label(row.name);
+    row.text = redact(row.text);
+  };
+  const quote = (row: ProductQuote) => {
+    row.authorName = clipUTF8(redact(row.authorName).trim(), quoteAuthorMaxBytes, '').trimEnd() || label('…');
+    row.text = clipUTF8(redact(row.text).trim(), quoteTextMaxBytes, '').trimEnd() || label('…');
+  };
+  const draft = (row: Draft) => {
+    row.text = redact(row.text);
+    row.materials.forEach(material);
+    if (row.quote) quote(row.quote);
+  };
+  const payload = (value: object) => {
+    const row = value as Record<string, unknown>;
+    for (const field of ['text', 'goal', 'draft', 'prompt', 'summary', 'detail', 'message', 'error', 'diagnostic', 'answer_text']) {
+      const text = row[field];
+      if (typeof text === 'string') row[field] = redact(text);
+    }
+    for (const field of ['result', 'details', 'error', 'diagnostic', 'draft', 'input', 'answer']) {
+      const nested = row[field];
+      if (nested && typeof nested === 'object' && !Array.isArray(nested)) payload(nested);
+    }
+    for (const field of ['questions', 'requirement_items', 'requirements', 'diagnostics', 'constraints']) {
+      const children = row[field];
+      if (!Array.isArray(children)) continue;
+      row[field] = children.map(child => {
+        if (typeof child === 'string') return redact(child);
+        if (child && typeof child === 'object' && !Array.isArray(child)) payload(child);
+        return child;
+      });
+    }
+    for (const field of ['materials', 'context', 'answer_context']) {
+      const materials = row[field];
+      if (Array.isArray(materials)) for (const item of materials) if (Value.Check(materialSchema, item)) material(item);
+    }
+    if (Value.Check(productQuote, row.quote)) quote(row.quote);
+  };
+
+  for (const conversation of profile.conversations) draft(conversation.draft);
+  for (const execution of profile.executions) {
+    draft(execution.input);
+    if (execution.error !== undefined) execution.error = redact(execution.error);
+    if (execution.retained) payload(execution.retained);
+  }
+  for (const activity of profile.activities) {
+    activity.goal = redact(activity.goal);
+    activity.requirements = activity.requirements.map(redact);
+    if (activity.routing?.constraints) activity.routing.constraints = activity.routing.constraints.map(text => {
+      const clean = redact(text);
+      return clean === text ? text : clipUTF8(clean, 1024, '');
+    });
+    activity.materials.forEach(material);
+    for (const question of activity.questions) {
+      question.text = redact(question.text);
+      if (question.answer) {
+        question.answer.text = redact(question.answer.text);
+        question.answer.materials.forEach(material);
+      }
+    }
+    for (const result of activity.results) result.text = redact(result.text);
+    if (activity.retained) payload(activity.retained);
+  }
+  for (const operation of profile.operations) {
+    payload(operation.reply);
+    if (operation.receipt.result) payload(operation.receipt.result);
+    if (operation.replyError) payload(operation.replyError);
+    if (operation.retained) payload(operation.retained);
+  }
+}
+
+export function backupProductProfile(paths: ProductProfilePaths, profile: ProductProfile, backup: ProductBackup, destination: string,
+  checkSecrets: (snapshot: object) => void): { path: string } {
   if (!isAbsolute(destination) || extname(destination).toLowerCase() !== '.json') {
     throw new RequestError('invalid_params', 'Choose an absolute JSON location for the recovery copy');
   }
@@ -318,6 +429,7 @@ export function backupProductProfile(paths: ProductProfilePaths, profile: Produc
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
   }
   const snapshot = { ...profile, recovery: { id: randomUUID(), ui }, backup };
+  checkSecrets(snapshot);
   inspectProductRecovery(snapshot);
   const data = Buffer.from(JSON.stringify(snapshot) + '\n');
   const fd = openSync(destination, 'wx', 0o600);
@@ -357,18 +469,26 @@ export function readPrivateConnection(path: string): PrivateConnection | undefin
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
     return;
   }
-  if (!data || typeof data !== 'object' || !('version' in data) || data.version !== 2 || !('sources' in data) || !data.sources || typeof data.sources !== 'object') {
-    throw new RequestError('connection_unavailable', 'The private connection file is not a v2 source store');
-  }
-  return data as PrivateConnection;
+  const legacy = Type.Object({ credential_source: recoveryID, model: recoveryID, context_tokens: counter, output_tokens: counter,
+    working_directory: recoveryID, max_active_tasks: counter });
+  const source = Type.Object({ api: Type.Union([Type.Literal('openai-responses'), Type.Literal('openai-chat-completions')]),
+    endpoint: recoveryID, api_key: Type.String() });
+  const sources = Type.Record(Type.String(), source);
+  const v2 = Type.Object({ version: Type.Literal(2), ...legacy.properties, sources });
+  const v3 = Type.Object({ version: Type.Literal(3), ...Type.Partial(legacy).properties, sources: Type.Optional(sources),
+    publicationId: Type.Optional(recoveryID), accounts: Type.Array(Type.Object({ ...providerAccount.properties, apiKey: recoveryID }, strict)) });
+  if (Value.Check(v2, data)) return data;
+  if (Value.Check(v3, data) && data.accounts.every(validProvider) &&
+      new Set(data.accounts.map(row => row.credentialSourceId)).size === data.accounts.length) return { ...data, sources: data.sources ?? {} };
+  throw new RequestError('connection_unavailable', 'The private connection file is not a supported credential store');
 }
 
-export function saveCredential(path: string, existing: PrivateConnection | undefined, configuration: Connection): PrivateConnection {
+export function saveCredential(path: string, existing: PrivateConnection | undefined, configuration: Connection): PrivateConnection & LegacyConnection {
   const api = configuration.wireApi === 'openai-responses' ? 'openai-responses' : 'openai-chat-completions';
   const source: Credential = { api, endpoint: configuration.baseUrl, api_key: configuration.apiKey };
   const sourceId = Object.entries(existing?.sources ?? {}).find(([, value]) => value.api === source.api && value.endpoint === source.endpoint && value.api_key === source.api_key)?.[0] ?? randomUUID();
-  const next: PrivateConnection = {
-    version: 2, credential_source: sourceId, model: configuration.model, context_tokens: configuration.contextTokens,
+  const next: PrivateConnection & LegacyConnection = {
+    version: existing?.version ?? 2, accounts: existing?.accounts, credential_source: sourceId, model: configuration.model, context_tokens: configuration.contextTokens,
     output_tokens: configuration.outputTokens, working_directory: configuration.workingDirectory, max_active_tasks: configuration.maxActiveTasks,
     sources: { ...existing?.sources, [sourceId]: source },
   };
@@ -392,13 +512,13 @@ export function importProductSnapshot(data: unknown, credentials: PrivateConnect
 function importCurrentProfile(old: OldProfile, profile: ProductProfile, credentials: PrivateConnection | undefined): ProductProfile {
   profile.preferences = { selectedBotId: old.selected, layout: old.layout, themeIds: old.theme_ids, appearance: old.appearance };
   profile.issueToolScopes = old.issue_tool_scopes;
-  if (credentials) {
+  if (credentials?.credential_source) {
     const defaultSource = credentials.sources[credentials.credential_source];
     if (!defaultSource) throw new RequestError('connection_unavailable', 'The saved credential source is missing');
     profile.connections.push({ revision: 1, sourceId: credentials.credential_source, configuration: {
       wireApi: defaultSource.api === 'openai-responses' ? 'openai-responses' : 'openai-completions', baseUrl: defaultSource.endpoint,
-      model: credentials.model, contextTokens: credentials.context_tokens, outputTokens: credentials.output_tokens,
-      workingDirectory: credentials.working_directory, maxActiveTasks: credentials.max_active_tasks,
+      model: credentials.model!, contextTokens: credentials.context_tokens!, outputTokens: credentials.output_tokens!,
+      workingDirectory: credentials.working_directory!, maxActiveTasks: credentials.max_active_tasks!,
     } });
     profile.savedRevision = 1;
     profile.appliedRevision = 1;

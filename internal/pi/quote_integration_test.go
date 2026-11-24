@@ -403,6 +403,7 @@ func TestPiProductQuoteSpeechActRedactionAndBackup(t *testing.T) {
 	if err != nil || backupDraft.Quote == nil {
 		t.Fatalf("SaveDraft before backup = %+v, %v", backupDraft, err)
 	}
+	mirrorBeforeBackup := productRead(t, opts.ProfilePath)
 	backupPath := filepath.Join(root, "quote-backup.json")
 	if _, err := proc2.client.BackupProfile(ctx, backupPath); err != nil {
 		t.Fatalf("BackupProfile = %v", err)
@@ -413,7 +414,15 @@ func TestPiProductQuoteSpeechActRedactionAndBackup(t *testing.T) {
 	if err != nil || backupInfo.Mode().Perm() != 0o600 {
 		t.Fatalf("backup permissions = %v err=%v", backupInfo.Mode().Perm(), err)
 	}
-	if bytes.Contains(productRead(t, opts.ProfilePath), []byte(`"backup"`)) {
+	backupBytes := productRead(t, backupPath)
+	if bytes.Contains(backupBytes, []byte(inactiveKey)) || bytes.Contains(backupBytes, []byte(productKey)) {
+		t.Fatal("quote recovery copy leaked a saved Provider credential")
+	}
+	mirrorAfterBackup := productRead(t, opts.ProfilePath)
+	if !bytes.Equal(mirrorAfterBackup, mirrorBeforeBackup) {
+		t.Fatal("BackupProfile mutated live contacts.json mirror")
+	}
+	if bytes.Contains(mirrorAfterBackup, []byte(`"backup"`)) {
 		t.Fatal("compact contacts.json mirror included backup envelope")
 	}
 
@@ -477,7 +486,7 @@ const fk = db.prepare('PRAGMA foreign_key_check').all().length;
 db.close();
 console.log(JSON.stringify({ v, fk }));
 `)
-		if !strings.Contains(schema, `"v":6`) || !strings.Contains(schema, `"fk":0`) {
+		if !strings.Contains(schema, `"v":7`) || !strings.Contains(schema, `"fk":0`) {
 			t.Fatalf("SQLite %s schema/FK mismatch = %s", dbFile, schema)
 		}
 	}

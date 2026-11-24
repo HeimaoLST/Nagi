@@ -7,7 +7,7 @@ import {
   createGrepToolDefinition, createFindToolDefinition, createLsToolDefinition,
   ModelRuntime, SessionManager, SettingsManager, createMcpExtension, McpOAuthCredentialStore, InMemoryAuthStorageBackend,
   type SessionEntry,
-  type AgentSessionEvent, type AgentSessionRuntime, type ToolDefinition, type McpServerEntry, type McpTransportFactory,
+  type AgentSessionEvent, type AgentSessionRuntime, type ExtensionFactory, type ToolDefinition, type McpServerEntry, type McpTransportFactory,
 } from '@earendil-works/pi-coding-agent';
 import { InMemoryCredentialStore, type AssistantMessage } from '@earendil-works/pi-ai';
 import { StdioTransport, StreamableHttpTransport, validateMcpServerConfig, mcpNamespace } from '@earendil-works/pi-mcp';
@@ -41,6 +41,7 @@ type Context = {
   active?: Run; observationSeq: number;
   transcriptSource?: string;
   transcriptSnapshot?: SessionEntry[];
+  publishConfiguration?: boolean;
 };
 
 class Worker {
@@ -181,14 +182,15 @@ class Worker {
     return config;
   }
   private nonsecretConfiguration(config: ConfigureParams): object {
-    return { wireApi: config.wireApi, baseUrl: config.baseUrl, model: config.model, contextTokens: config.contextTokens, outputTokens: config.outputTokens, credentialSource: config.credentialSource };
+    return { wireApi: config.wireApi, baseUrl: config.baseUrl, model: config.model, contextTokens: config.contextTokens, outputTokens: config.outputTokens,
+      credentialSource: config.credentialSource, ...(config.thinkingLevel === undefined ? {} : { thinkingLevel: config.thinkingLevel }) };
   }
   private configure(params: ConfigureParams): void {
     this.configured = this.validatedConfiguration(params);
   }
   private registerModel(models: ModelRuntime, config: ConfigureParams): void {
     models.registerProvider(PROVIDER, { api: config.wireApi, baseUrl: config.baseUrl, models: [{
-      id: config.model, name: config.model, reasoning: false, input: ['text'],
+      id: config.model, name: config.model, reasoning: config.reasoning ?? false, input: ['text'],
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
       contextWindow: config.contextTokens, maxTokens: config.outputTokens,
     }] });
@@ -281,6 +283,7 @@ class Worker {
     const directory = join(this.stateDir, 'sessions');
     let manager: SessionManager;
     let used = params.used;
+    let publishConfiguration = false;
     if (inMemory) {
       manager = SessionManager.inMemory(cwd);
     } else if (params.resumeRef) {
@@ -308,7 +311,11 @@ class Worker {
         const saved = manager.getEntries().find(entry => entry.type === 'custom' && entry.customType === BINDING_TYPE);
         if (!saved || saved.type !== 'custom' || JSON.stringify(saved.data) !== JSON.stringify(binding)) throw new RequestError('binding_conflict', 'Saved context owner differs');
         const savedConfig = manager.getEntries().findLast(entry => entry.type === 'custom' && entry.customType === CONFIGURATION_TYPE);
-        if (!savedConfig || savedConfig.type !== 'custom' || JSON.stringify(savedConfig.data) !== JSON.stringify(this.nonsecretConfiguration(config))) throw new RequestError('binding_conflict', 'Captured connection configuration differs from the saved context');
+        if (!savedConfig || savedConfig.type !== 'custom') throw new RequestError('binding_conflict', 'The saved context is missing its captured configuration');
+        publishConfiguration = JSON.stringify(savedConfig.data) !== JSON.stringify(this.nonsecretConfiguration(config));
+        if (publishConfiguration && !(productTools.length && params.purpose === 'conversation' && config.thinkingLevel !== undefined)) {
+          throw new RequestError('binding_conflict', 'Captured connection configuration differs from the saved context');
+        }
         const savedMcp = manager.getEntries().findLast(entry => entry.type === 'custom' && entry.customType === MCP_TYPE);
         if (JSON.stringify(savedMcp?.type === 'custom' ? savedMcp.data : []) !== JSON.stringify(mcpBinding)) throw new RequestError('binding_conflict', 'Captured MCP sources differ from the saved context');
         used = used || manager.getEntries().some(entry => entry.type === 'message');
@@ -335,18 +342,44 @@ class Worker {
     const productPrompt = productTools.length > 0 && isNagiBotSystemPrompt(params.instructions);
     const settings = SettingsManager.inMemory({ retry: { enabled: false, provider: { maxRetries: 0 } }, cacheWarming: 'off' });
     this.configureSettings(settings, config);
+    if (productTools.length) {
+      const stream = models.streamSimple.bind(models);
+      models.streamSimple = (model, context, options) => {
+        const observers = this.contexts.get(params.contextId)?.active?.product?.observers;
+        const request = options?.fetch ?? globalThis.fetch;
+        return stream(model, context, { ...options, fetch: async (input, init) => {
+          if (!observers?.authorizeProvider) throw new RequestError('credential_unavailable', 'No product execution owns this provider request');
+          observers.authorizeProvider();
+          const response = await request(input, init);
+          if (response.status === 401 || response.status === 403) observers.credentialRejected?.();
+          return response;
+        } });
+      };
+    }
+    const admission: ExtensionFactory = pi => {
+      pi.on('tool_call', event => {
+        const observers = this.contexts.get(params.contextId)?.active?.product?.observers;
+        if (!observers?.admitTool) return { block: true, reason: 'No product execution owns this tool call' };
+        observers.authorizeProvider?.();
+        observers.admitTool(event.toolName, event.toolCallId);
+      });
+    };
     const agentDir = join(this.stateDir, 'agent');
     const runtime = await createAgentSessionRuntime(async target => {
       const services = await createAgentSessionServices({
         ...target, modelRuntime: models, settingsManager: settings,
         resourceLoaderOptions: { noExtensions: true, noSkills: true, noPromptTemplates: true, noThemes: true, disabledBuiltinExtensions: ['mcp'],
-          extensionFactories: mcpEntries.length ? [this.mcpExtension(binding, mcpEntries)] : [],
+          extensionFactories: [
+            ...(mcpEntries.length ? [this.mcpExtension(binding, mcpEntries)] : []),
+            ...(productTools.length ? [admission] : []),
+          ],
           ...(productPrompt ? { systemPrompt: params.instructions } : { appendSystemPrompt: params.instructions ? [params.instructions] : [] }) },
       });
-      const result = await createAgentSessionFromServices({ services, sessionManager: target.sessionManager, model, thinkingLevel: 'off', tools, customTools });
+      const result = await createAgentSessionFromServices({ services, sessionManager: target.sessionManager, model, thinkingLevel: config.thinkingLevel ?? 'off', tools, customTools });
       return { ...result, services, diagnostics: services.diagnostics };
     }, { cwd, agentDir, sessionManager: manager });
-    const context: Context = { binding, configuration: config, instructions: params.instructions, codingTools: params.codingTools, domainTools: params.domainTools, mcpServers, manager, runtime, used, runIds: new Set(), observationSeq: 0 };
+    const context: Context = { binding, configuration: config, instructions: params.instructions, codingTools: params.codingTools, domainTools: params.domainTools,
+      mcpServers, manager, runtime, used, runIds: new Set(), observationSeq: 0, publishConfiguration };
     runtime.session.subscribe(event => this.onSdkEvent(context, event));
     this.contexts.set(params.contextId, context);
     try { await runtime.session.bindExtensions({}); }
@@ -357,6 +390,11 @@ class Worker {
     let failure: unknown;
     if (!run.product) this.event(context, run, 'run.started', { correlation: run.correlation });
     try {
+      run.product?.observers.authorizeProvider?.();
+      if (context.publishConfiguration) {
+        context.manager.appendCustomEntry(CONFIGURATION_TYPE, this.nonsecretConfiguration(context.configuration));
+        context.publishConfiguration = false;
+      }
       const draft = run.product?.draft;
       context.manager.appendCustomEntry(TURN_TYPE, { runId: run.id, text: params.text, context: params.context ?? [], correlation: run.correlation,
         ...(draft ? { materials: draft.materials } : {}), ...(draft?.quote ? { quote: draft.quote } : {}) });
