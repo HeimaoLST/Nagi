@@ -369,3 +369,11 @@
 **Cause or correction:** Sidecar tables that survive parent rewrites must use `DEFERRABLE INITIALLY DEFERRED` (`NO ACTION`) foreign keys bound with `encode(id)` JSON-encoded keys and clear prior generations only on explicit snapshot import/replacement, while omitting empty additive fields on legacy canonical serialization.
 
 **Prevention:** Audit `replaceProfile` and `pending_snapshot_previous` before adding any SQLite child table or Activity/Bot profile column, and include both unrelated-save retention and pending-mirror migration checks in integration tests.
+
+### Cold reload must preserve captured L0 and L1 profile bytes
+
+**Problem:** Recomputing the entire system prompt from current `bot.profile` during a cold reopen of an existing conversation binding overwrote the conversation's captured L1 identity and instructions after an in-place profile edit (`StartNewConversation: false`).
+
+**Cause or correction:** Existing bindings capture L0 and L1 identity/behavior instructions through the working-directory block; only dynamic trailing blocks (`<available_skills>` metadata catalog and L1.5 `Lasting Rules`) may refresh at cold or explicit-reload boundaries, and unchanged composed prompts should skip runtime refresh altogether.
+
+**Prevention:** Keep cold-reload prompt composition strictly additive over the captured L0+L1 prefix of `existing.instructions`, and run `TestPiProductSQLiteSavedKeyAndInitialInstructions` alongside new cold-reload integration tests.

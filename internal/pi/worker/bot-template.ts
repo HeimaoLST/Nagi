@@ -18,22 +18,34 @@ Give each Bot one Job, one Voice, and explicit Anti-Jobs that define what it mus
 When the user's goal is clear, draft the blueprint right away. If an ambiguity would change the Bot's design, ask at most one or two short, targeted questions.
 Present the Name, one-line Purpose, core Job, Voice, and Anti-Jobs in short chat bubbles. Once the user confirms, call bot_create or bot_update. Say the Bot was created or updated only after the tool succeeds.
 Supply three concise starter_prompts tailored to the specialist Bot's Job and Voice when creating or updating it.
+Recommend the least-privilege tool_preset for the job: none for writing or planning, readonly for review or research, and workspace for engineering or automation.
 Before auditing or refining existing Bots, call bot_inspect_team to read their actual saved profiles.`;
 
-export function composeBotSystemPrompt({ profile, cwd, systemKind, lastingRules }: {
-  profile: BotProfile; cwd: string; systemKind?: BotSystemKind; lastingRules?: string;
+export function composeBotSystemPrompt({ profile, cwd, systemKind, lastingRules, skills, capturedInstructions }: {
+  profile: BotProfile; cwd: string; systemKind?: BotSystemKind; lastingRules?: string; skills?: string; capturedInstructions?: string;
 }): string {
-  const role = profile.role.trim();
-  const identity = ['Bot Identity', `Name: ${profile.name.trim()}`, role && `Role: ${role}`, `Purpose:\n${profile.purpose.trim()}`]
-    .filter(Boolean).join('\n');
-  const instructions = profile.instructions.trim();
-  const l1ProfileBlock = [identity, systemKind === SYSTEM_KIND_BOT_ARCHITECT && PANDORABOX_ARCHITECT_INSTRUCTIONS,
-    instructions && `Behavior Instructions:\n${instructions}`,
-    `Default working directory: ${cwd}. Do not modify or write files outside this directory unless the user explicitly asks.`,
-  ].filter(Boolean).join('\n\n');
+  const workspace = `Default working directory: ${cwd}. Do not modify or write files outside this directory unless the user explicitly asks.`;
+  const rulesHeading = 'Lasting Rules:\n';
+  let prefix: string;
+  if (capturedInstructions === undefined) {
+    const role = profile.role.trim();
+    const identity = ['Bot Identity', `Name: ${profile.name.trim()}`, role && `Role: ${role}`, `Purpose:\n${profile.purpose.trim()}`]
+      .filter(Boolean).join('\n');
+    const instructions = profile.instructions.trim();
+    prefix = [NAGI_BOT_MASTER_TEMPLATE, identity, systemKind === SYSTEM_KIND_BOT_ARCHITECT && PANDORABOX_ARCHITECT_INSTRUCTIONS,
+      instructions && `Behavior Instructions:\n${instructions}`, workspace].filter(Boolean).join('\n\n');
+  } else {
+    const boundary = `\n\n${workspace}`;
+    const start = capturedInstructions.lastIndexOf(boundary);
+    if (start < 0 || !isNagiBotSystemPrompt(capturedInstructions)) return capturedInstructions;
+    const end = start + boundary.length;
+    if (end !== capturedInstructions.length && !capturedInstructions.startsWith('\n\n<available_skills>\n', end) &&
+        !capturedInstructions.startsWith(`\n\n${rulesHeading}`, end)) return capturedInstructions;
+    prefix = capturedInstructions.slice(0, end);
+  }
   const rules = lastingRules?.trim();
-  const l15LastingRulesBlock = rules && `Lasting Rules:\n${rules}`;
-  return [NAGI_BOT_MASTER_TEMPLATE, l1ProfileBlock, l15LastingRulesBlock].filter(Boolean).join('\n\n');
+  const l15LastingRulesBlock = rules && `${rulesHeading}${rules}`;
+  return [prefix, skills, l15LastingRulesBlock].filter(Boolean).join('\n\n');
 }
 
 type TightBotInstructions = { job: string; voice: string; antiJobs: string[]; workflow?: string };
