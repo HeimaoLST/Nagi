@@ -9,6 +9,7 @@ import { type BotMemory, type BotWorkLog } from './bot-memory.js';
 import { maxExecutionTraces, maxProfileTraces, traceDetail, redactTrace, type TraceBackup, type TraceObservation, type TraceUpdate } from './product-trace.js';
 import { projectionRedactor } from './product-redactor.js';
 import { assertSkillSecretFree, type BotSkills, type SkillWrite } from './bot-skills.js';
+import type { McpVault, McpVaultWrite } from './mcp-vault.js';
 
 const MIGRATIONS = [`
   CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT;
@@ -88,6 +89,8 @@ const MIGRATIONS = [`
   ) STRICT;
   CREATE INDEX activity_trace_meta_by_activity ON activity_trace_meta(activity_id);
   INSERT INTO meta VALUES ('trace_generation', lower(hex(randomblob(16))));
+`, `
+  CREATE TABLE mcp_servers (server_id TEXT PRIMARY KEY, sort_order INTEGER NOT NULL UNIQUE, config_json TEXT NOT NULL, catalog_json TEXT) STRICT;
 `];
 const LATEST_SCHEMA_VERSION = MIGRATIONS.length;
 
@@ -108,7 +111,7 @@ export class ProductSQLite {
   private readonly db: DatabaseSync;
   private digest?: string;
 
-  constructor(private readonly profilePath: string, private readonly skills?: BotSkills) {
+  constructor(private readonly profilePath: string, private readonly skills?: BotSkills, private readonly vault?: McpVault) {
     const directory = dirname(profilePath);
     mkdirSync(directory, { recursive: true, mode: 0o700 });
     this.databasePath = basename(profilePath) === 'contacts.json' ? join(directory, 'nagi.db') : `${profilePath}.sqlite`;
@@ -136,6 +139,8 @@ export class ProductSQLite {
     let staged: string | undefined;
     let committed = false;
     try {
+      this.publishMcpVault();
+      this.vault?.load();
       this.publishSkills();
       const profile = this.transaction(() => {
         for (const suffix of ['-wal', '-shm']) {
@@ -161,7 +166,7 @@ export class ProductSQLite {
         const { profile, backup } = importProductSnapshot(snapshot && JSON.parse(snapshot.data.toString('utf8')), credentials);
         mirror = this.stageMirror(snapshotFor(profile), previous);
         this.replaceProfile(profile, mirror);
-        const redact = projectionRedactor(Object.values(credentials?.sources ?? {}).map(source => source.api_key));
+        const redact = projectionRedactor([...Object.values(credentials?.sources ?? {}).map(source => source.api_key), ...this.vault?.keys() ?? []]);
         const writes: SkillWrite[] = (backup?.privateSkillBundles ?? []).map(row => {
           assertSkillSecretFree(row.content, redact);
           return { source: 'private', botId: row.ownerBotId, skillId: row.skillId, markdown: row.content };
@@ -185,9 +190,10 @@ export class ProductSQLite {
     }
   }
 
-  write(profile: ProductProfile, before: ProductProfile, skillWrite?: SkillWrite): TraceUpdate[] {
+  write(profile: ProductProfile, before: ProductProfile, skillWrite?: SkillWrite, mcpWrite?: McpVaultWrite): TraceUpdate[] {
     let mirror: Mirror | undefined;
     let staged: string | undefined;
+    let stagedVault: string | undefined;
     let committed = false;
     try {
       const updates = this.transaction(() => {
@@ -200,16 +206,22 @@ export class ProductSQLite {
           staged = this.skills!.stage([skillWrite]);
           this.db.prepare("INSERT INTO meta (key, value) VALUES ('pending_skill_stage', ?)").run(staged);
         }
+        if (mcpWrite && this.vault) {
+          stagedVault = this.vault.stage(mcpWrite);
+          this.db.prepare("INSERT INTO meta (key, value) VALUES ('pending_mcp_vault', ?)").run(stagedVault);
+        }
         mirror = this.stageMirror(snapshotFor(profile), previous);
         this.replaceProfile(profile, mirror);
         return this.recordTransitions(before, profile);
       });
       committed = true;
+      this.publishMcpVault();
       this.publishSkills();
       this.publish(mirror!);
       return updates;
     } catch (error) {
       if (staged && !committed) this.skills?.discard(staged);
+      if (stagedVault && !committed) this.vault?.discard(stagedVault);
       if (mirror) rmSync(mirror.temp, { force: true });
       throw error;
     }
@@ -230,6 +242,17 @@ export class ProductSQLite {
       return name;
     });
     if (staged) this.skills!.discard(staged);
+  }
+
+  private publishMcpVault(): void {
+    if (this.meta('pending_mcp_vault') === undefined) return;
+    this.transaction(() => {
+      const name = this.meta('pending_mcp_vault');
+      if (name === undefined) return;
+      if (!this.vault) throw new RequestError('profile_unavailable', 'The private MCP credential vault is unavailable');
+      this.vault.publish(name);
+      this.db.exec("DELETE FROM meta WHERE key = 'pending_mcp_vault'");
+    });
   }
 
   appendTrace(row: TraceObservation): TraceUpdate | undefined {
@@ -460,17 +483,21 @@ export class ProductSQLite {
     const connections = this.db.prepare('SELECT * FROM connections ORDER BY sort_order').all().map(row => ({
       revision: row.revision, sourceId: decode(row.source_id), configuration: decode(row.configuration_json),
     }));
+    const mcpServers = this.db.prepare('SELECT config_json, catalog_json FROM mcp_servers ORDER BY sort_order').all().map(row => ({
+      ...decode(row.config_json) as object, catalog: decode(row.catalog_json),
+    }));
     const read = (key: string) => decode(this.meta(key) ?? null);
     return decodeProductProfile({ version: 1, bots, conversations, activities, executions, operations, connections,
       savedRevision: read('saved_revision'), appliedRevision: read('applied_revision'), preferences: read('preferences_json'),
       issueToolScopes: read('issue_tool_scopes_json'), untargetedReceipts: read('untargeted_receipts_json'), recovery: read('recovery_json'),
       memory: this.readMemory(),
+      ...(mcpServers.length ? { mcpServers } : {}),
     });
   }
 
   private replaceProfile(profile: ProductProfile, mirror: Mirror): void {
     this.db.exec(`DELETE FROM operations; DELETE FROM activities; DELETE FROM conversations;
-      DELETE FROM executions; DELETE FROM bots; DELETE FROM connections;`);
+      DELETE FROM executions; DELETE FROM bots; DELETE FROM connections; DELETE FROM mcp_servers;`);
     const bots = this.db.prepare('INSERT INTO bots VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
     profile.bots.forEach((row, order) => bots.run(encode(row.botId), order, encode(row.profile), row.profileRevision,
       Number(row.archived), encode(row.currentConversationId), encode(row.retained), row.systemKind ?? null));
@@ -488,6 +515,10 @@ export class ProductSQLite {
       encode(row.input), encode(row.error), encode(row.engineRunId), encode(row.importedActivityId), encode(row.retained)));
     const connections = this.db.prepare('INSERT INTO connections VALUES (?, ?, ?, ?)');
     profile.connections.forEach((row, order) => connections.run(row.revision, order, encode(row.sourceId), encode(row.configuration)));
+    if (profile.mcpServers?.length) {
+      const servers = this.db.prepare('INSERT INTO mcp_servers VALUES (?, ?, ?, ?)');
+      profile.mcpServers.forEach(({ catalog, ...config }, order) => servers.run(config.serverId, order, encode(config), encode(catalog)));
+    }
     const operations = this.db.prepare('INSERT INTO operations VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
     profile.operations.forEach((row, order) => operations.run(encode(row.receipt.operationId), order, encode(row.method), row.fingerprint,
       encode(row.receipt), encode(row.reply), encode(row.replyError), row.connectionRevision ?? null, encode(row.retained)));
