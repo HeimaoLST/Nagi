@@ -5,11 +5,14 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/egoist/mygo/i18n"
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/markdown/parser"
 
+	"github.com/HeimaoLST/Nagi/internal/pi"
 	"github.com/HeimaoLST/Nagi/locales"
 )
 
@@ -103,7 +106,7 @@ func splitReplyBubblesState(text string, streaming bool) ([]string, int) {
 		}
 		offset := search + i
 		search = offset + len(replyBubbleSeparator)
-		if !inCode(offset) {
+		if replySeparatorPosition(text[:offset]) && !inCode(offset) {
 			appendBubble(strings.TrimRight(text[start:offset], " \t"))
 			tail := text[search:]
 			start = len(text) - len(strings.TrimLeft(tail, " \t"))
@@ -129,6 +132,15 @@ func splitReplyBubblesState(text string, streaming bool) ([]string, int) {
 		bubbles[maxBubbles-1] = overflow.String()
 	}
 	return bubbles, completed
+}
+
+func replySeparatorPosition(prefix string) bool {
+	prefix = strings.TrimRight(prefix, " \t")
+	if prefix == "" {
+		return true
+	}
+	last, _ := utf8.DecodeLastRuneInString(prefix)
+	return strings.ContainsRune("\r\n.!?。！？…)）」”\"", last)
 }
 
 func trimBubbleBlankLines(text string) string {
@@ -217,7 +229,7 @@ func chatMessageRow(c *ui.Context, t *ui.Theme, messages []*message, dividers []
 	row.Children(children)
 }
 
-func (a *appModel) botReplyBubbles(c *ui.Context, t *ui.Theme, m *message, scope, base string) {
+func (a *appModel) botReplyBubbles(c *ui.Context, t *ui.Theme, m *message, scope, base string, ct *contact, recall *quoteRecall) {
 	bubbles, completed := splitReplyBubblesState(m.Text, m.Streaming)
 	visible, typing := len(bubbles), false
 	live := m.liveReveal
@@ -263,6 +275,8 @@ func (a *appModel) botReplyBubbles(c *ui.Context, t *ui.Theme, m *message, scope
 				}
 				last := i == len(bubbles)-1
 				bubble := markdownMessageBubble{Background: palette.BubbleContact, PaddingX: 12, PaddingY: 8, Radius: 12, MenuOnlyCopy: true}
+				bubble.BeforeCopyMenu = a.quoteMenu(c, ct, m, i, text)
+				bubble.Highlight = recall.highlight(c, m, i)
 				if last && m.AlertTitle != "" {
 					bubble.Footer = func(fc *ui.Context) { a.alert(fc, t, m) }
 				}
@@ -299,4 +313,154 @@ func (a *appModel) replyTypingBubble(c *ui.Context) {
 			}
 		})
 	})
+}
+
+const (
+	quoteRecallDuration = 1600 * time.Millisecond
+	quoteRecallFade     = 180 * time.Millisecond
+	userQuoteBubble     = -1
+)
+
+type quoteRecall struct {
+	messageID string
+	bubble    int
+	until     time.Time
+}
+
+func quoteMessageID(m *message) string {
+	switch {
+	case m.MessageID != "":
+		return m.MessageID
+	case m.Key != "":
+		return m.Key
+	case m.ID != 0:
+		return strconv.Itoa(m.ID)
+	default:
+		return ""
+	}
+}
+
+func matchesQuotedMessage(m *message, id string) bool {
+	return id != "" && (m.Key == id || quoteMessageID(m) == id)
+}
+
+func quoteText(text string, limit int) string {
+	trim := func(r rune) bool { return unicode.IsSpace(r) || r == '\ufeff' }
+	text = strings.TrimFunc(text, trim)
+	if len(text) <= limit {
+		return text
+	}
+	for !utf8.RuneStart(text[limit]) {
+		limit--
+	}
+	return strings.TrimRightFunc(text[:limit], trim)
+}
+
+func (a *appModel) quoteDraftEditable(ct *contact) bool {
+	return ct != nil && !ct.Archived && !a.shutdownStarted && !a.dataRecoveryBlocksChanges()
+}
+
+func (a *appModel) quoteMenu(c *ui.Context, ct *contact, m *message, bubble int, text string) func(*ui.Menu) {
+	if !a.quoteDraftEditable(ct) || strings.TrimSpace(text) == "" || quoteMessageID(m) == "" {
+		return nil
+	}
+	return func(menu *ui.Menu) {
+		msgs := locales.In(c.Locale())
+		if !menu.Item(msgs.QuoteAction()).Chosen() || a.selectedContact() != ct || !a.quoteDraftEditable(ct) {
+			return
+		}
+		quote := &pi.ProductQuote{MessageID: quoteMessageID(m), Text: quoteText(text, 1024), Sender: "bot", AuthorName: quoteText(ct.Name, 120), BubbleIndex: &bubble}
+		if bubble == userQuoteBubble {
+			quote.Sender, quote.AuthorName, quote.BubbleIndex = "user", msgs.QuoteAuthorYou(), nil
+		}
+		if quote.Text != "" && quote.AuthorName != "" {
+			ct.DraftQuote = quote
+			a.draftChanged(ct)
+			a.focusComposer = true
+		}
+	}
+}
+
+func (a *appModel) removeDraftQuote(ct *contact) bool {
+	if ct.DraftQuote == nil || !a.quoteDraftEditable(ct) {
+		return false
+	}
+	ct.DraftQuote = nil
+	a.draftChanged(ct)
+	a.focusComposer = true
+	return true
+}
+
+func (a *appModel) composerQuote(c *ui.Context, t *ui.Theme, ct *contact) {
+	quote := ct.DraftQuote
+	msgs := locales.In(c.Locale())
+	ui.Row(c).Key("draft-quote").FillWidth().MinWidth(0).Radius(8).Padding(6, 8, 6, 10).
+		Background(a.workTheme.ComposerChipBg).Gap(8).AlignItems(ui.Center).Children(func() {
+		quoteStripText(c, t, msgs.QuoteReplyingTo(quote.AuthorName), quote.Text)
+		composerRemoveButton(c, t, msgs.QuoteRemove()).Size(24, 24).Disabled(!a.quoteDraftEditable(ct)).OnClick(func() {
+			a.removeDraftQuote(ct)
+		})
+	})
+}
+
+func quoteStripText(c *ui.Context, t *ui.Theme, author, text string) {
+	ui.Box(c).Width(2.5).AlignSelf(ui.Stretch).Shrink(0).Radius(1.25).Background(t.Accent.Alpha(.65))
+	ui.Column(c).Grow(1).MinWidth(0).Gap(1).Children(func() {
+		ui.Text(c, author).FontSize(typeMeta).FontWeight(500).FixedLineHeight(lineMeta).
+			SingleLine().Ellipsis("…").TextColor(t.Text)
+		ui.Text(c, strings.Join(strings.Fields(text), " ")).FontSize(typeMeta).FixedLineHeight(lineMeta).
+			SingleLine().Ellipsis("…").TextColor(t.TextMuted)
+	})
+}
+
+func (a *appModel) sentQuote(c *ui.Context, t *ui.Theme, quote *pi.ProductQuote, click func()) {
+	button := ui.ButtonBase(c).Key("sent-quote").AlignSelf(ui.Start).MaxWidthPercent(100).MinWidth(0).
+		Radius(8).Padding(5, 10).Gap(8).AlignItems(ui.Center).
+		Label(locales.In(c.Locale()).QuoteJump(quote.AuthorName))
+	background := a.workTheme.ComposerChipBg
+	switch {
+	case button.Pressed():
+		background = t.SurfacePressed
+	case button.Hovered():
+		background = t.SurfaceHover
+	}
+	button.Background(background).Children(func() { quoteStripText(c, t, quote.AuthorName, quote.Text) })
+	button.OnClick(click)
+}
+
+func recallQuotedMessage(c *ui.Context, messages []*message, list *ui.ListState, recall *quoteRecall, quote *pi.ProductQuote) {
+	bubble := userQuoteBubble
+	if quote.BubbleIndex != nil {
+		bubble = *quote.BubbleIndex
+	}
+	for i, m := range messages {
+		if matchesQuotedMessage(m, quote.MessageID) {
+			list.ScrollTo(i, ui.Center)
+			*recall = quoteRecall{messageID: quote.MessageID, bubble: bubble, until: c.Now().Add(quoteRecallDuration)}
+			c.After(quoteRecallDuration)
+			return
+		}
+	}
+}
+
+func (r *quoteRecall) highlight(c *ui.Context, m *message, bubble int) float32 {
+	if r.bubble != bubble || !matchesQuotedMessage(m, r.messageID) {
+		return 0
+	}
+	remaining := r.until.Sub(c.Now())
+	if remaining <= 0 {
+		*r = quoteRecall{}
+		return 0
+	}
+	const opacity = .8
+	if c.Preferences().ReduceMotion {
+		c.After(remaining)
+		return opacity
+	}
+	if remaining > quoteRecallFade {
+		c.After(remaining - quoteRecallFade)
+		return opacity
+	}
+	c.AnimationFrame()
+	return opacity * float32(remaining) / float32(quoteRecallFade)
 }

@@ -28,7 +28,7 @@ func (a *appModel) emptyState(c *ui.Context, t *ui.Theme, ct *contact) {
 		}
 		ui.Spacer(c)
 		ui.Column(c).FillWidth().AlignItems(ui.Center).Gap(10).Children(func() {
-			contactAvatar(c, t, ct.Name, 48)
+			contactAvatar(c, t, ct, 48)
 			ui.Text(c, msgs.EmptyBotGreeting(ct.Name)).MaxWidth(480).MaxLines(2).TextAlign(ui.Center).
 				FontSize(typePageTitle).FontWeight(500).FixedLineHeight(lineSettingsTitle).TextColor(t.Text)
 			if purpose := localizedBotPurpose(ct, msgs); purpose != "" {
