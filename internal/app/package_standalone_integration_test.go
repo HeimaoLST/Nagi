@@ -19,6 +19,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/HeimaoLST/Nagi/internal/pi"
 )
 
 type standaloneProvenance struct {
@@ -346,12 +348,15 @@ func TestPiPackageStandalone(t *testing.T) {
 	var admitted struct {
 		Version int `json:"version"`
 		Bots    []struct {
-			BotID string `json:"botId"`
+			BotID      string `json:"botId"`
+			SystemKind string `json:"systemKind"`
 		} `json:"bots"`
 	}
 	standaloneReadJSON(t, profile, &admitted)
-	if admitted.Version != 1 || len(admitted.Bots) != 1 || admitted.Bots[0].BotID != "standalone-cedar" {
-		t.Fatalf("packaged worker did not admit the synthetic profile: %+v", admitted)
+	if admitted.Version != 1 || len(admitted.Bots) != 2 ||
+		admitted.Bots[0].BotID != "builtin:pandorabox" || admitted.Bots[0].SystemKind != pi.SystemKindBotArchitect ||
+		admitted.Bots[1].BotID != "standalone-cedar" || admitted.Bots[1].SystemKind != "" {
+		t.Fatalf("packaged worker did not admit the synthetic profile with PandoraBox: %+v", admitted)
 	}
 	quitHelper := filepath.Join(root, "quit.swift")
 	if err := os.WriteFile(quitHelper, []byte(standaloneQuitProgram), 0o600); err != nil {
