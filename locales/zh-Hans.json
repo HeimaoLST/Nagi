@@ -204,6 +204,7 @@
   "stopConversationTooltip": "停止此对话",
   "sendAction": "发送",
   "sendTooltip": "发送消息。Enter 发送；Shift + Enter 换行。",
+  "botTyping": "正在输入",
   "sendingState": "正在发送…",
   "sendAcceptedState": "已接受；等待运行时启动。",
   "sendUnknownState": "发送尚未确认。请选择“重新加载”来核对任务与历史；该操作不会重发任务。",
