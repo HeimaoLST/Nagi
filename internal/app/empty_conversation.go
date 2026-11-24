@@ -116,5 +116,6 @@ func (a *appModel) starterPromptRow(c *ui.Context, t *ui.Theme, ct *contact, pro
 		ct.Draft = prompt
 		a.draftChanged(ct)
 		a.focusComposer = true
+		a.composerCaretToEnd = true
 	})
 }

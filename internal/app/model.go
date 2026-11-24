@@ -156,6 +156,7 @@ type appModel struct {
 
 	defaultContactN        int
 	focusComposer          bool
+	composerCaretToEnd     bool
 	priorChats             *productConversationBrowser
 	composerHandle         ui.Handle
 	composerAttachMenuOpen bool
