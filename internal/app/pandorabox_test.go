@@ -3,6 +3,8 @@ package app
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -32,7 +34,7 @@ func pandoraBoxTestApp(t *testing.T) (*appModel, *contact, *contact) {
 	return a, pandora, specialist
 }
 
-func TestPandoraBoxRailBadgeMenusAndProfileWithoutArchive(t *testing.T) {
+func TestPandoraBoxRailVisibilityMenusAndProfileWithoutArchive(t *testing.T) {
 	for _, locale := range []string{"en", "zh-Hans"} {
 		for _, dark := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/dark%t", locale, dark), func(t *testing.T) {
@@ -44,16 +46,19 @@ func TestPandoraBoxRailBadgeMenusAndProfileWithoutArchive(t *testing.T) {
 				tr.SetFocused(true)
 				tr.Frame()
 
-				if !tr.HasText("PandoraBox") || !tr.HasText(msgs.ProfileBuiltinBadge()) {
-					t.Fatalf("built-in badge missing in full rail: %v", tr.Texts())
+				if !tr.HasText("PandoraBox") {
+					t.Fatalf("PandoraBox missing in full rail: %v", tr.Texts())
+				}
+				if tr.HasText(locales.In("en").ProfileBuiltinBadge()) || tr.HasText(locales.In("zh-Hans").ProfileBuiltinBadge()) {
+					t.Fatalf("retired Built-in badge rendered in full rail: %v", tr.Texts())
 				}
 
 				if err := tr.RightClick(msgs.AvatarContactLabel("PandoraBox")); err != nil {
 					t.Fatal(err)
 				}
 				tr.Frame()
-				if !tr.HasText(msgs.ContactProfileAction()) {
-					t.Fatalf("PandoraBox menu missing Profile item: %v", tr.Texts())
+				if !tr.HasText(msgs.ContactProfileAction()) || !tr.HasText(msgs.BotMenuHideFromTeam()) {
+					t.Fatalf("PandoraBox menu missing Profile or Hide item: %v", tr.Texts())
 				}
 				if tr.HasText(msgs.BotMenuArchive()) || tr.HasText(msgs.RestoreContactAction()) {
 					t.Fatalf("PandoraBox menu exposed archive/restore: %v", tr.Texts())
@@ -80,17 +85,150 @@ func TestPandoraBoxRailBadgeMenusAndProfileWithoutArchive(t *testing.T) {
 				if !a.avatarRailActive() {
 					t.Fatal("1040 with profile open should use compact avatar rail")
 				}
-				if !trCompact.HasText(msgs.ProfileBuiltinArchitectNote()) {
-					t.Fatalf("PandoraBox profile missing built-in architect note: %v", trCompact.Texts())
+				showPreviewTooltip(t, trCompact, msgs.AvatarContactLabel("PandoraBox"))
+				for _, txt := range trCompact.Texts() {
+					if strings.Contains(txt, msgs.AvatarContactLabel("PandoraBox")) &&
+						(strings.Contains(txt, locales.In("en").ProfileBuiltinBadge()) || strings.Contains(txt, locales.In("zh-Hans").ProfileBuiltinBadge())) {
+						t.Fatalf("retired Built-in badge leaked into compact avatar tooltip: %q", txt)
+					}
 				}
-				if trCompact.HasText(msgs.ProfileContactManagement()) || trCompact.HasText(msgs.ProfileArchive()) {
-					t.Fatalf("PandoraBox profile exposed archive danger section: %v", trCompact.Texts())
+				if _, foundEn := trCompact.Find(locales.In("en").ProfileBuiltinBadge()); foundEn {
+					t.Fatalf("retired Built-in element appeared in compact view: %v", trCompact.Texts())
+				}
+				if _, foundZh := trCompact.Find(locales.In("zh-Hans").ProfileBuiltinBadge()); foundZh {
+					t.Fatalf("retired 内置 element appeared in compact view: %v", trCompact.Texts())
+				}
+				if !trCompact.HasText(msgs.ProfileBuiltinArchitectNote()) || !trCompact.HasText(msgs.BotMenuHideFromTeam()) {
+					t.Fatalf("PandoraBox profile missing architect note or visibility toggle: %v", trCompact.Texts())
+				}
+				if trCompact.HasText(msgs.ProfileArchive()) || trCompact.HasText(msgs.ProfileRestore()) {
+					t.Fatalf("PandoraBox profile exposed archive or restore action: %v", trCompact.Texts())
 				}
 				if a.archiveContact(pandora.ID) || pandora.Archived {
 					t.Fatal("archiveContact archived built-in Bot")
 				}
 			})
 		}
+	}
+}
+
+func TestPandoraBoxVisibilityToggleHiddenSummonAndEmptyRailRecovery(t *testing.T) {
+	for _, locale := range []string{"en", "zh-Hans"} {
+		t.Run(locale, func(t *testing.T) {
+			a, pandora, specialist := pandoraBoxTestApp(t)
+			msgs := locales.In(locale)
+			tr := ui.NewTester(a.view, 1280, 720)
+			tr.SetLocale(locale)
+			tr.SetFocused(true)
+			tr.Frame()
+
+			if err := tr.Click(msgs.SettingsTitle()); err != nil {
+				t.Fatal(err)
+			}
+			tr.Frame()
+			if !tr.HasText(msgs.SettingsPandoraBoxVisibility()) || !tr.HasText(msgs.SettingsPandoraBoxShow()) || !tr.HasText(msgs.SettingsPandoraBoxHide()) {
+				t.Fatalf("General settings missing PandoraBox visibility controls: %v", tr.Texts())
+			}
+			if err := tr.Click(msgs.SettingsPandoraBoxHide()); err != nil {
+				t.Fatal(err)
+			}
+			tr.Frame()
+			if !a.hideBuiltinArchitect || a.selectedContact() != specialist {
+				t.Fatalf("hiding selected PandoraBox did not switch to first visible Bot: hidden=%v selected=%q", a.hideBuiltinArchitect, a.selectedID())
+			}
+			if err := tr.Click(msgs.SettingsBackAccessible()); err != nil {
+				t.Fatal(err)
+			}
+			tr.Frame()
+			if slices.Contains(a.visibleContactIndices(), 0) || tr.HasText(msgs.AvatarContactLabel("PandoraBox")) {
+				t.Fatalf("hidden PandoraBox remained visible in rail: visible=%v", a.visibleContactIndices())
+			}
+
+			if err := tr.Click(msgs.AvatarAddContact()); err != nil {
+				t.Fatal(err)
+			}
+			tr.Frame()
+			if err := tr.Click(msgs.CreateBotWithPandoraBox()); err != nil {
+				t.Fatal(err)
+			}
+			tr.Frame()
+			if a.createBot != nil || a.selectedContact() != pandora || !a.hideBuiltinArchitect || slices.Contains(a.visibleContactIndices(), 0) {
+				t.Fatalf("summoned PandoraBox did not stay hidden in rail: modal=%v selected=%q hidden=%v visible=%v",
+					a.createBot != nil, a.selectedID(), a.hideBuiltinArchitect, a.visibleContactIndices())
+			}
+			if !tr.Focused(msgs.ComposerLabel("PandoraBox")) {
+				t.Fatal("summoning hidden PandoraBox did not focus its composer")
+			}
+
+			if err := tr.RightClick("Bot Architect"); err != nil {
+				t.Fatal(err)
+			}
+			tr.Frame()
+			if !tr.HasText(msgs.ContactProfileAction()) || !tr.HasText(msgs.BotMenuShowInTeam()) {
+				t.Fatalf("summoned PandoraBox header menu missing profile or show action: %v", tr.Texts())
+			}
+			if err := choosePopoverMenuItem(tr, msgs.ContactProfileAction()); err != nil {
+				t.Fatal(err)
+			}
+			if !a.detailIs(detailProfile) || !tr.HasText(msgs.BotMenuShowInTeam()) {
+				t.Fatalf("summoned PandoraBox profile did not open with Show in Bot Team action: detail=%q texts=%v", a.activeDetail(), tr.Texts())
+			}
+			a.profileScrollFor(pandora.ID).Y = 1000
+			tr.Frame()
+			if err := tr.Click(msgs.BotMenuShowInTeam()); err != nil {
+				t.Fatal(err)
+			}
+			tr.Frame()
+			if a.hideBuiltinArchitect || !slices.Contains(a.visibleContactIndices(), 0) {
+				t.Fatalf("Show in Bot Team from profile did not restore PandoraBox to rail: hidden=%v visible=%v", a.hideBuiltinArchitect, a.visibleContactIndices())
+			}
+			a.closeDetail()
+			tr.Frame()
+
+			if err := tr.RightClick(msgs.AvatarContactLabel("PandoraBox")); err != nil {
+				t.Fatal(err)
+			}
+			tr.Frame()
+			if err := choosePopoverMenuItem(tr, msgs.BotMenuHideFromTeam()); err != nil {
+				t.Fatal(err)
+			}
+			if !a.hideBuiltinArchitect || a.selectedContact() != specialist {
+				t.Fatalf("Hide from Bot Team menu did not hide and switch selection: hidden=%v selected=%q", a.hideBuiltinArchitect, a.selectedID())
+			}
+
+			a.contacts = []*contact{pandora}
+			a.selected = 0
+			a.contactSearch = "filter"
+			tr.Frame()
+			if !tr.HasText(msgs.RailShowPandoraBox()) {
+				t.Fatalf("empty full rail missing Show PandoraBox recovery action: %v", tr.Texts())
+			}
+			if err := tr.Click(msgs.RailShowPandoraBox()); err != nil {
+				t.Fatal(err)
+			}
+			tr.Frame()
+			if a.hideBuiltinArchitect || a.contactSearch != "" || !slices.Contains(a.visibleContactIndices(), 0) {
+				t.Fatalf("empty-rail Show PandoraBox did not restore visibility and clear search: hidden=%v search=%q visible=%v",
+					a.hideBuiltinArchitect, a.contactSearch, a.visibleContactIndices())
+			}
+
+			a.hideBuiltinArchitect = true
+			a.windowWidth = 1040
+			a.openContactProfile(pandora.ID)
+			trCompact := ui.NewTester(a.view, 1040, 720)
+			trCompact.SetLocale(locale)
+			trCompact.Frame()
+			if r, ok := trCompact.Find(msgs.RailShowPandoraBox()); !ok || r.W < 32 || r.H < 32 {
+				t.Fatalf("empty compact avatar rail missing 32x32 Show PandoraBox button: rect=%+v ok=%v", r, ok)
+			}
+			if err := trCompact.Click(msgs.RailShowPandoraBox()); err != nil {
+				t.Fatal(err)
+			}
+			trCompact.Frame()
+			if a.hideBuiltinArchitect {
+				t.Fatal("compact avatar rail Show PandoraBox did not restore PandoraBox")
+			}
+		})
 	}
 }
 

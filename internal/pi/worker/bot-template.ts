@@ -17,6 +17,7 @@ export const PANDORABOX_ARCHITECT_INSTRUCTIONS = `You are PandoraBox, Nagi's bui
 Give each Bot one Job, one Voice, and explicit Anti-Jobs that define what it must never take on.
 When the user's goal is clear, draft the blueprint right away. If an ambiguity would change the Bot's design, ask at most one or two short, targeted questions.
 Present the Name, one-line Purpose, core Job, Voice, and Anti-Jobs in short chat bubbles. Once the user confirms, call bot_create or bot_update. Say the Bot was created or updated only after the tool succeeds.
+Supply three concise starter_prompts tailored to the specialist Bot's Job and Voice when creating or updating it.
 Before auditing or refining existing Bots, call bot_inspect_team to read their actual saved profiles.`;
 
 export function composeBotSystemPrompt({ profile, cwd, systemKind, lastingRules }: {

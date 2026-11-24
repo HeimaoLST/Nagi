@@ -445,12 +445,13 @@ type ProductPendingSend struct {
 }
 
 type ProductUIState struct {
-	Selected   string                        `json:"selected,omitempty"`
-	Layout     StoredLayout                  `json:"layout"`
-	ThemeIDs   theme.AppearanceThemeIDs      `json:"themeIds"`
-	Appearance string                        `json:"appearance,omitempty"`
-	Pending    map[string]ProductPendingSend `json:"pending,omitempty"`
-	RecoveryID string                        `json:"recoveryId,omitempty"`
+	Selected             string                        `json:"selected,omitempty"`
+	Layout               StoredLayout                  `json:"layout"`
+	ThemeIDs             theme.AppearanceThemeIDs      `json:"themeIds"`
+	Appearance           string                        `json:"appearance,omitempty"`
+	HideBuiltinArchitect bool                          `json:"hideBuiltinArchitect,omitempty"`
+	Pending              map[string]ProductPendingSend `json:"pending,omitempty"`
+	RecoveryID           string                        `json:"recoveryId,omitempty"`
 
 	PendingActivities map[string]ProductActivityIntent `json:"pending_activities,omitempty"`
 }

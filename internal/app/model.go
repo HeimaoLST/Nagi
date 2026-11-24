@@ -82,6 +82,7 @@ type contact struct {
 	Role               string
 	Purpose            string
 	Instructions       string
+	StarterPrompts     []string
 	Workspace          string
 	BuiltinTools       *[]string
 	SystemKind         string
@@ -137,11 +138,12 @@ func (ct *contact) isBuiltin() bool {
 }
 
 type profileDraft struct {
-	Name         string
-	Purpose      string
-	Instructions string
-	Workspace    string
-	BuiltinTools *[]string
+	Name           string
+	Purpose        string
+	Instructions   string
+	StarterPrompts []string
+	Workspace      string
+	BuiltinTools   *[]string
 }
 
 type appModel struct {
@@ -181,6 +183,7 @@ type appModel struct {
 	profileEditors         map[string]*contactProfileEditor
 	contactProfileID       string
 	contactSearch          string
+	hideBuiltinArchitect   bool
 	createBot              *createBotForm
 	contactHistoryInFlight int
 	submissionInFlight     int

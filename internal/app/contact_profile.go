@@ -5,6 +5,7 @@ package app
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/egoist/mygo/ui"
@@ -13,10 +14,13 @@ import (
 )
 
 type contactProfileActions struct {
-	Save    func(profileDraft)
-	Archive func()
-	Restore func()
-	Discard func()
+	Save               func(profileDraft)
+	Archive            func()
+	Restore            func()
+	Discard            func()
+	ToggleVisibility   func()
+	VisibilityLabel    string
+	VisibilityDisabled bool
 }
 
 type contactProfileEditor struct {
@@ -121,6 +125,7 @@ func newContactProfileEditor(draft profileDraft) *contactProfileEditor {
 
 func cloneProfileDraft(draft profileDraft) profileDraft {
 	draft.BuiltinTools = cloneBuiltinTools(draft.BuiltinTools)
+	draft.StarterPrompts = slices.Clone(draft.StarterPrompts)
 	return draft
 }
 
@@ -241,6 +246,12 @@ func (e *contactProfileEditor) view(c *ui.Context, t *ui.Theme, actions contactP
 		})
 		settingsPreferenceRow(c, t, msgs.ProfileInstructions(), "", func() {
 			formTextArea(c, &e.Draft.Instructions, false, border).FillWidth().MinWidth(0).Label(msgs.FieldInstructionsAccessible()).Placeholder(msgs.ProfileInstructions()).Disabled(!editable)
+		})
+		settingsPreferenceRow(c, t, msgs.ProfileStarterPrompts(), msgs.ProfileStarterPromptsHint(), func() {
+			text := strings.Join(e.Draft.StarterPrompts, "\n")
+			formTextArea(c, &text, false, border).FillWidth().MinWidth(0).Label(msgs.FieldStarterPromptsAccessible()).Disabled(!editable).OnChange(func() {
+				e.Draft.StarterPrompts = strings.Split(text, "\n")
+			})
 		}, true)
 
 		ui.Column(c).Gap(6).Children(func() {
@@ -272,13 +283,15 @@ func (e *contactProfileEditor) view(c *ui.Context, t *ui.Theme, actions contactP
 }
 
 func (e *contactProfileEditor) managementView(c *ui.Context, t *ui.Theme, actions contactProfileActions) {
-	if e.builtin || (actions.Archive == nil && actions.Restore == nil) {
+	if actions.ToggleVisibility == nil && (e.builtin || (actions.Archive == nil && actions.Restore == nil)) {
 		return
 	}
 	msgs := locales.In(c.Locale())
 	ui.Row(c).Key("profile-management").FillWidth().AlignItems(ui.Center).Justify(ui.SpaceBetween).Gap(8).Padding(8, 0, 0).Children(func() {
 		ui.Text(c, msgs.ProfileContactManagement()).FontSize(typeLabel).FontWeight(500).FixedLineHeight(lineLabel).TextColor(t.Text)
-		if e.Archived && actions.Restore != nil {
+		if actions.ToggleVisibility != nil {
+			secondaryButton(c, actions.VisibilityLabel).Disabled(actions.VisibilityDisabled).OnClick(actions.ToggleVisibility)
+		} else if e.Archived && actions.Restore != nil {
 			secondaryButton(c, msgs.ProfileRestore()).Disabled(e.Busy).OnClick(actions.Restore)
 		} else if !e.Archived && actions.Archive != nil {
 			dangerButton(c, msgs.ProfileArchive()).Disabled(e.Busy || e.ActiveWork || e.UnknownWork).OnClick(actions.Archive)
@@ -290,7 +303,7 @@ func (a *appModel) contactProfileActions(ct *contact, editor *contactProfileEdit
 	editor.Archived, editor.builtin = ct.Archived, ct.isBuiltin()
 	editor.ActiveWork, editor.UnknownWork = a.contactActivity(ct)
 	id := ct.ID
-	return contactProfileActions{
+	actions := contactProfileActions{
 		Save:    func(draft profileDraft) { a.saveContactProfileDraftFor(id, draft, false) },
 		Archive: func() { a.archiveContact(id) },
 		Restore: func() { a.restoreContact(id) },
@@ -300,4 +313,10 @@ func (a *appModel) contactProfileActions(ct *contact, editor *contactProfileEdit
 			editor.ResetDraft()
 		},
 	}
+	if ct.isBuiltin() {
+		actions.ToggleVisibility = func() { a.setBuiltinArchitectHidden(!a.hideBuiltinArchitect) }
+		actions.VisibilityLabel = a.builtinArchitectVisibilityLabel(locales.In(a.uiLocale))
+		actions.VisibilityDisabled = !a.canChangeBuiltinArchitectVisibility()
+	}
+	return actions
 }

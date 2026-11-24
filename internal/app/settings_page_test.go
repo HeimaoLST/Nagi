@@ -36,12 +36,12 @@ func TestSettingsPageReplacesWorkbenchAndRoutesEntries(t *testing.T) {
 		t.Fatalf("settings page opened scrolled: %v", a.settingsScroll.Y)
 	}
 	msgs := locales.In("en")
-	for _, forbidden := range []string{msgs.RailContactsTitle(), msgs.AvatarAddContact(), msgs.ComposerLabel(ct.Name), "Send", "History", msgs.ContactProfileAction()} {
+	for _, forbidden := range []string{msgs.AvatarAddContact(), msgs.SearchContacts(), msgs.ComposerLabel(ct.Name), "Send", "History", msgs.ContactProfileAction()} {
 		if tr.HasText(forbidden) {
 			t.Fatalf("settings page still rendered workbench text %q: %v", forbidden, tr.Texts())
 		}
 	}
-	for _, want := range []string{msgs.SettingsTitle(), msgs.SettingsGeneral(), msgs.SettingsConnection(), msgs.SettingsAdvanced()} {
+	for _, want := range []string{msgs.SettingsTitle(), msgs.SettingsGeneral(), msgs.SettingsConnection(), msgs.SettingsAdvanced(), msgs.SettingsPandoraBoxVisibility()} {
 		if !tr.HasText(want) {
 			t.Fatalf("settings page missing %q: %v", want, tr.Texts())
 		}

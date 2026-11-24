@@ -303,6 +303,18 @@ func (a *appModel) settingsMain(c *ui.Context, t *ui.Theme, narrow bool) {
 func (a *appModel) settingsAppearanceContent(c *ui.Context, t *ui.Theme) {
 	msgs := locales.In(c.Locale())
 	a.ensureLanguageMode()
+	preferenceSection(c, t, msgs.RailContactsTitle(), func() {
+		c.Key("pandorabox-visibility")
+		settingsPreferenceRow(c, t, msgs.SettingsPandoraBoxVisibility(), msgs.SettingsPandoraBoxVisibilityHint(), func() {
+			selected := 0
+			if a.hideBuiltinArchitect {
+				selected = 1
+			}
+			theme.PreferenceSegmentedSelection(c, &selected, msgs.SettingsPandoraBoxVisibility(), !a.canChangeBuiltinArchitectVisibility(), false,
+				msgs.SettingsPandoraBoxShow(), msgs.SettingsPandoraBoxHide()).
+				OnChange(func() { a.setBuiltinArchitectHidden(selected == 1) })
+		}, true)
+	})
 	preferenceSection(c, t, msgs.SettingsAppearance(), func() {
 		c.Key("appearance-preference")
 		settingsPreferenceRow(c, t, msgs.AppearanceMode(), "", func() {

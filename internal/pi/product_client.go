@@ -76,12 +76,13 @@ type ProductPage[T any] struct {
 }
 
 type ProductBotProfile struct {
-	Name         string   `json:"name"`
-	Role         string   `json:"role"`
-	Purpose      string   `json:"purpose"`
-	Instructions string   `json:"instructions"`
-	Workspace    string   `json:"workspace"`
-	CodingTools  []string `json:"codingTools"`
+	Name           string   `json:"name"`
+	Role           string   `json:"role"`
+	Purpose        string   `json:"purpose"`
+	Instructions   string   `json:"instructions"`
+	Workspace      string   `json:"workspace"`
+	CodingTools    []string `json:"codingTools"`
+	StarterPrompts []string `json:"starterPrompts,omitempty"`
 }
 
 type ProductBot struct {
@@ -165,10 +166,11 @@ type ProductRecovery struct {
 }
 
 type ProductPreferences struct {
-	SelectedBotID string          `json:"selectedBotId,omitempty"`
-	Layout        json.RawMessage `json:"layout,omitempty"`
-	ThemeIDs      json.RawMessage `json:"themeIds,omitempty"`
-	Appearance    string          `json:"appearance,omitempty"`
+	SelectedBotID        string          `json:"selectedBotId,omitempty"`
+	Layout               json.RawMessage `json:"layout,omitempty"`
+	ThemeIDs             json.RawMessage `json:"themeIds,omitempty"`
+	Appearance           string          `json:"appearance,omitempty"`
+	HideBuiltinArchitect bool            `json:"hideBuiltinArchitect,omitempty"`
 }
 
 type ProductMaterial struct {

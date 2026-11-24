@@ -73,6 +73,7 @@ func (a *appModel) applyProductPreferences(preferences *pi.ProductPreferences) {
 		_ = json.Unmarshal(preferences.ThemeIDs, &a.appearanceThemeIDs)
 	}
 	a.appearanceMode = normalizeAppearanceMode(preferences.Appearance)
+	a.hideBuiltinArchitect = preferences.HideBuiltinArchitect
 }
 
 // newUnavailableApp keeps the window usable when the local contact store cannot

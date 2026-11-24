@@ -236,7 +236,12 @@ func (a *appModel) rail(c *ui.Context, t *ui.Theme) {
 		ui.SearchField(c, &a.contactSearch).Label(msgs.SearchContacts()).FontSize(typeAction).Placeholder(msgs.RailContactSearchPlaceholder())
 		visible := a.visibleContactIndices()
 		if len(visible) == 0 {
-			ui.Text(c, msgs.RailNoContactsMatch()).FontSize(typeLabel).FixedLineHeight(lineLabel).TextColor(t.TextMuted)
+			if a.hideBuiltinArchitect {
+				secondaryButton(c, msgs.RailShowPandoraBox()).AlignSelf(ui.Start).
+					Disabled(!a.canChangeBuiltinArchitectVisibility()).OnClick(a.showBuiltinArchitectInRail)
+			} else {
+				ui.Text(c, msgs.RailNoContactsMatch()).FontSize(typeLabel).FixedLineHeight(lineLabel).TextColor(t.TextMuted)
+			}
 			ui.Spacer(c).Grow(1)
 		} else {
 			ui.Scroll(c).Grow(1).Children(func() {
@@ -274,6 +279,12 @@ func (a *appModel) avatarRail(c *ui.Context, t *ui.Theme) {
 		})
 		visible := a.visibleContactIndices()
 		if len(visible) == 0 {
+			if a.hideBuiltinArchitect {
+				label := locales.In(c.Locale()).RailShowPandoraBox()
+				button := appTooltip(c, ui.ButtonBase(c).Label(label).Size(32, 32).Center().Radius(8), label)
+				button.Disabled(!a.canChangeBuiltinArchitectVisibility()).OnClick(a.showBuiltinArchitectInRail)
+				button.Children(func() { contactAvatar(c, t, "PandoraBox", 24) })
+			}
 			ui.Spacer(c).Grow(1)
 		} else {
 			ui.Scroll(c).Grow(1).Children(func() {
@@ -302,10 +313,6 @@ func (a *appModel) avatarRailRow(c *ui.Context, t *ui.Theme, i int) {
 	status := a.headerStatusLabel(ct, msgs)
 	if ct.Archived {
 		status = msgs.ProfileArchivedBadge()
-	}
-	if ct.isBuiltin() {
-		status = msgs.ProfileBuiltinBadge() + "\n" + status
-		status = strings.TrimSpace(status)
 	}
 	label := msgs.AvatarContactLabel(ct.Name)
 	tip := label
@@ -377,6 +384,9 @@ func (a *appModel) bindBotRowMenu(row ui.Element, contactID string, msgs locales
 			}
 		}
 		if ct.isBuiltin() {
+			if menu.Item(a.builtinArchitectVisibilityLabel(msgs)).Disabled(!a.canChangeBuiltinArchitectVisibility()).Chosen() {
+				a.setBuiltinArchitectHidden(!a.hideBuiltinArchitect)
+			}
 			return
 		}
 		if ct.Archived {
@@ -407,10 +417,6 @@ func (a *appModel) railRow(c *ui.Context, t *ui.Theme, i int) {
 	row.OnClick(func() { a.selectContact(i) })
 	if ct.Archived {
 		row.Description(currentMsgs.ProfileArchivedBadge())
-	} else if ct.isBuiltin() {
-		badge := currentMsgs.ProfileBuiltinBadge()
-		row.Description(badge)
-		row = appTooltip(c, row, ct.Name+"\n"+badge)
 	}
 	a.bindBotRowMenu(row, ct.ID, currentMsgs)
 	row.Children(func() {
@@ -421,17 +427,8 @@ func (a *appModel) railRow(c *ui.Context, t *ui.Theme, i int) {
 				if selected {
 					nameWeight = 500
 				}
-				name := ui.Text(c, ct.Name).FontSize(typeRailName).FontWeight(nameWeight).FixedLineHeight(lineNavigation).
-					MaxLines(1).MinWidth(0).TextColor(t.Text)
-				if ct.isBuiltin() {
-					ui.Text(c, currentMsgs.ProfileBuiltinBadge()).FontSize(typeMeta).FixedLineHeight(lineMeta).
-						SingleLine().Shrink(0).TextColor(t.TextMuted).Background(t.Surface).Padding(0, 4).Radius(4)
-					if ct.Unread > 0 {
-						ui.Box(c).Grow(1)
-					}
-				} else {
-					name.Grow(1)
-				}
+				ui.Text(c, ct.Name).FontSize(typeRailName).FontWeight(nameWeight).FixedLineHeight(lineNavigation).
+					MaxLines(1).MinWidth(0).Grow(1).TextColor(t.Text)
 				if ct.Unread > 0 {
 					ui.Text(c, fmt.Sprintf("%d", ct.Unread)).FontSize(typeMeta).FixedLineHeight(lineMeta).Shrink(0).TextColor(t.Warning)
 				}
@@ -477,9 +474,13 @@ func contactAvatar(c *ui.Context, t *ui.Theme, name string, size float32) {
 		}
 	}
 	background, ink := contactAvatarColors(t, name)
-	ui.Box(c).Size(size, size).MinWidth(size).Shrink(0).Radius(8).Background(background).
+	radius, fontSize, lineHeight := float32(8), typeMeta, lineMeta
+	if size == 48 {
+		radius, fontSize, lineHeight = 14, 20, 24
+	}
+	ui.Box(c).Size(size, size).MinWidth(size).Shrink(0).Radius(radius).Background(background).
 		AlignItems(ui.Center).Justify(ui.Center).IgnoreInput(true).Children(func() {
-		ui.Text(c, string(initials[:max(1, n)])).FontSize(typeMeta).FontWeight(600).FixedLineHeight(lineMeta).
+		ui.Text(c, string(initials[:max(1, n)])).FontSize(fontSize).FontWeight(600).FixedLineHeight(lineHeight).
 			SingleLine().TextColor(ink).IgnoreInput(true)
 	})
 }
@@ -744,7 +745,11 @@ func (a *appModel) main(c *ui.Context, t *ui.Theme) {
 }
 
 func (a *appModel) header(c *ui.Context, t *ui.Theme, ct *contact, status string) {
-	ui.Row(c).Key("header").FillWidth().BorderWidth(0, 0, 1, 0).BorderColor(t.Border).Children(func() {
+	header := ui.Row(c).Key("header").FillWidth().BorderWidth(0, 0, 1, 0).BorderColor(t.Border)
+	if ct.isBuiltin() && a.hideBuiltinArchitect {
+		a.bindBotRowMenu(header, ct.ID, locales.In(c.Locale()))
+	}
+	header.Children(func() {
 		ui.Column(c).FillWidth().Padding(12, 16).Children(func() {
 			ui.Row(c).FillWidth().MinHeight(32).AlignItems(ui.Center).Gap(12).Children(func() {
 				ui.Column(c).MinWidth(0).Shrink(1).Gap(0).Children(func() {
@@ -778,10 +783,8 @@ func (a *appModel) chat(c *ui.Context, t *ui.Theme, state connectionViewState, s
 	ct.list.FollowEnd = true
 	ui.Column(c).Key("chat").Grow(1).Children(func() {
 		if len(messages) == 0 {
-			ui.Row(c).Grow(1).FillHeight().Justify(ui.Center).Children(func() {
-				ui.Scroll(c).FillHeight().FillWidth().MaxWidth(conversationMaxWidth).Padding(16).Children(func() {
-					a.emptyState(c, t)
-				})
+			ui.Row(c).Grow(1).MinHeight(0).Justify(ui.Center).Children(func() {
+				a.emptyState(c, t, ct)
 			})
 		} else {
 			dividers := chatTimestampDividers(messages, time.Now(), c.Locale())
@@ -1188,27 +1191,6 @@ func (a *appModel) alert(c *ui.Context, t *ui.Theme, m *message) {
 		} else if m.RetryDone {
 			ui.Text(c, msgs.Retried()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 		}
-	})
-}
-
-func (a *appModel) emptyState(c *ui.Context, t *ui.Theme) {
-	ct := a.selectedContact()
-	msgs := locales.In(c.Locale())
-	ui.Column(c).Padding(8, 0).Gap(8).Children(func() {
-		if !a.demo && ct.SessionID != "" && !ct.Loaded {
-			ui.Text(c, msgs.HistoryNotLoadedTitle()).FontSize(typeBody).FontWeight(400).FixedLineHeight(lineBody).TextColor(t.Text)
-			ui.Text(c, msgs.HistoryNotLoadedHint()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
-			if !a.canReloadPiConversation(ct) {
-				ui.Text(c, msgs.HistoryRuntimeNotReady()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Warning)
-			}
-			return
-		}
-		ui.Text(c, msgs.EmptyNoMessages()).FontSize(typePageTitle).FontWeight(500).TextColor(t.Text)
-		hint := msgs.EmptyConversationStart(ct.Name)
-		if a.demo {
-			hint = msgs.EmptyConversationDraft(ct.Name)
-		}
-		ui.Text(c, hint).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 	})
 }
 

@@ -123,7 +123,7 @@ export type ProductProfile = {
   connections: StoredConnection[];
   savedRevision: number | null;
   appliedRevision: number | null;
-  preferences?: { selectedBotId?: string; layout?: object; themeIds?: object; appearance?: string };
+  preferences?: { selectedBotId?: string; layout?: object; themeIds?: object; appearance?: string; hideBuiltinArchitect?: boolean };
   issueToolScopes?: object[];
   untargetedReceipts?: object[];
   recovery?: { id: string; ui?: object };
@@ -187,16 +187,19 @@ function toolText(value: unknown, isError = false): ToolTextResult {
 const architectProfile: BotProfile = {
   name: 'PandoraBox', role: 'Bot Architect', purpose: 'Design, create, and refine focused Nagi Bots through conversation.',
   instructions: '', workspace: '', codingTools: [],
+  starterPrompts: ['Create a writing and editing Bot', 'Build a strict code review Bot', 'Audit and refine my existing Bot Team'],
 };
 
 const requiredText = Type.String({ minLength: 1, pattern: '\\S' });
 const architectInspect = Type.Object({}, { additionalProperties: false });
 const architectCreate = Type.Object({ name: requiredText, purpose: requiredText, job: requiredText, voice: requiredText,
   anti_jobs: Type.Array(requiredText, { minItems: 1 }), workflow: Type.Optional(Type.String()), role: Type.Optional(Type.String()),
+  starter_prompts: Type.Optional(Type.Array(Type.String())),
 }, { additionalProperties: false });
 const architectUpdate = Type.Object({ bot_id: requiredText, name: Type.Optional(requiredText), purpose: Type.Optional(Type.String()),
   role: Type.Optional(Type.String()), job: Type.Optional(requiredText), voice: Type.Optional(requiredText),
   anti_jobs: Type.Optional(Type.Array(requiredText)), workflow: Type.Optional(Type.String()), instructions: Type.Optional(Type.String()),
+  starter_prompts: Type.Optional(Type.Array(Type.String())),
 }, { additionalProperties: false });
 
 function architectResult(bot: Bot) {
@@ -401,10 +404,9 @@ export class Product {
   }
 
   private insertBot(candidate: ProductProfile, profile: BotProfile, systemKind?: BotSystemKind): Bot {
-    this.validateProfile(profile);
     const botId = systemKind ? PANDORABOX_BOT_ID : newId();
     const conversationId = newId();
-    const bot: Bot = { botId, profile, profileRevision: 1, archived: false, currentConversationId: conversationId };
+    const bot: Bot = { botId, profile: this.validateProfile(profile), profileRevision: 1, archived: false, currentConversationId: conversationId };
     if (systemKind) {
       if (candidate.bots.some(existing => existing.botId === botId)) stateError('operation_conflict', 'A saved Bot already uses the reserved built-in ID');
       bot.systemKind = systemKind;
@@ -418,7 +420,7 @@ export class Product {
 
   private updateBotProfile(candidate: ProductProfile, bot: Bot, profile: BotProfile, startNewConversation = false): void {
     if (bot.archived) stateError('conversation_read_only', 'Restore this Bot before editing');
-    this.validateProfile(profile, bot.profile.workspace);
+    profile = this.validateProfile(profile, bot.profile.workspace);
     if (startNewConversation) {
       const old = this.conversation(candidate, bot.currentConversationId);
       const execution = this.execution(candidate, old.latestExecutionId);
@@ -643,11 +645,25 @@ export class Product {
     }
   }
 
-  private validateProfile(profile: BotProfile, savedWorkspace = ''): void {
+  private validateProfile(profile: BotProfile, savedWorkspace = ''): BotProfile {
     if (!Value.Check(profileSchema, profile) || !profile.name.trim() ||
         profile.workspace && profile.workspace !== savedWorkspace && !isAbsolute(profile.workspace)) {
       stateError('invalid_params', 'The Bot requires a name and an absolute workspace when specified');
     }
+    if (!profile.starterPrompts) return profile;
+    const starterPrompts = new Set<string>();
+    for (const item of profile.starterPrompts) {
+      let prompt = '';
+      let bytes = 0;
+      for (const char of item.trim()) {
+        bytes += Buffer.byteLength(char);
+        if (bytes > 120) break;
+        prompt += char;
+      }
+      if (prompt) starterPrompts.add(prompt.trimEnd());
+      if (starterPrompts.size === 4) break;
+    }
+    return { ...profile, starterPrompts: [...starterPrompts] };
   }
 
   private resolveCredential(configuration: Connection): Connection {
@@ -1255,12 +1271,14 @@ export class Product {
     return [
       { name: 'bot_inspect_team', label: 'Inspect Bot Team', description: 'Read the saved profiles of the available Bots before auditing or refining them.', parameters: architectInspect,
         execute: execute(architectInspect, () => this.profile.bots.filter(bot => !bot.archived).map(({ botId, profile, systemKind }) => ({
-          bot_id: botId, name: profile.name, role: profile.role, purpose: profile.purpose, instructions: profile.instructions, system_kind: systemKind ?? null,
+          bot_id: botId, name: profile.name, role: profile.role, purpose: profile.purpose, instructions: profile.instructions,
+          starter_prompts: profile.starterPrompts, system_kind: systemKind ?? null,
         }))) },
       { name: 'bot_create', label: 'Create specialist Bot', description: 'Create the focused Bot blueprint after the user confirms it.', parameters: architectCreate,
         execute: execute(architectCreate, (input, executionId, callId) => {
           const params = { operationId: `${executionId}:bot_create:${callId}`, input };
           const profile: BotProfile = { name: input.name.trim(), purpose: input.purpose.trim(), role: input.role?.trim() ?? '', workspace: '', codingTools: null,
+            ...(input.starter_prompts === undefined ? {} : { starterPrompts: input.starter_prompts }),
             instructions: formatTightBotInstructions({ job: input.job, voice: input.voice, antiJobs: input.anti_jobs, workflow: input.workflow }) };
           return architectResult(this.changeBot('bot_create', params, candidate => ({ bot: this.insertBot(candidate, profile), change: 'created' })));
         }) },
@@ -1278,7 +1296,8 @@ export class Product {
                 antiJobs: anti_jobs ?? saved.antiJobs, workflow: workflow ?? saved.workflow });
             }
             this.updateBotProfile(candidate, bot, { ...bot.profile, name: name?.trim() ?? bot.profile.name,
-              purpose: purpose?.trim() ?? bot.profile.purpose, role: role?.trim() ?? bot.profile.role, instructions });
+              purpose: purpose?.trim() ?? bot.profile.purpose, role: role?.trim() ?? bot.profile.role, instructions,
+              ...(input.starter_prompts === undefined ? {} : { starterPrompts: input.starter_prompts }) });
             return { bot, change: 'updated' };
           }));
         }) },

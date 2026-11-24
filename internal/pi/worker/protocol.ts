@@ -22,6 +22,7 @@ const page = {
 export const profileSchema = Type.Object({
   name: id, role: Type.String(), purpose: Type.String(), instructions: Type.String(),
   workspace: Type.String(), codingTools: Type.Union([Type.Null(), stringList]),
+  starterPrompts: Type.Optional(Type.Array(Type.String())),
 });
 export const botSystemKindSchema = Type.Literal(SYSTEM_KIND_BOT_ARCHITECT);
 const botResult = Type.Object({ botId: id, profile: profileSchema, profileRevision: revision, archived: Type.Boolean(),
@@ -157,7 +158,7 @@ export const productResults = {
   'app.open': Type.Object({ version: Type.Literal(1), streamId: id, eventSeq: revision, snapshot: Type.Object({ bots: Type.Array(botResult),
     nextBotCursor: nullable(id), connection: connectionResult, preferences: Type.Optional(Type.Object({ selectedBotId: Type.Optional(id),
       layout: Type.Optional(Type.Record(Type.String(), Type.Unknown())), themeIds: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
-      appearance: Type.Optional(Type.String()) })),
+      appearance: Type.Optional(Type.String()), hideBuiltinArchitect: Type.Optional(Type.Boolean()) })),
     recovery: Type.Optional(Type.Object({ id, ui: Type.Optional(Type.Record(Type.String(), Type.Unknown())) })) }) }),
   'bot.list': productPage(botResult),
   'bot.ensureBuiltin': botResult,
