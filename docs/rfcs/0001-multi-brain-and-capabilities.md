@@ -1,6 +1,6 @@
 # RFC-0001: Multi-Brain Execution, Direct Data Inspection & Unified Capabilities
 
-- **Status**: `Partially Implemented` (`M0a`, `M0b`, `M1` backend, `M2` backend implemented; UI handoffs delivered to `t1vb`; `M3`–`M4` planned)
+- **Status**: `Partially Implemented` (`M0a`, `M0b`, `M1`–`M3` backend implemented; UI handoffs delivered to `t1vb`; `M4` next)
 - **Baseline**: `dev` @ `a6d57f8`
 - **Reviewers**: Backend Architecture (`t21d`), Deep Technical Review (`t1jr` / Astra-6.2)
 - **Canonical Vocabulary**: [docs/design/glossary.md](../design/glossary.md)
@@ -12,7 +12,7 @@
 - [x] **M0b** — Go App (`internal/app/`) `Issue` → `Activity` Symbol Normalization *(promoted to [glossary.md](../design/glossary.md))*
 - [x] **M1 (Backend)** — Built-in Tool Presets (`none` / `readonly` / `workspace`) & Text Skills (`SKILL.md`, Global / Workspace / Bot-Authored, progressive L1 catalog, `skill.*` RPCs & Go client, single-JSON `backup.privateSkillBundles`) *(promoted to [product-protocol.md](../design/product-protocol.md) & [glossary.md](../design/glossary.md); UI handoff delivered to `t1vb`)*
 - [x] **M2 (Backend)** — Multi-Bot Pooled MCP Broker (`shared` / `per_workspace` / `per_bot`) & Private `0600` Credential Vault *(promoted to [product-protocol.md](../design/product-protocol.md) & [glossary.md](../design/glossary.md); UI handoff delivered to `t1vb`)*
-- [ ] **M3** — Executable Skill Sandbox (`scripts/*.mjs`, OS-Enforced Isolation, Mediated Pipe HTTP Bridge, Content-Addressed Approval)
+- [x] **M3 (Backend)** — Executable Skill Sandbox (`scripts/*.mjs`, OS-Enforced Seatbelt Isolation, Inherited-Pipe HTTP Bridge, Content-Addressed Approval) *(promoted to [product-protocol.md](../design/product-protocol.md) & [glossary.md](../design/glossary.md); UI handoff delivered to `t1vb`)*
 - [ ] **M4** — Multi-Provider Pool (`connection.json` v3), Four-Role Invisible Multi-Brain Routing & Side-Effect-Safe Escalation
 
 ## Summary & Five Architectural Axioms

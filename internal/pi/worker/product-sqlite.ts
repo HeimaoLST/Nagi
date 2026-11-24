@@ -4,11 +4,11 @@ import { basename, dirname, join } from 'node:path';
 import { DatabaseSync, type SQLOutputValue } from 'node:sqlite';
 import { decodeProductProfile, importProductSnapshot, type PrivateConnection, type ProductProfilePaths } from './product-profile.js';
 import type { ProductProfile } from './product.js';
-import { canonicalJSON, RequestError, type TraceItem } from './protocol.js';
+import { canonicalJSON, RequestError, type SkillApproval, type SkillSource, type TraceItem } from './protocol.js';
 import { type BotMemory, type BotWorkLog } from './bot-memory.js';
 import { maxExecutionTraces, maxProfileTraces, traceDetail, redactTrace, type TraceBackup, type TraceObservation, type TraceUpdate } from './product-trace.js';
 import { projectionRedactor } from './product-redactor.js';
-import { assertSkillSecretFree, type BotSkills, type SkillWrite } from './bot-skills.js';
+import { backupSkillFiles, checkedSkillFiles, type BotSkills, type SkillWrite } from './bot-skills.js';
 import type { McpVault, McpVaultWrite } from './mcp-vault.js';
 
 const MIGRATIONS = [`
@@ -91,11 +91,16 @@ const MIGRATIONS = [`
   INSERT INTO meta VALUES ('trace_generation', lower(hex(randomblob(16))));
 `, `
   CREATE TABLE mcp_servers (server_id TEXT PRIMARY KEY, sort_order INTEGER NOT NULL UNIQUE, config_json TEXT NOT NULL, catalog_json TEXT) STRICT;
+`, `
+  CREATE TABLE skill_approvals (grant_key TEXT PRIMARY KEY, owner_bot_id TEXT NOT NULL, source TEXT NOT NULL, skill_id TEXT NOT NULL,
+    approval_digest TEXT NOT NULL, permissions_digest TEXT NOT NULL, mode TEXT NOT NULL CHECK (mode IN ('pure_compute_tested','user_approved')),
+    installation_id TEXT NOT NULL, approved_at TEXT NOT NULL, record_json TEXT NOT NULL) STRICT;
 `];
 const LATEST_SCHEMA_VERSION = MIGRATIONS.length;
 
 type Snapshot = { data: Buffer; digest: string };
 type Mirror = { snapshot: Snapshot; previous: string | null; temp: string };
+export type SkillApprovalChange = { put: SkillApproval } | { source: SkillSource; skillId: string; botId?: string } | { credentialServerId: string } | { workspaceBotId: string };
 
 const encode = (value: unknown): string | null => JSON.stringify(value) ?? null;
 const decode = (value: SQLOutputValue): unknown => value === null ? undefined : JSON.parse(String(value));
@@ -134,7 +139,7 @@ export class ProductSQLite {
     }
   }
 
-  open(paths: ProductProfilePaths, credentials: PrivateConnection | undefined): ProductProfile {
+  open(paths: ProductProfilePaths, credentials: PrivateConnection | undefined, installationId: string): ProductProfile {
     let mirror: Mirror | undefined;
     let staged: string | undefined;
     let committed = false;
@@ -168,14 +173,22 @@ export class ProductSQLite {
         this.replaceProfile(profile, mirror);
         const redact = projectionRedactor([...Object.values(credentials?.sources ?? {}).map(source => source.api_key), ...this.vault?.keys() ?? []]);
         const writes: SkillWrite[] = (backup?.privateSkillBundles ?? []).map(row => {
-          assertSkillSecretFree(row.content, redact);
-          return { source: 'private', botId: row.ownerBotId, skillId: row.skillId, markdown: row.content };
+          const { 'SKILL.md': markdown, ...files } = backupSkillFiles(row);
+          checkedSkillFiles({ ...files, 'SKILL.md': markdown }, redact);
+          return { source: 'private', botId: row.ownerBotId, skillId: row.skillId, markdown, files };
         });
         if (writes.length) {
           staged = this.skills!.stage(writes);
           this.db.prepare("INSERT INTO meta (key, value) VALUES ('pending_skill_stage', ?)").run(staged);
         }
         this.replaceTraces(backup, redact);
+        const trusted = new Map(this.skillApprovals().map(row => [row.grantKey, row]));
+        this.db.exec('DELETE FROM skill_approvals');
+        for (const row of backup?.skillApprovals ?? []) {
+          if (row.mode === 'pure_compute_tested' || (row.installationId === installationId && canonicalJSON(trusted.get(row.grantKey)) === canonicalJSON(row))) {
+            this.putApproval(row);
+          }
+        }
         return profile;
       });
       committed = true;
@@ -190,7 +203,7 @@ export class ProductSQLite {
     }
   }
 
-  write(profile: ProductProfile, before: ProductProfile, skillWrite?: SkillWrite, mcpWrite?: McpVaultWrite): TraceUpdate[] {
+  write(profile: ProductProfile, before: ProductProfile, skillWrite?: SkillWrite, mcpWrite?: McpVaultWrite, approval?: SkillApprovalChange): TraceUpdate[] {
     let mirror: Mirror | undefined;
     let staged: string | undefined;
     let stagedVault: string | undefined;
@@ -212,6 +225,11 @@ export class ProductSQLite {
         }
         mirror = this.stageMirror(snapshotFor(profile), previous);
         this.replaceProfile(profile, mirror);
+        if (approval) this.changeApproval(approval);
+        const workspaces = new Map(before.bots.map(bot => [bot.botId, bot.profile.workspace]));
+        for (const bot of profile.bots) {
+          if (workspaces.has(bot.botId) && workspaces.get(bot.botId) !== bot.profile.workspace) this.changeApproval({ workspaceBotId: bot.botId });
+        }
         return this.recordTransitions(before, profile);
       });
       committed = true;
@@ -278,6 +296,35 @@ export class ProductSQLite {
     const ids = executionId === undefined ? [encode(activityId)] : [encode(activityId), encode(executionId)];
     return this.db.prepare(`SELECT * FROM activity_traces WHERE ${where} AND seq > ? AND seq <= ? ORDER BY seq LIMIT ?`)
       .all(...ids, after, through, limit).map(row => this.traceItem(row));
+  }
+
+  skillApprovals(): SkillApproval[] {
+    return this.db.prepare('SELECT record_json FROM skill_approvals ORDER BY grant_key').all().map(row => decode(row.record_json) as SkillApproval);
+  }
+
+  skillApproval(grantKey: string): SkillApproval | undefined {
+    return decode(this.db.prepare('SELECT record_json FROM skill_approvals WHERE grant_key = ?').get(grantKey)?.record_json ?? null) as SkillApproval | undefined;
+  }
+
+  private putApproval(row: SkillApproval): void {
+    this.db.prepare('INSERT OR REPLACE INTO skill_approvals VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(row.grantKey, row.ownerBotId,
+      row.source, row.skillId, row.approvalDigest, row.permissionsDigest, row.mode, row.installationId, row.approvedAt, encode(row));
+  }
+
+  private changeApproval(change: SkillApprovalChange): void {
+    if ('put' in change) {
+      this.db.prepare('DELETE FROM skill_approvals WHERE owner_bot_id = ? AND source = ? AND skill_id = ?').run(change.put.ownerBotId, change.put.source, change.put.skillId);
+      this.putApproval(change.put);
+    } else if ('workspaceBotId' in change) {
+      this.db.prepare('DELETE FROM skill_approvals WHERE owner_bot_id = ?').run(change.workspaceBotId);
+    } else if ('credentialServerId' in change) {
+      this.db.prepare(`DELETE FROM skill_approvals WHERE EXISTS (SELECT 1 FROM json_each(record_json, '$.credentialRefs')
+        WHERE instr(value, ?) = 1)`).run(`mcp:${change.credentialServerId}:`);
+    } else if (change.botId === undefined) {
+      this.db.prepare('DELETE FROM skill_approvals WHERE source = ? AND skill_id = ?').run(change.source, change.skillId);
+    } else {
+      this.db.prepare('DELETE FROM skill_approvals WHERE owner_bot_id = ? AND source = ? AND skill_id = ?').run(change.botId, change.source, change.skillId);
+    }
   }
 
   captureBackup(redact: (text: string) => string): { profile: ProductProfile; backup: TraceBackup } {

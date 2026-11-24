@@ -8,10 +8,11 @@ import { Value } from 'typebox/value';
 import { RequestError, activityStateSchema, botSystemKindSchema, connectionSchema, draftSchema, executionSchema, hasCanonicalQuoteText, materialSchema, mcpServerRecord,
   operationSchema, profileSchema, type ActivityState, type Connection, type Draft, type Execution, type Material, type Operation } from './protocol.js';
 import type { ProductProfile } from './product.js';
+import { skillApprovalRecord, type SkillApproval } from './protocol.js';
 import { lastingRulesFit, MAX_LOG_BYTES, MAX_PENDING_LEARNINGS, MAX_RULE_BYTES, MAX_WORK_LOGS,
   memorySnapshotSchema, validMemoryDate } from './bot-memory.js';
 import { decodeTraceBackup, directlyOwns, normalizeActivityGrants, type TraceBackup } from './product-trace.js';
-import { privateSkillBundleSchema, validateSkillBundles, type PrivateSkillBundle } from './bot-skills.js';
+import { backupSkillFiles, bundleDigest, executableBundle, privateSkillBundleSchema, pureSkill, skillGrantKey, validateSkillBundles, type PrivateSkillBundle } from './bot-skills.js';
 import { maxMcpServers, uniqueMcpRegistry, validMcpBindings, validMcpServer } from './mcp-broker.js';
 
 export type ProductProfilePaths = {
@@ -20,7 +21,7 @@ export type ProductProfilePaths = {
   fresh: boolean;
 };
 
-export type ProductBackup = TraceBackup & { privateSkillBundles?: PrivateSkillBundle[] };
+export type ProductBackup = TraceBackup & { privateSkillBundles?: PrivateSkillBundle[]; skillApprovals?: SkillApproval[] };
 
 type Credential = { api: 'openai-responses' | 'openai-chat-completions'; endpoint: string; api_key: string };
 export type PrivateConnection = {
@@ -266,13 +267,31 @@ export function decodeProductBackup(data: unknown): { profile: ProductProfile; b
   if (data && typeof data === 'object' && 'backup' in data) {
     const { backup, ...records } = data;
     const profile = decodeProductProfile(records);
-    if (backup && typeof backup === 'object' && 'privateSkillBundles' in backup) {
-      const { privateSkillBundles: bundles, ...traces } = backup;
+    if (!backup || typeof backup !== 'object') return { profile, backup: decodeTraceBackup(profile, backup) };
+    const { privateSkillBundles: bundles, skillApprovals: approvals, ...traces } = backup as Record<string, unknown>;
+    const botIds = new Set(profile.bots.map(bot => bot.botId));
+    if (bundles !== undefined) {
       if (!Value.Check(privateSkillBundles, bundles)) throw new RequestError('profile_unavailable', 'The recovery copy has an invalid private skill list');
-      validateSkillBundles(bundles, new Set(profile.bots.map(bot => bot.botId)));
-      return { profile, backup: { ...decodeTraceBackup(profile, traces), privateSkillBundles: bundles } };
+      validateSkillBundles(bundles, botIds);
     }
-    return { profile, backup: decodeTraceBackup(profile, backup) };
+    if (approvals !== undefined) {
+      if (!Value.Check(Type.Array(skillApprovalRecord, { maxItems: 8192 }), approvals) ||
+          new Set(approvals.map(row => row.grantKey)).size !== approvals.length) {
+        throw new RequestError('profile_unavailable', 'The recovery copy has invalid skill approvals');
+      }
+      const privateFiles = new Map((bundles ?? []).map(row => [JSON.stringify([row.ownerBotId, row.skillId]), backupSkillFiles(row)]));
+      for (const row of approvals) {
+        const files = privateFiles.get(JSON.stringify([row.ownerBotId, row.skillId]));
+        const bundle = row.source === 'private' && files ? executableBundle(files) : undefined;
+        if (!botIds.has(row.ownerBotId) || skillGrantKey(row) !== row.grantKey || !Number.isFinite(Date.parse(row.approvedAt)) ||
+            row.mode === 'pure_compute_tested' && (!row.testedScripts?.length || row.credentialRefs?.length) ||
+            row.source === 'private' && (!bundle || bundleDigest(row.ownerBotId, row.source, row.skillId, bundle.files) !== row.approvalDigest ||
+              row.testedScripts?.some(name => !Object.hasOwn(bundle.manifest.scripts, name) || !pureSkill(bundle.manifest.scripts[name].permissions)))) {
+          throw new RequestError('profile_unavailable', 'A recovery skill approval does not match its bundle');
+        }
+      }
+    }
+    return { profile, backup: { ...decodeTraceBackup(profile, traces), privateSkillBundles: bundles, skillApprovals: approvals } };
   }
   return { profile: decodeProductProfile(data) };
 }
