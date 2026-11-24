@@ -218,7 +218,7 @@ func TestConnectionRecoveryStatusAndOneClickSettings(t *testing.T) {
 				a.connectionSaved = &next
 				a.connectionForm = newConnectionSettings(&next, "")
 			},
-			wantHeader: "Ready",
+			wantHeader: "",
 			wantButton: false,
 		},
 		{
@@ -246,7 +246,14 @@ func TestConnectionRecoveryStatusAndOneClickSettings(t *testing.T) {
 			tc.setup(a, ct)
 			tr := ui.NewTester(a.view, 1040, 720)
 			tr.Frame()
-			if !tr.HasText(tc.wantHeader) {
+			if tc.wantHeader == "" {
+				msgs := locales.In("en")
+				for _, retired := range []string{msgs.StatusReady(), msgs.ConnectionStatusNotConnected(), msgs.ConnectionStatusSetupNeeded()} {
+					if tr.HasText(retired) {
+						t.Fatalf("healthy header unexpectedly rendered %q: %v", retired, tr.Texts())
+					}
+				}
+			} else if !tr.HasText(tc.wantHeader) {
 				t.Fatalf("header = %v, want %q", tr.Texts(), tc.wantHeader)
 			}
 			if tc.wantHint != "" && !tr.HasText(tc.wantHint) {
@@ -291,8 +298,8 @@ func TestConnectionRecoveryPreservesWorkingAndAttentionStatus(t *testing.T) {
 		send   sendState
 		want   string
 	}{
-		{name: "working", status: statusWorking, want: "Working"},
-		{name: "attention unknown", status: statusAttention, send: sendUnknown, want: "Needs attention"},
+		{name: "working", status: statusWorking, want: locales.In("en").BotStatusReplying()},
+		{name: "attention unknown", status: statusAttention, send: sendUnknown, want: locales.In("en").BotStatusNeedsAttention()},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			a, ct := workspaceTestApp(t)

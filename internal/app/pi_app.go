@@ -172,6 +172,9 @@ func (a *appModel) openProductProfile(ctx context.Context, fresh bool, generatio
 			ct.Context.Items = productTaskContext(draft.Materials)
 		}
 		applyProductExecution(ct, conversation.LatestExecution)
+		if !ct.Archived {
+			ct.activeActivities, _ = listBotActiveActivities(ctx, host.product, ct.ID)
+		}
 		if pending, ok := host.productPending[ct.ID]; ok && pending.ConversationID == ct.SessionID {
 			receipt, lookupErr := host.product.Operation(ctx, pending.OperationID)
 			if lookupErr == nil && receipt.Target.ConversationID == ct.SessionID && receipt.State != "pending" && receipt.State != "unknown" {
@@ -320,6 +323,9 @@ func (a *appModel) sendProductConversation(host *piAppHost, ct *contact) bool {
 			if receipt.State == "accepted" && receipt.Execution != nil {
 				if ct.SendState == sendSubmitting {
 					applyProductExecution(ct, receipt.Execution)
+					if receipt.Execution.State == "completed" {
+						a.recordBotCompletion(ct)
+					}
 				}
 				delete(host.productPending, ct.ID)
 				_ = a.persist()
@@ -446,11 +452,19 @@ func (a *appModel) applyProductEvent(host *piAppHost, event pi.ProductEvent) {
 		}
 		return
 	}
+	if event.Name == "activity.changed" {
+		var item pi.ProductActivitySummary
+		if json.Unmarshal(event.Data, &item) == nil && item.ActivityID != "" {
+			host.activityRevision++
+			a.applyBotActivityStatus(item)
+		}
+		return
+	}
 	var data pi.ProductExecutionEvent
 	if json.Unmarshal(event.Data, &data) != nil {
 		return
 	}
-	if data.ActivityID != "" && (event.Name == "activity.changed" || event.Name == "execution.started" || event.Name == "execution.settled") {
+	if data.ActivityID != "" && (event.Name == "execution.started" || event.Name == "execution.settled") {
 		host.activityRevision++
 		return
 	}
@@ -480,6 +494,9 @@ func (a *appModel) applyProductEvent(host *piAppHost, event pi.ProductEvent) {
 		case "execution.settled":
 			if ct.ActiveTaskID == data.ExecutionID {
 				applyProductExecution(ct, &pi.ProductExecution{ExecutionID: data.ExecutionID, State: data.State, Error: data.Error})
+				if data.State == "completed" {
+					a.recordBotCompletion(ct)
+				}
 				a.reloadProductConversation(host, ct)
 			}
 		case "conversation.changed":
@@ -586,6 +603,9 @@ func (a *appModel) reconcileProductStream(host *piAppHost) {
 				for _, ct := range a.contacts {
 					a.refreshProductConversation(host, ct, ct.draftRev)
 					a.reloadProductConversation(host, ct)
+					if !ct.Archived {
+						a.refreshBotActivityStatus(host, ct)
+					}
 				}
 			}
 		})

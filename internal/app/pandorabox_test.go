@@ -160,7 +160,7 @@ func TestPandoraBoxVisibilityToggleHiddenSummonAndEmptyRailRecovery(t *testing.T
 				t.Fatal("summoning hidden PandoraBox did not focus its composer")
 			}
 
-			if err := tr.RightClick("Bot Architect"); err != nil {
+			if err := tr.RightClick("PandoraBox"); err != nil {
 				t.Fatal(err)
 			}
 			tr.Frame()

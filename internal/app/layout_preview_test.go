@@ -102,12 +102,12 @@ func TestPreviewHeaderGrouping(t *testing.T) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	const longRole = "Assistant for release engineering, cross-functional verification and runtime diagnostics"
-	write := func(name, locale, role string, dark bool, setup func(*appModel, *contact)) {
+	const longPurpose = "Assistant for release engineering, cross-functional verification and runtime diagnostics"
+	write := func(name, locale, purpose string, dark bool, setup func(*appModel, *contact)) {
 		t.Helper()
 		a, ct := workspaceTestApp(t)
 		a.windowWidth = 960
-		ct.Role = role
+		ct.Purpose = purpose
 		if setup != nil {
 			setup(a, ct)
 		}
@@ -115,8 +115,8 @@ func TestPreviewHeaderGrouping(t *testing.T) {
 		tr.SetLocale(locale)
 		tr.SetDark(dark)
 		tr.Frame()
-		if !tr.HasText(role) {
-			t.Fatalf("header role %q missing: %v", role, tr.Texts())
+		if !tr.HasText(purpose) {
+			t.Fatalf("header purpose %q missing: %v", purpose, tr.Texts())
 		}
 		img := tr.Image()
 		if img.Bounds().Dx() != 960 || img.Bounds().Dy() != 640 {
@@ -136,7 +136,7 @@ func TestPreviewHeaderGrouping(t *testing.T) {
 		a.connectionEffective = &cfg
 		a.ensureConnectionForm()
 	})
-	write("header-960-dark-en-XA-long-role.png", "en-XA", longRole, true, func(a *appModel, _ *contact) {
+	write("header-960-dark-en-XA-long-role.png", "en-XA", longPurpose, true, func(a *appModel, _ *contact) {
 		a.pi = presentationPiHost(a)
 		a.runtimeStatus = runtimeStateReady
 	})

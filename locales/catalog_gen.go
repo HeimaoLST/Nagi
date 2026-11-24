@@ -2450,6 +2450,130 @@ func (msgs Messages) StatusReady() string {
 	return Catalog.Format(msgs.locale, "statusReady", nil)
 }
 
+// BotStatusReplying says "Replying…"
+// in the language the app shows.
+func BotStatusReplying() string { return In(i18n.Locale()).BotStatusReplying() }
+
+// BotStatusReplying says "Replying…"
+// in the language of msgs.
+func (msgs Messages) BotStatusReplying() string {
+	return Catalog.Format(msgs.locale, "botStatusReplying", nil)
+}
+
+// BotStatusReplyingWithTasks says "{count, plural, one {Replying · # active task} other {Replying · # active tasks}}"
+// in the language the app shows.
+func BotStatusReplyingWithTasks(count int) string {
+	return In(i18n.Locale()).BotStatusReplyingWithTasks(count)
+}
+
+// BotStatusReplyingWithTasks says "{count, plural, one {Replying · # active task} other {Replying · # active tasks}}"
+// in the language of msgs.
+func (msgs Messages) BotStatusReplyingWithTasks(count int) string {
+	return Catalog.Format(msgs.locale, "botStatusReplyingWithTasks", map[string]any{"count": count})
+}
+
+// BotStatusWorking says "{count, plural, one {Working in background · # task} other {Working in background · # tasks}}"
+// in the language the app shows.
+func BotStatusWorking(count int) string { return In(i18n.Locale()).BotStatusWorking(count) }
+
+// BotStatusWorking says "{count, plural, one {Working in background · # task} other {Working in background · # tasks}}"
+// in the language of msgs.
+func (msgs Messages) BotStatusWorking(count int) string {
+	return Catalog.Format(msgs.locale, "botStatusWorking", map[string]any{"count": count})
+}
+
+// BotStatusRailWorking says "{count, plural, one {# task running} other {# tasks running}}"
+// in the language the app shows.
+func BotStatusRailWorking(count int) string { return In(i18n.Locale()).BotStatusRailWorking(count) }
+
+// BotStatusRailWorking says "{count, plural, one {# task running} other {# tasks running}}"
+// in the language of msgs.
+func (msgs Messages) BotStatusRailWorking(count int) string {
+	return Catalog.Format(msgs.locale, "botStatusRailWorking", map[string]any{"count": count})
+}
+
+// BotStatusWaiting says "{count, plural, one {Waiting for you · # question} other {Waiting for you · # questions}}"
+// in the language the app shows.
+func BotStatusWaiting(count int) string { return In(i18n.Locale()).BotStatusWaiting(count) }
+
+// BotStatusWaiting says "{count, plural, one {Waiting for you · # question} other {Waiting for you · # questions}}"
+// in the language of msgs.
+func (msgs Messages) BotStatusWaiting(count int) string {
+	return Catalog.Format(msgs.locale, "botStatusWaiting", map[string]any{"count": count})
+}
+
+// BotStatusRailWaiting says "Waiting for you ({count, number})"
+// in the language the app shows.
+func BotStatusRailWaiting(count int) string { return In(i18n.Locale()).BotStatusRailWaiting(count) }
+
+// BotStatusRailWaiting says "Waiting for you ({count, number})"
+// in the language of msgs.
+func (msgs Messages) BotStatusRailWaiting(count int) string {
+	return Catalog.Format(msgs.locale, "botStatusRailWaiting", map[string]any{"count": count})
+}
+
+// BotStatusNeedsAttention says "Needs attention"
+// in the language the app shows.
+func BotStatusNeedsAttention() string { return In(i18n.Locale()).BotStatusNeedsAttention() }
+
+// BotStatusNeedsAttention says "Needs attention"
+// in the language of msgs.
+func (msgs Messages) BotStatusNeedsAttention() string {
+	return Catalog.Format(msgs.locale, "botStatusNeedsAttention", nil)
+}
+
+// BotStatusDone says "✓ Done"
+// in the language the app shows.
+func BotStatusDone() string { return In(i18n.Locale()).BotStatusDone() }
+
+// BotStatusDone says "✓ Done"
+// in the language of msgs.
+func (msgs Messages) BotStatusDone() string {
+	return Catalog.Format(msgs.locale, "botStatusDone", nil)
+}
+
+// BotStatusRailDone says "✓ Done"
+// in the language the app shows.
+func BotStatusRailDone() string { return In(i18n.Locale()).BotStatusRailDone() }
+
+// BotStatusRailDone says "✓ Done"
+// in the language of msgs.
+func (msgs Messages) BotStatusRailDone() string {
+	return Catalog.Format(msgs.locale, "botStatusRailDone", nil)
+}
+
+// BotStatusRailDoneWithSnippet says "✓ Done · {snippet}"
+// in the language the app shows.
+func BotStatusRailDoneWithSnippet(snippet string) string {
+	return In(i18n.Locale()).BotStatusRailDoneWithSnippet(snippet)
+}
+
+// BotStatusRailDoneWithSnippet says "✓ Done · {snippet}"
+// in the language of msgs.
+func (msgs Messages) BotStatusRailDoneWithSnippet(snippet string) string {
+	return Catalog.Format(msgs.locale, "botStatusRailDoneWithSnippet", map[string]any{"snippet": snippet})
+}
+
+// BotStatusAnswer says "Answer →"
+// in the language the app shows.
+func BotStatusAnswer() string { return In(i18n.Locale()).BotStatusAnswer() }
+
+// BotStatusAnswer says "Answer →"
+// in the language of msgs.
+func (msgs Messages) BotStatusAnswer() string {
+	return Catalog.Format(msgs.locale, "botStatusAnswer", nil)
+}
+
+// BotStatusViewTasks says "View tasks →"
+// in the language the app shows.
+func BotStatusViewTasks() string { return In(i18n.Locale()).BotStatusViewTasks() }
+
+// BotStatusViewTasks says "View tasks →"
+// in the language of msgs.
+func (msgs Messages) BotStatusViewTasks() string {
+	return Catalog.Format(msgs.locale, "botStatusViewTasks", nil)
+}
+
 // SettingsAdvancedIntro says "Read-only Runtime and startup diagnostics. Open connection settings to repair configuration."
 // in the language the app shows.
 func SettingsAdvancedIntro() string { return In(i18n.Locale()).SettingsAdvancedIntro() }
