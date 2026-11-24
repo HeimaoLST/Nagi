@@ -1,16 +1,18 @@
 --- a/ui/access.go
 +++ b/ui/access.go
-@@ -465,6 +465,9 @@
- 	if st := e.st; (st.vw <= 0 || st.vh <= 0) && e.w > 0 && e.h > 0 {
- 		n.States |= platform.AccessOffscreen
+@@ -1026,6 +1026,11 @@
+ 	if readOnly {
+ 		n.States |= platform.AccessReadOnly
  	}
 +	if ed := e.st.editor; ed != nil && e.flags&flagEditable != 0 && ed.password {
 +		n.States |= platform.AccessPassword
++		n.Value = ""
++		n.SelStart, n.SelEnd = 0, 0
 +	}
  	if disabled {
  		return
  	}
-@@ -495,9 +498,7 @@
+@@ -1057,9 +1062,7 @@
  			n.States |= platform.AccessMultiline
  		}
  		n.Placeholder = ed.placeholder
@@ -23,17 +25,25 @@
  		}
 --- a/internal/darwin/access.go
 +++ b/internal/darwin/access.go
-@@ -231,8 +231,17 @@
- // element, and reports whether its value changed.
+@@ -397,7 +397,7 @@
+ // secret reports whether n is a password field, whose text, as
+ // NSSecureTextField's, assistive technology never reads.
+ func secret(n platform.AccessNode) bool {
+-	return n.Role == platform.RoleTextField && n.States&platform.AccessPassword != 0
++	return n.States&platform.AccessPassword != 0
+ }
+ 
+ // textual reports whether elements of a role edit text: text fields and
+@@ -458,7 +458,16 @@
  func (el *accessElement) apply(n platform.AccessNode, fresh bool) (valueChanged bool) {
  	o := el.node
-+	if n.States&platform.AccessPassword != 0 {
++	if secret(n) {
 +		n.Value = ""
 +		n.SelStart, n.SelEnd = 0, 0
 +	}
  	el.node = n
  	obj := el.obj
-+	passwordChanged := (n.States^o.States)&platform.AccessPassword != 0
++	passwordChanged := secret(n) != secret(o)
 +	if passwordChanged {
 +		sendSuper(obj, "MyGoAccessibilityElement", sel("setAccessibilityValue:"), uintptr(nsString("")))
 +		sendSuper(obj, "MyGoAccessibilityElement", sel("setAccessibilitySelectedText:"), uintptr(nsString("")))
@@ -41,7 +51,7 @@
  	r, sr := roleOf(n)
  	if or, osr := roleOf(o); fresh || r != or || sr != osr {
  		send(obj, "setAccessibilityRole:", uintptr(nsString(r)))
-@@ -277,7 +286,7 @@
+@@ -503,7 +512,7 @@
  	// table tells (AXSelectedRowsChanged).
  	toggled := toggle(n.Role) && n.States&(platform.AccessChecked|platform.AccessMixed) != o.States&(platform.AccessChecked|platform.AccessMixed) ||
  		n.Role == platform.RoleDisclosure && n.States&platform.AccessExpanded != o.States&platform.AccessExpanded
@@ -50,7 +60,7 @@
  		n.Role == platform.RoleHeading && n.Level != o.Level {
  		send(obj, "setAccessibilityValue:", uintptr(valueOf(n)))
  		valueChanged = !fresh
-@@ -321,7 +330,7 @@
+@@ -551,7 +560,7 @@
  		}
  		send(obj, "setAccessibilityHelp:", uintptr(d))
  	}
@@ -59,57 +69,61 @@
  		text := []rune(n.Value)
  		a, b := max(0, min(n.SelStart, len(text))), max(0, min(n.SelEnd, len(text)))
  		send(obj, "setAccessibilityNumberOfCharacters:", uintptr(units(text)))
-@@ -601,6 +610,9 @@
- 		}),
+@@ -1103,6 +1112,10 @@
  		method("accessibilityAttributeValue:", func(self id, cmd objc.SEL, attr id) id {
  			if el := b().accessElementOf(self); el != nil {
-+				if el.node.States&platform.AccessPassword != 0 && (stringOf(attr) == "AXValue" || stringOf(attr) == "AXSelectedText") {
-+					return nsString("")
-+				}
  				switch stringOf(attr) {
++				case "AXValue", "AXSelectedText":
++					if secret(el.node) {
++						return nsString("")
++					}
  				case "AXInvalid":
  					if el.node.States&platform.AccessInvalid != 0 {
-@@ -708,17 +720,39 @@
+ 						return nsString("true")
+@@ -1350,25 +1363,38 @@
  				el.act(platform.AccessFocus, "")
  			}
  		}),
 +		method("accessibilityValue", func(self id, cmd objc.SEL) id {
-+			if el := b().accessElementOf(self); el != nil && el.node.States&platform.AccessPassword != 0 {
++			if el := b().accessElementOf(self); el != nil && secret(el.node) {
 +				return nsString("")
 +			}
 +			return sendSuper(self, "MyGoAccessibilityElement", cmd)
 +		}),
 +		method("accessibilitySelectedText", func(self id, cmd objc.SEL) id {
-+			if el := b().accessElementOf(self); el != nil && el.node.States&platform.AccessPassword != 0 {
++			if el := b().accessElementOf(self); el != nil && secret(el.node) {
 +				return nsString("")
 +			}
 +			return sendSuper(self, "MyGoAccessibilityElement", cmd)
 +		}),
  		method("setAccessibilityValue:", func(self id, cmd objc.SEL, value id) {
--			sendSuper(self, "MyGoAccessibilityElement", cmd, uintptr(value))
--			if el := b().accessElementOf(self); el != nil && textual(el.node.Role) {
-+			el := b().accessElementOf(self)
+-			// What assistive technology writes to a password field is
+-			// not kept, or any other could read it back; the content's
+-			// own value, empty, still is.
+ 			el := b().accessElementOf(self)
+-			if el == nil || !secret(el.node) || el.s.updating {
+-				sendSuper(self, "MyGoAccessibilityElement", cmd, uintptr(value))
 +			cached := value
-+			if el != nil && el.node.States&platform.AccessPassword != 0 {
++			if el != nil && secret(el.node) {
 +				cached = nsString("")
-+			}
+ 			}
 +			sendSuper(self, "MyGoAccessibilityElement", cmd, uintptr(cached))
-+			if el != nil && textual(el.node.Role) {
+ 			if el != nil && textual(el.node.Role) {
  				el.act(platform.AccessSetValue, stringOf(value))
  			}
  		}),
  		// Typing into a text field over its selection, as Voice Control,
  		// dictation and automation insert text (kAXSelectedTextAttribute).
  		method("setAccessibilitySelectedText:", func(self id, cmd objc.SEL, text id) {
--			sendSuper(self, "MyGoAccessibilityElement", cmd, uintptr(text))
--			if el := b().accessElementOf(self); el != nil && textual(el.node.Role) && el.node.Actions&platform.ActionSetValue != 0 {
-+			el := b().accessElementOf(self)
+ 			el := b().accessElementOf(self)
+-			if el == nil || !secret(el.node) {
+-				sendSuper(self, "MyGoAccessibilityElement", cmd, uintptr(text))
 +			cached := text
-+			if el != nil && el.node.States&platform.AccessPassword != 0 {
++			if el != nil && secret(el.node) {
 +				cached = nsString("")
-+			}
+ 			}
 +			sendSuper(self, "MyGoAccessibilityElement", cmd, uintptr(cached))
-+			if el != nil && textual(el.node.Role) && el.node.Actions&platform.ActionSetValue != 0 {
+ 			if el != nil && textual(el.node.Role) && el.node.Actions&platform.ActionSetValue != 0 {
  				el.act(platform.AccessInsertText, stringOf(text))
  			}
  		}),

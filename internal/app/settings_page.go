@@ -91,6 +91,7 @@ func (a *appModel) openSettingsTab(tab, source string) {
 		a.settingsReturnFocus = source
 		a.settingsFocusBack = true
 	}
+	a.resetComposerOverlays()
 	a.settingsOpen = true
 	a.settingsTab = tab
 	if tab == settingsTabAppearance {
@@ -148,11 +149,7 @@ func (a *appModel) closeSettings() {
 	case settingsSourceAux:
 		switch {
 		case a.aux == "task-context":
-			if a.composerInlineAux() {
-				a.composerFocusContext = true
-			} else {
-				a.focusAuxBack = true
-			}
+			a.focusAuxBack = true
 		default:
 			a.focusComposer = true
 		}

@@ -98,7 +98,7 @@ func (a *appModel) productConversationsView(c *ui.Context, t *ui.Theme, browser 
 }
 
 func (a *appModel) mainPageActive() bool {
-	return a.aux == "task-context" && !a.composerInlineAux()
+	return a.aux == "task-context"
 }
 
 func (a *appModel) focusDetailControl(c *ui.Context, button ui.Element) {

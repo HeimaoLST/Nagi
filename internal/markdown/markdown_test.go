@@ -1362,3 +1362,66 @@ func revealCopyTooltip(t *testing.T, tr *ui.Tester, label string) {
 	tr.Advance(700 * time.Millisecond)
 	tr.Frame()
 }
+
+func TestMarkdownDisablesMentionsAndReferencesExtensions(t *testing.T) {
+	const source = "Ping @cedar about #123 and check [real link](https://example.com/docs)."
+	var focused LinkTarget
+	var copied string
+	options := ReaderOptions{
+		CopyLabel: "Copy message",
+		CopyText: func(text string) error {
+			copied = text
+			return nil
+		},
+		LinkScope: "mentions-check",
+		LinkFocus: &focused,
+	}
+	tr := ui.NewTester(func(c *ui.Context) {
+		c.SetTheme(theme.ResolveWorkbenchTheme(false).Theme)
+		Reader(c, source, options)
+	}, 640, 240)
+	tr.SetFocused(true)
+	tr.Frame()
+
+	for _, want := range []string{"@cedar", "#123", "real link"} {
+		if !tr.HasText(want) {
+			t.Fatalf("reader missing %q: %v", want, tr.Texts())
+		}
+	}
+	for _, plain := range []string{"@cedar", "#123"} {
+		if _, found := tr.Find(plain); found {
+			t.Fatalf("plain token %q unexpectedly became a standalone link/element: %v", plain, tr.Texts())
+		}
+	}
+	seenRealLink := false
+	seenDest := ""
+	for range 12 {
+		tr.Key(0, ui.KeyTab)
+		tr.Frame()
+		if tr.Focused("@cedar") || tr.Focused("#123") {
+			t.Fatalf("Tab focused disabled mention/reference token: %+v", focused)
+		}
+		if focused.Dest != "" && focused.Dest != "https://example.com/docs" {
+			t.Fatalf("unexpected LinkFocus destination %+v", focused)
+		}
+		if tr.Focused("real link") {
+			seenRealLink = true
+			seenDest = focused.Dest
+		}
+	}
+	if !seenRealLink || seenDest != "https://example.com/docs" {
+		t.Fatalf("expected only real link to focus via LinkFocus: seen=%t dest=%q", seenRealLink, seenDest)
+	}
+	if err := tr.Click("real link"); err != nil {
+		t.Fatal(err)
+	}
+	if urls := tr.OpenedURLs(); len(urls) != 1 || urls[0] != "https://example.com/docs" {
+		t.Fatalf("opened URLs = %v, want only real link", urls)
+	}
+	if err := tr.Click("Copy message"); err != nil {
+		t.Fatal(err)
+	}
+	if copied != source {
+		t.Fatalf("copied = %q, want verbatim %q", copied, source)
+	}
+}

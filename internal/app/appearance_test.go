@@ -11,8 +11,6 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo/ui"
-
-	"github.com/HeimaoLST/Nagi/locales"
 )
 
 func TestAppearanceModeResolutionUsesDarkTheme(t *testing.T) {
@@ -226,26 +224,6 @@ func TestAppearanceFailedSaveKeepsModeAndRetryClearsWarning(t *testing.T) {
 	a.setAppearanceMode(appearanceDark)
 	if a.appearanceMode != appearanceDark || a.appearanceError != "" {
 		t.Fatalf("retry did not clear warning: mode=%q error=%q", a.appearanceMode, a.appearanceError)
-	}
-}
-
-func TestComposerModelSummary(t *testing.T) {
-	a := testApp(t)
-	a.selectContact(0)
-	a.contacts[0].SessionID = ""
-	a.contacts[0].Draft = "draft-kept"
-	a.connectionEffective = &connectionConfig{Model: "model-default"}
-	tr := ui.NewTester(a.view, 1040, 720)
-	tr.Frame()
-	head, tail := a.conversationModelDisplayParts(locales.In("en"), a.contacts[0])
-	if !tr.HasText(head) || !tr.HasText(tail) {
-		t.Fatalf("unbound conversation default is not explicit: %q", tr.Texts())
-	}
-	if tr.HasText("Task model") {
-		t.Fatal("issue model entry leaked into the conversation composer")
-	}
-	if a.selectedContact().Draft != "draft-kept" {
-		t.Fatal("rendering the model summary changed the draft")
 	}
 }
 

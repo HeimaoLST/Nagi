@@ -91,19 +91,27 @@ func TestAvatarSettingsResizeBackFocus(t *testing.T) {
 	})
 }
 
-func TestStopConversationKeepsVisibleTextAndModelScope(t *testing.T) {
+func TestStopConversationKeepsPrimarySlotWithoutModelScope(t *testing.T) {
 	a, ct := workspaceTestApp(t)
 	ct.SessionID = "s1"
 	ct.SessionModel = "gpt-fixture"
 	ct.ActiveTaskID = "task-live"
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	if !tr.HasText("Stop chat") || !tr.HasText("Chat") || !tr.HasText("gpt-fixture") {
-		t.Fatalf("stop/model scope missing: %v", tr.Texts())
-	}
-	rect, ok := tr.Find("Stop chat")
-	if !ok || rect.W < 80 || rect.H < 32 {
+	msgs := locales.In("en")
+	rect, ok := tr.Find(msgs.StopConversation())
+	if !ok || rect.W != 32 || rect.H != 32 {
 		t.Fatalf("stop control geometry = %+v/%v", rect, ok)
+	}
+	attach, attachOK := tr.Find(msgs.ComposerAttach())
+	if !attachOK || attach.W != 32 || attach.H != 32 || rect.X < attach.X+attach.W {
+		t.Fatalf("attach/stop geometry = attach=%+v(%v) stop=%+v", attach, attachOK, rect)
+	}
+	if _, sendOK := tr.Find(msgs.SendAction()); sendOK {
+		t.Fatal("running conversation kept Send alongside Stop chat")
+	}
+	if tr.HasText("Chat model") || tr.HasText("gpt-fixture") {
+		t.Fatalf("retired model chrome appeared in composer: %v", tr.Texts())
 	}
 	for _, text := range tr.Texts() {
 		if strings.Contains(text, "More") {

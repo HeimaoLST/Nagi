@@ -1810,6 +1810,172 @@ func (msgs Messages) ComposerTools() string {
 	return Catalog.Format(msgs.locale, "composerTools", nil)
 }
 
+// ComposerAttach says "Attach…"
+// in the language the app shows.
+func ComposerAttach() string { return In(i18n.Locale()).ComposerAttach() }
+
+// ComposerAttach says "Attach…"
+// in the language of msgs.
+func (msgs Messages) ComposerAttach() string {
+	return Catalog.Format(msgs.locale, "composerAttach", nil)
+}
+
+// ComposerAttachFile says "Attach file…"
+// in the language the app shows.
+func ComposerAttachFile() string { return In(i18n.Locale()).ComposerAttachFile() }
+
+// ComposerAttachFile says "Attach file…"
+// in the language of msgs.
+func (msgs Messages) ComposerAttachFile() string {
+	return Catalog.Format(msgs.locale, "composerAttachFile", nil)
+}
+
+// ComposerAttachFilesAction says "Attach"
+// in the language the app shows.
+func ComposerAttachFilesAction() string { return In(i18n.Locale()).ComposerAttachFilesAction() }
+
+// ComposerAttachFilesAction says "Attach"
+// in the language of msgs.
+func (msgs Messages) ComposerAttachFilesAction() string {
+	return Catalog.Format(msgs.locale, "composerAttachFilesAction", nil)
+}
+
+// ComposerAddTextNote says "Add text note…"
+// in the language the app shows.
+func ComposerAddTextNote() string { return In(i18n.Locale()).ComposerAddTextNote() }
+
+// ComposerAddTextNote says "Add text note…"
+// in the language of msgs.
+func (msgs Messages) ComposerAddTextNote() string {
+	return Catalog.Format(msgs.locale, "composerAddTextNote", nil)
+}
+
+// ComposerTextNoteTitle says "Add text note"
+// in the language the app shows.
+func ComposerTextNoteTitle() string { return In(i18n.Locale()).ComposerTextNoteTitle() }
+
+// ComposerTextNoteTitle says "Add text note"
+// in the language of msgs.
+func (msgs Messages) ComposerTextNoteTitle() string {
+	return Catalog.Format(msgs.locale, "composerTextNoteTitle", nil)
+}
+
+// ComposerAddNoteAction says "Add"
+// in the language the app shows.
+func ComposerAddNoteAction() string { return In(i18n.Locale()).ComposerAddNoteAction() }
+
+// ComposerAddNoteAction says "Add"
+// in the language of msgs.
+func (msgs Messages) ComposerAddNoteAction() string {
+	return Catalog.Format(msgs.locale, "composerAddNoteAction", nil)
+}
+
+// ComposerDropFiles says "Drop files to attach"
+// in the language the app shows.
+func ComposerDropFiles() string { return In(i18n.Locale()).ComposerDropFiles() }
+
+// ComposerDropFiles says "Drop files to attach"
+// in the language of msgs.
+func (msgs Messages) ComposerDropFiles() string {
+	return Catalog.Format(msgs.locale, "composerDropFiles", nil)
+}
+
+// ComposerRemoveAttachment says "Remove {name}"
+// in the language the app shows.
+func ComposerRemoveAttachment(name string) string {
+	return In(i18n.Locale()).ComposerRemoveAttachment(name)
+}
+
+// ComposerRemoveAttachment says "Remove {name}"
+// in the language of msgs.
+func (msgs Messages) ComposerRemoveAttachment(name string) string {
+	return Catalog.Format(msgs.locale, "composerRemoveAttachment", map[string]any{"name": name})
+}
+
+// ComposerFileChooserFailed says "Could not open the file chooser. Try again."
+// in the language the app shows.
+func ComposerFileChooserFailed() string { return In(i18n.Locale()).ComposerFileChooserFailed() }
+
+// ComposerFileChooserFailed says "Could not open the file chooser. Try again."
+// in the language of msgs.
+func (msgs Messages) ComposerFileChooserFailed() string {
+	return Catalog.Format(msgs.locale, "composerFileChooserFailed", nil)
+}
+
+// ComposerDismissAttachmentError says "Dismiss attachment error"
+// in the language the app shows.
+func ComposerDismissAttachmentError() string {
+	return In(i18n.Locale()).ComposerDismissAttachmentError()
+}
+
+// ComposerDismissAttachmentError says "Dismiss attachment error"
+// in the language of msgs.
+func (msgs Messages) ComposerDismissAttachmentError() string {
+	return Catalog.Format(msgs.locale, "composerDismissAttachmentError", nil)
+}
+
+// ComposerPathReference says "File path reference"
+// in the language the app shows.
+func ComposerPathReference() string { return In(i18n.Locale()).ComposerPathReference() }
+
+// ComposerPathReference says "File path reference"
+// in the language of msgs.
+func (msgs Messages) ComposerPathReference() string {
+	return Catalog.Format(msgs.locale, "composerPathReference", nil)
+}
+
+// ComposerPathReferenceDetails says "{size} · Attached by local path for the Bot to inspect"
+// in the language the app shows.
+func ComposerPathReferenceDetails(size string) string {
+	return In(i18n.Locale()).ComposerPathReferenceDetails(size)
+}
+
+// ComposerPathReferenceDetails says "{size} · Attached by local path for the Bot to inspect"
+// in the language of msgs.
+func (msgs Messages) ComposerPathReferenceDetails(size string) string {
+	return Catalog.Format(msgs.locale, "composerPathReferenceDetails", map[string]any{"size": size})
+}
+
+// ComposerMaterialTitle says "Edit material"
+// in the language the app shows.
+func ComposerMaterialTitle() string { return In(i18n.Locale()).ComposerMaterialTitle() }
+
+// ComposerMaterialTitle says "Edit material"
+// in the language of msgs.
+func (msgs Messages) ComposerMaterialTitle() string {
+	return Catalog.Format(msgs.locale, "composerMaterialTitle", nil)
+}
+
+// ComposerMaterialClose says "Close"
+// in the language the app shows.
+func ComposerMaterialClose() string { return In(i18n.Locale()).ComposerMaterialClose() }
+
+// ComposerMaterialClose says "Close"
+// in the language of msgs.
+func (msgs Messages) ComposerMaterialClose() string {
+	return Catalog.Format(msgs.locale, "composerMaterialClose", nil)
+}
+
+// ComposerMaterialRefresh says "Refresh"
+// in the language the app shows.
+func ComposerMaterialRefresh() string { return In(i18n.Locale()).ComposerMaterialRefresh() }
+
+// ComposerMaterialRefresh says "Refresh"
+// in the language of msgs.
+func (msgs Messages) ComposerMaterialRefresh() string {
+	return Catalog.Format(msgs.locale, "composerMaterialRefresh", nil)
+}
+
+// ComposerMaterialSave says "Save"
+// in the language the app shows.
+func ComposerMaterialSave() string { return In(i18n.Locale()).ComposerMaterialSave() }
+
+// ComposerMaterialSave says "Save"
+// in the language of msgs.
+func (msgs Messages) ComposerMaterialSave() string {
+	return Catalog.Format(msgs.locale, "composerMaterialSave", nil)
+}
+
 // StopConversation says "Stop chat"
 // in the language the app shows.
 func StopConversation() string { return In(i18n.Locale()).StopConversation() }

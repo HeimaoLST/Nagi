@@ -165,3 +165,87 @@ func TestBubbleContactContrastAndTonalSeparation(t *testing.T) {
 		})
 	}
 }
+
+func TestComposerThemeContrastAndDefaultRailWidth(t *testing.T) {
+	if DefaultLeftPaneWidth != 272 || EffectiveCenterWidth != 516 {
+		t.Fatalf("layout widths = left:%g center:%g, want 272/516", DefaultLeftPaneWidth, EffectiveCenterWidth)
+	}
+	makeCustom := func(id, kind, bg, surface, text, muted string) WorkbenchTheme {
+		t.Helper()
+		payload := map[string]any{
+			"version": 1,
+			"id":      id,
+			"name":    id,
+			"kind":    kind,
+			"colors": map[string]string{
+				"background":      bg,
+				"surface":         surface,
+				"surface_hover":   "#2C2E28",
+				"surface_pressed": "#363830",
+				"border":          "#555555",
+				"text":            text,
+				"text_muted":      muted,
+				"accent":          "#3B6EA5",
+				"accent_hover":    "#487BB2",
+				"accent_pressed":  "#2D5A8B",
+				"accent_text":     "#FFFFFF",
+				"selection":       "#333333",
+				"focus":           "#777777",
+				"danger":          "#C43D44",
+				"warning":         "#A66D00",
+				"success":         "#2E6B45",
+				"rail":            bg,
+				"panel":           surface,
+				"bubble_user":     "#DDE8DD",
+				"bubble_contact":  surface,
+			},
+		}
+		data, err := json.Marshal(payload)
+		if err != nil {
+			t.Fatal(err)
+		}
+		custom, fileErr := decodeCustomTheme(id+".json", data)
+		if fileErr != nil {
+			t.Fatalf("decodeCustomTheme(%s): %+v", id, fileErr)
+		}
+		return custom.Palette
+	}
+
+	cases := []struct {
+		name    string
+		palette WorkbenchTheme
+	}{
+		{"builtin light", ResolveWorkbenchTheme(false)},
+		{"builtin dark", ResolveWorkbenchTheme(true)},
+		{"custom light low contrast muted", makeCustom("custom-composer-light", AppearanceLight, "#F6F6F2", "#FFFFFF", "#2A2B28", "#A3A59E")},
+		{"custom dark low contrast muted", makeCustom("custom-composer-dark", AppearanceDark, "#14161A", "#1E2026", "#E5E7EB", "#59606D")},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := tc.palette
+			if p.ComposerSurface.A != 255 || p.ComposerBorder.A != 255 || p.ComposerChipBg.A != 255 {
+				t.Fatalf("composer tokens must be opaque: surface=%+v border=%+v chip=%+v", p.ComposerSurface, p.ComposerBorder, p.ComposerChipBg)
+			}
+			for _, bg := range []struct {
+				name  string
+				color ui.Color
+			}{
+				{"ComposerSurface", p.ComposerSurface},
+				{"ComposerChipBg", p.ComposerChipBg},
+			} {
+				for _, ink := range []struct {
+					name  string
+					color ui.Color
+				}{
+					{"ComposerText", p.ComposerText},
+					{"ComposerMuted", p.ComposerMuted},
+				} {
+					if ratio := PaletteContrast(ink.color, bg.color); ratio < 4.5 {
+						t.Fatalf("%s on %s contrast = %.3f, want >= 4.5", ink.name, bg.name, ratio)
+					}
+				}
+			}
+		})
+	}
+}

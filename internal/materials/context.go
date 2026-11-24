@@ -40,6 +40,7 @@ var (
 	ErrRead        = errors.New("could not read the Material file")
 	ErrMissing     = errors.New("the Material no longer exists")
 	ErrNoSource    = errors.New("this Material has no file source")
+	ErrFileChooser = errors.New("could not open the attachment file chooser")
 )
 
 type Error struct {
@@ -156,6 +157,72 @@ func (tc *Context) ImportFile(path, name string) (Item, error) {
 	return tc.addItem(name, source, text)
 }
 
+func (tc *Context) AttachFile(path, name string) (Item, error) {
+	text, source, err := readAttachment(path)
+	if err != nil {
+		return Item{}, err
+	}
+	if strings.TrimSpace(name) == "" {
+		name = filepath.Base(source)
+	}
+	return tc.addItem(name, source, text)
+}
+
+const pathReferencePrefix = "Local file attachment (path reference)\nPath: "
+const pathReferenceSuffix = "\nThis binary or large file is attached by local path for agent tools to inspect."
+
+func IsPathReference(item Item) bool {
+	return PathReferenceSize(item) != ""
+}
+
+func PathReferenceSize(item Item) string {
+	if item.Source == "" || !strings.HasPrefix(item.Text, pathReferencePrefix) {
+		return ""
+	}
+	size, ok := strings.CutPrefix(item.Text, pathReferencePrefix+strconv.Quote(item.Source)+"\nSize: ")
+	if !ok {
+		return ""
+	}
+	size, ok = strings.CutSuffix(size, pathReferenceSuffix)
+	if !ok || strings.ContainsRune(size, '\n') {
+		return ""
+	}
+	return size
+}
+
+func readAttachment(path string) (text, source string, err error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return "", "", Detail(ErrRead, "enter a file path")
+	}
+	source, err = filepath.Abs(path)
+	if err != nil {
+		return "", "", Detail(ErrRead, err.Error())
+	}
+	info, err := os.Stat(source)
+	if err != nil {
+		return "", "", Detail(ErrRead, err.Error())
+	}
+	if !info.Mode().IsRegular() {
+		return "", "", Detail(ErrRead, filepath.Base(source)+" is not a regular file")
+	}
+	if info.Size() <= MaxBytes {
+		text, _, err = readFile(source)
+		if err == nil {
+			return text, source, nil
+		}
+		if !errors.Is(err, ErrUnsupported) && !errors.Is(err, ErrUTF8) && !errors.Is(err, ErrNotText) {
+			return "", "", err
+		}
+	}
+	file, err := os.Open(source)
+	if err != nil {
+		return "", "", Detail(ErrRead, err.Error())
+	}
+	file.Close()
+	return pathReferencePrefix + strconv.Quote(source) + "\nSize: " + FormatSize(info.Size()) + pathReferenceSuffix, source, nil
+}
+
 // Refresh re-reads the original source path into a new revision. On any
 // failure the previous snapshot is left unchanged.
 func (tc *Context) Refresh(id string) (Item, error) {
@@ -166,7 +233,11 @@ func (tc *Context) Refresh(id string) (Item, error) {
 		if current.Source == "" {
 			return Item{}, ErrNoSource
 		}
-		text, source, err := readFile(current.Source)
+		read := readFile
+		if IsPathReference(current) {
+			read = readAttachment
+		}
+		text, source, err := read(current.Source)
 		if err != nil {
 			return Item{}, err
 		}
@@ -195,6 +266,9 @@ func (tc *Context) Edit(id, name, text string) (Item, error) {
 		}
 		previous := tc.Snapshot()
 		next := current
+		if IsPathReference(current) {
+			text = current.Text
+		}
 		next.Name, next.Text, next.Revision = strings.TrimSpace(name), text, current.Revision+1
 		items := store.CloneTaskContextItems(previous)
 		items[index] = next
@@ -534,8 +608,13 @@ func (tc *Context) formView(c *ui.Context, wb theme.WorkbenchTheme) {
 			ui.Text(c, locales.In(c.Locale()).TaskContextName()).FontSize(theme.TypeLabel).FontWeight(400).FixedLineHeight(theme.LineLabel).TextColor(t.Text)
 			theme.PreferenceInput(c, &tc.FormName, false, wb.InputBorder).Label(locales.In(c.Locale()).TaskContextNameLabel()).Placeholder(locales.In(c.Locale()).TaskContextNamePlaceholder())
 			ui.Text(c, locales.In(c.Locale()).TaskContextText()).FontSize(theme.TypeLabel).FontWeight(400).FixedLineHeight(theme.LineLabel).TextColor(t.Text)
-			theme.FormTextArea(c, &tc.FormText, false, wb.InputBorder).Label(locales.In(c.Locale()).TaskContextTextLabel()).Height(84).Placeholder(locales.In(c.Locale()).TaskContextTextPlaceholder())
-			if tc.FormMode == "edit" && tc.FormPath != "" {
+			item, _ := tc.ItemByID(tc.FormID)
+			if size := PathReferenceSize(item); size != "" {
+				ui.Text(c, locales.In(c.Locale()).ComposerPathReferenceDetails(size)).FontSize(theme.TypeMeta).FixedLineHeight(theme.LineMeta).TextColor(t.TextMuted)
+			} else {
+				theme.FormTextArea(c, &tc.FormText, false, wb.InputBorder).Label(locales.In(c.Locale()).TaskContextTextLabel()).Height(84).Placeholder(locales.In(c.Locale()).TaskContextTextPlaceholder())
+			}
+			if tc.FormMode == "edit" && tc.FormPath != "" && !IsPathReference(item) {
 				ui.Text(c, locales.In(c.Locale()).TaskContextEditHint()).FontSize(theme.TypeMeta).FixedLineHeight(theme.LineMeta).TextColor(t.TextMuted)
 			}
 		}
@@ -600,6 +679,8 @@ func ErrorText(msgs locales.Messages, err error) string {
 			return msgs.TaskContextErrUnsupportedDetail(detail)
 		}
 		return msgs.TaskContextErrUnsupported()
+	case errors.Is(err, ErrFileChooser):
+		return msgs.ComposerFileChooserFailed()
 	case errors.Is(err, ErrRead):
 		if detail != "" {
 			return msgs.TaskContextErrReadDetail(detail)
@@ -618,6 +699,9 @@ func sourceLabel(msgs locales.Messages, item Item) string {
 	if item.Source == "" {
 		return msgs.TaskContextSourceNamed()
 	}
+	if IsPathReference(item) {
+		return msgs.ComposerPathReference()
+	}
 	return msgs.TaskContextSourceFile(strconv.FormatUint(item.Revision, 10))
 }
 
@@ -626,8 +710,18 @@ func sizeLabel(tc *Context) string {
 	for _, item := range tc.Items {
 		total += WrapperBytes(item.InputName(), item.Text)
 	}
-	if total < 1024 {
-		return fmt.Sprintf("%d B", total)
+	return FormatSize(int64(total))
+}
+
+func FormatSize(bytes int64) string {
+	switch {
+	case bytes < 1024:
+		return fmt.Sprintf("%d B", bytes)
+	case bytes < 1024*1024:
+		return fmt.Sprintf("%.1f KiB", float64(bytes)/1024)
+	case bytes < 1024*1024*1024:
+		return fmt.Sprintf("%.1f MiB", float64(bytes)/(1024*1024))
+	default:
+		return fmt.Sprintf("%.1f GiB", float64(bytes)/(1024*1024*1024))
 	}
-	return fmt.Sprintf("%.1f KiB", float64(total)/1024)
 }

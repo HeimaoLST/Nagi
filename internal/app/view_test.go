@@ -45,12 +45,13 @@ func TestTitleBarKeepsNavigationOutsideNativeControls(t *testing.T) {
 					a.workspaceOpen = false
 					ct := a.selectedContact()
 					ct.Draft = "keep the titlebar draft"
-					labels := []string{"Composer for Nagi", "Chat model", "Send"}
+					msgs := locales.In("en")
+					labels := []string{"Composer for Nagi", msgs.ComposerAttach(), "Send"}
 					closeLabel := ""
 					switch scene {
 					case "collapsed":
 						a.railCollapsed = true
-						labels = append(labels, locales.In("en").RailContactsTitle())
+						labels = append(labels, msgs.RailContactsTitle())
 					case "profile":
 						a.openContactProfile(ct.ID)
 						closeLabel = "Close profile"
@@ -69,8 +70,8 @@ func TestTitleBarKeepsNavigationOutsideNativeControls(t *testing.T) {
 						if !ok || r.W <= 0 || r.H <= 0 || r.X < 0 || r.X+r.W > float32(width) || r.Y < 0 || overlapsControls || r.Y+r.H > 640 {
 							t.Fatalf("%q collides with native controls or leaves the window: visible=%v bounds=%+v", label, ok, r)
 						}
-						if label == "Send" && (r.W < 32 || r.H < 32) {
-							t.Fatalf("Send target was clipped: %+v", r)
+						if (label == "Send" || label == msgs.ComposerAttach()) && (r.W < 32 || r.H < 32) {
+							t.Fatalf("%s target was clipped: %+v", label, r)
 						}
 					}
 					if closeLabel != "" {
@@ -723,54 +724,6 @@ func TestContactRailControlsStayVisibleAtNarrowWidths(t *testing.T) {
 	}
 }
 
-func TestComposerInlineContextReturnFocus(t *testing.T) {
-	a := testApp(t)
-	ct := a.selectedContact()
-	ct.Context.Items = []taskContextItem{
-		{ID: "p1", Name: "资料一", Text: "第一条"},
-		{ID: "p2", Name: "资料二", Text: "第二条"},
-	}
-	tr := ui.NewTester(a.view, 1040, 720)
-	tr.Frame()
-
-	if err := tr.Click(contextLabelForTest(2)); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if a.aux != "task-context" || !a.composerInlineAux() || !tr.HasText("Chat: Nagi") || !tr.HasText("资料一") {
-		t.Fatalf("inline context = aux=%q panel=%q texts=%v", a.aux, a.composerPanel, tr.Texts())
-	}
-	if err := tr.Click(locales.In("en").CloseTaskContext()); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	if a.aux != "" || a.composerPanel != "" || !tr.Focused(contextLabelForTest(2)) {
-		t.Fatalf("Materials close = aux=%q panel=%q focused=%v", a.aux, a.composerPanel, tr.Focused(contextLabelForTest(2)))
-	}
-
-	if err := tr.Click(contextLabelForTest(2)); err != nil {
-		t.Fatal(err)
-	}
-	tr.Frame()
-	a.selectContact(1)
-	tr.Frame()
-	if a.aux != "" || a.composerPanel != "" || a.composerInlineAux() {
-		t.Fatalf("contact switch kept stale inline context: aux=%q panel=%q texts=%v", a.aux, a.composerPanel, tr.Texts())
-	}
-	a.selectContact(0)
-	tr.Frame()
-
-	// The visible model label is the selected contact's value, not a stale
-	// value left by another contact.
-	a.contacts[1].SessionID = "session-mio"
-	a.contacts[1].SessionModel = "model-mio"
-	a.selectContact(1)
-	tr.Frame()
-	if !tr.HasText("model-mio") || tr.HasText("model-default") {
-		t.Fatalf("selected contact model label crossed contacts: %v", tr.Texts())
-	}
-}
-
 func TestResponsiveComposerAt960WithLoadedSession(t *testing.T) {
 	a, ct := appReadingTestApp(t)
 	a.windowWidth = 960
@@ -789,6 +742,7 @@ func TestResponsiveComposerAt960WithLoadedSession(t *testing.T) {
 	if a.workOverlay() || !a.avatarRailActive() {
 		t.Fatal("960 should use the avatar three-pane layout")
 	}
+	msgs := locales.In("en")
 	composer, ok := tr.Find("Composer for Nagi")
 	if !ok || composer.W <= 0 || composer.W-4 < 440 {
 		t.Fatalf("960 loaded composer=%+v ok=%v content=%g", composer, ok, composer.W-4)
@@ -801,24 +755,14 @@ func TestResponsiveComposerAt960WithLoadedSession(t *testing.T) {
 		}
 		return r
 	}
-	model := within("Chat model")
-	within("Chat")
-	within(contextLabelForTest(1))
-	send := within("Send")
-	if send.X < model.X+model.W {
-		t.Fatalf("960 Send overlaps model: send=%+v model=%+v", send, model)
+	attach := within(msgs.ComposerAttach())
+	within("资料")
+	send := within(msgs.SendAction())
+	if attach.W != 32 || attach.H != 32 || send.W != 32 || send.H != 32 || send.X < attach.X+attach.W {
+		t.Fatalf("960 toolbar geometry = attach=%+v send=%+v", attach, send)
 	}
-	head, tail := a.conversationModelDisplayParts(locales.In("en"), ct)
-	visibleModel := head
-	if tail != "" {
-		visibleModel = tail
-	}
-	if visibleModel == "" || !tr.HasText(visibleModel) {
-		t.Fatalf("960 visible model suffix %q missing: %v", visibleModel, tr.Texts())
-	}
-	showPreviewTooltip(t, tr, "Chat model")
-	if !tr.HasText(ct.SessionModel) {
-		t.Fatalf("960 model tooltip missing full ID: %v", tr.Texts())
+	if tr.HasText("Chat model") || tr.HasText(ct.SessionModel) {
+		t.Fatalf("960 composer rendered retired model chrome: %v", tr.Texts())
 	}
 
 	a.demo = false
@@ -829,28 +773,31 @@ func TestResponsiveComposerAt960WithLoadedSession(t *testing.T) {
 	if !ok || composer.W-4 < 440 {
 		t.Fatalf("960 Stop composer=%+v ok=%v content=%g", composer, ok, composer.W-4)
 	}
-	stop := within("Stop chat")
-	model = within("Chat model")
-	if stop.X < model.X+model.W || tr.HasText("Send") {
-		t.Fatalf("960 Stop geometry = stop=%+v model=%+v texts=%v", stop, model, tr.Texts())
+	stop := within(msgs.StopConversation())
+	attach = within(msgs.ComposerAttach())
+	if stop.W != 32 || stop.H != 32 || stop.X < attach.X+attach.W {
+		t.Fatalf("960 Stop geometry = stop=%+v attach=%+v", stop, attach)
+	}
+	if _, sendFound := tr.Find(msgs.SendAction()); sendFound {
+		t.Fatal("960 running conversation kept Send alongside Stop chat")
 	}
 }
 
-func TestComposerKeepsModelScopeAndPrimaryActionAtNarrowCenter(t *testing.T) {
+func TestComposerKeepsAttachAndPrimaryActionAtNarrowCenter(t *testing.T) {
 	a := testApp(t)
 	a.windowWidth = 1040
 	a.leftPaneWidth = defaultLeftPaneWidth
-	a.rightPaneWidth = 358 // leaves the real minimum 480px center beside the work pane
+	a.rightPaneWidth = 358
 	a.openContactProfile(a.selectedID())
 	ct := a.selectedContact()
-	ct.SessionID = "long-model-session"
-	ct.SessionModel = "provider/very-long-model-name-that-must-not-push-the-action-out-of-the-composer"
+	ct.SessionID = "narrow-center-session"
 	ct.Draft = "保留这段草稿"
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
 	if a.workOverlay() {
 		t.Fatal("test setup must keep the three-pane center")
 	}
+	msgs := locales.In("en")
 	composer, ok := tr.Find("Composer for Nagi")
 	if !ok || composer.W <= 0 {
 		t.Fatalf("composer bounds missing: %+v ok=%v", composer, ok)
@@ -864,25 +811,15 @@ func TestComposerKeepsModelScopeAndPrimaryActionAtNarrowCenter(t *testing.T) {
 		}
 		return r
 	}
-	model := withinComposer("Chat model")
-	scope := withinComposer("Chat")
-	if scope.X < model.X || scope.X+scope.W > model.X+model.W {
-		t.Fatalf("model scope is outside its chip: scope=%+v model=%+v", scope, model)
+	attach := withinComposer(msgs.ComposerAttach())
+	send := withinComposer(msgs.SendAction())
+	if attach.W != 32 || attach.H != 32 || send.W != 32 || send.H != 32 || send.X < attach.X+attach.W {
+		t.Fatalf("narrow center toolbar geometry = attach=%+v send=%+v", attach, send)
 	}
-	head, tail := a.conversationModelDisplayParts(locales.In("en"), ct)
-	visibleModel := head
-	if tail != "" {
-		visibleModel = tail
-	}
-	if visibleModel == "" || !tr.HasText(visibleModel) {
-		t.Fatalf("model text %q missing: %v", visibleModel, tr.Texts())
-	}
-	send := withinComposer("Send")
-	if send.X < model.X+model.W {
-		t.Fatalf("send action overlaps the model chip: send=%+v model=%+v", send, model)
+	if tr.HasText("Chat model") {
+		t.Fatalf("narrow center composer rendered retired model chrome: %v", tr.Texts())
 	}
 
-	// A running conversation replaces Send with the same fixed Stop target.
 	a.demo = false
 	a.runtimeStatus = runtimeStateReady
 	a.runtimeCapabilitiesLoaded = true
@@ -894,15 +831,14 @@ func TestComposerKeepsModelScopeAndPrimaryActionAtNarrowCenter(t *testing.T) {
 		t.Fatalf("composer bounds missing after stop switch: %+v ok=%v", composer, ok)
 	}
 	left, right = composer.X, composer.X+composer.W
-	model = withinComposer("Chat model")
-	stop := withinComposer("Stop chat")
-	if stop.X < model.X+model.W {
-		t.Fatalf("stop action overlaps the model chip: stop=%+v model=%+v", stop, model)
+	attach = withinComposer(msgs.ComposerAttach())
+	stop := withinComposer(msgs.StopConversation())
+	if stop.W != 32 || stop.H != 32 || stop.X < attach.X+attach.W {
+		t.Fatalf("stop action geometry = stop=%+v attach=%+v", stop, attach)
 	}
-	if tr.HasText("Send") {
+	if _, sendFound := tr.Find(msgs.SendAction()); sendFound {
 		t.Fatal("running conversation kept the Send action instead of Stop chat")
 	}
-
 }
 
 // TestPreviewComposerTypography always exercises the composer geometry matrix;
@@ -923,6 +859,7 @@ func TestPreviewComposerTypography(t *testing.T) {
 		{name: "long", draft: "把这周的资料整理成一份可以执行的计划：先核对项目代号和负责人，再把风险、依赖和下一步写清楚，最后给出可以直接继续处理的最小行动。", context: 3, width: 720, height: 640},
 		{name: "stop", draft: "当前对话正在运行；这个位置应显示停止动作。", context: 1, active: true, width: 720, height: 640},
 	}
+	msgs := locales.In("en")
 	for _, sc := range scenes {
 		for _, dark := range []bool{false, true} {
 			a := testApp(t)
@@ -933,11 +870,10 @@ func TestPreviewComposerTypography(t *testing.T) {
 			a.runtimeMaxActiveTasks = 2
 			ct := a.selectedContact()
 			ct.SessionID = "composer-preview-session"
-			ct.SessionModel = "deepseek/deepseek-chat"
 			ct.Draft = sc.draft
 			ct.Context.Items = nil
 			for i := 0; i < sc.context; i++ {
-				ct.Context.Items = append(ct.Context.Items, taskContextItem{Name: "资料 " + fmt.Sprint(i+1), Text: "预览资料"})
+				ct.Context.Items = append(ct.Context.Items, taskContextItem{ID: fmt.Sprintf("chip-%d", i+1), Name: "资料 " + fmt.Sprint(i+1), Text: "预览资料"})
 			}
 			if sc.active {
 				a.demo = false
@@ -955,126 +891,72 @@ func TestPreviewComposerTypography(t *testing.T) {
 				}
 				return r
 			}
-			visible("Composer for Nagi")
-			visible(contextLabelForTest(sc.context))
-			visible("Chat model")
+			composer := visible("Composer for Nagi")
+			attach := visible(msgs.ComposerAttach())
+			var primary ui.Rect
 			if sc.active {
-				visible("Stop chat")
+				primary = visible(msgs.StopConversation())
 			} else {
-				visible("Send")
+				primary = visible(msgs.SendAction())
 			}
-			head, tail := a.conversationModelDisplayParts(locales.In("en"), ct)
-			if !tr.HasText(head) || (tail != "" && !tr.HasText(tail)) {
-				t.Fatalf("%s: actual model label missing: %v", sc.name, tr.Texts())
+			if tr.HasText("Chat model") {
+				t.Fatalf("%s: retired model chrome appeared: %v", sc.name, tr.Texts())
 			}
-			if sc.active && sc.width == 720 {
-				composer := visible("Composer for Nagi")
-				context := visible(contextLabelForTest(sc.context))
-				model := visible("Chat model")
-				stop := visible("Stop chat")
-				if !tr.HasText("Stop chat") {
-					t.Fatalf("%s: Stop text was hidden: %v", sc.name, tr.Texts())
-				}
-				if context.X+context.W > model.X || model.X+model.W > stop.X ||
-					stop.X+stop.W > composer.X+composer.W ||
-					context.X < composer.X || model.X < composer.X || stop.X < composer.X {
-					t.Fatalf("%s: composer controls overlap/overflow composer=%+v context=%+v model=%+v stop=%+v",
-						sc.name, composer, context, model, stop)
-				}
-				scope, ok := tr.Find("Chat")
-				if !ok || scope.X < model.X || scope.X+scope.W > model.X+model.W {
-					t.Fatalf("%s: model scope outside model button: scope=%+v ok=%v model=%+v", sc.name, scope, ok, model)
-				}
-				head, tail := a.conversationModelDisplayParts(locales.In("en"), ct)
-				actualLabel := head
-				if tail != "" {
-					actualLabel = tail
-				}
-				actual, ok := tr.Find(actualLabel)
-				if !ok || actual.X < model.X || actual.X+actual.W > model.X+model.W {
-					t.Fatalf("%s: model text outside model button: actual=%+v ok=%v model=%+v", sc.name, actual, ok, model)
+			if attach.X < composer.X || attach.X+attach.W > primary.X || primary.X+primary.W > composer.X+composer.W {
+				t.Fatalf("%s: composer controls overlap/overflow composer=%+v attach=%+v primary=%+v", sc.name, composer, attach, primary)
+			}
+			for i := 0; i < sc.context; i++ {
+				chipName := "资料 " + fmt.Sprint(i+1)
+				if !tr.HasText(chipName) {
+					t.Fatalf("%s: chip %q missing: %v", sc.name, chipName, tr.Texts())
 				}
 			}
 			if dir != "" {
-				theme := "light"
+				themeName := "light"
 				if dark {
-					theme = "dark"
+					themeName = "dark"
 				}
-				writePreviewPNG(t, filepath.Join(dir, fmt.Sprintf("headless-composer-%s-%dx%d-%s.png", sc.name, sc.width, sc.height, theme)), tr.Image())
-			}
-		}
-	}
-	longPrefix := "provider/" + strings.Repeat("shared-prefix-", 4)
-	for _, width := range []int{720, 960} {
-		for _, dark := range []bool{false, true} {
-			for _, suffix := range []string{"alpha", "omega"} {
-				a := testApp(t)
-				a.windowWidth = width
-				a.workspaceOpen = false
-				a.runtimeStatus = runtimeStateReady
-				a.runtimeCapabilitiesLoaded = true
-				a.runtimeMaxActiveTasks = 2
-				ct := a.selectedContact()
-				ct.SessionID = "composer-preview-session"
-				ct.SessionModel = longPrefix + suffix
-				tr := ui.NewTester(a.view, width, 640)
-				tr.SetDark(dark)
-				tr.Frame()
-				if !tr.HasText(suffix) {
-					t.Fatalf("%d %s: distinguishing model tail missing: %v", width, suffix, tr.Texts())
-				}
-				if dir != "" {
-					theme := "light"
-					if dark {
-						theme = "dark"
-					}
-					writePreviewPNG(t, filepath.Join(dir, fmt.Sprintf("headless-composer-long-model-%s-%dx640-%s.png", suffix, width, theme)), tr.Image())
-				}
+				writePreviewPNG(t, filepath.Join(dir, fmt.Sprintf("headless-composer-%s-%dx%d-%s.png", sc.name, sc.width, sc.height, themeName)), tr.Image())
 			}
 		}
 	}
 }
 
-func contextLabelForTest(count int) string {
-	return locales.In("en").TaskContextCount(count)
-}
-
-func TestComposerZeroContextKeepsIconWithoutZeroText(t *testing.T) {
+func TestComposerZeroMaterialsKeepsCleanAttachTrigger(t *testing.T) {
 	a, ct := appReadingTestApp(t)
 	if ct.SessionID == "" || ct.Context.Count() != 0 {
-		t.Fatal("fixture needs a session with zero draft context")
+		t.Fatal("fixture needs a session with zero draft materials")
 	}
+	msgs := locales.In("en")
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.SetFocused(true)
 	tr.Frame()
-	if tr.HasText(locales.In("en").TaskContextTitle() + ": 0") {
-		t.Fatalf("zero context rendered an independent zero label: %v", tr.Texts())
+	if tr.HasText(msgs.TaskContextTitle() + ": 0") {
+		t.Fatalf("zero materials rendered an independent zero label: %v", tr.Texts())
 	}
 	if zero, ok := tr.Find("0"); ok {
-		t.Fatalf("zero context rendered an independent zero: %+v texts=%v", zero, tr.Texts())
+		t.Fatalf("zero materials rendered an independent zero: %+v texts=%v", zero, tr.Texts())
 	}
-	button, ok := tr.Find(contextLabelForTest(0))
+	button, ok := tr.Find(msgs.ComposerAttach())
 	if !ok || button.W < 32 || button.H < 32 {
-		t.Fatalf("zero-context control missing or under 32px: %+v ok=%v", button, ok)
+		t.Fatalf("attach control missing or under 32px: %+v ok=%v", button, ok)
 	}
-	for i := 0; i < 24 && !tr.Focused(contextLabelForTest(0)); i++ {
+	for i := 0; i < 24 && !tr.Focused(msgs.ComposerAttach()); i++ {
 		tr.Key(0, ui.KeyTab)
 		tr.Frame()
 	}
-	if !tr.Focused(contextLabelForTest(0)) {
-		t.Fatalf("zero-context control is not keyboard reachable: %v", tr.Texts())
+	if !tr.Focused(msgs.ComposerAttach()) {
+		t.Fatalf("attach control is not keyboard reachable: %v", tr.Texts())
 	}
 	tr.Key(0, ui.KeyEnter)
 	tr.Frame()
-	if a.aux != "task-context" || !a.composerInlineAux() {
-		t.Fatalf("keyboard did not open task context: aux=%q panel=%q", a.aux, a.composerPanel)
+	if !a.composerAttachMenuOpen || !tr.HasText(msgs.ComposerAttachFile()) || !tr.HasText(msgs.ComposerAddTextNote()) {
+		t.Fatalf("keyboard did not open attach menu: open=%v texts=%v", a.composerAttachMenuOpen, tr.Texts())
 	}
-	if err := tr.Click(locales.In("en").CloseTaskContext()); err != nil {
-		t.Fatal(err)
-	}
+	tr.Key(0, ui.KeyEscape)
 	tr.Frame()
-	if !tr.Focused(contextLabelForTest(0)) {
-		t.Fatalf("task context did not restore keyboard focus: %v", tr.Texts())
+	if a.composerAttachMenuOpen || !tr.Focused(msgs.ComposerAttach()) {
+		t.Fatalf("Escape did not close attach menu and restore focus: open=%v focused=%v", a.composerAttachMenuOpen, tr.Focused(msgs.ComposerAttach()))
 	}
 	ct.Messages = append(ct.Messages, &message{
 		Key: "live-session-context", Kind: msgUser, Text: "session prompt",
@@ -1090,54 +972,11 @@ func TestComposerZeroContextKeepsIconWithoutZeroText(t *testing.T) {
 	}
 	ct.Context.Items = []taskContextItem{{ID: "c1", Name: "资料", Text: "已有会话不计入草稿"}}
 	tr.Frame()
-	if !tr.HasText(contextLabelForTest(1)) {
-		t.Fatalf("non-zero context count missing: %v", tr.Texts())
+	if _, chipFound := tr.Find("资料"); !chipFound {
+		t.Fatalf("attached material did not render as a chip: %v", tr.Texts())
 	}
-}
-
-func TestComposerModelTooltipKeepsFullActualID(t *testing.T) {
-	a, ct := appReadingTestApp(t)
-	prefix := "provider/" + strings.Repeat("shared-prefix-", 4)
-	a.connectionEffective = &connectionConfig{Model: prefix + "alpha"}
-	ct.SessionID = "s1"
-	ct.SessionModel = prefix + "omega"
-	tr := ui.NewTester(a.view, 1040, 720)
-	tr.Frame()
-	showPreviewTooltip(t, tr, "Chat model")
-	if !tr.HasText(ct.SessionModel) || tr.HasText(prefix+"alpha") {
-		t.Fatalf("loaded session model tooltip = %v", tr.Texts())
-	}
-	ct.SessionModel = ""
-	tr.Frame()
-	showPreviewTooltip(t, tr, "Chat model")
-	if !tr.HasText("Session model not loaded") || tr.HasText(prefix+"alpha") {
-		t.Fatalf("unloaded session fell back to connection default: %v", tr.Texts())
-	}
-}
-
-func TestComposerModelsKeepActualSuffixAt720And960(t *testing.T) {
-	prefix := "provider/" + strings.Repeat("shared-prefix-", 4)
-	models := []string{prefix + "alpha", prefix + "omega", "deepseek/deepseek-chat"}
-	for _, width := range []int{720, 960} {
-		for _, model := range models {
-			a, ct := appReadingTestApp(t)
-			a.windowWidth = width
-			ct.SessionID = "s1"
-			ct.SessionModel = model
-			tr := ui.NewTester(a.view, width, 640)
-			tr.Frame()
-			modelRect, ok := tr.Find("Chat model")
-			if !ok || modelRect.W <= 0 {
-				t.Fatalf("%d %q: model control missing: %+v", width, model, modelRect)
-			}
-			runes := []rune(model)
-			tail := string(runes[len(runes)-8:])
-			tailRect, ok := tr.Find(tail)
-			if !ok || tailRect.W <= 0 || tailRect.X < modelRect.X || tailRect.X+tailRect.W > modelRect.X+modelRect.W {
-				t.Fatalf("%d %q: actual suffix %q missing/outside model control: tail=%+v ok=%v model=%+v texts=%v",
-					width, model, tail, tailRect, ok, modelRect, tr.Texts())
-			}
-		}
+	if _, retiredFound := tr.Find(msgs.TaskContextCount(1)); retiredFound {
+		t.Fatalf("retired count button rendered alongside attached chip: %v", tr.Texts())
 	}
 }
 
@@ -1293,33 +1132,31 @@ func TestComposerDeclaredToolbarKeepsRealEdgeTargets(t *testing.T) {
 					tr.SetFocused(true)
 					tr.Frame()
 					msgs := locales.In(locale)
-					contextLabel := msgs.TaskContextCount(1)
+					attachLabel := msgs.ComposerAttach()
 					bar, ok := tr.Find(msgs.ComposerTools())
-					button, found := tr.Find(contextLabel)
-					if !ok || !found || bar.H != 42 || button.W != 32 || button.H != 32 || button.Y-bar.Y != 5 {
-						t.Fatalf("declared42/py10 bar did not center the full target: bar=%+v target=%+v", bar, button)
+					button, found := tr.Find(attachLabel)
+					send, sendFound := tr.Find(msgs.SendAction())
+					if !ok || !found || !sendFound || bar.H != 32 || button.W != 32 || button.H != 32 || button.Y != bar.Y || send.W != 32 || send.H != 32 || send.Y != bar.Y {
+						t.Fatalf("32px toolbar did not align full targets: bar=%+v attach=%+v send=%+v", bar, button, send)
 					}
-					if button.X < bar.X || button.X+button.W > bar.X+bar.W || button.Y < 0 || button.Y+button.H > float32(size[1]) {
+					if button.X < bar.X || button.X+button.W > send.X || send.X+send.W > bar.X+bar.W || button.Y < 0 || button.Y+button.H > float32(size[1]) {
 						t.Fatal("composer target is clipped or outside its row/window")
 					}
 					for edge := 0; edge < 2; edge++ {
-						button, _ = tr.Find(contextLabel)
+						button, _ = tr.Find(attachLabel)
 						y := button.Y + 1
 						if edge == 1 {
 							y = button.Y + button.H - 1
 						}
-						generation := a.contextFileGeneration
 						tr.ClickAt(button.X+1, y)
 						tr.Frame()
-						if a.aux != "task-context" || !a.composerInlineAux() || a.contextFileGeneration != generation+1 {
-							t.Fatal("full target edge did not open exactly its own context panel")
+						if !a.composerAttachMenuOpen || !tr.HasText(msgs.ComposerAttachFile()) || !tr.HasText(msgs.ComposerAddTextNote()) {
+							t.Fatalf("full target edge did not open attach menu: open=%v texts=%v", a.composerAttachMenuOpen, tr.Texts())
 						}
-						if err := tr.Click(msgs.CloseTaskContext()); err != nil {
-							t.Fatal(err)
-						}
+						tr.Key(0, ui.KeyEscape)
 						tr.Frame()
-						if a.aux != "" || !tr.Focused(contextLabel) {
-							t.Fatal("context Close lost the actual initiating control focus")
+						if a.composerAttachMenuOpen || !tr.Focused(attachLabel) {
+							t.Fatalf("attach menu Escape lost initiating control focus: open=%v focused=%v", a.composerAttachMenuOpen, tr.Focused(attachLabel))
 						}
 					}
 					items := ct.Context.Snapshot()
@@ -1329,7 +1166,7 @@ func TestComposerDeclaredToolbarKeepsRealEdgeTargets(t *testing.T) {
 					if directory := os.Getenv("NAGI_PREVIEW_DIR"); directory != "" {
 						name := fmt.Sprintf("composer-declared-%s-%dx%d-dark%t", locale, size[0], size[1], dark)
 						writePreviewPNG(t, filepath.Join(directory, name+".png"), tr.Image())
-						data, _ := json.MarshalIndent(map[string]ui.Rect{"toolbar": bar, "context_target": button}, "", "  ")
+						data, _ := json.MarshalIndent(map[string]ui.Rect{"toolbar": bar, "attach_target": button, "send_target": send}, "", "  ")
 						if err := os.WriteFile(filepath.Join(directory, name+".json"), data, 0600); err != nil {
 							t.Fatal(err)
 						}
@@ -1337,5 +1174,65 @@ func TestComposerDeclaredToolbarKeepsRealEdgeTargets(t *testing.T) {
 				})
 			}
 		}
+	}
+}
+
+func TestWorkbenchPopoverMenusForUserBubbleAndComposer(t *testing.T) {
+	const text = "Copyable workbench message"
+	for _, tc := range []struct {
+		locale    string
+		dark      bool
+		selectAll string
+		paste     string
+	}{
+		{"en", true, "Select All", "Paste"},
+		{"zh-Hans", false, "全选", "粘贴"},
+	} {
+		t.Run(tc.locale, func(t *testing.T) {
+			a := testApp(t)
+			a.windowWidth = 1040
+			ct := a.contacts[0]
+			ct.Messages = []*message{{ID: 1, Kind: msgUser, Text: text}}
+			ct.Draft = ""
+
+			tr := ui.NewTester(a.view, 1040, 720)
+			tr.SetLocale(tc.locale)
+			tr.SetDark(tc.dark)
+			tr.SetFocused(true)
+			tr.Frame()
+
+			msgs := locales.In(tc.locale)
+			if err := tr.RightClick(text); err != nil {
+				t.Fatal(err)
+			}
+			tr.Frame()
+			if !tr.HasText(tc.selectAll) {
+				t.Fatalf("user bubble did not render in-window popover menu (%q missing): %v", tc.selectAll, tr.Texts())
+			}
+			if err := tr.ChooseMenuItem(msgs.CopyMessageLabel()); err != nil {
+				t.Fatal(err)
+			}
+			tr.Frame()
+			if got := tr.Clipboard(); got != text {
+				t.Fatalf("user bubble popover Copy = %q, want %q", got, text)
+			}
+
+			composer := msgs.ComposerLabel(ct.Name)
+			if err := tr.RightClick(composer); err != nil {
+				t.Fatal(err)
+			}
+			tr.Frame()
+			pasteRect, ok := tr.Find(tc.paste)
+			if !ok || pasteRect.W <= 0 || pasteRect.H <= 0 || pasteRect.Y < 0 || pasteRect.Y+pasteRect.H > 720 {
+				t.Fatalf("composer did not render in-window Paste popover inside viewport: rect=%+v ok=%t texts=%v", pasteRect, ok, tr.Texts())
+			}
+			if err := tr.Click(tc.paste); err != nil {
+				t.Fatal(err)
+			}
+			tr.Frame()
+			if ct.Draft != text {
+				t.Fatalf("composer popover Paste draft = %q, want %q", ct.Draft, text)
+			}
+		})
 	}
 }

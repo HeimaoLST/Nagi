@@ -144,12 +144,14 @@ type appModel struct {
 	detail         detailKind
 	profileScrolls map[string]*ui.ScrollState
 
-	defaultContactN      int
-	focusComposer        bool
-	priorChats           *productConversationBrowser
-	composerHandle       ui.Handle
-	composerPanel        string
-	composerFocusContext bool
+	defaultContactN        int
+	focusComposer          bool
+	priorChats             *productConversationBrowser
+	composerHandle         ui.Handle
+	composerAttachMenuOpen bool
+	focusComposerAttach    bool
+	focusComposerMaterial  string
+	composerMaterial       *composerMaterialForm
 
 	settingsOpen           bool
 	settingsTab            string
@@ -310,8 +312,7 @@ func (a *appModel) selectContact(i int) {
 		a.persist()
 	}
 	a.aux = ""
-	a.composerPanel = ""
-	a.composerFocusContext = false
+	a.resetComposerOverlays()
 	ct := a.contacts[i]
 	if !ct.Loaded && ct.ActiveTaskID == "" && a.canReloadPiConversation(ct) {
 		a.reloadContactByID(ct.ID)
@@ -385,8 +386,7 @@ func (a *appModel) addDefaultContact() {
 	a.selected = len(a.contacts) - 1
 	a.contactSearch = ""
 	a.aux = ""
-	a.composerPanel = ""
-	a.composerFocusContext = false
+	a.resetComposerOverlays()
 	a.focusComposer = true
 }
 
@@ -400,11 +400,6 @@ func (a *appModel) closeAux() {
 		a.closeSettings()
 		return
 	}
-	switch a.composerPanel {
-	case composerPanelContext:
-		a.composerFocusContext = true
-	}
-	a.composerPanel = ""
 	if a.aux == "task-context" {
 		a.contextFileGeneration++
 	}

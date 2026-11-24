@@ -13,7 +13,7 @@ const (
 )
 
 const (
-	DefaultLeftPaneWidth  float32 = 238
+	DefaultLeftPaneWidth  float32 = 272
 	MinLeftPaneWidth      float32 = 180
 	MaxLeftPaneWidth      float32 = 420
 	DefaultRightPaneWidth float32 = 340
@@ -26,7 +26,7 @@ const (
 	FullRailBreakpoint   int     = 1180
 	AvatarRailBreakpoint int     = 900
 	MinAvatarDetailWidth float32 = 300
-	EffectiveCenterWidth float32 = 512
+	EffectiveCenterWidth float32 = 516
 )
 
 // WorkbenchTheme resolves the Qoder reference palette and product surfaces.
@@ -48,8 +48,6 @@ const (
 	MenuCompactPadding       float32 = 6
 	MenuCompactGap           float32 = 6
 	GlyphMenu                float32 = 14
-	ComposerMinHeight        float32 = 120
-	ComposerToolbarHeight    float32 = 42
 	ConversationMaxWidth     float32 = 768
 	UserMessageMaxWidth      float32 = 752
 	TypeLabel                float32 = 14
@@ -73,28 +71,33 @@ const (
 )
 
 type WorkbenchTheme struct {
-	Theme         *ui.Theme
-	Link          ui.Color
-	InputBorder   ui.Color
-	ChromeFrom    ui.Color
-	ChromeTo      ui.Color
-	Tertiary      ui.Color
-	NavHover      ui.Color
-	NavSelected   ui.Color
-	Rail          ui.Color
-	Reading       ui.Color
-	Panel         ui.Color
-	Well          ui.Color
-	BubbleUser    ui.Color
-	BubbleContact ui.Color
-	ContactText   ui.Color
-	ContactMuted  ui.Color
-	ContactLink   ui.Color
-	WorkSurface   ui.Color
-	WorkText      ui.Color
-	WorkMuted     ui.Color
-	WorkAttention ui.Color
-	WorkWarningBg ui.Color
+	Theme           *ui.Theme
+	Link            ui.Color
+	InputBorder     ui.Color
+	ChromeFrom      ui.Color
+	ChromeTo        ui.Color
+	Tertiary        ui.Color
+	NavHover        ui.Color
+	NavSelected     ui.Color
+	Rail            ui.Color
+	Reading         ui.Color
+	Panel           ui.Color
+	Well            ui.Color
+	BubbleUser      ui.Color
+	BubbleContact   ui.Color
+	ContactText     ui.Color
+	ContactMuted    ui.Color
+	ContactLink     ui.Color
+	ComposerSurface ui.Color
+	ComposerBorder  ui.Color
+	ComposerChipBg  ui.Color
+	ComposerText    ui.Color
+	ComposerMuted   ui.Color
+	WorkSurface     ui.Color
+	WorkText        ui.Color
+	WorkMuted       ui.Color
+	WorkAttention   ui.Color
+	WorkWarningBg   ui.Color
 }
 
 func ResolveWorkbenchTheme(dark bool) WorkbenchTheme {
@@ -127,6 +130,7 @@ func ResolveWorkbenchTheme(dark bool) WorkbenchTheme {
 		NavHover: ui.Hex("#0000000A"), NavSelected: ui.Hex("#00000012"),
 		Rail: ui.Hex("#F2F2E2"), Reading: t.Background, Panel: t.Background,
 		Well: t.Surface, BubbleUser: ui.Hex("#F2F4F2"), BubbleContact: ui.Hex("#F3F3EF"),
+		ComposerSurface: ui.Hex("#FFFFFF"), ComposerBorder: ui.Hex("#E2E2DE"), ComposerChipBg: ui.Hex("#F4F4F0"),
 		WorkSurface: t.Background, WorkText: t.Text, WorkMuted: t.TextMuted,
 		WorkAttention: t.Warning, WorkWarningBg: ui.Hex("#FEFBE8"),
 	}
@@ -143,10 +147,12 @@ func ResolveWorkbenchTheme(dark bool) WorkbenchTheme {
 		palette.NavHover, palette.NavSelected = ui.Hex("#3D3F39"), ui.Hex("#454741")
 		palette.Reading, palette.Panel, palette.Well = t.Background, t.Background, t.Surface
 		palette.BubbleUser, palette.BubbleContact = ui.Hex("#2E2916"), ui.Hex("#22241F")
+		palette.ComposerSurface, palette.ComposerBorder, palette.ComposerChipBg = ui.Hex("#1E201B"), ui.Hex("#30322D"), ui.Hex("#282A24")
 		palette.WorkSurface, palette.WorkText, palette.WorkMuted = t.Background, t.Text, t.TextMuted
 		palette.WorkAttention, palette.WorkWarningBg = t.Warning, ui.Hex("#4A4019")
 	}
 	palette.ContactText, palette.ContactMuted, palette.ContactLink = t.Text, t.TextMuted, palette.Link
+	palette.ComposerText, palette.ComposerMuted = t.Text, t.TextMuted
 	return palette
 }
 
@@ -664,6 +670,9 @@ var (
 	GlyphArrowDownSLine    = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M11.9999 13.1714L16.9497 8.22168L18.3639 9.63589L11.9999 15.9999L5.63599 9.63589L7.0502 8.22168L11.9999 13.1714Z"/></svg>`))
 	GlyphArrowUpLine       = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M13.0001 7.82843V20H11.0001V7.82843L5.63614 13.1924L4.22192 11.7782L12.0001 4L19.7783 11.7782L18.3641 13.1924L13.0001 7.82843Z"/></svg>`))
 	GlyphArrowLeftLine     = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M7.82843 10.9999H20V12.9999H7.82843L13.1924 18.3638L11.7782 19.778L4 11.9999L11.7782 4.22168L13.1924 5.63589L7.82843 10.9999Z"/></svg>`))
+	GlyphFileTextLine      = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M21 8V20.9932C21 21.5501 20.5552 22 20.0066 22H3.9934C3.44495 22 3 21.556 3 21.0082V2.9918C3 2.45531 3.4487 2 4.00221 2H14.9968L21 8ZM19 9H14V4H5V20H19V9ZM8 7H11V9H8V7ZM8 11H16V13H8V11ZM8 15H16V17H8V15Z"/></svg>`))
+	GlyphAttachment2       = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M14.8287 7.75737L9.1718 13.4142C8.78127 13.8047 8.78127 14.4379 9.1718 14.8284C9.56232 15.219 10.1955 15.219 10.586 14.8284L16.2429 9.17158C17.4144 8.00001 17.4144 6.10052 16.2429 4.92894C15.0713 3.75737 13.1718 3.75737 12.0002 4.92894L6.34337 10.5858C4.39075 12.5384 4.39075 15.7042 6.34337 17.6569C8.29599 19.6095 11.4618 19.6095 13.4144 17.6569L19.0713 12L20.4855 13.4142L14.8287 19.0711C12.095 21.8047 7.66283 21.8047 4.92916 19.0711C2.19549 16.3374 2.19549 11.9053 4.92916 9.17158L10.586 3.51473C12.5386 1.56211 15.7045 1.56211 17.6571 3.51473C19.6097 5.46735 19.6097 8.63317 17.6571 10.5858L12.0002 16.2427C10.8287 17.4142 8.92916 17.4142 7.75759 16.2427C6.58601 15.0711 6.58601 13.1716 7.75759 12L13.4144 6.34316L14.8287 7.75737Z"/></svg>`))
+	GlyphStickyNoteLine    = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M21 15L15 20.996L4.00221 21C3.4487 21 3 20.5551 3 20.0066V3.9934C3 3.44476 3.44495 3 3.9934 3H20.0066C20.5552 3 21 3.45576 21 4.00247V15ZM19 5H5V19H13V14C13 13.4872 13.386 13.0645 13.8834 13.0067L14 13L19 12.999V5ZM18.171 14.999L15 15V18.169L18.171 14.999Z"/></svg>`))
 	GlyphArrowLeftSLine    = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M10.8284 12.0007L15.7782 16.9504L14.364 18.3646L8 12.0007L14.364 5.63672L15.7782 7.05093L10.8284 12.0007Z"/></svg>`))
 	GlyphArrowRightSLine   = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M13.1717 12.0007L8.22192 7.05093L9.63614 5.63672L16.0001 12.0007L9.63614 18.3646L8.22192 16.9504L13.1717 12.0007Z"/></svg>`))
 	GlyphCheckLine         = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M9.9997 15.1709L19.1921 5.97852L20.6063 7.39273L9.9997 17.9993L3.63574 11.6354L5.04996 10.2212L9.9997 15.1709Z"/></svg>`))

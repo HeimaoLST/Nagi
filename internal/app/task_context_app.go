@@ -11,6 +11,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
+	"github.com/HeimaoLST/Nagi/internal/materials"
 	"github.com/HeimaoLST/Nagi/locales"
 )
 
@@ -55,11 +56,6 @@ func (a *appModel) bindTaskContexts() {
 			issue.Context.OnChange = a.persist
 		}
 	}
-}
-
-func (a *appModel) openComposerTaskContext() {
-	a.composerPanel = composerPanelContext
-	a.openConversationTaskContext()
 }
 
 func (a *appModel) openConversationTaskContext() {
@@ -132,4 +128,62 @@ func (a *appModel) chooseTaskContextFile(ct *contact, tc *taskContext) {
 			tc.FileChoiceFailed = false
 		})
 	}()
+}
+
+func (a *appModel) composerMaterialsAllowed(ct *contact) bool {
+	return !a.shutdownStarted && !a.settingsOpen && !a.dataRecoveryBlocksChanges() &&
+		ct != nil && a.selectedContact() == ct && a.contactByID(ct.ID) == ct
+}
+
+func (a *appModel) chooseComposerFiles(ct *contact) {
+	if !a.composerMaterialsAllowed(ct) || ct.Context.FileChoosing {
+		return
+	}
+	tc := &ct.Context
+	tc.FileRequest++
+	request := tc.FileRequest
+	generation, folderGeneration := a.contextFileGeneration, a.folderChoiceGeneration
+	tc.FileChoosing = true
+	a.contextFilePickers++
+	pick := a.chooseContextFile
+	if pick == nil {
+		pick = mygo.Dialog.Open
+	}
+	msgs := locales.In(a.uiLocale)
+	defaultPath, _ := os.UserHomeDir()
+	opts := mygo.OpenDialogOptions{Parent: a.win, Title: msgs.ComposerAttachFile(), ButtonLabel: msgs.ComposerAttachFilesAction(), DefaultPath: defaultPath, Multiple: true}
+	go func() {
+		paths, err := pick(opts)
+		a.updateUI(func() {
+			a.contextFilePickers--
+			if tc.FileRequest != request {
+				return
+			}
+			tc.FileChoosing = false
+			if !a.composerMaterialsAllowed(ct) || a.contextFileGeneration != generation || a.folderChoiceGeneration != folderGeneration {
+				return
+			}
+			a.focusComposerAttach = true
+			if err != nil {
+				tc.ActionError = materials.ErrFileChooser
+				return
+			}
+			if len(paths) != 0 {
+				a.attachComposerFiles(ct, paths)
+			}
+		})
+	}()
+}
+
+func (a *appModel) attachComposerFiles(ct *contact, paths []string) {
+	if !a.composerMaterialsAllowed(ct) {
+		return
+	}
+	var firstErr error
+	for _, path := range paths {
+		if _, err := ct.Context.AttachFile(path, ""); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	ct.Context.ActionError = firstErr
 }
