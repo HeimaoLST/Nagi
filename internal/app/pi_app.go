@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -388,10 +389,69 @@ func (a *appModel) reloadProductConversation(host *piAppHost, ct *contact) {
 				ct.Unavailable = ct.LoadErr
 				return
 			}
-			ct.Messages, ct.History = projection.messages, projection.entries
+			ct.Messages = mergeLiveConversation(ct.Messages, projection.messages)
+			ct.History = projection.entries
 			ct.Loaded, ct.LoadErr, ct.Unavailable = true, "", ""
 		})
 	}()
+}
+
+func mergeLiveConversation(previous, history []*message) []*message {
+	position := 0
+	for i := 0; i < len(previous); i++ {
+		user := previous[i]
+		if user.TaskID == "" {
+			if position < len(history) && history[position].MessageID == user.MessageID {
+				position++
+			}
+			continue
+		}
+		if user.Kind != msgUser {
+			continue
+		}
+		if position == len(history) {
+			return append(history, previous[i:]...)
+		}
+		var reply *message
+		if i+1 < len(previous) && previous[i+1].TaskID == user.TaskID && previous[i+1].Kind == msgContact {
+			i++
+			reply = previous[i]
+		}
+		stored := history[position]
+		if stored.Kind != msgUser || stored.Text != user.Text || (user.MessageID != "" && stored.MessageID != user.MessageID) {
+			continue
+		}
+		stored.Key, stored.TaskID = user.Key, user.TaskID
+		position++
+		if reply == nil {
+			continue
+		}
+		end, remaining := position, reply.Text
+		for end < len(history) && history[end].Kind == msgContact {
+			var ok bool
+			remaining, ok = strings.CutPrefix(remaining, history[end].Text)
+			if !ok {
+				break
+			}
+			end++
+		}
+		if end < len(history) && history[end].Kind == msgContact {
+			continue
+		}
+		history = slices.Replace(history, position, end, reply)
+		position++
+	}
+	return history
+}
+
+func finishLiveReply(ct *contact, executionID string) {
+	for i := len(ct.Messages) - 1; i >= 0; i-- {
+		item := ct.Messages[i]
+		if item.TaskID == executionID && item.Kind == msgContact {
+			item.Streaming = false
+			return
+		}
+	}
 }
 
 func productHistory(ctx context.Context, client *pi.ProductClient, id string) (historyProjection, error) {
@@ -493,6 +553,7 @@ func (a *appModel) applyProductEvent(host *piAppHost, event pi.ProductEvent) {
 			}
 		case "execution.settled":
 			if ct.ActiveTaskID == data.ExecutionID {
+				finishLiveReply(ct, data.ExecutionID)
 				applyProductExecution(ct, &pi.ProductExecution{ExecutionID: data.ExecutionID, State: data.State, Error: data.Error})
 				if data.State == "completed" {
 					a.recordBotCompletion(ct)
@@ -657,6 +718,9 @@ func (a *appModel) observeProductExit(host *piAppHost) {
 		a.clearBuiltinToolCatalog()
 		for _, ct := range a.contacts {
 			if ct.ActiveTaskID != "" || ct.SendState == sendSubmitting {
+				if ct.ActiveTaskID != "" {
+					finishLiveReply(ct, ct.ActiveTaskID)
+				}
 				ct.ActiveTaskID, ct.SendState, ct.Status = "", sendUnknown, statusAttention
 				ct.setSendError(taskContextUncertainSendError, "send-uncertain", "")
 			}

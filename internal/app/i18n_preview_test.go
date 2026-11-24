@@ -43,7 +43,17 @@ func TestPreviewI18nSelectedSlice(t *testing.T) {
 			chatTr.SetLocale(locale)
 			chatTr.SetDark(dark)
 			chatTr.Frame()
-			showPreviewTooltip(t, chatTr, locales.In(locale).CopyMessageLabel())
+			copyLabel := locales.In(locale).CopyMessageLabel()
+			if chatTr.HasText(copyLabel) {
+				t.Fatalf("outer copy button unexpectedly visible in %s preview: %v", locale, chatTr.Texts())
+			}
+			if err := chatTr.RightClick("Profile edits affect later replies and leave saved messages intact."); err != nil {
+				t.Fatal(err)
+			}
+			chatTr.Frame()
+			if !chatTr.HasText(copyLabel) {
+				t.Fatalf("copy popover menu item %q missing: %v", copyLabel, chatTr.Texts())
+			}
 			writePreviewPNG(t, filepath.Join(dir, fmt.Sprintf("copy-%s-%s-1040x720.png", locale, theme)), chatTr.Image())
 		}
 	}
@@ -392,7 +402,14 @@ func TestPreviewMarkdownLinks(t *testing.T) {
 			path := filepath.Join(dir, name+".png")
 			t.Logf("Markdown link preview path=%s source=%q locale=%s theme=%s requested=%s effective=%s width=%d height=%d streaming=%v synthetic_custom_catalog=%v accent=%+v pointer=(-1,-1) link=%+v viewport=%+v", path, source, item.locale, theme, resolved.RequestedID, resolved.EffectiveID, item.width, item.height, item.streaming, item.custom, resolved.Palette.Theme.Accent, link, viewport)
 			writePreviewPNG(t, path, tr.Image())
-			if err := tr.Click(msgs.CopyMessageLabel()); err != nil {
+			if tr.HasText(msgs.CopyMessageLabel()) {
+				t.Fatalf("outer copy button unexpectedly visible on markdown preview: %v", tr.Texts())
+			}
+			if err := tr.RightClick("the design note"); err != nil {
+				t.Fatal(err)
+			}
+			tr.Frame()
+			if err := choosePopoverMenuItem(tr, msgs.CopyMessageLabel()); err != nil {
 				t.Fatal(err)
 			}
 			if got := tr.Clipboard(); got != source {

@@ -8,7 +8,7 @@ import (
 	"github.com/HeimaoLST/Nagi/locales"
 )
 
-func (a *appModel) composerToolbar(c *ui.Context, t *ui.Theme, ct *contact, sendDisabled bool) {
+func (a *appModel) composerToolbar(c *ui.Context, t *ui.Theme, ct *contact, sendDisabled bool, submissionStatus string) {
 	msgs := locales.In(c.Locale())
 	blocked := a.shutdownStarted || a.dataRecoveryBlocksChanges()
 	toolbar := ui.Row(c).Key("composer-tools").FillWidth().Height(32).Shrink(0).AlignItems(ui.Center).Gap(8).
@@ -44,6 +44,10 @@ func (a *appModel) composerToolbar(c *ui.Context, t *ui.Theme, ct *contact, send
 		if a.focusComposerAttach {
 			trigger.Focus()
 			a.focusComposerAttach = false
+		}
+		if submissionStatus != "" {
+			ui.Text(c, submissionStatus).FontSize(typeMeta).FixedLineHeight(lineMeta).SingleLine().
+				TextColor(a.workTheme.ComposerMuted).MinWidth(0).Shrink(1)
 		}
 		ui.Spacer(c)
 		if !a.demo && ct.ActiveTaskID != "" {

@@ -58,20 +58,20 @@ func TestAppAssistantMarkdownStreamsFinalAndCopies(t *testing.T) {
 		a.windowWidth = size.width
 		ct.Messages = []*message{{
 			Key: "live:" + execution + ":text:pi", Kind: msgContact, TaskID: execution, ItemID: "pi",
-			Text: "# 标题\n\n", Streaming: true,
+			Text: "# 标题\n\n", Streaming: true, liveReveal: true,
 		}}
 		tr := ui.NewTester(a.view, size.width, size.height)
 		tr.Frame()
-		if !tr.HasText("标题") || !tr.HasText("Copy message") {
-			t.Fatalf("%dx%d streaming markdown missing: %q", size.width, size.height, tr.Texts())
+		if !tr.HasText(locales.In("en").BotTyping()) || tr.HasText("标题") || tr.HasText("Copy message") {
+			t.Fatalf("%dx%d streaming bubble did not hold behind typing indicator: %q", size.width, size.height, tr.Texts())
 		}
 
 		applyTestProductEvent(t, a, "execution.textDelta", pi.ProductExecutionEvent{
 			ConversationID: ct.SessionID, ExecutionID: execution, Offset: uint64(len("# 标题\n\n")), Text: "列表：\n\n- 第一项\n- 第二项\n\n",
 		})
 		tr.Frame()
-		if !tr.HasText("第一项") {
-			t.Fatal("the Product delta did not extend the rendered Markdown")
+		if !tr.HasText(locales.In("en").BotTyping()) || !strings.Contains(ct.Messages[0].Text, "第一项") {
+			t.Fatal("the Product delta did not accumulate while holding behind typing indicator")
 		}
 		applyTestProductEvent(t, a, "execution.settled", pi.ProductExecutionEvent{ConversationID: ct.SessionID, ExecutionID: execution, State: "completed"})
 		ct.Messages = []*message{{Key: "saved-markdown", Kind: msgContact, Text: md, History: true}}
@@ -81,12 +81,17 @@ func TestAppAssistantMarkdownStreamsFinalAndCopies(t *testing.T) {
 				t.Fatalf("%dx%d final markdown missing %q: %q", size.width, size.height, want, tr.Texts())
 			}
 		}
-		// The 15px/1.8 reading measure can exceed a short viewport. Scroll the
-		// real reading list until the source control is laid out, then click it.
-		if !scrollToVisibleControl(tr, "Copy message", -160) {
-			t.Fatalf("%dx%d full-source control is not reachable", size.width, size.height)
+		if tr.HasText("Copy message") {
+			t.Fatalf("%dx%d outer Copy message button unexpectedly visible: %q", size.width, size.height, tr.Texts())
 		}
-		if err := tr.Click("Copy message"); err != nil {
+		if !scrollToVisibleControl(tr, "标题", -160) {
+			t.Fatalf("%dx%d bubble heading is not reachable for context menu", size.width, size.height)
+		}
+		if err := tr.RightClick("标题"); err != nil {
+			t.Fatal(err)
+		}
+		tr.Frame()
+		if err := choosePopoverMenuItem(tr, "Copy message"); err != nil {
 			t.Fatal(err)
 		}
 		if got := tr.Clipboard(); got != md {
@@ -126,7 +131,14 @@ func TestAppUserMessageStaysLiteralAndCopiesRaw(t *testing.T) {
 	if _, ok := tr.Find("Table, wrapped plain text"); ok {
 		t.Fatalf("user text was parsed as a Markdown table: %q", tr.Texts())
 	}
-	if err := tr.Click("Copy message"); err != nil {
+	if tr.HasText("Copy message") {
+		t.Fatalf("outer user Copy message button unexpectedly visible: %q", tr.Texts())
+	}
+	if err := tr.RightClick(raw); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if err := choosePopoverMenuItem(tr, "Copy message"); err != nil {
 		t.Fatal(err)
 	}
 	if got := tr.Clipboard(); got != raw {
@@ -169,14 +181,15 @@ func TestAppFourColumnTableAndCodeFitReadingBubble(t *testing.T) {
 		if bounds, ok := tr.Find(codeLine); !ok || bounds.X < 0 || bounds.X+bounds.W > float32(size.width) {
 			t.Fatalf("%dx%d code line missing or overflowing: %+v ok=%v", size.width, size.height, bounds, ok)
 		}
-		for _, label := range []string{"Copy message", "Copy code"} {
-			bounds, ok := tr.Find(label)
-			if !ok {
-				t.Fatalf("%dx%d %q missing: %q", size.width, size.height, label, tr.Texts())
-			}
-			if bounds.X < 0 || bounds.X+bounds.W > float32(size.width) {
-				t.Fatalf("%dx%d %q overflows: %+v", size.width, size.height, label, bounds)
-			}
+		if tr.HasText("Copy message") {
+			t.Fatalf("%dx%d outer Copy message unexpectedly visible: %q", size.width, size.height, tr.Texts())
+		}
+		bounds, ok := tr.Find("Copy code")
+		if !ok {
+			t.Fatalf("%dx%d Copy code missing: %q", size.width, size.height, tr.Texts())
+		}
+		if bounds.X < 0 || bounds.X+bounds.W > float32(size.width) {
+			t.Fatalf("%dx%d Copy code overflows: %+v", size.width, size.height, bounds)
 		}
 	}
 }

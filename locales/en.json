@@ -459,6 +459,7 @@
   "stopConversationTooltip": "Stop this chat",
   "sendAction": "Send",
   "sendTooltip": "Send message. Enter to send; Shift + Enter for a new line.",
+  "botTyping": "Bot is typing",
   "sendingState": "Sending…",
   "sendAcceptedState": "Accepted; waiting for the runtime to start.",
   "sendUnknownState": "Delivery is unconfirmed. Choose Reload to check the task and history. Nothing will be resent by Reload.",
