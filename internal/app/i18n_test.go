@@ -658,12 +658,12 @@ func TestChatProgressFollowsLocale(t *testing.T) {
 	workTr := ui.NewTester(workApp.view, 1040, 720)
 	workTr.SetLocale("zh-Hans")
 	workTr.Frame()
-	if !workTr.HasText("正在运行 read") {
+	if !workTr.HasText(locales.In("zh-Hans").BotStatusReplying()) {
 		t.Fatalf("Chinese work progress missing: %v", workTr.Texts())
 	}
 	workTr.SetLocale("en")
 	workTr.Frame()
-	if !workTr.HasText("Running read") {
+	if !workTr.HasText(locales.In("en").BotStatusReplying()) {
 		t.Fatalf("English work progress did not return: %v", workTr.Texts())
 	}
 }
