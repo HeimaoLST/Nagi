@@ -1,10 +1,10 @@
 package app
 
 import (
+	"math"
 	"strconv"
 	"strings"
 	"time"
-	"unicode"
 
 	"github.com/egoist/mygo/i18n"
 	"github.com/egoist/mygo/ui"
@@ -14,35 +14,61 @@ import (
 )
 
 const replyBubbleSeparator = "<<<NEXT>>>"
+const replyBubbleBeat = 360 * time.Millisecond
 
 func splitReplyBubbles(text string, streaming bool) []string {
-	partial := -1
+	bubbles, _ := splitReplyBubblesState(text, streaming)
+	return bubbles
+}
+
+func splitReplyBubblesState(text string, streaming bool) ([]string, int) {
+	end := len(text)
+	partial := 0
 	if streaming {
-		start := strings.LastIndexByte(text, '\n') + 1
-		tail := strings.TrimLeftFunc(text[start:], unicode.IsSpace)
-		if tail != "" && len(tail) < len(replyBubbleSeparator) && strings.HasPrefix(replyBubbleSeparator, tail) {
-			partial = start
+		for n := min(end, len(replyBubbleSeparator)-1); n > 0; n-- {
+			if strings.HasSuffix(text, replyBubbleSeparator[:n]) {
+				partial = n
+				break
+			}
 		}
 	}
-	if partial < 0 && !strings.Contains(text, replyBubbleSeparator) {
-		return []string{text}
+	if partial == 0 && !strings.Contains(text, replyBubbleSeparator) {
+		if strings.TrimSpace(text) == "" {
+			return nil, 0
+		}
+		return []string{text}, 0
 	}
 
 	var doc *parser.Document
-	if strings.Contains(text, "```") || strings.Contains(text, "~~~") {
+	if strings.ContainsAny(text, "`~") {
 		doc = parser.Parse(text)
+		doc.SetStreaming(streaming)
 	}
-	nextBlock := 1
-	inFence := func(offset int) bool {
-		for doc != nil && nextBlock < doc.Len() {
-			b := doc.Block(nextBlock)
+	blockIndex, inlineIndex := 1, 0
+	inCode := func(offset int) bool {
+		for doc != nil && blockIndex < doc.Len() {
+			b := doc.Block(blockIndex)
 			if b.Start > offset {
-				return false
+				break
 			}
-			if b.Kind == parser.CodeBlock && b.Fenced && offset < b.End {
-				return true
+			if offset < b.End {
+				if b.Kind == parser.CodeBlock && b.Fenced {
+					return true
+				}
+				inlines := doc.Inlines(blockIndex)
+				for inlineIndex < len(inlines) && inlines[inlineIndex].Start <= offset {
+					in := inlines[inlineIndex]
+					if in.Kind == parser.Code && offset < in.End {
+						return true
+					}
+					inlineIndex++
+				}
+				if b.Next == blockIndex+1 {
+					return false
+				}
 			}
-			nextBlock++
+			blockIndex++
+			inlineIndex = 0
 		}
 		return false
 	}
@@ -69,32 +95,40 @@ func splitReplyBubbles(text string, streaming bool) []string {
 		overflow.WriteString(text)
 	}
 
-	start, end, offset := 0, len(text), 0
-	for line := range strings.Lines(text) {
-		lineStart := offset
-		offset += len(line)
-		if lineStart == partial {
-			if !inFence(lineStart) {
-				end = lineStart
-			}
+	start := 0
+	for search := 0; search < len(text); {
+		i := strings.Index(text[search:], replyBubbleSeparator)
+		if i < 0 {
 			break
 		}
-		if strings.TrimSpace(line) == replyBubbleSeparator && !inFence(lineStart) {
-			appendBubble(text[start:lineStart])
-			start = offset
+		offset := search + i
+		search = offset + len(replyBubbleSeparator)
+		if !inCode(offset) {
+			appendBubble(strings.TrimRight(text[start:offset], " \t"))
+			tail := text[search:]
+			start = len(text) - len(strings.TrimLeft(tail, " \t"))
+			search = start
+		}
+	}
+	if partial > 0 && end-partial >= start && !inCode(end-partial) {
+		end -= partial
+		lineStart := max(start, strings.LastIndexByte(text[:end], '\n')+1)
+		if strings.TrimSpace(text[lineStart:end]) == "" {
+			end = lineStart
 		}
 	}
 	if start == 0 {
-		if end != len(text) && strings.TrimSpace(text[:end]) == "" {
-			return nil
+		if strings.TrimSpace(text[:end]) == "" {
+			return nil, 0
 		}
-		return []string{text[:end]}
+		return []string{text[:end]}, 0
 	}
+	completed := min(len(bubbles), maxBubbles-1)
 	appendBubble(text[start:end])
 	if overflow.Len() > 0 {
 		bubbles[maxBubbles-1] = overflow.String()
 	}
-	return bubbles
+	return bubbles, completed
 }
 
 func trimBubbleBlankLines(text string) string {
@@ -184,12 +218,34 @@ func chatMessageRow(c *ui.Context, t *ui.Theme, messages []*message, dividers []
 }
 
 func (a *appModel) botReplyBubbles(c *ui.Context, t *ui.Theme, m *message, scope, base string) {
-	bubbles := splitReplyBubbles(m.Text, m.Streaming)
-	if len(bubbles) == 0 {
+	bubbles, completed := splitReplyBubblesState(m.Text, m.Streaming)
+	visible, typing := len(bubbles), false
+	live := m.liveReveal
+	reduceMotion := c.Preferences().ReduceMotion
+	if live {
+		eligible := len(bubbles)
+		if m.Streaming {
+			eligible = completed
+		}
+		now := c.Now()
+		if reduceMotion {
+			m.revealedBubbles = eligible
+		} else if m.revealedBubbles < eligible && !now.Before(m.nextRevealAt) {
+			m.revealedBubbles++
+			m.nextRevealAt = now.Add(replyBubbleBeat)
+		}
+		if m.revealedBubbles < eligible {
+			c.After(max(16*time.Millisecond, m.nextRevealAt.Sub(now)))
+		}
+		visible = min(m.revealedBubbles, eligible)
+		typing = m.Streaming || visible < len(bubbles)
+		m.liveReveal = typing
+	}
+	if visible == 0 && !typing {
 		if m.AlertTitle == "" {
 			return
 		}
-		bubbles = []string{""}
+		bubbles, visible = []string{""}, 1
 	}
 	palette := a.workTheme
 	mdTheme := *messageMarkdownTheme
@@ -199,20 +255,47 @@ func (a *appModel) botReplyBubbles(c *ui.Context, t *ui.Theme, m *message, scope
 	options = a.readerOptions(options, scope, base)
 	ui.Row(c).FillWidth().MinWidth(0).AlignItems(ui.Start).Children(func() {
 		ui.Column(c).MaxWidth(userMessageMaxWidth).MinWidth(0).Shrink(1).AlignItems(ui.Start).Gap(4).Children(func() {
-			for i, text := range bubbles {
+			for i, text := range bubbles[:visible] {
 				c.Key(i)
 				opts := options
 				if i > 0 {
 					opts.LinkScope = scope + "/bubble:" + strconv.Itoa(i)
 				}
 				last := i == len(bubbles)-1
-				opts.Streaming = last && m.Streaming
-				bubble := markdownMessageBubble{Background: palette.BubbleContact, PaddingX: 12, PaddingY: 8, Radius: 12}
+				bubble := markdownMessageBubble{Background: palette.BubbleContact, PaddingX: 12, PaddingY: 8, Radius: 12, MenuOnlyCopy: true}
 				if last && m.AlertTitle != "" {
 					bubble.Footer = func(fc *ui.Context) { a.alert(fc, t, m) }
 				}
 				opts.MessageBubble = &bubble
-				markdownReader(c, text, opts).MaxWidthPercent(100).MinWidth(0).FontSize(typeBody).FixedLineHeight(lineBody)
+				reader := markdownReader(c, text, opts).MaxWidthPercent(100).MinWidth(0).FontSize(typeBody).FixedLineHeight(lineBody)
+				if m.revealedBubbles > 0 && !reduceMotion {
+					reader.Transition(ui.ElementTransition{Duration: 180 * time.Millisecond, Enter: &ui.Motion{Opacity: 0, Y: 4}})
+				}
+			}
+			if typing {
+				a.replyTypingBubble(c)
+			}
+		})
+	})
+}
+
+func (a *appModel) replyTypingBubble(c *ui.Context) {
+	palette := a.workTheme
+	reduceMotion := c.Preferences().ReduceMotion
+	bubble := ui.Column(c).Key("reply-typing").AlignSelf(ui.Start).Radius(12).Padding(10, 14).
+		Background(palette.BubbleContact).Role(ui.RoleStatus).Label(locales.In(c.Locale()).BotTyping())
+	bubble.Children(func() {
+		ui.Box(c).Size(21, 5).Draw(func(p *ui.Painter, r ui.Rect) {
+			phase := float64(p.Now().UnixMilli()%1400) * (2 * math.Pi / 1400)
+			for i := range 3 {
+				alpha := float32(.65)
+				if !reduceMotion {
+					alpha = .60 + .23*float32(math.Sin(phase-float64(i)*.80))
+				}
+				p.Fill(ui.Rect{X: r.X + 8*float32(i), Y: r.Y, W: 5, H: 5}, palette.ContactMuted.Alpha(alpha), 2.5)
+			}
+			if !reduceMotion {
+				p.After(33 * time.Millisecond)
 			}
 		})
 	})

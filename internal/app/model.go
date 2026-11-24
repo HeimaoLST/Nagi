@@ -70,6 +70,10 @@ type message struct {
 	History    bool
 	Streaming  bool
 	Context    []taskContextItem
+
+	liveReveal      bool
+	revealedBubbles int
+	nextRevealAt    time.Time
 }
 
 type runtimeBuiltinTool struct {
@@ -357,6 +361,7 @@ func (a *appModel) snippet(c *contact, msgs locales.Messages) string {
 				continue
 			}
 			source = bubbles[0]
+			source = strings.ReplaceAll(source, replyBubbleSeparator, "")
 		}
 		text := strings.Join(strings.Fields(source), " ")
 		if text == "" {
@@ -447,7 +452,7 @@ func (a *appModel) send(ct *contact, text string) bool {
 		ct.Status = statusReady
 		a.seq++
 		stamp := time.Now()
-		ct.Messages = append(ct.Messages, &message{ID: a.seq, Kind: msgContact, Text: a.canned(ct), Time: stamp.Format("15:04"), Timestamp: stamp})
+		ct.Messages = append(ct.Messages, &message{ID: a.seq, Kind: msgContact, Text: a.canned(ct), Time: stamp.Format("15:04"), Timestamp: stamp, liveReveal: true})
 		a.recordBotCompletion(ct)
 	})
 	return true

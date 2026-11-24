@@ -738,7 +738,23 @@ func (a *appModel) header(c *ui.Context, t *ui.Theme, ct *contact, visual botSta
 func (a *appModel) chat(c *ui.Context, t *ui.Theme, state connectionViewState, showConnectionSettings bool) {
 	ct := a.selectedContact()
 	messages := ct.Messages
+	waitingForReply := ct.Status == statusWorking && (a.demo || ct.ActiveTaskID != "")
+	if waitingForReply && !a.demo {
+		for i := len(messages) - 1; i >= 0 && messages[i].TaskID == ct.ActiveTaskID; i-- {
+			if messages[i].Kind == msgContact {
+				waitingForReply = false
+				break
+			}
+		}
+	}
+	rows := len(messages)
+	if waitingForReply {
+		rows++
+	}
 	ct.list.Key = func(i int) any {
+		if i == len(messages) {
+			return "live:" + ct.ActiveTaskID + ":text:pi"
+		}
 		m := messages[i]
 		if m.Key != "" {
 			return m.Key
@@ -747,19 +763,23 @@ func (a *appModel) chat(c *ui.Context, t *ui.Theme, state connectionViewState, s
 	}
 	ct.list.FollowEnd = true
 	ui.Column(c).Key("chat").Grow(1).Children(func() {
-		if len(messages) == 0 {
+		if rows == 0 {
 			ui.Row(c).Grow(1).MinHeight(0).Justify(ui.Center).Children(func() {
 				a.emptyState(c, t, ct)
 			})
 		} else {
 			dividers := chatTimestampDividers(messages, time.Now(), c.Locale())
 			ui.Row(c).Grow(1).FillHeight().Justify(ui.Center).Children(func() {
-				ui.List(c, &ct.list, len(messages), func(i int) {
+				ui.List(c, &ct.list, rows, func(i int) {
+					if i == len(messages) {
+						ui.Column(c).FillWidth().Padding(14, 0, 0, 0).Children(func() { a.replyTypingBubble(c) })
+						return
+					}
 					chatMessageRow(c, t, messages, dividers, i, func() { a.message(c, t, ct, messages[i]) })
 				}).Label(locales.In(c.Locale()).ConversationMessagesLabel()).FillHeight().FillWidth().MaxWidth(conversationMaxWidth).Padding(16, 16, 32)
 			})
 		}
-		if len(messages) > 0 && !ct.list.AtEnd() {
+		if rows > 0 && !ct.list.AtEnd() {
 			ui.Row(c).Key("back-to-latest").Justify(ui.Center).Children(func() {
 				back := secondaryButton(c, locales.In(c.Locale()).BackToLatest())
 				back.OnClick(func() {
@@ -1153,7 +1173,7 @@ func (a *appModel) userChatBubble(c *ui.Context, t *ui.Theme, m *message) {
 		ui.Column(c).MaxWidth(userMessageMaxWidth).MinWidth(0).Shrink(1).Gap(2).Children(func() {
 			if m.Text != "" {
 				opts := messageReaderOptions(c, true)
-				opts.MessageBubble = &markdownMessageBubble{Background: a.workTheme.BubbleUser, PaddingX: 12, PaddingY: 8, Radius: 12, ContextualCopy: true}
+				opts.MessageBubble = &markdownMessageBubble{Background: a.workTheme.BubbleUser, PaddingX: 12, PaddingY: 8, Radius: 12, MenuOnlyCopy: true}
 				markdownReader(c, m.Text, opts).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text)
 			}
 			taskContextReadOnlyView(c, a.workTheme, m.Context)
@@ -1364,7 +1384,16 @@ func (a *appModel) composer(c *ui.Context, t *ui.Theme, state connectionViewStat
 				sendReason = a.canSend(ct)
 				sendDisabled = strings.TrimSpace(ct.Draft) == "" || sendReason != ""
 			}
-			a.composerToolbar(c, t, ct, sendDisabled)
+			submissionStatus := ""
+			if !a.demo {
+				switch {
+				case ct.SendState == sendSubmitting:
+					submissionStatus = msgs.SendingState()
+				case ct.SendState == sendAccepted && ct.Status != statusWorking:
+					submissionStatus = msgs.SendAcceptedState()
+				}
+			}
+			a.composerToolbar(c, t, ct, sendDisabled, submissionStatus)
 			if ct.Context.ActionError != nil {
 				a.composerAttachmentError(c, t, ct)
 			}
@@ -1381,16 +1410,11 @@ func (a *appModel) composer(c *ui.Context, t *ui.Theme, state connectionViewStat
 					}
 				case "", blockApplying:
 				default:
-					if strings.TrimSpace(ct.Draft) != "" {
+					if strings.TrimSpace(ct.Draft) != "" && (sendReason != blockBusy || submissionStatus == "") {
 						ui.Text(c, sendBlockText(msgs, sendReason)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 					}
 				}
-				switch {
-				case ct.SendState == sendSubmitting:
-					ui.Text(c, msgs.SendingState()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
-				case ct.SendState == sendAccepted && ct.Status != statusWorking:
-					ui.Text(c, msgs.SendAcceptedState()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
-				case ct.SendState == sendUnknown && !unknownNotice && !knownMismatch:
+				if ct.SendState == sendUnknown && !unknownNotice && !knownMismatch {
 					ui.Text(c, unknownSummary).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Danger)
 				}
 				if sendErrorVisible || connectionLostDetail {

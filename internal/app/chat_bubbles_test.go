@@ -25,9 +25,30 @@ func TestSplitReplyBubblesAndRailPreview(t *testing.T) {
 			want: []string{"Short single reply."},
 		},
 		{
-			name: "inline marker inside sentence does not split",
+			name: "inline marker inside prose splits cleanly",
 			text: "Keep <<<NEXT>>> inside prose.",
-			want: []string{"Keep <<<NEXT>>> inside prose."},
+			want: []string{"Keep", "inside prose."},
+		},
+		{
+			name: "missing trailing newline after marker splits cleanly",
+			text: "圆周率如下。\n<<<NEXT>>>这是用 Machin 公式算的。",
+			want: []string{"圆周率如下。", "这是用 Machin 公式算的。"},
+		},
+		{
+			name: "inline single backtick code span keeps marker literal",
+			text: "Use `<<<NEXT>>>` literally.\n<<<NEXT>>>\nSecond.",
+			want: []string{"Use `<<<NEXT>>>` literally.", "Second."},
+		},
+		{
+			name: "inline double backtick code span keeps marker literal",
+			text: "Use ``<<<NEXT>>>`` in docs.<<<NEXT>>>Next bubble.",
+			want: []string{"Use ``<<<NEXT>>>`` in docs.", "Next bubble."},
+		},
+		{
+			name:      "inline streaming partial prefix suppressed",
+			text:      "Hello <<<NE",
+			streaming: true,
+			want:      []string{"Hello "},
 		},
 		{
 			name: "three bubbles with crlf whitespace and blank lines",
@@ -124,6 +145,10 @@ func TestSplitReplyBubblesAndRailPreview(t *testing.T) {
 	ct.Messages[1].Streaming = false
 	if got := a.snippet(ct, msgs); got != "First reply." || strings.Contains(got, "<<<NEXT>>>") {
 		t.Fatalf("multi-bubble snippet = %q, want %q", got, "First reply.")
+	}
+	ct.Messages[1].Text = "Inline `<<<NEXT>>>` marker in first bubble."
+	if got := a.snippet(ct, msgs); strings.Contains(got, "<<<NEXT>>>") {
+		t.Fatalf("rail snippet leaked separator literal: %q", got)
 	}
 }
 
@@ -328,10 +353,17 @@ func TestIMChatBubblesSpacingLinksCopyAndFrostedCreateBotModal(t *testing.T) {
 	ct.Messages = []*message{{ID: 3, Kind: msgContact, Text: rawReply, Timestamp: t3}}
 	tr.SetLocale("en")
 	tr.Frame()
-	if err := tr.Click(msgs.CopyMessageLabel()); err != nil {
+	if tr.HasText(msgs.CopyMessageLabel()) {
+		t.Fatalf("outer Bot bubble copy button should be absent: %v", tr.Texts())
+	}
+	if err := tr.RightClick("Docs"); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(tr.Clipboard(), "First bubble with") || strings.Contains(tr.Clipboard(), replyBubbleSeparator) {
-		t.Fatalf("Bot bubble copy button copied %q", tr.Clipboard())
+	tr.Frame()
+	if err := choosePopoverMenuItem(tr, msgs.CopyMessageLabel()); err != nil {
+		t.Fatal(err)
+	}
+	if tr.Clipboard() != "First bubble with [Docs](https://example.invalid/one)" {
+		t.Fatalf("Bot bubble context menu copy copied %q", tr.Clipboard())
 	}
 }
