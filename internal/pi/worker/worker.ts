@@ -73,6 +73,11 @@ class Worker {
       disconnect: () => { void this.disconnect(true); },
       cleanMessage: error => this.cleanMessage(error),
     }, frame => this.writer.send(frame));
+    if (this.product) {
+      process.once('exit', () => this.product?.killMcpOnExit());
+      process.once('SIGTERM', () => { process.exitCode = 143; void this.disconnect(false); });
+      process.once('SIGINT', () => { process.exitCode = 130; void this.disconnect(false); });
+    }
   }
   private response(id: string, result: object): Promise<void> {
     return this.writer.send({ v: 1, type: 'response', id, ok: true, result });
@@ -137,7 +142,7 @@ class Worker {
         const path = event.isError ? undefined : confirmedFileEffect(context.binding.cwd, event.toolName, input, content);
         if (path) observers.confirmedFileEffect(path, event.toolCallId);
         const first = content?.[0];
-        const excerpt = (path || event.toolName === 'read') && first?.type === 'text' ? first.text : undefined;
+        const excerpt = (path || event.toolName === 'read' || event.toolName.startsWith('mcp__')) && first?.type === 'text' ? first.text : undefined;
         observers.toolFinished(event.toolName, event.toolCallId, event.isError, excerpt);
       }
       run.inputs.delete(event.toolCallId);
@@ -471,7 +476,7 @@ class Worker {
 
   private async drainProduct(): Promise<void> {
     this.closing = true;
-    for (const context of this.contexts.values()) {
+    await Promise.all([this.product?.drainMcp(), ...[...this.contexts.values()].map(async context => {
       const run = context.active;
       if (run) {
         run.cancelled = true;
@@ -479,7 +484,7 @@ class Worker {
         await run.done;
       }
       await context.runtime.dispose();
-    }
+    })]);
   }
 
   private async completeShutdown(): Promise<void> {
@@ -610,14 +615,14 @@ class Worker {
     if (this.disconnected) return;
     this.disconnected = true; this.closing = true;
     if (failed) process.exitCode = 1;
-    const outcomes = await Promise.allSettled([...this.contexts.values()].map(async context => {
+    const outcomes = await Promise.allSettled([this.product?.drainMcp(), ...[...this.contexts.values()].map(async context => {
       const run = context.active;
       if (run) run.cancelled = true;
       try {
         await context.runtime.session.abort();
         if (run) await run.done;
       } finally { await context.runtime.dispose(); }
-    }));
+    })]);
     if (outcomes.some(outcome => outcome.status === 'rejected')) process.exitCode = 1;
     try { this.product?.close(); }
     catch { process.exitCode = 1; }

@@ -40,6 +40,7 @@ type ProductEvent struct {
 	Data         json.RawMessage              `json:"data"`
 	TraceUpdated *ProductActivityTraceUpdated `json:"-"`
 	SkillChanged *ProductSkillChange          `json:"-"`
+	McpChanged   *ProductMcpChange            `json:"-"`
 }
 
 type ProductActivityTraceUpdated struct {
@@ -93,6 +94,7 @@ type ProductBotProfile struct {
 	StarterPrompts []string              `json:"starterPrompts,omitempty"`
 	ToolPreset     string                `json:"toolPreset,omitempty"`
 	MountedSkills  []ProductMountedSkill `json:"mountedSkills,omitempty"`
+	McpBindings    []ProductMcpBinding   `json:"mcpBindings,omitempty"`
 }
 
 type ProductBot struct {
@@ -743,6 +745,13 @@ func (c *Client) handleProductEvent(line []byte) error {
 			return errors.New("invalid skill change")
 		}
 		event.SkillChanged = &change
+	}
+	if event.Name == "mcp.changed" {
+		var change ProductMcpChange
+		if json.Unmarshal(event.Data, &change) != nil || !change.valid() {
+			return errors.New("invalid MCP change")
+		}
+		event.McpChanged = &change
 	}
 	c.mu.Lock()
 	if event.StreamID != c.streamID || c.streamGap || event.Seq <= c.streamSeq {

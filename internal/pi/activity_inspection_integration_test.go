@@ -1314,19 +1314,19 @@ const db = new DatabaseSync(process.argv[1]);
 const version = db.prepare('PRAGMA user_version').get().user_version;
 const fk = db.prepare('PRAGMA foreign_key_check').all().length;
 const pending = db.prepare("SELECT value FROM meta WHERE key = 'pending_snapshot_previous'").get();
-db.exec('PRAGMA user_version = 5');
+db.exec('PRAGMA user_version = 6');
 db.close();
 console.log(JSON.stringify({ version, fk, hasPending: !!pending }));
 `)
-	if v4Check != `{"version":4,"fk":0,"hasPending":false}` {
-		t.Fatalf("v3->v4 pending repair state = %s", v4Check)
+	if v4Check != `{"version":5,"fk":0,"hasPending":false}` {
+		t.Fatalf("v3->v5 pending repair state = %s", v4Check)
 	}
 
 	v5Client, startErr := pi.StartProduct(v3Opts)
 	if startErr == nil {
 		if _, readyErr := v5Client.Ready(ctx); readyErr == nil {
 			if _, openErr := v5Client.Open(ctx, []int{pi.ProductVersion}); openErr == nil {
-				t.Fatal("worker admitted SQLite user_version=5")
+				t.Fatal("worker admitted SQLite user_version=6")
 			}
 		}
 		_, _ = v5Client.Wait(ctx)

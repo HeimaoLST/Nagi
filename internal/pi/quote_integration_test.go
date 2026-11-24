@@ -477,7 +477,7 @@ const fk = db.prepare('PRAGMA foreign_key_check').all().length;
 db.close();
 console.log(JSON.stringify({ v, fk }));
 `)
-		if !strings.Contains(schema, `"v":4`) || !strings.Contains(schema, `"fk":0`) {
+		if !strings.Contains(schema, `"v":5`) || !strings.Contains(schema, `"fk":0`) {
 			t.Fatalf("SQLite %s schema/FK mismatch = %s", dbFile, schema)
 		}
 	}

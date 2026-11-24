@@ -50,12 +50,51 @@ export type MountedSkill = Static<typeof mountedSkill>;
 export type SkillDetail = Static<typeof skillDetail>;
 export type SkillListing = Static<typeof skillListing>;
 export type SkillChange = Static<typeof skillChange>;
+
+const mcpStrict = { additionalProperties: false };
+const mcpServerId = Type.String({ pattern: '^[a-z0-9][a-z0-9_-]{0,62}$' });
+const mcpIsolation = Type.Union([Type.Literal('shared'), Type.Literal('per_workspace'), Type.Literal('per_bot')]);
+const mcpKeyList = Type.Optional(Type.Array(id, { maxItems: 64, uniqueItems: true }));
+const mcpFields = { serverId: mcpServerId, name: Type.String({ pattern: '^[A-Za-z0-9_-]{1,63}$' }), isolation: mcpIsolation, enabled: Type.Boolean() };
+const mcpPublicValues = Type.Optional(Type.Record(Type.String(), Type.String(), { maxProperties: 64 }));
+const mcpStdio = { ...mcpFields, transport: Type.Literal('stdio'), command: id, args: Type.Optional(stringList), cwd: Type.Optional(id),
+  envKeys: mcpKeyList, secretEnvKeys: mcpKeyList, env: mcpPublicValues };
+const mcpHttp = { ...mcpFields, transport: Type.Literal('http'), url: id, headerKeys: mcpKeyList, secretHeaderKeys: mcpKeyList, headers: mcpPublicValues };
+const mcpServerInput = Type.Union([Type.Object({ ...mcpStdio, revision: Type.Optional(revision) }, mcpStrict),
+  Type.Object({ ...mcpHttp, revision: Type.Optional(revision) }, mcpStrict)]);
+const mcpTool = Type.Object({ name: id, description: Type.String(), inputSchema: Type.Optional(Type.Unknown()),
+  readOnlyHint: Type.Optional(Type.Boolean()), destructiveHint: Type.Optional(Type.Boolean()) }, mcpStrict);
+const mcpCatalog = Type.Object({ tools: Type.Array(mcpTool, { maxItems: 128 }), fetchedAt: id, error: Type.Optional(id) }, mcpStrict);
+const mcpRecordFields = { revision, catalog: Type.Optional(mcpCatalog) };
+export const mcpServerRecord = Type.Union([Type.Object({ ...mcpStdio, ...mcpRecordFields }, mcpStrict),
+  Type.Object({ ...mcpHttp, ...mcpRecordFields }, mcpStrict)]);
+const mcpPool = Type.Object({ serverId: mcpServerId, scopeKey: id, isolation: mcpIsolation,
+  state: Type.Union([Type.Literal('connecting'), Type.Literal('connected'), Type.Literal('closing')]), refCount: revision, pid: Type.Optional(positiveInteger) }, mcpStrict);
+const mcpViewFields = { ...mcpRecordFields, credentialStatus: Type.Union([Type.Literal('ok'), Type.Literal('credential_missing')]), pools: Type.Array(mcpPool) };
+const mcpServerView = Type.Union([Type.Object({ ...mcpStdio, ...mcpViewFields }, mcpStrict), Type.Object({ ...mcpHttp, ...mcpViewFields }, mcpStrict)]);
+const mcpSecretValues = Type.Optional(Type.Union([Type.Record(Type.String(), Type.Union([Type.String(), Type.Null()]), { maxProperties: 64 }), Type.Null()]));
+const mcpSecretInput = Type.Optional(Type.Union([Type.Object({ env: mcpSecretValues, headers: mcpSecretValues }, mcpStrict), Type.Null()]));
+const mcpTestResult = Type.Object({ ok: Type.Boolean(), tools: Type.Array(mcpTool), error: Type.Optional(id), latencyMs: revision }, mcpStrict);
+const mcpChange = Type.Object({ serverId: mcpServerId,
+  change: Type.Union([Type.Literal('saved'), Type.Literal('deleted'), Type.Literal('tested')]) }, mcpStrict);
+export const mcpBinding = Type.Object({ serverId: mcpServerId, policy: Type.Union([Type.Literal('all'), Type.Literal('readonly'), Type.Literal('allowlist')]),
+  allowedTools: Type.Optional(Type.Array(id, { maxItems: 128, uniqueItems: true })) }, mcpStrict);
+export type McpBinding = Static<typeof mcpBinding>;
+export type McpServerInput = Static<typeof mcpServerInput>;
+export type McpServerRecord = Static<typeof mcpServerRecord>;
+export type McpServerView = Static<typeof mcpServerView>;
+export type McpPoolView = Static<typeof mcpPool>;
+export type McpTool = Static<typeof mcpTool>;
+export type McpSecretInput = Static<typeof mcpSecretInput>;
+export type McpTestResult = Static<typeof mcpTestResult>;
+
 export const profileSchema = Type.Object({
   name: id, role: Type.String(), purpose: Type.String(), instructions: Type.String(),
   workspace: Type.String(), codingTools: Type.Union([Type.Null(), stringList]),
   starterPrompts: Type.Optional(Type.Array(Type.String())),
   toolPreset: Type.Optional(Type.Union([toolPresetSchema, Type.Literal('custom')])),
   mountedSkills: Type.Optional(Type.Array(mountedSkill, { maxItems: 200 })),
+  mcpBindings: Type.Optional(Type.Array(mcpBinding, { maxItems: 64 })),
 });
 export const botSystemKindSchema = Type.Literal(SYSTEM_KIND_BOT_ARCHITECT);
 const botResult = Type.Object({ botId: id, profile: profileSchema, profileRevision: revision, archived: Type.Boolean(),
@@ -171,6 +210,11 @@ export const productCommands = Type.Union([
   Type.Object({ method: Type.Literal('connection.test'), params: Type.Object({ configuration: connectionSchema }) }),
   Type.Object({ method: Type.Literal('connection.save'), params: Type.Object({ configuration: connectionSchema, operationId: id }) }),
   Type.Object({ method: Type.Literal('connection.apply'), params: Type.Object({ savedRevision: revision, operationId: id }) }),
+  Type.Object({ method: Type.Literal('mcp.list'), params: Type.Object({}, mcpStrict) }),
+  Type.Object({ method: Type.Literal('mcp.save'), params: Type.Object({ server: mcpServerInput, secrets: mcpSecretInput, operationId: id }, mcpStrict) }),
+  Type.Object({ method: Type.Literal('mcp.delete'), params: Type.Object({ serverId: mcpServerId, operationId: id }, mcpStrict) }),
+  Type.Object({ method: Type.Literal('mcp.test'), params: Type.Object({ serverId: Type.Optional(mcpServerId), server: Type.Optional(mcpServerInput), secrets: mcpSecretInput }, mcpStrict) }),
+  Type.Object({ method: Type.Literal('mcp.status'), params: Type.Object({}, mcpStrict) }),
   Type.Object({ method: Type.Literal('operation.get'), params: Type.Object({ operationId: id }) }),
   Type.Object({ method: Type.Literal('profile.backup'), params: Type.Object({ destination: id }) }),
   Type.Object({ method: Type.Literal('app.shutdown'), params: Type.Object({}) }),
@@ -182,6 +226,7 @@ export const productEvents = Type.Union([
   Type.Object({ event: Type.Literal('bot.changed'), data: Type.Object({ bot: botResult, change: botChangeSchema }) }),
   Type.Object({ event: Type.Literal('memory.changed'), data: memoryChangedSchema }),
   Type.Object({ event: Type.Literal('skill.changed'), data: skillChange }),
+  Type.Object({ event: Type.Literal('mcp.changed'), data: mcpChange }),
   Type.Object({ event: Type.Literal('execution.started'), data: executionEvent({ revision }) }),
   Type.Object({ event: Type.Literal('execution.textDelta'), data: executionEvent({ offset: revision, text: Type.String() }) }),
   Type.Object({ event: Type.Literal('execution.settled'), data: executionEvent({
@@ -263,6 +308,11 @@ export const productResults = {
   'connection.test': Type.Object({ verified: Type.Literal(true) }),
   'connection.save': Type.Object(connectionRevisions),
   'connection.apply': Type.Object(connectionRevisions),
+  'mcp.list': Type.Object({ servers: Type.Array(mcpServerView) }),
+  'mcp.save': Type.Object({ server: mcpServerView }),
+  'mcp.delete': Type.Object({ deleted: Type.Literal(true) }),
+  'mcp.test': mcpTestResult,
+  'mcp.status': Type.Object({ pools: Type.Array(mcpPool) }),
   'operation.get': operationSchema,
   'profile.backup': Type.Object({ path: id }),
   'app.shutdown': Type.Object({ drained: Type.Literal(true) }),
