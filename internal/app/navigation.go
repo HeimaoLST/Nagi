@@ -162,7 +162,7 @@ func (a *appModel) profileDetail(c *ui.Context, t *ui.Theme) {
 		profileScroll.Children(func() {
 			ui.Column(c).FillWidth().MaxWidth(settingsContentWidth).AlignSelf(ui.Center).Gap(8).Children(func() {
 				ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
-					contactAvatar(c, t, ct.Name, 32)
+					contactAvatar(c, t, ct, 32)
 					ui.Text(c, ct.Name).FontSize(typePageTitle).FontWeight(500).FixedLineHeight(lineSettingsTitle).TextColor(t.Text).MinWidth(0).MaxLines(2)
 				})
 				editor.view(c, t, formActions, a.workTheme.InputBorder)

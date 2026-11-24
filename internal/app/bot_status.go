@@ -263,7 +263,7 @@ func botStatusAvatar(c *ui.Context, t *ui.Theme, ct *contact, size float32, stat
 		})
 	}
 	outer.Children(func() {
-		ink, glow, width := t.Border.Alpha(.45), ui.Transparent, float32(1)
+		ink, glow, width := ui.Transparent, ui.Transparent, float32(0)
 		switch state.kind {
 		case botVisualReplying:
 			ink, glow, width = t.Success.Alpha(.75), t.Success.Alpha(.18), 2
@@ -281,7 +281,7 @@ func botStatusAvatar(c *ui.Context, t *ui.Theme, ct *contact, size float32, stat
 		ui.Box(c).Absolute().Left(inset).Right(inset).Top(inset).Bottom(inset).Radius(radius+width).
 			Border(width, ink).Shadow(0, 0, 4, 1, glow).IgnoreInput(true).
 			Transition(ui.ElementTransition{Duration: 180 * time.Millisecond, Colors: true, Shadows: true})
-		contactAvatar(c, t, ct.Name, size)
+		contactAvatar(c, t, ct, size)
 	})
 }
 

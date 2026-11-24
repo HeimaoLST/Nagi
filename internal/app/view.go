@@ -10,7 +10,6 @@ import (
 	"slices"
 	"strings"
 	"time"
-	"unicode"
 
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/markdown"
@@ -286,7 +285,7 @@ func (a *appModel) avatarRail(c *ui.Context, t *ui.Theme) {
 				label := locales.In(c.Locale()).RailShowPandoraBox()
 				button := appTooltip(c, ui.ButtonBase(c).Label(label).Size(32, 32).Center().Radius(8), label)
 				button.Disabled(!a.canChangeBuiltinArchitectVisibility()).OnClick(a.showBuiltinArchitectInRail)
-				button.Children(func() { contactAvatar(c, t, "PandoraBox", 24) })
+				button.Children(func() { botStoneAvatar(c, t, "", "PandoraBox", true, 24) })
 			}
 			ui.Spacer(c).Grow(1)
 		} else {
@@ -425,34 +424,20 @@ func (a *appModel) railRow(c *ui.Context, t *ui.Theme, i int) {
 	})
 }
 
-func contactAvatar(c *ui.Context, t *ui.Theme, name string, size float32) {
-	name = strings.TrimSpace(name)
-	initials := [2]rune{'?'}
-	n := 0
-	for word := range strings.FieldsSeq(name) {
-		for _, r := range word {
-			if unicode.IsLetter(r) || unicode.IsNumber(r) {
-				initials[n] = unicode.ToUpper(r)
-				n++
-				break
-			}
-		}
-		if n == len(initials) {
-			break
-		}
+func contactAvatar(c *ui.Context, t *ui.Theme, ct *contact, size float32) {
+	var id, name string
+	var builtin bool
+	if ct != nil {
+		id, name, builtin = ct.ID, ct.Name, ct.isBuiltin()
 	}
-	background, ink := contactAvatarColors(t, name)
-	radius, fontSize, lineHeight := float32(8), typeMeta, lineMeta
-	switch size {
-	case 24:
-		radius = 7
-	case 48:
-		radius, fontSize, lineHeight = 14, 20, 24
-	}
-	ui.Box(c).Size(size, size).MinWidth(size).Shrink(0).Radius(radius).Background(background).
-		AlignItems(ui.Center).Justify(ui.Center).IgnoreInput(true).Children(func() {
-		ui.Text(c, string(initials[:max(1, n)])).FontSize(fontSize).FontWeight(600).FixedLineHeight(lineHeight).
-			SingleLine().TextColor(ink).IgnoreInput(true)
+	botStoneAvatar(c, t, id, name, builtin, size)
+}
+
+func botStoneAvatar(c *ui.Context, t *ui.Theme, id, name string, builtin bool, size float32) {
+	spec := resolveBotAvatar(t, id, name, builtin)
+	ui.Box(c).Size(size, size).MinWidth(size).Shrink(0).AlignItems(ui.Center).Justify(ui.Center).IgnoreInput(true).Children(func() {
+		ui.Icon(c, spec.Body).Size(size, size).TextColor(spec.BodyColor).IgnoreInput(true)
+		ui.Icon(c, spec.Eyes).Absolute().Left(0).Top(0).Size(size, size).TextColor(spec.EyeColor).IgnoreInput(true)
 	})
 }
 

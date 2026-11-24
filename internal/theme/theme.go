@@ -2,6 +2,7 @@ package theme
 
 import (
 	"math"
+	"strings"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -229,27 +230,9 @@ func PaletteContrast(a, b ui.Color) float64 {
 	return (x + 0.05) / (y + 0.05)
 }
 
-var contactAvatarSwatches = [...]struct{ light, dark ui.Color }{
-	{ui.Hex("#CADDEB"), ui.Hex("#2E4961")},
-	{ui.Hex("#D9D1EA"), ui.Hex("#4B3B61")},
-	{ui.Hex("#E9CDD4"), ui.Hex("#633B4B")},
-	{ui.Hex("#EED7BE"), ui.Hex("#634528")},
-	{ui.Hex("#C6E1DB"), ui.Hex("#284E4A")},
-	{ui.Hex("#DDE5C1"), ui.Hex("#47532F")},
-	{ui.Hex("#E4CFBE"), ui.Hex("#5B4338")},
-	{ui.Hex("#CBD2EE"), ui.Hex("#3B456B")},
-}
-
 func ContactAvatarColors(t *ui.Theme, name string) (background, ink ui.Color) {
-	hash := uint32(2166136261)
-	for i := 0; i < len(name); i++ {
-		hash = (hash ^ uint32(name[i])) * 16777619
-	}
-	swatch := contactAvatarSwatches[(hash^(hash>>16))%uint32(len(contactAvatarSwatches))]
-	if t.Dark {
-		return swatch.dark, ui.RGB(242, 241, 232)
-	}
-	return swatch.light, ui.RGB(20, 20, 20)
+	avatar := ResolveBotAvatar(t, "", name, strings.EqualFold(strings.TrimSpace(name), "PandoraBox"))
+	return avatar.BodyColor, avatar.EyeColor
 }
 
 // SegmentedSelection keeps MyGo's official SegmentedBase radio group,
