@@ -327,7 +327,7 @@ func TestPiAppProductActivityQuestionSurvivesWorkerLoss(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	provider := &piAppProvider{limit: 1}
-	call := piAppCall{name: "issue_wait", id: "lost-worker-question", args: piAppArguments(map[string]any{"text": questionText})}
+	call := piAppCall{name: "activity_ask", id: "lost-worker-question", args: piAppArguments(map[string]any{"text": questionText})}
 	if err := provider.install([]piAppCall{call}, "Unexpected continuation", nil, nil); err != nil {
 		t.Fatal(err)
 	}

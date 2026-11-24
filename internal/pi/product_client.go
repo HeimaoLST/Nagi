@@ -34,10 +34,17 @@ type ProductClient struct {
 }
 
 type ProductEvent struct {
-	StreamID string          `json:"streamId"`
-	Seq      uint64          `json:"seq"`
-	Name     string          `json:"event"`
-	Data     json.RawMessage `json:"data"`
+	StreamID     string                       `json:"streamId"`
+	Seq          uint64                       `json:"seq"`
+	Name         string                       `json:"event"`
+	Data         json.RawMessage              `json:"data"`
+	TraceUpdated *ProductActivityTraceUpdated `json:"-"`
+}
+
+type ProductActivityTraceUpdated struct {
+	ActivityID  string `json:"activityId"`
+	ExecutionID string `json:"executionId"`
+	LastSeq     uint64 `json:"lastSeq"`
 }
 
 type ProductExecutionEvent struct {
@@ -282,6 +289,28 @@ type ProductActivityResult struct {
 	Files       []ProductResultFile `json:"files"`
 }
 
+type ProductActivityTraceItem struct {
+	Seq         uint64 `json:"seq"`
+	ActivityID  string `json:"activityId"`
+	ExecutionID string `json:"executionId"`
+	At          string `json:"at"`
+	Kind        string `json:"kind"`
+	Tool        string `json:"tool,omitempty"`
+	CallID      string `json:"callId,omitempty"`
+	Target      string `json:"target,omitempty"`
+	OK          *bool  `json:"ok,omitempty"`
+	Excerpt     string `json:"excerpt,omitempty"`
+	Path        string `json:"path,omitempty"`
+	Scope       string `json:"scope,omitempty"`
+	State       string `json:"state,omitempty"`
+}
+
+type ProductActivityTrace struct {
+	ProductPage[ProductActivityTraceItem]
+	HistoryTruncated bool   `json:"historyTruncated"`
+	Coverage         string `json:"coverage"`
+}
+
 type ProductConnectionSettings struct {
 	WireAPI          WireAPI `json:"wireApi"`
 	BaseURL          string  `json:"baseUrl"`
@@ -426,6 +455,13 @@ type ProductActivityParams struct {
 type ProductActivityExecutionParams struct {
 	ProductActivityParams
 	ExecutionID string `json:"executionId"`
+}
+
+type ProductActivityTraceParams struct {
+	ProductActivityParams
+	ProductPageParams
+	ExecutionID string `json:"executionId,omitempty"`
+	MaxBytes    int    `json:"maxBytes,omitempty"`
 }
 
 type ProductActivityStopParams struct {
@@ -594,6 +630,10 @@ func (p *ProductClient) ActivityResult(ctx context.Context, params ProductActivi
 	return productCall[ProductActivityResult](ctx, p, "activity.result", params)
 }
 
+func (p *ProductClient) ActivityTrace(ctx context.Context, params ProductActivityTraceParams) (ProductActivityTrace, error) {
+	return productCall[ProductActivityTrace](ctx, p, "activity.trace", params)
+}
+
 func (p *ProductClient) ContinueActivity(ctx context.Context, params ProductActivityContinueParams) (ProductReceipt, error) {
 	if params.Materials == nil {
 		params.Materials = []ProductMaterial{}
@@ -674,6 +714,13 @@ func (c *Client) handleProductEvent(line []byte) error {
 	var event ProductEvent
 	if json.Unmarshal(line, &event) != nil || event.StreamID == "" || event.Seq == 0 || len(event.Data) == 0 || event.Name == "" {
 		return errors.New("invalid product event envelope")
+	}
+	if event.Name == "activity.traceUpdated" {
+		var update ProductActivityTraceUpdated
+		if json.Unmarshal(event.Data, &update) != nil || update.ActivityID == "" || update.ExecutionID == "" || update.LastSeq == 0 {
+			return errors.New("invalid activity trace update")
+		}
+		event.TraceUpdated = &update
 	}
 	c.mu.Lock()
 	if event.StreamID != c.streamID || c.streamGap || event.Seq <= c.streamSeq {

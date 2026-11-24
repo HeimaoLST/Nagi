@@ -7,8 +7,8 @@ This document is the single authoritative domain vocabulary for Nagi across prod
 | Canonical Term | Status | Definition | Stable Identifier | Storage / Wire / Tool Anchor |
 | --- | --- | --- | --- | --- |
 | **Bot** | Shipped | A long-lived member of the Bot Team. Built-in `PandoraBox` and user Bots share one uniform model. | `botId` | SQLite `bots`, wire `bot.*`, tools `bot_*` |
-| **Conversation** | Shipped | The continuous chat stream between the user and one Bot (current editable chat or read-only previous chat). | `conversationId` | SQLite `conversations`, wire `conversation.*`, planned read tools `conversation_*` |
-| **Activity** | Shipped | An independently tracked unit of work delegated to a Bot (e.g. researching a doc, implementing code, auditing a release). Persists across Bot switches and new chats. | `activityId` | SQLite `activities`, wire `activity.*`, tools `activity_*` (see legacy note below) |
+| **Conversation** | Shipped | The continuous chat stream between the user and one Bot (current editable chat or read-only previous chat). | `conversationId` | SQLite `conversations`, wire `conversation.*`, tools `conversation_read`, `conversation_search` |
+| **Activity** | Shipped | An independently tracked unit of work delegated to a Bot (e.g. researching a doc, implementing code, auditing a release). Persists across Bot switches and new chats. | `activityId` | SQLite `activities` + `activity_traces`, wire `activity.*`, tools `activity_*` |
 | **Execution** | Shipped | One concrete model/runtime run inside a Conversation turn or an Activity start/continue cycle, with its own settlement and receipts. | `executionId` | SQLite `executions`, wire `execution.*` |
 | **Question** | Shipped | A structured blocking question raised by an Activity when genuine human input is required. | `questionId` | Embedded on `Activity`, wire `question.answer` |
 | **Material** | Shipped | Captured text snippets and file-reference snapshots attached to a Conversation draft or Activity. | `materialId` | `Draft.materials`, `Activity.materials` |
@@ -27,6 +27,6 @@ This document is the single authoritative domain vocabulary for Nagi across prod
 The term `issue` was an early storage name for **Activity** and is retired as a product concept.
 
 - **Allowed read-only historical scope**: Legacy `issue` fields remain strictly confined to read-only historical admission and transcript readers — specifically the v10 `contacts.json` decoder (`internal/store/store.go`, `internal/pi/worker/product-profile.ts`), retained v1 import metadata, and historical Pi transcript readers (`readImportedActivityResult` and `nagi.issue_tools.*` filtering in `internal/pi/worker/product.ts`).
-- **Active migration tracked in [RFC-0001](../rfcs/0001-multi-brain-and-capabilities.md)**:
-  - **M0a**: Replace remaining live model tool names (`delegate_activity`, `issue_list`, `issue_get(issue_id)`, `issue_action(issue_id)`, `issue_wait`) with `activity_delegate`, `activity_list`, `activity_get(activity_id)`, `activity_action(activity_id)`, and `activity_ask`.
-  - **M0b**: Normalize remaining live Go runtime symbols under `internal/app/` from `Issue` to `Activity` while keeping `internal/store`'s v10 legacy decoder intact.
+- **Migration status ([RFC-0001](../rfcs/0001-multi-brain-and-capabilities.md))**:
+  - **M0a (Shipped)**: Live model tools use `activity_delegate`, `activity_list`, `activity_get(activity_id)`, `activity_action(activity_id)`, `activity_ask`, and `activity_trace_read` with zero dual live aliases.
+  - **M0b (Planned)**: Normalize remaining live Go runtime symbols under `internal/app/` from `Issue` to `Activity` while keeping `internal/store`'s v10 legacy decoder intact.

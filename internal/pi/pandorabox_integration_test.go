@@ -155,8 +155,8 @@ const fk = db.prepare('PRAGMA foreign_key_check').all().length;
 db.close();
 console.log(JSON.stringify({ version, hasSystemKind: cols.includes('system_kind'), fk }));
 `)
-	if !strings.Contains(versionAfter, `"version":3`) || !strings.Contains(versionAfter, `"hasSystemKind":true`) || !strings.Contains(versionAfter, `"fk":0`) {
-		t.Fatalf("v1->v3 SQLite upgrade state = %s", versionAfter)
+	if !strings.Contains(versionAfter, `"version":4`) || !strings.Contains(versionAfter, `"hasSystemKind":true`) || !strings.Contains(versionAfter, `"fk":0`) {
+		t.Fatalf("v1->v4 SQLite upgrade state = %s", versionAfter)
 	}
 
 	first, err := proc.client.EnsureBuiltinBot(ctx, pi.ProductBotEnsureBuiltinParams{
@@ -309,7 +309,7 @@ func TestPiProductPandoraBoxKVCachingToolsAndMutations(t *testing.T) {
 		mu.Lock()
 		captured = append(captured, capturedReq{system: sys, tools: toolNames, role: last.Role, last: lastContent})
 		isPandora := strings.Contains(sys, "Bot Identity\nName: PandoraBox")
-		isActivity := slices.Contains(toolNames, "issue_wait")
+		isActivity := slices.Contains(toolNames, "activity_ask")
 		var step int
 		if isPandora && !isActivity {
 			architectStep++
@@ -327,7 +327,7 @@ func TestPiProductPandoraBoxKVCachingToolsAndMutations(t *testing.T) {
 		if !isPandora {
 			switch step {
 			case 1:
-				piChatResponse(w, "", "delegate_activity", "call-delegate-1", `{"key":"check-1","goal":"Run isolated activity check"}`)
+				piChatResponse(w, "", "activity_delegate", "call-delegate-1", `{"key":"check-1","goal":"Run isolated activity check"}`)
 			default:
 				piChatResponse(w, "Ordinary turn complete.", "", "", "")
 			}
@@ -564,7 +564,7 @@ func TestPiProductPandoraBoxKVCachingToolsAndMutations(t *testing.T) {
 			t.Fatalf("request[%d] L0 prefix diverged (KV cache break):\ngot:  %q\nwant: %q", idx, parts[0], l0Prefix)
 		}
 
-		isActivity := slices.Contains(req.tools, "issue_wait")
+		isActivity := slices.Contains(req.tools, "activity_ask")
 		isPandora := strings.Contains(req.system, "Bot Identity\nName: PandoraBox")
 		if isActivity {
 			activityChecked = true
@@ -807,8 +807,8 @@ const db = new DatabaseSync(process.argv[1]);
 console.log(db.prepare('PRAGMA user_version').get().user_version);
 db.close();
 `)
-	if version != "3" {
-		t.Fatalf("SQLite schema version = %q, want 3", version)
+	if version != "4" {
+		t.Fatalf("SQLite schema version = %q, want 4", version)
 	}
 
 	backupPath := filepath.Join(root, "sp-backup.json")

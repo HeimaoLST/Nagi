@@ -72,7 +72,7 @@ func (p *productProvider) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if kind == "ASK_CEDAR" || kind == "ASK_COPPER" {
 			waitOffered := false
 			for _, tool := range body.Tools {
-				waitOffered = waitOffered || tool.Function.Name == "issue_wait"
+				waitOffered = waitOffered || tool.Function.Name == "activity_ask"
 			}
 			if !waitOffered {
 				problem = "activity execution did not offer the product question tool"
@@ -96,9 +96,9 @@ func (p *productProvider) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "SEED_HISTORY":
 		piChatResponse(w, "SEEDED_REPLY", "", "", "")
 	case "ASK_CEDAR":
-		piChatResponse(w, "", "issue_wait", "qa-question-cedar", `{"text":"Which cedar should I use?"}`)
+		piChatResponse(w, "", "activity_ask", "qa-question-cedar", `{"text":"Which cedar should I use?"}`)
 	case "ASK_COPPER":
-		piChatResponse(w, "", "issue_wait", "qa-question-copper", `{"text":"Which copper should I use?"}`)
+		piChatResponse(w, "", "activity_ask", "qa-question-copper", `{"text":"Which copper should I use?"}`)
 	case "HOLD_SEND":
 		select {
 		case p.arrivals <- kind:

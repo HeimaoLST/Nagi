@@ -671,13 +671,13 @@ func InspectProductProfileBytes(data []byte, copy bool) (contacts, activities in
 	const script = `
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
-const { decodeProductProfile, inspectProductRecovery } = await import(pathToFileURL(process.argv[1]).href);
+const { decodeProductBackup, inspectProductRecovery } = await import(pathToFileURL(process.argv[1]).href);
 try {
   const data = JSON.parse(readFileSync(0, 'utf8'));
   if (process.argv[2] === 'copy') {
     process.stdout.write(JSON.stringify(inspectProductRecovery(data)));
   } else {
-    decodeProductProfile(data);
+    decodeProductBackup(data);
   }
 } catch {
   process.exitCode = 2;

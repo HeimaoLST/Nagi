@@ -361,3 +361,11 @@
 **Cause or correction:** HC’s draft hold expires; it does not preserve an old draft indefinitely. Elapsed quiet time is not consent to replace input.
 
 **Prevention:** Inspect actual terminal input before delivery. When a human draft exists, share material files/links without sending another prompt. If replacement occurs, restore the exact original without submission and verify the unchanged turn, unsent input and terminal size; named-key input cannot replace raw Unicode paste.
+
+### SQLite parent rewrites require deferred non-cascading child foreign keys
+
+**Problem:** `ProductSQLite.replaceProfile` deletes and reinserts parent rows (`bots`, `conversations`, `activities`, `executions`) on every ordinary save, so adding child tables like `activity_traces` with `ON DELETE CASCADE` would wipe trace history on every draft save and immediate FKs would abort saves; emitting new empty arrays on legacy rows also breaks `pending_snapshot_previous` digest verification during crash-repair reopen.
+
+**Cause or correction:** Sidecar tables that survive parent rewrites must use `DEFERRABLE INITIALLY DEFERRED` (`NO ACTION`) foreign keys bound with `encode(id)` JSON-encoded keys and clear prior generations only on explicit snapshot import/replacement, while omitting empty additive fields on legacy canonical serialization.
+
+**Prevention:** Audit `replaceProfile` and `pending_snapshot_previous` before adding any SQLite child table or Activity/Bot profile column, and include both unrelated-save retention and pending-mirror migration checks in integration tests.

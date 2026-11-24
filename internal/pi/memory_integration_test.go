@@ -171,8 +171,8 @@ console.log(JSON.stringify({
   hasAll: ['bot_memory_rules', 'bot_work_logs', 'bot_work_logs_fts', 'bot_pending_learnings', 'bot_memory_meta'].every(n => tables.includes(n)),
 }));
 `)
-	if !strings.Contains(schemaState, `"version":3`) || !strings.Contains(schemaState, `"fk":0`) || !strings.Contains(schemaState, `"hasAll":true`) {
-		t.Fatalf("v2->v3 SQLite migration state = %s", schemaState)
+	if !strings.Contains(schemaState, `"version":4`) || !strings.Contains(schemaState, `"fk":0`) || !strings.Contains(schemaState, `"hasAll":true`) {
+		t.Fatalf("v2->v4 SQLite migration state = %s", schemaState)
 	}
 
 	const configuredKey = "custom-provider-key-xyz98765"
@@ -288,7 +288,7 @@ console.log(JSON.stringify({
 	runNodeSQLite(t, opts.NodePath, dbPath, `
 const { DatabaseSync } = require('node:sqlite');
 const db = new DatabaseSync(process.argv[1]);
-db.exec('PRAGMA user_version = 4');
+db.exec('PRAGMA user_version = 5');
 db.close();
 `)
 	badClient, startErr := pi.StartProduct(opts)
@@ -297,7 +297,7 @@ db.close();
 		if readyErr == nil {
 			_, openErr := badClient.Open(ctx, []int{pi.ProductVersion})
 			if openErr == nil {
-				t.Fatal("worker admitted SQLite user_version=4")
+				t.Fatal("worker admitted SQLite user_version=5")
 			}
 		}
 		_, _ = badClient.Wait(ctx)
@@ -310,7 +310,7 @@ db.close();
 console.log(row.n);
 `)
 	if ruleCountAfter != "1" {
-		t.Fatalf("v4 refusal mutated bot_memory_rules count: %s", ruleCountAfter)
+		t.Fatalf("v5 refusal mutated bot_memory_rules count: %s", ruleCountAfter)
 	}
 }
 
@@ -372,7 +372,7 @@ func TestPiProductMemoryToolsZeroCacheBustReloadAndConsolidation(t *testing.T) {
 		}
 		last := body.Messages[len(body.Messages)-1]
 		lastContent := string(last.Content)
-		isActivity := slices.Contains(toolNames, "issue_wait")
+		isActivity := slices.Contains(toolNames, "activity_ask")
 		isBotA := strings.Contains(sys, "Bot Identity\nName: Alpha")
 		botLabel := "bot-b"
 		if isBotA {
@@ -416,7 +416,7 @@ func TestPiProductMemoryToolsZeroCacheBustReloadAndConsolidation(t *testing.T) {
 			case 4:
 				piChatResponse(w, "Noted your checksum preference.", "", "", "")
 			case 5:
-				piChatResponse(w, "", "delegate_activity", "b-del-1", `{"key":"verify-artifacts","goal":"Verify release artifacts"}`)
+				piChatResponse(w, "", "activity_delegate", "b-del-1", `{"key":"verify-artifacts","goal":"Verify release artifacts"}`)
 			default:
 				piChatResponse(w, "Delegated artifact check.", "", "", "")
 			}
