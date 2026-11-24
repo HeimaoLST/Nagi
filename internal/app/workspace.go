@@ -488,6 +488,8 @@ type productActivityPanel struct {
 	open          bool
 	focusToggle   bool
 	focusBack     bool
+	focusQuestion string
+	legacyIssue   bool
 	items         []pi.ProductActivitySummary
 	nextCursor    *string
 	activityID    string
@@ -543,7 +545,9 @@ func (a *appModel) refreshProductActivities(ct *contact, more bool) {
 				}
 				p.nextCursor = page.NextCursor
 			}
-			if id != "" && p.activityID == id {
+			if p.activityID != id && p.activityID != "" {
+				p.loaded = false
+			} else if id != "" {
 				if detailErr != nil {
 					p.activity = nil
 					p.problem = a.connectionSafeMessage(detailErr)
@@ -572,6 +576,7 @@ func (a *appModel) openProductActivity(ct *contact, activityID string) {
 	p.scroll.Y = 0
 	p.actionProblem, p.problem = "", ""
 	p.focusBack = true
+	p.focusQuestion, p.legacyIssue = "", false
 	a.refreshProductActivities(ct, false)
 }
 

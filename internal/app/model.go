@@ -9,6 +9,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
+	"github.com/HeimaoLST/Nagi/internal/pi"
 	"github.com/HeimaoLST/Nagi/locales"
 )
 
@@ -89,6 +90,8 @@ type contact struct {
 	ProfileRevision    uint64
 	PendingLearnings   int
 	Status             contactStatus
+	completedUntil     time.Time
+	recentCompletion   bool
 	Unread             int
 	Work               string
 	WorkArg            string
@@ -108,6 +111,9 @@ type contact struct {
 	Works              []*workItem
 	Activities         []*productActivity
 	SelectedActivityID string
+
+	activeActivities       map[string]pi.ProductActivitySummary
+	activityStatusRevision uint64
 
 	// A Pi conversation is opened lazily on its first send.
 	SessionID         string
@@ -326,6 +332,7 @@ func (a *appModel) selectContact(i int) {
 	a.aux = ""
 	a.resetComposerOverlays()
 	ct := a.contacts[i]
+	ct.recentCompletion = false
 	if !ct.Loaded && ct.ActiveTaskID == "" && a.canReloadPiConversation(ct) {
 		a.reloadContactByID(ct.ID)
 	}
@@ -365,17 +372,6 @@ func (a *appModel) snippet(c *contact, msgs locales.Messages) string {
 		return text
 	}
 	return msgs.EmptyNoMessages()
-}
-
-func (a *appModel) statusLabel(c *contact, msgs locales.Messages) string {
-	switch c.Status {
-	case statusWorking:
-		return msgs.StatusWorking()
-	case statusAttention:
-		return msgs.StatusNeedsAttention()
-	default:
-		return msgs.StatusReady()
-	}
 }
 
 // addDefaultContact creates and selects a ready contact with a usable
@@ -452,6 +448,7 @@ func (a *appModel) send(ct *contact, text string) bool {
 		a.seq++
 		stamp := time.Now()
 		ct.Messages = append(ct.Messages, &message{ID: a.seq, Kind: msgContact, Text: a.canned(ct), Time: stamp.Format("15:04"), Timestamp: stamp})
+		a.recordBotCompletion(ct)
 	})
 	return true
 }
@@ -548,6 +545,7 @@ func (a *appModel) retry(m *message) bool {
 		a.seq++
 		stamp := time.Now()
 		ct.Messages = append(ct.Messages, &message{ID: a.seq, Kind: msgContact, Text: "Fixed the trailing-newline branch. Parser tests pass now: 64 passed, 0 failed.", Time: stamp.Format("15:04"), Timestamp: stamp})
+		a.recordBotCompletion(ct)
 	})
 	return true
 }

@@ -148,7 +148,7 @@ func TestPreviewI18nFinalMatrix(t *testing.T) {
 				return a
 			},
 			want: func(msgs locales.Messages) []string {
-				return []string{msgs.RuntimeConnecting(), msgs.EmptyNoMessages(), msgs.ComposerLabel("Nagi")}
+				return []string{msgs.ConnectionStatusConnecting(), msgs.ConnectionRecoveryConnectingHint(), msgs.EmptyNoMessages(), msgs.ComposerLabel("Nagi")}
 			},
 			fit: func(msgs locales.Messages) []string { return []string{msgs.ComposerLabel("Nagi")} },
 		},
