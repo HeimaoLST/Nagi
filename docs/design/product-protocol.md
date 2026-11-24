@@ -1,6 +1,6 @@
 # Nagi product protocol v1
 
-This contract maps the [desktop user flows](../requirements/desktop.md#v1) to the Go client, TypeScript worker and native MyGo workbench.
+This contract maps the [desktop user flows](../requirements/desktop.md#v1) to the Go client, TypeScript worker and native MyGo workbench. See [glossary.md](glossary.md) for canonical terminology and [RFC-0001](../rfcs/0001-multi-brain-and-capabilities.md) for planned multi-brain, direct inspection, and capability extensions.
 
 ## Process and wire format
 
