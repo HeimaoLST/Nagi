@@ -21,9 +21,9 @@ Saved fields appear as value rows; **Edit** opens their current draft. Closing a
 
 ### Bot Team, materials and results
 
-Choose or create a Bot in the left **Bot Team** list. Right-click anywhere on a Bot’s row and choose **Bot profile** to manage that member. Global Settings holds app-wide preferences. **General** settings contain appearance, theme and language choices; follow any restart note shown for system windows.
+Choose or create a Bot in the left **Bot Team** list. Right-click anywhere on a Bot’s row to manage that member or open **Bot profile** (including per-Bot memory rules, pending learnings, work logs and starter prompts). Global **Settings** holds app-wide preferences, including **General** controls for showing or hiding built-in `PandoraBox` in the Bot Team rail (it remains callable from the `+` New Bot modal), appearance, theme and language; follow any restart note shown for system windows.
 
-For a UTF-8 file, open **Materials → Add file → Choose UTF-8 file…**. Selection fills the path draft. **Save file** reads and saves the snapshot for preview; submission is a separate action. Later disk changes leave that snapshot intact until **Refresh from file**. Text can also be added with **Add snippet**. Review or remove materials before sending.
+Attach Materials directly from the composer’s `+` menu (**Add files…** or **Add text note…**) or by dragging files onto the conversation window. File attachments capture a snapshot (or a bounded path reference for larger files) before submission and appear as removable chips above the input. Review, edit or remove materials before sending.
 
 Ask the Bot in its conversation to check a task, follow up or retrieve a result. One Bot can handle several tasks. Stopping a chat targets that conversation execution. A finished execution can leave its task open. If delivery is uncertain, use the available details or history to check the original work before deciding whether to continue.
 

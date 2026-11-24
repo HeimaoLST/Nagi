@@ -6,6 +6,10 @@ Describe the change and the affected user flows.
 
 Record the tested commit, checks and results.
 
+## Documentation
+
+Follow the [documentation maintenance standard](https://github.com/HeimaoLST/Nagi/blob/dev/docs/README.md). Record updated canonical docs (`README.md`, `docs/requirements/`, `docs/design/`, or `docs/rfcs/`), or note why no documentation update is required.
+
 ## UI review
 
 Apply the [UI review workflow](https://github.com/HeimaoLST/Nagi/blob/dev/docs/design/ui-review.md) when the change affects the interface or interaction. For changes outside that scope, record why UI review is not applicable.
