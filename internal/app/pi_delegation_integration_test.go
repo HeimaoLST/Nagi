@@ -128,19 +128,19 @@ func TestPiAppProductScopedDelegation(t *testing.T) {
 	p.routes["DELEGATION_PRODUCT_CHAT"] = func(request delegationRequest) delegationReply {
 		switch request.callID {
 		case "":
-			return delegationReply{tool: "issue_get", id: "foreign-read", args: map[string]any{"issue_id": foreignActivity}}
+			return delegationReply{tool: "activity_get", id: "foreign-read", args: map[string]any{"activity_id": foreignActivity}}
 		case "foreign-read":
-			if !strings.Contains(request.result, "outside this conversation scope") || strings.Contains(request.result, "Unrelated inventory") {
+			if !strings.Contains(request.result, `"scope_denied"`) || strings.Contains(request.result, "Unrelated inventory") {
 				t.Errorf("foreign activity lookup leaked or returned the wrong refusal: %s", request.result)
 			}
-			return delegationReply{tool: "delegate_activity", id: "delegate-first", args: delegate}
+			return delegationReply{tool: "activity_delegate", id: "delegate-first", args: delegate}
 		case "delegate-first":
 			var receipt pi.ProductReceipt
 			if err := json.Unmarshal([]byte(request.result), &receipt); err != nil || receipt.Target.ActivityID == "" || receipt.Execution == nil || receipt.Execution.ExecutionID == "" {
 				t.Errorf("Product did not admit the delegated activity: %s, %v", request.result, err)
 			}
 			admitted.Store(receipt)
-			return delegationReply{tool: "delegate_activity", id: "delegate-repeat", args: delegate}
+			return delegationReply{tool: "activity_delegate", id: "delegate-repeat", args: delegate}
 		case "delegate-repeat":
 			first := admitted.Load().(pi.ProductReceipt)
 			var receipt pi.ProductReceipt

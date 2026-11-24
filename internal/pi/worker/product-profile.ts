@@ -2,7 +2,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { closeSync, fstatSync, lstatSync, openSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
-import { isAbsolute } from 'node:path';
+import { extname, isAbsolute } from 'node:path';
 import { Type } from 'typebox';
 import { Value } from 'typebox/value';
 import { RequestError, activityStateSchema, botSystemKindSchema, connectionSchema, draftSchema, executionSchema, materialSchema,
@@ -10,6 +10,7 @@ import { RequestError, activityStateSchema, botSystemKindSchema, connectionSchem
 import type { ProductProfile } from './product.js';
 import { lastingRulesFit, MAX_LOG_BYTES, MAX_PENDING_LEARNINGS, MAX_RULE_BYTES, MAX_WORK_LOGS,
   memorySnapshotSchema, validMemoryDate } from './bot-memory.js';
+import { decodeTraceBackup, directlyOwns, normalizeActivityGrants, type TraceBackup } from './product-trace.js';
 
 export type ProductProfilePaths = {
   profilePath: string;
@@ -81,6 +82,7 @@ const activityRecord = Type.Object({ activityId: recoveryID, ownerBotId: recover
   revision: counter, state: activityStateSchema, goal: Type.String(), requirements: Type.Array(Type.String()),
   questions: Type.Array(questionRecord), materials: Type.Array(materialSchema), inputFiles: Type.Array(Type.String()),
   executionIds: Type.Array(recoveryID), binding: Type.Optional(bindingSchema), retained: Type.Optional(opaque),
+  grantedLinkedActivityIds: Type.Optional(Type.Array(recoveryID)),
   results: Type.Array(Type.Object({ activityId: recoveryID, executionId: recoveryID, text: Type.String(), delivery: Type.Literal('available'),
     files: Type.Array(Type.Object({ path: recoveryID, callId: recoveryID }, strict)) }, strict)) }, strict);
 const recoveryUISchema = Type.Object({ selected: Type.Optional(recoveryID), layout: opaque, themeIds: opaque,
@@ -175,6 +177,16 @@ export function decodeProductProfile(data: unknown): ProductProfile {
         questionIds.size !== activity.questions.length ||
         activity.questions.some(question => !ids.has(question.executionId)) ||
         activity.results.some(result => result.activityId !== activity.activityId || !ids.has(result.executionId))) invalid();
+    if (activity.grantedLinkedActivityIds !== undefined) {
+      const originBotId = conversations.get(activity.originConversationId)!.botId;
+      const grants = normalizeActivityGrants(activity.grantedLinkedActivityIds, 'profile_unavailable');
+      for (const id of grants) {
+        const target = activities.get(id);
+        if (id === activity.activityId || !target || !directlyOwns(target, originBotId, conversations.get(target.originConversationId)?.botId)) invalid();
+      }
+      if (grants.length) activity.grantedLinkedActivityIds = grants;
+      else delete activity.grantedLinkedActivityIds;
+    }
     for (const id of ids) linkExecution(id, activity);
     binding(activity.binding);
   }
@@ -222,8 +234,17 @@ export function decodeProductProfile(data: unknown): ProductProfile {
   return data;
 }
 
+export function decodeProductBackup(data: unknown): { profile: ProductProfile; backup?: TraceBackup } {
+  if (data && typeof data === 'object' && 'backup' in data) {
+    const { backup, ...records } = data;
+    const profile = decodeProductProfile(records);
+    return { profile, backup: decodeTraceBackup(profile, backup) };
+  }
+  return { profile: decodeProductProfile(data) };
+}
+
 export function inspectProductRecovery(data: unknown): { contacts: number; activities: number } {
-  const profile = decodeProductProfile(data);
+  const { profile } = decodeProductBackup(data);
   if (!profile.bots.length || profile.executions.some(execution => execution.state === 'running' || execution.state === 'starting') ||
       profile.activities.some(activity => activity.questions.some(question => question.delivery === 'dispatching'))) {
     throw new RequestError('profile_unavailable', 'The recovery copy contains work that had not reached a saved boundary');
@@ -231,8 +252,10 @@ export function inspectProductRecovery(data: unknown): { contacts: number; activ
   return { contacts: profile.bots.length, activities: profile.activities.length };
 }
 
-export function backupProductProfile(paths: ProductProfilePaths, profile: ProductProfile, destination: string): { path: string } {
-  if (!isAbsolute(destination)) throw new RequestError('invalid_params', 'Choose an absolute location for the recovery copy');
+export function backupProductProfile(paths: ProductProfilePaths, profile: ProductProfile, backup: TraceBackup, destination: string): { path: string } {
+  if (!isAbsolute(destination) || extname(destination).toLowerCase() !== '.json') {
+    throw new RequestError('invalid_params', 'Choose an absolute JSON location for the recovery copy');
+  }
   let ui = profile.recovery?.ui;
   try {
     const saved: unknown = JSON.parse(readFileSync(`${paths.profilePath}.ui.json`, 'utf8'));
@@ -241,7 +264,7 @@ export function backupProductProfile(paths: ProductProfilePaths, profile: Produc
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
   }
-  const snapshot = { ...profile, recovery: { id: randomUUID(), ui } };
+  const snapshot = { ...profile, recovery: { id: randomUUID(), ui }, backup };
   inspectProductRecovery(snapshot);
   const data = Buffer.from(JSON.stringify(snapshot) + '\n');
   const fd = openSync(destination, 'wx', 0o600);
@@ -250,9 +273,11 @@ export function backupProductProfile(paths: ProductProfilePaths, profile: Produc
     try { writeFileSync(fd, data, { flush: true }); }
     finally { closeSync(fd); }
     const saved = lstatSync(destination);
-    if (!saved.isFile() || saved.dev !== identity.dev || saved.ino !== identity.ino || !data.equals(readFileSync(destination))) {
+    const readback = readFileSync(destination);
+    if (!saved.isFile() || saved.dev !== identity.dev || saved.ino !== identity.ino || !data.equals(readback)) {
       throw new Error('Recovery copy readback did not match the saved profile');
     }
+    inspectProductRecovery(JSON.parse(readback.toString('utf8')));
   } catch (error) {
     const current = lstatSync(destination, { throwIfNoEntry: false });
     if (current?.dev === identity.dev && current.ino === identity.ino) rmSync(destination);
@@ -298,17 +323,17 @@ export function saveCredential(path: string, existing: PrivateConnection | undef
   return next;
 }
 
-export function importProductSnapshot(data: unknown, credentials: PrivateConnection | undefined): ProductProfile {
+export function importProductSnapshot(data: unknown, credentials: PrivateConnection | undefined): { profile: ProductProfile; backup?: TraceBackup } {
   const empty: ProductProfile = {
     version: 1, bots: [], conversations: [], activities: [], executions: [], operations: [], connections: [], savedRevision: null, appliedRevision: null,
   };
-  if (data === undefined) return empty;
+  if (data === undefined) return { profile: empty };
   if (!data || typeof data !== 'object' || !('version' in data)) throw new RequestError('profile_unavailable', 'The product profile has an invalid format');
-  if (data.version === 1) return decodeProductProfile(data);
+  if (data.version === 1) return decodeProductBackup(data);
   if (data.version !== 10 || !('contacts' in data) || !Array.isArray(data.contacts) || !data.contacts.length) {
     throw new RequestError('profile_unavailable', 'The product profile format is unsupported');
   }
-  return decodeProductProfile(importCurrentProfile(data as OldProfile, empty, credentials));
+  return { profile: decodeProductProfile(importCurrentProfile(data as OldProfile, empty, credentials)) };
 }
 
 function importCurrentProfile(old: OldProfile, profile: ProductProfile, credentials: PrivateConnection | undefined): ProductProfile {

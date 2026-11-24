@@ -283,7 +283,7 @@ func TestPiAppConcurrentActivities(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	primary := &piAppProvider{limit: 4}
-	questionCall := piAppCall{name: "issue_wait", id: "activity-question", args: piAppArguments(map[string]any{"text": "Which sample?"})}
+	questionCall := piAppCall{name: "activity_ask", id: "activity-question", args: piAppArguments(map[string]any{"text": "Which sample?"})}
 	writeCall := piAppCall{name: "write", id: resultCall, args: piAppArguments(map[string]any{"path": resultName, "content": resultContent})}
 	if err := primary.install([]piAppCall{questionCall, writeCall}, resultText, nil, nil); err != nil {
 		t.Fatal(err)

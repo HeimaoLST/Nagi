@@ -158,7 +158,7 @@ console.log(JSON.stringify({ mode, version, fkCount: fk.length, digest }));
 	mirrorBytes := productRead(t, opts.ProfilePath)
 	sum := sha256.Sum256(mirrorBytes)
 	mirrorDigest := hex.EncodeToString(sum[:])
-	if !strings.EqualFold(inspected.Mode, "wal") || inspected.Version != 3 || inspected.FKCount != 0 || inspected.Digest != mirrorDigest {
+	if !strings.EqualFold(inspected.Mode, "wal") || inspected.Version != 4 || inspected.FKCount != 0 || inspected.Digest != mirrorDigest {
 		t.Fatalf("sqlite metadata mismatch: %+v mirrorDigest=%s", inspected, mirrorDigest)
 	}
 
@@ -381,7 +381,7 @@ console.log(digest);
 	runNodeSQLite(t, opts.NodePath, dbPath, `
 const { DatabaseSync } = require('node:sqlite');
 const db = new DatabaseSync(process.argv[1]);
-db.exec('PRAGMA user_version = 4');
+db.exec('PRAGMA user_version = 5');
 db.close();
 `)
 	badClient, startErr := pi.StartProduct(opts)
@@ -390,7 +390,7 @@ db.close();
 		if readyErr == nil {
 			_, openErr := badClient.Open(ctx, []int{pi.ProductVersion})
 			if openErr == nil {
-				t.Fatal("worker admitted a SQLite database with newer user_version=4")
+				t.Fatal("worker admitted a SQLite database with newer user_version=5")
 			}
 		}
 		_, _ = badClient.Wait(ctx)
