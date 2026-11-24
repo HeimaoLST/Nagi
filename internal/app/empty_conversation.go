@@ -2,7 +2,6 @@ package app
 
 import (
 	"slices"
-	"strings"
 
 	"github.com/egoist/mygo/ui"
 
@@ -32,11 +31,7 @@ func (a *appModel) emptyState(c *ui.Context, t *ui.Theme, ct *contact) {
 			contactAvatar(c, t, ct.Name, 48)
 			ui.Text(c, msgs.EmptyBotGreeting(ct.Name)).MaxWidth(480).MaxLines(2).TextAlign(ui.Center).
 				FontSize(typePageTitle).FontWeight(500).FixedLineHeight(lineSettingsTitle).TextColor(t.Text)
-			purpose := strings.TrimSpace(ct.Purpose)
-			if ct.isBuiltin() && purpose == locales.In("en").PandoraBoxPurpose() {
-				purpose = msgs.PandoraBoxPurpose()
-			}
-			if purpose != "" {
+			if purpose := localizedBotPurpose(ct, msgs); purpose != "" {
 				ui.Text(c, purpose).MaxWidth(480).MaxLines(2).TextAlign(ui.Center).
 					FontSize(typeAction).FixedLineHeight(lineCompact).TextColor(t.TextMuted)
 			}

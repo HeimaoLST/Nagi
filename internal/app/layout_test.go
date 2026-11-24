@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -271,13 +272,10 @@ func TestResponsiveAvatarRailKeyboardAndStatus(t *testing.T) {
 	a.contacts = append(a.contacts, waiting, attention, active)
 	tr := ui.NewTester(a.view, 960, 640)
 	tr.Frame()
-	for _, marker := range []string{"▶", "!"} {
-		if !tr.HasText(marker) {
-			t.Fatalf("static avatar marker %q missing: %v", marker, tr.Texts())
+	for _, retired := range []string{"▶", "!", "▶7", "▶1", "!1"} {
+		if tr.HasText(retired) {
+			t.Fatalf("retired avatar badge %q still rendered: %v", retired, tr.Texts())
 		}
-	}
-	if tr.HasText("▶7") || tr.HasText("▶1") || tr.HasText("!1") {
-		t.Fatalf("avatar status marker contains a task or unread count: %v", tr.Texts())
 	}
 	for _, label := range []string{locales.In("en").AvatarAddContact(), locales.In("en").AvatarContactLabel("Nagi"), locales.In("en").AvatarContactLabel("Waiting"), locales.In("en").AvatarContactLabel("Attention"), locales.In("en").AvatarContactLabel("Active"), "Settings"} {
 		if r, ok := tr.Find(label); !ok || r.X < 0 || r.X+r.W > avatarRailWidth {
@@ -294,8 +292,8 @@ func TestResponsiveAvatarRailKeyboardAndStatus(t *testing.T) {
 	if a.selectedContact() != saki || saki.Draft != "draft-saki" || !a.detailIs(detailProfile) {
 		t.Fatalf("select Nagi = selected=%q draft=%q detail=%q", a.selectedID(), saki.Draft, a.activeDetail())
 	}
-	if texts := strings.Join(tr.Texts(), "\n"); !strings.Contains(texts, "Working") {
-		t.Fatalf("working avatar status not rendered: %v", tr.Texts())
+	if texts := strings.Join(tr.Texts(), "\n"); !strings.Contains(texts, locales.In("en").BotStatusReplying()) {
+		t.Fatalf("replying avatar status not rendered: %v", tr.Texts())
 	}
 
 	tr.Key(0, ui.KeyTab)
@@ -304,8 +302,8 @@ func TestResponsiveAvatarRailKeyboardAndStatus(t *testing.T) {
 	if !tr.Focused(waitingLabel) || a.selectedContact().ID != saki.ID {
 		t.Fatalf("Tab did not focus Waiting without selecting: focused=%v selected=%q", tr.Focused(waitingLabel), a.selectedContact().ID)
 	}
-	if texts := strings.Join(tr.Texts(), "\n"); !strings.Contains(texts, "Ready") {
-		t.Fatalf("ready avatar status not rendered: %v", tr.Texts())
+	if texts := tr.Texts(); slices.Contains(texts, locales.In("en").StatusReady()) || !slices.Contains(texts, waitingLabel) {
+		t.Fatalf("idle avatar tooltip unexpectedly rendered Ready or missed label: %v", texts)
 	}
 	tr.Key(0, ui.KeySpace)
 	tr.Frame()
@@ -335,7 +333,7 @@ func TestResponsiveAvatarRailKeyboardAndStatus(t *testing.T) {
 	if !tr.Focused(activeLabel) {
 		t.Fatalf("Tab did not reach Active avatar: %v", tr.Texts())
 	}
-	if texts := strings.Join(tr.Texts(), "\n"); !strings.Contains(texts, "Working") {
+	if texts := strings.Join(tr.Texts(), "\n"); !strings.Contains(texts, locales.In("en").BotStatusReplying()) {
 		t.Fatalf("focused active avatar tooltip/AX = %v", tr.Texts())
 	}
 	for _, step := range []struct {
@@ -639,12 +637,12 @@ func TestClosedWorkEntryShowsRealWorkStatus(t *testing.T) {
 	ct.Status = statusWorking
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	if !tr.HasText("Working") || len(ct.Messages) != 0 || activityOpenCount(ct) != 0 || a.activityWorkNotice(ct).ActiveCount != 0 {
-		t.Fatalf("contact working hint = %v messages=%d open=%d", tr.Texts(), len(ct.Messages), activityOpenCount(ct))
+	if !tr.HasText(locales.In("en").BotStatusReplying()) || len(ct.Messages) != 0 || activityOpenCount(ct) != 0 || a.activityWorkNotice(ct).ActiveCount != 0 {
+		t.Fatalf("contact replying hint = %v messages=%d open=%d", tr.Texts(), len(ct.Messages), activityOpenCount(ct))
 	}
 	ct.Status = statusAttention
 	tr.Frame()
-	if !tr.HasText("Needs attention") || len(ct.Messages) != 0 || activityOpenCount(ct) != 0 || a.activityWorkNotice(ct).AttentionCount != 0 {
+	if !tr.HasText(locales.In("en").BotStatusNeedsAttention()) || len(ct.Messages) != 0 || activityOpenCount(ct) != 0 || a.activityWorkNotice(ct).AttentionCount != 0 {
 		t.Fatalf("contact attention hint = %v messages=%d open=%d", tr.Texts(), len(ct.Messages), activityOpenCount(ct))
 	}
 }
@@ -807,27 +805,28 @@ func TestLayoutRuntimeEntryLoadsSavedPreference(t *testing.T) {
 }
 
 func TestHeaderGroupsStatusAndRoleWithLongRawText(t *testing.T) {
-	const shortRole = "Assistant"
-	const longEnglishRole = "Assistant for release engineering, cross-functional verification and runtime diagnostics"
-	const longChineseRole = "负责发布工程、跨团队验证、运行时诊断与发布后回归分析的助理，同时维护跨团队交付记录和异常跟进"
+	const shortPurpose = "Release verification assistant"
+	const longEnglishPurpose = "Assistant for release engineering, cross-functional verification and runtime diagnostics"
+	const longChinesePurpose = "负责发布工程、跨团队验证、运行时诊断与发布后回归分析的助理，同时维护跨团队交付记录和异常跟进"
+	const retiredRole = "RetiredHeaderRoleMarker"
 	cases := []struct {
-		name   string
-		locale string
-		role   string
-		status string
-		wrap   bool
-		dark   bool
-		setup  func(a *appModel, ct *contact)
+		name           string
+		locale         string
+		purpose        string
+		wantSubtitle   string
+		wantConnection string
+		dark           bool
+		setup          func(a *appModel, ct *contact)
 	}{
 		{
-			name: "ready-960", locale: "en", role: shortRole, status: "Ready",
+			name: "idle-960", locale: "en", purpose: shortPurpose, wantSubtitle: shortPurpose,
 			setup: func(a *appModel, ct *contact) {
 				a.pi = presentationPiHost(a)
 				a.runtimeStatus = runtimeStateReady
 			},
 		},
 		{
-			name: "not-connected-960", locale: "en", role: shortRole, status: "Not connected", dark: true,
+			name: "not-connected-960", locale: "en", purpose: shortPurpose, wantSubtitle: shortPurpose, wantConnection: "Not connected", dark: true,
 			setup: func(a *appModel, ct *contact) {
 				cfg := connectionConfig{API: connectionAPIChatCompletions, Endpoint: "http://example.test/v1", APIKey: "fixture", Model: "fixture", ContextTokens: 1000, OutputTokens: 100, WorkingDirectory: t.TempDir(), MaxActiveTasks: 2}
 				a.runtimeStatus = runtimeStateExited
@@ -838,7 +837,7 @@ func TestHeaderGroupsStatusAndRoleWithLongRawText(t *testing.T) {
 			},
 		},
 		{
-			name: "attention-long-960", locale: "en", role: longEnglishRole, status: "Needs attention", wrap: true, dark: true,
+			name: "attention-long-960", locale: "en", purpose: longEnglishPurpose, wantSubtitle: "Needs attention", dark: true,
 			setup: func(a *appModel, ct *contact) {
 				a.pi = presentationPiHost(a)
 				a.runtimeStatus = runtimeStateReady
@@ -847,14 +846,14 @@ func TestHeaderGroupsStatusAndRoleWithLongRawText(t *testing.T) {
 			},
 		},
 		{
-			name: "hans-long-960", locale: "zh-Hans", role: longChineseRole, status: locales.In("zh-Hans").StatusReady(), wrap: true,
+			name: "hans-long-960", locale: "zh-Hans", purpose: longChinesePurpose, wantSubtitle: longChinesePurpose,
 			setup: func(a *appModel, ct *contact) {
 				a.pi = presentationPiHost(a)
 				a.runtimeStatus = runtimeStateReady
 			},
 		},
 		{
-			name: "en-XA-owned-status-960", locale: "en-XA", role: longEnglishRole, status: locales.In("en-XA").StatusReady(), wrap: true, dark: true,
+			name: "en-XA-owned-status-960", locale: "en-XA", purpose: longEnglishPurpose, wantSubtitle: longEnglishPurpose, dark: true,
 			setup: func(a *appModel, ct *contact) {
 				a.pi = presentationPiHost(a)
 				a.runtimeStatus = runtimeStateReady
@@ -865,7 +864,8 @@ func TestHeaderGroupsStatusAndRoleWithLongRawText(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			a, ct := workspaceTestApp(t)
 			a.windowWidth = 960
-			ct.Role = tc.role
+			ct.Purpose = tc.purpose
+			ct.Role = retiredRole
 			a.openContactProfile(ct.ID)
 			tc.setup(a, ct)
 			tr := ui.NewTester(a.view, 960, 640)
@@ -873,41 +873,29 @@ func TestHeaderGroupsStatusAndRoleWithLongRawText(t *testing.T) {
 			tr.SetDark(tc.dark)
 			tr.Frame()
 			msgs := locales.In(tc.locale)
-			if !tr.HasText(tc.status) || !tr.HasText(tc.role) {
-				t.Fatalf("header status/role missing: %v", tr.Texts())
+			if slices.Contains(tr.Texts(), msgs.StatusReady()) || tr.HasText(retiredRole) {
+				t.Fatalf("retired header text appeared: %v", tr.Texts())
 			}
-			status, statusOK := tr.Find(tc.status)
-			role, roleOK := tr.Find(tc.role)
-			if !statusOK || !roleOK || status.W <= 0 || status.H <= 0 || role.W <= 0 || role.H <= 0 {
-				t.Fatalf("header geometry status=%+v/%v role=%+v/%v", status, statusOK, role, roleOK)
+			if !tr.HasText(tc.wantSubtitle) {
+				t.Fatalf("header subtitle %q missing: %v", tc.wantSubtitle, tr.Texts())
 			}
-			mainStart := float32(0)
+			subtitle, subOK := tr.Find(tc.wantSubtitle)
+			if !subOK || subtitle.W <= 0 || subtitle.H <= 0 || subtitle.H > 26 {
+				t.Fatalf("header single-line subtitle geometry invalid: %+v ok=%v", subtitle, subOK)
+			}
+			mainStart := a.effectiveRailWidth() + paneSeparatorWidth
 			if a.avatarRailActive() {
 				mainStart = avatarRailWidth + paneSeparatorWidth
-			} else {
-				mainStart = a.effectiveRailWidth() + paneSeparatorWidth
 			}
 			centerRight := mainStart + a.centerPaneWidth
-			for _, item := range []struct {
-				name string
-				r    ui.Rect
-			}{{"status", status}, {"role", role}} {
-				if item.r.X < mainStart || item.r.X+item.r.W > centerRight || item.r.Y < 0 || item.r.Y+item.r.H > 640 {
-					t.Fatalf("header %s outside center: %+v center=[%.1f,%.1f]", item.name, item.r, mainStart, centerRight)
+			if subtitle.X < mainStart || subtitle.X+subtitle.W > centerRight || subtitle.Y < 0 || subtitle.Y+subtitle.H > 640 {
+				t.Fatalf("header subtitle outside center: %+v center=[%.1f,%.1f]", subtitle, mainStart, centerRight)
+			}
+			if tc.wantConnection != "" {
+				connRect, connOK := tr.Find(tc.wantConnection)
+				if !connOK || connRect.X < subtitle.X+subtitle.W || connRect.X+connRect.W > centerRight {
+					t.Fatalf("decoupled connection action geometry invalid: conn=%+v ok=%v subtitle=%+v center=[%.1f,%.1f]", connRect, connOK, subtitle, mainStart, centerRight)
 				}
-			}
-			if status.X < role.X+role.W && role.X < status.X+status.W && status.Y < role.Y+role.H && role.Y < status.Y+status.H {
-				t.Fatalf("header status/role overlap status=%+v role=%+v", status, role)
-			}
-			if status.Y < role.Y+role.H && role.Y < status.Y+status.H && role.X-(status.X+status.W) < 11.5 {
-				t.Fatalf("inline status/role separation below 12 logical pixels: status=%+v role=%+v", status, role)
-			}
-			if tc.wrap {
-				if role.H <= 24 {
-					t.Fatalf("long role did not wrap: %+v", role)
-				}
-			} else if status.Y >= role.Y+role.H || role.Y >= status.Y+status.H {
-				t.Fatalf("short status/role not on one row: status=%+v role=%+v", status, role)
 			}
 			composer, ok := tr.Find(msgs.ComposerLabel(ct.Name))
 			if !ok || composer.W-4 < 440 {
