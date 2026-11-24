@@ -93,7 +93,7 @@ func (a *appModel) productConversationsView(c *ui.Context, t *ui.Theme, browser 
 				}
 			})
 		})
-		a.productReadOnlyTranscript(c, t, browser, name)
+		a.productReadOnlyTranscript(c, t, browser)
 	})
 }
 

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/egoist/mygo/ui"
@@ -761,10 +762,11 @@ func (a *appModel) chat(c *ui.Context, t *ui.Theme, state connectionViewState, s
 				})
 			})
 		} else {
+			dividers := chatTimestampDividers(messages, time.Now(), c.Locale())
 			ui.Row(c).Grow(1).FillHeight().Justify(ui.Center).Children(func() {
 				ui.List(c, &ct.list, len(messages), func(i int) {
-					a.message(c, t, ct, messages[i])
-				}).Label(locales.In(c.Locale()).ConversationMessagesLabel()).FillHeight().FillWidth().MaxWidth(conversationMaxWidth).Padding(16).Gap(12)
+					chatMessageRow(c, t, messages, dividers, i, func() { a.message(c, t, ct, messages[i]) })
+				}).Label(locales.In(c.Locale()).ConversationMessagesLabel()).FillHeight().FillWidth().MaxWidth(conversationMaxWidth).Padding(16, 16, 32)
 			})
 		}
 		if len(messages) > 0 && !ct.list.AtEnd() {
@@ -1071,10 +1073,10 @@ func (a *appModel) productActivityResultView(c *ui.Context, t *ui.Theme, p *prod
 	}
 }
 
-func (a *appModel) productReadOnlyTranscript(c *ui.Context, t *ui.Theme, browser *productConversationBrowser, name string) {
-	entries := browser.history.entries
+func (a *appModel) productReadOnlyTranscript(c *ui.Context, t *ui.Theme, browser *productConversationBrowser) {
+	messages := browser.history.messages
 	msgs := locales.In(c.Locale())
-	if len(entries) == 0 {
+	if len(messages) == 0 {
 		if browser.ownerID != "" {
 			ui.Row(c).FillWidth().Justify(ui.Center).Children(func() {
 				a.activityText(c, t, msgs.EmptyNoMessages())
@@ -1082,41 +1084,20 @@ func (a *appModel) productReadOnlyTranscript(c *ui.Context, t *ui.Theme, browser
 		}
 		return
 	}
-	browser.transcript.Key = func(i int) any { return entries[i].ID }
+	browser.transcript.Key = func(i int) any { return messages[i].Key }
+	dividers := chatTimestampDividers(messages, time.Now(), c.Locale())
 	ui.Row(c).Grow(1).FillWidth().MinHeight(0).Justify(ui.Center).Children(func() {
-		ui.List(c, &browser.transcript, len(entries), func(i int) {
-			entry := entries[i]
-			scope := historyLinkScope(browser.ownerID, browser.selectedID, entry.ID)
-			a.renderHistoryEntry(c, t, entry, name, scope)
-		}).Label(msgs.ConversationMessagesLabel()).Fill().MaxWidth(conversationMaxWidth).Padding(16).Gap(12)
-	})
-}
-
-func (a *appModel) renderHistoryEntry(c *ui.Context, t *ui.Theme, e historyEntry, name, scope string) {
-	if e.From == "me" {
-		ui.Row(c).FillWidth().Justify(ui.End).Children(func() {
-			ui.Column(c).MaxWidth(userMessageMaxWidth).MinWidth(0).Gap(4).Children(func() {
-				if e.Text != "" {
-					opts := messageReaderOptions(c, true)
-					opts.MessageBubble = &markdownMessageBubble{Background: a.workTheme.BubbleUser, PaddingX: 12, PaddingY: 8, Radius: 12, ContextualCopy: true}
-					markdownReader(c, e.Text, opts).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text)
+		ui.List(c, &browser.transcript, len(messages), func(i int) {
+			m := messages[i]
+			chatMessageRow(c, t, messages, dividers, i, func() {
+				if m.Kind == msgUser {
+					a.userChatBubble(c, t, m)
+					return
 				}
-				taskContextReadOnlyView(c, a.workTheme, e.Context)
+				scope := historyLinkScope(browser.ownerID, browser.selectedID, m.Key)
+				a.botReplyBubbles(c, t, m, scope, "")
 			})
-		})
-		return
-	}
-	ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Start).Children(func() {
-		ui.Column(c).MaxWidth(conversationMaxWidth).MinWidth(0).Shrink(1).Children(func() {
-			opts := a.readerOptions(messageReaderOptions(c, false), scope, "")
-			opts.MessageBubble = &markdownMessageBubble{
-				Background: ui.Transparent,
-				Header: func(hc *ui.Context) {
-					ui.Text(hc, name+"  "+e.Date).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
-				},
-			}
-			markdownReader(c, e.Text, opts).FontSize(typeBody).FixedLineHeight(lineBody)
-		})
+		}).Label(msgs.ConversationMessagesLabel()).Fill().MaxWidth(conversationMaxWidth).Padding(16, 16, 32)
 	})
 }
 
@@ -1152,32 +1133,23 @@ func (a *appModel) message(c *ui.Context, t *ui.Theme, ct *contact, m *message) 
 			return
 		}
 	case msgUser:
-		ui.Row(c).FillWidth().Justify(ui.End).Children(func() {
-			ui.Column(c).MaxWidth(userMessageMaxWidth).MinWidth(0).Shrink(1).Gap(2).Children(func() {
-				if m.Text != "" {
-					opts := messageReaderOptions(c, true)
-					opts.MessageBubble = &markdownMessageBubble{Background: a.workTheme.BubbleUser, PaddingX: 12, PaddingY: 8, Radius: 12, ContextualCopy: true}
-					markdownReader(c, m.Text, opts).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text)
-				}
-				taskContextReadOnlyView(c, a.workTheme, m.Context)
-			})
-		})
+		a.userChatBubble(c, t, m)
 	default:
-		ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Start).Children(func() {
-			ui.Column(c).MaxWidth(userMessageMaxWidth).MinWidth(0).Shrink(1).Children(func() {
-				opts := a.readerOptions(markdownReaderOptions{Streaming: m.Streaming, CopyLabel: locales.In(c.Locale()).CopyMessageLabel(), Theme: messageMarkdownTheme}, messageLinkScope(ct.ID, m), ct.SessionWorkingDir)
-				opts.MessageBubble = &markdownMessageBubble{
-					Background: ui.Transparent, PaddingX: 0, PaddingY: 0, Radius: 0,
-					Footer: func(fc *ui.Context) {
-						if m.AlertTitle != "" {
-							a.alert(fc, t, m)
-						}
-					},
-				}
-				markdownReader(c, m.Text, opts).FontSize(typeBody).FixedLineHeight(lineBody)
-			})
-		})
+		a.botReplyBubbles(c, t, m, messageLinkScope(ct.ID, m), ct.SessionWorkingDir)
 	}
+}
+
+func (a *appModel) userChatBubble(c *ui.Context, t *ui.Theme, m *message) {
+	ui.Row(c).FillWidth().Justify(ui.End).Children(func() {
+		ui.Column(c).MaxWidth(userMessageMaxWidth).MinWidth(0).Shrink(1).Gap(2).Children(func() {
+			if m.Text != "" {
+				opts := messageReaderOptions(c, true)
+				opts.MessageBubble = &markdownMessageBubble{Background: a.workTheme.BubbleUser, PaddingX: 12, PaddingY: 8, Radius: 12, ContextualCopy: true}
+				markdownReader(c, m.Text, opts).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text)
+			}
+			taskContextReadOnlyView(c, a.workTheme, m.Context)
+		})
+	})
 }
 
 func (a *appModel) alert(c *ui.Context, t *ui.Theme, m *message) {

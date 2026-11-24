@@ -43,6 +43,7 @@ func TestPiProductSQLiteSavedKeyAndInitialInstructions(t *testing.T) {
 	var capturedSystems []string
 	var authHeaders []string
 	failWithEcho := false
+	replyText := "OK"
 
 	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var body struct {
@@ -70,6 +71,7 @@ func TestPiProductSQLiteSavedKeyAndInitialInstructions(t *testing.T) {
 		}
 		mu.Lock()
 		shouldFail := failWithEcho
+		reply := replyText
 		authHeaders = append(authHeaders, auth)
 		if systemText != "" {
 			capturedSystems = append(capturedSystems, systemText)
@@ -80,7 +82,7 @@ func TestPiProductSQLiteSavedKeyAndInitialInstructions(t *testing.T) {
 			_, _ = w.Write([]byte("rejected bearer " + productKey + " upstream"))
 			return
 		}
-		piChatResponse(w, "OK", "", "", "")
+		piChatResponse(w, reply, "", "", "")
 	}))
 	t.Cleanup(provider.Close)
 
@@ -254,8 +256,13 @@ console.log(JSON.stringify({ mode, version, fkCount: fk.length, digest }));
 		t.Fatalf("send %s did not complete", sendOp)
 	}
 
+	const multiBubbleReply = "First short bubble.\n<<<NEXT>>>\nSecond short bubble."
+	mu.Lock()
+	replyText = multiBubbleReply
+	mu.Unlock()
 	sendAndWait(proc, created.CurrentConversationID, "hello one", "op-d1", "op-s1")
 	mu.Lock()
+	replyText = "OK"
 	sysCount1 := len(capturedSystems)
 	var firstSys string
 	if sysCount1 > 0 {
@@ -265,10 +272,11 @@ console.log(JSON.stringify({ mode, version, fkCount: fk.length, digest }));
 	expectedBoundary := "Default working directory: " + workspace + ". Do not modify or write files outside this directory unless the user explicitly asks."
 	idxName := strings.Index(firstSys, "You are Cedar.")
 	idxPurpose := strings.Index(firstSys, "Purpose:\nTrack releases")
+	idxIM := strings.Index(firstSys, "<<<NEXT>>>")
 	idxInst := strings.Index(firstSys, "Be brief.")
 	idxDir := strings.Index(firstSys, expectedBoundary)
-	if idxName < 0 || idxPurpose <= idxName || idxInst <= idxPurpose || idxDir <= idxInst {
-		t.Fatalf("initial system prompt missing ordered sections: %q", firstSys)
+	if idxName < 0 || idxPurpose <= idxName || idxIM <= idxPurpose || idxInst <= idxIM || idxDir <= idxInst || !strings.Contains(firstSys, "at most three bubbles") {
+		t.Fatalf("initial system prompt missing ordered IM sections: %q", firstSys)
 	}
 
 	updated, err := proc.client.UpdateBot(ctx, pi.ProductBotUpdateParams{
@@ -296,12 +304,24 @@ console.log(JSON.stringify({ mode, version, fkCount: fk.length, digest }));
 	if len(reopened.Snapshot.Bots) != 2 || reopened.Snapshot.Connection.Saved == nil || reopened.Snapshot.Connection.Saved.Model != "updated-model" {
 		t.Fatalf("standalone SQLite reopen without mirror lost state: %+v", reopened.Snapshot)
 	}
+	page, err := proc2.client.History(ctx, pi.ProductHistoryParams{
+		ProductConversationParams: pi.ProductConversationParams{ConversationID: created.CurrentConversationID},
+		ProductPageParams:         pi.ProductPageParams{Limit: 10},
+	})
+	if err != nil || len(page.Items) != 2 || page.Items[1].Text != multiBubbleReply {
+		t.Fatalf("reopened messages did not preserve raw <<<NEXT>>> separator: %+v, %v", page.Items, err)
+	}
+	for i, item := range page.Items {
+		if _, err := time.Parse(time.RFC3339Nano, item.Timestamp); err != nil {
+			t.Fatalf("reopened message[%d] missing valid RFC3339 timestamp %q: %v", i, item.Timestamp, err)
+		}
+	}
 
 	sendAndWait(proc2, created.CurrentConversationID, "hello two", "op-d2", "op-s2")
 	mu.Lock()
 	secondSys := capturedSystems[len(capturedSystems)-1]
 	mu.Unlock()
-	if !strings.Contains(secondSys, "You are Cedar.") || strings.Contains(secondSys, "Cedar Prime") {
+	if !strings.Contains(secondSys, "You are Cedar.") || !strings.Contains(secondSys, "<<<NEXT>>>") || strings.Contains(secondSys, "Cedar Prime") {
 		t.Fatalf("existing binding did not preserve captured initial instructions after edit+restart: %q", secondSys)
 	}
 

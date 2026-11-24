@@ -6,6 +6,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"github.com/HeimaoLST/Nagi/internal/pi"
+	"github.com/HeimaoLST/Nagi/internal/theme"
 	"github.com/HeimaoLST/Nagi/locales"
 )
 
@@ -54,9 +55,9 @@ func (a *appModel) createBotDialogView(c *ui.Context, t *ui.Theme) {
 	width, _ := c.Size()
 	open := true
 	ui.DialogBase(c, &open, func(backdrop, panel ui.Element) {
-		backdrop.Background(ui.RGBA(0, 0, 0, 0.38))
+		theme.StyleFrostedModalBackdrop(backdrop, t)
 		panel.Label(msgs.CreateBotTitle()).Width(440).MaxWidth(width-32).Padding(24).Gap(16).
-			Background(t.Surface).Border(1, t.Border).Radius(12).Shadow(0, 8, 24, 0, ui.RGBA(0, 0, 0, 0.2))
+			Background(t.Surface).Border(1, t.Border).Radius(14).Shadow(0, 8, 28, 0, ui.RGBA(0, 0, 0, 0.24))
 		pageHeading(c, msgs.CreateBotTitle())
 		ui.Column(c).FillWidth().Gap(8).Children(func() {
 			ui.Text(c, msgs.FieldName()).FontSize(typeLabel).FontWeight(500).FixedLineHeight(lineLabel).TextColor(t.Text)

@@ -189,7 +189,22 @@ func decodeCustomTheme(file string, data []byte) (CustomTheme, *ThemeFileError) 
 		colors[field.Name] = color
 		*field.Target(&palette) = color
 	}
+	if palette.BubbleContact == palette.Reading {
+		palette.BubbleContact = palette.Reading.Mix(highContrastInk(palette.Reading), .06)
+	}
+	ink := highContrastInk(palette.BubbleContact)
+	palette.ContactText = contrastTextColor(palette.Theme.Text, ink, palette.BubbleContact)
+	palette.ContactMuted = contrastTextColor(palette.Theme.TextMuted, ink, palette.BubbleContact)
+	palette.ContactLink = contrastTextColor(palette.Link, ink, palette.BubbleContact)
 	return CustomTheme{ID: input.ID, Name: input.Name, Kind: input.Kind, File: file, Palette: palette, Warnings: ThemeContrastWarnings(palette)}, nil
+}
+
+func highContrastInk(background ui.Color) ui.Color {
+	black := ui.RGB(0, 0, 0)
+	if PaletteContrast(black, background) >= 4.5 {
+		return black
+	}
+	return ui.RGB(255, 255, 255)
 }
 
 func LoadCustomThemeCatalog(directory string) CustomThemeCatalog {
