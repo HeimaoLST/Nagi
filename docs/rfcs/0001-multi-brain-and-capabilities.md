@@ -1,6 +1,6 @@
 # RFC-0001: Multi-Brain Execution, Direct Data Inspection & Unified Capabilities
 
-- **Status**: `Partially Implemented` (`M0a` implemented; `M0b`–`M4` planned)
+- **Status**: `Partially Implemented` (`M0a`, `M0b` implemented; `M1`–`M4` planned)
 - **Baseline**: `dev` @ `a6d57f8`
 - **Reviewers**: Backend Architecture (`t21d`), Deep Technical Review (`t1jr` / Astra-6.2)
 - **Canonical Vocabulary**: [docs/design/glossary.md](../design/glossary.md)
@@ -9,7 +9,7 @@
 ## Milestone Tracker
 
 - [x] **M0a** — Backend Terminology Sync (`issue_*` → `activity_*`), SQLite v4 `activity_traces`, Direct Read Inspection (`activity_trace_read`, `conversation_read`, `conversation_search`), and Single-JSON `backup` Envelope *(promoted to [product-protocol.md](../design/product-protocol.md) & [glossary.md](../design/glossary.md))*
-- [ ] **M0b** — Go App (`internal/app/`) `Issue` → `Activity` Symbol Normalization
+- [x] **M0b** — Go App (`internal/app/`) `Issue` → `Activity` Symbol Normalization *(promoted to [glossary.md](../design/glossary.md))*
 - [ ] **M1** — Built-in Tool Presets (`none` / `readonly` / `workspace`) & Text Skills (`SKILL.md`, Global / Workspace / Bot-Authored)
 - [ ] **M2** — Multi-Bot Pooled MCP Broker (`shared` / `per_workspace` / `per_bot`) & Private Credential Vault
 - [ ] **M3** — Executable Skill Sandbox (`scripts/*.mjs`, OS-Enforced Isolation, Mediated Pipe HTTP Bridge, Content-Addressed Approval)

@@ -109,8 +109,8 @@ type contact struct {
 	replyIndex         int
 	list               ui.ListState
 	Works              []*workItem
-	Issues             []*productIssue
-	SelectedIssueID    string
+	Activities         []*productActivity
+	SelectedActivityID string
 
 	activeActivities       map[string]pi.ProductActivitySummary
 	activityStatusRevision uint64
@@ -215,12 +215,12 @@ type appModel struct {
 	localSavePrevErr   string
 	localSavePrevKind  string
 
-	issueFormError          string
-	issueFormNotice         string
-	issueFormNoticeDetail   string
-	issueActionError        string
-	issueActionNotice       string
-	issueActionNoticeDetail string
+	activityFormError          string
+	activityFormNotice         string
+	activityFormNoticeDetail   string
+	activityActionError        string
+	activityActionNotice       string
+	activityActionNoticeDetail string
 
 	// Runtime mode. demo keeps the local fixture path for tests/screenshots;
 	// the shipped app is runtime-backed.
@@ -266,8 +266,8 @@ type appModel struct {
 
 	openPath func(string) error
 
-	issueToolLedger *IssueToolOperationLedger
-	issueToolScopes map[string]IssueToolScope
+	activityToolLedger *ActivityToolOperationLedger
+	activityToolScopes map[string]ActivityToolScope
 
 	// Layout is a GUI-wide preference, not a contact or runtime fact. Widths
 	// are persisted in the contact store; windowWidth is only the current
@@ -468,13 +468,13 @@ func (ct *contact) setStatusDetail(raw, kind string) {
 
 func (ct *contact) clearStatusDetail() { ct.setStatusDetail("", "") }
 
-func (w *issueWorkSession) setSendError(raw, kind, detail string) {
+func (w *activityWorkSession) setSendError(raw, kind, detail string) {
 	w.SendError = raw
 	w.SendErrorKind = kind
 	w.SendErrorDetail = detail
 }
 
-func (w *issueWorkSession) clearSendError() { w.setSendError("", "", "") }
+func (w *activityWorkSession) clearSendError() { w.setSendError("", "", "") }
 
 func (a *appModel) sendCurrent() bool {
 	ct := a.selectedContact()

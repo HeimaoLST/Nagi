@@ -16,13 +16,13 @@ import (
 	"github.com/HeimaoLST/Nagi/locales"
 )
 
-// issueResultPreviewLimit bounds the current-file preview. A larger file is
+// activityResultPreviewLimit bounds the current-file preview. A larger file is
 // reported with its actual size instead of copying a silently truncated view.
-const issueResultPreviewLimit = 256 * 1024
+const activityResultPreviewLimit = 256 * 1024
 
-// issueResultFile is one successful write/edit result. Multiple calls and
+// activityResultFile is one successful write/edit result. Multiple calls and
 // executions remain separate rows even when they report the same path.
-type issueResultFile struct {
+type activityResultFile struct {
 	ExecutionID      string
 	SessionID        string
 	TaskID           string
@@ -34,7 +34,7 @@ type issueResultFile struct {
 	RawResult        string
 }
 
-type issueResultFileInspection struct {
+type activityResultFileInspection struct {
 	Path             string
 	WorkingDirectory string
 	Exists           bool
@@ -47,10 +47,10 @@ type issueResultFileInspection struct {
 	ReadErrorDetail  string
 }
 
-// inspectIssueResultFile reports the current file at the reported path. It does
+// inspectActivityResultFile reports the current file at the reported path. It does
 // not search for moved files and does not claim the execution-time snapshot.
-func inspectIssueResultFile(file issueResultFile) issueResultFileInspection {
-	inspection := issueResultFileInspection{Path: file.Path, WorkingDirectory: file.WorkingDirectory}
+func inspectActivityResultFile(file activityResultFile) activityResultFileInspection {
+	inspection := activityResultFileInspection{Path: file.Path, WorkingDirectory: file.WorkingDirectory}
 	handle, err := os.OpenFile(file.Path, os.O_RDONLY|syscall.O_NONBLOCK, 0)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
@@ -73,16 +73,16 @@ func inspectIssueResultFile(file issueResultFile) issueResultFileInspection {
 		return inspection
 	}
 	inspection.Regular = true
-	if info.Size() > issueResultPreviewLimit {
+	if info.Size() > activityResultPreviewLimit {
 		inspection.NoticeKind = resultNoticeTooLarge
 		return inspection
 	}
-	data, err := io.ReadAll(io.LimitReader(handle, issueResultPreviewLimit+1))
+	data, err := io.ReadAll(io.LimitReader(handle, activityResultPreviewLimit+1))
 	if err != nil {
 		inspection.ReadErrorKind, inspection.ReadErrorDetail = resultNoticeRead, err.Error()
 		return inspection
 	}
-	if len(data) > issueResultPreviewLimit {
+	if len(data) > activityResultPreviewLimit {
 		inspection.NoticeKind = resultNoticeGrew
 		return inspection
 	}
@@ -94,7 +94,7 @@ func inspectIssueResultFile(file issueResultFile) issueResultFileInspection {
 	return inspection
 }
 
-type issueResultFileAction struct {
+type activityResultFileAction struct {
 	Path         string
 	ErrKind      string
 	ErrDetail    string
@@ -114,7 +114,7 @@ const (
 	resultActionReveal   = "reveal-failed"
 )
 
-func issueResultNoticeText(msgs locales.Messages, kind, detail string) string {
+func activityResultNoticeText(msgs locales.Messages, kind, detail string) string {
 	switch kind {
 	case resultNoticeMissing:
 		return msgs.ResultInspectMissing()
@@ -135,7 +135,7 @@ func issueResultNoticeText(msgs locales.Messages, kind, detail string) string {
 	}
 }
 
-func issueResultPageText(msgs locales.Messages, kind, detail string) string {
+func activityResultPageText(msgs locales.Messages, kind, detail string) string {
 	switch kind {
 	case "load-runtime-not-ready":
 		return msgs.ResultLoadRuntimeNotReady()
@@ -150,18 +150,18 @@ func issueResultPageText(msgs locales.Messages, kind, detail string) string {
 	}
 }
 
-func issueResultInspectionNoticeText(msgs locales.Messages, inspection issueResultFileInspection) string {
+func activityResultInspectionNoticeText(msgs locales.Messages, inspection activityResultFileInspection) string {
 	switch inspection.NoticeKind {
 	case resultNoticeTooLarge:
-		return msgs.ResultInspectTooLarge(strconv.FormatInt(inspection.Size, 10), strconv.Itoa(issueResultPreviewLimit))
+		return msgs.ResultInspectTooLarge(strconv.FormatInt(inspection.Size, 10), strconv.Itoa(activityResultPreviewLimit))
 	case resultNoticeGrew:
-		return msgs.ResultInspectGrew(strconv.Itoa(issueResultPreviewLimit))
+		return msgs.ResultInspectGrew(strconv.Itoa(activityResultPreviewLimit))
 	default:
-		return issueResultNoticeText(msgs, inspection.NoticeKind, inspection.NoticeDetail)
+		return activityResultNoticeText(msgs, inspection.NoticeKind, inspection.NoticeDetail)
 	}
 }
 
-func currentIssueResultPath(path string) (string, string) {
+func currentActivityResultPath(path string) (string, string) {
 	info, err := os.Stat(path)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
@@ -175,30 +175,30 @@ func currentIssueResultPath(path string) (string, string) {
 	return "", ""
 }
 
-// requestOpenIssueResultFile checks the current path before invoking the injected
+// requestOpenActivityResultFile checks the current path before invoking the injected
 // opener. open is mygo.Shell.OpenPath in the application; tests inject a
 // recorder so a missing or non-regular path proves the opener was not called.
-func requestOpenIssueResultFile(file issueResultFile, open func(string) error) issueResultFileAction {
-	if kind, detail := currentIssueResultPath(file.Path); kind != "" {
-		return issueResultFileAction{Path: file.Path, NoticeKind: kind, NoticeDetail: detail}
+func requestOpenActivityResultFile(file activityResultFile, open func(string) error) activityResultFileAction {
+	if kind, detail := currentActivityResultPath(file.Path); kind != "" {
+		return activityResultFileAction{Path: file.Path, NoticeKind: kind, NoticeDetail: detail}
 	}
 	if err := open(file.Path); err != nil {
-		return issueResultFileAction{Path: file.Path, ErrKind: resultActionOpen, ErrDetail: err.Error()}
+		return activityResultFileAction{Path: file.Path, ErrKind: resultActionOpen, ErrDetail: err.Error()}
 	}
-	return issueResultFileAction{Path: file.Path}
+	return activityResultFileAction{Path: file.Path}
 }
 
-// requestRevealIssueResultFile checks the current path before requesting a reveal.
+// requestRevealActivityResultFile checks the current path before requesting a reveal.
 // The non-macOS API reports no outcome, so callers must not toast success for
 // it; only an explicit error is shown as failure.
-func requestRevealIssueResultFile(file issueResultFile, reveal func(string) error) issueResultFileAction {
-	if kind, detail := currentIssueResultPath(file.Path); kind != "" {
-		return issueResultFileAction{Path: file.Path, NoticeKind: kind, NoticeDetail: detail}
+func requestRevealActivityResultFile(file activityResultFile, reveal func(string) error) activityResultFileAction {
+	if kind, detail := currentActivityResultPath(file.Path); kind != "" {
+		return activityResultFileAction{Path: file.Path, NoticeKind: kind, NoticeDetail: detail}
 	}
 	if err := reveal(file.Path); err != nil {
-		return issueResultFileAction{Path: file.Path, ErrKind: resultActionReveal, ErrDetail: err.Error()}
+		return activityResultFileAction{Path: file.Path, ErrKind: resultActionReveal, ErrDetail: err.Error()}
 	}
-	return issueResultFileAction{Path: file.Path}
+	return activityResultFileAction{Path: file.Path}
 }
 
 // OpenPath reports whether the request failed, not whether an application
@@ -207,7 +207,7 @@ func openFileWithSystem(path string) error {
 	return mygo.Shell.OpenPath(path)
 }
 
-func requestRevealIssueResultWithSystem(path string) error {
+func requestRevealActivityResultWithSystem(path string) error {
 	if goruntime.GOOS == "darwin" {
 		return exec.Command("open", "-R", path).Run()
 	}

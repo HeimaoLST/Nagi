@@ -637,13 +637,13 @@ func TestClosedWorkEntryShowsRealWorkStatus(t *testing.T) {
 	ct.Status = statusWorking
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	if !tr.HasText(locales.In("en").BotStatusReplying()) || len(ct.Messages) != 0 || issueOpenCount(ct) != 0 || a.issueWorkNotice(ct).ActiveCount != 0 {
-		t.Fatalf("contact replying hint = %v messages=%d open=%d", tr.Texts(), len(ct.Messages), issueOpenCount(ct))
+	if !tr.HasText(locales.In("en").BotStatusReplying()) || len(ct.Messages) != 0 || activityOpenCount(ct) != 0 || a.activityWorkNotice(ct).ActiveCount != 0 {
+		t.Fatalf("contact replying hint = %v messages=%d open=%d", tr.Texts(), len(ct.Messages), activityOpenCount(ct))
 	}
 	ct.Status = statusAttention
 	tr.Frame()
-	if !tr.HasText(locales.In("en").BotStatusNeedsAttention()) || len(ct.Messages) != 0 || issueOpenCount(ct) != 0 || a.issueWorkNotice(ct).AttentionCount != 0 {
-		t.Fatalf("contact attention hint = %v messages=%d open=%d", tr.Texts(), len(ct.Messages), issueOpenCount(ct))
+	if !tr.HasText(locales.In("en").BotStatusNeedsAttention()) || len(ct.Messages) != 0 || activityOpenCount(ct) != 0 || a.activityWorkNotice(ct).AttentionCount != 0 {
+		t.Fatalf("contact attention hint = %v messages=%d open=%d", tr.Texts(), len(ct.Messages), activityOpenCount(ct))
 	}
 }
 

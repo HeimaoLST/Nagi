@@ -633,7 +633,7 @@ func TestLiveSendUnknownAfterDisconnectSaysRestart(t *testing.T) {
 						}
 					}
 				}
-				if ct.SendError != rawSend || ct.StatusDetail != rawStatus || ct.SendState != sendUnknown || ct.ActiveTaskID != taskID || ct.SessionID != sessionID || ct.Draft != draft || ct.Messages[0].Text != "original message" || ct.History[0].Text != "original history" || a.contactHistoryInFlight != 0 || issue.Executions[0].Status != issueExecutionUnknown {
+				if ct.SendError != rawSend || ct.StatusDetail != rawStatus || ct.SendState != sendUnknown || ct.ActiveTaskID != taskID || ct.SessionID != sessionID || ct.Draft != draft || ct.Messages[0].Text != "original message" || ct.History[0].Text != "original history" || a.contactHistoryInFlight != 0 || issue.Executions[0].Status != activityExecutionUnknown {
 					t.Fatal("disclosure changed unknown state/raw records/history or issued a request")
 				}
 				if recoveryRecordSnapshot(t, ct) != record || a.submissionInFlight != 0 {
@@ -644,7 +644,7 @@ func TestLiveSendUnknownAfterDisconnectSaysRestart(t *testing.T) {
 	}
 }
 
-func disconnectedRecoveryTestApp(t *testing.T, cause string) (*appModel, *contact, *productIssue) {
+func disconnectedRecoveryTestApp(t *testing.T, cause string) (*appModel, *contact, *productActivity) {
 	t.Helper()
 	a, ct := workspaceTestApp(t)
 	a.workspaceOpen = false
@@ -654,11 +654,11 @@ func disconnectedRecoveryTestApp(t *testing.T, cause string) (*appModel, *contac
 	ct.Draft = "retained unsent draft"
 	ct.Messages = []*message{{Kind: msgUser, Text: "original message"}}
 	ct.History = []historyEntry{{ID: "history-original", Text: "original history"}}
-	issue := &productIssue{ID: "recovery-issue", ContactID: ct.ID, Goal: "Retain original goal", Status: issueStatusInProgress, RequirementsRevision: 1}
+	issue := &productActivity{ID: "recovery-issue", ContactID: ct.ID, Goal: "Retain original goal", Status: activityStatusInProgress, RequirementsRevision: 1}
 	attachIssueToolTestExecution(issue)
-	issue.Executions[0].Status, issue.Executions[0].Prompt = issueExecutionUnknown, "original run prompt"
-	issue.Work = issueWorkSession{Loaded: true, SendState: sendUnknown}
-	ct.Issues = []*productIssue{issue}
+	issue.Executions[0].Status, issue.Executions[0].Prompt = activityExecutionUnknown, "original run prompt"
+	issue.Work = activityWorkSession{Loaded: true, SendState: sendUnknown}
+	ct.Activities = []*productActivity{issue}
 	if cause == "protocol" {
 		a.runtimeErr = "Pi worker protocol error"
 	}
@@ -983,7 +983,7 @@ func TestComposerZeroMaterialsKeepsCleanAttachTrigger(t *testing.T) {
 func recoveryRecordSnapshot(t *testing.T, ct *contact) string {
 	t.Helper()
 	issues := []any{}
-	for _, issue := range ct.Issues {
+	for _, issue := range ct.Activities {
 		executions := []any{}
 		for _, e := range issue.Executions {
 			executions = append(executions, []any{e.ID, e.SessionID, e.TaskID, e.MessageID, e.Prompt, e.Status, e.Detail, e.Context})

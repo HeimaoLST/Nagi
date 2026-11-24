@@ -15,8 +15,8 @@ func TestInspectIssueResultFileReadsCurrentFile(t *testing.T) {
 	if err := os.WriteFile(path, []byte("first\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	file := issueResultFile{Path: path, WorkingDirectory: root}
-	first := inspectIssueResultFile(file)
+	file := activityResultFile{Path: path, WorkingDirectory: root}
+	first := inspectActivityResultFile(file)
 	if !first.Exists || !first.Regular || first.Preview != "first\n" || first.NoticeKind != "" || first.ReadErrorKind != "" {
 		t.Fatalf("first inspection = %+v", first)
 	}
@@ -26,7 +26,7 @@ func TestInspectIssueResultFileReadsCurrentFile(t *testing.T) {
 	if err := os.WriteFile(path, []byte("second\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	second := inspectIssueResultFile(file)
+	second := inspectActivityResultFile(file)
 	if second.Preview != "second\n" {
 		t.Fatalf("current file preview = %q, want current contents not execution snapshot", second.Preview)
 	}
@@ -34,7 +34,7 @@ func TestInspectIssueResultFileReadsCurrentFile(t *testing.T) {
 
 func TestInspectIssueResultFileReportsMissingNonRegularBinaryAndOversize(t *testing.T) {
 	root := t.TempDir()
-	missing := inspectIssueResultFile(issueResultFile{Path: filepath.Join(root, "missing.txt")})
+	missing := inspectActivityResultFile(activityResultFile{Path: filepath.Join(root, "missing.txt")})
 	if missing.Exists || missing.NoticeKind != resultNoticeMissing {
 		t.Fatalf("missing = %+v", missing)
 	}
@@ -43,7 +43,7 @@ func TestInspectIssueResultFileReportsMissingNonRegularBinaryAndOversize(t *test
 	if err := os.Mkdir(directory, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	dir := inspectIssueResultFile(issueResultFile{Path: directory})
+	dir := inspectActivityResultFile(activityResultFile{Path: directory})
 	if !dir.Exists || dir.Regular || dir.NoticeKind != resultNoticeRegular {
 		t.Fatalf("directory = %+v", dir)
 	}
@@ -52,7 +52,7 @@ func TestInspectIssueResultFileReportsMissingNonRegularBinaryAndOversize(t *test
 	if err := syscall.Mkfifo(fifo, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	pipe := inspectIssueResultFile(issueResultFile{Path: fifo})
+	pipe := inspectActivityResultFile(activityResultFile{Path: fifo})
 	if !pipe.Exists || pipe.Regular || pipe.NoticeKind != resultNoticeRegular {
 		t.Fatalf("fifo = %+v", pipe)
 	}
@@ -61,17 +61,17 @@ func TestInspectIssueResultFileReportsMissingNonRegularBinaryAndOversize(t *test
 	if err := os.WriteFile(binary, []byte{0xff, 0xfe, 0x00}, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	notText := inspectIssueResultFile(issueResultFile{Path: binary})
+	notText := inspectActivityResultFile(activityResultFile{Path: binary})
 	if !notText.Regular || notText.Preview != "" || notText.NoticeKind != resultNoticeNotUTF8 {
 		t.Fatalf("binary = %+v", notText)
 	}
 
 	large := filepath.Join(root, "large.txt")
-	if err := os.WriteFile(large, []byte(strings.Repeat("a", issueResultPreviewLimit+1)), 0o600); err != nil {
+	if err := os.WriteFile(large, []byte(strings.Repeat("a", activityResultPreviewLimit+1)), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	oversize := inspectIssueResultFile(issueResultFile{Path: large})
-	if oversize.Preview != "" || oversize.Size != issueResultPreviewLimit+1 ||
+	oversize := inspectActivityResultFile(activityResultFile{Path: large})
+	if oversize.Preview != "" || oversize.Size != activityResultPreviewLimit+1 ||
 		oversize.NoticeKind != resultNoticeTooLarge {
 		t.Fatalf("oversize = %+v", oversize)
 	}
@@ -96,26 +96,26 @@ func TestIssueResultActionsCheckCurrentPathBeforeOpenAndReveal(t *testing.T) {
 			return nil
 		}
 	}
-	if action := requestOpenIssueResultFile(issueResultFile{Path: missing}, record(&opened)); action.NoticeKind == "" {
+	if action := requestOpenActivityResultFile(activityResultFile{Path: missing}, record(&opened)); action.NoticeKind == "" {
 		t.Fatalf("missing open = %+v", action)
 	}
-	if action := requestRevealIssueResultFile(issueResultFile{Path: missing}, record(&revealed)); action.NoticeKind == "" {
+	if action := requestRevealActivityResultFile(activityResultFile{Path: missing}, record(&revealed)); action.NoticeKind == "" {
 		t.Fatalf("missing reveal = %+v", action)
 	}
-	if action := requestOpenIssueResultFile(issueResultFile{Path: directory}, record(&opened)); action.NoticeKind == "" {
+	if action := requestOpenActivityResultFile(activityResultFile{Path: directory}, record(&opened)); action.NoticeKind == "" {
 		t.Fatalf("directory open = %+v", action)
 	}
-	if action := requestRevealIssueResultFile(issueResultFile{Path: directory}, record(&revealed)); action.NoticeKind == "" {
+	if action := requestRevealActivityResultFile(activityResultFile{Path: directory}, record(&revealed)); action.NoticeKind == "" {
 		t.Fatalf("directory reveal = %+v", action)
 	}
 	if len(opened) != 0 || len(revealed) != 0 {
 		t.Fatalf("actions called on unavailable paths: opened=%v revealed=%v", opened, revealed)
 	}
 
-	if action := requestOpenIssueResultFile(issueResultFile{Path: existing}, record(&opened)); action.ErrKind != "" || action.NoticeKind != "" {
+	if action := requestOpenActivityResultFile(activityResultFile{Path: existing}, record(&opened)); action.ErrKind != "" || action.NoticeKind != "" {
 		t.Fatalf("existing open = %+v", action)
 	}
-	if action := requestRevealIssueResultFile(issueResultFile{Path: existing}, record(&revealed)); action.ErrKind != "" || action.NoticeKind != "" {
+	if action := requestRevealActivityResultFile(activityResultFile{Path: existing}, record(&revealed)); action.ErrKind != "" || action.NoticeKind != "" {
 		t.Fatalf("existing reveal = %+v", action)
 	}
 	if len(opened) != 1 || opened[0] != existing || len(revealed) != 1 || revealed[0] != existing {
@@ -123,11 +123,11 @@ func TestIssueResultActionsCheckCurrentPathBeforeOpenAndReveal(t *testing.T) {
 	}
 
 	openErr := errors.New("no handler registered")
-	if action := requestOpenIssueResultFile(issueResultFile{Path: existing}, func(string) error { return openErr }); !strings.Contains(action.ErrDetail, openErr.Error()) {
+	if action := requestOpenActivityResultFile(activityResultFile{Path: existing}, func(string) error { return openErr }); !strings.Contains(action.ErrDetail, openErr.Error()) {
 		t.Fatalf("open error = %+v", action)
 	}
 	revealErr := errors.New("file manager refused")
-	if action := requestRevealIssueResultFile(issueResultFile{Path: existing}, func(string) error { return revealErr }); !strings.Contains(action.ErrDetail, revealErr.Error()) {
+	if action := requestRevealActivityResultFile(activityResultFile{Path: existing}, func(string) error { return revealErr }); !strings.Contains(action.ErrDetail, revealErr.Error()) {
 		t.Fatalf("reveal error = %+v", action)
 	}
 }
@@ -135,21 +135,21 @@ func TestIssueResultActionsCheckCurrentPathBeforeOpenAndReveal(t *testing.T) {
 func TestIssueResultMissingFileRecoversOnlyByExplicitReinspection(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "restored.txt")
-	file := issueResultFile{Path: path, WorkingDirectory: root}
+	file := activityResultFile{Path: path, WorkingDirectory: root}
 
-	missing := inspectIssueResultFile(file)
+	missing := inspectActivityResultFile(file)
 	if missing.Exists || missing.NoticeKind != resultNoticeMissing {
 		t.Fatalf("missing inspection = %+v", missing)
 	}
 	if err := os.WriteFile(path, []byte("restored content\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	restored := inspectIssueResultFile(file)
+	restored := inspectActivityResultFile(file)
 	if !restored.Exists || restored.Preview != "restored content\n" {
 		t.Fatalf("reinspection = %+v", restored)
 	}
 	opened := ""
-	action := requestOpenIssueResultFile(file, func(got string) error {
+	action := requestOpenActivityResultFile(file, func(got string) error {
 		opened = got
 		return nil
 	})
@@ -164,14 +164,14 @@ func TestIssueResultPathRetainsTrailingSpaceFilename(t *testing.T) {
 	if err := os.WriteFile(path, []byte("trailing space file\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	file := issueResultFile{ExecutionID: "exec-space", SessionID: "session-space", TaskID: "task-space", MessageID: "receipt-space", CallID: "call-space", ToolName: "write",
+	file := activityResultFile{ExecutionID: "exec-space", SessionID: "session-space", TaskID: "task-space", MessageID: "receipt-space", CallID: "call-space", ToolName: "write",
 		Path: path, WorkingDirectory: root}
-	inspection := inspectIssueResultFile(file)
+	inspection := inspectActivityResultFile(file)
 	if !inspection.Exists || inspection.Preview != "trailing space file\n" {
 		t.Fatalf("inspection = %+v", inspection)
 	}
 	opened := ""
-	action := requestOpenIssueResultFile(file, func(got string) error {
+	action := requestOpenActivityResultFile(file, func(got string) error {
 		opened = got
 		return nil
 	})

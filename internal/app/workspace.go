@@ -270,20 +270,20 @@ func (a *appModel) detailPage(c *ui.Context, t *ui.Theme) {
 	})
 }
 
-func (ct *contact) issueWork(issue *productIssue) *workItem {
-	if issue == nil {
+func (ct *contact) activityWork(activity *productActivity) *workItem {
+	if activity == nil {
 		return nil
 	}
-	for _, taskID := range []string{issue.Work.ActiveTaskID, ct.ActiveTaskID, ct.LastTaskID} {
-		if !issueHasTask(issue, taskID) {
+	for _, taskID := range []string{activity.Work.ActiveTaskID, ct.ActiveTaskID, ct.LastTaskID} {
+		if !activityHasTask(activity, taskID) {
 			continue
 		}
 		if work := workFor(ct, taskID); work != nil {
 			return work
 		}
 	}
-	for index := len(issue.Executions) - 1; index >= 0; index-- {
-		execution := issue.Executions[index]
+	for index := len(activity.Executions) - 1; index >= 0; index-- {
+		execution := activity.Executions[index]
 		if work := workFor(ct, execution.TaskID); work != nil {
 			return work
 		}
@@ -291,13 +291,13 @@ func (ct *contact) issueWork(issue *productIssue) *workItem {
 	return nil
 }
 
-func (ct *contact) resultTextForExecution(execution *issueExecution) string {
+func (ct *contact) resultTextForExecution(execution *activityExecution) string {
 	if execution == nil {
 		return ""
 	}
-	for _, issue := range ct.Issues {
-		for index := len(issue.Work.Messages) - 1; index >= 0; index-- {
-			m := issue.Work.Messages[index]
+	for _, activity := range ct.Activities {
+		for index := len(activity.Work.Messages) - 1; index >= 0; index-- {
+			m := activity.Work.Messages[index]
 			if m.Kind != msgContact || strings.TrimSpace(m.Text) == "" {
 				continue
 			}
@@ -309,20 +309,20 @@ func (ct *contact) resultTextForExecution(execution *issueExecution) string {
 	return ""
 }
 
-func latestIssueExecution(issue *productIssue) *issueExecution {
-	if issue == nil {
+func latestActivityExecution(activity *productActivity) *activityExecution {
+	if activity == nil {
 		return nil
 	}
-	for index := len(issue.Executions) - 1; index >= 0; index-- {
-		if issue.Executions[index] != nil {
-			return issue.Executions[index]
+	for index := len(activity.Executions) - 1; index >= 0; index-- {
+		if activity.Executions[index] != nil {
+			return activity.Executions[index]
 		}
 	}
 	return nil
 }
 
-func issueHasReadableResult(ct *contact, execution *issueExecution) bool {
-	if execution == nil || execution.Status != issueExecutionCompleted {
+func activityHasReadableResult(ct *contact, execution *activityExecution) bool {
+	if execution == nil || execution.Status != activityExecutionCompleted {
 		return false
 	}
 	if strings.TrimSpace(ct.resultTextForExecution(execution)) != "" {
@@ -462,9 +462,9 @@ func (a *appModel) workActivitySummary(ct *contact) (string, string) {
 	return "", ""
 }
 
-func issueHasUnconfirmedRun(issue *productIssue) bool {
-	for _, execution := range issue.Executions {
-		if execution != nil && (execution.Status == issueExecutionUnknown || execution.Status == issueExecutionPending) {
+func activityHasUnconfirmedRun(activity *productActivity) bool {
+	for _, execution := range activity.Executions {
+		if execution != nil && (execution.Status == activityExecutionUnknown || execution.Status == activityExecutionPending) {
 			return true
 		}
 	}
@@ -496,7 +496,7 @@ type productActivityPanel struct {
 	activity      *pi.ProductActivity
 	forms         map[string]*productActivityForm
 	result        *pi.ProductActivityResult
-	file          *issueResultFileInspection
+	file          *activityResultFileInspection
 	problem       string
 	actionProblem string
 	stopping      string
@@ -846,7 +846,7 @@ func productActivityIntentMatchesReceipt(target productActivityIntent, receipt p
 func (a *appModel) inspectProductActivityFile(p *productActivityPanel, path string) {
 	result := p.result
 	go func() {
-		inspection := inspectIssueResultFile(issueResultFile{Path: path})
+		inspection := inspectActivityResultFile(activityResultFile{Path: path})
 		a.updateUI(func() {
 			if p.result == result {
 				p.file, p.scroll.Y, p.focusBack = &inspection, 0, true
@@ -862,21 +862,21 @@ func (a *appModel) openProductActivityFile(p *productActivityPanel, path string,
 		open = openFileWithSystem
 	}
 	go func() {
-		file := issueResultFile{Path: path}
-		var outcome issueResultFileAction
+		file := activityResultFile{Path: path}
+		var outcome activityResultFileAction
 		if reveal {
-			outcome = requestRevealIssueResultFile(file, requestRevealIssueResultWithSystem)
+			outcome = requestRevealActivityResultFile(file, requestRevealActivityResultWithSystem)
 		} else {
-			outcome = requestOpenIssueResultFile(file, open)
+			outcome = requestOpenActivityResultFile(file, open)
 		}
 		a.updateUI(func() {
 			if p.result != result {
 				return
 			}
 			msgs := locales.In(a.uiLocale)
-			p.problem = issueResultNoticeText(msgs, outcome.NoticeKind, outcome.NoticeDetail)
+			p.problem = activityResultNoticeText(msgs, outcome.NoticeKind, outcome.NoticeDetail)
 			if outcome.ErrKind != "" {
-				p.problem = issueResultNoticeText(msgs, outcome.ErrKind, outcome.ErrDetail)
+				p.problem = activityResultNoticeText(msgs, outcome.ErrKind, outcome.ErrDetail)
 			}
 		})
 	}()

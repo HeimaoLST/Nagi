@@ -334,7 +334,7 @@ func TestPiAppProductActivityQuestionSurvivesWorkerLoss(t *testing.T) {
 	root := prepareProductWorkbench(t, provider)
 	if err := writeProfileJSON(guiStorePath(), storedState{Version: contactStoreVersion, Selected: botID,
 		Contacts: []storedContact{{ID: botID, Name: "Cedar", Workspace: root}},
-		Issues:   []storedIssue{{ID: activityID, ContactID: botID, Goal: goal, Status: issueStatusNotStarted, RequirementsRevision: 1}},
+		Issues:   []storedActivity{{ID: activityID, ContactID: botID, Goal: goal, Status: activityStatusNotStarted, RequirementsRevision: 1}},
 	}); err != nil {
 		t.Fatal(err)
 	}
