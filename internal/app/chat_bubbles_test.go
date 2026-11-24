@@ -25,9 +25,19 @@ func TestSplitReplyBubblesAndRailPreview(t *testing.T) {
 			want: []string{"Short single reply."},
 		},
 		{
-			name: "inline marker inside prose splits cleanly",
+			name: "mid-clause marker inside prose stays literal",
 			text: "Keep <<<NEXT>>> inside prose.",
-			want: []string{"Keep", "inside prose."},
+			want: []string{"Keep <<<NEXT>>> inside prose."},
+		},
+		{
+			name: "mid-clause Chinese parenthetical mention stays literal",
+			text: "圆周率可以这样计算（就是那个 <<<NEXT>>> 分句的规矩）。\n<<<NEXT>>>这是用 Machin 公式算的。",
+			want: []string{"圆周率可以这样计算（就是那个 <<<NEXT>>> 分句的规矩）。", "这是用 Machin 公式算的。"},
+		},
+		{
+			name: "post-sentence punctuation marker splits cleanly",
+			text: "第一句。<<<NEXT>>>第二句。",
+			want: []string{"第一句。", "第二句。"},
 		},
 		{
 			name: "missing trailing newline after marker splits cleanly",

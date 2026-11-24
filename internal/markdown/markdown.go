@@ -74,6 +74,8 @@ type MessageBubble struct {
 	Radius         float32
 	ContextualCopy bool
 	MenuOnlyCopy   bool
+	BeforeCopyMenu func(*ui.Menu)
+	Highlight      float32
 	Header         func(*ui.Context)
 	Footer         func(*ui.Context)
 	BodyHandle     *ui.Handle
@@ -198,6 +200,9 @@ func Reader(c *ui.Context, source string, options ReaderOptions) ui.Element {
 		label = locales.In(c.Locale()).CopyMessageLabel()
 	}
 	copyMenu := func(m *ui.Menu) {
+		if bubble := options.MessageBubble; bubble != nil && bubble.BeforeCopyMenu != nil {
+			bubble.BeforeCopyMenu(m)
+		}
 		if m.Item(label).Chosen() {
 			st.copySource(c, c.Now(), source, &st.sourceFeedback)
 		}
@@ -238,6 +243,12 @@ func Reader(c *ui.Context, source string, options ReaderOptions) ui.Element {
 			Radius(bubble.Radius).Background(bubble.Background).Gap(4)
 		if bubble.BodyHandle != nil {
 			body.Bind(bubble.BodyHandle)
+		}
+		if bubble.Highlight > 0 {
+			color := c.Theme().Accent.Alpha(bubble.Highlight)
+			body.DrawOver(func(p *ui.Painter, r ui.Rect) {
+				p.Stroke(r, color, bubble.Radius, 2)
+			})
 		}
 		if menuOnlyCopy {
 			if !options.PlainText {

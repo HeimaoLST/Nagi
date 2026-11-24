@@ -70,6 +70,7 @@ type message struct {
 	History    bool
 	Streaming  bool
 	Context    []taskContextItem
+	Quote      *pi.ProductQuote
 
 	liveReveal      bool
 	revealedBubbles int
@@ -103,6 +104,7 @@ type contact struct {
 	Messages           []*message
 	History            []historyEntry
 	Draft              string
+	DraftQuote         *pi.ProductQuote
 	Archived           bool
 	ArchivedAt         int64
 	PiBinding          *piConversationBinding
@@ -112,6 +114,7 @@ type contact struct {
 	memory             botMemoryViewState
 	replyIndex         int
 	list               ui.ListState
+	recall             quoteRecall
 	Works              []*workItem
 	Activities         []*productActivity
 	SelectedActivityID string
@@ -131,6 +134,7 @@ type contact struct {
 	SendErrorKind     string
 	SendErrorDetail   string
 	SubmittedDraft    string
+	SubmittedQuote    *pi.ProductQuote
 	SubmittedRev      int
 	pendingSend       *pendingSend
 	draftRev          int
@@ -443,7 +447,8 @@ func (a *appModel) send(ct *contact, text string) bool {
 	}
 	a.seq++
 	stamp := time.Now()
-	ct.Messages = append(ct.Messages, &message{ID: a.seq, Kind: msgUser, Text: text, Time: stamp.Format("15:04"), Timestamp: stamp})
+	ct.Messages = append(ct.Messages, &message{ID: a.seq, Kind: msgUser, Text: text, Time: stamp.Format("15:04"), Timestamp: stamp, Quote: ct.DraftQuote})
+	ct.DraftQuote = nil
 	label := ct.WorkLabel
 	if label == "" {
 		label = "Preparing a reply"

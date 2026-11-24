@@ -342,6 +342,36 @@ func (msgs Messages) CopyMessageLabel() string {
 	return Catalog.Format(msgs.locale, "copyMessageLabel", nil)
 }
 
+func QuoteAction() string { return In(i18n.Locale()).QuoteAction() }
+
+func (msgs Messages) QuoteAction() string {
+	return Catalog.Format(msgs.locale, "quoteAction", nil)
+}
+
+func QuoteRemove() string { return In(i18n.Locale()).QuoteRemove() }
+
+func (msgs Messages) QuoteRemove() string {
+	return Catalog.Format(msgs.locale, "quoteRemove", nil)
+}
+
+func QuoteAuthorYou() string { return In(i18n.Locale()).QuoteAuthorYou() }
+
+func (msgs Messages) QuoteAuthorYou() string {
+	return Catalog.Format(msgs.locale, "quoteAuthorYou", nil)
+}
+
+func QuoteReplyingTo(author string) string { return In(i18n.Locale()).QuoteReplyingTo(author) }
+
+func (msgs Messages) QuoteReplyingTo(author string) string {
+	return Catalog.Format(msgs.locale, "quoteReplyingTo", map[string]any{"author": author})
+}
+
+func QuoteJump(author string) string { return In(i18n.Locale()).QuoteJump(author) }
+
+func (msgs Messages) QuoteJump(author string) string {
+	return Catalog.Format(msgs.locale, "quoteJump", map[string]any{"author": author})
+}
+
 // CopyContextTextLabel says "Copy material text"
 // in the language the app shows.
 //

@@ -152,6 +152,7 @@ type (
 	workbenchTheme       = theme.WorkbenchTheme
 	selectOption         = theme.SelectOption
 	iconControlRole      = theme.IconControlRole
+	botAvatar            = theme.BotAvatar
 	appearanceThemeIDs   = theme.AppearanceThemeIDs
 	themeFileError       = theme.ThemeFileError
 	themeContrastWarning = theme.ThemeContrastWarning
@@ -249,6 +250,9 @@ func resolveWorkbenchTheme(dark bool) workbenchTheme { return theme.ResolveWorkb
 func paletteContrast(a, b ui.Color) float64          { return theme.PaletteContrast(a, b) }
 func contactAvatarColors(t *ui.Theme, name string) (ui.Color, ui.Color) {
 	return theme.ContactAvatarColors(t, name)
+}
+func resolveBotAvatar(t *ui.Theme, id, name string, builtin bool) botAvatar {
+	return theme.ResolveBotAvatar(t, id, name, builtin)
 }
 func segmentedSelection(c *ui.Context, selected *int, labels ...string) ui.Element {
 	return theme.SegmentedSelection(c, selected, labels...)

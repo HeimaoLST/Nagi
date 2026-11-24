@@ -10,7 +10,6 @@ import (
 	"slices"
 	"strings"
 	"time"
-	"unicode"
 
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/markdown"
@@ -55,7 +54,9 @@ func (a *appModel) view(c *ui.Context) {
 			a.openSettingsTab(settingsTabAppearance, source)
 		}
 	})
-	if !a.settingsOpen {
+	ct := a.selectedContact()
+	composerHandlesEscape := a.quoteDraftEditable(ct) && ct.DraftQuote != nil && strings.TrimSpace(ct.Draft) == "" && c.Focused(a.composerHandle)
+	if !a.settingsOpen && !composerHandlesEscape {
 		c.OnShortcut(0, ui.KeyEscape, func() { a.escapeTopLayer() })
 	}
 	ui.Column(c).Fill().LinearGradient(ui.LinearGradient{From: a.workTheme.ChromeFrom, To: a.workTheme.ChromeTo, Angle: 180}).Children(func() {
@@ -284,7 +285,7 @@ func (a *appModel) avatarRail(c *ui.Context, t *ui.Theme) {
 				label := locales.In(c.Locale()).RailShowPandoraBox()
 				button := appTooltip(c, ui.ButtonBase(c).Label(label).Size(32, 32).Center().Radius(8), label)
 				button.Disabled(!a.canChangeBuiltinArchitectVisibility()).OnClick(a.showBuiltinArchitectInRail)
-				button.Children(func() { contactAvatar(c, t, "PandoraBox", 24) })
+				button.Children(func() { botStoneAvatar(c, t, "", "PandoraBox", true, 24) })
 			}
 			ui.Spacer(c).Grow(1)
 		} else {
@@ -423,34 +424,20 @@ func (a *appModel) railRow(c *ui.Context, t *ui.Theme, i int) {
 	})
 }
 
-func contactAvatar(c *ui.Context, t *ui.Theme, name string, size float32) {
-	name = strings.TrimSpace(name)
-	initials := [2]rune{'?'}
-	n := 0
-	for word := range strings.FieldsSeq(name) {
-		for _, r := range word {
-			if unicode.IsLetter(r) || unicode.IsNumber(r) {
-				initials[n] = unicode.ToUpper(r)
-				n++
-				break
-			}
-		}
-		if n == len(initials) {
-			break
-		}
+func contactAvatar(c *ui.Context, t *ui.Theme, ct *contact, size float32) {
+	var id, name string
+	var builtin bool
+	if ct != nil {
+		id, name, builtin = ct.ID, ct.Name, ct.isBuiltin()
 	}
-	background, ink := contactAvatarColors(t, name)
-	radius, fontSize, lineHeight := float32(8), typeMeta, lineMeta
-	switch size {
-	case 24:
-		radius = 7
-	case 48:
-		radius, fontSize, lineHeight = 14, 20, 24
-	}
-	ui.Box(c).Size(size, size).MinWidth(size).Shrink(0).Radius(radius).Background(background).
-		AlignItems(ui.Center).Justify(ui.Center).IgnoreInput(true).Children(func() {
-		ui.Text(c, string(initials[:max(1, n)])).FontSize(fontSize).FontWeight(600).FixedLineHeight(lineHeight).
-			SingleLine().TextColor(ink).IgnoreInput(true)
+	botStoneAvatar(c, t, id, name, builtin, size)
+}
+
+func botStoneAvatar(c *ui.Context, t *ui.Theme, id, name string, builtin bool, size float32) {
+	spec := resolveBotAvatar(t, id, name, builtin)
+	ui.Box(c).Size(size, size).MinWidth(size).Shrink(0).AlignItems(ui.Center).Justify(ui.Center).IgnoreInput(true).Children(func() {
+		ui.Icon(c, spec.Body).Size(size, size).TextColor(spec.BodyColor).IgnoreInput(true)
+		ui.Icon(c, spec.Eyes).Absolute().Left(0).Top(0).Size(size, size).TextColor(spec.EyeColor).IgnoreInput(true)
 	})
 }
 
@@ -1120,11 +1107,13 @@ func (a *appModel) productReadOnlyTranscript(c *ui.Context, t *ui.Theme, browser
 			m := messages[i]
 			chatMessageRow(c, t, messages, dividers, i, func() {
 				if m.Kind == msgUser {
-					a.userChatBubble(c, t, m)
+					a.userChatBubble(c, t, m, nil, &browser.recall, func() {
+						recallQuotedMessage(c, messages, &browser.transcript, &browser.recall, m.Quote)
+					})
 					return
 				}
 				scope := historyLinkScope(browser.ownerID, browser.selectedID, m.Key)
-				a.botReplyBubbles(c, t, m, scope, "")
+				a.botReplyBubbles(c, t, m, scope, "", nil, &browser.recall)
 			})
 		}).Label(msgs.ConversationMessagesLabel()).Fill().MaxWidth(conversationMaxWidth).Padding(16, 16, 32)
 	})
@@ -1162,18 +1151,25 @@ func (a *appModel) message(c *ui.Context, t *ui.Theme, ct *contact, m *message) 
 			return
 		}
 	case msgUser:
-		a.userChatBubble(c, t, m)
+		a.userChatBubble(c, t, m, ct, &ct.recall, func() {
+			recallQuotedMessage(c, ct.Messages, &ct.list, &ct.recall, m.Quote)
+		})
 	default:
-		a.botReplyBubbles(c, t, m, messageLinkScope(ct.ID, m), ct.SessionWorkingDir)
+		a.botReplyBubbles(c, t, m, messageLinkScope(ct.ID, m), ct.SessionWorkingDir, ct, &ct.recall)
 	}
 }
 
-func (a *appModel) userChatBubble(c *ui.Context, t *ui.Theme, m *message) {
+func (a *appModel) userChatBubble(c *ui.Context, t *ui.Theme, m *message, ct *contact, recall *quoteRecall, jump func()) {
 	ui.Row(c).FillWidth().Justify(ui.End).Children(func() {
 		ui.Column(c).MaxWidth(userMessageMaxWidth).MinWidth(0).Shrink(1).Gap(2).Children(func() {
+			if m.Quote != nil {
+				a.sentQuote(c, t, m.Quote, jump)
+			}
 			if m.Text != "" {
 				opts := messageReaderOptions(c, true)
 				opts.MessageBubble = &markdownMessageBubble{Background: a.workTheme.BubbleUser, PaddingX: 12, PaddingY: 8, Radius: 12, MenuOnlyCopy: true}
+				opts.MessageBubble.BeforeCopyMenu = a.quoteMenu(c, ct, m, userQuoteBubble, m.Text)
+				opts.MessageBubble.Highlight = recall.highlight(c, m, userQuoteBubble)
 				markdownReader(c, m.Text, opts).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text)
 			}
 			taskContextReadOnlyView(c, a.workTheme, m.Context)
@@ -1342,6 +1338,9 @@ func (a *appModel) composer(c *ui.Context, t *ui.Theme, state connectionViewStat
 			card.Shadow(0, 2, 10, 0, ui.RGBA(0, 0, 0, .05))
 		}
 		card.Children(func() {
+			if ct.DraftQuote != nil {
+				a.composerQuote(c, t, ct)
+			}
 			if ct.Context.Count() > 0 {
 				a.composerAttachments(c, t, ct)
 			}
@@ -1355,6 +1354,9 @@ func (a *appModel) composer(c *ui.Context, t *ui.Theme, state connectionViewStat
 				Placeholder(msgs.ComposerPlaceholder(ct.Name)).PlaceholderColor(wb.ComposerMuted).FillWidth().OnChange(func() {
 				a.draftChanged(ct)
 			}).OnTextKey(func(k ui.TextKey) bool {
+				if k.Key == ui.KeyEscape && strings.TrimSpace(k.Text()) == "" && a.removeDraftQuote(ct) {
+					return true
+				}
 				if k.Key != ui.KeyEnter || k.Mods&ui.Shift != 0 {
 					return false
 				}

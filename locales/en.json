@@ -94,6 +94,13 @@
   "@copyMessageLabel": {
     "description": "The accessible name of the copy control for a conversation message."
   },
+  "quoteAction": "Quote",
+  "quoteRemove": "Remove quote",
+  "quoteAuthorYou": "You",
+  "quoteReplyingTo": "Quoting {author}",
+  "@quoteReplyingTo": {"placeholders": {"author": {"type": "String"}}},
+  "quoteJump": "Jump to quoted message from {author}",
+  "@quoteJump": {"placeholders": {"author": {"type": "String"}}},
   "copyContextTextLabel": "Copy material text",
   "@copyContextTextLabel": {
     "description": "The accessible name of the copy control for Material text."
