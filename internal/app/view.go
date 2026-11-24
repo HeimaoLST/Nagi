@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net/url"
 	"path/filepath"
 	"slices"
@@ -1363,6 +1364,10 @@ func (a *appModel) composer(c *ui.Context, t *ui.Theme, state connectionViewStat
 				}
 				return true
 			})
+			if a.composerCaretToEnd {
+				input.SetTextSelection(math.MaxInt, math.MaxInt)
+				a.composerCaretToEnd = false
+			}
 			if a.focusComposer {
 				input.Focus()
 				a.focusComposer = false
