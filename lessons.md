@@ -42,6 +42,14 @@
 
 **Prevention:** Key stateful editors with `c.Key(...)` before calling `ui.TextAreaBase`, use `Lines(1, 6)` with `Padding(0, 2)` for compact auto-growing composers, and verify net editable width (`>= 440 DIP` at `960x640` with profile open) plus resting height directly on rendered geometry.
 
+### Move caret explicitly after programmatic TextArea draft fill
+
+**Problem:** Filling a bound `*string` draft directly when clicking a starter prompt left the focused `ui.TextAreaBase` caret stranded at rune offset `0` on the far left instead of at the end of the inserted text.
+
+**Cause or correction:** When an existing MyGo `TextAreaBase` syncs a changed `*string` value via `ed.setText(*value)`, it clamps the prior caret with `min(caret, len)`, which preserves offset `0` from an empty composer.
+
+**Prevention:** Whenever a UI action programmatically populates a `TextAreaBase` and expects the user to continue typing at the end, pair `input.Focus()` with `input.SetTextSelection(math.MaxInt, math.MaxInt)` (which clamps cleanly across ASCII, CJK and multi-byte runes and resets the caret even on identical-text re-click) and verify by typing after the fill in headless tests.
+
 ### Audit pinned MyGo patches, parser defaults and licenses on minor upgrades
 
 **Problem:** Minor MyGo upgrades can silently enable new default Markdown extensions (`ExtMentions`, `ExtReferences`) and partially fix upstream drag/accessibility paths while leaving disabled-state or Darwin superclass cache leaks behind.

@@ -91,10 +91,79 @@ func TestUnifiedEmptyConversationCompositionAndDraftFill(t *testing.T) {
 			if ct.Draft != chosen || ct.draftRev != beforeRev+1 || len(ct.Messages) != 0 || a.pi != nil {
 				t.Fatalf("clicking starter prompt did not fill draft without sending: draft=%q rev=%d->%d msgs=%d", ct.Draft, beforeRev, ct.draftRev, len(ct.Messages))
 			}
+			if a.composerCaretToEnd {
+				t.Fatal("composerCaretToEnd was not cleared after applying starter prompt")
+			}
 			if !tr.Focused(msgs.ComposerLabel(ct.Name)) {
 				t.Fatal("clicking starter prompt did not focus composer")
 			}
+			tr.Type("!")
+			tr.Frame()
+			if ct.Draft != chosen+"!" || len(ct.Messages) != 0 {
+				t.Fatalf("typing after starter click did not append at end: got %q want %q", ct.Draft, chosen+"!")
+			}
+			tr.Key(0, ui.KeyBackspace)
+			tr.Frame()
+			if ct.Draft != chosen {
+				t.Fatalf("backspace did not restore starter prompt: got %q want %q", ct.Draft, chosen)
+			}
+			tr.Key(0, ui.KeyLeft)
+			tr.Key(0, ui.KeyLeft)
+			tr.Frame()
+			if err := tr.Click(chosen); err != nil {
+				t.Fatal(err)
+			}
+			tr.Frame()
+			if a.composerCaretToEnd || !tr.Focused(msgs.ComposerLabel(ct.Name)) {
+				t.Fatalf("re-clicking starter prompt did not refocus and clear caret flag: flag=%v focused=%v", a.composerCaretToEnd, tr.Focused(msgs.ComposerLabel(ct.Name)))
+			}
+			tr.Type("?")
+			tr.Frame()
+			if ct.Draft != chosen+"?" || len(ct.Messages) != 0 {
+				t.Fatalf("typing after re-clicking identical starter prompt did not append at end: got %q want %q", ct.Draft, chosen+"?")
+			}
 		})
+	}
+}
+
+func TestStarterPromptCaretAtEndWithMultibyteEmoji(t *testing.T) {
+	a, _, specialist := pandoraBoxTestApp(t)
+	prompt := "检查发布进度 🚀"
+	specialist.Draft = ""
+	specialist.StarterPrompts = []string{prompt}
+	a.selected = 1
+	a.windowWidth = 1040
+	msgs := locales.In("zh-Hans")
+	tr := ui.NewTester(a.view, 1040, 720)
+	tr.SetLocale("zh-Hans")
+	tr.SetDark(false)
+	tr.SetFocused(true)
+	tr.Frame()
+
+	if err := tr.Click(prompt); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if ct := specialist; ct.Draft != prompt || a.composerCaretToEnd || !tr.Focused(msgs.ComposerLabel(ct.Name)) {
+		t.Fatalf("multibyte starter click failed: draft=%q flag=%v focused=%v", ct.Draft, a.composerCaretToEnd, tr.Focused(msgs.ComposerLabel(ct.Name)))
+	}
+	tr.Type("!")
+	tr.Frame()
+	if specialist.Draft != prompt+"!" {
+		t.Fatalf("typing after multibyte emoji starter did not append at end: got %q want %q", specialist.Draft, prompt+"!")
+	}
+	tr.Key(0, ui.KeyBackspace)
+	tr.Key(0, ui.KeyHome)
+	tr.Key(0, ui.KeyLeft)
+	tr.Frame()
+	if err := tr.Click(prompt); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	tr.Type("?")
+	tr.Frame()
+	if specialist.Draft != prompt+"?" || len(specialist.Messages) != 0 {
+		t.Fatalf("re-clicking multibyte emoji starter did not reset caret to end: got %q want %q", specialist.Draft, prompt+"?")
 	}
 }
 
