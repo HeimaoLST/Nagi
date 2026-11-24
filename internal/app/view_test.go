@@ -1339,3 +1339,63 @@ func TestComposerDeclaredToolbarKeepsRealEdgeTargets(t *testing.T) {
 		}
 	}
 }
+
+func TestWorkbenchPopoverMenusForUserBubbleAndComposer(t *testing.T) {
+	const text = "Copyable workbench message"
+	for _, tc := range []struct {
+		locale    string
+		dark      bool
+		selectAll string
+		paste     string
+	}{
+		{"en", true, "Select All", "Paste"},
+		{"zh-Hans", false, "全选", "粘贴"},
+	} {
+		t.Run(tc.locale, func(t *testing.T) {
+			a := testApp(t)
+			a.windowWidth = 1040
+			ct := a.contacts[0]
+			ct.Messages = []*message{{ID: 1, Kind: msgUser, Text: text}}
+			ct.Draft = ""
+
+			tr := ui.NewTester(a.view, 1040, 720)
+			tr.SetLocale(tc.locale)
+			tr.SetDark(tc.dark)
+			tr.SetFocused(true)
+			tr.Frame()
+
+			msgs := locales.In(tc.locale)
+			if err := tr.RightClick(text); err != nil {
+				t.Fatal(err)
+			}
+			tr.Frame()
+			if !tr.HasText(tc.selectAll) {
+				t.Fatalf("user bubble did not render in-window popover menu (%q missing): %v", tc.selectAll, tr.Texts())
+			}
+			if err := tr.ChooseMenuItem(msgs.CopyMessageLabel()); err != nil {
+				t.Fatal(err)
+			}
+			tr.Frame()
+			if got := tr.Clipboard(); got != text {
+				t.Fatalf("user bubble popover Copy = %q, want %q", got, text)
+			}
+
+			composer := msgs.ComposerLabel(ct.Name)
+			if err := tr.RightClick(composer); err != nil {
+				t.Fatal(err)
+			}
+			tr.Frame()
+			pasteRect, ok := tr.Find(tc.paste)
+			if !ok || pasteRect.W <= 0 || pasteRect.H <= 0 || pasteRect.Y < 0 || pasteRect.Y+pasteRect.H > 720 {
+				t.Fatalf("composer did not render in-window Paste popover inside viewport: rect=%+v ok=%t texts=%v", pasteRect, ok, tr.Texts())
+			}
+			if err := tr.Click(tc.paste); err != nil {
+				t.Fatal(err)
+			}
+			tr.Frame()
+			if ct.Draft != text {
+				t.Fatalf("composer popover Paste draft = %q, want %q", ct.Draft, text)
+			}
+		})
+	}
+}

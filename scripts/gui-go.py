@@ -15,23 +15,42 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-SPLIT_PATCH = ROOT / "patches" / "split-release.patch"
-EDITOR_PATCH = ROOT / "patches" / "editor-release.patch"
-MARKDOWN_LINK_PATCH = ROOT / "patches" / "markdown-link-focus.patch"
-MARKDOWN_PRESENTATION_PATCH = ROOT / "patches" / "markdown-presentation.patch"
-SECURE_ACCESSIBILITY_PATCH = ROOT / "patches" / "secure-accessibility.patch"
 MYGO = "github.com/egoist/mygo"
-VERSION = "v0.7.4"
-SPLIT_BEFORE = "70f6d9b7e546278a54179d554b3935f2b8d3afc1e0df37e56fe0ad9f694c81a8"
-SPLIT_AFTER = "315165f4974f652521d52696cb22207819d4ec7bd493d878da9ec6fcdf513fcf"
-EDITOR_INPUT_BEFORE = "d7a8635820d7f5583f82d1b4f5b2c17ed6ebdbcae154daa4afafcdcb36395137"
-EDITOR_INPUT_AFTER = "e6d64ecaa49201256a8bcd64bf22954c0bef5ec49961b6231a47b998dedbc8d7"
-MARKDOWN_VIEW_BEFORE = "194e6719641a9dee4132e30d69a949e47ff9cd087fbdecf3f6ee84bb66b09b90"
-MARKDOWN_VIEW_AFTER = "b80afdb2a433dd73722d97e372661e3a27f59f10588fc9efca01241e5379efc2"
-MARKDOWN_PRESENTATION_BEFORE = {'ui/markdown/theme.go': '83bd2288ad3b10eceac6165fec4a845e2d28e8244d6824c5d372bc73030ba737', 'ui/markdown/view.go': 'b80afdb2a433dd73722d97e372661e3a27f59f10588fc9efca01241e5379efc2', 'ui/markdown/spans.go': '5b6db42985aed9f4e2be6556a57f4fcd03964d82d71c84cb7669a01cec7623ec', 'ui/markdown/copy.go': '6f0c9262590b1b233fb7c82db598a4250936097e2fb13706d5081b35daa6a093', 'ui/markdown/view_test.go': '35d91984cadb2087f23dc7044ae129e03950c77d76ea0ec60117a5599b6071c5'}
-MARKDOWN_PRESENTATION_AFTER = {'ui/markdown/theme.go': '7fd8e1215c5b4c7996a55811f777031f78a936beaf47dc23462f66e2b8bb4ead', 'ui/markdown/view.go': '64b9b9f557c00b0ac43d6074b8ff1fa4a11935fdcc5ba0e9c9cbe3869e2677b9', 'ui/markdown/spans.go': '16cf7b41d745d1749f4b547c35733feeca288c5864833d02ba79a9aa8fc6f315', 'ui/markdown/copy.go': '2e4a40a58ae59fedb867e99888be108d0b7cbdf82beddf0ad23d355bcac06d22', 'ui/markdown/view_test.go': 'd9b4f2d7eb75c3483ab8fd207c43502727e87c299de6cd86df33d09f06d022d4'}
-SECURE_ACCESSIBILITY_BEFORE = {'ui/access.go': '5b34247647520abaa936850e6b5c611eda593dcbb4c4270176bc209454080b1a', 'internal/darwin/access.go': '3898e375c5baa667d20acd3daabb88e60f87345c2be99aea86a52978680e6fc8'}
-SECURE_ACCESSIBILITY_AFTER = {'ui/access.go': 'a6ee99aeea29378163046d01f6efe8ff83436665c27ad80d0c54cc093717ff59', 'internal/darwin/access.go': '8a01b106e75cc1ca4032180ab17528da9d85f93966a54ec98b757bf11dd2c062'}
+VERSION = "v0.10.0"
+MARKDOWN_VIEW = "ui/markdown/view.go"
+LINK_VIEW = "d4f2be61d304e0bbf6b77a324a53bdfb6ea1119140bb963067dc3531a3d01adf"
+PATCHES = (
+    ("split-release.patch", {
+        "ui/split_release_before_frame_test.go": None,
+    }, {
+        "ui/split_release_before_frame_test.go": "d1604500d8043d39db15e6e2d11fd14f31c6fb4c543db1e334d86d670574b124",
+    }),
+    ("markdown-link-focus.patch", {
+        MARKDOWN_VIEW: "d1a756855d1a6fafbf51c4417d408f35de821af1ff2eac2bb21f229173a40b4b",
+    }, {
+        MARKDOWN_VIEW: LINK_VIEW,
+    }),
+    ("markdown-presentation.patch", {
+        "ui/markdown/theme.go": "edb4b59a2a01951e3cfdbcdc812596552eaade8d3a7a1485a13f1500fe58f121",
+        MARKDOWN_VIEW: LINK_VIEW,
+        "ui/markdown/spans.go": "272974925394a9c0d332e2176856ba48b0d23723c34156e1c4da90d9dcd0a6a7",
+        "ui/markdown/copy.go": "00c3c39cd62464bf47212937293cf01f8ecad79d17bf338028896c0894461947",
+        "ui/markdown/view_test.go": "d2221845614c64b72ec49597930c6e9aaecf06581cce5a084e9eafbc4274adff",
+    }, {
+        "ui/markdown/theme.go": "047578f076d84905420fac18c53d9fb023fd93ad9b26c0dc942f117d7fb184f8",
+        MARKDOWN_VIEW: "fd1379d61282ce9af63cb3f5c2457a1413a86eafe7440b397933a990ab714d0a",
+        "ui/markdown/spans.go": "e52916ed9e73bc36b6e8dc957d25c678a4aeb4669adc4b2637e2633298e92474",
+        "ui/markdown/copy.go": "9e3096458fba3e4c6d559520175d523760fd8a5e0d226006def5c52eff70075f",
+        "ui/markdown/view_test.go": "d5eb2fe33f3458cb1a0b598137e0c3e252fdcf31cdef8f729969c01e180211f8",
+    }),
+    ("secure-accessibility.patch", {
+        "ui/access.go": "79c8350f3b29470d509f6be5f339bf91a5f356b98635dc7256c2852646eed8c5",
+        "internal/darwin/access.go": "d3bfa7ad9b77736f18483e969d179eb91257a0077f2703a3cb633ca20976bbed",
+    }, {
+        "ui/access.go": "af0936ef292e9ee4dc0ad167bf33f0a0e5a7c772a7e81aa66ffd6f6e65eeee3b",
+        "internal/darwin/access.go": "52ddeb89928ee00df3ec07432f30f77a2cc7819e2580d3bff1fc9da58b96f97e",
+    }),
+)
 
 
 def fail(message: str, code: int) -> int:
@@ -81,7 +100,7 @@ def main(argv: list[str]) -> int:
         return fail("this launcher only forwards test, vet, build and run", 2)
     if any(arg == "-modfile" or arg.startswith("-modfile=") for arg in argv[1:]):
         return fail("caller may not override the prepared -modfile", 2)
-    if not ROOT.is_dir() or not SPLIT_PATCH.is_file() or not EDITOR_PATCH.is_file() or not MARKDOWN_LINK_PATCH.is_file() or not MARKDOWN_PRESENTATION_PATCH.is_file() or not SECURE_ACCESSIBILITY_PATCH.is_file():
+    if any(not (ROOT / "patches" / name).is_file() for name, _, _ in PATCHES):
         return fail("root module or a pinned patch is missing", 2)
     selected = selected_module()
     if selected.get("Version") != VERSION or selected.get("Replace") is not None:
@@ -98,74 +117,28 @@ def main(argv: list[str]) -> int:
         shutil.copytree(src, module)
         make_writable(module)
 
-        split_before = sha256(module / "ui" / "split.go")
-        if split_before != SPLIT_BEFORE:
-            return fail(
-                "unexpected MyGo Split source sha256=%s, expected %s; refusing to patch"
-                % (split_before, SPLIT_BEFORE),
-                2,
-            )
-        editor_before = sha256(module / "ui" / "input.go")
-        if editor_before != EDITOR_INPUT_BEFORE:
-            return fail(
-                "unexpected MyGo editor source sha256=%s, expected %s; refusing to patch"
-                % (editor_before, EDITOR_INPUT_BEFORE),
-                2,
-            )
-        markdown_before = sha256(module / "ui" / "markdown" / "view.go")
-        if markdown_before != MARKDOWN_VIEW_BEFORE:
-            return fail(
-                "unexpected MyGo Markdown source sha256=%s, expected %s; refusing to patch"
-                % (markdown_before, MARKDOWN_VIEW_BEFORE),
-                2,
-            )
-        for label, patch in (("Split", SPLIT_PATCH), ("Editor", EDITOR_PATCH), ("Markdown link", MARKDOWN_LINK_PATCH), ("Markdown presentation", MARKDOWN_PRESENTATION_PATCH), ("Secure accessibility", SECURE_ACCESSIBILITY_PATCH)):
-            if patch == MARKDOWN_PRESENTATION_PATCH:
-                actual = {path: sha256(module / path) for path in MARKDOWN_PRESENTATION_BEFORE}
-                if actual != MARKDOWN_PRESENTATION_BEFORE:
-                    return fail("unexpected Markdown presentation input hashes=%s; refusing to patch" % actual, 2)
-            if patch == SECURE_ACCESSIBILITY_PATCH:
-                actual = {path: sha256(module / path) for path in SECURE_ACCESSIBILITY_BEFORE}
-                if actual != SECURE_ACCESSIBILITY_BEFORE:
-                    return fail("unexpected secure accessibility input hashes=%s; refusing to patch" % actual, 2)
-            patch_result = subprocess.run(
-                ["patch", "-p1", "--fuzz=0", "--batch"],
-                cwd=module,
-                stdin=patch.open("rb"),
-                stdout=sys.stderr,
-                stderr=sys.stderr,
-            )
+        for name, before, after in PATCHES:
+            for path, expected in before.items():
+                source = module / path
+                actual = sha256(source) if source.exists() else None
+                if actual != expected:
+                    return fail(f"{name}: unexpected {path} input sha256={actual}, expected {expected}", 2)
+            with (ROOT / "patches" / name).open("rb") as patch:
+                patch_result = subprocess.run(
+                    ["patch", "-p1", "--fuzz=0", "--batch"],
+                    cwd=module,
+                    stdin=patch,
+                    stdout=sys.stderr,
+                    stderr=sys.stderr,
+                )
             if patch_result.returncode != 0:
-                return fail("%s patch failed; refusing to run partial source" % label, 3)
-        split_after = sha256(module / "ui" / "split.go")
-        if split_after != SPLIT_AFTER:
-            return fail(
-                "unexpected patched Split source sha256=%s, expected %s"
-                % (split_after, SPLIT_AFTER),
-                4,
-            )
-        editor_after = sha256(module / "ui" / "input.go")
-        if editor_after != EDITOR_INPUT_AFTER:
-            return fail(
-                "unexpected patched editor source sha256=%s, expected %s"
-                % (editor_after, EDITOR_INPUT_AFTER),
-                4,
-            )
-        markdown_after = sha256(module / "ui" / "markdown" / "view.go")
-        if markdown_after != MARKDOWN_PRESENTATION_AFTER["ui/markdown/view.go"]:
-            return fail(
-                "unexpected patched Markdown source sha256=%s, expected %s"
-                % (markdown_after, MARKDOWN_PRESENTATION_AFTER["ui/markdown/view.go"]),
-                4,
-            )
-        actual = {path: sha256(module / path) for path in MARKDOWN_PRESENTATION_AFTER}
-        if actual != MARKDOWN_PRESENTATION_AFTER:
-            return fail("unexpected patched Markdown presentation hashes=%s; refusing partial source" % actual, 4)
-        print("gui-go: verified Markdown presentation " + json.dumps(actual, sort_keys=True), file=sys.stderr)
-        actual = {path: sha256(module / path) for path in SECURE_ACCESSIBILITY_AFTER}
-        if actual != SECURE_ACCESSIBILITY_AFTER:
-            return fail("unexpected patched secure accessibility hashes=%s; refusing partial source" % actual, 4)
-        print("gui-go: verified secure accessibility " + json.dumps(actual, sort_keys=True), file=sys.stderr)
+                return fail(f"{name} failed; refusing to run partial source", 3)
+            for path, expected in after.items():
+                actual = sha256(module / path)
+                if actual != expected:
+                    return fail(f"{name}: unexpected {path} output sha256={actual}, expected {expected}", 4)
+            print(f"gui-go: verified {name} " + json.dumps(after, sort_keys=True), file=sys.stderr)
+
         # A module file distinct from the real go.mod; Go uses the
         # matching app.sum next to it. The source checkout is never edited.
         modfile = tmp / "app.mod"

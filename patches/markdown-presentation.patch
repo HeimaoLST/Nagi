@@ -1,6 +1,6 @@
 --- a/ui/markdown/theme.go
 +++ b/ui/markdown/theme.go
-@@ -87,6 +87,10 @@
+@@ -91,6 +91,10 @@
  	// Size is their size in ems, and Weight their weight.
  	Size   float32
  	Weight int
@@ -13,7 +13,7 @@
  	// Top and Bottom are the room above and below them in ems, which
 --- a/ui/markdown/view.go
 +++ b/ui/markdown/view.go
-@@ -336,7 +336,14 @@
+@@ -484,7 +484,14 @@
  		h := th.Headings[b.Level-1]
  		s := base
  		s.weight, s.size, s.color = h.Weight, th.em(h.Size), h.Color
@@ -28,7 +28,7 @@
  		if h.Rule {
  			el.BorderWidth(0, 0, 1, 0).BorderColor(th.Rule).Padding(0, 0, th.em(0.3), 0)
  		}
-@@ -441,6 +448,7 @@
+@@ -669,6 +676,7 @@
  	}
  	if objects := p.objects; len(objects) > 0 {
  		el.DrawObjects(func(pa *ui.Painter, at int, r ui.Rect) {
@@ -48,7 +48,7 @@
  
  	"github.com/egoist/mygo/ui"
  	"github.com/egoist/mygo/ui/markdown/parser"
-@@ -37,8 +40,10 @@
+@@ -40,8 +43,10 @@
  
  // para is what a paragraph, heading or cell shows.
  type para struct {
@@ -61,7 +61,7 @@
  	// objects are its math drawn by the app, in order: a slice of each
  	// build's own, which the view's drawing keeps.
  	objects []mathObject
-@@ -61,6 +66,57 @@
+@@ -71,6 +76,57 @@
  	size                float32
  	font                string
  	inLink, pendingLink bool
@@ -119,7 +119,7 @@
  }
  
  type spanBuilder struct {
-@@ -95,6 +151,9 @@
+@@ -111,6 +167,9 @@
  	for i := range p.pieces {
  		p.pieces[i].spans = append([]ui.Span(nil), p.pieces[i].spans...)
  	}
@@ -129,7 +129,7 @@
  }
  
  func (sb *spanBuilder) piece(link int) *piece {
-@@ -195,6 +254,7 @@
+@@ -211,6 +270,7 @@
  func (sb *spanBuilder) addSpan(text string, src, end int, exact bool, s spanStyle, link int, alpha float32) {
  	th := sb.th
  	sp := ui.Span{Text: text, Font: th.Font, Size: th.FontSize, Weight: s.weight, Italic: s.italic, Strikethrough: s.strike, Underline: s.underline}
@@ -139,8 +139,8 @@
  	}
 --- a/ui/markdown/copy.go
 +++ b/ui/markdown/copy.go
-@@ -53,6 +53,16 @@
- // math drawn as objects, as $x_i$, in place of their characters.
+@@ -54,6 +54,16 @@
+ // without links' icons, which have no source, or their joiners.
  func (st *viewState) writeText(b *strings.Builder, inf elemInfo, p ui.SelectedText) {
  	text := runeSlice(p.Text, p.Start, p.End)
 +	if inf.line == -1 && inf.block < len(st.paras) && st.paras[inf.block].ok {
@@ -156,7 +156,7 @@
  	if inf.line != -1 || inf.block >= len(st.paras) || !st.paras[inf.block].ok || len(st.paras[inf.block].p.objects) == 0 {
  		b.WriteString(text)
  		return
-@@ -181,7 +191,8 @@
+@@ -188,7 +198,8 @@
  		return b.Start
  	}
  	if inf.block < len(st.paras) && st.paras[inf.block].ok {
@@ -166,7 +166,7 @@
  	}
  	return b.Start
  }
-@@ -198,6 +209,9 @@
+@@ -280,6 +291,9 @@
  	li, ok2 := st.elem(last.ID)
  	if !ok1 || !ok2 {
  		return st.copyText(parts)
@@ -186,7 +186,7 @@
  	"github.com/egoist/mygo/ui"
  )
  
-@@ -407,3 +408,187 @@
+@@ -422,3 +423,187 @@
  		t.Errorf("done, shows %q", got)
  	}
  }

@@ -42,7 +42,7 @@ jobs:
         run: |
           python3 scripts/gui-go.py vet ./...
           python3 scripts/gui-go.py test ./cmd/nagi ./internal/app ./internal/connection ./internal/locale ./internal/markdown ./internal/materials ./internal/store ./internal/theme ./locales -count=1
-          python3 scripts/gui-go.py test github.com/egoist/mygo/ui -run '^(TestSplitReleaseBeforeFrame|TestEditorSelectionReleaseBeforeFrame)$' -count=1 -v
+          python3 scripts/gui-go.py test github.com/egoist/mygo/ui -run '^(TestSplitReleaseBeforeFrame|TestTextAreaDragReleaseBeforeFrame)$' -count=1 -v
           GOARCH=arm64 python3 scripts/gui-go.py build -trimpath -mod=readonly -buildvcs=true -o "$RUNNER_TEMP/Nagi" ./cmd/nagi
       - name: Headless previews
         id: headless-previews

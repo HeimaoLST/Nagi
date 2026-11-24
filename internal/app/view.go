@@ -49,6 +49,7 @@ func (a *appModel) view(c *ui.Context) {
 	a.workTheme = a.resolveAppearanceTheme(resolveAppearanceDark(a.appearanceMode, a.systemDark)).Palette
 	t := a.workTheme.Theme
 	c.SetTheme(t)
+	c.SetMenuPresentation(ui.PopoverMenus)
 	c.OnShortcut(ui.Cmd, ui.KeyComma, func() {
 		if !a.settingsOpen {
 			source := settingsSourceCommand

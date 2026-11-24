@@ -133,6 +133,7 @@ func Reader(c *ui.Context, source string, options ReaderOptions) ui.Element {
 	st.codeCopyHandles = options.CodeCopyHandles
 	if !st.ready {
 		st.ready = true
+		st.opts.Extensions = parser.Default &^ (parser.ExtMentions | parser.ExtReferences)
 		st.opts.WrapCode = true
 		st.opts.Reveal = &markdown.Reveal{Unit: markdown.AtOnce, Fade: -1}
 		st.opts.CodeBlock = func(c *ui.Context, b *markdown.CodeBlockView) {

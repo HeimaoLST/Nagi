@@ -1,19 +1,38 @@
 --- a/ui/markdown/view.go
 +++ b/ui/markdown/view.go
-@@ -29,0 +30,6 @@
-+	// LinkElement, when set, is called for each inline link after its normal
-+	// construction, children and tooltip. It may bind the element for focus
-+	// tracking; it cannot replace it, and it does not change OnLink, router,
-+	// anchor or link validation behavior. block and inline are the link's
-+	// parsed block and inline indices in this document.
+@@ -36,5 +36,10 @@
+ 	// heading, and links of other schemes do nothing.
+ 	OnLink func(url string)
++	// LinkElement binds each inline link after its children are built. Block
++	// and inline identify the parsed link. The callback preserves the view's
++	// activation and validation behavior.
 +	LinkElement func(c *ui.Context, block, inline int, dest string, element ui.Element)
-@@ -464 +470 @@
++
+ 	// LinkIcon, when set, makes an object at the start of a link's text,
+ 	// from its destination and the size of the text around it in DIPs:
+ 	// one on the baseline, inside the link, which stays on the line of
+@@ -695,12 +700,12 @@
+ 			// or code, which Options.CodeLink did.
+ 			in.Dest, in.Auto = pc.dest, true
+ 		}
 -		st.link(c, &in, func() { ui.RichText(c, pc.spans...) })
 +		st.link(c, block, pc.link, &in, func() { ui.RichText(c, pc.spans...) })
-@@ -469 +475 @@
+ 	}
+ }
+ 
+ // link builds a link to in.Dest whose text children builds.
 -func (st *viewState) link(c *ui.Context, in *parser.Inline, children func()) {
 +func (st *viewState) link(c *ui.Context, block, inline int, in *parser.Inline, children func()) {
-@@ -497,0 +504,3 @@
+ 	dest := in.Dest
+ 	var l ui.Element
+ 	switch {
+@@ -726,6 +731,9 @@
+ 	}
+ 	l.TextColor(st.th.Link)
+ 	l.Children(children)
 +	if st.o.LinkElement != nil {
 +		st.o.LinkElement(c, block, inline, dest, l)
 +	}
+ 	// What the tip says, which describes the link to assistive technology.
+ 	tip := in.Title
+ 	if tip == "" && !in.Auto && !in.Pending && dest != "" && !strings.HasPrefix(dest, "#") {
