@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -329,7 +330,17 @@ func TestPiAppProductConnectionStopAndWorkerLoss(t *testing.T) {
 	enter(msg.ComposerLabel(first.Name), stopInput)
 	w.click(msg.SendAction())
 	await(streamStarted, "the captured connection stream")
-	w.wait(func() bool { return first.ActiveTaskID != "" && w.view.HasText(stopDelta) })
+	w.wait(func() bool {
+		if first.ActiveTaskID == "" || !w.view.HasText(msg.BotTyping()) || !w.view.HasText(msg.StopConversation()) {
+			return false
+		}
+		for _, m := range first.Messages {
+			if m.TaskID == first.ActiveTaskID && m.Kind == msgContact && strings.Contains(m.Text, stopDelta) {
+				return true
+			}
+		}
+		return false
+	})
 	stopped := conversation(firstChat).LatestExecution
 	if stopped == nil || stopped.State != "running" || stopped.OperationID == "" {
 		t.Fatalf("could not identify the captured conversation stream: %+v", stopped)
@@ -360,7 +371,7 @@ func TestPiAppProductConnectionStopAndWorkerLoss(t *testing.T) {
 		t.Fatal("composer Stop did not close the provider request")
 	}
 	w.wait(func() bool {
-		return first.ActiveTaskID == "" && first.SessionState == "interrupted" && w.app.contactHistoryInFlight == 0
+		return first.ActiveTaskID == "" && first.SessionState == "interrupted" && w.app.contactHistoryInFlight == 0 && w.view.HasText(stopDelta)
 	})
 	assertExecution(firstChat, stopped, "interrupted")
 

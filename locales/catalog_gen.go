@@ -2170,6 +2170,12 @@ func (msgs Messages) SendTooltip() string {
 	return Catalog.Format(msgs.locale, "sendTooltip", nil)
 }
 
+func BotTyping() string { return In(i18n.Locale()).BotTyping() }
+
+func (msgs Messages) BotTyping() string {
+	return Catalog.Format(msgs.locale, "botTyping", nil)
+}
+
 // SendingState says "Sending…"
 // in the language the app shows.
 func SendingState() string { return In(i18n.Locale()).SendingState() }

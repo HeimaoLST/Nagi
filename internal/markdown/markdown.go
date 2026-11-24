@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/egoist/mygo/transfer"
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/markdown"
 	"github.com/egoist/mygo/ui/markdown/parser"
@@ -72,6 +73,7 @@ type MessageBubble struct {
 	PaddingY       float32
 	Radius         float32
 	ContextualCopy bool
+	MenuOnlyCopy   bool
 	Header         func(*ui.Context)
 	Footer         func(*ui.Context)
 	BodyHandle     *ui.Handle
@@ -170,6 +172,8 @@ func Reader(c *ui.Context, source string, options ReaderOptions) ui.Element {
 		}
 	}
 	st.opts.Theme = normalizedMarkdownTheme(c, options.Theme)
+	menuOnlyCopy := options.MessageBubble != nil && options.MessageBubble.MenuOnlyCopy
+	st.opts.ShareSelection = menuOnlyCopy
 	st.opts.LinkElement = nil
 	if !options.PlainText {
 		scope, focus, returnTarget, returnSeen := options.LinkScope, options.LinkFocus, options.LinkReturn, options.LinkReturnSeen
@@ -193,19 +197,24 @@ func Reader(c *ui.Context, source string, options ReaderOptions) ui.Element {
 	if label == "" {
 		label = locales.In(c.Locale()).CopyMessageLabel()
 	}
+	copyMenu := func(m *ui.Menu) {
+		if m.Item(label).Chosen() {
+			st.copySource(c, c.Now(), source, &st.sourceFeedback)
+		}
+		if options.PlainText {
+			m.Separator()
+			m.EditItems()
+		}
+	}
 
 	drawBody := func(c *ui.Context) {
 		switch {
 		case options.PlainText:
 			text := ui.Text(c, source).Selectable().Font("system-ui").FontSize(theme.TypeBody).FixedLineHeight(theme.LineBody)
-			if options.MessageBubble != nil && options.MessageBubble.ContextualCopy {
-				text.ContextMenu(func(m *ui.Menu) {
-					if m.Item(label).Chosen() {
-						st.copySource(c, c.Now(), source, &st.sourceFeedback)
-					}
-					m.Separator()
-					m.EditItems()
-				})
+			if menuOnlyCopy {
+				text.PopoverMenu(copyMenu)
+			} else if options.MessageBubble != nil && options.MessageBubble.ContextualCopy {
+				text.ContextMenu(copyMenu)
 			}
 		case options.Streaming:
 			markdown.Stream(c, source, &st.opts)
@@ -230,6 +239,12 @@ func Reader(c *ui.Context, source string, options ReaderOptions) ui.Element {
 		if bubble.BodyHandle != nil {
 			body.Bind(bubble.BodyHandle)
 		}
+		if menuOnlyCopy {
+			if !options.PlainText {
+				body.Selectable().CopyData(copyBubbleSelection)
+			}
+			body.PopoverMenu(copyMenu)
+		}
 		body.Children(func() {
 			if bubble.Header != nil {
 				bubble.Header(c)
@@ -239,6 +254,9 @@ func Reader(c *ui.Context, source string, options ReaderOptions) ui.Element {
 				bubble.Footer(c)
 			}
 		})
+		if menuOnlyCopy {
+			return
+		}
 		reveal := func() bool {
 			if !bubble.ContextualCopy {
 				return true
@@ -249,6 +267,29 @@ func Reader(c *ui.Context, source string, options ReaderOptions) ui.Element {
 		st.sourceCopyButton(c, c.Now(), label, func() string { return source }, &st.sourceFeedback, options.CopyHandle, true, reveal)
 	})
 	return root
+}
+
+func copyBubbleSelection(parts []ui.SelectedText) transfer.Data {
+	var text strings.Builder
+	for i, part := range parts {
+		if i > 0 {
+			text.WriteString("\n\n")
+		}
+		start, end := len(part.Text), len(part.Text)
+		position := 0
+		for offset := range part.Text {
+			if position == part.Start {
+				start = offset
+			}
+			if position == part.End {
+				end = offset
+				break
+			}
+			position++
+		}
+		text.WriteString(part.Text[start:end])
+	}
+	return transfer.TextData(text.String())
 }
 
 type readerStateKey struct{}

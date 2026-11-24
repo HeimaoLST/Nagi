@@ -378,21 +378,37 @@ func revealCopyTooltip(t *testing.T, tr *ui.Tester, label string) {
 
 func TestCopyLabelsFollowTesterLocale(t *testing.T) {
 	a := testApp(t)
+	ct := a.selectedContact()
+	ct.Messages = []*message{{
+		ID: 1, Kind: msgContact, Text: "Summary line\n\n```go\nprintln(1)\n```",
+	}}
 	tr := ui.NewTester(a.view, 1040, 720)
-	tr.SetLocale("en")
-	tr.Frame()
-	if !tr.HasText("Copy message") {
-		t.Fatalf("English copy label missing: %v", tr.Texts())
-	}
-	tr.SetLocale("zh-Hans")
-	tr.Frame()
-	if !tr.HasText("复制消息") {
-		t.Fatalf("Chinese copy label missing: %v", tr.Texts())
-	}
-	tr.SetLocale("en")
-	tr.Frame()
-	if !tr.HasText("Copy message") {
-		t.Fatalf("English copy label did not return: %v", tr.Texts())
+	for _, tc := range []struct {
+		locale   string
+		wantMenu string
+		wantCode string
+	}{
+		{"en", "Copy message", "Copy code"},
+		{"zh-Hans", "复制消息", "复制代码"},
+		{"en", "Copy message", "Copy code"},
+	} {
+		tr.SetLocale(tc.locale)
+		tr.Frame()
+		if !tr.HasText(tc.wantCode) {
+			t.Fatalf("%s code copy label %q missing: %v", tc.locale, tc.wantCode, tr.Texts())
+		}
+		if tr.HasText(tc.wantMenu) {
+			t.Fatalf("%s outer message copy button unexpectedly visible before right-click: %v", tc.locale, tr.Texts())
+		}
+		if err := tr.RightClick("Summary line"); err != nil {
+			t.Fatal(err)
+		}
+		tr.Frame()
+		if !tr.HasText(tc.wantMenu) {
+			t.Fatalf("%s popover copy label %q missing: %v", tc.locale, tc.wantMenu, tr.Texts())
+		}
+		tr.Key(0, ui.KeyEscape)
+		tr.Frame()
 	}
 }
 

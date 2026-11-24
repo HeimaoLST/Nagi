@@ -541,8 +541,8 @@ func TestLiveTaskStatesRenderWithoutWaitingConflict(t *testing.T) {
 	event.Text = "Hel"
 	applyTestProductEvent(t, a, "execution.textDelta", event)
 	tr.Frame()
-	if !tr.HasText("Hel") || ct.ActiveTaskID != event.ExecutionID {
-		t.Fatal("Pi stream did not render while its run remained active")
+	if !tr.HasText(locales.In("en").BotTyping()) || tr.HasText("Hel") || ct.ActiveTaskID != event.ExecutionID || len(ct.Messages) < 2 || ct.Messages[1].Text != "Hel" {
+		t.Fatalf("Pi live stream did not hold behind typing indicator while active: texts=%v msgs=%+v", tr.Texts(), ct.Messages)
 	}
 	event.State = "completed"
 	applyTestProductEvent(t, a, "execution.settled", event)
