@@ -1,12 +1,12 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdir, readFile, realpath, stat } from 'node:fs/promises';
+import { mkdir, realpath, stat } from 'node:fs/promises';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import {
   createAgentSessionFromServices, createAgentSessionRuntime, createAgentSessionServices,
   createReadToolDefinition, createBashToolDefinition, createEditToolDefinition, createWriteToolDefinition,
   createGrepToolDefinition, createFindToolDefinition, createLsToolDefinition,
   ModelRuntime, SessionManager, SettingsManager, createMcpExtension, McpOAuthCredentialStore, InMemoryAuthStorageBackend,
-  parseSessionEntries,
+  type SessionEntry,
   type AgentSessionEvent, type AgentSessionRuntime, type ToolDefinition, type McpServerEntry, type McpTransportFactory,
 } from '@earendil-works/pi-coding-agent';
 import { InMemoryCredentialStore, type AssistantMessage } from '@earendil-works/pi-ai';
@@ -19,11 +19,12 @@ import {
 import { Product, confirmedFileEffect, type ProductRunObservers, type ProductSession } from './product.js';
 import type { ProductProfilePaths } from './product-profile.js';
 import { isNagiBotSystemPrompt } from './bot-template.js';
+import { bindingEntryType as BINDING_TYPE, turnEntryType as TURN_TYPE, liveTranscript, matchesTranscriptOwner,
+  openDiskTranscript, transcriptEntries, type TranscriptOwner } from './product-transcript.js';
+import { clipUTF8, projectionRedactor, streamingProjectionRedactor } from './product-redactor.js';
 
-const BINDING_TYPE = 'nagi-context-v1';
 const CONFIGURATION_TYPE = 'nagi-configuration-v1';
 const MCP_TYPE = 'nagi-mcp-v1';
-const TURN_TYPE = 'nagi-turn-v1';
 const PROVIDER = 'nagi';
 type Binding = Pick<OpenParams, 'contextId' | 'botId' | 'purpose' | 'activityId' | 'selectionRevision' | 'cwd'>;
 type Run = {
@@ -36,6 +37,8 @@ type Context = {
   binding: Binding; configuration: ConfigureParams; instructions: string; codingTools: OpenParams['codingTools']; domainTools: OpenParams['domainTools']; mcpServers: NonNullable<OpenParams['mcpServers']>;
   manager: SessionManager; runtime: AgentSessionRuntime; used: boolean; runIds: Set<string>;
   active?: Run; observationSeq: number;
+  transcriptSource?: string;
+  transcriptSnapshot?: SessionEntry[];
 };
 
 class Worker {
@@ -60,6 +63,9 @@ class Worker {
       open: (params, tools) => this.openProductSession(params, tools),
       refreshSession: (params, tools) => this.refreshProductSession(params, tools),
       conversationPreview: (sessionRef, contextId, botId) => this.conversationPreview(sessionRef, contextId, botId),
+      readTranscript: (sessionRef, owner) => this.readTranscript(sessionRef, owner),
+      redactor: keys => projectionRedactor(this.credentialKeys(keys)),
+      streamingRedactor: keys => streamingProjectionRedactor(this.credentialKeys(keys)),
       test: configuration => this.testProductConnection(configuration),
       drain: () => this.drainProduct(),
       disconnect: () => { void this.disconnect(true); },
@@ -76,11 +82,12 @@ class Worker {
       ...(error instanceof RequestError && error.details ? { details: error.details } : {}),
     } });
   }
-  private cleanMessage(error: unknown, apiKey?: string): string {
-    const text = message(error);
-    const keys = [apiKey, this.configured?.apiKey, ...[...this.contexts.values()].flatMap(context => [context.configuration.apiKey,
+  private credentialKeys(keys: (string | undefined)[] = []): (string | undefined)[] {
+    return [...keys, this.configured?.apiKey, ...[...this.contexts.values()].flatMap(context => [context.configuration.apiKey,
       ...context.mcpServers.flatMap(server => [server.config.env, server.config.headers].flatMap(values => values && typeof values === 'object' ? Object.values(values).filter((value): value is string => typeof value === 'string') : []))])];
-    return keys.reduce<string>((value, key) => key ? value.split(key).join('[credential]') : value, text);
+  }
+  private cleanMessage(error: unknown, apiKey?: string): string {
+    return projectionRedactor(this.credentialKeys([apiKey, ...(this.product?.credentialKeys() ?? [])]))(message(error));
   }
   private event(context: Pick<Context, 'binding'>, run: Pick<Run, 'id' | 'seq'>, event: string, data: object): void {
     const value = { v: 1, type: 'event', workerEpoch: this.epoch, contextId: context.binding.contextId, runId: run.id, seq: ++run.seq, event, data };
@@ -111,16 +118,26 @@ class Worker {
       if (run.product) run.product.observers.text(text);
       else this.event(context, run, 'text.delta', { text });
     }
-    if (event.type === 'tool_execution_start') run.inputs.set(event.toolCallId, event.args);
+    if (event.type === 'tool_execution_start') {
+      const name = event.toolName;
+      const args: unknown = event.args;
+      if (!run.product || name === 'write' || name === 'edit') run.inputs.set(event.toolCallId, args);
+      const target = ['edit', 'find', 'grep', 'ls', 'read', 'write'].includes(name) && args && typeof args === 'object' && 'path' in args && typeof args.path === 'string' ? args.path : undefined;
+      run.product?.observers.toolStarted(name, event.toolCallId, target);
+    }
     if (event.type === 'tool_execution_end') {
       const input = run.inputs.get(event.toolCallId);
       if (!run.product) {
         this.event(context, run, 'tool.finished', { callId: event.toolCallId, name: event.toolName, input, isError: event.isError, result: event.result });
-      } else if (!event.isError && event.result && typeof event.result === 'object' && 'content' in event.result) {
-        const path = confirmedFileEffect(context.binding.cwd, event.toolName, input, event.result.content);
-        if (path) run.product.observers.file(path, event.toolCallId);
+      } else {
+        const { observers } = run.product;
+        const content = event.result?.content;
+        const path = event.isError ? undefined : confirmedFileEffect(context.binding.cwd, event.toolName, input, content);
+        if (path) observers.confirmedFileEffect(path, event.toolCallId);
+        const first = content?.[0];
+        const excerpt = (path || event.toolName === 'read') && first?.type === 'text' ? first.text : undefined;
+        observers.toolFinished(event.toolName, event.toolCallId, event.isError, excerpt);
       }
-      run.product?.observers.toolFinished(event.toolName, event.toolCallId, event.isError);
       run.inputs.delete(event.toolCallId);
     }
   }
@@ -351,44 +368,31 @@ class Worker {
     else this.event(context, run, 'run.settled', { status, text, ...(error ? { error } : {}), ...(last?.usage ? { usage: { ...last.usage, cost: undefined, scope: 'final_assistant', pricingKnown: false } } : {}) });
   }
   private async conversationPreview(sessionRef: string, contextId: string, botId: string) {
-    const path = resolve(sessionRef);
-    if (dirname(path) !== join(this.stateDir, 'sessions')) return {};
-    const entries = await this.readConversationEntries(path);
-    if (entries[0]?.type !== 'session') return {};
-    const owner = entries.find(entry => entry?.type === 'custom' && entry.customType === BINDING_TYPE);
-    if (owner?.type !== 'custom') return {};
-    const binding = owner.data as Partial<Binding> | undefined;
-    if (binding?.contextId !== contextId || binding.botId !== botId || binding.purpose !== 'conversation') return {};
-    const turn = entries.find(entry => entry?.type === 'custom' && entry.customType === TURN_TYPE);
+    let turn: SessionEntry | undefined;
+    try {
+      const transcript = await this.readTranscript(sessionRef, { contextId, botId, purpose: 'conversation' });
+      for await (const entry of transcriptEntries(transcript)) {
+        if (entry.type === 'custom' && entry.customType === TURN_TYPE) { turn = entry; break; }
+      }
+    } catch { return {}; }
     if (turn?.type !== 'custom') return {};
     const text = (turn.data as { text?: unknown } | undefined)?.text;
     if (typeof text !== 'string') return {};
-    let preview = '';
-    let bytes = 0;
-    let space = false;
-    for (const char of text) {
-      if (/\s/u.test(char)) {
-        space = bytes > 0;
-        continue;
-      }
-      bytes += Buffer.byteLength(char) + Number(space);
-      if (bytes > 256) break;
-      if (space) preview += ' ';
-      preview += char;
-      space = false;
-    }
+    const preview = clipUTF8(this.cleanMessage(text).trim().replace(/\s+/gu, ' '), 256);
     if (!preview) return {};
     const time = typeof turn.timestamp === 'string' ? Date.parse(turn.timestamp) : NaN;
     const timestamp = Number.isFinite(time) ? new Date(time).toISOString() : undefined;
     return timestamp && /^\d{4}-/.test(timestamp) ? { preview, timestamp } : { preview };
   }
-  private async readConversationEntries(path: string) {
-    try {
-      if (await realpath(path) !== path || !(await stat(path)).isFile()) return [];
-      return parseSessionEntries(await readFile(path, 'utf8'));
-    } catch {
-      return [];
+  private async readTranscript(sessionRef: string, owner: TranscriptOwner) {
+    const context = this.contexts.get(owner.contextId);
+    if (!context) return openDiskTranscript(join(this.stateDir, 'sessions'), sessionRef, owner);
+    if (context.manager.getSessionFile() !== sessionRef || !await matchesTranscriptOwner(context.binding, owner)) {
+      throw new RequestError('history_unavailable', 'The open session does not match the saved binding');
     }
+    context.transcriptSource ??= randomUUID();
+    if (context.transcriptSnapshot?.length !== context.manager.getEntryCount()) context.transcriptSnapshot = context.manager.getEntries();
+    return liveTranscript(context.transcriptSource, context.transcriptSnapshot!);
   }
   private async openProductSession(params: OpenParams, tools: ToolDefinition[]): Promise<ProductSession> {
     const context = await this.open(params, tools);
@@ -396,7 +400,6 @@ class Worker {
     if (!sessionRef) throw new RequestError('history_unavailable', 'Pi did not provide a session reference');
     return {
       sessionRef,
-      history: () => context.manager.getEntries(),
       start: (executionId, draft, observers) => this.startProductRun(context, executionId, draft, observers),
       stop: executionId => {
         if (context.active?.id !== executionId) throw new RequestError('not_found', 'The execution has settled');
@@ -442,7 +445,7 @@ class Worker {
       configuration: { ...configuration, credentialSource: id } }, [], true);
     const { promise, resolve, reject } = Promise.withResolvers<void>();
     const run = this.startProductRun(context, id, { revision: 0, text: 'Reply with OK.', materials: [] }, {
-      started: () => {}, text: () => {}, file: () => {}, toolFinished: () => {},
+      started: () => {}, text: () => {}, confirmedFileEffect: () => {}, toolStarted: () => {}, toolFinished: () => {},
       settled: (status, _text, error) => {
         if (status === 'completed') resolve();
         else reject(new RequestError('connection_test_failed', error ?? 'The test request did not complete'));
@@ -659,4 +662,8 @@ async function main(): Promise<void> {
   await worker.writer.send({ v: 1, type: 'ready', workerEpoch: worker.epoch, engine: { name: 'pi', version: '1.5.2' }, runtime: { name: 'node', version: process.version }, builtinCatalog: worker.builtinCatalog });
   await worker.read();
 }
-main().catch(() => { process.stderr.write('Pi worker initialization failed\n'); process.exitCode = 1; });
+main().catch(error => {
+  const code = error instanceof RequestError ? ` (${error.code})` : '';
+  process.stderr.write(`Pi worker initialization failed${code}\n`);
+  process.exitCode = 1;
+});

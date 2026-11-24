@@ -4,8 +4,10 @@ import { basename, dirname, join } from 'node:path';
 import { DatabaseSync, type SQLOutputValue } from 'node:sqlite';
 import { decodeProductProfile, importProductSnapshot, type PrivateConnection, type ProductProfilePaths } from './product-profile.js';
 import type { ProductProfile } from './product.js';
-import { canonicalJSON, RequestError } from './protocol.js';
+import { canonicalJSON, RequestError, type TraceItem } from './protocol.js';
 import { type BotMemory, type BotWorkLog } from './bot-memory.js';
+import { maxExecutionTraces, maxProfileTraces, traceDetail, redactTrace, type TraceBackup, type TraceObservation, type TraceUpdate } from './product-trace.js';
+import { projectionRedactor } from './product-redactor.js';
 
 const MIGRATIONS = [`
   CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT;
@@ -65,6 +67,26 @@ const MIGRATIONS = [`
   CREATE TABLE bot_memory_meta (
     bot_id TEXT PRIMARY KEY REFERENCES bots(bot_id) ON DELETE CASCADE, record_json TEXT NOT NULL
   ) STRICT;
+`, `
+  ALTER TABLE activities ADD COLUMN granted_linked_activity_ids_json TEXT NOT NULL DEFAULT '[]'
+    CHECK (json_valid(granted_linked_activity_ids_json) AND json_type(granted_linked_activity_ids_json) = 'array');
+  CREATE TABLE activity_traces (
+    seq INTEGER PRIMARY KEY AUTOINCREMENT,
+    activity_id TEXT NOT NULL REFERENCES activities(activity_id) DEFERRABLE INITIALLY DEFERRED,
+    execution_id TEXT NOT NULL REFERENCES executions(execution_id) DEFERRABLE INITIALLY DEFERRED,
+    at TEXT NOT NULL, kind TEXT NOT NULL CHECK (kind IN ('tool_started','tool_finished','file_confirmed','state_changed')),
+    detail_json TEXT NOT NULL CHECK (json_valid(detail_json) AND length(CAST(detail_json AS BLOB)) <= 1024)
+  ) STRICT;
+  CREATE INDEX activity_traces_by_activity ON activity_traces(activity_id, seq);
+  CREATE INDEX activity_traces_by_execution ON activity_traces(activity_id, execution_id, seq);
+  CREATE TABLE activity_trace_meta (
+    execution_id TEXT PRIMARY KEY REFERENCES executions(execution_id) DEFERRABLE INITIALLY DEFERRED,
+    activity_id TEXT NOT NULL REFERENCES activities(activity_id) DEFERRABLE INITIALLY DEFERRED,
+    coverage TEXT NOT NULL CHECK (coverage IN ('recorded','unrecorded')),
+    evicted_through_seq INTEGER NOT NULL DEFAULT 0
+  ) STRICT;
+  CREATE INDEX activity_trace_meta_by_activity ON activity_trace_meta(activity_id);
+  INSERT INTO meta VALUES ('trace_generation', lower(hex(randomblob(16))));
 `];
 const LATEST_SCHEMA_VERSION = MIGRATIONS.length;
 
@@ -132,9 +154,11 @@ export class ProductSQLite {
           return profile;
         }
         if (!snapshot && !paths.fresh) throw new RequestError('profile_unavailable', 'The product profile is missing');
-        const profile = importProductSnapshot(snapshot && JSON.parse(snapshot.data.toString('utf8')), credentials);
+        const { profile, backup } = importProductSnapshot(snapshot && JSON.parse(snapshot.data.toString('utf8')), credentials);
         mirror = this.stageMirror(snapshotFor(profile), previous);
         this.replaceProfile(profile, mirror);
+        const redact = projectionRedactor(Object.values(credentials?.sources ?? {}).map(source => source.api_key));
+        this.replaceTraces(backup, redact);
         return profile;
       });
       if (mirror) this.publish(mirror);
@@ -146,10 +170,10 @@ export class ProductSQLite {
     }
   }
 
-  write(profile: ProductProfile): void {
+  write(profile: ProductProfile, before: ProductProfile): TraceUpdate[] {
     let mirror: Mirror | undefined;
     try {
-      this.transaction(() => {
+      const updates = this.transaction(() => {
         if (this.meta('snapshot_sha256') !== this.digest) throw new RequestError('profile_unavailable', 'The SQLite profile changed in another worker');
         const previous = this.readMirror()?.digest ?? null;
         if (previous !== null && previous !== this.digest && this.meta('pending_snapshot_previous') !== encode(previous)) {
@@ -157,17 +181,127 @@ export class ProductSQLite {
         }
         mirror = this.stageMirror(snapshotFor(profile), previous);
         this.replaceProfile(profile, mirror);
+        return this.recordTransitions(before, profile);
       });
+      this.publish(mirror!);
+      return updates;
     } catch (error) {
       if (mirror) rmSync(mirror.temp, { force: true });
       throw error;
     }
-    this.publish(mirror!);
   }
 
   close(): void {
     this.db.close();
   }
+
+  appendTrace(row: TraceObservation): TraceUpdate | undefined {
+    if (Buffer.byteLength(traceDetail(row)) > 1024) return;
+    return this.transaction(() => {
+      if (this.meta('snapshot_sha256') !== this.digest) throw new RequestError('profile_unavailable', 'The SQLite profile changed in another worker');
+      return this.insertTrace(row);
+    });
+  }
+
+  traceBounds(activityId: string, executionId?: string) {
+    const where = executionId === undefined ? 'activity_id = ?' : 'activity_id = ? AND execution_id = ?';
+    const ids = executionId === undefined ? [encode(activityId)] : [encode(activityId), encode(executionId)];
+    const head = this.db.prepare(`SELECT max(seq) AS seq FROM activity_traces WHERE ${where}`).get(...ids);
+    const meta = this.db.prepare(`SELECT count(*) AS recorded, max(evicted_through_seq) AS evicted
+      FROM activity_trace_meta WHERE ${where} AND coverage = 'recorded'`).get(...ids);
+    return { generation: this.meta('trace_generation')!, high: Number(head?.seq ?? 0),
+      recorded: Number(meta?.recorded ?? 0), evicted: Number(meta?.evicted ?? 0) };
+  }
+
+  traceRows(activityId: string, executionId: string | undefined, after: number, through: number, limit: number): TraceItem[] {
+    const where = executionId === undefined ? 'activity_id = ?' : 'activity_id = ? AND execution_id = ?';
+    const ids = executionId === undefined ? [encode(activityId)] : [encode(activityId), encode(executionId)];
+    return this.db.prepare(`SELECT * FROM activity_traces WHERE ${where} AND seq > ? AND seq <= ? ORDER BY seq LIMIT ?`)
+      .all(...ids, after, through, limit).map(row => this.traceItem(row));
+  }
+
+  captureBackup(redact: (text: string) => string): { profile: ProductProfile; backup: TraceBackup } {
+    return this.transaction(() => {
+      if (this.meta('snapshot_sha256') !== this.digest) throw new RequestError('profile_unavailable', 'The SQLite profile changed in another worker');
+      const profile = this.readProfile();
+      const traces = this.db.prepare('SELECT * FROM activity_traces ORDER BY seq').all().map(row => redactTrace(this.traceItem(row), redact));
+      const traceCoverage = this.db.prepare('SELECT * FROM activity_trace_meta ORDER BY execution_id').all().map(row => ({
+        activityId: decode(row.activity_id) as string, executionId: decode(row.execution_id) as string,
+        coverage: row.coverage as 'recorded' | 'unrecorded', evictedThroughSeq: Number(row.evicted_through_seq),
+      }));
+      return { profile, backup: { version: 1, traces, traceCoverage } };
+    });
+  }
+
+  private traceItem(row: Record<string, SQLOutputValue>): TraceItem {
+    return { ...(decode(row.detail_json) as object), seq: row.seq, activityId: decode(row.activity_id),
+      executionId: decode(row.execution_id), at: row.at, kind: row.kind } as TraceItem;
+  }
+
+  private replaceTraces(backup: TraceBackup | undefined, redact: (text: string) => string): void {
+    this.db.exec('DELETE FROM activity_traces; DELETE FROM activity_trace_meta;');
+    this.db.prepare("UPDATE meta SET value = ? WHERE key = 'trace_generation'").run(randomUUID());
+    if (!backup) return;
+    const meta = this.db.prepare('INSERT INTO activity_trace_meta (execution_id, activity_id, coverage, evicted_through_seq) VALUES (?, ?, ?, ?)');
+    const insert = this.db.prepare('INSERT INTO activity_traces (seq, activity_id, execution_id, at, kind, detail_json) VALUES (?, ?, ?, ?, ?, ?)');
+    let high = 0;
+    for (const row of backup.traceCoverage) {
+      meta.run(encode(row.executionId), encode(row.activityId), row.coverage, row.evictedThroughSeq);
+      high = Math.max(high, row.evictedThroughSeq);
+    }
+    for (const row of backup.traces) {
+      insert.run(row.seq, encode(row.activityId), encode(row.executionId), row.at, row.kind, traceDetail(redactTrace(row, redact)));
+    }
+    if (high > 0) {
+      this.db.prepare("INSERT INTO sqlite_sequence(name, seq) SELECT 'activity_traces', ? WHERE NOT EXISTS (SELECT 1 FROM sqlite_sequence WHERE name = 'activity_traces')").run(high);
+      this.db.prepare("UPDATE sqlite_sequence SET seq = max(seq, ?) WHERE name = 'activity_traces'").run(high);
+    }
+  }
+
+  private recordTransitions(before: ProductProfile, profile: ProductProfile): TraceUpdate[] {
+    const oldActivities = new Map(before.activities.map(row => [row.activityId, row]));
+    const oldExecutions = new Map(before.executions.map(row => [row.executionId, row.state]));
+    const executions = new Map(profile.executions.map(row => [row.executionId, row.state]));
+    const coverage = this.db.prepare("SELECT 1 FROM activity_trace_meta WHERE execution_id = ? AND coverage = 'recorded'");
+    const admit = this.db.prepare("INSERT INTO activity_trace_meta (execution_id, activity_id, coverage) VALUES (?, ?, 'recorded')");
+    const updates: TraceUpdate[] = [];
+    for (const { activityId, state, executionIds, revision } of profile.activities) {
+      const previous = oldActivities.get(activityId);
+      if (previous?.revision === revision && previous.executionIds.every(id => oldExecutions.get(id) === executions.get(id))) continue;
+      for (const executionId of executionIds) {
+        const executionState = executions.get(executionId)!;
+        const priorState = oldExecutions.get(executionId);
+        const activityChanged = executionId === executionIds.at(-1) && previous?.state !== state;
+        if (!activityChanged && priorState === executionState) continue;
+        if (priorState === undefined) admit.run(encode(executionId), encode(activityId));
+        else if (!coverage.get(encode(executionId))) continue;
+        if (activityChanged) updates.push(this.insertTrace({ activityId, executionId, kind: 'state_changed', scope: 'activity', state }));
+        if (priorState !== executionState) updates.push(this.insertTrace({ activityId, executionId, kind: 'state_changed', scope: 'execution', state: executionState }));
+      }
+    }
+    return updates;
+  }
+
+  private insertTrace(row: TraceObservation): TraceUpdate {
+    const activityId = encode(row.activityId);
+    const executionId = encode(row.executionId);
+    const result = this.db.prepare('INSERT INTO activity_traces (activity_id, execution_id, at, kind, detail_json) VALUES (?, ?, ?, ?, ?)')
+      .run(activityId, executionId, new Date().toISOString(), row.kind, traceDetail(row));
+    const old = this.db.prepare(`DELETE FROM activity_traces WHERE seq IN (SELECT seq FROM activity_traces
+      WHERE activity_id = ? AND execution_id = ? ORDER BY seq DESC LIMIT -1 OFFSET ?) RETURNING execution_id, seq`)
+      .all(activityId, executionId, maxExecutionTraces);
+    const count = Number(this.db.prepare('SELECT count(*) AS total FROM activity_traces').get()?.total);
+    if (count > maxProfileTraces) {
+      old.push(...this.db.prepare(`DELETE FROM activity_traces WHERE seq IN (SELECT seq FROM activity_traces ORDER BY seq LIMIT ?)
+        RETURNING execution_id, seq`).all(count - maxProfileTraces));
+    }
+    if (old.length) {
+      const evict = this.db.prepare('UPDATE activity_trace_meta SET evicted_through_seq = max(evicted_through_seq, ?) WHERE execution_id = ?');
+      for (const { execution_id, seq } of old) evict.run(seq, execution_id);
+    }
+    return { activityId: row.activityId, executionId: row.executionId, lastSeq: Number(result.lastInsertRowid) };
+  }
+
 
   private transaction<T>(action: () => T): T {
     this.db.exec('BEGIN IMMEDIATE');
@@ -275,6 +409,7 @@ export class ProductSQLite {
       revision: row.revision, state: row.state, goal: decode(row.goal_json), requirements: decode(row.requirements_json),
       questions: decode(row.questions_json), materials: decode(row.materials_json), inputFiles: decode(row.input_files_json),
       executionIds: decode(row.execution_ids_json), results: decode(row.results_json), binding: decode(row.binding_json), retained: decode(row.retained_json),
+      grantedLinkedActivityIds: row.granted_linked_activity_ids_json === '[]' ? undefined : decode(row.granted_linked_activity_ids_json),
     }));
     const executions = this.db.prepare('SELECT * FROM executions ORDER BY sort_order').all().map(row => ({
       executionId: decode(row.execution_id), revision: row.revision, state: row.state, operationId: decode(row.operation_id),
@@ -305,10 +440,12 @@ export class ProductSQLite {
     const conversations = this.db.prepare('INSERT INTO conversations VALUES (?, ?, ?, ?, ?, ?, ?)');
     profile.conversations.forEach((row, order) => conversations.run(encode(row.conversationId), order, encode(row.botId), row.revision,
       encode(row.draft), encode(row.binding), encode(row.latestExecutionId)));
-    const activities = this.db.prepare('INSERT INTO activities VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    const activities = this.db.prepare(`INSERT INTO activities (activity_id, sort_order, owner_bot_id, origin_conversation_id,
+      revision, state, goal_json, requirements_json, questions_json, materials_json, input_files_json, execution_ids_json,
+      results_json, binding_json, retained_json, granted_linked_activity_ids_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
     profile.activities.forEach((row, order) => activities.run(encode(row.activityId), order, encode(row.ownerBotId), encode(row.originConversationId),
       row.revision, row.state, encode(row.goal), encode(row.requirements), encode(row.questions), encode(row.materials), encode(row.inputFiles),
-      encode(row.executionIds), encode(row.results), encode(row.binding), encode(row.retained)));
+      encode(row.executionIds), encode(row.results), encode(row.binding), encode(row.retained), encode(row.grantedLinkedActivityIds ?? [])));
     const executions = this.db.prepare('INSERT INTO executions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
     profile.executions.forEach((row, order) => executions.run(encode(row.executionId), order, row.revision, row.state, encode(row.operationId),
       encode(row.input), encode(row.error), encode(row.engineRunId), encode(row.importedActivityId), encode(row.retained)));

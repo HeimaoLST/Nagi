@@ -6,7 +6,7 @@ import { memoryChangedSchema, memoryDate, memoryRuleSchema, memorySearchLimit, m
   pendingLearningSchema, workLogSchema } from './bot-memory.js';
 
 export const MAX_FRAME = 8 * 1024 * 1024;
-const id = Type.String({ minLength: 1 });
+export const id = Type.String({ minLength: 1 });
 const stringList = Type.Array(Type.String());
 const target = { contextId: id, runId: id };
 const content = Type.Array(Type.Union([Type.Object({ type: Type.Literal('text'), text: Type.String() }), Type.Object({ type: Type.Literal('image'), data: Type.String(), mimeType: id })]));
@@ -15,6 +15,11 @@ const mcpServer = Type.Object({ name: id, sourceId: id, config: Type.Record(Type
 const request = Type.Object({ v: Type.Literal(1), id, method: id, params: Type.Record(Type.String(), Type.Unknown()) });
 const positiveInteger = Type.Integer({ minimum: 1, maximum: Number.MAX_SAFE_INTEGER });
 const revision = Type.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER });
+export const inspectionPage = {
+  cursor: Type.Optional(Type.String()),
+  limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 50 })),
+  maxBytes: Type.Optional(Type.Integer({ minimum: 2048, maximum: 32768 })),
+};
 const page = {
   cursor: Type.Optional(id),
   limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 200 })),
@@ -65,6 +70,17 @@ export const operationSchema = Type.Object({
   execution: Type.Optional(executionSchema),
   result: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
 });
+const traceIdentity = { seq: positiveInteger, activityId: id, executionId: id, at: id };
+const toolCall = { tool: id, callId: id };
+const strictTrace = { additionalProperties: false };
+export const traceItemSchema = Type.Union([
+  Type.Object({ ...traceIdentity, kind: Type.Literal('tool_started'), ...toolCall, target: Type.Optional(Type.String()) }, strictTrace),
+  Type.Object({ ...traceIdentity, kind: Type.Literal('tool_finished'), ...toolCall, ok: Type.Boolean(), excerpt: Type.Optional(Type.String()) }, strictTrace),
+  Type.Object({ ...traceIdentity, kind: Type.Literal('file_confirmed'), callId: id, path: Type.String() }, strictTrace),
+  Type.Object({ ...traceIdentity, kind: Type.Literal('state_changed'), scope: Type.Literal('activity'), state: activityStateSchema }, strictTrace),
+  Type.Object({ ...traceIdentity, kind: Type.Literal('state_changed'), scope: Type.Literal('execution'), state: executionSchema.properties.state }, strictTrace),
+]);
+export type TraceItem = Static<typeof traceItemSchema>;
 const memoryOwner = { botId: id };
 const memoryOperation = { ...memoryOwner, operationId: id };
 const memorySearch = { ...memoryOwner, query: memorySearchQuery, dateFrom: Type.Optional(memoryDate), dateTo: Type.Optional(memoryDate),
@@ -102,6 +118,7 @@ export const productCommands = Type.Union([
     activityId: id, ...operationTarget, text: Type.String(), materials: Type.Array(materialSchema),
   }) }),
   Type.Object({ method: Type.Literal('activity.stop'), params: Type.Object({ activityId: id, executionId: id, operationId: id }) }),
+  Type.Object({ method: Type.Literal('activity.trace'), params: Type.Object({ activityId: id, executionId: Type.Optional(id), ...inspectionPage }, { additionalProperties: false }) }),
   Type.Object({ method: Type.Literal('question.answer'), params: Type.Object({
     activityId: id, executionId: id, questionId: id, questionRevision: revision, operationId: id,
     text: id, materials: Type.Array(materialSchema),
@@ -127,6 +144,7 @@ export const productEvents = Type.Union([
     error: Type.Optional(Type.String()),
   }) }),
   Type.Object({ event: Type.Literal('conversation.changed'), data: Type.Object({ conversationId: id, revision }) }),
+  Type.Object({ event: Type.Literal('activity.traceUpdated'), data: Type.Object({ activityId: id, executionId: id, lastSeq: positiveInteger }) }),
   Type.Object({ event: Type.Literal('activity.changed'), data: Type.Object({
     activityId: id, ownerBotId: id, originConversationId: id, revision, state: activityStateSchema,
     goal: Type.String(), openQuestionIds: Type.Array(id),
@@ -185,6 +203,8 @@ export const productResults = {
   'activity.list': productPage(Type.Object(activityFields)),
   'activity.get': Type.Object({ ...activityFields, requirements: stringList, materials: Type.Array(materialSchema), questions: Type.Array(questionResult), executions: Type.Array(activeExecution) }),
   'activity.result': Type.Object({ activityId: id, executionId: id, text: Type.String(), delivery: Type.Literal('available'), files: Type.Array(Type.Object({ path: id, callId: id })) }),
+  'activity.trace': Type.Object({ ...productPage(traceItemSchema).properties, historyTruncated: Type.Boolean(),
+    coverage: Type.Union([Type.Literal('recorded'), Type.Literal('unrecorded'), Type.Literal('mixed')]) }),
   'activity.continue': operationSchema,
   'activity.stop': stopResult,
   'question.answer': Type.Object({ activityId: id, executionId: id, questionId: id, revision, answerSaved: Type.Literal(true), delivery: questionDelivery }),
