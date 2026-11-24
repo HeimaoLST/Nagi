@@ -5,6 +5,7 @@ import { DatabaseSync, type SQLOutputValue } from 'node:sqlite';
 import { decodeProductProfile, importProductSnapshot, type PrivateConnection, type ProductProfilePaths } from './product-profile.js';
 import type { ProductProfile } from './product.js';
 import { canonicalJSON, RequestError } from './protocol.js';
+import { type BotMemory, type BotWorkLog } from './bot-memory.js';
 
 const MIGRATIONS = [`
   CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT;
@@ -41,6 +42,28 @@ const MIGRATIONS = [`
   CREATE TABLE connections (
     revision INTEGER PRIMARY KEY, sort_order INTEGER NOT NULL UNIQUE, source_id TEXT NOT NULL,
     configuration_json TEXT NOT NULL
+  ) STRICT;
+`, 'ALTER TABLE bots ADD COLUMN system_kind TEXT;', `
+  CREATE TABLE bot_memory_rules (
+    rule_id TEXT PRIMARY KEY, bot_id TEXT NOT NULL REFERENCES bots(bot_id) ON DELETE CASCADE, record_json TEXT NOT NULL
+  ) STRICT;
+  CREATE TABLE bot_work_logs (
+    log_id TEXT PRIMARY KEY, bot_id TEXT NOT NULL REFERENCES bots(bot_id) ON DELETE CASCADE,
+    date TEXT NOT NULL, created_at TEXT NOT NULL, summary TEXT NOT NULL, tags_text TEXT NOT NULL, record_json TEXT NOT NULL
+  ) STRICT;
+  CREATE INDEX bot_work_logs_by_date ON bot_work_logs(bot_id, date DESC, created_at DESC);
+  CREATE VIRTUAL TABLE bot_work_logs_fts USING fts5(summary, tags_text, content='bot_work_logs', content_rowid='rowid');
+  CREATE TRIGGER bot_work_logs_insert AFTER INSERT ON bot_work_logs BEGIN
+    INSERT INTO bot_work_logs_fts(rowid, summary, tags_text) VALUES (new.rowid, new.summary, new.tags_text);
+  END;
+  CREATE TRIGGER bot_work_logs_delete AFTER DELETE ON bot_work_logs BEGIN
+    INSERT INTO bot_work_logs_fts(bot_work_logs_fts, rowid, summary, tags_text) VALUES ('delete', old.rowid, old.summary, old.tags_text);
+  END;
+  CREATE TABLE bot_pending_learnings (
+    learning_id TEXT PRIMARY KEY, bot_id TEXT NOT NULL REFERENCES bots(bot_id) ON DELETE CASCADE, record_json TEXT NOT NULL
+  ) STRICT;
+  CREATE TABLE bot_memory_meta (
+    bot_id TEXT PRIMARY KEY REFERENCES bots(bot_id) ON DELETE CASCADE, record_json TEXT NOT NULL
   ) STRICT;
 `];
 const LATEST_SCHEMA_VERSION = MIGRATIONS.length;
@@ -205,10 +228,43 @@ export class ProductSQLite {
     this.db.exec("DELETE FROM meta WHERE key = 'pending_snapshot_previous'");
   }
 
+  searchWorkLogs(botId: string, query: string, dateFrom?: string, dateTo?: string, limit = 50): BotWorkLog[] {
+    const text = query.trim();
+    const like = `%${text.replace(/[\\%_]/g, char => `\\${char}`)}%`;
+    const hasTokens = /[\p{L}\p{N}]/u.test(text);
+    const match = `"${text.replaceAll('"', '""')}"`;
+    const fullText = hasTokens ? 'OR rowid IN (SELECT rowid FROM bot_work_logs_fts WHERE bot_work_logs_fts MATCH ?)' : '';
+    const statement = this.db.prepare(`SELECT record_json FROM bot_work_logs
+      WHERE bot_id = ? AND date BETWEEN ? AND ?
+      ${text ? `AND (summary LIKE ? ESCAPE '\\' OR tags_text LIKE ? ESCAPE '\\' ${fullText})` : ''}
+      ORDER BY date DESC, created_at DESC, log_id DESC LIMIT ?`);
+    const search = text ? [like, like, ...(hasTokens ? [match] : [])] : [];
+    return statement.all(encode(botId), dateFrom ?? '0000-01-01', dateTo ?? '9999-12-31', ...search, limit)
+      .map(row => decode(row.record_json) as BotWorkLog);
+  }
+
+  private readMemory(): unknown {
+    if (this.meta('memory_present') === undefined) return undefined;
+    const records = (table: string) => this.db.prepare(`SELECT record_json FROM ${table} ORDER BY rowid`).all().map(row => decode(row.record_json));
+    return { rules: records('bot_memory_rules'), workLogs: records('bot_work_logs'), pendingLearnings: records('bot_pending_learnings'), meta: records('bot_memory_meta') };
+  }
+
+  private writeMemory(memory: BotMemory): void {
+    const rules = this.db.prepare('INSERT INTO bot_memory_rules VALUES (?, ?, ?)');
+    for (const row of memory.rules) rules.run(encode(row.ruleId), encode(row.botId), encode(row));
+    const logs = this.db.prepare('INSERT INTO bot_work_logs VALUES (?, ?, ?, ?, ?, ?, ?)');
+    for (const row of memory.workLogs) logs.run(encode(row.logId), encode(row.botId), row.date, row.createdAt, row.summary, row.tags.join(' '), encode(row));
+    const pending = this.db.prepare('INSERT INTO bot_pending_learnings VALUES (?, ?, ?)');
+    for (const row of memory.pendingLearnings) pending.run(encode(row.learningId), encode(row.botId), encode(row));
+    const meta = this.db.prepare('INSERT INTO bot_memory_meta VALUES (?, ?)');
+    for (const row of memory.meta) meta.run(encode(row.botId), encode(row));
+  }
+
   private readProfile(): ProductProfile {
     const bots = this.db.prepare('SELECT * FROM bots ORDER BY sort_order').all().map(row => ({
       botId: decode(row.bot_id), profile: decode(row.profile_json), profileRevision: row.profile_revision,
       archived: row.archived === 1, currentConversationId: decode(row.current_conversation_id), retained: decode(row.retained_json),
+      systemKind: row.system_kind ?? undefined,
     }));
     const conversations = this.db.prepare('SELECT * FROM conversations ORDER BY sort_order').all().map(row => ({
       conversationId: decode(row.conversation_id), botId: decode(row.bot_id), revision: row.revision, draft: decode(row.draft_json),
@@ -236,15 +292,16 @@ export class ProductSQLite {
     return decodeProductProfile({ version: 1, bots, conversations, activities, executions, operations, connections,
       savedRevision: read('saved_revision'), appliedRevision: read('applied_revision'), preferences: read('preferences_json'),
       issueToolScopes: read('issue_tool_scopes_json'), untargetedReceipts: read('untargeted_receipts_json'), recovery: read('recovery_json'),
+      memory: this.readMemory(),
     });
   }
 
   private replaceProfile(profile: ProductProfile, mirror: Mirror): void {
     this.db.exec(`DELETE FROM operations; DELETE FROM activities; DELETE FROM conversations;
       DELETE FROM executions; DELETE FROM bots; DELETE FROM connections;`);
-    const bots = this.db.prepare('INSERT INTO bots VALUES (?, ?, ?, ?, ?, ?, ?)');
+    const bots = this.db.prepare('INSERT INTO bots VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
     profile.bots.forEach((row, order) => bots.run(encode(row.botId), order, encode(row.profile), row.profileRevision,
-      Number(row.archived), encode(row.currentConversationId), encode(row.retained)));
+      Number(row.archived), encode(row.currentConversationId), encode(row.retained), row.systemKind ?? null));
     const conversations = this.db.prepare('INSERT INTO conversations VALUES (?, ?, ?, ?, ?, ?, ?)');
     profile.conversations.forEach((row, order) => conversations.run(encode(row.conversationId), order, encode(row.botId), row.revision,
       encode(row.draft), encode(row.binding), encode(row.latestExecutionId)));
@@ -260,11 +317,13 @@ export class ProductSQLite {
     const operations = this.db.prepare('INSERT INTO operations VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
     profile.operations.forEach((row, order) => operations.run(encode(row.receipt.operationId), order, encode(row.method), row.fingerprint,
       encode(row.receipt), encode(row.reply), encode(row.replyError), row.connectionRevision ?? null, encode(row.retained)));
+    if (profile.memory) this.writeMemory(profile.memory);
     const meta = this.db.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)');
     const remove = this.db.prepare('DELETE FROM meta WHERE key = ?');
     for (const [key, value] of Object.entries({
       saved_revision: encode(profile.savedRevision), applied_revision: encode(profile.appliedRevision), preferences_json: encode(profile.preferences),
       issue_tool_scopes_json: encode(profile.issueToolScopes), untargeted_receipts_json: encode(profile.untargetedReceipts), recovery_json: encode(profile.recovery),
+      memory_present: profile.memory ? '1' : null,
       snapshot_sha256: mirror.snapshot.digest, pending_snapshot_previous: encode(mirror.previous), updated_at: new Date().toISOString(),
     })) {
       if (value === null) remove.run(key);

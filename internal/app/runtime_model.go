@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -582,12 +583,8 @@ func (a *appModel) createContact(profile pi.ProductBotProfile, operationID strin
 		if err != nil {
 			return err
 		}
-		ct := productContact(bot)
-		ct.Loaded = true
-		ct.Context.OnChange = func() error { return a.saveProductDraft(ct) }
-		host.productBots[ct.ID] = bot
-		a.contacts = append(a.contacts, ct)
-		a.selectContact(len(a.contacts) - 1)
+		ct := a.applyProductBot(host, bot, true)
+		a.selectContact(slices.Index(a.contacts, ct))
 	} else {
 		ct := productContact(pi.ProductBot{BotID: newContactID(), Profile: profile})
 		ct.WorkLabel = "Preparing a reply"

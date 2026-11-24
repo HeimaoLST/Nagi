@@ -1,6 +1,9 @@
 import { Type, type Static, type TSchema } from 'typebox';
 import { Value } from 'typebox/value';
 import type { Writable } from 'node:stream';
+import { SYSTEM_KIND_BOT_ARCHITECT } from './bot-template.js';
+import { memoryChangedSchema, memoryDate, memoryRuleSchema, memorySearchLimit, memorySearchQuery, memoryText,
+  pendingLearningSchema, workLogSchema } from './bot-memory.js';
 
 export const MAX_FRAME = 8 * 1024 * 1024;
 const id = Type.String({ minLength: 1 });
@@ -20,6 +23,12 @@ export const profileSchema = Type.Object({
   name: id, role: Type.String(), purpose: Type.String(), instructions: Type.String(),
   workspace: Type.String(), codingTools: Type.Union([Type.Null(), stringList]),
 });
+export const botSystemKindSchema = Type.Literal(SYSTEM_KIND_BOT_ARCHITECT);
+const botResult = Type.Object({ botId: id, profile: profileSchema, profileRevision: revision, archived: Type.Boolean(),
+  pendingLearnings: Type.Optional(revision),
+  currentConversationId: id, systemKind: Type.Optional(botSystemKindSchema) });
+const botChangeSchema = Type.Union([Type.Literal('created'), Type.Literal('updated'), Type.Literal('archived'), Type.Literal('restored')]);
+export type BotChange = Static<typeof botChangeSchema>;
 export const connectionSchema = Type.Object({
   wireApi: Type.Union([Type.Literal('openai-completions'), Type.Literal('openai-responses')]),
   baseUrl: id, apiKey: Type.String(), model: id, contextTokens: positiveInteger, outputTokens: positiveInteger,
@@ -55,15 +64,28 @@ export const operationSchema = Type.Object({
   execution: Type.Optional(executionSchema),
   result: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
 });
+const memoryOwner = { botId: id };
+const memoryOperation = { ...memoryOwner, operationId: id };
+const memorySearch = { ...memoryOwner, query: memorySearchQuery, dateFrom: Type.Optional(memoryDate), dateTo: Type.Optional(memoryDate),
+  limit: Type.Optional(memorySearchLimit) };
 export const productCommands = Type.Union([
   Type.Object({ method: Type.Literal('app.open'), params: Type.Object({ supportedVersions: Type.Array(positiveInteger, { minItems: 1 }) }) }),
   Type.Object({ method: Type.Literal('bot.list'), params: Type.Object(page) }),
+  Type.Object({ method: Type.Literal('bot.ensureBuiltin'), params: Type.Object({ kind: botSystemKindSchema, operationId: id }) }),
   Type.Object({ method: Type.Literal('bot.create'), params: Type.Object({ profile: profileSchema, operationId: id }) }),
   Type.Object({ method: Type.Literal('bot.update'), params: Type.Object({
     botId: id, ...operationTarget, profile: profileSchema, startNewConversation: Type.Boolean(),
   }) }),
   Type.Object({ method: Type.Literal('bot.archive'), params: Type.Object({ botId: id, ...operationTarget }) }),
   Type.Object({ method: Type.Literal('bot.restore'), params: Type.Object({ botId: id, ...operationTarget }) }),
+  Type.Object({ method: Type.Literal('memory.get'), params: Type.Object(memoryOwner) }),
+  Type.Object({ method: Type.Literal('memory.addRule'), params: Type.Object({ ...memoryOperation, text: memoryText }) }),
+  Type.Object({ method: Type.Literal('memory.updateRule'), params: Type.Object({ ...memoryOperation, ruleId: id, text: memoryText }) }),
+  Type.Object({ method: Type.Literal('memory.deleteRule'), params: Type.Object({ ...memoryOperation, ruleId: id }) }),
+  Type.Object({ method: Type.Literal('memory.reviewLearning'), params: Type.Object({ ...memoryOperation, learningId: id,
+    decision: Type.Union([Type.Literal('approve'), Type.Literal('reject')]), text: Type.Optional(memoryText) }) }),
+  Type.Object({ method: Type.Literal('memory.deleteLog'), params: Type.Object({ ...memoryOperation, logId: id }) }),
+  Type.Object({ method: Type.Literal('memory.searchLogs'), params: Type.Object(memorySearch) }),
   Type.Object({ method: Type.Literal('conversation.list'), params: Type.Object({ botId: id, ...page }) }),
   Type.Object({ method: Type.Literal('conversation.get'), params: Type.Object({ conversationId: id }) }),
   Type.Object({ method: Type.Literal('conversation.saveDraft'), params: Type.Object({
@@ -95,6 +117,8 @@ const executionOwner = Type.Union([Type.Object({ conversationId: id }), Type.Obj
 const executionIdentity = { executionId: id, operationId: id };
 const executionEvent = (fields: object) => Type.Intersect([executionOwner, Type.Object({ ...executionIdentity, ...fields })]);
 export const productEvents = Type.Union([
+  Type.Object({ event: Type.Literal('bot.changed'), data: Type.Object({ bot: botResult, change: botChangeSchema }) }),
+  Type.Object({ event: Type.Literal('memory.changed'), data: memoryChangedSchema }),
   Type.Object({ event: Type.Literal('execution.started'), data: executionEvent({ revision }) }),
   Type.Object({ event: Type.Literal('execution.textDelta'), data: executionEvent({ offset: revision, text: Type.String() }) }),
   Type.Object({ event: Type.Literal('execution.settled'), data: executionEvent({
@@ -115,7 +139,6 @@ export const productEventSchema = Type.Intersect([
 ]);
 const nullable = <T extends TSchema>(schema: T) => Type.Union([schema, Type.Null()]);
 const productPage = <T extends TSchema>(item: T) => Type.Object({ items: Type.Array(item), nextCursor: nullable(id) });
-const botResult = Type.Object({ botId: id, profile: profileSchema, profileRevision: revision, archived: Type.Boolean(), currentConversationId: id });
 const conversationFields = { conversationId: id, botId: id, revision, mode: Type.Union([Type.Literal('current'), Type.Literal('readOnly')]) };
 const activeExecution = Type.Object({ ...executionSchema.properties, operationId: id, partial: Type.Optional(nullable(Type.String())),
   textOffset: Type.Optional(revision), error: Type.Optional(Type.String()) });
@@ -137,10 +160,19 @@ export const productResults = {
       appearance: Type.Optional(Type.String()) })),
     recovery: Type.Optional(Type.Object({ id, ui: Type.Optional(Type.Record(Type.String(), Type.Unknown())) })) }) }),
   'bot.list': productPage(botResult),
+  'bot.ensureBuiltin': botResult,
   'bot.create': botResult,
   'bot.update': botResult,
   'bot.archive': botResult,
   'bot.restore': botResult,
+  'memory.get': Type.Object({ botId: id, rulesRevision: revision, rules: Type.Array(memoryRuleSchema),
+    pendingLearnings: Type.Array(pendingLearningSchema), workLogs: Type.Array(workLogSchema) }),
+  'memory.addRule': memoryChangedSchema,
+  'memory.updateRule': memoryChangedSchema,
+  'memory.deleteRule': memoryChangedSchema,
+  'memory.reviewLearning': memoryChangedSchema,
+  'memory.deleteLog': memoryChangedSchema,
+  'memory.searchLogs': Type.Object({ items: Type.Array(workLogSchema) }),
   'conversation.list': productPage(Type.Object({ ...conversationFields,
     preview: Type.Optional(id), timestamp: Type.Optional(id) })),
   'conversation.get': Type.Object({ ...conversationFields, draft: Type.Union([draftSchema, Type.Null()]), latestExecution: Type.Union([activeExecution, Type.Null()]) }),

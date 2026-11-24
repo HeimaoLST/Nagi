@@ -20,16 +20,18 @@ type contactProfileActions struct {
 }
 
 type contactProfileEditor struct {
-	Draft       profileDraft
-	Archived    bool
-	ActiveWork  bool
-	UnknownWork bool
-	Busy        bool
-	Errors      map[string]string
-	Error       string
-	Status      string
-	focusField  string
-	initial     profileDraft
+	Draft           profileDraft
+	Archived        bool
+	ActiveWork      bool
+	UnknownWork     bool
+	Busy            bool
+	Errors          map[string]string
+	Error           string
+	Status          string
+	focusField      string
+	initial         profileDraft
+	profileRevision uint64
+	builtin         bool
 }
 
 // Profile notices are stored by kind so the page can say them again in the
@@ -50,8 +52,12 @@ const (
 	profileNoticeWorkspaceDirectory = "profile-workspace-directory"
 )
 
+const profileNoticeChangedElsewhere = "profile-changed-elsewhere"
+
 func profileNoticeText(msgs locales.Messages, notice string) string {
 	switch notice {
+	case profileNoticeChangedElsewhere:
+		return msgs.ProfileChangedElsewhere()
 	case profileNoticeBusy:
 		return msgs.ProfileErrorBusy()
 	case profileNoticeArchived:
@@ -213,6 +219,9 @@ func (e *contactProfileEditor) view(c *ui.Context, t *ui.Theme, actions contactP
 		if reason := e.activityReason(); reason != "" {
 			ui.Text(c, profileNoticeText(msgs, reason)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Warning)
 		}
+		if e.builtin {
+			ui.Text(c, msgs.ProfileBuiltinArchitectNote()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
+		}
 		if e.Archived {
 			ui.Text(c, msgs.ProfileArchivedBadge()).FontSize(typeLabel).FontWeight(400).FixedLineHeight(lineLabel).TextColor(t.Warning)
 		}
@@ -258,35 +267,37 @@ func (e *contactProfileEditor) view(c *ui.Context, t *ui.Theme, actions contactP
 				ui.Text(c, profileNoticeText(msgs, e.Status)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Text)
 			}
 		})
-		ui.Column(c).Gap(8).Padding(8, 0, 0).Children(func() {
-			ui.Text(c, msgs.ProfileContactManagement()).FontSize(typeLabel).FontWeight(500).FixedLineHeight(lineLabel).TextColor(t.Text)
-			ui.Row(c).Gap(8).Wrap().Children(func() {
-				if e.Archived {
-					secondaryButton(c, msgs.ProfileRestore()).Disabled(e.Busy).OnClick(func() {
-						if actions.Restore != nil {
-							actions.Restore()
-						}
-					})
-				} else {
-					dangerButton(c, msgs.ProfileArchive()).Disabled(e.Busy || e.ActiveWork || e.UnknownWork).OnClick(func() {
-						if actions.Archive != nil {
-							actions.Archive()
-						}
-					})
-				}
-			})
-		})
+		e.managementView(c, t, actions)
 	})
 }
 
-func (a *appModel) contactProfileForm(c *ui.Context, t *ui.Theme, ct *contact, editor *contactProfileEditor) {
-	editor.Archived = ct.Archived
+func (e *contactProfileEditor) managementView(c *ui.Context, t *ui.Theme, actions contactProfileActions) {
+	if e.builtin || (actions.Archive == nil && actions.Restore == nil) {
+		return
+	}
+	msgs := locales.In(c.Locale())
+	ui.Row(c).Key("profile-management").FillWidth().AlignItems(ui.Center).Justify(ui.SpaceBetween).Gap(8).Padding(8, 0, 0).Children(func() {
+		ui.Text(c, msgs.ProfileContactManagement()).FontSize(typeLabel).FontWeight(500).FixedLineHeight(lineLabel).TextColor(t.Text)
+		if e.Archived && actions.Restore != nil {
+			secondaryButton(c, msgs.ProfileRestore()).Disabled(e.Busy).OnClick(actions.Restore)
+		} else if !e.Archived && actions.Archive != nil {
+			dangerButton(c, msgs.ProfileArchive()).Disabled(e.Busy || e.ActiveWork || e.UnknownWork).OnClick(actions.Archive)
+		}
+	})
+}
+
+func (a *appModel) contactProfileActions(ct *contact, editor *contactProfileEditor) contactProfileActions {
+	editor.Archived, editor.builtin = ct.Archived, ct.isBuiltin()
 	editor.ActiveWork, editor.UnknownWork = a.contactActivity(ct)
 	id := ct.ID
-	editor.view(c, t, contactProfileActions{
+	return contactProfileActions{
 		Save:    func(draft profileDraft) { a.saveContactProfileDraftFor(id, draft, false) },
 		Archive: func() { a.archiveContact(id) },
 		Restore: func() { a.restoreContact(id) },
-		Discard: editor.ResetDraft,
-	}, a.workTheme.InputBorder)
+		Discard: func() {
+			editor.SetProfile(contactProfileDraft(ct))
+			editor.profileRevision = ct.ProfileRevision
+			editor.ResetDraft()
+		},
+	}
 }

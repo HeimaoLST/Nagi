@@ -1,6 +1,7 @@
 package app
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/egoist/mygo/ui"
@@ -46,12 +47,23 @@ func (a *appModel) submitCreateBot(form *createBotForm) {
 	}
 }
 
+func (a *appModel) createBotWithArchitect(bot *contact) {
+	a.createBot = nil
+	if a.activeDetail() != "" {
+		a.closeDetail()
+		a.focusProfileRow, a.focusRail = "", false
+	}
+	a.selectContact(slices.Index(a.contacts, bot))
+	a.aux, a.priorChats, a.focusComposer = "", nil, true
+}
+
 func (a *appModel) createBotDialogView(c *ui.Context, t *ui.Theme) {
 	form := a.createBot
 	if form == nil {
 		return
 	}
 	msgs := locales.In(c.Locale())
+	architect := slices.IndexFunc(a.contacts, func(ct *contact) bool { return ct.SystemKind == pi.SystemKindBotArchitect && !ct.Archived })
 	width, _ := c.Size()
 	open := true
 	ui.DialogBase(c, &open, func(backdrop, panel ui.Element) {
@@ -79,9 +91,19 @@ func (a *appModel) createBotDialogView(c *ui.Context, t *ui.Theme) {
 		if form.failed {
 			ui.Text(c, msgs.CreateBotFailed()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Danger)
 		}
-		ui.Row(c).FillWidth().Gap(8).Justify(ui.End).Children(func() {
-			secondaryButton(c, msgs.CreateBotCancel()).MinHeight(32).OnClick(func() { a.createBot = nil })
-			primaryButton(c, msgs.CreateBotAction()).MinHeight(32).OnClick(func() { a.submitCreateBot(form) })
+		footer := ui.Row(c).FillWidth().AlignItems(ui.Center).Justify(ui.End).Gap(8).Wrap()
+		if architect >= 0 {
+			footer.Justify(ui.SpaceBetween)
+		}
+		footer.Children(func() {
+			if architect >= 0 {
+				bot := a.contacts[architect]
+				linkButton(c, msgs.CreateBotWithPandoraBox()).OnClick(func() { a.createBotWithArchitect(bot) })
+			}
+			ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
+				secondaryButton(c, msgs.CreateBotCancel()).MinHeight(32).OnClick(func() { a.createBot = nil })
+				primaryButton(c, msgs.CreateBotAction()).MinHeight(32).OnClick(func() { a.submitCreateBot(form) })
+			})
 		})
 	})
 	if !open {

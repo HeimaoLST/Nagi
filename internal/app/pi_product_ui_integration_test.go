@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -221,7 +222,9 @@ func TestPiAppPreviousAndSourceChat(t *testing.T) {
 	assertSource(second, cedar, newPrompt, oldID, oldReply, oldHistory)
 	second.frame(func() { second.view.Key(0, ui.KeyEscape) })
 	second.wait(func() bool { return second.view.Focused(msg.SourceChat()) })
-	second.frame(func() { second.app.selectContact(1) })
+	second.frame(func() {
+		second.app.selectContact(slices.IndexFunc(second.app.contacts, func(ct *contact) bool { return ct.ID == "copper" }))
+	})
 	second.wait(func() bool {
 		ct := second.app.selectedContact()
 		return ct.ID == "copper" && ct.Loaded && ct.Draft == otherDraft
@@ -229,7 +232,9 @@ func TestPiAppPreviousAndSourceChat(t *testing.T) {
 	if provider.count() != 1 {
 		t.Fatal("opening source chat requested the provider")
 	}
-	second.frame(func() { second.app.selectContact(0) })
+	second.frame(func() {
+		second.app.selectContact(slices.IndexFunc(second.app.contacts, func(ct *contact) bool { return ct.ID == "cedar" }))
+	})
 	if err := provider.install([]piAppCall{}, newReply, nil, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -611,7 +616,9 @@ func TestPiAppConcurrentActivities(t *testing.T) {
 		t.Fatalf("restart changed the two Bot drafts: %q", drafts)
 	}
 	copper := reopened.app.contactByID("copper")
-	reopened.frame(func() { reopened.app.selectContact(1) })
+	reopened.frame(func() {
+		reopened.app.selectContact(slices.IndexFunc(reopened.app.contacts, func(ct *contact) bool { return ct.ID == "copper" }))
+	})
 	reopened.wait(func() bool { return reopened.app.selectedContact() == copper && copper.Loaded })
 	reopened.click(msg.SendAction())
 	select {
@@ -761,7 +768,7 @@ func TestPiAppSettingsBackupRestore(t *testing.T) {
 	w.frame(func() {
 		cedar.Draft = "Cedar next draft"
 		saveErr = w.app.saveProductDraft(cedar)
-		w.app.selectContact(1)
+		w.app.selectContact(slices.IndexFunc(w.app.contacts, func(ct *contact) bool { return ct.ID == "copper" }))
 	})
 	if saveErr != nil {
 		t.Fatal(saveErr)
@@ -847,7 +854,7 @@ func TestPiAppSettingsBackupRestore(t *testing.T) {
 		preview := func() {
 			restore.click(msg.RestorePausedAction())
 			restore.wait(func() bool {
-				return restore.view.HasText(msg.RecoveryPreviewCounts(2, 1)) && restore.view.Focused(msg.RecoveryConfirmAction())
+				return restore.view.HasText(msg.RecoveryPreviewCounts(3, 1)) && restore.view.Focused(msg.RecoveryConfirmAction())
 			})
 			if !bytes.Equal(read(profile), damaged) || !bytes.Equal(read(private), credentials) {
 				t.Fatal("preview changed the original profile or credentials")

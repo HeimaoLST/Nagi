@@ -158,7 +158,7 @@ console.log(JSON.stringify({ mode, version, fkCount: fk.length, digest }));
 	mirrorBytes := productRead(t, opts.ProfilePath)
 	sum := sha256.Sum256(mirrorBytes)
 	mirrorDigest := hex.EncodeToString(sum[:])
-	if !strings.EqualFold(inspected.Mode, "wal") || inspected.Version != 1 || inspected.FKCount != 0 || inspected.Digest != mirrorDigest {
+	if !strings.EqualFold(inspected.Mode, "wal") || inspected.Version != 3 || inspected.FKCount != 0 || inspected.Digest != mirrorDigest {
 		t.Fatalf("sqlite metadata mismatch: %+v mirrorDigest=%s", inspected, mirrorDigest)
 	}
 
@@ -270,13 +270,14 @@ console.log(JSON.stringify({ mode, version, fkCount: fk.length, digest }));
 	}
 	mu.Unlock()
 	expectedBoundary := "Default working directory: " + workspace + ". Do not modify or write files outside this directory unless the user explicitly asks."
-	idxName := strings.Index(firstSys, "You are Cedar.")
-	idxPurpose := strings.Index(firstSys, "Purpose:\nTrack releases")
+	idxL0 := strings.Index(firstSys, "You are a long-lived Nagi Bot teammate.")
 	idxIM := strings.Index(firstSys, "<<<NEXT>>>")
-	idxInst := strings.Index(firstSys, "Be brief.")
+	idxIdentity := strings.Index(firstSys, "Bot Identity\nName: Cedar")
+	idxPurpose := strings.Index(firstSys, "Purpose:\nTrack releases")
+	idxInst := strings.Index(firstSys, "Behavior Instructions:\nBe brief.")
 	idxDir := strings.Index(firstSys, expectedBoundary)
-	if idxName < 0 || idxPurpose <= idxName || idxIM <= idxPurpose || idxInst <= idxIM || idxDir <= idxInst || !strings.Contains(firstSys, "at most three bubbles") {
-		t.Fatalf("initial system prompt missing ordered IM sections: %q", firstSys)
+	if idxL0 != 0 || idxIM <= idxL0 || idxIdentity <= idxIM || idxPurpose <= idxIdentity || idxInst <= idxPurpose || idxDir <= idxInst || !strings.Contains(firstSys, "at most three bubbles") {
+		t.Fatalf("initial system prompt missing ordered L0/L1 sections: %q", firstSys)
 	}
 
 	updated, err := proc.client.UpdateBot(ctx, pi.ProductBotUpdateParams{
@@ -321,7 +322,7 @@ console.log(JSON.stringify({ mode, version, fkCount: fk.length, digest }));
 	mu.Lock()
 	secondSys := capturedSystems[len(capturedSystems)-1]
 	mu.Unlock()
-	if !strings.Contains(secondSys, "You are Cedar.") || !strings.Contains(secondSys, "<<<NEXT>>>") || strings.Contains(secondSys, "Cedar Prime") {
+	if !strings.Contains(secondSys, "Bot Identity\nName: Cedar") || !strings.Contains(secondSys, "<<<NEXT>>>") || strings.Contains(secondSys, "Cedar Prime") {
 		t.Fatalf("existing binding did not preserve captured initial instructions after edit+restart: %q", secondSys)
 	}
 
@@ -339,8 +340,8 @@ console.log(JSON.stringify({ mode, version, fkCount: fk.length, digest }));
 	mu.Lock()
 	thirdSys := capturedSystems[len(capturedSystems)-1]
 	mu.Unlock()
-	if !strings.Contains(thirdSys, "You are Cedar Prime.") || !strings.Contains(thirdSys, "Purpose:\nReview PRs") ||
-		!strings.Contains(thirdSys, "Verify invariants.") || !strings.Contains(thirdSys, expectedBoundary) {
+	if !strings.HasPrefix(thirdSys, "You are a long-lived Nagi Bot teammate.") || !strings.Contains(thirdSys, "Bot Identity\nName: Cedar Prime") ||
+		!strings.Contains(thirdSys, "Purpose:\nReview PRs") || !strings.Contains(thirdSys, "Behavior Instructions:\nVerify invariants.") || !strings.Contains(thirdSys, expectedBoundary) {
 		t.Fatalf("new conversation did not compose updated instructions: %q", thirdSys)
 	}
 
@@ -380,7 +381,7 @@ console.log(digest);
 	runNodeSQLite(t, opts.NodePath, dbPath, `
 const { DatabaseSync } = require('node:sqlite');
 const db = new DatabaseSync(process.argv[1]);
-db.exec('PRAGMA user_version = 2');
+db.exec('PRAGMA user_version = 4');
 db.close();
 `)
 	badClient, startErr := pi.StartProduct(opts)
@@ -389,7 +390,7 @@ db.close();
 		if readyErr == nil {
 			_, openErr := badClient.Open(ctx, []int{pi.ProductVersion})
 			if openErr == nil {
-				t.Fatal("worker admitted a SQLite database with newer user_version=2")
+				t.Fatal("worker admitted a SQLite database with newer user_version=4")
 			}
 		}
 		_, _ = badClient.Wait(ctx)

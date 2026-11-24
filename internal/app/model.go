@@ -84,6 +84,9 @@ type contact struct {
 	Instructions       string
 	Workspace          string
 	BuiltinTools       *[]string
+	SystemKind         string
+	ProfileRevision    uint64
+	PendingLearnings   int
 	Status             contactStatus
 	Unread             int
 	Work               string
@@ -98,6 +101,7 @@ type contact struct {
 	PreviousPiBindings []piConversationBinding
 	Context            taskContext
 	activity           productActivityPanel
+	memory             botMemoryViewState
 	replyIndex         int
 	list               ui.ListState
 	Works              []*workItem
@@ -126,6 +130,10 @@ type contact struct {
 	SessionAPI        string
 	SessionState      string
 	historyGen        int
+}
+
+func (ct *contact) isBuiltin() bool {
+	return ct != nil && ct.SystemKind != ""
 }
 
 type profileDraft struct {

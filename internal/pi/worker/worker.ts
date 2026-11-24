@@ -18,6 +18,7 @@ import {
 } from './protocol.js';
 import { Product, confirmedFileEffect, type ProductRunObservers, type ProductSession } from './product.js';
 import type { ProductProfilePaths } from './product-profile.js';
+import { isNagiBotSystemPrompt } from './bot-template.js';
 
 const BINDING_TYPE = 'nagi-context-v1';
 const CONFIGURATION_TYPE = 'nagi-configuration-v1';
@@ -57,6 +58,7 @@ class Worker {
     this.knownBuiltinTools = new Set(this.builtinCatalog.supported.map(tool => tool.name));
     if (productPaths) this.product = new Product(productPaths, {
       open: (params, tools) => this.openProductSession(params, tools),
+      refreshSession: (params, tools) => this.refreshProductSession(params, tools),
       conversationPreview: (sessionRef, contextId, botId) => this.conversationPreview(sessionRef, contextId, botId),
       test: configuration => this.testProductConnection(configuration),
       drain: () => this.drainProduct(),
@@ -299,19 +301,25 @@ class Worker {
     await models.setRuntimeApiKey(PROVIDER, config.apiKey);
     const model = models.getModel(PROVIDER, config.model);
     if (!model) throw new Error('Configured model is unavailable');
-    const customTools = [...(params.domainTools ?? []).map(tool => this.domainTool(params.contextId, tool)), ...productTools];
-    const codingTools = params.codingTools ?? this.builtinCatalog.defaults;
+    const customTools = [...(params.domainTools ?? []).map(tool => this.domainTool(params.contextId, tool)), ...productTools]
+      .sort((a, b) => a.name.localeCompare(b.name));
+    const codingTools = [...(params.codingTools ?? this.builtinCatalog.defaults)].sort((a, b) => a.localeCompare(b));
     if (codingTools.some(name => !this.knownBuiltinTools.has(name))) throw new RequestError('unsupported_tool', 'Unsupported coding tool selection');
     if (new Set(customTools.map(tool => tool.name)).size !== customTools.length || customTools.some(tool => this.knownBuiltinTools.has(tool.name))) throw new RequestError('invalid_params', 'Conflicting domain tool name');
+    const tools = [...codingTools, ...customTools.map(tool => tool.name)].sort((a, b) => a.localeCompare(b));
+    if (mcpEntries.length) tools.push('mcp__*');
+    const productPrompt = productTools.length > 0 && isNagiBotSystemPrompt(params.instructions);
     const settings = SettingsManager.inMemory({ retry: { enabled: false, provider: { maxRetries: 0 } }, cacheWarming: 'off' });
     this.configureSettings(settings, config);
     const agentDir = join(this.stateDir, 'agent');
     const runtime = await createAgentSessionRuntime(async target => {
       const services = await createAgentSessionServices({
         ...target, modelRuntime: models, settingsManager: settings,
-        resourceLoaderOptions: { noExtensions: true, noSkills: true, noPromptTemplates: true, noThemes: true, disabledBuiltinExtensions: ['mcp'], extensionFactories: mcpEntries.length ? [this.mcpExtension(binding, mcpEntries)] : [], appendSystemPrompt: params.instructions ? [params.instructions] : [] },
+        resourceLoaderOptions: { noExtensions: true, noSkills: true, noPromptTemplates: true, noThemes: true, disabledBuiltinExtensions: ['mcp'],
+          extensionFactories: mcpEntries.length ? [this.mcpExtension(binding, mcpEntries)] : [],
+          ...(productPrompt ? { systemPrompt: params.instructions } : { appendSystemPrompt: params.instructions ? [params.instructions] : [] }) },
       });
-      const result = await createAgentSessionFromServices({ services, sessionManager: target.sessionManager, model, thinkingLevel: 'off', tools: [...codingTools, ...customTools.map(tool => tool.name), ...(mcpEntries.length ? ['mcp__*'] : [])], customTools });
+      const result = await createAgentSessionFromServices({ services, sessionManager: target.sessionManager, model, thinkingLevel: 'off', tools, customTools });
       return { ...result, services, diagnostics: services.diagnostics };
     }, { cwd, agentDir, sessionManager: manager });
     const context: Context = { binding, configuration: config, instructions: params.instructions, codingTools: params.codingTools, domainTools: params.domainTools, mcpServers, manager, runtime, used, runIds: new Set(), observationSeq: 0 };
@@ -396,6 +404,14 @@ class Worker {
         void context.runtime.session.abort().catch(() => this.disconnect(true));
       },
     };
+  }
+
+  private async refreshProductSession(params: OpenParams, tools: ToolDefinition[]): Promise<ProductSession> {
+    const current = this.context(params.contextId);
+    if (current.active) throw new RequestError('busy', 'Context is running');
+    await current.runtime.dispose();
+    this.contexts.delete(params.contextId);
+    return this.openProductSession(params, tools);
   }
 
   private startProductRun(context: Context, executionId: string, draft: Draft, observers: ProductRunObservers): Run {
@@ -633,12 +649,12 @@ async function main(): Promise<void> {
         args[4] !== '--credentials' || !productPath || !credentialsPath || !isAbsolute(productPath) || !isAbsolute(credentialsPath) || resolve(productPath) === resolve(credentialsPath)))) {
     throw new Error('Invalid worker state or product profile arguments');
   }
+  if (fresh) await mkdir(dirname(productPath), { recursive: true, mode: 0o700 });
   await mkdir(args[1], { recursive: true });
   const stateDir = await realpath(args[1]);
   process.env.PI_CODING_AGENT_DIR = join(stateDir, 'agent');
   await mkdir(join(stateDir, 'sessions'), { recursive: true });
   await mkdir(join(stateDir, 'agent'), { recursive: true });
-  if (fresh) await mkdir(dirname(productPath), { recursive: true });
   const worker = new Worker(stateDir, productPath ? { profilePath: productPath, credentialsPath, fresh } : undefined);
   await worker.writer.send({ v: 1, type: 'ready', workerEpoch: worker.epoch, engine: { name: 'pi', version: '1.5.2' }, runtime: { name: 'node', version: process.version }, builtinCatalog: worker.builtinCatalog });
   await worker.read();
