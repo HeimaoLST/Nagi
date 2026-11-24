@@ -14,7 +14,7 @@ This directory holds Nagi's product requirements, implemented design contracts, 
 
 ### Active Architecture RFCs (Planned / In Progress)
 
-- [RFC-0001: Multi-Brain Execution, Direct Data Inspection & Unified Capabilities](rfcs/0001-multi-brain-and-capabilities.md) — `Partially Implemented` (`M0a` shipped; `M0b`–`M4` planned).
+- [RFC-0001: Multi-Brain Execution, Direct Data Inspection & Unified Capabilities](rfcs/0001-multi-brain-and-capabilities.md) — `Partially Implemented` (`M0a`–`M1` backend shipped; `M2`–`M4` planned).
 
 ### Repository Root References
 

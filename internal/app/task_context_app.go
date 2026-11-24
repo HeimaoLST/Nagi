@@ -52,8 +52,8 @@ func (a *appModel) loadStoredTaskContexts(store *contactStore) {
 func (a *appModel) bindTaskContexts() {
 	for _, ct := range a.contacts {
 		ct.Context.OnChange = a.persist
-		for _, issue := range ct.Issues {
-			issue.Context.OnChange = a.persist
+		for _, activity := range ct.Activities {
+			activity.Context.OnChange = a.persist
 		}
 	}
 }

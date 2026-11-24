@@ -59,22 +59,22 @@ func (a *appModel) contactActivity(ct *contact) (active, unknown bool) {
 	if ct.SendState == sendUnknown || (ct.pendingSend != nil && ct.pendingSend.State == "unknown") {
 		unknown = true
 	}
-	for _, issue := range ct.Issues {
-		if sessionBusy(issue.Work.SendState, issue.Work.ActiveTaskID) || issue.Work.pendingExecutionID != "" {
+	for _, activity := range ct.Activities {
+		if sessionBusy(activity.Work.SendState, activity.Work.ActiveTaskID) || activity.Work.pendingExecutionID != "" {
 			active = true
 		}
-		if issue.Work.SendState == sendUnknown {
+		if activity.Work.SendState == sendUnknown {
 			unknown = true
 		}
-		if issue.Supplements != nil && issue.Supplements.AutoContinue && issue.Supplements.PendingCount() > 0 {
+		if activity.Supplements != nil && activity.Supplements.AutoContinue && activity.Supplements.PendingCount() > 0 {
 			active = true
 		}
-		for _, execution := range issue.Executions {
+		for _, execution := range activity.Executions {
 			if !unresolvedExecution(execution) {
 				continue
 			}
 			active = true
-			if execution.Status == issueExecutionUnknown {
+			if execution.Status == activityExecutionUnknown {
 				unknown = true
 			}
 		}

@@ -119,7 +119,7 @@ func TestPiAppProductScopedDelegation(t *testing.T) {
 			{ID: recipient, Name: "Recipient Bot", Workspace: root, Draft: "Recipient draft"},
 			{ID: unrelated, Name: "Unrelated Bot", Workspace: root},
 		},
-		Issues: []storedIssue{{ID: foreignActivity, ContactID: unrelated, Goal: "Unrelated inventory", Status: issueStatusNotStarted, RequirementsRevision: 1}},
+		Issues: []storedActivity{{ID: foreignActivity, ContactID: unrelated, Goal: "Unrelated inventory", Status: activityStatusNotStarted, RequirementsRevision: 1}},
 	}); err != nil {
 		t.Fatal(err)
 	}

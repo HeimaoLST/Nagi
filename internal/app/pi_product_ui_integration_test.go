@@ -147,7 +147,7 @@ func TestPiAppPreviousAndSourceChat(t *testing.T) {
 	if err := writeProfileJSON(guiStorePath(), storedState{Version: contactStoreVersion, Selected: "cedar", Contacts: []storedContact{
 		{ID: "cedar", Name: "Cedar", Workspace: root, Draft: oldPrompt},
 		{ID: "copper", Name: "Copper", Workspace: root, Draft: otherDraft},
-	}, Issues: []storedIssue{{ID: "source-activity", ContactID: "cedar", Goal: "Original activity", Status: "not_started", RequirementsRevision: 1}}}); err != nil {
+	}, Issues: []storedActivity{{ID: "source-activity", ContactID: "cedar", Goal: "Original activity", Status: "not_started", RequirementsRevision: 1}}}); err != nil {
 		t.Fatal(err)
 	}
 	msg := locales.In("en")
@@ -333,7 +333,7 @@ func TestPiAppConcurrentActivities(t *testing.T) {
 	if err := writeProfileJSON(guiStorePath(), storedState{Version: contactStoreVersion, Selected: "cedar", Contacts: []storedContact{
 		{ID: "cedar", Name: "Cedar", Workspace: root, Draft: "Cedar draft"},
 		{ID: "copper", Name: "Copper", Workspace: root, Draft: quitPrompt},
-	}, Issues: []storedIssue{
+	}, Issues: []storedActivity{
 		{ID: firstID, ContactID: "cedar", Goal: firstGoal, Status: "not_started", RequirementsRevision: 1},
 		{ID: secondID, ContactID: "cedar", Goal: secondGoal, Status: "not_started", RequirementsRevision: 1},
 	}}); err != nil {
@@ -717,8 +717,8 @@ func TestPiAppSettingsBackupRestore(t *testing.T) {
 				TaskContext: []taskContextItem{{ID: "copper-material", Name: "Copper evidence", Text: "Copper captured text", Revision: 1}},
 				PendingSend: &pendingSend{Draft: "Unconfirmed Copper dispatch", State: "unknown", ToolScopeRef: "copper-scope"}},
 		},
-		Issues:          []storedIssue{{ID: "copper-activity", ContactID: "copper", Goal: "Review Copper materials", Status: "not_started"}},
-		IssueToolScopes: []IssueToolScope{{Ref: "copper-scope", ContactID: "copper", TurnID: importedOperation, RuntimeTaskID: "copper-execution"}},
+		Issues:          []storedActivity{{ID: "copper-activity", ContactID: "copper", Goal: "Review Copper materials", Status: "not_started"}},
+		IssueToolScopes: []ActivityToolScope{{Ref: "copper-scope", ContactID: "copper", TurnID: importedOperation, RuntimeTaskID: "copper-execution"}},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -929,11 +929,11 @@ func TestPiAppRestoresExistingV10Copy(t *testing.T) {
 	if err := writeProfileJSON(copyPath, storedState{Version: contactStoreVersion, Selected: botID,
 		Contacts: []storedContact{{ID: botID, Name: "Restored Bot", Workspace: root, SessionID: session, PiBinding: binding, Draft: text,
 			TaskContext: []taskContextItem{material}, PendingSend: &pendingSend{Draft: "Earlier uncertain send", State: "unknown", ToolScopeRef: "backup-scope"}}},
-		Issues: []storedIssue{{ID: activityID, ContactID: botID, Goal: "Restore retained findings", Status: issueStatusNeedsAttention, RequirementsRevision: 2,
+		Issues: []storedActivity{{ID: activityID, ContactID: botID, Goal: "Restore retained findings", Status: activityStatusNeedsAttention, RequirementsRevision: 2,
 			RequirementItems: []storedRequirement{{ID: "retained-requirement", Text: "Keep the findings", State: requirementUnverified}},
-			Executions:       []storedIssueExecution{{ID: activityExecution, PiIntent: true, Status: issueExecutionUnknown, Prompt: "Original activity input"}}}},
-		IssueToolScopes:     []IssueToolScope{{Ref: "backup-scope", ContactID: botID, RuntimeSessionID: session, TurnID: sendOperation, RuntimeTaskID: sendExecution}},
-		IssueToolOperations: &IssueToolOperationLedger{},
+			Executions:       []storedActivityExecution{{ID: activityExecution, PiIntent: true, Status: activityExecutionUnknown, Prompt: "Original activity input"}}}},
+		IssueToolScopes:     []ActivityToolScope{{Ref: "backup-scope", ContactID: botID, RuntimeSessionID: session, TurnID: sendOperation, RuntimeTaskID: sendExecution}},
+		IssueToolOperations: &ActivityToolOperationLedger{},
 	}); err != nil {
 		t.Fatal(err)
 	}

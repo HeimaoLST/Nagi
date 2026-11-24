@@ -486,7 +486,7 @@ func (a *appModel) dataRecoveryBlocked(restore bool) string {
 		return "unsaved"
 	}
 	ct := a.selectedContact()
-	if ct.Unavailable == "" || ct.SessionID != "" || ct.Draft != "" || len(ct.Messages)+len(ct.History)+len(ct.Issues)+len(ct.PreviousPiBindings) > 0 || ct.pendingSend != nil || len(ct.Context.Items) > 0 || ct.Context.FormOpen || ct.Context.FormName != "" || ct.Context.FormText != "" || ct.Context.FormPath != "" {
+	if ct.Unavailable == "" || ct.SessionID != "" || ct.Draft != "" || len(ct.Messages)+len(ct.History)+len(ct.Activities)+len(ct.PreviousPiBindings) > 0 || ct.pendingSend != nil || len(ct.Context.Items) > 0 || ct.Context.FormOpen || ct.Context.FormName != "" || ct.Context.FormText != "" || ct.Context.FormPath != "" {
 		return "unsaved"
 	}
 	for id, editor := range a.profileEditors {
@@ -754,7 +754,7 @@ func (a *appModel) settingsDataRecoveryContent(c *ui.Context, t *ui.Theme) {
 				secondaryButton(c, label).Label(label).AlignSelf(ui.Start).OnClick(func() {
 					fn := a.revealRecoveryFile
 					if fn == nil {
-						fn = requestRevealIssueResultWithSystem
+						fn = requestRevealActivityResultWithSystem
 					}
 					token, generation, owner, canonical := s.token, a.folderChoiceGeneration, a.selectedContact(), a.storePath
 					go func() {

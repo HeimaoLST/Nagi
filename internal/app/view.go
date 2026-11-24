@@ -343,7 +343,7 @@ func (a *appModel) bindBotRowMenu(row ui.Element, contactID string, msgs locales
 		}
 		ready := a.productProfileReady() && !a.dataRecoveryBlocksChanges()
 		mutable := ready || a.demo
-		count := len(ct.Issues)
+		count := len(ct.Activities)
 		if ct.activity.loaded && ct.activity.nextCursor == nil {
 			count = max(count, len(ct.activity.items))
 		}
@@ -868,9 +868,9 @@ func (a *appModel) conversationActivities(c *ui.Context, t *ui.Theme, ct *contac
 						}
 						switch {
 						case p.legacyIssue:
-							if issue := ct.selectedIssue(); issue != nil {
-								a.activityText(c, t, issue.Goal)
-								if question := issue.openQuestion(); question != nil {
+							if activity := ct.selectedActivity(); activity != nil {
+								a.activityText(c, t, activity.Goal)
+								if question := activity.openQuestion(); question != nil {
 									a.activityText(c, t, question.Text)
 								}
 							}
@@ -879,9 +879,9 @@ func (a *appModel) conversationActivities(c *ui.Context, t *ui.Theme, ct *contac
 						case p.activity != nil:
 							a.productActivityDetails(c, t, ct, client)
 						case p.activityID == "":
-							for _, issue := range ct.Issues {
-								if issue != nil && !issue.Archived {
-									secondaryButton(c, issue.Goal).Label(msgs.IssueRowLabel(issue.Goal)).OnClick(func() { a.openLegacyBotIssue(ct, issue) })
+							for _, activity := range ct.Activities {
+								if activity != nil && !activity.Archived {
+									secondaryButton(c, activity.Goal).Label(msgs.IssueRowLabel(activity.Goal)).OnClick(func() { a.openLegacyBotActivity(ct, activity) })
 								}
 							}
 							for _, item := range p.items {
@@ -1067,10 +1067,10 @@ func (a *appModel) productActivityResultView(c *ui.Context, t *ui.Theme, p *prod
 	if file := p.file; file != nil {
 		a.activityText(c, t, file.Path)
 		a.activityText(c, t, msgs.ResultCurrentFileDiff())
-		if notice := issueResultInspectionNoticeText(msgs, *file); notice != "" {
+		if notice := activityResultInspectionNoticeText(msgs, *file); notice != "" {
 			a.activityText(c, t, notice)
 		} else if file.ReadErrorKind != "" {
-			a.activityText(c, t, issueResultNoticeText(msgs, file.ReadErrorKind, file.ReadErrorDetail))
+			a.activityText(c, t, activityResultNoticeText(msgs, file.ReadErrorKind, file.ReadErrorDetail))
 		} else if file.Size == 0 {
 			a.activityText(c, t, msgs.ResultEmptyFile())
 		} else {
@@ -1584,12 +1584,12 @@ func (a *appModel) openMarkdownFile(base, destination string) error {
 	if open == nil {
 		open = openFileWithSystem
 	}
-	action := requestOpenIssueResultFile(issueResultFile{Path: filepath.Clean(path)}, open)
+	action := requestOpenActivityResultFile(activityResultFile{Path: filepath.Clean(path)}, open)
 	if action.NoticeKind != "" {
-		return errors.New(issueResultNoticeText(msgs, action.NoticeKind, action.NoticeDetail))
+		return errors.New(activityResultNoticeText(msgs, action.NoticeKind, action.NoticeDetail))
 	}
 	if action.ErrKind != "" {
-		return errors.New(issueResultNoticeText(msgs, action.ErrKind, action.ErrDetail))
+		return errors.New(activityResultNoticeText(msgs, action.ErrKind, action.ErrDetail))
 	}
 	return nil
 }

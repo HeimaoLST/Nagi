@@ -310,9 +310,9 @@ func (a *appModel) activeTaskCount() int {
 		if sessionBusy(ct.SendState, ct.ActiveTaskID) {
 			count++
 		}
-		for _, issue := range ct.Issues {
-			if issue.WorkSessionID != "" || sessionBusy(issue.Work.SendState, issue.Work.ActiveTaskID) {
-				if sessionBusy(issue.Work.SendState, issue.Work.ActiveTaskID) {
+		for _, activity := range ct.Activities {
+			if activity.WorkSessionID != "" || sessionBusy(activity.Work.SendState, activity.Work.ActiveTaskID) {
+				if sessionBusy(activity.Work.SendState, activity.Work.ActiveTaskID) {
 					count++
 				}
 			}
@@ -426,17 +426,17 @@ func (a *appModel) connectionConfigurationBlocked() bool {
 // Send/start blockers are stable reasons. One condition function serves the
 // composer and every work surface; rendering happens in the current language.
 const (
-	blockShutdown        = "shutdown"
-	blockArchivedSend    = "archived-send"
-	blockApplying        = "applying"
-	blockRuntimeNotReady = "runtime-not-ready"
-	blockHistoryLoading  = "history-loading"
-	blockBusy            = "busy"
-	blockCapacity        = "capacity"
-	blockAnotherContact  = "other-contact-working"
-	blockArchivedIssue   = "archived-issue"
-	blockIssueActive     = "issue-active"
-	blockWorkCapacity    = "work-capacity"
+	blockShutdown         = "shutdown"
+	blockArchivedSend     = "archived-send"
+	blockApplying         = "applying"
+	blockRuntimeNotReady  = "runtime-not-ready"
+	blockHistoryLoading   = "history-loading"
+	blockBusy             = "busy"
+	blockCapacity         = "capacity"
+	blockAnotherContact   = "other-contact-working"
+	blockArchivedActivity = "archived-issue"
+	blockActivityActive   = "issue-active"
+	blockWorkCapacity     = "work-capacity"
 )
 
 func sendBlockRaw(reason string) string {
@@ -457,9 +457,9 @@ func sendBlockRaw(reason string) string {
 		return "Runtime task capacity is full; retry after a task finishes."
 	case blockAnotherContact:
 		return "Another Bot is working. Wait for its task to finish before sending here."
-	case blockArchivedIssue:
+	case blockArchivedActivity:
 		return "This Bot is archived. Restore it before starting activity work."
-	case blockIssueActive:
+	case blockActivityActive:
 		return "This issue already has an active execution."
 	case blockWorkCapacity:
 		return "Work capacity is full; one runtime slot is reserved for conversation."
@@ -486,9 +486,9 @@ func sendBlockText(msgs locales.Messages, reason string) string {
 		return msgs.CanSendCapacity()
 	case blockAnotherContact:
 		return msgs.CanSendAnotherContact()
-	case blockArchivedIssue:
+	case blockArchivedActivity:
 		return msgs.CanStartArchived()
-	case blockIssueActive:
+	case blockActivityActive:
 		return msgs.CanStartIssueActive()
 	case blockWorkCapacity:
 		return msgs.CanStartWorkCapacity()
@@ -609,8 +609,8 @@ func (a *appModel) createContact(profile pi.ProductBotProfile, operationID strin
 func (a *appModel) normalizeRestoredSupplementBatches() {
 	changed := false
 	for _, ct := range a.contacts {
-		for _, issue := range ct.Issues {
-			ledger := issue.Supplements
+		for _, activity := range ct.Activities {
+			ledger := activity.Supplements
 			if ledger == nil {
 				continue
 			}
@@ -639,7 +639,7 @@ func (a *appModel) normalizeRestoredSupplementBatches() {
 	}
 	if changed {
 		if err := a.persist(); err != nil {
-			a.setIssueActionNotice("Could not save restored supplement integrity state: "+err.Error(), "supplement-restore-failed", err.Error())
+			a.setActivityActionNotice("Could not save restored supplement integrity state: "+err.Error(), "supplement-restore-failed", err.Error())
 		}
 	}
 }
@@ -685,7 +685,7 @@ func (a *appModel) persist() error {
 	if host := a.productHost(); host != nil {
 		err = a.persistProductUI(host)
 	} else if err = a.ensureContactStore(); err == nil {
-		a.store.SetIssueToolState(a.issueToolLedger, a.issueToolScopes)
+		a.store.SetIssueToolState(a.activityToolLedger, a.activityToolScopes)
 		var themeIDs *appearanceThemeIDs
 		if a.appearanceThemeIDs != (appearanceThemeIDs{}) {
 			ids := a.appearanceThemeIDs

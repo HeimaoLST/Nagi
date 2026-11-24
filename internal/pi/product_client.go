@@ -39,6 +39,7 @@ type ProductEvent struct {
 	Name         string                       `json:"event"`
 	Data         json.RawMessage              `json:"data"`
 	TraceUpdated *ProductActivityTraceUpdated `json:"-"`
+	SkillChanged *ProductSkillChange          `json:"-"`
 }
 
 type ProductActivityTraceUpdated struct {
@@ -83,13 +84,15 @@ type ProductPage[T any] struct {
 }
 
 type ProductBotProfile struct {
-	Name           string   `json:"name"`
-	Role           string   `json:"role"`
-	Purpose        string   `json:"purpose"`
-	Instructions   string   `json:"instructions"`
-	Workspace      string   `json:"workspace"`
-	CodingTools    []string `json:"codingTools"`
-	StarterPrompts []string `json:"starterPrompts,omitempty"`
+	Name           string                `json:"name"`
+	Role           string                `json:"role"`
+	Purpose        string                `json:"purpose"`
+	Instructions   string                `json:"instructions"`
+	Workspace      string                `json:"workspace"`
+	CodingTools    []string              `json:"codingTools"`
+	StarterPrompts []string              `json:"starterPrompts,omitempty"`
+	ToolPreset     string                `json:"toolPreset,omitempty"`
+	MountedSkills  []ProductMountedSkill `json:"mountedSkills,omitempty"`
 }
 
 type ProductBot struct {
@@ -178,6 +181,7 @@ type ProductPreferences struct {
 	ThemeIDs             json.RawMessage `json:"themeIds,omitempty"`
 	Appearance           string          `json:"appearance,omitempty"`
 	HideBuiltinArchitect bool            `json:"hideBuiltinArchitect,omitempty"`
+	DiscoverLocalSkills  bool            `json:"discoverLocalSkills,omitempty"`
 }
 
 type ProductMaterial struct {
@@ -721,6 +725,13 @@ func (c *Client) handleProductEvent(line []byte) error {
 			return errors.New("invalid activity trace update")
 		}
 		event.TraceUpdated = &update
+	}
+	if event.Name == "skill.changed" {
+		var change ProductSkillChange
+		if json.Unmarshal(event.Data, &change) != nil || !change.valid() {
+			return errors.New("invalid skill change")
+		}
+		event.SkillChanged = &change
 	}
 	c.mu.Lock()
 	if event.StreamID != c.streamID || c.streamGap || event.Seq <= c.streamSeq {

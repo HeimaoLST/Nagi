@@ -130,7 +130,7 @@ func recoveryProducedState(t *testing.T) storedState {
 	t.Helper()
 	a, ct := taskContextApp(t)
 	ct.SessionID, ct.PiBinding = "", nil
-	if _, err := a.createIssueFor(ct, "Keep 原文 and IDs", "A real saved requirement"); err != nil {
+	if _, err := a.createActivityFor(ct, "Keep 原文 and IDs", "A real saved requirement"); err != nil {
 		t.Fatal(err)
 	}
 	var state storedState
@@ -164,7 +164,7 @@ func TestStoreRecoveryAcceptsOrdinaryProducerCopies(t *testing.T) {
 			}
 			original := recoverySavedBytes(t, guiStorePath())
 			copy, err := inspectStoreRecoveryCopy(guiStorePath())
-			if err != nil || copy.Contacts != 1 || copy.Issues != len(ct.Issues) {
+			if err != nil || copy.Contacts != 1 || copy.Issues != len(ct.Activities) {
 				t.Fatalf("ordinary %s copy rejected: %+v %v", producer, copy, err)
 			}
 			if !bytes.Contains(original, []byte(`"issue_tool_operations": {}`)) {
@@ -190,7 +190,7 @@ func TestStoreRecoveryAcceptsOrdinaryProducerCopies(t *testing.T) {
 				t.Fatalf("ordinary producer did not restore: %+v %v", result, err)
 			}
 			var installed storedState
-			if err := json.Unmarshal(recoverySavedBytes(t, targetPath), &installed); err != nil || installed.Contacts[0].SelectedIssueID != ct.SelectedIssueID {
+			if err := json.Unmarshal(recoverySavedBytes(t, targetPath), &installed); err != nil || installed.Contacts[0].SelectedIssueID != ct.SelectedActivityID {
 				t.Fatal("installation filled a derived issue selection")
 			}
 			reopened, err := openContactStore(targetPath, "/ignored")
@@ -234,10 +234,10 @@ func TestStoreRecoveryRejectsUnsupportedCopies(t *testing.T) {
 			case "missing-ledger":
 				state.IssueToolOperations = nil
 			case "invalid-scope":
-				state.IssueToolScopes = []IssueToolScope{{Ref: "bad"}}
+				state.IssueToolScopes = []ActivityToolScope{{Ref: "bad"}}
 			case "duplicate-scope":
-				scope := IssueToolScope{Ref: "same", ContactID: state.Selected, RuntimeSessionID: "session", TurnID: "turn"}
-				state.IssueToolScopes = []IssueToolScope{scope, scope}
+				scope := ActivityToolScope{Ref: "same", ContactID: state.Selected, RuntimeSessionID: "session", TurnID: "turn"}
+				state.IssueToolScopes = []ActivityToolScope{scope, scope}
 			case "legacy-requirements":
 				extra = kind
 			case "revision":
@@ -247,33 +247,33 @@ func TestStoreRecoveryRejectsUnsupportedCopies(t *testing.T) {
 			case "blank-requirement":
 				issue.RequirementItems[0].Text = " "
 			case "nil-question":
-				issue.Questions = []*issueQuestion{nil}
+				issue.Questions = []*activityQuestion{nil}
 			case "blank-question":
-				issue.Questions = []*issueQuestion{{Ref: " "}}
+				issue.Questions = []*activityQuestion{{Ref: " "}}
 			case "issue-status":
 				issue.Status = "open"
 			case "execution-id", "execution-status", "pending-execution", "accepted-without-task", "running-without-task":
-				execution := storedIssueExecution{ID: "execution", Status: issueExecutionUnknown}
+				execution := storedActivityExecution{ID: "execution", Status: activityExecutionUnknown}
 				switch kind {
 				case "execution-id":
 					execution.ID = ""
 				case "execution-status":
 					execution.Status = ""
 				case "pending-execution":
-					execution.Status = issueExecutionPending
+					execution.Status = activityExecutionPending
 				case "accepted-without-task":
-					execution.Status = issueExecutionAccepted
+					execution.Status = activityExecutionAccepted
 				case "running-without-task":
-					execution.Status = issueExecutionRunning
+					execution.Status = activityExecutionRunning
 				}
-				issue.Executions = []storedIssueExecution{execution}
+				issue.Executions = []storedActivityExecution{execution}
 			case "submitting-intent":
 				state.Contacts[0].SessionID = "session"
 				state.Contacts[0].PendingSend = &pendingSend{State: "submitting", Draft: "uncertain"}
 			case "unknown-intent-without-session":
 				state.Contacts[0].PendingSend = &pendingSend{State: "unknown", Draft: "uncertain"}
 			case "dispatching-batch":
-				issue.Supplements.Batches = []*issueSupplementBatch{{ID: "batch", State: supplementBatchDispatching}}
+				issue.Supplements.Batches = []*activitySupplementBatch{{ID: "batch", State: supplementBatchDispatching}}
 			case "appearance":
 				state.Appearance = "invalid"
 			case "layout":
@@ -359,26 +359,26 @@ func TestStoreRecoveryOptionalDefaultsAndUnknownRecords(t *testing.T) {
 			state := recoveryProducedState(t)
 			state.Appearance, state.Layout = "", nil
 			state.ThemeIDs = &appearanceThemeIDs{Light: "missing-custom-theme"}
-			state.IssueToolOperations = &IssueToolOperationLedger{}
+			state.IssueToolOperations = &ActivityToolOperationLedger{}
 			state.Contacts[0].SelectedIssueID = ""
 			issue := &state.Issues[0]
 			switch kind {
 			case "unknown-execution":
-				issue.Executions = []storedIssueExecution{{ID: "unknown", PiIntent: true, Status: issueExecutionUnknown, Detail: "No trusted association"}}
+				issue.Executions = []storedActivityExecution{{ID: "unknown", PiIntent: true, Status: activityExecutionUnknown, Detail: "No trusted association"}}
 			case "accepted-no-session", "running-no-session":
-				status := issueExecutionAccepted
+				status := activityExecutionAccepted
 				if kind == "running-no-session" {
-					status = issueExecutionRunning
+					status = activityExecutionRunning
 				}
-				issue.Executions = []storedIssueExecution{{ID: "known-task", PiIntent: true, Status: status, TaskID: "task"}}
+				issue.Executions = []storedActivityExecution{{ID: "known-task", PiIntent: true, Status: status, TaskID: "task"}}
 			case "unknown-intent":
 				state.Contacts[0].SessionID = "session"
 				state.Contacts[0].PiBinding = recoveryConversationBinding(state.Contacts[0].ID, t.TempDir(), state.Contacts[0].SessionID)
 				state.Contacts[0].PendingSend = &pendingSend{State: "unknown", Draft: "May have been sent"}
 			case "unknown-batch":
-				issue.Supplements.Batches = []*issueSupplementBatch{{ID: "unknown", State: supplementBatchUnknown}}
+				issue.Supplements.Batches = []*activitySupplementBatch{{ID: "unknown", State: supplementBatchUnknown}}
 			case "associated-dispatching-batch":
-				issue.Supplements.Batches = []*issueSupplementBatch{{ID: "dispatching", State: supplementBatchDispatching, ExecutionID: "recorded-execution"}}
+				issue.Supplements.Batches = []*activitySupplementBatch{{ID: "dispatching", State: supplementBatchDispatching, ExecutionID: "recorded-execution"}}
 			}
 			path := filepath.Join(t.TempDir(), "copy.json")
 			original := recoveryWriteState(t, path, state)

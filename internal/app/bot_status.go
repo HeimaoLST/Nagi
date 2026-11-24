@@ -28,7 +28,7 @@ type botStatus struct {
 	waitingCount, attentionCount, workingCount int
 	waitingActivity, attentionActivity         string
 	questionID                                 string
-	waitingIssue, attentionIssue               *productIssue
+	waitingLegacy, attentionLegacy             *productActivity
 }
 
 func (a *appModel) botVisualState(ct *contact, now time.Time) botStatus {
@@ -45,34 +45,34 @@ func (a *appModel) botVisualState(ct *contact, now time.Time) botStatus {
 			status.addActivity(ct.ID, item)
 		}
 	}
-	for _, issue := range ct.Issues {
-		if issue == nil || issueManagementTerminal(issue) {
+	for _, activity := range ct.Activities {
+		if activity == nil || activityManagementTerminal(activity) {
 			continue
 		}
 		if ct.activeActivities != nil {
-			if _, exists := ct.activeActivities[issue.ID]; exists {
+			if _, exists := ct.activeActivities[activity.ID]; exists {
 				continue
 			}
 		}
-		state := issueDisplayStatusFor(issue)
+		state := activityDisplayStatusFor(activity)
 		questions := 0
-		for _, question := range issue.Questions {
-			if question != nil && question.State == issueQuestionOpen {
+		for _, question := range activity.Questions {
+			if question != nil && question.State == activityQuestionOpen {
 				questions++
 			}
 		}
 		switch {
 		case questions > 0:
 			status.waitingCount += questions
-			if status.waitingIssue == nil {
-				status.waitingIssue = issue
+			if status.waitingLegacy == nil {
+				status.waitingLegacy = activity
 			}
 		case state.Attention || state.Waiting:
 			status.attentionCount++
-			if status.attentionIssue == nil {
-				status.attentionIssue = issue
+			if status.attentionLegacy == nil {
+				status.attentionLegacy = activity
 			}
-		case state.Active || state.Status == issueStatusInProgress:
+		case state.Active || state.Status == activityStatusInProgress:
 			status.workingCount++
 		}
 	}
@@ -215,12 +215,12 @@ func (a *appModel) botStatusAction(c *ui.Context, t *ui.Theme, ct *contact, stat
 			a.openProductActivity(ct, state.waitingActivity)
 			p.focusQuestion = state.questionID
 			p.focusBack = false
-		case state.waitingIssue != nil:
-			a.openLegacyBotIssue(ct, state.waitingIssue)
+		case state.waitingLegacy != nil:
+			a.openLegacyBotActivity(ct, state.waitingLegacy)
 		case state.attentionActivity != "":
 			a.openProductActivity(ct, state.attentionActivity)
-		case state.attentionIssue != nil:
-			a.openLegacyBotIssue(ct, state.attentionIssue)
+		case state.attentionLegacy != nil:
+			a.openLegacyBotActivity(ct, state.attentionLegacy)
 		default:
 			p.activityID, p.activity, p.result, p.file = "", nil, nil, nil
 			p.focusQuestion, p.legacyIssue = "", false
@@ -230,8 +230,8 @@ func (a *appModel) botStatusAction(c *ui.Context, t *ui.Theme, ct *contact, stat
 	})
 }
 
-func (a *appModel) openLegacyBotIssue(ct *contact, issue *productIssue) {
-	ct.SelectedIssueID = issue.ID
+func (a *appModel) openLegacyBotActivity(ct *contact, activity *productActivity) {
+	ct.SelectedActivityID = activity.ID
 	p := &ct.activity
 	p.activityID, p.activity, p.result, p.file = "", nil, nil, nil
 	p.problem, p.actionProblem, p.scroll.Y = "", "", 0

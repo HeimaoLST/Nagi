@@ -65,11 +65,11 @@ func newRuntimeApp() (*appModel, error) {
 	}
 	a.bindTaskContexts()
 	a.normalizeRestoredSupplementBatches()
-	if a.issueToolLedger == nil {
-		a.issueToolLedger = &IssueToolOperationLedger{}
+	if a.activityToolLedger == nil {
+		a.activityToolLedger = &ActivityToolOperationLedger{}
 	}
-	if a.issueToolScopes == nil {
-		a.issueToolScopes = map[string]IssueToolScope{}
+	if a.activityToolScopes == nil {
+		a.activityToolScopes = map[string]ActivityToolScope{}
 	}
 	formConfig := startup.Config
 	if formConfig == nil {

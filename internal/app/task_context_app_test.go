@@ -38,15 +38,15 @@ func TestTaskContextStoreRoundTripAndOwnedLists(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	issue := &productIssue{ID: "i1", ContactID: ct.ID, Goal: "Goal", Status: issueStatusNotStarted}
+	issue := &productActivity{ID: "i1", ContactID: ct.ID, Goal: "Goal", Status: activityStatusNotStarted}
 	issue.Context.OnChange = a.persist
 	issueItem, err := issue.Context.AddSnippet("Issue notes", "issue text")
 	if err != nil {
 		t.Fatal(err)
 	}
-	execution := &issueExecution{ID: "e1", PiIntent: true, Status: issueExecutionUnknown, Context: []taskContextItem{issueItem}}
-	issue.Executions = []*issueExecution{execution}
-	ct.Issues = []*productIssue{issue}
+	execution := &activityExecution{ID: "e1", PiIntent: true, Status: activityExecutionUnknown, Context: []taskContextItem{issueItem}}
+	issue.Executions = []*activityExecution{execution}
+	ct.Activities = []*productActivity{issue}
 	if err := a.persist(); err != nil {
 		t.Fatal(err)
 	}
@@ -72,7 +72,7 @@ func TestTaskContextStoreRoundTripAndOwnedLists(t *testing.T) {
 	if len(reloaded.contacts[0].Context.Snapshot()) != 1 || reloaded.contacts[0].Context.Snapshot()[0].Text != "contact text" {
 		t.Fatalf("reloaded contact context = %+v", reloaded.contacts[0].Context.Snapshot())
 	}
-	reloadedIssue := reloaded.contacts[0].issueByID("i1")
+	reloadedIssue := reloaded.contacts[0].activityByID("i1")
 	if reloadedIssue == nil || len(reloadedIssue.Context.Snapshot()) != 1 || reloadedIssue.Executions[0].Context[0].Text != "issue text" {
 		t.Fatalf("reloaded issue = %+v", reloadedIssue)
 	}
@@ -128,7 +128,7 @@ func TestTaskContextRefreshStaysInOwningContactAndIssue(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	issue := &productIssue{ID: "i1", ContactID: ct.ID, Goal: "Goal"}
+	issue := &productActivity{ID: "i1", ContactID: ct.ID, Goal: "Goal"}
 	issue.Context.OnChange = a.persist
 	issueItem, err := issue.Context.ImportFile(path, "Issue file")
 	if err != nil {
