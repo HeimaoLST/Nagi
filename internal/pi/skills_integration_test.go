@@ -200,18 +200,13 @@ func TestPiProductSkillsPresetsCatalogAndSecurity(t *testing.T) {
 		if !slices.IsSorted(toolNames) {
 			recordErr("tools not sorted alphabetically: %v", toolNames)
 		}
-		for _, forbidden := range []string{"skill_test", "skill_exec"} {
-			if slices.Contains(toolNames, forbidden) {
-				recordErr("unexpected M3 executable skill tool %q in %v", forbidden, toolNames)
-			}
-		}
 		var skillTools []string
 		for _, name := range toolNames {
 			if strings.HasPrefix(name, "skill_") {
 				skillTools = append(skillTools, name)
 			}
 		}
-		wantSkillTools := []string{"skill_delete", "skill_list", "skill_read", "skill_save"}
+		wantSkillTools := []string{"skill_delete", "skill_exec", "skill_list", "skill_read", "skill_save", "skill_test"}
 		if !slices.Equal(skillTools, wantSkillTools) {
 			recordErr("conversation skill tools = %v, want %v", skillTools, wantSkillTools)
 		}
@@ -818,7 +813,7 @@ const fk = db.prepare('PRAGMA foreign_key_check').all().length;
 db.close();
 console.log(JSON.stringify({ v, fk }));
 `)
-	if !strings.Contains(schemaCheck, `"v":5`) || !strings.Contains(schemaCheck, `"fk":0`) {
+	if !strings.Contains(schemaCheck, `"v":6`) || !strings.Contains(schemaCheck, `"fk":0`) {
 		t.Fatalf("SQLite schema version/FK mismatch = %s", schemaCheck)
 	}
 

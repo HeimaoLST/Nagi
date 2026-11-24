@@ -37,14 +37,39 @@ export const skillSource = Type.Union([externalSkillSource, Type.Literal('privat
 const mountedSkill = Type.Object({ source: externalSkillSource, skillId: skillID, expectedDigest: Type.Optional(digest) }, { additionalProperties: false });
 export const skillText = { name: Type.String({ minLength: 1, maxLength: 128 }), description: Type.String({ minLength: 1, maxLength: 256 }),
   content: Type.String({ maxLength: 32768 }) };
+const skillStrict = { additionalProperties: false };
+export const skillScriptName = Type.String({ pattern: '^[a-z0-9][a-z0-9_-]{0,62}$' });
+export const skillScriptPath = Type.String({ pattern: '^scripts/[a-z0-9][a-z0-9_-]{0,62}\\.mjs$' });
+export const skillPermissions = Type.Object({ workspaceRead: Type.Optional(Type.Boolean()), workspaceWrite: Type.Optional(Type.Boolean()),
+  networkOrigins: Type.Optional(Type.Array(id, { maxItems: 16 })), credentialRefs: Type.Optional(Type.Array(id, { maxItems: 16 })) }, skillStrict);
+const skillScript = Type.Object({ entry: skillScriptPath, description: Type.String({ minLength: 1, maxLength: 512 }),
+  timeoutMs: Type.Optional(Type.Integer({ minimum: 1, maximum: 30000 })), permissions: skillPermissions }, skillStrict);
+const skillScripts = Type.Record(skillScriptName, skillScript, { minProperties: 1, maxProperties: 8 });
+export const skillManifest = Type.Object({ version: Type.Literal(1), scripts: skillScripts }, skillStrict);
+export const skillExecutable = { manifest: Type.Optional(Type.Union([skillManifest, Type.Null()])),
+  scripts: Type.Optional(Type.Record(skillScriptPath, Type.String({ maxLength: 65536 }), { maxProperties: 8 })) };
+const skillApprovalMode = Type.Union([Type.Literal('pure_compute_tested'), Type.Literal('user_approved')]);
+const skillApprovalStatus = Type.Union([Type.Literal('none'), skillApprovalMode, Type.Literal('approval_required')]);
+export const skillApprovalRecord = Type.Object({ grantKey: digest, ownerBotId: id, source: skillSource, skillId: skillID,
+  approvalDigest: digest, permissionsDigest: digest, mode: skillApprovalMode, installationId: id, approvedAt: id,
+  testedScripts: Type.Optional(Type.Array(skillScriptName, { maxItems: 8, uniqueItems: true })),
+  credentialRefs: Type.Optional(Type.Array(id, { maxItems: 128, uniqueItems: true })) }, skillStrict);
+export type SkillManifest = Static<typeof skillManifest>;
+export type SkillPermissions = Static<typeof skillPermissions>;
+export type SkillApproval = Static<typeof skillApprovalRecord>;
+export type SkillApprovalStatus = Static<typeof skillApprovalStatus>;
+const skillReview = { scripts: Type.Optional(skillScripts), approvalDigest: Type.Optional(digest), approvalStatus: Type.Optional(skillApprovalStatus),
+  canonicalWorkspace: Type.Optional(Type.String()), permissionsDigest: Type.Optional(digest), testedScripts: Type.Optional(Type.Array(skillScriptName, { maxItems: 8 })) };
 const skillKey = { source: skillSource, botId: Type.Optional(id), skillId: skillID };
-const skillSummary = Type.Object({ source: skillSource, skillId: skillID, name: id, description: id, sha256: digest });
-const skillDetail = Type.Object({ ...skillSummary.properties, content: Type.String(), markdown: Type.String() });
+const skillSummary = Type.Object({ source: skillSource, skillId: skillID, name: id, description: id, sha256: digest, ...skillReview });
+const skillDetail = Type.Object({ ...skillSummary.properties, content: Type.String(), markdown: Type.String(),
+  files: Type.Optional(Type.Record(Type.Union([Type.Literal('SKILL.md'), Type.Literal('manifest.json'), skillScriptPath]), Type.String(), { maxProperties: 10 })) });
 const skillListing = Type.Object({ global: Type.Array(skillSummary), workspace: Type.Array(skillSummary), local: Type.Array(skillSummary),
   private: Type.Array(skillSummary), mounted: Type.Array(Type.Object({ ...mountedSkill.properties,
     status: Type.Union([Type.Literal('available'), Type.Literal('missing')]), skill: Type.Optional(skillSummary) })), discoverLocalSkills: Type.Boolean() });
-const skillChange = Type.Object({ source: writableSkillSource, botId: Type.Optional(id), skillId: Type.String(),
-  change: Type.Union([Type.Literal('saved'), Type.Literal('deleted'), Type.Literal('promoted'), Type.Literal('preferences')]) });
+const skillChange = Type.Object({ source: skillSource, botId: Type.Optional(id), skillId: Type.String(),
+  change: Type.Union([Type.Literal('saved'), Type.Literal('deleted'), Type.Literal('promoted'), Type.Literal('preferences'),
+    Type.Literal('approved'), Type.Literal('revoked'), Type.Literal('tested')]) });
 export type SkillSource = Static<typeof skillSource>;
 export type MountedSkill = Static<typeof mountedSkill>;
 export type SkillDetail = Static<typeof skillDetail>;
@@ -181,10 +206,13 @@ export const productCommands = Type.Union([
   Type.Object({ method: Type.Literal('memory.searchLogs'), params: Type.Object(memorySearch) }),
   Type.Object({ method: Type.Literal('skill.list'), params: Type.Object({ botId: Type.Optional(id) }, { additionalProperties: false }) }),
   Type.Object({ method: Type.Literal('skill.get'), params: Type.Object(skillKey, { additionalProperties: false }) }),
-  Type.Object({ method: Type.Literal('skill.save'), params: Type.Object({ ...skillKey, source: writableSkillSource, ...skillText, operationId: id }, { additionalProperties: false }) }),
+  Type.Object({ method: Type.Literal('skill.save'), params: Type.Object({ ...skillKey, source: writableSkillSource, ...skillText, ...skillExecutable, operationId: id }, skillStrict) }),
   Type.Object({ method: Type.Literal('skill.delete'), params: Type.Object({ ...skillKey, source: writableSkillSource, operationId: id }, { additionalProperties: false }) }),
   Type.Object({ method: Type.Literal('skill.promoteGlobal'), params: Type.Object({ botId: id, skillId: skillID, targetSkillId: Type.Optional(skillID), operationId: id }, { additionalProperties: false }) }),
   Type.Object({ method: Type.Literal('skill.setPreferences'), params: Type.Object({ discoverLocalSkills: Type.Boolean(), operationId: id }, { additionalProperties: false }) }),
+  Type.Object({ method: Type.Literal('skill.approve'), params: Type.Object({ source: skillSource, botId: id, skillId: skillID, approvalDigest: digest,
+    permissionsDigest: Type.Optional(digest), operationId: id }, skillStrict) }),
+  Type.Object({ method: Type.Literal('skill.revokeApproval'), params: Type.Object({ source: skillSource, botId: id, skillId: skillID, operationId: id }, skillStrict) }),
   Type.Object({ method: Type.Literal('conversation.list'), params: Type.Object({ botId: id, ...page }) }),
   Type.Object({ method: Type.Literal('conversation.get'), params: Type.Object({ conversationId: id }) }),
   Type.Object({ method: Type.Literal('conversation.saveDraft'), params: Type.Object({
@@ -288,6 +316,8 @@ export const productResults = {
   'skill.delete': skillChange,
   'skill.promoteGlobal': skillChange,
   'skill.setPreferences': skillChange,
+  'skill.approve': skillChange,
+  'skill.revokeApproval': skillChange,
   'conversation.list': productPage(Type.Object({ ...conversationFields,
     preview: Type.Optional(id), timestamp: Type.Optional(id) })),
   'conversation.get': Type.Object({ ...conversationFields, draft: Type.Union([draftSchema, Type.Null()]), latestExecution: Type.Union([activeExecution, Type.Null()]) }),

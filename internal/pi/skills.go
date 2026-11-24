@@ -38,17 +38,43 @@ type ProductSkillKey struct {
 }
 
 type ProductSkillSummary struct {
-	Source      string `json:"source"`
-	SkillID     string `json:"skillId"`
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	SHA256      string `json:"sha256"`
+	Source             string                        `json:"source"`
+	SkillID            string                        `json:"skillId"`
+	Name               string                        `json:"name"`
+	Description        string                        `json:"description"`
+	SHA256             string                        `json:"sha256"`
+	Scripts            map[string]ProductSkillScript `json:"scripts,omitempty"`
+	ApprovalDigest     string                        `json:"approvalDigest,omitempty"`
+	PermissionsDigest  string                        `json:"permissionsDigest,omitempty"`
+	ApprovalStatus     string                        `json:"approvalStatus,omitempty"`
+	CanonicalWorkspace string                        `json:"canonicalWorkspace,omitempty"`
+	TestedScripts      []string                      `json:"testedScripts,omitempty"`
+}
+
+type ProductSkillPermissions struct {
+	WorkspaceRead  bool     `json:"workspaceRead,omitempty"`
+	WorkspaceWrite bool     `json:"workspaceWrite,omitempty"`
+	NetworkOrigins []string `json:"networkOrigins,omitempty"`
+	CredentialRefs []string `json:"credentialRefs,omitempty"`
+}
+
+type ProductSkillScript struct {
+	Entry       string                  `json:"entry"`
+	Description string                  `json:"description"`
+	TimeoutMS   int                     `json:"timeoutMs,omitempty"`
+	Permissions ProductSkillPermissions `json:"permissions"`
+}
+
+type ProductSkillManifest struct {
+	Version int                           `json:"version"`
+	Scripts map[string]ProductSkillScript `json:"scripts"`
 }
 
 type ProductSkillDetail struct {
 	ProductSkillSummary
-	Content  string `json:"content"`
-	Markdown string `json:"markdown"`
+	Content  string            `json:"content"`
+	Markdown string            `json:"markdown"`
+	Files    map[string]string `json:"files,omitempty"`
 }
 
 type ProductMountedSkillView struct {
@@ -68,9 +94,23 @@ type ProductSkillList struct {
 
 type ProductSkillSaveParams struct {
 	ProductSkillKey
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	Content     string `json:"content"`
+	Name        string                `json:"name"`
+	Description string                `json:"description"`
+	Content     string                `json:"content"`
+	OperationID string                `json:"operationId"`
+	Manifest    *ProductSkillManifest `json:"manifest,omitempty"`
+	Scripts     map[string]string     `json:"scripts,omitempty"`
+}
+
+type ProductSkillApproveParams struct {
+	ProductSkillKey
+	ApprovalDigest    string `json:"approvalDigest"`
+	PermissionsDigest string `json:"permissionsDigest,omitempty"`
+	OperationID       string `json:"operationId"`
+}
+
+type ProductSkillRevokeParams struct {
+	ProductSkillKey
 	OperationID string `json:"operationId"`
 }
 
@@ -104,6 +144,9 @@ func (event ProductSkillChange) valid() bool {
 		return event.Source == "global" && event.SkillID != "" && event.BotID != ""
 	case "preferences":
 		return event.Source == "global" && event.SkillID == "" && event.BotID == ""
+	case "approved", "revoked", "tested":
+		return event.SkillID != "" && event.BotID != "" &&
+			(event.Source == "private" || event.Source == "global" || event.Source == "workspace" || event.Source == "local")
 	default:
 		return false
 	}
@@ -136,4 +179,12 @@ func (p *ProductClient) PromoteSkill(ctx context.Context, params ProductSkillPro
 
 func (p *ProductClient) SetSkillPreferences(ctx context.Context, params ProductSkillPreferences) (ProductSkillChange, error) {
 	return productCall[ProductSkillChange](ctx, p, "skill.setPreferences", params)
+}
+
+func (p *ProductClient) ApproveSkill(ctx context.Context, params ProductSkillApproveParams) (ProductSkillChange, error) {
+	return productCall[ProductSkillChange](ctx, p, "skill.approve", params)
+}
+
+func (p *ProductClient) RevokeSkillApproval(ctx context.Context, params ProductSkillRevokeParams) (ProductSkillChange, error) {
+	return productCall[ProductSkillChange](ctx, p, "skill.revokeApproval", params)
 }

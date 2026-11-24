@@ -72,9 +72,9 @@ class Worker {
       drain: () => this.drainProduct(),
       disconnect: () => { void this.disconnect(true); },
       cleanMessage: error => this.cleanMessage(error),
-    }, frame => this.writer.send(frame));
+    }, frame => this.writer.send(frame), stateDir);
     if (this.product) {
-      process.once('exit', () => this.product?.killMcpOnExit());
+      process.once('exit', () => this.product?.killChildrenOnExit());
       process.once('SIGTERM', () => { process.exitCode = 143; void this.disconnect(false); });
       process.once('SIGINT', () => { process.exitCode = 130; void this.disconnect(false); });
     }
@@ -476,7 +476,7 @@ class Worker {
 
   private async drainProduct(): Promise<void> {
     this.closing = true;
-    await Promise.all([this.product?.drainMcp(), ...[...this.contexts.values()].map(async context => {
+    await Promise.all([this.product?.drainChildren(), ...[...this.contexts.values()].map(async context => {
       const run = context.active;
       if (run) {
         run.cancelled = true;
@@ -615,7 +615,7 @@ class Worker {
     if (this.disconnected) return;
     this.disconnected = true; this.closing = true;
     if (failed) process.exitCode = 1;
-    const outcomes = await Promise.allSettled([this.product?.drainMcp(), ...[...this.contexts.values()].map(async context => {
+    const outcomes = await Promise.allSettled([this.product?.drainChildren(), ...[...this.contexts.values()].map(async context => {
       const run = context.active;
       if (run) run.cancelled = true;
       try {

@@ -2,6 +2,7 @@
 
 import { createHash, randomUUID } from 'node:crypto';
 import { stat } from 'node:fs/promises';
+import { realpathSync } from 'node:fs';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import { setImmediate } from 'node:timers/promises';
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
@@ -9,12 +10,13 @@ import type { AssistantMessage, ToolCall } from '@earendil-works/pi-ai';
 import { Type, type Static, type TSchema } from 'typebox';
 import { Value } from 'typebox/value';
 import {
-  MAX_FRAME, RequestError, canonicalJSON, draftSchema, frameBytes, hasCanonicalQuoteText, id, inspectionPage, profileSchema, resolveCodingTools, skillID, skillSource, skillText, toolPresetSchema,
+  MAX_FRAME, RequestError, canonicalJSON, draftSchema, frameBytes, hasCanonicalQuoteText, id, inspectionPage, profileSchema, resolveCodingTools, skillExecutable, skillID, skillScriptName, skillSource, skillText, toolPresetSchema,
   type ActivityState, type BotChange, type BotProfile, type Connection, type Draft, type Execution,
-  type Material, type McpServerRecord, type McpServerView, type OpenParams, type Operation, type ProductCommand, type ProductParams, type SkillChange, type SkillSource, type TraceItem,
+  type Material, type McpServerRecord, type McpServerView, type OpenParams, type Operation, type ProductCommand, type ProductParams, type SkillApproval,
+  type SkillChange, type SkillDetail, type SkillListing, type SkillPermissions, type SkillSource, type TraceItem,
 } from './protocol.js';
 import { backupProductProfile, readPrivateConnection, saveCredential, type PrivateConnection, type ProductProfilePaths, type StoredConnection } from './product-profile.js';
-import { ProductSQLite } from './product-sqlite.js';
+import { ProductSQLite, type SkillApprovalChange } from './product-sqlite.js';
 import { composeBotSystemPrompt, formatTightBotInstructions, readTightBotInstructions,
   PANDORABOX_BOT_ID, SYSTEM_KIND_BOT_ARCHITECT, type BotSystemKind } from './bot-template.js';
 import { completedWorkSummary, formatLastingRulesBlock, lastingRulesFit, MEMORY_COLD_TTL_MS, MAX_LOG_BYTES, MAX_PENDING_LEARNINGS,
@@ -25,10 +27,12 @@ import { directlyOwns, normalizeActivityGrants, redactTrace, type TraceObservati
 import { cursorScope, decodeCursor, encodeCursor, encodedBytes, inspectConversation, inspectionQuery, invalidCursor, oversizedEntry,
   publicConversationMessage, redactQuote, type InspectionParams } from './product-inspection.js';
 import { transcriptEntries, turnEntryType, type Transcript, type TranscriptOwner } from './product-transcript.js';
-import { BotSkills, formatSkill, type SkillWrite } from './bot-skills.js';
+import { backupSkillFiles, BotSkills, bundleDigest, canonicalSkillOrigin, checkedSkillFiles, formatSkill, framedSkillDigest, pureSkill, skillGrantKey,
+  type SkillBundle, type SkillWrite } from './bot-skills.js';
 import { containsMcpSecret, maxMcpServers, McpConnectionManager, uniqueMcpRegistry, validMcpBindings, validMcpServer } from './mcp-broker.js';
 import { McpVault, mcpSecretKeys, mcpSecretsComplete, mergeMcpSecrets, type McpVaultWrite } from './mcp-vault.js';
 import { projectionRedactor } from './product-redactor.js';
+import { loadSkillInstallation, SkillSandbox } from './skill-sandbox.js';
 
 const emptyDraft = (): Draft => ({ revision: 0, text: '', materials: [] });
 const newId = randomUUID;
@@ -247,6 +251,8 @@ function architectResult(bot: Bot) {
 export class Product {
   private readonly storage: ProductSQLite;
   private readonly skills: BotSkills;
+  private readonly sandbox: SkillSandbox;
+  private readonly installationId: string;
   private readonly vault: McpVault;
   private readonly mcp = new McpConnectionManager();
   private readonly skillReload = new Set<string>();
@@ -263,13 +269,15 @@ export class Product {
   private readonly pendingTraceUpdates = new Map<string, TraceUpdate>();
   private traceUpdateTimer?: ReturnType<typeof globalThis.setImmediate>;
 
-  constructor(private paths: ProductProfilePaths, private engine: ProductEngine, private sendFrame: (frame: object) => Promise<void>) {
+  constructor(private paths: ProductProfilePaths, private engine: ProductEngine, private sendFrame: (frame: object) => Promise<void>, stateDir: string) {
     this.credentials = readPrivateConnection(paths.credentialsPath);
     this.skills = new BotSkills(dirname(paths.profilePath));
     this.vault = new McpVault(paths.credentialsPath);
     this.storage = new ProductSQLite(paths.profilePath, this.skills, this.vault);
     try {
-      this.profile = this.storage.open(paths, this.credentials);
+      this.installationId = loadSkillInstallation(dirname(paths.profilePath));
+      this.sandbox = new SkillSandbox([dirname(paths.profilePath), dirname(paths.credentialsPath), stateDir]);
+      this.profile = this.storage.open(paths, this.credentials, this.installationId);
       this.effectiveRevision = this.profile.appliedRevision;
       this.recoverInterruptedWork();
     } catch (error) {
@@ -314,14 +322,14 @@ export class Product {
     }
   }
 
-  drainMcp(): Promise<void> { return this.mcp.shutdown(); }
+  async drainChildren(): Promise<void> { await Promise.all([this.mcp.shutdown(), this.sandbox.shutdown()]); }
 
-  killMcpOnExit(): void { this.mcp.killOnExit(); }
+  killChildrenOnExit(): void { this.mcp.killOnExit(); this.sandbox.killOnExit(); }
 
-  private commit<T>(mutate: (candidate: ProductProfile) => T, skillWrite?: SkillWrite, mcpWrite?: McpVaultWrite): T {
+  private commit<T>(mutate: (candidate: ProductProfile) => T, skillWrite?: SkillWrite, mcpWrite?: McpVaultWrite, approval?: SkillApprovalChange): T {
     const candidate = structuredClone(this.profile);
     const result = mutate(candidate);
-    const updates = this.storage.write(candidate, this.profile, skillWrite, mcpWrite);
+    const updates = this.storage.write(candidate, this.profile, skillWrite, mcpWrite, approval);
     this.profile = candidate;
     for (const update of updates) this.queueTraceUpdate(update);
     return result;
@@ -720,19 +728,26 @@ export class Product {
       }
       case 'skill.list': {
         const owner = command.params.botId === undefined ? undefined : this.bot(this.profile, command.params.botId);
-        return this.modelProjection(this.skills.list(owner, this.skillWorkspace(owner), this.discoverLocalSkills));
+        return this.modelProjection(this.skillListing(owner));
       }
       case 'skill.get': {
         const { source, botId, skillId } = command.params;
         const owner = this.skillOwner(source, botId);
         const skill = this.skills.get({ source, botId, skillId }, this.skillWorkspace(owner), this.discoverLocalSkills);
         if (!skill) return stateError('skill_missing', 'The skill is missing');
-        return { skill: this.modelProjection(skill) };
+        return { skill: this.modelProjection({ ...skill, ...this.skillReview(owner, skill, this.skillWorkspace(owner), true, true) }) };
       }
       case 'skill.save':
         return this.saveSkill(command.params);
       case 'skill.delete':
         return this.deleteSkill(command.params);
+      case 'skill.approve':
+        return this.approveSkill(command.params);
+      case 'skill.revokeApproval': {
+        const { botId, source, skillId, operationId } = command.params;
+        this.bot(this.profile, botId);
+        return this.changeApproval(method, command.params, { botId, source, skillId, change: 'revoked' }, { botId, source, skillId }, operationId);
+      }
       case 'skill.promoteGlobal': {
         const params = command.params;
         const prior = this.sameOperation(method, params.operationId, params);
@@ -743,7 +758,9 @@ export class Product {
         if (!skill) return stateError('skill_missing', 'The private skill is missing');
         const redact = this.engine.redactor(this.credentialKeys());
         if ([skill.name, skill.description, skill.content].some(text => redact(text) !== text)) return stateError('skill_secret', 'Remove saved credentials before promoting the skill');
-        const write = this.skills.plan('global', undefined, targetSkillId, redact, skill.markdown, true);
+        const bundle = this.skills.bundle({ source: 'private', botId, skillId }, '', false);
+        const files = bundle && Object.fromEntries(Object.entries(bundle.files).filter(([path]) => path !== 'SKILL.md'));
+        const write = this.skills.plan('global', undefined, targetSkillId, redact, skill.markdown, true, files);
         return this.changeSkill(method, params, { source: 'global', botId, skillId: targetSkillId, change: 'promoted' }, write);
       }
       case 'skill.setPreferences': {
@@ -779,7 +796,14 @@ export class Product {
         if (vaultKeys.length && containsMcpSecret(profile, projectionRedactor(vaultKeys))) {
           stateError('mcp_secret', 'Remove the MCP credential from saved product data before making a recovery copy');
         }
-        return backupProductProfile(this.paths, profile, { ...backup, ...(bundles.length ? { privateSkillBundles: bundles } : {}) }, command.params.destination);
+        const files = new Map(bundles.map(row => [canonicalJSON([row.ownerBotId, row.skillId]), backupSkillFiles(row)]));
+        const skillApprovals = this.storage.skillApprovals().filter(row => {
+          if (row.source !== 'private') return true;
+          const bundle = files.get(canonicalJSON([row.ownerBotId, row.skillId]));
+          return bundle && bundleDigest(row.ownerBotId, row.source, row.skillId, bundle) === row.approvalDigest;
+        });
+        return backupProductProfile(this.paths, profile, { ...backup, ...(bundles.length ? { privateSkillBundles: bundles } : {}),
+          ...(skillApprovals.length ? { skillApprovals } : {}) }, command.params.destination);
       }
       case 'operation.get':
         return this.operation(command.params.operationId);
@@ -825,7 +849,7 @@ export class Product {
     this.commit(candidate => {
       candidate.mcpServers = next;
       this.record(candidate, method, params, { operationId, target: { connection: true }, state: 'accepted', result }, result);
-    }, undefined, changedSecrets ? { serverId, values } : undefined);
+    }, undefined, changedSecrets ? { serverId, values } : undefined, changedSecrets || changedConfig ? { credentialServerId: serverId } : undefined);
     await this.mcp.invalidate(serverId);
     this.emit('mcp.changed', { serverId, change: 'saved' });
     return result;
@@ -854,7 +878,7 @@ export class Product {
       }
       this.record(candidate, method, params, { operationId, target: { connection: true }, state: 'accepted', result }, result);
       return changed;
-    }, undefined, Object.keys(this.vault.get(serverId)).length ? { serverId, values: {} } : undefined);
+    }, undefined, Object.keys(this.vault.get(serverId)).length ? { serverId, values: {} } : undefined, { credentialServerId: serverId });
     await this.mcp.invalidate(serverId);
     for (const { retained, ...bot } of changedBots) this.emit('bot.changed', { bot, change: 'updated' });
     this.emit('mcp.changed', { serverId, change: 'deleted' });
@@ -1554,6 +1578,167 @@ export class Product {
     return bot;
   }
 
+  private skillGrant(botId: string, source: SkillSource, skillId: string, bundle: SkillBundle, cwd: string) {
+    const workspace = cwd ? realpathSync(cwd) : '';
+    const approvalDigest = bundleDigest(botId, source, skillId, bundle.files);
+    const permissions = Object.values(bundle.manifest.scripts).map(script => script.permissions);
+    const origins = [...new Set(permissions.flatMap(rule => (rule.networkOrigins ?? []).map(canonicalSkillOrigin)))].sort();
+    const credentialRefs = [...new Set(permissions.flatMap(rule => rule.credentialRefs ?? []))].sort();
+    const credentialBindings = credentialRefs.map(ref => {
+      const [, id] = ref.split(':');
+      const server = this.profile.mcpServers?.find(row => row.serverId === id);
+      return [ref, server?.transport === 'http' ? [server.url, server.enabled, server.secretHeaderKeys, server.revision] : null];
+    });
+    const permissionsDigest = framedSkillDigest([workspace, canonicalJSON(origins), canonicalJSON(credentialBindings)]);
+    const identity = { ownerBotId: botId, source, skillId, approvalDigest, permissionsDigest };
+    return { ...identity, grantKey: skillGrantKey(identity), workspace, credentialRefs };
+  }
+
+  private skillReview(owner: Bot | undefined, key: Pick<SkillDetail, 'source' | 'skillId'>, cwd: string, strict = false, includeFiles = false): Partial<SkillDetail> {
+    try {
+      const bundle = this.skills.bundle({ ...key, botId: owner?.botId }, cwd, this.discoverLocalSkills);
+      if (!bundle) return {};
+      const metadata: Partial<SkillDetail> = { scripts: bundle.manifest.scripts, approvalStatus: 'approval_required' };
+      if (includeFiles) {
+        checkedSkillFiles(bundle.files, this.engine.redactor(this.credentialKeys()));
+        metadata.files = bundle.files;
+      }
+      if (!owner) return metadata;
+      const review = this.skillGrant(owner.botId, key.source, key.skillId, bundle, cwd);
+      const row = this.storage.skillApproval(review.grantKey);
+      const approvalStatus = row?.mode === 'pure_compute_tested' || row?.installationId === this.installationId ? row.mode : 'approval_required';
+      return { ...metadata, approvalDigest: review.approvalDigest, approvalStatus, canonicalWorkspace: review.workspace,
+        permissionsDigest: review.permissionsDigest, ...(row?.testedScripts ? { testedScripts: row.testedScripts } : {}) };
+    } catch (error) {
+      if (strict) throw error;
+      return { approvalStatus: 'approval_required' };
+    }
+  }
+
+  private skillListing(owner?: Bot, cwd = this.skillWorkspace(owner)): SkillListing {
+    const result = this.skills.list(owner, cwd, this.discoverLocalSkills);
+    const review = <T extends Pick<SkillDetail, 'source' | 'skillId'>>(skill: T) => ({ ...skill, ...this.skillReview(owner, skill, cwd) });
+    return { ...result, global: result.global.map(review), workspace: result.workspace.map(review), local: result.local.map(review),
+      private: result.private.map(review), mounted: result.mounted.map(row => row.skill ? { ...row, skill: review(row.skill) } : row) };
+  }
+
+  private skillForBot(owner: Bot, skillId: string, cwd: string, source?: SkillSource): SkillDetail {
+    if (source === undefined || source === 'private') {
+      const own = this.skills.get({ source: 'private', botId: owner.botId, skillId }, cwd, false);
+      if (own) return own;
+    }
+    const refs = (owner.profile.mountedSkills ?? []).filter(ref => ref.skillId === skillId && (source === undefined || ref.source === source));
+    if (!refs.length) return stateError('scope_denied', 'The skill is outside the authorized scope');
+    if (refs.length > 1) return stateError('invalid_params', 'Specify the source for this skill ID');
+    const ref = refs[0];
+    const skill = this.skills.get(ref, cwd, this.discoverLocalSkills);
+    if (!skill || ref.expectedDigest && ref.expectedDigest !== skill.sha256) return stateError('skill_missing', 'The mounted skill is missing');
+    return skill;
+  }
+
+  private skillCredential(origin: string, refs: string[]): Record<string, string> {
+    const headers = new Map<string, string>();
+    for (const ref of refs) {
+      const [, serverId, header] = ref.split(':');
+      const server = this.profile.mcpServers?.find(item => item.serverId === serverId);
+      const field = header.toLowerCase();
+      if (server?.transport !== 'http' || !server.enabled || !server.secretHeaderKeys?.some(key => key.toLowerCase() === field)) {
+        return stateError('credential_missing', 'An approved MCP credential binding is unavailable');
+      }
+      if (canonicalSkillOrigin(new URL(server.url).origin) !== origin) continue;
+      if (headers.has(field) || /^(?:host|connection|content-length|transfer-encoding|upgrade|proxy-authorization)$/i.test(field)) {
+        return stateError('scope_denied', 'The approved credentials conflict with HTTP transport headers');
+      }
+      const value = this.vault.get(serverId)[field];
+      if (typeof value !== 'string' || !value) return stateError('credential_missing', 'An approved MCP credential is unavailable');
+      headers.set(field, value);
+    }
+    return Object.fromEntries(headers);
+  }
+
+  private changeApproval(method: string, params: object, result: SkillChange, change: SkillApprovalChange, operationId: string): object {
+    const prior = this.sameOperation(method, operationId, params);
+    if (prior) return prior.reply;
+    this.commit(candidate => this.record(candidate, method, params, { operationId, target: { botId: result.botId! },
+      state: 'accepted', result }, result), undefined, undefined, change);
+    this.emit('skill.changed', result);
+    return result;
+  }
+
+  private approveSkill(params: ProductParams<'skill.approve'>): object {
+    const { botId, source, skillId, approvalDigest, permissionsDigest, operationId } = params;
+    const prior = this.sameOperation('skill.approve', operationId, params);
+    if (prior) return prior.reply;
+    const owner = this.skillOwner(source, botId, true)!;
+    const cwd = this.skillWorkspace(owner);
+    this.skillForBot(owner, skillId, cwd, source);
+    const bundle = this.skills.bundle({ botId, source, skillId }, cwd, this.discoverLocalSkills);
+    if (!bundle) return stateError('invalid_skill', 'The skill has no executable scripts');
+    checkedSkillFiles(bundle.files, this.engine.redactor(this.credentialKeys()));
+    const { workspace, ...grant } = this.skillGrant(botId, source, skillId, bundle, cwd);
+    if (grant.approvalDigest !== approvalDigest || permissionsDigest !== undefined && grant.permissionsDigest !== permissionsDigest) {
+      return stateError('approval_required', 'The skill or its permissions changed after review');
+    }
+    for (const { permissions } of Object.values(bundle.manifest.scripts)) {
+      for (const ref of permissions.credentialRefs ?? []) {
+        const [, id] = ref.split(':');
+        const server = this.profile.mcpServers?.find(row => row.serverId === id);
+        const origin = server?.transport === 'http' ? canonicalSkillOrigin(new URL(server.url).origin) : undefined;
+        if (!origin || !(permissions.networkOrigins ?? []).some(value => canonicalSkillOrigin(value) === origin)) {
+          return stateError('invalid_skill', 'Each credential reference requires its server origin in the script permissions');
+        }
+        this.skillCredential(origin, [ref]);
+      }
+    }
+    const row: SkillApproval = { ...grant, mode: 'user_approved', installationId: this.installationId, approvedAt: new Date().toISOString() };
+    return this.changeApproval('skill.approve', params, { botId, source, skillId, change: 'approved' }, { put: row }, operationId);
+  }
+
+  private async runSkill(test: boolean, owner: Bot, { skill_id: skillId, source, script, input }: { skill_id: string; source?: SkillSource;
+      script: string; input?: unknown }, operationId: string, signal?: AbortSignal): Promise<object> {
+    const node = await this.sandbox.prepare();
+    const currentOwner = this.bot(this.profile, owner.botId);
+    if (currentOwner.archived || signal?.aborted) return stateError('scope_denied', 'The Bot no longer owns this skill call');
+    const cwd = this.skillWorkspace(currentOwner);
+    const skill = this.skillForBot(currentOwner, skillId, cwd, source);
+    const bundle = this.skills.bundle({ botId: owner.botId, source: skill.source, skillId }, cwd, this.discoverLocalSkills);
+    if (!bundle || !Object.hasOwn(bundle.manifest.scripts, script)) return stateError('invalid_skill', 'The script is not declared by the skill');
+    const redact = this.engine.redactor(this.credentialKeys());
+    checkedSkillFiles(bundle.files, redact);
+    if (input !== undefined && (frameBytes({ input }) > 65536 || containsMcpSecret(input, redact))) {
+      return stateError('invalid_params', 'The skill input exceeds its limit or contains credentials');
+    }
+    const { workspace, ...grant } = this.skillGrant(owner.botId, skill.source, skillId, bundle, cwd);
+    const permissions = bundle.manifest.scripts[script].permissions;
+    const accepted = this.storage.skillApproval(grant.grantKey);
+    const result = await this.sandbox.run(node, { botId: owner.botId, source: skill.source, skillId }, bundle, script, input, workspace,
+      test ? {} : permissions, digest => {
+        if (digest !== grant.approvalDigest) return stateError('invalid_skill', 'The staged skill bytes changed');
+        if (!test && !(accepted?.mode === 'user_approved' && accepted.installationId === this.installationId ||
+            accepted?.mode === 'pure_compute_tested' && pureSkill(permissions) && accepted.testedScripts?.includes(script))) {
+          throw new RequestError('approval_required', 'Review and approve the current skill permissions before execution', undefined,
+            { approvalDigest: digest, permissions, permissionsDigest: grant.permissionsDigest, canonicalWorkspace: workspace });
+        }
+      }, (origin, refs) => {
+        if (this.storage.skillApproval(grant.grantKey)?.mode !== 'user_approved') return stateError('approval_required', 'The approved credential binding changed');
+        return this.skillCredential(origin, refs);
+      }, redact, signal);
+    if (test && result.ok && pureSkill(permissions) && !this.closing && !signal?.aborted) {
+      const fresh = this.skills.bundle({ botId: owner.botId, source: skill.source, skillId }, cwd, this.discoverLocalSkills);
+      const latest = this.bot(this.profile, owner.botId);
+      const prior = this.storage.skillApproval(grant.grantKey);
+      if (fresh && !latest.archived && this.skillWorkspace(latest) === cwd && bundleDigest(owner.botId, skill.source, skillId, fresh.files) === grant.approvalDigest &&
+          prior?.mode !== 'user_approved') {
+        const testedScripts = [...new Set([...(prior?.testedScripts ?? []), script])].sort();
+        const { credentialRefs, ...pureGrant } = grant;
+        const row: SkillApproval = { ...pureGrant, mode: 'pure_compute_tested', installationId: this.installationId, testedScripts, approvedAt: new Date().toISOString() };
+        this.changeApproval('skill_test', { botId: owner.botId, skillId, script, approvalDigest: grant.approvalDigest },
+          { botId: owner.botId, source: skill.source, skillId, change: 'tested' }, { put: row }, operationId);
+      }
+    }
+    return result;
+  }
+
   private modelProjection<T>(value: T): T {
     return projectionJSON(value, this.engine.redactor(this.credentialKeys())) as T;
   }
@@ -1561,7 +1746,8 @@ export class Product {
   private changeSkill(method: string, params: { operationId: string }, result: SkillChange, write: SkillWrite): SkillChange {
     const target = result.botId ? { botId: result.botId } : { connection: true as const };
     this.commit(candidate => this.record(candidate, method, params,
-      { operationId: params.operationId, target, state: 'accepted', result }, result), write);
+      { operationId: params.operationId, target, state: 'accepted', result }, result), write, undefined,
+    { source: write.source, skillId: write.skillId, botId: write.botId });
     this.emit('skill.changed', result);
     return result;
   }
@@ -1569,11 +1755,13 @@ export class Product {
   private saveSkill(params: ProductParams<'skill.save'>): object {
     const prior = this.sameOperation('skill.save', params.operationId, params);
     if (prior) return prior.reply;
-    const { source, botId, skillId, name, description, content } = params;
+    const { source, botId, skillId, name, description, content, manifest, scripts } = params;
     this.skillOwner(source, botId, true);
     const redact = this.engine.redactor(this.credentialKeys());
     if ([name, description, content].some(text => redact(text) !== text)) return stateError('skill_secret', 'Remove saved credentials before saving the skill');
-    const write = this.skills.plan(source, botId, skillId, redact, formatSkill(name, description, content));
+    if (scripts && !manifest) return stateError('invalid_skill', 'Saving executable scripts requires a manifest');
+    const files = manifest === undefined ? undefined : manifest === null ? {} : { ...scripts, 'manifest.json': canonicalJSON(manifest) + '\n' };
+    const write = this.skills.plan(source, botId, skillId, redact, formatSkill(name, description, content), false, files);
     return this.changeSkill('skill.save', params, { source, botId, skillId, change: 'saved' }, write);
   }
 
@@ -1604,10 +1792,11 @@ export class Product {
   private skillTools(conversationId: string): ToolDefinition[] {
     const list = Type.Object({}, strictTool);
     const read = Type.Object({ skill_id: Type.String(), source: Type.Optional(skillSource) }, strictTool);
-    const save = Type.Object({ skill_id: Type.String(), ...skillText }, strictTool);
+    const save = Type.Object({ skill_id: Type.String(), ...skillText, ...skillExecutable }, strictTool);
+    const execute = Type.Object({ skill_id: Type.String(), source: Type.Optional(skillSource), script: skillScriptName, input: Type.Optional(Type.Unknown()) }, strictTool);
     const remove = Type.Object({ skill_id: Type.String() }, strictTool);
     const tool = <T extends TSchema>(name: string, description: string, parameters: T,
-      handler: (input: Static<T>, owner: Bot, workspace: string, operationId: string) => object): ToolDefinition<T> => ({
+      handler: (input: Static<T>, owner: Bot, workspace: string, operationId: string, signal?: AbortSignal) => object | Promise<object>): ToolDefinition<T> => ({
       name, label: description, description, parameters,
       execute: async (callId, args, signal) => {
         const conversation = this.conversation(this.profile, conversationId);
@@ -1616,29 +1805,26 @@ export class Product {
         if (signal?.aborted || !executionId || !this.active.has(executionId)) stateError('scope_denied', 'The conversation no longer owns this call');
         if (!Value.Check(parameters, args)) stateError('invalid_params', 'Invalid skill parameters');
         if ('skill_id' in args && !Value.Check(skillID, args.skill_id)) stateError('scope_denied', 'The skill is outside the authorized scope');
-        return this.modelResult(handler(args, owner, conversation.binding?.cwd ?? this.skillWorkspace(owner), `${executionId}:${name}:${callId}`));
+        return this.modelResult(await handler(args, owner, conversation.binding?.cwd ?? this.skillWorkspace(owner), `${executionId}:${name}:${callId}`, signal));
       },
     });
     return [
       tool('skill_list', 'List mounted text skills and private skills for this Bot.', list, (_, owner, cwd) => ({
-        mounted: this.skills.mounted(owner, cwd, this.discoverLocalSkills), private: this.skills.private(owner.botId),
+        mounted: this.skills.mounted(owner, cwd, this.discoverLocalSkills).map(row => row.skill ? { ...row, skill: { ...row.skill, ...this.skillReview(owner, row.skill, cwd) } } : row),
+        private: this.skills.private(owner.botId).map(skill => ({ ...skill, ...this.skillReview(owner, skill, cwd) })),
       })),
       tool('skill_read', 'Read an authorized mounted or private SKILL.md on demand.', read, ({ skill_id, source }, owner, cwd) => {
-        const candidate = source === undefined || source === 'private'
-          ? this.skills.get({ source: 'private', botId: owner.botId, skillId: skill_id }, cwd, false) : undefined;
-        if (candidate) return { skill: candidate };
-        const refs = (owner.profile.mountedSkills ?? []).filter(ref => ref.skillId === skill_id && (source === undefined || ref.source === source));
-        if (!refs.length) return stateError('scope_denied', 'The skill is outside the authorized scope');
-        if (refs.length > 1) return stateError('invalid_params', 'Specify the source for this skill ID');
-        const ref = refs[0];
-        const skill = this.skills.get(ref, cwd, this.discoverLocalSkills);
-        if (!skill || ref.expectedDigest && ref.expectedDigest !== skill.sha256) return stateError('skill_missing', 'The mounted skill is missing');
-        return { skill };
+        const skill = this.skillForBot(owner, skill_id, cwd, source);
+        return { skill: { ...skill, ...this.skillReview(owner, skill, cwd, true) } };
       }),
-      tool('skill_save', 'Save a text-only SKILL.md to this Bot’s private skills.', save, ({ skill_id, ...text }, owner, _cwd, operationId) =>
+      tool('skill_save', 'Save a private SKILL.md and optional executable bundle. Privileged scripts require user approval.', save, ({ skill_id, ...text }, owner, _cwd, operationId) =>
         this.saveSkill({ ...text, source: 'private', botId: owner.botId, skillId: skill_id, operationId })),
       tool('skill_delete', 'Delete a private skill of this Bot when the user explicitly requests it.', remove, ({ skill_id }, owner, _cwd, operationId) =>
         this.deleteSkill({ source: 'private', botId: owner.botId, skillId: skill_id, operationId }, true)),
+      tool('skill_test', 'Test a declared skill script without workspace or HTTP access. Pure scripts activate only after a successful test.', execute,
+        (args, owner, _, operationId, signal) => this.runSkill(true, owner, args, operationId, signal)),
+      tool('skill_exec', 'Run a declared skill script with its verified approval.', execute,
+        (args, owner, _, operationId, signal) => this.runSkill(false, owner, args, operationId, signal)),
     ];
   }
 
@@ -1698,7 +1884,7 @@ export class Product {
       try { return await tool.execute(...args); }
       catch (error) {
         if (!(error instanceof RequestError)) throw error;
-        return toolText({ code: error.code, message: this.engine.cleanMessage(error) }, true);
+        return toolText({ code: error.code, message: this.engine.cleanMessage(error), ...(error.details ? { details: this.modelProjection(error.details) } : {}) }, true);
       }
     } }));
   }
