@@ -34,6 +34,22 @@
 
 **Prevention:** Drive `PopoverMenu` through in-window pointer clicks (or keyboard navigation / menu geometry when another surface shares an item label). Focus the triggering button before opening a modal so Cancel, Escape and backdrop dismissal automatically restore focus cleanly.
 
+### Control compact TextArea height, keying and caret inset explicitly
+
+**Problem:** Replacing a tall fixed-height composer with stock `ui.TextArea` kept an unintended 80-DIP vertical minimum, calling `.Key()` after constructing a stateful textarea risked identity errors, and removing horizontal padding broke the 2-DIP caret-inset geometry check.
+
+**Cause or correction:** MyGo’s stock `ui.TextArea` applies a default minimum height and stateful editors bind identity at construction time; zeroing all padding removes the horizontal caret margin while vertical slack only comes from top/bottom padding.
+
+**Prevention:** Key stateful editors with `c.Key(...)` before calling `ui.TextAreaBase`, use `Lines(1, 6)` with `Padding(0, 2)` for compact auto-growing composers, and verify net editable width (`>= 440 DIP` at `960x640` with profile open) plus resting height directly on rendered geometry.
+
+### Audit pinned MyGo patches, parser defaults and licenses on minor upgrades
+
+**Problem:** Minor MyGo upgrades can silently enable new default Markdown extensions (`ExtMentions`, `ExtReferences`) and partially fix upstream drag/accessibility paths while leaving disabled-state or Darwin superclass cache leaks behind.
+
+**Cause or correction:** Upstream defaults evolve across minor releases, and a partial upstream accessibility guard does not guarantee every getter, setter and disabled early-return path scrubs secrets.
+
+**Prevention:** Diff every pinned patch against the exact target MyGo source before dropping or rebasing, lock input/output SHA-256 hashes with `--fuzz=0` in `scripts/gui-go.py`, opt out of unused default Markdown extensions explicitly, and verify every linked module supplies a license notice for standalone macOS bundling.
+
 ### Keep multi-bubble projection consistent across transcript, rail and width bounds
 
 **Problem:** Projecting a streamed reply into multiple bubbles hid an incomplete trailing separator in the chat transcript while leaking it in the Bot Team rail preview, and unconstrained bubble markdown readers overflowed wide four-column tables at 1040 and 720 widths.

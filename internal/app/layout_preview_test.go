@@ -192,7 +192,7 @@ func TestWorkbenchRoleScenesKeepActionsReachable(t *testing.T) {
 						ct.Instructions = "  exact profile instruction\n第二行  "
 						recoveryTestStore(t, a)
 						msgs := locales.In(locale)
-						label := msgs.TaskContextCount(0)
+						label := msgs.ComposerAttach()
 						switch scene {
 						case "conversation":
 							ct.Messages = []*message{{Key: "user-visual", Kind: msgUser, Text: "A retained user message.\n中文换行。"}, {Key: "reply-visual", Kind: msgContact, Text: "A retained reply with **original emphasis**, a [link](https://example.invalid) and `code`."}}

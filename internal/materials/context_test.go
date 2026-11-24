@@ -7,6 +7,7 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -544,6 +545,161 @@ func TestTaskContextSaveFailureKeepsEditorAndValues(t *testing.T) {
 	}
 	if !tr.HasText("store unavailable") || !tr.HasText("Save snippet") {
 		t.Fatalf("save failure was not visible inline: %v", tr.Texts())
+	}
+}
+
+func TestAttachFileSnapshotsPathReferencesBudgetAndRefresh(t *testing.T) {
+	dir := t.TempDir()
+	utf8Path := filepath.Join(dir, "notes.md")
+	utf8Body := "Alpha\n中文 — café\n"
+	if err := os.WriteFile(utf8Path, []byte(utf8Body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	pdfPath := filepath.Join(dir, "report.pdf")
+	pdfBytes := []byte("%PDF-1.7\n1 0 obj\n<<>>\nendobj\n")
+	if err := os.WriteFile(pdfPath, pdfBytes, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	badUTF8Path := filepath.Join(dir, "invalid.txt")
+	if err := os.WriteFile(badUTF8Path, []byte{0xff, 0xfe, 0xfd, 0x01}, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	nulPath := filepath.Join(dir, "binary.txt")
+	if err := os.WriteFile(nulPath, []byte("head\x00tail"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	oversizePath := filepath.Join(dir, "large.log")
+	oversizeBytes := make([]byte, MaxBytes+64)
+	for i := range oversizeBytes {
+		oversizeBytes[i] = 'x'
+	}
+	if err := os.WriteFile(oversizePath, oversizeBytes, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	subDir := filepath.Join(dir, "folder")
+	if err := os.Mkdir(subDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	tc := &Context{}
+	snap, err := tc.AttachFile(utf8Path, "")
+	if err != nil {
+		t.Fatalf("AttachFile(utf8) = %v", err)
+	}
+	if IsPathReference(snap) || PathReferenceSize(snap) != "" || snap.Text != utf8Body || snap.Source != utf8Path || snap.Name != "notes.md" {
+		t.Fatalf("UTF-8 attachment = %+v", snap)
+	}
+
+	for _, tcCase := range []struct {
+		name      string
+		path      string
+		size      int64
+		strictErr error
+	}{
+		{"pdf", pdfPath, int64(len(pdfBytes)), ErrUnsupported},
+		{"invalid-utf8", badUTF8Path, 4, ErrUTF8},
+		{"nul", nulPath, 9, ErrNotText},
+		{"oversize", oversizePath, int64(len(oversizeBytes)), ErrOversize},
+	} {
+		strict := &Context{}
+		if _, err := strict.ImportFile(tcCase.path, ""); !errors.Is(err, tcCase.strictErr) {
+			t.Fatalf("strict ImportFile(%s) = %v, want %v", tcCase.name, err, tcCase.strictErr)
+		}
+		ref, err := tc.AttachFile(tcCase.path, "")
+		if err != nil {
+			t.Fatalf("AttachFile(%s) = %v", tcCase.name, err)
+		}
+		if !IsPathReference(ref) || PathReferenceSize(ref) != FormatSize(tcCase.size) {
+			t.Fatalf("path reference(%s) = %+v size=%q want=%q", tcCase.name, ref, PathReferenceSize(ref), FormatSize(tcCase.size))
+		}
+		if !strings.Contains(ref.Text, strconv.Quote(tcCase.path)) || ref.Source != tcCase.path {
+			t.Fatalf("path reference(%s) body/source mismatch = %+v", tcCase.name, ref)
+		}
+	}
+
+	beforeCount := tc.Count()
+	for _, bad := range []string{"", "   ", filepath.Join(dir, "does-not-exist.bin"), subDir} {
+		if _, err := tc.AttachFile(bad, ""); !errors.Is(err, ErrRead) {
+			t.Fatalf("AttachFile(%q) = %v, want ErrRead", bad, err)
+		}
+	}
+	if tc.Count() != beforeCount {
+		t.Fatalf("rejected paths mutated list: got %d want %d", tc.Count(), beforeCount)
+	}
+
+	pdfItem := tc.Snapshot()[1]
+	edited, err := tc.Edit(pdfItem.ID, "Renamed PDF", "attempted body overwrite")
+	if err != nil {
+		t.Fatalf("Edit(pathRef) = %v", err)
+	}
+	if edited.Name != "Renamed PDF" || edited.Text != pdfItem.Text || !IsPathReference(edited) || edited.Revision != 2 {
+		t.Fatalf("Edit(pathRef) did not keep read-only canonical body: %+v", edited)
+	}
+
+	grownPDF := append(pdfBytes, make([]byte, 2048)...)
+	if err := os.WriteFile(pdfPath, grownPDF, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	refreshedRef, err := tc.Refresh(pdfItem.ID)
+	if err != nil {
+		t.Fatalf("Refresh(grown pathRef) = %v", err)
+	}
+	if refreshedRef.ID != pdfItem.ID || refreshedRef.Revision != 3 || !IsPathReference(refreshedRef) || PathReferenceSize(refreshedRef) != FormatSize(int64(len(grownPDF))) {
+		t.Fatalf("Refresh(grown pathRef) = %+v", refreshedRef)
+	}
+
+	upgradedText := "now small utf-8 text\n"
+	if err := os.WriteFile(oversizePath, []byte(upgradedText), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	oversizeID := tc.Snapshot()[4].ID
+	upgraded, err := tc.Refresh(oversizeID)
+	if err != nil {
+		t.Fatalf("Refresh(upgrade to utf8) = %v", err)
+	}
+	if upgraded.ID != oversizeID || upgraded.Revision != 2 || IsPathReference(upgraded) || upgraded.Text != upgradedText {
+		t.Fatalf("Refresh(upgrade to utf8) = %+v", upgraded)
+	}
+
+	if err := os.Remove(pdfPath); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tc.Refresh(pdfItem.ID); !errors.Is(err, ErrRead) {
+		t.Fatalf("Refresh(deleted pathRef) = %v, want ErrRead", err)
+	}
+	kept, ok := tc.ItemByID(pdfItem.ID)
+	if !ok || kept.Text != refreshedRef.Text || kept.Revision != refreshedRef.Revision {
+		t.Fatalf("failed refresh lost prior pathRef: %+v", kept)
+	}
+
+	if IsPathReference(Item{Name: "spoof", Text: refreshedRef.Text}) {
+		t.Fatal("snippet without source was classified as path reference")
+	}
+	if IsPathReference(Item{Name: "spoof", Source: utf8Path, Text: refreshedRef.Text}) {
+		t.Fatal("mismatched source was classified as path reference")
+	}
+
+	budget := &Context{}
+	bigChunk := strings.Repeat("b", MaxBytes-WrapperBytes("fill", "")-32)
+	if _, err := budget.AddSnippet("fill", bigChunk); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := budget.AttachFile(utf8Path, ""); !errors.Is(err, ErrOversize) {
+		t.Fatalf("AttachFile exceeding combined budget = %v, want ErrOversize", err)
+	}
+	if _, err := budget.AttachFile(badUTF8Path, ""); !errors.Is(err, ErrOversize) {
+		t.Fatalf("path-reference AttachFile exceeding combined budget = %v, want ErrOversize", err)
+	}
+	if budget.Count() != 1 {
+		t.Fatalf("budget overflow mutated items: %d", budget.Count())
+	}
+
+	failing := &Context{OnChange: func() error { return errors.New("disk full") }}
+	if _, err := failing.AttachFile(utf8Path, ""); err == nil || failing.Count() != 0 {
+		t.Fatalf("OnChange failure did not roll back UTF-8 attach: err=%v count=%d", err, failing.Count())
+	}
+	if _, err := failing.AttachFile(badUTF8Path, ""); err == nil || failing.Count() != 0 {
+		t.Fatalf("OnChange failure did not roll back path-reference attach: err=%v count=%d", err, failing.Count())
 	}
 }
 

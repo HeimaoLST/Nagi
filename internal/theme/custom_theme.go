@@ -196,6 +196,13 @@ func decodeCustomTheme(file string, data []byte) (CustomTheme, *ThemeFileError) 
 	palette.ContactText = contrastTextColor(palette.Theme.Text, ink, palette.BubbleContact)
 	palette.ContactMuted = contrastTextColor(palette.Theme.TextMuted, ink, palette.BubbleContact)
 	palette.ContactLink = contrastTextColor(palette.Link, ink, palette.BubbleContact)
+	t := palette.Theme
+	shade := highContrastInk(t.Text)
+	palette.ComposerSurface = contrastTextColor(palette.Reading.Mix(t.Text, .04), shade, t.Text)
+	palette.ComposerChipBg = contrastTextColor(palette.ComposerSurface.Mix(t.Text, .06), shade, t.Text)
+	palette.ComposerBorder = t.Border
+	palette.ComposerText = t.Text
+	palette.ComposerMuted = contrastTextColor(t.TextMuted, t.Text, palette.ComposerSurface, palette.ComposerChipBg)
 	return CustomTheme{ID: input.ID, Name: input.Name, Kind: input.Kind, File: file, Palette: palette, Warnings: ThemeContrastWarnings(palette)}, nil
 }
 

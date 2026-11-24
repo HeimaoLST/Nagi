@@ -22,13 +22,6 @@ import (
 // parser, clipboard and file behavior stay untouched (#187 owns those files).
 var messageMarkdownTheme = &markdown.Theme{FontSize: typeBody, LineHeight: 1.5}
 
-const (
-	composerPanelContext = "task-context"
-)
-
-// Small, deliberately understated composer glyphs. MyGo's Icon inherits the
-// button's text color, so these stay in the same semantic color path as UI text.
-
 func messageReaderOptions(c *ui.Context, plain bool) markdownReaderOptions {
 	return markdownReaderOptions{PlainText: plain, CopyLabel: locales.In(c.Locale()).CopyMessageLabel(), Theme: messageMarkdownTheme}
 }
@@ -88,9 +81,13 @@ func (a *appModel) view(c *ui.Context) {
 		})
 	})
 	a.createBotDialogView(c, t)
+	a.composerMaterialDialog(c, t)
 }
 
 func (a *appModel) escapeTopLayer() {
+	if a.composerMaterial != nil || a.composerAttachMenuOpen {
+		return
+	}
 	if a.detailPageActive() {
 		a.closeDetail()
 		return
@@ -1236,44 +1233,6 @@ func (a *appModel) connectionErrorBanner(c *ui.Context, t *ui.Theme, ct *contact
 
 // ---------- composer ----------
 
-func (a *appModel) composerInlineAux() bool {
-	return a.aux == composerPanelContext && a.composerPanel == composerPanelContext
-}
-
-func (a *appModel) composerModelSummary(c *ui.Context, t *ui.Theme, ct *contact) {
-	msgs := locales.In(c.Locale())
-	head, tail := a.conversationModelDisplayParts(msgs, ct)
-	appTooltip(c, ui.Row(c).Label(msgs.ConversationModelLabel()), msgs.ConversationModelTooltip(a.conversationModelSummary(msgs, ct))).MinWidth(0).MaxWidth(230).Shrink(1).Padding(8).AlignItems(ui.Center).Gap(3).Children(func() {
-		ui.Text(c, msgs.ConversationBadge()).FontSize(typeMeta).FontWeight(400).FixedLineHeight(lineNavigation).
-			MaxLines(1).Shrink(0).TextColor(t.TextMuted)
-		ui.Row(c).Grow(1).MinWidth(0).AlignItems(ui.Center).Gap(0).Children(func() {
-			if head != "" {
-				ui.Text(c, head).FontSize(typeAction).FontWeight(400).
-					Grow(1).Shrink(1).MinWidth(0).MaxLines(1).Ellipsis("…").TextColor(t.Text)
-			}
-			if tail != "" {
-				ui.Text(c, tail).FontSize(typeAction).FontWeight(400).
-					MaxLines(1).Shrink(0).TextColor(t.Text)
-			}
-		})
-	})
-}
-
-func (a *appModel) composerInlinePanel(c *ui.Context, t *ui.Theme) {
-	if !a.composerInlineAux() {
-		return
-	}
-	msgs := locales.In(c.Locale())
-	c.OnShortcut(0, ui.KeyEscape, func() { a.closeAux() })
-	ui.Column(c).FillWidth().Children(func() {
-		ui.Scroll(c).Label(msgs.TaskContextDetailsScroll()).MaxHeight(300).TrackScroll(&a.taskContextScroll).Children(func() {
-			ui.Column(c).Padding(8, 0).Gap(8).Children(func() {
-				a.taskContextPanel(c, t)
-			})
-		})
-	})
-}
-
 func contactNoticeText(msgs locales.Messages, kind, detail string) string {
 	switch kind {
 	case "send-protocol":
@@ -1350,12 +1309,40 @@ func (a *appModel) composer(c *ui.Context, t *ui.Theme, state connectionViewStat
 		}
 	}
 	ui.Column(c).FillWidth().Padding(8, 16).Gap(4).Children(func() {
-		ui.Column(c).FillWidth().MinHeight(composerMinHeight).Padding(8, 12, 0).Radius(16).Border(1, t.Border).Background(a.workTheme.Reading).Gap(4).Children(func() {
-			c.Key(ct.ID)
-			input := ui.TextArea(c, &ct.Draft).Bind(&a.composerHandle).Label(msgs.ComposerLabel(ct.Name)).
-				FontSize(typeBody).FixedLineHeight(lineBody).Lines(2, 6).MinHeight(48).
-				Background(ui.Transparent).BorderWidth(0).Padding(2).
-				Placeholder(msgs.ComposerPlaceholder(ct.Name)).FillWidth().OnChange(func() {
+		wb := a.workTheme
+		card := ui.Column(c).Key(ct.ID).FillWidth().Padding(10, 14, 8, 14).Gap(4).Radius(16)
+		surface, border := wb.ComposerSurface, wb.ComposerBorder
+		if c.Focused(a.composerHandle) {
+			border = t.Focus
+		}
+		dragOver := false
+		if !a.shutdownStarted && !a.dataRecoveryBlocksChanges() {
+			dragOver = card.FileDragOver()
+			if paths := card.DroppedFiles(); len(paths) > 0 {
+				a.attachComposerFiles(ct, paths)
+			}
+		}
+		if dragOver {
+			border, surface = t.Accent, surface.Mix(t.Accent, .06)
+		}
+		card.Border(1, border).Background(surface)
+		if t.Dark {
+			card.Shadow(0, 2, 12, 0, ui.RGBA(0, 0, 0, .24))
+		} else {
+			card.Shadow(0, 2, 10, 0, ui.RGBA(0, 0, 0, .05))
+		}
+		card.Children(func() {
+			if ct.Context.Count() > 0 {
+				a.composerAttachments(c, t, ct)
+			}
+			if dragOver {
+				ui.Text(c, msgs.ComposerDropFiles()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(wb.ComposerMuted)
+			}
+			c.Key("draft")
+			input := ui.TextAreaBase(c, &ct.Draft).Bind(&a.composerHandle).Label(msgs.ComposerLabel(ct.Name)).
+				FontSize(typeBody).FixedLineHeight(lineBody).Lines(1, 6).TextColor(wb.ComposerText).
+				Background(ui.Transparent).BorderWidth(0).Padding(0, 2).FocusRing(false).
+				Placeholder(msgs.ComposerPlaceholder(ct.Name)).PlaceholderColor(wb.ComposerMuted).FillWidth().OnChange(func() {
 				a.draftChanged(ct)
 			}).OnTextKey(func(k ui.TextKey) bool {
 				if k.Key != ui.KeyEnter || k.Mods&ui.Shift != 0 {
@@ -1377,66 +1364,16 @@ func (a *appModel) composer(c *ui.Context, t *ui.Theme, state connectionViewStat
 			if a.focusConnectionEntry && c.Focused(a.composerHandle) {
 				a.focusConnectionEntry = false
 			}
-			contextCount := ct.Context.Count()
-			contextLabel := msgs.TaskContextCount(contextCount)
 			sendDisabled := strings.TrimSpace(ct.Draft) == "" || ct.Status == statusWorking
 			sendReason := ""
 			if !a.demo {
 				sendReason = a.canSend(ct)
 				sendDisabled = strings.TrimSpace(ct.Draft) == "" || sendReason != ""
 			}
-			ui.Row(c).FillWidth().Height(composerToolbarHeight).Shrink(0).Padding(8, 8).AlignItems(ui.Center).Gap(8).Role(ui.RoleGroup).Label(msgs.ComposerTools()).Draw(func(p *ui.Painter, r ui.Rect) {
-				for x := r.X; x < r.X+r.W; x += 6 {
-					p.Line(x, r.Y+0.5, min(x+3, r.X+r.W), r.Y+0.5, 1, t.Border.Alpha(0.6))
-				}
-			}).Children(func() {
-				ui.Toolbar(c, func() {
-					contextButton := iconControlFace(c, appTooltip(c, ui.Button(c, "").Label(contextLabel), contextLabel), iconContext, false)
-					contextButton.Children(func() {
-						controlIcon(c, composerAttachIcon, iconContext).TextColor(t.TextMuted)
-					})
-					if contextCount > 0 {
-						ui.Text(c, fmt.Sprint(contextCount)).FontSize(typeMeta).FixedLineHeight(lineNavigation).TextColor(t.TextMuted)
-					}
-					contextButton.OnClick(func() { a.openComposerTaskContext() })
-					if a.composerFocusContext {
-						contextButton.Focus()
-						a.composerFocusContext = false
-					}
-				}).Label(msgs.ComposerTools()).Shrink(0).Padding(0)
-				ui.Spacer(c)
-				a.composerModelSummary(c, t, ct)
-				// Send/Stop are outside the Toolbar: the main action must never
-				// disappear into a toolbar overflow menu at narrow widths.
-				if !a.demo && ct.ActiveTaskID != "" {
-					stop := appTooltip(c, secondaryButton(c, "").Label(msgs.StopConversation()).FontWeight(500), msgs.StopConversationTooltip()).
-						Shrink(0).Height(32).Padding(4, 8).TextColor(t.Warning)
-					stop.Children(func() {
-						ui.Row(c).AlignItems(ui.Center).Gap(4).Children(func() {
-							ui.Icon(c, composerStopIcon).Width(16).Height(16)
-							ui.Text(c, msgs.StopConversation()).FontSize(typeAction).FontWeight(500).FixedLineHeight(lineAction).TextColor(t.Warning)
-						})
-					})
-					stop.OnClick(func() { a.cancelSelected() })
-				} else {
-					button := ui.PrimaryButton
-					outlined := a.detailIs(detailProfile)
-					if outlined {
-						button = ui.Button
-					}
-					send := appTooltip(c, button(c, "").Label(msgs.SendAction()), msgs.SendTooltip()).
-						Width(controlHit).Height(controlHit).Shrink(0).Padding(0).Radius(controlHit / 2).Disabled(sendDisabled)
-					if outlined {
-						send.Border(1, t.Focus)
-					}
-					send.Children(func() {
-						ui.Icon(c, composerSendIcon).Width(16).Height(16)
-					})
-					if send.Clicked() {
-						a.sendCurrent()
-					}
-				}
-			})
+			a.composerToolbar(c, t, ct, sendDisabled)
+			if ct.Context.ActionError != nil {
+				a.composerAttachmentError(c, t, ct)
+			}
 			if !a.demo {
 				sendErrorVisible := ct.SendError != "" && !knownMismatch
 				connectionLostDetail := ct.SendState == sendUnknown && ct.StatusDetail != "" && ct.StatusDetailKind == "status-connection-lost"
@@ -1500,9 +1437,6 @@ func (a *appModel) composer(c *ui.Context, t *ui.Theme, state connectionViewStat
 				}
 			}
 		})
-		if a.composerInlineAux() {
-			a.composerInlinePanel(c, t)
-		}
 	})
 }
 

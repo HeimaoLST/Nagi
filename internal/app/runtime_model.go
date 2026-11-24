@@ -254,6 +254,7 @@ func (a *appModel) beginShutdown() {
 		return
 	}
 	a.shutdownStarted = true
+	a.resetComposerOverlays()
 	a.persist()
 	if a.connectionTestCancel != nil {
 		a.connectionTestCancel()
@@ -600,8 +601,8 @@ func (a *appModel) createContact(profile pi.ProductBotProfile, operationID strin
 		}
 		a.contextFileGeneration++
 		a.priorChats = nil
-		a.aux, a.composerPanel = "", ""
-		a.composerFocusContext = false
+		a.aux = ""
+		a.resetComposerOverlays()
 	}
 	a.contactSearch, a.focusComposer = "", true
 	return nil
