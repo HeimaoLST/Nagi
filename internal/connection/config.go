@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"unicode"
 )
 
 const (
@@ -49,6 +50,8 @@ type PrivateConfig struct {
 	WorkingDirectory string                      `json:"working_directory"`
 	MaxActiveTasks   int                         `json:"max_active_tasks"`
 	Sources          map[string]CredentialSource `json:"sources"`
+	Accounts         json.RawMessage             `json:"accounts,omitempty"`
+	PublicationID    string                      `json:"publicationId,omitempty"`
 }
 
 func ReadPrivateConfig(path string) (PrivateConfig, error) {
@@ -65,7 +68,7 @@ func ReadPrivateConfig(path string) (PrivateConfig, error) {
 	if err := decoder.Decode(new(any)); err != io.EOF {
 		return config, fmt.Errorf("parse private connection config %s: trailing data", path)
 	}
-	if config.Version != 2 {
+	if config.Version != 3 && (config.Version != 2 || len(config.Accounts) != 0 || config.PublicationID != "") {
 		return config, fmt.Errorf("connection config version %d is unsupported", config.Version)
 	}
 	return config, nil
@@ -204,7 +207,9 @@ func ValidateConfig(config Config) map[string]string {
 	if config.API != APIResponses && config.API != APIChatCompletions {
 		fields["API"] = ValidationAPI
 	}
-	validateEndpoint(config.Endpoint, fields)
+	if reason := ValidateEndpoint(config.Endpoint); reason != "" {
+		fields["Endpoint"] = reason
+	}
 	if strings.TrimSpace(config.APIKey) == "" {
 		fields["APIKey"] = ValidationRequired
 	}
@@ -233,31 +238,27 @@ func ValidateConfig(config Config) map[string]string {
 	return fields
 }
 
-func validateEndpoint(raw string, fields map[string]string) {
+func ValidateEndpoint(raw string) string {
 	if raw == "" {
-		fields["Endpoint"] = ValidationRequired
-		return
+		return ValidationRequired
 	}
-	if raw != strings.TrimSpace(raw) {
-		fields["Endpoint"] = ValidationEndpointWhitespace
-		return
+	if strings.IndexFunc(raw, unicode.IsSpace) >= 0 {
+		return ValidationEndpointWhitespace
 	}
 	parsed, err := url.Parse(raw)
-	if err != nil || parsed.Host == "" || !strings.EqualFold(parsed.Scheme, "http") && !strings.EqualFold(parsed.Scheme, "https") {
-		fields["Endpoint"] = ValidationEndpointURL
-		return
+	if err != nil || parsed.Hostname() == "" || !strings.EqualFold(parsed.Scheme, "http") && !strings.EqualFold(parsed.Scheme, "https") {
+		return ValidationEndpointURL
 	}
 	if parsed.User != nil {
-		fields["Endpoint"] = ValidationEndpointUserinfo
-		return
+		return ValidationEndpointUserinfo
 	}
 	if parsed.RawQuery != "" || parsed.ForceQuery || strings.Contains(raw, "?") {
-		fields["Endpoint"] = ValidationEndpointQuery
-		return
+		return ValidationEndpointQuery
 	}
 	if parsed.Fragment != "" || strings.Contains(raw, "#") {
-		fields["Endpoint"] = ValidationEndpointFragment
+		return ValidationEndpointFragment
 	}
+	return ""
 }
 
 func validateWorkingDirectory(path string, fields map[string]string) {

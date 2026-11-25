@@ -86,6 +86,9 @@ func (a *appModel) openSettingsTab(tab, source string) {
 	wasOpen := a.settingsOpen
 	if !wasOpen || tab != a.settingsTab {
 		a.folderChoiceGeneration++
+		if tab == settingsTabConnection {
+			a.providers.tab = providerTabAccounts
+		}
 	}
 	if !wasOpen {
 		a.settingsReturnFocus = source
@@ -107,6 +110,9 @@ func (a *appModel) openSettingsTab(tab, source string) {
 		a.settingsFocusTab = tab
 	}
 	a.ensureConnectionForm()
+	if host := a.productHost(); tab == settingsTabConnection && host != nil {
+		a.refreshProductProviders(host)
+	}
 	if a.connectionForm != nil {
 		a.connectionForm.FocusField = ""
 	}
@@ -160,7 +166,7 @@ func (a *appModel) closeSettings() {
 }
 
 func (a *appModel) connectionApplied() bool {
-	return a.pi != nil && a.runtimeStatus == runtimeStateReady && a.connectionEffective != nil
+	return a.pi != nil && a.runtimeStatus == runtimeStateReady && (a.connectionEffective != nil || a.hasUsableProviderRoute())
 }
 
 func (a *appModel) settingsLandingTab() string {
@@ -282,9 +288,31 @@ func (a *appModel) settingsMain(c *ui.Context, t *ui.Theme, narrow bool) {
 		main.BorderWidth(0, 0, 0, 1)
 	}
 	main.Children(func() {
-		ui.Row(c).FillWidth().MaxWidth(settingsContentWidth).AlignSelf(ui.Center).Height(max(float32(48), c.TitleBar().Height)).Shrink(0).Padding(0, 32).AlignItems(ui.Center).DragWindow().Children(func() {
+		host := a.productHost()
+		providerSettings := a.settingsTab == settingsTabConnection && host != nil
+		width, _ := c.Size()
+		if !narrow {
+			width -= settingsSidebarWidth
+		}
+		contentWidth := min(width, settingsContentWidth) - 64
+		wrapTabs := providerSettings && contentWidth < 540
+		ui.Row(c).FillWidth().MaxWidth(settingsContentWidth).AlignSelf(ui.Center).Height(max(float32(48), c.TitleBar().Height)).Shrink(0).Padding(0, 32).AlignItems(ui.Center).Justify(ui.SpaceBetween).DragWindow().Children(func() {
 			pageHeading(c, title)
+			if providerSettings && !wrapTabs {
+				a.providerTabs(c, msgs, len(host.productProviders.Accounts))
+			}
 		})
+		if wrapTabs {
+			ui.Row(c).FillWidth().MaxWidth(settingsContentWidth).AlignSelf(ui.Center).Shrink(0).Padding(0, 32).Justify(ui.End).Children(func() {
+				a.providerTabs(c, msgs, len(host.productProviders.Accounts))
+			})
+		}
+		if providerSettings && a.providers.tab == providerTabAccounts && len(host.productProviders.Accounts) > 0 && contentWidth >= 600 {
+			ui.Column(c).FillWidth().MaxWidth(settingsContentWidth).MinHeight(0).Grow(1).AlignSelf(ui.Center).Padding(12, 32, 24).Gap(12).Children(func() {
+				a.providerWorkspace(c, t, host.productProviders, true)
+			})
+			return
+		}
 		ui.Scroll(c).FillWidth().MinWidth(0).Grow(1).MinHeight(0).TrackScroll(&a.settingsScroll).Children(func() {
 			ui.Column(c).FillWidth().MaxWidth(settingsContentWidth).MinWidth(0).AlignSelf(ui.Center).Padding(12, 32, 32).Gap(20).Children(func() {
 				switch a.settingsTab {
@@ -458,7 +486,7 @@ func (a *appModel) dataRecoveryBlocked(restore bool) string {
 			return "busy"
 		}
 	}
-	if a.contextFilePickers > 0 || a.shutdownStarted || a.connectionSaveInFlight || a.connectionApplying || a.connectionTesting || a.contactHistoryInFlight > 0 || a.submissionInFlight > 0 || a.themeImport != nil && a.themeImport.Busy || a.connectionForm != nil && a.connectionForm.Busy {
+	if a.contextFilePickers > 0 || a.shutdownStarted || a.connectionSaveInFlight || a.connectionApplying || a.connectionTesting || a.providerBusy() || a.contactHistoryInFlight > 0 || a.submissionInFlight > 0 || a.themeImport != nil && a.themeImport.Busy || a.connectionForm != nil && a.connectionForm.Busy {
 		return "busy"
 	}
 	if !productBackup && a.activeTaskCount() > 0 {
@@ -804,6 +832,28 @@ func (a *appModel) settingsConnectionContent(c *ui.Context, t *ui.Theme) {
 	form.SavedPending = a.connectionSavedPending()
 	actions := a.connectionActions()
 	actions.Discard = form.ResetDraft
+	if host := a.productHost(); host != nil {
+		pool := host.productProviders
+		switch a.providers.tab {
+		case providerTabRouting:
+			a.providerRouting(c, t, pool)
+			return
+		case providerTabAccounts:
+			if len(pool.Accounts) > 0 {
+				a.providerWorkspace(c, t, pool, false)
+				return
+			}
+			a.providerEmpty(c, t, pool)
+		}
+	}
+	if a.providers.adding || a.providers.tab == providerTabAccounts && a.productProvidersPending() {
+		legacy := *t
+		legacy.Accent, legacy.AccentHover, legacy.AccentPressed, legacy.AccentText = t.Surface, t.SurfaceHover, t.SurfacePressed, t.Text
+		ui.Themed(c, &legacy).FillWidth().Background(ui.Transparent).Children(func() {
+			form.View(c, &legacy, actions, a.workTheme.InputBorder)
+		})
+		return
+	}
 	form.View(c, t, actions, a.workTheme.InputBorder)
 }
 
