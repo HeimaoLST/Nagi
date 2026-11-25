@@ -393,3 +393,11 @@
 **Cause or correction:** Synchronous `readFileSync(0, ...)` does not handle non-blocking partial reads on large OS pipe buffers on Darwin.
 
 **Prevention:** Consume `process.stdin` asynchronously (for example with `await text(process.stdin)` from `node:stream/consumers`) in any Node helper invoked over Go `exec.Cmd` stdin pipes, and exercise recovery validation with multi-record 60 KiB+ single-JSON payloads.
+
+### Verify mid-history system-message positions on complete outbound wire bodies
+
+**Problem:** A Pi `context` extension that edits a cloned message in place can preserve mid-conversation `system` messages inside the extension runner while the downstream provider adapter still folds them to the front during wire serialization, silently altering the provider request prefix.
+
+**Cause or correction:** Extension-layer message preservation and provider-adapter serialization are independent steps; both `openai-completions` and `openai-responses` adapters fold mid-history system messages unless model compatibility (`compat.supportsMidConvoSystemMessages`) is explicitly configured.
+
+**Prevention:** Configure adapter compatibility explicitly for foreground sessions, never replace visible message objects or append synthetic messages in `context` handlers, and verify complete serialized outbound request bodies across both wire APIs rather than checking only extension arrays or `systemPrompt`.

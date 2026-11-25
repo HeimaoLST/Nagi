@@ -104,9 +104,40 @@ type ProductSkillSaveParams struct {
 
 type ProductSkillApproveParams struct {
 	ProductSkillKey
-	ApprovalDigest    string `json:"approvalDigest"`
-	PermissionsDigest string `json:"permissionsDigest,omitempty"`
-	OperationID       string `json:"operationId"`
+	ApprovalDigest     string `json:"approvalDigest"`
+	PermissionsDigest  string `json:"permissionsDigest,omitempty"`
+	RequestID          string `json:"requestId,omitempty"`
+	RequestRevision    uint64 `json:"requestRevision,omitempty"`
+	CanonicalWorkspace string `json:"canonicalWorkspace,omitempty"`
+	InstallationID     string `json:"installationId,omitempty"`
+	OperationID        string `json:"operationId"`
+}
+
+type ProductSkillDenyApprovalRequestParams struct {
+	RequestID       string `json:"requestId"`
+	RequestRevision uint64 `json:"requestRevision"`
+	OperationID     string `json:"operationId"`
+	Reason          string `json:"reason,omitempty"`
+}
+
+type ProductSkillApprovalRequest struct {
+	RequestID          string                  `json:"requestId"`
+	BotID              string                  `json:"botId"`
+	ActivityID         string                  `json:"activityId"`
+	ExecutionID        string                  `json:"executionId"`
+	CallID             string                  `json:"callId"`
+	Source             string                  `json:"source"`
+	SkillID            string                  `json:"skillId"`
+	Script             string                  `json:"script"`
+	ApprovalDigest     string                  `json:"approvalDigest"`
+	PermissionsDigest  string                  `json:"permissionsDigest"`
+	CanonicalWorkspace string                  `json:"canonicalWorkspace"`
+	InstallationID     string                  `json:"installationId"`
+	Permissions        ProductSkillPermissions `json:"permissions"`
+	Revision           uint64                  `json:"revision"`
+	State              string                  `json:"state"`
+	CreatedAt          string                  `json:"createdAt"`
+	Reason             string                  `json:"reason,omitempty"`
 }
 
 type ProductSkillRevokeParams struct {
@@ -133,7 +164,8 @@ type ProductSkillPreferences struct {
 
 type ProductSkillChange struct {
 	ProductSkillKey
-	Change string `json:"change"`
+	Change  string                       `json:"change"`
+	Request *ProductSkillApprovalRequest `json:"request,omitempty"`
 }
 
 func (event ProductSkillChange) valid() bool {
@@ -183,6 +215,10 @@ func (p *ProductClient) SetSkillPreferences(ctx context.Context, params ProductS
 
 func (p *ProductClient) ApproveSkill(ctx context.Context, params ProductSkillApproveParams) (ProductSkillChange, error) {
 	return productCall[ProductSkillChange](ctx, p, "skill.approve", params)
+}
+
+func (p *ProductClient) DenySkillApprovalRequest(ctx context.Context, params ProductSkillDenyApprovalRequestParams) (ProductSkillApprovalRequest, error) {
+	return productCall[ProductSkillApprovalRequest](ctx, p, "skill.denyApprovalRequest", params)
 }
 
 func (p *ProductClient) RevokeSkillApproval(ctx context.Context, params ProductSkillRevokeParams) (ProductSkillChange, error) {

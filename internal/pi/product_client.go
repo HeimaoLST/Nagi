@@ -38,10 +38,27 @@ type ProductEvent struct {
 	Seq             uint64                       `json:"seq"`
 	Name            string                       `json:"event"`
 	Data            json.RawMessage              `json:"data"`
+	ActivityChanged *ProductActivityChange       `json:"-"`
+	ActivityDigest  *ProductActivityDigest       `json:"-"`
 	TraceUpdated    *ProductActivityTraceUpdated `json:"-"`
 	SkillChanged    *ProductSkillChange          `json:"-"`
 	McpChanged      *ProductMcpChange            `json:"-"`
 	ProviderChanged *ProductProviderChange       `json:"-"`
+}
+
+type ProductActivityDigest struct {
+	FactID               string  `json:"factId"`
+	ActivityID           string  `json:"activityId"`
+	OwnerBotID           string  `json:"ownerBotId"`
+	OriginConversationID string  `json:"originConversationId"`
+	ExecutionID          string  `json:"executionId,omitempty"`
+	Revision             uint64  `json:"revision"`
+	Kind                 string  `json:"kind"`
+	Summary              string  `json:"summary"`
+	FileCount            *uint64 `json:"fileCount,omitempty"`
+	QuestionID           string  `json:"questionId,omitempty"`
+	RequestID            string  `json:"requestId,omitempty"`
+	At                   string  `json:"at"`
 }
 
 type ProductActivityTraceUpdated struct {
@@ -261,24 +278,44 @@ type ProductReceipt struct {
 }
 
 type ProductActivitySummary struct {
-	ActivityID           string   `json:"activityId"`
-	OwnerBotID           string   `json:"ownerBotId"`
-	OriginConversationID string   `json:"originConversationId"`
-	Revision             uint64   `json:"revision"`
-	State                string   `json:"state"`
-	Goal                 string   `json:"goal"`
-	OpenQuestionIDs      []string `json:"openQuestionIds"`
+	ActivityID                string                   `json:"activityId"`
+	OwnerBotID                string                   `json:"ownerBotId"`
+	OriginConversationID      string                   `json:"originConversationId"`
+	Revision                  uint64                   `json:"revision"`
+	State                     string                   `json:"state"`
+	Goal                      string                   `json:"goal"`
+	OpenQuestionIDs           []string                 `json:"openQuestionIds"`
+	PendingApprovalRequestIDs []string                 `json:"pendingApprovalRequestIds,omitempty"`
+	LatestProgress            *ProductActivityProgress `json:"latestProgress,omitempty"`
+	AcknowledgedAt            string                   `json:"acknowledgedAt,omitempty"`
+	AcknowledgedExecutionID   string                   `json:"acknowledgedExecutionId,omitempty"`
+	ClosedAt                  string                   `json:"closedAt,omitempty"`
+}
+
+type ProductActivityChange struct {
+	ProductActivitySummary
+	ApprovalRequests []ProductSkillApprovalRequest `json:"approvalRequests,omitempty"`
 }
 
 type ProductActivity struct {
 	ProductActivitySummary
-	Kind         string             `json:"kind,omitempty"`
-	Complexity   string             `json:"complexity,omitempty"`
-	Constraints  []string           `json:"constraints,omitempty"`
-	Requirements []string           `json:"requirements"`
-	Materials    []ProductMaterial  `json:"materials"`
-	Questions    []ProductQuestion  `json:"questions"`
-	Executions   []ProductExecution `json:"executions"`
+	Kind             string                        `json:"kind,omitempty"`
+	Complexity       string                        `json:"complexity,omitempty"`
+	Constraints      []string                      `json:"constraints,omitempty"`
+	Requirements     []string                      `json:"requirements"`
+	Materials        []ProductMaterial             `json:"materials"`
+	Questions        []ProductQuestion             `json:"questions"`
+	Executions       []ProductExecution            `json:"executions"`
+	ApprovalRequests []ProductSkillApprovalRequest `json:"approvalRequests,omitempty"`
+}
+
+type ProductActivityProgress struct {
+	ExecutionID string `json:"executionId"`
+	ProgressSeq uint64 `json:"progressSeq"`
+	Stage       string `json:"stage"`
+	Step        uint64 `json:"step,omitempty"`
+	TotalSteps  uint64 `json:"totalSteps,omitempty"`
+	At          string `json:"at"`
 }
 
 type ProductText struct {
@@ -287,14 +324,29 @@ type ProductText struct {
 }
 
 type ProductQuestion struct {
-	QuestionID      string                 `json:"questionId"`
-	ExecutionID     string                 `json:"executionId"`
-	Text            string                 `json:"text"`
-	Revision        uint64                 `json:"revision"`
-	State           string                 `json:"state"`
-	Answer          *ProductText           `json:"answer,omitempty"`
-	Delivery        string                 `json:"delivery,omitempty"`
-	DeliveryBlocker ProductDeliveryBlocker `json:"deliveryBlocker,omitempty"`
+	QuestionID           string                  `json:"questionId"`
+	ExecutionID          string                  `json:"executionId"`
+	Text                 string                  `json:"text"`
+	Revision             uint64                  `json:"revision"`
+	State                string                  `json:"state"`
+	Answer               *ProductText            `json:"answer,omitempty"`
+	Delivery             string                  `json:"delivery,omitempty"`
+	DeliveryBlocker      ProductDeliveryBlocker  `json:"deliveryBlocker,omitempty"`
+	Options              []ProductQuestionOption `json:"options,omitempty"`
+	AllowFreeText        *bool                   `json:"allowFreeText,omitempty"`
+	RequiresUserDecision *bool                   `json:"requiresUserDecision,omitempty"`
+	PreferenceKey        string                  `json:"preferenceKey,omitempty"`
+	Provenance           string                  `json:"provenance,omitempty"`
+	EvidenceID           string                  `json:"evidenceId,omitempty"`
+	EvidenceRevision     *uint64                 `json:"evidenceRevision,omitempty"`
+	SelectedOptionID     string                  `json:"selectedOptionId,omitempty"`
+}
+
+type ProductQuestionOption struct {
+	ID          string `json:"id"`
+	Label       string `json:"label"`
+	Description string `json:"description,omitempty"`
+	Recommended bool   `json:"recommended,omitempty"`
 }
 
 type ProductResultFile struct {
@@ -466,8 +518,9 @@ type ProductStopResult struct {
 
 type ProductActivityListParams struct {
 	ProductPageParams
-	BotID  string   `json:"botId"`
-	States []string `json:"states,omitempty"`
+	BotID              string   `json:"botId"`
+	States             []string `json:"states,omitempty"`
+	UnacknowledgedOnly bool     `json:"unacknowledgedOnly,omitempty"`
 }
 
 type ProductActivityParams struct {
@@ -477,6 +530,18 @@ type ProductActivityParams struct {
 type ProductActivityExecutionParams struct {
 	ProductActivityParams
 	ExecutionID string `json:"executionId"`
+}
+
+type ProductActivityAcknowledgeParams struct {
+	ProductActivityExecutionParams
+	ExpectedRevision uint64 `json:"expectedRevision"`
+	OperationID      string `json:"operationId"`
+}
+
+type ProductActivityCloseParams struct {
+	ProductActivityParams
+	ExpectedRevision uint64 `json:"expectedRevision"`
+	OperationID      string `json:"operationId"`
 }
 
 type ProductActivityTraceParams struct {
@@ -504,15 +569,20 @@ type ProductAnswerParams struct {
 	QuestionID       string `json:"questionId"`
 	QuestionRevision uint64 `json:"questionRevision"`
 	OperationID      string `json:"operationId"`
+	SelectedOptionID string `json:"selectedOptionId,omitempty"`
 }
 
 type ProductAnswerResult struct {
 	ProductActivityExecutionParams
-	QuestionID      string                 `json:"questionId"`
-	Revision        uint64                 `json:"revision"`
-	AnswerSaved     bool                   `json:"answerSaved"`
-	Delivery        string                 `json:"delivery"`
-	DeliveryBlocker ProductDeliveryBlocker `json:"deliveryBlocker,omitempty"`
+	QuestionID       string                 `json:"questionId"`
+	Revision         uint64                 `json:"revision"`
+	AnswerSaved      bool                   `json:"answerSaved"`
+	Delivery         string                 `json:"delivery"`
+	DeliveryBlocker  ProductDeliveryBlocker `json:"deliveryBlocker,omitempty"`
+	Provenance       string                 `json:"provenance,omitempty"`
+	EvidenceID       string                 `json:"evidenceId,omitempty"`
+	EvidenceRevision *uint64                `json:"evidenceRevision,omitempty"`
+	SelectedOptionID string                 `json:"selectedOptionId,omitempty"`
 }
 
 type ProductConnectionSaveParams struct {
@@ -664,6 +734,14 @@ func (p *ProductClient) ContinueActivity(ctx context.Context, params ProductActi
 	return productCall[ProductReceipt](ctx, p, "activity.continue", params)
 }
 
+func (p *ProductClient) AcknowledgeActivity(ctx context.Context, params ProductActivityAcknowledgeParams) (ProductActivitySummary, error) {
+	return productCall[ProductActivitySummary](ctx, p, "activity.acknowledge", params)
+}
+
+func (p *ProductClient) CloseActivity(ctx context.Context, params ProductActivityCloseParams) (ProductActivitySummary, error) {
+	return productCall[ProductActivitySummary](ctx, p, "activity.close", params)
+}
+
 func (p *ProductClient) StopActivity(ctx context.Context, params ProductActivityStopParams) (ProductStopResult, error) {
 	return productCall[ProductStopResult](ctx, p, "activity.stop", params)
 }
@@ -737,6 +815,21 @@ func (c *Client) handleProductEvent(line []byte) error {
 	var event ProductEvent
 	if json.Unmarshal(line, &event) != nil || event.StreamID == "" || event.Seq == 0 || len(event.Data) == 0 || event.Name == "" {
 		return errors.New("invalid product event envelope")
+	}
+	if event.Name == "activity.changed" {
+		var change ProductActivityChange
+		if json.Unmarshal(event.Data, &change) != nil || change.ActivityID == "" {
+			return errors.New("invalid activity change")
+		}
+		event.ActivityChanged = &change
+	}
+	if event.Name == "activity.digest" {
+		var digest ProductActivityDigest
+		if json.Unmarshal(event.Data, &digest) != nil || digest.ActivityID == "" || digest.FactID == "" ||
+			digest.OwnerBotID == "" || digest.OriginConversationID == "" || digest.At == "" || digest.Kind == "" {
+			return errors.New("invalid activity digest")
+		}
+		event.ActivityDigest = &digest
 	}
 	if event.Name == "activity.traceUpdated" {
 		var update ProductActivityTraceUpdated

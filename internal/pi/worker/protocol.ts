@@ -77,6 +77,13 @@ export type SkillDetail = Static<typeof skillDetail>;
 export type SkillListing = Static<typeof skillListing>;
 export type SkillChange = Static<typeof skillChange>;
 
+export const skillApprovalRequestSchema = Type.Object({ requestId: id, botId: id, activityId: id, executionId: id, callId: id,
+  source: skillSource, skillId: skillID, script: skillScriptName, approvalDigest: digest, permissionsDigest: digest,
+  canonicalWorkspace: id, installationId: id, permissions: skillPermissions, revision: positiveInteger, createdAt: id,
+  state: Type.Union([Type.Literal('open'), Type.Literal('approved'), Type.Literal('denied'), Type.Literal('expired'), Type.Literal('cancelled')]),
+  reason: Type.Optional(Type.String({ maxLength: 512 })) }, skillStrict);
+export type SkillApprovalRequest = Static<typeof skillApprovalRequestSchema>;
+
 const mcpStrict = { additionalProperties: false };
 const mcpServerId = Type.String({ pattern: '^[a-z0-9][a-z0-9_-]{0,62}$' });
 const mcpIsolation = Type.Union([Type.Literal('shared'), Type.Literal('per_workspace'), Type.Literal('per_bot')]);
@@ -137,6 +144,23 @@ export const activityStateSchema = Type.Union([
   Type.Literal('notStarted'), Type.Literal('running'), Type.Literal('waitingForAnswer'),
   Type.Literal('needsAttention'), Type.Literal('completed'), Type.Literal('cancelled'),
 ]);
+const progressStep = Type.Integer({ minimum: 1, maximum: 1000 });
+const progressFields = { executionId: id, progressSeq: positiveInteger, stage: Type.String({ minLength: 1, maxLength: 160 }),
+  step: Type.Optional(progressStep), totalSteps: Type.Optional(progressStep), at: id };
+const activityProgress = Type.Object(progressFields);
+export const activityProgressRecord = Type.Object({ ...progressFields, activityId: id, callId: id }, { additionalProperties: false });
+export type ActivityProgressRecord = Static<typeof activityProgressRecord>;
+export const activityLifecycleFields = { acknowledgedAt: Type.Optional(id), acknowledgedExecutionId: Type.Optional(id), closedAt: Type.Optional(id) };
+const activityFields = { activityId: id, ownerBotId: id, originConversationId: id, revision, state: activityStateSchema,
+  goal: Type.String(), openQuestionIds: Type.Array(id), ...activityLifecycleFields,
+  latestProgress: Type.Optional(activityProgress), pendingApprovalRequestIds: Type.Optional(Type.Array(id)) };
+const approvalRequests = { approvalRequests: Type.Optional(Type.Array(skillApprovalRequestSchema)) };
+const activityDigest = Type.Object({ factId: id, activityId: id, ownerBotId: id, originConversationId: id,
+  executionId: Type.Optional(id), revision, summary: Type.String(), fileCount: Type.Optional(revision), at: id,
+  questionId: Type.Optional(id), requestId: Type.Optional(id),
+  kind: Type.Union([Type.Literal('completed'), Type.Literal('needs_attention'), Type.Literal('question_open'),
+    Type.Literal('question_auto_saved'), Type.Literal('approval_required')]) });
+export type ActivityDigest = Static<typeof activityDigest>;
 const targetSchema = Type.Union([
   Type.Object({ conversationId: id }), Type.Object({ botId: id }),
   Type.Object({ activityId: id, questionId: Type.Optional(id) }), Type.Object({ connection: Type.Literal(true) }),
@@ -145,6 +169,24 @@ const operationTarget = { operationId: id, expectedRevision: revision };
 export const materialSchema = Type.Object({
   id, revision, name: id, text: Type.String(), source: Type.Optional(Type.String()),
 });
+export const questionTextBytes = 1024;
+export const optionLabelBytes = 120;
+export const optionDescriptionBytes = 256;
+export const questionOptionId = Type.String({ pattern: '^[a-z0-9][a-z0-9_-]{0,63}$' });
+export const questionOptions = Type.Array(Type.Object({ id: questionOptionId,
+  label: Type.String({ minLength: 1, maxLength: optionLabelBytes }),
+  description: Type.Optional(Type.String({ maxLength: optionDescriptionBytes })), recommended: Type.Optional(Type.Boolean()) }, skillStrict), { maxItems: 6 });
+export const preferenceKey = Type.String({ pattern: '^[a-z][a-z0-9_]{0,63}$' });
+export const maxTriageAttempts = 3;
+export const maxAutomaticAnswers = 2;
+export const triageAccounting = Type.Object({ activityId: id,
+  attemptsUsed: Type.Integer({ minimum: 1, maximum: maxTriageAttempts }),
+  autoAnswersUsed: Type.Integer({ minimum: 0, maximum: maxAutomaticAnswers }), updatedAt: id }, skillStrict);
+export type TriageAccounting = Static<typeof triageAccounting>;
+const answerProvenanceSchema = Type.Object({ provenance: Type.Optional(Type.Union([Type.Literal('user'), Type.Literal('bot_auto')])),
+  evidenceId: Type.Optional(id), evidenceRevision: Type.Optional(revision), selectedOptionId: Type.Optional(questionOptionId) });
+const answerProvenance = answerProvenanceSchema.properties;
+export type AnswerProvenance = Static<typeof answerProvenanceSchema>;
 export const quoteAuthorMaxBytes = 120;
 export const quoteTextMaxBytes = 1024;
 export const productQuote = Type.Object({
@@ -212,7 +254,10 @@ export const productCommands = Type.Union([
   Type.Object({ method: Type.Literal('skill.promoteGlobal'), params: Type.Object({ botId: id, skillId: skillID, targetSkillId: Type.Optional(skillID), operationId: id }, { additionalProperties: false }) }),
   Type.Object({ method: Type.Literal('skill.setPreferences'), params: Type.Object({ discoverLocalSkills: Type.Boolean(), operationId: id }, { additionalProperties: false }) }),
   Type.Object({ method: Type.Literal('skill.approve'), params: Type.Object({ source: skillSource, botId: id, skillId: skillID, approvalDigest: digest,
-    permissionsDigest: Type.Optional(digest), operationId: id }, skillStrict) }),
+    permissionsDigest: Type.Optional(digest), requestId: Type.Optional(id), requestRevision: Type.Optional(positiveInteger),
+    canonicalWorkspace: Type.Optional(id), installationId: Type.Optional(id), operationId: id }, skillStrict) }),
+  Type.Object({ method: Type.Literal('skill.denyApprovalRequest'), params: Type.Object({ requestId: id, requestRevision: positiveInteger,
+    operationId: id, reason: Type.Optional(Type.String({ maxLength: 512 })) }, skillStrict) }),
   Type.Object({ method: Type.Literal('skill.revokeApproval'), params: Type.Object({ source: skillSource, botId: id, skillId: skillID, operationId: id }, skillStrict) }),
   Type.Object({ method: Type.Literal('conversation.list'), params: Type.Object({ botId: id, ...page }) }),
   Type.Object({ method: Type.Literal('conversation.get'), params: Type.Object({ conversationId: id }) }),
@@ -223,17 +268,20 @@ export const productCommands = Type.Union([
   Type.Object({ method: Type.Literal('conversation.send'), params: Type.Object({ conversationId: id, operationId: id, draftRevision: revision }) }),
   Type.Object({ method: Type.Literal('conversation.stop'), params: Type.Object({ conversationId: id, executionId: id, operationId: id }) }),
   Type.Object({ method: Type.Literal('conversation.history'), params: Type.Object({ conversationId: id, ...page }) }),
-  Type.Object({ method: Type.Literal('activity.list'), params: Type.Object({ botId: id, states: Type.Optional(Type.Array(activityStateSchema)), ...page }) }),
+  Type.Object({ method: Type.Literal('activity.list'), params: Type.Object({ botId: id, states: Type.Optional(Type.Array(activityStateSchema)),
+    unacknowledgedOnly: Type.Optional(Type.Boolean()), ...page }) }),
   Type.Object({ method: Type.Literal('activity.get'), params: Type.Object({ activityId: id }) }),
   Type.Object({ method: Type.Literal('activity.result'), params: Type.Object({ activityId: id, executionId: id }) }),
   Type.Object({ method: Type.Literal('activity.continue'), params: Type.Object({
     activityId: id, ...operationTarget, text: Type.String(), materials: Type.Array(materialSchema),
   }) }),
+  Type.Object({ method: Type.Literal('activity.acknowledge'), params: Type.Object({ activityId: id, executionId: id, ...operationTarget }, skillStrict) }),
+  Type.Object({ method: Type.Literal('activity.close'), params: Type.Object({ activityId: id, ...operationTarget }, skillStrict) }),
   Type.Object({ method: Type.Literal('activity.stop'), params: Type.Object({ activityId: id, executionId: id, operationId: id }) }),
   Type.Object({ method: Type.Literal('activity.trace'), params: Type.Object({ activityId: id, executionId: Type.Optional(id), ...inspectionPage }, { additionalProperties: false }) }),
   Type.Object({ method: Type.Literal('question.answer'), params: Type.Object({
     activityId: id, executionId: id, questionId: id, questionRevision: revision, operationId: id,
-    text: id, materials: Type.Array(materialSchema),
+    text: Type.String(), materials: Type.Array(materialSchema), selectedOptionId: Type.Optional(questionOptionId),
   }) }),
   Type.Object({ method: Type.Literal('connection.get'), params: Type.Object({}) }),
   Type.Object({ method: Type.Literal('connection.test'), params: Type.Object({ configuration: connectionSchema }) }),
@@ -275,10 +323,8 @@ export const productEvents = Type.Union([
   }) }),
   Type.Object({ event: Type.Literal('conversation.changed'), data: Type.Object({ conversationId: id, revision }) }),
   Type.Object({ event: Type.Literal('activity.traceUpdated'), data: Type.Object({ activityId: id, executionId: id, lastSeq: positiveInteger }) }),
-  Type.Object({ event: Type.Literal('activity.changed'), data: Type.Object({
-    activityId: id, ownerBotId: id, originConversationId: id, revision, state: activityStateSchema,
-    goal: Type.String(), openQuestionIds: Type.Array(id),
-  }) }),
+  Type.Object({ event: Type.Literal('activity.changed'), data: Type.Object({ ...activityFields, ...approvalRequests }) }),
+  Type.Object({ event: Type.Literal('activity.digest'), data: activityDigest }),
 ]);
 export const productRequestSchema = Type.Intersect([
   Type.Object({ v: Type.Literal(1), type: Type.Literal('request'), id }), productCommands,
@@ -291,14 +337,15 @@ const productPage = <T extends TSchema>(item: T) => Type.Object({ items: Type.Ar
 const conversationFields = { conversationId: id, botId: id, revision, mode: Type.Union([Type.Literal('current'), Type.Literal('readOnly')]) };
 const activeExecution = Type.Object({ ...executionSchema.properties, operationId: id, partial: Type.Optional(nullable(Type.String())),
   textOffset: Type.Optional(revision), error: Type.Optional(Type.String()) });
-const activityFields = { activityId: id, ownerBotId: id, originConversationId: id, revision, state: activityStateSchema,
-  goal: Type.String(), openQuestionIds: Type.Array(id) };
 const questionDelivery = Type.Union([Type.Literal('saved'), Type.Literal('dispatching'), Type.Literal('delivered'),
   Type.Literal('unknown'), Type.Literal('canceled'), Type.Literal('unavailable')]);
-const questionResult = Type.Object({ questionId: id, executionId: id, text: Type.String(), revision,
-  state: Type.Union([Type.Literal('open'), Type.Literal('answered'), Type.Literal('superseded')]),
-  answer: Type.Optional(Type.Object({ text: Type.String(), materials: Type.Array(materialSchema) })), delivery: Type.Optional(questionDelivery),
-  deliveryBlocker: Type.Optional(Type.Literal('credential_unavailable')) });
+export const questionResult = Type.Object({ questionId: id, executionId: id, text: Type.String(), revision,
+  state: Type.Union([Type.Literal('open'), Type.Literal('answered'), Type.Literal('superseded'), Type.Literal('triage_pending')]),
+  answer: Type.Optional(Type.Object({ text: Type.String(), materials: Type.Array(materialSchema) }, skillStrict)), delivery: Type.Optional(questionDelivery),
+  deliveryBlocker: Type.Optional(Type.Literal('credential_unavailable')), options: Type.Optional(questionOptions),
+  allowFreeText: Type.Optional(Type.Boolean()), requiresUserDecision: Type.Optional(Type.Boolean()), preferenceKey: Type.Optional(preferenceKey),
+  ...answerProvenance }, skillStrict);
+export type ProductQuestion = Static<typeof questionResult>;
 const connectionRevisions = { savedRevision: nullable(revision), effectiveRevision: nullable(revision) };
 const routingFields = { ...connectionRevisions, policy: policySchema, effectivePolicy: policySchema,
   resolvedRoles: Type.Object({ dialogue: nullable(routeSchema), coding: nullable(routeSchema), reasoning: nullable(routeSchema), utility: nullable(routeSchema) }) };
@@ -332,7 +379,8 @@ export const productResults = {
   'skill.delete': skillChange,
   'skill.promoteGlobal': skillChange,
   'skill.setPreferences': skillChange,
-  'skill.approve': skillChange,
+  'skill.approve': Type.Object({ ...skillChange.properties, request: Type.Optional(skillApprovalRequestSchema) }),
+  'skill.denyApprovalRequest': skillApprovalRequestSchema,
   'skill.revokeApproval': skillChange,
   'conversation.list': productPage(Type.Object({ ...conversationFields,
     preview: Type.Optional(id), timestamp: Type.Optional(id) })),
@@ -343,13 +391,17 @@ export const productResults = {
   'conversation.history': productPage(Type.Object({ messageId: id, role: Type.Union([Type.Literal('user'), Type.Literal('assistant')]),
     timestamp: id, text: Type.String(), materials: Type.Array(materialSchema), quote: optionalQuote })),
   'activity.list': productPage(Type.Object(activityFields)),
-  'activity.get': Type.Object({ ...activityFields, ...activityRouting.properties, requirements: stringList, materials: Type.Array(materialSchema), questions: Type.Array(questionResult), executions: Type.Array(activeExecution) }),
+  'activity.get': Type.Object({ ...activityFields, ...approvalRequests, ...activityRouting.properties, requirements: stringList,
+    materials: Type.Array(materialSchema), questions: Type.Array(questionResult), executions: Type.Array(activeExecution) }),
   'activity.result': Type.Object({ activityId: id, executionId: id, text: Type.String(), delivery: Type.Literal('available'), files: Type.Array(Type.Object({ path: id, callId: id })) }),
   'activity.trace': Type.Object({ ...productPage(traceItemSchema).properties, historyTruncated: Type.Boolean(),
     coverage: Type.Union([Type.Literal('recorded'), Type.Literal('unrecorded'), Type.Literal('mixed')]) }),
   'activity.continue': operationSchema,
+  'activity.acknowledge': Type.Object(activityFields),
+  'activity.close': Type.Object(activityFields),
   'activity.stop': stopResult,
-  'question.answer': Type.Object({ activityId: id, executionId: id, questionId: id, revision, answerSaved: Type.Literal(true), delivery: questionDelivery, deliveryBlocker }),
+  'question.answer': Type.Object({ activityId: id, executionId: id, questionId: id, revision, answerSaved: Type.Literal(true),
+    delivery: questionDelivery, deliveryBlocker, ...answerProvenance }),
   'connection.get': connectionResult,
   'connection.test': Type.Object({ verified: Type.Literal(true) }),
   'connection.save': Type.Object(connectionRevisions),

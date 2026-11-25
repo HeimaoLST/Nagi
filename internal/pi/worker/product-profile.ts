@@ -6,10 +6,12 @@ import { extname, isAbsolute } from 'node:path';
 import { Type } from 'typebox';
 import { Value } from 'typebox/value';
 import { RequestError, activityStateSchema, botSystemKindSchema, connectionSchema, draftSchema, executionSchema, hasCanonicalQuoteText, materialSchema, mcpServerRecord,
-  operationSchema, productQuote, profileSchema, quoteAuthorMaxBytes, quoteTextMaxBytes, type ActivityState, type Connection, type Draft,
-  type Execution, type Material, type Operation, type ProductQuote } from './protocol.js';
+  operationSchema, profileSchema, quoteAuthorMaxBytes, quoteTextMaxBytes, type ActivityState, type Connection, type Draft,
+  type Execution, type Material, type Operation } from './protocol.js';
 import type { ProductProfile } from './product.js';
-import { skillApprovalRecord, type SkillApproval } from './protocol.js';
+import { activityLifecycleFields, activityProgressRecord, questionResult, skillApprovalRecord, skillApprovalRequestSchema, triageAccounting as triageSchema,
+  optionDescriptionBytes, optionLabelBytes, questionTextBytes, type ActivityProgressRecord, type SkillApproval, type SkillApprovalRequest,
+  type TriageAccounting } from './protocol.js';
 import { lastingRulesFit, MAX_LOG_BYTES, MAX_PENDING_LEARNINGS, MAX_RULE_BYTES, MAX_WORK_LOGS,
   memorySnapshotSchema, validMemoryDate } from './bot-memory.js';
 import { decodeTraceBackup, directlyOwns, normalizeActivityGrants, type TraceBackup } from './product-trace.js';
@@ -17,6 +19,7 @@ import { backupSkillFiles, bundleDigest, executableBundle, privateSkillBundleSch
 import { activityRouting, capturedRoute, escalationSchema, policySchema, providerAccount, validProvider, type Escalation, type ProviderAccount } from './model-router.js';
 import { maxMcpServers, uniqueMcpRegistry, validMcpBindings, validMcpServer } from './mcp-broker.js';
 import { clipUTF8 } from './product-redactor.js';
+import { triageDomain, validateQuestionFields } from './activity-control.js';
 
 export type ProductProfilePaths = {
   profilePath: string;
@@ -24,7 +27,9 @@ export type ProductProfilePaths = {
   fresh: boolean;
 };
 
-export type ProductBackup = TraceBackup & { privateSkillBundles?: PrivateSkillBundle[]; skillApprovals?: SkillApproval[]; activityEscalations?: Escalation[] };
+export type ProductBackup = TraceBackup & { privateSkillBundles?: PrivateSkillBundle[]; skillApprovals?: SkillApproval[];
+  activityEscalations?: Escalation[]; activityProgress?: ActivityProgressRecord[]; skillApprovalRequests?: SkillApprovalRequest[];
+  triageAccounting?: TriageAccounting[] };
 
 type Credential = { api: 'openai-responses' | 'openai-chat-completions'; endpoint: string; api_key: string };
 type LegacyConnection = {
@@ -88,15 +93,12 @@ const privateSkillBundles = Type.Array(privateSkillBundleSchema, { maxItems: 819
 const executionRecord = Type.Object({ ...executionSchema.properties, operationId: recoveryID,
   input: draftSchema, error: Type.Optional(Type.String()), engineRunId: Type.Optional(recoveryID),
   importedActivityId: Type.Optional(recoveryID), retained: Type.Optional(opaque) }, strict);
-const questionRecord = Type.Object({ questionId: recoveryID, executionId: recoveryID, text: Type.String(), revision: counter,
-  state: Type.Union([Type.Literal('open'), Type.Literal('answered'), Type.Literal('superseded')]),
-  answer: Type.Optional(Type.Object({ text: Type.String(), materials: Type.Array(materialSchema) }, strict)),
-  delivery: Type.Optional(Type.Union([Type.Literal('saved'), Type.Literal('dispatching'), Type.Literal('delivered'),
-    Type.Literal('unknown'), Type.Literal('canceled'), Type.Literal('unavailable')])),
-  deliveryBlocker: Type.Optional(Type.Literal('credential_unavailable')) }, strict);
+const questionRecord = Type.Object({ ...questionResult.properties, triageRulesRevision: Type.Optional(counter) }, strict);
 const activityRecord = Type.Object({ activityId: recoveryID, ownerBotId: recoveryID, originConversationId: recoveryID,
   routing: Type.Optional(activityRouting),
   revision: counter, state: activityStateSchema, goal: Type.String(), requirements: Type.Array(Type.String()),
+  ...activityLifecycleFields,
+  updatedAt: Type.Optional(recoveryID),
   questions: Type.Array(questionRecord), materials: Type.Array(materialSchema), inputFiles: Type.Array(Type.String()),
   executionIds: Type.Array(recoveryID), binding: Type.Optional(bindingSchema), retained: Type.Optional(opaque),
   grantedLinkedActivityIds: Type.Optional(Type.Array(recoveryID)),
@@ -230,6 +232,28 @@ export function decodeProductProfile(data: unknown): ProductProfile {
         questionIds.size !== activity.questions.length ||
         activity.questions.some(question => !ids.has(question.executionId)) ||
         activity.results.some(result => result.activityId !== activity.activityId || !ids.has(result.executionId))) invalid();
+    if (activity.updatedAt !== undefined && !Number.isFinite(Date.parse(activity.updatedAt))) invalid();
+    for (const question of activity.questions) {
+      if (question.options !== undefined || question.allowFreeText !== undefined || question.requiresUserDecision !== undefined || question.preferenceKey !== undefined) {
+        try { validateQuestionFields(question.text, question.options, question.allowFreeText); }
+        catch { invalid(); }
+      }
+      const selection = question.options?.find(row => row.id === question.selectedOptionId);
+      if (question.selectedOptionId !== undefined && (!selection || !question.answer) ||
+          question.allowFreeText === false && question.answer && (!selection || selection.label !== question.answer.text) ||
+          question.provenance !== undefined && (!question.answer || question.state !== 'answered') ||
+          (question.provenance === 'bot_auto' ? !question.evidenceId || !question.evidenceRevision || !selection ||
+            question.answer?.text !== selection.label || question.answer.materials.length !== 0 :
+            question.evidenceId !== undefined || question.evidenceRevision !== undefined) ||
+          question.state === 'triage_pending' && (question.triageRulesRevision === undefined || question.answer || !triageDomain(question) ||
+            !['starting', 'running', 'unknown'].includes(executions.get(question.executionId)?.state ?? ''))) invalid();
+    }
+    if ((activity.acknowledgedAt === undefined) !== (activity.acknowledgedExecutionId === undefined) ||
+        activity.acknowledgedAt !== undefined && (!Number.isFinite(Date.parse(activity.acknowledgedAt)) ||
+          activity.acknowledgedExecutionId !== activity.executionIds.at(-1) ||
+          ['starting', 'running'].includes(executions.get(activity.acknowledgedExecutionId!)?.state ?? '')) ||
+        activity.closedAt !== undefined && (!Number.isFinite(Date.parse(activity.closedAt)) ||
+          activity.state === 'running' || activity.state === 'waitingForAnswer')) invalid();
     if (activity.grantedLinkedActivityIds !== undefined) {
       const originBotId = conversations.get(activity.originConversationId)!.botId;
       const grants = normalizeActivityGrants(activity.grantedLinkedActivityIds, 'profile_unavailable');
@@ -269,10 +293,11 @@ export function decodeProductProfile(data: unknown): ProductProfile {
     }
     if ([...logsByBot.values()].some(items => items.length > MAX_WORK_LOGS) ||
         [...pendingByBot.values()].some(items => items.length > MAX_PENDING_LEARNINGS)) invalid();
-    for (const conversation of data.conversations) {
-      if ((conversation.binding?.memoryRulesRevision ?? 0) > (knownMeta.get(conversation.botId)?.rulesRevision ?? 0)) invalid();
+    for (const target of [...data.conversations, ...data.activities]) {
+      const botId = 'botId' in target ? target.botId : target.ownerBotId;
+      if ((target.binding?.memoryRulesRevision ?? 0) > (knownMeta.get(botId)?.rulesRevision ?? 0)) invalid();
     }
-  } else if (data.conversations.some(row => (row.binding?.memoryRulesRevision ?? 0) > 0)) invalid();
+  } else if ([...data.conversations, ...data.activities].some(row => (row.binding?.memoryRulesRevision ?? 0) > 0)) invalid();
   for (const [botId, pending] of Object.entries(data.recovery?.ui?.pending ?? {})) {
     if (conversations.get(pending.conversationId)?.botId !== botId) invalid();
   }
@@ -292,7 +317,38 @@ export function decodeProductBackup(data: unknown): { profile: ProductProfile; b
     const { backup, ...records } = data;
     const profile = decodeProductProfile(records);
     if (!backup || typeof backup !== 'object') return { profile, backup: decodeTraceBackup(profile, backup) };
-    const { privateSkillBundles: bundles, skillApprovals: approvals, activityEscalations, ...traces } = backup as Record<string, unknown>;
+    const { privateSkillBundles: bundles, skillApprovals: approvals, activityEscalations, activityProgress, skillApprovalRequests,
+      triageAccounting, ...traces } = backup as Record<string, unknown>;
+    const activities = new Map(profile.activities.map(row => [row.activityId, row]));
+    if (triageAccounting !== undefined && (!Value.Check(Type.Array(triageSchema), triageAccounting) ||
+        new Set(triageAccounting.map(row => row.activityId)).size !== triageAccounting.length || triageAccounting.some(row =>
+          !activities.has(row.activityId) || row.autoAnswersUsed > row.attemptsUsed || !Number.isFinite(Date.parse(row.updatedAt))))) {
+      throw new RequestError('profile_unavailable', 'The recovery copy has invalid triage accounting');
+    }
+    const budgets = new Map((triageAccounting ?? []).map(row => [row.activityId, row]));
+    for (const activity of activities.values()) {
+      const answers = activity.questions.filter(row => row.provenance === 'bot_auto').length;
+      const pending = activity.questions.filter(row => row.state === 'triage_pending').length;
+      const budget = budgets.get(activity.activityId);
+      if (answers !== (budget?.autoAnswersUsed ?? 0) || answers + pending > (budget?.attemptsUsed ?? 0)) {
+        throw new RequestError('profile_unavailable', 'The recovery copy has inconsistent triage accounting');
+      }
+    }
+    if (activityProgress !== undefined && (!Value.Check(Type.Array(activityProgressRecord), activityProgress) ||
+        new Set(activityProgress.map(row => row.activityId)).size !== activityProgress.length || activityProgress.some(row =>
+          activities.get(row.activityId)?.executionIds.at(-1) !== row.executionId || !Number.isFinite(Date.parse(row.at)) ||
+          row.stage !== row.stage.trim() || Buffer.byteLength(row.stage) > 160 || (row.totalSteps ?? 1000) < (row.step ?? 1)))) {
+      throw new RequestError('profile_unavailable', 'The recovery copy has invalid activity progress');
+    }
+    if (skillApprovalRequests !== undefined && (!Value.Check(Type.Array(skillApprovalRequestSchema), skillApprovalRequests) ||
+        new Set(skillApprovalRequests.map(row => row.requestId)).size !== skillApprovalRequests.length || skillApprovalRequests.some(row => {
+          const activity = activities.get(row.activityId);
+          return activity?.ownerBotId !== row.botId || !activity.executionIds.includes(row.executionId) ||
+            row.requestId !== `${row.executionId}:${row.callId}` || (row.revision === 1) !== (row.state === 'open') ||
+            !Number.isFinite(Date.parse(row.createdAt)) || !isAbsolute(row.canonicalWorkspace);
+        }))) {
+      throw new RequestError('profile_unavailable', 'The recovery copy has invalid skill approval requests');
+    }
     if (activityEscalations !== undefined) {
       if (!Value.Check(Type.Array(escalationSchema), activityEscalations) ||
           new Set(activityEscalations.map(row => row.activityId)).size !== activityEscalations.length) {
@@ -328,7 +384,8 @@ export function decodeProductBackup(data: unknown): { profile: ProductProfile; b
         }
       }
     }
-    return { profile, backup: { ...decodeTraceBackup(profile, traces), privateSkillBundles: bundles, skillApprovals: approvals, activityEscalations } };
+    return { profile, backup: { ...decodeTraceBackup(profile, traces), privateSkillBundles: bundles, skillApprovals: approvals, activityEscalations,
+      activityProgress, skillApprovalRequests, triageAccounting } };
   }
   return { profile: decodeProductProfile(data) };
 }
@@ -342,81 +399,48 @@ export function inspectProductRecovery(data: unknown): { contacts: number; activ
   return { contacts: profile.bots.length, activities: profile.activities.length };
 }
 
-export function redactBackupProfile(profile: ProductProfile, redact: (text: string) => string): void {
-  const label = (text: string) => redact(text) || redact('…') || '�';
-  const material = (row: Material) => {
-    row.name = label(row.name);
-    row.text = redact(row.text);
-  };
-  const quote = (row: ProductQuote) => {
-    row.authorName = clipUTF8(redact(row.authorName).trim(), quoteAuthorMaxBytes, '').trimEnd() || label('…');
-    row.text = clipUTF8(redact(row.text).trim(), quoteTextMaxBytes, '').trimEnd() || label('…');
-  };
-  const draft = (row: Draft) => {
-    row.text = redact(row.text);
-    row.materials.forEach(material);
-    if (row.quote) quote(row.quote);
-  };
-  const payload = (value: object) => {
-    const row = value as Record<string, unknown>;
-    for (const field of ['text', 'goal', 'draft', 'prompt', 'summary', 'detail', 'message', 'error', 'diagnostic', 'answer_text']) {
-      const text = row[field];
-      if (typeof text === 'string') row[field] = redact(text);
-    }
-    for (const field of ['result', 'details', 'error', 'diagnostic', 'draft', 'input', 'answer']) {
-      const nested = row[field];
-      if (nested && typeof nested === 'object' && !Array.isArray(nested)) payload(nested);
-    }
-    for (const field of ['questions', 'requirement_items', 'requirements', 'diagnostics', 'constraints']) {
-      const children = row[field];
-      if (!Array.isArray(children)) continue;
-      row[field] = children.map(child => {
-        if (typeof child === 'string') return redact(child);
-        if (child && typeof child === 'object' && !Array.isArray(child)) payload(child);
-        return child;
-      });
-    }
-    for (const field of ['materials', 'context', 'answer_context']) {
-      const materials = row[field];
-      if (Array.isArray(materials)) for (const item of materials) if (Value.Check(materialSchema, item)) material(item);
-    }
-    if (Value.Check(productQuote, row.quote)) quote(row.quote);
-  };
-
-  for (const conversation of profile.conversations) draft(conversation.draft);
-  for (const execution of profile.executions) {
-    draft(execution.input);
-    if (execution.error !== undefined) execution.error = redact(execution.error);
-    if (execution.retained) payload(execution.retained);
-  }
-  for (const activity of profile.activities) {
-    activity.goal = redact(activity.goal);
-    activity.requirements = activity.requirements.map(redact);
-    if (activity.routing?.constraints) activity.routing.constraints = activity.routing.constraints.map(text => {
-      const clean = redact(text);
-      return clean === text ? text : clipUTF8(clean, 1024, '');
-    });
-    activity.materials.forEach(material);
-    for (const question of activity.questions) {
-      question.text = redact(question.text);
-      if (question.answer) {
-        question.answer.text = redact(question.answer.text);
-        question.answer.materials.forEach(material);
+function redactBackupProfile(snapshot: ProductProfile & { backup: ProductBackup }, redact: (text: string) => string): void {
+  const bounded = (text: string, max: number) => clipUTF8(text.trim(), max, '').trimEnd() || redact('…') || '�';
+  const visit = (value: object) => {
+    for (const [key, item] of Object.entries(value)) {
+      if (item && typeof item === 'object') visit(item);
+      else if (typeof item === 'string') {
+        const clean = redact(item);
+        if (clean !== item) Object.assign(value, { [key]: clean });
       }
     }
-    for (const result of activity.results) result.text = redact(result.text);
-    if (activity.retained) payload(activity.retained);
+  };
+  visit(snapshot);
+  for (const draft of [...snapshot.conversations.map(row => row.draft), ...snapshot.executions.map(row => row.input)]) {
+    if (draft.quote) {
+      draft.quote.authorName = bounded(draft.quote.authorName, quoteAuthorMaxBytes);
+      draft.quote.text = bounded(draft.quote.text, quoteTextMaxBytes);
+    }
   }
-  for (const operation of profile.operations) {
-    payload(operation.reply);
-    if (operation.receipt.result) payload(operation.receipt.result);
-    if (operation.replyError) payload(operation.replyError);
-    if (operation.retained) payload(operation.retained);
+  for (const activity of snapshot.activities) {
+    if (activity.routing?.constraints) activity.routing.constraints = activity.routing.constraints.map(text => clipUTF8(text, 1024, ''));
+    for (const question of activity.questions) {
+      if (question.options !== undefined || question.allowFreeText !== undefined || question.requiresUserDecision !== undefined || question.preferenceKey !== undefined) {
+        question.text = bounded(question.text, questionTextBytes);
+      }
+      for (const option of question.options ?? []) {
+        option.label = bounded(option.label, optionLabelBytes);
+        if (option.description !== undefined) option.description = clipUTF8(option.description, optionDescriptionBytes, '');
+      }
+      if (question.answer && (question.allowFreeText === false || question.provenance === 'bot_auto')) {
+        const option = question.options?.find(row => row.id === question.selectedOptionId);
+        if (option) question.answer.text = option.label;
+      }
+    }
+  }
+  for (const row of snapshot.backup.activityProgress ?? []) row.stage = bounded(row.stage, 160);
+  for (const request of snapshot.backup.skillApprovalRequests ?? []) {
+    if (request.reason !== undefined) request.reason = clipUTF8(request.reason, 512, '');
   }
 }
 
 export function backupProductProfile(paths: ProductProfilePaths, profile: ProductProfile, backup: ProductBackup, destination: string,
-  checkSecrets: (snapshot: object) => void): { path: string } {
+  redact: (text: string) => string, checkSecrets: (snapshot: object) => void): { path: string } {
   if (!isAbsolute(destination) || extname(destination).toLowerCase() !== '.json') {
     throw new RequestError('invalid_params', 'Choose an absolute JSON location for the recovery copy');
   }
@@ -429,6 +453,7 @@ export function backupProductProfile(paths: ProductProfilePaths, profile: Produc
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
   }
   const snapshot = { ...profile, recovery: { id: randomUUID(), ui }, backup };
+  redactBackupProfile(snapshot, redact);
   checkSecrets(snapshot);
   inspectProductRecovery(snapshot);
   const data = Buffer.from(JSON.stringify(snapshot) + '\n');
