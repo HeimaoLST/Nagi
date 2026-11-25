@@ -4,7 +4,11 @@ package app
 // optional selection so a missing field means "use the Runtime default" while a
 // present, empty slice means "explicitly no built-in tools".
 
-import "slices"
+import (
+	"slices"
+
+	"github.com/HeimaoLST/Nagi/internal/pi"
+)
 
 const (
 	builtinNoticeManaged         = "builtin-managed"
@@ -25,6 +29,11 @@ func profileDraftEqual(left, right profileDraft) bool {
 		left.Instructions == right.Instructions &&
 		slices.Equal(left.StarterPrompts, right.StarterPrompts) &&
 		left.Workspace == right.Workspace &&
+		left.ToolPreset == right.ToolPreset &&
+		slices.Equal(left.MountedSkills, right.MountedSkills) &&
+		slices.EqualFunc(left.McpBindings, right.McpBindings, func(a, b pi.ProductMcpBinding) bool {
+			return a.ServerID == b.ServerID && a.Policy == b.Policy && slices.Equal(a.AllowedTools, b.AllowedTools)
+		}) &&
 		builtinToolsEqual(left.BuiltinTools, right.BuiltinTools)
 }
 
@@ -32,7 +41,7 @@ func (a *appModel) validateBuiltinToolSelection(current, next *[]string) string 
 	if builtinToolsEqual(current, next) {
 		return ""
 	}
-	if !a.connectionManaged {
+	if !a.connectionManaged && a.productHost() == nil {
 		return builtinNoticeManaged
 	}
 	if next == nil || len(*next) == 0 {

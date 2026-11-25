@@ -23,8 +23,8 @@ const (
 )
 
 func contactProfileDraft(ct *contact) profileDraft {
-	return profileDraft{Name: ct.Name, Purpose: ct.Purpose, Instructions: ct.Instructions, StarterPrompts: slices.Clone(ct.StarterPrompts),
-		Workspace: ct.Workspace, BuiltinTools: cloneBuiltinTools(ct.BuiltinTools)}
+	return cloneProfileDraft(profileDraft{Name: ct.Name, Purpose: ct.Purpose, Instructions: ct.Instructions, StarterPrompts: ct.StarterPrompts,
+		Workspace: ct.Workspace, BuiltinTools: ct.BuiltinTools, ToolPreset: ct.ToolPreset, MountedSkills: ct.MountedSkills, McpBindings: ct.McpBindings})
 }
 
 func (a *appModel) openContactProfile(contactID string) {
@@ -46,6 +46,7 @@ func (a *appModel) openContactProfile(contactID string) {
 	a.contactProfileID = contactID
 	a.openDetail(detailProfile)
 	a.loadBotMemory(ct)
+	a.loadBotCapabilities(ct)
 }
 
 func (a *appModel) profileEditorFor(contactID string) *contactProfileEditor {
@@ -111,8 +112,10 @@ func (a *appModel) updateProductBot(host *piAppHost, ct *contact, editor *contac
 		return false
 	}
 	var codingTools []string
-	if draft.BuiltinTools != nil {
+	if draft.BuiltinTools != nil && (draft.ToolPreset == "" || draft.ToolPreset == pi.ToolPresetCustom) {
 		codingTools = *draft.BuiltinTools
+	} else if draft.ToolPreset == pi.ToolPresetCustom {
+		codingTools = []string{}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -123,7 +126,8 @@ func (a *appModel) updateProductBot(host *piAppHost, ct *contact, editor *contac
 	bot, err := host.product.UpdateBot(ctx, pi.ProductBotUpdateParams{
 		ProductBotRevisionParams: pi.ProductBotRevisionParams{BotID: ct.ID, ExpectedRevision: ct.ProfileRevision, OperationID: newContactID()},
 		Profile: pi.ProductBotProfile{Name: draft.Name, Role: ct.Role, Purpose: draft.Purpose, Instructions: draft.Instructions,
-			StarterPrompts: draft.StarterPrompts, Workspace: draft.Workspace, CodingTools: codingTools}, StartNewConversation: startNew,
+			StarterPrompts: draft.StarterPrompts, Workspace: draft.Workspace, CodingTools: codingTools, ToolPreset: draft.ToolPreset,
+			MountedSkills: draft.MountedSkills, McpBindings: draft.McpBindings}, StartNewConversation: startNew,
 	})
 	if err != nil {
 		if editor != nil {
@@ -137,6 +141,7 @@ func (a *appModel) updateProductBot(host *piAppHost, ct *contact, editor *contac
 		editor.profileRevision = ct.ProfileRevision
 		editor.Status = profileNoticeSavedDefaults
 	}
+	a.refreshBotSkills(ct)
 	return true
 }
 

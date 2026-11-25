@@ -84,11 +84,13 @@ func (a *appModel) view(c *ui.Context) {
 	})
 	a.createBotDialogView(c, t)
 	a.providerDialog(c, t)
+	a.capabilityDialogs(c, t)
+	a.skillReviewDialog(c, t)
 	a.composerMaterialDialog(c, t)
 }
 
 func (a *appModel) escapeTopLayer() {
-	if a.composerMaterial != nil || a.composerAttachMenuOpen {
+	if a.composerMaterial != nil || a.composerAttachMenuOpen || a.capabilities.review != nil {
 		return
 	}
 	if a.detailPageActive() {

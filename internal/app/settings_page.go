@@ -17,9 +17,10 @@ import (
 )
 
 const (
-	settingsTabAppearance = "appearance"
-	settingsTabConnection = "connection"
-	settingsTabAdvanced   = "advanced"
+	settingsTabAppearance   = "appearance"
+	settingsTabConnection   = "connection"
+	settingsTabCapabilities = "capabilities"
+	settingsTabAdvanced     = "advanced"
 
 	settingsSourceRail          = "rail"
 	settingsSourceProfile       = "profile"
@@ -80,6 +81,10 @@ func (a *appModel) openSettingsTab(tab, source string) {
 	}
 	switch tab {
 	case settingsTabAppearance, settingsTabConnection, settingsTabAdvanced:
+	case settingsTabCapabilities:
+		if a.productHost() == nil {
+			tab = settingsTabAppearance
+		}
 	default:
 		tab = settingsTabAppearance
 	}
@@ -112,6 +117,10 @@ func (a *appModel) openSettingsTab(tab, source string) {
 	a.ensureConnectionForm()
 	if host := a.productHost(); tab == settingsTabConnection && host != nil {
 		a.refreshProductProviders(host)
+	}
+	if tab == settingsTabCapabilities {
+		a.refreshCapabilityLibrary()
+		a.refreshCapabilityServers()
 	}
 	if a.connectionForm != nil {
 		a.connectionForm.FocusField = ""
@@ -197,6 +206,8 @@ func (a *appModel) settingsPage(c *ui.Context, base *ui.Theme) {
 	})
 }
 
+var settingsCapabilitiesIcon = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>`))
+
 var settingsConnectionIcon = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12C22 17.5228 17.5228 22 12 22ZM9.71002 19.6674C8.74743 17.6259 8.15732 15.3742 8.02731 13H4.06189C4.458 16.1765 6.71639 18.7747 9.71002 19.6674ZM10.0307 13C10.1811 15.4388 10.8778 17.7297 12 19.752C13.1222 17.7297 13.8189 15.4388 13.9693 13H10.0307ZM19.9381 13H15.9727C15.8427 15.3742 15.2526 17.6259 14.29 19.6674C17.2836 18.7747 19.542 16.1765 19.9381 13ZM4.06189 11H8.02731C8.15732 8.62577 8.74743 6.37407 9.71002 4.33256C6.71639 5.22533 4.458 7.8235 4.06189 11ZM10.0307 11H13.9693C13.8189 8.56122 13.1222 6.27025 12 4.24799C10.8778 6.27025 10.1811 8.56122 10.0307 11ZM14.29 4.33256C15.2526 6.37407 15.8427 8.62577 15.9727 11H19.9381C19.542 7.8235 17.2836 5.22533 14.29 4.33256Z"/></svg>`))
 
 func (a *appModel) settingsSidebar(c *ui.Context, t *ui.Theme, narrow bool) {
@@ -244,6 +255,8 @@ func (a *appModel) settingsSidebar(c *ui.Context, t *ui.Theme, narrow bool) {
 				switch tab {
 				case settingsTabConnection:
 					glyph = settingsConnectionIcon
+				case settingsTabCapabilities:
+					glyph = settingsCapabilitiesIcon
 				case settingsTabAdvanced:
 					glyph = glyphMoreLine
 				}
@@ -257,19 +270,21 @@ func (a *appModel) settingsSidebar(c *ui.Context, t *ui.Theme, narrow bool) {
 			}
 		}
 		if narrow {
-			ui.Row(c).FillWidth().Padding(0, 8).Gap(2).Wrap().Children(func() {
-				nav(msgs.SettingsGeneral(), settingsTabAppearance)
-				nav(msgs.SettingsConnection(), settingsTabConnection)
-				nav(msgs.SettingsAdvanced(), settingsTabAdvanced)
-			})
+			ui.Row(c).FillWidth().Padding(0, 8).Gap(2).Wrap().Children(func() { a.settingsNavigation(c, msgs, nav) })
 		} else {
-			ui.Column(c).FillWidth().Padding(0, 8).Gap(2).Children(func() {
-				nav(msgs.SettingsGeneral(), settingsTabAppearance)
-				nav(msgs.SettingsConnection(), settingsTabConnection)
-				nav(msgs.SettingsAdvanced(), settingsTabAdvanced)
-			})
+			ui.Column(c).FillWidth().Padding(0, 8).Gap(2).Children(func() { a.settingsNavigation(c, msgs, nav) })
 		}
 	})
+}
+
+func (a *appModel) settingsNavigation(c *ui.Context, msgs locales.Messages, nav func(string, string)) {
+	nav(msgs.SettingsGeneral(), settingsTabAppearance)
+	nav(msgs.SettingsConnection(), settingsTabConnection)
+	if a.productHost() != nil {
+		c.Key(settingsTabCapabilities)
+		nav(msgs.SettingsCapabilities(), settingsTabCapabilities)
+	}
+	nav(msgs.SettingsAdvanced(), settingsTabAdvanced)
 }
 
 func (a *appModel) settingsMain(c *ui.Context, t *ui.Theme, narrow bool) {
@@ -280,6 +295,8 @@ func (a *appModel) settingsMain(c *ui.Context, t *ui.Theme, narrow bool) {
 		title = msgs.SettingsGeneral()
 	case settingsTabConnection:
 		title = msgs.SettingsConnection()
+	case settingsTabCapabilities:
+		title = msgs.SettingsCapabilities()
 	}
 	main := ui.Column(c).Grow(1).MinWidth(0).MinHeight(0).AlignSelf(ui.Stretch).BorderColor(t.Border).Clip()
 	if narrow {
@@ -290,26 +307,39 @@ func (a *appModel) settingsMain(c *ui.Context, t *ui.Theme, narrow bool) {
 	main.Children(func() {
 		host := a.productHost()
 		providerSettings := a.settingsTab == settingsTabConnection && host != nil
+		capabilitySettings := a.settingsTab == settingsTabCapabilities && host != nil
 		width, _ := c.Size()
 		if !narrow {
 			width -= settingsSidebarWidth
 		}
 		contentWidth := min(width, settingsContentWidth) - 64
-		wrapTabs := providerSettings && contentWidth < 540
+		var tabs func()
+		if providerSettings {
+			tabs = func() { a.providerTabs(c, msgs, len(host.productProviders.Accounts)) }
+		} else if capabilitySettings {
+			tabs = func() { a.capabilityTabs(c, msgs) }
+		}
+		wrapTabs := tabs != nil && contentWidth < 540
 		ui.Row(c).FillWidth().MaxWidth(settingsContentWidth).AlignSelf(ui.Center).Height(max(float32(48), c.TitleBar().Height)).Shrink(0).Padding(0, 32).AlignItems(ui.Center).Justify(ui.SpaceBetween).DragWindow().Children(func() {
 			pageHeading(c, title)
-			if providerSettings && !wrapTabs {
-				a.providerTabs(c, msgs, len(host.productProviders.Accounts))
+			if tabs != nil && !wrapTabs {
+				tabs()
 			}
 		})
 		if wrapTabs {
 			ui.Row(c).FillWidth().MaxWidth(settingsContentWidth).AlignSelf(ui.Center).Shrink(0).Padding(0, 32).Justify(ui.End).Children(func() {
-				a.providerTabs(c, msgs, len(host.productProviders.Accounts))
+				tabs()
 			})
 		}
 		if providerSettings && a.providers.tab == providerTabAccounts && len(host.productProviders.Accounts) > 0 && contentWidth >= 600 {
 			ui.Column(c).FillWidth().MaxWidth(settingsContentWidth).MinHeight(0).Grow(1).AlignSelf(ui.Center).Padding(12, 32, 24).Gap(12).Children(func() {
 				a.providerWorkspace(c, t, host.productProviders, true)
+			})
+			return
+		}
+		if capabilitySettings && contentWidth >= 600 {
+			ui.Column(c).FillWidth().MaxWidth(settingsContentWidth).MinHeight(0).Grow(1).AlignSelf(ui.Center).Padding(12, 32, 24).Gap(12).Children(func() {
+				a.settingsCapabilitiesContent(c, t, true)
 			})
 			return
 		}
@@ -320,6 +350,8 @@ func (a *appModel) settingsMain(c *ui.Context, t *ui.Theme, narrow bool) {
 					a.settingsAppearanceContent(c, t)
 				case settingsTabConnection:
 					a.settingsConnectionContent(c, t)
+				case settingsTabCapabilities:
+					a.settingsCapabilitiesContent(c, t, false)
 				default:
 					a.settingsAdvancedContent(c, t)
 				}
@@ -486,7 +518,7 @@ func (a *appModel) dataRecoveryBlocked(restore bool) string {
 			return "busy"
 		}
 	}
-	if a.contextFilePickers > 0 || a.shutdownStarted || a.connectionSaveInFlight || a.connectionApplying || a.connectionTesting || a.providerBusy() || a.contactHistoryInFlight > 0 || a.submissionInFlight > 0 || a.themeImport != nil && a.themeImport.Busy || a.connectionForm != nil && a.connectionForm.Busy {
+	if a.contextFilePickers > 0 || a.shutdownStarted || a.connectionSaveInFlight || a.connectionApplying || a.connectionTesting || a.providerBusy() || a.capabilitiesBusy() || a.contactHistoryInFlight > 0 || a.submissionInFlight > 0 || a.themeImport != nil && a.themeImport.Busy || a.connectionForm != nil && a.connectionForm.Busy {
 		return "busy"
 	}
 	if !productBackup && a.activeTaskCount() > 0 {

@@ -9947,3 +9947,1527 @@ func ProviderAnswerPaused() string { return In(i18n.Locale()).ProviderAnswerPaus
 func (msgs Messages) ProviderAnswerPaused() string {
 	return Catalog.Format(msgs.locale, "providerAnswerPaused", nil)
 }
+
+// SettingsCapabilities says "Capabilities"
+// in the language the app shows.
+func SettingsCapabilities() string { return In(i18n.Locale()).SettingsCapabilities() }
+
+// SettingsCapabilities says "Capabilities"
+// in the language of msgs.
+func (msgs Messages) SettingsCapabilities() string {
+	return Catalog.Format(msgs.locale, "settingsCapabilities", nil)
+}
+
+// CapSkills says "Skills"
+// in the language the app shows.
+func CapSkills() string { return In(i18n.Locale()).CapSkills() }
+
+// CapSkills says "Skills"
+// in the language of msgs.
+func (msgs Messages) CapSkills() string {
+	return Catalog.Format(msgs.locale, "capSkills", nil)
+}
+
+// CapSkillsCount says "Skills ({count})"
+// in the language the app shows.
+func CapSkillsCount(count int) string { return In(i18n.Locale()).CapSkillsCount(count) }
+
+// CapSkillsCount says "Skills ({count})"
+// in the language of msgs.
+func (msgs Messages) CapSkillsCount(count int) string {
+	return Catalog.Format(msgs.locale, "capSkillsCount", map[string]any{"count": count})
+}
+
+// CapMcp says "MCP servers"
+// in the language the app shows.
+func CapMcp() string { return In(i18n.Locale()).CapMcp() }
+
+// CapMcp says "MCP servers"
+// in the language of msgs.
+func (msgs Messages) CapMcp() string {
+	return Catalog.Format(msgs.locale, "capMcp", nil)
+}
+
+// CapMcpCount says "MCP servers ({count})"
+// in the language the app shows.
+func CapMcpCount(count int) string { return In(i18n.Locale()).CapMcpCount(count) }
+
+// CapMcpCount says "MCP servers ({count})"
+// in the language of msgs.
+func (msgs Messages) CapMcpCount(count int) string {
+	return Catalog.Format(msgs.locale, "capMcpCount", map[string]any{"count": count})
+}
+
+// CapGlobalCount says "{count, plural, one {# global skill} other {# global skills}}"
+// in the language the app shows.
+func CapGlobalCount(count int) string { return In(i18n.Locale()).CapGlobalCount(count) }
+
+// CapGlobalCount says "{count, plural, one {# global skill} other {# global skills}}"
+// in the language of msgs.
+func (msgs Messages) CapGlobalCount(count int) string {
+	return Catalog.Format(msgs.locale, "capGlobalCount", map[string]any{"count": count})
+}
+
+// CapDiscoveredCount says "{count, plural, other {# discovered}}"
+// in the language the app shows.
+func CapDiscoveredCount(count int) string { return In(i18n.Locale()).CapDiscoveredCount(count) }
+
+// CapDiscoveredCount says "{count, plural, other {# discovered}}"
+// in the language of msgs.
+func (msgs Messages) CapDiscoveredCount(count int) string {
+	return Catalog.Format(msgs.locale, "capDiscoveredCount", map[string]any{"count": count})
+}
+
+// CapLocalDiscovery says "Local discovery (~/.agents/skills)"
+// in the language the app shows.
+func CapLocalDiscovery() string { return In(i18n.Locale()).CapLocalDiscovery() }
+
+// CapLocalDiscovery says "Local discovery (~/.agents/skills)"
+// in the language of msgs.
+func (msgs Messages) CapLocalDiscovery() string {
+	return Catalog.Format(msgs.locale, "capLocalDiscovery", nil)
+}
+
+// CapOff says "Off"
+// in the language the app shows.
+func CapOff() string { return In(i18n.Locale()).CapOff() }
+
+// CapOff says "Off"
+// in the language of msgs.
+func (msgs Messages) CapOff() string {
+	return Catalog.Format(msgs.locale, "capOff", nil)
+}
+
+// CapOn says "On"
+// in the language the app shows.
+func CapOn() string { return In(i18n.Locale()).CapOn() }
+
+// CapOn says "On"
+// in the language of msgs.
+func (msgs Messages) CapOn() string {
+	return Catalog.Format(msgs.locale, "capOn", nil)
+}
+
+// CapNewSkill says "New skill"
+// in the language the app shows.
+func CapNewSkill() string { return In(i18n.Locale()).CapNewSkill() }
+
+// CapNewSkill says "New skill"
+// in the language of msgs.
+func (msgs Messages) CapNewSkill() string {
+	return Catalog.Format(msgs.locale, "capNewSkill", nil)
+}
+
+// CapNewSkillHint says "Write instructions that Bots can mount and use."
+// in the language the app shows.
+func CapNewSkillHint() string { return In(i18n.Locale()).CapNewSkillHint() }
+
+// CapNewSkillHint says "Write instructions that Bots can mount and use."
+// in the language of msgs.
+func (msgs Messages) CapNewSkillHint() string {
+	return Catalog.Format(msgs.locale, "capNewSkillHint", nil)
+}
+
+// CapNoSkills says "No skills in the library yet."
+// in the language the app shows.
+func CapNoSkills() string { return In(i18n.Locale()).CapNoSkills() }
+
+// CapNoSkills says "No skills in the library yet."
+// in the language of msgs.
+func (msgs Messages) CapNoSkills() string {
+	return Catalog.Format(msgs.locale, "capNoSkills", nil)
+}
+
+// CapSkillGlobal says "Global"
+// in the language the app shows.
+func CapSkillGlobal() string { return In(i18n.Locale()).CapSkillGlobal() }
+
+// CapSkillGlobal says "Global"
+// in the language of msgs.
+func (msgs Messages) CapSkillGlobal() string {
+	return Catalog.Format(msgs.locale, "capSkillGlobal", nil)
+}
+
+// CapSkillLocal says "Local"
+// in the language the app shows.
+func CapSkillLocal() string { return In(i18n.Locale()).CapSkillLocal() }
+
+// CapSkillLocal says "Local"
+// in the language of msgs.
+func (msgs Messages) CapSkillLocal() string {
+	return Catalog.Format(msgs.locale, "capSkillLocal", nil)
+}
+
+// CapLocalGroup says "Local (~/.agents/skills)"
+// in the language the app shows.
+func CapLocalGroup() string { return In(i18n.Locale()).CapLocalGroup() }
+
+// CapLocalGroup says "Local (~/.agents/skills)"
+// in the language of msgs.
+func (msgs Messages) CapLocalGroup() string {
+	return Catalog.Format(msgs.locale, "capLocalGroup", nil)
+}
+
+// CapLocalReadOnly says "Local, read-only"
+// in the language the app shows.
+func CapLocalReadOnly() string { return In(i18n.Locale()).CapLocalReadOnly() }
+
+// CapLocalReadOnly says "Local, read-only"
+// in the language of msgs.
+func (msgs Messages) CapLocalReadOnly() string {
+	return Catalog.Format(msgs.locale, "capLocalReadOnly", nil)
+}
+
+// CapSkillWorkspace says "Workspace"
+// in the language the app shows.
+func CapSkillWorkspace() string { return In(i18n.Locale()).CapSkillWorkspace() }
+
+// CapSkillWorkspace says "Workspace"
+// in the language of msgs.
+func (msgs Messages) CapSkillWorkspace() string {
+	return Catalog.Format(msgs.locale, "capSkillWorkspace", nil)
+}
+
+// CapSkillPrivate says "Private"
+// in the language the app shows.
+func CapSkillPrivate() string { return In(i18n.Locale()).CapSkillPrivate() }
+
+// CapSkillPrivate says "Private"
+// in the language of msgs.
+func (msgs Messages) CapSkillPrivate() string {
+	return Catalog.Format(msgs.locale, "capSkillPrivate", nil)
+}
+
+// CapSkillText says "Text"
+// in the language the app shows.
+func CapSkillText() string { return In(i18n.Locale()).CapSkillText() }
+
+// CapSkillText says "Text"
+// in the language of msgs.
+func (msgs Messages) CapSkillText() string {
+	return Catalog.Format(msgs.locale, "capSkillText", nil)
+}
+
+// CapExecutable says "Executable"
+// in the language the app shows.
+func CapExecutable() string { return In(i18n.Locale()).CapExecutable() }
+
+// CapExecutable says "Executable"
+// in the language of msgs.
+func (msgs Messages) CapExecutable() string {
+	return Catalog.Format(msgs.locale, "capExecutable", nil)
+}
+
+// CapReadOnly says "Read-only"
+// in the language the app shows.
+func CapReadOnly() string { return In(i18n.Locale()).CapReadOnly() }
+
+// CapReadOnly says "Read-only"
+// in the language of msgs.
+func (msgs Messages) CapReadOnly() string {
+	return Catalog.Format(msgs.locale, "capReadOnly", nil)
+}
+
+// CapSkillView says "Skill view"
+// in the language the app shows.
+func CapSkillView() string { return In(i18n.Locale()).CapSkillView() }
+
+// CapSkillView says "Skill view"
+// in the language of msgs.
+func (msgs Messages) CapSkillView() string {
+	return Catalog.Format(msgs.locale, "capSkillView", nil)
+}
+
+// CapPreview says "Preview"
+// in the language the app shows.
+func CapPreview() string { return In(i18n.Locale()).CapPreview() }
+
+// CapPreview says "Preview"
+// in the language of msgs.
+func (msgs Messages) CapPreview() string {
+	return Catalog.Format(msgs.locale, "capPreview", nil)
+}
+
+// CapEdit says "Edit"
+// in the language the app shows.
+func CapEdit() string { return In(i18n.Locale()).CapEdit() }
+
+// CapEdit says "Edit"
+// in the language of msgs.
+func (msgs Messages) CapEdit() string {
+	return Catalog.Format(msgs.locale, "capEdit", nil)
+}
+
+// CapDescription says "Description"
+// in the language the app shows.
+func CapDescription() string { return In(i18n.Locale()).CapDescription() }
+
+// CapDescription says "Description"
+// in the language of msgs.
+func (msgs Messages) CapDescription() string {
+	return Catalog.Format(msgs.locale, "capDescription", nil)
+}
+
+// CapInstructions says "Instructions (Markdown)"
+// in the language the app shows.
+func CapInstructions() string { return In(i18n.Locale()).CapInstructions() }
+
+// CapInstructions says "Instructions (Markdown)"
+// in the language of msgs.
+func (msgs Messages) CapInstructions() string {
+	return Catalog.Format(msgs.locale, "capInstructions", nil)
+}
+
+// CapInspectFiles says "Inspect files"
+// in the language the app shows.
+func CapInspectFiles() string { return In(i18n.Locale()).CapInspectFiles() }
+
+// CapInspectFiles says "Inspect files"
+// in the language of msgs.
+func (msgs Messages) CapInspectFiles() string {
+	return Catalog.Format(msgs.locale, "capInspectFiles", nil)
+}
+
+// CapDeleteSkill says "Delete skill"
+// in the language the app shows.
+func CapDeleteSkill() string { return In(i18n.Locale()).CapDeleteSkill() }
+
+// CapDeleteSkill says "Delete skill"
+// in the language of msgs.
+func (msgs Messages) CapDeleteSkill() string {
+	return Catalog.Format(msgs.locale, "capDeleteSkill", nil)
+}
+
+// CapSaveSkill says "Save skill"
+// in the language the app shows.
+func CapSaveSkill() string { return In(i18n.Locale()).CapSaveSkill() }
+
+// CapSaveSkill says "Save skill"
+// in the language of msgs.
+func (msgs Messages) CapSaveSkill() string {
+	return Catalog.Format(msgs.locale, "capSaveSkill", nil)
+}
+
+// CapSkillSlug says "Skill ID"
+// in the language the app shows.
+func CapSkillSlug() string { return In(i18n.Locale()).CapSkillSlug() }
+
+// CapSkillSlug says "Skill ID"
+// in the language of msgs.
+func (msgs Messages) CapSkillSlug() string {
+	return Catalog.Format(msgs.locale, "capSkillSlug", nil)
+}
+
+// CapRequired says "Fill in this field."
+// in the language the app shows.
+func CapRequired() string { return In(i18n.Locale()).CapRequired() }
+
+// CapRequired says "Fill in this field."
+// in the language of msgs.
+func (msgs Messages) CapRequired() string {
+	return Catalog.Format(msgs.locale, "capRequired", nil)
+}
+
+// CapSkillSlugInvalid says "Use up to 63 lowercase letters, digits or hyphens. Start with a letter or digit."
+// in the language the app shows.
+func CapSkillSlugInvalid() string { return In(i18n.Locale()).CapSkillSlugInvalid() }
+
+// CapSkillSlugInvalid says "Use up to 63 lowercase letters, digits or hyphens. Start with a letter or digit."
+// in the language of msgs.
+func (msgs Messages) CapSkillSlugInvalid() string {
+	return Catalog.Format(msgs.locale, "capSkillSlugInvalid", nil)
+}
+
+// CapSkillSlugTaken says "This ID already exists in the global library. Choose another."
+// in the language the app shows.
+func CapSkillSlugTaken() string { return In(i18n.Locale()).CapSkillSlugTaken() }
+
+// CapSkillSlugTaken says "This ID already exists in the global library. Choose another."
+// in the language of msgs.
+func (msgs Messages) CapSkillSlugTaken() string {
+	return Catalog.Format(msgs.locale, "capSkillSlugTaken", nil)
+}
+
+// CapLoading says "Loading…"
+// in the language the app shows.
+func CapLoading() string { return In(i18n.Locale()).CapLoading() }
+
+// CapLoading says "Loading…"
+// in the language of msgs.
+func (msgs Messages) CapLoading() string {
+	return Catalog.Format(msgs.locale, "capLoading", nil)
+}
+
+// CapSkillsReadFailed says "Could not load skills. Try again."
+// in the language the app shows.
+func CapSkillsReadFailed() string { return In(i18n.Locale()).CapSkillsReadFailed() }
+
+// CapSkillsReadFailed says "Could not load skills. Try again."
+// in the language of msgs.
+func (msgs Messages) CapSkillsReadFailed() string {
+	return Catalog.Format(msgs.locale, "capSkillsReadFailed", nil)
+}
+
+// CapSkillReadFailed says "Could not read the skill. Try again."
+// in the language the app shows.
+func CapSkillReadFailed() string { return In(i18n.Locale()).CapSkillReadFailed() }
+
+// CapSkillReadFailed says "Could not read the skill. Try again."
+// in the language of msgs.
+func (msgs Messages) CapSkillReadFailed() string {
+	return Catalog.Format(msgs.locale, "capSkillReadFailed", nil)
+}
+
+// CapSkillChangeFailed says "Could not update the skill library. Check the details and try again."
+// in the language the app shows.
+func CapSkillChangeFailed() string { return In(i18n.Locale()).CapSkillChangeFailed() }
+
+// CapSkillChangeFailed says "Could not update the skill library. Check the details and try again."
+// in the language of msgs.
+func (msgs Messages) CapSkillChangeFailed() string {
+	return Catalog.Format(msgs.locale, "capSkillChangeFailed", nil)
+}
+
+// CapSkillChanged says "The skill changed since you opened it. Switch to Preview, then reopen Edit to review the latest version."
+// in the language the app shows.
+func CapSkillChanged() string { return In(i18n.Locale()).CapSkillChanged() }
+
+// CapSkillChanged says "The skill changed since you opened it. Switch to Preview, then reopen Edit to review the latest version."
+// in the language of msgs.
+func (msgs Messages) CapSkillChanged() string {
+	return Catalog.Format(msgs.locale, "capSkillChanged", nil)
+}
+
+// CapMcpEnabledCount says "{count, plural, one {# server enabled} other {# servers enabled}}"
+// in the language the app shows.
+func CapMcpEnabledCount(count int) string { return In(i18n.Locale()).CapMcpEnabledCount(count) }
+
+// CapMcpEnabledCount says "{count, plural, one {# server enabled} other {# servers enabled}}"
+// in the language of msgs.
+func (msgs Messages) CapMcpEnabledCount(count int) string {
+	return Catalog.Format(msgs.locale, "capMcpEnabledCount", map[string]any{"count": count})
+}
+
+// CapMcpPoolCount says "{count, plural, one {# active pool} other {# active pools}}"
+// in the language the app shows.
+func CapMcpPoolCount(count int) string { return In(i18n.Locale()).CapMcpPoolCount(count) }
+
+// CapMcpPoolCount says "{count, plural, one {# active pool} other {# active pools}}"
+// in the language of msgs.
+func (msgs Messages) CapMcpPoolCount(count int) string {
+	return Catalog.Format(msgs.locale, "capMcpPoolCount", map[string]any{"count": count})
+}
+
+// CapNoMcp says "No MCP servers configured"
+// in the language the app shows.
+func CapNoMcp() string { return In(i18n.Locale()).CapNoMcp() }
+
+// CapNoMcp says "No MCP servers configured"
+// in the language of msgs.
+func (msgs Messages) CapNoMcp() string {
+	return Catalog.Format(msgs.locale, "capNoMcp", nil)
+}
+
+// CapRefreshStatus says "Refresh status"
+// in the language the app shows.
+func CapRefreshStatus() string { return In(i18n.Locale()).CapRefreshStatus() }
+
+// CapRefreshStatus says "Refresh status"
+// in the language of msgs.
+func (msgs Messages) CapRefreshStatus() string {
+	return Catalog.Format(msgs.locale, "capRefreshStatus", nil)
+}
+
+// CapAddMcp says "Add server"
+// in the language the app shows.
+func CapAddMcp() string { return In(i18n.Locale()).CapAddMcp() }
+
+// CapAddMcp says "Add server"
+// in the language of msgs.
+func (msgs Messages) CapAddMcp() string {
+	return Catalog.Format(msgs.locale, "capAddMcp", nil)
+}
+
+// CapAddMcpHint says "Connect an MCP server to make its tools available to Bots."
+// in the language the app shows.
+func CapAddMcpHint() string { return In(i18n.Locale()).CapAddMcpHint() }
+
+// CapAddMcpHint says "Connect an MCP server to make its tools available to Bots."
+// in the language of msgs.
+func (msgs Messages) CapAddMcpHint() string {
+	return Catalog.Format(msgs.locale, "capAddMcpHint", nil)
+}
+
+// CapMcpTestRefresh says "Test & refresh tools"
+// in the language the app shows.
+func CapMcpTestRefresh() string { return In(i18n.Locale()).CapMcpTestRefresh() }
+
+// CapMcpTestRefresh says "Test & refresh tools"
+// in the language of msgs.
+func (msgs Messages) CapMcpTestRefresh() string {
+	return Catalog.Format(msgs.locale, "capMcpTestRefresh", nil)
+}
+
+// CapMcpNameInvalid says "Use 1–63 letters, digits, hyphens or underscores."
+// in the language the app shows.
+func CapMcpNameInvalid() string { return In(i18n.Locale()).CapMcpNameInvalid() }
+
+// CapMcpNameInvalid says "Use 1–63 letters, digits, hyphens or underscores."
+// in the language of msgs.
+func (msgs Messages) CapMcpNameInvalid() string {
+	return Catalog.Format(msgs.locale, "capMcpNameInvalid", nil)
+}
+
+// CapTransport says "Transport"
+// in the language the app shows.
+func CapTransport() string { return In(i18n.Locale()).CapTransport() }
+
+// CapTransport says "Transport"
+// in the language of msgs.
+func (msgs Messages) CapTransport() string {
+	return Catalog.Format(msgs.locale, "capTransport", nil)
+}
+
+// CapStreamableHTTP says "Streamable HTTP"
+// in the language the app shows.
+func CapStreamableHTTP() string { return In(i18n.Locale()).CapStreamableHTTP() }
+
+// CapStreamableHTTP says "Streamable HTTP"
+// in the language of msgs.
+func (msgs Messages) CapStreamableHTTP() string {
+	return Catalog.Format(msgs.locale, "capStreamableHTTP", nil)
+}
+
+// CapIsolation says "Isolation"
+// in the language the app shows.
+func CapIsolation() string { return In(i18n.Locale()).CapIsolation() }
+
+// CapIsolation says "Isolation"
+// in the language of msgs.
+func (msgs Messages) CapIsolation() string {
+	return Catalog.Format(msgs.locale, "capIsolation", nil)
+}
+
+// CapShared says "Shared"
+// in the language the app shows.
+func CapShared() string { return In(i18n.Locale()).CapShared() }
+
+// CapShared says "Shared"
+// in the language of msgs.
+func (msgs Messages) CapShared() string {
+	return Catalog.Format(msgs.locale, "capShared", nil)
+}
+
+// CapPerWorkspace says "Per workspace"
+// in the language the app shows.
+func CapPerWorkspace() string { return In(i18n.Locale()).CapPerWorkspace() }
+
+// CapPerWorkspace says "Per workspace"
+// in the language of msgs.
+func (msgs Messages) CapPerWorkspace() string {
+	return Catalog.Format(msgs.locale, "capPerWorkspace", nil)
+}
+
+// CapPerBot says "Per Bot"
+// in the language the app shows.
+func CapPerBot() string { return In(i18n.Locale()).CapPerBot() }
+
+// CapPerBot says "Per Bot"
+// in the language of msgs.
+func (msgs Messages) CapPerBot() string {
+	return Catalog.Format(msgs.locale, "capPerBot", nil)
+}
+
+// CapIsolationHint says "Choose which Bots or workspaces share a connection."
+// in the language the app shows.
+func CapIsolationHint() string { return In(i18n.Locale()).CapIsolationHint() }
+
+// CapIsolationHint says "Choose which Bots or workspaces share a connection."
+// in the language of msgs.
+func (msgs Messages) CapIsolationHint() string {
+	return Catalog.Format(msgs.locale, "capIsolationHint", nil)
+}
+
+// CapCommand says "Command"
+// in the language the app shows.
+func CapCommand() string { return In(i18n.Locale()).CapCommand() }
+
+// CapCommand says "Command"
+// in the language of msgs.
+func (msgs Messages) CapCommand() string {
+	return Catalog.Format(msgs.locale, "capCommand", nil)
+}
+
+// CapArguments says "Arguments"
+// in the language the app shows.
+func CapArguments() string { return In(i18n.Locale()).CapArguments() }
+
+// CapArguments says "Arguments"
+// in the language of msgs.
+func (msgs Messages) CapArguments() string {
+	return Catalog.Format(msgs.locale, "capArguments", nil)
+}
+
+// CapArgumentsHint says "One argument per line"
+// in the language the app shows.
+func CapArgumentsHint() string { return In(i18n.Locale()).CapArgumentsHint() }
+
+// CapArgumentsHint says "One argument per line"
+// in the language of msgs.
+func (msgs Messages) CapArgumentsHint() string {
+	return Catalog.Format(msgs.locale, "capArgumentsHint", nil)
+}
+
+// CapMcpArgumentsInvalid says "Remove null characters from the arguments."
+// in the language the app shows.
+func CapMcpArgumentsInvalid() string { return In(i18n.Locale()).CapMcpArgumentsInvalid() }
+
+// CapMcpArgumentsInvalid says "Remove null characters from the arguments."
+// in the language of msgs.
+func (msgs Messages) CapMcpArgumentsInvalid() string {
+	return Catalog.Format(msgs.locale, "capMcpArgumentsInvalid", nil)
+}
+
+// CapEnvironment says "Environment variables"
+// in the language the app shows.
+func CapEnvironment() string { return In(i18n.Locale()).CapEnvironment() }
+
+// CapEnvironment says "Environment variables"
+// in the language of msgs.
+func (msgs Messages) CapEnvironment() string {
+	return Catalog.Format(msgs.locale, "capEnvironment", nil)
+}
+
+// CapMcpEnvInvalid says "Use one unique KEY=VALUE assignment per line."
+// in the language the app shows.
+func CapMcpEnvInvalid() string { return In(i18n.Locale()).CapMcpEnvInvalid() }
+
+// CapMcpEnvInvalid says "Use one unique KEY=VALUE assignment per line."
+// in the language of msgs.
+func (msgs Messages) CapMcpEnvInvalid() string {
+	return Catalog.Format(msgs.locale, "capMcpEnvInvalid", nil)
+}
+
+// CapAbsolutePath says "Enter an absolute path."
+// in the language the app shows.
+func CapAbsolutePath() string { return In(i18n.Locale()).CapAbsolutePath() }
+
+// CapAbsolutePath says "Enter an absolute path."
+// in the language of msgs.
+func (msgs Messages) CapAbsolutePath() string {
+	return Catalog.Format(msgs.locale, "capAbsolutePath", nil)
+}
+
+// CapSecretEnv says "Secret environment key"
+// in the language the app shows.
+func CapSecretEnv() string { return In(i18n.Locale()).CapSecretEnv() }
+
+// CapSecretEnv says "Secret environment key"
+// in the language of msgs.
+func (msgs Messages) CapSecretEnv() string {
+	return Catalog.Format(msgs.locale, "capSecretEnv", nil)
+}
+
+// CapSecretHeader says "Secret header"
+// in the language the app shows.
+func CapSecretHeader() string { return In(i18n.Locale()).CapSecretHeader() }
+
+// CapSecretHeader says "Secret header"
+// in the language of msgs.
+func (msgs Messages) CapSecretHeader() string {
+	return Catalog.Format(msgs.locale, "capSecretHeader", nil)
+}
+
+// CapSecretValue says "Secret value"
+// in the language the app shows.
+func CapSecretValue() string { return In(i18n.Locale()).CapSecretValue() }
+
+// CapSecretValue says "Secret value"
+// in the language of msgs.
+func (msgs Messages) CapSecretValue() string {
+	return Catalog.Format(msgs.locale, "capSecretValue", nil)
+}
+
+// CapAddSecret says "Add secret field"
+// in the language the app shows.
+func CapAddSecret() string { return In(i18n.Locale()).CapAddSecret() }
+
+// CapAddSecret says "Add secret field"
+// in the language of msgs.
+func (msgs Messages) CapAddSecret() string {
+	return Catalog.Format(msgs.locale, "capAddSecret", nil)
+}
+
+// CapClear says "Clear"
+// in the language the app shows.
+func CapClear() string { return In(i18n.Locale()).CapClear() }
+
+// CapClear says "Clear"
+// in the language of msgs.
+func (msgs Messages) CapClear() string {
+	return Catalog.Format(msgs.locale, "capClear", nil)
+}
+
+// CapRemove says "Remove"
+// in the language the app shows.
+func CapRemove() string { return In(i18n.Locale()).CapRemove() }
+
+// CapRemove says "Remove"
+// in the language of msgs.
+func (msgs Messages) CapRemove() string {
+	return Catalog.Format(msgs.locale, "capRemove", nil)
+}
+
+// CapServerURL says "Server URL"
+// in the language the app shows.
+func CapServerURL() string { return In(i18n.Locale()).CapServerURL() }
+
+// CapServerURL says "Server URL"
+// in the language of msgs.
+func (msgs Messages) CapServerURL() string {
+	return Catalog.Format(msgs.locale, "capServerURL", nil)
+}
+
+// CapMcpURLInvalid says "Enter an HTTP or HTTPS URL without credentials."
+// in the language the app shows.
+func CapMcpURLInvalid() string { return In(i18n.Locale()).CapMcpURLInvalid() }
+
+// CapMcpURLInvalid says "Enter an HTTP or HTTPS URL without credentials."
+// in the language of msgs.
+func (msgs Messages) CapMcpURLInvalid() string {
+	return Catalog.Format(msgs.locale, "capMcpURLInvalid", nil)
+}
+
+// CapHeaders says "Headers"
+// in the language the app shows.
+func CapHeaders() string { return In(i18n.Locale()).CapHeaders() }
+
+// CapHeaders says "Headers"
+// in the language of msgs.
+func (msgs Messages) CapHeaders() string {
+	return Catalog.Format(msgs.locale, "capHeaders", nil)
+}
+
+// CapMcpHeadersInvalid says "Use one unique Header: Value entry per line."
+// in the language the app shows.
+func CapMcpHeadersInvalid() string { return In(i18n.Locale()).CapMcpHeadersInvalid() }
+
+// CapMcpHeadersInvalid says "Use one unique Header: Value entry per line."
+// in the language of msgs.
+func (msgs Messages) CapMcpHeadersInvalid() string {
+	return Catalog.Format(msgs.locale, "capMcpHeadersInvalid", nil)
+}
+
+// CapMcpSecretsInvalid says "Use valid, unique secret names that differ from public names, and enter each value on one line."
+// in the language the app shows.
+func CapMcpSecretsInvalid() string { return In(i18n.Locale()).CapMcpSecretsInvalid() }
+
+// CapMcpSecretsInvalid says "Use valid, unique secret names that differ from public names, and enter each value on one line."
+// in the language of msgs.
+func (msgs Messages) CapMcpSecretsInvalid() string {
+	return Catalog.Format(msgs.locale, "capMcpSecretsInvalid", nil)
+}
+
+// CapToolCatalog says "Discovered tools"
+// in the language the app shows.
+func CapToolCatalog() string { return In(i18n.Locale()).CapToolCatalog() }
+
+// CapToolCatalog says "Discovered tools"
+// in the language of msgs.
+func (msgs Messages) CapToolCatalog() string {
+	return Catalog.Format(msgs.locale, "capToolCatalog", nil)
+}
+
+// CapToolCount says "{count, plural, one {# tool} other {# tools}}"
+// in the language the app shows.
+func CapToolCount(count int) string { return In(i18n.Locale()).CapToolCount(count) }
+
+// CapToolCount says "{count, plural, one {# tool} other {# tools}}"
+// in the language of msgs.
+func (msgs Messages) CapToolCount(count int) string {
+	return Catalog.Format(msgs.locale, "capToolCount", map[string]any{"count": count})
+}
+
+// CapDestructive says "Destructive"
+// in the language the app shows.
+func CapDestructive() string { return In(i18n.Locale()).CapDestructive() }
+
+// CapDestructive says "Destructive"
+// in the language of msgs.
+func (msgs Messages) CapDestructive() string {
+	return Catalog.Format(msgs.locale, "capDestructive", nil)
+}
+
+// CapMutating says "Mutating"
+// in the language the app shows.
+func CapMutating() string { return In(i18n.Locale()).CapMutating() }
+
+// CapMutating says "Mutating"
+// in the language of msgs.
+func (msgs Messages) CapMutating() string {
+	return Catalog.Format(msgs.locale, "capMutating", nil)
+}
+
+// CapLivePools says "Live connection pools"
+// in the language the app shows.
+func CapLivePools() string { return In(i18n.Locale()).CapLivePools() }
+
+// CapLivePools says "Live connection pools"
+// in the language of msgs.
+func (msgs Messages) CapLivePools() string {
+	return Catalog.Format(msgs.locale, "capLivePools", nil)
+}
+
+// CapPoolConnecting says "Connecting"
+// in the language the app shows.
+func CapPoolConnecting() string { return In(i18n.Locale()).CapPoolConnecting() }
+
+// CapPoolConnecting says "Connecting"
+// in the language of msgs.
+func (msgs Messages) CapPoolConnecting() string {
+	return Catalog.Format(msgs.locale, "capPoolConnecting", nil)
+}
+
+// CapPoolConnected says "Connected"
+// in the language the app shows.
+func CapPoolConnected() string { return In(i18n.Locale()).CapPoolConnected() }
+
+// CapPoolConnected says "Connected"
+// in the language of msgs.
+func (msgs Messages) CapPoolConnected() string {
+	return Catalog.Format(msgs.locale, "capPoolConnected", nil)
+}
+
+// CapPoolClosing says "Closing"
+// in the language the app shows.
+func CapPoolClosing() string { return In(i18n.Locale()).CapPoolClosing() }
+
+// CapPoolClosing says "Closing"
+// in the language of msgs.
+func (msgs Messages) CapPoolClosing() string {
+	return Catalog.Format(msgs.locale, "capPoolClosing", nil)
+}
+
+// CapPoolReferences says "{count, plural, one {# lease} other {# leases}}"
+// in the language the app shows.
+func CapPoolReferences(count int) string { return In(i18n.Locale()).CapPoolReferences(count) }
+
+// CapPoolReferences says "{count, plural, one {# lease} other {# leases}}"
+// in the language of msgs.
+func (msgs Messages) CapPoolReferences(count int) string {
+	return Catalog.Format(msgs.locale, "capPoolReferences", map[string]any{"count": count})
+}
+
+// CapPoolPID says "Process {pid}"
+// in the language the app shows.
+func CapPoolPID(pid string) string { return In(i18n.Locale()).CapPoolPID(pid) }
+
+// CapPoolPID says "Process {pid}"
+// in the language of msgs.
+func (msgs Messages) CapPoolPID(pid string) string {
+	return Catalog.Format(msgs.locale, "capPoolPID", map[string]any{"pid": pid})
+}
+
+// CapDeleteMcp says "Delete server"
+// in the language the app shows.
+func CapDeleteMcp() string { return In(i18n.Locale()).CapDeleteMcp() }
+
+// CapDeleteMcp says "Delete server"
+// in the language of msgs.
+func (msgs Messages) CapDeleteMcp() string {
+	return Catalog.Format(msgs.locale, "capDeleteMcp", nil)
+}
+
+// CapSaveMcp says "Save server"
+// in the language the app shows.
+func CapSaveMcp() string { return In(i18n.Locale()).CapSaveMcp() }
+
+// CapSaveMcp says "Save server"
+// in the language of msgs.
+func (msgs Messages) CapSaveMcp() string {
+	return Catalog.Format(msgs.locale, "capSaveMcp", nil)
+}
+
+// CapTestConnection says "Test connection"
+// in the language the app shows.
+func CapTestConnection() string { return In(i18n.Locale()).CapTestConnection() }
+
+// CapTestConnection says "Test connection"
+// in the language of msgs.
+func (msgs Messages) CapTestConnection() string {
+	return Catalog.Format(msgs.locale, "capTestConnection", nil)
+}
+
+// CapMcpReadFailed says "Could not load MCP servers. Try again."
+// in the language the app shows.
+func CapMcpReadFailed() string { return In(i18n.Locale()).CapMcpReadFailed() }
+
+// CapMcpReadFailed says "Could not load MCP servers. Try again."
+// in the language of msgs.
+func (msgs Messages) CapMcpReadFailed() string {
+	return Catalog.Format(msgs.locale, "capMcpReadFailed", nil)
+}
+
+// CapMcpChangeFailed says "Could not complete the MCP action. Check the details and try again."
+// in the language the app shows.
+func CapMcpChangeFailed() string { return In(i18n.Locale()).CapMcpChangeFailed() }
+
+// CapMcpChangeFailed says "Could not complete the MCP action. Check the details and try again."
+// in the language of msgs.
+func (msgs Messages) CapMcpChangeFailed() string {
+	return Catalog.Format(msgs.locale, "capMcpChangeFailed", nil)
+}
+
+// CapMcpTestFailed says "The last connection test failed. Test again to refresh the tool list."
+// in the language the app shows.
+func CapMcpTestFailed() string { return In(i18n.Locale()).CapMcpTestFailed() }
+
+// CapMcpTestFailed says "The last connection test failed. Test again to refresh the tool list."
+// in the language of msgs.
+func (msgs Messages) CapMcpTestFailed() string {
+	return Catalog.Format(msgs.locale, "capMcpTestFailed", nil)
+}
+
+// CapMcpChanged says "Server settings changed elsewhere. Load the saved version to continue."
+// in the language the app shows.
+func CapMcpChanged() string { return In(i18n.Locale()).CapMcpChanged() }
+
+// CapMcpChanged says "Server settings changed elsewhere. Load the saved version to continue."
+// in the language of msgs.
+func (msgs Messages) CapMcpChanged() string {
+	return Catalog.Format(msgs.locale, "capMcpChanged", nil)
+}
+
+// CapReloadServer says "Load saved version"
+// in the language the app shows.
+func CapReloadServer() string { return In(i18n.Locale()).CapReloadServer() }
+
+// CapReloadServer says "Load saved version"
+// in the language of msgs.
+func (msgs Messages) CapReloadServer() string {
+	return Catalog.Format(msgs.locale, "capReloadServer", nil)
+}
+
+// CapUnavailable says "Unavailable"
+// in the language the app shows.
+func CapUnavailable() string { return In(i18n.Locale()).CapUnavailable() }
+
+// CapUnavailable says "Unavailable"
+// in the language of msgs.
+func (msgs Messages) CapUnavailable() string {
+	return Catalog.Format(msgs.locale, "capUnavailable", nil)
+}
+
+// CapBuiltInTools says "Built-in tools"
+// in the language the app shows.
+func CapBuiltInTools() string { return In(i18n.Locale()).CapBuiltInTools() }
+
+// CapBuiltInTools says "Built-in tools"
+// in the language of msgs.
+func (msgs Messages) CapBuiltInTools() string {
+	return Catalog.Format(msgs.locale, "capBuiltInTools", nil)
+}
+
+// CapToolPreset says "Tool preset"
+// in the language the app shows.
+func CapToolPreset() string { return In(i18n.Locale()).CapToolPreset() }
+
+// CapToolPreset says "Tool preset"
+// in the language of msgs.
+func (msgs Messages) CapToolPreset() string {
+	return Catalog.Format(msgs.locale, "capToolPreset", nil)
+}
+
+// CapNone says "None"
+// in the language the app shows.
+func CapNone() string { return In(i18n.Locale()).CapNone() }
+
+// CapNone says "None"
+// in the language of msgs.
+func (msgs Messages) CapNone() string {
+	return Catalog.Format(msgs.locale, "capNone", nil)
+}
+
+// CapCustom says "Custom"
+// in the language the app shows.
+func CapCustom() string { return In(i18n.Locale()).CapCustom() }
+
+// CapCustom says "Custom"
+// in the language of msgs.
+func (msgs Messages) CapCustom() string {
+	return Catalog.Format(msgs.locale, "capCustom", nil)
+}
+
+// CapToolsNone says "No file or shell tools"
+// in the language the app shows.
+func CapToolsNone() string { return In(i18n.Locale()).CapToolsNone() }
+
+// CapToolsNone says "No file or shell tools"
+// in the language of msgs.
+func (msgs Messages) CapToolsNone() string {
+	return Catalog.Format(msgs.locale, "capToolsNone", nil)
+}
+
+// CapToolsReadonly says "find, grep, ls, read"
+// in the language the app shows.
+func CapToolsReadonly() string { return In(i18n.Locale()).CapToolsReadonly() }
+
+// CapToolsReadonly says "find, grep, ls, read"
+// in the language of msgs.
+func (msgs Messages) CapToolsReadonly() string {
+	return Catalog.Format(msgs.locale, "capToolsReadonly", nil)
+}
+
+// CapToolsWorkspace says "bash, edit, find, grep, ls, read, write"
+// in the language the app shows.
+func CapToolsWorkspace() string { return In(i18n.Locale()).CapToolsWorkspace() }
+
+// CapToolsWorkspace says "bash, edit, find, grep, ls, read, write"
+// in the language of msgs.
+func (msgs Messages) CapToolsWorkspace() string {
+	return Catalog.Format(msgs.locale, "capToolsWorkspace", nil)
+}
+
+// CapToolsCustom says "Choose the tools this Bot can use."
+// in the language the app shows.
+func CapToolsCustom() string { return In(i18n.Locale()).CapToolsCustom() }
+
+// CapToolsCustom says "Choose the tools this Bot can use."
+// in the language of msgs.
+func (msgs Messages) CapToolsCustom() string {
+	return Catalog.Format(msgs.locale, "capToolsCustom", nil)
+}
+
+// CapToolBash says "Run shell commands in the workspace."
+// in the language the app shows.
+func CapToolBash() string { return In(i18n.Locale()).CapToolBash() }
+
+// CapToolBash says "Run shell commands in the workspace."
+// in the language of msgs.
+func (msgs Messages) CapToolBash() string {
+	return Catalog.Format(msgs.locale, "capToolBash", nil)
+}
+
+// CapToolEdit says "Replace exact text in a file."
+// in the language the app shows.
+func CapToolEdit() string { return In(i18n.Locale()).CapToolEdit() }
+
+// CapToolEdit says "Replace exact text in a file."
+// in the language of msgs.
+func (msgs Messages) CapToolEdit() string {
+	return Catalog.Format(msgs.locale, "capToolEdit", nil)
+}
+
+// CapToolFind says "Find files by path or pattern."
+// in the language the app shows.
+func CapToolFind() string { return In(i18n.Locale()).CapToolFind() }
+
+// CapToolFind says "Find files by path or pattern."
+// in the language of msgs.
+func (msgs Messages) CapToolFind() string {
+	return Catalog.Format(msgs.locale, "capToolFind", nil)
+}
+
+// CapToolGrep says "Search file contents."
+// in the language the app shows.
+func CapToolGrep() string { return In(i18n.Locale()).CapToolGrep() }
+
+// CapToolGrep says "Search file contents."
+// in the language of msgs.
+func (msgs Messages) CapToolGrep() string {
+	return Catalog.Format(msgs.locale, "capToolGrep", nil)
+}
+
+// CapToolLs says "List directory contents."
+// in the language the app shows.
+func CapToolLs() string { return In(i18n.Locale()).CapToolLs() }
+
+// CapToolLs says "List directory contents."
+// in the language of msgs.
+func (msgs Messages) CapToolLs() string {
+	return Catalog.Format(msgs.locale, "capToolLs", nil)
+}
+
+// CapToolRead says "Read files and images."
+// in the language the app shows.
+func CapToolRead() string { return In(i18n.Locale()).CapToolRead() }
+
+// CapToolRead says "Read files and images."
+// in the language of msgs.
+func (msgs Messages) CapToolRead() string {
+	return Catalog.Format(msgs.locale, "capToolRead", nil)
+}
+
+// CapToolWrite says "Create or overwrite a file."
+// in the language the app shows.
+func CapToolWrite() string { return In(i18n.Locale()).CapToolWrite() }
+
+// CapToolWrite says "Create or overwrite a file."
+// in the language of msgs.
+func (msgs Messages) CapToolWrite() string {
+	return Catalog.Format(msgs.locale, "capToolWrite", nil)
+}
+
+// CapPendingApproval says "{skill} is waiting for approval to run {script}."
+// in the language the app shows.
+func CapPendingApproval(skill string, script string) string {
+	return In(i18n.Locale()).CapPendingApproval(skill, script)
+}
+
+// CapPendingApproval says "{skill} is waiting for approval to run {script}."
+// in the language of msgs.
+func (msgs Messages) CapPendingApproval(skill string, script string) string {
+	return Catalog.Format(msgs.locale, "capPendingApproval", map[string]any{"skill": skill, "script": script})
+}
+
+// CapReviewApprove says "Review & approve"
+// in the language the app shows.
+func CapReviewApprove() string { return In(i18n.Locale()).CapReviewApprove() }
+
+// CapReviewApprove says "Review & approve"
+// in the language of msgs.
+func (msgs Messages) CapReviewApprove() string {
+	return Catalog.Format(msgs.locale, "capReviewApprove", nil)
+}
+
+// CapDeny says "Deny"
+// in the language the app shows.
+func CapDeny() string { return In(i18n.Locale()).CapDeny() }
+
+// CapDeny says "Deny"
+// in the language of msgs.
+func (msgs Messages) CapDeny() string {
+	return Catalog.Format(msgs.locale, "capDeny", nil)
+}
+
+// CapAvailable says "Available"
+// in the language the app shows.
+func CapAvailable() string { return In(i18n.Locale()).CapAvailable() }
+
+// CapAvailable says "Available"
+// in the language of msgs.
+func (msgs Messages) CapAvailable() string {
+	return Catalog.Format(msgs.locale, "capAvailable", nil)
+}
+
+// CapMissing says "Missing"
+// in the language the app shows.
+func CapMissing() string { return In(i18n.Locale()).CapMissing() }
+
+// CapMissing says "Missing"
+// in the language of msgs.
+func (msgs Messages) CapMissing() string {
+	return Catalog.Format(msgs.locale, "capMissing", nil)
+}
+
+// CapPureVerified says "Pure · Auto-verified"
+// in the language the app shows.
+func CapPureVerified() string { return In(i18n.Locale()).CapPureVerified() }
+
+// CapPureVerified says "Pure · Auto-verified"
+// in the language of msgs.
+func (msgs Messages) CapPureVerified() string {
+	return Catalog.Format(msgs.locale, "capPureVerified", nil)
+}
+
+// CapApproved says "Approved"
+// in the language the app shows.
+func CapApproved() string { return In(i18n.Locale()).CapApproved() }
+
+// CapApproved says "Approved"
+// in the language of msgs.
+func (msgs Messages) CapApproved() string {
+	return Catalog.Format(msgs.locale, "capApproved", nil)
+}
+
+// CapApprovalRequired says "Approval required"
+// in the language the app shows.
+func CapApprovalRequired() string { return In(i18n.Locale()).CapApprovalRequired() }
+
+// CapApprovalRequired says "Approval required"
+// in the language of msgs.
+func (msgs Messages) CapApprovalRequired() string {
+	return Catalog.Format(msgs.locale, "capApprovalRequired", nil)
+}
+
+// CapUnmount says "Unmount"
+// in the language the app shows.
+func CapUnmount() string { return In(i18n.Locale()).CapUnmount() }
+
+// CapUnmount says "Unmount"
+// in the language of msgs.
+func (msgs Messages) CapUnmount() string {
+	return Catalog.Format(msgs.locale, "capUnmount", nil)
+}
+
+// CapMountSkill says "Mount skill"
+// in the language the app shows.
+func CapMountSkill() string { return In(i18n.Locale()).CapMountSkill() }
+
+// CapMountSkill says "Mount skill"
+// in the language of msgs.
+func (msgs Messages) CapMountSkill() string {
+	return Catalog.Format(msgs.locale, "capMountSkill", nil)
+}
+
+// CapChooseSkill says "Choose a skill"
+// in the language the app shows.
+func CapChooseSkill() string { return In(i18n.Locale()).CapChooseSkill() }
+
+// CapChooseSkill says "Choose a skill"
+// in the language of msgs.
+func (msgs Messages) CapChooseSkill() string {
+	return Catalog.Format(msgs.locale, "capChooseSkill", nil)
+}
+
+// CapMount says "Mount"
+// in the language the app shows.
+func CapMount() string { return In(i18n.Locale()).CapMount() }
+
+// CapMount says "Mount"
+// in the language of msgs.
+func (msgs Messages) CapMount() string {
+	return Catalog.Format(msgs.locale, "capMount", nil)
+}
+
+// CapOpenSettings says "Open Capabilities →"
+// in the language the app shows.
+func CapOpenSettings() string { return In(i18n.Locale()).CapOpenSettings() }
+
+// CapOpenSettings says "Open Capabilities →"
+// in the language of msgs.
+func (msgs Messages) CapOpenSettings() string {
+	return Catalog.Format(msgs.locale, "capOpenSettings", nil)
+}
+
+// CapPrivateSkills says "Bot-private skills"
+// in the language the app shows.
+func CapPrivateSkills() string { return In(i18n.Locale()).CapPrivateSkills() }
+
+// CapPrivateSkills says "Bot-private skills"
+// in the language of msgs.
+func (msgs Messages) CapPrivateSkills() string {
+	return Catalog.Format(msgs.locale, "capPrivateSkills", nil)
+}
+
+// CapInspect says "Inspect"
+// in the language the app shows.
+func CapInspect() string { return In(i18n.Locale()).CapInspect() }
+
+// CapInspect says "Inspect"
+// in the language of msgs.
+func (msgs Messages) CapInspect() string {
+	return Catalog.Format(msgs.locale, "capInspect", nil)
+}
+
+// CapPromoteGlobal says "Promote to global"
+// in the language the app shows.
+func CapPromoteGlobal() string { return In(i18n.Locale()).CapPromoteGlobal() }
+
+// CapPromoteGlobal says "Promote to global"
+// in the language of msgs.
+func (msgs Messages) CapPromoteGlobal() string {
+	return Catalog.Format(msgs.locale, "capPromoteGlobal", nil)
+}
+
+// CapPromote says "Promote"
+// in the language the app shows.
+func CapPromote() string { return In(i18n.Locale()).CapPromote() }
+
+// CapPromote says "Promote"
+// in the language of msgs.
+func (msgs Messages) CapPromote() string {
+	return Catalog.Format(msgs.locale, "capPromote", nil)
+}
+
+// CapMcpServer says "MCP server"
+// in the language the app shows.
+func CapMcpServer() string { return In(i18n.Locale()).CapMcpServer() }
+
+// CapMcpServer says "MCP server"
+// in the language of msgs.
+func (msgs Messages) CapMcpServer() string {
+	return Catalog.Format(msgs.locale, "capMcpServer", nil)
+}
+
+// CapToolScope says "Tool scope"
+// in the language the app shows.
+func CapToolScope() string { return In(i18n.Locale()).CapToolScope() }
+
+// CapToolScope says "Tool scope"
+// in the language of msgs.
+func (msgs Messages) CapToolScope() string {
+	return Catalog.Format(msgs.locale, "capToolScope", nil)
+}
+
+// CapSelected says "Selected"
+// in the language the app shows.
+func CapSelected() string { return In(i18n.Locale()).CapSelected() }
+
+// CapSelected says "Selected"
+// in the language of msgs.
+func (msgs Messages) CapSelected() string {
+	return Catalog.Format(msgs.locale, "capSelected", nil)
+}
+
+// CapAll says "All"
+// in the language the app shows.
+func CapAll() string { return In(i18n.Locale()).CapAll() }
+
+// CapAll says "All"
+// in the language of msgs.
+func (msgs Messages) CapAll() string {
+	return Catalog.Format(msgs.locale, "capAll", nil)
+}
+
+// CapAttachServer says "Attach MCP server"
+// in the language the app shows.
+func CapAttachServer() string { return In(i18n.Locale()).CapAttachServer() }
+
+// CapAttachServer says "Attach MCP server"
+// in the language of msgs.
+func (msgs Messages) CapAttachServer() string {
+	return Catalog.Format(msgs.locale, "capAttachServer", nil)
+}
+
+// CapChooseServer says "Choose a server"
+// in the language the app shows.
+func CapChooseServer() string { return In(i18n.Locale()).CapChooseServer() }
+
+// CapChooseServer says "Choose a server"
+// in the language of msgs.
+func (msgs Messages) CapChooseServer() string {
+	return Catalog.Format(msgs.locale, "capChooseServer", nil)
+}
+
+// CapAttach says "Attach"
+// in the language the app shows.
+func CapAttach() string { return In(i18n.Locale()).CapAttach() }
+
+// CapAttach says "Attach"
+// in the language of msgs.
+func (msgs Messages) CapAttach() string {
+	return Catalog.Format(msgs.locale, "capAttach", nil)
+}
+
+// CapConfigureMcp says "Configure MCP servers →"
+// in the language the app shows.
+func CapConfigureMcp() string { return In(i18n.Locale()).CapConfigureMcp() }
+
+// CapConfigureMcp says "Configure MCP servers →"
+// in the language of msgs.
+func (msgs Messages) CapConfigureMcp() string {
+	return Catalog.Format(msgs.locale, "capConfigureMcp", nil)
+}
+
+// CapAllServersAttached says "All configured servers are attached."
+// in the language the app shows.
+func CapAllServersAttached() string { return In(i18n.Locale()).CapAllServersAttached() }
+
+// CapAllServersAttached says "All configured servers are attached."
+// in the language of msgs.
+func (msgs Messages) CapAllServersAttached() string {
+	return Catalog.Format(msgs.locale, "capAllServersAttached", nil)
+}
+
+// CapNoMcpTools says "Test this server in Capabilities to discover its tools."
+// in the language the app shows.
+func CapNoMcpTools() string { return In(i18n.Locale()).CapNoMcpTools() }
+
+// CapNoMcpTools says "Test this server in Capabilities to discover its tools."
+// in the language of msgs.
+func (msgs Messages) CapNoMcpTools() string {
+	return Catalog.Format(msgs.locale, "capNoMcpTools", nil)
+}
+
+// CapReviewHint says "Review the skill’s files and the permissions it requests for this Bot."
+// in the language the app shows.
+func CapReviewHint() string { return In(i18n.Locale()).CapReviewHint() }
+
+// CapReviewHint says "Review the skill’s files and the permissions it requests for this Bot."
+// in the language of msgs.
+func (msgs Messages) CapReviewHint() string {
+	return Catalog.Format(msgs.locale, "capReviewHint", nil)
+}
+
+// CapPermissions says "Sandbox permissions"
+// in the language the app shows.
+func CapPermissions() string { return In(i18n.Locale()).CapPermissions() }
+
+// CapPermissions says "Sandbox permissions"
+// in the language of msgs.
+func (msgs Messages) CapPermissions() string {
+	return Catalog.Format(msgs.locale, "capPermissions", nil)
+}
+
+// CapScripts says "Scripts"
+// in the language the app shows.
+func CapScripts() string { return In(i18n.Locale()).CapScripts() }
+
+// CapScripts says "Scripts"
+// in the language of msgs.
+func (msgs Messages) CapScripts() string {
+	return Catalog.Format(msgs.locale, "capScripts", nil)
+}
+
+// CapScriptCount says "{count, plural, one {# script} other {# scripts}}"
+// in the language the app shows.
+func CapScriptCount(count int) string { return In(i18n.Locale()).CapScriptCount(count) }
+
+// CapScriptCount says "{count, plural, one {# script} other {# scripts}}"
+// in the language of msgs.
+func (msgs Messages) CapScriptCount(count int) string {
+	return Catalog.Format(msgs.locale, "capScriptCount", map[string]any{"count": count})
+}
+
+// CapWorkspaceAccess says "Workspace access"
+// in the language the app shows.
+func CapWorkspaceAccess() string { return In(i18n.Locale()).CapWorkspaceAccess() }
+
+// CapWorkspaceAccess says "Workspace access"
+// in the language of msgs.
+func (msgs Messages) CapWorkspaceAccess() string {
+	return Catalog.Format(msgs.locale, "capWorkspaceAccess", nil)
+}
+
+// CapReadWrite says "Read & write"
+// in the language the app shows.
+func CapReadWrite() string { return In(i18n.Locale()).CapReadWrite() }
+
+// CapReadWrite says "Read & write"
+// in the language of msgs.
+func (msgs Messages) CapReadWrite() string {
+	return Catalog.Format(msgs.locale, "capReadWrite", nil)
+}
+
+// CapIsolated says "None (isolated sandbox)"
+// in the language the app shows.
+func CapIsolated() string { return In(i18n.Locale()).CapIsolated() }
+
+// CapIsolated says "None (isolated sandbox)"
+// in the language of msgs.
+func (msgs Messages) CapIsolated() string {
+	return Catalog.Format(msgs.locale, "capIsolated", nil)
+}
+
+// CapNetwork says "Outbound network"
+// in the language the app shows.
+func CapNetwork() string { return In(i18n.Locale()).CapNetwork() }
+
+// CapNetwork says "Outbound network"
+// in the language of msgs.
+func (msgs Messages) CapNetwork() string {
+	return Catalog.Format(msgs.locale, "capNetwork", nil)
+}
+
+// CapNetworkBlocked says "None (network blocked by Seatbelt)"
+// in the language the app shows.
+func CapNetworkBlocked() string { return In(i18n.Locale()).CapNetworkBlocked() }
+
+// CapNetworkBlocked says "None (network blocked by Seatbelt)"
+// in the language of msgs.
+func (msgs Messages) CapNetworkBlocked() string {
+	return Catalog.Format(msgs.locale, "capNetworkBlocked", nil)
+}
+
+// CapCredentials says "Credentials"
+// in the language the app shows.
+func CapCredentials() string { return In(i18n.Locale()).CapCredentials() }
+
+// CapCredentials says "Credentials"
+// in the language of msgs.
+func (msgs Messages) CapCredentials() string {
+	return Catalog.Format(msgs.locale, "capCredentials", nil)
+}
+
+// CapReviewedFiles says "Reviewed source files"
+// in the language the app shows.
+func CapReviewedFiles() string { return In(i18n.Locale()).CapReviewedFiles() }
+
+// CapReviewedFiles says "Reviewed source files"
+// in the language of msgs.
+func (msgs Messages) CapReviewedFiles() string {
+	return Catalog.Format(msgs.locale, "capReviewedFiles", nil)
+}
+
+// CapRevokeApproval says "Revoke approval"
+// in the language the app shows.
+func CapRevokeApproval() string { return In(i18n.Locale()).CapRevokeApproval() }
+
+// CapRevokeApproval says "Revoke approval"
+// in the language of msgs.
+func (msgs Messages) CapRevokeApproval() string {
+	return Catalog.Format(msgs.locale, "capRevokeApproval", nil)
+}
+
+// CapApproveBot says "Approve for this Bot"
+// in the language the app shows.
+func CapApproveBot() string { return In(i18n.Locale()).CapApproveBot() }
+
+// CapApproveBot says "Approve for this Bot"
+// in the language of msgs.
+func (msgs Messages) CapApproveBot() string {
+	return Catalog.Format(msgs.locale, "capApproveBot", nil)
+}
+
+// CapSaveMountFirst says "Save the skill mount in the Bot profile before approving."
+// in the language the app shows.
+func CapSaveMountFirst() string { return In(i18n.Locale()).CapSaveMountFirst() }
+
+// CapSaveMountFirst says "Save the skill mount in the Bot profile before approving."
+// in the language of msgs.
+func (msgs Messages) CapSaveMountFirst() string {
+	return Catalog.Format(msgs.locale, "capSaveMountFirst", nil)
+}
+
+// CapReviewRequestChanged says "This request changed or closed. Reopen it to review again."
+// in the language the app shows.
+func CapReviewRequestChanged() string { return In(i18n.Locale()).CapReviewRequestChanged() }
+
+// CapReviewRequestChanged says "This request changed or closed. Reopen it to review again."
+// in the language of msgs.
+func (msgs Messages) CapReviewRequestChanged() string {
+	return Catalog.Format(msgs.locale, "capReviewRequestChanged", nil)
+}
+
+// CapApprovalReadFailed says "Could not read pending skill approvals. Try again."
+// in the language the app shows.
+func CapApprovalReadFailed() string { return In(i18n.Locale()).CapApprovalReadFailed() }
+
+// CapApprovalReadFailed says "Could not read pending skill approvals. Try again."
+// in the language of msgs.
+func (msgs Messages) CapApprovalReadFailed() string {
+	return Catalog.Format(msgs.locale, "capApprovalReadFailed", nil)
+}
+
+// CapApprovalChangeFailed says "Could not update the approval. Check the details and review again."
+// in the language the app shows.
+func CapApprovalChangeFailed() string { return In(i18n.Locale()).CapApprovalChangeFailed() }
+
+// CapApprovalChangeFailed says "Could not update the approval. Check the details and review again."
+// in the language of msgs.
+func (msgs Messages) CapApprovalChangeFailed() string {
+	return Catalog.Format(msgs.locale, "capApprovalChangeFailed", nil)
+}
+
+// CapTimeoutMS says "{time} ms"
+// in the language the app shows.
+func CapTimeoutMS(time_ string) string { return In(i18n.Locale()).CapTimeoutMS(time_) }
+
+// CapTimeoutMS says "{time} ms"
+// in the language of msgs.
+func (msgs Messages) CapTimeoutMS(time_ string) string {
+	return Catalog.Format(msgs.locale, "capTimeoutMS", map[string]any{"time": time_})
+}
+
+// CapMcpProbeResult says "Connected · {count, plural, one {# tool discovered} other {# tools discovered}} ({latency} ms)"
+// in the language the app shows.
+func CapMcpProbeResult(count int, latency string) string {
+	return In(i18n.Locale()).CapMcpProbeResult(count, latency)
+}
+
+// CapMcpProbeResult says "Connected · {count, plural, one {# tool discovered} other {# tools discovered}} ({latency} ms)"
+// in the language of msgs.
+func (msgs Messages) CapMcpProbeResult(count int, latency string) string {
+	return Catalog.Format(msgs.locale, "capMcpProbeResult", map[string]any{"count": count, "latency": latency})
+}
