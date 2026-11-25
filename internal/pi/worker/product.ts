@@ -10,10 +10,13 @@ import type { AssistantMessage, ToolCall } from '@earendil-works/pi-ai';
 import { Type, type Static, type TSchema } from 'typebox';
 import { Value } from 'typebox/value';
 import {
-  MAX_FRAME, RequestError, activityStateSchema, canonicalJSON, draftSchema, frameBytes, hasCanonicalQuoteText, id, inspectionPage, profileSchema, resolveCodingTools, skillExecutable, skillID, skillScriptName, skillSource, skillText, toolPresetSchema,
-  type ActivityState, type BotChange, type BotProfile, type Connection, type Draft, type Execution,
-  type Material, type McpServerRecord, type McpServerView, type OpenParams, type Operation, type ProductCommand, type ProductParams, type SkillApproval,
-  type SkillApprovalRequest, type SkillChange, type SkillDetail, type SkillListing, type SkillPermissions, type SkillSource, type TraceItem,
+  MAX_FRAME, RequestError, activityStateSchema, canonicalJSON, draftSchema, frameBytes, hasCanonicalQuoteText, id, inspectionPage,
+  maxAutomaticAnswers, maxTriageAttempts, preferenceKey, profileSchema, questionOptionId, questionOptions, questionTextBytes,
+  resolveCodingTools, skillExecutable, skillID, skillScriptName, skillSource, skillText, toolPresetSchema,
+  type ActivityDigest, type ActivityState, type AnswerProvenance, type BotChange, type BotProfile, type Connection, type Draft, type Execution,
+  type Material, type McpServerRecord, type McpServerView, type OpenParams, type Operation, type ProductCommand, type ProductParams,
+  type ProductQuestion, type SkillApproval, type SkillApprovalRequest, type SkillChange, type SkillDetail, type SkillListing, type SkillPermissions,
+  type SkillSource, type TraceItem,
 } from './protocol.js';
 import { backupProductProfile, privateCredentialKeys, saveCredential, type PrivateConnection, type ProductProfilePaths, type StoredConnection } from './product-profile.js';
 import { ProductSQLite, type ActivityControlWrite, type RoutingWrite, type SkillApprovalChange } from './product-sqlite.js';
@@ -35,6 +38,8 @@ import { clipEncodedText, clipUTF8, projectionRedactor } from './product-redacto
 import { loadSkillInstallation, SkillSandbox } from './skill-sandbox.js';
 import { activityRole, activityRouting, providerCacheTtlMs, providerEndpoint, resolveRole, resolvedRoles, validProvider,
   type ActivityRouting, type CapturedRoute, type ModelRole, type ProviderAccount, type RoutingPolicy } from './model-router.js';
+import { approvedPreferences, parseNomination, renderWhiteboard, triageDomain, validateQuestionFields,
+  type PreferenceCandidate, type WhiteboardRow } from './activity-control.js';
 
 const emptyDraft = (): Draft => ({ revision: 0, text: '', materials: [] });
 const newId = randomUUID;
@@ -57,6 +62,8 @@ export type ProductRunObservers = {
   toolStarted: (name: string, callId: string, target?: string) => void;
   toolFinished: (name: string, callId: string, isError: boolean, excerpt?: string) => void;
   authorizeProvider?: () => void;
+  acquireProvider?: (signal?: AbortSignal) => Promise<void>;
+  whiteboard?: string;
   credentialRejected?: () => void;
   admitTool?: (name: string, callId: string) => void;
 };
@@ -66,6 +73,7 @@ export type ProductSession = {
   cwd: string;
   start: (executionId: string, draft: Draft, observers: ProductRunObservers) => void;
   stop: (executionId: string) => void;
+  nominatePreference: (prompt: string, signal: AbortSignal) => Promise<string | undefined>;
 };
 
 export type ProductEngine = {
@@ -120,13 +128,7 @@ type Conversation = {
 };
 type Bot = { botId: string; profile: BotProfile; profileRevision: number; archived: boolean; currentConversationId: string;
   systemKind?: BotSystemKind; retained?: object };
-type Question = {
-  questionId: string; executionId: string; text: string; revision: number;
-  state: 'open' | 'answered' | 'superseded';
-  answer?: { text: string; materials: Material[] };
-  delivery?: 'saved' | 'dispatching' | 'delivered' | 'unknown' | 'canceled' | 'unavailable';
-  deliveryBlocker?: 'credential_unavailable';
-};
+type Question = ProductQuestion & { triageRulesRevision?: number };
 type ActivityResult = {
   activityId: string; executionId: string; text: string; delivery: 'available'; files: ResultFile[];
 };
@@ -140,6 +142,7 @@ type Activity = {
   acknowledgedAt?: string;
   acknowledgedExecutionId?: string;
   closedAt?: string;
+  updatedAt?: string;
 };
 type StoredOperation = {
   method: string; fingerprint: string; receipt: Operation; reply: object;
@@ -182,8 +185,13 @@ type LiveExecution = {
   progressCalls?: Set<string>;
   skillExecutionFailed?: boolean;
   learningToolUsed?: boolean;
+  slot: boolean;
+  triage?: AbortController;
+  answerTarget?: { questionId: string; revision: number };
 };
-type AnswerWaiter = { resolve: (answer: { text: string; materials: Material[] }) => void };
+type AnswerWaiter = { executionId: string; deliver: () => void; cancel: () => void;
+  triage?: { controller: AbortController; done: Promise<void> } };
+type ProviderWaiter = { run: LiveExecution; resolve: () => void; cancel: () => void };
 type ApprovalWaiter = { request: SkillApprovalRequest; resolve: (state: SkillApprovalRequest['state']) => void };
 type ActiveCall = { actor: ProductActor; bot: Bot; executionId: string; run: LiveExecution };
 type SkillGrantScope = Pick<SkillApproval, 'grantKey' | 'ownerBotId' | 'source' | 'skillId' | 'approvalDigest' | 'permissionsDigest'> &
@@ -242,6 +250,12 @@ const lineNumber = Type.Integer({ minimum: 1, maximum: Number.MAX_SAFE_INTEGER }
 const resultRead = Type.Object({ activity_id: id, execution_id: id, start_line: Type.Optional(lineNumber), end_line: Type.Optional(lineNumber),
   byte_offset: Type.Optional(Type.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER })), cursor: inspectionPage.cursor,
   max_bytes: inspectionPage.maxBytes }, strictTool);
+const questionInput = Type.Object({ text: Type.String({ minLength: 1, maxLength: questionTextBytes }), options: Type.Optional(questionOptions),
+  allow_free_text: Type.Optional(Type.Boolean()), requires_user_decision: Type.Optional(Type.Boolean()), preference_key: Type.Optional(preferenceKey) }, strictTool);
+const forwardAnswerInput = Type.Object({ activity_id: id, execution_id: id, question_id: id,
+  question_revision: Type.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER }), text: Type.String(),
+  selected_option_id: Type.Optional(questionOptionId) }, strictTool);
+const maxTriageConcurrency = 2;
 const progressCounter = Type.Integer({ minimum: 1, maximum: 1000 });
 const progressInput = Type.Object({ stage: Type.String({ minLength: 1, maxLength: 160 }), step: Type.Optional(progressCounter),
   total_steps: Type.Optional(progressCounter) }, strictTool);
@@ -317,6 +331,8 @@ export class Product {
   private readonly waiters = new Map<string, AnswerWaiter>();
   private readonly approvalWaiters = new Map<string, ApprovalWaiter>();
   private readonly escalating = new Set<string>();
+  private readonly providerWaiters = new Map<string, ProviderWaiter>();
+  private readonly triageTasks = new Set<Promise<void>>();
   private readonly pendingTraceUpdates = new Map<string, TraceUpdate>();
   private traceUpdateTimer?: ReturnType<typeof globalThis.setImmediate>;
 
@@ -353,6 +369,14 @@ export class Product {
             changed = true;
           }
           for (const question of activity.questions) {
+            if (question.state === 'triage_pending') {
+              question.state = 'open';
+              delete question.triageRulesRevision;
+              question.revision++;
+              changed = true;
+            }
+          }
+          for (const question of activity.questions) {
             if (question.delivery === 'dispatching') {
               question.delivery = 'unknown';
               question.revision++;
@@ -377,7 +401,9 @@ export class Product {
 
   async drainChildren(): Promise<void> {
     this.closing = true;
-    await Promise.all([this.mcp.shutdown(), this.sandbox.shutdown()]);
+    for (const run of this.active.values()) run.triage?.abort();
+    for (const waiter of this.providerWaiters.values()) waiter.cancel();
+    await Promise.all([this.mcp.shutdown(), this.sandbox.shutdown(), ...this.triageTasks]);
   }
 
   killChildrenOnExit(): void { this.mcp.killOnExit(); this.sandbox.killOnExit(); }
@@ -386,6 +412,11 @@ export class Product {
     routing?: RoutingWrite, control?: ActivityControlWrite): T {
     const candidate = structuredClone(this.profile);
     const result = mutate(candidate);
+    const beforeActivities = new Map(this.profile.activities.map(row => [row.activityId, row.revision]));
+    const now = new Date().toISOString();
+    for (const activity of candidate.activities) {
+      if (beforeActivities.get(activity.activityId) !== activity.revision) activity.updatedAt = now;
+    }
     let updates: TraceUpdate[];
     try { updates = this.storage.write(candidate, this.profile, skillWrite, mcpWrite, approval, routing, control); }
     catch (error) {
@@ -526,6 +557,7 @@ export class Product {
       const retained = new Set(privateCredentialKeys(next));
       for (const key of privateCredentialKeys(this.credentials)) if (!retained.has(key)) this.retiredKeys.add(key);
       this.credentials = next;
+      for (const run of this.active.values()) if (!this.bindingKey(run.binding)) run.triage?.abort();
     }
     this.emit('provider.changed', { ...this.providerRevisions(), change: providerChanges[method] });
     return reply;
@@ -630,11 +662,38 @@ export class Product {
     this.emit('activity.changed', { ...this.activityView(activity, requests), ...(approvalRequests.length ? { approvalRequests } : {}) });
   }
 
+  private emitDigest(activity: Activity, fact: Pick<ActivityDigest, 'kind' | 'executionId' | 'questionId' | 'requestId' | 'fileCount'>, summary: string): void {
+    const { activityId, ownerBotId, originConversationId, revision } = activity;
+    const redact = this.engine.redactor(this.credentialKeys());
+    const factId = fingerprint([activityId, revision, fact.kind, fact.executionId, fact.questionId, fact.requestId]);
+    this.emit('activity.digest', { ...fact, factId, activityId, ownerBotId, originConversationId, revision,
+      at: activity.updatedAt ?? new Date().toISOString(), summary: clipUTF8(redact(summary).replace(/[\p{Cc}]+/gu, ' ').trim(), 240) });
+  }
+
+  private whiteboard(botId: string): string | undefined {
+    const rows: WhiteboardRow[] = [];
+    for (const activity of this.visibleActivities(botId)) {
+      if (activity.closedAt || activity.state === 'completed' && activity.acknowledgedAt) continue;
+      const priority = { waitingForAnswer: 1, needsAttention: 2, running: 3, completed: 4, notStarted: 0, cancelled: 0 }[activity.state];
+      if (!priority) continue;
+      const requests = this.storage.approvalRequests(activity.activityId).filter(row => row.state === 'open');
+      const questions = activity.questions.filter(row => row.state === 'open');
+      const executionId = activity.executionIds.at(-1);
+      const progress = this.storage.progress(activity.activityId);
+      const updatedAt = [activity.updatedAt, progress?.at, requests.at(-1)?.createdAt,
+        !activity.updatedAt ? this.storage.activityTraceTimestamp(activity.activityId) : undefined].filter(Boolean).sort().at(-1);
+      rows.push({ activityId: activity.activityId, executionId, updatedAt, state: activity.state, priority: requests.length ? 1 : priority,
+        questionIds: questions.map(row => row.questionId), requestIds: requests.map(row => row.requestId),
+        summary: questions.at(-1)?.text ?? progress?.stage ?? activity.goal });
+    }
+    return renderWhiteboard(rows, this.engine.redactor(this.credentialKeys()));
+  }
+
   private activityDetails(activity: Activity) {
     const approvalRequests = this.storage.approvalRequests(activity.activityId);
     return {
       ...this.activityView(activity, approvalRequests), ...activity.routing, requirements: activity.requirements, materials: activity.materials,
-      questions: activity.questions, ...(approvalRequests.length ? { approvalRequests } : {}),
+      questions: activity.questions.map(({ triageRulesRevision, ...question }) => question), ...(approvalRequests.length ? { approvalRequests } : {}),
       executions: activity.executionIds.map(id => this.viewExecution(this.execution(this.profile, id))),
     };
   }
@@ -911,9 +970,11 @@ export class Product {
       case 'conversation.history':
         return this.history(command.params.conversationId, command.params.cursor, command.params.limit);
       case 'activity.list': {
-        const { botId, states, cursor, limit } = command.params;
-        const items = this.visibleActivities(botId).filter(item => !states?.length || states.includes(item.state));
-        return page(items.map(item => this.activityView(item)), item => item.activityId, canonicalJSON(['activities', botId, [...new Set(states ?? [])].sort()]), cursor, limit);
+        const { botId, states, cursor, limit, unacknowledgedOnly } = command.params;
+        const items = this.visibleActivities(botId).filter(item => (!states?.length || states.includes(item.state)) &&
+          (!unacknowledgedOnly || !item.closedAt && (item.state !== 'completed' || !item.acknowledgedAt)));
+        const scope = ['activities', botId, [...new Set(states ?? [])].sort(), ...(unacknowledgedOnly ? [true] : [])];
+        return page(items.map(item => this.activityView(item)), item => item.activityId, canonicalJSON(scope), cursor, limit);
       }
       case 'activity.get':
         return this.activityDetails(this.activity(this.profile, command.params.activityId));
@@ -1222,10 +1283,57 @@ export class Product {
     });
   }
 
-  private capacity(): void {
+  private capacity(allowQueue = false): void {
     const configuration = this.connection(this.profile, this.effectiveRevision)?.configuration;
     if (!configuration && this.profile.providerEffectiveRevision === undefined) stateError('not_configured', 'Apply a connection first');
-    if (this.active.size >= (configuration?.maxActiveTasks ?? 2)) stateError('busy', 'The configured execution capacity is full');
+    if (!allowQueue && !this.freeProviderSlot()) stateError('busy', 'The configured execution capacity is full');
+  }
+
+  private freeProviderSlot(): boolean {
+    const limit = this.connection(this.profile, this.effectiveRevision)?.configuration.maxActiveTasks ?? 2;
+    let used = 0;
+    for (const run of this.active.values()) if (run.slot && ++used >= limit) return false;
+    return true;
+  }
+
+  private async acquireProvider(executionId: string, run: LiveExecution, signal?: AbortSignal): Promise<void> {
+    if (this.closing || run.stopRequested || signal?.aborted) stateError('cancelled', 'The execution is no longer active');
+    if (run.slot) return;
+    if (this.freeProviderSlot()) {
+      run.slot = true;
+      return;
+    }
+    const { promise, resolve, reject } = Promise.withResolvers<void>();
+    const cancel = () => {
+      this.providerWaiters.delete(executionId);
+      reject(new RequestError('cancelled', 'The execution is no longer active'));
+    };
+    this.providerWaiters.set(executionId, { run, resolve, cancel });
+    signal?.addEventListener('abort', cancel, { once: true });
+    try { await promise; }
+    finally { signal?.removeEventListener('abort', cancel); }
+  }
+
+  private dispatchProviderWaiters(): void {
+    while (!this.closing && this.providerWaiters.size && this.freeProviderSlot()) {
+      const entry = [...this.providerWaiters].find(([, row]) => 'conversationId' in row.run.owner) ?? this.providerWaiters.entries().next().value!;
+      const [executionId, waiter] = entry;
+      this.providerWaiters.delete(executionId);
+      if (waiter.run.stopRequested || !this.active.has(executionId)) waiter.cancel();
+      else {
+        waiter.run.slot = true;
+        waiter.resolve();
+      }
+    }
+  }
+
+  private parkActivity(activity: Activity): void {
+    const executionId = activity.executionIds.at(-1);
+    const run = executionId ? this.active.get(executionId) : undefined;
+    if (run?.slot && !run.triage && this.hasActivityWaiter(activity)) {
+      run.slot = false;
+      this.dispatchProviderWaiters();
+    }
   }
 
   private listBots(cursor?: string, limit?: number) {
@@ -1464,14 +1572,20 @@ export class Product {
       candidate.executions.push(execution);
       this.record(candidate, 'conversation.send', params, receipt, receipt);
     });
-    this.start(session, owner, execution);
+    this.start(session, owner, execution, this.whiteboard(conversation.botId));
     return receipt;
   }
 
-  private start(session: ProductSession, owner: ProductActor, execution: StoredExecution): void {
+  private start(session: ProductSession, owner: ProductActor, execution: StoredExecution, whiteboard?: string): void {
     const executionId = execution.executionId;
     const binding = 'activityId' in owner ? this.activity(this.profile, owner.activityId).binding! : this.conversation(this.profile, owner.conversationId).binding!;
-    const current: LiveExecution = { owner, binding, session, offset: 0, partial: '', files: [] };
+    const current: LiveExecution = { owner, binding, session, offset: 0, partial: '', files: [], slot: this.freeProviderSlot() };
+    if ('conversationId' in owner) {
+      const botId = this.conversation(this.profile, owner.conversationId).botId;
+      const questions = this.visibleActivities(botId).filter(row => !row.closedAt).flatMap(row => row.questions.filter(question =>
+        question.state === 'open' && question.executionId === row.executionIds.at(-1)));
+      if (questions.length === 1) current.answerTarget = { questionId: questions[0].questionId, revision: questions[0].revision };
+    }
     this.active.set(executionId, current);
     const target = { ...owner, executionId, operationId: execution.operationId };
     const guarded = (handler: () => void) => {
@@ -1490,8 +1604,10 @@ export class Product {
     try {
       const sourceId = binding.route?.credentialSourceId ?? this.connection(this.profile, binding.connectionRevision ?? null)?.sourceId;
       session.start(executionId, execution.input, {
+        whiteboard,
+        acquireProvider: signal => this.acquireProvider(executionId, current, signal),
         authorizeProvider: () => {
-          if (this.closing || !this.active.has(executionId) || !this.bindingKey(binding)) stateError('credential_unavailable', 'The captured credential source is unavailable');
+          if (this.closing || current.stopRequested || !this.active.has(executionId) || !this.bindingKey(binding)) stateError('credential_unavailable', 'The captured credential source is unavailable');
         },
         credentialRejected: () => { if (sourceId) this.rejectedSources.add(sourceId); },
         admitTool: (name, callId) => this.storage.admitTool(executionId, 'activityId' in owner ? owner.activityId : undefined,
@@ -1578,8 +1694,13 @@ export class Product {
       if ('activityId' in owner) {
         const activity = this.activity(candidate, owner.activityId);
         for (const question of activity.questions) {
-          if (question.executionId === executionId && question.delivery === 'dispatching') {
+          if (question.executionId !== executionId) continue;
+          if (question.delivery === 'dispatching') {
             question.delivery = state === 'interrupted' ? 'canceled' : 'unknown';
+            question.revision++;
+          } else if (question.state === 'triage_pending') {
+            question.state = 'superseded';
+            delete question.triageRulesRevision;
             question.revision++;
           }
         }
@@ -1596,11 +1717,18 @@ export class Product {
       return execution;
     }, undefined, undefined, undefined, undefined, { approvalRequests: abandoned });
     for (const request of abandoned) this.approvalWaiters.get(request.requestId)?.resolve(request.state);
+    active?.triage?.abort();
+    for (const waiter of this.waiters.values()) if (waiter.executionId === executionId) waiter.cancel();
+    this.providerWaiters.get(executionId)?.cancel();
     this.active.delete(executionId);
+    this.dispatchProviderWaiters();
     this.emit('execution.settled', { ...owner, executionId, operationId: run.operationId, revision: run.revision, state, ...(run.error ? { error: run.error } : {}) });
     if ('activityId' in owner) {
       const activity = this.activity(this.profile, owner.activityId);
       this.emitActivity(activity);
+      const completed = activity.state === 'completed';
+      this.emitDigest(activity, { kind: completed ? 'completed' : 'needs_attention', executionId, fileCount: active?.files.length ?? 0 },
+        completed ? text || activity.goal : error || activity.goal);
       if (state === 'failed') this.escalateActivity(activity, run);
     }
     if (state === 'completed' && (!('activityId' in owner) || this.activity(this.profile, owner.activityId).state === 'completed')) {
@@ -1697,6 +1825,8 @@ export class Product {
     if (!active || canonicalJSON(active.owner) !== canonicalJSON(owner)) stateError('not_found', 'The target execution is not active');
     const result = this.change(method, params, owner, () => ({ executionId: params.executionId, cancelRequested: true }));
     active.stopRequested = true;
+    active.triage?.abort();
+    this.providerWaiters.get(params.executionId)?.cancel();
     active.session.stop(params.executionId);
     return result;
   }
@@ -1835,10 +1965,10 @@ export class Product {
     }
     preview.filesTruncated = preview.files.length < files.length;
     preview.textPreview = clipEncodedText(text, Math.min(resultPreviewBytes, remaining));
-    if (preview.textPreview !== text) {
+    if (canRead && preview.textPreview !== text) {
       const path = this.overflow!.write(executionId, text);
       const bytes = encodedBytes({ overflowPath: path }) - 1;
-      if (canRead && bytes <= remaining && redact(path) === path) {
+      if (bytes <= remaining && redact(path) === path) {
         preview.overflowPath = path;
         preview.textPreview = clipEncodedText(text, Math.min(resultPreviewBytes, remaining - bytes));
       }
@@ -1856,10 +1986,11 @@ export class Product {
     const { kind, complexity, constraints = [] } = activity.routing ?? {};
     const counts = { constraints: constraints.length, requirements: activity.requirements.length, materials: activity.materials.length,
       questions: activity.questions.length, approvalRequests: requests.length, executions: activity.executionIds.length, results: activity.results.length };
-    const response = { ...this.modelActivitySummary(activity, redact, requests), kind, complexity, counts, truncated: true,
+    const response = { ...this.modelActivitySummary(activity, redact, requests), kind, complexity, counts, truncated: false,
       constraints: [], requirements: [], materials: [], questions: [], approvalRequests: [], executions: [], results: [] };
     let remaining = budget - encodedBytes(response) - 1;
     if (remaining < 0) return oversizedEntry();
+    response.truncated = response.goal !== redact(activity.goal);
     const text = (value: string, limit = 160) => clipEncodedText(redact(value), limit);
     const exact = <T>(value: T) => projectionJSON(value, redact) as T;
     const append = <T>(key: keyof typeof counts, items: readonly T[], project: (item: T, bytes: number) => object | string | undefined,
@@ -1879,25 +2010,39 @@ export class Product {
     };
     append('results', activity.results, ({ executionId, text: result, files }, bytes) =>
       this.previewActivityText(exact({ executionId }).executionId, redact(result), files, bytes, canRead, redact), Math.ceil(remaining * 0.65), true);
+    response.truncated ||= (response.results as { truncated: boolean; filesTruncated: boolean }[]).some(row => row.truncated || row.filesTruncated);
     append('executions', activity.executionIds, (executionId, bytes) => {
       const execution = this.viewExecution(this.execution(this.profile, executionId));
       if (!execution) return;
       const { partial, error, ...fields } = execution;
       const base = { ...exact(fields), ...(error ? { error: text(error) } : {}) };
       const partialPreview = partial && this.previewActivityText(base.executionId, redact(partial), [], bytes - encodedBytes(base) - 11, canRead, redact);
+      response.truncated ||= !!error && base.error !== redact(error) || !!partial && (!partialPreview || partialPreview.truncated) || partial === null;
       return { ...base, ...(partialPreview ? { partial: partialPreview } : partial === null ? { partial: null } : {}) };
     }, Math.ceil(remaining / 2), true);
     const perCollection = Math.max(192, Math.floor(remaining / 5));
     append('approvalRequests', requests, row => exact({ requestId: row.requestId, executionId: row.executionId,
       source: row.source, skillId: row.skillId, script: row.script, revision: row.revision, state: row.state }), perCollection, true);
-    append('questions', activity.questions, ({ questionId, executionId, state, revision, delivery, text: question }) =>
-      ({ ...exact({ questionId, executionId, state, revision, delivery }), text: text(question) }), perCollection, true);
+    append('questions', activity.questions, ({ questionId, executionId, state, revision, delivery, text: question, options, allowFreeText }) => {
+      const preview = text(question);
+      response.truncated ||= preview !== redact(question);
+      return { ...exact({ questionId, executionId, state, revision, delivery, options, allowFreeText }), text: preview };
+    }, perCollection, true);
     append('materials', activity.materials, ({ id, revision, name, text: material }) => {
       const clean = redact(material);
-      return { ...exact({ id, revision }), name: text(name, 64), text: clipEncodedText(clean, 160), totalBytes: Buffer.byteLength(clean) };
+      const preview = clipEncodedText(clean, 160);
+      const namePreview = text(name, 64);
+      response.truncated ||= preview !== clean || namePreview !== redact(name);
+      return { ...exact({ id, revision }), name: namePreview, text: preview, totalBytes: Buffer.byteLength(clean) };
     }, perCollection);
-    append('requirements', activity.requirements, value => text(value), perCollection);
-    append('constraints', constraints, value => text(value), remaining);
+    const previewText = (value: string) => {
+      const preview = text(value);
+      response.truncated ||= preview !== redact(value);
+      return preview;
+    };
+    append('requirements', activity.requirements, previewText, perCollection);
+    append('constraints', constraints, previewText, remaining);
+    response.truncated ||= (Object.keys(counts) as (keyof typeof counts)[]).some(key => response[key].length < counts[key]);
     return response;
   }
 
@@ -2030,7 +2175,7 @@ export class Product {
   }
 
   private async startActivity(method: string, params: { activityId: string; operationId: string; expectedRevision: number; text: string; materials: Material[] },
-    escalation?: { route: CapturedRoute; prior: StoredExecution }) {
+    escalation?: { route: CapturedRoute; prior: StoredExecution }, delegated = false) {
     const prior = this.sameOperation(method, params.operationId, params);
     if (prior) return this.operation(params.operationId);
     const owner = { activityId: params.activityId };
@@ -2039,7 +2184,7 @@ export class Product {
     const bot = this.bot(this.profile, activity.ownerBotId);
     const last = this.execution(this.profile, activity.executionIds.at(-1));
     if (bot.archived || live(last) || unknown(last) || !escalation && this.escalating.has(activity.activityId)) stateError('busy', 'The activity is not ready to continue');
-    this.capacity();
+    this.capacity(delegated);
     const input = escalation?.prior.input ?? { revision: activity.revision,
       text: [activity.goal, ...activity.requirements, ...activity.routing?.constraints ?? [], params.text,
         ...activity.inputFiles.map(path => `Input file: ${path}`)].filter(Boolean).join('\n'), materials: params.materials };
@@ -2051,7 +2196,7 @@ export class Product {
       stateError('escalation_unavailable', 'The prior execution is no longer eligible to escalate');
     }
     if (!this.bindingKey(binding)) stateError('credential_unavailable', 'The captured credential source is unavailable');
-    this.capacity();
+    this.capacity(delegated);
     const execution = this.newExecution(params.operationId, input);
     const receipt: Operation = { operationId: params.operationId, state: 'accepted', target: owner, execution: publicExecution(execution) };
     this.commit(candidate => {
@@ -2074,37 +2219,128 @@ export class Product {
     return receipt;
   }
 
-  private answer(params: { activityId: string; executionId: string; questionId: string; questionRevision: number; operationId: string; text: string; materials: Material[] }) {
-    const method = 'question.answer';
-    const prior = this.sameOperation(method, params.operationId, params);
+  private canonicalAnswer(question: Question, text: string, selectedOptionId?: string): string {
+    const option = selectedOptionId === undefined ? undefined : question.options?.find(row => row.id === selectedOptionId);
+    if (selectedOptionId !== undefined && !option || question.allowFreeText === false && !option) {
+      return stateError('invalid_params', 'Choose a declared question option');
+    }
+    const answer = question.allowFreeText === false ? option!.label : text.trim() ? text : option?.label;
+    if (!answer?.trim()) return stateError('invalid_params', 'An answer requires text or a declared option');
+    return answer;
+  }
+
+  private forwardAnswer(actor: { conversationId: string }, callId: string, input: Static<typeof forwardAnswerInput>, signal?: AbortSignal) {
+    const { executionId: callerExecutionId, run } = this.activeCall(actor, signal);
+    const { activity_id: activityId, execution_id: executionId, question_id: questionId, question_revision: questionRevision,
+      text, selected_option_id: selectedOptionId } = input;
+    const activity = this.scopedActivity(activityId, executionId, actor);
+    const question = this.question(activity, questionId);
+    const target = { activityId, executionId, questionId, questionRevision, ...(selectedOptionId ? { selectedOptionId } : {}) };
+    const params = { ...target, operationId: `${callerExecutionId}:answer:${callId}`, text, materials: [] };
+    const prior = this.sameOperation('question.answer', params.operationId, params);
     if (prior) return prior.reply;
-    const { activityId, questionId, executionId, text, materials } = params;
-    validateDraft({ revision: 0, text, materials });
-    if (!text.trim()) stateError('invalid_params', 'An answer requires text');
-    const waiter = this.waiters.get(questionId);
-    const target = { activityId, questionId };
-    const binding = this.activity(this.profile, activityId).binding;
-    const deliveryBlocker = binding && !this.bindingKey(binding) ? 'credential_unavailable' : undefined;
-    const result = this.change(method, params, target, candidate => {
-      const activity = this.activity(candidate, activityId);
-      const question = this.question(activity, questionId);
-      requireRevision(question.revision, params.questionRevision);
-      if (question.executionId !== executionId || question.state !== 'open') stateError('question_conflict', 'The answer does not target this unanswered execution');
-      question.answer = { text, materials };
-      question.state = 'answered';
-      question.delivery = 'saved';
-      if (deliveryBlocker) question.deliveryBlocker = deliveryBlocker;
-      question.revision++;
-      activity.revision++;
-      return { ...target, executionId, revision: question.revision, answerSaved: true, delivery: question.delivery, ...(deliveryBlocker ? { deliveryBlocker } : {}) };
-    });
-    this.emitActivity(this.activity(this.profile, activityId));
-    if (waiter) {
-      this.waiters.delete(questionId);
-      if (deliveryBlocker) this.active.get(executionId)?.session.stop(executionId);
-      else if (live(this.execution(this.profile, executionId))) waiter.resolve({ text, materials });
+    requireRevision(question.revision, questionRevision);
+    if (question.state !== 'open' || question.executionId !== executionId || activity.executionIds.at(-1) !== executionId) {
+      return stateError('question_conflict', 'The answer does not target the current open question');
+    }
+    const answer = this.canonicalAnswer(question, text, selectedOptionId);
+    const draft = this.execution(this.profile, callerExecutionId)!.input.text.trim();
+    const exact = `Answer ${questionId}: `;
+    const single = 'Answer: ';
+    let evidence: string | undefined;
+    if (draft.startsWith(exact)) evidence = draft.slice(exact.length);
+    else if (draft.startsWith(single) && run.answerTarget?.questionId === questionId && run.answerTarget.revision === questionRevision) {
+      evidence = draft.slice(single.length);
+    }
+    const option = question.options?.find(row => row.id === selectedOptionId);
+    const sameText = evidence === answer.trim() && (!option || option.label === evidence &&
+      question.options?.filter(row => row.label === evidence).length === 1);
+    if (evidence !== undefined && (sameText || option && evidence === `option:${option.id}` && answer === option.label)) {
+      return this.answer(params);
+    }
+    return { state: 'confirmation_required', ...target, proposedAnswer: clipUTF8(answer, questionTextBytes) };
+  }
+
+  private answer(params: ProductParams<'question.answer'>) {
+    const prior = this.sameOperation('question.answer', params.operationId, params);
+    if (prior) return prior.reply;
+    const activity = this.activity(this.profile, params.activityId);
+    const question = this.question(activity, params.questionId);
+    requireRevision(question.revision, params.questionRevision);
+    if (question.executionId !== params.executionId || !['open', 'triage_pending'].includes(question.state)) {
+      return stateError('question_conflict', 'The answer does not target this unanswered execution');
+    }
+    const text = this.canonicalAnswer(question, params.text, params.selectedOptionId);
+    validateDraft({ revision: 0, text, materials: params.materials });
+    const result = this.saveAnswer(activity, question, { text, materials: params.materials },
+      { provenance: 'user', selectedOptionId: params.selectedOptionId }, params);
+    const waiter = this.waiters.get(question.questionId);
+    if (waiter?.executionId === question.executionId) {
+      if (waiter.triage) {
+        waiter.triage.controller.abort();
+        void waiter.triage.done.then(waiter.deliver);
+      } else waiter.deliver();
     }
     return result;
+  }
+
+  private saveAnswer(activity: Activity, question: Question, answer: NonNullable<Question['answer']>, provenance: AnswerProvenance,
+    operation?: ProductParams<'question.answer'>) {
+    const { activityId } = activity;
+    const { questionId, executionId } = question;
+    const binding = this.active.get(executionId)?.binding ?? activity.binding;
+    const deliveryBlocker = binding && !this.bindingKey(binding) ? 'credential_unavailable' as const : undefined;
+    const target = { activityId, questionId };
+    const automatic = provenance.provenance === 'bot_auto';
+    const committed = this.commit(candidate => {
+      const current = this.activity(candidate, activityId);
+      const row = this.question(current, questionId);
+      requireRevision(row.revision, question.revision);
+      if (automatic && (row.state !== 'triage_pending' || row.triageRulesRevision !== provenance.evidenceRevision ||
+          this.memoryStatus(candidate, current.ownerBotId).rulesRevision !== provenance.evidenceRevision ||
+          !live(this.execution(candidate, executionId)) || !this.active.has(executionId) || this.active.get(executionId)?.stopRequested || deliveryBlocker)) {
+        return stateError('triage_stale', 'The question or approved preference changed');
+      }
+      row.answer = answer;
+      row.state = 'answered';
+      row.delivery = 'saved';
+      Object.assign(row, provenance);
+      delete row.triageRulesRevision;
+      if (deliveryBlocker) row.deliveryBlocker = deliveryBlocker;
+      row.revision++;
+      current.revision++;
+      const reply = { ...target, executionId, revision: row.revision, answerSaved: true, delivery: row.delivery, deliveryBlocker, ...provenance };
+      if (operation) this.record(candidate, 'question.answer', operation, { operationId: operation.operationId, target, state: 'accepted', result: reply }, reply);
+      return { activity: current, reply };
+    }, undefined, undefined, undefined, undefined, automatic ? { triage: { activityId, kind: 'answer', at: new Date().toISOString() } } : undefined);
+    this.emitActivity(committed.activity);
+    if (automatic) this.emitDigest(committed.activity, { kind: 'question_auto_saved', questionId, executionId }, question.text);
+    return committed.reply;
+  }
+
+  private dispatchAnswer(activityId: string, questionId: string, executionId: string): ToolTextResult {
+    const run = this.active.get(executionId);
+    if (!run || run.stopRequested || this.closing) return stateError('cancelled', 'The question was interrupted');
+    const next = this.commit(candidate => {
+      const activity = this.activity(candidate, activityId);
+      const row = this.question(activity, questionId);
+      if (row.executionId !== executionId || row.delivery !== 'saved' || !row.answer) {
+        return stateError('question_conflict', 'The saved answer no longer belongs to this call');
+      }
+      if (row.deliveryBlocker || !this.bindingKey(run.binding)) row.deliveryBlocker = 'credential_unavailable';
+      else row.delivery = 'dispatching';
+      row.revision++;
+      activity.revision++;
+      return { activity, row };
+    });
+    this.emitActivity(next.activity);
+    const { answer, deliveryBlocker, provenance, evidenceId, evidenceRevision, selectedOptionId } = next.row;
+    if (deliveryBlocker) {
+      run.stopRequested = true;
+      run.session.stop(executionId);
+      return stateError(deliveryBlocker, 'The captured credential source is unavailable');
+    }
+    return this.modelResult({ ...answer, provenance, evidenceId, evidenceRevision, selectedOptionId });
   }
 
   private get discoverLocalSkills(): boolean {
@@ -2352,6 +2588,8 @@ export class Product {
     } });
     signal?.addEventListener('abort', abort, { once: true });
     this.emitActivity(activity);
+    this.emitDigest(activity, { kind: 'approval_required', executionId: request.executionId, requestId }, `Skill approval required for ${request.skillId}`);
+    this.parkActivity(activity);
     try { return await promise; }
     finally {
       this.approvalWaiters.delete(requestId);
@@ -2560,13 +2798,12 @@ export class Product {
   private tools(owner: ProductActor): ToolDefinition[] {
     const tools = [...this.inspectionTools(owner), ...this.memoryTools(owner), ...this.skillTools(owner)];
     if ('activityId' in owner) {
-      const question = Type.Object({ text: id }, strictTool);
       tools.push({
         name: 'activity_ask', label: 'Ask about the activity', description: 'Ask the user for information needed to finish this activity.',
-        parameters: question,
+        parameters: questionInput,
         execute: async (callId, input, signal) => {
-          if (!Value.Check(question, input)) return stateError('invalid_params', 'A question requires text');
-          return this.waitForAnswer(owner.activityId, callId, input.text, signal);
+          if (!Value.Check(questionInput, input)) return stateError('invalid_params', 'Invalid question parameters');
+          return this.waitForAnswer(owner.activityId, callId, input, signal);
         },
       }, {
         name: 'activity_progress', label: 'Report progress', description: 'Report a short stage and optional step for this execution.',
@@ -2583,6 +2820,12 @@ export class Product {
       const botId = this.conversation(this.profile, owner.conversationId).botId;
       if (this.bot(this.profile, botId).systemKind === SYSTEM_KIND_BOT_ARCHITECT) tools.push(...this.architectTools(owner.conversationId));
       tools.push(
+        { name: 'activity_answer', label: 'Relay an Activity answer',
+          description: 'Relay a direct current user answer to the exact observed question. Returns a confirmation proposal when the user has not given explicit answer evidence.',
+          parameters: forwardAnswerInput, execute: async (callId, input, signal) => {
+            if (!Value.Check(forwardAnswerInput, input)) return stateError('invalid_params', 'Invalid Activity answer target');
+            return this.modelResult(this.forwardAnswer(owner, callId, input, signal));
+          } },
         { name: 'bot_list', label: 'List Bots', description: 'Find the exact ID of an available Bot before an explicit handoff.', parameters: list,
           execute: async () => this.modelResult(this.profile.bots.filter(bot => !bot.archived && bot.botId !== botId)
             .map(({ botId, profile }) => ({ bot_id: botId, name: profile.name, role: profile.role }))) },
@@ -2745,41 +2988,116 @@ export class Product {
       this.record(candidate, 'activity.delegate', params, { operationId, state: 'accepted', target }, target);
     });
     this.emitActivity(activity);
-    return this.startActivity('activity.continue', { activityId: activity.activityId, operationId: `${operationId}:execution`, expectedRevision: 1, text: '', materials: activity.materials });
+    return this.startActivity('activity.continue', { activityId: activity.activityId, operationId: `${operationId}:execution`, expectedRevision: 1,
+      text: '', materials: activity.materials }, undefined, true);
   }
 
-  private async waitForAnswer(activityId: string, callId: string, text: string, signal?: AbortSignal) {
-    const { executionId } = this.activeCall({ activityId }, signal);
+  private async waitForAnswer(activityId: string, callId: string, input: Static<typeof questionInput>, signal?: AbortSignal) {
+    const { executionId, run, bot } = this.activeCall({ activityId }, signal);
+    const { options, allow_free_text: allowFreeText, requires_user_decision: requiresUserDecision, preference_key: preferenceKey } = input;
+    validateQuestionFields(input.text, options, allowFreeText);
     const questionId = `${executionId}:${callId}`;
-    const { promise, resolve, reject } = Promise.withResolvers<ToolTextResult>();
-    const abort = () => {
-      this.waiters.delete(questionId);
-      reject(new Error('The question was interrupted'));
-    };
-    this.commit(candidate => {
+    const activity = this.activity(this.profile, activityId);
+    if (activity.questions.some(row => row.questionId === questionId)) return stateError('question_conflict', 'This call already has a question');
+    const question: Question = { questionId, executionId, text: input.text.trim(), revision: 1, state: 'open',
+      options, allowFreeText, requiresUserDecision, preferenceKey };
+    const domain = triageDomain(question);
+    const accounting = domain && this.storage.triageAccounting(activityId);
+    const redact = this.engine.redactor(this.credentialKeys());
+    const candidates = domain && !run.triage && this.triageTasks.size < maxTriageConcurrency && this.bindingKey(run.binding) &&
+        (accounting?.attemptsUsed ?? 0) < maxTriageAttempts && (accounting?.autoAnswersUsed ?? 0) < maxAutomaticAnswers ?
+      approvedPreferences(question, domain, this.lastingRules(bot.botId)).filter(row => redact(row.rule) === row.rule && redact(row.evidenceId) === row.evidenceId) : [];
+    const triage = candidates.length ? new AbortController() : undefined;
+    if (triage) {
+      question.state = 'triage_pending';
+      question.triageRulesRevision = this.memoryStatus(this.profile, bot.botId).rulesRevision;
+    }
+    const updated = this.commit(candidate => {
       const current = this.activity(candidate, activityId);
-      current.questions.push({ questionId, executionId, text, revision: 1, state: 'open' });
+      current.questions.push(question);
+      if (!triage) current.state = 'waitingForAnswer';
+      current.revision++;
+      return current;
+    }, undefined, undefined, undefined, undefined, triage ? { triage: { activityId, kind: 'attempt', at: new Date().toISOString() } } : undefined);
+
+    const { promise, resolve, reject } = Promise.withResolvers<ToolTextResult>();
+    const finish = () => {
+      this.waiters.delete(questionId);
+      signal?.removeEventListener('abort', cancel);
+    };
+    const cancel = () => {
+      finish();
+      triage?.abort();
+      reject(new RequestError('cancelled', 'The question was interrupted'));
+    };
+    const waiter: AnswerWaiter = { executionId, cancel, deliver: () => {
+      if (this.waiters.get(questionId) !== waiter) return;
+      finish();
+      try { resolve(this.dispatchAnswer(activityId, questionId, executionId)); }
+      catch (error) { reject(error); }
+    } };
+    this.waiters.set(questionId, waiter);
+    signal?.addEventListener('abort', cancel, { once: true });
+    this.emitActivity(updated);
+    if (triage) {
+      run.triage = triage;
+      const task = this.triageQuestion(updated, question, candidates, run, triage).catch(error => {
+        if (this.waiters.get(questionId) === waiter) { finish(); reject(error); }
+      }).finally(() => {
+        this.triageTasks.delete(task);
+        if (run.triage === triage) delete run.triage;
+        if (!this.closing && this.active.get(executionId) === run) this.parkActivity(this.activity(this.profile, activityId));
+      });
+      waiter.triage = { controller: triage, done: task };
+      this.triageTasks.add(task);
+    } else {
+      this.emitDigest(updated, { kind: 'question_open', questionId, executionId }, question.text);
+      this.parkActivity(updated);
+    }
+    return promise;
+  }
+
+  private async triageQuestion(activity: Activity, question: Question, candidates: PreferenceCandidate[], run: LiveExecution, triage: AbortController): Promise<void> {
+    const { activityId, ownerBotId } = activity;
+    const { executionId, questionId } = question;
+    await setImmediate(undefined, { ref: false });
+    const stillOwned = () => !this.closing && this.active.get(executionId) === run && !run.stopRequested && this.waiters.has(questionId);
+    if (!stillOwned()) return;
+    let chosen = candidates.length === 1 ? candidates[0] : undefined;
+    if (candidates.length > 1 && !triage.signal.aborted && this.bindingKey(run.binding)) {
+      const prompt = JSON.stringify({ preferenceKey: question.preferenceKey, question: question.text,
+        candidates: candidates.map(row => ({ evidenceId: row.evidenceId, optionId: row.selectedOptionId, rule: row.rule })) });
+      try {
+        const response = await run.session.nominatePreference(prompt, triage.signal);
+        if (response !== undefined) chosen = parseNomination(response, candidates);
+      } catch { chosen = undefined; }
+    }
+    if (!stillOwned()) return;
+    const latest = this.activity(this.profile, activityId);
+    const row = this.question(latest, questionId);
+    if (row.state !== 'triage_pending' || row.revision !== question.revision) return;
+    const revision = this.memoryStatus(this.profile, ownerBotId).rulesRevision;
+    if (chosen && !triage.signal.aborted && revision === question.triageRulesRevision && this.bindingKey(run.binding)) {
+      try {
+        this.saveAnswer(latest, row, { text: chosen.text, materials: [] }, { provenance: 'bot_auto',
+          evidenceId: chosen.evidenceId, evidenceRevision: revision, selectedOptionId: chosen.selectedOptionId });
+        this.waiters.get(questionId)?.deliver();
+        return;
+      } catch (error) {
+        if (!(error instanceof RequestError) || !['triage_budget', 'triage_stale'].includes(error.code)) throw error;
+      }
+    }
+    const opened = this.commit(candidate => {
+      const current = this.activity(candidate, activityId);
+      const pending = this.question(current, questionId);
+      pending.state = 'open';
+      delete pending.triageRulesRevision;
+      pending.revision++;
       current.state = 'waitingForAnswer';
       current.revision++;
+      return current;
     });
-    this.waiters.set(questionId, { resolve: answer => {
-      signal?.removeEventListener('abort', abort);
-      try {
-        this.commit(candidate => {
-          const current = this.activity(candidate, activityId);
-          const question = this.question(current, questionId);
-          question.delivery = 'dispatching';
-          question.revision++;
-          current.revision++;
-        });
-        this.emitActivity(this.activity(this.profile, activityId));
-        resolve(this.modelResult(answer));
-      } catch (error) {
-        reject(error);
-      }
-    } });
-    signal?.addEventListener('abort', abort, { once: true });
-    this.emitActivity(this.activity(this.profile, activityId));
-    return promise;
+    this.emitActivity(opened);
+    this.emitDigest(opened, { kind: 'question_open', questionId, executionId }, question.text);
   }
 }

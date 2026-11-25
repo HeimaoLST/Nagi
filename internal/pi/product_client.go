@@ -39,10 +39,26 @@ type ProductEvent struct {
 	Name            string                       `json:"event"`
 	Data            json.RawMessage              `json:"data"`
 	ActivityChanged *ProductActivityChange       `json:"-"`
+	ActivityDigest  *ProductActivityDigest       `json:"-"`
 	TraceUpdated    *ProductActivityTraceUpdated `json:"-"`
 	SkillChanged    *ProductSkillChange          `json:"-"`
 	McpChanged      *ProductMcpChange            `json:"-"`
 	ProviderChanged *ProductProviderChange       `json:"-"`
+}
+
+type ProductActivityDigest struct {
+	FactID               string  `json:"factId"`
+	ActivityID           string  `json:"activityId"`
+	OwnerBotID           string  `json:"ownerBotId"`
+	OriginConversationID string  `json:"originConversationId"`
+	ExecutionID          string  `json:"executionId,omitempty"`
+	Revision             uint64  `json:"revision"`
+	Kind                 string  `json:"kind"`
+	Summary              string  `json:"summary"`
+	FileCount            *uint64 `json:"fileCount,omitempty"`
+	QuestionID           string  `json:"questionId,omitempty"`
+	RequestID            string  `json:"requestId,omitempty"`
+	At                   string  `json:"at"`
 }
 
 type ProductActivityTraceUpdated struct {
@@ -308,14 +324,29 @@ type ProductText struct {
 }
 
 type ProductQuestion struct {
-	QuestionID      string                 `json:"questionId"`
-	ExecutionID     string                 `json:"executionId"`
-	Text            string                 `json:"text"`
-	Revision        uint64                 `json:"revision"`
-	State           string                 `json:"state"`
-	Answer          *ProductText           `json:"answer,omitempty"`
-	Delivery        string                 `json:"delivery,omitempty"`
-	DeliveryBlocker ProductDeliveryBlocker `json:"deliveryBlocker,omitempty"`
+	QuestionID           string                  `json:"questionId"`
+	ExecutionID          string                  `json:"executionId"`
+	Text                 string                  `json:"text"`
+	Revision             uint64                  `json:"revision"`
+	State                string                  `json:"state"`
+	Answer               *ProductText            `json:"answer,omitempty"`
+	Delivery             string                  `json:"delivery,omitempty"`
+	DeliveryBlocker      ProductDeliveryBlocker  `json:"deliveryBlocker,omitempty"`
+	Options              []ProductQuestionOption `json:"options,omitempty"`
+	AllowFreeText        *bool                   `json:"allowFreeText,omitempty"`
+	RequiresUserDecision *bool                   `json:"requiresUserDecision,omitempty"`
+	PreferenceKey        string                  `json:"preferenceKey,omitempty"`
+	Provenance           string                  `json:"provenance,omitempty"`
+	EvidenceID           string                  `json:"evidenceId,omitempty"`
+	EvidenceRevision     *uint64                 `json:"evidenceRevision,omitempty"`
+	SelectedOptionID     string                  `json:"selectedOptionId,omitempty"`
+}
+
+type ProductQuestionOption struct {
+	ID          string `json:"id"`
+	Label       string `json:"label"`
+	Description string `json:"description,omitempty"`
+	Recommended bool   `json:"recommended,omitempty"`
 }
 
 type ProductResultFile struct {
@@ -487,8 +518,9 @@ type ProductStopResult struct {
 
 type ProductActivityListParams struct {
 	ProductPageParams
-	BotID  string   `json:"botId"`
-	States []string `json:"states,omitempty"`
+	BotID              string   `json:"botId"`
+	States             []string `json:"states,omitempty"`
+	UnacknowledgedOnly bool     `json:"unacknowledgedOnly,omitempty"`
 }
 
 type ProductActivityParams struct {
@@ -537,15 +569,20 @@ type ProductAnswerParams struct {
 	QuestionID       string `json:"questionId"`
 	QuestionRevision uint64 `json:"questionRevision"`
 	OperationID      string `json:"operationId"`
+	SelectedOptionID string `json:"selectedOptionId,omitempty"`
 }
 
 type ProductAnswerResult struct {
 	ProductActivityExecutionParams
-	QuestionID      string                 `json:"questionId"`
-	Revision        uint64                 `json:"revision"`
-	AnswerSaved     bool                   `json:"answerSaved"`
-	Delivery        string                 `json:"delivery"`
-	DeliveryBlocker ProductDeliveryBlocker `json:"deliveryBlocker,omitempty"`
+	QuestionID       string                 `json:"questionId"`
+	Revision         uint64                 `json:"revision"`
+	AnswerSaved      bool                   `json:"answerSaved"`
+	Delivery         string                 `json:"delivery"`
+	DeliveryBlocker  ProductDeliveryBlocker `json:"deliveryBlocker,omitempty"`
+	Provenance       string                 `json:"provenance,omitempty"`
+	EvidenceID       string                 `json:"evidenceId,omitempty"`
+	EvidenceRevision *uint64                `json:"evidenceRevision,omitempty"`
+	SelectedOptionID string                 `json:"selectedOptionId,omitempty"`
 }
 
 type ProductConnectionSaveParams struct {
@@ -785,6 +822,14 @@ func (c *Client) handleProductEvent(line []byte) error {
 			return errors.New("invalid activity change")
 		}
 		event.ActivityChanged = &change
+	}
+	if event.Name == "activity.digest" {
+		var digest ProductActivityDigest
+		if json.Unmarshal(event.Data, &digest) != nil || digest.ActivityID == "" || digest.FactID == "" ||
+			digest.OwnerBotID == "" || digest.OriginConversationID == "" || digest.At == "" || digest.Kind == "" {
+			return errors.New("invalid activity digest")
+		}
+		event.ActivityDigest = &digest
 	}
 	if event.Name == "activity.traceUpdated" {
 		var update ProductActivityTraceUpdated

@@ -155,8 +155,8 @@ const fk = db.prepare('PRAGMA foreign_key_check').all().length;
 db.close();
 console.log(JSON.stringify({ version, hasSystemKind: cols.includes('system_kind'), fk }));
 `)
-	if !strings.Contains(versionAfter, `"version":8`) || !strings.Contains(versionAfter, `"hasSystemKind":true`) || !strings.Contains(versionAfter, `"fk":0`) {
-		t.Fatalf("v1->v8 SQLite upgrade state = %s", versionAfter)
+	if !strings.Contains(versionAfter, `"version":9`) || !strings.Contains(versionAfter, `"hasSystemKind":true`) || !strings.Contains(versionAfter, `"fk":0`) {
+		t.Fatalf("v1->v9 SQLite upgrade state = %s", versionAfter)
 	}
 
 	first, err := proc.client.EnsureBuiltinBot(ctx, pi.ProductBotEnsureBuiltinParams{
@@ -821,8 +821,8 @@ const db = new DatabaseSync(process.argv[1]);
 console.log(db.prepare('PRAGMA user_version').get().user_version);
 db.close();
 `)
-	if version != "8" {
-		t.Fatalf("SQLite schema version = %q, want 8", version)
+	if version != "9" {
+		t.Fatalf("SQLite schema version = %q, want 9", version)
 	}
 
 	backupPath := filepath.Join(root, "sp-backup.json")

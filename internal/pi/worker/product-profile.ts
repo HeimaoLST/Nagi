@@ -9,8 +9,9 @@ import { RequestError, activityStateSchema, botSystemKindSchema, connectionSchem
   operationSchema, profileSchema, quoteAuthorMaxBytes, quoteTextMaxBytes, type ActivityState, type Connection, type Draft,
   type Execution, type Material, type Operation } from './protocol.js';
 import type { ProductProfile } from './product.js';
-import { activityLifecycleFields, activityProgressRecord, skillApprovalRecord, skillApprovalRequestSchema,
-  type ActivityProgressRecord, type SkillApproval, type SkillApprovalRequest } from './protocol.js';
+import { activityLifecycleFields, activityProgressRecord, questionResult, skillApprovalRecord, skillApprovalRequestSchema, triageAccounting as triageSchema,
+  optionDescriptionBytes, optionLabelBytes, questionTextBytes, type ActivityProgressRecord, type SkillApproval, type SkillApprovalRequest,
+  type TriageAccounting } from './protocol.js';
 import { lastingRulesFit, MAX_LOG_BYTES, MAX_PENDING_LEARNINGS, MAX_RULE_BYTES, MAX_WORK_LOGS,
   memorySnapshotSchema, validMemoryDate } from './bot-memory.js';
 import { decodeTraceBackup, directlyOwns, normalizeActivityGrants, type TraceBackup } from './product-trace.js';
@@ -18,6 +19,7 @@ import { backupSkillFiles, bundleDigest, executableBundle, privateSkillBundleSch
 import { activityRouting, capturedRoute, escalationSchema, policySchema, providerAccount, validProvider, type Escalation, type ProviderAccount } from './model-router.js';
 import { maxMcpServers, uniqueMcpRegistry, validMcpBindings, validMcpServer } from './mcp-broker.js';
 import { clipUTF8 } from './product-redactor.js';
+import { triageDomain, validateQuestionFields } from './activity-control.js';
 
 export type ProductProfilePaths = {
   profilePath: string;
@@ -26,7 +28,8 @@ export type ProductProfilePaths = {
 };
 
 export type ProductBackup = TraceBackup & { privateSkillBundles?: PrivateSkillBundle[]; skillApprovals?: SkillApproval[];
-  activityEscalations?: Escalation[]; activityProgress?: ActivityProgressRecord[]; skillApprovalRequests?: SkillApprovalRequest[] };
+  activityEscalations?: Escalation[]; activityProgress?: ActivityProgressRecord[]; skillApprovalRequests?: SkillApprovalRequest[];
+  triageAccounting?: TriageAccounting[] };
 
 type Credential = { api: 'openai-responses' | 'openai-chat-completions'; endpoint: string; api_key: string };
 type LegacyConnection = {
@@ -90,16 +93,12 @@ const privateSkillBundles = Type.Array(privateSkillBundleSchema, { maxItems: 819
 const executionRecord = Type.Object({ ...executionSchema.properties, operationId: recoveryID,
   input: draftSchema, error: Type.Optional(Type.String()), engineRunId: Type.Optional(recoveryID),
   importedActivityId: Type.Optional(recoveryID), retained: Type.Optional(opaque) }, strict);
-const questionRecord = Type.Object({ questionId: recoveryID, executionId: recoveryID, text: Type.String(), revision: counter,
-  state: Type.Union([Type.Literal('open'), Type.Literal('answered'), Type.Literal('superseded')]),
-  answer: Type.Optional(Type.Object({ text: Type.String(), materials: Type.Array(materialSchema) }, strict)),
-  delivery: Type.Optional(Type.Union([Type.Literal('saved'), Type.Literal('dispatching'), Type.Literal('delivered'),
-    Type.Literal('unknown'), Type.Literal('canceled'), Type.Literal('unavailable')])),
-  deliveryBlocker: Type.Optional(Type.Literal('credential_unavailable')) }, strict);
+const questionRecord = Type.Object({ ...questionResult.properties, triageRulesRevision: Type.Optional(counter) }, strict);
 const activityRecord = Type.Object({ activityId: recoveryID, ownerBotId: recoveryID, originConversationId: recoveryID,
   routing: Type.Optional(activityRouting),
   revision: counter, state: activityStateSchema, goal: Type.String(), requirements: Type.Array(Type.String()),
   ...activityLifecycleFields,
+  updatedAt: Type.Optional(recoveryID),
   questions: Type.Array(questionRecord), materials: Type.Array(materialSchema), inputFiles: Type.Array(Type.String()),
   executionIds: Type.Array(recoveryID), binding: Type.Optional(bindingSchema), retained: Type.Optional(opaque),
   grantedLinkedActivityIds: Type.Optional(Type.Array(recoveryID)),
@@ -233,6 +232,22 @@ export function decodeProductProfile(data: unknown): ProductProfile {
         questionIds.size !== activity.questions.length ||
         activity.questions.some(question => !ids.has(question.executionId)) ||
         activity.results.some(result => result.activityId !== activity.activityId || !ids.has(result.executionId))) invalid();
+    if (activity.updatedAt !== undefined && !Number.isFinite(Date.parse(activity.updatedAt))) invalid();
+    for (const question of activity.questions) {
+      if (question.options !== undefined || question.allowFreeText !== undefined || question.requiresUserDecision !== undefined || question.preferenceKey !== undefined) {
+        try { validateQuestionFields(question.text, question.options, question.allowFreeText); }
+        catch { invalid(); }
+      }
+      const selection = question.options?.find(row => row.id === question.selectedOptionId);
+      if (question.selectedOptionId !== undefined && (!selection || !question.answer) ||
+          question.allowFreeText === false && question.answer && (!selection || selection.label !== question.answer.text) ||
+          question.provenance !== undefined && (!question.answer || question.state !== 'answered') ||
+          (question.provenance === 'bot_auto' ? !question.evidenceId || !question.evidenceRevision || !selection ||
+            question.answer?.text !== selection.label || question.answer.materials.length !== 0 :
+            question.evidenceId !== undefined || question.evidenceRevision !== undefined) ||
+          question.state === 'triage_pending' && (question.triageRulesRevision === undefined || question.answer || !triageDomain(question) ||
+            !['starting', 'running', 'unknown'].includes(executions.get(question.executionId)?.state ?? ''))) invalid();
+    }
     if ((activity.acknowledgedAt === undefined) !== (activity.acknowledgedExecutionId === undefined) ||
         activity.acknowledgedAt !== undefined && (!Number.isFinite(Date.parse(activity.acknowledgedAt)) ||
           activity.acknowledgedExecutionId !== activity.executionIds.at(-1) ||
@@ -302,8 +317,23 @@ export function decodeProductBackup(data: unknown): { profile: ProductProfile; b
     const { backup, ...records } = data;
     const profile = decodeProductProfile(records);
     if (!backup || typeof backup !== 'object') return { profile, backup: decodeTraceBackup(profile, backup) };
-    const { privateSkillBundles: bundles, skillApprovals: approvals, activityEscalations, activityProgress, skillApprovalRequests, ...traces } = backup as Record<string, unknown>;
+    const { privateSkillBundles: bundles, skillApprovals: approvals, activityEscalations, activityProgress, skillApprovalRequests,
+      triageAccounting, ...traces } = backup as Record<string, unknown>;
     const activities = new Map(profile.activities.map(row => [row.activityId, row]));
+    if (triageAccounting !== undefined && (!Value.Check(Type.Array(triageSchema), triageAccounting) ||
+        new Set(triageAccounting.map(row => row.activityId)).size !== triageAccounting.length || triageAccounting.some(row =>
+          !activities.has(row.activityId) || row.autoAnswersUsed > row.attemptsUsed || !Number.isFinite(Date.parse(row.updatedAt))))) {
+      throw new RequestError('profile_unavailable', 'The recovery copy has invalid triage accounting');
+    }
+    const budgets = new Map((triageAccounting ?? []).map(row => [row.activityId, row]));
+    for (const activity of activities.values()) {
+      const answers = activity.questions.filter(row => row.provenance === 'bot_auto').length;
+      const pending = activity.questions.filter(row => row.state === 'triage_pending').length;
+      const budget = budgets.get(activity.activityId);
+      if (answers !== (budget?.autoAnswersUsed ?? 0) || answers + pending > (budget?.attemptsUsed ?? 0)) {
+        throw new RequestError('profile_unavailable', 'The recovery copy has inconsistent triage accounting');
+      }
+    }
     if (activityProgress !== undefined && (!Value.Check(Type.Array(activityProgressRecord), activityProgress) ||
         new Set(activityProgress.map(row => row.activityId)).size !== activityProgress.length || activityProgress.some(row =>
           activities.get(row.activityId)?.executionIds.at(-1) !== row.executionId || !Number.isFinite(Date.parse(row.at)) ||
@@ -355,7 +385,7 @@ export function decodeProductBackup(data: unknown): { profile: ProductProfile; b
       }
     }
     return { profile, backup: { ...decodeTraceBackup(profile, traces), privateSkillBundles: bundles, skillApprovals: approvals, activityEscalations,
-      activityProgress, skillApprovalRequests } };
+      activityProgress, skillApprovalRequests, triageAccounting } };
   }
   return { profile: decodeProductProfile(data) };
 }
@@ -389,8 +419,24 @@ function redactBackupProfile(snapshot: ProductProfile & { backup: ProductBackup 
   }
   for (const activity of snapshot.activities) {
     if (activity.routing?.constraints) activity.routing.constraints = activity.routing.constraints.map(text => clipUTF8(text, 1024, ''));
+    for (const question of activity.questions) {
+      if (question.options !== undefined || question.allowFreeText !== undefined || question.requiresUserDecision !== undefined || question.preferenceKey !== undefined) {
+        question.text = bounded(question.text, questionTextBytes);
+      }
+      for (const option of question.options ?? []) {
+        option.label = bounded(option.label, optionLabelBytes);
+        if (option.description !== undefined) option.description = clipUTF8(option.description, optionDescriptionBytes, '');
+      }
+      if (question.answer && (question.allowFreeText === false || question.provenance === 'bot_auto')) {
+        const option = question.options?.find(row => row.id === question.selectedOptionId);
+        if (option) question.answer.text = option.label;
+      }
+    }
   }
   for (const row of snapshot.backup.activityProgress ?? []) row.stage = bounded(row.stage, 160);
+  for (const request of snapshot.backup.skillApprovalRequests ?? []) {
+    if (request.reason !== undefined) request.reason = clipUTF8(request.reason, 512, '');
+  }
 }
 
 export function backupProductProfile(paths: ProductProfilePaths, profile: ProductProfile, backup: ProductBackup, destination: string,
