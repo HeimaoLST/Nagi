@@ -195,17 +195,20 @@ class Worker {
   }
   private nonsecretConfiguration(config: ConfigureParams): object {
     return { wireApi: config.wireApi, baseUrl: config.baseUrl, model: config.model, contextTokens: config.contextTokens, outputTokens: config.outputTokens,
-      credentialSource: config.credentialSource, ...(config.thinkingLevel === undefined ? {} : { thinkingLevel: config.thinkingLevel }) };
+      credentialSource: config.credentialSource, ...(config.thinkingLevel === undefined ? {} : { thinkingLevel: config.thinkingLevel }),
+      ...(config.capabilities ? { capabilities: config.capabilities } : {}) };
   }
   private configure(params: ConfigureParams): void {
     this.configured = this.validatedConfiguration(params);
   }
   private registerModel(models: ModelRuntime, config: ConfigureParams, preserveSystemPositions = false): void {
+    const capabilities = config.capabilities;
+    const compat = capabilities?.compat ?? (preserveSystemPositions ? { supportsMidConvoSystemMessages: true } : undefined);
     models.registerProvider(PROVIDER, { api: config.wireApi, baseUrl: config.baseUrl, models: [{
-      id: config.model, name: config.model, reasoning: config.reasoning ?? false, input: ['text'],
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      id: config.model, name: config.model, reasoning: capabilities?.reasoning ?? config.reasoning ?? false, input: capabilities?.input ?? ['text'],
+      cost: capabilities?.cost ?? { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
       contextWindow: config.contextTokens, maxTokens: config.outputTokens,
-      ...(preserveSystemPositions ? { compat: { supportsMidConvoSystemMessages: true } } : {}),
+      ...(capabilities ? { thinkingLevelMap: capabilities.thinkingLevelMap } : {}), ...(compat ? { compat } : {}),
     }] });
   }
   private configuration(context: Context): object {
@@ -325,7 +328,7 @@ class Worker {
         if (!saved || saved.type !== 'custom' || JSON.stringify(saved.data) !== JSON.stringify(binding)) throw new RequestError('binding_conflict', 'Saved context owner differs');
         const savedConfig = manager.getEntries().findLast(entry => entry.type === 'custom' && entry.customType === CONFIGURATION_TYPE);
         if (!savedConfig || savedConfig.type !== 'custom') throw new RequestError('binding_conflict', 'The saved context is missing its captured configuration');
-        publishConfiguration = JSON.stringify(savedConfig.data) !== JSON.stringify(this.nonsecretConfiguration(config));
+        publishConfiguration = canonicalJSON(savedConfig.data) !== canonicalJSON(this.nonsecretConfiguration(config));
         if (publishConfiguration && !(productTools.length && params.purpose === 'conversation' && config.thinkingLevel !== undefined)) {
           throw new RequestError('binding_conflict', 'Captured connection configuration differs from the saved context');
         }
@@ -592,7 +595,7 @@ class Worker {
     return run;
   }
 
-  private async testProductConnection(configuration: Connection): Promise<void> {
+  private async testProductConnection(configuration: Connection & Pick<ConfigureParams, 'capabilities'>): Promise<void> {
     try { await this.runProductConnectionTest(configuration); }
     catch (error) {
       const code = error instanceof RequestError ? error.code : 'connection_test_failed';
@@ -600,7 +603,7 @@ class Worker {
     }
   }
 
-  private async runProductConnectionTest(configuration: Connection): Promise<void> {
+  private async runProductConnectionTest(configuration: Connection & Pick<ConfigureParams, 'capabilities'>): Promise<void> {
     const id = randomUUID();
     const context = await this.open({ contextId: id, botId: id, purpose: 'conversation', selectionRevision: 1,
       cwd: configuration.workingDirectory, used: false, instructions: '', codingTools: [], domainTools: null,

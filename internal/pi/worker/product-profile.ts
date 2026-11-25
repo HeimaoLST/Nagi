@@ -17,7 +17,7 @@ import { lastingRulesFit, MAX_LOG_BYTES, MAX_PENDING_LEARNINGS, MAX_RULE_BYTES, 
   memorySnapshotSchema, validMemoryDate } from './bot-memory.js';
 import { decodeTraceBackup, directlyOwns, normalizeActivityGrants, type TraceBackup } from './product-trace.js';
 import { backupSkillFiles, bundleDigest, executableBundle, privateSkillBundleSchema, pureSkill, skillGrantKey, validateSkillBundles, type PrivateSkillBundle } from './bot-skills.js';
-import { activityRouting, capturedRoute, escalationSchema, policySchema, providerAccount, validProvider, type Escalation, type ProviderAccount } from './model-router.js';
+import { activityRouting, capturedRoute, escalationSchema, policySchema, privateProviderAccount, providerAccount, validProvider, type Escalation, type ProviderAccount } from './model-router.js';
 import { maxMcpServers, uniqueMcpRegistry, validMcpBindings, validMcpServer } from './mcp-broker.js';
 import { clipUTF8 } from './product-redactor.js';
 import { triageDomain, validateQuestionFields } from './activity-control.js';
@@ -37,8 +37,14 @@ type LegacyConnection = {
   credential_source: string; model: string; context_tokens: number; output_tokens: number;
   working_directory: string; max_active_tasks: number;
 };
+type PrivateProviderCredential = Omit<ProviderAccount, 'enabledModels' | 'fallbackOnly' | 'modelOverrides'> & { apiKey: string };
+
+export function privateProviderCredential(account: ProviderAccount, apiKey: string): PrivateProviderCredential {
+  const { providerId, name, wireApi, baseUrl, models, defaultModel, contextTokens, outputTokens, enabled, credentialSourceId } = account;
+  return { providerId, name, wireApi, baseUrl, models, defaultModel, contextTokens, outputTokens, enabled, credentialSourceId, apiKey };
+}
 export type PrivateConnection = Partial<LegacyConnection> & {
-  version: 2 | 3; sources: Record<string, Credential>; accounts?: (ProviderAccount & { apiKey: string })[]; publicationId?: string;
+  version: 2 | 3; sources: Record<string, Credential>; accounts?: PrivateProviderCredential[]; publicationId?: string;
 };
 export const privateCredentialKeys = (store?: PrivateConnection) => [
   ...Object.values(store?.sources ?? {}).map(source => source.api_key), ...store?.accounts?.map(account => account.apiKey) ?? [],
@@ -530,7 +536,7 @@ export function readPrivateConnection(path: string): PrivateConnection | undefin
   const sources = Type.Record(Type.String(), source);
   const v2 = Type.Object({ version: Type.Literal(2), ...legacy.properties, sources });
   const v3 = Type.Object({ version: Type.Literal(3), ...Type.Partial(legacy).properties, sources: Type.Optional(sources),
-    publicationId: Type.Optional(recoveryID), accounts: Type.Array(Type.Object({ ...providerAccount.properties, apiKey: recoveryID }, strict)) });
+    publicationId: Type.Optional(recoveryID), accounts: Type.Array(Type.Object({ ...privateProviderAccount.properties, apiKey: recoveryID }, strict)) });
   if (Value.Check(v2, data)) return data;
   if (Value.Check(v3, data) && data.accounts.every(validProvider) &&
       new Set(data.accounts.map(row => row.credentialSourceId)).size === data.accounts.length) return { ...data, sources: data.sources ?? {} };

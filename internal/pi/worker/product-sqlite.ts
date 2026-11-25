@@ -152,7 +152,7 @@ const MIGRATIONS = [`
     revision INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, settled_at TEXT, payload_json TEXT NOT NULL
   ) STRICT;
   CREATE INDEX activity_steers_by_execution ON activity_steers (activity_id, execution_id, created_at);
-`];
+`, 'SELECT 1;'];
 const LATEST_SCHEMA_VERSION = MIGRATIONS.length;
 
 type Snapshot = { data: Buffer; digest: string };

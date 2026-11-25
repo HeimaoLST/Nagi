@@ -14,12 +14,12 @@ import {
   maxAutomaticAnswers, maxDraftBytes, maxTriageAttempts, preferenceKey, profileSchema, questionOptionId, questionOptions, questionTextBytes,
   resolveCodingTools, skillExecutable, skillID, skillScriptName, skillSource, skillText, toolPresetSchema,
   type ActivityDigest, type ActivityState, type ActivitySteer, type ActivitySteerPayload, type AnswerProvenance, type BotChange, type BotProfile,
-  type Connection, type Draft, type Execution,
+  type ConfigureParams, type Connection, type Draft, type Execution,
   type Material, type McpServerRecord, type McpServerView, type OpenParams, type Operation, type ProductCommand, type ProductParams,
   type ProductQuestion, type SkillApproval, type SkillApprovalRequest, type SkillChange, type SkillDetail, type SkillListing, type SkillPermissions,
   type SkillSource, type TraceItem,
 } from './protocol.js';
-import { backupProductProfile, privateCredentialKeys, saveCredential, type PrivateConnection, type ProductProfilePaths, type StoredConnection } from './product-profile.js';
+import { backupProductProfile, privateCredentialKeys, privateProviderCredential, saveCredential, type PrivateConnection, type ProductProfilePaths, type StoredConnection } from './product-profile.js';
 import { ProductSQLite, type ActivityControlWrite, type RoutingWrite, type SkillApprovalChange } from './product-sqlite.js';
 import { composeBotSystemPrompt, formatTightBotInstructions, readTightBotInstructions,
   PANDORABOX_BOT_ID, SYSTEM_KIND_BOT_ARCHITECT, type BotSystemKind } from './bot-template.js';
@@ -39,6 +39,7 @@ import { clipEncodedText, clipUTF8, projectionRedactor } from './product-redacto
 import { loadSkillInstallation, SkillSandbox } from './skill-sandbox.js';
 import { activityRole, activityRouting, providerCacheTtlMs, providerEndpoint, resolveRole, resolvedRoles, validProvider,
   type ActivityRouting, type CapturedRoute, type ModelRole, type ProviderAccount, type RoutingPolicy } from './model-router.js';
+import { compareModelIds, describeModel, modelSupply } from './model-catalog.js';
 import { approvedPreferences, parseNomination, renderWhiteboard, steerEnvelope, triageDomain, validateQuestionFields,
   type PreferenceCandidate, type WhiteboardRow } from './activity-control.js';
 
@@ -50,7 +51,7 @@ const maxPartialBytes = 512 * 1024;
 const readOnlyTools: Record<string, true> = { read: true, grep: true, find: true, ls: true, activity_list: true, activity_get: true,
   activity_progress: true, activity_result_read: true, activity_trace_read: true, conversation_read: true, conversation_search: true, memory_list_rules: true, memory_search_log: true,
   skill_list: true, skill_read: true, bot_list: true, bot_inspect_team: true };
-const providerChanges = { 'provider.save': 'saved', 'provider.delete': 'deleted', 'provider.apply': 'applied',
+const providerChanges = { 'provider.save': 'saved', 'provider.reorder': 'saved', 'provider.delete': 'deleted', 'provider.apply': 'applied',
   'provider.revokeCredential': 'revoked', 'routing.setPolicy': 'policy' } as const;
 type ProviderMutation = Extract<ProductCommand, { method: keyof typeof providerChanges }>;
 
@@ -87,7 +88,7 @@ export type ProductEngine = {
   readTranscript: (sessionRef: string, owner: TranscriptOwner) => Promise<Transcript>;
   redactor: (keys: string[]) => (text: string) => string;
   streamingRedactor: (keys: string[]) => (text: string, final?: boolean) => string;
-  test: (configuration: Connection) => Promise<void>;
+  test: (configuration: Connection & Pick<ConfigureParams, 'capabilities'>) => Promise<void>;
   drain: () => Promise<void>;
   disconnect: () => void;
   cleanMessage: (error: unknown) => string;
@@ -508,16 +509,21 @@ export class Product {
           const sameEndpoint = previous?.wireApi === account.wireApi && previous.baseUrl === account.baseUrl;
           const existingKey = sameEndpoint ? this.providerKey(previous) : undefined;
           const key = apiKey?.trim() ? apiKey : existingKey;
-          if (!validProvider(account) || containsMcpSecret(account, projectionRedactor([...this.credentialKeys(), ...(key ? [key] : [])]))) {
+          const reusedOverrides = account.modelOverrides !== undefined && previous?.modelOverrides !== undefined &&
+            canonicalJSON(account.modelOverrides) === canonicalJSON(previous.modelOverrides);
+          const row = { ...account, ...(sameEndpoint ? { enabledModels: account.enabledModels ?? previous.enabledModels,
+            fallbackOnly: account.fallbackOnly ?? previous.fallbackOnly, modelOverrides: account.modelOverrides ?? previous.modelOverrides } :
+            reusedOverrides ? { modelOverrides: undefined } : {}) };
+          if (!validProvider(row) || containsMcpSecret(row, projectionRedactor([...this.credentialKeys(), ...(key ? [key] : [])]))) {
             stateError('invalid_params', 'The Provider requires an HTTP(S) endpoint, nonsecret metadata and valid model limits');
           }
           if (!previous && (candidate.providerAccounts?.length ?? 0) >= 64) stateError('busy', 'The Provider pool is full');
           const credentialSourceId = sameEndpoint && key === existingKey ? previous.credentialSourceId : newId();
-          const row = { ...account, credentialSourceId };
-          candidate.providerAccounts = previous ? candidate.providerAccounts!.map(item => item.providerId === account.providerId ? row : item) :
-            [...candidate.providerAccounts ?? [], row];
-          if (key) {
-            next.accounts = [...next.accounts.filter(item => item.credentialSourceId !== credentialSourceId), { ...row, apiKey: key }];
+          const savedAccount = { ...row, credentialSourceId };
+          candidate.providerAccounts = previous ? candidate.providerAccounts!.map(item => item.providerId === account.providerId ? savedAccount : item) :
+            [...candidate.providerAccounts ?? [], savedAccount];
+          if (key && (!sameEndpoint || key !== existingKey)) {
+            next.accounts = [...next.accounts.filter(item => item.credentialSourceId !== credentialSourceId), privateProviderCredential(savedAccount, key)];
             routing.credentials = next;
           }
           break;
@@ -526,6 +532,16 @@ export class Product {
           const accounts = candidate.providerAccounts?.filter(row => row.providerId !== command.params.providerId);
           if (!candidate.providerAccounts || accounts?.length === candidate.providerAccounts.length) stateError('not_found', 'The Provider does not exist');
           candidate.providerAccounts = accounts?.length ? accounts : undefined;
+          break;
+        }
+        case 'provider.reorder': {
+          const { providerIds, savedRevision } = command.params;
+          requireRevision(candidate.providerSavedRevision ?? 0, savedRevision);
+          const accounts = new Map((candidate.providerAccounts ?? []).map(row => [row.providerId, row]));
+          if (providerIds.length !== accounts.size || providerIds.some(id => !accounts.has(id))) {
+            stateError('invalid_params', 'Provider order must contain each saved Provider exactly once');
+          }
+          candidate.providerAccounts = providerIds.length ? providerIds.map(id => accounts.get(id)!) : undefined;
           break;
         }
         case 'routing.setPolicy':
@@ -597,13 +613,24 @@ export class Product {
         const catalog: unknown = JSON.parse(Buffer.concat(chunks, size).toString('utf8'));
         if (!catalog || typeof catalog !== 'object' || !('data' in catalog) || !Array.isArray(catalog.data)) stateError('provider_test_failed', 'The Provider model catalog is invalid');
         const redact = this.engine.redactor([...this.credentialKeys(), key]);
-        const models = [...new Set(catalog.data.map(row => row?.id).filter((model): model is string =>
-          typeof model === 'string' && model.length <= 256 && !!model.trim() && redact(model) === model))].slice(0, 128);
-        return { ok: true, models, latencyMs: Date.now() - started };
+        const models = new Set<string>();
+        for (const row of catalog.data) {
+          const model: unknown = row?.id;
+          if (typeof model === 'string' && model.length <= 256 && model.trim() && redact(model) === model) models.add(model);
+        }
+        const discoveredModels = [...models].map(model => describeModel(account, model)).sort((a, b) =>
+          Number(b.recommended) - Number(a.recommended) || Number(b.isChat === true) - Number(a.isChat === true) || compareModelIds(a.id, b.id)).slice(0, 128);
+        return { ok: true, models: discoveredModels.map(row => row.id), discoveredModels, latencyMs: Date.now() - started };
       }
       await response.body?.cancel();
       if (response.status !== 404 && response.status !== 405 && response.status !== 501) stateError('provider_test_failed', `The Provider rejected the probe (HTTP ${response.status})`);
-      await this.engine.test({ ...account, model: account.defaultModel, apiKey: key, workingDirectory: this.stateDir, maxActiveTasks: 1 });
+      const supply = modelSupply(account, account.defaultModel, true);
+      if (supply.isChat !== true || supply.priceProtected || supply.contextTokens <= supply.outputTokens || !supply.supported.includes('off')) {
+        stateError('provider_test_failed', 'The Provider does not expose discovery and its default model is unavailable for a connection probe');
+      }
+      await this.engine.test({ wireApi: account.wireApi, baseUrl: account.baseUrl, model: account.defaultModel, apiKey: key,
+        contextTokens: supply.contextTokens, outputTokens: supply.outputTokens, capabilities: supply.capabilities,
+        workingDirectory: this.stateDir, maxActiveTasks: 1 });
       return { ok: true, models: [], latencyMs: Date.now() - started };
     } catch (error) {
       const redact = this.engine.redactor([...this.credentialKeys(), key]);
@@ -1035,12 +1062,13 @@ export class Product {
       case 'routing.get':
         return this.routingState();
       case 'provider.list':
-        return { ...this.routingState(), accounts: (this.profile.providerAccounts ?? []).map(account => ({ ...account,
+        return { ...this.routingState(), accounts: (this.profile.providerAccounts ?? []).map((account, index) => ({ ...account, priority: index + 1,
           credentialStatus: this.providerKey(account) ? 'ok' : 'credential_missing' })) };
       case 'provider.test':
         return this.testProvider(command.params);
       case 'provider.save':
       case 'provider.delete':
+      case 'provider.reorder':
       case 'provider.apply':
       case 'provider.revokeCredential':
       case 'routing.setPolicy':
@@ -1486,14 +1514,19 @@ export class Product {
     const role = activity ? activityRole(activity.routing, !!bot.profile.mcpBindings?.length) : 'dialogue';
     const lastTurnAt = existing?.lastTurnAt ?? meta?.lastTurnAt;
     const coldRoute = conversationBoundary && (!lastTurnAt || Date.now() - Date.parse(lastTurnAt) >= providerCacheTtlMs);
-    const route = newRoute ?? ((existing ? coldRoute : true) ? this.selectRoute(role, activity?.routing?.complexity === 'deep') : null) ?? existing?.route;
+    const resolveNewRoute = !existing || coldRoute;
+    const route = newRoute ?? (resolveNewRoute ? this.selectRoute(role, activity?.routing?.complexity === 'deep') ?? undefined : existing?.route);
+    if (!route && resolveNewRoute && this.profile.providerEffectiveRevision !== undefined) {
+      const hasCredential = this.profile.providerEffectiveAccounts?.some(account => account.enabled && this.providerKey(account));
+      stateError(hasCredential ? 'route_unavailable' : 'credential_unavailable', 'No eligible Provider route is available');
+    }
     const routeChanged = canonicalJSON(route ?? null) !== canonicalJSON(existing?.route ?? null);
     if (cached && existing && !routeChanged && !reload && cached.instructions === existing.instructions && !cached.mcpSignature && !bot.profile.mcpBindings?.length) {
       return { session: cached.session, binding: existing };
     }
     const legacy = this.connection(this.profile, existing?.connectionRevision ?? this.effectiveRevision);
     const connectionRevision = route ? undefined : legacy?.revision;
-    if (!route && (!legacy || !existing && this.profile.providerEffectiveRevision !== undefined)) {
+    if (!route && !legacy) {
       stateError(this.profile.providerEffectiveRevision === undefined ? 'not_configured' : 'credential_unavailable', 'No eligible Provider credential is available');
     }
     const apiKey = route ? this.providerKey(route) : this.credentials?.sources[legacy!.sourceId]?.api_key;
@@ -1520,7 +1553,7 @@ export class Product {
       used: existing?.used ?? false, codingTools, domainTools: null,
       configuration: route ? { wireApi: route.wireApi, baseUrl: route.baseUrl, apiKey, model: route.resolvedModel,
         contextTokens: route.contextTokens, outputTokens: route.outputTokens, credentialSource: route.credentialSourceId,
-        thinkingLevel: route.thinkingLevel, reasoning: route.thinkingLevel !== 'off' } : {
+        thinkingLevel: route.thinkingLevel, capabilities: route.capabilities } : {
         wireApi: legacy!.configuration.wireApi, baseUrl: legacy!.configuration.baseUrl, apiKey, model: legacy!.configuration.model,
         contextTokens: legacy!.configuration.contextTokens, outputTokens: legacy!.configuration.outputTokens, credentialSource: legacy!.sourceId,
       },
