@@ -295,6 +295,7 @@ type ProductActivitySummary struct {
 type ProductActivityChange struct {
 	ProductActivitySummary
 	ApprovalRequests []ProductSkillApprovalRequest `json:"approvalRequests,omitempty"`
+	Steers           []ProductActivitySteer        `json:"steers,omitempty"`
 }
 
 type ProductActivity struct {
@@ -307,6 +308,17 @@ type ProductActivity struct {
 	Questions        []ProductQuestion             `json:"questions"`
 	Executions       []ProductExecution            `json:"executions"`
 	ApprovalRequests []ProductSkillApprovalRequest `json:"approvalRequests,omitempty"`
+	Steers           []ProductActivitySteer        `json:"steers,omitempty"`
+}
+
+type ProductActivitySteer struct {
+	OperationID string `json:"operationId"`
+	SteerID     string `json:"steerId"`
+	ActivityID  string `json:"activityId"`
+	ExecutionID string `json:"executionId"`
+	State       string `json:"state"`
+	Revision    uint64 `json:"revision"`
+	Reason      string `json:"reason,omitempty"`
 }
 
 type ProductActivityProgress struct {
@@ -556,6 +568,18 @@ type ProductActivityStopParams struct {
 	OperationID string `json:"operationId"`
 }
 
+type ProductSteerActivityParams struct {
+	ProductActivityExecutionParams
+	ProductText
+	OperationID      string  `json:"operationId"`
+	ExpectedRevision *uint64 `json:"expectedRevision,omitempty"`
+}
+
+type ProductSteerStatusParams struct {
+	OperationID string `json:"operationId,omitempty"`
+	SteerID     string `json:"steerId,omitempty"`
+}
+
 type ProductActivityContinueParams struct {
 	ProductActivityParams
 	ProductText
@@ -744,6 +768,17 @@ func (p *ProductClient) CloseActivity(ctx context.Context, params ProductActivit
 
 func (p *ProductClient) StopActivity(ctx context.Context, params ProductActivityStopParams) (ProductStopResult, error) {
 	return productCall[ProductStopResult](ctx, p, "activity.stop", params)
+}
+
+func (p *ProductClient) SteerActivity(ctx context.Context, params ProductSteerActivityParams) (ProductActivitySteer, error) {
+	if params.Materials == nil {
+		params.Materials = []ProductMaterial{}
+	}
+	return productCall[ProductActivitySteer](ctx, p, "activity.steer", params)
+}
+
+func (p *ProductClient) SteerStatus(ctx context.Context, params ProductSteerStatusParams) (ProductActivitySteer, error) {
+	return productCall[ProductActivitySteer](ctx, p, "activity.steerStatus", params)
 }
 
 func (p *ProductClient) AnswerQuestion(ctx context.Context, params ProductAnswerParams) (ProductAnswerResult, error) {

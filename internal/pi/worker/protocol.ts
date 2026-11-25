@@ -155,6 +155,12 @@ const activityFields = { activityId: id, ownerBotId: id, originConversationId: i
   goal: Type.String(), openQuestionIds: Type.Array(id), ...activityLifecycleFields,
   latestProgress: Type.Optional(activityProgress), pendingApprovalRequestIds: Type.Optional(Type.Array(id)) };
 const approvalRequests = { approvalRequests: Type.Optional(Type.Array(skillApprovalRequestSchema)) };
+const steerState = Type.Union([Type.Literal('pending_enqueue'), Type.Literal('queued'), Type.Literal('delivered'),
+  Type.Literal('not_applied'), Type.Literal('unknown'), Type.Literal('rejected')]);
+export const activitySteerReceipt = Type.Object({ operationId: id, steerId: id, activityId: id, executionId: id,
+  state: steerState, revision: positiveInteger, reason: Type.Optional(id) }, skillStrict);
+export type ActivitySteer = Static<typeof activitySteerReceipt>;
+const steers = { steers: Type.Optional(Type.Array(activitySteerReceipt)) };
 const activityDigest = Type.Object({ factId: id, activityId: id, ownerBotId: id, originConversationId: id,
   executionId: Type.Optional(id), revision, summary: Type.String(), fileCount: Type.Optional(revision), at: id,
   questionId: Type.Optional(id), requestId: Type.Optional(id),
@@ -169,6 +175,12 @@ const operationTarget = { operationId: id, expectedRevision: revision };
 export const materialSchema = Type.Object({
   id, revision, name: id, text: Type.String(), source: Type.Optional(Type.String()),
 });
+export const maxDraftBytes = 512 * 1024;
+export const activitySteerPayload = Type.Object({ text: Type.String({ minLength: 1 }), materials: Type.Array(materialSchema) }, skillStrict);
+export type ActivitySteerPayload = Static<typeof activitySteerPayload>;
+export const activitySteerRecord = Type.Object({ ...activitySteerReceipt.properties,
+  fingerprint: Type.String({ pattern: '^[a-f0-9]{64}$' }), createdAt: id, settledAt: Type.Optional(id), payload: activitySteerPayload }, skillStrict);
+export type ActivitySteerRecord = Static<typeof activitySteerRecord>;
 export const questionTextBytes = 1024;
 export const optionLabelBytes = 120;
 export const optionDescriptionBytes = 256;
@@ -278,6 +290,12 @@ export const productCommands = Type.Union([
   Type.Object({ method: Type.Literal('activity.acknowledge'), params: Type.Object({ activityId: id, executionId: id, ...operationTarget }, skillStrict) }),
   Type.Object({ method: Type.Literal('activity.close'), params: Type.Object({ activityId: id, ...operationTarget }, skillStrict) }),
   Type.Object({ method: Type.Literal('activity.stop'), params: Type.Object({ activityId: id, executionId: id, operationId: id }) }),
+  Type.Object({ method: Type.Literal('activity.steer'), params: Type.Object({ activityId: id, executionId: id,
+    expectedRevision: Type.Optional(revision), operationId: id, ...activitySteerPayload.properties }, skillStrict) }),
+  Type.Object({ method: Type.Literal('activity.steerStatus'), params: Type.Union([
+    Type.Object({ operationId: id, steerId: Type.Optional(id) }, skillStrict),
+    Type.Object({ steerId: id, operationId: Type.Optional(id) }, skillStrict),
+  ]) }),
   Type.Object({ method: Type.Literal('activity.trace'), params: Type.Object({ activityId: id, executionId: Type.Optional(id), ...inspectionPage }, { additionalProperties: false }) }),
   Type.Object({ method: Type.Literal('question.answer'), params: Type.Object({
     activityId: id, executionId: id, questionId: id, questionRevision: revision, operationId: id,
@@ -323,7 +341,7 @@ export const productEvents = Type.Union([
   }) }),
   Type.Object({ event: Type.Literal('conversation.changed'), data: Type.Object({ conversationId: id, revision }) }),
   Type.Object({ event: Type.Literal('activity.traceUpdated'), data: Type.Object({ activityId: id, executionId: id, lastSeq: positiveInteger }) }),
-  Type.Object({ event: Type.Literal('activity.changed'), data: Type.Object({ ...activityFields, ...approvalRequests }) }),
+  Type.Object({ event: Type.Literal('activity.changed'), data: Type.Object({ ...activityFields, ...approvalRequests, ...steers }) }),
   Type.Object({ event: Type.Literal('activity.digest'), data: activityDigest }),
 ]);
 export const productRequestSchema = Type.Intersect([
@@ -391,7 +409,7 @@ export const productResults = {
   'conversation.history': productPage(Type.Object({ messageId: id, role: Type.Union([Type.Literal('user'), Type.Literal('assistant')]),
     timestamp: id, text: Type.String(), materials: Type.Array(materialSchema), quote: optionalQuote })),
   'activity.list': productPage(Type.Object(activityFields)),
-  'activity.get': Type.Object({ ...activityFields, ...approvalRequests, ...activityRouting.properties, requirements: stringList,
+  'activity.get': Type.Object({ ...activityFields, ...approvalRequests, ...steers, ...activityRouting.properties, requirements: stringList,
     materials: Type.Array(materialSchema), questions: Type.Array(questionResult), executions: Type.Array(activeExecution) }),
   'activity.result': Type.Object({ activityId: id, executionId: id, text: Type.String(), delivery: Type.Literal('available'), files: Type.Array(Type.Object({ path: id, callId: id })) }),
   'activity.trace': Type.Object({ ...productPage(traceItemSchema).properties, historyTruncated: Type.Boolean(),
@@ -400,6 +418,8 @@ export const productResults = {
   'activity.acknowledge': Type.Object(activityFields),
   'activity.close': Type.Object(activityFields),
   'activity.stop': stopResult,
+  'activity.steer': activitySteerReceipt,
+  'activity.steerStatus': activitySteerReceipt,
   'question.answer': Type.Object({ activityId: id, executionId: id, questionId: id, revision, answerSaved: Type.Literal(true),
     delivery: questionDelivery, deliveryBlocker, ...answerProvenance }),
   'connection.get': connectionResult,

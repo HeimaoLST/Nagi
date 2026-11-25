@@ -11,9 +11,10 @@ import { Type, type Static, type TSchema } from 'typebox';
 import { Value } from 'typebox/value';
 import {
   MAX_FRAME, RequestError, activityStateSchema, canonicalJSON, draftSchema, frameBytes, hasCanonicalQuoteText, id, inspectionPage,
-  maxAutomaticAnswers, maxTriageAttempts, preferenceKey, profileSchema, questionOptionId, questionOptions, questionTextBytes,
+  maxAutomaticAnswers, maxDraftBytes, maxTriageAttempts, preferenceKey, profileSchema, questionOptionId, questionOptions, questionTextBytes,
   resolveCodingTools, skillExecutable, skillID, skillScriptName, skillSource, skillText, toolPresetSchema,
-  type ActivityDigest, type ActivityState, type AnswerProvenance, type BotChange, type BotProfile, type Connection, type Draft, type Execution,
+  type ActivityDigest, type ActivityState, type ActivitySteer, type ActivitySteerPayload, type AnswerProvenance, type BotChange, type BotProfile,
+  type Connection, type Draft, type Execution,
   type Material, type McpServerRecord, type McpServerView, type OpenParams, type Operation, type ProductCommand, type ProductParams,
   type ProductQuestion, type SkillApproval, type SkillApprovalRequest, type SkillChange, type SkillDetail, type SkillListing, type SkillPermissions,
   type SkillSource, type TraceItem,
@@ -38,14 +39,13 @@ import { clipEncodedText, clipUTF8, projectionRedactor } from './product-redacto
 import { loadSkillInstallation, SkillSandbox } from './skill-sandbox.js';
 import { activityRole, activityRouting, providerCacheTtlMs, providerEndpoint, resolveRole, resolvedRoles, validProvider,
   type ActivityRouting, type CapturedRoute, type ModelRole, type ProviderAccount, type RoutingPolicy } from './model-router.js';
-import { approvedPreferences, parseNomination, renderWhiteboard, triageDomain, validateQuestionFields,
+import { approvedPreferences, parseNomination, renderWhiteboard, steerEnvelope, triageDomain, validateQuestionFields,
   type PreferenceCandidate, type WhiteboardRow } from './activity-control.js';
 
 const emptyDraft = (): Draft => ({ revision: 0, text: '', materials: [] });
 const newId = randomUUID;
 const live = (execution?: StoredExecution) => execution?.state === 'starting' || execution?.state === 'running';
 const unknown = (execution?: StoredExecution) => execution?.state === 'unknown';
-const maxDraftBytes = 512 * 1024;
 const maxPartialBytes = 512 * 1024;
 const readOnlyTools: Record<string, true> = { read: true, grep: true, find: true, ls: true, activity_list: true, activity_get: true,
   activity_progress: true, activity_result_read: true, activity_trace_read: true, conversation_read: true, conversation_search: true, memory_list_rules: true, memory_search_log: true,
@@ -66,6 +66,7 @@ export type ProductRunObservers = {
   whiteboard?: string;
   credentialRejected?: () => void;
   admitTool?: (name: string, callId: string) => void;
+  steerChanged?: (steerId: string, state: 'queued' | 'delivered' | 'not_applied' | 'unknown', reason?: string) => void;
 };
 
 export type ProductSession = {
@@ -73,6 +74,8 @@ export type ProductSession = {
   cwd: string;
   start: (executionId: string, draft: Draft, observers: ProductRunObservers) => void;
   stop: (executionId: string) => void;
+  checkSteer: (executionId: string, bytes: number) => void;
+  steer: (executionId: string, steerId: string, envelope: string, bytes: number, eligible: () => boolean) => void;
   nominatePreference: (prompt: string, signal: AbortSignal) => Promise<string | undefined>;
 };
 
@@ -187,6 +190,7 @@ type LiveExecution = {
   learningToolUsed?: boolean;
   slot: boolean;
   triage?: AbortController;
+  uncertainSteer?: boolean;
   answerTarget?: { questionId: string; revision: number };
 };
 type AnswerWaiter = { executionId: string; deliver: () => void; cancel: () => void;
@@ -355,14 +359,17 @@ export class Product {
   }
 
   private recoverInterruptedWork(): void {
-    if (this.profile.executions.some(live) || this.profile.activities.some(activity => activity.questions.some(question => question.delivery === 'dispatching'))) {
+    const steerUpdates = this.storage.pendingSteers().map(row => ({ ...row, state: 'unknown' as const, revision: row.revision + 1, reason: 'worker_lost' }));
+    const steerActivities = new Set(steerUpdates.map(row => row.activityId));
+    if (steerUpdates.length || this.profile.executions.some(live) || this.profile.activities.some(activity =>
+        activity.questions.some(question => question.delivery === 'dispatching' || question.state === 'triage_pending'))) {
       this.commit(candidate => {
         for (const execution of candidate.executions.filter(live)) {
           execution.state = 'unknown';
           execution.revision++;
         }
         for (const activity of candidate.activities) {
-          let changed = false;
+          let changed = steerActivities.has(activity.activityId);
           const last = this.execution(candidate, activity.executionIds.at(-1));
           if (last?.state === 'unknown' && (activity.state === 'running' || activity.state === 'waitingForAnswer')) {
             activity.state = 'needsAttention';
@@ -385,7 +392,7 @@ export class Product {
           }
           if (changed) activity.revision++;
         }
-      });
+      }, undefined, undefined, undefined, undefined, { steerUpdates });
     }
   }
 
@@ -656,10 +663,11 @@ export class Product {
     };
   }
 
-  private emitActivity(activity: Activity): void {
+  private emitActivity(activity: Activity, steers?: ActivitySteer[]): void {
     const requests = this.storage.approvalRequests(activity.activityId);
     const approvalRequests = requests.filter(row => row.state === 'open' || row.executionId === activity.executionIds.at(-1));
-    this.emit('activity.changed', { ...this.activityView(activity, requests), ...(approvalRequests.length ? { approvalRequests } : {}) });
+    this.emit('activity.changed', { ...this.activityView(activity, requests), ...(approvalRequests.length ? { approvalRequests } : {}),
+      ...(steers?.length ? { steers } : {}) });
   }
 
   private emitDigest(activity: Activity, fact: Pick<ActivityDigest, 'kind' | 'executionId' | 'questionId' | 'requestId' | 'fileCount'>, summary: string): void {
@@ -691,9 +699,11 @@ export class Product {
 
   private activityDetails(activity: Activity) {
     const approvalRequests = this.storage.approvalRequests(activity.activityId);
+    const steers = this.storage.activitySteers(activity.activityId);
     return {
       ...this.activityView(activity, approvalRequests), ...activity.routing, requirements: activity.requirements, materials: activity.materials,
       questions: activity.questions.map(({ triageRulesRevision, ...question }) => question), ...(approvalRequests.length ? { approvalRequests } : {}),
+      ...(steers.length ? { steers } : {}),
       executions: activity.executionIds.map(id => this.viewExecution(this.execution(this.profile, id))),
     };
   }
@@ -995,6 +1005,10 @@ export class Product {
         return this.closeActivity(command.params);
       case 'activity.stop':
         return this.stop(method, command.params, { activityId: command.params.activityId });
+      case 'activity.steer':
+        return this.steerActivity(command.params);
+      case 'activity.steerStatus':
+        return this.steerStatus(command.params);
       case 'question.answer':
         return this.answer(command.params);
       case 'connection.get':
@@ -1639,6 +1653,7 @@ export class Product {
           publishText(redactChunk('', true));
           this.settle(owner, executionId, state, text, error);
         }),
+        steerChanged: (steerId, state, reason) => guarded(() => this.updateSteer(executionId, steerId, state, reason)),
         confirmedFileEffect: (path, callId) => guarded(() => {
           current.files.push({ path, callId });
           if ('activityId' in owner) this.observeTrace({ ...owner, executionId, kind: 'file_confirmed', callId, path });
@@ -1685,7 +1700,7 @@ export class Product {
       .map(request => ({ ...request, revision: request.revision + 1, state: state === 'interrupted' ? 'cancelled' as const : 'expired' as const }));
     const blocked = requests.some(request => request.state === 'open' || request.executionId === executionId &&
       (request.state === 'denied' || request.state === 'expired' || request.state === 'cancelled')) ||
-      'activityId' in owner && (active?.skillExecutionFailed || this.storage.uncertainMutation(executionId));
+      'activityId' in owner && (active?.skillExecutionFailed || active?.uncertainSteer || this.storage.uncertainMutation(executionId));
     const run = this.commit(candidate => {
       const execution = this.execution(candidate, executionId)!;
       execution.state = state;
@@ -1829,6 +1844,67 @@ export class Product {
     this.providerWaiters.get(params.executionId)?.cancel();
     active.session.stop(params.executionId);
     return result;
+  }
+
+  private steerStatus({ steerId, operationId }: ProductParams<'activity.steerStatus'>): ActivitySteer {
+    const row = this.storage.steerStatus(steerId, operationId);
+    if (!row || operationId !== undefined && row.operationId !== operationId) return stateError('not_found', 'The steering receipt does not exist');
+    return row;
+  }
+
+  private steerTarget(activity: Activity, executionId: string): LiveExecution | undefined {
+    const active = this.active.get(executionId);
+    if (!this.closing && activity.state === 'running' && activity.executionIds.at(-1) === executionId &&
+        active && 'activityId' in active.owner && active.owner.activityId === activity.activityId && !active.stopRequested && !active.triage &&
+        !this.hasActivityWaiter(activity) && !activity.questions.some(row => row.executionId === executionId && row.state === 'triage_pending')) return active;
+  }
+
+  private steerActivity(params: ProductParams<'activity.steer'>): ActivitySteer {
+    const { activityId, executionId, expectedRevision, operationId, text, materials } = params;
+    if (!text.trim() || text !== text.trim()) return stateError('invalid_params', 'Steering text must be non-empty and trimmed');
+    validateDraft({ revision: 0, text, materials });
+    const redact = this.engine.redactor(this.credentialKeys());
+    if (redact(operationId) !== operationId) return stateError('invalid_params', 'The steering operation ID contains a credential');
+    const payload = projectionJSON({ text, materials: materials.map(({ id, revision, name, text, source }) =>
+      ({ id, revision, name, text, source })) }, redact) as ActivitySteerPayload;
+    const parameters = { activityId, executionId, expectedRevision, operationId, ...payload };
+    const prior = this.sameOperation('activity.steer', operationId, parameters);
+    if (prior) return prior.reply as ActivitySteer;
+    const activity = this.activity(this.profile, activityId);
+    const active = this.steerTarget(activity, executionId);
+    if (!active) return stateError('not_running', 'The target Activity is not available for live steering');
+    if (expectedRevision !== undefined) requireRevision(activity.revision, expectedRevision);
+    if (!this.bindingKey(active.binding)) return stateError('credential_unavailable', 'The captured credential source is unavailable');
+    const steerId = newId();
+    const envelope = steerEnvelope(steerId, payload);
+    const bytes = Buffer.byteLength(envelope);
+    active.session.checkSteer(executionId, bytes);
+    const receipt: ActivitySteer = { operationId, steerId, activityId, executionId, state: 'pending_enqueue', revision: 1 };
+    const updated = this.commit(candidate => {
+      const row = this.activity(candidate, activityId);
+      row.revision++;
+      this.record(candidate, 'activity.steer', parameters, { operationId, target: { activityId }, state: 'accepted', result: receipt }, receipt);
+      return row;
+    }, undefined, undefined, undefined, undefined, { admitSteer: { ...receipt, payload, fingerprint: fingerprint(parameters), createdAt: new Date().toISOString() } });
+    this.emitActivity(updated, [receipt]);
+    active.session.steer(executionId, steerId, envelope, bytes, () =>
+      this.steerTarget(this.activity(this.profile, activityId), executionId) === active && !!this.bindingKey(active.binding));
+    return receipt;
+  }
+
+  private updateSteer(executionId: string, steerId: string, state: 'queued' | 'delivered' | 'not_applied' | 'unknown', reason?: string): void {
+    const prior = this.storage.steerStatus(steerId);
+    const active = this.active.get(executionId);
+    if (!prior || prior.executionId !== executionId || !active || !('activityId' in active.owner) || active.owner.activityId !== prior.activityId ||
+        (prior.state !== 'pending_enqueue' && prior.state !== 'queued') || prior.state === state) return;
+    const next = { ...prior, state, revision: prior.revision + 1, reason };
+    const activity = this.commit(candidate => {
+      const row = this.activity(candidate, prior.activityId);
+      row.revision++;
+      return row;
+    }, undefined, undefined, undefined, undefined, { steerUpdates: [next] });
+    if (state === 'unknown') active.uncertainSteer = true;
+    this.emitActivity(activity, [next]);
   }
 
   private async history(conversationId: string, cursor?: string, limit = 25) {
@@ -2815,7 +2891,8 @@ export class Product {
       });
     } else {
       const list = Type.Object({}, strictTool);
-      const change = Type.Object({ activity_id: id, action: Type.Union([Type.Literal('stop'), Type.Literal('add_supplement'), Type.Literal('resume'), Type.Literal('close')]),
+      const change = Type.Object({ activity_id: id, execution_id: Type.Optional(id),
+        action: Type.Union([Type.Literal('stop'), Type.Literal('add_supplement'), Type.Literal('resume'), Type.Literal('close'), Type.Literal('steer')]),
         text: Type.Optional(Type.String()), expected_revision: Type.Optional(Type.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER })) }, strictTool);
       const botId = this.conversation(this.profile, owner.conversationId).botId;
       if (this.bot(this.profile, botId).systemKind === SYSTEM_KIND_BOT_ARCHITECT) tools.push(...this.architectTools(owner.conversationId));
@@ -2834,13 +2911,23 @@ export class Product {
             if (!Value.Check(delegateInput, input)) return toolText('A stable key and a goal are required', true);
             return this.modelResult(await this.delegate(owner.conversationId, input));
           } },
-        { name: 'activity_action', label: 'Act on activity', description: 'Stop, continue, or close the exact Activity requested by the user. Closing requires its observed expected_revision.', parameters: change,
+        { name: 'activity_action', label: 'Act on activity', description: 'Stop, continue, close or steer an Activity. Closing requires expected_revision. Steer requires its exact execution_id and an explicit current user message: Steer <activity_id> <execution_id>: <text>.', parameters: change,
           execute: async (callId, input, signal) => {
             if (!Value.Check(change, input)) return stateError('invalid_params', 'An activity ID and action are required');
             const { executionId: callerExecution } = this.activeCall(owner, signal);
             const activity = this.scopedActivity(input.activity_id, undefined, owner);
             const executionId = activity.executionIds.at(-1);
             const operationId = `${callerExecution}:${callId}`;
+            if (input.action === 'steer') {
+              const { execution_id, text, expected_revision } = input;
+              if (!execution_id || !text?.trim() || text !== text.trim()) return stateError('invalid_params', 'Steering requires an exact execution and non-empty text');
+              const draft = this.execution(this.profile, callerExecution)!.input;
+              if (draft.text.trim() !== `Steer ${activity.activityId} ${execution_id}: ${text}`) {
+                return stateError('confirmation_required', 'Explicit steering text and target are required in the current user turn');
+              }
+              return this.modelResult(this.steerActivity({ activityId: activity.activityId, executionId: execution_id,
+                operationId, expectedRevision: expected_revision, text, materials: draft.materials }));
+            }
             if (input.action === 'stop') {
               if (!executionId) return toolText('The activity has no execution', true);
               return this.modelResult(this.stop('activity.stop', { operationId, executionId }, { activityId: activity.activityId }));
@@ -3007,18 +3094,27 @@ export class Product {
     const candidates = domain && !run.triage && this.triageTasks.size < maxTriageConcurrency && this.bindingKey(run.binding) &&
         (accounting?.attemptsUsed ?? 0) < maxTriageAttempts && (accounting?.autoAnswersUsed ?? 0) < maxAutomaticAnswers ?
       approvedPreferences(question, domain, this.lastingRules(bot.botId)).filter(row => redact(row.rule) === row.rule && redact(row.evidenceId) === row.evidenceId) : [];
-    const triage = candidates.length ? new AbortController() : undefined;
-    if (triage) {
-      question.state = 'triage_pending';
-      question.triageRulesRevision = this.memoryStatus(this.profile, bot.botId).rulesRevision;
-    }
-    const updated = this.commit(candidate => {
+    let triage = candidates.length ? new AbortController() : undefined;
+    const reserve = () => this.commit(candidate => {
       const current = this.activity(candidate, activityId);
       current.questions.push(question);
       if (!triage) current.state = 'waitingForAnswer';
       current.revision++;
       return current;
     }, undefined, undefined, undefined, undefined, triage ? { triage: { activityId, kind: 'attempt', at: new Date().toISOString() } } : undefined);
+    let updated: Activity;
+    if (triage) {
+      question.state = 'triage_pending';
+      question.triageRulesRevision = this.memoryStatus(this.profile, bot.botId).rulesRevision;
+      try { updated = reserve(); }
+      catch (error) {
+        if (!(error instanceof RequestError) || error.code !== 'triage_budget') throw error;
+        triage = undefined;
+        question.state = 'open';
+        delete question.triageRulesRevision;
+        updated = reserve();
+      }
+    } else updated = reserve();
 
     const { promise, resolve, reject } = Promise.withResolvers<ToolTextResult>();
     const finish = () => {

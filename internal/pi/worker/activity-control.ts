@@ -1,5 +1,7 @@
+import { createHash } from 'node:crypto';
 import { type BotMemoryRule } from './bot-memory.js';
-import { RequestError, optionDescriptionBytes, optionLabelBytes, questionTextBytes, type ProductQuestion } from './protocol.js';
+import { RequestError, canonicalJSON, optionDescriptionBytes, optionLabelBytes, questionTextBytes,
+  type ActivitySteerPayload, type ProductQuestion } from './protocol.js';
 
 const MAX_WHITEBOARD_ITEMS = 5;
 const MAX_WHITEBOARD_BYTES = 1536;
@@ -22,15 +24,21 @@ function xml(value: string, limit?: number): string {
   return escaped;
 }
 
+export function steerEnvelope(steerId: string, payload: ActivitySteerPayload): string {
+  const canonical = canonicalJSON(payload);
+  const digest = createHash('sha256').update(canonical).digest('hex');
+  const escaped = canonical.replace(/[&<>"']/g, character => xmlEntities[character]);
+  return `<activity_steer id="${steerId}" digest="${digest}">\n${escaped}\n</activity_steer>`;
+}
+
 export function renderWhiteboard(rows: WhiteboardRow[], redact: (value: string) => string): string | undefined {
   if (!rows.length) return;
   rows.sort((a, b) => a.priority - b.priority || (b.updatedAt ?? '').localeCompare(a.updatedAt ?? '') || a.activityId.localeCompare(b.activityId));
   const overflow = (count: number) => count > 0 ? `(+${count} more active/unread activities; call activity_list)\n` : '';
   const wrapperBytes = Buffer.byteLength(boardOpen + boardClose);
-  let bytes = wrapperBytes;
-  const included: string[] = [];
+  const entries: { start: string; bytes: number; summary: string }[] = [];
+  const end = '</activity>\n';
   for (const row of rows) {
-    if (included.length === MAX_WHITEBOARD_ITEMS) break;
     const identities = [['activityId', row.activityId], ['executionId', row.executionId],
       ...row.questionIds.map(id => ['questionId', id]), ...row.requestIds.map(id => ['requestId', id])] as [string, string | undefined][];
     const exact = identities.filter((pair): pair is [string, string] => pair[1] !== undefined);
@@ -38,12 +46,21 @@ export function renderWhiteboard(rows: WhiteboardRow[], redact: (value: string) 
     const attributes = exact.filter(([key]) => key === 'activityId' || key === 'executionId').map(([key, id]) => ` ${key}="${xml(id)}"`).join('');
     const links = exact.filter(([key]) => key === 'questionId' || key === 'requestId').map(([key, id]) => `<${key}>${xml(id)}</${key}>`).join('');
     const start = `<activity${attributes} state="${xml(row.state)}"${row.updatedAt ? ` at="${xml(redact(row.updatedAt))}"` : ''}>${links}`;
-    const end = '</activity>\n';
-    const room = MAX_WHITEBOARD_BYTES - bytes - Buffer.byteLength(start + end + overflow(rows.length - included.length - 1));
+    entries.push({ start, bytes: Buffer.byteLength(start + end), summary: row.summary });
+  }
+  let mandatoryBytes = entries.reduce((total, entry) => total + entry.bytes, 0);
+  const fitsAll = entries.length === rows.length && rows.length <= MAX_WHITEBOARD_ITEMS && wrapperBytes + mandatoryBytes <= MAX_WHITEBOARD_BYTES;
+  let remaining = MAX_WHITEBOARD_BYTES - wrapperBytes;
+  const included: string[] = [];
+  for (const { start, bytes, summary } of entries) {
+    if (included.length === MAX_WHITEBOARD_ITEMS) break;
+    mandatoryBytes -= bytes;
+    const reserve = fitsAll ? mandatoryBytes : Buffer.byteLength(overflow(rows.length - included.length - 1));
+    const room = remaining - bytes - reserve;
     if (room < 0) continue;
-    const line = start + xml(redact(row.summary), Math.min(room, 160)) + end;
-    included.push(line);
-    bytes += Buffer.byteLength(line);
+    const preview = xml(redact(summary), Math.min(room, 160));
+    included.push(start + preview + end);
+    remaining -= bytes + Buffer.byteLength(preview);
   }
   return boardOpen + included.join('') + overflow(rows.length - included.length) + boardClose;
 }

@@ -9,9 +9,10 @@ import { RequestError, activityStateSchema, botSystemKindSchema, connectionSchem
   operationSchema, profileSchema, quoteAuthorMaxBytes, quoteTextMaxBytes, type ActivityState, type Connection, type Draft,
   type Execution, type Material, type Operation } from './protocol.js';
 import type { ProductProfile } from './product.js';
-import { activityLifecycleFields, activityProgressRecord, questionResult, skillApprovalRecord, skillApprovalRequestSchema, triageAccounting as triageSchema,
-  optionDescriptionBytes, optionLabelBytes, questionTextBytes, type ActivityProgressRecord, type SkillApproval, type SkillApprovalRequest,
-  type TriageAccounting } from './protocol.js';
+import { activityLifecycleFields, activityProgressRecord, activitySteerReceipt, activitySteerRecord, canonicalJSON, frameBytes,
+  maxDraftBytes, questionResult, skillApprovalRecord, skillApprovalRequestSchema, triageAccounting as triageSchema,
+  optionDescriptionBytes, optionLabelBytes, questionTextBytes, type ActivityProgressRecord, type ActivitySteerRecord,
+  type SkillApproval, type SkillApprovalRequest, type TriageAccounting } from './protocol.js';
 import { lastingRulesFit, MAX_LOG_BYTES, MAX_PENDING_LEARNINGS, MAX_RULE_BYTES, MAX_WORK_LOGS,
   memorySnapshotSchema, validMemoryDate } from './bot-memory.js';
 import { decodeTraceBackup, directlyOwns, normalizeActivityGrants, type TraceBackup } from './product-trace.js';
@@ -29,7 +30,7 @@ export type ProductProfilePaths = {
 
 export type ProductBackup = TraceBackup & { privateSkillBundles?: PrivateSkillBundle[]; skillApprovals?: SkillApproval[];
   activityEscalations?: Escalation[]; activityProgress?: ActivityProgressRecord[]; skillApprovalRequests?: SkillApprovalRequest[];
-  triageAccounting?: TriageAccounting[] };
+  triageAccounting?: TriageAccounting[]; activitySteers?: ActivitySteerRecord[] };
 
 type Credential = { api: 'openai-responses' | 'openai-chat-completions'; endpoint: string; api_key: string };
 type LegacyConnection = {
@@ -318,8 +319,33 @@ export function decodeProductBackup(data: unknown): { profile: ProductProfile; b
     const profile = decodeProductProfile(records);
     if (!backup || typeof backup !== 'object') return { profile, backup: decodeTraceBackup(profile, backup) };
     const { privateSkillBundles: bundles, skillApprovals: approvals, activityEscalations, activityProgress, skillApprovalRequests,
-      triageAccounting, ...traces } = backup as Record<string, unknown>;
+      triageAccounting, activitySteers, ...traces } = backup as Record<string, unknown>;
     const activities = new Map(profile.activities.map(row => [row.activityId, row]));
+    const steerOperations = new Map(profile.operations.filter(row => row.method === 'activity.steer').map(row => [row.receipt.operationId, row]));
+    if (activitySteers !== undefined && !Value.Check(Type.Array(activitySteerRecord), activitySteers)) {
+      throw new RequestError('profile_unavailable', 'The recovery copy has invalid steering receipts');
+    }
+    const steerIds = new Set<string>();
+    for (const row of activitySteers ?? []) {
+      const { steerId, operationId, activityId, executionId, state, revision, createdAt, settledAt, payload, fingerprint } = row;
+      const operation = steerOperations.get(operationId);
+      const { text, materials } = payload;
+      const original = { steerId, operationId, activityId, executionId, state: 'pending_enqueue', revision: 1 };
+      if (steerIds.has(steerId) || !activities.get(activityId)?.executionIds.includes(executionId) || !operation ||
+          operation.fingerprint !== fingerprint || operation.receipt.state !== 'accepted' ||
+          'activityId' in operation.receipt.target && operation.receipt.target.activityId !== activityId ||
+          !('activityId' in operation.receipt.target) || !Value.Check(activitySteerReceipt, operation.reply) ||
+          canonicalJSON(operation.reply) !== canonicalJSON(original) || canonicalJSON(operation.receipt.result) !== canonicalJSON(original) ||
+          state === 'pending_enqueue' || state === 'queued' || revision < 2 || revision > 3 ||
+          !Number.isFinite(Date.parse(createdAt)) || !settledAt || !Number.isFinite(Date.parse(settledAt)) ||
+          !text.trim() || text !== text.trim() || frameBytes({ revision: 0, ...payload }) > maxDraftBytes ||
+          new Set(materials.map(item => item.id)).size !== materials.length) {
+        throw new RequestError('profile_unavailable', 'The recovery copy has inconsistent steering receipts');
+      }
+      steerIds.add(steerId);
+      steerOperations.delete(operationId);
+    }
+    if (steerOperations.size) throw new RequestError('profile_unavailable', 'The recovery copy is missing steering receipts');
     if (triageAccounting !== undefined && (!Value.Check(Type.Array(triageSchema), triageAccounting) ||
         new Set(triageAccounting.map(row => row.activityId)).size !== triageAccounting.length || triageAccounting.some(row =>
           !activities.has(row.activityId) || row.autoAnswersUsed > row.attemptsUsed || !Number.isFinite(Date.parse(row.updatedAt))))) {
@@ -385,15 +411,18 @@ export function decodeProductBackup(data: unknown): { profile: ProductProfile; b
       }
     }
     return { profile, backup: { ...decodeTraceBackup(profile, traces), privateSkillBundles: bundles, skillApprovals: approvals, activityEscalations,
-      activityProgress, skillApprovalRequests, triageAccounting } };
+      activityProgress, skillApprovalRequests, triageAccounting, activitySteers } };
   }
   return { profile: decodeProductProfile(data) };
 }
 
 export function inspectProductRecovery(data: unknown): { contacts: number; activities: number } {
-  const { profile } = decodeProductBackup(data);
+  const { profile, backup } = decodeProductBackup(data);
+  if (!backup && profile.operations.some(row => row.method === 'activity.steer')) {
+    throw new RequestError('profile_unavailable', 'The recovery copy is missing steering receipts');
+  }
   if (!profile.bots.length || profile.executions.some(execution => execution.state === 'running' || execution.state === 'starting') ||
-      profile.activities.some(activity => activity.questions.some(question => question.delivery === 'dispatching'))) {
+      profile.activities.some(activity => activity.questions.some(question => question.delivery === 'dispatching' || question.state === 'triage_pending'))) {
     throw new RequestError('profile_unavailable', 'The recovery copy contains work that had not reached a saved boundary');
   }
   return { contacts: profile.bots.length, activities: profile.activities.length };
