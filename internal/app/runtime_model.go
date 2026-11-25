@@ -293,10 +293,6 @@ func (a *appModel) updateUI(fn func()) {
 	fn()
 }
 
-func (a *appModel) capacityKnown() bool {
-	return a.demo || a.runtimeCapabilitiesLoaded
-}
-
 func (a *appModel) maxActiveTasks() int {
 	if a.runtimeMaxActiveTasks > 0 {
 		return a.runtimeMaxActiveTasks
@@ -642,9 +638,7 @@ func (a *appModel) normalizeRestoredSupplementBatches() {
 		}
 	}
 	if changed {
-		if err := a.persist(); err != nil {
-			a.setActivityActionNotice("Could not save restored supplement integrity state: "+err.Error(), "supplement-restore-failed", err.Error())
-		}
+		_ = a.persist()
 	}
 }
 

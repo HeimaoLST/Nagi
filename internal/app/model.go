@@ -223,13 +223,6 @@ type appModel struct {
 	localSavePrevErr   string
 	localSavePrevKind  string
 
-	activityFormError          string
-	activityFormNotice         string
-	activityFormNoticeDetail   string
-	activityActionError        string
-	activityActionNotice       string
-	activityActionNoticeDetail string
-
 	// Runtime mode. demo keeps the local fixture path for tests/screenshots;
 	// the shipped app is runtime-backed.
 	demo                      bool
@@ -476,8 +469,6 @@ func (ct *contact) setStatusDetail(raw, kind string) {
 	ct.StatusDetail = raw
 	ct.StatusDetailKind = kind
 }
-
-func (ct *contact) clearStatusDetail() { ct.setStatusDetail("", "") }
 
 func (w *activityWorkSession) setSendError(raw, kind, detail string) {
 	w.SendError = raw

@@ -266,10 +266,6 @@ type Event struct {
 	Data        json.RawMessage `json:"data"`
 }
 
-type TextDeltaData struct {
-	Text string `json:"text"`
-}
-
 type ToolRequestData struct {
 	CallID string          `json:"callId"`
 	Name   string          `json:"name"`

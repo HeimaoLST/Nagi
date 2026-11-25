@@ -179,14 +179,6 @@ type IssueQuestion struct {
 	AnswerText           string            `json:"answer_text,omitempty"`
 }
 
-func NewIssueQuestionRef() string {
-	var bytes [8]byte
-	if _, err := rand.Read(bytes[:]); err == nil {
-		return "question-" + hex.EncodeToString(bytes[:])
-	}
-	return fmt.Sprintf("question-%d", time.Now().UnixNano())
-}
-
 type IssueRequirement struct {
 	ID        string
 	Text      string

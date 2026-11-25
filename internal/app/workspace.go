@@ -168,35 +168,6 @@ func (a *appModel) ensureWork(ct *contact, taskID, messageID string) *workItem {
 	return w
 }
 
-func (ct *contact) activeWork() *workItem { return workFor(ct, ct.ActiveTaskID) }
-
-func (ct *contact) recentWork() *workItem {
-	if w := workFor(ct, ct.LastTaskID); w != nil {
-		return w
-	}
-	for i := len(ct.Works) - 1; i >= 0; i-- {
-		if ct.Works[i].TaskID != "" {
-			return ct.Works[i]
-		}
-	}
-	return nil
-}
-
-func workStateFromTask(status string) workState {
-	switch status {
-	case "completed":
-		return workCompleted
-	case "failed":
-		return workFailed
-	case "interrupted":
-		return workInterrupted
-	case "running":
-		return workRunning
-	default:
-		return workUnknown
-	}
-}
-
 func (a *appModel) toggleRail() {
 	a.railCollapsed = !a.railCollapsed
 	a.focusRail = true
@@ -289,32 +260,6 @@ const (
 	workNoticeStateUnknown            = "state-unknown"
 )
 
-func workNoticeForWork(w *workItem) string {
-	if w.State == workInterrupted && w.StopRequested {
-		return workNoticeStateStoppedInterrupted
-	}
-	return workNoticeForState(w.State)
-}
-
-func workNoticeForState(state workState) string {
-	switch state {
-	case workAccepted:
-		return workNoticeStateAccepted
-	case workRunning:
-		return workNoticeStateRunning
-	case workStopping:
-		return workNoticeStateStopping
-	case workCompleted:
-		return workNoticeStateCompleted
-	case workFailed:
-		return workNoticeStateFailed
-	case workInterrupted:
-		return workNoticeStateInterrupted
-	default:
-		return workNoticeStateUnknown
-	}
-}
-
 func workNoticeText(msgs locales.Messages, kind, arg string) string {
 	switch kind {
 	case workNoticeResuming:
@@ -354,32 +299,6 @@ func workNoticeText(msgs locales.Messages, kind, arg string) string {
 	default:
 		return kind
 	}
-}
-
-func (a *appModel) workActivitySummary(ct *contact) (string, string) {
-	if w := ct.activeWork(); w != nil {
-		if len(w.Tools) > 0 {
-			last := w.Tools[len(w.Tools)-1]
-			if !last.Finished {
-				return workNoticeRunningTool, last.Name
-			}
-			return workNoticeLastAction, last.Name
-		}
-		return workNoticeForWork(w), ""
-	}
-	if w := ct.recentWork(); w != nil {
-		return workNoticeForWork(w), ""
-	}
-	return "", ""
-}
-
-func activityHasUnconfirmedRun(activity *productActivity) bool {
-	for _, execution := range activity.Executions {
-		if execution != nil && (execution.Status == activityExecutionUnknown || execution.Status == activityExecutionPending) {
-			return true
-		}
-	}
-	return false
 }
 
 type productActivityForm struct {

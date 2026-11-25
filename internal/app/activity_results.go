@@ -135,21 +135,6 @@ func activityResultNoticeText(msgs locales.Messages, kind, detail string) string
 	}
 }
 
-func activityResultPageText(msgs locales.Messages, kind, detail string) string {
-	switch kind {
-	case "load-runtime-not-ready":
-		return msgs.ResultLoadRuntimeNotReady()
-	case "load-owner-missing":
-		return msgs.ResultLoadOwnerMissing()
-	case "load-detached":
-		return msgs.ResultLoadDetached()
-	case "load-failed":
-		return msgs.ResultLoadFailed(detail)
-	default:
-		return kind
-	}
-}
-
 func activityResultInspectionNoticeText(msgs locales.Messages, inspection activityResultFileInspection) string {
 	switch inspection.NoticeKind {
 	case resultNoticeTooLarge:

@@ -132,11 +132,6 @@ func (a *appModel) settingsSourceForVisiblePage() string {
 	}
 }
 
-func (a *appModel) openSettingsFromContext(c *ui.Context, tab, source string) {
-	a.captureLinkSettingsSource(c, &source)
-	a.openSettingsTab(tab, source)
-}
-
 func (a *appModel) armActiveSurfaceFallback() {
 	switch {
 	case a.priorChats != nil:

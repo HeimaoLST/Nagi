@@ -1,14 +1,9 @@
 package app
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"strings"
-	"time"
-
-	"github.com/HeimaoLST/Nagi/locales"
 )
 
 // A productActivity is the GUI-owned product object. Runtime tasks are linked as
@@ -60,18 +55,6 @@ func (activity *productActivity) openQuestion() *activityQuestion {
 	return nil
 }
 
-func (activity *productActivity) questionByRef(ref string) *activityQuestion {
-	if activity == nil {
-		return nil
-	}
-	for _, question := range activity.Questions {
-		if question != nil && question.Ref == ref {
-			return question
-		}
-	}
-	return nil
-}
-
 // activityWorkSession is transient state for the activity's Pi activity.
 type activityWorkSession struct {
 	Loaded             bool
@@ -83,10 +66,7 @@ type activityWorkSession struct {
 	SendErrorKind      string
 	SendErrorDetail    string
 	Messages           []*message
-	StopRequestedTasks map[string]bool
 	pendingExecutionID string
-	cancelAfterAccept  bool
-	piCancelSent       map[string]bool
 	historyGen         int
 }
 
@@ -143,14 +123,6 @@ func activityStatusLabel(activity *productActivity) string {
 	}
 }
 
-func newActivityExecutionID() string {
-	var bytes [8]byte
-	if _, err := rand.Read(bytes[:]); err == nil {
-		return "execution-" + hex.EncodeToString(bytes[:])
-	}
-	return fmt.Sprintf("execution-%d", time.Now().UnixNano())
-}
-
 func (ct *contact) activityByID(id string) *productActivity {
 	for _, activity := range ct.Activities {
 		if activity.ID == id {
@@ -189,79 +161,6 @@ func executionForTask(activity *productActivity, taskID string) *activityExecuti
 	return nil
 }
 
-func (ct *contact) executionByTask(taskID string) *activityExecution {
-	if taskID == "" {
-		return nil
-	}
-	for _, activity := range ct.Activities {
-		for _, execution := range activity.Executions {
-			if execution.TaskID == taskID {
-				return execution
-			}
-		}
-	}
-	return nil
-}
-
-func activityHasTask(activity *productActivity, taskID string) bool {
-	if activity == nil || taskID == "" {
-		return false
-	}
-	for _, execution := range activity.Executions {
-		if execution.TaskID == taskID {
-			return true
-		}
-	}
-	return false
-}
-
-func activityExecutionForTask(activity *productActivity, taskID string) (int, *activityExecution) {
-	if activity == nil {
-		return 0, nil
-	}
-	for index, execution := range activity.Executions {
-		if execution.TaskID == taskID {
-			return index, execution
-		}
-	}
-	return 0, nil
-}
-
-func (ct *contact) executionByID(id string) (*productActivity, *activityExecution) {
-	for _, activity := range ct.Activities {
-		for _, execution := range activity.Executions {
-			if execution.ID == id {
-				return activity, execution
-			}
-		}
-	}
-	return nil, nil
-}
-
-func (a *appModel) setActivityFormNotice(raw, notice, detail string) {
-	a.activityFormError = raw
-	a.activityFormNotice = notice
-	a.activityFormNoticeDetail = detail
-}
-
-func (a *appModel) clearActivityFormNotice() {
-	a.activityFormError = ""
-	a.activityFormNotice = ""
-	a.activityFormNoticeDetail = ""
-}
-
-func (a *appModel) setActivityActionNotice(raw, notice, detail string) {
-	a.activityActionError = raw
-	a.activityActionNotice = notice
-	a.activityActionNoticeDetail = detail
-}
-
-func (a *appModel) clearActivityActionNotice() {
-	a.activityActionError = ""
-	a.activityActionNotice = ""
-	a.activityActionNoticeDetail = ""
-}
-
 func (a *appModel) createActivityFor(ct *contact, goal, requirements string) (*productActivity, error) {
 	return a.createActivityForWithSave(ct, goal, requirements, nil)
 }
@@ -297,127 +196,7 @@ func (a *appModel) createActivityForWithSave(ct *contact, goal, requirements str
 	return item, nil
 }
 
-const (
-	activityBlockNoActivity = "no-issue"
-	activityBlockArchived   = "archived"
-	activityBlockQuestion   = "question"
-	activityBlockCompleted  = "completed"
-	activityBlockCanceled   = "canceled"
-	activityBlockExecution  = "execution-untrusted"
-)
-
-func activityBlockRaw(code string) string {
-	switch code {
-	case activityBlockNoActivity:
-		return "Issue not found."
-	case activityBlockArchived:
-		return "Restore this archived issue before starting work."
-	case activityBlockQuestion:
-		return "Answer the waiting question before continuing this issue."
-	case activityBlockCompleted:
-		return "Reopen this completed issue before starting another execution."
-	case activityBlockCanceled:
-		return "Reopen this canceled issue before starting another execution."
-	case activityBlockExecution:
-		return "An execution is still active or has no trusted terminal state; reload before running this issue again."
-	default:
-		return sendBlockRaw(code)
-	}
-}
-
-func activityNoticeText(msgs locales.Messages, notice, detail string) string {
-	switch notice {
-	case activityBlockNoActivity:
-		return msgs.IssueBlockNoIssue()
-	case activityBlockArchived:
-		return msgs.IssueBlockArchived()
-	case activityBlockQuestion:
-		return msgs.IssueBlockQuestion()
-	case activityBlockCompleted:
-		return msgs.IssueBlockCompleted()
-	case activityBlockCanceled:
-		return msgs.IssueBlockCanceled()
-	case activityBlockExecution:
-		return msgs.IssueBlockExecution()
-	case "contact-missing":
-		return msgs.IssueNoticeContactMissing()
-	case "issue-missing":
-		return msgs.IssueNoticeIssueMissing()
-	case "no-goal":
-		return msgs.IssueNoticeNoGoal()
-	case "enter-goal":
-		return msgs.IssueNoticeEnterGoal()
-	case "archived-edit":
-		return msgs.IssueNoticeArchivedEdit()
-	case "terminal-edit":
-		return msgs.IssueNoticeTerminalEdit()
-	case "restore-failed":
-		return msgs.IssueNoticeRestoreFailed()
-	case "reopen-failed":
-		return msgs.IssueNoticeReopenFailed()
-	case "cancel-failed":
-		return msgs.IssueNoticeCancelFailed()
-	case "complete-failed":
-		return msgs.IssueNoticeCompleteFailed()
-	case "requirement-save-failed":
-		return msgs.IssueNoticeRequirementSaveFailed()
-	case "confirm-failed":
-		return msgs.IssueNoticeConfirmFailed()
-	case "resume-failed":
-		return msgs.IssueNoticeResumeFailed()
-	case "wait-failed":
-		return msgs.IssueNoticeWaitFailed()
-	case "archive-failed":
-		return msgs.IssueNoticeArchiveFailed()
-	case "view-save-failed":
-		return msgs.IssueNoticeViewSaveFailed(detail)
-	case "save-issue-failed":
-		return msgs.IssueNoticeSaveIssueFailed(detail)
-	case "execution-save-failed":
-		return msgs.IssueNoticeExecutionSaveFailed(detail)
-	case "supplement-retry-save-failed":
-		return msgs.IssueNoticeSupplementRetrySaveFailed()
-	case "supplement-restore-failed":
-		return msgs.IssueNoticeSupplementRestoreFailed(detail)
-	case "supplement-batch-active":
-		return msgs.IssueNoticeSupplementBatchActive(supplementBatchStateLabel(msgs, detail))
-	case "form-switch":
-		return msgs.IssueNoticeFormSwitch()
-	case "supplement-auto-stop-failed":
-		return msgs.IssueNoticeSupplementAutoStop()
-	case "supplement-auto-resume-failed":
-		return msgs.IssueNoticeSupplementAutoResume()
-	case "supplement-retry-failed":
-		return msgs.IssueNoticeSupplementRetry()
-	default:
-		return sendBlockText(msgs, notice)
-	}
-}
-
-func activityExecutionText(msgs locales.Messages, status string) string {
-	switch status {
-	case activityExecutionPending:
-		return msgs.IssueExecutionPending()
-	case activityExecutionNotDispatched:
-		return msgs.IssueExecutionNotDispatched()
-	case activityExecutionRejected:
-		return msgs.IssueExecutionRejected()
-	case activityExecutionAccepted:
-		return msgs.IssueExecutionAccepted()
-	case activityExecutionRunning:
-		return msgs.IssueExecutionRunning()
-	case activityExecutionCompleted:
-		return msgs.IssueExecutionCompleted()
-	case activityExecutionFailed:
-		return msgs.IssueExecutionFailed()
-	case activityExecutionInterrupted:
-		return msgs.IssueExecutionInterrupted()
-	case activityExecutionUnknown:
-		return msgs.IssueExecutionUnknown()
-	default:
-		return status
-	}
-}
+const activityBlockExecution = "execution-untrusted"
 
 func activitiesForStoredContact(all []storedActivity, contactID string) []*productActivity {
 	out := make([]*productActivity, 0)
@@ -693,17 +472,6 @@ func activityExecutionNeedsAttention(status string) bool {
 	default:
 		return false
 	}
-}
-
-func (ct *contact) activityForTask(taskID string) (*productActivity, *activityExecution) {
-	for _, activity := range ct.Activities {
-		for _, execution := range activity.Executions {
-			if execution.TaskID == taskID {
-				return activity, execution
-			}
-		}
-	}
-	return nil, nil
 }
 
 func activityWorkActiveCount(ct *contact) int {

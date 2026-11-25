@@ -95,18 +95,10 @@ const (
 	activityExecutionFailed             = store.IssueExecutionFailed
 	activityExecutionInterrupted        = store.IssueExecutionInterrupted
 	activityExecutionUnknown            = store.IssueExecutionUnknown
-	supplementStatePending              = store.SupplementStatePending
 	supplementStateDispatching          = store.SupplementStateDispatching
-	supplementStateSubmitted            = store.SupplementStateSubmitted
-	supplementStateRejected             = store.SupplementStateRejected
-	supplementStateNotDispatched        = store.SupplementStateNotDispatched
 	supplementStateUnknown              = store.SupplementStateUnknown
 	supplementBatchDispatching          = store.SupplementBatchDispatching
-	supplementBatchAccepted             = store.SupplementBatchAccepted
-	supplementBatchRejected             = store.SupplementBatchRejected
-	supplementBatchNotDispatched        = store.SupplementBatchNotDispatched
 	supplementBatchUnknown              = store.SupplementBatchUnknown
-	supplementBatchCanceled             = store.SupplementBatchCanceled
 
 	connectionAPIResponses                 = connection.APIResponses
 	connectionAPIChatCompletions           = connection.APIChatCompletions
@@ -220,9 +212,6 @@ func piPayloadPaths() (string, string, error) { return pi.PayloadPaths() }
 
 func resolveWorkbenchTheme(dark bool) workbenchTheme { return theme.ResolveWorkbenchTheme(dark) }
 func paletteContrast(a, b ui.Color) float64          { return theme.PaletteContrast(a, b) }
-func contactAvatarColors(t *ui.Theme, name string) (ui.Color, ui.Color) {
-	return theme.ContactAvatarColors(t, name)
-}
 func resolveBotAvatar(t *ui.Theme, id, name string, builtin bool) botAvatar {
 	return theme.ResolveBotAvatar(t, id, name, builtin)
 }
@@ -272,9 +261,6 @@ func preferenceGroup(c *ui.Context, t *ui.Theme, children func()) {
 func preferenceSection(c *ui.Context, t *ui.Theme, title string, children func()) {
 	theme.PreferenceSection(c, t, title, children)
 }
-func preferenceSectionHeader(c *ui.Context, t *ui.Theme, title string) {
-	theme.PreferenceSectionHeader(c, t, title)
-}
 func settingsPreferenceRow(c *ui.Context, t *ui.Theme, label, description string, control func(), last ...bool) {
 	theme.SettingsPreferenceRow(c, t, label, description, control, last...)
 }
@@ -319,8 +305,6 @@ func cloneActivitySupplementLedger(l *activitySupplementLedger) *activitySupplem
 func newContactID() string                                   { return store.NewContactID() }
 func nowMillis() int64                                       { return store.NowMillis() }
 func newActivityID() string                                  { return store.NewIssueID() }
-func newRequirementID() string                               { return store.NewRequirementID() }
-func newActivityQuestionRef() string                         { return store.NewIssueQuestionRef() }
 func newActivitySupplementLedger() *activitySupplementLedger { return store.NewIssueSupplementLedger() }
 func parseActivityRequirements(text string) []*activityRequirement {
 	return store.ParseIssueRequirements(text)
@@ -372,12 +356,6 @@ func newConnectionSettings(config *connectionConfig, workDir string) *connection
 }
 
 func validateTaskContext(items []taskContextItem) error { return materials.Validate(items) }
-func taskContextInputs(items []taskContextItem, extra ...pi.ContextInput) []pi.ContextInput {
-	return materials.Inputs(items, extra...)
-}
-func validateRuntimeContextInputs(inputs []pi.ContextInput) error {
-	return materials.ValidateRuntimeInputs(inputs)
-}
 func taskContextReadOnlyView(c *ui.Context, theme workbenchTheme, items []taskContextItem) {
 	materials.ReadOnlyView(c, theme, items)
 }

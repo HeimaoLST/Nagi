@@ -224,17 +224,6 @@ func appearanceModeIndex(mode string) int {
 	}
 }
 
-func appearanceModeFromIndex(index int) string {
-	switch index {
-	case 1:
-		return appearanceLight
-	case 2:
-		return appearanceDark
-	default:
-		return appearanceSystem
-	}
-}
-
 func (a *appModel) openAppearance() {
 	a.appearanceStatus = appearanceStatusNone
 	a.openSettingsTab(settingsTabAppearance, settingsSourceRail)

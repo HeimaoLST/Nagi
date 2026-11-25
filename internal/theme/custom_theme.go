@@ -35,14 +35,6 @@ func (ids AppearanceThemeIDs) ForKind(kind string) string {
 	return "paper"
 }
 
-func (ids *AppearanceThemeIDs) SetForKind(kind, id string) {
-	if kind == AppearanceDark {
-		ids.Dark = id
-		return
-	}
-	ids.Light = id
-}
-
 type ThemeFileError struct {
 	File, Field, Message string
 }

@@ -465,26 +465,6 @@ func readFile(path string) (text, source string, err error) {
 	return string(data), absolute, nil
 }
 
-func Inputs(items []Item, extra ...pi.ContextInput) []pi.ContextInput {
-	inputs := make([]pi.ContextInput, 0, len(items)+len(extra))
-	for _, item := range items {
-		inputs = append(inputs, pi.ContextInput{Name: item.InputName(), Text: item.Text})
-	}
-	return append(inputs, extra...)
-}
-
-// ValidateRuntimeInputs includes app-injected context in the Pi request budget.
-func ValidateRuntimeInputs(inputs []pi.ContextInput) error {
-	total := 0
-	for _, input := range inputs {
-		total += WrapperBytes(input.Name, input.Text)
-		if total > MaxBytes {
-			return Detail(ErrOversize, fmt.Sprintf("combined caller context needs %d bytes", total))
-		}
-	}
-	return nil
-}
-
 // ReadOnlyView renders history materials without editor/resend controls.
 func ReadOnlyView(c *ui.Context, wb theme.WorkbenchTheme, items []Item) {
 	if len(items) == 0 {

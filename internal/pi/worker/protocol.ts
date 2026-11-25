@@ -58,7 +58,6 @@ export const skillApprovalRecord = Type.Object({ grantKey: digest, ownerBotId: i
 export type SkillManifest = Static<typeof skillManifest>;
 export type SkillPermissions = Static<typeof skillPermissions>;
 export type SkillApproval = Static<typeof skillApprovalRecord>;
-export type SkillApprovalStatus = Static<typeof skillApprovalStatus>;
 const skillReview = { scripts: Type.Optional(skillScripts), approvalDigest: Type.Optional(digest), approvalStatus: Type.Optional(skillApprovalStatus),
   canonicalWorkspace: Type.Optional(Type.String()), permissionsDigest: Type.Optional(digest), testedScripts: Type.Optional(Type.Array(skillScriptName, { maxItems: 8 })) };
 const skillKey = { source: skillSource, botId: Type.Optional(id), skillId: skillID };
@@ -72,7 +71,6 @@ const skillChange = Type.Object({ source: skillSource, botId: Type.Optional(id),
   change: Type.Union([Type.Literal('saved'), Type.Literal('deleted'), Type.Literal('promoted'), Type.Literal('preferences'),
     Type.Literal('approved'), Type.Literal('revoked'), Type.Literal('tested')]) });
 export type SkillSource = Static<typeof skillSource>;
-export type MountedSkill = Static<typeof mountedSkill>;
 export type SkillDetail = Static<typeof skillDetail>;
 export type SkillListing = Static<typeof skillListing>;
 export type SkillChange = Static<typeof skillChange>;
