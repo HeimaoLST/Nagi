@@ -231,6 +231,10 @@ func (a *appModel) openProductProfile(ctx context.Context, fresh bool, generatio
 			a.hideBuiltinArchitect = local.HideBuiltinArchitect
 		}
 		a.providers = providerSettings{}
+		a.capabilities = capabilitySettings{}
+		if prefs := opened.Snapshot.Preferences; prefs != nil {
+			a.capabilities.discoverLocal = prefs.DiscoverLocalSkills
+		}
 		a.applyProductProviders(providers)
 		a.applyProductConnection(opened.Snapshot.Connection)
 		a.connectionForm = nil
@@ -572,6 +576,17 @@ func (a *appModel) applyProductEvent(host *piAppHost, event pi.ProductEvent) {
 		a.refreshProductProviders(host)
 		return
 	}
+	if change := event.SkillChanged; change != nil {
+		if change.Request != nil {
+			a.applySkillApprovalRequests([]pi.ProductSkillApprovalRequest{*change.Request})
+		}
+		a.refreshCapabilitiesSkills()
+		return
+	}
+	if event.McpChanged != nil {
+		a.refreshCapabilityServers()
+		return
+	}
 	if event.Name == "memory.changed" {
 		var changed pi.ProductMemoryChangedEvent
 		if json.Unmarshal(event.Data, &changed) == nil {
@@ -601,6 +616,9 @@ func (a *appModel) applyProductEvent(host *piAppHost, event pi.ProductEvent) {
 		return
 	}
 	if event.Name == "activity.changed" {
+		if event.ActivityChanged != nil {
+			a.applyActivitySkillApprovals(event.ActivityChanged)
+		}
 		var item pi.ProductActivitySummary
 		if json.Unmarshal(event.Data, &item) == nil && item.ActivityID != "" {
 			host.activityRevision++
@@ -732,6 +750,11 @@ func (a *appModel) reconcileProductStream(host *piAppHost) {
 		return
 	}
 	a.refreshProductProviders(host)
+	a.refreshCapabilitiesSkills()
+	a.refreshCapabilityServers()
+	if ct := a.contactByID(a.contactProfileID); ct != nil && a.detail == detailProfile {
+		a.refreshSkillApprovalRequests(ct)
+	}
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -880,6 +903,7 @@ func (ct *contact) applyProductBotProfile(bot pi.ProductBot) {
 	ct.Name, ct.Role, ct.Purpose = profile.Name, profile.Role, profile.Purpose
 	ct.Instructions, ct.Workspace = profile.Instructions, profile.Workspace
 	ct.StarterPrompts = profile.StarterPrompts
+	ct.ToolPreset, ct.MountedSkills, ct.McpBindings = profile.ToolPreset, profile.MountedSkills, profile.McpBindings
 	ct.BuiltinTools = nil
 	if profile.CodingTools != nil {
 		ct.BuiltinTools = &profile.CodingTools

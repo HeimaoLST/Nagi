@@ -91,6 +91,9 @@ type contact struct {
 	StarterPrompts     []string
 	Workspace          string
 	BuiltinTools       *[]string
+	ToolPreset         string
+	MountedSkills      []pi.ProductMountedSkill
+	McpBindings        []pi.ProductMcpBinding
 	SystemKind         string
 	ProfileRevision    uint64
 	PendingLearnings   int
@@ -112,6 +115,7 @@ type contact struct {
 	Context            taskContext
 	activity           productActivityPanel
 	memory             botMemoryViewState
+	capabilities       botCapabilitiesState
 	replyIndex         int
 	list               ui.ListState
 	recall             quoteRecall
@@ -158,6 +162,9 @@ type profileDraft struct {
 	StarterPrompts []string
 	Workspace      string
 	BuiltinTools   *[]string
+	ToolPreset     string
+	MountedSkills  []pi.ProductMountedSkill
+	McpBindings    []pi.ProductMcpBinding
 }
 
 type appModel struct {
@@ -272,6 +279,7 @@ type appModel struct {
 	startupDetailsOpen     bool
 	shutdownDrainStarted   bool
 	providers              providerSettings
+	capabilities           capabilitySettings
 
 	openPath func(string) error
 

@@ -563,6 +563,7 @@ func (a *appModel) redactConnectionText(text string) string {
 			keys = append(keys, key)
 		}
 	}
+	keys = a.appendDraftMcpSecrets(keys)
 	for _, key := range keys {
 		text = strings.ReplaceAll(text, key, "[redacted]")
 	}
@@ -575,7 +576,7 @@ func (a *appModel) finishShutdown() {
 		return
 	}
 	if host := a.productHost(); host != nil {
-		if (a.dataRecovery != nil && a.dataRecovery.inFlight) || a.connectionApplying || a.connectionSaveInFlight || a.connectionTesting || a.providerBusy() || a.submissionInFlight > 0 || a.contactHistoryInFlight > 0 {
+		if (a.dataRecovery != nil && a.dataRecovery.inFlight) || a.connectionApplying || a.connectionSaveInFlight || a.connectionTesting || a.providerBusy() || a.capabilitiesBusy() || a.submissionInFlight > 0 || a.contactHistoryInFlight > 0 {
 			return
 		}
 		a.shutdownDrainStarted = true
