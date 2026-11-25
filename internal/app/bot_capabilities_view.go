@@ -174,18 +174,38 @@ func (a *appModel) botBuiltinTools(c *ui.Context, t *ui.Theme, msgs locales.Mess
 	if selected != 3 {
 		return
 	}
-	descriptions := [...]string{msgs.CapToolBash(), msgs.CapToolEdit(), msgs.CapToolFind(), msgs.CapToolGrep(), msgs.CapToolLs(), msgs.CapToolRead(), msgs.CapToolWrite()}
 	capabilityProfileRow(c, t, func() {
 		ui.Row(c).FillWidth().MinWidth(0).Wrap().Gap(6).Children(func() {
-			for i, name := range pi.ResolveCodingTools(nil, pi.ToolPresetWorkspace) {
+			for _, name := range pi.ResolveCodingTools(nil, pi.ToolPresetWorkspace) {
 				c.Key(name)
-				capabilityChip(c, t, name, descriptions[i], slices.Contains(effective, name), blocked).OnClick(func() {
+				capabilityChip(c, t, name, builtinToolDescription(msgs, name), slices.Contains(effective, name), blocked).OnClick(func() {
 					tools := toggleCapabilityTool(effective, name)
 					draft.ToolPreset, draft.BuiltinTools = pi.ToolPresetCustom, &tools
 				})
 			}
 		})
 	}, true)
+}
+
+func builtinToolDescription(msgs locales.Messages, name string) string {
+	switch name {
+	case "bash":
+		return msgs.CapToolBash()
+	case "edit":
+		return msgs.CapToolEdit()
+	case "find":
+		return msgs.CapToolFind()
+	case "grep":
+		return msgs.CapToolGrep()
+	case "ls":
+		return msgs.CapToolLs()
+	case "read":
+		return msgs.CapToolRead()
+	case "write":
+		return msgs.CapToolWrite()
+	default:
+		return ""
+	}
 }
 
 func toggleCapabilityTool(tools []string, name string) []string {
@@ -660,6 +680,9 @@ func (a *appModel) skillReviewDialog(c *ui.Context, base *ui.Theme) {
 			options = append(options, theme.SelectOption{Value: name, Label: name})
 		}
 		if len(options) != 0 {
+			if _, ok := value.Files[review.file]; !ok {
+				review.file = options[0].Value
+			}
 			theme.PreferenceSelect(c, &review.file, options, msgs.CapReviewedFiles(), a.capabilitiesBusy()).MaxWidth(260)
 			c.Key(review.file)
 			capabilityCode(c, msgs, value.Files[review.file])

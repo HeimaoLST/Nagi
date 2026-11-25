@@ -3,7 +3,7 @@ import type { Model } from '@earendil-works/pi-ai';
 import type { ModelRole, ProviderInput, ThinkingLevel } from './model-router.js';
 
 export type CostTier = 'free' | 'low' | 'mid' | 'high' | 'flagship_pro' | 'unknown';
-export type Capabilities = { reasoning: boolean; thinkingLevelMap: NonNullable<Model<'openai-completions'>['thinkingLevelMap']>;
+type Capabilities = { reasoning: boolean; thinkingLevelMap: NonNullable<Model<'openai-completions'>['thinkingLevelMap']>;
   compat?: NonNullable<Model<'openai-completions'>['compat']> | NonNullable<Model<'openai-responses'>['compat']>;
   cost?: Model<'openai-completions'>['cost']; input?: Model<'openai-completions'>['input'] };
 type Builtin = { source: string; api: string; id: string; baseUrl: string; reasoning: boolean; input: NonNullable<Capabilities['input']>;
