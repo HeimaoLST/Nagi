@@ -329,7 +329,7 @@ func TestPiAppProductConnectionStopAndWorkerLoss(t *testing.T) {
 	w.click(msg.SendAction())
 	await(streamStarted, "the sticky primary conversation stream")
 	w.wait(func() bool {
-		if first.ActiveTaskID == "" || !w.view.HasText(msg.BotTyping()) || !w.view.HasText(msg.StopConversation()) {
+		if first.ActiveTaskID == "" || w.app.submissionInFlight != 0 || first.Draft != "" || !w.view.HasText(msg.BotTyping()) || !w.view.HasText(msg.StopConversation()) {
 			return false
 		}
 		for _, m := range first.Messages {
