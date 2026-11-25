@@ -4,7 +4,8 @@ import { basename, dirname, join } from 'node:path';
 import { DatabaseSync, type SQLOutputValue } from 'node:sqlite';
 import { decodeProductProfile, importProductSnapshot, privateCredentialKeys, readPrivateConnection, type PrivateConnection, type ProductBackup, type ProductProfilePaths } from './product-profile.js';
 import type { ProductProfile } from './product.js';
-import { canonicalJSON, RequestError, type ActivityProgressRecord, type SkillApproval, type SkillApprovalRequest, type SkillSource, type TraceItem } from './protocol.js';
+import { canonicalJSON, maxAutomaticAnswers, maxTriageAttempts, RequestError, type ActivityProgressRecord, type TriageAccounting,
+  type SkillApproval, type SkillApprovalRequest, type SkillSource, type TraceItem } from './protocol.js';
 import { type BotMemory, type BotWorkLog } from './bot-memory.js';
 import { maxExecutionTraces, maxProfileTraces, traceDetail, redactTrace, type TraceBackup, type TraceObservation, type TraceUpdate } from './product-trace.js';
 import { projectionRedactor } from './product-redactor.js';
@@ -136,6 +137,12 @@ const MIGRATIONS = [`
     UNIQUE (execution_id, call_id)
   ) STRICT;
   CREATE INDEX skill_approval_requests_by_activity ON skill_approval_requests(activity_id, state);
+`, `
+  ALTER TABLE activities ADD COLUMN updated_at TEXT;
+  CREATE TABLE activity_triage_accounting (
+    activity_id TEXT PRIMARY KEY REFERENCES activities(activity_id) DEFERRABLE INITIALLY DEFERRED,
+    attempts_used INTEGER NOT NULL DEFAULT 0, auto_answers_used INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL
+  ) STRICT;
 `];
 const LATEST_SCHEMA_VERSION = MIGRATIONS.length;
 
@@ -148,7 +155,8 @@ const decode = (value: SQLOutputValue): unknown => value === null ? undefined : 
 const sha256 = (data: Buffer) => createHash('sha256').update(data).digest('hex');
 
 export type RoutingWrite = { credentials?: PrivateConnection; escalation?: Escalation };
-export type ActivityControlWrite = { approvalRequests?: SkillApprovalRequest[]; resetProgress?: string };
+export type ActivityControlWrite = { approvalRequests?: SkillApprovalRequest[]; resetProgress?: string;
+  triage?: { activityId: string; kind: 'attempt' | 'answer'; at: string } };
 function snapshotFor(profile: ProductProfile): Snapshot {
   const data = Buffer.from(canonicalJSON(profile) + '\n');
   return { data, digest: sha256(data) };
@@ -233,11 +241,13 @@ export class ProductSQLite {
         const { profile, backup } = importProductSnapshot(snapshot && JSON.parse(snapshot.data.toString('utf8')), credentials);
         mirror = this.stageMirror(snapshotFor(profile), previous);
         this.db.exec('DELETE FROM execution_mutation_admissions; DELETE FROM execution_admission_coverage; DELETE FROM activity_escalations;');
-        this.db.exec('DELETE FROM activity_progress; DELETE FROM skill_approval_requests;');
+        this.db.exec('DELETE FROM activity_progress; DELETE FROM skill_approval_requests; DELETE FROM activity_triage_accounting;');
         this.replaceProfile(profile, mirror);
         for (const row of backup?.activityProgress ?? []) this.putProgress(row);
         for (const row of backup?.skillApprovalRequests ?? []) this.putApprovalRequest(row);
         for (const row of backup?.activityEscalations ?? []) this.putEscalation(row);
+        const triage = this.db.prepare('INSERT INTO activity_triage_accounting VALUES (?, ?, ?, ?)');
+        for (const row of backup?.triageAccounting ?? []) triage.run(encode(row.activityId), row.attemptsUsed, row.autoAnswersUsed, row.updatedAt);
         const redact = projectionRedactor([...privateCredentialKeys(credentials), ...this.vault?.keys() ?? []]);
         const writes: SkillWrite[] = (backup?.privateSkillBundles ?? []).map(row => {
           const { 'SKILL.md': markdown, ...files } = backupSkillFiles(row);
@@ -302,6 +312,7 @@ export class ProductSQLite {
         if (routing?.escalation && !this.canEscalate(routing.escalation.activityId, routing.escalation.priorExecutionId)) {
           throw new RequestError('escalation_unavailable', 'The prior execution does not admit escalation');
         }
+        if (control?.triage) this.updateTriage(control.triage);
         mirror = this.stageMirror(snapshotFor(profile), previous);
         this.replaceProfile(profile, mirror);
         if (routing?.escalation) this.putEscalation(routing.escalation);
@@ -373,6 +384,11 @@ export class ProductSQLite {
       FROM activity_trace_meta WHERE ${where} AND coverage = 'recorded'`).get(...ids);
     return { generation: this.meta('trace_generation')!, high: Number(head?.seq ?? 0),
       recorded: Number(meta?.recorded ?? 0), evicted: Number(meta?.evicted ?? 0) };
+  }
+
+  activityTraceTimestamp(activityId: string): string | undefined {
+    const row = this.db.prepare('SELECT at FROM activity_traces WHERE activity_id = ? ORDER BY seq DESC LIMIT 1').get(encode(activityId));
+    return row?.at as string | undefined;
   }
   admitTool(executionId: string, activityId: string | undefined, callId: string, tool: string, toolClass: 'readonly' | 'mutating'): void {
     this.transaction(() => {
@@ -484,6 +500,20 @@ export class ProductSQLite {
     }
   }
 
+  triageAccounting(activityId: string): TriageAccounting | undefined {
+    const row = this.db.prepare('SELECT * FROM activity_triage_accounting WHERE activity_id = ?').get(encode(activityId));
+    if (row) return { activityId, attemptsUsed: Number(row.attempts_used), autoAnswersUsed: Number(row.auto_answers_used), updatedAt: String(row.updated_at) };
+  }
+
+  private updateTriage({ activityId, kind, at }: NonNullable<ActivityControlWrite['triage']>): void {
+    const result = kind === 'attempt' ? this.db.prepare(`INSERT INTO activity_triage_accounting VALUES (?, 1, 0, ?)
+      ON CONFLICT(activity_id) DO UPDATE SET attempts_used = attempts_used + 1, updated_at = excluded.updated_at
+      WHERE attempts_used < ? AND auto_answers_used < ?`).run(encode(activityId), at, maxTriageAttempts, maxAutomaticAnswers) :
+      this.db.prepare(`UPDATE activity_triage_accounting SET auto_answers_used = auto_answers_used + 1, updated_at = ?
+        WHERE activity_id = ? AND auto_answers_used < ? AND auto_answers_used < attempts_used`).run(at, encode(activityId), maxAutomaticAnswers);
+    if (result.changes !== 1) throw new RequestError('triage_budget', 'The Activity preference resolution budget is exhausted');
+  }
+
   captureBackup(redact: (text: string) => string): { profile: ProductProfile; backup: ProductBackup } {
     return this.transaction(() => {
       if (this.meta('snapshot_sha256') !== this.digest) throw new RequestError('profile_unavailable', 'The SQLite profile changed in another worker');
@@ -501,8 +531,12 @@ export class ProductSQLite {
         .map(row => decode(row.record_json) as ActivityProgressRecord);
       const skillApprovalRequests = this.db.prepare('SELECT record_json FROM skill_approval_requests ORDER BY request_id').all()
         .map(row => decode(row.record_json) as SkillApprovalRequest);
+      const triageAccounting = this.db.prepare('SELECT * FROM activity_triage_accounting ORDER BY activity_id').all().map(row => ({
+        activityId: decode(row.activity_id) as string, attemptsUsed: Number(row.attempts_used), autoAnswersUsed: Number(row.auto_answers_used), updatedAt: String(row.updated_at),
+      }));
       return { profile, backup: { version: 1, traces, traceCoverage, ...(activityEscalations.length ? { activityEscalations } : {}),
-        ...(activityProgress.length ? { activityProgress } : {}), ...(skillApprovalRequests.length ? { skillApprovalRequests } : {}) } };
+        ...(activityProgress.length ? { activityProgress } : {}), ...(skillApprovalRequests.length ? { skillApprovalRequests } : {}),
+        ...(triageAccounting.length ? { triageAccounting } : {}) } };
     });
   }
 
@@ -693,6 +727,7 @@ export class ProductSQLite {
       routing: decode(row.routing_json),
       acknowledgedAt: row.acknowledged_at ?? undefined, acknowledgedExecutionId: decode(row.acknowledged_execution_id),
       closedAt: row.closed_at ?? undefined,
+      updatedAt: row.updated_at ?? undefined,
     }));
     const executions = this.db.prepare('SELECT * FROM executions ORDER BY sort_order').all().map(row => ({
       executionId: decode(row.execution_id), revision: row.revision, state: row.state, operationId: decode(row.operation_id),
@@ -735,12 +770,12 @@ export class ProductSQLite {
       encode(row.draft), encode(row.binding), encode(row.latestExecutionId)));
     const activities = this.db.prepare(`INSERT INTO activities (activity_id, sort_order, owner_bot_id, origin_conversation_id,
       revision, state, goal_json, requirements_json, questions_json, materials_json, input_files_json, execution_ids_json,
-      results_json, binding_json, retained_json, granted_linked_activity_ids_json, routing_json, acknowledged_at, acknowledged_execution_id, closed_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+      results_json, binding_json, retained_json, granted_linked_activity_ids_json, routing_json, acknowledged_at, acknowledged_execution_id, closed_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
     profile.activities.forEach((row, order) => activities.run(encode(row.activityId), order, encode(row.ownerBotId), encode(row.originConversationId),
       row.revision, row.state, encode(row.goal), encode(row.requirements), encode(row.questions), encode(row.materials), encode(row.inputFiles),
       encode(row.executionIds), encode(row.results), encode(row.binding), encode(row.retained), encode(row.grantedLinkedActivityIds ?? []), encode(row.routing),
-      row.acknowledgedAt ?? null, encode(row.acknowledgedExecutionId), row.closedAt ?? null));
+      row.acknowledgedAt ?? null, encode(row.acknowledgedExecutionId), row.closedAt ?? null, row.updatedAt ?? null));
     const executions = this.db.prepare('INSERT INTO executions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
     profile.executions.forEach((row, order) => executions.run(encode(row.executionId), order, row.revision, row.state, encode(row.operationId),
       encode(row.input), encode(row.error), encode(row.engineRunId), encode(row.importedActivityId), encode(row.retained)));
