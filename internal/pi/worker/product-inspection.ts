@@ -1,4 +1,6 @@
-import { createHash, createHmac } from 'node:crypto';
+import { createHash, createHmac, randomUUID } from 'node:crypto';
+import { chmodSync, lstatSync, mkdirSync, readdirSync, renameSync, rmSync, rmdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type { SessionEntry } from '@earendil-works/pi-coding-agent';
 import { Value } from 'typebox/value';
 import { RequestError, hasCanonicalQuoteText, productQuote, quoteAuthorMaxBytes, quoteTextMaxBytes, type Material, type ProductQuote } from './protocol.js';
@@ -208,4 +210,149 @@ export async function inspectConversation(transcript: Transcript | undefined, co
   } finally {
     await transcript.close();
   }
+}
+
+export type ResultSlice = { start_line?: number; end_line?: number; byte_offset?: number; cursor?: string; max_bytes?: number };
+export type ResultFile = { path: string; callId: string };
+export const resultPreviewBytes = 4096;
+const overflowTTL = 60 * 60 * 1000;
+const overflowFile = /^[A-Za-z0-9_-]+-[a-f0-9]{8}\.txt(?:\.[a-f0-9-]{36}\.tmp)?$/;
+
+export function resultLineCount(text: string): number {
+  if (!text) return 0;
+  let lines = 1;
+  for (let index = text.indexOf('\n'); index !== -1; index = text.indexOf('\n', index + 1)) lines++;
+  return lines;
+}
+
+export class ActivityOverflow {
+  private readonly directory: string;
+  private readonly timer: NodeJS.Timeout;
+
+  constructor(stateDir: string) {
+    this.directory = join(stateDir, 'overflow');
+    this.reap();
+    this.timer = setInterval(() => this.reap(), overflowTTL);
+    this.timer.unref();
+  }
+
+  write(executionId: string, redacted: string): string {
+    const digest = createHash('sha256').update(redacted).digest('hex').slice(0, 8);
+    const filename = /^[A-Za-z0-9_-]{1,192}$/.test(executionId) ? executionId : createHash('sha256').update(executionId).digest('hex');
+    const path = join(this.directory, `${filename}-${digest}.txt`);
+    const temp = `${path}.${randomUUID()}.tmp`;
+    mkdirSync(this.directory, { recursive: true, mode: 0o700 });
+    const directory = lstatSync(this.directory);
+    if (!directory.isDirectory()) throw new RequestError('result_unavailable', 'The overflow directory is unavailable');
+    if ((directory.mode & 0o777) !== 0o700) chmodSync(this.directory, 0o700);
+    try {
+      writeFileSync(temp, redacted, { flag: 'wx', mode: 0o600, flush: true });
+      renameSync(temp, path);
+      return path;
+    } finally { rmSync(temp, { force: true }); }
+  }
+
+  private reap(all = false): void {
+    try {
+      if (!lstatSync(this.directory, { throwIfNoEntry: false })?.isDirectory()) return;
+      const cutoff = Date.now() - overflowTTL;
+      for (const entry of readdirSync(this.directory, { withFileTypes: true })) {
+        if (!entry.isFile() || !overflowFile.test(entry.name)) continue;
+        const path = join(this.directory, entry.name);
+        const status = lstatSync(path, { throwIfNoEntry: false });
+        if (status?.isFile() && (all || status.mtimeMs <= cutoff)) rmSync(path, { force: true });
+      }
+      if (all) rmdirSync(this.directory);
+    } catch (error) {
+      if (!['ENOENT', 'ENOTEMPTY'].includes((error as NodeJS.ErrnoException).code ?? '')) {
+        process.stderr.write('Unable to reap Activity result overflow files.\n');
+      }
+    }
+  }
+
+  close(): void {
+    clearInterval(this.timer);
+    this.reap(true);
+  }
+}
+
+type ActivityResultSource = { activityId: string; executionId: string; text: string; files: ResultFile[] };
+
+function lineBytes(content: Buffer, startLine: number, endLine: number | undefined): [number, number] {
+  let line = 1;
+  let start = 0;
+  while (line < startLine && start < content.length) {
+    const newline = content.indexOf(10, start);
+    start = newline < 0 ? content.length : newline + 1;
+    line++;
+  }
+  let end = start;
+  if (endLine === undefined) return [start, content.length];
+  while (line <= endLine && end < content.length) {
+    const newline = content.indexOf(10, end);
+    end = newline < 0 ? content.length : newline + 1;
+    line++;
+  }
+  return [start, end];
+}
+
+export function sliceActivityResult({ activityId, executionId, text, files }: ActivityResultSource, generation: string, params: ResultSlice) {
+  const { start_line: startLine, end_line: endLine, byte_offset: byteOffset, max_bytes: budget = 8192 } = params;
+  const lineMode = startLine !== undefined || endLine !== undefined;
+  if (lineMode && (byteOffset !== undefined || params.cursor !== undefined) || params.cursor !== undefined && byteOffset !== undefined ||
+      endLine !== undefined && endLine < (startLine ?? 1)) {
+    throw new RequestError('invalid_params', 'Use one line range, byte offset, or cursor');
+  }
+  const content = Buffer.from(text, 'utf8');
+  const digest = createHash('sha256').update(content).update('\0').update(JSON.stringify(files)).digest('hex');
+  const scope = cursorScope('activity_result_read', activityId, generation, executionId, digest);
+  const cursor = decodeCursor(params.cursor, scope, false);
+  let [position, end] = lineMode ? lineBytes(content, startLine ?? 1, endLine) : [byteOffset ?? 0, content.length];
+  if (cursor) {
+    end = Number(cursor.highEdge);
+    if (cursor.positionEdge || !Number.isSafeInteger(end) || end < 0 || end > content.length || cursor.high !== end + files.length) return invalidCursor();
+    position = cursor.position;
+  }
+  const boundary = (offset: number) => offset === content.length || (content[offset] & 0xc0) !== 0x80;
+  if (!boundary(end) || position < end && !boundary(position) || !cursor && (position > end || !boundary(position))) {
+    if (cursor) return invalidCursor();
+    throw new RequestError('invalid_params', 'The byte offset must be a UTF-8 code point boundary within the result');
+  }
+  const high = end + files.length;
+  const next = (at: number) => at < high && at > 0 ? encodeCursor(scope, { high, position: at, tail: false, highEdge: String(end) }) : null;
+  const response = { activityId, executionId, text: '', byteOffset: Math.min(position, end), nextByteOffset: Math.min(position, end),
+    totalLines: resultLineCount(text), totalBytes: content.length, totalFiles: files.length, files: [] as ResultFile[],
+    truncated: true, nextCursor: null as string | null };
+  const sizeAt = (at: number) => encodedBytes({ ...response, nextByteOffset: Math.min(at, end),
+    truncated: at < high, nextCursor: next(at) });
+  const start = position;
+  if (position < end) {
+    const available = budget - Math.max(sizeAt(position), sizeAt(Math.max(position, end - 1)), sizeAt(end));
+    let remaining = available;
+    let limit = Math.min(end, position + budget + 4);
+    while (!boundary(limit)) limit--;
+    const fragment = content.subarray(position, limit).toString('utf8');
+    let chars = 0;
+    for (const point of fragment) {
+      const cost = encodedBytes(point) - 2;
+      const after = position + Buffer.byteLength(point);
+      if (cost > remaining && (chars || sizeAt(after) + cost > budget)) break;
+      remaining -= cost;
+      chars += point.length;
+      position = after;
+    }
+    response.text = fragment.slice(0, chars);
+  }
+  for (; position >= end && position < high; position++) {
+    response.files.push(files[position - end]);
+    if (sizeAt(position + 1) > budget) {
+      response.files.pop();
+      break;
+    }
+  }
+  response.nextByteOffset = Math.min(position, end);
+  response.nextCursor = next(position);
+  response.truncated = position < high;
+  if (encodedBytes(response) > budget || start === position && position < high) return oversizedEntry();
+  return response;
 }

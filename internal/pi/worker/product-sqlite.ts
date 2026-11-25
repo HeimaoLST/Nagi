@@ -4,7 +4,7 @@ import { basename, dirname, join } from 'node:path';
 import { DatabaseSync, type SQLOutputValue } from 'node:sqlite';
 import { decodeProductProfile, importProductSnapshot, privateCredentialKeys, readPrivateConnection, type PrivateConnection, type ProductBackup, type ProductProfilePaths } from './product-profile.js';
 import type { ProductProfile } from './product.js';
-import { canonicalJSON, RequestError, type SkillApproval, type SkillSource, type TraceItem } from './protocol.js';
+import { canonicalJSON, RequestError, type ActivityProgressRecord, type SkillApproval, type SkillApprovalRequest, type SkillSource, type TraceItem } from './protocol.js';
 import { type BotMemory, type BotWorkLog } from './bot-memory.js';
 import { maxExecutionTraces, maxProfileTraces, traceDetail, redactTrace, type TraceBackup, type TraceObservation, type TraceUpdate } from './product-trace.js';
 import { projectionRedactor } from './product-redactor.js';
@@ -117,6 +117,25 @@ const MIGRATIONS = [`
     escalated_execution_id TEXT NOT NULL REFERENCES executions(execution_id) DEFERRABLE INITIALLY DEFERRED,
     from_role TEXT NOT NULL, to_role TEXT NOT NULL, at TEXT NOT NULL
   ) STRICT;
+`, `
+  ALTER TABLE activities ADD COLUMN acknowledged_at TEXT;
+  ALTER TABLE activities ADD COLUMN acknowledged_execution_id TEXT;
+  ALTER TABLE activities ADD COLUMN closed_at TEXT;
+  CREATE TABLE activity_progress (
+    activity_id TEXT PRIMARY KEY REFERENCES activities(activity_id) DEFERRABLE INITIALLY DEFERRED,
+    execution_id TEXT NOT NULL REFERENCES executions(execution_id) DEFERRABLE INITIALLY DEFERRED,
+    call_id TEXT NOT NULL, progress_seq INTEGER NOT NULL CHECK (progress_seq > 0), record_json TEXT NOT NULL
+  ) STRICT;
+  CREATE TABLE skill_approval_requests (
+    request_id TEXT PRIMARY KEY,
+    activity_id TEXT NOT NULL REFERENCES activities(activity_id) DEFERRABLE INITIALLY DEFERRED,
+    execution_id TEXT NOT NULL REFERENCES executions(execution_id) DEFERRABLE INITIALLY DEFERRED,
+    call_id TEXT NOT NULL, bot_id TEXT NOT NULL REFERENCES bots(bot_id) DEFERRABLE INITIALLY DEFERRED,
+    revision INTEGER NOT NULL CHECK (revision > 0),
+    state TEXT NOT NULL CHECK (state IN ('open','approved','denied','expired','cancelled')), record_json TEXT NOT NULL,
+    UNIQUE (execution_id, call_id)
+  ) STRICT;
+  CREATE INDEX skill_approval_requests_by_activity ON skill_approval_requests(activity_id, state);
 `];
 const LATEST_SCHEMA_VERSION = MIGRATIONS.length;
 
@@ -129,6 +148,7 @@ const decode = (value: SQLOutputValue): unknown => value === null ? undefined : 
 const sha256 = (data: Buffer) => createHash('sha256').update(data).digest('hex');
 
 export type RoutingWrite = { credentials?: PrivateConnection; escalation?: Escalation };
+export type ActivityControlWrite = { approvalRequests?: SkillApprovalRequest[]; resetProgress?: string };
 function snapshotFor(profile: ProductProfile): Snapshot {
   const data = Buffer.from(canonicalJSON(profile) + '\n');
   return { data, digest: sha256(data) };
@@ -213,7 +233,10 @@ export class ProductSQLite {
         const { profile, backup } = importProductSnapshot(snapshot && JSON.parse(snapshot.data.toString('utf8')), credentials);
         mirror = this.stageMirror(snapshotFor(profile), previous);
         this.db.exec('DELETE FROM execution_mutation_admissions; DELETE FROM execution_admission_coverage; DELETE FROM activity_escalations;');
+        this.db.exec('DELETE FROM activity_progress; DELETE FROM skill_approval_requests;');
         this.replaceProfile(profile, mirror);
+        for (const row of backup?.activityProgress ?? []) this.putProgress(row);
+        for (const row of backup?.skillApprovalRequests ?? []) this.putApprovalRequest(row);
         for (const row of backup?.activityEscalations ?? []) this.putEscalation(row);
         const redact = projectionRedactor([...privateCredentialKeys(credentials), ...this.vault?.keys() ?? []]);
         const writes: SkillWrite[] = (backup?.privateSkillBundles ?? []).map(row => {
@@ -248,7 +271,7 @@ export class ProductSQLite {
   }
 
   write(profile: ProductProfile, before: ProductProfile, skillWrite?: SkillWrite, mcpWrite?: McpVaultWrite, approval?: SkillApprovalChange,
-    routing?: RoutingWrite): TraceUpdate[] {
+    routing?: RoutingWrite, control?: ActivityControlWrite): TraceUpdate[] {
     let mirror: Mirror | undefined;
     let staged: string | undefined;
     let stagedVault: string | undefined;
@@ -283,6 +306,8 @@ export class ProductSQLite {
         this.replaceProfile(profile, mirror);
         if (routing?.escalation) this.putEscalation(routing.escalation);
         if (approval) this.changeApproval(approval);
+        if (control?.resetProgress) this.db.prepare('DELETE FROM activity_progress WHERE activity_id = ?').run(encode(control.resetProgress));
+        for (const row of control?.approvalRequests ?? []) this.putApprovalRequest(row);
         const workspaces = new Map(before.bots.map(bot => [bot.botId, bot.profile.workspace]));
         for (const bot of profile.bots) {
           if (workspaces.has(bot.botId) && workspaces.get(bot.botId) !== bot.profile.workspace) this.changeApproval({ workspaceBotId: bot.botId });
@@ -366,6 +391,49 @@ export class ProductSQLite {
       .run(isError ? 'settled_error' : 'settled_ok', encode(executionId), callId);
   }
 
+  uncertainMutation(executionId: string): boolean {
+    return !!this.db.prepare(`SELECT 1 FROM execution_mutation_admissions WHERE execution_id = ? AND tool_class = 'mutating'
+      AND state IN ('admitted', 'unknown') LIMIT 1`).get(encode(executionId));
+  }
+
+  progress(activityId: string): ActivityProgressRecord | undefined {
+    const row = this.db.prepare('SELECT record_json FROM activity_progress WHERE activity_id = ?').get(encode(activityId));
+    return decode(row?.record_json ?? null) as ActivityProgressRecord | undefined;
+  }
+
+  recordProgress(row: Omit<ActivityProgressRecord, 'progressSeq'>, interval: number): ActivityProgressRecord | undefined {
+    return this.transaction(() => {
+      if (this.meta('snapshot_sha256') !== this.digest) throw new RequestError('profile_unavailable', 'The SQLite profile changed in another worker');
+      const previous = this.progress(row.activityId);
+      if (previous && (previous.callId === row.callId ||
+          previous.step === row.step && Date.parse(row.at) - Date.parse(previous.at) < interval)) return;
+      const next = { ...row, progressSeq: (previous?.progressSeq ?? 0) + 1 };
+      this.putProgress(next);
+      return next;
+    });
+  }
+
+  private putProgress(row: ActivityProgressRecord): void {
+    this.db.prepare('INSERT OR REPLACE INTO activity_progress VALUES (?, ?, ?, ?, ?)').run(
+      encode(row.activityId), encode(row.executionId), encode(row.callId), row.progressSeq, encode(row));
+  }
+
+  approvalRequests(activityId: string): SkillApprovalRequest[] {
+    return this.db.prepare('SELECT record_json FROM skill_approval_requests WHERE activity_id = ? ORDER BY rowid')
+      .all(encode(activityId)).map(row => decode(row.record_json) as SkillApprovalRequest);
+  }
+
+  approvalRequest(requestId: string): SkillApprovalRequest | undefined {
+    const row = this.db.prepare('SELECT record_json FROM skill_approval_requests WHERE request_id = ?').get(encode(requestId));
+    return decode(row?.record_json ?? null) as SkillApprovalRequest | undefined;
+  }
+
+  private putApprovalRequest(row: SkillApprovalRequest): void {
+    this.db.prepare(`INSERT INTO skill_approval_requests VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(request_id) DO UPDATE SET revision = excluded.revision, state = excluded.state, record_json = excluded.record_json`)
+      .run(encode(row.requestId), encode(row.activityId), encode(row.executionId), encode(row.callId), encode(row.botId), row.revision, row.state, encode(row));
+  }
+
   canEscalate(activityId: string, executionId: string): boolean {
     return !!this.db.prepare(`SELECT 1 FROM executions e JOIN execution_admission_coverage c USING (execution_id)
       JOIN activity_trace_meta t USING (execution_id)
@@ -429,7 +497,12 @@ export class ProductSQLite {
         activityId: decode(row.activity_id), priorExecutionId: decode(row.prior_execution_id), escalatedExecutionId: decode(row.escalated_execution_id),
         fromRole: row.from_role, toRole: row.to_role, at: row.at,
       })) as Escalation[];
-      return { profile, backup: { version: 1, traces, traceCoverage, ...(activityEscalations.length ? { activityEscalations } : {}) } };
+      const activityProgress = this.db.prepare('SELECT record_json FROM activity_progress ORDER BY activity_id').all()
+        .map(row => decode(row.record_json) as ActivityProgressRecord);
+      const skillApprovalRequests = this.db.prepare('SELECT record_json FROM skill_approval_requests ORDER BY request_id').all()
+        .map(row => decode(row.record_json) as SkillApprovalRequest);
+      return { profile, backup: { version: 1, traces, traceCoverage, ...(activityEscalations.length ? { activityEscalations } : {}),
+        ...(activityProgress.length ? { activityProgress } : {}), ...(skillApprovalRequests.length ? { skillApprovalRequests } : {}) } };
     });
   }
 
@@ -618,6 +691,8 @@ export class ProductSQLite {
       executionIds: decode(row.execution_ids_json), results: decode(row.results_json), binding: decode(row.binding_json), retained: decode(row.retained_json),
       grantedLinkedActivityIds: row.granted_linked_activity_ids_json === '[]' ? undefined : decode(row.granted_linked_activity_ids_json),
       routing: decode(row.routing_json),
+      acknowledgedAt: row.acknowledged_at ?? undefined, acknowledgedExecutionId: decode(row.acknowledged_execution_id),
+      closedAt: row.closed_at ?? undefined,
     }));
     const executions = this.db.prepare('SELECT * FROM executions ORDER BY sort_order').all().map(row => ({
       executionId: decode(row.execution_id), revision: row.revision, state: row.state, operationId: decode(row.operation_id),
@@ -660,10 +735,12 @@ export class ProductSQLite {
       encode(row.draft), encode(row.binding), encode(row.latestExecutionId)));
     const activities = this.db.prepare(`INSERT INTO activities (activity_id, sort_order, owner_bot_id, origin_conversation_id,
       revision, state, goal_json, requirements_json, questions_json, materials_json, input_files_json, execution_ids_json,
-      results_json, binding_json, retained_json, granted_linked_activity_ids_json, routing_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+      results_json, binding_json, retained_json, granted_linked_activity_ids_json, routing_json, acknowledged_at, acknowledged_execution_id, closed_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
     profile.activities.forEach((row, order) => activities.run(encode(row.activityId), order, encode(row.ownerBotId), encode(row.originConversationId),
       row.revision, row.state, encode(row.goal), encode(row.requirements), encode(row.questions), encode(row.materials), encode(row.inputFiles),
-      encode(row.executionIds), encode(row.results), encode(row.binding), encode(row.retained), encode(row.grantedLinkedActivityIds ?? []), encode(row.routing)));
+      encode(row.executionIds), encode(row.results), encode(row.binding), encode(row.retained), encode(row.grantedLinkedActivityIds ?? []), encode(row.routing),
+      row.acknowledgedAt ?? null, encode(row.acknowledgedExecutionId), row.closedAt ?? null));
     const executions = this.db.prepare('INSERT INTO executions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
     profile.executions.forEach((row, order) => executions.run(encode(row.executionId), order, row.revision, row.state, encode(row.operationId),
       encode(row.input), encode(row.error), encode(row.engineRunId), encode(row.importedActivityId), encode(row.retained)));

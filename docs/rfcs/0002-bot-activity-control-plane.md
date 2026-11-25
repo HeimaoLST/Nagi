@@ -1,6 +1,6 @@
 # RFC-0002: Bot-Activity Control Plane v2 (Bounded Peripheral Awareness, Typed Question Triage, Live Steering & Capability Parity)
 
-- **Status**: `Review` *(Astra-6.2 deep technical review completed and resolved; implementation intentionally deferred until frontend finishes RFC-0001 M1–M4 UI adaptation)*
+- **Status**: `Partially Implemented` (`CP-1` backend shipped; UI handoff delivered to `t1vb`; `CP-2` next)
 - **Baseline**: `dev` @ `60c8f6f` (all RFC-0001 backend milestones `M0a`–`M4` merged; pinned Pi SDK `1.5.2`)
 - **Reviewers**: Backend Architecture (`t21d`), Deep Technical Review (`t1jr` / Astra-6.2, including offline Pi `1.5.2` `ExtensionRunner` probe)
 - **Canonical Vocabulary**: [docs/design/glossary.md](../design/glossary.md)
@@ -8,7 +8,7 @@
 
 ## Milestone Tracker
 
-- [ ] **CP-1** *(SQLite v8)* — Activity Capability Parity (Bot B captured L1.5 rules, `<available_skills>`, `skill_list`/`skill_read`/`skill_test`/`skill_exec` with captured canonical `cwd`, read-only `memory_search_log`), Dedicated M3 Skill Approval Request Card, Replay-Safe `activity_progress`, Fully Bounded `activity_list`/`activity_get` + Spill-to-File (`overflowPath`) & Universal Line/Byte `activity_result_read`, Lifecycle Refinement (`completed` / `needsAttention` / `acknowledgedAt` / `closedAt`), and Conditional L0 Orchestration Guidance
+- [x] **CP-1** *(SQLite v8)* — Activity Capability Parity (Bot B captured L1.5 rules, `<available_skills>`, `skill_list`/`skill_read`/`skill_test`/`skill_exec` with captured canonical `cwd`, read-only `memory_search_log`), Dedicated M3 Skill Approval Request Card, Replay-Safe `activity_progress`, Fully Bounded `activity_list`/`activity_get` + Spill-to-File (`overflowPath`) & Universal Line/Byte `activity_result_read`, Lifecycle Refinement (`completed` / `needsAttention` / `acknowledgedAt` / `closedAt`), and Conditional L0 Orchestration Guidance *(promoted to [product-protocol.md](../design/product-protocol.md); UI handoff delivered to `t1vb`)*
 - [ ] **CP-2** *(SQLite v9)* — Ephemeral `<active_activities>` Whiteboard (In-Place Pi `1.5.2` `context` Clone Decoration), Zero-LLM `activity.digest` + Reconnect Reconstruction, Structured Non-Blocking Floating `activity_ask(options[])`, Backend-Verified Typed Preference Triage (with Attempt Caps, Foreground Capacity Reservation & Fetch Guard), and User-Turn-Bound `activity_answer`
 - [ ] **CP-3** *(SQLite v10)* — Durable Mid-Execution Live Steering (`activity.steer` + `activity_action(action: "steer")`) via Pi SDK `session.steer()` with Consumption Proof, Disposal Proof, No-Replay Recovery, and M4 Escalation Exclusion
 

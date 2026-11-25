@@ -10,13 +10,13 @@ import type { AssistantMessage, ToolCall } from '@earendil-works/pi-ai';
 import { Type, type Static, type TSchema } from 'typebox';
 import { Value } from 'typebox/value';
 import {
-  MAX_FRAME, RequestError, canonicalJSON, draftSchema, frameBytes, hasCanonicalQuoteText, id, inspectionPage, profileSchema, resolveCodingTools, skillExecutable, skillID, skillScriptName, skillSource, skillText, toolPresetSchema,
+  MAX_FRAME, RequestError, activityStateSchema, canonicalJSON, draftSchema, frameBytes, hasCanonicalQuoteText, id, inspectionPage, profileSchema, resolveCodingTools, skillExecutable, skillID, skillScriptName, skillSource, skillText, toolPresetSchema,
   type ActivityState, type BotChange, type BotProfile, type Connection, type Draft, type Execution,
   type Material, type McpServerRecord, type McpServerView, type OpenParams, type Operation, type ProductCommand, type ProductParams, type SkillApproval,
-  type SkillChange, type SkillDetail, type SkillListing, type SkillPermissions, type SkillSource, type TraceItem,
+  type SkillApprovalRequest, type SkillChange, type SkillDetail, type SkillListing, type SkillPermissions, type SkillSource, type TraceItem,
 } from './protocol.js';
-import { backupProductProfile, privateCredentialKeys, redactBackupProfile, saveCredential, type PrivateConnection, type ProductProfilePaths, type StoredConnection } from './product-profile.js';
-import { ProductSQLite, type RoutingWrite, type SkillApprovalChange } from './product-sqlite.js';
+import { backupProductProfile, privateCredentialKeys, saveCredential, type PrivateConnection, type ProductProfilePaths, type StoredConnection } from './product-profile.js';
+import { ProductSQLite, type ActivityControlWrite, type RoutingWrite, type SkillApprovalChange } from './product-sqlite.js';
 import { composeBotSystemPrompt, formatTightBotInstructions, readTightBotInstructions,
   PANDORABOX_BOT_ID, SYSTEM_KIND_BOT_ARCHITECT, type BotSystemKind } from './bot-template.js';
 import { completedWorkSummary, formatLastingRulesBlock, lastingRulesFit, MEMORY_COLD_TTL_MS, MAX_LOG_BYTES, MAX_PENDING_LEARNINGS,
@@ -24,14 +24,14 @@ import { completedWorkSummary, formatLastingRulesBlock, lastingRulesFit, MEMORY_
   recurringPreference, validMemoryDate, validateMemoryCandidate, type BotMemory, type BotMemoryMeta, type BotMemoryRule,
   type BotPendingLearning, type BotWorkLog } from './bot-memory.js';
 import { directlyOwns, normalizeActivityGrants, redactTrace, type TraceObservation, type TraceUpdate } from './product-trace.js';
-import { cursorScope, decodeCursor, encodeCursor, encodedBytes, inspectConversation, inspectionQuery, invalidCursor, oversizedEntry,
-  publicConversationMessage, redactQuote, type InspectionParams } from './product-inspection.js';
+import { ActivityOverflow, cursorScope, decodeCursor, encodeCursor, encodedBytes, inspectConversation, inspectionQuery, invalidCursor, oversizedEntry,
+  publicConversationMessage, redactQuote, resultLineCount, resultPreviewBytes, sliceActivityResult, type InspectionParams, type ResultFile } from './product-inspection.js';
 import { transcriptEntries, turnEntryType, type Transcript, type TranscriptOwner } from './product-transcript.js';
 import { backupSkillFiles, BotSkills, bundleDigest, canonicalSkillOrigin, checkedSkillFiles, formatSkill, framedSkillDigest, pureSkill, skillGrantKey,
   type SkillBundle, type SkillWrite } from './bot-skills.js';
 import { containsMcpSecret, maxMcpServers, McpConnectionManager, uniqueMcpRegistry, validMcpBindings, validMcpServer } from './mcp-broker.js';
 import { McpVault, mcpSecretKeys, mcpSecretsComplete, mergeMcpSecrets, type McpVaultWrite } from './mcp-vault.js';
-import { projectionRedactor } from './product-redactor.js';
+import { clipEncodedText, clipUTF8, projectionRedactor } from './product-redactor.js';
 import { loadSkillInstallation, SkillSandbox } from './skill-sandbox.js';
 import { activityRole, activityRouting, providerCacheTtlMs, providerEndpoint, resolveRole, resolvedRoles, validProvider,
   type ActivityRouting, type CapturedRoute, type ModelRole, type ProviderAccount, type RoutingPolicy } from './model-router.js';
@@ -43,7 +43,7 @@ const unknown = (execution?: StoredExecution) => execution?.state === 'unknown';
 const maxDraftBytes = 512 * 1024;
 const maxPartialBytes = 512 * 1024;
 const readOnlyTools: Record<string, true> = { read: true, grep: true, find: true, ls: true, activity_list: true, activity_get: true,
-  activity_trace_read: true, conversation_read: true, conversation_search: true, memory_list_rules: true, memory_search_log: true,
+  activity_progress: true, activity_result_read: true, activity_trace_read: true, conversation_read: true, conversation_search: true, memory_list_rules: true, memory_search_log: true,
   skill_list: true, skill_read: true, bot_list: true, bot_inspect_team: true };
 const providerChanges = { 'provider.save': 'saved', 'provider.delete': 'deleted', 'provider.apply': 'applied',
   'provider.revokeCredential': 'revoked', 'routing.setPolicy': 'policy' } as const;
@@ -63,11 +63,13 @@ export type ProductRunObservers = {
 
 export type ProductSession = {
   sessionRef: string;
+  cwd: string;
   start: (executionId: string, draft: Draft, observers: ProductRunObservers) => void;
   stop: (executionId: string) => void;
 };
 
 export type ProductEngine = {
+  defaultCodingTools: readonly string[];
   open: (params: OpenParams, tools: ToolDefinition[]) => Promise<ProductSession>;
   refreshSession: (params: OpenParams, tools: ToolDefinition[]) => Promise<ProductSession>;
   conversationPreview: (sessionRef: string, contextId: string, botId: string) => Promise<{ preview?: string; timestamp?: string }>;
@@ -125,7 +127,6 @@ type Question = {
   delivery?: 'saved' | 'dispatching' | 'delivered' | 'unknown' | 'canceled' | 'unavailable';
   deliveryBlocker?: 'credential_unavailable';
 };
-type ResultFile = { path: string; callId: string };
 type ActivityResult = {
   activityId: string; executionId: string; text: string; delivery: 'available'; files: ResultFile[];
 };
@@ -136,6 +137,9 @@ type Activity = {
   grantedLinkedActivityIds?: string[];
   retained?: object;
   routing?: ActivityRouting;
+  acknowledgedAt?: string;
+  acknowledgedExecutionId?: string;
+  closedAt?: string;
 };
 type StoredOperation = {
   method: string; fingerprint: string; receipt: Operation; reply: object;
@@ -169,13 +173,22 @@ export type ProductProfile = {
 type ProductActor = { conversationId: string } | { activityId: string };
 type LiveExecution = {
   owner: ProductActor;
+  binding: SessionBinding;
   session: ProductSession;
   offset: number;
   partial: string | null;
   files: ResultFile[];
+  stopRequested?: boolean;
+  progressCalls?: Set<string>;
+  skillExecutionFailed?: boolean;
   learningToolUsed?: boolean;
 };
 type AnswerWaiter = { resolve: (answer: { text: string; materials: Material[] }) => void };
+type ApprovalWaiter = { request: SkillApprovalRequest; resolve: (state: SkillApprovalRequest['state']) => void };
+type ActiveCall = { actor: ProductActor; bot: Bot; executionId: string; run: LiveExecution };
+type SkillGrantScope = Pick<SkillApproval, 'grantKey' | 'ownerBotId' | 'source' | 'skillId' | 'approvalDigest' | 'permissionsDigest'> &
+  { workspace: string; credentialRefs: string[] };
+type PreparedSkill = { bundle: SkillBundle; grant: SkillGrantScope; source: SkillSource; permissions: SkillPermissions };
 
 function fingerprint(parameters: object): string {
   return createHash('sha256').update(canonicalJSON(parameters)).digest('hex');
@@ -223,6 +236,18 @@ const modelInspectionPage = { cursor: inspectionPage.cursor, limit: inspectionPa
 const traceToolParams = Type.Object({ activity_id: id, execution_id: Type.Optional(id), ...modelInspectionPage }, strictTool);
 const readToolParams = Type.Object({ conversation_id: id, ...modelInspectionPage, tail: Type.Optional(Type.Boolean()) }, strictTool);
 const searchToolParams = Type.Object({ conversation_id: id, ...modelInspectionPage, query: Type.String() }, strictTool);
+const modelActivityList = Type.Object({ states: Type.Optional(Type.Array(activityStateSchema, { maxItems: 6, uniqueItems: true })), ...modelInspectionPage }, strictTool);
+const modelActivityGet = Type.Object({ activity_id: id, max_bytes: inspectionPage.maxBytes }, strictTool);
+const lineNumber = Type.Integer({ minimum: 1, maximum: Number.MAX_SAFE_INTEGER });
+const resultRead = Type.Object({ activity_id: id, execution_id: id, start_line: Type.Optional(lineNumber), end_line: Type.Optional(lineNumber),
+  byte_offset: Type.Optional(Type.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER })), cursor: inspectionPage.cursor,
+  max_bytes: inspectionPage.maxBytes }, strictTool);
+const progressCounter = Type.Integer({ minimum: 1, maximum: 1000 });
+const progressInput = Type.Object({ stage: Type.String({ minLength: 1, maxLength: 160 }), step: Type.Optional(progressCounter),
+  total_steps: Type.Optional(progressCounter) }, strictTool);
+const configuredProgressInterval = Number(process.env.NAGI_PROGRESS_MIN_INTERVAL_MS ?? 2000);
+const progressInterval = Number.isSafeInteger(configuredProgressInterval) && configuredProgressInterval >= 0 ? configuredProgressInterval : 2000;
+const approvalWaitMs = 15 * 60 * 1000;
 const delegateInput = Type.Object({ goal: id, key: id,
   assignee_id: Type.Optional(Type.String()), requirements: Type.Optional(Type.Array(Type.String())),
   files: Type.Optional(Type.Array(Type.String(), { maxItems: 16 })), linked_activity_ids: Type.Optional(Type.Array(id)),
@@ -271,6 +296,7 @@ function architectResult(bot: Bot) {
 
 export class Product {
   private readonly storage: ProductSQLite;
+  private overflow?: ActivityOverflow;
   private readonly skills: BotSkills;
   private readonly sandbox: SkillSandbox;
   private readonly installationId: string;
@@ -289,6 +315,8 @@ export class Product {
   private readonly active = new Map<string, LiveExecution>();
   private readonly sessions = new Map<string, { session: ProductSession; instructions: string; mcpSignature: string }>();
   private readonly waiters = new Map<string, AnswerWaiter>();
+  private readonly approvalWaiters = new Map<string, ApprovalWaiter>();
+  private readonly escalating = new Set<string>();
   private readonly pendingTraceUpdates = new Map<string, TraceUpdate>();
   private traceUpdateTimer?: ReturnType<typeof globalThis.setImmediate>;
 
@@ -303,6 +331,7 @@ export class Product {
       this.profile = this.storage.open(paths, this.credentials, this.installationId);
       this.effectiveRevision = this.profile.appliedRevision;
       this.recoverInterruptedWork();
+      this.overflow = new ActivityOverflow(stateDir);
     } catch (error) {
       this.close();
       throw error;
@@ -339,22 +368,26 @@ export class Product {
   close(): void {
     this.closing = true;
     this.flushTraceUpdates();
+    this.overflow?.close();
     if (!this.storageClosed) {
       this.storage.close();
       this.storageClosed = true;
     }
   }
 
-  async drainChildren(): Promise<void> { await Promise.all([this.mcp.shutdown(), this.sandbox.shutdown()]); }
+  async drainChildren(): Promise<void> {
+    this.closing = true;
+    await Promise.all([this.mcp.shutdown(), this.sandbox.shutdown()]);
+  }
 
   killChildrenOnExit(): void { this.mcp.killOnExit(); this.sandbox.killOnExit(); }
 
   private commit<T>(mutate: (candidate: ProductProfile) => T, skillWrite?: SkillWrite, mcpWrite?: McpVaultWrite, approval?: SkillApprovalChange,
-    routing?: RoutingWrite): T {
+    routing?: RoutingWrite, control?: ActivityControlWrite): T {
     const candidate = structuredClone(this.profile);
     const result = mutate(candidate);
     let updates: TraceUpdate[];
-    try { updates = this.storage.write(candidate, this.profile, skillWrite, mcpWrite, approval, routing); }
+    try { updates = this.storage.write(candidate, this.profile, skillWrite, mcpWrite, approval, routing, control); }
     catch (error) {
       if (routing?.credentials) {
         this.closing = true;
@@ -576,17 +609,32 @@ export class Product {
     };
   }
 
-  private activityView(activity: Activity) {
+  private activityView(activity: Activity, requests = this.storage.approvalRequests(activity.activityId)) {
+    const progress = this.storage.progress(activity.activityId);
+    const pendingApprovalRequestIds = requests.filter(request => request.state === 'open').map(request => request.requestId);
+    const { acknowledgedAt, acknowledgedExecutionId, closedAt } = activity;
     return {
       activityId: activity.activityId, ownerBotId: activity.ownerBotId, originConversationId: activity.originConversationId,
       revision: activity.revision, state: activity.state, goal: activity.goal,
       openQuestionIds: activity.questions.filter(question => question.state === 'open').map(question => question.questionId),
+      acknowledgedAt, acknowledgedExecutionId, closedAt,
+      ...(progress ? { latestProgress: { executionId: progress.executionId, progressSeq: progress.progressSeq,
+        stage: progress.stage, step: progress.step, totalSteps: progress.totalSteps, at: progress.at } } : {}),
+      ...(pendingApprovalRequestIds.length ? { pendingApprovalRequestIds } : {}),
     };
   }
 
+  private emitActivity(activity: Activity): void {
+    const requests = this.storage.approvalRequests(activity.activityId);
+    const approvalRequests = requests.filter(row => row.state === 'open' || row.executionId === activity.executionIds.at(-1));
+    this.emit('activity.changed', { ...this.activityView(activity, requests), ...(approvalRequests.length ? { approvalRequests } : {}) });
+  }
+
   private activityDetails(activity: Activity) {
+    const approvalRequests = this.storage.approvalRequests(activity.activityId);
     return {
-      ...this.activityView(activity), ...activity.routing, requirements: activity.requirements, materials: activity.materials, questions: activity.questions,
+      ...this.activityView(activity, approvalRequests), ...activity.routing, requirements: activity.requirements, materials: activity.materials,
+      questions: activity.questions, ...(approvalRequests.length ? { approvalRequests } : {}),
       executions: activity.executionIds.map(id => this.viewExecution(this.execution(this.profile, id))),
     };
   }
@@ -880,6 +928,10 @@ export class Product {
       }
       case 'activity.continue':
         return this.continueActivity(command.params);
+      case 'activity.acknowledge':
+        return this.acknowledgeActivity(command.params);
+      case 'activity.close':
+        return this.closeActivity(command.params);
       case 'activity.stop':
         return this.stop(method, command.params, { activityId: command.params.activityId });
       case 'question.answer':
@@ -935,6 +987,8 @@ export class Product {
         return this.deleteSkill(command.params);
       case 'skill.approve':
         return this.approveSkill(command.params);
+      case 'skill.denyApprovalRequest':
+        return this.denyApprovalRequest(command.params);
       case 'skill.revokeApproval': {
         const { botId, source, skillId, operationId } = command.params;
         this.bot(this.profile, botId);
@@ -983,7 +1037,6 @@ export class Product {
         if (this.active.size) stateError('busy', 'Finish or stop active work before saving a recovery copy');
         const redact = this.engine.redactor(this.credentialKeys());
         const { profile, backup } = this.storage.captureBackup(redact);
-        redactBackupProfile(profile, redact);
         const bundles = this.skills.backup(profile.bots, redact);
         const files = new Map(bundles.map(row => [canonicalJSON([row.ownerBotId, row.skillId]), backupSkillFiles(row)]));
         const skillApprovals = this.storage.skillApprovals().filter(row => {
@@ -992,7 +1045,7 @@ export class Product {
           return bundle && bundleDigest(row.ownerBotId, row.source, row.skillId, bundle) === row.approvalDigest;
         });
         return backupProductProfile(this.paths, profile, { ...backup, ...(bundles.length ? { privateSkillBundles: bundles } : {}),
-          ...(skillApprovals.length ? { skillApprovals } : {}) }, command.params.destination, snapshot => {
+          ...(skillApprovals.length ? { skillApprovals } : {}) }, command.params.destination, redact, snapshot => {
           const vaultKeys = this.vault.keys();
           if (vaultKeys.length && containsMcpSecret(snapshot, projectionRedactor(vaultKeys))) {
             stateError('mcp_secret', 'Remove the MCP credential from saved product data before making a recovery copy');
@@ -1302,7 +1355,7 @@ export class Product {
     if (existing && !this.bindingKey(existing)) stateError('credential_unavailable', 'The captured credential source is unavailable');
     const contextId = existing?.contextId ?? newId();
     const cached = this.sessions.get(contextId);
-    const meta = 'conversationId' in owner ? this.profile.memory?.meta.find(row => row.botId === bot.botId) : undefined;
+    const meta = this.profile.memory?.meta.find(row => row.botId === bot.botId);
     const cold = !cached || !meta?.lastTurnAt || Date.now() - Date.parse(meta.lastTurnAt) >= MEMORY_COLD_TTL_MS;
     const reload = !!(existing && conversationBoundary && (this.skillReload.has(bot.botId) || cold ||
       meta?.forceReload && meta.rulesRevision !== (existing.memoryRulesRevision ?? 0)));
@@ -1323,16 +1376,22 @@ export class Product {
     }
     const apiKey = route ? this.providerKey(route) : this.credentials?.sources[legacy!.sourceId]?.api_key;
     if (!apiKey) stateError('credential_unavailable', 'The captured credential source is unavailable');
-    const profileRevision = existing?.profileRevision ?? bot.profileRevision;
-    const configuredCwd = existing?.cwd || bot.profile.workspace || legacy?.configuration.workingDirectory;
-    const cwd = configuredCwd || join(this.stateDir, 'workspace');
-    if (!configuredCwd) await mkdir(cwd, { recursive: true, mode: 0o700 });
-    const instructions = existing && !reload ? existing.instructions : composeBotSystemPrompt({ profile: bot.profile, cwd, systemKind: bot.systemKind,
-      capturedInstructions: existing?.instructions,
+    const captured = existing ?? (newRoute ? activity?.binding : undefined);
+    const profileRevision = captured?.profileRevision ?? bot.profileRevision;
+    const configuredCwd = bot.profile.workspace || legacy?.configuration.workingDirectory;
+    let cwd = captured?.cwd ?? (configuredCwd || join(this.stateDir, 'workspace'));
+    if (!captured) {
+      if (!configuredCwd) await mkdir(cwd, { recursive: true, mode: 0o700 });
+      try { cwd = realpathSync(cwd); }
+      catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+    }
+    const foreground = activityId === undefined;
+    const instructions = captured && !reload ? captured.instructions : composeBotSystemPrompt({ profile: bot.profile, cwd, foreground,
+      systemKind: foreground ? bot.systemKind : undefined, capturedInstructions: captured?.instructions,
       lastingRules: meta ? formatLastingRulesBlock(this.lastingRules(bot.botId)) : undefined,
-      skills: conversationBoundary ? this.skills.catalog(bot, cwd, this.discoverLocalSkills, this.engine.redactor(this.credentialKeys())) : undefined });
-    const memoryRulesRevision = existing && !reload ? existing.memoryRulesRevision : meta?.rulesRevision;
-    const codingTools = existing ? existing.codingTools : resolveCodingTools(bot.profile);
+      skills: this.skills.catalog(bot, cwd, this.discoverLocalSkills, this.engine.redactor(this.credentialKeys())) });
+    const memoryRulesRevision = captured && !reload ? captured.memoryRulesRevision : meta?.rulesRevision;
+    const codingTools = captured ? captured.codingTools : resolveCodingTools(bot.profile);
     const params: OpenParams = {
       contextId, botId: bot.botId, purpose: activityId ? 'activity' : 'conversation', activityId,
       selectionRevision: profileRevision, cwd, instructions, resumeRef: existing?.sessionRef,
@@ -1411,7 +1470,8 @@ export class Product {
 
   private start(session: ProductSession, owner: ProductActor, execution: StoredExecution): void {
     const executionId = execution.executionId;
-    const current: LiveExecution = { owner, session, offset: 0, partial: '', files: [] };
+    const binding = 'activityId' in owner ? this.activity(this.profile, owner.activityId).binding! : this.conversation(this.profile, owner.conversationId).binding!;
+    const current: LiveExecution = { owner, binding, session, offset: 0, partial: '', files: [] };
     this.active.set(executionId, current);
     const target = { ...owner, executionId, operationId: execution.operationId };
     const guarded = (handler: () => void) => {
@@ -1428,7 +1488,6 @@ export class Product {
       this.emit('execution.textDelta', { ...target, offset, text });
     };
     try {
-      const binding = 'activityId' in owner ? this.activity(this.profile, owner.activityId).binding! : this.conversation(this.profile, owner.conversationId).binding!;
       const sourceId = binding.route?.credentialSourceId ?? this.connection(this.profile, binding.connectionRevision ?? null)?.sourceId;
       session.start(executionId, execution.input, {
         authorizeProvider: () => {
@@ -1494,17 +1553,23 @@ export class Product {
       const question = this.question(current, id);
       question.delivery = isError ? 'unknown' : 'delivered';
       question.revision++;
-      current.state = current.questions.some(item => item.state === 'open' && this.waiters.has(item.questionId)) ? 'waitingForAnswer' : 'running';
+      current.state = this.hasActivityWaiter(current) ? 'waitingForAnswer' : 'running';
       current.revision++;
       return current;
     });
-    this.emit('activity.changed', this.activityView(updated));
+    this.emitActivity(updated);
   }
 
   private settle(owner: ProductActor, executionId: string, state: 'completed' | 'failed' | 'interrupted', text: string, error?: string): void {
     const settledAt = new Date().toISOString();
     const active = this.active.get(executionId);
     const redact = this.engine.redactor(this.credentialKeys());
+    const requests = 'activityId' in owner ? this.storage.approvalRequests(owner.activityId) : [];
+    const abandoned = requests.filter(request => request.executionId === executionId && request.state === 'open')
+      .map(request => ({ ...request, revision: request.revision + 1, state: state === 'interrupted' ? 'cancelled' as const : 'expired' as const }));
+    const blocked = requests.some(request => request.state === 'open' || request.executionId === executionId &&
+      (request.state === 'denied' || request.state === 'expired' || request.state === 'cancelled')) ||
+      'activityId' in owner && (active?.skillExecutionFailed || this.storage.uncertainMutation(executionId));
     const run = this.commit(candidate => {
       const execution = this.execution(candidate, executionId)!;
       execution.state = state;
@@ -1512,13 +1577,15 @@ export class Product {
       execution.error = error && redact(error);
       if ('activityId' in owner) {
         const activity = this.activity(candidate, owner.activityId);
-        activity.state = 'needsAttention';
         for (const question of activity.questions) {
           if (question.executionId === executionId && question.delivery === 'dispatching') {
             question.delivery = state === 'interrupted' ? 'canceled' : 'unknown';
             question.revision++;
           }
         }
+        const unresolved = activity.questions.some(question => question.state === 'open' || question.delivery === 'unknown' ||
+          question.executionId === executionId && question.delivery === 'saved');
+        activity.state = state === 'completed' && !unresolved && !blocked ? 'completed' : 'needsAttention';
         activity.revision++;
         activity.results.push({ activityId: owner.activityId, executionId, text: redact(text), delivery: 'available', files: active?.files ?? [] });
       } else {
@@ -1527,15 +1594,18 @@ export class Product {
         this.memoryMeta(this.ensureMemory(candidate), conversation.botId).lastTurnAt = settledAt;
       }
       return execution;
-    });
+    }, undefined, undefined, undefined, undefined, { approvalRequests: abandoned });
+    for (const request of abandoned) this.approvalWaiters.get(request.requestId)?.resolve(request.state);
     this.active.delete(executionId);
     this.emit('execution.settled', { ...owner, executionId, operationId: run.operationId, revision: run.revision, state, ...(run.error ? { error: run.error } : {}) });
     if ('activityId' in owner) {
       const activity = this.activity(this.profile, owner.activityId);
-      this.emit('activity.changed', this.activityView(activity));
+      this.emitActivity(activity);
       if (state === 'failed') this.escalateActivity(activity, run);
     }
-    if (state === 'completed') this.consolidateMemory(owner, run, text, settledAt, active?.learningToolUsed);
+    if (state === 'completed' && (!('activityId' in owner) || this.activity(this.profile, owner.activityId).state === 'completed')) {
+      this.consolidateMemory(owner, run, text, settledAt, active?.learningToolUsed);
+    }
   }
 
   private escalateActivity(activity: Activity, run: StoredExecution): void {
@@ -1545,10 +1615,11 @@ export class Product {
     const role = activity.routing?.kind === 'coding' ? 'coding' : 'reasoning';
     const route = this.selectRoute(role, true);
     if (!route) return;
+    this.escalating.add(activity.activityId);
     void this.startActivity('activity.continue', { activityId: activity.activityId, expectedRevision: activity.revision,
       operationId: `${run.executionId}:escalation`, text: '', materials: run.input.materials }, { route, prior: run }).catch(error => {
       if (!(error instanceof RequestError)) this.engine.disconnect();
-    });
+    }).finally(() => this.escalating.delete(activity.activityId));
   }
 
   private consolidateMemory(owner: ProductActor, run: StoredExecution, result: string, settledAt: string, learningToolUsed?: boolean): void {
@@ -1625,6 +1696,7 @@ export class Product {
     const active = this.active.get(params.executionId);
     if (!active || canonicalJSON(active.owner) !== canonicalJSON(owner)) stateError('not_found', 'The target execution is not active');
     const result = this.change(method, params, owner, () => ({ executionId: params.executionId, cancelRequested: true }));
+    active.stopRequested = true;
     active.session.stop(params.executionId);
     return result;
   }
@@ -1718,31 +1790,239 @@ export class Product {
     return inspectConversation(transcript, conversationId, params, this.engine.redactor(this.credentialKeys()), normalized);
   }
 
+  private modelActivitySummary(activity: Activity, redact: (text: string) => string, requests = this.storage.approvalRequests(activity.activityId)) {
+    const { openQuestionIds, pendingApprovalRequestIds, goal, ...summary } = this.activityView(activity, requests);
+    return { ...projectionJSON(summary, redact) as typeof summary, goal: clipEncodedText(redact(goal), 192),
+      openQuestionCount: openQuestionIds.length, pendingApprovalRequestCount: pendingApprovalRequestIds?.length ?? 0 };
+  }
+
+  private listModelActivities(botId: string, input: Static<typeof modelActivityList>) {
+    const { states, limit = 20, max_bytes: budget = 8192 } = input;
+    const items = this.visibleActivities(botId).filter(row => !states?.length || states.includes(row.state));
+    const membership = fingerprint(items.map(row => row.activityId));
+    const scope = cursorScope('activity_list', botId, membership, undefined, canonicalJSON([...states ?? []].sort()));
+    const cursor = decodeCursor(input.cursor, scope, false);
+    if (cursor && (cursor.high !== items.length || cursor.highEdge || cursor.positionEdge)) return invalidCursor();
+    const redact = this.engine.redactor(this.credentialKeys());
+    const response = { items: [] as object[], nextCursor: null as string | null };
+    let itemBytes = 0;
+    for (let position = cursor?.position ?? 0; position < items.length && response.items.length < limit; position++) {
+      const item = this.modelActivitySummary(items[position], redact);
+      const nextCursor = position + 1 < items.length ? encodeCursor(scope, { high: items.length, position: position + 1, tail: false }) : null;
+      const bytes = encodedBytes(item) + Number(response.items.length > 0);
+      if (encodedBytes({ items: [], nextCursor }) + itemBytes + bytes > budget) {
+        if (!response.items.length) return oversizedEntry();
+        break;
+      }
+      response.items.push(item);
+      itemBytes += bytes;
+      response.nextCursor = nextCursor;
+    }
+    return response;
+  }
+
+  private previewActivityText(executionId: string, text: string, files: ResultFile[], budget: number, canRead: boolean, redact: (text: string) => string) {
+    const preview = { executionId, totalBytes: Buffer.byteLength(text), totalLines: resultLineCount(text), textPreview: '', truncated: true,
+      files: [] as ResultFile[], totalFiles: files.length, filesTruncated: files.length > 0, overflowPath: undefined as string | undefined };
+    let remaining = budget - encodedBytes(preview) - 2;
+    if (remaining < 0) return;
+    for (const file of files.slice(0, 4)) {
+      const projected = projectionJSON(file, redact) as ResultFile;
+      const bytes = encodedBytes(projected) + Number(preview.files.length > 0);
+      if (bytes > Math.min(512, remaining)) break;
+      remaining -= bytes;
+      preview.files.push(projected);
+    }
+    preview.filesTruncated = preview.files.length < files.length;
+    preview.textPreview = clipEncodedText(text, Math.min(resultPreviewBytes, remaining));
+    if (preview.textPreview !== text) {
+      const path = this.overflow!.write(executionId, text);
+      const bytes = encodedBytes({ overflowPath: path }) - 1;
+      if (canRead && bytes <= remaining && redact(path) === path) {
+        preview.overflowPath = path;
+        preview.textPreview = clipEncodedText(text, Math.min(resultPreviewBytes, remaining - bytes));
+      }
+    }
+    preview.truncated = preview.textPreview !== text;
+    return preview;
+  }
+
+  private inspectActivity(actor: { conversationId: string }, activityId: string, budget = 8192) {
+    const activity = this.scopedActivity(activityId, undefined, actor);
+    const { run } = this.activeCall(actor);
+    const canRead = (run.binding.codingTools ?? this.engine.defaultCodingTools).includes('read');
+    const redact = this.engine.redactor(this.credentialKeys());
+    const requests = this.storage.approvalRequests(activityId);
+    const { kind, complexity, constraints = [] } = activity.routing ?? {};
+    const counts = { constraints: constraints.length, requirements: activity.requirements.length, materials: activity.materials.length,
+      questions: activity.questions.length, approvalRequests: requests.length, executions: activity.executionIds.length, results: activity.results.length };
+    const response = { ...this.modelActivitySummary(activity, redact, requests), kind, complexity, counts, truncated: true,
+      constraints: [], requirements: [], materials: [], questions: [], approvalRequests: [], executions: [], results: [] };
+    let remaining = budget - encodedBytes(response) - 1;
+    if (remaining < 0) return oversizedEntry();
+    const text = (value: string, limit = 160) => clipEncodedText(redact(value), limit);
+    const exact = <T>(value: T) => projectionJSON(value, redact) as T;
+    const append = <T>(key: keyof typeof counts, items: readonly T[], project: (item: T, bytes: number) => object | string | undefined,
+      allowance: number, reverse = false) => {
+      const output = response[key] as unknown[];
+      for (let index = 0; index < items.length && index < 20; index++) {
+        const available = Math.min(allowance, remaining) - Number(output.length > 0);
+        if (available < 1) break;
+        const row = project(items[reverse ? items.length - 1 - index : index], available);
+        if (row === undefined) break;
+        const bytes = encodedBytes(row);
+        if (bytes > available) break;
+        output.push(row);
+        remaining -= bytes + Number(output.length > 1);
+        allowance -= bytes + Number(output.length > 1);
+      }
+    };
+    append('results', activity.results, ({ executionId, text: result, files }, bytes) =>
+      this.previewActivityText(exact({ executionId }).executionId, redact(result), files, bytes, canRead, redact), Math.ceil(remaining * 0.65), true);
+    append('executions', activity.executionIds, (executionId, bytes) => {
+      const execution = this.viewExecution(this.execution(this.profile, executionId));
+      if (!execution) return;
+      const { partial, error, ...fields } = execution;
+      const base = { ...exact(fields), ...(error ? { error: text(error) } : {}) };
+      const partialPreview = partial && this.previewActivityText(base.executionId, redact(partial), [], bytes - encodedBytes(base) - 11, canRead, redact);
+      return { ...base, ...(partialPreview ? { partial: partialPreview } : partial === null ? { partial: null } : {}) };
+    }, Math.ceil(remaining / 2), true);
+    const perCollection = Math.max(192, Math.floor(remaining / 5));
+    append('approvalRequests', requests, row => exact({ requestId: row.requestId, executionId: row.executionId,
+      source: row.source, skillId: row.skillId, script: row.script, revision: row.revision, state: row.state }), perCollection, true);
+    append('questions', activity.questions, ({ questionId, executionId, state, revision, delivery, text: question }) =>
+      ({ ...exact({ questionId, executionId, state, revision, delivery }), text: text(question) }), perCollection, true);
+    append('materials', activity.materials, ({ id, revision, name, text: material }) => {
+      const clean = redact(material);
+      return { ...exact({ id, revision }), name: text(name, 64), text: clipEncodedText(clean, 160), totalBytes: Buffer.byteLength(clean) };
+    }, perCollection);
+    append('requirements', activity.requirements, value => text(value), perCollection);
+    append('constraints', constraints, value => text(value), remaining);
+    return response;
+  }
+
+  private async readModelActivityResult(actor: ProductActor, { activity_id: activityId, execution_id: executionId, ...params }: Static<typeof resultRead>) {
+    const activity = this.scopedActivity(activityId, executionId, actor);
+    const execution = this.execution(this.profile, executionId);
+    if (!execution || live(execution) || unknown(execution)) {
+      if (params.cursor !== undefined) return invalidCursor();
+      return stateError('result_unavailable', 'This execution has no verified result');
+    }
+    const local = activity.results.find(row => row.executionId === executionId);
+    let source: ActivityResult;
+    try { source = local ?? await this.readImportedActivityResult(activity, executionId); }
+    catch (error) {
+      if (!(error instanceof RequestError) || !['history_unavailable', 'invalid_resume', 'binding_conflict', 'result_unavailable'].includes(error.code)) throw error;
+      if (params.cursor !== undefined) return invalidCursor();
+      return stateError('result_unavailable', 'This execution has no verified result');
+    }
+    this.scopedActivity(activityId, executionId, actor);
+    const result = this.modelProjection(source);
+    const generation = canonicalJSON([this.storage.traceBounds(activityId, executionId).generation, execution.revision,
+      local ? 'settled' : activity.binding?.sessionRef, execution.engineRunId]);
+    return sliceActivityResult(result, generation, params);
+  }
+
   private inspectionTools(actor: ProductActor): ToolDefinition[] {
     const read = <T extends TSchema>(name: string, description: string, parameters: T, action: (input: Static<T>) => object | Promise<object>): ToolDefinition<T> => ({
       name, label: description, description, parameters,
       execute: async (_callId, input) => {
-        try {
-          if (!Value.Check(parameters, input)) stateError('invalid_params', 'Invalid inspection parameters');
-          return toolText(await action(input));
-        } catch (error) {
-          if (!(error instanceof RequestError)) throw error;
-          return toolText({ code: error.code, message: this.engine.cleanMessage(error) }, true);
-        }
+        if (!Value.Check(parameters, input)) stateError('invalid_params', 'Invalid inspection parameters');
+        return toolText(await action(input));
       },
     });
     return [
+      read('activity_result_read', 'Read an authorized settled Activity result by line range, UTF-8 byte offset, or cursor.', resultRead,
+        input => this.readModelActivityResult(actor, input)),
       read('activity_trace_read', 'Read committed trace observations for an authorized Activity.', traceToolParams,
         ({ activity_id, execution_id, cursor, limit, max_bytes }) => this.readTrace({ activityId: activity_id, executionId: execution_id, cursor, limit, maxBytes: max_bytes }, actor)),
       read('conversation_read', 'Read submitted turns and captured Materials in an authorized conversation.', readToolParams,
         ({ conversation_id, cursor, limit, max_bytes, tail }) => this.readConversation(actor, conversation_id, { cursor, limit, maxBytes: max_bytes, tail })),
       read('conversation_search', 'Find literal text in submitted turns and captured Materials in an authorized conversation.', searchToolParams,
         ({ conversation_id, cursor, limit, max_bytes, query }) => this.readConversation(actor, conversation_id, { cursor, limit, maxBytes: max_bytes }, query)),
+      ...('conversationId' in actor ? [
+        read('activity_list', 'List visible Activities with a bounded cursor page.', modelActivityList,
+          input => this.listModelActivities(this.conversation(this.profile, actor.conversationId).botId, input)),
+        read('activity_get', 'Read bounded Activity previews. Use activity_result_read for an exact settled result.', modelActivityGet,
+          ({ activity_id, max_bytes }) => this.inspectActivity(actor, activity_id, max_bytes)),
+      ] : []),
     ];
   }
 
   private modelResult(value: unknown): ToolTextResult {
     return toolText(projectionJSON(value, this.engine.redactor(this.credentialKeys())));
+  }
+
+  private activeCall(actor: ProductActor, signal?: AbortSignal): ActiveCall {
+    const activity = 'activityId' in actor ? this.activity(this.profile, actor.activityId) : undefined;
+    const conversation = 'conversationId' in actor ? this.conversation(this.profile, actor.conversationId) : undefined;
+    const bot = this.bot(this.profile, activity?.ownerBotId ?? conversation!.botId);
+    const executionId = activity?.executionIds.at(-1) ?? conversation?.latestExecutionId;
+    const run = executionId && this.active.get(executionId);
+    if (!executionId || !run || run.stopRequested || signal?.aborted || this.closing || bot.archived ||
+        ('activityId' in actor ? !('activityId' in run.owner) || run.owner.activityId !== actor.activityId :
+          !('conversationId' in run.owner) || run.owner.conversationId !== actor.conversationId || bot.currentConversationId !== actor.conversationId)) {
+      return stateError('scope_denied', 'The actor no longer owns this call');
+    }
+    return { actor, bot, executionId, run };
+  }
+
+  private hasActivityWaiter(activity: Activity, exceptRequestId?: string): boolean {
+    const executionId = activity.executionIds.at(-1);
+    return activity.questions.some(row => row.executionId === executionId && row.state === 'open' && this.waiters.has(row.questionId)) ||
+      [...this.approvalWaiters.values()].some(({ request }) => request.activityId === activity.activityId &&
+        request.executionId === executionId && request.requestId !== exceptRequestId);
+  }
+
+  private reportProgress(actor: { activityId: string }, callId: string, input: Static<typeof progressInput>, signal?: AbortSignal) {
+    const stage = input.stage.trim();
+    if (!stage || Buffer.byteLength(stage) > 160 || (input.total_steps ?? 1000) < (input.step ?? 1)) {
+      return stateError('invalid_params', 'Invalid activity progress');
+    }
+    const { executionId, run } = this.activeCall(actor, signal);
+    const calls = run.progressCalls ??= new Set();
+    if (calls.has(callId)) return { recorded: false };
+    const redact = this.engine.redactor(this.credentialKeys());
+    const cleanStage = clipUTF8(redact(stage).trim(), 160, '').trimEnd() || '…';
+    const row = this.storage.recordProgress({ ...actor, executionId, callId, stage: cleanStage, step: input.step,
+      totalSteps: input.total_steps, at: new Date().toISOString() }, progressInterval);
+    calls.add(callId);
+    if (row) this.emitActivity(this.activity(this.profile, actor.activityId));
+    return row ? { recorded: true, progressSeq: row.progressSeq, stage: row.stage } : { recorded: false };
+  }
+
+  private acknowledgeActivity(params: ProductParams<'activity.acknowledge'>) {
+    const { activityId, executionId, expectedRevision } = params;
+    return this.changeActivityLifecycle('activity.acknowledge', params, activity => {
+      const current = this.execution(this.profile, activity.executionIds.at(-1));
+      if (!current || current.executionId !== executionId || live(current)) stateError('execution_conflict', 'The execution is no longer the latest settled execution');
+      requireRevision(activity.revision, expectedRevision);
+      activity.acknowledgedAt = new Date().toISOString();
+      activity.acknowledgedExecutionId = executionId;
+    });
+  }
+
+  private closeActivity(params: ProductParams<'activity.close'>) {
+    return this.changeActivityLifecycle('activity.close', params, activity => {
+      if (live(this.execution(this.profile, activity.executionIds.at(-1))) || activity.state === 'running' ||
+          activity.state === 'waitingForAnswer' || this.escalating.has(activity.activityId)) stateError('busy', 'The activity is still active');
+      requireRevision(activity.revision, params.expectedRevision);
+      activity.closedAt ??= new Date().toISOString();
+    });
+  }
+
+  private changeActivityLifecycle(method: string, params: { activityId: string; operationId: string }, mutate: (activity: Activity) => void) {
+    const prior = this.sameOperation(method, params.operationId, params);
+    if (prior) return prior.reply;
+    const target = { activityId: params.activityId };
+    const result = this.change(method, params, target, candidate => {
+      const activity = this.activity(candidate, params.activityId);
+      mutate(activity);
+      activity.revision++;
+      return this.activityView(activity);
+    });
+    this.emitActivity(this.activity(this.profile, params.activityId));
+    return result;
   }
 
   private async continueActivity(params: { activityId: string; operationId: string; expectedRevision: number; text: string; materials: Material[] }) {
@@ -1758,7 +2038,7 @@ export class Product {
     requireRevision(activity.revision, params.expectedRevision);
     const bot = this.bot(this.profile, activity.ownerBotId);
     const last = this.execution(this.profile, activity.executionIds.at(-1));
-    if (bot.archived || live(last) || unknown(last)) stateError('busy', 'The activity is not ready to continue');
+    if (bot.archived || live(last) || unknown(last) || !escalation && this.escalating.has(activity.activityId)) stateError('busy', 'The activity is not ready to continue');
     this.capacity();
     const input = escalation?.prior.input ?? { revision: activity.revision,
       text: [activity.goal, ...activity.requirements, ...activity.routing?.constraints ?? [], params.text,
@@ -1781,12 +2061,15 @@ export class Product {
       current.binding = binding;
       current.revision++;
       current.state = 'running';
+      delete current.acknowledgedAt;
+      delete current.acknowledgedExecutionId;
+      delete current.closedAt;
       candidate.executions.push(execution);
       this.record(candidate, method, params, receipt, receipt);
     }, undefined, undefined, undefined, escalation ? { escalation: { activityId: owner.activityId, priorExecutionId: escalation.prior.executionId,
       escalatedExecutionId: execution.executionId, fromRole: 'utility', toRole: escalation.route.role === 'coding' ? 'coding' : 'reasoning',
-      at: new Date().toISOString() } } : undefined);
-    this.emit('activity.changed', this.activityView(this.activity(this.profile, owner.activityId)));
+      at: new Date().toISOString() } } : undefined, { resetProgress: owner.activityId });
+    this.emitActivity(this.activity(this.profile, owner.activityId));
     this.start(session, owner, execution);
     return receipt;
   }
@@ -1815,7 +2098,7 @@ export class Product {
       activity.revision++;
       return { ...target, executionId, revision: question.revision, answerSaved: true, delivery: question.delivery, ...(deliveryBlocker ? { deliveryBlocker } : {}) };
     });
-    this.emit('activity.changed', this.activityView(this.activity(this.profile, activityId)));
+    this.emitActivity(this.activity(this.profile, activityId));
     if (waiter) {
       this.waiters.delete(questionId);
       if (deliveryBlocker) this.active.get(executionId)?.session.stop(executionId);
@@ -1840,7 +2123,7 @@ export class Product {
     return bot;
   }
 
-  private skillGrant(botId: string, source: SkillSource, skillId: string, bundle: SkillBundle, cwd: string) {
+  private skillGrant(botId: string, source: SkillSource, skillId: string, bundle: SkillBundle, cwd: string): SkillGrantScope {
     const workspace = cwd ? realpathSync(cwd) : '';
     const approvalDigest = bundleDigest(botId, source, skillId, bundle.files);
     const permissions = Object.values(bundle.manifest.scripts).map(script => script.permissions);
@@ -1927,75 +2210,246 @@ export class Product {
     return result;
   }
 
-  private approveSkill(params: ProductParams<'skill.approve'>): object {
-    const { botId, source, skillId, approvalDigest, permissionsDigest, operationId } = params;
-    const prior = this.sameOperation('skill.approve', operationId, params);
-    if (prior) return prior.reply;
-    const owner = this.skillOwner(source, botId, true)!;
-    const cwd = this.skillWorkspace(owner);
-    this.skillForBot(owner, skillId, cwd, source);
-    const bundle = this.skills.bundle({ botId, source, skillId }, cwd, this.discoverLocalSkills);
+  private executableSkill(owner: Bot, skillId: string, cwd: string, source?: SkillSource) {
+    const skill = this.skillForBot(owner, skillId, cwd, source);
+    const bundle = this.skills.bundle({ botId: owner.botId, source: skill.source, skillId }, cwd, this.discoverLocalSkills);
     if (!bundle) return stateError('invalid_skill', 'The skill has no executable scripts');
     checkedSkillFiles(bundle.files, this.engine.redactor(this.credentialKeys()));
-    const { workspace, ...grant } = this.skillGrant(botId, source, skillId, bundle, cwd);
-    if (grant.approvalDigest !== approvalDigest || permissionsDigest !== undefined && grant.permissionsDigest !== permissionsDigest) {
-      return stateError('approval_required', 'The skill or its permissions changed after review');
-    }
-    for (const { permissions } of Object.values(bundle.manifest.scripts)) {
-      for (const ref of permissions.credentialRefs ?? []) {
-        const [, id] = ref.split(':');
-        const server = this.profile.mcpServers?.find(row => row.serverId === id);
-        const origin = server?.transport === 'http' ? canonicalSkillOrigin(new URL(server.url).origin) : undefined;
-        if (!origin || !(permissions.networkOrigins ?? []).some(value => canonicalSkillOrigin(value) === origin)) {
-          return stateError('invalid_skill', 'Each credential reference requires its server origin in the script permissions');
-        }
-        this.skillCredential(origin, [ref]);
-      }
-    }
-    const row: SkillApproval = { ...grant, mode: 'user_approved', installationId: this.installationId, approvedAt: new Date().toISOString() };
-    return this.changeApproval('skill.approve', params, { botId, source, skillId, change: 'approved' }, { put: row }, operationId);
+    return { skill, bundle };
   }
 
-  private async runSkill(test: boolean, owner: Bot, { skill_id: skillId, source, script, input }: { skill_id: string; source?: SkillSource;
-      script: string; input?: unknown }, operationId: string, signal?: AbortSignal): Promise<object> {
-    const node = await this.sandbox.prepare();
-    const currentOwner = this.bot(this.profile, owner.botId);
-    if (currentOwner.archived || signal?.aborted) return stateError('scope_denied', 'The Bot no longer owns this skill call');
-    const cwd = this.skillWorkspace(currentOwner);
-    const skill = this.skillForBot(currentOwner, skillId, cwd, source);
-    const bundle = this.skills.bundle({ botId: owner.botId, source: skill.source, skillId }, cwd, this.discoverLocalSkills);
-    if (!bundle || !Object.hasOwn(bundle.manifest.scripts, script)) return stateError('invalid_skill', 'The script is not declared by the skill');
+  private verifySkillCredentials(permissions: SkillPermissions): void {
+    for (const ref of permissions.credentialRefs ?? []) {
+      const [, id] = ref.split(':');
+      const server = this.profile.mcpServers?.find(row => row.serverId === id);
+      const origin = server?.transport === 'http' ? canonicalSkillOrigin(new URL(server.url).origin) : undefined;
+      if (!origin || !(permissions.networkOrigins ?? []).some(value => canonicalSkillOrigin(value) === origin)) {
+        return stateError('invalid_skill', 'Each credential reference requires its server origin in the script permissions');
+      }
+      this.skillCredential(origin, [ref]);
+    }
+  }
+
+  private approveSkill(params: ProductParams<'skill.approve'>): object {
+    const method = 'skill.approve';
+    const { botId, source, skillId, approvalDigest, permissionsDigest, operationId, requestId, requestRevision } = params;
+    const prior = this.sameOperation(method, operationId, params);
+    if (prior) return prior.reply;
+    if ((requestId === undefined) !== (requestRevision === undefined) || requestId && !permissionsDigest) {
+      return stateError('invalid_params', 'An approval request requires its exact revision and both digests');
+    }
+    const request = requestId ? this.openApprovalRequest(requestId, requestRevision!) : undefined;
+    if (request && (request.botId !== botId || request.source !== source || request.skillId !== skillId ||
+        request.approvalDigest !== approvalDigest || request.permissionsDigest !== permissionsDigest ||
+        params.canonicalWorkspace !== undefined && request.canonicalWorkspace !== params.canonicalWorkspace ||
+        params.installationId !== undefined && request.installationId !== params.installationId)) {
+      return stateError('approval_required', 'The approval does not match the reviewed request');
+    }
+    const target = request ? { activityId: request.activityId } : { botId };
+    const expire = (reason: string): never => {
+      const error = { code: 'approval_expired', message: reason };
+      this.updateApprovalRequest(request!, 'expired', reason, undefined, (candidate, expired) => {
+        this.record(candidate, method, params, { operationId, state: 'rejected', target, result: expired }, expired);
+        candidate.operations.at(-1)!.replyError = error;
+      });
+      return stateError(error.code, error.message);
+    };
+    let run: LiveExecution | undefined;
+    if (request) {
+      run = this.active.get(request.executionId);
+      if (!this.approvalWaiters.has(request.requestId) || !run || run.stopRequested || request.installationId !== this.installationId) {
+        return expire('The skill call is no longer waiting');
+      }
+    }
+    const approved = (): SkillApproval => {
+      const owner = this.skillOwner(source, botId, true)!;
+      const cwd = run ? this.capturedSkillWorkspace(run) : this.skillWorkspace(owner);
+      if (run && !this.bindingKey(run.binding)) stateError('credential_unavailable', 'The captured credential source is unavailable');
+      const { bundle } = this.executableSkill(owner, skillId, cwd, source);
+      const { workspace, ...grant } = this.skillGrant(botId, source, skillId, bundle, cwd);
+      if (grant.approvalDigest !== approvalDigest || permissionsDigest !== undefined && grant.permissionsDigest !== permissionsDigest ||
+          workspace !== (request?.canonicalWorkspace ?? params.canonicalWorkspace ?? workspace) ||
+          params.installationId !== undefined && params.installationId !== this.installationId) {
+        return stateError('approval_required', 'The skill or its permissions changed after review');
+      }
+      for (const { permissions } of Object.values(bundle.manifest.scripts)) this.verifySkillCredentials(permissions);
+      return { ...grant, mode: 'user_approved', installationId: this.installationId, approvedAt: new Date().toISOString() };
+    };
+    const result: SkillChange = { botId, source, skillId, change: 'approved' };
+    if (!request) return this.changeApproval(method, params, result, { put: approved() }, operationId);
+    let grant: SkillApproval;
+    try { grant = approved(); }
+    catch (error) {
+      if (!(error instanceof RequestError)) throw error;
+      return expire(this.engine.cleanMessage(error));
+    }
+    const updated = this.updateApprovalRequest(request, 'approved', undefined, { put: grant }, (candidate, row) => {
+      const reply = { ...result, request: row };
+      this.record(candidate, method, params, { operationId, state: 'accepted', target, result: reply }, reply);
+    });
+    this.emit('skill.changed', result);
+    return { ...result, request: updated };
+  }
+
+  private openApprovalRequest(requestId: string, revision: number): SkillApprovalRequest {
+    const request = this.storage.approvalRequest(requestId) ?? stateError('not_found', 'The skill approval request does not exist');
+    requireRevision(request.revision, revision);
+    if (request.state !== 'open') return stateError('approval_request_conflict', 'The skill approval request has been resolved');
+    return request;
+  }
+
+  private denyApprovalRequest(params: ProductParams<'skill.denyApprovalRequest'>): object {
+    const method = 'skill.denyApprovalRequest';
+    const { requestId, requestRevision, operationId, reason } = params;
+    const prior = this.sameOperation(method, operationId, params);
+    if (prior) return prior.reply;
+    const request = this.openApprovalRequest(requestId, requestRevision);
     const redact = this.engine.redactor(this.credentialKeys());
-    checkedSkillFiles(bundle.files, redact);
+    return this.updateApprovalRequest(request, 'denied', reason && clipUTF8(redact(reason), 512), undefined, (candidate, row) => {
+      this.record(candidate, method, params, { operationId, state: 'accepted', target: { activityId: row.activityId }, result: row }, row);
+    });
+  }
+
+  private updateApprovalRequest(request: SkillApprovalRequest, state: Exclude<SkillApprovalRequest['state'], 'open'>, reason?: string,
+    grant?: SkillApprovalChange, record?: (candidate: ProductProfile, row: SkillApprovalRequest) => void): SkillApprovalRequest {
+    const row = { ...request, state, revision: request.revision + 1, ...(reason ? { reason } : {}) };
+    const activity = this.commit(candidate => {
+      const activity = this.activity(candidate, request.activityId);
+      if (activity.executionIds.at(-1) === request.executionId && live(this.execution(candidate, request.executionId))) {
+        activity.state = this.hasActivityWaiter(activity, request.requestId) ? 'waitingForAnswer' : 'running';
+      }
+      activity.revision++;
+      record?.(candidate, row);
+      return activity;
+    }, undefined, undefined, grant, undefined, { approvalRequests: [row] });
+    this.approvalWaiters.get(request.requestId)?.resolve(state);
+    this.emitActivity(activity);
+    return row;
+  }
+
+  private async waitForSkillApproval(request: SkillApprovalRequest, signal?: AbortSignal) {
+    const { requestId, activityId } = request;
+    if (this.storage.approvalRequest(requestId)) return stateError('approval_request_conflict', 'This skill call already has an approval request');
+    const { promise, resolve, reject } = Promise.withResolvers<SkillApprovalRequest['state']>();
+    const activity = this.commit(candidate => {
+      const activity = this.activity(candidate, activityId);
+      activity.state = 'waitingForAnswer';
+      activity.revision++;
+      return activity;
+    }, undefined, undefined, undefined, undefined, { approvalRequests: [request] });
+    const finish = (state: 'cancelled' | 'expired') => {
+      try { this.updateApprovalRequest(request, state); }
+      catch (error) { reject(error); }
+    };
+    const abort = () => finish('cancelled');
+    const timer = setTimeout(() => finish('expired'), approvalWaitMs);
+    timer.unref();
+    this.approvalWaiters.set(requestId, { request, resolve: state => {
+      this.approvalWaiters.delete(requestId);
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', abort);
+      resolve(state);
+    } });
+    signal?.addEventListener('abort', abort, { once: true });
+    this.emitActivity(activity);
+    try { return await promise; }
+    finally {
+      this.approvalWaiters.delete(requestId);
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', abort);
+    }
+  }
+
+  private capturedSkillWorkspace(run: LiveExecution): string {
+    const { cwd } = run.session;
+    let canonical: string;
+    try { canonical = realpathSync(cwd); }
+    catch { return stateError('working_directory_unavailable', 'The captured working directory is no longer available'); }
+    if (canonical !== cwd) return stateError('scope_denied', 'The captured working directory changed');
+    return cwd;
+  }
+
+  private skillCall(actor: ProductActor, signal?: AbortSignal): ActiveCall {
+    const call = this.activeCall(actor, signal);
+    if (!this.bindingKey(call.run.binding)) stateError('credential_unavailable', 'The captured credential source is unavailable');
+    return call;
+  }
+
+  private async runSkill(test: boolean, call: ActiveCall, { skill_id: skillId, source, script, input }: { skill_id: string; source?: SkillSource;
+      script: string; input?: unknown }, callId: string, operationId: string, signal?: AbortSignal): Promise<object> {
+    const node = await this.sandbox.prepare();
+    const { actor, executionId, run } = call;
+    const cwd = this.capturedSkillWorkspace(run);
+    const currentOwner = () => {
+      const current = this.skillCall(actor, signal);
+      if (current.run !== run) return stateError('scope_denied', 'The execution no longer owns this skill call');
+      this.capturedSkillWorkspace(run);
+      return current.bot;
+    };
+    const botId = currentOwner().botId;
+    const requestId = `${executionId}:${callId}`;
+    if (!test && 'activityId' in actor && this.storage.approvalRequest(requestId)) {
+      return stateError('approval_request_conflict', 'This skill call already has an approval request');
+    }
+    const redact = this.engine.redactor(this.credentialKeys());
     if (input !== undefined && (frameBytes({ input }) > 65536 || containsMcpSecret(input, redact))) {
       return stateError('invalid_params', 'The skill input exceeds its limit or contains credentials');
     }
-    const { workspace, ...grant } = this.skillGrant(owner.botId, skill.source, skillId, bundle, cwd);
-    const permissions = bundle.manifest.scripts[script].permissions;
-    const accepted = this.storage.skillApproval(grant.grantKey);
-    const result = await this.sandbox.run(node, { botId: owner.botId, source: skill.source, skillId }, bundle, script, input, workspace,
-      test ? {} : permissions, digest => {
+    const prepare = (source?: SkillSource): PreparedSkill => {
+      const { skill, bundle } = this.executableSkill(currentOwner(), skillId, cwd, source);
+      if (!Object.hasOwn(bundle.manifest.scripts, script)) return stateError('invalid_skill', 'The script is not declared by the skill');
+      const grant = this.skillGrant(botId, skill.source, skillId, bundle, cwd);
+      return { bundle, grant, source: skill.source, permissions: bundle.manifest.scripts[script].permissions };
+    };
+    const initial = prepare(source);
+    let missingGrant = false;
+    const invoke = ({ bundle, grant, source, permissions }: PreparedSkill) => this.sandbox.run(node, { botId, source, skillId },
+      bundle, script, input, grant.workspace, test ? {} : permissions, digest => {
+        currentOwner();
         if (digest !== grant.approvalDigest) return stateError('invalid_skill', 'The staged skill bytes changed');
-        if (!test && !(accepted?.mode === 'user_approved' && accepted.installationId === this.installationId ||
+        if (test) return;
+        const accepted = this.storage.skillApproval(grant.grantKey);
+        if (!(accepted?.mode === 'user_approved' && accepted.installationId === this.installationId ||
             accepted?.mode === 'pure_compute_tested' && pureSkill(permissions) && accepted.testedScripts?.includes(script))) {
+          missingGrant = true;
           throw new RequestError('approval_required', 'Review and approve the current skill permissions before execution', undefined,
-            { approvalDigest: digest, permissions, permissionsDigest: grant.permissionsDigest, canonicalWorkspace: workspace });
+            { approvalDigest: digest, permissions, permissionsDigest: grant.permissionsDigest, canonicalWorkspace: grant.workspace });
         }
+        this.verifySkillCredentials(permissions);
       }, (origin, refs) => {
-        if (this.storage.skillApproval(grant.grantKey)?.mode !== 'user_approved') return stateError('approval_required', 'The approved credential binding changed');
+        currentOwner();
+        const accepted = this.storage.skillApproval(grant.grantKey);
+        if (accepted?.mode !== 'user_approved' || accepted.installationId !== this.installationId) {
+          return stateError('approval_required', 'The approved credential binding changed');
+        }
         return this.skillCredential(origin, refs);
       }, redact, signal);
-    if (test && result.ok && pureSkill(permissions) && !this.closing && !signal?.aborted) {
-      const fresh = this.skills.bundle({ botId: owner.botId, source: skill.source, skillId }, cwd, this.discoverLocalSkills);
-      const latest = this.bot(this.profile, owner.botId);
+    let result;
+    try { result = await invoke(initial); }
+    catch (error) {
+      if (!missingGrant || !('activityId' in actor)) throw error;
+      currentOwner();
+      const { approvalDigest, permissionsDigest, workspace } = initial.grant;
+      const request: SkillApprovalRequest = { ...actor, executionId, callId, botId, requestId, source: initial.source,
+        skillId, script, approvalDigest, permissionsDigest, canonicalWorkspace: workspace, installationId: this.installationId,
+        permissions: initial.permissions, revision: 1, state: 'open', createdAt: new Date().toISOString() };
+      const state = await this.waitForSkillApproval(request, signal);
+      if (state !== 'approved') return stateError(`approval_${state}`, 'The user approval was not granted for this skill call');
+      const fresh = prepare(initial.source);
+      if (fresh.grant.grantKey !== initial.grant.grantKey || fresh.grant.workspace !== workspace) {
+        return stateError('approval_required', 'The skill or its permissions changed after review');
+      }
+      result = await invoke(fresh);
+    }
+    if (test && result.ok && pureSkill(initial.permissions) && !this.closing && !signal?.aborted && !run.stopRequested) {
+      const fresh = prepare(initial.source);
+      const { workspace, credentialRefs, ...grant } = fresh.grant;
       const prior = this.storage.skillApproval(grant.grantKey);
-      if (fresh && !latest.archived && this.skillWorkspace(latest) === cwd && bundleDigest(owner.botId, skill.source, skillId, fresh.files) === grant.approvalDigest &&
-          prior?.mode !== 'user_approved') {
+      if (grant.grantKey === initial.grant.grantKey && prior?.mode !== 'user_approved') {
         const testedScripts = [...new Set([...(prior?.testedScripts ?? []), script])].sort();
-        const { credentialRefs, ...pureGrant } = grant;
-        const row: SkillApproval = { ...pureGrant, mode: 'pure_compute_tested', installationId: this.installationId, testedScripts, approvedAt: new Date().toISOString() };
-        this.changeApproval('skill_test', { botId: owner.botId, skillId, script, approvalDigest: grant.approvalDigest },
-          { botId: owner.botId, source: skill.source, skillId, change: 'tested' }, { put: row }, operationId);
+        const row: SkillApproval = { ...grant, mode: 'pure_compute_tested', installationId: this.installationId, testedScripts, approvedAt: new Date().toISOString() };
+        this.changeApproval('skill_test', { botId, skillId, script, approvalDigest: grant.approvalDigest },
+          { botId, source: initial.source, skillId, change: 'tested' }, { put: row }, operationId);
       }
     }
     return result;
@@ -2051,97 +2505,112 @@ export class Product {
     return mounts;
   }
 
-  private skillTools(conversationId: string): ToolDefinition[] {
+  private skillTools(actor: ProductActor): ToolDefinition[] {
     const list = Type.Object({}, strictTool);
     const read = Type.Object({ skill_id: Type.String(), source: Type.Optional(skillSource) }, strictTool);
     const save = Type.Object({ skill_id: Type.String(), ...skillText, ...skillExecutable }, strictTool);
     const execute = Type.Object({ skill_id: Type.String(), source: Type.Optional(skillSource), script: skillScriptName, input: Type.Optional(Type.Unknown()) }, strictTool);
     const remove = Type.Object({ skill_id: Type.String() }, strictTool);
     const tool = <T extends TSchema>(name: string, description: string, parameters: T,
-      handler: (input: Static<T>, owner: Bot, workspace: string, operationId: string, signal?: AbortSignal) => object | Promise<object>): ToolDefinition<T> => ({
+      handler: (input: Static<T>, call: ActiveCall, operationId: string, callId: string, signal?: AbortSignal) => object | Promise<object>): ToolDefinition<T> => ({
       name, label: description, description, parameters,
       execute: async (callId, args, signal) => {
-        const conversation = this.conversation(this.profile, conversationId);
-        const owner = this.bot(this.profile, conversation.botId);
-        const executionId = conversation.latestExecutionId;
-        if (signal?.aborted || !executionId || !this.active.has(executionId)) stateError('scope_denied', 'The conversation no longer owns this call');
+        const call = this.skillCall(actor, signal);
         if (!Value.Check(parameters, args)) stateError('invalid_params', 'Invalid skill parameters');
         if ('skill_id' in args && !Value.Check(skillID, args.skill_id)) stateError('scope_denied', 'The skill is outside the authorized scope');
-        return this.modelResult(await handler(args, owner, conversation.binding?.cwd ?? this.skillWorkspace(owner), `${executionId}:${name}:${callId}`, signal));
+        return this.modelResult(await handler(args, call, `${call.executionId}:${name}:${callId}`, callId, signal));
       },
     });
-    return [
-      tool('skill_list', 'List mounted text skills and private skills for this Bot.', list, (_, owner, cwd) => ({
-        mounted: this.skills.mounted(owner, cwd, this.discoverLocalSkills).map(row => row.skill ? { ...row, skill: { ...row.skill, ...this.skillReview(owner, row.skill, cwd) } } : row),
-        private: this.skills.private(owner.botId).map(skill => ({ ...skill, ...this.skillReview(owner, skill, cwd) })),
-      })),
-      tool('skill_read', 'Read an authorized mounted or private SKILL.md on demand.', read, ({ skill_id, source }, owner, cwd) => {
+    const tools: ToolDefinition[] = [
+      tool('skill_list', 'List mounted text skills and private skills for this Bot.', list, (_, { bot: owner, run }) => {
+        const cwd = this.capturedSkillWorkspace(run);
+        return {
+          mounted: this.skills.mounted(owner, cwd, this.discoverLocalSkills).map(row => row.skill ? { ...row, skill: { ...row.skill, ...this.skillReview(owner, row.skill, cwd) } } : row),
+          private: this.skills.private(owner.botId).map(skill => ({ ...skill, ...this.skillReview(owner, skill, cwd) })),
+        };
+      }),
+      tool('skill_read', 'Read an authorized mounted or private SKILL.md on demand.', read, ({ skill_id, source }, { bot: owner, run }) => {
+        const cwd = this.capturedSkillWorkspace(run);
         const skill = this.skillForBot(owner, skill_id, cwd, source);
         return { skill: { ...skill, ...this.skillReview(owner, skill, cwd, true) } };
       }),
-      tool('skill_save', 'Save a private SKILL.md and optional executable bundle. Privileged scripts require user approval.', save, ({ skill_id, ...text }, owner, _cwd, operationId) =>
-        this.saveSkill({ ...text, source: 'private', botId: owner.botId, skillId: skill_id, operationId })),
-      tool('skill_delete', 'Delete a private skill of this Bot when the user explicitly requests it.', remove, ({ skill_id }, owner, _cwd, operationId) =>
-        this.deleteSkill({ source: 'private', botId: owner.botId, skillId: skill_id, operationId }, true)),
       tool('skill_test', 'Test a declared skill script without workspace or HTTP access. Pure scripts activate only after a successful test.', execute,
-        (args, owner, _, operationId, signal) => this.runSkill(true, owner, args, operationId, signal)),
+        (args, call, operationId, callId, signal) => this.runSkill(true, call, args, callId, operationId, signal)),
       tool('skill_exec', 'Run a declared skill script with its verified approval.', execute,
-        (args, owner, _, operationId, signal) => this.runSkill(false, owner, args, operationId, signal)),
+        async (args, call, operationId, callId, signal) => {
+          try {
+            const result = await this.runSkill(false, call, args, callId, operationId, signal);
+            if ('activityId' in actor && 'ok' in result && result.ok === false) call.run.skillExecutionFailed = true;
+            return result;
+          } catch (error) {
+            if ('activityId' in actor) call.run.skillExecutionFailed = true;
+            throw error;
+          }
+        }),
     ];
+    if ('conversationId' in actor) tools.push(
+      tool('skill_save', 'Save a private SKILL.md and optional executable bundle. Privileged scripts require user approval.', save, ({ skill_id, ...text }, { bot }, operationId) =>
+        this.saveSkill({ ...text, source: 'private', botId: bot.botId, skillId: skill_id, operationId })),
+      tool('skill_delete', 'Delete a private skill of this Bot when the user explicitly requests it.', remove, ({ skill_id }, { bot }, operationId) =>
+        this.deleteSkill({ source: 'private', botId: bot.botId, skillId: skill_id, operationId }, true)),
+    );
+    return tools;
   }
 
   private tools(owner: ProductActor): ToolDefinition[] {
-    const inspection = this.inspectionTools(owner);
+    const tools = [...this.inspectionTools(owner), ...this.memoryTools(owner), ...this.skillTools(owner)];
     if ('activityId' in owner) {
       const question = Type.Object({ text: id }, strictTool);
-      return [{
+      tools.push({
         name: 'activity_ask', label: 'Ask about the activity', description: 'Ask the user for information needed to finish this activity.',
         parameters: question,
         execute: async (callId, input, signal) => {
-          if (!Value.Check(question, input)) return toolText('A question requires text', true);
+          if (!Value.Check(question, input)) return stateError('invalid_params', 'A question requires text');
           return this.waitForAnswer(owner.activityId, callId, input.text, signal);
         },
-      }, ...inspection];
+      }, {
+        name: 'activity_progress', label: 'Report progress', description: 'Report a short stage and optional step for this execution.',
+        parameters: progressInput,
+        execute: async (callId, input, signal) => {
+          if (!Value.Check(progressInput, input)) return stateError('invalid_params', 'Invalid activity progress');
+          return this.modelResult(this.reportProgress(owner, callId, input, signal));
+        },
+      });
+    } else {
+      const list = Type.Object({}, strictTool);
+      const change = Type.Object({ activity_id: id, action: Type.Union([Type.Literal('stop'), Type.Literal('add_supplement'), Type.Literal('resume'), Type.Literal('close')]),
+        text: Type.Optional(Type.String()), expected_revision: Type.Optional(Type.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER })) }, strictTool);
+      const botId = this.conversation(this.profile, owner.conversationId).botId;
+      if (this.bot(this.profile, botId).systemKind === SYSTEM_KIND_BOT_ARCHITECT) tools.push(...this.architectTools(owner.conversationId));
+      tools.push(
+        { name: 'bot_list', label: 'List Bots', description: 'Find the exact ID of an available Bot before an explicit handoff.', parameters: list,
+          execute: async () => this.modelResult(this.profile.bots.filter(bot => !bot.archived && bot.botId !== botId)
+            .map(({ botId, profile }) => ({ bot_id: botId, name: profile.name, role: profile.role }))) },
+        { name: 'activity_delegate', label: 'Delegate activity', description: 'Start independently tracked work only when the user assigns it. Use kind, complexity and constraints to describe the work. Link only directly accessible Activity IDs.', parameters: delegateInput,
+          execute: async (_callId, input) => {
+            if (!Value.Check(delegateInput, input)) return toolText('A stable key and a goal are required', true);
+            return this.modelResult(await this.delegate(owner.conversationId, input));
+          } },
+        { name: 'activity_action', label: 'Act on activity', description: 'Stop, continue, or close the exact Activity requested by the user. Closing requires its observed expected_revision.', parameters: change,
+          execute: async (callId, input, signal) => {
+            if (!Value.Check(change, input)) return stateError('invalid_params', 'An activity ID and action are required');
+            const { executionId: callerExecution } = this.activeCall(owner, signal);
+            const activity = this.scopedActivity(input.activity_id, undefined, owner);
+            const executionId = activity.executionIds.at(-1);
+            const operationId = `${callerExecution}:${callId}`;
+            if (input.action === 'stop') {
+              if (!executionId) return toolText('The activity has no execution', true);
+              return this.modelResult(this.stop('activity.stop', { operationId, executionId }, { activityId: activity.activityId }));
+            }
+            if (input.action === 'close') {
+              if (input.expected_revision === undefined) return stateError('invalid_params', 'Closing an Activity requires its observed revision');
+              return this.modelResult(this.closeActivity({ operationId, activityId: activity.activityId, expectedRevision: input.expected_revision }));
+            }
+            return this.modelResult(await this.continueActivity({ operationId, activityId: activity.activityId, expectedRevision: activity.revision,
+              text: input.text ?? '', materials: this.execution(this.profile, callerExecution)?.input.materials ?? [] }));
+          } },
+      );
     }
-    const list = Type.Object({}, strictTool);
-    const target = Type.Object({ activity_id: id }, strictTool);
-    const change = Type.Object({ activity_id: id, action: Type.Union([Type.Literal('stop'), Type.Literal('add_supplement'), Type.Literal('resume')]), text: Type.Optional(Type.String()) }, strictTool);
-    const botId = () => this.conversation(this.profile, owner.conversationId).botId;
-    const architect = this.bot(this.profile, botId()).systemKind === SYSTEM_KIND_BOT_ARCHITECT;
-    const tools: ToolDefinition[] = [
-      ...inspection,
-      { name: 'bot_list', label: 'List Bots', description: 'Find the exact ID of an available Bot before an explicit handoff.', parameters: list,
-        execute: async () => this.modelResult(this.profile.bots.filter(bot => !bot.archived && bot.botId !== botId()).map(({ botId, profile }) => ({ bot_id: botId, name: profile.name, role: profile.role }))) },
-      { name: 'activity_list', label: 'List activities', description: 'Read activity state for this Bot.', parameters: list,
-        execute: async () => this.modelResult(this.visibleActivities(botId()).map(activity => this.activityView(activity))) },
-      { name: 'activity_get', label: 'Read activity', description: 'Read the exact activity, questions, and execution results.', parameters: target,
-        execute: async (_callId, input) => {
-          if (!Value.Check(target, input)) return toolText('An activity ID is required', true);
-          const activity = this.scopedActivity(input.activity_id, undefined, owner);
-          return this.modelResult({ ...this.activityDetails(activity), results: activity.results });
-        } },
-      { name: 'activity_delegate', label: 'Delegate activity', description: 'Start independently tracked work only when the user assigns it. Use kind, complexity and constraints to describe the work. Link only directly accessible Activity IDs.', parameters: delegateInput,
-        execute: async (_callId, input) => {
-          if (!Value.Check(delegateInput, input)) return toolText('A stable key and a goal are required', true);
-          return this.modelResult(await this.delegate(owner.conversationId, input));
-        } },
-      { name: 'activity_action', label: 'Act on activity', description: 'Stop or continue the exact activity requested by the user.', parameters: change,
-        execute: async (callId, input) => {
-          if (!Value.Check(change, input)) return toolText('An activity ID and action are required', true);
-          const activity = this.scopedActivity(input.activity_id, undefined, owner);
-          const executionId = activity.executionIds.at(-1);
-          const source = this.conversation(this.profile, owner.conversationId);
-          const operationId = `${source.latestExecutionId}:${callId}`;
-          if (input.action === 'stop') {
-            if (!executionId) return toolText('The activity has no execution', true);
-            return this.modelResult(this.stop('activity.stop', { operationId, executionId }, { activityId: activity.activityId }));
-          }
-          return this.modelResult(await this.continueActivity({ operationId, activityId: activity.activityId, expectedRevision: activity.revision,
-            text: input.text ?? '', materials: this.execution(this.profile, source.latestExecutionId)?.input.materials ?? [] }));
-        } },
-    ];
-    if (architect) tools.push(...this.architectTools(owner.conversationId));
-    tools.push(...this.memoryTools(owner.conversationId), ...this.skillTools(owner.conversationId));
     return tools.sort((a, b) => a.name.localeCompare(b.name)).map(tool => ({ ...tool, execute: async (...args) => {
       try { return await tool.execute(...args); }
       catch (error) {
@@ -2151,7 +2620,7 @@ export class Product {
     } }));
   }
 
-  private memoryTools(conversationId: string): ToolDefinition[] {
+  private memoryTools(actor: ProductActor): ToolDefinition[] {
     const none = Type.Object({}, { additionalProperties: false });
     const ruleId = Type.Object({ rule_id: requiredText }, { additionalProperties: false });
     const rule = Type.Object({ text: memoryText }, { additionalProperties: false });
@@ -2163,20 +2632,15 @@ export class Product {
       action: (args: Static<T>, botId: string, executionId: string, operationId: string) => unknown): ToolDefinition<T> => ({
       name, label: description, description, parameters,
       execute: async (callId, args, signal) => {
-        try {
-          const source = this.current(this.profile, conversationId);
-          const id = source.latestExecutionId;
-          const run = id && this.active.get(id);
-          if (signal?.aborted || !id || !run) stateError('scope_denied', 'The conversation no longer owns this call');
-          if (name === 'memory_save_rule' || name === 'memory_propose_learning') run.learningToolUsed = true;
-          if (!Value.Check(parameters, args)) stateError('memory_invalid', 'Invalid memory tool parameters');
-          return this.modelResult(action(args, source.botId, id, `${id}:${name}:${callId}`));
-        } catch (error) {
-          if (!(error instanceof RequestError)) throw error;
-          return toolText({ code: error.code, message: this.engine.cleanMessage(error) }, true);
-        }
+        const { bot, executionId, run } = this.activeCall(actor, signal);
+        if (name === 'memory_save_rule' || name === 'memory_propose_learning') run.learningToolUsed = true;
+        if (!Value.Check(parameters, args)) stateError('memory_invalid', 'Invalid memory tool parameters');
+        return this.modelResult(action(args, bot.botId, executionId, `${executionId}:${name}:${callId}`));
       },
     });
+    const searchLogs = scoped('memory_search_log', 'Search the dates, summaries, and tags of this Bot’s work log.', search, (input, botId) =>
+      ({ items: this.searchWorkLogs({ botId, query: input.query, dateFrom: input.date_from, dateTo: input.date_to, limit: input.limit }) }));
+    if ('activityId' in actor) return [searchLogs];
     return [
       scoped('memory_forget_rule', 'Remove a lasting rule by ID when the user asks to forget it.', ruleId, (input, botId, _id, operationId) =>
         this.changeMemory('memory_forget_rule', { ...input, botId, operationId }, memory => this.removeRule(memory, botId, input.rule_id, false))),
@@ -2190,8 +2654,7 @@ export class Product {
           this.proposeLearning(memory, bot, input.text, input.reason, now, id))),
       scoped('memory_save_rule', 'Save a lasting rule when the user explicitly asks you to remember it.', rule, (input, botId, _id, operationId) =>
         this.changeMemory('memory_save_rule', { ...input, botId, operationId }, (memory, bot, now) => this.saveRule(memory, bot, input.text, 'explicit', now))),
-      scoped('memory_search_log', 'Search the dates, summaries, and tags of this Bot’s work log.', search, (input, botId) =>
-        ({ items: this.searchWorkLogs({ botId, query: input.query, dateFrom: input.date_from, dateTo: input.date_to, limit: input.limit }) })),
+      searchLogs,
     ];
   }
 
@@ -2281,14 +2744,12 @@ export class Product {
       const target = { activityId: activity.activityId };
       this.record(candidate, 'activity.delegate', params, { operationId, state: 'accepted', target }, target);
     });
-    this.emit('activity.changed', this.activityView(activity));
+    this.emitActivity(activity);
     return this.startActivity('activity.continue', { activityId: activity.activityId, operationId: `${operationId}:execution`, expectedRevision: 1, text: '', materials: activity.materials });
   }
 
   private async waitForAnswer(activityId: string, callId: string, text: string, signal?: AbortSignal) {
-    const activity = this.activity(this.profile, activityId);
-    const executionId = activity.executionIds.at(-1);
-    if (!executionId || !this.active.has(executionId) || signal?.aborted) return toolText('The execution is no longer active', true);
+    const { executionId } = this.activeCall({ activityId }, signal);
     const questionId = `${executionId}:${callId}`;
     const { promise, resolve, reject } = Promise.withResolvers<ToolTextResult>();
     const abort = () => {
@@ -2311,14 +2772,14 @@ export class Product {
           question.revision++;
           current.revision++;
         });
-        this.emit('activity.changed', this.activityView(this.activity(this.profile, activityId)));
+        this.emitActivity(this.activity(this.profile, activityId));
         resolve(this.modelResult(answer));
       } catch (error) {
         reject(error);
       }
     } });
     signal?.addEventListener('abort', abort, { once: true });
-    this.emit('activity.changed', this.activityView(this.activity(this.profile, activityId)));
+    this.emitActivity(this.activity(this.profile, activityId));
     return promise;
   }
 }
