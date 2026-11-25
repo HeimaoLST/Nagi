@@ -171,8 +171,8 @@ console.log(JSON.stringify({
   hasAll: ['bot_memory_rules', 'bot_work_logs', 'bot_work_logs_fts', 'bot_pending_learnings', 'bot_memory_meta'].every(n => tables.includes(n)),
 }));
 `)
-	if !strings.Contains(schemaState, `"version":9`) || !strings.Contains(schemaState, `"fk":0`) || !strings.Contains(schemaState, `"hasAll":true`) {
-		t.Fatalf("v2->v9 SQLite migration state = %s", schemaState)
+	if !strings.Contains(schemaState, `"version":10`) || !strings.Contains(schemaState, `"fk":0`) || !strings.Contains(schemaState, `"hasAll":true`) {
+		t.Fatalf("v2->v10 SQLite migration state = %s", schemaState)
 	}
 
 	const configuredKey = "custom-provider-key-xyz98765"
@@ -288,7 +288,7 @@ console.log(JSON.stringify({
 	runNodeSQLite(t, opts.NodePath, dbPath, `
 const { DatabaseSync } = require('node:sqlite');
 const db = new DatabaseSync(process.argv[1]);
-db.exec('PRAGMA user_version = 10');
+db.exec('PRAGMA user_version = 11');
 db.close();
 `)
 	badClient, startErr := pi.StartProduct(opts)
@@ -297,7 +297,7 @@ db.close();
 		if readyErr == nil {
 			_, openErr := badClient.Open(ctx, []int{pi.ProductVersion})
 			if openErr == nil {
-				t.Fatal("worker admitted SQLite user_version=10")
+				t.Fatal("worker admitted SQLite user_version=11")
 			}
 		}
 		_, _ = badClient.Wait(ctx)

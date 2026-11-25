@@ -4,7 +4,8 @@ import { basename, dirname, join } from 'node:path';
 import { DatabaseSync, type SQLOutputValue } from 'node:sqlite';
 import { decodeProductProfile, importProductSnapshot, privateCredentialKeys, readPrivateConnection, type PrivateConnection, type ProductBackup, type ProductProfilePaths } from './product-profile.js';
 import type { ProductProfile } from './product.js';
-import { canonicalJSON, maxAutomaticAnswers, maxTriageAttempts, RequestError, type ActivityProgressRecord, type TriageAccounting,
+import { canonicalJSON, maxAutomaticAnswers, maxTriageAttempts, RequestError, type ActivityProgressRecord, type ActivitySteer,
+  type ActivitySteerPayload, type ActivitySteerRecord, type TriageAccounting,
   type SkillApproval, type SkillApprovalRequest, type SkillSource, type TraceItem } from './protocol.js';
 import { type BotMemory, type BotWorkLog } from './bot-memory.js';
 import { maxExecutionTraces, maxProfileTraces, traceDetail, redactTrace, type TraceBackup, type TraceObservation, type TraceUpdate } from './product-trace.js';
@@ -143,6 +144,14 @@ const MIGRATIONS = [`
     activity_id TEXT PRIMARY KEY REFERENCES activities(activity_id) DEFERRABLE INITIALLY DEFERRED,
     attempts_used INTEGER NOT NULL DEFAULT 0, auto_answers_used INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL
   ) STRICT;
+`, `
+  CREATE TABLE activity_steers (
+    steer_id TEXT PRIMARY KEY, activity_id TEXT NOT NULL REFERENCES activities(activity_id) DEFERRABLE INITIALLY DEFERRED,
+    execution_id TEXT NOT NULL REFERENCES executions(execution_id) DEFERRABLE INITIALLY DEFERRED, operation_id TEXT NOT NULL UNIQUE,
+    fingerprint TEXT NOT NULL, state TEXT NOT NULL CHECK (state IN ('pending_enqueue','queued','delivered','not_applied','unknown','rejected')),
+    revision INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, settled_at TEXT, payload_json TEXT NOT NULL
+  ) STRICT;
+  CREATE INDEX activity_steers_by_execution ON activity_steers (activity_id, execution_id, created_at);
 `];
 const LATEST_SCHEMA_VERSION = MIGRATIONS.length;
 
@@ -156,7 +165,8 @@ const sha256 = (data: Buffer) => createHash('sha256').update(data).digest('hex')
 
 export type RoutingWrite = { credentials?: PrivateConnection; escalation?: Escalation };
 export type ActivityControlWrite = { approvalRequests?: SkillApprovalRequest[]; resetProgress?: string;
-  triage?: { activityId: string; kind: 'attempt' | 'answer'; at: string } };
+  triage?: { activityId: string; kind: 'attempt' | 'answer'; at: string };
+  admitSteer?: ActivitySteerRecord; steerUpdates?: ActivitySteer[] };
 function snapshotFor(profile: ProductProfile): Snapshot {
   const data = Buffer.from(canonicalJSON(profile) + '\n');
   return { data, digest: sha256(data) };
@@ -241,11 +251,12 @@ export class ProductSQLite {
         const { profile, backup } = importProductSnapshot(snapshot && JSON.parse(snapshot.data.toString('utf8')), credentials);
         mirror = this.stageMirror(snapshotFor(profile), previous);
         this.db.exec('DELETE FROM execution_mutation_admissions; DELETE FROM execution_admission_coverage; DELETE FROM activity_escalations;');
-        this.db.exec('DELETE FROM activity_progress; DELETE FROM skill_approval_requests; DELETE FROM activity_triage_accounting;');
+        this.db.exec('DELETE FROM activity_progress; DELETE FROM skill_approval_requests; DELETE FROM activity_triage_accounting; DELETE FROM activity_steers;');
         this.replaceProfile(profile, mirror);
         for (const row of backup?.activityProgress ?? []) this.putProgress(row);
         for (const row of backup?.skillApprovalRequests ?? []) this.putApprovalRequest(row);
         for (const row of backup?.activityEscalations ?? []) this.putEscalation(row);
+        for (const row of backup?.activitySteers ?? []) this.insertSteer(row);
         const triage = this.db.prepare('INSERT INTO activity_triage_accounting VALUES (?, ?, ?, ?)');
         for (const row of backup?.triageAccounting ?? []) triage.run(encode(row.activityId), row.attemptsUsed, row.autoAnswersUsed, row.updatedAt);
         const redact = projectionRedactor([...privateCredentialKeys(credentials), ...this.vault?.keys() ?? []]);
@@ -319,6 +330,8 @@ export class ProductSQLite {
         if (approval) this.changeApproval(approval);
         if (control?.resetProgress) this.db.prepare('DELETE FROM activity_progress WHERE activity_id = ?').run(encode(control.resetProgress));
         for (const row of control?.approvalRequests ?? []) this.putApprovalRequest(row);
+        if (control?.admitSteer) this.insertSteer(control.admitSteer);
+        for (const row of control?.steerUpdates ?? []) this.transitionSteer(row);
         const workspaces = new Map(before.bots.map(bot => [bot.botId, bot.profile.workspace]));
         for (const bot of profile.bots) {
           if (workspaces.has(bot.botId) && workspaces.get(bot.botId) !== bot.profile.workspace) this.changeApproval({ workspaceBotId: bot.botId });
@@ -450,11 +463,49 @@ export class ProductSQLite {
       .run(encode(row.requestId), encode(row.activityId), encode(row.executionId), encode(row.callId), encode(row.botId), row.revision, row.state, encode(row));
   }
 
+  private steerReceipt(row: Record<string, SQLOutputValue>): ActivitySteer {
+    return { steerId: decode(row.steer_id) as string, operationId: decode(row.operation_id) as string,
+      activityId: decode(row.activity_id) as string, executionId: decode(row.execution_id) as string,
+      state: row.state as ActivitySteer['state'], revision: Number(row.revision), ...(typeof row.reason === 'string' ? { reason: row.reason } : {}) };
+  }
+
+  steerStatus(steerId?: string, operationId?: string): ActivitySteer | undefined {
+    const row = this.db.prepare(`SELECT steer_id, operation_id, activity_id, execution_id, state, revision, payload_json ->> '$.reason' AS reason
+      FROM activity_steers WHERE ${steerId !== undefined ? 'steer_id' : 'operation_id'} = ?`).get(encode(steerId ?? operationId));
+    if (row) return this.steerReceipt(row);
+  }
+
+  activitySteers(activityId: string): ActivitySteer[] {
+    return this.db.prepare(`SELECT steer_id, operation_id, activity_id, execution_id, state, revision, payload_json ->> '$.reason' AS reason
+      FROM activity_steers WHERE activity_id = ? ORDER BY rowid`).all(encode(activityId)).map(row => this.steerReceipt(row));
+  }
+
+  pendingSteers(): ActivitySteer[] {
+    return this.db.prepare(`SELECT steer_id, operation_id, activity_id, execution_id, state, revision FROM activity_steers
+      WHERE state IN ('pending_enqueue', 'queued') ORDER BY rowid`).all().map(row => this.steerReceipt(row));
+  }
+
+  private insertSteer(row: ActivitySteerRecord): void {
+    this.db.prepare('INSERT INTO activity_steers VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(encode(row.steerId), encode(row.activityId),
+      encode(row.executionId), encode(row.operationId), row.fingerprint, row.state, row.revision, row.createdAt, row.settledAt ?? null,
+      encode({ ...row.payload, reason: row.reason }));
+  }
+
+  private transitionSteer(row: ActivitySteer): void {
+    const settledAt = row.state === 'queued' ? null : new Date().toISOString();
+    const result = this.db.prepare(`UPDATE activity_steers SET state = ?, revision = ?, settled_at = ?,
+      payload_json = CASE WHEN ? IS NULL THEN payload_json ELSE json_set(payload_json, '$.reason', ?) END
+      WHERE steer_id = ? AND revision = ? AND state IN ('pending_enqueue','queued')`)
+      .run(row.state, row.revision, settledAt, row.reason ?? null, row.reason ?? null, encode(row.steerId), row.revision - 1);
+    if (result.changes !== 1) throw new RequestError('profile_unavailable', 'The steering receipt changed in another worker');
+  }
+
   canEscalate(activityId: string, executionId: string): boolean {
     return !!this.db.prepare(`SELECT 1 FROM executions e JOIN execution_admission_coverage c USING (execution_id)
       JOIN activity_trace_meta t USING (execution_id)
       WHERE e.execution_id = ? AND t.activity_id = ? AND t.coverage = 'recorded' AND e.state IN ('failed', 'interrupted')
       AND NOT EXISTS (SELECT 1 FROM execution_mutation_admissions WHERE execution_id = e.execution_id AND tool_class = 'mutating')
+      AND NOT EXISTS (SELECT 1 FROM activity_steers WHERE activity_id = t.activity_id AND execution_id = e.execution_id AND state != 'rejected')
       AND NOT EXISTS (SELECT 1 FROM activity_escalations WHERE activity_id = t.activity_id)`).get(encode(executionId), encode(activityId));
   }
 
@@ -534,9 +585,14 @@ export class ProductSQLite {
       const triageAccounting = this.db.prepare('SELECT * FROM activity_triage_accounting ORDER BY activity_id').all().map(row => ({
         activityId: decode(row.activity_id) as string, attemptsUsed: Number(row.attempts_used), autoAnswersUsed: Number(row.auto_answers_used), updatedAt: String(row.updated_at),
       }));
+      const activitySteers: ActivitySteerRecord[] = this.db.prepare('SELECT * FROM activity_steers ORDER BY rowid').all().map(row => {
+        const { reason, ...payload } = decode(row.payload_json) as ActivitySteerPayload & { reason?: string };
+        return { ...this.steerReceipt(row), reason, payload, fingerprint: String(row.fingerprint), createdAt: String(row.created_at),
+          settledAt: row.settled_at === null ? undefined : String(row.settled_at) };
+      });
       return { profile, backup: { version: 1, traces, traceCoverage, ...(activityEscalations.length ? { activityEscalations } : {}),
         ...(activityProgress.length ? { activityProgress } : {}), ...(skillApprovalRequests.length ? { skillApprovalRequests } : {}),
-        ...(triageAccounting.length ? { triageAccounting } : {}) } };
+        ...(triageAccounting.length ? { triageAccounting } : {}), ...(activitySteers.length ? { activitySteers } : {}) } };
     });
   }
 
