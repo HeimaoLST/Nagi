@@ -63,6 +63,7 @@ class Worker {
       defaults: definitions.slice(0, 4).map(({ name }) => name) };
     this.knownBuiltinTools = new Set(this.builtinCatalog.supported.map(tool => tool.name));
     if (productPaths) this.product = new Product(productPaths, {
+      defaultCodingTools: this.builtinCatalog.defaults,
       open: (params, tools) => this.openProductSession(params, tools),
       refreshSession: (params, tools) => this.refreshProductSession(params, tools),
       conversationPreview: (sessionRef, contextId, botId) => this.conversationPreview(sessionRef, contextId, botId),
@@ -448,6 +449,7 @@ class Worker {
     if (!sessionRef) throw new RequestError('history_unavailable', 'Pi did not provide a session reference');
     return {
       sessionRef,
+      cwd: context.binding.cwd,
       start: (executionId, draft, observers) => this.startProductRun(context, executionId, draft, observers),
       stop: executionId => {
         if (context.active?.id !== executionId) throw new RequestError('not_found', 'The execution has settled');

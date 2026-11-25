@@ -526,7 +526,7 @@ func TestPiAppConcurrentActivities(t *testing.T) {
 		return item != nil && len(item.Executions) == 1 && item.Executions[0].State == "completed" && len(item.Questions) == 1 && item.Questions[0].Delivery == "delivered" && !cedar.activity.reading
 	})
 	completedRun := get(w, firstID)
-	if completedRun.State != "needsAttention" {
+	if completedRun.State != "completed" {
 		t.Fatalf("completed execution changed activity to %q", completedRun.State)
 	}
 	answered := completedRun.Questions[0]
@@ -606,7 +606,7 @@ func TestPiAppConcurrentActivities(t *testing.T) {
 	}
 	readCurrentFile(reopened, cedar, revisedContent)
 	firstAfter, secondAfter := get(reopened, firstID), get(reopened, secondID)
-	if firstAfter.State != "needsAttention" || len(firstAfter.Questions) != 1 || !reflect.DeepEqual(firstAfter.Questions[0], answered) ||
+	if firstAfter.State != "completed" || len(firstAfter.Questions) != 1 || !reflect.DeepEqual(firstAfter.Questions[0], answered) ||
 		len(secondAfter.Executions) != 1 || secondAfter.Executions[0].ExecutionID != secondRun || secondAfter.Executions[0].State != "interrupted" {
 		t.Fatal("restart changed the answered question or the stopped execution")
 	}

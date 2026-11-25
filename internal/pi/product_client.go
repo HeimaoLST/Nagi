@@ -38,6 +38,7 @@ type ProductEvent struct {
 	Seq             uint64                       `json:"seq"`
 	Name            string                       `json:"event"`
 	Data            json.RawMessage              `json:"data"`
+	ActivityChanged *ProductActivityChange       `json:"-"`
 	TraceUpdated    *ProductActivityTraceUpdated `json:"-"`
 	SkillChanged    *ProductSkillChange          `json:"-"`
 	McpChanged      *ProductMcpChange            `json:"-"`
@@ -261,24 +262,44 @@ type ProductReceipt struct {
 }
 
 type ProductActivitySummary struct {
-	ActivityID           string   `json:"activityId"`
-	OwnerBotID           string   `json:"ownerBotId"`
-	OriginConversationID string   `json:"originConversationId"`
-	Revision             uint64   `json:"revision"`
-	State                string   `json:"state"`
-	Goal                 string   `json:"goal"`
-	OpenQuestionIDs      []string `json:"openQuestionIds"`
+	ActivityID                string                   `json:"activityId"`
+	OwnerBotID                string                   `json:"ownerBotId"`
+	OriginConversationID      string                   `json:"originConversationId"`
+	Revision                  uint64                   `json:"revision"`
+	State                     string                   `json:"state"`
+	Goal                      string                   `json:"goal"`
+	OpenQuestionIDs           []string                 `json:"openQuestionIds"`
+	PendingApprovalRequestIDs []string                 `json:"pendingApprovalRequestIds,omitempty"`
+	LatestProgress            *ProductActivityProgress `json:"latestProgress,omitempty"`
+	AcknowledgedAt            string                   `json:"acknowledgedAt,omitempty"`
+	AcknowledgedExecutionID   string                   `json:"acknowledgedExecutionId,omitempty"`
+	ClosedAt                  string                   `json:"closedAt,omitempty"`
+}
+
+type ProductActivityChange struct {
+	ProductActivitySummary
+	ApprovalRequests []ProductSkillApprovalRequest `json:"approvalRequests,omitempty"`
 }
 
 type ProductActivity struct {
 	ProductActivitySummary
-	Kind         string             `json:"kind,omitempty"`
-	Complexity   string             `json:"complexity,omitempty"`
-	Constraints  []string           `json:"constraints,omitempty"`
-	Requirements []string           `json:"requirements"`
-	Materials    []ProductMaterial  `json:"materials"`
-	Questions    []ProductQuestion  `json:"questions"`
-	Executions   []ProductExecution `json:"executions"`
+	Kind             string                        `json:"kind,omitempty"`
+	Complexity       string                        `json:"complexity,omitempty"`
+	Constraints      []string                      `json:"constraints,omitempty"`
+	Requirements     []string                      `json:"requirements"`
+	Materials        []ProductMaterial             `json:"materials"`
+	Questions        []ProductQuestion             `json:"questions"`
+	Executions       []ProductExecution            `json:"executions"`
+	ApprovalRequests []ProductSkillApprovalRequest `json:"approvalRequests,omitempty"`
+}
+
+type ProductActivityProgress struct {
+	ExecutionID string `json:"executionId"`
+	ProgressSeq uint64 `json:"progressSeq"`
+	Stage       string `json:"stage"`
+	Step        uint64 `json:"step,omitempty"`
+	TotalSteps  uint64 `json:"totalSteps,omitempty"`
+	At          string `json:"at"`
 }
 
 type ProductText struct {
@@ -479,6 +500,18 @@ type ProductActivityExecutionParams struct {
 	ExecutionID string `json:"executionId"`
 }
 
+type ProductActivityAcknowledgeParams struct {
+	ProductActivityExecutionParams
+	ExpectedRevision uint64 `json:"expectedRevision"`
+	OperationID      string `json:"operationId"`
+}
+
+type ProductActivityCloseParams struct {
+	ProductActivityParams
+	ExpectedRevision uint64 `json:"expectedRevision"`
+	OperationID      string `json:"operationId"`
+}
+
 type ProductActivityTraceParams struct {
 	ProductActivityParams
 	ProductPageParams
@@ -664,6 +697,14 @@ func (p *ProductClient) ContinueActivity(ctx context.Context, params ProductActi
 	return productCall[ProductReceipt](ctx, p, "activity.continue", params)
 }
 
+func (p *ProductClient) AcknowledgeActivity(ctx context.Context, params ProductActivityAcknowledgeParams) (ProductActivitySummary, error) {
+	return productCall[ProductActivitySummary](ctx, p, "activity.acknowledge", params)
+}
+
+func (p *ProductClient) CloseActivity(ctx context.Context, params ProductActivityCloseParams) (ProductActivitySummary, error) {
+	return productCall[ProductActivitySummary](ctx, p, "activity.close", params)
+}
+
 func (p *ProductClient) StopActivity(ctx context.Context, params ProductActivityStopParams) (ProductStopResult, error) {
 	return productCall[ProductStopResult](ctx, p, "activity.stop", params)
 }
@@ -737,6 +778,13 @@ func (c *Client) handleProductEvent(line []byte) error {
 	var event ProductEvent
 	if json.Unmarshal(line, &event) != nil || event.StreamID == "" || event.Seq == 0 || len(event.Data) == 0 || event.Name == "" {
 		return errors.New("invalid product event envelope")
+	}
+	if event.Name == "activity.changed" {
+		var change ProductActivityChange
+		if json.Unmarshal(event.Data, &change) != nil || change.ActivityID == "" {
+			return errors.New("invalid activity change")
+		}
+		event.ActivityChanged = &change
 	}
 	if event.Name == "activity.traceUpdated" {
 		var update ProductActivityTraceUpdated

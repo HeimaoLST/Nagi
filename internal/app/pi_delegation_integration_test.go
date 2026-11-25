@@ -174,7 +174,7 @@ func TestPiAppProductScopedDelegation(t *testing.T) {
 	activityID, executionID := first.Target.ActivityID, first.Execution.ExecutionID
 	w.wait(func() bool {
 		for _, activity := range owner.activity.items {
-			if activity.ActivityID == activityID && activity.State == "needsAttention" {
+			if activity.ActivityID == activityID && activity.State == "completed" {
 				return true
 			}
 		}

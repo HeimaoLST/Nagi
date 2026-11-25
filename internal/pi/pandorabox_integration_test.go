@@ -155,8 +155,8 @@ const fk = db.prepare('PRAGMA foreign_key_check').all().length;
 db.close();
 console.log(JSON.stringify({ version, hasSystemKind: cols.includes('system_kind'), fk }));
 `)
-	if !strings.Contains(versionAfter, `"version":7`) || !strings.Contains(versionAfter, `"hasSystemKind":true`) || !strings.Contains(versionAfter, `"fk":0`) {
-		t.Fatalf("v1->v7 SQLite upgrade state = %s", versionAfter)
+	if !strings.Contains(versionAfter, `"version":8`) || !strings.Contains(versionAfter, `"hasSystemKind":true`) || !strings.Contains(versionAfter, `"fk":0`) {
+		t.Fatalf("v1->v8 SQLite upgrade state = %s", versionAfter)
 	}
 
 	first, err := proc.client.EnsureBuiltinBot(ctx, pi.ProductBotEnsureBuiltinParams{
@@ -544,7 +544,7 @@ func TestPiProductPandoraBoxKVCachingToolsAndMutations(t *testing.T) {
 		t.Fatalf("bot_update on archived bot was not denied: %s", archivedUpdateResult)
 	}
 
-	var l0Prefix string
+	var convL0Prefix, actL0Prefix string
 	var pandoraTools []string
 	var ordinaryChecked, activityChecked bool
 	for idx, req := range captured {
@@ -555,16 +555,30 @@ func TestPiProductPandoraBoxKVCachingToolsAndMutations(t *testing.T) {
 		if len(parts) < 2 {
 			t.Fatalf("request[%d] missing L0/L1 Bot Identity boundary: %q", idx, req.system)
 		}
-		if l0Prefix == "" {
-			l0Prefix = parts[0]
-			if !strings.HasPrefix(l0Prefix, "You are a long-lived Nagi Bot teammate.") || strings.Contains(l0Prefix, "PandoraBox") || strings.Contains(l0Prefix, workspace) {
-				t.Fatalf("L0 prefix is not static: %q", l0Prefix)
+		isActivity := slices.Contains(req.tools, "activity_ask")
+		if isActivity {
+			if actL0Prefix == "" {
+				actL0Prefix = parts[0]
+				if !strings.HasPrefix(actL0Prefix, "You are a long-lived Nagi Bot teammate.") || strings.Contains(actL0Prefix, "PandoraBox") || strings.Contains(actL0Prefix, workspace) || strings.Contains(actL0Prefix, "Use activity_delegate") {
+					t.Fatalf("Activity L0 prefix is not static or leaked foreground/dynamic content: %q", actL0Prefix)
+				}
+			} else if parts[0] != actL0Prefix {
+				t.Fatalf("activity request[%d] L0 prefix diverged (KV cache break):\ngot:  %q\nwant: %q", idx, parts[0], actL0Prefix)
 			}
-		} else if parts[0] != l0Prefix {
-			t.Fatalf("request[%d] L0 prefix diverged (KV cache break):\ngot:  %q\nwant: %q", idx, parts[0], l0Prefix)
+		} else {
+			if convL0Prefix == "" {
+				convL0Prefix = parts[0]
+				if !strings.HasPrefix(convL0Prefix, "You are a long-lived Nagi Bot teammate.") || strings.Contains(convL0Prefix, "PandoraBox") || strings.Contains(convL0Prefix, workspace) || !strings.Contains(convL0Prefix, "Use activity_delegate") {
+					t.Fatalf("Conversation L0 prefix is not static or missing foreground guidance: %q", convL0Prefix)
+				}
+			} else if parts[0] != convL0Prefix {
+				t.Fatalf("conversation request[%d] L0 prefix diverged (KV cache break):\ngot:  %q\nwant: %q", idx, parts[0], convL0Prefix)
+			}
+		}
+		if convL0Prefix != "" && actL0Prefix != "" && !strings.HasPrefix(convL0Prefix, actL0Prefix+"\n\n") {
+			t.Fatalf("Conversation L0 prefix does not extend static master L0 base:\nconv=%q\nact=%q", convL0Prefix, actL0Prefix)
 		}
 
-		isActivity := slices.Contains(req.tools, "activity_ask")
 		isPandora := strings.Contains(req.system, "Bot Identity\nName: PandoraBox")
 		if isActivity {
 			activityChecked = true
@@ -604,8 +618,8 @@ func TestPiProductPandoraBoxKVCachingToolsAndMutations(t *testing.T) {
 			}
 		}
 	}
-	if l0Prefix == "" || pandoraTools == nil || !ordinaryChecked || !activityChecked {
-		t.Fatalf("incomplete coverage across scopes: l0=%v pandora=%v ordinary=%v activity=%v", l0Prefix != "", pandoraTools != nil, ordinaryChecked, activityChecked)
+	if convL0Prefix == "" || actL0Prefix == "" || pandoraTools == nil || !ordinaryChecked || !activityChecked {
+		t.Fatalf("incomplete coverage across scopes: convL0=%v actL0=%v pandora=%v ordinary=%v activity=%v", convL0Prefix != "", actL0Prefix != "", pandoraTools != nil, ordinaryChecked, activityChecked)
 	}
 
 	botEvents := drainBotChangedEvents(proc)
@@ -807,8 +821,8 @@ const db = new DatabaseSync(process.argv[1]);
 console.log(db.prepare('PRAGMA user_version').get().user_version);
 db.close();
 `)
-	if version != "7" {
-		t.Fatalf("SQLite schema version = %q, want 7", version)
+	if version != "8" {
+		t.Fatalf("SQLite schema version = %q, want 8", version)
 	}
 
 	backupPath := filepath.Join(root, "sp-backup.json")
