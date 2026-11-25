@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/HeimaoLST/Nagi/internal/pi"
@@ -19,7 +18,6 @@ type piAppHost struct {
 	product          *pi.ProductClient
 	productBots      map[string]pi.ProductBot
 	productDrafts    map[string]pi.ProductDraft
-	productConn      pi.ProductConnectionStatus
 	productProviders pi.ProductProviderList
 	providerRead     uint64
 	providerRefresh  bool
@@ -186,6 +184,9 @@ func (a *appModel) openProductProfile(ctx context.Context, fresh bool, generatio
 			receipt, lookupErr := host.product.Operation(ctx, pending.OperationID)
 			if lookupErr == nil && receipt.Target.ConversationID == ct.SessionID && receipt.State != "pending" && receipt.State != "unknown" {
 				delete(host.productPending, ct.ID)
+				if receipt.State == "rejected" {
+					ct.applyProviderSendRejection(providerAdmission(receipt, nil))
+				}
 			} else if ct.SendState == sendIdle {
 				ct.SendState, ct.Status = sendUnknown, statusAttention
 				ct.setSendError(taskContextUncertainSendError, "send-uncertain", "")
@@ -237,9 +238,6 @@ func (a *appModel) openProductProfile(ctx context.Context, fresh bool, generatio
 		}
 		a.applyProductProviders(providers)
 		a.applyProductConnection(opened.Snapshot.Connection)
-		a.connectionForm = nil
-		a.ensureConnectionForm()
-		a.connectionForm.Busy = a.connectionApplying
 		a.applyBuiltinCatalog(ready)
 		for _, ct := range contacts {
 			ct.Context.OnChange = func() error { return a.saveProductDraft(ct) }
@@ -397,12 +395,7 @@ func (a *appModel) sendProductConversation(host *piAppHost, ct *contact) bool {
 				delete(host.productPending, ct.ID)
 				_ = a.persist()
 				ct.SendState = sendIdle
-				var result struct {
-					Code pi.ProductDeliveryBlocker `json:"code"`
-				}
-				_ = json.Unmarshal(receipt.Result, &result)
-				if result.Code == pi.ProductCredentialUnavailable || remote != nil && remote.Code == string(pi.ProductCredentialUnavailable) {
-					ct.setSendError("The Provider credential is unavailable.", sendErrorCredentialUnavailable, "")
+				if ct.applyProviderSendRejection(providerAdmission(receipt, remote)) {
 					a.refreshProductProviders(host)
 				} else if rejected {
 					ct.setSendError(a.connectionSafeMessage(err), "", "")
@@ -630,6 +623,9 @@ func (a *appModel) applyProductEvent(host *piAppHost, event pi.ProductEvent) {
 	if json.Unmarshal(event.Data, &data) != nil {
 		return
 	}
+	if event.Name == "execution.settled" && a.hasEffectiveProviderPool() {
+		a.refreshProductProviders(host)
+	}
 	if data.ActivityID != "" && (event.Name == "execution.started" || event.Name == "execution.settled") {
 		host.activityRevision++
 		return
@@ -843,54 +839,6 @@ func (a *appModel) observeProductExit(host *piAppHost) {
 	})
 }
 
-func (a *appModel) reopenProductConnection(host *piAppHost, config *connectionConfig, apply bool) {
-	form := a.connectionForm
-	form.Busy, a.connectionApplying = true, true
-	form.Status = connStatusChecking
-	form.Error, form.ErrorDetail, form.ReloadBlocked = "", "", ""
-	generation := a.connectionGeneration + 1
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-		defer cancel()
-		var err error
-		if host != nil {
-			outcome, _ := host.product.Wait(ctx)
-			if !outcome.Reaped {
-				err = errors.New("the previous product worker is still running")
-			}
-		}
-		if err == nil {
-			err = a.openProductProfile(ctx, false, generation)
-		}
-		a.updateUI(func() {
-			a.connectionApplying, a.connectionForm.Busy = false, false
-			a.connectionForm.Status = ""
-			if err != nil {
-				a.connectionForm.Error = a.connectionSafeMessage(err)
-			} else {
-				current := a.productHost()
-				go a.observeProductExit(current)
-				if !a.shutdownStarted {
-					switch {
-					case config != nil:
-						a.connectionForm.Draft = form.Draft
-						a.changeProductConnection(current, config, apply)
-					case apply && a.productConnectionPending():
-						a.changeProductConnection(current, nil, true)
-					case apply && a.connectionSaved == nil:
-						a.connectionForm.ReloadBlocked = connBlockedNoSaved
-					case apply:
-						a.connectionForm.Status = connStatusApplied
-					}
-				}
-			}
-			if a.shutdownStarted {
-				a.finishShutdown()
-			}
-		})
-	}()
-}
-
 func productContact(bot pi.ProductBot) *contact {
 	ct := &contact{ID: bot.BotID, SessionID: bot.CurrentConversationID, Status: statusReady}
 	ct.applyProductBotProfile(bot)
@@ -948,188 +896,10 @@ func (a *appModel) applyBuiltinCatalog(ready pi.Ready) {
 	a.runtimeBuiltinToolsErr = ""
 }
 
-func piWireAPI(api string) pi.WireAPI {
-	if api == connectionAPIResponses {
-		return pi.OpenAIResponses
-	}
-	return pi.OpenAICompletions
-}
-
-func piConfigureParams(config connectionConfig, sourceID string) pi.ConfigureParams {
-	return pi.ConfigureParams{WireAPI: piWireAPI(config.API), BaseURL: config.Endpoint, APIKey: config.APIKey,
-		Model: config.Model, ContextTokens: config.ContextTokens, OutputTokens: config.OutputTokens, CredentialSource: sourceID}
-}
-
 func (a *appModel) drainPiHost() {
 	if a.shutdownStarted {
 		a.finishShutdown()
 		return
 	}
 	a.beginShutdown()
-}
-
-type piConnectionProbe struct {
-	mu            sync.Mutex
-	client        *pi.Client
-	stateDir      string
-	outcome       pi.ProcessOutcome
-	callbacksDone bool
-	forced        bool
-	cancelErr     error
-	shutdownErr   error
-	waitErr       error
-	killErr       error
-	callbackErr   error
-	removeErr     error
-	cleanupErr    error
-	testErr       error
-}
-
-func (probe *piConnectionProbe) cleanupComplete() bool {
-	probe.mu.Lock()
-	defer probe.mu.Unlock()
-	return probe.client == nil || probe.outcome.Reaped && probe.callbacksDone
-}
-
-func probePiConnection(ctx context.Context, config connectionConfig, probe *piConnectionProbe) (err error) {
-	defer func() {
-		probe.mu.Lock()
-		probe.testErr = err
-		probe.mu.Unlock()
-	}()
-	if fields := validateConnectionConfig(config); len(fields) != 0 {
-		return errors.New(connectionValidationSummary(fields))
-	}
-	node, worker, err := piPayloadPaths()
-	if err != nil {
-		return err
-	}
-	dir, err := os.MkdirTemp("", "nagi-pi-test-*")
-	if err != nil {
-		return err
-	}
-	probe.mu.Lock()
-	probe.stateDir = dir
-	probe.mu.Unlock()
-	events := make(chan pi.Event, 1)
-	client, err := pi.Start(pi.Options{NodePath: node, WorkerPath: worker, StateDir: dir,
-		Handlers: pi.Handlers{OnEvent: func(event pi.Event) {
-			if event.Name == pi.RunSettled {
-				select {
-				case events <- event:
-				default:
-				}
-			}
-		}}})
-	if err != nil {
-		removeErr := os.RemoveAll(dir)
-		probe.mu.Lock()
-		probe.removeErr = removeErr
-		probe.mu.Unlock()
-		return errors.Join(err, removeErr)
-	}
-	probe.mu.Lock()
-	probe.client = client
-	probe.mu.Unlock()
-	contextID, runID := newContactID(), newContactID()
-	submitted, settled := false, false
-	defer func() {
-		cleanup, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		var cancelErr, waitErr, killErr, callbackErr, removeErr error
-		if submitted && !settled {
-			_, cancelErr = client.CancelRun(cleanup, pi.CancelRunParams{ContextID: contextID, RunID: runID})
-		}
-		outcome, shutdownErr := client.Shutdown(cleanup)
-		shutdownErrors := shutdownErr
-		if !outcome.Reaped {
-			select {
-			case <-events:
-				outcome, shutdownErr = client.Shutdown(cleanup)
-				shutdownErrors = errors.Join(shutdownErrors, shutdownErr)
-			case <-client.Done():
-				outcome, waitErr = client.Wait(cleanup)
-			case <-cleanup.Done():
-			}
-		}
-		forced := false
-		if !outcome.Reaped {
-			<-cleanup.Done()
-			killCtx, killCancel := context.WithTimeout(context.Background(), 10*time.Second)
-			forced = true
-			outcome, killErr = client.Kill(killCtx)
-			killCancel()
-		}
-		callbackCtx, callbackCancel := context.WithTimeout(context.Background(), 10*time.Second)
-		callbacksDone := false
-		select {
-		case <-client.CallbacksDone():
-			callbacksDone = true
-		case <-callbackCtx.Done():
-			callbackErr = callbackCtx.Err()
-		}
-		callbackCancel()
-		if outcome.Reaped && callbacksDone {
-			removeErr = os.RemoveAll(dir)
-		}
-		cleanupErr := errors.Join(cancelErr, shutdownErr, waitErr, killErr, callbackErr, removeErr)
-		if forced {
-			cleanupErr = errors.Join(cleanupErr, errors.New("connection test required forced worker termination"))
-		}
-		if !outcome.Reaped || !callbacksDone {
-			cleanupErr = errors.Join(cleanupErr, errors.New("connection test worker cleanup is unconfirmed"))
-		}
-		probe.mu.Lock()
-		probe.outcome = outcome
-		probe.callbacksDone = callbacksDone
-		probe.forced = forced
-		probe.cancelErr = cancelErr
-		probe.shutdownErr = shutdownErrors
-		probe.waitErr = waitErr
-		probe.killErr = killErr
-		probe.callbackErr = callbackErr
-		probe.removeErr = removeErr
-		probe.cleanupErr = cleanupErr
-		probe.mu.Unlock()
-		err = errors.Join(err, cleanupErr)
-	}()
-	ready, err := client.Ready(ctx)
-	if err != nil {
-		return err
-	}
-	if ready.Runtime.Version != "v22.23.5" {
-		return fmt.Errorf("Pi worker requires Node 22.23.5; got %s", ready.Runtime.Version)
-	}
-	if _, err = client.Configure(ctx, piConfigureParams(config, newContactID())); err != nil {
-		return err
-	}
-	if _, err = client.OpenContext(ctx, pi.OpenContextParams{ContextID: contextID, BotID: "connection-test", Purpose: pi.Conversation,
-		SelectionRevision: 1, CWD: config.WorkingDirectory, CodingTools: []string{}, DomainTools: []pi.DomainTool{}}); err != nil {
-		return err
-	}
-	submitted = true
-	if _, err = client.StartRun(ctx, pi.StartRunParams{ContextID: contextID, RunID: runID, Text: "Reply with OK."}); err != nil {
-		return err
-	}
-	for {
-		select {
-		case event := <-events:
-			if event.ContextID != contextID || event.RunID != runID || event.Name != pi.RunSettled {
-				continue
-			}
-			settled = true
-			var result pi.RunSettledData
-			if err = json.Unmarshal(event.Data, &result); err != nil {
-				return err
-			}
-			if result.Status != pi.Completed {
-				return fmt.Errorf("connection test did not complete: %s", result.Status)
-			}
-			return nil
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-client.Done():
-			return pi.ErrDisconnected
-		}
-	}
 }

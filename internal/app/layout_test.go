@@ -833,7 +833,6 @@ func TestHeaderGroupsStatusAndRoleWithLongRawText(t *testing.T) {
 				a.runtimeStage = "Connection configuration"
 				a.connectionSaved = &cfg
 				a.connectionEffective = &cfg
-				a.ensureConnectionForm()
 			},
 		},
 		{

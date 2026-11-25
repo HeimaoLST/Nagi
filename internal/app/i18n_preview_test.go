@@ -11,6 +11,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"github.com/HeimaoLST/Nagi/internal/pi"
 	"github.com/HeimaoLST/Nagi/locales"
 )
 
@@ -68,8 +69,7 @@ func TestPreviewI18nSelectedSlice(t *testing.T) {
 
 	cfg := connectionConfig{API: connectionAPIChatCompletions, Endpoint: "https://provider.example.invalid/v1", APIKey: "fixture", Model: "fixture", ContextTokens: 131072, OutputTokens: 8192, WorkingDirectory: t.TempDir(), MaxActiveTasks: 2}
 	conn, _ := workspaceTestApp(t)
-	conn.connectionForm = newConnectionSettings(&cfg, cfg.WorkingDirectory)
-	conn.connectionForm.Status = connStatusApplied
+	conn.connectionSaved = &cfg
 	conn.openSettingsTab(settingsTabConnection, settingsSourceRail)
 	connTr := ui.NewTester(conn.view, 1040, 720)
 	connTr.SetLocale("zh-Hans")
@@ -175,7 +175,7 @@ func TestPreviewI18nFinalMatrix(t *testing.T) {
 				return a
 			},
 			want: func(msgs locales.Messages) []string {
-				return []string{msgs.ConnectionStatusNotConnected(), msgs.ConnectionRecoveryNotConnectedHint()}
+				return []string{msgs.ConnectionStatusSetupNeeded(), msgs.ConnectionRecoverySetupHint()}
 			},
 			fit: func(msgs locales.Messages) []string {
 				return []string{msgs.ComposerLabel("Nagi"), msgs.ConfigurationDetails()}
@@ -199,15 +199,27 @@ func TestPreviewI18nFinalMatrix(t *testing.T) {
 			name: "settings-connection", width: 1040, height: 720,
 			setup: func(locale string) *appModel {
 				a, _ := workspaceTestApp(t)
-				cfg := connectionConfig{API: connectionAPIChatCompletions, Endpoint: "https://provider.example.invalid/v1/very/long/endpoint/for/final/preview", APIKey: "fixture", Model: "provider/very-long-model-name-for-final-preview", ContextTokens: 131072, OutputTokens: 8192, WorkingDirectory: t.TempDir(), MaxActiveTasks: 2}
-				a.connectionForm = newConnectionSettings(&cfg, cfg.WorkingDirectory)
-				a.connectionSaved = &cfg
-				a.connectionForm.SavedPending = true
+				a.providers.snapshot = pi.ProductProviderList{
+					Policy: pi.ProductRoutingBalanced,
+					Accounts: []pi.ProductProviderAccountView{{
+						ProductProviderAccount: pi.ProductProviderAccount{
+							ProviderID:    "preview-provider",
+							Name:          "Studio gateway",
+							WireAPI:       pi.OpenAICompletions,
+							BaseURL:       "https://provider.example.invalid/v1/very/long/endpoint/for/final/preview",
+							DefaultModel:  "provider/very-long-model-name-for-final-preview",
+							ContextTokens: 131072,
+							OutputTokens:  8192,
+							Enabled:       true,
+						},
+						CredentialStatus: "ok",
+					}},
+				}
 				a.openSettingsTab(settingsTabConnection, settingsSourceRail)
 				return a
 			},
 			want: func(msgs locales.Messages) []string {
-				return []string{msgs.SettingsConnection(), msgs.ConnectionCredentialsSection(), msgs.ConnectionModelCapacitySection(), msgs.ConnectionDirectorySection(), msgs.ConnectionTestAction(), msgs.ConnectionApplySaved(), msgs.ConnectionSaveConfiguration()}
+				return []string{msgs.SettingsConnection(), msgs.ProviderAccounts(), msgs.ProviderBaseURL(), msgs.ProviderDefaultModel(), msgs.ProviderTestSync(), msgs.ProviderSave(), msgs.ProviderSaveApply()}
 			},
 			fit: settingsFit,
 		},
@@ -473,7 +485,7 @@ func TestPreviewInputStates(t *testing.T) {
 				ContextTokens: 131072, OutputTokens: 8192, WorkingDirectory: a.workDir, MaxActiveTasks: 2,
 			}
 			a.connectionSaved = &cfg
-			a.connectionForm = newConnectionSettings(&cfg, cfg.WorkingDirectory)
+			a.chooseFirstProvider(-1)
 			wantThemeID := "paper"
 			if item.theme == appearanceDark {
 				wantThemeID = "night"
@@ -491,10 +503,12 @@ func TestPreviewInputStates(t *testing.T) {
 				}
 				a.appearanceThemeIDs = appearanceThemeIDs{Light: wantThemeID}
 			}
-			a.ensureConnectionForm()
 			a.openContactProfile(ct.ID)
 			editor := a.profileEditorFor(ct.ID)
 			if item.field == "connection-endpoint" {
+				a.pi = stubProductHost(t, a, pi.ProductProviderList{Policy: pi.ProductRoutingBalanced})
+				a.demo = false
+				a.runtimeStatus = runtimeStateReady
 				a.openSettingsTab(settingsTabConnection, settingsSourceRail)
 			}
 			if item.state == "invalid-focus" {
@@ -514,7 +528,7 @@ func TestPreviewInputStates(t *testing.T) {
 			if item.field == "contact-instructions" {
 				label = msgs.FieldInstructionsAccessible()
 			} else if item.field == "connection-endpoint" {
-				label = msgs.ConnectionFieldEndpoint()
+				label = msgs.ProviderBaseURL()
 			}
 			viewport := ui.Rect{W: float32(tr.Image().Bounds().Dx()), H: float32(tr.Image().Bounds().Dy())}
 			contains := func(outer, inner ui.Rect) bool {
@@ -539,14 +553,14 @@ func TestPreviewInputStates(t *testing.T) {
 			}
 			wantProfile := cloneProfileDraft(editor.Draft)
 			wantContact := contactProfileDraft(ct)
-			wantConnection, wantSaved := a.connectionForm.Draft, cfg
+			wantConnection, wantSaved := a.providers.first.BaseURL, cfg
 			wantConversationDraft := ct.Draft
 			storeBefore, err := os.ReadFile(a.store.Path)
 			if err != nil {
 				t.Fatal(err)
 			}
 			focusInput := func() {
-				for range 48 {
+				for range 64 {
 					active, _ := tr.TextInputActive()
 					if tr.Focused(label) && active {
 						return
@@ -556,21 +570,7 @@ func TestPreviewInputStates(t *testing.T) {
 				}
 				t.Fatalf("actual text controller was not keyboard reachable: label=%q", label)
 			}
-			var disclosureBounds *ui.Rect
 			if item.field == "connection-endpoint" {
-				if !tr.HasText(cfg.Endpoint) {
-					t.Fatal("saved endpoint value is not present before its real disclosure action")
-				}
-				action := msgs.ConnectionEditField(label)
-				box, found := tr.Find(action)
-				if !found || !contains(viewport, box) {
-					t.Fatalf("endpoint disclosure is not visible: %+v", box)
-				}
-				disclosureBounds = &box
-				if err := tr.Click(action); err != nil {
-					t.Fatal(err)
-				}
-				tr.Frame()
 				focusInput()
 			} else {
 				switch item.state {
@@ -593,7 +593,7 @@ func TestPreviewInputStates(t *testing.T) {
 					t.Fatalf("focus/hover changed actual input geometry: before=%+v after=%+v found=%v", *inputBounds, box, found)
 				}
 			}
-			if !profileDraftEqual(editor.Draft, wantProfile) || a.connectionForm.Draft != wantConnection {
+			if !profileDraftEqual(editor.Draft, wantProfile) || a.providers.first.BaseURL != wantConnection {
 				t.Fatal("input focus/hover/disabled targeting changed a draft")
 			}
 			active, noIME := tr.TextInputActive()
@@ -620,7 +620,6 @@ func TestPreviewInputStates(t *testing.T) {
 				"no_input_method": noIME, "caret": caret, "caret_active": caretActive,
 				"control_bounds": inputBounds, "window_viewport": viewport, "scroll_state": a.settingsScroll,
 				"caption_or_label_bounds": captionBounds, "caption_or_label_found": captionFound,
-				"connection_disclosure_bounds":        disclosureBounds,
 				"connection_editor_bounds_observable": item.field != "connection-endpoint",
 				"connection_bounds_limit":             "Connection caption and editor share a label; its caption is not an editor-bound observation",
 				"input_border_role":                   resolved.Palette.InputBorder, "accent_role": resolved.Palette.Theme.Accent,
@@ -629,8 +628,6 @@ func TestPreviewInputStates(t *testing.T) {
 			pointer := [2]float32{-1, -1}
 			if item.state == "hover" || item.state == "disabled" {
 				pointer = [2]float32{inputBounds.X + inputBounds.W/2, inputBounds.Y + inputBounds.H/2}
-			} else if disclosureBounds != nil {
-				pointer = [2]float32{disclosureBounds.X + disclosureBounds.W/2, disclosureBounds.Y + disclosureBounds.H/2}
 			}
 			receipt["pointer"] = pointer
 			writePreviewPNG(t, filepath.Join(dir, name+".png"), tr.Image())
@@ -641,7 +638,7 @@ func TestPreviewInputStates(t *testing.T) {
 					original = editor.Draft.Instructions
 					typed = "  Exact instructions 原文\nSecond line : []()\nTrailing spaces  "
 				} else if item.field == "connection-endpoint" {
-					original = a.connectionForm.Draft.Endpoint
+					original = a.providers.first.BaseURL
 					typed = "https://typed.example.invalid/v1?source=raw&mode=exact"
 				}
 				tr.Key(ui.Cmd, ui.KeyA)
@@ -653,7 +650,7 @@ func TestPreviewInputStates(t *testing.T) {
 				if item.field == "contact-instructions" {
 					got = editor.Draft.Instructions
 				} else if item.field == "connection-endpoint" {
-					got = a.connectionForm.Draft.Endpoint
+					got = a.providers.first.BaseURL
 				}
 				if got != typed || tr.Clipboard() != typed || !tr.Focused(label) {
 					t.Fatalf("actual input typing/selection changed source: draft=%q clipboard=%q want=%q", got, tr.Clipboard(), typed)
@@ -663,12 +660,12 @@ func TestPreviewInputStates(t *testing.T) {
 				tr.Type(original)
 				tr.Frame()
 			}
-			if !profileDraftEqual(editor.Draft, wantProfile) || a.connectionForm.Draft != wantConnection ||
+			if !profileDraftEqual(editor.Draft, wantProfile) || a.providers.first.BaseURL != wantConnection ||
 				!profileDraftEqual(contactProfileDraft(ct), wantContact) || ct.Draft != wantConversationDraft ||
 				a.connectionSaved == nil || *a.connectionSaved != wantSaved {
 				t.Fatal("input interactions did not preserve the exact drafts and saved source after restoration")
 			}
-			if a.connectionApplying || a.connectionTesting || a.connectionSaveInFlight || a.connectionProbe != nil || a.pi != nil || len(tr.OpenedURLs()) != 0 {
+			if a.providerBusy() || (item.field != "connection-endpoint" && a.pi != nil) || len(tr.OpenedURLs()) != 0 {
 				t.Fatal("input-only interaction triggered a connection or external action")
 			}
 			storeAfter, err := os.ReadFile(a.store.Path)

@@ -197,7 +197,7 @@ func TestStoreRecoveryAcceptsOrdinaryProducerCopies(t *testing.T) {
 			if err != nil || reopened.State.Selected != ct.ID {
 				t.Fatal("normal reopen lost the original selected contact")
 			}
-			if a.pi != nil || a.connectionApplying {
+			if a.pi != nil || a.providerBusy() {
 				t.Fatal("copy or restore started a Pi worker")
 			}
 		})

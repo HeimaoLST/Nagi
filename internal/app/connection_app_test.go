@@ -1,7 +1,6 @@
 package app
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,9 +8,6 @@ import (
 	"time"
 
 	"github.com/egoist/mygo"
-	"github.com/egoist/mygo/ui"
-
-	"github.com/HeimaoLST/Nagi/locales"
 )
 
 func isolateConnectionApp(t *testing.T, root, payload string) {
@@ -31,8 +27,8 @@ func TestConnectionFirstUseDoesNotPersistWrongDefaultWorkspace(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if a.connectionForm == nil || !a.settingsOpen || a.settingsTab != settingsTabConnection {
-		t.Fatalf("an empty profile must open the connection settings page: form=%v open=%v tab=%q", a.connectionForm != nil, a.settingsOpen, a.settingsTab)
+	if !a.settingsOpen || a.settingsTab != settingsTabConnection {
+		t.Fatalf("an empty profile must open the connection settings page: open=%v tab=%q", a.settingsOpen, a.settingsTab)
 	}
 	if _, err := os.Stat(guiStorePath()); !os.IsNotExist(err) {
 		t.Fatal("first use persisted a contact before the user selected a working directory")
@@ -91,8 +87,8 @@ func TestConnectionInvalidSavedSourceRemainsRepairable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if a.connectionForm == nil || a.connectionForm.Draft.Model != config.Model || a.connectionForm.Draft.WorkingDirectory != config.WorkingDirectory || a.connectionForm.Error == "" {
-		t.Fatal("invalid saved settings must open for correction with their previous values")
+	if a.runtimeStatus != runtimeStateFailed || a.runtimeErrKind != runtimeNoticeSavedNeedsRepair {
+		t.Fatalf("invalid saved settings did not enter repair state: status=%v kind=%q", a.runtimeStatus, a.runtimeErrKind)
 	}
 	if a.pi != nil || !a.settingsOpen || a.settingsTab != settingsTabConnection {
 		t.Fatalf("invalid GUI configuration did not open the repair page: pi=%v open=%v tab=%q", a.pi != nil, a.settingsOpen, a.settingsTab)
@@ -104,7 +100,6 @@ type folderChoiceReply struct {
 	err   error
 }
 
-// Only the native chooser is replaced; its worker still returns through updateUI.
 func controlledFolderChoice(t *testing.T, a *appModel) (<-chan mygo.OpenDialogOptions, chan<- folderChoiceReply, <-chan func()) {
 	t.Helper()
 	requests := make(chan mygo.OpenDialogOptions, 4)
@@ -129,242 +124,6 @@ func awaitFolderChoice[T any](t *testing.T, ch <-chan T) T {
 		t.Fatal("folder chooser did not reach its controlled boundary")
 		var zero T
 		return zero
-	}
-}
-
-func TestConnectionFolderChooserDraftCancelErrorAndRetry(t *testing.T) {
-	a, ct := workspaceTestApp(t)
-	a.uiLocale = "en"
-	config := testConnectionConfig(t)
-	a.connectionForm = newConnectionSettings(&config, config.WorkingDirectory)
-	a.connectionSaved, a.connectionEffective = &config, &config
-	a.workDir, ct.Workspace = config.WorkingDirectory, config.WorkingDirectory
-	a.win = &mygo.Window{}
-	a.openSettingsTab(settingsTabConnection, settingsSourceRail)
-	form := a.connectionForm
-	form.Draft.Model = "unsaved-model"
-	form.Error, form.Status = "previous save error", connStatusSavedApplied
-	form.Errors = map[string]string{"WorkingDirectory": connectionValidationWorkspaceDirectory, "Model": connectionValidationRequired}
-	form.FolderError = "previous chooser error"
-	before := form.Draft
-	requests, replies, updates := controlledFolderChoice(t, a)
-	tr := ui.NewTester(a.view, 1040, 720)
-	tr.Frame()
-	label := locales.In("en").WorkFolderChoose()
-	if err := clickSettingsAction(tr, label); err != nil {
-		t.Fatal(err)
-	}
-	opts := awaitFolderChoice(t, requests)
-	if opts.Parent != a.win || opts.DefaultPath != config.WorkingDirectory || !form.Busy {
-		t.Fatalf("chooser did not use the current folder/window: %+v", opts)
-	}
-	replies <- folderChoiceReply{}
-	awaitFolderChoice(t, updates)()
-	tr.Frame()
-	if form.Draft != before || form.Error != "previous save error" || form.Status != connStatusSavedApplied || form.FolderError != "previous chooser error" || len(form.Errors) != 2 || !tr.Focused(label) {
-		t.Fatal("cancel changed draft/error state or lost the initiating control focus")
-	}
-	missing := filepath.Join(t.TempDir(), "removed")
-	for _, reply := range []folderChoiceReply{{err: errors.New("dialog unavailable")}, {paths: []string{missing}}} {
-		a.chooseConnectionWorkFolder()
-		awaitFolderChoice(t, requests)
-		replies <- reply
-		awaitFolderChoice(t, updates)()
-		if form.Draft != before || form.FolderError == "" || form.Busy || form.Error != "previous save error" {
-			t.Fatal("chooser failure lost edits or did not permit retry")
-		}
-	}
-	chosen := filepath.Join(t.TempDir(), "工作 notes")
-	if err := os.Mkdir(chosen, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	a.chooseConnectionWorkFolder()
-	awaitFolderChoice(t, requests)
-	replies <- folderChoiceReply{paths: []string{chosen}}
-	apply := awaitFolderChoice(t, updates)
-	if form.Draft != before {
-		t.Fatal("the chooser worker edited state before the UI callback")
-	}
-	apply()
-	if form.Draft.WorkingDirectory != chosen || form.Draft.Model != before.Model || form.FolderError != "" || form.Errors["WorkingDirectory"] != "" || form.Errors["Model"] == "" {
-		t.Fatalf("retry did not update only the folder draft: %+v", form)
-	}
-	if config.WorkingDirectory == chosen || ct.Workspace == chosen || a.workDir == chosen || ct.SessionID != "s1" || a.connectionApplying || a.connectionTesting || a.pi != nil {
-		t.Fatal("folder choice saved/applied configuration or retargeted existing work")
-	}
-}
-
-func TestConnectionFolderChooserRejectsLateTargets(t *testing.T) {
-	for _, change := range []string{"editor", "tab-roundtrip", "close-roundtrip", "shutdown"} {
-		t.Run(change, func(t *testing.T) {
-			a, _ := workspaceTestApp(t)
-			config := testConnectionConfig(t)
-			a.connectionForm = newConnectionSettings(&config, config.WorkingDirectory)
-			a.openSettingsTab(settingsTabConnection, settingsSourceRail)
-			form := a.connectionForm
-			requests, replies, updates := controlledFolderChoice(t, a)
-			a.chooseConnectionWorkFolder()
-			awaitFolderChoice(t, requests)
-			switch change {
-			case "editor":
-				a.connectionForm = newConnectionSettings(&config, config.WorkingDirectory)
-			case "tab-roundtrip":
-				a.selectSettingsTab(settingsTabAppearance)
-				a.selectSettingsTab(settingsTabConnection)
-			case "close-roundtrip":
-				a.closeSettings()
-				a.openSettingsTab(settingsTabConnection, settingsSourceRail)
-			case "shutdown":
-				a.shutdownStarted = true
-			}
-			replies <- folderChoiceReply{paths: []string{t.TempDir()}}
-			awaitFolderChoice(t, updates)()
-			if form.Draft.WorkingDirectory != config.WorkingDirectory || form.FocusFolder || form.Busy || a.connectionForm.Draft.WorkingDirectory != config.WorkingDirectory {
-				t.Fatal("late result changed or focused a stale Settings editor")
-			}
-		})
-	}
-}
-
-func TestConnectionFolderChooserInitialFolderAndInvalidSelection(t *testing.T) {
-	valid := t.TempDir()
-	home, err := os.UserHomeDir()
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, tc := range []struct{ draft, effective, want string }{
-		{valid, t.TempDir(), valid},
-		{"relative", valid, valid},
-		{filepath.Join(valid, "missing"), "relative", home},
-	} {
-		a, _ := workspaceTestApp(t)
-		a.workDir = tc.effective
-		a.connectionForm = newConnectionSettings(nil, tc.draft)
-		a.openSettingsTab(settingsTabConnection, settingsSourceRail)
-		requests, replies, updates := controlledFolderChoice(t, a)
-		a.chooseConnectionWorkFolder()
-		if got := awaitFolderChoice(t, requests).DefaultPath; got != tc.want {
-			t.Fatalf("initial folder = %q, want %q", got, tc.want)
-		}
-		file := filepath.Join(t.TempDir(), "not-a-folder")
-		if err := os.WriteFile(file, []byte("fixture"), 0o600); err != nil {
-			t.Fatal(err)
-		}
-		replies <- folderChoiceReply{paths: []string{file}}
-		awaitFolderChoice(t, updates)()
-		if a.connectionForm.Draft.WorkingDirectory != tc.draft || a.connectionForm.FolderError == "" {
-			t.Fatal("a non-directory choice replaced the folder draft")
-		}
-	}
-}
-
-func TestFirstUseWorkFolderRequiresExplicitChoiceBeforeActions(t *testing.T) {
-	root := t.TempDir()
-	isolateConnectionApp(t, root, filepath.Join(root, "unused-runtime"))
-	t.Setenv("NAGI_GUI_WORKDIR", "")
-	t.Chdir(root)
-	a, err := newRuntimeApp()
-	if err != nil {
-		t.Fatal(err)
-	}
-	ct := a.selectedContact()
-	ct.Workspace = t.TempDir()
-	originalID, originalFolder := ct.ID, ct.Workspace
-	ct.Draft = "Keep local draft"
-	a.contacts = append(a.contacts, &contact{ID: "inherited-contact", Name: "Inherited", Role: "Assistant"})
-	if err := a.persist(); err != nil {
-		t.Fatal(err)
-	}
-	form := a.connectionForm
-	fixture := testConnectionConfig(t)
-	form.Draft.Endpoint, form.Draft.APIKey, form.Draft.Model = fixture.Endpoint, fixture.APIKey, fixture.Model
-	requests, replies, updates := controlledFolderChoice(t, a)
-	var saved, tested, applied []connectionConfig
-	actions := connectionSettingsActions{
-		Save:         func(config connectionConfig) { saved = append(saved, config) },
-		Test:         func(config connectionConfig) { tested = append(tested, config) },
-		SaveAndApply: func(config connectionConfig) { applied = append(applied, config) },
-		ChooseFolder: a.chooseConnectionWorkFolder,
-	}
-	tr := connectionSettingsTester(form, actions, 580, 1800)
-	tr.Frame()
-	assertBlocked := func() {
-		t.Helper()
-		for _, action := range []string{"Save", "Test", "Save and apply"} {
-			if err := tr.Click(action); err != nil {
-				t.Fatal(err)
-			}
-			tr.Frame()
-		}
-		if len(saved)+len(tested)+len(applied) != 0 {
-			t.Fatalf("fresh GUI silently accepted launch folder %q", form.Draft.WorkingDirectory)
-		}
-		if form.Errors["WorkingDirectory"] == "" || a.pi != nil || a.connectionProbe != nil || a.connectionApplying || a.connectionTesting {
-			t.Fatal("unconfirmed work folder did not block GUI actions")
-		}
-	}
-	assertBlocked()
-	for _, reply := range []folderChoiceReply{{}, {err: errors.New("folder access unavailable")}} {
-		if err := tr.Click("Choose folder…"); err != nil {
-			t.Fatal(err)
-		}
-		opts := awaitFolderChoice(t, requests)
-		home, err := os.UserHomeDir()
-		if err != nil || opts.DefaultPath != home {
-			t.Fatalf("fresh chooser suggestion = %q, want home %q: %v", opts.DefaultPath, home, err)
-		}
-		replies <- reply
-		awaitFolderChoice(t, updates)()
-		tr.Frame()
-		assertBlocked()
-	}
-	chosen := t.TempDir()
-	if err := tr.Click("Choose folder…"); err != nil {
-		t.Fatal(err)
-	}
-	awaitFolderChoice(t, requests)
-	replies <- folderChoiceReply{paths: []string{chosen}}
-	awaitFolderChoice(t, updates)()
-	tr.Frame()
-	for _, action := range []string{"Save", "Test", "Save and apply"} {
-		if err := tr.Click(action); err != nil {
-			t.Fatal(err)
-		}
-		tr.Frame()
-	}
-	for _, configs := range [][]connectionConfig{saved, tested, applied} {
-		if len(configs) != 1 || configs[0].WorkingDirectory != chosen {
-			t.Fatal("the confirmed folder did not reach a connection action")
-		}
-	}
-	if a.selectedContact() != ct || ct.ID != originalID || ct.Workspace != originalFolder || ct.Draft != "Keep local draft" || a.contactByID("inherited-contact").Workspace != "" {
-		t.Fatal("choosing the default folder changed an existing contact, draft or workspace override")
-	}
-}
-
-func TestFirstUseWorkFolderRetainsSavedChoice(t *testing.T) {
-	for _, source := range []string{"saved", "invalid-saved"} {
-		t.Run(source, func(t *testing.T) {
-			root := t.TempDir()
-			isolateConnectionApp(t, root, "")
-			config := testConnectionConfig(t)
-			if err := saveConnectionConfig(connectionConfigPath(guiStorePath()), config); err != nil {
-				t.Fatal(err)
-			}
-			if source == "invalid-saved" {
-				if err := os.Remove(config.WorkingDirectory); err != nil {
-					t.Fatal(err)
-				}
-			}
-			a, err := newRuntimeApp()
-			if err != nil {
-				t.Fatal(err)
-			}
-			a.openSettingsTab(settingsTabConnection, settingsSourceRail)
-			if a.connectionForm.Draft.WorkingDirectory != config.WorkingDirectory || a.pi != nil || a.connectionProbe != nil || a.connectionApplying || a.connectionTesting {
-				t.Fatalf("%s folder choice was cleared or started Pi: %+v", source, a.connectionForm.Draft)
-			}
-		})
 	}
 }
 
@@ -393,7 +152,6 @@ func TestC8RecoveryOwnedCompletionDrainsQuit(t *testing.T) {
 					a.confirmDataRecovery()
 					completion = awaitFolderChoice(t, updates)
 				}
-				// File I/O is finished and its owned final UI result remains queued.
 				if leave {
 					a.closeSettings()
 				}
@@ -441,17 +199,14 @@ func TestC8RecoveryHostAndThemeMutualAdmission(t *testing.T) {
 					awaitFolderChoice(t, updates)()
 				}
 			}
-			before, form := recoveryRecordSnapshot(t, a.selectedContact()), *a.connectionForm
+			before := recoveryRecordSnapshot(t, a.selectedContact())
 			a.chooseThemeFile = func(mygo.OpenDialogOptions) ([]string, error) {
 				t.Error("recovery ownership admitted a theme dialog")
 				return nil, nil
 			}
-			config := defaultConnectionConfig("")
-			a.saveConnectionWithApply(config, true)
-			a.testConnection(config)
-			a.applyConnection()
+			a.addProvider()
 			a.importAppearanceTheme()
-			if a.connectionForm.Draft != form.Draft || a.connectionForm.Error != form.Error || a.connectionForm.Status != form.Status || a.connectionForm.ReloadBlocked != form.ReloadBlocked || a.connectionSaveInFlight || a.connectionApplying || a.connectionTesting || a.pi != nil || a.themeImport != nil || recoveryRecordSnapshot(t, a.selectedContact()) != before {
+			if a.providers.adding || a.providers.busy || a.providers.failure != (providerFeedback{}) || a.pi != nil || a.themeImport != nil || recoveryRecordSnapshot(t, a.selectedContact()) != before {
 				t.Fatal("recovery ownership changed connection/theme/work through an actual entry method")
 			}
 			if _, err := os.Stat(connectionConfigPath(a.storePath)); !os.IsNotExist(err) {
@@ -524,7 +279,7 @@ func TestC8FailedRecoveryCompletionReleasesQuit(t *testing.T) {
 }
 
 func TestC8RestoreAdmissionPreservesUnavailableEditsAndLocalRetry(t *testing.T) {
-	for _, kind := range []string{"loaded", "local-save", "profile", "connection", "context", "contact-draft", "history", "submission", "connection-test", "contact-picker"} {
+	for _, kind := range []string{"loaded", "local-save", "profile", "context", "contact-draft", "history", "submission", "connection-test", "contact-picker"} {
 		t.Run(kind, func(t *testing.T) {
 			a := c8UnavailableApp(t)
 			if kind == "loaded" || kind == "local-save" {
@@ -536,8 +291,6 @@ func TestC8RestoreAdmissionPreservesUnavailableEditsAndLocalRetry(t *testing.T) 
 			case "profile":
 				a.openContactProfile(a.selectedID())
 				a.profileEditorFor(a.selectedID()).Draft.Name = "keep profile"
-			case "connection":
-				a.connectionForm.Draft.Model = "keep model"
 			case "context":
 				a.selectedContact().Context.FormText = "keep snippet"
 			case "contact-draft":
@@ -547,7 +300,7 @@ func TestC8RestoreAdmissionPreservesUnavailableEditsAndLocalRetry(t *testing.T) 
 			case "submission":
 				a.submissionInFlight = 1
 			case "connection-test":
-				a.connectionTesting = true
+				a.providers.busy = true
 			case "contact-picker":
 				a.openContactProfile(a.selectedID())
 				a.profileEditorFor(a.selectedID()).Busy = true

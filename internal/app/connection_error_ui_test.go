@@ -1,17 +1,53 @@
 package app
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
+	"github.com/HeimaoLST/Nagi/internal/pi"
 	"github.com/HeimaoLST/Nagi/locales"
 )
+
+func stubProductHost(t *testing.T, a *appModel, pool pi.ProductProviderList) *piAppHost {
+	t.Helper()
+	dir := t.TempDir()
+	if a != nil && a.storePath == "" {
+		a.storePath = filepath.Join(dir, "contacts.json")
+	}
+	stub := filepath.Join(dir, "stub.sh")
+	if err := os.WriteFile(stub, []byte("#!/bin/sh\ncat >/dev/null\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	client, err := pi.StartProduct(pi.ProductOptions{
+		NodePath:        "/bin/sh",
+		WorkerPath:      stub,
+		StateDir:        dir,
+		ProfilePath:     filepath.Join(dir, "profile.sqlite"),
+		CredentialsPath: filepath.Join(dir, "connection.json"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		_, _ = client.Kill(ctx)
+		<-client.CallbacksDone()
+	})
+	return &piAppHost{
+		generation:       1,
+		product:          client,
+		productProviders: pool,
+	}
+}
 
 func TestKnownConnectionFailureIsConciseAndKeepsOriginalDetails(t *testing.T) {
 	a, ct := workspaceTestApp(t)
@@ -118,10 +154,8 @@ func TestConnectionRecoveryStatusAndOneClickSettings(t *testing.T) {
 		{
 			name: "setup",
 			setup: func(a *appModel, _ *contact) {
-				a.runtimeStatus = runtimeStateFailed
-				a.runtimeStage = "Connection configuration"
-				a.ensureConnectionForm()
-				a.connectionForm.HasSaved = false
+				a.pi = stubProductHost(t, a, pi.ProductProviderList{})
+				a.runtimeStatus = runtimeStateReady
 			},
 			wantHeader: "Setup needed",
 			wantHint:   locales.In("en").ConnectionRecoverySetupHint(),
@@ -132,7 +166,6 @@ func TestConnectionRecoveryStatusAndOneClickSettings(t *testing.T) {
 			setup: func(a *appModel, _ *contact) {
 				a.runtimeStatus = runtimeStateFailed
 				a.connectionSaved = &config
-				a.ensureConnectionForm()
 			},
 			wantHeader: "Saved — apply to connect",
 			wantHint:   "The saved connection is waiting to be applied.",
@@ -143,7 +176,6 @@ func TestConnectionRecoveryStatusAndOneClickSettings(t *testing.T) {
 			setup: func(a *appModel, _ *contact) {
 				a.runtimeStatus = runtimeStateExited
 				a.runtimeStage = "Runtime connection"
-				a.ensureConnectionForm()
 			},
 			wantHeader: "Not connected",
 			wantHint:   locales.In("en").ConnectionRecoveryNotConnectedHint(),
@@ -197,16 +229,6 @@ func TestConnectionRecoveryStatusAndOneClickSettings(t *testing.T) {
 			wantButton: false,
 		},
 		{
-			name: "applying",
-			setup: func(a *appModel, _ *contact) {
-				a.connectionApplying = true
-				a.runtimeStatus = runtimeStateFailed
-			},
-			wantHeader: "Applying connection…",
-			wantHint:   "Wait for the connection to become ready.",
-			wantButton: false,
-		},
-		{
 			name:      "healthy Pi runtime with pending saved candidate",
 			hasPiHost: true,
 			setup: func(a *appModel, _ *contact) {
@@ -216,7 +238,6 @@ func TestConnectionRecoveryStatusAndOneClickSettings(t *testing.T) {
 				a.runtimeStatus = runtimeStateReady
 				a.connectionEffective = &old
 				a.connectionSaved = &next
-				a.connectionForm = newConnectionSettings(&next, "")
 			},
 			wantHeader: "",
 			wantButton: false,
@@ -306,7 +327,6 @@ func TestConnectionRecoveryPreservesWorkingAndAttentionStatus(t *testing.T) {
 			ct.Status = tc.status
 			ct.SendState = tc.send
 			a.runtimeStatus = runtimeStateExited
-			a.ensureConnectionForm()
 			tr := ui.NewTester(a.view, 1040, 720)
 			tr.Frame()
 			if got := a.headerStatusLabel(ct, locales.In("en")); got != tc.want {
@@ -318,10 +338,9 @@ func TestConnectionRecoveryPreservesWorkingAndAttentionStatus(t *testing.T) {
 
 func TestConnectionRecoveryRailSettingsDefaultsToConnection(t *testing.T) {
 	a, _ := workspaceTestApp(t)
-	a.runtimeStatus = runtimeStateFailed
-	a.runtimeStage = "Connection configuration"
-	a.ensureConnectionForm()
-	a.connectionForm.HasSaved = false
+	a.demo = false
+	a.pi = stubProductHost(t, a, pi.ProductProviderList{})
+	a.runtimeStatus = runtimeStateReady
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
 	if err := tr.Click("Settings"); err != nil {
@@ -335,10 +354,9 @@ func TestConnectionRecoveryRailSettingsDefaultsToConnection(t *testing.T) {
 
 func TestConnectionRecoveryLabelsFollowLocale(t *testing.T) {
 	a, _ := workspaceTestApp(t)
-	a.runtimeStatus = runtimeStateFailed
-	a.runtimeStage = "Connection configuration"
-	a.ensureConnectionForm()
-	a.connectionForm.HasSaved = false
+	a.demo = false
+	a.pi = stubProductHost(t, a, pi.ProductProviderList{})
+	a.runtimeStatus = runtimeStateReady
 	tr := ui.NewTester(a.view, 960, 640)
 	tr.SetLocale("zh-Hans")
 	tr.Frame()
@@ -351,10 +369,9 @@ func writeConnectionRecoveryPreviews(t *testing.T, dir string) {
 	t.Helper()
 	for _, locale := range []string{"en", "zh-Hans"} {
 		a, _ := workspaceTestApp(t)
-		a.runtimeStatus = runtimeStateFailed
-		a.runtimeStage = "Connection configuration"
-		a.ensureConnectionForm()
-		a.connectionForm.HasSaved = false
+		a.demo = false
+		a.pi = stubProductHost(t, a, pi.ProductProviderList{})
+		a.runtimeStatus = runtimeStateReady
 		a.workspaceOpen = false
 		a.windowWidth = 960
 		tr := ui.NewTester(a.view, 960, 640)
@@ -366,10 +383,9 @@ func writeConnectionRecoveryPreviews(t *testing.T, dir string) {
 
 func TestConnectionRecoveryEmptyDraftKeepsHigherPriorityReason(t *testing.T) {
 	a, ct := workspaceTestApp(t)
-	a.runtimeStatus = runtimeStateFailed
-	a.runtimeStage = "Connection configuration"
-	a.ensureConnectionForm()
-	a.connectionForm.HasSaved = false
+	a.demo = false
+	a.pi = stubProductHost(t, a, pi.ProductProviderList{})
+	a.runtimeStatus = runtimeStateReady
 	ct.Archived = true
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
@@ -479,8 +495,6 @@ func TestRecoveryPresentationLocalRetryClearsOnlyOwnedFeedback(t *testing.T) {
 	}
 	config := testConnectionConfig(t)
 	a.connectionSaved = &config
-	a.connectionForm = newConnectionSettings(&config, root)
-	a.connectionForm.Error, a.connectionForm.ErrorDetail = connStatusSavedStoreFailed, a.localSaveErr
 	if err := os.Remove(path); err != nil {
 		t.Fatal(err)
 	}
@@ -492,17 +506,9 @@ func TestRecoveryPresentationLocalRetryClearsOnlyOwnedFeedback(t *testing.T) {
 	tr.Frame()
 	a.openSettingsTab(settingsTabConnection, settingsSourceRail)
 	tr.Frame()
-	if a.localSaveErr != "" || a.connectionForm.Error != "" || a.connectionForm.ErrorDetail != "" || tr.HasText(locales.In("en").RecoveryLocalSaveFailed()) {
-		t.Fatalf("successful local retry left stale form feedback: local=%q form=%q detail=%q", a.localSaveErr, a.connectionForm.Error, a.connectionForm.ErrorDetail)
+	if a.localSaveErr != "" || tr.HasText(locales.In("en").RecoveryLocalSaveFailed()) {
+		t.Fatalf("successful local retry left stale local error: local=%q", a.localSaveErr)
 	}
-	store := a.store
-	a.store = nil
-	a.connectionForm.Error, a.connectionForm.ErrorDetail = connStatusSavedStoreFailed, "unavailable local data"
-	tr.Frame()
-	if a.connectionForm.Error != connStatusSavedStoreFailed {
-		t.Fatal("unavailable store falsely cleared feedback")
-	}
-	a.store = store
 	a.closeSettings()
 	if err := os.Remove(path); err != nil {
 		t.Fatal(err)
@@ -517,7 +523,7 @@ func TestRecoveryPresentationLocalRetryClearsOnlyOwnedFeedback(t *testing.T) {
 		t.Fatal(err)
 	}
 	const applyFailure = "Pi worker exited while applying"
-	a.connectionForm.Error, a.connectionForm.ErrorDetail = connErrorApplyConfig, applyFailure
+	a.providers.failure = providerFeedback{kind: "apply", detail: applyFailure}
 	tr.Frame()
 	if err := tr.Click(locales.In("en").SettingsRetrySave()); err != nil {
 		t.Fatal(err)
@@ -525,10 +531,10 @@ func TestRecoveryPresentationLocalRetryClearsOnlyOwnedFeedback(t *testing.T) {
 	tr.Frame()
 	a.openSettingsTab(settingsTabConnection, settingsSourceRail)
 	tr.Frame()
-	if !tr.HasText(locales.In("en").RecoveryConnectionApplyFailed()) {
+	if !tr.HasText(locales.In("en").ProviderApplyFailed()) {
 		t.Fatal("successful local retry hid the unrelated Apply diagnostic")
 	}
-	if a.localSaveErr != "" || a.connectionForm.Error != connErrorApplyConfig || a.connectionForm.ErrorDetail != applyFailure || ct.Draft != "retained local edit" || ct.SessionID != sessionRef || ct.PiBinding != binding || a.selectedContact() != ct {
+	if a.localSaveErr != "" || a.providers.failure.kind != "apply" || a.providers.failure.detail != applyFailure || ct.Draft != "retained local edit" || ct.SessionID != sessionRef || ct.PiBinding != binding || a.selectedContact() != ct {
 		t.Fatal("local recovery cleared unrelated state")
 	}
 }
@@ -578,8 +584,7 @@ func TestRecoveryPresentationRendersAndControls(t *testing.T) {
 					case "form":
 						config := testConnectionConfig(t)
 						a.connectionSaved = &config
-						a.connectionForm = newConnectionSettings(&config, config.WorkingDirectory)
-						a.connectionForm.Error, a.connectionForm.ErrorDetail = connErrorTestFailed, "Controlled provider request failure with a long diagnostic that wraps over ordinary text lines."
+						a.providers.failure = providerFeedback{kind: "test", detail: "Controlled provider request failure with a long diagnostic that wraps over ordinary text lines."}
 						a.openSettingsTab(settingsTabConnection, settingsSourceRail)
 						tr = ui.NewTester(a.view, size[0], size[1])
 						action = msgs.SettingsBackAccessible()
@@ -660,7 +665,7 @@ func TestC8UnavailableDataRestoreEntryKeepsOriginalFile(t *testing.T) {
 		if readErr != nil || len(entries) != 1 || entries[0].Name() != "contacts.json" {
 			t.Error("restore navigation created replacement/configuration/archive files before confirmation")
 		}
-		if a.pi != nil || a.connectionSaved != nil || a.connectionEffective != nil || a.connectionSaveInFlight || a.connectionApplying || a.connectionTesting || a.submissionInFlight != 0 || a.shutdownStarted {
+		if a.pi != nil || a.connectionSaved != nil || a.connectionEffective != nil || a.providerBusy() || a.submissionInFlight != 0 || a.shutdownStarted {
 			t.Error("restore entry saved/applied/tested a connection or started execution/shutdown")
 		}
 	}()

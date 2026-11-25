@@ -499,6 +499,7 @@ type productActivityPanel struct {
 	file          *activityResultFileInspection
 	problem       string
 	actionProblem string
+	actionBlocker pi.ProductRouteAdmission
 	stopping      string
 	scroll        ui.ScrollState
 }
@@ -575,6 +576,7 @@ func (a *appModel) openProductActivity(ct *contact, activityID string) {
 	p.activityID, p.activity, p.result, p.file = activityID, nil, nil, nil
 	p.scroll.Y = 0
 	p.actionProblem, p.problem = "", ""
+	p.actionBlocker = pi.ProductRouteAdmission{}
 	p.focusBack = true
 	p.focusQuestion, p.legacyIssue = "", false
 	a.refreshProductActivities(ct, false)
@@ -690,20 +692,23 @@ func (a *appModel) submitProductActivity(ct *contact, target productActivityInte
 func (a *appModel) runProductActivityAction(ct *contact, client *pi.ProductClient, target productActivityIntent, dispatch bool) {
 	p := &ct.activity
 	p.changing, p.actionProblem = true, ""
+	p.actionBlocker = pi.ProductRouteAdmission{}
 	a.submissionAsyncStarted()
 	go func() {
 		var accepted, rejected bool
 		var err error
+		var receipt pi.ProductReceipt
 		if dispatch {
 			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-			accepted, err = dispatchProductActivityIntent(target, ctx, client)
+			accepted, receipt, err = dispatchProductActivityIntent(target, ctx, client)
 			cancel()
 			var command *pi.CommandError
-			rejected = errors.As(err, &command) && (command.Delivery == pi.NotSent || command.Delivery == pi.Rejected)
+			rejected = receipt.State == "rejected" || errors.As(err, &command) && (command.Delivery == pi.NotSent || command.Delivery == pi.Rejected)
 		}
 		if !accepted && !rejected {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			receipt, lookupErr := client.Operation(ctx, target.OperationID)
+			var lookupErr error
+			receipt, lookupErr = client.Operation(ctx, target.OperationID)
 			cancel()
 			if lookupErr == nil && productActivityIntentMatchesReceipt(target, receipt) {
 				accepted, rejected = receipt.State == "accepted", receipt.State == "rejected"
@@ -711,6 +716,9 @@ func (a *appModel) runProductActivityAction(ct *contact, client *pi.ProductClien
 				err = lookupErr
 			}
 		}
+		var remote *pi.RemoteError
+		errors.As(err, &remote)
+		admission := providerAdmission(receipt, remote)
 		a.updateUI(func() {
 			defer a.submissionAsyncFinished()
 			p.changing = false
@@ -719,6 +727,9 @@ func (a *appModel) runProductActivityAction(ct *contact, client *pi.ProductClien
 			}
 			if p.activityID == target.ActivityID {
 				p.actionProblem = a.connectionSafeMessage(err)
+				if rejected && providerDeliveryBlocked(admission.Code) {
+					p.actionProblem, p.actionBlocker = "", admission
+				}
 			}
 			if accepted || rejected {
 				delete(a.activityIntents, target.ActivityID)
@@ -741,6 +752,9 @@ func (a *appModel) runProductActivityAction(ct *contact, client *pi.ProductClien
 					form.text = target.Text
 					form.materials.Items = productTaskContext(target.Materials)
 				}
+			}
+			if rejected && providerDeliveryBlocked(admission.Code) {
+				a.refreshProductProviders(a.productHost())
 			}
 			p.loaded = false
 		})
@@ -806,21 +820,24 @@ func (a *appModel) loadProductTranscript(browser *productConversationBrowser, id
 	}()
 }
 
-func dispatchProductActivityIntent(target productActivityIntent, ctx context.Context, client *pi.ProductClient) (bool, error) {
+func dispatchProductActivityIntent(target productActivityIntent, ctx context.Context, client *pi.ProductClient) (bool, pi.ProductReceipt, error) {
 	execution := productActivityExecution(target.ActivityID, target.ExecutionID)
 	text := pi.ProductText{Text: target.Text, Materials: target.Materials}
 	switch target.Action {
 	case "continue":
 		receipt, err := client.ContinueActivity(ctx, pi.ProductActivityContinueParams{ProductActivityParams: execution.ProductActivityParams, ProductText: text, OperationID: target.OperationID, ExpectedRevision: target.Revision})
-		return err == nil && productActivityIntentMatchesReceipt(target, receipt) && receipt.State == "accepted", err
+		if err == nil && productActivityIntentMatchesReceipt(target, receipt) {
+			return receipt.State == "accepted", receipt, nil
+		}
+		return false, pi.ProductReceipt{}, err
 	case "answer":
 		answer, err := client.AnswerQuestion(ctx, pi.ProductAnswerParams{ProductActivityExecutionParams: execution, ProductText: text, QuestionID: target.QuestionID, QuestionRevision: target.Revision, OperationID: target.OperationID})
-		return err == nil && answer.AnswerSaved && answer.ActivityID == target.ActivityID && answer.ExecutionID == target.ExecutionID && answer.QuestionID == target.QuestionID, err
+		return err == nil && answer.AnswerSaved && answer.ActivityID == target.ActivityID && answer.ExecutionID == target.ExecutionID && answer.QuestionID == target.QuestionID, pi.ProductReceipt{}, err
 	case "stop":
 		stop, err := client.StopActivity(ctx, pi.ProductActivityStopParams{ProductActivityExecutionParams: execution, OperationID: target.OperationID})
-		return err == nil && stop.CancelRequested && stop.ExecutionID == target.ExecutionID, err
+		return err == nil && stop.CancelRequested && stop.ExecutionID == target.ExecutionID, pi.ProductReceipt{}, err
 	default:
-		return false, nil
+		return false, pi.ProductReceipt{}, nil
 	}
 }
 

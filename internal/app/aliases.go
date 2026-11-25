@@ -123,27 +123,9 @@ const (
 	activityToolModeWork                = store.IssueToolModeWork
 	activityToolExecutionPageLimit      = store.IssueToolExecutionPageLimit
 
-	connectionAPIResponses                 = connection.APIResponses
-	connectionAPIChatCompletions           = connection.APIChatCompletions
-	connectionValidationRequired           = connection.ValidationRequired
-	connectionValidationEndpointURL        = connection.ValidationEndpointURL
-	connectionValidationWorkspaceDirectory = connection.ValidationWorkspaceDirectory
-	validationNumeric                      = connection.ValidationNumeric
-	connStatusSaving                       = connection.StatusSaving
-	connStatusSavedApplied                 = connection.StatusSavedApplied
-	connStatusChecking                     = connection.StatusChecking
-	connStatusApplied                      = connection.StatusApplied
-	connStatusTesting                      = connection.StatusTesting
-	connStatusTestCompleted                = connection.StatusTestCompleted
-	connStatusSavedStoreFailed             = connection.StatusSavedStoreFailed
-	connErrorTestFailed                    = connection.ErrorTestFailed
-	connErrorSavedNeedsRepair              = connection.ErrorSavedNeedsRepair
-	connErrorApplyConfig                   = connection.ErrorApplyConfig
-	connBlockedApplying                    = connection.BlockedApplying
-	connBlockedShutdown                    = connection.BlockedShutdown
-	connBlockedNoSaved                     = connection.BlockedNoSaved
-	connBlockedStore                       = connection.BlockedStore
-	connBlockedActiveWork                  = connection.BlockedActiveWork
+	connectionAPIResponses          = connection.APIResponses
+	connectionAPIChatCompletions    = connection.APIChatCompletions
+	connectionValidationEndpointURL = connection.ValidationEndpointURL
 
 	taskContextMaxBytes = materials.MaxBytes
 )
@@ -208,11 +190,8 @@ type (
 	storeRecoveryOutcome          = store.StoreRecoveryOutcome
 	storeRecoveryResult           = store.StoreRecoveryResult
 
-	connectionConfig          = connection.Config
-	privateConnectionConfig   = connection.PrivateConfig
-	connectionDraft           = connection.Draft
-	connectionSettings        = connection.Settings
-	connectionSettingsActions = connection.SettingsActions
+	connectionConfig        = connection.Config
+	privateConnectionConfig = connection.PrivateConfig
 
 	taskContext = materials.Context
 )
@@ -397,9 +376,6 @@ func validateConnectionConfig(config connectionConfig) map[string]string {
 }
 func connectionValidationSummary(fields map[string]string) string {
 	return connection.ValidationSummary(fields)
-}
-func newConnectionSettings(config *connectionConfig, workDir string) *connectionSettings {
-	return connection.NewSettings(config, workDir)
 }
 
 func validateTaskContext(items []taskContextItem) error { return materials.Validate(items) }

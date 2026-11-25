@@ -19,12 +19,8 @@ func newRuntimeApp() (*appModel, error) {
 	defaultWorkDir := guiWorkDir()
 	startup := readConnectionStartup(storePath)
 	workDir := defaultWorkDir
-	formWorkDir := defaultWorkDir
 	if startup.Config != nil {
 		workDir = startup.Config.WorkingDirectory
-		formWorkDir = workDir
-	} else if startup.FormConfig != nil && startup.FormConfig.WorkingDirectory != "" {
-		formWorkDir = startup.FormConfig.WorkingDirectory
 	}
 
 	_, statErr := os.Stat(storePath)
@@ -71,17 +67,9 @@ func newRuntimeApp() (*appModel, error) {
 	if a.activityToolScopes == nil {
 		a.activityToolScopes = map[string]ActivityToolScope{}
 	}
-	formConfig := startup.Config
-	if formConfig == nil {
-		formConfig = startup.FormConfig
-	}
-	a.connectionForm = newConnectionSettings(formConfig, formWorkDir)
 	if startup.Config == nil {
-		a.connectionForm.HasSaved = false
 		switch {
 		case startup.LoadErr != nil:
-			a.connectionForm.Error = connErrorSavedNeedsRepair
-			a.connectionForm.ErrorDetail = ""
 			a.runtimeStatus = runtimeStateFailed
 			a.runtimeStage = "Connection configuration"
 			a.runtimeErrKind = runtimeNoticeSavedNeedsRepair

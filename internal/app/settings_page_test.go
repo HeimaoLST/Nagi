@@ -12,6 +12,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
+	"github.com/HeimaoLST/Nagi/internal/pi"
 	"github.com/HeimaoLST/Nagi/locales"
 )
 
@@ -53,7 +54,7 @@ func TestSettingsPageReplacesWorkbenchAndRoutesEntries(t *testing.T) {
 	if a.settingsScroll.Y != 0 {
 		t.Fatalf("connection category opened scrolled: %v", a.settingsScroll.Y)
 	}
-	if a.settingsTab != settingsTabConnection || !tr.HasText(msgs.ConnectionNoneApplied()) {
+	if a.settingsTab != settingsTabConnection || !tr.HasText(msgs.ProviderQuickStart()) {
 		t.Fatalf("connection category = %q texts=%v", a.settingsTab, tr.Texts())
 	}
 	if err := tr.Click("← Back to workbench"); err != nil {
@@ -207,14 +208,15 @@ func TestSettingsPageConnectionErrorRoutesToConnectionCategory(t *testing.T) {
 func TestSettingsCategoryChangeResetsContentScrollAndKeepsDraft(t *testing.T) {
 	a, _ := workspaceTestApp(t)
 	a.openSettingsTab(settingsTabConnection, settingsSourceRail)
-	a.connectionForm.Draft.Model = "unsaved model"
+	a.chooseFirstProvider(0)
+	a.providers.first.DefaultModel = "unsaved model"
 	a.settingsScroll.Y = 200
 	a.selectSettingsTab(settingsTabAdvanced)
 	if a.settingsScroll.Y != 0 || a.settingsTab != settingsTabAdvanced {
 		t.Fatalf("category switch = scroll=%v tab=%q", a.settingsScroll.Y, a.settingsTab)
 	}
 	a.selectSettingsTab(settingsTabConnection)
-	if a.connectionForm.Draft.Model != "unsaved model" {
+	if a.providers.first.DefaultModel != "unsaved model" {
 		t.Fatal("category switch discarded the connection draft")
 	}
 }
@@ -278,63 +280,40 @@ func TestGeneralPreferenceSelectorsKeepWidthAndKeyboardChoice(t *testing.T) {
 	}
 }
 
-func TestSettingsConnectionDirtyDiscardAndAppliedReopen(t *testing.T) {
-	config := connectionConfig{API: connectionAPIChatCompletions, Endpoint: "http://example.test/v1", APIKey: "fixture", Model: "fixture", ContextTokens: 1000, OutputTokens: 100, WorkingDirectory: t.TempDir(), MaxActiveTasks: 2}
-	a, _ := workspaceTestApp(t)
-	a.connectionForm = newConnectionSettings(&config, config.WorkingDirectory)
-	a.connectionSaved = &config
-	a.connectionEffective = &config
-	a.pi = presentationPiHost(a)
-	a.runtimeStatus = runtimeStateReady
-	a.openSettingsTab(settingsTabConnection, settingsSourceRail)
-	if !a.connectionApplied() || a.connectionForm.Dirty() {
-		t.Fatalf("applied reopen = applied=%v dirty=%v", a.connectionApplied(), a.connectionForm.Dirty())
-	}
-	a.connectionForm.Draft.Model = "changed"
-	if !a.connectionForm.Dirty() {
-		t.Fatal("connection edit was not marked dirty")
-	}
-	tr := ui.NewTester(a.view, 1040, 720)
-	if err := clickSettingsAction(tr, "Discard changes"); err != nil {
-		t.Fatal(err)
-	}
-	if a.connectionForm.Dirty() || a.connectionForm.Draft.Model != "fixture" {
-		t.Fatalf("connection discard = %+v", a.connectionForm.Draft)
-	}
-}
-
 func TestSettingsConnectionEditorsSurviveNavigationAndLocale(t *testing.T) {
-	a, ct := workspaceTestApp(t)
+	a := providerUITestApp(t, pi.ProductProviderList{Policy: pi.ProductRoutingBalanced})
+	ct := a.selectedContact()
 	recoveryTestStore(t, a)
 	saved := testConnectionConfig(t)
 	effective := saved
 	effective.Model = "effective-model"
 	a.connectionSaved, a.connectionEffective = &saved, &effective
-	form := newConnectionSettings(&saved, saved.WorkingDirectory)
-	a.connectionForm = form
+	a.chooseFirstProvider(-1)
+	editor := a.providers.first
 	ct.Draft = "keep conversation text"
 	a.openSettingsTab(settingsTabConnection, settingsSourceRail)
 	tr := ui.NewTester(a.view, 1040, 720)
+	tr.SetLocale("en")
 	tr.SetFocused(true)
 	tr.Frame()
-	if err := clickSettingsAction(tr, "Edit Default model"); err != nil {
-		t.Fatal(err)
+	msgs := locales.In("en")
+	for range 64 {
+		active, _ := tr.TextInputActive()
+		if tr.Focused(msgs.ProviderDefaultModel()) && active {
+			break
+		}
+		tr.Key(0, ui.KeyTab)
+		tr.Frame()
 	}
-	if !tr.Focused("Default model") {
-		t.Fatal("model Edit did not focus the existing input")
+	if !tr.Focused(msgs.ProviderDefaultModel()) {
+		t.Fatal("Default model input did not take focus")
 	}
 	tr.Key(ui.Cmd, ui.KeyA)
 	tr.Type("unsaved-model")
 	tr.Frame()
-	if err := clickSettingsAction(tr, "Close Default model editor"); err != nil {
-		t.Fatal(err)
-	}
-	form.Draft.Slots = "invalid slots"
-	form.Errors = map[string]string{"MaxActiveTasks": validationNumeric}
-	form.Error, form.ErrorDetail = connErrorTestFailed, "original failure detail"
-	form.Status = connStatusTestCompleted
-	form.StatusArgs = []string{"tested-model", "https://tested.example.invalid", "1000", "100"}
-	draft := form.Draft
+	editor.fields = map[string]string{"Endpoint": connectionValidationEndpointURL}
+	editor.probe = providerFeedback{kind: "tested", models: 2, latency: 15}
+	a.providers.failure = providerFeedback{kind: "apply", detail: "original failure detail"}
 	a.selectSettingsTab(settingsTabAppearance)
 	tr.Frame()
 	a.selectSettingsTab(settingsTabConnection)
@@ -347,19 +326,11 @@ func TestSettingsConnectionEditorsSurviveNavigationAndLocale(t *testing.T) {
 	tr.Frame()
 	tr.SetLocale("en")
 	tr.Frame()
-	if a.connectionForm != form || form.Draft != draft || form.ErrorDetail != "original failure detail" || form.Status != connStatusTestCompleted || form.Errors["MaxActiveTasks"] != validationNumeric || !form.Dirty() || !a.connectionSavedPending() {
-		t.Fatal("navigation/locale replaced the form, raw edits or independent feedback")
+	if a.providers.first != editor || editor.DefaultModel != "unsaved-model" || a.providers.failure.detail != "original failure detail" || editor.probe.kind != "tested" || editor.fields["Endpoint"] != connectionValidationEndpointURL {
+		t.Fatal("navigation/locale replaced the provider editor, raw edits or independent feedback")
 	}
-	if *a.connectionSaved != saved || *a.connectionEffective != effective || a.pi != nil || ct.SessionID != "s1" || ct.Draft != "keep conversation text" {
-		t.Fatal("disclosure/navigation changed saved, effective or conversation state, or started Runtime")
-	}
-	if err := clickSettingsAction(tr, "Edit Default model"); err != nil {
-		t.Fatal(err)
-	}
-	tr.Type("-again")
-	tr.Frame()
-	if form.Draft.Model != "unsaved-model-again" || form.ErrorDetail != "original failure detail" {
-		t.Fatal("reopened editor lost current text, focus or feedback")
+	if *a.connectionSaved != saved || *a.connectionEffective != effective || ct.SessionID != "s1" || ct.Draft != "keep conversation text" {
+		t.Fatal("navigation/locale changed saved, effective or conversation state")
 	}
 }
 
@@ -374,29 +345,49 @@ func TestPreferencesListControlsAndPreviews(t *testing.T) {
 						a, ct := workspaceTestApp(t)
 						recoveryTestStore(t, a)
 						a.windowWidth = size[0]
-						config := testConnectionConfig(t)
 						a.connectionPath = filepath.Join(t.TempDir(), "connection.json")
-						if scene != "fresh" {
-							if err := saveConnectionConfig(a.connectionPath, config); err != nil {
-								t.Fatal(err)
+						rev1 := uint64(1)
+						if scene != "fresh" && scene != "general" {
+							a.providers.snapshot = pi.ProductProviderList{
+								SavedRevision:     &rev1,
+								EffectiveRevision: &rev1,
+								Policy:            pi.ProductRoutingBalanced,
+								Accounts: []pi.ProductProviderAccountView{{
+									ProductProviderAccount: pi.ProductProviderAccount{
+										ProviderID:    "pref-prov-1",
+										Name:          "Studio gateway",
+										WireAPI:       pi.OpenAICompletions,
+										BaseURL:       "https://example.com/v1",
+										DefaultModel:  "test-model",
+										ContextTokens: 131072,
+										OutputTokens:  8192,
+										Enabled:       true,
+									},
+									CredentialStatus: "ok",
+								}},
 							}
-							saved, err := loadConnectionConfig(a.connectionPath)
-							if err != nil {
-								t.Fatal(err)
-							}
-							a.connectionSaved = &saved
+							a.selectProvider(a.providers.snapshot.Accounts[0])
+						} else if scene == "fresh" {
+							a.demo = false
+							a.runtimeStatus = runtimeStateReady
+							a.pi = stubProductHost(t, a, pi.ProductProviderList{Policy: pi.ProductRoutingBalanced})
+							a.chooseFirstProvider(0)
 						}
-						a.connectionForm = newConnectionSettings(a.connectionSaved, "")
-						form := a.connectionForm
+						var editor *providerEditor
+						if scene == "fresh" {
+							editor = a.providers.first
+						} else if scene != "general" {
+							editor = a.providers.drafts["pref-prov-1"]
+						}
 						if scene == "dirty" || scene == "invalid-long" {
-							form.Draft.Endpoint = "https://current.example.invalid/" + strings.Repeat("long-project/", 10)
-							form.Draft.Model = "current/" + strings.Repeat("long-model-name-", 8)
+							editor.BaseURL = "https://current.example.invalid/" + strings.Repeat("long-project/", 10)
+							editor.DefaultModel = "current/" + strings.Repeat("long-model-name-", 8)
 						}
 						if scene == "invalid-long" {
-							form.Draft.APIKey = ""
-							form.Draft.ContextTokens, form.Draft.OutputTokens, form.Draft.Slots = "9007199254740993suffix", "1.5", "invalid slots"
-							form.Validated()
-							form.Errors["Endpoint"] = strings.Repeat("A complete original field error must remain readable while scrolling. ", 8)
+							editor.APIKey = ""
+							editor.context, editor.output = "9007199254740993suffix", "1.5"
+							editor.input(false)
+							editor.fields["Endpoint"] = strings.Repeat("A complete original field error must remain readable while scrolling. ", 2)
 						}
 						tab := settingsTabConnection
 						if scene == "general" {
@@ -414,32 +405,23 @@ func TestPreferencesListControlsAndPreviews(t *testing.T) {
 						if scene == "general" {
 							controls = append(controls, msgs.ThemeImportAction(), msgs.ThemeReload())
 						} else {
-							controls = append(controls, msgs.WorkFolderChoose(), msgs.ConnectionFolderEnterPath(), msgs.ConnectionSaveConfiguration(), msgs.ConnectionTestAction())
-							if scene == "saved" || scene == "dirty" {
-								controls = append(controls, msgs.ConnectionEditField(msgs.ConnectionFieldEndpoint()), msgs.ConnectionEditField(msgs.ConnectionFieldAPIKey()), msgs.ConnectionEditField(msgs.ConnectionFieldModel()))
+							testLabel := msgs.ProviderTestAccount("Studio gateway")
+							if scene == "fresh" {
+								testLabel = msgs.ProviderTestAccount("OpenAI")
 							}
-						}
-						if scene == "saved" {
-							for i := 0; i < 18; i++ {
-								tr.Key(0, ui.KeyTab)
-								tr.Frame()
-								if active, _ := tr.TextInputActive(); active {
-									t.Fatal("saved quiescent settings kept a permanent free-text input")
-								}
-							}
-							tr.Key(0, ui.KeyEscape)
+							controls = append(controls, msgs.ProviderSave(), msgs.ProviderSaveApply(), testLabel)
 						}
 						if scene == "fresh" {
 							fields := []struct {
 								label string
 								value *string
 							}{
-								{msgs.ConnectionFieldEndpoint(), &form.Draft.Endpoint},
-								{msgs.ConnectionFieldAPIKey(), &form.Draft.APIKey},
-								{msgs.ConnectionFieldModel(), &form.Draft.Model},
+								{msgs.ProviderBaseURL(), &editor.BaseURL},
+								{msgs.ConnectionFieldAPIKey(), &editor.APIKey},
+								{msgs.ProviderDefaultModel(), &editor.DefaultModel},
 							}
 							inputs := make(map[string]bool, len(fields))
-							for i := 0; i < 18; i++ {
+							for range 48 {
 								tr.Key(0, ui.KeyTab)
 								tr.Frame()
 								for _, field := range fields {
@@ -447,7 +429,7 @@ func TestPreferencesListControlsAndPreviews(t *testing.T) {
 										continue
 									}
 									if active, _ := tr.TextInputActive(); !active {
-										t.Fatalf("focused preference %q is not an editor", field.label)
+										continue
 									}
 									previous := *field.value
 									tr.Key(ui.Cmd, ui.KeyA)
@@ -460,17 +442,15 @@ func TestPreferencesListControlsAndPreviews(t *testing.T) {
 									tr.Frame()
 									inputs[field.label] = true
 								}
-								if tr.Focused(msgs.ConnectionFieldWorkingDirectory()) {
-									t.Fatal("fresh setup exposed the manual path before its disclosure")
-								}
 							}
 							for _, field := range fields {
 								if !inputs[field.label] {
-									t.Fatalf("fresh setup required an Edit action for %q", field.label)
+									t.Fatalf("fresh setup could not focus %q", field.label)
 								}
 							}
 						}
 						a.settingsScroll.Y = 0
+						a.providers.detailScroll.Y = 0
 						tr.Frame()
 						seen := map[string]bool{}
 						bounds := map[string]ui.Rect{}
@@ -490,7 +470,7 @@ func TestPreferencesListControlsAndPreviews(t *testing.T) {
 								}
 							}
 							if scene == "invalid-long" {
-								text := form.Errors["Endpoint"]
+								text := editor.fields["Endpoint"]
 								r, ok := tr.Find(text)
 								_, height := ui.ShapeText(text, ui.Font{Size: typeMeta, LineHeight: 1.5, Lang: locale}, r.W).Size()
 								visible := ok && r.H+0.5 >= height && r.Y >= 0 && r.Y+r.H <= float32(size[1])
@@ -502,13 +482,31 @@ func TestPreferencesListControlsAndPreviews(t *testing.T) {
 									bounds["complete-field-error"] = r
 								}
 							}
-							before := a.settingsScroll.Y
+							scrollState := &a.settingsScroll
+							scrollX, scrollY, delta := float32(size[0]/2), float32(size[1]-120), float32(240)
+							if scene != "general" {
+								scrollState = &a.providers.detailScroll
+								delta = 40
+								testLabel := msgs.ProviderTestAccount("Studio gateway")
+								if scene == "fresh" {
+									testLabel = msgs.ProviderTestAccount("OpenAI")
+								}
+								headerRect, okH := tr.Find(testLabel)
+								footerRect, okF := tr.Find(msgs.ProviderSaveApply())
+								if okH && okF {
+									scrollX = footerRect.X
+									scrollY = (headerRect.Y + headerRect.H + footerRect.Y) / 2
+								} else {
+									scrollX, scrollY = float32(size[0]-80), float32(size[1]-180)
+								}
+							}
+							before := scrollState.Y
 							if directory != "" && (step == 0 || step == 2) {
 								writePreviewPNG(t, filepath.Join(directory, fmt.Sprintf("%s-scroll-%02d.png", name, step)), tr.Image())
 							}
-							tr.Scroll(float32(size[0]/2), float32(size[1]-100), 0, 240)
+							tr.Scroll(scrollX, scrollY, 0, delta)
 							tr.Frame()
-							if before == a.settingsScroll.Y {
+							if before == scrollState.Y {
 								if directory != "" {
 									writePreviewPNG(t, filepath.Join(directory, name+"-bottom.png"), tr.Image())
 								}
@@ -523,7 +521,7 @@ func TestPreferencesListControlsAndPreviews(t *testing.T) {
 						if scene == "invalid-long" && !fullErrorSeen {
 							t.Fatal("the complete original field error was not reachable by scrolling")
 						}
-						if a.pi != nil || a.connectionTesting || a.connectionApplying || ct.SessionID != "s1" {
+						if (scene != "fresh" && a.pi != nil) || a.providerBusy() || ct.SessionID != "s1" {
 							t.Fatal("rendering/keyboard traversal started execution or changed the session")
 						}
 						if directory != "" {
@@ -644,10 +642,9 @@ func TestPreviewSettingsPage(t *testing.T) {
 	} else if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	longPath := "/Users/you/Workspace/a-very-long-project-directory-name/with/deep/nested/segments"
 	longURL := "https://provider.example.invalid/v1/organizations/team/projects/workspace/models/default"
 	longError := "Connection could not be applied because the saved endpoint is unavailable. Review the endpoint and retry after the current work finishes."
-	config := connectionConfig{API: connectionAPIChatCompletions, Endpoint: longURL, Model: "provider/very-long-model-identifier", ContextTokens: 131072, OutputTokens: 8192, WorkingDirectory: longPath, MaxActiveTasks: 2}
+	rev1 := uint64(1)
 	for _, dark := range []bool{false, true} {
 		theme := "light"
 		if dark {
@@ -663,11 +660,25 @@ func TestPreviewSettingsPage(t *testing.T) {
 				a.windowWidth = size.width
 				switch tab {
 				case settingsTabConnection:
-					a.connectionForm = newConnectionSettings(&config, longPath)
-					a.connectionSaved = &config
-					a.connectionEffective = &config
-					a.connectionForm.HasSaved = true
-					a.connectionForm.Error = longError
+					a.providers.snapshot = pi.ProductProviderList{
+						SavedRevision:     &rev1,
+						EffectiveRevision: &rev1,
+						Policy:            pi.ProductRoutingBalanced,
+						Accounts: []pi.ProductProviderAccountView{{
+							ProductProviderAccount: pi.ProductProviderAccount{
+								ProviderID:    "preview-p1",
+								Name:          "Studio gateway",
+								WireAPI:       pi.OpenAICompletions,
+								BaseURL:       longURL,
+								DefaultModel:  "provider/very-long-model-identifier",
+								ContextTokens: 131072,
+								OutputTokens:  8192,
+								Enabled:       true,
+							},
+							CredentialStatus: "ok",
+						}},
+					}
+					a.providers.failure = providerFeedback{kind: "apply", detail: longError}
 					a.runtimeStatus = runtimeStateReady
 				case settingsTabAdvanced:
 					a.runtimeStatus = runtimeStateFailed
@@ -688,11 +699,12 @@ func TestPreviewSettingsPage(t *testing.T) {
 					if a.settingsScroll.Y != 0 {
 						t.Fatalf("connection preview scrolled at %dx%d: %v", size.width, size.height, a.settingsScroll.Y)
 					}
-					if !tr.HasText("Current:") {
-						t.Fatalf("connection current state missing at %dx%d: %v", size.width, size.height, tr.Texts())
+					msgs := locales.In("en")
+					if !tr.HasText(msgs.ProviderAccounts()) {
+						t.Fatalf("connection provider list header missing at %dx%d: %v", size.width, size.height, tr.Texts())
 					}
-					if r, ok := tr.Find("Protocol"); !ok || r.X < 0 || r.X+r.W > float32(size.width) || r.Y < 0 || r.Y+r.H > float32(size.height) {
-						t.Fatalf("connection first field not visible at %dx%d: %+v ok=%v", size.width, size.height, r, ok)
+					if r, ok := tr.Find(msgs.ProviderSaveApply()); !ok || r.X < 0 || r.X+r.W > float32(size.width) || r.Y < 0 || r.Y+r.H > float32(size.height) {
+						t.Fatalf("connection footer primary action not visible at %dx%d: %+v ok=%v", size.width, size.height, r, ok)
 					}
 				}
 				if export {
@@ -715,10 +727,10 @@ func TestFirstLaunchOpensConnectionSettingsPageWithoutEmptyOverlay(t *testing.T)
 	}
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	if !tr.HasText("Connection & model") || !tr.HasText("Save and apply") || tr.HasText("No messages yet") {
+	msgs := locales.In("en")
+	if !tr.HasText(msgs.SettingsConnection()) || !tr.HasText(msgs.ProviderSaveApply()) || tr.HasText("No messages yet") {
 		t.Fatalf("first launch did not show the connection page alone: %v", tr.Texts())
 	}
-	msgs := locales.In("en")
 	if err := tr.Click(msgs.SettingsAdvanced()); err != nil {
 		t.Fatal(err)
 	}
@@ -736,7 +748,7 @@ func TestFirstLaunchOpensConnectionSettingsPageWithoutEmptyOverlay(t *testing.T)
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if a.settingsTab != settingsTabConnection || !tr.HasText("Save and apply") || tr.HasText("No messages yet") {
+	if a.settingsTab != settingsTabConnection || !tr.HasText(msgs.ProviderSaveApply()) || tr.HasText("No messages yet") {
 		t.Fatalf("Advanced did not return to the connection page alone: %v", tr.Texts())
 	}
 }
@@ -750,35 +762,59 @@ func TestSettingsLongConnectionScrollsThenPrimaryActionIsVisible(t *testing.T) {
 			t.Fatalf("%d action %q not visible in viewport: %+v ok=%v", width, label, r, ok)
 		}
 	}
+	rev1, rev2 := uint64(1), uint64(2)
 	for _, width := range []int{720, 800} {
 		for _, tc := range []struct {
-			name   string
-			dirty  bool
-			bottom []string
+			name    string
+			pending bool
+			actions []string
 		}{
-			{"clean pending", false, []string{msgs.ConnectionApplySaved(), msgs.ConnectionSaveConfiguration()}},
-			{"dirty pending", true, []string{msgs.ConnectionSaveAndApply(), msgs.ConnectionSaveConfiguration(), msgs.ConnectionApplySaved(), msgs.ConnectionDiscard()}},
+			{"applied", false, []string{msgs.ProviderSave(), msgs.ProviderSaveApply()}},
+			{"pending", true, []string{msgs.ProviderApplyChanges(), msgs.ProviderSave(), msgs.ProviderSaveApply()}},
 		} {
 			t.Run(fmt.Sprintf("%d-%s", width, tc.name), func(t *testing.T) {
-				a, _ := workspaceTestApp(t)
-				config := connectionConfig{API: connectionAPIChatCompletions, Endpoint: "https://provider.example.invalid/v1/very/long/endpoint", APIKey: "fixture", Model: "fixture", ContextTokens: 1000, OutputTokens: 100, WorkingDirectory: t.TempDir(), MaxActiveTasks: 2}
-				a.connectionForm = newConnectionSettings(&config, config.WorkingDirectory)
-				a.connectionSaved = &config
-				if tc.dirty {
-					a.connectionForm.Draft.Model = "edited-fixture"
+				pool := pi.ProductProviderList{
+					SavedRevision:     &rev1,
+					EffectiveRevision: &rev1,
+					Policy:            pi.ProductRoutingBalanced,
+					Accounts: []pi.ProductProviderAccountView{{
+						ProductProviderAccount: pi.ProductProviderAccount{
+							ProviderID:    "long-p1",
+							Name:          "Studio gateway",
+							WireAPI:       pi.OpenAICompletions,
+							BaseURL:       "https://provider.example.invalid/v1/very/long/endpoint",
+							DefaultModel:  "fixture",
+							Models:        []string{"fixture", "model-a", "model-b", "model-c", "model-d"},
+							ContextTokens: 131072,
+							OutputTokens:  8192,
+							Enabled:       true,
+						},
+						CredentialStatus: "ok",
+					}},
 				}
-				a.connectionForm.Error = strings.Repeat("A long form error that wraps without pushing controls out of the page. ", 8)
+				if tc.pending {
+					pool.SavedRevision = &rev2
+				}
+				a := providerUITestApp(t, pool)
+				a.selectProvider(pool.Accounts[0])
+				a.providers.drafts["long-p1"].advanced = true
+				a.providers.drafts["long-p1"].showModels = true
+				a.providers.drafts["long-p1"].custom = true
 				a.windowWidth = width
 				a.openSettingsTab(settingsTabConnection, settingsSourceRail)
 				tr := ui.NewTester(a.view, width, 640)
 				tr.Frame()
-				assertVisible(t, tr, width, msgs.ConnectionTestAction())
-				tr.Scroll(float32(width/2), 400, 0, 2000)
-				tr.Frame()
-				if a.settingsScroll.Y <= 0 {
-					t.Fatalf("%d long settings content did not scroll: %v", width, a.settingsScroll.Y)
+				headerRect, okH := tr.Find(msgs.ProviderTestAccount("Studio gateway"))
+				footerRect, okF := tr.Find(msgs.ProviderSaveApply())
+				if !okH || !okF {
+					t.Fatalf("%d provider header/footer missing: header=%v footer=%v", width, okH, okF)
 				}
-				for _, label := range tc.bottom {
+				tr.Scroll(footerRect.X, (headerRect.Y+headerRect.H+footerRect.Y)/2, 0, 2000)
+				tr.Frame()
+				if a.providers.detailScroll.Y <= 0 {
+					t.Fatalf("%d long provider detail did not scroll: %v", width, a.providers.detailScroll.Y)
+				}
+				for _, label := range tc.actions {
 					assertVisible(t, tr, width, label)
 				}
 			})
@@ -985,15 +1021,33 @@ func TestExplicitRailSettingsDoesNotReuseOldMarkdownLinkReturn(t *testing.T) {
 }
 
 func TestSettingsPendingBannerSurvivesDistinctTestStatus(t *testing.T) {
-	a, _ := workspaceTestApp(t)
-	config := testConnectionConfig(t)
-	a.connectionSaved = &config
-	a.connectionForm = newConnectionSettings(&config, config.WorkingDirectory)
-	a.connectionForm.Status = "Connection test completed: fixture"
-	a.openSettingsTab(settingsTabConnection, settingsSourceRail)
+	rev1, rev2 := uint64(1), uint64(2)
+	pool := pi.ProductProviderList{
+		SavedRevision:     &rev2,
+		EffectiveRevision: &rev1,
+		Policy:            pi.ProductRoutingBalanced,
+		Accounts: []pi.ProductProviderAccountView{{
+			ProductProviderAccount: pi.ProductProviderAccount{
+				ProviderID:    "p1",
+				Name:          "Studio gateway",
+				WireAPI:       pi.OpenAICompletions,
+				BaseURL:       "https://example.com/v1",
+				DefaultModel:  "fixture",
+				ContextTokens: 131072,
+				OutputTokens:  8192,
+				Enabled:       true,
+			},
+			CredentialStatus: "ok",
+		}},
+	}
+	a := providerUITestApp(t, pool)
+	a.selectProvider(pool.Accounts[0])
+	a.providers.drafts["p1"].probe = providerFeedback{kind: "tested", models: 2, latency: 12}
 	tr := ui.NewTester(a.view, 1040, 720)
+	tr.SetLocale("en")
 	tr.Frame()
-	if !tr.HasText(locales.In("en").ConnectionSavedAwaitingApply()) || !tr.HasText("Connection test completed: fixture") {
+	msgs := locales.In("en")
+	if !tr.HasText(msgs.ProviderApplyChanges()) || !tr.HasText(msgs.ProviderProbeResult(2, "12")) {
 		t.Fatalf("pending fact was lost behind distinct test status: %v", tr.Texts())
 	}
 }
@@ -1170,18 +1224,19 @@ func TestC8SaveRecoveryCopyEntryKeepsSavedAndUnsavedState(t *testing.T) {
 	openBotProfileFromRail(t, tr, locales.In("en").AvatarContactLabel(ct.Name))
 	editor := a.profileEditorFor(ct.ID)
 	editor.Draft.Name = "Unsaved profile name excluded from the copy"
-	a.connectionForm.Draft.Model = "unsaved-connection-model"
-	profileName, modelDraft := editor.Draft.Name, a.connectionForm.Draft
+	a.chooseFirstProvider(0)
+	a.providers.first.DefaultModel = "unsaved-connection-model"
+	profileName, modelDraft := editor.Draft.Name, a.providers.first.DefaultModel
 	requests, replies, updates := c8ControlledPicker(t, a)
 	folder := t.TempDir()
 	before := recoveryRecordSnapshot(t, ct)
 	ids, mode, store := a.appearanceThemeIDs, a.appearanceMode, a.store
 	defer func() {
 		after, readErr := os.ReadFile(a.storePath)
-		if readErr != nil || string(after) != string(saved) || recoveryRecordSnapshot(t, ct) != before || editor.Draft.Name != profileName || ct.Name == profileName || a.connectionForm.Draft != modelDraft || a.appearanceThemeIDs != ids || a.appearanceMode != mode || a.store != store {
+		if readErr != nil || string(after) != string(saved) || recoveryRecordSnapshot(t, ct) != before || editor.Draft.Name != profileName || ct.Name == profileName || a.providers.first.DefaultModel != modelDraft || a.appearanceThemeIDs != ids || a.appearanceMode != mode || a.store != store {
 			t.Error("recovery-copy entry changed saved bytes, IDs, work, unsaved editors or preferences")
 		}
-		if a.pi != nil || a.connectionSaved != nil || a.connectionEffective != nil || a.connectionSaveInFlight || a.connectionApplying || a.connectionTesting || a.submissionInFlight != 0 || a.shutdownStarted {
+		if a.pi != nil || a.connectionSaved != nil || a.connectionEffective != nil || a.providerBusy() || a.submissionInFlight != 0 || a.shutdownStarted {
 			t.Error("recovery-copy entry saved/applied/tested a connection or started execution/shutdown")
 		}
 	}()
@@ -1407,7 +1462,7 @@ func TestC8RecoveryCopyCollisionAndRetry(t *testing.T) {
 }
 
 func TestC8RecoveryRechecksTargetAndDirtyPreview(t *testing.T) {
-	for _, change := range []string{"target", "profile", "form", "context", "view", "cancel"} {
+	for _, change := range []string{"target", "profile", "context", "view", "cancel"} {
 		t.Run(change, func(t *testing.T) {
 			a := c8UnavailableApp(t)
 			req, reply, updates := c8ControlledPicker(t, a)
@@ -1429,8 +1484,6 @@ func TestC8RecoveryRechecksTargetAndDirtyPreview(t *testing.T) {
 			case "profile":
 				a.openContactProfile(a.selectedID())
 				a.profileEditorFor(a.selectedID()).Draft.Name = "keep unsaved profile"
-			case "form":
-				a.connectionForm.Draft.Model = "keep unsaved model"
 			case "context":
 				a.selectedContact().Context.FormText = "keep unsaved context"
 			case "view":
@@ -1797,11 +1850,9 @@ func TestSettingsQoderIntegratedLayout(t *testing.T) {
 					a, ct := workspaceTestApp(t)
 					recoveryTestStore(t, a)
 					a.windowWidth = width
-					config := testConnectionConfig(t)
-					a.connectionSaved, a.connectionEffective = &config, &config
-					a.connectionForm = newConnectionSettings(&config, config.WorkingDirectory)
 					ct.Draft = "Keep the actual draft while inspecting settings layout"
 					a.openSettingsTab(settingsTabConnection, settingsSourceRail)
+					a.providers.tab = providerTabRouting
 					var viewport ui.Rect
 					tr := ui.NewTester(func(c *ui.Context) {
 						ui.Box(c).Fill().DrawOver(func(_ *ui.Painter, _ ui.Rect) { viewport = a.settingsScroll.Bounds(c) }).Children(func() { a.view(c) })

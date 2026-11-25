@@ -130,7 +130,6 @@ type guiHarness struct {
 	root      string
 	closed    bool
 	piClient  *pi.ProductClient
-	piProbe   *piConnectionProbe
 	piOutcome pi.ProcessOutcome
 
 	// Test-only observer for the first evaluation of the shutdown predicate.
@@ -203,8 +202,8 @@ func (h *guiHarness) shutdownSnapshot() shutdownDiagnostic {
 	a := h.app
 	var b strings.Builder
 	fmt.Fprintf(&b, "shutdown_started=%v quit_ready=%v runtime_status=%q pi_present=%v\n", a.shutdownStarted, a.quitReady, a.runtimeStatus, a.pi != nil)
-	fmt.Fprintf(&b, "gates.connection_save_in_flight=%v connection_applying=%v connection_testing=%v contact_history_in_flight=%d submission_in_flight=%d\n",
-		a.connectionSaveInFlight, a.connectionApplying, a.connectionTesting, a.contactHistoryInFlight, a.submissionInFlight)
+	fmt.Fprintf(&b, "gates.provider_busy=%v contact_history_in_flight=%d submission_in_flight=%d\n",
+		a.providerBusy(), a.contactHistoryInFlight, a.submissionInFlight)
 	var clientDone, callbacksDone <-chan struct{}
 	if host := a.productHost(); host != nil {
 		clientDone, callbacksDone = host.product.Done(), host.product.CallbacksDone()
@@ -572,7 +571,6 @@ func (h *guiHarness) shutdown(t *testing.T) {
 		if host := h.app.productHost(); host != nil {
 			h.piClient = host.product
 		}
-		h.piProbe = h.app.connectionProbe
 		h.app.beginShutdown()
 	})
 	h.pump.waitTimeout(func() bool {
@@ -582,9 +580,6 @@ func (h *guiHarness) shutdown(t *testing.T) {
 		satisfied := h.app.quitReady
 		if h.piClient != nil {
 			satisfied = satisfied && shutdownChannelClosed(h.piClient.Done()) && shutdownChannelClosed(h.piClient.CallbacksDone())
-		}
-		if h.piProbe != nil {
-			satisfied = satisfied && h.piProbe.cleanupComplete()
 		}
 		if h.shutdownFirstResult != nil {
 			select {
@@ -602,14 +597,6 @@ func (h *guiHarness) shutdown(t *testing.T) {
 		if outcome.PID <= 0 || !outcome.Reaped || outcome.ExitCode != 0 || outcome.Err != nil || err != nil {
 			t.Errorf("Pi host shutdown did not finish cleanly: outcome=%+v error=%v", outcome, err)
 		}
-	}
-	if h.piProbe != nil {
-		h.piProbe.mu.Lock()
-		t.Logf("Pi probe cleanup: started=%t outcome=%+v callbacks_done=%t forced=%t cancel_error=%v shutdown_error=%v wait_error=%v kill_error=%v callback_error=%v remove_error=%v cleanup_error=%v test_error=%v",
-			h.piProbe.client != nil, h.piProbe.outcome, h.piProbe.callbacksDone, h.piProbe.forced,
-			h.piProbe.cancelErr, h.piProbe.shutdownErr, h.piProbe.waitErr, h.piProbe.killErr,
-			h.piProbe.callbackErr, h.piProbe.removeErr, h.piProbe.cleanupErr, h.piProbe.testErr)
-		h.piProbe.mu.Unlock()
 	}
 	h.pump.close()
 	h.closed = true

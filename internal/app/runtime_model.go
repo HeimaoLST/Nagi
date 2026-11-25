@@ -150,6 +150,7 @@ const (
 	runtimeNoticeStoreSave             = "store-save"
 	runtimeNoticeRuntimeShutdown       = "runtime-shutdown"
 	runtimeNoticeCredentialUnavailable = "provider-credential-unavailable"
+	runtimeNoticeRouteUnavailable      = "provider-route-unavailable"
 )
 
 func (a *appModel) hasRuntimeError() bool {
@@ -259,12 +260,12 @@ func (a *appModel) beginShutdown() {
 	a.shutdownStarted = true
 	a.resetComposerOverlays()
 	a.persist()
-	if a.connectionTestCancel != nil {
-		a.connectionTestCancel()
-		a.connectionTestCancel = nil
-	}
 	if a.providers.cancelTest != nil {
 		a.providers.cancelTest()
+	}
+	if timer := a.providers.healthTimer; timer != nil {
+		timer.Stop()
+		a.providers.healthTimer = nil
 	}
 	a.finishShutdown()
 }
@@ -373,7 +374,6 @@ type connectionViewState int
 
 const (
 	connectionViewHealthy connectionViewState = iota
-	connectionViewApplying
 	connectionViewConnecting
 	connectionViewSaved
 	connectionViewSetup
@@ -381,21 +381,18 @@ const (
 )
 
 func (a *appModel) runtimeAvailableForView() bool {
-	return a.demo || a.productProfileReady() && !a.connectionApplying && (a.hasUsableProviderRoute() || a.connectionEffective != nil)
+	return a.demo || a.productProfileReady() && (a.hasUsableProviderRoute() || a.connectionEffective != nil)
 }
 
 func (a *appModel) connectionViewState() connectionViewState {
 	if a.demo {
 		return connectionViewHealthy
 	}
-	if a.connectionApplying {
-		return connectionViewApplying
-	}
 	if a.productHost() != nil {
 		switch {
 		case !a.productProfileReady():
 			return connectionViewNotConnected
-		case a.productConnectionPending() || a.productProvidersPending():
+		case a.productProvidersPending():
 			return connectionViewSaved
 		case a.hasUsableProviderRoute() || a.connectionEffective != nil:
 			return connectionViewHealthy
@@ -414,7 +411,7 @@ func (a *appModel) connectionViewState() connectionViewState {
 	if a.connectionSaved != nil && (a.connectionEffective == nil || *a.connectionSaved != *a.connectionEffective) {
 		return connectionViewSaved
 	}
-	if a.runtimeStatus != runtimeStateExited && a.connectionForm != nil && !a.connectionForm.HasSaved && a.connectionSaved == nil {
+	if a.runtimeStatus != runtimeStateExited && a.connectionSaved == nil && (a.runtimeErrKind == runtimeNoticeConnectionRequired || a.runtimeHintKind == startupHintEnterConnection) {
 		return connectionViewSetup
 	}
 	return connectionViewNotConnected
@@ -434,7 +431,6 @@ func (a *appModel) connectionConfigurationBlocked() bool {
 const (
 	blockShutdown         = "shutdown"
 	blockArchivedSend     = "archived-send"
-	blockApplying         = "applying"
 	blockRuntimeNotReady  = "runtime-not-ready"
 	blockHistoryLoading   = "history-loading"
 	blockBusy             = "busy"
@@ -451,8 +447,6 @@ func sendBlockRaw(reason string) string {
 		return "The app is shutting down."
 	case blockArchivedSend:
 		return "This Bot is archived. Restore it before sending a message."
-	case blockApplying:
-		return "Connection settings are being applied. Wait for Pi to become ready."
 	case blockRuntimeNotReady:
 		return "Runtime is not ready."
 	case blockHistoryLoading:
@@ -480,8 +474,6 @@ func sendBlockText(msgs locales.Messages, reason string) string {
 		return msgs.CanSendShutdown()
 	case blockArchivedSend:
 		return msgs.CanSendArchived()
-	case blockApplying:
-		return msgs.CanSendApplying()
 	case blockRuntimeNotReady:
 		return msgs.CanSendRuntimeNotReady()
 	case blockHistoryLoading:
@@ -513,10 +505,9 @@ func (a *appModel) canSend(ct *contact) string {
 	if a.demo {
 		return ""
 	}
-	if a.connectionApplying {
-		return blockApplying
-	}
-	if !a.runtimeAvailableForView() && !(a.runtimeErrKind == runtimeNoticeCredentialUnavailable && ct.LastTaskID != "" && a.productProfileReady()) {
+	mayRequestAdmission := a.productProfileReady() && (a.runtimeErrKind == runtimeNoticeRouteUnavailable ||
+		a.runtimeErrKind == runtimeNoticeCredentialUnavailable && ct.LastTaskID != "")
+	if !a.runtimeAvailableForView() && !mayRequestAdmission {
 		return blockRuntimeNotReady
 	}
 	if ct.SessionID != "" && !ct.Loaded {

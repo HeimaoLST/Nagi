@@ -6,19 +6,21 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/egoist/mygo/ui"
+
 	"github.com/HeimaoLST/Nagi/internal/pi"
 	"github.com/HeimaoLST/Nagi/locales"
-	"github.com/egoist/mygo"
-	"github.com/egoist/mygo/ui"
 )
 
 func TestPiAppProductConnectionStopAndWorkerLoss(t *testing.T) {
@@ -40,16 +42,26 @@ func TestPiAppProductConnectionStopAndWorkerLoss(t *testing.T) {
 	root, launchFolder, explicitFolder := t.TempDir(), t.TempDir(), t.TempDir()
 	t.Chdir(launchFolder)
 	isolateConnectionApp(t, root, payload)
-	t.Setenv("NAGI_GUI_WORKDIR", "")
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	primary := &piAppProvider{limit: 3}
+	primary := &piAppProvider{limit: 2}
 	secondary := &piAppProvider{limit: 1}
+	var modelsProbes atomic.Int32
 	streamStarted, lossArrived := make(chan struct{}), make(chan struct{})
 	streamCancelled := make(chan bool, 1)
 	original := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if primary.count() != 2 {
+		if r.Method == http.MethodGet && r.URL.Path == "/v1/models" {
+			if r.Header.Get("Authorization") != "Bearer "+key {
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				return
+			}
+			modelsProbes.Add(1)
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprintf(w, `{"object":"list","data":[{"id":%q}]}`, model)
+			return
+		}
+		if primary.count() != 1 {
 			primary.ServeHTTP(w, r)
 			return
 		}
@@ -80,18 +92,6 @@ func TestPiAppProductConnectionStopAndWorkerLoss(t *testing.T) {
 	w := openProductWorkbench(t)
 	initialClient := w.client
 	go w.app.observeProductExit(w.app.productHost())
-	settingsAction := func(label string) {
-		t.Helper()
-		var err error
-		w.frame(func() {
-			w.view.Scroll(520, 360, 0, -3000)
-			w.view.Frame()
-			err = clickSettingsAction(w.view, label)
-		})
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
 	enter := func(label, text string) {
 		t.Helper()
 		var err error
@@ -106,13 +106,13 @@ func TestPiAppProductConnectionStopAndWorkerLoss(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	connection := func() pi.ProductConnectionStatus {
+	providers := func() pi.ProductProviderList {
 		t.Helper()
-		status, err := w.client.Connection(ctx)
+		list, err := w.client.ListProviders(ctx)
 		if err != nil {
 			t.Fatal(err)
 		}
-		return status
+		return list
 	}
 	conversation := func(id string) pi.ProductConversation {
 		t.Helper()
@@ -132,8 +132,8 @@ func TestPiAppProductConnectionStopAndWorkerLoss(t *testing.T) {
 	}
 
 	w.wait(func() bool { return w.app.settingsOpen && w.app.settingsTab == settingsTabConnection })
-	if initial := connection(); initial.SavedRevision != nil || initial.EffectiveRevision != nil {
-		t.Fatalf("fresh profile already has connection settings: %+v", initial)
+	if initial := providers(); initial.SavedRevision != nil || initial.EffectiveRevision != nil || len(initial.Accounts) != 0 {
+		t.Fatalf("fresh profile already has providers: %+v", initial)
 	}
 	w.click(msg.SettingsBackAccessible())
 	var first, second *contact
@@ -153,84 +153,65 @@ func TestPiAppProductConnectionStopAndWorkerLoss(t *testing.T) {
 		w.app.closeDetail()
 	})
 	if !profileSaved || second.SessionID == firstChat {
-		t.Fatal("could not establish an independent Bot with an explicit workspace before connection setup")
+		t.Fatal("could not establish an independent Bot with an explicit workspace before provider setup")
 	}
 	secondID, secondChat := second.ID, second.SessionID
-	const setupDraft = "Draft prepared before the first connection Save"
+	const setupDraft = "Draft prepared before the first provider Save"
 	enter(msg.ComposerLabel(second.Name), setupDraft)
 	w.frame(func() { w.app.openSettingsTab(settingsTabConnection, settingsSourceConnection) })
-	profileBeforeSetup := recoverySavedBytes(t, guiStorePath())
-	w.frame(func() {
-		w.app.chooseFolder = func(mygo.OpenDialogOptions) ([]string, error) { return []string{root}, nil }
-	})
-	enter(msg.ConnectionFieldEndpoint(), firstEndpoint)
+
+	w.click(msg.ProviderCustom())
+	enter(msg.FieldName(), "Primary gateway")
+	enter(msg.ProviderBaseURL(), firstEndpoint)
 	enter(msg.ConnectionFieldAPIKey(), key)
-	enter(msg.ConnectionFieldModel(), model)
-	settingsAction(msg.SettingsShowRuntimeDetails())
-	settingsAction("1")
+	enter(msg.ProviderDefaultModel(), model)
+
+	w.click(msg.ProviderTestAccount(msg.ProviderCustom()))
+	w.wait(func() bool {
+		return !w.app.providerBusy() && w.app.providers.first != nil && w.app.providers.first.tested
+	})
+	if checked := providers(); checked.SavedRevision != nil || checked.EffectiveRevision != nil || modelsProbes.Load() != 1 || primary.count() != 0 {
+		t.Fatalf("Test & sync should probe /models without saving or contacting chat completions: %+v probes=%d chats=%d", checked, modelsProbes.Load(), primary.count())
+	}
+
 	credentials := connectionConfigPath(guiStorePath())
-	for _, label := range []string{msg.ConnectionTestAction(), msg.ConnectionSaveConfiguration(), msg.ConnectionSaveAndApply()} {
-		settingsAction(label)
-		var blocked bool
-		w.pump.do(func() {
-			form := w.app.connectionForm
-			blocked = !form.Busy && form.Draft.Slots == "1" && form.Errors["WorkingDirectory"] != "" && w.view.HasText(msg.ValidationWorkspaceAbsolutePath())
-		})
-		if !blocked {
-			t.Fatalf("%q did not require an explicit working folder", label)
-		}
-	}
-	if status := connection(); status.SavedRevision != nil || status.EffectiveRevision != nil || primary.count() != 0 || !bytes.Equal(profileBeforeSetup, recoverySavedBytes(t, guiStorePath())) {
-		t.Fatalf("unchosen folder changed the Product profile or contacted the provider: %+v, requests=%d", status, primary.count())
-	}
-	if _, err := os.Lstat(credentials); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("unchosen folder created a credential file: %v", err)
-	}
-	settingsAction(msg.WorkFolderChoose())
-	w.wait(func() bool { return !w.app.connectionForm.Busy && w.app.connectionForm.Draft.WorkingDirectory == root })
-	install(primary, "OK", nil)
-	settingsAction(msg.ConnectionTestAction())
-	w.wait(func() bool { return w.app.connectionForm.Status == connStatusTestCompleted })
-	if checked := connection(); checked.SavedRevision != nil || checked.EffectiveRevision != nil || primary.count() != 1 {
-		t.Fatalf("Test should make one request without saving or applying: %+v, requests=%d", checked, primary.count())
-	}
-	var entered connectionDraft
-	w.pump.do(func() { entered = w.app.connectionForm.Draft })
 	if _, err := os.Lstat(credentials); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("first Save must begin without credentials: %v", err)
 	}
-	if err := os.Mkdir(credentials, 0700); err != nil {
-		t.Fatal(err)
-	}
-	settingsAction(msg.ConnectionSaveConfiguration())
-	w.wait(func() bool { return !w.app.connectionForm.Busy && w.view.HasText(msg.RecoveryConnectionSaveFailed()) })
+	enter(msg.FieldName(), "Primary "+key)
+	w.click(msg.ProviderSave())
+	w.wait(func() bool { return !w.app.providerBusy() && w.view.HasText(msg.ProviderSaveFailed()) })
 	w.pump.do(func() {
-		if form := w.app.connectionForm; form.Draft != entered || !form.Dirty() || form.HasSaved {
-			t.Error("first Save refusal changed the editable values or reported a saved connection")
+		ed := w.app.providers.first
+		if ed == nil || ed.Name != "Primary "+key || ed.BaseURL != firstEndpoint || ed.APIKey != key || ed.DefaultModel != model {
+			t.Errorf("first Save refusal lost editable provider values: %+v", ed)
 		}
 	})
-	if refused := connection(); refused.SavedRevision != nil || refused.EffectiveRevision != nil || primary.count() != 1 {
-		t.Fatalf("first Save refusal changed a connection revision or contacted the provider: %+v", refused)
+	if _, err := os.Lstat(credentials); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("first Save refusal unexpectedly wrote credentials: %v", err)
 	}
-	if err := os.Remove(credentials); err != nil {
-		t.Fatal(err)
+	if refused := providers(); refused.SavedRevision != nil || refused.EffectiveRevision != nil || len(refused.Accounts) != 0 || primary.count() != 0 {
+		t.Fatalf("first Save refusal changed revisions or contacted the provider: %+v", refused)
 	}
-	completion := make(chan func(), 1)
+	enter(msg.FieldName(), "Primary gateway")
+
+	completion := make(chan func(), 8)
 	var previousHook func(func())
 	w.pump.do(func() {
 		previousHook = w.app.getUIHook()
 		w.app.setUIHook(func(fn func()) { completion <- fn })
 	})
-	settingsAction(msg.ConnectionSaveConfiguration())
-	finishSave := awaitFolderChoice(t, completion)
+	w.click(msg.ProviderSave())
+	held1 := awaitFolderChoice(t, completion)
+	held2 := awaitFolderChoice(t, completion)
 	w.pump.do(func() { w.app.setUIHook(previousHook) })
-	if status := connection(); status.SavedRevision == nil || status.EffectiveRevision != nil {
+	if status := providers(); status.SavedRevision == nil || status.EffectiveRevision != nil || len(status.Accounts) != 1 {
 		t.Fatalf("the explicit retry did not save before UI completion: %+v", status)
 	}
 	var editor *contactProfileEditor
 	var completionPending bool
 	w.pump.do(func() {
-		completionPending = w.app.connectionSaveInFlight && w.app.connectionSaved == nil
+		completionPending = w.app.providerBusy() && len(w.app.productHost().productProviders.Accounts) == 0
 		editor = w.app.profileEditorFor(secondID)
 		editor.Draft.Name = "Uncommitted profile name"
 	})
@@ -256,7 +237,10 @@ func TestPiAppProductConnectionStopAndWorkerLoss(t *testing.T) {
 	if beforeError == "" {
 		t.Fatal("the intervening Bot selection did not report the local Save failure")
 	}
-	w.frame(finishSave)
+	w.frame(func() {
+		held1()
+		held2()
+	})
 	var retained bool
 	w.pump.do(func() {
 		retained = w.app.selectedContact() == first && w.app.contactByID(secondID) == second &&
@@ -265,7 +249,7 @@ func TestPiAppProductConnectionStopAndWorkerLoss(t *testing.T) {
 			w.app.productHost() != nil && w.app.productHost().product == initialClient && w.view.HasText(msg.RecoveryLocalSaveFailed())
 	})
 	if !retained {
-		t.Fatal("connection Save changed the intervening Bot selection, drafts, diagnostic, or unsaved profile")
+		t.Fatal("provider Save changed the intervening Bot selection, drafts, diagnostic, or unsaved profile")
 	}
 	if err := os.Remove(uiPath); err != nil {
 		t.Fatal(err)
@@ -273,15 +257,17 @@ func TestPiAppProductConnectionStopAndWorkerLoss(t *testing.T) {
 	w.click(msg.SettingsRetrySave())
 	w.wait(func() bool { return w.app.localSaveErr == "" && !w.view.HasText(msg.RecoveryLocalSaveFailed()) })
 	w.frame(func() { w.app.openSettingsTab(settingsTabConnection, settingsSourceConnection) })
-	w.wait(func() bool { return !w.app.connectionForm.Busy && w.app.connectionForm.SavedPending })
-	saved := connection()
-	if saved.SavedRevision == nil || saved.EffectiveRevision != nil || saved.Saved == nil || saved.Saved.BaseURL != firstEndpoint ||
-		saved.Saved.Model != model || saved.Saved.WorkingDirectory != root || saved.Saved.MaxActiveTasks != 1 || !saved.Saved.CredentialPresent || primary.count() != 1 {
-		t.Fatalf("Save should persist the entered settings without applying: %+v, requests=%d", saved, primary.count())
+	w.wait(func() bool { return !w.app.providerBusy() && w.app.productProvidersPending() })
+	saved := providers()
+	if saved.SavedRevision == nil || saved.EffectiveRevision != nil || len(saved.Accounts) != 1 ||
+		saved.Accounts[0].BaseURL != firstEndpoint || saved.Accounts[0].DefaultModel != model ||
+		saved.Accounts[0].CredentialStatus != "ok" || primary.count() != 0 {
+		t.Fatalf("Save should persist the entered provider without applying: %+v", saved)
 	}
-	settingsAction(msg.ConnectionApplySaved())
-	w.wait(func() bool { return w.app.connectionForm.Status == connStatusApplied })
-	if applied := connection(); !reflect.DeepEqual(saved.SavedRevision, applied.EffectiveRevision) || primary.count() != 1 {
+	primaryID := saved.Accounts[0].ProviderID
+	w.click(msg.ProviderApplyChanges())
+	w.wait(func() bool { return !w.app.providerBusy() && !w.app.productProvidersPending() })
+	if applied := providers(); !reflect.DeepEqual(saved.SavedRevision, applied.EffectiveRevision) || primary.count() != 0 {
 		t.Fatalf("Apply should activate the saved revision without a request: %+v", applied)
 	}
 	assertWorkspaces := func() {
@@ -291,14 +277,14 @@ func TestPiAppProductConnectionStopAndWorkerLoss(t *testing.T) {
 			if inherited == nil || explicit == nil || inherited.SessionID != firstChat || explicit.SessionID != secondChat ||
 				inherited.Workspace != "" || explicit.Workspace != explicitFolder || w.app.effectiveContactWorkspace(inherited) != root ||
 				w.app.effectiveContactWorkspace(explicit) != explicitFolder {
-				t.Error("the applied default replaced a Bot workspace override or changed inherited workspace and conversation identity")
+				t.Error("the applied provider replaced a Bot workspace override or changed inherited workspace and conversation identity")
 			}
 		})
 	}
 	assertWorkspaces()
 	for id, want := range map[string]string{firstChat: firstInput, secondChat: lossInput} {
 		if state := conversation(id); state.Draft == nil || state.Draft.Text != want || state.LatestExecution != nil {
-			t.Fatalf("first connection Apply changed a preconfiguration draft or admitted work: %+v", state)
+			t.Fatalf("first provider Apply changed a preconfiguration draft or admitted work: %+v", state)
 		}
 	}
 	w.click(msg.SettingsBackAccessible())
@@ -307,29 +293,41 @@ func TestPiAppProductConnectionStopAndWorkerLoss(t *testing.T) {
 	w.wait(func() bool { return first.SendState == sendIdle && w.view.HasText(firstReply) })
 
 	w.frame(func() { w.app.openSettingsTab(settingsTabConnection, settingsSourceConnection) })
-	var endpointOpen bool
-	w.pump.do(func() { endpointOpen = w.app.connectionForm.EditOpen["Endpoint"] })
-	if !endpointOpen {
-		settingsAction(msg.ConnectionEditField(msg.ConnectionFieldEndpoint()))
+	w.click(msg.ProviderAddShort())
+	w.wait(func() bool { return w.app.providers.adding && w.app.providers.editor != nil })
+	w.frame(func() {
+		ed := w.app.providers.editor
+		ed.Name = "Replacement gateway"
+		ed.WireAPI = pi.OpenAICompletions
+		ed.BaseURL = secondEndpoint
+		ed.APIKey = key
+		ed.DefaultModel = model
+	})
+	w.click(msg.ProviderSave())
+	w.wait(func() bool {
+		return !w.app.providerBusy() && !w.app.providers.adding && w.app.productProvidersPending() && len(w.app.productHost().productProviders.Accounts) == 2
+	})
+	replacementID := providers().Accounts[1].ProviderID
+	w.click(msg.ProviderMoveUp())
+	w.wait(func() bool {
+		return !w.app.providerBusy() && w.app.productHost().productProviders.Accounts[0].ProviderID == replacementID
+	})
+	pending := providers()
+	if pending.Accounts[0].ProviderID != replacementID || pending.Accounts[1].ProviderID != primaryID || !reflect.DeepEqual(pending.EffectiveRevision, saved.SavedRevision) {
+		t.Fatalf("saving/reordering the replacement provider changed the active revision before Apply: %+v", pending)
 	}
-	enter(msg.ConnectionFieldEndpoint(), secondEndpoint)
-	settingsAction(msg.ConnectionSaveConfiguration())
-	w.wait(func() bool { return !w.app.connectionForm.Busy && w.app.connectionForm.SavedPending })
-	pending := connection()
-	if pending.Saved == nil || pending.Saved.BaseURL != secondEndpoint || !reflect.DeepEqual(pending.EffectiveRevision, saved.SavedRevision) {
-		t.Fatalf("saving the second endpoint changed the active connection: %+v", pending)
-	}
-	settingsAction(msg.ConnectionApplySaved())
-	w.wait(func() bool { return w.app.connectionForm.Status == connStatusApplied })
-	applied := connection()
-	if applied.Effective == nil || applied.Effective.BaseURL != secondEndpoint || !reflect.DeepEqual(applied.EffectiveRevision, pending.SavedRevision) {
-		t.Fatalf("the second endpoint did not become effective: %+v", applied)
+	w.click(msg.ProviderApplyChanges())
+	w.wait(func() bool { return !w.app.providerBusy() && !w.app.productProvidersPending() })
+	applied := providers()
+	if !reflect.DeepEqual(applied.EffectiveRevision, pending.SavedRevision) || applied.ResolvedRoles.Dialogue == nil || applied.ResolvedRoles.Dialogue.ProviderID != replacementID {
+		t.Fatalf("the replacement provider did not become effective: %+v", applied)
 	}
 	w.click(msg.SettingsBackAccessible())
+
 	install(primary, stopDelta, nil)
 	enter(msg.ComposerLabel(first.Name), stopInput)
 	w.click(msg.SendAction())
-	await(streamStarted, "the captured connection stream")
+	await(streamStarted, "the sticky primary conversation stream")
 	w.wait(func() bool {
 		if first.ActiveTaskID == "" || !w.view.HasText(msg.BotTyping()) || !w.view.HasText(msg.StopConversation()) {
 			return false
@@ -345,22 +343,6 @@ func TestPiAppProductConnectionStopAndWorkerLoss(t *testing.T) {
 	if stopped == nil || stopped.State != "running" || stopped.OperationID == "" {
 		t.Fatalf("could not identify the captured conversation stream: %+v", stopped)
 	}
-	w.click(msg.AvatarContactLabel(second.Name))
-	w.wait(func() bool { return w.app.selectedID() == secondID && second.Loaded })
-	blocked := conversation(secondChat)
-	if blocked.Draft == nil || blocked.Draft.Text != lossInput || blocked.LatestExecution != nil {
-		t.Fatalf("the second Bot did not retain its unsubmitted draft: %+v", blocked)
-	}
-	_, err := w.client.Send(ctx, pi.ProductSendParams{
-		ProductConversationParams: pi.ProductConversationParams{ConversationID: secondChat},
-		OperationID:               "second-bot-capacity-refusal", DraftRevision: blocked.Draft.Revision,
-	})
-	var busy *pi.RemoteError
-	if !errors.As(err, &busy) || busy.Code != "busy" || !reflect.DeepEqual(conversation(secondChat), blocked) || primary.count() != 3 || secondary.count() != 0 {
-		t.Fatalf("the full slot did not refuse the second Bot without submitting: %v", err)
-	}
-	w.click(msg.AvatarContactLabel(first.Name))
-	w.wait(func() bool { return w.app.selectedID() == firstID && w.view.HasText(msg.StopConversation()) })
 	w.click(msg.StopConversation())
 	select {
 	case cancelled := <-streamCancelled:
@@ -381,7 +363,7 @@ func TestPiAppProductConnectionStopAndWorkerLoss(t *testing.T) {
 	})
 	install(secondary, "Unexpected completed response", lossArrived)
 	w.click(msg.SendAction())
-	await(lossArrived, "the second Bot send")
+	await(lossArrived, "the second Bot send on replacement provider")
 	w.wait(func() bool { return second.ActiveTaskID != "" && w.app.submissionInFlight == 0 && second.Draft == "" })
 	lost := conversation(secondChat).LatestExecution
 	if lost == nil || lost.State != "running" || lost.OperationID == "" {
@@ -400,15 +382,8 @@ func TestPiAppProductConnectionStopAndWorkerLoss(t *testing.T) {
 		return w.app.runtimeStatus == runtimeStateExited && second.SendState == sendUnknown && second.Draft == nextDraft &&
 			w.view.HasText(msg.SendDisconnectedState())
 	})
-	w.frame(func() { w.app.openSettingsTab(settingsTabConnection, settingsSourceConnection) })
-	settingsAction(msg.ConnectionApplySaved())
-	w.wait(func() bool {
-		host := w.app.productHost()
-		if host != nil && host.product != initialClient {
-			w.client = host.product
-		}
-		return w.client != initialClient && w.app.connectionForm.Status == connStatusApplied
-	})
+
+	w = openProductWorkbench(t)
 	assertRecovered := func() {
 		t.Helper()
 		w.wait(func() bool {
@@ -429,7 +404,6 @@ func TestPiAppProductConnectionStopAndWorkerLoss(t *testing.T) {
 		}
 	}
 	assertRecovered()
-	w.click(msg.SettingsBackAccessible())
 	w.wait(func() bool { return w.view.HasText(msg.SendUnknownState()) && w.app.contactHistoryInFlight == 0 })
 	var reloadErr error
 	var reloadGeneration int
@@ -449,10 +423,10 @@ func TestPiAppProductConnectionStopAndWorkerLoss(t *testing.T) {
 		return current.historyGen > reloadGeneration && w.app.contactHistoryInFlight == 0 && current.LoadErr == "" && current.Loaded
 	})
 	assertRecovered()
-	if primary.count() != 3 || secondary.count() != 1 {
+	if primary.count() != 2 || secondary.count() != 1 {
 		t.Fatal("keyboard Reload contacted the provider")
 	}
-	t.Log("First Save refusal preserved the fresh draft and empty revisions. The second Bot sent after capacity cleared, and keyboard Reload read history without a provider request.")
+	t.Log("First Plan A provider Save refusal preserved edits and empty revisions. Sticky primary Stop, replacement routing, worker loss recovery, and keyboard Reload completed cleanly without replay.")
 	w.shutdown(ctx)
 	w = openProductWorkbench(t)
 	assertRecovered()
@@ -472,6 +446,6 @@ func TestPiAppProductConnectionStopAndWorkerLoss(t *testing.T) {
 			}
 		}
 	}
-	assertProvider(primary, "Reply with OK.", firstInput, stopInput)
+	assertProvider(primary, firstInput, stopInput)
 	assertProvider(secondary, lossInput)
 }
