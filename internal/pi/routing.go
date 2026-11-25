@@ -19,21 +19,33 @@ type ProductDeliveryBlocker string
 const ProductCredentialUnavailable ProductDeliveryBlocker = "credential_unavailable"
 
 type ProductProviderAccount struct {
-	ProviderID    string   `json:"providerId"`
-	Name          string   `json:"name"`
-	WireAPI       WireAPI  `json:"wireApi"`
-	BaseURL       string   `json:"baseUrl"`
-	Models        []string `json:"models,omitempty"`
-	DefaultModel  string   `json:"defaultModel"`
-	ContextTokens int      `json:"contextTokens"`
-	OutputTokens  int      `json:"outputTokens"`
-	Enabled       bool     `json:"enabled"`
+	ProviderID     string                  `json:"providerId"`
+	Name           string                  `json:"name"`
+	WireAPI        WireAPI                 `json:"wireApi"`
+	BaseURL        string                  `json:"baseUrl"`
+	Models         []string                `json:"models,omitempty"`
+	DefaultModel   string                  `json:"defaultModel"`
+	ContextTokens  int                     `json:"contextTokens"`
+	OutputTokens   int                     `json:"outputTokens"`
+	Enabled        bool                    `json:"enabled"`
+	EnabledModels  *[]string               `json:"enabledModels,omitempty"`
+	FallbackOnly   *bool                   `json:"fallbackOnly,omitempty"`
+	ModelOverrides *[]ProductModelOverride `json:"modelOverrides,omitempty"`
+}
+
+type ProductModelOverride struct {
+	ID            string `json:"id"`
+	IsChat        *bool  `json:"isChat,omitempty"`
+	ToolCall      *bool  `json:"toolCall,omitempty"`
+	ContextTokens *int   `json:"contextTokens,omitempty"`
+	OutputTokens  *int   `json:"outputTokens,omitempty"`
 }
 
 type ProductProviderAccountView struct {
 	ProductProviderAccount
 	CredentialSourceID string `json:"credentialSourceId"`
 	CredentialStatus   string `json:"credentialStatus"`
+	Priority           *int   `json:"priority,omitempty"`
 }
 
 type ProductModelRoute struct {
@@ -42,6 +54,11 @@ type ProductModelRoute struct {
 	ResolvedModel      string               `json:"resolvedModel"`
 	Role               ProductModelRole     `json:"role"`
 	ThinkingLevel      ProductThinkingLevel `json:"thinkingLevel"`
+	CanonicalModelID   string               `json:"canonicalModelId,omitempty"`
+	Source             string               `json:"source,omitempty"`
+	CostTier           string               `json:"costTier,omitempty"`
+	Reason             string               `json:"reason,omitempty"`
+	ProviderName       string               `json:"providerName,omitempty"`
 }
 
 type ProductResolvedRoles struct {
@@ -69,10 +86,24 @@ type ProductProviderTestParams struct {
 }
 
 type ProductProviderTestResult struct {
-	OK        bool     `json:"ok"`
-	Models    []string `json:"models"`
-	LatencyMs uint64   `json:"latencyMs"`
-	Error     string   `json:"error,omitempty"`
+	OK               bool                     `json:"ok"`
+	Models           []string                 `json:"models"`
+	LatencyMs        uint64                   `json:"latencyMs"`
+	Error            string                   `json:"error,omitempty"`
+	DiscoveredModels []ProductDiscoveredModel `json:"discoveredModels,omitempty"`
+}
+
+type ProductDiscoveredModel struct {
+	ID             string `json:"id"`
+	CanonicalID    string `json:"canonicalId"`
+	IsChat         *bool  `json:"isChat"`
+	ToolCall       *bool  `json:"toolCall"`
+	Reasoning      bool   `json:"reasoning"`
+	Tier           string `json:"tier"`
+	PriceProtected bool   `json:"priceProtected"`
+	Recommended    bool   `json:"recommended"`
+	ContextTokens  int    `json:"contextTokens"`
+	OutputTokens   int    `json:"outputTokens"`
 }
 
 type ProductProviderSaveParams struct {
@@ -83,6 +114,12 @@ type ProductProviderSaveParams struct {
 type ProductProviderTargetParams struct {
 	ProviderID  string `json:"providerId"`
 	OperationID string `json:"operationId"`
+}
+
+type ProductProviderReorderParams struct {
+	ProviderIDs   []string `json:"providerIds"`
+	SavedRevision uint64   `json:"savedRevision"`
+	OperationID   string   `json:"operationId"`
 }
 
 type ProductRoutingPolicyParams struct {
@@ -118,6 +155,13 @@ func (p *ProductClient) SaveProvider(ctx context.Context, params ProductProvider
 
 func (p *ProductClient) DeleteProvider(ctx context.Context, params ProductProviderTargetParams) (ProductConnectionRevisions, error) {
 	return productCall[ProductConnectionRevisions](ctx, p, "provider.delete", params)
+}
+
+func (p *ProductClient) ReorderProviders(ctx context.Context, params ProductProviderReorderParams) (ProductConnectionRevisions, error) {
+	if params.ProviderIDs == nil {
+		params.ProviderIDs = []string{}
+	}
+	return productCall[ProductConnectionRevisions](ctx, p, "provider.reorder", params)
 }
 
 func (p *ProductClient) ApplyProviders(ctx context.Context, params ProductConnectionApplyParams) (ProductConnectionRevisions, error) {

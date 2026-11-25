@@ -1,14 +1,14 @@
 # RFC-0003: Model Catalog, Ranked Multi-Provider Routing & Health Failover
 
-- **Status**: `Review` *(Astra-6.2 deep technical review completed and resolved; implementation scheduled immediately after RFC-0002 CP-3 SQLite v10 merges to `dev`)*
-- **Baseline**: `dev` @ `dd921f1` (RFC-0001 `M0a`–`M4` + RFC-0002 `CP-1`–`CP-2` merged; pinned Pi SDK `1.5.2`)
+- **Status**: `Partially Implemented` *(Astra-6.2 deep technical review resolved; `RT-1` backend & SQLite v11 shipped and promoted to `docs/design/product-protocol.md`; `RT-2` next)*
+- **Baseline**: `dev` @ `c7cc96c` (RFC-0001 `M0a`–`M4` + RFC-0002 `CP-1`–`CP-3` SQLite v10 merged; pinned Pi SDK `1.5.2`)
 - **Authors / Reviewers**: Backend Architecture (`t21d`), Deep Technical Review (`t1jr` / Astra-6.2, including offline Node `22.23.5` / `@earendil-works/pi-ai` `1.5.2` catalog & scoring probes)
 - **Canonical Vocabulary**: [docs/design/glossary.md](../design/glossary.md)
 - **Promotion Targets**: [product-protocol.md](../design/product-protocol.md), [glossary.md](../design/glossary.md), [desktop.md](../design/desktop.md), [README.md](../../README.md)
 
 ## Milestone Tracker
 
-- [ ] **RT-1** *(SQLite v11, strictly after CP-3 v10)* — Deterministic Offline Baked Catalog (public `@earendil-works/pi-ai/providers/all` exports + pinned `models.dev` snapshot & MIT notice in `build-pi-worker.py` + curated `model-ranks.json`), Source-Scoped Canonical Identity & Supply-Route Capabilities, Safe Default Active Model Pool (`*[]string` `enabledModels`), Provider Priority Ordering (`provider.reorder` over `sort_order`), `fallbackOnly`, Calibrated Capability-Shortlist Weighted Auto-Routing, Lower-Only Thinking Clamping & Actual Pi Registration Compat, and Legacy M4 Editor Compatibility
+- [x] **RT-1** *(SQLite v11, strictly after CP-3 v10)* — Deterministic Offline Baked Catalog (public `@earendil-works/pi-ai/providers/all` exports + pinned `models.dev` snapshot & MIT notice in `build-pi-worker.py` + curated `model-ranks.json`), Source-Scoped Canonical Identity & Supply-Route Capabilities, Safe Default Active Model Pool (`*[]string` `enabledModels`), Provider Priority Ordering (`provider.reorder` over `sort_order`), `fallbackOnly`, Calibrated Capability-Shortlist Weighted Auto-Routing, Lower-Only Thinking Clamping & Actual Pi Registration Compat, and Legacy M4 Editor Compatibility
 - [ ] **RT-2** — Four-Slot Manual Overrides (`routing.setOverrides`: `auto` / `pinned_model` / `pinned_route` with Fail-Closed Exact Pins & Per-Role `pinStatus` Readback), Per-Route Gateway `429`/`5xx` Cooldown & Half-Open Single-Lease New-Turn Failover (Same-Model-First), Orthogonal Runtime Hard Gates (`requiresTools`, `minContextTokens`, future `requiresVision`), and Unmodified M4 Go Client Event-Stream Compatibility
 
 ---

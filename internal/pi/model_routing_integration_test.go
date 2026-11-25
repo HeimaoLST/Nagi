@@ -36,33 +36,76 @@ type routingReqRecord struct {
 type routingPlanFunc func(role, lastRole string) (choice string, tool *mcpProviderStep)
 
 type routingMultiHarness struct {
-	t        *testing.T
-	keys     map[string]string
-	servers  map[string]*httptest.Server
-	mu       sync.Mutex
-	requests []routingReqRecord
-	probes   []string
-	plans    map[string]routingPlanFunc
-	problems []string
+	t          *testing.T
+	keys       map[string]string
+	keyToRole  map[string]string
+	server     *httptest.Server
+	offsiteLog string
+	mu         sync.Mutex
+	requests   []routingReqRecord
+	probes     []string
+	plans      map[string]routingPlanFunc
+	problems   []string
+}
+
+func routingRoleSpec(role string) (baseURL, model string) {
+	switch role {
+	case "dialogue":
+		return "https://api.openai.com/v1", "gpt-4o-mini"
+	case "reasoning":
+		return "https://api.openai.com/v1", "o3"
+	case "coding":
+		return "https://openrouter.ai/api/v1", "openai/gpt-5.3-codex"
+	case "utility":
+		return "https://api.openai.com/v1", "gpt-5.4-nano"
+	default:
+		return "", "m4-" + role
+	}
 }
 
 func newRoutingMultiHarness(t *testing.T, roles []string) *routingMultiHarness {
 	t.Helper()
 	h := &routingMultiHarness{
-		t:       t,
-		keys:    make(map[string]string),
-		servers: make(map[string]*httptest.Server),
-		plans:   make(map[string]routingPlanFunc),
+		t:         t,
+		keys:      make(map[string]string),
+		keyToRole: make(map[string]string),
+		plans:     make(map[string]routingPlanFunc),
 	}
 	for _, role := range roles {
-		r := role
-		h.keys[r] = "synthetic-m4-go-auth-" + r + "-81395"
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-			h.serveRole(r, w, req)
-		}))
-		h.servers[r] = srv
-		t.Cleanup(srv.Close)
+		key := "synthetic-m4-go-auth-" + role + "-81395"
+		h.keys[role] = key
+		h.keyToRole[key] = role
 	}
+	h.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		h.serveRequest(w, req)
+	}))
+	t.Cleanup(h.server.Close)
+	preloadDir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.offsiteLog = filepath.Join(preloadDir, "offsite.log")
+	preloadPath := filepath.Join(preloadDir, "loopback-preload.mjs")
+	preload := fmt.Sprintf(`import { appendFileSync } from 'node:fs';
+const orig = globalThis.fetch;
+const mapped = new Set(['api.openai.com', 'openrouter.ai', 'api.deepseek.com', 'api.x.ai']);
+const targetBase = %q;
+const offsiteLog = %q;
+globalThis.fetch = (input, init) => {
+  const url = new URL(input instanceof Request ? input.url : String(input));
+  if (url.hostname === '127.0.0.1' || url.hostname === 'localhost') return orig(input, init);
+  if (mapped.has(url.hostname)) {
+    const dest = new URL(targetBase + '/' + url.hostname + url.pathname + url.search);
+    return orig(input instanceof Request ? new Request(dest, input) : dest, init);
+  }
+  appendFileSync(offsiteLog, url.origin + '\n');
+  throw new Error('Blocked external fetch in offline test: ' + url.origin);
+};
+`, h.server.URL, h.offsiteLog)
+	if err := os.WriteFile(preloadPath, []byte(preload), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("NODE_OPTIONS", "--import "+preloadPath)
 	return h
 }
 
@@ -82,6 +125,9 @@ func (h *routingMultiHarness) recordProblem(msg string) {
 
 func (h *routingMultiHarness) assertNoProblems() {
 	h.t.Helper()
+	if data, err := os.ReadFile(h.offsiteLog); err == nil && len(data) > 0 {
+		h.t.Fatalf("unexpected offsite network attempts: %s", string(data))
+	}
 	h.mu.Lock()
 	probs := append([]string(nil), h.problems...)
 	h.mu.Unlock()
@@ -115,40 +161,47 @@ func (h *routingMultiHarness) probeList() []string {
 }
 
 func (h *routingMultiHarness) account(role string, models ...string) pi.ProductProviderAccount {
+	baseURL, defModel := routingRoleSpec(role)
+	if baseURL == "" {
+		baseURL = h.server.URL + "/" + role + "/v1"
+	}
 	return pi.ProductProviderAccount{
 		ProviderID:    role,
 		Name:          role,
 		WireAPI:       pi.OpenAICompletions,
-		BaseURL:       h.servers[role].URL + "/v1",
+		BaseURL:       baseURL,
 		Models:        models,
-		DefaultModel:  "m4-" + role,
-		ContextTokens: 65536,
-		OutputTokens:  4096,
+		DefaultModel:  defModel,
+		ContextTokens: 200000,
+		OutputTokens:  16384,
 		Enabled:       true,
 	}
 }
 
-func (h *routingMultiHarness) serveRole(role string, w http.ResponseWriter, r *http.Request) {
-	if r.Header.Get("Authorization") != "Bearer "+h.keys[role] {
-		h.recordProblem(fmt.Sprintf("role %s auth mismatch", role))
+func (h *routingMultiHarness) serveRequest(w http.ResponseWriter, r *http.Request) {
+	auth := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+	role, ok := h.keyToRole[auth]
+	if !ok {
+		h.recordProblem(fmt.Sprintf("unexpected auth header on %s", r.URL.Path))
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
-	if r.URL.Path == "/v1/models" {
+	if strings.HasSuffix(r.URL.Path, "/models") {
 		h.mu.Lock()
 		h.probes = append(h.probes, role)
 		h.mu.Unlock()
+		_, defModel := routingRoleSpec(role)
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"data": []map[string]string{
-				{"id": "m4-" + role},
+				{"id": defModel},
 				{"id": h.keys[role]},
-				{"id": "m4-" + role + "-pro"},
+				{"id": "gpt-4o"},
 			},
 		})
 		return
 	}
-	if r.URL.Path != "/v1/chat/completions" {
+	if !strings.HasSuffix(r.URL.Path, "/chat/completions") {
 		h.recordProblem("unexpected path: " + r.URL.Path)
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -156,7 +209,10 @@ func (h *routingMultiHarness) serveRole(role string, w http.ResponseWriter, r *h
 	var body struct {
 		Model           string `json:"model"`
 		ReasoningEffort string `json:"reasoning_effort"`
-		Messages        []struct {
+		Reasoning       *struct {
+			Effort string `json:"effort"`
+		} `json:"reasoning"`
+		Messages []struct {
 			Role    string          `json:"role"`
 			Content json.RawMessage `json:"content"`
 		} `json:"messages"`
@@ -177,6 +233,9 @@ func (h *routingMultiHarness) serveRole(role string, w http.ResponseWriter, r *h
 	}
 	last := body.Messages[len(body.Messages)-1]
 	thinking := body.ReasoningEffort
+	if thinking == "" && body.Reasoning != nil {
+		thinking = body.Reasoning.Effort
+	}
 	if thinking == "" {
 		thinking = "off"
 	}
@@ -356,7 +415,7 @@ func TestPiProductModelRoutingPoolStickinessAndSafeEscalation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	roles := []string{"dialogue", "coding", "reasoning", "utility"}
+	roles := []string{"dialogue", "reasoning", "coding", "utility"}
 	h := newRoutingMultiHarness(t, append(append([]string(nil), roles...), "legacy"))
 
 	var writeCount atomic.Int64
@@ -534,8 +593,8 @@ const fk = db.prepare('PRAGMA foreign_key_check').all().length;
 db.close();
 console.log(JSON.stringify({ v, fk }));
 `)
-	if migCheck != `{"v":10,"fk":0}` {
-		t.Fatalf("v6->v10 migration check = %s", migCheck)
+	if migCheck != `{"v":11,"fk":0}` {
+		t.Fatalf("v6->v11 migration check = %s", migCheck)
 	}
 	if !bytes.Equal(productRead(t, opts.ProfilePath), legacyProfileBytes) {
 		t.Fatal("v6->v7 migration mutated canonical legacy contacts.json bytes")
@@ -587,8 +646,8 @@ console.log(JSON.stringify({ v, fk }));
 		"reasoning": singleRouting.ResolvedRoles.Reasoning,
 		"utility":   singleRouting.ResolvedRoles.Utility,
 	} {
-		if slot == nil || slot.ResolvedModel != "m4-dialogue" {
-			t.Fatalf("single-model collapse slot %s = %+v, want m4-dialogue", name, slot)
+		if slot == nil || slot.ResolvedModel != "gpt-4o-mini" {
+			t.Fatalf("single-model collapse slot %s = %+v, want gpt-4o-mini", name, slot)
 		}
 	}
 
@@ -603,7 +662,7 @@ console.log(JSON.stringify({ v, fk }));
 		}
 	}
 	beforeApply, err := proc.client.Routing(ctx)
-	if err != nil || beforeApply.ResolvedRoles.Utility == nil || beforeApply.ResolvedRoles.Utility.ResolvedModel != "m4-dialogue" {
+	if err != nil || beforeApply.ResolvedRoles.Reasoning == nil || beforeApply.ResolvedRoles.Reasoning.ResolvedModel != "gpt-4o-mini" {
 		t.Fatalf("SaveProvider mutated effective roles before Apply: %+v, %v", beforeApply, err)
 	}
 	if _, err := proc.client.ApplyProviders(ctx, pi.ProductConnectionApplyParams{
@@ -616,11 +675,9 @@ console.log(JSON.stringify({ v, fk }));
 	if err != nil {
 		t.Fatal(err)
 	}
-	if fourRouting.ResolvedRoles.Dialogue.ResolvedModel != "m4-dialogue" ||
-		fourRouting.ResolvedRoles.Coding.ResolvedModel != "m4-coding" ||
-		fourRouting.ResolvedRoles.Reasoning.ResolvedModel != "m4-reasoning" ||
-		fourRouting.ResolvedRoles.Utility.ResolvedModel != "m4-utility" {
-		t.Fatalf("four-role resolution mismatch: %+v", fourRouting.ResolvedRoles)
+	if fourRouting.ResolvedRoles.Dialogue.ResolvedModel != "gpt-4o-mini" ||
+		fourRouting.ResolvedRoles.Reasoning.ResolvedModel != "o3" {
+		t.Fatalf("balanced multi-provider resolution mismatch: %+v", fourRouting.ResolvedRoles)
 	}
 
 	listBeforeTest, err := proc.client.ListProviders(ctx)
@@ -628,7 +685,7 @@ console.log(JSON.stringify({ v, fk }));
 		t.Fatal(err)
 	}
 	testRes, err := proc.client.TestProvider(ctx, pi.ProductProviderTestParams{Account: h.account("dialogue")})
-	if err != nil || !testRes.OK || !slices.Equal(testRes.Models, []string{"m4-dialogue", "m4-dialogue-pro"}) {
+	if err != nil || !testRes.OK || !slices.Equal(testRes.Models, []string{"gpt-4o", "gpt-4o-mini"}) {
 		t.Fatalf("TestProvider = %+v, %v", testRes, err)
 	}
 	listAfterTest, err := proc.client.ListProviders(ctx)
@@ -672,8 +729,12 @@ console.log(JSON.stringify({ v, fk }));
 	if s := evLog.waitSettled(t, ctx, proc, execHot1); s.State != "completed" {
 		t.Fatalf("HOT ONE failed: %+v", s)
 	}
+	dlgUpgraded := h.account("dialogue")
+	dlgUpgraded.DefaultModel = "gpt-4o"
+	dlgEnabled := []string{"gpt-4o"}
+	dlgUpgraded.EnabledModels = &dlgEnabled
 	if _, err := proc.client.SaveProvider(ctx, pi.ProductProviderSaveParams{
-		ProductProviderTestParams: pi.ProductProviderTestParams{Account: h.account("dialogue", "m4-dialogue-pro"), APIKey: h.keys["dialogue"]},
+		ProductProviderTestParams: pi.ProductProviderTestParams{Account: dlgUpgraded, APIKey: h.keys["dialogue"]},
 		OperationID:               "op-save-dlg-pro",
 	}); err != nil {
 		t.Fatal(err)
@@ -698,8 +759,12 @@ console.log(JSON.stringify({ v, fk }));
 	}
 	evLog.drainProviderChange(t, ctx, proc, "policy")
 	evLog.drainProviderChange(t, ctx, proc, "applied")
-	if rt, err := proc.client.Routing(ctx); err != nil || rt.ResolvedRoles.Dialogue.ResolvedModel != "m4-dialogue-pro" {
-		t.Fatalf("dialogue model after quality Apply = %+v, %v", rt, err)
+	if rt, err := proc.client.Routing(ctx); err != nil ||
+		rt.ResolvedRoles.Dialogue.ResolvedModel != "gpt-4o" ||
+		rt.ResolvedRoles.Coding.ResolvedModel != "openai/gpt-5.3-codex" ||
+		rt.ResolvedRoles.Reasoning.ResolvedModel != "o3" ||
+		rt.ResolvedRoles.Utility.ResolvedModel != "gpt-5.4-nano" {
+		t.Fatalf("four-role resolution after quality Apply = %+v, %v", rt, err)
 	}
 	execHot3 := mcpSendTurn(t, ctx, proc, originBot, "HOT THREE", "op-hot-3")
 	if s := evLog.waitSettled(t, ctx, proc, execHot3); s.State != "completed" {
@@ -711,7 +776,7 @@ console.log(JSON.stringify({ v, fk }));
 			hotModels = append(hotModels, req.Model)
 		}
 	}
-	if !slices.Equal(hotModels, []string{"m4-dialogue", "m4-dialogue", "m4-dialogue"}) {
+	if !slices.Equal(hotModels, []string{"gpt-4o-mini", "gpt-4o-mini", "gpt-4o-mini"}) {
 		t.Fatalf("hot Conversation failed stickiness guard: %v", hotModels)
 	}
 
@@ -727,8 +792,8 @@ console.log(JSON.stringify({ v, fk }));
 		t.Fatalf("NEW DIALOGUE failed: %+v", s)
 	}
 	reqs = h.allRequests()
-	if reqs[len(reqs)-1].Model != "m4-dialogue-pro" {
-		t.Fatalf("fresh conversation model = %q, want m4-dialogue-pro", reqs[len(reqs)-1].Model)
+	if reqs[len(reqs)-1].Model != "gpt-4o" {
+		t.Fatalf("fresh conversation model = %q, want gpt-4o", reqs[len(reqs)-1].Model)
 	}
 
 	codingSum := routingDelegate(t, ctx, proc, evLog, h, originBot, workerBot, "DEEP CODING", "coding", "deep", []string{"fixture constraint"}, "op-del-code")
@@ -748,7 +813,7 @@ console.log(JSON.stringify({ v, fk }));
 			codingReqs = append(codingReqs, req)
 		}
 	}
-	if len(codingReqs) != 1 || codingReqs[0].Role != "coding" || codingReqs[0].Model != "m4-coding" || codingReqs[0].Thinking != "high" {
+	if len(codingReqs) != 1 || codingReqs[0].Role != "coding" || codingReqs[0].Model != "openai/gpt-5.3-codex" || codingReqs[0].Thinking != "high" {
 		t.Fatalf("DEEP CODING provider routing = %+v", codingReqs)
 	}
 
@@ -785,7 +850,7 @@ console.log(oldSession);
 		t.Fatalf("COLD DIALOGUE failed: %+v", s)
 	}
 	reqs = h.allRequests()
-	if reqs[len(reqs)-1].Model != "m4-dialogue-pro" {
+	if reqs[len(reqs)-1].Model != "gpt-4o" {
 		t.Fatalf("cold dialogue did not adopt applied model: %+v", reqs[len(reqs)-1])
 	}
 	reboundSession := runNodeSQLite(t, nodePath, dbPath, `
@@ -796,7 +861,7 @@ db.close();
 const binding = JSON.parse(row.binding_json);
 console.log(JSON.stringify({ sessionRef: binding.sessionRef, model: binding.route.resolvedModel }));
 `, originBot.CurrentConversationID)
-	if !strings.Contains(reboundSession, oldSession) || !strings.Contains(reboundSession, `"m4-dialogue-pro"`) {
+	if !strings.Contains(reboundSession, oldSession) || !strings.Contains(reboundSession, `"gpt-4o"`) {
 		t.Fatalf("cold adoption lost sessionRef or model: got %s want session %s", reboundSession, oldSession)
 	}
 	hist, err := proc.client.History(ctx, pi.ProductHistoryParams{
@@ -925,7 +990,7 @@ console.log(JSON.stringify({ adm, esc }));
 			readRouteSeq = append(readRouteSeq, req.Role+":"+req.Thinking)
 		}
 	}
-	if !slices.Equal(readRouteSeq, []string{"utility:off", "utility:off", "reasoning:high"}) {
+	if !slices.Equal(readRouteSeq, []string{"utility:none", "utility:none", "reasoning:high"}) {
 		t.Fatalf("readonly escalation provider sequence = %v", readRouteSeq)
 	}
 
@@ -947,7 +1012,7 @@ func TestPiProductModelRoutingDeletedProviderRevocationBackupAndMigration(t *tes
 		t.Fatal(err)
 	}
 
-	roles := []string{"dialogue", "coding", "reasoning", "utility"}
+	roles := []string{"dialogue", "reasoning", "coding", "utility"}
 	h := newRoutingMultiHarness(t, append(append([]string(nil), roles...), "spare"))
 
 	opts := pi.ProductOptions{
@@ -964,13 +1029,23 @@ func TestPiProductModelRoutingDeletedProviderRevocationBackupAndMigration(t *tes
 
 	var rev pi.ProductConnectionRevisions
 	for _, role := range roles {
+		acc := h.account(role)
+		if role == "dialogue" {
+			acc.DefaultModel = "gpt-4o"
+		}
 		rev, err = proc.client.SaveProvider(ctx, pi.ProductProviderSaveParams{
-			ProductProviderTestParams: pi.ProductProviderTestParams{Account: h.account(role), APIKey: h.keys[role]},
+			ProductProviderTestParams: pi.ProductProviderTestParams{Account: acc, APIKey: h.keys[role]},
 			OperationID:               "op-save-" + role,
 		})
 		if err != nil {
 			t.Fatal(err)
 		}
+	}
+	rev, err = proc.client.SetRoutingPolicy(ctx, pi.ProductRoutingPolicyParams{
+		Policy: pi.ProductRoutingQuality, OperationID: "op-policy-base",
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
 	if _, err := proc.client.ApplyProviders(ctx, pi.ProductConnectionApplyParams{
 		OperationID: "op-apply-base", SavedRevision: *rev.SavedRevision,
@@ -1328,18 +1403,18 @@ const db = new DatabaseSync(process.argv[1]);
 const v = db.prepare('PRAGMA user_version').get().user_version;
 const fk = db.prepare('PRAGMA foreign_key_check').all().length;
 const cov = db.prepare('SELECT count(*) AS n FROM execution_admission_coverage').get().n;
-db.exec('PRAGMA user_version = 11');
+db.exec('PRAGMA user_version = 12');
 db.close();
 console.log(JSON.stringify({ v, fk, cov }));
 `)
-	if restoreCheck != `{"v":10,"fk":0,"cov":0}` {
+	if restoreCheck != `{"v":11,"fk":0,"cov":0}` {
 		t.Fatalf("restored SQLite check = %s", restoreCheck)
 	}
 	v8Client, startErr := pi.StartProduct(restoreOpts)
 	if startErr == nil {
 		if _, readyErr := v8Client.Ready(ctx); readyErr == nil {
 			if _, openErr := v8Client.Open(ctx, []int{pi.ProductVersion}); openErr == nil {
-				t.Fatal("worker admitted SQLite user_version=11")
+				t.Fatal("worker admitted SQLite user_version=12")
 			}
 		}
 		_, _ = v8Client.Wait(ctx)

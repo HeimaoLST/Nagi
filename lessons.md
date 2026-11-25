@@ -409,3 +409,11 @@
 **Cause or correction:** Pi can continue the active SDK run to process a queued steering message after an assistant error, so raw provider request count and durable Nagi replacement execution count measure different mechanisms.
 
 **Prevention:** Trigger controlled provider failures after observing steer consumption when testing M4 escalation exclusion, and assert durable `activity.executions` count, routed models, and `activity_escalations` rows separately from raw HTTP request counts; also dispatch mock MCP HTTP stream probes by method before parsing request bodies.
+
+### Project complete provider defaults, case-insensitive protection and sibling scoring in model catalogs
+
+**Problem:** A cherry-picked catalog supplement left most built-in OpenAI-compatible models without tool evidence, marked Responses-only OpenAI Pro SKUs as non-chat because they inherit `provider.toml` defaults instead of repeating `[api.*]`, dropped DeepSeek `toggle=true` `off` support, compiled family/price-protection regexes case-sensitively so uppercase Pro IDs bypassed opt-in and mixed-case families failed to match, let lexicographical deduplication shadow same-provider `:free` siblings on `economy`, and wiped freshly supplied `modelOverrides` on endpoint repoints.
+
+**Cause or correction:** Catalog generators must read provider-level transport defaults, `base_model` inheritance, nested IDs, and `toggle` semantics across all supported providers rather than cherry-picking samples; cost-protection patterns must be case-insensitive; canonical deduplication must preserve applied provider order across distinct providers while scoring siblings within the same provider; and repoint invalidation must drop only omitted or unchanged copied overrides.
+
+**Prevention:** Project the full pinned upstream inventory for every supported OpenAI-compatible provider with deterministic allowlists, compile and validate family regexes case-insensitively, test both same-account and cross-account canonical siblings plus mixed-case Pro SKUs and endpoint repoints with fresh overrides, and keep an unchanged-editor 200+ ID discovery integration gate green.

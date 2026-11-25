@@ -13,6 +13,8 @@ import sys
 
 ROOT = Path(__file__).resolve().parent.parent
 SOURCE = ROOT / "internal" / "pi" / "worker"
+CATALOG_INPUTS = ("model-ranks.json", "model-catalog-supplement.json")
+NOTICE_FILES = ("Pi-MIT.txt", "models.dev-MIT.txt")
 
 
 def sha256(path: Path) -> str:
@@ -32,9 +34,14 @@ def verify_patch_files(package_root: Path, patch: dict, field: str) -> None:
 def source_inputs() -> dict:
     paths = [SOURCE / name for name in ("package.json", "package-lock.json", "tsconfig.json")]
     paths.extend(SOURCE.glob("*.ts"))
-    paths.extend((ROOT / ".github" / "pi-runtime.json", ROOT / "assets" / "licenses" / "Pi-MIT.txt", Path(__file__).resolve()))
+    paths.extend((ROOT / ".github" / "pi-runtime.json", ROOT / "assets/licenses/Pi-MIT.txt", Path(__file__).resolve()))
     pin = json.loads((ROOT / ".github" / "pi-runtime.json").read_text())
     paths.extend(ROOT / patch["path"] for patch in pin["pi"]["patches"])
+    return {str(path.relative_to(ROOT)): sha256(path) for path in paths}
+
+
+def catalog_inputs() -> dict:
+    paths = [*(SOURCE / name for name in CATALOG_INPUTS), ROOT / "assets/licenses/models.dev-MIT.txt", ROOT / "scripts/sync-model-catalog.py"]
     return {str(path.relative_to(ROOT)): sha256(path) for path in paths}
 
 
@@ -44,6 +51,7 @@ def build(output: Path, runtime: Path) -> dict:
     if output.is_relative_to(ROOT):
         raise ValueError("worker output must be outside the source checkout")
     before = source_inputs()
+    catalog_before = catalog_inputs()
     pin = json.loads((ROOT / ".github" / "pi-runtime.json").read_text())
     for field, hash_field in (("package_json", "package_json_sha256"), ("lock_file", "lock_sha256")):
         if before[pin["pi"][field]] != pin["pi"][hash_field]:
@@ -63,7 +71,8 @@ def build(output: Path, runtime: Path) -> dict:
     (output / "licenses").mkdir()
     shutil.copy2(runtime / "bin" / "node", output / "bin" / "node")
     shutil.copy2(runtime / "LICENSE", output / "licenses" / "Node.txt")
-    shutil.copy2(ROOT / "assets" / "licenses" / "Pi-MIT.txt", output / "licenses" / "Pi-MIT.txt")
+    for name in NOTICE_FILES:
+        shutil.copy2(ROOT / "assets" / "licenses" / name, output / "licenses" / name)
     for name in ("package.json", "package-lock.json"):
         shutil.copy2(SOURCE / name, output / name)
     build_source = output / ".build-source"
@@ -83,11 +92,10 @@ def build(output: Path, runtime: Path) -> dict:
     environment["PATH"] = str(node.parent) + os.pathsep + environment.get("PATH", "")
     dependency_command = [npm, "ci", "--ignore-scripts", "--no-audit", "--no-fund"]
     patch_commands = [["/usr/bin/patch", "--batch", "--forward", "--fuzz=0", "-p1", "-i", str(ROOT / patch["path"])] for patch in patches]
-    build_commands = [
-        [str(node), str(compiler), "--project", str(build_source / "tsconfig.json"), "--noEmit", "false", "--outDir", str(output / "dist")],
-        [npm, "prune", "--omit=dev", "--ignore-scripts", "--no-audit", "--no-fund"],
-    ]
-    commands = [dependency_command, *patch_commands, *build_commands]
+    compile_command = [str(node), str(compiler), "--project", str(build_source / "tsconfig.json"), "--noEmit", "false", "--outDir", str(output / "dist")]
+    catalog_command = [str(node), str(output / "dist" / "model-catalog-build.js")]
+    prune_command = [npm, "prune", "--omit=dev", "--ignore-scripts", "--no-audit", "--no-fund"]
+    commands = [dependency_command, *patch_commands, compile_command, catalog_command, prune_command]
     with (output / "build.log").open("wb") as log:
         subprocess.run(dependency_command, cwd=output, env=environment, stdout=log, stderr=subprocess.STDOUT, check=True)
         for patch, command, package_root in zip(patches, patch_commands, package_roots):
@@ -107,8 +115,13 @@ def build(output: Path, runtime: Path) -> dict:
             },
             "development_install": json.loads((output / "node_modules" / ".package-lock.json").read_text()),
         }
-        for command in build_commands:
-            subprocess.run(command, cwd=output, env=environment, stdout=log, stderr=subprocess.STDOUT, check=True)
+        subprocess.run(compile_command, cwd=output, env=environment, stdout=log, stderr=subprocess.STDOUT, check=True)
+        for name in CATALOG_INPUTS:
+            shutil.copy2(SOURCE / name, output / "dist" / name)
+        subprocess.run(catalog_command, cwd=output, env=environment, stdout=log, stderr=subprocess.STDOUT, check=True)
+        (output / "dist" / "model-catalog-build.js").unlink()
+        (output / "dist" / "model-catalog-supplement.json").unlink()
+        subprocess.run(prune_command, cwd=output, env=environment, stdout=log, stderr=subprocess.STDOUT, check=True)
     if {path.name: sha256(path) for path in build_source.iterdir()} != compiled_inputs:
         raise ValueError("worker compilation source changed during build")
     for path in build_source.iterdir():
@@ -123,10 +136,12 @@ def build(output: Path, runtime: Path) -> dict:
             raise ValueError("installed Pi package differs from the pinned version")
     for patch, package_root in zip(patches, package_roots):
         verify_patch_files(package_root, patch, "after_sha256")
-    if source_inputs() != before:
+    if source_inputs() != before or catalog_inputs() != catalog_before:
         raise ValueError("worker source inputs changed during build")
     files = {}
     for path in sorted(output.rglob("*")):
+        if path == output / "build.log":
+            continue
         if path.is_symlink():
             files[str(path.relative_to(output))] = {"symlink": os.readlink(path)}
         elif path.is_file():
@@ -138,8 +153,10 @@ def build(output: Path, runtime: Path) -> dict:
         "nagi_source": {"commit": git_head, "status": git_status, "inputs": before},
         "pi": pin["pi"],
         "node": {**pin["node"], "input_receipt_sha256": sha256(receipt_path), "binary_sha256": sha256(node)},
-        "commands": commands,
-        "command_cwds": [str(output), *map(str, package_roots), str(output), str(output)],
+        "commands": [[part.replace(str(output) + os.sep, "${OUTPUT}/").replace(str(ROOT) + os.sep, "${SOURCE}/")
+                      for part in command] for command in commands],
+        "command_cwds": [".", *(str(path.relative_to(output)) for path in package_roots), ".", ".", "."],
+        "catalog": {"path": "dist/model-catalog.json", "sha256": files["dist/model-catalog.json"]["sha256"], "inputs": catalog_before},
         "compilation": compilation,
         "entry": {"node": "bin/node", "worker": "dist/worker.js"},
         "files": files,
