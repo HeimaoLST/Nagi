@@ -9413,3 +9413,537 @@ func TaskContextChooseFileHint() string { return In(i18n.Locale()).TaskContextCh
 func (msgs Messages) TaskContextChooseFileHint() string {
 	return Catalog.Format(msgs.locale, "taskContextChooseFileHint", nil)
 }
+
+func ProviderRouting() string { return In(i18n.Locale()).ProviderRouting() }
+
+func (msgs Messages) ProviderRouting() string {
+	return Catalog.Format(msgs.locale, "providerRouting", nil)
+}
+
+func ProviderAccounts() string { return In(i18n.Locale()).ProviderAccounts() }
+
+func (msgs Messages) ProviderAccounts() string {
+	return Catalog.Format(msgs.locale, "providerAccounts", nil)
+}
+
+func ProviderAdd() string { return In(i18n.Locale()).ProviderAdd() }
+
+func (msgs Messages) ProviderAdd() string {
+	return Catalog.Format(msgs.locale, "providerAdd", nil)
+}
+
+func ProviderApplyChanges() string { return In(i18n.Locale()).ProviderApplyChanges() }
+
+func (msgs Messages) ProviderApplyChanges() string {
+	return Catalog.Format(msgs.locale, "providerApplyChanges", nil)
+}
+
+func ProviderSaveApply() string { return In(i18n.Locale()).ProviderSaveApply() }
+
+func (msgs Messages) ProviderSaveApply() string {
+	return Catalog.Format(msgs.locale, "providerSaveApply", nil)
+}
+
+func ProviderSave() string { return In(i18n.Locale()).ProviderSave() }
+
+func (msgs Messages) ProviderSave() string {
+	return Catalog.Format(msgs.locale, "providerSave", nil)
+}
+
+func ProviderRevoke() string { return In(i18n.Locale()).ProviderRevoke() }
+
+func (msgs Messages) ProviderRevoke() string {
+	return Catalog.Format(msgs.locale, "providerRevoke", nil)
+}
+
+func ProviderDelete() string { return In(i18n.Locale()).ProviderDelete() }
+
+func (msgs Messages) ProviderDelete() string {
+	return Catalog.Format(msgs.locale, "providerDelete", nil)
+}
+
+func ProviderNoAccounts() string { return In(i18n.Locale()).ProviderNoAccounts() }
+
+func (msgs Messages) ProviderNoAccounts() string {
+	return Catalog.Format(msgs.locale, "providerNoAccounts", nil)
+}
+
+func ProviderPending() string { return In(i18n.Locale()).ProviderPending() }
+
+func (msgs Messages) ProviderPending() string {
+	return Catalog.Format(msgs.locale, "providerPending", nil)
+}
+
+func ProviderCredentialsUnavailable() string {
+	return In(i18n.Locale()).ProviderCredentialsUnavailable()
+}
+
+func (msgs Messages) ProviderCredentialsUnavailable() string {
+	return Catalog.Format(msgs.locale, "providerCredentialsUnavailable", nil)
+}
+
+func ProviderActiveRoutingNote() string { return In(i18n.Locale()).ProviderActiveRoutingNote() }
+
+func (msgs Messages) ProviderActiveRoutingNote() string {
+	return Catalog.Format(msgs.locale, "providerActiveRoutingNote", nil)
+}
+
+func ProviderStrategy() string { return In(i18n.Locale()).ProviderStrategy() }
+
+func (msgs Messages) ProviderStrategy() string {
+	return Catalog.Format(msgs.locale, "providerStrategy", nil)
+}
+
+func ProviderEconomy() string { return In(i18n.Locale()).ProviderEconomy() }
+
+func (msgs Messages) ProviderEconomy() string {
+	return Catalog.Format(msgs.locale, "providerEconomy", nil)
+}
+
+func ProviderBalanced() string { return In(i18n.Locale()).ProviderBalanced() }
+
+func (msgs Messages) ProviderBalanced() string {
+	return Catalog.Format(msgs.locale, "providerBalanced", nil)
+}
+
+func ProviderQuality() string { return In(i18n.Locale()).ProviderQuality() }
+
+func (msgs Messages) ProviderQuality() string {
+	return Catalog.Format(msgs.locale, "providerQuality", nil)
+}
+
+func ProviderEconomyHint() string { return In(i18n.Locale()).ProviderEconomyHint() }
+
+func (msgs Messages) ProviderEconomyHint() string {
+	return Catalog.Format(msgs.locale, "providerEconomyHint", nil)
+}
+
+func ProviderBalancedHint() string { return In(i18n.Locale()).ProviderBalancedHint() }
+
+func (msgs Messages) ProviderBalancedHint() string {
+	return Catalog.Format(msgs.locale, "providerBalancedHint", nil)
+}
+
+func ProviderQualityHint() string { return In(i18n.Locale()).ProviderQualityHint() }
+
+func (msgs Messages) ProviderQualityHint() string {
+	return Catalog.Format(msgs.locale, "providerQualityHint", nil)
+}
+
+func ProviderRoleDialogue() string { return In(i18n.Locale()).ProviderRoleDialogue() }
+
+func (msgs Messages) ProviderRoleDialogue() string {
+	return Catalog.Format(msgs.locale, "providerRoleDialogue", nil)
+}
+
+func ProviderRoleDialogueHint() string { return In(i18n.Locale()).ProviderRoleDialogueHint() }
+
+func (msgs Messages) ProviderRoleDialogueHint() string {
+	return Catalog.Format(msgs.locale, "providerRoleDialogueHint", nil)
+}
+
+func ProviderRoleCoding() string { return In(i18n.Locale()).ProviderRoleCoding() }
+
+func (msgs Messages) ProviderRoleCoding() string {
+	return Catalog.Format(msgs.locale, "providerRoleCoding", nil)
+}
+
+func ProviderRoleCodingHint() string { return In(i18n.Locale()).ProviderRoleCodingHint() }
+
+func (msgs Messages) ProviderRoleCodingHint() string {
+	return Catalog.Format(msgs.locale, "providerRoleCodingHint", nil)
+}
+
+func ProviderRoleReasoning() string { return In(i18n.Locale()).ProviderRoleReasoning() }
+
+func (msgs Messages) ProviderRoleReasoning() string {
+	return Catalog.Format(msgs.locale, "providerRoleReasoning", nil)
+}
+
+func ProviderRoleReasoningHint() string { return In(i18n.Locale()).ProviderRoleReasoningHint() }
+
+func (msgs Messages) ProviderRoleReasoningHint() string {
+	return Catalog.Format(msgs.locale, "providerRoleReasoningHint", nil)
+}
+
+func ProviderRoleUtility() string { return In(i18n.Locale()).ProviderRoleUtility() }
+
+func (msgs Messages) ProviderRoleUtility() string {
+	return Catalog.Format(msgs.locale, "providerRoleUtility", nil)
+}
+
+func ProviderRoleUtilityHint() string { return In(i18n.Locale()).ProviderRoleUtilityHint() }
+
+func (msgs Messages) ProviderRoleUtilityHint() string {
+	return Catalog.Format(msgs.locale, "providerRoleUtilityHint", nil)
+}
+
+func ProviderUnassigned() string { return In(i18n.Locale()).ProviderUnassigned() }
+
+func (msgs Messages) ProviderUnassigned() string {
+	return Catalog.Format(msgs.locale, "providerUnassigned", nil)
+}
+
+func ProviderPendingRemoval() string { return In(i18n.Locale()).ProviderPendingRemoval() }
+
+func (msgs Messages) ProviderPendingRemoval() string {
+	return Catalog.Format(msgs.locale, "providerPendingRemoval", nil)
+}
+
+func ProviderThinkingOff() string { return In(i18n.Locale()).ProviderThinkingOff() }
+
+func (msgs Messages) ProviderThinkingOff() string {
+	return Catalog.Format(msgs.locale, "providerThinkingOff", nil)
+}
+
+func ProviderThinkingLow() string { return In(i18n.Locale()).ProviderThinkingLow() }
+
+func (msgs Messages) ProviderThinkingLow() string {
+	return Catalog.Format(msgs.locale, "providerThinkingLow", nil)
+}
+
+func ProviderThinkingMedium() string { return In(i18n.Locale()).ProviderThinkingMedium() }
+
+func (msgs Messages) ProviderThinkingMedium() string {
+	return Catalog.Format(msgs.locale, "providerThinkingMedium", nil)
+}
+
+func ProviderThinkingHigh() string { return In(i18n.Locale()).ProviderThinkingHigh() }
+
+func (msgs Messages) ProviderThinkingHigh() string {
+	return Catalog.Format(msgs.locale, "providerThinkingHigh", nil)
+}
+
+func ProviderReady() string { return In(i18n.Locale()).ProviderReady() }
+
+func (msgs Messages) ProviderReady() string {
+	return Catalog.Format(msgs.locale, "providerReady", nil)
+}
+
+func ProviderEnabled() string { return In(i18n.Locale()).ProviderEnabled() }
+
+func (msgs Messages) ProviderEnabled() string {
+	return Catalog.Format(msgs.locale, "providerEnabled", nil)
+}
+
+func ProviderDisabled() string { return In(i18n.Locale()).ProviderDisabled() }
+
+func (msgs Messages) ProviderDisabled() string {
+	return Catalog.Format(msgs.locale, "providerDisabled", nil)
+}
+
+func ProviderMissingKey() string { return In(i18n.Locale()).ProviderMissingKey() }
+
+func (msgs Messages) ProviderMissingKey() string {
+	return Catalog.Format(msgs.locale, "providerMissingKey", nil)
+}
+
+func ProviderModelCount(count int) string { return In(i18n.Locale()).ProviderModelCount(count) }
+
+func (msgs Messages) ProviderModelCount(count int) string {
+	return Catalog.Format(msgs.locale, "providerModelCount", map[string]any{"count": count})
+}
+
+func ProviderActiveFor(roles string) string { return In(i18n.Locale()).ProviderActiveFor(roles) }
+
+func (msgs Messages) ProviderActiveFor(roles string) string {
+	return Catalog.Format(msgs.locale, "providerActiveFor", map[string]any{"roles": roles})
+}
+
+func ProviderRoleSeparator() string { return In(i18n.Locale()).ProviderRoleSeparator() }
+
+func (msgs Messages) ProviderRoleSeparator() string {
+	return Catalog.Format(msgs.locale, "providerRoleSeparator", nil)
+}
+
+func ProviderTestAccount(name string) string { return In(i18n.Locale()).ProviderTestAccount(name) }
+
+func (msgs Messages) ProviderTestAccount(name string) string {
+	return Catalog.Format(msgs.locale, "providerTestAccount", map[string]any{"name": name})
+}
+
+func ProviderRevokeAccount(name string) string { return In(i18n.Locale()).ProviderRevokeAccount(name) }
+
+func (msgs Messages) ProviderRevokeAccount(name string) string {
+	return Catalog.Format(msgs.locale, "providerRevokeAccount", map[string]any{"name": name})
+}
+
+func ProviderDeleteAccount(name string) string { return In(i18n.Locale()).ProviderDeleteAccount(name) }
+
+func (msgs Messages) ProviderDeleteAccount(name string) string {
+	return Catalog.Format(msgs.locale, "providerDeleteAccount", map[string]any{"name": name})
+}
+
+func ProviderPreset() string { return In(i18n.Locale()).ProviderPreset() }
+
+func (msgs Messages) ProviderPreset() string {
+	return Catalog.Format(msgs.locale, "providerPreset", nil)
+}
+
+func ProviderCustom() string { return In(i18n.Locale()).ProviderCustom() }
+
+func (msgs Messages) ProviderCustom() string {
+	return Catalog.Format(msgs.locale, "providerCustom", nil)
+}
+
+func ProviderBaseURL() string { return In(i18n.Locale()).ProviderBaseURL() }
+
+func (msgs Messages) ProviderBaseURL() string {
+	return Catalog.Format(msgs.locale, "providerBaseURL", nil)
+}
+
+func ProviderKeepKey() string { return In(i18n.Locale()).ProviderKeepKey() }
+
+func (msgs Messages) ProviderKeepKey() string {
+	return Catalog.Format(msgs.locale, "providerKeepKey", nil)
+}
+
+func ProviderDiscovered() string { return In(i18n.Locale()).ProviderDiscovered() }
+
+func (msgs Messages) ProviderDiscovered() string {
+	return Catalog.Format(msgs.locale, "providerDiscovered", nil)
+}
+
+func ProviderAdditionalModels() string { return In(i18n.Locale()).ProviderAdditionalModels() }
+
+func (msgs Messages) ProviderAdditionalModels() string {
+	return Catalog.Format(msgs.locale, "providerAdditionalModels", nil)
+}
+
+func ProviderAdditionalModelsHint() string { return In(i18n.Locale()).ProviderAdditionalModelsHint() }
+
+func (msgs Messages) ProviderAdditionalModelsHint() string {
+	return Catalog.Format(msgs.locale, "providerAdditionalModelsHint", nil)
+}
+
+func ProviderAccountStatus() string { return In(i18n.Locale()).ProviderAccountStatus() }
+
+func (msgs Messages) ProviderAccountStatus() string {
+	return Catalog.Format(msgs.locale, "providerAccountStatus", nil)
+}
+
+func ProviderWorking() string { return In(i18n.Locale()).ProviderWorking() }
+
+func (msgs Messages) ProviderWorking() string {
+	return Catalog.Format(msgs.locale, "providerWorking", nil)
+}
+
+func ProviderProbeResult(count int, latency string) string {
+	return In(i18n.Locale()).ProviderProbeResult(count, latency)
+}
+
+func (msgs Messages) ProviderProbeResult(count int, latency string) string {
+	return Catalog.Format(msgs.locale, "providerProbeResult", map[string]any{"count": count, "latency": latency})
+}
+
+func ProviderTabAccounts(count int) string { return In(i18n.Locale()).ProviderTabAccounts(count) }
+
+func (msgs Messages) ProviderTabAccounts(count int) string {
+	return Catalog.Format(msgs.locale, "providerTabAccounts", map[string]any{"count": count})
+}
+
+func ProviderTabRouting() string { return In(i18n.Locale()).ProviderTabRouting() }
+
+func (msgs Messages) ProviderTabRouting() string {
+	return Catalog.Format(msgs.locale, "providerTabRouting", nil)
+}
+
+func ProviderTabWorkspace() string { return In(i18n.Locale()).ProviderTabWorkspace() }
+
+func (msgs Messages) ProviderTabWorkspace() string {
+	return Catalog.Format(msgs.locale, "providerTabWorkspace", nil)
+}
+
+func ProviderEnabledCount(count int) string { return In(i18n.Locale()).ProviderEnabledCount(count) }
+
+func (msgs Messages) ProviderEnabledCount(count int) string {
+	return Catalog.Format(msgs.locale, "providerEnabledCount", map[string]any{"count": count})
+}
+
+func ProviderActiveCount(count int) string { return In(i18n.Locale()).ProviderActiveCount(count) }
+
+func (msgs Messages) ProviderActiveCount(count int) string {
+	return Catalog.Format(msgs.locale, "providerActiveCount", map[string]any{"count": count})
+}
+
+func ProviderAllApplied() string { return In(i18n.Locale()).ProviderAllApplied() }
+
+func (msgs Messages) ProviderAllApplied() string {
+	return Catalog.Format(msgs.locale, "providerAllApplied", nil)
+}
+
+func ProviderAddShort() string { return In(i18n.Locale()).ProviderAddShort() }
+
+func (msgs Messages) ProviderAddShort() string {
+	return Catalog.Format(msgs.locale, "providerAddShort", nil)
+}
+
+func ProviderToggleDisabled() string { return In(i18n.Locale()).ProviderToggleDisabled() }
+
+func (msgs Messages) ProviderToggleDisabled() string {
+	return Catalog.Format(msgs.locale, "providerToggleDisabled", nil)
+}
+
+func ProviderNoRole() string { return In(i18n.Locale()).ProviderNoRole() }
+
+func (msgs Messages) ProviderNoRole() string {
+	return Catalog.Format(msgs.locale, "providerNoRole", nil)
+}
+
+func ProviderLatencyReady(latency string) string {
+	return In(i18n.Locale()).ProviderLatencyReady(latency)
+}
+
+func (msgs Messages) ProviderLatencyReady(latency string) string {
+	return Catalog.Format(msgs.locale, "providerLatencyReady", map[string]any{"latency": latency})
+}
+
+func ProviderTestSync() string { return In(i18n.Locale()).ProviderTestSync() }
+
+func (msgs Messages) ProviderTestSync() string {
+	return Catalog.Format(msgs.locale, "providerTestSync", nil)
+}
+
+func ProviderTestDiscover() string { return In(i18n.Locale()).ProviderTestDiscover() }
+
+func (msgs Messages) ProviderTestDiscover() string {
+	return Catalog.Format(msgs.locale, "providerTestDiscover", nil)
+}
+
+func ProviderMoreModels(count int) string { return In(i18n.Locale()).ProviderMoreModels(count) }
+
+func (msgs Messages) ProviderMoreModels(count int) string {
+	return Catalog.Format(msgs.locale, "providerMoreModels", map[string]any{"count": count})
+}
+
+func ProviderAddHint() string { return In(i18n.Locale()).ProviderAddHint() }
+
+func (msgs Messages) ProviderAddHint() string {
+	return Catalog.Format(msgs.locale, "providerAddHint", nil)
+}
+
+func ProviderPresetResponses() string { return In(i18n.Locale()).ProviderPresetResponses() }
+
+func (msgs Messages) ProviderPresetResponses() string {
+	return Catalog.Format(msgs.locale, "providerPresetResponses", nil)
+}
+
+func ProviderPresetChat() string { return In(i18n.Locale()).ProviderPresetChat() }
+
+func (msgs Messages) ProviderPresetChat() string {
+	return Catalog.Format(msgs.locale, "providerPresetChat", nil)
+}
+
+func ProviderPresetMultiModel() string { return In(i18n.Locale()).ProviderPresetMultiModel() }
+
+func (msgs Messages) ProviderPresetMultiModel() string {
+	return Catalog.Format(msgs.locale, "providerPresetMultiModel", nil)
+}
+
+func ProviderPresetLocal() string { return In(i18n.Locale()).ProviderPresetLocal() }
+
+func (msgs Messages) ProviderPresetLocal() string {
+	return Catalog.Format(msgs.locale, "providerPresetLocal", nil)
+}
+
+func ProviderPresetCompatible() string { return In(i18n.Locale()).ProviderPresetCompatible() }
+
+func (msgs Messages) ProviderPresetCompatible() string {
+	return Catalog.Format(msgs.locale, "providerPresetCompatible", nil)
+}
+
+func ProviderAdvanced() string { return In(i18n.Locale()).ProviderAdvanced() }
+
+func (msgs Messages) ProviderAdvanced() string {
+	return Catalog.Format(msgs.locale, "providerAdvanced", nil)
+}
+
+func ProviderProtocolChatShort() string { return In(i18n.Locale()).ProviderProtocolChatShort() }
+
+func (msgs Messages) ProviderProtocolChatShort() string {
+	return Catalog.Format(msgs.locale, "providerProtocolChatShort", nil)
+}
+
+func ProviderTestFailed() string { return In(i18n.Locale()).ProviderTestFailed() }
+
+func (msgs Messages) ProviderTestFailed() string {
+	return Catalog.Format(msgs.locale, "providerTestFailed", nil)
+}
+
+func ProviderSaveFailed() string { return In(i18n.Locale()).ProviderSaveFailed() }
+
+func (msgs Messages) ProviderSaveFailed() string {
+	return Catalog.Format(msgs.locale, "providerSaveFailed", nil)
+}
+
+func ProviderApplyFailed() string { return In(i18n.Locale()).ProviderApplyFailed() }
+
+func (msgs Messages) ProviderApplyFailed() string {
+	return Catalog.Format(msgs.locale, "providerApplyFailed", nil)
+}
+
+func ProviderPolicyFailed() string { return In(i18n.Locale()).ProviderPolicyFailed() }
+
+func (msgs Messages) ProviderPolicyFailed() string {
+	return Catalog.Format(msgs.locale, "providerPolicyFailed", nil)
+}
+
+func ProviderDeleteFailed() string { return In(i18n.Locale()).ProviderDeleteFailed() }
+
+func (msgs Messages) ProviderDeleteFailed() string {
+	return Catalog.Format(msgs.locale, "providerDeleteFailed", nil)
+}
+
+func ProviderRevokeFailed() string { return In(i18n.Locale()).ProviderRevokeFailed() }
+
+func (msgs Messages) ProviderRevokeFailed() string {
+	return Catalog.Format(msgs.locale, "providerRevokeFailed", nil)
+}
+
+func ProviderStaleRevision() string { return In(i18n.Locale()).ProviderStaleRevision() }
+
+func (msgs Messages) ProviderStaleRevision() string {
+	return Catalog.Format(msgs.locale, "providerStaleRevision", nil)
+}
+
+func ProviderRefreshFailed() string { return In(i18n.Locale()).ProviderRefreshFailed() }
+
+func (msgs Messages) ProviderRefreshFailed() string {
+	return Catalog.Format(msgs.locale, "providerRefreshFailed", nil)
+}
+
+func ProviderNameLength() string { return In(i18n.Locale()).ProviderNameLength() }
+
+func (msgs Messages) ProviderNameLength() string {
+	return Catalog.Format(msgs.locale, "providerNameLength", nil)
+}
+
+func ProviderEndpointLength() string { return In(i18n.Locale()).ProviderEndpointLength() }
+
+func (msgs Messages) ProviderEndpointLength() string {
+	return Catalog.Format(msgs.locale, "providerEndpointLength", nil)
+}
+
+func ProviderModelLimit() string { return In(i18n.Locale()).ProviderModelLimit() }
+
+func (msgs Messages) ProviderModelLimit() string {
+	return Catalog.Format(msgs.locale, "providerModelLimit", nil)
+}
+
+func ProviderCredentialRecovery() string { return In(i18n.Locale()).ProviderCredentialRecovery() }
+
+func (msgs Messages) ProviderCredentialRecovery() string {
+	return Catalog.Format(msgs.locale, "providerCredentialRecovery", nil)
+}
+
+func ProviderSendRejected() string { return In(i18n.Locale()).ProviderSendRejected() }
+
+func (msgs Messages) ProviderSendRejected() string {
+	return Catalog.Format(msgs.locale, "providerSendRejected", nil)
+}
+
+func ProviderAnswerPaused() string { return In(i18n.Locale()).ProviderAnswerPaused() }
+
+func (msgs Messages) ProviderAnswerPaused() string {
+	return Catalog.Format(msgs.locale, "providerAnswerPaused", nil)
+}

@@ -83,6 +83,7 @@ func (a *appModel) view(c *ui.Context) {
 		})
 	})
 	a.createBotDialogView(c, t)
+	a.providerDialog(c, t)
 	a.composerMaterialDialog(c, t)
 }
 
@@ -561,6 +562,8 @@ func (a *appModel) runtimeRecoverySummary(msgs locales.Messages) string {
 		return msgs.ConnectionErrorSavedNeedsRepair()
 	case runtimeNoticeConnectionRequired:
 		return msgs.ConnectionRecoverySetupHint()
+	case runtimeNoticeCredentialUnavailable:
+		return msgs.ProviderCredentialRecovery()
 	case runtimeNoticeStoreSave:
 		return msgs.RecoveryLocalSaveFailed()
 	default:
@@ -636,6 +639,11 @@ func (a *appModel) main(c *ui.Context, t *ui.Theme) {
 			}
 			duplicateLocalSave := a.localSaveErr != "" && a.runtimeErrKind == runtimeNoticeStoreSave && a.runtimeErr == a.localSaveErr
 			showRuntimeError := a.hasRuntimeError() && (!duplicateLocalSave || a.runtimeStage == startupStageLocalStore)
+			activity := &ct.activity
+			pausedAnswerVisible := activity.open && !activity.legacyIssue && activity.result == nil && activity.activity != nil &&
+				slices.ContainsFunc(activity.activity.Questions, func(question pi.ProductQuestion) bool {
+					return question.Answer != nil && question.Delivery == "saved" && question.DeliveryBlocker == pi.ProductCredentialUnavailable
+				})
 			switch {
 			case a.runtimeStatus == runtimeStateDraining:
 				conversationNotice(c, func() {
@@ -648,6 +656,7 @@ func (a *appModel) main(c *ui.Context, t *ui.Theme) {
 					}
 					ui.Text(c, msgs.ConnectionRecoveryApplyingHint()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 				})
+			case a.runtimeErrKind == runtimeNoticeCredentialUnavailable && (ct.SendErrorKind == sendErrorCredentialUnavailable || pausedAnswerVisible):
 			case a.connectionConfigurationBlocked():
 				a.connectionRecoveryNotice(c, t, ct, state, showRuntimeError && a.runtimeErrKind != runtimeNoticeConnectionRequired)
 				showConnectionSettings = false
@@ -709,6 +718,8 @@ func (a *appModel) header(c *ui.Context, t *ui.Theme, ct *contact, visual botSta
 			if label := connectionStatusLabel(connection, msgs); !a.demo && label != "" && visual.kind != botVisualWaiting {
 				if connection == connectionViewConnecting || connection == connectionViewApplying {
 					ui.Text(c, label).FontSize(typeHeaderMeta).FixedLineHeight(lineHeader).TextColor(t.TextMuted).SingleLine().Shrink(0)
+				} else if a.runtimeErrKind == runtimeNoticeCredentialUnavailable {
+					ui.Text(c, label).FontSize(typeHeaderMeta).FixedLineHeight(lineHeader).TextColor(t.Warning).SingleLine().Shrink(0)
 				} else {
 					secondaryButton(c, label).Label(label).MinHeight(32).Padding(4, 10).Radius(8).Shrink(0).TextColor(t.Warning).OnClick(a.openConfiguration)
 				}
@@ -966,7 +977,12 @@ func (a *appModel) productActivityDetails(c *ui.Context, t *ui.Theme, ct *contac
 				taskContextReadOnlyView(c, a.workTheme, productTaskContext(question.Answer.Materials))
 				switch question.Delivery {
 				case "saved":
-					a.activityText(c, t, msgs.IssueAnswerSaved())
+					if question.DeliveryBlocker == pi.ProductCredentialUnavailable {
+						ui.Text(c, msgs.ProviderAnswerPaused()).FontSize(typeMeta).LineHeight(1.5).TextColor(t.Warning)
+						linkButton(c, msgs.ConnectionRecoveryOpenSettings()).AlignSelf(ui.Start).OnClick(a.openConfiguration)
+					} else {
+						a.activityText(c, t, msgs.IssueAnswerSaved())
+					}
 				case "dispatching":
 					a.activityText(c, t, msgs.IssueAnswerDispatching())
 				case "unknown":
@@ -1419,7 +1435,10 @@ func (a *appModel) composer(c *ui.Context, t *ui.Theme, state connectionViewStat
 				if ct.SendState == sendUnknown && !unknownNotice && !knownMismatch {
 					ui.Text(c, unknownSummary).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Danger)
 				}
-				if sendErrorVisible || connectionLostDetail {
+				if ct.SendErrorKind == sendErrorCredentialUnavailable {
+					a.recoveryNotice(c, t, "provider-send:"+ct.ID, msgs.ProviderSendRejected(), "", true)
+					showConnectionSettings = false
+				} else if sendErrorVisible || connectionLostDetail {
 					var key, detail string
 					if sendErrorVisible {
 						key = "send:" + ct.ID + ":" + ct.SessionID + ":" + ct.LastTaskID + ":" + ct.ActiveTaskID
@@ -1441,7 +1460,7 @@ func (a *appModel) composer(c *ui.Context, t *ui.Theme, state connectionViewStat
 					a.recoveryNotice(c, t, key, summary, detail, showConnectionSettings)
 					showConnectionSettings = false
 				}
-				if canReload && (ct.SendState == sendUnknown || ct.SendError != "") {
+				if canReload && ct.SendErrorKind != sendErrorCredentialUnavailable && (ct.SendState == sendUnknown || ct.SendError != "") {
 					secondaryButton(c, msgs.ReloadAction()).Label(msgs.ReloadAction()).OnClick(func() { a.reloadSelected() })
 				}
 				if ct.StatusDetail != "" && !connectionLostDetail {

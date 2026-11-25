@@ -12,6 +12,7 @@ import (
 
 	"github.com/egoist/mygo"
 
+	"github.com/HeimaoLST/Nagi/internal/connection"
 	"github.com/HeimaoLST/Nagi/internal/pi"
 	"github.com/HeimaoLST/Nagi/locales"
 )
@@ -47,16 +48,24 @@ func (a *appModel) applyProductConnection(status pi.ProductConnectionStatus) {
 	if a.connectionForm != nil {
 		a.connectionForm.CredentialPresent = status.Saved != nil && status.Saved.CredentialPresent
 	}
+	a.updateProductReadiness()
+}
+
+func (a *appModel) updateProductReadiness() {
+	if a.shutdownStarted || !a.productProfileReady() {
+		return
+	}
 	a.runtimeStatus = runtimeStateReady
 	a.runtimeErr, a.runtimeErrKind = "", ""
+	a.runtimeCapabilitiesLoaded = a.connectionEffective != nil || a.hasUsableProviderRoute()
 	if effective := a.connectionEffective; effective != nil {
 		a.workDir = effective.WorkingDirectory
 		a.runtimeMaxActiveTasks = effective.MaxActiveTasks
-		a.runtimeCapabilitiesLoaded = true
-		return
-	}
-	a.runtimeCapabilitiesLoaded = false
-	if status.Saved == nil {
+	} else if a.hasUsableProviderRoute() {
+		a.runtimeMaxActiveTasks = 2
+	} else if a.hasEffectiveProviderPool() {
+		a.runtimeErrKind = runtimeNoticeCredentialUnavailable
+	} else if !a.hasAnySavedConnection() && !a.productProvidersPending() {
 		a.runtimeErrKind = runtimeNoticeConnectionRequired
 	}
 }
@@ -159,11 +168,24 @@ func (a *appModel) testProductConnection(host *piAppHost, config connectionConfi
 
 func readConnectionStartup(storePath string) connectionStartup {
 	startup := connectionStartup{Path: connectionConfigPath(storePath)}
-	config, err := loadConnectionConfig(startup.Path)
+	private, err := connection.ReadPrivateConfig(startup.Path)
 	if err == nil {
-		startup.Config = &config
-		startup.FormConfig = &config
-		return startup
+		if private.Version == 3 && len(private.Accounts) > 0 && private.CredentialSource == "" {
+			initial := defaultConnectionConfig("")
+			startup.FormConfig = &initial
+			return startup
+		}
+		config, defaultsErr := private.Defaults()
+		if defaultsErr == nil {
+			startup.FormConfig = &config
+			if fields := validateConnectionConfig(config); len(fields) == 0 {
+				startup.Config = &config
+			} else {
+				startup.LoadErr = fmt.Errorf("invalid connection config %s: %s", startup.Path, connectionValidationSummary(fields))
+			}
+			return startup
+		}
+		err = defaultsErr
 	}
 	if errors.Is(err, os.ErrNotExist) {
 		initial := defaultConnectionConfig("")
@@ -171,9 +193,6 @@ func readConnectionStartup(storePath string) connectionStartup {
 		return startup
 	}
 	startup.LoadErr = err
-	if config.WorkingDirectory != "" || config.Endpoint != "" || config.APIKey != "" || config.Model != "" {
-		startup.FormConfig = &config
-	}
 	return startup
 }
 
@@ -353,7 +372,7 @@ func (a *appModel) saveAndApplyConnection(config connectionConfig) {
 func (a *appModel) saveConnectionWithApply(config connectionConfig, applyAfterSave bool) {
 	a.ensureConnectionForm()
 	form := a.connectionForm
-	if form.Busy || a.shutdownStarted || a.dataRecoveryBlocksChanges() {
+	if form.Busy || a.providerBusy() || a.shutdownStarted || a.dataRecoveryBlocksChanges() {
 		return
 	}
 	if host := a.productHost(); host != nil {
@@ -394,7 +413,7 @@ func (a *appModel) connectionReloadBlocked() string {
 func (a *appModel) applyConnection() {
 	a.ensureConnectionForm()
 	form := a.connectionForm
-	if form.Busy || a.shutdownStarted || a.dataRecoveryBlocksChanges() {
+	if form.Busy || a.providerBusy() || a.shutdownStarted || a.dataRecoveryBlocksChanges() {
 		return
 	}
 	if reason := a.connectionReloadBlocked(); reason != "" {
@@ -429,7 +448,7 @@ func (a *appModel) runOnUI(fn func()) {
 func (a *appModel) testConnection(config connectionConfig) {
 	a.ensureConnectionForm()
 	form := a.connectionForm
-	if form.Busy || a.connectionTesting || a.shutdownStarted || a.dataRecoveryBlocksChanges() {
+	if form.Busy || a.providerBusy() || a.connectionTesting || a.shutdownStarted || a.dataRecoveryBlocksChanges() {
 		return
 	}
 	if host := a.productHost(); host != nil {
@@ -539,6 +558,11 @@ func (a *appModel) redactConnectionText(text string) string {
 	if a.connectionForm != nil && a.connectionForm.Draft.APIKey != "" {
 		keys = append(keys, a.connectionForm.Draft.APIKey)
 	}
+	if editor := a.providers.editor; editor != nil {
+		if key := strings.TrimSpace(editor.APIKey); key != "" {
+			keys = append(keys, key)
+		}
+	}
 	for _, key := range keys {
 		text = strings.ReplaceAll(text, key, "[redacted]")
 	}
@@ -551,7 +575,7 @@ func (a *appModel) finishShutdown() {
 		return
 	}
 	if host := a.productHost(); host != nil {
-		if (a.dataRecovery != nil && a.dataRecovery.inFlight) || a.connectionApplying || a.connectionSaveInFlight || a.connectionTesting || a.submissionInFlight > 0 || a.contactHistoryInFlight > 0 {
+		if (a.dataRecovery != nil && a.dataRecovery.inFlight) || a.connectionApplying || a.connectionSaveInFlight || a.connectionTesting || a.providerBusy() || a.submissionInFlight > 0 || a.contactHistoryInFlight > 0 {
 			return
 		}
 		a.shutdownDrainStarted = true
