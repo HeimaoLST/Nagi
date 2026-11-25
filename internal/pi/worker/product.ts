@@ -37,8 +37,10 @@ import { containsMcpSecret, maxMcpServers, McpConnectionManager, uniqueMcpRegist
 import { McpVault, mcpSecretKeys, mcpSecretsComplete, mergeMcpSecrets, type McpVaultWrite } from './mcp-vault.js';
 import { clipEncodedText, clipUTF8, projectionRedactor } from './product-redactor.js';
 import { loadSkillInstallation, SkillSandbox } from './skill-sandbox.js';
-import { activityRole, activityRouting, providerCacheTtlMs, providerEndpoint, resolveRole, resolvedRoles, validProvider,
-  type ActivityRouting, type CapturedRoute, type ModelRole, type ProviderAccount, type RoutingPolicy } from './model-router.js';
+import { activityRole, activityRouting, capturedCompatible, endpointFingerprint, providerCacheTtlMs, providerEndpoint, publicRoute,
+  resolveRole, roles, validatePin, validProvider, type ActivityRouting, type CapturedRoute, type ModelRole, type ProviderAccount,
+  type RoleStatus, type RouteRequirements, type RoutingOverrides, type RoutingPolicy } from './model-router.js';
+import { RouteHealth, type ProviderAttempt } from './route-health.js';
 import { compareModelIds, describeModel, modelSupply } from './model-catalog.js';
 import { approvedPreferences, parseNomination, renderWhiteboard, steerEnvelope, triageDomain, validateQuestionFields,
   type PreferenceCandidate, type WhiteboardRow } from './activity-control.js';
@@ -52,20 +54,20 @@ const readOnlyTools: Record<string, true> = { read: true, grep: true, find: true
   activity_progress: true, activity_result_read: true, activity_trace_read: true, conversation_read: true, conversation_search: true, memory_list_rules: true, memory_search_log: true,
   skill_list: true, skill_read: true, bot_list: true, bot_inspect_team: true };
 const providerChanges = { 'provider.save': 'saved', 'provider.reorder': 'saved', 'provider.delete': 'deleted', 'provider.apply': 'applied',
-  'provider.revokeCredential': 'revoked', 'routing.setPolicy': 'policy' } as const;
+  'provider.revokeCredential': 'revoked', 'routing.setPolicy': 'policy', 'routing.setOverrides': 'saved' } as const;
 type ProviderMutation = Extract<ProductCommand, { method: keyof typeof providerChanges }>;
 
 export type ProductRunObservers = {
   started: () => void;
   text: (text: string) => void;
-  settled: (state: 'completed' | 'failed' | 'interrupted', text: string, error?: string) => void;
+  settled: (state: 'completed' | 'failed' | 'interrupted', text: string, error?: string, transportFailed?: boolean) => void;
   confirmedFileEffect: (path: string, callId: string) => void;
   toolStarted: (name: string, callId: string, target?: string) => void;
   toolFinished: (name: string, callId: string, isError: boolean, excerpt?: string) => void;
   authorizeProvider?: () => void;
   acquireProvider?: (signal?: AbortSignal) => Promise<void>;
   whiteboard?: string;
-  credentialRejected?: () => void;
+  providerAttempt?: () => ProviderAttempt;
   admitTool?: (name: string, callId: string) => void;
   steerChanged?: (steerId: string, state: 'queued' | 'delivered' | 'not_applied' | 'unknown', reason?: string) => void;
 };
@@ -86,9 +88,10 @@ export type ProductEngine = {
   refreshSession: (params: OpenParams, tools: ToolDefinition[]) => Promise<ProductSession>;
   conversationPreview: (sessionRef: string, contextId: string, botId: string) => Promise<{ preview?: string; timestamp?: string }>;
   readTranscript: (sessionRef: string, owner: TranscriptOwner) => Promise<Transcript>;
+  historyBytes: (sessionRef: string, owner: TranscriptOwner) => Promise<number>;
   redactor: (keys: string[]) => (text: string) => string;
   streamingRedactor: (keys: string[]) => (text: string, final?: boolean) => string;
-  test: (configuration: Connection & Pick<ConfigureParams, 'capabilities'>) => Promise<void>;
+  test: (configuration: Connection & Pick<ConfigureParams, 'capabilities'>, attempt?: () => ProviderAttempt) => Promise<void>;
   drain: () => Promise<void>;
   disconnect: () => void;
   cleanMessage: (error: unknown) => string;
@@ -125,6 +128,7 @@ type StoredExecution = Execution & {
   engineRunId?: string;
   importedActivityId?: string;
   retained?: object;
+  route?: CapturedRoute;
 };
 type Conversation = {
   conversationId: string; botId: string; revision: number; draft: Draft; binding?: SessionBinding;
@@ -174,6 +178,8 @@ export type ProductProfile = {
   providerEffectiveAccounts?: ProviderAccount[];
   routingPolicy?: RoutingPolicy;
   providerEffectivePolicy?: RoutingPolicy;
+  routingOverrides?: RoutingOverrides;
+  providerEffectiveOverrides?: RoutingOverrides;
   providerSavedRevision?: number;
   providerEffectiveRevision?: number;
 };
@@ -327,7 +333,7 @@ export class Product {
   private profile: ProductProfile;
   private credentials: PrivateConnection | undefined;
   private readonly retiredKeys = new Set<string>();
-  private readonly rejectedSources = new Set<string>();
+  private readonly routeHealth = new RouteHealth();
   private stream?: { streamId: string; seq: number };
   private effectiveRevision: number | null;
   private closing = false;
@@ -470,8 +476,8 @@ export class Product {
     return profile.connections.find(item => item.revision === revision);
   }
 
-  private providerKey(binding: Pick<CapturedRoute, 'providerId' | 'credentialSourceId' | 'baseUrl' | 'wireApi'>): string | undefined {
-    if (this.rejectedSources.has(binding.credentialSourceId)) return;
+  private providerKey(binding: Pick<CapturedRoute, 'providerId' | 'credentialSourceId' | 'baseUrl' | 'wireApi'>, includeRejected = false): string | undefined {
+    if (!includeRejected && this.routeHealth.authFailed(binding.credentialSourceId)) return;
     return this.credentials?.accounts?.find(row => row.credentialSourceId === binding.credentialSourceId &&
       row.providerId === binding.providerId && row.baseUrl === binding.baseUrl && row.wireApi === binding.wireApi)?.apiKey;
   }
@@ -479,7 +485,7 @@ export class Product {
   private bindingKey(binding: SessionBinding): string | undefined {
     if (binding.route) return this.providerKey(binding.route);
     const connection = this.connection(this.profile, binding.connectionRevision ?? null);
-    return connection && !this.rejectedSources.has(connection.sourceId) ? this.credentials?.sources[connection.sourceId]?.api_key : undefined;
+    return connection && !this.routeHealth.authFailed(connection.sourceId) ? this.credentials?.sources[connection.sourceId]?.api_key : undefined;
   }
 
   private providerRevisions(profile = this.profile) {
@@ -487,10 +493,12 @@ export class Product {
   }
 
   private routingState() {
-    const { providerEffectiveAccounts, providerEffectiveRevision, providerEffectivePolicy, routingPolicy } = this.profile;
-    const effectivePolicy = providerEffectivePolicy ?? 'balanced';
-    return { ...this.providerRevisions(), policy: routingPolicy ?? 'balanced', effectivePolicy,
-      resolvedRoles: resolvedRoles(providerEffectiveAccounts ?? [], providerEffectiveRevision ?? 0, effectivePolicy, account => !!this.providerKey(account)) };
+    const { providerEffectivePolicy, routingPolicy, routingOverrides, providerEffectiveOverrides } = this.profile;
+    const decisions = roles.map(role => this.selectRoute(role));
+    return { ...this.providerRevisions(), policy: routingPolicy ?? 'balanced', effectivePolicy: providerEffectivePolicy ?? 'balanced',
+      ...(routingOverrides ? { overrides: routingOverrides } : {}), ...(providerEffectiveOverrides ? { effectiveOverrides: providerEffectiveOverrides } : {}),
+      resolvedRoles: Object.fromEntries(roles.map((role, index) => [role, decisions[index].route ? publicRoute(decisions[index].route!) : null])),
+      roleStatus: Object.fromEntries(roles.map((role, index) => [role, decisions[index].status])) };
   }
 
   private changeProvider(command: ProviderMutation) {
@@ -507,7 +515,7 @@ export class Product {
           const { account, apiKey } = command.params;
           const previous = candidate.providerAccounts?.find(row => row.providerId === account.providerId);
           const sameEndpoint = previous?.wireApi === account.wireApi && previous.baseUrl === account.baseUrl;
-          const existingKey = sameEndpoint ? this.providerKey(previous) : undefined;
+          const existingKey = sameEndpoint ? this.providerKey(previous, true) : undefined;
           const key = apiKey?.trim() ? apiKey : existingKey;
           const reusedOverrides = account.modelOverrides !== undefined && previous?.modelOverrides !== undefined &&
             canonicalJSON(account.modelOverrides) === canonicalJSON(previous.modelOverrides);
@@ -547,6 +555,20 @@ export class Product {
         case 'routing.setPolicy':
           candidate.routingPolicy = command.params.policy;
           break;
+        case 'routing.setOverrides': {
+          requireRevision(candidate.providerSavedRevision ?? 0, command.params.savedRevision);
+          const overrides = { ...candidate.routingOverrides };
+          for (const role of roles) {
+            const value = command.params.overrides[role];
+            if (value === undefined) continue;
+            if (value === null) { delete overrides[role]; continue; }
+            const pin = validatePin(candidate.providerAccounts ?? [], value);
+            if (!pin) stateError('invalid_params', `The ${role} pin does not target an authorized saved model`);
+            overrides[role] = pin;
+          }
+          candidate.routingOverrides = Object.keys(overrides).length ? overrides : undefined;
+          break;
+        }
         case 'provider.apply': {
           const saved = candidate.providerSavedRevision;
           requireRevision(saved ?? 0, command.params.savedRevision);
@@ -554,6 +576,7 @@ export class Product {
           candidate.providerEffectiveRevision = saved;
           candidate.providerEffectivePolicy = candidate.routingPolicy ?? 'balanced';
           candidate.providerEffectiveAccounts = candidate.providerAccounts;
+          candidate.providerEffectiveOverrides = candidate.routingOverrides;
           const savedIds = new Set(candidate.providerAccounts?.map(row => row.providerId));
           next.accounts = next.accounts.filter(row => savedIds.has(row.providerId));
           break;
@@ -628,9 +651,18 @@ export class Product {
       if (supply.isChat !== true || supply.priceProtected || supply.contextTokens <= supply.outputTokens || !supply.supported.includes('off')) {
         stateError('provider_test_failed', 'The Provider does not expose discovery and its default model is unavailable for a connection probe');
       }
-      await this.engine.test({ wireApi: account.wireApi, baseUrl: account.baseUrl, model: account.defaultModel, apiKey: key,
-        contextTokens: supply.contextTokens, outputTokens: supply.outputTokens, capabilities: supply.capabilities,
-        workingDirectory: this.stateDir, maxActiveTasks: 1 });
+      const effective = this.profile.providerEffectiveAccounts?.find(row => row.enabled && row.providerId === account.providerId &&
+        endpointFingerprint(row) === endpointFingerprint(account) && this.providerKey(row) === key);
+      const route = effective && validatePin([effective], { mode: 'route', providerId: effective.providerId, model: account.defaultModel }) &&
+        { ...effective, resolvedModel: account.defaultModel };
+      const release = route && this.routeHealth.claim(route);
+      if (route && !release) stateError('provider_test_failed', 'The effective Provider route is cooling down');
+      try {
+        await this.engine.test({ wireApi: account.wireApi, baseUrl: account.baseUrl, model: account.defaultModel, apiKey: key,
+          contextTokens: supply.contextTokens, outputTokens: supply.outputTokens, capabilities: supply.capabilities,
+          workingDirectory: this.stateDir, maxActiveTasks: 1 }, route ? () => this.routeHealth.begin(route.credentialSourceId, route,
+          () => this.providerKey(route) === key, true) : undefined);
+      } finally { release?.(); }
       return { ok: true, models: [], latencyMs: Date.now() - started };
     } catch (error) {
       const redact = this.engine.redactor([...this.credentialKeys(), key]);
@@ -639,9 +671,30 @@ export class Product {
     }
   }
 
-  private selectRoute(role: ModelRole, deep = false): CapturedRoute | null {
+  private selectRoute(role: ModelRole, deep = false, requirements?: RouteRequirements) {
     return resolveRole(this.profile.providerEffectiveAccounts ?? [], this.profile.providerEffectiveRevision ?? 0,
-      this.profile.providerEffectivePolicy ?? 'balanced', role, account => !!this.providerKey(account), deep);
+      this.profile.providerEffectivePolicy ?? 'balanced', role, {
+        pin: this.profile.providerEffectiveOverrides?.[role], deep, requirements,
+        credential: account => this.routeHealth.authFailed(account.credentialSourceId) ? 'auth_failed' : this.providerKey(account) ? 'ready' : 'credential_missing',
+        cooldown: route => this.routeHealth.cooldown(route),
+      });
+  }
+
+  private rejectRoute(status: Pick<RoleStatus, 'unavailableReason' | 'retryAt'>): never {
+    const { unavailableReason: reason, retryAt } = status;
+    const code = reason === 'credential_missing' || reason === 'auth_failed' ? 'credential_unavailable' : 'route_unavailable';
+    throw new RequestError(code, 'No eligible Provider route is available', undefined,
+      { ...(reason ? { reason } : {}), ...(retryAt ? { retryAt } : {}) });
+  }
+
+  private recordNonDispatch(method: string, params: { operationId: string }, owner: ProductActor, error: unknown): Operation {
+    if (!(error instanceof RequestError) || !['route_unavailable', 'credential_unavailable'].includes(error.code)) throw error;
+    return this.commit(candidate => {
+      const result = { code: error.code, delivery: 'non_dispatched', ...error.details };
+      const receipt: Operation = { operationId: params.operationId, state: 'rejected', target: owner, result };
+      this.record(candidate, method, params, receipt, receipt);
+      return receipt;
+    });
   }
 
   private connectionState(profile = this.profile) {
@@ -1063,7 +1116,7 @@ export class Product {
         return this.routingState();
       case 'provider.list':
         return { ...this.routingState(), accounts: (this.profile.providerAccounts ?? []).map((account, index) => ({ ...account, priority: index + 1,
-          credentialStatus: this.providerKey(account) ? 'ok' : 'credential_missing' })) };
+          credentialStatus: this.providerKey(account) ? 'ok' : 'credential_missing', ...this.routeHealth.view(account) })) };
       case 'provider.test':
         return this.testProvider(command.params);
       case 'provider.save':
@@ -1072,6 +1125,7 @@ export class Product {
       case 'provider.apply':
       case 'provider.revokeCredential':
       case 'routing.setPolicy':
+      case 'routing.setOverrides':
         return this.changeProvider(command);
       case 'skill.list': {
         const owner = command.params.botId === undefined ? undefined : this.bot(this.profile, command.params.botId);
@@ -1500,9 +1554,10 @@ export class Product {
     return this.storage.searchWorkLogs(botId, query, dateFrom, dateTo, limit);
   }
 
-  private async prepareSession(owner: ProductActor, existing: SessionBinding | undefined, bot: Bot, conversationBoundary = false,
-    newRoute?: CapturedRoute) {
-    if (existing && !this.bindingKey(existing)) stateError('credential_unavailable', 'The captured credential source is unavailable');
+  private async prepareSession(owner: ProductActor, existing: SessionBinding | undefined, bot: Bot, input: Draft,
+    conversationBoundary = false, escalationRole?: ModelRole, whiteboard?: string) {
+    if (existing && !this.bindingKey(existing)) this.rejectRoute({ unavailableReason: existing.route &&
+      this.routeHealth.authFailed(existing.route.credentialSourceId) ? 'auth_failed' : 'credential_missing' });
     const contextId = existing?.contextId ?? newId();
     const cached = this.sessions.get(contextId);
     const meta = this.profile.memory?.meta.find(row => row.botId === bot.botId);
@@ -1511,27 +1566,11 @@ export class Product {
       meta?.forceReload && meta.rulesRevision !== (existing.memoryRulesRevision ?? 0)));
     const activityId = 'activityId' in owner ? owner.activityId : undefined;
     const activity = activityId ? this.activity(this.profile, activityId) : undefined;
-    const role = activity ? activityRole(activity.routing, !!bot.profile.mcpBindings?.length) : 'dialogue';
+    const role = escalationRole ?? (activity ? activityRole(activity.routing, !!bot.profile.mcpBindings?.length) : 'dialogue');
     const lastTurnAt = existing?.lastTurnAt ?? meta?.lastTurnAt;
     const coldRoute = conversationBoundary && (!lastTurnAt || Date.now() - Date.parse(lastTurnAt) >= providerCacheTtlMs);
-    const resolveNewRoute = !existing || coldRoute;
-    const route = newRoute ?? (resolveNewRoute ? this.selectRoute(role, activity?.routing?.complexity === 'deep') ?? undefined : existing?.route);
-    if (!route && resolveNewRoute && this.profile.providerEffectiveRevision !== undefined) {
-      const hasCredential = this.profile.providerEffectiveAccounts?.some(account => account.enabled && this.providerKey(account));
-      stateError(hasCredential ? 'route_unavailable' : 'credential_unavailable', 'No eligible Provider route is available');
-    }
-    const routeChanged = canonicalJSON(route ?? null) !== canonicalJSON(existing?.route ?? null);
-    if (cached && existing && !routeChanged && !reload && cached.instructions === existing.instructions && !cached.mcpSignature && !bot.profile.mcpBindings?.length) {
-      return { session: cached.session, binding: existing };
-    }
     const legacy = this.connection(this.profile, existing?.connectionRevision ?? this.effectiveRevision);
-    const connectionRevision = route ? undefined : legacy?.revision;
-    if (!route && !legacy) {
-      stateError(this.profile.providerEffectiveRevision === undefined ? 'not_configured' : 'credential_unavailable', 'No eligible Provider credential is available');
-    }
-    const apiKey = route ? this.providerKey(route) : this.credentials?.sources[legacy!.sourceId]?.api_key;
-    if (!apiKey) stateError('credential_unavailable', 'The captured credential source is unavailable');
-    const captured = existing ?? (newRoute ? activity?.binding : undefined);
+    const captured = existing ?? (escalationRole ? activity?.binding : undefined);
     const profileRevision = captured?.profileRevision ?? bot.profileRevision;
     const configuredCwd = bot.profile.workspace || legacy?.configuration.workingDirectory;
     let cwd = captured?.cwd ?? (configuredCwd || join(this.stateDir, 'workspace'));
@@ -1547,17 +1586,6 @@ export class Product {
       skills: this.skills.catalog(bot, cwd, this.discoverLocalSkills, this.engine.redactor(this.credentialKeys())) });
     const memoryRulesRevision = captured && !reload ? captured.memoryRulesRevision : meta?.rulesRevision;
     const codingTools = captured ? captured.codingTools : resolveCodingTools(bot.profile);
-    const params: OpenParams = {
-      contextId, botId: bot.botId, purpose: activityId ? 'activity' : 'conversation', activityId,
-      selectionRevision: profileRevision, cwd, instructions, resumeRef: existing?.sessionRef,
-      used: existing?.used ?? false, codingTools, domainTools: null,
-      configuration: route ? { wireApi: route.wireApi, baseUrl: route.baseUrl, apiKey, model: route.resolvedModel,
-        contextTokens: route.contextTokens, outputTokens: route.outputTokens, credentialSource: route.credentialSourceId,
-        thinkingLevel: route.thinkingLevel, capabilities: route.capabilities } : {
-        wireApi: legacy!.configuration.wireApi, baseUrl: legacy!.configuration.baseUrl, apiKey, model: legacy!.configuration.model,
-        contextTokens: legacy!.configuration.contextTokens, outputTokens: legacy!.configuration.outputTokens, credentialSource: legacy!.sourceId,
-      },
-    };
     const mounts = (bot.profile.mcpBindings ?? []).flatMap(binding => {
       const server = this.profile.mcpServers?.find(item => item.serverId === binding.serverId);
       return server ? [{ server, binding, secrets: this.vault.get(server.serverId) }] : [];
@@ -1573,13 +1601,57 @@ export class Product {
       if (binding && server) return { server, binding, secrets: this.vault.get(serverId) };
     }, () => this.engine.redactor(this.credentialKeys()));
     const tools = [...this.tools(owner), ...mcp.tools];
-    const refresh = !!(cached && (routeChanged || cached.instructions !== instructions || cached.mcpSignature !== mcp.signature));
-    if (refresh) this.sessions.delete(contextId);
-    const session = refresh ? await this.engine.refreshSession(params, tools) : await this.engine.open(params, tools);
-    this.sessions.set(contextId, { session, instructions, mcpSignature: mcp.signature });
-    if (conversationBoundary) this.skillReload.delete(bot.botId);
-    return { session, binding: { contextId, sessionRef: session.sessionRef, connectionRevision, route, profileRevision, cwd, instructions, codingTools,
-      used: existing?.used ?? false, memoryRulesRevision, lastTurnAt: existing?.lastTurnAt } };
+    let route = existing?.route;
+    if (route || this.profile.providerEffectiveRevision !== undefined) {
+      const purpose = foreground ? 'conversation' : 'activity';
+      const history = existing?.used ? await this.engine.historyBytes(existing.sessionRef,
+        { contextId, botId: bot.botId, purpose, activityId, selectionRevision: profileRevision, cwd }) : 0;
+      let bytes = Buffer.byteLength(input.text) + Buffer.byteLength(input.quote?.text ?? '') + Buffer.byteLength(input.quote?.authorName ?? '') +
+        Buffer.byteLength(instructions) + Buffer.byteLength(whiteboard ?? '') + history + 64;
+      for (const item of input.materials) bytes += Buffer.byteLength(item.name) + Buffer.byteLength(item.text) + 48;
+      for (const tool of tools) bytes += Buffer.byteLength(tool.name) + Buffer.byteLength(tool.description) + Buffer.byteLength(JSON.stringify(tool.parameters)) + 24;
+      const requirements = { requiresTools: tools.length > 0 || (codingTools ?? this.engine.defaultCodingTools).length > 0,
+        inputTokens: Math.ceil(bytes / 4) + (codingTools ?? this.engine.defaultCodingTools).length * 192 };
+      const retry = route ? this.routeHealth.cooldown(route) : undefined;
+      const compatible = !route || capturedCompatible(route, requirements);
+      const canSelect = !existing || conversationBoundary && (coldRoute || !!this.profile.providerEffectiveOverrides?.[role] || retry !== undefined || !compatible);
+      if (canSelect) {
+        const decision = this.selectRoute(role, escalationRole !== undefined || activity?.routing?.complexity === 'deep', requirements);
+        if (!decision.route) this.rejectRoute(decision.status);
+        route = decision.route;
+      } else if (!compatible) this.rejectRoute({ unavailableReason: 'incompatible' });
+      else if (retry !== undefined) this.rejectRoute({ unavailableReason: 'cooldown', retryAt: new Date(retry).toISOString() });
+    }
+    if (!route && !legacy) stateError('not_configured', 'No eligible Provider credential is available');
+    const connectionRevision = route ? undefined : legacy?.revision;
+    const apiKey = route ? this.providerKey(route) : this.credentials?.sources[legacy!.sourceId]?.api_key;
+    if (!apiKey) this.rejectRoute({ unavailableReason: 'credential_missing' });
+    const params: OpenParams = {
+      contextId, botId: bot.botId, purpose: foreground ? 'conversation' : 'activity', activityId,
+      selectionRevision: profileRevision, cwd, instructions, resumeRef: existing?.sessionRef,
+      used: existing?.used ?? false, codingTools, domainTools: null,
+      configuration: route ? { wireApi: route.wireApi, baseUrl: route.baseUrl, apiKey, model: route.resolvedModel,
+        contextTokens: route.contextTokens, outputTokens: route.outputTokens, credentialSource: route.credentialSourceId,
+        thinkingLevel: route.thinkingLevel, capabilities: route.capabilities } : {
+        wireApi: legacy!.configuration.wireApi, baseUrl: legacy!.configuration.baseUrl, apiKey, model: legacy!.configuration.model,
+        contextTokens: legacy!.configuration.contextTokens, outputTokens: legacy!.configuration.outputTokens, credentialSource: legacy!.sourceId,
+      },
+    };
+    const release = route && this.routeHealth.claim(route);
+    if (route && !release) this.rejectRoute({ unavailableReason: 'cooldown', retryAt: new Date(this.routeHealth.cooldown(route)!).toISOString() });
+    try {
+      const routeChanged = canonicalJSON(route ?? null) !== canonicalJSON(existing?.route ?? null);
+      const refresh = !!(cached && (routeChanged || cached.instructions !== instructions || cached.mcpSignature !== mcp.signature));
+      if (refresh) this.sessions.delete(contextId);
+      const session = refresh ? await this.engine.refreshSession(params, tools) : await this.engine.open(params, tools);
+      this.sessions.set(contextId, { session, instructions, mcpSignature: mcp.signature });
+      if (conversationBoundary) this.skillReload.delete(bot.botId);
+      return { session, release, binding: { contextId, sessionRef: session.sessionRef, connectionRevision, route, profileRevision, cwd, instructions, codingTools,
+        used: existing?.used ?? false, memoryRulesRevision, lastTurnAt: existing?.lastTurnAt } };
+    } catch (error) {
+      release?.();
+      throw error;
+    }
   }
 
   private newExecution(operationId: string, input: Draft): StoredExecution {
@@ -1596,34 +1668,43 @@ export class Product {
     }
     requireRevision(conversation.draft.revision, params.draftRevision);
     if (!conversation.draft.text.trim()) stateError('invalid_params', 'A message requires text');
-    const rejectCredential = () => this.commit(candidate => {
-      const result = { code: 'credential_unavailable', delivery: 'non_dispatched' };
-      const receipt: Operation = { operationId: params.operationId, state: 'rejected', target: owner, result };
-      return this.record(candidate, 'conversation.send', params, receipt, receipt);
-    });
-    if (conversation.binding && !this.bindingKey(conversation.binding)) return rejectCredential();
     this.capacity();
-    const { session, binding } = await this.prepareSession(owner, conversation.binding, this.bot(this.profile, conversation.botId), true);
-    if (!this.bindingKey(binding)) return rejectCredential();
-    this.capacity();
-    const execution = this.newExecution(params.operationId, conversation.draft);
-    const receipt: Operation = { operationId: params.operationId, state: 'accepted', target: owner, execution: publicExecution(execution) };
-    this.commit(candidate => {
-      const current = this.current(candidate, params.conversationId);
-      requireRevision(current.draft.revision, params.draftRevision);
-      current.binding = binding;
-      const meta = candidate.memory?.meta.find(row => row.botId === current.botId);
-      if (meta && meta.rulesRevision === binding.memoryRulesRevision) meta.forceReload = false;
-      current.latestExecutionId = execution.executionId;
-      current.revision++;
-      candidate.executions.push(execution);
-      this.record(candidate, 'conversation.send', params, receipt, receipt);
-    });
-    this.start(session, owner, execution, this.whiteboard(conversation.botId));
-    return receipt;
+    const whiteboard = this.whiteboard(conversation.botId);
+    let release: (() => void) | undefined;
+    try {
+      const prepared = await this.prepareSession(owner, conversation.binding, this.bot(this.profile, conversation.botId), conversation.draft, true, undefined, whiteboard);
+      const { session, binding } = prepared;
+      release = prepared.release;
+      if (!this.bindingKey(binding)) this.rejectRoute({ unavailableReason: 'credential_missing' });
+      this.capacity();
+      const execution = this.newExecution(params.operationId, conversation.draft);
+      execution.route = binding.route;
+      const receipt = this.admissionReceipt(owner, execution);
+      this.commit(candidate => {
+        const current = this.current(candidate, params.conversationId);
+        requireRevision(current.draft.revision, params.draftRevision);
+        current.binding = binding;
+        const meta = candidate.memory?.meta.find(row => row.botId === current.botId);
+        if (meta && meta.rulesRevision === binding.memoryRulesRevision) meta.forceReload = false;
+        current.latestExecutionId = execution.executionId;
+        current.revision++;
+        candidate.executions.push(execution);
+        this.record(candidate, 'conversation.send', params, receipt, receipt);
+      });
+      this.start(session, owner, execution, release, whiteboard);
+      return receipt;
+    } catch (error) {
+      release?.();
+      return this.recordNonDispatch('conversation.send', params, owner, error);
+    }
   }
 
-  private start(session: ProductSession, owner: ProductActor, execution: StoredExecution, whiteboard?: string): void {
+  private admissionReceipt(owner: ProductActor, execution: StoredExecution): Operation {
+    return { operationId: execution.operationId, state: 'accepted', target: owner, execution: publicExecution(execution),
+      ...(execution.route ? { result: { route: publicRoute(execution.route) } } : {}) };
+  }
+
+  private start(session: ProductSession, owner: ProductActor, execution: StoredExecution, release?: () => void, whiteboard?: string): void {
     const executionId = execution.executionId;
     const binding = 'activityId' in owner ? this.activity(this.profile, owner.activityId).binding! : this.conversation(this.profile, owner.conversationId).binding!;
     const current: LiveExecution = { owner, binding, session, offset: 0, partial: '', files: [], slot: this.freeProviderSlot() };
@@ -1656,7 +1737,7 @@ export class Product {
         authorizeProvider: () => {
           if (this.closing || current.stopRequested || !this.active.has(executionId) || !this.bindingKey(binding)) stateError('credential_unavailable', 'The captured credential source is unavailable');
         },
-        credentialRejected: () => { if (sourceId) this.rejectedSources.add(sourceId); },
+        providerAttempt: sourceId ? () => this.routeHealth.begin(sourceId, binding.route, () => !!this.bindingKey(binding)) : undefined,
         admitTool: (name, callId) => this.storage.admitTool(executionId, 'activityId' in owner ? owner.activityId : undefined,
           redactAdmission(callId), redactAdmission(name), Object.hasOwn(readOnlyTools, name) ? 'readonly' : 'mutating'),
         started: () => guarded(() => {
@@ -1682,9 +1763,10 @@ export class Product {
           if (update.conversation) this.emit('conversation.changed', { ...owner, revision: update.conversation.revision });
         }),
         text: text => publishText(redactChunk(text)),
-        settled: (state, text, error) => guarded(() => {
+        settled: (state, text, error, transportFailed) => guarded(() => {
+          release?.();
           publishText(redactChunk('', true));
-          this.settle(owner, executionId, state, text, error);
+          this.settle(owner, executionId, state, text, error, transportFailed);
         }),
         steerChanged: (steerId, state, reason) => guarded(() => this.updateSteer(executionId, steerId, state, reason)),
         confirmedFileEffect: (path, callId) => guarded(() => {
@@ -1703,6 +1785,7 @@ export class Product {
         }),
       });
     } catch (error) {
+      release?.();
       guarded(() => this.settle(owner, executionId, 'failed', '', this.engine.cleanMessage(error)));
     }
   }
@@ -1724,7 +1807,7 @@ export class Product {
     this.emitActivity(updated);
   }
 
-  private settle(owner: ProductActor, executionId: string, state: 'completed' | 'failed' | 'interrupted', text: string, error?: string): void {
+  private settle(owner: ProductActor, executionId: string, state: 'completed' | 'failed' | 'interrupted', text: string, error?: string, transportFailed = false): void {
     const settledAt = new Date().toISOString();
     const active = this.active.get(executionId);
     const redact = this.engine.redactor(this.credentialKeys());
@@ -1777,7 +1860,7 @@ export class Product {
       const completed = activity.state === 'completed';
       this.emitDigest(activity, { kind: completed ? 'completed' : 'needs_attention', executionId, fileCount: active?.files.length ?? 0 },
         completed ? text || activity.goal : error || activity.goal);
-      if (state === 'failed') this.escalateActivity(activity, run);
+      if (state === 'failed' && !transportFailed) this.escalateActivity(activity, run);
     }
     if (state === 'completed' && (!('activityId' in owner) || this.activity(this.profile, owner.activityId).state === 'completed')) {
       this.consolidateMemory(owner, run, text, settledAt, active?.learningToolUsed);
@@ -1789,11 +1872,10 @@ export class Product {
     if (this.closing || original?.role !== 'utility' || !this.providerKey(original) ||
         !this.storage.canEscalate(activity.activityId, run.executionId)) return;
     const role = activity.routing?.kind === 'coding' ? 'coding' : 'reasoning';
-    const route = this.selectRoute(role, true);
-    if (!route) return;
+    if (!this.selectRoute(role, true).route) return;
     this.escalating.add(activity.activityId);
     void this.startActivity('activity.continue', { activityId: activity.activityId, expectedRevision: activity.revision,
-      operationId: `${run.executionId}:escalation`, text: '', materials: run.input.materials }, { route, prior: run }).catch(error => {
+      operationId: `${run.executionId}:escalation`, text: '', materials: run.input.materials }, { role, prior: run }).catch(error => {
       if (!(error instanceof RequestError)) this.engine.disconnect();
     }).finally(() => this.escalating.delete(activity.activityId));
   }
@@ -2284,7 +2366,7 @@ export class Product {
   }
 
   private async startActivity(method: string, params: { activityId: string; operationId: string; expectedRevision: number; text: string; materials: Material[] },
-    escalation?: { route: CapturedRoute; prior: StoredExecution }, delegated = false) {
+    escalation?: { role: ModelRole; prior: StoredExecution }, delegated = false) {
     const prior = this.sameOperation(method, params.operationId, params);
     if (prior) return this.operation(params.operationId);
     const owner = { activityId: params.activityId };
@@ -2298,34 +2380,43 @@ export class Product {
       text: [activity.goal, ...activity.requirements, ...activity.routing?.constraints ?? [], params.text,
         ...activity.inputFiles.map(path => `Input file: ${path}`)].filter(Boolean).join('\n'), materials: params.materials };
     validateDraft(input);
-    const { session, binding } = await this.prepareSession(owner, escalation ? undefined : activity.binding, bot, false, escalation?.route);
-    if (this.closing) stateError('closing', 'The app is shutting down');
-    const latest = this.activity(this.profile, params.activityId);
-    if (escalation && (!latest.binding || !this.bindingKey(latest.binding) || escalation.prior.executionId !== latest.executionIds.at(-1))) {
-      stateError('escalation_unavailable', 'The prior execution is no longer eligible to escalate');
+    let release: (() => void) | undefined;
+    try {
+      const prepared = await this.prepareSession(owner, escalation ? undefined : activity.binding, bot, input, false, escalation?.role);
+      const { session, binding } = prepared;
+      release = prepared.release;
+      if (this.closing) stateError('closing', 'The app is shutting down');
+      const latest = this.activity(this.profile, params.activityId);
+      if (escalation && (!latest.binding || !this.bindingKey(latest.binding) || escalation.prior.executionId !== latest.executionIds.at(-1))) {
+        stateError('escalation_unavailable', 'The prior execution is no longer eligible to escalate');
+      }
+      if (!this.bindingKey(binding)) this.rejectRoute({ unavailableReason: 'credential_missing' });
+      this.capacity(delegated);
+      const execution = this.newExecution(params.operationId, input);
+      execution.route = binding.route;
+      const receipt = this.admissionReceipt(owner, execution);
+      this.commit(candidate => {
+        const current = this.activity(candidate, params.activityId);
+        requireRevision(current.revision, params.expectedRevision);
+        current.executionIds.push(execution.executionId);
+        current.binding = binding;
+        current.revision++;
+        current.state = 'running';
+        delete current.acknowledgedAt;
+        delete current.acknowledgedExecutionId;
+        delete current.closedAt;
+        candidate.executions.push(execution);
+        this.record(candidate, method, params, receipt, receipt);
+      }, undefined, undefined, undefined, escalation ? { escalation: { activityId: owner.activityId, priorExecutionId: escalation.prior.executionId,
+        escalatedExecutionId: execution.executionId, fromRole: 'utility', toRole: escalation.role === 'coding' ? 'coding' : 'reasoning',
+        at: new Date().toISOString() } } : undefined, { resetProgress: owner.activityId });
+      this.emitActivity(this.activity(this.profile, owner.activityId));
+      this.start(session, owner, execution, release);
+      return receipt;
+    } catch (error) {
+      release?.();
+      return this.recordNonDispatch(method, params, owner, error);
     }
-    if (!this.bindingKey(binding)) stateError('credential_unavailable', 'The captured credential source is unavailable');
-    this.capacity(delegated);
-    const execution = this.newExecution(params.operationId, input);
-    const receipt: Operation = { operationId: params.operationId, state: 'accepted', target: owner, execution: publicExecution(execution) };
-    this.commit(candidate => {
-      const current = this.activity(candidate, params.activityId);
-      requireRevision(current.revision, params.expectedRevision);
-      current.executionIds.push(execution.executionId);
-      current.binding = binding;
-      current.revision++;
-      current.state = 'running';
-      delete current.acknowledgedAt;
-      delete current.acknowledgedExecutionId;
-      delete current.closedAt;
-      candidate.executions.push(execution);
-      this.record(candidate, method, params, receipt, receipt);
-    }, undefined, undefined, undefined, escalation ? { escalation: { activityId: owner.activityId, priorExecutionId: escalation.prior.executionId,
-      escalatedExecutionId: execution.executionId, fromRole: 'utility', toRole: escalation.route.role === 'coding' ? 'coding' : 'reasoning',
-      at: new Date().toISOString() } } : undefined, { resetProgress: owner.activityId });
-    this.emitActivity(this.activity(this.profile, owner.activityId));
-    this.start(session, owner, execution);
-    return receipt;
   }
 
   private canonicalAnswer(question: Question, text: string, selectedOptionId?: string): string {

@@ -17,7 +17,8 @@ import { lastingRulesFit, MAX_LOG_BYTES, MAX_PENDING_LEARNINGS, MAX_RULE_BYTES, 
   memorySnapshotSchema, validMemoryDate } from './bot-memory.js';
 import { decodeTraceBackup, directlyOwns, normalizeActivityGrants, type TraceBackup } from './product-trace.js';
 import { backupSkillFiles, bundleDigest, executableBundle, privateSkillBundleSchema, pureSkill, skillGrantKey, validateSkillBundles, type PrivateSkillBundle } from './bot-skills.js';
-import { activityRouting, capturedRoute, escalationSchema, policySchema, privateProviderAccount, providerAccount, validProvider, type Escalation, type ProviderAccount } from './model-router.js';
+import { activityRouting, capturedRoute, escalationSchema, overridesSchema, policySchema, privateProviderAccount, providerAccount,
+  validProvider, type Escalation, type ProviderAccount } from './model-router.js';
 import { maxMcpServers, uniqueMcpRegistry, validMcpBindings, validMcpServer } from './mcp-broker.js';
 import { clipUTF8 } from './product-redactor.js';
 import { triageDomain, validateQuestionFields } from './activity-control.js';
@@ -99,7 +100,7 @@ const bindingSchema = Type.Object({ contextId: recoveryID, sessionRef: recoveryI
 const privateSkillBundles = Type.Array(privateSkillBundleSchema, { maxItems: 8192 });
 const executionRecord = Type.Object({ ...executionSchema.properties, operationId: recoveryID,
   input: draftSchema, error: Type.Optional(Type.String()), engineRunId: Type.Optional(recoveryID),
-  importedActivityId: Type.Optional(recoveryID), retained: Type.Optional(opaque) }, strict);
+  importedActivityId: Type.Optional(recoveryID), retained: Type.Optional(opaque), route: Type.Optional(capturedRoute) }, strict);
 const questionRecord = Type.Object({ ...questionResult.properties, triageRulesRevision: Type.Optional(counter) }, strict);
 const activityRecord = Type.Object({ activityId: recoveryID, ownerBotId: recoveryID, originConversationId: recoveryID,
   routing: Type.Optional(activityRouting),
@@ -138,6 +139,7 @@ const savedProfileSchema = Type.Object({ version: Type.Literal(1),
   providerEffectiveAccounts: Type.Optional(Type.Array(providerAccount, { maxItems: 64 })),
   routingPolicy: Type.Optional(policySchema), providerEffectivePolicy: Type.Optional(policySchema),
   providerSavedRevision: Type.Optional(counter), providerEffectiveRevision: Type.Optional(counter),
+  routingOverrides: Type.Optional(overridesSchema), providerEffectiveOverrides: Type.Optional(overridesSchema),
   issueToolScopes: Type.Optional(Type.Array(opaque)), untargetedReceipts: Type.Optional(Type.Array(opaque)),
   recovery: Type.Optional(Type.Object({ id: recoveryID, ui: Type.Optional(recoveryUISchema) }, strict)),
   memory: Type.Optional(memorySnapshotSchema),
@@ -161,9 +163,12 @@ export function decodeProductProfile(data: unknown): ProductProfile {
   for (const accounts of [data.providerAccounts, data.providerEffectiveAccounts]) {
     if (accounts && (new Set(accounts.map(row => row.providerId)).size !== accounts.length || accounts.some(row => !validProvider(row)))) invalid();
   }
-  if (data.providerSavedRevision === undefined ? !!(data.providerAccounts || data.routingPolicy || data.providerEffectiveRevision) :
+  for (const key of ['routingOverrides', 'providerEffectiveOverrides'] as const) {
+    if (data[key] && !Object.keys(data[key]).length) delete data[key];
+  }
+  if (data.providerSavedRevision === undefined ? !!(data.providerAccounts || data.routingPolicy || data.providerEffectiveRevision || data.routingOverrides) :
       data.providerSavedRevision < 1 || (data.providerEffectiveRevision ?? 0) > data.providerSavedRevision) invalid();
-  if (data.providerEffectiveRevision === undefined && (data.providerEffectiveAccounts || data.providerEffectivePolicy)) invalid();
+  if (data.providerEffectiveRevision === undefined && (data.providerEffectiveAccounts || data.providerEffectivePolicy || data.providerEffectiveOverrides)) invalid();
   const serverIds = new Set(data.mcpServers?.map(server => server.serverId));
   const bots = new Map(data.bots.map(bot => [bot.botId, bot]));
   for (const { profile } of data.bots) {
@@ -214,11 +219,15 @@ export function decodeProductProfile(data: unknown): ProductProfile {
   };
   const contextIds = new Set<string>();
   const sessionRefs = new Set<string>();
+  const validRoute = (route: NonNullable<ProductProfile['executions'][number]['route']>) =>
+    route.effectiveRevision <= (data.providerEffectiveRevision ?? 0) && validProvider({
+      ...route, name: route.providerId, defaultModel: route.resolvedModel, enabled: true,
+    });
+  if (data.executions.some(row => row.route && !validRoute(row.route))) invalid();
   const binding = (value?: typeof data.conversations[number]['binding']) => {
     if (!value) return;
-    if ((value.route ? value.connectionRevision !== undefined || value.route.effectiveRevision > (data.providerEffectiveRevision ?? 0) || !validProvider({
-      ...value.route, name: value.route.providerId, defaultModel: value.route.resolvedModel, enabled: true,
-    }) : value.connectionRevision === undefined || !connections.has(value.connectionRevision)) ||
+    if ((value.route ? value.connectionRevision !== undefined || !validRoute(value.route) :
+      value.connectionRevision === undefined || !connections.has(value.connectionRevision)) ||
       contextIds.has(value.contextId) || sessionRefs.has(value.sessionRef)) invalid();
     contextIds.add(value.contextId);
     sessionRefs.add(value.sessionRef);

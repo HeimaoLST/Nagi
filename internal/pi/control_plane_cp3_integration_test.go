@@ -1290,13 +1290,15 @@ func TestPiControlPlaneCP3CrashRecoveryEscalationExclusionAndV10Backup(t *testin
 					return cp2Reply{Calls: []cp2ToolCall{{ID: nextCall("cr"), Name: "mcp__fixture__hold", Args: `{"key":"crash-hold"}`}}}
 				}
 				return cp2Reply{Text: "Should not finish after SIGKILL."}
+			case strings.Contains(firstBase, "CP3_TRANSPORT_FAIL"):
+				return cp2Reply{HTTPStatus: 500, RawError: "controlled transport utility failure"}
 			case strings.Contains(firstBase, "CP3_UNSTEERED_FAIL"):
 				mu.Lock()
 				unsteeredUtilFails++
 				n := unsteeredUtilFails
 				mu.Unlock()
 				if n == 1 {
-					return cp2Reply{HTTPStatus: 500, RawError: "controlled utility failure"}
+					return cp2Reply{Text: "truncated utility output", FinishReason: "length"}
 				}
 				mu.Lock()
 				reasoningModelsSeen = append(reasoningModelsSeen, "escalated")
@@ -1314,7 +1316,7 @@ func TestPiControlPlaneCP3CrashRecoveryEscalationExclusionAndV10Backup(t *testin
 				if len(cp3ExtractSteers(t, req.Messages)) == 0 {
 					t.Errorf("steered utility request 2 missing consumed steer envelope")
 				}
-				return cp2Reply{HTTPStatus: 400, RawError: "controlled failure after steer consumption"}
+				return cp2Reply{Text: "truncated after steer consumption", FinishReason: "length"}
 			case strings.Contains(firstBase, "CP3_BACKUP_STEER"):
 				mu.Lock()
 				backupSteerCalls++
@@ -1533,6 +1535,19 @@ func TestPiControlPlaneCP3CrashRecoveryEscalationExclusionAndV10Backup(t *testin
 	botBID = eB.BotID
 	mu.Unlock()
 
+	if settled := cp1SendTurn(t, ctx, escProc, eA.CurrentConversationID, "del-tresc", "CP3_DEL_ROUTED_CP3_TRANSPORT_FAIL", nil); settled.State != "completed" {
+		t.Fatal(settled)
+	}
+	trAct := cp2FindActivityByGoal(t, ctx, escProc, eA.BotID, "CP3_TRANSPORT_FAIL")
+	if settled := escProc.waitSettled(t, ctx, trAct.Executions[0].ExecutionID); settled.State != "failed" {
+		t.Fatalf("transport utility execution settled = %+v, want failed", settled)
+	}
+	time.Sleep(300 * time.Millisecond)
+	trDone, err := escProc.client.GetActivity(ctx, trAct.ActivityID)
+	if err != nil || trDone.State != "needsAttention" || len(trDone.Executions) != 1 {
+		t.Fatalf("transport 5xx utility failure must NOT escalate: %+v, %v", trDone, err)
+	}
+
 	if settled := cp1SendTurn(t, ctx, escProc, eA.CurrentConversationID, "del-unesc", "CP3_DEL_ROUTED_CP3_UNSTEERED_FAIL", nil); settled.State != "completed" {
 		t.Fatal(settled)
 	}
@@ -1581,14 +1596,15 @@ func TestPiControlPlaneCP3CrashRecoveryEscalationExclusionAndV10Backup(t *testin
 	escSQL := runNodeSQLite(t, nodePath, escDB, `
 const { DatabaseSync } = require('node:sqlite');
 const db = new DatabaseSync(process.argv[1]);
-const unEsc = db.prepare('SELECT count(*) AS n FROM activity_escalations WHERE activity_id = ?').get(JSON.stringify(process.argv[2])).n;
-const stEsc = db.prepare('SELECT count(*) AS n FROM activity_escalations WHERE activity_id = ?').get(JSON.stringify(process.argv[3])).n;
-const stMut = db.prepare("SELECT count(*) AS n FROM execution_mutation_admissions WHERE execution_id = ? AND tool_class = 'mutating'").get(JSON.stringify(process.argv[4])).n;
+const trEsc = db.prepare('SELECT count(*) AS n FROM activity_escalations WHERE activity_id = ?').get(JSON.stringify(process.argv[2])).n;
+const unEsc = db.prepare('SELECT count(*) AS n FROM activity_escalations WHERE activity_id = ?').get(JSON.stringify(process.argv[3])).n;
+const stEsc = db.prepare('SELECT count(*) AS n FROM activity_escalations WHERE activity_id = ?').get(JSON.stringify(process.argv[4])).n;
+const stMut = db.prepare("SELECT count(*) AS n FROM execution_mutation_admissions WHERE execution_id = ? AND tool_class = 'mutating'").get(JSON.stringify(process.argv[5])).n;
 db.close();
-console.log(JSON.stringify({ unEsc, stEsc, stMut }));
-`, unAct.ActivityID, stAct.ActivityID, stExecID)
-	if escSQL != `{"unEsc":1,"stEsc":0,"stMut":0}` {
-		t.Fatalf("M4 escalation exclusion SQLite state = %s, want unEsc=1 stEsc=0 stMut=0", escSQL)
+console.log(JSON.stringify({ trEsc, unEsc, stEsc, stMut }));
+`, trAct.ActivityID, unAct.ActivityID, stAct.ActivityID, stExecID)
+	if escSQL != `{"trEsc":0,"unEsc":1,"stEsc":0,"stMut":0}` {
+		t.Fatalf("M4 escalation exclusion SQLite state = %s, want trEsc=0 unEsc=1 stEsc=0 stMut=0", escSQL)
 	}
 	escProc.shutdown(t, ctx)
 

@@ -17,6 +17,7 @@ type ProductThinkingLevel string
 type ProductDeliveryBlocker string
 
 const ProductCredentialUnavailable ProductDeliveryBlocker = "credential_unavailable"
+const ProductRouteUnavailable ProductDeliveryBlocker = "route_unavailable"
 
 type ProductProviderAccount struct {
 	ProviderID     string                  `json:"providerId"`
@@ -43,9 +44,11 @@ type ProductModelOverride struct {
 
 type ProductProviderAccountView struct {
 	ProductProviderAccount
-	CredentialSourceID string `json:"credentialSourceId"`
-	CredentialStatus   string `json:"credentialStatus"`
-	Priority           *int   `json:"priority,omitempty"`
+	CredentialSourceID string               `json:"credentialSourceId"`
+	CredentialStatus   string               `json:"credentialStatus"`
+	Priority           *int                 `json:"priority,omitempty"`
+	HealthSummary      string               `json:"healthSummary,omitempty"`
+	RouteHealth        []ProductRouteHealth `json:"routeHealth,omitempty"`
 }
 
 type ProductModelRoute struct {
@@ -59,6 +62,7 @@ type ProductModelRoute struct {
 	CostTier           string               `json:"costTier,omitempty"`
 	Reason             string               `json:"reason,omitempty"`
 	ProviderName       string               `json:"providerName,omitempty"`
+	Failover           string               `json:"failover,omitempty"`
 }
 
 type ProductResolvedRoles struct {
@@ -70,9 +74,49 @@ type ProductResolvedRoles struct {
 
 type ProductRoutingStatus struct {
 	ProductConnectionRevisions
-	Policy          ProductRoutingPolicy `json:"policy"`
-	EffectivePolicy ProductRoutingPolicy `json:"effectivePolicy"`
-	ResolvedRoles   ProductResolvedRoles `json:"resolvedRoles"`
+	Policy             ProductRoutingPolicy                   `json:"policy"`
+	EffectivePolicy    ProductRoutingPolicy                   `json:"effectivePolicy"`
+	ResolvedRoles      ProductResolvedRoles                   `json:"resolvedRoles"`
+	Overrides          ProductRoutingOverrides                `json:"overrides,omitempty"`
+	EffectiveOverrides ProductRoutingOverrides                `json:"effectiveOverrides,omitempty"`
+	RoleStatus         map[ProductModelRole]ProductRoleStatus `json:"roleStatus,omitempty"`
+}
+
+type ProductRoutingOverride struct {
+	Mode                string `json:"mode"`
+	CanonicalModelID    string `json:"canonicalModelId,omitempty"`
+	ProviderID          string `json:"providerId,omitempty"`
+	Model               string `json:"model,omitempty"`
+	EndpointFingerprint string `json:"endpointFingerprint,omitempty"`
+}
+
+type ProductRoutingOverrides map[ProductModelRole]ProductRoutingOverride
+
+type ProductRoutingOverridesPatch map[ProductModelRole]*ProductRoutingOverride
+
+type ProductRoleStatus struct {
+	Mode              string `json:"mode"`
+	Status            string `json:"status"`
+	UnavailableReason string `json:"unavailableReason,omitempty"`
+	RetryAt           string `json:"retryAt,omitempty"`
+	Failover          string `json:"failover,omitempty"`
+}
+
+type ProductRouteHealth struct {
+	WireModelID         string `json:"wireModelId,omitempty"`
+	Scope               string `json:"scope"`
+	State               string `json:"state"`
+	Reason              string `json:"reason"`
+	RetryAt             string `json:"retryAt,omitempty"`
+	ConsecutiveFailures int    `json:"consecutiveFailures,omitempty"`
+}
+
+type ProductRouteAdmission struct {
+	Route    *ProductModelRoute     `json:"route,omitempty"`
+	Code     ProductDeliveryBlocker `json:"code,omitempty"`
+	Delivery string                 `json:"delivery,omitempty"`
+	Reason   string                 `json:"reason,omitempty"`
+	RetryAt  string                 `json:"retryAt,omitempty"`
 }
 
 type ProductProviderList struct {
@@ -127,6 +171,12 @@ type ProductRoutingPolicyParams struct {
 	OperationID string               `json:"operationId"`
 }
 
+type ProductRoutingOverridesParams struct {
+	SavedRevision uint64                       `json:"savedRevision"`
+	Overrides     ProductRoutingOverridesPatch `json:"overrides"`
+	OperationID   string                       `json:"operationId"`
+}
+
 type ProductProviderChange struct {
 	ProductConnectionRevisions
 	Change string `json:"change"`
@@ -178,4 +228,11 @@ func (p *ProductClient) Routing(ctx context.Context) (ProductRoutingStatus, erro
 
 func (p *ProductClient) SetRoutingPolicy(ctx context.Context, params ProductRoutingPolicyParams) (ProductConnectionRevisions, error) {
 	return productCall[ProductConnectionRevisions](ctx, p, "routing.setPolicy", params)
+}
+
+func (p *ProductClient) SetRoutingOverrides(ctx context.Context, params ProductRoutingOverridesParams) (ProductConnectionRevisions, error) {
+	if params.Overrides == nil {
+		params.Overrides = ProductRoutingOverridesPatch{}
+	}
+	return productCall[ProductConnectionRevisions](ctx, p, "routing.setOverrides", params)
 }

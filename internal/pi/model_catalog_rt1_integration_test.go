@@ -828,12 +828,18 @@ func TestPiProductRT1OfflineCatalogProvenanceAndDualWireDispatch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = proc.client.Send(ctx, pi.ProductSendParams{
+	recIncompat, err := proc.client.Send(ctx, pi.ProductSendParams{
 		ProductConversationParams: pi.ProductConversationParams{ConversationID: blockedBot.CurrentConversationID},
 		DraftRevision:             draftIncompat.Revision,
 		OperationID:               "op-send-incompat",
 	})
-	mcpExpectRemoteCode(t, err, "route_unavailable", "Send on known-incompatible tool route")
+	if err != nil || recIncompat.State != "rejected" {
+		t.Fatalf("Send on known-incompatible tool route = %+v, %v", recIncompat, err)
+	}
+	var admIncompat pi.ProductRouteAdmission
+	if err := json.Unmarshal(recIncompat.Result, &admIncompat); err != nil || admIncompat.Code != pi.ProductRouteUnavailable || admIncompat.Delivery != "non_dispatched" || admIncompat.Reason != "incompatible" {
+		t.Fatalf("known-incompatible tool route admission = %s (%+v), err=%v", string(recIncompat.Result), admIncompat, err)
+	}
 	if h.requestCount() != countBeforeBlock {
 		t.Fatalf("known-incompatible tool route dispatched %d requests", h.requestCount()-countBeforeBlock)
 	}
@@ -842,12 +848,18 @@ func TestPiProductRT1OfflineCatalogProvenanceAndDualWireDispatch(t *testing.T) {
 	undeclared.EnabledModels = rt1SlicePtr("default", "text-embedding-3-small")
 	undeclared.ModelOverrides = rt1OverridesPtr(pi.ProductModelOverride{ID: "text-embedding-3-small", IsChat: rt1BoolPtr(true), ToolCall: rt1BoolPtr(true)})
 	rt1SaveApply(t, ctx, proc, undeclared, h.secret, "op-undeclared")
-	_, err = proc.client.Send(ctx, pi.ProductSendParams{
+	recUndeclared, err := proc.client.Send(ctx, pi.ProductSendParams{
 		ProductConversationParams: pi.ProductConversationParams{ConversationID: blockedBot.CurrentConversationID},
 		DraftRevision:             draftIncompat.Revision,
 		OperationID:               "op-send-undeclared",
 	})
-	mcpExpectRemoteCode(t, err, "route_unavailable", "Send on undeclared private route")
+	if err != nil || recUndeclared.State != "rejected" {
+		t.Fatalf("Send on undeclared private route = %+v, %v", recUndeclared, err)
+	}
+	var admUndeclared pi.ProductRouteAdmission
+	if err := json.Unmarshal(recUndeclared.Result, &admUndeclared); err != nil || admUndeclared.Code != pi.ProductRouteUnavailable || admUndeclared.Delivery != "non_dispatched" || admUndeclared.Reason != "incompatible" {
+		t.Fatalf("undeclared private route admission = %s (%+v), err=%v", string(recUndeclared.Result), admUndeclared, err)
+	}
 	if h.requestCount() != countBeforeBlock {
 		t.Fatalf("undeclared private route dispatched %d requests", h.requestCount()-countBeforeBlock)
 	}
@@ -1617,12 +1629,18 @@ db.close();
 				if err != nil {
 					t.Fatal(err)
 				}
-				_, err = rp.client.Send(ctx, pi.ProductSendParams{
+				recRestored, err := rp.client.Send(ctx, pi.ProductSendParams{
 					ProductConversationParams: pi.ProductConversationParams{ConversationID: "conv-v10"},
 					DraftRevision:             draft.Revision,
 					OperationID:               "op-restored-send",
 				})
-				mcpExpectRemoteCode(t, err, "credential_unavailable", "Send on restored credential-free profile")
+				if err != nil || recRestored.State != "rejected" {
+					t.Fatalf("Send on restored credential-free profile = %+v, %v", recRestored, err)
+				}
+				var admRestored pi.ProductRouteAdmission
+				if err := json.Unmarshal(recRestored.Result, &admRestored); err != nil || admRestored.Code != pi.ProductCredentialUnavailable || admRestored.Delivery != "non_dispatched" || admRestored.Reason != "credential_missing" {
+					t.Fatalf("restored credential-free admission = %s (%+v), err=%v", string(recRestored.Result), admRestored, err)
+				}
 			}
 			rp.shutdown(t, ctx)
 		}
