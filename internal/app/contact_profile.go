@@ -21,6 +21,7 @@ type contactProfileActions struct {
 	ToggleVisibility   func()
 	VisibilityLabel    string
 	VisibilityDisabled bool
+	SaveInFooter       bool
 }
 
 type contactProfileEditor struct {
@@ -126,6 +127,11 @@ func newContactProfileEditor(draft profileDraft) *contactProfileEditor {
 func cloneProfileDraft(draft profileDraft) profileDraft {
 	draft.BuiltinTools = cloneBuiltinTools(draft.BuiltinTools)
 	draft.StarterPrompts = slices.Clone(draft.StarterPrompts)
+	draft.MountedSkills = slices.Clone(draft.MountedSkills)
+	draft.McpBindings = slices.Clone(draft.McpBindings)
+	for i := range draft.McpBindings {
+		draft.McpBindings[i].AllowedTools = slices.Clone(draft.McpBindings[i].AllowedTools)
+	}
 	return draft
 }
 
@@ -254,31 +260,39 @@ func (e *contactProfileEditor) view(c *ui.Context, t *ui.Theme, actions contactP
 			})
 		}, true)
 
-		ui.Column(c).Gap(6).Children(func() {
-			ui.Row(c).Gap(8).Wrap().Children(func() {
-				primaryButton(c, msgs.ContactSaveChanges()).Label(msgs.ContactSaveChanges()).Disabled(!editable).OnClick(func() {
-					if draft, ok := e.Request(false); ok && actions.Save != nil {
-						actions.Save(draft)
-					}
-				})
-				if !profileDraftEqual(e.Draft, e.initial) && !e.Busy && actions.Discard != nil {
-					secondaryButton(c, msgs.ProfileDiscard()).OnClick(actions.Discard)
+		if !actions.SaveInFooter {
+			e.saveView(c, t, actions, !editable)
+		}
+		e.managementView(c, t, actions)
+	})
+}
+
+func (e *contactProfileEditor) saveView(c *ui.Context, t *ui.Theme, actions contactProfileActions, blocked bool) {
+	msgs := locales.In(c.Locale())
+	dirty := !profileDraftEqual(e.Draft, e.initial)
+	ui.Column(c).Key("profile-save").MinWidth(0).Shrink(0).Gap(4).Children(func() {
+		ui.Row(c).Gap(8).Wrap().AlignItems(ui.Center).Children(func() {
+			primaryButton(c, msgs.ContactSaveChanges()).Disabled(blocked).OnClick(func() {
+				if draft, ok := e.Request(false); ok && actions.Save != nil {
+					actions.Save(draft)
 				}
 			})
-			if !profileDraftEqual(e.Draft, e.initial) {
-				ui.Text(c, msgs.SettingsUnsavedChanges()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Warning)
-			}
-			if e.Busy {
-				ui.Text(c, msgs.ProfileSaving()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
-			}
-			if e.Error != "" {
-				ui.Text(c, profileNoticeText(msgs, e.Error)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Danger)
-			}
-			if e.Status != "" {
-				ui.Text(c, profileNoticeText(msgs, e.Status)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Text)
+			if dirty && !e.Busy && actions.Discard != nil {
+				secondaryButton(c, msgs.ProfileDiscard()).Disabled(blocked).OnClick(actions.Discard)
 			}
 		})
-		e.managementView(c, t, actions)
+		if dirty {
+			ui.Text(c, msgs.SettingsUnsavedChanges()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Warning)
+		}
+		if e.Busy {
+			ui.Text(c, msgs.ProfileSaving()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
+		}
+		if e.Error != "" {
+			ui.Text(c, profileNoticeText(msgs, e.Error)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Danger)
+		}
+		if e.Status != "" {
+			ui.Text(c, profileNoticeText(msgs, e.Status)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Text)
+		}
 	})
 }
 

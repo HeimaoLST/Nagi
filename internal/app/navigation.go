@@ -144,7 +144,9 @@ func (a *appModel) profileDetail(c *ui.Context, t *ui.Theme) {
 	editor := a.profileEditorFor(ct.ID)
 	actions := a.contactProfileActions(ct, editor)
 	formActions := actions
-	if a.productHost() != nil {
+	product := a.productHost() != nil
+	if product {
+		formActions.SaveInFooter = true
 		formActions.Archive, formActions.Restore = nil, nil
 		formActions.ToggleVisibility = nil
 	}
@@ -166,11 +168,18 @@ func (a *appModel) profileDetail(c *ui.Context, t *ui.Theme) {
 					ui.Text(c, ct.Name).FontSize(typePageTitle).FontWeight(500).FixedLineHeight(lineSettingsTitle).TextColor(t.Text).MinWidth(0).MaxLines(2)
 				})
 				editor.view(c, t, formActions, a.workTheme.InputBorder)
+				if product {
+					a.botCapabilitiesView(c, t, ct, editor)
+				}
 				a.botMemoryView(c, t, ct)
 			})
 		})
-		if a.productHost() != nil {
-			editor.managementView(c, t, actions)
+		if product {
+			footer := ui.Column(c).FillWidth().Shrink(0).Gap(4).Padding(8, 0, 0).BorderWidth(1, 0, 0, 0).BorderColor(t.Border)
+			footer.Children(func() {
+				editor.saveView(c, t, actions, editor.Archived || editor.Busy || a.capabilitiesBlocked())
+				editor.managementView(c, t, actions)
+			})
 		}
 	})
 }
