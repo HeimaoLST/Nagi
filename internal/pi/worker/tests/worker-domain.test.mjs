@@ -133,26 +133,46 @@ test('model router validates endpoints and selects routes by role and policy', (
   assert.equal(modelRouter.activityRole({ kind: 'coding', complexity: 'deep' }, false), 'coding');
   assert.equal(modelRouter.activityRole(undefined, true), 'reasoning');
 
+  const customAccount = {
+    providerId: 'p-custom',
+    credentialSourceId: 'c-custom',
+    name: 'Custom',
+    wireApi: 'openai-completions',
+    baseUrl: 'https://custom.example/v1',
+    defaultModel: 'custom-model',
+    contextTokens: 128000,
+    outputTokens: 4096,
+    enabled: true,
+    enabledModels: ['custom-model'],
+  };
+  assert.equal(modelRouter.validProvider({ ...customAccount, contextTokens: 100, outputTokens: 97 }), false);
+  assert.equal(modelRouter.resolveRole([customAccount], 1, 'balanced', 'dialogue', () => true), null);
+  const overridden = modelRouter.resolveRole([
+    { ...customAccount, modelOverrides: [{ id: 'custom-model', isChat: true, toolCall: true }] },
+  ], 1, 'balanced', 'dialogue', () => true);
+  assert.equal(overridden?.resolvedModel, 'custom-model');
+  assert.equal(overridden?.thinkingLevel, 'off');
+
   const accounts = [
     {
       providerId: 'p1',
       credentialSourceId: 'c1',
-      name: 'Fast',
-      wireApi: 'openai-completions',
-      baseUrl: 'https://fast.example/v1',
+      name: 'OpenAI',
+      wireApi: 'openai-responses',
+      baseUrl: 'https://api.openai.com/v1',
       defaultModel: 'gpt-4o-mini',
-      contextTokens: 128000,
-      outputTokens: 4096,
+      contextTokens: 200000,
+      outputTokens: 16384,
       enabled: true,
-      models: ['gpt-5-pro', 'deepseek-coder'],
-      enabledModels: ['gpt-4o-mini', 'gpt-5-pro', 'deepseek-coder'],
+      models: ['gpt-5', 'gpt-4o-mini'],
     },
   ];
-  assert.equal(modelRouter.validProvider({ ...accounts[0], contextTokens: 100, outputTokens: 97 }), false);
-  const coding = modelRouter.resolveRole(accounts, 3, 'quality', 'coding', () => true, true);
-  assert.equal(coding?.resolvedModel, 'deepseek-coder');
+  const utility = modelRouter.resolveRole(accounts, 3, 'economy', 'utility', () => true, false);
+  assert.equal(utility?.resolvedModel, 'gpt-4o-mini');
+  assert.equal(utility?.thinkingLevel, 'off');
   const reasoning = modelRouter.resolveRole(accounts, 3, 'quality', 'reasoning', () => true, true);
-  assert.equal(reasoning?.resolvedModel, 'gpt-5-pro');
+  assert.equal(reasoning?.resolvedModel, 'gpt-5');
+  assert.equal(reasoning?.canonicalModelId, 'openai/gpt-5');
   assert.equal(reasoning?.thinkingLevel, 'high');
 });
 
