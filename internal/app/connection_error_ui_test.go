@@ -480,7 +480,7 @@ func TestRecoveryPresentationLocalRetryClearsOnlyOwnedFeedback(t *testing.T) {
 	config := testConnectionConfig(t)
 	a.connectionSaved = &config
 	a.connectionForm = newConnectionSettings(&config, root)
-	a.connectionForm.Error, a.connectionForm.ErrorDetail = connStatusSavedStoreFailed, a.localSaveErr
+	a.connectionForm.Error, a.connectionForm.ErrorDetail = connectionStatusSavedStoreFailed, a.localSaveErr
 	if err := os.Remove(path); err != nil {
 		t.Fatal(err)
 	}
@@ -497,9 +497,9 @@ func TestRecoveryPresentationLocalRetryClearsOnlyOwnedFeedback(t *testing.T) {
 	}
 	store := a.store
 	a.store = nil
-	a.connectionForm.Error, a.connectionForm.ErrorDetail = connStatusSavedStoreFailed, "unavailable local data"
+	a.connectionForm.Error, a.connectionForm.ErrorDetail = connectionStatusSavedStoreFailed, "unavailable local data"
 	tr.Frame()
-	if a.connectionForm.Error != connStatusSavedStoreFailed {
+	if a.connectionForm.Error != connectionStatusSavedStoreFailed {
 		t.Fatal("unavailable store falsely cleared feedback")
 	}
 	a.store = store
@@ -517,7 +517,7 @@ func TestRecoveryPresentationLocalRetryClearsOnlyOwnedFeedback(t *testing.T) {
 		t.Fatal(err)
 	}
 	const applyFailure = "Pi worker exited while applying"
-	a.connectionForm.Error, a.connectionForm.ErrorDetail = connErrorApplyConfig, applyFailure
+	a.connectionForm.Error, a.connectionForm.ErrorDetail = connectionErrorApplyConfig, applyFailure
 	tr.Frame()
 	if err := tr.Click(locales.In("en").SettingsRetrySave()); err != nil {
 		t.Fatal(err)
@@ -528,7 +528,7 @@ func TestRecoveryPresentationLocalRetryClearsOnlyOwnedFeedback(t *testing.T) {
 	if !tr.HasText(locales.In("en").RecoveryConnectionApplyFailed()) {
 		t.Fatal("successful local retry hid the unrelated Apply diagnostic")
 	}
-	if a.localSaveErr != "" || a.connectionForm.Error != connErrorApplyConfig || a.connectionForm.ErrorDetail != applyFailure || ct.Draft != "retained local edit" || ct.SessionID != sessionRef || ct.PiBinding != binding || a.selectedContact() != ct {
+	if a.localSaveErr != "" || a.connectionForm.Error != connectionErrorApplyConfig || a.connectionForm.ErrorDetail != applyFailure || ct.Draft != "retained local edit" || ct.SessionID != sessionRef || ct.PiBinding != binding || a.selectedContact() != ct {
 		t.Fatal("local recovery cleared unrelated state")
 	}
 }
@@ -579,7 +579,7 @@ func TestRecoveryPresentationRendersAndControls(t *testing.T) {
 						config := testConnectionConfig(t)
 						a.connectionSaved = &config
 						a.connectionForm = newConnectionSettings(&config, config.WorkingDirectory)
-						a.connectionForm.Error, a.connectionForm.ErrorDetail = connErrorTestFailed, "Controlled provider request failure with a long diagnostic that wraps over ordinary text lines."
+						a.connectionForm.Error, a.connectionForm.ErrorDetail = connectionErrorTestFailed, "Controlled provider request failure with a long diagnostic that wraps over ordinary text lines."
 						a.openSettingsTab(settingsTabConnection, settingsSourceRail)
 						tr = ui.NewTester(a.view, size[0], size[1])
 						action = msgs.SettingsBackAccessible()

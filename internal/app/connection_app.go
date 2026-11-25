@@ -91,9 +91,9 @@ func (a *appModel) changeProductConnection(host *piAppHost, config *connectionCo
 	form.Busy = true
 	form.Error, form.ErrorDetail, form.ReloadBlocked = "", "", ""
 	if config != nil {
-		form.Status = connStatusSaving
+		form.Status = connectionStatusSaving
 	} else {
-		form.Status = connStatusChecking
+		form.Status = connectionStatusChecking
 	}
 	a.connectionSaveInFlight = true
 	known := host.productConn.SavedRevision
@@ -133,7 +133,7 @@ func (a *appModel) changeProductConnection(host *piAppHost, config *connectionCo
 			} else if readErr != nil {
 				form.Error = a.connectionSafeMessage(readErr)
 			} else if apply {
-				form.Status = connStatusApplied
+				form.Status = connectionStatusApplied
 			}
 			if a.shutdownStarted {
 				a.finishShutdown()
@@ -145,7 +145,7 @@ func (a *appModel) changeProductConnection(host *piAppHost, config *connectionCo
 func (a *appModel) testProductConnection(host *piAppHost, config connectionConfig) {
 	form := a.connectionForm
 	form.Busy, a.connectionTesting = true, true
-	form.Error, form.ErrorDetail, form.Status = "", "", connStatusTesting
+	form.Error, form.ErrorDetail, form.Status = "", "", connectionStatusTesting
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	a.connectionTestCancel = cancel
 	go func() {
@@ -154,9 +154,9 @@ func (a *appModel) testProductConnection(host *piAppHost, config connectionConfi
 		a.updateUI(func() {
 			a.connectionTesting, form.Busy, a.connectionTestCancel = false, false, nil
 			if err != nil {
-				form.Status, form.Error, form.ErrorDetail = "", connErrorTestFailed, a.connectionSafeMessage(err)
+				form.Status, form.Error, form.ErrorDetail = "", connectionErrorTestFailed, a.connectionSafeMessage(err)
 			} else {
-				form.Status = connStatusTestCompleted
+				form.Status = connectionStatusTestCompleted
 				form.StatusArgs = []string{config.Model, config.Endpoint, fmt.Sprint(config.ContextTokens), fmt.Sprint(config.OutputTokens)}
 			}
 			if a.shutdownStarted {
@@ -463,7 +463,7 @@ func (a *appModel) testConnection(config connectionConfig) {
 	form.Busy = true
 	form.Error = ""
 	form.ErrorDetail = ""
-	form.Status = connStatusTesting
+	form.Status = connectionStatusTesting
 	go func() {
 		err := probePiConnection(ctx, config, probe)
 		cancel()
@@ -474,7 +474,7 @@ func (a *appModel) testConnection(config connectionConfig) {
 			a.connectionTestCancel = nil
 			if !probe.cleanupComplete() {
 				form.Status = ""
-				form.Error = connErrorTestFailed
+				form.Error = connectionErrorTestFailed
 				form.ErrorDetail = a.connectionSafeMessage(err)
 				if a.shutdownStarted {
 					a.runtimeErrKind = runtimeNoticeRuntimeShutdown
@@ -491,11 +491,11 @@ func (a *appModel) testConnection(config connectionConfig) {
 			}
 			if err != nil {
 				form.Status = ""
-				form.Error = connErrorTestFailed
+				form.Error = connectionErrorTestFailed
 				form.ErrorDetail = a.connectionSafeMessage(err)
 				return
 			}
-			form.Status = connStatusTestCompleted
+			form.Status = connectionStatusTestCompleted
 			form.StatusArgs = []string{config.Model, config.Endpoint, fmt.Sprint(config.ContextTokens), fmt.Sprint(config.OutputTokens)}
 			form.Error = ""
 		})
@@ -533,7 +533,7 @@ func (a *appModel) awaitPiConnectionProbe(probe *piConnectionProbe) {
 		a.connectionTestCancel = nil
 		a.connectionForm.Busy = false
 		a.connectionForm.Status = ""
-		a.connectionForm.Error = connErrorTestFailed
+		a.connectionForm.Error = connectionErrorTestFailed
 		a.connectionForm.ErrorDetail = a.connectionSafeMessage(testErr)
 		if a.shutdownStarted {
 			a.finishShutdown()

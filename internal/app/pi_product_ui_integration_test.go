@@ -718,7 +718,7 @@ func TestPiAppSettingsBackupRestore(t *testing.T) {
 				PendingSend: &pendingSend{Draft: "Unconfirmed Copper dispatch", State: "unknown", ToolScopeRef: "copper-scope"}},
 		},
 		Issues:          []storedActivity{{ID: "copper-activity", ContactID: "copper", Goal: "Review Copper materials", Status: "not_started"}},
-		IssueToolScopes: []ActivityToolScope{{Ref: "copper-scope", ContactID: "copper", TurnID: importedOperation, RuntimeTaskID: "copper-execution"}},
+		IssueToolScopes: []activityToolScope{{Ref: "copper-scope", ContactID: "copper", TurnID: importedOperation, RuntimeTaskID: "copper-execution"}},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -932,8 +932,8 @@ func TestPiAppRestoresExistingV10Copy(t *testing.T) {
 		Issues: []storedActivity{{ID: activityID, ContactID: botID, Goal: "Restore retained findings", Status: activityStatusNeedsAttention, RequirementsRevision: 2,
 			RequirementItems: []storedRequirement{{ID: "retained-requirement", Text: "Keep the findings", State: requirementUnverified}},
 			Executions:       []storedActivityExecution{{ID: activityExecution, PiIntent: true, Status: activityExecutionUnknown, Prompt: "Original activity input"}}}},
-		IssueToolScopes:     []ActivityToolScope{{Ref: "backup-scope", ContactID: botID, RuntimeSessionID: session, TurnID: sendOperation, RuntimeTaskID: sendExecution}},
-		IssueToolOperations: &ActivityToolOperationLedger{},
+		IssueToolScopes:     []activityToolScope{{Ref: "backup-scope", ContactID: botID, RuntimeSessionID: session, TurnID: sendOperation, RuntimeTaskID: sendExecution}},
+		IssueToolOperations: &activityToolOperationLedger{},
 	}); err != nil {
 		t.Fatal(err)
 	}

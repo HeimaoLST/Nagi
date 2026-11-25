@@ -143,7 +143,7 @@ func TestConnectionFolderChooserDraftCancelErrorAndRetry(t *testing.T) {
 	a.openSettingsTab(settingsTabConnection, settingsSourceRail)
 	form := a.connectionForm
 	form.Draft.Model = "unsaved-model"
-	form.Error, form.Status = "previous save error", connStatusSavedApplied
+	form.Error, form.Status = "previous save error", connectionStatusSavedApplied
 	form.Errors = map[string]string{"WorkingDirectory": connectionValidationWorkspaceDirectory, "Model": connectionValidationRequired}
 	form.FolderError = "previous chooser error"
 	before := form.Draft
@@ -161,7 +161,7 @@ func TestConnectionFolderChooserDraftCancelErrorAndRetry(t *testing.T) {
 	replies <- folderChoiceReply{}
 	awaitFolderChoice(t, updates)()
 	tr.Frame()
-	if form.Draft != before || form.Error != "previous save error" || form.Status != connStatusSavedApplied || form.FolderError != "previous chooser error" || len(form.Errors) != 2 || !tr.Focused(label) {
+	if form.Draft != before || form.Error != "previous save error" || form.Status != connectionStatusSavedApplied || form.FolderError != "previous chooser error" || len(form.Errors) != 2 || !tr.Focused(label) {
 		t.Fatal("cancel changed draft/error state or lost the initiating control focus")
 	}
 	missing := filepath.Join(t.TempDir(), "removed")

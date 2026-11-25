@@ -1,7 +1,7 @@
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { Type, type Static, type TSchema } from 'typebox';
 import { Value } from 'typebox/value';
-import { MAX_LOG_BYTES, memoryDate, memorySearchLimit, memorySearchQuery, memoryTags, memoryText } from './bot-memory.js';
+import { maxLogBytes, memoryDate, memorySearchLimit, memorySearchQuery, memoryTags, memoryText } from './bot-memory.js';
 import { RequestError } from './protocol.js';
 import type { ToolTextResult } from './product-effects.js';
 
@@ -12,7 +12,7 @@ const ruleIdSchema = Type.Object({ rule_id: requiredText }, strictTool);
 const ruleSchema = Type.Object({ text: memoryText }, strictTool);
 const proposalSchema = Type.Object({
   text: memoryText,
-  reason: Type.String({ minLength: 1, maxLength: MAX_LOG_BYTES, pattern: '\\S' }),
+  reason: Type.String({ minLength: 1, maxLength: maxLogBytes, pattern: '\\S' }),
 }, strictTool);
 const logSchema = Type.Object({
   summary: memoryText,

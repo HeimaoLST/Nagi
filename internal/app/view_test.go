@@ -655,7 +655,7 @@ func disconnectedRecoveryTestApp(t *testing.T, cause string) (*appModel, *contac
 	ct.Messages = []*message{{Kind: msgUser, Text: "original message"}}
 	ct.History = []historyEntry{{ID: "history-original", Text: "original history"}}
 	issue := &productActivity{ID: "recovery-issue", ContactID: ct.ID, Goal: "Retain original goal", Status: activityStatusInProgress, RequirementsRevision: 1}
-	attachIssueToolTestExecution(issue)
+	attachActivityTestExecution(issue)
 	issue.Executions[0].Status, issue.Executions[0].Prompt = activityExecutionUnknown, "original run prompt"
 	issue.Work = activityWorkSession{Loaded: true, SendState: sendUnknown}
 	ct.Activities = []*productActivity{issue}

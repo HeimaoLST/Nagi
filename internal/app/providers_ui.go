@@ -327,8 +327,8 @@ func (a *appModel) testProvider(params pi.ProductProviderTestParams, editor *pro
 	}, func(err error) {
 		editor.probe = a.providerFailure("test", err)
 		if err == nil {
-			editor.probe = providerFeedback{kind: "tested", models: len(result.Models), latency: result.LatencyMs}
-			editor.tested, editor.latency = true, result.LatencyMs
+			editor.probe = providerFeedback{kind: "tested", models: len(result.Models), latency: result.LatencyMS}
+			editor.tested, editor.latency = true, result.LatencyMS
 			if len(result.Models) > 0 {
 				editor.Models = result.Models
 			}

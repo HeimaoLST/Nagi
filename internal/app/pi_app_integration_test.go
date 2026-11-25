@@ -303,7 +303,7 @@ func TestPiAppProductConnectionSaveAndApplyRefusal(t *testing.T) {
 		t.Fatalf("Apply refusal changed the pending or effective revision: %+v", refused)
 	}
 	clickSettings(msg.ConnectionApplySaved())
-	w.wait(func() bool { return w.app.connectionForm.Status == connStatusApplied })
+	w.wait(func() bool { return w.app.connectionForm.Status == connectionStatusApplied })
 	applied := readConnection()
 	if !reflect.DeepEqual(applied.SavedRevision, saved.SavedRevision) || !reflect.DeepEqual(applied.EffectiveRevision, saved.SavedRevision) ||
 		!reflect.DeepEqual(applied.Saved, saved.Saved) || !reflect.DeepEqual(applied.Effective, saved.Saved) {

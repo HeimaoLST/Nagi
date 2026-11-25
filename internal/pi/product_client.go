@@ -23,10 +23,10 @@ type ProductOptions struct {
 }
 
 type ProductHandlers struct {
-	OnEvent       func(ProductEvent)
-	OnStreamGap   func()
-	OnProtocolErr func(error)
-	OnExit        func(ProcessOutcome)
+	OnEvent         func(ProductEvent)
+	OnStreamGap     func()
+	OnProtocolError func(error)
+	OnExit          func(ProcessOutcome)
 }
 
 type ProductClient struct {
@@ -622,7 +622,7 @@ type ProductConnectionApplyParams struct {
 func StartProduct(options ProductOptions) (*ProductClient, error) {
 	client, err := start(Options{
 		NodePath: options.NodePath, WorkerPath: options.WorkerPath, StateDir: options.StateDir,
-		Handlers: Handlers{OnExit: options.Handlers.OnExit, OnProtocolError: options.Handlers.OnProtocolErr},
+		Handlers: Handlers{OnExit: options.Handlers.OnExit, OnProtocolError: options.Handlers.OnProtocolError},
 	}, &options)
 	if err != nil {
 		return nil, err

@@ -262,7 +262,7 @@ func startCP1Process(t *testing.T, options pi.ProductOptions) *cp1Process {
 			signal()
 			p.mu.Unlock()
 		},
-		OnProtocolErr: func(err error) {
+		OnProtocolError: func(err error) {
 			p.mu.Lock()
 			p.problems = append(p.problems, err)
 			signal()

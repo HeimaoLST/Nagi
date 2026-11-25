@@ -69,7 +69,7 @@ func TestPreviewI18nSelectedSlice(t *testing.T) {
 	cfg := connectionConfig{API: connectionAPIChatCompletions, Endpoint: "https://provider.example.invalid/v1", APIKey: "fixture", Model: "fixture", ContextTokens: 131072, OutputTokens: 8192, WorkingDirectory: t.TempDir(), MaxActiveTasks: 2}
 	conn, _ := workspaceTestApp(t)
 	conn.connectionForm = newConnectionSettings(&cfg, cfg.WorkingDirectory)
-	conn.connectionForm.Status = connStatusApplied
+	conn.connectionForm.Status = connectionStatusApplied
 	conn.openSettingsTab(settingsTabConnection, settingsSourceRail)
 	connTr := ui.NewTester(conn.view, 1040, 720)
 	connTr.SetLocale("zh-Hans")

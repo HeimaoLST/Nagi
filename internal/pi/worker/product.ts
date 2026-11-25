@@ -10,9 +10,9 @@ import type { AssistantMessage, ToolCall } from '@earendil-works/pi-ai';
 import { Type, type Static, type TSchema } from 'typebox';
 import { Value } from 'typebox/value';
 import {
-  MAX_FRAME, RequestError, activityStateSchema, canonicalJSON, draftSchema, frameBytes, hasCanonicalQuoteText, id, inspectionPage,
+  maxFrameBytes, RequestError, activityStateSchema, canonicalJSON, draftSchema, frameBytes, hasCanonicalQuoteText, id, inspectionPage,
   maxAutomaticAnswers, maxDraftBytes, maxTriageAttempts, preferenceKey, profileSchema, questionOptionId, questionOptions, questionTextBytes,
-  resolveCodingTools, skillID, skillSource,
+  resolveCodingTools, skillId, skillSource,
   type ActivityDigest, type ActivityState, type ActivitySteer, type ActivitySteerPayload, type AnswerProvenance, type BotChange, type BotProfile,
   type ConfigureParams, type Connection, type Draft, type Execution,
   type Material, type McpServerRecord, type McpServerView, type OpenParams, type Operation, type ProductCommand, type ProductParams,
@@ -23,8 +23,8 @@ import { backupProductProfile, privateCredentialKeys, privateProviderCredential,
 import { ProductSQLite, type ActivityControlWrite, type RoutingWrite, type SkillApprovalChange } from './product-sqlite.js';
 import { composeBotSystemPrompt, formatTightBotInstructions, readTightBotInstructions,
   PANDORABOX_BOT_ID, SYSTEM_KIND_BOT_ARCHITECT, type BotSystemKind } from './bot-template.js';
-import { completedWorkSummary, formatLastingRulesBlock, lastingRulesFit, MEMORY_COLD_TTL_MS, MAX_LOG_BYTES, MAX_PENDING_LEARNINGS,
-  MAX_RULE_BYTES, MAX_WORK_LOGS, newestLogFirst, oldestRuleFirst,
+import { completedWorkSummary, formatLastingRulesBlock, lastingRulesFit, memoryColdTtlMs, maxLogBytes, maxPendingLearnings,
+  maxRuleBytes, maxWorkLogs, newestLogFirst, oldestRuleFirst,
   recurringPreference, validMemoryDate, validateMemoryCandidate, type BotMemory, type BotMemoryMeta, type BotMemoryRule,
   type BotPendingLearning, type BotWorkLog } from './bot-memory.js';
 import { directlyOwns, normalizeActivityGrants, redactTrace, type TraceObservation, type TraceUpdate } from './product-trace.js';
@@ -871,7 +871,7 @@ export class Product {
         this.bot(this.profile, botId);
         return { botId, rulesRevision: this.memoryStatus(this.profile, botId).rulesRevision, rules: this.lastingRules(botId),
           pendingLearnings: this.profile.memory?.pendingLearnings.filter(item => item.botId === botId && item.state === 'pending') ?? [],
-          workLogs: this.storage.searchWorkLogs(botId, '', undefined, undefined, MAX_WORK_LOGS) };
+          workLogs: this.storage.searchWorkLogs(botId, '', undefined, undefined, maxWorkLogs) };
       }
       case 'memory.searchLogs':
         return { items: this.searchWorkLogs(command.params) };
@@ -1391,7 +1391,7 @@ export class Product {
   }
 
   private saveRule(memory: BotMemory, bot: Bot, input: string, source: BotMemoryRule['source'], now: string, existing?: BotMemoryRule): BotMemoryRule {
-    const text = this.memoryCandidate(memory, bot, input, MAX_RULE_BYTES, { ruleId: existing?.ruleId });
+    const text = this.memoryCandidate(memory, bot, input, maxRuleBytes, { ruleId: existing?.ruleId });
     const rules = memory.rules.filter(row => row.botId === bot.botId);
     const latest = rules.reduce((time, row) => Math.max(time, Date.parse(row.createdAt)), 0);
     const createdAt = new Date(Math.max(latest + 1, Date.parse(now))).toISOString();
@@ -1416,20 +1416,20 @@ export class Product {
   private saveWorkLog(memory: BotMemory, bot: Bot, input: string, now: string, tags: string[], executionId?: string,
     date = now.slice(0, 10), metadata = tags): BotWorkLog {
     if (!validMemoryDate(date)) stateError('memory_invalid', 'Use a calendar date in YYYY-MM-DD format');
-    const summary = this.memoryCandidate(memory, bot, input, MAX_LOG_BYTES, { date, metadata });
+    const summary = this.memoryCandidate(memory, bot, input, maxLogBytes, { date, metadata });
     const row: BotWorkLog = { logId: newId(), botId: bot.botId, date, summary, tags, executionId, createdAt: now };
     memory.workLogs.push(row);
     const owned = memory.workLogs.filter(log => log.botId === bot.botId);
-    if (owned.length > MAX_WORK_LOGS) {
-      const remove = new Set(owned.sort(newestLogFirst).slice(MAX_WORK_LOGS).map(log => log.logId));
+    if (owned.length > maxWorkLogs) {
+      const remove = new Set(owned.sort(newestLogFirst).slice(maxWorkLogs).map(log => log.logId));
       memory.workLogs = memory.workLogs.filter(log => !remove.has(log.logId));
     }
     return row;
   }
 
   private proposeLearning(memory: BotMemory, bot: Bot, input: string, reason: string, now: string, executionId: string): BotPendingLearning {
-    const text = this.memoryCandidate(memory, bot, input, MAX_RULE_BYTES, { metadata: [reason] });
-    if (memory.pendingLearnings.filter(row => row.botId === bot.botId && row.state === 'pending').length >= MAX_PENDING_LEARNINGS) {
+    const text = this.memoryCandidate(memory, bot, input, maxRuleBytes, { metadata: [reason] });
+    if (memory.pendingLearnings.filter(row => row.botId === bot.botId && row.state === 'pending').length >= maxPendingLearnings) {
       stateError('memory_pending_limit', 'Review the pending learnings before adding more');
     }
     const row: BotPendingLearning = { learningId: newId(), botId: bot.botId, kind: 'rule', text, reason: reason.trim(), executionId, state: 'pending', createdAt: now };
@@ -1451,7 +1451,7 @@ export class Product {
     const contextId = existing?.contextId ?? newId();
     const cached = this.sessions.get(contextId);
     const meta = this.profile.memory?.meta.find(row => row.botId === bot.botId);
-    const cold = !cached || !meta?.lastTurnAt || Date.now() - Date.parse(meta.lastTurnAt) >= MEMORY_COLD_TTL_MS;
+    const cold = !cached || !meta?.lastTurnAt || Date.now() - Date.parse(meta.lastTurnAt) >= memoryColdTtlMs;
     const reload = !!(existing && conversationBoundary && (this.skillReload.has(bot.botId) || cold ||
       meta?.forceReload && meta.rulesRevision !== (existing.memoryRulesRevision ?? 0)));
     const activityId = 'activityId' in owner ? owner.activityId : undefined;
@@ -1916,7 +1916,7 @@ export class Product {
     }
     for (let count = limit; count > 0; count--) {
       const result = page(messages, item => item.messageId, `history:${conversationId}`, cursor, count);
-      if (frameBytes(result) < MAX_FRAME - 1024) return result;
+      if (frameBytes(result) < maxFrameBytes - 1024) return result;
     }
     stateError('entry_too_large', 'An individual history entry exceeds the frame limit');
   }

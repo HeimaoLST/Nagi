@@ -70,13 +70,8 @@ const (
 	storeRecoveryVerifiedInstalled      = store.StoreRecoveryVerifiedInstalled
 	storeRecoveryInstallUnconfirmed     = store.StoreRecoveryInstallUnconfirmed
 	activityQuestionOpen                = store.IssueQuestionOpen
-	activityQuestionAnswered            = store.IssueQuestionAnswered
-	activityQuestionSuperseded          = store.IssueQuestionSuperseded
-	activityQuestionDeliverySaved       = store.IssueQuestionDeliverySaved
 	activityQuestionDeliveryDispatching = store.IssueQuestionDeliveryDispatching
-	activityQuestionDeliveryResolved    = store.IssueQuestionDeliveryResolved
 	activityQuestionDeliveryUnknown     = store.IssueQuestionDeliveryUnknown
-	activityQuestionDeliveryCanceled    = store.IssueQuestionDeliveryCanceled
 	activityStatusNotStarted            = store.IssueStatusNotStarted
 	activityStatusInProgress            = store.IssueStatusInProgress
 	activityStatusWaitingUser           = store.IssueStatusWaitingUser
@@ -87,8 +82,6 @@ const (
 	requirementSatisfied                = store.RequirementSatisfied
 	requirementUnmet                    = store.RequirementUnmet
 	activityExecutionPending            = store.IssueExecutionPending
-	activityExecutionNotDispatched      = store.IssueExecutionNotDispatched
-	activityExecutionRejected           = store.IssueExecutionRejected
 	activityExecutionAccepted           = store.IssueExecutionAccepted
 	activityExecutionRunning            = store.IssueExecutionRunning
 	activityExecutionCompleted          = store.IssueExecutionCompleted
@@ -105,22 +98,21 @@ const (
 	connectionValidationRequired           = connection.ValidationRequired
 	connectionValidationEndpointURL        = connection.ValidationEndpointURL
 	connectionValidationWorkspaceDirectory = connection.ValidationWorkspaceDirectory
-	validationNumeric                      = connection.ValidationNumeric
-	connStatusSaving                       = connection.StatusSaving
-	connStatusSavedApplied                 = connection.StatusSavedApplied
-	connStatusChecking                     = connection.StatusChecking
-	connStatusApplied                      = connection.StatusApplied
-	connStatusTesting                      = connection.StatusTesting
-	connStatusTestCompleted                = connection.StatusTestCompleted
-	connStatusSavedStoreFailed             = connection.StatusSavedStoreFailed
-	connErrorTestFailed                    = connection.ErrorTestFailed
-	connErrorSavedNeedsRepair              = connection.ErrorSavedNeedsRepair
-	connErrorApplyConfig                   = connection.ErrorApplyConfig
+	connectionValidationNumeric            = connection.ValidationNumeric
+	connectionStatusSaving                 = connection.StatusSaving
+	connectionStatusSavedApplied           = connection.StatusSavedApplied
+	connectionStatusChecking               = connection.StatusChecking
+	connectionStatusApplied                = connection.StatusApplied
+	connectionStatusTesting                = connection.StatusTesting
+	connectionStatusTestCompleted          = connection.StatusTestCompleted
+	connectionStatusSavedStoreFailed       = connection.StatusSavedStoreFailed
+	connectionErrorTestFailed              = connection.ErrorTestFailed
+	connectionErrorSavedNeedsRepair        = connection.ErrorSavedNeedsRepair
+	connectionErrorApplyConfig             = connection.ErrorApplyConfig
 	connBlockedApplying                    = connection.BlockedApplying
 	connBlockedShutdown                    = connection.BlockedShutdown
 	connBlockedNoSaved                     = connection.BlockedNoSaved
 	connBlockedStore                       = connection.BlockedStore
-	connBlockedActiveWork                  = connection.BlockedActiveWork
 
 	taskContextMaxBytes = materials.MaxBytes
 )
@@ -153,14 +145,10 @@ type (
 	activityExecution           = store.IssueExecution
 	productActivityIntent       = store.ProductActivityIntent
 	activityHandoff             = store.IssueHandoff
-	activitySupplement          = store.IssueSupplement
 	activitySupplementBatch     = store.IssueSupplementBatch
 	activitySupplementLedger    = store.IssueSupplementLedger
-	ActivityToolScope           = store.IssueToolScope
-	ActivityToolError           = store.IssueToolError
-	ActivityToolReceipt         = store.IssueToolReceipt
-	ActivityToolOperation       = store.IssueToolOperation
-	ActivityToolOperationLedger = store.IssueToolOperationLedger
+	activityToolScope           = store.IssueToolScope
+	activityToolOperationLedger = store.IssueToolOperationLedger
 	storedContact               = store.StoredContact
 	storedActivityExecution     = store.StoredIssueExecution
 	storedRequirement           = store.StoredRequirement
@@ -172,7 +160,6 @@ type (
 	productUIState              = store.ProductUIState
 	storeRecoveryCopy           = store.StoreRecoveryCopy
 	storeRecoveryTarget         = store.StoreRecoveryTarget
-	storeRecoveryOutcome        = store.StoreRecoveryOutcome
 	storeRecoveryResult         = store.StoreRecoveryResult
 
 	connectionConfig          = connection.Config
@@ -187,20 +174,17 @@ type (
 var (
 	themeColorFields = theme.ColorFields
 
-	glyphAddLine         = theme.GlyphAddLine
-	glyphArrowRightSLine = theme.GlyphArrowRightSLine
-	glyphCloseLine       = theme.GlyphCloseLine
-	glyphMoreLine        = theme.GlyphMoreLine
-	glyphSettings4Line   = theme.GlyphSettings4Line
-	glyphSubtractLine    = theme.GlyphSubtractLine
-	navBackIcon          = theme.NavBackIcon
-	navContactsIcon      = theme.NavContactsIcon
-	composerAttachIcon   = theme.ComposerAttachIcon
-	composerSendIcon     = theme.ComposerSendIcon
-	composerStopIcon     = theme.ComposerStopIcon
-	railHideIcon         = theme.RailHideIcon
-	railAddIcon          = theme.RailAddIcon
-	railSettingsIcon     = theme.RailSettingsIcon
+	glyphCloseLine     = theme.GlyphCloseLine
+	glyphMoreLine      = theme.GlyphMoreLine
+	glyphSettings4Line = theme.GlyphSettings4Line
+	navBackIcon        = theme.NavBackIcon
+	navContactsIcon    = theme.NavContactsIcon
+	composerAttachIcon = theme.ComposerAttachIcon
+	composerSendIcon   = theme.ComposerSendIcon
+	composerStopIcon   = theme.ComposerStopIcon
+	railHideIcon       = theme.RailHideIcon
+	railAddIcon        = theme.RailAddIcon
+	railSettingsIcon   = theme.RailSettingsIcon
 
 	errTaskContextName = materials.ErrName
 	errTaskContextRead = materials.ErrRead

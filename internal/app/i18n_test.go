@@ -616,7 +616,7 @@ func TestConnectionFeedbackFollowLocale(t *testing.T) {
 	config := connectionConfig{API: connectionAPIChatCompletions, Endpoint: "https://provider.example.invalid/v1", APIKey: "fixture", Model: "fixture", ContextTokens: 131072, OutputTokens: 8192, WorkingDirectory: t.TempDir(), MaxActiveTasks: 2}
 	a.connectionForm = newConnectionSettings(&config, config.WorkingDirectory)
 	a.connectionSaved = &config
-	a.connectionForm.Status = connStatusApplied
+	a.connectionForm.Status = connectionStatusApplied
 	a.connectionForm.Errors = map[string]string{"Endpoint": connectionValidationEndpointURL}
 	a.openSettingsTab(settingsTabConnection, settingsSourceRail)
 	tr := ui.NewTester(a.view, 1040, 720)

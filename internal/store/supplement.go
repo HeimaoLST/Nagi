@@ -5,25 +5,12 @@ import (
 )
 
 const (
-	MaxPendingSupplements     = 32
-	MaxSupplementTextBytes    = 16 * 1024
-	MaxPendingSupplementBytes = 64 * 1024
-)
+	SupplementStatePending     = "pending"
+	SupplementStateDispatching = "dispatching"
+	SupplementStateUnknown     = "unknown"
 
-const (
-	SupplementStatePending       = "pending"
-	SupplementStateDispatching   = "dispatching"
-	SupplementStateSubmitted     = "submitted"
-	SupplementStateRejected      = "rejected"
-	SupplementStateNotDispatched = "not_dispatched"
-	SupplementStateUnknown       = "unknown"
-
-	SupplementBatchDispatching   = "dispatching"
-	SupplementBatchAccepted      = "accepted"
-	SupplementBatchRejected      = "rejected"
-	SupplementBatchNotDispatched = "not_dispatched"
-	SupplementBatchUnknown       = "unknown"
-	SupplementBatchCanceled      = "canceled"
+	SupplementBatchDispatching = "dispatching"
+	SupplementBatchUnknown     = "unknown"
 )
 
 type IssueSupplementTarget struct {

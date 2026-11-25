@@ -415,7 +415,7 @@ func TestRecoveryPresentationExplicitTestUsesDraftAndDisclosesFailure(t *testing
 				actions.Test = func(candidate connectionConfig) {
 					tested = append(tested, candidate)
 					raw = failure + "; API_KEY=" + candidate.APIKey + "; " + strings.Repeat("original diagnostic ", 40)
-					s.Error, s.ErrorDetail = connErrorTestFailed, raw
+					s.Error, s.ErrorDetail = connectionErrorTestFailed, raw
 				}
 				tr := connectionSettingsTester(s, actions, 600, 2100)
 				tr.SetLocale(locale)
@@ -571,7 +571,7 @@ func TestConnectionSettingsValidationRevealsCollapsedDraft(t *testing.T) {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if calls != 0 || s.Draft.APIKey != "" || s.Draft.ContextTokens != "9007199254740993suffix" || s.Errors["APIKey"] == "" || s.Errors["ContextTokens"] != validationNumeric || !s.LimitsOpen || !tr.Focused("API key") {
+	if calls != 0 || s.Draft.APIKey != "" || s.Draft.ContextTokens != "9007199254740993suffix" || s.Errors["APIKey"] == "" || s.Errors["ContextTokens"] != connectionValidationNumeric || !s.LimitsOpen || !tr.Focused("API key") {
 		t.Fatal("validation did not preserve raw values, reveal capacity and focus the hidden first invalid field")
 	}
 	tr.Type("replacement-key")
@@ -587,7 +587,7 @@ func TestConnectionSettingsValidationRevealsCollapsedDraft(t *testing.T) {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if s.LimitsOpen || s.Errors["ContextTokens"] != validationNumeric || !tr.HasText(locales.In("en").ValidationNumeric()) {
+	if s.LimitsOpen || s.Errors["ContextTokens"] != connectionValidationNumeric || !tr.HasText(locales.In("en").ValidationNumeric()) {
 		t.Fatal("collapsing capacity hid the pending token error")
 	}
 	s.Draft.ContextTokens = "131072"
@@ -626,7 +626,7 @@ func TestConnectionSettingsCapacityPreservesExactValues(t *testing.T) {
 			t.Fatal(err)
 		}
 		tr.Frame()
-		s.Errors = map[string]string{"MaxActiveTasks": validationNumeric}
+		s.Errors = map[string]string{"MaxActiveTasks": connectionValidationNumeric}
 		for _, count := range []string{"4", "3", "2", "1"} {
 			if err := tr.Click(count); err != nil {
 				t.Fatal(err)
@@ -771,7 +771,7 @@ func TestConnectionSettingsCapacityPreservesExactValues(t *testing.T) {
 			}
 			tr.Frame()
 			if tc.want == 0 {
-				if saves != 0 || s.Draft.Slots != tc.raw || s.Errors["MaxActiveTasks"] != validationNumeric || !tr.Focused(field) || !tr.HasText(msgs.ValidationNumeric()) {
+				if saves != 0 || s.Draft.Slots != tc.raw || s.Errors["MaxActiveTasks"] != connectionValidationNumeric || !tr.Focused(field) || !tr.HasText(msgs.ValidationNumeric()) {
 					t.Fatalf("invalid count did not preserve its draft, block Save and focus the error: %q %v", s.Draft.Slots, s.Errors)
 				}
 				return
@@ -825,7 +825,7 @@ func TestConnectionSettingsSavedCredentialBulletsBlankReuseAndRedaction(t *testi
 			}
 			const secret = "sk-synthetic-redact-987654321"
 			s.Draft.APIKey = secret
-			s.Error = connErrorTestFailed
+			s.Error = connectionErrorTestFailed
 			s.ErrorDetail = "HTTP 401 unauthorized for key " + secret
 			s.RecoveryDetailsOpen = true
 			tr.Frame()

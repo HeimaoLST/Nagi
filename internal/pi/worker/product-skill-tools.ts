@@ -1,7 +1,7 @@
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { Type, type Static, type TSchema } from 'typebox';
 import { Value } from 'typebox/value';
-import { RequestError, skillExecutable, skillID, skillScriptName, skillSource, skillText, type SkillSource } from './protocol.js';
+import { RequestError, skillExecutable, skillId, skillScriptName, skillSource, skillText, type SkillSource } from './protocol.js';
 import type { ToolTextResult } from './product-effects.js';
 
 const strictTool = { additionalProperties: false };
@@ -47,7 +47,7 @@ export function buildSkillTools<Call extends SkillToolCall>(host: SkillToolsHost
     execute: async (callId, args, signal) => {
       const call = host.skillCall(signal);
       if (!Value.Check(parameters, args)) throw new RequestError('invalid_params', 'Invalid skill parameters');
-      if ('skill_id' in args && !Value.Check(skillID, args.skill_id)) {
+      if ('skill_id' in args && !Value.Check(skillId, args.skill_id)) {
         throw new RequestError('scope_denied', 'The skill is outside the authorized scope');
       }
       return host.toResult(await handler(args, call, `${call.executionId}:${name}:${callId}`, callId, signal));

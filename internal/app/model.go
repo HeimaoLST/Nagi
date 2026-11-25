@@ -268,8 +268,8 @@ type appModel struct {
 
 	openPath func(string) error
 
-	activityToolLedger *ActivityToolOperationLedger
-	activityToolScopes map[string]ActivityToolScope
+	activityToolLedger *activityToolOperationLedger
+	activityToolScopes map[string]activityToolScope
 
 	// Layout is a GUI-wide preference, not a contact or runtime fact. Widths
 	// are persisted in the contact store; windowWidth is only the current

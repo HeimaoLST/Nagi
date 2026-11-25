@@ -1,21 +1,21 @@
 import { Type, type Static } from 'typebox';
 
-export const MAX_LASTING_RULES = 40;
-export const MAX_LASTING_RULES_BYTES = 4096;
-export const MAX_RULE_BYTES = 300;
-export const MAX_LOG_BYTES = 1024;
-export const MAX_WORK_LOGS = 500;
-export const MAX_PENDING_LEARNINGS = 50;
-export const MEMORY_COLD_TTL_MS = Number(process.env.NAGI_MEMORY_COLD_TTL_MS) || 60 * 60 * 1000;
+export const maxLastingRules = 40;
+export const maxLastingRulesBytes = 4096;
+export const maxRuleBytes = 300;
+export const maxLogBytes = 1024;
+export const maxWorkLogs = 500;
+export const maxPendingLearnings = 50;
+export const memoryColdTtlMs = Number(process.env.NAGI_MEMORY_COLD_TTL_MS) || 60 * 60 * 1000;
 
 const id = Type.String({ minLength: 1 });
 const strict = { additionalProperties: false };
 const timestamp = Type.String({ pattern: '^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$' });
 const revision = Type.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER });
 export const memoryDate = Type.String({ pattern: '^\\d{4}-\\d{2}-\\d{2}$' });
-export const memoryText = Type.String({ maxLength: MAX_LOG_BYTES });
+export const memoryText = Type.String({ maxLength: maxLogBytes });
 export const memoryTags = Type.Array(Type.String({ maxLength: 48 }), { maxItems: 12 });
-export const memorySearchLimit = Type.Integer({ minimum: 1, maximum: MAX_WORK_LOGS });
+export const memorySearchLimit = Type.Integer({ minimum: 1, maximum: maxWorkLogs });
 export const memorySearchQuery = Type.String({ maxLength: 256 });
 export const memoryRuleSchema = Type.Object({ ruleId: id, botId: id, text: memoryText,
   source: Type.Union([Type.Literal('explicit'), Type.Literal('approved'), Type.Literal('manual')]), createdAt: timestamp, updatedAt: timestamp }, strict);
@@ -50,7 +50,7 @@ export function formatLastingRulesBlock(rules: readonly BotMemoryRule[]): string
 }
 
 export function lastingRulesFit(rules: readonly BotMemoryRule[]): boolean {
-  return rules.length <= MAX_LASTING_RULES && Buffer.byteLength(formatLastingRulesBlock(rules)) <= MAX_LASTING_RULES_BYTES;
+  return rules.length <= maxLastingRules && Buffer.byteLength(formatLastingRulesBlock(rules)) <= maxLastingRulesBytes;
 }
 
 export function normalizeMemoryText(value: string): string {

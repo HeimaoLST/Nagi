@@ -190,7 +190,7 @@ func TestPiAppProductConnectionStopAndWorkerLoss(t *testing.T) {
 	w.wait(func() bool { return !w.app.connectionForm.Busy && w.app.connectionForm.Draft.WorkingDirectory == root })
 	install(primary, "OK", nil)
 	settingsAction(msg.ConnectionTestAction())
-	w.wait(func() bool { return w.app.connectionForm.Status == connStatusTestCompleted })
+	w.wait(func() bool { return w.app.connectionForm.Status == connectionStatusTestCompleted })
 	if checked := connection(); checked.SavedRevision != nil || checked.EffectiveRevision != nil || primary.count() != 1 {
 		t.Fatalf("Test should make one request without saving or applying: %+v, requests=%d", checked, primary.count())
 	}
@@ -280,7 +280,7 @@ func TestPiAppProductConnectionStopAndWorkerLoss(t *testing.T) {
 		t.Fatalf("Save should persist the entered settings without applying: %+v, requests=%d", saved, primary.count())
 	}
 	settingsAction(msg.ConnectionApplySaved())
-	w.wait(func() bool { return w.app.connectionForm.Status == connStatusApplied })
+	w.wait(func() bool { return w.app.connectionForm.Status == connectionStatusApplied })
 	if applied := connection(); !reflect.DeepEqual(saved.SavedRevision, applied.EffectiveRevision) || primary.count() != 1 {
 		t.Fatalf("Apply should activate the saved revision without a request: %+v", applied)
 	}
@@ -320,7 +320,7 @@ func TestPiAppProductConnectionStopAndWorkerLoss(t *testing.T) {
 		t.Fatalf("saving the second endpoint changed the active connection: %+v", pending)
 	}
 	settingsAction(msg.ConnectionApplySaved())
-	w.wait(func() bool { return w.app.connectionForm.Status == connStatusApplied })
+	w.wait(func() bool { return w.app.connectionForm.Status == connectionStatusApplied })
 	applied := connection()
 	if applied.Effective == nil || applied.Effective.BaseURL != secondEndpoint || !reflect.DeepEqual(applied.EffectiveRevision, pending.SavedRevision) {
 		t.Fatalf("the second endpoint did not become effective: %+v", applied)
@@ -407,7 +407,7 @@ func TestPiAppProductConnectionStopAndWorkerLoss(t *testing.T) {
 		if host != nil && host.product != initialClient {
 			w.client = host.product
 		}
-		return w.client != initialClient && w.app.connectionForm.Status == connStatusApplied
+		return w.client != initialClient && w.app.connectionForm.Status == connectionStatusApplied
 	})
 	assertRecovered := func() {
 		t.Helper()

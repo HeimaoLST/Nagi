@@ -13,7 +13,7 @@ import { InMemoryCredentialStore, type AssistantMessage, type UserMessage } from
 import { StdioTransport, StreamableHttpTransport, validateMcpServerConfig, mcpNamespace } from '@earendil-works/pi-mcp';
 import type { TSchema } from 'typebox';
 import {
-  MAX_FRAME, RequestError, Writer, canonicalJSON, frameBytes, maxDraftBytes, message, parseProductRequest, parseRequest,
+  maxFrameBytes, RequestError, Writer, canonicalJSON, frameBytes, maxDraftBytes, message, parseProductRequest, parseRequest,
   type Command, type ConfigureParams, type Connection, type Draft, type OpenParams, type StartParams, type ToolResult,
 } from './protocol.js';
 import { Product, confirmedFileEffect, type ProductRunObservers, type ProductSession } from './product.js';
@@ -24,8 +24,8 @@ import { bindingEntryType as BINDING_TYPE, turnEntryType as TURN_TYPE, liveTrans
   openDiskTranscript, transcriptEntries, type TranscriptOwner } from './product-transcript.js';
 import { clipUTF8, projectionRedactor, streamingProjectionRedactor } from './product-redactor.js';
 
-const CONFIGURATION_TYPE = 'nagi-configuration-v1';
-const MCP_TYPE = 'nagi-mcp-v1';
+const configurationEntryType = 'nagi-configuration-v1';
+const mcpEntryType = 'nagi-mcp-v1';
 const PROVIDER = 'nagi';
 const escapeQuoteMarkup = (text: string) => text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');
 type Binding = Pick<OpenParams, 'contextId' | 'botId' | 'purpose' | 'activityId' | 'selectionRevision' | 'cwd'>;
@@ -230,7 +230,7 @@ class Worker {
     await context.runtime.session.setModel(model);
     this.configureSettings(context.runtime.services.settingsManager, config);
     context.configuration = config;
-    context.manager.appendCustomEntry(CONFIGURATION_TYPE, this.nonsecretConfiguration(config));
+    context.manager.appendCustomEntry(configurationEntryType, this.nonsecretConfiguration(config));
     context.observationSeq++;
   }
   private configureSettings(settings: SettingsManager, params: ConfigureParams): void {
@@ -318,21 +318,21 @@ class Worker {
         if (params.used) throw new RequestError('history_unavailable', 'A used session is missing or empty');
         manager = SessionManager.create(cwd, directory);
         manager.appendCustomEntry(BINDING_TYPE, binding);
-        manager.appendCustomEntry(CONFIGURATION_TYPE, this.nonsecretConfiguration(config));
-        if (mcpBinding.length) manager.appendCustomEntry(MCP_TYPE, mcpBinding);
+        manager.appendCustomEntry(configurationEntryType, this.nonsecretConfiguration(config));
+        if (mcpBinding.length) manager.appendCustomEntry(mcpEntryType, mcpBinding);
       } else {
         if (await realpath(path) !== path) throw new RequestError('invalid_resume', 'Session reference is not canonical');
         if ([...this.contexts.values()].some(context => context.manager.getSessionFile() === path)) throw new RequestError('binding_conflict', 'Session already open');
         manager = SessionManager.open(path, directory, cwd);
         const saved = manager.getEntries().find(entry => entry.type === 'custom' && entry.customType === BINDING_TYPE);
         if (!saved || saved.type !== 'custom' || JSON.stringify(saved.data) !== JSON.stringify(binding)) throw new RequestError('binding_conflict', 'Saved context owner differs');
-        const savedConfig = manager.getEntries().findLast(entry => entry.type === 'custom' && entry.customType === CONFIGURATION_TYPE);
+        const savedConfig = manager.getEntries().findLast(entry => entry.type === 'custom' && entry.customType === configurationEntryType);
         if (!savedConfig || savedConfig.type !== 'custom') throw new RequestError('binding_conflict', 'The saved context is missing its captured configuration');
         publishConfiguration = canonicalJSON(savedConfig.data) !== canonicalJSON(this.nonsecretConfiguration(config));
         if (publishConfiguration && !(productTools.length && params.purpose === 'conversation' && config.thinkingLevel !== undefined)) {
           throw new RequestError('binding_conflict', 'Captured connection configuration differs from the saved context');
         }
-        const savedMcp = manager.getEntries().findLast(entry => entry.type === 'custom' && entry.customType === MCP_TYPE);
+        const savedMcp = manager.getEntries().findLast(entry => entry.type === 'custom' && entry.customType === mcpEntryType);
         if (JSON.stringify(savedMcp?.type === 'custom' ? savedMcp.data : []) !== JSON.stringify(mcpBinding)) throw new RequestError('binding_conflict', 'Captured MCP sources differ from the saved context');
         used = used || manager.getEntries().some(entry => entry.type === 'message');
       }
@@ -340,8 +340,8 @@ class Worker {
       if (params.used) throw new RequestError('history_unavailable', 'A used context requires its session reference');
       manager = SessionManager.create(cwd, directory);
       manager.appendCustomEntry(BINDING_TYPE, binding);
-      manager.appendCustomEntry(CONFIGURATION_TYPE, this.nonsecretConfiguration(config));
-      if (mcpBinding.length) manager.appendCustomEntry(MCP_TYPE, mcpBinding);
+      manager.appendCustomEntry(configurationEntryType, this.nonsecretConfiguration(config));
+      if (mcpBinding.length) manager.appendCustomEntry(mcpEntryType, mcpBinding);
     }
     const models = await ModelRuntime.create({ credentials: new InMemoryCredentialStore(), modelsPath: null, allowModelNetwork: false, refreshOnCreate: false });
     const foreground = productTools.length > 0 && params.purpose === 'conversation';
@@ -472,7 +472,7 @@ class Worker {
     try {
       run.product?.observers.authorizeProvider?.();
       if (context.publishConfiguration) {
-        context.manager.appendCustomEntry(CONFIGURATION_TYPE, this.nonsecretConfiguration(context.configuration));
+        context.manager.appendCustomEntry(configurationEntryType, this.nonsecretConfiguration(context.configuration));
         context.publishConfiguration = false;
       }
       const draft = run.product?.draft;
@@ -680,7 +680,7 @@ class Worker {
     do {
       const nextCursor = offset + page.length < entries.length ? page.at(-1)?.id : undefined;
       result = { contextId: context.binding.contextId, sessionRef: context.manager.getSessionFile(), entries: page, ...(nextCursor ? { nextCursor } : {}), projection: metadata };
-      if (frameBytes({ v: 1, type: 'response', id: 'history', ok: true, result }) < MAX_FRAME - 1024) return result;
+      if (frameBytes({ v: 1, type: 'response', id: 'history', ok: true, result }) < maxFrameBytes - 1024) return result;
       page.pop();
     } while (page.length);
     throw new RequestError('entry_too_large', 'A history entry exceeds the frame limit');
@@ -695,7 +695,7 @@ class Worker {
       ...(context.active ? { activeRun: { runId: context.active.id, cancelRequested: context.active.cancelled } } : {}),
       observationSeq: context.observationSeq, capturedAt: new Date().toISOString(), complete: true,
     };
-    if (frameBytes(result) > MAX_FRAME - 1024) throw new RequestError('snapshot_too_large', 'Complete context exceeds frame limit; use paged history');
+    if (frameBytes(result) > maxFrameBytes - 1024) throw new RequestError('snapshot_too_large', 'Complete context exceeds frame limit; use paged history');
     return result;
   }
   private async handle(id: string, command: Command): Promise<void> {
@@ -795,13 +795,13 @@ class Worker {
         partial = Buffer.concat([partial, Buffer.from(chunk)]);
         let newline: number;
         while ((newline = partial.indexOf(10)) >= 0) {
-          if (newline + 1 > MAX_FRAME) throw new Error('Input frame limit exceeded');
+          if (newline + 1 > maxFrameBytes) throw new Error('Input frame limit exceeded');
           const data = partial.subarray(0, newline);
           partial = partial.subarray(newline + 1);
           commands = commands.then(() => this.handleFrame(data));
           commands = commands.catch(() => this.disconnect(true));
         }
-        if (partial.length >= MAX_FRAME) throw new Error('Input frame limit exceeded');
+        if (partial.length >= maxFrameBytes) throw new Error('Input frame limit exceeded');
       }
       if (partial.length) throw new Error('Partial JSONL at EOF');
       await commands;

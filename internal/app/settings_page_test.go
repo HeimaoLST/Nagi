@@ -330,9 +330,9 @@ func TestSettingsConnectionEditorsSurviveNavigationAndLocale(t *testing.T) {
 		t.Fatal(err)
 	}
 	form.Draft.Slots = "invalid slots"
-	form.Errors = map[string]string{"MaxActiveTasks": validationNumeric}
-	form.Error, form.ErrorDetail = connErrorTestFailed, "original failure detail"
-	form.Status = connStatusTestCompleted
+	form.Errors = map[string]string{"MaxActiveTasks": connectionValidationNumeric}
+	form.Error, form.ErrorDetail = connectionErrorTestFailed, "original failure detail"
+	form.Status = connectionStatusTestCompleted
 	form.StatusArgs = []string{"tested-model", "https://tested.example.invalid", "1000", "100"}
 	draft := form.Draft
 	a.selectSettingsTab(settingsTabAppearance)
@@ -347,7 +347,7 @@ func TestSettingsConnectionEditorsSurviveNavigationAndLocale(t *testing.T) {
 	tr.Frame()
 	tr.SetLocale("en")
 	tr.Frame()
-	if a.connectionForm != form || form.Draft != draft || form.ErrorDetail != "original failure detail" || form.Status != connStatusTestCompleted || form.Errors["MaxActiveTasks"] != validationNumeric || !form.Dirty() || !a.connectionSavedPending() {
+	if a.connectionForm != form || form.Draft != draft || form.ErrorDetail != "original failure detail" || form.Status != connectionStatusTestCompleted || form.Errors["MaxActiveTasks"] != connectionValidationNumeric || !form.Dirty() || !a.connectionSavedPending() {
 		t.Fatal("navigation/locale replaced the form, raw edits or independent feedback")
 	}
 	if *a.connectionSaved != saved || *a.connectionEffective != effective || a.pi != nil || ct.SessionID != "s1" || ct.Draft != "keep conversation text" {

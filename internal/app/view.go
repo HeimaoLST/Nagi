@@ -27,7 +27,7 @@ func messageReaderOptions(c *ui.Context, plain bool) markdownReaderOptions {
 
 func (a *appModel) view(c *ui.Context) {
 	a.uiLocale = c.Locale()
-	if form := a.connectionForm; form != nil && form.Error == connStatusSavedStoreFailed && a.store != nil && a.localSaveErr == "" {
+	if form := a.connectionForm; form != nil && form.Error == connectionStatusSavedStoreFailed && a.store != nil && a.localSaveErr == "" {
 		form.Error, form.ErrorDetail = "", ""
 		form.RecoveryDetailsOpen = false
 	}

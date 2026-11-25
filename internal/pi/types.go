@@ -22,7 +22,6 @@ type Handlers struct {
 const (
 	ProtocolVersion = 1
 	MaxFrameBytes   = 8 * 1024 * 1024
-	SDKVersion      = "1.5.2"
 )
 
 type WireAPI string

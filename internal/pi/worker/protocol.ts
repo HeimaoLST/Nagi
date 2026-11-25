@@ -6,7 +6,7 @@ import { memoryChangedSchema, memoryDate, memoryRuleSchema, memorySearchLimit, m
   pendingLearningSchema, workLogSchema } from './bot-memory.js';
 import { activityRouting, discoveredModel, modelCapabilities, policySchema, providerAccountView, providerInput, routeSchema, thinkingSchema } from './model-router.js';
 
-export const MAX_FRAME = 8 * 1024 * 1024;
+export const maxFrameBytes = 8 * 1024 * 1024;
 export const id = Type.String({ minLength: 1 });
 const stringList = Type.Array(Type.String());
 const target = { contextId: id, runId: id };
@@ -30,12 +30,12 @@ export const codingToolPresets = {
 };
 export const toolPresetSchema = Type.Union([Type.Literal('none'), Type.Literal('readonly'), Type.Literal('workspace')]);
 export const skillSlugPattern = '^[a-z0-9][a-z0-9-]{0,62}$';
-export const skillID = Type.String({ pattern: skillSlugPattern });
+export const skillId = Type.String({ pattern: skillSlugPattern });
 const digest = Type.String({ pattern: '^[a-f0-9]{64}$' });
 const externalSkillSource = Type.Union([Type.Literal('global'), Type.Literal('workspace'), Type.Literal('local')]);
 export const writableSkillSource = Type.Union([Type.Literal('global'), Type.Literal('private')]);
 export const skillSource = Type.Union([externalSkillSource, Type.Literal('private')]);
-const mountedSkill = Type.Object({ source: externalSkillSource, skillId: skillID, expectedDigest: Type.Optional(digest) }, { additionalProperties: false });
+const mountedSkill = Type.Object({ source: externalSkillSource, skillId: skillId, expectedDigest: Type.Optional(digest) }, { additionalProperties: false });
 export const skillText = { name: Type.String({ minLength: 1, maxLength: 128 }), description: Type.String({ minLength: 1, maxLength: 256 }),
   content: Type.String({ maxLength: 32768 }) };
 const skillStrict = { additionalProperties: false };
@@ -51,7 +51,7 @@ export const skillExecutable = { manifest: Type.Optional(Type.Union([skillManife
   scripts: Type.Optional(Type.Record(skillScriptPath, Type.String({ maxLength: 65536 }), { maxProperties: 8 })) };
 const skillApprovalMode = Type.Union([Type.Literal('pure_compute_tested'), Type.Literal('user_approved')]);
 const skillApprovalStatus = Type.Union([Type.Literal('none'), skillApprovalMode, Type.Literal('approval_required')]);
-export const skillApprovalRecord = Type.Object({ grantKey: digest, ownerBotId: id, source: skillSource, skillId: skillID,
+export const skillApprovalRecord = Type.Object({ grantKey: digest, ownerBotId: id, source: skillSource, skillId: skillId,
   approvalDigest: digest, permissionsDigest: digest, mode: skillApprovalMode, installationId: id, approvedAt: id,
   testedScripts: Type.Optional(Type.Array(skillScriptName, { maxItems: 8, uniqueItems: true })),
   credentialRefs: Type.Optional(Type.Array(id, { maxItems: 128, uniqueItems: true })) }, skillStrict);
@@ -60,8 +60,8 @@ export type SkillPermissions = Static<typeof skillPermissions>;
 export type SkillApproval = Static<typeof skillApprovalRecord>;
 const skillReview = { scripts: Type.Optional(skillScripts), approvalDigest: Type.Optional(digest), approvalStatus: Type.Optional(skillApprovalStatus),
   canonicalWorkspace: Type.Optional(Type.String()), permissionsDigest: Type.Optional(digest), testedScripts: Type.Optional(Type.Array(skillScriptName, { maxItems: 8 })) };
-const skillKey = { source: skillSource, botId: Type.Optional(id), skillId: skillID };
-const skillSummary = Type.Object({ source: skillSource, skillId: skillID, name: id, description: id, sha256: digest, ...skillReview });
+const skillKey = { source: skillSource, botId: Type.Optional(id), skillId: skillId };
+const skillSummary = Type.Object({ source: skillSource, skillId: skillId, name: id, description: id, sha256: digest, ...skillReview });
 const skillDetail = Type.Object({ ...skillSummary.properties, content: Type.String(), markdown: Type.String(),
   files: Type.Optional(Type.Record(Type.Union([Type.Literal('SKILL.md'), Type.Literal('manifest.json'), skillScriptPath]), Type.String(), { maxProperties: 10 })) });
 const skillListing = Type.Object({ global: Type.Array(skillSummary), workspace: Type.Array(skillSummary), local: Type.Array(skillSummary),
@@ -76,7 +76,7 @@ export type SkillListing = Static<typeof skillListing>;
 export type SkillChange = Static<typeof skillChange>;
 
 export const skillApprovalRequestSchema = Type.Object({ requestId: id, botId: id, activityId: id, executionId: id, callId: id,
-  source: skillSource, skillId: skillID, script: skillScriptName, approvalDigest: digest, permissionsDigest: digest,
+  source: skillSource, skillId: skillId, script: skillScriptName, approvalDigest: digest, permissionsDigest: digest,
   canonicalWorkspace: id, installationId: id, permissions: skillPermissions, revision: positiveInteger, createdAt: id,
   state: Type.Union([Type.Literal('open'), Type.Literal('approved'), Type.Literal('denied'), Type.Literal('expired'), Type.Literal('cancelled')]),
   reason: Type.Optional(Type.String({ maxLength: 512 })) }, skillStrict);
@@ -261,14 +261,14 @@ export const productCommands = Type.Union([
   Type.Object({ method: Type.Literal('skill.get'), params: Type.Object(skillKey, { additionalProperties: false }) }),
   Type.Object({ method: Type.Literal('skill.save'), params: Type.Object({ ...skillKey, source: writableSkillSource, ...skillText, ...skillExecutable, operationId: id }, skillStrict) }),
   Type.Object({ method: Type.Literal('skill.delete'), params: Type.Object({ ...skillKey, source: writableSkillSource, operationId: id }, { additionalProperties: false }) }),
-  Type.Object({ method: Type.Literal('skill.promoteGlobal'), params: Type.Object({ botId: id, skillId: skillID, targetSkillId: Type.Optional(skillID), operationId: id }, { additionalProperties: false }) }),
+  Type.Object({ method: Type.Literal('skill.promoteGlobal'), params: Type.Object({ botId: id, skillId: skillId, targetSkillId: Type.Optional(skillId), operationId: id }, { additionalProperties: false }) }),
   Type.Object({ method: Type.Literal('skill.setPreferences'), params: Type.Object({ discoverLocalSkills: Type.Boolean(), operationId: id }, { additionalProperties: false }) }),
-  Type.Object({ method: Type.Literal('skill.approve'), params: Type.Object({ source: skillSource, botId: id, skillId: skillID, approvalDigest: digest,
+  Type.Object({ method: Type.Literal('skill.approve'), params: Type.Object({ source: skillSource, botId: id, skillId: skillId, approvalDigest: digest,
     permissionsDigest: Type.Optional(digest), requestId: Type.Optional(id), requestRevision: Type.Optional(positiveInteger),
     canonicalWorkspace: Type.Optional(id), installationId: Type.Optional(id), operationId: id }, skillStrict) }),
   Type.Object({ method: Type.Literal('skill.denyApprovalRequest'), params: Type.Object({ requestId: id, requestRevision: positiveInteger,
     operationId: id, reason: Type.Optional(Type.String({ maxLength: 512 })) }, skillStrict) }),
-  Type.Object({ method: Type.Literal('skill.revokeApproval'), params: Type.Object({ source: skillSource, botId: id, skillId: skillID, operationId: id }, skillStrict) }),
+  Type.Object({ method: Type.Literal('skill.revokeApproval'), params: Type.Object({ source: skillSource, botId: id, skillId: skillId, operationId: id }, skillStrict) }),
   Type.Object({ method: Type.Literal('conversation.list'), params: Type.Object({ botId: id, ...page }) }),
   Type.Object({ method: Type.Literal('conversation.get'), params: Type.Object({ conversationId: id }) }),
   Type.Object({ method: Type.Literal('conversation.saveDraft'), params: Type.Object({
@@ -539,8 +539,8 @@ export class Writer {
   }
   send(value: object): Promise<void> {
     const data = Buffer.from(JSON.stringify(value) + '\n');
-    if (data.length > MAX_FRAME) throw new RequestError('frame_too_large', 'Result exceeds protocol frame limit');
-    if (this.failed || this.queued + data.length > 4 * MAX_FRAME) {
+    if (data.length > maxFrameBytes) throw new RequestError('frame_too_large', 'Result exceeds protocol frame limit');
+    if (this.failed || this.queued + data.length > 4 * maxFrameBytes) {
       this.fail();
       return Promise.reject(new Error('Protocol output unavailable'));
     }

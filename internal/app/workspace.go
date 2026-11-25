@@ -20,13 +20,8 @@ import (
 type workState string
 
 const (
-	workAccepted    workState = "accepted"
-	workRunning     workState = "running"
-	workStopping    workState = "stopping"
-	workCompleted   workState = "completed"
-	workFailed      workState = "failed"
-	workInterrupted workState = "interrupted"
-	workUnknown     workState = "unknown"
+	workAccepted workState = "accepted"
+	workRunning  workState = "running"
 )
 
 type workTool struct {

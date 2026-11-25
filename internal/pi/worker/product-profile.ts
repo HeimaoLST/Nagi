@@ -13,7 +13,7 @@ import { activityLifecycleFields, activityProgressRecord, activitySteerReceipt, 
   maxDraftBytes, questionResult, skillApprovalRecord, skillApprovalRequestSchema, triageAccounting as triageSchema,
   optionDescriptionBytes, optionLabelBytes, questionTextBytes, type ActivityProgressRecord, type ActivitySteerRecord,
   type SkillApproval, type SkillApprovalRequest, type TriageAccounting } from './protocol.js';
-import { lastingRulesFit, MAX_LOG_BYTES, MAX_PENDING_LEARNINGS, MAX_RULE_BYTES, MAX_WORK_LOGS,
+import { lastingRulesFit, maxLogBytes, maxPendingLearnings, maxRuleBytes, maxWorkLogs,
   memorySnapshotSchema, validMemoryDate } from './bot-memory.js';
 import { decodeTraceBackup, directlyOwns, normalizeActivityGrants, type TraceBackup } from './product-trace.js';
 import { backupSkillFiles, bundleDigest, executableBundle, privateSkillBundleSchema, pureSkill, skillGrantKey, validateSkillBundles, type PrivateSkillBundle } from './bot-skills.js';
@@ -88,49 +88,49 @@ type OldProfile = {
   layout?: object; theme_ids?: object; appearance?: string;
 };
 
-const recoveryID = Type.String({ minLength: 1 });
+const recoveryId = Type.String({ minLength: 1 });
 const counter = Type.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER });
 const revisionRef = Type.Union([counter, Type.Null()]);
 const opaque = Type.Record(Type.String(), Type.Unknown());
 const strict = { additionalProperties: false };
-const bindingSchema = Type.Object({ contextId: recoveryID, sessionRef: recoveryID, connectionRevision: Type.Optional(counter), route: Type.Optional(capturedRoute),
-  profileRevision: counter, cwd: recoveryID, instructions: Type.String(), codingTools: profileSchema.properties.codingTools,
-  used: Type.Boolean(), memoryRulesRevision: Type.Optional(counter), lastTurnAt: Type.Optional(recoveryID) }, strict);
+const bindingSchema = Type.Object({ contextId: recoveryId, sessionRef: recoveryId, connectionRevision: Type.Optional(counter), route: Type.Optional(capturedRoute),
+  profileRevision: counter, cwd: recoveryId, instructions: Type.String(), codingTools: profileSchema.properties.codingTools,
+  used: Type.Boolean(), memoryRulesRevision: Type.Optional(counter), lastTurnAt: Type.Optional(recoveryId) }, strict);
 const privateSkillBundles = Type.Array(privateSkillBundleSchema, { maxItems: 8192 });
-const executionRecord = Type.Object({ ...executionSchema.properties, operationId: recoveryID,
-  input: draftSchema, error: Type.Optional(Type.String()), engineRunId: Type.Optional(recoveryID),
-  importedActivityId: Type.Optional(recoveryID), retained: Type.Optional(opaque) }, strict);
+const executionRecord = Type.Object({ ...executionSchema.properties, operationId: recoveryId,
+  input: draftSchema, error: Type.Optional(Type.String()), engineRunId: Type.Optional(recoveryId),
+  importedActivityId: Type.Optional(recoveryId), retained: Type.Optional(opaque) }, strict);
 const questionRecord = Type.Object({ ...questionResult.properties, triageRulesRevision: Type.Optional(counter) }, strict);
-const activityRecord = Type.Object({ activityId: recoveryID, ownerBotId: recoveryID, originConversationId: recoveryID,
+const activityRecord = Type.Object({ activityId: recoveryId, ownerBotId: recoveryId, originConversationId: recoveryId,
   routing: Type.Optional(activityRouting),
   revision: counter, state: activityStateSchema, goal: Type.String(), requirements: Type.Array(Type.String()),
   ...activityLifecycleFields,
-  updatedAt: Type.Optional(recoveryID),
+  updatedAt: Type.Optional(recoveryId),
   questions: Type.Array(questionRecord), materials: Type.Array(materialSchema), inputFiles: Type.Array(Type.String()),
-  executionIds: Type.Array(recoveryID), binding: Type.Optional(bindingSchema), retained: Type.Optional(opaque),
-  grantedLinkedActivityIds: Type.Optional(Type.Array(recoveryID)),
-  results: Type.Array(Type.Object({ activityId: recoveryID, executionId: recoveryID, text: Type.String(), delivery: Type.Literal('available'),
-    files: Type.Array(Type.Object({ path: recoveryID, callId: recoveryID }, strict)) }, strict)) }, strict);
-const recoveryUISchema = Type.Object({ selected: Type.Optional(recoveryID), layout: opaque, themeIds: opaque,
-  appearance: Type.Optional(Type.String()), recoveryId: Type.Optional(recoveryID),
+  executionIds: Type.Array(recoveryId), binding: Type.Optional(bindingSchema), retained: Type.Optional(opaque),
+  grantedLinkedActivityIds: Type.Optional(Type.Array(recoveryId)),
+  results: Type.Array(Type.Object({ activityId: recoveryId, executionId: recoveryId, text: Type.String(), delivery: Type.Literal('available'),
+    files: Type.Array(Type.Object({ path: recoveryId, callId: recoveryId }, strict)) }, strict)) }, strict);
+const recoveryUISchema = Type.Object({ selected: Type.Optional(recoveryId), layout: opaque, themeIds: opaque,
+  appearance: Type.Optional(Type.String()), recoveryId: Type.Optional(recoveryId),
   hideBuiltinArchitect: Type.Optional(Type.Boolean()),
-  pending: Type.Optional(Type.Record(recoveryID, Type.Object({ conversationId: recoveryID, operationId: recoveryID }, strict))),
-  pending_activities: Type.Optional(Type.Record(recoveryID, Type.Object({ operation_id: recoveryID, bot_id: recoveryID, activity_id: recoveryID,
+  pending: Type.Optional(Type.Record(recoveryId, Type.Object({ conversationId: recoveryId, operationId: recoveryId }, strict))),
+  pending_activities: Type.Optional(Type.Record(recoveryId, Type.Object({ operation_id: recoveryId, bot_id: recoveryId, activity_id: recoveryId,
     action: Type.Union([Type.Literal('continue'), Type.Literal('answer'), Type.Literal('stop')]), revision: counter,
-    execution_id: Type.Optional(recoveryID), question_id: Type.Optional(recoveryID), text: Type.Optional(Type.String()),
+    execution_id: Type.Optional(recoveryId), question_id: Type.Optional(recoveryId), text: Type.Optional(Type.String()),
     materials: Type.Optional(Type.Array(materialSchema)) }, strict))) }, strict);
 const savedProfileSchema = Type.Object({ version: Type.Literal(1),
-  bots: Type.Array(Type.Object({ botId: recoveryID, profile: profileSchema, profileRevision: counter, archived: Type.Boolean(),
-    currentConversationId: recoveryID, systemKind: Type.Optional(botSystemKindSchema), retained: Type.Optional(opaque) }, strict)),
-  conversations: Type.Array(Type.Object({ conversationId: recoveryID, botId: recoveryID, revision: counter, draft: draftSchema,
-    binding: Type.Optional(bindingSchema), latestExecutionId: Type.Optional(recoveryID) }, strict)),
+  bots: Type.Array(Type.Object({ botId: recoveryId, profile: profileSchema, profileRevision: counter, archived: Type.Boolean(),
+    currentConversationId: recoveryId, systemKind: Type.Optional(botSystemKindSchema), retained: Type.Optional(opaque) }, strict)),
+  conversations: Type.Array(Type.Object({ conversationId: recoveryId, botId: recoveryId, revision: counter, draft: draftSchema,
+    binding: Type.Optional(bindingSchema), latestExecutionId: Type.Optional(recoveryId) }, strict)),
   activities: Type.Array(activityRecord), executions: Type.Array(executionRecord),
-  operations: Type.Array(Type.Object({ method: recoveryID, fingerprint: Type.String(), receipt: operationSchema, reply: opaque,
-    replyError: Type.Optional(Type.Object({ code: recoveryID, message: Type.String(), details: Type.Optional(opaque) }, strict)),
+  operations: Type.Array(Type.Object({ method: recoveryId, fingerprint: Type.String(), receipt: operationSchema, reply: opaque,
+    replyError: Type.Optional(Type.Object({ code: recoveryId, message: Type.String(), details: Type.Optional(opaque) }, strict)),
     connectionRevision: Type.Optional(counter), retained: Type.Optional(opaque) }, strict)),
-  connections: Type.Array(Type.Object({ revision: counter, sourceId: recoveryID, configuration: Type.Omit(connectionSchema, ['apiKey'], strict) }, strict)),
+  connections: Type.Array(Type.Object({ revision: counter, sourceId: recoveryId, configuration: Type.Omit(connectionSchema, ['apiKey'], strict) }, strict)),
   savedRevision: revisionRef, appliedRevision: revisionRef,
-  preferences: Type.Optional(Type.Object({ selectedBotId: Type.Optional(recoveryID), layout: Type.Optional(opaque),
+  preferences: Type.Optional(Type.Object({ selectedBotId: Type.Optional(recoveryId), layout: Type.Optional(opaque),
     themeIds: Type.Optional(opaque), appearance: Type.Optional(Type.String()), hideBuiltinArchitect: Type.Optional(Type.Boolean()),
     discoverLocalSkills: Type.Optional(Type.Boolean()) }, strict)),
   mcpServers: Type.Optional(Type.Array(mcpServerRecord, { maxItems: maxMcpServers })),
@@ -139,7 +139,7 @@ const savedProfileSchema = Type.Object({ version: Type.Literal(1),
   routingPolicy: Type.Optional(policySchema), providerEffectivePolicy: Type.Optional(policySchema),
   providerSavedRevision: Type.Optional(counter), providerEffectiveRevision: Type.Optional(counter),
   issueToolScopes: Type.Optional(Type.Array(opaque)), untargetedReceipts: Type.Optional(Type.Array(opaque)),
-  recovery: Type.Optional(Type.Object({ id: recoveryID, ui: Type.Optional(recoveryUISchema) }, strict)),
+  recovery: Type.Optional(Type.Object({ id: recoveryId, ui: Type.Optional(recoveryUISchema) }, strict)),
   memory: Type.Optional(memorySnapshotSchema),
 }, strict);
 
@@ -288,8 +288,8 @@ export function decodeProductProfile(data: unknown): ProductProfile {
       return !owner || ('conversationId' in owner ? owner.botId : owner.ownerBotId) !== row.botId;
     };
     if (knownMeta.size !== meta.length || meta.some(foreign) ||
-        new Set(rules.map(row => row.ruleId)).size !== rules.length || rules.some(row => foreign(row) || Buffer.byteLength(row.text) > MAX_RULE_BYTES) ||
-        new Set(workLogs.map(row => row.logId)).size !== workLogs.length || workLogs.some(row => foreign(row) || !validMemoryDate(row.date) || Buffer.byteLength(row.summary) > MAX_LOG_BYTES) ||
+        new Set(rules.map(row => row.ruleId)).size !== rules.length || rules.some(row => foreign(row) || Buffer.byteLength(row.text) > maxRuleBytes) ||
+        new Set(workLogs.map(row => row.logId)).size !== workLogs.length || workLogs.some(row => foreign(row) || !validMemoryDate(row.date) || Buffer.byteLength(row.summary) > maxLogBytes) ||
         new Set(pendingLearnings.map(row => row.learningId)).size !== pendingLearnings.length ||
         pendingLearnings.some(row => foreign(row) || (row.state === 'pending') !== (row.reviewedAt === undefined))) invalid();
     const rulesByBot = Map.groupBy(rules, row => row.botId);
@@ -298,8 +298,8 @@ export function decodeProductProfile(data: unknown): ProductProfile {
     for (const [botId, owned] of rulesByBot) {
       if (!knownMeta.get(botId)?.rulesRevision || !lastingRulesFit(owned)) invalid();
     }
-    if ([...logsByBot.values()].some(items => items.length > MAX_WORK_LOGS) ||
-        [...pendingByBot.values()].some(items => items.length > MAX_PENDING_LEARNINGS)) invalid();
+    if ([...logsByBot.values()].some(items => items.length > maxWorkLogs) ||
+        [...pendingByBot.values()].some(items => items.length > maxPendingLearnings)) invalid();
     for (const target of [...data.conversations, ...data.activities]) {
       const botId = 'botId' in target ? target.botId : target.ownerBotId;
       if ((target.binding?.memoryRulesRevision ?? 0) > (knownMeta.get(botId)?.rulesRevision ?? 0)) invalid();
@@ -529,14 +529,14 @@ export function readPrivateConnection(path: string): PrivateConnection | undefin
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
     return;
   }
-  const legacy = Type.Object({ credential_source: recoveryID, model: recoveryID, context_tokens: counter, output_tokens: counter,
-    working_directory: recoveryID, max_active_tasks: counter });
+  const legacy = Type.Object({ credential_source: recoveryId, model: recoveryId, context_tokens: counter, output_tokens: counter,
+    working_directory: recoveryId, max_active_tasks: counter });
   const source = Type.Object({ api: Type.Union([Type.Literal('openai-responses'), Type.Literal('openai-chat-completions')]),
-    endpoint: recoveryID, api_key: Type.String() });
+    endpoint: recoveryId, api_key: Type.String() });
   const sources = Type.Record(Type.String(), source);
   const v2 = Type.Object({ version: Type.Literal(2), ...legacy.properties, sources });
   const v3 = Type.Object({ version: Type.Literal(3), ...Type.Partial(legacy).properties, sources: Type.Optional(sources),
-    publicationId: Type.Optional(recoveryID), accounts: Type.Array(Type.Object({ ...privateProviderAccount.properties, apiKey: recoveryID }, strict)) });
+    publicationId: Type.Optional(recoveryId), accounts: Type.Array(Type.Object({ ...privateProviderAccount.properties, apiKey: recoveryId }, strict)) });
   if (Value.Check(v2, data)) return data;
   if (Value.Check(v3, data) && data.accounts.every(validProvider) &&
       new Set(data.accounts.map(row => row.credentialSourceId)).size === data.accounts.length) return { ...data, sources: data.sources ?? {} };

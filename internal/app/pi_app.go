@@ -823,7 +823,7 @@ func (a *appModel) observeProductExit(host *piAppHost) {
 func (a *appModel) reopenProductConnection(host *piAppHost, config *connectionConfig, apply bool) {
 	form := a.connectionForm
 	form.Busy, a.connectionApplying = true, true
-	form.Status = connStatusChecking
+	form.Status = connectionStatusChecking
 	form.Error, form.ErrorDetail, form.ReloadBlocked = "", "", ""
 	generation := a.connectionGeneration + 1
 	go func() {
@@ -857,7 +857,7 @@ func (a *appModel) reopenProductConnection(host *piAppHost, config *connectionCo
 					case apply && a.connectionSaved == nil:
 						a.connectionForm.ReloadBlocked = connBlockedNoSaved
 					case apply:
-						a.connectionForm.Status = connStatusApplied
+						a.connectionForm.Status = connectionStatusApplied
 					}
 				}
 			}

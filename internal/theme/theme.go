@@ -37,7 +37,6 @@ const (
 	PreferenceSelectMaxWidth float32 = 160
 	LineBody                 float32 = 24
 	CSSRem                   float32 = 16
-	ControlHeight            float32 = 28
 	ControlHit               float32 = 32
 	TypeSettingsTitle        float32 = 22
 	LineSettingsTitle        float32 = 28
@@ -45,10 +44,6 @@ const (
 	LineForm                 float32 = 20
 	TypeHeaderMeta           float32 = 12
 	LineHeader               float32 = 16
-	MenuCompactRadius        float32 = 6
-	MenuCompactPadding       float32 = 6
-	MenuCompactGap           float32 = 6
-	GlyphMenu                float32 = 14
 	ConversationMaxWidth     float32 = 768
 	UserMessageMaxWidth      float32 = 752
 	TypeLabel                float32 = 14

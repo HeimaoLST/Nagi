@@ -1,7 +1,7 @@
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { Type, type Static, type TSchema } from 'typebox';
 import { Value } from 'typebox/value';
-import { RequestError, skillID, toolPresetSchema, type BotProfile } from './protocol.js';
+import { RequestError, skillId, toolPresetSchema, type BotProfile } from './protocol.js';
 import type { ToolTextResult } from './product-effects.js';
 
 export const architectProfile: BotProfile = {
@@ -17,7 +17,7 @@ export const architectProfile: BotProfile = {
 const requiredText = Type.String({ minLength: 1, pattern: '\\S' });
 const architectCapabilities = {
   tool_preset: Type.Optional(toolPresetSchema),
-  skill_ids: Type.Optional(Type.Array(skillID, { maxItems: 200 })),
+  skill_ids: Type.Optional(Type.Array(skillId, { maxItems: 200 })),
 };
 
 export const architectInspectSchema = Type.Object({}, { additionalProperties: false });

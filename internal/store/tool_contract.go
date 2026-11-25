@@ -5,15 +5,7 @@ import (
 	"strings"
 )
 
-const (
-	IssueToolActionCreate        = "create"
-	IssueToolActionUpdate        = "update"
-	IssueToolActionRun           = "run"
-	IssueToolActionStop          = "stop"
-	IssueToolActionAddSupplement = "add_supplement"
-	IssueToolActionWait          = "wait"
-	IssueToolActionResume        = "resume"
-)
+const IssueToolActionCreate = "create"
 
 const (
 	IssueToolReceiptSaved         = "saved"
@@ -28,10 +20,7 @@ var (
 	ErrIssueToolReceiptIDsMissing = errors.New("accepted issue tool receipt lacks an admitted Pi run")
 )
 
-const (
-	IssueToolModeConversation = "conversation"
-	IssueToolModeWork         = "work"
-)
+const IssueToolModeWork = "work"
 
 // IssueToolScope is issued before a Runtime task exists. TurnID is the stable
 // app-issued user-turn/intent identity; RuntimeTaskID may be attached later and

@@ -205,10 +205,10 @@ func startProductProcess(t *testing.T, options pi.ProductOptions) *productProces
 	t.Helper()
 	process := &productProcess{events: make(chan pi.ProductEvent, 128), problems: make(chan error, 8), exits: make(chan pi.ProcessOutcome, 1)}
 	options.Handlers = pi.ProductHandlers{
-		OnEvent:       func(event pi.ProductEvent) { process.events <- event },
-		OnProtocolErr: func(err error) { process.problems <- err },
-		OnStreamGap:   func() { process.problems <- pi.ErrProductStreamGap },
-		OnExit:        func(outcome pi.ProcessOutcome) { process.exits <- outcome },
+		OnEvent:         func(event pi.ProductEvent) { process.events <- event },
+		OnProtocolError: func(err error) { process.problems <- err },
+		OnStreamGap:     func() { process.problems <- pi.ErrProductStreamGap },
+		OnExit:          func(outcome pi.ProcessOutcome) { process.exits <- outcome },
 	}
 	client, err := pi.StartProduct(options)
 	if err != nil {

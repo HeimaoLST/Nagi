@@ -66,10 +66,10 @@ func newRuntimeApp() (*appModel, error) {
 	a.bindTaskContexts()
 	a.normalizeRestoredSupplementBatches()
 	if a.activityToolLedger == nil {
-		a.activityToolLedger = &ActivityToolOperationLedger{}
+		a.activityToolLedger = &activityToolOperationLedger{}
 	}
 	if a.activityToolScopes == nil {
-		a.activityToolScopes = map[string]ActivityToolScope{}
+		a.activityToolScopes = map[string]activityToolScope{}
 	}
 	formConfig := startup.Config
 	if formConfig == nil {
@@ -80,7 +80,7 @@ func newRuntimeApp() (*appModel, error) {
 		a.connectionForm.HasSaved = false
 		switch {
 		case startup.LoadErr != nil:
-			a.connectionForm.Error = connErrorSavedNeedsRepair
+			a.connectionForm.Error = connectionErrorSavedNeedsRepair
 			a.connectionForm.ErrorDetail = ""
 			a.runtimeStatus = runtimeStateFailed
 			a.runtimeStage = "Connection configuration"

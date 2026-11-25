@@ -7,7 +7,7 @@ import { parseFrontmatter } from '@earendil-works/pi-coding-agent';
 import { Type, type Static } from 'typebox';
 import { Value } from 'typebox/value';
 import { clipUTF8 } from './product-redactor.js';
-import { canonicalJSON, id, RequestError, skillID, skillManifest, skillScriptPath, skillSlugPattern,
+import { canonicalJSON, id, RequestError, skillId, skillManifest, skillScriptPath, skillSlugPattern,
   type BotProfile, type SkillApproval, type SkillDetail, type SkillListing, type SkillManifest, type SkillPermissions, type SkillSource } from './protocol.js';
 
 const maxSkillBytes = 32 * 1024;
@@ -25,7 +25,7 @@ const strict = { additionalProperties: false };
 
 const backupFileFields = { byteLength: Type.Integer({ minimum: 0, maximum: maxScriptBytes }), sha256: Type.String({ pattern: '^[a-f0-9]{64}$' }),
   content: Type.String({ maxLength: maxScriptBytes }) };
-export const privateSkillBundleSchema = Type.Object({ ownerBotId: id, skillId: skillID, relativePath: Type.Literal('SKILL.md'),
+export const privateSkillBundleSchema = Type.Object({ ownerBotId: id, skillId: skillId, relativePath: Type.Literal('SKILL.md'),
   ...backupFileFields, files: Type.Optional(Type.Array(Type.Object({ relativePath: Type.Union([Type.Literal('manifest.json'), skillScriptPath]),
     ...backupFileFields }, strict), { maxItems: 9 })),
 }, strict);

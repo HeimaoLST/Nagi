@@ -10,7 +10,7 @@ import (
 	"github.com/HeimaoLST/Nagi/internal/pi"
 )
 
-func attachIssueToolTestExecution(issue *productActivity) {
+func attachActivityTestExecution(issue *productActivity) {
 	root := "/tmp"
 	run := &piActivityRun{WorkerEpoch: "fixture", ContextID: "activity-" + issue.ID, SessionRef: "work-session", RunID: "work-task", Admitted: true}
 	issue.PiBinding = &piActivityBinding{Engine: "pi", Context: pi.ContextBinding{ContextID: run.ContextID, BotID: issue.ContactID, Purpose: pi.Activity, ActivityID: issue.ID, SessionRef: run.SessionRef, SelectionRevision: 1, CWD: root}, Selection: piSelection{CWD: root}, Configuration: piConfiguration{CredentialSource: "fixture"}}
@@ -21,7 +21,7 @@ func attachIssueToolTestExecution(issue *productActivity) {
 	})
 }
 
-func TestIssueStoreRoundTripKeepsPiConversationAndDraft(t *testing.T) {
+func TestActivityStoreRoundTripKeepsPiConversationAndDraft(t *testing.T) {
 	a, ct, _ := piRunStartedTestApp(t)
 	ct.ActiveTaskID, ct.SendState, ct.Draft = "", sendIdle, "preserved draft"
 	path, sessionID := a.store.Path, ct.SessionID
@@ -54,7 +54,7 @@ func TestIssueStoreRoundTripKeepsPiConversationAndDraft(t *testing.T) {
 	}
 }
 
-func TestCreateIssueRequiresGoalAndPersistsBeforeAnyRun(t *testing.T) {
+func TestCreateActivityRequiresGoalAndPersistsBeforeAnyRun(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "contacts.json")
 	store, err := openContactStore(path, "/tmp")
 	if err != nil {
@@ -84,7 +84,7 @@ func TestCreateIssueRequiresGoalAndPersistsBeforeAnyRun(t *testing.T) {
 	}
 }
 
-func TestCreateIssueFailureKeepsExistingIssues(t *testing.T) {
+func TestCreateActivityFailureKeepsExistingActivities(t *testing.T) {
 	ct := &contact{ID: "c1", Name: "Nagi", Draft: "unsent chat"}
 	a := &appModel{store: &contactStore{Path: t.TempDir()}, contacts: []*contact{ct}}
 	if _, err := a.createActivityFor(ct, "Implement login", "SMS required"); err == nil {
@@ -95,7 +95,7 @@ func TestCreateIssueFailureKeepsExistingIssues(t *testing.T) {
 	}
 }
 
-func TestStoreRejectsIssueWithoutValidContact(t *testing.T) {
+func TestStoreRejectsActivityWithoutValidContact(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "contacts.json")
 	state := storedState{
 		Version: contactStoreVersion, Selected: "c1",
@@ -150,7 +150,7 @@ func TestRestoredNonterminalExecutionWithoutTaskIsUnknown(t *testing.T) {
 	}
 }
 
-func TestContactActivityObservesIssueWorkTarget(t *testing.T) {
+func TestContactActivityObservesActivityWorkTarget(t *testing.T) {
 	ct := &contact{ID: "x", Name: "X", Loaded: true}
 	a := &appModel{contacts: []*contact{ct}, runtimeStatus: runtimeStateReady}
 	if active, unknown := a.contactActivity(ct); active || unknown {
@@ -165,7 +165,7 @@ func TestContactActivityObservesIssueWorkTarget(t *testing.T) {
 	}
 }
 
-func TestIssueWorkNoticeKeepsUnseenOlderExceptionAfterSuccess(t *testing.T) {
+func TestActivityWorkNoticeKeepsUnseenOlderExceptionAfterSuccess(t *testing.T) {
 	ct := &contact{ID: "x", Name: "X", Loaded: true}
 	issue := &productActivity{ID: "i-old-exception", ContactID: ct.ID, Goal: "older failed work"}
 	issue.Executions = []*activityExecution{
@@ -184,7 +184,7 @@ func TestIssueWorkNoticeKeepsUnseenOlderExceptionAfterSuccess(t *testing.T) {
 	}
 }
 
-func TestIssueSeenUnknownWithActiveTaskIDDoesNotReAttention(t *testing.T) {
+func TestActivitySeenUnknownWithActiveTaskIDDoesNotReAttention(t *testing.T) {
 	ct := &contact{ID: "contact-seen-active-unknown", Name: "Seen Unknown", Loaded: true}
 	execution := &activityExecution{
 		ID: "run-seen-active-unknown", TaskID: "task-seen-active-unknown",
@@ -213,7 +213,7 @@ func TestIssueSeenUnknownWithActiveTaskIDDoesNotReAttention(t *testing.T) {
 	}
 }
 
-func TestIssueDisplayProjectionUsesExistingFacts(t *testing.T) {
+func TestActivityDisplayProjectionUsesExistingFacts(t *testing.T) {
 	ct := &contact{ID: "contact-projection", Name: "Projection", Loaded: true}
 	completed := &productActivity{ID: "issue-completed", ContactID: ct.ID, Goal: "completed goal", Status: activityStatusCompleted,
 		Executions: []*activityExecution{{ID: "run-completed-old", Status: activityExecutionFailed, Detail: "old failure"}}}
@@ -253,7 +253,7 @@ func TestIssueDisplayProjectionUsesExistingFacts(t *testing.T) {
 	}
 }
 
-func TestIssueExplicitNeedsAttentionSurvivesSeenRun(t *testing.T) {
+func TestActivityExplicitNeedsAttentionSurvivesSeenRun(t *testing.T) {
 	ct := &contact{ID: "contact-explicit-attention", Name: "Explicit", Loaded: true}
 	execution := &activityExecution{ID: "run-explicit", Status: activityExecutionFailed, Detail: "seen failure", AttentionSeenStatus: activityExecutionFailed}
 	issue := &productActivity{ID: "issue-explicit", ContactID: ct.ID, Goal: "explicit attention", Status: activityStatusNeedsAttention,
@@ -272,7 +272,7 @@ func TestIssueExplicitNeedsAttentionSurvivesSeenRun(t *testing.T) {
 	}
 }
 
-func TestIssueWorkNoticeBaselineTerminalAndWaiting(t *testing.T) {
+func TestActivityWorkNoticeBaselineTerminalAndWaiting(t *testing.T) {
 	ct := &contact{ID: "contact-baseline", Name: "Baseline", Loaded: true}
 	completed := &productActivity{ID: "issue-baseline-completed", ContactID: ct.ID, Goal: "completed old",
 		Status: activityStatusCompleted, Executions: []*activityExecution{{ID: "run-baseline-old", Status: activityExecutionFailed, Detail: "old failure"}}}
@@ -290,7 +290,7 @@ func TestIssueWorkNoticeBaselineTerminalAndWaiting(t *testing.T) {
 	}
 }
 
-func TestIssueWorkNoticeWinnerScopeAndActive(t *testing.T) {
+func TestActivityWorkNoticeWinnerScopeAndActive(t *testing.T) {
 	ct := &contact{ID: "contact-winner", Name: "Winner", Loaded: true}
 	attention := &productActivity{ID: "issue-winner-attention", ContactID: ct.ID, Goal: "attention active",
 		Status: activityStatusInProgress, Work: activityWorkSession{Loaded: true, ActiveTaskID: "run-winner-attention", SendState: sendAccepted},
@@ -357,11 +357,11 @@ func TestIssueWorkNoticeWinnerScopeAndActive(t *testing.T) {
 	}
 }
 
-func TestPiIssueAttentionReopensUnseen(t *testing.T) {
+func TestPiActivityAttentionReopensUnseen(t *testing.T) {
 	a, ct, _ := piRunStartedTestApp(t)
 	ct.ActiveTaskID, ct.SendState = "", sendIdle
 	issue := &productActivity{ID: "failed-issue", ContactID: ct.ID, Goal: "Retain failure", RequirementsRevision: 1, Status: activityStatusNeedsAttention}
-	attachIssueToolTestExecution(issue)
+	attachActivityTestExecution(issue)
 	issue.Executions[0].Status, issue.Executions[0].Detail = activityExecutionFailed, "Pi failed"
 	ct.Activities = []*productActivity{issue}
 	if err := a.persist(); err != nil {
@@ -383,7 +383,7 @@ func TestPiIssueAttentionReopensUnseen(t *testing.T) {
 	}
 }
 
-func TestIssueWorkNoticeSurfacesFailureWithoutChatUnread(t *testing.T) {
+func TestActivityWorkNoticeSurfacesFailureWithoutChatUnread(t *testing.T) {
 	ct := &contact{ID: "x", Name: "X", Loaded: true, Unread: 3}
 	issue := &productActivity{ID: "i1", ContactID: "x", Goal: "build login"}
 	issue.Work.ActiveTaskID = ""

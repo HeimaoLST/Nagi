@@ -215,7 +215,7 @@ export async function inspectConversation(transcript: Transcript | undefined, co
 export type ResultSlice = { start_line?: number; end_line?: number; byte_offset?: number; cursor?: string; max_bytes?: number };
 export type ResultFile = { path: string; callId: string };
 export const resultPreviewBytes = 4096;
-const overflowTTL = 60 * 60 * 1000;
+const overflowTtlMs = 60 * 60 * 1000;
 const overflowFile = /^[A-Za-z0-9_-]+-[a-f0-9]{8}\.txt(?:\.[a-f0-9-]{36}\.tmp)?$/;
 
 export function resultLineCount(text: string): number {
@@ -232,7 +232,7 @@ export class ActivityOverflow {
   constructor(stateDir: string) {
     this.directory = join(stateDir, 'overflow');
     this.reap();
-    this.timer = setInterval(() => this.reap(), overflowTTL);
+    this.timer = setInterval(() => this.reap(), overflowTtlMs);
     this.timer.unref();
   }
 
@@ -255,7 +255,7 @@ export class ActivityOverflow {
   private reap(all = false): void {
     try {
       if (!lstatSync(this.directory, { throwIfNoEntry: false })?.isDirectory()) return;
-      const cutoff = Date.now() - overflowTTL;
+      const cutoff = Date.now() - overflowTtlMs;
       for (const entry of readdirSync(this.directory, { withFileTypes: true })) {
         if (!entry.isFile() || !overflowFile.test(entry.name)) continue;
         const path = join(this.directory, entry.name);
