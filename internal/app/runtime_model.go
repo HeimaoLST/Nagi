@@ -47,7 +47,7 @@ func newProductRuntimeApp() (*appModel, error) {
 	if err := a.openProductProfile(ctx, errors.Is(err, os.ErrNotExist), 1); err != nil {
 		return nil, err
 	}
-	if a.connectionSaved == nil {
+	if !a.hasAnySavedConnection() && !a.hasEffectiveProviderPool() {
 		a.openSettingsTab(settingsTabConnection, settingsSourceConnection)
 	}
 	a.reloadAppearanceThemes()
@@ -143,12 +143,13 @@ const (
 )
 
 const (
-	runtimeNoticeSavedNeedsRepair   = "saved-needs-repair"
-	runtimeNoticeConnectionRequired = "connection-required"
-	runtimeNoticeStart              = "start"
-	runtimeNoticeConnectionLost     = "connection-lost"
-	runtimeNoticeStoreSave          = "store-save"
-	runtimeNoticeRuntimeShutdown    = "runtime-shutdown"
+	runtimeNoticeSavedNeedsRepair      = "saved-needs-repair"
+	runtimeNoticeConnectionRequired    = "connection-required"
+	runtimeNoticeStart                 = "start"
+	runtimeNoticeConnectionLost        = "connection-lost"
+	runtimeNoticeStoreSave             = "store-save"
+	runtimeNoticeRuntimeShutdown       = "runtime-shutdown"
+	runtimeNoticeCredentialUnavailable = "provider-credential-unavailable"
 )
 
 func (a *appModel) hasRuntimeError() bool {
@@ -261,6 +262,9 @@ func (a *appModel) beginShutdown() {
 	if a.connectionTestCancel != nil {
 		a.connectionTestCancel()
 		a.connectionTestCancel = nil
+	}
+	if a.providers.cancelTest != nil {
+		a.providers.cancelTest()
 	}
 	a.finishShutdown()
 }
@@ -377,7 +381,7 @@ const (
 )
 
 func (a *appModel) runtimeAvailableForView() bool {
-	return a.demo || a.productProfileReady() && !a.connectionApplying && a.connectionEffective != nil
+	return a.demo || a.productProfileReady() && !a.connectionApplying && (a.hasUsableProviderRoute() || a.connectionEffective != nil)
 }
 
 func (a *appModel) connectionViewState() connectionViewState {
@@ -391,10 +395,12 @@ func (a *appModel) connectionViewState() connectionViewState {
 		switch {
 		case !a.productProfileReady():
 			return connectionViewNotConnected
-		case a.productConnectionPending():
+		case a.productConnectionPending() || a.productProvidersPending():
 			return connectionViewSaved
-		case a.connectionEffective != nil:
+		case a.hasUsableProviderRoute() || a.connectionEffective != nil:
 			return connectionViewHealthy
+		case a.hasEffectiveProviderPool():
+			return connectionViewNotConnected
 		default:
 			return connectionViewSetup
 		}
@@ -510,7 +516,7 @@ func (a *appModel) canSend(ct *contact) string {
 	if a.connectionApplying {
 		return blockApplying
 	}
-	if !a.runtimeAvailableForView() {
+	if !a.runtimeAvailableForView() && !(a.runtimeErrKind == runtimeNoticeCredentialUnavailable && ct.LastTaskID != "" && a.productProfileReady()) {
 		return blockRuntimeNotReady
 	}
 	if ct.SessionID != "" && !ct.Loaded {
