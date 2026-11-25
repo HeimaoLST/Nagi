@@ -201,25 +201,11 @@ func TestPiAppProductConnectionSaveAndApplyRefusal(t *testing.T) {
 	w := openProductWorkbench(t)
 	msg := locales.In("en")
 	w.frame(func() { w.app.openSettingsTab(settingsTabConnection, settingsSourceRail) })
-	clickSettings := func(label string) {
+	w.wait(func() bool {
+		return w.app.settingsOpen && w.app.providers.first != nil && w.app.providers.first.preset == -1
+	})
+	enterField := func(label, value string) {
 		t.Helper()
-		var err error
-		w.frame(func() {
-			w.view.Scroll(520, 360, 0, -3000)
-			w.view.Frame()
-			err = clickSettingsAction(w.view, label)
-		})
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
-	editField := func(field, label, value string) {
-		t.Helper()
-		var open bool
-		w.pump.do(func() { open = w.app.connectionForm.EditOpen[field] })
-		if !open {
-			clickSettings(msg.ConnectionEditField(label))
-		}
 		var err error
 		w.frame(func() {
 			err = focusPiControl(w.view, label, true)
@@ -232,27 +218,60 @@ func TestPiAppProductConnectionSaveAndApplyRefusal(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	readConnection := func() pi.ProductConnectionStatus {
+	readProviders := func() pi.ProductProviderList {
 		t.Helper()
-		status, err := w.client.Connection(ctx)
+		list, err := w.client.ListProviders(ctx)
 		if err != nil {
 			t.Fatal(err)
 		}
-		return status
+		return list
 	}
-	before := readConnection()
-	if before.SavedRevision == nil || before.EffectiveRevision == nil || *before.SavedRevision != *before.EffectiveRevision {
-		t.Fatalf("expected an effective initial connection: %+v", before)
+	before := readProviders()
+	if before.SavedRevision != nil || before.EffectiveRevision != nil || len(before.Accounts) != 0 {
+		t.Fatalf("expected legacy v2 profile to start with 0 provider accounts: %+v", before)
 	}
 	const model = "revised-fixture-model"
-	editField("Model", msg.ConnectionFieldModel(), model)
-	editField("APIKey", msg.ConnectionFieldAPIKey(), "nagi-product-loopback")
-	var draft connectionDraft
-	w.pump.do(func() { draft = w.app.connectionForm.Draft })
-	if draft.Model != model || draft.APIKey != "nagi-product-loopback" {
-		t.Fatal("Settings did not capture the edited model and synthetic key")
+	const apiKey = "nagi-product-loopback"
+	enterField(msg.FieldName(), "Studio "+apiKey)
+	enterField(msg.ProviderDefaultModel(), model)
+	enterField(msg.ConnectionFieldAPIKey(), apiKey)
+	var firstBaseURL string
+	w.pump.do(func() {
+		ed := w.app.providers.first
+		if ed == nil || ed.DefaultModel != model || ed.APIKey != apiKey {
+			t.Errorf("Settings did not capture the edited model and synthetic key: %+v", ed)
+			return
+		}
+		firstBaseURL = ed.BaseURL
+	})
+	w.click(msg.ProviderSaveApply())
+	w.wait(func() bool { return !w.app.providerBusy() && w.view.HasText(msg.ProviderSaveFailed()) })
+	w.pump.do(func() {
+		ed := w.app.providers.first
+		if ed == nil || ed.DefaultModel != model || ed.APIKey != apiKey || ed.BaseURL != firstBaseURL {
+			t.Errorf("Save & apply refusal lost editable provider values: %+v", ed)
+		}
+	})
+	if refused := readProviders(); !reflect.DeepEqual(refused, before) {
+		t.Fatalf("Save refusal changed saved or effective revisions: %+v", refused)
 	}
-	blocked := func(action string, expected connectionDraft, dirty, credentialPresent bool) {
+	enterField(msg.FieldName(), "Studio gateway")
+	w.click(msg.ProviderSave())
+	w.wait(func() bool {
+		return !w.app.providerBusy() && w.app.productProvidersPending() && len(w.app.productHost().productProviders.Accounts) == 1
+	})
+	saved := readProviders()
+	if saved.SavedRevision == nil || saved.EffectiveRevision != nil || len(saved.Accounts) != 1 ||
+		saved.Accounts[0].DefaultModel != model || saved.Accounts[0].CredentialStatus != "ok" {
+		t.Fatalf("Save did not leave the new revision pending Apply: %+v", saved)
+	}
+	w.pump.do(func() {
+		ed := w.app.providers.editor
+		if ed == nil || ed.DefaultModel != model || ed.BaseURL != firstBaseURL || ed.APIKey != "" {
+			t.Errorf("accepted Save did not clear plaintext key and retain values: %+v", ed)
+		}
+	})
+	obstruct := func(action string, wantNotice string, check func()) {
 		t.Helper()
 		backup := profile + ".fixture-backup"
 		if err := os.Rename(profile, backup); err != nil {
@@ -271,54 +290,51 @@ func TestPiAppProductConnectionSaveAndApplyRefusal(t *testing.T) {
 				t.Errorf("remove fixture obstruction: %v", err)
 			}
 		}()
-		clickSettings(action)
-		w.wait(func() bool { return !w.app.connectionForm.Busy })
-		w.pump.do(func() {
-			form := w.app.connectionForm
-			if form.Draft != expected || form.Dirty() != dirty || form.CredentialPresent != credentialPresent || !w.view.HasText(msg.RecoveryConnectionSaveFailed()) {
-				t.Errorf("%s refusal did not preserve the editable values or show its error: draft=%+v want=%+v dirty=%t cred=%t", action, form.Draft, expected, form.Dirty(), form.CredentialPresent)
-			}
-		})
+		w.click(action)
+		w.wait(func() bool { return !w.app.providerBusy() && w.view.HasText(wantNotice) })
+		w.pump.do(check)
 	}
-	blocked(msg.ConnectionSaveAndApply(), draft, true, true)
-	if refused := readConnection(); !reflect.DeepEqual(refused, before) {
-		t.Fatalf("Save refusal changed saved or effective revisions: %+v", refused)
-	}
-	clickSettings(msg.ConnectionSaveConfiguration())
-	w.wait(func() bool { return !w.app.connectionForm.Busy && w.app.connectionForm.SavedPending })
-	saved := readConnection()
-	if saved.SavedRevision == nil || *saved.SavedRevision <= *before.SavedRevision || saved.Saved == nil || saved.Saved.Model != model ||
-		!reflect.DeepEqual(saved.EffectiveRevision, before.EffectiveRevision) {
-		t.Fatalf("Save did not leave the new revision pending Apply: %+v", saved)
-	}
-	savedDraft := draft
-	savedDraft.APIKey = ""
-	w.pump.do(func() {
-		if form := w.app.connectionForm; form.Draft != savedDraft || form.Initial != savedDraft || !form.CredentialPresent || form.Dirty() {
-			t.Fatalf("accepted Save did not clear plaintext key and retain credential flag: draft=%+v initial=%+v cred=%t", form.Draft, form.Initial, form.CredentialPresent)
+	const editedModel = "obstructed-save-model"
+	enterField(msg.ProviderDefaultModel(), editedModel)
+	obstruct(msg.ProviderSaveApply(), msg.ProviderSaveFailed(), func() {
+		ed := w.app.providers.editor
+		if ed == nil || ed.DefaultModel != editedModel || ed.APIKey != "" || !w.app.productProvidersPending() {
+			t.Errorf("obstructed Save & apply lost editable values or pending state: %+v", ed)
 		}
 	})
-	blocked(msg.ConnectionApplySaved(), savedDraft, false, true)
-	if refused := readConnection(); !reflect.DeepEqual(refused, saved) {
+	if refused := readProviders(); !reflect.DeepEqual(refused, saved) {
+		t.Fatalf("obstructed Save & apply changed pending or effective revisions: %+v", refused)
+	}
+	enterField(msg.ProviderDefaultModel(), model)
+	obstruct(msg.ProviderApplyChanges(), msg.ProviderApplyFailed(), func() {
+		ed := w.app.providers.editor
+		if ed == nil || ed.DefaultModel != model || ed.APIKey != "" || !w.app.productProvidersPending() {
+			t.Errorf("Apply refusal lost pending state or editor values: %+v", ed)
+		}
+	})
+	if refused := readProviders(); !reflect.DeepEqual(refused, saved) {
 		t.Fatalf("Apply refusal changed the pending or effective revision: %+v", refused)
 	}
-	clickSettings(msg.ConnectionApplySaved())
-	w.wait(func() bool { return w.app.connectionForm.Status == connStatusApplied })
-	applied := readConnection()
+	w.click(msg.ProviderApplyChanges())
+	w.wait(func() bool {
+		return !w.app.providerBusy() && !w.app.productProvidersPending() && w.view.HasText(msg.ProviderAllApplied())
+	})
+	applied := readProviders()
 	if !reflect.DeepEqual(applied.SavedRevision, saved.SavedRevision) || !reflect.DeepEqual(applied.EffectiveRevision, saved.SavedRevision) ||
-		!reflect.DeepEqual(applied.Saved, saved.Saved) || !reflect.DeepEqual(applied.Effective, saved.Saved) {
+		len(applied.Accounts) != 1 || applied.Accounts[0].DefaultModel != model || applied.ResolvedRoles.Dialogue == nil {
 		t.Fatalf("Apply retry did not activate the existing saved revision: %+v", applied)
 	}
 	w.pump.do(func() {
-		if form := w.app.connectionForm; form.Draft != savedDraft || form.Initial != savedDraft || !form.CredentialPresent || form.Dirty() || form.Error != "" {
+		ed := w.app.providers.editor
+		if ed == nil || ed.DefaultModel != model || ed.APIKey != "" || w.app.providers.failure != (providerFeedback{}) {
 			t.Error("Apply retry changed the editor or retained the prior error")
 		}
 	})
 	w.shutdown(ctx)
 	if requests := provider.count(); requests != 0 {
-		t.Fatalf("connection Save or Apply contacted the provider %d times", requests)
+		t.Fatalf("provider Save or Apply contacted the provider %d times", requests)
 	}
-	t.Logf("Retried Apply of saved revision %d after refusal with effective revision %d and zero provider requests", *saved.SavedRevision, *before.EffectiveRevision)
+	t.Logf("Retried Apply of saved revision %d after refusal with zero provider requests", *saved.SavedRevision)
 }
 
 func TestPiAppProductActivityQuestionSurvivesWorkerLoss(t *testing.T) {

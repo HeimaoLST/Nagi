@@ -124,6 +124,14 @@
 
 **Prevention:** Permit backup once execution reaches a saved boundary, preserving the unknown receipt without replay. Permit explicit Apply only for the current owned host after reaping, callback completion and exit state; retain live, pending, store and legacy guards. Verify Apply and reopen make no model request, and count provider calls or durable effects before and after recovery.
 
+### Classify connection setup from explicit startup signals
+
+**Problem:** Retiring the legacy form misclassified unconfigured launches and disconnected legacy profiles in the connection status.
+
+**Cause or correction:** Runtime failure and the absence of a saved connection do not determine first-use setup. For a runtime that has not exited and has no saved connection, the connection-required notice or enter-connection startup hint identifies setup.
+
+**Prevention:** Preserve the startup signals when removing form state. Verify the rendered status for an unconfigured launch, a legacy profile without a live host, and a local save failure alongside connection diagnostics.
+
 ### Bind mutations and answers to captured ownership
 
 **Problem:** The Answer action opened a generic supplement form, a superseded question could receive an answer, and Pi callers retained retired client checks or replaced canonical rejection reasons.

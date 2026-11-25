@@ -14,6 +14,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -172,7 +173,7 @@ globalThis.fetch = (input, init) => {
 	w := openProductWorkbench(t)
 	w.wait(func() bool { return w.app.settingsOpen && w.app.settingsTab == settingsTabConnection })
 
-	w.click(msgs.ProviderAdd())
+	w.click(msgs.ProviderAddShort())
 	w.wait(func() bool { return w.app.providers.adding && w.app.providers.editor != nil })
 
 	w.click("OpenAI")
@@ -210,7 +211,7 @@ globalThis.fetch = (input, init) => {
 		}
 	}
 
-	w.click("gpt-4o")
+	w.frame(func() { w.app.providers.editor.DefaultModel = "gpt-4o" })
 	w.click(msgs.ProviderSaveApply())
 	w.wait(func() bool {
 		return !w.app.providerBusy() && !w.app.providers.adding && len(w.app.productHost().productProviders.Accounts) == 1 &&
@@ -222,18 +223,19 @@ globalThis.fetch = (input, init) => {
 	if w.app.providers.editor.APIKey != "" {
 		t.Fatal("accepted provider Save did not clear plaintext APIKey")
 	}
+	var savedPool pi.ProductProviderList
 	w.pump.do(func() {
-		pool := w.app.productHost().productProviders
-		if len(pool.Accounts) != 1 || len(pool.Accounts[0].Models) != 128 || pool.Accounts[0].EnabledModels != nil {
-			t.Fatalf("unchanged editor saved unexpected pool metadata: %+v", pool.Accounts)
-		}
-		if pool.ResolvedRoles.Dialogue == nil || pool.ResolvedRoles.Dialogue.ResolvedModel != "gpt-4o" ||
-			pool.ResolvedRoles.Coding == nil || pool.ResolvedRoles.Coding.ResolvedModel != "gpt-5.4-mini" ||
-			pool.ResolvedRoles.Reasoning == nil || pool.ResolvedRoles.Reasoning.ResolvedModel != "o3" ||
-			pool.ResolvedRoles.Utility == nil || pool.ResolvedRoles.Utility.ResolvedModel != "gpt-5.4-nano" {
-			t.Fatalf("safe default balanced pool mismatch: %+v", pool.ResolvedRoles)
-		}
+		savedPool = w.app.productHost().productProviders
 	})
+	if len(savedPool.Accounts) != 1 || len(savedPool.Accounts[0].Models) != 128 || savedPool.Accounts[0].EnabledModels != nil {
+		t.Fatalf("unchanged editor saved unexpected pool metadata: %+v", savedPool.Accounts)
+	}
+	if savedPool.ResolvedRoles.Dialogue == nil || savedPool.ResolvedRoles.Dialogue.ResolvedModel != "gpt-4o" ||
+		savedPool.ResolvedRoles.Coding == nil || savedPool.ResolvedRoles.Coding.ResolvedModel != "gpt-5.4-mini" ||
+		savedPool.ResolvedRoles.Reasoning == nil || savedPool.ResolvedRoles.Reasoning.ResolvedModel != "o3" ||
+		savedPool.ResolvedRoles.Utility == nil || savedPool.ResolvedRoles.Utility.ResolvedModel != "gpt-5.4-nano" {
+		t.Fatalf("safe default balanced pool mismatch: %+v", savedPool.ResolvedRoles)
+	}
 
 	w.click(msgs.ProviderAddShort())
 	w.wait(func() bool { return w.app.providers.adding })
@@ -405,4 +407,350 @@ globalThis.fetch = (input, init) => {
 			!reopened.app.settingsOpen
 	})
 	reopened.shutdown(ctx)
+}
+
+func TestPiAppProvidersV2UpgradeRT1PoolOrderRT2PinsAndCooldownFailover(t *testing.T) {
+	const rtKey = "synthetic-provider-rt-key"
+	node, worker := os.Getenv("NAGI_TEST_NODE"), os.Getenv("NAGI_TEST_WORKER")
+	payload := filepath.Dir(filepath.Dir(node))
+	if !filepath.IsAbs(node) || node != filepath.Join(payload, "bin", "node") || worker != filepath.Join(payload, "dist", "worker.js") {
+		t.Fatal("NAGI_TEST_NODE and NAGI_TEST_WORKER must identify one pinned payload")
+	}
+
+	var modelsCount, completionsCount atomic.Int32
+	var rateLimited atomic.Bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer "+rtKey {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		if r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/models") {
+			modelsCount.Add(1)
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(w, `{"object":"list","data":[{"id":"gpt-4o"},{"id":"gpt-5.4-mini"},{"id":"gpt-5.4-pro"},{"id":"text-embedding-3-small"}]}`)
+			return
+		}
+		if r.Method == http.MethodPost && (strings.HasSuffix(r.URL.Path, "/responses") || strings.HasSuffix(r.URL.Path, "/chat/completions")) {
+			completionsCount.Add(1)
+			if rateLimited.Load() {
+				w.Header().Set("Retry-After", "60")
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusTooManyRequests)
+				fmt.Fprint(w, `{"error":{"message":"synthetic provider cooldown","type":"rate_limit_error"}}`)
+				return
+			}
+			t.Error("unexpected model completion call before cooldown phase")
+		}
+		http.NotFound(w, r)
+	}))
+	t.Cleanup(server.Close)
+
+	setupIsolatedProfile := func(t *testing.T) string {
+		t.Helper()
+		root := t.TempDir()
+		isolateConnectionApp(t, root, payload)
+		preload := filepath.Join(root, "route-fixture.mjs")
+		source := fmt.Sprintf(`import { appendFileSync } from 'node:fs';
+const orig = globalThis.fetch;
+globalThis.fetch = (input, init) => {
+  const url = new URL(input instanceof Request ? input.url : String(input));
+  if (url.hostname === 'api.openai.com') {
+    const local = new URL(%q + url.pathname + url.search);
+    return orig(input instanceof Request ? new Request(local, input) : local, init);
+  }
+  if (url.hostname === '127.0.0.1' || url.hostname === 'localhost') return orig(input, init);
+  appendFileSync(%q, url.origin + '\n');
+  throw new Error('Blocked external fetch in offline test: ' + url.origin);
+};`, server.URL, filepath.Join(root, "offsite.log"))
+		if err := os.WriteFile(preload, []byte(source), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		t.Setenv("NODE_OPTIONS", "--import="+preload)
+		if err := writeProfileJSON(guiStorePath(), storedState{
+			Version:  contactStoreVersion,
+			Selected: "cedar",
+			Contacts: []storedContact{{ID: "cedar", Name: "Cedar", Workspace: root, BuiltinTools: &[]string{}}},
+		}); err != nil {
+			t.Fatal(err)
+		}
+		return root
+	}
+
+	clickScrolled := func(t *testing.T, w *productWorkbench, label string) {
+		t.Helper()
+		var err error
+		w.frame(func() { err = w.view.Click(label) })
+		if err == nil {
+			return
+		}
+		w.frame(func() {
+			tr := w.view
+			for range 12 {
+				r, ok := tr.Find(label)
+				if !ok || (r.Y >= 105 && r.Y+r.H <= 520) {
+					break
+				}
+				x := float32(920)
+				if w.app.providers.adding {
+					x = 700
+				}
+				tr.Scroll(x, 360, 0, r.Y-320)
+				tr.Frame()
+			}
+		})
+		w.click(label)
+	}
+	typeInput := func(t *testing.T, w *productWorkbench, label, value string) {
+		t.Helper()
+		var err error
+		w.frame(func() {
+			err = focusPiControl(w.view, label, true)
+			if err == nil {
+				w.view.Key(ui.Cmd, ui.KeyA)
+				w.view.Type(value)
+			}
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	applyChanges := func(t *testing.T, w *productWorkbench) {
+		t.Helper()
+		clickScrolled(t, w, locales.In("en").ProviderApplyChanges())
+		w.wait(func() bool { return !w.app.providerBusy() && !w.app.productProvidersPending() })
+	}
+	pinRole := func(t *testing.T, w *productWorkbench, roleLabel, option string, role pi.ProductModelRole, wantMode string) {
+		t.Helper()
+		clickScrolled(t, w, locales.In("en").ProviderPinRole(roleLabel))
+		clickScrolled(t, w, option)
+		w.wait(func() bool {
+			return !w.app.providerBusy() && w.app.productHost().productProviders.Overrides[role].Mode == wantMode
+		})
+	}
+
+	t.Run("legacy-v2-import-upgrade", func(t *testing.T) {
+		root := setupIsolatedProfile(t)
+		msgs := locales.In("en")
+		cfg := connectionConfig{
+			API: connectionAPIResponses, Endpoint: "https://api.openai.com/v1", APIKey: rtKey,
+			Model: "gpt-4o", ContextTokens: 65536, OutputTokens: 4096, WorkingDirectory: root, MaxActiveTasks: 2,
+		}
+		path := connectionConfigPath(guiStorePath())
+		if err := saveConnectionConfig(path, cfg); err != nil {
+			t.Fatal(err)
+		}
+		assertVersion := func(want int) {
+			t.Helper()
+			data, err := os.ReadFile(path)
+			var doc struct {
+				Version int `json:"version"`
+			}
+			if err != nil || json.Unmarshal(data, &doc) != nil || doc.Version != want {
+				t.Fatalf("connection.json version = %d (%v), want %d", doc.Version, err, want)
+			}
+		}
+		assertVersion(2)
+		w := openProductWorkbench(t)
+		w.frame(func() { w.app.openConfiguration() })
+		w.wait(func() bool { return w.app.providers.first != nil && w.app.providers.first.preset == -1 })
+		w.frame(func() {
+			e := w.app.providers.first
+			if e.BaseURL != cfg.Endpoint || e.WireAPI != pi.OpenAIResponses || e.DefaultModel != cfg.Model || e.context != "65536" || e.output != "4096" || e.APIKey != "" {
+				t.Errorf("legacy v2 prefill mismatch: %+v", e)
+			}
+		})
+		typeInput(t, w, msgs.ConnectionFieldAPIKey(), rtKey)
+		clickScrolled(t, w, msgs.ProviderSaveApply())
+		w.wait(func() bool {
+			return !w.app.providerBusy() && !w.app.productProvidersPending() && len(w.app.productHost().productProviders.Accounts) == 1
+		})
+		assertVersion(3)
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		w.shutdown(ctx)
+	})
+
+	t.Run("rt1-rt2-order-pins-cooldown-failover-and-reopen", func(t *testing.T) {
+		root := setupIsolatedProfile(t)
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		msgs := locales.In("en")
+		w := openProductWorkbench(t)
+		w.wait(func() bool { return w.app.settingsOpen && len(w.app.productHost().productProviders.Accounts) == 0 })
+
+		typeInput(t, w, msgs.ConnectionFieldAPIKey(), rtKey)
+		clickScrolled(t, w, "DeepSeek")
+		clickScrolled(t, w, "OpenAI")
+		w.frame(func() {
+			if e := w.app.providers.first; e == nil || e.APIKey != rtKey || e.preset != 0 {
+				t.Errorf("quick-start preset switch lost key or preset: %+v", e)
+			}
+		})
+		typeInput(t, w, msgs.FieldName(), "Studio gateway")
+		typeInput(t, w, msgs.ProviderDefaultModel(), "gpt-4o")
+		clickScrolled(t, w, msgs.ProviderTestAccount("OpenAI"))
+		w.wait(func() bool {
+			return !w.app.providerBusy() && w.app.providers.first != nil && w.app.providers.first.tested
+		})
+		w.frame(func() {
+			e := w.app.providers.first
+			ready := e.discoveredModel("gpt-4o")
+			protected := e.discoveredModel("gpt-5.4-pro")
+			embedding := e.discoveredModel("text-embedding-3-small")
+			if ready.ToolCall == nil || !*ready.ToolCall || !ready.Recommended || !protected.PriceProtected || embedding.IsChat == nil || *embedding.IsChat || len(e.discovered) != 4 || e.EnabledModels != nil {
+				t.Errorf("discovered capability metadata mismatch: %+v", e.discovered)
+			}
+		})
+		clickScrolled(t, w, msgs.ProviderSaveApply())
+		w.wait(func() bool {
+			return !w.app.providerBusy() && !w.app.productProvidersPending() && len(w.app.productHost().productProviders.Accounts) == 1
+		})
+		one, err := w.client.ListProviders(ctx)
+		if err != nil || one.Accounts[0].EnabledModels != nil {
+			t.Fatalf("untouched EnabledModels was unexpectedly populated: %+v err=%v", one, err)
+		}
+		primaryID := one.Accounts[0].ProviderID
+
+		clickScrolled(t, w, msgs.ProviderAddShort())
+		w.wait(func() bool { return w.app.providers.adding && w.app.providers.editor != nil })
+		clickScrolled(t, w, "OpenAI")
+		typeInput(t, w, msgs.FieldName(), "Backup gateway")
+		typeInput(t, w, msgs.ConnectionFieldAPIKey(), rtKey)
+		typeInput(t, w, msgs.ProviderDefaultModel(), "gpt-4o")
+		clickScrolled(t, w, msgs.ProviderTestDiscover())
+		w.wait(func() bool {
+			return !w.app.providerBusy() && w.app.providers.editor != nil && w.app.providers.editor.tested
+		})
+		clickScrolled(t, w, msgs.ProviderUseAsBackup())
+		clickScrolled(t, w, msgs.ProviderToggleModel("gpt-5.4-mini"))
+		clickScrolled(t, w, msgs.ProviderToggleModel("gpt-4o"))
+		clickScrolled(t, w, msgs.ProviderSave())
+		w.wait(func() bool {
+			return !w.app.providerBusy() && !w.app.providers.adding && len(w.app.productHost().productProviders.Accounts) == 2
+		})
+		two, err := w.client.ListProviders(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		backupID := two.Accounts[1].ProviderID
+		if row := two.Accounts[1]; row.EnabledModels == nil || len(*row.EnabledModels) != 0 || row.FallbackOnly == nil || !*row.FallbackOnly {
+			t.Fatalf("explicit empty EnabledModels and FallbackOnly did not persist: %+v", row)
+		}
+
+		clickScrolled(t, w, msgs.ProviderToggleModel("gpt-4o"))
+		clickScrolled(t, w, msgs.ProviderSave())
+		w.wait(func() bool {
+			row := w.app.productHost().productProviders.Accounts[1]
+			return !w.app.providerBusy() && row.EnabledModels != nil && slices.Equal(*row.EnabledModels, []string{"gpt-4o"})
+		})
+		clickScrolled(t, w, msgs.ProviderMoveUp())
+		w.wait(func() bool {
+			return !w.app.providerBusy() && w.app.productHost().productProviders.Accounts[0].ProviderID == backupID
+		})
+		clickScrolled(t, w, msgs.ProviderMoveDown())
+		w.wait(func() bool {
+			return !w.app.providerBusy() && w.app.productHost().productProviders.Accounts[0].ProviderID == primaryID
+		})
+		clickScrolled(t, w, msgs.ProviderMoveUp())
+		w.wait(func() bool {
+			return !w.app.providerBusy() && w.app.productHost().productProviders.Accounts[0].ProviderID == backupID
+		})
+		applyChanges(t, w)
+
+		clickScrolled(t, w, msgs.ProviderTabRouting())
+		clickScrolled(t, w, msgs.ProviderQuality())
+		w.wait(func() bool {
+			return !w.app.providerBusy() && w.app.productHost().productProviders.Policy == pi.ProductRoutingQuality
+		})
+		pinRole(t, w, msgs.ProviderRoleUtility(), msgs.ProviderModelPinOption("openai/gpt-4o"), "utility", "model")
+		pinRole(t, w, msgs.ProviderRoleDialogue(), "Studio gateway · gpt-4o", "dialogue", "route")
+		applyChanges(t, w)
+		pinRole(t, w, msgs.ProviderRoleUtility(), msgs.ProviderFollowStrategy(), "utility", "")
+		applyChanges(t, w)
+		pinRole(t, w, msgs.ProviderRoleUtility(), msgs.ProviderModelPinOption("openai/gpt-4o"), "utility", "model")
+		applyChanges(t, w)
+
+		w.shutdown(ctx)
+
+		w = openProductWorkbench(t)
+		reopenedState, err := w.client.ListProviders(ctx)
+		if err != nil || len(reopenedState.Accounts) != 2 || reopenedState.Accounts[0].ProviderID != backupID || reopenedState.Accounts[1].ProviderID != primaryID {
+			t.Fatalf("reopen lost saved priority order: %+v err=%v", reopenedState, err)
+		}
+		if row := reopenedState.Accounts[0]; row.EnabledModels == nil || !slices.Equal(*row.EnabledModels, []string{"gpt-4o"}) || row.FallbackOnly == nil || !*row.FallbackOnly {
+			t.Fatalf("reopen lost EnabledModels or FallbackOnly: %+v", row)
+		}
+		if reopenedState.EffectiveOverrides["dialogue"].ProviderID != primaryID || reopenedState.EffectiveOverrides["utility"].CanonicalModelID != "openai/gpt-4o" {
+			t.Fatalf("reopen lost effective routing overrides: %+v", reopenedState.EffectiveOverrides)
+		}
+
+		w.frame(func() { w.app.closeSettings() })
+		var cedar *contact
+		w.pump.do(func() { cedar = w.app.contactByID("cedar") })
+		rateLimited.Store(true)
+		typeInput(t, w, msgs.ComposerLabel("Cedar"), "Trigger the synthetic cooldown")
+		clickScrolled(t, w, msgs.SendAction())
+		w.wait(func() bool {
+			return w.app.productHost().productProviders.RoleStatus["dialogue"].Status == "cooldown" && cedar.SendState == sendIdle
+		})
+		beforeCooldown := completionsCount.Load()
+		if beforeCooldown == 0 {
+			t.Fatal("expected cooldown-inducing request count > 0")
+		}
+		w.wait(func() bool { return cedar.Loaded && w.view.HasText("Trigger the synthetic cooldown") })
+		var quoteErr error
+		w.frame(func() {
+			quoteErr = w.view.RightClick("Trigger the synthetic cooldown")
+			if quoteErr == nil {
+				quoteErr = choosePopoverMenuItem(w.view, msgs.QuoteAction())
+			}
+		})
+		if quoteErr != nil {
+			t.Fatal(quoteErr)
+		}
+		w.wait(func() bool { return cedar.DraftQuote != nil })
+		typeInput(t, w, msgs.ComposerLabel("Cedar"), "Keep this draft while the route cools down")
+		clickScrolled(t, w, msgs.SendAction())
+		w.wait(func() bool { return cedar.SendErrorKind == sendErrorRouteUnavailable })
+		w.frame(func() {
+			if cedar.SendState != sendIdle || cedar.SendErrorDetail == "" || cedar.Draft != "Keep this draft while the route cools down" ||
+				cedar.DraftQuote == nil || cedar.DraftQuote.Text != "Trigger the synthetic cooldown" || completionsCount.Load() != beforeCooldown {
+				t.Errorf("non-dispatched route_unavailable lost draft/quote/retry or contacted provider: state=%v detail=%q draft=%q calls=%d/%d",
+					cedar.SendState, cedar.SendErrorDetail, cedar.Draft, completionsCount.Load(), beforeCooldown)
+			}
+		})
+
+		clickScrolled(t, w, msgs.ConnectionRecoveryOpenSettings())
+		clickScrolled(t, w, msgs.ProviderTabRouting())
+		pinRole(t, w, msgs.ProviderRoleDialogue(), msgs.ProviderModelPinOption("openai/gpt-4o"), "dialogue", "model")
+		applyChanges(t, w)
+		w.wait(func() bool {
+			route := w.app.productHost().productProviders.ResolvedRoles.Dialogue
+			return route != nil && route.ProviderID == backupID && route.Source == "pinned_model" &&
+				route.Failover == "same_model_cooldown" && w.view.HasText(msgs.ProviderSameModelFailover())
+		})
+
+		pinRole(t, w, msgs.ProviderRoleDialogue(), "Studio gateway · gpt-4o", "dialogue", "route")
+		applyChanges(t, w)
+		clickScrolled(t, w, msgs.ProviderTabAccounts(2))
+		clickScrolled(t, w, "Studio gateway")
+		clickScrolled(t, w, msgs.ProviderDeleteAccount("Studio gateway"))
+		w.wait(func() bool { return !w.app.providerBusy() && len(w.app.productHost().productProviders.Accounts) == 1 })
+		applyChanges(t, w)
+		clickScrolled(t, w, msgs.ProviderTabRouting())
+		w.wait(func() bool {
+			return w.app.productHost().productProviders.RoleStatus["dialogue"].UnavailableReason == "provider_deleted" &&
+				w.view.HasText(msgs.ProviderPinnedUnavailable())
+		})
+		pinRole(t, w, msgs.ProviderRoleDialogue(), msgs.ProviderFollowStrategy(), "dialogue", "")
+		applyChanges(t, w)
+
+		w.shutdown(ctx)
+		if _, err := os.Stat(filepath.Join(root, "offsite.log")); !os.IsNotExist(err) {
+			t.Fatalf("offline RT-1/RT-2 test attempted external fetch: %v", err)
+		}
+		if modelsCount.Load() < 2 {
+			t.Fatalf("expected >= 2 local /models discovery probes, got %d", modelsCount.Load())
+		}
+	})
 }

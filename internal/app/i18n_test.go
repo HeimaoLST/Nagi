@@ -138,43 +138,54 @@ func TestGeneralLanguageUsesStableValuesAndPreservesState(t *testing.T) {
 }
 
 func TestLanguageSwitchKeepsNonzeroSettingsScrollAndActualFocus(t *testing.T) {
-	a, _ := workspaceTestApp(t)
-	config := connectionConfig{API: connectionAPIChatCompletions, Endpoint: "https://provider.example.invalid/v1/very/long/endpoint", APIKey: "fixture", Model: "fixture", ContextTokens: 1000, OutputTokens: 100, WorkingDirectory: t.TempDir(), MaxActiveTasks: 2}
-	a.connectionForm = newConnectionSettings(&config, config.WorkingDirectory)
-	a.connectionSaved = &config
-	a.connectionEffective = &config
-	a.connectionForm.Error = strings.Repeat("A long form error that scrolls the settings page. ", 12)
-	a.openSettingsTab(settingsTabConnection, settingsSourceRail)
-	a.connectionForm.FocusField = "Endpoint"
+	a := providerUITestApp(t, pi.ProductProviderList{Policy: pi.ProductRoutingBalanced})
+	a.windowWidth = 1040
+	a.chooseFirstProvider(0)
+	a.providers.first.BaseURL = "https://provider.example.invalid/v1/very/long/endpoint"
+	a.providers.first.advanced = true
+	a.providers.first.showModels = true
+	a.providers.first.custom = true
 	tr := ui.NewTester(a.view, 1040, 720)
+	tr.SetLocale("en")
+	tr.SetFocused(true)
 	tr.Frame()
-	if !tr.Focused("API endpoint") {
-		t.Fatalf("API endpoint did not take focus: %v", tr.Texts())
+	msgsEN := locales.In("en")
+	msgsZH := locales.In("zh-Hans")
+	for range 48 {
+		active, _ := tr.TextInputActive()
+		if tr.Focused(msgsEN.ProviderBaseURL()) && active {
+			break
+		}
+		tr.Key(0, ui.KeyTab)
+		tr.Frame()
 	}
-	tr.Scroll(520, 400, 0, 100)
+	if !tr.Focused(msgsEN.ProviderBaseURL()) {
+		t.Fatalf("Base URL did not take focus: %v", tr.Texts())
+	}
+	tr.Scroll(760, 360, 0, 100)
 	tr.Frame()
-	scrollBefore := a.settingsScroll.Y
+	scrollBefore := a.providers.detailScroll.Y
 	if scrollBefore <= 0 {
-		t.Fatalf("settings page did not scroll: %v", scrollBefore)
+		t.Fatalf("settings detail did not scroll: %v", scrollBefore)
 	}
 	tr.SetLocale("zh-Hans")
 	tr.Frame()
-	if a.settingsScroll.Y != scrollBefore || a.settingsTab != settingsTabConnection {
-		t.Fatalf("language switch changed middle scroll/category: scroll=%v/%v tab=%q", scrollBefore, a.settingsScroll.Y, a.settingsTab)
+	if a.providers.detailScroll.Y != scrollBefore || a.settingsTab != settingsTabConnection {
+		t.Fatalf("language switch changed middle scroll/category: scroll=%v/%v tab=%q", scrollBefore, a.providers.detailScroll.Y, a.settingsTab)
 	}
-	if !tr.Focused("API 端点") {
+	if !tr.Focused(msgsZH.ProviderBaseURL()) {
 		t.Fatalf("language switch lost actual Chinese focus: %v", tr.Texts())
 	}
 	tr.SetLocale("en")
 	tr.Frame()
-	if !tr.Focused("API endpoint") {
+	if !tr.Focused(msgsEN.ProviderBaseURL()) {
 		t.Fatalf("switching back lost the same input focus: %v", tr.Texts())
 	}
-	if a.settingsScroll.Y != scrollBefore || a.settingsTab != settingsTabConnection {
-		t.Fatalf("switching back changed middle scroll/category: scroll=%v/%v tab=%q", scrollBefore, a.settingsScroll.Y, a.settingsTab)
+	if a.providers.detailScroll.Y != scrollBefore || a.settingsTab != settingsTabConnection {
+		t.Fatalf("switching back changed middle scroll/category: scroll=%v/%v tab=%q", scrollBefore, a.providers.detailScroll.Y, a.settingsTab)
 	}
-	if a.connectionForm.Draft.Endpoint != config.Endpoint {
-		t.Fatalf("language switch changed the API draft: %q", a.connectionForm.Draft.Endpoint)
+	if a.providers.first.BaseURL != "https://provider.example.invalid/v1/very/long/endpoint" {
+		t.Fatalf("language switch changed the Base URL draft: %q", a.providers.first.BaseURL)
 	}
 	if _, active := tr.TextCaret(); !active {
 		t.Fatal("switching back lost the text caret")
@@ -613,31 +624,30 @@ func TestShellAndNewContactFollowLocale(t *testing.T) {
 
 func TestConnectionFeedbackFollowLocale(t *testing.T) {
 	a, _ := workspaceTestApp(t)
-	config := connectionConfig{API: connectionAPIChatCompletions, Endpoint: "https://provider.example.invalid/v1", APIKey: "fixture", Model: "fixture", ContextTokens: 131072, OutputTokens: 8192, WorkingDirectory: t.TempDir(), MaxActiveTasks: 2}
-	a.connectionForm = newConnectionSettings(&config, config.WorkingDirectory)
-	a.connectionSaved = &config
-	a.connectionForm.Status = connStatusApplied
-	a.connectionForm.Errors = map[string]string{"Endpoint": connectionValidationEndpointURL}
+	a.chooseFirstProvider(0)
+	const wantEndpoint = "https://provider.example.invalid/v1"
+	a.providers.first.BaseURL = wantEndpoint
+	a.providers.first.fields = map[string]string{"Endpoint": connectionValidationEndpointURL}
+	a.providers.failure = providerFeedback{kind: "apply", detail: "fixture apply error"}
 	a.openSettingsTab(settingsTabConnection, settingsSourceRail)
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.SetLocale("en")
 	tr.Frame()
-	if !tr.HasText(locales.In("en").ConnectionStatusApplied()) ||
-		!tr.HasText(locales.In("en").ConnectionBlockedStore()) ||
+	if !tr.HasText(locales.In("en").ProviderApplyFailed()) ||
+		!tr.HasText(locales.In("en").ProviderRuntimeUnavailable()) ||
 		!tr.HasText("Enter an absolute http(s) URL with a host.") {
 		t.Fatalf("English connection feedback missing: %v", tr.Texts())
 	}
 	tr.SetLocale("zh-Hans")
 	tr.Frame()
-	if !tr.HasText(locales.In("zh-Hans").ConnectionStatusApplied()) ||
-		!tr.HasText(locales.In("zh-Hans").ConnectionBlockedStore()) ||
+	if !tr.HasText(locales.In("zh-Hans").ProviderApplyFailed()) ||
+		!tr.HasText(locales.In("zh-Hans").ProviderRuntimeUnavailable()) ||
 		!tr.HasText("请输入带主机的绝对 http(s) URL。") {
 		t.Fatalf("Chinese connection feedback missing: %v", tr.Texts())
 	}
-	if a.connectionForm.Draft.Endpoint != config.Endpoint {
-		t.Fatalf("locale switch changed the connection draft: %q", a.connectionForm.Draft.Endpoint)
+	if a.providers.first.BaseURL != wantEndpoint {
+		t.Fatalf("locale switch changed the connection draft: %q", a.providers.first.BaseURL)
 	}
-
 }
 
 func TestRuntimeStartupFeedbackFollowsLocale(t *testing.T) {
@@ -878,9 +888,9 @@ func TestChatScrollSurvivesLocaleSwitch(t *testing.T) {
 		})
 	}
 	cfg := connectionConfig{API: connectionAPIChatCompletions, Endpoint: "https://provider.example.invalid/v1/very/long/endpoint", APIKey: "fixture", Model: "fixture-provider-model", ContextTokens: 131072, OutputTokens: 8192, WorkingDirectory: t.TempDir(), MaxActiveTasks: 2}
-	a.connectionForm = newConnectionSettings(&cfg, cfg.WorkingDirectory)
 	a.connectionSaved = &cfg
 	a.connectionEffective = &cfg
+	a.chooseFirstProvider(-1)
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.SetLocale("en")
 	tr.Frame()
@@ -908,8 +918,8 @@ func TestChatScrollSurvivesLocaleSwitch(t *testing.T) {
 	if ct.Draft != "keep the chat draft" || a.selectedContact() != ct {
 		t.Fatalf("locale switch changed the conversation or draft: contact=%q draft=%q", a.selectedID(), ct.Draft)
 	}
-	if a.connectionForm.Draft.Endpoint != cfg.Endpoint || a.connectionForm.Draft.Model != cfg.Model || a.connectionSaved.Model != cfg.Model || a.connectionEffective.Endpoint != cfg.Endpoint {
-		t.Fatalf("locale switch changed stable connection values: %+v", a.connectionForm.Draft)
+	if a.providers.first.BaseURL != cfg.Endpoint || a.providers.first.DefaultModel != cfg.Model || a.connectionSaved.Model != cfg.Model || a.connectionEffective.Endpoint != cfg.Endpoint {
+		t.Fatalf("locale switch changed stable connection values: %+v", a.providers.first)
 	}
 	if !tr.HasText(locales.In("zh-Hans").BackToLatest()) {
 		t.Fatalf("Chinese chat label missing: %v", tr.Texts())

@@ -28,10 +28,6 @@ func messageReaderOptions(c *ui.Context, plain bool) markdownReaderOptions {
 
 func (a *appModel) view(c *ui.Context) {
 	a.uiLocale = c.Locale()
-	if form := a.connectionForm; form != nil && form.Error == connStatusSavedStoreFailed && a.store != nil && a.localSaveErr == "" {
-		form.Error, form.ErrorDetail = "", ""
-		form.RecoveryDetailsOpen = false
-	}
 	a.syncDetailPageMode()
 	if !a.settingsOpen {
 		a.linkReturnSeen = false
@@ -459,8 +455,6 @@ func (a *appModel) headerStatusLabel(ct *contact, msgs locales.Messages, visual 
 
 func connectionStatusLabel(state connectionViewState, msgs locales.Messages) string {
 	switch state {
-	case connectionViewApplying:
-		return msgs.ConnectionStatusApplying()
 	case connectionViewConnecting:
 		return msgs.ConnectionStatusConnecting()
 	case connectionViewSaved:
@@ -566,6 +560,8 @@ func (a *appModel) runtimeRecoverySummary(msgs locales.Messages) string {
 		return msgs.ConnectionRecoverySetupHint()
 	case runtimeNoticeCredentialUnavailable:
 		return msgs.ProviderCredentialRecovery()
+	case runtimeNoticeRouteUnavailable:
+		return msgs.ProviderRoutesNeedAttention()
 	case runtimeNoticeStoreSave:
 		return msgs.RecoveryLocalSaveFailed()
 	default:
@@ -644,21 +640,14 @@ func (a *appModel) main(c *ui.Context, t *ui.Theme) {
 			activity := &ct.activity
 			pausedAnswerVisible := activity.open && !activity.legacyIssue && activity.result == nil && activity.activity != nil &&
 				slices.ContainsFunc(activity.activity.Questions, func(question pi.ProductQuestion) bool {
-					return question.Answer != nil && question.Delivery == "saved" && question.DeliveryBlocker == pi.ProductCredentialUnavailable
+					return question.Answer != nil && question.Delivery == "saved" && providerDeliveryBlocked(question.DeliveryBlocker)
 				})
 			switch {
 			case a.runtimeStatus == runtimeStateDraining:
 				conversationNotice(c, func() {
 					ui.Text(c, msgs.RuntimeDraining()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 				})
-			case state == connectionViewApplying:
-				conversationNotice(c, func() {
-					if visual.kind == botVisualWaiting {
-						ui.Text(c, msgs.ConnectionStatusApplying()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Warning)
-					}
-					ui.Text(c, msgs.ConnectionRecoveryApplyingHint()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
-				})
-			case a.runtimeErrKind == runtimeNoticeCredentialUnavailable && (ct.SendErrorKind == sendErrorCredentialUnavailable || pausedAnswerVisible):
+			case (a.runtimeErrKind == runtimeNoticeCredentialUnavailable || a.runtimeErrKind == runtimeNoticeRouteUnavailable) && (ct.providerSendBlocked() || pausedAnswerVisible):
 			case a.connectionConfigurationBlocked():
 				a.connectionRecoveryNotice(c, t, ct, state, showRuntimeError && a.runtimeErrKind != runtimeNoticeConnectionRequired)
 				showConnectionSettings = false
@@ -718,7 +707,7 @@ func (a *appModel) header(c *ui.Context, t *ui.Theme, ct *contact, visual botSta
 			})
 			a.botStatusAction(c, t, ct, visual, msgs)
 			if label := connectionStatusLabel(connection, msgs); !a.demo && label != "" && visual.kind != botVisualWaiting {
-				if connection == connectionViewConnecting || connection == connectionViewApplying {
+				if connection == connectionViewConnecting {
 					ui.Text(c, label).FontSize(typeHeaderMeta).FixedLineHeight(lineHeader).TextColor(t.TextMuted).SingleLine().Shrink(0)
 				} else if a.runtimeErrKind == runtimeNoticeCredentialUnavailable {
 					ui.Text(c, label).FontSize(typeHeaderMeta).FixedLineHeight(lineHeader).TextColor(t.Warning).SingleLine().Shrink(0)
@@ -866,6 +855,14 @@ func (a *appModel) conversationActivities(c *ui.Context, t *ui.Theme, ct *contac
 						if p.actionProblem != "" {
 							ui.Text(c, p.actionProblem).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Warning)
 						}
+						if providerDeliveryBlocked(p.actionBlocker.Code) {
+							summary := msgs.ProviderSendRejected()
+							if p.actionBlocker.Code == pi.ProductRouteUnavailable {
+								summary = providerRouteRejectionText(c, msgs, p.actionBlocker.RetryAt)
+							}
+							ui.Text(c, summary).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Warning)
+							linkButton(c, msgs.ConnectionRecoveryOpenSettings()).AlignSelf(ui.Start).OnClick(a.openConfiguration)
+						}
 						switch {
 						case p.legacyIssue:
 							if activity := ct.selectedActivity(); activity != nil {
@@ -979,8 +976,12 @@ func (a *appModel) productActivityDetails(c *ui.Context, t *ui.Theme, ct *contac
 				taskContextReadOnlyView(c, a.workTheme, productTaskContext(question.Answer.Materials))
 				switch question.Delivery {
 				case "saved":
-					if question.DeliveryBlocker == pi.ProductCredentialUnavailable {
-						ui.Text(c, msgs.ProviderAnswerPaused()).FontSize(typeMeta).LineHeight(1.5).TextColor(t.Warning)
+					if providerDeliveryBlocked(question.DeliveryBlocker) {
+						notice := msgs.ProviderAnswerPaused()
+						if question.DeliveryBlocker == pi.ProductRouteUnavailable {
+							notice = msgs.ProviderAnswerRoutePaused()
+						}
+						ui.Text(c, notice).FontSize(typeMeta).LineHeight(1.5).TextColor(t.Warning)
 						linkButton(c, msgs.ConnectionRecoveryOpenSettings()).AlignSelf(ui.Start).OnClick(a.openConfiguration)
 					} else {
 						a.activityText(c, t, msgs.IssueAnswerSaved())
@@ -1428,7 +1429,7 @@ func (a *appModel) composer(c *ui.Context, t *ui.Theme, state connectionViewStat
 					if state == connectionViewHealthy && !unknownNotice {
 						ui.Text(c, sendBlockText(msgs, sendReason)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 					}
-				case "", blockApplying:
+				case "":
 				default:
 					if strings.TrimSpace(ct.Draft) != "" && (sendReason != blockBusy || submissionStatus == "") {
 						ui.Text(c, sendBlockText(msgs, sendReason)).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
@@ -1437,8 +1438,12 @@ func (a *appModel) composer(c *ui.Context, t *ui.Theme, state connectionViewStat
 				if ct.SendState == sendUnknown && !unknownNotice && !knownMismatch {
 					ui.Text(c, unknownSummary).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Danger)
 				}
-				if ct.SendErrorKind == sendErrorCredentialUnavailable {
-					a.recoveryNotice(c, t, "provider-send:"+ct.ID, msgs.ProviderSendRejected(), "", true)
+				if ct.providerSendBlocked() {
+					summary := msgs.ProviderSendRejected()
+					if ct.SendErrorKind == sendErrorRouteUnavailable {
+						summary = providerRouteRejectionText(c, msgs, ct.SendErrorDetail)
+					}
+					a.recoveryNotice(c, t, "provider-send:"+ct.ID, summary, "", true)
 					showConnectionSettings = false
 				} else if sendErrorVisible || connectionLostDetail {
 					var key, detail string
@@ -1462,7 +1467,7 @@ func (a *appModel) composer(c *ui.Context, t *ui.Theme, state connectionViewStat
 					a.recoveryNotice(c, t, key, summary, detail, showConnectionSettings)
 					showConnectionSettings = false
 				}
-				if canReload && ct.SendErrorKind != sendErrorCredentialUnavailable && (ct.SendState == sendUnknown || ct.SendError != "") {
+				if canReload && !ct.providerSendBlocked() && (ct.SendState == sendUnknown || ct.SendError != "") {
 					secondaryButton(c, msgs.ReloadAction()).Label(msgs.ReloadAction()).OnClick(func() { a.reloadSelected() })
 				}
 				if ct.StatusDetail != "" && !connectionLostDetail {
@@ -1484,7 +1489,6 @@ func (a *appModel) composer(c *ui.Context, t *ui.Theme, state connectionViewStat
 // ---------- main pages ----------
 
 func (a *appModel) openConfiguration() {
-	a.ensureConnectionForm()
 	a.openSettingsTab(settingsTabConnection, settingsSourceConnection)
 }
 
@@ -1530,7 +1534,7 @@ func (a *appModel) runtimePanel(c *ui.Context, t *ui.Theme, ct *contact) {
 		ui.Text(c, msgs.RuntimeSessionAPIUnknown()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 	}
 	ui.Text(c, msgs.RuntimeSessionModelLine(valueOr(ct.SessionModel, msgs.RuntimeSessionModelUnknown()))).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
-	if a.connectionManaged || (a.connectionForm != nil && a.connectionForm.HasSaved) {
+	if a.connectionManaged || a.connectionSaved != nil {
 		ui.Text(c, msgs.RuntimeConnectionManagedNote()).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.TextMuted)
 	}
 }

@@ -134,7 +134,6 @@ func TestPreviewHeaderGrouping(t *testing.T) {
 		a.runtimeStage = "Connection configuration"
 		a.connectionSaved = &cfg
 		a.connectionEffective = &cfg
-		a.ensureConnectionForm()
 	})
 	write("header-960-dark-en-XA-long-role.png", "en-XA", longPurpose, true, func(a *appModel, _ *contact) {
 		a.pi = presentationPiHost(a)

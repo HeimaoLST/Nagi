@@ -211,7 +211,6 @@ func TestBotStatusHeaderPurposeCenteringAndDecoupledActions(t *testing.T) {
 	a.demo = false
 	a.runtimeStatus = runtimeStateExited
 	a.runtimeStage = "Connection configuration"
-	a.ensureConnectionForm()
 	tr.Frame()
 	if !tr.HasText(specialist.Purpose) || !tr.HasText(msgs.ConnectionStatusNotConnected()) {
 		t.Fatalf("non-ready connection header missing purpose or decoupled connection button: %v", tr.Texts())

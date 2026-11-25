@@ -53,7 +53,7 @@ func TestContactWorkspaceDefaultsRespectConnectionSource(t *testing.T) {
 			if got := a.selectedContact().Workspace; got != want {
 				t.Errorf("%s added contact workspace=%q, want %q", source, got, want)
 			}
-			if a.pi != nil || a.connectionApplying {
+			if a.pi != nil || a.providerBusy() {
 				t.Fatal("contact defaults started Runtime")
 			}
 		})
@@ -119,19 +119,12 @@ func TestLocalStateBeforeConnectionCreateSaveAndRestart(t *testing.T) {
 	defer provider.Close()
 	config := testConnectionConfig(t)
 	config.Endpoint = provider.URL + "/v1"
-	pump := newUIPump(t, restarted)
-	defer pump.close()
-	pump.do(func() { restarted.saveConnection(config) })
-	pump.wait(func() bool { return !restarted.connectionSaveInFlight })
-	var connectionError string
-	var stateRetained bool
-	pump.do(func() {
-		connectionError = restarted.connectionForm.Error
-		first := restarted.contactByID(firstID)
-		stateRetained = first != nil && restarted.selectedID() == secondID && first.Draft == "Keep the first local draft" && restarted.selectedContact().Draft == second.Draft
-	})
-	if connectionError != "" || !stateRetained {
-		t.Fatalf("first connection Save replaced local state: error=%q", connectionError)
+	if err := saveConnectionConfig(connectionConfigPath(guiStorePath()), config); err != nil {
+		t.Fatal(err)
+	}
+	first := restarted.contactByID(firstID)
+	if first == nil || restarted.selectedID() != secondID || first.Draft != "Keep the first local draft" || restarted.selectedContact().Draft != second.Draft {
+		t.Fatal("first connection Save replaced local state")
 	}
 	afterConnection, err := newRuntimeApp()
 	if err != nil {
@@ -141,7 +134,7 @@ func TestLocalStateBeforeConnectionCreateSaveAndRestart(t *testing.T) {
 		t.Fatal("connection Save/reopen lost local contact state")
 	}
 	for _, app := range []*appModel{a, restarted, afterConnection} {
-		if app.pi != nil || app.connectionApplying {
+		if app.pi != nil || app.providerBusy() {
 			t.Fatal("local exploration or connection Save started Runtime")
 		}
 	}

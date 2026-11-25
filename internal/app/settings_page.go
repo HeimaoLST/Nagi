@@ -114,16 +114,12 @@ func (a *appModel) openSettingsTab(tab, source string) {
 	} else {
 		a.settingsFocusTab = tab
 	}
-	a.ensureConnectionForm()
 	if host := a.productHost(); tab == settingsTabConnection && host != nil {
 		a.refreshProductProviders(host)
 	}
 	if tab == settingsTabCapabilities {
 		a.refreshCapabilityLibrary()
 		a.refreshCapabilityServers()
-	}
-	if a.connectionForm != nil {
-		a.connectionForm.FocusField = ""
 	}
 }
 
@@ -189,7 +185,6 @@ func (a *appModel) settingsPage(c *ui.Context, base *ui.Theme) {
 	if a.settingsTab == "" {
 		a.settingsTab = a.settingsLandingTab()
 	}
-	a.ensureConnectionForm()
 	t := theme.SettingsTheme(base)
 	ui.Themed(c, &t).Fill().Background(t.Background).Children(func() {
 		if a.layoutWidth() < int(preferenceBreakpoint) {
@@ -306,7 +301,11 @@ func (a *appModel) settingsMain(c *ui.Context, t *ui.Theme, narrow bool) {
 	}
 	main.Children(func() {
 		host := a.productHost()
-		providerSettings := a.settingsTab == settingsTabConnection && host != nil
+		providerSettings := a.settingsTab == settingsTabConnection
+		pool := a.providers.snapshot
+		if host != nil {
+			pool = host.productProviders
+		}
 		capabilitySettings := a.settingsTab == settingsTabCapabilities && host != nil
 		width, _ := c.Size()
 		if !narrow {
@@ -315,7 +314,7 @@ func (a *appModel) settingsMain(c *ui.Context, t *ui.Theme, narrow bool) {
 		contentWidth := min(width, settingsContentWidth) - 64
 		var tabs func()
 		if providerSettings {
-			tabs = func() { a.providerTabs(c, msgs, len(host.productProviders.Accounts)) }
+			tabs = func() { a.providerTabs(c, msgs, len(pool.Accounts)) }
 		} else if capabilitySettings {
 			tabs = func() { a.capabilityTabs(c, msgs) }
 		}
@@ -331,9 +330,9 @@ func (a *appModel) settingsMain(c *ui.Context, t *ui.Theme, narrow bool) {
 				tabs()
 			})
 		}
-		if providerSettings && a.providers.tab == providerTabAccounts && len(host.productProviders.Accounts) > 0 && contentWidth >= 600 {
+		if providerSettings && a.providers.tab == providerTabAccounts {
 			ui.Column(c).FillWidth().MaxWidth(settingsContentWidth).MinHeight(0).Grow(1).AlignSelf(ui.Center).Padding(12, 32, 24).Gap(12).Children(func() {
-				a.providerWorkspace(c, t, host.productProviders, true)
+				a.providerWorkspace(c, t, pool, contentWidth >= 600)
 			})
 			return
 		}
@@ -349,7 +348,7 @@ func (a *appModel) settingsMain(c *ui.Context, t *ui.Theme, narrow bool) {
 				case settingsTabAppearance:
 					a.settingsAppearanceContent(c, t)
 				case settingsTabConnection:
-					a.settingsConnectionContent(c, t)
+					a.providerRouting(c, t, pool)
 				case settingsTabCapabilities:
 					a.settingsCapabilitiesContent(c, t, false)
 				default:
@@ -518,7 +517,7 @@ func (a *appModel) dataRecoveryBlocked(restore bool) string {
 			return "busy"
 		}
 	}
-	if a.contextFilePickers > 0 || a.shutdownStarted || a.connectionSaveInFlight || a.connectionApplying || a.connectionTesting || a.providerBusy() || a.capabilitiesBusy() || a.contactHistoryInFlight > 0 || a.submissionInFlight > 0 || a.themeImport != nil && a.themeImport.Busy || a.connectionForm != nil && a.connectionForm.Busy {
+	if a.contextFilePickers > 0 || a.shutdownStarted || a.providerBusy() || a.capabilitiesBusy() || a.contactHistoryInFlight > 0 || a.submissionInFlight > 0 || a.themeImport != nil && a.themeImport.Busy {
 		return "busy"
 	}
 	if !productBackup && a.activeTaskCount() > 0 {
@@ -542,7 +541,7 @@ func (a *appModel) dataRecoveryBlocked(restore bool) string {
 	if a.store != nil || a.storeInitAllowed || a.pi != nil || a.runtimeStage != startupStageLocalStore || a.storePath == "" {
 		return "unavailable"
 	}
-	if a.localSaveErr != "" || len(a.contacts) != 1 || a.connectionForm != nil && a.connectionForm.Dirty() {
+	if a.localSaveErr != "" || len(a.contacts) != 1 {
 		return "unsaved"
 	}
 	ct := a.selectedContact()
@@ -851,78 +850,6 @@ func (a *appModel) settingsDataRecoveryContent(c *ui.Context, t *ui.Theme) {
 			}
 		})
 	})
-}
-
-func (a *appModel) settingsConnectionContent(c *ui.Context, t *ui.Theme) {
-	msgs := locales.In(c.Locale())
-	form := a.connectionForm
-	form.CurrentSummary = ""
-	if a.connectionApplied() {
-		form.CurrentSummary = a.redactConnectionText(connectionCurrentSummary(msgs, a.connectionEffective))
-	}
-	form.ReloadBlocked = a.connectionReloadBlocked()
-	form.SavedPending = a.connectionSavedPending()
-	actions := a.connectionActions()
-	actions.Discard = form.ResetDraft
-	if host := a.productHost(); host != nil {
-		pool := host.productProviders
-		switch a.providers.tab {
-		case providerTabRouting:
-			a.providerRouting(c, t, pool)
-			return
-		case providerTabAccounts:
-			if len(pool.Accounts) > 0 {
-				a.providerWorkspace(c, t, pool, false)
-				return
-			}
-			a.providerEmpty(c, t, pool)
-		}
-	}
-	if a.providers.adding || a.providers.tab == providerTabAccounts && a.productProvidersPending() {
-		legacy := *t
-		legacy.Accent, legacy.AccentHover, legacy.AccentPressed, legacy.AccentText = t.Surface, t.SurfaceHover, t.SurfacePressed, t.Text
-		ui.Themed(c, &legacy).FillWidth().Background(ui.Transparent).Children(func() {
-			form.View(c, &legacy, actions, a.workTheme.InputBorder)
-		})
-		return
-	}
-	form.View(c, t, actions, a.workTheme.InputBorder)
-}
-
-func connectionCurrentSummary(msgs locales.Messages, config *connectionConfig) string {
-	if config == nil {
-		return ""
-	}
-	parts := make([]string, 0, 3)
-	if strings.TrimSpace(config.Model) != "" {
-		parts = append(parts, config.Model)
-	}
-	switch config.API {
-	case connectionAPIChatCompletions:
-		parts = append(parts, msgs.ProtocolChatCompletionsLabel())
-	case connectionAPIResponses:
-		parts = append(parts, msgs.ProtocolResponsesLabel())
-	}
-	if strings.TrimSpace(config.Endpoint) != "" {
-		parts = append(parts, config.Endpoint)
-	}
-	return strings.Join(parts, " · ")
-}
-
-func (a *appModel) connectionSavedPending() bool {
-	if a.runtimeStatus == runtimeStateExited {
-		return a.connectionSaved != nil
-	}
-	if a.productHost() != nil {
-		return a.productConnectionPending()
-	}
-	if a.connectionSaved == nil {
-		return false
-	}
-	if !a.connectionApplied() || a.connectionEffective == nil {
-		return true
-	}
-	return *a.connectionSaved != *a.connectionEffective
 }
 
 func containsString(values []string, want string) bool {

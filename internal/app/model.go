@@ -264,22 +264,16 @@ type appModel struct {
 	quitReady                 bool
 	shutdownStarted           bool
 
-	connectionPath         string
-	connectionForm         *connectionSettings
-	connectionSaved        *connectionConfig
-	connectionEffective    *connectionConfig
-	connectionManaged      bool
-	connectionGeneration   int
-	connectionApplying     bool
-	connectionDetailsOpen  map[string]bool
-	connectionSaveInFlight bool
-	connectionTesting      bool
-	connectionTestCancel   func()
-	connectionProbe        *piConnectionProbe
-	startupDetailsOpen     bool
-	shutdownDrainStarted   bool
-	providers              providerSettings
-	capabilities           capabilitySettings
+	connectionPath        string
+	connectionSaved       *connectionConfig
+	connectionEffective   *connectionConfig
+	connectionManaged     bool
+	connectionGeneration  int
+	connectionDetailsOpen map[string]bool
+	startupDetailsOpen    bool
+	shutdownDrainStarted  bool
+	providers             providerSettings
+	capabilities          capabilitySettings
 
 	openPath func(string) error
 

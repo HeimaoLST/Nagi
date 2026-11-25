@@ -17,6 +17,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
+	"github.com/HeimaoLST/Nagi/internal/pi"
 	"github.com/HeimaoLST/Nagi/locales"
 )
 
@@ -52,13 +53,13 @@ func TestMain(m *testing.M) {
 
 type connectionNativeScene struct {
 	app           *appModel
+	editor        *providerEditor
 	root          string
 	testCalls     int
 	saveCalls     int
 	callbackExact bool
 	released      bool
-	savedClosed   bool
-	savedReopened bool
+	saved         bool
 	failure       string
 }
 
@@ -71,40 +72,47 @@ func (s *connectionNativeScene) recordFailure(message string) {
 func (s *connectionNativeScene) view(c *ui.Context) {
 	theme := resolveWorkbenchTheme(c.Theme().Dark)
 	c.SetTheme(theme.Theme)
-	form := s.app.connectionForm
-	if form.HasSaved && !form.EditOpen["APIKey"] {
-		s.savedClosed = true
-	}
-	if s.savedClosed && form.EditOpen["APIKey"] {
-		s.savedReopened = true
-	}
-	actions := connectionSettingsActions{
-		Save: func(config connectionConfig) {
-			s.saveCalls++
-			if config.APIKey != connectionNativeSentinel {
-				s.recordFailure("Save did not receive the exact synthetic key")
-				return
-			}
-			s.app.saveConnection(config)
-		},
-		Test: func(config connectionConfig) {
-			s.testCalls++
-			s.callbackExact = config.APIKey == connectionNativeSentinel
-			if s.testCalls != 1 || !s.callbackExact {
-				s.recordFailure("Test callback count or synthetic key differs")
-			}
-			form.Busy = true
-		},
-		Discard: func() { form.ResetDraft() },
-		SaveAndApply: func(connectionConfig) {
-			s.recordFailure("Save and Apply is outside this no-provider control scene")
-		},
-		Apply: func() { s.recordFailure("Apply is outside this no-provider control scene") },
-	}
+	msgs := locales.In(c.Locale())
+	blocked := s.app.providers.busy
 	ui.Scroll(c).Fill().Background(theme.Reading).Children(func() {
-		ui.Column(c).FillWidth().MaxWidth(settingsContentWidth).AlignSelf(ui.Center).AlignItems(ui.Start).Padding(8, 32, 48).Gap(8).Children(func() {
-			pageHeading(c, locales.In(c.Locale()).SettingsConnection()).Padding(0, 16)
-			form.View(c, theme.Theme, actions)
+		ui.Column(c).FillWidth().MaxWidth(settingsContentWidth).AlignSelf(ui.Center).AlignItems(ui.Start).Padding(8, 32, 48).Gap(10).Children(func() {
+			pageHeading(c, msgs.SettingsConnection())
+			s.app.providerField(c, theme.Theme, msgs, s.editor, "Name", msgs.FieldName(), "", &s.editor.Name, false, blocked)
+			s.app.providerEndpoint(c, theme.Theme, msgs, s.editor, blocked)
+			s.app.providerField(c, theme.Theme, msgs, s.editor, "APIKey", msgs.ConnectionFieldAPIKey(), "", &s.editor.APIKey, true, blocked)
+			s.app.providerField(c, theme.Theme, msgs, s.editor, "Model", msgs.ProviderDefaultModel(), "", &s.editor.DefaultModel, false, blocked)
+			ui.Row(c).Gap(8).Children(func() {
+				secondaryButton(c, msgs.ProviderTestSync()).Disabled(blocked).OnClick(func() {
+					s.testCalls++
+					s.callbackExact = s.editor.APIKey == connectionNativeSentinel
+					if s.testCalls != 1 || !s.callbackExact {
+						s.recordFailure("Test callback count or synthetic key differs")
+					}
+					s.app.providers.busy = true
+				})
+				primaryButton(c, msgs.ProviderSave()).Disabled(blocked).OnClick(func() {
+					s.saveCalls++
+					if s.editor.APIKey != connectionNativeSentinel {
+						s.recordFailure("Save did not receive the exact synthetic key")
+						return
+					}
+					cfg := connectionConfig{
+						API:              connectionAPIChatCompletions,
+						Endpoint:         s.editor.BaseURL,
+						APIKey:           s.editor.APIKey,
+						Model:            s.editor.DefaultModel,
+						ContextTokens:    131072,
+						OutputTokens:     8192,
+						WorkingDirectory: s.app.workDir,
+						MaxActiveTasks:   2,
+					}
+					if err := saveConnectionConfig(s.app.connectionPath, cfg); err != nil {
+						s.recordFailure(err.Error())
+						return
+					}
+					s.saved = true
+				})
+			})
 		})
 	})
 	if err := s.writeState(); err != nil {
@@ -113,27 +121,24 @@ func (s *connectionNativeScene) view(c *ui.Context) {
 }
 
 func (s *connectionNativeScene) writeState() error {
-	form := s.app.connectionForm
-	digest := sha256.Sum256([]byte(form.Draft.APIKey))
+	digest := sha256.Sum256([]byte(s.editor.APIKey))
 	phase := "fresh"
-	if form.Busy && s.testCalls > 0 {
+	if s.app.providers.busy && s.testCalls > 0 {
 		phase = "busy"
-	} else if s.savedReopened {
-		phase = "edit"
-	} else if form.HasSaved {
+	} else if s.saved {
 		phase = "saved"
 	} else if s.released {
 		phase = "released"
 	}
 	state := map[string]any{
-		"pid": os.Getpid(), "phase": phase, "busy": form.Busy,
+		"pid": os.Getpid(), "phase": phase, "busy": s.app.providers.busy,
 		"test_calls": s.testCalls, "save_calls": s.saveCalls,
-		"draft_exact":  form.Draft.APIKey == connectionNativeSentinel,
-		"draft_sha256": hex.EncodeToString(digest[:]), "callback_exact": s.callbackExact,
-		"has_saved": form.HasSaved, "saved_closed": s.savedClosed, "saved_reopened": s.savedReopened,
-		"save_in_flight": s.app.connectionSaveInFlight,
+		"draft_exact":    s.editor.APIKey == connectionNativeSentinel,
+		"draft_sha256":   hex.EncodeToString(digest[:]),
+		"callback_exact": s.callbackExact,
+		"has_saved":      s.saved,
 		"config_path":    s.app.connectionPath, "failure": s.failure,
-		"scope": "native production Connection form; controlled Test callback, real Save, no Apply or provider",
+		"scope": "native production Provider secure input; controlled Test callback, real Save, no Apply or provider",
 	}
 	data, err := json.MarshalIndent(state, "", "  ")
 	if err != nil {
@@ -182,12 +187,12 @@ func TestConnectionNativeSecureControlE2E(t *testing.T) {
 	}
 	app := &appModel{store: store, storePath: storePath, workDir: work, connectionPath: filepath.Join(profile, "connection.json")}
 	applyStoreSelection(app, store)
-	app.connectionForm = newConnectionSettings(nil, "")
-	app.connectionForm.Draft.Endpoint = "http://127.0.0.1:1/v1"
-	app.connectionForm.Draft.Model = "synthetic-no-provider"
-	app.connectionForm.Draft.WorkingDirectory = work
-	app.connectionForm.FocusField = "APIKey"
-	scene := &connectionNativeScene{app: app, root: root}
+	editor := newProviderDraft()
+	editor.Name = "Synthetic Native"
+	editor.WireAPI = pi.OpenAICompletions
+	editor.BaseURL = "http://127.0.0.1:1/v1"
+	editor.DefaultModel = "synthetic-no-provider"
+	scene := &connectionNativeScene{app: app, editor: editor, root: root}
 	mygo.RunOnMain(func() {
 		app.win = mygo.NewWindow(mygo.WindowOptions{
 			Title: "Nagi Secure Control E2E — synthetic only", Width: 1040, Height: 720,
@@ -199,10 +204,10 @@ func TestConnectionNativeSecureControlE2E(t *testing.T) {
 	}
 	released := make(chan struct{})
 	app.updateUI(func() {
-		if scene.testCalls != 1 || !app.connectionForm.Busy || !scene.callbackExact {
+		if scene.testCalls != 1 || !app.providers.busy || !scene.callbackExact {
 			scene.recordFailure("release did not follow one exact held Test callback")
 		}
-		app.connectionForm.Busy = false
+		app.providers.busy = false
 		scene.released = true
 		close(released)
 	})
@@ -212,10 +217,10 @@ func TestConnectionNativeSecureControlE2E(t *testing.T) {
 	}
 	checked := make(chan string, 1)
 	app.updateUI(func() {
-		if scene.testCalls != 1 || scene.saveCalls != 1 || !scene.released || app.connectionForm.Busy || app.connectionSaveInFlight || !scene.savedReopened || app.connectionForm.Draft.APIKey != connectionNativeSentinel {
-			scene.recordFailure("fresh/Test/Save/Close/Edit sequence or exact draft is incomplete")
+		if scene.testCalls != 1 || scene.saveCalls != 1 || !scene.released || app.providers.busy || !scene.saved || editor.APIKey != connectionNativeSentinel {
+			scene.recordFailure("fresh/Test/Save sequence or exact draft is incomplete")
 		}
-		if app.pi != nil || app.connectionEffective != nil || app.connectionTesting || app.connectionApplying {
+		if app.pi != nil || app.connectionEffective != nil || app.providerBusy() {
 			scene.recordFailure("a provider or Apply path was activated")
 		}
 		if err := scene.writeState(); err != nil {
@@ -233,7 +238,7 @@ func TestConnectionNativeSecureControlE2E(t *testing.T) {
 	if saved.APIKey != connectionNativeSentinel {
 		t.Fatal("saved configuration lost the synthetic key")
 	}
-	for _, phase := range []string{"fresh", "busy", "edit"} {
+	for _, phase := range []string{"fresh", "busy", "saved"} {
 		data, err := os.ReadFile(filepath.Join(root, "ax-"+phase+".json"))
 		if err != nil {
 			t.Fatal(err)
