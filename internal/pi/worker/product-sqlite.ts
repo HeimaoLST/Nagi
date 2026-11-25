@@ -785,11 +785,13 @@ export class ProductSQLite {
       closedAt: row.closed_at ?? undefined,
       updatedAt: row.updated_at ?? undefined,
     }));
-    const executions = this.db.prepare('SELECT * FROM executions ORDER BY sort_order').all().map(row => ({
-      executionId: decode(row.execution_id), revision: row.revision, state: row.state, operationId: decode(row.operation_id),
-      input: decode(row.input_json), error: decode(row.error_json), engineRunId: decode(row.engine_run_id),
-      importedActivityId: decode(row.imported_activity_id), retained: decode(row.retained_json),
-    }));
+    const executions = this.db.prepare('SELECT * FROM executions ORDER BY sort_order').all().map(row => {
+      const { route, ...input } = decode(row.input_json) as ProductProfile['executions'][number]['input'] &
+        Pick<ProductProfile['executions'][number], 'route'>;
+      return { executionId: decode(row.execution_id), revision: row.revision, state: row.state, operationId: decode(row.operation_id),
+        input, route, error: decode(row.error_json), engineRunId: decode(row.engine_run_id),
+        importedActivityId: decode(row.imported_activity_id), retained: decode(row.retained_json) };
+    });
     const operations = this.db.prepare('SELECT * FROM operations ORDER BY sort_order').all().map(row => ({
       method: decode(row.method_json), fingerprint: row.fingerprint, receipt: decode(row.receipt_json), reply: decode(row.reply_json),
       replyError: decode(row.reply_error_json), connectionRevision: row.connection_revision ?? undefined, retained: decode(row.retained_json),
@@ -812,6 +814,7 @@ export class ProductSQLite {
       providerEffectiveAccounts: read('provider_effective_accounts'), providerEffectivePolicy: read('provider_effective_policy'),
       routingPolicy: providerSavedRevision === undefined ? undefined : read('routing_policy'),
       providerSavedRevision, providerEffectiveRevision: read('provider_effective_revision'),
+      routingOverrides: read('routing_overrides'), providerEffectiveOverrides: read('provider_effective_overrides'),
     });
   }
 
@@ -834,7 +837,8 @@ export class ProductSQLite {
       row.acknowledgedAt ?? null, encode(row.acknowledgedExecutionId), row.closedAt ?? null, row.updatedAt ?? null));
     const executions = this.db.prepare('INSERT INTO executions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
     profile.executions.forEach((row, order) => executions.run(encode(row.executionId), order, row.revision, row.state, encode(row.operationId),
-      encode(row.input), encode(row.error), encode(row.engineRunId), encode(row.importedActivityId), encode(row.retained)));
+      encode(row.route ? { ...row.input, route: row.route } : row.input), encode(row.error), encode(row.engineRunId),
+      encode(row.importedActivityId), encode(row.retained)));
     const connections = this.db.prepare('INSERT INTO connections VALUES (?, ?, ?, ?)');
     profile.connections.forEach((row, order) => connections.run(row.revision, order, encode(row.sourceId), encode(row.configuration)));
     if (profile.mcpServers?.length) {
@@ -856,6 +860,7 @@ export class ProductSQLite {
       routing_policy: encode(profile.routingPolicy ?? 'balanced'), provider_effective_policy: encode(profile.providerEffectivePolicy),
       provider_saved_revision: encode(profile.providerSavedRevision), provider_effective_revision: encode(profile.providerEffectiveRevision),
       provider_effective_accounts: encode(profile.providerEffectiveAccounts),
+      routing_overrides: encode(profile.routingOverrides), provider_effective_overrides: encode(profile.providerEffectiveOverrides),
       snapshot_sha256: mirror.snapshot.digest, pending_snapshot_previous: encode(mirror.previous), updated_at: new Date().toISOString(),
     })) {
       if (value === null) remove.run(key);

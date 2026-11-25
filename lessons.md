@@ -417,3 +417,11 @@
 **Cause or correction:** Catalog generators must read provider-level transport defaults, `base_model` inheritance, nested IDs, and `toggle` semantics across all supported providers rather than cherry-picking samples; cost-protection patterns must be case-insensitive; canonical deduplication must preserve applied provider order across distinct providers while scoring siblings within the same provider; and repoint invalidation must drop only omitted or unchanged copied overrides.
 
 **Prevention:** Project the full pinned upstream inventory for every supported OpenAI-compatible provider with deterministic allowlists, compile and validate family regexes case-insensitively, test both same-account and cross-account canonical siblings plus mixed-case Pro SKUs and endpoint repoints with fresh overrides, and keep an unchanged-editor 200+ ID discovery integration gate green.
+
+### Distinguish caller cancellation from SDK cleanup aborts and transport failures from semantic escalation
+
+**Problem:** An interrupted HTTP 200 model stream can look like a local fetch abort because Pi's OpenAI SDK cancels its internal `AbortController` during stream cleanup, and older utility-escalation fixtures triggered HTTP 5xx provider errors that conflict with the zero-transport-replay rule.
+
+**Cause or correction:** Only explicit caller cancellation or shutdown signals represent non-poisoning user aborts; a stream that drops or errors after flushing HTTP 200 is a route-level transport/stream failure. Likewise, durable operation admission (`accepted`) and recovered execution state (`unknown`) are independent facts, and M4 utility escalation applies only to zero-mutating semantic failures (such as `finish_reason: "length"` truncation), never to retrying transient `429`/`5xx`/network errors on another Provider.
+
+**Prevention:** Classify user abort exclusively from the caller/run cancellation signal rather than the SDK's internal fetch signal, verify flushed-200 interrupted streams across both wire APIs, and keep separate integration assertions for transport-failure zero-escalation versus semantic utility escalation.

@@ -33,8 +33,9 @@ type cp1ToolCall struct {
 }
 
 type cp1Reply struct {
-	Text  string
-	Calls []cp1ToolCall
+	Text         string
+	Calls        []cp1ToolCall
+	FinishReason string
 }
 
 type cp1Request struct {
@@ -188,6 +189,9 @@ func writeCP1SSE(w http.ResponseWriter, reply cp1Reply) {
 		chunks = append(chunks, map[string]any{"index": 0, "delta": map[string]any{"role": "assistant", "content": reply.Text}, "finish_reason": nil})
 	}
 	finish := "stop"
+	if reply.FinishReason != "" {
+		finish = reply.FinishReason
+	}
 	if len(reply.Calls) > 0 {
 		finish = "tool_calls"
 		toolCalls := make([]any, 0, len(reply.Calls))

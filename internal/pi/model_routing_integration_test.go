@@ -264,6 +264,21 @@ func (h *routingMultiHarness) serveRequest(w http.ResponseWriter, r *http.Reques
 		w.WriteHeader(http.StatusServiceUnavailable)
 		_, _ = w.Write([]byte("controlled provider failure"))
 		return
+	case "fail-length":
+		w.Header().Set("Content-Type", "text/event-stream")
+		chunk, _ := json.Marshal(map[string]any{
+			"id":      "routing-length-response",
+			"object":  "chat.completion.chunk",
+			"created": 1,
+			"model":   body.Model,
+			"choices": []any{map[string]any{
+				"index":         0,
+				"delta":         map[string]any{"role": "assistant", "content": "truncated"},
+				"finish_reason": "length",
+			}},
+		})
+		_, _ = fmt.Fprintf(w, "data: %s\n\ndata: [DONE]\n\n", chunk)
+		return
 	}
 	if tool != nil {
 		args := tool.Args
@@ -944,7 +959,7 @@ console.log(n);
 		if role == "utility" && lastRole == "user" {
 			return "", &mcpProviderStep{Name: "ls", ID: "call_read_only", Args: string(lsArgs)}
 		}
-		return "fail", nil
+		return "fail-length", nil
 	})
 	readSum := routingDelegate(t, ctx, proc, evLog, h, originBot, workerBot, "READ ONLY", "quick", "light", nil, "op-del-read")
 	var escalatedAct pi.ProductActivity
@@ -992,6 +1007,33 @@ console.log(JSON.stringify({ adm, esc }));
 	}
 	if !slices.Equal(readRouteSeq, []string{"utility:none", "utility:none", "reasoning:high"}) {
 		t.Fatalf("readonly escalation provider sequence = %v", readRouteSeq)
+	}
+
+	h.setPlan("TRANSPORT FAIL", func(_role, _lastRole string) (string, *mcpProviderStep) {
+		return "fail", nil
+	})
+	trSum := routingDelegate(t, ctx, proc, evLog, h, originBot, workerBot, "TRANSPORT FAIL", "quick", "light", nil, "op-del-trfail")
+	trAct, err := proc.client.GetActivity(ctx, trSum.ActivityID)
+	if err != nil || len(trAct.Executions) != 1 {
+		t.Fatalf("GetActivity(TRANSPORT FAIL) = %+v, %v", trAct, err)
+	}
+	if s := evLog.waitSettled(t, ctx, proc, trAct.Executions[0].ExecutionID); s.State != "failed" {
+		t.Fatalf("TRANSPORT FAIL settled = %+v, want failed", s)
+	}
+	time.Sleep(300 * time.Millisecond)
+	trAct, err = proc.client.GetActivity(ctx, trSum.ActivityID)
+	if err != nil || trAct.State != "needsAttention" || len(trAct.Executions) != 1 {
+		t.Fatalf("transport 5xx failure must NOT escalate: %+v, %v", trAct, err)
+	}
+	trEscCount := runNodeSQLite(t, nodePath, dbPath, `
+const { DatabaseSync } = require('node:sqlite');
+const db = new DatabaseSync(process.argv[1]);
+const n = db.prepare('SELECT count(*) AS n FROM activity_escalations WHERE activity_id = ?').get(JSON.stringify(process.argv[2])).n;
+db.close();
+console.log(n);
+`, trSum.ActivityID)
+	if trEscCount != "0" {
+		t.Fatalf("activity_escalations count for transport failure = %s, want 0", trEscCount)
 	}
 
 	proc.shutdown(t, ctx)
@@ -1092,12 +1134,23 @@ func TestPiProductModelRoutingDeletedProviderRevocationBackupAndMigration(t *tes
 	if len(authReqs) != 1 || authReqs[0].Role != "coding" || authReqs[0].Thinking != "medium" {
 		t.Fatalf("AUTH FAIL requests = %+v", authReqs)
 	}
-	_, err = proc.client.ContinueActivity(ctx, pi.ProductActivityContinueParams{
+	contParams := pi.ProductActivityContinueParams{
 		ProductActivityParams: pi.ProductActivityParams{ActivityID: authSum.ActivityID},
 		ExpectedRevision:      authAct.Revision,
 		OperationID:           "op-cont-auth",
-	})
-	mcpExpectRemoteCode(t, err, "credential_unavailable", "ContinueActivity after remote 401")
+	}
+	contRec, err := proc.client.ContinueActivity(ctx, contParams)
+	if err != nil || contRec.State != "rejected" {
+		t.Fatalf("ContinueActivity after remote 401 = %+v, %v", contRec, err)
+	}
+	var contAdm pi.ProductRouteAdmission
+	if err := json.Unmarshal(contRec.Result, &contAdm); err != nil || contAdm.Code != pi.ProductCredentialUnavailable || contAdm.Delivery != "non_dispatched" || contAdm.Reason != "auth_failed" {
+		t.Fatalf("ContinueActivity after remote 401 result = %s (%+v), err=%v", string(contRec.Result), contAdm, err)
+	}
+	contReplay, err := proc.client.ContinueActivity(ctx, contParams)
+	if err != nil || !reflect.DeepEqual(contReplay, contRec) {
+		t.Fatalf("ContinueActivity replay after remote 401 = %+v, want %+v, err=%v", contReplay, contRec, err)
+	}
 	authCountAfter := 0
 	for _, req := range h.allRequests() {
 		if req.User == "AUTH FAIL" {

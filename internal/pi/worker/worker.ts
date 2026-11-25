@@ -5,7 +5,7 @@ import {
   createAgentSessionFromServices, createAgentSessionRuntime, createAgentSessionServices,
   createReadToolDefinition, createBashToolDefinition, createEditToolDefinition, createWriteToolDefinition,
   createGrepToolDefinition, createFindToolDefinition, createLsToolDefinition,
-  ModelRuntime, SessionManager, SettingsManager, createMcpExtension, McpOAuthCredentialStore, InMemoryAuthStorageBackend,
+  ModelRuntime, SessionManager, SettingsManager, buildSessionContext, createMcpExtension, McpOAuthCredentialStore, InMemoryAuthStorageBackend,
   type SessionEntry,
   type AgentSessionEvent, type AgentSessionRuntime, type ExtensionFactory, type ToolDefinition, type McpServerEntry, type McpTransportFactory,
 } from '@earendil-works/pi-coding-agent';
@@ -23,6 +23,7 @@ import { isNagiBotSystemPrompt } from './bot-template.js';
 import { bindingEntryType as BINDING_TYPE, turnEntryType as TURN_TYPE, liveTranscript, matchesTranscriptOwner,
   openDiskTranscript, transcriptEntries, type TranscriptOwner } from './product-transcript.js';
 import { clipUTF8, projectionRedactor, streamingProjectionRedactor } from './product-redactor.js';
+import type { ProviderAttempt } from './route-health.js';
 
 const CONFIGURATION_TYPE = 'nagi-configuration-v1';
 const MCP_TYPE = 'nagi-mcp-v1';
@@ -37,6 +38,8 @@ type Run = {
   whiteboard?: { text: string; anchor?: UserMessage };
   steeringClosed?: boolean;
   steering?: { pending: Map<string, { steerId: string; bytes: number }>; bytes: number; enqueues: Promise<void> };
+  providerFailed?: boolean;
+  providerSettlements?: Set<Promise<void>>;
 };
 type Context = {
   binding: Binding; configuration: ConfigureParams; instructions: string; codingTools: OpenParams['codingTools']; domainTools: OpenParams['domainTools']; mcpServers: NonNullable<OpenParams['mcpServers']>;
@@ -71,9 +74,10 @@ class Worker {
       refreshSession: (params, tools) => this.refreshProductSession(params, tools),
       conversationPreview: (sessionRef, contextId, botId) => this.conversationPreview(sessionRef, contextId, botId),
       readTranscript: (sessionRef, owner) => this.readTranscript(sessionRef, owner),
+      historyBytes: (sessionRef, owner) => this.historyBytes(sessionRef, owner),
       redactor: keys => projectionRedactor(this.credentialKeys(keys)),
       streamingRedactor: keys => streamingProjectionRedactor(this.credentialKeys(keys)),
-      test: configuration => this.testProductConnection(configuration),
+      test: (configuration, attempt) => this.testProductConnection(configuration, attempt),
       drain: () => this.drainProduct(),
       disconnect: () => { void this.disconnect(true); },
       cleanMessage: error => this.cleanMessage(error),
@@ -362,16 +366,46 @@ class Worker {
     if (productTools.length || inMemory) {
       const stream = models.streamSimple.bind(models);
       models.streamSimple = (model, context, options) => {
-        const observers = this.contexts.get(params.contextId)?.active?.product?.observers;
+        const run = this.contexts.get(params.contextId)?.active;
+        const observers = run?.product?.observers;
         const request = options?.fetch ?? globalThis.fetch;
-        return stream(model, context, { ...options, fetch: async (input, init) => {
-          if (!observers?.authorizeProvider) throw new RequestError('credential_unavailable', 'No product execution owns this provider request');
-          await observers.acquireProvider?.(init?.signal ?? undefined);
+        const auxiliary = options?.fetch !== undefined;
+        let attempt: ProviderAttempt | undefined;
+        let fetchError: unknown;
+        let signal: AbortSignal | undefined;
+        const result = stream(model, context, { ...options, fetch: async (input, init) => {
+          if (!observers?.authorizeProvider || !run) throw new RequestError('credential_unavailable', 'No product execution owns this provider request');
+          if (run.providerFailed) throw new RequestError('route_unavailable', 'The execution provider request already failed');
+          signal = init?.signal ?? options?.signal ?? undefined;
+          await observers.acquireProvider?.(signal);
           observers.authorizeProvider();
-          const response = await request(input, init);
-          if (response.status === 401 || response.status === 403) observers.credentialRejected?.();
-          return response;
+          attempt = observers.providerAttempt?.();
+          try {
+            const response = await request(input, init);
+            if (!signal?.aborted && !run.cancelled) {
+              attempt?.headers(response);
+              if (!response.ok && !auxiliary) run.providerFailed = true;
+            }
+            return response;
+          } catch (error) {
+            fetchError = error;
+            if (!signal?.aborted && !auxiliary) run.providerFailed = true;
+            throw error;
+          }
         } });
+        if (run) {
+          const pending = run.providerSettlements ??= new Set();
+          const observe = (outcome: 'success' | 'error' | 'aborted') => {
+            if (run.cancelled || options?.signal?.aborted) outcome = 'aborted';
+            if (outcome === 'error' && attempt && !auxiliary) run.providerFailed = true;
+            attempt?.settle(outcome, fetchError);
+          };
+          const settlement = result.result().then(message => observe(message.stopReason === 'error' ? 'error' :
+            message.stopReason === 'aborted' ? 'aborted' : 'success'), () => observe('error'));
+          pending.add(settlement);
+          void settlement.then(() => pending.delete(settlement), () => pending.delete(settlement));
+        }
+        return result;
       };
     }
     const admission: ExtensionFactory = pi => {
@@ -492,6 +526,7 @@ class Worker {
         throw error;
       }
     }
+    if (run.providerSettlements?.size) await Promise.all(run.providerSettlements);
     const last = run.final;
     const completed = !failure && run.sdkSettled && !run.sdkAborted && last?.stopReason === 'stop';
     const status = run.product && completed ? 'completed' : run.cancelled || run.sdkAborted || last?.stopReason === 'aborted' ? 'interrupted'
@@ -500,7 +535,7 @@ class Worker {
     const error = status === 'failed' ? { code: 'execution_failed', message: failure ? this.cleanMessage(failure) : this.cleanMessage(last?.errorMessage ?? `SDK outcome: ${last?.stopReason ?? 'missing settlement'}`) } : undefined;
     context.active = undefined;
     context.observationSeq++;
-    if (run.product) run.product.observers.settled(status, text, error?.message);
+    if (run.product) run.product.observers.settled(status, text, error?.message, run.providerFailed);
     else this.event(context, run, 'run.settled', { status, text, ...(error ? { error } : {}), ...(last?.usage ? { usage: { ...last.usage, cost: undefined, scope: 'final_assistant', pricingKnown: false } } : {}) });
   }
   private async conversationPreview(sessionRef: string, contextId: string, botId: string) {
@@ -530,6 +565,22 @@ class Worker {
     if (context.transcriptSnapshot?.length !== context.manager.getEntryCount()) context.transcriptSnapshot = context.manager.getEntries();
     return liveTranscript(context.transcriptSource, context.transcriptSnapshot!);
   }
+  private async historyBytes(sessionRef: string, owner: TranscriptOwner): Promise<number> {
+    const transcript = await this.readTranscript(sessionRef, owner);
+    try {
+      const open = this.contexts.get(owner.contextId);
+      const entries = open ? undefined : [] as SessionEntry[];
+      if (entries) for await (const entry of transcriptEntries(transcript)) entries.push(entry);
+      const messages = entries ? buildSessionContext(entries).messages : open!.manager.buildSessionContext().messages;
+      let bytes = 0;
+      for (const message of messages) {
+        if ('content' in message) bytes += Buffer.byteLength(JSON.stringify(message.content)) + 24;
+        else if ('summary' in message && typeof message.summary === 'string') bytes += Buffer.byteLength(message.summary) + 24;
+      }
+      return bytes;
+    } finally { await transcript.close(); }
+  }
+
   private async openProductSession(params: OpenParams, tools: ToolDefinition[]): Promise<ProductSession> {
     const context = await this.open(params, tools);
     const sessionRef = context.manager.getSessionFile();
@@ -595,15 +646,15 @@ class Worker {
     return run;
   }
 
-  private async testProductConnection(configuration: Connection & Pick<ConfigureParams, 'capabilities'>): Promise<void> {
-    try { await this.runProductConnectionTest(configuration); }
+  private async testProductConnection(configuration: Connection & Pick<ConfigureParams, 'capabilities'>, attempt?: () => ProviderAttempt): Promise<void> {
+    try { await this.runProductConnectionTest(configuration, attempt); }
     catch (error) {
       const code = error instanceof RequestError ? error.code : 'connection_test_failed';
       throw new RequestError(code, this.cleanMessage(error, configuration.apiKey));
     }
   }
 
-  private async runProductConnectionTest(configuration: Connection & Pick<ConfigureParams, 'capabilities'>): Promise<void> {
+  private async runProductConnectionTest(configuration: Connection & Pick<ConfigureParams, 'capabilities'>, attempt?: () => ProviderAttempt): Promise<void> {
     const id = randomUUID();
     const context = await this.open({ contextId: id, botId: id, purpose: 'conversation', selectionRevision: 1,
       cwd: configuration.workingDirectory, used: false, instructions: '', codingTools: [], domainTools: null,
@@ -611,6 +662,7 @@ class Worker {
     const { promise, resolve, reject } = Promise.withResolvers<void>();
     const run = this.startProductRun(context, id, { revision: 0, text: 'Reply with OK.', materials: [] }, {
       started: () => {}, text: () => {}, confirmedFileEffect: () => {}, toolStarted: () => {}, toolFinished: () => {},
+      providerAttempt: attempt,
       authorizeProvider: () => {
         if (this.closing || !context.active || context.active.cancelled) throw new RequestError('cancelled', 'The provider test is no longer active');
       },

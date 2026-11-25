@@ -34,11 +34,12 @@ type cp2ToolCall struct {
 }
 
 type cp2Reply struct {
-	Text        string
-	Calls       []cp2ToolCall
-	HTTPStatus  int
-	RedirectURL string
-	RawError    string
+	Text         string
+	Calls        []cp2ToolCall
+	HTTPStatus   int
+	RedirectURL  string
+	RawError     string
+	FinishReason string
 }
 
 type cp2WireMsg struct {
@@ -370,8 +371,9 @@ func (p *cp2Provider) serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeCP1SSE(w, cp1Reply{
-		Text:  reply.Text,
-		Calls: cp2ToCP1Calls(reply.Calls),
+		Text:         reply.Text,
+		Calls:        cp2ToCP1Calls(reply.Calls),
+		FinishReason: reply.FinishReason,
 	})
 }
 

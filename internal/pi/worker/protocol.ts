@@ -4,7 +4,8 @@ import type { Writable } from 'node:stream';
 import { SYSTEM_KIND_BOT_ARCHITECT } from './bot-template.js';
 import { memoryChangedSchema, memoryDate, memoryRuleSchema, memorySearchLimit, memorySearchQuery, memoryText,
   pendingLearningSchema, workLogSchema } from './bot-memory.js';
-import { activityRouting, discoveredModel, modelCapabilities, policySchema, providerAccountView, providerInput, routeSchema, thinkingSchema } from './model-router.js';
+import { activityRouting, discoveredModel, modelCapabilities, overridesPatchSchema, overridesSchema, policySchema, providerAccountView,
+  providerInput, roleStatusSchema, routeSchema, thinkingSchema } from './model-router.js';
 
 export const MAX_FRAME = 8 * 1024 * 1024;
 export const id = Type.String({ minLength: 1 });
@@ -315,6 +316,7 @@ export const productCommands = Type.Union([
   Type.Object({ method: Type.Literal('provider.revokeCredential'), params: Type.Object({ providerId: providerInput.properties.providerId, operationId: id }, mcpStrict) }),
   Type.Object({ method: Type.Literal('routing.get'), params: Type.Object({}, mcpStrict) }),
   Type.Object({ method: Type.Literal('routing.setPolicy'), params: Type.Object({ policy: policySchema, operationId: id }, mcpStrict) }),
+  Type.Object({ method: Type.Literal('routing.setOverrides'), params: Type.Object({ savedRevision: revision, overrides: overridesPatchSchema, operationId: id }, mcpStrict) }),
   Type.Object({ method: Type.Literal('mcp.list'), params: Type.Object({}, mcpStrict) }),
   Type.Object({ method: Type.Literal('mcp.save'), params: Type.Object({ server: mcpServerInput, secrets: mcpSecretInput, operationId: id }, mcpStrict) }),
   Type.Object({ method: Type.Literal('mcp.delete'), params: Type.Object({ serverId: mcpServerId, operationId: id }, mcpStrict) }),
@@ -368,7 +370,8 @@ export const questionResult = Type.Object({ questionId: id, executionId: id, tex
 export type ProductQuestion = Static<typeof questionResult>;
 const connectionRevisions = { savedRevision: nullable(revision), effectiveRevision: nullable(revision) };
 const routingFields = { ...connectionRevisions, policy: policySchema, effectivePolicy: policySchema,
-  resolvedRoles: Type.Object({ dialogue: nullable(routeSchema), coding: nullable(routeSchema), reasoning: nullable(routeSchema), utility: nullable(routeSchema) }) };
+  resolvedRoles: Type.Object({ dialogue: nullable(routeSchema), coding: nullable(routeSchema), reasoning: nullable(routeSchema), utility: nullable(routeSchema) }),
+  overrides: Type.Optional(overridesSchema), effectiveOverrides: Type.Optional(overridesSchema), roleStatus: Type.Optional(roleStatusSchema) };
 const deliveryBlocker = Type.Optional(Type.Literal('credential_unavailable'));
 const connectionView = Type.Object({ ...Type.Omit(connectionSchema, ['apiKey']).properties, credentialPresent: Type.Boolean() });
 const connectionResult = Type.Object({ ...connectionRevisions, saved: Type.Union([connectionView, Type.Null()]), effective: Type.Union([connectionView, Type.Null()]) });
@@ -437,6 +440,7 @@ export const productResults = {
   'provider.revokeCredential': Type.Object(connectionRevisions),
   'routing.get': Type.Object(routingFields),
   'routing.setPolicy': Type.Object(connectionRevisions),
+  'routing.setOverrides': Type.Object(connectionRevisions),
   'mcp.list': Type.Object({ servers: Type.Array(mcpServerView) }),
   'mcp.save': Type.Object({ server: mcpServerView }),
   'mcp.delete': Type.Object({ deleted: Type.Literal(true) }),
