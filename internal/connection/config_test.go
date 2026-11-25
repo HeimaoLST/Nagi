@@ -260,3 +260,84 @@ func sortedKeys(values map[string]string) []string {
 	}
 	return keys
 }
+
+func TestConnectionConfigV3AccountsPublicationAndVersionGuards(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "connection.json")
+	rawAccounts := json.RawMessage(`[{"providerId":"prov-1","name":"Studio","wireApi":"openai-completions","baseUrl":"https://api.example.com/v1","defaultModel":"gpt-4o","models":["gpt-4o"],"contextTokens":131072,"outputTokens":8192,"enabled":true}]`)
+
+	v3ProviderOnly := PrivateConfig{
+		Version:       3,
+		Sources:       map[string]CredentialSource{"prov-1": {API: APIChatCompletions, Endpoint: "https://api.example.com/v1", APIKey: "sk-v3-only"}},
+		Accounts:      rawAccounts,
+		PublicationID: "pub-v3-001",
+	}
+	data, err := json.MarshalIndent(v3ProviderOnly, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	compact := func(raw json.RawMessage) string {
+		t.Helper()
+		var buf bytes.Buffer
+		if err := json.Compact(&buf, raw); err != nil {
+			t.Fatal(err)
+		}
+		return buf.String()
+	}
+	got, err := ReadPrivateConfig(path)
+	if err != nil {
+		t.Fatalf("ReadPrivateConfig v3 provider-only failed: %v", err)
+	}
+	if got.Version != 3 || got.PublicationID != "pub-v3-001" || compact(got.Accounts) != string(rawAccounts) {
+		t.Fatalf("v3 fields mismatch: version=%d pub=%q accounts=%s", got.Version, got.PublicationID, string(got.Accounts))
+	}
+
+	legacy := testConnectionConfig(t)
+	if err := SaveConfig(path, legacy); err != nil {
+		t.Fatalf("SaveConfig onto v3 file failed: %v", err)
+	}
+	afterSave, err := ReadPrivateConfig(path)
+	if err != nil {
+		t.Fatalf("ReadPrivateConfig after SaveConfig on v3 failed: %v", err)
+	}
+	if afterSave.Version != 3 || afterSave.PublicationID != "pub-v3-001" || compact(afterSave.Accounts) != string(rawAccounts) {
+		t.Fatalf("SaveConfig dropped v3 fields: version=%d pub=%q accounts=%s", afterSave.Version, afterSave.PublicationID, string(afterSave.Accounts))
+	}
+	if _, ok := afterSave.Sources["prov-1"]; !ok {
+		t.Fatalf("SaveConfig dropped existing provider credential source")
+	}
+	defaults, err := afterSave.Defaults()
+	if err != nil || defaults.Model != legacy.Model || defaults.Endpoint != legacy.Endpoint {
+		t.Fatalf("SaveConfig legacy defaults mismatch: %+v err=%v", defaults, err)
+	}
+
+	for _, tc := range []struct {
+		name string
+		cfg  PrivateConfig
+	}{
+		{"v2-with-accounts", PrivateConfig{Version: 2, Accounts: rawAccounts, Sources: map[string]CredentialSource{}}},
+		{"v2-with-publicationId", PrivateConfig{Version: 2, PublicationID: "pub-bad", Sources: map[string]CredentialSource{}}},
+		{"v4-unsupported", PrivateConfig{Version: 4, Sources: map[string]CredentialSource{}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			badPath := filepath.Join(dir, tc.name+".json")
+			raw, err := json.Marshal(tc.cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(badPath, raw, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := ReadPrivateConfig(badPath); err == nil || !strings.Contains(err.Error(), "unsupported") {
+				t.Fatalf("%s expected unsupported version error, got %v", tc.name, err)
+			}
+			untouched, err := os.ReadFile(badPath)
+			if err != nil || !bytes.Equal(untouched, raw) {
+				t.Fatalf("%s mutated file on rejection", tc.name)
+			}
+		})
+	}
+}

@@ -20,6 +20,9 @@ type piAppHost struct {
 	productBots      map[string]pi.ProductBot
 	productDrafts    map[string]pi.ProductDraft
 	productConn      pi.ProductConnectionStatus
+	productProviders pi.ProductProviderList
+	providerRead     uint64
+	providerRefresh  bool
 	productEvents    chan struct{}
 	productPending   map[string]productPendingSend
 	generation       int
@@ -128,6 +131,10 @@ func (a *appModel) openProductProfile(ctx context.Context, fresh bool, generatio
 	if err != nil {
 		return err
 	}
+	providers, err := host.product.ListProviders(ctx)
+	if err != nil {
+		return err
+	}
 	if recovery := opened.Snapshot.Recovery; recovery != nil {
 		host.recoveryID = recovery.ID
 		if local == nil || local.RecoveryID != recovery.ID {
@@ -223,6 +230,8 @@ func (a *appModel) openProductProfile(ctx context.Context, fresh bool, generatio
 			a.appearanceMode = normalizeAppearanceMode(local.Appearance)
 			a.hideBuiltinArchitect = local.HideBuiltinArchitect
 		}
+		a.providers = providerSettings{}
+		a.applyProductProviders(providers)
 		a.applyProductConnection(opened.Snapshot.Connection)
 		a.connectionForm = nil
 		a.ensureConnectionForm()
@@ -380,11 +389,22 @@ func (a *appModel) sendProductConversation(host *piAppHost, ct *contact) bool {
 				_ = a.persist()
 				return
 			}
-			if rejected {
+			if rejected || receipt.State == "rejected" {
 				delete(host.productPending, ct.ID)
 				_ = a.persist()
 				ct.SendState = sendIdle
-				ct.setSendError(a.connectionSafeMessage(err), "", "")
+				var result struct {
+					Code pi.ProductDeliveryBlocker `json:"code"`
+				}
+				_ = json.Unmarshal(receipt.Result, &result)
+				if result.Code == pi.ProductCredentialUnavailable || remote != nil && remote.Code == string(pi.ProductCredentialUnavailable) {
+					ct.setSendError("The Provider credential is unavailable.", sendErrorCredentialUnavailable, "")
+					a.refreshProductProviders(host)
+				} else if rejected {
+					ct.setSendError(a.connectionSafeMessage(err), "", "")
+				} else {
+					ct.setSendError("The conversation was not dispatched.", "", "")
+				}
 				return
 			}
 			ct.SendState, ct.Status = sendUnknown, statusAttention
@@ -548,6 +568,10 @@ func (a *appModel) applyProductEvent(host *piAppHost, event pi.ProductEvent) {
 	if a.pi != host {
 		return
 	}
+	if event.Name == "provider.changed" {
+		a.refreshProductProviders(host)
+		return
+	}
 	if event.Name == "memory.changed" {
 		var changed pi.ProductMemoryChangedEvent
 		if json.Unmarshal(event.Data, &changed) == nil {
@@ -707,6 +731,7 @@ func (a *appModel) reconcileProductStream(host *piAppHost) {
 	if a.pi != host {
 		return
 	}
+	a.refreshProductProviders(host)
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()

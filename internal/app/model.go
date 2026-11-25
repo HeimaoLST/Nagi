@@ -271,6 +271,7 @@ type appModel struct {
 	connectionProbe        *piConnectionProbe
 	startupDetailsOpen     bool
 	shutdownDrainStarted   bool
+	providers              providerSettings
 
 	openPath func(string) error
 
