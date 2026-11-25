@@ -4,7 +4,7 @@ import type { Writable } from 'node:stream';
 import { SYSTEM_KIND_BOT_ARCHITECT } from './bot-template.js';
 import { memoryChangedSchema, memoryDate, memoryRuleSchema, memorySearchLimit, memorySearchQuery, memoryText,
   pendingLearningSchema, workLogSchema } from './bot-memory.js';
-import { activityRouting, policySchema, providerAccountView, providerInput, routeSchema, thinkingSchema } from './model-router.js';
+import { activityRouting, discoveredModel, modelCapabilities, policySchema, providerAccountView, providerInput, routeSchema, thinkingSchema } from './model-router.js';
 
 export const MAX_FRAME = 8 * 1024 * 1024;
 export const id = Type.String({ minLength: 1 });
@@ -309,6 +309,8 @@ export const productCommands = Type.Union([
   Type.Object({ method: Type.Literal('provider.test'), params: Type.Object({ account: providerInput, apiKey: Type.Optional(Type.String()) }, mcpStrict) }),
   Type.Object({ method: Type.Literal('provider.save'), params: Type.Object({ account: providerInput, apiKey: Type.Optional(Type.String()), operationId: id }, mcpStrict) }),
   Type.Object({ method: Type.Literal('provider.delete'), params: Type.Object({ providerId: providerInput.properties.providerId, operationId: id }, mcpStrict) }),
+  Type.Object({ method: Type.Literal('provider.reorder'), params: Type.Object({ providerIds: Type.Array(providerInput.properties.providerId,
+    { maxItems: 64, uniqueItems: true }), savedRevision: revision, operationId: id }, mcpStrict) }),
   Type.Object({ method: Type.Literal('provider.apply'), params: Type.Object({ savedRevision: revision, operationId: id }, mcpStrict) }),
   Type.Object({ method: Type.Literal('provider.revokeCredential'), params: Type.Object({ providerId: providerInput.properties.providerId, operationId: id }, mcpStrict) }),
   Type.Object({ method: Type.Literal('routing.get'), params: Type.Object({}, mcpStrict) }),
@@ -427,9 +429,10 @@ export const productResults = {
   'connection.save': Type.Object(connectionRevisions),
   'connection.apply': Type.Object(connectionRevisions),
   'provider.list': Type.Object({ ...routingFields, accounts: Type.Array(providerAccountView) }),
-  'provider.test': Type.Object({ ok: Type.Boolean(), models: stringList, latencyMs: revision, error: Type.Optional(id) }),
+  'provider.test': Type.Object({ ok: Type.Boolean(), models: stringList, discoveredModels: Type.Optional(Type.Array(discoveredModel)), latencyMs: revision, error: Type.Optional(id) }),
   'provider.save': Type.Object(connectionRevisions),
   'provider.delete': Type.Object(connectionRevisions),
+  'provider.reorder': Type.Object(connectionRevisions),
   'provider.apply': Type.Object(connectionRevisions),
   'provider.revokeCredential': Type.Object(connectionRevisions),
   'routing.get': Type.Object(routingFields),
@@ -475,7 +478,7 @@ export type ActivityState = Static<typeof activityStateSchema>;
 export type ProductParams<M extends ProductCommand['method']> = Extract<ProductCommand, { method: M }>['params'];
 const modelSettings = Type.Object({ model: id, contextTokens: positiveInteger, outputTokens: positiveInteger });
 const configuration = Type.Object({ wireApi: connectionSchema.properties.wireApi, baseUrl: id, apiKey: id, credentialSource: id,
-  ...modelSettings.properties, thinkingLevel: Type.Optional(thinkingSchema), reasoning: Type.Optional(Type.Boolean()) });
+  ...modelSettings.properties, thinkingLevel: Type.Optional(thinkingSchema), reasoning: Type.Optional(Type.Boolean()), capabilities: Type.Optional(modelCapabilities) });
 const commands = Type.Union([
   Type.Object({ method: Type.Literal('configure'), params: configuration }),
   Type.Object({ method: Type.Literal('context.open'), params: Type.Object({ contextId: id, botId: id, purpose: Type.Union([Type.Literal('conversation'), Type.Literal('activity')]), activityId: Type.Optional(id), selectionRevision: Type.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER }), instructions: Type.String(), cwd: id, resumeRef: Type.Optional(id), used: Type.Boolean(), codingTools: Type.Union([Type.Null(), stringList]), domainTools: Type.Union([Type.Null(), Type.Array(domainTool)]), mcpServers: Type.Optional(Type.Array(mcpServer)), configuration: Type.Optional(configuration) }) }),

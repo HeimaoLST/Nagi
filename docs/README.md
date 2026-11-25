@@ -16,7 +16,7 @@ This directory holds Nagi's product requirements, implemented design contracts, 
 
 - [RFC-0001: Multi-Brain Execution, Direct Data Inspection & Unified Capabilities](rfcs/0001-multi-brain-and-capabilities.md) — `Partially Implemented` (`M0a`–`M4` backend shipped; M1–M4 UI handoffs delivered to `t1vb`).
 - [RFC-0002: Bot-Activity Control Plane v2](rfcs/0002-bot-activity-control-plane.md) — `Partially Implemented` (`CP-1`–`CP-3` all backend milestones shipped; UI handoffs delivered to `t1vb`).
-- [RFC-0003: Model Catalog, Ranked Multi-Provider Routing & Health Failover](rfcs/0003-model-catalog-and-smart-routing.md) — `Review` (Astra-6.2 deep technical review resolved; implementation scheduled after RFC-0002 `CP-3`).
+- [RFC-0003: Model Catalog, Ranked Multi-Provider Routing & Health Failover](rfcs/0003-model-catalog-and-smart-routing.md) — `Partially Implemented` (`RT-1` backend shipped; `RT-2` next).
 
 ### Repository Root References
 

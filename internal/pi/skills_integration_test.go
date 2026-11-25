@@ -814,7 +814,7 @@ const fk = db.prepare('PRAGMA foreign_key_check').all().length;
 db.close();
 console.log(JSON.stringify({ v, fk }));
 `)
-	if !strings.Contains(schemaCheck, `"v":10`) || !strings.Contains(schemaCheck, `"fk":0`) {
+	if !strings.Contains(schemaCheck, `"v":11`) || !strings.Contains(schemaCheck, `"fk":0`) {
 		t.Fatalf("SQLite schema version/FK mismatch = %s", schemaCheck)
 	}
 
