@@ -401,3 +401,11 @@
 **Cause or correction:** Extension-layer message preservation and provider-adapter serialization are independent steps; both `openai-completions` and `openai-responses` adapters fold mid-history system messages unless model compatibility (`compat.supportsMidConvoSystemMessages`) is explicitly configured.
 
 **Prevention:** Configure adapter compatibility explicitly for foreground sessions, never replace visible message objects or append synthetic messages in `context` handlers, and verify complete serialized outbound request bodies across both wire APIs rather than checking only extension arrays or `systemPrompt`.
+
+### Separate Pi steer continuation from Nagi escalation in tests
+
+**Problem:** Injecting a provider error while a queued steer was still pending caused a second provider request inside the same Pi SDK run during escalation verification, obscuring whether a durable replacement execution had been admitted.
+
+**Cause or correction:** Pi can continue the active SDK run to process a queued steering message after an assistant error, so raw provider request count and durable Nagi replacement execution count measure different mechanisms.
+
+**Prevention:** Trigger controlled provider failures after observing steer consumption when testing M4 escalation exclusion, and assert durable `activity.executions` count, routed models, and `activity_escalations` rows separately from raw HTTP request counts; also dispatch mock MCP HTTP stream probes by method before parsing request bodies.

@@ -13,7 +13,7 @@ import { InMemoryCredentialStore, type AssistantMessage, type UserMessage } from
 import { StdioTransport, StreamableHttpTransport, validateMcpServerConfig, mcpNamespace } from '@earendil-works/pi-mcp';
 import type { TSchema } from 'typebox';
 import {
-  MAX_FRAME, RequestError, Writer, canonicalJSON, frameBytes, message, parseProductRequest, parseRequest,
+  MAX_FRAME, RequestError, Writer, canonicalJSON, frameBytes, maxDraftBytes, message, parseProductRequest, parseRequest,
   type Command, type ConfigureParams, type Connection, type Draft, type OpenParams, type StartParams, type ToolResult,
 } from './protocol.js';
 import { Product, confirmedFileEffect, type ProductRunObservers, type ProductSession } from './product.js';
@@ -35,6 +35,8 @@ type Run = {
   pending: Map<string, (result: ToolResult) => void>; inputs: Map<string, unknown>;
   product?: { observers: ProductRunObservers; draft: Draft };
   whiteboard?: { text: string; anchor?: UserMessage };
+  steeringClosed?: boolean;
+  steering?: { pending: Map<string, { steerId: string; bytes: number }>; bytes: number; enqueues: Promise<void> };
 };
 type Context = {
   binding: Binding; configuration: ConfigureParams; instructions: string; codingTools: OpenParams['codingTools']; domainTools: OpenParams['domainTools']; mcpServers: NonNullable<OpenParams['mcpServers']>;
@@ -122,6 +124,11 @@ class Worker {
       if (run.cancelled || this.disconnected) void context.runtime.session.abort().catch(() => this.disconnect(true));
     }
     if (event.type === 'agent_settled') { run.sdkSettled = true; run.sdkAborted = event.aborted; }
+    if (event.type === 'message_start' && event.message.role === 'user' && run.steering?.pending.size) {
+      const content = event.message.content;
+      const envelope = typeof content === 'string' ? content : content.length === 1 && content[0].type === 'text' ? content[0].text : undefined;
+      if (envelope !== undefined) this.observeSteer(run, envelope, 'delivered');
+    }
     if (event.type === 'message_end' && event.message.role === 'assistant') run.final = event.message;
     if (run.whiteboard && !run.whiteboard.anchor && event.type === 'message_end' && event.message.role === 'user') {
       run.whiteboard.anchor = event.message;
@@ -414,6 +421,48 @@ class Worker {
     catch (error) { await runtime.dispose(); this.contexts.delete(params.contextId); throw error; }
     return context;
   }
+  private steeringRun(context: Context, executionId: string): Run | undefined {
+    const run = context.active;
+    if (context.binding.purpose === 'activity' && run?.product && run.id === executionId && run.sdkStarted && !run.sdkSettled &&
+        !run.steeringClosed && !run.cancelled && !this.closing && context.runtime.session.isStreaming) return run;
+  }
+
+  private observeSteer(run: Run, envelope: string, state: 'delivered' | 'not_applied' | 'unknown', reason?: string): void {
+    const steering = run.steering!;
+    const entry = steering.pending.get(envelope);
+    if (!entry) return;
+    steering.pending.delete(envelope);
+    steering.bytes -= entry.bytes;
+    run.product!.observers.steerChanged?.(entry.steerId, state, reason);
+  }
+
+  private enqueueSteer(context: Context, executionId: string, steerId: string, envelope: string, bytes: number, eligible: () => boolean): void {
+    const run = this.steeringRun(context, executionId)!;
+    const steering = run.steering ??= { pending: new Map(), bytes: 0, enqueues: Promise.resolve() };
+    steering.pending.set(envelope, { steerId, bytes });
+    steering.bytes += bytes;
+    steering.enqueues = steering.enqueues.then(async () => {
+      if (this.steeringRun(context, executionId) !== run || !eligible()) {
+        this.observeSteer(run, envelope, 'not_applied', 'target_unavailable');
+        return;
+      }
+      let disposition: 'handled' | 'queued';
+      try { disposition = await context.runtime.session.steer(envelope); }
+      catch { return; }
+      if (disposition === 'handled') this.observeSteer(run, envelope, 'not_applied', 'input_handled');
+      else if (context.active === run && steering.pending.has(envelope)) run.product!.observers.steerChanged?.(steerId, 'queued');
+    });
+  }
+
+  private async drainSteers(context: Context, run: Run): Promise<void> {
+    const steering = run.steering!;
+    await steering.enqueues;
+    await context.runtime.session.waitForIdle();
+    const removed = context.runtime.session.clearQueue();
+    for (const envelope of removed.steering) this.observeSteer(run, envelope, 'not_applied', 'queue_removed');
+    for (const envelope of steering.pending.keys()) this.observeSteer(run, envelope, 'unknown', 'delivery_unobserved');
+  }
+
   private async execute(context: Context, run: Run, params: StartParams): Promise<void> {
     let failure: unknown;
     if (!run.product) this.event(context, run, 'run.started', { correlation: run.correlation });
@@ -432,6 +481,14 @@ class Worker {
       if (!run.cancelled && !this.disconnected) await context.runtime.session.prompt(params.text + snapshots + quotedMessage);
       await context.runtime.session.waitForIdle();
     } catch (error) { failure = error; }
+    run.steeringClosed = true;
+    if (run.steering) {
+      try { await this.drainSteers(context, run); }
+      catch (error) {
+        void this.disconnect(true);
+        throw error;
+      }
+    }
     const last = run.final;
     const completed = !failure && run.sdkSettled && !run.sdkAborted && last?.stopReason === 'stop';
     const status = run.product && completed ? 'completed' : run.cancelled || run.sdkAborted || last?.stopReason === 'aborted' ? 'interrupted'
@@ -497,6 +554,14 @@ class Worker {
         return response.content.filter(row => row.type === 'text').map(row => row.text).join('');
       },
       start: (executionId, draft, observers) => this.startProductRun(context, executionId, draft, observers),
+      checkSteer: (executionId, bytes) => {
+        const run = this.steeringRun(context, executionId);
+        if (!run) throw new RequestError('not_running', 'The Activity execution is not streaming');
+        if (bytes + (run.steering?.bytes ?? 0) > maxDraftBytes || (run.steering?.pending.size ?? 0) >= 8) {
+          throw new RequestError('steer_capacity', 'The Activity steering queue has reached its limit');
+        }
+      },
+      steer: (executionId, steerId, envelope, bytes, eligible) => this.enqueueSteer(context, executionId, steerId, envelope, bytes, eligible),
       stop: executionId => {
         if (context.active?.id !== executionId) throw new RequestError('not_found', 'The execution has settled');
         context.active.cancelled = true;
