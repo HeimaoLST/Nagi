@@ -242,17 +242,6 @@ func TestConnectionConfigRejectsInvalidSaveWithoutCreatingData(t *testing.T) {
 	}
 }
 
-func environmentMap(env []string) map[string]string {
-	values := make(map[string]string, len(env))
-	for _, entry := range env {
-		key, value, ok := strings.Cut(entry, "=")
-		if ok {
-			values[key] = value
-		}
-	}
-	return values
-}
-
 func sortedKeys(values map[string]string) []string {
 	keys := make([]string, 0, len(values))
 	for key := range values {

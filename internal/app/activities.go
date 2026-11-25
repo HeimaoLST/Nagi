@@ -238,20 +238,6 @@ func (ct *contact) executionByID(id string) (*productActivity, *activityExecutio
 	return nil, nil
 }
 
-func activityPrompt(activity *productActivity) string {
-	goal := strings.TrimSpace(activity.Goal)
-	requirements := strings.TrimSpace(activityRequirementsText(activity))
-	if requirements != "" {
-		goal += "\n\nRequirements:\n" + requirements
-	}
-	if activity.Handoff != nil && len(activity.Handoff.Files) != 0 {
-		goal += "\n\nFiles supplied for this activity:\n" + strings.Join(activity.Handoff.Files, "\n")
-	}
-	return goal
-}
-
-// createActivity persists an explicit product item and its original requirements.
-// It does not dispatch any Runtime work; dispatch is a separate Run action.
 func (a *appModel) setActivityFormNotice(raw, notice, detail string) {
 	a.activityFormError = raw
 	a.activityFormNotice = notice
@@ -309,18 +295,6 @@ func (a *appModel) createActivityForWithSave(ct *contact, goal, requirements str
 		return nil, fmt.Errorf("Could not save this issue: %w", err)
 	}
 	return item, nil
-}
-
-func activityHasRemainingRequirements(activity *productActivity) bool {
-	if activity == nil {
-		return false
-	}
-	for _, requirement := range activity.Requirements {
-		if requirement != nil && requirement.State != requirementSatisfied {
-			return true
-		}
-	}
-	return false
 }
 
 const (

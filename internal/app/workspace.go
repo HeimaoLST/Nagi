@@ -6,7 +6,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -268,94 +267,6 @@ func (a *appModel) detailPage(c *ui.Context, t *ui.Theme) {
 	ui.Column(c).Fill().Background(a.workTheme.Panel).Children(func() {
 		a.profileDetail(c, t)
 	})
-}
-
-func (ct *contact) activityWork(activity *productActivity) *workItem {
-	if activity == nil {
-		return nil
-	}
-	for _, taskID := range []string{activity.Work.ActiveTaskID, ct.ActiveTaskID, ct.LastTaskID} {
-		if !activityHasTask(activity, taskID) {
-			continue
-		}
-		if work := workFor(ct, taskID); work != nil {
-			return work
-		}
-	}
-	for index := len(activity.Executions) - 1; index >= 0; index-- {
-		execution := activity.Executions[index]
-		if work := workFor(ct, execution.TaskID); work != nil {
-			return work
-		}
-	}
-	return nil
-}
-
-func (ct *contact) resultTextForExecution(execution *activityExecution) string {
-	if execution == nil {
-		return ""
-	}
-	for _, activity := range ct.Activities {
-		for index := len(activity.Work.Messages) - 1; index >= 0; index-- {
-			m := activity.Work.Messages[index]
-			if m.Kind != msgContact || strings.TrimSpace(m.Text) == "" {
-				continue
-			}
-			if execution.TaskID != "" && m.TaskID == execution.TaskID {
-				return strings.TrimSpace(m.Text)
-			}
-		}
-	}
-	return ""
-}
-
-func latestActivityExecution(activity *productActivity) *activityExecution {
-	if activity == nil {
-		return nil
-	}
-	for index := len(activity.Executions) - 1; index >= 0; index-- {
-		if activity.Executions[index] != nil {
-			return activity.Executions[index]
-		}
-	}
-	return nil
-}
-
-func activityHasReadableResult(ct *contact, execution *activityExecution) bool {
-	if execution == nil || execution.Status != activityExecutionCompleted {
-		return false
-	}
-	if strings.TrimSpace(ct.resultTextForExecution(execution)) != "" {
-		return true
-	}
-	work := workFor(ct, execution.TaskID)
-	if work == nil {
-		return false
-	}
-	for _, tool := range work.Tools {
-		if tool != nil && tool.Finished && strings.TrimSpace(tool.Output) != "" {
-			return true
-		}
-	}
-	return false
-}
-
-func toolTitleFor(name, args string) string {
-	if name == "" {
-		name = "Tool"
-	}
-	if args == "" {
-		return name
-	}
-	var parsed map[string]any
-	if err := json.Unmarshal([]byte(args), &parsed); err == nil {
-		for _, key := range []string{"path", "command"} {
-			if value, ok := parsed[key].(string); ok && strings.TrimSpace(value) != "" {
-				return name + ": " + truncate(value, 70)
-			}
-		}
-	}
-	return name + ": " + truncate(args, 70)
 }
 
 const (

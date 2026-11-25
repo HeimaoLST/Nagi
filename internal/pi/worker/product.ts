@@ -3,7 +3,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, stat } from 'node:fs/promises';
 import { realpathSync } from 'node:fs';
-import { dirname, isAbsolute, join, resolve } from 'node:path';
+import { dirname, isAbsolute, join } from 'node:path';
 import { setImmediate } from 'node:timers/promises';
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
 import type { AssistantMessage, ToolCall } from '@earendil-works/pi-ai';
@@ -12,7 +12,7 @@ import { Value } from 'typebox/value';
 import {
   MAX_FRAME, RequestError, activityStateSchema, canonicalJSON, draftSchema, frameBytes, hasCanonicalQuoteText, id, inspectionPage,
   maxAutomaticAnswers, maxDraftBytes, maxTriageAttempts, preferenceKey, profileSchema, questionOptionId, questionOptions, questionTextBytes,
-  resolveCodingTools, skillExecutable, skillID, skillScriptName, skillSource, skillText, toolPresetSchema,
+  resolveCodingTools, skillID, skillSource,
   type ActivityDigest, type ActivityState, type ActivitySteer, type ActivitySteerPayload, type AnswerProvenance, type BotChange, type BotProfile,
   type ConfigureParams, type Connection, type Draft, type Execution,
   type Material, type McpServerRecord, type McpServerView, type OpenParams, type Operation, type ProductCommand, type ProductParams,
@@ -24,7 +24,7 @@ import { ProductSQLite, type ActivityControlWrite, type RoutingWrite, type Skill
 import { composeBotSystemPrompt, formatTightBotInstructions, readTightBotInstructions,
   PANDORABOX_BOT_ID, SYSTEM_KIND_BOT_ARCHITECT, type BotSystemKind } from './bot-template.js';
 import { completedWorkSummary, formatLastingRulesBlock, lastingRulesFit, MEMORY_COLD_TTL_MS, MAX_LOG_BYTES, MAX_PENDING_LEARNINGS,
-  MAX_RULE_BYTES, MAX_WORK_LOGS, memoryDate, memorySearchLimit, memorySearchQuery, memoryTags, memoryText, newestLogFirst, oldestRuleFirst,
+  MAX_RULE_BYTES, MAX_WORK_LOGS, newestLogFirst, oldestRuleFirst,
   recurringPreference, validMemoryDate, validateMemoryCandidate, type BotMemory, type BotMemoryMeta, type BotMemoryRule,
   type BotPendingLearning, type BotWorkLog } from './bot-memory.js';
 import { directlyOwns, normalizeActivityGrants, redactTrace, type TraceObservation, type TraceUpdate } from './product-trace.js';
@@ -42,6 +42,13 @@ import { activityRole, activityRouting, providerCacheTtlMs, providerEndpoint, re
 import { compareModelIds, describeModel, modelSupply } from './model-catalog.js';
 import { approvedPreferences, parseNomination, renderWhiteboard, steerEnvelope, triageDomain, validateQuestionFields,
   type PreferenceCandidate, type WhiteboardRow } from './activity-control.js';
+import { confirmedFileEffect, toolText, type ToolTextResult } from './product-effects.js';
+import { extractCatalogModels, readBoundedBytes } from './product-providers.js';
+import { architectProfile, architectResult, buildArchitectTools } from './product-architect-tools.js';
+import { buildMemoryTools } from './product-memory-tools.js';
+import { buildSkillTools } from './product-skill-tools.js';
+
+export { confirmedFileEffect };
 
 const emptyDraft = (): Draft => ({ revision: 0, text: '', materials: [] });
 const newId = randomUUID;
@@ -93,24 +100,6 @@ export type ProductEngine = {
   disconnect: () => void;
   cleanMessage: (error: unknown) => string;
 };
-
-export function confirmedFileEffect(cwd: string, name: string, input: unknown, content: unknown): string | undefined {
-  if (name !== 'write' && name !== 'edit' || !input || typeof input !== 'object' || !('path' in input) ||
-      typeof input.path !== 'string' || !input.path || input.path.includes('\0') || !Array.isArray(content) || content.length !== 1) return;
-  const receipt: unknown = content[0];
-  if (!receipt || typeof receipt !== 'object' || !('type' in receipt) || receipt.type !== 'text' || !('text' in receipt) || typeof receipt.text !== 'string') return;
-  const requested = input.path;
-  if (name === 'write') {
-    if (receipt.text !== `Successfully wrote to ${requested}`) return;
-  } else {
-    const prefix = 'Successfully replaced ';
-    const suffix = ` block(s) in ${requested}.`;
-    if (!receipt.text.startsWith(prefix) || !receipt.text.endsWith(suffix) || !/^[1-9][0-9]*$/.test(receipt.text.slice(prefix.length, -suffix.length))) return;
-  }
-  const path = requested.replace(/^@/, '').replace(/[\u00a0\u2000-\u200a\u202f\u205f\u3000]/g, ' ');
-  if (!path || path === '~' || path.startsWith('~/') || path.startsWith('file://')) return;
-  return resolve(cwd, path);
-}
 
 type SessionBinding = {
   contextId: string; sessionRef: string; connectionRevision?: number; route?: CapturedRoute; profileRevision: number;
@@ -242,8 +231,6 @@ function nonsecret(configuration: Connection) {
   return { ...publicFields, credentialPresent: Boolean(apiKey) };
 }
 
-type ToolTextResult = { content: { type: 'text'; text: string }[]; details: Record<string, never>; isError: boolean };
-
 const strictTool = { additionalProperties: false };
 const modelInspectionPage = { cursor: inspectionPage.cursor, limit: inspectionPage.limit, max_bytes: inspectionPage.maxBytes };
 const traceToolParams = Type.Object({ activity_id: id, execution_id: Type.Optional(id), ...modelInspectionPage }, strictTool);
@@ -282,35 +269,6 @@ function projectionJSON(value: unknown, redact: (text: string) => string, key = 
   if (Array.isArray(value)) return value.map(item => projectionJSON(item, redact, key));
   if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([field, item]) => [field, projectionJSON(item, redact, field)]));
   return value;
-}
-
-function toolText(value: unknown, isError = false): ToolTextResult {
-  return { content: [{ type: 'text' as const, text: typeof value === 'string' ? value : JSON.stringify(value) }], details: {}, isError };
-}
-
-const architectProfile: BotProfile = {
-  name: 'PandoraBox', role: 'Bot Architect', purpose: 'Design, create, and refine focused Nagi Bots through conversation.',
-  instructions: '', workspace: '', codingTools: [],
-  starterPrompts: ['Create a writing and editing Bot', 'Build a strict code review Bot', 'Audit and refine my existing Bot Team'],
-};
-
-const requiredText = Type.String({ minLength: 1, pattern: '\\S' });
-const architectInspect = Type.Object({}, { additionalProperties: false });
-const architectCapabilities = { tool_preset: Type.Optional(toolPresetSchema), skill_ids: Type.Optional(Type.Array(skillID, { maxItems: 200 })) };
-const architectCreate = Type.Object({ name: requiredText, purpose: requiredText, job: requiredText, voice: requiredText,
-  anti_jobs: Type.Array(requiredText, { minItems: 1 }), workflow: Type.Optional(Type.String()), role: Type.Optional(Type.String()),
-  starter_prompts: Type.Optional(Type.Array(Type.String())),
-  ...architectCapabilities,
-}, { additionalProperties: false });
-const architectUpdate = Type.Object({ bot_id: requiredText, name: Type.Optional(requiredText), purpose: Type.Optional(Type.String()),
-  role: Type.Optional(Type.String()), job: Type.Optional(requiredText), voice: Type.Optional(requiredText),
-  anti_jobs: Type.Optional(Type.Array(requiredText)), workflow: Type.Optional(Type.String()), instructions: Type.Optional(Type.String()),
-  starter_prompts: Type.Optional(Type.Array(Type.String())),
-  ...architectCapabilities,
-}, { additionalProperties: false });
-
-function architectResult(bot: Bot) {
-  return { bot_id: bot.botId, name: bot.profile.name, purpose: bot.profile.purpose, profile_revision: bot.profileRevision };
 }
 
 export class Product {
@@ -589,7 +547,8 @@ export class Product {
   private async testProvider({ account, apiKey }: ProductParams<'provider.test'>) {
     if (!validProvider(account)) stateError('invalid_params', 'The Provider requires an HTTP(S) endpoint and valid model limits');
     const previous = this.profile.providerAccounts?.find(row => row.providerId === account.providerId);
-    const key = apiKey?.trim() ? apiKey : previous?.baseUrl === account.baseUrl && previous.wireApi === account.wireApi ? this.providerKey(previous) : undefined;
+    const sameTarget = previous?.baseUrl === account.baseUrl && previous.wireApi === account.wireApi;
+    const key = apiKey?.trim() ? apiKey : sameTarget ? this.providerKey(previous) : undefined;
     if (!key) stateError('credential_unavailable', 'The Provider credential is unavailable');
     const started = Date.now();
     try {
@@ -597,33 +556,19 @@ export class Product {
       endpoint.pathname = endpoint.pathname.replace(/\/$/, '') + '/models';
       const response = await fetch(endpoint, { redirect: 'manual', signal: AbortSignal.timeout(5000), headers: { Authorization: `Bearer ${key}` } });
       if (response.ok && response.body) {
-        const reader = response.body.getReader();
-        const chunks: Uint8Array[] = [];
-        let size = 0;
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          size += value.byteLength;
-          if (size > 1024 * 1024) {
-            await reader.cancel();
-            stateError('provider_test_failed', 'The Provider model catalog exceeds the probe limit');
-          }
-          chunks.push(value);
-        }
-        const catalog: unknown = JSON.parse(Buffer.concat(chunks, size).toString('utf8'));
-        if (!catalog || typeof catalog !== 'object' || !('data' in catalog) || !Array.isArray(catalog.data)) stateError('provider_test_failed', 'The Provider model catalog is invalid');
+        const body = await readBoundedBytes(response.body, 1024 * 1024, 'provider_test_failed', 'The Provider model catalog exceeds the probe limit');
+        const catalog: unknown = JSON.parse(body.toString('utf8'));
         const redact = this.engine.redactor([...this.credentialKeys(), key]);
-        const models = new Set<string>();
-        for (const row of catalog.data) {
-          const model: unknown = row?.id;
-          if (typeof model === 'string' && model.length <= 256 && model.trim() && redact(model) === model) models.add(model);
-        }
-        const discoveredModels = [...models].map(model => describeModel(account, model)).sort((a, b) =>
-          Number(b.recommended) - Number(a.recommended) || Number(b.isChat === true) - Number(a.isChat === true) || compareModelIds(a.id, b.id)).slice(0, 128);
+        const discoveredModels = extractCatalogModels(catalog, redact)
+          .map(model => describeModel(account, model))
+          .sort((a, b) => Number(b.recommended) - Number(a.recommended) || Number(b.isChat === true) - Number(a.isChat === true) || compareModelIds(a.id, b.id))
+          .slice(0, 128);
         return { ok: true, models: discoveredModels.map(row => row.id), discoveredModels, latencyMs: Date.now() - started };
       }
       await response.body?.cancel();
-      if (response.status !== 404 && response.status !== 405 && response.status !== 501) stateError('provider_test_failed', `The Provider rejected the probe (HTTP ${response.status})`);
+      if (response.status !== 404 && response.status !== 405 && response.status !== 501) {
+        stateError('provider_test_failed', `The Provider rejected the probe (HTTP ${response.status})`);
+      }
       const supply = modelSupply(account, account.defaultModel, true);
       if (supply.isChat !== true || supply.priceProtected || supply.contextTokens <= supply.outputTokens || !supply.supported.includes('off')) {
         stateError('provider_test_failed', 'The Provider does not expose discovery and its default model is unavailable for a connection probe');
@@ -1515,7 +1460,8 @@ export class Product {
     const lastTurnAt = existing?.lastTurnAt ?? meta?.lastTurnAt;
     const coldRoute = conversationBoundary && (!lastTurnAt || Date.now() - Date.parse(lastTurnAt) >= providerCacheTtlMs);
     const resolveNewRoute = !existing || coldRoute;
-    const route = newRoute ?? (resolveNewRoute ? this.selectRoute(role, activity?.routing?.complexity === 'deep') ?? undefined : existing?.route);
+    const selectedRoute = resolveNewRoute ? this.selectRoute(role, activity?.routing?.complexity === 'deep') : null;
+    const route = newRoute ?? (resolveNewRoute ? selectedRoute ?? undefined : existing?.route);
     if (!route && resolveNewRoute && this.profile.providerEffectiveRevision !== undefined) {
       const hasCredential = this.profile.providerEffectiveAccounts?.some(account => account.enabled && this.providerKey(account));
       stateError(hasCredential ? 'route_unavailable' : 'credential_unavailable', 'No eligible Provider route is available');
@@ -1547,16 +1493,29 @@ export class Product {
       skills: this.skills.catalog(bot, cwd, this.discoverLocalSkills, this.engine.redactor(this.credentialKeys())) });
     const memoryRulesRevision = captured && !reload ? captured.memoryRulesRevision : meta?.rulesRevision;
     const codingTools = captured ? captured.codingTools : resolveCodingTools(bot.profile);
+    const configuration = route ? {
+      wireApi: route.wireApi,
+      baseUrl: route.baseUrl,
+      apiKey,
+      model: route.resolvedModel,
+      contextTokens: route.contextTokens,
+      outputTokens: route.outputTokens,
+      credentialSource: route.credentialSourceId,
+      thinkingLevel: route.thinkingLevel,
+      capabilities: route.capabilities,
+    } : {
+      wireApi: legacy!.configuration.wireApi,
+      baseUrl: legacy!.configuration.baseUrl,
+      apiKey,
+      model: legacy!.configuration.model,
+      contextTokens: legacy!.configuration.contextTokens,
+      outputTokens: legacy!.configuration.outputTokens,
+      credentialSource: legacy!.sourceId,
+    };
     const params: OpenParams = {
       contextId, botId: bot.botId, purpose: activityId ? 'activity' : 'conversation', activityId,
       selectionRevision: profileRevision, cwd, instructions, resumeRef: existing?.sessionRef,
-      used: existing?.used ?? false, codingTools, domainTools: null,
-      configuration: route ? { wireApi: route.wireApi, baseUrl: route.baseUrl, apiKey, model: route.resolvedModel,
-        contextTokens: route.contextTokens, outputTokens: route.outputTokens, credentialSource: route.credentialSourceId,
-        thinkingLevel: route.thinkingLevel, capabilities: route.capabilities } : {
-        wireApi: legacy!.configuration.wireApi, baseUrl: legacy!.configuration.baseUrl, apiKey, model: legacy!.configuration.model,
-        contextTokens: legacy!.configuration.contextTokens, outputTokens: legacy!.configuration.outputTokens, credentialSource: legacy!.sourceId,
-      },
+      used: existing?.used ?? false, codingTools, domainTools: null, configuration,
     };
     const mounts = (bot.profile.mcpBindings ?? []).flatMap(binding => {
       const server = this.profile.mcpServers?.find(item => item.serverId === binding.serverId);
@@ -2853,55 +2812,35 @@ export class Product {
   }
 
   private skillTools(actor: ProductActor): ToolDefinition[] {
-    const list = Type.Object({}, strictTool);
-    const read = Type.Object({ skill_id: Type.String(), source: Type.Optional(skillSource) }, strictTool);
-    const save = Type.Object({ skill_id: Type.String(), ...skillText, ...skillExecutable }, strictTool);
-    const execute = Type.Object({ skill_id: Type.String(), source: Type.Optional(skillSource), script: skillScriptName, input: Type.Optional(Type.Unknown()) }, strictTool);
-    const remove = Type.Object({ skill_id: Type.String() }, strictTool);
-    const tool = <T extends TSchema>(name: string, description: string, parameters: T,
-      handler: (input: Static<T>, call: ActiveCall, operationId: string, callId: string, signal?: AbortSignal) => object | Promise<object>): ToolDefinition<T> => ({
-      name, label: description, description, parameters,
-      execute: async (callId, args, signal) => {
+    return buildSkillTools({
+      isActivity: 'activityId' in actor,
+      skillCall: signal => {
         const call = this.skillCall(actor, signal);
-        if (!Value.Check(parameters, args)) stateError('invalid_params', 'Invalid skill parameters');
-        if ('skill_id' in args && !Value.Check(skillID, args.skill_id)) stateError('scope_denied', 'The skill is outside the authorized scope');
-        return this.modelResult(await handler(args, call, `${call.executionId}:${name}:${callId}`, callId, signal));
+        return {
+          ...call,
+          botId: call.bot.botId,
+          markFailed: () => { call.run.skillExecutionFailed = true; },
+        };
       },
-    });
-    const tools: ToolDefinition[] = [
-      tool('skill_list', 'List mounted text skills and private skills for this Bot.', list, (_, { bot: owner, run }) => {
+      toResult: value => this.modelResult(value),
+      listSkills: ({ bot: owner, run }) => {
         const cwd = this.capturedSkillWorkspace(run);
         return {
           mounted: this.skills.mounted(owner, cwd, this.discoverLocalSkills).map(row => row.skill ? { ...row, skill: { ...row.skill, ...this.skillReview(owner, row.skill, cwd) } } : row),
           private: this.skills.private(owner.botId).map(skill => ({ ...skill, ...this.skillReview(owner, skill, cwd) })),
         };
-      }),
-      tool('skill_read', 'Read an authorized mounted or private SKILL.md on demand.', read, ({ skill_id, source }, { bot: owner, run }) => {
+      },
+      readSkill: ({ bot: owner, run }, skillId, source) => {
         const cwd = this.capturedSkillWorkspace(run);
-        const skill = this.skillForBot(owner, skill_id, cwd, source);
+        const skill = this.skillForBot(owner, skillId, cwd, source);
         return { skill: { ...skill, ...this.skillReview(owner, skill, cwd, true) } };
-      }),
-      tool('skill_test', 'Test a declared skill script without workspace or HTTP access. Pure scripts activate only after a successful test.', execute,
-        (args, call, operationId, callId, signal) => this.runSkill(true, call, args, callId, operationId, signal)),
-      tool('skill_exec', 'Run a declared skill script with its verified approval.', execute,
-        async (args, call, operationId, callId, signal) => {
-          try {
-            const result = await this.runSkill(false, call, args, callId, operationId, signal);
-            if ('activityId' in actor && 'ok' in result && result.ok === false) call.run.skillExecutionFailed = true;
-            return result;
-          } catch (error) {
-            if ('activityId' in actor) call.run.skillExecutionFailed = true;
-            throw error;
-          }
-        }),
-    ];
-    if ('conversationId' in actor) tools.push(
-      tool('skill_save', 'Save a private SKILL.md and optional executable bundle. Privileged scripts require user approval.', save, ({ skill_id, ...text }, { bot }, operationId) =>
-        this.saveSkill({ ...text, source: 'private', botId: bot.botId, skillId: skill_id, operationId })),
-      tool('skill_delete', 'Delete a private skill of this Bot when the user explicitly requests it.', remove, ({ skill_id }, { bot }, operationId) =>
-        this.deleteSkill({ source: 'private', botId: bot.botId, skillId: skill_id, operationId }, true)),
-    );
-    return tools;
+      },
+      runSkill: (testOnly, call, args, callId, operationId, signal) => this.runSkill(testOnly, call, args, callId, operationId, signal),
+      saveSkill: ({ bot }, operationId, { skill_id, ...text }) =>
+        this.saveSkill({ ...text, source: 'private', botId: bot.botId, skillId: skill_id, operationId }),
+      deleteSkill: ({ bot }, operationId, skillId) =>
+        this.deleteSkill({ source: 'private', botId: bot.botId, skillId, operationId }, true),
+    });
   }
 
   private tools(owner: ProductActor): ToolDefinition[] {
@@ -2984,98 +2923,91 @@ export class Product {
   }
 
   private memoryTools(actor: ProductActor): ToolDefinition[] {
-    const none = Type.Object({}, { additionalProperties: false });
-    const ruleId = Type.Object({ rule_id: requiredText }, { additionalProperties: false });
-    const rule = Type.Object({ text: memoryText }, { additionalProperties: false });
-    const proposal = Type.Object({ text: memoryText, reason: Type.String({ minLength: 1, maxLength: MAX_LOG_BYTES, pattern: '\\S' }) }, { additionalProperties: false });
-    const log = Type.Object({ summary: memoryText, date: Type.Optional(memoryDate), tags: Type.Optional(memoryTags) }, { additionalProperties: false });
-    const search = Type.Object({ query: memorySearchQuery, date_from: Type.Optional(memoryDate), date_to: Type.Optional(memoryDate),
-      limit: Type.Optional(memorySearchLimit) }, { additionalProperties: false });
-    const scoped = <T extends TSchema>(name: string, description: string, parameters: T,
-      action: (args: Static<T>, botId: string, executionId: string, operationId: string) => unknown): ToolDefinition<T> => ({
-      name, label: description, description, parameters,
-      execute: async (callId, args, signal) => {
+    return buildMemoryTools({
+      isActivity: 'activityId' in actor,
+      activeCall: (learningTool, signal) => {
         const { bot, executionId, run } = this.activeCall(actor, signal);
-        if (name === 'memory_save_rule' || name === 'memory_propose_learning') run.learningToolUsed = true;
-        if (!Value.Check(parameters, args)) stateError('memory_invalid', 'Invalid memory tool parameters');
-        return this.modelResult(action(args, bot.botId, executionId, `${executionId}:${name}:${callId}`));
+        if (learningTool) run.learningToolUsed = true;
+        return { botId: bot.botId, executionId };
       },
-    });
-    const searchLogs = scoped('memory_search_log', 'Search the dates, summaries, and tags of this Bot’s work log.', search, (input, botId) =>
-      ({ items: this.searchWorkLogs({ botId, query: input.query, dateFrom: input.date_from, dateTo: input.date_to, limit: input.limit }) }));
-    if ('activityId' in actor) return [searchLogs];
-    return [
-      scoped('memory_forget_rule', 'Remove a lasting rule by ID when the user asks to forget it.', ruleId, (input, botId, _id, operationId) =>
-        this.changeMemory('memory_forget_rule', { ...input, botId, operationId }, memory => this.removeRule(memory, botId, input.rule_id, false))),
-      scoped('memory_list_rules', 'Read the saved rules and count of pending learnings for this Bot.', none, (_input, botId) =>
-        ({ rules: this.lastingRules(botId), pending_count: this.memoryStatus(this.profile, botId).pendingCount })),
-      scoped('memory_log_work', 'Record a concise dated fact or completed work for this Bot.', log, (input, botId, id, operationId) =>
+      toResult: value => this.modelResult(value),
+      forgetRule: (botId, ruleId, operationId) =>
+        this.changeMemory('memory_forget_rule', { rule_id: ruleId, botId, operationId }, memory => this.removeRule(memory, botId, ruleId, false)),
+      listRules: botId => ({
+        rules: this.lastingRules(botId),
+        pending_count: this.memoryStatus(this.profile, botId).pendingCount,
+      }),
+      logWork: (botId, executionId, operationId, input) =>
         this.changeMemory('memory_log_work', { ...input, botId, operationId }, (memory, bot, now) =>
-          this.saveWorkLog(memory, bot, input.summary, now, input.tags ?? [], id, input.date))),
-      scoped('memory_propose_learning', 'Queue an inferred lasting preference for the user to review.', proposal, (input, botId, id, operationId) =>
+          this.saveWorkLog(memory, bot, input.summary, now, input.tags ?? [], executionId, input.date)),
+      proposeLearning: (botId, executionId, operationId, input) =>
         this.changeMemory('memory_propose_learning', { ...input, botId, operationId }, (memory, bot, now) =>
-          this.proposeLearning(memory, bot, input.text, input.reason, now, id))),
-      scoped('memory_save_rule', 'Save a lasting rule when the user explicitly asks you to remember it.', rule, (input, botId, _id, operationId) =>
-        this.changeMemory('memory_save_rule', { ...input, botId, operationId }, (memory, bot, now) => this.saveRule(memory, bot, input.text, 'explicit', now))),
-      searchLogs,
-    ];
+          this.proposeLearning(memory, bot, input.text, input.reason, now, executionId)),
+      saveRule: (botId, operationId, text) =>
+        this.changeMemory('memory_save_rule', { text, botId, operationId }, (memory, bot, now) => this.saveRule(memory, bot, text, 'explicit', now)),
+      searchWorkLogs: (botId, input) => ({
+        items: this.searchWorkLogs({ botId, query: input.query, dateFrom: input.date_from, dateTo: input.date_to, limit: input.limit }),
+      }),
+    });
   }
 
   private architectTools(conversationId: string): ToolDefinition[] {
-    const execute = <T extends TSchema>(schema: T, action: (input: Static<T>, executionId: string, callId: string) => unknown): ToolDefinition<T>['execute'] =>
-      async (callId, input, signal) => {
-        if (!Value.Check(schema, input)) return toolText({ code: 'invalid_params', message: 'Invalid Bot Architect tool parameters' }, true);
-        try {
-          const source = this.conversation(this.profile, conversationId);
-          const bot = this.bot(this.profile, source.botId);
-          const executionId = source.latestExecutionId;
-          if (signal?.aborted || bot.systemKind !== SYSTEM_KIND_BOT_ARCHITECT || bot.archived || bot.currentConversationId !== conversationId ||
-              !executionId || !this.active.has(executionId)) stateError('scope_denied', 'The Bot Architect conversation no longer owns this call');
-          return this.modelResult(action(input, executionId, callId));
-        } catch (error) {
-          if (!(error instanceof RequestError)) throw error;
-          return toolText({ code: error.code, message: this.engine.cleanMessage(error) }, true);
+    return buildArchitectTools({
+      assertOwner: signal => {
+        const source = this.conversation(this.profile, conversationId);
+        const bot = this.bot(this.profile, source.botId);
+        const executionId = source.latestExecutionId;
+        if (signal?.aborted || bot.systemKind !== SYSTEM_KIND_BOT_ARCHITECT || bot.archived || bot.currentConversationId !== conversationId ||
+            !executionId || !this.active.has(executionId)) {
+          stateError('scope_denied', 'The Bot Architect conversation no longer owns this call');
         }
-      };
-    return [
-      { name: 'bot_inspect_team', label: 'Inspect Bot Team', description: 'Read the saved profiles of the available Bots before auditing or refining them.', parameters: architectInspect,
-        execute: execute(architectInspect, () => this.profile.bots.filter(bot => !bot.archived).map(({ botId, profile, systemKind }) => ({
-          bot_id: botId, name: profile.name, role: profile.role, purpose: profile.purpose, instructions: profile.instructions,
-          starter_prompts: profile.starterPrompts, system_kind: systemKind ?? null,
-          tool_preset: profile.toolPreset, skill_ids: profile.mountedSkills?.map(ref => ref.skillId),
-        }))) },
-      { name: 'bot_create', label: 'Create specialist Bot', description: 'Create the focused Bot blueprint after the user confirms it.', parameters: architectCreate,
-        execute: execute(architectCreate, (input, executionId, callId) => {
-          const params = { operationId: `${executionId}:bot_create:${callId}`, input };
-          const profile: BotProfile = { name: input.name.trim(), purpose: input.purpose.trim(), role: input.role?.trim() ?? '', workspace: '', codingTools: null,
-            ...(input.starter_prompts === undefined ? {} : { starterPrompts: input.starter_prompts }),
-            ...(input.tool_preset === undefined ? {} : { toolPreset: input.tool_preset }),
-            ...(input.skill_ids === undefined ? {} : { mountedSkills: this.architectMounts(input.skill_ids, '') }),
-            instructions: formatTightBotInstructions({ job: input.job, voice: input.voice, antiJobs: input.anti_jobs, workflow: input.workflow }) };
-          return architectResult(this.changeBot('bot_create', params, candidate => ({ bot: this.insertBot(candidate, profile), change: 'created' })));
-        }) },
-      { name: 'bot_update', label: 'Update specialist Bot', description: 'Update a saved specialist Bot after inspecting its profile and getting user confirmation.', parameters: architectUpdate,
-        execute: execute(architectUpdate, (input, executionId, callId) => {
-          const params = { operationId: `${executionId}:bot_update:${callId}`, input };
-          return architectResult(this.changeBot('bot_update', params, candidate => {
-            const bot = this.bot(candidate, input.bot_id);
-            if (bot.systemKind || bot.archived) stateError('scope_denied', 'Only active specialist Bots can be updated by the Bot Architect');
-            const { name, purpose, role, job, voice, anti_jobs, workflow } = input;
-            let instructions = input.instructions ?? bot.profile.instructions;
-            if (job !== undefined || voice !== undefined || anti_jobs !== undefined || workflow !== undefined) {
-              const saved = readTightBotInstructions(bot.profile.instructions);
-              instructions = formatTightBotInstructions({ job: job ?? saved.job, voice: voice ?? saved.voice,
-                antiJobs: anti_jobs ?? saved.antiJobs, workflow: workflow ?? saved.workflow });
-            }
-            this.updateBotProfile(candidate, bot, { ...bot.profile, name: name?.trim() ?? bot.profile.name,
-              purpose: purpose?.trim() ?? bot.profile.purpose, role: role?.trim() ?? bot.profile.role, instructions,
-              ...(input.tool_preset === undefined ? {} : { toolPreset: input.tool_preset, codingTools: null }),
-              ...(input.skill_ids === undefined ? {} : { mountedSkills: this.architectMounts(input.skill_ids, bot.profile.workspace) }),
-              ...(input.starter_prompts === undefined ? {} : { starterPrompts: input.starter_prompts }) });
-            return { bot, change: 'updated' };
-          }));
-        }) },
-    ];
+        return executionId;
+      },
+      cleanMessage: error => this.engine.cleanMessage(error),
+      toResult: value => this.modelResult(value),
+      errorResult: (code, message) => toolText({ code, message }, true),
+      inspectTeam: () => this.profile.bots.filter(bot => !bot.archived).map(({ botId, profile, systemKind }) => ({
+        bot_id: botId, name: profile.name, role: profile.role, purpose: profile.purpose, instructions: profile.instructions,
+        starter_prompts: profile.starterPrompts, system_kind: systemKind ?? null,
+        tool_preset: profile.toolPreset, skill_ids: profile.mountedSkills?.map(ref => ref.skillId),
+      })),
+      createBot: (operationId, input) => {
+        const profile: BotProfile = {
+          name: input.name.trim(),
+          purpose: input.purpose.trim(),
+          role: input.role?.trim() ?? '',
+          workspace: '',
+          codingTools: null,
+          ...(input.starter_prompts === undefined ? {} : { starterPrompts: input.starter_prompts }),
+          ...(input.tool_preset === undefined ? {} : { toolPreset: input.tool_preset }),
+          ...(input.skill_ids === undefined ? {} : { mountedSkills: this.architectMounts(input.skill_ids, '') }),
+          instructions: formatTightBotInstructions({ job: input.job, voice: input.voice, antiJobs: input.anti_jobs, workflow: input.workflow }),
+        };
+        return architectResult(this.changeBot('bot_create', { operationId, input }, candidate => ({ bot: this.insertBot(candidate, profile), change: 'created' })));
+      },
+      updateBot: (operationId, input) => architectResult(this.changeBot('bot_update', { operationId, input }, candidate => {
+        const bot = this.bot(candidate, input.bot_id);
+        if (bot.systemKind || bot.archived) stateError('scope_denied', 'Only active specialist Bots can be updated by the Bot Architect');
+        const { name, purpose, role, job, voice, anti_jobs, workflow } = input;
+        let instructions = input.instructions ?? bot.profile.instructions;
+        if (job !== undefined || voice !== undefined || anti_jobs !== undefined || workflow !== undefined) {
+          const saved = readTightBotInstructions(bot.profile.instructions);
+          instructions = formatTightBotInstructions({ job: job ?? saved.job, voice: voice ?? saved.voice,
+            antiJobs: anti_jobs ?? saved.antiJobs, workflow: workflow ?? saved.workflow });
+        }
+        this.updateBotProfile(candidate, bot, {
+          ...bot.profile,
+          name: name?.trim() ?? bot.profile.name,
+          purpose: purpose?.trim() ?? bot.profile.purpose,
+          role: role?.trim() ?? bot.profile.role,
+          instructions,
+          ...(input.tool_preset === undefined ? {} : { toolPreset: input.tool_preset, codingTools: null }),
+          ...(input.skill_ids === undefined ? {} : { mountedSkills: this.architectMounts(input.skill_ids, bot.profile.workspace) }),
+          ...(input.starter_prompts === undefined ? {} : { starterPrompts: input.starter_prompts }),
+        });
+        return { bot, change: 'updated' };
+      })),
+    });
   }
 
   private async delegate(originConversationId: string, input: Static<typeof delegateInput>) {

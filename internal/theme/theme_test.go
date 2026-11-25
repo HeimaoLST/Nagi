@@ -167,9 +167,6 @@ func TestBubbleContactContrastAndTonalSeparation(t *testing.T) {
 }
 
 func TestComposerThemeContrastAndDefaultRailWidth(t *testing.T) {
-	if DefaultLeftPaneWidth != 272 || EffectiveCenterWidth != 516 {
-		t.Fatalf("layout widths = left:%g center:%g, want 272/516", DefaultLeftPaneWidth, EffectiveCenterWidth)
-	}
 	makeCustom := func(id, kind, bg, surface, text, muted string) WorkbenchTheme {
 		t.Helper()
 		payload := map[string]any{

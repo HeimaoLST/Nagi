@@ -419,3 +419,52 @@ func TestProviderCredentialUnavailableNoticesAndReadConnectionStartupV3(t *testi
 		})
 	}
 }
+
+func TestProviderEditorInputValidationAndPresets(t *testing.T) {
+	var editor providerEditor
+	editor.choosePreset(0)
+	if editor.BaseURL == "" || editor.DefaultModel == "" || editor.context != "131072" {
+		t.Fatalf("choosePreset(0) did not populate defaults: %+v", editor)
+	}
+	if utf16Length("a😀b") != 4 {
+		t.Fatalf("utf16Length(a😀b) = %d, want 4", utf16Length("a😀b"))
+	}
+
+	editor.Name = "  "
+	editor.DefaultModel = ""
+	editor.BaseURL = "ftp://bad.example"
+	editor.APIKey = ""
+	editor.context = "0"
+	editor.output = "10"
+	_, ok := editor.input(false)
+	if ok || editor.fields["Name"] != connection.ValidationRequired || editor.fields["Model"] != connection.ValidationRequired ||
+		editor.fields["APIKey"] != connection.ValidationRequired || editor.fields["Endpoint"] == "" || editor.fields["ContextTokens"] != connection.ValidationPositive {
+		t.Fatalf("expected invalid required fields, got fields=%+v ok=%v", editor.fields, ok)
+	}
+
+	editor.Name = "Studio"
+	editor.BaseURL = "https://api.example.com/v1"
+	editor.DefaultModel = "gpt-4o"
+	editor.context = "100"
+	editor.output = "97"
+	_, ok = editor.input(true)
+	if ok || editor.fields["APIKey"] != "" || editor.fields["OutputTokens"] != connection.ValidationContextGap {
+		t.Fatalf("expected keepKey=true and gap error, got fields=%+v ok=%v", editor.fields, ok)
+	}
+
+	editor.context = "9007199254740991"
+	editor.output = "1024"
+	editor.Models = []string{"gpt-4o-mini"}
+	editor.additional = "gpt-4o-mini, claude-sonnet\n o3-mini "
+	params, ok := editor.input(true)
+	if !ok || params.Account.ContextTokens != 9007199254740991 || !slices.Equal(params.Account.Models, []string{"gpt-4o-mini", "claude-sonnet", "o3-mini"}) {
+		t.Fatalf("expected valid maxTokens and deduplicated models, got ok=%v fields=%+v params=%+v", ok, editor.fields, params)
+	}
+
+	editor.Name = strings.Repeat("x", 257)
+	editor.context = "9007199254740992"
+	_, ok = editor.input(true)
+	if ok || editor.fields["Name"] != "name-length" || editor.fields["ContextTokens"] != connection.ValidationPositive {
+		t.Fatalf("expected name-length and over-maxTokens failure, got fields=%+v", editor.fields)
+	}
+}

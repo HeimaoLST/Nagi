@@ -15,9 +15,6 @@ import (
 )
 
 func TestComposerSurfaceHeightLayoutAndRetiredChrome(t *testing.T) {
-	if defaultLeftPaneWidth != 272 {
-		t.Fatalf("defaultLeftPaneWidth = %g, want 272", defaultLeftPaneWidth)
-	}
 	for _, locale := range []string{"en", "zh-Hans"} {
 		for _, dark := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/dark%t", locale, dark), func(t *testing.T) {

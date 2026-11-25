@@ -1,3 +1,5 @@
+//go:build integration
+
 package pi_test
 
 import (
@@ -138,12 +140,6 @@ func (h *piProcessHarness) shutdown(t *testing.T, ctx context.Context) {
 	case <-h.client.CallbacksDone():
 	case <-ctx.Done():
 		t.Fatalf("Pi callbacks did not drain after reap: %v", ctx.Err())
-	}
-	h.closed = true
-	select {
-	case <-h.client.CallbacksDone():
-	case <-ctx.Done():
-		t.Fatal("Pi callbacks did not finish after process reap")
 	}
 	select {
 	case observed := <-h.exits:

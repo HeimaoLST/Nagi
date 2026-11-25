@@ -9,6 +9,7 @@ import { dirname, join } from 'node:path';
 import type { Readable, Writable } from 'node:stream';
 import { bundleDigest, canonicalSkillOrigin, type SkillBundle } from './bot-skills.js';
 import { clipUTF8 } from './product-redactor.js';
+import { readBoundedBytes } from './product-providers.js';
 import { RequestError, type SkillPermissions, type SkillSource } from './protocol.js';
 
 const sandbox = '/usr/bin/sandbox-exec';
@@ -228,21 +229,7 @@ export class SkillSandbox {
       await response.body?.cancel();
       throw new RequestError('redirect_denied', 'Mediated HTTP redirects are disabled');
     }
-    const chunks: Uint8Array[] = [];
-    let size = 0;
-    const reader = response.body?.getReader();
-    if (reader) {
-      try {
-        for (;;) {
-          const next = await reader.read();
-          if (next.done) break;
-          size += next.value.length;
-          if (size > responseLimit) throw new RequestError('response_too_large', 'The mediated response exceeds the size limit');
-          chunks.push(next.value);
-        }
-      } finally { await reader.cancel().catch(() => {}); }
-    }
-    let text = Buffer.concat(chunks, size).toString('utf8');
+    let text = (await readBoundedBytes(response.body, responseLimit, 'response_too_large', 'The mediated response exceeds the size limit')).toString('utf8');
     if (response.headers.get('content-type')?.includes('json')) {
       try {
         const clean = (value: unknown): unknown => typeof value === 'string' ? redact(value) : Array.isArray(value) ? value.map(clean) :

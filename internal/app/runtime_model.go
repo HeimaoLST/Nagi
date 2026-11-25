@@ -315,10 +315,8 @@ func (a *appModel) activeTaskCount() int {
 			count++
 		}
 		for _, activity := range ct.Activities {
-			if activity.WorkSessionID != "" || sessionBusy(activity.Work.SendState, activity.Work.ActiveTaskID) {
-				if sessionBusy(activity.Work.SendState, activity.Work.ActiveTaskID) {
-					count++
-				}
+			if sessionBusy(activity.Work.SendState, activity.Work.ActiveTaskID) {
+				count++
 			}
 		}
 	}

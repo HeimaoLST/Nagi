@@ -556,13 +556,11 @@ func FieldErrorText(msgs locales.Messages, key, kind string) string {
 		return msgs.ValidationWorkspaceAbsolutePath()
 	case ValidationWorkspaceDirectory:
 		return msgs.ValidationWorkspaceDirectoryExists()
-	case ValidationPositive, ValidationContextGap, ValidationLessThanContext:
-		if ValidationContextGap == kind {
-			return msgs.ValidationContextGap()
-		}
-		if ValidationLessThanContext == kind {
-			return msgs.ValidationLessThanContext()
-		}
+	case ValidationContextGap:
+		return msgs.ValidationContextGap()
+	case ValidationLessThanContext:
+		return msgs.ValidationLessThanContext()
+	case ValidationPositive:
 		return msgs.ValidationPositive()
 	case ValidationNumeric:
 		return msgs.ValidationNumeric()

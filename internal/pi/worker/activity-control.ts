@@ -33,12 +33,12 @@ export function steerEnvelope(steerId: string, payload: ActivitySteerPayload): s
 
 export function renderWhiteboard(rows: WhiteboardRow[], redact: (value: string) => string): string | undefined {
   if (!rows.length) return;
-  rows.sort((a, b) => a.priority - b.priority || (b.updatedAt ?? '').localeCompare(a.updatedAt ?? '') || a.activityId.localeCompare(b.activityId));
+  const sorted = [...rows].sort((a, b) => a.priority - b.priority || (b.updatedAt ?? '').localeCompare(a.updatedAt ?? '') || a.activityId.localeCompare(b.activityId));
   const overflow = (count: number) => count > 0 ? `(+${count} more active/unread activities; call activity_list)\n` : '';
   const wrapperBytes = Buffer.byteLength(boardOpen + boardClose);
   const entries: { start: string; bytes: number; summary: string }[] = [];
   const end = '</activity>\n';
-  for (const row of rows) {
+  for (const row of sorted) {
     const identities = [['activityId', row.activityId], ['executionId', row.executionId],
       ...row.questionIds.map(id => ['questionId', id]), ...row.requestIds.map(id => ['requestId', id])] as [string, string | undefined][];
     const exact = identities.filter((pair): pair is [string, string] => pair[1] !== undefined);

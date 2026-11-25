@@ -313,3 +313,29 @@ func TestBotStatusReplyingHaloAnimationAndReduceMotion(t *testing.T) {
 		})
 	}
 }
+
+func TestApplyBotActivityStatusMonotonicityAndCompletion(t *testing.T) {
+	if activityNeedsStatus(pi.ProductActivitySummary{State: "completed"}) || activityNeedsStatus(pi.ProductActivitySummary{State: "cancelled"}) {
+		t.Fatal("completed and cancelled activities must not stay in active status")
+	}
+	if !activityNeedsStatus(pi.ProductActivitySummary{State: "notStarted", OpenQuestionIDs: []string{"q1"}}) {
+		t.Fatal("activity with open questions must require status")
+	}
+
+	a, ct := workspaceTestApp(t)
+	a.applyBotActivityStatus(pi.ProductActivitySummary{ActivityID: "act-1", OwnerBotID: ct.ID, Revision: 3, State: "running"})
+	if ct.activityStatusRevision != 1 || len(ct.activeActivities) != 1 {
+		t.Fatalf("expected active act-1 rev 1, got rev=%d active=%+v", ct.activityStatusRevision, ct.activeActivities)
+	}
+
+	a.applyBotActivityStatus(pi.ProductActivitySummary{ActivityID: "act-1", OwnerBotID: ct.ID, Revision: 2, State: "completed"})
+	if ct.activityStatusRevision != 1 || len(ct.activeActivities) != 1 {
+		t.Fatalf("stale revision incorrectly modified status: rev=%d active=%+v", ct.activityStatusRevision, ct.activeActivities)
+	}
+
+	a.applyBotActivityStatus(pi.ProductActivitySummary{ActivityID: "act-1", OwnerBotID: ct.ID, Revision: 4, State: "completed"})
+	if ct.activityStatusRevision != 2 || len(ct.activeActivities) != 0 || ct.completedUntil.IsZero() {
+		t.Fatalf("expected completed transition with completion timestamp, got rev=%d active=%+v completedUntil=%v",
+			ct.activityStatusRevision, ct.activeActivities, ct.completedUntil)
+	}
+}

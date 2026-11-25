@@ -107,21 +107,6 @@ const (
 	supplementBatchNotDispatched        = store.SupplementBatchNotDispatched
 	supplementBatchUnknown              = store.SupplementBatchUnknown
 	supplementBatchCanceled             = store.SupplementBatchCanceled
-	activityToolActionCreate            = store.IssueToolActionCreate
-	activityToolActionUpdate            = store.IssueToolActionUpdate
-	activityToolActionRun               = store.IssueToolActionRun
-	activityToolActionStop              = store.IssueToolActionStop
-	activityToolActionAddSupplement     = store.IssueToolActionAddSupplement
-	activityToolActionWait              = store.IssueToolActionWait
-	activityToolActionResume            = store.IssueToolActionResume
-	activityToolReceiptSaved            = store.IssueToolReceiptSaved
-	activityToolReceiptDispatching      = store.IssueToolReceiptDispatching
-	activityToolReceiptAccepted         = store.IssueToolReceiptAccepted
-	activityToolReceiptStopRequested    = store.IssueToolReceiptStopRequested
-	activityToolReceiptUnknown          = store.IssueToolReceiptUnknown
-	activityToolModeConversation        = store.IssueToolModeConversation
-	activityToolModeWork                = store.IssueToolModeWork
-	activityToolExecutionPageLimit      = store.IssueToolExecutionPageLimit
 
 	connectionAPIResponses                 = connection.APIResponses
 	connectionAPIChatCompletions           = connection.APIChatCompletions
@@ -163,50 +148,40 @@ type (
 	markdownMessageBubble = markdown.MessageBubble
 	markdownLinkTarget    = markdown.LinkTarget
 
-	taskContextItem               = store.TaskContextItem
-	pendingSend                   = store.PendingSend
-	piSelection                   = store.PiSelection
-	piConfiguration               = store.PiConfiguration
-	piConversationBinding         = store.PiConversationBinding
-	piActivityBinding             = store.PiActivityBinding
-	piActivityRun                 = store.PiActivityRun
-	piQuestionCall                = store.PiQuestionCall
-	activityQuestion              = store.IssueQuestion
-	activityRequirement           = store.IssueRequirement
-	activityExecution             = store.IssueExecution
-	productActivityIntent         = store.ProductActivityIntent
-	activityHandoff               = store.IssueHandoff
-	activitySupplementTarget      = store.IssueSupplementTarget
-	activitySupplement            = store.IssueSupplement
-	activitySupplementBatch       = store.IssueSupplementBatch
-	activitySupplementAssociation = store.IssueSupplementAssociation
-	activitySupplementLedger      = store.IssueSupplementLedger
-	ActivityToolScope             = store.IssueToolScope
-	ActivityToolError             = store.IssueToolError
-	ActivityToolActionRequest     = store.IssueToolActionRequest
-	ActivityToolReceipt           = store.IssueToolReceipt
-	ActivityToolOperation         = store.IssueToolOperation
-	ActivityToolOperationLedger   = store.IssueToolOperationLedger
-	ActivityToolListResult        = store.IssueToolIssueListResult
-	ActivityToolSummary           = store.IssueToolIssueSummary
-	ActivityToolRequirementView   = store.IssueToolRequirementView
-	ActivityToolExecutionView     = store.IssueToolExecutionView
-	ActivityToolResultFileView    = store.IssueToolResultFileView
-	ActivityToolPiProgress        = store.IssueToolPiProgress
-	ActivityToolDetail            = store.IssueToolIssueDetail
-	storedContact                 = store.StoredContact
-	storedActivityExecution       = store.StoredIssueExecution
-	storedRequirement             = store.StoredRequirement
-	storedActivity                = store.StoredIssue
-	storedLayout                  = store.StoredLayout
-	storedState                   = store.StoredState
-	contactStore                  = store.ContactStore
-	productPendingSend            = store.ProductPendingSend
-	productUIState                = store.ProductUIState
-	storeRecoveryCopy             = store.StoreRecoveryCopy
-	storeRecoveryTarget           = store.StoreRecoveryTarget
-	storeRecoveryOutcome          = store.StoreRecoveryOutcome
-	storeRecoveryResult           = store.StoreRecoveryResult
+	taskContextItem             = store.TaskContextItem
+	pendingSend                 = store.PendingSend
+	piSelection                 = store.PiSelection
+	piConfiguration             = store.PiConfiguration
+	piConversationBinding       = store.PiConversationBinding
+	piActivityBinding           = store.PiActivityBinding
+	piActivityRun               = store.PiActivityRun
+	piQuestionCall              = store.PiQuestionCall
+	activityQuestion            = store.IssueQuestion
+	activityRequirement         = store.IssueRequirement
+	activityExecution           = store.IssueExecution
+	productActivityIntent       = store.ProductActivityIntent
+	activityHandoff             = store.IssueHandoff
+	activitySupplement          = store.IssueSupplement
+	activitySupplementBatch     = store.IssueSupplementBatch
+	activitySupplementLedger    = store.IssueSupplementLedger
+	ActivityToolScope           = store.IssueToolScope
+	ActivityToolError           = store.IssueToolError
+	ActivityToolReceipt         = store.IssueToolReceipt
+	ActivityToolOperation       = store.IssueToolOperation
+	ActivityToolOperationLedger = store.IssueToolOperationLedger
+	storedContact               = store.StoredContact
+	storedActivityExecution     = store.StoredIssueExecution
+	storedRequirement           = store.StoredRequirement
+	storedActivity              = store.StoredIssue
+	storedLayout                = store.StoredLayout
+	storedState                 = store.StoredState
+	contactStore                = store.ContactStore
+	productPendingSend          = store.ProductPendingSend
+	productUIState              = store.ProductUIState
+	storeRecoveryCopy           = store.StoreRecoveryCopy
+	storeRecoveryTarget         = store.StoreRecoveryTarget
+	storeRecoveryOutcome        = store.StoreRecoveryOutcome
+	storeRecoveryResult         = store.StoreRecoveryResult
 
 	connectionConfig          = connection.Config
 	privateConnectionConfig   = connection.PrivateConfig
@@ -234,9 +209,6 @@ var (
 	railHideIcon         = theme.RailHideIcon
 	railAddIcon          = theme.RailAddIcon
 	railSettingsIcon     = theme.RailSettingsIcon
-
-	errActivityToolAction       = store.ErrIssueToolAction
-	errActivityToolSaveRequired = store.ErrIssueToolSaveRequired
 
 	errTaskContextName = materials.ErrName
 	errTaskContextRead = materials.ErrRead
@@ -375,9 +347,6 @@ func restoreStoreRecoveryCopy(copy *storeRecoveryCopy, target *storeRecoveryTarg
 }
 func restoreStoreRecoveryCopyWithRename(copy *storeRecoveryCopy, target *storeRecoveryTarget, rename func(string, string) error) (storeRecoveryResult, error) {
 	return store.RestoreStoreRecoveryCopyWithRename(copy, target, rename)
-}
-func ValidateActivityToolReceipt(receipt *ActivityToolReceipt) error {
-	return store.ValidateIssueToolReceipt(receipt)
 }
 
 func defaultConnectionConfig(workDir string) connectionConfig {
