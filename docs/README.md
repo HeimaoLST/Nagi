@@ -15,6 +15,7 @@ This directory holds Nagi's product requirements, implemented design contracts, 
 ### Active Architecture RFCs (Planned / In Progress)
 
 - [RFC-0001: Multi-Brain Execution, Direct Data Inspection & Unified Capabilities](rfcs/0001-multi-brain-and-capabilities.md) — `Partially Implemented` (`M0a`–`M4` backend shipped; M1–M4 UI handoffs delivered to `t1vb`).
+- [RFC-0002: Bot-Activity Control Plane v2](rfcs/0002-bot-activity-control-plane.md) — `Review` (Astra-6.2 deep technical review resolved; implementation deferred pending frontend M1–M4 adaptation).
 
 ### Repository Root References
 
