@@ -596,3 +596,96 @@ func TestBotProfileThreeLayerCapabilitiesFooterAndM3ReviewModal(t *testing.T) {
 		t.Fatal("Escape on M3 modal unexpectedly closed underlying Bot Profile")
 	}
 }
+
+func TestCapabilitiesHelpersValidationAndReviewFileFallback(t *testing.T) {
+	if got := skillSlug("  Field Guide 2026!!  "); got != "field-guide-2026" {
+		t.Fatalf("skillSlug = %q, want field-guide-2026", got)
+	}
+	longSlug := skillSlug("a-" + strings.Repeat("b", 80))
+	if len(longSlug) != 63 || strings.HasSuffix(longSlug, "-") {
+		t.Fatalf("long skillSlug = %q (len=%d)", longSlug, len(longSlug))
+	}
+
+	msgs := locales.In("en")
+	ed := newMcpEditor(pi.ProductMcpServerView{
+		ProductMcpServerConfig: pi.ProductMcpServerConfig{
+			ServerID:  "mcp-test",
+			Name:      "stdio-tool",
+			Transport: "stdio",
+			Isolation: "shared",
+			Command:   "/usr/local/bin/mcp-tool",
+		},
+	})
+	ed.args = "first\r\n\r\nsecond\r\n"
+	in, _, ok := ed.input(msgs)
+	if !ok || !slices.Equal(in.Args, []string{"first", "second"}) {
+		t.Fatalf("CRLF args parsing = ok=%v args=%#v", ok, in.Args)
+	}
+
+	ed.args = "bad\x00arg"
+	if _, _, ok := ed.input(msgs); ok || ed.fields["args"] == "" {
+		t.Fatalf("NUL arg should fail validation: ok=%v fields=%+v", ok, ed.fields)
+	}
+
+	ed.args = ""
+	ed.config.Command = "relative/bin"
+	ed.config.Cwd = "relative/cwd"
+	if _, _, ok := ed.input(msgs); ok || ed.fields["command"] == "" || ed.fields["cwd"] == "" {
+		t.Fatalf("relative stdio paths should fail validation: ok=%v fields=%+v", ok, ed.fields)
+	}
+
+	ed.config.Transport = "http"
+	ed.config.URL = "https://user:pass@mcp.example.invalid/mcp"
+	if _, _, ok := ed.input(msgs); ok || ed.fields["url"] == "" {
+		t.Fatalf("HTTP URL with userinfo should fail validation: ok=%v fields=%+v", ok, ed.fields)
+	}
+
+	for _, loc := range []string{"en", "zh-Hans"} {
+		locMsgs := locales.In(loc)
+		for _, tool := range pi.ResolveCodingTools(nil, pi.ToolPresetWorkspace) {
+			if builtinToolDescription(locMsgs, tool) == "" {
+				t.Fatalf("missing localized description for tool %q in %q", tool, loc)
+			}
+		}
+		if got := builtinToolDescription(locMsgs, "unknown"); got != "" {
+			t.Fatalf("unknown tool description = %q, want empty", got)
+		}
+	}
+
+	a, ct := capabilitiesUITestApp(t)
+	a.windowWidth = 1040
+	const onlyScript = "export default async function() { return {}; }\n"
+	a.capabilities.review = &skillReviewState{
+		key:  pi.ProductSkillKey{Source: "private", BotID: ct.ID, SkillID: "script-only"},
+		name: "Script only",
+		file: "SKILL.md",
+		read: capabilityRead[pi.ProductSkillDetail]{
+			ready: true,
+			value: pi.ProductSkillDetail{
+				ProductSkillSummary: pi.ProductSkillSummary{
+					Source:  "private",
+					SkillID: "script-only",
+					Name:    "Script only",
+					Scripts: map[string]pi.ProductSkillScript{
+						"run": {Entry: "scripts/run.mjs", Description: "Run"},
+					},
+				},
+				Files: map[string]string{
+					"scripts/run.mjs": onlyScript,
+				},
+			},
+		},
+	}
+	tr := ui.NewTester(a.view, 1040, 720)
+	tr.SetLocale("en")
+	tr.Frame()
+	if a.capabilities.review.file != "scripts/run.mjs" {
+		t.Fatalf("skillReviewDialog file fallback = %q, want scripts/run.mjs", a.capabilities.review.file)
+	}
+	if err := tr.Click(msgs.CopyCodeLabel()); err != nil {
+		t.Fatal(err)
+	}
+	if tr.Clipboard() != onlyScript {
+		t.Fatalf("fallback Copy wrote %q, want %q", tr.Clipboard(), onlyScript)
+	}
+}

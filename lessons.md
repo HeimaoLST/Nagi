@@ -425,3 +425,11 @@
 **Cause or correction:** Only explicit caller cancellation or shutdown signals represent non-poisoning user aborts; a stream that drops or errors after flushing HTTP 200 is a route-level transport/stream failure. Likewise, durable operation admission (`accepted`) and recovered execution state (`unknown`) are independent facts, and M4 utility escalation applies only to zero-mutating semantic failures (such as `finish_reason: "length"` truncation), never to retrying transient `429`/`5xx`/network errors on another Provider.
 
 **Prevention:** Classify user abort exclusively from the caller/run cancellation signal rather than the SDK's internal fetch signal, verify flushed-200 interrupted streams across both wire APIs, and keep separate integration assertions for transport-failure zero-escalation versus semantic utility escalation.
+
+### Pair single-clock health guards and key UI metadata by stable identifier
+
+**Problem:** Checking half-open route availability with separate `Date.now()` calls between `claim` and `cooldown` could observe an expired cooldown after claim failure and pass `undefined` into `new Date()`, sorting caller arrays in place silently reordered caller telemetry, and indexing UI tool descriptions positionally against `pi.ResolveCodingTools` coupled presentation order to cross-package tool sorting.
+
+**Cause or correction:** Clock progression between consecutive guard checks breaks coupled invariants, `Array.prototype.sort` mutates its receiver, and positional indexing assumes two independent lists always share length and order.
+
+**Prevention:** Share a single timestamp snapshot across `claim` and `cooldown` fallbacks (and inject deterministic clocks for unit tests), sort shallow array copies in pure projection helpers, and switch or map UI tool descriptions by stable tool name.
