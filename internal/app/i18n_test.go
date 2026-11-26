@@ -141,6 +141,7 @@ func TestLanguageSwitchKeepsNonzeroSettingsScrollAndActualFocus(t *testing.T) {
 	a := providerUITestApp(t, pi.ProductProviderList{Policy: pi.ProductRoutingBalanced})
 	a.windowWidth = 1040
 	a.chooseFirstProvider(0)
+	a.openProviderDialog()
 	a.providers.first.BaseURL = "https://provider.example.invalid/v1/very/long/endpoint"
 	a.providers.first.advanced = true
 	a.providers.first.showModels = true
@@ -162,7 +163,7 @@ func TestLanguageSwitchKeepsNonzeroSettingsScrollAndActualFocus(t *testing.T) {
 	if !tr.Focused(msgsEN.ProviderBaseURL()) {
 		t.Fatalf("Base URL did not take focus: %v", tr.Texts())
 	}
-	tr.Scroll(760, 360, 0, 100)
+	tr.Scroll(520, 360, 0, 100)
 	tr.Frame()
 	scrollBefore := a.providers.detailScroll.Y
 	if scrollBefore <= 0 {
@@ -625,6 +626,7 @@ func TestShellAndNewContactFollowLocale(t *testing.T) {
 func TestConnectionFeedbackFollowLocale(t *testing.T) {
 	a, _ := workspaceTestApp(t)
 	a.chooseFirstProvider(0)
+	a.openProviderDialog()
 	const wantEndpoint = "https://provider.example.invalid/v1"
 	a.providers.first.BaseURL = wantEndpoint
 	a.providers.first.fields = map[string]string{"Endpoint": connectionValidationEndpointURL}

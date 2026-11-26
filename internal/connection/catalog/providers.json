@@ -1,0 +1,83 @@
+{
+  "version": 1,
+  "sections": [
+    {"id": "local", "order": 10, "collapsible": false, "title": {"en": "Local & custom", "zh-Hans": "本地与自定义"}, "subtitle": {"en": "Local inference servers or any OpenAI-compatible gateway", "zh-Hans": "本机推理引擎或任意 OpenAI 兼容网关，始终触手可及"}},
+    {"id": "cloud", "order": 20, "collapsible": true, "title": {"en": "Popular providers", "zh-Hans": "常用服务商"}, "subtitle": {"en": "Official endpoints and mainstream compatible APIs", "zh-Hans": "官方直连与主流聚合接口，点击图标即可配置"}}
+  ],
+  "providers": [
+    {
+      "id": "ollama", "section": "local", "order": 10,
+      "name": {"en": "Ollama"}, "tag": {"en": "Local", "zh-Hans": "本地"}, "icon": "ollama.svg",
+      "endpoint": "http://127.0.0.1:11434/v1", "wireApi": "openai-completions", "defaultModel": "qwen3:8b",
+      "contextTokens": 131072, "outputTokens": 8192, "website": "https://ollama.com", "noKey": true,
+      "matchHosts": ["127.0.0.1:11434", "localhost:11434"]
+    },
+    {
+      "id": "lmstudio", "section": "local", "order": 20,
+      "name": {"en": "LM Studio"}, "tag": {"en": "Local", "zh-Hans": "本地"}, "icon": "lmstudio.svg",
+      "endpoint": "http://127.0.0.1:1234/v1", "wireApi": "openai-completions", "defaultModel": "qwen3-14b",
+      "contextTokens": 131072, "outputTokens": 8192, "website": "https://lmstudio.ai", "noKey": true,
+      "matchHosts": ["127.0.0.1:1234", "localhost:1234"]
+    },
+    {
+      "id": "custom", "section": "local", "order": 30,
+      "name": {"en": "Custom API", "zh-Hans": "自定义 API"}, "tag": {"en": "Compatible API", "zh-Hans": "兼容接口"}, "icon": "custom.svg",
+      "endpoint": "", "wireApi": "openai-completions", "defaultModel": "",
+      "contextTokens": 131072, "outputTokens": 8192, "custom": true
+    },
+    {
+      "id": "openai", "section": "cloud", "order": 10, "name": {"en": "OpenAI"}, "icon": "openai.svg",
+      "endpoint": "https://api.openai.com/v1", "wireApi": "openai-responses", "defaultModel": "gpt-5",
+      "contextTokens": 131072, "outputTokens": 16384, "website": "https://platform.openai.com", "matchHosts": ["api.openai.com"]
+    },
+    {
+      "id": "google", "section": "cloud", "order": 20, "name": {"en": "Google Gemini"}, "icon": "gemini-color.svg",
+      "endpoint": "https://generativelanguage.googleapis.com/v1beta/openai", "wireApi": "openai-completions", "defaultModel": "gemini-2.5-pro",
+      "contextTokens": 1048576, "outputTokens": 8192, "website": "https://aistudio.google.com", "matchHosts": ["generativelanguage.googleapis.com"]
+    },
+    {
+      "id": "deepseek", "section": "cloud", "order": 30, "name": {"en": "DeepSeek"}, "icon": "deepseek-color.svg",
+      "endpoint": "https://api.deepseek.com/v1", "wireApi": "openai-completions", "defaultModel": "deepseek-chat",
+      "contextTokens": 131072, "outputTokens": 8192, "website": "https://platform.deepseek.com", "matchHosts": ["api.deepseek.com"]
+    },
+    {
+      "id": "xai", "section": "cloud", "order": 40, "name": {"en": "xAI"}, "icon": "xai.svg",
+      "endpoint": "https://api.x.ai/v1", "wireApi": "openai-completions", "defaultModel": "grok-3",
+      "contextTokens": 131072, "outputTokens": 8192, "website": "https://console.x.ai", "matchHosts": ["api.x.ai"]
+    },
+    {
+      "id": "moonshot", "section": "cloud", "order": 50, "name": {"en": "Kimi"}, "icon": "kimi.svg",
+      "endpoint": "https://api.moonshot.cn/v1", "wireApi": "openai-completions", "defaultModel": "kimi-k2-0905-preview",
+      "contextTokens": 262144, "outputTokens": 8192, "website": "https://platform.moonshot.cn",
+      "matchHosts": ["api.moonshot.cn", "api.moonshot.ai", "api.kimi.com", "api.kimi.ai"]
+    },
+    {
+      "id": "zhipu", "section": "cloud", "order": 60, "name": {"en": "Zhipu GLM", "zh-Hans": "智谱 GLM"}, "icon": "zhipu-color.svg",
+      "endpoint": "https://open.bigmodel.cn/api/paas/v4", "wireApi": "openai-completions", "defaultModel": "glm-4.7",
+      "contextTokens": 131072, "outputTokens": 8192, "website": "https://open.bigmodel.cn", "matchHosts": ["open.bigmodel.cn", "api.z.ai"]
+    },
+    {
+      "id": "minimax", "section": "cloud", "order": 70, "name": {"en": "MiniMax"}, "icon": "minimax-color.svg",
+      "endpoint": "https://api.minimaxi.com/v1", "wireApi": "openai-completions", "defaultModel": "MiniMax-M1",
+      "contextTokens": 1048576, "outputTokens": 8192, "website": "https://platform.minimaxi.com",
+      "matchHosts": ["api.minimaxi.com", "api.minimax.io", "api.minimax.chat"]
+    },
+    {
+      "id": "volcengine", "section": "cloud", "order": 80, "name": {"en": "Volcengine Ark", "zh-Hans": "火山方舟 Ark"}, "icon": "volcengine-color.svg",
+      "endpoint": "https://ark.cn-beijing.volces.com/api/v3", "wireApi": "openai-completions", "defaultModel": "doubao-seed-1.6",
+      "contextTokens": 262144, "outputTokens": 8192, "website": "https://console.volcengine.com",
+      "matchHosts": ["ark.cn-beijing.volces.com", "ark.ap-southeast.bytepluses.com"]
+    },
+    {
+      "id": "qwen", "section": "cloud", "order": 90, "name": {"en": "Qwen", "zh-Hans": "通义千问 Qwen"}, "icon": "qwen-color.svg",
+      "endpoint": "https://dashscope.aliyuncs.com/compatible-mode/v1", "wireApi": "openai-completions", "defaultModel": "qwen3-coder-plus",
+      "contextTokens": 262144, "outputTokens": 8192, "website": "https://bailian.console.aliyun.com",
+      "matchHosts": ["dashscope.aliyuncs.com", "dashscope-intl.aliyuncs.com"]
+    },
+    {
+      "id": "openrouter", "section": "cloud", "order": 100, "name": {"en": "OpenRouter"}, "icon": "openrouter.svg",
+      "endpoint": "https://openrouter.ai/api/v1", "wireApi": "openai-completions", "defaultModel": "openai/gpt-4o",
+      "contextTokens": 131072, "outputTokens": 8192, "website": "https://openrouter.ai", "matchHosts": ["openrouter.ai"]
+    }
+  ]
+}

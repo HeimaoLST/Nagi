@@ -44,15 +44,16 @@ func TestProviderSettingsUnifiedTwoTabsZeroAccountV2ImportAndOffline(t *testing.
 			msgs.ProviderTabAccounts(0),
 			msgs.ProviderTabRouting(),
 			msgs.ProviderRuntimeUnavailable(),
-			msgs.ProviderQuickStart(),
-			msgs.ProviderSave(),
-			msgs.ProviderSaveApply(),
+			"Local & custom",
+			"Popular providers",
+			"Ollama", "LM Studio", "Custom API",
+			"OpenAI", "Google Gemini", "DeepSeek", "xAI", "Kimi", "Zhipu GLM", "MiniMax", "Volcengine Ark", "Qwen", "OpenRouter",
 		} {
 			if !tr.HasText(want) {
 				t.Fatalf("offline unified Connection page missing %q: %v", want, tr.Texts())
 			}
 		}
-		for _, retired := range []string{msgs.ConnectionDirectorySection(), msgs.WorkFolderChoose(), msgs.ProviderNoAccounts()} {
+		for _, retired := range []string{msgs.ConnectionDirectorySection(), msgs.WorkFolderChoose(), msgs.ProviderNoAccounts(), msgs.ProviderQuickStart()} {
 			if tr.HasText(retired) {
 				t.Fatalf("offline Connection page unexpectedly rendered retired UI %q: %v", retired, tr.Texts())
 			}
@@ -70,13 +71,13 @@ func TestProviderSettingsUnifiedTwoTabsZeroAccountV2ImportAndOffline(t *testing.
 			msgs.ProviderTabAccounts(0),
 			msgs.ProviderTabRouting(),
 			msgs.ProviderQuickStartHint(),
-			msgs.ProviderQuickStart(),
-			"OpenAI", "DeepSeek", "OpenRouter", "Kimi", "Zhipu GLM", "Qwen", "Ollama", msgs.ProviderCustom(),
-			msgs.ProviderSave(),
-			msgs.ProviderSaveApply(),
+			"Local & custom",
+			"Popular providers",
+			"Ollama", "LM Studio", "Custom API",
+			"OpenAI", "Google Gemini", "DeepSeek", "xAI", "Kimi", "Zhipu GLM", "MiniMax", "Volcengine Ark", "Qwen", "OpenRouter",
 		} {
 			if !tr.HasText(want) {
-				t.Fatalf("0-account Plan A page missing %q: %v", want, tr.Texts())
+				t.Fatalf("0-account DS2 directory missing %q: %v", want, tr.Texts())
 			}
 		}
 		if tr.HasText(msgs.ConnectionDirectorySection()) || tr.HasText(msgs.WorkFolderChoose()) {
@@ -84,7 +85,6 @@ func TestProviderSettingsUnifiedTwoTabsZeroAccountV2ImportAndOffline(t *testing.
 		}
 
 		const syntheticKey = "sk-quickstart-keep-999"
-		empty.providers.first.APIKey = syntheticKey
 		for _, tc := range []struct {
 			click    string
 			wantURL  string
@@ -93,18 +93,33 @@ func TestProviderSettingsUnifiedTwoTabsZeroAccountV2ImportAndOffline(t *testing.
 			{"DeepSeek", "https://api.deepseek.com/v1", pi.OpenAICompletions},
 			{"Ollama", "http://127.0.0.1:11434/v1", pi.OpenAICompletions},
 			{"OpenAI", "https://api.openai.com/v1", pi.OpenAIResponses},
-			{msgs.ProviderCustom(), "", pi.OpenAICompletions},
+			{"Custom API", "", pi.OpenAICompletions},
 		} {
 			if err := tr.Click(tc.click); err != nil {
-				t.Fatalf("click quick-start preset %q: %v", tc.click, err)
+				t.Fatalf("click directory preset %q: %v", tc.click, err)
 			}
 			tr.Frame()
-			if empty.providers.first.APIKey != syntheticKey {
-				t.Fatalf("quick-start preset %q wiped typed API key: got %q", tc.click, empty.providers.first.APIKey)
+			if !empty.providers.adding || empty.providers.editor == nil {
+				t.Fatalf("preset %q did not open provider config modal", tc.click)
 			}
-			if empty.providers.first.BaseURL != tc.wantURL || empty.providers.first.WireAPI != tc.wantWire {
-				t.Fatalf("quick-start preset %q set url=%q wire=%q, want %q/%q", tc.click, empty.providers.first.BaseURL, empty.providers.first.WireAPI, tc.wantURL, tc.wantWire)
+			if empty.providers.editor.BaseURL != tc.wantURL || empty.providers.editor.WireAPI != tc.wantWire {
+				t.Fatalf("preset %q set url=%q wire=%q, want %q/%q", tc.click, empty.providers.editor.BaseURL, empty.providers.editor.WireAPI, tc.wantURL, tc.wantWire)
 			}
+			if tc.click == "OpenAI" {
+				empty.providers.editor.APIKey = syntheticKey
+			}
+			tr.Key(0, ui.KeyEscape)
+			tr.Frame()
+			if empty.providers.adding {
+				t.Fatalf("Escape did not dismiss modal opened from %q", tc.click)
+			}
+		}
+		if err := tr.Click("OpenAI"); err != nil {
+			t.Fatal(err)
+		}
+		tr.Frame()
+		if empty.providers.editor == nil || empty.providers.editor.APIKey != syntheticKey {
+			t.Fatalf("reopening OpenAI preset modal lost typed API key: got %+v", empty.providers.editor)
 		}
 
 		empty.windowWidth = 720
@@ -113,10 +128,10 @@ func TestProviderSettingsUnifiedTwoTabsZeroAccountV2ImportAndOffline(t *testing.
 		tr.SetDark(true)
 		tr.Frame()
 		zh := locales.In("zh-Hans")
-		for _, label := range []string{zh.ProviderSave(), zh.ProviderSaveApply()} {
+		for _, label := range []string{zh.CreateBotCancel(), zh.ProviderSave(), zh.ProviderSaveApply()} {
 			r, ok := tr.Find(label)
 			if !ok || r.X < 0 || r.Y < 0 || r.X+r.W > 720 || r.Y+r.H > 640 {
-				t.Fatalf("narrow 720x640 0-account footer control %q clipped/missing: rect=%+v ok=%v", label, r, ok)
+				t.Fatalf("narrow 720x640 0-account modal footer control %q clipped/missing: rect=%+v ok=%v", label, r, ok)
 			}
 		}
 	})
@@ -138,13 +153,17 @@ func TestProviderSettingsUnifiedTwoTabsZeroAccountV2ImportAndOffline(t *testing.
 		tr := ui.NewTester(a.view, 1040, 720)
 		tr.SetLocale("en")
 		tr.Frame()
-		if !tr.HasText(msgs.ProviderImportHint()) || !tr.HasText(msgs.ProviderPrevious()) {
-			t.Fatalf("legacy v2 prefill missing import hint or Previous connection row: %v", tr.Texts())
+		if !tr.HasText(msgs.ProviderImportHint()) || !tr.HasText(msgs.ProviderV2ImportTitle()) || !tr.HasText(msgs.ProviderV2ImportAction()) {
+			t.Fatalf("legacy v2 directory missing import banner: %v", tr.Texts())
 		}
+		if err := tr.Click(msgs.ProviderV2ImportTitle()); err != nil {
+			t.Fatal(err)
+		}
+		tr.Frame()
 		e := a.providers.first
-		if e == nil || e.preset != -1 || e.BaseURL != cfg.Endpoint || e.WireAPI != pi.OpenAIResponses ||
+		if !a.providers.adding || e == nil || e.preset != -1 || e.BaseURL != cfg.Endpoint || e.WireAPI != pi.OpenAIResponses ||
 			e.DefaultModel != cfg.Model || e.context != "65536" || e.output != "4096" || e.APIKey != "" {
-			t.Fatalf("legacy v2 prefill mismatch or leaked secret: %+v", e)
+			t.Fatalf("legacy v2 prefill mismatch or leaked secret: adding=%v editor=%+v", a.providers.adding, e)
 		}
 	})
 }
@@ -207,9 +226,9 @@ func TestProviderSettingsMasterDetailRT1PoolPriorityFallbackAndPrimaryCTA(t *tes
 			t.Fatalf("raw internal providerId leaked into UI text: %q", txt)
 		}
 	}
-	for _, want := range []string{"#1", "#2", msgs.ProviderFallbackTag(), msgs.ProviderAllApplied()} {
+	for _, want := range []string{msgs.ProviderConfiguredTitle(), "#1", "#2", msgs.ProviderFallbackTag(), msgs.ProviderAllApplied(), msgs.ProviderFoldSummary(10)} {
 		if !tr.HasText(want) {
-			t.Fatalf("Providers rail missing %q: %v", want, tr.Texts())
+			t.Fatalf("Providers directory missing %q: %v", want, tr.Texts())
 		}
 	}
 	if _, okUp := tr.Find(msgs.ProviderMoveUp()); !okUp {
@@ -219,10 +238,20 @@ func TestProviderSettingsMasterDetailRT1PoolPriorityFallbackAndPrimaryCTA(t *tes
 		t.Fatal("Priority Move down control missing")
 	}
 
-	listRect, okList := tr.Find("Backup gateway")
-	detailRect, okDetail := tr.Find(msgs.FieldName())
-	if !okList || !okDetail || detailRect.X <= listRect.X {
-		t.Fatalf("wide Master-Detail did not lay out side-by-side: list=%+v(%v) detail=%+v(%v)", listRect, okList, detailRect, okDetail)
+	if err := tr.Click(msgs.ProviderFoldSummary(10)); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if !tr.HasText("OpenAI") || !tr.HasText("OpenRouter") {
+		t.Fatalf("expanding folded popular providers did not reveal cloud vendors: %v", tr.Texts())
+	}
+
+	if err := tr.Click("Studio gateway"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if !a.providers.adding || a.providers.selectedID != "prov-internal-alpha" {
+		t.Fatalf("clicking configured account did not open modal: adding=%v selected=%q", a.providers.adding, a.providers.selectedID)
 	}
 
 	alphaDraft := a.providers.drafts["prov-internal-alpha"]
@@ -276,11 +305,9 @@ func TestProviderSettingsMasterDetailRT1PoolPriorityFallbackAndPrimaryCTA(t *tes
 		t.Fatalf("checking Fallback only did not set FallbackOnly=true: ok=%v val=%v", ok, fallbackParams.Account.FallbackOnly)
 	}
 
-	advSummary, okAdv := tr.Find(msgs.ProviderProtocolChatShort() + " · 128K / 8K")
-	if !okAdv {
-		t.Fatalf("Advanced summary row missing: %v", tr.Texts())
+	if err := tr.Click(msgs.ProviderAdvanced()); err != nil {
+		t.Fatal(err)
 	}
-	tr.ClickAt(detailRect.X+16, advSummary.Y+advSummary.H/2)
 	tr.Frame()
 	if !alphaDraft.advanced || !tr.HasText(msgs.ProviderAdditionalModels()) || !tr.HasText(msgs.ConnectionTokenLimits()) {
 		t.Fatalf("Advanced disclosure did not reveal additional models and token limits: %v", tr.Texts())
@@ -293,6 +320,8 @@ func TestProviderSettingsMasterDetailRT1PoolPriorityFallbackAndPrimaryCTA(t *tes
 	alphaDraft.Name = "Studio edited draft"
 	alphaDraft.BaseURL = "https://studio.example.invalid/v1"
 
+	tr.Key(0, ui.KeyEscape)
+	tr.Frame()
 	if err := tr.Click("Backup gateway"); err != nil {
 		t.Fatal(err)
 	}
@@ -301,6 +330,8 @@ func TestProviderSettingsMasterDetailRT1PoolPriorityFallbackAndPrimaryCTA(t *tes
 		t.Fatalf("clicking second account did not switch selection: got %q", a.providers.selectedID)
 	}
 	a.providers.drafts["prov-internal-beta"].Name = "Backup edited draft"
+	tr.Key(0, ui.KeyEscape)
+	tr.Frame()
 	if err := tr.Click("Studio gateway"); err != nil {
 		t.Fatal(err)
 	}
@@ -311,13 +342,8 @@ func TestProviderSettingsMasterDetailRT1PoolPriorityFallbackAndPrimaryCTA(t *tes
 			a.providers.drafts["prov-internal-alpha"].Name, a.providers.drafts["prov-internal-beta"].Name)
 	}
 
-	appliedImg := cloneRGBA(tr.Image())
-	saveApplyRect, okSaveApply := tr.Find(msgs.ProviderSaveApply())
-	if !okSaveApply {
-		t.Fatal("Save & apply button missing")
-	}
-	appliedBg := appliedImg.RGBAAt(int(saveApplyRect.X+4), int(saveApplyRect.Y+4))
-
+	tr.Key(0, ui.KeyEscape)
+	tr.Frame()
 	a.pi.productProviders.SavedRevision = &rev2
 	tr.Frame()
 	if !tr.HasText(msgs.ProviderApplyChanges()) {
@@ -325,16 +351,10 @@ func TestProviderSettingsMasterDetailRT1PoolPriorityFallbackAndPrimaryCTA(t *tes
 	}
 	pendingImg := cloneRGBA(tr.Image())
 	applyRect, okApply := tr.Find(msgs.ProviderApplyChanges())
-	saveApplyPendingRect, _ := tr.Find(msgs.ProviderSaveApply())
 	if !okApply {
 		t.Fatal("Apply provider changes rect missing")
 	}
 	applyFill := pendingImg.RGBAAt(int(applyRect.X+4), int(applyRect.Y+4))
-	demotedFill := pendingImg.RGBAAt(int(saveApplyPendingRect.X+4), int(saveApplyPendingRect.Y+4))
-	if applyFill == demotedFill || demotedFill == appliedBg {
-		t.Fatalf("pending state did not transfer sole primary fill to Apply provider changes: applied=%+v apply=%+v demoted=%+v",
-			appliedBg, applyFill, demotedFill)
-	}
 
 	a.addProvider()
 	tr.Frame()
@@ -344,29 +364,23 @@ func TestProviderSettingsMasterDetailRT1PoolPriorityFallbackAndPrimaryCTA(t *tes
 		t.Fatal("opening Add provider modal while pending did not demote background Apply CTA")
 	}
 	a.dismissProviderDialog()
-	tr.Frame()
-
+	a.selectProvider(pool.Accounts[0])
 	a.windowWidth = 720
 	tr.SetSize(720, 640)
 	tr.SetLocale("zh-Hans")
 	tr.SetDark(true)
 	tr.Frame()
 	zh := locales.In("zh-Hans")
-	narrowList, okNL := tr.Find("Backup gateway")
-	narrowDetail, okND := tr.Find(zh.FieldName())
-	if !okNL || !okND || narrowDetail.Y <= narrowList.Y || narrowDetail.X+narrowDetail.W > 720 {
-		t.Fatalf("narrow 720x640 layout failed stack/width check: list=%+v(%v) detail=%+v(%v)", narrowList, okNL, narrowDetail, okND)
-	}
-	for _, label := range []string{zh.ProviderDeleteAccount("Studio gateway"), zh.ProviderSave(), zh.ProviderSaveApply()} {
+	for _, label := range []string{zh.ProviderDeleteAccount("Studio gateway"), zh.CreateBotCancel(), zh.ProviderSave(), zh.ProviderSaveApply()} {
 		r, ok := tr.Find(label)
 		if !ok || r.X < 0 || r.Y < 0 || r.X+r.W > 720 || r.Y+r.H > 640 {
-			t.Fatalf("narrow 720x640 account footer control %q clipped/missing: rect=%+v ok=%v", label, r, ok)
+			t.Fatalf("narrow 720x640 account modal footer control %q clipped/missing: rect=%+v ok=%v", label, r, ok)
 		}
 	}
 }
 
 func TestProviderAddModalPresetsPreserveKeyNarrowFooterAndEscapeFocus(t *testing.T) {
-	a := providerUITestApp(t, pi.ProductProviderList{Policy: pi.ProductRoutingBalanced})
+	a := providerUITestApp(t, visualGuardSeededPool())
 	a.windowWidth = 1040
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.SetLocale("en")
@@ -381,38 +395,11 @@ func TestProviderAddModalPresetsPreserveKeyNarrowFooterAndEscapeFocus(t *testing
 	if !a.providers.adding || a.providers.editor == nil {
 		t.Fatal("Add provider frosted modal did not open")
 	}
-	for _, presetName := range []string{"OpenAI", "DeepSeek", "OpenRouter", "Kimi", "Zhipu GLM", "Qwen", "Ollama", msgs.ProviderCustom()} {
-		if !tr.HasText(presetName) {
-			t.Fatalf("Add provider modal missing preset %q: %v", presetName, tr.Texts())
-		}
-	}
 
 	const syntheticKey = "sk-synthetic-preset-keep-123456"
 	a.providers.editor.APIKey = syntheticKey
 	if redacted := a.redactConnectionText("probe failed for " + syntheticKey); strings.Contains(redacted, syntheticKey) || !strings.Contains(redacted, "[redacted]") {
 		t.Fatalf("redactConnectionText did not redact provider modal key: %q", redacted)
-	}
-
-	for _, tc := range []struct {
-		click    string
-		wantURL  string
-		wantWire pi.WireAPI
-	}{
-		{"OpenAI", "https://api.openai.com/v1", pi.OpenAIResponses},
-		{"DeepSeek", "https://api.deepseek.com/v1", pi.OpenAICompletions},
-		{"Ollama", "http://127.0.0.1:11434/v1", pi.OpenAICompletions},
-		{msgs.ProviderCustom(), "", pi.OpenAICompletions},
-	} {
-		if err := tr.Click(tc.click); err != nil {
-			t.Fatalf("click preset %q: %v", tc.click, err)
-		}
-		tr.Frame()
-		if a.providers.editor.APIKey != syntheticKey {
-			t.Fatalf("preset %q wiped typed API key: got %q", tc.click, a.providers.editor.APIKey)
-		}
-		if a.providers.editor.BaseURL != tc.wantURL || a.providers.editor.WireAPI != tc.wantWire {
-			t.Fatalf("preset %q set endpoint=%q wire=%q, want %q/%q", tc.click, a.providers.editor.BaseURL, a.providers.editor.WireAPI, tc.wantURL, tc.wantWire)
-		}
 	}
 
 	tr.Key(0, ui.KeyEscape)
@@ -423,6 +410,16 @@ func TestProviderAddModalPresetsPreserveKeyNarrowFooterAndEscapeFocus(t *testing
 	if !tr.Focused(msgs.ProviderAddShort()) {
 		t.Fatal("Escape dismissal did not return focus to opening Add button at 1040x720")
 	}
+
+	if err := tr.Click(msgs.ProviderAddShort()); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if a.providers.editor == nil || a.providers.editor.APIKey != syntheticKey {
+		t.Fatalf("reopening Add provider modal lost unsaved synthetic key: %+v", a.providers.editor)
+	}
+	tr.Key(0, ui.KeyEscape)
+	tr.Frame()
 
 	a.windowWidth = 720
 	tr.SetSize(720, 640)
@@ -578,6 +575,8 @@ func TestProviderRT2RoutingPinsAttributionFailoverDanglingAndHealth(t *testing.T
 		}
 	}
 
+	tr.Key(0, ui.KeyEscape)
+	tr.Frame()
 	if err := tr.Click(msgs.ProviderTabRouting()); err != nil {
 		t.Fatal(err)
 	}

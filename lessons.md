@@ -82,6 +82,14 @@
 
 **Prevention:** Keep the error region visible or repeat exact field errors when a section collapses, and verify summary and fields agree. Wrap a standalone action in a left-aligned `Row` or set `AlignSelf(ui.Start)`; check width after collapse and at minimum window size.
 
+### Align bordered credential strips with form inputs
+
+**Problem:** The saved API key strip sat below the label’s vertical centerline in the provider modal.
+
+**Cause or correction:** Vertical padding and a border around 32 DIP `TextAction` buttons made the strip taller than the input height used to align `providerFormRow` labels.
+
+**Prevention:** Keep the bordered strip close to the height of adjacent inputs and run `TestVisualGuardProviderModalFormAlignment` in English and Simplified Chinese.
+
 ### Bind Bot management and first-use folder choice
 
 **Problem:** Bot profiles can appear under global Settings and a cached selection can edit the wrong Bot. An empty first-use form can treat the launch directory as the selected work folder.

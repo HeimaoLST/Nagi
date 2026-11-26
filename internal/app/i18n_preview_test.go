@@ -219,7 +219,7 @@ func TestPreviewI18nFinalMatrix(t *testing.T) {
 				return a
 			},
 			want: func(msgs locales.Messages) []string {
-				return []string{msgs.SettingsConnection(), msgs.ProviderAccounts(), msgs.ProviderBaseURL(), msgs.ProviderDefaultModel(), msgs.ProviderTestSync(), msgs.ProviderSave(), msgs.ProviderSaveApply()}
+				return []string{msgs.SettingsConnection(), msgs.ProviderConfiguredTitle(), msgs.ProviderAddShort(), "Studio gateway", msgs.ProviderFoldSummary(10)}
 			},
 			fit: settingsFit,
 		},
@@ -510,6 +510,7 @@ func TestPreviewInputStates(t *testing.T) {
 				a.demo = false
 				a.runtimeStatus = runtimeStateReady
 				a.openSettingsTab(settingsTabConnection, settingsSourceRail)
+				a.openProviderDialog()
 			}
 			if item.state == "invalid-focus" {
 				editor.Errors = map[string]string{"Name": profileNoticeNameRequired}
@@ -687,4 +688,83 @@ func TestPreviewInputStates(t *testing.T) {
 			t.Logf("whole-app input preview=%s receipt=%s synthetic_fixture=true native_or_IME_acceptance=false", filepath.Join(dir, name+".png"), filepath.Join(dir, name+".json"))
 		})
 	}
+}
+
+func TestPreviewProvidersDS2(t *testing.T) {
+	dir := os.Getenv("NAGI_PREVIEW_DIR")
+	if dir == "" {
+		t.Skip("set NAGI_PREVIEW_DIR to write DS2 provider and toggle previews")
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	writeShot := func(name string, a *appModel, width, height int, locale string, dark bool) {
+		t.Helper()
+		a.windowWidth = width
+		tr := ui.NewTesterWith(a.view, width, height, ui.TesterOptions{Dark: dark})
+		tr.SetLocale(locale)
+		tr.SetFocused(true)
+		tr.Frame()
+		path := filepath.Join(dir, name)
+		writePreviewPNG(t, path, tr.Image())
+		t.Logf("ds2 preview path=%s width=%d height=%d locale=%s dark=%v", path, width, height, locale, dark)
+	}
+
+	v2Cfg := connectionConfig{
+		API:              connectionAPIResponses,
+		Endpoint:         "https://api.openai.com/v1",
+		APIKey:           "sk-preview-v2-synthetic",
+		Model:            "gpt-5",
+		ContextTokens:    131072,
+		OutputTokens:     16384,
+		WorkingDirectory: t.TempDir(),
+		MaxActiveTasks:   2,
+	}
+	v2App := providerUITestApp(t, pi.ProductProviderList{Policy: pi.ProductRoutingBalanced})
+	v2App.connectionSaved = &v2Cfg
+	writeShot("ds2-providers-0acc-v2import-en-light-1040x720.png", v2App, 1040, 720, "en", false)
+
+	foldedApp := providerUITestApp(t, visualGuardSeededPool())
+	writeShot("ds2-providers-2acc-folded-zh-light-1040x720.png", foldedApp, 1040, 720, "zh-Hans", false)
+
+	expandedLight := providerUITestApp(t, visualGuardSeededPool())
+	expandedLight.providers.catalogFolds = map[string]bool{"cloud": false}
+	writeShot("ds2-providers-2acc-expanded-zh-light-1040x720.png", expandedLight, 1040, 720, "zh-Hans", false)
+
+	expandedDark := providerUITestApp(t, visualGuardSeededPool())
+	expandedDark.providers.catalogFolds = map[string]bool{"cloud": false}
+	writeShot("ds2-providers-2acc-expanded-zh-dark-1040x720.png", expandedDark, 1040, 720, "zh-Hans", true)
+
+	yes := true
+	modalSavedPool := visualGuardSeededPool()
+	modalLight := providerUITestApp(t, modalSavedPool)
+	modalLight.selectProvider(modalSavedPool.Accounts[0])
+	modalLight.providers.drafts["prov-internal-openai"].discovered = []pi.ProductDiscoveredModel{
+		{ID: "gpt-5", CanonicalID: "openai/gpt-5", IsChat: &yes, ToolCall: &yes, Recommended: true, ContextTokens: 131072, OutputTokens: 16384},
+		{ID: "gpt-4o", CanonicalID: "openai/gpt-4o", IsChat: &yes, ToolCall: &yes, Recommended: true, ContextTokens: 131072, OutputTokens: 16384},
+		{ID: "gpt-5.4-mini", CanonicalID: "openai/gpt-5.4-mini", IsChat: &yes, ToolCall: &yes, Reasoning: true, Recommended: true, ContextTokens: 262144, OutputTokens: 16384},
+	}
+	modalLight.providers.drafts["prov-internal-openai"].tested = true
+	modalLight.providers.drafts["prov-internal-openai"].latency = 142
+	writeShot("ds2-providers-modal-saved-zh-light-1040x720.png", modalLight, 1040, 720, "zh-Hans", false)
+
+	modalDark := providerUITestApp(t, modalSavedPool)
+	modalDark.selectProvider(modalSavedPool.Accounts[0])
+	modalDark.providers.drafts["prov-internal-openai"].discovered = modalLight.providers.drafts["prov-internal-openai"].discovered
+	modalDark.providers.drafts["prov-internal-openai"].tested = true
+	modalDark.providers.drafts["prov-internal-openai"].latency = 142
+	writeShot("ds2-providers-modal-saved-zh-dark-1040x720.png", modalDark, 1040, 720, "zh-Hans", true)
+
+	routingApp := providerUITestApp(t, visualGuardSeededPool())
+	routingApp.providers.tab = providerTabRouting
+	writeShot("ds2-providers-routing-zh-light-1040x720.png", routingApp, 1040, 720, "zh-Hans", false)
+
+	narrowDark := providerUITestApp(t, visualGuardSeededPool())
+	narrowDark.providers.catalogFolds = map[string]bool{"cloud": false}
+	writeShot("ds2-providers-narrow-zh-dark-720x640.png", narrowDark, 720, 640, "zh-Hans", true)
+
+	generalApp := providerUITestApp(t, visualGuardSeededPool())
+	generalApp.openSettingsTab(settingsTabAppearance, settingsSourceRail)
+	writeShot("ds2-general-toggle-zh-light-1040x720.png", generalApp, 1040, 720, "zh-Hans", false)
 }

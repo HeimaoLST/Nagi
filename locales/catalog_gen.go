@@ -9432,6 +9432,118 @@ func (msgs Messages) ProviderAnswerPaused() string {
 	return Catalog.Format(msgs.locale, "providerAnswerPaused", nil)
 }
 
+func ProviderConfiguredTitle() string { return In(i18n.Locale()).ProviderConfiguredTitle() }
+
+func (msgs Messages) ProviderConfiguredTitle() string {
+	return Catalog.Format(msgs.locale, "providerConfiguredTitle", nil)
+}
+
+func ProviderConfiguredSubtitle() string { return In(i18n.Locale()).ProviderConfiguredSubtitle() }
+
+func (msgs Messages) ProviderConfiguredSubtitle() string {
+	return Catalog.Format(msgs.locale, "providerConfiguredSubtitle", nil)
+}
+
+func ProviderFoldCollapse() string { return In(i18n.Locale()).ProviderFoldCollapse() }
+
+func (msgs Messages) ProviderFoldCollapse() string {
+	return Catalog.Format(msgs.locale, "providerFoldCollapse", nil)
+}
+
+func ProviderFoldExpand() string { return In(i18n.Locale()).ProviderFoldExpand() }
+
+func (msgs Messages) ProviderFoldExpand() string {
+	return Catalog.Format(msgs.locale, "providerFoldExpand", nil)
+}
+
+func ProviderFoldSummary(count int) string { return In(i18n.Locale()).ProviderFoldSummary(count) }
+
+func (msgs Messages) ProviderFoldSummary(count int) string {
+	return Catalog.Format(msgs.locale, "providerFoldSummary", map[string]any{"count": count})
+}
+
+func ProviderKeyInUse() string { return In(i18n.Locale()).ProviderKeyInUse() }
+
+func (msgs Messages) ProviderKeyInUse() string {
+	return Catalog.Format(msgs.locale, "providerKeyInUse", nil)
+}
+
+func ProviderReplaceKey() string { return In(i18n.Locale()).ProviderReplaceKey() }
+
+func (msgs Messages) ProviderReplaceKey() string {
+	return Catalog.Format(msgs.locale, "providerReplaceKey", nil)
+}
+
+func ProviderOptionalKey() string { return In(i18n.Locale()).ProviderOptionalKey() }
+
+func (msgs Messages) ProviderOptionalKey() string {
+	return Catalog.Format(msgs.locale, "providerOptionalKey", nil)
+}
+
+func ProviderSelectAll() string { return In(i18n.Locale()).ProviderSelectAll() }
+
+func (msgs Messages) ProviderSelectAll() string {
+	return Catalog.Format(msgs.locale, "providerSelectAll", nil)
+}
+
+func ProviderSelectNone() string { return In(i18n.Locale()).ProviderSelectNone() }
+
+func (msgs Messages) ProviderSelectNone() string {
+	return Catalog.Format(msgs.locale, "providerSelectNone", nil)
+}
+
+func ProviderAddModel() string { return In(i18n.Locale()).ProviderAddModel() }
+
+func (msgs Messages) ProviderAddModel() string {
+	return Catalog.Format(msgs.locale, "providerAddModel", nil)
+}
+
+func ProviderAddModelPlaceholder() string { return In(i18n.Locale()).ProviderAddModelPlaceholder() }
+
+func (msgs Messages) ProviderAddModelPlaceholder() string {
+	return Catalog.Format(msgs.locale, "providerAddModelPlaceholder", nil)
+}
+
+func ProviderAddAnother(name string) string { return In(i18n.Locale()).ProviderAddAnother(name) }
+
+func (msgs Messages) ProviderAddAnother(name string) string {
+	return Catalog.Format(msgs.locale, "providerAddAnother", map[string]any{"name": name})
+}
+
+// ProviderV2ImportTitle says "Previous connection detected"
+// in the language the app shows.
+func ProviderV2ImportTitle() string { return In(i18n.Locale()).ProviderV2ImportTitle() }
+
+// ProviderV2ImportTitle says "Previous connection detected"
+// in the language of msgs.
+func (msgs Messages) ProviderV2ImportTitle() string {
+	return Catalog.Format(msgs.locale, "providerV2ImportTitle", nil)
+}
+
+// ProviderV2ImportAction says "Import →"
+// in the language the app shows.
+func ProviderV2ImportAction() string { return In(i18n.Locale()).ProviderV2ImportAction() }
+
+// ProviderV2ImportAction says "Import →"
+// in the language of msgs.
+func (msgs Messages) ProviderV2ImportAction() string {
+	return Catalog.Format(msgs.locale, "providerV2ImportAction", nil)
+}
+
+func ProviderEnabledModelsCount(count int) string {
+	return In(i18n.Locale()).ProviderEnabledModelsCount(count)
+}
+
+func (msgs Messages) ProviderEnabledModelsCount(count int) string {
+	return Catalog.Format(msgs.locale, "providerEnabledModelsCount", map[string]any{"count": count})
+}
+
+func ProviderRoutingSubtitle() string { return In(i18n.Locale()).ProviderRoutingSubtitle() }
+
+func (msgs Messages) ProviderRoutingSubtitle() string {
+	return Catalog.Format(msgs.locale, "providerRoutingSubtitle", nil)
+}
+
 // SettingsCapabilities says "Capabilities"
 // in the language the app shows.
 func SettingsCapabilities() string { return In(i18n.Locale()).SettingsCapabilities() }

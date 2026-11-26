@@ -126,12 +126,22 @@ func TestPandoraBoxVisibilityToggleHiddenSummonAndEmptyRailRecovery(t *testing.T
 				t.Fatal(err)
 			}
 			tr.Frame()
-			if !tr.HasText(msgs.SettingsPandoraBoxVisibility()) || !tr.HasText(msgs.SettingsPandoraBoxShow()) || !tr.HasText(msgs.SettingsPandoraBoxHide()) {
-				t.Fatalf("General settings missing PandoraBox visibility controls: %v", tr.Texts())
+			if !tr.HasText(msgs.SettingsPandoraBoxVisibility()) {
+				t.Fatalf("General settings missing PandoraBox visibility toggle: %v", tr.Texts())
 			}
-			if err := tr.Click(msgs.SettingsPandoraBoxHide()); err != nil {
-				t.Fatal(err)
+			focusedToggle := false
+			for range 20 {
+				if tr.Focused(msgs.SettingsPandoraBoxVisibility()) {
+					focusedToggle = true
+					break
+				}
+				tr.Key(0, ui.KeyTab)
+				tr.Frame()
 			}
+			if !focusedToggle {
+				t.Fatal("PandoraBox visibility ToggleSwitch was not keyboard-focusable")
+			}
+			tr.Key(0, ui.KeySpace)
 			tr.Frame()
 			if !a.hideBuiltinArchitect || a.selectedContact() != specialist {
 				t.Fatalf("hiding selected PandoraBox did not switch to first visible Bot: hidden=%v selected=%q", a.hideBuiltinArchitect, a.selectedID())

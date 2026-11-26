@@ -6,9 +6,9 @@ import (
 )
 
 func StyleFrostedModalBackdrop(backdrop ui.Element, t *ui.Theme) {
-	tint := ui.RGBA(246, 246, 243, 0.45)
+	tint := ui.RGBA(20, 21, 18, 0.22)
 	if t.Dark {
-		tint = ui.RGBA(14, 15, 12, 0.45)
+		tint = ui.RGBA(8, 9, 7, 0.50)
 	}
 	backdrop.Material(glass.Blur{Radius: 12}).Draw(func(p *ui.Painter, r ui.Rect) {
 		p.Fill(r, tint, 0)
@@ -16,7 +16,7 @@ func StyleFrostedModalBackdrop(backdrop ui.Element, t *ui.Theme) {
 }
 
 func PreferenceGroup(c *ui.Context, t *ui.Theme, children func()) {
-	ui.Column(c).FillWidth().MinWidth(0).Padding(6, 18).Background(t.Surface).Border(1, t.Border).Radius(12).Children(children)
+	ui.Column(c).FillWidth().MinWidth(0).Padding(6, 18).Background(t.Surface).Border(1, t.Border).Radius(CardRadius).Children(children)
 }
 
 func PreferenceSection(c *ui.Context, t *ui.Theme, title string, children func()) {
@@ -27,8 +27,20 @@ func PreferenceSection(c *ui.Context, t *ui.Theme, title string, children func()
 }
 
 func PreferenceSectionHeader(c *ui.Context, t *ui.Theme, title string) {
-	ui.Row(c).FillWidth().Padding(0, 18).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, title).Role(ui.RoleHeading).Level(2).FontSize(TypeGroupTitle).FontWeight(600).FixedLineHeight(LineGroupTitle).TextColor(t.Text)
+	PreferenceSectionHeaderWithSubtitle(c, t, title, "")
+}
+
+func PreferenceSectionHeaderWithSubtitle(c *ui.Context, t *ui.Theme, title, subtitle string, trailing ...func()) {
+	ui.Row(c).FillWidth().MinWidth(0).Padding(0, 2).Wrap().AlignItems(ui.Center).Gap(8).Children(func() {
+		ui.Row(c).MinWidth(0).Grow(1).Wrap().AlignItems(ui.Center).Gap(8).Children(func() {
+			ui.Text(c, title).Role(ui.RoleHeading).Level(2).FontSize(TypeGroupTitle).FontWeight(600).FixedLineHeight(LineGroupTitle).TextColor(t.Text)
+			if subtitle != "" {
+				ui.Text(c, subtitle).MinWidth(0).FontSize(TypeMeta).FixedLineHeight(LineMeta).TextColor(t.TextMuted)
+			}
+		})
+		for _, action := range trailing {
+			action()
+		}
 	})
 }
 

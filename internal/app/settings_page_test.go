@@ -54,7 +54,7 @@ func TestSettingsPageReplacesWorkbenchAndRoutesEntries(t *testing.T) {
 	if a.settingsScroll.Y != 0 {
 		t.Fatalf("connection category opened scrolled: %v", a.settingsScroll.Y)
 	}
-	if a.settingsTab != settingsTabConnection || !tr.HasText(msgs.ProviderQuickStart()) {
+	if a.settingsTab != settingsTabConnection || !tr.HasText(msgs.ProviderTabAccounts(0)) || !tr.HasText("Local & custom") {
 		t.Fatalf("connection category = %q texts=%v", a.settingsTab, tr.Texts())
 	}
 	if err := tr.Click("← Back to workbench"); err != nil {
@@ -289,6 +289,7 @@ func TestSettingsConnectionEditorsSurviveNavigationAndLocale(t *testing.T) {
 	effective.Model = "effective-model"
 	a.connectionSaved, a.connectionEffective = &saved, &effective
 	a.chooseFirstProvider(-1)
+	a.openProviderDialog()
 	editor := a.providers.first
 	ct.Draft = "keep conversation text"
 	a.openSettingsTab(settingsTabConnection, settingsSourceRail)
@@ -371,7 +372,7 @@ func TestPreferencesListControlsAndPreviews(t *testing.T) {
 							a.demo = false
 							a.runtimeStatus = runtimeStateReady
 							a.pi = stubProductHost(t, a, pi.ProductProviderList{Policy: pi.ProductRoutingBalanced})
-							a.chooseFirstProvider(0)
+							a.openProviderPreset(pi.ProductProviderList{Policy: pi.ProductRoutingBalanced}, "openai")
 						}
 						var editor *providerEditor
 						if scene == "fresh" {
@@ -487,18 +488,7 @@ func TestPreferencesListControlsAndPreviews(t *testing.T) {
 							if scene != "general" {
 								scrollState = &a.providers.detailScroll
 								delta = 40
-								testLabel := msgs.ProviderTestAccount("Studio gateway")
-								if scene == "fresh" {
-									testLabel = msgs.ProviderTestAccount("OpenAI")
-								}
-								headerRect, okH := tr.Find(testLabel)
-								footerRect, okF := tr.Find(msgs.ProviderSaveApply())
-								if okH && okF {
-									scrollX = footerRect.X
-									scrollY = (headerRect.Y + headerRect.H + footerRect.Y) / 2
-								} else {
-									scrollX, scrollY = float32(size[0]-80), float32(size[1]-180)
-								}
+								scrollX, scrollY = float32(size[0])/2, float32(size[1])/2
 							}
 							before := scrollState.Y
 							if directory != "" && (step == 0 || step == 2) {
@@ -700,11 +690,11 @@ func TestPreviewSettingsPage(t *testing.T) {
 						t.Fatalf("connection preview scrolled at %dx%d: %v", size.width, size.height, a.settingsScroll.Y)
 					}
 					msgs := locales.In("en")
-					if !tr.HasText(msgs.ProviderAccounts()) {
-						t.Fatalf("connection provider list header missing at %dx%d: %v", size.width, size.height, tr.Texts())
+					if !tr.HasText(msgs.ProviderConfiguredTitle()) || !tr.HasText("Studio gateway") || !tr.HasText(msgs.ProviderFoldSummary(10)) {
+						t.Fatalf("connection provider directory missing configured/folded sections at %dx%d: %v", size.width, size.height, tr.Texts())
 					}
-					if r, ok := tr.Find(msgs.ProviderSaveApply()); !ok || r.X < 0 || r.X+r.W > float32(size.width) || r.Y < 0 || r.Y+r.H > float32(size.height) {
-						t.Fatalf("connection footer primary action not visible at %dx%d: %+v ok=%v", size.width, size.height, r, ok)
+					if r, ok := tr.Find("Studio gateway"); !ok || r.X < 0 || r.X+r.W > float32(size.width) || r.Y < 0 || r.Y+r.H > float32(size.height) {
+						t.Fatalf("configured provider row not visible at %dx%d: %+v ok=%v", size.width, size.height, r, ok)
 					}
 				}
 				if export {
@@ -728,7 +718,7 @@ func TestFirstLaunchOpensConnectionSettingsPageWithoutEmptyOverlay(t *testing.T)
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
 	msgs := locales.In("en")
-	if !tr.HasText(msgs.SettingsConnection()) || !tr.HasText(msgs.ProviderSaveApply()) || tr.HasText("No messages yet") {
+	if !tr.HasText(msgs.SettingsConnection()) || !tr.HasText(msgs.ProviderTabAccounts(0)) || !tr.HasText("Local & custom") || tr.HasText("No messages yet") {
 		t.Fatalf("first launch did not show the connection page alone: %v", tr.Texts())
 	}
 	if err := tr.Click(msgs.SettingsAdvanced()); err != nil {
@@ -748,7 +738,7 @@ func TestFirstLaunchOpensConnectionSettingsPageWithoutEmptyOverlay(t *testing.T)
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if a.settingsTab != settingsTabConnection || !tr.HasText(msgs.ProviderSaveApply()) || tr.HasText("No messages yet") {
+	if a.settingsTab != settingsTabConnection || !tr.HasText(msgs.ProviderTabAccounts(0)) || !tr.HasText("Local & custom") || tr.HasText("No messages yet") {
 		t.Fatalf("Advanced did not return to the connection page alone: %v", tr.Texts())
 	}
 }

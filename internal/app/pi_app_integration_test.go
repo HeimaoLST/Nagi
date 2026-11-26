@@ -202,7 +202,11 @@ func TestPiAppProductConnectionSaveAndApplyRefusal(t *testing.T) {
 	msg := locales.In("en")
 	w.frame(func() { w.app.openSettingsTab(settingsTabConnection, settingsSourceRail) })
 	w.wait(func() bool {
-		return w.app.settingsOpen && w.app.providers.first != nil && w.app.providers.first.preset == -1
+		return w.app.settingsOpen && w.view.HasText(msg.ProviderV2ImportTitle())
+	})
+	w.click(msg.ProviderV2ImportTitle())
+	w.wait(func() bool {
+		return w.app.providers.adding && w.app.providers.first != nil && w.app.providers.first.preset == -1
 	})
 	enterField := func(label, value string) {
 		t.Helper()
@@ -295,6 +299,8 @@ func TestPiAppProductConnectionSaveAndApplyRefusal(t *testing.T) {
 		w.pump.do(check)
 	}
 	const editedModel = "obstructed-save-model"
+	w.click("Studio gateway")
+	w.wait(func() bool { return w.app.providers.adding && w.app.providers.editor != nil })
 	enterField(msg.ProviderDefaultModel(), editedModel)
 	obstruct(msg.ProviderSaveApply(), msg.ProviderSaveFailed(), func() {
 		ed := w.app.providers.editor
@@ -306,6 +312,7 @@ func TestPiAppProductConnectionSaveAndApplyRefusal(t *testing.T) {
 		t.Fatalf("obstructed Save & apply changed pending or effective revisions: %+v", refused)
 	}
 	enterField(msg.ProviderDefaultModel(), model)
+	w.frame(func() { w.app.dismissProviderDialog() })
 	obstruct(msg.ProviderApplyChanges(), msg.ProviderApplyFailed(), func() {
 		ed := w.app.providers.editor
 		if ed == nil || ed.DefaultModel != model || ed.APIKey != "" || !w.app.productProvidersPending() {
