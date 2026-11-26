@@ -33,3 +33,29 @@ Every GUI change must satisfy all six rules, enforced by `internal/app/visual_gu
 3. **Guard & test alignment (`nagi-review`).** Align affected tests, add or extend `TestVisualGuard*` invariants (verifying each new guard catches regressions when the invariant is violated), and run the full headless suite plus built-worker Pi integration.
 4. **Real-data visual evidence & verdict.** Capture original PNGs on a clean frozen checkout via `scripts/capture-ui-review.py` using realistic seeded fixtures (multiple providers, models, bots, dark/light, EN/zh-Hans, wide/narrow). Open and inspect every original PNG and record an explicit visual verdict; P0/P1 findings block merge.
 5. **CI & signed standalone delivery (orchestrator).** Require green `CI/gui`, `CI/pi-integration` and `CI/ci-required`, merge to `dev`, rebuild and sign standalone `Nagi.app`, and verify launched GUI + bundled worker PIDs and executable inodes.
+
+## 4. Self-evolving guards, Fail-Before-Fix and verification iron laws
+
+1. **Self-discovering guards over manual lists.** *A guard test reads what it guards from the code, not from a list someone has to remember to update.* Prefer Go `go/ast` / `go/parser`, reflection, JSON schema scans, catalog traversal, or UI-tree introspection over hand-maintained allowlists.
+2. **Browserless guards run in CI.** Static governance, link integrity, schema, i18n, and visual-guard suites (`python3 scripts/check-governance.py --strict .`, `TestVisualGuard*`, `TestPublishedCatalogContract`) run automatically on every PR without requiring a desktop window or network access.
+3. **Fail-Before-Fix (Break It On Purpose).** For every bug fix or invariant guard, `nagi-review` (the independent test/QA owner) proves the test catches the real defect: revert the fix or sabotage the guarded invariant, confirm a genuine behavioral `FAIL` (compile errors, panics, or `SKIP` do not count), restore the fix to confirm `PASS`, and record the proof in the PR description.
+4. **Zero-excuse green baseline.** Never dismiss failures with *"fails the same on dev"* or *"passes on rerun"*. Investigate root cause, fix immediately, or track explicitly; prove nondeterminism before labeling any failure flaky via:
+   `CGO_ENABLED=1 NAGI_TEST_ONLINE=0 python3 scripts/gui-go.py test -tags=integration -race -count=20 -run <Test> ./...`
+5. **Deterministic timing, concurrency and isolation.** Wait for observable final states (never fixed `sleep` delays); reproduce races with deterministic barriers/hooks and validate bounded concurrency (`-race -cpu 1`); align local `-tags=integration -race` runs with CI whenever touching frosted modals, blur, or concurrency paths; reap every spawned worker process and timer; isolate test `HOME`/profile directories with stripped host env vars.
+6. **Verification Evidence Taxonomy.** Every handoff and PR explicitly separates proof levels (`source inspection`, `build/vet`, `headless & visual guards [H]`, `built-worker Pi integration/E2E (-race)`, `native macOS [N]`, `standalone package`, `real provider`, `human acceptance`) and marks unexecuted tiers `not run`.
+
+## 5. Data safety, concurrency and packaging guardrails
+
+1. **Fail closed & preserve corrupt inputs.** Access control, skill-approval digest, credential, and quota checks fail closed on read/parse errors (`error = unknown`, never `empty`/`none`/`equal`). Corrupt profile or recovery files retain a side-by-side backup while keeping valid in-memory state.
+2. **Concurrency & ownership hygiene.** Never hold locks across blocking I/O, IPC, network calls, or callbacks; complete shared state initialization before publishing across goroutines; bind every Bot, draft, activity, question, receipt, and file to its recorded owner ID; never auto-replay uncertain operations across restarts.
+3. **Path safety & packaging reproducibility.** Resolve symlinks on both sides (`os.OpenRoot` or `filepath.EvalSymlinks`) before containment checks; build GUI binaries with `-trimpath -mod=readonly -buildvcs=true` and `python3 scripts/gui-go.py`; keep external worker and Node runtimes pinned by SHA-256 in `.github/pi-runtime.json`; obey `Tag != Release` (fetch tags, tag only completed green CI commits, verify all release artifacts before announcing).
+
+## 6. Graduated rules log
+
+| Rule / Class | Enforcing Guard | Authoritative Location |
+| --- | --- | --- |
+| Docs, budgets, relative links & PR/lessons schemas | `scripts/check-governance.py --strict .` | [CI Workflow](../.github/workflows/ci.yml) & [Subsystem Index](subsystems/README.md) |
+| Settings/modal alignment, contrast, SVGs, shared primitives & locale parity | `TestVisualGuard*` (`internal/app/visual_guard_test.go`) | [Visual Guard Suite](../internal/app/visual_guard_test.go) |
+| EN / zh-Hans translation key & placeholder contract | `TestPublishedCatalogContract` & i18n tests | [Locales](../locales/catalog_gen.go) |
+| Layered catalog safety (path traversal, symlink escape, malformed plugins) | `internal/connection/catalog_test.go` | [Provider Catalog](../internal/connection/catalog.go) |
+| Design System 2.0 primitives & WCAG AA ink contrast | `internal/theme/ds2_test.go` | [DS2 Primitives](../internal/theme/ds2.go) |
