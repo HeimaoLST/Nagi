@@ -35,6 +35,8 @@ jobs:
           python-version: '3.12'
       - name: Go formatting
         run: test -z "$(gofmt -l .)"
+      - name: Governance guard
+        run: python3 scripts/check-governance.py --strict .
       - name: Nagi vet, tests and independent build
         env:
           CGO_ENABLED: '0'

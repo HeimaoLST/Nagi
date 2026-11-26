@@ -11,6 +11,8 @@ This directory holds Nagi's product requirements, implemented design contracts, 
 - **Product Protocol**: [Product Protocol v1](design/product-protocol.md) — implemented Go/TypeScript JSONL wire contract, receipts, events, and profile admission.
 - **Pi Runtime**: [Pi Integration](design/pi-integration.md) — process ownership, startup/shutdown, packaging, and standalone verification.
 - **Native Desktop UI**: [Desktop Design](design/desktop.md), [UI Checklist](design/ui-checklist.md), and [UI Review Workflow](design/ui-review.md) — implemented MyGo layout, visual tokens, and visual review gates.
+- **Engineering & UI Standards**: [Code and UI Standards](code-standards.md) — fix-the-class rules, machine-checkable GUI red lines, Fail-Before-Fix, and verification taxonomy.
+- **Subsystem Reference Index**: [Subsystem Index](subsystems/README.md) — single-source-of-truth map of live subsystems and update rules.
 
 ### Active Architecture RFCs (Planned / In Progress)
 
