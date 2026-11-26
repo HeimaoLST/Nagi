@@ -163,7 +163,7 @@ func (a *appModel) providerPriority(c *ui.Context, msgs locales.Messages, pool p
 		}{{-1, "↑", msgs.ProviderMoveUp()}, {1, "↓", msgs.ProviderMoveDown()}} {
 			c.Key(move.arrow)
 			target := index + move.delta
-			button := secondaryButton(c, move.arrow).Label(move.name).MinHeight(32).Padding(4, 8).
+			button := secondaryButton(c, move.arrow).Label(move.name).Size(32, 32).Padding(4, 8).
 				Disabled(blocked || target < 0 || target >= len(pool.Accounts))
 			appTooltip(c, button, move.name)
 			button.OnClick(func() {
@@ -183,14 +183,12 @@ func (a *appModel) providerPriority(c *ui.Context, msgs locales.Messages, pool p
 	})
 }
 
-func (a *appModel) providerFallback(c *ui.Context, t *ui.Theme, msgs locales.Messages, editor *providerEditor, blocked bool) {
-	providerFormRow(c, t, msgs.ProviderFallbackOnly(), func() {
-		fallback := editor.FallbackOnly != nil && *editor.FallbackOnly
-		ui.Checkbox(c, &fallback, msgs.ProviderUseAsBackup()).Disabled(blocked).OnChange(func() {
-			editor.FallbackOnly, editor.fallbackChanged = &fallback, true
-		})
-		ui.Text(c, msgs.ProviderFallbackHint()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
+func (a *appModel) providerFallback(c *ui.Context, msgs locales.Messages, editor *providerEditor, blocked bool) {
+	fallback := editor.FallbackOnly != nil && *editor.FallbackOnly
+	control := ui.Checkbox(c, &fallback, msgs.ProviderUseAsBackup()).MinHeight(theme.ControlHit).Disabled(blocked).OnChange(func() {
+		editor.FallbackOnly, editor.fallbackChanged = &fallback, true
 	})
+	appTooltip(c, control, msgs.ProviderFallbackHint())
 }
 
 func providerRetryLabel(c *ui.Context, msgs locales.Messages, stamp string) string {
@@ -355,7 +353,7 @@ func (a *appModel) providerPinPicker(c *ui.Context, t *ui.Theme, msgs locales.Me
 		choices = append(choices, theme.SelectOption{Value: selected, Label: label})
 	}
 	c.Key("provider-pin")
-	if theme.PreferenceSelect(c, &selected, choices, msgs.ProviderPinRole(role.name), a.providerChangesBlocked() || pool.SavedRevision == nil).FillWidth().MaxWidth(280).Changed() {
+	if theme.PreferenceSelect(c, &selected, choices, msgs.ProviderPinRole(role.name), a.providerChangesBlocked() || pool.SavedRevision == nil).FillWidth().MaxWidth(264).Changed() {
 		if index := slices.IndexFunc(options, func(option providerPinOption) bool { return option.Value == selected }); index >= 0 {
 			var change *pi.ProductRoutingOverride
 			if value := options[index].pin; value.Mode != "" {
@@ -373,7 +371,7 @@ func (a *appModel) providerPinPicker(c *ui.Context, t *ui.Theme, msgs locales.Me
 	}
 }
 
-func providerRoleStatus(c *ui.Context, t *ui.Theme, msgs locales.Messages, status pi.ProductRoleStatus, route *pi.ProductModelRoute) {
+func providerRoleStatus(c *ui.Context, t *ui.Theme, msgs locales.Messages, status pi.ProductRoleStatus, route *pi.ProductModelRoute, thinking string) {
 	ink, label := t.Warning, msgs.ProviderUnavailable()
 	if route != nil || status.Status == "ready" {
 		ink, label = t.Success, msgs.ProviderReady()
@@ -398,7 +396,7 @@ func providerRoleStatus(c *ui.Context, t *ui.Theme, msgs locales.Messages, statu
 	case "pinned_route", "route":
 		attribution = msgs.ProviderPinnedRoute()
 	}
-	ui.Row(c).FillWidth().MinWidth(0).Wrap().AlignItems(ui.Center).Gap(6).Children(func() {
+	ui.Row(c).FillWidth().MinWidth(0).Wrap().AlignItems(ui.Center).Justify(ui.End).Gap(6).Children(func() {
 		capabilityBadge(c, t, attribution, t.TextMuted)
 		if failover == "same_model_cooldown" {
 			capabilityBadge(c, t, msgs.ProviderSameModelFailover(), t.Warning)
@@ -406,6 +404,9 @@ func providerRoleStatus(c *ui.Context, t *ui.Theme, msgs locales.Messages, statu
 			capabilityBadge(c, t, msgs.ProviderFallbackModel(), t.Warning)
 		}
 		capabilityBadge(c, t, label, ink)
+		if thinking != "" {
+			ui.Text(c, thinking).MinWidth(0).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
+		}
 	})
 	if note := providerUnavailableReason(msgs, status.UnavailableReason); note != "" {
 		ui.Text(c, note).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(ink)

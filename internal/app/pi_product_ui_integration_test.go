@@ -104,11 +104,17 @@ func (w *productWorkbench) click(label string) {
 	w.t.Helper()
 	var err error
 	var visible []string
-	w.frame(func() {
-		w.view.Frame()
+	w.pump.do(func() {
+		if w.view.FramePending() {
+			w.view.Frame()
+		}
 		err = w.view.Click(label)
 		if err != nil {
-			visible = w.view.Texts()
+			w.view.Frame()
+			err = w.view.Click(label)
+			if err != nil {
+				visible = w.view.Texts()
+			}
 		}
 	})
 	if err != nil {

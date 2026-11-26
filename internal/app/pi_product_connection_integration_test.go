@@ -95,10 +95,10 @@ func TestPiAppProductConnectionStopAndWorkerLoss(t *testing.T) {
 	enter := func(label, text string) {
 		t.Helper()
 		var err error
-		w.frame(func() {
+		w.pump.do(func() {
 			err = focusPiControl(w.view, label, true)
 			if err == nil {
-				w.view.Key(ui.Cmd, ui.KeyA)
+				w.view.Command("selectAll")
 				w.view.Type(text)
 			}
 		})
@@ -160,13 +160,14 @@ func TestPiAppProductConnectionStopAndWorkerLoss(t *testing.T) {
 	enter(msg.ComposerLabel(second.Name), setupDraft)
 	w.frame(func() { w.app.openSettingsTab(settingsTabConnection, settingsSourceConnection) })
 
-	w.click(msg.ProviderCustom())
+	w.click("Custom API")
+	w.wait(func() bool { return w.app.providers.adding && w.app.providers.first != nil })
 	enter(msg.FieldName(), "Primary gateway")
 	enter(msg.ProviderBaseURL(), firstEndpoint)
 	enter(msg.ConnectionFieldAPIKey(), key)
 	enter(msg.ProviderDefaultModel(), model)
 
-	w.click(msg.ProviderTestAccount(msg.ProviderCustom()))
+	w.click(msg.ProviderTestAccount("Primary gateway"))
 	w.wait(func() bool {
 		return !w.app.providerBusy() && w.app.providers.first != nil && w.app.providers.first.tested
 	})
@@ -218,7 +219,7 @@ func TestPiAppProductConnectionStopAndWorkerLoss(t *testing.T) {
 	if !completionPending {
 		t.Fatal("the successful Save completion was not held at the UI boundary")
 	}
-	w.click(msg.SettingsBackAccessible())
+	w.frame(func() { w.app.closeSettings() })
 	enter(msg.ComposerLabel(second.Name), lossInput)
 	uiPath := productUIPath(guiStorePath())
 	if err := os.Remove(uiPath); err != nil {
@@ -308,7 +309,7 @@ func TestPiAppProductConnectionStopAndWorkerLoss(t *testing.T) {
 		return !w.app.providerBusy() && !w.app.providers.adding && w.app.productProvidersPending() && len(w.app.productHost().productProviders.Accounts) == 2
 	})
 	replacementID := providers().Accounts[1].ProviderID
-	w.click(msg.ProviderMoveUp())
+	w.click(msg.ProviderMoveDown())
 	w.wait(func() bool {
 		return !w.app.providerBusy() && w.app.productHost().productProviders.Accounts[0].ProviderID == replacementID
 	})

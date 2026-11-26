@@ -173,16 +173,14 @@ globalThis.fetch = (input, init) => {
 	w := openProductWorkbench(t)
 	w.wait(func() bool { return w.app.settingsOpen && w.app.settingsTab == settingsTabConnection })
 
-	w.click(msgs.ProviderAddShort())
-	w.wait(func() bool { return w.app.providers.adding && w.app.providers.editor != nil })
-
 	w.click("OpenAI")
+	w.wait(func() bool { return w.app.providers.adding && w.app.providers.editor != nil })
 	w.frame(func() {
 		ed := w.app.providers.editor
 		ed.Name = "Studio gateway"
 		ed.APIKey = apiKey
 	})
-	w.click(msgs.ProviderTestDiscover())
+	w.click(msgs.ProviderTestAccount("Studio gateway"))
 	w.wait(func() bool {
 		return !w.app.providerBusy() && w.app.providers.editor != nil && w.app.providers.editor.tested && len(w.app.providers.editor.Models) == 128
 	})
@@ -237,9 +235,8 @@ globalThis.fetch = (input, init) => {
 		t.Fatalf("safe default balanced pool mismatch: %+v", savedPool.ResolvedRoles)
 	}
 
-	w.click(msgs.ProviderAddShort())
-	w.wait(func() bool { return w.app.providers.adding })
 	w.click("Ollama")
+	w.wait(func() bool { return w.app.providers.adding && w.app.providers.editor != nil })
 	w.frame(func() {
 		ed := w.app.providers.editor
 		ed.Enabled = false
@@ -251,9 +248,6 @@ globalThis.fetch = (input, init) => {
 	})
 	w.click(msgs.ProviderApplyChanges())
 	w.wait(func() bool { return !w.app.providerBusy() && !w.app.productProvidersPending() })
-
-	w.click("Studio gateway")
-	w.wait(func() bool { return w.app.providers.editor != nil && w.app.providers.editor.Name == "Studio gateway" })
 
 	w.click(msgs.ProviderTabRouting())
 	w.wait(func() bool {
@@ -322,7 +316,13 @@ globalThis.fetch = (input, init) => {
 	}
 
 	w.frame(func() { w.app.openSettingsTab(settingsTabConnection, settingsSourceRail) })
-	w.wait(func() bool { return w.app.settingsOpen && w.view.HasText(msgs.ProviderRevokeAccount("Studio gateway")) })
+	w.wait(func() bool { return w.app.settingsOpen })
+	w.click(msgs.ProviderTabAccounts(2))
+	w.wait(func() bool { return w.app.providers.tab == providerTabAccounts && w.view.HasText("Studio gateway") })
+	w.click("Studio gateway")
+	w.wait(func() bool {
+		return w.app.providers.adding && w.view.HasText(msgs.ProviderRevokeAccount("Studio gateway"))
+	})
 	var savedBeforeRevoke, effBeforeRevoke uint64
 	w.pump.do(func() {
 		pool := w.app.productHost().productProviders
@@ -334,6 +334,7 @@ globalThis.fetch = (input, init) => {
 		return !w.app.providerBusy() && !w.app.hasUsableProviderRoute() && w.app.runtimeErrKind == runtimeNoticeCredentialUnavailable &&
 			*pool.SavedRevision == savedBeforeRevoke && *pool.EffectiveRevision == effBeforeRevoke
 	})
+	w.frame(func() { w.app.dismissProviderDialog() })
 
 	w.click(msgs.SettingsBack())
 	w.click(msgs.AvatarContactLabel("Cedar"))
@@ -479,12 +480,15 @@ globalThis.fetch = (input, init) => {
 	clickScrolled := func(t *testing.T, w *productWorkbench, label string) {
 		t.Helper()
 		var err error
-		w.frame(func() { err = w.view.Click(label) })
-		if err == nil {
-			return
-		}
-		w.frame(func() {
+		var visible []string
+		w.pump.do(func() {
 			tr := w.view
+			if tr.FramePending() {
+				tr.Frame()
+			}
+			if err = tr.Click(label); err == nil {
+				return
+			}
 			for range 12 {
 				r, ok := tr.Find(label)
 				if !ok || (r.Y >= 105 && r.Y+r.H <= 520) {
@@ -495,18 +499,27 @@ globalThis.fetch = (input, init) => {
 					x = 700
 				}
 				tr.Scroll(x, 360, 0, r.Y-320)
+			}
+			err = tr.Click(label)
+			if err != nil {
 				tr.Frame()
+				err = tr.Click(label)
+				if err != nil {
+					visible = tr.Texts()
+				}
 			}
 		})
-		w.click(label)
+		if err != nil {
+			t.Fatalf("click %q: %v, visible: %v", label, err, visible)
+		}
 	}
 	typeInput := func(t *testing.T, w *productWorkbench, label, value string) {
 		t.Helper()
 		var err error
-		w.frame(func() {
+		w.pump.do(func() {
 			err = focusPiControl(w.view, label, true)
 			if err == nil {
-				w.view.Key(ui.Cmd, ui.KeyA)
+				w.view.Command("selectAll")
 				w.view.Type(value)
 			}
 		})
@@ -552,7 +565,11 @@ globalThis.fetch = (input, init) => {
 		assertVersion(2)
 		w := openProductWorkbench(t)
 		w.frame(func() { w.app.openConfiguration() })
-		w.wait(func() bool { return w.app.providers.first != nil && w.app.providers.first.preset == -1 })
+		w.wait(func() bool { return w.view.HasText(msgs.ProviderV2ImportTitle()) })
+		w.click(msgs.ProviderV2ImportTitle())
+		w.wait(func() bool {
+			return w.app.providers.adding && w.app.providers.first != nil && w.app.providers.first.preset == -1
+		})
 		w.frame(func() {
 			e := w.app.providers.first
 			if e.BaseURL != cfg.Endpoint || e.WireAPI != pi.OpenAIResponses || e.DefaultModel != cfg.Model || e.context != "65536" || e.output != "4096" || e.APIKey != "" {
@@ -578,17 +595,22 @@ globalThis.fetch = (input, init) => {
 		w := openProductWorkbench(t)
 		w.wait(func() bool { return w.app.settingsOpen && len(w.app.productHost().productProviders.Accounts) == 0 })
 
-		typeInput(t, w, msgs.ConnectionFieldAPIKey(), rtKey)
 		clickScrolled(t, w, "DeepSeek")
+		w.wait(func() bool { return w.app.providers.adding && w.app.providers.first != nil })
+		w.frame(func() { w.app.dismissProviderDialog() })
+		clickScrolled(t, w, "OpenAI")
+		w.wait(func() bool { return w.app.providers.adding && w.app.providers.first != nil })
+		typeInput(t, w, msgs.ConnectionFieldAPIKey(), rtKey)
+		w.frame(func() { w.app.dismissProviderDialog() })
 		clickScrolled(t, w, "OpenAI")
 		w.frame(func() {
-			if e := w.app.providers.first; e == nil || e.APIKey != rtKey || e.preset != 0 {
-				t.Errorf("quick-start preset switch lost key or preset: %+v", e)
+			if e := w.app.providers.first; e == nil || e.APIKey != rtKey || e.presetID != "openai" {
+				t.Errorf("reopening OpenAI modal lost key or preset: %+v", e)
 			}
 		})
 		typeInput(t, w, msgs.FieldName(), "Studio gateway")
 		typeInput(t, w, msgs.ProviderDefaultModel(), "gpt-4o")
-		clickScrolled(t, w, msgs.ProviderTestAccount("OpenAI"))
+		clickScrolled(t, w, msgs.ProviderTestAccount("Studio gateway"))
 		w.wait(func() bool {
 			return !w.app.providerBusy() && w.app.providers.first != nil && w.app.providers.first.tested
 		})
@@ -603,7 +625,7 @@ globalThis.fetch = (input, init) => {
 		})
 		clickScrolled(t, w, msgs.ProviderSaveApply())
 		w.wait(func() bool {
-			return !w.app.providerBusy() && !w.app.productProvidersPending() && len(w.app.productHost().productProviders.Accounts) == 1
+			return !w.app.providerBusy() && !w.app.providers.adding && !w.app.productProvidersPending() && len(w.app.productHost().productProviders.Accounts) == 1
 		})
 		one, err := w.client.ListProviders(ctx)
 		if err != nil || one.Accounts[0].EnabledModels != nil {
@@ -611,13 +633,16 @@ globalThis.fetch = (input, init) => {
 		}
 		primaryID := one.Accounts[0].ProviderID
 
-		clickScrolled(t, w, msgs.ProviderAddShort())
-		w.wait(func() bool { return w.app.providers.adding && w.app.providers.editor != nil })
-		clickScrolled(t, w, "OpenAI")
+		clickScrolled(t, w, "Studio gateway")
+		w.wait(func() bool { return w.app.providers.adding && w.view.HasText(msgs.ProviderAddAnother("OpenAI")) })
+		clickScrolled(t, w, msgs.ProviderAddAnother("OpenAI"))
+		w.wait(func() bool {
+			return w.app.providers.adding && w.app.providers.editor != nil && w.app.providers.editor.ProviderID != primaryID
+		})
 		typeInput(t, w, msgs.FieldName(), "Backup gateway")
 		typeInput(t, w, msgs.ConnectionFieldAPIKey(), rtKey)
 		typeInput(t, w, msgs.ProviderDefaultModel(), "gpt-4o")
-		clickScrolled(t, w, msgs.ProviderTestDiscover())
+		clickScrolled(t, w, msgs.ProviderTestAccount("Backup gateway"))
 		w.wait(func() bool {
 			return !w.app.providerBusy() && w.app.providers.editor != nil && w.app.providers.editor.tested
 		})
@@ -637,21 +662,38 @@ globalThis.fetch = (input, init) => {
 			t.Fatalf("explicit empty EnabledModels and FallbackOnly did not persist: %+v", row)
 		}
 
+		clickScrolled(t, w, "Backup gateway")
+		w.wait(func() bool { return w.app.providers.adding && w.app.providers.selectedID == backupID })
 		clickScrolled(t, w, msgs.ProviderToggleModel("gpt-4o"))
 		clickScrolled(t, w, msgs.ProviderSave())
 		w.wait(func() bool {
 			row := w.app.productHost().productProviders.Accounts[1]
-			return !w.app.providerBusy() && row.EnabledModels != nil && slices.Equal(*row.EnabledModels, []string{"gpt-4o"})
+			return !w.app.providerBusy() && !w.app.providers.adding && row.EnabledModels != nil && slices.Equal(*row.EnabledModels, []string{"gpt-4o"})
 		})
-		clickScrolled(t, w, msgs.ProviderMoveUp())
+		clickRowMove := func(rowLabel, moveLabel string) {
+			t.Helper()
+			var okR, okM bool
+			var rr, mr ui.Rect
+			w.frame(func() {
+				rr, okR = w.view.Find(rowLabel)
+				mr, okM = w.view.Find(moveLabel)
+				if okR && okM {
+					w.view.ClickAt(mr.X+mr.W/2, rr.Y+rr.H/2)
+				}
+			})
+			if !okR || !okM {
+				t.Fatalf("row move control missing: row=%q(%v) move=%q(%v)", rowLabel, okR, moveLabel, okM)
+			}
+		}
+		clickRowMove("Backup gateway", msgs.ProviderMoveUp())
 		w.wait(func() bool {
 			return !w.app.providerBusy() && w.app.productHost().productProviders.Accounts[0].ProviderID == backupID
 		})
-		clickScrolled(t, w, msgs.ProviderMoveDown())
+		clickRowMove("Backup gateway", msgs.ProviderMoveDown())
 		w.wait(func() bool {
 			return !w.app.providerBusy() && w.app.productHost().productProviders.Accounts[0].ProviderID == primaryID
 		})
-		clickScrolled(t, w, msgs.ProviderMoveUp())
+		clickRowMove("Backup gateway", msgs.ProviderMoveUp())
 		w.wait(func() bool {
 			return !w.app.providerBusy() && w.app.productHost().productProviders.Accounts[0].ProviderID == backupID
 		})

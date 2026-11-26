@@ -126,7 +126,7 @@ func ResolveWorkbenchTheme(dark bool) WorkbenchTheme {
 	t.Scrollbar, t.ScrollbarWidth = ui.Hex("#DFDFDF"), 6
 	palette := WorkbenchTheme{
 		Theme: t,
-		Link:  ui.Hex("#2D6A4A"), InputBorder: ui.Hex("#8F8E8B"),
+		Link:  ui.Hex("#2D6A4A"), InputBorder: ui.Hex("#D4D4CE"),
 		ChromeFrom: ui.Hex("#F2F2E2"), ChromeTo: ui.Hex("#E6EBEF"), Tertiary: ui.Hex("#838280"),
 		NavHover: ui.Hex("#0000000A"), NavSelected: ui.Hex("#00000012"),
 		Rail: ui.Hex("#F2F2E2"), Reading: t.Background, Panel: t.Background,
@@ -144,7 +144,7 @@ func ResolveWorkbenchTheme(dark bool) WorkbenchTheme {
 		t.Danger, t.Warning, t.Success, t.Scrollbar = ui.Hex("#FF4D4F"), ui.Hex("#FAAD14"), ui.Hex("#73CD94"), ui.Hex("#363830")
 		palette.ChromeFrom, palette.ChromeTo, palette.Rail = ui.Hex("#10110E"), ui.Hex("#10110E"), ui.Hex("#10110E")
 		palette.Tertiary = ui.Hex("#89877A")
-		palette.Link, palette.InputBorder = ui.Hex("#E0C65C"), ui.Hex("#76776C")
+		palette.Link, palette.InputBorder = ui.Hex("#E0C65C"), ui.Hex("#3A3D36")
 		palette.NavHover, palette.NavSelected = ui.Hex("#3D3F39"), ui.Hex("#454741")
 		palette.Reading, palette.Panel, palette.Well = t.Background, t.Background, t.Surface
 		palette.BubbleUser, palette.BubbleContact = ui.Hex("#2E2916"), ui.Hex("#22241F")
@@ -324,7 +324,7 @@ func PreferenceSelect(c *ui.Context, selected *string, options []SelectOption, l
 		full += ": " + display
 	}
 	sel := ui.SelectBase(c, selected)
-	trigger := SharedControlFace(c, sel.Trigger.Label(label).Value(display).Disabled(blocked), 16, 4, true, false, false).
+	trigger := SharedControlFace(c, sel.Trigger.Label(label).Value(display).Disabled(blocked), ControlRadius, 2, true, false, false).
 		FillWidth().MinWidth(PreferenceSelectMinWidth).MaxWidth(PreferenceSelectMaxWidth).
 		Justify(ui.Start).Padding(8, 10, 8, 12).FontWeight(500)
 	trigger.Children(func() {
@@ -375,12 +375,12 @@ func PrimaryButton(c *ui.Context, label string) ui.Element {
 
 func SecondaryButton(c *ui.Context, label string) ui.Element {
 	t := c.Theme()
-	return actionButton(c, label, t.Text, t.Surface, t.SurfaceHover, t.SurfacePressed, t.Focus, false)
+	return actionButton(c, label, t.Text, t.Surface, t.SurfaceHover, t.SurfacePressed, t.Border, false)
 }
 
 func DangerButton(c *ui.Context, label string) ui.Element {
 	t := c.Theme()
-	return actionButton(c, label, t.Danger, t.Surface, t.Surface.Mix(t.Danger, 0.08), t.Surface.Mix(t.Danger, 0.14), t.Focus.Mix(t.Danger, 0.35), false)
+	return actionButton(c, label, t.Danger, t.Surface, t.Surface.Mix(t.Danger, 0.08), t.Surface.Mix(t.Danger, 0.14), t.Border.Mix(t.Danger, 0.35), false)
 }
 
 func GhostButton(c *ui.Context, label string) ui.Element {
@@ -399,7 +399,7 @@ func actionButton(c *ui.Context, label string, ink, background, hover, pressed, 
 	t := c.Theme()
 	button := ui.Button(c, label).Label(label).Height(ControlHit).MinHeight(ControlHit).MinWidth(ControlHit).
 		Radius(0).Background(ui.Transparent).Border(0, ui.Transparent).FocusRing(false).
-		FontSize(TypeAction).FontWeight(500).FixedLineHeight(LineAction).TextColor(ink).Padding(8, 12).Gap(6)
+		FontSize(TypeAction).FontWeight(500).FixedLineHeight(LineAction).TextColor(ink).Padding(8, 12).Gap(6).Transition(ControlTransition)
 	return button.Draw(func(p *ui.Painter, r ui.Rect) {
 		r.Y, r.H = r.Y+2, r.H-4
 		fill := background
@@ -412,14 +412,14 @@ func actionButton(c *ui.Context, label string, ink, background, hover, pressed, 
 		case button.Hovered():
 			fill = hover
 		}
-		PaintPreferenceFace(p, r, 16, 4, fill, border)
+		PaintPreferenceFace(p, r, ControlRadius, 2, fill, border)
 		if button.FocusVisible() && !button.IsDisabled() {
 			ring := t.Accent
 			if primary {
 				ring = t.AccentText
 			}
 			inside := ui.Rect{X: r.X + 2, Y: r.Y + 2, W: r.W - 4, H: r.H - 4}
-			p.StrokePath(ControlPath(inside, 14, 4), 2, ring)
+			p.StrokePath(ControlPath(inside, ControlRadius-2, 2), 2, ring)
 		}
 	})
 }
@@ -436,7 +436,7 @@ func NavigationControl(c *ui.Context, e ui.Element, palette WorkbenchTheme, sele
 		}
 		PaintPreferenceFace(p, r, 8, 4, fill, ui.Transparent)
 	})
-	return e
+	return e.Transition(ControlTransition)
 }
 
 // SharedControlFace extends the transparent interaction box two DIPs past the visible face
@@ -601,7 +601,7 @@ func FormTextArea(c *ui.Context, value *string, invalid bool, inputBorder ...ui.
 	e := ui.TextAreaBase(c, value).Font("system-ui").FontSize(TypeAction).FontWeight(400).
 		FixedLineHeight(LineForm).MinHeight(80).BorderWidth(8, 12).BorderColor(ui.Transparent).
 		Padding(0).Radius(0).Background(ui.Transparent).TextColor(c.Theme().Text).FocusRing(false)
-	return DrawControlFace(c, e, 16, 4, true, invalid, false, 0, 0, c.Theme().SurfaceHover, border)
+	return DrawControlFace(c, e, ControlRadius, 2, true, invalid, false, 0, 0, c.Theme().SurfaceHover, border)
 }
 
 // PaintPreferenceFace renders a superellipse preference face while keeping fill out of the border when disabled opacity applies.
@@ -643,7 +643,7 @@ func PreferenceInput(c *ui.Context, value *string, invalid bool, inputBorder ...
 	}
 	e := ui.TextInputBase(c, value).Font("system-ui").FontSize(TypeAction).FontWeight(400).
 		FixedLineHeight(LineAction).TextColor(c.Theme().Text)
-	e = SharedControlFace(c, e, 16, 4, true, invalid, false, border)
+	e = SharedControlFace(c, e, ControlRadius, 2, true, invalid, false, border)
 	return e.BorderWidth(0, 12, 0, 12).Padding(8, 0)
 }
 

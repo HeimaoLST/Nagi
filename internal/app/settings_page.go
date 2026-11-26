@@ -114,8 +114,11 @@ func (a *appModel) openSettingsTab(tab, source string) {
 	} else {
 		a.settingsFocusTab = tab
 	}
-	if host := a.productHost(); tab == settingsTabConnection && host != nil {
-		a.refreshProductProviders(host)
+	if tab == settingsTabConnection {
+		a.refreshProviderCatalog()
+		if host := a.productHost(); host != nil {
+			a.refreshProductProviders(host)
+		}
 	}
 	if tab == settingsTabCapabilities {
 		a.refreshCapabilityLibrary()
@@ -302,10 +305,7 @@ func (a *appModel) settingsMain(c *ui.Context, t *ui.Theme, narrow bool) {
 	main.Children(func() {
 		host := a.productHost()
 		providerSettings := a.settingsTab == settingsTabConnection
-		pool := a.providers.snapshot
-		if host != nil {
-			pool = host.productProviders
-		}
+		pool := a.providerPool()
 		capabilitySettings := a.settingsTab == settingsTabCapabilities && host != nil
 		width, _ := c.Size()
 		if !narrow {
@@ -330,12 +330,6 @@ func (a *appModel) settingsMain(c *ui.Context, t *ui.Theme, narrow bool) {
 				tabs()
 			})
 		}
-		if providerSettings && a.providers.tab == providerTabAccounts {
-			ui.Column(c).FillWidth().MaxWidth(settingsContentWidth).MinHeight(0).Grow(1).AlignSelf(ui.Center).Padding(12, 32, 24).Gap(12).Children(func() {
-				a.providerWorkspace(c, t, pool, contentWidth >= 600)
-			})
-			return
-		}
 		if capabilitySettings && contentWidth >= 600 {
 			ui.Column(c).FillWidth().MaxWidth(settingsContentWidth).MinHeight(0).Grow(1).AlignSelf(ui.Center).Padding(12, 32, 24).Gap(12).Children(func() {
 				a.settingsCapabilitiesContent(c, t, true)
@@ -348,7 +342,11 @@ func (a *appModel) settingsMain(c *ui.Context, t *ui.Theme, narrow bool) {
 				case settingsTabAppearance:
 					a.settingsAppearanceContent(c, t)
 				case settingsTabConnection:
-					a.providerRouting(c, t, pool)
+					if a.providers.tab == providerTabAccounts {
+						a.providerWorkspace(c, t, pool, contentWidth >= 580)
+					} else {
+						a.providerRouting(c, t, pool)
+					}
 				case settingsTabCapabilities:
 					a.settingsCapabilitiesContent(c, t, false)
 				default:
@@ -365,13 +363,9 @@ func (a *appModel) settingsAppearanceContent(c *ui.Context, t *ui.Theme) {
 	preferenceSection(c, t, msgs.RailContactsTitle(), func() {
 		c.Key("pandorabox-visibility")
 		settingsPreferenceRow(c, t, msgs.SettingsPandoraBoxVisibility(), msgs.SettingsPandoraBoxVisibilityHint(), func() {
-			selected := 0
-			if a.hideBuiltinArchitect {
-				selected = 1
-			}
-			theme.PreferenceSegmentedSelection(c, &selected, msgs.SettingsPandoraBoxVisibility(), !a.canChangeBuiltinArchitectVisibility(), false,
-				msgs.SettingsPandoraBoxShow(), msgs.SettingsPandoraBoxHide()).
-				OnChange(func() { a.setBuiltinArchitectHidden(selected == 1) })
+			shown := !a.hideBuiltinArchitect
+			theme.ToggleSwitch(c, &shown, msgs.SettingsPandoraBoxVisibility(), !a.canChangeBuiltinArchitectVisibility()).
+				OnChange(func() { a.setBuiltinArchitectHidden(!shown) })
 		}, true)
 	})
 	preferenceSection(c, t, msgs.SettingsAppearance(), func() {
