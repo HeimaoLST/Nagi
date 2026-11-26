@@ -65,9 +65,8 @@ func (a *appModel) composerMaterialDialog(c *ui.Context, t *ui.Theme) {
 	open := true
 	width, _ := c.Size()
 	ui.DialogBase(c, &open, func(backdrop, panel ui.Element) {
-		theme.StyleFrostedModalBackdrop(backdrop, t)
-		panel.Label(title).Width(460).MaxWidth(width-32).Padding(24).Gap(16).
-			Background(t.Surface).Border(1, t.Border).Radius(14).Shadow(0, 8, 28, 0, ui.RGBA(0, 0, 0, .24))
+		theme.StyleFrostedModal(backdrop, panel, t)
+		panel.Label(title).Width(460).MaxWidth(width - 32).Padding(24).Gap(16)
 		pageHeading(c, title)
 		if item.Source != "" {
 			ui.Text(c, msgs.TaskContextSource(item.Source)).Selectable().FillWidth().MinWidth(0).

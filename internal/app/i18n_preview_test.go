@@ -11,7 +11,9 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"github.com/HeimaoLST/Nagi/internal/materials"
 	"github.com/HeimaoLST/Nagi/internal/pi"
+	"github.com/HeimaoLST/Nagi/internal/theme"
 	"github.com/HeimaoLST/Nagi/locales"
 )
 
@@ -767,4 +769,157 @@ func TestPreviewProvidersDS2(t *testing.T) {
 	generalApp := providerUITestApp(t, visualGuardSeededPool())
 	generalApp.openSettingsTab(settingsTabAppearance, settingsSourceRail)
 	writeShot("ds2-general-toggle-zh-light-1040x720.png", generalApp, 1040, 720, "zh-Hans", false)
+}
+
+func TestPreviewCapabilitiesProfileDS2(t *testing.T) {
+	dir := os.Getenv("NAGI_PREVIEW_DIR")
+	if dir == "" {
+		t.Skip("set NAGI_PREVIEW_DIR to write DS2 Phase 2 capabilities and profile previews")
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	writeShot := func(name string, a *appModel, width, height int, locale string, dark bool, prepare func(*ui.Tester)) {
+		t.Helper()
+		a.windowWidth = width
+		tr := ui.NewTesterWith(a.view, width, height, ui.TesterOptions{Dark: dark})
+		tr.SetLocale(locale)
+		tr.SetFocused(true)
+		tr.Frame()
+		if prepare != nil {
+			prepare(tr)
+			tr.Advance(theme.ControlTransition.Duration)
+			tr.Frame()
+		}
+		path := filepath.Join(dir, name)
+		writePreviewPNG(t, path, tr.Image())
+		t.Logf("ds2 phase2 preview path=%s width=%d height=%d locale=%s dark=%v", path, width, height, locale, dark)
+	}
+
+	skillsLight, _, _, _ := phase2SeededCapabilitiesProfileApp(t)
+	skillsLight.settingsOpen = true
+	skillsLight.settingsTab = settingsTabCapabilities
+	skillsLight.capabilities.tab = capabilityTabSkills
+	writeShot("ds2-p2-skills-en-light-1040x720.png", skillsLight, 1040, 720, "en", false, nil)
+
+	skillsDark, _, _, _ := phase2SeededCapabilitiesProfileApp(t)
+	skillsDark.settingsOpen = true
+	skillsDark.settingsTab = settingsTabCapabilities
+	skillsDark.capabilities.tab = capabilityTabSkills
+	writeShot("ds2-p2-skills-zh-dark-1040x720.png", skillsDark, 1040, 720, "zh-Hans", true, nil)
+
+	for _, tc := range []struct {
+		name string
+		dark bool
+	}{
+		{"ds2-p2-new-skill-modal-zh-light-1040x720.png", false},
+		{"ds2-p2-new-skill-modal-zh-dark-1040x720.png", true},
+	} {
+		app, _, _, _ := phase2SeededCapabilitiesProfileApp(t)
+		app.settingsOpen = true
+		app.settingsTab = settingsTabCapabilities
+		app.capabilities.tab = capabilityTabSkills
+		app.capabilities.newSkill = &skillEditor{
+			key:     pi.ProductSkillKey{Source: "global", SkillID: "release-audit"},
+			name:    "Release audit",
+			summary: "Validate frozen candidate manifests and visual guards.",
+			body:    "## Steps\n\n1. Check manifest SHA-256\n2. Inspect rendered PNGs",
+		}
+		writeShot(tc.name, app, 1040, 720, "zh-Hans", tc.dark, nil)
+	}
+
+	mcpLight, _, _, _ := phase2SeededCapabilitiesProfileApp(t)
+	mcpLight.settingsOpen = true
+	mcpLight.settingsTab = settingsTabCapabilities
+	mcpLight.capabilities.tab = capabilityTabMCP
+	writeShot("ds2-p2-mcp-detail-zh-light-1040x720.png", mcpLight, 1040, 720, "zh-Hans", false, nil)
+
+	mcpNarrowDark, _, _, _ := phase2SeededCapabilitiesProfileApp(t)
+	mcpNarrowDark.settingsOpen = true
+	mcpNarrowDark.settingsTab = settingsTabCapabilities
+	mcpNarrowDark.capabilities.tab = capabilityTabMCP
+	writeShot("ds2-p2-mcp-detail-zh-dark-720x640.png", mcpNarrowDark, 720, 640, "zh-Hans", true, nil)
+
+	for _, tc := range []struct {
+		name string
+		dark bool
+	}{
+		{"ds2-p2-add-mcp-modal-zh-light-1040x720.png", false},
+		{"ds2-p2-add-mcp-modal-zh-dark-1040x720.png", true},
+	} {
+		app, _, _, _ := phase2SeededCapabilitiesProfileApp(t)
+		app.settingsOpen = true
+		app.settingsTab = settingsTabCapabilities
+		app.capabilities.tab = capabilityTabMCP
+		ed := newMcpEditor(pi.ProductMcpServerView{
+			ProductMcpServerConfig: pi.ProductMcpServerConfig{
+				Name:      "docs-gateway",
+				Transport: "http",
+				Isolation: "shared",
+				Enabled:   true,
+				URL:       "https://mcp.example.invalid/v1",
+			},
+		})
+		ed.secretHTTP = []mcpSecretDraft{{key: "Authorization", value: "Bearer synthetic-preview-token"}}
+		app.capabilities.newMcp = ed
+		writeShot(tc.name, app, 1040, 720, "zh-Hans", tc.dark, nil)
+	}
+
+	profileCaps, ctCaps, _, _ := phase2SeededCapabilitiesProfileApp(t)
+	profileCaps.contactProfileID = ctCaps.ID
+	profileCaps.openDetail(detailProfile)
+	writeShot("ds2-p2-bot-profile-caps-zh-light-1040x720.png", profileCaps, 1040, 720, "zh-Hans", false, func(tr *ui.Tester) {
+		profileCaps.profileScrollFor(ctCaps.ID).Y = 560
+		tr.Frame()
+	})
+
+	profileMcp, ctMcp, _, _ := phase2SeededCapabilitiesProfileApp(t)
+	profileMcp.contactProfileID = ctMcp.ID
+	profileMcp.openDetail(detailProfile)
+	writeShot("ds2-p2-bot-profile-mcp-zh-dark-1040x720.png", profileMcp, 1040, 720, "zh-Hans", true, func(tr *ui.Tester) {
+		profileMcp.profileScrollFor(ctMcp.ID).Y = 1280
+		tr.Frame()
+	})
+
+	profileMem, ctMem, _, _ := phase2SeededCapabilitiesProfileApp(t)
+	profileMem.contactProfileID = ctMem.ID
+	profileMem.openDetail(detailProfile)
+	writeShot("ds2-p2-bot-profile-memory-zh-dark-1040x720.png", profileMem, 1040, 720, "zh-Hans", true, func(tr *ui.Tester) {
+		profileMem.profileScrollFor(ctMem.ID).Y = 1750
+		tr.Frame()
+	})
+
+	reviewApp, ctRev, privateSkill, req := phase2SeededCapabilitiesProfileApp(t)
+	reviewApp.contactProfileID = ctRev.ID
+	reviewApp.openDetail(detailProfile)
+	reviewApp.capabilities.review = &skillReviewState{
+		key:     pi.ProductSkillKey{Source: "private", BotID: ctRev.ID, SkillID: "case-script"},
+		name:    privateSkill.Name,
+		request: &req,
+		file:    "scripts/run.mjs",
+		read: capabilityRead[pi.ProductSkillDetail]{
+			ready: true,
+			value: pi.ProductSkillDetail{
+				ProductSkillSummary: privateSkill,
+				Files: map[string]string{
+					"SKILL.md":        "---\nname: Case files script\n---\n",
+					"scripts/run.mjs": "export default async function(input, ctx) {\n  return { workspace: ctx.workspace };\n}\n",
+				},
+			},
+		},
+	}
+	writeShot("ds2-p2-skill-review-modal-zh-dark-1040x720.png", reviewApp, 1040, 720, "zh-Hans", true, nil)
+
+	createApp, _, _, _ := phase2SeededCapabilitiesProfileApp(t)
+	createApp.openCreateBotDialog()
+	createApp.createBot.name = "Release Reviewer"
+	createApp.createBot.purpose = "Audit visual invariants and integration evidence."
+	writeShot("ds2-p2-create-bot-modal-zh-light-1040x720.png", createApp, 1040, 720, "zh-Hans", false, nil)
+
+	matApp, ctMat, _, _ := phase2SeededCapabilitiesProfileApp(t)
+	matApp.openComposerMaterial(ctMat, materials.Item{})
+	matApp.composerMaterial.name = "Design System 2.0 Notes"
+	matApp.composerMaterial.text = "Verify 16 DIP frosted modal radius, 1 DIP hairline InputBorder, and first-frame theme contrast."
+	writeShot("ds2-p2-composer-material-modal-zh-dark-1040x720.png", matApp, 1040, 720, "zh-Hans", true, nil)
 }

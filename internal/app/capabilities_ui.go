@@ -25,7 +25,6 @@ const (
 	capabilityTabMCP
 )
 
-var capabilityTransition = ui.ElementTransition{Duration: 180 * time.Millisecond, Colors: true, Shadows: true}
 var skillSlugPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
 var mcpNamePattern = regexp.MustCompile(`^[A-Za-z0-9_-]{1,63}$`)
 var mcpEnvKeyPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
@@ -324,7 +323,7 @@ func (a *appModel) settingsCapabilitiesContent(c *ui.Context, t *ui.Theme, wide 
 
 func capabilityStrip(c *ui.Context, t *ui.Theme, summary string, ink ui.Color, actions func()) {
 	bar := ui.Row(c).FillWidth().MinWidth(0).Shrink(0).Wrap().AlignItems(ui.Center).Gap(8).Padding(10, 14).
-		Radius(10).Border(1, t.Border).Background(t.Surface)
+		Radius(theme.CardRadius).Border(1, t.Border).Background(t.Surface)
 	bar.Children(func() {
 		ui.Row(c).Basis(210).Grow(1).MinWidth(0).AlignItems(ui.Center).Gap(8).Children(func() {
 			providerDot(c, ink)
@@ -336,7 +335,7 @@ func capabilityStrip(c *ui.Context, t *ui.Theme, summary string, ink ui.Color, a
 
 func capabilitySplit(c *ui.Context, t *ui.Theme, wide bool, scroll *ui.ScrollState, header, list, detail func()) {
 	background := t.Surface.Mix(t.Background, .45)
-	split := ui.Row(c).FillWidth().MinWidth(0).Background(t.Surface).Border(1, t.Border).Radius(12).Clip()
+	split := ui.Row(c).FillWidth().MinWidth(0).Background(t.Surface).Border(1, t.Border).Radius(theme.CardRadius).Clip()
 	if wide {
 		split.Grow(1).MinHeight(0).AlignItems(ui.Stretch)
 	} else {
@@ -376,7 +375,7 @@ func (a *appModel) capabilityListRow(c *ui.Context, t *ui.Theme, name, subtitle,
 	palette.NavHover, palette.NavSelected = ui.Transparent, ui.Transparent
 	row := navigationControl(c, ui.ButtonBase(c).Label(name).AccessSelected(selected), palette, selected).
 		FillWidth().MinWidth(0).Height(52).MinHeight(52).Shrink(0).Margin(0).Column().AlignItems(ui.Stretch).
-		Gap(2).Padding(8, 10).Radius(8).Disabled(disabled).Transition(capabilityTransition)
+		Gap(2).Padding(8, 10).Radius(theme.ControlRadius).Disabled(disabled)
 	fill := ui.Transparent
 	switch {
 	case row.Pressed():
@@ -391,16 +390,16 @@ func (a *appModel) capabilityListRow(c *ui.Context, t *ui.Theme, name, subtitle,
 		ui.Row(c).FillWidth().MinWidth(0).AlignItems(ui.Center).Gap(8).Children(func() {
 			providerDot(c, ink)
 			ui.Text(c, name).Grow(1).MinWidth(0).FontSize(typeAction).FontWeight(500).FixedLineHeight(lineAction).MaxLines(1).Ellipsis("…").TextColor(t.Text)
-			ui.Text(c, state).Shrink(0).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(ink).Transition(capabilityTransition)
+			ui.Text(c, state).Shrink(0).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(ink)
 		})
 		ui.Text(c, subtitle).MinWidth(0).Padding(0, 0, 0, 14).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted).MaxLines(1).Ellipsis("…")
 	})
-	return appTooltip(c, row, name+"\n"+subtitle)
+	return appTooltip(c, theme.TransitionControl(row, t), name+"\n"+subtitle)
 }
 
 func capabilityBadge(c *ui.Context, t *ui.Theme, text string, ink ui.Color) ui.Element {
 	return ui.Text(c, text).MinWidth(0).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(ink).
-		Padding(2, 6).Radius(6).Background(t.Surface.Mix(ink, .08)).Transition(capabilityTransition)
+		Padding(2, 6).Radius(6).Background(t.Surface.Mix(ink, .08))
 }
 
 func capabilityHeading(c *ui.Context, t *ui.Theme, title string, badges func()) {
@@ -429,7 +428,7 @@ func capabilityFooter(c *ui.Context, t *ui.Theme, left, right func()) {
 }
 
 func capabilityEmpty(c *ui.Context, t *ui.Theme, text string) {
-	ui.Text(c, text).FillWidth().MinWidth(0).Padding(16).Border(1, t.Border).Radius(12).Background(t.Surface).
+	ui.Text(c, text).FillWidth().MinWidth(0).Padding(16).Border(1, t.Border).Radius(theme.CardRadius).Background(t.Surface).
 		FontSize(typeLabel).FixedLineHeight(lineLabel).TextColor(t.TextMuted)
 }
 
@@ -452,9 +451,8 @@ func capabilityDialog(c *ui.Context, base *ui.Theme, key, title, hint string, bl
 	open := true
 	c.Key(key)
 	ui.DialogBase(c, &open, func(backdrop, panel ui.Element) {
-		theme.StyleFrostedModalBackdrop(backdrop, &t)
-		panel.Label(title).Width(560).MaxWidth(width-32).MaxHeight(height-48).Padding(20).Gap(14).
-			Background(t.Surface).Border(1, t.Border).Radius(14).Shadow(0, 8, 28, 0, ui.RGBA(0, 0, 0, .24))
+		theme.StyleFrostedModal(backdrop, panel, &t)
+		panel.Label(title).Width(616).MaxWidth(width - 32).MaxHeight(height - 48).Padding(20).Gap(14)
 		ui.Row(c).FillWidth().Shrink(0).AlignItems(ui.Center).Gap(12).Children(func() {
 			ui.Column(c).Grow(1).MinWidth(0).Gap(4).Children(func() {
 				pageHeading(c, title)
@@ -510,13 +508,10 @@ func (a *appModel) skillLibrary(c *ui.Context, t *ui.Theme, wide bool) {
 	}
 	capabilityStrip(c, t, summary, ink, func() {
 		ui.Row(c).MinWidth(0).Wrap().AlignItems(ui.Center).Gap(8).Children(func() {
-			capabilityText(c, t, msgs.CapLocalDiscovery())
-			selected := 0
-			if s.discoverLocal {
-				selected = 1
-			}
-			theme.PreferenceSegmentedSelection(c, &selected, msgs.CapLocalDiscovery(), !canAdd, false, msgs.CapOff(), msgs.CapOn()).OnChange(func() {
-				a.setLocalSkillDiscovery(selected == 1)
+			capabilityText(c, t, msgs.CapLocalGroup())
+			discover := s.discoverLocal
+			theme.ToggleSwitch(c, &discover, msgs.CapLocalDiscovery(), !canAdd).OnChange(func() {
+				a.setLocalSkillDiscovery(discover)
 			})
 			capabilityAddButton(c, msgs.CapNewSkill(), len(list.Global) == 0 && s.newSkill == nil, !canAdd, func() {
 				s.newSkill = &skillEditor{key: pi.ProductSkillKey{Source: "global"}}
@@ -676,9 +671,9 @@ func skillSlug(name string) string {
 	return slug.String()
 }
 
-func capabilityInput(c *ui.Context, t *ui.Theme, label, key string, value *string, fields map[string]string, disabled bool) ui.Element {
+func (a *appModel) capabilityInput(c *ui.Context, label, key string, value *string, fields map[string]string, disabled bool) ui.Element {
 	c.Key(key)
-	return preferenceInput(c, value, fields[key] != "", t.Focus).FillWidth().MinWidth(0).Label(label).Disabled(disabled)
+	return preferenceInput(c, value, fields[key] != "", a.workTheme.InputBorder).FillWidth().MinWidth(0).Label(label).Disabled(disabled)
 }
 
 func capabilityFieldError(c *ui.Context, t *ui.Theme, problem string) {
@@ -690,7 +685,7 @@ func capabilityFieldError(c *ui.Context, t *ui.Theme, problem string) {
 func (a *appModel) skillForm(c *ui.Context, t *ui.Theme, e *skillEditor, creating bool) {
 	msgs, blocked := locales.In(c.Locale()), a.capabilitiesBlocked()
 	providerFormRow(c, t, msgs.FieldName(), func() {
-		capabilityInput(c, t, msgs.FieldName(), "name", &e.name, e.fields, blocked).OnChange(func() {
+		a.capabilityInput(c, msgs.FieldName(), "name", &e.name, e.fields, blocked).OnChange(func() {
 			delete(e.fields, "name")
 			if creating && !e.slugEdited {
 				e.key.SkillID = skillSlug(e.name)
@@ -701,17 +696,17 @@ func (a *appModel) skillForm(c *ui.Context, t *ui.Theme, e *skillEditor, creatin
 	})
 	if creating {
 		providerFormRow(c, t, msgs.CapSkillSlug(), func() {
-			capabilityInput(c, t, msgs.CapSkillSlug(), "slug", &e.key.SkillID, e.fields, blocked).OnChange(func() { e.slugEdited = true; delete(e.fields, "slug") })
+			a.capabilityInput(c, msgs.CapSkillSlug(), "slug", &e.key.SkillID, e.fields, blocked).OnChange(func() { e.slugEdited = true; delete(e.fields, "slug") })
 			capabilityFieldError(c, t, e.fields["slug"])
 		})
 	}
 	providerFormRow(c, t, msgs.CapDescription(), func() {
-		capabilityInput(c, t, msgs.CapDescription(), "summary", &e.summary, e.fields, blocked).OnChange(func() { delete(e.fields, "summary") })
+		a.capabilityInput(c, msgs.CapDescription(), "summary", &e.summary, e.fields, blocked).OnChange(func() { delete(e.fields, "summary") })
 		capabilityFieldError(c, t, e.fields["summary"])
 	})
 	providerFormRow(c, t, msgs.CapInstructions(), func() {
 		c.Key("skill-body")
-		formTextArea(c, &e.body, e.fields["body"] != "", t.Focus).Lines(6, 16).FillWidth().MinWidth(0).Label(msgs.CapInstructions()).Disabled(blocked).
+		formTextArea(c, &e.body, e.fields["body"] != "", a.workTheme.InputBorder).Lines(6, 16).FillWidth().MinWidth(0).Label(msgs.CapInstructions()).Disabled(blocked).
 			OnChange(func() { delete(e.fields, "body") })
 		capabilityFieldError(c, t, e.fields["body"])
 	})
@@ -738,7 +733,7 @@ func (a *appModel) capabilityDialogs(c *ui.Context, t *ui.Theme) {
 
 func (a *appModel) capabilityDialogActions(c *ui.Context, msgs locales.Messages, save string, cancel, apply func()) {
 	ui.Row(c).FillWidth().MinWidth(0).Wrap().AlignItems(ui.Center).Justify(ui.SpaceBetween).Gap(8).Children(func() {
-		theme.GhostButton(c, msgs.CreateBotCancel()).Disabled(a.capabilitiesBusy()).OnClick(cancel)
+		theme.TextAction(c, msgs.CreateBotCancel(), false).Disabled(a.capabilitiesBusy()).OnClick(cancel)
 		primaryButton(c, save).Disabled(a.capabilitiesBlocked()).OnClick(apply)
 	})
 }
@@ -1193,13 +1188,9 @@ func (a *appModel) mcpDetail(c *ui.Context, t *ui.Theme, row pi.ProductMcpServer
 			})
 		})
 		ui.Row(c).MinWidth(0).Wrap().AlignItems(ui.Center).Gap(8).Children(func() {
-			selected := 0
-			if !e.config.Enabled {
-				selected = 1
-			}
-			theme.PreferenceSegmentedSelection(c, &selected, msgs.ProviderAccountStatus(), blocked, false,
-				msgs.ProviderEnabled(), msgs.ProviderToggleDisabled()).OnChange(func() {
-				e.config.Enabled = selected == 0
+			enabled := e.config.Enabled
+			theme.ToggleSwitch(c, &enabled, msgs.ProviderAccountStatus(), blocked).OnChange(func() {
+				e.config.Enabled = enabled
 				e.changed("enabled")
 			})
 			secondaryButton(c, msgs.CapMcpTestRefresh()).Disabled(blocked || e.stale).OnClick(func() { a.testCapabilityMcp(e) })
@@ -1234,14 +1225,14 @@ func (a *appModel) mcpForm(c *ui.Context, t *ui.Theme, e *mcpEditor, adding bool
 	msgs, blocked := locales.In(c.Locale()), a.capabilitiesBlocked()
 	field := func(label, key string, value *string) {
 		providerFormRow(c, t, label, func() {
-			capabilityInput(c, t, label, key, value, e.fields, blocked).OnChange(func() { e.changed(key) })
+			a.capabilityInput(c, label, key, value, e.fields, blocked).OnChange(func() { e.changed(key) })
 			capabilityFieldError(c, t, e.fields[key])
 		})
 	}
 	area := func(label, key, placeholder string, value *string) {
 		providerFormRow(c, t, label, func() {
 			c.Key(key)
-			formTextArea(c, value, e.fields[key] != "", t.Focus).MinHeight(36).Lines(1, 5).FillWidth().MinWidth(0).Label(label).
+			formTextArea(c, value, e.fields[key] != "", a.workTheme.InputBorder).MinHeight(36).Lines(1, 5).FillWidth().MinWidth(0).Label(label).
 				Placeholder(placeholder).Disabled(blocked).OnChange(func() { e.changed(key) })
 			capabilityFieldError(c, t, e.fields[key])
 		})
@@ -1274,13 +1265,13 @@ func (a *appModel) mcpForm(c *ui.Context, t *ui.Theme, e *mcpEditor, adding bool
 			field(msgs.ConnectionFieldWorkingDirectory(), "cwd", &e.config.Cwd)
 			area(msgs.CapEnvironment(), "env", "KEY=VALUE", &e.env)
 		}
-		mcpSecretFields(c, t, msgs, e, &e.secretEnv, msgs.CapSecretEnv(), blocked)
+		a.mcpSecretFields(c, t, msgs, e, &e.secretEnv, msgs.CapSecretEnv(), blocked)
 	} else {
 		field(msgs.CapServerURL(), "url", &e.config.URL)
 		if !adding {
 			area(msgs.CapHeaders(), "headers", "Header: Value", &e.headers)
 		}
-		mcpSecretFields(c, t, msgs, e, &e.secretHTTP, msgs.CapSecretHeader(), blocked)
+		a.mcpSecretFields(c, t, msgs, e, &e.secretHTTP, msgs.CapSecretHeader(), blocked)
 	}
 	if adding {
 		secondaryButton(c, msgs.CapTestConnection()).AlignSelf(ui.Start).Disabled(blocked).OnClick(func() { a.testCapabilityMcp(e) })
@@ -1297,7 +1288,7 @@ func (a *appModel) mcpForm(c *ui.Context, t *ui.Theme, e *mcpEditor, adding bool
 	}
 }
 
-func mcpSecretFields(c *ui.Context, t *ui.Theme, msgs locales.Messages, e *mcpEditor, rows *[]mcpSecretDraft, label string, blocked bool) {
+func (a *appModel) mcpSecretFields(c *ui.Context, t *ui.Theme, msgs locales.Messages, e *mcpEditor, rows *[]mcpSecretDraft, label string, blocked bool) {
 	providerFormRow(c, t, label, func() {
 		for i := range *rows {
 			c.Key(i)
@@ -1306,14 +1297,14 @@ func mcpSecretFields(c *ui.Context, t *ui.Theme, msgs locales.Messages, e *mcpEd
 				if row.saved {
 					capabilityText(c, t, row.key).MaxLines(1).Ellipsis("…")
 				} else {
-					capabilityInput(c, t, label, "secret-name", &row.key, nil, blocked).OnChange(func() { e.changed("secrets") })
+					a.capabilityInput(c, label, "secret-name", &row.key, nil, blocked).OnChange(func() { e.changed("secrets") })
 				}
 				ui.Row(c).FillWidth().MinWidth(0).Wrap().AlignItems(ui.Center).Gap(6).Children(func() {
 					placeholder := msgs.CapSecretValue()
 					if row.saved && e.base.CredentialStatus == "ok" {
 						placeholder = msgs.ProviderKeepKey()
 					}
-					value := preferenceInput(c, &row.value, e.fields["secrets"] != "", t.Focus).Basis(140).Grow(1).MinWidth(0).
+					value := preferenceInput(c, &row.value, e.fields["secrets"] != "", a.workTheme.InputBorder).Basis(140).Grow(1).MinWidth(0).
 						Label(msgs.CapSecretValue()).Placeholder(placeholder).Password().Disabled(blocked || row.clear)
 					value.OnChange(func() { e.changed("secrets") })
 					if row.saved {
@@ -1324,7 +1315,7 @@ func mcpSecretFields(c *ui.Context, t *ui.Theme, msgs locales.Messages, e *mcpEd
 							e.changed("secrets")
 						})
 					} else {
-						theme.GhostButton(c, msgs.CapRemove()).Disabled(blocked).OnClick(func() {
+						theme.TextAction(c, msgs.CapRemove(), true).Disabled(blocked).OnClick(func() {
 							*rows = slices.Delete(*rows, i, i+1)
 							e.changed("secrets")
 						})

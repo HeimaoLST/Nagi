@@ -67,9 +67,8 @@ func (a *appModel) createBotDialogView(c *ui.Context, t *ui.Theme) {
 	width, _ := c.Size()
 	open := true
 	ui.DialogBase(c, &open, func(backdrop, panel ui.Element) {
-		theme.StyleFrostedModalBackdrop(backdrop, t)
-		panel.Label(msgs.CreateBotTitle()).Width(440).MaxWidth(width-32).Padding(24).Gap(16).
-			Background(t.Surface).Border(1, t.Border).Radius(14).Shadow(0, 8, 28, 0, ui.RGBA(0, 0, 0, 0.24))
+		theme.StyleFrostedModal(backdrop, panel, t)
+		panel.Label(msgs.CreateBotTitle()).Width(440).MaxWidth(width - 32).Padding(24).Gap(16)
 		pageHeading(c, msgs.CreateBotTitle())
 		ui.Column(c).FillWidth().Gap(8).Children(func() {
 			ui.Text(c, msgs.FieldName()).FontSize(typeLabel).FontWeight(500).FixedLineHeight(lineLabel).TextColor(t.Text)

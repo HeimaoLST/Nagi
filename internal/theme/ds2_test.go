@@ -199,3 +199,130 @@ func cloneTestRGBA(src *image.RGBA) *image.RGBA {
 	copy(dst.Pix, src.Pix)
 	return dst
 }
+
+func TestDS2TransitionControlThemeSwitchSnapsFirstFrame(t *testing.T) {
+	newView := func(checked, pillSelected *bool, hoverAction *bool) func(*ui.Context) {
+		return func(c *ui.Context) {
+			wb := ResolveWorkbenchTheme(c.Theme().Dark)
+			st := SettingsTheme(wb.Theme)
+			c.SetTheme(&st)
+			ui.Column(c).Fill().Padding(16).Gap(12).Background(st.Surface).Children(func() {
+				ToggleSwitch(c, checked, "Theme switch", false)
+				TagPill(c, "read", "128K", *pillSelected, true, false).OnClick(func() {
+					*pillSelected = !*pillSelected
+				})
+				TextAction(c, "Danger action", true)
+				if *hoverAction {
+					TextAction(c, "Quiet action", false)
+				}
+			})
+		}
+	}
+
+	sampleRect := func(img *image.RGBA, r ui.Rect, dx, dy float32) [4]uint8 {
+		c := img.RGBAAt(int(r.X+dx), int(r.Y+dy))
+		return [4]uint8{c.R, c.G, c.B, c.A}
+	}
+	closeColor := func(a, b [4]uint8) bool {
+		for i := range 4 {
+			d := int(a[i]) - int(b[i])
+			if d < 0 {
+				d = -d
+			}
+			if d > 3 {
+				return false
+			}
+		}
+		return true
+	}
+
+	lightChecked, lightSelected, showQuiet := true, true, true
+	refLight := ui.NewTesterWith(newView(&lightChecked, &lightSelected, &showQuiet), 480, 320, ui.TesterOptions{Dark: false})
+	refLight.SetFocused(true)
+	refLight.Frame()
+	if ta, ok := refLight.Find("Danger action"); ok {
+		refLight.Move(ta.X+ta.W/2, ta.Y+ta.H/2)
+		refLight.Advance(ControlTransition.Duration)
+		refLight.Frame()
+	}
+	lightImg := cloneTestRGBA(refLight.Image())
+
+	darkChecked, darkSelected, darkQuiet := true, true, true
+	refDark := ui.NewTesterWith(newView(&darkChecked, &darkSelected, &darkQuiet), 480, 320, ui.TesterOptions{Dark: true})
+	refDark.SetFocused(true)
+	refDark.Frame()
+	if ta, ok := refDark.Find("Danger action"); ok {
+		refDark.Move(ta.X+ta.W/2, ta.Y+ta.H/2)
+		refDark.Advance(ControlTransition.Duration)
+		refDark.Frame()
+	}
+	darkImg := cloneTestRGBA(refDark.Image())
+
+	checked, selected, quiet := true, true, true
+	tr := ui.NewTesterWith(newView(&checked, &selected, &quiet), 480, 320, ui.TesterOptions{Dark: false})
+	tr.SetFocused(true)
+	tr.Frame()
+
+	swRect, okS := tr.Find("Theme switch")
+	pillRect, okP := tr.Find("read")
+	taRect, okT := tr.Find("Danger action")
+	if !okS || !okP || !okT {
+		t.Fatalf("missing test controls: switch=%v pill=%v textAction=%v", okS, okP, okT)
+	}
+	tr.Move(taRect.X+taRect.W/2, taRect.Y+taRect.H/2)
+	tr.Advance(ControlTransition.Duration)
+	tr.Frame()
+
+	tr.SetDark(true)
+	firstDark := cloneTestRGBA(tr.Image())
+	if got, want := sampleRect(firstDark, swRect, 10, swRect.H/2), sampleRect(darkImg, swRect, 10, swRect.H/2); !closeColor(got, want) {
+		t.Fatalf("ToggleSwitch track did not snap on first Light->Dark frame: got=%v want=%v", got, want)
+	}
+	if got, want := sampleRect(firstDark, pillRect, 6, pillRect.H/2), sampleRect(darkImg, pillRect, 6, pillRect.H/2); !closeColor(got, want) {
+		t.Fatalf("TagPill fill did not snap on first Light->Dark frame: got=%v want=%v", got, want)
+	}
+	if got, want := sampleRect(firstDark, taRect, 3, 3), sampleRect(darkImg, taRect, 3, 3); !closeColor(got, want) {
+		t.Fatalf("TextAction hover fill did not snap on first Light->Dark frame: got=%v want=%v", got, want)
+	}
+
+	tr.SetDark(false)
+	firstLight := cloneTestRGBA(tr.Image())
+	if got, want := sampleRect(firstLight, swRect, 10, swRect.H/2), sampleRect(lightImg, swRect, 10, swRect.H/2); !closeColor(got, want) {
+		t.Fatalf("ToggleSwitch track did not snap on first Dark->Light frame: got=%v want=%v", got, want)
+	}
+	if got, want := sampleRect(firstLight, pillRect, 6, pillRect.H/2), sampleRect(lightImg, pillRect, 6, pillRect.H/2); !closeColor(got, want) {
+		t.Fatalf("TagPill fill did not snap on first Dark->Light frame: got=%v want=%v", got, want)
+	}
+	if got, want := sampleRect(firstLight, taRect, 3, 3), sampleRect(lightImg, taRect, 3, 3); !closeColor(got, want) {
+		t.Fatalf("TextAction hover fill did not snap on first Dark->Light frame: got=%v want=%v", got, want)
+	}
+
+	offChecked, offSelected, offQuiet := false, false, true
+	refLightOff := ui.NewTesterWith(newView(&offChecked, &offSelected, &offQuiet), 480, 320, ui.TesterOptions{Dark: false})
+	refLightOff.SetFocused(true)
+	refLightOff.Frame()
+	lightOffImg := cloneTestRGBA(refLightOff.Image())
+
+	if err := tr.Click("Theme switch"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tr.Click("read"); err != nil {
+		t.Fatal(err)
+	}
+	tr.Move(0, 0)
+	if checked || selected {
+		t.Fatalf("intra-palette clicks did not toggle state: checked=%v selected=%v", checked, selected)
+	}
+	if got, want := sampleRect(tr.Image(), swRect, 30, swRect.H/2), sampleRect(lightOffImg, swRect, 30, swRect.H/2); closeColor(got, want) {
+		t.Fatalf("ToggleSwitch intra-palette toggle unexpectedly snapped at t=0 without transition: got=%v want!=%v", got, want)
+	}
+	tr.Advance(ControlTransition.Duration)
+	tr.Frame()
+	settledOff := cloneTestRGBA(tr.Image())
+	if got, want := sampleRect(settledOff, swRect, 30, swRect.H/2), sampleRect(lightOffImg, swRect, 30, swRect.H/2); !closeColor(got, want) {
+		t.Fatalf("ToggleSwitch intra-palette toggle did not settle after %v: got=%v want=%v", ControlTransition.Duration, got, want)
+	}
+	if got, want := sampleRect(settledOff, pillRect, 6, pillRect.H/2), sampleRect(lightOffImg, pillRect, 6, pillRect.H/2); !closeColor(got, want) {
+		t.Fatalf("TagPill intra-palette toggle did not settle after %v: got=%v want=%v", ControlTransition.Duration, got, want)
+	}
+}
