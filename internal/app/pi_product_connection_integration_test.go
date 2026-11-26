@@ -95,10 +95,10 @@ func TestPiAppProductConnectionStopAndWorkerLoss(t *testing.T) {
 	enter := func(label, text string) {
 		t.Helper()
 		var err error
-		w.frame(func() {
+		w.pump.do(func() {
 			err = focusPiControl(w.view, label, true)
 			if err == nil {
-				w.view.Key(ui.Cmd, ui.KeyA)
+				w.view.Command("selectAll")
 				w.view.Type(text)
 			}
 		})

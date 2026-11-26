@@ -480,12 +480,15 @@ globalThis.fetch = (input, init) => {
 	clickScrolled := func(t *testing.T, w *productWorkbench, label string) {
 		t.Helper()
 		var err error
-		w.frame(func() { err = w.view.Click(label) })
-		if err == nil {
-			return
-		}
-		w.frame(func() {
+		var visible []string
+		w.pump.do(func() {
 			tr := w.view
+			if tr.FramePending() {
+				tr.Frame()
+			}
+			if err = tr.Click(label); err == nil {
+				return
+			}
 			for range 12 {
 				r, ok := tr.Find(label)
 				if !ok || (r.Y >= 105 && r.Y+r.H <= 520) {
@@ -496,18 +499,27 @@ globalThis.fetch = (input, init) => {
 					x = 700
 				}
 				tr.Scroll(x, 360, 0, r.Y-320)
+			}
+			err = tr.Click(label)
+			if err != nil {
 				tr.Frame()
+				err = tr.Click(label)
+				if err != nil {
+					visible = tr.Texts()
+				}
 			}
 		})
-		w.click(label)
+		if err != nil {
+			t.Fatalf("click %q: %v, visible: %v", label, err, visible)
+		}
 	}
 	typeInput := func(t *testing.T, w *productWorkbench, label, value string) {
 		t.Helper()
 		var err error
-		w.frame(func() {
+		w.pump.do(func() {
 			err = focusPiControl(w.view, label, true)
 			if err == nil {
-				w.view.Key(ui.Cmd, ui.KeyA)
+				w.view.Command("selectAll")
 				w.view.Type(value)
 			}
 		})
