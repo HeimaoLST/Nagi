@@ -449,3 +449,19 @@
 **Cause or correction:** Only explicit caller cancellation or shutdown signals represent non-poisoning user aborts; a stream that drops or errors after flushing HTTP 200 is a route-level transport/stream failure. Likewise, durable operation admission (`accepted`) and recovered execution state (`unknown`) are independent facts, and M4 utility escalation applies only to zero-mutating semantic failures (such as `finish_reason: "length"` truncation), never to retrying transient `429`/`5xx`/network errors on another Provider.
 
 **Prevention:** Classify user abort exclusively from the caller/run cancellation signal rather than the SDK's internal fetch signal, verify flushed-200 interrupted streams across both wire APIs, and keep separate integration assertions for transport-failure zero-escalation versus semantic utility escalation.
+
+### Elevate concrete user examples into general runtime primitives
+
+**Problem:** Architecture drafts framed around a user's concrete example (such as remote SSH shells, CI watchers, or external agent monitoring) narrow core schemas and runtime boundaries to single use cases, while shortcutting macOS PTY hosting with `/usr/bin/script` or Pi `sendCustomMessage` fails worker stdio and transcript-role invariants.
+
+**Cause or correction:** Concrete workflows are downstream compositions of three scenario-agnostic runtime primitives—worker-supervised stateful session handles (using a bundled native `forkpty` supervisor rather than `node-gyp` or `/usr/bin/script`, which exits 1 on socket stdio), standing-grant-gated asynchronous watches/schedules, and a private orchestration actor projecting product-owned timeline notices (since `sendCustomMessage` enters Pi provider payloads as role `user`).
+
+**Prevention:** Keep core schemas, RPCs, tools, and acceptance fixtures completely domain-agnostic, verify standalone macOS OS mechanisms with bundled Node and empty `PATH`, and bind unattended command schedules to explicit installation-local grants imported paused from backups.
+
+### Enable continuous autonomous Bot orchestration in a scoped compact context
+
+**Problem:** Treating UI "zero-LLM digest hints" as a global rule against unprompted autonomous turns—or bounding autonomous runs with low turn caps—causes Bots to stall whenever the human leaves the foreground window, whereas running wakes directly on full public Conversation transcripts inflates token consumption and pollutes user chat history.
+
+**Cause or correction:** Users want authorized Bots to continue collaborating, operating handles, and scheduling multi-hour or overnight work autonomously while the human is away, surfacing only what warrants attention and controlling cost through compact scoped orchestration contexts and efficient routing rather than halting execution.
+
+**Prevention:** Isolate autonomous orchestration in a dedicated private `OrchestrationActor` with rolling checkpoints and full projected-request budgets, queue human sends cleanly ahead of subsequent autonomous turns, split window hide from explicit `Cmd-Q` shutdown, and apply exponential backoff strictly per causal failure/no-progress loop rather than halting productive Bots.
