@@ -179,7 +179,7 @@ func (a *appModel) botBuiltinTools(c *ui.Context, t *ui.Theme, msgs locales.Mess
 		ui.Row(c).FillWidth().MinWidth(0).Wrap().Gap(6).Children(func() {
 			for i, name := range pi.ResolveCodingTools(nil, pi.ToolPresetWorkspace) {
 				c.Key(name)
-				capabilityChip(c, t, name, descriptions[i], slices.Contains(effective, name), blocked).OnClick(func() {
+				capabilityChip(c, name, descriptions[i], slices.Contains(effective, name), blocked).OnClick(func() {
 					tools := toggleCapabilityTool(effective, name)
 					draft.ToolPreset, draft.BuiltinTools = pi.ToolPresetCustom, &tools
 				})
@@ -196,25 +196,8 @@ func toggleCapabilityTool(tools []string, name string) []string {
 	return append(result, name)
 }
 
-func capabilityChip(c *ui.Context, t *ui.Theme, name, hint string, selected, disabled bool) ui.Element {
-	chip := ui.ButtonBase(c).Label(name).AccessSelected(selected).MinHeight(32).MinWidth(32).MaxWidth(180).Padding(4, 8).
-		Radius(8).AlignItems(ui.Center).Justify(ui.Center).Disabled(disabled).Transition(capabilityTransition)
-	fill, ink, border := t.Surface, t.TextMuted, t.Border
-	if selected {
-		fill, ink, border = t.Selection, t.Text, t.Focus
-	}
-	if chip.Pressed() {
-		fill = t.SurfacePressed
-	} else if chip.Hovered() {
-		fill = t.SurfaceHover
-	}
-	if chip.FocusVisible() {
-		border = t.Accent
-	}
-	chip.Background(fill).Border(1, border).Children(func() {
-		ui.Text(c, name).FontSize(typeMeta).FixedLineHeight(lineMeta).MinWidth(0).MaxLines(1).Ellipsis("…").TextColor(ink)
-	})
-	return appTooltip(c, chip, name+"\n"+hint)
+func capabilityChip(c *ui.Context, name, hint string, selected, disabled bool) ui.Element {
+	return appTooltip(c, theme.TagPill(c, name, "", selected, true, disabled).MinWidth(theme.ControlHit).MaxWidth(180), name+"\n"+hint)
 }
 
 func botSkill(list pi.ProductSkillList, source, id string) (pi.ProductSkillSummary, bool) {
@@ -297,7 +280,7 @@ func (a *appModel) botSkillControls(c *ui.Context, t *ui.Theme, msgs locales.Mes
 				if available && len(row.Scripts) != 0 {
 					a.skillReviewButton(c, msgs.CapReviewApprove(), key, name, nil, blocked)
 				}
-				theme.GhostButton(c, msgs.CapUnmount()).Padding(4, 0).Disabled(blocked).OnClick(func() {
+				theme.TextAction(c, msgs.CapUnmount(), true).Disabled(blocked).OnClick(func() {
 					draft.MountedSkills = slices.Delete(draft.MountedSkills, i, i+1)
 				})
 			})
@@ -358,7 +341,7 @@ func (a *appModel) skillRequestBanner(c *ui.Context, t *ui.Theme, msgs locales.M
 		ui.Row(c).FillWidth().MinWidth(0).Wrap().Gap(6).Children(func() {
 			key := pi.ProductSkillKey{Source: request.Source, BotID: ct.ID, SkillID: request.SkillID}
 			a.skillReviewButton(c, msgs.CapReviewApprove(), key, name, &request, blocked)
-			theme.GhostButton(c, msgs.CapDeny()).Disabled(blocked).OnClick(func() { a.denySkillApproval(ct, request) })
+			theme.TextAction(c, msgs.CapDeny(), true).Disabled(blocked).OnClick(func() { a.denySkillApproval(ct, request) })
 		})
 	})
 }
@@ -404,7 +387,7 @@ func (a *appModel) privateSkillRow(c *ui.Context, t *ui.Theme, msgs locales.Mess
 		})
 		if p := s.promotion; p != nil && p.key == key {
 			ui.Row(c).FillWidth().MinWidth(0).Wrap().Gap(6).AlignItems(ui.Center).Children(func() {
-				preferenceInput(c, &p.target, p.problem != "", t.Focus).Basis(136).Grow(1).MinWidth(0).Label(msgs.CapSkillSlug()).Disabled(blocked)
+				preferenceInput(c, &p.target, p.problem != "", a.workTheme.InputBorder).Basis(136).Grow(1).MinWidth(0).Label(msgs.CapSkillSlug()).Disabled(blocked)
 				secondaryButton(c, msgs.CapPromote()).Disabled(blocked).OnClick(func() {
 					if !skillSlugPattern.MatchString(p.target) {
 						p.problem = msgs.CapSkillSlugInvalid()
@@ -412,7 +395,7 @@ func (a *appModel) privateSkillRow(c *ui.Context, t *ui.Theme, msgs locales.Mess
 					}
 					a.promotePrivateSkill(ct, key, p.target)
 				})
-				theme.GhostButton(c, msgs.CreateBotCancel()).Disabled(blocked).OnClick(func() { s.promotion = nil })
+				theme.TextAction(c, msgs.CreateBotCancel(), false).Disabled(blocked).OnClick(func() { s.promotion = nil })
 			})
 			capabilityFieldError(c, t, p.problem)
 		}
@@ -466,7 +449,7 @@ func (a *appModel) botMcpControls(c *ui.Context, t *ui.Theme, msgs locales.Messa
 						binding.AllowedTools = nil
 					}
 				})
-				theme.GhostButton(c, msgs.CapRemove()).Padding(4, 0).Disabled(blocked).OnClick(func() { draft.McpBindings = slices.Delete(draft.McpBindings, i, i+1) })
+				theme.TextAction(c, msgs.CapRemove(), true).Disabled(blocked).OnClick(func() { draft.McpBindings = slices.Delete(draft.McpBindings, i, i+1) })
 			})
 			if binding.Policy == "allowlist" {
 				botMcpToolChips(c, t, msgs, binding, row.Catalog, blocked || !exists)
@@ -518,7 +501,7 @@ func botMcpToolChips(c *ui.Context, t *ui.Theme, msgs locales.Messages, binding 
 		for _, tool := range tools {
 			c.Key(tool.Name)
 			hint, _ := mcpToolHint(t, msgs, tool)
-			capabilityChip(c, t, tool.Name, hint+"\n"+tool.Description, slices.Contains(binding.AllowedTools, tool.Name), blocked).OnClick(func() {
+			capabilityChip(c, tool.Name, hint+"\n"+tool.Description, slices.Contains(binding.AllowedTools, tool.Name), blocked).OnClick(func() {
 				binding.AllowedTools = toggleCapabilityTool(binding.AllowedTools, tool.Name)
 			})
 		}
@@ -527,7 +510,7 @@ func botMcpToolChips(c *ui.Context, t *ui.Theme, msgs locales.Messages, binding 
 				continue
 			}
 			c.Key(name)
-			capabilityChip(c, t, name, msgs.CapMissing(), true, blocked).OnClick(func() {
+			capabilityChip(c, name, msgs.CapMissing(), true, blocked).OnClick(func() {
 				binding.AllowedTools = toggleCapabilityTool(binding.AllowedTools, name)
 			})
 		}
@@ -676,7 +659,7 @@ func (a *appModel) skillReviewDialog(c *ui.Context, base *ui.Theme) {
 			capabilityText(c, t, message).TextColor(t.Warning)
 		}
 		ui.Row(c).FillWidth().MinWidth(0).Wrap().AlignItems(ui.Center).Justify(ui.SpaceBetween).Gap(8).Children(func() {
-			theme.GhostButton(c, msgs.CreateBotCancel()).Disabled(a.capabilitiesBusy()).OnClick(closeDialog)
+			theme.TextAction(c, msgs.CreateBotCancel(), false).Disabled(a.capabilitiesBusy()).OnClick(closeDialog)
 			ui.Row(c).MinWidth(0).Wrap().Gap(6).AlignItems(ui.Center).Children(func() {
 				if value.ApprovalStatus == "user_approved" || value.ApprovalStatus == "pure_compute_tested" {
 					dangerButton(c, msgs.CapRevokeApproval()).Disabled(a.capabilitiesBlocked()).OnClick(func() { a.revokeReviewedSkill(review) })
@@ -772,7 +755,7 @@ func skillScriptList(c *ui.Context, t *ui.Theme, msgs locales.Messages, value pi
 func capabilityCode(c *ui.Context, msgs locales.Messages, source string) {
 	t := c.Theme()
 	box := ui.Column(c).FillWidth().MinWidth(0).Padding(4, 12, 12).Gap(4).
-		Radius(10).Border(1, t.Border).Background(t.Surface.Mix(t.Text, .04))
+		Radius(theme.CardRadius).Border(1, t.Border).Background(t.Surface.Mix(t.Text, .04))
 	type copyFeedback struct {
 		until time.Time
 		err   error

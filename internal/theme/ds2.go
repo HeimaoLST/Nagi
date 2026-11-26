@@ -15,6 +15,21 @@ const (
 
 var ControlTransition = ui.ElementTransition{Duration: 180 * time.Millisecond, Colors: true, Shadows: true}
 
+func TransitionControl(e ui.Element, t *ui.Theme) ui.Element {
+	palette := [10]ui.Color{t.Surface, t.SurfaceHover, t.SurfacePressed, t.Border, t.Text, t.TextMuted, t.Accent, t.AccentText, t.Success, t.Danger}
+	previous := ui.Local(e, "control-palette", func() [10]ui.Color { return palette })
+	if *previous == palette {
+		e.Transition(ControlTransition)
+	}
+	*previous = palette
+	return e
+}
+
+func StyleFrostedModal(backdrop, panel ui.Element, t *ui.Theme) {
+	StyleFrostedModalBackdrop(backdrop, t)
+	panel.Background(t.Surface).Border(1, t.Border).Radius(ModalRadius).Shadow(0, 8, 28, 0, ui.RGBA(0, 0, 0, .24))
+}
+
 func ToggleSwitch(c *ui.Context, checked *bool, label string, disabled ...bool) ui.Element {
 	t := c.Theme()
 	control := ui.SwitchBase(c, checked).Label(label).Size(40, ControlHit).Shrink(0).
@@ -29,9 +44,9 @@ func ToggleSwitch(c *ui.Context, checked *bool, label string, disabled ...bool) 
 		if *checked {
 			track, thumb, side = t.Accent, t.AccentText, ui.End
 		}
-		ui.Row(c).Size(40, 23).Padding(0, 3).Radius(PillRadius).Background(track).Transition(ControlTransition).
-			AlignItems(ui.Center).Justify(side).Children(func() {
-			ui.Box(c).Size(17, 17).Radius(PillRadius).Background(thumb).Transition(ControlTransition)
+		trackElement := ui.Row(c).Size(40, 23).Padding(0, 3).Radius(PillRadius).Background(track)
+		TransitionControl(trackElement, t).AlignItems(ui.Center).Justify(side).Children(func() {
+			TransitionControl(ui.Box(c).Size(17, 17).Radius(PillRadius).Background(thumb), t)
 		})
 	})
 	return control.Draw(func(p *ui.Painter, r ui.Rect) {
@@ -47,8 +62,8 @@ func TextAction(c *ui.Context, label string, danger bool) ui.Element {
 	if danger {
 		ink, hover, pressed = t.Danger, t.Surface.Mix(t.Danger, .10), t.Surface.Mix(t.Danger, .16)
 	}
-	button := ui.ButtonBase(c).Label(label).MinWidth(ControlHit).MinHeight(ControlHit).Radius(8).Padding(6, 10).
-		Justify(ui.Center).AlignItems(ui.Center).TextColor(ink).FocusRingColor(t.Accent).Transition(ControlTransition)
+	button := ui.ButtonBase(c).Label(label).MinWidth(ControlHit).MinHeight(ControlHit).Radius(ControlRadius).Padding(6, 10).
+		Justify(ui.Center).AlignItems(ui.Center).TextColor(ink).FocusRingColor(t.Accent)
 	if button.Pressed() {
 		button.Background(pressed)
 	} else if button.Hovered() {
@@ -57,7 +72,7 @@ func TextAction(c *ui.Context, label string, danger bool) ui.Element {
 	button.Children(func() {
 		ui.Text(c, label).FontSize(TypeAction).FontWeight(500).FixedLineHeight(LineAction).SingleLine()
 	})
-	return button
+	return TransitionControl(button, t)
 }
 
 func BrandIcon(c *ui.Context, icon *ui.SVG, size float32) ui.Element {
@@ -77,7 +92,8 @@ func TagPill(c *ui.Context, label, badge string, selected, dashed, disabled bool
 	}
 	pill := ui.ButtonBase(c).Label(label).AccessSelected(selected).Disabled(disabled).FocusRing(false).
 		MinHeight(ControlHit).MinWidth(0).MaxWidthPercent(100).Padding(4, 12).Gap(6).AlignItems(ui.Center).
-		Radius(PillRadius).Border(1, border).Transition(ControlTransition)
+		Radius(PillRadius).Border(1, border)
+	TransitionControl(pill, t)
 	if pill.Pressed() {
 		background, ink = t.SurfacePressed, t.Text
 	} else if pill.Hovered() {

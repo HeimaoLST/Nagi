@@ -9,6 +9,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"github.com/HeimaoLST/Nagi/internal/pi"
+	"github.com/HeimaoLST/Nagi/internal/theme"
 	"github.com/HeimaoLST/Nagi/locales"
 )
 
@@ -200,11 +201,13 @@ func (a *appModel) memoryLearningList(c *ui.Context, t *ui.Theme, ct *contact, m
 	ui.Column(c).Key("pending").FillWidth().MinWidth(0).Gap(6).Children(func() {
 		memoryHeading(c, t, msgs.MemoryReviewCount(len(ct.memory.data.PendingLearnings)))
 		for _, learning := range ct.memory.data.PendingLearnings {
-			ui.Column(c).Key(learning.LearningID).FillWidth().MinWidth(0).Gap(4).Padding(8).Radius(8).Background(t.SurfaceHover).Children(func() {
+			card := ui.Column(c).Key(learning.LearningID).FillWidth().MinWidth(0).Gap(4).Padding(8).Radius(theme.CardRadius).
+				Border(1, t.Border).Background(t.SurfaceHover)
+			card.Children(func() {
 				ui.Text(c, learning.Text).FontSize(typeLabel).FixedLineHeight(lineLabel).TextColor(t.Text)
 				ui.Text(c, learning.Reason).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 				ui.Row(c).FillWidth().Gap(8).Wrap().Children(func() {
-					memoryApproveButton(c, t, msgs.MemoryApprove()).Disabled(!mutable).OnClick(func() {
+					memoryApproveButton(c, t, msgs.MemoryApprove(), !mutable).OnClick(func() {
 						a.reviewMemoryLearning(ct, learning.LearningID, "approve")
 					})
 					secondaryButton(c, msgs.MemoryReject()).Disabled(!mutable).OnClick(func() {
@@ -216,22 +219,22 @@ func (a *appModel) memoryLearningList(c *ui.Context, t *ui.Theme, ct *contact, m
 	})
 }
 
-func memoryApproveButton(c *ui.Context, t *ui.Theme, label string) ui.Element {
-	button := ui.Button(c, label).Label(label).MinHeight(32).Padding(8, 12).FontSize(typeLabel).FontWeight(500).
-		FixedLineHeight(lineLabel).TextColor(t.Text).Background(ui.Transparent).BorderWidth(0)
-	return button.Draw(func(p *ui.Painter, r ui.Rect) {
-		fill := t.Surface.Mix(t.Accent, 0.14)
-		if button.Pressed() {
-			fill = t.Surface.Mix(t.Accent, 0.24)
-		} else if button.Hovered() {
-			fill = t.Surface.Mix(t.Accent, 0.19)
-		}
-		if button.IsDisabled() {
-			fill = t.Surface
-		}
-		r.Y, r.H = r.Y+2, r.H-4
-		paintPreferenceFace(p, r, 16, 4, fill, t.Focus)
+func memoryApproveButton(c *ui.Context, t *ui.Theme, label string, disabled bool) ui.Element {
+	button := ui.ButtonBase(c).Label(label).MinHeight(theme.ControlHit).Padding(6, 12).Radius(theme.ControlRadius).
+		Disabled(disabled).FocusRingColor(t.Accent).AlignItems(ui.Center).Justify(ui.Center)
+	fill, border, ink := t.Surface.Mix(t.Accent, .12), t.Border.Mix(t.Accent, .45), t.Text
+	switch {
+	case disabled:
+		fill, border, ink = t.Surface, t.Border, t.TextMuted
+	case button.Pressed():
+		fill = t.Surface.Mix(t.Accent, .24)
+	case button.Hovered():
+		fill = t.Surface.Mix(t.Accent, .18)
+	}
+	button.Background(fill).Border(1, border).TextColor(ink).Children(func() {
+		ui.Text(c, label).FontSize(typeAction).FontWeight(500).FixedLineHeight(lineAction)
 	})
+	return theme.TransitionControl(button, t)
 }
 
 func (a *appModel) reviewMemoryLearning(ct *contact, learningID, decision string) {
@@ -260,7 +263,7 @@ func (a *appModel) memoryRuleList(c *ui.Context, t *ui.Theme, ct *contact, msgs 
 				})
 			secondaryButton(c, action).Shrink(0).Disabled(!mutable || strings.TrimSpace(m.addDraft) == "").OnClick(func() { a.submitMemoryRule(ct) })
 			if m.editRuleID != "" {
-				memoryRemoveButton(c, t, msgs.MemoryCancelEdit()).OnClick(func() { m.editRuleID, m.addDraft, m.problem = "", "", "" })
+				memoryRemoveButton(c, t, msgs.MemoryCancelEdit(), false).OnClick(func() { m.editRuleID, m.addDraft, m.problem = "", "", "" })
 			}
 		})
 		if m.problem != "" {
@@ -285,7 +288,7 @@ func (a *appModel) memoryRuleList(c *ui.Context, t *ui.Theme, ct *contact, msgs 
 				linkButton(c, msgs.MemoryEdit()).Disabled(!mutable).OnClick(func() {
 					m.editRuleID, m.addDraft, m.problem = rule.RuleID, rule.Text, ""
 				})
-				memoryRemoveButton(c, t, msgs.MemoryRemoveRule()).Disabled(!mutable).OnClick(func() {
+				memoryRemoveButton(c, t, msgs.MemoryRemoveRule(), !mutable).OnClick(func() {
 					a.changeBotMemory(ct, func(ctx context.Context, client *pi.ProductClient, params pi.ProductMemoryOperation) (pi.ProductMemoryChangedEvent, error) {
 						return client.DeleteMemoryRule(ctx, pi.ProductMemoryDeleteRuleParams{ProductMemoryOperation: params, RuleID: rule.RuleID})
 					}, func() {
@@ -332,7 +335,7 @@ func (a *appModel) memoryWorkLogs(c *ui.Context, t *ui.Theme, ct *contact, msgs 
 							ui.Text(c, item.Date).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 							ui.Text(c, item.Summary).FontSize(typeLabel).FixedLineHeight(lineLabel).TextColor(t.Text)
 						})
-						memoryRemoveButton(c, t, msgs.MemoryRemoveLog()).Disabled(!mutable).OnClick(func() {
+						memoryRemoveButton(c, t, msgs.MemoryRemoveLog(), !mutable).OnClick(func() {
 							a.changeBotMemory(ct, func(ctx context.Context, client *pi.ProductClient, params pi.ProductMemoryOperation) (pi.ProductMemoryChangedEvent, error) {
 								return client.DeleteMemoryLog(ctx, pi.ProductMemoryDeleteLogParams{ProductMemoryOperation: params, LogID: item.LogID})
 							}, nil)
@@ -344,9 +347,14 @@ func (a *appModel) memoryWorkLogs(c *ui.Context, t *ui.Theme, ct *contact, msgs 
 	})
 }
 
-func memoryRemoveButton(c *ui.Context, t *ui.Theme, label string) ui.Element {
-	button := ui.ButtonBase(c).Label(label).Size(32, 32).Shrink(0).Radius(6).Center().TextColor(t.TextMuted)
-	button = iconControlFace(c, button, iconChrome, false)
+func memoryRemoveButton(c *ui.Context, t *ui.Theme, label string, disabled bool) ui.Element {
+	button := ui.ButtonBase(c).Label(label).Size(theme.ControlHit, theme.ControlHit).Shrink(0).Radius(theme.ControlRadius).
+		Disabled(disabled).Center().TextColor(t.TextMuted).FocusRingColor(t.Accent)
+	if button.Pressed() {
+		button.Background(t.SurfacePressed)
+	} else if button.Hovered() {
+		button.Background(t.SurfaceHover)
+	}
 	button.Children(func() { controlIcon(c, glyphCloseLine, iconChrome) })
-	return appTooltip(c, button, label)
+	return appTooltip(c, theme.TransitionControl(button, t), label)
 }

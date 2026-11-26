@@ -10,6 +10,14 @@
 
 **Prevention:** Inspect screenshots of actual composed pages at applicable sizes, themes, languages and states against `docs/design/desktop.md` and `docs/design/ui-checklist.md`. Enforce explicit four-tier typography (page title > section header > setting label > muted 1-line helper), distinct Primary/bordered Secondary/red Danger/Link controls, control-first Settings (segmented switches, presets and concise disclosures over stacked textboxes/prose), and centered wide-screen alignment. Check control bounds and scroll position, keep a failure frame when a click cannot be verified, and record the reviewer and verdict against the frozen candidate.
 
+### Keep control text and background in the same theme during a switch
+
+**Problem:** Immediately after switching from Moss Dark to Paper Light, Memory approval rendered dark text on the previous dark button fill.
+
+**Cause or correction:** MyGo interpolates background and border colors while applying new text colors immediately. The 180 ms interaction transition carried the old palette into the new one.
+
+**Prevention:** Apply control palette changes in the same frame and keep the transition for interaction within a palette. Inspect the first frame after changing themes in both directions, with populated controls visible.
+
 ### Verify native app, window and chooser identity
 
 **Problem:** A new window can appear after the owned app exits, a chooser launcher can lose the original process, and a duplicate bundle identifier can show an unrelated window. The same file can appear as `/tmp` or `/private/tmp`.

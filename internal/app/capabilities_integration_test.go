@@ -218,7 +218,7 @@ func TestPiAppCapabilitiesSkillsMcpProfileAndM3Approval(t *testing.T) {
 		return w.app.settingsOpen && w.app.settingsTab == settingsTabCapabilities && w.app.capabilities.library.ready
 	})
 
-	w.click(msgs.CapOn())
+	w.click(msgs.CapLocalDiscovery())
 	w.wait(func() bool {
 		return !w.app.capabilitiesBusy() && w.app.capabilities.discoverLocal && len(w.app.capabilities.library.value.Local) == 1
 	})

@@ -16,6 +16,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"github.com/HeimaoLST/Nagi/internal/connection"
+	"github.com/HeimaoLST/Nagi/internal/materials"
 	"github.com/HeimaoLST/Nagi/internal/pi"
 	"github.com/HeimaoLST/Nagi/internal/theme"
 	"github.com/HeimaoLST/Nagi/locales"
@@ -645,4 +646,570 @@ func extractICUPlaceholders(msg string) []string {
 	}
 	slices.Sort(out)
 	return out
+}
+
+func TestVisualGuardInputBorderDisciplineAST(t *testing.T) {
+	entries, err := os.ReadDir(".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fset := token.NewFileSet()
+	checkedCalls := 0
+	isFocusExpr := func(expr ast.Expr, focusVars map[string]bool) bool {
+		switch e := expr.(type) {
+		case *ast.SelectorExpr:
+			return e.Sel.Name == "Focus"
+		case *ast.Ident:
+			return focusVars[e.Name]
+		}
+		return false
+	}
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		file, err := parser.ParseFile(fset, name, nil, 0)
+		if err != nil {
+			t.Fatalf("parse %s: %v", name, err)
+		}
+		for _, decl := range file.Decls {
+			fn, ok := decl.(*ast.FuncDecl)
+			if !ok || fn.Body == nil {
+				continue
+			}
+			focusVars := make(map[string]bool)
+			ast.Inspect(fn.Body, func(node ast.Node) bool {
+				switch n := node.(type) {
+				case *ast.AssignStmt:
+					for i, rhs := range n.Rhs {
+						if i < len(n.Lhs) {
+							if id, ok := n.Lhs[i].(*ast.Ident); ok && isFocusExpr(rhs, focusVars) {
+								focusVars[id.Name] = true
+							}
+						}
+					}
+				case *ast.CallExpr:
+					var callee string
+					switch fun := n.Fun.(type) {
+					case *ast.Ident:
+						callee = fun.Name
+					case *ast.SelectorExpr:
+						if pkg, ok := fun.X.(*ast.Ident); ok && pkg.Name == "theme" {
+							callee = fun.Sel.Name
+						}
+					}
+					switch callee {
+					case "preferenceInput", "formTextArea", "PreferenceInput", "FormTextArea":
+						checkedCalls++
+						for _, arg := range n.Args[min(3, len(n.Args)):] {
+							if isFocusExpr(arg, focusVars) {
+								pos := fset.Position(arg.Pos())
+								t.Errorf("%s:%d: %s must not use .Focus as resting input border; use a.workTheme.InputBorder", pos.Filename, pos.Line, callee)
+							}
+						}
+					}
+				}
+				return true
+			})
+		}
+	}
+	if checkedCalls < 10 {
+		t.Fatalf("expected >= 10 preferenceInput/formTextArea call sites, scanned %d", checkedCalls)
+	}
+}
+
+func TestVisualGuardStyleFrostedModalAST(t *testing.T) {
+	entries, err := os.ReadDir(".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fset := token.NewFileSet()
+	dialogCount := 0
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		file, err := parser.ParseFile(fset, name, nil, 0)
+		if err != nil {
+			t.Fatalf("parse %s: %v", name, err)
+		}
+		ast.Inspect(file, func(node ast.Node) bool {
+			call, ok := node.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			sel, ok := call.Fun.(*ast.SelectorExpr)
+			if !ok {
+				return true
+			}
+			pkg, ok := sel.X.(*ast.Ident)
+			if !ok || pkg.Name != "ui" || sel.Sel.Name != "DialogBase" {
+				return true
+			}
+			dialogCount++
+			pos := fset.Position(call.Pos())
+			if len(call.Args) < 3 {
+				t.Errorf("%s:%d: ui.DialogBase missing modal callback argument", pos.Filename, pos.Line)
+				return true
+			}
+			lit, ok := call.Args[2].(*ast.FuncLit)
+			if !ok || lit.Body == nil {
+				t.Errorf("%s:%d: ui.DialogBase callback must be a literal calling theme.StyleFrostedModal", pos.Filename, pos.Line)
+				return true
+			}
+			panelParam := ""
+			if lit.Type != nil && lit.Type.Params != nil {
+				var params []string
+				for _, field := range lit.Type.Params.List {
+					for _, id := range field.Names {
+						params = append(params, id.Name)
+					}
+				}
+				if len(params) >= 2 {
+					panelParam = params[1]
+				}
+			}
+			hasStyleFrostedModal := false
+			ast.Inspect(lit.Body, func(inner ast.Node) bool {
+				ic, ok := inner.(*ast.CallExpr)
+				if !ok {
+					return true
+				}
+				isel, ok := ic.Fun.(*ast.SelectorExpr)
+				if !ok {
+					return true
+				}
+				if ipkg, ok := isel.X.(*ast.Ident); ok && ipkg.Name == "theme" {
+					if isel.Sel.Name == "StyleFrostedModal" {
+						hasStyleFrostedModal = true
+					}
+					if isel.Sel.Name == "StyleFrostedModalBackdrop" {
+						ipos := fset.Position(ic.Pos())
+						t.Errorf("%s:%d: ui.DialogBase modal must call theme.StyleFrostedModal instead of theme.StyleFrostedModalBackdrop", ipos.Filename, ipos.Line)
+					}
+				}
+				if panelParam != "" && isel.Sel.Name == "Radius" {
+					var root ast.Expr = isel.X
+					for {
+						switch r := root.(type) {
+						case *ast.CallExpr:
+							if rs, ok := r.Fun.(*ast.SelectorExpr); ok {
+								root = rs.X
+								continue
+							}
+						case *ast.Ident:
+							if r.Name == panelParam {
+								ipos := fset.Position(ic.Pos())
+								t.Errorf("%s:%d: ui.DialogBase modal panel must not override Radius outside theme.StyleFrostedModal", ipos.Filename, ipos.Line)
+							}
+						}
+						break
+					}
+				}
+				return true
+			})
+			if !hasStyleFrostedModal {
+				t.Errorf("%s:%d: ui.DialogBase modal callback must call theme.StyleFrostedModal", pos.Filename, pos.Line)
+			}
+			return true
+		})
+	}
+	if dialogCount < 4 {
+		t.Fatalf("expected >= 4 ui.DialogBase modals in internal/app, found %d", dialogCount)
+	}
+}
+
+func phase2SeededCapabilitiesProfileApp(t *testing.T) (*appModel, *contact, pi.ProductSkillSummary, pi.ProductSkillApprovalRequest) {
+	t.Helper()
+	a, ct := capabilitiesUITestApp(t)
+	ct.Loaded = true
+	readOnlyTrue := true
+	destructiveTrue := true
+	poolPID := 4242
+
+	globalSummary := pi.ProductSkillSummary{
+		Source:      "global",
+		SkillID:     "field-guide",
+		Name:        "Field guide",
+		Description: "Collect structured intake notes and workspace context.",
+		SHA256:      "sha-global-1",
+	}
+	localSummary := pi.ProductSkillSummary{
+		Source:      "local",
+		SkillID:     "local-ref",
+		Name:        "Local reference",
+		Description: "Read-only discovered local project guide.",
+		SHA256:      "sha-local-1",
+	}
+	privateSkill := pi.ProductSkillSummary{
+		Source:             "private",
+		SkillID:            "case-script",
+		Name:               "Case files script",
+		Description:        "Summarize case workspace files for review.",
+		SHA256:             "sha-private-1",
+		ApprovalDigest:     "digest-abc123456789",
+		PermissionsDigest:  "perm-xyz",
+		ApprovalStatus:     "approval_required",
+		CanonicalWorkspace: "/tmp/canonical-ws",
+		Scripts: map[string]pi.ProductSkillScript{
+			"run": {
+				Entry:       "scripts/run.mjs",
+				Description: "Summarize workspace",
+				TimeoutMS:   10000,
+				Permissions: pi.ProductSkillPermissions{WorkspaceRead: true, NetworkOrigins: []string{"http://127.0.0.1:58423"}},
+			},
+		},
+	}
+
+	globalKey := pi.ProductSkillKey{Source: "global", SkillID: "field-guide"}
+	localKey := pi.ProductSkillKey{Source: "local", SkillID: "local-ref"}
+	a.capabilities.discoverLocal = true
+	a.capabilities.library = capabilityRead[pi.ProductSkillList]{
+		ready: true,
+		value: pi.ProductSkillList{
+			DiscoverLocalSkills: true,
+			Global:              []pi.ProductSkillSummary{globalSummary},
+			Local:               []pi.ProductSkillSummary{localSummary},
+		},
+	}
+	a.capabilities.selectedSkill = globalKey
+	a.capabilities.skillDetails = map[pi.ProductSkillKey]*skillDetailRead{
+		globalKey: {
+			digest: "sha-global-1",
+			capabilityRead: capabilityRead[pi.ProductSkillDetail]{
+				ready: true,
+				value: pi.ProductSkillDetail{
+					ProductSkillSummary: globalSummary,
+					Content:             "## Intake checklist\n\n- Confirm workspace path\n- Capture reproducible evidence",
+				},
+			},
+		},
+		localKey: {
+			digest: "sha-local-1",
+			capabilityRead: capabilityRead[pi.ProductSkillDetail]{
+				ready: true,
+				value: pi.ProductSkillDetail{
+					ProductSkillSummary: localSummary,
+					Content:             "Local read-only skill body.",
+				},
+			},
+		},
+	}
+
+	serverView := pi.ProductMcpServerView{
+		ProductMcpServerConfig: pi.ProductMcpServerConfig{
+			ServerID:         "mcp-studio",
+			Name:             "studio-tools",
+			Transport:        "http",
+			Isolation:        "shared",
+			Enabled:          true,
+			URL:              "https://mcp.example.invalid/mcp",
+			SecretHeaderKeys: []string{"authorization"},
+		},
+		Revision:         3,
+		CredentialStatus: "ok",
+		Catalog: &pi.ProductMcpCatalog{
+			FetchedAt: "2026-11-26T09:30:00Z",
+			Tools: []pi.ProductMcpTool{
+				{Name: "list_docs", Description: "List workspace docs", ReadOnlyHint: &readOnlyTrue},
+				{Name: "tag_doc", Description: "Apply classification tags"},
+				{Name: "purge_doc", Description: "Delete archived document", DestructiveHint: &destructiveTrue},
+			},
+		},
+		Pools: []pi.ProductMcpPool{
+			{ServerID: "mcp-studio", ScopeKey: "shared:mcp-studio", Isolation: "shared", State: "connected", RefCount: 2, PID: &poolPID},
+		},
+	}
+	a.capabilities.servers = capabilityRead[[]pi.ProductMcpServerView]{ready: true, value: []pi.ProductMcpServerView{serverView}}
+	a.capabilities.selectedMcp = serverView.ServerID
+	a.capabilities.mcpEditors = map[string]*mcpEditor{serverView.ServerID: newMcpEditor(serverView)}
+
+	customTools := []string{"read", "bash"}
+	ct.ToolPreset = pi.ToolPresetCustom
+	ct.BuiltinTools = &customTools
+	ct.MountedSkills = []pi.ProductMountedSkill{
+		{Source: "global", SkillID: "field-guide"},
+		{Source: "global", SkillID: "missing-skill"},
+	}
+	ct.McpBindings = []pi.ProductMcpBinding{
+		{ServerID: "mcp-studio", Policy: "allowlist", AllowedTools: []string{"list_docs"}},
+	}
+	ct.capabilities.skills = capabilityRead[pi.ProductSkillList]{
+		ready: true,
+		value: pi.ProductSkillList{
+			Global:  []pi.ProductSkillSummary{globalSummary},
+			Private: []pi.ProductSkillSummary{privateSkill},
+		},
+	}
+	req := pi.ProductSkillApprovalRequest{
+		RequestID:          "req-p2-1",
+		ActivityID:         "act-p2-1",
+		BotID:              ct.ID,
+		Source:             "private",
+		SkillID:            "case-script",
+		Script:             "run",
+		State:              "open",
+		Revision:           1,
+		InstallationID:     "inst-p2-1",
+		ApprovalDigest:     "digest-abc123456789",
+		PermissionsDigest:  "perm-xyz",
+		CanonicalWorkspace: "/tmp/canonical-ws",
+	}
+	ct.capabilities.requests = map[string]pi.ProductSkillApprovalRequest{req.RequestID: req}
+	ct.memory = botMemoryViewState{
+		loaded: true,
+		data: pi.ProductBotMemory{
+			BotID:         ct.ID,
+			RulesRevision: 2,
+			PendingLearnings: []pi.ProductPendingLearning{
+				{
+					LearningID: "learn-p2-1",
+					BotID:      ct.ID,
+					Kind:       "rule",
+					Text:       "Always verify theme switch contrast on the first rendered frame.",
+					Reason:     "Caught during Phase 2 Design System review.",
+					State:      "pending",
+				},
+			},
+			Rules: []pi.ProductMemoryRule{
+				{RuleID: "rule-p2-1", BotID: ct.ID, Text: "Keep all frosted modals unified at 16 DIP radius.", Source: "user"},
+			},
+			WorkLogs: []pi.ProductWorkLog{
+				{LogID: "log-p2-1", BotID: ct.ID, Date: "2026-11-26", Summary: "Completed DS2 Phase 2 Capabilities and Bot Profile alignment.", Tags: []string{"ds2", "qa"}},
+			},
+		},
+	}
+	a.profileEditors = map[string]*contactProfileEditor{ct.ID: newContactProfileEditor(contactProfileDraft(ct))}
+	return a, ct, privateSkill, req
+}
+
+func TestVisualGuardCapabilitiesProfileAndModals(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		dark bool
+	}{{"Paper Light", false}, {"Moss Dark", true}} {
+		wb := theme.ResolveWorkbenchTheme(tc.dark)
+		st := theme.SettingsTheme(wb.Theme)
+		for _, tset := range []*ui.Theme{wb.Theme, &st} {
+			for _, factor := range []float32{.12, .18, .24} {
+				bg := tset.Surface.Mix(tset.Accent, factor)
+				if ratio := theme.PaletteContrast(tset.Text, bg); ratio < 4.5 {
+					t.Fatalf("%s: memoryApproveButton Text on Surface.Mix(Accent, %.2f) contrast = %.2f, want >= 4.5", tc.name, factor, ratio)
+				}
+			}
+		}
+	}
+
+	closeRGBA := func(a, b [4]uint8) bool {
+		for i := range 4 {
+			d := int(a[i]) - int(b[i])
+			if d < 0 {
+				d = -d
+			}
+			if d > 4 {
+				return false
+			}
+		}
+		return true
+	}
+
+	sizes := [][2]int{{1040, 720}, {720, 640}}
+	for _, locale := range []string{"en", "zh-Hans"} {
+		msgs := locales.In(locale)
+		for _, dark := range []bool{false, true} {
+			wb := theme.ResolveWorkbenchTheme(dark)
+			st := theme.SettingsTheme(wb.Theme)
+			accentRGBA := [4]uint8{st.Accent.R, st.Accent.G, st.Accent.B, st.Accent.A}
+			for _, size := range sizes {
+				tag := fmt.Sprintf("%s-dark%t-%dx%d", locale, dark, size[0], size[1])
+				t.Run(tag, func(t *testing.T) {
+					w, h := size[0], size[1]
+					assertControl := func(tr *ui.Tester, scene string, labels ...string) {
+						t.Helper()
+						for _, label := range labels {
+							r, ok := tr.Find(label)
+							if !ok || r.X < 0 || r.Y < 0 || r.X+r.W > float32(w)+0.5 || r.Y+r.H > float32(h)+0.5 || r.W < theme.ControlHit || r.H < theme.ControlHit {
+								t.Fatalf("scene=%s control %q invalid/clipped: rect=%+v ok=%v viewport=%dx%d", scene, label, r, ok, w, h)
+							}
+						}
+					}
+					assertFillIsAccent := func(tr *ui.Tester, scene, label string, want bool) {
+						t.Helper()
+						r, ok := tr.Find(label)
+						if !ok {
+							t.Fatalf("scene=%s missing CTA %q", scene, label)
+						}
+						c := tr.Image().RGBAAt(int(r.X+r.W/2), int(r.Y+3))
+						got := [4]uint8{c.R, c.G, c.B, c.A}
+						isAccent := closeRGBA(got, accentRGBA)
+						if isAccent != want {
+							t.Fatalf("scene=%s CTA %q accent fill = %v (got=%v accent=%v), want %v", scene, label, isAccent, got, accentRGBA, want)
+						}
+					}
+					assertRowInputAligned := func(tr *ui.Tester, scene, label string) {
+						t.Helper()
+						r, ok := tr.Find(label)
+						if !ok {
+							t.Fatalf("scene=%s missing form row label %q", scene, label)
+						}
+						tr.ClickAt(r.X+r.W+24, r.Y+r.H/2)
+						tr.Frame()
+						caret, okC := tr.TextCaret()
+						if !okC {
+							t.Fatalf("scene=%s row %q input had no active caret", scene, label)
+						}
+						labelMidY := r.Y + r.H/2
+						controlMidY := caret.Y + caret.H/2
+						if delta := math.Abs(float64(labelMidY - controlMidY)); delta > 4.0 {
+							t.Fatalf("scene=%s row %q misaligned: labelMidY=%.2f controlMidY=%.2f (delta=%.2f > 4)", scene, label, labelMidY, controlMidY, delta)
+						}
+					}
+
+					a, ct, privateSkill, req := phase2SeededCapabilitiesProfileApp(t)
+					a.windowWidth = w
+					a.settingsOpen = true
+					a.settingsTab = settingsTabCapabilities
+					a.capabilities.tab = capabilityTabSkills
+					tr := ui.NewTesterWith(a.view, w, h, ui.TesterOptions{Dark: dark})
+					tr.SetLocale(locale)
+					tr.SetFocused(true)
+					tr.Frame()
+					assertControl(tr, "skills", msgs.CapLocalDiscovery(), msgs.CapNewSkill(), msgs.CapEdit(), msgs.CapDeleteSkill())
+
+					a.capabilities.newSkill = &skillEditor{key: pi.ProductSkillKey{Source: "global"}, name: "Audit guide", summary: "Verify DS2 forms."}
+					tr.Frame()
+					assertControl(tr, "new-skill-modal", msgs.CreateBotCancel(), msgs.CapSaveSkill())
+					assertFillIsAccent(tr, "new-skill-modal", msgs.CapSaveSkill(), true)
+					if w >= 1040 {
+						assertRowInputAligned(tr, "new-skill-modal", msgs.FieldName())
+						assertRowInputAligned(tr, "new-skill-modal", msgs.CapSkillSlug())
+						assertRowInputAligned(tr, "new-skill-modal", msgs.CapDescription())
+					}
+					a.capabilities.newSkill = nil
+
+					a.capabilities.tab = capabilityTabMCP
+					a.settingsScroll.Y = 0
+					tr.Frame()
+					assertControl(tr, "mcp-detail", msgs.ProviderAccountStatus(), msgs.CapMcpTestRefresh())
+					if w >= 1040 {
+						assertControl(tr, "mcp-detail-footer", msgs.CapDeleteMcp(), msgs.CapSaveMcp())
+						assertFillIsAccent(tr, "mcp-detail", msgs.CapSaveMcp(), true)
+					}
+
+					a.capabilities.newMcp = newMcpEditor(pi.ProductMcpServerView{
+						ProductMcpServerConfig: pi.ProductMcpServerConfig{Transport: "http", Isolation: "shared", Enabled: true},
+					})
+					tr.Frame()
+					if w >= 1040 {
+						assertFillIsAccent(tr, "add-mcp-modal-bg-demoted", msgs.CapSaveMcp(), false)
+					}
+					savedServers, savedSelected := a.capabilities.servers.value, a.capabilities.selectedMcp
+					a.capabilities.servers.value, a.capabilities.selectedMcp = nil, ""
+					tr.Frame()
+					assertControl(tr, "add-mcp-modal", msgs.CreateBotCancel(), msgs.CapSaveMcp())
+					assertFillIsAccent(tr, "add-mcp-modal", msgs.CapSaveMcp(), true)
+					if w >= 1040 {
+						assertRowInputAligned(tr, "add-mcp-modal", msgs.FieldName())
+						assertRowInputAligned(tr, "add-mcp-modal", msgs.CapServerURL())
+						for _, pair := range [][2]string{{msgs.CapTransport(), "stdio"}, {msgs.CapIsolation(), msgs.CapShared()}} {
+							lr, okL := tr.Find(pair[0])
+							cr, okC := tr.Find(pair[1])
+							if !okL || !okC {
+								t.Fatalf("add-mcp-modal missing row %q(%v) or control %q(%v)", pair[0], okL, pair[1], okC)
+							}
+							if delta := math.Abs(float64((lr.Y + lr.H/2) - (cr.Y + cr.H/2))); delta > 4.0 {
+								t.Fatalf("add-mcp-modal row %q misaligned: labelMidY=%.2f controlMidY=%.2f (delta=%.2f > 4)",
+									pair[0], lr.Y+lr.H/2, cr.Y+cr.H/2, delta)
+							}
+						}
+					}
+					a.capabilities.servers.value, a.capabilities.selectedMcp = savedServers, savedSelected
+					a.capabilities.newMcp = nil
+
+					a.settingsOpen = false
+					a.contactProfileID = ct.ID
+					a.openDetail(detailProfile)
+					a.profileScrollFor(ct.ID).Y = 0
+					tr.Frame()
+					assertControl(tr, "bot-profile-footer", msgs.ContactSaveChanges(), msgs.ProfileArchive())
+					assertFillIsAccent(tr, "bot-profile-footer", msgs.ContactSaveChanges(), true)
+
+					scrollProfileTo := func(label string) ui.Rect {
+						t.Helper()
+						for y := float32(0); y <= 2600; y += 180 {
+							a.profileScrollFor(ct.ID).Y = y
+							tr.Frame()
+							if r, ok := tr.Find(label); ok && r.W >= theme.ControlHit && r.H >= theme.ControlHit && r.Y >= 56 && r.Y+r.H <= float32(h)-90 {
+								return r
+							}
+						}
+						t.Fatalf("bot-profile could not scroll %q into visible viewport (%dx%d)", label, w, h)
+						return ui.Rect{}
+					}
+
+					scrollProfileTo("read")
+					assertControl(tr, "bot-profile-custom-tools", "read", "write")
+
+					scrollProfileTo("list_docs")
+					assertControl(tr, "bot-profile-mcp-allowlist", "list_docs")
+
+					approveRect := scrollProfileTo(msgs.MemoryApprove())
+					assertControl(tr, "bot-profile-memory", msgs.MemoryApprove(), msgs.MemoryReject())
+					assertFillIsAccent(tr, "bot-profile-memory", msgs.MemoryApprove(), false)
+
+					if w == 1040 {
+						tr.SetDark(!dark)
+						otherWB := theme.ResolveWorkbenchTheme(!dark)
+						wantFill := otherWB.Theme.Surface.Mix(otherWB.Theme.Accent, .12)
+						gotC := tr.Image().RGBAAt(int(approveRect.X+approveRect.W/2), int(approveRect.Y+3))
+						if !closeRGBA([4]uint8{gotC.R, gotC.G, gotC.B, gotC.A}, [4]uint8{wantFill.R, wantFill.G, wantFill.B, wantFill.A}) {
+							t.Fatalf("memoryApproveButton did not snap on first SetDark(%v) frame: got=%+v want=%+v", !dark, gotC, wantFill)
+						}
+						tr.SetDark(dark)
+						tr.Advance(theme.ControlTransition.Duration)
+						tr.Frame()
+					}
+
+					a.capabilities.review = &skillReviewState{
+						key:     pi.ProductSkillKey{Source: "private", BotID: ct.ID, SkillID: "case-script"},
+						name:    privateSkill.Name,
+						request: &req,
+						file:    "scripts/run.mjs",
+						read: capabilityRead[pi.ProductSkillDetail]{
+							ready: true,
+							value: pi.ProductSkillDetail{
+								ProductSkillSummary: privateSkill,
+								Files: map[string]string{
+									"SKILL.md":        "---\nname: Case files script\n---\n",
+									"scripts/run.mjs": "export default async function() { return { ok: true }; }\n",
+								},
+							},
+						},
+					}
+					tr.Frame()
+					assertControl(tr, "skill-review-modal-footer", msgs.CreateBotCancel(), msgs.CapApproveBot())
+					assertFillIsAccent(tr, "skill-review-modal", msgs.CapApproveBot(), true)
+					a.capabilities.review.scroll.Y = 240
+					tr.Frame()
+					assertControl(tr, "skill-review-modal-body", msgs.CopyCodeLabel())
+					a.capabilities.review = nil
+
+					a.closeDetail()
+					a.openCreateBotDialog()
+					tr.Frame()
+					assertControl(tr, "create-bot-modal", msgs.CreateBotCancel(), msgs.CreateBotAction())
+					assertFillIsAccent(tr, "create-bot-modal", msgs.CreateBotAction(), true)
+					a.createBot = nil
+
+					a.openComposerMaterial(ct, materials.Item{})
+					tr.Frame()
+					assertControl(tr, "composer-material-modal", msgs.TaskContextFormCancel(), msgs.ComposerAddNoteAction())
+					assertFillIsAccent(tr, "composer-material-modal", msgs.ComposerAddNoteAction(), true)
+					a.composerMaterial = nil
+				})
+			}
+		}
+	}
 }

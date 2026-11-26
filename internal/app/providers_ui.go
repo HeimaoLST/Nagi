@@ -895,7 +895,7 @@ func (a *appModel) providerCatalogSection(c *ui.Context, t *ui.Theme, msgs local
 		if collapsed {
 			c.Key("provider-section-preview")
 			label := msgs.ProviderFoldSummary(len(presets))
-			button := providerDirectoryButton(c, t, label, true).Expanded(false).FillWidth().Wrap().Radius(11).
+			button := providerDirectoryButton(c, t, label, true).Expanded(false).FillWidth().Wrap().Radius(theme.ControlRadius).
 				Background(t.Surface).Border(1, t.Border).Padding(10, 12).Gap(8).Justify(ui.SpaceBetween)
 			button.Children(func() {
 				ui.Row(c).MinWidth(0).Wrap().AlignItems(ui.Center).Gap(10).Children(func() {
@@ -1414,9 +1414,8 @@ func (a *appModel) providerDialog(c *ui.Context, base *ui.Theme) {
 	open := true
 	c.Key("provider-config-dialog")
 	ui.DialogBase(c, &open, func(backdrop, panel ui.Element) {
-		theme.StyleFrostedModalBackdrop(backdrop, &t)
-		panel.Label(name).Width(616).MaxWidth(width-32).MaxHeight(height-48).Column().Clip().
-			Background(t.Surface).Border(1, t.Border).Radius(theme.ModalRadius).Shadow(0, 8, 28, 0, ui.RGBA(0, 0, 0, .24))
+		theme.StyleFrostedModal(backdrop, panel, &t)
+		panel.Label(name).Width(616).MaxWidth(width - 32).MaxHeight(height - 48).Column().Clip()
 		ui.Themed(c, &t).FillWidth().MinHeight(0).Shrink(1).Column().Children(func() {
 			a.providerDialogHeader(c, &t, msgs, editor, account, preset, name, blocked)
 			c.Key("provider-dialog-scroll-" + editor.ProviderID)
