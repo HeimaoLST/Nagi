@@ -943,12 +943,13 @@ func (e *mcpEditor) input(msgs locales.Messages) (pi.ProductMcpServerInput, *pi.
 		if input.Cwd != "" && (!filepath.IsAbs(input.Cwd) || strings.ContainsRune(input.Cwd, 0)) {
 			e.fields["cwd"] = msgs.CapAbsolutePath()
 		}
-		for _, arg := range strings.Split(e.args, "\n") {
+		for _, raw := range strings.Split(e.args, "\n") {
+			arg := strings.TrimSuffix(raw, "\r")
 			if strings.ContainsRune(arg, 0) {
 				e.fields["args"] = msgs.CapMcpArgumentsInvalid()
 			}
 			if arg != "" {
-				input.Args = append(input.Args, strings.TrimSuffix(arg, "\r"))
+				input.Args = append(input.Args, arg)
 			}
 		}
 		input.EnvKeys = e.config.EnvKeys

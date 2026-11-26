@@ -70,13 +70,8 @@ const (
 	storeRecoveryVerifiedInstalled      = store.StoreRecoveryVerifiedInstalled
 	storeRecoveryInstallUnconfirmed     = store.StoreRecoveryInstallUnconfirmed
 	activityQuestionOpen                = store.IssueQuestionOpen
-	activityQuestionAnswered            = store.IssueQuestionAnswered
-	activityQuestionSuperseded          = store.IssueQuestionSuperseded
-	activityQuestionDeliverySaved       = store.IssueQuestionDeliverySaved
 	activityQuestionDeliveryDispatching = store.IssueQuestionDeliveryDispatching
-	activityQuestionDeliveryResolved    = store.IssueQuestionDeliveryResolved
 	activityQuestionDeliveryUnknown     = store.IssueQuestionDeliveryUnknown
-	activityQuestionDeliveryCanceled    = store.IssueQuestionDeliveryCanceled
 	activityStatusNotStarted            = store.IssueStatusNotStarted
 	activityStatusInProgress            = store.IssueStatusInProgress
 	activityStatusWaitingUser           = store.IssueStatusWaitingUser
@@ -95,11 +90,7 @@ const (
 	activityExecutionFailed             = store.IssueExecutionFailed
 	activityExecutionInterrupted        = store.IssueExecutionInterrupted
 	activityExecutionUnknown            = store.IssueExecutionUnknown
-	supplementStatePending              = store.SupplementStatePending
 	supplementStateDispatching          = store.SupplementStateDispatching
-	supplementStateSubmitted            = store.SupplementStateSubmitted
-	supplementStateRejected             = store.SupplementStateRejected
-	supplementStateNotDispatched        = store.SupplementStateNotDispatched
 	supplementStateUnknown              = store.SupplementStateUnknown
 	supplementBatchDispatching          = store.SupplementBatchDispatching
 	supplementBatchAccepted             = store.SupplementBatchAccepted
@@ -110,16 +101,9 @@ const (
 	activityToolActionCreate            = store.IssueToolActionCreate
 	activityToolActionUpdate            = store.IssueToolActionUpdate
 	activityToolActionRun               = store.IssueToolActionRun
-	activityToolActionStop              = store.IssueToolActionStop
-	activityToolActionAddSupplement     = store.IssueToolActionAddSupplement
 	activityToolActionWait              = store.IssueToolActionWait
-	activityToolActionResume            = store.IssueToolActionResume
-	activityToolReceiptSaved            = store.IssueToolReceiptSaved
-	activityToolReceiptDispatching      = store.IssueToolReceiptDispatching
 	activityToolReceiptAccepted         = store.IssueToolReceiptAccepted
-	activityToolReceiptStopRequested    = store.IssueToolReceiptStopRequested
 	activityToolReceiptUnknown          = store.IssueToolReceiptUnknown
-	activityToolModeConversation        = store.IssueToolModeConversation
 	activityToolModeWork                = store.IssueToolModeWork
 	activityToolExecutionPageLimit      = store.IssueToolExecutionPageLimit
 
@@ -134,7 +118,6 @@ type (
 	workbenchTheme       = theme.WorkbenchTheme
 	selectOption         = theme.SelectOption
 	iconControlRole      = theme.IconControlRole
-	botAvatar            = theme.BotAvatar
 	appearanceThemeIDs   = theme.AppearanceThemeIDs
 	themeFileError       = theme.ThemeFileError
 	themeContrastWarning = theme.ThemeContrastWarning
@@ -145,53 +128,46 @@ type (
 	markdownMessageBubble = markdown.MessageBubble
 	markdownLinkTarget    = markdown.LinkTarget
 
-	taskContextItem               = store.TaskContextItem
-	pendingSend                   = store.PendingSend
-	piSelection                   = store.PiSelection
-	piConfiguration               = store.PiConfiguration
-	piConversationBinding         = store.PiConversationBinding
-	piActivityBinding             = store.PiActivityBinding
-	piActivityRun                 = store.PiActivityRun
-	piQuestionCall                = store.PiQuestionCall
-	activityQuestion              = store.IssueQuestion
-	activityRequirement           = store.IssueRequirement
-	activityExecution             = store.IssueExecution
-	productActivityIntent         = store.ProductActivityIntent
-	activityHandoff               = store.IssueHandoff
-	activitySupplementTarget      = store.IssueSupplementTarget
-	activitySupplement            = store.IssueSupplement
-	activitySupplementBatch       = store.IssueSupplementBatch
-	activitySupplementAssociation = store.IssueSupplementAssociation
-	activitySupplementLedger      = store.IssueSupplementLedger
-	ActivityToolScope             = store.IssueToolScope
-	ActivityToolError             = store.IssueToolError
-	ActivityToolActionRequest     = store.IssueToolActionRequest
-	ActivityToolReceipt           = store.IssueToolReceipt
-	ActivityToolOperation         = store.IssueToolOperation
-	ActivityToolOperationLedger   = store.IssueToolOperationLedger
-	ActivityToolListResult        = store.IssueToolIssueListResult
-	ActivityToolSummary           = store.IssueToolIssueSummary
-	ActivityToolRequirementView   = store.IssueToolRequirementView
-	ActivityToolExecutionView     = store.IssueToolExecutionView
-	ActivityToolResultFileView    = store.IssueToolResultFileView
-	ActivityToolPiProgress        = store.IssueToolPiProgress
-	ActivityToolDetail            = store.IssueToolIssueDetail
-	storedContact                 = store.StoredContact
-	storedActivityExecution       = store.StoredIssueExecution
-	storedRequirement             = store.StoredRequirement
-	storedActivity                = store.StoredIssue
-	storedLayout                  = store.StoredLayout
-	storedState                   = store.StoredState
-	contactStore                  = store.ContactStore
-	productPendingSend            = store.ProductPendingSend
-	productUIState                = store.ProductUIState
-	storeRecoveryCopy             = store.StoreRecoveryCopy
-	storeRecoveryTarget           = store.StoreRecoveryTarget
-	storeRecoveryOutcome          = store.StoreRecoveryOutcome
-	storeRecoveryResult           = store.StoreRecoveryResult
+	taskContextItem             = store.TaskContextItem
+	pendingSend                 = store.PendingSend
+	piSelection                 = store.PiSelection
+	piConfiguration             = store.PiConfiguration
+	piConversationBinding       = store.PiConversationBinding
+	piActivityBinding           = store.PiActivityBinding
+	piActivityRun               = store.PiActivityRun
+	piQuestionCall              = store.PiQuestionCall
+	activityQuestion            = store.IssueQuestion
+	activityRequirement         = store.IssueRequirement
+	activityExecution           = store.IssueExecution
+	productActivityIntent       = store.ProductActivityIntent
+	activityHandoff             = store.IssueHandoff
+	activitySupplementBatch     = store.IssueSupplementBatch
+	activitySupplementLedger    = store.IssueSupplementLedger
+	activityToolScope           = store.IssueToolScope
+	activityToolError           = store.IssueToolError
+	activityToolActionRequest   = store.IssueToolActionRequest
+	activityToolReceipt         = store.IssueToolReceipt
+	activityToolOperation       = store.IssueToolOperation
+	activityToolOperationLedger = store.IssueToolOperationLedger
+	activityToolListResult      = store.IssueToolIssueListResult
+	activityToolSummaryView     = store.IssueToolIssueSummary
+	activityToolRequirementView = store.IssueToolRequirementView
+	activityToolExecutionView   = store.IssueToolExecutionView
+	activityToolDetail          = store.IssueToolIssueDetail
+	storedContact               = store.StoredContact
+	storedActivityExecution     = store.StoredIssueExecution
+	storedRequirement           = store.StoredRequirement
+	storedActivity              = store.StoredIssue
+	storedLayout                = store.StoredLayout
+	storedState                 = store.StoredState
+	contactStore                = store.ContactStore
+	productPendingSend          = store.ProductPendingSend
+	productUIState              = store.ProductUIState
+	storeRecoveryCopy           = store.StoreRecoveryCopy
+	storeRecoveryTarget         = store.StoreRecoveryTarget
+	storeRecoveryResult         = store.StoreRecoveryResult
 
-	connectionConfig        = connection.Config
-	privateConnectionConfig = connection.PrivateConfig
+	connectionConfig = connection.Config
 
 	taskContext = materials.Context
 )
@@ -199,20 +175,17 @@ type (
 var (
 	themeColorFields = theme.ColorFields
 
-	glyphAddLine         = theme.GlyphAddLine
-	glyphArrowRightSLine = theme.GlyphArrowRightSLine
-	glyphCloseLine       = theme.GlyphCloseLine
-	glyphMoreLine        = theme.GlyphMoreLine
-	glyphSettings4Line   = theme.GlyphSettings4Line
-	glyphSubtractLine    = theme.GlyphSubtractLine
-	navBackIcon          = theme.NavBackIcon
-	navContactsIcon      = theme.NavContactsIcon
-	composerAttachIcon   = theme.ComposerAttachIcon
-	composerSendIcon     = theme.ComposerSendIcon
-	composerStopIcon     = theme.ComposerStopIcon
-	railHideIcon         = theme.RailHideIcon
-	railAddIcon          = theme.RailAddIcon
-	railSettingsIcon     = theme.RailSettingsIcon
+	glyphCloseLine     = theme.GlyphCloseLine
+	glyphMoreLine      = theme.GlyphMoreLine
+	glyphSettings4Line = theme.GlyphSettings4Line
+	navBackIcon        = theme.NavBackIcon
+	navContactsIcon    = theme.NavContactsIcon
+	composerAttachIcon = theme.ComposerAttachIcon
+	composerSendIcon   = theme.ComposerSendIcon
+	composerStopIcon   = theme.ComposerStopIcon
+	railHideIcon       = theme.RailHideIcon
+	railAddIcon        = theme.RailAddIcon
+	railSettingsIcon   = theme.RailSettingsIcon
 
 	errActivityToolAction       = store.ErrIssueToolAction
 	errActivityToolSaveRequired = store.ErrIssueToolSaveRequired
@@ -227,10 +200,7 @@ func piPayloadPaths() (string, string, error) { return pi.PayloadPaths() }
 
 func resolveWorkbenchTheme(dark bool) workbenchTheme { return theme.ResolveWorkbenchTheme(dark) }
 func paletteContrast(a, b ui.Color) float64          { return theme.PaletteContrast(a, b) }
-func contactAvatarColors(t *ui.Theme, name string) (ui.Color, ui.Color) {
-	return theme.ContactAvatarColors(t, name)
-}
-func resolveBotAvatar(t *ui.Theme, id, name string, builtin bool) botAvatar {
+func resolveBotAvatar(t *ui.Theme, id, name string, builtin bool) theme.BotAvatar {
 	return theme.ResolveBotAvatar(t, id, name, builtin)
 }
 func segmentedSelection(c *ui.Context, selected *int, labels ...string) ui.Element {
@@ -267,9 +237,6 @@ func pageHeading(c *ui.Context, title string) ui.Element { return theme.PageHead
 func formTextArea(c *ui.Context, value *string, invalid bool, inputBorder ...ui.Color) ui.Element {
 	return theme.FormTextArea(c, value, invalid, inputBorder...)
 }
-func paintPreferenceFace(p *ui.Painter, r ui.Rect, region float32, exponent float64, fill, border ui.Color) {
-	theme.PaintPreferenceFace(p, r, region, exponent, fill, border)
-}
 func preferenceInput(c *ui.Context, value *string, invalid bool, inputBorder ...ui.Color) ui.Element {
 	return theme.PreferenceInput(c, value, invalid, inputBorder...)
 }
@@ -278,9 +245,6 @@ func preferenceGroup(c *ui.Context, t *ui.Theme, children func()) {
 }
 func preferenceSection(c *ui.Context, t *ui.Theme, title string, children func()) {
 	theme.PreferenceSection(c, t, title, children)
-}
-func preferenceSectionHeader(c *ui.Context, t *ui.Theme, title string) {
-	theme.PreferenceSectionHeader(c, t, title)
 }
 func settingsPreferenceRow(c *ui.Context, t *ui.Theme, label, description string, control func(), last ...bool) {
 	theme.SettingsPreferenceRow(c, t, label, description, control, last...)
@@ -326,8 +290,6 @@ func cloneActivitySupplementLedger(l *activitySupplementLedger) *activitySupplem
 func newContactID() string                                   { return store.NewContactID() }
 func nowMillis() int64                                       { return store.NowMillis() }
 func newActivityID() string                                  { return store.NewIssueID() }
-func newRequirementID() string                               { return store.NewRequirementID() }
-func newActivityQuestionRef() string                         { return store.NewIssueQuestionRef() }
 func newActivitySupplementLedger() *activitySupplementLedger { return store.NewIssueSupplementLedger() }
 func parseActivityRequirements(text string) []*activityRequirement {
 	return store.ParseIssueRequirements(text)
@@ -355,20 +317,17 @@ func restoreStoreRecoveryCopy(copy *storeRecoveryCopy, target *storeRecoveryTarg
 func restoreStoreRecoveryCopyWithRename(copy *storeRecoveryCopy, target *storeRecoveryTarget, rename func(string, string) error) (storeRecoveryResult, error) {
 	return store.RestoreStoreRecoveryCopyWithRename(copy, target, rename)
 }
-func ValidateActivityToolReceipt(receipt *ActivityToolReceipt) error {
+func validateActivityToolReceipt(receipt *activityToolReceipt) error {
 	return store.ValidateIssueToolReceipt(receipt)
 }
 
-func defaultConnectionConfig(workDir string) connectionConfig {
-	return connection.DefaultConfig(workDir)
-}
 func loadConnectionConfig(path string) (connectionConfig, error) {
 	return connection.LoadConfig(path)
 }
 func saveConnectionConfig(path string, config connectionConfig) error {
 	return connection.SaveConfig(path, config)
 }
-func readPrivateConnectionConfig(path string) (privateConnectionConfig, error) {
+func readPrivateConnectionConfig(path string) (connection.PrivateConfig, error) {
 	return connection.ReadPrivateConfig(path)
 }
 func validateConnectionConfig(config connectionConfig) map[string]string {
@@ -379,12 +338,6 @@ func connectionValidationSummary(fields map[string]string) string {
 }
 
 func validateTaskContext(items []taskContextItem) error { return materials.Validate(items) }
-func taskContextInputs(items []taskContextItem, extra ...pi.ContextInput) []pi.ContextInput {
-	return materials.Inputs(items, extra...)
-}
-func validateRuntimeContextInputs(inputs []pi.ContextInput) error {
-	return materials.ValidateRuntimeInputs(inputs)
-}
 func taskContextReadOnlyView(c *ui.Context, theme workbenchTheme, items []taskContextItem) {
 	materials.ReadOnlyView(c, theme, items)
 }

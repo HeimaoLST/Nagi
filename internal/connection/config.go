@@ -19,7 +19,6 @@ import (
 const (
 	APIResponses       = "openai-responses"
 	APIChatCompletions = "openai-chat-completions"
-	DefaultID          = "default"
 )
 
 // Config is the plaintext local GUI source; connection.json contains

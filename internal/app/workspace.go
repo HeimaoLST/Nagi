@@ -107,9 +107,9 @@ func (a *appModel) detailMinWidthForLayout() float32 {
 }
 
 func (a *appModel) effectiveDetailWidth() float32 {
-	separators := 1 // main/work split
+	separators := 1
 	if a.effectiveRailWidth() > 0 {
-		separators++ // rail/main split or fixed avatar divider
+		separators++
 	}
 	available := float32(a.layoutWidth()) - a.effectiveRailWidth() -
 		float32(separators)*paneSeparatorWidth - effectiveCenterWidth
@@ -123,8 +123,6 @@ func (a *appModel) effectiveDetailWidth() float32 {
 func (a *appModel) clampLeftForDrag(value float32, threePaneAtStart bool) float32 {
 	limit := maxLeftPaneWidth
 	if a.workspaceOpen && threePaneAtStart {
-		// Left drag changes the rail preference. The detail may derive narrower
-		// effective width, but the saved right preference is not rewritten.
 		byCenter := float32(a.layoutWidth()) - 2*paneSeparatorWidth -
 			a.detailMinWidthForLayout() - effectiveCenterWidth
 		if byCenter < limit {
@@ -183,21 +181,6 @@ func (ct *contact) recentWork() *workItem {
 	return nil
 }
 
-func workStateFromTask(status string) workState {
-	switch status {
-	case "completed":
-		return workCompleted
-	case "failed":
-		return workFailed
-	case "interrupted":
-		return workInterrupted
-	case "running":
-		return workRunning
-	default:
-		return workUnknown
-	}
-}
-
 func (a *appModel) toggleRail() {
 	a.railCollapsed = !a.railCollapsed
 	a.focusRail = true
@@ -227,8 +210,6 @@ func (a *appModel) layoutBody(c *ui.Context, t *ui.Theme) {
 	ui.Split(c, &a.leftPaneWidth, func() { a.rail(c, t) }, func() {
 		a.layoutMainArea(c, t, a.leftPaneWidth, true)
 	}).OnChange(func() {
-		// Split updates its bound width inside the handle's afterInput, before
-		// OnChange and the rebuild. Clamp here, not after a stale build.
 		a.leftPaneWidth = a.clampLeftForDrag(a.leftPaneWidth, threePaneAtStart)
 	}).Fill()
 }
@@ -268,76 +249,6 @@ func (a *appModel) detailPage(c *ui.Context, t *ui.Theme) {
 	ui.Column(c).Fill().Background(a.workTheme.Panel).Children(func() {
 		a.profileDetail(c, t)
 	})
-}
-
-func (ct *contact) activityWork(activity *productActivity) *workItem {
-	if activity == nil {
-		return nil
-	}
-	for _, taskID := range []string{activity.Work.ActiveTaskID, ct.ActiveTaskID, ct.LastTaskID} {
-		if !activityHasTask(activity, taskID) {
-			continue
-		}
-		if work := workFor(ct, taskID); work != nil {
-			return work
-		}
-	}
-	for index := len(activity.Executions) - 1; index >= 0; index-- {
-		execution := activity.Executions[index]
-		if work := workFor(ct, execution.TaskID); work != nil {
-			return work
-		}
-	}
-	return nil
-}
-
-func (ct *contact) resultTextForExecution(execution *activityExecution) string {
-	if execution == nil {
-		return ""
-	}
-	for _, activity := range ct.Activities {
-		for index := len(activity.Work.Messages) - 1; index >= 0; index-- {
-			m := activity.Work.Messages[index]
-			if m.Kind != msgContact || strings.TrimSpace(m.Text) == "" {
-				continue
-			}
-			if execution.TaskID != "" && m.TaskID == execution.TaskID {
-				return strings.TrimSpace(m.Text)
-			}
-		}
-	}
-	return ""
-}
-
-func latestActivityExecution(activity *productActivity) *activityExecution {
-	if activity == nil {
-		return nil
-	}
-	for index := len(activity.Executions) - 1; index >= 0; index-- {
-		if activity.Executions[index] != nil {
-			return activity.Executions[index]
-		}
-	}
-	return nil
-}
-
-func activityHasReadableResult(ct *contact, execution *activityExecution) bool {
-	if execution == nil || execution.Status != activityExecutionCompleted {
-		return false
-	}
-	if strings.TrimSpace(ct.resultTextForExecution(execution)) != "" {
-		return true
-	}
-	work := workFor(ct, execution.TaskID)
-	if work == nil {
-		return false
-	}
-	for _, tool := range work.Tools {
-		if tool != nil && tool.Finished && strings.TrimSpace(tool.Output) != "" {
-			return true
-		}
-	}
-	return false
 }
 
 func toolTitleFor(name, args string) string {
@@ -443,32 +354,6 @@ func workNoticeText(msgs locales.Messages, kind, arg string) string {
 	default:
 		return kind
 	}
-}
-
-func (a *appModel) workActivitySummary(ct *contact) (string, string) {
-	if w := ct.activeWork(); w != nil {
-		if len(w.Tools) > 0 {
-			last := w.Tools[len(w.Tools)-1]
-			if !last.Finished {
-				return workNoticeRunningTool, last.Name
-			}
-			return workNoticeLastAction, last.Name
-		}
-		return workNoticeForWork(w), ""
-	}
-	if w := ct.recentWork(); w != nil {
-		return workNoticeForWork(w), ""
-	}
-	return "", ""
-}
-
-func activityHasUnconfirmedRun(activity *productActivity) bool {
-	for _, execution := range activity.Executions {
-		if execution != nil && (execution.Status == activityExecutionUnknown || execution.Status == activityExecutionPending) {
-			return true
-		}
-	}
-	return false
 }
 
 type productActivityForm struct {

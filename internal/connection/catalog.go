@@ -39,10 +39,11 @@ func (text LocalizedText) Resolve(locale string) string {
 		}
 	}
 	tags := slices.Sorted(maps.Keys(text))
-	language, _, _ := strings.Cut(locale, "-")
-	for _, tag := range tags {
-		if strings.HasPrefix(tag, language+"-") && text[tag] != "" {
-			return text[tag]
+	if language, _, _ := strings.Cut(locale, "-"); language != "" {
+		for _, tag := range tags {
+			if strings.HasPrefix(tag, language+"-") && text[tag] != "" {
+				return text[tag]
+			}
 		}
 	}
 	if value := text["en"]; value != "" {
@@ -197,7 +198,7 @@ func (catalog *ProviderCatalog) mergeLayer(origin, dir string, data []byte, sect
 			warn(fmt.Errorf("provider %q has an unsupported wire API", id))
 			continue
 		}
-		if preset.Icon != "" && (!strings.HasSuffix(preset.Icon, ".svg") || strings.ContainsAny(preset.Icon, `/\`) || strings.Contains(preset.Icon, "..")) {
+		if preset.Icon != "" && (!strings.HasSuffix(preset.Icon, ".svg") || strings.ContainsAny(preset.Icon, `/\`) || strings.Contains(preset.Icon, "..") || strings.ContainsRune(preset.Icon, 0)) {
 			warn(fmt.Errorf("provider %q has an invalid icon filename", id))
 			continue
 		}

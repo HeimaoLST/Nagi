@@ -62,10 +62,10 @@ func newRuntimeApp() (*appModel, error) {
 	a.bindTaskContexts()
 	a.normalizeRestoredSupplementBatches()
 	if a.activityToolLedger == nil {
-		a.activityToolLedger = &ActivityToolOperationLedger{}
+		a.activityToolLedger = &activityToolOperationLedger{}
 	}
 	if a.activityToolScopes == nil {
-		a.activityToolScopes = map[string]ActivityToolScope{}
+		a.activityToolScopes = map[string]activityToolScope{}
 	}
 	if startup.Config == nil {
 		switch {

@@ -158,7 +158,7 @@ func (a *appModel) profileDetail(c *ui.Context, t *ui.Theme) {
 			ui.Text(c, msgs.ContactProfileAction()).FontSize(typePageTitle).FontWeight(500).FixedLineHeight(lineSettingsTitle).TextColor(t.Text).Grow(1)
 		})
 		profileScroll := ui.Scroll(c).FillWidth().Grow(1).MinHeight(0).TrackScroll(a.profileScrollFor(ct.ID))
-		if a.productHost() != nil {
+		if product {
 			profileScroll.Padding(0, 8, 0, 0)
 		}
 		profileScroll.Children(func() {
@@ -216,10 +216,9 @@ func (a *appModel) auxPage(c *ui.Context, t *ui.Theme) {
 	})
 }
 
+// syncDetailPageMode skips updating detailPageMode while Settings or a main
+// reader owns focus, leaving evaluation until the workbench is visible again.
 func (a *appModel) syncDetailPageMode() {
-	// A Settings or main-reader page is not showing the workbench. Do not
-	// advance the detail page mode or arm a hidden workbench close while that
-	// page owns focus; the next visible workbench frame evaluates it.
 	if a.settingsOpen || a.mainPageActive() {
 		return
 	}
