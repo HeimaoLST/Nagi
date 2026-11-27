@@ -616,6 +616,7 @@ func mergeLiveConversation(previous, history []*message) []*message {
 		if end == position+1 && remaining == "" {
 			reply.MessageID = history[position].MessageID
 		}
+		stored.ReadByBot = stored.ReadByBot || user.ReadByBot || stored.History
 		history = slices.Replace(history, position, end, reply)
 		position++
 	}
@@ -659,7 +660,7 @@ func productHistory(ctx context.Context, client *pi.ProductClient, id string) (h
 				previous.Text = reply.String()
 			} else {
 				reply.Reset()
-				projection.messages = append(messages, &message{Key: row.MessageID, MessageID: row.MessageID, Kind: kind, Text: row.Text, Time: when, Timestamp: stamp, Context: materials, Quote: row.Quote, History: true})
+				projection.messages = append(messages, &message{Key: row.MessageID, MessageID: row.MessageID, Kind: kind, Text: row.Text, Time: when, Timestamp: stamp, Context: materials, Quote: row.Quote, History: true, ReadByBot: kind == msgUser})
 			}
 			projection.entries = append(projection.entries, historyEntry{ID: row.MessageID, Date: when, From: from, Text: row.Text, Context: materials})
 		}
@@ -774,7 +775,7 @@ func (a *appModel) applyProductEvent(host *piAppHost, event pi.ProductEvent) {
 			}
 			applyProductExecution(ct, &pi.ProductExecution{ExecutionID: data.ExecutionID, State: "running"})
 			stamp := time.Now()
-			ct.Messages = append(ct.Messages, &message{Key: data.ExecutionID + ":user", Kind: msgUser, Text: ct.SubmittedDraft, Time: stamp.Format("15:04"), Timestamp: stamp, TaskID: data.ExecutionID, Context: productTaskContext(host.productDrafts[ct.ID].Materials), Quote: ct.SubmittedQuote})
+			ct.Messages = append(ct.Messages, &message{Key: data.ExecutionID + ":user", Kind: msgUser, Text: ct.SubmittedDraft, Time: stamp.Format("15:04"), Timestamp: stamp, TaskID: data.ExecutionID, Context: productTaskContext(host.productDrafts[ct.ID].Materials), Quote: ct.SubmittedQuote, ReadByBot: true})
 			ct.SubmittedQuote = nil
 		case "execution.textDelta":
 			if ct.ActiveTaskID == data.ExecutionID {

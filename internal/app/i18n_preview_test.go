@@ -1251,3 +1251,59 @@ func TestPreviewNativeLifecycle(t *testing.T) {
 		t.Logf("bg3a preview path=%s width=%d height=%d locale=%s dark=%v", path, shot.w, shot.h, shot.locale, shot.dark)
 	}
 }
+
+func TestPreviewMessageReadStatus(t *testing.T) {
+	dir := os.Getenv("NAGI_PREVIEW_DIR")
+	if dir == "" {
+		t.Skip("set NAGI_PREVIEW_DIR to write message read status previews")
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, shot := range []struct {
+		name, locale string
+		w, h         int
+		dark         bool
+		setup        func(*appModel, *contact)
+	}{
+		{
+			name: "read-status-consecutive-zh-dark-720x640.png", locale: "zh-Hans", w: 720, h: 640, dark: true,
+			setup: func(a *appModel, ct *contact) {
+				ct.Messages = []*message{
+					{ID: 1, Kind: msgUser, Text: "请先看下部署状态。", ReadByBot: true},
+					{ID: 2, Kind: msgUser, Text: "确认无误后告诉我结果。", ReadByBot: true},
+				}
+			},
+		},
+		{
+			name: "read-status-typing-en-light-1040x720.png", locale: "en", w: 1040, h: 720, dark: false,
+			setup: func(a *appModel, ct *contact) {
+				ct.Status = statusWorking
+				ct.Messages = []*message{
+					{ID: 1, Kind: msgUser, Text: "Can you check the rollout status and verify the checksum?", ReadByBot: true},
+					{Key: "live:read-preview:text:pi", Kind: msgContact, Text: "Working on it", Streaming: true, liveReveal: true},
+				}
+			},
+		},
+		{
+			name: "read-status-cleared-after-reply-zh-light-1040x720.png", locale: "zh-Hans", w: 1040, h: 720, dark: false,
+			setup: func(a *appModel, ct *contact) {
+				ct.Messages = []*message{
+					{ID: 1, Kind: msgUser, Text: "请先看下部署状态。", ReadByBot: true},
+					{ID: 2, Kind: msgUser, Text: "确认无误后告诉我结果。", ReadByBot: true},
+					{ID: 3, Kind: msgContact, Text: "已核对完成，所有服务状态正常。", History: true},
+				}
+			},
+		},
+	} {
+		a, ct := workspaceTestApp(t)
+		a.windowWidth = shot.w
+		shot.setup(a, ct)
+		tr := ui.NewTesterWith(a.view, shot.w, shot.h, ui.TesterOptions{Dark: shot.dark})
+		tr.SetLocale(shot.locale)
+		tr.Frame()
+		path := filepath.Join(dir, shot.name)
+		writePreviewPNG(t, path, tr.Image())
+		t.Logf("read-status preview path=%s width=%d height=%d locale=%s dark=%v", path, shot.w, shot.h, shot.locale, shot.dark)
+	}
+}
