@@ -286,6 +286,19 @@ func TestVisualGuardProviderModalFormAlignment(t *testing.T) {
 	}
 }
 
+func closeRGBA(a, b [4]uint8) bool {
+	for i := range 4 {
+		d := int(a[i]) - int(b[i])
+		if d < 0 {
+			d = -d
+		}
+		if d > 5 {
+			return false
+		}
+	}
+	return true
+}
+
 func TestVisualGuardModalsRoomyNoClippingAndSinglePrimaryCTA(t *testing.T) {
 	sizes := [][2]int{{1440, 900}, {1040, 720}, {720, 640}}
 	rev2 := uint64(2)
@@ -324,6 +337,10 @@ func TestVisualGuardModalsRoomyNoClippingAndSinglePrimaryCTA(t *testing.T) {
 					tr.Frame()
 					assertNoInternalIDs(tr, "general")
 					assertInViewport(tr, "general", msgs.AppearanceSystem(), msgs.ThemeImportAction(), msgs.ThemeReload())
+					hintRect, okHint := tr.Find(msgs.SettingsPandoraBoxVisibilityHint())
+					if !okHint || (locale == "en" && w == 1040 && hintRect.H < 30) {
+						t.Fatalf("scene=general PandoraBox hint did not wrap cleanly: ok=%v rect=%+v", okHint, hintRect)
+					}
 					focusedToggle := false
 					for range 20 {
 						if tr.Focused(msgs.SettingsPandoraBoxVisibility()) {
@@ -364,6 +381,32 @@ func TestVisualGuardModalsRoomyNoClippingAndSinglePrimaryCTA(t *testing.T) {
 					trDir.Frame()
 					assertNoInternalIDs(trDir, "2acc-folded")
 					assertInViewport(trDir, "2acc-folded", msgs.ProviderApplyChanges(), msgs.ProviderFoldSummary(10))
+
+					foldRect, okFold := trDir.Find(msgs.ProviderFoldSummary(10))
+					if !okFold {
+						t.Fatal("missing folded provider summary control")
+					}
+					foldTheme := theme.SettingsTheme(theme.ResolveWorkbenchTheme(dark).Theme)
+					foldImg := trDir.Image()
+					foldBg := foldImg.RGBAAt(int(foldRect.X+4), int(foldRect.Y+4))
+					wantBg := foldTheme.Surface
+					if !closeRGBA([4]uint8{foldBg.R, foldBg.G, foldBg.B, foldBg.A}, [4]uint8{wantBg.R, wantBg.G, wantBg.B, wantBg.A}) {
+						t.Fatalf("folded provider summary bg = %+v, want %+v", foldBg, wantBg)
+					}
+					bestContrast := 0.0
+					scanX0 := max(0, int(foldRect.X+foldRect.W)-140)
+					scanX1 := min(foldImg.Bounds().Max.X, int(foldRect.X+foldRect.W)-8)
+					for y := max(0, int(foldRect.Y+6)); y < min(foldImg.Bounds().Max.Y, int(foldRect.Y+foldRect.H)-6); y++ {
+						for x := scanX0; x < scanX1; x++ {
+							c := foldImg.RGBAAt(x, y)
+							if ratio := theme.PaletteContrast(ui.RGB(c.R, c.G, c.B), foldTheme.Surface); ratio > bestContrast {
+								bestContrast = ratio
+							}
+						}
+					}
+					if bestContrast < 4.5 {
+						t.Fatalf("folded provider summary label contrast = %.2f, want >= 4.5 (rect=%+v)", bestContrast, foldRect)
+					}
 
 					applyBeforeRect, okApply := trDir.Find(msgs.ProviderApplyChanges())
 					if !okApply {
@@ -1477,19 +1520,6 @@ func TestVisualGuardControlPlaneWorkbench(t *testing.T) {
 		}
 	}
 
-	closeRGBA := func(a, b [4]uint8) bool {
-		for i := range 4 {
-			d := int(a[i]) - int(b[i])
-			if d < 0 {
-				d = -d
-			}
-			if d > 5 {
-				return false
-			}
-		}
-		return true
-	}
-
 	for _, locale := range []string{"en", "zh-Hans"} {
 		msgs := locales.In(locale)
 		for _, dark := range []bool{false, true} {
@@ -1521,6 +1551,37 @@ func TestVisualGuardControlPlaneWorkbench(t *testing.T) {
 				if r, ok := tr.Find(msgs.ContactSaveChanges()); !ok || r.W < theme.ControlHit || r.H < theme.ControlHit || r.X+r.W > 960.5 {
 					t.Fatalf("960x640 profile Save changes invalid: ok=%v rect=%+v", ok, r)
 				}
+				sendRect, okSend := tr.Find(msgs.SendAction())
+				if !okSend || sendRect.W < theme.ControlHit || sendRect.H < theme.ControlHit {
+					t.Fatalf("960x640 outlined Send missing: ok=%v rect=%+v", okSend, sendRect)
+				}
+				l1Dist := func(r, g, b uint8, target ui.Color) int {
+					abs := func(v int) int {
+						if v < 0 {
+							return -v
+						}
+						return v
+					}
+					return abs(int(r)-int(target.R)) + abs(int(g)-int(target.G)) + abs(int(b)-int(target.B))
+				}
+				sendPx := tr.Image().RGBAAt(int(sendRect.X+sendRect.W/2), int(sendRect.Y))
+				if dIn, dFocus := l1Dist(sendPx.R, sendPx.G, sendPx.B, wb.InputBorder), l1Dist(sendPx.R, sendPx.G, sendPx.B, wb.Theme.Focus); dIn >= dFocus {
+					t.Fatalf("960x640 resting outlined Send border %+v is closer to Focus %+v (d=%d) than InputBorder %+v (d=%d)", sendPx, wb.Theme.Focus, dFocus, wb.InputBorder, dIn)
+				}
+				attachRect, okAttach := tr.Find(msgs.ComposerAttach())
+				if !okAttach {
+					t.Fatal("960x640 composer attach button missing")
+				}
+				tr.SetDark(!dark)
+				otherComposer := theme.ResolveWorkbenchTheme(!dark)
+				attachBg := tr.Image().RGBAAt(int(attachRect.X+6), int(attachRect.Y+6))
+				wantAttachBg := [4]uint8{otherComposer.ComposerSurface.R, otherComposer.ComposerSurface.G, otherComposer.ComposerSurface.B, otherComposer.ComposerSurface.A}
+				if !closeRGBA([4]uint8{attachBg.R, attachBg.G, attachBg.B, attachBg.A}, wantAttachBg) {
+					t.Fatalf("attach button did not snap ComposerSurface on first SetDark(%v) frame: got=%+v want=%+v", !dark, attachBg, wantAttachBg)
+				}
+				tr.SetDark(dark)
+				tr.Advance(theme.ControlTransition.Duration)
+				tr.Frame()
 			})
 
 			for _, size := range [][2]int{{1040, 720}, {720, 640}} {

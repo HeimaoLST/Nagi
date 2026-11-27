@@ -14,7 +14,7 @@ func (a *appModel) composerToolbar(c *ui.Context, t *ui.Theme, ct *contact, send
 	toolbar := ui.Row(c).Key("composer-tools").FillWidth().Height(32).Shrink(0).AlignItems(ui.Center).Gap(8).
 		Role(ui.RoleGroup).Label(msgs.ComposerTools())
 	toolbar.Children(func() {
-		trigger := ui.ButtonBase(c).Key("attach").Size(32, 32).Shrink(0).Center().Radius(8).
+		trigger := ui.ButtonBase(c).Key("attach").Size(32, 32).Shrink(0).Center().Radius(theme.ControlRadius).
 			Label(msgs.ComposerAttach()).Disabled(blocked)
 		bg, border := a.workTheme.ComposerSurface, a.workTheme.ComposerBorder
 		switch {
@@ -27,6 +27,7 @@ func (a *appModel) composerToolbar(c *ui.Context, t *ui.Theme, ct *contact, send
 			border = t.Focus
 		}
 		trigger.Background(bg).Border(1, border).TextColor(a.workTheme.ComposerText)
+		theme.TransitionControl(trigger, t)
 		trigger.Children(func() { ui.Icon(c, composerAttachIcon).Size(16, 16) })
 		trigger.PopoverMenuButton(func(menu *ui.Menu) {
 			if menu.Item(msgs.ComposerAttachFile()).Disabled(blocked || ct.Context.FileChoosing).Chosen() {
@@ -53,6 +54,7 @@ func (a *appModel) composerToolbar(c *ui.Context, t *ui.Theme, ct *contact, send
 		if !a.demo && ct.ActiveTaskID != "" {
 			stop := appTooltip(c, ui.Button(c, "").Label(msgs.StopConversation()), msgs.StopConversationTooltip()).
 				Size(32, 32).Shrink(0).Radius(16).Padding(0).Center().Border(1, t.Border).TextColor(t.Warning)
+			theme.TransitionControl(stop, t)
 			stop.Children(func() { ui.Icon(c, composerStopIcon).Size(16, 16) })
 			stop.OnClick(a.cancelSelected)
 			return
@@ -65,7 +67,12 @@ func (a *appModel) composerToolbar(c *ui.Context, t *ui.Theme, ct *contact, send
 		send := appTooltip(c, button(c, "").Label(msgs.SendAction()), msgs.SendTooltip()).
 			Size(32, 32).Shrink(0).Radius(16).Padding(0).Center().Disabled(sendDisabled)
 		if outlined {
-			send.Border(1, t.Focus)
+			border := a.workTheme.InputBorder
+			if send.Focused() {
+				border = t.Focus
+			}
+			send.Border(1, border).FocusRingColor(t.Accent)
+			theme.TransitionControl(send, t)
 		}
 		send.Children(func() { ui.Icon(c, composerSendIcon).Size(16, 16) })
 		if send.Clicked() {
@@ -99,6 +106,7 @@ func (a *appModel) composerAttachments(c *ui.Context, t *ui.Theme, ct *contact) 
 					if main.Hovered() {
 						main.Background(wb.ComposerChipBg.Mix(wb.ComposerText, .06))
 					}
+					theme.TransitionControl(main, t)
 					main.Children(func() {
 						ui.Icon(c, icon).Size(14, 14).Shrink(0).TextColor(wb.ComposerMuted)
 						ui.Text(c, item.Name).MaxWidth(176).MinWidth(0).MaxLines(1).Ellipsis("…").
@@ -145,5 +153,5 @@ func composerRemoveButton(c *ui.Context, t *ui.Theme, label string) ui.Element {
 		button.Background(t.SurfaceHover)
 	}
 	button.Children(func() { ui.Icon(c, theme.GlyphCloseLine).Size(12, 12) })
-	return appTooltip(c, button, label)
+	return appTooltip(c, theme.TransitionControl(button, t), label)
 }
