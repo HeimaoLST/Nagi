@@ -12,15 +12,17 @@ import { Value } from 'typebox/value';
 import {
   MAX_FRAME, RequestError, activityStateSchema, canonicalJSON, draftSchema, frameBytes, hasCanonicalQuoteText, id, inspectionPage,
   maxAutomaticAnswers, maxDraftBytes, maxTriageAttempts, preferenceKey, profileSchema, questionOptionId, questionOptions, questionTextBytes,
-  resolveCodingTools, skillExecutable, skillID, skillScriptName, skillSource, skillText, toolPresetSchema,
+  resolveCodingTools, sessionDimension, sessionMode, sessionReadLimit, sessionState, skillExecutable, skillID, skillScriptName, skillSource,
+  skillText, toolPresetSchema, watchFilters, watchModelCreate,
   type ActivityDigest, type ActivityState, type ActivitySteer, type ActivitySteerPayload, type AnswerProvenance, type BotChange, type BotProfile,
-  type ConfigureParams, type Connection, type Draft, type Execution,
-  type Material, type McpServerRecord, type McpServerView, type OpenParams, type Operation, type ProductCommand, type ProductParams,
-  type ProductQuestion, type SkillApproval, type SkillApprovalRequest, type SkillChange, type SkillDetail, type SkillListing, type SkillPermissions,
-  type SkillSource, type TraceItem,
+  type ConfigureParams, type Connection, type Draft, type Execution, type Material, type McpServerRecord, type McpServerView, type OpenParams,
+  type Operation, type OrchestrationMandate, type ProductCommand, type ProductOpenParams, type ProductParams, type ProductQuestion,
+  type SessionCloseResult, type SkillApproval, type SkillApprovalRequest, type SkillChange, type SkillDetail, type SkillListing,
+  type SkillPermissions, type SkillSource, type TraceItem, type WatchPrecheck,
 } from './protocol.js';
 import { backupProductProfile, privateCredentialKeys, privateProviderCredential, saveCredential, type PrivateConnection, type ProductProfilePaths, type StoredConnection } from './product-profile.js';
-import { ProductSQLite, type ActivityControlWrite, type RoutingWrite, type SkillApprovalChange } from './product-sqlite.js';
+import { ProductSQLite, publicWatch, publicWatchGrant, type ActivityControlWrite, type QueuedSend, type RoutingWrite,
+  type RuntimeSessionWrite, type RuntimeWatch, type SkillApprovalChange } from './product-sqlite.js';
 import { composeBotSystemPrompt, formatTightBotInstructions, readTightBotInstructions,
   PANDORABOX_BOT_ID, SYSTEM_KIND_BOT_ARCHITECT, type BotSystemKind } from './bot-template.js';
 import { completedWorkSummary, formatLastingRulesBlock, lastingRulesFit, MEMORY_COLD_TTL_MS, MAX_LOG_BYTES, MAX_PENDING_LEARNINGS,
@@ -44,15 +46,9 @@ import { RouteHealth, type ProviderAttempt } from './route-health.js';
 import { compareModelIds, describeModel, modelSupply } from './model-catalog.js';
 import { approvedPreferences, parseNomination, renderWhiteboard, steerEnvelope, triageDomain, validateQuestionFields,
   type PreferenceCandidate, type WhiteboardRow } from './activity-control.js';
-import { sessionDimension, sessionMode, sessionReadLimit, sessionState, type SessionCloseResult } from './protocol.js';
-import { MAX_SESSION_INPUT, RuntimeSessions, sessionSignals } from './session-supervisor.js';
-import type { RuntimeSessionWrite } from './product-sqlite.js';
-import { watchFilters, watchModelCreate, type WatchPrecheck } from './protocol.js';
-import { publicWatch, publicWatchGrant, type RuntimeWatch } from './product-sqlite.js';
+import { maxSessionInputBytes, RuntimeSessions, sessionSignals } from './session-supervisor.js';
 import { WatchScheduler, type PreparedWatchSkill } from './watch-scheduler.js';
 import { OrchestrationRuntime } from './orchestration-runtime.js';
-import type { QueuedSend } from './product-sqlite.js';
-import type { OrchestrationMandate, ProductOpenParams } from './protocol.js';
 
 const emptyDraft = (): Draft => ({ revision: 0, text: '', materials: [] });
 const newId = randomUUID;
@@ -275,8 +271,8 @@ const sessionOpenInput = Type.Object({ command: Type.String({ minLength: 1, maxL
   cols: Type.Optional(sessionDimension), rows: Type.Optional(sessionDimension) }, strictTool);
 const sessionReadInput = Type.Object({ ...sessionHandleInput, offset: Type.Optional(sessionOffset), limit: Type.Optional(sessionReadLimit) }, strictTool);
 const sessionWriteInput = Type.Union([
-  Type.Object({ ...sessionHandleInput, text: Type.String({ minLength: 1, maxLength: MAX_SESSION_INPUT }) }, strictTool),
-  Type.Object({ ...sessionHandleInput, data_base64: Type.String({ minLength: 4, maxLength: Math.ceil(MAX_SESSION_INPUT / 3) * 4 }) }, strictTool),
+  Type.Object({ ...sessionHandleInput, text: Type.String({ minLength: 1, maxLength: maxSessionInputBytes }) }, strictTool),
+  Type.Object({ ...sessionHandleInput, data_base64: Type.String({ minLength: 4, maxLength: Math.ceil(maxSessionInputBytes / 3) * 4 }) }, strictTool),
 ]);
 const sessionWatchListInput = Type.Object({ ...sessionHandleInput, action: Type.Literal('list') }, strictTool);
 const sessionWatchDuration = Type.Integer({ minimum: 1, maximum: 2 ** 31 - 1 });
@@ -3498,7 +3494,7 @@ export class Product {
       tool('session_write', 'Send text or base64-encoded bytes to a session created by this actor. Never enter passwords or secrets.', sessionWriteInput, input => {
         const row = scoped(input, true);
         const bytes = 'text' in input ? Buffer.from(input.text) : Buffer.from(input.data_base64, 'base64');
-        if (!bytes.length || bytes.length > MAX_SESSION_INPUT || 'data_base64' in input && bytes.toString('base64') !== input.data_base64) {
+        if (!bytes.length || bytes.length > maxSessionInputBytes || 'data_base64' in input && bytes.toString('base64') !== input.data_base64) {
           return stateError('invalid_params', 'Session input must be canonical text or base64 within the byte limit');
         }
         return this.runtimeSessions.write(row, bytes);

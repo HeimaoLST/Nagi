@@ -135,9 +135,9 @@ func cloneProfileDraft(draft profileDraft) profileDraft {
 	return draft
 }
 
-// SetProfile replaces the host's saved profile and resets the draft. It is
+// setProfile replaces the host's saved profile and resets the draft. It is
 // used after a successful host save, never to optimistically claim success.
-func (e *contactProfileEditor) SetProfile(draft profileDraft) {
+func (e *contactProfileEditor) setProfile(draft profileDraft) {
 	e.Busy = false
 	e.initial = cloneProfileDraft(draft)
 	e.Draft = cloneProfileDraft(draft)
@@ -146,18 +146,18 @@ func (e *contactProfileEditor) SetProfile(draft profileDraft) {
 	e.Status = ""
 }
 
-func (e *contactProfileEditor) SetBusy(busy bool, status string) {
+func (e *contactProfileEditor) setBusy(busy bool, status string) {
 	e.Busy = busy
 	e.Status = status
 }
 
-func (e *contactProfileEditor) SetError(message string) {
+func (e *contactProfileEditor) setError(message string) {
 	e.Busy = false
 	e.Error = message
 	e.Status = ""
 }
 
-func (e *contactProfileEditor) ResetDraft() {
+func (e *contactProfileEditor) resetDraft() {
 	e.Draft = cloneProfileDraft(e.initial)
 	e.Errors = nil
 	e.Error = ""
@@ -184,7 +184,7 @@ func validateProfileDraft(draft profileDraft, savedWorkspace string) (profileDra
 	return draft, problems
 }
 
-func (e *contactProfileEditor) Request(saveAndNew bool) (profileDraft, bool) {
+func (e *contactProfileEditor) request() (profileDraft, bool) {
 	if e.Busy {
 		e.Error = profileNoticeBusy
 		return profileDraft{}, false
@@ -273,7 +273,7 @@ func (e *contactProfileEditor) saveView(c *ui.Context, t *ui.Theme, actions cont
 	ui.Column(c).Key("profile-save").MinWidth(0).Shrink(0).Gap(4).Children(func() {
 		ui.Row(c).MinWidth(0).AlignSelf(ui.Start).Gap(8).Wrap().AlignItems(ui.Center).Children(func() {
 			primaryButton(c, msgs.ContactSaveChanges()).Disabled(blocked).OnClick(func() {
-				if draft, ok := e.Request(false); ok && actions.Save != nil {
+				if draft, ok := e.request(); ok && actions.Save != nil {
 					actions.Save(draft)
 				}
 			})
@@ -322,9 +322,9 @@ func (a *appModel) contactProfileActions(ct *contact, editor *contactProfileEdit
 		Archive: func() { a.archiveContact(id) },
 		Restore: func() { a.restoreContact(id) },
 		Discard: func() {
-			editor.SetProfile(contactProfileDraft(ct))
+			editor.setProfile(contactProfileDraft(ct))
 			editor.profileRevision = ct.ProfileRevision
-			editor.ResetDraft()
+			editor.resetDraft()
 		},
 	}
 	if ct.isBuiltin() {

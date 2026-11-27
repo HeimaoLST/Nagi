@@ -861,78 +861,69 @@ func (c *Client) handleProductEvent(line []byte) error {
 	if json.Unmarshal(line, &event) != nil || event.StreamID == "" || event.Seq == 0 || len(event.Data) == 0 || event.Name == "" {
 		return errors.New("invalid product event envelope")
 	}
-	if event.Name == "activity.changed" {
+	switch event.Name {
+	case "activity.changed":
 		var change ProductActivityChange
 		if json.Unmarshal(event.Data, &change) != nil || change.ActivityID == "" {
 			return errors.New("invalid activity change")
 		}
 		event.ActivityChanged = &change
-	}
-	if event.Name == "activity.digest" {
+	case "activity.digest":
 		var digest ProductActivityDigest
 		if json.Unmarshal(event.Data, &digest) != nil || digest.ActivityID == "" || digest.FactID == "" ||
 			digest.OwnerBotID == "" || digest.OriginConversationID == "" || digest.At == "" || digest.Kind == "" {
 			return errors.New("invalid activity digest")
 		}
 		event.ActivityDigest = &digest
-	}
-	if event.Name == "activity.traceUpdated" {
+	case "activity.traceUpdated":
 		var update ProductActivityTraceUpdated
 		if json.Unmarshal(event.Data, &update) != nil || update.ActivityID == "" || update.ExecutionID == "" || update.LastSeq == 0 {
 			return errors.New("invalid activity trace update")
 		}
 		event.TraceUpdated = &update
-	}
-	if event.Name == "skill.changed" {
+	case "skill.changed":
 		var change ProductSkillChange
 		if json.Unmarshal(event.Data, &change) != nil || !change.valid() {
 			return errors.New("invalid skill change")
 		}
 		event.SkillChanged = &change
-	}
-	if event.Name == "mcp.changed" {
+	case "mcp.changed":
 		var change ProductMcpChange
 		if json.Unmarshal(event.Data, &change) != nil || !change.valid() {
 			return errors.New("invalid MCP change")
 		}
 		event.McpChanged = &change
-	}
-	if event.Name == "provider.changed" {
+	case "provider.changed":
 		var change ProductProviderChange
 		if json.Unmarshal(event.Data, &change) != nil || !change.valid() {
 			return errors.New("invalid provider change")
 		}
 		event.ProviderChanged = &change
-	}
-	if event.Name == "session.changed" {
+	case "session.changed":
 		var change ProductSessionSummary
 		if json.Unmarshal(event.Data, &change) != nil || change.SessionID == "" || change.OwnerBotID == "" || change.Generation == 0 || change.Revision == 0 {
 			return errors.New("invalid session change")
 		}
 		event.SessionChanged = &change
-	}
-	if event.Name == "session.outputUpdated" {
+	case "session.outputUpdated":
 		var update ProductSessionOutputUpdated
 		if json.Unmarshal(event.Data, &update) != nil || update.SessionID == "" || update.OwnerBotID == "" || update.Generation == 0 {
 			return errors.New("invalid session output update")
 		}
 		event.SessionOutputUpdated = &update
-	}
-	if event.Name == "watch.changed" {
+	case "watch.changed":
 		var change ProductWatchChange
 		if json.Unmarshal(event.Data, &change) != nil || change.BotID == "" || change.Change == "" || change.At == "" {
 			return errors.New("invalid watch change")
 		}
 		event.WatchChanged = &change
-	}
-	if event.Name == "conversation.timelineChanged" {
+	case "conversation.timelineChanged":
 		var change ProductConversationTimelineChanged
 		if json.Unmarshal(event.Data, &change) != nil || change.ConversationID == "" || change.TimelineRevision == 0 || change.At == "" {
 			return errors.New("invalid conversation timeline change")
 		}
 		event.TimelineChanged = &change
-	}
-	if event.Name == "orchestration.changed" {
+	case "orchestration.changed":
 		var change ProductOrchestrationChange
 		if json.Unmarshal(event.Data, &change) != nil || change.BotID == "" || change.Change == "" || change.At == "" {
 			return errors.New("invalid orchestration change")

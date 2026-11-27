@@ -5,18 +5,17 @@ import { closeSync, fstatSync, lstatSync, openSync, readFileSync, renameSync, rm
 import { extname, isAbsolute } from 'node:path';
 import { Type } from 'typebox';
 import { Value } from 'typebox/value';
-import { RequestError, activityStateSchema, botSystemKindSchema, connectionSchema, draftSchema, executionSchema, hasCanonicalQuoteText, materialSchema, mcpServerRecord,
-  operationSchema, profileSchema, quoteAuthorMaxBytes, quoteTextMaxBytes, type ActivityState, type Connection, type Draft,
-  type Execution, type Material, type Operation } from './protocol.js';
+import { RequestError, activityLifecycleFields, activityProgressRecord, activityStateSchema, activitySteerReceipt, activitySteerRecord,
+  botSystemKindSchema, canonicalJSON, connectionSchema, draftSchema, executionSchema, frameBytes, hasCanonicalQuoteText,
+  materialSchema, maxDraftBytes, mcpServerRecord, operationSchema, optionDescriptionBytes, optionLabelBytes,
+  orchestrationCheckpoint, orchestrationDecision, orchestrationMandate, profileSchema, questionResult, questionTextBytes,
+  quoteAuthorMaxBytes, quoteTextMaxBytes, sessionSummary, sessionWatchOccurrence, skillApprovalRecord, skillApprovalRequestSchema,
+  storedConversationNotice, triageAccounting as triageSchema, validateWatchDefinition, watchOccurrence, watchSummary,
+  type ActivityProgressRecord, type ActivityState, type ActivitySteerRecord, type Connection, type Draft, type Execution,
+  type Material, type Operation, type OrchestrationCheckpoint, type OrchestrationDecision, type OrchestrationMandate,
+  type SessionSummary, type SessionWatchOccurrence, type SkillApproval, type SkillApprovalRequest, type StoredConversationNotice,
+  type TriageAccounting, type WatchOccurrence, type WatchSummary } from './protocol.js';
 import type { ProductProfile } from './product.js';
-import { activityLifecycleFields, activityProgressRecord, activitySteerReceipt, activitySteerRecord, canonicalJSON, frameBytes,
-  maxDraftBytes, questionResult, skillApprovalRecord, skillApprovalRequestSchema, triageAccounting as triageSchema,
-  optionDescriptionBytes, optionLabelBytes, questionTextBytes, type ActivityProgressRecord, type ActivitySteerRecord,
-  type SkillApproval, type SkillApprovalRequest, type TriageAccounting } from './protocol.js';
-import { sessionSummary, sessionWatchOccurrence, type SessionSummary, type SessionWatchOccurrence } from './protocol.js';
-import { watchOccurrence, watchSummary, validateWatchDefinition, type WatchOccurrence, type WatchSummary } from './protocol.js';
-import { orchestrationCheckpoint, orchestrationDecision, orchestrationMandate, storedConversationNotice,
-  type OrchestrationCheckpoint, type OrchestrationDecision, type OrchestrationMandate, type StoredConversationNotice } from './protocol.js';
 import { lastingRulesFit, MAX_LOG_BYTES, MAX_PENDING_LEARNINGS, MAX_RULE_BYTES, MAX_WORK_LOGS,
   memorySnapshotSchema, validMemoryDate } from './bot-memory.js';
 import { decodeTraceBackup, directlyOwns, normalizeActivityGrants, type TraceBackup } from './product-trace.js';

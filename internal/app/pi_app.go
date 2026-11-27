@@ -336,7 +336,7 @@ func (a *appModel) reconcilePendingWatchOperations(host *piAppHost) {
 	}
 	for _, ct := range a.contacts {
 		if b := a.schedules.bots[ct.ID]; b != nil {
-			b.ReconcileWatchOperation(a.scheduledWorkFallbackDeps(ct))
+			b.reconcileWatchOperation(a.scheduledWorkFallbackDeps(ct))
 		}
 	}
 }
@@ -830,7 +830,7 @@ func (a *appModel) applyProductBot(host *piAppHost, bot pi.ProductBot, created b
 		current := contactProfileDraft(ct)
 		if profileDraftEqual(editor.Draft, editor.initial) {
 			if !profileDraftEqual(editor.initial, current) {
-				editor.SetProfile(current)
+				editor.setProfile(current)
 			}
 			editor.profileRevision = ct.ProfileRevision
 		} else if profileDraftEqual(editor.initial, current) {

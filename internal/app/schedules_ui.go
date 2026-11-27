@@ -1,6 +1,7 @@
 package app
 
 import (
+	"cmp"
 	"context"
 	"crypto/rand"
 	"encoding/json"
@@ -144,6 +145,12 @@ func (s *scheduledWorkState) pendingOperations() []store.PendingWatchOperation {
 			})
 		}
 	}
+	slices.SortFunc(pending, func(a, b store.PendingWatchOperation) int {
+		if order := cmp.Compare(a.BotID, b.BotID); order != 0 {
+			return order
+		}
+		return cmp.Compare(a.ID, b.ID)
+	})
 	return pending
 }
 
@@ -258,7 +265,7 @@ func (b *botScheduleState) startOperation(deps scheduledWorkDeps, op scheduledWa
 	b.runOperation(deps, func(ctx context.Context) (pi.ProductReceipt, error) { return call(ctx, op.id) }, false)
 }
 
-func (b *botScheduleState) ReconcileWatchOperation(deps scheduledWorkDeps) {
+func (b *botScheduleState) reconcileWatchOperation(deps scheduledWorkDeps) {
 	if b.operation == nil || b.operation.botID != deps.botID || b.working || deps.client == nil || deps.updateUI == nil {
 		return
 	}
@@ -473,9 +480,23 @@ func (e *scheduledWatchEditor) parameters(botID string, m scheduledWorkCopy) (pi
 		params.Timer = &pi.ProductTimerSpec{FireAt: stamp.UTC().Format(time.RFC3339Nano), MissedPolicy: pi.ProductTimerMissedPolicy(e.missed)}
 		return params, ""
 	}
+	schedule, problem := e.buildScheduleSpec(m)
+	if problem != "" {
+		return params, problem
+	}
+	params.Schedule = schedule
+	precheck, problem := e.buildPrecheckSpec(m)
+	if problem != "" {
+		return params, problem
+	}
+	params.Precheck = precheck
+	return params, ""
+}
+
+func (e *scheduledWatchEditor) buildScheduleSpec(m scheduledWorkCopy) (*pi.ProductScheduleSpec, string) {
 	zone := strings.TrimSpace(e.zone)
 	if _, err := time.LoadLocation(zone); err != nil || zone == "" || zone == "Local" {
-		return params, m.text("Enter an IANA time zone, for example Asia/Shanghai or UTC.", "请输入 IANA 时区，例如 Asia/Shanghai 或 UTC。")
+		return nil, m.text("Enter an IANA time zone, for example Asia/Shanghai or UTC.", "请输入 IANA 时区，例如 Asia/Shanghai 或 UTC。")
 	}
 	schedule := &pi.ProductScheduleSpec{CadenceKind: pi.ProductScheduleCadenceKind(e.cadence), TimeZone: zone}
 	if e.base.Schedule != nil {
@@ -484,76 +505,78 @@ func (e *scheduledWatchEditor) parameters(botID string, m scheduledWorkCopy) (pi
 	if schedule.CadenceKind == pi.ProductScheduleInterval {
 		seconds, err := strconv.Atoi(strings.TrimSpace(e.interval))
 		if err != nil || seconds < 10 {
-			return params, m.text("Enter an interval of at least 10 seconds.", "请输入至少 10 秒的间隔。")
+			return nil, m.text("Enter an interval of at least 10 seconds.", "请输入至少 10 秒的间隔。")
 		}
 		schedule.IntervalSeconds = &seconds
-	} else {
-		schedule.Frequency = e.frequency
-		minute, err := strconv.Atoi(strings.TrimSpace(e.minute))
-		if err != nil || minute < 0 || minute > 59 {
-			return params, m.text("Enter a minute from 0 to 59.", "请输入 0 至 59 的分钟数。")
+		return schedule, ""
+	}
+	schedule.Frequency = e.frequency
+	minute, err := strconv.Atoi(strings.TrimSpace(e.minute))
+	if err != nil || minute < 0 || minute > 59 {
+		return nil, m.text("Enter a minute from 0 to 59.", "请输入 0 至 59 的分钟数。")
+	}
+	schedule.Minute = &minute
+	if e.frequency != "hourly" {
+		hour, err := strconv.Atoi(strings.TrimSpace(e.hour))
+		if err != nil || hour < 0 || hour > 23 {
+			return nil, m.text("Enter an hour from 0 to 23.", "请输入 0 至 23 的小时数。")
 		}
-		schedule.Minute = &minute
-		if e.frequency != "hourly" {
-			hour, err := strconv.Atoi(strings.TrimSpace(e.hour))
-			if err != nil || hour < 0 || hour > 23 {
-				return params, m.text("Enter an hour from 0 to 23.", "请输入 0 至 23 的小时数。")
+		schedule.Hour = &hour
+	}
+	if e.frequency == "weekly" {
+		for day, selected := range e.days {
+			if selected {
+				schedule.DaysOfWeek = append(schedule.DaysOfWeek, day)
 			}
-			schedule.Hour = &hour
 		}
-		if e.frequency == "weekly" {
-			for day, selected := range e.days {
-				if selected {
-					schedule.DaysOfWeek = append(schedule.DaysOfWeek, day)
-				}
-			}
-			if len(schedule.DaysOfWeek) == 0 {
-				return params, m.text("Choose at least one day of the week.", "请至少选择一个星期几。")
-			}
+		if len(schedule.DaysOfWeek) == 0 {
+			return nil, m.text("Choose at least one day of the week.", "请至少选择一个星期几。")
 		}
 	}
-	params.Schedule = schedule
+	return schedule, ""
+}
+
+func (e *scheduledWatchEditor) buildPrecheckSpec(m scheduledWorkCopy) (*pi.ProductWatchPrecheck, string) {
 	if e.precheck == "" {
-		return params, ""
+		return nil, ""
 	}
 	precheck := &pi.ProductWatchPrecheck{Kind: e.precheck}
 	if e.precheck == "executable" {
 		precheck.Executable = strings.TrimSpace(e.executable)
 		if !filepath.IsAbs(precheck.Executable) {
-			return params, m.text("Enter an absolute executable path.", "请输入可执行文件的绝对路径。")
+			return nil, m.text("Enter an absolute executable path.", "请输入可执行文件的绝对路径。")
 		}
 		if args := strings.TrimSpace(e.args); args != "" {
 			var argv []*string
 			problem := m.text("Enter arguments as a JSON array of strings, for example [\"-h\", \".\"].", "请将参数写成 JSON 字符串数组，例如 [\"-h\", \".\"]。")
 			if err := json.Unmarshal([]byte(args), &argv); err != nil || argv == nil {
-				return params, problem
+				return nil, problem
 			}
 			for _, arg := range argv {
 				if arg == nil {
-					return params, problem
+					return nil, problem
 				}
 				precheck.AllowedArgs = append(precheck.AllowedArgs, *arg)
 			}
 		}
 		timeout, err := strconv.Atoi(strings.TrimSpace(e.timeout))
 		if err != nil || timeout < 1000 || timeout > 30000 {
-			return params, m.text("Enter a timeout from 1,000 to 30,000 milliseconds.", "请输入 1,000 至 30,000 毫秒的超时时间。")
+			return nil, m.text("Enter a timeout from 1,000 to 30,000 milliseconds.", "请输入 1,000 至 30,000 毫秒的超时时间。")
 		}
 		precheck.TimeoutMS, precheck.WorkspaceRead, precheck.EmitInitial = &timeout, e.workspaceRead, e.emit
-	} else {
-		precheck.SkillID, precheck.SkillSource, precheck.ScriptName = strings.TrimSpace(e.skill), e.source, strings.TrimSpace(e.script)
-		if precheck.SkillID == "" || precheck.SkillSource == "" || precheck.ScriptName == "" {
-			return params, m.text("Choose a skill source and enter the skill ID and script name.", "请选择技能来源，并填写技能 ID 和脚本名称。")
-		}
-		if input := strings.TrimSpace(e.input); input != "" {
-			if !json.Valid([]byte(input)) {
-				return params, m.text("Enter skill input as valid JSON.", "请输入有效的 JSON 技能输入。")
-			}
-			precheck.Input = json.RawMessage(input)
-		}
+		return precheck, ""
 	}
-	params.Precheck = precheck
-	return params, ""
+	precheck.SkillID, precheck.SkillSource, precheck.ScriptName = strings.TrimSpace(e.skill), e.source, strings.TrimSpace(e.script)
+	if precheck.SkillID == "" || precheck.SkillSource == "" || precheck.ScriptName == "" {
+		return nil, m.text("Choose a skill source and enter the skill ID and script name.", "请选择技能来源，并填写技能 ID 和脚本名称。")
+	}
+	if input := strings.TrimSpace(e.input); input != "" {
+		if !json.Valid([]byte(input)) {
+			return nil, m.text("Enter skill input as valid JSON.", "请输入有效的 JSON 技能输入。")
+		}
+		precheck.Input = json.RawMessage(input)
+	}
+	return precheck, ""
 }
 
 func (m scheduledWorkCopy) recoveryScope() string {
@@ -671,7 +694,7 @@ func (b *botScheduleState) renderOperation(c *ui.Context, deps scheduledWorkDeps
 	case b.operation != nil:
 		scheduledWorkCard(c, t, func() {
 			capabilityText(c, t, m.text("The result is unconfirmed. Check the saved receipt before making another change.", "结果尚未确认。再次更改前，请检查已保存的回执。")).TextColor(t.Warning)
-			scheduledButton(c, m.text("Check saved result", "检查已保存的结果"), func() { b.ReconcileWatchOperation(deps) }).Disabled(deps.client == nil || deps.updateUI == nil)
+			scheduledButton(c, m.text("Check saved result", "检查已保存的结果"), func() { b.reconcileWatchOperation(deps) }).Disabled(deps.client == nil || deps.updateUI == nil)
 		})
 	case b.problem != nil:
 		message := m.text("The change was not applied. Review the current item and try again.", "更改未应用。请检查当前项目后重试。")

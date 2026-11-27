@@ -9,7 +9,7 @@ import type { SkillBundle } from './bot-skills.js';
 import { clipUTF8, projectionRedactor, streamingProjectionRedactor } from './product-redactor.js';
 import { publicWatch, publicWatchGrant, type InboxSource, type ProductSQLite, type RuntimeWatch, type RuntimeWatchGrant, type WatchChanges } from './product-sqlite.js';
 import { canonicalJSON, RequestError, validateWatchDefinition, type Operation, type ProductParams, type SkillPermissions,
-  type WatchChange, type WatchModelCreate, type WatchMutationResult, type WatchOccurrence, type WatchPrecheck, type WatchRevokeResult,
+  type WatchChange, type WatchMutationResult, type WatchOccurrence, type WatchPrecheck, type WatchRevokeResult,
   type WatchSchedule } from './protocol.js';
 import { NativeSession, supervisorPath, TerminalProjection } from './session-supervisor.js';
 import type { SkillSandbox } from './skill-sandbox.js';

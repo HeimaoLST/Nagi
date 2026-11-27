@@ -12,15 +12,15 @@ import { RequestError, type SessionChunk, type SessionCloseResult, type SessionR
 import { clipUTF8, projectionRedactor, streamingProjectionRedactor, type StreamingProjectionRedactor } from './product-redactor.js';
 import type { ProductSQLite, RuntimeSession, RuntimeSessionWrite } from './product-sqlite.js';
 
-const HEADER = 5;
-const MAX_FRAME = 8192;
-export const MAX_SESSION_INPUT = 16384;
-const OUTPUT_CAPACITY = 256 * 1024;
-const MAX_RETAINED_SESSIONS = 64;
-const MAX_ACTIVE_PER_BOT = 8;
-const MAX_ACTIVE_GLOBAL = 32;
-const MAX_ARMED_WATCHES = 32;
-const AUTH_MESSAGE = 'Do not enter passwords or secrets into Nagi chat/prompts; complete authentication externally or close this session.';
+const frameHeaderBytes = 5;
+const maxSupervisorFrameBytes = 8192;
+export const maxSessionInputBytes = 16384;
+const outputRingCapacity = 256 * 1024;
+const maxRetainedSessions = 64;
+const maxActiveSessionsPerBot = 8;
+const maxActiveSessionsGlobal = 32;
+const maxArmedWatches = 32;
+const authPauseMessage = 'Do not enter passwords or secrets into Nagi chat/prompts; complete authentication externally or close this session.';
 const authPrompt = /(?:password\s*:|passphrase[^\n]{0,80}:|enter\s+(?:a\s+)?pin\b)/i;
 const controlErrors = [null, 'auth_paused', 'input_closed', 'unsupported_operation', 'write_unknown'] as const;
 export const sessionSignals = ['SIGINT', 'SIGTERM', 'SIGHUP', 'SIGKILL'] as const;
@@ -73,13 +73,13 @@ export class NativeSession {
     this.process.stdout.on('data', (chunk: Buffer) => {
       try {
         this.buffer = this.buffer.length ? Buffer.concat([this.buffer, chunk]) : chunk;
-        while (this.buffer.length >= HEADER) {
+        while (this.buffer.length >= frameHeaderBytes) {
           const bytes = this.buffer.readUInt32BE(1);
-          if (bytes > MAX_FRAME) throw new Error('Oversized supervisor frame');
-          if (this.buffer.length < HEADER + bytes) break;
+          if (bytes > maxSupervisorFrameBytes) throw new Error('Oversized supervisor frame');
+          if (this.buffer.length < frameHeaderBytes + bytes) break;
           const type = this.buffer[0];
-          const data = this.buffer.subarray(HEADER, HEADER + bytes);
-          this.buffer = this.buffer.subarray(HEADER + bytes);
+          const data = this.buffer.subarray(frameHeaderBytes, frameHeaderBytes + bytes);
+          this.buffer = this.buffer.subarray(frameHeaderBytes + bytes);
           if (type === 16 && bytes === 0) {
             receive(type, data);
             this.started.resolve(true);
@@ -106,15 +106,15 @@ export class NativeSession {
   async control(type: number, data: Buffer): Promise<void> {
     if (this.endRequested || this.pending) throw new RequestError('session_busy', 'The session is closing or has an input operation in flight');
     const reply = this.pending = Promise.withResolvers<number>();
-    const frame = Buffer.allocUnsafe(HEADER + data.length);
+    const frame = Buffer.allocUnsafe(frameHeaderBytes + data.length);
     frame[0] = type;
     frame.writeUInt32BE(data.length, 1);
-    data.copy(frame, HEADER);
+    data.copy(frame, frameHeaderBytes);
     this.process.stdin.write(frame, error => { if (error) reply.resolve(4); });
     const timeout = setTimeout(() => { this.release(); reply.resolve(4); }, 1000);
     try {
       const error = controlErrors[await reply.promise];
-      if (error) throw new RequestError(error, error === 'auth_paused' ? AUTH_MESSAGE : 'The supervisor could not confirm the requested session operation');
+      if (error) throw new RequestError(error, error === 'auth_paused' ? authPauseMessage : 'The supervisor could not confirm the requested session operation');
     } finally {
       clearTimeout(timeout);
       this.pending = undefined;
@@ -202,17 +202,18 @@ function utf8Boundary(bytes: Buffer, index: number, direction: 1 | -1): number {
   return index;
 }
 
-class OutputRing {
+export class OutputRing {
   private segments: (Segment | undefined)[] = [];
   private head = 0;
   firstAvailableOffset = 0;
   nextOffset = 0;
 
   append(stream: Stream, data: Buffer): number {
+    if (!data.length) return this.nextOffset;
     const offset = this.nextOffset;
     this.nextOffset += data.length;
     this.segments.push({ stream, offset, data });
-    const minimum = Math.max(this.nextOffset - OUTPUT_CAPACITY, 0);
+    const minimum = Math.max(this.nextOffset - outputRingCapacity, 0);
     let segment = this.segments[this.head]!;
     while (segment.offset + segment.data.length <= minimum) {
       this.segments[this.head++] = undefined;
@@ -274,7 +275,7 @@ class OutputRing {
   }
 }
 
-class LiteralMatch {
+export class LiteralMatch {
   private readonly prefix: number[] = [0];
   private readonly bytes: Buffer;
   private matched = 0;
@@ -370,7 +371,7 @@ export class RuntimeSessions {
 
   async open(input: OpenSession): Promise<SessionSummary> {
     this.checkAdmission();
-    if (this.live.size >= MAX_ACTIVE_GLOBAL || [...this.live.values()].filter(handle => handle.row.ownerBotId === input.ownerBotId).length >= MAX_ACTIVE_PER_BOT) {
+    if (this.live.size >= maxActiveSessionsGlobal || [...this.live.values()].filter(handle => handle.row.ownerBotId === input.ownerBotId).length >= maxActiveSessionsPerBot) {
       throw new RequestError('session_capacity', 'The active session limit is reached');
     }
     const path = supervisorPath();
@@ -399,7 +400,7 @@ export class RuntimeSessions {
     this.live.set(row.sessionId, handle);
     this.retained.set(row.sessionId, ring);
     for (const sessionId of this.retained.keys()) {
-      if (this.retained.size <= MAX_RETAINED_SESSIONS) break;
+      if (this.retained.size <= maxRetainedSessions) break;
       if (!this.live.has(sessionId)) this.retained.delete(sessionId);
     }
     this.recheckTimer ??= setInterval(() => {
@@ -427,7 +428,7 @@ export class RuntimeSessions {
 
   async write(row: RuntimeSession, bytes: Buffer): Promise<object> {
     const handle = this.active(row);
-    if (handle.row.authPause?.paused) throw new RequestError('auth_paused', AUTH_MESSAGE);
+    if (handle.row.authPause?.paused) throw new RequestError('auth_paused', authPauseMessage);
     await handle.native.control(1, bytes);
     return { acceptedBytes: bytes.length, sessionId: row.sessionId, generation: row.generation };
   }
@@ -540,7 +541,7 @@ export class RuntimeSessions {
 
   private auth(handle: LiveHandle, reason?: string): void {
     if (handle.closing || handle.row.authPause?.reason === reason) return;
-    this.update(handle, { authPause: reason ? { paused: true, reason, message: AUTH_MESSAGE } : undefined });
+    this.update(handle, { authPause: reason ? { paused: true, reason, message: authPauseMessage } : undefined });
   }
 
   private publishText(handle: LiveHandle, text: string, length: number, match: boolean): void {
@@ -593,7 +594,7 @@ export class RuntimeSessions {
     if (!row.epoch) throw new RequestError('scope_denied', 'Restored session history cannot arm a watch');
     const handle = this.live.get(row.sessionId);
     if (handle?.closing) throw new RequestError('session_settled', 'The session is closing');
-    if ((handle?.watches.size ?? 0) >= MAX_ARMED_WATCHES) throw new RequestError('watch_capacity', 'The session watch limit is reached');
+    if ((handle?.watches.size ?? 0) >= maxArmedWatches) throw new RequestError('watch_capacity', 'The session watch limit is reached');
     const { on_exit, match_literal, idle_ms, timeout_ms, start_offset = row.nextOffset } = input;
     const conditions: SessionWatchSummary['conditions'] = [];
     if (on_exit) conditions.push('exit');

@@ -5,11 +5,11 @@ import { DatabaseSync, type SQLOutputValue } from 'node:sqlite';
 import { decodeProductProfile, importProductSnapshot, privateCredentialKeys, readPrivateConnection, type PrivateConnection, type ProductBackup, type ProductProfilePaths } from './product-profile.js';
 import type { ProductProfile } from './product.js';
 import { canonicalJSON, maxAutomaticAnswers, maxTriageAttempts, RequestError, type ActivityProgressRecord, type ActivitySteer,
-  type ActivitySteerPayload, type ActivitySteerRecord, type TriageAccounting,
-  type SkillApproval, type SkillApprovalRequest, type SkillSource, type TraceItem } from './protocol.js';
-import type { SessionSummary, SessionWatchOccurrence, WatchChange, WatchGrant, WatchOccurrence, WatchSummary } from './protocol.js';
-import type { OrchestrationCheckpoint, OrchestrationDecision, OrchestrationEffectReceipt, OrchestrationMandate, OrchestrationRun,
-  OrchestrationSummary, StoredConversationNotice, TimelineChanged } from './protocol.js';
+  type ActivitySteerPayload, type ActivitySteerRecord, type OrchestrationCheckpoint, type OrchestrationDecision,
+  type OrchestrationEffectReceipt, type OrchestrationMandate, type OrchestrationRun, type OrchestrationSummary,
+  type SessionSummary, type SessionWatchOccurrence, type SkillApproval, type SkillApprovalRequest, type SkillSource,
+  type StoredConversationNotice, type TimelineChanged, type TraceItem, type TriageAccounting, type WatchGrant,
+  type WatchOccurrence, type WatchSummary } from './protocol.js';
 import { type BotMemory, type BotWorkLog } from './bot-memory.js';
 import { maxExecutionTraces, maxProfileTraces, traceDetail, redactTrace, type TraceBackup, type TraceObservation, type TraceUpdate } from './product-trace.js';
 import { projectionRedactor } from './product-redactor.js';
