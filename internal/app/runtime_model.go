@@ -294,10 +294,6 @@ func (a *appModel) updateUI(fn func()) {
 	fn()
 }
 
-func (a *appModel) capacityKnown() bool {
-	return a.demo || a.runtimeCapabilitiesLoaded
-}
-
 func (a *appModel) maxActiveTasks() int {
 	if a.runtimeMaxActiveTasks > 0 {
 		return a.runtimeMaxActiveTasks

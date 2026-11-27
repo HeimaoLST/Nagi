@@ -203,18 +203,6 @@ func (ct *contact) executionByTask(taskID string) *activityExecution {
 	return nil
 }
 
-func activityHasTask(activity *productActivity, taskID string) bool {
-	if activity == nil || taskID == "" {
-		return false
-	}
-	for _, execution := range activity.Executions {
-		if execution.TaskID == taskID {
-			return true
-		}
-	}
-	return false
-}
-
 func activityExecutionForTask(activity *productActivity, taskID string) (int, *activityExecution) {
 	if activity == nil {
 		return 0, nil

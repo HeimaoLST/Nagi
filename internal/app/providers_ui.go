@@ -516,8 +516,8 @@ func (a *appModel) testProvider(params pi.ProductProviderTestParams, editor *pro
 	}, func(err error) {
 		editor.probe = a.providerFailure("test", err)
 		if err == nil {
-			editor.probe = providerFeedback{kind: "tested", models: len(result.Models), latency: result.LatencyMs}
-			editor.tested, editor.latency = true, result.LatencyMs
+			editor.probe = providerFeedback{kind: "tested", models: len(result.Models), latency: result.LatencyMS}
+			editor.tested, editor.latency = true, result.LatencyMS
 			editor.discovered = result.DiscoveredModels
 			for _, id := range result.Models {
 				if len(editor.Models) == 128 {
@@ -939,13 +939,13 @@ func (a *appModel) providerCatalogSection(c *ui.Context, t *ui.Theme, msgs local
 func providerDirectoryButton(c *ui.Context, t *ui.Theme, label string, available bool) ui.Element {
 	button := ui.ButtonBase(c).Label(label).Disabled(!available).MinWidth(0).MinHeight(theme.ControlHit).
 		Radius(10).Border(1, ui.Transparent).AlignItems(ui.Center).Justify(ui.Start).
-		FocusRingColor(t.Accent).Transition(theme.ControlTransition)
+		FocusRingColor(t.Accent)
 	if button.Pressed() {
 		button.Background(t.SurfacePressed).BorderColor(t.Border)
 	} else if button.Hovered() {
 		button.Background(t.Surface).BorderColor(t.Border)
 	}
-	return button
+	return theme.TransitionControl(button, t)
 }
 
 func providerDot(c *ui.Context, color ui.Color) {

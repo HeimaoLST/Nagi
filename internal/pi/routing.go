@@ -132,7 +132,7 @@ type ProductProviderTestParams struct {
 type ProductProviderTestResult struct {
 	OK               bool                     `json:"ok"`
 	Models           []string                 `json:"models"`
-	LatencyMs        uint64                   `json:"latencyMs"`
+	LatencyMS        uint64                   `json:"latencyMs"`
 	Error            string                   `json:"error,omitempty"`
 	DiscoveredModels []ProductDiscoveredModel `json:"discoveredModels,omitempty"`
 }

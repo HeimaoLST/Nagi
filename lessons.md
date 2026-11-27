@@ -12,11 +12,11 @@
 
 ### Keep control text and background in the same theme during a switch
 
-**Problem:** Immediately after switching from Moss Dark to Paper Light, Memory approval rendered dark text on the previous dark button fill.
+**Problem:** Immediately after switching from Moss Dark to Paper Light, Memory approval rendered dark text on the previous dark button fill, and any control calling `.Transition(ControlTransition)` directly (bypassing `theme.TransitionControl`) kept interpolating the prior theme's background or border across the 180 ms transition.
 
-**Cause or correction:** MyGo interpolates background and border colors while applying new text colors immediately. The 180 ms interaction transition carried the old palette into the new one.
+**Cause or correction:** MyGo interpolates background and border colors while applying new text colors immediately. The 180 ms interaction transition carried the old palette into the new one whenever a control registered `ControlTransition` unconditionally without checking a cached theme palette.
 
-**Prevention:** Apply control palette changes in the same frame and keep the transition for interaction within a palette. Inspect the first frame after changing themes in both directions, with populated controls visible.
+**Prevention:** Route every animated control helper (including `actionButton`, `NavigationControl`, and app-level button builders such as `providerDirectoryButton`) through `theme.TransitionControl` so theme switches snap on the first frame while intra-palette hover/press/toggle states remain animated. Inspect the first frame after changing themes in both directions, with populated controls visible.
 
 ### Verify native app, window and chooser identity
 
@@ -481,3 +481,11 @@
 **Cause or correction:** Users want authorized Bots to continue collaborating, operating handles, and scheduling multi-hour or overnight work autonomously while the human is away, surfacing only what warrants attention and controlling cost through compact scoped orchestration contexts and efficient routing rather than halting execution.
 
 **Prevention:** Isolate autonomous orchestration in a dedicated private `OrchestrationActor` with rolling checkpoints and full projected-request budgets, queue human sends cleanly ahead of subsequent autonomous turns, split window hide from explicit `Cmd-Q` shutdown, and apply exponential backoff strictly per causal failure/no-progress loop rather than halting productive Bots.
+
+### Pair single-clock health guards and key UI metadata by stable identifier
+
+**Problem:** Checking half-open route availability with separate `Date.now()` calls between `claim` and `cooldown` could observe an expired cooldown after claim failure and pass `undefined` into `new Date()`, sorting caller arrays in place silently reordered caller telemetry, indexing UI tool descriptions positionally against `pi.ResolveCodingTools` coupled presentation order to cross-package tool sorting, and empty-locale fallback (`LocalizedText.Resolve("")`) matched `"-"`-prefixed keys while empty route-health reasons left leading `" · "` separators.
+
+**Cause or correction:** Clock progression between consecutive guard checks breaks coupled invariants, `Array.prototype.sort` mutates its receiver, positional indexing assumes two independent lists share length and order, unguarded `strings.Cut` yields an empty prefix that matches `"-"` keys, and unconditional slice initialization treats empty fields as populated text.
+
+**Prevention:** Share a single timestamp snapshot across `claim` and `cooldown` fallbacks (with injectable deterministic clocks for unit tests), sort shallow array copies in pure projection helpers, key UI tool descriptions by stable tool name, guard empty language prefixes before prefix matching, and omit empty fragments before joining UI badges/notes.

@@ -206,8 +206,8 @@ func TestAppearanceFailedSaveKeepsModeAndRetryClearsWarning(t *testing.T) {
 		selected:           0,
 		appearanceMode:     appearanceSystem,
 		contacts:           []*contact{{ID: "contact-keep", Name: "Saki", Draft: "draft-keep"}},
-		activityToolLedger: &ActivityToolOperationLedger{},
-		activityToolScopes: map[string]ActivityToolScope{},
+		activityToolLedger: &activityToolOperationLedger{},
+		activityToolScopes: map[string]activityToolScope{},
 	}
 	a.setAppearanceMode(appearanceDark)
 	if a.appearanceMode != appearanceDark {
@@ -242,7 +242,7 @@ func TestAppearanceLaterContactSaveClearsUnsavedWarning(t *testing.T) {
 		store: store, storePath: filepath.Join(root, "contacts.json"), workDir: root,
 		selected: 0, appearanceMode: appearanceSystem,
 		contacts:           []*contact{{ID: "contact-keep", Name: "Saki"}},
-		activityToolLedger: &ActivityToolOperationLedger{}, activityToolScopes: map[string]ActivityToolScope{},
+		activityToolLedger: &activityToolOperationLedger{}, activityToolScopes: map[string]activityToolScope{},
 	}
 	a.setAppearanceMode(appearanceDark)
 	if a.appearanceError == "" {
@@ -326,7 +326,7 @@ func TestAppearanceRetrySaveUIAndRuntimeErrorOwnership(t *testing.T) {
 		store: store, storePath: filepath.Join(root, "contacts.json"), workDir: root,
 		selected: 0, appearanceMode: appearanceSystem, systemDark: true,
 		contacts:           []*contact{{ID: "contact-keep", Name: "Saki", Draft: "keep"}},
-		activityToolLedger: &ActivityToolOperationLedger{}, activityToolScopes: map[string]ActivityToolScope{},
+		activityToolLedger: &activityToolOperationLedger{}, activityToolScopes: map[string]activityToolScope{},
 		runtimeErr: "Runtime protocol error: unrelated",
 	}
 	a.openAppearance()

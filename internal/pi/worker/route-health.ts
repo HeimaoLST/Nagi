@@ -1,6 +1,6 @@
 import { endpointFingerprint, hasUsableModel, type CapturedRoute, type HealthSummary, type ProviderAccount, type RouteHealthView } from './model-router.js';
 
-export type RouteOrigin = Pick<CapturedRoute, 'providerId' | 'baseUrl' | 'wireApi' | 'credentialSourceId' | 'resolvedModel'>;
+type RouteOrigin = Pick<CapturedRoute, 'providerId' | 'baseUrl' | 'wireApi' | 'credentialSourceId' | 'resolvedModel'>;
 export type ProviderAttempt = {
   headers: (response: Response) => void;
   settle: (outcome: 'success' | 'error' | 'aborted', error?: unknown) => void;
@@ -38,13 +38,15 @@ export class RouteHealth {
   private readonly rejected = new Set<string>();
   private readonly endpoints = new Map<string, Endpoint>();
 
+  constructor(private readonly clock: () => number = Date.now) {}
+
   authFailed(sourceId: string): boolean { return this.rejected.has(sourceId); }
 
   private key(route: Omit<RouteOrigin, 'resolvedModel' | 'credentialSourceId'>): string {
     return JSON.stringify([route.providerId, endpointFingerprint(route)]);
   }
 
-  cooldown(route: RouteOrigin, now = Date.now()): number | undefined {
+  cooldown(route: RouteOrigin, now = this.clock()): number | undefined {
     const endpoint = this.endpoints.get(this.key(route));
     if (!endpoint) return;
     const blocked = [endpoint.state, endpoint.models.get(route.resolvedModel)]
@@ -52,7 +54,7 @@ export class RouteHealth {
     if (blocked.length) return Math.max(...blocked.map(state => state!.retry!));
   }
 
-  claim(route: RouteOrigin, now = Date.now()): (() => void) | undefined {
+  claim(route: RouteOrigin, now = this.clock()): (() => void) | undefined {
     const endpoint = this.endpoints.get(this.key(route));
     const scopes = [endpoint?.state, endpoint?.models.get(route.resolvedModel)].filter((state): state is ScopeState => state?.retry !== undefined);
     if (scopes.some(state => state.lease || state.retry! > now)) return;
@@ -105,7 +107,7 @@ export class RouteHealth {
   }
 
   private fail(state: ScopeState, reason: Failure, retryAfter: string | null = null): void {
-    const now = Date.now();
+    const now = this.clock();
     state.generation++;
     const sameStreak = state.reason === reason || (state.reason === 'provider_failure' || state.reason === 'stream_error') &&
       (reason === 'provider_failure' || reason === 'stream_error');
@@ -118,7 +120,7 @@ export class RouteHealth {
     state.retry = Math.max(state.retry ?? 0, now + delay);
   }
 
-  view(account: ProviderAccount, now = Date.now()): { healthSummary: HealthSummary; routeHealth?: RouteHealthView[] } {
+  view(account: ProviderAccount, now = this.clock()): { healthSummary: HealthSummary; routeHealth?: RouteHealthView[] } {
     const endpoint = this.endpoints.get(this.key(account));
     const routeHealth: RouteHealthView[] = [];
     if (this.authFailed(account.credentialSourceId)) routeHealth.push({ scope: 'credential', state: 'auth_failed', reason: 'auth_failed' });

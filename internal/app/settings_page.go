@@ -846,15 +846,6 @@ func (a *appModel) settingsDataRecoveryContent(c *ui.Context, t *ui.Theme) {
 	})
 }
 
-func containsString(values []string, want string) bool {
-	for _, value := range values {
-		if value == want {
-			return true
-		}
-	}
-	return false
-}
-
 func (a *appModel) settingsAdvancedContent(c *ui.Context, t *ui.Theme) {
 	msgs := locales.In(c.Locale())
 	preferenceGroup(c, t, func() {

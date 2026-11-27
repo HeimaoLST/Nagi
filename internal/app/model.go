@@ -41,7 +41,7 @@ const (
 type historyEntry struct {
 	ID      string
 	Date    string
-	From    string // "me" or "contact"
+	From    string
 	Text    string
 	Context []taskContextItem
 }
@@ -260,8 +260,8 @@ type appModel struct {
 	workDir                   string
 	storePath                 string
 	uiHookMu                  sync.Mutex
-	uiHook                    func(func()) // test seam for deterministic UI-thread ordering
-	requestQuit               func()       // set by main to mygo.App.Quit
+	uiHook                    func(func())
+	requestQuit               func()
 	quitReady                 bool
 	shutdownStarted           bool
 
@@ -278,8 +278,8 @@ type appModel struct {
 
 	openPath func(string) error
 
-	activityToolLedger *ActivityToolOperationLedger
-	activityToolScopes map[string]ActivityToolScope
+	activityToolLedger *activityToolOperationLedger
+	activityToolScopes map[string]activityToolScope
 
 	// Layout is a GUI-wide preference, not a contact or runtime fact. Widths
 	// are persisted in the contact store; windowWidth is only the current
@@ -479,8 +479,6 @@ func (ct *contact) setStatusDetail(raw, kind string) {
 	ct.StatusDetail = raw
 	ct.StatusDetailKind = kind
 }
-
-func (ct *contact) clearStatusDetail() { ct.setStatusDetail("", "") }
 
 func (w *activityWorkSession) setSendError(raw, kind, detail string) {
 	w.SendError = raw

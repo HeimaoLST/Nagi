@@ -649,6 +649,9 @@ func mcpRequirePinnedWorker(t *testing.T) (string, string) {
 			t.Fatalf("NAGI_TEST_NODE and NAGI_TEST_WORKER must name pinned regular absolute inputs: %q: %v", p, err)
 		}
 	}
+	if os.Getenv("NAGI_PI_PAYLOAD") == "" {
+		t.Setenv("NAGI_PI_PAYLOAD", filepath.Dir(filepath.Dir(nodePath)))
+	}
 	return nodePath, workerPath
 }
 

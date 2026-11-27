@@ -1637,8 +1637,12 @@ export class Product {
         contextTokens: legacy!.configuration.contextTokens, outputTokens: legacy!.configuration.outputTokens, credentialSource: legacy!.sourceId,
       },
     };
-    const release = route && this.routeHealth.claim(route);
-    if (route && !release) this.rejectRoute({ unavailableReason: 'cooldown', retryAt: new Date(this.routeHealth.cooldown(route)!).toISOString() });
+    const now = Date.now();
+    const release = route && this.routeHealth.claim(route, now);
+    if (route && !release) {
+      const retry = this.routeHealth.cooldown(route, now);
+      this.rejectRoute({ unavailableReason: 'cooldown', ...(retry === undefined ? {} : { retryAt: new Date(retry).toISOString() }) });
+    }
     try {
       const routeChanged = canonicalJSON(route ?? null) !== canonicalJSON(existing?.route ?? null);
       const refresh = !!(cached && (routeChanged || cached.instructions !== instructions || cached.mcpSignature !== mcp.signature));

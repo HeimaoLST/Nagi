@@ -399,7 +399,8 @@ func actionButton(c *ui.Context, label string, ink, background, hover, pressed, 
 	t := c.Theme()
 	button := ui.Button(c, label).Label(label).Height(ControlHit).MinHeight(ControlHit).MinWidth(ControlHit).
 		Radius(0).Background(ui.Transparent).Border(0, ui.Transparent).FocusRing(false).
-		FontSize(TypeAction).FontWeight(500).FixedLineHeight(LineAction).TextColor(ink).Padding(8, 12).Gap(6).Transition(ControlTransition)
+		FontSize(TypeAction).FontWeight(500).FixedLineHeight(LineAction).TextColor(ink).Padding(8, 12).Gap(6)
+	TransitionControl(button, t)
 	return button.Draw(func(p *ui.Painter, r ui.Rect) {
 		r.Y, r.H = r.Y+2, r.H-4
 		fill := background
@@ -436,7 +437,7 @@ func NavigationControl(c *ui.Context, e ui.Element, palette WorkbenchTheme, sele
 		}
 		PaintPreferenceFace(p, r, 8, 4, fill, ui.Transparent)
 	})
-	return e.Transition(ControlTransition)
+	return TransitionControl(e, c.Theme())
 }
 
 // SharedControlFace extends the transparent interaction box two DIPs past the visible face
