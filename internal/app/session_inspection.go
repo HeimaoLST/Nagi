@@ -12,6 +12,7 @@ import (
 
 	"github.com/HeimaoLST/Nagi/internal/pi"
 	"github.com/HeimaoLST/Nagi/internal/theme"
+	"github.com/HeimaoLST/Nagi/locales"
 )
 
 const (
@@ -64,6 +65,9 @@ type sessionInspectorDeps struct {
 	wb                  theme.WorkbenchTheme
 	blocked             bool
 	copy                sessionInspectionCopy
+	formatDimensions    func(cols, rows int) string
+	formatGap           func(bytes string) string
+	formatMS            func(ms string) string
 	updateUI            func(func())
 	persistCloseIntents func([]pi.ProductSessionCloseParams) error
 	onBack              func()
@@ -76,24 +80,26 @@ type sessionWorkspaceState struct {
 	activeBotID         string
 	client              *pi.ProductClient
 	readEpoch           uint64
+	blocked             bool
 	updateUI            func(func())
 	persistCloseIntents func([]pi.ProductSessionCloseParams) error
 }
 
 type botSessionState struct {
-	botID       string
-	items       []pi.ProductSessionSummary
-	cursors     []string
-	page        int
-	nextCursor  string
-	listLoading bool
-	listFailed  bool
-	listScroll  ui.ScrollState
-	detail      *sessionDetailState
-	closes      map[sessionRun]*sessionCloseIntent
-	focusBack   bool
-	focusRow    string
-	focusOpener bool
+	botID           string
+	items           []pi.ProductSessionSummary
+	cursors         []string
+	page            int
+	nextCursor      string
+	listLoading     bool
+	listFailed      bool
+	listScroll      ui.ScrollState
+	detail          *sessionDetailState
+	closes          map[sessionRun]*sessionCloseIntent
+	focusBack       bool
+	focusRow        string
+	focusOpener     bool
+	focusSourceChat bool
 }
 
 type sessionRun struct {
@@ -149,7 +155,10 @@ func (s *sessionWorkspaceState) botSession(botID string) *botSessionState {
 }
 
 func (s *sessionWorkspaceState) sessionInspectorButton(c *ui.Context, deps sessionInspectorDeps) ui.Element {
-	button := theme.SecondaryButton(c, deps.copy.text("title")).OnClick(func() { s.openSessionInspection(deps) })
+	title := deps.copy.text("title")
+	button := theme.SecondaryButton(c, title).Key("sessions-inspector-btn").Label(title).
+		MinHeight(theme.ControlHit).Padding(4, 10).Radius(theme.ControlRadius).Shrink(0).
+		OnClick(func() { s.openSessionInspection(deps) })
 	if bot := s.bots[deps.botID]; bot != nil && bot.focusOpener {
 		button.Focus()
 		bot.focusOpener = false
@@ -161,6 +170,7 @@ func (s *sessionWorkspaceState) openSessionInspection(deps sessionInspectorDeps)
 	if deps.botID == "" {
 		return
 	}
+	s.blocked = deps.blocked
 	s.updateUI = deps.updateUI
 	s.persistCloseIntents = deps.persistCloseIntents
 	bot := s.botSession(deps.botID)
@@ -198,6 +208,9 @@ func (s *sessionWorkspaceState) refreshSessionInspection() {
 			s.loadSessionDetail(bot, bot.detail)
 		}
 	}
+	if s.blocked {
+		return
+	}
 	for _, bot := range s.bots {
 		for _, intent := range bot.closes {
 			if intent.status == "killUnknown" {
@@ -221,6 +234,9 @@ func (s *sessionWorkspaceState) backSessionInspection(deps sessionInspectorDeps)
 }
 
 func runSessionRequest[T any](updateUI func(func()), timeout time.Duration, call func(context.Context) (T, error), complete func(T, error)) {
+	if updateUI == nil {
+		return
+	}
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		result, err := call(ctx)
@@ -669,6 +685,10 @@ func (s *sessionWorkspaceState) sessionInspectionView(c *ui.Context, deps sessio
 				theme.DangerButton(c, words.text("kill")).Shrink(0).
 					Disabled(deps.blocked || s.client == nil || !detail.canClose(intent)).
 					OnClick(func() { s.closeSession(bot, detail, deps.blocked) })
+			} else {
+				theme.SecondaryButton(c, words.text("reload")).Key("session-list-reload").Shrink(0).
+					Disabled(s.client == nil || bot.listLoading).
+					OnClick(func() { s.loadSessionPage(bot, 0, "") })
 			}
 		})
 		if bot.detail == nil {
@@ -676,7 +696,7 @@ func (s *sessionWorkspaceState) sessionInspectionView(c *ui.Context, deps sessio
 		} else {
 			s.sessionDetailView(c, bot, bot.detail, deps)
 		}
-	}).OnShortcut(0, ui.KeyEscape, func() { s.backSessionInspection(deps) })
+	})
 }
 
 func sessionBody(c *ui.Context, key string, scroll *ui.ScrollState, contents func()) {
@@ -690,9 +710,6 @@ func sessionBody(c *ui.Context, key string, scroll *ui.ScrollState, contents fun
 func (s *sessionWorkspaceState) sessionListView(c *ui.Context, bot *botSessionState, deps sessionInspectorDeps) {
 	words, wb := deps.copy, deps.wb
 	sessionBody(c, "session-list", &bot.listScroll, func() {
-		theme.SecondaryButton(c, words.text("reload")).AlignSelf(ui.Start).Disabled(s.client == nil || bot.listLoading).OnClick(func() {
-			s.loadSessionPage(bot, 0, "")
-		})
 		switch {
 		case s.client == nil:
 			sessionNotice(c, wb, words.text("hostDisconnected"))
@@ -782,18 +799,25 @@ func (s *sessionWorkspaceState) sessionDetailView(c *ui.Context, bot *botSession
 						OnClick(func() { s.loadSessionDetail(bot, detail) })
 				}
 				if summary.OriginConversationID != "" && deps.onOpenConversation != nil {
-					theme.LinkButton(c, words.text("sourceChat")).TextColor(wb.Link).Padding(0).
-						OnClick(func() { deps.onOpenConversation(summary.OriginConversationID) })
+					link := theme.LinkButton(c, words.text("sourceChat")).TextColor(wb.Link).Padding(0).Justify(ui.Start).
+						OnClick(func() {
+							bot.focusSourceChat = true
+							deps.onOpenConversation(summary.OriginConversationID)
+						})
+					if bot.focusSourceChat {
+						link.Focus()
+						bot.focusSourceChat = false
+					}
 				}
 				if summary.OriginActivityID != "" && deps.onOpenActivity != nil {
-					theme.LinkButton(c, words.text("sourceActivity")).TextColor(wb.Link).Padding(0).
+					theme.LinkButton(c, words.text("sourceActivity")).TextColor(wb.Link).Padding(0).Justify(ui.Start).
 						OnClick(func() { deps.onOpenActivity(summary.OriginActivityID) })
 				}
 			})
 		})
-		sessionMetadata(c, wb, words, summary)
+		sessionMetadata(c, wb, deps, summary)
 		s.sessionOutputView(c, bot, detail, deps)
-		sessionWatchesView(c, wb, words, summary)
+		sessionWatchesView(c, wb, deps, summary)
 	})
 }
 
@@ -807,14 +831,21 @@ func sessionTitle(summary pi.ProductSessionSummary, words sessionInspectionCopy)
 	return words.text("session")
 }
 
-func sessionMetadata(c *ui.Context, wb theme.WorkbenchTheme, words sessionInspectionCopy, summary pi.ProductSessionSummary) {
+func sessionMetadata(c *ui.Context, wb theme.WorkbenchTheme, deps sessionInspectorDeps, summary pi.ProductSessionSummary) {
+	words := deps.copy
 	ui.Column(c).FillWidth().Gap(8).Children(func() {
 		sessionMetadataText(c, wb, words.text("command"), summary.CommandSummary)
 		sessionMetadataText(c, wb, words.text("directory"), summary.Cwd)
 		ui.Row(c).FillWidth().Gap(16).Wrap().Children(func() {
 			sessionField(c, wb, words.text("mode"), words.text(string(summary.Mode)))
 			if summary.Cols != nil && summary.Rows != nil {
-				sessionField(c, wb, words.text("size"), fmt.Sprintf(words.text("dimensions"), *summary.Cols, *summary.Rows))
+				dimensions := ""
+				if deps.formatDimensions != nil {
+					dimensions = deps.formatDimensions(*summary.Cols, *summary.Rows)
+				} else {
+					dimensions = fmt.Sprintf(words.text("dimensions"), *summary.Cols, *summary.Rows)
+				}
+				sessionField(c, wb, words.text("size"), dimensions)
 			}
 			transport := string(summary.TransportStatus)
 			if summary.TransportStatus == pi.ProductTransportEOF {
@@ -892,7 +923,13 @@ func (s *sessionWorkspaceState) sessionOutputView(c *ui.Context, bot *botSession
 			})
 		}
 		if gap := max(output.gapBytes, output.evicted); gap > 0 {
-			sessionNotice(c, wb, fmt.Sprintf(words.text("outputGap"), sessionNumber(gap)))
+			formattedGap := ""
+			if deps.formatGap != nil {
+				formattedGap = deps.formatGap(sessionNumber(gap))
+			} else {
+				formattedGap = fmt.Sprintf(words.text("outputGap"), sessionNumber(gap))
+			}
+			sessionNotice(c, wb, formattedGap)
 		}
 		ui.Scroll(c).Key("projected-output").FillWidth().Height(224).MinWidth(0).Clip().TrackScroll(&output.scroll).
 			Background(wb.Reading).Border(1, wb.InputBorder).Radius(theme.CardRadius).Children(func() {
@@ -921,7 +958,8 @@ func (s *sessionWorkspaceState) sessionOutputView(c *ui.Context, bot *botSession
 	})
 }
 
-func sessionWatchesView(c *ui.Context, wb theme.WorkbenchTheme, words sessionInspectionCopy, summary pi.ProductSessionSummary) {
+func sessionWatchesView(c *ui.Context, wb theme.WorkbenchTheme, deps sessionInspectorDeps, summary pi.ProductSessionSummary) {
+	words := deps.copy
 	ui.Column(c).FillWidth().Gap(8).Children(func() {
 		sessionHeading(c, wb, words.text("watches"))
 		count := 0
@@ -939,10 +977,22 @@ func sessionWatchesView(c *ui.Context, wb theme.WorkbenchTheme, words sessionIns
 				sessionField(c, wb, words.text("conditions"), strings.Join(conditions, ", "))
 				ui.Row(c).FillWidth().Gap(16).Wrap().Children(func() {
 					if watch.IdleMS != nil {
-						sessionField(c, wb, words.text("idleTime"), fmt.Sprintf(words.text("milliseconds"), sessionNumber(*watch.IdleMS)))
+						idleText := ""
+						if deps.formatMS != nil {
+							idleText = deps.formatMS(sessionNumber(*watch.IdleMS))
+						} else {
+							idleText = fmt.Sprintf(words.text("milliseconds"), sessionNumber(*watch.IdleMS))
+						}
+						sessionField(c, wb, words.text("idleTime"), idleText)
 					}
 					if watch.TimeoutMS != nil {
-						sessionField(c, wb, words.text("timeoutTime"), fmt.Sprintf(words.text("milliseconds"), sessionNumber(*watch.TimeoutMS)))
+						timeoutText := ""
+						if deps.formatMS != nil {
+							timeoutText = deps.formatMS(sessionNumber(*watch.TimeoutMS))
+						} else {
+							timeoutText = fmt.Sprintf(words.text("milliseconds"), sessionNumber(*watch.TimeoutMS))
+						}
+						sessionField(c, wb, words.text("timeoutTime"), timeoutText)
 					}
 					sessionField(c, wb, words.text("firedKind"), words.text(watch.FiredKind))
 				})
@@ -1011,4 +1061,94 @@ func sessionMetadataText(c *ui.Context, wb theme.WorkbenchTheme, label, value st
 		appTooltip(c, ui.Text(c, value).Selectable().FillWidth().MinWidth(0).SingleLine().Ellipsis("…").
 			FontSize(typeAction).FixedLineHeight(lineLabel).TextColor(wb.Theme.Text), value)
 	})
+}
+
+func sessionInspectionLocaleCopy(msgs locales.Messages) sessionInspectionCopy {
+	return sessionInspectionCopy{
+		"title":               msgs.SessionInspectTitle(),
+		"back":                msgs.SessionInspectBack(),
+		"reload":              msgs.SessionInspectReload(),
+		"loadMore":            msgs.SessionInspectLoadMore(),
+		"previousPage":        msgs.SessionInspectPreviousPage(),
+		"loadingList":         msgs.SessionInspectLoadingList(),
+		"emptyList":           msgs.SessionInspectEmptyList(),
+		"listError":           msgs.SessionInspectListError(),
+		"loadingDetail":       msgs.SessionInspectLoadingDetail(),
+		"detailError":         msgs.SessionInspectDetailError(),
+		"session":             msgs.SessionInspectSession(),
+		"starting":            msgs.SessionInspectStarting(),
+		"running":             msgs.SessionInspectRunning(),
+		"exited":              msgs.SessionInspectExited(),
+		"closed":              msgs.SessionInspectClosed(),
+		"disconnected":        msgs.SessionInspectDisconnected(),
+		"failed":              msgs.SessionInspectFailed(),
+		"readOnly":            msgs.SessionInspectReadOnly(),
+		"sourceChat":          msgs.SessionInspectSourceChat(),
+		"sourceActivity":      msgs.SessionInspectSourceActivity(),
+		"command":             msgs.SessionInspectCommand(),
+		"directory":           msgs.SessionInspectDirectory(),
+		"mode":                msgs.SessionInspectMode(),
+		"pty":                 msgs.SessionInspectPty(),
+		"pipe":                msgs.SessionInspectPipe(),
+		"size":                msgs.SessionInspectSize(),
+		"exitCode":            msgs.SessionInspectExitCode(),
+		"exitSignal":          msgs.SessionInspectExitSignal(),
+		"transport":           msgs.SessionInspectTransport(),
+		"live":                msgs.SessionInspectLive(),
+		"eof":                 msgs.SessionInspectEof(),
+		"transportEOF":        msgs.SessionInspectTransportEOF(),
+		"supervisor_lost":     msgs.SessionInspectSupervisorLost(),
+		"worker_restarted":    msgs.SessionInspectWorkerRestarted(),
+		"closed_by_user":      msgs.SessionInspectClosedByUser(),
+		"closed_by_bot":       msgs.SessionInspectClosedByBot(),
+		"closed_on_shutdown":  msgs.SessionInspectClosedOnShutdown(),
+		"exec_failed":         msgs.SessionInspectExecFailed(),
+		"output":              msgs.SessionInspectOutput(),
+		"stdout":              msgs.SessionInspectStdout(),
+		"stderr":              msgs.SessionInspectStderr(),
+		"reading":             msgs.SessionInspectReading(),
+		"emptyOutput":         msgs.SessionInspectEmptyOutput(),
+		"outputError":         msgs.SessionInspectOutputError(),
+		"hostDisconnected":    msgs.SessionInspectHostDisconnected(),
+		"earlierOutput":       msgs.SessionInspectEarlierOutput(),
+		"laterOutput":         msgs.SessionInspectLaterOutput(),
+		"latestOutput":        msgs.SessionInspectLatestOutput(),
+		"newOutput":           msgs.SessionInspectNewOutput(),
+		"authPaused":          msgs.SessionInspectAuthPaused(),
+		"auth_prompt":         msgs.SessionInspectAuthPrompt(),
+		"canonical_no_echo":   msgs.SessionInspectCanonicalNoEcho(),
+		"authAction":          msgs.SessionInspectAuthAction(),
+		"watches":             msgs.SessionInspectWatches(),
+		"noWatches":           msgs.SessionInspectNoWatches(),
+		"armed":               msgs.SessionInspectArmed(),
+		"fired":               msgs.SessionInspectFired(),
+		"cancelled":           msgs.SessionInspectCancelled(),
+		"target_lost":         msgs.SessionInspectTargetLost(),
+		"conditions":          msgs.SessionInspectConditions(),
+		"exit":                msgs.SessionInspectExit(),
+		"match":               msgs.SessionInspectMatch(),
+		"idle":                msgs.SessionInspectIdle(),
+		"timeout":             msgs.SessionInspectTimeout(),
+		"matchLiteral":        msgs.SessionInspectMatchLiteral(),
+		"idleTime":            msgs.SessionInspectIdleTime(),
+		"timeoutTime":         msgs.SessionInspectTimeoutTime(),
+		"firedKind":           msgs.SessionInspectFiredKind(),
+		"matchedExcerpt":      msgs.SessionInspectMatchedExcerpt(),
+		"kill":                msgs.SessionInspectKill(),
+		"killBlocked":         msgs.SessionInspectKillBlocked(),
+		"killPending":         msgs.SessionInspectKillPending(),
+		"killUnknown":         msgs.SessionInspectKillUnknown(),
+		"checkClose":          msgs.SessionInspectCheckClose(),
+		"killAccepted":        msgs.SessionInspectKillAccepted(),
+		"killTerminated":      msgs.SessionInspectKillTerminated(),
+		"killSettled":         msgs.SessionInspectKillSettled(),
+		"killUnreaped":        msgs.SessionInspectKillUnreaped(),
+		"killReaped":          msgs.SessionInspectKillReaped(),
+		"previousClose":       msgs.SessionInspectPreviousClose(),
+		"killStaleGeneration": msgs.SessionInspectKillStaleGeneration(),
+		"killStaleRevision":   msgs.SessionInspectKillStaleRevision(),
+		"killRejected":        msgs.SessionInspectKillRejected(),
+		"killNotSent":         msgs.SessionInspectKillNotSent(),
+		"killSaveError":       msgs.SessionInspectKillSaveError(),
+	}
 }

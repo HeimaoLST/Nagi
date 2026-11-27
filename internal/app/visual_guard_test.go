@@ -1708,3 +1708,207 @@ func TestVisualGuardControlPlaneWorkbench(t *testing.T) {
 		}
 	}
 }
+
+func visualIntPtr(v int) *int {
+	return &v
+}
+
+func visualUint64Ptr(v uint64) *uint64 {
+	return &v
+}
+
+func seedVisualSessionInspectorFixture(t *testing.T) (phase3SeededControlPlane, pi.ProductSessionSummary, pi.ProductSessionSummary) {
+	t.Helper()
+	fx := phase3SeededControlPlaneApp(t)
+	fx.contact.activeActivities = nil
+	fx.contact.activity.items = nil
+	fx.contact.activityNotices = activityNoticeState{}
+
+	ptySummary := pi.ProductSessionSummary{
+		SessionID:            "sess-pty-visual",
+		OwnerBotID:           fx.contact.ID,
+		OriginConversationID: fx.contact.SessionID,
+		OriginActivityID:     fx.steerAct.ActivityID,
+		CreatingOperationID:  "op-sess-pty",
+		Generation:           1,
+		Revision:             4,
+		Label:                "PTY build console",
+		CommandSummary:       "/bin/zsh -lc 'make verify'",
+		Cwd:                  "/tmp/nagi-workspace",
+		Mode:                 pi.ProductSessionPTY,
+		Cols:                 visualIntPtr(120),
+		Rows:                 visualIntPtr(36),
+		State:                pi.ProductSessionRunning,
+		TransportStatus:      pi.ProductTransportLive,
+		NextOffset:           12288,
+		AuthPause: &pi.ProductSessionAuthPause{
+			Paused: true,
+			Reason: "auth_prompt",
+		},
+		Watches: []pi.ProductSessionWatchSummary{
+			{
+				WatchID:      "watch-pty-1",
+				SessionID:    "sess-pty-visual",
+				Generation:   1,
+				Revision:     2,
+				State:        "armed",
+				Conditions:   []string{"exit", "match", "idle", "timeout"},
+				MatchLiteral: "BUILD_DONE",
+				IdleMS:       visualUint64Ptr(1500),
+				TimeoutMS:    visualUint64Ptr(30000),
+			},
+		},
+	}
+	pipeSummary := pi.ProductSessionSummary{
+		SessionID:            "sess-pipe-visual",
+		OwnerBotID:           fx.contact.ID,
+		OriginConversationID: fx.contact.SessionID,
+		OriginActivityID:     fx.steerAct.ActivityID,
+		CreatingOperationID:  "op-sess-pipe",
+		Generation:           2,
+		Revision:             6,
+		Label:                "Pipe test runner",
+		CommandSummary:       "node scripts/run-suite.mjs",
+		Cwd:                  "/tmp/nagi-workspace",
+		Mode:                 pi.ProductSessionPipe,
+		State:                pi.ProductSessionExited,
+		ExitCode:             visualIntPtr(0),
+		TransportStatus:      pi.ProductTransportEOF,
+		FirstAvailableOffset: 2048,
+		NextOffset:           12288,
+		EOF:                  true,
+		EvictedBytes:         2048,
+		Watches: []pi.ProductSessionWatchSummary{
+			{
+				WatchID:        "watch-pipe-1",
+				SessionID:      "sess-pipe-visual",
+				Generation:     2,
+				Revision:       3,
+				State:          "fired",
+				Conditions:     []string{"match"},
+				MatchLiteral:   "PASS",
+				FiredKind:      "match",
+				MatchedExcerpt: "All checks PASS",
+			},
+		},
+	}
+
+	bot := fx.app.sessions.botSession(fx.contact.ID)
+	fx.app.sessions.client = fx.app.pi.product
+	bot.items = []pi.ProductSessionSummary{ptySummary, pipeSummary}
+	bot.nextCursor = "cursor-page-2"
+	return fx, ptySummary, pipeSummary
+}
+
+func TestVisualGuardSessionInspection(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		dark bool
+	}{{"Paper Light", false}, {"Moss Dark", true}} {
+		wb := theme.ResolveWorkbenchTheme(tc.dark)
+		th := wb.Theme
+		for _, pair := range []struct {
+			label string
+			fg    ui.Color
+		}{
+			{"sessionBadge running", th.Success},
+			{"sessionBadge failed", th.Danger},
+			{"sessionBadge starting", wb.WorkAttention},
+			{"sessionBadge closed", th.TextMuted},
+		} {
+			if ratio := theme.PaletteContrast(pair.fg, wb.Reading); ratio < 4.5 {
+				t.Fatalf("%s %s contrast = %.2f, want >= 4.5", tc.name, pair.label, ratio)
+			}
+		}
+	}
+
+	for _, locale := range []string{"en", "zh-Hans"} {
+		msgs := locales.In(locale)
+		for _, dark := range []bool{false, true} {
+			for _, size := range [][2]int{{1040, 720}, {960, 640}, {720, 640}} {
+				w, h := size[0], size[1]
+				t.Run(fmt.Sprintf("%s-dark%t-%dx%d", locale, dark, w, h), func(t *testing.T) {
+					assertHit := func(tr *ui.Tester, scene string, labels ...string) {
+						t.Helper()
+						for _, label := range labels {
+							r, ok := tr.Find(label)
+							if !ok || r.X < -0.5 || r.Y < -0.5 || r.X+r.W > float32(w)+0.5 || r.Y+r.H > float32(h)+0.5 || r.W < theme.ControlHit || r.H < theme.ControlHit {
+								t.Fatalf("scene=%s control %q invalid/overflow: ok=%v rect=%+v viewport=%dx%d", scene, label, ok, r, w, h)
+							}
+						}
+					}
+
+					fx, ptySummary, pipeSummary := seedVisualSessionInspectorFixture(t)
+					fx.app.windowWidth = w
+					tr := ui.NewTesterWith(fx.app.view, w, h, ui.TesterOptions{Dark: dark})
+					tr.SetLocale(locale)
+					tr.SetFocused(true)
+					tr.Frame()
+
+					headerBtn, okHeader := tr.Find(msgs.SessionInspectTitle())
+					if !okHeader || headerBtn.W < theme.ControlHit || headerBtn.H < theme.ControlHit || headerBtn.W >= 220 || headerBtn.X+headerBtn.W > float32(w)+0.5 {
+						t.Fatalf("zero-activity header Sessions button invalid: ok=%v rect=%+v viewport=%dx%d", okHeader, headerBtn, w, h)
+					}
+
+					fx.app.sessions.activeBotID = fx.contact.ID
+					tr.Frame()
+					assertHit(tr, "session-list", msgs.SessionInspectBack(), msgs.SessionInspectReload(), ptySummary.Label+", "+msgs.SessionInspectRunning(), pipeSummary.Label+", "+msgs.SessionInspectExited(), msgs.SessionInspectLoadMore())
+					backRect, _ := tr.Find(msgs.SessionInspectBack())
+					reloadRect, _ := tr.Find(msgs.SessionInspectReload())
+					ptyRowRect, _ := tr.Find(ptySummary.Label + ", " + msgs.SessionInspectRunning())
+					if reloadRect.W >= 220 || math.Abs(float64(reloadRect.Y-backRect.Y)) > 6 || reloadRect.Y >= ptyRowRect.Y {
+						t.Fatalf("list header Reload misaligned or stretched: reload=%+v back=%+v firstRow=%+v", reloadRect, backRect, ptyRowRect)
+					}
+
+					bot := fx.app.sessions.botSession(fx.contact.ID)
+					bot.detail = &sessionDetailState{
+						summary: ptySummary,
+						ready:   true,
+						output: sessionOutputState{
+							loaded:         true,
+							from:           4096,
+							next:           8192,
+							highWater:      12288,
+							firstAvailable: 2048,
+							gapBytes:       2048,
+							browsing:       true,
+							revision:       ptySummary.Revision,
+							authPause:      ptySummary.AuthPause,
+							chunks:         []pi.ProductSessionChunk{{Stream: "pty", Offset: 4096, NextOffset: 4120, Text: "PTY_BUILD_OUTPUT\n"}},
+						},
+					}
+					tr.Frame()
+
+					assertHit(tr, "session-detail-pty", msgs.SessionInspectBack(), msgs.SessionInspectKill(), msgs.SessionInspectSourceChat(), msgs.SessionInspectSourceActivity(), msgs.SessionInspectEarlierOutput(), msgs.SessionInspectLaterOutput(), msgs.SessionInspectLatestOutput())
+					killRect, _ := tr.Find(msgs.SessionInspectKill())
+					if killRect.W >= 220 || math.Abs(float64(killRect.Y-backRect.Y)) > 6 {
+						t.Fatalf("detail header Kill session misaligned or stretched: kill=%+v back=%+v", killRect, backRect)
+					}
+					sourceChatRect, _ := tr.Find(msgs.SessionInspectSourceChat())
+					sourceActRect, _ := tr.Find(msgs.SessionInspectSourceActivity())
+					cmdLabelRect, okCmd := tr.Find(msgs.SessionInspectCommand())
+					if !okCmd || sourceChatRect.W >= 220 || sourceActRect.W >= 220 || math.Abs(float64(sourceChatRect.X-cmdLabelRect.X)) > 2.5 {
+						t.Fatalf("source links stretched or misaligned from Command: sourceChat=%+v sourceAct=%+v cmd=%+v (ok=%v)", sourceChatRect, sourceActRect, cmdLabelRect, okCmd)
+					}
+					dimWanted := msgs.SessionInspectDimensions(120, 36)
+					if !tr.HasText(dimWanted) {
+						t.Fatalf("localized dimensions %q missing in texts=%v", dimWanted, tr.Texts())
+					}
+					for _, txt := range tr.Texts() {
+						if strings.Contains(txt, "%d") || strings.Contains(txt, "%s") || strings.Contains(txt, "{cols}") || strings.Contains(txt, "{bytes}") {
+							t.Fatalf("unformatted placeholder in session detail text %q", txt)
+						}
+					}
+
+					if err := tr.Click(msgs.SessionInspectBack()); err != nil {
+						t.Fatalf("click Back from detail: %v", err)
+					}
+					tr.Frame()
+					if bot.detail != nil {
+						t.Fatal("Back from detail did not return to session list")
+					}
+				})
+			}
+		}
+	}
+}
