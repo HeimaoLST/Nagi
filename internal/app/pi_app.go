@@ -168,6 +168,7 @@ func (a *appModel) openProductProfile(ctx context.Context, fresh bool, generatio
 	}
 	bots = slices.Insert(bots, 0, architect)
 	contacts := make([]*contact, 0, len(bots))
+	activeSessions := make(map[string]map[string]pi.ProductSessionSummary, len(bots))
 	for _, bot := range bots {
 		conversation, err := host.product.GetConversation(ctx, bot.CurrentConversationID)
 		if err != nil {
@@ -182,6 +183,8 @@ func (a *appModel) openProductProfile(ctx context.Context, fresh bool, generatio
 		applyProductExecution(ct, conversation.LatestExecution)
 		if !ct.Archived {
 			ct.activeActivities, _ = listBotActiveActivities(ctx, host.product, ct.ID)
+			ct.orchestration.items, _ = listBotActiveOrchestrations(ctx, host.product, ct.ID)
+			activeSessions[ct.ID], _ = listBotActiveSessions(ctx, host.product, ct.ID)
 		}
 		if pending, ok := host.productPending[ct.ID]; ok && pending.ConversationID == ct.SessionID {
 			receipt, lookupErr := host.product.Operation(ctx, pending.OperationID)
@@ -235,6 +238,7 @@ func (a *appModel) openProductProfile(ctx context.Context, fresh bool, generatio
 		a.selected = slices.Index(contacts, selected)
 		a.activityIntents = nil
 		a.sessions = sessionWorkspaceState{
+			active:              activeSessions,
 			updateUI:            a.updateUI,
 			persistCloseIntents: a.persistSessionCloseIntents,
 		}
@@ -270,11 +274,6 @@ func (a *appModel) openProductProfile(ctx context.Context, fresh bool, generatio
 		a.sessions.blocked = a.dataRecoveryBlocksChanges()
 		a.sessions.setSessionInspectorClient(host.product)
 		a.reconcilePendingWatchOperations(host)
-		for _, ct := range contacts {
-			if !ct.Archived {
-				a.refreshBotOrchestrations(host, ct)
-			}
-		}
 		a.reconcileOrchestrationOperations(host)
 		a.refreshDockMenu()
 	})
@@ -373,6 +372,9 @@ func (a *appModel) sessionInspectorDeps(c *ui.Context, ct *contact) sessionInspe
 	deps.formatDimensions = msgs.SessionInspectDimensions
 	deps.formatGap = msgs.SessionInspectOutputGap
 	deps.formatMS = msgs.SessionInspectMilliseconds
+	if a.detailPageActive() && a.railCollapsed {
+		deps.showContacts = a.showContactsButton
+	}
 	return deps
 }
 
@@ -385,11 +387,23 @@ func (a *appModel) sessionInspectorFallbackDeps(ct *contact) sessionInspectorDep
 		copy:                defaultSessionInspectionCopy,
 		updateUI:            a.updateUI,
 		persistCloseIntents: a.persistSessionCloseIntents,
+		onBack: func() {
+			opener := a.sessions.botSession(ct.ID).opener
+			if opener == "profile-sessions:"+ct.ID {
+				a.focusSessionsOpener = ct.ID
+				return
+			}
+			a.closeDetail()
+			a.focusBotDrawerOpener(ct.ID, opener)
+		},
 		onOpenConversation: func(conversationID string) {
+			a.selectContactWithDrawer(slices.Index(a.contacts, ct), true)
 			a.browseProductConversations(ct, conversationID)
 		},
 		onOpenActivity: func(activityID string) {
-			a.sessions.activeBotID = ""
+			a.selectContactWithDrawer(slices.Index(a.contacts, ct), true)
+			a.priorChats = nil
+			a.closeDetail()
 			ct.activity.open = true
 			a.openProductActivity(ct, activityID)
 		},

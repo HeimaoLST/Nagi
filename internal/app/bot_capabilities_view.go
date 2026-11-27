@@ -140,12 +140,33 @@ func (a *appModel) botCapabilitiesView(c *ui.Context, t *ui.Theme, ct *contact, 
 				open := secondaryButton(c, msgs.SchedWorkOpenAction()).Key("open-scheduled-work").AlignSelf(ui.Start).
 					Disabled(a.productActivityClient() == nil).
 					OnClick(func() {
-						a.scheduledWorkBotID = ct.ID
-						a.schedules.bot(ct.ID).focusHeading = true
+						a.openBotScheduledWork(ct.ID)
 					})
 				if a.focusScheduledWorkOpener == ct.ID {
 					open.Focus().ScrollIntoView()
 					a.focusScheduledWorkOpener = ""
+				}
+			})
+		})
+		preferenceSection(c, t, msgs.OrchestrationTitle(), func() {
+			ui.Column(c).FillWidth().MinWidth(0).Gap(8).Children(func() {
+				capabilityText(c, t, msgs.OrchestrationProfileHint())
+				opener := "profile-background:" + ct.ID
+				open := secondaryButton(c, msgs.OrchestrationOpenAction()).Key("open-background-work").AlignSelf(ui.Start).
+					Disabled(a.productActivityClient() == nil || a.dataRecoveryBlocksChanges()).
+					OnClick(func() { a.openBackgroundWork(ct.ID, "", opener) })
+				a.focusBackgroundOpener(open, opener)
+			})
+		})
+		preferenceSection(c, t, msgs.SessionInspectTitle(), func() {
+			ui.Column(c).FillWidth().MinWidth(0).Gap(8).Children(func() {
+				capabilityText(c, t, msgs.SessionInspectProfileHint())
+				open := secondaryButton(c, msgs.SessionInspectOpenAction()).Key("open-terminal-sessions").AlignSelf(ui.Start).
+					Disabled(ct.Archived || a.productActivityClient() == nil || a.dataRecoveryBlocksChanges()).
+					OnClick(func() { a.openBotSessions(ct.ID, "profile-sessions:"+ct.ID) })
+				if a.focusSessionsOpener == ct.ID {
+					open.Focus().ScrollIntoView()
+					a.focusSessionsOpener = ""
 				}
 			})
 		})

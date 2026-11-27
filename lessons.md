@@ -553,3 +553,27 @@
 **Cause or correction:** Product mutation and navigation controls depend on the worker staying reachable, while the headless fixture did not establish readiness.
 
 **Prevention:** Start the pinned worker with a disposable profile and wait for `Ready` before capturing enabled product controls. Exercise the actual option and field focus and record the observed outcomes.
+
+### Seed Bot summaries before headless UI dispatch begins
+
+**Problem:** The first headless frame raced with a detached startup orchestration refresh in `TestPiAppScheduledWorkAndGrants`.
+
+**Cause or correction:** A worker callback used the direct `updateUI` fallback before the UI hook was installed and changed the orchestration slice concurrently with rendering.
+
+**Prevention:** Read initial orchestration and active-session summaries before installing the profile. Serialize direct UI updates with hook installation and release the mutex before dispatching through the hook or native window.
+
+### Keep Bot inspectors behind the overview menu
+
+**Problem:** Permanent Terminal sessions and Background work buttons crowded the chat header. Opening either inspector replaced the conversation at widths that could show both. The Settings heading style also truncated inspector titles in the right drawer.
+
+**Cause or correction:** Both actions were top-level header controls and both inspectors rendered inside the main chat column. `typePageTitle` and `lineSettingsTitle` resolve to 22 and 28, while drawer titles use 16 px type, weight 600, and a 24 px line height.
+
+**Prevention:** Put Bot management actions in the overview menu and show inspectors in the Bot profile drawer. Use the existing narrow overlay breakpoint, restore focus to the opener, and check the full drawer title at the default width.
+
+### Keep inspector rows stationary during background reloads
+
+**Problem:** Clicking a Terminal sessions row could miss when a background reload finished at pointer-down. Background work had the same layout shift.
+
+**Cause or correction:** Inserting a loading notice above populated content moved the click targets when the notice disappeared.
+
+**Prevention:** Show the loading notice only while the current list or detail has no content. Keep existing content in place and use the Reload control's disabled state during refresh.

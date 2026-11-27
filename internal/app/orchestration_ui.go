@@ -25,6 +25,7 @@ type botOrchestrationState struct {
 type backgroundWorkPanel struct {
 	bot          *contact
 	opener       string
+	returnChat   *productConversationBrowser
 	detailID     string
 	listOpener   string
 	focusBack    bool
@@ -129,7 +130,12 @@ func (a *appModel) openBackgroundWork(botID, mandateID, opener string) {
 	if ct == nil || !a.productProfileReady() || a.dataRecoveryBlocksChanges() {
 		return
 	}
-	panel := &backgroundWorkPanel{bot: ct, detailID: mandateID, opener: opener, focusBack: true}
+	var returnChat *productConversationBrowser
+	if strings.HasPrefix(opener, "notice:") {
+		returnChat = a.priorChats
+	}
+	a.openContactProfile(botID)
+	panel := &backgroundWorkPanel{bot: ct, detailID: mandateID, opener: opener, focusBack: true, returnChat: returnChat}
 	a.backgroundWork.panel, a.backgroundWork.returnFocus = panel, ""
 	a.loadBackgroundWork(panel, "")
 }
@@ -200,7 +206,13 @@ func (a *appModel) backBackgroundWork() {
 		a.backgroundWork.returnFocus = panel.listOpener
 		return
 	}
-	a.backgroundWork.panel = nil
+	if panel.opener == "profile-background:"+panel.bot.ID {
+		a.backgroundWork.panel = nil
+	} else {
+		a.closeDetail()
+		a.priorChats = panel.returnChat
+		a.focusBotDrawerOpener(panel.bot.ID, panel.opener)
+	}
 	a.backgroundWork.returnFocus = panel.opener
 }
 
@@ -466,33 +478,23 @@ func (a *appModel) orchestrationDecisionCard(c *ui.Context, t *ui.Theme, ct *con
 	})
 }
 
-func (a *appModel) backgroundWorkButton(c *ui.Context, ct *contact, count int) {
-	msgs := locales.In(c.Locale())
-	opener := "background-work:" + ct.ID
-	label := msgs.OrchestrationTitle()
-	if count > 0 {
-		label = msgs.OrchestrationHeaderCount(count)
-	}
-	button := secondaryButton(c, label).Key("background-work-button").Label(label).MinHeight(theme.ControlHit).
-		Padding(4, 10).Radius(theme.ControlRadius).Shrink(0).Disabled(!a.productProfileReady() || a.dataRecoveryBlocksChanges())
-	a.focusBackgroundOpener(button, opener)
-	button.OnClick(func() { a.openBackgroundWork(ct.ID, "", opener) })
-}
-
 func (a *appModel) backgroundWorkView(c *ui.Context, t *ui.Theme, panel *backgroundWorkPanel) {
 	msgs := locales.In(c.Locale())
-	ui.Column(c).Key("background-work").Fill().MinWidth(0).MinHeight(0).Children(func() {
+	ui.Column(c).Key("background-work").Fill().MinWidth(0).MinHeight(0).Background(a.workTheme.Panel).Children(func() {
 		ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(8).Padding(8, 12).Shrink(0).Children(func() {
 			back := detailBackButton(c, t, msgs.OrchestrationBack(), msgs.OrchestrationBack()).OnClick(a.backBackgroundWork)
 			if panel.focusBack {
 				back.Focus()
 				panel.focusBack = false
 			}
-			theme.PageHeading(c, msgs.OrchestrationTitle()).Grow(1).MinWidth(0)
+			title := msgs.OrchestrationTitle()
+			heading := ui.Text(c, title).Role(ui.RoleHeading).Level(1).FontSize(16).FontWeight(600).
+				FixedLineHeight(24).TextColor(t.Text).Grow(1).MinWidth(0).SingleLine().Ellipsis("…")
+			appTooltip(c, heading, title)
 			secondaryButton(c, msgs.OrchestrationReload()).AlignSelf(ui.Start).Disabled(panel.loading || !a.productProfileReady()).OnClick(func() {
 				a.loadBackgroundWork(panel, "")
 			})
-			if a.railCollapsed {
+			if a.detailPageActive() && a.railCollapsed {
 				a.showContactsButton(c, t)
 			}
 		})
@@ -505,7 +507,7 @@ func (a *appModel) backgroundWorkView(c *ui.Context, t *ui.Theme, panel *backgro
 			switch {
 			case panel.failed:
 				a.activityText(c, t, msgs.OrchestrationLoadFailed())
-			case panel.loading:
+			case panel.loading && (panel.detailID == "" && len(panel.items) == 0 || panel.detailID != "" && panel.detail == nil):
 				a.activityText(c, t, msgs.OrchestrationLoading())
 			}
 			if panel.detailID != "" {
@@ -723,13 +725,8 @@ func (a *appModel) openDockBackgroundWork(botID string) {
 	}
 	a.closeSettings()
 	a.closeAux()
-	a.priorChats = nil
-	a.sessions.activeBotID = ""
 	a.resetComposerOverlays()
-	if a.activeDetail() != "" {
-		a.closeDetail()
-	}
-	a.openBackgroundWork(botID, "", "background-work:"+botID)
+	a.openBackgroundWork(botID, "", "header-overview:"+botID)
 	a.reopenWindow()
 	a.invalidateNativeWindow()
 }

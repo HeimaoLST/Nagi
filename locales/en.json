@@ -1931,7 +1931,10 @@
       }
     }
   },
-  "sessionInspectTitle": "Sessions",
+  "sessionInspectTitle": "Terminal sessions",
+  "sessionInspectMenuCount": "{count, plural, =0 {Terminal sessions} one {Terminal sessions (#)} other {Terminal sessions (#)}}",
+  "sessionInspectProfileHint": "Inspect this Bot’s terminal sessions and their output.",
+  "sessionInspectOpenAction": "View terminal sessions",
   "sessionInspectBack": "Back",
   "sessionInspectReload": "Reload",
   "sessionInspectLoadMore": "Load more",
@@ -2152,6 +2155,10 @@
   "orchestrationDispositionFailed": "Failed",
   "orchestrationDispositionUnknown": "Unknown",
   "orchestrationHeaderCount": "Background work ({count, number})",
+  "botOverviewLabel": "Bot overview",
+  "orchestrationMenuCount": "{count, plural, =0 {Background work} one {Background work (#)} other {Background work (#)}}",
+  "orchestrationProfileHint": "Review this Bot’s background work, decisions, and recent wakes.",
+  "orchestrationOpenAction": "View background work",
   "orchestrationVersion": "Generation {generation, number} · Revision {revision, number}",
   "orchestrationSourceWatch": "Watch",
   "orchestrationSourceTimer": "Timer",

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -240,6 +241,17 @@ func TestPiAppOrchestrationAndTimeline(t *testing.T) {
 	}
 	w.wait(func() bool { return cedar.Loaded && w.app.selectedContact() == cedar })
 
+	var headerErr string
+	w.pump.do(func() {
+		_, hasOverview := w.view.Find(msgs.BotOverviewLabel())
+		if !hasOverview || w.view.HasText(msgs.OrchestrationTitle()) || w.view.HasText(msgs.SessionInspectTitle()) || w.view.HasText("Sessions") {
+			headerErr = fmt.Sprintf("idle chat header unexpected state: overview=%v texts=%v", hasOverview, w.view.Texts())
+		}
+	})
+	if headerErr != "" {
+		t.Fatal(headerErr)
+	}
+
 	w.click("Copper")
 	w.wait(func() bool {
 		return w.app.selectedContact() == copper && copper.Loaded && copper.Draft == "HOLD_COPPER"
@@ -324,10 +336,26 @@ func TestPiAppOrchestrationAndTimeline(t *testing.T) {
 	}
 
 	w.wait(func() bool {
+		visual := w.app.botVisualState(cedar, time.Now())
 		return w.view.HasText("Approve release checklist") &&
 			w.view.HasText("Publish notes") &&
-			w.view.HasText(msgs.OrchestrationHeaderCount(2))
+			visual.backgroundActive+visual.backgroundDecisions == 2
 	})
+	w.pump.do(func() {
+		texts := w.view.Texts()
+		if slices.Contains(texts, msgs.OrchestrationTitle()) || w.view.HasText(msgs.OrchestrationHeaderCount(2)) {
+			headerErr = fmt.Sprintf("header should not show permanent background work button: texts=%v", texts)
+		}
+	})
+	if headerErr != "" {
+		t.Fatal(headerErr)
+	}
+	w.click(msgs.BotOverviewLabel())
+	w.wait(func() bool {
+		return w.app.headerMenuOpen && w.view.HasText(msgs.OrchestrationMenuCount(2))
+	})
+	w.frame(func() { w.view.Key(0, ui.KeyEscape) })
+	w.wait(func() bool { return !w.app.headerMenuOpen })
 
 	w.click("Publish notes")
 	w.click(msgs.OrchestrationNotePlaceholder())
@@ -364,15 +392,27 @@ func TestPiAppOrchestrationAndTimeline(t *testing.T) {
 		t.Fatalf("save schedule watch: %v", err)
 	}
 
-	headerCount3 := msgs.OrchestrationHeaderCount(3)
 	w.wait(func() bool {
-		return w.app.selectedContact() == cedar && w.view.HasText(headerCount3)
+		visual := w.app.botVisualState(cedar, time.Now())
+		return w.app.selectedContact() == cedar && visual.backgroundActive+visual.backgroundDecisions == 3
 	})
-	w.click(headerCount3)
+	w.pump.do(func() {
+		texts := w.view.Texts()
+		if slices.Contains(texts, msgs.OrchestrationTitle()) || w.view.HasText(msgs.OrchestrationHeaderCount(3)) {
+			headerErr = fmt.Sprintf("header should remain clean before opening background work: texts=%v", texts)
+		}
+	})
+	if headerErr != "" {
+		t.Fatal(headerErr)
+	}
+	openOverviewMenuItem(w, msgs.BotOverviewLabel(), msgs.OrchestrationMenuCount(3))
 	w.wait(func() bool {
-		return w.app.backgroundWork.panel != nil &&
+		return w.app.detail == detailProfile &&
+			w.app.workspaceOpen &&
+			w.app.backgroundWork.panel != nil &&
 			w.view.HasText(decisionTimerPurpose) &&
-			w.view.HasText(scheduleMandatePurpose)
+			w.view.HasText(scheduleMandatePurpose) &&
+			w.view.HasText(msgs.SendAction())
 	})
 
 	clickInBackgroundWorkScroll(w, msgs.DetailsAction()+" "+decisionTimerPurpose)
@@ -392,7 +432,12 @@ func TestPiAppOrchestrationAndTimeline(t *testing.T) {
 	})
 
 	w.frame(func() { w.view.Key(0, ui.KeyEscape) })
-	w.wait(func() bool { return w.app.backgroundWork.panel == nil })
+	w.wait(func() bool {
+		return w.app.backgroundWork.panel == nil &&
+			!w.app.workspaceOpen &&
+			w.app.detail == "" &&
+			w.view.Focused(msgs.BotOverviewLabel())
+	})
 
 	w.wait(func() bool {
 		if w.view.FramePending() {

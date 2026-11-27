@@ -1717,6 +1717,23 @@ func visualUint64Ptr(v uint64) *uint64 {
 	return &v
 }
 
+func visualIntrinsicHeadingWidth(text, locale string, dark bool) float32 {
+	var measured float32
+	tr := ui.NewTesterWith(func(c *ui.Context) {
+		wb := theme.ResolveWorkbenchTheme(dark)
+		c.SetTheme(wb.Theme)
+		ui.Row(c).Children(func() {
+			ui.Text(c, text).FontSize(16).FontWeight(600).FixedLineHeight(24).TextColor(wb.Theme.Text).SingleLine()
+		})
+	}, 800, 80, ui.TesterOptions{Dark: dark})
+	tr.SetLocale(locale)
+	tr.Frame()
+	if r, ok := tr.Find(text); ok {
+		measured = r.W
+	}
+	return measured
+}
+
 func seedVisualSessionInspectorFixture(t *testing.T) (phase3SeededControlPlane, pi.ProductSessionSummary, pi.ProductSessionSummary) {
 	t.Helper()
 	fx := phase3SeededControlPlaneApp(t)
@@ -1795,6 +1812,11 @@ func seedVisualSessionInspectorFixture(t *testing.T) (phase3SeededControlPlane, 
 
 	bot := fx.app.sessions.botSession(fx.contact.ID)
 	fx.app.sessions.client = fx.app.pi.product
+	fx.app.sessions.active = map[string]map[string]pi.ProductSessionSummary{
+		fx.contact.ID: {
+			ptySummary.SessionID: ptySummary,
+		},
+	}
 	bot.items = []pi.ProductSessionSummary{ptySummary, pipeSummary}
 	bot.nextCursor = "cursor-page-2"
 	return fx, ptySummary, pipeSummary
@@ -1845,22 +1867,72 @@ func TestVisualGuardSessionInspection(t *testing.T) {
 					tr.SetFocused(true)
 					tr.Frame()
 
-					headerBtn, okHeader := tr.Find(msgs.SessionInspectTitle())
-					if !okHeader || headerBtn.W < theme.ControlHit || headerBtn.H < theme.ControlHit || headerBtn.W >= 220 || headerBtn.X+headerBtn.W > float32(w)+0.5 {
-						t.Fatalf("zero-activity header Sessions button invalid: ok=%v rect=%+v viewport=%dx%d", okHeader, headerBtn, w, h)
+					if tr.HasText(msgs.SessionInspectTitle()) || tr.HasText(msgs.OrchestrationTitle()) || tr.HasText("Sessions") || tr.HasText(msgs.SessionInspectMenuCount(1)) {
+						t.Fatalf("idle chat header should stay clean without permanent work text buttons: texts=%v", tr.Texts())
+					}
+					overviewBtn, okOverview := tr.Find(msgs.BotOverviewLabel())
+					if !okOverview || overviewBtn.W < theme.ControlHit || overviewBtn.H < theme.ControlHit || overviewBtn.W > 48 || overviewBtn.Y < 0 || overviewBtn.Y+overviewBtn.H > 64 || overviewBtn.X < 0 || overviewBtn.X+overviewBtn.W > float32(w)+0.5 {
+						t.Fatalf("header Bot overview button invalid: ok=%v rect=%+v viewport=%dx%d", okOverview, overviewBtn, w, h)
 					}
 
-					fx.app.sessions.activeBotID = fx.contact.ID
+					if err := tr.Click(msgs.BotOverviewLabel()); err != nil {
+						t.Fatalf("click Bot overview button: %v", err)
+					}
 					tr.Frame()
+					if !fx.app.headerMenuOpen {
+						t.Fatal("Bot overview popover menu did not open")
+					}
+					for _, menuItem := range []string{
+						msgs.BotMenuActivities(0),
+						msgs.OrchestrationMenuCount(0),
+						msgs.SessionInspectMenuCount(1),
+						msgs.SchedWorkTitle(),
+						msgs.ContactProfileAction(),
+					} {
+						r, ok := tr.Find(menuItem)
+						if !ok || r.W <= 0 || r.H <= 0 || r.X < 0 || r.X+r.W > float32(w)+0.5 || r.Y < 0 || r.Y+r.H > float32(h)+0.5 {
+							t.Fatalf("Bot overview popover item %q missing or clipped at %dx%d: ok=%v rect=%+v", menuItem, w, h, ok, r)
+						}
+					}
+					tr.Key(0, ui.KeyEscape)
+					tr.Frame()
+					if fx.app.headerMenuOpen {
+						t.Fatal("Escape did not close Bot overview popover menu")
+					}
+
+					fx.app.openBotSessions(fx.contact.ID, "header-overview:"+fx.contact.ID)
+					bot := fx.app.sessions.botSession(fx.contact.ID)
+					bot.items = []pi.ProductSessionSummary{ptySummary, pipeSummary}
+					bot.nextCursor = "cursor-page-2"
+					bot.listLoading = false
+					bot.listFailed = false
+					tr.Frame()
+
+					if fx.app.detail != detailProfile || !fx.app.workspaceOpen || fx.app.sessions.activeBotID != fx.contact.ID {
+						t.Fatalf("session inspection did not open in right drawer: detail=%q workspaceOpen=%v activeBotID=%q", fx.app.detail, fx.app.workspaceOpen, fx.app.sessions.activeBotID)
+					}
 					assertHit(tr, "session-list", msgs.SessionInspectBack(), msgs.SessionInspectReload(), ptySummary.Label+", "+msgs.SessionInspectRunning(), pipeSummary.Label+", "+msgs.SessionInspectExited(), msgs.SessionInspectLoadMore())
+					wantSessTitleW := visualIntrinsicHeadingWidth(msgs.SessionInspectTitle(), locale, dark)
+					titleRect, okTitle := tr.Find(msgs.SessionInspectTitle())
+					if !okTitle || !slices.Contains(tr.Texts(), msgs.SessionInspectTitle()) || titleRect.W < 40 || titleRect.X < 0 || titleRect.X+titleRect.W > float32(w)+0.5 {
+						t.Fatalf("session list heading missing or out of bounds: ok=%v rect=%+v texts=%v", okTitle, titleRect, tr.Texts())
+					}
+					if titleRect.W+0.5 < wantSessTitleW {
+						t.Fatalf("session list heading %q optically truncated at %dx%d: allocated=%.1f < intrinsic=%.1f", msgs.SessionInspectTitle(), w, h, titleRect.W, wantSessTitleW)
+					}
 					backRect, _ := tr.Find(msgs.SessionInspectBack())
 					reloadRect, _ := tr.Find(msgs.SessionInspectReload())
 					ptyRowRect, _ := tr.Find(ptySummary.Label + ", " + msgs.SessionInspectRunning())
 					if reloadRect.W >= 220 || math.Abs(float64(reloadRect.Y-backRect.Y)) > 6 || reloadRect.Y >= ptyRowRect.Y {
 						t.Fatalf("list header Reload misaligned or stretched: reload=%+v back=%+v firstRow=%+v", reloadRect, backRect, ptyRowRect)
 					}
+					if w >= 900 {
+						sendRect, okSend := tr.Find(msgs.SendAction())
+						if !okSend || backRect.X < float32(w)-360 || sendRect.X+sendRect.W > backRect.X {
+							t.Fatalf("side-by-side drawer geometry invalid at %dx%d: send=%+v okSend=%v back=%+v", w, h, sendRect, okSend, backRect)
+						}
+					}
 
-					bot := fx.app.sessions.botSession(fx.contact.ID)
 					bot.detail = &sessionDetailState{
 						summary: ptySummary,
 						ready:   true,
@@ -1879,7 +1951,14 @@ func TestVisualGuardSessionInspection(t *testing.T) {
 					}
 					tr.Frame()
 
-					assertHit(tr, "session-detail-pty", msgs.SessionInspectBack(), msgs.SessionInspectKill(), msgs.SessionInspectSourceChat(), msgs.SessionInspectSourceActivity(), msgs.SessionInspectEarlierOutput(), msgs.SessionInspectLaterOutput(), msgs.SessionInspectLatestOutput())
+					assertHit(tr, "session-detail-pty", msgs.SessionInspectBack(), msgs.SessionInspectKill(), msgs.SessionInspectSourceChat(), msgs.SessionInspectSourceActivity())
+					detailTitleRect, okDetailTitle := tr.Find(msgs.SessionInspectTitle())
+					if !okDetailTitle || detailTitleRect.W < 40 || detailTitleRect.X+detailTitleRect.W > float32(w)+0.5 {
+						t.Fatalf("session detail heading missing or out of bounds: ok=%v rect=%+v", okDetailTitle, detailTitleRect)
+					}
+					if detailTitleRect.W+0.5 < wantSessTitleW {
+						t.Fatalf("session detail heading %q optically truncated at %dx%d: allocated=%.1f < intrinsic=%.1f", msgs.SessionInspectTitle(), w, h, detailTitleRect.W, wantSessTitleW)
+					}
 					killRect, _ := tr.Find(msgs.SessionInspectKill())
 					if killRect.W >= 220 || math.Abs(float64(killRect.Y-backRect.Y)) > 6 {
 						t.Fatalf("detail header Kill session misaligned or stretched: kill=%+v back=%+v", killRect, backRect)
@@ -1899,13 +1978,28 @@ func TestVisualGuardSessionInspection(t *testing.T) {
 							t.Fatalf("unformatted placeholder in session detail text %q", txt)
 						}
 					}
+					for y := float32(0); y <= 600; y += 120 {
+						bot.detail.scroll.Y = y
+						tr.Frame()
+						if r, ok := tr.Find(msgs.SessionInspectEarlierOutput()); ok && r.Y >= 0 && r.Y+r.H <= float32(h)+0.5 {
+							break
+						}
+					}
+					assertHit(tr, "session-detail-pty-output", msgs.SessionInspectEarlierOutput(), msgs.SessionInspectLaterOutput(), msgs.SessionInspectLatestOutput())
 
 					if err := tr.Click(msgs.SessionInspectBack()); err != nil {
 						t.Fatalf("click Back from detail: %v", err)
 					}
 					tr.Frame()
-					if bot.detail != nil {
-						t.Fatal("Back from detail did not return to session list")
+					if bot.detail != nil || !fx.app.workspaceOpen {
+						t.Fatalf("Back from detail did not return to session list inside drawer: detail=%v open=%v", bot.detail, fx.app.workspaceOpen)
+					}
+					if err := tr.Click(msgs.SessionInspectBack()); err != nil {
+						t.Fatalf("click Back from session list: %v", err)
+					}
+					tr.Frame()
+					if fx.app.sessions.activeBotID != "" || fx.app.workspaceOpen || fx.app.detail != "" {
+						t.Fatalf("Back from root session list did not collapse drawer: activeBotID=%q workspaceOpen=%v detail=%q", fx.app.sessions.activeBotID, fx.app.workspaceOpen, fx.app.detail)
 					}
 				})
 			}
@@ -2285,6 +2379,11 @@ func TestVisualGuardOrchestrationAndTimeline(t *testing.T) {
 				t.Run(fmt.Sprintf("%s-dark%t-%dx%d", locale, dark, w, h), func(t *testing.T) {
 					a, ct := workspaceTestApp(t)
 					a.windowWidth = w
+					a.demo = false
+					a.runtimeStatus = runtimeStateReady
+					a.connectionGeneration = 1
+					a.pi = phase3StubProductHost(t, a, visualGuardSeededPool())
+					a.profileEditors = map[string]*contactProfileEditor{ct.ID: newContactProfileEditor(contactProfileDraft(ct))}
 					ct.transcriptError = true
 					ct.Messages = []*message{
 						{
@@ -2351,6 +2450,25 @@ func TestVisualGuardOrchestrationAndTimeline(t *testing.T) {
 					ct.orchestration.items = []pi.ProductOrchestrationSummary{decisionItem}
 					tr.Frame()
 
+					texts := tr.Texts()
+					if slices.Contains(texts, msgs.OrchestrationTitle()) || tr.HasText(msgs.OrchestrationHeaderCount(1)) || slices.Contains(texts, msgs.SessionInspectTitle()) {
+						t.Fatalf("chat header should stay clean without permanent Background work button: texts=%v", texts)
+					}
+					overviewRect, okOverview := tr.Find(msgs.BotOverviewLabel())
+					if !okOverview || overviewRect.W < theme.ControlHit || overviewRect.H < theme.ControlHit || overviewRect.W > 48 || overviewRect.Y < 0 || overviewRect.Y+overviewRect.H > 64 || overviewRect.X+overviewRect.W > float32(w)+0.5 {
+						t.Fatalf("header Bot overview button invalid at %dx%d: ok=%v rect=%+v", w, h, okOverview, overviewRect)
+					}
+					if err := tr.Click(msgs.BotOverviewLabel()); err != nil {
+						t.Fatalf("click Bot overview button: %v", err)
+					}
+					tr.Frame()
+					menuRect, okMenu := tr.Find(msgs.OrchestrationMenuCount(1))
+					if !okMenu || !a.headerMenuOpen || menuRect.X < 0 || menuRect.X+menuRect.W > float32(w)+0.5 || menuRect.Y < 0 || menuRect.Y+menuRect.H > float32(h)+0.5 {
+						t.Fatalf("popover item %q missing or clipped at %dx%d: ok=%v open=%v rect=%+v texts=%v", msgs.OrchestrationMenuCount(1), w, h, okMenu, a.headerMenuOpen, menuRect, tr.Texts())
+					}
+					tr.Key(0, ui.KeyEscape)
+					tr.Frame()
+
 					for _, expected := range []string{
 						"Approve rollout",
 						"Publish notes",
@@ -2364,15 +2482,31 @@ func TestVisualGuardOrchestrationAndTimeline(t *testing.T) {
 						}
 					}
 
+					a.openContactProfile(ct.ID)
 					a.backgroundWork.panel = &backgroundWorkPanel{
-						bot:   ct,
-						items: ct.orchestration.items,
+						bot:    ct,
+						opener: "header-overview:" + ct.ID,
+						items:  ct.orchestration.items,
 					}
 					tr.Frame()
 					for _, expected := range []string{msgs.OrchestrationTitle(), "Monitor release readiness", msgs.DetailsAction()} {
 						r, ok := tr.Find(expected)
 						if !ok || r.W <= 0 || r.H <= 0 || r.X < -0.5 || r.X+r.W > float32(w)+0.5 || r.Y < -0.5 || r.Y+r.H > float32(h)+0.5 {
 							t.Fatalf("background list text %q out of viewport %dx%d: ok=%v rect=%+v", expected, w, h, ok, r)
+						}
+					}
+					wantBgTitleW := visualIntrinsicHeadingWidth(msgs.OrchestrationTitle(), locale, dark)
+					bgTitleRect, _ := tr.Find(msgs.OrchestrationTitle())
+					if !slices.Contains(tr.Texts(), msgs.OrchestrationTitle()) {
+						t.Fatalf("background work heading missing untruncated text %q: texts=%v", msgs.OrchestrationTitle(), tr.Texts())
+					}
+					if bgTitleRect.W+0.5 < wantBgTitleW {
+						t.Fatalf("background work list heading %q optically truncated at %dx%d: allocated=%.1f < intrinsic=%.1f", msgs.OrchestrationTitle(), w, h, bgTitleRect.W, wantBgTitleW)
+					}
+					if w >= 900 {
+						decRect, okDec := tr.Find(msgs.OrchestrationDecisionBadge())
+						if !okDec || bgTitleRect.X < float32(w)-360 || decRect.X+decRect.W > bgTitleRect.X {
+							t.Fatalf("background drawer geometry invalid at %dx%d: title=%+v decision=%+v okDec=%v", w, h, bgTitleRect, decRect, okDec)
 						}
 					}
 
@@ -2389,6 +2523,10 @@ func TestVisualGuardOrchestrationAndTimeline(t *testing.T) {
 						},
 					}
 					tr.Frame()
+					bgDetailTitleRect, okBgDetailTitle := tr.Find(msgs.OrchestrationTitle())
+					if !okBgDetailTitle || bgDetailTitleRect.W+0.5 < wantBgTitleW {
+						t.Fatalf("background detail heading %q missing or truncated at %dx%d: ok=%v allocated=%.1f < intrinsic=%.1f", msgs.OrchestrationTitle(), w, h, okBgDetailTitle, bgDetailTitleRect.W, wantBgTitleW)
+					}
 					if !tr.HasText(msgs.OrchestrationMetricsTitle()) {
 						t.Fatalf("background detail missing metrics heading: %v", tr.Texts())
 					}
@@ -2404,7 +2542,7 @@ func TestVisualGuardOrchestrationAndTimeline(t *testing.T) {
 					if !receiptsVisible {
 						t.Fatalf("scrolling background detail did not reveal receipts: %v", tr.Texts())
 					}
-					a.backgroundWork.panel = nil
+					a.closeDetail()
 
 					a.openSettingsTab(settingsTabAppearance, settingsSourceCommand)
 					s := a.ensureDataRecovery()

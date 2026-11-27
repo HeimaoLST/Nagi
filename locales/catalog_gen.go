@@ -12052,14 +12052,46 @@ func (msgs Messages) CapMcpProbeResult(count int, latency string) string {
 	return Catalog.Format(msgs.locale, "capMcpProbeResult", map[string]any{"count": count, "latency": latency})
 }
 
-// SessionInspectTitle says "Sessions"
+// SessionInspectTitle says "Terminal sessions"
 // in the language the app shows.
 func SessionInspectTitle() string { return In(i18n.Locale()).SessionInspectTitle() }
 
-// SessionInspectTitle says "Sessions"
+// SessionInspectTitle says "Terminal sessions"
 // in the language of msgs.
 func (msgs Messages) SessionInspectTitle() string {
 	return Catalog.Format(msgs.locale, "sessionInspectTitle", nil)
+}
+
+// SessionInspectMenuCount says "{count, plural, =0 {Terminal sessions} one {Terminal sessions (#)} other {Terminal sessions (#)}}"
+// in the language the app shows.
+func SessionInspectMenuCount(count int) string {
+	return In(i18n.Locale()).SessionInspectMenuCount(count)
+}
+
+// SessionInspectMenuCount says "{count, plural, =0 {Terminal sessions} one {Terminal sessions (#)} other {Terminal sessions (#)}}"
+// in the language of msgs.
+func (msgs Messages) SessionInspectMenuCount(count int) string {
+	return Catalog.Format(msgs.locale, "sessionInspectMenuCount", map[string]any{"count": count})
+}
+
+// SessionInspectProfileHint says "Inspect this Bot’s terminal sessions and their output."
+// in the language the app shows.
+func SessionInspectProfileHint() string { return In(i18n.Locale()).SessionInspectProfileHint() }
+
+// SessionInspectProfileHint says "Inspect this Bot’s terminal sessions and their output."
+// in the language of msgs.
+func (msgs Messages) SessionInspectProfileHint() string {
+	return Catalog.Format(msgs.locale, "sessionInspectProfileHint", nil)
+}
+
+// SessionInspectOpenAction says "View terminal sessions"
+// in the language the app shows.
+func SessionInspectOpenAction() string { return In(i18n.Locale()).SessionInspectOpenAction() }
+
+// SessionInspectOpenAction says "View terminal sessions"
+// in the language of msgs.
+func (msgs Messages) SessionInspectOpenAction() string {
+	return Catalog.Format(msgs.locale, "sessionInspectOpenAction", nil)
 }
 
 // SessionInspectBack says "Back"
@@ -13008,8 +13040,12 @@ func (msgs Messages) DockOpenNagi() string {
 	return Catalog.Format(msgs.locale, "dockOpenNagi", nil)
 }
 
+// MessageReadStatus says "Read"
+// in the language the app shows.
 func MessageReadStatus() string { return In(i18n.Locale()).MessageReadStatus() }
 
+// MessageReadStatus says "Read"
+// in the language of msgs.
 func (msgs Messages) MessageReadStatus() string {
 	return Catalog.Format(msgs.locale, "messageReadStatus", nil)
 }
@@ -13614,6 +13650,46 @@ func OrchestrationHeaderCount(count int) string {
 // in the language of msgs.
 func (msgs Messages) OrchestrationHeaderCount(count int) string {
 	return Catalog.Format(msgs.locale, "orchestrationHeaderCount", map[string]any{"count": count})
+}
+
+// BotOverviewLabel says "Bot overview"
+// in the language the app shows.
+func BotOverviewLabel() string { return In(i18n.Locale()).BotOverviewLabel() }
+
+// BotOverviewLabel says "Bot overview"
+// in the language of msgs.
+func (msgs Messages) BotOverviewLabel() string {
+	return Catalog.Format(msgs.locale, "botOverviewLabel", nil)
+}
+
+// OrchestrationMenuCount says "{count, plural, =0 {Background work} one {Background work (#)} other {Background work (#)}}"
+// in the language the app shows.
+func OrchestrationMenuCount(count int) string { return In(i18n.Locale()).OrchestrationMenuCount(count) }
+
+// OrchestrationMenuCount says "{count, plural, =0 {Background work} one {Background work (#)} other {Background work (#)}}"
+// in the language of msgs.
+func (msgs Messages) OrchestrationMenuCount(count int) string {
+	return Catalog.Format(msgs.locale, "orchestrationMenuCount", map[string]any{"count": count})
+}
+
+// OrchestrationProfileHint says "Review this Bot’s background work, decisions, and recent wakes."
+// in the language the app shows.
+func OrchestrationProfileHint() string { return In(i18n.Locale()).OrchestrationProfileHint() }
+
+// OrchestrationProfileHint says "Review this Bot’s background work, decisions, and recent wakes."
+// in the language of msgs.
+func (msgs Messages) OrchestrationProfileHint() string {
+	return Catalog.Format(msgs.locale, "orchestrationProfileHint", nil)
+}
+
+// OrchestrationOpenAction says "View background work"
+// in the language the app shows.
+func OrchestrationOpenAction() string { return In(i18n.Locale()).OrchestrationOpenAction() }
+
+// OrchestrationOpenAction says "View background work"
+// in the language of msgs.
+func (msgs Messages) OrchestrationOpenAction() string {
+	return Catalog.Format(msgs.locale, "orchestrationOpenAction", nil)
 }
 
 // OrchestrationVersion says "Generation {generation, number} · Revision {revision, number}"

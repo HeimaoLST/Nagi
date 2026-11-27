@@ -133,19 +133,12 @@ func (a *appModel) openDockBotPanel(botID string, sessions bool) {
 	if state.botID != botID || (sessions && !state.canInspect) || (!sessions && !state.canSchedule) {
 		return
 	}
-	ct := a.selectedContact()
 	a.closeSettings()
 	a.closeAux()
-	a.priorChats = nil
-	a.backgroundWork.panel, a.backgroundWork.returnFocus = nil, ""
 	a.resetComposerOverlays()
 	if sessions {
-		if a.activeDetail() != "" {
-			a.closeDetail()
-		}
-		a.sessions.openSessionInspection(a.sessionInspectorFallbackDeps(ct))
+		a.openBotSessions(botID, "header-overview:"+botID)
 	} else {
-		a.sessions.activeBotID = ""
 		a.openBotScheduledWork(botID)
 	}
 	a.reopenWindow()

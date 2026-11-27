@@ -195,6 +195,9 @@ type appModel struct {
 	backgroundWork           backgroundWorkState
 	scheduledWorkBotID       string
 	focusScheduledWorkOpener string
+	focusSessionsOpener      string
+	headerMenuOpen           bool
+	focusHeaderOverview      string
 	composerHandle           ui.Handle
 	composerAttachMenuOpen   bool
 	focusComposerAttach      bool
@@ -272,6 +275,7 @@ type appModel struct {
 	runtimeBuiltinToolsErr    string
 	workDir                   string
 	storePath                 string
+	directUIMu                sync.Mutex
 	uiHookMu                  sync.Mutex
 	uiHook                    func(func())
 	requestQuit               func()
@@ -349,6 +353,11 @@ func (a *appModel) contactByID(id string) *contact {
 }
 
 func (a *appModel) selectContact(i int) {
+	a.selectContactWithDrawer(i, false)
+}
+
+func (a *appModel) selectContactWithDrawer(i int, keepDrawer bool) {
+	a.headerMenuOpen = false
 	if i < 0 || i >= len(a.contacts) || i == a.selected {
 		return
 	}
@@ -356,8 +365,15 @@ func (a *appModel) selectContact(i int) {
 	a.contacts[i].Unread = 0
 	a.selected = i
 	a.priorChats = nil
-	a.sessions.activeBotID = ""
-	a.backgroundWork.panel, a.backgroundWork.returnFocus = nil, ""
+	if !keepDrawer {
+		if a.backgroundWork.panel != nil || a.sessions.activeBotID != "" || a.scheduledWorkBotID != "" {
+			a.closeDetail()
+			a.focusProfileRow, a.focusRail = "", false
+		} else {
+			a.clearBotDrawers()
+		}
+		a.focusHeaderOverview = ""
+	}
 	if !a.demo {
 		a.persist()
 	}
@@ -426,6 +442,7 @@ func (a *appModel) addDefaultContact() {
 	a.selected = len(a.contacts) - 1
 	a.contactSearch = ""
 	a.aux = ""
+	a.headerMenuOpen = false
 	a.resetComposerOverlays()
 	a.focusComposer = true
 }

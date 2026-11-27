@@ -251,6 +251,7 @@ func (a *appModel) beginShutdown() {
 	a.runtimeStatus = runtimeStateDraining
 	a.refreshDockMenu()
 	a.resetComposerOverlays()
+	a.headerMenuOpen = false
 	a.persist()
 	a.stopProviderTimers()
 	a.finishShutdown()
@@ -268,6 +269,8 @@ func (a *appModel) stopProviderTimers() {
 }
 
 func (a *appModel) setUIHook(hook func(func())) {
+	a.directUIMu.Lock()
+	defer a.directUIMu.Unlock()
 	a.uiHookMu.Lock()
 	a.uiHook = hook
 	a.uiHookMu.Unlock()
@@ -284,11 +287,19 @@ func (a *appModel) updateUI(fn func()) {
 		hook(fn)
 		return
 	}
-	if a.win != nil {
-		a.win.Update(fn)
+	a.directUIMu.Lock()
+	hook, win := a.getUIHook(), a.win
+	if hook == nil && win == nil {
+		defer a.directUIMu.Unlock()
+		fn()
 		return
 	}
-	fn()
+	a.directUIMu.Unlock()
+	if hook != nil {
+		hook(fn)
+	} else {
+		win.Update(fn)
+	}
 }
 
 func (a *appModel) maxActiveTasks() int {

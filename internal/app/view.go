@@ -32,6 +32,9 @@ func (a *appModel) view(c *ui.Context) {
 	if !a.settingsOpen {
 		a.linkReturnSeen = false
 	}
+	if a.settingsOpen || a.mainPageActive() || a.detailPageActive() || a.priorChats != nil {
+		a.headerMenuOpen = false
+	}
 	a.systemDark = c.Theme().Dark
 	a.workTheme = a.resolveAppearanceTheme(resolveAppearanceDark(a.appearanceMode, a.systemDark)).Palette
 	t := a.workTheme.Theme
@@ -82,7 +85,11 @@ func (a *appModel) view(c *ui.Context) {
 }
 
 func (a *appModel) escapeTopLayer() {
-	if a.composerMaterial != nil || a.composerAttachMenuOpen || a.capabilities.review != nil {
+	if a.headerMenuOpen || a.composerMaterial != nil || a.composerAttachMenuOpen || a.capabilities.review != nil {
+		return
+	}
+	if a.priorChats != nil {
+		a.backProductConversations()
 		return
 	}
 	if a.backgroundWork.panel != nil {
@@ -95,16 +102,14 @@ func (a *appModel) escapeTopLayer() {
 			return
 		}
 	}
+	if a.detailIs(detailProfile) && !a.demo && a.sessions.activeBotID != "" {
+		if ct := a.contactByID(a.sessions.activeBotID); ct != nil {
+			a.sessions.backSessionInspection(a.sessionInspectorFallbackDeps(ct))
+			return
+		}
+	}
 	if a.detailPageActive() {
 		a.closeDetail()
-		return
-	}
-	if a.priorChats != nil {
-		a.backProductConversations()
-		return
-	}
-	if ct := a.selectedContact(); !a.demo && ct != nil && a.sessions.activeBotID == ct.ID {
-		a.sessions.backSessionInspection(a.sessionInspectorFallbackDeps(ct))
 		return
 	}
 	if a.aux != "" {
@@ -143,12 +148,12 @@ func (a *appModel) settingsSourceForVisiblePage() string {
 
 func (a *appModel) armActiveSurfaceFallback() {
 	switch {
-	case a.backgroundWork.panel != nil:
-		a.backgroundWork.panel.focusBack = true
 	case a.priorChats != nil:
 		a.priorChats.focusBack = true
-	case !a.demo && a.selectedContact() != nil && a.sessions.activeBotID == a.selectedContact().ID:
-		a.sessions.botSession(a.selectedContact().ID).focusBack = true
+	case a.backgroundWork.panel != nil:
+		a.backgroundWork.panel.focusBack = true
+	case a.detailIs(detailProfile) && !a.demo && a.sessions.activeBotID != "":
+		a.sessions.botSession(a.sessions.activeBotID).focusBack = true
 	case a.detailIs(detailProfile) && a.scheduledWorkBotID != "":
 		a.schedules.bot(a.scheduledWorkBotID).focusHeading = true
 	case a.detailIs(detailProfile):
@@ -352,30 +357,15 @@ func (a *appModel) bindBotRowMenu(row ui.Element, contactID string, msgs locales
 		}
 		ready := a.productProfileReady() && !a.dataRecoveryBlocksChanges()
 		mutable := ready || a.demo
-		count := len(ct.Activities)
-		if ct.activity.loaded && ct.activity.nextCursor == nil {
-			count = max(count, len(ct.activity.items))
-		}
-		if menu.Item(msgs.BotMenuActivities(count)).Disabled(!ready && !ct.activity.loaded).Chosen() {
+		if menu.Item(msgs.BotMenuActivities(botActivityCount(ct))).Disabled(!ready && !ct.activity.loaded).Chosen() {
 			a.selectContact(slices.Index(a.contacts, ct))
-			a.priorChats = nil
-			a.aux = ""
-			ct.activity.open, ct.activity.focusToggle = true, true
-			ct.activity.scroll.Y = 0
+			a.openBotActivities(ct)
 		}
 		menu.Separator()
-		profile := msgs.ContactProfileAction()
-		if ct.PendingLearnings > 0 {
-			profile = msgs.MemoryProfileAction(ct.PendingLearnings)
-		}
-		if menu.Item(profile).Chosen() {
+		if menu.Item(botProfileMenuLabel(msgs, ct)).Chosen() {
 			a.openContactProfile(contactID)
 		}
-		if !a.demo && a.productHost() != nil {
-			if menu.Item(msgs.SchedWorkTitle()).Chosen() {
-				a.openBotScheduledWork(contactID)
-			}
-		}
+		a.botWorkMenu(menu, msgs, ct, a.botVisualState(ct, time.Now()), "row:"+ct.ID)
 		menu.Separator()
 		if sessionBusy(ct.SendState, ct.ActiveTaskID) {
 			if menu.Item(msgs.BotMenuStopReply()).Disabled(!ready || ct.ActiveTaskID == "").Chosen() {
@@ -400,6 +390,47 @@ func (a *appModel) bindBotRowMenu(row ui.Element, contactID string, msgs locales
 		row.Focus().ScrollIntoView()
 		a.focusProfileRow = ""
 	}
+}
+
+func (a *appModel) botWorkMenu(menu *ui.Menu, msgs locales.Messages, ct *contact, visual botStatus, opener string) {
+	if a.demo || a.productHost() == nil {
+		return
+	}
+	blocked := !a.productProfileReady() || a.dataRecoveryBlocksChanges()
+	if menu.Item(msgs.OrchestrationMenuCount(visual.backgroundActive + visual.backgroundDecisions)).Disabled(blocked).Chosen() {
+		a.openBackgroundWork(ct.ID, "", opener)
+	}
+	if !ct.Archived && menu.Item(msgs.SessionInspectMenuCount(a.sessions.activeCount(ct.ID))).Disabled(blocked).Chosen() {
+		a.openBotSessions(ct.ID, opener)
+	}
+	if menu.Item(msgs.SchedWorkTitle()).Chosen() {
+		a.openBotScheduledWork(ct.ID)
+	}
+}
+
+func botActivityCount(ct *contact) int {
+	if ct.activity.loaded && ct.activity.nextCursor == nil {
+		return max(len(ct.Activities), len(ct.activity.items))
+	}
+	return len(ct.Activities)
+}
+
+func botProfileMenuLabel(msgs locales.Messages, ct *contact) string {
+	if ct.PendingLearnings > 0 {
+		return msgs.MemoryProfileAction(ct.PendingLearnings)
+	}
+	return msgs.ContactProfileAction()
+}
+
+func (a *appModel) openBotActivities(ct *contact) {
+	if a.activeDetail() != "" {
+		a.closeDetail()
+	}
+	a.priorChats = nil
+	a.aux = ""
+	a.headerMenuOpen = false
+	ct.activity.open, ct.activity.focusToggle = true, true
+	ct.activity.scroll.Y = 0
 }
 
 func (a *appModel) railRow(c *ui.Context, t *ui.Theme, i int) {
@@ -635,16 +666,8 @@ func (a *appModel) main(c *ui.Context, t *ui.Theme) {
 	ct := a.selectedContact()
 	msgs := locales.In(c.Locale())
 	ui.Column(c).Grow(1).MinWidth(0).FillHeight().Margin(4).Background(a.workTheme.Reading).Border(1, t.Border).Radius(16).Clip().Children(func() {
-		if panel := a.backgroundWork.panel; panel != nil {
-			a.backgroundWorkView(c, t, panel)
-			return
-		}
 		if browser := a.priorChats; browser != nil && browser.contact == ct {
 			a.productConversationsView(c, t, browser)
-			return
-		}
-		if !a.demo && a.sessions.activeBotID == ct.ID {
-			a.sessions.sessionInspectionView(c, a.sessionInspectorDeps(c, ct))
 			return
 		}
 		visual := a.botVisualState(ct, c.Now())
@@ -728,12 +751,6 @@ func (a *appModel) header(c *ui.Context, t *ui.Theme, ct *contact, visual botSta
 				}
 			})
 			a.botStatusAction(c, t, ct, visual, msgs)
-			if !a.demo && a.productHost() != nil && !ct.Archived {
-				a.sessions.sessionInspectorButton(c, a.sessionInspectorDeps(c, ct))
-			}
-			if !a.demo && a.productHost() != nil {
-				a.backgroundWorkButton(c, ct, visual.backgroundActive+visual.backgroundDecisions)
-			}
 			if label := connectionStatusLabel(connection, msgs); !a.demo && label != "" && visual.kind != botVisualWaiting {
 				if connection == connectionViewConnecting {
 					ui.Text(c, label).FontSize(typeHeaderMeta).FixedLineHeight(lineHeader).TextColor(t.TextMuted).SingleLine().Shrink(0)
@@ -745,11 +762,38 @@ func (a *appModel) header(c *ui.Context, t *ui.Theme, ct *contact, visual botSta
 					theme.TransitionControl(button, t).OnClick(a.openConfiguration)
 				}
 			}
+			a.botOverviewButton(c, t, ct, visual, msgs)
 			if a.railCollapsed {
 				a.showContactsButton(c, t)
 			}
 		})
 	})
+}
+
+func (a *appModel) botOverviewButton(c *ui.Context, t *ui.Theme, ct *contact, visual botStatus, msgs locales.Messages) {
+	label := msgs.BotOverviewLabel()
+	selected := a.headerMenuOpen || a.detailIs(detailProfile) && a.contactProfileID == ct.ID
+	button := iconControlFace(c, appTooltip(c, ui.Button(c, "").Key("bot-overview-btn").Label(label), label), iconChrome, selected)
+	button.Children(func() { controlIcon(c, glyphMoreLine, iconChrome).TextColor(t.TextMuted) })
+	opener := "header-overview:" + ct.ID
+	if a.focusHeaderOverview == ct.ID || a.backgroundWork.returnFocus == opener {
+		button.Focus()
+		a.focusHeaderOverview = ""
+		if a.backgroundWork.returnFocus == opener {
+			a.backgroundWork.returnFocus = ""
+		}
+	}
+	button.PopoverMenuButton(func(menu *ui.Menu) {
+		ready := a.productProfileReady() && !a.dataRecoveryBlocksChanges()
+		if menu.Item(msgs.BotMenuActivities(botActivityCount(ct))).Disabled(!ready && !a.demo && !ct.activity.loaded).Chosen() {
+			a.openBotActivities(ct)
+		}
+		a.botWorkMenu(menu, msgs, ct, visual, opener)
+		menu.Separator()
+		if menu.Item(botProfileMenuLabel(msgs, ct)).Chosen() {
+			a.openContactProfile(ct.ID)
+		}
+	}, ui.PopoverMenuButtonOptions{At: ui.AnchorBottomEnd, Self: ui.AnchorTopEnd, Open: &a.headerMenuOpen})
 }
 
 func (a *appModel) chat(c *ui.Context, t *ui.Theme, state connectionViewState, showConnectionSettings bool) {
