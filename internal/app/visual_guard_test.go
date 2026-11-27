@@ -2140,3 +2140,48 @@ func TestVisualGuardScheduledWork(t *testing.T) {
 		}
 	}
 }
+
+func TestVisualGuardNativeLifecycleDraining(t *testing.T) {
+	for _, locale := range []string{"en", "zh-Hans"} {
+		msgs := locales.In(locale)
+		for _, dark := range []bool{false, true} {
+			for _, size := range [][2]int{{1040, 720}, {960, 640}, {720, 640}} {
+				w, h := size[0], size[1]
+				t.Run(fmt.Sprintf("%s-dark%t-%dx%d", locale, dark, w, h), func(t *testing.T) {
+					fx, _, _, _ := seedVisualScheduledWorkFixture(t)
+					fx.app.windowWidth = w
+					fx.app.shutdownStarted = true
+					fx.app.shutdownDrainStarted = true
+					tr := ui.NewTesterWith(fx.app.nativeWindowView, w, h, ui.TesterOptions{Dark: dark})
+					tr.SetLocale(locale)
+					tr.SetFocused(true)
+					tr.Frame()
+
+					if !tr.HasText(msgs.RuntimeStatusDraining()) || !tr.HasText(msgs.RuntimeDraining()) {
+						t.Fatalf("draining view missing localized status/body: texts=%v", tr.Texts())
+					}
+					for _, text := range []string{msgs.RuntimeStatusDraining(), msgs.RuntimeDraining()} {
+						r, ok := tr.Find(text)
+						if !ok || r.X < -0.5 || r.Y < -0.5 || r.X+r.W > float32(w)+0.5 || r.Y+r.H > float32(h)+0.5 {
+							t.Fatalf("draining text %q clipped: ok=%v rect=%+v viewport=%dx%d", text, ok, r, w, h)
+						}
+					}
+
+					fx.app.shutdownDrainStarted = false
+					fx.app.runtimeErrKind = runtimeNoticeRuntimeShutdown
+					fx.app.runtimeErr = "drain timeout"
+					tr.Frame()
+
+					errText := fx.app.runtimeErrorDisplay(msgs)
+					if !tr.HasText(errText) {
+						t.Fatalf("drain retry view missing error=%q: texts=%v", errText, tr.Texts())
+					}
+					r, ok := tr.Find(msgs.RecoveryQuitAction())
+					if !ok || r.X < -0.5 || r.Y < -0.5 || r.X+r.W > float32(w)+0.5 || r.Y+r.H > float32(h)+0.5 || r.H < theme.ControlHit || r.W < theme.ControlHit || r.W >= float32(w-80) {
+						t.Fatalf("drain retry button invalid/stretched: ok=%v rect=%+v viewport=%dx%d", ok, r, w, h)
+					}
+				})
+			}
+		}
+	}
+}
