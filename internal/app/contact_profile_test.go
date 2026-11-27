@@ -39,7 +39,7 @@ func TestContactProfileDiscardDoesNotSaveNewOrArchive(t *testing.T) {
 	}
 	tr := contactProfileTester(editor, actions, 320, 720)
 	tr.Frame()
-	editor.ResetDraft()
+	editor.resetDraft()
 	if saved != 0 || archived != 0 {
 		t.Fatalf("discard callbacks save=%d archive=%d", saved, archived)
 	}
@@ -51,7 +51,7 @@ func TestContactProfileDiscardDoesNotSaveNewOrArchive(t *testing.T) {
 func TestContactProfileValidationCorrectsWorkspaceAndPreservesInstructions(t *testing.T) {
 	editor := newContactProfileEditor(profileDraftForTest(t))
 	editor.Draft.Name = " "
-	if _, ok := editor.Request(false); ok || editor.Errors["Name"] == "" {
+	if _, ok := editor.request(); ok || editor.Errors["Name"] == "" {
 		t.Fatal("blank name was accepted")
 	}
 	file := filepath.Join(t.TempDir(), "workspace.txt")
@@ -61,7 +61,7 @@ func TestContactProfileValidationCorrectsWorkspaceAndPreservesInstructions(t *te
 	for _, workspace := range []string{"relative/path", filepath.Join(t.TempDir(), "missing"), file} {
 		editor.Draft.Name = "Writer"
 		editor.Draft.Workspace = workspace
-		if _, ok := editor.Request(false); ok || editor.Errors["Workspace"] == "" {
+		if _, ok := editor.request(); ok || editor.Errors["Workspace"] == "" {
 			t.Fatalf("invalid workspace %q was accepted", workspace)
 		}
 	}
@@ -143,7 +143,7 @@ func TestContactProfileArchiveIsHostConfirmed(t *testing.T) {
 	}
 	editor.Archived = true
 	tr.Frame()
-	if _, ok := editor.Request(false); ok || editor.Error == "" {
+	if _, ok := editor.request(); ok || editor.Error == "" {
 		t.Fatal("Request accepted a save for an archived contact")
 	}
 	if !tr.HasText("Archived") {
@@ -167,11 +167,11 @@ func TestContactProfileSaveFailureKeepsDraftAndArchiveState(t *testing.T) {
 	editor := newContactProfileEditor(profileDraftForTest(t))
 	editor.Draft.Name = "Draft after failure"
 	editor.Draft.Instructions = "keep\n  this"
-	editor.SetBusy(true, "Saving…")
-	if _, ok := editor.Request(false); ok || editor.Error == "" {
+	editor.setBusy(true, "Saving…")
+	if _, ok := editor.request(); ok || editor.Error == "" {
 		t.Fatal("Request accepted a save while saving was in progress")
 	}
-	editor.SetError("Could not save this profile. Your changes are still here.")
+	editor.setError("Could not save this profile. Your changes are still here.")
 	if editor.Busy || !strings.Contains(editor.Error, "still here") {
 		t.Fatal("save failure did not restore an editable state with an error")
 	}
@@ -186,10 +186,10 @@ func TestContactProfileSaveFailureKeepsDraftAndArchiveState(t *testing.T) {
 	if tr.HasText("Saving…") {
 		t.Fatal("save failure still displays an in-progress status")
 	}
-	editor.SetBusy(true, "Saving…")
-	editor.SetProfile(editor.Draft)
+	editor.setBusy(true, "Saving…")
+	editor.setProfile(editor.Draft)
 	editor.Draft.Name = "Next edit"
-	editor.ResetDraft()
+	editor.resetDraft()
 	if editor.Draft.Name != "Draft after failure" {
 		t.Fatal("confirmed save did not re-enable editing and become the new discard target")
 	}
@@ -214,7 +214,7 @@ func TestPreviewContactProfile(t *testing.T) {
 		}{{560, 720, "560x720"}, {320, 720, "320x720"}} {
 			editor := newContactProfileEditor(profileDraftForTest(t))
 			editor.Draft.Purpose = "A long purpose line that should wrap clearly at narrow width without hiding the primary action."
-			editor.SetError("Saving failed. The previous profile is still intact and this draft is editable.")
+			editor.setError("Saving failed. The previous profile is still intact and this draft is editable.")
 			tr := contactProfileTester(editor, contactProfileActions{}, size.width, size.height)
 			tr.SetDark(dark)
 			tr.Frame()
