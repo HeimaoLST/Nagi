@@ -134,6 +134,21 @@ func (a *appModel) botCapabilitiesView(c *ui.Context, t *ui.Theme, ct *contact, 
 		preferenceSection(c, t, msgs.CapMcp(), func() {
 			a.botMcpControls(c, t, msgs, ct, &editor.Draft, blocked)
 		})
+		preferenceSection(c, t, msgs.SchedWorkTitle(), func() {
+			ui.Column(c).FillWidth().MinWidth(0).Gap(8).Children(func() {
+				capabilityText(c, t, msgs.SchedWorkProfileHint())
+				open := secondaryButton(c, msgs.SchedWorkOpenAction()).Key("open-scheduled-work").AlignSelf(ui.Start).
+					Disabled(a.productActivityClient() == nil).
+					OnClick(func() {
+						a.scheduledWorkBotID = ct.ID
+						a.schedules.bot(ct.ID).focusHeading = true
+					})
+				if a.focusScheduledWorkOpener == ct.ID {
+					open.Focus().ScrollIntoView()
+					a.focusScheduledWorkOpener = ""
+				}
+			})
+		})
 	})
 }
 

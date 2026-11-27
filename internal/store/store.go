@@ -453,8 +453,9 @@ type ProductUIState struct {
 	Pending              map[string]ProductPendingSend `json:"pending,omitempty"`
 	RecoveryID           string                        `json:"recoveryId,omitempty"`
 
-	PendingActivities    map[string]ProductActivityIntent `json:"pending_activities,omitempty"`
-	PendingSessionCloses []pi.ProductSessionCloseParams   `json:"pending_session_closes,omitempty"`
+	PendingActivities      map[string]ProductActivityIntent `json:"pending_activities,omitempty"`
+	PendingSessionCloses   []pi.ProductSessionCloseParams   `json:"pending_session_closes,omitempty"`
+	PendingWatchOperations []PendingWatchOperation          `json:"pending_watch_operations,omitempty"`
 }
 
 func ProductUIPath(profilePath string) string { return profilePath + ".ui.json" }
@@ -646,12 +647,15 @@ func ValidateRecoveryState(state StoredState) error {
 }
 
 type StoreRecoveryCopy struct {
-	Path       string
-	Contacts   int
-	Issues     int
-	ModifiedAt time.Time
-	data       []byte
-	info       os.FileInfo
+	Path           string
+	Contacts       int
+	Issues         int
+	Timers         int
+	Schedules      int
+	DormantWatches int
+	ModifiedAt     time.Time
+	data           []byte
+	info           os.FileInfo
 }
 
 func ProductProfileVersion(data []byte) bool {
@@ -664,9 +668,15 @@ func ProductProfileVersion(data []byte) bool {
 var ErrInvalidProductRecovery = errors.New("the current product profile contains unsupported or inconsistent records")
 
 func InspectProductProfileBytes(data []byte, copy bool) (contacts, activities int, err error) {
+	counts, err := inspectProductProfileBytes(data, copy)
+	return counts.Contacts, counts.Activities, err
+}
+
+func inspectProductProfileBytes(data []byte, copy bool) (productRecoveryCounts, error) {
+	var counts productRecoveryCounts
 	node, worker, err := pi.PayloadPaths()
 	if err != nil {
-		return 0, 0, err
+		return counts, err
 	}
 	module := filepath.Join(filepath.Dir(worker), "product-profile.js")
 	const script = `
@@ -695,21 +705,16 @@ try {
 	if err != nil {
 		var exit *exec.ExitError
 		if errors.As(err, &exit) && exit.ExitCode() == 2 {
-			return 0, 0, ErrInvalidProductRecovery
+			return counts, ErrInvalidProductRecovery
 		}
-		return 0, 0, fmt.Errorf("could not check the recovery profile: %w", err)
+		return counts, fmt.Errorf("could not check the recovery profile: %w", err)
 	}
-	if !copy {
-		return 0, 0, nil
+	if copy {
+		if err := json.Unmarshal(output, &counts); err != nil {
+			return productRecoveryCounts{}, fmt.Errorf("could not read the recovery profile summary: %w", err)
+		}
 	}
-	var counts struct {
-		Contacts   int `json:"contacts"`
-		Activities int `json:"activities"`
-	}
-	if err := json.Unmarshal(output, &counts); err != nil {
-		return 0, 0, fmt.Errorf("could not read the recovery profile summary: %w", err)
-	}
-	return counts.Contacts, counts.Activities, nil
+	return counts, nil
 }
 
 type StoreRecoveryTarget struct {
@@ -744,11 +749,14 @@ func InspectStoreRecoveryCopy(path string) (*StoreRecoveryCopy, error) {
 		return nil, err
 	}
 	if ProductProfileVersion(data) {
-		contacts, activities, err := InspectProductProfileBytes(data, true)
+		counts, err := inspectProductProfileBytes(data, true)
 		if err != nil {
 			return nil, fmt.Errorf("unsupported recovery copy %s: %w", path, err)
 		}
-		return &StoreRecoveryCopy{Path: path, Contacts: contacts, Issues: activities, ModifiedAt: info.ModTime(), data: data, info: info}, nil
+		return &StoreRecoveryCopy{
+			Path: path, Contacts: counts.Contacts, Issues: counts.Activities, ModifiedAt: info.ModTime(), data: data, info: info,
+			Timers: counts.Timers, Schedules: counts.Schedules, DormantWatches: counts.DormantWatches,
+		}, nil
 	}
 	state, err := DecodeStoredState(path, data, true)
 	if err == nil {

@@ -2028,5 +2028,23 @@
   "sessionInspectKillStaleRevision": "The session changed before it could be closed.",
   "sessionInspectKillRejected": "The host rejected the close.",
   "sessionInspectKillNotSent": "The close request couldn’t be sent.",
-  "sessionInspectKillSaveError": "Couldn’t save the close request. Try again."
+  "sessionInspectKillSaveError": "Couldn’t save the close request. Try again.",
+  "schedWorkTitle": "Scheduled work",
+  "schedWorkProfileHint": "Manage timers, recurring schedules, and installation-local standing grants for this Bot.",
+  "schedWorkOpenAction": "Manage scheduled work",
+  "recoveryScopeWatches": "Restored timers and executable schedules stay paused and unarmed. Standing grants are installation-local. The copy imports zero grants.",
+  "recoveryPreviewWatchCounts": "Timers {timers}, schedules {schedules}, dormant entries {dormant}",
+  "@recoveryPreviewWatchCounts": {
+    "placeholders": {
+      "timers": {
+        "type": "int"
+      },
+      "schedules": {
+        "type": "int"
+      },
+      "dormant": {
+        "type": "int"
+      }
+    }
+  }
 }

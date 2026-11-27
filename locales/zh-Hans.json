@@ -1393,5 +1393,10 @@
   "sessionInspectKillStaleRevision": "终止前，会话状态已更新。",
   "sessionInspectKillRejected": "主机拒绝了终止请求。",
   "sessionInspectKillNotSent": "无法发送终止请求。",
-  "sessionInspectKillSaveError": "无法保存终止请求。请重试。"
+  "sessionInspectKillSaveError": "无法保存终止请求。请重试。",
+  "schedWorkTitle": "计划工作",
+  "schedWorkProfileHint": "管理此 Bot 的计时器、重复计划与本机常驻授权。",
+  "schedWorkOpenAction": "管理计划工作",
+  "recoveryScopeWatches": "恢复的计时器和可执行计划会保持暂停，不会启用。常驻授权仅在本机安装中有效，恢复副本不会导入授权。",
+  "recoveryPreviewWatchCounts": "计时器 {timers}，计划 {schedules}，休眠项目 {dormant}"
 }
