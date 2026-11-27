@@ -23,6 +23,7 @@ REQUIRED_GROUPS = {
             "TestPiProductProcessAdmitsCurrentProfileAndRestoresDrafts",
             "TestPiProductProcessTargetsConcurrentActivityQuestions",
             "TestPiProductProcessRetainsUnknownSendWithoutReplay",
+            "TestPiProductBG3AutonomousOrchestrationTimelineAndPriority",
         ),
     ),
     "desktop": (
