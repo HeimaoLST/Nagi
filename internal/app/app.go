@@ -35,17 +35,20 @@ func Run() {
 		a = newUnavailableApp(err)
 	}
 	a.requestQuit = mygo.App.Quit
-	mygo.App.OnBeforeQuit(func(e *mygo.QuitEvent) {
-		if a.quitReady {
-			return
-		}
-		e.PreventDefault()
-		a.drainPiHost()
+	mygo.App.OnBeforeQuit(a.handleBeforeQuit)
+	mygo.App.OnActivate(a.handleAppActivate)
+	mygo.App.OnLocaleChanged(func(locale string) {
+		a.uiLocale = locale
+		a.refreshDockMenu()
 	})
 	mygo.App.WhenReady(func() {
-		windowOptions.Content = ui.View(a.view)
+		windowOptions.Content = ui.View(a.nativeWindowView)
 		win := mygo.NewWindow(windowOptions)
 		a.win = win
+		a.hideWindow, a.showWindow, a.focusWindow = win.Hide, win.Show, win.Focus
+		a.focusApp, a.setDockMenu = mygo.App.Focus, mygo.App.Dock.SetMenu
+		a.uiLocale = mygo.App.Locale()
+		a.refreshDockMenu()
 		updateContentSize := func(event string) {
 			w, h := win.ContentSize()
 			if w > 0 {
@@ -60,13 +63,7 @@ func Run() {
 		win.OnResize(func() {
 			updateContentSize("resize")
 		})
-		win.OnClose(func(e *mygo.CloseEvent) {
-			if a.quitReady {
-				return
-			}
-			e.PreventDefault()
-			a.drainPiHost()
-		})
+		win.OnClose(a.handleWindowClose)
 		if host := a.productHost(); host != nil {
 			go a.observeProductExit(host)
 		}

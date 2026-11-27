@@ -229,6 +229,51 @@ func chatMessageRow(c *ui.Context, t *ui.Theme, messages []*message, dividers []
 	row.Children(children)
 }
 
+func botReplyHasVisibleBubble(m *message, now time.Time, reduceMotion bool) bool {
+	if m.AlertTitle != "" {
+		return true
+	}
+	bubbles, completed := splitReplyBubblesState(m.Text, m.Streaming)
+	visible := len(bubbles)
+	if m.liveReveal {
+		eligible := len(bubbles)
+		if m.Streaming {
+			eligible = completed
+		}
+		revealed := m.revealedBubbles
+		if reduceMotion {
+			revealed = eligible
+		} else if revealed < eligible && !now.Before(m.nextRevealAt) {
+			revealed++
+		}
+		visible = min(revealed, eligible)
+	}
+	return visible > 0
+}
+
+func latestReadUserMessageIndex(messages []*message, now time.Time, reduceMotion bool) int {
+	for i := len(messages) - 1; i >= 0; i-- {
+		m := messages[i]
+		if m == nil || m.Kind == msgActivity {
+			continue
+		}
+		if m.Kind == msgContact {
+			if botReplyHasVisibleBubble(m, now, reduceMotion) {
+				return -1
+			}
+			continue
+		}
+		if m.Kind != msgUser {
+			return -1
+		}
+		if m.ReadByBot || m.History {
+			return i
+		}
+		return -1
+	}
+	return -1
+}
+
 func (a *appModel) botReplyBubbles(c *ui.Context, t *ui.Theme, m *message, scope, base string, ct *contact, recall *quoteRecall) {
 	bubbles, completed := splitReplyBubblesState(m.Text, m.Streaming)
 	visible, typing := len(bubbles), false

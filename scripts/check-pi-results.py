@@ -38,6 +38,8 @@ REQUIRED_GROUPS = {
             "TestPiAppProductScopedDelegation",
             "TestPiAppSessionInspectionAndClose",
             "TestPiAppScheduledWorkAndGrants",
+            "TestPiAppNativeLifecycleHideAndQuit",
+            "TestPiAppMessageReadStatusLifecycle",
             "TestPiPackageStandalone",
         ),
     ),

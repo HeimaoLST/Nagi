@@ -2046,5 +2046,7 @@
         "type": "int"
       }
     }
-  }
+  },
+  "dockOpenNagi": "Open Nagi",
+  "messageReadStatus": "Read"
 }

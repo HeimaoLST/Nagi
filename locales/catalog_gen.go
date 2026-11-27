@@ -12997,3 +12997,19 @@ func RecoveryPreviewWatchCounts(timers int, schedules int, dormant int) string {
 func (msgs Messages) RecoveryPreviewWatchCounts(timers int, schedules int, dormant int) string {
 	return Catalog.Format(msgs.locale, "recoveryPreviewWatchCounts", map[string]any{"timers": timers, "schedules": schedules, "dormant": dormant})
 }
+
+// DockOpenNagi says "Open Nagi"
+// in the language the app shows.
+func DockOpenNagi() string { return In(i18n.Locale()).DockOpenNagi() }
+
+// DockOpenNagi says "Open Nagi"
+// in the language of msgs.
+func (msgs Messages) DockOpenNagi() string {
+	return Catalog.Format(msgs.locale, "dockOpenNagi", nil)
+}
+
+func MessageReadStatus() string { return In(i18n.Locale()).MessageReadStatus() }
+
+func (msgs Messages) MessageReadStatus() string {
+	return Catalog.Format(msgs.locale, "messageReadStatus", nil)
+}

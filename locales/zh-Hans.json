@@ -1398,5 +1398,7 @@
   "schedWorkProfileHint": "管理此 Bot 的计时器、重复计划与本机常驻授权。",
   "schedWorkOpenAction": "管理计划工作",
   "recoveryScopeWatches": "恢复的计时器和可执行计划会保持暂停，不会启用。常驻授权仅在本机安装中有效，恢复副本不会导入授权。",
-  "recoveryPreviewWatchCounts": "计时器 {timers}，计划 {schedules}，休眠项目 {dormant}"
+  "recoveryPreviewWatchCounts": "计时器 {timers}，计划 {schedules}，休眠项目 {dormant}",
+  "dockOpenNagi": "打开 Nagi",
+  "messageReadStatus": "已读"
 }

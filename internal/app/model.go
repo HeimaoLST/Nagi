@@ -71,6 +71,7 @@ type message struct {
 	Streaming  bool
 	Context    []taskContextItem
 	Quote      *pi.ProductQuote
+	ReadByBot  bool
 
 	liveReveal      bool
 	revealedBubbles int
@@ -268,6 +269,14 @@ type appModel struct {
 	requestQuit               func()
 	quitReady                 bool
 	shutdownStarted           bool
+	windowHidden              bool
+	sessionEnding             bool
+	hideWindow                func()
+	showWindow                func()
+	focusWindow               func()
+	focusApp                  func()
+	setDockMenu               func(*mygo.Menu)
+	dockMenuKey               dockMenuState
 
 	connectionPath        string
 	connectionSaved       *connectionConfig
@@ -350,6 +359,7 @@ func (a *appModel) selectContact(i int) {
 	a.resetComposerOverlays()
 	ct := a.contacts[i]
 	ct.recentCompletion = false
+	a.refreshDockMenu()
 	if !ct.Loaded && ct.ActiveTaskID == "" && a.canReloadPiConversation(ct) {
 		a.reloadContactByID(ct.ID)
 	}
@@ -456,7 +466,7 @@ func (a *appModel) send(ct *contact, text string) bool {
 	}
 	a.seq++
 	stamp := time.Now()
-	ct.Messages = append(ct.Messages, &message{ID: a.seq, Kind: msgUser, Text: text, Time: stamp.Format("15:04"), Timestamp: stamp, Quote: ct.DraftQuote})
+	ct.Messages = append(ct.Messages, &message{ID: a.seq, Kind: msgUser, Text: text, Time: stamp.Format("15:04"), Timestamp: stamp, Quote: ct.DraftQuote, ReadByBot: true})
 	ct.DraftQuote = nil
 	label := ct.WorkLabel
 	if label == "" {

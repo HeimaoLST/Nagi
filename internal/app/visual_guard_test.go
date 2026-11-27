@@ -2140,3 +2140,124 @@ func TestVisualGuardScheduledWork(t *testing.T) {
 		}
 	}
 }
+
+func TestVisualGuardNativeLifecycleDraining(t *testing.T) {
+	for _, locale := range []string{"en", "zh-Hans"} {
+		msgs := locales.In(locale)
+		for _, dark := range []bool{false, true} {
+			for _, size := range [][2]int{{1040, 720}, {960, 640}, {720, 640}} {
+				w, h := size[0], size[1]
+				t.Run(fmt.Sprintf("%s-dark%t-%dx%d", locale, dark, w, h), func(t *testing.T) {
+					fx, _, _, _ := seedVisualScheduledWorkFixture(t)
+					fx.app.windowWidth = w
+					fx.app.shutdownStarted = true
+					fx.app.shutdownDrainStarted = true
+					tr := ui.NewTesterWith(fx.app.nativeWindowView, w, h, ui.TesterOptions{Dark: dark})
+					tr.SetLocale(locale)
+					tr.SetFocused(true)
+					tr.Frame()
+
+					if !tr.HasText(msgs.RuntimeStatusDraining()) || !tr.HasText(msgs.RuntimeDraining()) {
+						t.Fatalf("draining view missing localized status/body: texts=%v", tr.Texts())
+					}
+					for _, text := range []string{msgs.RuntimeStatusDraining(), msgs.RuntimeDraining()} {
+						r, ok := tr.Find(text)
+						if !ok || r.X < -0.5 || r.Y < -0.5 || r.X+r.W > float32(w)+0.5 || r.Y+r.H > float32(h)+0.5 {
+							t.Fatalf("draining text %q clipped: ok=%v rect=%+v viewport=%dx%d", text, ok, r, w, h)
+						}
+					}
+
+					fx.app.shutdownDrainStarted = false
+					fx.app.runtimeErrKind = runtimeNoticeRuntimeShutdown
+					fx.app.runtimeErr = "drain timeout"
+					tr.Frame()
+
+					errText := fx.app.runtimeErrorDisplay(msgs)
+					if !tr.HasText(errText) {
+						t.Fatalf("drain retry view missing error=%q: texts=%v", errText, tr.Texts())
+					}
+					r, ok := tr.Find(msgs.RecoveryQuitAction())
+					if !ok || r.X < -0.5 || r.Y < -0.5 || r.X+r.W > float32(w)+0.5 || r.Y+r.H > float32(h)+0.5 || r.H < theme.ControlHit || r.W < theme.ControlHit || r.W >= float32(w-80) {
+						t.Fatalf("drain retry button invalid/stretched: ok=%v rect=%+v viewport=%dx%d", ok, r, w, h)
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestVisualGuardMessageReadStatus(t *testing.T) {
+	countText := func(tr *ui.Tester, target string) int {
+		count := 0
+		for _, text := range tr.Texts() {
+			if text == target {
+				count++
+			}
+		}
+		return count
+	}
+	for _, locale := range []string{"en", "zh-Hans"} {
+		msgs := locales.In(locale)
+		readLabel := msgs.MessageReadStatus()
+		for _, dark := range []bool{false, true} {
+			for _, size := range [][2]int{{1040, 720}, {960, 640}, {720, 640}} {
+				w, h := size[0], size[1]
+				t.Run(fmt.Sprintf("%s-dark%t-%dx%d", locale, dark, w, h), func(t *testing.T) {
+					a, ct := workspaceTestApp(t)
+					a.windowWidth = w
+					ct.Messages = []*message{{ID: 1, Kind: msgUser, Text: "Unconfirmed user draft", ReadByBot: false, History: false}}
+					tr := ui.NewTesterWith(a.view, w, h, ui.TesterOptions{Dark: dark})
+					tr.SetLocale(locale)
+					tr.Frame()
+					if tr.HasText(readLabel) {
+						t.Fatalf("unconfirmed user message unexpectedly showed %q: %v", readLabel, tr.Texts())
+					}
+
+					ct.Status = statusWorking
+					ct.Messages = []*message{
+						{ID: 1, Kind: msgUser, Text: "First user turn", ReadByBot: true},
+						{Key: "live:read-1:text:pi", Kind: msgContact, Text: "Streaming first line...", Streaming: true, liveReveal: true},
+					}
+					tr.Frame()
+					if countText(tr, readLabel) != 1 || !tr.HasText(msgs.BotTyping()) {
+						t.Fatalf("typing turn should show 1 %q and typing indicator: texts=%v", readLabel, tr.Texts())
+					}
+
+					ct.Status = statusReady
+					ct.Messages = []*message{
+						{ID: 1, Kind: msgUser, Text: "First user turn", ReadByBot: true},
+						{ID: 2, Kind: msgUser, Text: "Second consecutive user turn", ReadByBot: true},
+					}
+					tr.Frame()
+					if got := countText(tr, readLabel); got != 1 {
+						t.Fatalf("consecutive user messages should render exactly 1 %q, got %d: texts=%v", readLabel, got, tr.Texts())
+					}
+					u2Rect, okU2 := tr.Find("Second consecutive user turn")
+					readRect, okRead := tr.Find(readLabel)
+					if !okU2 || !okRead || readRect.W <= 0 || readRect.H <= 0 || readRect.Y < u2Rect.Y+u2Rect.H-2 ||
+						readRect.X < -0.5 || readRect.X+readRect.W > float32(w)+0.5 || readRect.Y+readRect.H > float32(h)+0.5 ||
+						readRect.X+readRect.W < u2Rect.X {
+						t.Fatalf("read badge invalid geometry: u2=%+v(%v) read=%+v(%v) viewport=%dx%d", u2Rect, okU2, readRect, okRead, w, h)
+					}
+
+					ct.Messages = append(ct.Messages, &message{ID: 3, Kind: msgContact, Text: "Agent reply arrived.", History: true})
+					tr.Frame()
+					if tr.HasText(readLabel) {
+						t.Fatalf("read indicator remained after Bot reply appeared: texts=%v", tr.Texts())
+					}
+
+					ct.Messages = append(ct.Messages, &message{ID: 4, Kind: msgUser, Text: "Third user follow-up", ReadByBot: true})
+					tr.Frame()
+					if got := countText(tr, readLabel); got != 1 {
+						t.Fatalf("follow-up user turn should show 1 %q, got %d: texts=%v", readLabel, got, tr.Texts())
+					}
+					u3Rect, okU3 := tr.Find("Third user follow-up")
+					readRect3, okRead3 := tr.Find(readLabel)
+					if !okU3 || !okRead3 || readRect3.Y < u3Rect.Y+u3Rect.H-2 {
+						t.Fatalf("follow-up read badge not positioned below third turn: u3=%+v read=%+v", u3Rect, readRect3)
+					}
+				})
+			}
+		}
+	}
+}

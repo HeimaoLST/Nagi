@@ -260,6 +260,7 @@ func (a *appModel) openProductProfile(ctx context.Context, fresh bool, generatio
 		a.sessions.blocked = a.dataRecoveryBlocksChanges()
 		a.sessions.setSessionInspectorClient(host.product)
 		a.reconcilePendingWatchOperations(host)
+		a.refreshDockMenu()
 	})
 	return nil
 }
@@ -615,6 +616,7 @@ func mergeLiveConversation(previous, history []*message) []*message {
 		if end == position+1 && remaining == "" {
 			reply.MessageID = history[position].MessageID
 		}
+		stored.ReadByBot = stored.ReadByBot || user.ReadByBot || stored.History
 		history = slices.Replace(history, position, end, reply)
 		position++
 	}
@@ -658,7 +660,7 @@ func productHistory(ctx context.Context, client *pi.ProductClient, id string) (h
 				previous.Text = reply.String()
 			} else {
 				reply.Reset()
-				projection.messages = append(messages, &message{Key: row.MessageID, MessageID: row.MessageID, Kind: kind, Text: row.Text, Time: when, Timestamp: stamp, Context: materials, Quote: row.Quote, History: true})
+				projection.messages = append(messages, &message{Key: row.MessageID, MessageID: row.MessageID, Kind: kind, Text: row.Text, Time: when, Timestamp: stamp, Context: materials, Quote: row.Quote, History: true, ReadByBot: kind == msgUser})
 			}
 			projection.entries = append(projection.entries, historyEntry{ID: row.MessageID, Date: when, From: from, Text: row.Text, Context: materials})
 		}
@@ -734,6 +736,7 @@ func (a *appModel) applyProductEvent(host *piAppHost, event pi.ProductEvent) {
 				a.reloadProductConversation(host, ct)
 			}
 		}
+		a.refreshDockMenu()
 		return
 	}
 	if event.Name == "activity.changed" {
@@ -772,7 +775,7 @@ func (a *appModel) applyProductEvent(host *piAppHost, event pi.ProductEvent) {
 			}
 			applyProductExecution(ct, &pi.ProductExecution{ExecutionID: data.ExecutionID, State: "running"})
 			stamp := time.Now()
-			ct.Messages = append(ct.Messages, &message{Key: data.ExecutionID + ":user", Kind: msgUser, Text: ct.SubmittedDraft, Time: stamp.Format("15:04"), Timestamp: stamp, TaskID: data.ExecutionID, Context: productTaskContext(host.productDrafts[ct.ID].Materials), Quote: ct.SubmittedQuote})
+			ct.Messages = append(ct.Messages, &message{Key: data.ExecutionID + ":user", Kind: msgUser, Text: ct.SubmittedDraft, Time: stamp.Format("15:04"), Timestamp: stamp, TaskID: data.ExecutionID, Context: productTaskContext(host.productDrafts[ct.ID].Materials), Quote: ct.SubmittedQuote, ReadByBot: true})
 			ct.SubmittedQuote = nil
 		case "execution.textDelta":
 			if ct.ActiveTaskID == data.ExecutionID {
@@ -946,9 +949,13 @@ func (a *appModel) finishProductShutdown(host *piAppHost) {
 		}
 		if !outcome.Reaped || !drained {
 			a.shutdownDrainStarted = false
+			if a.windowHidden {
+				a.reopenWindow()
+			}
 			return
 		}
 		a.pi, a.quitReady = nil, true
+		a.refreshDockMenu()
 		if a.requestQuit != nil {
 			a.requestQuit()
 		}
@@ -970,6 +977,7 @@ func (a *appModel) observeProductExit(host *piAppHost) {
 		for _, b := range a.schedules.bots {
 			b.client = nil
 		}
+		a.refreshDockMenu()
 		for _, ct := range a.contacts {
 			if ct.ActiveTaskID != "" || ct.SendState == sendSubmitting {
 				if ct.ActiveTaskID != "" {
