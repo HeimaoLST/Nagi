@@ -156,6 +156,14 @@
 
 **Prevention:** Capture owner, issue, question reference, revision and origin call; reject noncurrent targets before saving and preserve the draft. Persist answer and receipt before showing saved, dispatching, resolved, unknown or canceled; resolve only the exact held call and never deliver to a replacement run. Reuse canonical admission and readiness decisions, keep exited-host and first-use setup distinct, and render the raw reason rather than English diagnostic text. Compare operation and execution IDs at their documented locations, and count provider calls or durable effects before and after recovery.
 
+### Reject Activity detail reads after the drawer target changes
+
+**Problem:** Returning to the Activity list while a close-triggered detail read was in flight could repopulate the closed detail and hide the list.
+
+**Cause or correction:** The response guard treated the empty Activity ID as an exception, and the renderer displayed a nonnil detail even after Back cleared its target.
+
+**Prevention:** Apply each detail response only when the captured target still equals the selected Activity ID, including the empty list target. Verify Back after a lifecycle mutation while a read is pending.
+
 ### Separate product decisions, domain persistence and legacy admission
 
 **Problem:** A conjecture was treated as architecture, and legacy-shaped fixtures were admitted without checking current persistence. Opaque legacy records can fail before the intended assertion or mask a missing-session case.
@@ -277,6 +285,14 @@
 **Cause or correction:** Cached labels and system installations are not pinned-tool evidence. Wrapper syntax and formatting are prerequisites, not product failures.
 
 **Prevention:** Resolve required cached compiler/formatter paths, record exact executables and argv, and reuse them in owner fences. Run the pinned gofmt listing over the committed tree, including tagged files and final-declaration removals. Parse Python AST and check shell/JS quoting before a long phase; preserve failed wrappers and do not count unexecuted steps as passed.
+
+### Pass the locale directory to the standalone catalog generator
+
+**Problem:** Running the standalone catalog generator against the repository root reported a missing English catalog and tried to load `mygo.json` as a language.
+
+**Cause or correction:** The generator resolves `*.json` relative to its first argument. Its separate `Dir` setting labels diagnostics.
+
+**Prevention:** Pass the absolute `locales` directory as the input and `locales/catalog_gen.go` as the output. Run with `-mod=readonly` in the standalone generator's module.
 
 ## Verification and Evidence
 

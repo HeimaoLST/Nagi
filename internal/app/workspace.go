@@ -472,10 +472,19 @@ func activityHasUnconfirmedRun(activity *productActivity) bool {
 }
 
 type productActivityForm struct {
-	target    productActivityIntent
-	text      string
-	materials taskContext
-	focus     bool
+	target     productActivityIntent
+	text       string
+	materials  taskContext
+	focus      bool
+	caretToEnd bool
+}
+
+type productActivityFormKey struct {
+	activity, execution, question, action string
+}
+
+func activityFormKey(target productActivityIntent) productActivityFormKey {
+	return productActivityFormKey{target.ActivityID, target.ExecutionID, target.QuestionID, target.Action}
 }
 
 type productActivityPanel struct {
@@ -495,10 +504,14 @@ type productActivityPanel struct {
 	activityID    string
 	activity      *pi.ProductActivity
 	forms         map[string]*productActivityForm
+	drafts        map[productActivityFormKey]*productActivityForm
+	traces        map[pi.ProductActivityExecutionParams]*activityTraceState
 	result        *pi.ProductActivityResult
 	file          *activityResultFileInspection
 	problem       string
 	actionProblem string
+	actionTarget  string
+	recovery      []productActivityIntent
 	actionBlocker pi.ProductRouteAdmission
 	stopping      string
 	scroll        ui.ScrollState
@@ -546,14 +559,17 @@ func (a *appModel) refreshProductActivities(ct *contact, more bool) {
 				}
 				p.nextCursor = page.NextCursor
 			}
-			if p.activityID != id && p.activityID != "" {
+			if p.activityID != id || revision != a.productActivityRevision() {
 				p.loaded = false
-			} else if id != "" {
+				return
+			}
+			if id != "" {
 				if detailErr != nil {
 					p.activity = nil
 					p.problem = a.connectionSafeMessage(detailErr)
-				} else {
+				} else if detail.ActivityID == id {
 					p.activity = &detail
+					a.applySkillApprovalRequests(detail.ApprovalRequests)
 				}
 			}
 		})
@@ -580,6 +596,9 @@ func (a *appModel) openProductActivity(ct *contact, activityID string) {
 	p.focusBack = true
 	p.focusQuestion, p.legacyIssue = "", false
 	a.refreshProductActivities(ct, false)
+	if pending := a.activityIntents[activityID]; pending.Action == "steer" && !p.changing && a.productActivityClient() != nil {
+		a.runProductActivityAction(ct, a.productActivityClient(), pending, false)
+	}
 }
 
 func (a *appModel) readProductActivityResult(ct *contact, activityID, executionID string) {
@@ -617,12 +636,31 @@ func (a *appModel) editProductActivity(ct *contact, target productActivityIntent
 	if p.forms == nil {
 		p.forms = make(map[string]*productActivityForm)
 	}
-	form := p.forms[target.ActivityID]
+	form := activityDraft(p, target)
+	form.target.Revision = target.Revision
+	p.forms[target.ActivityID] = form
+	form.focus = true
+}
+
+func activityDraft(p *productActivityPanel, target productActivityIntent) *productActivityForm {
+	if p.drafts == nil {
+		p.drafts = make(map[productActivityFormKey]*productActivityForm)
+	}
+	key := activityFormKey(target)
+	form := p.drafts[key]
 	if form == nil {
 		form = &productActivityForm{target: target}
-		p.forms[target.ActivityID] = form
+		p.drafts[key] = form
 	}
-	form.focus = true
+	return form
+}
+
+func discardActivityDraft(p *productActivityPanel, target productActivityIntent) {
+	key := activityFormKey(target)
+	if p.forms[target.ActivityID] == p.drafts[key] {
+		delete(p.forms, target.ActivityID)
+	}
+	delete(p.drafts, key)
 }
 
 func (a *appModel) chooseActivityMaterial(ct *contact, form *productActivityForm) {
@@ -666,11 +704,25 @@ func (a *appModel) chooseActivityMaterial(ct *contact, form *productActivityForm
 
 func (a *appModel) submitProductActivity(ct *contact, target productActivityIntent, form *productActivityForm) {
 	p, client := &ct.activity, a.productActivityClient()
-	if client == nil || a.selectedContact() != ct || p.activityID != target.ActivityID || p.changing || a.dataRecoveryBlocksChanges() || a.activityIntents[target.ActivityID].OperationID != "" {
+	if client == nil || a.selectedContact() != ct || target.BotID != ct.ID || p.changing || a.dataRecoveryBlocksChanges() || a.activityIntents[target.ActivityID].OperationID != "" {
+		return
+	}
+	activity := p.activity
+	if p.activityID != target.ActivityID || activity == nil {
+		if target.Action != "acknowledge" {
+			return
+		}
+		activity = ct.activityNotices.details[target.ActivityID]
+	}
+	if activity == nil || !a.validActivityControlTarget(ct, activity, target, form) {
 		return
 	}
 	if form != nil {
 		target.Text = form.text
+		target.SelectedOptionID = form.target.SelectedOptionID
+		if target.Action == "steer" {
+			target.Text = strings.TrimSpace(target.Text)
+		}
 		target.Materials = make([]pi.ProductMaterial, len(form.materials.Items))
 		for i, item := range form.materials.Items {
 			target.Materials[i] = pi.ProductMaterial{ID: item.ID, Name: item.Name, Text: item.Text, Source: item.Source, Revision: item.Revision}
@@ -681,6 +733,7 @@ func (a *appModel) submitProductActivity(ct *contact, target productActivityInte
 		a.activityIntents = make(map[string]productActivityIntent)
 	}
 	a.activityIntents[target.ActivityID] = target
+	p.actionTarget = target.ActivityID
 	if err := a.persist(); err != nil {
 		delete(a.activityIntents, target.ActivityID)
 		p.actionProblem = a.connectionSafeMessage(err)
@@ -692,6 +745,7 @@ func (a *appModel) submitProductActivity(ct *contact, target productActivityInte
 func (a *appModel) runProductActivityAction(ct *contact, client *pi.ProductClient, target productActivityIntent, dispatch bool) {
 	p := &ct.activity
 	p.changing, p.actionProblem = true, ""
+	p.actionTarget = target.ActivityID
 	p.actionBlocker = pi.ProductRouteAdmission{}
 	a.submissionAsyncStarted()
 	go func() {
@@ -708,11 +762,18 @@ func (a *appModel) runProductActivityAction(ct *contact, client *pi.ProductClien
 		if !accepted && !rejected {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			var lookupErr error
-			receipt, lookupErr = client.Operation(ctx, target.OperationID)
+			if target.Action == "steer" {
+				steer, lookup := client.SteerStatus(ctx, pi.ProductSteerStatusParams{OperationID: target.OperationID})
+				accepted, rejected = activitySteerOutcome(target, steer)
+				lookupErr = lookup
+			} else {
+				receipt, lookupErr = client.Operation(ctx, target.OperationID)
+				if lookupErr == nil && productActivityIntentMatchesReceipt(target, receipt) {
+					accepted, rejected = receipt.State == "accepted", receipt.State == "rejected"
+				}
+			}
 			cancel()
-			if lookupErr == nil && productActivityIntentMatchesReceipt(target, receipt) {
-				accepted, rejected = receipt.State == "accepted", receipt.State == "rejected"
-			} else if err == nil {
+			if err == nil && !accepted {
 				err = lookupErr
 			}
 		}
@@ -721,42 +782,44 @@ func (a *appModel) runProductActivityAction(ct *contact, client *pi.ProductClien
 		admission := providerAdmission(receipt, remote)
 		a.updateUI(func() {
 			defer a.submissionAsyncFinished()
+			defer a.resumeControlPlaneReadback(ct)
 			p.changing = false
 			if !a.currentActivityClient(ct, client) || a.activityIntents[target.ActivityID].OperationID != target.OperationID {
 				return
 			}
-			if p.activityID == target.ActivityID {
+			if target.Action != "steer" || rejected {
 				p.actionProblem = a.connectionSafeMessage(err)
-				if rejected && providerDeliveryBlocked(admission.Code) {
-					p.actionProblem, p.actionBlocker = "", admission
-				}
+			}
+			if rejected && providerDeliveryBlocked(admission.Code) {
+				p.actionProblem, p.actionBlocker = "", admission
 			}
 			if accepted || rejected {
 				delete(a.activityIntents, target.ActivityID)
 				if err := a.persist(); err != nil {
 					a.activityIntents[target.ActivityID] = target
-					if p.activityID == target.ActivityID {
-						p.actionProblem = a.connectionSafeMessage(err)
-					}
+					p.actionProblem = a.connectionSafeMessage(err)
 				} else if accepted {
-					if owner := a.contactByID(target.BotID); owner != nil && target.Action != "stop" {
-						delete(owner.activity.forms, target.ActivityID)
+					if activityActionHasForm(target.Action) {
+						discardActivityDraft(p, target)
 					}
 					if target.Action == "stop" {
 						p.stopping = target.ExecutionID
 					}
 					p.actionProblem = ""
-				} else if target.Action != "stop" && p.forms[target.ActivityID] == nil {
-					a.editProductActivity(ct, target)
-					form := p.forms[target.ActivityID]
+				} else if activityActionHasForm(target.Action) && p.drafts[activityFormKey(target)] == nil {
+					form := activityDraft(p, target)
 					form.text = target.Text
 					form.materials.Items = productTaskContext(target.Materials)
+					if p.forms[target.ActivityID] == nil && p.activityID == target.ActivityID {
+						a.editProductActivity(ct, target)
+					}
 				}
 			}
 			if rejected && providerDeliveryBlocked(admission.Code) {
 				a.refreshProductProviders(a.productHost())
 			}
 			p.loaded = false
+			ct.activityNotices.version++
 		})
 	}()
 }
@@ -831,11 +894,24 @@ func dispatchProductActivityIntent(target productActivityIntent, ctx context.Con
 		}
 		return false, pi.ProductReceipt{}, err
 	case "answer":
-		answer, err := client.AnswerQuestion(ctx, pi.ProductAnswerParams{ProductActivityExecutionParams: execution, ProductText: text, QuestionID: target.QuestionID, QuestionRevision: target.Revision, OperationID: target.OperationID})
-		return err == nil && answer.AnswerSaved && answer.ActivityID == target.ActivityID && answer.ExecutionID == target.ExecutionID && answer.QuestionID == target.QuestionID, pi.ProductReceipt{}, err
+		answer, err := client.AnswerQuestion(ctx, pi.ProductAnswerParams{ProductActivityExecutionParams: execution, ProductText: text, QuestionID: target.QuestionID, QuestionRevision: target.Revision, OperationID: target.OperationID, SelectedOptionID: target.SelectedOptionID})
+		return err == nil && answer.AnswerSaved && answer.ActivityID == target.ActivityID && answer.ExecutionID == target.ExecutionID && answer.QuestionID == target.QuestionID && answer.SelectedOptionID == target.SelectedOptionID, pi.ProductReceipt{}, err
 	case "stop":
 		stop, err := client.StopActivity(ctx, pi.ProductActivityStopParams{ProductActivityExecutionParams: execution, OperationID: target.OperationID})
 		return err == nil && stop.CancelRequested && stop.ExecutionID == target.ExecutionID, pi.ProductReceipt{}, err
+	case "steer":
+		steer, err := client.SteerActivity(ctx, pi.ProductSteerActivityParams{ProductActivityExecutionParams: execution, ProductText: text, OperationID: target.OperationID, ExpectedRevision: &target.Revision})
+		accepted, rejected := activitySteerOutcome(target, steer)
+		if rejected {
+			return false, pi.ProductReceipt{State: "rejected"}, err
+		}
+		return accepted, pi.ProductReceipt{}, err
+	case "acknowledge":
+		item, err := client.AcknowledgeActivity(ctx, pi.ProductActivityAcknowledgeParams{ProductActivityExecutionParams: execution, ExpectedRevision: target.Revision, OperationID: target.OperationID})
+		return err == nil && item.ActivityID == target.ActivityID && item.AcknowledgedExecutionID == target.ExecutionID && item.AcknowledgedAt != "", pi.ProductReceipt{}, err
+	case "close":
+		item, err := client.CloseActivity(ctx, pi.ProductActivityCloseParams{ProductActivityParams: execution.ProductActivityParams, ExpectedRevision: target.Revision, OperationID: target.OperationID})
+		return err == nil && item.ActivityID == target.ActivityID && item.ClosedAt != "", pi.ProductReceipt{}, err
 	default:
 		return false, pi.ProductReceipt{}, nil
 	}
@@ -854,9 +930,18 @@ func productActivityIntentMatchesReceipt(target productActivityIntent, receipt p
 		return json.Unmarshal(receipt.Result, &result) == nil && result.CancelRequested && result.ExecutionID == target.ExecutionID
 	case "answer":
 		var result pi.ProductAnswerResult
-		return json.Unmarshal(receipt.Result, &result) == nil && result.AnswerSaved && result.ActivityID == target.ActivityID && result.ExecutionID == target.ExecutionID && result.QuestionID == target.QuestionID
+		return json.Unmarshal(receipt.Result, &result) == nil && result.AnswerSaved && result.ActivityID == target.ActivityID && result.ExecutionID == target.ExecutionID && result.QuestionID == target.QuestionID && result.SelectedOptionID == target.SelectedOptionID
 	case "continue":
 		return receipt.Execution != nil && receipt.Execution.ExecutionID != ""
+	case "acknowledge", "close":
+		var result pi.ProductActivitySummary
+		if json.Unmarshal(receipt.Result, &result) != nil || result.ActivityID != target.ActivityID {
+			return false
+		}
+		if target.Action == "acknowledge" {
+			return result.AcknowledgedAt != "" && result.AcknowledgedExecutionID == target.ExecutionID
+		}
+		return result.ClosedAt != ""
 	default:
 		return false
 	}

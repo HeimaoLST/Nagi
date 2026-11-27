@@ -5106,6 +5106,322 @@ func (msgs Messages) IssueRequirementUnverified() string {
 	return Catalog.Format(msgs.locale, "issueRequirementUnverified", nil)
 }
 
+// ActivityProgressSteps says "Step {step, number} of {total, number}"
+// in the language the app shows.
+func ActivityProgressSteps(step int, total int) string {
+	return In(i18n.Locale()).ActivityProgressSteps(step, total)
+}
+
+// ActivityProgressSteps says "Step {step, number} of {total, number}"
+// in the language of msgs.
+func (msgs Messages) ActivityProgressSteps(step int, total int) string {
+	return Catalog.Format(msgs.locale, "activityProgressSteps", map[string]any{"step": step, "total": total})
+}
+
+// ActivityTrace says "Execution trace"
+// in the language the app shows.
+func ActivityTrace() string { return In(i18n.Locale()).ActivityTrace() }
+
+// ActivityTrace says "Execution trace"
+// in the language of msgs.
+func (msgs Messages) ActivityTrace() string {
+	return Catalog.Format(msgs.locale, "activityTrace", nil)
+}
+
+// ActivityTraceStarted says "Started"
+// in the language the app shows.
+func ActivityTraceStarted() string { return In(i18n.Locale()).ActivityTraceStarted() }
+
+// ActivityTraceStarted says "Started"
+// in the language of msgs.
+func (msgs Messages) ActivityTraceStarted() string {
+	return Catalog.Format(msgs.locale, "activityTraceStarted", nil)
+}
+
+// ActivityTraceFile says "File confirmed"
+// in the language the app shows.
+func ActivityTraceFile() string { return In(i18n.Locale()).ActivityTraceFile() }
+
+// ActivityTraceFile says "File confirmed"
+// in the language of msgs.
+func (msgs Messages) ActivityTraceFile() string {
+	return Catalog.Format(msgs.locale, "activityTraceFile", nil)
+}
+
+// ActivityTraceEmpty says "No trace was recorded for this run."
+// in the language the app shows.
+func ActivityTraceEmpty() string { return In(i18n.Locale()).ActivityTraceEmpty() }
+
+// ActivityTraceEmpty says "No trace was recorded for this run."
+// in the language of msgs.
+func (msgs Messages) ActivityTraceEmpty() string {
+	return Catalog.Format(msgs.locale, "activityTraceEmpty", nil)
+}
+
+// ActivityTraceTruncated says "Some earlier trace entries are unavailable."
+// in the language the app shows.
+func ActivityTraceTruncated() string { return In(i18n.Locale()).ActivityTraceTruncated() }
+
+// ActivityTraceTruncated says "Some earlier trace entries are unavailable."
+// in the language of msgs.
+func (msgs Messages) ActivityTraceTruncated() string {
+	return Catalog.Format(msgs.locale, "activityTraceTruncated", nil)
+}
+
+// ActivityLoadMore says "Load more"
+// in the language the app shows.
+func ActivityLoadMore() string { return In(i18n.Locale()).ActivityLoadMore() }
+
+// ActivityLoadMore says "Load more"
+// in the language of msgs.
+func (msgs Messages) ActivityLoadMore() string {
+	return Catalog.Format(msgs.locale, "activityLoadMore", nil)
+}
+
+// ActivityAcknowledge says "Acknowledge"
+// in the language the app shows.
+func ActivityAcknowledge() string { return In(i18n.Locale()).ActivityAcknowledge() }
+
+// ActivityAcknowledge says "Acknowledge"
+// in the language of msgs.
+func (msgs Messages) ActivityAcknowledge() string {
+	return Catalog.Format(msgs.locale, "activityAcknowledge", nil)
+}
+
+// ActivityClose says "Close"
+// in the language the app shows.
+func ActivityClose() string { return In(i18n.Locale()).ActivityClose() }
+
+// ActivityClose says "Close"
+// in the language of msgs.
+func (msgs Messages) ActivityClose() string {
+	return Catalog.Format(msgs.locale, "activityClose", nil)
+}
+
+// ActivityClosed says "Closed"
+// in the language the app shows.
+func ActivityClosed() string { return In(i18n.Locale()).ActivityClosed() }
+
+// ActivityClosed says "Closed"
+// in the language of msgs.
+func (msgs Messages) ActivityClosed() string {
+	return Catalog.Format(msgs.locale, "activityClosed", nil)
+}
+
+// ActivityOpen says "Open activity"
+// in the language the app shows.
+func ActivityOpen() string { return In(i18n.Locale()).ActivityOpen() }
+
+// ActivityOpen says "Open activity"
+// in the language of msgs.
+func (msgs Messages) ActivityOpen() string {
+	return Catalog.Format(msgs.locale, "activityOpen", nil)
+}
+
+// ActivityAnswer says "Answer question"
+// in the language the app shows.
+func ActivityAnswer() string { return In(i18n.Locale()).ActivityAnswer() }
+
+// ActivityAnswer says "Answer question"
+// in the language of msgs.
+func (msgs Messages) ActivityAnswer() string {
+	return Catalog.Format(msgs.locale, "activityAnswer", nil)
+}
+
+// ActivityRecommended says "Recommended"
+// in the language the app shows.
+func ActivityRecommended() string { return In(i18n.Locale()).ActivityRecommended() }
+
+// ActivityRecommended says "Recommended"
+// in the language of msgs.
+func (msgs Messages) ActivityRecommended() string {
+	return Catalog.Format(msgs.locale, "activityRecommended", nil)
+}
+
+// ActivityAutoAnswered says "Auto-answered from rule"
+// in the language the app shows.
+func ActivityAutoAnswered() string { return In(i18n.Locale()).ActivityAutoAnswered() }
+
+// ActivityAutoAnswered says "Auto-answered from rule"
+// in the language of msgs.
+func (msgs Messages) ActivityAutoAnswered() string {
+	return Catalog.Format(msgs.locale, "activityAutoAnswered", nil)
+}
+
+// ActivityDelivered says "Delivered"
+// in the language the app shows.
+func ActivityDelivered() string { return In(i18n.Locale()).ActivityDelivered() }
+
+// ActivityDelivered says "Delivered"
+// in the language of msgs.
+func (msgs Messages) ActivityDelivered() string {
+	return Catalog.Format(msgs.locale, "activityDelivered", nil)
+}
+
+// ActivityDismissHint says "Dismiss hint"
+// in the language the app shows.
+func ActivityDismissHint() string { return In(i18n.Locale()).ActivityDismissHint() }
+
+// ActivityDismissHint says "Dismiss hint"
+// in the language of msgs.
+func (msgs Messages) ActivityDismissHint() string {
+	return Catalog.Format(msgs.locale, "activityDismissHint", nil)
+}
+
+// ActivityNextNotice says "Next · {position, number}/{total, number}"
+// in the language the app shows.
+func ActivityNextNotice(position int, total int) string {
+	return In(i18n.Locale()).ActivityNextNotice(position, total)
+}
+
+// ActivityNextNotice says "Next · {position, number}/{total, number}"
+// in the language of msgs.
+func (msgs Messages) ActivityNextNotice(position int, total int) string {
+	return Catalog.Format(msgs.locale, "activityNextNotice", map[string]any{"position": position, "total": total})
+}
+
+// ActivityRetryNotices says "Reload activity notices"
+// in the language the app shows.
+func ActivityRetryNotices() string { return In(i18n.Locale()).ActivityRetryNotices() }
+
+// ActivityRetryNotices says "Reload activity notices"
+// in the language of msgs.
+func (msgs Messages) ActivityRetryNotices() string {
+	return Catalog.Format(msgs.locale, "activityRetryNotices", nil)
+}
+
+// ActivitySteer says "Steer"
+// in the language the app shows.
+func ActivitySteer() string { return In(i18n.Locale()).ActivitySteer() }
+
+// ActivitySteer says "Steer"
+// in the language of msgs.
+func (msgs Messages) ActivitySteer() string {
+	return Catalog.Format(msgs.locale, "activitySteer", nil)
+}
+
+// ActivitySteerInstruction says "Instruction for the running activity"
+// in the language the app shows.
+func ActivitySteerInstruction() string { return In(i18n.Locale()).ActivitySteerInstruction() }
+
+// ActivitySteerInstruction says "Instruction for the running activity"
+// in the language of msgs.
+func (msgs Messages) ActivitySteerInstruction() string {
+	return Catalog.Format(msgs.locale, "activitySteerInstruction", nil)
+}
+
+// ActivitySendSteer says "Send instruction"
+// in the language the app shows.
+func ActivitySendSteer() string { return In(i18n.Locale()).ActivitySendSteer() }
+
+// ActivitySendSteer says "Send instruction"
+// in the language of msgs.
+func (msgs Messages) ActivitySendSteer() string {
+	return Catalog.Format(msgs.locale, "activitySendSteer", nil)
+}
+
+// ActivitySteerQueued says "Instruction queued"
+// in the language the app shows.
+func ActivitySteerQueued() string { return In(i18n.Locale()).ActivitySteerQueued() }
+
+// ActivitySteerQueued says "Instruction queued"
+// in the language of msgs.
+func (msgs Messages) ActivitySteerQueued() string {
+	return Catalog.Format(msgs.locale, "activitySteerQueued", nil)
+}
+
+// ActivitySteerDelivered says "Instruction delivered"
+// in the language the app shows.
+func ActivitySteerDelivered() string { return In(i18n.Locale()).ActivitySteerDelivered() }
+
+// ActivitySteerDelivered says "Instruction delivered"
+// in the language of msgs.
+func (msgs Messages) ActivitySteerDelivered() string {
+	return Catalog.Format(msgs.locale, "activitySteerDelivered", nil)
+}
+
+// ActivitySteerNotApplied says "Instruction not applied"
+// in the language the app shows.
+func ActivitySteerNotApplied() string { return In(i18n.Locale()).ActivitySteerNotApplied() }
+
+// ActivitySteerNotApplied says "Instruction not applied"
+// in the language of msgs.
+func (msgs Messages) ActivitySteerNotApplied() string {
+	return Catalog.Format(msgs.locale, "activitySteerNotApplied", nil)
+}
+
+// ActivitySteerUnknown says "Instruction delivery unknown"
+// in the language the app shows.
+func ActivitySteerUnknown() string { return In(i18n.Locale()).ActivitySteerUnknown() }
+
+// ActivitySteerUnknown says "Instruction delivery unknown"
+// in the language of msgs.
+func (msgs Messages) ActivitySteerUnknown() string {
+	return Catalog.Format(msgs.locale, "activitySteerUnknown", nil)
+}
+
+// ActivitySteerRejected says "Instruction rejected"
+// in the language the app shows.
+func ActivitySteerRejected() string { return In(i18n.Locale()).ActivitySteerRejected() }
+
+// ActivitySteerRejected says "Instruction rejected"
+// in the language of msgs.
+func (msgs Messages) ActivitySteerRejected() string {
+	return Catalog.Format(msgs.locale, "activitySteerRejected", nil)
+}
+
+// ActivitySteerTargetUnavailable says "The run stopped accepting instructions."
+// in the language the app shows.
+func ActivitySteerTargetUnavailable() string {
+	return In(i18n.Locale()).ActivitySteerTargetUnavailable()
+}
+
+// ActivitySteerTargetUnavailable says "The run stopped accepting instructions."
+// in the language of msgs.
+func (msgs Messages) ActivitySteerTargetUnavailable() string {
+	return Catalog.Format(msgs.locale, "activitySteerTargetUnavailable", nil)
+}
+
+// ActivitySteerInputHandled says "The runtime handled the input before queueing it."
+// in the language the app shows.
+func ActivitySteerInputHandled() string { return In(i18n.Locale()).ActivitySteerInputHandled() }
+
+// ActivitySteerInputHandled says "The runtime handled the input before queueing it."
+// in the language of msgs.
+func (msgs Messages) ActivitySteerInputHandled() string {
+	return Catalog.Format(msgs.locale, "activitySteerInputHandled", nil)
+}
+
+// ActivitySteerQueueRemoved says "The instruction was removed from the queue."
+// in the language the app shows.
+func ActivitySteerQueueRemoved() string { return In(i18n.Locale()).ActivitySteerQueueRemoved() }
+
+// ActivitySteerQueueRemoved says "The instruction was removed from the queue."
+// in the language of msgs.
+func (msgs Messages) ActivitySteerQueueRemoved() string {
+	return Catalog.Format(msgs.locale, "activitySteerQueueRemoved", nil)
+}
+
+// ActivitySteerUnobserved says "The runtime could not confirm delivery."
+// in the language the app shows.
+func ActivitySteerUnobserved() string { return In(i18n.Locale()).ActivitySteerUnobserved() }
+
+// ActivitySteerUnobserved says "The runtime could not confirm delivery."
+// in the language of msgs.
+func (msgs Messages) ActivitySteerUnobserved() string {
+	return Catalog.Format(msgs.locale, "activitySteerUnobserved", nil)
+}
+
+// ActivitySteerWorkerLost says "The runtime disconnected before delivery was confirmed."
+// in the language the app shows.
+func ActivitySteerWorkerLost() string { return In(i18n.Locale()).ActivitySteerWorkerLost() }
+
+// ActivitySteerWorkerLost says "The runtime disconnected before delivery was confirmed."
+// in the language of msgs.
+func (msgs Messages) ActivitySteerWorkerLost() string {
+	return Catalog.Format(msgs.locale, "activitySteerWorkerLost", nil)
+}
+
 // ResultHeading says "Result"
 // in the language the app shows.
 func ResultHeading() string { return In(i18n.Locale()).ResultHeading() }

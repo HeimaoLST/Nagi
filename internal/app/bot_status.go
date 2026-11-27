@@ -3,12 +3,14 @@ package app
 import (
 	"context"
 	"math"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/egoist/mygo/ui"
 
 	"github.com/HeimaoLST/Nagi/internal/pi"
+	"github.com/HeimaoLST/Nagi/internal/theme"
 	"github.com/HeimaoLST/Nagi/locales"
 )
 
@@ -90,7 +92,7 @@ func (a *appModel) botVisualState(ct *contact, now time.Time) botStatus {
 }
 
 func (s *botStatus) addActivity(owner string, item pi.ProductActivitySummary) {
-	if item.OwnerBotID != owner || item.State == "completed" || item.State == "cancelled" {
+	if item.OwnerBotID != owner || item.ClosedAt != "" || item.State == "completed" || item.State == "cancelled" {
 		return
 	}
 	switch {
@@ -99,7 +101,7 @@ func (s *botStatus) addActivity(owner string, item pi.ProductActivitySummary) {
 		if s.waitingActivity == "" || item.ActivityID < s.waitingActivity {
 			s.waitingActivity, s.questionID = item.ActivityID, item.OpenQuestionIDs[0]
 		}
-	case item.State == "waitingForAnswer" || item.State == "needsAttention":
+	case len(item.PendingApprovalRequestIDs) > 0 || item.State == "waitingForAnswer" || item.State == "needsAttention":
 		s.attentionCount++
 		if s.attentionActivity == "" || item.ActivityID < s.attentionActivity {
 			s.attentionActivity = item.ActivityID
@@ -197,7 +199,8 @@ func (a *appModel) botStatusAction(c *ui.Context, t *ui.Theme, ct *contact, stat
 		label = msgs.BotStatusAnswer()
 		ink, border = t.Warning, t.Warning.Alpha(.35)
 	}
-	button := ui.Button(c, label).Label(label).Height(32).MinHeight(32).Padding(4, 10).Radius(8).Shrink(0).
+	button := ui.Button(c, label).Label(label).Height(theme.ControlHit).MinHeight(theme.ControlHit).MinWidth(theme.ControlHit).
+		Padding(4, 10).Radius(theme.ControlRadius).Shrink(0).FocusRingColor(t.Accent).
 		FontSize(typeAction).FontWeight(500).FixedLineHeight(lineCompact).TextColor(ink).Border(1, border).
 		Disabled(a.shutdownStarted || a.dataRecoveryBlocksChanges())
 	fill := t.Surface
@@ -206,7 +209,7 @@ func (a *appModel) botStatusAction(c *ui.Context, t *ui.Theme, ct *contact, stat
 	} else if button.Hovered() {
 		fill = t.SurfaceHover
 	}
-	button.Background(fill)
+	theme.TransitionControl(button.Background(fill), t)
 	button.OnClick(func() {
 		p := &ct.activity
 		p.open = true
@@ -287,14 +290,14 @@ func botStatusAvatar(c *ui.Context, t *ui.Theme, ct *contact, size float32, stat
 
 func listBotActiveActivities(ctx context.Context, client *pi.ProductClient, botID string) (map[string]pi.ProductActivitySummary, error) {
 	items := make(map[string]pi.ProductActivitySummary)
-	params := pi.ProductActivityListParams{BotID: botID, States: []string{"running", "waitingForAnswer", "needsAttention"}, ProductPageParams: pi.ProductPageParams{Limit: 200}}
+	params := pi.ProductActivityListParams{BotID: botID, States: []string{"running", "waitingForAnswer", "needsAttention", "completed"}, ProductPageParams: pi.ProductPageParams{Limit: 200}}
 	for {
 		page, err := client.ListActivities(ctx, params)
 		if err != nil {
 			return nil, err
 		}
 		for _, item := range page.Items {
-			if item.OwnerBotID == botID {
+			if item.OwnerBotID == botID && activityNeedsStatus(item) {
 				items[item.ActivityID] = item
 			}
 		}
@@ -306,13 +309,18 @@ func listBotActiveActivities(ctx context.Context, client *pi.ProductClient, botI
 }
 
 func activityNeedsStatus(item pi.ProductActivitySummary) bool {
+	if item.ClosedAt != "" {
+		return false
+	}
 	switch item.State {
-	case "completed", "cancelled":
+	case "completed":
+		return item.AcknowledgedAt == ""
+	case "cancelled":
 		return false
 	case "running", "waitingForAnswer", "needsAttention":
 		return true
 	default:
-		return len(item.OpenQuestionIDs) > 0
+		return len(item.OpenQuestionIDs)+len(item.PendingApprovalRequestIDs) > 0
 	}
 }
 
@@ -330,18 +338,34 @@ func (a *appModel) applyBotActivityStatus(item pi.ProductActivitySummary) {
 		}
 	}
 	previous, existed := ct.activeActivities[item.ActivityID]
-	if existed && previous.Revision >= item.Revision {
+	if existed && (previous.Revision > item.Revision || previous.Revision == item.Revision &&
+		activityProgressSeq(previous.LatestProgress) >= activityProgressSeq(item.LatestProgress) && sameActivityNotice(previous, item)) {
 		return
 	}
 	ct.activityStatusRevision++
+	if !existed || !sameActivityNotice(previous, item) {
+		ct.activityNotices.version++
+	}
 	if activityNeedsStatus(item) {
 		ct.activeActivities[item.ActivityID] = item
 	} else {
 		delete(ct.activeActivities, item.ActivityID)
-		if existed && item.State == "completed" {
-			a.recordBotCompletion(ct)
-		}
 	}
+	if existed && previous.State != "completed" && item.State == "completed" && item.ClosedAt == "" {
+		a.recordBotCompletion(ct)
+	}
+}
+
+func activityProgressSeq(progress *pi.ProductActivityProgress) uint64 {
+	if progress != nil {
+		return progress.ProgressSeq
+	}
+	return 0
+}
+
+func sameActivityNotice(previous, next pi.ProductActivitySummary) bool {
+	return previous.Revision == next.Revision && previous.State == next.State && previous.AcknowledgedAt == next.AcknowledgedAt && previous.ClosedAt == next.ClosedAt &&
+		slices.Equal(previous.OpenQuestionIDs, next.OpenQuestionIDs) && slices.Equal(previous.PendingApprovalRequestIDs, next.PendingApprovalRequestIDs)
 }
 
 func (a *appModel) refreshBotActivityStatus(host *piAppHost, ct *contact) {
@@ -361,6 +385,7 @@ func (a *appModel) refreshBotActivityStatus(host *piAppHost, ct *contact) {
 				return
 			}
 			ct.activeActivities = items
+			ct.activityNotices.version++
 		})
 	}()
 }

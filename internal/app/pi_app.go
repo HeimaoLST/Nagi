@@ -244,6 +244,7 @@ func (a *appModel) openProductProfile(ctx context.Context, fresh bool, generatio
 		}
 		installed = true
 		close(host.productEvents)
+		a.reconcileControlPlaneIntents(host)
 	})
 	return nil
 }
@@ -565,6 +566,14 @@ func (a *appModel) applyProductEvent(host *piAppHost, event pi.ProductEvent) {
 	if a.pi != host {
 		return
 	}
+	if digest := event.ActivityDigest; digest != nil {
+		a.applyActivityDigest(host, *digest)
+		return
+	}
+	if trace := event.TraceUpdated; trace != nil {
+		a.applyActivityTraceUpdated(host, *trace)
+		return
+	}
 	if event.Name == "provider.changed" {
 		a.refreshProductProviders(host)
 		return
@@ -775,10 +784,14 @@ func (a *appModel) reconcileProductStream(host *piAppHost) {
 				for _, ct := range a.contacts {
 					a.refreshProductConversation(host, ct, ct.draftRev)
 					a.reloadProductConversation(host, ct)
+					for _, trace := range ct.activity.traces {
+						trace.client = nil
+					}
 					if !ct.Archived {
 						a.refreshBotActivityStatus(host, ct)
 					}
 				}
+				a.reconcileControlPlaneIntents(host)
 			}
 		})
 	}()

@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"go/ast"
@@ -12,6 +13,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -1208,6 +1210,431 @@ func TestVisualGuardCapabilitiesProfileAndModals(t *testing.T) {
 					assertControl(tr, "composer-material-modal", msgs.TaskContextFormCancel(), msgs.ComposerAddNoteAction())
 					assertFillIsAccent(tr, "composer-material-modal", msgs.ComposerAddNoteAction(), true)
 					a.composerMaterial = nil
+				})
+			}
+		}
+	}
+}
+
+type phase3SeededControlPlane struct {
+	app           *appModel
+	contact       *contact
+	questionAct   *pi.ProductActivity
+	approvalAct   *pi.ProductActivity
+	completedAct  *pi.ProductActivity
+	autoAnswerAct *pi.ProductActivity
+	steerAct      *pi.ProductActivity
+}
+
+func phase3StubProductHost(t *testing.T, a *appModel, pool pi.ProductProviderList) *piAppHost {
+	t.Helper()
+	dir := t.TempDir()
+	if a != nil && a.storePath == "" {
+		a.storePath = filepath.Join(dir, "contacts.json")
+	}
+	stub := filepath.Join(dir, "stub.sh")
+	if err := os.WriteFile(stub, []byte("#!/bin/sh\nexec sleep 60\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	client, err := pi.StartProduct(pi.ProductOptions{
+		NodePath:        "/bin/sh",
+		WorkerPath:      stub,
+		StateDir:        dir,
+		ProfilePath:     filepath.Join(dir, "profile.sqlite"),
+		CredentialsPath: filepath.Join(dir, "connection.json"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		_, _ = client.Kill(ctx)
+		<-client.CallbacksDone()
+	})
+	return &piAppHost{
+		generation:       1,
+		product:          client,
+		productProviders: pool,
+	}
+}
+
+func phase3SeededControlPlaneApp(t *testing.T) phase3SeededControlPlane {
+	t.Helper()
+	a, ct := workspaceTestApp(t)
+	a.demo = false
+	a.runtimeStatus = runtimeStateReady
+	a.connectionGeneration = 1
+	host := phase3StubProductHost(t, a, visualGuardSeededPool())
+	a.pi = host
+	client := host.product
+	ct.Name = "Cedar"
+	ct.Draft = "Keep this conversation draft"
+	ct.SessionID = "conv-cp-origin"
+	ct.Loaded = true
+	a.profileEditors = map[string]*contactProfileEditor{ct.ID: newContactProfileEditor(contactProfileDraft(ct))}
+
+	allowFalse := false
+	okTrue := true
+	nextCur := "trace-page-2"
+
+	questionAct := &pi.ProductActivity{
+		ProductActivitySummary: pi.ProductActivitySummary{
+			ActivityID:           "act-cp-question",
+			OwnerBotID:           ct.ID,
+			OriginConversationID: ct.SessionID,
+			Revision:             2,
+			State:                "waitingForAnswer",
+			Goal:                 "Verify the intake inventory",
+			OpenQuestionIDs:      []string{"q-cp-1"},
+			LatestProgress:       &pi.ProductActivityProgress{ExecutionID: "exec-q-1", ProgressSeq: 3, Stage: "Checking intake records", Step: 2, TotalSteps: 4},
+		},
+		Questions: []pi.ProductQuestion{{
+			QuestionID:    "q-cp-1",
+			ExecutionID:   "exec-q-1",
+			Text:          "Which intake batch should I verify?",
+			Revision:      1,
+			State:         "open",
+			AllowFreeText: &allowFalse,
+			Options: []pi.ProductQuestionOption{
+				{ID: "batch_14", Label: "Batch fourteen", Description: "Primary verified batch", Recommended: true},
+				{ID: "batch_16", Label: "Batch sixteen", Description: "Fallback intake lot"},
+			},
+		}},
+		Executions: []pi.ProductExecution{{ExecutionID: "exec-q-1", Revision: 1, State: "running"}},
+	}
+
+	approvalReq := pi.ProductSkillApprovalRequest{
+		RequestID:          "req-cp-1",
+		ActivityID:         "act-cp-approval",
+		BotID:              ct.ID,
+		Source:             "private",
+		SkillID:            "verify-intake",
+		Script:             "check",
+		State:              "open",
+		Revision:           1,
+		InstallationID:     "inst-cp-1",
+		ApprovalDigest:     "digest-cp-1",
+		PermissionsDigest:  "perm-cp-1",
+		CanonicalWorkspace: "/tmp/ws",
+	}
+	approvalAct := &pi.ProductActivity{
+		ProductActivitySummary: pi.ProductActivitySummary{
+			ActivityID:                "act-cp-approval",
+			OwnerBotID:                ct.ID,
+			OriginConversationID:      ct.SessionID,
+			Revision:                  2,
+			State:                     "waitingForAnswer",
+			Goal:                      "Verify source documents",
+			PendingApprovalRequestIDs: []string{approvalReq.RequestID},
+		},
+		ApprovalRequests: []pi.ProductSkillApprovalRequest{approvalReq},
+		Executions:       []pi.ProductExecution{{ExecutionID: "exec-app-1", Revision: 1, State: "running"}},
+	}
+
+	completedAct := &pi.ProductActivity{
+		ProductActivitySummary: pi.ProductActivitySummary{
+			ActivityID:           "act-cp-done",
+			OwnerBotID:           ct.ID,
+			OriginConversationID: ct.SessionID,
+			Revision:             4,
+			State:                "completed",
+			Goal:                 "Summarize supplier audit",
+			LatestProgress:       &pi.ProductActivityProgress{ExecutionID: "exec-done-1", ProgressSeq: 5, Stage: "Finished verification", Step: 4, TotalSteps: 4},
+		},
+		Executions: []pi.ProductExecution{{ExecutionID: "exec-done-1", Revision: 2, State: "completed"}},
+	}
+
+	autoAnswerAct := &pi.ProductActivity{
+		ProductActivitySummary: pi.ProductActivitySummary{
+			ActivityID:           "act-cp-auto",
+			OwnerBotID:           ct.ID,
+			OriginConversationID: ct.SessionID,
+			Revision:             3,
+			State:                "running",
+			Goal:                 "Format intake notes",
+		},
+		Questions: []pi.ProductQuestion{{
+			QuestionID:       "q-cp-auto",
+			ExecutionID:      "exec-auto-1",
+			Text:             "Which date format should I use?",
+			Revision:         2,
+			State:            "answered",
+			Provenance:       "bot_auto",
+			SelectedOptionID: "iso_dates",
+			Delivery:         "delivered",
+			Answer:           &pi.ProductText{Text: "ISO dates"},
+		}},
+		Executions: []pi.ProductExecution{{ExecutionID: "exec-auto-1", Revision: 1, State: "running"}},
+	}
+
+	steerAct := &pi.ProductActivity{
+		ProductActivitySummary: pi.ProductActivitySummary{
+			ActivityID:           "act-cp-steer",
+			OwnerBotID:           ct.ID,
+			OriginConversationID: ct.SessionID,
+			Revision:             5,
+			State:                "running",
+			Goal:                 "Compare supplier lots",
+			LatestProgress:       &pi.ProductActivityProgress{ExecutionID: "exec-steer-1", ProgressSeq: 7, Stage: "Matching source lots", Step: 2, TotalSteps: 3},
+		},
+		Executions: []pi.ProductExecution{{ExecutionID: "exec-steer-1", Revision: 1, State: "running"}},
+		Steers: []pi.ProductActivitySteer{
+			{OperationID: "op-steer-1", SteerID: "steer-1", ActivityID: "act-cp-steer", ExecutionID: "exec-steer-1", State: "delivered", Revision: 5},
+			{OperationID: "op-steer-2", SteerID: "steer-2", ActivityID: "act-cp-steer", ExecutionID: "exec-steer-1", State: "unknown", Revision: 5, Reason: "worker_lost"},
+		},
+	}
+
+	ct.activeActivities = map[string]pi.ProductActivitySummary{
+		questionAct.ActivityID:   questionAct.ProductActivitySummary,
+		approvalAct.ActivityID:   approvalAct.ProductActivitySummary,
+		completedAct.ActivityID:  completedAct.ProductActivitySummary,
+		autoAnswerAct.ActivityID: autoAnswerAct.ProductActivitySummary,
+		steerAct.ActivityID:      steerAct.ProductActivitySummary,
+	}
+	ct.activity = productActivityPanel{
+		client:   client,
+		revision: a.productActivityRevision(),
+		loaded:   true,
+		items: []pi.ProductActivitySummary{
+			questionAct.ProductActivitySummary,
+			steerAct.ProductActivitySummary,
+			completedAct.ProductActivitySummary,
+		},
+		traces: map[pi.ProductActivityExecutionParams]*activityTraceState{
+			productActivityExecution(steerAct.ActivityID, "exec-steer-1"): {
+				open:     true,
+				loaded:   true,
+				client:   client,
+				observed: 3,
+				page: pi.ProductActivityTrace{
+					ProductPage: pi.ProductPage[pi.ProductActivityTraceItem]{
+						Items: []pi.ProductActivityTraceItem{
+							{Seq: 1, ActivityID: steerAct.ActivityID, ExecutionID: "exec-steer-1", Kind: "tool_started", Tool: "activity_progress", Target: "Step 1 of 3"},
+							{Seq: 2, ActivityID: steerAct.ActivityID, ExecutionID: "exec-steer-1", Kind: "tool_finished", Tool: "activity_progress", OK: &okTrue, Excerpt: "Matched 14 source rows"},
+							{Seq: 3, ActivityID: steerAct.ActivityID, ExecutionID: "exec-steer-1", Kind: "file_confirmed", Path: "/tmp/ws/lots.md"},
+						},
+						NextCursor: &nextCur,
+					},
+				},
+			},
+		},
+	}
+	ct.activityNotices = activityNoticeState{
+		client:  client,
+		version: 1,
+		loaded:  1,
+		details: map[string]*pi.ProductActivity{
+			questionAct.ActivityID:   questionAct,
+			approvalAct.ActivityID:   approvalAct,
+			completedAct.ActivityID:  completedAct,
+			autoAnswerAct.ActivityID: autoAnswerAct,
+		},
+	}
+	return phase3SeededControlPlane{
+		app:           a,
+		contact:       ct,
+		questionAct:   questionAct,
+		approvalAct:   approvalAct,
+		completedAct:  completedAct,
+		autoAnswerAct: autoAnswerAct,
+		steerAct:      steerAct,
+	}
+}
+
+func TestVisualGuardControlPlaneWorkbench(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		dark bool
+	}{{"Paper Light", false}, {"Moss Dark", true}} {
+		wb := theme.ResolveWorkbenchTheme(tc.dark)
+		th := wb.Theme
+		for _, pair := range []struct {
+			label string
+			fg    ui.Color
+			bg    ui.Color
+		}{
+			{"botStatusAction waiting", th.Warning, th.Surface},
+			{"botStatusAction muted", th.TextMuted, th.Surface},
+			{"capabilityBadge muted", th.TextMuted, th.Surface.Mix(th.TextMuted, .08)},
+			{"capabilityBadge success", th.Success, th.Surface.Mix(th.Success, .08)},
+			{"capabilityBadge warning", th.Warning, th.Surface.Mix(th.Warning, .08)},
+			{"capabilityBadge danger", th.Danger, th.Surface.Mix(th.Danger, .08)},
+			{"TextAction default", th.TextMuted, th.Surface},
+			{"TextAction danger", th.Danger, th.Surface},
+			{"TagPill unselected", th.TextMuted, th.Surface},
+		} {
+			if ratio := theme.PaletteContrast(pair.fg, pair.bg); ratio < 4.5 {
+				t.Fatalf("%s %s contrast = %.2f, want >= 4.5", tc.name, pair.label, ratio)
+			}
+		}
+		pillBg := th.Surface.Mix(th.Success, .09)
+		if tc.dark {
+			pillBg = th.Surface.Mix(th.Accent, .12)
+		}
+		if ratio := theme.PaletteContrast(th.Text, pillBg); ratio < 4.5 {
+			t.Fatalf("%s TagPill selected contrast = %.2f, want >= 4.5", tc.name, ratio)
+		}
+	}
+
+	closeRGBA := func(a, b [4]uint8) bool {
+		for i := range 4 {
+			d := int(a[i]) - int(b[i])
+			if d < 0 {
+				d = -d
+			}
+			if d > 5 {
+				return false
+			}
+		}
+		return true
+	}
+
+	for _, locale := range []string{"en", "zh-Hans"} {
+		msgs := locales.In(locale)
+		for _, dark := range []bool{false, true} {
+			wb := theme.ResolveWorkbenchTheme(dark)
+			accentRGBA := [4]uint8{wb.Theme.Accent.R, wb.Theme.Accent.G, wb.Theme.Accent.B, wb.Theme.Accent.A}
+
+			t.Run(fmt.Sprintf("%s-dark%t-960x640-profile-activity", locale, dark), func(t *testing.T) {
+				fx := phase3SeededControlPlaneApp(t)
+				fx.app.windowWidth = 960
+				fx.app.rightPaneWidth = 440
+				fx.app.contactProfileID = fx.contact.ID
+				fx.app.openDetail(detailProfile)
+				fx.contact.activity.open = true
+				fx.contact.activity.activityID = fx.steerAct.ActivityID
+				fx.contact.activity.activity = fx.steerAct
+
+				tr := ui.NewTesterWith(fx.app.view, 960, 640, ui.TesterOptions{Dark: dark})
+				tr.SetLocale(locale)
+				tr.SetFocused(true)
+				tr.Frame()
+
+				comp, ok := tr.Find(msgs.ComposerLabel(fx.contact.Name))
+				if !ok || comp.W <= 0 || comp.H <= 0 || comp.X < 0 || comp.X+comp.W > 960.5 || comp.Y+comp.H > 640.5 {
+					t.Fatalf("960x640 composer missing or clipped: ok=%v rect=%+v", ok, comp)
+				}
+				if netW := comp.W - 4; netW < 440 {
+					t.Fatalf("960x640 profile+activity net editable composer width = %.1f DIP, want >= 440", netW)
+				}
+				if r, ok := tr.Find(msgs.ContactSaveChanges()); !ok || r.W < theme.ControlHit || r.H < theme.ControlHit || r.X+r.W > 960.5 {
+					t.Fatalf("960x640 profile Save changes invalid: ok=%v rect=%+v", ok, r)
+				}
+			})
+
+			for _, size := range [][2]int{{1040, 720}, {720, 640}} {
+				w, h := size[0], size[1]
+				t.Run(fmt.Sprintf("%s-dark%t-%dx%d", locale, dark, w, h), func(t *testing.T) {
+					assertHit := func(tr *ui.Tester, scene string, labels ...string) {
+						t.Helper()
+						for _, label := range labels {
+							r, ok := tr.Find(label)
+							if !ok || r.X < -0.5 || r.Y < -0.5 || r.X+r.W > float32(w)+0.5 || r.Y+r.H > float32(h)+0.5 || r.W < theme.ControlHit || r.H < theme.ControlHit {
+								t.Fatalf("scene=%s control %q invalid/overflow: ok=%v rect=%+v viewport=%dx%d", scene, label, ok, r, w, h)
+							}
+						}
+					}
+					assertNotAccentFill := func(tr *ui.Tester, scene string, labels ...string) {
+						t.Helper()
+						for _, label := range labels {
+							r, ok := tr.Find(label)
+							if !ok {
+								t.Fatalf("scene=%s missing control %q", scene, label)
+							}
+							c := tr.Image().RGBAAt(int(r.X+r.W/2), int(r.Y+3))
+							if closeRGBA([4]uint8{c.R, c.G, c.B, c.A}, accentRGBA) {
+								t.Fatalf("scene=%s non-primary control %q unexpectedly used solid Accent fill: got=%+v", scene, label, c)
+							}
+						}
+					}
+
+					fx := phase3SeededControlPlaneApp(t)
+					fx.app.windowWidth = w
+					fx.contact.activity.open = true
+					fx.contact.activityNotices.selected = activityNoticeKey{fx.questionAct.ActivityID, "question_open", "q-cp-1"}
+					tr := ui.NewTesterWith(fx.app.view, w, h, ui.TesterOptions{Dark: dark})
+					tr.SetLocale(locale)
+					tr.SetFocused(true)
+					tr.Frame()
+
+					assertHit(tr, "drawer+notice-strip", msgs.WorkActivity(), msgs.ReloadAction(), msgs.ActivityAnswer(), "Batch fourteen", "Batch sixteen", msgs.SendAction())
+					assertNotAccentFill(tr, "drawer+notice-strip", msgs.WorkActivity(), msgs.ActivityAnswer(), "Batch fourteen", msgs.BotStatusAnswer())
+
+					compRect, okComp := tr.Find(msgs.ComposerLabel(fx.contact.Name))
+					if !okComp || compRect.X < 0 || compRect.Y < 0 || compRect.X+compRect.W > float32(w)+0.5 || compRect.Y+compRect.H > float32(h)+0.5 {
+						t.Fatalf("composer clipped with drawer+notice strip open: ok=%v rect=%+v viewport=%dx%d", okComp, compRect, w, h)
+					}
+					if err := tr.Click(msgs.ComposerLabel(fx.contact.Name)); err != nil {
+						t.Fatalf("composer not focusable with drawer+notice strip open: %v", err)
+					}
+					tr.Frame()
+					if _, hasCaret := tr.TextCaret(); !hasCaret {
+						t.Fatal("composer has no active caret after click with drawer+notice strip open")
+					}
+					beforeDraft := fx.contact.Draft
+					fx.app.pi.productDrafts = map[string]pi.ProductDraft{fx.contact.ID: {Text: beforeDraft + "!"}}
+					tr.Type("!")
+					tr.Frame()
+					if fx.contact.Draft != beforeDraft+"!" {
+						t.Fatalf("composer typing failed with drawer+notice strip open: got=%q want=%q", fx.contact.Draft, beforeDraft+"!")
+					}
+
+					if err := tr.Click("Batch fourteen"); err != nil {
+						t.Fatalf("click option pill Batch fourteen: %v", err)
+					}
+					tr.Move(0, 0)
+					tr.Advance(theme.ControlTransition.Duration)
+					tr.Frame()
+
+					headerRect, okHeader := tr.Find(msgs.BotStatusAnswer())
+					pillRect, okPill := tr.Find("Batch fourteen")
+					if !okHeader || !okPill {
+						t.Fatalf("missing header(%v) or pill(%v) before theme switch snap check", okHeader, okPill)
+					}
+					tr.SetDark(!dark)
+					otherWB := theme.ResolveWorkbenchTheme(!dark)
+					gotHeader := tr.Image().RGBAAt(int(headerRect.X+headerRect.W/2), int(headerRect.Y+3))
+					wantHeader := otherWB.Theme.Surface
+					if !closeRGBA([4]uint8{gotHeader.R, gotHeader.G, gotHeader.B, gotHeader.A}, [4]uint8{wantHeader.R, wantHeader.G, wantHeader.B, wantHeader.A}) {
+						t.Fatalf("botStatusAction did not snap on first SetDark(%v) frame: got=%+v want=%+v", !dark, gotHeader, wantHeader)
+					}
+					gotPill := tr.Image().RGBAAt(int(pillRect.X+pillRect.W/2), int(pillRect.Y+3))
+					wantPill := otherWB.Theme.Surface.Mix(otherWB.Theme.Success, .09)
+					if !dark {
+						wantPill = otherWB.Theme.Surface.Mix(otherWB.Theme.Accent, .12)
+					}
+					if !closeRGBA([4]uint8{gotPill.R, gotPill.G, gotPill.B, gotPill.A}, [4]uint8{wantPill.R, wantPill.G, wantPill.B, wantPill.A}) {
+						t.Fatalf("selected option TagPill did not snap on first SetDark(%v) frame: got=%+v want=%+v", !dark, gotPill, wantPill)
+					}
+					tr.SetDark(dark)
+					tr.Advance(theme.ControlTransition.Duration)
+					tr.Frame()
+
+					fx.contact.activity.open = false
+					for _, notice := range []struct {
+						name   string
+						key    activityNoticeKey
+						labels []string
+					}{
+						{"strip-approval", activityNoticeKey{fx.approvalAct.ActivityID, "approval_required", "req-cp-1"}, []string{msgs.CapReviewApprove(), msgs.CapDeny()}},
+						{"strip-completed", activityNoticeKey{fx.completedAct.ActivityID, "completed", "exec-done-1"}, []string{msgs.ActivityAcknowledge(), msgs.ActivityOpen()}},
+						{"strip-auto-answer", activityNoticeKey{fx.autoAnswerAct.ActivityID, "question_auto_saved", "q-cp-auto"}, []string{msgs.ActivityDismissHint()}},
+					} {
+						fx.contact.activityNotices.selected = notice.key
+						fx.contact.activityNotices.scroll.Y = 0
+						tr.Frame()
+						assertHit(tr, notice.name, notice.labels...)
+						assertNotAccentFill(tr, notice.name, notice.labels...)
+					}
+
+					fx.contact.activity.open = true
+					fx.contact.activity.activityID = fx.steerAct.ActivityID
+					fx.contact.activity.activity = fx.steerAct
+					fx.contact.activity.scroll.Y = 0
+					tr.Frame()
+					assertHit(tr, "steer-detail", msgs.BackLabel(), msgs.WorkActivity(), msgs.ReloadAction(), msgs.WorkStopIssueTask(), msgs.ActivitySteer())
+					assertNotAccentFill(tr, "steer-detail", msgs.WorkStopIssueTask(), msgs.ActivitySteer())
 				})
 			}
 		}

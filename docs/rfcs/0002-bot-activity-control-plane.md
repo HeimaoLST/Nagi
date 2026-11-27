@@ -1,6 +1,6 @@
 # RFC-0002: Bot-Activity Control Plane v2 (Bounded Peripheral Awareness, Typed Question Triage, Live Steering & Capability Parity)
 
-- **Status**: `Partially Implemented` (`CP-1`–`CP-3` all backend milestones shipped; UI handoffs delivered to `t1vb`)
+- **Status**: `Implemented` (`CP-1`–`CP-3` in the worker and desktop Workbench)
 - **Baseline**: `dev` @ `60c8f6f` (all RFC-0001 backend milestones `M0a`–`M4` merged; pinned Pi SDK `1.5.2`)
 - **Reviewers**: Backend Architecture (`t21d`), Deep Technical Review (`t1jr` / Astra-6.2, including offline Pi `1.5.2` `ExtensionRunner` probe)
 - **Canonical Vocabulary**: [docs/design/glossary.md](../design/glossary.md)
@@ -8,9 +8,9 @@
 
 ## Milestone Tracker
 
-- [x] **CP-1** *(SQLite v8)* — Activity Capability Parity (Bot B captured L1.5 rules, `<available_skills>`, `skill_list`/`skill_read`/`skill_test`/`skill_exec` with captured canonical `cwd`, read-only `memory_search_log`), Dedicated M3 Skill Approval Request Card, Replay-Safe `activity_progress`, Fully Bounded `activity_list`/`activity_get` + Spill-to-File (`overflowPath`) & Universal Line/Byte `activity_result_read`, Lifecycle Refinement (`completed` / `needsAttention` / `acknowledgedAt` / `closedAt`), and Conditional L0 Orchestration Guidance *(promoted to [product-protocol.md](../design/product-protocol.md); UI handoff delivered to `t1vb`)*
-- [x] **CP-2** *(SQLite v9)* — Ephemeral `<active_activities>` Whiteboard (In-Place Pi `1.5.2` `context` Clone Decoration), Zero-LLM `activity.digest` + Reconnect Reconstruction, Structured Non-Blocking Floating `activity_ask(options[])`, Backend-Verified Typed Preference Triage (with Attempt Caps, Foreground Capacity Reservation & Fetch Guard), and User-Turn-Bound `activity_answer` *(promoted to [product-protocol.md](../design/product-protocol.md); UI handoff delivered to `t1vb`)*
-- [x] **CP-3** *(SQLite v10)* — Durable Mid-Execution Live Steering (`activity.steer` + `activity_action(action: "steer")`) via Pi SDK `session.steer()` with Consumption Proof, Disposal Proof, No-Replay Recovery, and M4 Escalation Exclusion *(promoted to [product-protocol.md](../design/product-protocol.md); UI handoff delivered to `t1vb`)*
+- [x] **CP-1** *(SQLite v8)* — Activity capability parity, execution traces, bounded inspection and result reads, progress, explicit acknowledgment and closure, and dedicated skill approval.
+- [x] **CP-2** *(SQLite v9)* — Ephemeral whiteboard, authoritative reconstruction of digest notices, structured questions, and typed preference triage.
+- [x] **CP-3** *(SQLite v10)* — Durable mid-execution steering with delivery receipts and no-replay recovery.
 
 ---
 
@@ -127,7 +127,7 @@ Every model-facing inspection surface uses **separate bounded model DTOs** while
 ### 1.3 Layer 3 — Zero-LLM Digest Hints & Reconnect Reconstruction (CP-2)
 
 - Emit post-commit hint event `activity.digest` (`{ factId, activityId, ownerBotId, originConversationId, executionId?, revision, kind: 'completed' | 'needs_attention' | 'question_open' | 'question_auto_saved' | 'approval_required', summary, fileCount?, questionId?, requestId?, at }`).
-- **Hint, Not Source of Truth**: Keep digests out of composer drafts and Pi transcripts. On reconnect/reopen, UI reconstructs exact inline chips and floating cards from authoritative reads (`activity.list` explicitly querying unacknowledged `completed` alongside `running`, `waitingForAnswer`, and `needsAttention`; updating `internal/app/bot_status.go:288-343` when frontend integrates).
+- **Hint, Not Source of Truth**: Digests stay outside composer drafts and Pi transcripts. The Workbench reconstructs notices from `activity.list` and `activity.get`, including unacknowledged completed work alongside `running`, `waitingForAnswer`, and `needsAttention`.
 - Late `question_open` or `approval_required` events never reopen an already answered/resolved card; a failed utility execution superseded by an admitted M4 escalation renders as superseded.
 
 ---
