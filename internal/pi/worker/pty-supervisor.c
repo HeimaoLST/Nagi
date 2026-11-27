@@ -1,6 +1,7 @@
 #define _DARWIN_C_SOURCE
 #include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
 #include <poll.h>
 #include <signal.h>
 #include <stdbool.h>
@@ -8,16 +9,17 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
+#include <sys/syslimits.h>
 #include <sys/wait.h>
 #include <termios.h>
 #include <time.h>
 #include <unistd.h>
 #include <util.h>
 
-enum { WRITE = 1, RESIZE, SIGNAL, EOF_INPUT, CLOSE };
-enum { OPENED = 16, PTY, STDOUT, STDERR, ECHO_STATE, ACK, EXITED, EXEC_FAILED };
-enum { APPLIED, AUTH_PAUSED, INPUT_CLOSED, UNSUPPORTED, IO_FAILED };
-enum { FRAME_HEADER = 5, MAX_INPUT = 16384, OUTPUT_CHUNK = 8192 };
+enum { NAGI_WRITE = 1, NAGI_RESIZE, NAGI_SIGNAL, NAGI_EOF_INPUT, NAGI_CLOSE };
+enum { NAGI_OPENED = 16, NAGI_PTY, NAGI_STDOUT, NAGI_STDERR, NAGI_ECHO_STATE, NAGI_ACK, NAGI_EXITED, NAGI_EXEC_FAILED };
+enum { NAGI_APPLIED, NAGI_AUTH_PAUSED, NAGI_INPUT_CLOSED, NAGI_UNSUPPORTED, NAGI_IO_FAILED };
+enum { NAGI_FRAME_HEADER = 5, NAGI_MAX_INPUT = 16384, NAGI_OUTPUT_CHUNK = 8192 };
 
 struct session {
     pid_t child;
@@ -171,7 +173,7 @@ static void close_input(struct session *session) {
 }
 
 static bool read_output(int *fd, unsigned char stream, int64_t deadline) {
-    unsigned char data[OUTPUT_CHUNK];
+    unsigned char data[NAGI_OUTPUT_CHUNK];
     ssize_t count = read(*fd, data, sizeof(data));
     if (count > 0) return event(stream, data, (size_t)count, deadline);
     if (count == 0 || (errno != EINTR && errno != EAGAIN && errno != EWOULDBLOCK)) close_fd(fd);
@@ -186,45 +188,45 @@ static bool echo_state(struct session *session, struct termios *settings) {
     if (state != session->echo_state) {
         session->echo_state = state;
         unsigned char value = (unsigned char)state;
-        return event(ECHO_STATE, &value, 1, millis() + 250);
+        return event(NAGI_ECHO_STATE, &value, 1, millis() + 250);
     }
     return true;
 }
 
 static bool control(struct session *session, unsigned char type, const unsigned char *data, uint32_t size) {
-    unsigned char result = APPLIED;
+    unsigned char result = NAGI_APPLIED;
     struct termios settings = {0};
-    if ((type == WRITE || type == EOF_INPUT) && !echo_state(session, &settings)) return false;
-    if (type == CLOSE && size == 0) return false;
-    if (type == WRITE && size > 0) {
-        if (session->eof || session->input < 0 || (session->pty && session->output < 0)) result = INPUT_CLOSED;
-        else if (session->echo_state == 3) result = AUTH_PAUSED;
-        else if (!transfer(session->input, data, size, millis() + 250)) result = IO_FAILED;
-    } else if (type == RESIZE && size == 4 && data[0] + data[1] > 0 && data[2] + data[3] > 0) {
+    if ((type == NAGI_WRITE || type == NAGI_EOF_INPUT) && !echo_state(session, &settings)) return false;
+    if (type == NAGI_CLOSE && size == 0) return false;
+    if (type == NAGI_WRITE && size > 0) {
+        if (session->eof || session->input < 0 || (session->pty && session->output < 0)) result = NAGI_INPUT_CLOSED;
+        else if (session->echo_state == 3) result = NAGI_AUTH_PAUSED;
+        else if (!transfer(session->input, data, size, millis() + 250)) result = NAGI_IO_FAILED;
+    } else if (type == NAGI_RESIZE && size == 4 && data[0] + data[1] > 0 && data[2] + data[3] > 0) {
         struct winsize size_request = {.ws_col = (unsigned short)(data[0] << 8 | data[1]),
             .ws_row = (unsigned short)(data[2] << 8 | data[3])};
-        if (!session->pty) result = UNSUPPORTED;
-        else if (session->output < 0 || ioctl(session->output, TIOCSWINSZ, &size_request) < 0) result = IO_FAILED;
-    } else if (type == SIGNAL && size == 1 && data[0] < 4) {
+        if (!session->pty) result = NAGI_UNSUPPORTED;
+        else if (session->output < 0 || ioctl(session->output, TIOCSWINSZ, &size_request) < 0) result = NAGI_IO_FAILED;
+    } else if (type == NAGI_SIGNAL && size == 1 && data[0] < 4) {
         const int signals[] = {SIGINT, SIGTERM, SIGHUP, SIGKILL};
         signal_child(session, signals[data[0]]);
-    } else if (type == EOF_INPUT && size == 0) {
+    } else if (type == NAGI_EOF_INPUT && size == 0) {
         if (!session->eof && session->pty) {
-            if (session->echo_state == 3) result = AUTH_PAUSED;
-            else if (session->echo_state != 2 || settings.c_cc[VEOF] == _POSIX_VDISABLE) result = UNSUPPORTED;
-            else if (!transfer(session->input, &settings.c_cc[VEOF], 1, millis() + 250)) result = IO_FAILED;
+            if (session->echo_state == 3) result = NAGI_AUTH_PAUSED;
+            else if (session->echo_state != 2 || settings.c_cc[VEOF] == _POSIX_VDISABLE) result = NAGI_UNSUPPORTED;
+            else if (!transfer(session->input, &settings.c_cc[VEOF], 1, millis() + 250)) result = NAGI_IO_FAILED;
         }
-        if (result == APPLIED) close_input(session);
+        if (result == NAGI_APPLIED) close_input(session);
     } else {
         return false;
     }
-    return event(ACK, &result, 1, millis() + 250);
+    return event(NAGI_ACK, &result, 1, millis() + 250);
 }
 
 static bool supervise(struct session *session) {
-    unsigned char frame[FRAME_HEADER + MAX_INPUT];
+    unsigned char frame[NAGI_FRAME_HEADER + NAGI_MAX_INPUT];
     size_t have = 0;
-    size_t need = FRAME_HEADER;
+    size_t need = NAGI_FRAME_HEADER;
     while (!stopping && !child_exited(session->child)) {
         struct pollfd fds[] = {{STDIN_FILENO, POLLIN, 0}, {session->output, POLLIN, 0}, {session->error, POLLIN, 0}};
         if (poll(fds, 3, 25) < 0 && errno != EINTR) return false;
@@ -235,19 +237,19 @@ static bool supervise(struct session *session) {
             ssize_t count = read(STDIN_FILENO, frame + have, need - have);
             if (count == 0 || (count < 0 && errno != EINTR && errno != EAGAIN && errno != EWOULDBLOCK)) return false;
             if (count > 0) have += (size_t)count;
-            if (have == FRAME_HEADER && need == FRAME_HEADER) {
+            if (have == NAGI_FRAME_HEADER && need == NAGI_FRAME_HEADER) {
                 uint32_t length = read_u32(frame + 1);
-                if (length > MAX_INPUT) return false;
+                if (length > NAGI_MAX_INPUT) return false;
                 need += length;
             }
             if (have == need) {
-                if (!control(session, frame[0], frame + FRAME_HEADER, (uint32_t)(need - FRAME_HEADER))) return false;
+                if (!control(session, frame[0], frame + NAGI_FRAME_HEADER, (uint32_t)(need - NAGI_FRAME_HEADER))) return false;
                 have = 0;
-                need = FRAME_HEADER;
+                need = NAGI_FRAME_HEADER;
             }
         }
-        if (fds[1].revents && !read_output(&session->output, session->pty ? PTY : STDOUT, millis() + 250)) return false;
-        if (fds[2].revents && !read_output(&session->error, STDERR, millis() + 250)) return false;
+        if (fds[1].revents && !read_output(&session->output, session->pty ? NAGI_PTY : NAGI_STDOUT, millis() + 250)) return false;
+        if (fds[2].revents && !read_output(&session->error, NAGI_STDERR, millis() + 250)) return false;
     }
     return !stopping;
 }
@@ -272,8 +274,8 @@ static void drain(struct session *session) {
     for (int count = 0; count < 64 && millis() < deadline; count++) {
         struct pollfd fds[] = {{session->output, POLLIN, 0}, {session->error, POLLIN, 0}};
         if (poll(fds, 2, 0) <= 0) break;
-        if (fds[0].revents && !read_output(&session->output, session->pty ? PTY : STDOUT, deadline)) break;
-        if (fds[1].revents && !read_output(&session->error, STDERR, deadline)) break;
+        if (fds[0].revents && !read_output(&session->output, session->pty ? NAGI_PTY : NAGI_STDOUT, deadline)) break;
+        if (fds[1].revents && !read_output(&session->error, NAGI_STDERR, deadline)) break;
     }
 }
 
@@ -293,17 +295,17 @@ int main(int argc, char **argv) {
     if (failure) {
         if (session.child > 0) reap(&session, false);
         unsigned char reason = (unsigned char)(failure < 0 ? EIO : failure);
-        event(EXEC_FAILED, &reason, 1, millis() + 250);
+        event(NAGI_EXEC_FAILED, &reason, 1, millis() + 250);
         return 0;
     }
-    bool started = event(OPENED, NULL, 0, millis() + 250);
+    bool started = event(NAGI_OPENED, NULL, 0, millis() + 250);
     bool exited = started && supervise(&session);
     int status = reap(&session, exited);
     if (started) {
         drain(&session);
         unsigned char outcome[] = {status < 0 ? 0 : WIFEXITED(status) ? 1 : 2,
             status < 0 ? 0 : WIFEXITED(status) ? WEXITSTATUS(status) : WTERMSIG(status)};
-        event(EXITED, outcome, sizeof(outcome), millis() + 250);
+        event(NAGI_EXITED, outcome, sizeof(outcome), millis() + 250);
     }
     return 0;
 }
