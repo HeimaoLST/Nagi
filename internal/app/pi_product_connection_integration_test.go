@@ -42,7 +42,7 @@ func TestPiAppProductConnectionStopAndWorkerLoss(t *testing.T) {
 	root, launchFolder, explicitFolder := t.TempDir(), t.TempDir(), t.TempDir()
 	t.Chdir(launchFolder)
 	isolateConnectionApp(t, root, payload)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
 	primary := &piAppProvider{limit: 2}

@@ -1136,3 +1136,83 @@ func TestPreviewSessionInspection(t *testing.T) {
 	_ = ptySummary
 	_ = pipeSummary
 }
+
+func TestPreviewScheduledWork(t *testing.T) {
+	dir := os.Getenv("NAGI_PREVIEW_DIR")
+	if dir == "" {
+		t.Skip("set NAGI_PREVIEW_DIR to write BG-2 scheduled work previews")
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	writeSchedShot := func(name string, fx phase3SeededControlPlane, width, height int, locale string, dark bool) {
+		t.Helper()
+		fx.app.windowWidth = width
+		tr := ui.NewTesterWith(fx.app.view, width, height, ui.TesterOptions{Dark: dark})
+		tr.SetLocale(locale)
+		tr.SetFocused(true)
+		tr.Frame()
+		path := filepath.Join(dir, name)
+		writePreviewPNG(t, path, tr.Image())
+		t.Logf("bg2 preview path=%s width=%d height=%d locale=%s dark=%v", path, width, height, locale, dark)
+	}
+
+	fxList, _, _, _ := seedVisualScheduledWorkFixture(t)
+	fxList.app.scheduledWorkBotID = fxList.contact.ID
+	writeSchedShot("bg2-schedules-list-en-light-1040x720.png", fxList, 1040, 720, "en", false)
+
+	fxEditor, _, _, _ := seedVisualScheduledWorkFixture(t)
+	fxEditor.app.scheduledWorkBotID = fxEditor.contact.ID
+	fxEditor.app.schedules.bot(fxEditor.contact.ID).editor = &scheduledWatchEditor{
+		kind:      string(pi.ProductWatchSchedule),
+		cadence:   string(pi.ProductScheduleCalendar),
+		frequency: "weekly",
+		precheck:  "executable",
+		zone:      "Asia/Shanghai",
+		hour:      "9",
+		minute:    "30",
+	}
+	writeSchedShot("bg2-schedules-editor-zh-dark-960x640.png", fxEditor, 960, 640, "zh-Hans", true)
+
+	fxReview, _, dormantWatch, _ := seedVisualScheduledWorkFixture(t)
+	fxReview.app.scheduledWorkBotID = fxReview.contact.ID
+	fxReview.app.schedules.bot(fxReview.contact.ID).review = &scheduledWatchReview{watch: dormantWatch, needed: true}
+	writeSchedShot("bg2-schedules-grant-review-zh-dark-720x640.png", fxReview, 720, 640, "zh-Hans", true)
+
+	fxDetail, detail, _, _ := seedVisualScheduledWorkFixture(t)
+	fxDetail.app.scheduledWorkBotID = fxDetail.contact.ID
+	fxDetail.app.schedules.bot(fxDetail.contact.ID).watchID = detail.WatchID
+	fxDetail.app.schedules.bot(fxDetail.contact.ID).scroll.Y = 340
+	writeSchedShot("bg2-schedules-occurrences-en-light-1040x720.png", fxDetail, 1040, 720, "en", false)
+
+	for _, shot := range []struct {
+		name, locale string
+		w, h         int
+		dark         bool
+	}{
+		{"bg2-settings-recovery-dormant-en-light-1040x720.png", "en", 1040, 720, false},
+		{"bg2-settings-recovery-dormant-zh-dark-720x640.png", "zh-Hans", 720, 640, true},
+	} {
+		fxRec, _, _, _ := seedVisualScheduledWorkFixture(t)
+		fxRec.app.scheduledWorkBotID = ""
+		fxRec.app.openSettingsTab(settingsTabAppearance, settingsSourceCommand)
+		s := fxRec.app.ensureDataRecovery()
+		s.target = &storeRecoveryTarget{}
+		s.canonical = fxRec.app.storePath
+		s.viewGeneration = fxRec.app.folderChoiceGeneration
+		s.owner = fxRec.app.selectedContact()
+		s.copy = &storeRecoveryCopy{
+			Path:           "/tmp/nagi-backup.profile",
+			Contacts:       2,
+			Issues:         1,
+			Timers:         1,
+			Schedules:      2,
+			DormantWatches: 3,
+			ModifiedAt:     time.Date(2026, 11, 27, 18, 0, 0, 0, time.UTC),
+		}
+		s.scopeOpen = true
+		fxRec.app.settingsScroll.Y = 900
+		writeSchedShot(shot.name, fxRec, shot.w, shot.h, shot.locale, shot.dark)
+	}
+}

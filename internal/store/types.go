@@ -298,3 +298,20 @@ func CloneBuiltinTools(selection *[]string) *[]string {
 }
 
 func NowMillis() int64 { return time.Now().UnixMilli() }
+
+type productRecoveryCounts struct {
+	Contacts       int `json:"contacts"`
+	Activities     int `json:"activities"`
+	Timers         int `json:"timers"`
+	Schedules      int `json:"schedules"`
+	DormantWatches int `json:"dormantWatches"`
+}
+
+type PendingWatchOperation struct {
+	ID       string `json:"id"`
+	BotID    string `json:"bot_id"`
+	WatchID  string `json:"watch_id,omitempty"`
+	GrantID  string `json:"grant_id,omitempty"`
+	Revision uint64 `json:"revision,omitempty"`
+	Action   string `json:"action"`
+}

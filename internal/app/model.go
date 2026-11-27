@@ -176,16 +176,19 @@ type appModel struct {
 	detail         detailKind
 	profileScrolls map[string]*ui.ScrollState
 
-	defaultContactN        int
-	focusComposer          bool
-	composerCaretToEnd     bool
-	priorChats             *productConversationBrowser
-	sessions               sessionWorkspaceState
-	composerHandle         ui.Handle
-	composerAttachMenuOpen bool
-	focusComposerAttach    bool
-	focusComposerMaterial  string
-	composerMaterial       *composerMaterialForm
+	defaultContactN          int
+	focusComposer            bool
+	composerCaretToEnd       bool
+	priorChats               *productConversationBrowser
+	sessions                 sessionWorkspaceState
+	schedules                scheduledWorkState
+	scheduledWorkBotID       string
+	focusScheduledWorkOpener string
+	composerHandle           ui.Handle
+	composerAttachMenuOpen   bool
+	focusComposerAttach      bool
+	focusComposerMaterial    string
+	composerMaterial         *composerMaterialForm
 
 	settingsOpen           bool
 	settingsTab            string

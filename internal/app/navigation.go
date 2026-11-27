@@ -27,6 +27,15 @@ func (a *appModel) openDetail(kind detailKind) {
 	a.focusDetailClose = true
 }
 
+func (a *appModel) openBotScheduledWork(contactID string) {
+	if a.contactByID(contactID) == nil {
+		return
+	}
+	a.openContactProfile(contactID)
+	a.scheduledWorkBotID = contactID
+	a.schedules.bot(contactID).focusHeading = true
+}
+
 func (a *appModel) closeDetail() {
 	if a.railCollapsed {
 		a.focusRail = true
@@ -34,6 +43,8 @@ func (a *appModel) closeDetail() {
 		a.focusProfileRow = a.contactProfileID
 	}
 	a.contactProfileID = ""
+	a.scheduledWorkBotID = ""
+	a.focusScheduledWorkOpener = ""
 	a.folderChoiceGeneration++
 	a.workspaceOpen = false
 	a.detail = ""
@@ -153,6 +164,12 @@ func (a *appModel) profileDetail(c *ui.Context, t *ui.Theme) {
 		formActions.SaveInFooter = true
 		formActions.Archive, formActions.Restore = nil, nil
 		formActions.ToggleVisibility = nil
+	}
+	if product && a.scheduledWorkBotID == ct.ID {
+		ui.Column(c).Key(ct.ID).Fill().MinWidth(0).MinHeight(0).Children(func() {
+			a.schedules.render(c, a.scheduledWorkDeps(c, ct))
+		})
+		return
 	}
 	msgs := locales.In(c.Locale())
 	ui.Column(c).Key(ct.ID).Fill().MinWidth(0).MinHeight(0).Padding(16).Gap(8).Children(func() {

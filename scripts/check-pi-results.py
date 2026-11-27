@@ -37,6 +37,7 @@ REQUIRED_GROUPS = {
             "TestPiAppRestoresExistingV10Copy",
             "TestPiAppProductScopedDelegation",
             "TestPiAppSessionInspectionAndClose",
+            "TestPiAppScheduledWorkAndGrants",
             "TestPiPackageStandalone",
         ),
     ),

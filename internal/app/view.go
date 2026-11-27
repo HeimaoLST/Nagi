@@ -86,6 +86,12 @@ func (a *appModel) escapeTopLayer() {
 	if a.composerMaterial != nil || a.composerAttachMenuOpen || a.capabilities.review != nil {
 		return
 	}
+	if a.detailIs(detailProfile) && a.scheduledWorkBotID != "" {
+		if ct := a.contactByID(a.scheduledWorkBotID); ct != nil {
+			a.schedules.bot(ct.ID).back(a.scheduledWorkFallbackDeps(ct))
+			return
+		}
+	}
 	if a.detailPageActive() {
 		a.closeDetail()
 		return
@@ -138,6 +144,8 @@ func (a *appModel) armActiveSurfaceFallback() {
 		a.priorChats.focusBack = true
 	case !a.demo && a.selectedContact() != nil && a.sessions.activeBotID == a.selectedContact().ID:
 		a.sessions.botSession(a.selectedContact().ID).focusBack = true
+	case a.detailIs(detailProfile) && a.scheduledWorkBotID != "":
+		a.schedules.bot(a.scheduledWorkBotID).focusHeading = true
 	case a.detailIs(detailProfile):
 		a.focusDetailClose = true
 	default:
@@ -357,6 +365,11 @@ func (a *appModel) bindBotRowMenu(row ui.Element, contactID string, msgs locales
 		}
 		if menu.Item(profile).Chosen() {
 			a.openContactProfile(contactID)
+		}
+		if !a.demo && a.productHost() != nil {
+			if menu.Item(msgs.SchedWorkTitle()).Chosen() {
+				a.openBotScheduledWork(contactID)
+			}
 		}
 		menu.Separator()
 		if sessionBusy(ct.SendState, ct.ActiveTaskID) {

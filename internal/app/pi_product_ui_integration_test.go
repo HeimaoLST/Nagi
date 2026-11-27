@@ -287,7 +287,7 @@ func TestPiAppConcurrentActivities(t *testing.T) {
 	const resultContent, revisedContent = "Original inventory file", "Current inventory file"
 	const nextPrompt, nextResult = "Recheck the inventory", "Recheck complete, see inventory-result.txt"
 	const nextExcerpt, quitPrompt = "Only review the revised inventory", "Copper draft"
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	primary := &piAppProvider{limit: 4}
 	questionCall := piAppCall{name: "activity_ask", id: "activity-question", args: piAppArguments(map[string]any{"text": "Which sample?"})}

@@ -12945,3 +12945,55 @@ func SessionInspectKillSaveError() string { return In(i18n.Locale()).SessionInsp
 func (msgs Messages) SessionInspectKillSaveError() string {
 	return Catalog.Format(msgs.locale, "sessionInspectKillSaveError", nil)
 }
+
+// SchedWorkTitle says "Scheduled work"
+// in the language the app shows.
+func SchedWorkTitle() string { return In(i18n.Locale()).SchedWorkTitle() }
+
+// SchedWorkTitle says "Scheduled work"
+// in the language of msgs.
+func (msgs Messages) SchedWorkTitle() string {
+	return Catalog.Format(msgs.locale, "schedWorkTitle", nil)
+}
+
+// SchedWorkProfileHint says "Manage timers, recurring schedules, and installation-local standing grants for this Bot."
+// in the language the app shows.
+func SchedWorkProfileHint() string { return In(i18n.Locale()).SchedWorkProfileHint() }
+
+// SchedWorkProfileHint says "Manage timers, recurring schedules, and installation-local standing grants for this Bot."
+// in the language of msgs.
+func (msgs Messages) SchedWorkProfileHint() string {
+	return Catalog.Format(msgs.locale, "schedWorkProfileHint", nil)
+}
+
+// SchedWorkOpenAction says "Manage scheduled work"
+// in the language the app shows.
+func SchedWorkOpenAction() string { return In(i18n.Locale()).SchedWorkOpenAction() }
+
+// SchedWorkOpenAction says "Manage scheduled work"
+// in the language of msgs.
+func (msgs Messages) SchedWorkOpenAction() string {
+	return Catalog.Format(msgs.locale, "schedWorkOpenAction", nil)
+}
+
+// RecoveryScopeWatches says "Restored timers and executable schedules stay paused and unarmed. Standing grants are installation-local. The copy im…"
+// in the language the app shows.
+func RecoveryScopeWatches() string { return In(i18n.Locale()).RecoveryScopeWatches() }
+
+// RecoveryScopeWatches says "Restored timers and executable schedules stay paused and unarmed. Standing grants are installation-local. The copy im…"
+// in the language of msgs.
+func (msgs Messages) RecoveryScopeWatches() string {
+	return Catalog.Format(msgs.locale, "recoveryScopeWatches", nil)
+}
+
+// RecoveryPreviewWatchCounts says "Timers {timers}, schedules {schedules}, dormant entries {dormant}"
+// in the language the app shows.
+func RecoveryPreviewWatchCounts(timers int, schedules int, dormant int) string {
+	return In(i18n.Locale()).RecoveryPreviewWatchCounts(timers, schedules, dormant)
+}
+
+// RecoveryPreviewWatchCounts says "Timers {timers}, schedules {schedules}, dormant entries {dormant}"
+// in the language of msgs.
+func (msgs Messages) RecoveryPreviewWatchCounts(timers int, schedules int, dormant int) string {
+	return Catalog.Format(msgs.locale, "recoveryPreviewWatchCounts", map[string]any{"timers": timers, "schedules": schedules, "dormant": dormant})
+}

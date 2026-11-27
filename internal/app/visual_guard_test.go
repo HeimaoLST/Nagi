@@ -1912,3 +1912,231 @@ func TestVisualGuardSessionInspection(t *testing.T) {
 		}
 	}
 }
+
+func seedVisualScheduledWorkFixture(t *testing.T) (phase3SeededControlPlane, pi.ProductWatchDetail, pi.ProductWatchSummary, pi.ProductWatchGrant) {
+	t.Helper()
+	fx := phase3SeededControlPlaneApp(t)
+	fx.app.contactProfileID = fx.contact.ID
+	fx.app.openDetail(detailProfile)
+	interval := 300
+	timeout := 5000
+	exitZero := 0
+
+	grant := pi.ProductWatchGrant{
+		GrantID:           "grant-bg2-exec",
+		OwnerBotID:        fx.contact.ID,
+		State:             "active",
+		Revision:          2,
+		Purpose:           "Check workspace inventory status",
+		ArtifactKind:      "executable",
+		Executable:        "/usr/bin/true",
+		ExecutableDigest:  "sha256:4f8d22e91c",
+		AllowedArgs:       []string{"--check"},
+		CanonicalCWD:      "/tmp/nagi-workspace",
+		WorkspaceRead:     true,
+		MinCadenceSeconds: 60,
+		MaxTimeoutMS:      5000,
+		NetworkOrigins:    []string{"https://inventory.invalid"},
+		CreatedAt:         "2026-11-27T08:00:00Z",
+		UpdatedAt:         "2026-11-27T08:00:00Z",
+	}
+
+	activeWatch := pi.ProductWatchSummary{
+		WatchID:              "watch-bg2-sched",
+		OwnerBotID:           fx.contact.ID,
+		TargetConversationID: fx.contact.SessionID,
+		Kind:                 pi.ProductWatchSchedule,
+		State:                pi.ProductWatchActive,
+		Armed:                true,
+		Source:               pi.ProductWatchSourceUser,
+		Revision:             3,
+		Label:                "Inventory check",
+		Purpose:              "Check workspace inventory status",
+		Prompt:               "Summarize any inventory deltas.",
+		NextDueAt:            "2026-12-01T09:00:00Z",
+		Schedule: &pi.ProductScheduleSpec{
+			CadenceKind:     pi.ProductScheduleInterval,
+			IntervalSeconds: &interval,
+			TimeZone:        "UTC",
+		},
+		Precheck: &pi.ProductWatchPrecheck{
+			Kind:             "executable",
+			Executable:       grant.Executable,
+			ExecutableDigest: grant.ExecutableDigest,
+			AllowedArgs:      grant.AllowedArgs,
+			WorkspaceRead:    true,
+			TimeoutMS:        &timeout,
+			EmitInitial:      true,
+		},
+		GrantID: grant.GrantID,
+	}
+
+	dormantWatch := pi.ProductWatchSummary{
+		WatchID:              "watch-bg2-dormant",
+		OwnerBotID:           fx.contact.ID,
+		TargetConversationID: fx.contact.SessionID,
+		Kind:                 pi.ProductWatchSchedule,
+		State:                pi.ProductWatchRestored,
+		Source:               pi.ProductWatchSourceModel,
+		StatusReason:         "grant_required",
+		Revision:             1,
+		Label:                "Imported supplier audit",
+		Purpose:              "Audit imported supplier snapshot",
+		Prompt:               "Check supplier compliance.",
+		Schedule: &pi.ProductScheduleSpec{
+			CadenceKind: pi.ProductScheduleCalendar,
+			Frequency:   "daily",
+			TimeZone:    "Asia/Shanghai",
+			Hour:        visualIntPtr(9),
+			Minute:      visualIntPtr(30),
+		},
+		Precheck: &pi.ProductWatchPrecheck{
+			Kind:             "executable",
+			Executable:       "/usr/local/bin/audit",
+			ExecutableDigest: "sha256:9aa3b4c5d6",
+			AllowedArgs:      []string{"--dry-run"},
+			WorkspaceRead:    false,
+			TimeoutMS:        &timeout,
+		},
+	}
+
+	detail := pi.ProductWatchDetail{
+		ProductWatchSummary: activeWatch,
+		Grant:               &grant,
+		RecentOccurrences: []pi.ProductWatchOccurrence{
+			{
+				OccurrenceID:  "occ-bg2-1",
+				WatchID:       activeWatch.WatchID,
+				OwnerBotID:    fx.contact.ID,
+				WatchRevision: 3,
+				ScheduledAt:   "2026-11-27T08:00:00Z",
+				Outcome:       "changed",
+				State:         "settled",
+				ExitCode:      &exitZero,
+				Digest:        "sha256:abcd1234",
+				Excerpt:       "Detected 2 updated rows",
+				Truncated:     true,
+				CreatedAt:     "2026-11-27T08:00:00Z",
+				SettledAt:     "2026-11-27T08:00:02Z",
+			},
+		},
+	}
+
+	bot := fx.app.schedules.bot(fx.contact.ID)
+	bot.client = fx.app.pi.product
+	bot.watches = scheduledRead[pi.ProductPage[pi.ProductWatchSummary]]{
+		ready: true,
+		value: pi.ProductPage[pi.ProductWatchSummary]{
+			Items: []pi.ProductWatchSummary{activeWatch, dormantWatch},
+		},
+	}
+	bot.grants = scheduledRead[pi.ProductPage[pi.ProductWatchGrant]]{
+		ready: true,
+		value: pi.ProductPage[pi.ProductWatchGrant]{
+			Items: []pi.ProductWatchGrant{grant},
+		},
+	}
+	bot.detail = scheduledRead[pi.ProductWatchDetail]{
+		ready: true,
+		value: detail,
+	}
+	return fx, detail, dormantWatch, grant
+}
+
+func TestVisualGuardScheduledWork(t *testing.T) {
+	for _, locale := range []string{"en", "zh-Hans"} {
+		msgs := locales.In(locale)
+		m := scheduledWorkCopy{locale: locale}
+		for _, dark := range []bool{false, true} {
+			for _, size := range [][2]int{{1040, 720}, {960, 640}, {720, 640}} {
+				w, h := size[0], size[1]
+				t.Run(fmt.Sprintf("%s-dark%t-%dx%d", locale, dark, w, h), func(t *testing.T) {
+					assertBtn := func(tr *ui.Tester, scene, label string) {
+						t.Helper()
+						r, ok := tr.Find(label)
+						if !ok || r.X < -0.5 || r.Y < -0.5 || r.X+r.W > float32(w)+0.5 || r.Y+r.H > float32(h)+0.5 || r.H < theme.ControlHit || r.W < theme.ControlHit {
+							t.Fatalf("scene=%s button %q invalid/clipped: ok=%v rect=%+v viewport=%dx%d", scene, label, ok, r, w, h)
+						}
+					}
+
+					fx, detail, dormantWatch, _ := seedVisualScheduledWorkFixture(t)
+					fx.app.windowWidth = w
+					tr := ui.NewTesterWith(fx.app.view, w, h, ui.TesterOptions{Dark: dark})
+					tr.SetLocale(locale)
+					tr.SetFocused(true)
+					tr.Frame()
+
+					scrollTo := func(scroll *ui.ScrollState, target string) {
+						for y := float32(0); y <= 3600; y += 100 {
+							scroll.Y = y
+							tr.Frame()
+							if r, ok := tr.Find(target); ok && r.W >= theme.ControlHit && r.H >= theme.ControlHit && r.Y >= 0 && r.Y+r.H <= float32(h) {
+								return
+							}
+						}
+					}
+					scrollTo(fx.app.profileScrollFor(fx.contact.ID), msgs.SchedWorkOpenAction())
+					assertBtn(tr, "profile-opener", msgs.SchedWorkOpenAction())
+
+					fx.app.scheduledWorkBotID = fx.contact.ID
+					tr.Frame()
+					assertBtn(tr, "sched-list-back", msgs.BackLabel())
+					assertBtn(tr, "sched-list-new", m.text("New timer or schedule", "新建计时器或计划"))
+					assertBtn(tr, "sched-list-grants", m.text("Standing grants", "常驻授权"))
+					newBtn, _ := tr.Find(m.text("New timer or schedule", "新建计时器或计划"))
+					if newBtn.W >= 280 {
+						t.Fatalf("sched-list primary action stretched horizontally: rect=%+v", newBtn)
+					}
+
+					bot := fx.app.schedules.bot(fx.contact.ID)
+					bot.detail.value = detail
+					bot.editor = &scheduledWatchEditor{
+						kind:      string(pi.ProductWatchSchedule),
+						cadence:   string(pi.ProductScheduleCalendar),
+						frequency: "weekly",
+						precheck:  "executable",
+						zone:      "Asia/Shanghai",
+						hour:      "9",
+						minute:    "30",
+					}
+					scrollTo(&bot.scroll, m.text("Review local grant", "审核本机授权"))
+					assertBtn(tr, "sched-editor-submit", m.text("Review local grant", "审核本机授权"))
+
+					bot.editor = nil
+					bot.review = &scheduledWatchReview{watch: dormantWatch, needed: true}
+					bot.scroll.Y = 0
+					tr.Frame()
+					if !tr.HasText(m.recoveryScope()) {
+						t.Fatalf("dormant review missing recovery scope warning in %v", tr.Texts())
+					}
+					scrollTo(&bot.scroll, m.text("Approve local grant and activate", "批准本机授权并启用"))
+					assertBtn(tr, "sched-grant-approve", m.text("Approve local grant and activate", "批准本机授权并启用"))
+
+					fx.app.scheduledWorkBotID = ""
+					fx.app.openSettingsTab(settingsTabAppearance, settingsSourceCommand)
+					s := fx.app.ensureDataRecovery()
+					s.target = &storeRecoveryTarget{}
+					s.canonical = fx.app.storePath
+					s.viewGeneration = fx.app.folderChoiceGeneration
+					s.owner = fx.app.selectedContact()
+					s.copy = &storeRecoveryCopy{
+						Path:           "/tmp/nagi-backup.profile",
+						Contacts:       2,
+						Issues:         1,
+						Timers:         1,
+						Schedules:      2,
+						DormantWatches: 3,
+						ModifiedAt:     time.Date(2026, 11, 27, 18, 0, 0, 0, time.UTC),
+					}
+					s.scopeOpen = true
+					scrollTo(&fx.app.settingsScroll, msgs.RecoveryConfirmAction())
+					wantCounts := msgs.RecoveryPreviewWatchCounts(1, 2, 3)
+					if !tr.HasText(wantCounts) || !tr.HasText(msgs.RecoveryScopeWatches()) {
+						t.Fatalf("settings recovery preview missing watch counts=%q or scope in texts=%v", wantCounts, tr.Texts())
+					}
+					assertBtn(tr, "settings-recovery-confirm", msgs.RecoveryConfirmAction())
+				})
+			}
+		}
+	}
+}

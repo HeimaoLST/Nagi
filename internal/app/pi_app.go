@@ -230,9 +230,13 @@ func (a *appModel) openProductProfile(ctx context.Context, fresh bool, generatio
 			updateUI:            a.updateUI,
 			persistCloseIntents: a.persistSessionCloseIntents,
 		}
+		a.schedules = scheduledWorkState{}
+		a.scheduledWorkBotID = ""
+		a.focusScheduledWorkOpener = ""
 		if local != nil {
 			a.activityIntents = local.PendingActivities
 			a.sessions.restoreSessionCloses(local.PendingSessionCloses)
+			a.schedules.restoreOperations(local.PendingWatchOperations)
 			a.leftPaneWidth = clampPaneWidth(local.Layout.LeftWidth, defaultLeftPaneWidth, minLeftPaneWidth, maxLeftPaneWidth)
 			a.rightPaneWidth = clampPaneWidth(local.Layout.RightWidth, defaultRightPaneWidth, minRightPaneWidth, maxRightPaneWidth)
 			a.appearanceThemeIDs = local.ThemeIDs
@@ -255,6 +259,7 @@ func (a *appModel) openProductProfile(ctx context.Context, fresh bool, generatio
 		a.reconcileControlPlaneIntents(host)
 		a.sessions.blocked = a.dataRecoveryBlocksChanges()
 		a.sessions.setSessionInspectorClient(host.product)
+		a.reconcilePendingWatchOperations(host)
 	})
 	return nil
 }
@@ -276,10 +281,63 @@ func (a *appModel) persistProductUI(host *piAppHost) error {
 	return writeProfileJSON(productUIPath(a.storePath), productUIState{
 		Selected: a.selectedID(), Layout: storedLayout{LeftWidth: a.railWidth(), RightWidth: a.workWidth(), WorkspaceOpen: a.workspaceOpen},
 		ThemeIDs: a.appearanceThemeIDs, Appearance: normalizeAppearanceMode(a.appearanceMode), Pending: host.productPending, RecoveryID: host.recoveryID,
-		PendingActivities:    a.activityIntents,
-		PendingSessionCloses: a.sessions.pendingSessionCloses(),
-		HideBuiltinArchitect: a.hideBuiltinArchitect,
+		PendingActivities:      a.activityIntents,
+		PendingSessionCloses:   a.sessions.pendingSessionCloses(),
+		PendingWatchOperations: a.schedules.pendingOperations(),
+		HideBuiltinArchitect:   a.hideBuiltinArchitect,
 	})
+}
+
+func (a *appModel) persistWatchOperations() error {
+	host := a.productHost()
+	if host == nil {
+		return nil
+	}
+	return a.persistProductUI(host)
+}
+
+func (a *appModel) scheduledWorkDeps(c *ui.Context, ct *contact) scheduledWorkDeps {
+	deps := a.scheduledWorkFallbackDeps(ct)
+	deps.locale = c.Locale()
+	return deps
+}
+
+func (a *appModel) scheduledWorkFallbackDeps(ct *contact) scheduledWorkDeps {
+	return scheduledWorkDeps{
+		client:            a.productActivityClient(),
+		botID:             ct.ID,
+		wb:                a.workTheme,
+		blocked:           a.dataRecoveryBlocksChanges(),
+		locale:            "en",
+		updateUI:          a.updateUI,
+		persistOperations: a.persistWatchOperations,
+		onBack: func() {
+			a.scheduledWorkBotID = ""
+			a.focusScheduledWorkOpener = ct.ID
+		},
+		onOpenConversation: func(conversationID string) {
+			if idx := slices.Index(a.contacts, ct); idx >= 0 {
+				a.selectContact(idx)
+			}
+			a.scheduledWorkBotID = ""
+			if a.detailPageActive() {
+				a.closeDetail()
+			}
+			a.sessions.activeBotID = ""
+			a.browseProductConversations(ct, conversationID)
+		},
+	}
+}
+
+func (a *appModel) reconcilePendingWatchOperations(host *piAppHost) {
+	if a.dataRecoveryBlocksChanges() || a.productActivityClient() != host.product {
+		return
+	}
+	for _, ct := range a.contacts {
+		if b := a.schedules.bots[ct.ID]; b != nil {
+			b.ReconcileWatchOperation(a.scheduledWorkFallbackDeps(ct))
+		}
+	}
 }
 
 func (a *appModel) persistSessionCloseIntents(pending []pi.ProductSessionCloseParams) error {
@@ -631,6 +689,10 @@ func (a *appModel) applyProductEvent(host *piAppHost, event pi.ProductEvent) {
 		a.sessions.applySessionOutputUpdated(*updated)
 		return
 	}
+	if watchChanged := event.WatchChanged; watchChanged != nil {
+		a.schedules.applyWatchChanged(*watchChanged)
+		return
+	}
 	if event.Name == "provider.changed" {
 		a.refreshProductProviders(host)
 		return
@@ -852,6 +914,10 @@ func (a *appModel) reconcileProductStream(host *piAppHost) {
 				a.sessions.blocked = a.dataRecoveryBlocksChanges()
 				a.sessions.setSessionInspectorClient(host.product)
 				a.sessions.refreshSessionInspection()
+				for _, b := range a.schedules.bots {
+					b.refresh()
+				}
+				a.reconcilePendingWatchOperations(host)
 			}
 		})
 	}()
@@ -901,6 +967,9 @@ func (a *appModel) observeProductExit(host *piAppHost) {
 		a.runtimeErrKind = runtimeNoticeConnectionLost
 		a.clearBuiltinToolCatalog()
 		a.sessions.setSessionInspectorClient(nil)
+		for _, b := range a.schedules.bots {
+			b.client = nil
+		}
 		for _, ct := range a.contacts {
 			if ct.ActiveTaskID != "" || ct.SendState == sendSubmitting {
 				if ct.ActiveTaskID != "" {
