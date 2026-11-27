@@ -298,11 +298,14 @@ func TestBotStatusReplyingHaloAnimationAndReduceMotion(t *testing.T) {
 			x0, y0, x1, y1 := mainStart+12, 4, mainStart+56, 48
 
 			before := cloneRGBA(tr.Image())
-			tr.Advance(450 * time.Millisecond)
+			tr.Advance(300 * time.Millisecond)
+			tr.Frame()
+			mid := cloneRGBA(tr.Image())
+			tr.Advance(300 * time.Millisecond)
 			tr.Frame()
 			after := cloneRGBA(tr.Image())
 
-			changed := diffPixelsInRect(before, after, x0, y0, x1, y1)
+			changed := max(diffPixelsInRect(before, mid, x0, y0, x1, y1), diffPixelsInRect(before, after, x0, y0, x1, y1))
 			if tc.wantChanged && changed == 0 {
 				t.Fatalf("replying halo did not animate under normal motion in ROI [%d,%d,%d,%d]", x0, y0, x1, y1)
 			}

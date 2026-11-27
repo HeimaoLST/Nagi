@@ -208,6 +208,20 @@ var settingsCapabilitiesIcon = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" 
 
 var settingsConnectionIcon = ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12C22 17.5228 17.5228 22 12 22ZM9.71002 19.6674C8.74743 17.6259 8.15732 15.3742 8.02731 13H4.06189C4.458 16.1765 6.71639 18.7747 9.71002 19.6674ZM10.0307 13C10.1811 15.4388 10.8778 17.7297 12 19.752C13.1222 17.7297 13.8189 15.4388 13.9693 13H10.0307ZM19.9381 13H15.9727C15.8427 15.3742 15.2526 17.6259 14.29 19.6674C17.2836 18.7747 19.542 16.1765 19.9381 13ZM4.06189 11H8.02731C8.15732 8.62577 8.74743 6.37407 9.71002 4.33256C6.71639 5.22533 4.458 7.8235 4.06189 11ZM10.0307 11H13.9693C13.8189 8.56122 13.1222 6.27025 12 4.24799C10.8778 6.27025 10.1811 8.56122 10.0307 11ZM14.29 4.33256C15.2526 6.37407 15.8427 8.62577 15.9727 11H19.9381C19.542 7.8235 17.2836 5.22533 14.29 4.33256Z"/></svg>`))
 
+func settingsNavigationButton(c *ui.Context, t *ui.Theme, label string, selected bool) ui.Element {
+	button := ui.ButtonBase(c).Label(label).Selected(selected).MinHeight(controlHit).MinWidth(controlHit).
+		Radius(theme.ControlRadius).Padding(8, 12).Gap(8).AlignItems(ui.Center).Justify(ui.Start).FocusRingColor(t.Accent)
+	switch {
+	case button.Pressed():
+		button.Background(t.SurfacePressed)
+	case selected:
+		button.Background(t.Surface.Mix(t.Text, .10))
+	case button.Hovered():
+		button.Background(t.Surface.Mix(t.Text, .06))
+	}
+	return theme.TransitionControl(button, t)
+}
+
 func (a *appModel) settingsSidebar(c *ui.Context, t *ui.Theme, narrow bool) {
 	msgs := locales.In(c.Locale())
 	column := ui.Column(c).MinWidth(0).Shrink(0).Background(t.Surface)
@@ -216,17 +230,14 @@ func (a *appModel) settingsSidebar(c *ui.Context, t *ui.Theme, narrow bool) {
 	} else {
 		column.FillHeight().Width(settingsSidebarWidth)
 	}
-	navPalette := a.workTheme
-	navPalette.NavHover = t.Surface.Mix(t.Text, .06)
-	navPalette.NavSelected = t.Surface.Mix(t.Text, .10)
 	column.Children(func() {
 		if !narrow {
 			ui.Row(c).FillWidth().Height(max(float32(40), c.TitleBar().Height)).Shrink(0).DragWindow()
 		}
 		ui.Toolbar(c, func() {
-			back := secondaryButton(c, "").Label(msgs.SettingsBackAccessible()).Padding(8, 12).Gap(8).TextColor(t.Text)
+			back := settingsNavigationButton(c, t, msgs.SettingsBackAccessible(), false).AlignSelf(ui.Start)
 			back.Children(func() {
-				ui.Icon(c, navBackIcon).Size(16, 16).TextColor(t.TextMuted)
+				ui.Icon(c, navBackIcon).Size(16, 16).Shrink(0).TextColor(t.TextMuted)
 				ui.Text(c, msgs.SettingsBack()).FontSize(typeAction).FontWeight(500).FixedLineHeight(lineAction).TextColor(t.Text)
 			})
 			back.OnClick(func() { a.closeSettings() })
@@ -234,7 +245,7 @@ func (a *appModel) settingsSidebar(c *ui.Context, t *ui.Theme, narrow bool) {
 				back.Focus()
 				a.settingsFocusBack = false
 			}
-		}).Label(msgs.SettingsNavigationLabel()).FillWidth().Padding(12)
+		}).Label(msgs.SettingsNavigationLabel()).FillWidth().Padding(12, 8)
 		ui.Text(c, msgs.SettingsTitle()).FontSize(typeLabel).FontWeight(600).FixedLineHeight(lineLabel).TextColor(t.Text).Padding(4, 16)
 		nav := func(label, tab string) {
 			selected := a.settingsTab == tab
@@ -242,9 +253,7 @@ func (a *appModel) settingsSidebar(c *ui.Context, t *ui.Theme, narrow bool) {
 			if selected {
 				weight, ink = 500, t.Text
 			}
-			button := navigationControl(c, ui.ButtonBase(c).Label(label).Selected(selected), navPalette, selected).
-				FontSize(typeNavigation).FontWeight(weight).FixedLineHeight(lineNavigation).
-				Padding(8, 12).Gap(8).Justify(ui.Start).TextColor(ink)
+			button := settingsNavigationButton(c, t, label, selected).TextColor(ink)
 			if !narrow {
 				button.FillWidth()
 			}
@@ -258,7 +267,7 @@ func (a *appModel) settingsSidebar(c *ui.Context, t *ui.Theme, narrow bool) {
 				case settingsTabAdvanced:
 					glyph = glyphMoreLine
 				}
-				ui.Box(c).Size(16, 16).AlignItems(ui.Center).Justify(ui.Center).Children(func() { ui.Icon(c, glyph).Size(14, 14) })
+				ui.Icon(c, glyph).Size(16, 16).Shrink(0).TextColor(ink)
 				ui.Text(c, label).FontSize(typeNavigation).FontWeight(weight).FixedLineHeight(lineNavigation).TextColor(ink)
 			})
 			button.OnClick(func() { a.selectSettingsTab(tab) })
@@ -718,6 +727,30 @@ func (a *appModel) confirmDataRecovery() {
 func (a *appModel) settingsDataRecoveryContent(c *ui.Context, t *ui.Theme) {
 	msgs := locales.In(c.Locale())
 	s := a.ensureDataRecovery()
+	ui.Column(c).FillWidth().Gap(8).Children(func() {
+		a.settingsRecoveryControls(c, t, s, msgs)
+		if a.dataRecoveryPreviewCurrent(s) {
+			ui.Column(c).FillWidth().MinWidth(0).Padding(12).Gap(8).Radius(theme.CardRadius).Border(1, t.Border).Background(t.Surface).Children(func() {
+				ui.Text(c, msgs.RecoveryPreviewTitle()).FontSize(typeLabel).FontWeight(500).FixedLineHeight(lineLabel).TextColor(t.Text)
+				ui.Text(c, safeDiagnostic(s.copy.Path)).MinWidth(0).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Text)
+				ui.Text(c, msgs.RecoveryPreviewCounts(s.copy.Contacts, s.copy.Issues)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Text)
+				ui.Text(c, msgs.RecoveryFileModified(s.copy.ModifiedAt.Format("2006-01-02 15:04:05 MST"))).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
+				ui.Text(c, msgs.RecoveryPreviewWarning()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Warning)
+				ui.Text(c, msgs.RecoveryPauseWarning()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Warning)
+				ui.Row(c).Wrap().Gap(8).Children(func() {
+					confirm := primaryButton(c, msgs.RecoveryConfirmAction()).Label(msgs.RecoveryConfirmAction()).Disabled(s.inFlight || a.dataRecoveryBlocked(true) != "").OnClick(a.confirmDataRecovery)
+					if s.focus == "confirm" {
+						confirm.Focus().ScrollIntoView()
+						s.focus = ""
+					}
+					secondaryButton(c, msgs.RecoveryCancelAction()).Label(msgs.RecoveryCancelAction()).Disabled(s.inFlight).OnClick(func() { s.copy, s.target = nil, nil; s.focus = "restore" })
+				})
+			})
+		}
+	})
+}
+
+func (a *appModel) settingsRecoveryControls(c *ui.Context, t *ui.Theme, s *dataRecoveryState, msgs locales.Messages) {
 	preferenceSection(c, t, msgs.RecoveryDataTitle(), func() {
 		settingsPreferenceRow(c, t, msgs.RecoveryBackupLabel(), msgs.RecoveryBackupHint(), func() {
 			ui.Row(c).Wrap().Gap(8).Children(func() {
@@ -736,7 +769,7 @@ func (a *appModel) settingsDataRecoveryContent(c *ui.Context, t *ui.Theme) {
 				if s.scopeOpen {
 					label = msgs.HideDetailsAction()
 				}
-				linkButton(c, label).OnClick(func() { s.scopeOpen = !s.scopeOpen })
+				theme.TextAction(c, label, false).AlignSelf(ui.Start).OnClick(func() { s.scopeOpen = !s.scopeOpen })
 			})
 		}, true)
 		ui.Column(c).FillWidth().Gap(8).Children(func() {
@@ -749,22 +782,6 @@ func (a *appModel) settingsDataRecoveryContent(c *ui.Context, t *ui.Theme) {
 			}
 			if s.choosing || s.inFlight {
 				ui.Text(c, msgs.RecoveryDataWorking()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
-			}
-			if a.dataRecoveryPreviewCurrent(s) {
-				ui.Text(c, msgs.RecoveryPreviewTitle()).FontSize(typeLabel).FontWeight(500).FixedLineHeight(lineLabel).TextColor(t.Text)
-				ui.Text(c, safeDiagnostic(s.copy.Path)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Text)
-				ui.Text(c, msgs.RecoveryPreviewCounts(s.copy.Contacts, s.copy.Issues)).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Text)
-				ui.Text(c, msgs.RecoveryFileModified(s.copy.ModifiedAt.Format("2006-01-02 15:04:05 MST"))).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
-				ui.Text(c, msgs.RecoveryPreviewWarning()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Warning)
-				ui.Text(c, msgs.RecoveryPauseWarning()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Warning)
-				ui.Row(c).Wrap().Gap(8).Children(func() {
-					confirm := primaryButton(c, msgs.RecoveryConfirmAction()).Label(msgs.RecoveryConfirmAction()).Disabled(s.inFlight || a.dataRecoveryBlocked(true) != "").OnClick(a.confirmDataRecovery)
-					if s.focus == "confirm" {
-						confirm.Focus().ScrollIntoView()
-						s.focus = ""
-					}
-					secondaryButton(c, msgs.RecoveryCancelAction()).Label(msgs.RecoveryCancelAction()).Disabled(s.inFlight).OnClick(func() { s.copy, s.target = nil, nil; s.focus = "restore" })
-				})
 			}
 			var summary string
 			switch s.result.Outcome {
@@ -830,7 +847,7 @@ func (a *appModel) settingsDataRecoveryContent(c *ui.Context, t *ui.Theme) {
 				if s.details {
 					label = msgs.HideDetailsAction()
 				}
-				linkButton(c, label).AlignSelf(ui.Start).OnClick(func() { s.details = !s.details })
+				theme.TextAction(c, label, false).AlignSelf(ui.Start).OnClick(func() { s.details = !s.details })
 				if s.details {
 					markdownReader(c, safeDiagnostic(s.problem), markdownReaderOptions{PlainText: true, CopyLabel: msgs.CopyErrorDetailsLabel()}).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 				}
