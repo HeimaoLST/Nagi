@@ -413,7 +413,7 @@ class Worker {
         const observers = this.contexts.get(params.contextId)?.active?.product?.observers;
         if (!observers?.admitTool) return { block: true, reason: 'No product execution owns this tool call' };
         observers.authorizeProvider?.();
-        observers.admitTool(event.toolName, event.toolCallId);
+        observers.admitTool(event.toolName, event.toolCallId, event.input);
       });
     };
     const whiteboard: ExtensionFactory = pi => {

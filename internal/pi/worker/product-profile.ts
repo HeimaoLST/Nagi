@@ -13,6 +13,7 @@ import { activityLifecycleFields, activityProgressRecord, activitySteerReceipt, 
   maxDraftBytes, questionResult, skillApprovalRecord, skillApprovalRequestSchema, triageAccounting as triageSchema,
   optionDescriptionBytes, optionLabelBytes, questionTextBytes, type ActivityProgressRecord, type ActivitySteerRecord,
   type SkillApproval, type SkillApprovalRequest, type TriageAccounting } from './protocol.js';
+import { sessionSummary, sessionWatchOccurrence, type SessionSummary, type SessionWatchOccurrence } from './protocol.js';
 import { lastingRulesFit, MAX_LOG_BYTES, MAX_PENDING_LEARNINGS, MAX_RULE_BYTES, MAX_WORK_LOGS,
   memorySnapshotSchema, validMemoryDate } from './bot-memory.js';
 import { decodeTraceBackup, directlyOwns, normalizeActivityGrants, type TraceBackup } from './product-trace.js';
@@ -31,7 +32,8 @@ export type ProductProfilePaths = {
 
 export type ProductBackup = TraceBackup & { privateSkillBundles?: PrivateSkillBundle[]; skillApprovals?: SkillApproval[];
   activityEscalations?: Escalation[]; activityProgress?: ActivityProgressRecord[]; skillApprovalRequests?: SkillApprovalRequest[];
-  triageAccounting?: TriageAccounting[]; activitySteers?: ActivitySteerRecord[] };
+  triageAccounting?: TriageAccounting[]; activitySteers?: ActivitySteerRecord[];
+  runtimeSessions?: SessionSummary[]; runtimeWatchOccurrences?: SessionWatchOccurrence[] };
 
 type Credential = { api: 'openai-responses' | 'openai-chat-completions'; endpoint: string; api_key: string };
 type LegacyConnection = {
@@ -328,13 +330,58 @@ export function decodeProductProfile(data: unknown): ProductProfile {
   return data;
 }
 
+function decodeRuntimeHistory(profile: ProductProfile, sessions: unknown, occurrences: unknown): Pick<ProductBackup, 'runtimeSessions' | 'runtimeWatchOccurrences'> {
+  if (sessions === undefined && occurrences === undefined) return {};
+  const invalid = () => new RequestError('profile_unavailable', 'The recovery copy has invalid session history');
+  if (!Value.Check(Type.Array(sessionSummary), sessions) || !Value.Check(Type.Array(sessionWatchOccurrence), occurrences)) throw invalid();
+  const bots = new Set(profile.bots.map(row => row.botId));
+  const conversations = new Map(profile.conversations.map(row => [row.conversationId, row]));
+  const activities = new Map(profile.activities.map(row => [row.activityId, row]));
+  const sessionIds = new Set<string>();
+  const expected = new Map<string, SessionWatchOccurrence>();
+  const watchIds = new Set<string>();
+  for (const session of sessions) {
+    const { ownerBotId, sessionId, originActivityId, originConversationId, generation } = session;
+    const activity = originActivityId && activities.get(originActivityId);
+    const conversation = originConversationId && conversations.get(originConversationId);
+    if (sessionIds.has(sessionId) || !bots.has(ownerBotId) || (!originActivityId && !originConversationId) ||
+        (originActivityId ? !activity || activity.ownerBotId !== ownerBotId ||
+          (originConversationId !== undefined && activity.originConversationId !== originConversationId) :
+          !conversation || conversation.botId !== ownerBotId) ||
+        !isAbsolute(session.cwd) || session.state === 'starting' || session.state === 'running' || session.transportStatus === 'live' ||
+        !session.eof || session.authPause || session.firstAvailableOffset !== session.nextOffset || session.evictedBytes !== session.nextOffset ||
+        !session.settledAt || ![session.createdAt, session.updatedAt, session.settledAt].every(at => Number.isFinite(Date.parse(at)))) throw invalid();
+    sessionIds.add(sessionId);
+    for (const watch of session.watches) {
+      if (watchIds.has(watch.watchId) || watch.sessionId !== sessionId || watch.generation !== generation || watch.state === 'armed') throw invalid();
+      watchIds.add(watch.watchId);
+      const { occurrenceId, watchId, firedKind, firedAt, firedOffset, matchedExcerpt } = watch;
+      if (watch.state === 'cancelled') {
+        if (occurrenceId || firedKind || firedAt || firedOffset !== undefined || matchedExcerpt !== undefined) throw invalid();
+        continue;
+      }
+      if (!occurrenceId || !firedKind || !firedAt || !Number.isFinite(Date.parse(firedAt)) || expected.has(occurrenceId) ||
+          (watch.state === 'target_lost') !== (firedKind === 'target_lost') ||
+          (firedKind !== 'target_lost' && !watch.conditions.includes(firedKind))) throw invalid();
+      expected.set(occurrenceId, { occurrenceId, watchId, sessionId, ownerBotId, generation, firedKind, firedAt, firedOffset, matchedExcerpt });
+    }
+  }
+  for (const row of occurrences) {
+    const occurrence = expected.get(row.occurrenceId);
+    if (!occurrence || canonicalJSON(row) !== canonicalJSON(occurrence)) throw invalid();
+    expected.delete(row.occurrenceId);
+  }
+  if (expected.size) throw invalid();
+  return { runtimeSessions: sessions, runtimeWatchOccurrences: occurrences };
+}
+
 export function decodeProductBackup(data: unknown): { profile: ProductProfile; backup?: ProductBackup } {
   if (data && typeof data === 'object' && 'backup' in data) {
     const { backup, ...records } = data;
     const profile = decodeProductProfile(records);
     if (!backup || typeof backup !== 'object') return { profile, backup: decodeTraceBackup(profile, backup) };
     const { privateSkillBundles: bundles, skillApprovals: approvals, activityEscalations, activityProgress, skillApprovalRequests,
-      triageAccounting, activitySteers, ...traces } = backup as Record<string, unknown>;
+      triageAccounting, activitySteers, runtimeSessions, runtimeWatchOccurrences, ...traces } = backup as Record<string, unknown>;
     const activities = new Map(profile.activities.map(row => [row.activityId, row]));
     const steerOperations = new Map(profile.operations.filter(row => row.method === 'activity.steer').map(row => [row.receipt.operationId, row]));
     if (activitySteers !== undefined && !Value.Check(Type.Array(activitySteerRecord), activitySteers)) {
@@ -426,7 +473,7 @@ export function decodeProductBackup(data: unknown): { profile: ProductProfile; b
       }
     }
     return { profile, backup: { ...decodeTraceBackup(profile, traces), privateSkillBundles: bundles, skillApprovals: approvals, activityEscalations,
-      activityProgress, skillApprovalRequests, triageAccounting, activitySteers } };
+      activityProgress, skillApprovalRequests, triageAccounting, activitySteers, ...decodeRuntimeHistory(profile, runtimeSessions, runtimeWatchOccurrences) } };
   }
   return { profile: decodeProductProfile(data) };
 }

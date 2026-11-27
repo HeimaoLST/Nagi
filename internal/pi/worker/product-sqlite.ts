@@ -7,6 +7,7 @@ import type { ProductProfile } from './product.js';
 import { canonicalJSON, maxAutomaticAnswers, maxTriageAttempts, RequestError, type ActivityProgressRecord, type ActivitySteer,
   type ActivitySteerPayload, type ActivitySteerRecord, type TriageAccounting,
   type SkillApproval, type SkillApprovalRequest, type SkillSource, type TraceItem } from './protocol.js';
+import type { SessionSummary, SessionWatchOccurrence } from './protocol.js';
 import { type BotMemory, type BotWorkLog } from './bot-memory.js';
 import { maxExecutionTraces, maxProfileTraces, traceDetail, redactTrace, type TraceBackup, type TraceObservation, type TraceUpdate } from './product-trace.js';
 import { projectionRedactor } from './product-redactor.js';
@@ -152,7 +153,27 @@ const MIGRATIONS = [`
     revision INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, settled_at TEXT, payload_json TEXT NOT NULL
   ) STRICT;
   CREATE INDEX activity_steers_by_execution ON activity_steers (activity_id, execution_id, created_at);
-`, 'SELECT 1;'];
+`, 'SELECT 1;', `
+  CREATE TABLE runtime_sessions (
+    session_id TEXT PRIMARY KEY, owner_bot_id TEXT NOT NULL REFERENCES bots(bot_id) DEFERRABLE INITIALLY DEFERRED,
+    origin_conversation_id TEXT REFERENCES conversations(conversation_id) DEFERRABLE INITIALLY DEFERRED,
+    origin_activity_id TEXT REFERENCES activities(activity_id) DEFERRABLE INITIALLY DEFERRED,
+    generation INTEGER NOT NULL, revision INTEGER NOT NULL, state TEXT NOT NULL, updated_at TEXT NOT NULL, record_json TEXT NOT NULL
+  ) STRICT;
+  CREATE INDEX runtime_sessions_by_owner ON runtime_sessions(owner_bot_id, updated_at DESC, session_id);
+  CREATE TABLE session_watches (
+    watch_id TEXT PRIMARY KEY, session_id TEXT NOT NULL REFERENCES runtime_sessions(session_id) DEFERRABLE INITIALLY DEFERRED,
+    owner_bot_id TEXT NOT NULL REFERENCES bots(bot_id) DEFERRABLE INITIALLY DEFERRED,
+    generation INTEGER NOT NULL, revision INTEGER NOT NULL, state TEXT NOT NULL, record_json TEXT NOT NULL
+  ) STRICT;
+  CREATE INDEX session_watches_by_session ON session_watches(session_id);
+  CREATE TABLE runtime_watch_occurrences (
+    occurrence_id TEXT PRIMARY KEY, watch_id TEXT NOT NULL UNIQUE REFERENCES session_watches(watch_id) DEFERRABLE INITIALLY DEFERRED,
+    session_id TEXT NOT NULL REFERENCES runtime_sessions(session_id) DEFERRABLE INITIALLY DEFERRED,
+    owner_bot_id TEXT NOT NULL REFERENCES bots(bot_id) DEFERRABLE INITIALLY DEFERRED,
+    generation INTEGER NOT NULL, fired_kind TEXT NOT NULL, fired_at TEXT NOT NULL, record_json TEXT NOT NULL
+  ) STRICT;
+`];
 const LATEST_SCHEMA_VERSION = MIGRATIONS.length;
 
 type Snapshot = { data: Buffer; digest: string };
@@ -167,6 +188,8 @@ export type RoutingWrite = { credentials?: PrivateConnection; escalation?: Escal
 export type ActivityControlWrite = { approvalRequests?: SkillApprovalRequest[]; resetProgress?: string;
   triage?: { activityId: string; kind: 'attempt' | 'answer'; at: string };
   admitSteer?: ActivitySteerRecord; steerUpdates?: ActivitySteer[] };
+export type RuntimeSession = SessionSummary & { epoch?: string; childReaped?: boolean };
+export type RuntimeSessionWrite = { session: RuntimeSession; occurrences?: SessionWatchOccurrence[] };
 function snapshotFor(profile: ProductProfile): Snapshot {
   const data = Buffer.from(canonicalJSON(profile) + '\n');
   return { data, digest: sha256(data) };
@@ -176,6 +199,7 @@ export class ProductSQLite {
   private readonly databasePath: string;
   private readonly db: DatabaseSync;
   private digest?: string;
+  readonly sessionEpoch = randomUUID();
 
   constructor(private readonly profilePath: string, private readonly credentialsPath: string, private readonly skills?: BotSkills, private readonly vault?: McpVault) {
     const directory = dirname(profilePath);
@@ -252,7 +276,10 @@ export class ProductSQLite {
         mirror = this.stageMirror(snapshotFor(profile), previous);
         this.db.exec('DELETE FROM execution_mutation_admissions; DELETE FROM execution_admission_coverage; DELETE FROM activity_escalations;');
         this.db.exec('DELETE FROM activity_progress; DELETE FROM skill_approval_requests; DELETE FROM activity_triage_accounting; DELETE FROM activity_steers;');
+        this.db.exec('DELETE FROM runtime_watch_occurrences; DELETE FROM session_watches; DELETE FROM runtime_sessions;');
         this.replaceProfile(profile, mirror);
+        for (const row of backup?.runtimeSessions ?? []) this.putSession({ session: row });
+        for (const row of backup?.runtimeWatchOccurrences ?? []) this.putSessionOccurrence(row);
         for (const row of backup?.activityProgress ?? []) this.putProgress(row);
         for (const row of backup?.skillApprovalRequests ?? []) this.putApprovalRequest(row);
         for (const row of backup?.activityEscalations ?? []) this.putEscalation(row);
@@ -292,7 +319,7 @@ export class ProductSQLite {
   }
 
   write(profile: ProductProfile, before: ProductProfile, skillWrite?: SkillWrite, mcpWrite?: McpVaultWrite, approval?: SkillApprovalChange,
-    routing?: RoutingWrite, control?: ActivityControlWrite): TraceUpdate[] {
+    routing?: RoutingWrite, control?: ActivityControlWrite, runtime?: RuntimeSessionWrite): TraceUpdate[] {
     let mirror: Mirror | undefined;
     let staged: string | undefined;
     let stagedVault: string | undefined;
@@ -301,6 +328,7 @@ export class ProductSQLite {
     try {
       const updates = this.transaction(() => {
         if (this.meta('snapshot_sha256') !== this.digest) throw new RequestError('profile_unavailable', 'The SQLite profile changed in another worker');
+        if (runtime) this.assertSessionEpoch();
         const previous = this.readMirror()?.digest ?? null;
         if (previous !== null && previous !== this.digest && this.meta('pending_snapshot_previous') !== encode(previous)) {
           throw new RequestError('profile_unavailable', 'The recovery snapshot changed while the profile was open');
@@ -332,6 +360,7 @@ export class ProductSQLite {
         for (const row of control?.approvalRequests ?? []) this.putApprovalRequest(row);
         if (control?.admitSteer) this.insertSteer(control.admitSteer);
         for (const row of control?.steerUpdates ?? []) this.transitionSteer(row);
+        if (runtime) this.putSession(runtime);
         const workspaces = new Map(before.bots.map(bot => [bot.botId, bot.profile.workspace]));
         for (const bot of profile.bots) {
           if (workspaces.has(bot.botId) && workspaces.get(bot.botId) !== bot.profile.workspace) this.changeApproval({ workspaceBotId: bot.botId });
@@ -565,6 +594,70 @@ export class ProductSQLite {
     if (result.changes !== 1) throw new RequestError('triage_budget', 'The Activity preference resolution budget is exhausted');
   }
 
+  assertSessionEpoch(): void {
+    if (this.meta('runtime_session_epoch') !== this.sessionEpoch || this.meta('snapshot_sha256') !== this.digest) {
+      throw new RequestError('profile_unavailable', 'The worker no longer owns the profile session epoch');
+    }
+  }
+
+  runtimeSessions(botId?: string, sessionId?: string): RuntimeSession[] {
+    const select = 'SELECT record_json FROM runtime_sessions';
+    const rows = sessionId === undefined ? (botId === undefined ? this.db.prepare(select).all() :
+      this.db.prepare(`${select} WHERE owner_bot_id = ? ORDER BY updated_at DESC, session_id`).all(encode(botId))) :
+      this.db.prepare(`${select} WHERE owner_bot_id = ? AND session_id = ?`).all(encode(botId), encode(sessionId));
+    const watches = this.db.prepare('SELECT record_json FROM session_watches WHERE session_id = ? ORDER BY rowid');
+    return rows.map(row => {
+      const session = decode(row.record_json) as Omit<RuntimeSession, 'watches'>;
+      return { ...session, watches: watches.all(encode(session.sessionId)).map(row => decode(row.record_json) as RuntimeSession['watches'][number]) };
+    });
+  }
+
+  private putSession({ session, occurrences }: RuntimeSessionWrite): void {
+    const { watches, ...record } = session;
+    this.db.prepare('INSERT OR REPLACE INTO runtime_sessions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').run(encode(record.sessionId),
+      encode(record.ownerBotId), encode(record.originConversationId), encode(record.originActivityId), record.generation,
+      record.revision, record.state, record.updatedAt, encode(record));
+    const watch = this.db.prepare(`INSERT INTO session_watches VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(watch_id) DO UPDATE SET
+      revision = excluded.revision, state = excluded.state, record_json = excluded.record_json WHERE excluded.revision > session_watches.revision`);
+    for (const row of watches) watch.run(encode(row.watchId), encode(row.sessionId), encode(record.ownerBotId), row.generation,
+      row.revision, row.state, encode(row));
+    for (const row of occurrences ?? []) this.putSessionOccurrence(row);
+  }
+
+  private putSessionOccurrence(row: SessionWatchOccurrence): void {
+    this.db.prepare('INSERT INTO runtime_watch_occurrences VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(encode(row.occurrenceId),
+      encode(row.watchId), encode(row.sessionId), encode(row.ownerBotId), row.generation, row.firedKind, row.firedAt, encode(row));
+  }
+
+  saveRuntimeSession(write: RuntimeSessionWrite): void {
+    this.transaction(() => {
+      this.assertSessionEpoch();
+      this.putSession(write);
+    });
+  }
+
+  recoverRuntimeSessions(): void {
+    this.transaction(() => {
+      if (this.meta('snapshot_sha256') !== this.digest) throw new RequestError('profile_unavailable', 'The SQLite profile changed in another worker');
+      this.db.prepare("INSERT OR REPLACE INTO meta VALUES ('runtime_session_epoch', ?)").run(this.sessionEpoch);
+      const at = new Date().toISOString();
+      for (const session of this.runtimeSessions()) {
+        const live = session.state === 'starting' || session.state === 'running';
+        const occurrences: SessionWatchOccurrence[] = [];
+        const watches = session.watches.map(watch => {
+          if (watch.state !== 'armed') return watch;
+          const fired = { occurrenceId: randomUUID(), firedKind: 'target_lost' as const, firedAt: at };
+          occurrences.push({ ...fired, watchId: watch.watchId, sessionId: session.sessionId, ownerBotId: session.ownerBotId,
+            generation: session.generation });
+          return { ...watch, ...fired, state: 'target_lost' as const, revision: watch.revision + 1 };
+        });
+        if (live || occurrences.length) this.putSession({ session: { ...session, watches, revision: session.revision + 1, updatedAt: at,
+          ...(live ? { state: 'disconnected', transportStatus: 'worker_restarted', eof: true, authPause: undefined,
+            settledAt: at, firstAvailableOffset: session.nextOffset, evictedBytes: session.nextOffset, childReaped: false } : {}) }, occurrences });
+      }
+    });
+  }
+
   captureBackup(redact: (text: string) => string): { profile: ProductProfile; backup: ProductBackup } {
     return this.transaction(() => {
       if (this.meta('snapshot_sha256') !== this.digest) throw new RequestError('profile_unavailable', 'The SQLite profile changed in another worker');
@@ -590,9 +683,19 @@ export class ProductSQLite {
         return { ...this.steerReceipt(row), reason, payload, fingerprint: String(row.fingerprint), createdAt: String(row.created_at),
           settledAt: row.settled_at === null ? undefined : String(row.settled_at) };
       });
+      const now = new Date().toISOString();
+      const runtimeSessions = this.runtimeSessions().map(({ epoch, childReaped, authPause, ...session }): SessionSummary => ({ ...session,
+        state: session.state === 'starting' || session.state === 'running' ? 'disconnected' : session.state,
+        transportStatus: session.transportStatus === 'live' ? 'worker_restarted' : session.transportStatus,
+        eof: true, firstAvailableOffset: session.nextOffset, evictedBytes: session.nextOffset, settledAt: session.settledAt ?? now,
+        watches: session.watches.map(watch => watch.state === 'armed' ? { ...watch, state: 'cancelled', revision: watch.revision + 1 } : watch),
+      }));
+      const runtimeWatchOccurrences = this.db.prepare('SELECT record_json FROM runtime_watch_occurrences ORDER BY fired_at, occurrence_id').all()
+        .map(row => decode(row.record_json) as SessionWatchOccurrence);
       return { profile, backup: { version: 1, traces, traceCoverage, ...(activityEscalations.length ? { activityEscalations } : {}),
         ...(activityProgress.length ? { activityProgress } : {}), ...(skillApprovalRequests.length ? { skillApprovalRequests } : {}),
-        ...(triageAccounting.length ? { triageAccounting } : {}), ...(activitySteers.length ? { activitySteers } : {}) } };
+        ...(triageAccounting.length ? { triageAccounting } : {}), ...(activitySteers.length ? { activitySteers } : {}),
+        ...(runtimeSessions.length ? { runtimeSessions, runtimeWatchOccurrences } : {}) } };
     });
   }
 
