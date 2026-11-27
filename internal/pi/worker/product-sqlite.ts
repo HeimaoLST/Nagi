@@ -8,6 +8,8 @@ import { canonicalJSON, maxAutomaticAnswers, maxTriageAttempts, RequestError, ty
   type ActivitySteerPayload, type ActivitySteerRecord, type TriageAccounting,
   type SkillApproval, type SkillApprovalRequest, type SkillSource, type TraceItem } from './protocol.js';
 import type { SessionSummary, SessionWatchOccurrence, WatchChange, WatchGrant, WatchOccurrence, WatchSummary } from './protocol.js';
+import type { OrchestrationCheckpoint, OrchestrationDecision, OrchestrationEffectReceipt, OrchestrationMandate, OrchestrationRun,
+  OrchestrationSummary, StoredConversationNotice, TimelineChanged } from './protocol.js';
 import { type BotMemory, type BotWorkLog } from './bot-memory.js';
 import { maxExecutionTraces, maxProfileTraces, traceDetail, redactTrace, type TraceBackup, type TraceObservation, type TraceUpdate } from './product-trace.js';
 import { projectionRedactor } from './product-redactor.js';
@@ -212,6 +214,76 @@ const MIGRATIONS = [`
   CREATE INDEX bot_event_inbox_by_owner ON bot_event_inbox(owner_bot_id, state, created_at, event_id);
   CREATE INDEX bot_event_inbox_by_batch ON bot_event_inbox(batch_id) WHERE batch_id IS NOT NULL;
   CREATE INDEX bot_event_inbox_by_source ON bot_event_inbox(owner_bot_id, source_id, target_conversation_id, source_kind);
+`, `
+  CREATE TABLE orchestration_mandates (
+    mandate_id TEXT PRIMARY KEY, owner_bot_id TEXT NOT NULL REFERENCES bots(bot_id) DEFERRABLE INITIALLY DEFERRED,
+    target_conversation_id TEXT NOT NULL REFERENCES conversations(conversation_id) DEFERRABLE INITIALLY DEFERRED,
+    source_kind TEXT NOT NULL, source_id TEXT, purpose TEXT NOT NULL, state TEXT NOT NULL, revision INTEGER NOT NULL,
+    generation INTEGER NOT NULL, current_run_id TEXT, last_disposition TEXT, last_notice_id TEXT, last_receipt_state TEXT,
+    last_error TEXT, status_reason TEXT, dormant INTEGER NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+    settled_at TEXT, record_json TEXT NOT NULL
+  ) STRICT;
+  CREATE INDEX orchestration_mandates_by_owner ON orchestration_mandates(owner_bot_id, updated_at DESC, mandate_id);
+  CREATE TABLE orchestration_checkpoints (
+    mandate_id TEXT PRIMARY KEY REFERENCES orchestration_mandates(mandate_id) DEFERRABLE INITIALLY DEFERRED,
+    generation INTEGER NOT NULL, revision INTEGER NOT NULL, working_summary TEXT NOT NULL, checkpoint_json TEXT NOT NULL, updated_at TEXT NOT NULL
+  ) STRICT;
+  CREATE TABLE orchestration_runs (
+    run_id TEXT PRIMARY KEY, mandate_id TEXT NOT NULL REFERENCES orchestration_mandates(mandate_id) DEFERRABLE INITIALLY DEFERRED,
+    owner_bot_id TEXT NOT NULL REFERENCES bots(bot_id) DEFERRABLE INITIALLY DEFERRED, generation INTEGER NOT NULL,
+    batch_id TEXT REFERENCES bot_event_batches(batch_id) DEFERRABLE INITIALLY DEFERRED, state TEXT NOT NULL, route_role TEXT,
+    route_json TEXT, disposition TEXT, summary TEXT, notice_id TEXT, decision_id TEXT, error TEXT, queue_delay_ms INTEGER NOT NULL,
+    coalesced_count INTEGER NOT NULL, calls INTEGER NOT NULL, input_tokens INTEGER NOT NULL, output_tokens INTEGER NOT NULL,
+    total_tokens INTEGER NOT NULL, cost_usd REAL NOT NULL, dispatched_at TEXT, started_at TEXT NOT NULL, settled_at TEXT, record_json TEXT NOT NULL
+  ) STRICT;
+  CREATE INDEX orchestration_runs_by_mandate ON orchestration_runs(mandate_id, started_at DESC, run_id);
+  CREATE TABLE orchestration_admissions (
+    receipt_id TEXT PRIMARY KEY, mandate_id TEXT NOT NULL REFERENCES orchestration_mandates(mandate_id) DEFERRABLE INITIALLY DEFERRED,
+    run_id TEXT NOT NULL REFERENCES orchestration_runs(run_id) DEFERRABLE INITIALLY DEFERRED, call_id TEXT NOT NULL,
+    tool TEXT NOT NULL, target TEXT, tool_class TEXT NOT NULL CHECK (tool_class IN ('readonly','mutating')),
+    state TEXT NOT NULL CHECK (state IN ('admitted','non_dispatched','settled_ok','settled_error','unknown')),
+    reason TEXT, created_at TEXT NOT NULL, UNIQUE(run_id, call_id)
+  ) STRICT;
+  CREATE INDEX orchestration_admissions_by_mandate ON orchestration_admissions(mandate_id, created_at DESC, receipt_id);
+  CREATE TABLE orchestration_decisions (
+    decision_id TEXT PRIMARY KEY, mandate_id TEXT NOT NULL REFERENCES orchestration_mandates(mandate_id) DEFERRABLE INITIALLY DEFERRED,
+    owner_bot_id TEXT NOT NULL REFERENCES bots(bot_id) DEFERRABLE INITIALLY DEFERRED, run_id TEXT NOT NULL, revision INTEGER NOT NULL,
+    state TEXT NOT NULL, kind TEXT NOT NULL, purpose TEXT NOT NULL, summary TEXT NOT NULL,
+    target_conversation_id TEXT NOT NULL REFERENCES conversations(conversation_id) DEFERRABLE INITIALLY DEFERRED,
+    options_json TEXT NOT NULL, outcome TEXT, selected_option_id TEXT, response_text TEXT, dormant INTEGER NOT NULL,
+    status_reason TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, resolved_at TEXT, record_json TEXT NOT NULL, UNIQUE(run_id)
+  ) STRICT;
+  CREATE UNIQUE INDEX orchestration_decisions_open ON orchestration_decisions(mandate_id) WHERE state = 'open';
+  CREATE TABLE conversation_notices (
+    notice_id TEXT PRIMARY KEY, conversation_id TEXT NOT NULL REFERENCES conversations(conversation_id) DEFERRABLE INITIALLY DEFERRED,
+    owner_bot_id TEXT NOT NULL REFERENCES bots(bot_id) DEFERRABLE INITIALLY DEFERRED,
+    mandate_id TEXT NOT NULL REFERENCES orchestration_mandates(mandate_id) DEFERRABLE INITIALLY DEFERRED, run_id TEXT NOT NULL,
+    fact_digest TEXT NOT NULL, timeline_seq INTEGER NOT NULL, anchor_kind TEXT NOT NULL,
+    anchor_execution_id TEXT REFERENCES executions(execution_id) DEFERRABLE INITIALLY DEFERRED, anchor_outcome TEXT,
+    text TEXT NOT NULL, source_refs_json TEXT NOT NULL, urgency TEXT NOT NULL, dormant INTEGER NOT NULL,
+    created_at TEXT NOT NULL, record_json TEXT NOT NULL, UNIQUE(run_id, fact_digest), UNIQUE(run_id), UNIQUE(conversation_id, timeline_seq)
+  ) STRICT;
+  CREATE INDEX conversation_notices_by_execution ON conversation_notices(anchor_execution_id) WHERE anchor_outcome IS NULL;
+  CREATE TABLE conversation_timelines (
+    conversation_id TEXT PRIMARY KEY REFERENCES conversations(conversation_id) DEFERRABLE INITIALLY DEFERRED,
+    timeline_revision INTEGER NOT NULL, next_seq INTEGER NOT NULL, updated_at TEXT NOT NULL
+  ) STRICT;
+  CREATE TABLE orchestration_backoff (
+    mandate_id TEXT PRIMARY KEY REFERENCES orchestration_mandates(mandate_id) DEFERRABLE INITIALLY DEFERRED,
+    source_id TEXT, action_or_error_class TEXT NOT NULL, observed_state_hash TEXT NOT NULL,
+    consecutive_no_progress INTEGER NOT NULL, backoff_delay_ms INTEGER NOT NULL, backoff_reason TEXT,
+    last_notice_episode_hash TEXT, next_eligible_at TEXT, updated_at TEXT NOT NULL, record_json TEXT NOT NULL
+  ) STRICT;
+  CREATE TABLE queued_conversation_sends (
+    operation_id TEXT PRIMARY KEY REFERENCES operations(operation_id) DEFERRABLE INITIALLY DEFERRED,
+    conversation_id TEXT NOT NULL REFERENCES conversations(conversation_id) DEFERRABLE INITIALLY DEFERRED,
+    execution_id TEXT NOT NULL UNIQUE REFERENCES executions(execution_id) DEFERRABLE INITIALLY DEFERRED,
+    draft_revision INTEGER NOT NULL, state TEXT NOT NULL, reason TEXT NOT NULL, route_json TEXT,
+    dispatched_at TEXT, created_at TEXT NOT NULL, settled_at TEXT
+  ) STRICT;
+  ALTER TABLE bot_event_inbox ADD COLUMN mandate_id TEXT REFERENCES orchestration_mandates(mandate_id) DEFERRABLE INITIALLY DEFERRED;
+  CREATE INDEX bot_event_inbox_by_mandate ON bot_event_inbox(mandate_id, state);
+  ALTER TABLE activities ADD COLUMN origin_mandate_id TEXT;
 `];
 const LATEST_SCHEMA_VERSION = MIGRATIONS.length;
 
@@ -224,20 +296,31 @@ const decode = (value: SQLOutputValue): unknown => value === null ? undefined : 
 const sha256 = (data: Buffer) => createHash('sha256').update(data).digest('hex');
 
 export type RoutingWrite = { credentials?: PrivateConnection; escalation?: Escalation };
+export type QueuedSend = { operationId: string; conversationId: string; executionId: string; draftRevision: number;
+  state: 'pending' | 'accepted' | 'rejected' | 'settled'; reason: string; route?: object; dispatchedAt?: string; createdAt: string; settledAt?: string };
 export type ActivityControlWrite = { approvalRequests?: SkillApprovalRequest[]; resetProgress?: string;
+  queuedSends?: QueuedSend[]; timelineOutcomes?: { executionId: string; state: NonNullable<StoredConversationNotice['anchorOutcome']> }[];
   triage?: { activityId: string; kind: 'attempt' | 'answer'; at: string };
   admitSteer?: ActivitySteerRecord; steerUpdates?: ActivitySteer[] };
 export type RuntimeSession = SessionSummary & { epoch?: string; childReaped?: boolean };
 export type RuntimeSessionWrite = { session: RuntimeSession; occurrences?: SessionWatchOccurrence[] };
 export type RuntimeWatch = WatchSummary & { scheduledAt?: string; canonicalCwd?: string; lastFailureDigest?: string };
 export type RuntimeWatchGrant = WatchGrant & { scopeDigest: string };
-type WatchOperation = ProductProfile['operations'][number];
-export type InboxSource = 'timer_fired' | 'schedule_tick' | 'schedule_precheck' | 'session_watch_fired' | 'target_lost' | 'activity_milestone';
-type InboxInput = { ownerBotId: string; targetConversationId?: string; sourceKind: InboxSource; sourceId: string;
+export type InboxSource = 'timer_fired' | 'schedule_tick' | 'schedule_precheck' | 'session_watch_fired' | 'target_lost' |
+  'activity_milestone' | 'decision_resolved';
+type InboxInput = { ownerBotId: string; targetConversationId?: string; sourceKind: InboxSource; sourceId: string; mandateId?: string;
   occurrenceId: string; coalesceKey?: string; at: string; payload: object };
+type WatchOperation = ProductProfile['operations'][number];
 type InboxState = 'pending' | 'claimed' | 'consumed' | 'unknown' | 'cancelled';
 export type InboxEvent = Omit<InboxInput, 'at'> & { eventId: string; coalescedCount: number; state: InboxState; batchId?: string; createdAt: string; updatedAt: string };
-export type EventBatch = { batchId: string; ownerBotId: string; targetConversationId?: string; leaseId: string;
+export type OrchestrationActor = { botId: string; mandateId: string; generation: number; runId: string; batchId: string };
+export type OrchestrationBackoff = { mandateId: string; sourceId?: string; actionClass: string; observedStateHash: string;
+  previousSignature?: string; signature: string; consecutiveNoProgress: number; backoffDelayMs: number; backoffReason?: string;
+  lastNoticeEpisodeHash?: string; nextEligibleAt?: string; updatedAt: string };
+type StoredRun = OrchestrationRun & { ownerBotId: string; route?: object; dispatchedAt?: string };
+type OrchestrationOperation = ProductProfile['operations'][number];
+export const emptyOrchestrationUsage = () => ({ calls: 0, inputTokens: 0, outputTokens: 0, totalTokens: 0, costUsd: 0 });
+export type EventBatch = { batchId: string; ownerBotId: string; targetConversationId?: string; mandateId?: string; leaseId: string;
   stage: 'staged' | 'dispatched' | 'completed' | 'released' | 'unknown'; dispatched: boolean;
   eventIds: string[]; createdAt: string; updatedAt: string };
 export type WatchChanges = { watches?: RuntimeWatch[]; grants?: RuntimeWatchGrant[]; operation?: WatchOperation };
@@ -332,7 +415,9 @@ export class ProductSQLite {
         this.db.exec('DELETE FROM activity_progress; DELETE FROM skill_approval_requests; DELETE FROM activity_triage_accounting; DELETE FROM activity_steers;');
         this.db.exec('DELETE FROM runtime_watch_occurrences; DELETE FROM session_watches; DELETE FROM runtime_sessions;');
         this.db.exec("DELETE FROM bot_event_inbox; DELETE FROM bot_event_batches; DELETE FROM watch_occurrences; DELETE FROM runtime_watches; DELETE FROM watch_grants; DELETE FROM meta WHERE key GLOB 'watch_operation:*';");
+        this.clearOrchestration();
         this.replaceProfile(profile, mirror);
+        this.importOrchestration(backup);
         for (const watch of backup?.watches ?? []) this.putRuntimeWatch(watch);
         for (const occurrence of backup?.watchOccurrences ?? []) this.insertWatchOccurrence(occurrence);
         for (const row of backup?.runtimeSessions ?? []) this.putSession({ session: row });
@@ -424,6 +509,8 @@ export class ProductSQLite {
         }
         if (control?.admitSteer) this.insertSteer(control.admitSteer);
         for (const row of control?.steerUpdates ?? []) this.transitionSteer(row);
+        for (const row of control?.queuedSends ?? []) this.putQueuedSend(row);
+        for (const outcome of control?.timelineOutcomes ?? []) this.finishAnchoredNotices(outcome.executionId, outcome.state);
         for (const bot of profile.bots) {
           const old = before.bots.find(row => row.botId === bot.botId);
           if (old && (old.profile.workspace !== bot.profile.workspace || !old.archived && bot.archived)) {
@@ -454,6 +541,229 @@ export class ProductSQLite {
 
   close(): void {
     this.db.close();
+  }
+
+  private clearOrchestration(): void {
+    this.db.exec(`DELETE FROM orchestration_admissions; DELETE FROM conversation_notices; DELETE FROM conversation_timelines;
+      DELETE FROM orchestration_decisions; DELETE FROM orchestration_runs; DELETE FROM orchestration_checkpoints;
+      DELETE FROM orchestration_backoff; DELETE FROM orchestration_mandates; DELETE FROM queued_conversation_sends;
+      DELETE FROM meta WHERE key GLOB 'orchestration_operation:*';`);
+  }
+
+  private importOrchestration(backup?: ProductBackup): void {
+    for (const row of backup?.orchestrationMandates ?? []) this.putMandate(row);
+    for (const row of backup?.orchestrationCheckpoints ?? []) this.putCheckpoint(row);
+    for (const row of backup?.orchestrationDecisions ?? []) this.putDecision(row);
+    for (const row of backup?.conversationNotices ?? []) {
+      this.putNotice(row);
+      this.advanceTimeline(row.conversationId, row.createdAt, row.timelineSeq + 1);
+    }
+  }
+
+  orchestrationTransaction<T>(action: () => T): T {
+    return this.transaction(() => {
+      this.assertSessionEpoch();
+      return action();
+    });
+  }
+
+  orchestrationOperation(operationId: string): OrchestrationOperation | undefined {
+    return decode(this.meta('orchestration_operation:' + encode(operationId)) ?? null) as OrchestrationOperation | undefined;
+  }
+
+  saveOrchestrationOperation(row: OrchestrationOperation): void {
+    this.db.prepare('INSERT INTO meta VALUES (?, ?)').run('orchestration_operation:' + encode(row.receipt.operationId), encode(row));
+  }
+
+  queuedSends(): QueuedSend[] {
+    return this.db.prepare("SELECT * FROM queued_conversation_sends WHERE state IN ('pending','accepted') ORDER BY rowid").all().map(row => ({
+      operationId: decode(row.operation_id) as string, conversationId: decode(row.conversation_id) as string,
+      executionId: decode(row.execution_id) as string, draftRevision: Number(row.draft_revision), state: row.state as QueuedSend['state'],
+      reason: String(row.reason), route: decode(row.route_json) as object | undefined, dispatchedAt: (row.dispatched_at as string | null) ?? undefined,
+      createdAt: String(row.created_at), settledAt: (row.settled_at as string | null) ?? undefined,
+    }));
+  }
+
+  private putQueuedSend(row: QueuedSend): void {
+    this.db.prepare(`INSERT INTO queued_conversation_sends VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(operation_id) DO UPDATE SET state = excluded.state, reason = excluded.reason,
+      dispatched_at = excluded.dispatched_at, settled_at = excluded.settled_at`).run(encode(row.operationId), encode(row.conversationId),
+      encode(row.executionId), row.draftRevision, row.state, row.reason, encode(row.route), row.dispatchedAt ?? null, row.createdAt, row.settledAt ?? null);
+  }
+
+  private putOrchestrationRow(table: string, ...values: (string | number | null)[]): void {
+    this.db.prepare(`INSERT OR REPLACE INTO ${table} VALUES (${values.map(() => '?').join(', ')})`).run(...values);
+  }
+
+  mandate(mandateId: string): OrchestrationMandate | undefined {
+    return decode(this.db.prepare('SELECT record_json FROM orchestration_mandates WHERE mandate_id = ?')
+      .get(encode(mandateId))?.record_json ?? null) as OrchestrationMandate | undefined;
+  }
+
+  mandates(botId: string): OrchestrationMandate[] {
+    return this.db.prepare('SELECT record_json FROM orchestration_mandates WHERE owner_bot_id = ? ORDER BY updated_at DESC, mandate_id')
+      .all(encode(botId)).map(row => decode(row.record_json) as OrchestrationMandate);
+  }
+
+  putMandate(row: OrchestrationMandate): void {
+    this.putOrchestrationRow('orchestration_mandates', encode(row.mandateId), encode(row.ownerBotId), encode(row.targetConversationId),
+      row.sourceKind, encode(row.sourceId), row.purpose, row.state, row.revision, row.generation, encode(row.currentRunId),
+      row.lastDisposition ?? null, encode(row.lastNoticeId), row.lastReceiptState ?? null, row.lastError ?? null, row.statusReason ?? null,
+      Number(row.dormant), row.createdAt, row.updatedAt, row.settledAt ?? null, encode(row));
+  }
+
+  private ensureMandate(source: Pick<OrchestrationMandate, 'mandateId' | 'ownerBotId' | 'targetConversationId' | 'sourceKind' | 'sourceId' | 'purpose'>,
+    at: string, active: boolean): void {
+    const prior = this.mandate(source.mandateId);
+    if (!prior) {
+      if (active) this.putMandate({ ...source, generation: 1, revision: 1, state: 'active', dormant: false, createdAt: at, updatedAt: at });
+      return;
+    }
+    if (prior.dormant || prior.state === 'stopped') return;
+    const state = active ? (prior.state === 'paused' ? this.pendingDecision(prior.mandateId) ? 'waiting_decision' : 'active' : prior.state) : 'paused';
+    if (prior.state === state && prior.purpose === source.purpose) return;
+    if (!active) this.cancelMandateEvents(prior.mandateId);
+    this.putMandate({ ...prior, state, purpose: source.purpose, revision: prior.revision + 1, updatedAt: at });
+  }
+
+  private saveWatchMandate(row: RuntimeWatch): void {
+    if (!row.targetConversationId || !this.eventTarget(row.ownerBotId, row.targetConversationId)) return;
+    this.ensureMandate({ mandateId: 'watch:' + row.watchId, ownerBotId: row.ownerBotId, targetConversationId: row.targetConversationId,
+      sourceKind: row.kind, sourceId: row.watchId, purpose: [row.purpose, row.prompt].filter(Boolean).join('\n').slice(0, 1024) },
+      row.updatedAt, row.state === 'active');
+  }
+
+  cancelMandateEvents(mandateId: string): void {
+    this.db.prepare("UPDATE bot_event_inbox SET state = 'cancelled' WHERE mandate_id = ? AND state = 'pending'").run(encode(mandateId));
+  }
+
+  checkpoint(mandateId: string): OrchestrationCheckpoint | undefined {
+    return decode(this.db.prepare('SELECT checkpoint_json FROM orchestration_checkpoints WHERE mandate_id = ?')
+      .get(encode(mandateId))?.checkpoint_json ?? null) as OrchestrationCheckpoint | undefined;
+  }
+
+  putCheckpoint(row: OrchestrationCheckpoint): void {
+    this.putOrchestrationRow('orchestration_checkpoints', encode(row.mandateId), row.generation, row.revision, row.workingSummary, encode(row), row.updatedAt);
+  }
+
+  orchestrationDecision(decisionId: string): OrchestrationDecision | undefined {
+    return decode(this.db.prepare('SELECT record_json FROM orchestration_decisions WHERE decision_id = ?')
+      .get(encode(decisionId))?.record_json ?? null) as OrchestrationDecision | undefined;
+  }
+
+  pendingDecision(mandateId: string): OrchestrationDecision | undefined {
+    return decode(this.db.prepare("SELECT record_json FROM orchestration_decisions WHERE mandate_id = ? AND state = 'open'")
+      .get(encode(mandateId))?.record_json ?? null) as OrchestrationDecision | undefined;
+  }
+
+  putDecision(row: OrchestrationDecision): void {
+    this.putOrchestrationRow('orchestration_decisions', encode(row.decisionId), encode(row.mandateId), encode(row.ownerBotId), encode(row.runId),
+      row.revision, row.state, row.kind, row.purpose, row.summary, encode(row.targetConversationId), encode(row.options), row.outcome ?? null,
+      encode(row.selectedOptionId), row.responseText ?? null, Number(row.dormant), row.statusReason ?? null, row.createdAt, row.updatedAt,
+      row.resolvedAt ?? null, encode(row));
+  }
+
+  orchestrationBackoff(mandateId: string): OrchestrationBackoff | undefined {
+    return decode(this.db.prepare('SELECT record_json FROM orchestration_backoff WHERE mandate_id = ?')
+      .get(encode(mandateId))?.record_json ?? null) as OrchestrationBackoff | undefined;
+  }
+
+  putBackoff(row: OrchestrationBackoff): void {
+    this.putOrchestrationRow('orchestration_backoff', encode(row.mandateId), encode(row.sourceId), row.actionClass, row.observedStateHash,
+      row.consecutiveNoProgress, row.backoffDelayMs, row.backoffReason ?? null, row.lastNoticeEpisodeHash ?? null, row.nextEligibleAt ?? null,
+      row.updatedAt, encode(row));
+  }
+
+  clearBackoff(mandateId: string): void {
+    this.db.prepare('DELETE FROM orchestration_backoff WHERE mandate_id = ?').run(encode(mandateId));
+  }
+
+  orchestrationSummary(row: OrchestrationMandate): OrchestrationSummary {
+    const metrics = this.db.prepare(`SELECT count(*) total, sum(calls) calls, sum(input_tokens) input, sum(output_tokens) output,
+      sum(total_tokens) tokens, sum(cost_usd) cost FROM orchestration_runs WHERE mandate_id = ?`).get(encode(row.mandateId))!;
+    const last = this.db.prepare('SELECT queue_delay_ms, coalesced_count FROM orchestration_runs WHERE mandate_id = ? ORDER BY rowid DESC LIMIT 1')
+      .get(encode(row.mandateId));
+    const backoff = this.orchestrationBackoff(row.mandateId);
+    return { ...row, currentExecutionState: row.currentRunId ? this.orchestrationRun(row.currentRunId)?.state : undefined,
+      pendingDecision: this.pendingDecision(row.mandateId), metrics: { totalWakes: Number(metrics.total), calls: Number(metrics.calls ?? 0),
+        inputTokens: Number(metrics.input ?? 0), outputTokens: Number(metrics.output ?? 0), totalTokens: Number(metrics.tokens ?? 0),
+        costUsd: Number(metrics.cost ?? 0), lastQueueDelayMs: Number(last?.queue_delay_ms ?? 0), lastCoalescedCount: Number(last?.coalesced_count ?? 0),
+        backoffDelayMs: backoff?.backoffDelayMs ?? 0, backoffReason: backoff?.backoffReason,
+        consecutiveNoProgress: backoff?.consecutiveNoProgress ?? 0, nextEligibleAt: backoff?.nextEligibleAt } };
+  }
+
+  orchestrationDetail(row: OrchestrationMandate) {
+    const key = encode(row.mandateId);
+    const recentRuns = this.db.prepare('SELECT record_json FROM orchestration_runs WHERE mandate_id = ? ORDER BY rowid DESC LIMIT 20')
+      .all(key).map(value => {
+        const { ownerBotId, route, dispatchedAt, ...run } = decode(value.record_json) as StoredRun;
+        return run;
+      });
+    const decisions = this.db.prepare('SELECT record_json FROM orchestration_decisions WHERE mandate_id = ? ORDER BY created_at DESC, decision_id LIMIT 20')
+      .all(key).map(value => decode(value.record_json) as OrchestrationDecision);
+    const recentReceipts = this.db.prepare('SELECT * FROM orchestration_admissions WHERE mandate_id = ? ORDER BY rowid DESC LIMIT 20').all(key)
+      .map((value): OrchestrationEffectReceipt => ({ receiptId: decode(value.receipt_id) as string, mandateId: row.mandateId,
+        runId: decode(value.run_id) as string, callId: String(value.call_id), tool: String(value.tool), target: decode(value.target) as string | undefined,
+        state: String(value.state), reason: (value.reason as string | null) ?? undefined, createdAt: String(value.created_at) }));
+    return { ...this.orchestrationSummary(row), recentRuns, decisions, recentReceipts };
+  }
+
+  orchestrationRun(runId: string): StoredRun | undefined {
+    return decode(this.db.prepare('SELECT record_json FROM orchestration_runs WHERE run_id = ?').get(encode(runId))?.record_json ?? null) as StoredRun | undefined;
+  }
+
+  putRun(row: StoredRun): void {
+    this.putOrchestrationRow('orchestration_runs', encode(row.runId), encode(row.mandateId), encode(row.ownerBotId), row.generation,
+      encode(row.batchId), row.state, row.routeRole ?? null, encode(row.route), row.disposition ?? null, row.summary ?? null,
+      encode(row.noticeId), encode(row.decisionId), row.error ?? null, row.queueDelayMs, row.coalescedCount, row.calls, row.inputTokens,
+      row.outputTokens, row.totalTokens, row.costUsd, row.dispatchedAt ?? null, row.startedAt, row.settledAt ?? null, encode(row));
+  }
+
+  timelineRevision(conversationId: string): number {
+    return Number(this.db.prepare('SELECT timeline_revision FROM conversation_timelines WHERE conversation_id = ?')
+      .get(encode(conversationId))?.timeline_revision ?? 0);
+  }
+
+  conversationNotices(conversationId: string): StoredConversationNotice[] {
+    return this.db.prepare(`SELECT record_json FROM conversation_notices WHERE conversation_id = ?
+      AND (anchor_kind != 'post_settlement' OR anchor_outcome IS NOT NULL) ORDER BY timeline_seq`).all(encode(conversationId))
+      .map(row => decode(row.record_json) as StoredConversationNotice);
+  }
+
+  private advanceTimeline(conversationId: string, at: string, nextSeq: number): void {
+    this.db.prepare(`INSERT INTO conversation_timelines VALUES (?, 1, ?, ?) ON CONFLICT(conversation_id) DO UPDATE SET
+      timeline_revision = timeline_revision + 1, next_seq = max(next_seq, excluded.next_seq), updated_at = excluded.updated_at`)
+      .run(encode(conversationId), nextSeq, at);
+  }
+
+  private putNotice(row: StoredConversationNotice): void {
+    this.putOrchestrationRow('conversation_notices', encode(row.noticeId), encode(row.conversationId), encode(row.botId),
+      encode(row.mandateId), encode(row.runId), row.factDigest, row.timelineSeq, row.anchorKind, encode(row.anchorExecutionId),
+      row.anchorOutcome ?? null, row.text, encode(row.sourceRefs), row.urgency, Number(row.dormant), row.createdAt, encode(row));
+  }
+
+  appendNotice(row: Omit<StoredConversationNotice, 'timelineSeq'>): TimelineChanged | undefined {
+    const next = this.db.prepare('SELECT next_seq, timeline_revision FROM conversation_timelines WHERE conversation_id = ?').get(encode(row.conversationId));
+    const timelineSeq = Number(next?.next_seq ?? 1);
+    this.putNotice({ ...row, timelineSeq });
+    if (row.anchorKind === 'post_settlement' && !row.anchorOutcome) {
+      this.db.prepare(`INSERT INTO conversation_timelines VALUES (?, 0, ?, ?) ON CONFLICT(conversation_id) DO UPDATE SET next_seq = excluded.next_seq`)
+        .run(encode(row.conversationId), timelineSeq + 1, row.createdAt);
+      return;
+    }
+    this.advanceTimeline(row.conversationId, row.createdAt, timelineSeq + 1);
+    return { conversationId: row.conversationId, noticeId: row.noticeId, timelineRevision: Number(next?.timeline_revision ?? 0) + 1, at: row.createdAt };
+  }
+
+  private finishAnchoredNotices(executionId: string, state: NonNullable<StoredConversationNotice['anchorOutcome']>): void {
+    const at = new Date().toISOString();
+    for (const row of this.db.prepare('SELECT record_json FROM conversation_notices WHERE anchor_execution_id = ? AND anchor_outcome IS NULL')
+      .all(encode(executionId))) {
+      const notice = decode(row.record_json) as StoredConversationNotice;
+      this.db.prepare('UPDATE conversation_notices SET anchor_outcome = ?, record_json = ? WHERE notice_id = ?')
+        .run(state, encode({ ...notice, anchorOutcome: state }), encode(notice.noticeId));
+      this.advanceTimeline(notice.conversationId, at, notice.timelineSeq + 1);
+    }
   }
 
   private publishSkills(): void {
@@ -691,9 +1001,16 @@ export class ProductSQLite {
       revision = excluded.revision, state = excluded.state, record_json = excluded.record_json WHERE excluded.revision > session_watches.revision`);
     for (const row of watches) watch.run(encode(row.watchId), encode(row.sessionId), encode(record.ownerBotId), row.generation,
       row.revision, row.state, encode(row));
+    const targetConversationId = this.eventTarget(record.ownerBotId, record.originConversationId);
+    const liveOccurrence = occurrences?.some(row => row.firedKind !== 'target_lost');
+    const mandateId = !record.originActivityId && record.epoch === this.sessionEpoch && targetConversationId ? 'session:' + record.sessionId : undefined;
+    if (mandateId && targetConversationId && (liveOccurrence || watches.some(row => row.state === 'armed'))) {
+      this.ensureMandate({ mandateId, ownerBotId: record.ownerBotId, targetConversationId, sourceKind: 'session', sourceId: record.sessionId,
+        purpose: record.label || 'Observe a supervised session' }, record.updatedAt, true);
+    }
     for (const row of occurrences ?? []) {
       this.putSessionOccurrence(row);
-      this.insertInbox({ ownerBotId: row.ownerBotId, targetConversationId: this.eventTarget(row.ownerBotId, session.originConversationId),
+      this.insertInbox({ ownerBotId: row.ownerBotId, targetConversationId, mandateId: row.firedKind === 'target_lost' ? undefined : mandateId,
         sourceKind: row.firedKind === 'target_lost' ? 'target_lost' : 'session_watch_fired', sourceId: row.watchId,
         occurrenceId: row.occurrenceId, at: row.firedAt, payload: row });
     }
@@ -787,7 +1104,10 @@ export class ProductSQLite {
     this.transaction(() => {
       this.assertSessionEpoch();
       for (const row of grants ?? []) this.putWatchGrant(row);
-      for (const row of watches ?? []) this.putRuntimeWatch(row);
+      for (const row of watches ?? []) {
+        this.putRuntimeWatch(row);
+        this.saveWatchMandate(row);
+      }
       if (operation) {
         this.db.prepare('INSERT INTO meta (key, value) VALUES (?, ?)').run('watch_operation:' + encode(operation.receipt.operationId), encode(operation));
       }
@@ -805,8 +1125,15 @@ export class ProductSQLite {
     }
     for (const row of this.runtimeWatches(botId)) {
       if (reason === 'bot_archived' ? row.state !== 'active' : !row.precheck || row.state === 'settled' || row.state === 'cancelled') continue;
-      this.putRuntimeWatch({ ...row, revision: row.revision + 1, state: reason === 'bot_archived' ? 'paused' : 'invalidated',
-        statusReason: reason, armed: false, nextDueAt: undefined, scheduledAt: undefined, updatedAt: at });
+      const next = { ...row, revision: row.revision + 1, state: reason === 'bot_archived' ? 'paused' as const : 'invalidated' as const,
+        statusReason: reason, armed: false, nextDueAt: undefined, scheduledAt: undefined, updatedAt: at };
+      this.putRuntimeWatch(next);
+      this.saveWatchMandate(next);
+    }
+    if (reason === 'bot_archived') for (const mandate of this.mandates(botId)) {
+      if (mandate.state !== 'active' && mandate.state !== 'waiting_decision') continue;
+      this.cancelMandateEvents(mandate.mandateId);
+      this.putMandate({ ...mandate, state: 'paused', revision: mandate.revision + 1, statusReason: reason, updatedAt: at });
     }
   }
 
@@ -846,7 +1173,9 @@ export class ProductSQLite {
 
   private finishWatchTick(next: RuntimeWatch, occurrence: WatchOccurrence, input?: InboxInput): RuntimeWatch {
     if (input) {
-      const { eventId, coalesced } = this.insertInbox(input);
+      const mandateId = 'watch:' + next.watchId;
+      if (!this.mandate(mandateId) && next.targetConversationId) this.saveWatchMandate({ ...next, state: 'active' });
+      const { eventId, coalesced } = this.insertInbox({ ...input, mandateId });
       occurrence = { ...occurrence, eventId, ...(coalesced ? { coalescedInto: eventId } : {}) };
       next = { ...next, lastEventId: eventId };
       this.updateWatchOccurrence(occurrence);
@@ -869,16 +1198,24 @@ export class ProductSQLite {
 
   private putActivityEvent(activity: ProductProfile['activities'][number], kind: string, identity: unknown[], extra: object, at: string): void {
     this.insertInbox({ ownerBotId: activity.ownerBotId, targetConversationId: this.eventTarget(activity.ownerBotId, activity.originConversationId),
+      mandateId: activity.originMandateId,
       sourceKind: 'activity_milestone', sourceId: activity.activityId,
       occurrenceId: sha256(Buffer.from(canonicalJSON(['activity_milestone', activity.activityId, kind, ...identity]))), at,
       payload: { kind, activityId: activity.activityId, revision: activity.revision, originConversationId: activity.originConversationId, ...extra } });
   }
 
-  private insertInbox(input: InboxInput): { eventId: string; coalesced: boolean } {
+  insertInbox(input: InboxInput): { eventId: string; coalesced: boolean } {
+    const mandate = input.mandateId ? this.mandate(input.mandateId) : undefined;
+    const routed = mandate?.ownerBotId === input.ownerBotId && mandate.targetConversationId === input.targetConversationId &&
+      !mandate.dormant && (mandate.state === 'active' || mandate.state === 'waiting_decision');
+    const mandateKey = encode(routed ? mandate.mandateId : undefined);
+    if (routed && input.sourceKind === 'schedule_precheck' && ['changed', 'recovered'].includes(String((input.payload as { transition?: string }).transition))) {
+      this.clearBackoff(mandate.mandateId);
+    }
     if (input.coalesceKey) {
       const latest = this.db.prepare(`SELECT event_id, state, coalesce_key FROM bot_event_inbox
-        WHERE owner_bot_id = ? AND source_id = ? AND target_conversation_id IS ? AND source_kind = ? ORDER BY rowid DESC LIMIT 1`)
-        .get(encode(input.ownerBotId), encode(input.sourceId), encode(input.targetConversationId), input.sourceKind);
+        WHERE owner_bot_id = ? AND source_id = ? AND target_conversation_id IS ? AND source_kind = ? AND mandate_id IS ? ORDER BY rowid DESC LIMIT 1`)
+        .get(encode(input.ownerBotId), encode(input.sourceId), encode(input.targetConversationId), input.sourceKind, mandateKey);
       const row = latest?.state === 'pending' && latest.coalesce_key === input.coalesceKey ? latest : undefined;
       if (row) {
         this.db.prepare('UPDATE bot_event_inbox SET coalesced_count = coalesced_count + 1, updated_at = ?, payload_json = ? WHERE event_id = ?')
@@ -887,9 +1224,9 @@ export class ProductSQLite {
       }
     }
     const eventId = randomUUID();
-    this.db.prepare(`INSERT INTO bot_event_inbox VALUES (?, ?, ?, ?, ?, ?, ?, 1, 'pending', NULL, ?, ?, ?)`)
+    this.db.prepare(`INSERT INTO bot_event_inbox VALUES (?, ?, ?, ?, ?, ?, ?, 1, 'pending', NULL, ?, ?, ?, ?)`)
       .run(encode(eventId), encode(input.ownerBotId), encode(input.targetConversationId), input.sourceKind, encode(input.sourceId),
-        encode(input.occurrenceId), input.coalesceKey ?? null, input.at, input.at, encode(input.payload));
+        encode(input.occurrenceId), input.coalesceKey ?? null, input.at, input.at, encode(input.payload), mandateKey);
     return { eventId, coalesced: false };
   }
 
@@ -898,10 +1235,133 @@ export class ProductSQLite {
     const ids = state === undefined ? [encode(botId)] : [encode(botId), state];
     return this.db.prepare(`SELECT * FROM bot_event_inbox WHERE ${where} ORDER BY rowid`).all(...ids).map(row => ({
       eventId: decode(row.event_id) as string, ownerBotId: botId, targetConversationId: decode(row.target_conversation_id) as string | undefined,
+      mandateId: decode(row.mandate_id) as string | undefined,
       sourceKind: row.source_kind as InboxSource, sourceId: decode(row.source_id) as string, occurrenceId: decode(row.occurrence_id) as string,
       coalesceKey: typeof row.coalesce_key === 'string' ? row.coalesce_key : undefined, coalescedCount: Number(row.coalesced_count), state: row.state as InboxState,
       batchId: decode(row.batch_id) as string | undefined, createdAt: String(row.created_at), updatedAt: String(row.updated_at), payload: decode(row.payload_json) as object,
     }));
+  }
+
+  readyMandates(at: string): OrchestrationMandate[] {
+    return this.db.prepare(`SELECT m.record_json FROM orchestration_mandates m LEFT JOIN orchestration_backoff b USING (mandate_id)
+      WHERE m.state = 'active' AND m.dormant = 0 AND m.current_run_id IS NULL AND (b.next_eligible_at IS NULL OR b.next_eligible_at <= ?)
+      AND EXISTS (SELECT 1 FROM bot_event_inbox i WHERE i.mandate_id = m.mandate_id AND i.state = 'pending')
+      ORDER BY (SELECT min(i.rowid) FROM bot_event_inbox i WHERE i.mandate_id = m.mandate_id AND i.state = 'pending')`)
+      .all(at).map(row => decode(row.record_json) as OrchestrationMandate);
+  }
+
+  wakeEvents(mandate: OrchestrationMandate): InboxEvent[] {
+    return this.db.prepare(`SELECT * FROM bot_event_inbox WHERE mandate_id = ? AND owner_bot_id = ? AND target_conversation_id = ?
+      AND state = 'pending' ORDER BY rowid LIMIT 8`).all(encode(mandate.mandateId), encode(mandate.ownerBotId), encode(mandate.targetConversationId))
+      .map(row => ({ eventId: decode(row.event_id) as string, ownerBotId: mandate.ownerBotId, targetConversationId: mandate.targetConversationId,
+        mandateId: mandate.mandateId, sourceKind: row.source_kind as InboxSource, sourceId: decode(row.source_id) as string,
+        occurrenceId: decode(row.occurrence_id) as string, coalescedCount: Number(row.coalesced_count), state: 'pending',
+        createdAt: String(row.created_at), updatedAt: String(row.updated_at), payload: decode(row.payload_json) as object }));
+  }
+
+  stageWake(mandate: OrchestrationMandate, runId: string, events: InboxEvent[], at: string): EventBatch {
+    const batch: EventBatch = { batchId: randomUUID(), ownerBotId: mandate.ownerBotId, targetConversationId: mandate.targetConversationId,
+      mandateId: mandate.mandateId, leaseId: runId, stage: 'staged', dispatched: false, createdAt: at, updatedAt: at, eventIds: events.map(row => row.eventId) };
+    this.db.prepare('INSERT INTO bot_event_batches VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(encode(batch.batchId), encode(batch.ownerBotId),
+      encode(runId), batch.stage, 0, at, at, encode(batch));
+    const statement = this.db.prepare(`UPDATE bot_event_inbox SET state = 'claimed', batch_id = ?, updated_at = ?
+      WHERE event_id = ? AND mandate_id = ? AND state = 'pending' AND coalesced_count = ? AND updated_at = ?`);
+    for (const row of events) if (!statement.run(encode(batch.batchId), at, encode(row.eventId), encode(mandate.mandateId),
+      row.coalescedCount, row.updatedAt).changes) {
+      throw new RequestError('stale_revision', 'The orchestration event changed before admission');
+    }
+    return batch;
+  }
+
+  dispatchWake(actor: OrchestrationActor, batch: EventBatch, at: string): EventBatch {
+    return this.orchestrationTransaction(() => {
+      const mandate = this.mandate(actor.mandateId);
+      const run = this.orchestrationRun(actor.runId);
+      if (!run || run.state !== 'starting' || mandate?.currentRunId !== actor.runId || mandate.state !== 'active' || mandate.generation !== actor.generation) {
+        throw new RequestError('invalid_state', 'The orchestration run is no longer admitted');
+      }
+      this.putRun({ ...run, state: 'running', dispatchedAt: at });
+      return this.settleBatch(batch, 'dispatched');
+    });
+  }
+
+  finishWake(batch: EventBatch, unknown: boolean): void {
+    this.settleBatch(batch, !batch.dispatched ? 'released' : unknown ? 'unknown' : 'completed');
+  }
+
+  admitOrchestrationTool(actor: OrchestrationActor, callId: string, tool: string, target: string, mutating: boolean, at: string): void {
+    this.orchestrationTransaction(() => {
+      const mandate = this.mandate(actor.mandateId);
+      const run = this.orchestrationRun(actor.runId);
+      if (mandate?.ownerBotId !== actor.botId || mandate.currentRunId !== actor.runId || mandate.generation !== actor.generation ||
+          !['active', 'waiting_decision'].includes(mandate.state) || run?.batchId !== actor.batchId || run.state !== 'running') {
+        throw new RequestError('scope_denied', 'The orchestration tool is outside its admitted run');
+      }
+      this.db.prepare('INSERT INTO orchestration_admissions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        .run(encode(randomUUID()), encode(actor.mandateId), encode(actor.runId), callId, tool, encode(target), mutating ? 'mutating' : 'readonly',
+          'admitted', null, at);
+    });
+  }
+
+  settleOrchestrationTool(runId: string, callId: string, isError: boolean): void {
+    this.db.prepare("UPDATE orchestration_admissions SET state = ? WHERE run_id = ? AND call_id = ? AND state = 'admitted'")
+      .run(isError ? 'settled_error' : 'settled_ok', encode(runId), callId);
+  }
+
+  finishOrchestrationAdmissions(runId: string): boolean {
+    const key = encode(runId);
+    const uncertain = this.db.prepare("SELECT 1 FROM orchestration_admissions WHERE run_id = ? AND state = 'admitted' AND tool_class = 'mutating'").get(key);
+    this.db.prepare("UPDATE orchestration_admissions SET state = 'unknown', reason = 'tool_settlement_unobserved' WHERE run_id = ? AND state = 'admitted'").run(key);
+    return !!uncertain;
+  }
+
+  recordOrchestrationUsage(actor: OrchestrationActor, usage: Omit<ReturnType<typeof emptyOrchestrationUsage>, 'calls'>): void {
+    this.orchestrationTransaction(() => {
+      const run = this.orchestrationRun(actor.runId);
+      if (run?.state !== 'running' || run.batchId !== actor.batchId) return;
+      this.putRun({ ...run, calls: run.calls + 1, inputTokens: run.inputTokens + usage.inputTokens, outputTokens: run.outputTokens + usage.outputTokens,
+        totalTokens: run.totalTokens + usage.totalTokens, costUsd: run.costUsd + usage.costUsd });
+    });
+  }
+
+  disarmMandateWatch(row: OrchestrationMandate, at: string): RuntimeWatch | undefined {
+    if (!row.sourceId || row.sourceKind === 'session' || row.sourceKind === 'user') return;
+    const watch = this.runtimeWatch(row.ownerBotId, row.sourceId);
+    if (!watch || watch.state !== 'active') return;
+    this.putRuntimeWatch({ ...watch, revision: watch.revision + 1, state: 'paused', armed: false, statusReason: 'mandate_stopped',
+      nextDueAt: undefined, scheduledAt: undefined, updatedAt: at });
+    return watch;
+  }
+
+  private recoverOrchestration(): void {
+    const at = new Date().toISOString();
+    for (const value of this.db.prepare("SELECT record_json FROM orchestration_runs WHERE state IN ('starting','running')").all()) {
+      const run = decode(value.record_json) as StoredRun;
+      const state = run.dispatchedAt ? 'unknown' : 'failed';
+      const mandate = this.mandate(run.mandateId)!;
+      this.putRun({ ...run, state, disposition: state, error: 'worker_lost', settledAt: at });
+      this.putMandate({ ...mandate, state: mandate.state === 'active' && state === 'unknown' ? 'unknown' : mandate.state,
+        currentRunId: undefined, lastDisposition: state, lastReceiptState: state === 'unknown' ? 'unknown' : 'non_dispatched',
+        lastError: 'worker_lost', revision: mandate.revision + 1, updatedAt: at, settledAt: at });
+    }
+    this.db.exec("UPDATE orchestration_admissions SET state = 'unknown', reason = 'worker_lost' WHERE state = 'admitted'");
+  }
+
+  private captureOrchestration(redact: (text: string) => string) {
+    const records = <T>(table: string, column = 'record_json') => this.db.prepare(`SELECT ${column} FROM ${table} ORDER BY rowid`).all()
+      .map(row => decode(row[column]) as T);
+    const orchestrationMandates = records<OrchestrationMandate>('orchestration_mandates').map(row => ({ ...row,
+      purpose: redact(row.purpose).slice(0, 1024), lastError: row.lastError && redact(row.lastError).slice(0, 2048), currentRunId: undefined,
+      state: 'restored_readonly' as const, dormant: true, statusReason: 'restored_dormant' }));
+    const orchestrationCheckpoints = records<OrchestrationCheckpoint>('orchestration_checkpoints', 'checkpoint_json')
+      .map(row => ({ ...row, workingSummary: redact(row.workingSummary).slice(0, 2048) }));
+    const orchestrationDecisions = records<OrchestrationDecision>('orchestration_decisions').map(row => ({ ...row,
+      purpose: redact(row.purpose).slice(0, 256), kind: redact(row.kind), summary: redact(row.summary).slice(0, 2048),
+      options: row.options.map(option => ({ ...option, label: redact(option.label).slice(0, 160), description: option.description && redact(option.description).slice(0, 512) })),
+      responseText: row.responseText && redact(row.responseText).slice(0, 2048), dormant: true }));
+    const conversationNotices = records<StoredConversationNotice>('conversation_notices').map(row => ({ ...row,
+      text: redact(row.text).slice(0, 2048), sourceRefs: row.sourceRefs.map(ref => ({ ...ref, label: ref.label && redact(ref.label).slice(0, 160) })), dormant: true }));
+    return orchestrationMandates.length ? { orchestrationMandates, orchestrationCheckpoints, orchestrationDecisions, conversationNotices } : {};
   }
 
   claimEventBatch(botId: string, leaseId: string, targetConversationId?: string): EventBatch | undefined {
@@ -969,6 +1429,7 @@ export class ProductSQLite {
         const batch = decode(row.record_json) as EventBatch;
         this.settleBatch(batch, batch.dispatched ? 'unknown' : 'released');
       }
+      this.recoverOrchestration();
       for (const row of this.db.prepare("SELECT record_json FROM watch_occurrences WHERE state = 'running'").all()) {
         const occurrence = decode(row.record_json) as WatchOccurrence;
         const at = new Date().toISOString();
@@ -1026,7 +1487,8 @@ export class ProductSQLite {
       return { profile, backup: { version: 1, traces, traceCoverage, ...(activityEscalations.length ? { activityEscalations } : {}),
         ...(activityProgress.length ? { activityProgress } : {}), ...(skillApprovalRequests.length ? { skillApprovalRequests } : {}),
         ...(triageAccounting.length ? { triageAccounting } : {}), ...(activitySteers.length ? { activitySteers } : {}),
-        ...(runtimeSessions.length ? { runtimeSessions, runtimeWatchOccurrences } : {}), ...(watches.length ? { watches, watchOccurrences } : {}) } };
+        ...(runtimeSessions.length ? { runtimeSessions, runtimeWatchOccurrences } : {}), ...(watches.length ? { watches, watchOccurrences } : {}),
+        ...this.captureOrchestration(redact) } };
     });
   }
 
@@ -1223,6 +1685,7 @@ export class ProductSQLite {
     }));
     const activities = this.db.prepare('SELECT * FROM activities ORDER BY sort_order').all().map(row => ({
       activityId: decode(row.activity_id), ownerBotId: decode(row.owner_bot_id), originConversationId: decode(row.origin_conversation_id),
+      originMandateId: decode(row.origin_mandate_id),
       revision: row.revision, state: row.state, goal: decode(row.goal_json), requirements: decode(row.requirements_json),
       questions: decode(row.questions_json), materials: decode(row.materials_json), inputFiles: decode(row.input_files_json),
       executionIds: decode(row.execution_ids_json), results: decode(row.results_json), binding: decode(row.binding_json), retained: decode(row.retained_json),
@@ -1276,12 +1739,12 @@ export class ProductSQLite {
       encode(row.draft), encode(row.binding), encode(row.latestExecutionId)));
     const activities = this.db.prepare(`INSERT INTO activities (activity_id, sort_order, owner_bot_id, origin_conversation_id,
       revision, state, goal_json, requirements_json, questions_json, materials_json, input_files_json, execution_ids_json,
-      results_json, binding_json, retained_json, granted_linked_activity_ids_json, routing_json, acknowledged_at, acknowledged_execution_id, closed_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+      results_json, binding_json, retained_json, granted_linked_activity_ids_json, routing_json, acknowledged_at, acknowledged_execution_id, closed_at,
+      updated_at, origin_mandate_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
     profile.activities.forEach((row, order) => activities.run(encode(row.activityId), order, encode(row.ownerBotId), encode(row.originConversationId),
       row.revision, row.state, encode(row.goal), encode(row.requirements), encode(row.questions), encode(row.materials), encode(row.inputFiles),
       encode(row.executionIds), encode(row.results), encode(row.binding), encode(row.retained), encode(row.grantedLinkedActivityIds ?? []), encode(row.routing),
-      row.acknowledgedAt ?? null, encode(row.acknowledgedExecutionId), row.closedAt ?? null, row.updatedAt ?? null));
+      row.acknowledgedAt ?? null, encode(row.acknowledgedExecutionId), row.closedAt ?? null, row.updatedAt ?? null, encode(row.originMandateId)));
     const executions = this.db.prepare('INSERT INTO executions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
     profile.executions.forEach((row, order) => executions.run(encode(row.executionId), order, row.revision, row.state, encode(row.operationId),
       encode(row.route ? { ...row.input, route: row.route } : row.input), encode(row.error), encode(row.engineRunId),

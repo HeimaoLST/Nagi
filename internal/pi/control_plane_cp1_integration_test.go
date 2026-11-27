@@ -2394,18 +2394,18 @@ const { DatabaseSync } = require('node:sqlite');
 const db = new DatabaseSync(process.argv[1]);
 const v = db.prepare('PRAGMA user_version').get().user_version;
 const fk = db.prepare('PRAGMA foreign_key_check').all().length;
-db.exec('PRAGMA user_version = 14');
+db.exec('PRAGMA user_version = 15');
 db.close();
 console.log(JSON.stringify({ v, fk }));
 `)
-	if restoreSQLite != `{"v":13,"fk":0}` {
-		t.Fatalf("restored v13 SQLite check = %s", restoreSQLite)
+	if restoreSQLite != `{"v":14,"fk":0}` {
+		t.Fatalf("restored v14 SQLite check = %s", restoreSQLite)
 	}
 	v9Client, startErr := pi.StartProduct(restoreOpts)
 	if startErr == nil {
 		if _, readyErr := v9Client.Ready(ctx); readyErr == nil {
 			if _, openErr := v9Client.Open(ctx, []int{pi.ProductVersion}); openErr == nil {
-				t.Fatal("worker admitted SQLite user_version=14")
+				t.Fatal("worker admitted SQLite user_version=15")
 			}
 		}
 		_, _ = v9Client.Wait(ctx)
@@ -2575,8 +2575,8 @@ const ddl = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND n
 db.close();
 console.log(JSON.stringify({ v, fk, seq, hasFourKinds: ddl.includes("'tool_started','tool_finished','file_confirmed','state_changed'") }));
 `)
-	if v7Schema != `{"v":13,"fk":0,"seq":41,"hasFourKinds":true}` {
-		t.Fatalf("v7->v13 schema/trace check = %s", v7Schema)
+	if v7Schema != `{"v":14,"fk":0,"seq":41,"hasFourKinds":true}` {
+		t.Fatalf("v7->v14 schema/trace check = %s", v7Schema)
 	}
 
 	if _, err := v7Proc.client.UpdateBot(ctx, pi.ProductBotUpdateParams{

@@ -157,3 +157,14 @@ export async function* transcriptEntries(transcript: Transcript): AsyncGenerator
     await transcript.close();
   }
 }
+
+export async function* anchoredTranscriptEntries(transcript: Transcript) {
+  let executionId: string | undefined;
+  for await (const entry of transcriptEntries(transcript)) {
+    if (entry.type === 'custom' && entry.customType === turnEntryType) {
+      const turn = entry.data as { runId?: unknown } | undefined;
+      executionId = typeof turn?.runId === 'string' ? turn.runId : undefined;
+    }
+    yield { entry, executionId };
+  }
+}

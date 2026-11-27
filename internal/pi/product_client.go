@@ -34,19 +34,21 @@ type ProductClient struct {
 }
 
 type ProductEvent struct {
-	StreamID             string                       `json:"streamId"`
-	Seq                  uint64                       `json:"seq"`
-	Name                 string                       `json:"event"`
-	Data                 json.RawMessage              `json:"data"`
-	ActivityChanged      *ProductActivityChange       `json:"-"`
-	ActivityDigest       *ProductActivityDigest       `json:"-"`
-	TraceUpdated         *ProductActivityTraceUpdated `json:"-"`
-	SkillChanged         *ProductSkillChange          `json:"-"`
-	McpChanged           *ProductMcpChange            `json:"-"`
-	ProviderChanged      *ProductProviderChange       `json:"-"`
-	SessionChanged       *ProductSessionSummary       `json:"-"`
-	SessionOutputUpdated *ProductSessionOutputUpdated `json:"-"`
-	WatchChanged         *ProductWatchChange          `json:"-"`
+	StreamID             string                              `json:"streamId"`
+	Seq                  uint64                              `json:"seq"`
+	Name                 string                              `json:"event"`
+	Data                 json.RawMessage                     `json:"data"`
+	ActivityChanged      *ProductActivityChange              `json:"-"`
+	ActivityDigest       *ProductActivityDigest              `json:"-"`
+	TraceUpdated         *ProductActivityTraceUpdated        `json:"-"`
+	SkillChanged         *ProductSkillChange                 `json:"-"`
+	McpChanged           *ProductMcpChange                   `json:"-"`
+	ProviderChanged      *ProductProviderChange              `json:"-"`
+	SessionChanged       *ProductSessionSummary              `json:"-"`
+	SessionOutputUpdated *ProductSessionOutputUpdated        `json:"-"`
+	WatchChanged         *ProductWatchChange                 `json:"-"`
+	TimelineChanged      *ProductConversationTimelineChanged `json:"-"`
+	OrchestrationChanged *ProductOrchestrationChange         `json:"-"`
 }
 
 type ProductActivityDigest struct {
@@ -272,6 +274,8 @@ type ProductReceiptTarget struct {
 	SessionID      string `json:"sessionId,omitempty"`
 	WatchID        string `json:"watchId,omitempty"`
 	GrantID        string `json:"grantId,omitempty"`
+	MandateID      string `json:"mandateId,omitempty"`
+	DecisionID     string `json:"decisionId,omitempty"`
 	Connection     bool   `json:"connection,omitempty"`
 }
 
@@ -920,6 +924,20 @@ func (c *Client) handleProductEvent(line []byte) error {
 			return errors.New("invalid watch change")
 		}
 		event.WatchChanged = &change
+	}
+	if event.Name == "conversation.timelineChanged" {
+		var change ProductConversationTimelineChanged
+		if json.Unmarshal(event.Data, &change) != nil || change.ConversationID == "" || change.TimelineRevision == 0 || change.At == "" {
+			return errors.New("invalid conversation timeline change")
+		}
+		event.TimelineChanged = &change
+	}
+	if event.Name == "orchestration.changed" {
+		var change ProductOrchestrationChange
+		if json.Unmarshal(event.Data, &change) != nil || change.BotID == "" || change.Change == "" || change.At == "" {
+			return errors.New("invalid orchestration change")
+		}
+		event.OrchestrationChanged = &change
 	}
 	c.mu.Lock()
 	if event.StreamID != c.streamID || c.streamGap || event.Seq <= c.streamSeq {

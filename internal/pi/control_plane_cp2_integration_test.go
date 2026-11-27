@@ -2907,22 +2907,22 @@ const rows = db.prepare('SELECT count(*) AS n FROM activity_triage_accounting').
 db.close();
 console.log(JSON.stringify({ v, fk, hasUpdatedAt: cols.includes('updated_at'), rows }));
 `)
-	if v8Check != `{"v":13,"fk":0,"hasUpdatedAt":true,"rows":0}` {
-		t.Fatalf("v8->v13 migration check = %s", v8Check)
+	if v8Check != `{"v":14,"fk":0,"hasUpdatedAt":true,"rows":0}` {
+		t.Fatalf("v8->v14 migration check = %s", v8Check)
 	}
 	v8Proc.shutdown(t, ctx)
 
 	runNodeSQLite(t, nodePath, v8DB, `
 const { DatabaseSync } = require('node:sqlite');
 const db = new DatabaseSync(process.argv[1]);
-db.exec('PRAGMA user_version = 14');
+db.exec('PRAGMA user_version = 15');
 db.close();
 `)
 	v10Client, startErr := pi.StartProduct(v8Opts)
 	if startErr == nil {
 		if _, readyErr := v10Client.Ready(ctx); readyErr == nil {
 			if _, openErr := v10Client.Open(ctx, []int{pi.ProductVersion}); openErr == nil {
-				t.Fatal("worker admitted SQLite user_version=14")
+				t.Fatal("worker admitted SQLite user_version=15")
 			}
 		}
 		_, _ = v10Client.Wait(ctx)
@@ -2935,8 +2935,8 @@ const bots = db.prepare('SELECT count(*) AS n FROM bots').get().n;
 db.close();
 console.log(JSON.stringify({ v, bots }));
 `)
-	if v10After != `{"v":14,"bots":1}` {
-		t.Fatalf("v14 refusal mutated DB: %s", v10After)
+	if v10After != `{"v":15,"bots":1}` {
+		t.Fatalf("v15 refusal mutated DB: %s", v10After)
 	}
 
 	portDir := filepath.Join(root, "portable-live")
@@ -3063,7 +3063,7 @@ const fk = db.prepare('PRAGMA foreign_key_check').all().length;
 db.close();
 console.log(JSON.stringify({ v, fk }));
 `)
-	if restoreSchema != `{"v":13,"fk":0}` {
+	if restoreSchema != `{"v":14,"fk":0}` {
 		t.Fatalf("restored schema check = %s", restoreSchema)
 	}
 	provider.assertNoProblems()

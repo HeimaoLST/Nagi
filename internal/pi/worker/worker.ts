@@ -14,7 +14,7 @@ import { StdioTransport, StreamableHttpTransport, validateMcpServerConfig, mcpNa
 import type { TSchema } from 'typebox';
 import {
   MAX_FRAME, RequestError, Writer, canonicalJSON, frameBytes, maxDraftBytes, message, parseProductRequest, parseRequest,
-  type Command, type ConfigureParams, type Connection, type Draft, type OpenParams, type StartParams, type ToolResult,
+  type Command, type ConfigureParams, type Connection, type Draft, type OpenParams, type ProductOpenParams, type StartParams, type ToolResult,
 } from './protocol.js';
 import { Product, confirmedFileEffect, type ProductRunObservers, type ProductSession } from './product.js';
 import type { ProductProfilePaths } from './product-profile.js';
@@ -29,7 +29,7 @@ const CONFIGURATION_TYPE = 'nagi-configuration-v1';
 const MCP_TYPE = 'nagi-mcp-v1';
 const PROVIDER = 'nagi';
 const escapeQuoteMarkup = (text: string) => text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');
-type Binding = Pick<OpenParams, 'contextId' | 'botId' | 'purpose' | 'activityId' | 'selectionRevision' | 'cwd'>;
+type Binding = Pick<ProductOpenParams, 'contextId' | 'botId' | 'purpose' | 'activityId' | 'selectionRevision' | 'cwd'>;
 type Run = {
   id: string; seq: number; cancelled: boolean; sdkStarted: boolean; sdkSettled: boolean; sdkAborted: boolean;
   final?: AssistantMessage; correlation: StartParams['correlation']; done: Promise<void>;
@@ -44,6 +44,7 @@ type Run = {
 type Context = {
   binding: Binding; configuration: ConfigureParams; instructions: string; codingTools: OpenParams['codingTools']; domainTools: OpenParams['domainTools']; mcpServers: NonNullable<OpenParams['mcpServers']>;
   manager: SessionManager; runtime: AgentSessionRuntime; used: boolean; runIds: Set<string>;
+  inMemory: boolean;
   active?: Run; observationSeq: number;
   transcriptSource?: string;
   transcriptSnapshot?: SessionEntry[];
@@ -283,7 +284,7 @@ class Worker {
       updateConfig: () => { throw new RequestError('unsupported_operation', 'Change MCP configuration through Nagi'); },
     });
   }
-  private async open(params: OpenParams, productTools: ToolDefinition[] = [], inMemory = false): Promise<Context> {
+  private async open(params: ProductOpenParams, productTools: ToolDefinition[] = [], inMemory = params.inMemory === true): Promise<Context> {
     const source = params.configuration ?? this.configured;
     if (!source) throw new RequestError('not_configured', 'Configure first');
     const config = this.validatedConfiguration(source);
@@ -361,7 +362,8 @@ class Worker {
     const tools = [...codingTools, ...customTools.map(tool => tool.name)].sort((a, b) => a.localeCompare(b));
     if (mcpEntries.length) tools.push('mcp__*');
     const productPrompt = productTools.length > 0 && isNagiBotSystemPrompt(params.instructions);
-    const settings = SettingsManager.inMemory({ retry: { enabled: false, provider: { maxRetries: 0 } }, cacheWarming: 'off' });
+    const settings = SettingsManager.inMemory({ retry: { enabled: false, provider: { maxRetries: 0 } }, cacheWarming: 'off',
+      ...(params.purpose === 'orchestration' ? { compaction: { enabled: false } } : {}) });
     this.configureSettings(settings, config);
     if (productTools.length || inMemory) {
       const stream = models.streamSimple.bind(models);
@@ -372,6 +374,7 @@ class Worker {
         const auxiliary = options?.fetch !== undefined;
         let attempt: ProviderAttempt | undefined;
         let fetchError: unknown;
+        let requested = false;
         let signal: AbortSignal | undefined;
         const result = stream(model, context, { ...options, fetch: async (input, init) => {
           if (!observers?.authorizeProvider || !run) throw new RequestError('credential_unavailable', 'No product execution owns this provider request');
@@ -379,9 +382,18 @@ class Worker {
           signal = init?.signal ?? options?.signal ?? undefined;
           await observers.acquireProvider?.(signal);
           observers.authorizeProvider();
+          if (params.purpose === 'orchestration') {
+            const destination = new URL(input instanceof Request ? input.url : String(input));
+            if (destination.origin !== new URL(config.baseUrl).origin) throw new RequestError('scope_denied', 'The orchestration provider destination changed');
+            if (typeof init?.body !== 'string' || !observers.checkRequestBytes) {
+              throw new RequestError('context_limit', 'The orchestration request could not be sized');
+            }
+            observers.checkRequestBytes(Buffer.byteLength(init.body));
+          }
           attempt = observers.providerAttempt?.();
+          requested = true;
           try {
-            const response = await request(input, init);
+            const response = await request(input, params.purpose === 'orchestration' ? { ...init, redirect: 'error' } : init);
             if (!signal?.aborted && !run.cancelled) {
               attempt?.headers(response);
               if (!response.ok && !auxiliary) run.providerFailed = true;
@@ -400,8 +412,17 @@ class Worker {
             if (outcome === 'error' && attempt && !auxiliary) run.providerFailed = true;
             attempt?.settle(outcome, fetchError);
           };
-          const settlement = result.result().then(message => observe(message.stopReason === 'error' ? 'error' :
-            message.stopReason === 'aborted' ? 'aborted' : 'success'), () => observe('error'));
+          const settlement = result.result().then(message => {
+            if (requested && observers?.onModelSettlement) {
+              const usage = message.usage;
+              observers.onModelSettlement({ inputTokens: usage.input + usage.cacheRead + usage.cacheWrite, outputTokens: usage.output,
+                totalTokens: usage.totalTokens, costUsd: usage.cost.total });
+            }
+            observe(message.stopReason === 'error' ? 'error' : message.stopReason === 'aborted' ? 'aborted' : 'success');
+          }, () => {
+            if (requested) observers?.onModelSettlement?.({ inputTokens: 0, outputTokens: 0, totalTokens: 0, costUsd: 0 });
+            observe('error');
+          });
           pending.add(settlement);
           void settlement.then(() => pending.delete(settlement), () => pending.delete(settlement));
         }
@@ -451,7 +472,7 @@ class Worker {
       return { ...result, services, diagnostics: services.diagnostics };
     }, { cwd, agentDir, sessionManager: manager });
     const context: Context = { binding, configuration: config, instructions: params.instructions, codingTools: params.codingTools, domainTools: params.domainTools,
-      mcpServers, manager, runtime, used, runIds: new Set(), observationSeq: 0, publishConfiguration };
+      mcpServers, manager, runtime, used, inMemory, runIds: new Set(), observationSeq: 0, publishConfiguration };
     runtime.session.subscribe(event => this.onSdkEvent(context, event));
     this.contexts.set(params.contextId, context);
     try { await runtime.session.bindExtensions({}); }
@@ -510,7 +531,7 @@ class Worker {
         context.publishConfiguration = false;
       }
       const draft = run.product?.draft;
-      context.manager.appendCustomEntry(TURN_TYPE, { runId: run.id, text: params.text, context: params.context ?? [], correlation: run.correlation,
+      if (!context.inMemory) context.manager.appendCustomEntry(TURN_TYPE, { runId: run.id, text: params.text, context: params.context ?? [], correlation: run.correlation,
         ...(draft ? { materials: draft.materials } : {}), ...(draft?.quote ? { quote: draft.quote } : {}) });
       const snapshots = (params.context ?? []).map(item => `\n\n<context name=${JSON.stringify(item.name)}>\n${item.text}\n</context>`).join('');
       const quote = draft?.quote && redactQuote(draft.quote, projectionRedactor(this.credentialKeys(this.product?.credentialKeys())));
@@ -581,13 +602,19 @@ class Worker {
     } finally { await transcript.close(); }
   }
 
-  private async openProductSession(params: OpenParams, tools: ToolDefinition[]): Promise<ProductSession> {
+  private async openProductSession(params: ProductOpenParams, tools: ToolDefinition[]): Promise<ProductSession> {
     const context = await this.open(params, tools);
     const sessionRef = context.manager.getSessionFile();
-    if (!sessionRef) throw new RequestError('history_unavailable', 'Pi did not provide a session reference');
+    if (!sessionRef && !context.inMemory) throw new RequestError('history_unavailable', 'Pi did not provide a session reference');
     return {
-      sessionRef,
+      sessionRef: sessionRef ?? '',
       cwd: context.binding.cwd,
+      historyBytes: () => Buffer.byteLength(JSON.stringify(context.manager.buildSessionContext().messages)),
+      close: async () => {
+        if (context.active) throw new RequestError('busy', 'The execution context is running');
+        this.contexts.delete(params.contextId);
+        await context.runtime.dispose();
+      },
       nominatePreference: async (prompt, cancelled) => {
         const signal = AbortSignal.any([cancelled, AbortSignal.timeout(15_000)]);
         const model = context.runtime.session.model;
@@ -686,7 +713,7 @@ class Worker {
 
   private async drainProduct(): Promise<void> {
     this.closing = true;
-    await Promise.all([this.product?.drainChildren(), ...[...this.contexts.values()].map(async context => {
+    await Promise.all([this.product?.drainChildren(), ...[...this.contexts.values()].filter(context => context.binding.purpose !== 'orchestration').map(async context => {
       const run = context.active;
       if (run) {
         run.cancelled = true;
@@ -825,7 +852,7 @@ class Worker {
     if (this.disconnected) return;
     this.disconnected = true; this.closing = true;
     if (failed) process.exitCode = 1;
-    const outcomes = await Promise.allSettled([this.product?.drainChildren(), ...[...this.contexts.values()].map(async context => {
+    const outcomes = await Promise.allSettled([this.product?.drainChildren(), ...[...this.contexts.values()].filter(context => context.binding.purpose !== 'orchestration').map(async context => {
       const run = context.active;
       if (run) run.cancelled = true;
       try {
