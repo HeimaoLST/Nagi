@@ -1624,7 +1624,7 @@ func TestPiProductMcpVaultExclusionBackupRestoreAndMigration(t *testing.T) {
 	runNodeSQLite(t, nodePath, migDB, `
 const { DatabaseSync } = require('node:sqlite');
 const db = new DatabaseSync(process.argv[1]);
-db.exec('DROP TABLE activity_steers; DROP TABLE activity_triage_accounting; ALTER TABLE activities DROP COLUMN updated_at; DROP TABLE activity_progress; DROP TABLE skill_approval_requests; ALTER TABLE activities DROP COLUMN acknowledged_at; ALTER TABLE activities DROP COLUMN acknowledged_execution_id; ALTER TABLE activities DROP COLUMN closed_at; DROP TABLE execution_mutation_admissions; DROP TABLE execution_admission_coverage; DROP TABLE activity_escalations; DROP TABLE provider_accounts; ALTER TABLE activities DROP COLUMN routing_json; DROP TABLE skill_approvals; DROP TABLE mcp_servers; PRAGMA user_version = 4;');
+db.exec("DROP TABLE runtime_watch_occurrences; DROP TABLE session_watches; DROP TABLE runtime_sessions; DELETE FROM meta WHERE key = 'runtime_session_epoch'; DROP TABLE activity_steers; DROP TABLE activity_triage_accounting; ALTER TABLE activities DROP COLUMN updated_at; DROP TABLE activity_progress; DROP TABLE skill_approval_requests; ALTER TABLE activities DROP COLUMN acknowledged_at; ALTER TABLE activities DROP COLUMN acknowledged_execution_id; ALTER TABLE activities DROP COLUMN closed_at; DROP TABLE execution_mutation_admissions; DROP TABLE execution_admission_coverage; DROP TABLE activity_escalations; DROP TABLE provider_accounts; ALTER TABLE activities DROP COLUMN routing_json; DROP TABLE skill_approvals; DROP TABLE mcp_servers; PRAGMA user_version = 4;");
 db.close();
 `)
 
@@ -1654,19 +1654,19 @@ const db = new DatabaseSync(process.argv[1]);
 const v = db.prepare('PRAGMA user_version').get().user_version;
 const fk = db.prepare('PRAGMA foreign_key_check').all().length;
 const hasTable = !!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='mcp_servers'").get();
-db.exec('PRAGMA user_version = 12');
+db.exec('PRAGMA user_version = 13');
 db.close();
 console.log(JSON.stringify({ v, fk, hasTable }));
 `)
-	if migState != `{"v":11,"fk":0,"hasTable":true}` {
-		t.Fatalf("v4->v11 migration SQLite state = %s", migState)
+	if migState != `{"v":12,"fk":0,"hasTable":true}` {
+		t.Fatalf("v4->v12 migration SQLite state = %s", migState)
 	}
 
 	v8Client, startErr := pi.StartProduct(migOpts)
 	if startErr == nil {
 		if _, readyErr := v8Client.Ready(ctx); readyErr == nil {
 			if _, openErr := v8Client.Open(ctx, []int{pi.ProductVersion}); openErr == nil {
-				t.Fatal("worker admitted SQLite user_version=12")
+				t.Fatal("worker admitted SQLite user_version=13")
 			}
 		}
 		_, _ = v8Client.Wait(ctx)

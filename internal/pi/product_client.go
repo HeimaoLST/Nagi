@@ -34,16 +34,18 @@ type ProductClient struct {
 }
 
 type ProductEvent struct {
-	StreamID        string                       `json:"streamId"`
-	Seq             uint64                       `json:"seq"`
-	Name            string                       `json:"event"`
-	Data            json.RawMessage              `json:"data"`
-	ActivityChanged *ProductActivityChange       `json:"-"`
-	ActivityDigest  *ProductActivityDigest       `json:"-"`
-	TraceUpdated    *ProductActivityTraceUpdated `json:"-"`
-	SkillChanged    *ProductSkillChange          `json:"-"`
-	McpChanged      *ProductMcpChange            `json:"-"`
-	ProviderChanged *ProductProviderChange       `json:"-"`
+	StreamID             string                       `json:"streamId"`
+	Seq                  uint64                       `json:"seq"`
+	Name                 string                       `json:"event"`
+	Data                 json.RawMessage              `json:"data"`
+	ActivityChanged      *ProductActivityChange       `json:"-"`
+	ActivityDigest       *ProductActivityDigest       `json:"-"`
+	TraceUpdated         *ProductActivityTraceUpdated `json:"-"`
+	SkillChanged         *ProductSkillChange          `json:"-"`
+	McpChanged           *ProductMcpChange            `json:"-"`
+	ProviderChanged      *ProductProviderChange       `json:"-"`
+	SessionChanged       *ProductSessionSummary       `json:"-"`
+	SessionOutputUpdated *ProductSessionOutputUpdated `json:"-"`
 }
 
 type ProductActivityDigest struct {
@@ -266,6 +268,7 @@ type ProductReceiptTarget struct {
 	ConversationID string `json:"conversationId,omitempty"`
 	ActivityID     string `json:"activityId,omitempty"`
 	QuestionID     string `json:"questionId,omitempty"`
+	SessionID      string `json:"sessionId,omitempty"`
 	Connection     bool   `json:"connection,omitempty"`
 }
 
@@ -893,6 +896,20 @@ func (c *Client) handleProductEvent(line []byte) error {
 			return errors.New("invalid provider change")
 		}
 		event.ProviderChanged = &change
+	}
+	if event.Name == "session.changed" {
+		var change ProductSessionSummary
+		if json.Unmarshal(event.Data, &change) != nil || change.SessionID == "" || change.OwnerBotID == "" || change.Generation == 0 || change.Revision == 0 {
+			return errors.New("invalid session change")
+		}
+		event.SessionChanged = &change
+	}
+	if event.Name == "session.outputUpdated" {
+		var update ProductSessionOutputUpdated
+		if json.Unmarshal(event.Data, &update) != nil || update.SessionID == "" || update.OwnerBotID == "" || update.Generation == 0 {
+			return errors.New("invalid session output update")
+		}
+		event.SessionOutputUpdated = &update
 	}
 	c.mu.Lock()
 	if event.StreamID != c.streamID || c.streamGap || event.Seq <= c.streamSeq {

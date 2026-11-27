@@ -1,18 +1,18 @@
 # RFC-0004: Stateful Session Handles, Event Watch Substrate & Scoped Autonomous Orchestration
 
-- **Status**: `Accepted` *(Astra-6.2 deep technical review & offline Darwin `forkpty` / Pi `1.5.2` probes resolved; **implementation intentionally held** until frontend and backend synchronize on the unified RFC-0001–0003 baseline)*
-- **Baseline**: `dev` @ `0ab940f` (RFC-0001 `M0a`–`M4`, RFC-0002 `CP-1`–`CP-3`, RFC-0003 `RT-1`–`RT-2`, governance CI & Design System 2.0 merged; SQLite `v11`; Pi SDK `1.5.2`; Node `22.23.5`)
+- **Status**: `Partially Implemented` *(`BG-1` shipped on `dev`; `BG-2` and `BG-3` next)*
+- **Baseline**: `dev` @ `1f3d4f5` (RFC-0001 `M0a`–`M4`, RFC-0002 `CP-1`–`CP-3`, RFC-0003 `RT-1`–`RT-2` full frontend/backend parity baseline; SQLite `v11` -> `v12` in `BG-1`; Pi SDK `1.5.2`; Node `22.23.5`)
 - **Authors / Reviewers**: Backend Architecture (`t21d`), Deep Technical Review (`t1jr` / Astra-6.2, including offline macOS arm64 `forkpty` vs `/usr/bin/script` & Pi `1.5.2` `SessionManager` probes)
 - **Canonical Vocabulary**: [docs/design/glossary.md](../design/glossary.md)
 - **Promotion Targets**: [product-protocol.md](../design/product-protocol.md), [pi-integration.md](../design/pi-integration.md), [glossary.md](../design/glossary.md), [desktop.md](../design/desktop.md), [README.md](../../README.md)
 
-> **Execution Hold Note**: This specification records the agreed target architecture and mandatory acceptance gates. **Zero `BG-1`–`BG-3` runtime implementation starts before frontend UI parity converges with currently shipped RFC-0001–0003 backend capabilities.**
+> **Execution Note**: Frontend/backend parity for RFC-0001–0003 converged on `dev` (`1f3d4f5`), lifting the execution hold. `BG-1` (SQLite `v12`) is shipped; see [product-protocol.md](../design/product-protocol.md), [pi-integration.md](../design/pi-integration.md), and [glossary.md](../design/glossary.md) for canonical shipped contracts.
 
 ## Milestone Tracker
 
-- [ ] **BG-1** *(SQLite v12, held pending frontend parity sync)* — Worker-Owned Stateful Session Handles (`session_open`, `session_read`, `session_write`, `session_signal`, `session_resize`, `session_eof`, `session_close`, `session_list`), Bundled Native Darwin `forkpty` Supervisor & Pipe Supervisor (`env -i PATH=/nonexistent`, zero `node-gyp`), Incremental Normalized Streaming Redactor, Read-Only GUI Inspection / Kill (`session.*`), and Durable `session_watch` Triggers
-- [ ] **BG-2** *(SQLite v13, held pending frontend parity sync)* — Standing Local Execution Grants, Constrained `schedule.precheck` Observation Diffs, Durable Timers & Recurring Schedules (DST/missed-slot/sleep-wake policy), Staged At-Most-Once Queue Claims (`bot_event_inbox`), and Dormant Backup/Import Policy
-- [ ] **BG-3** *(SQLite v14, held pending frontend parity sync)* — Dedicated Private `OrchestrationActor` (`SessionManager.inMemory` generations + compact CAS checkpoints + full-request token budgeting + RFC-0003 `utility` default), Human-Queued `maxActiveTasks` Priority, Three-Way Attention Gate, Draft-Safe Product Timeline Notices (`conversation_notify`), Causal Lack-of-Progress Backoff, and Native Window Hide vs Explicit `Cmd-Q` Shutdown Separation
+- [x] **BG-1** *(SQLite v12 — Shipped)* — Worker-Owned Stateful Session Handles (`session_open`, `session_read`, `session_write`, `session_signal`, `session_resize`, `session_eof`, `session_close`, `session_list`), Bundled Native Darwin `forkpty` Supervisor & Pipe Supervisor (`env -i PATH=/nonexistent`, zero `node-gyp`), Incremental Normalized Streaming Redactor, Read-Only GUI Inspection / Kill (`session.*`), and Durable `session_watch` Triggers
+- [ ] **BG-2** *(SQLite v13)* — Standing Local Execution Grants, Constrained `schedule.precheck` Observation Diffs, Durable Timers & Recurring Schedules (DST/missed-slot/sleep-wake policy), Staged At-Most-Once Queue Claims (`bot_event_inbox`), and Dormant Backup/Import Policy
+- [ ] **BG-3** *(SQLite v14)* — Dedicated Private `OrchestrationActor` (`SessionManager.inMemory` generations + compact CAS checkpoints + full-request token budgeting + RFC-0003 `utility` default), Human-Queued `maxActiveTasks` Priority, Three-Way Attention Gate, Draft-Safe Product Timeline Notices (`conversation_notify`), Causal Lack-of-Progress Backoff, and Native Window Hide vs Explicit `Cmd-Q` Shutdown Separation
 
 ---
 

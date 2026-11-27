@@ -57,6 +57,7 @@ def install_payload(payload: Path, destination: Path, pin: dict) -> dict:
     if any(manifest["node"][key] != value for key, value in pin["node"].items()):
         raise ValueError("worker manifest differs from the current Node pin")
     inputs = [WORKER / name for name in ("package.json", "package-lock.json", "tsconfig.json")]
+    inputs.append(WORKER / "pty-supervisor.c")
     inputs.extend(WORKER.glob("*.ts"))
     inputs.extend((PIN_PATH, ROOT / "assets/licenses/Pi-MIT.txt", ROOT / "scripts/build-pi-worker.py"))
     inputs.extend(ROOT / patch["path"] for patch in pin["pi"]["patches"])
@@ -76,6 +77,11 @@ def install_payload(payload: Path, destination: Path, pin: dict) -> dict:
         raise ValueError("installed worker bytes differ from the worker manifest")
     if files["bin/node"]["sha256"] != manifest["node"]["binary_sha256"]:
         raise ValueError("Node binary differs from its recorded runtime hash")
+    supervisor = destination / "bin/nagi-pty-supervisor"
+    if files["bin/nagi-pty-supervisor"]["sha256"] != manifest["supervisor"]["binary_sha256"]:
+        raise ValueError("supervisor binary differs from its recorded hash")
+    minimum_os(supervisor)
+    subprocess.run(["/usr/bin/codesign", "--verify", "--strict", supervisor], check=True)
     if files["package-lock.json"]["sha256"] != pin["pi"]["lock_sha256"]:
         raise ValueError("bundled worker lock differs from the Pi pin")
     write_json(destination / "manifest.json", manifest)
@@ -150,7 +156,8 @@ def build(destination: Path, payload: Path) -> dict:
             raise ValueError("GUI build information differs from the clean package source")
         node = worker_root / "bin/node"
         worker = worker_root / "dist/worker.js"
-        floors = {"gui": minimum_os(gui), "node": minimum_os(node), "bundle": MINIMUM_OS}
+        floors = {"gui": minimum_os(gui), "node": minimum_os(node),
+                  "supervisor": minimum_os(worker_root / "bin/nagi-pty-supervisor"), "bundle": MINIMUM_OS}
         plist = {
             "CFBundleDevelopmentRegion": "en",
             "CFBundleDisplayName": "Nagi",
@@ -177,6 +184,7 @@ def build(destination: Path, payload: Path) -> dict:
             "minimum_os": floors,
             "gui": {"build_info": build_info, "unsigned_sha256": sha256(gui)},
             "node": runtime["node"],
+            "supervisor": runtime["supervisor"],
             "pi": runtime["pi"],
             "runtime": {"manifest_sha256": sha256(worker_root / "manifest.json"), "worker_sha256": sha256(worker), "pin_sha256": sha256(PIN_PATH)},
             "licenses": licenses,

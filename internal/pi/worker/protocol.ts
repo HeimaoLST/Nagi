@@ -169,7 +169,7 @@ const activityDigest = Type.Object({ factId: id, activityId: id, ownerBotId: id,
     Type.Literal('question_auto_saved'), Type.Literal('approval_required')]) });
 export type ActivityDigest = Static<typeof activityDigest>;
 const targetSchema = Type.Union([
-  Type.Object({ conversationId: id }), Type.Object({ botId: id }),
+  Type.Object({ conversationId: id }), Type.Object({ botId: id, sessionId: Type.Optional(id) }),
   Type.Object({ activityId: id, questionId: Type.Optional(id) }), Type.Object({ connection: Type.Literal(true) }),
 ]);
 const operationTarget = { operationId: id, expectedRevision: revision };
@@ -242,6 +242,54 @@ const memoryOwner = { botId: id };
 const memoryOperation = { ...memoryOwner, operationId: id };
 const memorySearch = { ...memoryOwner, query: memorySearchQuery, dateFrom: Type.Optional(memoryDate), dateTo: Type.Optional(memoryDate),
   limit: Type.Optional(memorySearchLimit) };
+const sessionStrict = { additionalProperties: false };
+const sessionTarget = { botId: id, sessionId: id };
+const sessionGeneration = { ...sessionTarget, generation: positiveInteger };
+export const sessionState = Type.Union([Type.Literal('starting'), Type.Literal('running'), Type.Literal('exited'),
+  Type.Literal('closed'), Type.Literal('disconnected'), Type.Literal('failed')]);
+export const sessionMode = Type.Union([Type.Literal('pty'), Type.Literal('pipe')]);
+export const sessionDimension = Type.Integer({ minimum: 1, maximum: 65535 });
+export const sessionReadLimit = Type.Integer({ minimum: 1024, maximum: 65536 });
+const sessionTransport = Type.Union([Type.Literal('live'), Type.Literal('eof'), Type.Literal('supervisor_lost'),
+  Type.Literal('worker_restarted'), Type.Literal('closed_by_user'), Type.Literal('closed_by_bot'),
+  Type.Literal('closed_on_shutdown'), Type.Literal('exec_failed')]);
+const authPause = Type.Optional(Type.Object({ paused: Type.Boolean(), reason: Type.Optional(id), message: Type.Optional(id) }, sessionStrict));
+const exitCode = Type.Optional(Type.Union([revision, Type.Null()]));
+const exitSignal = Type.Optional(id);
+const watchCondition = Type.Union([Type.Literal('exit'), Type.Literal('match'), Type.Literal('idle'), Type.Literal('timeout')]);
+const watchFiredKind = Type.Union([...watchCondition.anyOf, Type.Literal('target_lost')]);
+export const sessionWatchSummary = Type.Object({ watchId: id, sessionId: id, generation: positiveInteger, revision: positiveInteger,
+  state: Type.Union([Type.Literal('armed'), Type.Literal('fired'), Type.Literal('cancelled'), Type.Literal('target_lost')]),
+  conditions: Type.Array(watchCondition, { minItems: 1, maxItems: 4, uniqueItems: true }), startOffset: revision,
+  matchLiteral: Type.Optional(id), idleMs: Type.Optional(positiveInteger), timeoutMs: Type.Optional(positiveInteger),
+  firedKind: Type.Optional(watchFiredKind), occurrenceId: Type.Optional(id), firedAt: Type.Optional(id),
+  firedOffset: Type.Optional(revision), matchedExcerpt: Type.Optional(Type.String()),
+}, sessionStrict);
+export const sessionWatchOccurrence = Type.Object({ occurrenceId: id, watchId: id, sessionId: id, ownerBotId: id,
+  generation: positiveInteger, firedKind: watchFiredKind, firedAt: id, firedOffset: Type.Optional(revision),
+  matchedExcerpt: Type.Optional(Type.String()) }, sessionStrict);
+const sessionWatermark = { firstAvailableOffset: revision, nextOffset: revision, evictedBytes: revision, eof: Type.Boolean() };
+export const sessionSummary = Type.Object({ sessionId: id, ownerBotId: id, originConversationId: Type.Optional(id), originActivityId: Type.Optional(id),
+  creatingOperationId: id, generation: positiveInteger, revision: positiveInteger, label: Type.Optional(Type.String()), commandSummary: Type.String(),
+  cwd: id, mode: sessionMode, cols: Type.Optional(sessionDimension), rows: Type.Optional(sessionDimension), state: sessionState,
+  exitCode, exitSignal, transportStatus: sessionTransport, ...sessionWatermark, authPause, watches: Type.Array(sessionWatchSummary),
+  error: Type.Optional(Type.String()), createdAt: id, updatedAt: id, settledAt: Type.Optional(id),
+}, sessionStrict);
+const sessionOutputUpdated = Type.Object({ sessionId: id, ownerBotId: id, generation: positiveInteger, ...sessionWatermark, at: id }, sessionStrict);
+export const sessionChunk = Type.Object({ stream: Type.Union([Type.Literal('pty'), Type.Literal('stdout'), Type.Literal('stderr')]),
+  offset: revision, nextOffset: revision, text: Type.String() }, sessionStrict);
+const sessionReadResult = Type.Object({ sessionId: id, generation: positiveInteger, revision: positiveInteger, mode: sessionMode, state: sessionState,
+  firstAvailableOffset: revision, fromOffset: revision, nextOffset: revision, highWaterOffset: revision, eof: Type.Boolean(),
+  gap: Type.Boolean(), gapBytes: revision, authPause, chunks: Type.Array(sessionChunk) }, sessionStrict);
+const sessionCloseResult = Type.Object({ sessionId: id, generation: positiveInteger, revision: positiveInteger, state: sessionState,
+  closeDisposition: Type.Union([Type.Literal('terminated'), Type.Literal('already_settled')]), childReaped: Type.Boolean(),
+  exitCode, exitSignal, transportStatus: sessionTransport }, sessionStrict);
+export type SessionSummary = Static<typeof sessionSummary>;
+export type SessionWatchSummary = Static<typeof sessionWatchSummary>;
+export type SessionWatchOccurrence = Static<typeof sessionWatchOccurrence>;
+export type SessionChunk = Static<typeof sessionChunk>;
+export type SessionReadResult = Static<typeof sessionReadResult>;
+export type SessionCloseResult = Static<typeof sessionCloseResult>;
 export const productCommands = Type.Union([
   Type.Object({ method: Type.Literal('app.open'), params: Type.Object({ supportedVersions: Type.Array(positiveInteger, { minItems: 1 }) }) }),
   Type.Object({ method: Type.Literal('bot.list'), params: Type.Object(page) }),
@@ -322,6 +370,14 @@ export const productCommands = Type.Union([
   Type.Object({ method: Type.Literal('mcp.delete'), params: Type.Object({ serverId: mcpServerId, operationId: id }, mcpStrict) }),
   Type.Object({ method: Type.Literal('mcp.test'), params: Type.Object({ serverId: Type.Optional(mcpServerId), server: Type.Optional(mcpServerInput), secrets: mcpSecretInput }, mcpStrict) }),
   Type.Object({ method: Type.Literal('mcp.status'), params: Type.Object({}, mcpStrict) }),
+  Type.Object({ method: Type.Literal('session.list'), params: Type.Object({ botId: id,
+    states: Type.Optional(Type.Array(sessionState, { minItems: 1, maxItems: 6, uniqueItems: true })),
+    cursor: Type.Optional(id), limit: inspectionPage.limit }, sessionStrict) }),
+  Type.Object({ method: Type.Literal('session.get'), params: Type.Object(sessionTarget, sessionStrict) }),
+  Type.Object({ method: Type.Literal('session.read'), params: Type.Object({ ...sessionGeneration,
+    offset: Type.Optional(revision), limit: Type.Optional(sessionReadLimit) }, sessionStrict) }),
+  Type.Object({ method: Type.Literal('session.close'), params: Type.Object({ ...sessionGeneration,
+    expectedRevision: Type.Optional(revision), operationId: id }, sessionStrict) }),
   Type.Object({ method: Type.Literal('operation.get'), params: Type.Object({ operationId: id }) }),
   Type.Object({ method: Type.Literal('profile.backup'), params: Type.Object({ destination: id }) }),
   Type.Object({ method: Type.Literal('app.shutdown'), params: Type.Object({}) }),
@@ -347,6 +403,8 @@ export const productEvents = Type.Union([
   Type.Object({ event: Type.Literal('activity.traceUpdated'), data: Type.Object({ activityId: id, executionId: id, lastSeq: positiveInteger }) }),
   Type.Object({ event: Type.Literal('activity.changed'), data: Type.Object({ ...activityFields, ...approvalRequests, ...steers }) }),
   Type.Object({ event: Type.Literal('activity.digest'), data: activityDigest }),
+  Type.Object({ event: Type.Literal('session.changed'), data: sessionSummary }),
+  Type.Object({ event: Type.Literal('session.outputUpdated'), data: sessionOutputUpdated }),
 ]);
 export const productRequestSchema = Type.Intersect([
   Type.Object({ v: Type.Literal(1), type: Type.Literal('request'), id }), productCommands,
@@ -446,6 +504,11 @@ export const productResults = {
   'mcp.delete': Type.Object({ deleted: Type.Literal(true) }),
   'mcp.test': mcpTestResult,
   'mcp.status': Type.Object({ pools: Type.Array(mcpPool) }),
+  'session.list': Type.Object({ items: Type.Array(sessionSummary), nextCursor: nullable(id) }, sessionStrict),
+  'session.get': sessionSummary,
+  'session.read': sessionReadResult,
+  'session.close': Type.Object({ operationId: id, state: operationSchema.properties.state,
+    target: Type.Object(sessionTarget, sessionStrict), result: sessionCloseResult }, sessionStrict),
   'operation.get': operationSchema,
   'profile.backup': Type.Object({ path: id }),
   'app.shutdown': Type.Object({ drained: Type.Literal(true) }),
