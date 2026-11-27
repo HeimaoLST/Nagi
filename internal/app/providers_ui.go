@@ -903,7 +903,7 @@ func (a *appModel) providerCatalogSection(c *ui.Context, t *ui.Theme, msgs local
 						theme.BrandIcon(c, a.providerIcon(preset), 18)
 					}
 				})
-				ui.Text(c, label).MinWidth(0).FontSize(typeAction).FontWeight(500)
+				ui.Text(c, label).MinWidth(0).FontSize(typeAction).FontWeight(500).TextColor(t.Text)
 			})
 			button.OnClick(toggle)
 			return
@@ -916,7 +916,7 @@ func (a *appModel) providerCatalogSection(c *ui.Context, t *ui.Theme, msgs local
 				button := providerDirectoryButton(c, t, name, !blocked && (canAdd || exists)).FillWidth().Padding(8, 12).Gap(10)
 				button.Children(func() {
 					theme.BrandIcon(c, a.providerIcon(preset), 22)
-					text := ui.Text(c, name).MinWidth(0).Shrink(1).MaxLines(1).Ellipsis("…").FontSize(typeAction)
+					text := ui.Text(c, name).MinWidth(0).Shrink(1).MaxLines(1).Ellipsis("…").FontSize(typeAction).TextColor(t.Text)
 					if exists {
 						providerDot(c, ink)
 					} else if tag := preset.Tag.Resolve(c.Locale()); tag != "" {

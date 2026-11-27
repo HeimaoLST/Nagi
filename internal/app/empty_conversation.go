@@ -91,7 +91,7 @@ func pandoraBoxStarters(msgs locales.Messages) [3]string {
 }
 
 func (a *appModel) starterPromptRow(c *ui.Context, t *ui.Theme, ct *contact, prompt string) {
-	button := ui.ButtonBase(c).Key(prompt).Label(prompt).FillWidth().MinWidth(0).MinHeight(34).Padding(6, 10).Radius(8).
+	button := ui.ButtonBase(c).Key(prompt).Label(prompt).FillWidth().MinWidth(0).MinHeight(34).Padding(6, 10).Radius(theme.ControlRadius).
 		Justify(ui.Start).AlignItems(ui.Center).Gap(10).Background(ui.Transparent).BorderWidth(0).
 		Disabled(ct.Archived || a.shutdownStarted || a.dataRecoveryBlocksChanges())
 	ink := t.TextMuted
@@ -104,9 +104,12 @@ func (a *appModel) starterPromptRow(c *ui.Context, t *ui.Theme, ct *contact, pro
 		ink = t.Text
 	}
 	button.Children(func() {
-		ui.Icon(c, theme.GlyphChat3Line).Size(15, 15).Shrink(0).TextColor(ink).IgnoreInput(true)
-		ui.Text(c, prompt).Grow(1).MinWidth(0).MaxLines(1).FontSize(typeAction).FixedLineHeight(lineCompact).TextColor(ink)
+		ui.Box(c).Size(16, 16).Shrink(0).AlignItems(ui.Center).Justify(ui.Center).IgnoreInput(true).Children(func() {
+			ui.Icon(c, theme.GlyphChat3Line).Size(15, 15).Shrink(0).TextColor(ink).IgnoreInput(true)
+		})
+		ui.Text(c, prompt).Grow(1).MinWidth(0).MaxLines(1).Ellipsis("…").FontSize(typeAction).FixedLineHeight(lineCompact).TextColor(ink)
 	})
+	appTooltip(c, theme.TransitionControl(button, t), prompt)
 	button.OnClick(func() {
 		ct.Draft = prompt
 		a.draftChanged(ct)

@@ -271,7 +271,7 @@ func (e *contactProfileEditor) saveView(c *ui.Context, t *ui.Theme, actions cont
 	msgs := locales.In(c.Locale())
 	dirty := !profileDraftEqual(e.Draft, e.initial)
 	ui.Column(c).Key("profile-save").MinWidth(0).Shrink(0).Gap(4).Children(func() {
-		ui.Row(c).Gap(8).Wrap().AlignItems(ui.Center).Children(func() {
+		ui.Row(c).MinWidth(0).AlignSelf(ui.Start).Gap(8).Wrap().AlignItems(ui.Center).Children(func() {
 			primaryButton(c, msgs.ContactSaveChanges()).Disabled(blocked).OnClick(func() {
 				if draft, ok := e.Request(false); ok && actions.Save != nil {
 					actions.Save(draft)
@@ -301,8 +301,8 @@ func (e *contactProfileEditor) managementView(c *ui.Context, t *ui.Theme, action
 		return
 	}
 	msgs := locales.In(c.Locale())
-	ui.Row(c).Key("profile-management").FillWidth().AlignItems(ui.Center).Justify(ui.SpaceBetween).Gap(8).Padding(8, 0, 0).Children(func() {
-		ui.Text(c, msgs.ProfileContactManagement()).FontSize(typeLabel).FontWeight(500).FixedLineHeight(lineLabel).TextColor(t.Text)
+	ui.Row(c).Key("profile-management").FillWidth().MinWidth(0).Wrap().AlignItems(ui.Center).Justify(ui.SpaceBetween).Gap(8).Padding(4, 0, 0).Children(func() {
+		ui.Text(c, msgs.ProfileContactManagement()).MinWidth(0).FontSize(typeLabel).FontWeight(500).FixedLineHeight(lineLabel).TextColor(t.Text)
 		if actions.ToggleVisibility != nil {
 			secondaryButton(c, actions.VisibilityLabel).Disabled(actions.VisibilityDisabled).OnClick(actions.ToggleVisibility)
 		} else if e.Archived && actions.Restore != nil {
