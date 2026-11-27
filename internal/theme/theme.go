@@ -400,8 +400,7 @@ func actionButton(c *ui.Context, label string, ink, background, hover, pressed, 
 	button := ui.Button(c, label).Label(label).Height(ControlHit).MinHeight(ControlHit).MinWidth(ControlHit).
 		Radius(0).Background(ui.Transparent).Border(0, ui.Transparent).FocusRing(false).
 		FontSize(TypeAction).FontWeight(500).FixedLineHeight(LineAction).TextColor(ink).Padding(8, 12).Gap(6)
-	TransitionControl(button, t)
-	return button.Draw(func(p *ui.Painter, r ui.Rect) {
+	return TransitionControl(button, t).Draw(func(p *ui.Painter, r ui.Rect) {
 		r.Y, r.H = r.Y+2, r.H-4
 		fill := background
 		switch {
