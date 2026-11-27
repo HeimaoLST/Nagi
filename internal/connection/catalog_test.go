@@ -90,6 +90,10 @@ func TestProviderCatalogLocalizedTextResolveAndMatchAccount(t *testing.T) {
 	if got := onlyJa.Resolve("en"); got != "日本語" {
 		t.Fatalf("Resolve fallback without en = %q, want 日本語", got)
 	}
+	withDashKey := LocalizedText{"-x": "DashPrefix", "en": "English"}
+	if got := withDashKey.Resolve(""); got != "English" {
+		t.Fatalf("Resolve(\"\") matched dash key = %q, want English", got)
+	}
 	if got := (LocalizedText{}).Resolve("en"); got != "" {
 		t.Fatalf("empty LocalizedText resolved to %q", got)
 	}
@@ -158,6 +162,7 @@ func TestProviderCatalogLayeredPluginsOverridesHiddenAndSecurity(t *testing.T) {
     {"id": "escape-gw", "section": "enterprise", "order": 20, "name": {"en": "Escape Test"}, "icon": "escape.svg", "endpoint": "https://escape.invalid/v1", "wireApi": "openai-completions", "defaultModel": "m1"},
     {"id": "huge-gw", "section": "enterprise", "order": 30, "name": {"en": "Huge Test"}, "icon": "huge.svg", "endpoint": "https://huge.invalid/v1", "wireApi": "openai-completions", "defaultModel": "m1"},
     {"id": "traversal-gw", "section": "enterprise", "order": 40, "name": {"en": "Traversal"}, "icon": "../secret.svg", "endpoint": "https://trav.invalid/v1", "wireApi": "openai-completions", "defaultModel": "m1"},
+    {"id": "nulicon-gw", "section": "enterprise", "order": 45, "name": {"en": "NulIcon"}, "icon": "bad\u0000.svg", "endpoint": "https://nul.invalid/v1", "wireApi": "openai-completions", "defaultModel": "m1"},
     {"id": "badwire-gw", "section": "enterprise", "order": 50, "name": {"en": "Bad Wire"}, "endpoint": "https://bad.invalid/v1", "wireApi": "anthropic-messages", "defaultModel": "m1"},
     {"id": "openai", "defaultModel": "gpt-5-plugin"}
   ]
@@ -206,6 +211,9 @@ func TestProviderCatalogLayeredPluginsOverridesHiddenAndSecurity(t *testing.T) {
 	}
 	if _, ok := cat.PresetByID("traversal-gw"); ok {
 		t.Fatal("path-traversal icon preset was admitted")
+	}
+	if _, ok := cat.PresetByID("nulicon-gw"); ok {
+		t.Fatal("NUL-byte icon preset was admitted")
 	}
 	if _, ok := cat.PresetByID("badwire-gw"); ok {
 		t.Fatal("unsupported wireApi preset was admitted")

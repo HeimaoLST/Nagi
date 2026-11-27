@@ -32,8 +32,6 @@ func (a *appModel) view(c *ui.Context) {
 	if !a.settingsOpen {
 		a.linkReturnSeen = false
 	}
-	// Context.begin resets this to the system theme on every pass, so this is
-	// the live system appearance even while an explicit mode is shown.
 	a.systemDark = c.Theme().Dark
 	a.workTheme = a.resolveAppearanceTheme(resolveAppearanceDark(a.appearanceMode, a.systemDark)).Palette
 	t := a.workTheme.Theme
@@ -56,8 +54,6 @@ func (a *appModel) view(c *ui.Context) {
 		c.OnShortcut(0, ui.KeyEscape, func() { a.escapeTopLayer() })
 	}
 	ui.Column(c).Fill().LinearGradient(ui.LinearGradient{From: a.workTheme.ChromeFrom, To: a.workTheme.ChromeTo, Angle: 180}).Children(func() {
-		// The reference chrome shares the controls' band on macOS. Full pages,
-		// narrow rails and platforms with right-side controls reserve it.
 		titleBarHeight := c.TitleBar().Height
 		if a.settingsOpen || c.TitleBar().Right == 0 && !a.mainPageActive() && !a.detailPageActive() && !a.railCollapsed && !a.avatarRailActive() {
 			titleBarHeight = 0
@@ -131,11 +127,6 @@ func (a *appModel) settingsSourceForVisiblePage() string {
 	}
 }
 
-func (a *appModel) openSettingsFromContext(c *ui.Context, tab, source string) {
-	a.captureLinkSettingsSource(c, &source)
-	a.openSettingsTab(tab, source)
-}
-
 func (a *appModel) armActiveSurfaceFallback() {
 	switch {
 	case a.priorChats != nil:
@@ -200,8 +191,6 @@ func (a *appModel) finishMarkdownLinkReturn() {
 	a.markdownLinkFocus = markdownLinkTarget{}
 	a.linkReturnTarget = markdownLinkTarget{}
 }
-
-// ---------- rail ----------
 
 func (a *appModel) rail(c *ui.Context, t *ui.Theme) {
 	msgs := locales.In(c.Locale())
@@ -722,8 +711,6 @@ func (a *appModel) header(c *ui.Context, t *ui.Theme, ct *contact, visual botSta
 	})
 }
 
-// ---------- chat ----------
-
 func (a *appModel) chat(c *ui.Context, t *ui.Theme, state connectionViewState, showConnectionSettings bool) {
 	ct := a.selectedContact()
 	messages := ct.Messages
@@ -1213,10 +1200,9 @@ func (a *appModel) alert(c *ui.Context, t *ui.Theme, m *message) {
 	})
 }
 
+// knownConnectionFailure matches the "code: " prefix emitted by runtimeMessage
+// rather than arbitrary diagnostics containing the word.
 func knownConnectionFailure(text string) bool {
-	// runtimeMessage prefixes typed errors as "code: message". Match the code
-	// exactly rather than treating an arbitrary diagnostic containing the word
-	// as a known connection failure.
 	return strings.HasPrefix(strings.TrimSpace(text), "connection_mismatch:")
 }
 
@@ -1255,8 +1241,6 @@ func (a *appModel) connectionErrorBanner(c *ui.Context, t *ui.Theme, ct *contact
 	})
 	return false
 }
-
-// ---------- composer ----------
 
 func contactNoticeText(msgs locales.Messages, kind, detail string) string {
 	switch kind {
@@ -1486,8 +1470,6 @@ func (a *appModel) composer(c *ui.Context, t *ui.Theme, state connectionViewStat
 	})
 }
 
-// ---------- main pages ----------
-
 func (a *appModel) openConfiguration() {
 	a.openSettingsTab(settingsTabConnection, settingsSourceConnection)
 }
@@ -1588,9 +1570,6 @@ func toolOutputSummary(msgs locales.Messages, output string) string {
 	if body != "" {
 		return body
 	}
-	// Structured tool results such as write/edit receipts have no readable
-	// assistant body. Keep the exact record in Details/Copy, but do not present
-	// raw JSON as a result preview.
 	return msgs.ToolOutputStructured()
 }
 

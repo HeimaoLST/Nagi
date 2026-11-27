@@ -234,10 +234,10 @@ func TestStoreRecoveryRejectsUnsupportedCopies(t *testing.T) {
 			case "missing-ledger":
 				state.IssueToolOperations = nil
 			case "invalid-scope":
-				state.IssueToolScopes = []ActivityToolScope{{Ref: "bad"}}
+				state.IssueToolScopes = []activityToolScope{{Ref: "bad"}}
 			case "duplicate-scope":
-				scope := ActivityToolScope{Ref: "same", ContactID: state.Selected, RuntimeSessionID: "session", TurnID: "turn"}
-				state.IssueToolScopes = []ActivityToolScope{scope, scope}
+				scope := activityToolScope{Ref: "same", ContactID: state.Selected, RuntimeSessionID: "session", TurnID: "turn"}
+				state.IssueToolScopes = []activityToolScope{scope, scope}
 			case "legacy-requirements":
 				extra = kind
 			case "revision":
@@ -359,7 +359,7 @@ func TestStoreRecoveryOptionalDefaultsAndUnknownRecords(t *testing.T) {
 			state := recoveryProducedState(t)
 			state.Appearance, state.Layout = "", nil
 			state.ThemeIDs = &appearanceThemeIDs{Light: "missing-custom-theme"}
-			state.IssueToolOperations = &ActivityToolOperationLedger{}
+			state.IssueToolOperations = &activityToolOperationLedger{}
 			state.Contacts[0].SelectedIssueID = ""
 			issue := &state.Issues[0]
 			switch kind {

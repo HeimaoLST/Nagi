@@ -7,8 +7,8 @@ import (
 	"testing"
 )
 
-func issueToolScopeForTest() ActivityToolScope {
-	return ActivityToolScope{
+func issueToolScopeForTest() activityToolScope {
+	return activityToolScope{
 		Ref: "scope-turn-1", ContactID: "contact-x", RuntimeSessionID: "conversation-1",
 		TurnID: "turn-1", AllowedIssueIDs: []string{"issue-a", "issue-b"}, AllowCreate: true,
 		CreatedAt: 1,
@@ -22,13 +22,13 @@ func issueToolTestIssue(id, contactID, status string) *productActivity {
 	}
 }
 
-func issueToolCreateRequest(scope ActivityToolScope, goal string) ActivityToolActionRequest {
-	return ActivityToolActionRequest{ScopeRef: scope.Ref, Action: activityToolActionCreate, Goal: goal}
+func issueToolCreateRequest(scope activityToolScope, goal string) activityToolActionRequest {
+	return activityToolActionRequest{ScopeRef: scope.Ref, Action: activityToolActionCreate, Goal: goal}
 }
 
 // runReserved is the module consumer: it runs the side effect only after a new
 // operation was durably reserved. Duplicate/unknown/error paths do not call it.
-func runReserved(ledger *ActivityToolOperationLedger, scope ActivityToolScope, request ActivityToolActionRequest, save func() error, execute func(*ActivityToolOperation)) (*ActivityToolOperation, bool, error) {
+func runReserved(ledger *activityToolOperationLedger, scope activityToolScope, request activityToolActionRequest, save func() error, execute func(*activityToolOperation)) (*activityToolOperation, bool, error) {
 	operation, isNew, err := ledger.Reserve(scope, request, save)
 	if err != nil {
 		return nil, false, err
@@ -56,7 +56,7 @@ func TestIssueToolScopeIsOwnerBoundBeforeRuntimeTask(t *testing.T) {
 	if scopeAllowsActivity(scope, issueToolTestIssue("issue-a", "contact-y", activityStatusInProgress)) {
 		t.Fatal("other owner's issue was allowed")
 	}
-	if err := (ActivityToolActionRequest{ScopeRef: scope.Ref, Action: activityToolActionRun, IssueID: "issue-c"}).Validate(scope); err == nil {
+	if err := (activityToolActionRequest{ScopeRef: scope.Ref, Action: activityToolActionRun, IssueID: "issue-c"}).Validate(scope); err == nil {
 		t.Fatal("cross-issue action validation succeeded")
 	}
 }
@@ -115,7 +115,7 @@ func TestIssueToolListAndGetAreBoundedAndUseExistingFacts(t *testing.T) {
 
 func TestIssueToolReservationConsumerDoesNotRepeatOrReusePayload(t *testing.T) {
 	scope := issueToolScopeForTest()
-	ledger := &ActivityToolOperationLedger{}
+	ledger := &activityToolOperationLedger{}
 	saves, executions := 0, 0
 	executedIDs := []string{}
 	save := func() error {
@@ -123,7 +123,7 @@ func TestIssueToolReservationConsumerDoesNotRepeatOrReusePayload(t *testing.T) {
 		_, err := json.Marshal(ledger)
 		return err
 	}
-	execute := func(operation *ActivityToolOperation) {
+	execute := func(operation *activityToolOperation) {
 		executions++
 		executedIDs = append(executedIDs, operation.ID)
 	}
@@ -145,7 +145,7 @@ func TestIssueToolReservationConsumerDoesNotRepeatOrReusePayload(t *testing.T) {
 		!strings.Contains(err.Error(), "different payload") {
 		t.Fatalf("different payload = %v", err)
 	}
-	if _, _, err := runReserved(ledger, scope, ActivityToolActionRequest{ScopeRef: scope.Ref, Action: activityToolActionRun, IssueID: "issue-c"}, save, execute); err == nil ||
+	if _, _, err := runReserved(ledger, scope, activityToolActionRequest{ScopeRef: scope.Ref, Action: activityToolActionRun, IssueID: "issue-c"}, save, execute); err == nil ||
 		!strings.Contains(err.Error(), "scope") {
 		t.Fatalf("cross-issue = %v", err)
 	}
@@ -156,25 +156,25 @@ func TestIssueToolReservationConsumerDoesNotRepeatOrReusePayload(t *testing.T) {
 
 func TestIssueToolOperationPersistsAndDoesNotReplay(t *testing.T) {
 	scope := issueToolScopeForTest()
-	ledger := &ActivityToolOperationLedger{}
+	ledger := &activityToolOperationLedger{}
 	saves, executions := 0, 0
 	save := func() error {
 		saves++
 		_, err := json.Marshal(ledger)
 		return err
 	}
-	first, isNew, err := runReserved(ledger, scope, issueToolCreateRequest(scope, "reload goal"), save, func(*ActivityToolOperation) { executions++ })
+	first, isNew, err := runReserved(ledger, scope, issueToolCreateRequest(scope, "reload goal"), save, func(*activityToolOperation) { executions++ })
 	if err != nil || !isNew || first == nil {
 		t.Fatalf("first = %+v new=%v err=%v", first, isNew, err)
 	}
-	if err := ledger.SetReceipt(first.ID, &ActivityToolReceipt{State: activityToolReceiptUnknown}, save); err != nil {
+	if err := ledger.SetReceipt(first.ID, &activityToolReceipt{State: activityToolReceiptUnknown}, save); err != nil {
 		t.Fatal(err)
 	}
 	data, err := json.Marshal(ledger)
 	if err != nil {
 		t.Fatal(err)
 	}
-	var reloaded ActivityToolOperationLedger
+	var reloaded activityToolOperationLedger
 	if err := json.Unmarshal(data, &reloaded); err != nil {
 		t.Fatal(err)
 	}
@@ -182,7 +182,7 @@ func TestIssueToolOperationPersistsAndDoesNotReplay(t *testing.T) {
 	existing, isNew, err := runReserved(&reloaded, scope, issueToolCreateRequest(scope, "reload goal"), func() error {
 		reloadedSaves++
 		return nil
-	}, func(*ActivityToolOperation) { reloadedExecutions++ })
+	}, func(*activityToolOperation) { reloadedExecutions++ })
 	if err != nil || isNew || existing.ID != first.ID || reloadedSaves != 0 || reloadedExecutions != 0 {
 		t.Fatalf("reloaded duplicate = %+v new=%v saves=%d executions=%d err=%v", existing, isNew, reloadedSaves, reloadedExecutions, err)
 	}
@@ -193,12 +193,12 @@ func TestIssueToolOperationPersistsAndDoesNotReplay(t *testing.T) {
 
 func TestIssueToolReserveSaveFailureDoesNotConsumeAction(t *testing.T) {
 	scope := issueToolScopeForTest()
-	ledger := &ActivityToolOperationLedger{}
+	ledger := &activityToolOperationLedger{}
 	saves, executions := 0, 0
 	_, isNew, err := runReserved(ledger, scope, issueToolCreateRequest(scope, "save failure"), func() error {
 		saves++
 		return errActivityToolSaveRequired
-	}, func(*ActivityToolOperation) { executions++ })
+	}, func(*activityToolOperation) { executions++ })
 	if err == nil || isNew || len(ledger.Operations) != 0 || saves != 1 || executions != 0 {
 		t.Fatalf("save failure = new=%v operations=%d saves=%d executions=%d err=%v", isNew, len(ledger.Operations), saves, executions, err)
 	}
@@ -206,22 +206,22 @@ func TestIssueToolReserveSaveFailureDoesNotConsumeAction(t *testing.T) {
 
 func TestIssueToolSetReceiptRequiresCurrentLedgerMemberAndTarget(t *testing.T) {
 	scope := issueToolScopeForTest()
-	ledger := &ActivityToolOperationLedger{}
+	ledger := &activityToolOperationLedger{}
 	saves := 0
 	save := func() error { saves++; return nil }
-	operation, _, err := runReserved(ledger, scope, ActivityToolActionRequest{ScopeRef: scope.Ref, Action: activityToolActionRun, IssueID: "issue-a"}, save, func(*ActivityToolOperation) {})
+	operation, _, err := runReserved(ledger, scope, activityToolActionRequest{ScopeRef: scope.Ref, Action: activityToolActionRun, IssueID: "issue-a"}, save, func(*activityToolOperation) {})
 	if err != nil {
 		t.Fatal(err)
 	}
-	wrong := &ActivityToolOperationLedger{}
-	if err := wrong.SetReceipt(operation.ID, &ActivityToolReceipt{State: activityToolReceiptUnknown}, save); err == nil {
+	wrong := &activityToolOperationLedger{}
+	if err := wrong.SetReceipt(operation.ID, &activityToolReceipt{State: activityToolReceiptUnknown}, save); err == nil {
 		t.Fatal("foreign ledger accepted a receipt")
 	}
 	if saves != 1 {
 		t.Fatalf("foreign receipt save count = %d", saves)
 	}
-	accepted := &ActivityToolReceipt{State: activityToolReceiptAccepted, IssueID: "issue-a", ExecutionID: "e", SessionID: "s", TaskID: "t"}
-	if err := ValidateActivityToolReceipt(accepted); err == nil {
+	accepted := &activityToolReceipt{State: activityToolReceiptAccepted, IssueID: "issue-a", ExecutionID: "e", SessionID: "s", TaskID: "t"}
+	if err := validateActivityToolReceipt(accepted); err == nil {
 		t.Fatal("accepted receipt without an admitted Pi run passed")
 	}
 	accepted.PiRun = &piActivityRun{WorkerEpoch: "epoch", ContextID: "activity", SessionRef: "s", RunID: "t", Admitted: true}
@@ -241,7 +241,7 @@ func TestIssueToolSetReceiptRequiresCurrentLedgerMemberAndTarget(t *testing.T) {
 func TestIssueToolRevisionValidationKeepsInvalidActionSentinel(t *testing.T) {
 	scope := issueToolScopeForTest()
 	for _, action := range []string{activityToolActionUpdate, activityToolActionWait} {
-		request := ActivityToolActionRequest{
+		request := activityToolActionRequest{
 			ScopeRef: scope.Ref, Action: action, IssueID: "issue-a", Goal: "goal", Text: "text",
 		}
 		err := request.Validate(scope)

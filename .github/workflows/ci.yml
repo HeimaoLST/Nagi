@@ -43,7 +43,7 @@ jobs:
           NAGI_TEST_ONLINE: '0'
         run: |
           python3 scripts/gui-go.py vet ./...
-          python3 scripts/gui-go.py test ./cmd/nagi ./internal/app ./internal/connection ./internal/locale ./internal/markdown ./internal/materials ./internal/store ./internal/theme ./locales -count=1
+          python3 scripts/gui-go.py test ./cmd/nagi ./internal/app ./internal/connection ./internal/locale ./internal/markdown ./internal/materials ./internal/pi ./internal/store ./internal/theme ./locales -count=1
           python3 scripts/gui-go.py test github.com/egoist/mygo/ui -run '^(TestSplitReleaseBeforeFrame|TestTextAreaDragReleaseBeforeFrame)$' -count=1 -v
           GOARCH=arm64 python3 scripts/gui-go.py build -trimpath -mod=readonly -buildvcs=true -o "$RUNNER_TEMP/Nagi" ./cmd/nagi
       - name: Headless previews
@@ -88,6 +88,16 @@ jobs:
           package-manager-cache: false
       - name: Build external pinned worker payload
         run: python3 scripts/build-pi-worker.py --runtime "$RUNNER_TEMP/node-runtime" --output "$RUNNER_TEMP/pi-payload"
+      - name: Worker and domain unit tests
+        env:
+          CGO_ENABLED: '0'
+          NAGI_TEST_ONLINE: '0'
+          NAGI_TEST_NODE: ${{ runner.temp }}/pi-payload/bin/node
+          NAGI_TEST_WORKER: ${{ runner.temp }}/pi-payload/dist/worker.js
+          NAGI_WORKER_DIST: ${{ runner.temp }}/pi-payload/dist
+        run: |
+          "$NAGI_TEST_NODE" --test internal/pi/worker/tests/*.test.mjs
+          python3 scripts/gui-go.py test -v ./internal/pi -run TestWorkerDomainUnits -count=1
       - name: Assemble signed standalone app
         run: python3 scripts/build-macos-app.py --payload "$RUNNER_TEMP/pi-payload" --output "$RUNNER_TEMP/nagi-app"
       - name: Pi process and product integration

@@ -7,10 +7,10 @@ const providerId = Type.String({ pattern: '^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$' })
 const count = Type.Integer({ minimum: 1, maximum: Number.MAX_SAFE_INTEGER });
 const wireApi = Type.Union([Type.Literal('openai-completions'), Type.Literal('openai-responses')]);
 export const policySchema = Type.Union([Type.Literal('economy'), Type.Literal('balanced'), Type.Literal('quality')]);
-export const roleSchema = Type.Union([Type.Literal('dialogue'), Type.Literal('coding'), Type.Literal('reasoning'), Type.Literal('utility')]);
+const roleSchema = Type.Union([Type.Literal('dialogue'), Type.Literal('coding'), Type.Literal('reasoning'), Type.Literal('utility')]);
 export const thinkingSchema = Type.Union([Type.Literal('off'), Type.Literal('low'), Type.Literal('medium'), Type.Literal('high')]);
-export const activityKind = Type.Union([Type.Literal('coding'), Type.Literal('research'), Type.Literal('writing'), Type.Literal('ops'), Type.Literal('quick')]);
-export const activityComplexity = Type.Union([Type.Literal('light'), Type.Literal('standard'), Type.Literal('deep')]);
+const activityKind = Type.Union([Type.Literal('coding'), Type.Literal('research'), Type.Literal('writing'), Type.Literal('ops'), Type.Literal('quick')]);
+const activityComplexity = Type.Union([Type.Literal('light'), Type.Literal('standard'), Type.Literal('deep')]);
 export const activityRouting = Type.Object({ kind: Type.Optional(activityKind), complexity: Type.Optional(activityComplexity),
   constraints: Type.Optional(Type.Array(Type.String({ maxLength: 1024 }), { maxItems: 32 })) }, strict);
 
@@ -86,15 +86,30 @@ export type ActivityRouting = Static<typeof activityRouting>;
 export type Escalation = Static<typeof escalationSchema>;
 
 export type RoutingOverrides = Static<typeof overridesSchema>;
-export type RoutingOverride = Static<typeof savedPin>;
-export type RoutingOverridesPatch = Static<typeof overridesPatchSchema>;
+type RoutingOverride = Static<typeof savedPin>;
+type RoutingOverridesPatch = Static<typeof overridesPatchSchema>;
 export type RoleStatus = Static<typeof roleStatus>;
 export type RouteHealthView = Static<typeof routeHealth>;
 export type HealthSummary = Static<typeof healthSummary>;
 export type RouteRequirements = { requiresTools: boolean; inputTokens: number };
-export type RouteDecision = { route: CapturedRoute | null; status: RoleStatus };
+type RouteDecision = { route: CapturedRoute | null; status: RoleStatus };
 type CredentialStatus = 'ready' | 'credential_missing' | 'auth_failed';
 type Scope = Pick<CapturedRoute, 'providerId' | 'baseUrl' | 'wireApi'>;
+type RouteCandidate = {
+  account: ProviderAccount;
+  priority: number;
+  supply: ReturnType<typeof modelSupply>;
+  thinkingLevel: ThinkingLevel;
+  cap: number;
+  score: number;
+};
+type ResolveRoleOptions = {
+  pin?: RoutingOverride;
+  deep?: boolean;
+  requirements?: RouteRequirements;
+  credential: (account: ProviderAccount) => CredentialStatus;
+  cooldown: (route: Scope & { resolvedModel: string; credentialSourceId: string }) => number | undefined;
+};
 
 const costScores: Record<CostTier, number> = { free: 100, low: 85, mid: 60, high: 30, flagship_pro: 5, unknown: 55 };
 const policies = { quality: { margin: 10, weights: [65, 10, 5, 20] }, balanced: { margin: 20, weights: [45, 15, 15, 25] },
@@ -172,28 +187,36 @@ export function publicRoute(route: CapturedRoute) {
   return { providerId, credentialSourceId, providerName, resolvedModel, role, thinkingLevel, canonicalModelId, source, costTier, reason, failover };
 }
 
-export function resolveRole(accounts: readonly ProviderAccount[], effectiveRevision: number, policy: RoutingPolicy, role: ModelRole,
-  options: { pin?: RoutingOverride; deep?: boolean; requirements?: RouteRequirements;
-    credential: (account: ProviderAccount) => CredentialStatus;
-    cooldown: (route: Scope & { resolvedModel: string; credentialSourceId: string }) => number | undefined }): RouteDecision {
-  const { pin, deep, requirements = { requiresTools: true, inputTokens: 0 }, credential, cooldown } = options;
-  const mode = pin?.mode ?? 'auto';
-  const unavailable = (reason: NonNullable<RoleStatus['unavailableReason']>, retryAt?: number): RouteDecision => ({ route: null,
-    status: { mode, status: reason === 'auth_failed' || reason === 'credential_missing' || reason === 'cooldown' || reason === 'incompatible' || reason === 'empty_pool'
-      ? reason : 'pin_unavailable', unavailableReason: reason, ...(retryAt === undefined ? {} : { retryAt: new Date(retryAt).toISOString() }) } });
-  const pinnedAccount = pin?.mode === 'route' ? accounts.find(account => account.providerId === pin.providerId) : undefined;
-  if (pin?.mode === 'route') {
-    if (!pinnedAccount) return unavailable('provider_deleted');
-    if (endpointFingerprint(pinnedAccount) !== pin.endpointFingerprint) return unavailable('endpoint_changed');
-    if (!pinnedAccount.enabled) return unavailable('provider_disabled');
-    if (!activeModels(pinnedAccount).has(pin.model) || !authorizedSupply(pinnedAccount, pin.model).authorized) return unavailable('model_disabled');
-  }
+function unavailableDecision(mode: RoleStatus['mode'], reason: NonNullable<RoleStatus['unavailableReason']>, retryAt?: number): RouteDecision {
+  const status = reason === 'auth_failed' || reason === 'credential_missing' || reason === 'cooldown' ||
+    reason === 'incompatible' || reason === 'empty_pool' ? reason : 'pin_unavailable';
+  return {
+    route: null,
+    status: { mode, status, unavailableReason: reason, ...(retryAt === undefined ? {} : { retryAt: new Date(retryAt).toISOString() }) },
+  };
+}
+
+function validateRoutePin(pinnedAccount: ProviderAccount | undefined, pin: Extract<RoutingOverride, { mode: 'route' }>): NonNullable<RoleStatus['unavailableReason']> | undefined {
+  if (!pinnedAccount) return 'provider_deleted';
+  if (endpointFingerprint(pinnedAccount) !== pin.endpointFingerprint) return 'endpoint_changed';
+  if (!pinnedAccount.enabled) return 'provider_disabled';
+  if (!activeModels(pinnedAccount).has(pin.model) || !authorizedSupply(pinnedAccount, pin.model).authorized) return 'model_disabled';
+}
+
+function collectRouteCandidates(
+  accounts: readonly ProviderAccount[],
+  pinnedAccount: ProviderAccount | undefined,
+  policy: RoutingPolicy,
+  role: ModelRole,
+  options: Pick<ResolveRoleOptions, 'pin' | 'deep' | 'credential'> & { requirements: RouteRequirements },
+) {
+  const { pin, deep, requirements, credential } = options;
   const requested = role === 'utility' ? 'off' : role === 'dialogue' ? (policy === 'economy' ? 'off' : 'low') : deep ? 'high' : 'medium';
-  const { margin, weights: [capWeight, speedWeight, costWeight, priorityWeight] } = policies[policy];
+  const { weights: [capWeight, speedWeight, costWeight, priorityWeight] } = policies[policy];
   let incompatible = false;
   let authFailed = false;
   let missing = false;
-  const routes = accounts.flatMap((account, priority) => {
+  const routes: RouteCandidate[] = accounts.flatMap((account, priority) => {
     if (!account.enabled || pinnedAccount && account !== pinnedAccount) return [];
     const credentialState = credential(account);
     const priorityScore = Math.round(100 * (accounts.length - priority) / accounts.length);
@@ -219,42 +242,87 @@ export function resolveRole(accounts: readonly ProviderAccount[], effectiveRevis
       return [{ account, priority, supply, thinkingLevel, cap, score }];
     });
   });
-  if (!routes.length) return unavailable(authFailed ? 'auth_failed' : missing ? 'credential_missing' : incompatible ? 'incompatible' :
-    pin?.mode === 'model' ? 'model_disabled' : 'empty_pool');
+  return { routes, incompatible, authFailed, missing };
+}
 
-  const order = (a: typeof routes[number], b: typeof routes[number]) => Number(!!a.account.fallbackOnly) - Number(!!b.account.fallbackOnly) ||
-    a.priority - b.priority || b.score - a.score || compareModelIds(a.supply.id, b.supply.id);
-  const groups = Map.groupBy(routes.sort(order), row => row.supply.canonicalId);
-  let retryAt = Infinity;
-  let modelFailed = false;
-  const choose = (siblings: typeof routes, reason: string): RouteDecision | undefined => {
-    for (const [index, row] of siblings.entries()) {
-      const { providerId, credentialSourceId, name: providerName, wireApi, baseUrl } = row.account;
-      const { id: resolvedModel, canonicalId: canonicalModelId, contextTokens, outputTokens, tier, capabilities, toolCall } = row.supply;
-      const at = cooldown({ providerId, credentialSourceId, wireApi, baseUrl, resolvedModel });
-      if (at !== undefined) { retryAt = Math.min(retryAt, at); continue; }
-      const failover = modelFailed ? 'model_cooldown' : index > 0 ? 'same_model_cooldown' : undefined;
-      return { route: { providerId, credentialSourceId, providerName, role, resolvedModel, thinkingLevel: row.thinkingLevel,
-        effectiveRevision, wireApi, baseUrl, contextTokens, outputTokens, capabilities, toolCall,
-        canonicalModelId, source: mode === 'route' ? 'pinned_route' : mode === 'model' ? 'pinned_model' : 'auto', costTier: tier,
-        reason, ...(failover ? { failover } : {}) }, status: { mode, status: 'ready', ...(failover ? { failover } : {}) } };
+function pickHealthySibling(
+  siblings: readonly RouteCandidate[],
+  effectiveRevision: number,
+  role: ModelRole,
+  mode: RoleStatus['mode'],
+  reason: string,
+  modelFailed: boolean,
+  cooldown: ResolveRoleOptions['cooldown'],
+  minRetryAt: number,
+): { decision?: RouteDecision; retryAt: number } {
+  let retryAt = minRetryAt;
+  for (const [index, row] of siblings.entries()) {
+    const { providerId, credentialSourceId, name: providerName, wireApi, baseUrl } = row.account;
+    const { id: resolvedModel, canonicalId: canonicalModelId, contextTokens, outputTokens, tier, capabilities, toolCall } = row.supply;
+    const at = cooldown({ providerId, credentialSourceId, wireApi, baseUrl, resolvedModel });
+    if (at !== undefined) {
+      retryAt = Math.min(retryAt, at);
+      continue;
     }
-  };
-  if (pin) return choose(routes, pin.mode === 'route' ? 'exact_pin' : 'model_pin') ?? unavailable('cooldown', retryAt);
+    const failover = modelFailed ? 'model_cooldown' : index > 0 ? 'same_model_cooldown' : undefined;
+    return {
+      retryAt,
+      decision: {
+        route: {
+          providerId, credentialSourceId, providerName, role, resolvedModel, thinkingLevel: row.thinkingLevel,
+          effectiveRevision, wireApi, baseUrl, contextTokens, outputTokens, capabilities, toolCall,
+          canonicalModelId, source: mode === 'route' ? 'pinned_route' : mode === 'model' ? 'pinned_model' : 'auto', costTier: tier,
+          reason, ...(failover ? { failover } : {}),
+        },
+        status: { mode, status: 'ready', ...(failover ? { failover } : {}) },
+      },
+    };
+  }
+  return { retryAt };
+}
 
+export function resolveRole(accounts: readonly ProviderAccount[], effectiveRevision: number, policy: RoutingPolicy, role: ModelRole,
+  options: ResolveRoleOptions): RouteDecision {
+  const { pin, deep, requirements = { requiresTools: true, inputTokens: 0 }, credential, cooldown } = options;
+  const mode = pin?.mode ?? 'auto';
+  const pinnedAccount = pin?.mode === 'route' ? accounts.find(account => account.providerId === pin.providerId) : undefined;
+  if (pin?.mode === 'route') {
+    const blocker = validateRoutePin(pinnedAccount, pin);
+    if (blocker) return unavailableDecision(mode, blocker);
+  }
+  const { routes, incompatible, authFailed, missing } = collectRouteCandidates(accounts, pinnedAccount, policy, role,
+    { pin, deep, requirements, credential });
+  if (!routes.length) {
+    return unavailableDecision(mode, authFailed ? 'auth_failed' : missing ? 'credential_missing' : incompatible ? 'incompatible' :
+      pin?.mode === 'model' ? 'model_disabled' : 'empty_pool');
+  }
+  routes.sort((a, b) => Number(!!a.account.fallbackOnly) - Number(!!b.account.fallbackOnly) ||
+    a.priority - b.priority || b.score - a.score || compareModelIds(a.supply.id, b.supply.id));
+  if (pin) {
+    const picked = pickHealthySibling(routes, effectiveRevision, role, mode, pin.mode === 'route' ? 'exact_pin' : 'model_pin',
+      false, cooldown, Infinity);
+    return picked.decision ?? unavailableDecision(mode, 'cooldown', picked.retryAt);
+  }
+
+  const groups = Map.groupBy(routes, row => row.supply.canonicalId);
   const preferred = [...groups.values()].map(siblings => siblings[0]);
   const ordinary = preferred.filter(row => !row.account.fallbackOnly);
+  const { margin } = policies[policy];
+  let retryAt = Infinity;
+  let modelFailed = false;
   let remaining = ordinary.length ? ordinary : preferred;
   while (remaining.length) {
     const minCap = Math.max(...remaining.map(row => row.cap)) - margin;
     const shortlist = remaining.filter(row => row.cap >= minCap).sort((a, b) => b.score - a.score || a.priority - b.priority ||
       compareModelIds(a.supply.canonicalId, b.supply.canonicalId));
     for (const row of shortlist) {
-      const decision = choose(groups.get(row.supply.canonicalId)!, !ordinary.length ? 'fallback_only' : preferred.length === 1 ? 'single_model' : 'ranked');
-      if (decision) return decision;
+      const reason = !ordinary.length ? 'fallback_only' : preferred.length === 1 ? 'single_model' : 'ranked';
+      const picked = pickHealthySibling(groups.get(row.supply.canonicalId)!, effectiveRevision, role, mode, reason, modelFailed, cooldown, retryAt);
+      retryAt = picked.retryAt;
+      if (picked.decision) return picked.decision;
       modelFailed = true;
     }
     remaining = remaining.filter(row => row.cap < minCap);
   }
-  return unavailable('cooldown', retryAt);
+  return unavailableDecision(mode, 'cooldown', retryAt);
 }

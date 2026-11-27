@@ -212,6 +212,8 @@ func TestDS2TransitionControlThemeSwitchSnapsFirstFrame(t *testing.T) {
 					*pillSelected = !*pillSelected
 				})
 				TextAction(c, "Danger action", true)
+				SecondaryButton(c, "Secondary action")
+				NavigationControl(c, ui.ButtonBase(c).Label("Nav action"), wb, true)
 				if *hoverAction {
 					TextAction(c, "Quiet action", false)
 				}
@@ -266,8 +268,9 @@ func TestDS2TransitionControlThemeSwitchSnapsFirstFrame(t *testing.T) {
 	swRect, okS := tr.Find("Theme switch")
 	pillRect, okP := tr.Find("read")
 	taRect, okT := tr.Find("Danger action")
-	if !okS || !okP || !okT {
-		t.Fatalf("missing test controls: switch=%v pill=%v textAction=%v", okS, okP, okT)
+	secRect, okSec := tr.Find("Secondary action")
+	if !okS || !okP || !okT || !okSec {
+		t.Fatalf("missing test controls: switch=%v pill=%v textAction=%v secondary=%v", okS, okP, okT, okSec)
 	}
 	tr.Move(taRect.X+taRect.W/2, taRect.Y+taRect.H/2)
 	tr.Advance(ControlTransition.Duration)
@@ -283,6 +286,9 @@ func TestDS2TransitionControlThemeSwitchSnapsFirstFrame(t *testing.T) {
 	}
 	if got, want := sampleRect(firstDark, taRect, 3, 3), sampleRect(darkImg, taRect, 3, 3); !closeColor(got, want) {
 		t.Fatalf("TextAction hover fill did not snap on first Light->Dark frame: got=%v want=%v", got, want)
+	}
+	if got, want := sampleRect(firstDark, secRect, secRect.W/2, secRect.H/2), sampleRect(darkImg, secRect, secRect.W/2, secRect.H/2); !closeColor(got, want) {
+		t.Fatalf("SecondaryButton did not snap on first Light->Dark frame: got=%v want=%v", got, want)
 	}
 
 	tr.SetDark(false)

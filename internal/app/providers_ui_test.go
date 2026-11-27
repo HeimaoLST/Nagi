@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/json"
+	"image"
 	"os"
 	"path/filepath"
 	"slices"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/HeimaoLST/Nagi/internal/connection"
 	"github.com/HeimaoLST/Nagi/internal/pi"
+	"github.com/HeimaoLST/Nagi/internal/theme"
 	"github.com/HeimaoLST/Nagi/locales"
 )
 
@@ -728,4 +730,127 @@ func TestProviderCredentialAndRouteUnavailableNoticesAndV3Startup(t *testing.T) 
 			}
 		})
 	}
+}
+
+func TestProviderRoutingHelpersHealthNotesAndThemeSwitch(t *testing.T) {
+	msgs := locales.In("en")
+
+	if got := providerAdmission(pi.ProductReceipt{Result: json.RawMessage(`{"code":"route_unavailable","retryAt":"2026-11-26T00:00:00Z"}`)}, &pi.RemoteError{Code: "other"}); got.Code != pi.ProductRouteUnavailable || got.RetryAt == "" {
+		t.Fatalf("providerAdmission receipt = %+v", got)
+	}
+	if got := providerAdmission(pi.ProductReceipt{}, &pi.RemoteError{Code: "credential_unavailable"}); got.Code != pi.ProductCredentialUnavailable {
+		t.Fatalf("providerAdmission remote fallback = %+v", got)
+	}
+	if !providerDeliveryBlocked(pi.ProductCredentialUnavailable) || !providerDeliveryBlocked(pi.ProductRouteUnavailable) || providerDeliveryBlocked("other") {
+		t.Fatal("providerDeliveryBlocked returned unexpected result")
+	}
+	if got := providerTokenBadge(131072); got != "128K" {
+		t.Fatalf("providerTokenBadge(131072) = %q, want 128K", got)
+	}
+	if got := providerTokenBadge(2 * 1024 * 1024); got != "2.0M" {
+		t.Fatalf("providerTokenBadge(2M) = %q, want 2.0M", got)
+	}
+	if got := providerTokenBadge(512); got != "512" {
+		t.Fatalf("providerTokenBadge(512) = %q, want 512", got)
+	}
+	if got := providerTokenBadge(0); got != "" {
+		t.Fatalf("providerTokenBadge(0) = %q, want empty", got)
+	}
+
+	ed := newProviderDraft()
+	ed.Name = "Loopback Studio"
+	ed.BaseURL = "http://127.0.0.1:11434/v1"
+	ed.DefaultModel = "qwen3:8b"
+	ed.noKey = true
+	params, ok := ed.input(false)
+	if !ok || params.APIKey != "nagi-loopback" {
+		t.Fatalf("loopback noKey editor input = ok:%v key:%q fields:%+v", ok, params.APIKey, ed.fields)
+	}
+	ed.Name = strings.Repeat("a", 257)
+	ed.output = "131070"
+	if _, ok := ed.input(false); ok || ed.fields["Name"] != "name-length" || ed.fields["OutputTokens"] != connection.ValidationContextGap {
+		t.Fatalf("invalid Name/OutputTokens not caught: ok=%v fields=%+v", ok, ed.fields)
+	}
+
+	a := providerUITestApp(t, pi.ProductProviderList{})
+	a.windowWidth = 1040
+	t.Run("provider-health-omits-empty-reason-separator", func(t *testing.T) {
+		account := pi.ProductProviderAccountView{
+			ProductProviderAccount: pi.ProductProviderAccount{
+				ProviderID: "p-health", Name: "Studio", WireAPI: pi.OpenAICompletions,
+				BaseURL: "https://api.example.com/v1", DefaultModel: "gpt-4o", Enabled: true,
+			},
+			CredentialStatus: "ok",
+			HealthSummary:    "degraded",
+			RouteHealth: []pi.ProductRouteHealth{{
+				WireModelID:         "gpt-4o",
+				Scope:               "route",
+				State:               "degraded",
+				Reason:              "",
+				ConsecutiveFailures: 2,
+			}},
+		}
+		healthView := func(c *ui.Context) {
+			wb := theme.ResolveWorkbenchTheme(c.Theme().Dark)
+			st := theme.SettingsTheme(wb.Theme)
+			c.SetTheme(&st)
+			ui.Column(c).Fill().Padding(16).Background(st.Background).Children(func() {
+				a.providerHealth(c, &st, msgs, account, false)
+			})
+		}
+		trHealth := ui.NewTester(healthView, 520, 240)
+		trHealth.SetLocale("en")
+		trHealth.Frame()
+		wantCount := msgs.ProviderFailureCount(2)
+		for _, txt := range trHealth.Texts() {
+			if strings.HasPrefix(txt, " · ") || strings.Contains(txt, "· "+wantCount) && strings.HasPrefix(strings.TrimSpace(txt), "·") {
+				t.Fatalf("providerHealth emitted leading middle dot when Reason is empty: %q (all=%v)", txt, trHealth.Texts())
+			}
+		}
+		if !trHealth.HasText(wantCount) {
+			t.Fatalf("providerHealth missing failure count %q: %v", wantCount, trHealth.Texts())
+		}
+	})
+
+	t.Run("directory-button-snaps-on-theme-switch", func(t *testing.T) {
+		sampleRect := func(img *image.RGBA, r ui.Rect, dx, dy float32) [4]uint8 {
+			c := img.RGBAAt(int(r.X+dx), int(r.Y+dy))
+			return [4]uint8{c.R, c.G, c.B, c.A}
+		}
+		closeColor := func(x, y [4]uint8) bool {
+			for i := range 4 {
+				d := int(x[i]) - int(y[i])
+				if d < 0 {
+					d = -d
+				}
+				if d > 3 {
+					return false
+				}
+			}
+			return true
+		}
+		dirView := func(c *ui.Context) {
+			wb := theme.ResolveWorkbenchTheme(c.Theme().Dark)
+			st := theme.SettingsTheme(wb.Theme)
+			c.SetTheme(&st)
+			ui.Column(c).Fill().Padding(16).Background(st.Background).Children(func() {
+				providerDirectoryButton(c, &st, "OpenAI", true).FillWidth().Background(st.Surface).Border(1, st.Border)
+			})
+		}
+		refDark := ui.NewTesterWith(dirView, 360, 120, ui.TesterOptions{Dark: true})
+		refDark.Frame()
+		darkImg := image.NewRGBA(refDark.Image().Bounds())
+		copy(darkImg.Pix, refDark.Image().Pix)
+
+		trDir := ui.NewTesterWith(dirView, 360, 120, ui.TesterOptions{Dark: false})
+		trDir.Frame()
+		btnRect, ok := trDir.Find("OpenAI")
+		if !ok {
+			t.Fatal("missing providerDirectoryButton")
+		}
+		trDir.SetDark(true)
+		if got, want := sampleRect(trDir.Image(), btnRect, 8, 8), sampleRect(darkImg, btnRect, 8, 8); !closeColor(got, want) {
+			t.Fatalf("providerDirectoryButton did not snap on first Light->Dark frame: got=%v want=%v", got, want)
+		}
+	})
 }

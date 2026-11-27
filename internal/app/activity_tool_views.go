@@ -2,15 +2,15 @@ package app
 
 import "sort"
 
-func scopeAllowsActivity(s ActivityToolScope, activity *productActivity) bool {
+func scopeAllowsActivity(s activityToolScope, activity *productActivity) bool {
 	if activity == nil || s.Validate() != nil {
 		return false
 	}
 	return (activity.ContactID == s.ContactID || s.Mode != activityToolModeWork && activity.Handoff != nil && activity.Handoff.SourceBotID == s.ContactID) && s.AllowsIssueID(activity.ID)
 }
 
-func activityToolSummary(activity *productActivity) ActivityToolSummary {
-	summary := ActivityToolSummary{}
+func activityToolSummary(activity *productActivity) activityToolSummaryView {
+	summary := activityToolSummaryView{}
 	if activity == nil {
 		return summary
 	}
@@ -45,14 +45,14 @@ func activityToolSummary(activity *productActivity) ActivityToolSummary {
 
 // activityToolList reads existing product facts without mutating activities or
 // inferring targets from GUI selection.
-func activityToolList(scope ActivityToolScope, activities []*productActivity, includeArchived bool, limit int, cursor string) (ActivityToolListResult, error) {
+func activityToolList(scope activityToolScope, activities []*productActivity, includeArchived bool, limit int, cursor string) (activityToolListResult, error) {
 	if err := scope.Validate(); err != nil {
-		return ActivityToolListResult{}, err
+		return activityToolListResult{}, err
 	}
 	if limit <= 0 || limit > 100 {
 		limit = 50
 	}
-	all := make([]ActivityToolSummary, 0)
+	all := make([]activityToolSummaryView, 0)
 	for _, activity := range activities {
 		if !scopeAllowsActivity(scope, activity) || (!includeArchived && activity.Archived) {
 			continue
@@ -74,14 +74,14 @@ func activityToolList(scope ActivityToolScope, activities []*productActivity, in
 			}
 		}
 		if start == 0 {
-			return ActivityToolListResult{}, &ActivityToolError{Code: "invalid_cursor", Message: "issue list cursor is not in this scope"}
+			return activityToolListResult{}, &activityToolError{Code: "invalid_cursor", Message: "issue list cursor is not in this scope"}
 		}
 	}
 	end := start + limit
 	if end > len(all) {
 		end = len(all)
 	}
-	result := ActivityToolListResult{Issues: all[start:end]}
+	result := activityToolListResult{Issues: all[start:end]}
 	if end < len(all) {
 		result.HasMore = true
 		result.NextCursor = all[end-1].ID
@@ -89,7 +89,7 @@ func activityToolList(scope ActivityToolScope, activities []*productActivity, in
 	return result, nil
 }
 
-func activityToolGet(scope ActivityToolScope, activities []*productActivity, activityID string) (*ActivityToolDetail, error) {
+func activityToolGet(scope activityToolScope, activities []*productActivity, activityID string) (*activityToolDetail, error) {
 	if err := scope.Validate(); err != nil {
 		return nil, err
 	}
@@ -101,17 +101,17 @@ func activityToolGet(scope ActivityToolScope, activities []*productActivity, act
 		}
 	}
 	if activity == nil {
-		return nil, &ActivityToolError{Code: "not_found", Message: "issue was not found in this scope"}
+		return nil, &activityToolError{Code: "not_found", Message: "issue was not found in this scope"}
 	}
 	if !scopeAllowsActivity(scope, activity) {
-		return nil, &ActivityToolError{Code: "scope_denied", Message: "issue is outside the issued scope"}
+		return nil, &activityToolError{Code: "scope_denied", Message: "issue is outside the issued scope"}
 	}
-	detail := &ActivityToolDetail{Issue: activityToolSummary(activity)}
+	detail := &activityToolDetail{Issue: activityToolSummary(activity)}
 	for _, requirement := range activity.Requirements {
 		if requirement == nil {
 			continue
 		}
-		detail.Requirements = append(detail.Requirements, ActivityToolRequirementView{
+		detail.Requirements = append(detail.Requirements, activityToolRequirementView{
 			ID: requirement.ID, Text: requirement.Text, State: requirement.State, Evidence: requirement.Evidence,
 		})
 	}
@@ -124,7 +124,7 @@ func activityToolGet(scope ActivityToolScope, activities []*productActivity, act
 		if execution == nil {
 			continue
 		}
-		detail.Executions = append(detail.Executions, ActivityToolExecutionView{
+		detail.Executions = append(detail.Executions, activityToolExecutionView{
 			ID: execution.ID, SessionID: execution.SessionID, TaskID: execution.TaskID,
 			Status: execution.Status, Detail: execution.Detail,
 			PiRun:                clonePiActivityRun(execution.PiRun),

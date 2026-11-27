@@ -269,14 +269,19 @@ func (a *appModel) providerHealth(c *ui.Context, t *ui.Theme, msgs locales.Messa
 					appTooltip(c, text, name)
 					capabilityBadge(c, t, providerHealthState(msgs, entry.State), t.Warning)
 				})
-				notes := []string{providerUnavailableReason(msgs, entry.Reason)}
+				notes := make([]string, 0, 3)
+				if reason := providerUnavailableReason(msgs, entry.Reason); reason != "" {
+					notes = append(notes, reason)
+				}
 				if entry.ConsecutiveFailures > 0 {
 					notes = append(notes, msgs.ProviderFailureCount(entry.ConsecutiveFailures))
 				}
 				if retry := providerRetryLabel(c, msgs, entry.RetryAt); retry != "" {
 					notes = append(notes, retry)
 				}
-				ui.Text(c, strings.Join(notes, " · ")).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
+				if len(notes) > 0 {
+					ui.Text(c, strings.Join(notes, " · ")).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
+				}
 			})
 		}
 	})
