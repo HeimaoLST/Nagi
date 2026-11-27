@@ -1687,6 +1687,10 @@ func TestVisualGuardControlPlaneWorkbench(t *testing.T) {
 						tr.Frame()
 						assertHit(tr, notice.name, notice.labels...)
 						assertNotAccentFill(tr, notice.name, notice.labels...)
+						actRect, okAct := tr.Find(msgs.WorkActivity())
+						if !okAct || actRect.W >= 220 {
+							t.Fatalf("scene=%s collapsed Activity toggle width = %.1f DIP, want intrinsic < 220 (ok=%v)", notice.name, actRect.W, okAct)
+						}
 					}
 
 					fx.contact.activity.open = true
@@ -1694,8 +1698,11 @@ func TestVisualGuardControlPlaneWorkbench(t *testing.T) {
 					fx.contact.activity.activity = fx.steerAct
 					fx.contact.activity.scroll.Y = 0
 					tr.Frame()
-					assertHit(tr, "steer-detail", msgs.BackLabel(), msgs.WorkActivity(), msgs.ReloadAction(), msgs.WorkStopIssueTask(), msgs.ActivitySteer())
-					assertNotAccentFill(tr, "steer-detail", msgs.WorkStopIssueTask(), msgs.ActivitySteer())
+					assertHit(tr, "steer-detail", msgs.BackLabel(), msgs.WorkActivity(), msgs.ReloadAction(), msgs.SourceChat(), msgs.WorkStopIssueTask(), msgs.ActivitySteer())
+					assertNotAccentFill(tr, "steer-detail", msgs.SourceChat(), msgs.WorkStopIssueTask(), msgs.ActivitySteer())
+					if sourceRect, okSource := tr.Find(msgs.SourceChat()); !okSource || sourceRect.W >= 220 {
+						t.Fatalf("steer-detail SourceChat button stretched: ok=%v rect=%+v", okSource, sourceRect)
+					}
 				})
 			}
 		}
