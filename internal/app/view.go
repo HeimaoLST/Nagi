@@ -810,9 +810,12 @@ func (a *appModel) conversationActivities(c *ui.Context, t *ui.Theme, ct *contac
 	}
 	msgs := locales.In(c.Locale())
 	ui.Row(c).Key("conversation-activities").Justify(ui.Center).Children(func() {
-		ui.Column(c).Key(ct.ID).FillWidth().MaxWidth(conversationMaxWidth-32).MinWidth(0).Margin(0, 16, 4).
-			Gap(4).Padding(4, 8).Radius(theme.CardRadius).Border(1, t.Border).Background(t.Surface).Children(func() {
-			ui.Row(c).FillWidth().AlignItems(ui.Center).Children(func() {
+		dock := ui.Column(c).Key(ct.ID).FillWidth().MaxWidth(conversationMaxWidth-32).MinWidth(0).Margin(0, 16, 4)
+		if p.open {
+			dock.Gap(4).Padding(4, 8).Radius(theme.CardRadius).Border(1, t.Border).Background(t.Surface)
+		}
+		dock.Children(func() {
+			ui.Row(c).FillWidth().MinWidth(0).AlignItems(ui.Center).Gap(4).Children(func() {
 				if p.open && (p.activityID != "" || p.legacyIssue) {
 					back := secondaryButton(c, msgs.BackAction()).Label(msgs.BackLabel()).OnClick(func() { a.backProductActivity(ct) })
 					if p.focusBack {
@@ -837,7 +840,7 @@ func (a *appModel) conversationActivities(c *ui.Context, t *ui.Theme, ct *contac
 			})
 			if p.open {
 				ui.Scroll(c).FillWidth().Height(230).TrackScroll(&p.scroll).Children(func() {
-					ui.Column(c).FillWidth().MinWidth(0).Gap(8).Padding(4, 8).Children(func() {
+					ui.Column(c).FillWidth().MinWidth(0).Gap(8).Padding(4, 0).Children(func() {
 						if client == nil {
 							a.activityText(c, t, msgs.WorkHistoryNotReady())
 						}
@@ -870,7 +873,7 @@ func (a *appModel) conversationActivities(c *ui.Context, t *ui.Theme, ct *contac
 						case p.activityID == "":
 							for _, activity := range ct.Activities {
 								if activity != nil && !activity.Archived {
-									secondaryButton(c, activity.Goal).Label(msgs.IssueRowLabel(activity.Goal)).OnClick(func() { a.openLegacyBotActivity(ct, activity) })
+									secondaryButton(c, activity.Goal).AlignSelf(ui.Start).MaxWidthPercent(100).Label(msgs.IssueRowLabel(activity.Goal)).OnClick(func() { a.openLegacyBotActivity(ct, activity) })
 								}
 							}
 							for _, item := range p.items {
@@ -883,7 +886,7 @@ func (a *appModel) conversationActivities(c *ui.Context, t *ui.Theme, ct *contac
 								})
 							}
 							if p.nextCursor != nil {
-								secondaryButton(c, msgs.SupplementShowAll()).Disabled(client == nil || p.reading).OnClick(func() { a.refreshProductActivities(ct, true) })
+								secondaryButton(c, msgs.SupplementShowAll()).AlignSelf(ui.Start).Disabled(client == nil || p.reading).OnClick(func() { a.refreshProductActivities(ct, true) })
 							}
 							if client != nil && p.loaded && !p.reading && len(p.items) == 0 && p.problem == "" {
 								a.activityText(c, t, msgs.WorkNoCurrent())
@@ -934,7 +937,7 @@ func (a *appModel) productActivityDetails(c *ui.Context, t *ui.Theme, ct *contac
 		activityProgressView(c, t, msgs, activity.LatestProgress)
 	})
 	if origin := activity.OriginConversationID; origin != "" {
-		source := secondaryButton(c, msgs.SourceChat()).Disabled(client == nil).OnClick(func() { a.browseProductConversations(ct, origin) })
+		source := secondaryButton(c, msgs.SourceChat()).AlignSelf(ui.Start).Disabled(client == nil).OnClick(func() { a.browseProductConversations(ct, origin) })
 		if p.focusSource {
 			source.Focus().ScrollIntoView()
 			p.focusSource = false
@@ -953,13 +956,13 @@ func (a *appModel) productActivityDetails(c *ui.Context, t *ui.Theme, ct *contac
 			a.activityText(c, t, pending.Text)
 			taskContextReadOnlyView(c, a.workTheme, productTaskContext(pending.Materials))
 		}
-		secondaryButton(c, msgs.ReloadAction()).Disabled(client == nil || p.changing || a.dataRecoveryBlocksChanges()).OnClick(func() {
+		secondaryButton(c, msgs.ReloadAction()).AlignSelf(ui.Start).Disabled(client == nil || p.changing || a.dataRecoveryBlocksChanges()).OnClick(func() {
 			a.runProductActivityAction(ct, client, pending, false)
 		})
 	}
 	for _, request := range openActivityApprovals(ct, activity) {
 		c.Key(request.RequestID)
-		ui.Column(c).FillWidth().MinWidth(0).Padding(8).Gap(4).Radius(theme.CardRadius).Border(1, t.Border).Background(t.Surface).Children(func() {
+		ui.Column(c).FillWidth().MinWidth(0).Padding(8, 0, 0).Gap(4).BorderWidth(1, 0, 0, 0).BorderColor(t.Border).Children(func() {
 			a.activityApprovalCard(c, t, ct, request, blocked, false)
 		})
 	}
@@ -968,7 +971,7 @@ func (a *appModel) productActivityDetails(c *ui.Context, t *ui.Theme, ct *contac
 			a.activityText(c, t, question.Text)
 			if question.State == "open" {
 				answer := activityAnswerIntent(ct, activity, question)
-				button := secondaryButton(c, msgs.IssueNoticeWaiting(activity.Goal)).Disabled(blocked).OnClick(func() { a.editProductActivity(ct, answer) })
+				button := secondaryButton(c, msgs.IssueNoticeWaiting(activity.Goal)).AlignSelf(ui.Start).MaxWidthPercent(100).Disabled(blocked).OnClick(func() { a.editProductActivity(ct, answer) })
 				if p.focusQuestion == question.QuestionID && !blocked {
 					button.Focus().ScrollIntoView()
 					p.focusQuestion = ""
@@ -1008,7 +1011,7 @@ func (a *appModel) productActivityDetails(c *ui.Context, t *ui.Theme, ct *contac
 	for i := len(activity.Executions) - 1; i >= 0; i-- {
 		execution := activity.Executions[i]
 		label := msgs.IssueCurrentRun(activityExecutionLabel(msgs, execution.State))
-		ui.Column(c).Key(execution.ExecutionID).Gap(4).Children(func() {
+		ui.Column(c).Key(execution.ExecutionID).FillWidth().MinWidth(0).Gap(4).Children(func() {
 			if i != len(activity.Executions)-1 {
 				label = activityExecutionLabel(msgs, execution.State)
 			}
@@ -1041,7 +1044,7 @@ func (a *appModel) productActivityDetails(c *ui.Context, t *ui.Theme, ct *contac
 				}
 			default:
 				label := msgs.IssueOpenResultRun(fmt.Sprint(i + 1))
-				secondaryButton(c, label).Label(label).Disabled(client == nil || p.reading).OnClick(func() {
+				secondaryButton(c, label).AlignSelf(ui.Start).Label(label).Disabled(client == nil || p.reading).OnClick(func() {
 					a.readProductActivityResult(ct, activity.ActivityID, execution.ExecutionID)
 				})
 			}
@@ -1051,7 +1054,7 @@ func (a *appModel) productActivityDetails(c *ui.Context, t *ui.Theme, ct *contac
 	}
 	if canContinue && p.forms[activity.ActivityID] == nil {
 		target.Action, target.Revision = "continue", activity.Revision
-		secondaryButton(c, msgs.SupplementAdd()).Disabled(blocked || ct.Archived).OnClick(func() { a.editProductActivity(ct, target) })
+		secondaryButton(c, msgs.SupplementAdd()).AlignSelf(ui.Start).Disabled(blocked || ct.Archived).OnClick(func() { a.editProductActivity(ct, target) })
 	}
 	if form := p.forms[activity.ActivityID]; form != nil {
 		a.productActivityEditView(c, t, ct, form, blocked)

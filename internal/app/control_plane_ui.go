@@ -323,7 +323,7 @@ func (a *appModel) activityApprovalCard(c *ui.Context, t *ui.Theme, ct *contact,
 	if compact {
 		appTooltip(c, text.MaxLines(1).Ellipsis("…"), label)
 	}
-	ui.Row(c).FillWidth().MinWidth(0).Wrap().AlignItems(ui.Center).Gap(4).Children(func() {
+	ui.Row(c).FillWidth().MinWidth(0).Wrap().AlignItems(ui.Center).Gap(8).Children(func() {
 		key := pi.ProductSkillKey{Source: request.Source, BotID: request.BotID, SkillID: request.SkillID}
 		a.skillReviewButton(c, msgs.CapReviewApprove(), key, request.SkillID, &request, blocked)
 		theme.TextAction(c, msgs.CapDeny(), true).Disabled(blocked).OnClick(func() { a.denySkillApproval(ct, request) })
@@ -468,7 +468,7 @@ func activityTraceRow(c *ui.Context, t *ui.Theme, msgs locales.Messages, item pi
 			label = activityExecutionLabel(msgs, item.State)
 		}
 	}
-	ui.Column(c).FillWidth().MinWidth(0).Gap(2).Padding(4, 8).BorderWidth(1, 0, 0, 0).BorderColor(t.Border).Children(func() {
+	ui.Column(c).FillWidth().MinWidth(0).Gap(2).Padding(4, 0).BorderWidth(1, 0, 0, 0).BorderColor(t.Border).Children(func() {
 		ui.Row(c).FillWidth().MinWidth(0).Wrap().AlignItems(ui.Center).Gap(6).Children(func() {
 			if item.Tool != "" {
 				capabilityText(c, t, item.Tool).TextColor(t.Text)
@@ -683,7 +683,7 @@ func (a *appModel) activityNoticeStrip(c *ui.Context, t *ui.Theme, ct *contact) 
 				item := notices[index]
 				c.Key(item.key)
 				ui.Scroll(c).FillWidth().MinWidth(0).MaxHeight(110).TrackScroll(&n.scroll).Children(func() {
-					ui.Column(c).FillWidth().MinWidth(0).Gap(2).Children(func() { a.activityNoticeCard(c, t, ct, item, msgs) })
+					ui.Column(c).FillWidth().MinWidth(0).Gap(4).Children(func() { a.activityNoticeCard(c, t, ct, item, msgs) })
 				})
 			}
 		})
