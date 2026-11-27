@@ -366,28 +366,16 @@ func (a *appModel) settingsMain(c *ui.Context, t *ui.Theme, narrow bool) {
 	})
 }
 
-func settingsPreferenceWithDescription(c *ui.Context, t *ui.Theme, label, description string, control func()) {
-	ui.Row(c).FillWidth().MinWidth(0).Wrap().AlignItems(ui.Center).Gap(12).Padding(12, 0).Children(func() {
-		ui.Column(c).Basis(280).Grow(1).Shrink(1).MinWidth(0).Gap(4).Children(func() {
-			ui.Text(c, label).FontSize(typeLabel).FontWeight(500).FixedLineHeight(lineLabel).TextColor(t.Text)
-			if description != "" {
-				ui.Text(c, description).MinWidth(0).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
-			}
-		})
-		ui.Column(c).Basis(320).Grow(1).Shrink(1).MinWidth(0).AlignItems(ui.End).Gap(8).Children(control)
-	})
-}
-
 func (a *appModel) settingsAppearanceContent(c *ui.Context, t *ui.Theme) {
 	msgs := locales.In(c.Locale())
 	a.ensureLanguageMode()
 	preferenceSection(c, t, msgs.RailContactsTitle(), func() {
 		c.Key("pandorabox-visibility")
-		settingsPreferenceWithDescription(c, t, msgs.SettingsPandoraBoxVisibility(), msgs.SettingsPandoraBoxVisibilityHint(), func() {
+		settingsPreferenceRow(c, t, msgs.SettingsPandoraBoxVisibility(), msgs.SettingsPandoraBoxVisibilityHint(), func() {
 			shown := !a.hideBuiltinArchitect
 			theme.ToggleSwitch(c, &shown, msgs.SettingsPandoraBoxVisibility(), !a.canChangeBuiltinArchitectVisibility()).
 				OnChange(func() { a.setBuiltinArchitectHidden(!shown) })
-		})
+		}, true)
 	})
 	preferenceSection(c, t, msgs.SettingsAppearance(), func() {
 		c.Key("appearance-preference")
@@ -440,7 +428,7 @@ func (a *appModel) settingsAppearanceContent(c *ui.Context, t *ui.Theme) {
 			}
 		}
 		c.Key("local-themes-preference")
-		settingsPreferenceWithDescription(c, t, msgs.SettingsLocalThemes(), msgs.ThemeImportHint(), func() {
+		settingsPreferenceRow(c, t, msgs.SettingsLocalThemes(), msgs.ThemeImportHint(), func() {
 			ui.Row(c).Gap(8).Wrap().Children(func() {
 				busy := a.themeImport != nil && a.themeImport.Busy
 				importButton := secondaryButton(c, msgs.ThemeImportAction()).Label(msgs.ThemeImportAction()).Disabled(busy || a.shutdownStarted || a.dataRecoveryBlocksChanges()).OnClick(a.importAppearanceTheme)
@@ -450,7 +438,7 @@ func (a *appModel) settingsAppearanceContent(c *ui.Context, t *ui.Theme) {
 				}
 				secondaryButton(c, msgs.ThemeReload()).Label(msgs.ThemeReload()).OnClick(a.reloadAppearanceThemes)
 			})
-		})
+		}, true)
 		if state := a.themeImport; state != nil {
 			if state.Busy {
 				ui.Text(c, msgs.ThemeImportBusy()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
@@ -470,7 +458,7 @@ func (a *appModel) settingsAppearanceContent(c *ui.Context, t *ui.Theme) {
 	})
 	preferenceSection(c, t, msgs.SettingsLanguage(), func() {
 		c.Key("language-preference")
-		settingsPreferenceWithDescription(c, t, msgs.SettingsLanguage(), msgs.LanguageHint(), func() {
+		settingsPreferenceRow(c, t, msgs.SettingsLanguage(), msgs.LanguageHint(), func() {
 			options := []selectOption{
 				{Value: "", Label: msgs.LanguageSystem(languageSelfName(msgs, c.Locale()))},
 				{Value: "zh-Hans", Label: msgs.LanguageChinese()},
@@ -481,7 +469,7 @@ func (a *appModel) settingsAppearanceContent(c *ui.Context, t *ui.Theme) {
 			if preferenceSelect(c, &selected, options, msgs.SettingsLanguage()).Changed() {
 				a.setLanguageMode(selected)
 			}
-		})
+		}, true)
 	})
 	a.settingsDataRecoveryContent(c, t)
 }
@@ -764,7 +752,7 @@ func (a *appModel) settingsDataRecoveryContent(c *ui.Context, t *ui.Theme) {
 
 func (a *appModel) settingsRecoveryControls(c *ui.Context, t *ui.Theme, s *dataRecoveryState, msgs locales.Messages) {
 	preferenceSection(c, t, msgs.RecoveryDataTitle(), func() {
-		settingsPreferenceWithDescription(c, t, msgs.RecoveryBackupLabel(), msgs.RecoveryBackupHint(), func() {
+		settingsPreferenceRow(c, t, msgs.RecoveryBackupLabel(), msgs.RecoveryBackupHint(), func() {
 			ui.Row(c).Wrap().Gap(8).Children(func() {
 				for _, restore := range []bool{false, true} {
 					label, key := msgs.SaveRecoveryCopyAction(), "copy"
@@ -783,7 +771,7 @@ func (a *appModel) settingsRecoveryControls(c *ui.Context, t *ui.Theme, s *dataR
 				}
 				theme.TextAction(c, label, false).AlignSelf(ui.Start).OnClick(func() { s.scopeOpen = !s.scopeOpen })
 			})
-		})
+		}, true)
 		ui.Column(c).FillWidth().Gap(8).Children(func() {
 			if s.scopeOpen {
 				ui.Text(c, msgs.RecoveryDataIncluded()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
@@ -878,7 +866,7 @@ func (a *appModel) settingsRecoveryControls(c *ui.Context, t *ui.Theme, s *dataR
 func (a *appModel) settingsAdvancedContent(c *ui.Context, t *ui.Theme) {
 	msgs := locales.In(c.Locale())
 	preferenceGroup(c, t, func() {
-		settingsPreferenceWithDescription(c, t, msgs.SettingsStartupSection(), a.runtimeStatusText(msgs), func() {
+		settingsPreferenceRow(c, t, msgs.SettingsStartupSection(), a.runtimeStatusText(msgs), func() {
 			ui.Row(c).Wrap().Gap(8).Children(func() {
 				label := msgs.SettingsShowRuntimeDetails()
 				if a.startupDetailsOpen {
@@ -889,7 +877,7 @@ func (a *appModel) settingsAdvancedContent(c *ui.Context, t *ui.Theme) {
 					secondaryButton(c, msgs.SettingsOpenConnection()).OnClick(func() { a.selectSettingsTab(settingsTabConnection) })
 				}
 			})
-		})
+		}, true)
 		if a.startupDetailsOpen {
 			ui.Column(c).FillWidth().MinWidth(0).AlignItems(ui.Start).Gap(8).Children(func() {
 				a.runtimePanel(c, t, a.selectedContact())

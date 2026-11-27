@@ -8,7 +8,15 @@
 
 **Cause or correction:** Visual acceptance depends on the rendered page, not source, test status or image count. Capture and review are separate steps, and unbordered ghost actions plus verbose disclaimers destroy visual hierarchy.
 
-**Prevention:** Inspect screenshots of actual composed pages at applicable sizes, themes, languages and states against `docs/design/desktop.md` and `docs/design/ui-checklist.md`. Enforce explicit four-tier typography (page title > section header > setting label > muted 1-line helper), distinct Primary/bordered Secondary/red Danger/Link controls, control-first Settings (segmented switches, presets and concise disclosures over stacked textboxes/prose), and centered wide-screen alignment. Check control bounds and scroll position, keep a failure frame when a click cannot be verified, and record the reviewer and verdict against the frozen candidate.
+**Prevention:** Inspect screenshots of actual composed pages at applicable sizes, themes, languages and states against `docs/design/desktop.md` and `docs/design/ui-checklist.md`. Enforce explicit four-tier typography (page title > section header > setting label > muted concise wrapped helper), distinct Primary/bordered Secondary/red Danger/Link controls, control-first Settings (segmented switches, presets and concise disclosures over stacked textboxes/prose), and centered wide-screen alignment. Check control bounds and scroll position, keep a failure frame when a click cannot be verified, and record the reviewer and verdict against the frozen candidate.
+
+### Sample periodic animations across non-symmetric phases
+
+**Problem:** Checking a sinusoidal animation with a single quarter-period step (`450 ms` on an `1800 ms` cycle) produces identical start and end opacity whenever wall-clock start lands near a symmetric pair (`sin(pi/4) == sin(3*pi/4)`).
+
+**Cause or correction:** Comparing only two points separated by `pi/2` or `pi` on a wall-clock `UnixMilli` sinusoid leaves a symmetric zero-delta window.
+
+**Prevention:** Advance and sample across at least two asymmetric steps (such as `+300 ms` and `+600 ms` on an `1800 ms` cycle) and take the maximum pixel delta so normal-motion tests stay deterministic across CI runners while `ReduceMotion` still checks `0`.
 
 ### Keep control text and background in the same theme during a switch
 

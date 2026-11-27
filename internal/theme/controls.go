@@ -53,7 +53,7 @@ func SettingsPreferenceRow(c *ui.Context, t *ui.Theme, label, description string
 		ui.Column(c).Basis(280).Grow(1).Shrink(1).MinWidth(0).Gap(4).Children(func() {
 			ui.Text(c, label).FontSize(TypeLabel).FontWeight(500).FixedLineHeight(LineLabel).TextColor(t.Text)
 			if description != "" {
-				ui.Text(c, description).FontSize(TypeMeta).FixedLineHeight(LineMeta).TextColor(t.TextMuted)
+				ui.Text(c, description).MinWidth(0).FontSize(TypeMeta).FixedLineHeight(LineMeta).TextColor(t.TextMuted)
 			}
 		})
 		ui.Column(c).Basis(320).Grow(1).Shrink(1).MinWidth(0).AlignItems(ui.End).Gap(8).Children(control)
