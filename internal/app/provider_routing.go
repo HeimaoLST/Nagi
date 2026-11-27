@@ -185,7 +185,7 @@ func (a *appModel) providerPriority(c *ui.Context, msgs locales.Messages, pool p
 
 func (a *appModel) providerFallback(c *ui.Context, msgs locales.Messages, editor *providerEditor, blocked bool) {
 	fallback := editor.FallbackOnly != nil && *editor.FallbackOnly
-	control := ui.Checkbox(c, &fallback, msgs.ProviderUseAsBackup()).MinHeight(theme.ControlHit).Disabled(blocked).OnChange(func() {
+	control := theme.Checkbox(c, &fallback, msgs.ProviderUseAsBackup()).Disabled(blocked).OnChange(func() {
 		editor.FallbackOnly, editor.fallbackChanged = &fallback, true
 	})
 	appTooltip(c, control, msgs.ProviderFallbackHint())
