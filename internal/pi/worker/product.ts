@@ -44,6 +44,9 @@ import { RouteHealth, type ProviderAttempt } from './route-health.js';
 import { compareModelIds, describeModel, modelSupply } from './model-catalog.js';
 import { approvedPreferences, parseNomination, renderWhiteboard, steerEnvelope, triageDomain, validateQuestionFields,
   type PreferenceCandidate, type WhiteboardRow } from './activity-control.js';
+import { sessionDimension, sessionMode, sessionReadLimit, sessionState, type SessionCloseResult } from './protocol.js';
+import { MAX_SESSION_INPUT, RuntimeSessions, sessionSignals } from './session-supervisor.js';
+import type { RuntimeSessionWrite } from './product-sqlite.js';
 
 const emptyDraft = (): Draft => ({ revision: 0, text: '', materials: [] });
 const newId = randomUUID;
@@ -52,7 +55,7 @@ const unknown = (execution?: StoredExecution) => execution?.state === 'unknown';
 const maxPartialBytes = 512 * 1024;
 const readOnlyTools: Record<string, true> = { read: true, grep: true, find: true, ls: true, activity_list: true, activity_get: true,
   activity_progress: true, activity_result_read: true, activity_trace_read: true, conversation_read: true, conversation_search: true, memory_list_rules: true, memory_search_log: true,
-  skill_list: true, skill_read: true, bot_list: true, bot_inspect_team: true };
+  skill_list: true, skill_read: true, bot_list: true, bot_inspect_team: true, session_list: true, session_read: true };
 const providerChanges = { 'provider.save': 'saved', 'provider.reorder': 'saved', 'provider.delete': 'deleted', 'provider.apply': 'applied',
   'provider.revokeCredential': 'revoked', 'routing.setPolicy': 'policy', 'routing.setOverrides': 'saved' } as const;
 type ProviderMutation = Extract<ProductCommand, { method: keyof typeof providerChanges }>;
@@ -68,7 +71,7 @@ export type ProductRunObservers = {
   acquireProvider?: (signal?: AbortSignal) => Promise<void>;
   whiteboard?: string;
   providerAttempt?: () => ProviderAttempt;
-  admitTool?: (name: string, callId: string) => void;
+  admitTool?: (name: string, callId: string, input: unknown) => void;
   steerChanged?: (steerId: string, state: 'queued' | 'delivered' | 'not_applied' | 'unknown', reason?: string) => void;
 };
 
@@ -251,6 +254,26 @@ function nonsecret(configuration: Connection) {
 type ToolTextResult = { content: { type: 'text'; text: string }[]; details: Record<string, never>; isError: boolean };
 
 const strictTool = { additionalProperties: false };
+const sessionHandleInput = { session_id: id, generation: Type.Integer({ minimum: 1, maximum: Number.MAX_SAFE_INTEGER }) };
+const sessionOffset = Type.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER });
+const sessionDimensions = { cols: sessionDimension, rows: sessionDimension };
+const sessionOpenInput = Type.Object({ command: Type.String({ minLength: 1, maxLength: 4096 }),
+  args: Type.Optional(Type.Array(Type.String({ maxLength: 4096 }), { maxItems: 128 })),
+  mode: sessionMode, cwd: Type.Optional(id), label: Type.Optional(Type.String({ maxLength: 256 })),
+  cols: Type.Optional(sessionDimension), rows: Type.Optional(sessionDimension) }, strictTool);
+const sessionReadInput = Type.Object({ ...sessionHandleInput, offset: Type.Optional(sessionOffset), limit: Type.Optional(sessionReadLimit) }, strictTool);
+const sessionWriteInput = Type.Union([
+  Type.Object({ ...sessionHandleInput, text: Type.String({ minLength: 1, maxLength: MAX_SESSION_INPUT }) }, strictTool),
+  Type.Object({ ...sessionHandleInput, data_base64: Type.String({ minLength: 4, maxLength: Math.ceil(MAX_SESSION_INPUT / 3) * 4 }) }, strictTool),
+]);
+const sessionWatchListInput = Type.Object({ ...sessionHandleInput, action: Type.Literal('list') }, strictTool);
+const sessionWatchDuration = Type.Integer({ minimum: 1, maximum: 2 ** 31 - 1 });
+const sessionWatchInput = Type.Union([sessionWatchListInput,
+  Type.Object({ ...sessionHandleInput, action: Type.Literal('cancel'), watch_id: id }, strictTool),
+  Type.Object({ ...sessionHandleInput, action: Type.Literal('arm'), start_offset: Type.Optional(sessionOffset),
+    on_exit: Type.Optional(Type.Boolean()), match_literal: Type.Optional(Type.String({ minLength: 1, maxLength: 256 })),
+    idle_ms: Type.Optional(sessionWatchDuration), timeout_ms: Type.Optional(sessionWatchDuration) }, strictTool),
+]);
 const modelInspectionPage = { cursor: inspectionPage.cursor, limit: inspectionPage.limit, max_bytes: inspectionPage.maxBytes };
 const traceToolParams = Type.Object({ activity_id: id, execution_id: Type.Optional(id), ...modelInspectionPage }, strictTool);
 const readToolParams = Type.Object({ conversation_id: id, ...modelInspectionPage, tail: Type.Optional(Type.Boolean()) }, strictTool);
@@ -321,6 +344,8 @@ function architectResult(bot: Bot) {
 
 export class Product {
   private readonly storage: ProductSQLite;
+  private readonly runtimeSessions: RuntimeSessions;
+  private readonly sessionCloses = new Map<string, Promise<Operation>>();
   private overflow?: ActivityOverflow;
   private readonly skills: BotSkills;
   private readonly sandbox: SkillSandbox;
@@ -351,6 +376,7 @@ export class Product {
     this.skills = new BotSkills(dirname(paths.profilePath));
     this.vault = new McpVault(paths.credentialsPath);
     this.storage = new ProductSQLite(paths.profilePath, paths.credentialsPath, this.skills, this.vault);
+    this.runtimeSessions = new RuntimeSessions(this.storage, () => this.credentialKeys(), (event, value) => this.emit(event, value), () => this.engine.disconnect());
     try {
       this.credentials = this.storage.credentials();
       this.installationId = loadSkillInstallation(dirname(paths.profilePath));
@@ -366,11 +392,21 @@ export class Product {
   }
 
   private recoverInterruptedWork(): void {
+    this.storage.recoverRuntimeSessions();
+    const pendingCloses = this.profile.operations.filter(row => row.method === 'session.close' && row.receipt.state === 'pending');
     const steerUpdates = this.storage.pendingSteers().map(row => ({ ...row, state: 'unknown' as const, revision: row.revision + 1, reason: 'worker_lost' }));
     const steerActivities = new Set(steerUpdates.map(row => row.activityId));
-    if (steerUpdates.length || this.profile.executions.some(live) || this.profile.activities.some(activity =>
+    if (pendingCloses.length || steerUpdates.length || this.profile.executions.some(live) || this.profile.activities.some(activity =>
         activity.questions.some(question => question.delivery === 'dispatching' || question.state === 'triage_pending'))) {
       this.commit(candidate => {
+        for (const operation of candidate.operations) {
+          if (operation.method !== 'session.close' || operation.receipt.state !== 'pending') continue;
+          const target = operation.receipt.target;
+          const row = 'botId' in target && target.sessionId && this.storage.runtimeSessions(target.botId, target.sessionId)[0];
+          operation.receipt.state = 'unknown';
+          if (row) operation.receipt.result = this.runtimeSessions.closeResult(row, false);
+          operation.reply = operation.receipt;
+        }
         for (const execution of candidate.executions.filter(live)) {
           execution.state = 'unknown';
           execution.revision++;
@@ -417,13 +453,17 @@ export class Product {
     this.closing = true;
     for (const run of this.active.values()) run.triage?.abort();
     for (const waiter of this.providerWaiters.values()) waiter.cancel();
-    await Promise.all([this.mcp.shutdown(), this.sandbox.shutdown(), ...this.triageTasks]);
+    await Promise.all([this.runtimeSessions.drain(), this.mcp.shutdown(), this.sandbox.shutdown(), ...this.triageTasks]);
   }
 
-  killChildrenOnExit(): void { this.mcp.killOnExit(); this.sandbox.killOnExit(); }
+  killChildrenOnExit(): void {
+    this.runtimeSessions.killOnExit();
+    this.mcp.killOnExit();
+    this.sandbox.killOnExit();
+  }
 
   private commit<T>(mutate: (candidate: ProductProfile) => T, skillWrite?: SkillWrite, mcpWrite?: McpVaultWrite, approval?: SkillApprovalChange,
-    routing?: RoutingWrite, control?: ActivityControlWrite): T {
+    routing?: RoutingWrite, control?: ActivityControlWrite, runtime?: RuntimeSessionWrite): T {
     const candidate = structuredClone(this.profile);
     const result = mutate(candidate);
     const beforeActivities = new Map(this.profile.activities.map(row => [row.activityId, row.revision]));
@@ -432,7 +472,8 @@ export class Product {
       if (beforeActivities.get(activity.activityId) !== activity.revision) activity.updatedAt = now;
     }
     let updates: TraceUpdate[];
-    try { updates = this.storage.write(candidate, this.profile, skillWrite, mcpWrite, approval, routing, control); }
+    const previousMcpKeys = mcpWrite && this.vault.keys();
+    try { updates = this.storage.write(candidate, this.profile, skillWrite, mcpWrite, approval, routing, control, runtime); }
     catch (error) {
       if (routing?.credentials) {
         this.closing = true;
@@ -441,6 +482,11 @@ export class Product {
       throw error;
     }
     this.profile = candidate;
+    if (previousMcpKeys) {
+      const current = new Set(this.vault.keys());
+      for (const key of previousMcpKeys) if (!current.has(key)) this.retiredKeys.add(key);
+      this.runtimeSessions.refreshCredentials();
+    }
     for (const update of updates) this.queueTraceUpdate(update);
     return result;
   }
@@ -603,6 +649,7 @@ export class Product {
       const retained = new Set(privateCredentialKeys(next));
       for (const key of privateCredentialKeys(this.credentials)) if (!retained.has(key)) this.retiredKeys.add(key);
       this.credentials = next;
+      this.runtimeSessions.refreshCredentials();
       for (const run of this.active.values()) if (!this.bindingKey(run.binding)) run.triage?.abort();
     }
     this.emit('provider.changed', { ...this.providerRevisions(), change: providerChanges[method] });
@@ -1190,6 +1237,18 @@ export class Product {
         return this.deleteMcpServer(command.params);
       case 'mcp.test':
         return this.testMcpServer(command.params);
+      case 'session.list':
+        return this.listRuntimeSessions(command.params);
+      case 'session.get':
+        return RuntimeSessions.summary(this.runtimeSessions.get(command.params.botId, command.params.sessionId));
+      case 'session.read': {
+        const { botId, sessionId, generation, offset, limit } = command.params;
+        const session = this.runtimeSessions.get(botId, sessionId);
+        this.runtimeSessions.generation(session, generation);
+        return this.runtimeSessions.read(session, offset, limit);
+      }
+      case 'session.close':
+        return this.closeRuntimeSession(command.params);
       case 'profile.backup': {
         if (this.active.size) stateError('busy', 'Finish or stop active work before saving a recovery copy');
         const redact = this.engine.redactor(this.credentialKeys());
@@ -1216,6 +1275,47 @@ export class Product {
       case 'operation.get':
         return this.operation(command.params.operationId);
     }
+  }
+
+  private listRuntimeSessions({ botId, states, cursor, limit = 20 }: ProductParams<'session.list'>) {
+    this.bot(this.profile, botId);
+    const scope = canonicalJSON(['session.list', botId, [...states ?? []].sort()]);
+    const rows = this.runtimeSessions.list(botId).filter(row => !states || states.includes(row.state));
+    return page(rows.map(RuntimeSessions.summary), row => row.sessionId, scope, cursor, limit);
+  }
+
+  private async closeRuntimeSession(params: ProductParams<'session.close'>): Promise<Operation> {
+    const { botId, sessionId, generation, expectedRevision, operationId } = params;
+    const method = 'session.close';
+    const prior = this.sameOperation(method, operationId, params);
+    if (prior) return this.sessionCloses.get(operationId) ?? prior.receipt;
+    const row = this.runtimeSessions.get(botId, sessionId);
+    this.runtimeSessions.generation(row, generation);
+    if (expectedRevision !== undefined) requireRevision(row.revision, expectedRevision);
+    const target = { botId, sessionId };
+    const live = row.state === 'running' || row.state === 'starting';
+    if (!live) {
+      const receipt: Operation = { operationId, target, state: 'accepted', result: this.runtimeSessions.closeResult(row, false) };
+      this.commit(candidate => this.record(candidate, method, params, receipt, receipt));
+      return receipt;
+    }
+    const pending: Operation = { operationId, target, state: 'pending' };
+    this.commit(candidate => this.record(candidate, method, params, pending, pending));
+    let acknowledged: Operation | undefined;
+    const finish = (result: SessionCloseResult, write?: RuntimeSessionWrite): Operation => {
+      const receipt: Operation = { operationId, target, state: result.state === 'disconnected' ? 'unknown' : 'accepted', result };
+      this.commit(candidate => {
+        const stored = candidate.operations.find(row => row.receipt.operationId === operationId)!;
+        stored.receipt = receipt;
+        stored.reply = receipt;
+      }, undefined, undefined, undefined, undefined, undefined, write);
+      return acknowledged = receipt;
+    };
+    const closing = this.runtimeSessions.close(row, 'closed_by_user', (write, result) => { finish(result, write); })
+      .then(result => acknowledged ?? finish(result));
+    this.sessionCloses.set(operationId, closing);
+    try { return await closing; }
+    finally { this.sessionCloses.delete(operationId); }
   }
 
   private mcpView(server: McpServerRecord, pools: ReturnType<McpConnectionManager['status']>): McpServerView {
@@ -1368,6 +1468,7 @@ export class Product {
     }
     const credentials = saveCredential(this.paths.credentialsPath, this.credentials, config);
     this.credentials = credentials;
+    this.runtimeSessions.refreshCredentials();
     const { apiKey: _, ...configuration } = config;
     const sourceId = credentials.credential_source;
     return this.commit(candidate => {
@@ -1742,8 +1843,9 @@ export class Product {
           if (this.closing || current.stopRequested || !this.active.has(executionId) || !this.bindingKey(binding)) stateError('credential_unavailable', 'The captured credential source is unavailable');
         },
         providerAttempt: sourceId ? () => this.routeHealth.begin(sourceId, binding.route, () => !!this.bindingKey(binding)) : undefined,
-        admitTool: (name, callId) => this.storage.admitTool(executionId, 'activityId' in owner ? owner.activityId : undefined,
-          redactAdmission(callId), redactAdmission(name), Object.hasOwn(readOnlyTools, name) ? 'readonly' : 'mutating'),
+        admitTool: (name, callId, input) => this.storage.admitTool(executionId, 'activityId' in owner ? owner.activityId : undefined,
+          redactAdmission(callId), redactAdmission(name), Object.hasOwn(readOnlyTools, name) || name === 'session_watch' && Value.Check(sessionWatchListInput, input)
+            ? 'readonly' : 'mutating'),
         started: () => guarded(() => {
           const update = this.commit(candidate => {
             const run = this.execution(candidate, executionId)!;
@@ -2999,8 +3101,89 @@ export class Product {
     return tools;
   }
 
+  private sessionTools(owner: ProductActor): ToolDefinition[] {
+    const activity = 'activityId' in owner ? this.activity(this.profile, owner.activityId) : undefined;
+    const botId = 'conversationId' in owner ? this.conversation(this.profile, owner.conversationId).botId : activity!.ownerBotId;
+    if (!resolveCodingTools(this.bot(this.profile, botId).profile)?.includes('bash')) return [];
+    const tool = <S extends TSchema>(name: string, description: string, parameters: S,
+      execute: (input: Static<S>, call: ActiveCall, callId: string) => unknown | Promise<unknown>): ToolDefinition => ({
+      name, label: name, description, parameters,
+      execute: async (callId, input, signal) => {
+        try {
+          const call = this.activeCall(owner, signal);
+          if (!resolveCodingTools(call.bot.profile)?.includes('bash')) stateError('scope_denied', 'The Bot cannot use stateful sessions');
+          if (!Value.Check(parameters, input)) return stateError('invalid_params', 'Invalid session tool parameters');
+          return this.modelResult(await execute(input, call, callId));
+        } catch (error) {
+          if (!(error instanceof RequestError)) throw error;
+          return toolText({ code: error.code, message: this.engine.cleanMessage(error) }, true);
+        }
+      },
+    });
+    const scoped = (input: { session_id: string; generation: number }, mutate: boolean) => {
+      const row = this.runtimeSessions.get(botId, input.session_id, { ...owner, botId }, mutate);
+      this.runtimeSessions.generation(row, input.generation);
+      return row;
+    };
+    return [
+      tool('session_open', 'Open a supervised process in this Bot’s workspace. Supply an executable and separate arguments.', sessionOpenInput,
+        (input, { executionId, run }, callId) => {
+          const { command, args = [], label, mode, cols, rows } = input;
+          if ([command, ...args, input.cwd ?? ''].some(text => text.includes('\0')) ||
+              Buffer.byteLength([command, ...args].join('\0')) > 32768 || mode === 'pipe' && (cols !== undefined || rows !== undefined)) {
+            return stateError('invalid_params', 'Invalid command, argument size or terminal dimensions');
+          }
+          const workspace = realpathSync(run.binding.cwd);
+          let cwd = workspace;
+          if (input.cwd !== undefined) {
+            try { cwd = realpathSync(resolve(workspace, input.cwd)); }
+            catch { return stateError('invalid_params', 'The session directory does not exist'); }
+            if (cwd !== workspace && !cwd.startsWith(workspace.endsWith('/') ? workspace : workspace + '/')) {
+              return stateError('scope_denied', 'The session directory is outside the captured workspace');
+            }
+          }
+          return this.runtimeSessions.open({ ownerBotId: botId, originActivityId: activity?.activityId,
+            originConversationId: activity?.originConversationId ?? ('conversationId' in owner ? owner.conversationId : undefined),
+            creatingOperationId: `${executionId}:${callId}`, command, args, cwd, label, mode,
+            ...(mode === 'pty' ? { cols: cols ?? 80, rows: rows ?? 24 } : {}) });
+        }),
+      tool('session_list', 'List stateful sessions visible to this actor.', Type.Object({ limit: inspectionPage.limit, cursor: inspectionPage.cursor,
+        states: Type.Optional(Type.Array(sessionState, { minItems: 1, maxItems: 6, uniqueItems: true })) }, strictTool),
+      ({ states, cursor, limit = 20 }) => {
+        const scope = canonicalJSON(['session_list', botId, owner, [...states ?? []].sort()]);
+        const rows = this.runtimeSessions.list(botId, { ...owner, botId }).filter(row => !states || states.includes(row.state));
+        return page(rows.map(RuntimeSessions.summary), row => row.sessionId, scope, cursor, limit);
+      }),
+      tool('session_read', 'Read a projected UTF-8 output slice and session state.', sessionReadInput,
+        input => this.runtimeSessions.read(scoped(input, false), input.offset, input.limit)),
+      tool('session_write', 'Send text or base64-encoded bytes to a session created by this actor. Never enter passwords or secrets.', sessionWriteInput, input => {
+        const row = scoped(input, true);
+        const bytes = 'text' in input ? Buffer.from(input.text) : Buffer.from(input.data_base64, 'base64');
+        if (!bytes.length || bytes.length > MAX_SESSION_INPUT || 'data_base64' in input && bytes.toString('base64') !== input.data_base64) {
+          return stateError('invalid_params', 'Session input must be canonical text or base64 within the byte limit');
+        }
+        return this.runtimeSessions.write(row, bytes);
+      }),
+      tool('session_signal', 'Send an explicit OS signal to a session created by this actor.', Type.Object({ ...sessionHandleInput,
+        signal: Type.Union(sessionSignals.map(signal => Type.Literal(signal))) }, strictTool),
+      input => this.runtimeSessions.signal(scoped(input, true), input.signal)),
+      tool('session_resize', 'Resize the terminal of a session created by this actor.', Type.Object({ ...sessionHandleInput, ...sessionDimensions }, strictTool),
+        input => this.runtimeSessions.resize(scoped(input, true), input.cols, input.rows)),
+      tool('session_eof', 'Close the session input while retaining its output stream.', Type.Object(sessionHandleInput, strictTool),
+        input => this.runtimeSessions.eof(scoped(input, true))),
+      tool('session_close', 'Close and reap a session created by this actor.', Type.Object(sessionHandleInput, strictTool),
+        input => this.runtimeSessions.close(scoped(input, true), 'closed_by_bot')),
+      tool('session_watch', 'Arm, list or cancel one-shot watches on projected output and session lifecycle.', sessionWatchInput, input => {
+        const row = scoped(input, input.action !== 'list');
+        if (input.action === 'list') return { watches: row.watches };
+        if (input.action === 'cancel') return this.runtimeSessions.cancel(row, input.watch_id);
+        return this.runtimeSessions.arm(row, input);
+      }),
+    ];
+  }
+
   private tools(owner: ProductActor): ToolDefinition[] {
-    const tools = [...this.inspectionTools(owner), ...this.memoryTools(owner), ...this.skillTools(owner)];
+    const tools = [...this.inspectionTools(owner), ...this.memoryTools(owner), ...this.skillTools(owner), ...this.sessionTools(owner)];
     if ('activityId' in owner) {
       tools.push({
         name: 'activity_ask', label: 'Ask about the activity', description: 'Ask the user for information needed to finish this activity.',

@@ -1714,22 +1714,22 @@ const steers = db.prepare('SELECT count(*) AS n FROM activity_steers').get().n;
 db.close();
 console.log(JSON.stringify({ v, fk, steers }));
 `)
-	if v9Check != `{"v":11,"fk":0,"steers":0}` {
-		t.Fatalf("v9->v11 migration check = %s", v9Check)
+	if v9Check != `{"v":12,"fk":0,"steers":0}` {
+		t.Fatalf("v9->v12 migration check = %s", v9Check)
 	}
 	v9Proc.shutdown(t, ctx)
 
 	runNodeSQLite(t, nodePath, v9DB, `
 const { DatabaseSync } = require('node:sqlite');
 const db = new DatabaseSync(process.argv[1]);
-db.exec('PRAGMA user_version = 12');
+db.exec('PRAGMA user_version = 13');
 db.close();
 `)
 	v11Client, startErr := pi.StartProduct(v9Opts)
 	if startErr == nil {
 		if _, readyErr := v11Client.Ready(ctx); readyErr == nil {
 			if _, openErr := v11Client.Open(ctx, []int{pi.ProductVersion}); openErr == nil {
-				t.Fatal("worker admitted SQLite user_version=12")
+				t.Fatal("worker admitted SQLite user_version=13")
 			}
 		}
 		_, _ = v11Client.Wait(ctx)
@@ -1742,8 +1742,8 @@ const bots = db.prepare('SELECT count(*) AS n FROM bots').get().n;
 db.close();
 console.log(JSON.stringify({ v, bots }));
 `)
-	if v11After != `{"v":12,"bots":1}` {
-		t.Fatalf("v12 refusal mutated DB: %s", v11After)
+	if v11After != `{"v":13,"bots":1}` {
+		t.Fatalf("v13 refusal mutated DB: %s", v11After)
 	}
 
 	bkDir := filepath.Join(root, "backup-source")
@@ -2010,8 +2010,8 @@ const fk = db.prepare('PRAGMA foreign_key_check').all().length;
 db.close();
 console.log(JSON.stringify({ v, fk }));
 `)
-	if restoreSchema != `{"v":11,"fk":0}` {
-		t.Fatalf("restored v11 schema check = %s", restoreSchema)
+	if restoreSchema != `{"v":12,"fk":0}` {
+		t.Fatalf("restored v12 schema check = %s", restoreSchema)
 	}
 
 	wbDir := filepath.Join(root, "wb-exact-fit")
