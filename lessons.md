@@ -489,3 +489,11 @@
 **Cause or correction:** Clock progression between consecutive guard checks breaks coupled invariants, `Array.prototype.sort` mutates its receiver, positional indexing assumes two independent lists share length and order, unguarded `strings.Cut` yields an empty prefix that matches `"-"` keys, and unconditional slice initialization treats empty fields as populated text.
 
 **Prevention:** Share a single timestamp snapshot across `claim` and `cooldown` fallbacks (with injectable deterministic clocks for unit tests), sort shallow array copies in pure projection helpers, key UI tool descriptions by stable tool name, guard empty language prefixes before prefix matching, and omit empty fragments before joining UI badges/notes.
+
+### Preserve Mach-O LC_UUID on macOS 27 and read SDK provenance from linked Mach-O headers
+
+**Problem:** Compiling the native PTY helper with `-Wl,-no_uuid` caused macOS 27 `dyld` to abort launch with `SIGABRT` (`missing LC_UUID load command`), `xcrun --show-sdk-version` failed under the active CLT configuration even when `clang` compiled, and standalone integration test helpers failed when CLI runs passed `NAGI_TEST_NODE` without setting `NAGI_PI_PAYLOAD`.
+
+**Cause or correction:** Apple's linker generates a deterministic content-based `LC_UUID` when compiling relative source paths with `-fno-ident` and omitting `-Wl,-no_uuid`, the linked binary's `LC_BUILD_VERSION` (`vtool -show-build`) reliably records the resolved macOS SDK version, and `NAGI_PI_PAYLOAD` sits predictably two directories above `NAGI_TEST_NODE` (`.../pi/bin/node`).
+
+**Prevention:** Keep Apple's default deterministic `LC_UUID` on bundled macOS helpers, verify byte-identity across independent build directories with `cmp`, inspect SDK provenance from linked Mach-O build metadata (`vtool -show-build`) when CLT omits `xcrun --show-sdk-version`, and fall back from `NAGI_PI_PAYLOAD` to `dirname(dirname(NAGI_TEST_NODE))` consistently across integration test helpers.

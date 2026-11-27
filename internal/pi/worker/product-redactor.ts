@@ -10,11 +10,17 @@ export function projectionRedactor(keys: Iterable<string | undefined>): (text: s
   return pattern ? text => text.replace(pattern, marker) : text => text;
 }
 
-export function streamingProjectionRedactor(keys: Iterable<string | undefined>): (text: string, final?: boolean) => string {
-  const { pattern, secrets, marker } = credentialPattern(keys);
-  if (!pattern) return text => text;
+export type StreamingProjectionRedactor = {
+  (fragment: string, final?: boolean): string;
+  update: (keys: Iterable<string | undefined>) => void;
+};
+
+export function streamingProjectionRedactor(keys: Iterable<string | undefined>,
+  project?: (text: string, consumed: number, match: boolean) => void): StreamingProjectionRedactor {
+  let rules = credentialPattern(keys);
   let pending = '';
-  return (fragment, final) => {
+  const write = (fragment: string, final?: boolean) => {
+    const { pattern, secrets, marker } = rules;
     const text = pending + fragment;
     let boundary = text.length;
     if (!final) {
@@ -25,17 +31,23 @@ export function streamingProjectionRedactor(keys: Iterable<string | undefined>):
         }
       }
     }
-    pattern.lastIndex = 0;
+    if (pattern) pattern.lastIndex = 0;
     let consumed = 0;
     let projected = '';
-    for (let match = pattern.exec(text); match && match.index < boundary; match = pattern.exec(text)) {
-      projected += text.slice(consumed, match.index) + marker;
-      consumed = pattern.lastIndex;
+    for (let match = pattern?.exec(text); match && match.index < boundary; match = pattern?.exec(text)) {
+      const plain = text.slice(consumed, match.index);
+      projected += plain + marker;
+      if (plain) project?.(plain, plain.length, false);
+      project?.(marker, match[0].length, true);
+      consumed = pattern!.lastIndex;
     }
     boundary = Math.max(boundary, consumed);
     pending = text.slice(boundary);
-    return projected + text.slice(consumed, boundary);
+    const plain = text.slice(consumed, boundary);
+    if (plain) project?.(plain, plain.length, false);
+    return projected + plain;
   };
+  return Object.assign(write, { update: (next: Iterable<string | undefined>) => { rules = credentialPattern(next); } });
 }
 
 export function clipUTF8(text: string, limit: number, marker = '…'): string {
