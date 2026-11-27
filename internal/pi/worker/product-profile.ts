@@ -15,6 +15,8 @@ import { activityLifecycleFields, activityProgressRecord, activitySteerReceipt, 
   type SkillApproval, type SkillApprovalRequest, type TriageAccounting } from './protocol.js';
 import { sessionSummary, sessionWatchOccurrence, type SessionSummary, type SessionWatchOccurrence } from './protocol.js';
 import { watchOccurrence, watchSummary, validateWatchDefinition, type WatchOccurrence, type WatchSummary } from './protocol.js';
+import { orchestrationCheckpoint, orchestrationDecision, orchestrationMandate, storedConversationNotice,
+  type OrchestrationCheckpoint, type OrchestrationDecision, type OrchestrationMandate, type StoredConversationNotice } from './protocol.js';
 import { lastingRulesFit, MAX_LOG_BYTES, MAX_PENDING_LEARNINGS, MAX_RULE_BYTES, MAX_WORK_LOGS,
   memorySnapshotSchema, validMemoryDate } from './bot-memory.js';
 import { decodeTraceBackup, directlyOwns, normalizeActivityGrants, type TraceBackup } from './product-trace.js';
@@ -35,7 +37,9 @@ export type ProductBackup = TraceBackup & { privateSkillBundles?: PrivateSkillBu
   activityEscalations?: Escalation[]; activityProgress?: ActivityProgressRecord[]; skillApprovalRequests?: SkillApprovalRequest[];
   triageAccounting?: TriageAccounting[]; activitySteers?: ActivitySteerRecord[];
   runtimeSessions?: SessionSummary[]; runtimeWatchOccurrences?: SessionWatchOccurrence[];
-  watches?: WatchSummary[]; watchOccurrences?: WatchOccurrence[] };
+  watches?: WatchSummary[]; watchOccurrences?: WatchOccurrence[];
+  orchestrationMandates?: OrchestrationMandate[]; orchestrationCheckpoints?: OrchestrationCheckpoint[];
+  orchestrationDecisions?: OrchestrationDecision[]; conversationNotices?: StoredConversationNotice[] };
 
 type Credential = { api: 'openai-responses' | 'openai-chat-completions'; endpoint: string; api_key: string };
 type LegacyConnection = {
@@ -108,6 +112,7 @@ const executionRecord = Type.Object({ ...executionSchema.properties, operationId
 const questionRecord = Type.Object({ ...questionResult.properties, triageRulesRevision: Type.Optional(counter) }, strict);
 const activityRecord = Type.Object({ activityId: recoveryID, ownerBotId: recoveryID, originConversationId: recoveryID,
   routing: Type.Optional(activityRouting),
+  originMandateId: Type.Optional(recoveryID),
   revision: counter, state: activityStateSchema, goal: Type.String(), requirements: Type.Array(Type.String()),
   ...activityLifecycleFields,
   updatedAt: Type.Optional(recoveryID),
@@ -408,13 +413,51 @@ function decodeWatchHistory(profile: ProductProfile, watches: unknown, occurrenc
   return { watches: dormant, watchOccurrences: inert };
 }
 
+function decodeOrchestrationHistory(profile: ProductProfile, mandates: unknown, checkpoints: unknown, decisions: unknown, notices: unknown):
+  Pick<ProductBackup, 'orchestrationMandates' | 'orchestrationCheckpoints' | 'orchestrationDecisions' | 'conversationNotices'> {
+  if (mandates === undefined && checkpoints === undefined && decisions === undefined && notices === undefined) return {};
+  const invalid = new RequestError('profile_unavailable', 'The recovery copy has invalid orchestration history');
+  const mandateRows = mandates === undefined ? [] : mandates;
+  const checkpointRows = checkpoints === undefined ? [] : checkpoints;
+  const cardRows = decisions === undefined ? [] : decisions;
+  const noticeRows = notices === undefined ? [] : notices;
+  if (!Value.Check(Type.Array(orchestrationMandate), mandateRows) || !Value.Check(Type.Array(orchestrationCheckpoint), checkpointRows) ||
+      !Value.Check(Type.Array(orchestrationDecision), cardRows) || !Value.Check(Type.Array(storedConversationNotice), noticeRows)) throw invalid;
+  const byId = new Map(mandateRows.map(row => [row.mandateId, row]));
+  const conversations = new Map(profile.conversations.map(row => [row.conversationId, row.botId]));
+  const executionOwners = new Map(profile.operations.flatMap(({ receipt }) => receipt.execution && 'conversationId' in receipt.target ?
+    [[receipt.execution.executionId, receipt.target.conversationId] as const] : []));
+  const unique = (ids: string[]) => new Set(ids).size === ids.length;
+  if (byId.size !== mandateRows.length || !unique(checkpointRows.map(row => row.mandateId)) || !unique(cardRows.map(row => row.decisionId)) ||
+      !unique(cardRows.map(row => row.runId)) || !unique(cardRows.filter(row => row.state === 'open').map(row => row.mandateId)) ||
+      !unique(noticeRows.map(row => row.noticeId)) || !unique(noticeRows.map(row => row.runId)) ||
+      !unique(noticeRows.map(row => canonicalJSON([row.conversationId, row.timelineSeq])))) throw invalid;
+  if (mandateRows.some(row => conversations.get(row.targetConversationId) !== row.ownerBotId) ||
+      checkpointRows.some(row => byId.get(row.mandateId)?.generation !== row.generation) ||
+      cardRows.some(row => {
+        const owner = byId.get(row.mandateId);
+        return owner?.ownerBotId !== row.ownerBotId || owner.targetConversationId !== row.targetConversationId ||
+          !unique(row.options.map(option => option.id)) || row.selectedOptionId !== undefined && !row.options.some(option => option.id === row.selectedOptionId);
+      }) || noticeRows.some(row => {
+        const owner = byId.get(row.mandateId);
+        return owner?.ownerBotId !== row.botId || owner.targetConversationId !== row.conversationId ||
+          row.anchorExecutionId !== undefined && executionOwners.get(row.anchorExecutionId) !== row.conversationId ||
+          row.anchorKind === 'post_settlement' && (!row.anchorExecutionId || !row.anchorOutcome);
+      })) throw invalid;
+  return { orchestrationMandates: mandateRows.map(row => ({ ...row, state: 'restored_readonly', dormant: true,
+      currentRunId: undefined, statusReason: 'restored_dormant' })), orchestrationCheckpoints: checkpointRows,
+    orchestrationDecisions: cardRows.map(row => ({ ...row, dormant: true, statusReason: row.state === 'open' ? 'restored_dormant' : row.statusReason })),
+    conversationNotices: noticeRows.map(row => ({ ...row, dormant: true })) };
+}
+
 export function decodeProductBackup(data: unknown): { profile: ProductProfile; backup?: ProductBackup } {
   if (data && typeof data === 'object' && 'backup' in data) {
     const { backup, ...records } = data;
     const profile = decodeProductProfile(records);
     if (!backup || typeof backup !== 'object') return { profile, backup: decodeTraceBackup(profile, backup) };
     const { privateSkillBundles: bundles, skillApprovals: approvals, activityEscalations, activityProgress, skillApprovalRequests,
-      triageAccounting, activitySteers, runtimeSessions, runtimeWatchOccurrences, watches, watchOccurrences, ...traces } = backup as Record<string, unknown>;
+      triageAccounting, activitySteers, runtimeSessions, runtimeWatchOccurrences, watches, watchOccurrences,
+      orchestrationMandates, orchestrationCheckpoints, orchestrationDecisions, conversationNotices, ...traces } = backup as Record<string, unknown>;
     const activities = new Map(profile.activities.map(row => [row.activityId, row]));
     const steerOperations = new Map(profile.operations.filter(row => row.method === 'activity.steer').map(row => [row.receipt.operationId, row]));
     if (activitySteers !== undefined && !Value.Check(Type.Array(activitySteerRecord), activitySteers)) {
@@ -507,12 +550,13 @@ export function decodeProductBackup(data: unknown): { profile: ProductProfile; b
     }
     return { profile, backup: { ...decodeTraceBackup(profile, traces), privateSkillBundles: bundles, skillApprovals: approvals, activityEscalations,
       activityProgress, skillApprovalRequests, triageAccounting, activitySteers, ...decodeRuntimeHistory(profile, runtimeSessions, runtimeWatchOccurrences),
-      ...decodeWatchHistory(profile, watches, watchOccurrences) } };
+      ...decodeWatchHistory(profile, watches, watchOccurrences),
+      ...decodeOrchestrationHistory(profile, orchestrationMandates, orchestrationCheckpoints, orchestrationDecisions, conversationNotices) } };
   }
   return { profile: decodeProductProfile(data) };
 }
 
-export function inspectProductRecovery(data: unknown): { contacts: number; activities: number; timers: number; schedules: number; dormantWatches: number } {
+export function inspectProductRecovery(data: unknown) {
   const { profile, backup } = decodeProductBackup(data);
   if (!backup && profile.operations.some(row => row.method === 'activity.steer')) {
     throw new RequestError('profile_unavailable', 'The recovery copy is missing steering receipts');
@@ -523,7 +567,9 @@ export function inspectProductRecovery(data: unknown): { contacts: number; activ
   }
   const watches = (backup?.watches ?? []).filter(row => row.state !== 'cancelled');
   return { contacts: profile.bots.length, activities: profile.activities.length, timers: watches.filter(row => row.kind === 'timer').length,
-    schedules: watches.filter(row => row.kind === 'schedule').length, dormantWatches: watches.filter(row => row.state === 'restored').length };
+    schedules: watches.filter(row => row.kind === 'schedule').length, dormantWatches: watches.filter(row => row.state === 'restored').length,
+    notices: backup?.conversationNotices?.length ?? 0, decisions: backup?.orchestrationDecisions?.length ?? 0,
+    dormantMandates: backup?.orchestrationMandates?.length ?? 0 };
 }
 
 function redactBackupProfile(snapshot: ProductProfile & { backup: ProductBackup }, redact: (text: string) => string): void {

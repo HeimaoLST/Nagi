@@ -526,7 +526,7 @@ test('WatchScheduler tracks precheck >64 KiB tail changes, >1 MiB output_limit a
   const captured = h.storage.captureBackup(text => text);
   const wire = { ...captured.profile, backup: captured.backup };
   const summary = inspectProductRecovery(wire);
-  assert.deepEqual(summary, { contacts: 1, activities: 0, timers: 1, schedules: 2, dormantWatches: 3 });
+  assert.deepEqual(summary, { contacts: 1, activities: 0, timers: 1, schedules: 2, dormantWatches: 3, notices: 0, decisions: 0, dormantMandates: 4 });
   const decoded = decodeProductBackup(wire);
   assert.equal(decoded.backup.watchGrants, undefined);
   assert.equal(decoded.backup.botEventInbox, undefined);
@@ -544,6 +544,6 @@ test('WatchScheduler tracks precheck >64 KiB tail changes, >1 MiB output_limit a
   }
 
   const legacyRecovery = inspectProductRecovery({ ...captured.profile, backup: { version: 1, traces: [], traceCoverage: [] } });
-  assert.deepEqual(legacyRecovery, { contacts: 1, activities: 0, timers: 0, schedules: 0, dormantWatches: 0 });
+  assert.deepEqual(legacyRecovery, { contacts: 1, activities: 0, timers: 0, schedules: 0, dormantWatches: 0, notices: 0, decisions: 0, dormantMandates: 0 });
   assert.equal(h.fatalFailures(), 0);
 });

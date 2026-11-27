@@ -169,7 +169,8 @@ const activityDigest = Type.Object({ factId: id, activityId: id, ownerBotId: id,
     Type.Literal('question_auto_saved'), Type.Literal('approval_required')]) });
 export type ActivityDigest = Static<typeof activityDigest>;
 const targetSchema = Type.Union([
-  Type.Object({ conversationId: id }), Type.Object({ botId: id, sessionId: Type.Optional(id), watchId: Type.Optional(id), grantId: Type.Optional(id) }),
+  Type.Object({ conversationId: id }), Type.Object({ botId: id, sessionId: Type.Optional(id), watchId: Type.Optional(id), grantId: Type.Optional(id),
+    mandateId: Type.Optional(id), decisionId: Type.Optional(id) }),
   Type.Object({ activityId: id, questionId: Type.Optional(id) }), Type.Object({ connection: Type.Literal(true) }),
 ]);
 const operationTarget = { operationId: id, expectedRevision: revision };
@@ -388,6 +389,66 @@ export function validateWatchDefinition({ kind, purpose, timer, schedule, preche
   }
 }
 
+const orchestrationStrict = { additionalProperties: false };
+const mandateState = Type.Union([Type.Literal('active'), Type.Literal('waiting_decision'), Type.Literal('paused'), Type.Literal('restored'),
+  Type.Literal('restored_readonly'), Type.Literal('completed'), Type.Literal('stopped'), Type.Literal('failed'), Type.Literal('unknown')]);
+const disposition = Type.Union([Type.Literal('silent'), Type.Literal('notified'), Type.Literal('needs_decision'), Type.Literal('stopped'),
+  Type.Literal('failed'), Type.Literal('unknown')]);
+const decisionOutcome = Type.Union([Type.Literal('approve'), Type.Literal('reject')]);
+const mandateTarget = { botId: id, mandateId: id };
+export const noticeUrgency = Type.Union([Type.Literal('low'), Type.Literal('normal'), Type.Literal('high')]);
+export const noticeSourceRef = Type.Object({ kind: Type.Union([Type.Literal('watch'), Type.Literal('session'), Type.Literal('activity'),
+  Type.Literal('decision')]), id, label: Type.Optional(Type.String({ maxLength: 160 })) }, orchestrationStrict);
+export const decisionOption = Type.Object({ id, label: Type.String({ minLength: 1, maxLength: 160 }),
+  description: Type.Optional(Type.String({ maxLength: 512 })), recommended: optionalFlag }, orchestrationStrict);
+export const conversationNotice = Type.Object({ noticeId: id, botId: id, mandateId: id, runId: id, factDigest: digest,
+  anchorKind: Type.Union([Type.Literal('pre_send'), Type.Literal('post_settlement'), Type.Literal('standalone')]), anchorExecutionId: optionalID,
+  anchorOutcome: Type.Optional(Type.Union([Type.Literal('completed'), Type.Literal('failed'), Type.Literal('interrupted'), Type.Literal('unknown')])),
+  sourceRefs: Type.Array(noticeSourceRef, { maxItems: 8 }), urgency: noticeUrgency, dormant: Type.Boolean(), createdAt: id }, orchestrationStrict);
+export const storedConversationNotice = Type.Object({ ...conversationNotice.properties, conversationId: id, timelineSeq: positiveInteger,
+  text: Type.String({ minLength: 1, maxLength: 2048 }) }, orchestrationStrict);
+export const orchestrationDecision = Type.Object({ decisionId: id, mandateId: id, ownerBotId: id, runId: id, revision: positiveInteger,
+  state: Type.Union([Type.Literal('open'), Type.Literal('approved'), Type.Literal('rejected'), Type.Literal('cancelled')]),
+  kind: id, purpose: Type.String({ maxLength: 256 }), summary: Type.String({ maxLength: 2048 }), targetConversationId: id,
+  options: Type.Array(decisionOption, { maxItems: 8 }), outcome: Type.Optional(decisionOutcome), selectedOptionId: optionalID,
+  responseText: Type.Optional(Type.String({ maxLength: 2048 })), dormant: Type.Boolean(), statusReason: optionalID, createdAt: id,
+  updatedAt: id, resolvedAt: optionalID }, orchestrationStrict);
+const runUsage = { calls: revision, inputTokens: revision, outputTokens: revision, totalTokens: revision, costUsd: Type.Number({ minimum: 0 }) };
+const orchestrationMetrics = Type.Object({ ...runUsage, totalWakes: revision, lastQueueDelayMs: revision, lastCoalescedCount: revision,
+  backoffDelayMs: revision, backoffReason: optionalID, consecutiveNoProgress: revision, nextEligibleAt: optionalID }, orchestrationStrict);
+export const orchestrationMandate = Type.Object({ mandateId: id, ownerBotId: id, targetConversationId: id,
+  sourceKind: Type.Union([Type.Literal('watch'), Type.Literal('timer'), Type.Literal('schedule'), Type.Literal('session'), Type.Literal('user')]),
+  sourceId: optionalID, purpose: Type.String({ maxLength: 1024 }), state: mandateState, revision: positiveInteger, generation: positiveInteger,
+  currentRunId: optionalID, lastDisposition: Type.Optional(disposition), lastNoticeId: optionalID, lastReceiptState: optionalID,
+  lastError: Type.Optional(Type.String({ maxLength: 2048 })), statusReason: optionalID, dormant: Type.Boolean(), createdAt: id, updatedAt: id,
+  settledAt: optionalID }, orchestrationStrict);
+export const orchestrationCheckpoint = Type.Object({ mandateId: id, generation: positiveInteger, revision: positiveInteger,
+  workingSummary: Type.String({ maxLength: 2048 }), updatedAt: id }, orchestrationStrict);
+const orchestrationSummary = Type.Object({ ...orchestrationMandate.properties, metrics: orchestrationMetrics,
+  currentExecutionState: optionalID, pendingDecision: Type.Optional(orchestrationDecision) }, orchestrationStrict);
+export const orchestrationRun = Type.Object({ runId: id, mandateId: id, generation: positiveInteger, batchId: optionalID, state: id,
+  routeRole: optionalID, disposition: Type.Optional(disposition), summary: Type.Optional(Type.String({ maxLength: 2048 })), noticeId: optionalID,
+  decisionId: optionalID, error: Type.Optional(Type.String({ maxLength: 2048 })), queueDelayMs: revision, coalescedCount: revision,
+  ...runUsage, startedAt: id, settledAt: optionalID }, orchestrationStrict);
+const orchestrationEffectReceipt = Type.Object({ receiptId: id, mandateId: id, runId: id, callId: id, tool: id, target: optionalID,
+  state: id, reason: optionalID, createdAt: id }, orchestrationStrict);
+export const timelineChanged = Type.Object({ conversationId: id, timelineRevision: positiveInteger, noticeId: optionalID, at: id }, orchestrationStrict);
+export const orchestrationChanged = Type.Object({ botId: id, change: Type.Union([Type.Literal('mandate_updated'), Type.Literal('run_started'),
+  Type.Literal('run_settled'), Type.Literal('decision_opened'), Type.Literal('decision_resolved'), Type.Literal('stopped'),
+  Type.Literal('backoff_updated'), Type.Literal('queue_updated')]), mandateId: optionalID, mandateRevision: Type.Optional(positiveInteger),
+  state: Type.Optional(mandateState), runId: optionalID, decisionId: optionalID, conversationId: optionalID, executionId: optionalID,
+  operationId: optionalID, at: id }, orchestrationStrict);
+export type StoredConversationNotice = Static<typeof storedConversationNotice>;
+export type OrchestrationMandate = Static<typeof orchestrationMandate>;
+export type OrchestrationCheckpoint = Static<typeof orchestrationCheckpoint>;
+export type OrchestrationDecision = Static<typeof orchestrationDecision>;
+export type OrchestrationSummary = Static<typeof orchestrationSummary>;
+export type OrchestrationRun = Static<typeof orchestrationRun>;
+export type OrchestrationEffectReceipt = Static<typeof orchestrationEffectReceipt>;
+export type TimelineChanged = Static<typeof timelineChanged>;
+export type OrchestrationChanged = Static<typeof orchestrationChanged>;
+
+
 export const productCommands = Type.Union([
   Type.Object({ method: Type.Literal('app.open'), params: Type.Object({ supportedVersions: Type.Array(positiveInteger, { minItems: 1 }) }) }),
   Type.Object({ method: Type.Literal('bot.list'), params: Type.Object(page) }),
@@ -427,6 +488,7 @@ export const productCommands = Type.Union([
   Type.Object({ method: Type.Literal('conversation.send'), params: Type.Object({ conversationId: id, operationId: id, draftRevision: revision }) }),
   Type.Object({ method: Type.Literal('conversation.stop'), params: Type.Object({ conversationId: id, executionId: id, operationId: id }) }),
   Type.Object({ method: Type.Literal('conversation.history'), params: Type.Object({ conversationId: id, ...page }) }),
+  Type.Object({ method: Type.Literal('conversation.timeline'), params: Type.Object({ conversationId: id, ...page }, orchestrationStrict) }),
   Type.Object({ method: Type.Literal('activity.list'), params: Type.Object({ botId: id, states: Type.Optional(Type.Array(activityStateSchema)),
     unacknowledgedOnly: Type.Optional(Type.Boolean()), ...page }) }),
   Type.Object({ method: Type.Literal('activity.get'), params: Type.Object({ activityId: id }) }),
@@ -486,6 +548,14 @@ export const productCommands = Type.Union([
     cursor: optionalID, limit: inspectionPage.limit }, watchStrict) }),
   Type.Object({ method: Type.Literal('watch.revokeGrant'), params: Type.Object({ ...watchGrantTarget,
     expectedRevision: positiveInteger, operationId: id }, watchStrict) }),
+  Type.Object({ method: Type.Literal('orchestration.list'), params: Type.Object({ botId: id, cursor: optionalID,
+    limit: inspectionPage.limit, states: Type.Optional(Type.Array(mandateState, { minItems: 1, maxItems: 9, uniqueItems: true })) }, orchestrationStrict) }),
+  Type.Object({ method: Type.Literal('orchestration.get'), params: Type.Object(mandateTarget, orchestrationStrict) }),
+  Type.Object({ method: Type.Literal('orchestration.decide'), params: Type.Object({ ...mandateTarget, decisionId: id, ...operationTarget,
+    expectedRevision: positiveInteger, outcome: decisionOutcome, selectedOptionId: optionalID,
+    text: Type.Optional(Type.String({ maxLength: 2048 })) }, orchestrationStrict) }),
+  Type.Object({ method: Type.Literal('orchestration.stop'), params: Type.Object({ ...mandateTarget, operationId: id,
+    expectedRevision: Type.Optional(positiveInteger), generation: Type.Optional(positiveInteger), runId: optionalID }, orchestrationStrict) }),
   Type.Object({ method: Type.Literal('operation.get'), params: Type.Object({ operationId: id }) }),
   Type.Object({ method: Type.Literal('profile.backup'), params: Type.Object({ destination: id }) }),
   Type.Object({ method: Type.Literal('app.shutdown'), params: Type.Object({}) }),
@@ -514,6 +584,8 @@ export const productEvents = Type.Union([
   Type.Object({ event: Type.Literal('session.changed'), data: sessionSummary }),
   Type.Object({ event: Type.Literal('session.outputUpdated'), data: sessionOutputUpdated }),
   Type.Object({ event: Type.Literal('watch.changed'), data: watchChange }),
+  Type.Object({ event: Type.Literal('conversation.timelineChanged'), data: timelineChanged }),
+  Type.Object({ event: Type.Literal('orchestration.changed'), data: orchestrationChanged }),
 ]);
 export const productRequestSchema = Type.Intersect([
   Type.Object({ v: Type.Literal(1), type: Type.Literal('request'), id }), productCommands,
@@ -543,6 +615,15 @@ const deliveryBlocker = Type.Optional(Type.Literal('credential_unavailable'));
 const connectionView = Type.Object({ ...Type.Omit(connectionSchema, ['apiKey']).properties, credentialPresent: Type.Boolean() });
 const connectionResult = Type.Object({ ...connectionRevisions, saved: Type.Union([connectionView, Type.Null()]), effective: Type.Union([connectionView, Type.Null()]) });
 const stopResult = Type.Object({ executionId: id, cancelRequested: Type.Literal(true) });
+const timelineItem = { messageId: id, timestamp: id, anchorSeq: revision, text: Type.String() };
+const timelineResult = Type.Object({ conversationId: id, timelineRevision: revision, transcriptAvailable: Type.Boolean(),
+  transcriptError: Type.Optional(Type.String()), nextCursor: nullable(id), items: Type.Array(Type.Union([
+    Type.Object({ ...timelineItem, kind: Type.Literal('message'), role: Type.Union([Type.Literal('user'), Type.Literal('assistant')]),
+      materials: Type.Array(materialSchema), quote: optionalQuote }, orchestrationStrict),
+    Type.Object({ ...timelineItem, kind: Type.Literal('notice'), notice: conversationNotice }, orchestrationStrict),
+  ])) }, orchestrationStrict);
+const orchestrationReceipt = (result: TSchema, decision = false) => Type.Object({ operationId: id, state: Type.Literal('accepted'),
+  target: Type.Object({ ...mandateTarget, ...(decision ? { decisionId: id } : {}) }, orchestrationStrict), result }, orchestrationStrict);
 export const productResults = {
   'app.open': Type.Object({ version: Type.Literal(1), streamId: id, eventSeq: revision, snapshot: Type.Object({ bots: Type.Array(botResult),
     nextBotCursor: nullable(id), connection: connectionResult, preferences: Type.Optional(Type.Object({ selectedBotId: Type.Optional(id),
@@ -580,6 +661,7 @@ export const productResults = {
   'conversation.stop': stopResult,
   'conversation.history': productPage(Type.Object({ messageId: id, role: Type.Union([Type.Literal('user'), Type.Literal('assistant')]),
     timestamp: id, text: Type.String(), materials: Type.Array(materialSchema), quote: optionalQuote })),
+  'conversation.timeline': timelineResult,
   'activity.list': productPage(Type.Object(activityFields)),
   'activity.get': Type.Object({ ...activityFields, ...approvalRequests, ...steers, ...activityRouting.properties, requirements: stringList,
     materials: Type.Array(materialSchema), questions: Type.Array(questionResult), executions: Type.Array(activeExecution) }),
@@ -627,6 +709,11 @@ export const productResults = {
   'watch.listGrants': Type.Object({ items: Type.Array(watchGrant), nextCursor: nullable(id) }, watchStrict),
   'watch.revokeGrant': Type.Object({ operationId: id, state: Type.Literal('accepted'), target: Type.Object(watchGrantTarget, watchStrict),
     result: watchRevokeResult }, watchStrict),
+  'orchestration.list': Type.Object({ items: Type.Array(orchestrationSummary), nextCursor: nullable(id) }, orchestrationStrict),
+  'orchestration.get': Type.Object({ ...orchestrationSummary.properties, recentRuns: Type.Array(orchestrationRun, { maxItems: 20 }),
+    decisions: Type.Array(orchestrationDecision, { maxItems: 20 }), recentReceipts: Type.Array(orchestrationEffectReceipt, { maxItems: 20 }) }, orchestrationStrict),
+  'orchestration.decide': orchestrationReceipt(Type.Object({ mandate: orchestrationSummary, decision: orchestrationDecision }, orchestrationStrict), true),
+  'orchestration.stop': orchestrationReceipt(Type.Object({ mandate: orchestrationSummary, cancelRequested: Type.Boolean(), stoppedRunId: optionalID }, orchestrationStrict)),
   'operation.get': operationSchema,
   'profile.backup': Type.Object({ path: id }),
   'app.shutdown': Type.Object({ drained: Type.Literal(true) }),
@@ -678,6 +765,7 @@ const commands = Type.Union([
   Type.Object({ method: Type.Literal('shutdown'), params: Type.Object({}) }),
 ]);
 export type Command = Static<typeof commands>;
+export type ProductOpenParams = Omit<OpenParams, 'purpose'> & { purpose: OpenParams['purpose'] | 'orchestration'; inMemory?: boolean };
 export type OpenParams = Extract<Command, { method: 'context.open' }>['params'];
 export type ConfigureParams = Extract<Command, { method: 'configure' }>['params'];
 export type ToolResult = Extract<Command, { method: 'tool.result' }>['params'];

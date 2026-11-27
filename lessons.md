@@ -529,3 +529,11 @@
 **Cause or correction:** Non-interactive caption labels earlier in layout order intercept text-based clicks unless the caption explicitly delegates focus to its associated field; `t.Fatal` (`runtime.Goexit`) must never run inside helper goroutines that own channel handshakes; and `openProductProfile` prepends system Bots before persisted user Contacts.
 
 **Prevention:** Delegate `OnClick` on custom field captions to request `.Focus()` on their associated input, capture check errors from `w.pump.do` closures and call `t.Fatal` outside the closure on the test goroutine, and resolve test contacts by stable Bot ID via `slices.IndexFunc`.
+
+### Keep private orchestration checkpoints structured, withhold post-settlement notices until turn finality, and separate pending non-dispatch from crash uncertainty
+
+**Problem:** Falling back directly to raw private assistant text during orchestration checkpoint rotation risked persisting unbounded private reasoning, publishing `conversation_notify` during an active foreground send could overtake that send's settlement order or fail on empty transcripts, and treating queued `conversation.send` waits identically to dispatched runs conflated pre-dispatch interruption with uncertain external execution.
+
+**Cause or correction:** Checkpoint fallback must synthesize structured disposition and source facts when no explicit advisory summary is available; `post_settlement` notices must remain withheld behind the active foreground execution anchor until `completed`, `failed`, `interrupted`, or `unknown` finality while `conversation.timeline` keeps transcript availability separate from committed product notices; and queued sends must record explicit `dispatched_at` transitions so pre-dispatch cancellations and worker crashes settle `pending` human sends as `rejected` (`delivery: "non_dispatched"`) with intact drafts and zero replay while leaving in-flight turns `unknown`.
+
+**Prevention:** Record structured fallback summaries outside raw private Pi transcripts, serialize per-conversation timeline anchors across all send finality states without touching `Draft`, and track pre-dispatch queue state (`dispatched_at == null`) separately from admitted executions in both live cancellation and crash recovery.

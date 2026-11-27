@@ -1250,6 +1250,25 @@ console.log(JSON.stringify({ sessions, watches, occ, fk, m4 }));
 		t.Fatal("contacts.json canonical mirror leaked runtimeSessions")
 	}
 
+	bg1WaitUntil(t, ctx, "ownerBot orchestration idle before backup", func() bool {
+		orchs, err := proc.client.ListOrchestrations(ctx, pi.ProductOrchestrationListParams{BotID: ownerBot.BotID, Limit: 50})
+		if err != nil {
+			return false
+		}
+		for _, item := range orchs.Items {
+			if item.CurrentRunID != "" {
+				return false
+			}
+		}
+		pendingOrch := runNodeSQLite(t, nodePath, dbPath, fmt.Sprintf(`
+const { DatabaseSync } = require('node:sqlite');
+const db = new DatabaseSync(process.argv[1]);
+console.log(db.prepare("SELECT count(*) AS n FROM bot_event_inbox WHERE owner_bot_id = ? AND mandate_id IS NOT NULL AND state IN ('pending','claimed')").get(JSON.stringify(%q)).n);
+db.close();
+`, ownerBot.BotID))
+		return pendingOrch == "0"
+	})
+
 	liveMirrorBefore := cp1FileSHA256(t, opts.ProfilePath)
 	backupPath := filepath.Join(root, "bg1-backup.json")
 	callsBeforeBackup := provider.calls.Load()
@@ -1350,7 +1369,7 @@ const fk = db.prepare('PRAGMA foreign_key_check').all().length;
 db.close();
 console.log(JSON.stringify({ v, fk }));
 `)
-	if restoreCheck != `{"v":13,"fk":0}` {
+	if restoreCheck != `{"v":14,"fk":0}` {
 		t.Fatalf("restored SQLite check = %s", restoreCheck)
 	}
 
@@ -1530,7 +1549,7 @@ console.log(JSON.stringify({ occ, adm, exec, fk }));
 	runNodeSQLite(t, nodePath, migDB, `
 const { DatabaseSync } = require('node:sqlite');
 const db = new DatabaseSync(process.argv[1]);
-db.exec("DROP TABLE bot_event_inbox; DROP TABLE bot_event_batches; DROP TABLE watch_occurrences; DROP TABLE runtime_watches; DROP TABLE watch_grants; DELETE FROM meta WHERE key GLOB 'watch_operation:*'; DROP TABLE runtime_watch_occurrences; DROP TABLE session_watches; DROP TABLE runtime_sessions; DELETE FROM meta WHERE key = 'runtime_session_epoch';");
+db.exec("DROP TABLE orchestration_admissions; DROP TABLE conversation_notices; DROP TABLE conversation_timelines; DROP TABLE orchestration_decisions; DROP TABLE orchestration_runs; DROP TABLE orchestration_checkpoints; DROP TABLE orchestration_backoff; DROP TABLE queued_conversation_sends; DROP TABLE bot_event_inbox; DROP TABLE orchestration_mandates; DELETE FROM meta WHERE key GLOB 'orchestration_operation:*'; ALTER TABLE activities DROP COLUMN origin_mandate_id; DROP TABLE bot_event_batches; DROP TABLE watch_occurrences; DROP TABLE runtime_watches; DROP TABLE watch_grants; DELETE FROM meta WHERE key GLOB 'watch_operation:*'; DROP TABLE runtime_watch_occurrences; DROP TABLE session_watches; DROP TABLE runtime_sessions; DELETE FROM meta WHERE key = 'runtime_session_epoch';");
 db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES ('pending_snapshot_previous', ?)").run(JSON.stringify(process.argv[2]));
 db.exec('PRAGMA user_version = 11');
 db.close();
@@ -1541,10 +1560,10 @@ db.close();
 	migProc = startCP1Process(t, migOpts)
 	_ = migProc.open(t, ctx)
 	if provider.calls.Load() != callsBeforeMig {
-		t.Fatal("v11->v13 migration triggered provider calls")
+		t.Fatal("v11->v14 migration triggered provider calls")
 	}
 	if !bytes.Equal(productRead(t, migOpts.ProfilePath), migMirrorCanonical) {
-		t.Fatal("v11->v13 pending mirror repair did not restore exact canonical contacts.json bytes")
+		t.Fatal("v11->v14 pending mirror repair did not restore exact canonical contacts.json bytes")
 	}
 	migState := runNodeSQLite(t, nodePath, migDB, `
 const { DatabaseSync } = require('node:sqlite');
@@ -1555,22 +1574,22 @@ const pending = !!db.prepare("SELECT value FROM meta WHERE key = 'pending_snapsh
 db.close();
 console.log(JSON.stringify({ v, fk, pending }));
 `)
-	if migState != `{"v":13,"fk":0,"pending":false}` {
-		t.Fatalf("v11->v13 migration state = %s", migState)
+	if migState != `{"v":14,"fk":0,"pending":false}` {
+		t.Fatalf("v11->v14 migration state = %s", migState)
 	}
 	migProc.shutdown(t, ctx)
 
 	runNodeSQLite(t, nodePath, migDB, `
 const { DatabaseSync } = require('node:sqlite');
 const db = new DatabaseSync(process.argv[1]);
-db.exec('PRAGMA user_version = 14');
+db.exec('PRAGMA user_version = 15');
 db.close();
 `)
 	v13Client, startErr := pi.StartProduct(migOpts)
 	if startErr == nil {
 		if _, readyErr := v13Client.Ready(ctx); readyErr == nil {
 			if _, openErr := v13Client.Open(ctx, []int{pi.ProductVersion}); openErr == nil {
-				t.Fatal("worker admitted SQLite user_version=14")
+				t.Fatal("worker admitted SQLite user_version=15")
 			}
 		}
 		_, _ = v13Client.Wait(ctx)
@@ -1584,8 +1603,8 @@ const fk = db.prepare('PRAGMA foreign_key_check').all().length;
 db.close();
 console.log(JSON.stringify({ v, bots, fk }));
 `)
-	if v13After != `{"v":14,"bots":1,"fk":0}` {
-		t.Fatalf("v14 refusal mutated DB: %s", v13After)
+	if v13After != `{"v":15,"bots":1,"fk":0}` {
+		t.Fatalf("v15 refusal mutated DB: %s", v13After)
 	}
 	provider.assertNoProblems()
 }

@@ -591,7 +591,7 @@ console.log(JSON.stringify(rows));
 	runNodeSQLite(t, nodePath, dbPath, `
 const { DatabaseSync } = require('node:sqlite');
 const db = new DatabaseSync(process.argv[1]);
-db.exec("DROP TABLE bot_event_inbox; DROP TABLE bot_event_batches; DROP TABLE watch_occurrences; DROP TABLE runtime_watches; DROP TABLE watch_grants; DELETE FROM meta WHERE key GLOB 'watch_operation:*'; DROP TABLE runtime_watch_occurrences; DROP TABLE session_watches; DROP TABLE runtime_sessions; DELETE FROM meta WHERE key = 'runtime_session_epoch'; DROP TABLE activity_steers; DROP TABLE activity_triage_accounting; ALTER TABLE activities DROP COLUMN updated_at; DROP TABLE activity_progress; DROP TABLE skill_approval_requests; ALTER TABLE activities DROP COLUMN acknowledged_at; ALTER TABLE activities DROP COLUMN acknowledged_execution_id; ALTER TABLE activities DROP COLUMN closed_at; DROP TABLE execution_mutation_admissions; DROP TABLE execution_admission_coverage; DROP TABLE activity_escalations; DROP TABLE provider_accounts; ALTER TABLE activities DROP COLUMN routing_json; PRAGMA user_version = 6;");
+db.exec("DROP TABLE orchestration_admissions; DROP TABLE conversation_notices; DROP TABLE conversation_timelines; DROP TABLE orchestration_decisions; DROP TABLE orchestration_runs; DROP TABLE orchestration_checkpoints; DROP TABLE orchestration_backoff; DROP TABLE queued_conversation_sends; DROP TABLE bot_event_inbox; DROP TABLE orchestration_mandates; DELETE FROM meta WHERE key GLOB 'orchestration_operation:*'; ALTER TABLE activities DROP COLUMN origin_mandate_id; DROP TABLE bot_event_batches; DROP TABLE watch_occurrences; DROP TABLE runtime_watches; DROP TABLE watch_grants; DELETE FROM meta WHERE key GLOB 'watch_operation:*'; DROP TABLE runtime_watch_occurrences; DROP TABLE session_watches; DROP TABLE runtime_sessions; DELETE FROM meta WHERE key = 'runtime_session_epoch'; DROP TABLE activity_steers; DROP TABLE activity_triage_accounting; ALTER TABLE activities DROP COLUMN updated_at; DROP TABLE activity_progress; DROP TABLE skill_approval_requests; ALTER TABLE activities DROP COLUMN acknowledged_at; ALTER TABLE activities DROP COLUMN acknowledged_execution_id; ALTER TABLE activities DROP COLUMN closed_at; DROP TABLE execution_mutation_admissions; DROP TABLE execution_admission_coverage; DROP TABLE activity_escalations; DROP TABLE provider_accounts; ALTER TABLE activities DROP COLUMN routing_json; PRAGMA user_version = 6;");
 db.close();
 `)
 
@@ -608,8 +608,8 @@ const fk = db.prepare('PRAGMA foreign_key_check').all().length;
 db.close();
 console.log(JSON.stringify({ v, fk }));
 `)
-	if migCheck != `{"v":13,"fk":0}` {
-		t.Fatalf("v6->v13 migration check = %s", migCheck)
+	if migCheck != `{"v":14,"fk":0}` {
+		t.Fatalf("v6->v14 migration check = %s", migCheck)
 	}
 	if !bytes.Equal(productRead(t, opts.ProfilePath), legacyProfileBytes) {
 		t.Fatal("v6->v7 migration mutated canonical legacy contacts.json bytes")
@@ -1456,18 +1456,18 @@ const db = new DatabaseSync(process.argv[1]);
 const v = db.prepare('PRAGMA user_version').get().user_version;
 const fk = db.prepare('PRAGMA foreign_key_check').all().length;
 const cov = db.prepare('SELECT count(*) AS n FROM execution_admission_coverage').get().n;
-db.exec('PRAGMA user_version = 14');
+db.exec('PRAGMA user_version = 15');
 db.close();
 console.log(JSON.stringify({ v, fk, cov }));
 `)
-	if restoreCheck != `{"v":13,"fk":0,"cov":0}` {
+	if restoreCheck != `{"v":14,"fk":0,"cov":0}` {
 		t.Fatalf("restored SQLite check = %s", restoreCheck)
 	}
 	v8Client, startErr := pi.StartProduct(restoreOpts)
 	if startErr == nil {
 		if _, readyErr := v8Client.Ready(ctx); readyErr == nil {
 			if _, openErr := v8Client.Open(ctx, []int{pi.ProductVersion}); openErr == nil {
-				t.Fatal("worker admitted SQLite user_version=14")
+				t.Fatal("worker admitted SQLite user_version=15")
 			}
 		}
 		_, _ = v8Client.Wait(ctx)

@@ -944,58 +944,69 @@ export default async (input, ctx) => {
 		t.Fatalf("unexpected drift state: %+v", afterDrift)
 	}
 
-	mirrorBeforeTicks := productRead(t, opts.ProfilePath)
-	plainReceipt, err := proc.client.SaveWatch(ctx, pi.ProductWatchSaveParams{
-		BotID: bot.BotID, Kind: pi.ProductWatchSchedule, Purpose: "Plain recurring tick", Schedule: interval10, OperationID: "bg2-save-plain",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	plainRes, _ := pi.DecodeWatchMutationResult(plainReceipt)
-	tickWatch(plainRes.Watch.WatchID, "", "tick")
-	secondTick, _ := tickWatch(plainRes.Watch.WatchID, "", "tick")
-	setClock(bg2ParseISO(t, secondTick.NextDueAt) + 120_000)
-	var afterSkip pi.ProductWatchDetail
-	bg1WaitUntil(t, ctx, "offline schedule backlog skip", func() bool {
-		got, err := proc.client.GetWatch(ctx, bot.BotID, plainRes.Watch.WatchID)
+	proc.shutdown(t, ctx)
+	t.Run("HeldInboxBurstCoalescing", func(t *testing.T) {
+		t.Setenv("NAGI_ORCHESTRATION_HOLD", "1")
+		opts.FreshProfile = false
+		proc = startCP1Process(t, opts)
+		_ = proc.open(t, ctx)
+		mirrorBeforeTicks := productRead(t, opts.ProfilePath)
+		plainReceipt, err := proc.client.SaveWatch(ctx, pi.ProductWatchSaveParams{
+			BotID: bot.BotID, Kind: pi.ProductWatchSchedule, Purpose: "Plain recurring tick", Schedule: interval10, OperationID: "bg2-save-plain",
+		})
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got.NextDueAt != "" && bg2ParseISO(t, got.NextDueAt) > currentEpoch {
-			afterSkip = got
-			return true
+		plainRes, _ := pi.DecodeWatchMutationResult(plainReceipt)
+		tickWatch(plainRes.Watch.WatchID, "", "tick")
+		secondTick, _ := tickWatch(plainRes.Watch.WatchID, "", "tick")
+		setClock(bg2ParseISO(t, secondTick.NextDueAt) + 120_000)
+		var afterSkip pi.ProductWatchDetail
+		bg1WaitUntil(t, ctx, "offline schedule backlog skip", func() bool {
+			got, err := proc.client.GetWatch(ctx, bot.BotID, plainRes.Watch.WatchID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.NextDueAt != "" && bg2ParseISO(t, got.NextDueAt) > currentEpoch {
+				afterSkip = got
+				return true
+			}
+			return false
+		})
+		if len(afterSkip.RecentOccurrences) != 3 {
+			t.Fatalf("expected 3 occurrences after skip, got %d", len(afterSkip.RecentOccurrences))
 		}
-		return false
-	})
-	if len(afterSkip.RecentOccurrences) != 3 {
-		t.Fatalf("expected 3 occurrences after skip, got %d", len(afterSkip.RecentOccurrences))
-	}
-	plainInboxCount := bg2CountRows(t, nodePath, dbPath, "bot_event_inbox", "source_id = "+bg2SQLQuote(plainRes.Watch.WatchID))
-	if plainInboxCount != 1 {
-		t.Fatalf("expected 1 coalesced inbox row, got %d", plainInboxCount)
-	}
-	coalescedVal := runNodeSQLite(t, nodePath, dbPath, fmt.Sprintf(`
+		plainInboxCount := bg2CountRows(t, nodePath, dbPath, "bot_event_inbox", "source_id = "+bg2SQLQuote(plainRes.Watch.WatchID))
+		if plainInboxCount != 1 {
+			t.Fatalf("expected 1 coalesced inbox row, got %d", plainInboxCount)
+		}
+		coalescedVal := runNodeSQLite(t, nodePath, dbPath, fmt.Sprintf(`
 const { DatabaseSync } = require('node:sqlite');
 const db = new DatabaseSync(process.argv[1]);
 console.log(db.prepare('SELECT coalesced_count FROM bot_event_inbox WHERE source_id = ?').get(JSON.stringify(%q)).coalesced_count);
 db.close();
 `, plainRes.Watch.WatchID))
-	if coalescedVal != "3" {
-		t.Fatalf("coalesced_count = %s, want 3", coalescedVal)
-	}
-	setClock(currentEpoch - 120_000)
-	rollbackCheck, err := proc.client.GetWatch(ctx, bot.BotID, plainRes.Watch.WatchID)
-	if err != nil || rollbackCheck.NextDueAt != afterSkip.NextDueAt {
-		t.Fatalf("clock rollback altered nextDueAt: got=%q want=%q err=%v", rollbackCheck.NextDueAt, afterSkip.NextDueAt, err)
-	}
-	if !bytes.Equal(productRead(t, opts.ProfilePath), mirrorBeforeTicks) {
-		t.Fatal("watch mutations/ticks altered canonical contacts.json bytes")
-	}
-	if _, err := proc.client.PauseWatch(ctx, pi.ProductWatchStateMutationParams{
-		BotID: bot.BotID, WatchID: plainRes.Watch.WatchID, ExpectedRevision: rollbackCheck.Revision, OperationID: "bg2-pause-plain",
-	}); err != nil {
-		t.Fatal(err)
-	}
+		if coalescedVal != "3" {
+			t.Fatalf("coalesced_count = %s, want 3", coalescedVal)
+		}
+		setClock(currentEpoch - 120_000)
+		rollbackCheck, err := proc.client.GetWatch(ctx, bot.BotID, plainRes.Watch.WatchID)
+		if err != nil || rollbackCheck.NextDueAt != afterSkip.NextDueAt {
+			t.Fatalf("clock rollback altered nextDueAt: got=%q want=%q err=%v", rollbackCheck.NextDueAt, afterSkip.NextDueAt, err)
+		}
+		if !bytes.Equal(productRead(t, opts.ProfilePath), mirrorBeforeTicks) {
+			t.Fatal("watch mutations/ticks altered canonical contacts.json bytes")
+		}
+		if _, err := proc.client.PauseWatch(ctx, pi.ProductWatchStateMutationParams{
+			BotID: bot.BotID, WatchID: plainRes.Watch.WatchID, ExpectedRevision: rollbackCheck.Revision, OperationID: "bg2-pause-plain",
+		}); err != nil {
+			t.Fatal(err)
+		}
+		proc.shutdown(t, ctx)
+	})
+	opts.FreshProfile = false
+	proc = startCP1Process(t, opts)
+	_ = proc.open(t, ctx)
 
 	setClock(bg2ParseISO(t, "2026-03-07T06:00:00.000Z"))
 	springReceipt, err := proc.client.SaveWatch(ctx, pi.ProductWatchSaveParams{
@@ -1197,6 +1208,21 @@ db.close();
 		t.Fatal(err)
 	}
 
+	bg1WaitUntil(t, ctx, "orchestration idle before backup", func() bool {
+		for _, botID := range []string{bot.BotID, sibling.BotID} {
+			orchs, err := proc.client.ListOrchestrations(ctx, pi.ProductOrchestrationListParams{BotID: botID, Limit: 50})
+			if err != nil {
+				return false
+			}
+			for _, item := range orchs.Items {
+				if item.CurrentRunID != "" {
+					return false
+				}
+			}
+		}
+		return bg2CountRows(t, nodePath, dbPath, "bot_event_inbox", "mandate_id IS NOT NULL AND state IN ('pending','claimed')") == 0
+	})
+
 	backupPath := filepath.Join(root, "bg2-backup.json")
 	callsBeforeBackup := provider.calls.Load()
 	canonicalBeforeBackup := productRead(t, opts.ProfilePath)
@@ -1243,17 +1269,21 @@ const { inspectProductRecovery } = await import(%q);
 console.log(JSON.stringify(inspectProductRecovery(JSON.parse(readFileSync(process.argv[1], 'utf8')))));
 `, "file://"+filepath.Join(filepath.Dir(workerPath), "product-profile.js")), backupPath)
 	var recoveredCounts struct {
-		Contacts       int `json:"contacts"`
-		Activities     int `json:"activities"`
-		Timers         int `json:"timers"`
-		Schedules      int `json:"schedules"`
-		DormantWatches int `json:"dormantWatches"`
+		Contacts        int `json:"contacts"`
+		Activities      int `json:"activities"`
+		Timers          int `json:"timers"`
+		Schedules       int `json:"schedules"`
+		DormantWatches  int `json:"dormantWatches"`
+		Notices         int `json:"notices"`
+		Decisions       int `json:"decisions"`
+		DormantMandates int `json:"dormantMandates"`
 	}
 	if err := json.Unmarshal([]byte(inspectJSON), &recoveredCounts); err != nil {
 		t.Fatal(err)
 	}
 	if recoveredCounts.Contacts != 2 || recoveredCounts.Activities != 1 || recoveredCounts.Timers != expectedTimers ||
-		recoveredCounts.Schedules != expectedScheds || recoveredCounts.DormantWatches != expectedDormant || expectedDormant == 0 {
+		recoveredCounts.Schedules != expectedScheds || recoveredCounts.DormantWatches != expectedDormant || expectedDormant == 0 ||
+		recoveredCounts.DormantMandates == 0 {
 		t.Fatalf("inspectProductRecovery mismatch: got=%+v want timers=%d schedules=%d dormant=%d",
 			recoveredCounts, expectedTimers, expectedScheds, expectedDormant)
 	}
@@ -1458,11 +1488,13 @@ console.log(JSON.stringify(batch));
 	if err := json.Unmarshal([]byte(stagedJSON), &stagedBatch); err != nil || stagedBatch.Stage != "staged" || len(stagedBatch.EventIDs) == 0 {
 		t.Fatalf("claimEventBatch staged = %s err=%v", stagedJSON, err)
 	}
-	callsBeforeBatches := provider.calls.Load()
-	proc = startCP1Process(t, opts)
-	_ = proc.open(t, ctx)
-	proc.shutdown(t, ctx)
-	releasedStage := runNodeSQLite(t, nodePath, dbPath, fmt.Sprintf(`
+	t.Run("HeldBatchReconciliation", func(t *testing.T) {
+		t.Setenv("NAGI_ORCHESTRATION_HOLD", "1")
+		callsBeforeBatches := provider.calls.Load()
+		proc = startCP1Process(t, opts)
+		_ = proc.open(t, ctx)
+		proc.shutdown(t, ctx)
+		releasedStage := runNodeSQLite(t, nodePath, dbPath, fmt.Sprintf(`
 const { DatabaseSync } = require('node:sqlite');
 const db = new DatabaseSync(process.argv[1]);
 const stage = db.prepare('SELECT stage FROM bot_event_batches WHERE batch_id = ?').get(JSON.stringify(%q)).stage;
@@ -1472,14 +1504,14 @@ const pending = db.prepare('SELECT count(*) AS n FROM bot_event_inbox WHERE even
 db.close();
 console.log(JSON.stringify({ stage, pending }));
 `, stagedBatch.BatchID, func() string {
-		b, _ := json.Marshal(stagedBatch.EventIDs)
-		return string(b)
-	}()))
-	if releasedStage != fmt.Sprintf(`{"stage":"released","pending":%d}`, len(stagedBatch.EventIDs)) {
-		t.Fatalf("staged batch reopen mismatch = %s", releasedStage)
-	}
+			b, _ := json.Marshal(stagedBatch.EventIDs)
+			return string(b)
+		}()))
+		if releasedStage != fmt.Sprintf(`{"stage":"released","pending":%d}`, len(stagedBatch.EventIDs)) {
+			t.Fatalf("staged batch reopen mismatch = %s", releasedStage)
+		}
 
-	dispJSON := bg2RunNodeJSON(t, nodePath, fmt.Sprintf(`
+		dispJSON := bg2RunNodeJSON(t, nodePath, fmt.Sprintf(`
 const { ProductSQLite } = await import(%q);
 const { join } = await import('node:path');
 const [dir, botId] = process.argv.slice(1);
@@ -1492,18 +1524,18 @@ const disp = s.markBatchDispatched(batch.batchId);
 s.close();
 console.log(JSON.stringify(disp));
 `, sqliteModuleURL), profileDir, bot.BotID)
-	var dispBatch struct {
-		BatchID  string   `json:"batchId"`
-		Stage    string   `json:"stage"`
-		EventIDs []string `json:"eventIds"`
-	}
-	if err := json.Unmarshal([]byte(dispJSON), &dispBatch); err != nil || dispBatch.Stage != "dispatched" {
-		t.Fatalf("markBatchDispatched = %s err=%v", dispJSON, err)
-	}
-	proc = startCP1Process(t, opts)
-	_ = proc.open(t, ctx)
-	proc.shutdown(t, ctx)
-	unknownStage := runNodeSQLite(t, nodePath, dbPath, fmt.Sprintf(`
+		var dispBatch struct {
+			BatchID  string   `json:"batchId"`
+			Stage    string   `json:"stage"`
+			EventIDs []string `json:"eventIds"`
+		}
+		if err := json.Unmarshal([]byte(dispJSON), &dispBatch); err != nil || dispBatch.Stage != "dispatched" {
+			t.Fatalf("markBatchDispatched = %s err=%v", dispJSON, err)
+		}
+		proc = startCP1Process(t, opts)
+		_ = proc.open(t, ctx)
+		proc.shutdown(t, ctx)
+		unknownStage := runNodeSQLite(t, nodePath, dbPath, fmt.Sprintf(`
 const { DatabaseSync } = require('node:sqlite');
 const db = new DatabaseSync(process.argv[1]);
 const bid = JSON.stringify(%q);
@@ -1512,12 +1544,13 @@ const unk = db.prepare("SELECT count(*) AS n FROM bot_event_inbox WHERE batch_id
 db.close();
 console.log(JSON.stringify({ stage, unk }));
 `, dispBatch.BatchID))
-	if unknownStage != fmt.Sprintf(`{"stage":"unknown","unk":%d}`, len(dispBatch.EventIDs)) {
-		t.Fatalf("dispatched batch reopen mismatch = %s", unknownStage)
-	}
-	if provider.calls.Load() != callsBeforeBatches {
-		t.Fatalf("batch reconciliation replayed provider calls: before=%d after=%d", callsBeforeBatches, provider.calls.Load())
-	}
+		if unknownStage != fmt.Sprintf(`{"stage":"unknown","unk":%d}`, len(dispBatch.EventIDs)) {
+			t.Fatalf("dispatched batch reopen mismatch = %s", unknownStage)
+		}
+		if provider.calls.Load() != callsBeforeBatches {
+			t.Fatalf("batch reconciliation replayed provider calls: before=%d after=%d", callsBeforeBatches, provider.calls.Load())
+		}
+	})
 
 	for _, fromVer := range []int{11, 12} {
 		mDir := filepath.Join(root, fmt.Sprintf("mig-v%d", fromVer))
@@ -1542,9 +1575,9 @@ console.log(JSON.stringify({ stage, unk }));
 		mProc.shutdown(t, ctx)
 
 		mDB := filepath.Join(mDir, "nagi.db")
-		dropSQL := "DROP TABLE bot_event_inbox; DROP TABLE bot_event_batches; DROP TABLE watch_occurrences; DROP TABLE runtime_watches; DROP TABLE watch_grants; DELETE FROM meta WHERE key GLOB 'watch_operation:*'; PRAGMA user_version = 12;"
+		dropSQL := "DROP TABLE orchestration_admissions; DROP TABLE conversation_notices; DROP TABLE conversation_timelines; DROP TABLE orchestration_decisions; DROP TABLE orchestration_runs; DROP TABLE orchestration_checkpoints; DROP TABLE orchestration_backoff; DROP TABLE queued_conversation_sends; DROP TABLE bot_event_inbox; DROP TABLE orchestration_mandates; DELETE FROM meta WHERE key GLOB 'orchestration_operation:*'; ALTER TABLE activities DROP COLUMN origin_mandate_id; DROP TABLE bot_event_batches; DROP TABLE watch_occurrences; DROP TABLE runtime_watches; DROP TABLE watch_grants; DELETE FROM meta WHERE key GLOB 'watch_operation:*'; PRAGMA user_version = 12;"
 		if fromVer == 11 {
-			dropSQL = "DROP TABLE bot_event_inbox; DROP TABLE bot_event_batches; DROP TABLE watch_occurrences; DROP TABLE runtime_watches; DROP TABLE watch_grants; DELETE FROM meta WHERE key GLOB 'watch_operation:*'; DROP TABLE runtime_watch_occurrences; DROP TABLE session_watches; DROP TABLE runtime_sessions; DELETE FROM meta WHERE key = 'runtime_session_epoch'; PRAGMA user_version = 11;"
+			dropSQL = "DROP TABLE orchestration_admissions; DROP TABLE conversation_notices; DROP TABLE conversation_timelines; DROP TABLE orchestration_decisions; DROP TABLE orchestration_runs; DROP TABLE orchestration_checkpoints; DROP TABLE orchestration_backoff; DROP TABLE queued_conversation_sends; DROP TABLE bot_event_inbox; DROP TABLE orchestration_mandates; DELETE FROM meta WHERE key GLOB 'orchestration_operation:*'; ALTER TABLE activities DROP COLUMN origin_mandate_id; DROP TABLE bot_event_batches; DROP TABLE watch_occurrences; DROP TABLE runtime_watches; DROP TABLE watch_grants; DELETE FROM meta WHERE key GLOB 'watch_operation:*'; DROP TABLE runtime_watch_occurrences; DROP TABLE session_watches; DROP TABLE runtime_sessions; DELETE FROM meta WHERE key = 'runtime_session_epoch'; PRAGMA user_version = 11;"
 		}
 		runNodeSQLite(t, nodePath, mDB, fmt.Sprintf(`
 const { DatabaseSync } = require('node:sqlite');
@@ -1558,25 +1591,25 @@ db.close();
 		_ = mProc.open(t, ctx)
 		mProc.shutdown(t, ctx)
 		if !bytes.Equal(productRead(t, mOpts.ProfilePath), canonBefore) {
-			t.Fatalf("v%d->v13 altered contacts.json bytes", fromVer)
+			t.Fatalf("v%d->v14 altered contacts.json bytes", fromVer)
 		}
 		vCheck := runNodeSQLite(t, nodePath, mDB, `
 const { DatabaseSync } = require('node:sqlite');
 const db = new DatabaseSync(process.argv[1]);
 const v = db.prepare('PRAGMA user_version').get().user_version;
 const fk = db.prepare('PRAGMA foreign_key_check').all().length;
-db.exec('PRAGMA user_version = 14');
+db.exec('PRAGMA user_version = 15');
 db.close();
 console.log(JSON.stringify({ v, fk }));
 `)
-		if vCheck != `{"v":13,"fk":0}` {
-			t.Fatalf("v%d->v13 schema check = %s", fromVer, vCheck)
+		if vCheck != `{"v":14,"fk":0}` {
+			t.Fatalf("v%d->v14 schema check = %s", fromVer, vCheck)
 		}
 		v14Client, startErr := pi.StartProduct(mOpts)
 		if startErr == nil {
 			if _, readyErr := v14Client.Ready(ctx); readyErr == nil {
 				if _, openErr := v14Client.Open(ctx, []int{pi.ProductVersion}); openErr == nil {
-					t.Fatalf("worker admitted user_version=14 on v%d dir", fromVer)
+					t.Fatalf("worker admitted user_version=15 on v%d dir", fromVer)
 				}
 			}
 			_, _ = v14Client.Wait(ctx)
@@ -1589,8 +1622,8 @@ const bots = db.prepare('SELECT count(*) AS n FROM bots').get().n;
 db.close();
 console.log(JSON.stringify({ v, bots }));
 `)
-		if after14 != `{"v":14,"bots":1}` {
-			t.Fatalf("v14 refusal mutated DB: %s", after14)
+		if after14 != `{"v":15,"bots":1}` {
+			t.Fatalf("v15 refusal mutated DB: %s", after14)
 		}
 	}
 

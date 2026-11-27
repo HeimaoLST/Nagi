@@ -200,7 +200,7 @@ export class WatchScheduler {
   constructor(private readonly storage: ProductSQLite, private readonly dependencies: ScheduleDependencies,
     private readonly clock: () => number = Date.now) {}
 
-  private now(): number {
+  now(): number {
     const file = process.env.NAGI_TEST_CLOCK_FILE;
     if (!file) return this.clock();
     try {
@@ -247,6 +247,12 @@ export class WatchScheduler {
       this.inflight.get(row.watchId)?.controller.abort();
       this.change(row.state === 'paused' ? 'paused' : 'invalidated', row, this.grant(row));
     }
+  }
+
+  mandateDisarmed(botId: string, watchId: string): void {
+    this.inflight.get(watchId)?.controller.abort();
+    const row = this.get(botId, watchId);
+    this.change('paused', row, this.grant(row));
   }
 
   private checkAdmission(): void {
@@ -355,6 +361,9 @@ export class WatchScheduler {
       throw new RequestError('stale_revision', 'The watch revision has changed', undefined, { currentRevision: previous?.revision });
     }
     if (previous?.state === 'cancelled' || previous?.state === 'settled') throw new RequestError('invalid_state', 'The watch is already settled');
+    if (previous?.targetConversationId && targetConversationId && targetConversationId !== previous.targetConversationId) {
+      throw new RequestError('invalid_params', 'An existing watch keeps its original conversation');
+    }
     const target = targetConversationId ?? previous?.targetConversationId ?? model?.conversationId ?? owner.currentConversationId;
     if (!this.dependencies.ownsConversation(botId, target) || model && target !== model.conversationId) {
       throw new RequestError(model ? 'scope_denied' : 'not_found', 'The watch conversation is outside the owner scope');
