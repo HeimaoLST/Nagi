@@ -169,7 +169,7 @@ const activityDigest = Type.Object({ factId: id, activityId: id, ownerBotId: id,
     Type.Literal('question_auto_saved'), Type.Literal('approval_required')]) });
 export type ActivityDigest = Static<typeof activityDigest>;
 const targetSchema = Type.Union([
-  Type.Object({ conversationId: id }), Type.Object({ botId: id, sessionId: Type.Optional(id) }),
+  Type.Object({ conversationId: id }), Type.Object({ botId: id, sessionId: Type.Optional(id), watchId: Type.Optional(id), grantId: Type.Optional(id) }),
   Type.Object({ activityId: id, questionId: Type.Optional(id) }), Type.Object({ connection: Type.Literal(true) }),
 ]);
 const operationTarget = { operationId: id, expectedRevision: revision };
@@ -290,6 +290,104 @@ export type SessionWatchOccurrence = Static<typeof sessionWatchOccurrence>;
 export type SessionChunk = Static<typeof sessionChunk>;
 export type SessionReadResult = Static<typeof sessionReadResult>;
 export type SessionCloseResult = Static<typeof sessionCloseResult>;
+const watchStrict = { additionalProperties: false };
+const optionalText = Type.Optional(Type.String());
+const optionalID = Type.Optional(id);
+const optionalFlag = Type.Optional(Type.Boolean());
+const watchTimestamp = Type.String({ pattern: '^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,3})?Z$' });
+const watchKind = Type.Union([Type.Literal('timer'), Type.Literal('schedule')]);
+const watchState = Type.Union([Type.Literal('active'), Type.Literal('proposed'), Type.Literal('paused'), Type.Literal('restored'),
+  Type.Literal('invalidated'), Type.Literal('settled'), Type.Literal('cancelled')]);
+const watchMissedPolicy = Type.Union([Type.Literal('skip'), Type.Literal('fire_once_coalesced')]);
+const watchTimer = Type.Object({ fireAt: watchTimestamp, missedPolicy: Type.Optional(watchMissedPolicy) }, watchStrict);
+const watchCalendar = Type.Union([Type.Literal('hourly'), Type.Literal('daily'), Type.Literal('weekly')]);
+const watchZone = { timeZone: id, jitterSeconds: Type.Optional(revision) };
+const watchSchedule = Type.Union([
+  Type.Object({ cadenceKind: Type.Literal('interval'), intervalSeconds: Type.Integer({ minimum: 10, maximum: 31536000 }), ...watchZone }, watchStrict),
+  Type.Object({ cadenceKind: Type.Literal('calendar'), frequency: watchCalendar,
+    minute: Type.Integer({ minimum: 0, maximum: 59 }), hour: Type.Optional(Type.Integer({ minimum: 0, maximum: 23 })),
+    daysOfWeek: Type.Optional(Type.Array(Type.Integer({ minimum: 0, maximum: 6 }), { minItems: 1, maxItems: 7, uniqueItems: true })),
+    ...watchZone }, watchStrict),
+]);
+const watchTimeout = Type.Integer({ minimum: 1000, maximum: 30000 });
+const watchArgs = Type.Array(Type.String({ maxLength: 4096 }), { maxItems: 128 });
+const precheckOptions = { timeoutMs: Type.Optional(watchTimeout), emitInitial: optionalFlag };
+const precheckExecutable = { kind: Type.Literal('executable'), executable: id, allowedArgs: Type.Optional(watchArgs), workspaceRead: optionalFlag };
+const precheckSkill = { kind: Type.Literal('skill'), skillId: skillID, skillSource, scriptName: skillScriptName, input: Type.Optional(Type.Unknown()) };
+const watchPrecheck = Type.Union([
+  Type.Object({ ...precheckExecutable, ...precheckOptions, executableDigest: Type.Optional(digest) }, watchStrict),
+  Type.Object({ ...precheckSkill, ...precheckOptions, approvalDigest: Type.Optional(digest), workspaceRead: optionalFlag }, watchStrict),
+]);
+const watchDefinition = { kind: watchKind, label: Type.Optional(Type.String({ maxLength: 256 })), purpose: Type.String({ minLength: 1, maxLength: 1024 }),
+  prompt: Type.Optional(Type.String({ maxLength: 4096 })), timer: Type.Optional(watchTimer), schedule: Type.Optional(watchSchedule),
+  precheck: Type.Optional(watchPrecheck) };
+export const watchSummary = Type.Object({ ...watchDefinition, watchId: id, ownerBotId: id, targetConversationId: id, originActivityId: optionalID,
+  revision: positiveInteger, source: Type.Union([Type.Literal('user'), Type.Literal('model')]), state: watchState, armed: Type.Boolean(),
+  label: Type.String(), grantId: optionalID, statusReason: optionalID, nextDueAt: optionalID, lastFiredAt: optionalID,
+  lastGoodDigest: Type.Optional(digest), lastOutcome: optionalID, consecutiveFailures: revision,
+  lastOccurrenceId: optionalID, lastEventId: optionalID, createdAt: id, updatedAt: id, settledAt: optionalID }, watchStrict);
+export const watchOccurrence = Type.Object({ occurrenceId: id, watchId: id, ownerBotId: id, watchRevision: positiveInteger,
+  scheduledAt: watchTimestamp, outcome: id, state: Type.Union([Type.Literal('running'), Type.Literal('settled'), Type.Literal('unknown'), Type.Literal('cancelled')]),
+  exitCode: Type.Optional(revision), truncated: optionalFlag, digest: Type.Optional(digest), excerpt: optionalText, error: optionalText,
+  eventId: optionalID, coalescedInto: optionalID, createdAt: id, settledAt: optionalID }, watchStrict);
+export const watchGrant = Type.Object({ grantId: id, installationId: id, ownerBotId: id, revision: positiveInteger,
+  state: Type.Union([Type.Literal('active'), Type.Literal('revoked')]), purpose: id,
+  operationClass: Type.Union([Type.Literal('precheck_skill'), Type.Literal('precheck_executable')]),
+  artifactKind: Type.Union([Type.Literal('skill'), Type.Literal('executable')]), executable: optionalID,
+  executableDigest: Type.Optional(digest), allowedArgs: Type.Optional(watchArgs), skillId: optionalID, skillSource: Type.Optional(skillSource),
+  scriptName: optionalID, approvalDigest: Type.Optional(digest), permissionsDigest: Type.Optional(digest), canonicalCwd: id,
+  workspaceRead: Type.Boolean(), networkOrigins: stringList, minCadenceSeconds: positiveInteger, maxTimeoutMs: watchTimeout,
+  revokedReason: optionalID, createdAt: id, updatedAt: id, revokedAt: optionalID }, watchStrict);
+const watchChanges = Type.Union([Type.Literal('saved'), Type.Literal('activated'), Type.Literal('paused'), Type.Literal('cancelled'),
+  Type.Literal('fired'), Type.Literal('invalidated'), Type.Literal('grant_saved'), Type.Literal('grant_revoked')]);
+const watchChange = Type.Object({ botId: id, change: watchChanges, watchId: optionalID, watchRevision: Type.Optional(positiveInteger),
+  state: Type.Optional(watchState), grantId: optionalID, grantRevision: Type.Optional(positiveInteger), occurrenceId: optionalID,
+  nextDueAt: optionalID, at: id }, watchStrict);
+const watchTarget = { botId: id, watchId: id };
+const watchGrantTarget = { botId: id, grantId: id };
+const watchMutation = { ...watchTarget, operationId: id, expectedRevision: positiveInteger };
+export const watchFilters = { kind: Type.Optional(watchKind),
+  states: Type.Optional(Type.Array(watchState, { minItems: 1, maxItems: 7, uniqueItems: true })),
+  cursor: optionalID, limit: inspectionPage.limit };
+export const watchModelCreate = Type.Object({ ...watchDefinition, targetConversationId: optionalID }, watchStrict);
+const watchSave = Type.Object({ ...watchDefinition, botId: id, watchId: optionalID, targetConversationId: optionalID,
+  expectedRevision: Type.Optional(positiveInteger), activate: optionalFlag, approveGrant: optionalFlag, operationId: id }, watchStrict);
+const watchMutationResult = Type.Object({ watch: watchSummary, grant: Type.Optional(watchGrant), disposition: optionalID }, watchStrict);
+const watchRevokeResult = Type.Object({ grant: watchGrant, invalidatedWatchIds: Type.Array(id) }, watchStrict);
+const watchReceipt = Type.Object({ operationId: id, state: Type.Literal('accepted'), target: Type.Object(watchTarget, watchStrict),
+  result: watchMutationResult }, watchStrict);
+export type WatchSummary = Static<typeof watchSummary>;
+export type WatchGrant = Static<typeof watchGrant>;
+export type WatchOccurrence = Static<typeof watchOccurrence>;
+export type WatchChange = Static<typeof watchChange>;
+export type WatchSchedule = Static<typeof watchSchedule>;
+export type WatchPrecheck = Static<typeof watchPrecheck>;
+export type WatchMutationResult = Static<typeof watchMutationResult>;
+export type WatchRevokeResult = Static<typeof watchRevokeResult>;
+export type WatchModelCreate = Static<typeof watchModelCreate>;
+
+export function validateWatchDefinition({ kind, purpose, timer, schedule, precheck }: WatchModelCreate): void {
+  if (!purpose.trim() || (kind === 'timer' ? !timer || !!schedule || !!precheck : !schedule || !!timer)) {
+    throw new RequestError('invalid_params', 'Choose the matching timer or schedule definition');
+  }
+  if (timer) {
+    const instant = Date.parse(timer.fireAt);
+    const canonical = timer.fireAt.replace(/(?:\.(\d{1,3}))?Z$/, (_, ms: string | undefined) => `.${(ms ?? '').padEnd(3, '0')}Z`);
+    if (!Number.isFinite(instant) || new Date(instant).toISOString() !== canonical) throw new RequestError('invalid_params', 'The timer needs a valid UTC instant');
+  }
+  if (schedule) {
+    try { new Intl.DateTimeFormat('en-US', { timeZone: schedule.timeZone }); }
+    catch { throw new RequestError('invalid_params', 'The schedule needs a valid IANA time zone'); }
+    if (/^[+-]/.test(schedule.timeZone) || schedule.cadenceKind === 'calendar' &&
+        (schedule.frequency !== 'hourly' && schedule.hour === undefined || (schedule.frequency === 'weekly') !== (schedule.daysOfWeek !== undefined))) {
+      throw new RequestError('invalid_params', 'The schedule does not have valid calendar fields');
+    }
+  }
+  if (precheck?.kind === 'executable' && [precheck.executable, ...precheck.allowedArgs ?? []].some(arg => arg.includes('\0'))) {
+    throw new RequestError('invalid_params', 'Precheck executable paths and arguments cannot contain NUL');
+  }
+}
+
 export const productCommands = Type.Union([
   Type.Object({ method: Type.Literal('app.open'), params: Type.Object({ supportedVersions: Type.Array(positiveInteger, { minItems: 1 }) }) }),
   Type.Object({ method: Type.Literal('bot.list'), params: Type.Object(page) }),
@@ -378,6 +476,16 @@ export const productCommands = Type.Union([
     offset: Type.Optional(revision), limit: Type.Optional(sessionReadLimit) }, sessionStrict) }),
   Type.Object({ method: Type.Literal('session.close'), params: Type.Object({ ...sessionGeneration,
     expectedRevision: Type.Optional(revision), operationId: id }, sessionStrict) }),
+  Type.Object({ method: Type.Literal('watch.list'), params: Type.Object({ botId: id, ...watchFilters }, watchStrict) }),
+  Type.Object({ method: Type.Literal('watch.get'), params: Type.Object(watchTarget, watchStrict) }),
+  Type.Object({ method: Type.Literal('watch.save'), params: watchSave }),
+  Type.Object({ method: Type.Literal('watch.activate'), params: Type.Object({ ...watchMutation, approveGrant: optionalFlag }, watchStrict) }),
+  Type.Object({ method: Type.Literal('watch.pause'), params: Type.Object(watchMutation, watchStrict) }),
+  Type.Object({ method: Type.Literal('watch.cancel'), params: Type.Object(watchMutation, watchStrict) }),
+  Type.Object({ method: Type.Literal('watch.listGrants'), params: Type.Object({ botId: id, includeRevoked: optionalFlag,
+    cursor: optionalID, limit: inspectionPage.limit }, watchStrict) }),
+  Type.Object({ method: Type.Literal('watch.revokeGrant'), params: Type.Object({ ...watchGrantTarget,
+    expectedRevision: positiveInteger, operationId: id }, watchStrict) }),
   Type.Object({ method: Type.Literal('operation.get'), params: Type.Object({ operationId: id }) }),
   Type.Object({ method: Type.Literal('profile.backup'), params: Type.Object({ destination: id }) }),
   Type.Object({ method: Type.Literal('app.shutdown'), params: Type.Object({}) }),
@@ -405,6 +513,7 @@ export const productEvents = Type.Union([
   Type.Object({ event: Type.Literal('activity.digest'), data: activityDigest }),
   Type.Object({ event: Type.Literal('session.changed'), data: sessionSummary }),
   Type.Object({ event: Type.Literal('session.outputUpdated'), data: sessionOutputUpdated }),
+  Type.Object({ event: Type.Literal('watch.changed'), data: watchChange }),
 ]);
 export const productRequestSchema = Type.Intersect([
   Type.Object({ v: Type.Literal(1), type: Type.Literal('request'), id }), productCommands,
@@ -509,6 +618,15 @@ export const productResults = {
   'session.read': sessionReadResult,
   'session.close': Type.Object({ operationId: id, state: operationSchema.properties.state,
     target: Type.Object(sessionTarget, sessionStrict), result: sessionCloseResult }, sessionStrict),
+  'watch.list': Type.Object({ items: Type.Array(watchSummary), nextCursor: nullable(id) }, watchStrict),
+  'watch.get': Type.Object({ ...watchSummary.properties, grant: Type.Optional(watchGrant), recentOccurrences: Type.Array(watchOccurrence, { maxItems: 20 }) }, watchStrict),
+  'watch.save': watchReceipt,
+  'watch.activate': watchReceipt,
+  'watch.pause': watchReceipt,
+  'watch.cancel': watchReceipt,
+  'watch.listGrants': Type.Object({ items: Type.Array(watchGrant), nextCursor: nullable(id) }, watchStrict),
+  'watch.revokeGrant': Type.Object({ operationId: id, state: Type.Literal('accepted'), target: Type.Object(watchGrantTarget, watchStrict),
+    result: watchRevokeResult }, watchStrict),
   'operation.get': operationSchema,
   'profile.backup': Type.Object({ path: id }),
   'app.shutdown': Type.Object({ drained: Type.Literal(true) }),

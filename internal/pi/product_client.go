@@ -46,6 +46,7 @@ type ProductEvent struct {
 	ProviderChanged      *ProductProviderChange       `json:"-"`
 	SessionChanged       *ProductSessionSummary       `json:"-"`
 	SessionOutputUpdated *ProductSessionOutputUpdated `json:"-"`
+	WatchChanged         *ProductWatchChange          `json:"-"`
 }
 
 type ProductActivityDigest struct {
@@ -269,6 +270,8 @@ type ProductReceiptTarget struct {
 	ActivityID     string `json:"activityId,omitempty"`
 	QuestionID     string `json:"questionId,omitempty"`
 	SessionID      string `json:"sessionId,omitempty"`
+	WatchID        string `json:"watchId,omitempty"`
+	GrantID        string `json:"grantId,omitempty"`
 	Connection     bool   `json:"connection,omitempty"`
 }
 
@@ -910,6 +913,13 @@ func (c *Client) handleProductEvent(line []byte) error {
 			return errors.New("invalid session output update")
 		}
 		event.SessionOutputUpdated = &update
+	}
+	if event.Name == "watch.changed" {
+		var change ProductWatchChange
+		if json.Unmarshal(event.Data, &change) != nil || change.BotID == "" || change.Change == "" || change.At == "" {
+			return errors.New("invalid watch change")
+		}
+		event.WatchChanged = &change
 	}
 	c.mu.Lock()
 	if event.StreamID != c.streamID || c.streamGap || event.Seq <= c.streamSeq {

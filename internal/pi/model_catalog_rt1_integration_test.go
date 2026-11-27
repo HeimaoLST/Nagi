@@ -1448,8 +1448,8 @@ const pending = !!db.prepare("SELECT value FROM meta WHERE key = 'pending_snapsh
 db.close();
 console.log(JSON.stringify({ v, fk, pending }));
 `)
-	if v10State != `{"v":12,"fk":0,"pending":false}` {
-		t.Fatalf("v10->v12 migration state = %s", v10State)
+	if v10State != `{"v":13,"fk":0,"pending":false}` {
+		t.Fatalf("v10->v13 migration state = %s", v10State)
 	}
 	v10List, err := v10Proc.client.ListProviders(ctx)
 	if err != nil || len(v10List.Accounts) != 2 ||
@@ -1498,14 +1498,14 @@ console.log(JSON.stringify({ v, fk, pending }));
 	runNodeSQLite(t, nodePath, v10DB, `
 const { DatabaseSync } = require('node:sqlite');
 const db = new DatabaseSync(process.argv[1]);
-db.exec('PRAGMA user_version = 13');
+db.exec('PRAGMA user_version = 14');
 db.close();
 `)
 	v12Client, startErr := pi.StartProduct(v10Opts)
 	if startErr == nil {
 		if _, readyErr := v12Client.Ready(ctx); readyErr == nil {
 			if _, openErr := v12Client.Open(ctx, []int{pi.ProductVersion}); openErr == nil {
-				t.Fatal("worker admitted SQLite user_version=13")
+				t.Fatal("worker admitted SQLite user_version=14")
 			}
 		}
 		_, _ = v12Client.Wait(ctx)
@@ -1518,14 +1518,14 @@ const bots = db.prepare('SELECT count(*) AS n FROM bots').get().n;
 db.close();
 console.log(JSON.stringify({ v, bots }));
 `)
-	if v12After != `{"v":13,"bots":1}` {
-		t.Fatalf("v13 refusal mutated database: %s", v12After)
+	if v12After != `{"v":14,"bots":1}` {
+		t.Fatalf("v14 refusal mutated database: %s", v12After)
 	}
 
 	runNodeSQLite(t, nodePath, v10DB, `
 const { DatabaseSync } = require('node:sqlite');
 const db = new DatabaseSync(process.argv[1]);
-db.exec('PRAGMA user_version = 12');
+db.exec('PRAGMA user_version = 13');
 db.close();
 `)
 	rt1Proc := startProductProcess(t, v10Opts)
@@ -1652,7 +1652,7 @@ const fk = db.prepare('PRAGMA foreign_key_check').all().length;
 db.close();
 console.log(JSON.stringify({ v, fk }));
 `)
-		if schema != `{"v":12,"fk":0}` {
+		if schema != `{"v":13,"fk":0}` {
 			t.Fatalf("%s restored SQLite schema mismatch: %s", name, schema)
 		}
 	}

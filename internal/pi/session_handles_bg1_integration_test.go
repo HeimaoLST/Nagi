@@ -432,6 +432,162 @@ func TestPiProductBG1SessionHandlesSupervisorAndWatch(t *testing.T) {
 		}
 	}
 
+	defDir := filepath.Join(root, "default-tools-profile")
+	if err := os.MkdirAll(defDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	defOpts := pi.ProductOptions{
+		NodePath:        nodePath,
+		WorkerPath:      workerPath,
+		StateDir:        filepath.Join(defDir, "pi"),
+		ProfilePath:     filepath.Join(defDir, "contacts.json"),
+		CredentialsPath: filepath.Join(defDir, "connection.json"),
+		FreshProfile:    true,
+	}
+	defProc := startCP1Process(t, defOpts)
+	_ = defProc.open(t, ctx)
+	cp1ConfigureConnection(t, ctx, defProc.client, provider.server.URL+"/v1", activeSecret, workspace)
+
+	defaultBot, err := defProc.client.CreateBot(ctx, pi.ProductBotCreateParams{
+		OperationID: "def-default-bot",
+		Profile: pi.ProductBotProfile{
+			Name: "DefaultBot", Role: "Tester", Purpose: "BG-1 default", Workspace: workspace,
+		},
+	})
+	if err != nil || defaultBot.Profile.CodingTools != nil || defaultBot.Profile.ToolPreset != "" {
+		t.Fatalf("defaultBot = %+v, err=%v", defaultBot, err)
+	}
+	pandoraBot, err := defProc.client.EnsureBuiltinBot(ctx, pi.ProductBotEnsureBuiltinParams{
+		Kind: pi.SystemKindBotArchitect, OperationID: "def-ensure-pandora",
+	})
+	if err != nil || pandoraBot.SystemKind != pi.SystemKindBotArchitect || pandoraBot.Profile.CodingTools == nil || len(pandoraBot.Profile.CodingTools) != 0 {
+		t.Fatalf("pandoraBot = %+v, err=%v", pandoraBot, err)
+	}
+	defReadonlyBot, err := defProc.client.CreateBot(ctx, pi.ProductBotCreateParams{
+		OperationID: "def-readonly-bot",
+		Profile: pi.ProductBotProfile{
+			Name: "DefReadonlyBot", Role: "Tester", Purpose: "BG-1", Workspace: workspace, ToolPreset: pi.ToolPresetReadonly,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defNoneBot, err := defProc.client.CreateBot(ctx, pi.ProductBotCreateParams{
+		OperationID: "def-none-bot",
+		Profile: pi.ProductBotProfile{
+			Name: "DefNoneBot", Role: "Tester", Purpose: "BG-1", Workspace: workspace, ToolPreset: pi.ToolPresetNone,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, restricted := range []pi.ProductBot{pandoraBot, defReadonlyBot, defNoneBot} {
+		_, rTools := callModelTool(defProc, restricted.CurrentConversationID, "", nil)
+		for _, tool := range rTools {
+			if strings.HasPrefix(tool, "session_") {
+				t.Fatalf("restricted bot %s (%s) exposed session tool %s", restricted.BotID, restricted.Profile.Name, tool)
+			}
+		}
+		rOpenRes, _ := callModelTool(defProc, restricted.CurrentConversationID, "session_open", map[string]any{
+			"command": nodePath, "mode": "pipe",
+		})
+		if rOpenRes == "" || strings.Contains(rOpenRes, "sessionId") ||
+			(!strings.Contains(strings.ToLower(rOpenRes), "not found") && !strings.Contains(rOpenRes, "scope_denied")) {
+			t.Fatalf("restricted bot %s session_open = %s, want rejection", restricted.BotID, rOpenRes)
+		}
+		rList, err := defProc.client.ListSessions(ctx, pi.ProductSessionListParams{BotID: restricted.BotID})
+		if err != nil || len(rList.Items) != 0 {
+			t.Fatalf("restricted bot %s created sessions = %+v, err=%v", restricted.BotID, rList, err)
+		}
+	}
+
+	openDefRes, defTools := callModelTool(defProc, defaultBot.CurrentConversationID, "session_open", map[string]any{
+		"command": nodePath,
+		"args":    []string{"-e", "process.stdout.write('DEFAULT_BOT_SESSION_OK\\n')"},
+		"mode":    "pipe",
+		"label":   "default-tools-pipe",
+	})
+	for _, wantTool := range []string{"session_open", "session_list", "session_read", "session_write", "session_signal", "session_resize", "session_eof", "session_close", "session_watch"} {
+		if !slices.Contains(defTools, wantTool) {
+			t.Fatalf("default bot missing session tool %s in %v", wantTool, defTools)
+		}
+	}
+	var defSess pi.ProductSessionSummary
+	mustDecode(openDefRes, &defSess)
+	if defSess.SessionID == "" || defSess.Generation != 1 {
+		t.Fatalf("default bot session_open = %+v (raw=%s)", defSess, openDefRes)
+	}
+	defRead := bg1WaitReadContains(t, ctx, defProc.client, defaultBot.BotID, defSess.SessionID, defSess.Generation, nil, "DEFAULT_BOT_SESSION_OK")
+	if !strings.Contains(bg1JoinedOutput(defRead), "DEFAULT_BOT_SESSION_OK") {
+		t.Fatalf("default bot ReadSession = %+v", defRead)
+	}
+	readDefRes, _ := callModelTool(defProc, defaultBot.CurrentConversationID, "session_read", map[string]any{
+		"session_id": defSess.SessionID, "generation": defSess.Generation,
+	})
+	var defReadModel pi.ProductSessionReadResult
+	mustDecode(readDefRes, &defReadModel)
+	if !strings.Contains(bg1JoinedOutput(defReadModel), "DEFAULT_BOT_SESSION_OK") {
+		t.Fatalf("default bot model session_read = %s", readDefRes)
+	}
+	closeDefRes, _ := callModelTool(defProc, defaultBot.CurrentConversationID, "session_close", map[string]any{
+		"session_id": defSess.SessionID, "generation": defSess.Generation,
+	})
+	var defClosed pi.ProductSessionCloseResult
+	mustDecode(closeDefRes, &defClosed)
+	if defClosed.SessionID != defSess.SessionID || !defClosed.ChildReaped ||
+		(defClosed.CloseDisposition != "already_settled" && defClosed.CloseDisposition != "terminated") ||
+		(defClosed.State != pi.ProductSessionExited && defClosed.State != pi.ProductSessionClosed) {
+		t.Fatalf("default bot model session_close = %+v (raw=%s)", defClosed, closeDefRes)
+	}
+
+	defRev := defaultBot.ProfileRevision
+	for idx, restrictedProf := range []pi.ProductBotProfile{
+		{Name: "DefaultBot", Role: "Tester", Purpose: "BG-1 default", Workspace: workspace, CodingTools: []string{}},
+		{Name: "DefaultBot", Role: "Tester", Purpose: "BG-1 default", Workspace: workspace, ToolPreset: pi.ToolPresetNone},
+		{Name: "DefaultBot", Role: "Tester", Purpose: "BG-1 default", Workspace: workspace, ToolPreset: pi.ToolPresetReadonly},
+	} {
+		updatedDef, err := defProc.client.UpdateBot(ctx, pi.ProductBotUpdateParams{
+			ProductBotRevisionParams: pi.ProductBotRevisionParams{
+				BotID: defaultBot.BotID, ExpectedRevision: defRev, OperationID: fmt.Sprintf("def-restrict-%d", idx),
+			},
+			Profile:              restrictedProf,
+			StartNewConversation: false,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defRev = updatedDef.ProfileRevision
+		deniedExecRes, _ := callModelTool(defProc, defaultBot.CurrentConversationID, "session_open", map[string]any{
+			"command": nodePath, "mode": "pipe",
+		})
+		var deniedErr struct {
+			Code string `json:"code"`
+		}
+		mustDecode(deniedExecRes, &deniedErr)
+		if deniedErr.Code != "scope_denied" {
+			t.Fatalf("runtime restricted profile[%d] session_open = %s, want scope_denied", idx, deniedExecRes)
+		}
+	}
+	if _, err := defProc.client.UpdateBot(ctx, pi.ProductBotUpdateParams{
+		ProductBotRevisionParams: pi.ProductBotRevisionParams{
+			BotID: defaultBot.BotID, ExpectedRevision: defRev, OperationID: "def-restore-default",
+		},
+		Profile:              pi.ProductBotProfile{Name: "DefaultBot", Role: "Tester", Purpose: "BG-1 default", Workspace: workspace},
+		StartNewConversation: false,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	listDefRes, _ := callModelTool(defProc, defaultBot.CurrentConversationID, "session_list", map[string]any{})
+	var defListPage struct {
+		Items []pi.ProductSessionSummary `json:"items"`
+	}
+	mustDecode(listDefRes, &defListPage)
+	if len(defListPage.Items) != 1 || defListPage.Items[0].SessionID != defSess.SessionID {
+		t.Fatalf("restored default bot session_list = %s", listDefRes)
+	}
+	defProc.shutdown(t, ctx)
+
 	profileDir := filepath.Join(root, "live-profile")
 	if err := os.MkdirAll(profileDir, 0o700); err != nil {
 		t.Fatal(err)
@@ -1194,7 +1350,7 @@ const fk = db.prepare('PRAGMA foreign_key_check').all().length;
 db.close();
 console.log(JSON.stringify({ v, fk }));
 `)
-	if restoreCheck != `{"v":12,"fk":0}` {
+	if restoreCheck != `{"v":13,"fk":0}` {
 		t.Fatalf("restored SQLite check = %s", restoreCheck)
 	}
 
@@ -1374,7 +1530,7 @@ console.log(JSON.stringify({ occ, adm, exec, fk }));
 	runNodeSQLite(t, nodePath, migDB, `
 const { DatabaseSync } = require('node:sqlite');
 const db = new DatabaseSync(process.argv[1]);
-db.exec("DROP TABLE runtime_watch_occurrences; DROP TABLE session_watches; DROP TABLE runtime_sessions; DELETE FROM meta WHERE key = 'runtime_session_epoch';");
+db.exec("DROP TABLE bot_event_inbox; DROP TABLE bot_event_batches; DROP TABLE watch_occurrences; DROP TABLE runtime_watches; DROP TABLE watch_grants; DELETE FROM meta WHERE key GLOB 'watch_operation:*'; DROP TABLE runtime_watch_occurrences; DROP TABLE session_watches; DROP TABLE runtime_sessions; DELETE FROM meta WHERE key = 'runtime_session_epoch';");
 db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES ('pending_snapshot_previous', ?)").run(JSON.stringify(process.argv[2]));
 db.exec('PRAGMA user_version = 11');
 db.close();
@@ -1385,10 +1541,10 @@ db.close();
 	migProc = startCP1Process(t, migOpts)
 	_ = migProc.open(t, ctx)
 	if provider.calls.Load() != callsBeforeMig {
-		t.Fatal("v11->v12 migration triggered provider calls")
+		t.Fatal("v11->v13 migration triggered provider calls")
 	}
 	if !bytes.Equal(productRead(t, migOpts.ProfilePath), migMirrorCanonical) {
-		t.Fatal("v11->v12 pending mirror repair did not restore exact canonical contacts.json bytes")
+		t.Fatal("v11->v13 pending mirror repair did not restore exact canonical contacts.json bytes")
 	}
 	migState := runNodeSQLite(t, nodePath, migDB, `
 const { DatabaseSync } = require('node:sqlite');
@@ -1399,22 +1555,22 @@ const pending = !!db.prepare("SELECT value FROM meta WHERE key = 'pending_snapsh
 db.close();
 console.log(JSON.stringify({ v, fk, pending }));
 `)
-	if migState != `{"v":12,"fk":0,"pending":false}` {
-		t.Fatalf("v11->v12 migration state = %s", migState)
+	if migState != `{"v":13,"fk":0,"pending":false}` {
+		t.Fatalf("v11->v13 migration state = %s", migState)
 	}
 	migProc.shutdown(t, ctx)
 
 	runNodeSQLite(t, nodePath, migDB, `
 const { DatabaseSync } = require('node:sqlite');
 const db = new DatabaseSync(process.argv[1]);
-db.exec('PRAGMA user_version = 13');
+db.exec('PRAGMA user_version = 14');
 db.close();
 `)
 	v13Client, startErr := pi.StartProduct(migOpts)
 	if startErr == nil {
 		if _, readyErr := v13Client.Ready(ctx); readyErr == nil {
 			if _, openErr := v13Client.Open(ctx, []int{pi.ProductVersion}); openErr == nil {
-				t.Fatal("worker admitted SQLite user_version=13")
+				t.Fatal("worker admitted SQLite user_version=14")
 			}
 		}
 		_, _ = v13Client.Wait(ctx)
@@ -1428,8 +1584,8 @@ const fk = db.prepare('PRAGMA foreign_key_check').all().length;
 db.close();
 console.log(JSON.stringify({ v, bots, fk }));
 `)
-	if v13After != `{"v":13,"bots":1,"fk":0}` {
-		t.Fatalf("v13 refusal mutated DB: %s", v13After)
+	if v13After != `{"v":14,"bots":1,"fk":0}` {
+		t.Fatalf("v14 refusal mutated DB: %s", v13After)
 	}
 	provider.assertNoProblems()
 }

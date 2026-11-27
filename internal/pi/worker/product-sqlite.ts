@@ -7,7 +7,7 @@ import type { ProductProfile } from './product.js';
 import { canonicalJSON, maxAutomaticAnswers, maxTriageAttempts, RequestError, type ActivityProgressRecord, type ActivitySteer,
   type ActivitySteerPayload, type ActivitySteerRecord, type TriageAccounting,
   type SkillApproval, type SkillApprovalRequest, type SkillSource, type TraceItem } from './protocol.js';
-import type { SessionSummary, SessionWatchOccurrence } from './protocol.js';
+import type { SessionSummary, SessionWatchOccurrence, WatchChange, WatchGrant, WatchOccurrence, WatchSummary } from './protocol.js';
 import { type BotMemory, type BotWorkLog } from './bot-memory.js';
 import { maxExecutionTraces, maxProfileTraces, traceDetail, redactTrace, type TraceBackup, type TraceObservation, type TraceUpdate } from './product-trace.js';
 import { projectionRedactor } from './product-redactor.js';
@@ -173,6 +173,45 @@ const MIGRATIONS = [`
     owner_bot_id TEXT NOT NULL REFERENCES bots(bot_id) DEFERRABLE INITIALLY DEFERRED,
     generation INTEGER NOT NULL, fired_kind TEXT NOT NULL, fired_at TEXT NOT NULL, record_json TEXT NOT NULL
   ) STRICT;
+`, `
+  CREATE TABLE watch_grants (
+    grant_id TEXT PRIMARY KEY, installation_id TEXT NOT NULL, owner_bot_id TEXT NOT NULL REFERENCES bots(bot_id) DEFERRABLE INITIALLY DEFERRED,
+    revision INTEGER NOT NULL, state TEXT NOT NULL, updated_at TEXT NOT NULL, record_json TEXT NOT NULL
+  ) STRICT;
+  CREATE INDEX watch_grants_by_owner ON watch_grants(installation_id, owner_bot_id, updated_at DESC, grant_id);
+  CREATE TABLE runtime_watches (
+    watch_id TEXT PRIMARY KEY, owner_bot_id TEXT NOT NULL REFERENCES bots(bot_id) DEFERRABLE INITIALLY DEFERRED,
+    target_conversation_id TEXT NOT NULL REFERENCES conversations(conversation_id) DEFERRABLE INITIALLY DEFERRED,
+    origin_activity_id TEXT REFERENCES activities(activity_id) DEFERRABLE INITIALLY DEFERRED,
+    kind TEXT NOT NULL CHECK (kind IN ('timer','schedule')), revision INTEGER NOT NULL, state TEXT NOT NULL,
+    next_due_at TEXT, updated_at TEXT NOT NULL, record_json TEXT NOT NULL
+  ) STRICT;
+  CREATE INDEX runtime_watches_by_owner ON runtime_watches(owner_bot_id, updated_at DESC, watch_id);
+  CREATE INDEX runtime_watches_by_due ON runtime_watches(next_due_at, watch_id) WHERE state = 'active';
+  CREATE TABLE watch_occurrences (
+    occurrence_id TEXT PRIMARY KEY, watch_id TEXT NOT NULL REFERENCES runtime_watches(watch_id) DEFERRABLE INITIALLY DEFERRED,
+    owner_bot_id TEXT NOT NULL REFERENCES bots(bot_id) DEFERRABLE INITIALLY DEFERRED, watch_revision INTEGER NOT NULL,
+    scheduled_at TEXT NOT NULL, state TEXT NOT NULL, created_at TEXT NOT NULL, record_json TEXT NOT NULL,
+    UNIQUE (watch_id, watch_revision, scheduled_at)
+  ) STRICT;
+  CREATE INDEX watch_occurrences_recent ON watch_occurrences(watch_id, scheduled_at DESC, occurrence_id);
+  CREATE TABLE bot_event_batches (
+    batch_id TEXT PRIMARY KEY, owner_bot_id TEXT NOT NULL REFERENCES bots(bot_id) DEFERRABLE INITIALLY DEFERRED,
+    lease_id TEXT NOT NULL, stage TEXT NOT NULL CHECK (stage IN ('staged','dispatched','completed','released','unknown')),
+    dispatched INTEGER NOT NULL CHECK (dispatched IN (0, 1)), created_at TEXT NOT NULL, updated_at TEXT NOT NULL, record_json TEXT NOT NULL,
+    UNIQUE (owner_bot_id, lease_id)
+  ) STRICT;
+  CREATE TABLE bot_event_inbox (
+    event_id TEXT PRIMARY KEY, owner_bot_id TEXT NOT NULL REFERENCES bots(bot_id) DEFERRABLE INITIALLY DEFERRED,
+    target_conversation_id TEXT REFERENCES conversations(conversation_id) DEFERRABLE INITIALLY DEFERRED,
+    source_kind TEXT NOT NULL, source_id TEXT NOT NULL, occurrence_id TEXT NOT NULL UNIQUE, coalesce_key TEXT,
+    coalesced_count INTEGER NOT NULL DEFAULT 1, state TEXT NOT NULL CHECK (state IN ('pending','claimed','consumed','unknown','cancelled')),
+    batch_id TEXT REFERENCES bot_event_batches(batch_id) DEFERRABLE INITIALLY DEFERRED,
+    created_at TEXT NOT NULL, updated_at TEXT NOT NULL, payload_json TEXT NOT NULL
+  ) STRICT;
+  CREATE INDEX bot_event_inbox_by_owner ON bot_event_inbox(owner_bot_id, state, created_at, event_id);
+  CREATE INDEX bot_event_inbox_by_batch ON bot_event_inbox(batch_id) WHERE batch_id IS NOT NULL;
+  CREATE INDEX bot_event_inbox_by_source ON bot_event_inbox(owner_bot_id, source_id, target_conversation_id, source_kind);
 `];
 const LATEST_SCHEMA_VERSION = MIGRATIONS.length;
 
@@ -190,6 +229,21 @@ export type ActivityControlWrite = { approvalRequests?: SkillApprovalRequest[]; 
   admitSteer?: ActivitySteerRecord; steerUpdates?: ActivitySteer[] };
 export type RuntimeSession = SessionSummary & { epoch?: string; childReaped?: boolean };
 export type RuntimeSessionWrite = { session: RuntimeSession; occurrences?: SessionWatchOccurrence[] };
+export type RuntimeWatch = WatchSummary & { scheduledAt?: string; canonicalCwd?: string; lastFailureDigest?: string };
+export type RuntimeWatchGrant = WatchGrant & { scopeDigest: string };
+type WatchOperation = ProductProfile['operations'][number];
+export type InboxSource = 'timer_fired' | 'schedule_tick' | 'schedule_precheck' | 'session_watch_fired' | 'target_lost' | 'activity_milestone';
+type InboxInput = { ownerBotId: string; targetConversationId?: string; sourceKind: InboxSource; sourceId: string;
+  occurrenceId: string; coalesceKey?: string; at: string; payload: object };
+type InboxState = 'pending' | 'claimed' | 'consumed' | 'unknown' | 'cancelled';
+export type InboxEvent = Omit<InboxInput, 'at'> & { eventId: string; coalescedCount: number; state: InboxState; batchId?: string; createdAt: string; updatedAt: string };
+export type EventBatch = { batchId: string; ownerBotId: string; targetConversationId?: string; leaseId: string;
+  stage: 'staged' | 'dispatched' | 'completed' | 'released' | 'unknown'; dispatched: boolean;
+  eventIds: string[]; createdAt: string; updatedAt: string };
+export type WatchChanges = { watches?: RuntimeWatch[]; grants?: RuntimeWatchGrant[]; operation?: WatchOperation };
+export function publicWatch({ scheduledAt, canonicalCwd, lastFailureDigest, ...watch }: RuntimeWatch): WatchSummary { return watch; }
+export function publicWatchGrant({ scopeDigest, ...grant }: RuntimeWatchGrant): WatchGrant { return grant; }
+
 function snapshotFor(profile: ProductProfile): Snapshot {
   const data = Buffer.from(canonicalJSON(profile) + '\n');
   return { data, digest: sha256(data) };
@@ -277,7 +331,10 @@ export class ProductSQLite {
         this.db.exec('DELETE FROM execution_mutation_admissions; DELETE FROM execution_admission_coverage; DELETE FROM activity_escalations;');
         this.db.exec('DELETE FROM activity_progress; DELETE FROM skill_approval_requests; DELETE FROM activity_triage_accounting; DELETE FROM activity_steers;');
         this.db.exec('DELETE FROM runtime_watch_occurrences; DELETE FROM session_watches; DELETE FROM runtime_sessions;');
+        this.db.exec("DELETE FROM bot_event_inbox; DELETE FROM bot_event_batches; DELETE FROM watch_occurrences; DELETE FROM runtime_watches; DELETE FROM watch_grants; DELETE FROM meta WHERE key GLOB 'watch_operation:*';");
         this.replaceProfile(profile, mirror);
+        for (const watch of backup?.watches ?? []) this.putRuntimeWatch(watch);
+        for (const occurrence of backup?.watchOccurrences ?? []) this.insertWatchOccurrence(occurrence);
         for (const row of backup?.runtimeSessions ?? []) this.putSession({ session: row });
         for (const row of backup?.runtimeWatchOccurrences ?? []) this.putSessionOccurrence(row);
         for (const row of backup?.activityProgress ?? []) this.putProgress(row);
@@ -357,9 +414,22 @@ export class ProductSQLite {
         if (routing?.escalation) this.putEscalation(routing.escalation);
         if (approval) this.changeApproval(approval);
         if (control?.resetProgress) this.db.prepare('DELETE FROM activity_progress WHERE activity_id = ?').run(encode(control.resetProgress));
-        for (const row of control?.approvalRequests ?? []) this.putApprovalRequest(row);
+        for (const row of control?.approvalRequests ?? []) {
+          const isNew = row.state === 'open' && !this.approvalRequest(row.requestId);
+          this.putApprovalRequest(row);
+          if (isNew) {
+            const activity = profile.activities.find(activity => activity.activityId === row.activityId)!;
+            this.putActivityEvent(activity, 'approval_required', [row.requestId], { requestId: row.requestId, executionId: row.executionId }, row.createdAt);
+          }
+        }
         if (control?.admitSteer) this.insertSteer(control.admitSteer);
         for (const row of control?.steerUpdates ?? []) this.transitionSteer(row);
+        for (const bot of profile.bots) {
+          const old = before.bots.find(row => row.botId === bot.botId);
+          if (old && (old.profile.workspace !== bot.profile.workspace || !old.archived && bot.archived)) {
+            this.invalidateBotWatches(bot.botId, old.profile.workspace !== bot.profile.workspace ? 'workspace_changed' : 'bot_archived');
+          }
+        }
         if (runtime) this.putSession(runtime);
         const workspaces = new Map(before.bots.map(bot => [bot.botId, bot.profile.workspace]));
         for (const bot of profile.bots) {
@@ -621,7 +691,12 @@ export class ProductSQLite {
       revision = excluded.revision, state = excluded.state, record_json = excluded.record_json WHERE excluded.revision > session_watches.revision`);
     for (const row of watches) watch.run(encode(row.watchId), encode(row.sessionId), encode(record.ownerBotId), row.generation,
       row.revision, row.state, encode(row));
-    for (const row of occurrences ?? []) this.putSessionOccurrence(row);
+    for (const row of occurrences ?? []) {
+      this.putSessionOccurrence(row);
+      this.insertInbox({ ownerBotId: row.ownerBotId, targetConversationId: this.eventTarget(row.ownerBotId, session.originConversationId),
+        sourceKind: row.firedKind === 'target_lost' ? 'target_lost' : 'session_watch_fired', sourceId: row.watchId,
+        occurrenceId: row.occurrenceId, at: row.firedAt, payload: row });
+    }
   }
 
   private putSessionOccurrence(row: SessionWatchOccurrence): void {
@@ -654,6 +729,254 @@ export class ProductSQLite {
         if (live || occurrences.length) this.putSession({ session: { ...session, watches, revision: session.revision + 1, updatedAt: at,
           ...(live ? { state: 'disconnected', transportStatus: 'worker_restarted', eof: true, authPause: undefined,
             settledAt: at, firstAvailableOffset: session.nextOffset, evictedBytes: session.nextOffset, childReaped: false } : {}) }, occurrences });
+      }
+    });
+  }
+
+  runtimeWatches(botId?: string): RuntimeWatch[] {
+    const columns = 'SELECT record_json FROM runtime_watches';
+    const order = 'ORDER BY updated_at DESC, watch_id';
+    const rows = botId === undefined ? this.db.prepare(`${columns} ${order}`).all() :
+      this.db.prepare(`${columns} WHERE owner_bot_id = ? ${order}`).all(encode(botId));
+    return rows.map(row => decode(row.record_json) as RuntimeWatch);
+  }
+
+  runtimeWatch(botId: string, watchId: string): RuntimeWatch | undefined {
+    const row = this.db.prepare('SELECT record_json FROM runtime_watches WHERE owner_bot_id = ? AND watch_id = ?').get(encode(botId), encode(watchId));
+    return decode(row?.record_json ?? null) as RuntimeWatch | undefined;
+  }
+
+  dueWatches(at: string): RuntimeWatch[] {
+    return this.db.prepare("SELECT record_json FROM runtime_watches WHERE state = 'active' AND next_due_at <= ? ORDER BY next_due_at, watch_id")
+      .all(at).map(row => decode(row.record_json) as RuntimeWatch);
+  }
+
+  watchGrants(installationId: string, botId: string): RuntimeWatchGrant[] {
+    return this.db.prepare('SELECT record_json FROM watch_grants WHERE installation_id = ? AND owner_bot_id = ? ORDER BY updated_at DESC, grant_id')
+      .all(installationId, encode(botId)).map(row => decode(row.record_json) as RuntimeWatchGrant);
+  }
+
+  watchGrant(installationId: string, botId: string, grantId?: string): RuntimeWatchGrant | undefined {
+    if (grantId === undefined) return;
+    const row = this.db.prepare('SELECT record_json FROM watch_grants WHERE installation_id = ? AND owner_bot_id = ? AND grant_id = ?')
+      .get(installationId, encode(botId), encode(grantId));
+    return decode(row?.record_json ?? null) as RuntimeWatchGrant | undefined;
+  }
+
+  watchOccurrences(watchId: string, limit = 20): WatchOccurrence[] {
+    return this.db.prepare('SELECT record_json FROM watch_occurrences WHERE watch_id = ? ORDER BY scheduled_at DESC, occurrence_id LIMIT ?')
+      .all(encode(watchId), limit).map(row => decode(row.record_json) as WatchOccurrence);
+  }
+
+  watchOperation(operationId: string): WatchOperation | undefined {
+    const text = this.meta('watch_operation:' + encode(operationId));
+    return decode(text ?? null) as WatchOperation | undefined;
+  }
+
+  private putRuntimeWatch(row: RuntimeWatch): void {
+    this.db.prepare('INSERT OR REPLACE INTO runtime_watches VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(encode(row.watchId), encode(row.ownerBotId),
+      encode(row.targetConversationId), encode(row.originActivityId), row.kind, row.revision, row.state, row.nextDueAt ?? null, row.updatedAt, encode(row));
+  }
+
+  private putWatchGrant(row: RuntimeWatchGrant): void {
+    this.db.prepare('INSERT OR REPLACE INTO watch_grants VALUES (?, ?, ?, ?, ?, ?, ?)').run(encode(row.grantId), row.installationId,
+      encode(row.ownerBotId), row.revision, row.state, row.updatedAt, encode(row));
+  }
+
+  writeWatches({ watches, grants, operation }: WatchChanges): void {
+    this.transaction(() => {
+      this.assertSessionEpoch();
+      for (const row of grants ?? []) this.putWatchGrant(row);
+      for (const row of watches ?? []) this.putRuntimeWatch(row);
+      if (operation) {
+        this.db.prepare('INSERT INTO meta (key, value) VALUES (?, ?)').run('watch_operation:' + encode(operation.receipt.operationId), encode(operation));
+      }
+    });
+  }
+
+  private invalidateBotWatches(botId: string, reason: 'bot_archived' | 'workspace_changed'): void {
+    const at = new Date().toISOString();
+    if (reason === 'workspace_changed') {
+      const grants = this.db.prepare("SELECT record_json FROM watch_grants WHERE owner_bot_id = ? AND state = 'active'").all(encode(botId));
+      for (const value of grants) {
+        const row = decode(value.record_json) as RuntimeWatchGrant;
+        this.putWatchGrant({ ...row, state: 'revoked', revision: row.revision + 1, updatedAt: at, revokedAt: at, revokedReason: reason });
+      }
+    }
+    for (const row of this.runtimeWatches(botId)) {
+      if (reason === 'bot_archived' ? row.state !== 'active' : !row.precheck || row.state === 'settled' || row.state === 'cancelled') continue;
+      this.putRuntimeWatch({ ...row, revision: row.revision + 1, state: reason === 'bot_archived' ? 'paused' : 'invalidated',
+        statusReason: reason, armed: false, nextDueAt: undefined, scheduledAt: undefined, updatedAt: at });
+    }
+  }
+
+  private insertWatchOccurrence(row: WatchOccurrence): void {
+    this.db.prepare('INSERT INTO watch_occurrences VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(encode(row.occurrenceId), encode(row.watchId),
+      encode(row.ownerBotId), row.watchRevision, row.scheduledAt, row.state, row.createdAt, encode(row));
+  }
+
+  private updateWatchOccurrence(row: WatchOccurrence): void {
+    this.db.prepare('UPDATE watch_occurrences SET state = ?, record_json = ? WHERE occurrence_id = ?')
+      .run(row.state, encode(row), encode(row.occurrenceId));
+  }
+
+  recordWatchTick(before: RuntimeWatch, next: RuntimeWatch, occurrence: WatchOccurrence, input?: InboxInput): RuntimeWatch | undefined {
+    return this.transaction(() => {
+      this.assertSessionEpoch();
+      const current = this.runtimeWatch(before.ownerBotId, before.watchId);
+      if (current?.state !== 'active' || current.revision !== before.revision || current.nextDueAt !== before.nextDueAt) return;
+      this.insertWatchOccurrence(occurrence);
+      return this.finishWatchTick(next, occurrence, input);
+    });
+  }
+
+  settleWatchTick(next: RuntimeWatch, occurrence: WatchOccurrence, input?: InboxInput): RuntimeWatch | undefined {
+    return this.transaction(() => {
+      this.assertSessionEpoch();
+      const pending = this.db.prepare('SELECT state FROM watch_occurrences WHERE occurrence_id = ?').get(encode(occurrence.occurrenceId));
+      if (pending?.state !== 'running') return;
+      const current = this.runtimeWatch(next.ownerBotId, next.watchId);
+      if (current?.state !== 'active' || current.revision !== next.revision) {
+        this.updateWatchOccurrence({ ...occurrence, state: 'cancelled', outcome: 'cancelled', digest: undefined, excerpt: undefined, error: undefined });
+        return;
+      }
+      return this.finishWatchTick(next, occurrence, input);
+    });
+  }
+
+  private finishWatchTick(next: RuntimeWatch, occurrence: WatchOccurrence, input?: InboxInput): RuntimeWatch {
+    if (input) {
+      const { eventId, coalesced } = this.insertInbox(input);
+      occurrence = { ...occurrence, eventId, ...(coalesced ? { coalescedInto: eventId } : {}) };
+      next = { ...next, lastEventId: eventId };
+      this.updateWatchOccurrence(occurrence);
+    } else if (occurrence.state !== 'running') this.updateWatchOccurrence(occurrence);
+    this.putRuntimeWatch(next);
+    if (['unchanged', 'suppressed_failure', 'baseline'].includes(occurrence.outcome)) {
+      this.db.prepare(`DELETE FROM watch_occurrences WHERE occurrence_id IN (
+        SELECT occurrence_id FROM watch_occurrences WHERE watch_id = ? AND state = 'settled'
+        AND json_extract(record_json, '$.outcome') IN ('unchanged','suppressed_failure','baseline')
+        ORDER BY scheduled_at DESC, occurrence_id LIMIT -1 OFFSET 20)`).run(encode(next.watchId));
+    }
+    return next;
+  }
+
+  private eventTarget(botId: string, conversationId?: string): string | undefined {
+    if (conversationId === undefined) return;
+    const row = this.db.prepare('SELECT bot_id FROM conversations WHERE conversation_id = ?').get(encode(conversationId));
+    return row?.bot_id === encode(botId) ? conversationId : undefined;
+  }
+
+  private putActivityEvent(activity: ProductProfile['activities'][number], kind: string, identity: unknown[], extra: object, at: string): void {
+    this.insertInbox({ ownerBotId: activity.ownerBotId, targetConversationId: this.eventTarget(activity.ownerBotId, activity.originConversationId),
+      sourceKind: 'activity_milestone', sourceId: activity.activityId,
+      occurrenceId: sha256(Buffer.from(canonicalJSON(['activity_milestone', activity.activityId, kind, ...identity]))), at,
+      payload: { kind, activityId: activity.activityId, revision: activity.revision, originConversationId: activity.originConversationId, ...extra } });
+  }
+
+  private insertInbox(input: InboxInput): { eventId: string; coalesced: boolean } {
+    if (input.coalesceKey) {
+      const latest = this.db.prepare(`SELECT event_id, state, coalesce_key FROM bot_event_inbox
+        WHERE owner_bot_id = ? AND source_id = ? AND target_conversation_id IS ? AND source_kind = ? ORDER BY rowid DESC LIMIT 1`)
+        .get(encode(input.ownerBotId), encode(input.sourceId), encode(input.targetConversationId), input.sourceKind);
+      const row = latest?.state === 'pending' && latest.coalesce_key === input.coalesceKey ? latest : undefined;
+      if (row) {
+        this.db.prepare('UPDATE bot_event_inbox SET coalesced_count = coalesced_count + 1, updated_at = ?, payload_json = ? WHERE event_id = ?')
+          .run(input.at, encode({ ...input.payload, latestOccurrenceId: input.occurrenceId }), row.event_id);
+        return { eventId: decode(row.event_id) as string, coalesced: true };
+      }
+    }
+    const eventId = randomUUID();
+    this.db.prepare(`INSERT INTO bot_event_inbox VALUES (?, ?, ?, ?, ?, ?, ?, 1, 'pending', NULL, ?, ?, ?)`)
+      .run(encode(eventId), encode(input.ownerBotId), encode(input.targetConversationId), input.sourceKind, encode(input.sourceId),
+        encode(input.occurrenceId), input.coalesceKey ?? null, input.at, input.at, encode(input.payload));
+    return { eventId, coalesced: false };
+  }
+
+  listEventInbox(botId: string, state?: InboxState): InboxEvent[] {
+    const where = state === undefined ? 'owner_bot_id = ?' : 'owner_bot_id = ? AND state = ?';
+    const ids = state === undefined ? [encode(botId)] : [encode(botId), state];
+    return this.db.prepare(`SELECT * FROM bot_event_inbox WHERE ${where} ORDER BY rowid`).all(...ids).map(row => ({
+      eventId: decode(row.event_id) as string, ownerBotId: botId, targetConversationId: decode(row.target_conversation_id) as string | undefined,
+      sourceKind: row.source_kind as InboxSource, sourceId: decode(row.source_id) as string, occurrenceId: decode(row.occurrence_id) as string,
+      coalesceKey: typeof row.coalesce_key === 'string' ? row.coalesce_key : undefined, coalescedCount: Number(row.coalesced_count), state: row.state as InboxState,
+      batchId: decode(row.batch_id) as string | undefined, createdAt: String(row.created_at), updatedAt: String(row.updated_at), payload: decode(row.payload_json) as object,
+    }));
+  }
+
+  claimEventBatch(botId: string, leaseId: string, targetConversationId?: string): EventBatch | undefined {
+    return this.transaction(() => {
+      this.assertSessionEpoch();
+      if (!leaseId || targetConversationId !== undefined && this.eventTarget(botId, targetConversationId) === undefined) {
+        throw new RequestError('scope_denied', 'The event batch target is outside the Bot scope');
+      }
+      const prior = this.db.prepare('SELECT record_json FROM bot_event_batches WHERE owner_bot_id = ? AND lease_id = ?').get(encode(botId), encode(leaseId));
+      if (prior) {
+        const batch = decode(prior.record_json) as EventBatch;
+        if (batch.targetConversationId !== targetConversationId) throw new RequestError('operation_conflict', 'The lease is bound to a different target');
+        return batch;
+      }
+      if (this.db.prepare("SELECT 1 FROM bot_event_batches WHERE owner_bot_id = ? AND stage IN ('staged','dispatched')").get(encode(botId))) return;
+      const filter = targetConversationId === undefined ? '' : ' AND target_conversation_id = ?';
+      const ids = targetConversationId === undefined ? [encode(botId)] : [encode(botId), encode(targetConversationId)];
+      const events = this.db.prepare(`SELECT event_id FROM bot_event_inbox WHERE owner_bot_id = ? AND state = 'pending'${filter}
+        ORDER BY rowid LIMIT 32`).all(...ids);
+      if (!events.length) return;
+      const at = new Date().toISOString();
+      const batch: EventBatch = { batchId: randomUUID(), ownerBotId: botId, targetConversationId, leaseId, stage: 'staged', dispatched: false,
+        createdAt: at, updatedAt: at, eventIds: events.map(row => decode(row.event_id) as string) };
+      this.db.prepare('INSERT INTO bot_event_batches VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(encode(batch.batchId), encode(botId), encode(leaseId),
+        batch.stage, 0, at, at, encode(batch));
+      const claim = this.db.prepare("UPDATE bot_event_inbox SET state = 'claimed', batch_id = ?, updated_at = ? WHERE event_id = ?");
+      for (const row of events) claim.run(encode(batch.batchId), at, row.event_id);
+      return batch;
+    });
+  }
+
+  markBatchDispatched(batchId: string): EventBatch { return this.changeBatch(batchId, 'staged', 'dispatched'); }
+  releaseUndispatchedBatch(batchId: string): EventBatch { return this.changeBatch(batchId, 'staged', 'released'); }
+  completeEventBatch(batchId: string): EventBatch { return this.changeBatch(batchId, 'dispatched', 'completed'); }
+
+  private changeBatch(batchId: string, from: EventBatch['stage'], to: EventBatch['stage']): EventBatch {
+    return this.transaction(() => {
+      this.assertSessionEpoch();
+      const row = this.db.prepare('SELECT record_json FROM bot_event_batches WHERE batch_id = ?').get(encode(batchId));
+      if (!row) throw new RequestError('not_found', 'The event batch does not exist');
+      const batch = decode(row.record_json) as EventBatch;
+      if (batch.stage !== from) throw new RequestError('invalid_state', 'The event batch cannot enter that stage');
+      return this.settleBatch(batch, to);
+    });
+  }
+
+  private settleBatch(batch: EventBatch, stage: EventBatch['stage']): EventBatch {
+    const next = { ...batch, stage, dispatched: batch.dispatched || stage === 'dispatched', updatedAt: new Date().toISOString() };
+    this.db.prepare('UPDATE bot_event_batches SET stage = ?, dispatched = ?, updated_at = ?, record_json = ? WHERE batch_id = ?')
+      .run(next.stage, Number(next.dispatched), next.updatedAt, encode(next), encode(next.batchId));
+    if (stage === 'released') {
+      this.db.prepare("UPDATE bot_event_inbox SET state = 'pending', batch_id = NULL, updated_at = ? WHERE batch_id = ? AND state = 'claimed'")
+        .run(next.updatedAt, encode(batch.batchId));
+    } else if (stage === 'completed' || stage === 'unknown') {
+      this.db.prepare("UPDATE bot_event_inbox SET state = ?, updated_at = ? WHERE batch_id = ? AND state = 'claimed'")
+        .run(stage === 'completed' ? 'consumed' : 'unknown', next.updatedAt, encode(batch.batchId));
+    }
+    return next;
+  }
+
+  reconcileInterruptedBatches(): void {
+    this.transaction(() => {
+      this.assertSessionEpoch();
+      for (const row of this.db.prepare("SELECT record_json FROM bot_event_batches WHERE stage IN ('staged','dispatched')").all()) {
+        const batch = decode(row.record_json) as EventBatch;
+        this.settleBatch(batch, batch.dispatched ? 'unknown' : 'released');
+      }
+      for (const row of this.db.prepare("SELECT record_json FROM watch_occurrences WHERE state = 'running'").all()) {
+        const occurrence = decode(row.record_json) as WatchOccurrence;
+        const at = new Date().toISOString();
+        this.updateWatchOccurrence({ ...occurrence, state: 'unknown', outcome: 'unknown', settledAt: at });
+        const watch = this.runtimeWatch(occurrence.ownerBotId, occurrence.watchId);
+        if (watch?.revision === occurrence.watchRevision) {
+          this.putRuntimeWatch({ ...watch, lastOutcome: 'unknown', lastOccurrenceId: occurrence.occurrenceId, updatedAt: at });
+        }
       }
     });
   }
@@ -692,10 +1015,18 @@ export class ProductSQLite {
       }));
       const runtimeWatchOccurrences = this.db.prepare('SELECT record_json FROM runtime_watch_occurrences ORDER BY fired_at, occurrence_id').all()
         .map(row => decode(row.record_json) as SessionWatchOccurrence);
+      const watches = this.runtimeWatches().map(row => {
+        const watch = publicWatch(row);
+        const state = watch.state === 'cancelled' || watch.kind === 'timer' && watch.state === 'settled' ? watch.state : 'restored';
+        return { ...watch, state, armed: false, grantId: undefined, nextDueAt: undefined, lastEventId: undefined,
+          statusReason: state === 'restored' ? 'restored_dormant' : watch.statusReason } satisfies WatchSummary;
+      });
+      const watchOccurrences = this.db.prepare("SELECT record_json FROM watch_occurrences WHERE state != 'running' ORDER BY scheduled_at, occurrence_id").all()
+        .map(row => decode(row.record_json) as WatchOccurrence).map(({ eventId, coalescedInto, ...row }) => row);
       return { profile, backup: { version: 1, traces, traceCoverage, ...(activityEscalations.length ? { activityEscalations } : {}),
         ...(activityProgress.length ? { activityProgress } : {}), ...(skillApprovalRequests.length ? { skillApprovalRequests } : {}),
         ...(triageAccounting.length ? { triageAccounting } : {}), ...(activitySteers.length ? { activitySteers } : {}),
-        ...(runtimeSessions.length ? { runtimeSessions, runtimeWatchOccurrences } : {}) } };
+        ...(runtimeSessions.length ? { runtimeSessions, runtimeWatchOccurrences } : {}), ...(watches.length ? { watches, watchOccurrences } : {}) } };
     });
   }
 
@@ -738,9 +1069,22 @@ export class ProductSQLite {
     const coverage = this.db.prepare("SELECT 1 FROM activity_trace_meta WHERE execution_id = ? AND coverage = 'recorded'");
     const admit = this.db.prepare("INSERT INTO activity_trace_meta (execution_id, activity_id, coverage) VALUES (?, ?, 'recorded')");
     const updates: TraceUpdate[] = [];
-    for (const { activityId, state, executionIds, revision } of profile.activities) {
+    for (const activity of profile.activities) {
+      const { activityId, state, executionIds, revision } = activity;
       const previous = oldActivities.get(activityId);
       if (previous?.revision === revision && previous.executionIds.every(id => oldExecutions.get(id) === executions.get(id))) continue;
+      const at = activity.updatedAt ?? new Date().toISOString();
+      const executionId = executionIds.at(-1);
+      if (previous?.state !== state && (state === 'completed' || state === 'needsAttention')) {
+        this.putActivityEvent(activity, state === 'completed' ? 'completed' : 'needs_attention', [revision], { executionId }, at);
+      }
+      if (state === 'waitingForAnswer') {
+        for (const question of activity.questions) {
+          if (question.state === 'open' && !previous?.questions.some(row => row.questionId === question.questionId && row.state === 'open')) {
+            this.putActivityEvent(activity, 'question_open', [question.questionId, question.revision], { executionId, questionId: question.questionId }, at);
+          }
+        }
+      }
       for (const executionId of executionIds) {
         const executionState = executions.get(executionId)!;
         const priorState = oldExecutions.get(executionId);
