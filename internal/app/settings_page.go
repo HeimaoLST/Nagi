@@ -577,8 +577,6 @@ func (a *appModel) openDataRecovery() {
 	a.ensureDataRecovery().focus = "restore"
 }
 
-// Completion accounting belongs to the admitted operation, even after its view
-// has gone away. A chooser alone has not admitted any filesystem operation.
 func (a *appModel) finishDataRecoveryIO(s *dataRecoveryState) {
 	s.inFlight = false
 	if a.shutdownStarted {
@@ -738,6 +736,10 @@ func (a *appModel) settingsDataRecoveryContent(c *ui.Context, t *ui.Theme) {
 					ui.Text(c, msgs.RecoveryPreviewWatchCounts(copy.Timers, copy.Schedules, copy.DormantWatches)).FontSize(typeMeta).LineHeight(1.5).TextColor(t.Text)
 					ui.Text(c, msgs.RecoveryScopeWatches()).FontSize(typeMeta).LineHeight(1.5).TextColor(t.Warning)
 				}
+				if copy := s.copy; copy.DormantMandates > 0 || copy.Decisions > 0 || copy.Notices > 0 {
+					ui.Text(c, msgs.RecoveryPreviewOrchestrationCounts(copy.DormantMandates, copy.Decisions, copy.Notices)).MinWidth(0).FontSize(typeMeta).LineHeight(1.5).TextColor(t.Text)
+					ui.Text(c, msgs.RecoveryScopeOrchestration()).MinWidth(0).FontSize(typeMeta).LineHeight(1.5).TextColor(t.Warning)
+				}
 				ui.Text(c, msgs.RecoveryFileModified(s.copy.ModifiedAt.Format("2006-01-02 15:04:05 MST"))).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 				ui.Text(c, msgs.RecoveryPreviewWarning()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Warning)
 				ui.Text(c, msgs.RecoveryPauseWarning()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Warning)
@@ -780,6 +782,7 @@ func (a *appModel) settingsRecoveryControls(c *ui.Context, t *ui.Theme, s *dataR
 			if s.scopeOpen {
 				ui.Text(c, msgs.RecoveryDataIncluded()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 				ui.Text(c, msgs.RecoveryScopeWatches()).FontSize(typeMeta).LineHeight(1.5).TextColor(t.TextMuted)
+				ui.Text(c, msgs.RecoveryScopeOrchestration()).MinWidth(0).FontSize(typeMeta).LineHeight(1.5).TextColor(t.TextMuted)
 				ui.Text(c, msgs.RecoveryDataExcluded()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 			}
 			if reason := a.dataRecoveryBlocked(a.store == nil && a.productHost() == nil); reason != "" && s.result.Outcome != storeRecoveryVerifiedInstalled && s.result.Outcome != storeRecoveryInstallUnconfirmed {

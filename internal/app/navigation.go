@@ -22,6 +22,9 @@ func (a *appModel) detailIs(kind detailKind) bool {
 }
 
 func (a *appModel) openDetail(kind detailKind) {
+	a.clearBotDrawers()
+	a.priorChats = nil
+	a.headerMenuOpen = false
 	a.workspaceOpen = true
 	a.detail = kind
 	a.focusDetailClose = true
@@ -36,6 +39,36 @@ func (a *appModel) openBotScheduledWork(contactID string) {
 	a.schedules.bot(contactID).focusHeading = true
 }
 
+func (a *appModel) openBotSessions(botID, opener string) {
+	ct := a.contactByID(botID)
+	if ct == nil || ct.Archived || !a.productProfileReady() || a.dataRecoveryBlocksChanges() {
+		return
+	}
+	a.openContactProfile(botID)
+	bot := a.sessions.botSession(botID)
+	bot.opener, bot.detail = opener, nil
+	a.sessions.openSessionInspection(a.sessionInspectorFallbackDeps(ct))
+}
+
+func (a *appModel) clearBotDrawers() {
+	a.backgroundWork.panel, a.backgroundWork.returnFocus = nil, ""
+	a.sessions.activeBotID = ""
+	a.scheduledWorkBotID = ""
+	a.focusScheduledWorkOpener, a.focusSessionsOpener = "", ""
+}
+
+func (a *appModel) focusBotDrawerOpener(botID, opener string) {
+	switch opener {
+	case "header-overview:" + botID:
+		a.focusHeaderOverview = botID
+		a.focusProfileRow, a.focusRail = "", false
+	case "row:" + botID:
+		if !a.railCollapsed {
+			a.focusProfileRow = botID
+		}
+	}
+}
+
 func (a *appModel) closeDetail() {
 	if a.railCollapsed {
 		a.focusRail = true
@@ -43,18 +76,15 @@ func (a *appModel) closeDetail() {
 		a.focusProfileRow = a.contactProfileID
 	}
 	a.contactProfileID = ""
-	a.scheduledWorkBotID = ""
-	a.focusScheduledWorkOpener = ""
+	a.clearBotDrawers()
 	a.folderChoiceGeneration++
 	a.workspaceOpen = false
 	a.detail = ""
 	a.focusDetailClose = false
 }
 
-// detailPageActive means the right surface is the whole application page
-// because the three-pane layout cannot keep its 480px reading column.
 func (a *appModel) detailPageActive() bool {
-	return a.activeDetail() != "" && a.workOverlay()
+	return a.activeDetail() != "" && a.workOverlay() && a.priorChats == nil
 }
 
 func (a *appModel) backProductConversations() {
@@ -102,8 +132,8 @@ func (a *appModel) productConversationsView(c *ui.Context, t *ui.Theme, browser 
 						summary = msgs.HistoryRuntimeNotReady()
 					}
 					a.recoveryNotice(c, t, "prior-chat:"+browser.selectedID, summary, browser.problem, false)
-					secondaryButton(c, msgs.ReloadAction()).Disabled(!a.productProfileReady()).OnClick(func() {
-						a.loadProductTranscript(browser, browser.sourceID)
+					secondaryButton(c, msgs.ReloadAction()).AlignSelf(ui.Start).Disabled(!a.productProfileReady()).OnClick(func() {
+						a.refreshProductTranscript(browser)
 					})
 				}
 			})
@@ -113,7 +143,7 @@ func (a *appModel) productConversationsView(c *ui.Context, t *ui.Theme, browser 
 }
 
 func (a *appModel) mainPageActive() bool {
-	return a.aux == "task-context"
+	return a.aux == "task-context" || a.priorChats != nil && a.activeDetail() != "" && a.workOverlay()
 }
 
 func (a *appModel) focusDetailControl(c *ui.Context, button ui.Element) {
@@ -156,20 +186,28 @@ func (a *appModel) profileDetail(c *ui.Context, t *ui.Theme) {
 	if ct == nil {
 		return
 	}
-	editor := a.profileEditorFor(ct.ID)
-	actions := a.contactProfileActions(ct, editor)
-	formActions := actions
 	product := a.productHost() != nil
-	if product {
-		formActions.SaveInFooter = true
-		formActions.Archive, formActions.Restore = nil, nil
-		formActions.ToggleVisibility = nil
+	if product && a.backgroundWork.panel != nil && a.backgroundWork.panel.bot.ID == ct.ID {
+		a.backgroundWorkView(c, t, a.backgroundWork.panel)
+		return
 	}
 	if product && a.scheduledWorkBotID == ct.ID {
 		ui.Column(c).Key(ct.ID).Fill().MinWidth(0).MinHeight(0).Children(func() {
 			a.schedules.render(c, a.scheduledWorkDeps(c, ct))
 		})
 		return
+	}
+	if product && a.sessions.activeBotID == ct.ID {
+		a.sessions.sessionInspectionView(c, a.sessionInspectorDeps(c, ct))
+		return
+	}
+	editor := a.profileEditorFor(ct.ID)
+	actions := a.contactProfileActions(ct, editor)
+	formActions := actions
+	if product {
+		formActions.SaveInFooter = true
+		formActions.Archive, formActions.Restore = nil, nil
+		formActions.ToggleVisibility = nil
 	}
 	msgs := locales.In(c.Locale())
 	ui.Column(c).Key(ct.ID).Fill().MinWidth(0).MinHeight(0).Padding(16).Gap(8).Children(func() {
@@ -237,8 +275,6 @@ func (a *appModel) auxPage(c *ui.Context, t *ui.Theme) {
 	})
 }
 
-// syncDetailPageMode skips updating detailPageMode while Settings or a main
-// reader owns focus, leaving evaluation until the workbench is visible again.
 func (a *appModel) syncDetailPageMode() {
 	if a.settingsOpen || a.mainPageActive() {
 		return

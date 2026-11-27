@@ -22,9 +22,6 @@ func NewTaskContextID() string {
 	return "context-" + rand.Text()
 }
 
-// InputName is the single label projection used for both the size budget and
-// the caller-context wire value. Named snippets stay just their name; file
-// snapshots make the explicit source path visible without changing Text.
 func (item TaskContextItem) InputName() string {
 	if item.Source == "" {
 		return item.Name
@@ -42,13 +39,10 @@ func CloneTaskContextItems(items []TaskContextItem) []TaskContextItem {
 }
 
 type PendingSend struct {
-	Draft   string            `json:"draft,omitempty"`
-	Context []TaskContextItem `json:"context,omitempty"`
-	State   string            `json:"state,omitempty"`
-	// ToolScopeRef binds the app-issued issue-tool scope to the one pending
-	// conversation turn. It is not a user-visible field and is cleared with the
-	// pending send after acceptance.
-	ToolScopeRef string `json:"tool_scope_ref,omitempty"`
+	Draft        string            `json:"draft,omitempty"`
+	Context      []TaskContextItem `json:"context,omitempty"`
+	State        string            `json:"state,omitempty"`
+	ToolScopeRef string            `json:"tool_scope_ref,omitempty"`
 }
 
 func ClonePendingSend(send *PendingSend) *PendingSend {
@@ -195,10 +189,6 @@ type IssueRequirement struct {
 	UpdatedAt int64
 }
 
-// IssueExecution is the persisted association for one attempt on an issue.
-// Prompt is the exact pre-dispatch snapshot; Runtime history remains the
-// authority for task/message/tool results. AttentionSeenStatus tracks the
-// last displayed exception status and is empty when unseen.
 type IssueExecution struct {
 	ID                   string
 	SessionID            string
@@ -300,11 +290,21 @@ func CloneBuiltinTools(selection *[]string) *[]string {
 func NowMillis() int64 { return time.Now().UnixMilli() }
 
 type productRecoveryCounts struct {
-	Contacts       int `json:"contacts"`
-	Activities     int `json:"activities"`
-	Timers         int `json:"timers"`
-	Schedules      int `json:"schedules"`
-	DormantWatches int `json:"dormantWatches"`
+	Contacts        int `json:"contacts"`
+	Activities      int `json:"activities"`
+	Timers          int `json:"timers"`
+	Schedules       int `json:"schedules"`
+	DormantWatches  int `json:"dormantWatches"`
+	Notices         int `json:"notices"`
+	Decisions       int `json:"decisions"`
+	DormantMandates int `json:"dormantMandates"`
+}
+
+type PendingOrchestrationOperation struct {
+	BotID       string `json:"botId"`
+	MandateID   string `json:"mandateId"`
+	DecisionID  string `json:"decisionId,omitempty"`
+	OperationID string `json:"operationId"`
 }
 
 type PendingWatchOperation struct {

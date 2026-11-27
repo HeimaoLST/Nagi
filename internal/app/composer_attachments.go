@@ -54,6 +54,7 @@ func (a *appModel) composerToolbar(c *ui.Context, t *ui.Theme, ct *contact, send
 		if !a.demo && ct.ActiveTaskID != "" {
 			stop := appTooltip(c, ui.Button(c, "").Label(msgs.StopConversation()), msgs.StopConversationTooltip()).
 				Size(32, 32).Shrink(0).Radius(16).Padding(0).Center().Border(1, t.Border).TextColor(t.Warning)
+			stop.Disabled(blocked || ct.stoppingQueued == ct.ActiveTaskID)
 			theme.TransitionControl(stop, t)
 			stop.Children(func() { ui.Icon(c, composerStopIcon).Size(16, 16) })
 			stop.OnClick(a.cancelSelected)

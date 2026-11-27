@@ -28,6 +28,7 @@ const (
 type botStatus struct {
 	kind                                       botVisualKind
 	waitingCount, attentionCount, workingCount int
+	backgroundActive, backgroundDecisions      int
 	waitingActivity, attentionActivity         string
 	questionID                                 string
 	waitingLegacy, attentionLegacy             *productActivity
@@ -78,12 +79,25 @@ func (a *appModel) botVisualState(ct *contact, now time.Time) botStatus {
 			status.workingCount++
 		}
 	}
+	for _, item := range ct.orchestration.items {
+		if item.Dormant {
+			continue
+		}
+		switch item.State {
+		case pi.ProductMandateActive:
+			status.backgroundActive++
+		case pi.ProductMandateWaitingDecision:
+			status.backgroundDecisions++
+		}
+	}
 	switch {
 	case status.waitingCount > 0 || status.attentionCount > 0 || ct.Status == statusAttention:
 		status.kind = botVisualWaiting
-	case ct.Status == statusWorking || sessionBusy(ct.SendState, ct.ActiveTaskID):
+	case status.backgroundDecisions > 0:
+		status.kind = botVisualWaiting
+	case ct.SendState != sendQueued && (ct.Status == statusWorking || sessionBusy(ct.SendState, ct.ActiveTaskID)):
 		status.kind = botVisualReplying
-	case status.workingCount > 0:
+	case status.workingCount+status.backgroundActive > 0:
 		status.kind = botVisualWorking
 	case now.Before(ct.completedUntil):
 		status.kind = botVisualDone
@@ -133,6 +147,9 @@ func (s botStatus) label(msgs locales.Messages, rail bool) string {
 	case botVisualArchived:
 		return msgs.ProfileArchivedBadge()
 	case botVisualWaiting:
+		if s.backgroundDecisions > 0 && s.waitingCount+s.attentionCount == 0 {
+			return msgs.OrchestrationDecisionBadge()
+		}
 		if s.waitingCount == 0 {
 			return msgs.BotStatusNeedsAttention()
 		}
@@ -147,9 +164,9 @@ func (s botStatus) label(msgs locales.Messages, rail bool) string {
 		return msgs.BotStatusReplying()
 	case botVisualWorking:
 		if rail {
-			return msgs.BotStatusRailWorking(s.workingCount)
+			return msgs.BotStatusRailWorking(s.workingCount + s.backgroundActive)
 		}
-		return msgs.BotStatusWorking(s.workingCount)
+		return msgs.BotStatusWorking(s.workingCount + s.backgroundActive)
 	case botVisualDone:
 		if rail {
 			return msgs.BotStatusRailDone()

@@ -168,6 +168,7 @@ func (a *appModel) openProductProfile(ctx context.Context, fresh bool, generatio
 	}
 	bots = slices.Insert(bots, 0, architect)
 	contacts := make([]*contact, 0, len(bots))
+	activeSessions := make(map[string]map[string]pi.ProductSessionSummary, len(bots))
 	for _, bot := range bots {
 		conversation, err := host.product.GetConversation(ctx, bot.CurrentConversationID)
 		if err != nil {
@@ -182,17 +183,26 @@ func (a *appModel) openProductProfile(ctx context.Context, fresh bool, generatio
 		applyProductExecution(ct, conversation.LatestExecution)
 		if !ct.Archived {
 			ct.activeActivities, _ = listBotActiveActivities(ctx, host.product, ct.ID)
+			ct.orchestration.items, _ = listBotActiveOrchestrations(ctx, host.product, ct.ID)
+			activeSessions[ct.ID], _ = listBotActiveSessions(ctx, host.product, ct.ID)
 		}
 		if pending, ok := host.productPending[ct.ID]; ok && pending.ConversationID == ct.SessionID {
 			receipt, lookupErr := host.product.Operation(ctx, pending.OperationID)
-			if lookupErr == nil && receipt.Target.ConversationID == ct.SessionID && receipt.State != "pending" && receipt.State != "unknown" {
-				delete(host.productPending, ct.ID)
-				if receipt.State == "rejected" {
-					ct.applyProviderSendRejection(providerAdmission(receipt, nil))
+			if lookupErr == nil && conversationSendReceiptMatches(pending, receipt) {
+				if setQueuedConversationSend(ct, receipt) {
+					if draft := conversation.Draft; draft != nil && draft.Revision == pending.DraftRevision {
+						captureSubmittedDraft(ct, *draft)
+					}
+				} else if receipt.State == "accepted" || receipt.State == "rejected" {
+					delete(host.productPending, ct.ID)
+					if receipt.State == "rejected" && !applyNonDispatchedSend(ct, receipt) {
+						ct.applyProviderSendRejection(providerAdmission(receipt, nil))
+					}
+				} else if ct.SendState == sendIdle {
+					markUncertainConversationSend(ct)
 				}
 			} else if ct.SendState == sendIdle {
-				ct.SendState, ct.Status = sendUnknown, statusAttention
-				ct.setSendError(taskContextUncertainSendError, "send-uncertain", "")
+				markUncertainConversationSend(ct)
 			}
 		}
 		contacts = append(contacts, ct)
@@ -211,8 +221,9 @@ func (a *appModel) openProductProfile(ctx context.Context, fresh bool, generatio
 			break
 		}
 	}
-	if projection, err := productHistory(ctx, host.product, selected.SessionID); err == nil {
+	if projection, err := productTimeline(ctx, host.product, selected.SessionID); err == nil {
 		selected.Messages, selected.History, selected.Loaded = projection.messages, projection.entries, true
+		selected.transcriptError = projection.transcriptError
 	} else {
 		selected.LoadErr = safeDiagnostic(err.Error())
 		selected.Unavailable = selected.LoadErr
@@ -227,16 +238,19 @@ func (a *appModel) openProductProfile(ctx context.Context, fresh bool, generatio
 		a.selected = slices.Index(contacts, selected)
 		a.activityIntents = nil
 		a.sessions = sessionWorkspaceState{
+			active:              activeSessions,
 			updateUI:            a.updateUI,
 			persistCloseIntents: a.persistSessionCloseIntents,
 		}
 		a.schedules = scheduledWorkState{}
 		a.scheduledWorkBotID = ""
 		a.focusScheduledWorkOpener = ""
+		a.backgroundWork = newBackgroundWorkState(nil)
 		if local != nil {
 			a.activityIntents = local.PendingActivities
 			a.sessions.restoreSessionCloses(local.PendingSessionCloses)
 			a.schedules.restoreOperations(local.PendingWatchOperations)
+			a.backgroundWork = newBackgroundWorkState(local.PendingOrchestrationOperations)
 			a.leftPaneWidth = clampPaneWidth(local.Layout.LeftWidth, defaultLeftPaneWidth, minLeftPaneWidth, maxLeftPaneWidth)
 			a.rightPaneWidth = clampPaneWidth(local.Layout.RightWidth, defaultRightPaneWidth, minRightPaneWidth, maxRightPaneWidth)
 			a.appearanceThemeIDs = local.ThemeIDs
@@ -260,6 +274,7 @@ func (a *appModel) openProductProfile(ctx context.Context, fresh bool, generatio
 		a.sessions.blocked = a.dataRecoveryBlocksChanges()
 		a.sessions.setSessionInspectorClient(host.product)
 		a.reconcilePendingWatchOperations(host)
+		a.reconcileOrchestrationOperations(host)
 		a.refreshDockMenu()
 	})
 	return nil
@@ -282,10 +297,11 @@ func (a *appModel) persistProductUI(host *piAppHost) error {
 	return writeProfileJSON(productUIPath(a.storePath), productUIState{
 		Selected: a.selectedID(), Layout: storedLayout{LeftWidth: a.railWidth(), RightWidth: a.workWidth(), WorkspaceOpen: a.workspaceOpen},
 		ThemeIDs: a.appearanceThemeIDs, Appearance: normalizeAppearanceMode(a.appearanceMode), Pending: host.productPending, RecoveryID: host.recoveryID,
-		PendingActivities:      a.activityIntents,
-		PendingSessionCloses:   a.sessions.pendingSessionCloses(),
-		PendingWatchOperations: a.schedules.pendingOperations(),
-		HideBuiltinArchitect:   a.hideBuiltinArchitect,
+		PendingActivities:              a.activityIntents,
+		PendingSessionCloses:           a.sessions.pendingSessionCloses(),
+		PendingWatchOperations:         a.schedules.pendingOperations(),
+		PendingOrchestrationOperations: a.backgroundWork.operations,
+		HideBuiltinArchitect:           a.hideBuiltinArchitect,
 	})
 }
 
@@ -356,6 +372,9 @@ func (a *appModel) sessionInspectorDeps(c *ui.Context, ct *contact) sessionInspe
 	deps.formatDimensions = msgs.SessionInspectDimensions
 	deps.formatGap = msgs.SessionInspectOutputGap
 	deps.formatMS = msgs.SessionInspectMilliseconds
+	if a.detailPageActive() && a.railCollapsed {
+		deps.showContacts = a.showContactsButton
+	}
 	return deps
 }
 
@@ -368,11 +387,23 @@ func (a *appModel) sessionInspectorFallbackDeps(ct *contact) sessionInspectorDep
 		copy:                defaultSessionInspectionCopy,
 		updateUI:            a.updateUI,
 		persistCloseIntents: a.persistSessionCloseIntents,
+		onBack: func() {
+			opener := a.sessions.botSession(ct.ID).opener
+			if opener == "profile-sessions:"+ct.ID {
+				a.focusSessionsOpener = ct.ID
+				return
+			}
+			a.closeDetail()
+			a.focusBotDrawerOpener(ct.ID, opener)
+		},
 		onOpenConversation: func(conversationID string) {
+			a.selectContactWithDrawer(slices.Index(a.contacts, ct), true)
 			a.browseProductConversations(ct, conversationID)
 		},
 		onOpenActivity: func(activityID string) {
-			a.sessions.activeBotID = ""
+			a.selectContactWithDrawer(slices.Index(a.contacts, ct), true)
+			a.priorChats = nil
+			a.closeDetail()
 			ct.activity.open = true
 			a.openProductActivity(ct, activityID)
 		},
@@ -457,16 +488,16 @@ func (a *appModel) sendProductConversation(host *piAppHost, ct *contact) bool {
 		ct.setSendError(a.connectionSafeMessage(err), "", "")
 		return false
 	}
-	pending := productPendingSend{ConversationID: ct.SessionID, OperationID: newContactID()}
+	draft := host.productDrafts[ct.ID]
+	pending := productPendingSend{ConversationID: ct.SessionID, OperationID: newContactID(), DraftRevision: draft.Revision}
 	host.productPending[ct.ID] = pending
 	if err := a.persist(); err != nil {
 		delete(host.productPending, ct.ID)
 		ct.setSendError(a.connectionSafeMessage(err), "", "")
 		return false
 	}
-	draft := host.productDrafts[ct.ID]
-	ct.SubmittedDraft, ct.SubmittedRev = draft.Text, ct.draftRev
-	ct.SubmittedQuote = cloneQuote(draft.Quote)
+	captureSubmittedDraft(ct, draft)
+	ct.sendNotice = ""
 	ct.SendState = sendSubmitting
 	ct.clearSendError()
 	a.submissionAsyncStarted()
@@ -486,62 +517,177 @@ func (a *appModel) sendProductConversation(host *piAppHost, ct *contact) bool {
 		}
 		a.updateUI(func() {
 			defer a.submissionAsyncFinished()
-			if a.pi != host || a.contactByID(ct.ID) != ct || ct.SessionID != pending.ConversationID {
+			if a.pi != host || a.contactByID(ct.ID) != ct || ct.SessionID != pending.ConversationID || host.productPending[ct.ID] != pending {
 				return
 			}
-			if receipt.State == "accepted" && receipt.Execution != nil {
-				if ct.SendState == sendSubmitting {
-					applyProductExecution(ct, receipt.Execution)
-					if receipt.Execution.State == "completed" {
-						a.recordBotCompletion(ct)
-					}
+			if conversationSendReceiptMatches(pending, receipt) && a.applyConversationSendReceipt(host, ct, receipt, true) {
+				if ct.SendState == sendQueued {
+					a.reconcilePendingConversationSend(host, ct, true)
 				}
-				delete(host.productPending, ct.ID)
-				_ = a.persist()
 				return
 			}
-			if rejected || receipt.State == "rejected" {
+			if rejected {
 				delete(host.productPending, ct.ID)
 				_ = a.persist()
 				ct.SendState = sendIdle
 				if ct.applyProviderSendRejection(providerAdmission(receipt, remote)) {
 					a.refreshProductProviders(host)
-				} else if rejected {
-					ct.setSendError(a.connectionSafeMessage(err), "", "")
 				} else {
-					ct.setSendError("The conversation was not dispatched.", "", "")
+					ct.setSendError(a.connectionSafeMessage(err), "", "")
 				}
 				return
 			}
-			ct.SendState, ct.Status = sendUnknown, statusAttention
-			ct.setSendError(taskContextUncertainSendError, "send-uncertain", "")
+			markUncertainConversationSend(ct)
 		})
 	}()
 	return true
 }
 
+func captureSubmittedDraft(ct *contact, draft pi.ProductDraft) {
+	ct.SubmittedDraft, ct.SubmittedRev = draft.Text, ct.draftRev
+	ct.SubmittedQuote = cloneQuote(draft.Quote)
+	ct.submittedMaterials = productTaskContext(draft.Materials)
+}
+
+func conversationSendReceiptMatches(pending productPendingSend, receipt pi.ProductReceipt) bool {
+	return receipt.OperationID == pending.OperationID && receipt.Target.ConversationID == pending.ConversationID
+}
+
+func setQueuedConversationSend(ct *contact, receipt pi.ProductReceipt) bool {
+	if receipt.State != "pending" || receipt.Execution == nil || receipt.Execution.ExecutionID == "" {
+		return false
+	}
+	result, _ := pi.DecodeConversationSendResult(receipt)
+	ct.SendState, ct.Status = sendQueued, statusReady
+	ct.SendQueuedPosition, ct.ActiveTaskID = result.QueuePosition, receipt.Execution.ExecutionID
+	ct.clearSendError()
+	return true
+}
+
+func applyNonDispatchedSend(ct *contact, receipt pi.ProductReceipt) bool {
+	result, err := pi.DecodeConversationSendResult(receipt)
+	if err != nil || result.Delivery != "non_dispatched" {
+		return false
+	}
+	if result.Reason != "cancelled_before_dispatch" && result.Reason != "interrupted_before_dispatch" {
+		return false
+	}
+	applyProductExecution(ct, nil)
+	ct.clearSendError()
+	ct.sendNotice = result.Reason
+	return true
+}
+
+func markUncertainConversationSend(ct *contact) {
+	ct.ActiveTaskID, ct.SendQueuedPosition = "", 0
+	ct.SendState, ct.Status = sendUnknown, statusAttention
+	ct.setSendError(taskContextUncertainSendError, "send-uncertain", "")
+}
+
+func (a *appModel) applyConversationSendReceipt(host *piAppHost, ct *contact, receipt pi.ProductReceipt, recoverAccepted bool) bool {
+	switch receipt.State {
+	case "pending":
+		return setQueuedConversationSend(ct, receipt)
+	case "accepted":
+		if receipt.Execution == nil || !recoverAccepted {
+			return true
+		}
+		ct.clearSendError()
+		applyProductExecution(ct, receipt.Execution)
+		if receipt.Execution.State == "completed" {
+			a.recordBotCompletion(ct)
+		}
+	case "rejected":
+		if !applyNonDispatchedSend(ct, receipt) {
+			applyProductExecution(ct, nil)
+			if ct.applyProviderSendRejection(providerAdmission(receipt, nil)) {
+				a.refreshProductProviders(host)
+			} else {
+				ct.setSendError("The conversation was not dispatched.", "", "")
+			}
+		}
+	default:
+		return false
+	}
+	delete(host.productPending, ct.ID)
+	_ = a.persist()
+	return true
+}
+
+func (a *appModel) reconcilePendingConversationSend(host *piAppHost, ct *contact, recoverAccepted bool) {
+	pending, ok := host.productPending[ct.ID]
+	if !ok || pending.ConversationID != ct.SessionID || ct.SendState == sendSubmitting {
+		return
+	}
+	ct.sendReceiptRead++
+	read := ct.sendReceiptRead
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		receipt, err := host.product.Operation(ctx, pending.OperationID)
+		if err != nil || !conversationSendReceiptMatches(pending, receipt) {
+			return
+		}
+		if recoverAccepted && receipt.State == "accepted" && receipt.Execution != nil {
+			conversation, err := host.product.GetConversation(ctx, pending.ConversationID)
+			if err == nil && conversation.LatestExecution != nil && conversation.LatestExecution.ExecutionID == receipt.Execution.ExecutionID {
+				receipt.Execution = conversation.LatestExecution
+			}
+		}
+		a.updateUI(func() {
+			if a.pi != host || a.contactByID(ct.ID) != ct || ct.SessionID != pending.ConversationID || host.productPending[ct.ID] != pending || ct.sendReceiptRead != read {
+				return
+			}
+			a.applyConversationSendReceipt(host, ct, receipt, recoverAccepted)
+			if recoverAccepted && receipt.State == "accepted" {
+				a.refreshProductConversation(host, ct, ct.SubmittedRev)
+				a.reloadProductConversation(host, ct)
+			}
+		})
+	}()
+}
+
 func (a *appModel) stopProductConversation(host *piAppHost, ct *contact, execution string) {
-	if ct == nil || execution == "" || ct.ActiveTaskID != execution {
+	if ct == nil || execution == "" || ct.ActiveTaskID != execution || ct.stoppingQueued == execution {
 		return
 	}
 	id := ct.SessionID
+	queued := ct.SendState == sendQueued
+	if queued {
+		ct.stoppingQueued = execution
+		a.submissionAsyncStarted()
+	}
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		_, err := host.product.StopConversation(ctx, pi.ProductConversationStopParams{
 			ProductConversationParams: pi.ProductConversationParams{ConversationID: id}, ExecutionID: execution, OperationID: newContactID(),
 		})
-		if err != nil {
-			a.updateUI(func() {
-				if a.pi == host && ct.SessionID == id && ct.ActiveTaskID == execution {
-					ct.setSendError(a.connectionSafeMessage(err), "", "")
+		a.updateUI(func() {
+			if queued {
+				defer a.submissionAsyncFinished()
+				if ct.stoppingQueued == execution {
+					ct.stoppingQueued = ""
 				}
-			})
-		}
+			}
+			if a.pi != host || ct.SessionID != id || ct.ActiveTaskID != execution {
+				return
+			}
+			if queued {
+				a.reconcilePendingConversationSend(host, ct, false)
+			}
+			if err != nil {
+				ct.setSendError(a.connectionSafeMessage(err), "", "")
+			}
+		})
 	}()
 }
 
 func (a *appModel) reloadProductConversation(host *piAppHost, ct *contact) {
+	a.refreshProductTimeline(host, ct, true)
+}
+
+func (a *appModel) refreshProductTimeline(host *piAppHost, ct *contact, resolveDraftQuote bool) {
 	if !a.canReloadPiConversation(ct) {
 		return
 	}
@@ -551,7 +697,7 @@ func (a *appModel) reloadProductConversation(host *piAppHost, ct *contact) {
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
-		projection, err := productHistory(ctx, host.product, id)
+		projection, err := productTimeline(ctx, host.product, id)
 		a.updateUI(func() {
 			defer a.historyAsyncFinished()
 			if a.pi != host || ct.historyGen != generation || ct.SessionID != id {
@@ -565,8 +711,11 @@ func (a *appModel) reloadProductConversation(host *piAppHost, ct *contact) {
 			}
 			ct.Messages = mergeLiveConversation(ct.Messages, projection.messages)
 			ct.History = projection.entries
+			ct.transcriptError = projection.transcriptError
 			ct.Loaded, ct.LoadErr, ct.Unavailable = true, "", ""
-			a.updateDraftQuoteReference(ct)
+			if resolveDraftQuote {
+				a.updateDraftQuoteReference(ct)
+			}
 		})
 	}()
 }
@@ -575,7 +724,13 @@ func mergeLiveConversation(previous, history []*message) []*message {
 	position := 0
 	for i := 0; i < len(previous); i++ {
 		user := previous[i]
+		if user.Kind == msgNotice {
+			continue
+		}
 		if user.TaskID == "" {
+			for position < len(history) && history[position].Kind == msgNotice {
+				position++
+			}
 			if position < len(history) && history[position].MessageID == user.MessageID {
 				position++
 			}
@@ -584,40 +739,46 @@ func mergeLiveConversation(previous, history []*message) []*message {
 		if user.Kind != msgUser {
 			continue
 		}
-		if position == len(history) {
-			return append(history, previous[i:]...)
-		}
 		var reply *message
 		if i+1 < len(previous) && previous[i+1].TaskID == user.TaskID && previous[i+1].Kind == msgContact {
 			i++
 			reply = previous[i]
 		}
-		stored := history[position]
-		if stored.Kind != msgUser || stored.Text != user.Text || (user.MessageID != "" && stored.MessageID != user.MessageID) {
-			continue
+		for position < len(history) && history[position].Kind == msgNotice {
+			notice := history[position].Notice
+			if notice != nil && notice.AnchorKind == pi.ProductAnchorPostSettlement && notice.AnchorExecutionID == user.TaskID {
+				break
+			}
+			position++
 		}
-		stored.Key, stored.TaskID = user.Key, user.TaskID
-		position++
+		if position == len(history) || history[position].Kind == msgNotice {
+			history = slices.Insert(history, position, user)
+			position++
+		} else {
+			stored := history[position]
+			if stored.Kind != msgUser || stored.Text != user.Text || (user.MessageID != "" && stored.MessageID != user.MessageID) {
+				continue
+			}
+			stored.Key, stored.TaskID = user.Key, user.TaskID
+			stored.ReadByBot = stored.ReadByBot || user.ReadByBot || stored.History
+			position++
+		}
 		if reply == nil {
 			continue
 		}
-		end, remaining := position, reply.Text
-		for end < len(history) && history[end].Kind == msgContact {
-			var ok bool
-			remaining, ok = strings.CutPrefix(remaining, history[end].Text)
-			if !ok {
-				break
+		if position < len(history) && history[position].Kind == msgContact {
+			stored := history[position]
+			if !strings.HasPrefix(reply.Text, stored.Text) {
+				position++
+				continue
 			}
-			end++
+			if stored.Text == reply.Text {
+				reply.MessageID = stored.MessageID
+			}
+			history[position] = reply
+		} else {
+			history = slices.Insert(history, position, reply)
 		}
-		if end < len(history) && history[end].Kind == msgContact {
-			continue
-		}
-		if end == position+1 && remaining == "" {
-			reply.MessageID = history[position].MessageID
-		}
-		stored.ReadByBot = stored.ReadByBot || user.ReadByBot || stored.History
-		history = slices.Replace(history, position, end, reply)
 		position++
 	}
 	return history
@@ -643,26 +804,7 @@ func productHistory(ctx context.Context, client *pi.ProductClient, id string) (h
 			return historyProjection{}, err
 		}
 		for _, row := range page.Items {
-			kind, from := msgContact, "contact"
-			if row.Role == "user" {
-				kind, from = msgUser, "me"
-			}
-			stamp, _ := time.Parse(time.RFC3339Nano, row.Timestamp)
-			when := formatMillis(stamp.UnixMilli())
-			materials := productTaskContext(row.Materials)
-			messages := projection.messages
-			if kind == msgContact && len(messages) > 0 && messages[len(messages)-1].Kind == msgContact {
-				previous := messages[len(messages)-1]
-				if reply.Len() == 0 {
-					reply.WriteString(previous.Text)
-				}
-				reply.WriteString(row.Text)
-				previous.Text = reply.String()
-			} else {
-				reply.Reset()
-				projection.messages = append(messages, &message{Key: row.MessageID, MessageID: row.MessageID, Kind: kind, Text: row.Text, Time: when, Timestamp: stamp, Context: materials, Quote: row.Quote, History: true, ReadByBot: kind == msgUser})
-			}
-			projection.entries = append(projection.entries, historyEntry{ID: row.MessageID, Date: when, From: from, Text: row.Text, Context: materials})
+			projection.appendProductMessage(&reply, row.MessageID, row.Role, row.Timestamp, row.Text, row.Materials, row.Quote)
 		}
 		if page.NextCursor == nil {
 			return projection, nil
@@ -673,6 +815,22 @@ func productHistory(ctx context.Context, client *pi.ProductClient, id string) (h
 
 func (a *appModel) applyProductEvent(host *piAppHost, event pi.ProductEvent) {
 	if a.pi != host {
+		return
+	}
+	if changed := event.TimelineChanged; changed != nil {
+		for _, ct := range a.contacts {
+			if ct.SessionID == changed.ConversationID {
+				a.refreshProductTimeline(host, ct, false)
+				break
+			}
+		}
+		if browser := a.priorChats; browser != nil && browser.selectedID == changed.ConversationID {
+			a.refreshProductTranscript(browser)
+		}
+		return
+	}
+	if changed := event.OrchestrationChanged; changed != nil {
+		a.applyOrchestrationChange(host, *changed)
 		return
 	}
 	if digest := event.ActivityDigest; digest != nil {
@@ -770,13 +928,23 @@ func (a *appModel) applyProductEvent(host *piAppHost, event pi.ProductEvent) {
 		}
 		switch event.Name {
 		case "execution.started":
-			if ct.ActiveTaskID != data.ExecutionID && host.productPending[ct.ID].OperationID != data.OperationID {
+			pending, waiting := host.productPending[ct.ID]
+			if ct.ActiveTaskID != data.ExecutionID && (!waiting || pending.OperationID != data.OperationID) {
 				return
 			}
+			ct.clearSendError()
 			applyProductExecution(ct, &pi.ProductExecution{ExecutionID: data.ExecutionID, State: "running"})
-			stamp := time.Now()
-			ct.Messages = append(ct.Messages, &message{Key: data.ExecutionID + ":user", Kind: msgUser, Text: ct.SubmittedDraft, Time: stamp.Format("15:04"), Timestamp: stamp, TaskID: data.ExecutionID, Context: productTaskContext(host.productDrafts[ct.ID].Materials), Quote: ct.SubmittedQuote, ReadByBot: true})
-			ct.SubmittedQuote = nil
+			if waiting && pending.OperationID == data.OperationID {
+				delete(host.productPending, ct.ID)
+				_ = a.persist()
+			}
+			if ct.SubmittedDraft != "" {
+				stamp := time.Now()
+				ct.Messages = append(ct.Messages, &message{Key: data.ExecutionID + ":user", Kind: msgUser, Text: ct.SubmittedDraft, Time: stamp.Format("15:04"), Timestamp: stamp, TaskID: data.ExecutionID, Context: ct.submittedMaterials, Quote: ct.SubmittedQuote, ReadByBot: true})
+				ct.SubmittedDraft, ct.SubmittedQuote, ct.submittedMaterials = "", nil, nil
+			} else if waiting {
+				a.reloadProductConversation(host, ct)
+			}
 		case "execution.textDelta":
 			if ct.ActiveTaskID == data.ExecutionID {
 				item := a.liveText(ct, data.ExecutionID, "pi")
@@ -786,6 +954,10 @@ func (a *appModel) applyProductEvent(host *piAppHost, event pi.ProductEvent) {
 				}
 			}
 		case "execution.settled":
+			if ct.SendState == sendQueued && ct.ActiveTaskID == data.ExecutionID {
+				a.reconcilePendingConversationSend(host, ct, true)
+				return
+			}
 			if ct.ActiveTaskID == data.ExecutionID {
 				finishLiveReply(ct, data.ExecutionID)
 				applyProductExecution(ct, &pi.ProductExecution{ExecutionID: data.ExecutionID, State: data.State, Error: data.Error})
@@ -842,6 +1014,8 @@ func (a *appModel) applyProductBot(host *piAppHost, bot pi.ProductBot, created b
 		ct.Messages, ct.History, ct.Loaded = nil, nil, false
 		ct.recall = quoteRecall{}
 		ct.SubmittedQuote = nil
+		ct.SubmittedDraft, ct.submittedMaterials, ct.sendNotice, ct.stoppingQueued = "", nil, "", ""
+		ct.transcriptError = false
 		ct.LoadErr, ct.Unavailable = "", ""
 		applyProductExecution(ct, nil)
 		a.refreshProductConversation(host, ct, ct.draftRev)
@@ -906,11 +1080,13 @@ func (a *appModel) reconcileProductStream(host *piAppHost) {
 				for _, ct := range a.contacts {
 					a.refreshProductConversation(host, ct, ct.draftRev)
 					a.reloadProductConversation(host, ct)
+					a.reconcilePendingConversationSend(host, ct, true)
 					for _, trace := range ct.activity.traces {
 						trace.client = nil
 					}
 					if !ct.Archived {
 						a.refreshBotActivityStatus(host, ct)
+						a.refreshBotOrchestrations(host, ct)
 					}
 				}
 				a.reconcileControlPlaneIntents(host)
@@ -921,6 +1097,10 @@ func (a *appModel) reconcileProductStream(host *piAppHost) {
 					b.refresh()
 				}
 				a.reconcilePendingWatchOperations(host)
+				a.reconcileOrchestrationOperations(host)
+				if panel := a.backgroundWork.panel; panel != nil {
+					a.loadBackgroundWork(panel, "")
+				}
 			}
 		})
 	}()
@@ -983,8 +1163,7 @@ func (a *appModel) observeProductExit(host *piAppHost) {
 				if ct.ActiveTaskID != "" {
 					finishLiveReply(ct, ct.ActiveTaskID)
 				}
-				ct.ActiveTaskID, ct.SendState, ct.Status = "", sendUnknown, statusAttention
-				ct.setSendError(taskContextUncertainSendError, "send-uncertain", "")
+				markUncertainConversationSend(ct)
 			}
 		}
 	})
@@ -1020,6 +1199,7 @@ func productTaskContext(materials []pi.ProductMaterial) []taskContextItem {
 
 func applyProductExecution(ct *contact, execution *pi.ProductExecution) {
 	ct.ActiveTaskID, ct.SendState, ct.Status = "", sendIdle, statusReady
+	ct.SendQueuedPosition = 0
 	if execution == nil {
 		return
 	}

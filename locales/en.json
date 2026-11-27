@@ -1931,7 +1931,10 @@
       }
     }
   },
-  "sessionInspectTitle": "Sessions",
+  "sessionInspectTitle": "Terminal sessions",
+  "sessionInspectMenuCount": "{count, plural, =0 {Terminal sessions} one {Terminal sessions (#)} other {Terminal sessions (#)}}",
+  "sessionInspectProfileHint": "Inspect this Bot’s terminal sessions and their output.",
+  "sessionInspectOpenAction": "View terminal sessions",
   "sessionInspectBack": "Back",
   "sessionInspectReload": "Reload",
   "sessionInspectLoadMore": "Load more",
@@ -2048,5 +2051,120 @@
     }
   },
   "dockOpenNagi": "Open Nagi",
-  "messageReadStatus": "Read"
+  "messageReadStatus": "Read",
+  "sendQueuedState": "Queued — waiting for an open runtime slot…",
+  "sendQueuedPosition": "Queued (#{position}) — waiting for an open runtime slot…",
+  "@sendQueuedPosition": {
+    "placeholders": {
+      "position": {
+        "type": "int"
+      }
+    }
+  },
+  "sendCancelledBeforeDispatch": "Cancelled before dispatch. Your draft is still here.",
+  "sendInterruptedBeforeDispatch": "Interrupted before dispatch. Your draft was not sent.",
+  "recoveryScopeOrchestration": "Restored background goals, decision cards, and notices stay dormant and read-only on open.",
+  "recoveryPreviewOrchestrationCounts": "Dormant goals {mandates}, decisions {decisions}, notices {notices}",
+  "@recoveryPreviewOrchestrationCounts": {
+    "placeholders": {
+      "mandates": {
+        "type": "int"
+      },
+      "decisions": {
+        "type": "int"
+      },
+      "notices": {
+        "type": "int"
+      }
+    }
+  },
+  "timelineNoticeBadge": "Background update",
+  "timelineNoticeUrgent": "Needs review",
+  "timelineNoticeReadOnly": "Restored · read-only",
+  "timelineInspectMandate": "View background work",
+  "timelineLoadMore": "Load earlier records",
+  "timelineTranscriptErrorNotice": "Pi message history is unavailable; durable product updates remain visible below.",
+  "orchestrationTitle": "Background work",
+  "orchestrationBack": "Back",
+  "orchestrationReload": "Reload",
+  "orchestrationEmpty": "No background orchestration runs for this Bot yet.",
+  "orchestrationLoading": "Loading background work…",
+  "orchestrationLoadFailed": "Couldn’t load background work. Reload to try again.",
+  "orchestrationLoadMore": "Load more",
+  "orchestrationStop": "Stop",
+  "orchestrationStopping": "Stopping…",
+  "orchestrationDecisionBadge": "Needs decision",
+  "orchestrationApprove": "Approve",
+  "orchestrationReject": "Decline",
+  "orchestrationNotePlaceholder": "Optional note for the Bot",
+  "orchestrationDecisionPending": "Saving decision…",
+  "orchestrationDecisionUnknown": "Decision status is unconfirmed. Reload to verify.",
+  "orchestrationDecisionRejected": "Decision could not be applied.",
+  "orchestrationCheckStatus": "Check status",
+  "orchestrationDormantNotice": "Restored dormant — read-only inspection only.",
+  "orchestrationMetricsTitle": "Wake metrics & backoff",
+  "orchestrationMetricsWakes": "Wakes {wakes} · Calls {calls} · Tokens {tokens}",
+  "@orchestrationMetricsWakes": {
+    "placeholders": {
+      "wakes": {
+        "type": "int"
+      },
+      "calls": {
+        "type": "int"
+      },
+      "tokens": {
+        "type": "int"
+      }
+    }
+  },
+  "orchestrationMetricsCost": "Estimated cost: ${cost}",
+  "orchestrationMetricsDelay": "Queue wait {queueMs} ms · Coalesced {coalesced} · Backoff {backoffMs} ms",
+  "@orchestrationMetricsDelay": {
+    "placeholders": {
+      "queueMs": {
+        "type": "int"
+      },
+      "coalesced": {
+        "type": "int"
+      },
+      "backoffMs": {
+        "type": "int"
+      }
+    }
+  },
+  "orchestrationBackoffReason": "Backoff reason: {reason}",
+  "orchestrationNextEligible": "Next eligible: {at}",
+  "orchestrationRunsTitle": "Recent wakes",
+  "orchestrationDecisionsTitle": "Decisions",
+  "orchestrationReceiptsTitle": "Action receipts",
+  "orchestrationStopUnknown": "Stop request status is unconfirmed. Reload before retrying.",
+  "orchestrationStopFailed": "Could not stop background work: {detail}",
+  "orchestrationStateActive": "Running",
+  "orchestrationStateWaitingDecision": "Waiting for decision",
+  "orchestrationStatePaused": "Paused",
+  "orchestrationStateRestored": "Restored",
+  "orchestrationStateRestoredReadOnly": "Restored (read-only)",
+  "orchestrationStateCompleted": "Completed",
+  "orchestrationStateStopped": "Stopped",
+  "orchestrationStateFailed": "Failed",
+  "orchestrationStateUnknown": "Unknown",
+  "orchestrationDispositionSilent": "Silent",
+  "orchestrationDispositionNotified": "Notified",
+  "orchestrationDispositionNeedsDecision": "Needs decision",
+  "orchestrationDispositionStopped": "Stopped",
+  "orchestrationDispositionFailed": "Failed",
+  "orchestrationDispositionUnknown": "Unknown",
+  "orchestrationHeaderCount": "Background work ({count, number})",
+  "botOverviewLabel": "Bot overview",
+  "orchestrationMenuCount": "{count, plural, =0 {Background work} one {Background work (#)} other {Background work (#)}}",
+  "orchestrationProfileHint": "Review this Bot’s background work, decisions, and recent wakes.",
+  "orchestrationOpenAction": "View background work",
+  "orchestrationVersion": "Generation {generation, number} · Revision {revision, number}",
+  "orchestrationSourceWatch": "Watch",
+  "orchestrationSourceTimer": "Timer",
+  "orchestrationSourceSchedule": "Schedule",
+  "orchestrationSourceUser": "Manual",
+  "orchestrationApproved": "Approved",
+  "orchestrationRejected": "Rejected",
+  "orchestrationRouteRole": "Route: {role}"
 }
