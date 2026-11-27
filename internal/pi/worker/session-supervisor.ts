@@ -28,14 +28,14 @@ type Stream = SessionChunk['stream'];
 type CloseReason = Extract<SessionSummary['transportStatus'], `closed_${string}`>;
 type NativeOutcome = { childReaped: boolean; exitCode?: number; exitSignal?: string; execFailed?: boolean };
 type SessionActor = { botId: string; conversationId?: string; activityId?: string };
-type OpenSession = Pick<SessionSummary, 'mode' | 'cwd' | 'label' | 'cols' | 'rows' | 'creatingOperationId' | 'originConversationId' | 'originActivityId' | 'ownerBotId'> &
-  { command: string; args: string[] };
+type NativeCommand = Pick<SessionSummary, 'mode' | 'cwd' | 'cols' | 'rows'> & { command: string; args: string[] };
+type OpenSession = NativeCommand & Pick<SessionSummary, 'label' | 'creatingOperationId' | 'originConversationId' | 'originActivityId' | 'ownerBotId'>;
 type WatchInput = { start_offset?: number; on_exit?: boolean; match_literal?: string; idle_ms?: number; timeout_ms?: number };
 type CloseCommit = (write: RuntimeSessionWrite, result: SessionCloseResult) => void;
 type WatchKind = NonNullable<SessionWatchSummary['firedKind']>;
 const now = () => new Date().toISOString();
 
-function supervisorPath(): string {
+export function supervisorPath(): string {
   const bundled = fileURLToPath(new URL('../bin/nagi-pty-supervisor', import.meta.url));
   const path = statSync(bundled, { throwIfNoEntry: false }) ? bundled : process.env.NAGI_PTY_SUPERVISOR;
   if (!path || !isAbsolute(path) || !statSync(path, { throwIfNoEntry: false })?.isFile()) {
@@ -45,7 +45,7 @@ function supervisorPath(): string {
   return path;
 }
 
-class NativeSession {
+export class NativeSession {
   private readonly process: ChildProcessByStdio<Writable, Readable, null>;
   private buffer: Buffer = Buffer.alloc(0);
   private outcome: NativeOutcome = { childReaped: false };
@@ -56,9 +56,9 @@ class NativeSession {
   readonly ready = this.started.promise;
   readonly done = this.settled.promise;
 
-  constructor(path: string, input: OpenSession, receive: (type: number, data: Buffer) => void, failed: () => void) {
+  constructor(path: string, input: NativeCommand, receive: (type: number, data: Buffer) => void, failed: () => void, environment?: NodeJS.ProcessEnv) {
     const { HOME, TMPDIR, LANG, PATH } = process.env;
-    const env = { HOME, TMPDIR, LANG, PATH: PATH || '/usr/bin:/bin:/usr/sbin:/sbin',
+    const env = environment ?? { HOME, TMPDIR, LANG, PATH: PATH || '/usr/bin:/bin:/usr/sbin:/sbin',
       ...(input.mode === 'pty' ? { TERM: 'xterm-256color' } : {}) };
     this.process = spawn(path, ['1', input.mode, String(input.cols ?? 80), String(input.rows ?? 24), input.command, ...input.args],
       { cwd: input.cwd, env, stdio: ['pipe', 'pipe', 'ignore'] });
@@ -144,7 +144,7 @@ class NativeSession {
   }
 }
 
-class TerminalProjection {
+export class TerminalProjection {
   private readonly decoder = new TextDecoder();
   private escape: 'text' | 'esc' | 'intermediate' | 'csi' | 'string' | 'string_escape' = 'text';
   private cr = false;

@@ -1253,8 +1253,8 @@ const fk = db.prepare('PRAGMA foreign_key_check').all().length;
 db.close();
 console.log(JSON.stringify({ v, fk }));
 `)
-	if schemaCheck != `{"v":12,"fk":0}` {
-		t.Fatalf("restored RT-2 SQLite check = %s, want v12 fk=0", schemaCheck)
+	if schemaCheck != `{"v":13,"fk":0}` {
+		t.Fatalf("restored RT-2 SQLite check = %s, want v13 fk=0", schemaCheck)
 	}
 }
 

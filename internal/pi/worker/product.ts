@@ -47,6 +47,9 @@ import { approvedPreferences, parseNomination, renderWhiteboard, steerEnvelope, 
 import { sessionDimension, sessionMode, sessionReadLimit, sessionState, type SessionCloseResult } from './protocol.js';
 import { MAX_SESSION_INPUT, RuntimeSessions, sessionSignals } from './session-supervisor.js';
 import type { RuntimeSessionWrite } from './product-sqlite.js';
+import { watchFilters, watchModelCreate, type WatchPrecheck } from './protocol.js';
+import { publicWatch, publicWatchGrant, type RuntimeWatch } from './product-sqlite.js';
+import { WatchScheduler, type PreparedWatchSkill } from './watch-scheduler.js';
 
 const emptyDraft = (): Draft => ({ revision: 0, text: '', materials: [] });
 const newId = randomUUID;
@@ -55,7 +58,7 @@ const unknown = (execution?: StoredExecution) => execution?.state === 'unknown';
 const maxPartialBytes = 512 * 1024;
 const readOnlyTools: Record<string, true> = { read: true, grep: true, find: true, ls: true, activity_list: true, activity_get: true,
   activity_progress: true, activity_result_read: true, activity_trace_read: true, conversation_read: true, conversation_search: true, memory_list_rules: true, memory_search_log: true,
-  skill_list: true, skill_read: true, bot_list: true, bot_inspect_team: true, session_list: true, session_read: true };
+  skill_list: true, skill_read: true, bot_list: true, bot_inspect_team: true, session_list: true, session_read: true, watch_list: true, watch_get: true };
 const providerChanges = { 'provider.save': 'saved', 'provider.reorder': 'saved', 'provider.delete': 'deleted', 'provider.apply': 'applied',
   'provider.revokeCredential': 'revoked', 'routing.setPolicy': 'policy', 'routing.setOverrides': 'saved' } as const;
 type ProviderMutation = Extract<ProductCommand, { method: keyof typeof providerChanges }>;
@@ -274,6 +277,9 @@ const sessionWatchInput = Type.Union([sessionWatchListInput,
     on_exit: Type.Optional(Type.Boolean()), match_literal: Type.Optional(Type.String({ minLength: 1, maxLength: 256 })),
     idle_ms: Type.Optional(sessionWatchDuration), timeout_ms: Type.Optional(sessionWatchDuration) }, strictTool),
 ]);
+const watchToolTarget = Type.Object({ watch_id: id }, strictTool);
+const watchToolMutation = Type.Object({ watch_id: id, expected_revision: sessionHandleInput.generation }, strictTool);
+const watchToolList = Type.Object(watchFilters, strictTool);
 const modelInspectionPage = { cursor: inspectionPage.cursor, limit: inspectionPage.limit, max_bytes: inspectionPage.maxBytes };
 const traceToolParams = Type.Object({ activity_id: id, execution_id: Type.Optional(id), ...modelInspectionPage }, strictTool);
 const readToolParams = Type.Object({ conversation_id: id, ...modelInspectionPage, tail: Type.Optional(Type.Boolean()) }, strictTool);
@@ -345,6 +351,7 @@ function architectResult(bot: Bot) {
 export class Product {
   private readonly storage: ProductSQLite;
   private readonly runtimeSessions: RuntimeSessions;
+  private readonly watchScheduler: WatchScheduler;
   private readonly sessionCloses = new Map<string, Promise<Operation>>();
   private overflow?: ActivityOverflow;
   private readonly skills: BotSkills;
@@ -382,6 +389,16 @@ export class Product {
       this.installationId = loadSkillInstallation(dirname(paths.profilePath));
       this.sandbox = new SkillSandbox([dirname(paths.profilePath), dirname(paths.credentialsPath), stateDir]);
       this.profile = this.storage.open(paths, this.credentials, this.installationId);
+      this.watchScheduler = new WatchScheduler(this.storage, {
+        installationId: this.installationId, privatePaths: [dirname(paths.profilePath), dirname(paths.credentialsPath), stateDir], sandbox: this.sandbox,
+        owner: botId => {
+          const bot = this.bot(this.profile, botId);
+          return { ...bot, workspace: this.skillWorkspace(bot) };
+        },
+        ownsConversation: (botId, conversationId) => this.profile.conversations.some(row => row.botId === botId && row.conversationId === conversationId),
+        skill: (botId, definition, cwd) => this.watchSkill(botId, definition, cwd), keys: () => this.credentialKeys(),
+        emit: change => this.emit('watch.changed', change), failure: () => this.engine.disconnect(),
+      });
       this.effectiveRevision = this.profile.appliedRevision;
       this.recoverInterruptedWork();
       this.overflow = new ActivityOverflow(stateDir);
@@ -393,6 +410,7 @@ export class Product {
 
   private recoverInterruptedWork(): void {
     this.storage.recoverRuntimeSessions();
+    this.storage.reconcileInterruptedBatches();
     const pendingCloses = this.profile.operations.filter(row => row.method === 'session.close' && row.receipt.state === 'pending');
     const steerUpdates = this.storage.pendingSteers().map(row => ({ ...row, state: 'unknown' as const, revision: row.revision + 1, reason: 'worker_lost' }));
     const steerActivities = new Set(steerUpdates.map(row => row.activityId));
@@ -453,10 +471,11 @@ export class Product {
     this.closing = true;
     for (const run of this.active.values()) run.triage?.abort();
     for (const waiter of this.providerWaiters.values()) waiter.cancel();
-    await Promise.all([this.runtimeSessions.drain(), this.mcp.shutdown(), this.sandbox.shutdown(), ...this.triageTasks]);
+    await Promise.all([this.watchScheduler.drain(), this.runtimeSessions.drain(), this.mcp.shutdown(), this.sandbox.shutdown(), ...this.triageTasks]);
   }
 
   killChildrenOnExit(): void {
+    this.watchScheduler.killOnExit();
     this.runtimeSessions.killOnExit();
     this.mcp.killOnExit();
     this.sandbox.killOnExit();
@@ -841,14 +860,14 @@ export class Product {
   }
 
   private operation(operationId: string) {
-    const saved = this.profile.operations.find(item => item.receipt.operationId === operationId);
+    const saved = this.profile.operations.find(item => item.receipt.operationId === operationId) ?? this.storage.watchOperation(operationId);
     if (!saved) stateError('not_found', 'The operation receipt was not found');
     const execution = this.execution(this.profile, saved.receipt.execution?.executionId);
     return execution ? { ...saved.receipt, execution: publicExecution(execution) } : saved.receipt;
   }
 
   private sameOperation(method: string, operationId: string, parameters: object, apiKey?: string): StoredOperation | undefined {
-    const prior = this.profile.operations.find(item => item.receipt.operationId === operationId);
+    const prior = this.profile.operations.find(item => item.receipt.operationId === operationId) ?? this.storage.watchOperation(operationId);
     if (!prior) return;
     const sourceId = this.connection(this.profile, prior.connectionRevision ?? null)?.sourceId;
     if (prior.method !== method || prior.fingerprint !== fingerprint(parameters) ||
@@ -877,15 +896,19 @@ export class Product {
     const prior = this.sameOperation(method, params.operationId, params);
     if (prior) return prior.reply as Bot;
     const before = this.profile;
-    const { bot, change } = this.commit(candidate => {
+    const { bot, change, previousWatches } = this.commit(candidate => {
       const result = mutate(candidate);
       const { retained, ...publicBot } = result.bot;
       this.record(candidate, method, params, { operationId: params.operationId, state: 'accepted', target: { botId: publicBot.botId }, result: publicBot }, publicBot);
-      return { bot: publicBot, change: result.change };
+      const old = before.bots.find(row => row.botId === result.bot.botId);
+      const previousWatches = old && (old.profile.workspace !== result.bot.profile.workspace || !old.archived && result.bot.archived) ?
+        this.storage.runtimeWatches(result.bot.botId) : undefined;
+      return { bot: publicBot, change: result.change, previousWatches };
     });
     const old = before.bots.find(row => row.botId === bot.botId);
     if (old && canonicalJSON(old.profile.mountedSkills) !== canonicalJSON(bot.profile.mountedSkills)) this.skillReload.add(bot.botId);
     if (change) this.emit('bot.changed', { bot, change });
+    if (previousWatches) this.watchScheduler.ownerChanged(bot.botId, previousWatches);
     return bot;
   }
 
@@ -962,6 +985,7 @@ export class Product {
         ...(this.profile.preferences ? { preferences: this.profile.preferences } : {}),
         ...(this.profile.recovery ? { recovery: this.profile.recovery } : {}),
       } });
+      this.watchScheduler.start();
       return;
     }
     if (!this.stream) stateError('not_open', 'Open the app protocol first');
@@ -1249,32 +1273,73 @@ export class Product {
       }
       case 'session.close':
         return this.closeRuntimeSession(command.params);
-      case 'profile.backup': {
-        if (this.active.size) stateError('busy', 'Finish or stop active work before saving a recovery copy');
-        const redact = this.engine.redactor(this.credentialKeys());
-        const { profile, backup } = this.storage.captureBackup(redact);
-        const bundles = this.skills.backup(profile.bots, redact);
-        const files = new Map(bundles.map(row => [canonicalJSON([row.ownerBotId, row.skillId]), backupSkillFiles(row)]));
-        const skillApprovals = this.storage.skillApprovals().filter(row => {
-          if (row.source !== 'private') return true;
-          const bundle = files.get(canonicalJSON([row.ownerBotId, row.skillId]));
-          return bundle && bundleDigest(row.ownerBotId, row.source, row.skillId, bundle) === row.approvalDigest;
-        });
-        return backupProductProfile(this.paths, profile, { ...backup, ...(bundles.length ? { privateSkillBundles: bundles } : {}),
-          ...(skillApprovals.length ? { skillApprovals } : {}) }, command.params.destination, redact, snapshot => {
-          const vaultKeys = this.vault.keys();
-          if (vaultKeys.length && containsMcpSecret(snapshot, projectionRedactor(vaultKeys))) {
-            stateError('mcp_secret', 'Remove the MCP credential from saved product data before making a recovery copy');
-          }
-          const providerKeys = [...privateCredentialKeys(this.credentials), ...this.retiredKeys];
-          if (providerKeys.length && containsMcpSecret(snapshot, projectionRedactor(providerKeys))) {
-            stateError('provider_secret', 'Remove the Provider credential from saved product data before making a recovery copy');
-          }
-        });
+      case 'watch.list':
+        return this.listWatches(command.params);
+      case 'watch.get':
+        return this.watchScheduler.detail(command.params.botId, command.params.watchId);
+      case 'watch.listGrants': {
+        const { botId, includeRevoked = false, cursor, limit = 20 } = command.params;
+        this.bot(this.profile, botId);
+        const rows = this.storage.watchGrants(this.installationId, botId).filter(row => includeRevoked || row.state === 'active');
+        return page(rows.map(publicWatchGrant), row => row.grantId, canonicalJSON([method, botId, includeRevoked]), cursor, limit);
       }
+      case 'watch.save':
+      case 'watch.activate':
+      case 'watch.pause':
+      case 'watch.cancel':
+      case 'watch.revokeGrant': {
+        const params = command.params;
+        const prior = this.sameOperation(method, params.operationId, params);
+        if (prior) return prior.receipt;
+        switch (command.method) {
+          case 'watch.save': return this.watchScheduler.save(command.params);
+          case 'watch.activate': return this.watchScheduler.activate(command.params);
+          case 'watch.pause':
+          case 'watch.cancel': return this.watchScheduler.transition(command.method, command.params);
+          case 'watch.revokeGrant': return this.watchScheduler.revokeGrant(command.params);
+        }
+      }
+      case 'profile.backup':
+        if (this.active.size) stateError('busy', 'Finish or stop active work before saving a recovery copy');
+        return this.watchScheduler.withBackupFence(() => this.backupProfile(command.params.destination));
       case 'operation.get':
         return this.operation(command.params.operationId);
     }
+  }
+
+  private backupProfile(destination: string): object {
+    if (this.active.size) stateError('busy', 'Finish or stop active work before saving a recovery copy');
+    const redact = this.engine.redactor(this.credentialKeys());
+    const { profile, backup } = this.storage.captureBackup(redact);
+    if (backup.watches?.some(watch => watch.precheck && containsMcpSecret(watch.precheck, redact))) {
+      stateError('secret_in_definition', 'Remove the credential from the precheck definition before making a recovery copy');
+    }
+    const bundles = this.skills.backup(profile.bots, redact);
+    const files = new Map(bundles.map(row => [canonicalJSON([row.ownerBotId, row.skillId]), backupSkillFiles(row)]));
+    const skillApprovals = this.storage.skillApprovals().filter(row => {
+      if (row.source !== 'private') return true;
+      const bundle = files.get(canonicalJSON([row.ownerBotId, row.skillId]));
+      return bundle && bundleDigest(row.ownerBotId, row.source, row.skillId, bundle) === row.approvalDigest;
+    });
+    return backupProductProfile(this.paths, profile, { ...backup, ...(bundles.length ? { privateSkillBundles: bundles } : {}),
+      ...(skillApprovals.length ? { skillApprovals } : {}) }, destination, redact, snapshot => {
+      const vaultKeys = this.vault.keys();
+      if (vaultKeys.length && containsMcpSecret(snapshot, projectionRedactor(vaultKeys))) {
+        stateError('mcp_secret', 'Remove the MCP credential from saved product data before making a recovery copy');
+      }
+      const providerKeys = [...privateCredentialKeys(this.credentials), ...this.retiredKeys];
+      if (providerKeys.length && containsMcpSecret(snapshot, projectionRedactor(providerKeys))) {
+        stateError('provider_secret', 'Remove the Provider credential from saved product data before making a recovery copy');
+      }
+    });
+  }
+
+  private listWatches({ botId, kind, states, cursor, limit = 20 }: ProductParams<'watch.list'>, actor?: ProductActor) {
+    this.bot(this.profile, botId);
+    const scope = canonicalJSON([actor ? 'watch_list' : 'watch.list', botId, kind ?? null, [...states ?? []].sort(), actor ?? null]);
+    const rows = this.storage.runtimeWatches(botId).filter(row => (!kind || row.kind === kind) && (!states || states.includes(row.state)) &&
+      (!actor || !('activityId' in actor) || actor.activityId === row.originActivityId));
+    return page(rows.map(publicWatch), row => row.watchId, scope, cursor, limit);
   }
 
   private listRuntimeSessions({ botId, states, cursor, limit = 20 }: ProductParams<'session.list'>) {
@@ -2681,6 +2746,15 @@ export class Product {
     return { ...identity, grantKey: skillGrantKey(identity), workspace, credentialRefs };
   }
 
+  private watchSkill(botId: string, definition: Extract<WatchPrecheck, { kind: 'skill' }>, cwd: string): PreparedWatchSkill {
+    const owner = this.bot(this.profile, botId);
+    const { bundle } = this.executableSkill(owner, definition.skillId, cwd, definition.skillSource);
+    const script = Object.hasOwn(bundle.manifest.scripts, definition.scriptName) && bundle.manifest.scripts[definition.scriptName];
+    if (!script) return stateError('executable_changed', 'The precheck skill script is unavailable');
+    const { approvalDigest, permissionsDigest } = this.skillGrant(botId, definition.skillSource, definition.skillId, bundle, cwd);
+    return { bundle, permissions: script.permissions, approvalDigest, permissionsDigest };
+  }
+
   private skillReview(owner: Bot | undefined, key: Pick<SkillDetail, 'source' | 'skillId'>, cwd: string, strict = false, includeFiles = false): Partial<SkillDetail> {
     try {
       const bundle = this.skills.bundle({ ...key, botId: owner?.botId }, cwd, this.discoverLocalSkills);
@@ -3182,8 +3256,58 @@ export class Product {
     ];
   }
 
+  private watchTools(actor: ProductActor): ToolDefinition[] {
+    const tool = <S extends TSchema>(name: string, description: string, parameters: S, execute: (call: ActiveCall, input: Static<S>, callId: string) => object): ToolDefinition => ({
+      name, description, label: name, parameters, execute: async (callId, input, signal) => {
+        try {
+          const call = this.activeCall(actor, signal);
+          if (!Value.Check(parameters, input)) return stateError('invalid_params', 'Invalid watch tool parameters');
+          return this.modelResult(execute(call, input, callId));
+        } catch (error) {
+          if (!(error instanceof RequestError)) throw error;
+          return toolText({ code: error.code, message: this.engine.cleanMessage(error) }, true);
+        }
+      },
+    });
+    const scoped = (botId: string, watchId: string, write: boolean): RuntimeWatch => {
+      const row = this.storage.runtimeWatch(botId, watchId);
+      if (!row || ('activityId' in actor ? row.originActivityId !== actor.activityId : write &&
+          (row.originActivityId !== undefined || row.targetConversationId !== actor.conversationId))) {
+        return stateError('scope_denied', 'The watch is outside this actor scope');
+      }
+      return row;
+    };
+    const stateTool = (name: 'watch_pause' | 'watch_cancel', description: string) => tool(name, description, watchToolMutation,
+      ({ bot, executionId }, { watch_id, expected_revision }, callId) => {
+        const operationId = `${executionId}:${callId}`;
+        const params = { botId: bot.botId, watchId: watch_id, expectedRevision: expected_revision, operationId };
+        const previous = this.sameOperation(name, operationId, params);
+        if (previous) return previous.receipt;
+        scoped(bot.botId, watch_id, true);
+        return this.watchScheduler.transition(name, params);
+      });
+    return [
+      tool('watch_list', 'List timers and schedules visible to this actor.', watchToolList, ({ bot }, input) => this.listWatches({ ...input, botId: bot.botId }, actor)),
+      tool('watch_get', 'Read a timer or schedule and its recent occurrences.', watchToolTarget, ({ bot }, { watch_id }) => {
+        const row = scoped(bot.botId, watch_id, false);
+        return { ...publicWatch(row), recentOccurrences: this.storage.watchOccurrences(row.watchId) };
+      }),
+      tool('watch_create', 'Create a timer, schedule, or precheck proposal for this actor. A precheck needs an existing matching standing grant or approval in the desktop app.',
+        watchModelCreate, ({ bot, executionId }, input, callId) => {
+          const operationId = `${executionId}:${callId}`;
+          const params = { ...input, botId: bot.botId, operationId };
+          const previous = this.sameOperation('watch_create', operationId, params);
+          if (previous) return previous.receipt;
+          const owner = 'activityId' in actor ? { activityId: actor.activityId, conversationId: bot.currentConversationId } : actor;
+          return this.watchScheduler.save(params, owner);
+        }),
+      stateTool('watch_pause', 'Pause a watch created by this actor.'),
+      stateTool('watch_cancel', 'Cancel a watch created by this actor.'),
+    ];
+  }
+
   private tools(owner: ProductActor): ToolDefinition[] {
-    const tools = [...this.inspectionTools(owner), ...this.memoryTools(owner), ...this.skillTools(owner), ...this.sessionTools(owner)];
+    const tools = [...this.inspectionTools(owner), ...this.memoryTools(owner), ...this.skillTools(owner), ...this.sessionTools(owner), ...this.watchTools(owner)];
     if ('activityId' in owner) {
       tools.push({
         name: 'activity_ask', label: 'Ask about the activity', description: 'Ask the user for information needed to finish this activity.',

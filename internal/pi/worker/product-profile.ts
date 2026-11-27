@@ -14,6 +14,7 @@ import { activityLifecycleFields, activityProgressRecord, activitySteerReceipt, 
   optionDescriptionBytes, optionLabelBytes, questionTextBytes, type ActivityProgressRecord, type ActivitySteerRecord,
   type SkillApproval, type SkillApprovalRequest, type TriageAccounting } from './protocol.js';
 import { sessionSummary, sessionWatchOccurrence, type SessionSummary, type SessionWatchOccurrence } from './protocol.js';
+import { watchOccurrence, watchSummary, validateWatchDefinition, type WatchOccurrence, type WatchSummary } from './protocol.js';
 import { lastingRulesFit, MAX_LOG_BYTES, MAX_PENDING_LEARNINGS, MAX_RULE_BYTES, MAX_WORK_LOGS,
   memorySnapshotSchema, validMemoryDate } from './bot-memory.js';
 import { decodeTraceBackup, directlyOwns, normalizeActivityGrants, type TraceBackup } from './product-trace.js';
@@ -33,7 +34,8 @@ export type ProductProfilePaths = {
 export type ProductBackup = TraceBackup & { privateSkillBundles?: PrivateSkillBundle[]; skillApprovals?: SkillApproval[];
   activityEscalations?: Escalation[]; activityProgress?: ActivityProgressRecord[]; skillApprovalRequests?: SkillApprovalRequest[];
   triageAccounting?: TriageAccounting[]; activitySteers?: ActivitySteerRecord[];
-  runtimeSessions?: SessionSummary[]; runtimeWatchOccurrences?: SessionWatchOccurrence[] };
+  runtimeSessions?: SessionSummary[]; runtimeWatchOccurrences?: SessionWatchOccurrence[];
+  watches?: WatchSummary[]; watchOccurrences?: WatchOccurrence[] };
 
 type Credential = { api: 'openai-responses' | 'openai-chat-completions'; endpoint: string; api_key: string };
 type LegacyConnection = {
@@ -375,13 +377,44 @@ function decodeRuntimeHistory(profile: ProductProfile, sessions: unknown, occurr
   return { runtimeSessions: sessions, runtimeWatchOccurrences: occurrences };
 }
 
+function decodeWatchHistory(profile: ProductProfile, watches: unknown, occurrences: unknown): Pick<ProductBackup, 'watches' | 'watchOccurrences'> {
+  if (watches === undefined && occurrences === undefined) return {};
+  const invalid = new RequestError('profile_unavailable', 'The recovery copy has invalid scheduled work');
+  if (!Value.Check(Type.Array(watchSummary), watches) || !Value.Check(Type.Array(watchOccurrence), occurrences)) throw invalid;
+  const byId = new Map(watches.map(row => [row.watchId, row]));
+  const conversations = new Map(profile.conversations.map(row => [row.conversationId, row.botId]));
+  const activities = new Map(profile.activities.map(row => [row.activityId, row.ownerBotId]));
+  if (byId.size !== watches.length) throw invalid;
+  const dormant = watches.map(row => {
+    try { validateWatchDefinition(row); } catch { throw invalid; }
+    if (conversations.get(row.targetConversationId) !== row.ownerBotId ||
+        row.originActivityId !== undefined && activities.get(row.originActivityId) !== row.ownerBotId ||
+        ![row.createdAt, row.updatedAt, ...row.settledAt ? [row.settledAt] : []].every(at => Number.isFinite(Date.parse(at)))) throw invalid;
+    const state = row.state === 'cancelled' || row.kind === 'timer' && row.state === 'settled' ? row.state : 'restored';
+    return { ...row, state, armed: false, grantId: undefined, nextDueAt: undefined, lastEventId: undefined,
+      statusReason: state === 'restored' ? 'restored_dormant' : row.statusReason } satisfies WatchSummary;
+  });
+  const occurrenceIds = new Set<string>();
+  const slots = new Set<string>();
+  const inert = occurrences.map(({ eventId, coalescedInto, ...row }) => {
+    const watch = byId.get(row.watchId);
+    const slot = canonicalJSON([row.watchId, row.watchRevision, row.scheduledAt]);
+    if (watch?.ownerBotId !== row.ownerBotId || row.watchRevision > watch.revision || occurrenceIds.has(row.occurrenceId) || slots.has(slot) ||
+        !row.settledAt || ![row.createdAt, row.scheduledAt, row.settledAt].every(at => Number.isFinite(Date.parse(at))) || row.state === 'running') throw invalid;
+    occurrenceIds.add(row.occurrenceId);
+    slots.add(slot);
+    return row;
+  });
+  return { watches: dormant, watchOccurrences: inert };
+}
+
 export function decodeProductBackup(data: unknown): { profile: ProductProfile; backup?: ProductBackup } {
   if (data && typeof data === 'object' && 'backup' in data) {
     const { backup, ...records } = data;
     const profile = decodeProductProfile(records);
     if (!backup || typeof backup !== 'object') return { profile, backup: decodeTraceBackup(profile, backup) };
     const { privateSkillBundles: bundles, skillApprovals: approvals, activityEscalations, activityProgress, skillApprovalRequests,
-      triageAccounting, activitySteers, runtimeSessions, runtimeWatchOccurrences, ...traces } = backup as Record<string, unknown>;
+      triageAccounting, activitySteers, runtimeSessions, runtimeWatchOccurrences, watches, watchOccurrences, ...traces } = backup as Record<string, unknown>;
     const activities = new Map(profile.activities.map(row => [row.activityId, row]));
     const steerOperations = new Map(profile.operations.filter(row => row.method === 'activity.steer').map(row => [row.receipt.operationId, row]));
     if (activitySteers !== undefined && !Value.Check(Type.Array(activitySteerRecord), activitySteers)) {
@@ -473,12 +506,13 @@ export function decodeProductBackup(data: unknown): { profile: ProductProfile; b
       }
     }
     return { profile, backup: { ...decodeTraceBackup(profile, traces), privateSkillBundles: bundles, skillApprovals: approvals, activityEscalations,
-      activityProgress, skillApprovalRequests, triageAccounting, activitySteers, ...decodeRuntimeHistory(profile, runtimeSessions, runtimeWatchOccurrences) } };
+      activityProgress, skillApprovalRequests, triageAccounting, activitySteers, ...decodeRuntimeHistory(profile, runtimeSessions, runtimeWatchOccurrences),
+      ...decodeWatchHistory(profile, watches, watchOccurrences) } };
   }
   return { profile: decodeProductProfile(data) };
 }
 
-export function inspectProductRecovery(data: unknown): { contacts: number; activities: number } {
+export function inspectProductRecovery(data: unknown): { contacts: number; activities: number; timers: number; schedules: number; dormantWatches: number } {
   const { profile, backup } = decodeProductBackup(data);
   if (!backup && profile.operations.some(row => row.method === 'activity.steer')) {
     throw new RequestError('profile_unavailable', 'The recovery copy is missing steering receipts');
@@ -487,7 +521,9 @@ export function inspectProductRecovery(data: unknown): { contacts: number; activ
       profile.activities.some(activity => activity.questions.some(question => question.delivery === 'dispatching' || question.state === 'triage_pending'))) {
     throw new RequestError('profile_unavailable', 'The recovery copy contains work that had not reached a saved boundary');
   }
-  return { contacts: profile.bots.length, activities: profile.activities.length };
+  const watches = (backup?.watches ?? []).filter(row => row.state !== 'cancelled');
+  return { contacts: profile.bots.length, activities: profile.activities.length, timers: watches.filter(row => row.kind === 'timer').length,
+    schedules: watches.filter(row => row.kind === 'schedule').length, dormantWatches: watches.filter(row => row.state === 'restored').length };
 }
 
 function redactBackupProfile(snapshot: ProductProfile & { backup: ProductBackup }, redact: (text: string) => string): void {

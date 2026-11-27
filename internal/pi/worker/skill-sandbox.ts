@@ -88,7 +88,8 @@ try {
 
 type Scope = { botId: string; source: SkillSource; skillId: string };
 export type SkillCredentials = (origin: string, refs: string[]) => Record<string, string>;
-type SandboxResult = { ok: boolean; stdout: string; stderr: string };
+type SandboxResult = { ok: boolean; stdout: string; stderr: string; exitCode?: number };
+export type SkillObservation = { timeoutMs: number; output: (stream: 'stdout' | 'stderr', data: Buffer) => void };
 type Stage = { root: string; tree: string; scratch: string; files: Record<string, string>; approvalDigest: string };
 
 export function loadSkillInstallation(profileDir: string): string {
@@ -191,7 +192,8 @@ export class SkillSandbox {
   }
 
   async run(node: string, scope: Scope, bundle: SkillBundle, scriptName: string, input: unknown, workspace: string, permissions: SkillPermissions,
-      authorize: (approvalDigest: string) => void, credentials: SkillCredentials, redact: (text: string) => string, signal?: AbortSignal): Promise<SandboxResult> {
+      authorize: (approvalDigest: string) => void, credentials: SkillCredentials, redact: (text: string) => string,
+      signal?: AbortSignal, observation?: SkillObservation): Promise<SandboxResult> {
     const stage = stageBundle(bundle, scope);
     try {
       if (signal?.aborted || this.closing) throw new RequestError('cancelled', 'The skill run was cancelled');
@@ -199,12 +201,14 @@ export class SkillSandbox {
       const script = bundle.manifest.scripts[scriptName];
       const profile = this.profile(node, stage, workspace, permissions);
       return await this.launch(node, profile, runProgram, { files: stage.files, entry: script.entry, input: input ?? null, tree: stage.tree,
-        workspace: permissions.workspaceRead || permissions.workspaceWrite ? workspace : undefined }, stage, script.timeoutMs ?? 10000, redact, signal,
-      (request, stopped) => this.request(request, permissions, credentials, redact, stopped));
+        workspace: permissions.workspaceRead || permissions.workspaceWrite ? workspace : undefined }, stage,
+      observation?.timeoutMs ?? script.timeoutMs ?? 10000, redact, signal,
+      (request, stopped) => this.request(request, permissions, credentials, redact, stopped, observation !== undefined), observation);
     } finally { removeStage(stage.root); }
   }
 
-  private async request(value: unknown, permissions: SkillPermissions, credentials: SkillCredentials, redact: (text: string) => string, signal: AbortSignal) {
+  private async request(value: unknown, permissions: SkillPermissions, credentials: SkillCredentials, redact: (text: string) => string,
+      signal: AbortSignal, readonly = false) {
     const request = value as { url?: unknown; options?: { method?: unknown; headers?: unknown; body?: unknown } };
     const url = typeof request?.url === 'string' ? URL.parse(request.url) : null;
     if (!url || !['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.hash || redact(url.href) !== url.href) denied('The HTTP request URL is not authorized');
@@ -212,6 +216,7 @@ export class SkillSandbox {
     if (!(permissions.networkOrigins ?? []).some(value => canonicalSkillOrigin(value) === origin)) denied('The HTTP origin is not approved');
     const options = request.options ?? {};
     const method = typeof options.method === 'string' ? options.method.toUpperCase() : 'GET';
+    if (readonly && (method !== 'GET' && method !== 'HEAD' || options.body !== undefined)) denied('Prechecks may only make read-only HTTP requests');
     if (!['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) denied('The HTTP request method is not supported');
     if (options.headers !== undefined && (!options.headers || typeof options.headers !== 'object' || Array.isArray(options.headers))) denied('Invalid HTTP headers');
     const headers = new Headers();
@@ -254,7 +259,8 @@ export class SkillSandbox {
   }
 
   private launch(node: string, policy: string, program: string, input: object, stage: { root: string; scratch: string }, timeoutMs: number,
-      redact: (text: string) => string, signal?: AbortSignal, broker?: (request: unknown, signal: AbortSignal) => Promise<object>): Promise<SandboxResult> {
+      redact: (text: string) => string, signal?: AbortSignal, broker?: (request: unknown, signal: AbortSignal) => Promise<object>,
+      observation?: SkillObservation): Promise<SandboxResult> {
     if (this.closing || signal?.aborted) return Promise.reject(new RequestError('cancelled', 'The skill run was cancelled'));
     const child = spawn(sandbox, ['-f', '/dev/fd/6', node, ...nodeArgs, program], { cwd: stage.scratch, env: {}, detached: true,
       stdio: ['ignore', 'pipe', 'pipe', 'pipe', 'pipe', 'pipe', 'pipe'] });
@@ -288,7 +294,11 @@ export class SkillSandbox {
     if (signal?.aborted) onAbort();
     const stdout: Buffer[] = [], stderr: Buffer[] = [];
     let size = 0;
-    for (const [stream, output] of [[child.stdout!, stdout], [child.stderr!, stderr]] as const) stream.on('data', (chunk: Buffer) => {
+    for (const [channel, stream, output] of [['stdout', child.stdout!, stdout], ['stderr', child.stderr!, stderr]] as const) stream.on('data', (chunk: Buffer) => {
+      if (observation) {
+        observation.output(channel, chunk);
+        return;
+      }
       size += chunk.length;
       if (size > outputLimit) stop('output_limit', 'The skill output exceeds the size limit');
       else output.push(chunk);
@@ -330,7 +340,8 @@ export class SkillSandbox {
       done.resolve();
       if (failure) result.reject(failure);
       else if (!ready) result.reject(new RequestError('sandbox_unavailable', 'OS skill sandbox did not establish isolation'));
-      else result.resolve({ ok: code === 0, stdout: redact(Buffer.concat(stdout).toString('utf8')), stderr: redact(Buffer.concat(stderr).toString('utf8')) });
+      else result.resolve({ ok: code === 0, stdout: redact(Buffer.concat(stdout).toString('utf8')), stderr: redact(Buffer.concat(stderr).toString('utf8')),
+        exitCode: code ?? undefined });
     });
     return result.promise;
   }
