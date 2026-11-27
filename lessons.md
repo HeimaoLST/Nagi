@@ -513,3 +513,11 @@
 **Cause or correction:** Visible excerpt truncation (`1024` bytes / `64 KiB` `truncated` flag) serves UI/LLM payload bounds whereas digest change detection needs incremental hashing up to the `1 MiB` safety ceiling; staging verified binary bytes (`O_NOFOLLOW`, SHA-256 check, `0500`) into an isolated scratch directory prevents swapped-binary execution while `nagi-pty-supervisor` preserves worker-crash reaping; and cold Seatbelt process setup under `-race` needs realistic fixture deadlines.
 
 **Prevention:** Stage and digest-verify every `executable` precheck binary before entering Seatbelt, hash full redacted normalized output up to the hard safety cap together with `truncated` and exit status while capping stored excerpts separately, and give Seatbelt process fixtures `>= 3000ms` runtime headroom (`10000ms` under `-race` integration suites) while keeping user-configurable floors explicit.
+
+### Fall back from null codingTools to engine defaults before capability gating
+
+**Problem:** Capability checks using `!resolveCodingTools(profile)?.includes('bash')` treated a `null` result—used by default and v10-migrated Bots to inherit all default engine coding tools including `bash`—as falsy, stripping `session_*` tools from tool inventory and runtime execution even when `bash` was active.
+
+**Cause or correction:** `resolveCodingTools` returns `null` rather than the explicit array when no override or preset narrows the built-in tool list, whereas empty `[]` explicitly disables coding tools. Both the tool advertisement gate and runtime authorization guard in `sessionTools` (`internal/pi/worker/product.ts`) must resolve `resolveCodingTools(profile) ?? this.engine.defaultCodingTools` before checking tool membership.
+
+**Prevention:** Never apply negative optional-chaining checks (`!arr?.includes(...)`) to nullable capability resolvers where `null` means full defaults; normalize nullable capability lists to the active default set in one helper or shared expression at every inventory and runtime enforcement site, and preserve built-in and `none`/`readonly` profile coverage alongside omitted-default (`nil`/`""`) Bots.

@@ -3178,14 +3178,14 @@ export class Product {
   private sessionTools(owner: ProductActor): ToolDefinition[] {
     const activity = 'activityId' in owner ? this.activity(this.profile, owner.activityId) : undefined;
     const botId = 'conversationId' in owner ? this.conversation(this.profile, owner.conversationId).botId : activity!.ownerBotId;
-    if (!resolveCodingTools(this.bot(this.profile, botId).profile)?.includes('bash')) return [];
+    if (!(resolveCodingTools(this.bot(this.profile, botId).profile) ?? this.engine.defaultCodingTools).includes('bash')) return [];
     const tool = <S extends TSchema>(name: string, description: string, parameters: S,
       execute: (input: Static<S>, call: ActiveCall, callId: string) => unknown | Promise<unknown>): ToolDefinition => ({
       name, label: name, description, parameters,
       execute: async (callId, input, signal) => {
         try {
           const call = this.activeCall(owner, signal);
-          if (!resolveCodingTools(call.bot.profile)?.includes('bash')) stateError('scope_denied', 'The Bot cannot use stateful sessions');
+          if (!(resolveCodingTools(call.bot.profile) ?? this.engine.defaultCodingTools).includes('bash')) stateError('scope_denied', 'The Bot cannot use stateful sessions');
           if (!Value.Check(parameters, input)) return stateError('invalid_params', 'Invalid session tool parameters');
           return this.modelResult(await execute(input, call, callId));
         } catch (error) {

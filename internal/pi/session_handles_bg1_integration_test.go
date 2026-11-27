@@ -432,6 +432,162 @@ func TestPiProductBG1SessionHandlesSupervisorAndWatch(t *testing.T) {
 		}
 	}
 
+	defDir := filepath.Join(root, "default-tools-profile")
+	if err := os.MkdirAll(defDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	defOpts := pi.ProductOptions{
+		NodePath:        nodePath,
+		WorkerPath:      workerPath,
+		StateDir:        filepath.Join(defDir, "pi"),
+		ProfilePath:     filepath.Join(defDir, "contacts.json"),
+		CredentialsPath: filepath.Join(defDir, "connection.json"),
+		FreshProfile:    true,
+	}
+	defProc := startCP1Process(t, defOpts)
+	_ = defProc.open(t, ctx)
+	cp1ConfigureConnection(t, ctx, defProc.client, provider.server.URL+"/v1", activeSecret, workspace)
+
+	defaultBot, err := defProc.client.CreateBot(ctx, pi.ProductBotCreateParams{
+		OperationID: "def-default-bot",
+		Profile: pi.ProductBotProfile{
+			Name: "DefaultBot", Role: "Tester", Purpose: "BG-1 default", Workspace: workspace,
+		},
+	})
+	if err != nil || defaultBot.Profile.CodingTools != nil || defaultBot.Profile.ToolPreset != "" {
+		t.Fatalf("defaultBot = %+v, err=%v", defaultBot, err)
+	}
+	pandoraBot, err := defProc.client.EnsureBuiltinBot(ctx, pi.ProductBotEnsureBuiltinParams{
+		Kind: pi.SystemKindBotArchitect, OperationID: "def-ensure-pandora",
+	})
+	if err != nil || pandoraBot.SystemKind != pi.SystemKindBotArchitect || pandoraBot.Profile.CodingTools == nil || len(pandoraBot.Profile.CodingTools) != 0 {
+		t.Fatalf("pandoraBot = %+v, err=%v", pandoraBot, err)
+	}
+	defReadonlyBot, err := defProc.client.CreateBot(ctx, pi.ProductBotCreateParams{
+		OperationID: "def-readonly-bot",
+		Profile: pi.ProductBotProfile{
+			Name: "DefReadonlyBot", Role: "Tester", Purpose: "BG-1", Workspace: workspace, ToolPreset: pi.ToolPresetReadonly,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defNoneBot, err := defProc.client.CreateBot(ctx, pi.ProductBotCreateParams{
+		OperationID: "def-none-bot",
+		Profile: pi.ProductBotProfile{
+			Name: "DefNoneBot", Role: "Tester", Purpose: "BG-1", Workspace: workspace, ToolPreset: pi.ToolPresetNone,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, restricted := range []pi.ProductBot{pandoraBot, defReadonlyBot, defNoneBot} {
+		_, rTools := callModelTool(defProc, restricted.CurrentConversationID, "", nil)
+		for _, tool := range rTools {
+			if strings.HasPrefix(tool, "session_") {
+				t.Fatalf("restricted bot %s (%s) exposed session tool %s", restricted.BotID, restricted.Profile.Name, tool)
+			}
+		}
+		rOpenRes, _ := callModelTool(defProc, restricted.CurrentConversationID, "session_open", map[string]any{
+			"command": nodePath, "mode": "pipe",
+		})
+		if rOpenRes == "" || strings.Contains(rOpenRes, "sessionId") ||
+			(!strings.Contains(strings.ToLower(rOpenRes), "not found") && !strings.Contains(rOpenRes, "scope_denied")) {
+			t.Fatalf("restricted bot %s session_open = %s, want rejection", restricted.BotID, rOpenRes)
+		}
+		rList, err := defProc.client.ListSessions(ctx, pi.ProductSessionListParams{BotID: restricted.BotID})
+		if err != nil || len(rList.Items) != 0 {
+			t.Fatalf("restricted bot %s created sessions = %+v, err=%v", restricted.BotID, rList, err)
+		}
+	}
+
+	openDefRes, defTools := callModelTool(defProc, defaultBot.CurrentConversationID, "session_open", map[string]any{
+		"command": nodePath,
+		"args":    []string{"-e", "process.stdout.write('DEFAULT_BOT_SESSION_OK\\n')"},
+		"mode":    "pipe",
+		"label":   "default-tools-pipe",
+	})
+	for _, wantTool := range []string{"session_open", "session_list", "session_read", "session_write", "session_signal", "session_resize", "session_eof", "session_close", "session_watch"} {
+		if !slices.Contains(defTools, wantTool) {
+			t.Fatalf("default bot missing session tool %s in %v", wantTool, defTools)
+		}
+	}
+	var defSess pi.ProductSessionSummary
+	mustDecode(openDefRes, &defSess)
+	if defSess.SessionID == "" || defSess.Generation != 1 {
+		t.Fatalf("default bot session_open = %+v (raw=%s)", defSess, openDefRes)
+	}
+	defRead := bg1WaitReadContains(t, ctx, defProc.client, defaultBot.BotID, defSess.SessionID, defSess.Generation, nil, "DEFAULT_BOT_SESSION_OK")
+	if !strings.Contains(bg1JoinedOutput(defRead), "DEFAULT_BOT_SESSION_OK") {
+		t.Fatalf("default bot ReadSession = %+v", defRead)
+	}
+	readDefRes, _ := callModelTool(defProc, defaultBot.CurrentConversationID, "session_read", map[string]any{
+		"session_id": defSess.SessionID, "generation": defSess.Generation,
+	})
+	var defReadModel pi.ProductSessionReadResult
+	mustDecode(readDefRes, &defReadModel)
+	if !strings.Contains(bg1JoinedOutput(defReadModel), "DEFAULT_BOT_SESSION_OK") {
+		t.Fatalf("default bot model session_read = %s", readDefRes)
+	}
+	closeDefRes, _ := callModelTool(defProc, defaultBot.CurrentConversationID, "session_close", map[string]any{
+		"session_id": defSess.SessionID, "generation": defSess.Generation,
+	})
+	var defClosed pi.ProductSessionCloseResult
+	mustDecode(closeDefRes, &defClosed)
+	if defClosed.SessionID != defSess.SessionID || !defClosed.ChildReaped ||
+		(defClosed.CloseDisposition != "already_settled" && defClosed.CloseDisposition != "terminated") ||
+		(defClosed.State != pi.ProductSessionExited && defClosed.State != pi.ProductSessionClosed) {
+		t.Fatalf("default bot model session_close = %+v (raw=%s)", defClosed, closeDefRes)
+	}
+
+	defRev := defaultBot.ProfileRevision
+	for idx, restrictedProf := range []pi.ProductBotProfile{
+		{Name: "DefaultBot", Role: "Tester", Purpose: "BG-1 default", Workspace: workspace, CodingTools: []string{}},
+		{Name: "DefaultBot", Role: "Tester", Purpose: "BG-1 default", Workspace: workspace, ToolPreset: pi.ToolPresetNone},
+		{Name: "DefaultBot", Role: "Tester", Purpose: "BG-1 default", Workspace: workspace, ToolPreset: pi.ToolPresetReadonly},
+	} {
+		updatedDef, err := defProc.client.UpdateBot(ctx, pi.ProductBotUpdateParams{
+			ProductBotRevisionParams: pi.ProductBotRevisionParams{
+				BotID: defaultBot.BotID, ExpectedRevision: defRev, OperationID: fmt.Sprintf("def-restrict-%d", idx),
+			},
+			Profile:              restrictedProf,
+			StartNewConversation: false,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defRev = updatedDef.ProfileRevision
+		deniedExecRes, _ := callModelTool(defProc, defaultBot.CurrentConversationID, "session_open", map[string]any{
+			"command": nodePath, "mode": "pipe",
+		})
+		var deniedErr struct {
+			Code string `json:"code"`
+		}
+		mustDecode(deniedExecRes, &deniedErr)
+		if deniedErr.Code != "scope_denied" {
+			t.Fatalf("runtime restricted profile[%d] session_open = %s, want scope_denied", idx, deniedExecRes)
+		}
+	}
+	if _, err := defProc.client.UpdateBot(ctx, pi.ProductBotUpdateParams{
+		ProductBotRevisionParams: pi.ProductBotRevisionParams{
+			BotID: defaultBot.BotID, ExpectedRevision: defRev, OperationID: "def-restore-default",
+		},
+		Profile:              pi.ProductBotProfile{Name: "DefaultBot", Role: "Tester", Purpose: "BG-1 default", Workspace: workspace},
+		StartNewConversation: false,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	listDefRes, _ := callModelTool(defProc, defaultBot.CurrentConversationID, "session_list", map[string]any{})
+	var defListPage struct {
+		Items []pi.ProductSessionSummary `json:"items"`
+	}
+	mustDecode(listDefRes, &defListPage)
+	if len(defListPage.Items) != 1 || defListPage.Items[0].SessionID != defSess.SessionID {
+		t.Fatalf("restored default bot session_list = %s", listDefRes)
+	}
+	defProc.shutdown(t, ctx)
+
 	profileDir := filepath.Join(root, "live-profile")
 	if err := os.MkdirAll(profileDir, 0o700); err != nil {
 		t.Fatal(err)
