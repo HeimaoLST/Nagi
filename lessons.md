@@ -521,3 +521,11 @@
 **Cause or correction:** `resolveCodingTools` returns `null` rather than the explicit array when no override or preset narrows the built-in tool list, whereas empty `[]` explicitly disables coding tools. Both the tool advertisement gate and runtime authorization guard in `sessionTools` (`internal/pi/worker/product.ts`) must resolve `resolveCodingTools(profile) ?? this.engine.defaultCodingTools` before checking tool membership.
 
 **Prevention:** Never apply negative optional-chaining checks (`!arr?.includes(...)`) to nullable capability resolvers where `null` means full defaults; normalize nullable capability lists to the active default set in one helper or shared expression at every inventory and runtime enforcement site, and preserve built-in and `none`/`readonly` profile coverage alongside omitted-default (`nil`/`""`) Bots.
+
+### Delegate field-caption clicks to inputs, return errors out of UI pump closures, and look up Bot indices dynamically
+
+**Problem:** Clicking a form caption (`capabilityText`) that shared its string label with the nested `preferenceInput` below it satisfied MyGo `Tester.Click` on the static caption without focusing the input; calling `t.Fatal` inside `w.pump.do` terminated the UI pump goroutine before signaling completion and deadlocked the test; and hardcoding contact list indices (`0`/`1`) collided with the prepended built-in `PandoraBox` entry.
+
+**Cause or correction:** Non-interactive caption labels earlier in layout order intercept text-based clicks unless the caption explicitly delegates focus to its associated field; `t.Fatal` (`runtime.Goexit`) must never run inside helper goroutines that own channel handshakes; and `openProductProfile` prepends system Bots before persisted user Contacts.
+
+**Prevention:** Delegate `OnClick` on custom field captions to request `.Focus()` on their associated input, capture check errors from `w.pump.do` closures and call `t.Fatal` outside the closure on the test goroutine, and resolve test contacts by stable Bot ID via `slices.IndexFunc`.

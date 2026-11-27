@@ -1216,3 +1216,38 @@ func TestPreviewScheduledWork(t *testing.T) {
 		writeSchedShot(shot.name, fxRec, shot.w, shot.h, shot.locale, shot.dark)
 	}
 }
+
+func TestPreviewNativeLifecycle(t *testing.T) {
+	dir := os.Getenv("NAGI_PREVIEW_DIR")
+	if dir == "" {
+		t.Skip("set NAGI_PREVIEW_DIR to write BG-3A native lifecycle previews")
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, shot := range []struct {
+		name, locale string
+		w, h         int
+		dark, retry  bool
+	}{
+		{"bg3a-draining-en-light-1040x720.png", "en", 1040, 720, false, false},
+		{"bg3a-draining-zh-dark-720x640.png", "zh-Hans", 720, 640, true, false},
+		{"bg3a-drain-retry-zh-dark-720x640.png", "zh-Hans", 720, 640, true, true},
+	} {
+		fx, _, _, _ := seedVisualScheduledWorkFixture(t)
+		fx.app.windowWidth = shot.w
+		fx.app.shutdownStarted = true
+		fx.app.shutdownDrainStarted = !shot.retry
+		if shot.retry {
+			fx.app.runtimeErrKind = runtimeNoticeRuntimeShutdown
+			fx.app.runtimeErr = "worker did not drain before timeout"
+		}
+		tr := ui.NewTesterWith(fx.app.nativeWindowView, shot.w, shot.h, ui.TesterOptions{Dark: shot.dark})
+		tr.SetLocale(shot.locale)
+		tr.SetFocused(true)
+		tr.Frame()
+		path := filepath.Join(dir, shot.name)
+		writePreviewPNG(t, path, tr.Image())
+		t.Logf("bg3a preview path=%s width=%d height=%d locale=%s dark=%v", path, shot.w, shot.h, shot.locale, shot.dark)
+	}
+}

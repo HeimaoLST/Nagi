@@ -260,6 +260,7 @@ func (a *appModel) openProductProfile(ctx context.Context, fresh bool, generatio
 		a.sessions.blocked = a.dataRecoveryBlocksChanges()
 		a.sessions.setSessionInspectorClient(host.product)
 		a.reconcilePendingWatchOperations(host)
+		a.refreshDockMenu()
 	})
 	return nil
 }
@@ -734,6 +735,7 @@ func (a *appModel) applyProductEvent(host *piAppHost, event pi.ProductEvent) {
 				a.reloadProductConversation(host, ct)
 			}
 		}
+		a.refreshDockMenu()
 		return
 	}
 	if event.Name == "activity.changed" {
@@ -946,9 +948,13 @@ func (a *appModel) finishProductShutdown(host *piAppHost) {
 		}
 		if !outcome.Reaped || !drained {
 			a.shutdownDrainStarted = false
+			if a.windowHidden {
+				a.reopenWindow()
+			}
 			return
 		}
 		a.pi, a.quitReady = nil, true
+		a.refreshDockMenu()
 		if a.requestQuit != nil {
 			a.requestQuit()
 		}
@@ -970,6 +976,7 @@ func (a *appModel) observeProductExit(host *piAppHost) {
 		for _, b := range a.schedules.bots {
 			b.client = nil
 		}
+		a.refreshDockMenu()
 		for _, ct := range a.contacts {
 			if ct.ActiveTaskID != "" || ct.SendState == sendSubmitting {
 				if ct.ActiveTaskID != "" {

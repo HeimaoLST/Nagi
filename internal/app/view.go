@@ -29,6 +29,7 @@ func messageReaderOptions(c *ui.Context, plain bool) markdownReaderOptions {
 
 func (a *appModel) view(c *ui.Context) {
 	a.uiLocale = c.Locale()
+	a.refreshDockMenu()
 	a.syncDetailPageMode()
 	if !a.settingsOpen {
 		a.linkReturnSeen = false

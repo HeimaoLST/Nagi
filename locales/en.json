@@ -2046,5 +2046,6 @@
         "type": "int"
       }
     }
-  }
+  },
+  "dockOpenNagi": "Open Nagi"
 }

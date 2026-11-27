@@ -250,16 +250,21 @@ func (a *appModel) clearBuiltinToolCatalog() {
 	a.runtimeBuiltinToolsErr = ""
 }
 
-// beginShutdown is the single quit path for the window close button and
-// Cmd+Q. It prevents the default close, drains the runtime, then asks the app
-// to quit. The UI thread is never blocked on the process wait.
 func (a *appModel) beginShutdown() {
 	if a.shutdownStarted {
 		return
 	}
 	a.shutdownStarted = true
+	a.runtimeStatus = runtimeStateDraining
+	a.refreshDockMenu()
 	a.resetComposerOverlays()
 	a.persist()
+	a.stopProviderTimers()
+	a.finishShutdown()
+	a.invalidateNativeWindow()
+}
+
+func (a *appModel) stopProviderTimers() {
 	if a.providers.cancelTest != nil {
 		a.providers.cancelTest()
 	}
@@ -267,7 +272,6 @@ func (a *appModel) beginShutdown() {
 		timer.Stop()
 		a.providers.healthTimer = nil
 	}
-	a.finishShutdown()
 }
 
 func (a *appModel) setUIHook(hook func(func())) {
