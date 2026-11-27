@@ -98,9 +98,21 @@
   "quoteRemove": "Remove quote",
   "quoteAuthorYou": "You",
   "quoteReplyingTo": "Quoting {author}",
-  "@quoteReplyingTo": {"placeholders": {"author": {"type": "String"}}},
+  "@quoteReplyingTo": {
+    "placeholders": {
+      "author": {
+        "type": "String"
+      }
+    }
+  },
   "quoteJump": "Jump to quoted message from {author}",
-  "@quoteJump": {"placeholders": {"author": {"type": "String"}}},
+  "@quoteJump": {
+    "placeholders": {
+      "author": {
+        "type": "String"
+      }
+    }
+  },
   "copyContextTextLabel": "Copy material text",
   "@copyContextTextLabel": {
     "description": "The accessible name of the copy control for Material text."
@@ -338,11 +350,29 @@
   "createBotFailed": "Could not create the Bot. Try again.",
   "createBotWithPandoraBox": "Create with PandoraBox",
   "emptyBotGreeting": "What’s next with {name}?",
-  "@emptyBotGreeting": {"placeholders": {"name": {"type": "String"}}},
+  "@emptyBotGreeting": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "starterFollowUp": "Follow up on: {summary}",
-  "@starterFollowUp": {"placeholders": {"summary": {"type": "String"}}},
+  "@starterFollowUp": {
+    "placeholders": {
+      "summary": {
+        "type": "String"
+      }
+    }
+  },
   "starterHelpWithPurpose": "Help me with: {purpose}",
-  "@starterHelpWithPurpose": {"placeholders": {"purpose": {"type": "String"}}},
+  "@starterHelpWithPurpose": {
+    "placeholders": {
+      "purpose": {
+        "type": "String"
+      }
+    }
+  },
   "pandoraBoxPurpose": "Design, create, and refine focused Nagi Bots through conversation.",
   "pandoraBoxStarterWriting": "Create a writing and editing Bot",
   "pandoraBoxStarterCodeReview": "Build a strict code review Bot",
@@ -473,7 +503,13 @@
   "botStatusDone": "✓ Done",
   "botStatusRailDone": "✓ Done",
   "botStatusRailDoneWithSnippet": "✓ Done · {snippet}",
-  "@botStatusRailDoneWithSnippet": {"placeholders": {"snippet": {"type": "String"}}},
+  "@botStatusRailDoneWithSnippet": {
+    "placeholders": {
+      "snippet": {
+        "type": "String"
+      }
+    }
+  },
   "botStatusAnswer": "Answer →",
   "botStatusViewTasks": "View tasks →",
   "settingsAdvancedIntro": "Read-only Runtime and startup diagnostics. Open connection settings to repair configuration.",
@@ -772,7 +808,16 @@
   "issueRequirementUnmet": "Not met",
   "issueRequirementUnverified": "Unverified",
   "activityProgressSteps": "Step {step, number} of {total, number}",
-  "@activityProgressSteps": {"placeholders": {"step": {"type": "int"}, "total": {"type": "int"}}},
+  "@activityProgressSteps": {
+    "placeholders": {
+      "step": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
   "activityTrace": "Execution trace",
   "activityTraceStarted": "Started",
   "activityTraceFile": "File confirmed",
@@ -789,7 +834,16 @@
   "activityDelivered": "Delivered",
   "activityDismissHint": "Dismiss hint",
   "activityNextNotice": "Next · {position, number}/{total, number}",
-  "@activityNextNotice": {"placeholders": {"position": {"type": "int"}, "total": {"type": "int"}}},
+  "@activityNextNotice": {
+    "placeholders": {
+      "position": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
   "activityRetryNotices": "Reload activity notices",
   "activitySteer": "Steer",
   "activitySteerInstruction": "Instruction for the running activity",
@@ -1377,16 +1431,46 @@
   "providerDisabled": "Disabled",
   "providerMissingKey": "Missing key",
   "providerModelCount": "{count, plural, one {# model} other {# models}}",
-  "@providerModelCount": {"placeholders": {"count": {"type": "int"}}},
+  "@providerModelCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "providerActiveFor": "Active for {roles}",
-  "@providerActiveFor": {"placeholders": {"roles": {"type": "String"}}},
+  "@providerActiveFor": {
+    "placeholders": {
+      "roles": {
+        "type": "String"
+      }
+    }
+  },
   "providerRoleSeparator": ", ",
   "providerTestAccount": "Test {name}",
-  "@providerTestAccount": {"placeholders": {"name": {"type": "String"}}},
+  "@providerTestAccount": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "providerRevokeAccount": "Revoke key for {name}",
-  "@providerRevokeAccount": {"placeholders": {"name": {"type": "String"}}},
+  "@providerRevokeAccount": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "providerDeleteAccount": "Delete {name}",
-  "@providerDeleteAccount": {"placeholders": {"name": {"type": "String"}}},
+  "@providerDeleteAccount": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "providerPreset": "Provider preset",
   "providerCustom": "Custom",
   "providerBaseURL": "Base URL",
@@ -1397,9 +1481,24 @@
   "providerAccountStatus": "Account status",
   "providerWorking": "Updating provider…",
   "providerProbeResult": "Connected · {count, plural, one {# model discovered} other {# models discovered}} ({latency} ms)",
-  "@providerProbeResult": {"placeholders": {"count": {"type": "int"}, "latency": {"type": "String"}}},
+  "@providerProbeResult": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "latency": {
+        "type": "String"
+      }
+    }
+  },
   "providerTabAccounts": "Providers ({count})",
-  "@providerTabAccounts": {"placeholders": {"count": {"type": "int"}}},
+  "@providerTabAccounts": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "providerTabRouting": "Routing",
   "providerPrevious": "Previous connection",
   "providerQuickStart": "Quick start",
@@ -1416,7 +1515,13 @@
   "providerAutomaticPoolHint": "Test & sync to see automatic choices, or select each model to set the pool yourself",
   "providerPickDefault": "Choose default model",
   "providerToggleModel": "Enable or disable {model}",
-  "@providerToggleModel": {"placeholders": {"model": {"type": "String"}}},
+  "@providerToggleModel": {
+    "placeholders": {
+      "model": {
+        "type": "String"
+      }
+    }
+  },
   "providerTools": "Tools",
   "providerNoTools": "No tool support",
   "providerToolsUnknown": "Tool support unknown",
@@ -1426,7 +1531,16 @@
   "providerRecommended": "Recommended",
   "providerPriceProtected": "Price protected",
   "providerModelLimits": "{context, number} context · {output, number} output tokens",
-  "@providerModelLimits": {"placeholders": {"context": {"type": "int"}, "output": {"type": "int"}}},
+  "@providerModelLimits": {
+    "placeholders": {
+      "context": {
+        "type": "int"
+      },
+      "output": {
+        "type": "int"
+      }
+    }
+  },
   "providerFallbackTag": "Fallback",
   "providerFallbackOnly": "Fallback only",
   "providerUseAsBackup": "Use as backup",
@@ -1438,9 +1552,21 @@
   "providerUnavailable": "Unavailable",
   "providerKeyRejected": "Key rejected",
   "providerFailureCount": "{count, plural, one {# failure} other {# failures}}",
-  "@providerFailureCount": {"placeholders": {"count": {"type": "int"}}},
+  "@providerFailureCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "providerRetryAt": "Retry at {time}",
-  "@providerRetryAt": {"placeholders": {"time": {"type": "String"}}},
+  "@providerRetryAt": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
   "providerPinDeleted": "The pinned provider was deleted",
   "providerPinDisabled": "The pinned provider is disabled",
   "providerPinRepointed": "The pinned provider’s endpoint changed",
@@ -1453,9 +1579,21 @@
   "providerStreamFailure": "Response stream interrupted",
   "providerFollowStrategy": "Auto (follow strategy)",
   "providerModelPinOption": "Model · {model}",
-  "@providerModelPinOption": {"placeholders": {"model": {"type": "String"}}},
+  "@providerModelPinOption": {
+    "placeholders": {
+      "model": {
+        "type": "String"
+      }
+    }
+  },
   "providerPinRole": "Route for {role}",
-  "@providerPinRole": {"placeholders": {"role": {"type": "String"}}},
+  "@providerPinRole": {
+    "placeholders": {
+      "role": {
+        "type": "String"
+      }
+    }
+  },
   "providerPinnedUnavailable": "Pinned (unavailable)",
   "providerPinFailed": "Could not change the route pin",
   "providerAuto": "Auto",
@@ -1465,22 +1603,52 @@
   "providerFallbackModel": "Fallback model",
   "providerRouteUnavailable": "No route is available. Your draft was kept. Check routing in Connection & model.",
   "providerRouteCoolingDown": "The route is cooling down. Your draft was kept. {retry}.",
-  "@providerRouteCoolingDown": {"placeholders": {"retry": {"type": "String"}}},
+  "@providerRouteCoolingDown": {
+    "placeholders": {
+      "retry": {
+        "type": "String"
+      }
+    }
+  },
   "providerAnswerRoutePaused": "Your answer was saved. Delivery is paused until the activity’s route is available.",
   "providerEnabledCount": "{count, plural, one {# provider enabled} other {# providers enabled}}",
-  "@providerEnabledCount": {"placeholders": {"count": {"type": "int"}}},
+  "@providerEnabledCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "providerActiveCount": "{count}/4 roles active",
-  "@providerActiveCount": {"placeholders": {"count": {"type": "int"}}},
+  "@providerActiveCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "providerAllApplied": "All changes applied",
   "providerAddShort": "Add",
   "providerToggleDisabled": "Disabled",
   "providerNoRole": "Not assigned to a role",
   "providerLatencyReady": "{latency} ms · Ready",
-  "@providerLatencyReady": {"placeholders": {"latency": {"type": "String"}}},
+  "@providerLatencyReady": {
+    "placeholders": {
+      "latency": {
+        "type": "String"
+      }
+    }
+  },
   "providerTestSync": "Test & sync",
   "providerTestDiscover": "Test & discover",
   "providerMoreModels": "+{count} more",
-  "@providerMoreModels": {"placeholders": {"count": {"type": "int"}}},
+  "@providerMoreModels": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "providerAddHint": "Choose a preset or enter a compatible endpoint",
   "providerPresetResponses": "Responses",
   "providerPresetChat": "Chat API",
@@ -1508,7 +1676,13 @@
   "providerFoldCollapse": "Collapse ▾",
   "providerFoldExpand": "Expand ▸",
   "providerFoldSummary": "{count, plural, one {Show # provider} other {Show all # providers}} ▾",
-  "@providerFoldSummary": {"placeholders": {"count": {"type": "int"}}},
+  "@providerFoldSummary": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "providerKeyInUse": "In use",
   "providerReplaceKey": "Replace key",
   "providerOptionalKey": "Optional for local servers",
@@ -1517,23 +1691,59 @@
   "providerAddModel": "Add model",
   "providerAddModelPlaceholder": "Enter a custom model ID",
   "providerAddAnother": "Add another {name}",
-  "@providerAddAnother": {"placeholders": {"name": {"type": "String"}}},
+  "@providerAddAnother": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "providerV2ImportTitle": "Previous connection detected",
   "providerV2ImportAction": "Import →",
   "providerEnabledModelsCount": "{count, plural, one {# enabled model} other {# enabled models}}",
-  "@providerEnabledModelsCount": {"placeholders": {"count": {"type": "int"}}},
+  "@providerEnabledModelsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "providerRoutingSubtitle": "Choose automatic routing or pin a model for each role",
   "settingsCapabilities": "Capabilities",
   "capSkills": "Skills",
   "capSkillsCount": "Skills ({count})",
-  "@capSkillsCount": {"placeholders": {"count": {"type": "int"}}},
+  "@capSkillsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "capMcp": "MCP servers",
   "capMcpCount": "MCP servers ({count})",
-  "@capMcpCount": {"placeholders": {"count": {"type": "int"}}},
+  "@capMcpCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "capGlobalCount": "{count, plural, one {# global skill} other {# global skills}}",
-  "@capGlobalCount": {"placeholders": {"count": {"type": "int"}}},
+  "@capGlobalCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "capDiscoveredCount": "{count, plural, other {# discovered}}",
-  "@capDiscoveredCount": {"placeholders": {"count": {"type": "int"}}},
+  "@capDiscoveredCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "capLocalDiscovery": "Local discovery (~/.agents/skills)",
   "capOff": "Off",
   "capOn": "On",
@@ -1567,9 +1777,21 @@
   "capSkillChangeFailed": "Could not update the skill library. Check the details and try again.",
   "capSkillChanged": "The skill changed since you opened it. Switch to Preview, then reopen Edit to review the latest version.",
   "capMcpEnabledCount": "{count, plural, one {# server enabled} other {# servers enabled}}",
-  "@capMcpEnabledCount": {"placeholders": {"count": {"type": "int"}}},
+  "@capMcpEnabledCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "capMcpPoolCount": "{count, plural, one {# active pool} other {# active pools}}",
-  "@capMcpPoolCount": {"placeholders": {"count": {"type": "int"}}},
+  "@capMcpPoolCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "capNoMcp": "No MCP servers configured",
   "capRefreshStatus": "Refresh status",
   "capAddMcp": "Add server",
@@ -1603,7 +1825,13 @@
   "capMcpSecretsInvalid": "Use valid, unique secret names that differ from public names, and enter each value on one line.",
   "capToolCatalog": "Discovered tools",
   "capToolCount": "{count, plural, one {# tool} other {# tools}}",
-  "@capToolCount": {"placeholders": {"count": {"type": "int"}}},
+  "@capToolCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "capDestructive": "Destructive",
   "capMutating": "Mutating",
   "capLivePools": "Live connection pools",
@@ -1611,7 +1839,13 @@
   "capPoolConnected": "Connected",
   "capPoolClosing": "Closing",
   "capPoolReferences": "{count, plural, one {# lease} other {# leases}}",
-  "@capPoolReferences": {"placeholders": {"count": {"type": "int"}}},
+  "@capPoolReferences": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "capPoolPID": "Process {pid}",
   "capDeleteMcp": "Delete server",
   "capSaveMcp": "Save server",
@@ -1668,7 +1902,13 @@
   "capPermissions": "Sandbox permissions",
   "capScripts": "Scripts",
   "capScriptCount": "{count, plural, one {# script} other {# scripts}}",
-  "@capScriptCount": {"placeholders": {"count": {"type": "int"}}},
+  "@capScriptCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "capWorkspaceAccess": "Workspace access",
   "capReadWrite": "Read & write",
   "capIsolated": "None (isolated sandbox)",
@@ -1684,5 +1924,109 @@
   "capApprovalChangeFailed": "Could not update the approval. Check the details and review again.",
   "capTimeoutMS": "{time} ms",
   "capMcpProbeResult": "Connected · {count, plural, one {# tool discovered} other {# tools discovered}} ({latency} ms)",
-  "@capMcpProbeResult": {"placeholders": {"count": {"type": "int"}}}
+  "@capMcpProbeResult": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "sessionInspectTitle": "Sessions",
+  "sessionInspectBack": "Back",
+  "sessionInspectReload": "Reload",
+  "sessionInspectLoadMore": "Load more",
+  "sessionInspectPreviousPage": "Previous page",
+  "sessionInspectLoadingList": "Loading sessions…",
+  "sessionInspectEmptyList": "This Bot has no sessions yet.",
+  "sessionInspectListError": "Couldn’t load sessions. Reload to try again.",
+  "sessionInspectLoadingDetail": "Loading session details…",
+  "sessionInspectDetailError": "Couldn’t load session details. Reload to try again.",
+  "sessionInspectSession": "Session",
+  "sessionInspectStarting": "Starting",
+  "sessionInspectRunning": "Running",
+  "sessionInspectExited": "Exited",
+  "sessionInspectClosed": "Closed",
+  "sessionInspectDisconnected": "Disconnected",
+  "sessionInspectFailed": "Failed",
+  "sessionInspectReadOnly": "Read-only session history",
+  "sessionInspectSourceChat": "Source chat",
+  "sessionInspectSourceActivity": "Source activity",
+  "sessionInspectCommand": "Command",
+  "sessionInspectDirectory": "Working directory",
+  "sessionInspectMode": "Mode",
+  "sessionInspectPty": "PTY",
+  "sessionInspectPipe": "Pipe",
+  "sessionInspectSize": "Terminal size",
+  "sessionInspectDimensions": "{cols} × {rows}",
+  "@sessionInspectDimensions": {
+    "placeholders": {
+      "cols": {
+        "type": "int"
+      },
+      "rows": {
+        "type": "int"
+      }
+    }
+  },
+  "sessionInspectExitCode": "Exit code",
+  "sessionInspectExitSignal": "Exit signal",
+  "sessionInspectTransport": "Transport",
+  "sessionInspectLive": "Connected",
+  "sessionInspectEof": "Output ended",
+  "sessionInspectTransportEOF": "Stream closed",
+  "sessionInspectSupervisorLost": "Supervisor disconnected",
+  "sessionInspectWorkerRestarted": "Worker restarted",
+  "sessionInspectClosedByUser": "Closed by you",
+  "sessionInspectClosedByBot": "Closed by the Bot",
+  "sessionInspectClosedOnShutdown": "Closed on shutdown",
+  "sessionInspectExecFailed": "Couldn’t start the process",
+  "sessionInspectOutput": "Output",
+  "sessionInspectStdout": "stdout",
+  "sessionInspectStderr": "stderr",
+  "sessionInspectReading": "Reading output…",
+  "sessionInspectEmptyOutput": "No output yet.",
+  "sessionInspectOutputError": "Couldn’t read output. Reload to try again.",
+  "sessionInspectOutputGap": "{bytes} bytes of earlier output are unavailable.",
+  "sessionInspectHostDisconnected": "The session host is disconnected. Available history is read-only.",
+  "sessionInspectEarlierOutput": "Earlier output",
+  "sessionInspectLaterOutput": "Later output",
+  "sessionInspectLatestOutput": "Latest output",
+  "sessionInspectNewOutput": "New output is available.",
+  "sessionInspectAuthPaused": "Waiting for external authentication",
+  "sessionInspectAuthPrompt": "The process asked for authentication.",
+  "sessionInspectCanonicalNoEcho": "The process is waiting for hidden terminal input.",
+  "sessionInspectAuthAction": "Complete authentication outside Nagi or kill this session.",
+  "sessionInspectWatches": "Watches",
+  "sessionInspectNoWatches": "No watches for this run.",
+  "sessionInspectArmed": "Armed",
+  "sessionInspectFired": "Fired",
+  "sessionInspectCancelled": "Cancelled",
+  "sessionInspectTargetLost": "Target lost",
+  "sessionInspectConditions": "Conditions",
+  "sessionInspectExit": "Process exit",
+  "sessionInspectMatch": "Text match",
+  "sessionInspectIdle": "Idle",
+  "sessionInspectTimeout": "Timeout",
+  "sessionInspectMatchLiteral": "Match text",
+  "sessionInspectIdleTime": "Idle threshold",
+  "sessionInspectTimeoutTime": "Timeout",
+  "sessionInspectMilliseconds": "{time} ms",
+  "sessionInspectFiredKind": "Triggered by",
+  "sessionInspectMatchedExcerpt": "Matched output",
+  "sessionInspectKill": "Kill session",
+  "sessionInspectKillBlocked": "Session actions are temporarily unavailable.",
+  "sessionInspectKillPending": "Waiting for the host to confirm the close…",
+  "sessionInspectKillUnknown": "Couldn’t confirm the close. Check its status before taking another action.",
+  "sessionInspectCheckClose": "Check close status",
+  "sessionInspectKillAccepted": "Close accepted.",
+  "sessionInspectKillTerminated": "Process terminated and reaped.",
+  "sessionInspectKillSettled": "The session had already ended.",
+  "sessionInspectKillUnreaped": "Process reaping is unconfirmed.",
+  "sessionInspectKillReaped": "Process reaping confirmed.",
+  "sessionInspectPreviousClose": "Close request for an earlier run",
+  "sessionInspectKillStaleGeneration": "The session run changed before it could be closed.",
+  "sessionInspectKillStaleRevision": "The session changed before it could be closed.",
+  "sessionInspectKillRejected": "The host rejected the close.",
+  "sessionInspectKillNotSent": "The close request couldn’t be sent.",
+  "sessionInspectKillSaveError": "Couldn’t save the close request. Try again."
 }

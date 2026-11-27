@@ -342,32 +342,52 @@ func (msgs Messages) CopyMessageLabel() string {
 	return Catalog.Format(msgs.locale, "copyMessageLabel", nil)
 }
 
+// QuoteAction says "Quote"
+// in the language the app shows.
 func QuoteAction() string { return In(i18n.Locale()).QuoteAction() }
 
+// QuoteAction says "Quote"
+// in the language of msgs.
 func (msgs Messages) QuoteAction() string {
 	return Catalog.Format(msgs.locale, "quoteAction", nil)
 }
 
+// QuoteRemove says "Remove quote"
+// in the language the app shows.
 func QuoteRemove() string { return In(i18n.Locale()).QuoteRemove() }
 
+// QuoteRemove says "Remove quote"
+// in the language of msgs.
 func (msgs Messages) QuoteRemove() string {
 	return Catalog.Format(msgs.locale, "quoteRemove", nil)
 }
 
+// QuoteAuthorYou says "You"
+// in the language the app shows.
 func QuoteAuthorYou() string { return In(i18n.Locale()).QuoteAuthorYou() }
 
+// QuoteAuthorYou says "You"
+// in the language of msgs.
 func (msgs Messages) QuoteAuthorYou() string {
 	return Catalog.Format(msgs.locale, "quoteAuthorYou", nil)
 }
 
+// QuoteReplyingTo says "Quoting {author}"
+// in the language the app shows.
 func QuoteReplyingTo(author string) string { return In(i18n.Locale()).QuoteReplyingTo(author) }
 
+// QuoteReplyingTo says "Quoting {author}"
+// in the language of msgs.
 func (msgs Messages) QuoteReplyingTo(author string) string {
 	return Catalog.Format(msgs.locale, "quoteReplyingTo", map[string]any{"author": author})
 }
 
+// QuoteJump says "Jump to quoted message from {author}"
+// in the language the app shows.
 func QuoteJump(author string) string { return In(i18n.Locale()).QuoteJump(author) }
 
+// QuoteJump says "Jump to quoted message from {author}"
+// in the language of msgs.
 func (msgs Messages) QuoteJump(author string) string {
 	return Catalog.Format(msgs.locale, "quoteJump", map[string]any{"author": author})
 }
@@ -2090,8 +2110,12 @@ func (msgs Messages) SendTooltip() string {
 	return Catalog.Format(msgs.locale, "sendTooltip", nil)
 }
 
+// BotTyping says "Bot is typing"
+// in the language the app shows.
 func BotTyping() string { return In(i18n.Locale()).BotTyping() }
 
+// BotTyping says "Bot is typing"
+// in the language of msgs.
 func (msgs Messages) BotTyping() string {
 	return Catalog.Format(msgs.locale, "botTyping", nil)
 }
@@ -8860,968 +8884,1604 @@ func (msgs Messages) TaskContextChooseFileHint() string {
 	return Catalog.Format(msgs.locale, "taskContextChooseFileHint", nil)
 }
 
+// ProviderRouting says "Multi-brain routing"
+// in the language the app shows.
 func ProviderRouting() string { return In(i18n.Locale()).ProviderRouting() }
 
+// ProviderRouting says "Multi-brain routing"
+// in the language of msgs.
 func (msgs Messages) ProviderRouting() string {
 	return Catalog.Format(msgs.locale, "providerRouting", nil)
 }
 
+// ProviderAccounts says "Provider accounts"
+// in the language the app shows.
 func ProviderAccounts() string { return In(i18n.Locale()).ProviderAccounts() }
 
+// ProviderAccounts says "Provider accounts"
+// in the language of msgs.
 func (msgs Messages) ProviderAccounts() string {
 	return Catalog.Format(msgs.locale, "providerAccounts", nil)
 }
 
+// ProviderAdd says "Add provider"
+// in the language the app shows.
 func ProviderAdd() string { return In(i18n.Locale()).ProviderAdd() }
 
+// ProviderAdd says "Add provider"
+// in the language of msgs.
 func (msgs Messages) ProviderAdd() string {
 	return Catalog.Format(msgs.locale, "providerAdd", nil)
 }
 
+// ProviderApplyChanges says "Apply provider changes"
+// in the language the app shows.
 func ProviderApplyChanges() string { return In(i18n.Locale()).ProviderApplyChanges() }
 
+// ProviderApplyChanges says "Apply provider changes"
+// in the language of msgs.
 func (msgs Messages) ProviderApplyChanges() string {
 	return Catalog.Format(msgs.locale, "providerApplyChanges", nil)
 }
 
+// ProviderSaveApply says "Save & apply"
+// in the language the app shows.
 func ProviderSaveApply() string { return In(i18n.Locale()).ProviderSaveApply() }
 
+// ProviderSaveApply says "Save & apply"
+// in the language of msgs.
 func (msgs Messages) ProviderSaveApply() string {
 	return Catalog.Format(msgs.locale, "providerSaveApply", nil)
 }
 
+// ProviderSave says "Save"
+// in the language the app shows.
 func ProviderSave() string { return In(i18n.Locale()).ProviderSave() }
 
+// ProviderSave says "Save"
+// in the language of msgs.
 func (msgs Messages) ProviderSave() string {
 	return Catalog.Format(msgs.locale, "providerSave", nil)
 }
 
+// ProviderRevoke says "Revoke key"
+// in the language the app shows.
 func ProviderRevoke() string { return In(i18n.Locale()).ProviderRevoke() }
 
+// ProviderRevoke says "Revoke key"
+// in the language of msgs.
 func (msgs Messages) ProviderRevoke() string {
 	return Catalog.Format(msgs.locale, "providerRevoke", nil)
 }
 
+// ProviderDelete says "Delete"
+// in the language the app shows.
 func ProviderDelete() string { return In(i18n.Locale()).ProviderDelete() }
 
+// ProviderDelete says "Delete"
+// in the language of msgs.
 func (msgs Messages) ProviderDelete() string {
 	return Catalog.Format(msgs.locale, "providerDelete", nil)
 }
 
+// ProviderNoAccounts says "No provider accounts yet"
+// in the language the app shows.
 func ProviderNoAccounts() string { return In(i18n.Locale()).ProviderNoAccounts() }
 
+// ProviderNoAccounts says "No provider accounts yet"
+// in the language of msgs.
 func (msgs Messages) ProviderNoAccounts() string {
 	return Catalog.Format(msgs.locale, "providerNoAccounts", nil)
 }
 
+// ProviderPending says "Saved changes pending apply"
+// in the language the app shows.
 func ProviderPending() string { return In(i18n.Locale()).ProviderPending() }
 
+// ProviderPending says "Saved changes pending apply"
+// in the language of msgs.
 func (msgs Messages) ProviderPending() string {
 	return Catalog.Format(msgs.locale, "providerPending", nil)
 }
 
+// ProviderCredentialsUnavailable says "Credentials unavailable"
+// in the language the app shows.
 func ProviderCredentialsUnavailable() string {
 	return In(i18n.Locale()).ProviderCredentialsUnavailable()
 }
 
+// ProviderCredentialsUnavailable says "Credentials unavailable"
+// in the language of msgs.
 func (msgs Messages) ProviderCredentialsUnavailable() string {
 	return Catalog.Format(msgs.locale, "providerCredentialsUnavailable", nil)
 }
 
+// ProviderActiveRoutingNote says "Showing active routing — apply saved changes to update."
+// in the language the app shows.
 func ProviderActiveRoutingNote() string { return In(i18n.Locale()).ProviderActiveRoutingNote() }
 
+// ProviderActiveRoutingNote says "Showing active routing — apply saved changes to update."
+// in the language of msgs.
 func (msgs Messages) ProviderActiveRoutingNote() string {
 	return Catalog.Format(msgs.locale, "providerActiveRoutingNote", nil)
 }
 
+// ProviderStrategy says "Routing strategy"
+// in the language the app shows.
 func ProviderStrategy() string { return In(i18n.Locale()).ProviderStrategy() }
 
+// ProviderStrategy says "Routing strategy"
+// in the language of msgs.
 func (msgs Messages) ProviderStrategy() string {
 	return Catalog.Format(msgs.locale, "providerStrategy", nil)
 }
 
+// ProviderEconomy says "Economy"
+// in the language the app shows.
 func ProviderEconomy() string { return In(i18n.Locale()).ProviderEconomy() }
 
+// ProviderEconomy says "Economy"
+// in the language of msgs.
 func (msgs Messages) ProviderEconomy() string {
 	return Catalog.Format(msgs.locale, "providerEconomy", nil)
 }
 
+// ProviderBalanced says "Balanced"
+// in the language the app shows.
 func ProviderBalanced() string { return In(i18n.Locale()).ProviderBalanced() }
 
+// ProviderBalanced says "Balanced"
+// in the language of msgs.
 func (msgs Messages) ProviderBalanced() string {
 	return Catalog.Format(msgs.locale, "providerBalanced", nil)
 }
 
+// ProviderQuality says "Quality"
+// in the language the app shows.
 func ProviderQuality() string { return In(i18n.Locale()).ProviderQuality() }
 
+// ProviderQuality says "Quality"
+// in the language of msgs.
 func (msgs Messages) ProviderQuality() string {
 	return Catalog.Format(msgs.locale, "providerQuality", nil)
 }
 
+// ProviderEconomyHint says "Prioritizes faster, lower-cost models across roles."
+// in the language the app shows.
 func ProviderEconomyHint() string { return In(i18n.Locale()).ProviderEconomyHint() }
 
+// ProviderEconomyHint says "Prioritizes faster, lower-cost models across roles."
+// in the language of msgs.
 func (msgs Messages) ProviderEconomyHint() string {
 	return Catalog.Format(msgs.locale, "providerEconomyHint", nil)
 }
 
+// ProviderBalancedHint says "Balances capability, speed, and cost automatically."
+// in the language the app shows.
 func ProviderBalancedHint() string { return In(i18n.Locale()).ProviderBalancedHint() }
 
+// ProviderBalancedHint says "Balances capability, speed, and cost automatically."
+// in the language of msgs.
 func (msgs Messages) ProviderBalancedHint() string {
 	return Catalog.Format(msgs.locale, "providerBalancedHint", nil)
 }
 
+// ProviderQualityHint says "Prioritizes flagship coding and reasoning models."
+// in the language the app shows.
 func ProviderQualityHint() string { return In(i18n.Locale()).ProviderQualityHint() }
 
+// ProviderQualityHint says "Prioritizes flagship coding and reasoning models."
+// in the language of msgs.
 func (msgs Messages) ProviderQualityHint() string {
 	return Catalog.Format(msgs.locale, "providerQualityHint", nil)
 }
 
+// ProviderRoleDialogue says "Dialogue"
+// in the language the app shows.
 func ProviderRoleDialogue() string { return In(i18n.Locale()).ProviderRoleDialogue() }
 
+// ProviderRoleDialogue says "Dialogue"
+// in the language of msgs.
 func (msgs Messages) ProviderRoleDialogue() string {
 	return Catalog.Format(msgs.locale, "providerRoleDialogue", nil)
 }
 
+// ProviderRoleDialogueHint says "Foreground chat, sticky per session"
+// in the language the app shows.
 func ProviderRoleDialogueHint() string { return In(i18n.Locale()).ProviderRoleDialogueHint() }
 
+// ProviderRoleDialogueHint says "Foreground chat, sticky per session"
+// in the language of msgs.
 func (msgs Messages) ProviderRoleDialogueHint() string {
 	return Catalog.Format(msgs.locale, "providerRoleDialogueHint", nil)
 }
 
+// ProviderRoleCoding says "Coding"
+// in the language the app shows.
 func ProviderRoleCoding() string { return In(i18n.Locale()).ProviderRoleCoding() }
 
+// ProviderRoleCoding says "Coding"
+// in the language of msgs.
 func (msgs Messages) ProviderRoleCoding() string {
 	return Catalog.Format(msgs.locale, "providerRoleCoding", nil)
 }
 
+// ProviderRoleCodingHint says "Code editing, debugging, and verification"
+// in the language the app shows.
 func ProviderRoleCodingHint() string { return In(i18n.Locale()).ProviderRoleCodingHint() }
 
+// ProviderRoleCodingHint says "Code editing, debugging, and verification"
+// in the language of msgs.
 func (msgs Messages) ProviderRoleCodingHint() string {
 	return Catalog.Format(msgs.locale, "providerRoleCodingHint", nil)
 }
 
+// ProviderRoleReasoning says "Reasoning"
+// in the language the app shows.
 func ProviderRoleReasoning() string { return In(i18n.Locale()).ProviderRoleReasoning() }
 
+// ProviderRoleReasoning says "Reasoning"
+// in the language of msgs.
 func (msgs Messages) ProviderRoleReasoning() string {
 	return Catalog.Format(msgs.locale, "providerRoleReasoning", nil)
 }
 
+// ProviderRoleReasoningHint says "Research, analysis, and complex planning"
+// in the language the app shows.
 func ProviderRoleReasoningHint() string { return In(i18n.Locale()).ProviderRoleReasoningHint() }
 
+// ProviderRoleReasoningHint says "Research, analysis, and complex planning"
+// in the language of msgs.
 func (msgs Messages) ProviderRoleReasoningHint() string {
 	return Catalog.Format(msgs.locale, "providerRoleReasoningHint", nil)
 }
 
+// ProviderRoleUtility says "Utility"
+// in the language the app shows.
 func ProviderRoleUtility() string { return In(i18n.Locale()).ProviderRoleUtility() }
 
+// ProviderRoleUtility says "Utility"
+// in the language of msgs.
 func (msgs Messages) ProviderRoleUtility() string {
 	return Catalog.Format(msgs.locale, "providerRoleUtility", nil)
 }
 
+// ProviderRoleUtilityHint says "Quick tasks, summaries, and upkeep"
+// in the language the app shows.
 func ProviderRoleUtilityHint() string { return In(i18n.Locale()).ProviderRoleUtilityHint() }
 
+// ProviderRoleUtilityHint says "Quick tasks, summaries, and upkeep"
+// in the language of msgs.
 func (msgs Messages) ProviderRoleUtilityHint() string {
 	return Catalog.Format(msgs.locale, "providerRoleUtilityHint", nil)
 }
 
+// ProviderUnassigned says "Unassigned"
+// in the language the app shows.
 func ProviderUnassigned() string { return In(i18n.Locale()).ProviderUnassigned() }
 
+// ProviderUnassigned says "Unassigned"
+// in the language of msgs.
 func (msgs Messages) ProviderUnassigned() string {
 	return Catalog.Format(msgs.locale, "providerUnassigned", nil)
 }
 
+// ProviderPendingRemoval says "Provider pending removal"
+// in the language the app shows.
 func ProviderPendingRemoval() string { return In(i18n.Locale()).ProviderPendingRemoval() }
 
+// ProviderPendingRemoval says "Provider pending removal"
+// in the language of msgs.
 func (msgs Messages) ProviderPendingRemoval() string {
 	return Catalog.Format(msgs.locale, "providerPendingRemoval", nil)
 }
 
+// ProviderThinkingOff says "Thinking off"
+// in the language the app shows.
 func ProviderThinkingOff() string { return In(i18n.Locale()).ProviderThinkingOff() }
 
+// ProviderThinkingOff says "Thinking off"
+// in the language of msgs.
 func (msgs Messages) ProviderThinkingOff() string {
 	return Catalog.Format(msgs.locale, "providerThinkingOff", nil)
 }
 
+// ProviderThinkingLow says "Low thinking"
+// in the language the app shows.
 func ProviderThinkingLow() string { return In(i18n.Locale()).ProviderThinkingLow() }
 
+// ProviderThinkingLow says "Low thinking"
+// in the language of msgs.
 func (msgs Messages) ProviderThinkingLow() string {
 	return Catalog.Format(msgs.locale, "providerThinkingLow", nil)
 }
 
+// ProviderThinkingMedium says "Medium thinking"
+// in the language the app shows.
 func ProviderThinkingMedium() string { return In(i18n.Locale()).ProviderThinkingMedium() }
 
+// ProviderThinkingMedium says "Medium thinking"
+// in the language of msgs.
 func (msgs Messages) ProviderThinkingMedium() string {
 	return Catalog.Format(msgs.locale, "providerThinkingMedium", nil)
 }
 
+// ProviderThinkingHigh says "High thinking"
+// in the language the app shows.
 func ProviderThinkingHigh() string { return In(i18n.Locale()).ProviderThinkingHigh() }
 
+// ProviderThinkingHigh says "High thinking"
+// in the language of msgs.
 func (msgs Messages) ProviderThinkingHigh() string {
 	return Catalog.Format(msgs.locale, "providerThinkingHigh", nil)
 }
 
+// ProviderReady says "Ready"
+// in the language the app shows.
 func ProviderReady() string { return In(i18n.Locale()).ProviderReady() }
 
+// ProviderReady says "Ready"
+// in the language of msgs.
 func (msgs Messages) ProviderReady() string {
 	return Catalog.Format(msgs.locale, "providerReady", nil)
 }
 
+// ProviderEnabled says "Enabled"
+// in the language the app shows.
 func ProviderEnabled() string { return In(i18n.Locale()).ProviderEnabled() }
 
+// ProviderEnabled says "Enabled"
+// in the language of msgs.
 func (msgs Messages) ProviderEnabled() string {
 	return Catalog.Format(msgs.locale, "providerEnabled", nil)
 }
 
+// ProviderDisabled says "Disabled"
+// in the language the app shows.
 func ProviderDisabled() string { return In(i18n.Locale()).ProviderDisabled() }
 
+// ProviderDisabled says "Disabled"
+// in the language of msgs.
 func (msgs Messages) ProviderDisabled() string {
 	return Catalog.Format(msgs.locale, "providerDisabled", nil)
 }
 
+// ProviderMissingKey says "Missing key"
+// in the language the app shows.
 func ProviderMissingKey() string { return In(i18n.Locale()).ProviderMissingKey() }
 
+// ProviderMissingKey says "Missing key"
+// in the language of msgs.
 func (msgs Messages) ProviderMissingKey() string {
 	return Catalog.Format(msgs.locale, "providerMissingKey", nil)
 }
 
+// ProviderModelCount says "{count, plural, one {# model} other {# models}}"
+// in the language the app shows.
 func ProviderModelCount(count int) string { return In(i18n.Locale()).ProviderModelCount(count) }
 
+// ProviderModelCount says "{count, plural, one {# model} other {# models}}"
+// in the language of msgs.
 func (msgs Messages) ProviderModelCount(count int) string {
 	return Catalog.Format(msgs.locale, "providerModelCount", map[string]any{"count": count})
 }
 
+// ProviderActiveFor says "Active for {roles}"
+// in the language the app shows.
 func ProviderActiveFor(roles string) string { return In(i18n.Locale()).ProviderActiveFor(roles) }
 
+// ProviderActiveFor says "Active for {roles}"
+// in the language of msgs.
 func (msgs Messages) ProviderActiveFor(roles string) string {
 	return Catalog.Format(msgs.locale, "providerActiveFor", map[string]any{"roles": roles})
 }
 
+// ProviderRoleSeparator says ", "
+// in the language the app shows.
 func ProviderRoleSeparator() string { return In(i18n.Locale()).ProviderRoleSeparator() }
 
+// ProviderRoleSeparator says ", "
+// in the language of msgs.
 func (msgs Messages) ProviderRoleSeparator() string {
 	return Catalog.Format(msgs.locale, "providerRoleSeparator", nil)
 }
 
+// ProviderTestAccount says "Test {name}"
+// in the language the app shows.
 func ProviderTestAccount(name string) string { return In(i18n.Locale()).ProviderTestAccount(name) }
 
+// ProviderTestAccount says "Test {name}"
+// in the language of msgs.
 func (msgs Messages) ProviderTestAccount(name string) string {
 	return Catalog.Format(msgs.locale, "providerTestAccount", map[string]any{"name": name})
 }
 
+// ProviderRevokeAccount says "Revoke key for {name}"
+// in the language the app shows.
 func ProviderRevokeAccount(name string) string { return In(i18n.Locale()).ProviderRevokeAccount(name) }
 
+// ProviderRevokeAccount says "Revoke key for {name}"
+// in the language of msgs.
 func (msgs Messages) ProviderRevokeAccount(name string) string {
 	return Catalog.Format(msgs.locale, "providerRevokeAccount", map[string]any{"name": name})
 }
 
+// ProviderDeleteAccount says "Delete {name}"
+// in the language the app shows.
 func ProviderDeleteAccount(name string) string { return In(i18n.Locale()).ProviderDeleteAccount(name) }
 
+// ProviderDeleteAccount says "Delete {name}"
+// in the language of msgs.
 func (msgs Messages) ProviderDeleteAccount(name string) string {
 	return Catalog.Format(msgs.locale, "providerDeleteAccount", map[string]any{"name": name})
 }
 
+// ProviderPreset says "Provider preset"
+// in the language the app shows.
 func ProviderPreset() string { return In(i18n.Locale()).ProviderPreset() }
 
+// ProviderPreset says "Provider preset"
+// in the language of msgs.
 func (msgs Messages) ProviderPreset() string {
 	return Catalog.Format(msgs.locale, "providerPreset", nil)
 }
 
+// ProviderCustom says "Custom"
+// in the language the app shows.
 func ProviderCustom() string { return In(i18n.Locale()).ProviderCustom() }
 
+// ProviderCustom says "Custom"
+// in the language of msgs.
 func (msgs Messages) ProviderCustom() string {
 	return Catalog.Format(msgs.locale, "providerCustom", nil)
 }
 
+// ProviderBaseURL says "Base URL"
+// in the language the app shows.
 func ProviderBaseURL() string { return In(i18n.Locale()).ProviderBaseURL() }
 
+// ProviderBaseURL says "Base URL"
+// in the language of msgs.
 func (msgs Messages) ProviderBaseURL() string {
 	return Catalog.Format(msgs.locale, "providerBaseURL", nil)
 }
 
+// ProviderKeepKey says "Saved — leave blank to keep"
+// in the language the app shows.
 func ProviderKeepKey() string { return In(i18n.Locale()).ProviderKeepKey() }
 
+// ProviderKeepKey says "Saved — leave blank to keep"
+// in the language of msgs.
 func (msgs Messages) ProviderKeepKey() string {
 	return Catalog.Format(msgs.locale, "providerKeepKey", nil)
 }
 
+// ProviderDiscovered says "Discovered models"
+// in the language the app shows.
 func ProviderDiscovered() string { return In(i18n.Locale()).ProviderDiscovered() }
 
+// ProviderDiscovered says "Discovered models"
+// in the language of msgs.
 func (msgs Messages) ProviderDiscovered() string {
 	return Catalog.Format(msgs.locale, "providerDiscovered", nil)
 }
 
+// ProviderAdditionalModels says "Additional models"
+// in the language the app shows.
 func ProviderAdditionalModels() string { return In(i18n.Locale()).ProviderAdditionalModels() }
 
+// ProviderAdditionalModels says "Additional models"
+// in the language of msgs.
 func (msgs Messages) ProviderAdditionalModels() string {
 	return Catalog.Format(msgs.locale, "providerAdditionalModels", nil)
 }
 
+// ProviderAdditionalModelsHint says "Enter model IDs separated by commas or new lines"
+// in the language the app shows.
 func ProviderAdditionalModelsHint() string { return In(i18n.Locale()).ProviderAdditionalModelsHint() }
 
+// ProviderAdditionalModelsHint says "Enter model IDs separated by commas or new lines"
+// in the language of msgs.
 func (msgs Messages) ProviderAdditionalModelsHint() string {
 	return Catalog.Format(msgs.locale, "providerAdditionalModelsHint", nil)
 }
 
+// ProviderAccountStatus says "Account status"
+// in the language the app shows.
 func ProviderAccountStatus() string { return In(i18n.Locale()).ProviderAccountStatus() }
 
+// ProviderAccountStatus says "Account status"
+// in the language of msgs.
 func (msgs Messages) ProviderAccountStatus() string {
 	return Catalog.Format(msgs.locale, "providerAccountStatus", nil)
 }
 
+// ProviderWorking says "Updating provider…"
+// in the language the app shows.
 func ProviderWorking() string { return In(i18n.Locale()).ProviderWorking() }
 
+// ProviderWorking says "Updating provider…"
+// in the language of msgs.
 func (msgs Messages) ProviderWorking() string {
 	return Catalog.Format(msgs.locale, "providerWorking", nil)
 }
 
+// ProviderProbeResult says "Connected · {count, plural, one {# model discovered} other {# models discovered}} ({latency} ms)"
+// in the language the app shows.
 func ProviderProbeResult(count int, latency string) string {
 	return In(i18n.Locale()).ProviderProbeResult(count, latency)
 }
 
+// ProviderProbeResult says "Connected · {count, plural, one {# model discovered} other {# models discovered}} ({latency} ms)"
+// in the language of msgs.
 func (msgs Messages) ProviderProbeResult(count int, latency string) string {
 	return Catalog.Format(msgs.locale, "providerProbeResult", map[string]any{"count": count, "latency": latency})
 }
 
+// ProviderTabAccounts says "Providers ({count})"
+// in the language the app shows.
 func ProviderTabAccounts(count int) string { return In(i18n.Locale()).ProviderTabAccounts(count) }
 
+// ProviderTabAccounts says "Providers ({count})"
+// in the language of msgs.
 func (msgs Messages) ProviderTabAccounts(count int) string {
 	return Catalog.Format(msgs.locale, "providerTabAccounts", map[string]any{"count": count})
 }
 
+// ProviderTabRouting says "Routing"
+// in the language the app shows.
 func ProviderTabRouting() string { return In(i18n.Locale()).ProviderTabRouting() }
 
+// ProviderTabRouting says "Routing"
+// in the language of msgs.
 func (msgs Messages) ProviderTabRouting() string {
 	return Catalog.Format(msgs.locale, "providerTabRouting", nil)
 }
 
+// ProviderPrevious says "Previous connection"
+// in the language the app shows.
 func ProviderPrevious() string { return In(i18n.Locale()).ProviderPrevious() }
 
+// ProviderPrevious says "Previous connection"
+// in the language of msgs.
 func (msgs Messages) ProviderPrevious() string {
 	return Catalog.Format(msgs.locale, "providerPrevious", nil)
 }
 
+// ProviderQuickStart says "Quick start"
+// in the language the app shows.
 func ProviderQuickStart() string { return In(i18n.Locale()).ProviderQuickStart() }
 
+// ProviderQuickStart says "Quick start"
+// in the language of msgs.
 func (msgs Messages) ProviderQuickStart() string {
 	return Catalog.Format(msgs.locale, "providerQuickStart", nil)
 }
 
+// ProviderQuickStartHint says "No providers yet · Pick a preset to connect"
+// in the language the app shows.
 func ProviderQuickStartHint() string { return In(i18n.Locale()).ProviderQuickStartHint() }
 
+// ProviderQuickStartHint says "No providers yet · Pick a preset to connect"
+// in the language of msgs.
 func (msgs Messages) ProviderQuickStartHint() string {
 	return Catalog.Format(msgs.locale, "providerQuickStartHint", nil)
 }
 
+// ProviderImportHint says "No providers yet · Import your previous connection or pick a preset"
+// in the language the app shows.
 func ProviderImportHint() string { return In(i18n.Locale()).ProviderImportHint() }
 
+// ProviderImportHint says "No providers yet · Import your previous connection or pick a preset"
+// in the language of msgs.
 func (msgs Messages) ProviderImportHint() string {
 	return Catalog.Format(msgs.locale, "providerImportHint", nil)
 }
 
+// ProviderRuntimeUnavailable says "Runtime unavailable · Provider settings are read-only"
+// in the language the app shows.
 func ProviderRuntimeUnavailable() string { return In(i18n.Locale()).ProviderRuntimeUnavailable() }
 
+// ProviderRuntimeUnavailable says "Runtime unavailable · Provider settings are read-only"
+// in the language of msgs.
 func (msgs Messages) ProviderRuntimeUnavailable() string {
 	return Catalog.Format(msgs.locale, "providerRuntimeUnavailable", nil)
 }
 
+// ProviderRoutesNeedAttention says "Some routes need attention"
+// in the language the app shows.
 func ProviderRoutesNeedAttention() string { return In(i18n.Locale()).ProviderRoutesNeedAttention() }
 
+// ProviderRoutesNeedAttention says "Some routes need attention"
+// in the language of msgs.
 func (msgs Messages) ProviderRoutesNeedAttention() string {
 	return Catalog.Format(msgs.locale, "providerRoutesNeedAttention", nil)
 }
 
+// ProviderNotSaved says "Not saved"
+// in the language the app shows.
 func ProviderNotSaved() string { return In(i18n.Locale()).ProviderNotSaved() }
 
+// ProviderNotSaved says "Not saved"
+// in the language of msgs.
 func (msgs Messages) ProviderNotSaved() string {
 	return Catalog.Format(msgs.locale, "providerNotSaved", nil)
 }
 
+// ProviderMoveUp says "Move up"
+// in the language the app shows.
 func ProviderMoveUp() string { return In(i18n.Locale()).ProviderMoveUp() }
 
+// ProviderMoveUp says "Move up"
+// in the language of msgs.
 func (msgs Messages) ProviderMoveUp() string {
 	return Catalog.Format(msgs.locale, "providerMoveUp", nil)
 }
 
+// ProviderMoveDown says "Move down"
+// in the language the app shows.
 func ProviderMoveDown() string { return In(i18n.Locale()).ProviderMoveDown() }
 
+// ProviderMoveDown says "Move down"
+// in the language of msgs.
 func (msgs Messages) ProviderMoveDown() string {
 	return Catalog.Format(msgs.locale, "providerMoveDown", nil)
 }
 
+// ProviderReorderFailed says "Could not reorder providers"
+// in the language the app shows.
 func ProviderReorderFailed() string { return In(i18n.Locale()).ProviderReorderFailed() }
 
+// ProviderReorderFailed says "Could not reorder providers"
+// in the language of msgs.
 func (msgs Messages) ProviderReorderFailed() string {
 	return Catalog.Format(msgs.locale, "providerReorderFailed", nil)
 }
 
+// ProviderDefaultModel says "Default model"
+// in the language the app shows.
 func ProviderDefaultModel() string { return In(i18n.Locale()).ProviderDefaultModel() }
 
+// ProviderDefaultModel says "Default model"
+// in the language of msgs.
 func (msgs Messages) ProviderDefaultModel() string {
 	return Catalog.Format(msgs.locale, "providerDefaultModel", nil)
 }
 
+// ProviderModelPool says "Model pool"
+// in the language the app shows.
 func ProviderModelPool() string { return In(i18n.Locale()).ProviderModelPool() }
 
+// ProviderModelPool says "Model pool"
+// in the language of msgs.
 func (msgs Messages) ProviderModelPool() string {
 	return Catalog.Format(msgs.locale, "providerModelPool", nil)
 }
 
+// ProviderAutomaticPoolHint says "Test & sync to see automatic choices, or select each model to set the pool yourself"
+// in the language the app shows.
 func ProviderAutomaticPoolHint() string { return In(i18n.Locale()).ProviderAutomaticPoolHint() }
 
+// ProviderAutomaticPoolHint says "Test & sync to see automatic choices, or select each model to set the pool yourself"
+// in the language of msgs.
 func (msgs Messages) ProviderAutomaticPoolHint() string {
 	return Catalog.Format(msgs.locale, "providerAutomaticPoolHint", nil)
 }
 
+// ProviderPickDefault says "Choose default model"
+// in the language the app shows.
 func ProviderPickDefault() string { return In(i18n.Locale()).ProviderPickDefault() }
 
+// ProviderPickDefault says "Choose default model"
+// in the language of msgs.
 func (msgs Messages) ProviderPickDefault() string {
 	return Catalog.Format(msgs.locale, "providerPickDefault", nil)
 }
 
+// ProviderToggleModel says "Enable or disable {model}"
+// in the language the app shows.
 func ProviderToggleModel(model string) string { return In(i18n.Locale()).ProviderToggleModel(model) }
 
+// ProviderToggleModel says "Enable or disable {model}"
+// in the language of msgs.
 func (msgs Messages) ProviderToggleModel(model string) string {
 	return Catalog.Format(msgs.locale, "providerToggleModel", map[string]any{"model": model})
 }
 
+// ProviderTools says "Tools"
+// in the language the app shows.
 func ProviderTools() string { return In(i18n.Locale()).ProviderTools() }
 
+// ProviderTools says "Tools"
+// in the language of msgs.
 func (msgs Messages) ProviderTools() string {
 	return Catalog.Format(msgs.locale, "providerTools", nil)
 }
 
+// ProviderNoTools says "No tool support"
+// in the language the app shows.
 func ProviderNoTools() string { return In(i18n.Locale()).ProviderNoTools() }
 
+// ProviderNoTools says "No tool support"
+// in the language of msgs.
 func (msgs Messages) ProviderNoTools() string {
 	return Catalog.Format(msgs.locale, "providerNoTools", nil)
 }
 
+// ProviderToolsUnknown says "Tool support unknown"
+// in the language the app shows.
 func ProviderToolsUnknown() string { return In(i18n.Locale()).ProviderToolsUnknown() }
 
+// ProviderToolsUnknown says "Tool support unknown"
+// in the language of msgs.
 func (msgs Messages) ProviderToolsUnknown() string {
 	return Catalog.Format(msgs.locale, "providerToolsUnknown", nil)
 }
 
+// ProviderChatUnknown says "Chat support unknown"
+// in the language the app shows.
 func ProviderChatUnknown() string { return In(i18n.Locale()).ProviderChatUnknown() }
 
+// ProviderChatUnknown says "Chat support unknown"
+// in the language of msgs.
 func (msgs Messages) ProviderChatUnknown() string {
 	return Catalog.Format(msgs.locale, "providerChatUnknown", nil)
 }
 
+// ProviderNotChat says "Non-chat model"
+// in the language the app shows.
 func ProviderNotChat() string { return In(i18n.Locale()).ProviderNotChat() }
 
+// ProviderNotChat says "Non-chat model"
+// in the language of msgs.
 func (msgs Messages) ProviderNotChat() string {
 	return Catalog.Format(msgs.locale, "providerNotChat", nil)
 }
 
+// ProviderReasoningCapability says "Reasoning"
+// in the language the app shows.
 func ProviderReasoningCapability() string { return In(i18n.Locale()).ProviderReasoningCapability() }
 
+// ProviderReasoningCapability says "Reasoning"
+// in the language of msgs.
 func (msgs Messages) ProviderReasoningCapability() string {
 	return Catalog.Format(msgs.locale, "providerReasoningCapability", nil)
 }
 
+// ProviderRecommended says "Recommended"
+// in the language the app shows.
 func ProviderRecommended() string { return In(i18n.Locale()).ProviderRecommended() }
 
+// ProviderRecommended says "Recommended"
+// in the language of msgs.
 func (msgs Messages) ProviderRecommended() string {
 	return Catalog.Format(msgs.locale, "providerRecommended", nil)
 }
 
+// ProviderPriceProtected says "Price protected"
+// in the language the app shows.
 func ProviderPriceProtected() string { return In(i18n.Locale()).ProviderPriceProtected() }
 
+// ProviderPriceProtected says "Price protected"
+// in the language of msgs.
 func (msgs Messages) ProviderPriceProtected() string {
 	return Catalog.Format(msgs.locale, "providerPriceProtected", nil)
 }
 
+// ProviderModelLimits says "{context, number} context · {output, number} output tokens"
+// in the language the app shows.
 func ProviderModelLimits(context int, output int) string {
 	return In(i18n.Locale()).ProviderModelLimits(context, output)
 }
 
+// ProviderModelLimits says "{context, number} context · {output, number} output tokens"
+// in the language of msgs.
 func (msgs Messages) ProviderModelLimits(context int, output int) string {
 	return Catalog.Format(msgs.locale, "providerModelLimits", map[string]any{"context": context, "output": output})
 }
 
+// ProviderFallbackTag says "Fallback"
+// in the language the app shows.
 func ProviderFallbackTag() string { return In(i18n.Locale()).ProviderFallbackTag() }
 
+// ProviderFallbackTag says "Fallback"
+// in the language of msgs.
 func (msgs Messages) ProviderFallbackTag() string {
 	return Catalog.Format(msgs.locale, "providerFallbackTag", nil)
 }
 
+// ProviderFallbackOnly says "Fallback only"
+// in the language the app shows.
 func ProviderFallbackOnly() string { return In(i18n.Locale()).ProviderFallbackOnly() }
 
+// ProviderFallbackOnly says "Fallback only"
+// in the language of msgs.
 func (msgs Messages) ProviderFallbackOnly() string {
 	return Catalog.Format(msgs.locale, "providerFallbackOnly", nil)
 }
 
+// ProviderUseAsBackup says "Use as backup"
+// in the language the app shows.
 func ProviderUseAsBackup() string { return In(i18n.Locale()).ProviderUseAsBackup() }
 
+// ProviderUseAsBackup says "Use as backup"
+// in the language of msgs.
 func (msgs Messages) ProviderUseAsBackup() string {
 	return Catalog.Format(msgs.locale, "providerUseAsBackup", nil)
 }
 
+// ProviderFallbackHint says "Use when primary routes are unavailable or cooling down"
+// in the language the app shows.
 func ProviderFallbackHint() string { return In(i18n.Locale()).ProviderFallbackHint() }
 
+// ProviderFallbackHint says "Use when primary routes are unavailable or cooling down"
+// in the language of msgs.
 func (msgs Messages) ProviderFallbackHint() string {
 	return Catalog.Format(msgs.locale, "providerFallbackHint", nil)
 }
 
+// ProviderRouteHealth says "Route health"
+// in the language the app shows.
 func ProviderRouteHealth() string { return In(i18n.Locale()).ProviderRouteHealth() }
 
+// ProviderRouteHealth says "Route health"
+// in the language of msgs.
 func (msgs Messages) ProviderRouteHealth() string {
 	return Catalog.Format(msgs.locale, "providerRouteHealth", nil)
 }
 
+// ProviderDegraded says "Degraded"
+// in the language the app shows.
 func ProviderDegraded() string { return In(i18n.Locale()).ProviderDegraded() }
 
+// ProviderDegraded says "Degraded"
+// in the language of msgs.
 func (msgs Messages) ProviderDegraded() string {
 	return Catalog.Format(msgs.locale, "providerDegraded", nil)
 }
 
+// ProviderCooldown says "Cooldown"
+// in the language the app shows.
 func ProviderCooldown() string { return In(i18n.Locale()).ProviderCooldown() }
 
+// ProviderCooldown says "Cooldown"
+// in the language of msgs.
 func (msgs Messages) ProviderCooldown() string {
 	return Catalog.Format(msgs.locale, "providerCooldown", nil)
 }
 
+// ProviderHalfOpen says "Ready to try again"
+// in the language the app shows.
 func ProviderHalfOpen() string { return In(i18n.Locale()).ProviderHalfOpen() }
 
+// ProviderHalfOpen says "Ready to try again"
+// in the language of msgs.
 func (msgs Messages) ProviderHalfOpen() string {
 	return Catalog.Format(msgs.locale, "providerHalfOpen", nil)
 }
 
+// ProviderUnavailable says "Unavailable"
+// in the language the app shows.
 func ProviderUnavailable() string { return In(i18n.Locale()).ProviderUnavailable() }
 
+// ProviderUnavailable says "Unavailable"
+// in the language of msgs.
 func (msgs Messages) ProviderUnavailable() string {
 	return Catalog.Format(msgs.locale, "providerUnavailable", nil)
 }
 
+// ProviderKeyRejected says "Key rejected"
+// in the language the app shows.
 func ProviderKeyRejected() string { return In(i18n.Locale()).ProviderKeyRejected() }
 
+// ProviderKeyRejected says "Key rejected"
+// in the language of msgs.
 func (msgs Messages) ProviderKeyRejected() string {
 	return Catalog.Format(msgs.locale, "providerKeyRejected", nil)
 }
 
+// ProviderFailureCount says "{count, plural, one {# failure} other {# failures}}"
+// in the language the app shows.
 func ProviderFailureCount(count int) string { return In(i18n.Locale()).ProviderFailureCount(count) }
 
+// ProviderFailureCount says "{count, plural, one {# failure} other {# failures}}"
+// in the language of msgs.
 func (msgs Messages) ProviderFailureCount(count int) string {
 	return Catalog.Format(msgs.locale, "providerFailureCount", map[string]any{"count": count})
 }
 
+// ProviderRetryAt says "Retry at {time}"
+// in the language the app shows.
 func ProviderRetryAt(time_ string) string { return In(i18n.Locale()).ProviderRetryAt(time_) }
 
+// ProviderRetryAt says "Retry at {time}"
+// in the language of msgs.
 func (msgs Messages) ProviderRetryAt(time_ string) string {
 	return Catalog.Format(msgs.locale, "providerRetryAt", map[string]any{"time": time_})
 }
 
+// ProviderPinDeleted says "The pinned provider was deleted"
+// in the language the app shows.
 func ProviderPinDeleted() string { return In(i18n.Locale()).ProviderPinDeleted() }
 
+// ProviderPinDeleted says "The pinned provider was deleted"
+// in the language of msgs.
 func (msgs Messages) ProviderPinDeleted() string {
 	return Catalog.Format(msgs.locale, "providerPinDeleted", nil)
 }
 
+// ProviderPinDisabled says "The pinned provider is disabled"
+// in the language the app shows.
 func ProviderPinDisabled() string { return In(i18n.Locale()).ProviderPinDisabled() }
 
+// ProviderPinDisabled says "The pinned provider is disabled"
+// in the language of msgs.
 func (msgs Messages) ProviderPinDisabled() string {
 	return Catalog.Format(msgs.locale, "providerPinDisabled", nil)
 }
 
+// ProviderPinRepointed says "The pinned provider’s endpoint changed"
+// in the language the app shows.
 func ProviderPinRepointed() string { return In(i18n.Locale()).ProviderPinRepointed() }
 
+// ProviderPinRepointed says "The pinned provider’s endpoint changed"
+// in the language of msgs.
 func (msgs Messages) ProviderPinRepointed() string {
 	return Catalog.Format(msgs.locale, "providerPinRepointed", nil)
 }
 
+// ProviderPinModelDisabled says "The pinned model is excluded from the pool"
+// in the language the app shows.
 func ProviderPinModelDisabled() string { return In(i18n.Locale()).ProviderPinModelDisabled() }
 
+// ProviderPinModelDisabled says "The pinned model is excluded from the pool"
+// in the language of msgs.
 func (msgs Messages) ProviderPinModelDisabled() string {
 	return Catalog.Format(msgs.locale, "providerPinModelDisabled", nil)
 }
 
+// ProviderModelIncompatible says "No model meets this role’s requirements"
+// in the language the app shows.
 func ProviderModelIncompatible() string { return In(i18n.Locale()).ProviderModelIncompatible() }
 
+// ProviderModelIncompatible says "No model meets this role’s requirements"
+// in the language of msgs.
 func (msgs Messages) ProviderModelIncompatible() string {
 	return Catalog.Format(msgs.locale, "providerModelIncompatible", nil)
 }
 
+// ProviderEmptyPool says "No eligible routes in the model pool"
+// in the language the app shows.
 func ProviderEmptyPool() string { return In(i18n.Locale()).ProviderEmptyPool() }
 
+// ProviderEmptyPool says "No eligible routes in the model pool"
+// in the language of msgs.
 func (msgs Messages) ProviderEmptyPool() string {
 	return Catalog.Format(msgs.locale, "providerEmptyPool", nil)
 }
 
+// ProviderRateLimited says "Rate limit reached"
+// in the language the app shows.
 func ProviderRateLimited() string { return In(i18n.Locale()).ProviderRateLimited() }
 
+// ProviderRateLimited says "Rate limit reached"
+// in the language of msgs.
 func (msgs Messages) ProviderRateLimited() string {
 	return Catalog.Format(msgs.locale, "providerRateLimited", nil)
 }
 
+// ProviderServiceFailure says "Provider service error"
+// in the language the app shows.
 func ProviderServiceFailure() string { return In(i18n.Locale()).ProviderServiceFailure() }
 
+// ProviderServiceFailure says "Provider service error"
+// in the language of msgs.
 func (msgs Messages) ProviderServiceFailure() string {
 	return Catalog.Format(msgs.locale, "providerServiceFailure", nil)
 }
 
+// ProviderNetworkFailure says "Endpoint could not be reached"
+// in the language the app shows.
 func ProviderNetworkFailure() string { return In(i18n.Locale()).ProviderNetworkFailure() }
 
+// ProviderNetworkFailure says "Endpoint could not be reached"
+// in the language of msgs.
 func (msgs Messages) ProviderNetworkFailure() string {
 	return Catalog.Format(msgs.locale, "providerNetworkFailure", nil)
 }
 
+// ProviderStreamFailure says "Response stream interrupted"
+// in the language the app shows.
 func ProviderStreamFailure() string { return In(i18n.Locale()).ProviderStreamFailure() }
 
+// ProviderStreamFailure says "Response stream interrupted"
+// in the language of msgs.
 func (msgs Messages) ProviderStreamFailure() string {
 	return Catalog.Format(msgs.locale, "providerStreamFailure", nil)
 }
 
+// ProviderFollowStrategy says "Auto (follow strategy)"
+// in the language the app shows.
 func ProviderFollowStrategy() string { return In(i18n.Locale()).ProviderFollowStrategy() }
 
+// ProviderFollowStrategy says "Auto (follow strategy)"
+// in the language of msgs.
 func (msgs Messages) ProviderFollowStrategy() string {
 	return Catalog.Format(msgs.locale, "providerFollowStrategy", nil)
 }
 
+// ProviderModelPinOption says "Model · {model}"
+// in the language the app shows.
 func ProviderModelPinOption(model string) string {
 	return In(i18n.Locale()).ProviderModelPinOption(model)
 }
 
+// ProviderModelPinOption says "Model · {model}"
+// in the language of msgs.
 func (msgs Messages) ProviderModelPinOption(model string) string {
 	return Catalog.Format(msgs.locale, "providerModelPinOption", map[string]any{"model": model})
 }
 
+// ProviderPinRole says "Route for {role}"
+// in the language the app shows.
 func ProviderPinRole(role string) string { return In(i18n.Locale()).ProviderPinRole(role) }
 
+// ProviderPinRole says "Route for {role}"
+// in the language of msgs.
 func (msgs Messages) ProviderPinRole(role string) string {
 	return Catalog.Format(msgs.locale, "providerPinRole", map[string]any{"role": role})
 }
 
+// ProviderPinnedUnavailable says "Pinned (unavailable)"
+// in the language the app shows.
 func ProviderPinnedUnavailable() string { return In(i18n.Locale()).ProviderPinnedUnavailable() }
 
+// ProviderPinnedUnavailable says "Pinned (unavailable)"
+// in the language of msgs.
 func (msgs Messages) ProviderPinnedUnavailable() string {
 	return Catalog.Format(msgs.locale, "providerPinnedUnavailable", nil)
 }
 
+// ProviderPinFailed says "Could not change the route pin"
+// in the language the app shows.
 func ProviderPinFailed() string { return In(i18n.Locale()).ProviderPinFailed() }
 
+// ProviderPinFailed says "Could not change the route pin"
+// in the language of msgs.
 func (msgs Messages) ProviderPinFailed() string {
 	return Catalog.Format(msgs.locale, "providerPinFailed", nil)
 }
 
+// ProviderAuto says "Auto"
+// in the language the app shows.
 func ProviderAuto() string { return In(i18n.Locale()).ProviderAuto() }
 
+// ProviderAuto says "Auto"
+// in the language of msgs.
 func (msgs Messages) ProviderAuto() string {
 	return Catalog.Format(msgs.locale, "providerAuto", nil)
 }
 
+// ProviderPinnedModel says "Pinned model"
+// in the language the app shows.
 func ProviderPinnedModel() string { return In(i18n.Locale()).ProviderPinnedModel() }
 
+// ProviderPinnedModel says "Pinned model"
+// in the language of msgs.
 func (msgs Messages) ProviderPinnedModel() string {
 	return Catalog.Format(msgs.locale, "providerPinnedModel", nil)
 }
 
+// ProviderPinnedRoute says "Pinned route"
+// in the language the app shows.
 func ProviderPinnedRoute() string { return In(i18n.Locale()).ProviderPinnedRoute() }
 
+// ProviderPinnedRoute says "Pinned route"
+// in the language of msgs.
 func (msgs Messages) ProviderPinnedRoute() string {
 	return Catalog.Format(msgs.locale, "providerPinnedRoute", nil)
 }
 
+// ProviderSameModelFailover says "Same-model failover"
+// in the language the app shows.
 func ProviderSameModelFailover() string { return In(i18n.Locale()).ProviderSameModelFailover() }
 
+// ProviderSameModelFailover says "Same-model failover"
+// in the language of msgs.
 func (msgs Messages) ProviderSameModelFailover() string {
 	return Catalog.Format(msgs.locale, "providerSameModelFailover", nil)
 }
 
+// ProviderFallbackModel says "Fallback model"
+// in the language the app shows.
 func ProviderFallbackModel() string { return In(i18n.Locale()).ProviderFallbackModel() }
 
+// ProviderFallbackModel says "Fallback model"
+// in the language of msgs.
 func (msgs Messages) ProviderFallbackModel() string {
 	return Catalog.Format(msgs.locale, "providerFallbackModel", nil)
 }
 
+// ProviderRouteUnavailable says "No route is available. Your draft was kept. Check routing in Connection & model."
+// in the language the app shows.
 func ProviderRouteUnavailable() string { return In(i18n.Locale()).ProviderRouteUnavailable() }
 
+// ProviderRouteUnavailable says "No route is available. Your draft was kept. Check routing in Connection & model."
+// in the language of msgs.
 func (msgs Messages) ProviderRouteUnavailable() string {
 	return Catalog.Format(msgs.locale, "providerRouteUnavailable", nil)
 }
 
+// ProviderRouteCoolingDown says "The route is cooling down. Your draft was kept. {retry}."
+// in the language the app shows.
 func ProviderRouteCoolingDown(retry string) string {
 	return In(i18n.Locale()).ProviderRouteCoolingDown(retry)
 }
 
+// ProviderRouteCoolingDown says "The route is cooling down. Your draft was kept. {retry}."
+// in the language of msgs.
 func (msgs Messages) ProviderRouteCoolingDown(retry string) string {
 	return Catalog.Format(msgs.locale, "providerRouteCoolingDown", map[string]any{"retry": retry})
 }
 
+// ProviderAnswerRoutePaused says "Your answer was saved. Delivery is paused until the activity’s route is available."
+// in the language the app shows.
 func ProviderAnswerRoutePaused() string { return In(i18n.Locale()).ProviderAnswerRoutePaused() }
 
+// ProviderAnswerRoutePaused says "Your answer was saved. Delivery is paused until the activity’s route is available."
+// in the language of msgs.
 func (msgs Messages) ProviderAnswerRoutePaused() string {
 	return Catalog.Format(msgs.locale, "providerAnswerRoutePaused", nil)
 }
 
+// ProviderEnabledCount says "{count, plural, one {# provider enabled} other {# providers enabled}}"
+// in the language the app shows.
 func ProviderEnabledCount(count int) string { return In(i18n.Locale()).ProviderEnabledCount(count) }
 
+// ProviderEnabledCount says "{count, plural, one {# provider enabled} other {# providers enabled}}"
+// in the language of msgs.
 func (msgs Messages) ProviderEnabledCount(count int) string {
 	return Catalog.Format(msgs.locale, "providerEnabledCount", map[string]any{"count": count})
 }
 
+// ProviderActiveCount says "{count}/4 roles active"
+// in the language the app shows.
 func ProviderActiveCount(count int) string { return In(i18n.Locale()).ProviderActiveCount(count) }
 
+// ProviderActiveCount says "{count}/4 roles active"
+// in the language of msgs.
 func (msgs Messages) ProviderActiveCount(count int) string {
 	return Catalog.Format(msgs.locale, "providerActiveCount", map[string]any{"count": count})
 }
 
+// ProviderAllApplied says "All changes applied"
+// in the language the app shows.
 func ProviderAllApplied() string { return In(i18n.Locale()).ProviderAllApplied() }
 
+// ProviderAllApplied says "All changes applied"
+// in the language of msgs.
 func (msgs Messages) ProviderAllApplied() string {
 	return Catalog.Format(msgs.locale, "providerAllApplied", nil)
 }
 
+// ProviderAddShort says "Add"
+// in the language the app shows.
 func ProviderAddShort() string { return In(i18n.Locale()).ProviderAddShort() }
 
+// ProviderAddShort says "Add"
+// in the language of msgs.
 func (msgs Messages) ProviderAddShort() string {
 	return Catalog.Format(msgs.locale, "providerAddShort", nil)
 }
 
+// ProviderToggleDisabled says "Disabled"
+// in the language the app shows.
 func ProviderToggleDisabled() string { return In(i18n.Locale()).ProviderToggleDisabled() }
 
+// ProviderToggleDisabled says "Disabled"
+// in the language of msgs.
 func (msgs Messages) ProviderToggleDisabled() string {
 	return Catalog.Format(msgs.locale, "providerToggleDisabled", nil)
 }
 
+// ProviderNoRole says "Not assigned to a role"
+// in the language the app shows.
 func ProviderNoRole() string { return In(i18n.Locale()).ProviderNoRole() }
 
+// ProviderNoRole says "Not assigned to a role"
+// in the language of msgs.
 func (msgs Messages) ProviderNoRole() string {
 	return Catalog.Format(msgs.locale, "providerNoRole", nil)
 }
 
+// ProviderLatencyReady says "{latency} ms · Ready"
+// in the language the app shows.
 func ProviderLatencyReady(latency string) string {
 	return In(i18n.Locale()).ProviderLatencyReady(latency)
 }
 
+// ProviderLatencyReady says "{latency} ms · Ready"
+// in the language of msgs.
 func (msgs Messages) ProviderLatencyReady(latency string) string {
 	return Catalog.Format(msgs.locale, "providerLatencyReady", map[string]any{"latency": latency})
 }
 
+// ProviderTestSync says "Test & sync"
+// in the language the app shows.
 func ProviderTestSync() string { return In(i18n.Locale()).ProviderTestSync() }
 
+// ProviderTestSync says "Test & sync"
+// in the language of msgs.
 func (msgs Messages) ProviderTestSync() string {
 	return Catalog.Format(msgs.locale, "providerTestSync", nil)
 }
 
+// ProviderTestDiscover says "Test & discover"
+// in the language the app shows.
 func ProviderTestDiscover() string { return In(i18n.Locale()).ProviderTestDiscover() }
 
+// ProviderTestDiscover says "Test & discover"
+// in the language of msgs.
 func (msgs Messages) ProviderTestDiscover() string {
 	return Catalog.Format(msgs.locale, "providerTestDiscover", nil)
 }
 
+// ProviderMoreModels says "+{count} more"
+// in the language the app shows.
 func ProviderMoreModels(count int) string { return In(i18n.Locale()).ProviderMoreModels(count) }
 
+// ProviderMoreModels says "+{count} more"
+// in the language of msgs.
 func (msgs Messages) ProviderMoreModels(count int) string {
 	return Catalog.Format(msgs.locale, "providerMoreModels", map[string]any{"count": count})
 }
 
+// ProviderAddHint says "Choose a preset or enter a compatible endpoint"
+// in the language the app shows.
 func ProviderAddHint() string { return In(i18n.Locale()).ProviderAddHint() }
 
+// ProviderAddHint says "Choose a preset or enter a compatible endpoint"
+// in the language of msgs.
 func (msgs Messages) ProviderAddHint() string {
 	return Catalog.Format(msgs.locale, "providerAddHint", nil)
 }
 
+// ProviderPresetResponses says "Responses"
+// in the language the app shows.
 func ProviderPresetResponses() string { return In(i18n.Locale()).ProviderPresetResponses() }
 
+// ProviderPresetResponses says "Responses"
+// in the language of msgs.
 func (msgs Messages) ProviderPresetResponses() string {
 	return Catalog.Format(msgs.locale, "providerPresetResponses", nil)
 }
 
+// ProviderPresetChat says "Chat API"
+// in the language the app shows.
 func ProviderPresetChat() string { return In(i18n.Locale()).ProviderPresetChat() }
 
+// ProviderPresetChat says "Chat API"
+// in the language of msgs.
 func (msgs Messages) ProviderPresetChat() string {
 	return Catalog.Format(msgs.locale, "providerPresetChat", nil)
 }
 
+// ProviderPresetMultiModel says "Multi-model"
+// in the language the app shows.
 func ProviderPresetMultiModel() string { return In(i18n.Locale()).ProviderPresetMultiModel() }
 
+// ProviderPresetMultiModel says "Multi-model"
+// in the language of msgs.
 func (msgs Messages) ProviderPresetMultiModel() string {
 	return Catalog.Format(msgs.locale, "providerPresetMultiModel", nil)
 }
 
+// ProviderPresetLocal says "Local"
+// in the language the app shows.
 func ProviderPresetLocal() string { return In(i18n.Locale()).ProviderPresetLocal() }
 
+// ProviderPresetLocal says "Local"
+// in the language of msgs.
 func (msgs Messages) ProviderPresetLocal() string {
 	return Catalog.Format(msgs.locale, "providerPresetLocal", nil)
 }
 
+// ProviderPresetCompatible says "Compatible API"
+// in the language the app shows.
 func ProviderPresetCompatible() string { return In(i18n.Locale()).ProviderPresetCompatible() }
 
+// ProviderPresetCompatible says "Compatible API"
+// in the language of msgs.
 func (msgs Messages) ProviderPresetCompatible() string {
 	return Catalog.Format(msgs.locale, "providerPresetCompatible", nil)
 }
 
+// ProviderAdvanced says "Advanced"
+// in the language the app shows.
 func ProviderAdvanced() string { return In(i18n.Locale()).ProviderAdvanced() }
 
+// ProviderAdvanced says "Advanced"
+// in the language of msgs.
 func (msgs Messages) ProviderAdvanced() string {
 	return Catalog.Format(msgs.locale, "providerAdvanced", nil)
 }
 
+// ProviderProtocolChatShort says "Chat"
+// in the language the app shows.
 func ProviderProtocolChatShort() string { return In(i18n.Locale()).ProviderProtocolChatShort() }
 
+// ProviderProtocolChatShort says "Chat"
+// in the language of msgs.
 func (msgs Messages) ProviderProtocolChatShort() string {
 	return Catalog.Format(msgs.locale, "providerProtocolChatShort", nil)
 }
 
+// ProviderTestFailed says "Provider test failed. Check the endpoint and key, then try again."
+// in the language the app shows.
 func ProviderTestFailed() string { return In(i18n.Locale()).ProviderTestFailed() }
 
+// ProviderTestFailed says "Provider test failed. Check the endpoint and key, then try again."
+// in the language of msgs.
 func (msgs Messages) ProviderTestFailed() string {
 	return Catalog.Format(msgs.locale, "providerTestFailed", nil)
 }
 
+// ProviderSaveFailed says "Could not save the provider. Your changes are still here."
+// in the language the app shows.
 func ProviderSaveFailed() string { return In(i18n.Locale()).ProviderSaveFailed() }
 
+// ProviderSaveFailed says "Could not save the provider. Your changes are still here."
+// in the language of msgs.
 func (msgs Messages) ProviderSaveFailed() string {
 	return Catalog.Format(msgs.locale, "providerSaveFailed", nil)
 }
 
+// ProviderApplyFailed says "Could not apply provider changes. Your saved changes are still available."
+// in the language the app shows.
 func ProviderApplyFailed() string { return In(i18n.Locale()).ProviderApplyFailed() }
 
+// ProviderApplyFailed says "Could not apply provider changes. Your saved changes are still available."
+// in the language of msgs.
 func (msgs Messages) ProviderApplyFailed() string {
 	return Catalog.Format(msgs.locale, "providerApplyFailed", nil)
 }
 
+// ProviderPolicyFailed says "Could not save the routing strategy. Try again."
+// in the language the app shows.
 func ProviderPolicyFailed() string { return In(i18n.Locale()).ProviderPolicyFailed() }
 
+// ProviderPolicyFailed says "Could not save the routing strategy. Try again."
+// in the language of msgs.
 func (msgs Messages) ProviderPolicyFailed() string {
 	return Catalog.Format(msgs.locale, "providerPolicyFailed", nil)
 }
 
+// ProviderDeleteFailed says "Could not delete the provider. Try again."
+// in the language the app shows.
 func ProviderDeleteFailed() string { return In(i18n.Locale()).ProviderDeleteFailed() }
 
+// ProviderDeleteFailed says "Could not delete the provider. Try again."
+// in the language of msgs.
 func (msgs Messages) ProviderDeleteFailed() string {
 	return Catalog.Format(msgs.locale, "providerDeleteFailed", nil)
 }
 
+// ProviderRevokeFailed says "Could not revoke the provider key. Try again."
+// in the language the app shows.
 func ProviderRevokeFailed() string { return In(i18n.Locale()).ProviderRevokeFailed() }
 
+// ProviderRevokeFailed says "Could not revoke the provider key. Try again."
+// in the language of msgs.
 func (msgs Messages) ProviderRevokeFailed() string {
 	return Catalog.Format(msgs.locale, "providerRevokeFailed", nil)
 }
 
+// ProviderStaleRevision says "Provider settings changed. Review the latest saved settings before applying."
+// in the language the app shows.
 func ProviderStaleRevision() string { return In(i18n.Locale()).ProviderStaleRevision() }
 
+// ProviderStaleRevision says "Provider settings changed. Review the latest saved settings before applying."
+// in the language of msgs.
 func (msgs Messages) ProviderStaleRevision() string {
 	return Catalog.Format(msgs.locale, "providerStaleRevision", nil)
 }
 
+// ProviderRefreshFailed says "Could not refresh the provider list. Reopen Connection to check the latest state."
+// in the language the app shows.
 func ProviderRefreshFailed() string { return In(i18n.Locale()).ProviderRefreshFailed() }
 
+// ProviderRefreshFailed says "Could not refresh the provider list. Reopen Connection to check the latest state."
+// in the language of msgs.
 func (msgs Messages) ProviderRefreshFailed() string {
 	return Catalog.Format(msgs.locale, "providerRefreshFailed", nil)
 }
 
+// ProviderNameLength says "Use 256 characters or fewer."
+// in the language the app shows.
 func ProviderNameLength() string { return In(i18n.Locale()).ProviderNameLength() }
 
+// ProviderNameLength says "Use 256 characters or fewer."
+// in the language of msgs.
 func (msgs Messages) ProviderNameLength() string {
 	return Catalog.Format(msgs.locale, "providerNameLength", nil)
 }
 
+// ProviderEndpointLength says "Use 2,048 characters or fewer."
+// in the language the app shows.
 func ProviderEndpointLength() string { return In(i18n.Locale()).ProviderEndpointLength() }
 
+// ProviderEndpointLength says "Use 2,048 characters or fewer."
+// in the language of msgs.
 func (msgs Messages) ProviderEndpointLength() string {
 	return Catalog.Format(msgs.locale, "providerEndpointLength", nil)
 }
 
+// ProviderModelLimit says "Use up to 128 model IDs, each 256 characters or fewer."
+// in the language the app shows.
 func ProviderModelLimit() string { return In(i18n.Locale()).ProviderModelLimit() }
 
+// ProviderModelLimit says "Use up to 128 model IDs, each 256 characters or fewer."
+// in the language of msgs.
 func (msgs Messages) ProviderModelLimit() string {
 	return Catalog.Format(msgs.locale, "providerModelLimit", nil)
 }
 
+// ProviderCredentialRecovery says "No applied provider has an available credential. Open Connection settings to restore a key."
+// in the language the app shows.
 func ProviderCredentialRecovery() string { return In(i18n.Locale()).ProviderCredentialRecovery() }
 
+// ProviderCredentialRecovery says "No applied provider has an available credential. Open Connection settings to restore a key."
+// in the language of msgs.
 func (msgs Messages) ProviderCredentialRecovery() string {
 	return Catalog.Format(msgs.locale, "providerCredentialRecovery", nil)
 }
 
+// ProviderSendRejected says "The provider credential for this conversation is unavailable. Your draft is preserved."
+// in the language the app shows.
 func ProviderSendRejected() string { return In(i18n.Locale()).ProviderSendRejected() }
 
+// ProviderSendRejected says "The provider credential for this conversation is unavailable. Your draft is preserved."
+// in the language of msgs.
 func (msgs Messages) ProviderSendRejected() string {
 	return Catalog.Format(msgs.locale, "providerSendRejected", nil)
 }
 
+// ProviderAnswerPaused says "Your answer was saved locally. Delivery is paused because the run’s provider credential is unavailable."
+// in the language the app shows.
 func ProviderAnswerPaused() string { return In(i18n.Locale()).ProviderAnswerPaused() }
 
+// ProviderAnswerPaused says "Your answer was saved locally. Delivery is paused because the run’s provider credential is unavailable."
+// in the language of msgs.
 func (msgs Messages) ProviderAnswerPaused() string {
 	return Catalog.Format(msgs.locale, "providerAnswerPaused", nil)
 }
 
+// ProviderConfiguredTitle says "Configured providers"
+// in the language the app shows.
 func ProviderConfiguredTitle() string { return In(i18n.Locale()).ProviderConfiguredTitle() }
 
+// ProviderConfiguredTitle says "Configured providers"
+// in the language of msgs.
 func (msgs Messages) ProviderConfiguredTitle() string {
 	return Catalog.Format(msgs.locale, "providerConfiguredTitle", nil)
 }
 
+// ProviderConfiguredSubtitle says "Ordered by priority. Select a provider to edit models and credentials."
+// in the language the app shows.
 func ProviderConfiguredSubtitle() string { return In(i18n.Locale()).ProviderConfiguredSubtitle() }
 
+// ProviderConfiguredSubtitle says "Ordered by priority. Select a provider to edit models and credentials."
+// in the language of msgs.
 func (msgs Messages) ProviderConfiguredSubtitle() string {
 	return Catalog.Format(msgs.locale, "providerConfiguredSubtitle", nil)
 }
 
+// ProviderFoldCollapse says "Collapse ▾"
+// in the language the app shows.
 func ProviderFoldCollapse() string { return In(i18n.Locale()).ProviderFoldCollapse() }
 
+// ProviderFoldCollapse says "Collapse ▾"
+// in the language of msgs.
 func (msgs Messages) ProviderFoldCollapse() string {
 	return Catalog.Format(msgs.locale, "providerFoldCollapse", nil)
 }
 
+// ProviderFoldExpand says "Expand ▸"
+// in the language the app shows.
 func ProviderFoldExpand() string { return In(i18n.Locale()).ProviderFoldExpand() }
 
+// ProviderFoldExpand says "Expand ▸"
+// in the language of msgs.
 func (msgs Messages) ProviderFoldExpand() string {
 	return Catalog.Format(msgs.locale, "providerFoldExpand", nil)
 }
 
+// ProviderFoldSummary says "{count, plural, one {Show # provider} other {Show all # providers}} ▾"
+// in the language the app shows.
 func ProviderFoldSummary(count int) string { return In(i18n.Locale()).ProviderFoldSummary(count) }
 
+// ProviderFoldSummary says "{count, plural, one {Show # provider} other {Show all # providers}} ▾"
+// in the language of msgs.
 func (msgs Messages) ProviderFoldSummary(count int) string {
 	return Catalog.Format(msgs.locale, "providerFoldSummary", map[string]any{"count": count})
 }
 
+// ProviderKeyInUse says "In use"
+// in the language the app shows.
 func ProviderKeyInUse() string { return In(i18n.Locale()).ProviderKeyInUse() }
 
+// ProviderKeyInUse says "In use"
+// in the language of msgs.
 func (msgs Messages) ProviderKeyInUse() string {
 	return Catalog.Format(msgs.locale, "providerKeyInUse", nil)
 }
 
+// ProviderReplaceKey says "Replace key"
+// in the language the app shows.
 func ProviderReplaceKey() string { return In(i18n.Locale()).ProviderReplaceKey() }
 
+// ProviderReplaceKey says "Replace key"
+// in the language of msgs.
 func (msgs Messages) ProviderReplaceKey() string {
 	return Catalog.Format(msgs.locale, "providerReplaceKey", nil)
 }
 
+// ProviderOptionalKey says "Optional for local servers"
+// in the language the app shows.
 func ProviderOptionalKey() string { return In(i18n.Locale()).ProviderOptionalKey() }
 
+// ProviderOptionalKey says "Optional for local servers"
+// in the language of msgs.
 func (msgs Messages) ProviderOptionalKey() string {
 	return Catalog.Format(msgs.locale, "providerOptionalKey", nil)
 }
 
+// ProviderSelectAll says "Select all"
+// in the language the app shows.
 func ProviderSelectAll() string { return In(i18n.Locale()).ProviderSelectAll() }
 
+// ProviderSelectAll says "Select all"
+// in the language of msgs.
 func (msgs Messages) ProviderSelectAll() string {
 	return Catalog.Format(msgs.locale, "providerSelectAll", nil)
 }
 
+// ProviderSelectNone says "Select none"
+// in the language the app shows.
 func ProviderSelectNone() string { return In(i18n.Locale()).ProviderSelectNone() }
 
+// ProviderSelectNone says "Select none"
+// in the language of msgs.
 func (msgs Messages) ProviderSelectNone() string {
 	return Catalog.Format(msgs.locale, "providerSelectNone", nil)
 }
 
+// ProviderAddModel says "Add model"
+// in the language the app shows.
 func ProviderAddModel() string { return In(i18n.Locale()).ProviderAddModel() }
 
+// ProviderAddModel says "Add model"
+// in the language of msgs.
 func (msgs Messages) ProviderAddModel() string {
 	return Catalog.Format(msgs.locale, "providerAddModel", nil)
 }
 
+// ProviderAddModelPlaceholder says "Enter a custom model ID"
+// in the language the app shows.
 func ProviderAddModelPlaceholder() string { return In(i18n.Locale()).ProviderAddModelPlaceholder() }
 
+// ProviderAddModelPlaceholder says "Enter a custom model ID"
+// in the language of msgs.
 func (msgs Messages) ProviderAddModelPlaceholder() string {
 	return Catalog.Format(msgs.locale, "providerAddModelPlaceholder", nil)
 }
 
+// ProviderAddAnother says "Add another {name}"
+// in the language the app shows.
 func ProviderAddAnother(name string) string { return In(i18n.Locale()).ProviderAddAnother(name) }
 
+// ProviderAddAnother says "Add another {name}"
+// in the language of msgs.
 func (msgs Messages) ProviderAddAnother(name string) string {
 	return Catalog.Format(msgs.locale, "providerAddAnother", map[string]any{"name": name})
 }
@@ -9846,16 +10506,24 @@ func (msgs Messages) ProviderV2ImportAction() string {
 	return Catalog.Format(msgs.locale, "providerV2ImportAction", nil)
 }
 
+// ProviderEnabledModelsCount says "{count, plural, one {# enabled model} other {# enabled models}}"
+// in the language the app shows.
 func ProviderEnabledModelsCount(count int) string {
 	return In(i18n.Locale()).ProviderEnabledModelsCount(count)
 }
 
+// ProviderEnabledModelsCount says "{count, plural, one {# enabled model} other {# enabled models}}"
+// in the language of msgs.
 func (msgs Messages) ProviderEnabledModelsCount(count int) string {
 	return Catalog.Format(msgs.locale, "providerEnabledModelsCount", map[string]any{"count": count})
 }
 
+// ProviderRoutingSubtitle says "Choose automatic routing or pin a model for each role"
+// in the language the app shows.
 func ProviderRoutingSubtitle() string { return In(i18n.Locale()).ProviderRoutingSubtitle() }
 
+// ProviderRoutingSubtitle says "Choose automatic routing or pin a model for each role"
+// in the language of msgs.
 func (msgs Messages) ProviderRoutingSubtitle() string {
 	return Catalog.Format(msgs.locale, "providerRoutingSubtitle", nil)
 }
@@ -11382,4 +12050,898 @@ func CapMcpProbeResult(count int, latency string) string {
 // in the language of msgs.
 func (msgs Messages) CapMcpProbeResult(count int, latency string) string {
 	return Catalog.Format(msgs.locale, "capMcpProbeResult", map[string]any{"count": count, "latency": latency})
+}
+
+// SessionInspectTitle says "Sessions"
+// in the language the app shows.
+func SessionInspectTitle() string { return In(i18n.Locale()).SessionInspectTitle() }
+
+// SessionInspectTitle says "Sessions"
+// in the language of msgs.
+func (msgs Messages) SessionInspectTitle() string {
+	return Catalog.Format(msgs.locale, "sessionInspectTitle", nil)
+}
+
+// SessionInspectBack says "Back"
+// in the language the app shows.
+func SessionInspectBack() string { return In(i18n.Locale()).SessionInspectBack() }
+
+// SessionInspectBack says "Back"
+// in the language of msgs.
+func (msgs Messages) SessionInspectBack() string {
+	return Catalog.Format(msgs.locale, "sessionInspectBack", nil)
+}
+
+// SessionInspectReload says "Reload"
+// in the language the app shows.
+func SessionInspectReload() string { return In(i18n.Locale()).SessionInspectReload() }
+
+// SessionInspectReload says "Reload"
+// in the language of msgs.
+func (msgs Messages) SessionInspectReload() string {
+	return Catalog.Format(msgs.locale, "sessionInspectReload", nil)
+}
+
+// SessionInspectLoadMore says "Load more"
+// in the language the app shows.
+func SessionInspectLoadMore() string { return In(i18n.Locale()).SessionInspectLoadMore() }
+
+// SessionInspectLoadMore says "Load more"
+// in the language of msgs.
+func (msgs Messages) SessionInspectLoadMore() string {
+	return Catalog.Format(msgs.locale, "sessionInspectLoadMore", nil)
+}
+
+// SessionInspectPreviousPage says "Previous page"
+// in the language the app shows.
+func SessionInspectPreviousPage() string { return In(i18n.Locale()).SessionInspectPreviousPage() }
+
+// SessionInspectPreviousPage says "Previous page"
+// in the language of msgs.
+func (msgs Messages) SessionInspectPreviousPage() string {
+	return Catalog.Format(msgs.locale, "sessionInspectPreviousPage", nil)
+}
+
+// SessionInspectLoadingList says "Loading sessions…"
+// in the language the app shows.
+func SessionInspectLoadingList() string { return In(i18n.Locale()).SessionInspectLoadingList() }
+
+// SessionInspectLoadingList says "Loading sessions…"
+// in the language of msgs.
+func (msgs Messages) SessionInspectLoadingList() string {
+	return Catalog.Format(msgs.locale, "sessionInspectLoadingList", nil)
+}
+
+// SessionInspectEmptyList says "This Bot has no sessions yet."
+// in the language the app shows.
+func SessionInspectEmptyList() string { return In(i18n.Locale()).SessionInspectEmptyList() }
+
+// SessionInspectEmptyList says "This Bot has no sessions yet."
+// in the language of msgs.
+func (msgs Messages) SessionInspectEmptyList() string {
+	return Catalog.Format(msgs.locale, "sessionInspectEmptyList", nil)
+}
+
+// SessionInspectListError says "Couldn’t load sessions. Reload to try again."
+// in the language the app shows.
+func SessionInspectListError() string { return In(i18n.Locale()).SessionInspectListError() }
+
+// SessionInspectListError says "Couldn’t load sessions. Reload to try again."
+// in the language of msgs.
+func (msgs Messages) SessionInspectListError() string {
+	return Catalog.Format(msgs.locale, "sessionInspectListError", nil)
+}
+
+// SessionInspectLoadingDetail says "Loading session details…"
+// in the language the app shows.
+func SessionInspectLoadingDetail() string { return In(i18n.Locale()).SessionInspectLoadingDetail() }
+
+// SessionInspectLoadingDetail says "Loading session details…"
+// in the language of msgs.
+func (msgs Messages) SessionInspectLoadingDetail() string {
+	return Catalog.Format(msgs.locale, "sessionInspectLoadingDetail", nil)
+}
+
+// SessionInspectDetailError says "Couldn’t load session details. Reload to try again."
+// in the language the app shows.
+func SessionInspectDetailError() string { return In(i18n.Locale()).SessionInspectDetailError() }
+
+// SessionInspectDetailError says "Couldn’t load session details. Reload to try again."
+// in the language of msgs.
+func (msgs Messages) SessionInspectDetailError() string {
+	return Catalog.Format(msgs.locale, "sessionInspectDetailError", nil)
+}
+
+// SessionInspectSession says "Session"
+// in the language the app shows.
+func SessionInspectSession() string { return In(i18n.Locale()).SessionInspectSession() }
+
+// SessionInspectSession says "Session"
+// in the language of msgs.
+func (msgs Messages) SessionInspectSession() string {
+	return Catalog.Format(msgs.locale, "sessionInspectSession", nil)
+}
+
+// SessionInspectStarting says "Starting"
+// in the language the app shows.
+func SessionInspectStarting() string { return In(i18n.Locale()).SessionInspectStarting() }
+
+// SessionInspectStarting says "Starting"
+// in the language of msgs.
+func (msgs Messages) SessionInspectStarting() string {
+	return Catalog.Format(msgs.locale, "sessionInspectStarting", nil)
+}
+
+// SessionInspectRunning says "Running"
+// in the language the app shows.
+func SessionInspectRunning() string { return In(i18n.Locale()).SessionInspectRunning() }
+
+// SessionInspectRunning says "Running"
+// in the language of msgs.
+func (msgs Messages) SessionInspectRunning() string {
+	return Catalog.Format(msgs.locale, "sessionInspectRunning", nil)
+}
+
+// SessionInspectExited says "Exited"
+// in the language the app shows.
+func SessionInspectExited() string { return In(i18n.Locale()).SessionInspectExited() }
+
+// SessionInspectExited says "Exited"
+// in the language of msgs.
+func (msgs Messages) SessionInspectExited() string {
+	return Catalog.Format(msgs.locale, "sessionInspectExited", nil)
+}
+
+// SessionInspectClosed says "Closed"
+// in the language the app shows.
+func SessionInspectClosed() string { return In(i18n.Locale()).SessionInspectClosed() }
+
+// SessionInspectClosed says "Closed"
+// in the language of msgs.
+func (msgs Messages) SessionInspectClosed() string {
+	return Catalog.Format(msgs.locale, "sessionInspectClosed", nil)
+}
+
+// SessionInspectDisconnected says "Disconnected"
+// in the language the app shows.
+func SessionInspectDisconnected() string { return In(i18n.Locale()).SessionInspectDisconnected() }
+
+// SessionInspectDisconnected says "Disconnected"
+// in the language of msgs.
+func (msgs Messages) SessionInspectDisconnected() string {
+	return Catalog.Format(msgs.locale, "sessionInspectDisconnected", nil)
+}
+
+// SessionInspectFailed says "Failed"
+// in the language the app shows.
+func SessionInspectFailed() string { return In(i18n.Locale()).SessionInspectFailed() }
+
+// SessionInspectFailed says "Failed"
+// in the language of msgs.
+func (msgs Messages) SessionInspectFailed() string {
+	return Catalog.Format(msgs.locale, "sessionInspectFailed", nil)
+}
+
+// SessionInspectReadOnly says "Read-only session history"
+// in the language the app shows.
+func SessionInspectReadOnly() string { return In(i18n.Locale()).SessionInspectReadOnly() }
+
+// SessionInspectReadOnly says "Read-only session history"
+// in the language of msgs.
+func (msgs Messages) SessionInspectReadOnly() string {
+	return Catalog.Format(msgs.locale, "sessionInspectReadOnly", nil)
+}
+
+// SessionInspectSourceChat says "Source chat"
+// in the language the app shows.
+func SessionInspectSourceChat() string { return In(i18n.Locale()).SessionInspectSourceChat() }
+
+// SessionInspectSourceChat says "Source chat"
+// in the language of msgs.
+func (msgs Messages) SessionInspectSourceChat() string {
+	return Catalog.Format(msgs.locale, "sessionInspectSourceChat", nil)
+}
+
+// SessionInspectSourceActivity says "Source activity"
+// in the language the app shows.
+func SessionInspectSourceActivity() string { return In(i18n.Locale()).SessionInspectSourceActivity() }
+
+// SessionInspectSourceActivity says "Source activity"
+// in the language of msgs.
+func (msgs Messages) SessionInspectSourceActivity() string {
+	return Catalog.Format(msgs.locale, "sessionInspectSourceActivity", nil)
+}
+
+// SessionInspectCommand says "Command"
+// in the language the app shows.
+func SessionInspectCommand() string { return In(i18n.Locale()).SessionInspectCommand() }
+
+// SessionInspectCommand says "Command"
+// in the language of msgs.
+func (msgs Messages) SessionInspectCommand() string {
+	return Catalog.Format(msgs.locale, "sessionInspectCommand", nil)
+}
+
+// SessionInspectDirectory says "Working directory"
+// in the language the app shows.
+func SessionInspectDirectory() string { return In(i18n.Locale()).SessionInspectDirectory() }
+
+// SessionInspectDirectory says "Working directory"
+// in the language of msgs.
+func (msgs Messages) SessionInspectDirectory() string {
+	return Catalog.Format(msgs.locale, "sessionInspectDirectory", nil)
+}
+
+// SessionInspectMode says "Mode"
+// in the language the app shows.
+func SessionInspectMode() string { return In(i18n.Locale()).SessionInspectMode() }
+
+// SessionInspectMode says "Mode"
+// in the language of msgs.
+func (msgs Messages) SessionInspectMode() string {
+	return Catalog.Format(msgs.locale, "sessionInspectMode", nil)
+}
+
+// SessionInspectPty says "PTY"
+// in the language the app shows.
+func SessionInspectPty() string { return In(i18n.Locale()).SessionInspectPty() }
+
+// SessionInspectPty says "PTY"
+// in the language of msgs.
+func (msgs Messages) SessionInspectPty() string {
+	return Catalog.Format(msgs.locale, "sessionInspectPty", nil)
+}
+
+// SessionInspectPipe says "Pipe"
+// in the language the app shows.
+func SessionInspectPipe() string { return In(i18n.Locale()).SessionInspectPipe() }
+
+// SessionInspectPipe says "Pipe"
+// in the language of msgs.
+func (msgs Messages) SessionInspectPipe() string {
+	return Catalog.Format(msgs.locale, "sessionInspectPipe", nil)
+}
+
+// SessionInspectSize says "Terminal size"
+// in the language the app shows.
+func SessionInspectSize() string { return In(i18n.Locale()).SessionInspectSize() }
+
+// SessionInspectSize says "Terminal size"
+// in the language of msgs.
+func (msgs Messages) SessionInspectSize() string {
+	return Catalog.Format(msgs.locale, "sessionInspectSize", nil)
+}
+
+// SessionInspectDimensions says "{cols} × {rows}"
+// in the language the app shows.
+func SessionInspectDimensions(cols int, rows int) string {
+	return In(i18n.Locale()).SessionInspectDimensions(cols, rows)
+}
+
+// SessionInspectDimensions says "{cols} × {rows}"
+// in the language of msgs.
+func (msgs Messages) SessionInspectDimensions(cols int, rows int) string {
+	return Catalog.Format(msgs.locale, "sessionInspectDimensions", map[string]any{"cols": cols, "rows": rows})
+}
+
+// SessionInspectExitCode says "Exit code"
+// in the language the app shows.
+func SessionInspectExitCode() string { return In(i18n.Locale()).SessionInspectExitCode() }
+
+// SessionInspectExitCode says "Exit code"
+// in the language of msgs.
+func (msgs Messages) SessionInspectExitCode() string {
+	return Catalog.Format(msgs.locale, "sessionInspectExitCode", nil)
+}
+
+// SessionInspectExitSignal says "Exit signal"
+// in the language the app shows.
+func SessionInspectExitSignal() string { return In(i18n.Locale()).SessionInspectExitSignal() }
+
+// SessionInspectExitSignal says "Exit signal"
+// in the language of msgs.
+func (msgs Messages) SessionInspectExitSignal() string {
+	return Catalog.Format(msgs.locale, "sessionInspectExitSignal", nil)
+}
+
+// SessionInspectTransport says "Transport"
+// in the language the app shows.
+func SessionInspectTransport() string { return In(i18n.Locale()).SessionInspectTransport() }
+
+// SessionInspectTransport says "Transport"
+// in the language of msgs.
+func (msgs Messages) SessionInspectTransport() string {
+	return Catalog.Format(msgs.locale, "sessionInspectTransport", nil)
+}
+
+// SessionInspectLive says "Connected"
+// in the language the app shows.
+func SessionInspectLive() string { return In(i18n.Locale()).SessionInspectLive() }
+
+// SessionInspectLive says "Connected"
+// in the language of msgs.
+func (msgs Messages) SessionInspectLive() string {
+	return Catalog.Format(msgs.locale, "sessionInspectLive", nil)
+}
+
+// SessionInspectEof says "Output ended"
+// in the language the app shows.
+func SessionInspectEof() string { return In(i18n.Locale()).SessionInspectEof() }
+
+// SessionInspectEof says "Output ended"
+// in the language of msgs.
+func (msgs Messages) SessionInspectEof() string {
+	return Catalog.Format(msgs.locale, "sessionInspectEof", nil)
+}
+
+// SessionInspectTransportEOF says "Stream closed"
+// in the language the app shows.
+func SessionInspectTransportEOF() string { return In(i18n.Locale()).SessionInspectTransportEOF() }
+
+// SessionInspectTransportEOF says "Stream closed"
+// in the language of msgs.
+func (msgs Messages) SessionInspectTransportEOF() string {
+	return Catalog.Format(msgs.locale, "sessionInspectTransportEOF", nil)
+}
+
+// SessionInspectSupervisorLost says "Supervisor disconnected"
+// in the language the app shows.
+func SessionInspectSupervisorLost() string { return In(i18n.Locale()).SessionInspectSupervisorLost() }
+
+// SessionInspectSupervisorLost says "Supervisor disconnected"
+// in the language of msgs.
+func (msgs Messages) SessionInspectSupervisorLost() string {
+	return Catalog.Format(msgs.locale, "sessionInspectSupervisorLost", nil)
+}
+
+// SessionInspectWorkerRestarted says "Worker restarted"
+// in the language the app shows.
+func SessionInspectWorkerRestarted() string { return In(i18n.Locale()).SessionInspectWorkerRestarted() }
+
+// SessionInspectWorkerRestarted says "Worker restarted"
+// in the language of msgs.
+func (msgs Messages) SessionInspectWorkerRestarted() string {
+	return Catalog.Format(msgs.locale, "sessionInspectWorkerRestarted", nil)
+}
+
+// SessionInspectClosedByUser says "Closed by you"
+// in the language the app shows.
+func SessionInspectClosedByUser() string { return In(i18n.Locale()).SessionInspectClosedByUser() }
+
+// SessionInspectClosedByUser says "Closed by you"
+// in the language of msgs.
+func (msgs Messages) SessionInspectClosedByUser() string {
+	return Catalog.Format(msgs.locale, "sessionInspectClosedByUser", nil)
+}
+
+// SessionInspectClosedByBot says "Closed by the Bot"
+// in the language the app shows.
+func SessionInspectClosedByBot() string { return In(i18n.Locale()).SessionInspectClosedByBot() }
+
+// SessionInspectClosedByBot says "Closed by the Bot"
+// in the language of msgs.
+func (msgs Messages) SessionInspectClosedByBot() string {
+	return Catalog.Format(msgs.locale, "sessionInspectClosedByBot", nil)
+}
+
+// SessionInspectClosedOnShutdown says "Closed on shutdown"
+// in the language the app shows.
+func SessionInspectClosedOnShutdown() string {
+	return In(i18n.Locale()).SessionInspectClosedOnShutdown()
+}
+
+// SessionInspectClosedOnShutdown says "Closed on shutdown"
+// in the language of msgs.
+func (msgs Messages) SessionInspectClosedOnShutdown() string {
+	return Catalog.Format(msgs.locale, "sessionInspectClosedOnShutdown", nil)
+}
+
+// SessionInspectExecFailed says "Couldn’t start the process"
+// in the language the app shows.
+func SessionInspectExecFailed() string { return In(i18n.Locale()).SessionInspectExecFailed() }
+
+// SessionInspectExecFailed says "Couldn’t start the process"
+// in the language of msgs.
+func (msgs Messages) SessionInspectExecFailed() string {
+	return Catalog.Format(msgs.locale, "sessionInspectExecFailed", nil)
+}
+
+// SessionInspectOutput says "Output"
+// in the language the app shows.
+func SessionInspectOutput() string { return In(i18n.Locale()).SessionInspectOutput() }
+
+// SessionInspectOutput says "Output"
+// in the language of msgs.
+func (msgs Messages) SessionInspectOutput() string {
+	return Catalog.Format(msgs.locale, "sessionInspectOutput", nil)
+}
+
+// SessionInspectStdout says "stdout"
+// in the language the app shows.
+func SessionInspectStdout() string { return In(i18n.Locale()).SessionInspectStdout() }
+
+// SessionInspectStdout says "stdout"
+// in the language of msgs.
+func (msgs Messages) SessionInspectStdout() string {
+	return Catalog.Format(msgs.locale, "sessionInspectStdout", nil)
+}
+
+// SessionInspectStderr says "stderr"
+// in the language the app shows.
+func SessionInspectStderr() string { return In(i18n.Locale()).SessionInspectStderr() }
+
+// SessionInspectStderr says "stderr"
+// in the language of msgs.
+func (msgs Messages) SessionInspectStderr() string {
+	return Catalog.Format(msgs.locale, "sessionInspectStderr", nil)
+}
+
+// SessionInspectReading says "Reading output…"
+// in the language the app shows.
+func SessionInspectReading() string { return In(i18n.Locale()).SessionInspectReading() }
+
+// SessionInspectReading says "Reading output…"
+// in the language of msgs.
+func (msgs Messages) SessionInspectReading() string {
+	return Catalog.Format(msgs.locale, "sessionInspectReading", nil)
+}
+
+// SessionInspectEmptyOutput says "No output yet."
+// in the language the app shows.
+func SessionInspectEmptyOutput() string { return In(i18n.Locale()).SessionInspectEmptyOutput() }
+
+// SessionInspectEmptyOutput says "No output yet."
+// in the language of msgs.
+func (msgs Messages) SessionInspectEmptyOutput() string {
+	return Catalog.Format(msgs.locale, "sessionInspectEmptyOutput", nil)
+}
+
+// SessionInspectOutputError says "Couldn’t read output. Reload to try again."
+// in the language the app shows.
+func SessionInspectOutputError() string { return In(i18n.Locale()).SessionInspectOutputError() }
+
+// SessionInspectOutputError says "Couldn’t read output. Reload to try again."
+// in the language of msgs.
+func (msgs Messages) SessionInspectOutputError() string {
+	return Catalog.Format(msgs.locale, "sessionInspectOutputError", nil)
+}
+
+// SessionInspectOutputGap says "{bytes} bytes of earlier output are unavailable."
+// in the language the app shows.
+func SessionInspectOutputGap(bytes string) string {
+	return In(i18n.Locale()).SessionInspectOutputGap(bytes)
+}
+
+// SessionInspectOutputGap says "{bytes} bytes of earlier output are unavailable."
+// in the language of msgs.
+func (msgs Messages) SessionInspectOutputGap(bytes string) string {
+	return Catalog.Format(msgs.locale, "sessionInspectOutputGap", map[string]any{"bytes": bytes})
+}
+
+// SessionInspectHostDisconnected says "The session host is disconnected. Available history is read-only."
+// in the language the app shows.
+func SessionInspectHostDisconnected() string {
+	return In(i18n.Locale()).SessionInspectHostDisconnected()
+}
+
+// SessionInspectHostDisconnected says "The session host is disconnected. Available history is read-only."
+// in the language of msgs.
+func (msgs Messages) SessionInspectHostDisconnected() string {
+	return Catalog.Format(msgs.locale, "sessionInspectHostDisconnected", nil)
+}
+
+// SessionInspectEarlierOutput says "Earlier output"
+// in the language the app shows.
+func SessionInspectEarlierOutput() string { return In(i18n.Locale()).SessionInspectEarlierOutput() }
+
+// SessionInspectEarlierOutput says "Earlier output"
+// in the language of msgs.
+func (msgs Messages) SessionInspectEarlierOutput() string {
+	return Catalog.Format(msgs.locale, "sessionInspectEarlierOutput", nil)
+}
+
+// SessionInspectLaterOutput says "Later output"
+// in the language the app shows.
+func SessionInspectLaterOutput() string { return In(i18n.Locale()).SessionInspectLaterOutput() }
+
+// SessionInspectLaterOutput says "Later output"
+// in the language of msgs.
+func (msgs Messages) SessionInspectLaterOutput() string {
+	return Catalog.Format(msgs.locale, "sessionInspectLaterOutput", nil)
+}
+
+// SessionInspectLatestOutput says "Latest output"
+// in the language the app shows.
+func SessionInspectLatestOutput() string { return In(i18n.Locale()).SessionInspectLatestOutput() }
+
+// SessionInspectLatestOutput says "Latest output"
+// in the language of msgs.
+func (msgs Messages) SessionInspectLatestOutput() string {
+	return Catalog.Format(msgs.locale, "sessionInspectLatestOutput", nil)
+}
+
+// SessionInspectNewOutput says "New output is available."
+// in the language the app shows.
+func SessionInspectNewOutput() string { return In(i18n.Locale()).SessionInspectNewOutput() }
+
+// SessionInspectNewOutput says "New output is available."
+// in the language of msgs.
+func (msgs Messages) SessionInspectNewOutput() string {
+	return Catalog.Format(msgs.locale, "sessionInspectNewOutput", nil)
+}
+
+// SessionInspectAuthPaused says "Waiting for external authentication"
+// in the language the app shows.
+func SessionInspectAuthPaused() string { return In(i18n.Locale()).SessionInspectAuthPaused() }
+
+// SessionInspectAuthPaused says "Waiting for external authentication"
+// in the language of msgs.
+func (msgs Messages) SessionInspectAuthPaused() string {
+	return Catalog.Format(msgs.locale, "sessionInspectAuthPaused", nil)
+}
+
+// SessionInspectAuthPrompt says "The process asked for authentication."
+// in the language the app shows.
+func SessionInspectAuthPrompt() string { return In(i18n.Locale()).SessionInspectAuthPrompt() }
+
+// SessionInspectAuthPrompt says "The process asked for authentication."
+// in the language of msgs.
+func (msgs Messages) SessionInspectAuthPrompt() string {
+	return Catalog.Format(msgs.locale, "sessionInspectAuthPrompt", nil)
+}
+
+// SessionInspectCanonicalNoEcho says "The process is waiting for hidden terminal input."
+// in the language the app shows.
+func SessionInspectCanonicalNoEcho() string { return In(i18n.Locale()).SessionInspectCanonicalNoEcho() }
+
+// SessionInspectCanonicalNoEcho says "The process is waiting for hidden terminal input."
+// in the language of msgs.
+func (msgs Messages) SessionInspectCanonicalNoEcho() string {
+	return Catalog.Format(msgs.locale, "sessionInspectCanonicalNoEcho", nil)
+}
+
+// SessionInspectAuthAction says "Complete authentication outside Nagi or kill this session."
+// in the language the app shows.
+func SessionInspectAuthAction() string { return In(i18n.Locale()).SessionInspectAuthAction() }
+
+// SessionInspectAuthAction says "Complete authentication outside Nagi or kill this session."
+// in the language of msgs.
+func (msgs Messages) SessionInspectAuthAction() string {
+	return Catalog.Format(msgs.locale, "sessionInspectAuthAction", nil)
+}
+
+// SessionInspectWatches says "Watches"
+// in the language the app shows.
+func SessionInspectWatches() string { return In(i18n.Locale()).SessionInspectWatches() }
+
+// SessionInspectWatches says "Watches"
+// in the language of msgs.
+func (msgs Messages) SessionInspectWatches() string {
+	return Catalog.Format(msgs.locale, "sessionInspectWatches", nil)
+}
+
+// SessionInspectNoWatches says "No watches for this run."
+// in the language the app shows.
+func SessionInspectNoWatches() string { return In(i18n.Locale()).SessionInspectNoWatches() }
+
+// SessionInspectNoWatches says "No watches for this run."
+// in the language of msgs.
+func (msgs Messages) SessionInspectNoWatches() string {
+	return Catalog.Format(msgs.locale, "sessionInspectNoWatches", nil)
+}
+
+// SessionInspectArmed says "Armed"
+// in the language the app shows.
+func SessionInspectArmed() string { return In(i18n.Locale()).SessionInspectArmed() }
+
+// SessionInspectArmed says "Armed"
+// in the language of msgs.
+func (msgs Messages) SessionInspectArmed() string {
+	return Catalog.Format(msgs.locale, "sessionInspectArmed", nil)
+}
+
+// SessionInspectFired says "Fired"
+// in the language the app shows.
+func SessionInspectFired() string { return In(i18n.Locale()).SessionInspectFired() }
+
+// SessionInspectFired says "Fired"
+// in the language of msgs.
+func (msgs Messages) SessionInspectFired() string {
+	return Catalog.Format(msgs.locale, "sessionInspectFired", nil)
+}
+
+// SessionInspectCancelled says "Cancelled"
+// in the language the app shows.
+func SessionInspectCancelled() string { return In(i18n.Locale()).SessionInspectCancelled() }
+
+// SessionInspectCancelled says "Cancelled"
+// in the language of msgs.
+func (msgs Messages) SessionInspectCancelled() string {
+	return Catalog.Format(msgs.locale, "sessionInspectCancelled", nil)
+}
+
+// SessionInspectTargetLost says "Target lost"
+// in the language the app shows.
+func SessionInspectTargetLost() string { return In(i18n.Locale()).SessionInspectTargetLost() }
+
+// SessionInspectTargetLost says "Target lost"
+// in the language of msgs.
+func (msgs Messages) SessionInspectTargetLost() string {
+	return Catalog.Format(msgs.locale, "sessionInspectTargetLost", nil)
+}
+
+// SessionInspectConditions says "Conditions"
+// in the language the app shows.
+func SessionInspectConditions() string { return In(i18n.Locale()).SessionInspectConditions() }
+
+// SessionInspectConditions says "Conditions"
+// in the language of msgs.
+func (msgs Messages) SessionInspectConditions() string {
+	return Catalog.Format(msgs.locale, "sessionInspectConditions", nil)
+}
+
+// SessionInspectExit says "Process exit"
+// in the language the app shows.
+func SessionInspectExit() string { return In(i18n.Locale()).SessionInspectExit() }
+
+// SessionInspectExit says "Process exit"
+// in the language of msgs.
+func (msgs Messages) SessionInspectExit() string {
+	return Catalog.Format(msgs.locale, "sessionInspectExit", nil)
+}
+
+// SessionInspectMatch says "Text match"
+// in the language the app shows.
+func SessionInspectMatch() string { return In(i18n.Locale()).SessionInspectMatch() }
+
+// SessionInspectMatch says "Text match"
+// in the language of msgs.
+func (msgs Messages) SessionInspectMatch() string {
+	return Catalog.Format(msgs.locale, "sessionInspectMatch", nil)
+}
+
+// SessionInspectIdle says "Idle"
+// in the language the app shows.
+func SessionInspectIdle() string { return In(i18n.Locale()).SessionInspectIdle() }
+
+// SessionInspectIdle says "Idle"
+// in the language of msgs.
+func (msgs Messages) SessionInspectIdle() string {
+	return Catalog.Format(msgs.locale, "sessionInspectIdle", nil)
+}
+
+// SessionInspectTimeout says "Timeout"
+// in the language the app shows.
+func SessionInspectTimeout() string { return In(i18n.Locale()).SessionInspectTimeout() }
+
+// SessionInspectTimeout says "Timeout"
+// in the language of msgs.
+func (msgs Messages) SessionInspectTimeout() string {
+	return Catalog.Format(msgs.locale, "sessionInspectTimeout", nil)
+}
+
+// SessionInspectMatchLiteral says "Match text"
+// in the language the app shows.
+func SessionInspectMatchLiteral() string { return In(i18n.Locale()).SessionInspectMatchLiteral() }
+
+// SessionInspectMatchLiteral says "Match text"
+// in the language of msgs.
+func (msgs Messages) SessionInspectMatchLiteral() string {
+	return Catalog.Format(msgs.locale, "sessionInspectMatchLiteral", nil)
+}
+
+// SessionInspectIdleTime says "Idle threshold"
+// in the language the app shows.
+func SessionInspectIdleTime() string { return In(i18n.Locale()).SessionInspectIdleTime() }
+
+// SessionInspectIdleTime says "Idle threshold"
+// in the language of msgs.
+func (msgs Messages) SessionInspectIdleTime() string {
+	return Catalog.Format(msgs.locale, "sessionInspectIdleTime", nil)
+}
+
+// SessionInspectTimeoutTime says "Timeout"
+// in the language the app shows.
+func SessionInspectTimeoutTime() string { return In(i18n.Locale()).SessionInspectTimeoutTime() }
+
+// SessionInspectTimeoutTime says "Timeout"
+// in the language of msgs.
+func (msgs Messages) SessionInspectTimeoutTime() string {
+	return Catalog.Format(msgs.locale, "sessionInspectTimeoutTime", nil)
+}
+
+// SessionInspectMilliseconds says "{time} ms"
+// in the language the app shows.
+func SessionInspectMilliseconds(time_ string) string {
+	return In(i18n.Locale()).SessionInspectMilliseconds(time_)
+}
+
+// SessionInspectMilliseconds says "{time} ms"
+// in the language of msgs.
+func (msgs Messages) SessionInspectMilliseconds(time_ string) string {
+	return Catalog.Format(msgs.locale, "sessionInspectMilliseconds", map[string]any{"time": time_})
+}
+
+// SessionInspectFiredKind says "Triggered by"
+// in the language the app shows.
+func SessionInspectFiredKind() string { return In(i18n.Locale()).SessionInspectFiredKind() }
+
+// SessionInspectFiredKind says "Triggered by"
+// in the language of msgs.
+func (msgs Messages) SessionInspectFiredKind() string {
+	return Catalog.Format(msgs.locale, "sessionInspectFiredKind", nil)
+}
+
+// SessionInspectMatchedExcerpt says "Matched output"
+// in the language the app shows.
+func SessionInspectMatchedExcerpt() string { return In(i18n.Locale()).SessionInspectMatchedExcerpt() }
+
+// SessionInspectMatchedExcerpt says "Matched output"
+// in the language of msgs.
+func (msgs Messages) SessionInspectMatchedExcerpt() string {
+	return Catalog.Format(msgs.locale, "sessionInspectMatchedExcerpt", nil)
+}
+
+// SessionInspectKill says "Kill session"
+// in the language the app shows.
+func SessionInspectKill() string { return In(i18n.Locale()).SessionInspectKill() }
+
+// SessionInspectKill says "Kill session"
+// in the language of msgs.
+func (msgs Messages) SessionInspectKill() string {
+	return Catalog.Format(msgs.locale, "sessionInspectKill", nil)
+}
+
+// SessionInspectKillBlocked says "Session actions are temporarily unavailable."
+// in the language the app shows.
+func SessionInspectKillBlocked() string { return In(i18n.Locale()).SessionInspectKillBlocked() }
+
+// SessionInspectKillBlocked says "Session actions are temporarily unavailable."
+// in the language of msgs.
+func (msgs Messages) SessionInspectKillBlocked() string {
+	return Catalog.Format(msgs.locale, "sessionInspectKillBlocked", nil)
+}
+
+// SessionInspectKillPending says "Waiting for the host to confirm the close…"
+// in the language the app shows.
+func SessionInspectKillPending() string { return In(i18n.Locale()).SessionInspectKillPending() }
+
+// SessionInspectKillPending says "Waiting for the host to confirm the close…"
+// in the language of msgs.
+func (msgs Messages) SessionInspectKillPending() string {
+	return Catalog.Format(msgs.locale, "sessionInspectKillPending", nil)
+}
+
+// SessionInspectKillUnknown says "Couldn’t confirm the close. Check its status before taking another action."
+// in the language the app shows.
+func SessionInspectKillUnknown() string { return In(i18n.Locale()).SessionInspectKillUnknown() }
+
+// SessionInspectKillUnknown says "Couldn’t confirm the close. Check its status before taking another action."
+// in the language of msgs.
+func (msgs Messages) SessionInspectKillUnknown() string {
+	return Catalog.Format(msgs.locale, "sessionInspectKillUnknown", nil)
+}
+
+// SessionInspectCheckClose says "Check close status"
+// in the language the app shows.
+func SessionInspectCheckClose() string { return In(i18n.Locale()).SessionInspectCheckClose() }
+
+// SessionInspectCheckClose says "Check close status"
+// in the language of msgs.
+func (msgs Messages) SessionInspectCheckClose() string {
+	return Catalog.Format(msgs.locale, "sessionInspectCheckClose", nil)
+}
+
+// SessionInspectKillAccepted says "Close accepted."
+// in the language the app shows.
+func SessionInspectKillAccepted() string { return In(i18n.Locale()).SessionInspectKillAccepted() }
+
+// SessionInspectKillAccepted says "Close accepted."
+// in the language of msgs.
+func (msgs Messages) SessionInspectKillAccepted() string {
+	return Catalog.Format(msgs.locale, "sessionInspectKillAccepted", nil)
+}
+
+// SessionInspectKillTerminated says "Process terminated and reaped."
+// in the language the app shows.
+func SessionInspectKillTerminated() string { return In(i18n.Locale()).SessionInspectKillTerminated() }
+
+// SessionInspectKillTerminated says "Process terminated and reaped."
+// in the language of msgs.
+func (msgs Messages) SessionInspectKillTerminated() string {
+	return Catalog.Format(msgs.locale, "sessionInspectKillTerminated", nil)
+}
+
+// SessionInspectKillSettled says "The session had already ended."
+// in the language the app shows.
+func SessionInspectKillSettled() string { return In(i18n.Locale()).SessionInspectKillSettled() }
+
+// SessionInspectKillSettled says "The session had already ended."
+// in the language of msgs.
+func (msgs Messages) SessionInspectKillSettled() string {
+	return Catalog.Format(msgs.locale, "sessionInspectKillSettled", nil)
+}
+
+// SessionInspectKillUnreaped says "Process reaping is unconfirmed."
+// in the language the app shows.
+func SessionInspectKillUnreaped() string { return In(i18n.Locale()).SessionInspectKillUnreaped() }
+
+// SessionInspectKillUnreaped says "Process reaping is unconfirmed."
+// in the language of msgs.
+func (msgs Messages) SessionInspectKillUnreaped() string {
+	return Catalog.Format(msgs.locale, "sessionInspectKillUnreaped", nil)
+}
+
+// SessionInspectKillReaped says "Process reaping confirmed."
+// in the language the app shows.
+func SessionInspectKillReaped() string { return In(i18n.Locale()).SessionInspectKillReaped() }
+
+// SessionInspectKillReaped says "Process reaping confirmed."
+// in the language of msgs.
+func (msgs Messages) SessionInspectKillReaped() string {
+	return Catalog.Format(msgs.locale, "sessionInspectKillReaped", nil)
+}
+
+// SessionInspectPreviousClose says "Close request for an earlier run"
+// in the language the app shows.
+func SessionInspectPreviousClose() string { return In(i18n.Locale()).SessionInspectPreviousClose() }
+
+// SessionInspectPreviousClose says "Close request for an earlier run"
+// in the language of msgs.
+func (msgs Messages) SessionInspectPreviousClose() string {
+	return Catalog.Format(msgs.locale, "sessionInspectPreviousClose", nil)
+}
+
+// SessionInspectKillStaleGeneration says "The session run changed before it could be closed."
+// in the language the app shows.
+func SessionInspectKillStaleGeneration() string {
+	return In(i18n.Locale()).SessionInspectKillStaleGeneration()
+}
+
+// SessionInspectKillStaleGeneration says "The session run changed before it could be closed."
+// in the language of msgs.
+func (msgs Messages) SessionInspectKillStaleGeneration() string {
+	return Catalog.Format(msgs.locale, "sessionInspectKillStaleGeneration", nil)
+}
+
+// SessionInspectKillStaleRevision says "The session changed before it could be closed."
+// in the language the app shows.
+func SessionInspectKillStaleRevision() string {
+	return In(i18n.Locale()).SessionInspectKillStaleRevision()
+}
+
+// SessionInspectKillStaleRevision says "The session changed before it could be closed."
+// in the language of msgs.
+func (msgs Messages) SessionInspectKillStaleRevision() string {
+	return Catalog.Format(msgs.locale, "sessionInspectKillStaleRevision", nil)
+}
+
+// SessionInspectKillRejected says "The host rejected the close."
+// in the language the app shows.
+func SessionInspectKillRejected() string { return In(i18n.Locale()).SessionInspectKillRejected() }
+
+// SessionInspectKillRejected says "The host rejected the close."
+// in the language of msgs.
+func (msgs Messages) SessionInspectKillRejected() string {
+	return Catalog.Format(msgs.locale, "sessionInspectKillRejected", nil)
+}
+
+// SessionInspectKillNotSent says "The close request couldn’t be sent."
+// in the language the app shows.
+func SessionInspectKillNotSent() string { return In(i18n.Locale()).SessionInspectKillNotSent() }
+
+// SessionInspectKillNotSent says "The close request couldn’t be sent."
+// in the language of msgs.
+func (msgs Messages) SessionInspectKillNotSent() string {
+	return Catalog.Format(msgs.locale, "sessionInspectKillNotSent", nil)
+}
+
+// SessionInspectKillSaveError says "Couldn’t save the close request. Try again."
+// in the language the app shows.
+func SessionInspectKillSaveError() string { return In(i18n.Locale()).SessionInspectKillSaveError() }
+
+// SessionInspectKillSaveError says "Couldn’t save the close request. Try again."
+// in the language of msgs.
+func (msgs Messages) SessionInspectKillSaveError() string {
+	return Catalog.Format(msgs.locale, "sessionInspectKillSaveError", nil)
 }

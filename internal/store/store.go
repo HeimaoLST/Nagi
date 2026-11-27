@@ -453,7 +453,8 @@ type ProductUIState struct {
 	Pending              map[string]ProductPendingSend `json:"pending,omitempty"`
 	RecoveryID           string                        `json:"recoveryId,omitempty"`
 
-	PendingActivities map[string]ProductActivityIntent `json:"pending_activities,omitempty"`
+	PendingActivities    map[string]ProductActivityIntent `json:"pending_activities,omitempty"`
+	PendingSessionCloses []pi.ProductSessionCloseParams   `json:"pending_session_closes,omitempty"`
 }
 
 func ProductUIPath(profilePath string) string { return profilePath + ".ui.json" }

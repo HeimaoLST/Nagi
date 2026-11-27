@@ -36,6 +36,7 @@ REQUIRED_GROUPS = {
             "TestPiAppSettingsBackupRestore",
             "TestPiAppRestoresExistingV10Copy",
             "TestPiAppProductScopedDelegation",
+            "TestPiAppSessionInspectionAndClose",
             "TestPiPackageStandalone",
         ),
     ),
