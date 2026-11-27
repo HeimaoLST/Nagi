@@ -505,3 +505,11 @@
 **Cause or correction:** Apple's linker generates a deterministic content-based `LC_UUID` when compiling relative source paths with `-fno-ident` and omitting `-Wl,-no_uuid`; macOS SDK headers reserve short unprefixed C macro names across minor SDK releases (`syslimits.h`); the linked binary's `LC_BUILD_VERSION` (`vtool -show-build`) reliably records the resolved macOS SDK version; and `NAGI_PI_PAYLOAD` sits predictably two directories above `NAGI_TEST_NODE` (`.../pi/bin/node`).
 
 **Prevention:** Keep Apple's default deterministic `LC_UUID` on bundled macOS helpers, include `<limits.h>` and `<sys/syslimits.h>` explicitly while prefixing all internal C enum/macro identifiers (`NAGI_*`), verify byte-identity across independent build directories with `cmp`, inspect SDK provenance from linked Mach-O build metadata (`vtool -show-build`) when CLT omits `xcrun --show-sdk-version`, and fall back from `NAGI_PI_PAYLOAD` to `dirname(dirname(NAGI_TEST_NODE))` consistently across integration test helpers.
+
+### Stage precheck executables before Seatbelt launch and hash full redacted observations past visible truncation caps
+
+**Problem:** Hashing only the visible `64 KiB` output slice let tail-only output changes appear identical, running a Seatbelt `executable` precheck directly on the mutable workspace binary opened a TOCTOU swap window, and a `1000ms` cold Seatbelt fixture timeout timed out during isolated bundle launch under `-race`.
+
+**Cause or correction:** Visible excerpt truncation (`1024` bytes / `64 KiB` `truncated` flag) serves UI/LLM payload bounds whereas digest change detection needs incremental hashing up to the `1 MiB` safety ceiling; staging verified binary bytes (`O_NOFOLLOW`, SHA-256 check, `0500`) into an isolated scratch directory prevents swapped-binary execution while `nagi-pty-supervisor` preserves worker-crash reaping; and cold Seatbelt process setup under `-race` needs realistic fixture deadlines.
+
+**Prevention:** Stage and digest-verify every `executable` precheck binary before entering Seatbelt, hash full redacted normalized output up to the hard safety cap together with `truncated` and exit status while capping stored excerpts separately, and give Seatbelt process fixtures `>= 3000ms` runtime headroom (`10000ms` under `-race` integration suites) while keeping user-configurable floors explicit.
