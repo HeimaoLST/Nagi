@@ -775,13 +775,14 @@ func (a *appModel) chat(c *ui.Context, t *ui.Theme, state connectionViewState, s
 			})
 		} else {
 			dividers := chatTimestampDividers(messages, time.Now(), c.Locale())
+			readIndex := latestReadUserMessageIndex(messages, c.Now(), c.Preferences().ReduceMotion)
 			ui.Row(c).Grow(1).FillHeight().Justify(ui.Center).Children(func() {
 				ui.List(c, &ct.list, rows, func(i int) {
 					if i == len(messages) {
 						ui.Column(c).FillWidth().Padding(14, 0, 0, 0).Children(func() { a.replyTypingBubble(c) })
 						return
 					}
-					chatMessageRow(c, t, messages, dividers, i, func() { a.message(c, t, ct, messages[i]) })
+					chatMessageRow(c, t, messages, dividers, i, func() { a.message(c, t, ct, messages[i], i == readIndex) })
 				}).Label(locales.In(c.Locale()).ConversationMessagesLabel()).FillHeight().FillWidth().MaxWidth(conversationMaxWidth).Padding(16, 16, 32)
 			})
 		}
@@ -1195,12 +1196,13 @@ func (a *appModel) productReadOnlyTranscript(c *ui.Context, t *ui.Theme, browser
 	}
 	browser.transcript.Key = func(i int) any { return messages[i].Key }
 	dividers := chatTimestampDividers(messages, time.Now(), c.Locale())
+	readIndex := latestReadUserMessageIndex(messages, c.Now(), c.Preferences().ReduceMotion)
 	ui.Row(c).Grow(1).FillWidth().MinHeight(0).Justify(ui.Center).Children(func() {
 		ui.List(c, &browser.transcript, len(messages), func(i int) {
 			m := messages[i]
 			chatMessageRow(c, t, messages, dividers, i, func() {
 				if m.Kind == msgUser {
-					a.userChatBubble(c, t, m, nil, &browser.recall, func() {
+					a.userChatBubble(c, t, m, nil, &browser.recall, i == readIndex, func() {
 						recallQuotedMessage(c, messages, &browser.transcript, &browser.recall, m.Quote)
 					})
 					return
@@ -1212,7 +1214,7 @@ func (a *appModel) productReadOnlyTranscript(c *ui.Context, t *ui.Theme, browser
 	})
 }
 
-func (a *appModel) message(c *ui.Context, t *ui.Theme, ct *contact, m *message) {
+func (a *appModel) message(c *ui.Context, t *ui.Theme, ct *contact, m *message, read bool) {
 	msgs := locales.In(c.Locale())
 	switch m.Kind {
 	case msgActivity:
@@ -1244,7 +1246,7 @@ func (a *appModel) message(c *ui.Context, t *ui.Theme, ct *contact, m *message) 
 			return
 		}
 	case msgUser:
-		a.userChatBubble(c, t, m, ct, &ct.recall, func() {
+		a.userChatBubble(c, t, m, ct, &ct.recall, read, func() {
 			recallQuotedMessage(c, ct.Messages, &ct.list, &ct.recall, m.Quote)
 		})
 	default:
@@ -1252,7 +1254,7 @@ func (a *appModel) message(c *ui.Context, t *ui.Theme, ct *contact, m *message) 
 	}
 }
 
-func (a *appModel) userChatBubble(c *ui.Context, t *ui.Theme, m *message, ct *contact, recall *quoteRecall, jump func()) {
+func (a *appModel) userChatBubble(c *ui.Context, t *ui.Theme, m *message, ct *contact, recall *quoteRecall, read bool, jump func()) {
 	ui.Row(c).FillWidth().Justify(ui.End).Children(func() {
 		ui.Column(c).MaxWidth(userMessageMaxWidth).MinWidth(0).Shrink(1).Gap(2).Children(func() {
 			if m.Quote != nil {
@@ -1266,6 +1268,10 @@ func (a *appModel) userChatBubble(c *ui.Context, t *ui.Theme, m *message, ct *co
 				markdownReader(c, m.Text, opts).FontSize(typeBody).FixedLineHeight(lineBody).TextColor(t.Text)
 			}
 			taskContextReadOnlyView(c, a.workTheme, m.Context)
+			if read {
+				ui.Text(c, locales.In(c.Locale()).MessageReadStatus()).Key("read-status").AlignSelf(ui.End).
+					Padding(0, 4).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
+			}
 		})
 	})
 }

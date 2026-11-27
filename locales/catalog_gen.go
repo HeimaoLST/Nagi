@@ -13007,3 +13007,9 @@ func DockOpenNagi() string { return In(i18n.Locale()).DockOpenNagi() }
 func (msgs Messages) DockOpenNagi() string {
 	return Catalog.Format(msgs.locale, "dockOpenNagi", nil)
 }
+
+func MessageReadStatus() string { return In(i18n.Locale()).MessageReadStatus() }
+
+func (msgs Messages) MessageReadStatus() string {
+	return Catalog.Format(msgs.locale, "messageReadStatus", nil)
+}

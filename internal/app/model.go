@@ -71,6 +71,7 @@ type message struct {
 	Streaming  bool
 	Context    []taskContextItem
 	Quote      *pi.ProductQuote
+	ReadByBot  bool
 
 	liveReveal      bool
 	revealedBubbles int
@@ -465,7 +466,7 @@ func (a *appModel) send(ct *contact, text string) bool {
 	}
 	a.seq++
 	stamp := time.Now()
-	ct.Messages = append(ct.Messages, &message{ID: a.seq, Kind: msgUser, Text: text, Time: stamp.Format("15:04"), Timestamp: stamp, Quote: ct.DraftQuote})
+	ct.Messages = append(ct.Messages, &message{ID: a.seq, Kind: msgUser, Text: text, Time: stamp.Format("15:04"), Timestamp: stamp, Quote: ct.DraftQuote, ReadByBot: true})
 	ct.DraftQuote = nil
 	label := ct.WorkLabel
 	if label == "" {

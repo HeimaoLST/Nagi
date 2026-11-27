@@ -2047,5 +2047,6 @@
       }
     }
   },
-  "dockOpenNagi": "Open Nagi"
+  "dockOpenNagi": "Open Nagi",
+  "messageReadStatus": "Read"
 }
