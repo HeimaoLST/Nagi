@@ -170,7 +170,7 @@ func chatTimestampDividers(messages []*message, now time.Time, locale string) []
 	var anchor time.Time
 	for i, m := range messages {
 		stamp := m.Timestamp
-		if stamp.IsZero() || m.Kind == msgActivity {
+		if stamp.IsZero() || m.Kind == msgActivity || m.Kind == msgNotice {
 			continue
 		}
 		if anchor.IsZero() || !sameLocalDay(anchor, stamp) || stamp.Sub(anchor) >= 5*time.Minute {
@@ -221,7 +221,7 @@ func chatMessageRow(c *ui.Context, t *ui.Theme, messages []*message, dividers []
 	if index > 0 {
 		gap := float32(14)
 		kind := messages[index].Kind
-		if kind != msgActivity && messages[index-1].Kind == kind {
+		if kind != msgActivity && kind != msgNotice && messages[index-1].Kind == kind {
 			gap = 4
 		}
 		row.Padding(gap, 0, 0, 0)
@@ -254,7 +254,7 @@ func botReplyHasVisibleBubble(m *message, now time.Time, reduceMotion bool) bool
 func latestReadUserMessageIndex(messages []*message, now time.Time, reduceMotion bool) int {
 	for i := len(messages) - 1; i >= 0; i-- {
 		m := messages[i]
-		if m == nil || m.Kind == msgActivity {
+		if m == nil || m.Kind == msgActivity || m.Kind == msgNotice {
 			continue
 		}
 		if m.Kind == msgContact {

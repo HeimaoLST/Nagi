@@ -19,8 +19,6 @@ import (
 	"github.com/HeimaoLST/Nagi/locales"
 )
 
-// Message typography is supplied at the view call site so the reader's
-// parser, clipboard and file behavior stay untouched (#187 owns those files).
 var messageMarkdownTheme = &markdown.Theme{FontSize: typeBody, LineHeight: 1.5}
 
 func messageReaderOptions(c *ui.Context, plain bool) markdownReaderOptions {
@@ -87,6 +85,10 @@ func (a *appModel) escapeTopLayer() {
 	if a.composerMaterial != nil || a.composerAttachMenuOpen || a.capabilities.review != nil {
 		return
 	}
+	if a.backgroundWork.panel != nil {
+		a.backBackgroundWork()
+		return
+	}
 	if a.detailIs(detailProfile) && a.scheduledWorkBotID != "" {
 		if ct := a.contactByID(a.scheduledWorkBotID); ct != nil {
 			a.schedules.bot(ct.ID).back(a.scheduledWorkFallbackDeps(ct))
@@ -141,6 +143,8 @@ func (a *appModel) settingsSourceForVisiblePage() string {
 
 func (a *appModel) armActiveSurfaceFallback() {
 	switch {
+	case a.backgroundWork.panel != nil:
+		a.backgroundWork.panel.focusBack = true
 	case a.priorChats != nil:
 		a.priorChats.focusBack = true
 	case !a.demo && a.selectedContact() != nil && a.sessions.activeBotID == a.selectedContact().ID:
@@ -631,6 +635,10 @@ func (a *appModel) main(c *ui.Context, t *ui.Theme) {
 	ct := a.selectedContact()
 	msgs := locales.In(c.Locale())
 	ui.Column(c).Grow(1).MinWidth(0).FillHeight().Margin(4).Background(a.workTheme.Reading).Border(1, t.Border).Radius(16).Clip().Children(func() {
+		if panel := a.backgroundWork.panel; panel != nil {
+			a.backgroundWorkView(c, t, panel)
+			return
+		}
 		if browser := a.priorChats; browser != nil && browser.contact == ct {
 			a.productConversationsView(c, t, browser)
 			return
@@ -723,6 +731,9 @@ func (a *appModel) header(c *ui.Context, t *ui.Theme, ct *contact, visual botSta
 			if !a.demo && a.productHost() != nil && !ct.Archived {
 				a.sessions.sessionInspectorButton(c, a.sessionInspectorDeps(c, ct))
 			}
+			if !a.demo && a.productHost() != nil {
+				a.backgroundWorkButton(c, ct, visual.backgroundActive+visual.backgroundDecisions)
+			}
 			if label := connectionStatusLabel(connection, msgs); !a.demo && label != "" && visual.kind != botVisualWaiting {
 				if connection == connectionViewConnecting {
 					ui.Text(c, label).FontSize(typeHeaderMeta).FixedLineHeight(lineHeader).TextColor(t.TextMuted).SingleLine().Shrink(0)
@@ -746,7 +757,13 @@ func (a *appModel) chat(c *ui.Context, t *ui.Theme, state connectionViewState, s
 	messages := ct.Messages
 	waitingForReply := ct.Status == statusWorking && (a.demo || ct.ActiveTaskID != "")
 	if waitingForReply && !a.demo {
-		for i := len(messages) - 1; i >= 0 && messages[i].TaskID == ct.ActiveTaskID; i-- {
+		for i := len(messages) - 1; i >= 0; i-- {
+			if messages[i].Kind == msgNotice {
+				continue
+			}
+			if messages[i].TaskID != ct.ActiveTaskID {
+				break
+			}
 			if messages[i].Kind == msgContact {
 				waitingForReply = false
 				break
@@ -768,7 +785,10 @@ func (a *appModel) chat(c *ui.Context, t *ui.Theme, state connectionViewState, s
 		return m.ID
 	}
 	ct.list.FollowEnd = true
-	ui.Column(c).Key("chat").Grow(1).Children(func() {
+	ui.Column(c).Key("chat").Grow(1).MinHeight(0).Children(func() {
+		if ct.transcriptError {
+			timelineTranscriptWarning(c, t)
+		}
 		if rows == 0 {
 			ui.Row(c).Grow(1).MinHeight(0).Justify(ui.Center).Children(func() {
 				a.emptyState(c, t, ct)
@@ -776,7 +796,7 @@ func (a *appModel) chat(c *ui.Context, t *ui.Theme, state connectionViewState, s
 		} else {
 			dividers := chatTimestampDividers(messages, time.Now(), c.Locale())
 			readIndex := latestReadUserMessageIndex(messages, c.Now(), c.Preferences().ReduceMotion)
-			ui.Row(c).Grow(1).FillHeight().Justify(ui.Center).Children(func() {
+			ui.Row(c).Grow(1).MinHeight(0).FillHeight().Justify(ui.Center).Children(func() {
 				ui.List(c, &ct.list, rows, func(i int) {
 					if i == len(messages) {
 						ui.Column(c).FillWidth().Padding(14, 0, 0, 0).Children(func() { a.replyTypingBubble(c) })
@@ -796,6 +816,7 @@ func (a *appModel) chat(c *ui.Context, t *ui.Theme, state connectionViewState, s
 			})
 		}
 		a.conversationActivities(c, t, ct)
+		a.orchestrationDecisionStrip(c, t, ct)
 		a.activityNoticeStrip(c, t, ct)
 		ui.Row(c).Key("composer").Justify(ui.Center).Children(func() {
 			ui.Column(c).FillWidth().MaxWidth(conversationMaxWidth).Children(func() {
@@ -1186,6 +1207,9 @@ func (a *appModel) productActivityResultView(c *ui.Context, t *ui.Theme, p *prod
 func (a *appModel) productReadOnlyTranscript(c *ui.Context, t *ui.Theme, browser *productConversationBrowser) {
 	messages := browser.history.messages
 	msgs := locales.In(c.Locale())
+	if browser.history.transcriptError {
+		timelineTranscriptWarning(c, t)
+	}
 	if len(messages) == 0 {
 		if browser.ownerID != "" {
 			ui.Row(c).FillWidth().Justify(ui.Center).Children(func() {
@@ -1201,6 +1225,10 @@ func (a *appModel) productReadOnlyTranscript(c *ui.Context, t *ui.Theme, browser
 		ui.List(c, &browser.transcript, len(messages), func(i int) {
 			m := messages[i]
 			chatMessageRow(c, t, messages, dividers, i, func() {
+				if m.Kind == msgNotice {
+					a.timelineNotice(c, t, browser.ownerID, m)
+					return
+				}
 				if m.Kind == msgUser {
 					a.userChatBubble(c, t, m, nil, &browser.recall, i == readIndex, func() {
 						recallQuotedMessage(c, messages, &browser.transcript, &browser.recall, m.Quote)
@@ -1217,6 +1245,8 @@ func (a *appModel) productReadOnlyTranscript(c *ui.Context, t *ui.Theme, browser
 func (a *appModel) message(c *ui.Context, t *ui.Theme, ct *contact, m *message, read bool) {
 	msgs := locales.In(c.Locale())
 	switch m.Kind {
+	case msgNotice:
+		a.timelineNotice(c, t, ct.ID, m)
 	case msgActivity:
 		if m.ToolName != "" || m.ToolOutput != "" {
 			title := toolTitleFor(m.ToolName, m.ToolArgs)
@@ -1293,8 +1323,6 @@ func (a *appModel) alert(c *ui.Context, t *ui.Theme, m *message) {
 	})
 }
 
-// knownConnectionFailure matches the "code: " prefix emitted by runtimeMessage
-// rather than arbitrary diagnostics containing the word.
 func knownConnectionFailure(text string) bool {
 	return strings.HasPrefix(strings.TrimSpace(text), "connection_mismatch:")
 }
@@ -1487,6 +1515,15 @@ func (a *appModel) composer(c *ui.Context, t *ui.Theme, state connectionViewStat
 				switch {
 				case ct.SendState == sendSubmitting:
 					submissionStatus = msgs.SendingState()
+				case ct.SendState == sendQueued:
+					submissionStatus = msgs.SendQueuedState()
+					if ct.SendQueuedPosition > 0 {
+						submissionStatus = msgs.SendQueuedPosition(ct.SendQueuedPosition)
+					}
+				case ct.sendNotice == "cancelled_before_dispatch":
+					submissionStatus = msgs.SendCancelledBeforeDispatch()
+				case ct.sendNotice == "interrupted_before_dispatch":
+					submissionStatus = msgs.SendInterruptedBeforeDispatch()
 				case ct.SendState == sendAccepted && ct.Status != statusWorking:
 					submissionStatus = msgs.SendAcceptedState()
 				}

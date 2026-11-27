@@ -27,6 +27,7 @@ const (
 	msgUser messageKind = iota
 	msgContact
 	msgActivity
+	msgNotice
 )
 
 type sendState int
@@ -36,6 +37,7 @@ const (
 	sendSubmitting
 	sendAccepted
 	sendUnknown
+	sendQueued
 )
 
 type historyEntry struct {
@@ -58,7 +60,6 @@ type message struct {
 	RetryDone   bool
 	Expanded    bool
 
-	// Key identifies a Pi history entry or a live run item.
 	Key        string
 	TaskID     string
 	MessageID  string
@@ -72,6 +73,8 @@ type message struct {
 	Context    []taskContextItem
 	Quote      *pi.ProductQuote
 	ReadByBot  bool
+	Notice     *pi.ProductConversationNotice
+	AnchorSeq  uint64
 
 	liveReveal      bool
 	revealedBubbles int
@@ -127,30 +130,36 @@ type contact struct {
 	activeActivities       map[string]pi.ProductActivitySummary
 	activityStatusRevision uint64
 	activityNotices        activityNoticeState
+	orchestration          botOrchestrationState
 
-	// A Pi conversation is opened lazily on its first send.
-	SessionID         string
-	Loaded            bool
-	LoadErr           string
-	Unavailable       string
-	ActiveTaskID      string
-	LastTaskID        string
-	SendState         sendState
-	SendError         string
-	SendErrorKind     string
-	SendErrorDetail   string
-	SubmittedDraft    string
-	SubmittedQuote    *pi.ProductQuote
-	SubmittedRev      int
-	pendingSend       *pendingSend
-	draftRev          int
-	StatusDetail      string
-	StatusDetailKind  string
-	SessionWorkingDir string
-	SessionModel      string
-	SessionAPI        string
-	SessionState      string
-	historyGen        int
+	SessionID          string
+	Loaded             bool
+	LoadErr            string
+	Unavailable        string
+	ActiveTaskID       string
+	LastTaskID         string
+	SendState          sendState
+	SendError          string
+	SendErrorKind      string
+	SendErrorDetail    string
+	SubmittedDraft     string
+	SubmittedQuote     *pi.ProductQuote
+	SubmittedRev       int
+	submittedMaterials []taskContextItem
+	SendQueuedPosition int
+	sendNotice         string
+	sendReceiptRead    uint64
+	stoppingQueued     string
+	pendingSend        *pendingSend
+	draftRev           int
+	StatusDetail       string
+	StatusDetailKind   string
+	SessionWorkingDir  string
+	SessionModel       string
+	SessionAPI         string
+	SessionState       string
+	historyGen         int
+	transcriptError    bool
 }
 
 func (ct *contact) isBuiltin() bool {
@@ -183,6 +192,7 @@ type appModel struct {
 	priorChats               *productConversationBrowser
 	sessions                 sessionWorkspaceState
 	schedules                scheduledWorkState
+	backgroundWork           backgroundWorkState
 	scheduledWorkBotID       string
 	focusScheduledWorkOpener string
 	composerHandle           ui.Handle
@@ -243,8 +253,6 @@ type appModel struct {
 	activityActionNotice       string
 	activityActionNoticeDetail string
 
-	// Runtime mode. demo keeps the local fixture path for tests/screenshots;
-	// the shipped app is runtime-backed.
 	demo                      bool
 	store                     *contactStore
 	pi                        *piAppHost
@@ -294,9 +302,6 @@ type appModel struct {
 	activityToolLedger *activityToolOperationLedger
 	activityToolScopes map[string]activityToolScope
 
-	// Layout is a GUI-wide preference, not a contact or runtime fact. Widths
-	// are persisted in the contact store; windowWidth is only the current
-	// native viewport and never overwrites a preferred width when it shrinks.
 	windowWidth          int
 	leftPaneWidth        float32
 	rightPaneWidth       float32
@@ -352,6 +357,7 @@ func (a *appModel) selectContact(i int) {
 	a.selected = i
 	a.priorChats = nil
 	a.sessions.activeBotID = ""
+	a.backgroundWork.panel, a.backgroundWork.returnFocus = nil, ""
 	if !a.demo {
 		a.persist()
 	}
@@ -374,7 +380,7 @@ func (a *appModel) snippet(c *contact, msgs locales.Messages) string {
 	}
 	for i := len(c.Messages) - 1; i >= 0; i-- {
 		m := c.Messages[i]
-		if m.Kind == msgActivity {
+		if m.Kind == msgActivity || m.Kind == msgNotice {
 			continue
 		}
 		source := m.Text
@@ -402,8 +408,6 @@ func (a *appModel) snippet(c *contact, msgs locales.Messages) string {
 	return msgs.EmptyNoMessages()
 }
 
-// addDefaultContact creates and selects a ready contact with a usable
-// default name, then asks the composer to take focus once.
 func (a *appModel) addDefaultContact() {
 	if !a.demo {
 		a.addRuntimeContact()

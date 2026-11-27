@@ -2247,14 +2247,189 @@ func TestVisualGuardMessageReadStatus(t *testing.T) {
 					}
 
 					ct.Messages = append(ct.Messages, &message{ID: 4, Kind: msgUser, Text: "Third user follow-up", ReadByBot: true})
+					ct.Messages = append(ct.Messages, &message{
+						Key:       "notice:n-follow",
+						Kind:      msgNotice,
+						Text:      "Background check note",
+						Timestamp: time.Now(),
+						Notice:    &pi.ProductConversationNotice{BotID: ct.ID, MandateID: "mandate-follow", Urgency: "normal"},
+					})
 					tr.Frame()
-					if got := countText(tr, readLabel); got != 1 {
-						t.Fatalf("follow-up user turn should show 1 %q, got %d: texts=%v", readLabel, got, tr.Texts())
+					if got := countText(tr, readLabel); got != 1 || !tr.HasText("Background check note") {
+						t.Fatalf("follow-up user turn with notice should keep 1 %q, got %d: texts=%v", readLabel, got, tr.Texts())
 					}
 					u3Rect, okU3 := tr.Find("Third user follow-up")
 					readRect3, okRead3 := tr.Find(readLabel)
 					if !okU3 || !okRead3 || readRect3.Y < u3Rect.Y+u3Rect.H-2 {
 						t.Fatalf("follow-up read badge not positioned below third turn: u3=%+v read=%+v", u3Rect, readRect3)
+					}
+
+					ct.Messages = append(ct.Messages, &message{ID: 5, Kind: msgContact, Text: "Reply after notice.", History: true})
+					tr.Frame()
+					if tr.HasText(readLabel) {
+						t.Fatalf("read indicator remained after Bot reply after notice: texts=%v", tr.Texts())
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestVisualGuardOrchestrationAndTimeline(t *testing.T) {
+	sizes := [][2]int{{1040, 720}, {960, 640}, {720, 640}}
+	for _, locale := range []string{"en", "zh-Hans"} {
+		msgs := locales.In(locale)
+		for _, dark := range []bool{false, true} {
+			for _, size := range sizes {
+				w, h := size[0], size[1]
+				t.Run(fmt.Sprintf("%s-dark%t-%dx%d", locale, dark, w, h), func(t *testing.T) {
+					a, ct := workspaceTestApp(t)
+					a.windowWidth = w
+					ct.transcriptError = true
+					ct.Messages = []*message{
+						{
+							Key:       "notice:n-urgent",
+							Kind:      msgNotice,
+							Text:      "Staging checks passed; awaiting confirmation.",
+							Timestamp: time.Now(),
+							Notice: &pi.ProductConversationNotice{
+								BotID:     ct.ID,
+								MandateID: "watch:w-release",
+								Urgency:   "high",
+								Dormant:   true,
+							},
+						},
+						{ID: 1, Kind: msgUser, Text: "Is the release ready?", ReadByBot: true},
+					}
+					ct.SendState = sendQueued
+					ct.SendQueuedPosition = 2
+					ct.ActiveTaskID = "exec-queued"
+					ct.Draft = "Follow up on canary checks"
+					decisionItem := pi.ProductOrchestrationSummary{
+						MandateID:  "watch:w-release",
+						OwnerBotID: ct.ID,
+						SourceKind: pi.ProductMandateSourceWatch,
+						Purpose:    "Monitor release readiness",
+						State:      pi.ProductMandateWaitingDecision,
+						Generation: 2,
+						Revision:   7,
+						PendingDecision: &pi.ProductOrchestrationDecision{
+							DecisionID: "dec-release",
+							MandateID:  "watch:w-release",
+							OwnerBotID: ct.ID,
+							Revision:   1,
+							State:      "open",
+							Kind:       "approval",
+							Purpose:    "Approve rollout",
+							Summary:    "Confirm whether to publish release notes.",
+							Options: []pi.ProductOrchestrationDecisionOption{
+								{ID: "publish", Label: "Publish notes"},
+								{ID: "hold", Label: "Hold draft"},
+							},
+						},
+						Metrics: pi.ProductOrchestrationMetrics{TotalWakes: 4, Calls: 3, TotalTokens: 980},
+					}
+
+					tr := ui.NewTesterWith(a.view, w, h, ui.TesterOptions{Dark: dark})
+					tr.SetLocale(locale)
+					tr.SetFocused(true)
+					tr.Frame()
+
+					for _, expected := range []string{
+						msgs.TimelineTranscriptErrorNotice(),
+						msgs.TimelineNoticeUrgent(),
+						msgs.TimelineNoticeReadOnly(),
+						msgs.MessageReadStatus(),
+						msgs.SendQueuedPosition(2),
+					} {
+						r, ok := tr.Find(expected)
+						if !ok || r.W <= 0 || r.H <= 0 || r.X < -0.5 || r.X+r.W > float32(w)+0.5 || r.Y < -0.5 || r.Y+r.H > float32(h)+0.5 {
+							t.Fatalf("chat timeline text %q out of viewport %dx%d: ok=%v rect=%+v", expected, w, h, ok, r)
+						}
+					}
+
+					ct.orchestration.items = []pi.ProductOrchestrationSummary{decisionItem}
+					tr.Frame()
+
+					for _, expected := range []string{
+						"Approve rollout",
+						"Publish notes",
+						msgs.OrchestrationApprove(),
+						msgs.OrchestrationReject(),
+						msgs.SendQueuedPosition(2),
+					} {
+						r, ok := tr.Find(expected)
+						if !ok || r.W <= 0 || r.H <= 0 || r.X < -0.5 || r.X+r.W > float32(w)+0.5 || r.Y < -0.5 || r.Y+r.H > float32(h)+0.5 {
+							t.Fatalf("chat decision text %q out of viewport %dx%d: ok=%v rect=%+v", expected, w, h, ok, r)
+						}
+					}
+
+					a.backgroundWork.panel = &backgroundWorkPanel{
+						bot:   ct,
+						items: ct.orchestration.items,
+					}
+					tr.Frame()
+					for _, expected := range []string{msgs.OrchestrationTitle(), "Monitor release readiness", msgs.DetailsAction()} {
+						r, ok := tr.Find(expected)
+						if !ok || r.W <= 0 || r.H <= 0 || r.X < -0.5 || r.X+r.W > float32(w)+0.5 || r.Y < -0.5 || r.Y+r.H > float32(h)+0.5 {
+							t.Fatalf("background list text %q out of viewport %dx%d: ok=%v rect=%+v", expected, w, h, ok, r)
+						}
+					}
+
+					detailSummary := ct.orchestration.items[0]
+					a.backgroundWork.panel.detailID = detailSummary.MandateID
+					a.backgroundWork.panel.detail = &pi.ProductOrchestrationDetail{
+						ProductOrchestrationSummary: detailSummary,
+						Decisions:                   []pi.ProductOrchestrationDecision{*detailSummary.PendingDecision},
+						RecentRuns: []pi.ProductOrchestrationRun{
+							{RunID: "run-1", MandateID: detailSummary.MandateID, Generation: 2, State: "completed", RouteRole: "utility", Disposition: pi.ProductDispositionNeedsDecision, Summary: "Requested rollout decision.", Calls: 2, TotalTokens: 480},
+						},
+						RecentReceipts: []pi.ProductOrchestrationEffectReceipt{
+							{ReceiptID: "rcpt-1", MandateID: detailSummary.MandateID, RunID: "run-1", CallID: "c1", Tool: "conversation_notify", Target: "conv-1", State: "settled_ok"},
+						},
+					}
+					tr.Frame()
+					if !tr.HasText(msgs.OrchestrationMetricsTitle()) {
+						t.Fatalf("background detail missing metrics heading: %v", tr.Texts())
+					}
+					var receiptsVisible bool
+					for y := float32(0); y <= 1400; y += 160 {
+						a.backgroundWork.panel.detailScroll.Y = y
+						tr.Frame()
+						if tr.HasText(msgs.OrchestrationReceiptsTitle()) && tr.HasText("conversation_notify") {
+							receiptsVisible = true
+							break
+						}
+					}
+					if !receiptsVisible {
+						t.Fatalf("scrolling background detail did not reveal receipts: %v", tr.Texts())
+					}
+					a.backgroundWork.panel = nil
+
+					a.openSettingsTab(settingsTabAppearance, settingsSourceCommand)
+					s := a.ensureDataRecovery()
+					s.target = &storeRecoveryTarget{}
+					s.canonical = a.storePath
+					s.viewGeneration = a.folderChoiceGeneration
+					s.owner = ct
+					s.scopeOpen = true
+					s.copy = &storeRecoveryCopy{
+						Path: "/Documents/Nagi.backup.json", Contacts: 2, Issues: 1,
+						Timers: 1, Schedules: 1, DormantWatches: 2,
+						DormantMandates: 3, Decisions: 2, Notices: 4, ModifiedAt: time.Now(),
+					}
+					wantCounts := msgs.RecoveryPreviewOrchestrationCounts(3, 2, 4)
+					var foundCounts bool
+					for y := float32(0); y <= 2400; y += 160 {
+						a.settingsScroll.Y = y
+						tr.Frame()
+						if r, ok := tr.Find(wantCounts); ok && r.W > 0 && r.H > 0 && r.X >= -0.5 && r.X+r.W <= float32(w)+0.5 && r.Y >= 0 && r.Y+r.H <= float32(h)+0.5 {
+							foundCounts = true
+							break
+						}
+					}
+					if !foundCounts || !tr.HasText(msgs.RecoveryScopeOrchestration()) {
+						t.Fatalf("settings recovery did not render v14 orchestration counts %q cleanly: %v", wantCounts, tr.Texts())
 					}
 				})
 			}

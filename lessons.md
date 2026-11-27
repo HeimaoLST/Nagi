@@ -296,11 +296,11 @@
 
 ### Pass the locale directory to the standalone catalog generator
 
-**Problem:** Running the standalone catalog generator against the repository root reported a missing English catalog and tried to load `mygo.json` as a language.
+**Problem:** The standalone catalog generator scanned the repository root for languages. The patched MyGo CLI generator failed in readonly mode because its RPM dependency checksum was absent from Nagi's application module.
 
-**Cause or correction:** The generator resolves `*.json` relative to its first argument. Its separate `Dir` setting labels diagnostics.
+**Cause or correction:** The standalone generator resolves `*.json` relative to its first argument. `scripts/gui-go.py` builds MyGo with a temporary copy of the application's module and checksum files.
 
-**Prevention:** Pass the absolute `locales` directory as the input and `locales/catalog_gen.go` as the output. Run with `-mod=readonly` in the standalone generator's module.
+**Prevention:** Pass the `locales` directory to the standalone generator. For the patched MyGo CLI, run `GOFLAGS=-mod=mod python3 scripts/gui-go.py run github.com/egoist/mygo/cmd/mygo generate .` from the checkout root and verify the generated accessors against both catalogs. The wrapper resolves generator-only dependencies in its temporary module.
 
 ## Verification and Evidence
 
@@ -537,3 +537,19 @@
 **Cause or correction:** Checkpoint fallback must synthesize structured disposition and source facts when no explicit advisory summary is available; `post_settlement` notices must remain withheld behind the active foreground execution anchor until `completed`, `failed`, `interrupted`, or `unknown` finality while `conversation.timeline` keeps transcript availability separate from committed product notices; and queued sends must record explicit `dispatched_at` transitions so pre-dispatch cancellations and worker crashes settle `pending` human sends as `rejected` (`delivery: "non_dispatched"`) with intact drafts and zero replay while leaving in-flight turns `unknown`.
 
 **Prevention:** Record structured fallback summaries outside raw private Pi transcripts, serialize per-conversation timeline anchors across all send finality states without touching `Draft`, and track pre-dispatch queue state (`dispatched_at == null`) separately from admitted executions in both live cancellation and crash recovery.
+
+### Distinguish queued cancellation from provider admission rejection
+
+**Problem:** Treating every `delivery: non_dispatched` send receipt as a queued interruption hid provider admission errors behind a misleading cancellation message.
+
+**Cause or correction:** Credential and routing failures use the same delivery value as sends cancelled or interrupted in the queue. Only the explicit queue reasons prove that outcome.
+
+**Prevention:** Show the calm queue message only for `cancelled_before_dispatch` or `interrupted_before_dispatch`. Keep other rejection receipts on the provider admission path.
+
+### Require worker readiness for enabled headless product controls
+
+**Problem:** Decision options and timeline inspect actions appeared disabled or missing in headless captures with an unverified stub worker.
+
+**Cause or correction:** Product mutation and navigation controls depend on the worker staying reachable, while the headless fixture did not establish readiness.
+
+**Prevention:** Start the pinned worker with a disposable profile and wait for `Ready` before capturing enabled product controls. Exercise the actual option and field focus and record the observed outcomes.

@@ -1,9 +1,5 @@
 package app
 
-// Runtime-backed app wiring: configuration, startup/restore, the real send
-// path, event application and history rendering. All UI state changes go
-// through win.Update; I/O and JSON decoding stay off the UI thread.
-
 import (
 	"context"
 	"encoding/json"
@@ -76,9 +72,6 @@ func (a *appModel) applyProductPreferences(preferences *pi.ProductPreferences) {
 	a.hideBuiltinArchitect = preferences.HideBuiltinArchitect
 }
 
-// newUnavailableApp keeps the window usable when the local contact store cannot
-// be read or created. It retains the actual paths, labels the local store stage,
-// keeps store=nil, and never silently creates a replacement store.
 func newUnavailableApp(err error) *appModel {
 	storePath := guiStorePath()
 	if absolute, err := filepath.Abs(storePath); err == nil {
@@ -337,9 +330,10 @@ func (a *appModel) reloadContactByID(contactID string) {
 }
 
 type historyProjection struct {
-	messages []*message
-	entries  []historyEntry
-	detail   string
+	messages        []*message
+	entries         []historyEntry
+	detail          string
+	transcriptError bool
 }
 
 func formatMillis(ms int64) string {
@@ -426,8 +420,6 @@ func (a *appModel) connectionConfigurationBlocked() bool {
 	}
 }
 
-// Send/start blockers are stable reasons. One condition function serves the
-// composer and every work surface; rendering happens in the current language.
 const (
 	blockShutdown         = "shutdown"
 	blockArchivedSend     = "archived-send"
@@ -516,7 +508,7 @@ func (a *appModel) canSend(ct *contact) string {
 	if sessionBusy(ct.SendState, ct.ActiveTaskID) {
 		return blockBusy
 	}
-	if a.activeTaskCount() >= a.maxActiveTasks() {
+	if a.productHost() == nil && a.activeTaskCount() >= a.maxActiveTasks() {
 		if a.maxActiveTasks() <= 1 {
 			return blockAnotherContact
 		}
@@ -560,6 +552,7 @@ func (a *appModel) reloadSelected() {
 		return
 	}
 	a.reloadContactByID(ct.ID)
+	a.reconcilePendingConversationSend(a.productHost(), ct, true)
 }
 
 func (a *appModel) addRuntimeContact() {

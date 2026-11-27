@@ -1307,3 +1307,137 @@ func TestPreviewMessageReadStatus(t *testing.T) {
 		t.Logf("read-status preview path=%s width=%d height=%d locale=%s dark=%v", path, shot.w, shot.h, shot.locale, shot.dark)
 	}
 }
+
+func TestPreviewOrchestrationAndTimeline(t *testing.T) {
+	dir := os.Getenv("NAGI_PREVIEW_DIR")
+	if dir == "" {
+		t.Skip("set NAGI_PREVIEW_DIR to write BG-3B orchestration previews")
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, shot := range []struct {
+		name, locale string
+		w, h         int
+		dark         bool
+		setup        func(*appModel, *contact, *ui.Tester)
+	}{
+		{
+			name: "bg3b-timeline-decision-zh-light-720x640.png", locale: "zh-Hans", w: 720, h: 640, dark: false,
+			setup: func(a *appModel, ct *contact, tr *ui.Tester) {
+				ct.Messages = []*message{
+					{
+						Key:       "notice:p-1",
+						Kind:      msgNotice,
+						Text:      "发布前冒烟检查已全部通过，发布说明待确认。",
+						Timestamp: time.Now(),
+						Notice:    &pi.ProductConversationNotice{BotID: ct.ID, MandateID: "watch:w-1", Urgency: "high"},
+					},
+					{ID: 1, Kind: msgUser, Text: "状态确认无误后告诉我。", ReadByBot: true},
+				}
+				ct.orchestration.items = []pi.ProductOrchestrationSummary{
+					{
+						MandateID:  "watch:w-1",
+						OwnerBotID: ct.ID,
+						SourceKind: pi.ProductMandateSourceWatch,
+						Purpose:    "监视发布检查清单",
+						State:      pi.ProductMandateWaitingDecision,
+						Generation: 2,
+						Revision:   7,
+						PendingDecision: &pi.ProductOrchestrationDecision{
+							DecisionID: "dec-1",
+							MandateID:  "watch:w-1",
+							OwnerBotID: ct.ID,
+							Revision:   1,
+							State:      "open",
+							Kind:       "approval",
+							Purpose:    "确认是否发布更新说明",
+							Summary:    "除发布说明外其他检查均已就绪。",
+							Options: []pi.ProductOrchestrationDecisionOption{
+								{ID: "publish", Label: "发布说明"},
+								{ID: "hold", Label: "暂缓发布"},
+							},
+						},
+					},
+				}
+				tr.Frame()
+			},
+		},
+		{
+			name: "bg3b-queued-send-zh-dark-720x640.png", locale: "zh-Hans", w: 720, h: 640, dark: true,
+			setup: func(a *appModel, ct *contact, tr *ui.Tester) {
+				ct.SendState = sendQueued
+				ct.SendQueuedPosition = 2
+				ct.ActiveTaskID = "exec-queued-preview"
+				ct.Draft = "补充核对发布标签校验和。"
+				tr.Frame()
+			},
+		},
+		{
+			name: "bg3b-background-detail-en-dark-1040x720.png", locale: "en", w: 1040, h: 720, dark: true,
+			setup: func(a *appModel, ct *contact, tr *ui.Tester) {
+				summary := pi.ProductOrchestrationSummary{
+					MandateID:       "watch:w-1",
+					OwnerBotID:      ct.ID,
+					SourceKind:      pi.ProductMandateSourceWatch,
+					Purpose:         "Monitor release readiness",
+					State:           pi.ProductMandateWaitingDecision,
+					LastDisposition: pi.ProductDispositionNeedsDecision,
+					Generation:      2,
+					Revision:        7,
+					Metrics:         pi.ProductOrchestrationMetrics{TotalWakes: 4, Calls: 3, TotalTokens: 980, CostUSD: 0.0042},
+				}
+				a.backgroundWork.panel = &backgroundWorkPanel{
+					bot:      ct,
+					detailID: summary.MandateID,
+					items:    []pi.ProductOrchestrationSummary{summary},
+					detail: &pi.ProductOrchestrationDetail{
+						ProductOrchestrationSummary: summary,
+						RecentRuns: []pi.ProductOrchestrationRun{
+							{RunID: "run-1", MandateID: summary.MandateID, Generation: 2, State: "completed", RouteRole: "utility", Disposition: pi.ProductDispositionNeedsDecision, Summary: "Requested sign-off on release notes.", Calls: 2, TotalTokens: 480},
+						},
+						RecentReceipts: []pi.ProductOrchestrationEffectReceipt{
+							{ReceiptID: "rcpt-1", MandateID: summary.MandateID, RunID: "run-1", CallID: "c1", Tool: "conversation_notify", Target: "conv-1", State: "settled_ok"},
+						},
+					},
+				}
+				tr.Frame()
+			},
+		},
+		{
+			name: "bg3b-recovery-v14-zh-dark-720x640.png", locale: "zh-Hans", w: 720, h: 640, dark: true,
+			setup: func(a *appModel, ct *contact, tr *ui.Tester) {
+				a.openSettingsTab(settingsTabAppearance, settingsSourceCommand)
+				s := a.ensureDataRecovery()
+				s.target = &storeRecoveryTarget{}
+				s.canonical = a.storePath
+				s.viewGeneration = a.folderChoiceGeneration
+				s.owner = ct
+				s.scopeOpen = true
+				s.copy = &storeRecoveryCopy{
+					Path: "/Documents/Nagi.backup.json", Contacts: 2, Issues: 1,
+					Timers: 1, Schedules: 1, DormantWatches: 2,
+					DormantMandates: 3, Decisions: 2, Notices: 4, ModifiedAt: time.Now(),
+				}
+				want := locales.In("zh-Hans").RecoveryPreviewOrchestrationCounts(3, 2, 4)
+				for y := float32(0); y <= 2400; y += 80 {
+					a.settingsScroll.Y = y
+					tr.Frame()
+					if r, ok := tr.Find(want); ok && r.H > 0 && r.Y >= 80 && r.Y+r.H <= 500 {
+						break
+					}
+				}
+			},
+		},
+	} {
+		a, ct := workspaceTestApp(t)
+		a.windowWidth = shot.w
+		tr := ui.NewTesterWith(a.view, shot.w, shot.h, ui.TesterOptions{Dark: shot.dark})
+		tr.SetLocale(shot.locale)
+		tr.SetFocused(true)
+		shot.setup(a, ct, tr)
+		path := filepath.Join(dir, shot.name)
+		writePreviewPNG(t, path, tr.Image())
+		t.Logf("bg3b preview path=%s width=%d height=%d locale=%s dark=%v", path, shot.w, shot.h, shot.locale, shot.dark)
+	}
+}

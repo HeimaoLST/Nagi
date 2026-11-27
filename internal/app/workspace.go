@@ -16,8 +16,6 @@ import (
 	"github.com/HeimaoLST/Nagi/locales"
 )
 
-// A workItem is the GUI projection of one runtime task. User/assistant text
-// stays in chat; tool activity is attached here by task/call identity.
 type workState string
 
 const (
@@ -186,8 +184,6 @@ func (a *appModel) toggleRail() {
 	a.focusRail = true
 }
 
-// layoutBody draws the contact rail and the main conversation. A visible
-// work panel nests a second Split so either edge can be resized independently.
 func (a *appModel) layoutBody(c *ui.Context, t *ui.Theme) {
 	if a.detailPageActive() {
 		a.detailPage(c, t)
@@ -235,16 +231,12 @@ func (a *appModel) layoutMainArea(c *ui.Context, t *ui.Theme, left float32, oute
 	}).Fill()
 }
 
-// workspaceFrame draws the current right detail in its own column.
 func (a *appModel) workspaceFrame(c *ui.Context, t *ui.Theme) {
 	ui.Column(c).FillWidth().FillHeight().Background(a.workTheme.Panel).BorderWidth(0, 0, 0, 1).BorderColor(t.Border).Children(func() {
 		a.profileDetail(c, t)
 	})
 }
 
-// detailPage is the non-modal narrow rendering of the same right detail. It
-// replaces the whole workbench body, so the 480px reading column is not
-// squeezed or covered by a backdrop/focus trap.
 func (a *appModel) detailPage(c *ui.Context, t *ui.Theme) {
 	ui.Column(c).Fill().Background(a.workTheme.Panel).Children(func() {
 		a.profileDetail(c, t)
@@ -710,16 +702,17 @@ func (a *appModel) runProductActivityAction(ct *contact, client *pi.ProductClien
 }
 
 type productConversationBrowser struct {
-	contact    *contact
-	sourceID   string
-	reading    bool
-	focusBack  bool
-	problem    string
-	selectedID string
-	ownerID    string
-	history    historyProjection
-	transcript ui.ListState
-	recall     quoteRecall
+	contact        *contact
+	sourceID       string
+	reading        bool
+	readGeneration uint64
+	focusBack      bool
+	problem        string
+	selectedID     string
+	ownerID        string
+	history        historyProjection
+	transcript     ui.ListState
+	recall         quoteRecall
 }
 
 func (a *appModel) browseProductConversations(ct *contact, sourceID string) {
@@ -735,12 +728,22 @@ func (a *appModel) loadProductTranscript(browser *productConversationBrowser, id
 	if browser.reading || !a.productProfileReady() || a.dataRecoveryBlocksChanges() {
 		return
 	}
-	client := a.productHost().product
-	ct := browser.contact
+	browser.focusBack = true
 	browser.selectedID, browser.ownerID, browser.problem = id, "", ""
-	browser.reading, browser.focusBack = true, true
+	browser.reading = false
 	browser.history, browser.transcript = historyProjection{}, ui.ListState{}
 	browser.recall = quoteRecall{}
+	a.refreshProductTranscript(browser)
+}
+
+func (a *appModel) refreshProductTranscript(browser *productConversationBrowser) {
+	if !a.productProfileReady() || a.dataRecoveryBlocksChanges() {
+		return
+	}
+	client, ct, id := a.productHost().product, browser.contact, browser.selectedID
+	browser.readGeneration++
+	generation := browser.readGeneration
+	browser.reading = true
 	a.historyAsyncStarted()
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
@@ -751,18 +754,19 @@ func (a *appModel) loadProductTranscript(browser *productConversationBrowser, id
 			err = errors.New("the activity's source chat is unavailable")
 		}
 		if err == nil {
-			history, err = productHistory(ctx, client, id)
+			history, err = productTimeline(ctx, client, id)
 		}
 		a.updateUI(func() {
 			defer a.historyAsyncFinished()
-			browser.reading = false
-			if a.priorChats != browser || browser.selectedID != id || !a.currentActivityClient(ct, client) {
+			if a.priorChats != browser || browser.readGeneration != generation || !a.currentActivityClient(ct, client) {
 				return
 			}
+			browser.reading = false
 			if err != nil {
 				browser.problem = a.connectionSafeMessage(err)
 				return
 			}
+			browser.problem = ""
 			browser.ownerID, browser.history = conversation.BotID, history
 		})
 	}()

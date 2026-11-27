@@ -51,8 +51,6 @@ func (a *appModel) closeDetail() {
 	a.focusDetailClose = false
 }
 
-// detailPageActive means the right surface is the whole application page
-// because the three-pane layout cannot keep its 480px reading column.
 func (a *appModel) detailPageActive() bool {
 	return a.activeDetail() != "" && a.workOverlay()
 }
@@ -102,8 +100,8 @@ func (a *appModel) productConversationsView(c *ui.Context, t *ui.Theme, browser 
 						summary = msgs.HistoryRuntimeNotReady()
 					}
 					a.recoveryNotice(c, t, "prior-chat:"+browser.selectedID, summary, browser.problem, false)
-					secondaryButton(c, msgs.ReloadAction()).Disabled(!a.productProfileReady()).OnClick(func() {
-						a.loadProductTranscript(browser, browser.sourceID)
+					secondaryButton(c, msgs.ReloadAction()).AlignSelf(ui.Start).Disabled(!a.productProfileReady()).OnClick(func() {
+						a.refreshProductTranscript(browser)
 					})
 				}
 			})
@@ -237,8 +235,6 @@ func (a *appModel) auxPage(c *ui.Context, t *ui.Theme) {
 	})
 }
 
-// syncDetailPageMode skips updating detailPageMode while Settings or a main
-// reader owns focus, leaving evaluation until the workbench is visible again.
 func (a *appModel) syncDetailPageMode() {
 	if a.settingsOpen || a.mainPageActive() {
 		return
