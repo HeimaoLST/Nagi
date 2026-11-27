@@ -49,6 +49,10 @@ func (a *appModel) detailPageActive() bool {
 func (a *appModel) backProductConversations() {
 	browser := a.priorChats
 	a.priorChats = nil
+	if browser.contact != nil && a.sessions.activeBotID == browser.contact.ID {
+		a.sessions.botSession(browser.contact.ID).focusSourceChat = true
+		return
+	}
 	browser.contact.activity.focusSource = true
 }
 

@@ -1049,3 +1049,90 @@ func TestPreviewControlPlaneDS2(t *testing.T) {
 		tr.Frame()
 	})
 }
+
+func TestPreviewSessionInspection(t *testing.T) {
+	dir := os.Getenv("NAGI_PREVIEW_DIR")
+	if dir == "" {
+		t.Skip("set NAGI_PREVIEW_DIR to write BG-1 session inspection previews")
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	writeSessionShot := func(name string, fx phase3SeededControlPlane, width, height int, locale string, dark bool) {
+		t.Helper()
+		fx.app.windowWidth = width
+		tr := ui.NewTesterWith(fx.app.view, width, height, ui.TesterOptions{Dark: dark})
+		tr.SetLocale(locale)
+		tr.SetFocused(true)
+		tr.Frame()
+		path := filepath.Join(dir, name)
+		writePreviewPNG(t, path, tr.Image())
+		t.Logf("bg1 preview path=%s width=%d height=%d locale=%s dark=%v", path, width, height, locale, dark)
+	}
+
+	fxList, ptySummary, pipeSummary := seedVisualSessionInspectorFixture(t)
+	fxList.app.sessions.activeBotID = fxList.contact.ID
+	writeSessionShot("bg1-sessions-list-en-light-1040x720.png", fxList, 1040, 720, "en", false)
+
+	fxPTY, ptyDetailSummary, _ := seedVisualSessionInspectorFixture(t)
+	fxPTY.app.sessions.activeBotID = fxPTY.contact.ID
+	fxPTY.app.sessions.botSession(fxPTY.contact.ID).detail = &sessionDetailState{
+		summary: ptyDetailSummary,
+		ready:   true,
+		output: sessionOutputState{
+			loaded:         true,
+			from:           0,
+			next:           512,
+			highWater:      512,
+			firstAvailable: 0,
+			revision:       ptyDetailSummary.Revision,
+			authPause:      ptyDetailSummary.AuthPause,
+			chunks:         []pi.ProductSessionChunk{{Stream: "pty", Offset: 0, NextOffset: 512, Text: "PTY_READY\nPassword:\n"}},
+		},
+	}
+	writeSessionShot("bg1-session-pty-auth-zh-dark-720x640.png", fxPTY, 720, 640, "zh-Hans", true)
+
+	fxPipe, _, pipeDetailSummary := seedVisualSessionInspectorFixture(t)
+	fxPipe.app.sessions.activeBotID = fxPipe.contact.ID
+	fxPipe.app.sessions.botSession(fxPipe.contact.ID).detail = &sessionDetailState{
+		summary: pipeDetailSummary,
+		ready:   true,
+		output: sessionOutputState{
+			loaded:         true,
+			from:           2048,
+			next:           6144,
+			highWater:      12288,
+			firstAvailable: 2048,
+			gapBytes:       2048,
+			browsing:       true,
+			eof:            true,
+			revision:       pipeDetailSummary.Revision,
+			chunks: []pi.ProductSessionChunk{
+				{Stream: "stdout", Offset: 2048, NextOffset: 2070, Text: "Running integration\n"},
+				{Stream: "stderr", Offset: 2070, NextOffset: 2090, Text: "warning: slow step\n"},
+				{Stream: "stdout", Offset: 2090, NextOffset: 2110, Text: "All checks PASS\n"},
+			},
+		},
+	}
+	writeSessionShot("bg1-session-pipe-browsing-en-light-960x640.png", fxPipe, 960, 640, "en", false)
+
+	fxWatches, _, closedSummary := seedVisualSessionInspectorFixture(t)
+	closedSummary.State = pi.ProductSessionClosed
+	closedSummary.TransportStatus = pi.ProductTransportClosedByUser
+	fxWatches.app.sessions.activeBotID = fxWatches.contact.ID
+	fxWatches.app.sessions.botSession(fxWatches.contact.ID).detail = &sessionDetailState{
+		summary: closedSummary,
+		ready:   true,
+		output: sessionOutputState{
+			loaded:   true,
+			eof:      true,
+			revision: closedSummary.Revision,
+			chunks:   []pi.ProductSessionChunk{{Stream: "stdout", Offset: 0, NextOffset: 16, Text: "All checks PASS\n"}},
+		},
+		scroll: ui.ScrollState{Y: 260},
+	}
+	writeSessionShot("bg1-session-closed-watches-zh-dark-1040x720.png", fxWatches, 1040, 720, "zh-Hans", true)
+	_ = ptySummary
+	_ = pipeSummary
+}

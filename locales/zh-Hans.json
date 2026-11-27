@@ -105,11 +105,29 @@
   "createBotFailed": "无法创建 Bot，请重试。",
   "createBotWithPandoraBox": "用 PandoraBox 对话创建",
   "emptyBotGreeting": "{name} 已就绪，接下来做什么？",
-  "@emptyBotGreeting": {"placeholders": {"name": {"type": "String"}}},
+  "@emptyBotGreeting": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "starterFollowUp": "继续跟进：{summary}",
-  "@starterFollowUp": {"placeholders": {"summary": {"type": "String"}}},
+  "@starterFollowUp": {
+    "placeholders": {
+      "summary": {
+        "type": "String"
+      }
+    }
+  },
   "starterHelpWithPurpose": "帮我处理：{purpose}",
-  "@starterHelpWithPurpose": {"placeholders": {"purpose": {"type": "String"}}},
+  "@starterHelpWithPurpose": {
+    "placeholders": {
+      "purpose": {
+        "type": "String"
+      }
+    }
+  },
   "pandoraBoxPurpose": "通过对话设计、创建和改进专注于特定任务的 Nagi Bot。",
   "pandoraBoxStarterWriting": "创建一个写作和编辑 Bot",
   "pandoraBoxStarterCodeReview": "创建一个严格的代码审查 Bot",
@@ -240,7 +258,13 @@
   "botStatusDone": "✓ 任务已完成",
   "botStatusRailDone": "刚刚完成",
   "botStatusRailDoneWithSnippet": "刚刚完成 · {snippet}",
-  "@botStatusRailDoneWithSnippet": {"placeholders": {"snippet": {"type": "String"}}},
+  "@botStatusRailDoneWithSnippet": {
+    "placeholders": {
+      "snippet": {
+        "type": "String"
+      }
+    }
+  },
   "botStatusAnswer": "去回答 →",
   "botStatusViewTasks": "展开进度 →",
   "settingsAdvancedIntro": "只读的运行时与启动诊断。打开连接设置可修复配置。",
@@ -466,7 +490,16 @@
   "issueNoExecution": "还没有执行",
   "issueLatestExecution": "最新执行",
   "activityProgressSteps": "第 {step, number} 步，共 {total, number} 步",
-  "@activityProgressSteps": {"placeholders": {"step": {"type": "int"}, "total": {"type": "int"}}},
+  "@activityProgressSteps": {
+    "placeholders": {
+      "step": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
   "activityTrace": "执行轨迹",
   "activityTraceStarted": "已开始",
   "activityTraceFile": "已确认文件",
@@ -483,7 +516,16 @@
   "activityDelivered": "已送达",
   "activityDismissHint": "关闭提示",
   "activityNextNotice": "下一条 · {position, number}/{total, number}",
-  "@activityNextNotice": {"placeholders": {"position": {"type": "int"}, "total": {"type": "int"}}},
+  "@activityNextNotice": {
+    "placeholders": {
+      "position": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
   "activityRetryNotices": "重新加载活动提示",
   "activitySteer": "实时引导",
   "activitySteerInstruction": "发给运行中活动的指令",
@@ -967,7 +1009,13 @@
   "providerAutomaticPoolHint": "测试并同步可查看自动选择，也可以手动选择模型来设定模型池",
   "providerPickDefault": "选择默认模型",
   "providerToggleModel": "启用或停用 {model}",
-  "@providerToggleModel": {"placeholders": {"model": {"type": "String"}}},
+  "@providerToggleModel": {
+    "placeholders": {
+      "model": {
+        "type": "String"
+      }
+    }
+  },
   "providerTools": "支持工具",
   "providerNoTools": "不支持工具",
   "providerToolsUnknown": "工具支持未知",
@@ -977,7 +1025,16 @@
   "providerRecommended": "推荐",
   "providerPriceProtected": "高价模型",
   "providerModelLimits": "上下文 {context, number} · 输出 {output, number} token",
-  "@providerModelLimits": {"placeholders": {"context": {"type": "int"}, "output": {"type": "int"}}},
+  "@providerModelLimits": {
+    "placeholders": {
+      "context": {
+        "type": "int"
+      },
+      "output": {
+        "type": "int"
+      }
+    }
+  },
   "providerFallbackTag": "备用",
   "providerFallbackOnly": "仅作备用",
   "providerUseAsBackup": "用作备用",
@@ -989,9 +1046,21 @@
   "providerUnavailable": "不可用",
   "providerKeyRejected": "密钥被拒绝",
   "providerFailureCount": "{count, plural, other {失败 # 次}}",
-  "@providerFailureCount": {"placeholders": {"count": {"type": "int"}}},
+  "@providerFailureCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "providerRetryAt": "可在 {time} 重试",
-  "@providerRetryAt": {"placeholders": {"time": {"type": "String"}}},
+  "@providerRetryAt": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
   "providerPinDeleted": "固定的提供方已删除",
   "providerPinDisabled": "固定的提供方已停用",
   "providerPinRepointed": "固定的提供方已更改端点",
@@ -1004,9 +1073,21 @@
   "providerStreamFailure": "响应流中断",
   "providerFollowStrategy": "自动（遵循策略）",
   "providerModelPinOption": "模型 · {model}",
-  "@providerModelPinOption": {"placeholders": {"model": {"type": "String"}}},
+  "@providerModelPinOption": {
+    "placeholders": {
+      "model": {
+        "type": "String"
+      }
+    }
+  },
   "providerPinRole": "{role}路由",
-  "@providerPinRole": {"placeholders": {"role": {"type": "String"}}},
+  "@providerPinRole": {
+    "placeholders": {
+      "role": {
+        "type": "String"
+      }
+    }
+  },
   "providerPinnedUnavailable": "已固定（不可用）",
   "providerPinFailed": "无法更改固定路由",
   "providerAuto": "自动",
@@ -1016,7 +1097,13 @@
   "providerFallbackModel": "已切换为备用模型",
   "providerRouteUnavailable": "没有可用路由。草稿已保留，你可以在连接与模型中检查路由。",
   "providerRouteCoolingDown": "路由正在冷却。草稿已保留。{retry}。",
-  "@providerRouteCoolingDown": {"placeholders": {"retry": {"type": "String"}}},
+  "@providerRouteCoolingDown": {
+    "placeholders": {
+      "retry": {
+        "type": "String"
+      }
+    }
+  },
   "providerAnswerRoutePaused": "回答已保存。此事项的路由恢复后，你可以继续交付回答。",
   "providerEnabledCount": "{count, plural, other {已启用 # 个服务商}}",
   "providerActiveCount": "{count}/4 个角色已就绪",
@@ -1218,5 +1305,93 @@
   "capApprovalReadFailed": "无法读取待批准的技能请求，请重试。",
   "capApprovalChangeFailed": "无法更新批准状态。请查看详情后重新审核。",
   "capTimeoutMS": "{time} 毫秒",
-  "capMcpProbeResult": "已连接 · {count, plural, other {发现 # 项工具}}（{latency} 毫秒）"
+  "capMcpProbeResult": "已连接 · {count, plural, other {发现 # 项工具}}（{latency} 毫秒）",
+  "sessionInspectTitle": "会话",
+  "sessionInspectBack": "返回",
+  "sessionInspectReload": "重新加载",
+  "sessionInspectLoadMore": "加载更多",
+  "sessionInspectPreviousPage": "上一页",
+  "sessionInspectLoadingList": "正在加载会话…",
+  "sessionInspectEmptyList": "这个 Bot 还没有会话。",
+  "sessionInspectListError": "无法加载会话。请重新加载。",
+  "sessionInspectLoadingDetail": "正在加载会话详情…",
+  "sessionInspectDetailError": "无法加载会话详情。请重新加载。",
+  "sessionInspectSession": "会话",
+  "sessionInspectStarting": "正在启动",
+  "sessionInspectRunning": "运行中",
+  "sessionInspectExited": "已退出",
+  "sessionInspectClosed": "已关闭",
+  "sessionInspectDisconnected": "已断开",
+  "sessionInspectFailed": "失败",
+  "sessionInspectReadOnly": "只读会话记录",
+  "sessionInspectSourceChat": "来源对话",
+  "sessionInspectSourceActivity": "来源活动",
+  "sessionInspectCommand": "命令",
+  "sessionInspectDirectory": "工作目录",
+  "sessionInspectMode": "模式",
+  "sessionInspectPty": "PTY",
+  "sessionInspectPipe": "管道",
+  "sessionInspectSize": "终端尺寸",
+  "sessionInspectDimensions": "{cols} × {rows}",
+  "sessionInspectExitCode": "退出码",
+  "sessionInspectExitSignal": "退出信号",
+  "sessionInspectTransport": "连接状态",
+  "sessionInspectLive": "已连接",
+  "sessionInspectEof": "输出已结束",
+  "sessionInspectTransportEOF": "输出流已关闭",
+  "sessionInspectSupervisorLost": "会话管理进程已断开",
+  "sessionInspectWorkerRestarted": "运行时已重启",
+  "sessionInspectClosedByUser": "由你关闭",
+  "sessionInspectClosedByBot": "由 Bot 关闭",
+  "sessionInspectClosedOnShutdown": "随应用退出而关闭",
+  "sessionInspectExecFailed": "无法启动进程",
+  "sessionInspectOutput": "输出",
+  "sessionInspectStdout": "标准输出",
+  "sessionInspectStderr": "标准错误",
+  "sessionInspectReading": "正在读取输出…",
+  "sessionInspectEmptyOutput": "还没有输出。",
+  "sessionInspectOutputError": "无法读取输出。请重新加载。",
+  "sessionInspectOutputGap": "有 {bytes} 字节的早期输出已无法读取。",
+  "sessionInspectHostDisconnected": "会话主机已断开。仍可查看已有记录。",
+  "sessionInspectEarlierOutput": "较早的输出",
+  "sessionInspectLaterOutput": "之后的输出",
+  "sessionInspectLatestOutput": "最新输出",
+  "sessionInspectNewOutput": "有新输出。",
+  "sessionInspectAuthPaused": "等待外部身份验证",
+  "sessionInspectAuthPrompt": "进程要求进行身份验证。",
+  "sessionInspectCanonicalNoEcho": "进程正在等待隐藏的终端输入。",
+  "sessionInspectAuthAction": "请在 Nagi 之外完成身份验证，或终止此会话。",
+  "sessionInspectWatches": "监视规则",
+  "sessionInspectNoWatches": "本次运行没有监视规则。",
+  "sessionInspectArmed": "等待触发",
+  "sessionInspectFired": "已触发",
+  "sessionInspectCancelled": "已取消",
+  "sessionInspectTargetLost": "监视目标已丢失",
+  "sessionInspectConditions": "触发条件",
+  "sessionInspectExit": "进程退出",
+  "sessionInspectMatch": "文本匹配",
+  "sessionInspectIdle": "空闲",
+  "sessionInspectTimeout": "超时",
+  "sessionInspectMatchLiteral": "匹配文本",
+  "sessionInspectIdleTime": "空闲阈值",
+  "sessionInspectTimeoutTime": "超时阈值",
+  "sessionInspectMilliseconds": "{time} 毫秒",
+  "sessionInspectFiredKind": "触发原因",
+  "sessionInspectMatchedExcerpt": "匹配到的输出",
+  "sessionInspectKill": "终止会话",
+  "sessionInspectKillBlocked": "暂时无法操作会话。",
+  "sessionInspectKillPending": "正在等待主机确认终止结果…",
+  "sessionInspectKillUnknown": "无法确认终止结果。请先核对状态。",
+  "sessionInspectCheckClose": "核对终止状态",
+  "sessionInspectKillAccepted": "主机已接受终止请求。",
+  "sessionInspectKillTerminated": "进程已终止并回收。",
+  "sessionInspectKillSettled": "会话已经结束。",
+  "sessionInspectKillUnreaped": "尚未确认进程已回收。",
+  "sessionInspectKillReaped": "已确认进程回收。",
+  "sessionInspectPreviousClose": "较早一次运行的终止请求",
+  "sessionInspectKillStaleGeneration": "终止前，会话已切换到另一次运行。",
+  "sessionInspectKillStaleRevision": "终止前，会话状态已更新。",
+  "sessionInspectKillRejected": "主机拒绝了终止请求。",
+  "sessionInspectKillNotSent": "无法发送终止请求。",
+  "sessionInspectKillSaveError": "无法保存终止请求。请重试。"
 }

@@ -94,6 +94,10 @@ func (a *appModel) escapeTopLayer() {
 		a.backProductConversations()
 		return
 	}
+	if ct := a.selectedContact(); !a.demo && ct != nil && a.sessions.activeBotID == ct.ID {
+		a.sessions.backSessionInspection(a.sessionInspectorFallbackDeps(ct))
+		return
+	}
 	if a.aux != "" {
 		a.closeAux()
 		return
@@ -132,6 +136,8 @@ func (a *appModel) armActiveSurfaceFallback() {
 	switch {
 	case a.priorChats != nil:
 		a.priorChats.focusBack = true
+	case !a.demo && a.selectedContact() != nil && a.sessions.activeBotID == a.selectedContact().ID:
+		a.sessions.botSession(a.selectedContact().ID).focusBack = true
 	case a.detailIs(detailProfile):
 		a.focusDetailClose = true
 	default:
@@ -615,6 +621,10 @@ func (a *appModel) main(c *ui.Context, t *ui.Theme) {
 			a.productConversationsView(c, t, browser)
 			return
 		}
+		if !a.demo && a.sessions.activeBotID == ct.ID {
+			a.sessions.sessionInspectionView(c, a.sessionInspectorDeps(c, ct))
+			return
+		}
 		visual := a.botVisualState(ct, c.Now())
 		state := a.connectionViewState()
 		a.header(c, t, ct, visual, state)
@@ -696,6 +706,9 @@ func (a *appModel) header(c *ui.Context, t *ui.Theme, ct *contact, visual botSta
 				}
 			})
 			a.botStatusAction(c, t, ct, visual, msgs)
+			if !a.demo && a.productHost() != nil && !ct.Archived {
+				a.sessions.sessionInspectorButton(c, a.sessionInspectorDeps(c, ct))
+			}
 			if label := connectionStatusLabel(connection, msgs); !a.demo && label != "" && visual.kind != botVisualWaiting {
 				if connection == connectionViewConnecting {
 					ui.Text(c, label).FontSize(typeHeaderMeta).FixedLineHeight(lineHeader).TextColor(t.TextMuted).SingleLine().Shrink(0)

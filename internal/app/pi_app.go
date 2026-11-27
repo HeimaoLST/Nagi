@@ -11,7 +11,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/egoist/mygo/ui"
+
 	"github.com/HeimaoLST/Nagi/internal/pi"
+	"github.com/HeimaoLST/Nagi/locales"
 )
 
 type piAppHost struct {
@@ -223,8 +226,13 @@ func (a *appModel) openProductProfile(ctx context.Context, fresh bool, generatio
 		a.applyProductPreferences(opened.Snapshot.Preferences)
 		a.selected = slices.Index(contacts, selected)
 		a.activityIntents = nil
+		a.sessions = sessionWorkspaceState{
+			updateUI:            a.updateUI,
+			persistCloseIntents: a.persistSessionCloseIntents,
+		}
 		if local != nil {
 			a.activityIntents = local.PendingActivities
+			a.sessions.restoreSessionCloses(local.PendingSessionCloses)
 			a.leftPaneWidth = clampPaneWidth(local.Layout.LeftWidth, defaultLeftPaneWidth, minLeftPaneWidth, maxLeftPaneWidth)
 			a.rightPaneWidth = clampPaneWidth(local.Layout.RightWidth, defaultRightPaneWidth, minRightPaneWidth, maxRightPaneWidth)
 			a.appearanceThemeIDs = local.ThemeIDs
@@ -245,6 +253,8 @@ func (a *appModel) openProductProfile(ctx context.Context, fresh bool, generatio
 		installed = true
 		close(host.productEvents)
 		a.reconcileControlPlaneIntents(host)
+		a.sessions.blocked = a.dataRecoveryBlocksChanges()
+		a.sessions.setSessionInspectorClient(host.product)
 	})
 	return nil
 }
@@ -267,8 +277,47 @@ func (a *appModel) persistProductUI(host *piAppHost) error {
 		Selected: a.selectedID(), Layout: storedLayout{LeftWidth: a.railWidth(), RightWidth: a.workWidth(), WorkspaceOpen: a.workspaceOpen},
 		ThemeIDs: a.appearanceThemeIDs, Appearance: normalizeAppearanceMode(a.appearanceMode), Pending: host.productPending, RecoveryID: host.recoveryID,
 		PendingActivities:    a.activityIntents,
+		PendingSessionCloses: a.sessions.pendingSessionCloses(),
 		HideBuiltinArchitect: a.hideBuiltinArchitect,
 	})
+}
+
+func (a *appModel) persistSessionCloseIntents(pending []pi.ProductSessionCloseParams) error {
+	host := a.productHost()
+	if host == nil {
+		return nil
+	}
+	return a.persistProductUI(host)
+}
+
+func (a *appModel) sessionInspectorDeps(c *ui.Context, ct *contact) sessionInspectorDeps {
+	msgs := locales.In(c.Locale())
+	deps := a.sessionInspectorFallbackDeps(ct)
+	deps.copy = sessionInspectionLocaleCopy(msgs)
+	deps.formatDimensions = msgs.SessionInspectDimensions
+	deps.formatGap = msgs.SessionInspectOutputGap
+	deps.formatMS = msgs.SessionInspectMilliseconds
+	return deps
+}
+
+func (a *appModel) sessionInspectorFallbackDeps(ct *contact) sessionInspectorDeps {
+	return sessionInspectorDeps{
+		client:              a.productActivityClient(),
+		botID:               ct.ID,
+		wb:                  a.workTheme,
+		blocked:             a.dataRecoveryBlocksChanges(),
+		copy:                defaultSessionInspectionCopy,
+		updateUI:            a.updateUI,
+		persistCloseIntents: a.persistSessionCloseIntents,
+		onOpenConversation: func(conversationID string) {
+			a.browseProductConversations(ct, conversationID)
+		},
+		onOpenActivity: func(activityID string) {
+			a.sessions.activeBotID = ""
+			ct.activity.open = true
+			a.openProductActivity(ct, activityID)
+		},
+	}
 }
 
 func applyProductDraft(ct *contact, draft *pi.ProductDraft) {
@@ -574,6 +623,14 @@ func (a *appModel) applyProductEvent(host *piAppHost, event pi.ProductEvent) {
 		a.applyActivityTraceUpdated(host, *trace)
 		return
 	}
+	if changed := event.SessionChanged; changed != nil {
+		a.sessions.applySessionChanged(*changed)
+		return
+	}
+	if updated := event.SessionOutputUpdated; updated != nil {
+		a.sessions.applySessionOutputUpdated(*updated)
+		return
+	}
 	if event.Name == "provider.changed" {
 		a.refreshProductProviders(host)
 		return
@@ -792,6 +849,9 @@ func (a *appModel) reconcileProductStream(host *piAppHost) {
 					}
 				}
 				a.reconcileControlPlaneIntents(host)
+				a.sessions.blocked = a.dataRecoveryBlocksChanges()
+				a.sessions.setSessionInspectorClient(host.product)
+				a.sessions.refreshSessionInspection()
 			}
 		})
 	}()
@@ -840,6 +900,7 @@ func (a *appModel) observeProductExit(host *piAppHost) {
 		host.activityRevision++
 		a.runtimeErrKind = runtimeNoticeConnectionLost
 		a.clearBuiltinToolCatalog()
+		a.sessions.setSessionInspectorClient(nil)
 		for _, ct := range a.contacts {
 			if ct.ActiveTaskID != "" || ct.SendState == sendSubmitting {
 				if ct.ActiveTaskID != "" {

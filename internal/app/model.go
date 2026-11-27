@@ -180,6 +180,7 @@ type appModel struct {
 	focusComposer          bool
 	composerCaretToEnd     bool
 	priorChats             *productConversationBrowser
+	sessions               sessionWorkspaceState
 	composerHandle         ui.Handle
 	composerAttachMenuOpen bool
 	focusComposerAttach    bool
@@ -338,6 +339,7 @@ func (a *appModel) selectContact(i int) {
 	a.contacts[i].Unread = 0
 	a.selected = i
 	a.priorChats = nil
+	a.sessions.activeBotID = ""
 	if !a.demo {
 		a.persist()
 	}
