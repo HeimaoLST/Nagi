@@ -125,6 +125,7 @@ type contact struct {
 
 	activeActivities       map[string]pi.ProductActivitySummary
 	activityStatusRevision uint64
+	activityNotices        activityNoticeState
 
 	// A Pi conversation is opened lazily on its first send.
 	SessionID         string

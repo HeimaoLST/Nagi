@@ -282,6 +282,8 @@ type ProductActivityIntent struct {
 	QuestionID  string               `json:"question_id,omitempty"`
 	Text        string               `json:"text,omitempty"`
 	Materials   []pi.ProductMaterial `json:"materials,omitempty"`
+
+	SelectedOptionID string `json:"selected_option_id,omitempty"`
 }
 
 func CloneBuiltinTools(selection *[]string) *[]string {

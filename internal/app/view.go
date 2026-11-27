@@ -15,6 +15,7 @@ import (
 	"github.com/egoist/mygo/ui/markdown"
 
 	"github.com/HeimaoLST/Nagi/internal/pi"
+	"github.com/HeimaoLST/Nagi/internal/theme"
 	"github.com/HeimaoLST/Nagi/locales"
 )
 
@@ -701,7 +702,9 @@ func (a *appModel) header(c *ui.Context, t *ui.Theme, ct *contact, visual botSta
 				} else if a.runtimeErrKind == runtimeNoticeCredentialUnavailable {
 					ui.Text(c, label).FontSize(typeHeaderMeta).FixedLineHeight(lineHeader).TextColor(t.Warning).SingleLine().Shrink(0)
 				} else {
-					secondaryButton(c, label).Label(label).MinHeight(32).Padding(4, 10).Radius(8).Shrink(0).TextColor(t.Warning).OnClick(a.openConfiguration)
+					button := secondaryButton(c, label).Label(label).MinHeight(theme.ControlHit).Padding(4, 10).
+						Radius(theme.ControlRadius).Shrink(0).TextColor(t.Warning)
+					theme.TransitionControl(button, t).OnClick(a.openConfiguration)
 				}
 			}
 			if a.railCollapsed {
@@ -765,6 +768,7 @@ func (a *appModel) chat(c *ui.Context, t *ui.Theme, state connectionViewState, s
 			})
 		}
 		a.conversationActivities(c, t, ct)
+		a.activityNoticeStrip(c, t, ct)
 		ui.Row(c).Key("composer").Justify(ui.Center).Children(func() {
 			ui.Column(c).FillWidth().MaxWidth(conversationMaxWidth).Children(func() {
 				a.composer(c, t, state, showConnectionSettings)
@@ -806,7 +810,8 @@ func (a *appModel) conversationActivities(c *ui.Context, t *ui.Theme, ct *contac
 	}
 	msgs := locales.In(c.Locale())
 	ui.Row(c).Key("conversation-activities").Justify(ui.Center).Children(func() {
-		ui.Column(c).Key(ct.ID).FillWidth().MaxWidth(conversationMaxWidth).Padding(0, 16).Gap(4).Children(func() {
+		ui.Column(c).Key(ct.ID).FillWidth().MaxWidth(conversationMaxWidth-32).MinWidth(0).Margin(0, 16, 4).
+			Gap(4).Padding(4, 8).Radius(theme.CardRadius).Border(1, t.Border).Background(t.Surface).Children(func() {
 			ui.Row(c).FillWidth().AlignItems(ui.Center).Children(func() {
 				if p.open && (p.activityID != "" || p.legacyIssue) {
 					back := secondaryButton(c, msgs.BackAction()).Label(msgs.BackLabel()).OnClick(func() { a.backProductActivity(ct) })
@@ -839,10 +844,10 @@ func (a *appModel) conversationActivities(c *ui.Context, t *ui.Theme, ct *contac
 						if p.problem != "" {
 							ui.Text(c, p.problem).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Warning)
 						}
-						if p.actionProblem != "" {
+						if p.actionProblem != "" && p.actionTarget == p.activityID {
 							ui.Text(c, p.actionProblem).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Warning)
 						}
-						if providerDeliveryBlocked(p.actionBlocker.Code) {
+						if p.actionTarget == p.activityID && providerDeliveryBlocked(p.actionBlocker.Code) {
 							summary := msgs.ProviderSendRejected()
 							if p.actionBlocker.Code == pi.ProductRouteUnavailable {
 								summary = providerRouteRejectionText(c, msgs, p.actionBlocker.RetryAt)
@@ -873,7 +878,8 @@ func (a *appModel) conversationActivities(c *ui.Context, t *ui.Theme, ct *contac
 									secondaryButton(c, item.Goal).Label(msgs.IssueRowLabel(item.Goal)).Disabled(client == nil || p.reading).OnClick(func() {
 										a.openProductActivity(ct, item.ActivityID)
 									})
-									a.activityText(c, t, productActivityStateLabel(msgs, item.State))
+									activityStatusBadge(c, t, msgs, item)
+									activityProgressView(c, t, msgs, item.LatestProgress)
 								})
 							}
 							if p.nextCursor != nil {
@@ -923,7 +929,10 @@ func (a *appModel) productActivityDetails(c *ui.Context, t *ui.Theme, ct *contac
 	pending := a.activityIntents[activity.ActivityID]
 	blocked := client == nil || p.changing || pending.OperationID != "" || a.dataRecoveryBlocksChanges()
 	ui.Text(c, activity.Goal).FontSize(typeSettingsTitle).FontWeight(500).FixedLineHeight(lineSettingsTitle).TextColor(t.Text)
-	a.activityText(c, t, productActivityStateLabel(msgs, activity.State))
+	ui.Row(c).FillWidth().MinWidth(0).Wrap().AlignItems(ui.Center).Gap(6).Children(func() {
+		activityStatusBadge(c, t, msgs, activity.ProductActivitySummary)
+		activityProgressView(c, t, msgs, activity.LatestProgress)
+	})
 	if origin := activity.OriginConversationID; origin != "" {
 		source := secondaryButton(c, msgs.SourceChat()).Disabled(client == nil).OnClick(func() { a.browseProductConversations(ct, origin) })
 		if p.focusSource {
@@ -937,6 +946,9 @@ func (a *appModel) productActivityDetails(c *ui.Context, t *ui.Theme, ct *contac
 	taskContextReadOnlyView(c, a.workTheme, productTaskContext(activity.Materials))
 	if pending.OperationID != "" {
 		a.activityText(c, t, msgs.SupplementUnknown())
+		if pending.Action == "steer" {
+			capabilityBadge(c, t, msgs.ActivitySteerUnknown(), t.Warning)
+		}
 		if p.forms[activity.ActivityID] == nil {
 			a.activityText(c, t, pending.Text)
 			taskContextReadOnlyView(c, a.workTheme, productTaskContext(pending.Materials))
@@ -945,13 +957,17 @@ func (a *appModel) productActivityDetails(c *ui.Context, t *ui.Theme, ct *contac
 			a.runProductActivityAction(ct, client, pending, false)
 		})
 	}
+	for _, request := range openActivityApprovals(ct, activity) {
+		c.Key(request.RequestID)
+		ui.Column(c).FillWidth().MinWidth(0).Padding(8).Gap(4).Radius(theme.CardRadius).Border(1, t.Border).Background(t.Surface).Children(func() {
+			a.activityApprovalCard(c, t, ct, request, blocked, false)
+		})
+	}
 	for _, question := range activity.Questions {
 		ui.Column(c).Key(question.QuestionID).FillWidth().Gap(4).Children(func() {
 			a.activityText(c, t, question.Text)
 			if question.State == "open" {
-				answer := target
-				answer.Action, answer.Revision = "answer", question.Revision
-				answer.ExecutionID, answer.QuestionID = question.ExecutionID, question.QuestionID
+				answer := activityAnswerIntent(ct, activity, question)
 				button := secondaryButton(c, msgs.IssueNoticeWaiting(activity.Goal)).Disabled(blocked).OnClick(func() { a.editProductActivity(ct, answer) })
 				if p.focusQuestion == question.QuestionID && !blocked {
 					button.Focus().ScrollIntoView()
@@ -960,6 +976,9 @@ func (a *appModel) productActivityDetails(c *ui.Context, t *ui.Theme, ct *contac
 			}
 			if question.Answer != nil {
 				a.activityText(c, t, question.Answer.Text)
+				if question.Provenance == "bot_auto" {
+					capabilityBadge(c, t, msgs.ActivityAutoAnswered(), t.TextMuted)
+				}
 				taskContextReadOnlyView(c, a.workTheme, productTaskContext(question.Answer.Materials))
 				switch question.Delivery {
 				case "saved":
@@ -975,6 +994,8 @@ func (a *appModel) productActivityDetails(c *ui.Context, t *ui.Theme, ct *contac
 					}
 				case "dispatching":
 					a.activityText(c, t, msgs.IssueAnswerDispatching())
+				case "delivered":
+					a.activityText(c, t, msgs.ActivityDelivered())
 				case "unknown":
 					a.activityText(c, t, msgs.SupplementUnknown())
 				default:
@@ -983,13 +1004,13 @@ func (a *appModel) productActivityDetails(c *ui.Context, t *ui.Theme, ct *contac
 			}
 		})
 	}
-	canContinue := len(activity.OpenQuestionIDs) == 0
+	canContinue := activity.ClosedAt == "" && len(activity.OpenQuestionIDs)+len(activity.PendingApprovalRequestIDs) == 0
 	for i := len(activity.Executions) - 1; i >= 0; i-- {
 		execution := activity.Executions[i]
-		label := msgs.IssueCurrentRun(workNoticeText(msgs, execution.State, ""))
+		label := msgs.IssueCurrentRun(activityExecutionLabel(msgs, execution.State))
 		ui.Column(c).Key(execution.ExecutionID).Gap(4).Children(func() {
 			if i != len(activity.Executions)-1 {
-				label = workNoticeText(msgs, execution.State, "")
+				label = activityExecutionLabel(msgs, execution.State)
 			}
 			a.activityText(c, t, label)
 			if execution.Partial != nil && *execution.Partial != "" {
@@ -1006,7 +1027,14 @@ func (a *appModel) productActivityDetails(c *ui.Context, t *ui.Theme, ct *contac
 				if p.stopping == execution.ExecutionID {
 					a.activityText(c, t, msgs.IssueSendCancelRequested())
 				}
-				secondaryButton(c, msgs.WorkStopIssueTask()).Disabled(blocked || p.stopping == execution.ExecutionID).OnClick(func() { a.submitProductActivity(ct, stop, nil) })
+				ui.Row(c).FillWidth().MinWidth(0).Wrap().Gap(6).Children(func() {
+					secondaryButton(c, msgs.WorkStopIssueTask()).Disabled(blocked || p.stopping == execution.ExecutionID).OnClick(func() { a.submitProductActivity(ct, stop, nil) })
+					if canSteerActivity(p, activity, execution) {
+						steer := target
+						steer.Action, steer.Revision, steer.ExecutionID = "steer", activity.Revision, execution.ExecutionID
+						secondaryButton(c, msgs.ActivitySteer()).Disabled(blocked || ct.Archived).OnClick(func() { a.editProductActivity(ct, steer) })
+					}
+				})
 			case "unknown":
 				if i == len(activity.Executions)-1 {
 					canContinue = false
@@ -1017,6 +1045,8 @@ func (a *appModel) productActivityDetails(c *ui.Context, t *ui.Theme, ct *contac
 					a.readProductActivityResult(ct, activity.ActivityID, execution.ExecutionID)
 				})
 			}
+			activitySteerReceipts(c, t, msgs, activity, execution.ExecutionID)
+			a.activityExecutionTrace(c, t, ct, activity.ActivityID, execution.ExecutionID)
 		})
 	}
 	if canContinue && p.forms[activity.ActivityID] == nil {
@@ -1026,19 +1056,47 @@ func (a *appModel) productActivityDetails(c *ui.Context, t *ui.Theme, ct *contac
 	if form := p.forms[activity.ActivityID]; form != nil {
 		a.productActivityEditView(c, t, ct, form, blocked)
 	}
+	a.activityLifecycleActions(c, ct, activity, blocked)
 }
 
 func (a *appModel) productActivityEditView(c *ui.Context, t *ui.Theme, ct *contact, form *productActivityForm, blocked bool) {
 	p, msgs := &ct.activity, locales.In(c.Locale())
 	label, submit := msgs.SupplementFormLabel(), msgs.IssueResume()
-	if form.target.Action == "answer" {
+	question := activityFormQuestion(p.activity, form.target)
+	switch form.target.Action {
+	case "answer":
 		label, submit = msgs.IssueNoticeWaiting(p.activity.Goal), msgs.ContactSaveChanges()
+	case "steer":
+		label, submit = msgs.ActivitySteerInstruction(), msgs.ActivitySendSteer()
 	}
-	ui.Column(c).Key(form.target.ActivityID + ":" + form.target.QuestionID).FillWidth().Gap(8).Children(func() {
-		input := formTextArea(c, &form.text, false, a.workTheme.InputBorder).Label(label).Disabled(blocked).Height(80)
-		if form.focus {
-			input.Focus().ScrollIntoView()
-			form.focus = false
+	valid := a.validActivityControlTarget(ct, p.activity, form.target, form)
+	ui.Column(c).Key(activityFormKey(form.target)).FillWidth().MinWidth(0).Gap(8).Children(func() {
+		var input ui.Element
+		if question == nil || questionAllowsText(*question) {
+			c.Key("activity-edit-text")
+			input = formTextArea(c, &form.text, false, a.workTheme.InputBorder).Label(label).Disabled(blocked).Height(80)
+			if form.caretToEnd {
+				input.SetTextSelection(math.MaxInt, math.MaxInt)
+				form.caretToEnd = false
+			}
+			if form.focus && !blocked {
+				input.Focus().ScrollIntoView()
+				form.focus = false
+			}
+			if question != nil {
+				input.OnChange(func() {
+					if option := activityQuestionOption(*question, form.target.SelectedOptionID); option != nil && form.text != option.Label {
+						form.target.SelectedOptionID = ""
+					}
+				})
+			}
+		}
+		if question != nil && len(question.Options) > 0 {
+			activityOptions(c, msgs, *question, form, blocked || question.State != "open", func() {
+				if questionAllowsText(*question) {
+					form.focus, form.caretToEnd = true, true
+				}
+			})
 		}
 		if !blocked {
 			form.materials.ChooseFile = func() { a.chooseActivityMaterial(ct, form) }
@@ -1047,9 +1105,8 @@ func (a *appModel) productActivityEditView(c *ui.Context, t *ui.Theme, ct *conta
 			taskContextReadOnlyView(c, a.workTheme, form.materials.Items)
 		}
 		ui.Row(c).Wrap().Gap(8).Children(func() {
-			empty := strings.TrimSpace(form.text) == "" && (form.target.Action == "answer" || form.materials.Count() == 0)
-			secondaryButton(c, submit).Disabled(blocked || empty || form.materials.FormOpen).OnClick(func() { a.submitProductActivity(ct, form.target, form) })
-			secondaryButton(c, msgs.SupplementCancel()).Disabled(blocked).OnClick(func() { delete(p.forms, form.target.ActivityID) })
+			secondaryButton(c, submit).Disabled(blocked || !valid || form.materials.FormOpen).OnClick(func() { a.submitProductActivity(ct, form.target, form) })
+			secondaryButton(c, msgs.SupplementCancel()).Disabled(blocked).OnClick(func() { discardActivityDraft(p, form.target) })
 		})
 	})
 }

@@ -923,3 +923,129 @@ func TestPreviewCapabilitiesProfileDS2(t *testing.T) {
 	matApp.composerMaterial.text = "Verify 16 DIP frosted modal radius, 1 DIP hairline InputBorder, and first-frame theme contrast."
 	writeShot("ds2-p2-composer-material-modal-zh-dark-1040x720.png", matApp, 1040, 720, "zh-Hans", true, nil)
 }
+
+func TestPreviewControlPlaneDS2(t *testing.T) {
+	dir := os.Getenv("NAGI_PREVIEW_DIR")
+	if dir == "" {
+		t.Skip("set NAGI_PREVIEW_DIR to write DS2 Phase 3 control plane previews")
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	writeShot := func(name string, fx phase3SeededControlPlane, width, height int, locale string, dark bool, prepare func(*ui.Tester)) {
+		t.Helper()
+		fx.app.windowWidth = width
+		tr := ui.NewTesterWith(fx.app.view, width, height, ui.TesterOptions{Dark: dark})
+		tr.SetLocale(locale)
+		tr.SetFocused(true)
+		tr.Frame()
+		if prepare != nil {
+			prepare(tr)
+			tr.Advance(theme.ControlTransition.Duration)
+			tr.Frame()
+		}
+		path := filepath.Join(dir, name)
+		writePreviewPNG(t, path, tr.Image())
+		t.Logf("ds2 phase3 preview path=%s width=%d height=%d locale=%s dark=%v", path, width, height, locale, dark)
+	}
+
+	fxQ1 := phase3SeededControlPlaneApp(t)
+	fxQ1.contact.activityNotices.selected = activityNoticeKey{fxQ1.questionAct.ActivityID, "question_open", "q-cp-1"}
+	writeShot("ds2-p3-notice-strip-question-en-light-1040x720.png", fxQ1, 1040, 720, "en", false, func(tr *ui.Tester) {
+		_ = tr.Click("Batch fourteen")
+		tr.Move(0, 0)
+		tr.Frame()
+	})
+
+	fxQ2 := phase3SeededControlPlaneApp(t)
+	fxQ2.contact.activityNotices.selected = activityNoticeKey{fxQ2.questionAct.ActivityID, "question_open", "q-cp-1"}
+	writeShot("ds2-p3-notice-strip-question-zh-dark-720x640.png", fxQ2, 720, 640, "zh-Hans", true, func(tr *ui.Tester) {
+		_ = tr.Click("Batch fourteen")
+		tr.Move(0, 0)
+		tr.Frame()
+	})
+
+	fxApp := phase3SeededControlPlaneApp(t)
+	fxApp.contact.activityNotices.selected = activityNoticeKey{fxApp.approvalAct.ActivityID, "approval_required", "req-cp-1"}
+	writeShot("ds2-p3-notice-strip-approval-zh-dark-1040x720.png", fxApp, 1040, 720, "zh-Hans", true, nil)
+
+	fxAuto := phase3SeededControlPlaneApp(t)
+	fxAuto.contact.activityNotices.selected = activityNoticeKey{fxAuto.autoAnswerAct.ActivityID, "question_auto_saved", "q-cp-auto"}
+	writeShot("ds2-p3-notice-strip-auto-answer-en-light-1040x720.png", fxAuto, 1040, 720, "en", false, nil)
+
+	fxDone := phase3SeededControlPlaneApp(t)
+	fxDone.contact.activityNotices.selected = activityNoticeKey{fxDone.completedAct.ActivityID, "completed", "exec-done-1"}
+	writeShot("ds2-p3-notice-strip-completed-zh-dark-720x640.png", fxDone, 720, 640, "zh-Hans", true, nil)
+
+	fxTraceEn := phase3SeededControlPlaneApp(t)
+	fxTraceEn.contact.activity.open = true
+	fxTraceEn.contact.activity.activityID = fxTraceEn.steerAct.ActivityID
+	fxTraceEn.contact.activity.activity = fxTraceEn.steerAct
+	writeShot("ds2-p3-activity-detail-trace-steer-en-light-1040x720.png", fxTraceEn, 1040, 720, "en", false, func(tr *ui.Tester) {
+		fxTraceEn.contact.activity.scroll.Y = 180
+		tr.Frame()
+	})
+
+	fxTraceZh := phase3SeededControlPlaneApp(t)
+	fxTraceZh.contact.activity.open = true
+	fxTraceZh.contact.activity.activityID = fxTraceZh.steerAct.ActivityID
+	fxTraceZh.contact.activity.activity = fxTraceZh.steerAct
+	writeShot("ds2-p3-activity-detail-trace-steer-zh-dark-720x640.png", fxTraceZh, 720, 640, "zh-Hans", true, func(tr *ui.Tester) {
+		fxTraceZh.contact.activity.scroll.Y = 180
+		tr.Frame()
+	})
+
+	fxOpt := phase3SeededControlPlaneApp(t)
+	fxOpt.contact.activity.open = true
+	fxOpt.contact.activity.activityID = fxOpt.questionAct.ActivityID
+	fxOpt.contact.activity.activity = fxOpt.questionAct
+	fxOpt.app.editProductActivity(fxOpt.contact, activityAnswerIntent(fxOpt.contact, fxOpt.questionAct, fxOpt.questionAct.Questions[0]))
+	writeShot("ds2-p3-activity-options-editor-en-light-1040x720.png", fxOpt, 1040, 720, "en", false, func(tr *ui.Tester) {
+		_ = tr.Click("Batch fourteen")
+		tr.Move(0, 0)
+		tr.Frame()
+	})
+
+	fxUnk := phase3SeededControlPlaneApp(t)
+	fxUnk.contact.activity.open = true
+	fxUnk.contact.activity.activityID = fxUnk.steerAct.ActivityID
+	fxUnk.contact.activity.activity = fxUnk.steerAct
+	fxUnk.app.activityIntents = map[string]productActivityIntent{
+		fxUnk.steerAct.ActivityID: {
+			OperationID: "op-preview-unknown",
+			BotID:       fxUnk.contact.ID,
+			ActivityID:  fxUnk.steerAct.ActivityID,
+			Action:      "steer",
+			ExecutionID: "exec-steer-1",
+			Text:        "Verify missing steering receipt",
+		},
+	}
+	writeShot("ds2-p3-activity-steer-unknown-zh-dark-1040x720.png", fxUnk, 1040, 720, "zh-Hans", true, nil)
+
+	fxProfEn := phase3SeededControlPlaneApp(t)
+	fxProfEn.app.rightPaneWidth = 440
+	fxProfEn.app.contactProfileID = fxProfEn.contact.ID
+	fxProfEn.app.openDetail(detailProfile)
+	fxProfEn.contact.activity.open = true
+	fxProfEn.contact.activity.activityID = fxProfEn.steerAct.ActivityID
+	fxProfEn.contact.activity.activity = fxProfEn.steerAct
+	writeShot("ds2-p3-workbench-profile-activity-en-light-960x640.png", fxProfEn, 960, 640, "en", false, nil)
+
+	fxProfZh := phase3SeededControlPlaneApp(t)
+	fxProfZh.app.rightPaneWidth = 440
+	fxProfZh.app.contactProfileID = fxProfZh.contact.ID
+	fxProfZh.app.openDetail(detailProfile)
+	fxProfZh.contact.activity.open = true
+	fxProfZh.contact.activity.activityID = fxProfZh.steerAct.ActivityID
+	fxProfZh.contact.activity.activity = fxProfZh.steerAct
+	writeShot("ds2-p3-workbench-profile-activity-zh-dark-960x640.png", fxProfZh, 960, 640, "zh-Hans", true, nil)
+
+	fxNarrow := phase3SeededControlPlaneApp(t)
+	fxNarrow.contact.activity.open = true
+	fxNarrow.contact.activityNotices.selected = activityNoticeKey{fxNarrow.questionAct.ActivityID, "question_open", "q-cp-1"}
+	writeShot("ds2-p3-workbench-narrow-composer-zh-dark-720x640.png", fxNarrow, 720, 640, "zh-Hans", true, func(tr *ui.Tester) {
+		_ = tr.Click(locales.In("zh-Hans").ComposerLabel(fxNarrow.contact.Name))
+		tr.Frame()
+	})
+}

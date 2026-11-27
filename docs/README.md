@@ -14,11 +14,11 @@ This directory holds Nagi's product requirements, implemented design contracts, 
 - **Engineering & UI Standards**: [Code and UI Standards](code-standards.md) — fix-the-class rules, machine-checkable GUI red lines, Fail-Before-Fix, and verification taxonomy.
 - **Subsystem Reference Index**: [Subsystem Index](subsystems/README.md) — single-source-of-truth map of live subsystems and update rules.
 
-### Active Architecture RFCs (Planned / In Progress)
+### Architecture RFCs
 
-- [RFC-0001: Multi-Brain Execution, Direct Data Inspection & Unified Capabilities](rfcs/0001-multi-brain-and-capabilities.md) — `Partially Implemented` (`M0a`–`M4` backend shipped; M1–M4 UI handoffs delivered to `t1vb`).
-- [RFC-0002: Bot-Activity Control Plane v2](rfcs/0002-bot-activity-control-plane.md) — `Partially Implemented` (`CP-1`–`CP-3` all backend milestones shipped; UI handoffs delivered to `t1vb`; passive-only Main-Bot wake framing superseded by `RFC-0004`).
-- [RFC-0003: Model Catalog, Ranked Multi-Provider Routing & Health Failover](rfcs/0003-model-catalog-and-smart-routing.md) — `Partially Implemented` (`RT-1`–`RT-2` all backend milestones shipped; UI handoffs delivered to `t1vb`).
+- [RFC-0001: Multi-Brain Execution, Direct Data Inspection & Unified Capabilities](rfcs/0001-multi-brain-and-capabilities.md) — `Implemented`.
+- [RFC-0002: Bot-Activity Control Plane v2](rfcs/0002-bot-activity-control-plane.md) — `Implemented`.
+- [RFC-0003: Model Catalog, Ranked Multi-Provider Routing & Health Failover](rfcs/0003-model-catalog-and-smart-routing.md) — `Implemented`.
 - [RFC-0004: Stateful Session Handles, Event Watch Substrate & Scoped Autonomous Orchestration](rfcs/0004-stateful-sessions-and-autonomous-orchestration.md) — `Accepted` *(Astra-6.2 reviewed; **implementation intentionally held** until frontend and backend synchronize on the unified RFC-0001–0003 baseline).*
 
 ### Repository Root References

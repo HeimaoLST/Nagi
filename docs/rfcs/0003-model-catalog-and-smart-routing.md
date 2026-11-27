@@ -1,6 +1,6 @@
 # RFC-0003: Model Catalog, Ranked Multi-Provider Routing & Health Failover
 
-- **Status**: `Partially Implemented` *(Astra-6.2 deep technical review resolved; all backend milestones `RT-1`–`RT-2` shipped on SQLite v11 and promoted to `docs/design/product-protocol.md`; consolidated frontend UI handoff delivered to `t1vb`)*
+- **Status**: `Implemented` (`RT-1`–`RT-2` on SQLite v11, with desktop catalog, routing overrides and health readback)
 - **Baseline**: `dev` @ `24519ac` (RFC-0001 `M0a`–`M4`, RFC-0002 `CP-1`–`CP-3`, and RFC-0003 `RT-1` merged; pinned Pi SDK `1.5.2`)
 - **Authors / Reviewers**: Backend Architecture (`t21d`), Deep Technical Review (`t1jr` / Astra-6.2, including offline Node `22.23.5` / `@earendil-works/pi-ai` `1.5.2` catalog & scoring probes)
 - **Canonical Vocabulary**: [docs/design/glossary.md](../design/glossary.md)
@@ -168,7 +168,7 @@ Track runtime health strictly in memory per worker lifetime (reset on worker res
     - **NEVER emit `"health"` on the v1 `provider.changed` stream** and never fake config saves on cooldown. Expose per-route health + account summary (`healthy` / `degraded` / `cooldown` / `auth_failed`) on `provider.list` and `routing.get` reads without bumping revisions.
 - **Explicit Frontend Alignment (`internal/app/providers_ui.go`)**:
   - All 8 M4 RPCs, nullable `resolvedRoles[role]`, and `credentialStatus` vocabulary remain 100% intact.
-  - Because `providers_ui.go:92-102` treats nil `Dialogue` as not-ready and an empty pool as credentials-unavailable, frontend RT adoption will read the new sibling `roleStatus[role]` (`cooldown` + `retryAt`, `pin_unavailable`, `empty_pool`) and refresh locally at cooldown expiry without restart.
+  - Desktop reads per-role `roleStatus`, including cooldown and retry time, independently of whether the role resolves to a route.
 
 ---
 
