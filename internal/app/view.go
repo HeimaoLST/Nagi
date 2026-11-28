@@ -1499,7 +1499,7 @@ func (a *appModel) composer(c *ui.Context, t *ui.Theme, state connectionViewStat
 	}
 	ui.Column(c).FillWidth().Padding(8, 16).Gap(4).Children(func() {
 		wb := a.workTheme
-		card := ui.Column(c).Key(ct.ID).FillWidth().Padding(10, 14, 8, 14).Gap(4).Radius(16)
+		card := ui.Column(c).Key(ct.ID).FillWidth().Padding(10, 12, 8, 6).Gap(4).Radius(16)
 		surface, border := wb.ComposerSurface, wb.ComposerBorder
 		focused := c.Focused(a.composerHandle)
 		if focused {
@@ -1531,12 +1531,12 @@ func (a *appModel) composer(c *ui.Context, t *ui.Theme, state connectionViewStat
 				a.composerAttachments(c, t, ct)
 			}
 			if dragOver {
-				ui.Text(c, msgs.ComposerDropFiles()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(wb.ComposerMuted)
+				ui.Text(c, msgs.ComposerDropFiles()).Padding(0, 2, 0, 8).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(wb.ComposerMuted)
 			}
 			c.Key("draft")
 			input := ui.TextAreaBase(c, &ct.Draft).Bind(&a.composerHandle).Label(msgs.ComposerLabel(ct.Name)).
 				FontSize(typeBody).FixedLineHeight(lineBody).Lines(1, 6).TextColor(wb.ComposerText).
-				Background(ui.Transparent).BorderWidth(0).Padding(0, 2).FocusRing(false).
+				Background(ui.Transparent).BorderWidth(0).Padding(0, 2, 0, 12).FocusRing(false).
 				Placeholder(msgs.ComposerPlaceholder(ct.Name)).PlaceholderColor(wb.ComposerMuted).FillWidth().OnChange(func() {
 				a.draftChanged(ct)
 			}).OnTextKey(func(k ui.TextKey) bool {

@@ -439,11 +439,13 @@ func (a *appModel) removeDraftQuote(ct *contact) bool {
 func (a *appModel) composerQuote(c *ui.Context, t *ui.Theme, ct *contact) {
 	quote := ct.DraftQuote
 	msgs := locales.In(c.Locale())
-	ui.Row(c).Key("draft-quote").FillWidth().MinWidth(0).Radius(8).Padding(6, 8, 6, 10).
-		Background(a.workTheme.ComposerChipBg).Gap(8).AlignItems(ui.Center).Children(func() {
-		quoteStripText(c, t, msgs.QuoteReplyingTo(quote.AuthorName), quote.Text)
-		composerRemoveButton(c, t, msgs.QuoteRemove()).Size(24, 24).Disabled(!a.quoteDraftEditable(ct)).OnClick(func() {
-			a.removeDraftQuote(ct)
+	ui.Column(c).FillWidth().Padding(0, 2, 0, 8).Children(func() {
+		ui.Row(c).Key("draft-quote").FillWidth().MinWidth(0).Radius(8).Padding(6, 8, 6, 10).
+			Background(a.workTheme.ComposerChipBg).Gap(8).AlignItems(ui.Center).Children(func() {
+			quoteStripText(c, t, msgs.QuoteReplyingTo(quote.AuthorName), quote.Text)
+			composerRemoveButton(c, t, msgs.QuoteRemove()).Size(24, 24).Disabled(!a.quoteDraftEditable(ct)).OnClick(func() {
+				a.removeDraftQuote(ct)
+			})
 		})
 	})
 }

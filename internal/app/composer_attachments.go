@@ -11,25 +11,38 @@ import (
 func (a *appModel) composerToolbar(c *ui.Context, t *ui.Theme, ct *contact, sendDisabled bool, submissionStatus string) {
 	msgs := locales.In(c.Locale())
 	blocked := a.shutdownStarted || a.dataRecoveryBlocksChanges()
-	toolbar := ui.Row(c).Key("composer-tools").FillWidth().Height(32).Shrink(0).AlignItems(ui.Center).Gap(8).
+	toolbar := ui.Row(c).Key("composer-tools").FillWidth().Height(32).Shrink(0).Padding(0, 2, 0, 0).AlignItems(ui.Center).Gap(4).
 		Role(ui.RoleGroup).Label(msgs.ComposerTools())
 	toolbar.Children(func() {
-		trigger := ui.ButtonBase(c).Key("attach").Size(32, 32).Shrink(0).Center().Radius(theme.ControlRadius).
+		trigger := ui.ButtonBase(c).Key("attach").Size(32, 32).Shrink(0).Center().
+			Background(ui.Transparent).Border(0, ui.Transparent).
 			Label(msgs.ComposerAttach()).Disabled(blocked).FocusRing(false)
-		bg, border := a.workTheme.ComposerSurface, a.workTheme.ComposerBorder
-		switch {
-		case trigger.Pressed() || a.composerAttachMenuOpen:
-			bg = theme.StrongPressedFill(t)
-		case trigger.Hovered():
-			bg = theme.StrongHoverFill(t)
+		ink := a.workTheme.ComposerMuted
+		if !blocked && (trigger.Hovered() || trigger.Pressed() || a.composerAttachMenuOpen || trigger.FocusVisible()) {
+			ink = a.workTheme.ComposerText
 		}
-		trigger.Background(bg).Border(1, border).TextColor(a.workTheme.ComposerText).DrawOver(func(p *ui.Painter, r ui.Rect) {
+		trigger.TextColor(ink).Draw(func(p *ui.Painter, r ui.Rect) {
+			face := ui.Rect{X: r.X + 3, Y: r.Y + 3, W: r.W - 6, H: r.H - 6}
+			fill := ui.Transparent
+			if !blocked {
+				switch {
+				case trigger.Pressed() || a.composerAttachMenuOpen:
+					fill = theme.StrongPressedFill(t)
+				case trigger.Hovered():
+					fill = theme.StrongHoverFill(t)
+				}
+			}
+			if fill.A > 0 {
+				theme.PaintPreferenceFace(p, face, 8, 2, fill, ui.Transparent)
+			}
+		}).DrawOver(func(p *ui.Painter, r ui.Rect) {
 			if trigger.FocusVisible() && !trigger.IsDisabled() {
-				theme.DrawFocusRing(p, r, theme.ControlRadius, 0, t)
+				face := ui.Rect{X: r.X + 3, Y: r.Y + 3, W: r.W - 6, H: r.H - 6}
+				theme.DrawFocusRing(p, face, 8, 2, t)
 			}
 		})
 		theme.TransitionControl(trigger, t)
-		trigger.Children(func() { ui.Icon(c, composerAttachIcon).Size(16, 16) })
+		trigger.Children(func() { ui.Icon(c, composerAttachIcon).Size(15, 15) })
 		trigger.PopoverMenuButton(func(menu *ui.Menu) {
 			if menu.Item(msgs.ComposerAttachFile()).Disabled(blocked || ct.Context.FileChoosing).Chosen() {
 				trigger.Focus()
@@ -90,7 +103,7 @@ func (a *appModel) composerAttachments(c *ui.Context, t *ui.Theme, ct *contact) 
 	blocked := a.shutdownStarted || a.dataRecoveryBlocksChanges()
 	c.Key("attachments")
 	ui.Scroll(c).FillWidth().MaxHeight(84).Label(msgs.TaskContextHeading()).Children(func() {
-		ui.Row(c).FillWidth().Wrap().Gap(6).Children(func() {
+		ui.Row(c).FillWidth().Padding(0, 2, 0, 8).Wrap().Gap(6).Children(func() {
 			for _, item := range ct.Context.Items {
 				icon := theme.GlyphStickyNoteLine
 				tip := item.Name + "\n" + materials.FormatSize(int64(len(item.Text)))
@@ -138,7 +151,7 @@ func (a *appModel) composerAttachments(c *ui.Context, t *ui.Theme, ct *contact) 
 
 func (a *appModel) composerAttachmentError(c *ui.Context, t *ui.Theme, ct *contact) {
 	msgs := locales.In(c.Locale())
-	ui.Row(c).Key("attachment-error").FillWidth().AlignItems(ui.Center).Gap(6).Children(func() {
+	ui.Row(c).Key("attachment-error").FillWidth().Padding(0, 2, 0, 8).AlignItems(ui.Center).Gap(6).Children(func() {
 		ui.Text(c, materials.ErrorText(msgs, ct.Context.ActionError)).Grow(1).MinWidth(0).
 			FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.Danger)
 		composerRemoveButton(c, t, msgs.ComposerDismissAttachmentError()).OnClick(func() {

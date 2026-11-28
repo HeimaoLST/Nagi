@@ -1545,7 +1545,7 @@ func TestVisualGuardControlPlaneWorkbench(t *testing.T) {
 				if !ok || comp.W <= 0 || comp.H <= 0 || comp.X < 0 || comp.X+comp.W > 960.5 || comp.Y+comp.H > 640.5 {
 					t.Fatalf("960x640 composer missing or clipped: ok=%v rect=%+v", ok, comp)
 				}
-				if netW := comp.W - 4; netW < 440 {
+				if netW := comp.W - 14; netW < 440 {
 					t.Fatalf("960x640 profile+activity net editable composer width = %.1f DIP, want >= 440", netW)
 				}
 				if r, ok := tr.Find(msgs.ContactSaveChanges()); !ok || r.W < theme.ControlHit || r.H < theme.ControlHit || r.X+r.W > 960.5 {
@@ -2573,4 +2573,8 @@ func TestVisualGuardOrchestrationAndTimeline(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestVisualGuardComposerPlusAlignment(t *testing.T) {
+	assertComposerPlusAlignmentAndChrome(t)
 }

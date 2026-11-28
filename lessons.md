@@ -56,7 +56,15 @@
 
 **Cause or correction:** MyGo’s stock `ui.TextArea` applies a default minimum height and stateful editors bind identity at construction time; zeroing all padding removes the horizontal caret margin while vertical slack only comes from top/bottom padding.
 
-**Prevention:** Key stateful editors with `c.Key(...)` before calling `ui.TextAreaBase`, use `Lines(1, 6)` with `Padding(0, 2)` for compact auto-growing composers, and verify net editable width (`>= 440 DIP` at `960x640` with profile open) plus resting height directly on rendered geometry.
+**Prevention:** Key stateful editors with `c.Key(...)` before calling `ui.TextAreaBase`, use `Lines(1, 6)` with zero vertical padding, and verify the caret insets, resting height and net editable width (`>= 440 DIP` at `960 × 640` with the profile open) on rendered geometry.
+
+### Align borderless composer toolbar icons optically with inset text
+
+**Problem:** Aligning the attachment hit area to the editor inset shifted the centered plus glyph right of the text. Adding margins to the full-width quote row shifted it past the right inset.
+
+**Cause or correction:** The glyph has leading whitespace within its 32-DIP target. Inset the target 6 DIP and the editor text 18 DIP from the card edge. MyGo's full-width quote kept its width when margins were added, so use a padded parent to constrain the row.
+
+**Prevention:** Measure the painted glyph edge separately from the hit area. When redistributing card padding, check the editable width, send and stop positions, and the quote and material row insets.
 
 ### Move caret explicitly after programmatic TextArea draft fill
 
