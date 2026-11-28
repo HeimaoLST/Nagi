@@ -33,11 +33,24 @@ func SegmentedActivityChart7D(c *ui.Context, days []ActivityDay, meanValue float
 	accentBar := ChartAccentBar(t)
 	tertiary := TertiaryInk(t)
 
-	maxY := 30
+	peak := 0
 	for _, d := range days {
-		if total := d.Regular + d.Coalesced; total > maxY {
-			maxY = ((total + 9) / 10) * 10
+		if total := d.Regular + d.Coalesced; total > peak {
+			peak = total
 		}
+	}
+	maxY := 30
+	switch {
+	case peak <= 6:
+		maxY = 6
+	case peak <= 12:
+		maxY = 12
+	case peak <= 20:
+		maxY = 20
+	case peak <= 30:
+		maxY = 30
+	default:
+		maxY = ((peak + 19) / 20) * 20
 	}
 
 	const (
@@ -209,24 +222,29 @@ func WakeRhythmStrip24H(c *ui.Context, hours []WakeHour, startLabel, midLabel, e
 //	theme.SparklineStatTile(c, msgs.MetricCompleted7D(), "131", pts, t.Success)
 func SparklineStatTile(c *ui.Context, label, value string, points []float64, stroke ui.Color) ui.Element {
 	t := c.Theme()
-	tile := ui.Column(c).MinWidth(0).Grow(1).Padding(8, 10).Gap(4).Radius(ControlRadius).Background(t.Surface).Border(1, t.Border)
+	tile := ui.Column(c).Basis(116).MinWidth(0).Grow(1).Padding(8, 10).Gap(4).Radius(ControlRadius).Background(t.Surface).Border(1, t.Border)
 	tile.Children(func() {
 		ui.Text(c, label).FontSize(11).FixedLineHeight(14).TextColor(t.TextMuted).MaxLines(1).Ellipsis("…")
 		ui.Row(c).FillWidth().AlignItems(ui.End).Justify(ui.SpaceBetween).Gap(6).Children(func() {
 			ui.Text(c, value).FontSize(16).FontWeight(600).FixedLineHeight(18).TextColor(t.Text).SingleLine()
-			spark := ui.Box(c).Size(62, 20).Shrink(0)
+			spark := ui.Box(c).Size(48, 18).Shrink(0)
 			spark.Draw(func(p *ui.Painter, r ui.Rect) {
 				if len(points) < 2 {
 					return
 				}
-				peak := 1.0
-				for _, v := range points {
+				low, peak := points[0], points[0]
+				for _, v := range points[1:] {
+					low = min(low, v)
 					peak = max(peak, v)
 				}
+				peak = max(1.0, peak)
 				coords := make([][2]float32, len(points))
 				for i, v := range points {
 					x := r.X + (r.W-4)*float32(i)/float32(len(points)-1) + 2
-					y := r.Y + r.H - 2 - float32(max(0, v)/peak)*max(1, r.H-4)
+					y := r.Y + r.H*0.5
+					if peak > low {
+						y = r.Y + r.H - 2 - float32(max(0, v)/peak)*max(1, r.H-4)
+					}
 					coords[i] = [2]float32{x, y}
 				}
 				p.StrokePolyline(coords, 2, stroke)

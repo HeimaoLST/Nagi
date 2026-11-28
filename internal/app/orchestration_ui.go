@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/egoist/mygo/i18n"
 	"github.com/egoist/mygo/ui"
 
 	"github.com/HeimaoLST/Nagi/internal/pi"
@@ -367,15 +368,18 @@ func (a *appModel) orchestrationOperationFeedback(c *ui.Context, t *ui.Theme, ct
 	if pending.OperationID != "" {
 		working := s.checking[pending.OperationID]
 		text := msgs.OrchestrationDecisionUnknown()
+		tone := theme.ToneWarning
 		if target.decisionID == "" {
 			text = msgs.OrchestrationStopUnknown()
 			if working {
 				text = msgs.OrchestrationStopping()
+				tone = theme.ToneNeutral
 			}
 		} else if working {
 			text = msgs.OrchestrationDecisionPending()
+			tone = theme.ToneNeutral
 		}
-		a.activityText(c, t, text)
+		theme.InlineBanner(c, text, "", tone, nil)
 		if !working {
 			secondaryButton(c, msgs.OrchestrationCheckStatus()).AlignSelf(ui.Start).Disabled(a.orchestrationReadOnly(ct)).OnClick(func() {
 				a.readOrchestrationOperation(a.productHost(), pending, nil)
@@ -386,7 +390,7 @@ func (a *appModel) orchestrationOperationFeedback(c *ui.Context, t *ui.Theme, ct
 		if target.decisionID == "" {
 			text = msgs.OrchestrationStopFailed(problem)
 		}
-		a.activityText(c, t, text)
+		theme.InlineBanner(c, text, "", theme.ToneDanger, nil)
 		secondaryButton(c, msgs.OrchestrationCheckStatus()).AlignSelf(ui.Start).Disabled(!a.productProfileReady()).OnClick(func() {
 			delete(s.problems, target)
 			a.applyOrchestrationChange(a.productHost(), pi.ProductOrchestrationChange{BotID: ct.ID, MandateID: target.mandateID})
@@ -402,7 +406,7 @@ func (a *appModel) orchestrationDecisionStrip(c *ui.Context, t *ui.Theme, ct *co
 	if !slices.ContainsFunc(ct.orchestration.items, visible) {
 		return
 	}
-	ui.Scroll(c).Key("orchestration-decisions").FillWidth().MaxHeight(228).Shrink(0).Children(func() {
+	ui.Scroll(c).Key("orchestration-decisions").FillWidth().MaxHeight(276).Shrink(0).Children(func() {
 		ui.Row(c).FillWidth().Justify(ui.Center).Children(func() {
 			ui.Column(c).FillWidth().MinWidth(0).MaxWidth(conversationMaxWidth).Padding(4, 16).Gap(8).Children(func() {
 				for _, item := range ct.orchestration.items {
@@ -432,8 +436,16 @@ func (a *appModel) orchestrationDecisionCard(c *ui.Context, t *ui.Theme, ct *con
 	}
 	blocked := item.Dormant || a.orchestrationReadOnly(ct) || pending.OperationID != ""
 	opener := "decision:" + item.DecisionID
-	ui.Column(c).Key(item.DecisionID).FillWidth().MinWidth(0).Padding(10, 12).Gap(6).Radius(theme.CardRadius).Border(1, t.Border).Background(t.Surface).Children(func() {
-		ui.Text(c, msgs.OrchestrationDecisionBadge()).FontSize(typeMeta).FontWeight(500).TextColor(t.Warning)
+	cardBg, cardBorder := t.Surface, t.Border
+	if !item.Dormant {
+		warnBg, _, _ := theme.ToneWarning.Colors(t)
+		cardBg = t.Surface.Mix(warnBg, .55)
+		cardBorder = t.Border.Mix(t.Warning, .40)
+	}
+	ui.Column(c).Key(item.DecisionID).FillWidth().MinWidth(0).Padding(12).Gap(8).Radius(theme.CardRadius).Border(1, cardBorder).Background(cardBg).Children(func() {
+		ui.Row(c).FillWidth().AlignItems(ui.Center).Children(func() {
+			theme.StatusPill(c, msgs.OrchestrationDecisionBadge(), theme.ToneWarning)
+		})
 		orchestrationHeading(c, t, item.Purpose)
 		if item.Summary != "" && item.Summary != item.Purpose {
 			orchestrationText(c, t, item.Summary)
@@ -506,9 +518,14 @@ func (a *appModel) backgroundWorkView(c *ui.Context, t *ui.Theme, panel *backgro
 			a.activityText(c, t, panel.bot.Name)
 			switch {
 			case panel.failed:
-				a.activityText(c, t, msgs.OrchestrationLoadFailed())
+				theme.InlineBanner(c, msgs.OrchestrationLoadFailed(), "", theme.ToneDanger, nil)
 			case panel.loading && (panel.detailID == "" && len(panel.items) == 0 || panel.detailID != "" && panel.detail == nil):
 				a.activityText(c, t, msgs.OrchestrationLoading())
+				ui.Column(c).FillWidth().MinWidth(0).Gap(8).Padding(12).Radius(theme.CardRadius).Border(1, t.Border).Background(t.Surface).Children(func() {
+					theme.SkeletonLine(c, 0, 12)
+					theme.SkeletonLine(c, 0, 12)
+					theme.SkeletonLine(c, 132, 12)
+				})
 			}
 			if panel.detailID != "" {
 				if panel.detail != nil {
@@ -520,7 +537,7 @@ func (a *appModel) backgroundWorkView(c *ui.Context, t *ui.Theme, panel *backgro
 				a.activityText(c, t, msgs.OrchestrationEmpty())
 			}
 			for _, item := range panel.items {
-				ui.Column(c).Key(item.MandateID).FillWidth().MinWidth(0).Gap(6).Padding(12).Radius(theme.CardRadius).Border(1, t.Border).Children(func() {
+				ui.Column(c).Key(item.MandateID).FillWidth().MinWidth(0).Gap(8).Padding(12).Radius(theme.CardRadius).Border(1, t.Border).Background(t.Surface).Children(func() {
 					a.backgroundWorkSummary(c, t, item)
 					a.activityText(c, t, msgs.OrchestrationMetricsWakes(int(item.Metrics.TotalWakes), int(item.Metrics.Calls), int(item.Metrics.TotalTokens)))
 					ui.Row(c).Wrap().Gap(8).Children(func() {
@@ -547,11 +564,11 @@ func (a *appModel) backgroundWorkView(c *ui.Context, t *ui.Theme, panel *backgro
 func (a *appModel) backgroundWorkSummary(c *ui.Context, t *ui.Theme, item pi.ProductOrchestrationSummary) {
 	msgs := locales.In(c.Locale())
 	orchestrationHeading(c, t, item.Purpose)
-	ui.Row(c).FillWidth().Wrap().Gap(8).Children(func() {
-		a.activityText(c, t, orchestrationSourceLabel(msgs, item.SourceKind))
-		a.activityText(c, t, orchestrationStateLabel(msgs, item.State))
+	ui.Row(c).FillWidth().Wrap().Gap(6).AlignItems(ui.Center).Children(func() {
+		theme.StatusPill(c, orchestrationStateLabel(msgs, item.State), orchestrationStateTone(item.State))
+		theme.StatusPill(c, orchestrationSourceLabel(msgs, item.SourceKind), theme.ToneNeutral)
 		if item.LastDisposition != "" {
-			a.activityText(c, t, orchestrationDispositionLabel(msgs, item.LastDisposition))
+			theme.StatusPill(c, orchestrationDispositionLabel(msgs, item.LastDisposition), orchestrationDispositionTone(item.LastDisposition))
 		}
 	})
 	a.activityText(c, t, msgs.OrchestrationVersion(int(item.Generation), int(item.Revision)))
@@ -576,23 +593,26 @@ func (a *appModel) orchestrationStopFeedback(c *ui.Context, t *ui.Theme, ct *con
 func (a *appModel) backgroundWorkDetail(c *ui.Context, t *ui.Theme, panel *backgroundWorkPanel) {
 	msgs, detail := locales.In(c.Locale()), panel.detail
 	item := detail.ProductOrchestrationSummary
-	ui.Column(c).FillWidth().MinWidth(0).Gap(6).Children(func() {
+	ui.Column(c).FillWidth().MinWidth(0).Gap(8).Padding(12).Radius(theme.CardRadius).Border(1, t.Border).Background(t.Surface).Children(func() {
 		a.backgroundWorkSummary(c, t, item)
 		a.orchestrationStopButton(c, panel.bot, item)
 		a.orchestrationStopFeedback(c, t, panel.bot, item)
 	})
 	m := item.Metrics
-	ui.Column(c).FillWidth().MinWidth(0).Gap(4).Children(func() {
-		orchestrationHeading(c, t, msgs.OrchestrationMetricsTitle())
-		a.activityText(c, t, msgs.OrchestrationMetricsWakes(int(m.TotalWakes), int(m.Calls), int(m.TotalTokens)))
-		a.activityText(c, t, msgs.OrchestrationMetricsCost(fmt.Sprintf("%.6f", m.CostUSD)))
-		a.activityText(c, t, msgs.OrchestrationMetricsDelay(int(m.LastQueueDelayMS), int(m.LastCoalescedCount), int(m.BackoffDelayMS)))
-		if m.BackoffReason != "" {
-			a.activityText(c, t, msgs.OrchestrationBackoffReason(safeDiagnostic(m.BackoffReason)))
-		}
-		if stamp, err := time.Parse(time.RFC3339Nano, m.NextEligibleAt); err == nil {
-			a.activityText(c, t, msgs.OrchestrationNextEligible(formatChatTimestamp(stamp, c.Now(), c.Locale())))
-		}
+	orchestrationHeading(c, t, msgs.OrchestrationMetricsTitle())
+	ui.Column(c).FillWidth().MinWidth(0).Gap(10).Padding(12).Radius(theme.CardRadius).Border(1, t.Border).Background(t.Surface).Children(func() {
+		a.orchestrationDetailAnalytics(c, t, detail)
+		ui.Column(c).FillWidth().MinWidth(0).Gap(4).Children(func() {
+			a.activityText(c, t, msgs.OrchestrationMetricsWakes(int(m.TotalWakes), int(m.Calls), int(m.TotalTokens)))
+			a.activityText(c, t, msgs.OrchestrationMetricsCost(fmt.Sprintf("%.6f", m.CostUSD)))
+			a.activityText(c, t, msgs.OrchestrationMetricsDelay(int(m.LastQueueDelayMS), int(m.LastCoalescedCount), int(m.BackoffDelayMS)))
+			if m.BackoffReason != "" {
+				a.activityText(c, t, msgs.OrchestrationBackoffReason(safeDiagnostic(m.BackoffReason)))
+			}
+			if stamp, err := time.Parse(time.RFC3339Nano, m.NextEligibleAt); err == nil {
+				a.activityText(c, t, msgs.OrchestrationNextEligible(formatChatTimestamp(stamp, c.Now(), c.Locale())))
+			}
+		})
 	})
 	if len(detail.Decisions) > 0 {
 		orchestrationHeading(c, t, msgs.OrchestrationDecisionsTitle())
@@ -604,13 +624,15 @@ func (a *appModel) backgroundWorkDetail(c *ui.Context, t *ui.Theme, panel *backg
 				a.orchestrationDecisionCard(c, t, panel.bot, decision, false)
 				continue
 			}
-			ui.Column(c).Key(decision.DecisionID).FillWidth().MinWidth(0).Gap(4).Children(func() {
-				orchestrationHeading(c, t, decision.Purpose)
-				if decision.Outcome == "approve" {
-					a.activityText(c, t, msgs.OrchestrationApproved())
-				} else if decision.Outcome == "reject" {
-					a.activityText(c, t, msgs.OrchestrationRejected())
-				}
+			ui.Column(c).Key(decision.DecisionID).FillWidth().MinWidth(0).Gap(6).Padding(10, 12).Radius(theme.CardRadius).Border(1, t.Border).Background(t.Surface).Children(func() {
+				ui.Row(c).FillWidth().AlignItems(ui.Center).Wrap().Gap(6).Children(func() {
+					orchestrationHeading(c, t, decision.Purpose)
+					if decision.Outcome == "approve" {
+						theme.StatusPill(c, msgs.OrchestrationApproved(), theme.ToneSuccess)
+					} else if decision.Outcome == "reject" {
+						theme.StatusPill(c, msgs.OrchestrationRejected(), theme.ToneWarning)
+					}
+				})
 				if decision.Summary != "" {
 					orchestrationText(c, t, decision.Summary)
 				}
@@ -620,18 +642,20 @@ func (a *appModel) backgroundWorkDetail(c *ui.Context, t *ui.Theme, panel *backg
 	if len(detail.RecentRuns) > 0 {
 		orchestrationHeading(c, t, msgs.OrchestrationRunsTitle())
 		for _, run := range detail.RecentRuns {
-			ui.Column(c).Key(run.RunID).FillWidth().MinWidth(0).Gap(4).Children(func() {
-				a.activityText(c, t, orchestrationDispositionLabel(msgs, run.Disposition))
-				if run.RouteRole != "" {
-					a.activityText(c, t, msgs.OrchestrationRouteRole(safeDiagnostic(run.RouteRole)))
-				}
+			ui.Column(c).Key(run.RunID).FillWidth().MinWidth(0).Gap(6).Padding(10, 12).Radius(theme.CardRadius).Border(1, t.Border).Background(t.Surface).Children(func() {
+				ui.Row(c).FillWidth().AlignItems(ui.Center).Wrap().Gap(6).Children(func() {
+					theme.StatusPill(c, orchestrationDispositionLabel(msgs, run.Disposition), orchestrationDispositionTone(run.Disposition))
+					if run.RouteRole != "" {
+						a.activityText(c, t, msgs.OrchestrationRouteRole(safeDiagnostic(run.RouteRole)))
+					}
+				})
 				a.activityText(c, t, msgs.OrchestrationMetricsWakes(1, int(run.Calls), int(run.TotalTokens)))
 				a.activityText(c, t, msgs.OrchestrationMetricsCost(fmt.Sprintf("%.6f", run.CostUSD)))
 				if run.Summary != "" {
 					orchestrationText(c, t, run.Summary)
 				}
 				if run.Error != "" {
-					a.activityText(c, t, safeDiagnostic(run.Error))
+					theme.InlineBanner(c, safeDiagnostic(run.Error), "", theme.ToneDanger, nil)
 				}
 			})
 		}
@@ -639,9 +663,11 @@ func (a *appModel) backgroundWorkDetail(c *ui.Context, t *ui.Theme, panel *backg
 	if len(detail.RecentReceipts) > 0 {
 		orchestrationHeading(c, t, msgs.OrchestrationReceiptsTitle())
 		for _, receipt := range detail.RecentReceipts {
-			ui.Column(c).Key(receipt.ReceiptID).FillWidth().MinWidth(0).Gap(4).Children(func() {
-				orchestrationHeading(c, t, safeDiagnostic(receipt.Tool))
-				a.activityText(c, t, safeDiagnostic(receipt.State))
+			ui.Column(c).Key(receipt.ReceiptID).FillWidth().MinWidth(0).Gap(6).Padding(10, 12).Radius(theme.CardRadius).Border(1, t.Border).Background(t.Surface).Children(func() {
+				ui.Row(c).FillWidth().AlignItems(ui.Center).Wrap().Gap(6).Children(func() {
+					orchestrationHeading(c, t, safeDiagnostic(receipt.Tool))
+					theme.StatusPill(c, safeDiagnostic(receipt.State), orchestrationReceiptTone(receipt.State))
+				})
 				if receipt.Target != "" {
 					orchestrationText(c, t, safeDiagnostic(receipt.Target))
 				}
@@ -650,6 +676,196 @@ func (a *appModel) backgroundWorkDetail(c *ui.Context, t *ui.Theme, panel *backg
 				}
 			})
 		}
+	}
+}
+
+func (a *appModel) activeOrchestrationContextTokens() int {
+	accounts := a.providers.snapshot.Accounts
+	if len(accounts) == 0 && a.pi != nil {
+		accounts = a.pi.productProviders.Accounts
+	}
+	fallback := 0
+	for _, acc := range accounts {
+		if acc.ContextTokens <= 0 {
+			continue
+		}
+		if acc.Enabled {
+			return acc.ContextTokens
+		}
+		if fallback == 0 {
+			fallback = acc.ContextTokens
+		}
+	}
+	return fallback
+}
+
+func (a *appModel) orchestrationDetailAnalytics(c *ui.Context, t *ui.Theme, detail *pi.ProductOrchestrationDetail) {
+	msgs := locales.In(c.Locale())
+	m := detail.Metrics
+	wakePts := make([]float64, 0, len(detail.RecentRuns)+2)
+	tokenPts := make([]float64, 0, len(detail.RecentRuns)+2)
+	for i := len(detail.RecentRuns) - 1; i >= 0; i-- {
+		run := detail.RecentRuns[i]
+		wakePts = append(wakePts, float64(max(1, int(run.CoalescedCount))))
+		tokenPts = append(tokenPts, float64(run.TotalTokens))
+	}
+	ui.Row(c).FillWidth().Wrap().Gap(8).Children(func() {
+		theme.SparklineStatTile(c, msgs.OrchestrationStatWakes(), fmt.Sprintf("%d", m.TotalWakes), wakePts, t.Success)
+		theme.SparklineStatTile(c, msgs.OrchestrationStatTokens(), formatCompactTokens(m.TotalTokens), tokenPts, theme.ChartAccentBar(t))
+	})
+	if quota := a.activeOrchestrationContextTokens(); quota > 0 {
+		used := m.TotalTokens
+		if len(detail.RecentRuns) > 0 && detail.RecentRuns[0].TotalTokens > 0 {
+			used = detail.RecentRuns[0].TotalTokens
+		}
+		pct := min(100.0, float64(used)*100.0/float64(quota))
+		barDetail := fmt.Sprintf("%s / %s (%.0f%%)", formatCompactTokens(used), formatCompactTokens(uint64(quota)), pct)
+		theme.ContextCapacityBar(c, float64(used), float64(quota), msgs.OrchestrationContextBudget(), barDetail)
+	}
+	if len(detail.RecentRuns) > 0 || m.TotalWakes > 0 {
+		days, mean, hours, startHr, midHr := buildOrchestrationSeries(c.Now().Local(), c.Locale(), msgs, m, detail.RecentRuns)
+		ui.Column(c).FillWidth().MinWidth(0).Gap(4).Children(func() {
+			ui.Text(c, msgs.OrchestrationChart7DTitle()).FontSize(typeMeta).FontWeight(500).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
+			theme.SegmentedActivityChart7D(c, days, mean)
+		})
+		ui.Column(c).FillWidth().MinWidth(0).Gap(4).Children(func() {
+			ui.Text(c, msgs.OrchestrationRhythm24HTitle()).FontSize(typeMeta).FontWeight(500).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
+			theme.WakeRhythmStrip24H(c, hours, startHr, midHr, msgs.OrchestrationRhythmNow())
+		})
+	}
+}
+
+func buildOrchestrationSeries(now time.Time, locale string, msgs locales.Messages, metrics pi.ProductOrchestrationMetrics, runs []pi.ProductOrchestrationRun) ([]theme.ActivityDay, float64, []theme.WakeHour, string, string) {
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	dayDates := make([]time.Time, 7)
+	days := make([]theme.ActivityDay, 7)
+	for i := range 7 {
+		d := today.AddDate(0, 0, i-6)
+		dayDates[i] = d
+		days[i].Label = i18n.FormatDate(locale, d, i18n.DateOptions{Skeleton: "EEE"})
+	}
+	curHour := now.Truncate(time.Hour)
+	hourStarts := make([]time.Time, 24)
+	hours := make([]theme.WakeHour, 24)
+	for i := range 24 {
+		slot := curHour.Add(time.Duration(i-23) * time.Hour)
+		hourStarts[i] = slot
+		hours[i].Hour = slot.Hour()
+	}
+	if len(runs) == 0 && metrics.TotalWakes > 0 {
+		days[6].Regular = int(metrics.TotalWakes)
+		if metrics.LastCoalescedCount > 1 {
+			days[6].Coalesced = int(metrics.LastCoalescedCount) - 1
+		}
+		hours[23].Runs = int(metrics.TotalWakes)
+	}
+	for _, run := range runs {
+		stamp, hasTime := parseOrchestrationRunTime(run, now)
+		dayIdx := -1
+		if !hasTime {
+			dayIdx = 6
+		} else {
+			localStamp := stamp.In(now.Location())
+			for i, d := range dayDates {
+				if localStamp.Year() == d.Year() && localStamp.Month() == d.Month() && localStamp.Day() == d.Day() {
+					dayIdx = i
+					break
+				}
+			}
+		}
+		if dayIdx >= 0 {
+			days[dayIdx].Regular += 1
+			if run.CoalescedCount > 1 {
+				days[dayIdx].Coalesced += int(run.CoalescedCount) - 1
+			}
+		}
+		if !hasTime {
+			hours[23].Runs += 1
+		} else {
+			localStamp := stamp.In(now.Location())
+			for i, start := range hourStarts {
+				end := start.Add(time.Hour)
+				if !localStamp.Before(start) && localStamp.Before(end) {
+					hours[i].Runs += 1
+					break
+				}
+			}
+		}
+	}
+	totalWakes := 0
+	for i := range days {
+		w := days[i].Regular + days[i].Coalesced
+		totalWakes += w
+		days[i].Tooltip = msgs.OrchestrationChart7DTooltip(days[i].Label, w, days[i].Coalesced)
+	}
+	for i := range hours {
+		hrLabel := fmt.Sprintf("%02d:00", hourStarts[i].Hour())
+		hours[i].Tooltip = msgs.OrchestrationRhythmHourTooltip(hrLabel, hours[i].Runs)
+	}
+	return days, float64(totalWakes) / 7.0, hours, fmt.Sprintf("%02d:00", hourStarts[0].Hour()), fmt.Sprintf("%02d:00", hourStarts[12].Hour())
+}
+
+func parseOrchestrationRunTime(run pi.ProductOrchestrationRun, fallback time.Time) (time.Time, bool) {
+	for _, raw := range [2]string{run.StartedAt, run.SettledAt} {
+		if raw == "" {
+			continue
+		}
+		if parsed, err := time.Parse(time.RFC3339Nano, raw); err == nil {
+			return parsed, true
+		}
+	}
+	return fallback, false
+}
+
+func formatCompactTokens(tokens uint64) string {
+	switch {
+	case tokens >= 1_000_000:
+		return fmt.Sprintf("%.1fM", float64(tokens)/1_000_000)
+	case tokens >= 10_000:
+		return fmt.Sprintf("%.0fK", float64(tokens)/1_000)
+	case tokens >= 1_000:
+		return fmt.Sprintf("%.1fK", float64(tokens)/1_000)
+	default:
+		return fmt.Sprintf("%d", tokens)
+	}
+}
+
+func orchestrationStateTone(state pi.ProductMandateState) theme.StatusTone {
+	switch state {
+	case pi.ProductMandateActive, pi.ProductMandateCompleted:
+		return theme.ToneSuccess
+	case pi.ProductMandateWaitingDecision, pi.ProductMandatePaused, pi.ProductMandateRestored, pi.ProductMandateRestoredReadOnly:
+		return theme.ToneWarning
+	case pi.ProductMandateFailed:
+		return theme.ToneDanger
+	default:
+		return theme.ToneNeutral
+	}
+}
+
+func orchestrationDispositionTone(disposition pi.ProductOrchestrationDisposition) theme.StatusTone {
+	switch disposition {
+	case pi.ProductDispositionNotified:
+		return theme.ToneSuccess
+	case pi.ProductDispositionNeedsDecision, pi.ProductDispositionStopped:
+		return theme.ToneWarning
+	case pi.ProductDispositionFailed:
+		return theme.ToneDanger
+	default:
+		return theme.ToneNeutral
+	}
+}
+
+func orchestrationReceiptTone(state string) theme.StatusTone {
+	switch strings.ToLower(strings.TrimSpace(state)) {
+	case "settled_ok", "ok", "applied", "completed":
+		return theme.ToneSuccess
+	case "pending", "queued", "waiting":
+		return theme.ToneWarning
+	case "failed", "rejected", "error", "denied":
+		return theme.ToneDanger
+	default:
+		return theme.ToneNeutral
 	}
 }
 

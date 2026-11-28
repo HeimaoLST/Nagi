@@ -13775,3 +13775,87 @@ func OrchestrationRouteRole(role string) string {
 func (msgs Messages) OrchestrationRouteRole(role string) string {
 	return Catalog.Format(msgs.locale, "orchestrationRouteRole", map[string]any{"role": role})
 }
+
+// OrchestrationStatWakes says "Total wakes"
+// in the language the app shows.
+func OrchestrationStatWakes() string { return In(i18n.Locale()).OrchestrationStatWakes() }
+
+// OrchestrationStatWakes says "Total wakes"
+// in the language of msgs.
+func (msgs Messages) OrchestrationStatWakes() string {
+	return Catalog.Format(msgs.locale, "orchestrationStatWakes", nil)
+}
+
+// OrchestrationStatTokens says "Total tokens"
+// in the language the app shows.
+func OrchestrationStatTokens() string { return In(i18n.Locale()).OrchestrationStatTokens() }
+
+// OrchestrationStatTokens says "Total tokens"
+// in the language of msgs.
+func (msgs Messages) OrchestrationStatTokens() string {
+	return Catalog.Format(msgs.locale, "orchestrationStatTokens", nil)
+}
+
+// OrchestrationContextBudget says "Context window"
+// in the language the app shows.
+func OrchestrationContextBudget() string { return In(i18n.Locale()).OrchestrationContextBudget() }
+
+// OrchestrationContextBudget says "Context window"
+// in the language of msgs.
+func (msgs Messages) OrchestrationContextBudget() string {
+	return Catalog.Format(msgs.locale, "orchestrationContextBudget", nil)
+}
+
+// OrchestrationChart7DTitle says "7-day wake activity"
+// in the language the app shows.
+func OrchestrationChart7DTitle() string { return In(i18n.Locale()).OrchestrationChart7DTitle() }
+
+// OrchestrationChart7DTitle says "7-day wake activity"
+// in the language of msgs.
+func (msgs Messages) OrchestrationChart7DTitle() string {
+	return Catalog.Format(msgs.locale, "orchestrationChart7DTitle", nil)
+}
+
+// OrchestrationChart7DTooltip says "{day}: {wakes} wakes · {coalesced} coalesced"
+// in the language the app shows.
+func OrchestrationChart7DTooltip(day string, wakes int, coalesced int) string {
+	return In(i18n.Locale()).OrchestrationChart7DTooltip(day, wakes, coalesced)
+}
+
+// OrchestrationChart7DTooltip says "{day}: {wakes} wakes · {coalesced} coalesced"
+// in the language of msgs.
+func (msgs Messages) OrchestrationChart7DTooltip(day string, wakes int, coalesced int) string {
+	return Catalog.Format(msgs.locale, "orchestrationChart7DTooltip", map[string]any{"day": day, "wakes": wakes, "coalesced": coalesced})
+}
+
+// OrchestrationRhythm24HTitle says "24h wake rhythm"
+// in the language the app shows.
+func OrchestrationRhythm24HTitle() string { return In(i18n.Locale()).OrchestrationRhythm24HTitle() }
+
+// OrchestrationRhythm24HTitle says "24h wake rhythm"
+// in the language of msgs.
+func (msgs Messages) OrchestrationRhythm24HTitle() string {
+	return Catalog.Format(msgs.locale, "orchestrationRhythm24HTitle", nil)
+}
+
+// OrchestrationRhythmNow says "Now"
+// in the language the app shows.
+func OrchestrationRhythmNow() string { return In(i18n.Locale()).OrchestrationRhythmNow() }
+
+// OrchestrationRhythmNow says "Now"
+// in the language of msgs.
+func (msgs Messages) OrchestrationRhythmNow() string {
+	return Catalog.Format(msgs.locale, "orchestrationRhythmNow", nil)
+}
+
+// OrchestrationRhythmHourTooltip says "{hour}: {runs} wakes"
+// in the language the app shows.
+func OrchestrationRhythmHourTooltip(hour string, runs int) string {
+	return In(i18n.Locale()).OrchestrationRhythmHourTooltip(hour, runs)
+}
+
+// OrchestrationRhythmHourTooltip says "{hour}: {runs} wakes"
+// in the language of msgs.
+func (msgs Messages) OrchestrationRhythmHourTooltip(hour string, runs int) string {
+	return Catalog.Format(msgs.locale, "orchestrationRhythmHourTooltip", map[string]any{"hour": hour, "runs": runs})
+}

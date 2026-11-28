@@ -93,15 +93,20 @@ func (a *appModel) timelineNotice(c *ui.Context, t *ui.Theme, ownerID string, it
 	if notice == nil || notice.BotID != ownerID {
 		return
 	}
-	badge, ink := msgs.TimelineNoticeBadge(), t.TextMuted
-	if notice.Urgency == "high" || notice.Urgency == "urgent" {
-		badge, ink = msgs.TimelineNoticeUrgent(), t.Warning
+	urgent := notice.Urgency == "high" || notice.Urgency == "urgent"
+	badge, tone := msgs.TimelineNoticeBadge(), theme.ToneNeutral
+	bg, border := t.Surface, t.Border
+	if urgent {
+		badge, tone = msgs.TimelineNoticeUrgent(), theme.ToneWarning
+		warnBg, _, _ := theme.ToneWarning.Colors(t)
+		bg = t.Surface.Mix(warnBg, .35)
+		border = t.Border.Mix(t.Warning, .35)
 	}
-	ui.Column(c).FillWidth().MinWidth(0).Gap(4).Padding(8, 12).Radius(theme.CardRadius).Border(1, t.Border).Children(func() {
-		ui.Row(c).FillWidth().Wrap().Gap(8).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, badge).FontSize(typeMeta).FontWeight(500).FixedLineHeight(lineMeta).TextColor(ink)
+	ui.Column(c).FillWidth().MinWidth(0).Gap(6).Padding(10, 12).Radius(theme.CardRadius).Border(1, border).Background(bg).Children(func() {
+		ui.Row(c).FillWidth().Wrap().Gap(6).AlignItems(ui.Center).Children(func() {
+			theme.StatusPill(c, badge, tone)
 			if notice.Dormant {
-				ui.Text(c, msgs.TimelineNoticeReadOnly()).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
+				theme.StatusPill(c, msgs.TimelineNoticeReadOnly(), theme.ToneNeutral)
 			}
 			if !item.Timestamp.IsZero() {
 				ui.Text(c, formatChatTimestamp(item.Timestamp, c.Now(), c.Locale())).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
@@ -129,7 +134,8 @@ func (a *appModel) timelineNotice(c *ui.Context, t *ui.Theme, ownerID string, it
 
 func timelineTranscriptWarning(c *ui.Context, t *ui.Theme) {
 	ui.Row(c).FillWidth().MinWidth(0).Justify(ui.Center).Children(func() {
-		ui.Text(c, locales.In(c.Locale()).TimelineTranscriptErrorNotice()).MinWidth(0).
-			MaxWidth(conversationMaxWidth).Padding(6, 16).FontSize(typeMeta).LineHeight(1.5).TextColor(t.Warning)
+		ui.Column(c).FillWidth().MinWidth(0).MaxWidth(conversationMaxWidth).Padding(6, 16).Children(func() {
+			theme.InlineBanner(c, locales.In(c.Locale()).TimelineTranscriptErrorNotice(), "", theme.ToneWarning, nil)
+		})
 	})
 }
