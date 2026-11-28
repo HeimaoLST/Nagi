@@ -1727,3 +1727,173 @@ func TestPreviewComposerPlusAlign(t *testing.T) {
 		t.Logf("composer plus preview path=%s width=%d height=%d locale=%s dark=%v", path, shot.w, shot.h, shot.locale, shot.dark)
 	}
 }
+
+func TestPreviewContextBadgesAndBotVoice(t *testing.T) {
+	dir := os.Getenv("NAGI_PREVIEW_DIR")
+	if dir == "" {
+		t.Skip("set NAGI_PREVIEW_DIR to write Track 2 provider badge and bot voice previews")
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	yes := true
+	writeShot := func(name string, a *appModel, width, height int, locale string, dark bool, setup func(*ui.Tester)) {
+		t.Helper()
+		a.windowWidth = width
+		a.uiLocale = locale
+		tr := ui.NewTesterWith(a.view, width, height, ui.TesterOptions{Dark: dark})
+		tr.SetLocale(locale)
+		tr.SetFocused(true)
+		tr.Frame()
+		if setup != nil {
+			setup(tr)
+		}
+		path := filepath.Join(dir, name)
+		writePreviewPNG(t, path, tr.Image())
+		t.Logf("track2 preview path=%s width=%d height=%d locale=%s dark=%v", path, width, height, locale, dark)
+	}
+
+	for _, tc := range []struct {
+		name   string
+		preset string
+		width  int
+		height int
+		locale string
+		dark   bool
+		models []string
+		disc   []pi.ProductDiscoveredModel
+		def    string
+		ctx    string
+		out    string
+	}{
+		{
+			name:   "t2-provider-deepseek-en-light-1440x900.png",
+			preset: "deepseek",
+			width:  1440,
+			height: 900,
+			locale: "en",
+			dark:   false,
+			models: []string{"deepseek-chat", "deepseek-reasoner", "deepseek-coder-legacy"},
+			disc: []pi.ProductDiscoveredModel{
+				{ID: "deepseek-chat", CanonicalID: "deepseek/deepseek-chat", IsChat: &yes, ToolCall: &yes, Recommended: true, ContextTokens: 1000000, OutputTokens: 65536},
+				{ID: "deepseek-reasoner", CanonicalID: "deepseek/deepseek-reasoner", IsChat: &yes, ToolCall: &yes, Reasoning: true, Recommended: true, ContextTokens: 1048576, OutputTokens: 131072},
+				{ID: "deepseek-coder-legacy", CanonicalID: "deepseek/deepseek-coder-legacy", IsChat: &yes, ToolCall: &yes, ContextTokens: 131072, OutputTokens: 8192},
+			},
+			def: "deepseek-chat",
+			ctx: "1048576",
+			out: "131072",
+		},
+		{
+			name:   "t2-provider-openai-zh-dark-1040x720.png",
+			preset: "openai",
+			width:  1040,
+			height: 720,
+			locale: "zh-Hans",
+			dark:   true,
+			models: []string{"gpt-5.4", "gpt-5", "gpt-5.4-mini", "gpt-4o"},
+			disc: []pi.ProductDiscoveredModel{
+				{ID: "gpt-5.4", CanonicalID: "openai/gpt-5.4", IsChat: &yes, ToolCall: &yes, Reasoning: true, Recommended: true, ContextTokens: 1050000, OutputTokens: 131072},
+				{ID: "gpt-5", CanonicalID: "openai/gpt-5", IsChat: &yes, ToolCall: &yes, Reasoning: true, Recommended: true, ContextTokens: 400000, OutputTokens: 128000},
+				{ID: "gpt-5.4-mini", CanonicalID: "openai/gpt-5.4-mini", IsChat: &yes, ToolCall: &yes, Reasoning: true, Recommended: true, ContextTokens: 262144, OutputTokens: 16384},
+				{ID: "gpt-4o", CanonicalID: "openai/gpt-4o", IsChat: &yes, ToolCall: &yes, ContextTokens: 128000, OutputTokens: 16384},
+			},
+			def: "gpt-5.4",
+			ctx: "1050000",
+			out: "131072",
+		},
+		{
+			name:   "t2-provider-openai-en-light-720x640.png",
+			preset: "openai",
+			width:  720,
+			height: 640,
+			locale: "en",
+			dark:   false,
+			models: []string{"gpt-5.4", "gpt-5", "gpt-5.4-mini", "gpt-4o"},
+			disc: []pi.ProductDiscoveredModel{
+				{ID: "gpt-5.4", CanonicalID: "openai/gpt-5.4", IsChat: &yes, ToolCall: &yes, Reasoning: true, Recommended: true, ContextTokens: 1050000, OutputTokens: 131072},
+				{ID: "gpt-5", CanonicalID: "openai/gpt-5", IsChat: &yes, ToolCall: &yes, Reasoning: true, Recommended: true, ContextTokens: 400000, OutputTokens: 128000},
+				{ID: "gpt-5.4-mini", CanonicalID: "openai/gpt-5.4-mini", IsChat: &yes, ToolCall: &yes, Reasoning: true, Recommended: true, ContextTokens: 262144, OutputTokens: 16384},
+				{ID: "gpt-4o", CanonicalID: "openai/gpt-4o", IsChat: &yes, ToolCall: &yes, ContextTokens: 128000, OutputTokens: 16384},
+			},
+			def: "gpt-5.4",
+			ctx: "400000",
+			out: "128000",
+		},
+		{
+			name:   "t2-provider-deepseek-zh-dark-720x640.png",
+			preset: "deepseek",
+			width:  720,
+			height: 640,
+			locale: "zh-Hans",
+			dark:   true,
+			models: []string{"deepseek-chat", "deepseek-reasoner", "deepseek-coder-legacy"},
+			disc: []pi.ProductDiscoveredModel{
+				{ID: "deepseek-chat", CanonicalID: "deepseek/deepseek-chat", IsChat: &yes, ToolCall: &yes, Recommended: true, ContextTokens: 1000000, OutputTokens: 65536},
+				{ID: "deepseek-reasoner", CanonicalID: "deepseek/deepseek-reasoner", IsChat: &yes, ToolCall: &yes, Reasoning: true, Recommended: true, ContextTokens: 1048576, OutputTokens: 131072},
+				{ID: "deepseek-coder-legacy", CanonicalID: "deepseek/deepseek-coder-legacy", IsChat: &yes, ToolCall: &yes, ContextTokens: 131072, OutputTokens: 8192},
+			},
+			def: "deepseek-chat",
+			ctx: "1048576",
+			out: "131072",
+		},
+	} {
+		a := providerUITestApp(t, pi.ProductProviderList{Policy: pi.ProductRoutingBalanced})
+		a.uiLocale = tc.locale
+		a.openProviderPreset(pi.ProductProviderList{Policy: pi.ProductRoutingBalanced}, tc.preset)
+		ed := a.providers.editor
+		ed.Models = tc.models
+		ed.discovered = tc.disc
+		ed.DefaultModel = tc.def
+		ed.context = tc.ctx
+		ed.output = tc.out
+		ed.tested = true
+		ed.latency = 84
+		ed.probe = providerFeedback{kind: "tested", models: len(tc.models), latency: 84}
+		ed.advanced = true
+		writeShot(tc.name, a, tc.width, tc.height, tc.locale, tc.dark, func(tr *ui.Tester) {
+			a.providers.detailScroll.Y = 300
+			tr.Frame()
+		})
+	}
+
+	for _, tc := range []struct {
+		name   string
+		width  int
+		height int
+		locale string
+		dark   bool
+		voice  string
+		open   bool
+	}{
+		{"t2-createbot-closed-en-light-1440x900.png", 1440, 900, "en", false, "curious", false},
+		{"t2-createbot-open-en-light-1040x720.png", 1040, 720, "en", false, "curious", true},
+		{"t2-createbot-open-en-dark-720x640.png", 720, 640, "en", true, "curious", true},
+		{"t2-createbot-closed-zh-dark-1040x720.png", 1040, 720, "zh-Hans", true, "grounded", false},
+		{"t2-createbot-open-zh-light-720x640.png", 720, 640, "zh-Hans", false, "random", true},
+	} {
+		a := testApp(t)
+		a.windowWidth = tc.width
+		a.closeSettings()
+		a.uiLocale = tc.locale
+		a.openCreateBotDialog()
+		a.createBot.voice = tc.voice
+		a.createBot.purpose = "Draft release notes and keep track of open follow-ups."
+		if tc.locale == "zh-Hans" {
+			a.createBot.purpose = "整理发布记录并跟进未完成的事项。"
+		}
+		writeShot(tc.name, a, tc.width, tc.height, tc.locale, tc.dark, func(tr *ui.Tester) {
+			if tc.open {
+				triggerLabel := locales.In(tc.locale).CreateBotVoiceRandom()
+				if tc.voice == "curious" {
+					triggerLabel = locales.In(tc.locale).CreateBotVoiceCurious()
+				}
+				if err := tr.Click(triggerLabel); err != nil {
+					t.Fatal(err)
+				}
+				tr.Advance(theme.ControlTransition.Duration)
+				tr.Frame()
+			}
+		})
+	}
+}

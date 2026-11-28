@@ -1,9 +1,11 @@
 package app
 
 import (
+	"context"
 	"encoding/json"
 	"image"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -758,8 +760,36 @@ func TestProviderRoutingHelpersHealthNotesAndThemeSwitch(t *testing.T) {
 	if got := providerTokenBadge(131072); got != "128K" {
 		t.Fatalf("providerTokenBadge(131072) = %q, want 128K", got)
 	}
-	if got := providerTokenBadge(2 * 1024 * 1024); got != "2.0M" {
-		t.Fatalf("providerTokenBadge(2M) = %q, want 2.0M", got)
+	if got := providerTokenBadge(2 * 1024 * 1024); got != "2M" {
+		t.Fatalf("providerTokenBadge(2M) = %q, want 2M", got)
+	}
+	for _, tc := range []struct {
+		tokens int
+		want   string
+	}{
+		{1000000, "1M"},
+		{1047576, "1M"},
+		{1048576, "1M"},
+		{1048600, "1M"},
+		{1050000, "1M"},
+		{1500000, "1.5M"},
+		{2000000, "2M"},
+		{400000, "400K"},
+		{393216, "384K"},
+		{272000, "272K"},
+		{262144, "256K"},
+		{200000, "200K"},
+		{204800, "200K"},
+		{196608, "192K"},
+		{128000, "128K"},
+		{131072, "128K"},
+		{256000, "256K"},
+		{384000, "384K"},
+		{512000, "512K"},
+	} {
+		if got := providerTokenBadge(tc.tokens); got != tc.want {
+			t.Fatalf("providerTokenBadge(%d) = %q, want %q", tc.tokens, got, tc.want)
+		}
 	}
 	if got := providerTokenBadge(512); got != "512" {
 		t.Fatalf("providerTokenBadge(512) = %q, want 512", got)
@@ -769,6 +799,9 @@ func TestProviderRoutingHelpersHealthNotesAndThemeSwitch(t *testing.T) {
 	}
 
 	ed := newProviderDraft()
+	if ed.context != "1048576" || ed.output != "131072" || ed.limitsEdited {
+		t.Fatalf("newProviderDraft limits mismatch: context=%q output=%q limitsEdited=%v", ed.context, ed.output, ed.limitsEdited)
+	}
 	ed.Name = "Loopback Studio"
 	ed.BaseURL = "http://127.0.0.1:11434/v1"
 	ed.DefaultModel = "qwen3:8b"
@@ -778,9 +811,14 @@ func TestProviderRoutingHelpersHealthNotesAndThemeSwitch(t *testing.T) {
 		t.Fatalf("loopback noKey editor input = ok:%v key:%q fields:%+v", ok, params.APIKey, ed.fields)
 	}
 	ed.Name = strings.Repeat("a", 257)
-	ed.output = "131070"
+	ed.output = "1048574"
 	if _, ok := ed.input(false); ok || ed.fields["Name"] != "name-length" || ed.fields["OutputTokens"] != connection.ValidationContextGap {
-		t.Fatalf("invalid Name/OutputTokens not caught: ok=%v fields=%+v", ok, ed.fields)
+		t.Fatalf("invalid Name/OutputTokens not caught against 1M draft: ok=%v fields=%+v", ok, ed.fields)
+	}
+	ed.context = "131072"
+	ed.output = "131070"
+	if _, ok := ed.input(false); ok || ed.fields["OutputTokens"] != connection.ValidationContextGap {
+		t.Fatalf("invalid OutputTokens not caught against 128K context: ok=%v fields=%+v", ok, ed.fields)
 	}
 
 	a := providerUITestApp(t, pi.ProductProviderList{})
@@ -959,5 +997,181 @@ func TestProviderLiveModelsInputAutoAddAndPreferredDiscovery(t *testing.T) {
 		Models: []string{"  ", "fallback-id"},
 	}); got != "fallback-id" {
 		t.Fatalf("preferredDiscoveredModel Models slice fallback = %q, want fallback-id", got)
+	}
+}
+
+func TestProviderTestAutoSyncsUneditedLimitsAndPreservesEdited(t *testing.T) {
+	py, err := exec.LookPath("python3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cat := connection.LoadProviderCatalog("")
+	if ds, ok := cat.PresetByID("deepseek"); !ok || ds.ContextTokens < 1048576 {
+		t.Fatalf("DeepSeek catalog preset ceiling = %+v ok=%v", ds, ok)
+	}
+
+	dir := t.TempDir()
+	stub := filepath.Join(dir, "provider_test_stub.py")
+	script := `import json, sys
+print(json.dumps({"v": 1, "type": "ready", "workerEpoch": "e1", "engine": {"name": "pi", "version": "1.5.2"}, "runtime": {"name": "node", "version": "v22.0.0"}, "builtinCatalog": {"supported": [{"name": "read", "description": "Read files"}], "defaults": ["read"]}}), flush=True)
+for line in sys.stdin:
+    line = line.strip()
+    if not line:
+        continue
+    req = json.loads(line)
+    m = req.get("method")
+    if m == "provider.test":
+        res = {
+            "ok": True,
+            "latencyMs": 12,
+            "models": ["deepseek-chat", "deepseek-embed"],
+            "discoveredModels": [
+                {"id": "deepseek-chat", "canonicalId": "deepseek/deepseek-chat", "isChat": True, "toolCall": True, "reasoning": False, "tier": "low", "priceProtected": False, "recommended": True, "contextTokens": 1000000, "outputTokens": 65536},
+                {"id": "deepseek-embed", "canonicalId": "deepseek/deepseek-embed", "isChat": False, "toolCall": False, "reasoning": False, "tier": "unknown", "priceProtected": False, "recommended": False, "contextTokens": 2097152, "outputTokens": 524288},
+            ],
+        }
+    elif m == "app.shutdown":
+        res = {"drained": True}
+    else:
+        res = {}
+    print(json.dumps({"v": 1, "type": "response", "id": req["id"], "ok": True, "result": res}), flush=True)
+`
+	if err := os.WriteFile(stub, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	client, err := pi.StartProduct(pi.ProductOptions{
+		NodePath:        py,
+		WorkerPath:      stub,
+		StateDir:        dir,
+		ProfilePath:     filepath.Join(dir, "profile.sqlite"),
+		CredentialsPath: filepath.Join(dir, "connection.json"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	readyCtx, cancelReady := context.WithTimeout(context.Background(), 5*time.Second)
+	if _, err := client.Ready(readyCtx); err != nil {
+		cancelReady()
+		t.Fatal(err)
+	}
+	cancelReady()
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		_, _ = client.Kill(ctx)
+		<-client.CallbacksDone()
+	})
+
+	a, _ := workspaceTestApp(t)
+	a.demo = false
+	a.runtimeStatus = runtimeStateReady
+	a.connectionGeneration = 1
+	a.storePath = filepath.Join(dir, "contacts.json")
+	pool := pi.ProductProviderList{
+		Policy: pi.ProductRoutingBalanced,
+		Accounts: []pi.ProductProviderAccountView{{
+			ProductProviderAccount: pi.ProductProviderAccount{
+				ProviderID: "prov-saved", Name: "Saved Studio", WireAPI: pi.OpenAICompletions,
+				BaseURL: "https://saved.example.invalid/v1", DefaultModel: "deepseek-chat",
+				ContextTokens: 131072, OutputTokens: 8192, Enabled: true,
+			},
+			CredentialStatus: "ok",
+		}},
+	}
+	a.pi = &piAppHost{generation: 1, product: client, productProviders: pool}
+	a.applyProductProviders(pool)
+	a.settingsOpen = true
+	a.settingsTab = settingsTabConnection
+	a.providers.tab = providerTabAccounts
+
+	uiDone := make(chan struct{}, 8)
+	a.setUIHook(func(fn func()) {
+		fn()
+		select {
+		case uiDone <- struct{}{}:
+		default:
+		}
+	})
+	runTestAndWait := func(ed *providerEditor, keepKey bool) {
+		t.Helper()
+		params, ok := ed.inputFor(keepKey, false)
+		if !ok {
+			t.Fatalf("editor input invalid: fields=%+v", ed.fields)
+		}
+		a.testProvider(params, ed)
+		timer := time.NewTimer(5 * time.Second)
+		defer timer.Stop()
+		select {
+		case <-uiDone:
+		case <-timer.C:
+			t.Fatal("timed out waiting for testProvider UI callback")
+		}
+	}
+
+	a.openProviderPreset(pi.ProductProviderList{Policy: pi.ProductRoutingBalanced}, "deepseek")
+	fresh := a.providers.editor
+	if fresh == nil || fresh.limitsEdited || fresh.context != "1048576" || fresh.output != "393216" {
+		t.Fatalf("fresh deepseek preset state = %+v", fresh)
+	}
+	fresh.APIKey = "sk-fresh-deepseek"
+	runTestAndWait(fresh, false)
+	if fresh.context != "1000000" || fresh.output != "65536" || fresh.DefaultModel != "deepseek-chat" {
+		t.Fatalf("fresh unedited draft did not auto-sync chat maxima: context=%q output=%q model=%q", fresh.context, fresh.output, fresh.DefaultModel)
+	}
+
+	fresh.advanced = true
+	fresh.custom = true
+	a.providers.detailScroll.Y = 500
+	tr := ui.NewTester(a.view, 1040, 720)
+	tr.SetLocale("en")
+	tr.SetFocused(true)
+	tr.Frame()
+	if r, ok := tr.Find(locales.In("en").ConnectionFieldContextTokens()); !ok {
+		t.Fatal("ContextTokens label missing")
+	} else {
+		tr.ClickAt(r.X+r.W+24, r.Y+r.H/2)
+	}
+	tr.Frame()
+	tr.Key(ui.Cmd, ui.KeyA)
+	tr.Type("262144")
+	tr.Frame()
+	if !fresh.limitsEdited || fresh.context != "262144" {
+		t.Fatalf("editing ContextTokens did not mark limitsEdited: edited=%v context=%q", fresh.limitsEdited, fresh.context)
+	}
+	fresh.output = "32768"
+	runTestAndWait(fresh, false)
+	if fresh.context != "262144" || fresh.output != "32768" {
+		t.Fatalf("manual edit was overwritten by testProvider: context=%q output=%q", fresh.context, fresh.output)
+	}
+
+	a.selectProvider(pool.Accounts[0])
+	savedEd := a.providers.editor
+	if !savedEd.limitsEdited || savedEd.context != "131072" || savedEd.output != "8192" {
+		t.Fatalf("selectProvider did not preserve saved limits and limitsEdited: %+v", savedEd)
+	}
+	runTestAndWait(savedEd, true)
+	if savedEd.context != "131072" || savedEd.output != "8192" {
+		t.Fatalf("testProvider overwrote saved account limits: context=%q output=%q", savedEd.context, savedEd.output)
+	}
+
+	a.connectionSaved = &connectionConfig{
+		API:              connectionAPIChatCompletions,
+		Endpoint:         "https://legacy.example.invalid/v1",
+		APIKey:           "sk-legacy",
+		Model:            "deepseek-chat",
+		ContextTokens:    65536,
+		OutputTokens:     4096,
+		WorkingDirectory: dir,
+		MaxActiveTasks:   2,
+	}
+	a.chooseFirstProvider(-1)
+	v2Ed := a.providers.editor
+	if !v2Ed.limitsEdited || v2Ed.context != "65536" || v2Ed.output != "4096" {
+		t.Fatalf("v2 import draft did not set limitsEdited: %+v", v2Ed)
+	}
+	v2Ed.APIKey = "sk-v2-probe"
+	runTestAndWait(v2Ed, false)
+	if v2Ed.context != "65536" || v2Ed.output != "4096" {
+		t.Fatalf("testProvider overwrote v2 imported limits: context=%q output=%q", v2Ed.context, v2Ed.output)
 	}
 }

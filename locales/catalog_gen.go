@@ -1356,6 +1356,186 @@ func (msgs Messages) CreateBotPurposePlaceholder() string {
 	return Catalog.Format(msgs.locale, "createBotPurposePlaceholder", nil)
 }
 
+// CreateBotVoice says "Voice"
+// in the language the app shows.
+func CreateBotVoice() string { return In(i18n.Locale()).CreateBotVoice() }
+
+// CreateBotVoice says "Voice"
+// in the language of msgs.
+func (msgs Messages) CreateBotVoice() string {
+	return Catalog.Format(msgs.locale, "createBotVoice", nil)
+}
+
+// CreateBotVoiceAccessible says "Bot voice"
+// in the language the app shows.
+func CreateBotVoiceAccessible() string { return In(i18n.Locale()).CreateBotVoiceAccessible() }
+
+// CreateBotVoiceAccessible says "Bot voice"
+// in the language of msgs.
+func (msgs Messages) CreateBotVoiceAccessible() string {
+	return Catalog.Format(msgs.locale, "createBotVoiceAccessible", nil)
+}
+
+// CreateBotVoiceHint says "Sets the Bot’s tone. You can change it later in its profile."
+// in the language the app shows.
+func CreateBotVoiceHint() string { return In(i18n.Locale()).CreateBotVoiceHint() }
+
+// CreateBotVoiceHint says "Sets the Bot’s tone. You can change it later in its profile."
+// in the language of msgs.
+func (msgs Messages) CreateBotVoiceHint() string {
+	return Catalog.Format(msgs.locale, "createBotVoiceHint", nil)
+}
+
+// CreateBotVoiceRandom says "Random preset"
+// in the language the app shows.
+func CreateBotVoiceRandom() string { return In(i18n.Locale()).CreateBotVoiceRandom() }
+
+// CreateBotVoiceRandom says "Random preset"
+// in the language of msgs.
+func (msgs Messages) CreateBotVoiceRandom() string {
+	return Catalog.Format(msgs.locale, "createBotVoiceRandom", nil)
+}
+
+// CreateBotVoiceCrisp says "Crisp & direct"
+// in the language the app shows.
+func CreateBotVoiceCrisp() string { return In(i18n.Locale()).CreateBotVoiceCrisp() }
+
+// CreateBotVoiceCrisp says "Crisp & direct"
+// in the language of msgs.
+func (msgs Messages) CreateBotVoiceCrisp() string {
+	return Catalog.Format(msgs.locale, "createBotVoiceCrisp", nil)
+}
+
+// CreateBotVoiceWarm says "Warm & approachable"
+// in the language the app shows.
+func CreateBotVoiceWarm() string { return In(i18n.Locale()).CreateBotVoiceWarm() }
+
+// CreateBotVoiceWarm says "Warm & approachable"
+// in the language of msgs.
+func (msgs Messages) CreateBotVoiceWarm() string {
+	return Catalog.Format(msgs.locale, "createBotVoiceWarm", nil)
+}
+
+// CreateBotVoiceAnalytical says "Calm & analytical"
+// in the language the app shows.
+func CreateBotVoiceAnalytical() string { return In(i18n.Locale()).CreateBotVoiceAnalytical() }
+
+// CreateBotVoiceAnalytical says "Calm & analytical"
+// in the language of msgs.
+func (msgs Messages) CreateBotVoiceAnalytical() string {
+	return Catalog.Format(msgs.locale, "createBotVoiceAnalytical", nil)
+}
+
+// CreateBotVoiceWitty says "Light & witty"
+// in the language the app shows.
+func CreateBotVoiceWitty() string { return In(i18n.Locale()).CreateBotVoiceWitty() }
+
+// CreateBotVoiceWitty says "Light & witty"
+// in the language of msgs.
+func (msgs Messages) CreateBotVoiceWitty() string {
+	return Catalog.Format(msgs.locale, "createBotVoiceWitty", nil)
+}
+
+// CreateBotVoiceGrounded says "Grounded & pragmatic"
+// in the language the app shows.
+func CreateBotVoiceGrounded() string { return In(i18n.Locale()).CreateBotVoiceGrounded() }
+
+// CreateBotVoiceGrounded says "Grounded & pragmatic"
+// in the language of msgs.
+func (msgs Messages) CreateBotVoiceGrounded() string {
+	return Catalog.Format(msgs.locale, "createBotVoiceGrounded", nil)
+}
+
+// CreateBotVoiceCurious says "Curious & collaborative"
+// in the language the app shows.
+func CreateBotVoiceCurious() string { return In(i18n.Locale()).CreateBotVoiceCurious() }
+
+// CreateBotVoiceCurious says "Curious & collaborative"
+// in the language of msgs.
+func (msgs Messages) CreateBotVoiceCurious() string {
+	return Catalog.Format(msgs.locale, "createBotVoiceCurious", nil)
+}
+
+// CreateBotVoiceNone says "Default neutral"
+// in the language the app shows.
+func CreateBotVoiceNone() string { return In(i18n.Locale()).CreateBotVoiceNone() }
+
+// CreateBotVoiceNone says "Default neutral"
+// in the language of msgs.
+func (msgs Messages) CreateBotVoiceNone() string {
+	return Catalog.Format(msgs.locale, "createBotVoiceNone", nil)
+}
+
+// CreateBotVoiceInstructionCrisp says "Be concise and direct. Lead with the answer and include only the details that matter."
+// in the language the app shows.
+func CreateBotVoiceInstructionCrisp() string {
+	return In(i18n.Locale()).CreateBotVoiceInstructionCrisp()
+}
+
+// CreateBotVoiceInstructionCrisp says "Be concise and direct. Lead with the answer and include only the details that matter."
+// in the language of msgs.
+func (msgs Messages) CreateBotVoiceInstructionCrisp() string {
+	return Catalog.Format(msgs.locale, "createBotVoiceInstructionCrisp", nil)
+}
+
+// CreateBotVoiceInstructionWarm says "Use a warm, approachable tone. Acknowledge the user’s situation briefly and explain things plainly."
+// in the language the app shows.
+func CreateBotVoiceInstructionWarm() string { return In(i18n.Locale()).CreateBotVoiceInstructionWarm() }
+
+// CreateBotVoiceInstructionWarm says "Use a warm, approachable tone. Acknowledge the user’s situation briefly and explain things plainly."
+// in the language of msgs.
+func (msgs Messages) CreateBotVoiceInstructionWarm() string {
+	return Catalog.Format(msgs.locale, "createBotVoiceInstructionWarm", nil)
+}
+
+// CreateBotVoiceInstructionAnalytical says "Stay calm and methodical. Distinguish evidence from assumptions and make uncertainty clear."
+// in the language the app shows.
+func CreateBotVoiceInstructionAnalytical() string {
+	return In(i18n.Locale()).CreateBotVoiceInstructionAnalytical()
+}
+
+// CreateBotVoiceInstructionAnalytical says "Stay calm and methodical. Distinguish evidence from assumptions and make uncertainty clear."
+// in the language of msgs.
+func (msgs Messages) CreateBotVoiceInstructionAnalytical() string {
+	return Catalog.Format(msgs.locale, "createBotVoiceInstructionAnalytical", nil)
+}
+
+// CreateBotVoiceInstructionWitty says "Keep the tone light. Use a touch of wit when it fits the conversation, and stay straightforward on serious topics."
+// in the language the app shows.
+func CreateBotVoiceInstructionWitty() string {
+	return In(i18n.Locale()).CreateBotVoiceInstructionWitty()
+}
+
+// CreateBotVoiceInstructionWitty says "Keep the tone light. Use a touch of wit when it fits the conversation, and stay straightforward on serious topics."
+// in the language of msgs.
+func (msgs Messages) CreateBotVoiceInstructionWitty() string {
+	return Catalog.Format(msgs.locale, "createBotVoiceInstructionWitty", nil)
+}
+
+// CreateBotVoiceInstructionGrounded says "Keep advice practical. Use concrete examples and emphasize what the user can do next."
+// in the language the app shows.
+func CreateBotVoiceInstructionGrounded() string {
+	return In(i18n.Locale()).CreateBotVoiceInstructionGrounded()
+}
+
+// CreateBotVoiceInstructionGrounded says "Keep advice practical. Use concrete examples and emphasize what the user can do next."
+// in the language of msgs.
+func (msgs Messages) CreateBotVoiceInstructionGrounded() string {
+	return Catalog.Format(msgs.locale, "createBotVoiceInstructionGrounded", nil)
+}
+
+// CreateBotVoiceInstructionCurious says "Explore ideas with the user. Ask focused questions when they help move the work forward."
+// in the language the app shows.
+func CreateBotVoiceInstructionCurious() string {
+	return In(i18n.Locale()).CreateBotVoiceInstructionCurious()
+}
+
+// CreateBotVoiceInstructionCurious says "Explore ideas with the user. Ask focused questions when they help move the work forward."
+// in the language of msgs.
+func (msgs Messages) CreateBotVoiceInstructionCurious() string {
+	return Catalog.Format(msgs.locale, "createBotVoiceInstructionCurious", nil)
+}
+
 // CreateBotFailed says "Could not create the Bot. Try again."
 // in the language the app shows.
 func CreateBotFailed() string { return In(i18n.Locale()).CreateBotFailed() }
