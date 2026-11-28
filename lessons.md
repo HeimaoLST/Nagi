@@ -296,11 +296,11 @@
 
 ### Pass the locale directory to the standalone catalog generator
 
-**Problem:** Running the standalone catalog generator against the repository root reported a missing English catalog and tried to load `mygo.json` as a language.
+**Problem:** The standalone catalog generator scanned the repository root for languages. The patched MyGo CLI generator failed in readonly mode because its RPM dependency checksum was absent from Nagi's application module.
 
-**Cause or correction:** The generator resolves `*.json` relative to its first argument. Its separate `Dir` setting labels diagnostics.
+**Cause or correction:** The standalone generator resolves `*.json` relative to its first argument. `scripts/gui-go.py` builds MyGo with a temporary copy of the application's module and checksum files.
 
-**Prevention:** Pass the absolute `locales` directory as the input and `locales/catalog_gen.go` as the output. Run with `-mod=readonly` in the standalone generator's module.
+**Prevention:** Pass the `locales` directory to the standalone generator. For the patched MyGo CLI, run `GOFLAGS=-mod=mod python3 scripts/gui-go.py run github.com/egoist/mygo/cmd/mygo generate .` from the checkout root and verify the generated accessors against both catalogs. The wrapper resolves generator-only dependencies in its temporary module.
 
 ## Verification and Evidence
 
@@ -545,3 +545,43 @@
 **Cause or correction:** Unsigned subtraction wraps silently in Go, map iteration order is randomized, `OutputRing` assumed at least one segment exists after appending, scheduler/LRU clocks may advance on synthetic epochs (`deps.now()`) while `conversation_notices` interleave by `createdAt` against real transcript wall-clock entries (`new Date().toISOString()`), and Go package boundaries depend on unexporting internal UI helpers.
 
 **Prevention:** Guard unsigned length calculations with `next > from` and an explicit cap before `Grow`, sort slices derived from Go maps before persisting `.ui.json` state, short-circuit empty writes in ring buffers, keep scheduler/backoff/session-LRU clocks separated from conversation/UI wall-clock timestamps, and verify `internal/app` non-test files export only `Run`.
+
+### Distinguish queued cancellation from provider admission rejection
+
+**Problem:** Treating every `delivery: non_dispatched` send receipt as a queued interruption hid provider admission errors behind a misleading cancellation message.
+
+**Cause or correction:** Credential and routing failures use the same delivery value as sends cancelled or interrupted in the queue. Only the explicit queue reasons prove that outcome.
+
+**Prevention:** Show the calm queue message only for `cancelled_before_dispatch` or `interrupted_before_dispatch`. Keep other rejection receipts on the provider admission path.
+
+### Require worker readiness for enabled headless product controls
+
+**Problem:** Decision options and timeline inspect actions appeared disabled or missing in headless captures with an unverified stub worker.
+
+**Cause or correction:** Product mutation and navigation controls depend on the worker staying reachable, while the headless fixture did not establish readiness.
+
+**Prevention:** Start the pinned worker with a disposable profile and wait for `Ready` before capturing enabled product controls. Exercise the actual option and field focus and record the observed outcomes.
+
+### Seed Bot summaries before headless UI dispatch begins
+
+**Problem:** The first headless frame raced with a detached startup orchestration refresh in `TestPiAppScheduledWorkAndGrants`.
+
+**Cause or correction:** A worker callback used the direct `updateUI` fallback before the UI hook was installed and changed the orchestration slice concurrently with rendering.
+
+**Prevention:** Read initial orchestration and active-session summaries before installing the profile. Serialize direct UI updates with hook installation and release the mutex before dispatching through the hook or native window.
+
+### Keep Bot inspectors behind the overview menu
+
+**Problem:** Permanent Terminal sessions and Background work buttons crowded the chat header. Opening either inspector replaced the conversation at widths that could show both. The Settings heading style also truncated inspector titles in the right drawer.
+
+**Cause or correction:** Both actions were top-level header controls and both inspectors rendered inside the main chat column. `typePageTitle` and `lineSettingsTitle` resolve to 22 and 28, while drawer titles use 16 px type, weight 600, and a 24 px line height.
+
+**Prevention:** Put Bot management actions in the overview menu and show inspectors in the Bot profile drawer. Use the existing narrow overlay breakpoint, restore focus to the opener, and check the full drawer title at the default width.
+
+### Keep inspector rows stationary during background reloads
+
+**Problem:** Clicking a Terminal sessions row could miss when a background reload finished at pointer-down. Background work had the same layout shift.
+
+**Cause or correction:** Inserting a loading notice above populated content moved the click targets when the notice disappeared.
+
+**Prevention:** Show the loading notice only while the current list or detail has no content. Keep existing content in place and use the Reload control's disabled state during refresh.

@@ -12052,14 +12052,46 @@ func (msgs Messages) CapMcpProbeResult(count int, latency string) string {
 	return Catalog.Format(msgs.locale, "capMcpProbeResult", map[string]any{"count": count, "latency": latency})
 }
 
-// SessionInspectTitle says "Sessions"
+// SessionInspectTitle says "Terminal sessions"
 // in the language the app shows.
 func SessionInspectTitle() string { return In(i18n.Locale()).SessionInspectTitle() }
 
-// SessionInspectTitle says "Sessions"
+// SessionInspectTitle says "Terminal sessions"
 // in the language of msgs.
 func (msgs Messages) SessionInspectTitle() string {
 	return Catalog.Format(msgs.locale, "sessionInspectTitle", nil)
+}
+
+// SessionInspectMenuCount says "{count, plural, =0 {Terminal sessions} one {Terminal sessions (#)} other {Terminal sessions (#)}}"
+// in the language the app shows.
+func SessionInspectMenuCount(count int) string {
+	return In(i18n.Locale()).SessionInspectMenuCount(count)
+}
+
+// SessionInspectMenuCount says "{count, plural, =0 {Terminal sessions} one {Terminal sessions (#)} other {Terminal sessions (#)}}"
+// in the language of msgs.
+func (msgs Messages) SessionInspectMenuCount(count int) string {
+	return Catalog.Format(msgs.locale, "sessionInspectMenuCount", map[string]any{"count": count})
+}
+
+// SessionInspectProfileHint says "Inspect this Bot’s terminal sessions and their output."
+// in the language the app shows.
+func SessionInspectProfileHint() string { return In(i18n.Locale()).SessionInspectProfileHint() }
+
+// SessionInspectProfileHint says "Inspect this Bot’s terminal sessions and their output."
+// in the language of msgs.
+func (msgs Messages) SessionInspectProfileHint() string {
+	return Catalog.Format(msgs.locale, "sessionInspectProfileHint", nil)
+}
+
+// SessionInspectOpenAction says "View terminal sessions"
+// in the language the app shows.
+func SessionInspectOpenAction() string { return In(i18n.Locale()).SessionInspectOpenAction() }
+
+// SessionInspectOpenAction says "View terminal sessions"
+// in the language of msgs.
+func (msgs Messages) SessionInspectOpenAction() string {
+	return Catalog.Format(msgs.locale, "sessionInspectOpenAction", nil)
 }
 
 // SessionInspectBack says "Back"
@@ -13008,8 +13040,822 @@ func (msgs Messages) DockOpenNagi() string {
 	return Catalog.Format(msgs.locale, "dockOpenNagi", nil)
 }
 
+// MessageReadStatus says "Read"
+// in the language the app shows.
 func MessageReadStatus() string { return In(i18n.Locale()).MessageReadStatus() }
 
+// MessageReadStatus says "Read"
+// in the language of msgs.
 func (msgs Messages) MessageReadStatus() string {
 	return Catalog.Format(msgs.locale, "messageReadStatus", nil)
+}
+
+// SendQueuedState says "Queued — waiting for an open runtime slot…"
+// in the language the app shows.
+func SendQueuedState() string { return In(i18n.Locale()).SendQueuedState() }
+
+// SendQueuedState says "Queued — waiting for an open runtime slot…"
+// in the language of msgs.
+func (msgs Messages) SendQueuedState() string {
+	return Catalog.Format(msgs.locale, "sendQueuedState", nil)
+}
+
+// SendQueuedPosition says "Queued (#{position}) — waiting for an open runtime slot…"
+// in the language the app shows.
+func SendQueuedPosition(position int) string { return In(i18n.Locale()).SendQueuedPosition(position) }
+
+// SendQueuedPosition says "Queued (#{position}) — waiting for an open runtime slot…"
+// in the language of msgs.
+func (msgs Messages) SendQueuedPosition(position int) string {
+	return Catalog.Format(msgs.locale, "sendQueuedPosition", map[string]any{"position": position})
+}
+
+// SendCancelledBeforeDispatch says "Cancelled before dispatch. Your draft is still here."
+// in the language the app shows.
+func SendCancelledBeforeDispatch() string { return In(i18n.Locale()).SendCancelledBeforeDispatch() }
+
+// SendCancelledBeforeDispatch says "Cancelled before dispatch. Your draft is still here."
+// in the language of msgs.
+func (msgs Messages) SendCancelledBeforeDispatch() string {
+	return Catalog.Format(msgs.locale, "sendCancelledBeforeDispatch", nil)
+}
+
+// SendInterruptedBeforeDispatch says "Interrupted before dispatch. Your draft was not sent."
+// in the language the app shows.
+func SendInterruptedBeforeDispatch() string { return In(i18n.Locale()).SendInterruptedBeforeDispatch() }
+
+// SendInterruptedBeforeDispatch says "Interrupted before dispatch. Your draft was not sent."
+// in the language of msgs.
+func (msgs Messages) SendInterruptedBeforeDispatch() string {
+	return Catalog.Format(msgs.locale, "sendInterruptedBeforeDispatch", nil)
+}
+
+// RecoveryScopeOrchestration says "Restored background goals, decision cards, and notices stay dormant and read-only on open."
+// in the language the app shows.
+func RecoveryScopeOrchestration() string { return In(i18n.Locale()).RecoveryScopeOrchestration() }
+
+// RecoveryScopeOrchestration says "Restored background goals, decision cards, and notices stay dormant and read-only on open."
+// in the language of msgs.
+func (msgs Messages) RecoveryScopeOrchestration() string {
+	return Catalog.Format(msgs.locale, "recoveryScopeOrchestration", nil)
+}
+
+// RecoveryPreviewOrchestrationCounts says "Dormant goals {mandates}, decisions {decisions}, notices {notices}"
+// in the language the app shows.
+func RecoveryPreviewOrchestrationCounts(mandates int, decisions int, notices int) string {
+	return In(i18n.Locale()).RecoveryPreviewOrchestrationCounts(mandates, decisions, notices)
+}
+
+// RecoveryPreviewOrchestrationCounts says "Dormant goals {mandates}, decisions {decisions}, notices {notices}"
+// in the language of msgs.
+func (msgs Messages) RecoveryPreviewOrchestrationCounts(mandates int, decisions int, notices int) string {
+	return Catalog.Format(msgs.locale, "recoveryPreviewOrchestrationCounts", map[string]any{"mandates": mandates, "decisions": decisions, "notices": notices})
+}
+
+// TimelineNoticeBadge says "Background update"
+// in the language the app shows.
+func TimelineNoticeBadge() string { return In(i18n.Locale()).TimelineNoticeBadge() }
+
+// TimelineNoticeBadge says "Background update"
+// in the language of msgs.
+func (msgs Messages) TimelineNoticeBadge() string {
+	return Catalog.Format(msgs.locale, "timelineNoticeBadge", nil)
+}
+
+// TimelineNoticeUrgent says "Needs review"
+// in the language the app shows.
+func TimelineNoticeUrgent() string { return In(i18n.Locale()).TimelineNoticeUrgent() }
+
+// TimelineNoticeUrgent says "Needs review"
+// in the language of msgs.
+func (msgs Messages) TimelineNoticeUrgent() string {
+	return Catalog.Format(msgs.locale, "timelineNoticeUrgent", nil)
+}
+
+// TimelineNoticeReadOnly says "Restored · read-only"
+// in the language the app shows.
+func TimelineNoticeReadOnly() string { return In(i18n.Locale()).TimelineNoticeReadOnly() }
+
+// TimelineNoticeReadOnly says "Restored · read-only"
+// in the language of msgs.
+func (msgs Messages) TimelineNoticeReadOnly() string {
+	return Catalog.Format(msgs.locale, "timelineNoticeReadOnly", nil)
+}
+
+// TimelineInspectMandate says "View background work"
+// in the language the app shows.
+func TimelineInspectMandate() string { return In(i18n.Locale()).TimelineInspectMandate() }
+
+// TimelineInspectMandate says "View background work"
+// in the language of msgs.
+func (msgs Messages) TimelineInspectMandate() string {
+	return Catalog.Format(msgs.locale, "timelineInspectMandate", nil)
+}
+
+// TimelineLoadMore says "Load earlier records"
+// in the language the app shows.
+func TimelineLoadMore() string { return In(i18n.Locale()).TimelineLoadMore() }
+
+// TimelineLoadMore says "Load earlier records"
+// in the language of msgs.
+func (msgs Messages) TimelineLoadMore() string {
+	return Catalog.Format(msgs.locale, "timelineLoadMore", nil)
+}
+
+// TimelineTranscriptErrorNotice says "Pi message history is unavailable; durable product updates remain visible below."
+// in the language the app shows.
+func TimelineTranscriptErrorNotice() string { return In(i18n.Locale()).TimelineTranscriptErrorNotice() }
+
+// TimelineTranscriptErrorNotice says "Pi message history is unavailable; durable product updates remain visible below."
+// in the language of msgs.
+func (msgs Messages) TimelineTranscriptErrorNotice() string {
+	return Catalog.Format(msgs.locale, "timelineTranscriptErrorNotice", nil)
+}
+
+// OrchestrationTitle says "Background work"
+// in the language the app shows.
+func OrchestrationTitle() string { return In(i18n.Locale()).OrchestrationTitle() }
+
+// OrchestrationTitle says "Background work"
+// in the language of msgs.
+func (msgs Messages) OrchestrationTitle() string {
+	return Catalog.Format(msgs.locale, "orchestrationTitle", nil)
+}
+
+// OrchestrationBack says "Back"
+// in the language the app shows.
+func OrchestrationBack() string { return In(i18n.Locale()).OrchestrationBack() }
+
+// OrchestrationBack says "Back"
+// in the language of msgs.
+func (msgs Messages) OrchestrationBack() string {
+	return Catalog.Format(msgs.locale, "orchestrationBack", nil)
+}
+
+// OrchestrationReload says "Reload"
+// in the language the app shows.
+func OrchestrationReload() string { return In(i18n.Locale()).OrchestrationReload() }
+
+// OrchestrationReload says "Reload"
+// in the language of msgs.
+func (msgs Messages) OrchestrationReload() string {
+	return Catalog.Format(msgs.locale, "orchestrationReload", nil)
+}
+
+// OrchestrationEmpty says "No background orchestration runs for this Bot yet."
+// in the language the app shows.
+func OrchestrationEmpty() string { return In(i18n.Locale()).OrchestrationEmpty() }
+
+// OrchestrationEmpty says "No background orchestration runs for this Bot yet."
+// in the language of msgs.
+func (msgs Messages) OrchestrationEmpty() string {
+	return Catalog.Format(msgs.locale, "orchestrationEmpty", nil)
+}
+
+// OrchestrationLoading says "Loading background work…"
+// in the language the app shows.
+func OrchestrationLoading() string { return In(i18n.Locale()).OrchestrationLoading() }
+
+// OrchestrationLoading says "Loading background work…"
+// in the language of msgs.
+func (msgs Messages) OrchestrationLoading() string {
+	return Catalog.Format(msgs.locale, "orchestrationLoading", nil)
+}
+
+// OrchestrationLoadFailed says "Couldn’t load background work. Reload to try again."
+// in the language the app shows.
+func OrchestrationLoadFailed() string { return In(i18n.Locale()).OrchestrationLoadFailed() }
+
+// OrchestrationLoadFailed says "Couldn’t load background work. Reload to try again."
+// in the language of msgs.
+func (msgs Messages) OrchestrationLoadFailed() string {
+	return Catalog.Format(msgs.locale, "orchestrationLoadFailed", nil)
+}
+
+// OrchestrationLoadMore says "Load more"
+// in the language the app shows.
+func OrchestrationLoadMore() string { return In(i18n.Locale()).OrchestrationLoadMore() }
+
+// OrchestrationLoadMore says "Load more"
+// in the language of msgs.
+func (msgs Messages) OrchestrationLoadMore() string {
+	return Catalog.Format(msgs.locale, "orchestrationLoadMore", nil)
+}
+
+// OrchestrationStop says "Stop"
+// in the language the app shows.
+func OrchestrationStop() string { return In(i18n.Locale()).OrchestrationStop() }
+
+// OrchestrationStop says "Stop"
+// in the language of msgs.
+func (msgs Messages) OrchestrationStop() string {
+	return Catalog.Format(msgs.locale, "orchestrationStop", nil)
+}
+
+// OrchestrationStopping says "Stopping…"
+// in the language the app shows.
+func OrchestrationStopping() string { return In(i18n.Locale()).OrchestrationStopping() }
+
+// OrchestrationStopping says "Stopping…"
+// in the language of msgs.
+func (msgs Messages) OrchestrationStopping() string {
+	return Catalog.Format(msgs.locale, "orchestrationStopping", nil)
+}
+
+// OrchestrationDecisionBadge says "Needs decision"
+// in the language the app shows.
+func OrchestrationDecisionBadge() string { return In(i18n.Locale()).OrchestrationDecisionBadge() }
+
+// OrchestrationDecisionBadge says "Needs decision"
+// in the language of msgs.
+func (msgs Messages) OrchestrationDecisionBadge() string {
+	return Catalog.Format(msgs.locale, "orchestrationDecisionBadge", nil)
+}
+
+// OrchestrationApprove says "Approve"
+// in the language the app shows.
+func OrchestrationApprove() string { return In(i18n.Locale()).OrchestrationApprove() }
+
+// OrchestrationApprove says "Approve"
+// in the language of msgs.
+func (msgs Messages) OrchestrationApprove() string {
+	return Catalog.Format(msgs.locale, "orchestrationApprove", nil)
+}
+
+// OrchestrationReject says "Decline"
+// in the language the app shows.
+func OrchestrationReject() string { return In(i18n.Locale()).OrchestrationReject() }
+
+// OrchestrationReject says "Decline"
+// in the language of msgs.
+func (msgs Messages) OrchestrationReject() string {
+	return Catalog.Format(msgs.locale, "orchestrationReject", nil)
+}
+
+// OrchestrationNotePlaceholder says "Optional note for the Bot"
+// in the language the app shows.
+func OrchestrationNotePlaceholder() string { return In(i18n.Locale()).OrchestrationNotePlaceholder() }
+
+// OrchestrationNotePlaceholder says "Optional note for the Bot"
+// in the language of msgs.
+func (msgs Messages) OrchestrationNotePlaceholder() string {
+	return Catalog.Format(msgs.locale, "orchestrationNotePlaceholder", nil)
+}
+
+// OrchestrationDecisionPending says "Saving decision…"
+// in the language the app shows.
+func OrchestrationDecisionPending() string { return In(i18n.Locale()).OrchestrationDecisionPending() }
+
+// OrchestrationDecisionPending says "Saving decision…"
+// in the language of msgs.
+func (msgs Messages) OrchestrationDecisionPending() string {
+	return Catalog.Format(msgs.locale, "orchestrationDecisionPending", nil)
+}
+
+// OrchestrationDecisionUnknown says "Decision status is unconfirmed. Reload to verify."
+// in the language the app shows.
+func OrchestrationDecisionUnknown() string { return In(i18n.Locale()).OrchestrationDecisionUnknown() }
+
+// OrchestrationDecisionUnknown says "Decision status is unconfirmed. Reload to verify."
+// in the language of msgs.
+func (msgs Messages) OrchestrationDecisionUnknown() string {
+	return Catalog.Format(msgs.locale, "orchestrationDecisionUnknown", nil)
+}
+
+// OrchestrationDecisionRejected says "Decision could not be applied."
+// in the language the app shows.
+func OrchestrationDecisionRejected() string { return In(i18n.Locale()).OrchestrationDecisionRejected() }
+
+// OrchestrationDecisionRejected says "Decision could not be applied."
+// in the language of msgs.
+func (msgs Messages) OrchestrationDecisionRejected() string {
+	return Catalog.Format(msgs.locale, "orchestrationDecisionRejected", nil)
+}
+
+// OrchestrationCheckStatus says "Check status"
+// in the language the app shows.
+func OrchestrationCheckStatus() string { return In(i18n.Locale()).OrchestrationCheckStatus() }
+
+// OrchestrationCheckStatus says "Check status"
+// in the language of msgs.
+func (msgs Messages) OrchestrationCheckStatus() string {
+	return Catalog.Format(msgs.locale, "orchestrationCheckStatus", nil)
+}
+
+// OrchestrationDormantNotice says "Restored dormant — read-only inspection only."
+// in the language the app shows.
+func OrchestrationDormantNotice() string { return In(i18n.Locale()).OrchestrationDormantNotice() }
+
+// OrchestrationDormantNotice says "Restored dormant — read-only inspection only."
+// in the language of msgs.
+func (msgs Messages) OrchestrationDormantNotice() string {
+	return Catalog.Format(msgs.locale, "orchestrationDormantNotice", nil)
+}
+
+// OrchestrationMetricsTitle says "Wake metrics & backoff"
+// in the language the app shows.
+func OrchestrationMetricsTitle() string { return In(i18n.Locale()).OrchestrationMetricsTitle() }
+
+// OrchestrationMetricsTitle says "Wake metrics & backoff"
+// in the language of msgs.
+func (msgs Messages) OrchestrationMetricsTitle() string {
+	return Catalog.Format(msgs.locale, "orchestrationMetricsTitle", nil)
+}
+
+// OrchestrationMetricsWakes says "Wakes {wakes} · Calls {calls} · Tokens {tokens}"
+// in the language the app shows.
+func OrchestrationMetricsWakes(wakes int, calls int, tokens int) string {
+	return In(i18n.Locale()).OrchestrationMetricsWakes(wakes, calls, tokens)
+}
+
+// OrchestrationMetricsWakes says "Wakes {wakes} · Calls {calls} · Tokens {tokens}"
+// in the language of msgs.
+func (msgs Messages) OrchestrationMetricsWakes(wakes int, calls int, tokens int) string {
+	return Catalog.Format(msgs.locale, "orchestrationMetricsWakes", map[string]any{"wakes": wakes, "calls": calls, "tokens": tokens})
+}
+
+// OrchestrationMetricsCost says "Estimated cost: ${cost}"
+// in the language the app shows.
+func OrchestrationMetricsCost(cost string) string {
+	return In(i18n.Locale()).OrchestrationMetricsCost(cost)
+}
+
+// OrchestrationMetricsCost says "Estimated cost: ${cost}"
+// in the language of msgs.
+func (msgs Messages) OrchestrationMetricsCost(cost string) string {
+	return Catalog.Format(msgs.locale, "orchestrationMetricsCost", map[string]any{"cost": cost})
+}
+
+// OrchestrationMetricsDelay says "Queue wait {queueMs} ms · Coalesced {coalesced} · Backoff {backoffMs} ms"
+// in the language the app shows.
+func OrchestrationMetricsDelay(queueMs int, coalesced int, backoffMs int) string {
+	return In(i18n.Locale()).OrchestrationMetricsDelay(queueMs, coalesced, backoffMs)
+}
+
+// OrchestrationMetricsDelay says "Queue wait {queueMs} ms · Coalesced {coalesced} · Backoff {backoffMs} ms"
+// in the language of msgs.
+func (msgs Messages) OrchestrationMetricsDelay(queueMs int, coalesced int, backoffMs int) string {
+	return Catalog.Format(msgs.locale, "orchestrationMetricsDelay", map[string]any{"queueMs": queueMs, "coalesced": coalesced, "backoffMs": backoffMs})
+}
+
+// OrchestrationBackoffReason says "Backoff reason: {reason}"
+// in the language the app shows.
+func OrchestrationBackoffReason(reason string) string {
+	return In(i18n.Locale()).OrchestrationBackoffReason(reason)
+}
+
+// OrchestrationBackoffReason says "Backoff reason: {reason}"
+// in the language of msgs.
+func (msgs Messages) OrchestrationBackoffReason(reason string) string {
+	return Catalog.Format(msgs.locale, "orchestrationBackoffReason", map[string]any{"reason": reason})
+}
+
+// OrchestrationNextEligible says "Next eligible: {at}"
+// in the language the app shows.
+func OrchestrationNextEligible(at string) string {
+	return In(i18n.Locale()).OrchestrationNextEligible(at)
+}
+
+// OrchestrationNextEligible says "Next eligible: {at}"
+// in the language of msgs.
+func (msgs Messages) OrchestrationNextEligible(at string) string {
+	return Catalog.Format(msgs.locale, "orchestrationNextEligible", map[string]any{"at": at})
+}
+
+// OrchestrationRunsTitle says "Recent wakes"
+// in the language the app shows.
+func OrchestrationRunsTitle() string { return In(i18n.Locale()).OrchestrationRunsTitle() }
+
+// OrchestrationRunsTitle says "Recent wakes"
+// in the language of msgs.
+func (msgs Messages) OrchestrationRunsTitle() string {
+	return Catalog.Format(msgs.locale, "orchestrationRunsTitle", nil)
+}
+
+// OrchestrationDecisionsTitle says "Decisions"
+// in the language the app shows.
+func OrchestrationDecisionsTitle() string { return In(i18n.Locale()).OrchestrationDecisionsTitle() }
+
+// OrchestrationDecisionsTitle says "Decisions"
+// in the language of msgs.
+func (msgs Messages) OrchestrationDecisionsTitle() string {
+	return Catalog.Format(msgs.locale, "orchestrationDecisionsTitle", nil)
+}
+
+// OrchestrationReceiptsTitle says "Action receipts"
+// in the language the app shows.
+func OrchestrationReceiptsTitle() string { return In(i18n.Locale()).OrchestrationReceiptsTitle() }
+
+// OrchestrationReceiptsTitle says "Action receipts"
+// in the language of msgs.
+func (msgs Messages) OrchestrationReceiptsTitle() string {
+	return Catalog.Format(msgs.locale, "orchestrationReceiptsTitle", nil)
+}
+
+// OrchestrationStopUnknown says "Stop request status is unconfirmed. Reload before retrying."
+// in the language the app shows.
+func OrchestrationStopUnknown() string { return In(i18n.Locale()).OrchestrationStopUnknown() }
+
+// OrchestrationStopUnknown says "Stop request status is unconfirmed. Reload before retrying."
+// in the language of msgs.
+func (msgs Messages) OrchestrationStopUnknown() string {
+	return Catalog.Format(msgs.locale, "orchestrationStopUnknown", nil)
+}
+
+// OrchestrationStopFailed says "Could not stop background work: {detail}"
+// in the language the app shows.
+func OrchestrationStopFailed(detail string) string {
+	return In(i18n.Locale()).OrchestrationStopFailed(detail)
+}
+
+// OrchestrationStopFailed says "Could not stop background work: {detail}"
+// in the language of msgs.
+func (msgs Messages) OrchestrationStopFailed(detail string) string {
+	return Catalog.Format(msgs.locale, "orchestrationStopFailed", map[string]any{"detail": detail})
+}
+
+// OrchestrationStateActive says "Running"
+// in the language the app shows.
+func OrchestrationStateActive() string { return In(i18n.Locale()).OrchestrationStateActive() }
+
+// OrchestrationStateActive says "Running"
+// in the language of msgs.
+func (msgs Messages) OrchestrationStateActive() string {
+	return Catalog.Format(msgs.locale, "orchestrationStateActive", nil)
+}
+
+// OrchestrationStateWaitingDecision says "Waiting for decision"
+// in the language the app shows.
+func OrchestrationStateWaitingDecision() string {
+	return In(i18n.Locale()).OrchestrationStateWaitingDecision()
+}
+
+// OrchestrationStateWaitingDecision says "Waiting for decision"
+// in the language of msgs.
+func (msgs Messages) OrchestrationStateWaitingDecision() string {
+	return Catalog.Format(msgs.locale, "orchestrationStateWaitingDecision", nil)
+}
+
+// OrchestrationStatePaused says "Paused"
+// in the language the app shows.
+func OrchestrationStatePaused() string { return In(i18n.Locale()).OrchestrationStatePaused() }
+
+// OrchestrationStatePaused says "Paused"
+// in the language of msgs.
+func (msgs Messages) OrchestrationStatePaused() string {
+	return Catalog.Format(msgs.locale, "orchestrationStatePaused", nil)
+}
+
+// OrchestrationStateRestored says "Restored"
+// in the language the app shows.
+func OrchestrationStateRestored() string { return In(i18n.Locale()).OrchestrationStateRestored() }
+
+// OrchestrationStateRestored says "Restored"
+// in the language of msgs.
+func (msgs Messages) OrchestrationStateRestored() string {
+	return Catalog.Format(msgs.locale, "orchestrationStateRestored", nil)
+}
+
+// OrchestrationStateRestoredReadOnly says "Restored (read-only)"
+// in the language the app shows.
+func OrchestrationStateRestoredReadOnly() string {
+	return In(i18n.Locale()).OrchestrationStateRestoredReadOnly()
+}
+
+// OrchestrationStateRestoredReadOnly says "Restored (read-only)"
+// in the language of msgs.
+func (msgs Messages) OrchestrationStateRestoredReadOnly() string {
+	return Catalog.Format(msgs.locale, "orchestrationStateRestoredReadOnly", nil)
+}
+
+// OrchestrationStateCompleted says "Completed"
+// in the language the app shows.
+func OrchestrationStateCompleted() string { return In(i18n.Locale()).OrchestrationStateCompleted() }
+
+// OrchestrationStateCompleted says "Completed"
+// in the language of msgs.
+func (msgs Messages) OrchestrationStateCompleted() string {
+	return Catalog.Format(msgs.locale, "orchestrationStateCompleted", nil)
+}
+
+// OrchestrationStateStopped says "Stopped"
+// in the language the app shows.
+func OrchestrationStateStopped() string { return In(i18n.Locale()).OrchestrationStateStopped() }
+
+// OrchestrationStateStopped says "Stopped"
+// in the language of msgs.
+func (msgs Messages) OrchestrationStateStopped() string {
+	return Catalog.Format(msgs.locale, "orchestrationStateStopped", nil)
+}
+
+// OrchestrationStateFailed says "Failed"
+// in the language the app shows.
+func OrchestrationStateFailed() string { return In(i18n.Locale()).OrchestrationStateFailed() }
+
+// OrchestrationStateFailed says "Failed"
+// in the language of msgs.
+func (msgs Messages) OrchestrationStateFailed() string {
+	return Catalog.Format(msgs.locale, "orchestrationStateFailed", nil)
+}
+
+// OrchestrationStateUnknown says "Unknown"
+// in the language the app shows.
+func OrchestrationStateUnknown() string { return In(i18n.Locale()).OrchestrationStateUnknown() }
+
+// OrchestrationStateUnknown says "Unknown"
+// in the language of msgs.
+func (msgs Messages) OrchestrationStateUnknown() string {
+	return Catalog.Format(msgs.locale, "orchestrationStateUnknown", nil)
+}
+
+// OrchestrationDispositionSilent says "Silent"
+// in the language the app shows.
+func OrchestrationDispositionSilent() string {
+	return In(i18n.Locale()).OrchestrationDispositionSilent()
+}
+
+// OrchestrationDispositionSilent says "Silent"
+// in the language of msgs.
+func (msgs Messages) OrchestrationDispositionSilent() string {
+	return Catalog.Format(msgs.locale, "orchestrationDispositionSilent", nil)
+}
+
+// OrchestrationDispositionNotified says "Notified"
+// in the language the app shows.
+func OrchestrationDispositionNotified() string {
+	return In(i18n.Locale()).OrchestrationDispositionNotified()
+}
+
+// OrchestrationDispositionNotified says "Notified"
+// in the language of msgs.
+func (msgs Messages) OrchestrationDispositionNotified() string {
+	return Catalog.Format(msgs.locale, "orchestrationDispositionNotified", nil)
+}
+
+// OrchestrationDispositionNeedsDecision says "Needs decision"
+// in the language the app shows.
+func OrchestrationDispositionNeedsDecision() string {
+	return In(i18n.Locale()).OrchestrationDispositionNeedsDecision()
+}
+
+// OrchestrationDispositionNeedsDecision says "Needs decision"
+// in the language of msgs.
+func (msgs Messages) OrchestrationDispositionNeedsDecision() string {
+	return Catalog.Format(msgs.locale, "orchestrationDispositionNeedsDecision", nil)
+}
+
+// OrchestrationDispositionStopped says "Stopped"
+// in the language the app shows.
+func OrchestrationDispositionStopped() string {
+	return In(i18n.Locale()).OrchestrationDispositionStopped()
+}
+
+// OrchestrationDispositionStopped says "Stopped"
+// in the language of msgs.
+func (msgs Messages) OrchestrationDispositionStopped() string {
+	return Catalog.Format(msgs.locale, "orchestrationDispositionStopped", nil)
+}
+
+// OrchestrationDispositionFailed says "Failed"
+// in the language the app shows.
+func OrchestrationDispositionFailed() string {
+	return In(i18n.Locale()).OrchestrationDispositionFailed()
+}
+
+// OrchestrationDispositionFailed says "Failed"
+// in the language of msgs.
+func (msgs Messages) OrchestrationDispositionFailed() string {
+	return Catalog.Format(msgs.locale, "orchestrationDispositionFailed", nil)
+}
+
+// OrchestrationDispositionUnknown says "Unknown"
+// in the language the app shows.
+func OrchestrationDispositionUnknown() string {
+	return In(i18n.Locale()).OrchestrationDispositionUnknown()
+}
+
+// OrchestrationDispositionUnknown says "Unknown"
+// in the language of msgs.
+func (msgs Messages) OrchestrationDispositionUnknown() string {
+	return Catalog.Format(msgs.locale, "orchestrationDispositionUnknown", nil)
+}
+
+// OrchestrationHeaderCount says "Background work ({count, number})"
+// in the language the app shows.
+func OrchestrationHeaderCount(count int) string {
+	return In(i18n.Locale()).OrchestrationHeaderCount(count)
+}
+
+// OrchestrationHeaderCount says "Background work ({count, number})"
+// in the language of msgs.
+func (msgs Messages) OrchestrationHeaderCount(count int) string {
+	return Catalog.Format(msgs.locale, "orchestrationHeaderCount", map[string]any{"count": count})
+}
+
+// BotOverviewLabel says "Bot overview"
+// in the language the app shows.
+func BotOverviewLabel() string { return In(i18n.Locale()).BotOverviewLabel() }
+
+// BotOverviewLabel says "Bot overview"
+// in the language of msgs.
+func (msgs Messages) BotOverviewLabel() string {
+	return Catalog.Format(msgs.locale, "botOverviewLabel", nil)
+}
+
+// OrchestrationMenuCount says "{count, plural, =0 {Background work} one {Background work (#)} other {Background work (#)}}"
+// in the language the app shows.
+func OrchestrationMenuCount(count int) string { return In(i18n.Locale()).OrchestrationMenuCount(count) }
+
+// OrchestrationMenuCount says "{count, plural, =0 {Background work} one {Background work (#)} other {Background work (#)}}"
+// in the language of msgs.
+func (msgs Messages) OrchestrationMenuCount(count int) string {
+	return Catalog.Format(msgs.locale, "orchestrationMenuCount", map[string]any{"count": count})
+}
+
+// OrchestrationProfileHint says "Review this Bot’s background work, decisions, and recent wakes."
+// in the language the app shows.
+func OrchestrationProfileHint() string { return In(i18n.Locale()).OrchestrationProfileHint() }
+
+// OrchestrationProfileHint says "Review this Bot’s background work, decisions, and recent wakes."
+// in the language of msgs.
+func (msgs Messages) OrchestrationProfileHint() string {
+	return Catalog.Format(msgs.locale, "orchestrationProfileHint", nil)
+}
+
+// OrchestrationOpenAction says "View background work"
+// in the language the app shows.
+func OrchestrationOpenAction() string { return In(i18n.Locale()).OrchestrationOpenAction() }
+
+// OrchestrationOpenAction says "View background work"
+// in the language of msgs.
+func (msgs Messages) OrchestrationOpenAction() string {
+	return Catalog.Format(msgs.locale, "orchestrationOpenAction", nil)
+}
+
+// OrchestrationVersion says "Generation {generation, number} · Revision {revision, number}"
+// in the language the app shows.
+func OrchestrationVersion(generation int, revision int) string {
+	return In(i18n.Locale()).OrchestrationVersion(generation, revision)
+}
+
+// OrchestrationVersion says "Generation {generation, number} · Revision {revision, number}"
+// in the language of msgs.
+func (msgs Messages) OrchestrationVersion(generation int, revision int) string {
+	return Catalog.Format(msgs.locale, "orchestrationVersion", map[string]any{"generation": generation, "revision": revision})
+}
+
+// OrchestrationSourceWatch says "Watch"
+// in the language the app shows.
+func OrchestrationSourceWatch() string { return In(i18n.Locale()).OrchestrationSourceWatch() }
+
+// OrchestrationSourceWatch says "Watch"
+// in the language of msgs.
+func (msgs Messages) OrchestrationSourceWatch() string {
+	return Catalog.Format(msgs.locale, "orchestrationSourceWatch", nil)
+}
+
+// OrchestrationSourceTimer says "Timer"
+// in the language the app shows.
+func OrchestrationSourceTimer() string { return In(i18n.Locale()).OrchestrationSourceTimer() }
+
+// OrchestrationSourceTimer says "Timer"
+// in the language of msgs.
+func (msgs Messages) OrchestrationSourceTimer() string {
+	return Catalog.Format(msgs.locale, "orchestrationSourceTimer", nil)
+}
+
+// OrchestrationSourceSchedule says "Schedule"
+// in the language the app shows.
+func OrchestrationSourceSchedule() string { return In(i18n.Locale()).OrchestrationSourceSchedule() }
+
+// OrchestrationSourceSchedule says "Schedule"
+// in the language of msgs.
+func (msgs Messages) OrchestrationSourceSchedule() string {
+	return Catalog.Format(msgs.locale, "orchestrationSourceSchedule", nil)
+}
+
+// OrchestrationSourceUser says "Manual"
+// in the language the app shows.
+func OrchestrationSourceUser() string { return In(i18n.Locale()).OrchestrationSourceUser() }
+
+// OrchestrationSourceUser says "Manual"
+// in the language of msgs.
+func (msgs Messages) OrchestrationSourceUser() string {
+	return Catalog.Format(msgs.locale, "orchestrationSourceUser", nil)
+}
+
+// OrchestrationApproved says "Approved"
+// in the language the app shows.
+func OrchestrationApproved() string { return In(i18n.Locale()).OrchestrationApproved() }
+
+// OrchestrationApproved says "Approved"
+// in the language of msgs.
+func (msgs Messages) OrchestrationApproved() string {
+	return Catalog.Format(msgs.locale, "orchestrationApproved", nil)
+}
+
+// OrchestrationRejected says "Rejected"
+// in the language the app shows.
+func OrchestrationRejected() string { return In(i18n.Locale()).OrchestrationRejected() }
+
+// OrchestrationRejected says "Rejected"
+// in the language of msgs.
+func (msgs Messages) OrchestrationRejected() string {
+	return Catalog.Format(msgs.locale, "orchestrationRejected", nil)
+}
+
+// OrchestrationRouteRole says "Route: {role}"
+// in the language the app shows.
+func OrchestrationRouteRole(role string) string {
+	return In(i18n.Locale()).OrchestrationRouteRole(role)
+}
+
+// OrchestrationRouteRole says "Route: {role}"
+// in the language of msgs.
+func (msgs Messages) OrchestrationRouteRole(role string) string {
+	return Catalog.Format(msgs.locale, "orchestrationRouteRole", map[string]any{"role": role})
+}
+
+// OrchestrationStatWakes says "Total wakes"
+// in the language the app shows.
+func OrchestrationStatWakes() string { return In(i18n.Locale()).OrchestrationStatWakes() }
+
+// OrchestrationStatWakes says "Total wakes"
+// in the language of msgs.
+func (msgs Messages) OrchestrationStatWakes() string {
+	return Catalog.Format(msgs.locale, "orchestrationStatWakes", nil)
+}
+
+// OrchestrationStatTokens says "Total tokens"
+// in the language the app shows.
+func OrchestrationStatTokens() string { return In(i18n.Locale()).OrchestrationStatTokens() }
+
+// OrchestrationStatTokens says "Total tokens"
+// in the language of msgs.
+func (msgs Messages) OrchestrationStatTokens() string {
+	return Catalog.Format(msgs.locale, "orchestrationStatTokens", nil)
+}
+
+// OrchestrationContextBudget says "Context window"
+// in the language the app shows.
+func OrchestrationContextBudget() string { return In(i18n.Locale()).OrchestrationContextBudget() }
+
+// OrchestrationContextBudget says "Context window"
+// in the language of msgs.
+func (msgs Messages) OrchestrationContextBudget() string {
+	return Catalog.Format(msgs.locale, "orchestrationContextBudget", nil)
+}
+
+// OrchestrationChart7DTitle says "7-day wake activity"
+// in the language the app shows.
+func OrchestrationChart7DTitle() string { return In(i18n.Locale()).OrchestrationChart7DTitle() }
+
+// OrchestrationChart7DTitle says "7-day wake activity"
+// in the language of msgs.
+func (msgs Messages) OrchestrationChart7DTitle() string {
+	return Catalog.Format(msgs.locale, "orchestrationChart7DTitle", nil)
+}
+
+// OrchestrationChart7DTooltip says "{day}: {wakes} wakes · {coalesced} coalesced"
+// in the language the app shows.
+func OrchestrationChart7DTooltip(day string, wakes int, coalesced int) string {
+	return In(i18n.Locale()).OrchestrationChart7DTooltip(day, wakes, coalesced)
+}
+
+// OrchestrationChart7DTooltip says "{day}: {wakes} wakes · {coalesced} coalesced"
+// in the language of msgs.
+func (msgs Messages) OrchestrationChart7DTooltip(day string, wakes int, coalesced int) string {
+	return Catalog.Format(msgs.locale, "orchestrationChart7DTooltip", map[string]any{"day": day, "wakes": wakes, "coalesced": coalesced})
+}
+
+// OrchestrationRhythm24HTitle says "24h wake rhythm"
+// in the language the app shows.
+func OrchestrationRhythm24HTitle() string { return In(i18n.Locale()).OrchestrationRhythm24HTitle() }
+
+// OrchestrationRhythm24HTitle says "24h wake rhythm"
+// in the language of msgs.
+func (msgs Messages) OrchestrationRhythm24HTitle() string {
+	return Catalog.Format(msgs.locale, "orchestrationRhythm24HTitle", nil)
+}
+
+// OrchestrationRhythmNow says "Now"
+// in the language the app shows.
+func OrchestrationRhythmNow() string { return In(i18n.Locale()).OrchestrationRhythmNow() }
+
+// OrchestrationRhythmNow says "Now"
+// in the language of msgs.
+func (msgs Messages) OrchestrationRhythmNow() string {
+	return Catalog.Format(msgs.locale, "orchestrationRhythmNow", nil)
+}
+
+// OrchestrationRhythmHourTooltip says "{hour}: {runs} wakes"
+// in the language the app shows.
+func OrchestrationRhythmHourTooltip(hour string, runs int) string {
+	return In(i18n.Locale()).OrchestrationRhythmHourTooltip(hour, runs)
+}
+
+// OrchestrationRhythmHourTooltip says "{hour}: {runs} wakes"
+// in the language of msgs.
+func (msgs Messages) OrchestrationRhythmHourTooltip(hour string, runs int) string {
+	return Catalog.Format(msgs.locale, "orchestrationRhythmHourTooltip", map[string]any{"hour": hour, "runs": runs})
 }

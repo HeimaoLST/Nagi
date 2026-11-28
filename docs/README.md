@@ -19,7 +19,7 @@ This directory holds Nagi's product requirements, implemented design contracts, 
 - [RFC-0001: Multi-Brain Execution, Direct Data Inspection & Unified Capabilities](rfcs/0001-multi-brain-and-capabilities.md) — `Implemented`.
 - [RFC-0002: Bot-Activity Control Plane v2](rfcs/0002-bot-activity-control-plane.md) — `Implemented`.
 - [RFC-0003: Model Catalog, Ranked Multi-Provider Routing & Health Failover](rfcs/0003-model-catalog-and-smart-routing.md) — `Implemented`.
-- [RFC-0004: Stateful Session Handles, Event Watch Substrate & Scoped Autonomous Orchestration](rfcs/0004-stateful-sessions-and-autonomous-orchestration.md) — `Partially Implemented` *(`BG-1`–`BG-2`, `BG-3` backend SQLite `v14`, and `BG-3a` native lifecycle shipped; `BG-3b` UI integration pending).*
+- [RFC-0004: Stateful Session Handles, Event Watch Substrate & Scoped Autonomous Orchestration](rfcs/0004-stateful-sessions-and-autonomous-orchestration.md) — `Implemented`.
 
 ### Repository Root References
 

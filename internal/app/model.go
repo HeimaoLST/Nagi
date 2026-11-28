@@ -27,6 +27,7 @@ const (
 	msgUser messageKind = iota
 	msgContact
 	msgActivity
+	msgNotice
 )
 
 type sendState int
@@ -36,6 +37,7 @@ const (
 	sendSubmitting
 	sendAccepted
 	sendUnknown
+	sendQueued
 )
 
 type historyEntry struct {
@@ -58,7 +60,6 @@ type message struct {
 	RetryDone   bool
 	Expanded    bool
 
-	// Key identifies a Pi history entry or a live run item.
 	Key        string
 	TaskID     string
 	MessageID  string
@@ -72,6 +73,8 @@ type message struct {
 	Context    []taskContextItem
 	Quote      *pi.ProductQuote
 	ReadByBot  bool
+	Notice     *pi.ProductConversationNotice
+	AnchorSeq  uint64
 
 	liveReveal      bool
 	revealedBubbles int
@@ -127,30 +130,36 @@ type contact struct {
 	activeActivities       map[string]pi.ProductActivitySummary
 	activityStatusRevision uint64
 	activityNotices        activityNoticeState
+	orchestration          botOrchestrationState
 
-	// A Pi conversation is opened lazily on its first send.
-	SessionID         string
-	Loaded            bool
-	LoadErr           string
-	Unavailable       string
-	ActiveTaskID      string
-	LastTaskID        string
-	SendState         sendState
-	SendError         string
-	SendErrorKind     string
-	SendErrorDetail   string
-	SubmittedDraft    string
-	SubmittedQuote    *pi.ProductQuote
-	SubmittedRev      int
-	pendingSend       *pendingSend
-	draftRev          int
-	StatusDetail      string
-	StatusDetailKind  string
-	SessionWorkingDir string
-	SessionModel      string
-	SessionAPI        string
-	SessionState      string
-	historyGen        int
+	SessionID          string
+	Loaded             bool
+	LoadErr            string
+	Unavailable        string
+	ActiveTaskID       string
+	LastTaskID         string
+	SendState          sendState
+	SendError          string
+	SendErrorKind      string
+	SendErrorDetail    string
+	SubmittedDraft     string
+	SubmittedQuote     *pi.ProductQuote
+	SubmittedRev       int
+	submittedMaterials []taskContextItem
+	SendQueuedPosition int
+	sendNotice         string
+	sendReceiptRead    uint64
+	stoppingQueued     string
+	pendingSend        *pendingSend
+	draftRev           int
+	StatusDetail       string
+	StatusDetailKind   string
+	SessionWorkingDir  string
+	SessionModel       string
+	SessionAPI         string
+	SessionState       string
+	historyGen         int
+	transcriptError    bool
 }
 
 func (ct *contact) isBuiltin() bool {
@@ -183,8 +192,12 @@ type appModel struct {
 	priorChats               *productConversationBrowser
 	sessions                 sessionWorkspaceState
 	schedules                scheduledWorkState
+	backgroundWork           backgroundWorkState
 	scheduledWorkBotID       string
 	focusScheduledWorkOpener string
+	focusSessionsOpener      string
+	headerMenuOpen           bool
+	focusHeaderOverview      string
 	composerHandle           ui.Handle
 	composerAttachMenuOpen   bool
 	focusComposerAttach      bool
@@ -243,8 +256,6 @@ type appModel struct {
 	activityActionNotice       string
 	activityActionNoticeDetail string
 
-	// Runtime mode. demo keeps the local fixture path for tests/screenshots;
-	// the shipped app is runtime-backed.
 	demo                      bool
 	store                     *contactStore
 	pi                        *piAppHost
@@ -264,6 +275,7 @@ type appModel struct {
 	runtimeBuiltinToolsErr    string
 	workDir                   string
 	storePath                 string
+	directUIMu                sync.Mutex
 	uiHookMu                  sync.Mutex
 	uiHook                    func(func())
 	requestQuit               func()
@@ -294,9 +306,6 @@ type appModel struct {
 	activityToolLedger *activityToolOperationLedger
 	activityToolScopes map[string]activityToolScope
 
-	// Layout is a GUI-wide preference, not a contact or runtime fact. Widths
-	// are persisted in the contact store; windowWidth is only the current
-	// native viewport and never overwrites a preferred width when it shrinks.
 	windowWidth          int
 	leftPaneWidth        float32
 	rightPaneWidth       float32
@@ -344,6 +353,11 @@ func (a *appModel) contactByID(id string) *contact {
 }
 
 func (a *appModel) selectContact(i int) {
+	a.selectContactWithDrawer(i, false)
+}
+
+func (a *appModel) selectContactWithDrawer(i int, keepDrawer bool) {
+	a.headerMenuOpen = false
 	if i < 0 || i >= len(a.contacts) || i == a.selected {
 		return
 	}
@@ -351,7 +365,15 @@ func (a *appModel) selectContact(i int) {
 	a.contacts[i].Unread = 0
 	a.selected = i
 	a.priorChats = nil
-	a.sessions.activeBotID = ""
+	if !keepDrawer {
+		if a.backgroundWork.panel != nil || a.sessions.activeBotID != "" || a.scheduledWorkBotID != "" {
+			a.closeDetail()
+			a.focusProfileRow, a.focusRail = "", false
+		} else {
+			a.clearBotDrawers()
+		}
+		a.focusHeaderOverview = ""
+	}
 	if !a.demo {
 		a.persist()
 	}
@@ -374,7 +396,7 @@ func (a *appModel) snippet(c *contact, msgs locales.Messages) string {
 	}
 	for i := len(c.Messages) - 1; i >= 0; i-- {
 		m := c.Messages[i]
-		if m.Kind == msgActivity {
+		if m.Kind == msgActivity || m.Kind == msgNotice {
 			continue
 		}
 		source := m.Text
@@ -402,8 +424,6 @@ func (a *appModel) snippet(c *contact, msgs locales.Messages) string {
 	return msgs.EmptyNoMessages()
 }
 
-// addDefaultContact creates and selects a ready contact with a usable
-// default name, then asks the composer to take focus once.
 func (a *appModel) addDefaultContact() {
 	if !a.demo {
 		a.addRuntimeContact()
@@ -422,6 +442,7 @@ func (a *appModel) addDefaultContact() {
 	a.selected = len(a.contacts) - 1
 	a.contactSearch = ""
 	a.aux = ""
+	a.headerMenuOpen = false
 	a.resetComposerOverlays()
 	a.focusComposer = true
 }

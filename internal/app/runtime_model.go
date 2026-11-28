@@ -1,9 +1,5 @@
 package app
 
-// Runtime-backed app wiring: configuration, startup/restore, the real send
-// path, event application and history rendering. All UI state changes go
-// through win.Update; I/O and JSON decoding stay off the UI thread.
-
 import (
 	"context"
 	"encoding/json"
@@ -76,9 +72,6 @@ func (a *appModel) applyProductPreferences(preferences *pi.ProductPreferences) {
 	a.hideBuiltinArchitect = preferences.HideBuiltinArchitect
 }
 
-// newUnavailableApp keeps the window usable when the local contact store cannot
-// be read or created. It retains the actual paths, labels the local store stage,
-// keeps store=nil, and never silently creates a replacement store.
 func newUnavailableApp(err error) *appModel {
 	storePath := guiStorePath()
 	if absolute, err := filepath.Abs(storePath); err == nil {
@@ -258,6 +251,7 @@ func (a *appModel) beginShutdown() {
 	a.runtimeStatus = runtimeStateDraining
 	a.refreshDockMenu()
 	a.resetComposerOverlays()
+	a.headerMenuOpen = false
 	a.persist()
 	a.stopProviderTimers()
 	a.finishShutdown()
@@ -275,6 +269,8 @@ func (a *appModel) stopProviderTimers() {
 }
 
 func (a *appModel) setUIHook(hook func(func())) {
+	a.directUIMu.Lock()
+	defer a.directUIMu.Unlock()
 	a.uiHookMu.Lock()
 	a.uiHook = hook
 	a.uiHookMu.Unlock()
@@ -291,11 +287,19 @@ func (a *appModel) updateUI(fn func()) {
 		hook(fn)
 		return
 	}
-	if a.win != nil {
-		a.win.Update(fn)
+	a.directUIMu.Lock()
+	hook, win := a.getUIHook(), a.win
+	if hook == nil && win == nil {
+		defer a.directUIMu.Unlock()
+		fn()
 		return
 	}
-	fn()
+	a.directUIMu.Unlock()
+	if hook != nil {
+		hook(fn)
+	} else {
+		win.Update(fn)
+	}
 }
 
 func (a *appModel) maxActiveTasks() int {
@@ -337,9 +341,10 @@ func (a *appModel) reloadContactByID(contactID string) {
 }
 
 type historyProjection struct {
-	messages []*message
-	entries  []historyEntry
-	detail   string
+	messages        []*message
+	entries         []historyEntry
+	detail          string
+	transcriptError bool
 }
 
 func formatMillis(ms int64) string {
@@ -426,8 +431,6 @@ func (a *appModel) connectionConfigurationBlocked() bool {
 	}
 }
 
-// Send/start blockers are stable reasons. One condition function serves the
-// composer and every work surface; rendering happens in the current language.
 const (
 	blockShutdown         = "shutdown"
 	blockArchivedSend     = "archived-send"
@@ -516,7 +519,7 @@ func (a *appModel) canSend(ct *contact) string {
 	if sessionBusy(ct.SendState, ct.ActiveTaskID) {
 		return blockBusy
 	}
-	if a.activeTaskCount() >= a.maxActiveTasks() {
+	if a.productHost() == nil && a.activeTaskCount() >= a.maxActiveTasks() {
 		if a.maxActiveTasks() <= 1 {
 			return blockAnotherContact
 		}
@@ -560,6 +563,7 @@ func (a *appModel) reloadSelected() {
 		return
 	}
 	a.reloadContactByID(ct.ID)
+	a.reconcilePendingConversationSend(a.productHost(), ct, true)
 }
 
 func (a *appModel) addRuntimeContact() {

@@ -1050,7 +1050,7 @@ func TestPreviewControlPlaneDS2(t *testing.T) {
 	})
 }
 
-func TestPreviewSessionInspection(t *testing.T) {
+func TestPreviewSessionInspector(t *testing.T) {
 	dir := os.Getenv("NAGI_PREVIEW_DIR")
 	if dir == "" {
 		t.Skip("set NAGI_PREVIEW_DIR to write BG-1 session inspection previews")
@@ -1059,25 +1059,74 @@ func TestPreviewSessionInspection(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	writeSessionShot := func(name string, fx phase3SeededControlPlane, width, height int, locale string, dark bool) {
+	writeSessionShot := func(name string, fx phase3SeededControlPlane, width, height int, locale string, dark bool, prepare func(*ui.Tester)) {
 		t.Helper()
 		fx.app.windowWidth = width
 		tr := ui.NewTesterWith(fx.app.view, width, height, ui.TesterOptions{Dark: dark})
 		tr.SetLocale(locale)
 		tr.SetFocused(true)
 		tr.Frame()
+		if prepare != nil {
+			prepare(tr)
+		}
 		path := filepath.Join(dir, name)
 		writePreviewPNG(t, path, tr.Image())
 		t.Logf("bg1 preview path=%s width=%d height=%d locale=%s dark=%v", path, width, height, locale, dark)
 	}
 
-	fxList, ptySummary, pipeSummary := seedVisualSessionInspectorFixture(t)
-	fxList.app.sessions.activeBotID = fxList.contact.ID
-	writeSessionShot("bg1-sessions-list-en-light-1040x720.png", fxList, 1040, 720, "en", false)
+	fxHeader, _, _ := seedVisualSessionInspectorFixture(t)
+	writeSessionShot("bg1-session-header-clean-en-light-1040x720.png", fxHeader, 1040, 720, "en", false, nil)
 
-	fxPTY, ptyDetailSummary, _ := seedVisualSessionInspectorFixture(t)
-	fxPTY.app.sessions.activeBotID = fxPTY.contact.ID
-	fxPTY.app.sessions.botSession(fxPTY.contact.ID).detail = &sessionDetailState{
+	fxMenuEn, _, _ := seedVisualSessionInspectorFixture(t)
+	writeSessionShot("bg1-session-overview-menu-en-light-1040x720.png", fxMenuEn, 1040, 720, "en", false, func(tr *ui.Tester) {
+		_ = tr.Click(locales.In("en").BotOverviewLabel())
+		tr.Frame()
+	})
+
+	fxMenuZh, _, _ := seedVisualSessionInspectorFixture(t)
+	writeSessionShot("bg1-session-overview-menu-zh-dark-720x640.png", fxMenuZh, 720, 640, "zh-Hans", true, func(tr *ui.Tester) {
+		_ = tr.Click(locales.In("zh-Hans").BotOverviewLabel())
+		tr.Frame()
+	})
+
+	fxList, ptySummary, pipeSummary := seedVisualSessionInspectorFixture(t)
+	fxList.app.openBotSessions(fxList.contact.ID, "header-overview:"+fxList.contact.ID)
+	botList := fxList.app.sessions.botSession(fxList.contact.ID)
+	botList.items = []pi.ProductSessionSummary{ptySummary, pipeSummary}
+	botList.nextCursor = "cursor-page-2"
+	botList.listLoading = false
+	botList.listFailed = false
+	writeSessionShot("bg1-sessions-drawer-list-en-light-1040x720.png", fxList, 1040, 720, "en", false, nil)
+
+	fxPTYEn, ptyDetailEn, pipeListEn := seedVisualSessionInspectorFixture(t)
+	fxPTYEn.app.openBotSessions(fxPTYEn.contact.ID, "header-overview:"+fxPTYEn.contact.ID)
+	botPTYEn := fxPTYEn.app.sessions.botSession(fxPTYEn.contact.ID)
+	botPTYEn.items = []pi.ProductSessionSummary{ptyDetailEn, pipeListEn}
+	botPTYEn.listLoading = false
+	botPTYEn.listFailed = false
+	botPTYEn.detail = &sessionDetailState{
+		summary: ptyDetailEn,
+		ready:   true,
+		output: sessionOutputState{
+			loaded:         true,
+			from:           0,
+			next:           512,
+			highWater:      512,
+			firstAvailable: 0,
+			revision:       ptyDetailEn.Revision,
+			authPause:      ptyDetailEn.AuthPause,
+			chunks:         []pi.ProductSessionChunk{{Stream: "pty", Offset: 0, NextOffset: 512, Text: "PTY_READY\nPassword:\n"}},
+		},
+	}
+	writeSessionShot("bg1-session-pty-auth-en-light-1040x720.png", fxPTYEn, 1040, 720, "en", false, nil)
+
+	fxPTY, ptyDetailSummary, pipeListSummary := seedVisualSessionInspectorFixture(t)
+	fxPTY.app.openBotSessions(fxPTY.contact.ID, "header-overview:"+fxPTY.contact.ID)
+	botPTY := fxPTY.app.sessions.botSession(fxPTY.contact.ID)
+	botPTY.items = []pi.ProductSessionSummary{ptyDetailSummary, pipeListSummary}
+	botPTY.listLoading = false
+	botPTY.listFailed = false
+	botPTY.detail = &sessionDetailState{
 		summary: ptyDetailSummary,
 		ready:   true,
 		output: sessionOutputState{
@@ -1091,11 +1140,15 @@ func TestPreviewSessionInspection(t *testing.T) {
 			chunks:         []pi.ProductSessionChunk{{Stream: "pty", Offset: 0, NextOffset: 512, Text: "PTY_READY\nPassword:\n"}},
 		},
 	}
-	writeSessionShot("bg1-session-pty-auth-zh-dark-720x640.png", fxPTY, 720, 640, "zh-Hans", true)
+	writeSessionShot("bg1-session-pty-auth-zh-dark-720x640.png", fxPTY, 720, 640, "zh-Hans", true, nil)
 
-	fxPipe, _, pipeDetailSummary := seedVisualSessionInspectorFixture(t)
-	fxPipe.app.sessions.activeBotID = fxPipe.contact.ID
-	fxPipe.app.sessions.botSession(fxPipe.contact.ID).detail = &sessionDetailState{
+	fxPipe, ptyPipeList, pipeDetailSummary := seedVisualSessionInspectorFixture(t)
+	fxPipe.app.openBotSessions(fxPipe.contact.ID, "header-overview:"+fxPipe.contact.ID)
+	botPipe := fxPipe.app.sessions.botSession(fxPipe.contact.ID)
+	botPipe.items = []pi.ProductSessionSummary{ptyPipeList, pipeDetailSummary}
+	botPipe.listLoading = false
+	botPipe.listFailed = false
+	botPipe.detail = &sessionDetailState{
 		summary: pipeDetailSummary,
 		ready:   true,
 		output: sessionOutputState{
@@ -1115,13 +1168,17 @@ func TestPreviewSessionInspection(t *testing.T) {
 			},
 		},
 	}
-	writeSessionShot("bg1-session-pipe-browsing-en-light-960x640.png", fxPipe, 960, 640, "en", false)
+	writeSessionShot("bg1-session-pipe-browsing-en-light-960x640.png", fxPipe, 960, 640, "en", false, nil)
 
-	fxWatches, _, closedSummary := seedVisualSessionInspectorFixture(t)
+	fxWatches, ptyWatchList, closedSummary := seedVisualSessionInspectorFixture(t)
 	closedSummary.State = pi.ProductSessionClosed
 	closedSummary.TransportStatus = pi.ProductTransportClosedByUser
-	fxWatches.app.sessions.activeBotID = fxWatches.contact.ID
-	fxWatches.app.sessions.botSession(fxWatches.contact.ID).detail = &sessionDetailState{
+	fxWatches.app.openBotSessions(fxWatches.contact.ID, "header-overview:"+fxWatches.contact.ID)
+	botWatches := fxWatches.app.sessions.botSession(fxWatches.contact.ID)
+	botWatches.items = []pi.ProductSessionSummary{ptyWatchList, closedSummary}
+	botWatches.listLoading = false
+	botWatches.listFailed = false
+	botWatches.detail = &sessionDetailState{
 		summary: closedSummary,
 		ready:   true,
 		output: sessionOutputState{
@@ -1132,9 +1189,7 @@ func TestPreviewSessionInspection(t *testing.T) {
 		},
 		scroll: ui.ScrollState{Y: 260},
 	}
-	writeSessionShot("bg1-session-closed-watches-zh-dark-1040x720.png", fxWatches, 1040, 720, "zh-Hans", true)
-	_ = ptySummary
-	_ = pipeSummary
+	writeSessionShot("bg1-session-closed-watches-zh-dark-1040x720.png", fxWatches, 1040, 720, "zh-Hans", true, nil)
 }
 
 func TestPreviewScheduledWork(t *testing.T) {
@@ -1305,5 +1360,196 @@ func TestPreviewMessageReadStatus(t *testing.T) {
 		path := filepath.Join(dir, shot.name)
 		writePreviewPNG(t, path, tr.Image())
 		t.Logf("read-status preview path=%s width=%d height=%d locale=%s dark=%v", path, shot.w, shot.h, shot.locale, shot.dark)
+	}
+}
+
+func TestPreviewOrchestrationAndTimeline(t *testing.T) {
+	dir := os.Getenv("NAGI_PREVIEW_DIR")
+	if dir == "" {
+		t.Skip("set NAGI_PREVIEW_DIR to write BG-3B orchestration previews")
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	seedPreviewOrchestrationItem := func(ct *contact) pi.ProductOrchestrationSummary {
+		return pi.ProductOrchestrationSummary{
+			MandateID:       "watch:w-1",
+			OwnerBotID:      ct.ID,
+			SourceKind:      pi.ProductMandateSourceWatch,
+			Purpose:         "Monitor release readiness",
+			State:           pi.ProductMandateWaitingDecision,
+			LastDisposition: pi.ProductDispositionNeedsDecision,
+			Generation:      2,
+			Revision:        7,
+			PendingDecision: &pi.ProductOrchestrationDecision{
+				DecisionID: "dec-1",
+				MandateID:  "watch:w-1",
+				OwnerBotID: ct.ID,
+				Revision:   1,
+				State:      "open",
+				Kind:       "approval",
+				Purpose:    "Approve rollout",
+				Summary:    "Confirm whether to publish release notes.",
+				Options: []pi.ProductOrchestrationDecisionOption{
+					{ID: "publish", Label: "Publish notes"},
+					{ID: "hold", Label: "Hold draft"},
+				},
+			},
+			Metrics: pi.ProductOrchestrationMetrics{TotalWakes: 4, Calls: 3, TotalTokens: 980, CostUSD: 0.0042},
+		}
+	}
+	for _, shot := range []struct {
+		name, locale string
+		w, h         int
+		dark         bool
+		setup        func(*appModel, *contact, *ui.Tester)
+	}{
+		{
+			name: "bg3b-overview-menu-en-light-1040x720.png", locale: "en", w: 1040, h: 720, dark: false,
+			setup: func(a *appModel, ct *contact, tr *ui.Tester) {
+				ct.Messages = []*message{
+					{
+						Key:       "notice:p-en",
+						Kind:      msgNotice,
+						Text:      "Checklist smoke checks passed; release notes need sign-off.",
+						Timestamp: time.Now(),
+						Notice:    &pi.ProductConversationNotice{BotID: ct.ID, MandateID: "watch:w-1", Urgency: "high"},
+					},
+					{ID: 1, Kind: msgUser, Text: "Confirm once checks settle.", ReadByBot: true},
+				}
+				ct.orchestration.items = []pi.ProductOrchestrationSummary{seedPreviewOrchestrationItem(ct)}
+				tr.Frame()
+				_ = tr.Click(locales.In("en").BotOverviewLabel())
+				tr.Frame()
+			},
+		},
+		{
+			name: "bg3b-drawer-list-zh-light-960x640.png", locale: "zh-Hans", w: 960, h: 640, dark: false,
+			setup: func(a *appModel, ct *contact, tr *ui.Tester) {
+				ct.Messages = []*message{
+					{
+						Key:       "notice:p-1",
+						Kind:      msgNotice,
+						Text:      "发布前冒烟检查已全部通过，发布说明待确认。",
+						Timestamp: time.Now(),
+						Notice:    &pi.ProductConversationNotice{BotID: ct.ID, MandateID: "watch:w-1", Urgency: "high"},
+					},
+					{ID: 1, Kind: msgUser, Text: "状态确认无误后告诉我。", ReadByBot: true},
+				}
+				item := seedPreviewOrchestrationItem(ct)
+				item.Purpose = "监视发布检查清单"
+				item.PendingDecision.Purpose = "确认是否发布更新说明"
+				item.PendingDecision.Summary = "除发布说明外其他检查均已就绪。"
+				item.PendingDecision.Options = []pi.ProductOrchestrationDecisionOption{
+					{ID: "publish", Label: "发布说明"},
+					{ID: "hold", Label: "暂缓发布"},
+				}
+				ct.orchestration.items = []pi.ProductOrchestrationSummary{item}
+				a.openContactProfile(ct.ID)
+				a.backgroundWork.panel = &backgroundWorkPanel{
+					bot:    ct,
+					opener: "header-overview:" + ct.ID,
+					items:  ct.orchestration.items,
+				}
+				tr.Frame()
+			},
+		},
+		{
+			name: "bg3b-background-drawer-detail-en-dark-1040x720.png", locale: "en", w: 1040, h: 720, dark: true,
+			setup: func(a *appModel, ct *contact, tr *ui.Tester) {
+				summary := seedPreviewOrchestrationItem(ct)
+				a.openContactProfile(ct.ID)
+				a.backgroundWork.panel = &backgroundWorkPanel{
+					bot:      ct,
+					opener:   "header-overview:" + ct.ID,
+					detailID: summary.MandateID,
+					items:    []pi.ProductOrchestrationSummary{summary},
+					detail: &pi.ProductOrchestrationDetail{
+						ProductOrchestrationSummary: summary,
+						RecentRuns: []pi.ProductOrchestrationRun{
+							{RunID: "run-1", MandateID: summary.MandateID, Generation: 2, State: "completed", RouteRole: "utility", Disposition: pi.ProductDispositionNeedsDecision, Summary: "Requested sign-off on release notes.", Calls: 2, TotalTokens: 480},
+						},
+						RecentReceipts: []pi.ProductOrchestrationEffectReceipt{
+							{ReceiptID: "rcpt-1", MandateID: summary.MandateID, RunID: "run-1", CallID: "c1", Tool: "conversation_notify", Target: "conv-1", State: "settled_ok"},
+						},
+					},
+				}
+				tr.Frame()
+			},
+		},
+		{
+			name: "bg3b-background-drawer-overlay-zh-dark-720x640.png", locale: "zh-Hans", w: 720, h: 640, dark: true,
+			setup: func(a *appModel, ct *contact, tr *ui.Tester) {
+				summary := seedPreviewOrchestrationItem(ct)
+				summary.Purpose = "监视发布检查清单"
+				a.openContactProfile(ct.ID)
+				a.backgroundWork.panel = &backgroundWorkPanel{
+					bot:      ct,
+					opener:   "header-overview:" + ct.ID,
+					detailID: summary.MandateID,
+					items:    []pi.ProductOrchestrationSummary{summary},
+					detail: &pi.ProductOrchestrationDetail{
+						ProductOrchestrationSummary: summary,
+						RecentRuns: []pi.ProductOrchestrationRun{
+							{RunID: "run-1", MandateID: summary.MandateID, Generation: 2, State: "completed", RouteRole: "utility", Disposition: pi.ProductDispositionNeedsDecision, Summary: "已请求确认发布说明。", Calls: 2, TotalTokens: 480},
+						},
+						RecentReceipts: []pi.ProductOrchestrationEffectReceipt{
+							{ReceiptID: "rcpt-1", MandateID: summary.MandateID, RunID: "run-1", CallID: "c1", Tool: "conversation_notify", Target: "conv-1", State: "settled_ok"},
+						},
+					},
+				}
+				tr.Frame()
+			},
+		},
+		{
+			name: "bg3b-queued-send-zh-dark-720x640.png", locale: "zh-Hans", w: 720, h: 640, dark: true,
+			setup: func(a *appModel, ct *contact, tr *ui.Tester) {
+				ct.SendState = sendQueued
+				ct.SendQueuedPosition = 2
+				ct.ActiveTaskID = "exec-queued-preview"
+				ct.Draft = "补充核对发布标签校验和。"
+				tr.Frame()
+			},
+		},
+		{
+			name: "bg3b-recovery-v14-zh-dark-720x640.png", locale: "zh-Hans", w: 720, h: 640, dark: true,
+			setup: func(a *appModel, ct *contact, tr *ui.Tester) {
+				a.openSettingsTab(settingsTabAppearance, settingsSourceCommand)
+				s := a.ensureDataRecovery()
+				s.target = &storeRecoveryTarget{}
+				s.canonical = a.storePath
+				s.viewGeneration = a.folderChoiceGeneration
+				s.owner = ct
+				s.scopeOpen = true
+				s.copy = &storeRecoveryCopy{
+					Path: "/Documents/Nagi.backup.json", Contacts: 2, Issues: 1,
+					Timers: 1, Schedules: 1, DormantWatches: 2,
+					DormantMandates: 3, Decisions: 2, Notices: 4, ModifiedAt: time.Now(),
+				}
+				want := locales.In("zh-Hans").RecoveryPreviewOrchestrationCounts(3, 2, 4)
+				for y := float32(0); y <= 2400; y += 80 {
+					a.settingsScroll.Y = y
+					tr.Frame()
+					if r, ok := tr.Find(want); ok && r.H > 0 && r.Y >= 80 && r.Y+r.H <= 500 {
+						break
+					}
+				}
+			},
+		},
+	} {
+		a, ct := workspaceTestApp(t)
+		a.windowWidth = shot.w
+		a.demo = false
+		a.runtimeStatus = runtimeStateReady
+		a.connectionGeneration = 1
+		a.pi = phase3StubProductHost(t, a, visualGuardSeededPool())
+		a.profileEditors = map[string]*contactProfileEditor{ct.ID: newContactProfileEditor(contactProfileDraft(ct))}
+		tr := ui.NewTesterWith(a.view, shot.w, shot.h, ui.TesterOptions{Dark: shot.dark})
+		tr.SetLocale(shot.locale)
+		tr.SetFocused(true)
+		shot.setup(a, ct, tr)
+		path := filepath.Join(dir, shot.name)
+		writePreviewPNG(t, path, tr.Image())
+		t.Logf("bg3b preview path=%s width=%d height=%d locale=%s dark=%v", path, shot.w, shot.h, shot.locale, shot.dark)
 	}
 }

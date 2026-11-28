@@ -1,8 +1,5 @@
 package store
 
-// The contact store owns product records and Pi session bindings. The Pi
-// worker reads transcripts through Pi's session API.
-
 import (
 	"bytes"
 	"context"
@@ -96,8 +93,6 @@ type StoredIssue struct {
 	Executions           []StoredIssueExecution `json:"executions,omitempty"`
 }
 
-// StoredLayout is the GUI-wide workbench preference. It is optional so
-// stores written before #184 keep loading with the right work panel closed.
 type StoredLayout struct {
 	LeftWidth     float32 `json:"left_width,omitempty"`
 	RightWidth    float32 `json:"right_width,omitempty"`
@@ -131,9 +126,6 @@ func NewContactID() string {
 	return fmt.Sprintf("contact-%d", time.Now().UnixNano())
 }
 
-// OpenContactStore loads the store, or creates and persists a default Nagi
-// contact when the file does not exist. A corrupt or unsupported file is
-// reported and left untouched; the app must not silently replace it.
 func OpenContactStore(path, defaultWorkspace string) (*ContactStore, error) {
 	store := &ContactStore{Path: path}
 	data, err := os.ReadFile(path)
@@ -442,6 +434,7 @@ func (s *ContactStore) CommitState(candidate StoredState) error {
 type ProductPendingSend struct {
 	ConversationID string `json:"conversationId"`
 	OperationID    string `json:"operationId"`
+	DraftRevision  uint64 `json:"draftRevision,omitempty"`
 }
 
 type ProductUIState struct {
@@ -453,9 +446,10 @@ type ProductUIState struct {
 	Pending              map[string]ProductPendingSend `json:"pending,omitempty"`
 	RecoveryID           string                        `json:"recoveryId,omitempty"`
 
-	PendingActivities      map[string]ProductActivityIntent `json:"pending_activities,omitempty"`
-	PendingSessionCloses   []pi.ProductSessionCloseParams   `json:"pending_session_closes,omitempty"`
-	PendingWatchOperations []PendingWatchOperation          `json:"pending_watch_operations,omitempty"`
+	PendingActivities              map[string]ProductActivityIntent         `json:"pending_activities,omitempty"`
+	PendingSessionCloses           []pi.ProductSessionCloseParams           `json:"pending_session_closes,omitempty"`
+	PendingWatchOperations         []PendingWatchOperation                  `json:"pending_watch_operations,omitempty"`
+	PendingOrchestrationOperations map[string]PendingOrchestrationOperation `json:"pending_orchestration_operations,omitempty"`
 }
 
 func ProductUIPath(profilePath string) string { return profilePath + ".ui.json" }
@@ -647,15 +641,18 @@ func ValidateRecoveryState(state StoredState) error {
 }
 
 type StoreRecoveryCopy struct {
-	Path           string
-	Contacts       int
-	Issues         int
-	Timers         int
-	Schedules      int
-	DormantWatches int
-	ModifiedAt     time.Time
-	data           []byte
-	info           os.FileInfo
+	Path            string
+	Contacts        int
+	Issues          int
+	Timers          int
+	Schedules       int
+	DormantWatches  int
+	Notices         int
+	Decisions       int
+	DormantMandates int
+	ModifiedAt      time.Time
+	data            []byte
+	info            os.FileInfo
 }
 
 func ProductProfileVersion(data []byte) bool {
@@ -737,8 +734,6 @@ type StoreRecoveryResult struct {
 	ArchivePath string
 }
 
-// InspectStoreRecoveryCopy captures one saved point in time so later operations
-// use those validated bytes rather than a live projection or reread source.
 func InspectStoreRecoveryCopy(path string) (*StoreRecoveryCopy, error) {
 	path, err := filepath.Abs(path)
 	if err != nil {
@@ -756,6 +751,7 @@ func InspectStoreRecoveryCopy(path string) (*StoreRecoveryCopy, error) {
 		return &StoreRecoveryCopy{
 			Path: path, Contacts: counts.Contacts, Issues: counts.Activities, ModifiedAt: info.ModTime(), data: data, info: info,
 			Timers: counts.Timers, Schedules: counts.Schedules, DormantWatches: counts.DormantWatches,
+			Notices: counts.Notices, Decisions: counts.Decisions, DormantMandates: counts.DormantMandates,
 		}, nil
 	}
 	state, err := DecodeStoredState(path, data, true)
@@ -827,8 +823,6 @@ func removeIncompleteRecoveryFile(path string, info os.FileInfo, cause error) er
 	return cause
 }
 
-// WriteStoreRecoveryCopy writes the captured recovery bytes to a new destination
-// chosen by the caller. A collision is an error; existing files are never overwritten.
 func WriteStoreRecoveryCopy(copy *StoreRecoveryCopy, destination string) (string, error) {
 	if copy == nil {
 		return "", errors.New("inspect a compatible recovery copy first")
@@ -897,9 +891,6 @@ func (target *StoreRecoveryTarget) unchanged() error {
 	return nil
 }
 
-// RestoreStoreRecoveryCopy archives the unavailable target and installs the
-// paused copy. The UI must explicitly confirm pausing and reserve quiescent
-// unavailable state before calling; a successful Rename is never rolled back.
 func RestoreStoreRecoveryCopy(copy *StoreRecoveryCopy, target *StoreRecoveryTarget) (StoreRecoveryResult, error) {
 	return RestoreStoreRecoveryCopyWithRename(copy, target, os.Rename)
 }

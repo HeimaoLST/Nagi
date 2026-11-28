@@ -15,18 +15,19 @@ func (a *appModel) composerToolbar(c *ui.Context, t *ui.Theme, ct *contact, send
 		Role(ui.RoleGroup).Label(msgs.ComposerTools())
 	toolbar.Children(func() {
 		trigger := ui.ButtonBase(c).Key("attach").Size(32, 32).Shrink(0).Center().Radius(theme.ControlRadius).
-			Label(msgs.ComposerAttach()).Disabled(blocked)
+			Label(msgs.ComposerAttach()).Disabled(blocked).FocusRing(false)
 		bg, border := a.workTheme.ComposerSurface, a.workTheme.ComposerBorder
 		switch {
 		case trigger.Pressed() || a.composerAttachMenuOpen:
-			bg = t.SurfacePressed
+			bg = theme.StrongPressedFill(t)
 		case trigger.Hovered():
-			bg = t.SurfaceHover
+			bg = theme.StrongHoverFill(t)
 		}
-		if trigger.Focused() {
-			border = t.Focus
-		}
-		trigger.Background(bg).Border(1, border).TextColor(a.workTheme.ComposerText)
+		trigger.Background(bg).Border(1, border).TextColor(a.workTheme.ComposerText).DrawOver(func(p *ui.Painter, r ui.Rect) {
+			if trigger.FocusVisible() && !trigger.IsDisabled() {
+				theme.DrawFocusRing(p, r, theme.ControlRadius, 0, t)
+			}
+		})
 		theme.TransitionControl(trigger, t)
 		trigger.Children(func() { ui.Icon(c, composerAttachIcon).Size(16, 16) })
 		trigger.PopoverMenuButton(func(menu *ui.Menu) {
@@ -54,6 +55,7 @@ func (a *appModel) composerToolbar(c *ui.Context, t *ui.Theme, ct *contact, send
 		if !a.demo && ct.ActiveTaskID != "" {
 			stop := appTooltip(c, ui.Button(c, "").Label(msgs.StopConversation()), msgs.StopConversationTooltip()).
 				Size(32, 32).Shrink(0).Radius(16).Padding(0).Center().Border(1, t.Border).TextColor(t.Warning)
+			stop.Disabled(blocked || ct.stoppingQueued == ct.ActiveTaskID)
 			theme.TransitionControl(stop, t)
 			stop.Children(func() { ui.Icon(c, composerStopIcon).Size(16, 16) })
 			stop.OnClick(a.cancelSelected)
@@ -68,10 +70,11 @@ func (a *appModel) composerToolbar(c *ui.Context, t *ui.Theme, ct *contact, send
 			Size(32, 32).Shrink(0).Radius(16).Padding(0).Center().Disabled(sendDisabled)
 		if outlined {
 			border := a.workTheme.InputBorder
-			if send.Focused() {
-				border = t.Focus
-			}
-			send.Border(1, border).FocusRingColor(t.Accent)
+			send.Border(1, border).FocusRing(false).DrawOver(func(p *ui.Painter, r ui.Rect) {
+				if send.FocusVisible() && !send.IsDisabled() {
+					theme.DrawFocusRing(p, r, 16, 0, t)
+				}
+			})
 			theme.TransitionControl(send, t)
 		}
 		send.Children(func() { ui.Icon(c, composerSendIcon).Size(16, 16) })

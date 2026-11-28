@@ -27,7 +27,7 @@ const (
 type sessionInspectionCopy map[string]string
 
 var defaultSessionInspectionCopy = sessionInspectionCopy{
-	"title": "Sessions", "back": "Back", "reload": "Reload", "loadMore": "Load more", "previousPage": "Previous page",
+	"title": "Terminal sessions", "back": "Back", "reload": "Reload", "loadMore": "Load more", "previousPage": "Previous page",
 	"loadingList": "Loading sessions…", "emptyList": "This Bot has no sessions yet.", "listError": "Couldn’t load sessions. Reload to try again.",
 	"loadingDetail": "Loading session details…", "detailError": "Couldn’t load session details. Reload to try again.",
 	"session": "Session", "starting": "Starting", "running": "Running", "exited": "Exited", "closed": "Closed", "disconnected": "Disconnected", "failed": "Failed",
@@ -75,10 +75,12 @@ type sessionInspectorDeps struct {
 	onBack              func()
 	onOpenConversation  func(conversationID string)
 	onOpenActivity      func(activityID string)
+	showContacts        func(*ui.Context, *ui.Theme)
 }
 
 type sessionWorkspaceState struct {
 	bots                map[string]*botSessionState
+	active              map[string]map[string]pi.ProductSessionSummary
 	activeBotID         string
 	client              *pi.ProductClient
 	readEpoch           uint64
@@ -100,7 +102,8 @@ type botSessionState struct {
 	closes          map[sessionRun]*sessionCloseIntent
 	focusBack       bool
 	focusRow        string
-	focusOpener     bool
+	opener          string
+	activeChanges   map[string]pi.ProductSessionSummary
 	focusSourceChat bool
 }
 
@@ -156,16 +159,44 @@ func (s *sessionWorkspaceState) botSession(botID string) *botSessionState {
 	return bot
 }
 
-func (s *sessionWorkspaceState) sessionInspectorButton(c *ui.Context, deps sessionInspectorDeps) ui.Element {
-	title := deps.copy.text("title")
-	button := theme.SecondaryButton(c, title).Key("sessions-inspector-btn").Label(title).
-		MinHeight(theme.ControlHit).Padding(4, 10).Radius(theme.ControlRadius).Shrink(0).
-		OnClick(func() { s.openSessionInspection(deps) })
-	if bot := s.bots[deps.botID]; bot != nil && bot.focusOpener {
-		button.Focus()
-		bot.focusOpener = false
+func listBotActiveSessions(ctx context.Context, client *pi.ProductClient, botID string) (map[string]pi.ProductSessionSummary, error) {
+	params := pi.ProductSessionListParams{BotID: botID, Limit: sessionPageSize,
+		States: []pi.ProductSessionState{pi.ProductSessionStarting, pi.ProductSessionRunning}}
+	active := make(map[string]pi.ProductSessionSummary)
+	for {
+		page, err := client.ListSessions(ctx, params)
+		if err != nil {
+			return nil, err
+		}
+		for _, item := range page.Items {
+			if item.OwnerBotID == botID && sessionIsActive(item) {
+				active[item.SessionID] = item
+			}
+		}
+		if page.NextCursor == nil {
+			return active, nil
+		}
+		params.Cursor = *page.NextCursor
 	}
-	return button
+}
+
+func sessionIsActive(item pi.ProductSessionSummary) bool {
+	return item.State == pi.ProductSessionStarting || item.State == pi.ProductSessionRunning
+}
+
+func (s *sessionWorkspaceState) activeCount(botID string) int {
+	return len(s.active[botID])
+}
+
+func updateActiveSession(active map[string]pi.ProductSessionSummary, item pi.ProductSessionSummary) {
+	if current, ok := active[item.SessionID]; ok && sessionSummaryNewer(current, item) {
+		return
+	}
+	if sessionIsActive(item) {
+		active[item.SessionID] = item
+	} else {
+		delete(active, item.SessionID)
+	}
 }
 
 func (s *sessionWorkspaceState) openSessionInspection(deps sessionInspectorDeps) {
@@ -190,9 +221,13 @@ func (s *sessionWorkspaceState) setSessionInspectorClient(client *pi.ProductClie
 		return
 	}
 	s.client = client
+	if client == nil {
+		clear(s.active)
+	}
 	s.readEpoch++
 	for _, bot := range s.bots {
 		bot.listLoading = false
+		bot.activeChanges = nil
 		if detail := bot.detail; detail != nil {
 			detail.loading, detail.ready, detail.output.loading = false, false, false
 		}
@@ -229,7 +264,6 @@ func (s *sessionWorkspaceState) backSessionInspection(deps sessionInspectorDeps)
 		return
 	}
 	s.activeBotID = ""
-	bot.focusOpener = true
 	if deps.onBack != nil {
 		deps.onBack()
 	}
@@ -254,13 +288,27 @@ func (s *sessionWorkspaceState) loadSessionPage(bot *botSessionState, page int, 
 	}
 	bot.listLoading, bot.listFailed = true, false
 	params := pi.ProductSessionListParams{BotID: bot.botID, Cursor: cursor, Limit: sessionPageSize}
-	runSessionRequest(s.updateUI, sessionReadTimeout, func(ctx context.Context) (pi.ProductPage[pi.ProductSessionSummary], error) {
-		return client.ListSessions(ctx, params)
-	}, func(result pi.ProductPage[pi.ProductSessionSummary], err error) {
+	type sessionPage struct {
+		pi.ProductPage[pi.ProductSessionSummary]
+		active map[string]pi.ProductSessionSummary
+	}
+	if page == 0 {
+		bot.activeChanges = make(map[string]pi.ProductSessionSummary)
+	}
+	runSessionRequest(s.updateUI, sessionReadTimeout, func(ctx context.Context) (sessionPage, error) {
+		result, err := client.ListSessions(ctx, params)
+		var active map[string]pi.ProductSessionSummary
+		if err == nil && page == 0 && result.NextCursor != nil {
+			active, _ = listBotActiveSessions(ctx, client, params.BotID)
+		}
+		return sessionPage{ProductPage: result, active: active}, err
+	}, func(result sessionPage, err error) {
 		if s.readEpoch != epoch || s.bots[bot.botID] != bot {
 			return
 		}
 		bot.listLoading, bot.listFailed = false, err != nil
+		changes := bot.activeChanges
+		bot.activeChanges = nil
 		if err != nil {
 			return
 		}
@@ -278,6 +326,24 @@ func (s *sessionWorkspaceState) loadSessionPage(bot *botSessionState, page int, 
 			items = append(items, item)
 		}
 		bot.items = items
+		if page == 0 {
+			active := result.active
+			if result.NextCursor == nil {
+				active = make(map[string]pi.ProductSessionSummary)
+				for _, item := range items {
+					updateActiveSession(active, item)
+				}
+			}
+			if active != nil {
+				for _, item := range changes {
+					updateActiveSession(active, item)
+				}
+				if s.active == nil {
+					s.active = make(map[string]map[string]pi.ProductSessionSummary)
+				}
+				s.active[bot.botID] = active
+			}
+		}
 		if page != bot.page {
 			bot.listScroll.Y = 0
 			bot.focusBack = true
@@ -320,16 +386,32 @@ func (s *sessionWorkspaceState) loadSessionDetail(bot *botSessionState, detail *
 		detail.ready = err == nil && summary.OwnerBotID == bot.botID && summary.SessionID == id
 		detail.failed = !detail.ready
 		if detail.ready {
-			s.applySessionChanged(summary)
+			if !sessionSummaryNewer(detail.summary, summary) {
+				s.applySessionChanged(summary)
+			}
 			detail.output.failed = false
 		}
 	})
 }
 
 func (s *sessionWorkspaceState) applySessionChanged(summary pi.ProductSessionSummary) {
+	active := s.active[summary.OwnerBotID]
+	if active == nil && sessionIsActive(summary) {
+		if s.active == nil {
+			s.active = make(map[string]map[string]pi.ProductSessionSummary)
+		}
+		active = make(map[string]pi.ProductSessionSummary)
+		s.active[summary.OwnerBotID] = active
+	}
+	updateActiveSession(active, summary)
 	bot := s.bots[summary.OwnerBotID]
 	if bot == nil {
 		return
+	}
+	if bot.activeChanges != nil {
+		if current := bot.activeChanges[summary.SessionID]; !sessionSummaryNewer(current, summary) {
+			bot.activeChanges[summary.SessionID] = summary
+		}
 	}
 	for i, item := range bot.items {
 		if item.SessionID == summary.SessionID && !sessionSummaryNewer(item, summary) {
@@ -688,14 +770,17 @@ func (s *sessionWorkspaceState) sessionInspectionView(c *ui.Context, deps sessio
 		return
 	}
 	words, wb := deps.copy, deps.wb
-	ui.Column(c).Key("session-inspector").Fill().MinWidth(0).MinHeight(0).Background(wb.Reading).Children(func() {
-		ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(12).Padding(8, 16).Shrink(0).Children(func() {
+	ui.Column(c).Key("session-inspector").Fill().MinWidth(0).MinHeight(0).Background(wb.Panel).Children(func() {
+		ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(8).Padding(8, 12).Shrink(0).Children(func() {
 			back := detailBackButton(c, wb.Theme, words.text("back"), words.text("back"), words.text("back")).OnClick(func() { s.backSessionInspection(deps) })
 			if bot.focusBack {
 				back.Focus()
 				bot.focusBack = false
 			}
-			theme.PageHeading(c, words.text("title")).Grow(1).MinWidth(0)
+			title := words.text("title")
+			heading := ui.Text(c, title).Role(ui.RoleHeading).Level(1).FontSize(16).FontWeight(600).
+				FixedLineHeight(24).TextColor(wb.Theme.Text).Grow(1).MinWidth(0).SingleLine().Ellipsis("…")
+			appTooltip(c, heading, title)
 			if detail := bot.detail; detail != nil {
 				intent := bot.closes[sessionRun{detail.summary.SessionID, detail.summary.Generation}]
 				theme.DangerButton(c, words.text("kill")).Shrink(0).
@@ -705,6 +790,9 @@ func (s *sessionWorkspaceState) sessionInspectionView(c *ui.Context, deps sessio
 				theme.SecondaryButton(c, words.text("reload")).Key("session-list-reload").Shrink(0).
 					Disabled(s.client == nil || bot.listLoading).
 					OnClick(func() { s.loadSessionPage(bot, 0, "") })
+			}
+			if deps.showContacts != nil {
+				deps.showContacts(c, wb.Theme)
 			}
 		})
 		if bot.detail == nil {
@@ -729,7 +817,7 @@ func (s *sessionWorkspaceState) sessionListView(c *ui.Context, bot *botSessionSt
 		switch {
 		case s.client == nil:
 			sessionNotice(c, wb, words.text("hostDisconnected"))
-		case bot.listLoading:
+		case bot.listLoading && len(bot.items) == 0:
 			sessionNotice(c, wb, words.text("loadingList"))
 		case bot.listFailed:
 			sessionNotice(c, wb, words.text("listError"))

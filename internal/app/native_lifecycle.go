@@ -120,6 +120,9 @@ func (a *appModel) buildDockMenu() *mygo.Menu {
 			&mygo.MenuItem{ID: "sessions", Label: msgs.SessionInspectTitle(), Disabled: !state.canInspect, Click: func(*mygo.MenuItem, *mygo.Window) {
 				a.openDockBotPanel(state.botID, true)
 			}},
+			&mygo.MenuItem{ID: "background-work", Label: msgs.OrchestrationTitle(), Disabled: !state.canSchedule, Click: func(*mygo.MenuItem, *mygo.Window) {
+				a.openDockBackgroundWork(state.botID)
+			}},
 		)
 	}
 	return mygo.NewMenu(items)
@@ -130,18 +133,12 @@ func (a *appModel) openDockBotPanel(botID string, sessions bool) {
 	if state.botID != botID || (sessions && !state.canInspect) || (!sessions && !state.canSchedule) {
 		return
 	}
-	ct := a.selectedContact()
 	a.closeSettings()
 	a.closeAux()
-	a.priorChats = nil
 	a.resetComposerOverlays()
 	if sessions {
-		if a.activeDetail() != "" {
-			a.closeDetail()
-		}
-		a.sessions.openSessionInspection(a.sessionInspectorFallbackDeps(ct))
+		a.openBotSessions(botID, "header-overview:"+botID)
 	} else {
-		a.sessions.activeBotID = ""
 		a.openBotScheduledWork(botID)
 	}
 	a.reopenWindow()

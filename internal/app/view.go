@@ -19,8 +19,6 @@ import (
 	"github.com/HeimaoLST/Nagi/locales"
 )
 
-// Message typography is supplied at the view call site so the reader's
-// parser, clipboard and file behavior stay untouched (#187 owns those files).
 var messageMarkdownTheme = &markdown.Theme{FontSize: typeBody, LineHeight: 1.5}
 
 func messageReaderOptions(c *ui.Context, plain bool) markdownReaderOptions {
@@ -33,6 +31,9 @@ func (a *appModel) view(c *ui.Context) {
 	a.syncDetailPageMode()
 	if !a.settingsOpen {
 		a.linkReturnSeen = false
+	}
+	if a.settingsOpen || a.mainPageActive() || a.detailPageActive() || a.priorChats != nil {
+		a.headerMenuOpen = false
 	}
 	a.systemDark = c.Theme().Dark
 	a.workTheme = a.resolveAppearanceTheme(resolveAppearanceDark(a.appearanceMode, a.systemDark)).Palette
@@ -84,7 +85,15 @@ func (a *appModel) view(c *ui.Context) {
 }
 
 func (a *appModel) escapeTopLayer() {
-	if a.composerMaterial != nil || a.composerAttachMenuOpen || a.capabilities.review != nil {
+	if a.headerMenuOpen || a.composerMaterial != nil || a.composerAttachMenuOpen || a.capabilities.review != nil {
+		return
+	}
+	if a.priorChats != nil {
+		a.backProductConversations()
+		return
+	}
+	if a.backgroundWork.panel != nil {
+		a.backBackgroundWork()
 		return
 	}
 	if a.detailIs(detailProfile) && a.scheduledWorkBotID != "" {
@@ -93,16 +102,14 @@ func (a *appModel) escapeTopLayer() {
 			return
 		}
 	}
+	if a.detailIs(detailProfile) && !a.demo && a.sessions.activeBotID != "" {
+		if ct := a.contactByID(a.sessions.activeBotID); ct != nil {
+			a.sessions.backSessionInspection(a.sessionInspectorFallbackDeps(ct))
+			return
+		}
+	}
 	if a.detailPageActive() {
 		a.closeDetail()
-		return
-	}
-	if a.priorChats != nil {
-		a.backProductConversations()
-		return
-	}
-	if ct := a.selectedContact(); !a.demo && ct != nil && a.sessions.activeBotID == ct.ID {
-		a.sessions.backSessionInspection(a.sessionInspectorFallbackDeps(ct))
 		return
 	}
 	if a.aux != "" {
@@ -143,8 +150,10 @@ func (a *appModel) armActiveSurfaceFallback() {
 	switch {
 	case a.priorChats != nil:
 		a.priorChats.focusBack = true
-	case !a.demo && a.selectedContact() != nil && a.sessions.activeBotID == a.selectedContact().ID:
-		a.sessions.botSession(a.selectedContact().ID).focusBack = true
+	case a.backgroundWork.panel != nil:
+		a.backgroundWork.panel.focusBack = true
+	case a.detailIs(detailProfile) && !a.demo && a.sessions.activeBotID != "":
+		a.sessions.botSession(a.sessions.activeBotID).focusBack = true
 	case a.detailIs(detailProfile) && a.scheduledWorkBotID != "":
 		a.schedules.bot(a.scheduledWorkBotID).focusHeading = true
 	case a.detailIs(detailProfile):
@@ -329,14 +338,16 @@ func (a *appModel) avatarRailRow(c *ui.Context, t *ui.Theme, i int) {
 	row := ui.ButtonBase(c).Key(ct.ID).Label(label).Description(status).
 		Selected(i == a.selected).FillWidth().Height(44).Padding(4).Radius(8).
 		AlignItems(ui.Center).Justify(ui.Center).Background(ui.Transparent).BorderWidth(0).TextColor(t.Text)
+	cutout := a.workTheme.Rail
 	if i == a.selected {
 		row.Background(t.Selection).TextColor(t.Text)
+		cutout = t.Selection
 	}
 	row = appTooltip(c, row, tip)
 	row.OnClick(func() { a.selectContact(i) })
 	a.bindBotRowMenu(row, ct.ID, msgs)
 	row.Children(func() {
-		botStatusAvatar(c, t, ct, 24, state)
+		botStatusAvatar(c, t, ct, 24, state, cutout)
 	})
 }
 
@@ -348,30 +359,15 @@ func (a *appModel) bindBotRowMenu(row ui.Element, contactID string, msgs locales
 		}
 		ready := a.productProfileReady() && !a.dataRecoveryBlocksChanges()
 		mutable := ready || a.demo
-		count := len(ct.Activities)
-		if ct.activity.loaded && ct.activity.nextCursor == nil {
-			count = max(count, len(ct.activity.items))
-		}
-		if menu.Item(msgs.BotMenuActivities(count)).Disabled(!ready && !ct.activity.loaded).Chosen() {
+		if menu.Item(msgs.BotMenuActivities(botActivityCount(ct))).Disabled(!ready && !ct.activity.loaded).Chosen() {
 			a.selectContact(slices.Index(a.contacts, ct))
-			a.priorChats = nil
-			a.aux = ""
-			ct.activity.open, ct.activity.focusToggle = true, true
-			ct.activity.scroll.Y = 0
+			a.openBotActivities(ct)
 		}
 		menu.Separator()
-		profile := msgs.ContactProfileAction()
-		if ct.PendingLearnings > 0 {
-			profile = msgs.MemoryProfileAction(ct.PendingLearnings)
-		}
-		if menu.Item(profile).Chosen() {
+		if menu.Item(botProfileMenuLabel(msgs, ct)).Chosen() {
 			a.openContactProfile(contactID)
 		}
-		if !a.demo && a.productHost() != nil {
-			if menu.Item(msgs.SchedWorkTitle()).Chosen() {
-				a.openBotScheduledWork(contactID)
-			}
-		}
+		a.botWorkMenu(menu, msgs, ct, a.botVisualState(ct, time.Now()), "row:"+ct.ID)
 		menu.Separator()
 		if sessionBusy(ct.SendState, ct.ActiveTaskID) {
 			if menu.Item(msgs.BotMenuStopReply()).Disabled(!ready || ct.ActiveTaskID == "").Chosen() {
@@ -398,6 +394,47 @@ func (a *appModel) bindBotRowMenu(row ui.Element, contactID string, msgs locales
 	}
 }
 
+func (a *appModel) botWorkMenu(menu *ui.Menu, msgs locales.Messages, ct *contact, visual botStatus, opener string) {
+	if a.demo || a.productHost() == nil {
+		return
+	}
+	blocked := !a.productProfileReady() || a.dataRecoveryBlocksChanges()
+	if menu.Item(msgs.OrchestrationMenuCount(visual.backgroundActive + visual.backgroundDecisions)).Disabled(blocked).Chosen() {
+		a.openBackgroundWork(ct.ID, "", opener)
+	}
+	if !ct.Archived && menu.Item(msgs.SessionInspectMenuCount(a.sessions.activeCount(ct.ID))).Disabled(blocked).Chosen() {
+		a.openBotSessions(ct.ID, opener)
+	}
+	if menu.Item(msgs.SchedWorkTitle()).Chosen() {
+		a.openBotScheduledWork(ct.ID)
+	}
+}
+
+func botActivityCount(ct *contact) int {
+	if ct.activity.loaded && ct.activity.nextCursor == nil {
+		return max(len(ct.Activities), len(ct.activity.items))
+	}
+	return len(ct.Activities)
+}
+
+func botProfileMenuLabel(msgs locales.Messages, ct *contact) string {
+	if ct.PendingLearnings > 0 {
+		return msgs.MemoryProfileAction(ct.PendingLearnings)
+	}
+	return msgs.ContactProfileAction()
+}
+
+func (a *appModel) openBotActivities(ct *contact) {
+	if a.activeDetail() != "" {
+		a.closeDetail()
+	}
+	a.priorChats = nil
+	a.aux = ""
+	a.headerMenuOpen = false
+	ct.activity.open, ct.activity.focusToggle = true, true
+	ct.activity.scroll.Y = 0
+}
+
 func (a *appModel) railRow(c *ui.Context, t *ui.Theme, i int) {
 	ct := a.contacts[i]
 	msgs := locales.In(c.Locale())
@@ -414,8 +451,17 @@ func (a *appModel) railRow(c *ui.Context, t *ui.Theme, i int) {
 	row.OnClick(func() { a.selectContact(i) })
 	row = appTooltip(c, row, ct.Name+"\n"+line)
 	a.bindBotRowMenu(row, ct.ID, msgs)
+	cutout := a.workTheme.Rail
+	switch {
+	case row.Pressed():
+		cutout = t.SurfacePressed
+	case row.Hovered():
+		cutout = t.SurfaceHover
+	case selected:
+		cutout = t.Selection
+	}
 	row.Children(func() {
-		botStatusAvatar(c, t, ct, 28, state)
+		botStatusAvatar(c, t, ct, 28, state, cutout)
 		ui.Column(c).Grow(1).MinWidth(0).Gap(2).Children(func() {
 			ui.Row(c).AlignItems(ui.Center).Gap(4).Children(func() {
 				nameWeight := 400
@@ -433,17 +479,21 @@ func (a *appModel) railRow(c *ui.Context, t *ui.Theme, i int) {
 	})
 }
 
-func contactAvatar(c *ui.Context, t *ui.Theme, ct *contact, size float32) {
+func contactAvatar(c *ui.Context, t *ui.Theme, ct *contact, size float32, archived ...bool) {
 	var id, name string
 	var builtin bool
 	if ct != nil {
 		id, name, builtin = ct.ID, ct.Name, ct.isBuiltin()
 	}
-	botStoneAvatar(c, t, id, name, builtin, size)
+	botStoneAvatar(c, t, id, name, builtin, size, archived...)
 }
 
-func botStoneAvatar(c *ui.Context, t *ui.Theme, id, name string, builtin bool, size float32) {
+func botStoneAvatar(c *ui.Context, t *ui.Theme, id, name string, builtin bool, size float32, archived ...bool) {
 	spec := resolveBotAvatar(t, id, name, builtin)
+	if len(archived) > 0 && archived[0] {
+		gray := uint8(math.Round(0.2126*float64(spec.BodyColor.R) + 0.7152*float64(spec.BodyColor.G) + 0.0722*float64(spec.BodyColor.B)))
+		spec.BodyColor = spec.BodyColor.Mix(ui.RGB(gray, gray, gray), .55)
+	}
 	ui.Box(c).Size(size, size).MinWidth(size).Shrink(0).AlignItems(ui.Center).Justify(ui.Center).IgnoreInput(true).Children(func() {
 		ui.Icon(c, spec.Body).Size(size, size).TextColor(spec.BodyColor).IgnoreInput(true)
 		ui.Icon(c, spec.Eyes).Absolute().Left(0).Top(0).Size(size, size).TextColor(spec.EyeColor).IgnoreInput(true)
@@ -635,10 +685,6 @@ func (a *appModel) main(c *ui.Context, t *ui.Theme) {
 			a.productConversationsView(c, t, browser)
 			return
 		}
-		if !a.demo && a.sessions.activeBotID == ct.ID {
-			a.sessions.sessionInspectionView(c, a.sessionInspectorDeps(c, ct))
-			return
-		}
 		visual := a.botVisualState(ct, c.Now())
 		state := a.connectionViewState()
 		a.header(c, t, ct, visual, state)
@@ -708,7 +754,7 @@ func (a *appModel) header(c *ui.Context, t *ui.Theme, ct *contact, visual botSta
 	header.Children(func() {
 		ui.Row(c).FillWidth().MinWidth(0).Padding(8, 16).AlignItems(ui.Center).Gap(8).Children(func() {
 			c.Key(ct.ID)
-			botStatusAvatar(c, t, ct, 28, visual)
+			botStatusAvatar(c, t, ct, 28, visual, t.Background)
 			ui.Column(c).Grow(1).MinWidth(0).Gap(1).Children(func() {
 				title := ui.Text(c, ct.Name).FontSize(typeContactTitle).FontWeight(600).FixedLineHeight(lineHeader).
 					TextColor(t.Text).FillWidth().MaxLines(1).Ellipsis("…")
@@ -720,9 +766,6 @@ func (a *appModel) header(c *ui.Context, t *ui.Theme, ct *contact, visual botSta
 				}
 			})
 			a.botStatusAction(c, t, ct, visual, msgs)
-			if !a.demo && a.productHost() != nil && !ct.Archived {
-				a.sessions.sessionInspectorButton(c, a.sessionInspectorDeps(c, ct))
-			}
 			if label := connectionStatusLabel(connection, msgs); !a.demo && label != "" && visual.kind != botVisualWaiting {
 				if connection == connectionViewConnecting {
 					ui.Text(c, label).FontSize(typeHeaderMeta).FixedLineHeight(lineHeader).TextColor(t.TextMuted).SingleLine().Shrink(0)
@@ -734,6 +777,7 @@ func (a *appModel) header(c *ui.Context, t *ui.Theme, ct *contact, visual botSta
 					theme.TransitionControl(button, t).OnClick(a.openConfiguration)
 				}
 			}
+			a.botOverviewButton(c, t, ct, visual, msgs)
 			if a.railCollapsed {
 				a.showContactsButton(c, t)
 			}
@@ -741,12 +785,44 @@ func (a *appModel) header(c *ui.Context, t *ui.Theme, ct *contact, visual botSta
 	})
 }
 
+func (a *appModel) botOverviewButton(c *ui.Context, t *ui.Theme, ct *contact, visual botStatus, msgs locales.Messages) {
+	label := msgs.BotOverviewLabel()
+	selected := a.headerMenuOpen || a.detailIs(detailProfile) && a.contactProfileID == ct.ID
+	button := iconControlFace(c, appTooltip(c, ui.Button(c, "").Key("bot-overview-btn").Label(label), label), iconChrome, selected)
+	button.Children(func() { controlIcon(c, glyphMoreLine, iconChrome).TextColor(t.TextMuted) })
+	opener := "header-overview:" + ct.ID
+	if a.focusHeaderOverview == ct.ID || a.backgroundWork.returnFocus == opener {
+		button.Focus()
+		a.focusHeaderOverview = ""
+		if a.backgroundWork.returnFocus == opener {
+			a.backgroundWork.returnFocus = ""
+		}
+	}
+	button.PopoverMenuButton(func(menu *ui.Menu) {
+		ready := a.productProfileReady() && !a.dataRecoveryBlocksChanges()
+		if menu.Item(msgs.BotMenuActivities(botActivityCount(ct))).Disabled(!ready && !a.demo && !ct.activity.loaded).Chosen() {
+			a.openBotActivities(ct)
+		}
+		a.botWorkMenu(menu, msgs, ct, visual, opener)
+		menu.Separator()
+		if menu.Item(botProfileMenuLabel(msgs, ct)).Chosen() {
+			a.openContactProfile(ct.ID)
+		}
+	}, ui.PopoverMenuButtonOptions{At: ui.AnchorBottomEnd, Self: ui.AnchorTopEnd, Open: &a.headerMenuOpen})
+}
+
 func (a *appModel) chat(c *ui.Context, t *ui.Theme, state connectionViewState, showConnectionSettings bool) {
 	ct := a.selectedContact()
 	messages := ct.Messages
 	waitingForReply := ct.Status == statusWorking && (a.demo || ct.ActiveTaskID != "")
 	if waitingForReply && !a.demo {
-		for i := len(messages) - 1; i >= 0 && messages[i].TaskID == ct.ActiveTaskID; i-- {
+		for i := len(messages) - 1; i >= 0; i-- {
+			if messages[i].Kind == msgNotice {
+				continue
+			}
+			if messages[i].TaskID != ct.ActiveTaskID {
+				break
+			}
 			if messages[i].Kind == msgContact {
 				waitingForReply = false
 				break
@@ -768,7 +844,10 @@ func (a *appModel) chat(c *ui.Context, t *ui.Theme, state connectionViewState, s
 		return m.ID
 	}
 	ct.list.FollowEnd = true
-	ui.Column(c).Key("chat").Grow(1).Children(func() {
+	ui.Column(c).Key("chat").Grow(1).MinHeight(0).Children(func() {
+		if ct.transcriptError {
+			timelineTranscriptWarning(c, t)
+		}
 		if rows == 0 {
 			ui.Row(c).Grow(1).MinHeight(0).Justify(ui.Center).Children(func() {
 				a.emptyState(c, t, ct)
@@ -776,7 +855,7 @@ func (a *appModel) chat(c *ui.Context, t *ui.Theme, state connectionViewState, s
 		} else {
 			dividers := chatTimestampDividers(messages, time.Now(), c.Locale())
 			readIndex := latestReadUserMessageIndex(messages, c.Now(), c.Preferences().ReduceMotion)
-			ui.Row(c).Grow(1).FillHeight().Justify(ui.Center).Children(func() {
+			ui.Row(c).Grow(1).MinHeight(0).FillHeight().Justify(ui.Center).Children(func() {
 				ui.List(c, &ct.list, rows, func(i int) {
 					if i == len(messages) {
 						ui.Column(c).FillWidth().Padding(14, 0, 0, 0).Children(func() { a.replyTypingBubble(c) })
@@ -796,6 +875,7 @@ func (a *appModel) chat(c *ui.Context, t *ui.Theme, state connectionViewState, s
 			})
 		}
 		a.conversationActivities(c, t, ct)
+		a.orchestrationDecisionStrip(c, t, ct)
 		a.activityNoticeStrip(c, t, ct)
 		ui.Row(c).Key("composer").Justify(ui.Center).Children(func() {
 			ui.Column(c).FillWidth().MaxWidth(conversationMaxWidth).Children(func() {
@@ -1186,6 +1266,9 @@ func (a *appModel) productActivityResultView(c *ui.Context, t *ui.Theme, p *prod
 func (a *appModel) productReadOnlyTranscript(c *ui.Context, t *ui.Theme, browser *productConversationBrowser) {
 	messages := browser.history.messages
 	msgs := locales.In(c.Locale())
+	if browser.history.transcriptError {
+		timelineTranscriptWarning(c, t)
+	}
 	if len(messages) == 0 {
 		if browser.ownerID != "" {
 			ui.Row(c).FillWidth().Justify(ui.Center).Children(func() {
@@ -1201,6 +1284,10 @@ func (a *appModel) productReadOnlyTranscript(c *ui.Context, t *ui.Theme, browser
 		ui.List(c, &browser.transcript, len(messages), func(i int) {
 			m := messages[i]
 			chatMessageRow(c, t, messages, dividers, i, func() {
+				if m.Kind == msgNotice {
+					a.timelineNotice(c, t, browser.ownerID, m)
+					return
+				}
 				if m.Kind == msgUser {
 					a.userChatBubble(c, t, m, nil, &browser.recall, i == readIndex, func() {
 						recallQuotedMessage(c, messages, &browser.transcript, &browser.recall, m.Quote)
@@ -1217,6 +1304,8 @@ func (a *appModel) productReadOnlyTranscript(c *ui.Context, t *ui.Theme, browser
 func (a *appModel) message(c *ui.Context, t *ui.Theme, ct *contact, m *message, read bool) {
 	msgs := locales.In(c.Locale())
 	switch m.Kind {
+	case msgNotice:
+		a.timelineNotice(c, t, ct.ID, m)
 	case msgActivity:
 		if m.ToolName != "" || m.ToolOutput != "" {
 			title := toolTitleFor(m.ToolName, m.ToolArgs)
@@ -1293,8 +1382,6 @@ func (a *appModel) alert(c *ui.Context, t *ui.Theme, m *message) {
 	})
 }
 
-// knownConnectionFailure matches the "code: " prefix emitted by runtimeMessage
-// rather than arbitrary diagnostics containing the word.
 func knownConnectionFailure(text string) bool {
 	return strings.HasPrefix(strings.TrimSpace(text), "connection_mismatch:")
 }
@@ -1414,8 +1501,9 @@ func (a *appModel) composer(c *ui.Context, t *ui.Theme, state connectionViewStat
 		wb := a.workTheme
 		card := ui.Column(c).Key(ct.ID).FillWidth().Padding(10, 14, 8, 14).Gap(4).Radius(16)
 		surface, border := wb.ComposerSurface, wb.ComposerBorder
-		if c.Focused(a.composerHandle) {
-			border = t.Focus
+		focused := c.Focused(a.composerHandle)
+		if focused {
+			border = theme.InputFocusInk(t)
 		}
 		dragOver := false
 		if !a.shutdownStarted && !a.dataRecoveryBlocksChanges() {
@@ -1428,7 +1516,9 @@ func (a *appModel) composer(c *ui.Context, t *ui.Theme, state connectionViewStat
 			border, surface = t.Accent, surface.Mix(t.Accent, .06)
 		}
 		card.Border(1, border).Background(surface)
-		if t.Dark {
+		if focused && !dragOver {
+			card.Shadow(0, 0, 0, 3, theme.InputFocusHalo(t))
+		} else if t.Dark {
 			card.Shadow(0, 2, 12, 0, ui.RGBA(0, 0, 0, .24))
 		} else {
 			card.Shadow(0, 2, 10, 0, ui.RGBA(0, 0, 0, .05))
@@ -1487,6 +1577,15 @@ func (a *appModel) composer(c *ui.Context, t *ui.Theme, state connectionViewStat
 				switch {
 				case ct.SendState == sendSubmitting:
 					submissionStatus = msgs.SendingState()
+				case ct.SendState == sendQueued:
+					submissionStatus = msgs.SendQueuedState()
+					if ct.SendQueuedPosition > 0 {
+						submissionStatus = msgs.SendQueuedPosition(ct.SendQueuedPosition)
+					}
+				case ct.sendNotice == "cancelled_before_dispatch":
+					submissionStatus = msgs.SendCancelledBeforeDispatch()
+				case ct.sendNotice == "interrupted_before_dispatch":
+					submissionStatus = msgs.SendInterruptedBeforeDispatch()
 				case ct.SendState == sendAccepted && ct.Status != statusWorking:
 					submissionStatus = msgs.SendAcceptedState()
 				}

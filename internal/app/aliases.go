@@ -216,7 +216,13 @@ func secondaryButton(c *ui.Context, label string) ui.Element {
 }
 func primaryButton(c *ui.Context, label string) ui.Element { return theme.PrimaryButton(c, label) }
 func dangerButton(c *ui.Context, label string) ui.Element  { return theme.DangerButton(c, label) }
-func linkButton(c *ui.Context, label string) ui.Element    { return theme.LinkButton(c, label) }
+func dangerSolidButton(c *ui.Context, label string) ui.Element {
+	return theme.DangerSolidButton(c, label)
+}
+func checkbox(c *ui.Context, checked *bool, label string) ui.Element {
+	return theme.Checkbox(c, checked, label)
+}
+func linkButton(c *ui.Context, label string) ui.Element { return theme.LinkButton(c, label) }
 func navigationControl(c *ui.Context, e ui.Element, palette workbenchTheme, selected bool) ui.Element {
 	return theme.NavigationControl(c, e, palette, selected)
 }

@@ -4,6 +4,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,6 +17,56 @@ import (
 	"github.com/HeimaoLST/Nagi/internal/pi"
 	"github.com/HeimaoLST/Nagi/locales"
 )
+
+func openOverviewMenuItem(w *productWorkbench, overviewLabel, item string) {
+	w.t.Helper()
+	w.click(overviewLabel)
+	w.wait(func() bool { return w.app.headerMenuOpen && w.view.HasText(item) })
+	var err error
+	w.pump.do(func() {
+		if err = choosePopoverMenuItem(w.view, item); err == nil {
+			w.view.Frame()
+		}
+	})
+	if err != nil {
+		w.t.Fatalf("choose %q from %q: %v", item, overviewLabel, err)
+	}
+}
+
+func clickInSessionDetailScroll(w *productWorkbench, botID, label string) {
+	w.t.Helper()
+	var err error
+	var visible []string
+	w.pump.do(func() {
+		if w.view.FramePending() {
+			w.view.Frame()
+		}
+		bot := w.app.sessions.bots[botID]
+		if bot == nil || bot.detail == nil {
+			err = fmt.Errorf("session detail closed before clicking %q", label)
+			return
+		}
+		offsets := []float32{bot.detail.scroll.Y}
+		for y := float32(0); y <= 1400; y += 120 {
+			offsets = append(offsets, y)
+		}
+		for _, y := range offsets {
+			bot.detail.scroll.Y = y
+			w.view.Frame()
+			if clickErr := w.view.Click(label); clickErr == nil {
+				w.view.Frame()
+				err = nil
+				return
+			} else {
+				err = clickErr
+			}
+		}
+		visible = w.view.Texts()
+	})
+	if err != nil {
+		w.t.Fatalf("clickInSessionDetailScroll %q: %v, visible=%v", label, err, visible)
+	}
+}
 
 func bg1SessionFixtureScript() string {
 	return `import fs from 'node:fs';
@@ -106,21 +157,55 @@ func TestPiAppSessionInspectionAndClose(t *testing.T) {
 		t.Fatalf("expected zero initial activities, got %d", len(cedar.activeActivities))
 	}
 
-	w.click(msgs.SessionInspectTitle())
+	var headerErr string
+	w.pump.do(func() {
+		_, hasOverview := w.view.Find(msgs.BotOverviewLabel())
+		if !hasOverview || w.view.HasText(msgs.SessionInspectTitle()) || w.view.HasText(msgs.OrchestrationTitle()) || w.view.HasText("Sessions") {
+			headerErr = fmt.Sprintf("idle chat header unexpected state: overview=%v texts=%v", hasOverview, w.view.Texts())
+		}
+	})
+	if headerErr != "" {
+		t.Fatal(headerErr)
+	}
+
+	openOverviewMenuItem(w, msgs.BotOverviewLabel(), msgs.SessionInspectMenuCount(0))
 	w.wait(func() bool {
-		return w.app.sessions.activeBotID == "cedar" && w.view.HasText(msgs.SessionInspectEmptyList())
+		return w.app.detail == detailProfile &&
+			w.app.workspaceOpen &&
+			w.app.sessions.activeBotID == "cedar" &&
+			w.view.HasText(msgs.SessionInspectEmptyList()) &&
+			w.view.HasText(msgs.SendAction())
 	})
 	w.frame(func() { w.view.Key(0, ui.KeyEscape) })
-	w.wait(func() bool { return w.app.sessions.activeBotID == "" && w.view.HasText(msgs.SendAction()) })
+	w.wait(func() bool {
+		return w.app.sessions.activeBotID == "" &&
+			!w.app.workspaceOpen &&
+			w.app.detail == "" &&
+			w.view.Focused(msgs.BotOverviewLabel()) &&
+			w.view.HasText(msgs.SendAction())
+	})
 
 	w.click(msgs.SendAction())
-	w.wait(func() bool { return cedar.SendState == sendIdle && len(cedar.History) >= 2 })
-
-	w.click(msgs.SessionInspectTitle())
 	w.wait(func() bool {
-		return w.app.sessions.activeBotID == "cedar" &&
+		return cedar.SendState == sendIdle && len(cedar.History) >= 2 && w.app.sessions.activeCount("cedar") == 2
+	})
+	w.pump.do(func() {
+		if w.view.HasText(msgs.SessionInspectTitle()) || w.view.HasText(msgs.SessionInspectMenuCount(2)) || w.view.HasText(msgs.OrchestrationTitle()) {
+			headerErr = fmt.Sprintf("header should remain clean when sessions run: texts=%v", w.view.Texts())
+		}
+	})
+	if headerErr != "" {
+		t.Fatal(headerErr)
+	}
+
+	openOverviewMenuItem(w, msgs.BotOverviewLabel(), msgs.SessionInspectMenuCount(2))
+	w.wait(func() bool {
+		return w.app.detail == detailProfile &&
+			w.app.workspaceOpen &&
+			w.app.sessions.activeBotID == "cedar" &&
 			w.view.HasText("Pipe worker") &&
-			w.view.HasText("PTY console")
+			w.view.HasText("PTY console") &&
+			w.view.HasText(msgs.SendAction())
 	})
 
 	w.click("Pipe worker, " + msgs.SessionInspectRunning())
@@ -145,7 +230,7 @@ func TestPiAppSessionInspectionAndClose(t *testing.T) {
 		t.Fatalf("missing pipe stream labels in projected output: %q", projectedInitial)
 	}
 
-	w.click(msgs.SessionInspectEarlierOutput())
+	clickInSessionDetailScroll(w, "cedar", msgs.SessionInspectEarlierOutput())
 	w.wait(func() bool {
 		detail := w.app.sessions.bots["cedar"].detail
 		return detail != nil && detail.output.browsing && !detail.output.loading &&
@@ -159,39 +244,63 @@ func TestPiAppSessionInspectionAndClose(t *testing.T) {
 		return w.view.HasText(msgs.SessionInspectNewOutput()) &&
 			w.view.HasText(msgs.SessionInspectLatestOutput())
 	})
+	var browseErr string
 	w.pump.do(func() {
 		detail := w.app.sessions.bots["cedar"].detail
 		if !detail.output.browsing {
-			t.Fatal("browsing mode was snapped back to tail on new output")
+			browseErr = "browsing mode was snapped back to tail on new output"
+			return
 		}
 		if strings.Contains(detail.output.projectedText(pi.ProductSessionPipe, defaultSessionInspectionCopy), "LIVE_TAIL_FINAL") {
-			t.Fatal("live tail output overwrote browsed earlier slice")
+			browseErr = "live tail output overwrote browsed earlier slice"
 		}
 	})
+	if browseErr != "" {
+		t.Fatal(browseErr)
+	}
 
-	w.click(msgs.SessionInspectLatestOutput())
+	clickInSessionDetailScroll(w, "cedar", msgs.SessionInspectLatestOutput())
 	w.wait(func() bool {
 		detail := w.app.sessions.bots["cedar"].detail
 		return detail != nil && !detail.output.browsing &&
 			strings.Contains(detail.output.projectedText(pi.ProductSessionPipe, defaultSessionInspectionCopy), "LIVE_TAIL_FINAL")
 	})
 
-	w.click(msgs.SessionInspectSourceChat())
+	clickInSessionDetailScroll(w, "cedar", msgs.SessionInspectSourceChat())
 	w.wait(func() bool {
-		return w.app.priorChats != nil && w.view.HasText(msgs.ReadOnlyChat()) && w.view.HasText("Sessions ready.")
+		return w.app.priorChats != nil && w.view.HasText(msgs.ReadOnlyChat()) && w.view.HasText("Sessions ready.") &&
+			w.app.sessions.activeBotID == "cedar" && w.app.workspaceOpen
 	})
 
 	w.frame(func() { w.view.Key(0, ui.KeyEscape) })
 	w.wait(func() bool {
 		return w.app.priorChats == nil && w.app.sessions.activeBotID == "cedar" &&
 			w.app.sessions.bots["cedar"].detail != nil &&
-			w.app.sessions.bots["cedar"].detail.summary.SessionID == pipeSessID
+			w.app.sessions.bots["cedar"].detail.summary.SessionID == pipeSessID &&
+			w.view.Focused(msgs.SessionInspectSourceChat())
 	})
 
 	w.frame(func() { w.view.Key(0, ui.KeyEscape) })
 	w.wait(func() bool {
 		return w.app.sessions.activeBotID == "cedar" &&
 			w.app.sessions.bots["cedar"].detail == nil &&
+			w.app.workspaceOpen &&
+			w.view.HasText("PTY console")
+	})
+
+	w.frame(func() { w.view.Key(0, ui.KeyEscape) })
+	w.wait(func() bool {
+		return w.app.sessions.activeBotID == "" &&
+			!w.app.workspaceOpen &&
+			w.app.detail == "" &&
+			w.view.Focused(msgs.BotOverviewLabel())
+	})
+
+	openOverviewMenuItem(w, msgs.BotOverviewLabel(), msgs.SessionInspectMenuCount(2))
+	w.wait(func() bool {
+		return w.app.detail == detailProfile &&
+			w.app.workspaceOpen &&
+			w.app.sessions.activeBotID == "cedar" &&
 			w.view.HasText("PTY console")
 	})
 
@@ -288,9 +397,12 @@ func TestPiAppSessionInspectionAndClose(t *testing.T) {
 	if err != nil || afterRestart.TransportStatus == pi.ProductTransportClosedByUser {
 		t.Fatalf("restart reconcile altered session end reason via auto-replay: %+v, err=%v", afterRestart, err)
 	}
-	w2.click(msgs.SessionInspectTitle())
+	openOverviewMenuItem(w2, msgs.BotOverviewLabel(), msgs.SessionInspectMenuCount(0))
 	w2.wait(func() bool {
-		return w2.app.sessions.activeBotID == "cedar" && w2.view.HasText("Pipe worker")
+		return w2.app.detail == detailProfile &&
+			w2.app.workspaceOpen &&
+			w2.app.sessions.activeBotID == "cedar" &&
+			w2.view.HasText("Pipe worker")
 	})
 	w2.click("Pipe worker, " + msgs.SessionInspectClosed())
 	w2.wait(func() bool {

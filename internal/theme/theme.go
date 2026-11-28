@@ -154,6 +154,7 @@ func ResolveWorkbenchTheme(dark bool) WorkbenchTheme {
 	}
 	palette.ContactText, palette.ContactMuted, palette.ContactLink = t.Text, t.TextMuted, palette.Link
 	palette.ComposerText, palette.ComposerMuted = t.Text, t.TextMuted
+	t.FocusRingOffset, t.FocusRingWidth = FocusRingGap, FocusRingStroke
 	return palette
 }
 
@@ -258,7 +259,7 @@ func segmentedSelection(c *ui.Context, selected *int, disabled, focus bool, labe
 	track.Children(func() {
 		for i, label := range labels {
 			segment := parts.Segment(i).Label(label).Disabled(disabled).MinWidth(ControlHit).MinHeight(ControlHit).Padding(t.Space(1), t.Space(2)).
-				Radius(t.Radius).Background(ui.Transparent).Border(2, ui.Transparent).FocusRing(false).TextColor(t.TextMuted)
+				Radius(t.Radius).Background(ui.Transparent).Border(0, ui.Transparent).FocusRing(false).TextColor(t.TextMuted)
 			if i == *selected {
 				segment.Background(t.Selection).TextColor(t.Text)
 			}
@@ -274,9 +275,11 @@ func segmentedSelection(c *ui.Context, selected *int, disabled, focus bool, labe
 			if focus && !disabled && i == max(0, *selected) {
 				segment.Focus().ScrollIntoView()
 			}
-			if segment.FocusVisible() {
-				segment.BorderColor(t.Accent)
-			}
+			segment.DrawOver(func(p *ui.Painter, r ui.Rect) {
+				if segment.FocusVisible() && !segment.IsDisabled() {
+					DrawFocusRing(p, r, t.Radius, 0, t)
+				}
+			})
 			segment.Children(func() {
 				ui.Text(c, label).FontSize(TypeAction).FontWeight(500).FixedLineHeight(LineAction).SingleLine()
 			})
@@ -368,29 +371,72 @@ func AppTooltip(c *ui.Context, anchor ui.Element, text string) ui.Element {
 	return anchor
 }
 
+// PrimaryButton renders the single highest-priority solid CTA on a surface with top rim highlight,
+// elevation shadow, and a 3-DIP air-gap keyboard focus ring. Reserve for one primary action per screen or modal:
+//
+//	theme.PrimaryButton(c, msgs.SaveChanges()).Disabled(blocked).OnClick(save)
 func PrimaryButton(c *ui.Context, label string) ui.Element {
 	t := c.Theme()
 	return actionButton(c, label, t.AccentText, t.Accent, t.AccentHover, t.AccentPressed, ui.Transparent, true)
 }
 
+// SecondaryButton renders the default outlined action with an InputBorder resting hairline, stepped hover/press fills,
+// subtle elevation shadow, and a 3-DIP air-gap focus ring:
+//
+//	theme.SecondaryButton(c, msgs.Cancel()).OnClick(dismiss)
 func SecondaryButton(c *ui.Context, label string) ui.Element {
 	t := c.Theme()
-	return actionButton(c, label, t.Text, t.Surface, t.SurfaceHover, t.SurfacePressed, t.Border, false)
+	return actionButton(c, label, t.Text, t.Surface, StrongHoverFill(t), StrongPressedFill(t), InputBorderColor(t), false)
 }
 
+// DangerButton renders a tinted danger-outline action for reversible destructive triggers (use DangerSolidButton inside final confirmation alerts):
+//
+//	theme.DangerButton(c, msgs.RemoveSkill()).Disabled(blocked).OnClick(promptDelete)
 func DangerButton(c *ui.Context, label string) ui.Element {
 	t := c.Theme()
-	return actionButton(c, label, t.Danger, t.Surface, t.Surface.Mix(t.Danger, 0.08), t.Surface.Mix(t.Danger, 0.14), t.Border.Mix(t.Danger, 0.35), false)
+	soft := float32(.09)
+	hover := float32(.16)
+	borderMix := float32(.38)
+	if t.Dark {
+		soft, hover, borderMix = .14, .22, .45
+	}
+	return actionButton(c, label, t.Danger, t.Surface.Mix(t.Danger, soft), t.Surface.Mix(t.Danger, hover), t.Surface.Mix(t.Danger, .24), t.Border.Mix(t.Danger, borderMix), false)
 }
 
+// DangerSolidButton renders the solid destructive confirmation CTA with white ink and elevation for irreversible delete or archive alert modals:
+//
+//	theme.DangerSolidButton(c, msgs.ConfirmArchive()).OnClick(archiveBot)
+func DangerSolidButton(c *ui.Context, label string) ui.Element {
+	t := c.Theme()
+	hover, pressed := t.Danger.Mix(t.Text, .12), t.Danger.Mix(t.Text, .22)
+	if isBuiltinPalette(t) {
+		if t.Dark {
+			hover, pressed = ui.Hex("#FF7879"), ui.Hex("#E04849")
+		} else {
+			hover, pressed = ui.Hex("#991E26"), ui.Hex("#80181F")
+		}
+	}
+	return actionButton(c, label, ui.Hex("#FFFFFF"), t.Danger, hover, pressed, ui.Transparent, true)
+}
+
+// GhostButton renders a chrome-free auxiliary button that stays transparent at rest and reveals stepped hover/press fills:
+//
+//	theme.GhostButton(c, msgs.InspectDetails()).OnClick(openDetails)
 func GhostButton(c *ui.Context, label string) ui.Element {
 	t := c.Theme()
-	return actionButton(c, label, t.TextMuted, ui.Transparent, t.SurfaceHover, t.SurfacePressed, ui.Transparent, false)
+	return actionButton(c, label, t.TextMuted, ui.Transparent, StrongHoverFill(t), StrongPressedFill(t), ui.Transparent, false)
 }
 
+// LinkButton renders an underlined inline action tinted with LinkInk (#2D6A4A on Paper, Accent on Moss) and a 3-DIP focus ring:
+//
+//	theme.LinkButton(c, msgs.AddSecret()).OnClick(addRow)
 func LinkButton(c *ui.Context, label string) ui.Element {
 	t := c.Theme()
-	button := actionButton(c, "", t.TextMuted, ui.Transparent, t.SurfaceHover, t.SurfacePressed, ui.Transparent, false).Label(label)
+	hover := ui.RGBA(0, 0, 0, .042)
+	if t.Dark {
+		hover = StrongHoverFill(t)
+	}
+	button := actionButton(c, "", LinkInk(t), ui.Transparent, hover, StrongPressedFill(t), ui.Transparent, false).Label(label)
 	button.Children(func() { ui.Text(c, label).Underline().SingleLine() })
 	return button
 }
@@ -400,9 +446,12 @@ func actionButton(c *ui.Context, label string, ink, background, hover, pressed, 
 	button := ui.Button(c, label).Label(label).Height(ControlHit).MinHeight(ControlHit).MinWidth(ControlHit).
 		Radius(0).Background(ui.Transparent).Border(0, ui.Transparent).FocusRing(false).
 		FontSize(TypeAction).FontWeight(500).FixedLineHeight(LineAction).TextColor(ink).Padding(8, 12).Gap(6)
+	if !button.IsDisabled() && !primary && border.A == 0 && ink == t.TextMuted && (button.Hovered() || button.Pressed()) {
+		button.TextColor(t.Text)
+	}
 	return TransitionControl(button, t).Draw(func(p *ui.Painter, r ui.Rect) {
 		r.Y, r.H = r.Y+2, r.H-4
-		fill := background
+		fill, drawBorder := background, border
 		switch {
 		case button.IsDisabled() && primary:
 			fill = background.Mix(t.Surface, 0.35)
@@ -411,20 +460,39 @@ func actionButton(c *ui.Context, label string, ink, background, hover, pressed, 
 			fill = pressed
 		case button.Hovered():
 			fill = hover
-		}
-		PaintPreferenceFace(p, r, ControlRadius, 2, fill, border)
-		if button.FocusVisible() && !button.IsDisabled() {
-			ring := t.Accent
-			if primary {
-				ring = t.AccentText
+			if !primary && border.A > 0 {
+				drawBorder = border.Mix(t.Text, .24)
 			}
-			inside := ui.Rect{X: r.X + 2, Y: r.Y + 2, W: r.W - 4, H: r.H - 4}
-			p.StrokePath(ControlPath(inside, ControlRadius-2, 2), 2, ring)
+		}
+		if !button.IsDisabled() && !button.Pressed() && (primary || drawBorder.A > 0) {
+			shadowCol, _ := ButtonElevation(t, primary)
+			p.Shadow(r, ControlRadius, 0, 1, 2, 0, shadowCol)
+		}
+		PaintPreferenceFace(p, r, ControlRadius, 2, fill, drawBorder)
+		if !button.IsDisabled() && !button.Pressed() && (primary || drawBorder.A > 0) {
+			_, topRim := ButtonElevation(t, primary)
+			interior, interiorRad := r, float32(ControlRadius)
+			rimH := float32(0.5)
+			if drawBorder.A > 0 {
+				interior = ui.Rect{X: r.X + 1, Y: r.Y + 1, W: max(0, r.W-2), H: max(0, r.H-2)}
+				interiorRad -= 1
+				rimH = 1
+			}
+			p.Clip(interior, interiorRad, func() {
+				p.Fill(ui.Rect{X: interior.X, Y: interior.Y, W: interior.W, H: rimH}, topRim, 0)
+			})
+		}
+	}).DrawOver(func(p *ui.Painter, r ui.Rect) {
+		r.Y, r.H = r.Y+2, r.H-4
+		if button.FocusVisible() && !button.IsDisabled() {
+			DrawFocusRing(p, r, ControlRadius, 2, t)
 		}
 	})
 }
 
+// NavigationControl styles rail or Settings sidebar navigation rows with subtle selection fills and a 3-DIP focus ring.
 func NavigationControl(c *ui.Context, e ui.Element, palette WorkbenchTheme, selected bool) ui.Element {
+	t := c.Theme()
 	e = SharedControlFace(c, e, 8, 4, false, false, false)
 	e.Draw(func(p *ui.Painter, r ui.Rect) {
 		r.Y, r.H = r.Y+2, r.H-4
@@ -435,8 +503,13 @@ func NavigationControl(c *ui.Context, e ui.Element, palette WorkbenchTheme, sele
 			fill = palette.NavHover
 		}
 		PaintPreferenceFace(p, r, 8, 4, fill, ui.Transparent)
+	}).DrawOver(func(p *ui.Painter, r ui.Rect) {
+		if e.FocusVisible() && !e.IsDisabled() {
+			r.Y, r.H = r.Y+2, r.H-4
+			DrawFocusRing(p, r, 8, 4, t)
+		}
 	})
-	return TransitionControl(e, c.Theme())
+	return TransitionControl(e, t)
 }
 
 // SharedControlFace extends the transparent interaction box two DIPs past the visible face
@@ -447,6 +520,8 @@ func SharedControlFace(c *ui.Context, e ui.Element, region float32, exponent flo
 	return DrawControlFace(c, e, region, exponent, outlined, invalid, selected, 0, 2, c.Theme().SurfaceHover, inputBorder...)
 }
 
+// DrawControlFace paints shared DS 2.1 superellipse faces: supplying inputBorder opts into the recessed form input treatment
+// with top inner shade at rest and a harmonious 3-DIP outer halo on focus; non-input outlined or icon faces gain a 3-DIP focus ring.
 func DrawControlFace(c *ui.Context, e ui.Element, region float32, exponent float64, outlined, invalid, selected bool, insetX, insetY float32, focusFill ui.Color, inputBorder ...ui.Color) ui.Element {
 	t := c.Theme()
 	textInput := len(inputBorder) > 0
@@ -457,6 +532,39 @@ func DrawControlFace(c *ui.Context, e ui.Element, region float32, exponent float
 	e.Draw(func(p *ui.Painter, r ui.Rect) {
 		r.X, r.Y = r.X+insetX, r.Y+insetY
 		r.W, r.H = r.W-2*insetX, r.H-2*insetY
+		if textInput {
+			slotBg, innerShade := InputSlotColors(t)
+			fill, border := slotBg, inputBoundary
+			focused := !e.IsDisabled() && e.Focused()
+			switch {
+			case focused:
+				fill = t.Surface
+				border = InputFocusInk(t)
+				if invalid {
+					border = t.Danger
+				}
+			case invalid:
+				fill = slotBg.Mix(t.Danger, .03)
+				border = t.Danger
+			case !e.IsDisabled() && e.Hovered():
+				border = inputBoundary.Mix(t.Text, .26)
+			}
+			if focused {
+				halo := InputFocusHalo(t)
+				if invalid {
+					halo = t.Danger.Alpha(.14)
+				}
+				p.Shadow(r, region, 0, 0, 0, 3, halo)
+			}
+			PaintPreferenceFace(p, r, region, exponent, fill, border)
+			if !focused && !e.IsDisabled() {
+				interior := ui.Rect{X: r.X + 1, Y: r.Y + 1, W: max(0, r.W-2), H: max(0, r.H-2)}
+				p.Clip(interior, max(0, region-1), func() {
+					p.Fill(ui.Rect{X: interior.X, Y: interior.Y, W: interior.W, H: 1.5}, innerShade, 0)
+				})
+			}
+			return
+		}
 		fill, border := ui.Transparent, ui.Transparent
 		if outlined {
 			fill, border = t.Surface, t.Border
@@ -464,10 +572,7 @@ func DrawControlFace(c *ui.Context, e ui.Element, region float32, exponent float
 		if selected {
 			fill = t.Selection
 		}
-		if textInput {
-			fill, border = t.Surface, inputBoundary
-		}
-		if !textInput && !e.IsDisabled() {
+		if !e.IsDisabled() {
 			if e.Pressed() {
 				fill = t.SurfacePressed
 			} else if e.Hovered() {
@@ -477,25 +582,17 @@ func DrawControlFace(c *ui.Context, e ui.Element, region float32, exponent float
 				fill = focusFill
 			}
 		}
-		inputFocused := textInput && !invalid && !e.IsDisabled() && e.Focused()
 		if invalid {
 			border = t.Danger
-		} else if inputFocused {
-			border = t.Accent
-		} else if !textInput && outlined && e.Focused() {
+		} else if outlined && !e.IsDisabled() && e.Focused() {
 			border = t.Focus
 		}
-		if inputFocused {
-			interior, interiorRegion := r, region
-			if border.A > 0 {
-				interior = ui.Rect{X: r.X + 2, Y: r.Y + 2, W: r.W - 4, H: r.H - 4}
-				interiorRegion -= 2
-			}
-			p.FillPath(ControlPath(interior, interiorRegion, exponent), fill)
-			inside := ui.Rect{X: r.X + 1, Y: r.Y + 1, W: r.W - 2, H: r.H - 2}
-			p.StrokePath(ControlPath(inside, region-1, exponent), 2, border)
-		} else {
-			PaintPreferenceFace(p, r, region, exponent, fill, border)
+		PaintPreferenceFace(p, r, region, exponent, fill, border)
+	}).DrawOver(func(p *ui.Painter, r ui.Rect) {
+		if !textInput && !e.IsDisabled() && e.FocusVisible() {
+			r.X, r.Y = r.X+insetX, r.Y+insetY
+			r.W, r.H = r.W-2*insetX, r.H-2*insetY
+			DrawFocusRing(p, r, region, exponent, t)
 		}
 	})
 	return e
@@ -593,6 +690,10 @@ func (tone MarkdownHeadingTone) Color(t *ui.Theme) ui.Color {
 	return t.TextMuted
 }
 
+// FormTextArea styles a multi-line editable text box with recessed slot resting depth, 3-DIP focus halo,
+// and validation error border treatment. Pass wb.InputBorder to align with PreferenceInput boundaries:
+//
+//	theme.FormTextArea(c, &draft, invalid, a.workTheme.InputBorder).Label(label)
 func FormTextArea(c *ui.Context, value *string, invalid bool, inputBorder ...ui.Color) ui.Element {
 	border := c.Theme().Border
 	if len(inputBorder) > 0 {

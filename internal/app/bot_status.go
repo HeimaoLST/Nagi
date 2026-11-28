@@ -28,6 +28,7 @@ const (
 type botStatus struct {
 	kind                                       botVisualKind
 	waitingCount, attentionCount, workingCount int
+	backgroundActive, backgroundDecisions      int
 	waitingActivity, attentionActivity         string
 	questionID                                 string
 	waitingLegacy, attentionLegacy             *productActivity
@@ -78,12 +79,25 @@ func (a *appModel) botVisualState(ct *contact, now time.Time) botStatus {
 			status.workingCount++
 		}
 	}
+	for _, item := range ct.orchestration.items {
+		if item.Dormant {
+			continue
+		}
+		switch item.State {
+		case pi.ProductMandateActive:
+			status.backgroundActive++
+		case pi.ProductMandateWaitingDecision:
+			status.backgroundDecisions++
+		}
+	}
 	switch {
 	case status.waitingCount > 0 || status.attentionCount > 0 || ct.Status == statusAttention:
 		status.kind = botVisualWaiting
-	case ct.Status == statusWorking || sessionBusy(ct.SendState, ct.ActiveTaskID):
+	case status.backgroundDecisions > 0:
+		status.kind = botVisualWaiting
+	case ct.SendState != sendQueued && (ct.Status == statusWorking || sessionBusy(ct.SendState, ct.ActiveTaskID)):
 		status.kind = botVisualReplying
-	case status.workingCount > 0:
+	case status.workingCount+status.backgroundActive > 0:
 		status.kind = botVisualWorking
 	case now.Before(ct.completedUntil):
 		status.kind = botVisualDone
@@ -133,6 +147,9 @@ func (s botStatus) label(msgs locales.Messages, rail bool) string {
 	case botVisualArchived:
 		return msgs.ProfileArchivedBadge()
 	case botVisualWaiting:
+		if s.backgroundDecisions > 0 && s.waitingCount+s.attentionCount == 0 {
+			return msgs.OrchestrationDecisionBadge()
+		}
 		if s.waitingCount == 0 {
 			return msgs.BotStatusNeedsAttention()
 		}
@@ -147,9 +164,9 @@ func (s botStatus) label(msgs locales.Messages, rail bool) string {
 		return msgs.BotStatusReplying()
 	case botVisualWorking:
 		if rail {
-			return msgs.BotStatusRailWorking(s.workingCount)
+			return msgs.BotStatusRailWorking(s.workingCount + s.backgroundActive)
 		}
-		return msgs.BotStatusWorking(s.workingCount)
+		return msgs.BotStatusWorking(s.workingCount + s.backgroundActive)
 	case botVisualDone:
 		if rail {
 			return msgs.BotStatusRailDone()
@@ -200,16 +217,20 @@ func (a *appModel) botStatusAction(c *ui.Context, t *ui.Theme, ct *contact, stat
 		ink, border = t.Warning, t.Warning.Alpha(.35)
 	}
 	button := ui.Button(c, label).Label(label).Height(theme.ControlHit).MinHeight(theme.ControlHit).MinWidth(theme.ControlHit).
-		Padding(4, 10).Radius(theme.ControlRadius).Shrink(0).FocusRingColor(t.Accent).
+		Padding(4, 10).Radius(theme.ControlRadius).Shrink(0).FocusRing(false).
 		FontSize(typeAction).FontWeight(500).FixedLineHeight(lineCompact).TextColor(ink).Border(1, border).
 		Disabled(a.shutdownStarted || a.dataRecoveryBlocksChanges())
 	fill := t.Surface
 	if button.Pressed() {
-		fill = t.SurfacePressed
+		fill = theme.StrongPressedFill(t)
 	} else if button.Hovered() {
-		fill = t.SurfaceHover
+		fill = theme.StrongHoverFill(t)
 	}
-	theme.TransitionControl(button.Background(fill), t)
+	theme.TransitionControl(button.Background(fill), t).DrawOver(func(p *ui.Painter, r ui.Rect) {
+		if button.FocusVisible() && !button.IsDisabled() {
+			theme.DrawFocusRing(p, r, theme.ControlRadius, 2, t)
+		}
+	})
 	button.OnClick(func() {
 		p := &ct.activity
 		p.open = true
@@ -241,51 +262,144 @@ func (a *appModel) openLegacyBotActivity(ct *contact, activity *productActivity)
 	p.legacyIssue, p.focusBack = true, true
 }
 
-func botStatusAvatar(c *ui.Context, t *ui.Theme, ct *contact, size float32, state botStatus) {
+// botStatusAvatar renders Hybrid Status C: a rounded PedestalColors frame housing an 82%-scaled dual-layer rock avatar,
+// breathing/steady outer status rings on Replying/Waiting (honoring ReduceMotion), and a bottom-right corner badge.
+// Callers on non-Background surfaces (rail rows, hover/selected items) should pass the matching host cutout background color.
+func botStatusAvatar(c *ui.Context, t *ui.Theme, ct *contact, size float32, state botStatus, cutout ...ui.Color) {
 	const gutter = 4
-	radius := float32(8)
-	if size == 24 {
+	radius := float32(math.Round(float64(size) * 0.24))
+	if size <= 24 {
 		radius = 7
+	}
+	cutoutBg := t.Background
+	if len(cutout) > 0 {
+		cutoutBg = cutout[0]
 	}
 	if state.kind == botVisualDone {
 		c.After(max(16*time.Millisecond, ct.completedUntil.Sub(c.Now())))
 	}
+	reduceMotion := c.Preferences().ReduceMotion
 	outer := ui.Box(c).Size(size+2*gutter, size+2*gutter).Shrink(0).Center().IgnoreInput(true)
-	breathing := state.kind == botVisualReplying && !c.Preferences().ReduceMotion
-	if state.kind == botVisualArchived {
-		outer.Opacity(.6)
-	}
-	if breathing {
+	if state.kind == botVisualReplying || state.kind == botVisualWaiting {
 		outer.Draw(func(p *ui.Painter, r ui.Rect) {
-			phase := float64(p.Now().UnixMilli()%1800) * (2 * math.Pi / 1800)
-			pulse := float32((1 + math.Sin(phase)) / 2)
-			p.Stroke(r, t.Success.Alpha(.12+.12*pulse), radius+gutter, 2)
-			ring := ui.Rect{X: r.X + 2, Y: r.Y + 2, W: r.W - 4, H: r.H - 4}
-			p.Stroke(ring, t.Success.Alpha(.45+.5*pulse), radius+2, 2)
-			p.After(33 * time.Millisecond)
+			ring := ui.Rect{X: r.X + 1, Y: r.Y + 1, W: r.W - 2, H: r.H - 2}
+			ringRadius := radius + 3
+			if state.kind == botVisualReplying {
+				vivid := theme.StatusVividSuccess(t)
+				if reduceMotion {
+					p.Shadow(ring, ringRadius, 0, 0, 2, 1, vivid.Alpha(.24))
+					p.Stroke(ring, vivid.Alpha(.88), ringRadius, 2)
+					return
+				}
+				phase := float64(p.Now().UnixMilli()%1500) * (2 * math.Pi / 1500)
+				pulse := float32((1 + math.Sin(phase)) / 2)
+				p.Shadow(ring, ringRadius, 0, 0, 2.5, 1+2.5*pulse, vivid.Alpha(.18+.18*pulse))
+				p.Stroke(ring, vivid, ringRadius, 2)
+				p.After(33 * time.Millisecond)
+				return
+			}
+			warn := theme.StatusVividWarning(t)
+			p.Shadow(ring, ringRadius, 0, 0, 0, 2, warn.Alpha(.24))
+			p.Stroke(ring, warn, ringRadius, 2)
 		})
 	}
 	outer.Children(func() {
-		ink, glow, width := ui.Transparent, ui.Transparent, float32(0)
-		switch state.kind {
-		case botVisualReplying:
-			ink, glow, width = t.Success.Alpha(.75), t.Success.Alpha(.18), 2
-			if breathing {
-				ink, glow = ui.Transparent, ui.Transparent
-			}
-		case botVisualWorking:
-			ink, glow, width = t.Success, t.Success.Alpha(.19), 2
-		case botVisualWaiting:
-			ink, glow, width = t.Warning, t.Warning.Alpha(.34), 2
-		case botVisualDone:
-			ink, glow, width = t.Success.Alpha(.55), t.Success.Alpha(.12), 2
+		pedBg, pedBorder := theme.PedestalColors(t)
+		archived := state.kind == botVisualArchived
+		pedestal := ui.Box(c).Size(size, size).Radius(radius).Background(pedBg).Border(1, pedBorder).
+			Shrink(0).Center().IgnoreInput(true)
+		if archived {
+			pedestal.Opacity(.56)
 		}
-		inset := gutter - width
-		ui.Box(c).Absolute().Left(inset).Right(inset).Top(inset).Bottom(inset).Radius(radius+width).
-			Border(width, ink).Shadow(0, 0, 4, 1, glow).IgnoreInput(true).
-			Transition(ui.ElementTransition{Duration: 180 * time.Millisecond, Colors: true, Shadows: true})
-		contactAvatar(c, t, ct, size)
+		pedestal.Children(func() {
+			innerSize := float32(math.Round(float64(size) * 0.82))
+			contactAvatar(c, t, ct, innerSize, archived)
+		})
 	})
+	if state.kind != botVisualIdle {
+		outer.DrawOver(func(p *ui.Painter, r ui.Rect) {
+			paintBotCornerBadge(p, t, r, size, state.kind, cutoutBg, reduceMotion)
+		})
+	}
+}
+
+func paintBotCornerBadge(p *ui.Painter, t *ui.Theme, outer ui.Rect, avatarSize float32, kind botVisualKind, cutoutBg ui.Color, reduceMotion bool) {
+	scale := float32(1)
+	if avatarSize <= 24 {
+		scale = 0.86
+	}
+	bh := float32(14) * scale
+	bw := bh
+	if kind == botVisualReplying {
+		bw = float32(20) * scale
+	}
+	badge := ui.Rect{X: outer.X + outer.W - bw, Y: outer.Y + outer.H - bh, W: bw, H: bh}
+	rad := bh / 2
+	cut := ui.Rect{X: badge.X - 2, Y: badge.Y - 2, W: badge.W + 4, H: badge.H + 4}
+	p.Fill(cut, cutoutBg, rad+2)
+	white := ui.RGB(255, 255, 255)
+	cx, cy := badge.X+badge.W/2, badge.Y+badge.H/2
+	switch kind {
+	case botVisualReplying:
+		p.Fill(badge, theme.StatusVividSuccess(t), rad)
+		dotSize := float32(2.6) * scale
+		spacing := float32(4.4) * scale
+		for idx := 0; idx < 3; idx++ {
+			offsetY := float32(0)
+			alpha := float32(0.95)
+			if !reduceMotion {
+				ms := (p.Now().UnixMilli() - int64(idx*160) + 1100) % 1100
+				frac := float64(ms) / 1100.0
+				wave := float32(math.Max(0, math.Sin(frac*2*math.Pi)))
+				offsetY = -1.6 * scale * wave
+				alpha = 0.68 + 0.32*wave
+			}
+			dx := cx + float32(idx-1)*spacing - dotSize/2
+			dy := cy + offsetY - dotSize/2
+			p.Fill(ui.Rect{X: dx, Y: dy, W: dotSize, H: dotSize}, white.Alpha(alpha), dotSize/2)
+		}
+		if !reduceMotion {
+			p.After(33 * time.Millisecond)
+		}
+	case botVisualWorking:
+		p.Fill(badge, t.Accent, rad)
+		radius := float32(3.8) * scale
+		p.Stroke(ui.Rect{X: cx - radius, Y: cy - radius, W: 2 * radius, H: 2 * radius}, t.AccentText.Alpha(.28), radius, 1.5*scale)
+		startAngle := -math.Pi / 2
+		if !reduceMotion {
+			startAngle += float64(p.Now().UnixMilli()%850) / 850.0 * 2 * math.Pi
+			p.After(33 * time.Millisecond)
+		}
+		var arc ui.Path
+		for step := 0; step <= 14; step++ {
+			angle := startAngle + (1.35*math.Pi)*float64(step)/14.0
+			px := cx + radius*float32(math.Cos(angle))
+			py := cy + radius*float32(math.Sin(angle))
+			if step == 0 {
+				arc.MoveTo(px, py)
+			} else {
+				arc.LineTo(px, py)
+			}
+		}
+		p.StrokePath(&arc, 1.6*scale, t.AccentText)
+	case botVisualWaiting:
+		p.Fill(badge, theme.StatusVividWarning(t), rad)
+		stemW, stemH := float32(1.8)*scale, float32(4.4)*scale
+		p.Fill(ui.Rect{X: cx - stemW/2, Y: badge.Y + 2.6*scale, W: stemW, H: stemH}, white, stemW/2)
+		dotS := float32(2.0) * scale
+		p.Fill(ui.Rect{X: cx - dotS/2, Y: badge.Y + badge.H - 4.3*scale, W: dotS, H: dotS}, white, dotS/2)
+	case botVisualDone:
+		p.Fill(badge, theme.StatusVividSuccess(t), rad)
+		var check ui.Path
+		check.MoveTo(badge.X+badge.W*0.26, badge.Y+badge.H*0.54).
+			LineTo(badge.X+badge.W*0.44, badge.Y+badge.H*0.72).
+			LineTo(badge.X+badge.W*0.76, badge.Y+badge.H*0.33)
+		p.StrokePath(&check, 1.8*scale, white)
+	case botVisualArchived:
+		p.Fill(badge, theme.TertiaryInk(t), rad)
+		dashW, dashH := float32(6.2)*scale, float32(1.8)*scale
+		p.Fill(ui.Rect{X: cx - dashW/2, Y: cy - dashH/2, W: dashW, H: dashH}, white, dashH/2)
+	}
 }
 
 func listBotActiveActivities(ctx context.Context, client *pi.ProductClient, botID string) (map[string]pi.ProductActivitySummary, error) {
