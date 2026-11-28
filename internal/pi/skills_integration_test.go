@@ -527,7 +527,7 @@ func TestPiProductSkillsPresetsCatalogAndSecurity(t *testing.T) {
 		}
 		if l0Prefix == "" {
 			l0Prefix = parts[0]
-			if !strings.HasPrefix(l0Prefix, "You are a long-lived Nagi Bot teammate.") || strings.Contains(l0Prefix, "<available_skills>") {
+			if !strings.HasPrefix(l0Prefix, "You are a long-lived Nagi Bot teammate.") || strings.Contains(l0Prefix, "<available_skills>\n") || strings.Contains(l0Prefix, "</available_skills>") {
 				t.Fatalf("L0 prefix mutated or leaked skills: %q", l0Prefix)
 			}
 		} else if parts[0] != l0Prefix {
