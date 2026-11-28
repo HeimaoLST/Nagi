@@ -234,7 +234,7 @@ func (a *appModel) settingsSidebar(c *ui.Context, t *ui.Theme, narrow bool) {
 		if !narrow {
 			ui.Row(c).FillWidth().Height(max(float32(40), c.TitleBar().Height)).Shrink(0).DragWindow()
 		}
-		ui.Toolbar(c, func() {
+		toolbar := ui.Toolbar(c, func() {
 			back := settingsNavigationButton(c, t, msgs.SettingsBackAccessible(), false).AlignSelf(ui.Start)
 			back.Children(func() {
 				ui.Icon(c, navBackIcon).Size(16, 16).Shrink(0).TextColor(t.TextMuted)
@@ -246,6 +246,11 @@ func (a *appModel) settingsSidebar(c *ui.Context, t *ui.Theme, narrow bool) {
 				a.settingsFocusBack = false
 			}
 		}).Label(msgs.SettingsNavigationLabel()).FillWidth().Padding(12, 8)
+		if narrow && c.TitleBar().Height > 0 {
+			winW := a.windowContentWidth(c)
+			leftSafe, rightSafe := windowControlInsets(c, 0, winW, winW)
+			toolbar.MinHeight(max(float32(40), c.TitleBar().Height)).Padding(12, max(8, rightSafe), 12, max(8, leftSafe)).DragWindow()
+		}
 		ui.Text(c, msgs.SettingsTitle()).FontSize(typeLabel).FontWeight(600).FixedLineHeight(lineLabel).TextColor(t.Text).Padding(4, 16)
 		nav := func(label, tab string) {
 			selected := a.settingsTab == tab
@@ -316,19 +321,27 @@ func (a *appModel) settingsMain(c *ui.Context, t *ui.Theme, narrow bool) {
 		providerSettings := a.settingsTab == settingsTabConnection
 		pool := a.providerPool()
 		capabilitySettings := a.settingsTab == settingsTabCapabilities && host != nil
-		width, _ := c.Size()
+		winW := a.windowContentWidth(c)
+		width := winW
 		if !narrow {
 			width -= settingsSidebarWidth
 		}
 		contentWidth := min(width, settingsContentWidth) - 64
+		headerRightPad := float32(32)
+		if bar := c.TitleBar(); !narrow && bar.Height > 0 && bar.Right > 0 {
+			headerWidth := min(width-1, settingsContentWidth)
+			rowEndX := winW - (width-1-headerWidth)/2
+			_, rightSafe := windowControlInsets(c, settingsSidebarWidth+1, rowEndX, winW)
+			headerRightPad = max(headerRightPad, rightSafe)
+		}
 		var tabs func()
 		if providerSettings {
 			tabs = func() { a.providerTabs(c, msgs, len(pool.Accounts)) }
 		} else if capabilitySettings {
 			tabs = func() { a.capabilityTabs(c, msgs) }
 		}
-		wrapTabs := tabs != nil && contentWidth < 540
-		ui.Row(c).FillWidth().MaxWidth(settingsContentWidth).AlignSelf(ui.Center).Height(max(float32(48), c.TitleBar().Height)).Shrink(0).Padding(0, 32).AlignItems(ui.Center).Justify(ui.SpaceBetween).DragWindow().Children(func() {
+		wrapTabs := tabs != nil && contentWidth-(headerRightPad-32) < 540
+		ui.Row(c).FillWidth().MaxWidth(settingsContentWidth).AlignSelf(ui.Center).Height(max(float32(48), c.TitleBar().Height)).Shrink(0).Padding(0, headerRightPad, 0, 32).AlignItems(ui.Center).Justify(ui.SpaceBetween).DragWindow().Children(func() {
 			pageHeading(c, title)
 			if tabs != nil && !wrapTabs {
 				tabs()

@@ -492,8 +492,14 @@ func (a *appModel) orchestrationDecisionCard(c *ui.Context, t *ui.Theme, ct *con
 
 func (a *appModel) backgroundWorkView(c *ui.Context, t *ui.Theme, panel *backgroundWorkPanel) {
 	msgs := locales.In(c.Locale())
+	winW := a.windowContentWidth(c)
+	rowStartX, rowEndX := a.detailRowBounds(winW, 0)
+	leftSafe, rightSafe := windowControlInsets(c, rowStartX, rowEndX, winW)
 	ui.Column(c).Key("background-work").Fill().MinWidth(0).MinHeight(0).Background(a.workTheme.Panel).Children(func() {
-		ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(8).Padding(8, 12).Shrink(0).Children(func() {
+		ui.Row(c).FillWidth().MinHeight(max(float32(48), c.TitleBar().Height)).Padding(8, max(12, rightSafe), 8, max(12, leftSafe)).AlignItems(ui.Center).Gap(8).Shrink(0).DragWindow().Children(func() {
+			if a.detailPageActive() && a.railCollapsed {
+				a.showContactsButton(c, t)
+			}
 			back := detailBackButton(c, t, msgs.OrchestrationBack(), msgs.OrchestrationBack()).OnClick(a.backBackgroundWork)
 			if panel.focusBack {
 				back.Focus()
@@ -506,9 +512,6 @@ func (a *appModel) backgroundWorkView(c *ui.Context, t *ui.Theme, panel *backgro
 			secondaryButton(c, msgs.OrchestrationReload()).AlignSelf(ui.Start).Disabled(panel.loading || !a.productProfileReady()).OnClick(func() {
 				a.loadBackgroundWork(panel, "")
 			})
-			if a.detailPageActive() && a.railCollapsed {
-				a.showContactsButton(c, t)
-			}
 		})
 		key, scroll := "background-work-list", &panel.listScroll
 		if panel.detailID != "" {

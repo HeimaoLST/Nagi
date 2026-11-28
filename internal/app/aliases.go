@@ -178,11 +178,12 @@ var (
 	glyphMoreLine      = theme.GlyphMoreLine
 	glyphSettings4Line = theme.GlyphSettings4Line
 	navBackIcon        = theme.NavBackIcon
-	navContactsIcon    = theme.NavContactsIcon
 	composerAttachIcon = theme.ComposerAttachIcon
 	composerSendIcon   = theme.ComposerSendIcon
+	backToLatestIcon   = theme.BackToLatestIcon
 	composerStopIcon   = theme.ComposerStopIcon
 	railHideIcon       = theme.RailHideIcon
+	railShowIcon       = theme.RailShowIcon
 	railAddIcon        = theme.RailAddIcon
 	railSettingsIcon   = theme.RailSettingsIcon
 

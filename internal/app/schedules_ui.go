@@ -22,15 +22,17 @@ import (
 )
 
 type scheduledWorkDeps struct {
-	client             *pi.ProductClient
-	botID              string
-	wb                 theme.WorkbenchTheme
-	blocked            bool
-	locale             string
-	updateUI           func(func())
-	persistOperations  func() error
-	onBack             func()
-	onOpenConversation func(conversationID string)
+	client                        *pi.ProductClient
+	botID                         string
+	wb                            theme.WorkbenchTheme
+	blocked                       bool
+	locale                        string
+	updateUI                      func(func())
+	persistOperations             func() error
+	onBack                        func()
+	onOpenConversation            func(conversationID string)
+	showContacts                  func(*ui.Context, *ui.Theme)
+	headerLeftPad, headerRightPad float32
 }
 
 type scheduledWorkCopy struct {
@@ -599,25 +601,34 @@ func (s *scheduledWorkState) render(c *ui.Context, deps scheduledWorkDeps) {
 	t := deps.wb.Theme
 	c.Key("scheduled-work-" + deps.botID)
 	ui.Column(c).FillWidth().Grow(1).MinWidth(0).MinHeight(0).Clip().Radius(theme.CardRadius).Background(t.Background).Children(func() {
-		ui.Row(c).FillWidth().MaxWidth(720).AlignSelf(ui.Center).Shrink(0).Wrap().Gap(8).Padding(8, 16).AlignItems(ui.Center).Children(func() {
-			msgs := locales.In(deps.locale)
-			back := secondaryButton(c, msgs.BackAction()).Label(msgs.BackLabel()).Disabled(!b.hasBack() && deps.onBack == nil).OnClick(func() { b.back(deps) })
-			if b.focusHeading {
-				back.Focus()
-				b.focusHeading = false
+		ui.Row(c).FillWidth().MinHeight(max(float32(48), c.TitleBar().Height)).Padding(8, max(16, deps.headerRightPad), 8, max(16, deps.headerLeftPad)).Shrink(0).DragWindow().Justify(ui.Center).Children(func() {
+			header := ui.Row(c).FillWidth().MinWidth(0).Wrap().Gap(8).AlignItems(ui.Center)
+			if deps.showContacts == nil {
+				header.MaxWidth(720 - 2*16)
 			}
-			title := m.text("Scheduled work", "计划工作")
-			switch {
-			case b.review != nil:
-				title = m.text("Review activation", "审核启用")
-			case b.editor != nil && b.editor.base.WatchID == "":
-				title = m.text("New scheduled work", "新建计划工作")
-			case b.editor != nil:
-				title = m.text("Edit scheduled work", "编辑计划工作")
-			case b.showGrants:
-				title = m.text("Standing grants", "常驻授权")
-			}
-			pageHeading(c, title).MinWidth(0)
+			header.Children(func() {
+				if deps.showContacts != nil {
+					deps.showContacts(c, t)
+				}
+				msgs := locales.In(deps.locale)
+				back := secondaryButton(c, msgs.BackAction()).Label(msgs.BackLabel()).Disabled(!b.hasBack() && deps.onBack == nil).OnClick(func() { b.back(deps) })
+				if b.focusHeading {
+					back.Focus()
+					b.focusHeading = false
+				}
+				title := m.text("Scheduled work", "计划工作")
+				switch {
+				case b.review != nil:
+					title = m.text("Review activation", "审核启用")
+				case b.editor != nil && b.editor.base.WatchID == "":
+					title = m.text("New scheduled work", "新建计划工作")
+				case b.editor != nil:
+					title = m.text("Edit scheduled work", "编辑计划工作")
+				case b.showGrants:
+					title = m.text("Standing grants", "常驻授权")
+				}
+				pageHeading(c, title).MinWidth(0)
+			})
 		})
 		ui.Scroll(c).FillWidth().Grow(1).MinWidth(0).MinHeight(0).TrackScroll(&b.scroll).Children(func() {
 			ui.Column(c).FillWidth().MaxWidth(720).AlignSelf(ui.Center).MinWidth(0).Gap(16).Padding(8, 16, 32).Children(func() {

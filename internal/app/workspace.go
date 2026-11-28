@@ -238,7 +238,7 @@ func (a *appModel) workspaceFrame(c *ui.Context, t *ui.Theme) {
 }
 
 func (a *appModel) detailPage(c *ui.Context, t *ui.Theme) {
-	ui.Column(c).Fill().Background(a.workTheme.Panel).Children(func() {
+	ui.Column(c).Grow(1).MinWidth(0).MinHeight(0).AlignSelf(ui.Stretch).Margin(4).Radius(16).Border(1, t.Border).Clip().Background(a.workTheme.Panel).Children(func() {
 		a.profileDetail(c, t)
 	})
 }

@@ -10,6 +10,14 @@
 
 **Prevention:** Inspect screenshots of actual composed pages at applicable sizes, themes, languages and states against `docs/design/desktop.md` and `docs/design/ui-checklist.md`. Enforce explicit four-tier typography (page title > section header > setting label > muted concise wrapped helper), distinct Primary/bordered Secondary/red Danger/Link controls, control-first Settings (segmented switches, presets and concise disclosures over stacked textboxes/prose), and centered wide-screen alignment. Check control bounds and scroll position, keep a failure frame when a click cannot be verified, and record the reviewer and verdict against the frozen candidate.
 
+### Keep transcript overlays and window-control clearance local
+
+**Problem:** The return-to-latest row shrank the message viewport, and a root title-bar spacer pushed the entire workbench down in collapsed and compact layouts. After removing the spacer, the collapsed card still lost its vertical margins.
+
+**Cause or correction:** Both controls reserved space in the normal layout. Anchor the return button directly to the viewport and compute window-control clearance within each header or compact rail. Use flex growth and cross-axis stretch for cards that move between horizontal and vertical parents and must retain their margins.
+
+**Prevention:** Verify stable viewport height and unobstructed scrolling beside the overlay. Compare card top and bottom margins across rail modes, and check header hit targets against actual title-bar insets.
+
 ### Sample periodic animations across non-symmetric phases
 
 **Problem:** Checking a sinusoidal animation with a single quarter-period step (`450 ms` on an `1800 ms` cycle) produces identical start and end opacity whenever wall-clock start lands near a symmetric pair (`sin(pi/4) == sin(3*pi/4)`).
@@ -362,11 +370,11 @@
 
 ### Discover actual paths, close callers and run root tooling
 
-**Problem:** Searches named absent files, edit anchors were used before reading the range, and changes passed selected checks but failed compilation on missing callers/imports.
+**Problem:** Searches named absent files, edit anchors were used before reading the range, and changes passed selected checks but failed compilation on missing callers or stale imports. Using the app's existing icon wrappers left a direct theme import unused.
 
 **Cause or correction:** Path/symbol discovery and complete diagnostics locate the real surface; selected searches do not resolve the package.
 
-**Prevention:** Discover files/symbols before targeted reads and verify cited symbols against their producer. Read the exact declaration and callee before replacement, include methods when mapping callers, and avoid keyword matches that find a different guard. Collect complete root-package diagnostics before another closure; check imports and avoid cosmetic changes after freeze. Run locale generation from the checkout root (`mygo.json`) and verify accessors against both catalogs.
+**Prevention:** Discover files and symbols before targeted reads and verify cited symbols against their producer. Read the exact declaration and callee before replacement, include methods when mapping callers, and avoid keyword matches that find a different guard. Compile the affected package before running multiple checks, and remove imports superseded by existing wrappers. Run locale generation from the checkout root (`mygo.json`) and verify accessors against both catalogs.
 
 ## Ownership and Delivery
 

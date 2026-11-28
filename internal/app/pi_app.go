@@ -316,6 +316,12 @@ func (a *appModel) persistWatchOperations() error {
 func (a *appModel) scheduledWorkDeps(c *ui.Context, ct *contact) scheduledWorkDeps {
 	deps := a.scheduledWorkFallbackDeps(ct)
 	deps.locale = c.Locale()
+	winW := a.windowContentWidth(c)
+	rowStartX, rowEndX := a.detailRowBounds(winW, 0)
+	deps.headerLeftPad, deps.headerRightPad = windowControlInsets(c, rowStartX, rowEndX, winW)
+	if a.detailPageActive() && a.railCollapsed {
+		deps.showContacts = a.showContactsButton
+	}
 	return deps
 }
 
@@ -372,6 +378,9 @@ func (a *appModel) sessionInspectorDeps(c *ui.Context, ct *contact) sessionInspe
 	deps.formatDimensions = msgs.SessionInspectDimensions
 	deps.formatGap = msgs.SessionInspectOutputGap
 	deps.formatMS = msgs.SessionInspectMilliseconds
+	winW := a.windowContentWidth(c)
+	rowStartX, rowEndX := a.detailRowBounds(winW, 0)
+	deps.headerLeftPad, deps.headerRightPad = windowControlInsets(c, rowStartX, rowEndX, winW)
 	if a.detailPageActive() && a.railCollapsed {
 		deps.showContacts = a.showContactsButton
 	}
