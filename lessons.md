@@ -538,6 +538,14 @@
 
 **Prevention:** Record structured fallback summaries outside raw private Pi transcripts, serialize per-conversation timeline anchors across all send finality states without touching `Draft`, and track pre-dispatch queue state (`dispatched_at == null`) separately from admitted executions in both live cancellation and crash recovery.
 
+### Guard unsigned sizing, deterministic persistence and clock domains
+
+**Problem:** Pre-sizing `strings.Builder` with `int(next - from)` on `uint64` stream offsets risks unsigned underflow and huge allocations when `from > next`, iterating Go maps directly when persisting `.ui.json` pending watch or session-close operations yields nondeterministic serialization, `OutputRing.append` crashes if called with an empty buffer at offset `0`, mixing a synthetic scheduler clock with Pi's wall-clock conversation timeline (`appendNotice` vs transcript messages) misorders notices into the past, and exported methods on unexported `internal/app` structs leak past the single-entrypoint package boundary.
+
+**Cause or correction:** Unsigned subtraction wraps silently in Go, map iteration order is randomized, `OutputRing` assumed at least one segment exists after appending, scheduler/LRU clocks may advance on synthetic epochs (`deps.now()`) while `conversation_notices` interleave by `createdAt` against real transcript wall-clock entries (`new Date().toISOString()`), and Go package boundaries depend on unexporting internal UI helpers.
+
+**Prevention:** Guard unsigned length calculations with `next > from` and an explicit cap before `Grow`, sort slices derived from Go maps before persisting `.ui.json` state, short-circuit empty writes in ring buffers, keep scheduler/backoff/session-LRU clocks separated from conversation/UI wall-clock timestamps, and verify `internal/app` non-test files export only `Run`.
+
 ### Distinguish queued cancellation from provider admission rejection
 
 **Problem:** Treating every `delivery: non_dispatched` send receipt as a queued interruption hid provider admission errors behind a misleading cancellation message.

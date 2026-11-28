@@ -107,7 +107,7 @@ func (a *appModel) updateProductBot(host *piAppHost, ct *contact, editor *contac
 	}
 	if problem := a.validateBuiltinToolSelection(ct.BuiltinTools, draft.BuiltinTools); problem != "" {
 		if editor != nil {
-			editor.SetError(problem)
+			editor.setError(problem)
 		}
 		return false
 	}
@@ -120,7 +120,7 @@ func (a *appModel) updateProductBot(host *piAppHost, ct *contact, editor *contac
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if editor != nil && editor.profileRevision != 0 && editor.profileRevision != ct.ProfileRevision {
-		editor.SetError(profileNoticeChangedElsewhere)
+		editor.setError(profileNoticeChangedElsewhere)
 		return false
 	}
 	bot, err := host.product.UpdateBot(ctx, pi.ProductBotUpdateParams{
@@ -131,13 +131,13 @@ func (a *appModel) updateProductBot(host *piAppHost, ct *contact, editor *contac
 	})
 	if err != nil {
 		if editor != nil {
-			editor.SetError(profileNoticeErrorSave)
+			editor.setError(profileNoticeErrorSave)
 		}
 		return false
 	}
 	a.applyProductBot(host, bot, false)
 	if editor != nil {
-		editor.SetProfile(contactProfileDraft(ct))
+		editor.setProfile(contactProfileDraft(ct))
 		editor.profileRevision = ct.ProfileRevision
 		editor.Status = profileNoticeSavedDefaults
 	}
@@ -157,7 +157,7 @@ func (a *appModel) setProductBotArchived(host *piAppHost, ct *contact, archived 
 	editor := a.profileEditorFor(ct.ID)
 	if err != nil {
 		if editor != nil {
-			editor.SetError(failure)
+			editor.setError(failure)
 		}
 		return false
 	}
@@ -183,13 +183,13 @@ func (a *appModel) saveContactProfile(ct *contact, editor *contactProfileEditor,
 	if !a.demo && a.ensureContactStore() != nil {
 		if editor != nil {
 			editor.Draft = entered
-			editor.SetError(profileNoticeErrorStore)
+			editor.setError(profileNoticeErrorStore)
 		}
 		return false
 	}
 	if ct.Archived {
 		if editor != nil {
-			editor.SetError(profileNoticeArchived)
+			editor.setError(profileNoticeArchived)
 		}
 		return false
 	}
@@ -197,13 +197,13 @@ func (a *appModel) saveContactProfile(ct *contact, editor *contactProfileEditor,
 		active, unknown := a.contactActivity(ct)
 		if unknown || active {
 			if editor != nil {
-				editor.SetError(editor.activityReason())
+				editor.setError(editor.activityReason())
 			}
 			return false
 		}
 		if ct.PiBinding == nil && (!a.demo || ct.SessionID == "") {
 			if editor != nil {
-				editor.SetError(profileNoticeNoConversation)
+				editor.setError(profileNoticeNoConversation)
 			}
 			return false
 		}
@@ -273,12 +273,12 @@ func (a *appModel) saveContactProfile(ct *contact, editor *contactProfileEditor,
 		}
 		if editor != nil {
 			editor.Draft = entered
-			editor.SetError(profileNoticeErrorSave)
+			editor.setError(profileNoticeErrorSave)
 		}
 		return false
 	}
 	if editor != nil {
-		editor.SetProfile(draft)
+		editor.setProfile(draft)
 		editor.Status = profileNoticeSavedDefaults
 		if startNew {
 			editor.Status = profileNoticeSavedNextMessage
@@ -297,13 +297,13 @@ func (a *appModel) archiveContact(contactID string) bool {
 	}
 	if !a.demo && a.ensureContactStore() != nil {
 		if editor := a.profileEditorFor(contactID); editor != nil {
-			editor.SetError(archiveNoticeStore)
+			editor.setError(archiveNoticeStore)
 		}
 		return false
 	}
 	if reason := a.contactArchiveBlocked(ct); reason != "" {
 		if editor := a.profileEditorFor(contactID); editor != nil {
-			editor.SetError(reason)
+			editor.setError(reason)
 		}
 		return false
 	}
@@ -320,7 +320,7 @@ func (a *appModel) archiveContact(contactID string) bool {
 			a.store.State = oldState
 		}
 		if editor := a.profileEditorFor(contactID); editor != nil {
-			editor.SetError(archiveNoticeSave)
+			editor.setError(archiveNoticeSave)
 		}
 		return false
 	}
@@ -341,7 +341,7 @@ func (a *appModel) restoreContact(contactID string) bool {
 	}
 	if !a.demo && a.ensureContactStore() != nil {
 		if editor := a.profileEditorFor(contactID); editor != nil {
-			editor.SetError(restoreNoticeStore)
+			editor.setError(restoreNoticeStore)
 		}
 		return false
 	}
@@ -358,7 +358,7 @@ func (a *appModel) restoreContact(contactID string) bool {
 			a.store.State = oldState
 		}
 		if editor := a.profileEditorFor(contactID); editor != nil {
-			editor.SetError(restoreNoticeSave)
+			editor.setError(restoreNoticeSave)
 		}
 		return false
 	}

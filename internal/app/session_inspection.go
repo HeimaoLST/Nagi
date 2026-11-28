@@ -1,10 +1,12 @@
 package app
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"strings"
 	"time"
 
@@ -541,7 +543,9 @@ func (output *sessionOutputState) projectedText(mode pi.ProductSessionMode, word
 		return output.text
 	}
 	var text strings.Builder
-	text.Grow(int(output.next - output.from))
+	if output.next > output.from {
+		text.Grow(int(min(output.next-output.from, sessionOutputLimit)))
+	}
 	var stream string
 	endOfLine := true
 	for _, chunk := range output.chunks {
@@ -582,6 +586,18 @@ func (s *sessionWorkspaceState) pendingSessionCloses() []pi.ProductSessionCloseP
 			}
 		}
 	}
+	slices.SortFunc(pending, func(a, b pi.ProductSessionCloseParams) int {
+		if order := cmp.Compare(a.BotID, b.BotID); order != 0 {
+			return order
+		}
+		if order := cmp.Compare(a.SessionID, b.SessionID); order != 0 {
+			return order
+		}
+		if order := cmp.Compare(a.Generation, b.Generation); order != 0 {
+			return order
+		}
+		return cmp.Compare(a.OperationID, b.OperationID)
+	})
 	return pending
 }
 

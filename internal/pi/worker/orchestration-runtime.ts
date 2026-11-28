@@ -2,13 +2,12 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { Type, type Static, type TSchema } from 'typebox';
 import { Value } from 'typebox/value';
-import { canonicalJSON, decisionOption, id, noticeSourceRef, noticeUrgency, RequestError, type Operation, type OrchestrationChanged,
+import { canonicalJSON, decisionOption, noticeSourceRef, noticeUrgency, RequestError, type Operation, type OrchestrationChanged,
   type OrchestrationDecision, type OrchestrationMandate, type ProductOpenParams, type ProductParams, type StoredConversationNotice,
   type TimelineChanged } from './protocol.js';
 import { emptyOrchestrationUsage, type EventBatch, type InboxEvent, type OrchestrationActor, type OrchestrationBackoff,
   type ProductSQLite, type RuntimeWatch } from './product-sqlite.js';
 import type { ProductSession } from './product.js';
-import { clipUTF8 } from './product-redactor.js';
 import type { ProviderAttempt } from './route-health.js';
 
 const strict = { additionalProperties: false };
@@ -51,6 +50,7 @@ type Wake = { actor: OrchestrationActor; batch: EventBatch; events: InboxEvent[]
 export class OrchestrationRuntime {
   private readonly active = new Map<string, Running>();
   private readonly sessions = new Map<string, RetainedSession>();
+  private readonly currentWake = new Map<string, Wake>();
   private timer?: ReturnType<typeof setInterval>;
   private scheduled = false;
   private closing = false;
@@ -292,6 +292,56 @@ export class OrchestrationRuntime {
     return `<orchestration_event>\n${value}\n</orchestration_event>`;
   }
 
+  private fitWakePrompt(mandate: OrchestrationMandate, events: InboxEvent[], workingSummary: string | undefined,
+    fixedBytes: number, headroom: number): { events: InboxEvent[]; input: string; workingSummary?: string } {
+    let fitted = events;
+    let summary = workingSummary;
+    let input = this.prompt(mandate, fitted, summary);
+    while (fitted.length > 1 && Math.ceil((fixedBytes + Buffer.byteLength(input)) / 4) > headroom) {
+      fitted = fitted.slice(0, -1);
+      input = this.prompt(mandate, fitted, summary);
+    }
+    if (Math.ceil((fixedBytes + Buffer.byteLength(input)) / 4) > headroom && summary) {
+      summary = undefined;
+      input = this.prompt(mandate, fitted);
+    }
+    if (Math.ceil((fixedBytes + Buffer.byteLength(input)) / 4) > headroom) {
+      throw new RequestError('context_limit', 'The orchestration request exceeds the route context budget');
+    }
+    return { events: fitted, input, workingSummary: summary };
+  }
+
+  private async acquireSession(mandate: OrchestrationMandate, identity: string, fixedBytes: number, inputBytes: number, headroom: number,
+    checkpoint: { revision: number } | undefined, workingSummary: string | undefined, params: ProductOpenParams,
+    tools: ToolDefinition[]): Promise<{ mandate: OrchestrationMandate; session: RetainedSession }> {
+    const key = mandate.mandateId;
+    let row = mandate;
+    let session = this.sessions.get(key);
+    const projected = fixedBytes + inputBytes + (session?.session.historyBytes() ?? 0);
+    if (session && (session.generation !== row.generation || session.identity !== identity || session.turns >= 4 || projected / 4 > headroom * 0.75)) {
+      const at = date(this.deps.now());
+      row = this.storage.orchestrationTransaction(() => {
+        const latest = this.requireMandate(row.ownerBotId, key);
+        if (latest.revision !== row.revision || latest.generation !== row.generation) throw new RequestError('stale_revision', 'The mandate changed');
+        const next = { ...latest, generation: latest.generation + 1, revision: latest.revision + 1, updatedAt: at };
+        this.storage.putCheckpoint({ mandateId: key, generation: next.generation, revision: (checkpoint?.revision ?? 0) + 1,
+          workingSummary: workingSummary ?? '', updatedAt: at });
+        this.storage.putMandate(next);
+        return next;
+      });
+      this.changed('mandate_updated', row);
+      await this.closeSession(key);
+      session = undefined;
+    }
+    if (!session) {
+      const oldest = [...this.sessions.entries()].filter(([id]) => !this.active.has(id)).sort((a, b) => a[1].touched - b[1].touched)[0];
+      if (oldest && this.sessions.size >= 32) await this.closeSession(oldest[0]);
+      session = { session: await this.deps.open(params, tools), generation: row.generation, identity, turns: 0, touched: this.deps.now() };
+      this.sessions.set(key, session);
+    }
+    return { mandate: row, session };
+  }
+
   private async run(initial: OrchestrationMandate, active: Running): Promise<void> {
     const key = initial.mandateId;
     let wake: Wake | undefined;
@@ -304,10 +354,10 @@ export class OrchestrationRuntime {
       let events = this.storage.wakeEvents(row);
       if (!events.length) return;
       const checkpoint = this.storage.checkpoint(key);
-      let input = this.prompt(row, events, checkpoint?.workingSummary);
+      const initialInput = this.prompt(row, events, checkpoint?.workingSummary);
       const tools = this.tools(() => this.currentWake.get(key));
       const toolBytes = Buffer.byteLength(JSON.stringify(tools.map(({ name, description, parameters }) => ({ name, description, parameters }))));
-      const prepared = await this.deps.prepare(row, tools, toolBytes + Buffer.byteLength(input));
+      const prepared = await this.deps.prepare(row, tools, toolBytes + Buffer.byteLength(initialInput));
       release = prepared.release;
       if (active.canceled || this.closing || !this.deps.ownerAvailable(row) || this.storage.mandate(key)?.revision !== row.revision) return;
       const config = prepared.params.configuration!;
@@ -315,40 +365,13 @@ export class OrchestrationRuntime {
       const headroom = contextTokens - config.outputTokens;
       if (headroom <= 0) throw new RequestError('context_limit', 'The orchestration route has no input budget');
       const fixedBytes = Buffer.byteLength(prepared.params.instructions) + toolBytes + 128;
-      let workingSummary = checkpoint?.workingSummary;
-      while (events.length > 1 && Math.ceil((fixedBytes + Buffer.byteLength(input)) / 4) > headroom) {
-        events = events.slice(0, -1);
-        input = this.prompt(row, events, workingSummary);
-      }
-      if (Math.ceil((fixedBytes + Buffer.byteLength(input)) / 4) > headroom && workingSummary) {
-        workingSummary = undefined;
-        input = this.prompt(row, events);
-      }
-      if (Math.ceil((fixedBytes + Buffer.byteLength(input)) / 4) > headroom) throw new RequestError('context_limit', 'The orchestration request exceeds the route context budget');
+      const fitted = this.fitWakePrompt(row, events, checkpoint?.workingSummary, fixedBytes, headroom);
+      events = fitted.events;
+      const input = fitted.input;
       const identity = hash([prepared.params.cwd, prepared.params.instructions, config]);
-      session = this.sessions.get(key);
-      const projected = fixedBytes + Buffer.byteLength(input) + (session?.session.historyBytes() ?? 0);
-      if (session && (session.generation !== row.generation || session.identity !== identity || session.turns >= 4 || projected / 4 > headroom * 0.75)) {
-        const at = date(this.deps.now());
-        row = this.storage.orchestrationTransaction(() => {
-          const latest = this.requireMandate(row.ownerBotId, key);
-          if (latest.revision !== row.revision || latest.generation !== row.generation) throw new RequestError('stale_revision', 'The mandate changed');
-          const next = { ...latest, generation: latest.generation + 1, revision: latest.revision + 1, updatedAt: at };
-          this.storage.putCheckpoint({ mandateId: key, generation: next.generation, revision: (checkpoint?.revision ?? 0) + 1,
-            workingSummary: workingSummary ?? '', updatedAt: at });
-          this.storage.putMandate(next);
-          return next;
-        });
-        this.changed('mandate_updated', row);
-        await this.closeSession(key);
-        session = undefined;
-      }
-      if (!session) {
-        const oldest = [...this.sessions.entries()].filter(([id]) => !this.active.has(id)).sort((a, b) => a[1].touched - b[1].touched)[0];
-        if (oldest && this.sessions.size >= 32) await this.closeSession(oldest[0]);
-        session = { session: await this.deps.open(prepared.params, tools), generation: row.generation, identity, turns: 0, touched: Date.now() };
-        this.sessions.set(key, session);
-      }
+      const acquired = await this.acquireSession(row, identity, fixedBytes, Buffer.byteLength(input), headroom, checkpoint, fitted.workingSummary, prepared.params, tools);
+      row = acquired.mandate;
+      session = acquired.session;
       if (active.canceled || this.closing || !this.deps.ownerAvailable(row) || this.storage.mandate(key)?.revision !== row.revision) return;
       const now = this.deps.now();
       const at = date(now);
@@ -392,7 +415,7 @@ export class OrchestrationRuntime {
       });
       const outcome = await promise;
       session.turns++;
-      session.touched = Date.now();
+      session.touched = this.deps.now();
       this.settle(current, outcome.state, outcome.text, outcome.error, outcome.uncertain);
       settled = true;
       if (outcome.state !== 'completed') await this.closeSession(key);
@@ -408,8 +431,6 @@ export class OrchestrationRuntime {
       if (active.canceled || this.closing) await this.closeSession(key);
     }
   }
-
-  private readonly currentWake = new Map<string, Wake>();
 
   private delayUnavailable(mandate: OrchestrationMandate, error: string): void {
     const at = date(this.deps.now());

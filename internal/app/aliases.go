@@ -135,7 +135,6 @@ type (
 	piConversationBinding       = store.PiConversationBinding
 	piActivityBinding           = store.PiActivityBinding
 	piActivityRun               = store.PiActivityRun
-	piQuestionCall              = store.PiQuestionCall
 	activityQuestion            = store.IssueQuestion
 	activityRequirement         = store.IssueRequirement
 	activityExecution           = store.IssueExecution
@@ -286,7 +285,7 @@ func clonePiActivityBinding(b *piActivityBinding) *piActivityBinding {
 	return store.ClonePiActivityBinding(b)
 }
 func clonePiActivityRun(r *piActivityRun) *piActivityRun { return store.ClonePiActivityRun(r) }
-func clonePiQuestionCall(c *piQuestionCall) *piQuestionCall {
+func clonePiQuestionCall(c *store.PiQuestionCall) *store.PiQuestionCall {
 	return store.ClonePiQuestionCall(c)
 }
 func cloneActivityHandoff(h *activityHandoff) *activityHandoff { return store.CloneIssueHandoff(h) }

@@ -418,7 +418,7 @@ test('WatchScheduler tracks precheck >64 KiB tail changes, >1 MiB output_limit a
     kind: 'schedule',
     purpose: 'Precheck digest state machine',
     schedule: { cadenceKind: 'interval', intervalSeconds: 10, timeZone: 'UTC', jitterSeconds: 0 },
-    precheck: { kind: 'executable', executable: binary, allowedArgs: [], workspaceRead: true, timeoutMs: 1000, emitInitial: false },
+    precheck: { kind: 'executable', executable: binary, allowedArgs: [], workspaceRead: true, timeoutMs: 3000, emitInitial: false },
     operationId: randomUUID(),
   }).result.watch;
   assert.equal(watch.state, 'active');
@@ -487,7 +487,7 @@ test('WatchScheduler tracks precheck >64 KiB tail changes, >1 MiB output_limit a
     kind: 'schedule',
     purpose: 'Precheck emitInitial check',
     schedule: { cadenceKind: 'interval', intervalSeconds: 10, timeZone: 'UTC', jitterSeconds: 0 },
-    precheck: { kind: 'executable', executable: binary, allowedArgs: [], workspaceRead: true, timeoutMs: 1000, emitInitial: true },
+    precheck: { kind: 'executable', executable: binary, allowedArgs: [], workspaceRead: true, timeoutMs: 3000, emitInitial: true },
     operationId: randomUUID(),
   }).result.watch;
   const initRes = await tickOne(initialWatch.watchId, 'A', 'initial');

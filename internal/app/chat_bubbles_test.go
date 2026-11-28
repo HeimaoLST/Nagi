@@ -377,3 +377,47 @@ func TestIMChatBubblesSpacingLinksCopyAndFrostedCreateBotModal(t *testing.T) {
 		t.Fatalf("Bot bubble context menu copy copied %q", tr.Clipboard())
 	}
 }
+
+func TestLatestReadUserMessageIndexAndVisibleReplyBubble(t *testing.T) {
+	now := time.Date(2026, 11, 27, 12, 0, 0, 0, time.UTC)
+	unread := []*message{{Kind: msgUser, Text: "hi"}}
+	if got := latestReadUserMessageIndex(unread, now, false); got != -1 {
+		t.Fatalf("unread message index = %d, want -1", got)
+	}
+
+	readWithActivity := []*message{
+		{Kind: msgUser, Text: "first", History: true},
+		{Kind: msgUser, Text: "second", ReadByBot: true},
+		{Kind: msgActivity, Text: "tool log"},
+	}
+	if got := latestReadUserMessageIndex(readWithActivity, now, false); got != 1 {
+		t.Fatalf("read message before activity index = %d, want 1", got)
+	}
+
+	streamingHidden := []*message{
+		{Kind: msgUser, Text: "second", ReadByBot: true},
+		{Kind: msgContact, Text: "streaming reply", Streaming: true, liveReveal: true, revealedBubbles: 0},
+	}
+	if got := latestReadUserMessageIndex(streamingHidden, now, false); got != 0 {
+		t.Fatalf("streaming unrevealed reply index = %d, want 0", got)
+	}
+	if got := latestReadUserMessageIndex(streamingHidden, now, true); got != 0 {
+		t.Fatalf("streaming incomplete sentence with reduceMotion index = %d, want 0", got)
+	}
+
+	streamingTwo := []*message{
+		{Kind: msgUser, Text: "second", ReadByBot: true},
+		{Kind: msgContact, Text: "First.\n<<<NEXT>>>\nSecond", Streaming: true, liveReveal: true, revealedBubbles: 0},
+	}
+	if got := latestReadUserMessageIndex(streamingTwo, now, true); got != -1 {
+		t.Fatalf("reduceMotion revealed eligible bubble index = %d, want -1", got)
+	}
+
+	alertVisible := []*message{
+		{Kind: msgUser, Text: "second", ReadByBot: true},
+		{Kind: msgContact, AlertTitle: "Interrupted"},
+	}
+	if got := latestReadUserMessageIndex(alertVisible, now, false); got != -1 {
+		t.Fatalf("visible alert reply index = %d, want -1", got)
+	}
+}
