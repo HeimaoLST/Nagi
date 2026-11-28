@@ -2166,5 +2166,36 @@
   "orchestrationSourceUser": "Manual",
   "orchestrationApproved": "Approved",
   "orchestrationRejected": "Rejected",
-  "orchestrationRouteRole": "Route: {role}"
+  "orchestrationRouteRole": "Route: {role}",
+  "orchestrationStatWakes": "Total wakes",
+  "orchestrationStatTokens": "Total tokens",
+  "orchestrationContextBudget": "Context window",
+  "orchestrationChart7DTitle": "7-day wake activity",
+  "orchestrationChart7DTooltip": "{day}: {wakes} wakes · {coalesced} coalesced",
+  "@orchestrationChart7DTooltip": {
+    "placeholders": {
+      "day": {
+        "type": "String"
+      },
+      "wakes": {
+        "type": "int"
+      },
+      "coalesced": {
+        "type": "int"
+      }
+    }
+  },
+  "orchestrationRhythm24HTitle": "24h wake rhythm",
+  "orchestrationRhythmNow": "Now",
+  "orchestrationRhythmHourTooltip": "{hour}: {runs} wakes",
+  "@orchestrationRhythmHourTooltip": {
+    "placeholders": {
+      "hour": {
+        "type": "String"
+      },
+      "runs": {
+        "type": "int"
+      }
+    }
+  }
 }

@@ -1309,7 +1309,7 @@ func (a *appModel) mcpSecretFields(c *ui.Context, t *ui.Theme, msgs locales.Mess
 						Label(msgs.CapSecretValue()).Placeholder(placeholder).Password().Disabled(blocked || row.clear)
 					value.OnChange(func() { e.changed("secrets") })
 					if row.saved {
-						ui.Checkbox(c, &row.clear, msgs.CapClear()).Disabled(blocked).OnChange(func() {
+						theme.Checkbox(c, &row.clear, msgs.CapClear()).Disabled(blocked).OnChange(func() {
 							if row.clear {
 								row.value = ""
 							}

@@ -338,14 +338,16 @@ func (a *appModel) avatarRailRow(c *ui.Context, t *ui.Theme, i int) {
 	row := ui.ButtonBase(c).Key(ct.ID).Label(label).Description(status).
 		Selected(i == a.selected).FillWidth().Height(44).Padding(4).Radius(8).
 		AlignItems(ui.Center).Justify(ui.Center).Background(ui.Transparent).BorderWidth(0).TextColor(t.Text)
+	cutout := a.workTheme.Rail
 	if i == a.selected {
 		row.Background(t.Selection).TextColor(t.Text)
+		cutout = t.Selection
 	}
 	row = appTooltip(c, row, tip)
 	row.OnClick(func() { a.selectContact(i) })
 	a.bindBotRowMenu(row, ct.ID, msgs)
 	row.Children(func() {
-		botStatusAvatar(c, t, ct, 24, state)
+		botStatusAvatar(c, t, ct, 24, state, cutout)
 	})
 }
 
@@ -449,8 +451,17 @@ func (a *appModel) railRow(c *ui.Context, t *ui.Theme, i int) {
 	row.OnClick(func() { a.selectContact(i) })
 	row = appTooltip(c, row, ct.Name+"\n"+line)
 	a.bindBotRowMenu(row, ct.ID, msgs)
+	cutout := a.workTheme.Rail
+	switch {
+	case row.Pressed():
+		cutout = t.SurfacePressed
+	case row.Hovered():
+		cutout = t.SurfaceHover
+	case selected:
+		cutout = t.Selection
+	}
 	row.Children(func() {
-		botStatusAvatar(c, t, ct, 28, state)
+		botStatusAvatar(c, t, ct, 28, state, cutout)
 		ui.Column(c).Grow(1).MinWidth(0).Gap(2).Children(func() {
 			ui.Row(c).AlignItems(ui.Center).Gap(4).Children(func() {
 				nameWeight := 400
@@ -468,17 +479,21 @@ func (a *appModel) railRow(c *ui.Context, t *ui.Theme, i int) {
 	})
 }
 
-func contactAvatar(c *ui.Context, t *ui.Theme, ct *contact, size float32) {
+func contactAvatar(c *ui.Context, t *ui.Theme, ct *contact, size float32, archived ...bool) {
 	var id, name string
 	var builtin bool
 	if ct != nil {
 		id, name, builtin = ct.ID, ct.Name, ct.isBuiltin()
 	}
-	botStoneAvatar(c, t, id, name, builtin, size)
+	botStoneAvatar(c, t, id, name, builtin, size, archived...)
 }
 
-func botStoneAvatar(c *ui.Context, t *ui.Theme, id, name string, builtin bool, size float32) {
+func botStoneAvatar(c *ui.Context, t *ui.Theme, id, name string, builtin bool, size float32, archived ...bool) {
 	spec := resolveBotAvatar(t, id, name, builtin)
+	if len(archived) > 0 && archived[0] {
+		gray := uint8(math.Round(0.2126*float64(spec.BodyColor.R) + 0.7152*float64(spec.BodyColor.G) + 0.0722*float64(spec.BodyColor.B)))
+		spec.BodyColor = spec.BodyColor.Mix(ui.RGB(gray, gray, gray), .55)
+	}
 	ui.Box(c).Size(size, size).MinWidth(size).Shrink(0).AlignItems(ui.Center).Justify(ui.Center).IgnoreInput(true).Children(func() {
 		ui.Icon(c, spec.Body).Size(size, size).TextColor(spec.BodyColor).IgnoreInput(true)
 		ui.Icon(c, spec.Eyes).Absolute().Left(0).Top(0).Size(size, size).TextColor(spec.EyeColor).IgnoreInput(true)
@@ -739,7 +754,7 @@ func (a *appModel) header(c *ui.Context, t *ui.Theme, ct *contact, visual botSta
 	header.Children(func() {
 		ui.Row(c).FillWidth().MinWidth(0).Padding(8, 16).AlignItems(ui.Center).Gap(8).Children(func() {
 			c.Key(ct.ID)
-			botStatusAvatar(c, t, ct, 28, visual)
+			botStatusAvatar(c, t, ct, 28, visual, t.Background)
 			ui.Column(c).Grow(1).MinWidth(0).Gap(1).Children(func() {
 				title := ui.Text(c, ct.Name).FontSize(typeContactTitle).FontWeight(600).FixedLineHeight(lineHeader).
 					TextColor(t.Text).FillWidth().MaxLines(1).Ellipsis("…")
@@ -1486,8 +1501,9 @@ func (a *appModel) composer(c *ui.Context, t *ui.Theme, state connectionViewStat
 		wb := a.workTheme
 		card := ui.Column(c).Key(ct.ID).FillWidth().Padding(10, 14, 8, 14).Gap(4).Radius(16)
 		surface, border := wb.ComposerSurface, wb.ComposerBorder
-		if c.Focused(a.composerHandle) {
-			border = t.Focus
+		focused := c.Focused(a.composerHandle)
+		if focused {
+			border = theme.InputFocusInk(t)
 		}
 		dragOver := false
 		if !a.shutdownStarted && !a.dataRecoveryBlocksChanges() {
@@ -1500,7 +1516,9 @@ func (a *appModel) composer(c *ui.Context, t *ui.Theme, state connectionViewStat
 			border, surface = t.Accent, surface.Mix(t.Accent, .06)
 		}
 		card.Border(1, border).Background(surface)
-		if t.Dark {
+		if focused && !dragOver {
+			card.Shadow(0, 0, 0, 3, theme.InputFocusHalo(t))
+		} else if t.Dark {
 			card.Shadow(0, 2, 12, 0, ui.RGBA(0, 0, 0, .24))
 		} else {
 			card.Shadow(0, 2, 10, 0, ui.RGBA(0, 0, 0, .05))

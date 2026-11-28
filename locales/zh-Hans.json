@@ -1472,5 +1472,13 @@
   "orchestrationSourceUser": "手动",
   "orchestrationApproved": "已批准",
   "orchestrationRejected": "已拒绝",
-  "orchestrationRouteRole": "路由：{role}"
+  "orchestrationRouteRole": "路由：{role}",
+  "orchestrationStatWakes": "累计唤醒",
+  "orchestrationStatTokens": "累计 Tokens",
+  "orchestrationContextBudget": "上下文容量",
+  "orchestrationChart7DTitle": "7 日唤醒趋势",
+  "orchestrationChart7DTooltip": "{day}：唤醒 {wakes} 次 · 合并 {coalesced} 次",
+  "orchestrationRhythm24HTitle": "24 小时唤醒节拍",
+  "orchestrationRhythmNow": "现在",
+  "orchestrationRhythmHourTooltip": "{hour}：唤醒 {runs} 次"
 }

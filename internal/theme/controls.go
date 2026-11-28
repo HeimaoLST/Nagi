@@ -5,6 +5,7 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
+// StyleFrostedModalBackdrop applies a 12-DIP Gaussian glass blur and theme-matched dim scrim behind modal dialogs.
 func StyleFrostedModalBackdrop(backdrop ui.Element, t *ui.Theme) {
 	tint := ui.RGBA(20, 21, 18, 0.22)
 	if t.Dark {
@@ -15,10 +16,14 @@ func StyleFrostedModalBackdrop(backdrop ui.Element, t *ui.Theme) {
 	})
 }
 
+// PreferenceGroup wraps grouped Settings preference rows inside a rounded 1-DIP bordered surface card.
 func PreferenceGroup(c *ui.Context, t *ui.Theme, children func()) {
 	ui.Column(c).FillWidth().MinWidth(0).Padding(6, 18).Background(t.Surface).Border(1, t.Border).Radius(CardRadius).Children(children)
 }
 
+// PreferenceSection renders a section heading above a bordered PreferenceGroup card.
+//
+//	theme.PreferenceSection(c, t, msgs.AppearanceHeading(), func() { ... })
 func PreferenceSection(c *ui.Context, t *ui.Theme, title string, children func()) {
 	ui.Column(c).FillWidth().Gap(8).Children(func() {
 		PreferenceSectionHeader(c, t, title)
@@ -26,10 +31,12 @@ func PreferenceSection(c *ui.Context, t *ui.Theme, title string, children func()
 	})
 }
 
+// PreferenceSectionHeader renders a standalone level-2 group heading without trailing actions or subtitle.
 func PreferenceSectionHeader(c *ui.Context, t *ui.Theme, title string) {
 	PreferenceSectionHeaderWithSubtitle(c, t, title, "")
 }
 
+// PreferenceSectionHeaderWithSubtitle renders a wrapping group heading with optional muted subtitle and right-aligned actions.
 func PreferenceSectionHeaderWithSubtitle(c *ui.Context, t *ui.Theme, title, subtitle string, trailing ...func()) {
 	ui.Row(c).FillWidth().MinWidth(0).Padding(0, 2).Wrap().AlignItems(ui.Center).Gap(8).Children(func() {
 		ui.Row(c).MinWidth(0).Grow(1).Wrap().AlignItems(ui.Center).Gap(8).Children(func() {
@@ -44,6 +51,10 @@ func PreferenceSectionHeaderWithSubtitle(c *ui.Context, t *ui.Theme, title, subt
 	})
 }
 
+// SettingsPreferenceRow aligns a responsive label/description column against an end-aligned control slot.
+// Pass true for last on the final row of a PreferenceGroup to omit the trailing bottom hairline divider:
+//
+//	theme.SettingsPreferenceRow(c, t, label, desc, func() { theme.ToggleSwitch(c, &on, label) }, true)
 func SettingsPreferenceRow(c *ui.Context, t *ui.Theme, label, description string, control func(), last ...bool) {
 	row := ui.Row(c).FillWidth().MinWidth(0).Wrap().AlignItems(ui.Center).Gap(12).Padding(12, 0)
 	if len(last) == 0 || !last[0] {
