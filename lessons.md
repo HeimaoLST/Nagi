@@ -168,7 +168,7 @@
 
 **Cause or correction:** Initial account defaults participate in the runtime clamp. Providers advertise token limits in both decimal and binary units.
 
-**Prevention:** Set preset ceilings to cover provider model ranges and initialize unedited drafts from chat-eligible discovery. Preserve explicit limits and show exact token counts alongside compact labels that handle both unit conventions.
+**Prevention:** Set preset ceilings to cover provider model ranges and initialize unedited drafts from chat-eligible discovery. Preserve explicit limits and show exact token counts alongside compact labels that handle both unit conventions. Check `%1000 == 0` before `%1024 == 0` to preserve decimal labels for shared multiples, since `lcm(1000, 1024) = 128000`.
 
 ## Product State and Recovery
 

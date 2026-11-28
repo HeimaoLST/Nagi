@@ -1393,11 +1393,11 @@ func providerTokenBadge(tokens int) string {
 		rounded := math.Round(count*10/1_000_000) / 10
 		return strings.TrimSuffix(strconv.FormatFloat(rounded, 'f', 1, 64), ".0") + "M"
 	}
-	if tokens%1024 == 0 {
-		return strconv.Itoa(tokens/1024) + "K"
-	}
 	if tokens%1000 == 0 {
 		return strconv.Itoa(tokens/1000) + "K"
+	}
+	if tokens%1024 == 0 {
+		return strconv.Itoa(tokens/1024) + "K"
 	}
 	for _, tier := range [...]int{4, 8, 16, 32, 64, 96, 100, 128, 160, 200, 256, 272, 300, 384, 400, 500, 512, 768} {
 		for _, unit := range [...]int{1000, 1024} {
