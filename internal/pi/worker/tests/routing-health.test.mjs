@@ -1,4 +1,8 @@
 import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
+import { mkdirSync, mkdtempSync, realpathSync, rmSync } from 'node:fs';
+import { createServer } from 'node:http';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import { pathToFileURL } from 'node:url';
@@ -15,11 +19,13 @@ const [
   modelRouter,
   modelCatalog,
   activityControl,
+  botTemplate,
 ] = await Promise.all([
   load('route-health.js'),
   load('model-router.js'),
   load('model-catalog.js'),
   load('activity-control.js'),
+  load('bot-template.js'),
 ]);
 
 const openAiAccount = (overrides = {}) => ({
@@ -347,4 +353,402 @@ test('activity control renders non-mutating whiteboard, steer envelopes, and pre
   ]).length, 0);
   assert.equal(activityControl.parseNomination('{"evidenceId":"r-1","optionId":"markdown"}', prefs)?.selectedOptionId, 'markdown');
   assert.equal(activityControl.parseNomination('{"evidenceId":"r-1","extra":1}', prefs), undefined);
+});
+
+test('model catalog prioritizes discovered /models limits, guards equal output caps, and honors overrides', t => {
+  modelCatalog.clearDiscoveredLimits();
+  t.after(() => modelCatalog.clearDiscoveredLimits());
+
+  const acc = openAiAccount({ contextTokens: 2000000, outputTokens: 200000 });
+  const before = modelCatalog.describeModel(acc, 'gpt-4o-mini');
+  assert.equal(before.contextTokens, 128000);
+  assert.equal(before.outputTokens, 16384);
+
+  modelCatalog.recordDiscoveredLimits('https://api.openai.com/v1/', 'openai-responses', new Map([
+    ['gpt-4o-mini', { contextTokens: 512000, outputTokens: 65536 }],
+    ['gpt-5', { contextTokens: 400000, outputTokens: 400000 }],
+    ['gw-equal-small', { contextTokens: 16384, outputTokens: 16384 }],
+  ]));
+
+  const discoveredMini = modelCatalog.describeModel(acc, 'gpt-4o-mini');
+  assert.equal(discoveredMini.contextTokens, 512000);
+  assert.equal(discoveredMini.outputTokens, 65536);
+  const routed = modelRouter.resolveRole(
+    [{ ...acc, models: ['gpt-4o-mini'], enabledModels: ['gpt-4o-mini'] }],
+    1,
+    'balanced',
+    'coding',
+    { requirements: { requiresTools: true, inputTokens: 300000 }, credential: () => 'ready', cooldown: () => undefined },
+  );
+  assert.equal(routed.route?.resolvedModel, 'gpt-4o-mini');
+  assert.equal(routed.route?.contextTokens, 512000);
+
+  const equalGpt5 = modelCatalog.describeModel(acc, 'gpt-5');
+  assert.equal(equalGpt5.contextTokens, 400000);
+  assert.equal(equalGpt5.outputTokens, 128000);
+
+  const equalSmall = modelCatalog.describeModel(acc, 'gw-equal-small');
+  assert.equal(equalSmall.contextTokens, 16384);
+  assert.equal(equalSmall.outputTokens, 4096);
+
+  const overridden = modelCatalog.describeModel({
+    ...acc,
+    modelOverrides: [{ id: 'gpt-4o-mini', contextTokens: 64000, outputTokens: 4096 }],
+  }, 'gpt-4o-mini');
+  assert.equal(overridden.contextTokens, 64000);
+  assert.equal(overridden.outputTokens, 4096);
+
+  const accountCapped = modelCatalog.describeModel({ ...acc, contextTokens: 32000 }, 'gpt-4o-mini');
+  assert.equal(accountCapped.contextTokens, 32000);
+  assert.equal(accountCapped.outputTokens, 8000);
+});
+
+test('model catalog supplement fallback avoids identity/capability leakage and prefers official vendors', () => {
+  const priv = openAiAccount({
+    providerId: 'private',
+    wireApi: 'openai-completions',
+    baseUrl: 'https://priv.example/v1',
+    defaultModel: 'glm-5.3-flash',
+    contextTokens: 2000000,
+    outputTokens: 500000,
+  });
+
+  const bareGlm = modelCatalog.describeModel(priv, 'glm-5.3-flash');
+  assert.equal(bareGlm.canonicalId, 'custom:7:private:glm-5.3-flash');
+  assert.equal(bareGlm.reasoning, false);
+  assert.equal(bareGlm.isChat, null);
+  assert.equal(bareGlm.toolCall, null);
+  assert.equal(bareGlm.contextTokens, 1000000);
+  assert.equal(bareGlm.outputTokens, 131072);
+
+  const qualifiedGlm = modelCatalog.describeModel(priv, 'zai-org/GLM-5.3-Flash');
+  assert.equal(qualifiedGlm.canonicalId, 'custom:7:private:zai-org/GLM-5.3-Flash');
+  assert.equal(qualifiedGlm.reasoning, false);
+  assert.equal(qualifiedGlm.isChat, null);
+  assert.equal(qualifiedGlm.toolCall, null);
+  assert.equal(qualifiedGlm.contextTokens, 1048576);
+  assert.equal(qualifiedGlm.outputTokens, 131072);
+
+  const privGpt54 = modelCatalog.describeModel({ ...priv, contextTokens: 1000000 }, 'gpt-5.4');
+  assert.equal(privGpt54.canonicalId, 'custom:7:private:gpt-5.4');
+  assert.equal(privGpt54.reasoning, false);
+  assert.equal(privGpt54.isChat, null);
+  assert.equal(privGpt54.toolCall, null);
+  assert.equal(privGpt54.contextTokens, 1000000);
+
+  const responsesFallback = modelCatalog.describeModel({ ...priv, wireApi: 'openai-responses' }, 'qwen3-vl-plus');
+  assert.equal(responsesFallback.canonicalId, 'custom:7:private:qwen3-vl-plus');
+  assert.equal(responsesFallback.reasoning, false);
+  assert.equal(responsesFallback.isChat, null);
+  assert.equal(responsesFallback.toolCall, null);
+  assert.equal(responsesFallback.contextTokens, 262144);
+  assert.equal(responsesFallback.outputTokens, 32768);
+
+  const minimaxi = modelCatalog.describeModel(openAiAccount({
+    providerId: 'mm-cn',
+    wireApi: 'openai-completions',
+    baseUrl: 'https://api.minimaxi.com/v1',
+    defaultModel: 'MiniMax-M2.5',
+  }), 'MiniMax-M2.5');
+  assert.equal(minimaxi.canonicalId, 'minimax/MiniMax-M2.5');
+  assert.equal(minimaxi.isChat, true);
+
+  const minimaxChat = modelCatalog.describeModel(openAiAccount({
+    providerId: 'mm-chat',
+    wireApi: 'openai-completions',
+    baseUrl: 'https://api.minimax.chat/v1',
+    defaultModel: 'MiniMax-M2.5',
+  }), 'MiniMax-M2.5');
+  assert.equal(minimaxChat.canonicalId, 'minimax/MiniMax-M2.5');
+  assert.equal(minimaxChat.isChat, true);
+
+  const googleOpenai = modelCatalog.describeModel(openAiAccount({
+    providerId: 'gg',
+    wireApi: 'openai-completions',
+    baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
+    defaultModel: 'gemini-2.5-flash',
+    contextTokens: 2000000,
+    outputTokens: 200000,
+  }), 'gemini-2.5-flash');
+  assert.equal(googleOpenai.contextTokens, 1048576);
+  assert.equal(googleOpenai.outputTokens, 65535);
+});
+
+test('compiled worker strips PI_* environment variables from bash child processes while keeping non-PI_* vars', async t => {
+  const root = mkdtempSync(join(realpathSync(tmpdir()), 'nagi-pi-env-'));
+  const stateDir = join(root, 'state');
+  const cwd = join(root, 'work');
+  mkdirSync(cwd, { recursive: true });
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+
+  let capturedToolOutput = '';
+  let requestCount = 0;
+  const server = createServer((req, res) => {
+    const chunks = [];
+    req.on('data', chunk => chunks.push(chunk));
+    req.on('end', () => {
+      requestCount++;
+      const payload = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+      res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' });
+      if (requestCount === 1) {
+        const firstChunk = {
+          id: 'chatcmpl-env-1',
+          object: 'chat.completion.chunk',
+          created: 1700000000,
+          model: 'gpt-4o-mini',
+          choices: [{
+            index: 0,
+            delta: {
+              role: 'assistant',
+              tool_calls: [{
+                index: 0,
+                id: 'call_env_1',
+                type: 'function',
+                function: { name: 'bash', arguments: JSON.stringify({ command: 'env' }) },
+              }],
+            },
+            finish_reason: null,
+          }],
+        };
+        const stopChunk = {
+          id: 'chatcmpl-env-1',
+          object: 'chat.completion.chunk',
+          created: 1700000000,
+          model: 'gpt-4o-mini',
+          choices: [{ index: 0, delta: {}, finish_reason: 'tool_calls' }],
+        };
+        res.end(`data: ${JSON.stringify(firstChunk)}\n\ndata: ${JSON.stringify(stopChunk)}\n\ndata: [DONE]\n\n`);
+        return;
+      }
+      const toolMsg = (payload.messages ?? []).find(msg => msg.role === 'tool' && msg.tool_call_id === 'call_env_1');
+      capturedToolOutput = typeof toolMsg?.content === 'string'
+        ? toolMsg.content
+        : Array.isArray(toolMsg?.content) ? toolMsg.content.map(part => part.text ?? '').join('') : '';
+      const replyChunk = {
+        id: 'chatcmpl-env-2',
+        object: 'chat.completion.chunk',
+        created: 1700000001,
+        model: 'gpt-4o-mini',
+        choices: [{ index: 0, delta: { role: 'assistant', content: 'env checked' }, finish_reason: null }],
+      };
+      const doneChunk = {
+        id: 'chatcmpl-env-2',
+        object: 'chat.completion.chunk',
+        created: 1700000001,
+        model: 'gpt-4o-mini',
+        choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
+      };
+      res.end(`data: ${JSON.stringify(replyChunk)}\n\ndata: ${JSON.stringify(doneChunk)}\n\ndata: [DONE]\n\n`);
+    });
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => new Promise(resolve => server.close(resolve)));
+  const address = server.address();
+  const baseUrl = `http://127.0.0.1:${address.port}/v1`;
+
+  const child = spawn(process.execPath, [join(distDir, 'worker.js'), '--state-dir', stateDir], {
+    stdio: ['pipe', 'pipe', 'pipe'],
+    env: {
+      ...process.env,
+      PI_MODEL: 'leaked-model',
+      PI_PROVIDER: 'leaked-provider',
+      PI_SESSION_FILE: '/tmp/leaked-session',
+      PI_REASONING_LEVEL: 'high',
+      PI_EXTRA_SECRET: 'leaked-extra',
+      NAGI_SURVIVOR_ENV: 'keep-123',
+    },
+  });
+
+  const stderrChunks = [];
+  child.stderr.on('data', chunk => stderrChunks.push(chunk));
+
+  let partial = '';
+  const frames = [];
+  const waiters = [];
+  child.stdout.on('data', chunk => {
+    partial += chunk.toString('utf8');
+    let newline;
+    while ((newline = partial.indexOf('\n')) >= 0) {
+      const line = partial.slice(0, newline);
+      partial = partial.slice(newline + 1);
+      if (!line.trim()) continue;
+      const frame = JSON.parse(line);
+      frames.push(frame);
+      for (let i = waiters.length - 1; i >= 0; i--) {
+        if (waiters[i].predicate(frame)) {
+          const [match] = waiters.splice(i, 1);
+          match.resolve(frame);
+        }
+      }
+    }
+  });
+
+  const waitForFrame = predicate => {
+    const existing = frames.find(predicate);
+    if (existing) return Promise.resolve(existing);
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error(`Timed out waiting for frame; stderr=${Buffer.concat(stderrChunks).toString('utf8')}`)), 15000);
+      waiters.push({
+        predicate,
+        resolve: frame => {
+          clearTimeout(timer);
+          resolve(frame);
+        },
+      });
+    });
+  };
+
+  const send = obj => child.stdin.write(JSON.stringify(obj) + '\n');
+
+  const ready = await waitForFrame(frame => frame.type === 'ready');
+  const bashCatalog = ready.builtinCatalog.supported.find(tool => tool.name === 'bash');
+  assert.ok(bashCatalog);
+  assert.equal(bashCatalog.description.includes('PI_SESSION'), false);
+  assert.equal(bashCatalog.description.includes('PI_MODEL'), false);
+
+  send({
+    v: 1,
+    id: '1',
+    method: 'configure',
+    params: {
+      wireApi: 'openai-completions',
+      baseUrl,
+      apiKey: 'sk-loopback',
+      credentialSource: 'src-1',
+      model: 'gpt-4o-mini',
+      contextTokens: 131072,
+      outputTokens: 4096,
+    },
+  });
+  const cfgResp = await waitForFrame(frame => frame.type === 'response' && frame.id === '1');
+  assert.equal(cfgResp.ok, true);
+
+  send({
+    v: 1,
+    id: '2',
+    method: 'context.open',
+    params: {
+      contextId: 'ctx-1',
+      botId: 'bot-1',
+      purpose: 'conversation',
+      selectionRevision: 1,
+      instructions: 'Test env.',
+      cwd,
+      used: false,
+      codingTools: ['bash'],
+      domainTools: [],
+    },
+  });
+  const openResp = await waitForFrame(frame => frame.type === 'response' && frame.id === '2');
+  assert.equal(openResp.ok, true);
+
+  send({
+    v: 1,
+    id: '3',
+    method: 'run.start',
+    params: { contextId: 'ctx-1', runId: 'run-1', text: 'Inspect env' },
+  });
+  const startResp = await waitForFrame(frame => frame.type === 'response' && frame.id === '3');
+  assert.equal(startResp.ok, true);
+
+  const settled = await waitForFrame(frame => frame.type === 'event' && frame.event === 'run.settled');
+  assert.equal(settled.data.status, 'completed');
+
+  send({ v: 1, id: '4', method: 'shutdown', params: {} });
+  const shutResp = await waitForFrame(frame => frame.type === 'response' && frame.id === '4');
+  assert.equal(shutResp.ok, true);
+
+  const exitCode = await new Promise(resolve => child.once('exit', resolve));
+  assert.equal(exitCode, 0);
+  assert.equal(capturedToolOutput.includes('NAGI_SURVIVOR_ENV=keep-123'), true);
+  for (const forbidden of ['PI_MODEL=', 'PI_PROVIDER=', 'PI_SESSION_ID=', 'PI_SESSION_FILE=', 'PI_REASONING_LEVEL=', 'PI_CODING_AGENT_DIR=', 'PI_EXTRA_SECRET=']) {
+    assert.equal(capturedToolOutput.includes(forbidden), false, `unexpected leaked env var ${forbidden} in ${capturedToolOutput}`);
+  }
+  assert.equal(/^PI_[A-Z0-9_]*=/m.test(capturedToolOutput), false);
+});
+
+test('bot-template v2 enforces voice presets, empty purpose omission, legacy cold reload, and orchestration prompt', () => {
+  assert.equal(botTemplate.BOT_VOICE_PRESETS.length, 6);
+  const voice = botTemplate.defaultBotVoice('Atlas');
+  assert.equal(botTemplate.defaultBotVoice('  Atlas  '), voice);
+  assert.equal(botTemplate.BOT_VOICE_PRESETS.includes(voice), true);
+
+  const defaultPrompt = botTemplate.composeBotSystemPrompt({
+    profile: { name: 'Atlas', role: 'Reviewer', purpose: '   ', instructions: '', workspace: '', codingTools: null },
+    cwd: '/work',
+    foreground: true,
+  });
+  assert.equal(defaultPrompt.startsWith(botTemplate.NAGI_BOT_MASTER_TEMPLATE), true);
+  assert.equal(defaultPrompt.includes(`Default Voice: ${voice}`), true);
+  assert.equal(defaultPrompt.includes('Purpose:'), false);
+  assert.equal(defaultPrompt.includes('Behavior Instructions:'), false);
+
+  const explicitPrompt = botTemplate.composeBotSystemPrompt({
+    profile: { name: 'Atlas', role: '', purpose: 'Audit PRs', instructions: 'Stay terse.', workspace: '', codingTools: null },
+    cwd: '/work',
+    foreground: true,
+  });
+  assert.equal(explicitPrompt.includes('Default Voice:'), false);
+  assert.equal(explicitPrompt.includes('Purpose:\nAudit PRs'), true);
+  assert.equal(explicitPrompt.includes('Behavior Instructions:\nStay terse.'), true);
+
+  const architectPrompt = botTemplate.composeBotSystemPrompt({
+    profile: { name: 'PandoraBox', role: '', purpose: 'Design bots', instructions: '', workspace: '', codingTools: null },
+    cwd: '/work',
+    foreground: true,
+    systemKind: botTemplate.SYSTEM_KIND_BOT_ARCHITECT,
+  });
+  assert.equal(architectPrompt.includes('Default Voice:'), false);
+  assert.equal(architectPrompt.includes(botTemplate.PANDORABOX_ARCHITECT_INSTRUCTIONS), true);
+
+  for (const legacy of ['You are Nagi.', 'You are Nagi.\nLegacy stub line']) {
+    const upgraded = botTemplate.composeBotSystemPrompt({
+      profile: { name: 'Atlas', role: 'Reviewer', purpose: 'Check diffs', instructions: '', workspace: '', codingTools: null },
+      cwd: '/work',
+      foreground: true,
+      skills: '<available_skills>\ns1\n</available_skills>',
+      lastingRules: '- Rule 1',
+      capturedInstructions: legacy,
+    });
+    assert.equal(upgraded.startsWith(botTemplate.NAGI_BOT_MASTER_TEMPLATE), true);
+    assert.equal(upgraded.includes('Name: Atlas'), true);
+    assert.equal(upgraded.includes('<available_skills>\ns1\n</available_skills>'), true);
+    assert.equal(upgraded.includes('Lasting Rules:\n- Rule 1'), true);
+  }
+
+  const modernCaptured = botTemplate.composeBotSystemPrompt({
+    profile: { name: 'OldName', role: '', purpose: 'Old purpose', instructions: 'Old tone', workspace: '', codingTools: null },
+    cwd: '/work',
+    foreground: true,
+    skills: '<available_skills>\nold\n</available_skills>',
+    lastingRules: '- Old rule',
+  });
+  const modernReloaded = botTemplate.composeBotSystemPrompt({
+    profile: { name: 'NewName', role: '', purpose: 'New purpose', instructions: 'New tone', workspace: '', codingTools: null },
+    cwd: '/work',
+    foreground: true,
+    skills: '<available_skills>\nnew\n</available_skills>',
+    lastingRules: '- New rule',
+    capturedInstructions: modernCaptured,
+  });
+  assert.equal(modernReloaded.includes('Name: OldName'), true);
+  assert.equal(modernReloaded.includes('Name: NewName'), false);
+  assert.equal(modernReloaded.includes('<available_skills>\nnew\n</available_skills>'), true);
+  assert.equal(modernReloaded.includes('Lasting Rules:\n- New rule'), true);
+
+  const orchPrompt = botTemplate.composeOrchestrationSystemPrompt({
+    profile: { name: 'Atlas', role: 'Ops', purpose: 'Monitor', instructions: 'Custom', workspace: '', codingTools: null },
+    cwd: '/work',
+    lastingRules: '- Escalate P0',
+  });
+  assert.equal(orchPrompt.startsWith('You are a long-lived Nagi Bot teammate.'), true);
+  assert.equal(botTemplate.isNagiBotSystemPrompt(orchPrompt), true);
+  assert.equal(orchPrompt.includes('<<<NEXT>>>'), false);
+  assert.equal(orchPrompt.includes('activity_delegate'), false);
+  assert.equal(orchPrompt.includes('orchestration_finish'), true);
+  assert.equal(orchPrompt.includes('conversation_notify'), true);
+  assert.equal(orchPrompt.includes('orchestration_request_decision'), true);
+  assert.equal(orchPrompt.includes('Bot Identity\nName: Atlas\nRole: Ops\nPurpose:\nMonitor'), true);
+  assert.equal(orchPrompt.includes('Default working directory: /work.'), true);
+  assert.equal(orchPrompt.includes('Lasting Rules:\n- Escalate P0'), true);
 });
