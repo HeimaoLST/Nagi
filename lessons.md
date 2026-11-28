@@ -50,6 +50,14 @@
 
 **Prevention:** Reuse pinned components, official examples and shared helpers; record the concrete unsupported behavior before custom UI. Reacquire the action after navigation, verify expansion/current editor state and actual text-input versus button focus, and use exact labels with positive viewport geometry. Prefer the real pane or bounded keyboard traversal, and inspect all affected helpers rather than fixing one control.
 
+### Check shared select width in forms
+
+**Problem:** The New Bot Voice selector rendered at 160 DIP despite `FillWidth()`, leaving insufficient space for long English choices.
+
+**Cause or correction:** `theme.PreferenceSelect` applies a maximum width for preference rows that also constrains the control in a stacked form.
+
+**Prevention:** Set the selector maximum to the dialog width when the form needs a full-width control. Inspect the composed dialog and verify the available space for the longest localized choice.
+
 ### Drive PopoverMenu overlays and modal opener focus explicitly
 
 **Problem:** Switching a row menu from native `ContextMenu` to MyGo’s themed `PopoverMenu` broke `Tester.ChooseMenuItem` fixtures, duplicate panel headings captured `Tester.Click`, and dismissing a `DialogBase`/`Modal` lost return focus to the opener.
@@ -154,6 +162,14 @@
 
 **Prevention:** Remove the retired panel, entry points, state and dedicated tests together. Inspect remaining read-only information separately and retain its full-value tooltip, shared helpers and live behavior. Do not add placeholder panels or replacement tests for a feature the user no longer wants.
 
+### Preserve high-context model limits and labels
+
+**Problem:** A provider preset ceiling of `131072` silently capped 1M models when routing took the minimum of the account and model limits. Dividing only by 1024 turned a decimal `1000000` context into `976K`.
+
+**Cause or correction:** Initial account defaults participate in the runtime clamp. Providers advertise token limits in both decimal and binary units.
+
+**Prevention:** Set preset ceilings to cover provider model ranges and initialize unedited drafts from chat-eligible discovery. Preserve explicit limits and show exact token counts alongside compact labels that handle both unit conventions.
+
 ## Product State and Recovery
 
 ### Keep admitted work, backup and unknown delivery distinct
@@ -246,6 +262,14 @@
 
 ## Pi, SDK, and Process Integration
 
+### Keep Pi shell metadata private and upgrade legacy prompts on cold reload
+
+**Problem:** Pi session metadata could reach `bash` child environments, and a captured `You are Nagi.` stub could persist after the Bot system prompt changed.
+
+**Cause or correction:** SDK session variables can be injected or inherited. Cold prompt refresh preserved the captured prefix even when it was the legacy stub.
+
+**Prevention:** Disable `exposeSessionEnvironment` and filter inherited `PI_*` names in the `spawnHook`. Rebuild the legacy stub at the cold reload boundary on the same transcript and preserve modern captured prompts through ordinary turns.
+
 ### Verify exact SDK types and owned defaults
 
 **Problem:** An adapter used a nonexistent settings setter, treated credential metadata as contents, duplicated transcript types and manually flushed file descriptors. Default changes globally updated existing contexts.
@@ -304,17 +328,17 @@
 
 ### Select pinned compiler and formatter, then parse wrappers
 
-**Problem:** Offline phases selected system Go 1.27.1 instead of cached 1.27.3, and a formatting phase probed the wrong formatter. A wrapper had a missing parenthesis; a last-function deletion left an EOF blank line; shell quoting failed before execution.
+**Problem:** Offline phases selected system Go 1.27.1 instead of cached 1.27.3, and a formatting phase probed the wrong formatter. A wrapper had a missing parenthesis, a last-function deletion left an EOF blank line, and shell quoting failed before execution. An invalid BSD `awk` pattern left a suite launch without a valid process occupancy check.
 
 **Cause or correction:** Cached labels and system installations are not pinned-tool evidence. Wrapper syntax and formatting are prerequisites, not product failures.
 
-**Prevention:** Resolve required cached compiler/formatter paths, record exact executables and argv, and reuse them in owner fences. Run the pinned gofmt listing over the committed tree, including tagged files and final-declaration removals. Parse Python AST and check shell/JS quoting before a long phase; preserve failed wrappers and do not count unexecuted steps as passed.
+**Prevention:** Resolve required cached compiler/formatter paths, record exact executables and argv, and reuse them in owner fences. Run the pinned gofmt listing over the committed tree, including tagged files and final-declaration removals. Parse Python AST and check shell/JS quoting before a long phase. Treat process-check errors as blocking the launch, preserve failed wrappers, and do not count unexecuted steps as passed.
 
 ### Pass the locale directory to the standalone catalog generator
 
-**Problem:** The standalone catalog generator scanned the repository root for languages. The patched MyGo CLI generator failed in readonly mode because its RPM dependency checksum was absent from Nagi's application module.
+**Problem:** The standalone generator scanned the repository root for languages. The patched MyGo CLI needed generator-only dependencies and rejected `generate ./locales` because it found no app configuration there.
 
-**Cause or correction:** The standalone generator resolves `*.json` relative to its first argument. `scripts/gui-go.py` builds MyGo with a temporary copy of the application's module and checksum files.
+**Cause or correction:** The standalone generator resolves `*.json` relative to its first argument. The MyGo CLI resolves `mygo.json` relative to its argument and reads the catalog location from that configuration. `scripts/gui-go.py` builds MyGo with a temporary copy of the application's module and checksum files.
 
 **Prevention:** Pass the `locales` directory to the standalone generator. For the patched MyGo CLI, run `GOFLAGS=-mod=mod python3 scripts/gui-go.py run github.com/egoist/mygo/cmd/mygo generate .` from the checkout root and verify the generated accessors against both catalogs. The wrapper resolves generator-only dependencies in its temporary module.
 

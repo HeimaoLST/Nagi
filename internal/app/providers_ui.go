@@ -3,7 +3,7 @@ package app
 import (
 	"context"
 	"errors"
-	"fmt"
+	"math"
 	"net"
 	"net/url"
 	"path/filepath"
@@ -61,6 +61,7 @@ type providerEditor struct {
 	noKey           bool
 	context         string
 	output          string
+	limitsEdited    bool
 	additional      string
 	advanced        bool
 	custom          bool
@@ -84,7 +85,7 @@ type providerFeedback struct {
 
 var providerTokenPresets = [...]struct {
 	context, output int
-}{{131072, 8192}, {262144, 16384}, {524288, 32768}}
+}{{131072, 8192}, {262144, 32768}, {400000, 128000}, {1048576, 131072}, {2097152, 131072}}
 
 func (a *appModel) hasEffectiveProviderPool() bool {
 	host := a.productHost()
@@ -213,7 +214,7 @@ func newProviderEditor(account pi.ProductProviderAccount) *providerEditor {
 func newProviderDraft() *providerEditor {
 	return newProviderEditor(pi.ProductProviderAccount{
 		ProviderID: "provider-" + newContactID(), WireAPI: pi.OpenAICompletions, Enabled: true,
-		ContextTokens: 131072, OutputTokens: 8192,
+		ContextTokens: 1048576, OutputTokens: 131072,
 	})
 }
 
@@ -284,6 +285,7 @@ func (a *appModel) chooseFirstProvider(index int) {
 				e.WireAPI = pi.OpenAIResponses
 			}
 			e.context, e.output = strconv.Itoa(previous.ContextTokens), strconv.Itoa(previous.OutputTokens)
+			e.limitsEdited = true
 		}
 		s.firstDrafts[key] = e
 	}
@@ -339,6 +341,7 @@ func (a *appModel) selectProvider(account pi.ProductProviderAccountView) {
 		e.presetID, e.noKey = preset.ID, preset.NoKey
 		s.drafts[account.ProviderID] = e
 	}
+	e.limitsEdited = true
 	s.selectedID, s.editor = account.ProviderID, e
 	a.openProviderDialog()
 }
@@ -392,6 +395,7 @@ func (a *appModel) addAnotherProvider(account pi.ProductProviderAccount, preset 
 		}
 		e.BaseURL, e.DefaultModel, e.WireAPI = account.BaseURL, account.DefaultModel, account.WireAPI
 		e.context, e.output = strconv.Itoa(account.ContextTokens), strconv.Itoa(account.OutputTokens)
+		e.limitsEdited = true
 		s.firstDrafts[key] = e
 	}
 	s.first, s.editor = s.firstDrafts[key], s.firstDrafts[key]
@@ -560,6 +564,18 @@ func (a *appModel) testProvider(params pi.ProductProviderTestParams, editor *pro
 			editor.probe = providerFeedback{kind: "tested", models: len(result.Models), latency: result.LatencyMS}
 			editor.tested, editor.latency = true, result.LatencyMS
 			editor.discovered = result.DiscoveredModels
+			if !editor.limitsEdited && len(result.DiscoveredModels) > 0 {
+				maxContext, maxOutput := 0, 0
+				for _, model := range result.DiscoveredModels {
+					if model.IsChat == nil || *model.IsChat {
+						maxContext = max(maxContext, model.ContextTokens)
+						maxOutput = max(maxOutput, model.OutputTokens)
+					}
+				}
+				if maxOutput > 0 && maxContext-maxOutput >= 4 {
+					editor.context, editor.output = strconv.Itoa(maxContext), strconv.Itoa(maxOutput)
+				}
+			}
 			for _, id := range result.Models {
 				if len(editor.Models) == 128 {
 					break
@@ -607,6 +623,7 @@ func (a *appModel) saveProvider(editor *providerEditor, params pi.ProductProvide
 			}
 		}
 		savedEditor.presetID, savedEditor.noKey = editor.presetID, editor.noKey
+		savedEditor.limitsEdited = true
 		savedEditor.discovered = editor.discovered
 		savedEditor.tested, savedEditor.latency = editor.tested, editor.latency
 		s.drafts[editor.ProviderID] = savedEditor
@@ -1168,9 +1185,12 @@ func (a *appModel) providerInput(c *ui.Context, editor *providerEditor, key, lab
 	}
 	return field.OnChange(func() {
 		delete(editor.fields, key)
-		if key == "Endpoint" {
+		switch {
+		case key == "ContextTokens" || key == "OutputTokens":
+			editor.limitsEdited = true
+		case key == "Endpoint":
 			editor.resetModelCatalog()
-		} else if secret {
+		case secret:
 			editor.resetProbe()
 		}
 	})
@@ -1353,16 +1373,42 @@ func (e *providerEditor) setEnabledModels(models []string) {
 }
 
 func providerTokenBadge(tokens int) string {
-	switch {
-	case tokens >= 1024*1024:
-		return fmt.Sprintf("%.1fM", float64(tokens)/(1024*1024))
-	case tokens >= 1024:
-		return strconv.Itoa(tokens/1024) + "K"
-	case tokens > 0:
-		return strconv.Itoa(tokens)
-	default:
+	if tokens <= 0 {
 		return ""
 	}
+	if tokens < 1000 {
+		return strconv.Itoa(tokens)
+	}
+	if tokens >= 950_000 {
+		count := float64(tokens)
+		decimal := math.Round(count / 1_000_000)
+		if math.Abs(count-decimal*1_000_000) <= decimal*1_000_000*0.055 ||
+			math.Abs(count-decimal*1_048_576) <= decimal*1_048_576*0.055 {
+			return strconv.Itoa(int(decimal)) + "M"
+		}
+		binary := math.Round(count / 1_048_576)
+		if math.Abs(count-binary*1_048_576) <= binary*1_048_576*0.055 {
+			return strconv.Itoa(int(binary)) + "M"
+		}
+		rounded := math.Round(count*10/1_000_000) / 10
+		return strings.TrimSuffix(strconv.FormatFloat(rounded, 'f', 1, 64), ".0") + "M"
+	}
+	if tokens%1024 == 0 {
+		return strconv.Itoa(tokens/1024) + "K"
+	}
+	if tokens%1000 == 0 {
+		return strconv.Itoa(tokens/1000) + "K"
+	}
+	for _, tier := range [...]int{4, 8, 16, 32, 64, 96, 100, 128, 160, 200, 256, 272, 300, 384, 400, 500, 512, 768} {
+		for _, unit := range [...]int{1000, 1024} {
+			target := tier * unit
+			tolerance := target / 50
+			if tokens >= target-tolerance && tokens <= target+tolerance {
+				return strconv.Itoa(tier) + "K"
+			}
+		}
+	}
+	return strconv.Itoa((tokens+500)/1000) + "K"
 }
 
 func (a *appModel) providerAdditionalModels(c *ui.Context, t *ui.Theme, msgs locales.Messages, editor *providerEditor, blocked bool) {
@@ -1418,7 +1464,7 @@ func (a *appModel) providerTokenFields(c *ui.Context, t *ui.Theme, msgs locales.
 	selected := "custom"
 	for i, preset := range providerTokenPresets {
 		value := strconv.Itoa(i)
-		options = append(options, theme.SelectOption{Value: value, Label: fmt.Sprintf("%dK / %dK", preset.context/1024, preset.output/1024)})
+		options = append(options, theme.SelectOption{Value: value, Label: providerTokenBadge(preset.context) + " / " + providerTokenBadge(preset.output)})
 		if !editor.custom && editor.context == strconv.Itoa(preset.context) && editor.output == strconv.Itoa(preset.output) {
 			selected = value
 		}
@@ -1427,6 +1473,7 @@ func (a *appModel) providerTokenFields(c *ui.Context, t *ui.Theme, msgs locales.
 	providerFormRow(c, t, msgs.ConnectionTokenLimits(), func() {
 		c.Key("provider-token-presets")
 		if theme.PreferenceSelect(c, &selected, options, msgs.ConnectionTokenLimits(), blocked).FillWidth().Changed() {
+			editor.limitsEdited = true
 			editor.custom = selected == "custom"
 			if !editor.custom {
 				index, _ := strconv.Atoi(selected)
@@ -1438,8 +1485,8 @@ func (a *appModel) providerTokenFields(c *ui.Context, t *ui.Theme, msgs locales.
 		}
 	})
 	if selected == "custom" {
-		a.providerField(c, t, msgs, editor, "ContextTokens", msgs.ConnectionFieldContextTokens(), "131072", &editor.context, false, blocked)
-		a.providerField(c, t, msgs, editor, "OutputTokens", msgs.ConnectionFieldOutputTokens(), "8192", &editor.output, false, blocked)
+		a.providerField(c, t, msgs, editor, "ContextTokens", msgs.ConnectionFieldContextTokens(), "1048576", &editor.context, false, blocked)
+		a.providerField(c, t, msgs, editor, "OutputTokens", msgs.ConnectionFieldOutputTokens(), "131072", &editor.output, false, blocked)
 	}
 }
 
