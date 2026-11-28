@@ -108,17 +108,20 @@ func (a *appModel) productConversationsView(c *ui.Context, t *ui.Theme, browser 
 	if owner != nil {
 		name = owner.Name
 	}
+	winW := a.windowContentWidth(c)
+	rowStartX, rowEndX := a.mainHeaderBounds(winW)
+	leftSafe, rightSafe := windowControlInsets(c, rowStartX, rowEndX, winW)
 	ui.Column(c).Key("conversation-browser").Fill().MinHeight(0).Children(func() {
-		ui.Row(c).FillWidth().MinHeight(40).Padding(4, 6).AlignItems(ui.Center).Gap(8).Children(func() {
+		ui.Row(c).FillWidth().MinHeight(max(float32(48), c.TitleBar().Height)).Padding(6, max(12, rightSafe), 6, max(12, leftSafe)).AlignItems(ui.Center).Gap(8).DragWindow().Children(func() {
+			if a.railCollapsed {
+				a.showContactsButton(c, t)
+			}
 			back := secondaryButton(c, msgs.BackAction()).Label(msgs.BackLabel()).OnClick(a.backProductConversations)
 			if browser.focusBack {
 				back.Focus()
 				browser.focusBack = false
 			}
 			ui.Text(c, title).FontSize(typeContactTitle).FontWeight(500).FixedLineHeight(lineHeader).TextColor(t.Text).Grow(1).MinWidth(0)
-			if a.railCollapsed {
-				a.showContactsButton(c, t)
-			}
 		})
 		ui.Row(c).FillWidth().Justify(ui.Center).Children(func() {
 			ui.Column(c).FillWidth().MaxWidth(conversationMaxWidth).Padding(8, 16).Gap(4).Children(func() {
@@ -146,6 +149,49 @@ func (a *appModel) mainPageActive() bool {
 	return a.aux == "task-context" || a.priorChats != nil && a.activeDetail() != "" && a.workOverlay()
 }
 
+func (a *appModel) windowContentWidth(c *ui.Context) float32 {
+	width, _ := c.Size()
+	if width <= 0 {
+		return float32(a.layoutWidth())
+	}
+	return width
+}
+
+func windowControlInsets(c *ui.Context, rowStartX, rowEndX, winW float32) (left, right float32) {
+	bar := c.TitleBar()
+	if bar.Height <= 0 {
+		return 0, 0
+	}
+	if bar.Left > rowStartX {
+		left = bar.Left - rowStartX + 4
+	}
+	if edge := winW - bar.Right; bar.Right > 0 && edge < rowEndX {
+		right = rowEndX - edge + 4
+	}
+	return left, right
+}
+
+func (a *appModel) mainHeaderBounds(winW float32) (rowStartX, rowEndX float32) {
+	rowStartX, rowEndX = 5, winW-5
+	if a.mainPageActive() {
+		return rowStartX, rowEndX
+	}
+	if railWidth := a.effectiveRailWidth(); railWidth > 0 {
+		rowStartX += railWidth + paneSeparatorWidth
+	}
+	if a.activeDetail() != "" {
+		rowEndX -= a.effectiveDetailWidth() + paneSeparatorWidth
+	}
+	return rowStartX, rowEndX
+}
+
+func (a *appModel) detailRowBounds(winW, extraPad float32) (rowStartX, rowEndX float32) {
+	if a.detailPageActive() {
+		return 5 + extraPad, winW - 5 - extraPad
+	}
+	return winW - a.effectiveDetailWidth() + 1 + extraPad, winW - extraPad
+}
+
 func (a *appModel) focusDetailControl(c *ui.Context, button ui.Element) {
 	if a.focusDetailClose {
 		button.Focus()
@@ -156,13 +202,9 @@ func (a *appModel) focusDetailControl(c *ui.Context, button ui.Element) {
 func (a *appModel) showContactsButton(c *ui.Context, t *ui.Theme) {
 	msgs := locales.In(c.Locale())
 	label := msgs.RailContactsTitle()
-	contacts := appTooltip(c, secondaryButton(c, "").Label(label), msgs.NavShowContactsTooltip()).
-		Margin(0).Padding(8).FontSize(typeNavigation).FontWeight(400).FixedLineHeight(lineNavigation)
+	contacts := iconControlFace(c, appTooltip(c, ui.Button(c, "").Key("show-contacts-btn").Label(label), msgs.NavShowContactsTooltip()), iconChrome, false)
 	contacts.Children(func() {
-		ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
-			controlIcon(c, navContactsIcon, iconChrome).TextColor(t.TextMuted)
-			ui.Text(c, label).FontSize(typeNavigation).FixedLineHeight(lineNavigation).TextColor(t.Text)
-		})
+		controlIcon(c, railShowIcon, iconChrome).TextColor(t.TextMuted)
 	})
 	if a.focusRail {
 		contacts.Focus()
@@ -210,8 +252,14 @@ func (a *appModel) profileDetail(c *ui.Context, t *ui.Theme) {
 		formActions.ToggleVisibility = nil
 	}
 	msgs := locales.In(c.Locale())
-	ui.Column(c).Key(ct.ID).Fill().MinWidth(0).MinHeight(0).Padding(16).Gap(8).Children(func() {
-		ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(8).Children(func() {
+	winW := a.windowContentWidth(c)
+	rowStartX, rowEndX := a.detailRowBounds(winW, 16)
+	leftSafe, rightSafe := windowControlInsets(c, rowStartX, rowEndX, winW)
+	ui.Column(c).Key(ct.ID).Fill().MinWidth(0).MinHeight(0).Padding(0, 16, 16, 16).Gap(8).Children(func() {
+		ui.Row(c).FillWidth().MinHeight(max(float32(48), c.TitleBar().Height)).Padding(12, rightSafe, 4, leftSafe).AlignItems(ui.Center).Gap(8).DragWindow().Children(func() {
+			if a.detailPageActive() && a.railCollapsed {
+				a.showContactsButton(c, t)
+			}
 			back := detailBackButton(c, t, msgs.ProfileClose(), msgs.ProfileBackTooltip()).OnClick(a.closeDetail)
 			a.focusDetailControl(c, back)
 			ui.Text(c, msgs.ContactProfileAction()).FontSize(typePageTitle).FontWeight(500).FixedLineHeight(lineSettingsTitle).TextColor(t.Text).Grow(1)
@@ -244,22 +292,23 @@ func (a *appModel) profileDetail(c *ui.Context, t *ui.Theme) {
 }
 
 func (a *appModel) mainPage(c *ui.Context, t *ui.Theme) {
-	ui.Column(c).Fill().Background(a.workTheme.Reading).Children(func() {
-		switch {
-		case a.aux == "task-context":
+	if a.aux == "task-context" {
+		ui.Column(c).Grow(1).MinWidth(0).MinHeight(0).AlignSelf(ui.Stretch).Margin(4).Radius(16).Border(1, t.Border).Clip().Background(a.workTheme.Reading).Children(func() {
 			a.auxPage(c, t)
-		default:
-			a.main(c, t)
-		}
-	})
+		})
+		return
+	}
+	ui.Row(c).Fill().Children(func() { a.main(c, t) })
 }
 
 func (a *appModel) auxPage(c *ui.Context, t *ui.Theme) {
 	msgs := locales.In(c.Locale())
 	title := msgs.TaskContextTitle()
 	closeLabel := msgs.CloseTaskContext()
+	winW := a.windowContentWidth(c)
+	leftSafe, rightSafe := windowControlInsets(c, 5, winW-5, winW)
 	ui.Column(c).Fill().Children(func() {
-		ui.Row(c).MinHeight(40).Padding(4, 6).AlignItems(ui.Center).Gap(12).Children(func() {
+		ui.Row(c).FillWidth().MinHeight(max(float32(40), c.TitleBar().Height)).Padding(4, max(6, rightSafe), 4, max(6, leftSafe)).AlignItems(ui.Center).Gap(12).DragWindow().Children(func() {
 			back := appTooltip(c, secondaryButton(c, msgs.BackAction()).Label(closeLabel), msgs.BackFromAux(title)).OnClick(func() { a.closeAux() })
 			if a.focusAuxBack {
 				back.Focus()

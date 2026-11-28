@@ -3,15 +3,19 @@ package app
 import (
 	"errors"
 	"fmt"
+	"image"
+	"math"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
 	"github.com/HeimaoLST/Nagi/internal/pi"
+	"github.com/HeimaoLST/Nagi/internal/theme"
 	"github.com/HeimaoLST/Nagi/locales"
 )
 
@@ -657,4 +661,257 @@ func TestSaveFailureAppearanceKeepsReaderSelection(t *testing.T) {
 			}
 		})
 	}
+}
+
+func assertFloatingBackToLatestOverlay(t *testing.T) {
+	t.Helper()
+	pxDist := func(a, b [4]uint8) int {
+		abs := func(v int) int {
+			if v < 0 {
+				return -v
+			}
+			return v
+		}
+		return abs(int(a[0])-int(b[0])) + abs(int(a[1])-int(b[1])) + abs(int(a[2])-int(b[2]))
+	}
+	rgbaOf := func(c ui.Color) [4]uint8 {
+		return [4]uint8{c.R, c.G, c.B, c.A}
+	}
+	imgRGBA := func(img image.Image, x, y int) [4]uint8 {
+		p := img.(*image.RGBA).RGBAAt(x, y)
+		return [4]uint8{p.R, p.G, p.B, p.A}
+	}
+	countBubblePixels := func(img image.Image, xStart, xEnd, y int, bubble [4]uint8) int {
+		hits := 0
+		for x := xStart; x <= xEnd; x++ {
+			if pxDist(imgRGBA(img, x, y), bubble) <= 6 {
+				hits++
+			}
+		}
+		return hits
+	}
+
+	line := strings.Repeat("Wide continuous assistant prose occupying the full reading bubble width behind the overlay control. ", 2)
+	body := strings.Join([]string{line, line, line, line, line, line}, "\n")
+
+	for _, locale := range []string{"en", "zh-Hans"} {
+		msgs := locales.In(locale)
+		for _, dark := range []bool{false, true} {
+			wb := theme.ResolveWorkbenchTheme(dark)
+			surf := rgbaOf(wb.ComposerSurface)
+			inBorder := rgbaOf(wb.InputBorder)
+			bubble := rgbaOf(wb.BubbleContact)
+			reading := rgbaOf(wb.Reading)
+			otherWB := theme.ResolveWorkbenchTheme(!dark)
+			otherSurf := rgbaOf(otherWB.ComposerSurface)
+
+			for _, size := range [][2]int{{720, 640}, {960, 640}, {1040, 720}, {1180, 720}} {
+				w, h := size[0], size[1]
+				t.Run(fmt.Sprintf("%s-dark%t-%dx%d", locale, dark, w, h), func(t *testing.T) {
+					a, ct := appReadingTestApp(t)
+					a.windowWidth = w
+					a.workspaceOpen = false
+					a.focusComposer = false
+					ct.Draft = "keep scroll draft"
+					ct.Messages = make([]*message, 0, 36)
+					for i := 0; i < 36; i++ {
+						ct.Messages = append(ct.Messages, &message{
+							Key:  fmt.Sprintf("overlay-msg-%02d", i),
+							Kind: msgContact,
+							Text: fmt.Sprintf("Message %02d\n%s", i, body),
+						})
+					}
+
+					tr := ui.NewTesterWith(a.view, w, h, ui.TesterOptions{Dark: dark})
+					tr.SetLocale(locale)
+					tr.SetFocused(true)
+					tr.Move(-1, -1)
+					tr.Frame()
+
+					if !ct.list.AtEnd() || tr.HasText(msgs.BackToLatest()) {
+						t.Fatalf("at end state invalid: atEnd=%v hasBack=%v", ct.list.AtEnd(), tr.HasText(msgs.BackToLatest()))
+					}
+					viewportAtEnd, okEnd := tr.Find(msgs.ConversationMessagesLabel())
+					if !okEnd || viewportAtEnd.W <= 0 || viewportAtEnd.H <= 0 {
+						t.Fatalf("viewport at end missing: ok=%v rect=%+v", okEnd, viewportAtEnd)
+					}
+
+					for i := 0; i < 3 && ct.list.AtEnd(); i++ {
+						tr.Scroll(viewportAtEnd.X+viewportAtEnd.W/2, viewportAtEnd.Y+viewportAtEnd.H/2, 0, -640)
+						tr.Frame()
+					}
+					if ct.list.AtEnd() {
+						t.Fatal("failed to scroll up away from latest message")
+					}
+					backRect, okBack := tr.Find(msgs.BackToLatest())
+					if !okBack {
+						t.Fatalf("floating %q missing when scrolled up", msgs.BackToLatest())
+					}
+					for step := 0; step < 6; step++ {
+						imgTry := tr.Image()
+						by := int(backRect.Y + 16)
+						if countBubblePixels(imgTry, int(backRect.X)-64, int(backRect.X)-8, by, bubble) >= 12 &&
+							countBubblePixels(imgTry, int(backRect.X+backRect.W)+8, int(backRect.X+backRect.W)+64, by, bubble) >= 12 {
+							break
+						}
+						tr.Scroll(viewportAtEnd.X+viewportAtEnd.W/2, viewportAtEnd.Y+viewportAtEnd.H/2, 0, -28)
+						tr.Frame()
+						backRect, _ = tr.Find(msgs.BackToLatest())
+					}
+
+					viewportScrolled, okScrolled := tr.Find(msgs.ConversationMessagesLabel())
+					if !okScrolled {
+						t.Fatal("scrolled viewport missing")
+					}
+					if viewportScrolled != viewportAtEnd {
+						t.Fatalf("Back to latest shrank or shifted viewport: atEnd=%+v scrolled=%+v", viewportAtEnd, viewportScrolled)
+					}
+					if backRect.W != 32 || backRect.H != 32 {
+						t.Fatalf("Back to latest size = %.1fx%.1f, want 32x32", backRect.W, backRect.H)
+					}
+					if dx := math.Abs(float64((backRect.X + backRect.W/2) - (viewportScrolled.X + viewportScrolled.W/2))); dx > 1.0 {
+						t.Fatalf("Back to latest not horizontally centered: back=%+v viewport=%+v dx=%.2f", backRect, viewportScrolled, dx)
+					}
+					wantY := viewportScrolled.Y + viewportScrolled.H - 40
+					if dy := math.Abs(float64(backRect.Y - wantY)); dy > 1.0 {
+						t.Fatalf("Back to latest not anchored 8 DIP above viewport bottom: gotY=%.1f wantY=%.1f back=%+v viewport=%+v", backRect.Y, wantY, backRect, viewportScrolled)
+					}
+
+					img := tr.Image()
+					bx, by := int(backRect.X), int(backRect.Y)
+					cornerPx := imgRGBA(img, bx+1, by+1)
+					if pxDist(cornerPx, inBorder) <= 12 || pxDist(cornerPx, surf) <= 6 {
+						t.Fatalf("outer corner (%d,%d) looks square instead of Radius(16) circle: got=%v border=%v surf=%v", bx+1, by+1, cornerPx, inBorder, surf)
+					}
+					for _, pt := range [][2]int{{bx + 16, by + 5}, {bx + 5, by + 16}, {bx + 26, by + 16}} {
+						if got := imgRGBA(img, pt[0], pt[1]); pxDist(got, surf) > 5 {
+							t.Fatalf("circular face interior (%d,%d) mismatch: got=%v want=%v", pt[0], pt[1], got, surf)
+						}
+					}
+					maxGlyphContrast := 0
+					for y := by + 8; y <= by+24; y++ {
+						for x := bx + 8; x <= bx+24; x++ {
+							if d := pxDist(imgRGBA(img, x, y), surf); d > maxGlyphContrast {
+								maxGlyphContrast = d
+							}
+						}
+					}
+					if maxGlyphContrast < 180 {
+						t.Fatalf("down-arrow glyph contrast too low inside Back to latest: maxL1=%d", maxGlyphContrast)
+					}
+
+					midY := by + 16
+					leftBubbleHits := countBubblePixels(img, bx-64, bx-8, midY, bubble)
+					rightBubbleHits := countBubblePixels(img, bx+32+8, bx+32+64, midY, bubble)
+					leftReadingHits := countBubblePixels(img, bx-64, bx-8, midY, reading)
+					if leftBubbleHits < 12 || rightBubbleHits < 12 || leftReadingHits > 0 {
+						t.Fatalf("detected opaque cutout band behind Back to latest at y=%d: leftBubble=%d rightBubble=%d leftReading=%d", midY, leftBubbleHits, rightBubbleHits, leftReadingHits)
+					}
+
+					firstBefore, _ := ct.list.Visible()
+					tr.Scroll(backRect.X-40, backRect.Y+16, 0, -1400)
+					tr.Frame()
+					firstLeftWheel, _ := ct.list.Visible()
+					if firstLeftWheel >= firstBefore {
+						t.Fatalf("left-side wheel beside Back to latest did not scroll up: %d -> %d", firstBefore, firstLeftWheel)
+					}
+					tr.Scroll(backRect.X+backRect.W+40, backRect.Y+16, 0, 500)
+					tr.Frame()
+					firstRightWheel, _ := ct.list.Visible()
+					if firstRightWheel <= firstLeftWheel || ct.list.AtEnd() {
+						t.Fatalf("right-side wheel beside Back to latest did not scroll cleanly: %d -> %d (atEnd=%v)", firstLeftWheel, firstRightWheel, ct.list.AtEnd())
+					}
+
+					tr.Move(-1, -1)
+					tr.Advance(theme.ControlTransition.Duration)
+					tr.Frame()
+					tr.SetDark(!dark)
+					snapImg := tr.Image()
+					snapRect, _ := tr.Find(msgs.BackToLatest())
+					sx, sy := int(snapRect.X), int(snapRect.Y)
+					if got := imgRGBA(snapImg, sx+16, sy+5); pxDist(got, otherSurf) > 5 {
+						t.Fatalf("Back to latest face did not snap on frame 1 of SetDark(%v): got=%v want=%v", !dark, got, otherSurf)
+					}
+					maxSnapGlyph := 0
+					for y := sy + 8; y <= sy+24; y++ {
+						for x := sx + 8; x <= sx+24; x++ {
+							if d := pxDist(imgRGBA(snapImg, x, y), otherSurf); d > maxSnapGlyph {
+								maxSnapGlyph = d
+							}
+						}
+					}
+					if maxSnapGlyph < 180 {
+						t.Fatalf("Back to latest glyph did not snap contrast on frame 1 of SetDark(%v): maxL1=%d", !dark, maxSnapGlyph)
+					}
+					tr.SetDark(dark)
+					tr.Advance(theme.ControlTransition.Duration)
+					tr.Frame()
+
+					countLabel := func() int {
+						n := 0
+						for _, txt := range tr.Texts() {
+							if txt == msgs.BackToLatest() {
+								n++
+							}
+						}
+						return n
+					}
+					if got := countLabel(); got != 1 {
+						t.Fatalf("expected 1 resting occurrence of %q, got %d", msgs.BackToLatest(), got)
+					}
+					backRect, _ = tr.Find(msgs.BackToLatest())
+					tr.Move(1, 1)
+					tr.Move(backRect.X+16, backRect.Y+16)
+					tr.Advance(700 * time.Millisecond)
+					tr.Frame()
+					if got := countLabel(); got < 2 {
+						t.Fatalf("hovering Back to latest did not reveal %q tooltip: occurrences=%d texts=%v", msgs.BackToLatest(), got, tr.Texts())
+					}
+
+					if err := tr.Click(msgs.BackToLatest()); err != nil {
+						t.Fatal(err)
+					}
+					tr.Frame()
+					if !ct.list.AtEnd() || tr.HasText(msgs.BackToLatest()) || !tr.Focused(msgs.ComposerLabel(ct.Name)) || ct.Draft != "keep scroll draft" {
+						t.Fatalf("clicking Back to latest failed state restore: atEnd=%v hasBack=%v compFocus=%v draft=%q", ct.list.AtEnd(), tr.HasText(msgs.BackToLatest()), tr.Focused(msgs.ComposerLabel(ct.Name)), ct.Draft)
+					}
+
+					tr.Move(-1, -1)
+					tr.Scroll(viewportAtEnd.X+viewportAtEnd.W/2, viewportAtEnd.Y+viewportAtEnd.H/2, 0, -1400)
+					tr.Frame()
+					if err := tr.Click(msgs.ComposerLabel(ct.Name)); err != nil {
+						t.Fatal(err)
+					}
+					tr.Frame()
+					tr.Key(ui.Shift, ui.KeyTab)
+					tr.Advance(theme.ControlTransition.Duration)
+					tr.Frame()
+					if !tr.Focused(msgs.BackToLatest()) {
+						t.Fatalf("Shift+Tab from composer did not focus %q: texts=%v", msgs.BackToLatest(), tr.Texts())
+					}
+					ringImg := tr.Image()
+					backRect, _ = tr.Find(msgs.BackToLatest())
+					var foundRing bool
+					for x := int(backRect.X) - 6; x <= int(backRect.X)-1; x++ {
+						if pxDist(imgRGBA(ringImg, x, int(backRect.Y)+16), surf) >= 90 {
+							foundRing = true
+							break
+						}
+					}
+					if !foundRing {
+						t.Fatal("keyboard-focused Back to latest missing visible DS 2.1 outer focus ring")
+					}
+					tr.Key(0, ui.KeyEnter)
+					tr.Frame()
+					if !ct.list.AtEnd() || tr.HasText(msgs.BackToLatest()) || !tr.Focused(msgs.ComposerLabel(ct.Name)) || ct.Draft != "keep scroll draft" {
+						t.Fatalf("Shift+Tab + Enter on Back to latest failed restore: atEnd=%v hasBack=%v compFocus=%v draft=%q", ct.list.AtEnd(), tr.HasText(msgs.BackToLatest()), tr.Focused(msgs.ComposerLabel(ct.Name)), ct.Draft)
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestFloatingBackToLatestOverlayGeometryPixelsAndScroll(t *testing.T) {
+	assertFloatingBackToLatestOverlay(t)
 }

@@ -62,20 +62,21 @@ func (copy sessionInspectionCopy) text(key string) string {
 }
 
 type sessionInspectorDeps struct {
-	client              *pi.ProductClient
-	botID               string
-	wb                  theme.WorkbenchTheme
-	blocked             bool
-	copy                sessionInspectionCopy
-	formatDimensions    func(cols, rows int) string
-	formatGap           func(bytes string) string
-	formatMS            func(ms string) string
-	updateUI            func(func())
-	persistCloseIntents func([]pi.ProductSessionCloseParams) error
-	onBack              func()
-	onOpenConversation  func(conversationID string)
-	onOpenActivity      func(activityID string)
-	showContacts        func(*ui.Context, *ui.Theme)
+	client                        *pi.ProductClient
+	botID                         string
+	wb                            theme.WorkbenchTheme
+	blocked                       bool
+	copy                          sessionInspectionCopy
+	formatDimensions              func(cols, rows int) string
+	formatGap                     func(bytes string) string
+	formatMS                      func(ms string) string
+	updateUI                      func(func())
+	persistCloseIntents           func([]pi.ProductSessionCloseParams) error
+	onBack                        func()
+	onOpenConversation            func(conversationID string)
+	onOpenActivity                func(activityID string)
+	showContacts                  func(*ui.Context, *ui.Theme)
+	headerLeftPad, headerRightPad float32
 }
 
 type sessionWorkspaceState struct {
@@ -771,7 +772,10 @@ func (s *sessionWorkspaceState) sessionInspectionView(c *ui.Context, deps sessio
 	}
 	words, wb := deps.copy, deps.wb
 	ui.Column(c).Key("session-inspector").Fill().MinWidth(0).MinHeight(0).Background(wb.Panel).Children(func() {
-		ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(8).Padding(8, 12).Shrink(0).Children(func() {
+		ui.Row(c).FillWidth().MinHeight(max(float32(48), c.TitleBar().Height)).Padding(8, max(12, deps.headerRightPad), 8, max(12, deps.headerLeftPad)).AlignItems(ui.Center).Gap(8).Shrink(0).DragWindow().Children(func() {
+			if deps.showContacts != nil {
+				deps.showContacts(c, wb.Theme)
+			}
 			back := detailBackButton(c, wb.Theme, words.text("back"), words.text("back"), words.text("back")).OnClick(func() { s.backSessionInspection(deps) })
 			if bot.focusBack {
 				back.Focus()
@@ -790,9 +794,6 @@ func (s *sessionWorkspaceState) sessionInspectionView(c *ui.Context, deps sessio
 				theme.SecondaryButton(c, words.text("reload")).Key("session-list-reload").Shrink(0).
 					Disabled(s.client == nil || bot.listLoading).
 					OnClick(func() { s.loadSessionPage(bot, 0, "") })
-			}
-			if deps.showContacts != nil {
-				deps.showContacts(c, wb.Theme)
 			}
 		})
 		if bot.detail == nil {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"image"
 	"image/png"
+	"math"
 	"os"
 	"path/filepath"
 	"slices"
@@ -14,6 +15,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"github.com/HeimaoLST/Nagi/internal/pi"
+	"github.com/HeimaoLST/Nagi/internal/theme"
 	"github.com/HeimaoLST/Nagi/locales"
 )
 
@@ -1235,4 +1237,223 @@ func TestWorkbenchPopoverMenusForUserBubbleAndComposer(t *testing.T) {
 			}
 		})
 	}
+}
+
+func assertCollapsedRailTopLeftToggleAndZeroTopStrip(t *testing.T) {
+	t.Helper()
+	pxDist := func(a, b [4]uint8) int {
+		abs := func(v int) int {
+			if v < 0 {
+				return -v
+			}
+			return v
+		}
+		return abs(int(a[0])-int(b[0])) + abs(int(a[1])-int(b[1])) + abs(int(a[2])-int(b[2]))
+	}
+	rgbaOf := func(c ui.Color) [4]uint8 {
+		return [4]uint8{c.R, c.G, c.B, c.A}
+	}
+	imgRGBA := func(img image.Image, x, y int) [4]uint8 {
+		p := img.(*image.RGBA).RGBAAt(x, y)
+		return [4]uint8{p.R, p.G, p.B, p.A}
+	}
+	cardSpanAtX := func(img image.Image, x, h int, reading, chromeTo [4]uint8) (top, bottom int) {
+		top, bottom = -1, -1
+		for y := 0; y < h; y++ {
+			if pxDist(imgRGBA(img, x, y), reading) <= 4 {
+				top = y
+				break
+			}
+		}
+		for y := h - 1; y >= 0; y-- {
+			if pxDist(imgRGBA(img, x, y), chromeTo) > 4 {
+				bottom = y
+				break
+			}
+		}
+		return top, bottom
+	}
+
+	for _, locale := range []string{"en", "zh-Hans"} {
+		msgs := locales.In(locale)
+		for _, dark := range []bool{false, true} {
+			wb := theme.ResolveWorkbenchTheme(dark)
+			reading := rgbaOf(wb.Reading)
+			chromeFrom := rgbaOf(wb.ChromeFrom)
+			chromeTo := rgbaOf(wb.ChromeTo)
+			for _, right := range []float32{0, 138} {
+				for _, size := range [][2]int{{720, 640}, {960, 640}, {1040, 720}, {1180, 720}} {
+					w, h := size[0], size[1]
+					t.Run(fmt.Sprintf("%s-dark%t-right%g-%dx%d", locale, dark, right, w, h), func(t *testing.T) {
+						a, ct := workspaceTestApp(t)
+						a.windowWidth = w
+						a.workspaceOpen = false
+						a.railCollapsed = false
+						ct.Draft = "keep rail draft"
+						ct.Messages = []*message{
+							{ID: 1, Kind: msgUser, Text: "Expanded vs collapsed alignment prompt"},
+							{ID: 2, Kind: msgContact, Text: "Expanded vs collapsed alignment reply"},
+						}
+						tr := ui.NewTesterWith(a.view, w, h, ui.TesterOptions{Dark: dark})
+						tr.SetLocale(locale)
+						tr.SetTitleBar(ui.TitleBar{Height: 38, Left: 80, Right: right})
+						tr.Frame()
+
+						vpExp, okExp := tr.Find(msgs.ConversationMessagesLabel())
+						if !okExp {
+							t.Fatal("expanded conversation viewport missing")
+						}
+						topExp, botExp := cardSpanAtX(tr.Image(), int(vpExp.X+vpExp.W/2), h, reading, chromeTo)
+
+						if err := tr.Click(msgs.RailHide()); err != nil {
+							t.Fatalf("click Hide Bot Team: %v", err)
+						}
+						tr.Frame()
+						if !a.railCollapsed {
+							t.Fatal("Hide Bot Team did not collapse sidebar")
+						}
+
+						vpCol, okCol := tr.Find(msgs.ConversationMessagesLabel())
+						if !okCol {
+							t.Fatal("collapsed conversation viewport missing")
+						}
+						if math.Abs(float64(vpCol.Y-vpExp.Y)) > 0.5 || math.Abs(float64(vpCol.H-vpExp.H)) > 0.5 {
+							t.Fatalf("collapsing rail shifted viewport vertically: expanded=%+v collapsed=%+v", vpExp, vpCol)
+						}
+						topCol, botCol := cardSpanAtX(tr.Image(), w/2, h, reading, chromeTo)
+						if topCol < 0 || topCol != topExp || botCol != botExp || topCol > 6 || botCol < h-6 {
+							t.Fatalf("collapsed main card vertical edges drifted: expanded=(%d..%d) collapsed=(%d..%d)", topExp, botExp, topCol, botCol)
+						}
+						topStripPx := imgRGBA(tr.Image(), w/2, 12)
+						if pxDist(topStripPx, reading) > 4 || pxDist(topStripPx, reading) >= pxDist(topStripPx, chromeFrom) {
+							t.Fatalf("unexpected top blank strip at (%d,12): got=%v want Reading=%v (ChromeFrom=%v)", w/2, topStripPx, reading, chromeFrom)
+						}
+
+						showRect, okShow := tr.Find(msgs.RailContactsTitle())
+						nameRect, okName := tr.Find(ct.Name)
+						ovRect, okOv := tr.Find(msgs.BotOverviewLabel())
+						if !okShow || !okName || !okOv {
+							t.Fatalf("collapsed header controls missing: show=%v name=%v overview=%v", okShow, okName, okOv)
+						}
+						if showRect.W != 32 || showRect.H != 32 || showRect.X < 80 || showRect.Y >= 48 {
+							t.Fatalf("collapsed top-left toggle bounds invalid: show=%+v (want 32x32, X>=80, Y<48)", showRect)
+						}
+						if showRect.X+showRect.W >= nameRect.X {
+							t.Fatalf("collapsed toggle was not strictly LEFT of Bot name %q: show=%+v name=%+v", ct.Name, showRect, nameRect)
+						}
+						if ovRect.X <= float32(w)/2 {
+							t.Fatalf("Bot overview button did not remain alone on right: ov=%+v", ovRect)
+						}
+						if right > 0 && ovRect.Y < 38 && ovRect.X+ovRect.W > float32(w)-right {
+							t.Fatalf("Bot overview overlapped right native window controls at %dx%d right=%g: ov=%+v", w, h, right, ovRect)
+						}
+					})
+				}
+
+				t.Run(fmt.Sprintf("%s-dark%t-right%g-960x640-avatarRail", locale, dark, right), func(t *testing.T) {
+					a, ct := workspaceTestApp(t)
+					a.windowWidth = 960
+					a.railCollapsed = false
+					a.openContactProfile(ct.ID)
+					tr := ui.NewTesterWith(a.view, 960, 640, ui.TesterOptions{Dark: dark})
+					tr.SetLocale(locale)
+					tr.SetTitleBar(ui.TitleBar{Height: 38, Left: 80, Right: right})
+					tr.Frame()
+
+					if !a.avatarRailActive() {
+						t.Fatal("expected compact avatarRailActive at 960x640 with profile open")
+					}
+					addRect, okAdd := tr.Find(msgs.AvatarAddContact())
+					nameRect, okName := tr.Find(ct.Name)
+					closeRect, okClose := tr.Find(msgs.ProfileClose())
+					if !okAdd || !okName || !okClose {
+						t.Fatalf("960x640 avatar rail/profile controls missing: add=%v name=%v close=%v", okAdd, okName, okClose)
+					}
+					if addRect.W != 32 || addRect.H != 32 || addRect.Y < 38 || addRect.X+addRect.W > 56 {
+						t.Fatalf("960x640 avatar rail add target missed 38 DIP traffic light clearance: add=%+v", addRect)
+					}
+					if nameRect.Y >= 38 {
+						t.Fatalf("960x640 main header shifted downward unexpectedly: name=%+v", nameRect)
+					}
+					if px := imgRGBA(tr.Image(), 480, 12); pxDist(px, reading) > 4 {
+						t.Fatalf("960x640 (480,12) showed top blank strip instead of Reading: got=%v want=%v", px, reading)
+					}
+					if right > 0 && closeRect.Y < 38 && closeRect.X+closeRect.W > 960-right {
+						t.Fatalf("960x640 profile close overlapped right window controls: close=%+v", closeRect)
+					}
+				})
+
+				for _, drawer := range []string{"profile", "source-chat", "background-work", "terminal-sessions", "scheduled-work"} {
+					t.Run(fmt.Sprintf("%s-dark%t-right%g-720x640-%s", locale, dark, right, drawer), func(t *testing.T) {
+						var (
+							a         *appModel
+							ct        *contact
+							backLabel string
+						)
+						switch drawer {
+						case "profile":
+							a, ct = workspaceTestApp(t)
+							a.openContactProfile(ct.ID)
+							backLabel = msgs.ProfileClose()
+						case "source-chat":
+							a, ct = workspaceTestApp(t)
+							a.priorChats = &productConversationBrowser{
+								contact:    ct,
+								selectedID: "prior-conv-titlebar",
+								ownerID:    ct.ID,
+								history: historyProjection{
+									messages: []*message{{Key: "p1", ID: 1, Kind: msgUser, Text: "Prior source prompt"}},
+								},
+							}
+							backLabel = msgs.BackLabel()
+						case "background-work":
+							fx := phase3SeededControlPlaneApp(t)
+							a, ct = fx.app, fx.contact
+							a.openContactProfile(ct.ID)
+							a.backgroundWork.panel = &backgroundWorkPanel{
+								bot:    ct,
+								opener: "header-overview:" + ct.ID,
+							}
+							backLabel = msgs.OrchestrationBack()
+						case "terminal-sessions":
+							fx := phase3SeededControlPlaneApp(t)
+							a, ct = fx.app, fx.contact
+							a.openBotSessions(ct.ID, "header-overview:"+ct.ID)
+							backLabel = msgs.SessionInspectBack()
+						case "scheduled-work":
+							fx, _, _, _ := seedVisualScheduledWorkFixture(t)
+							a, ct = fx.app, fx.contact
+							a.scheduledWorkBotID = ct.ID
+							backLabel = msgs.BackLabel()
+						}
+						a.windowWidth = 720
+						a.railCollapsed = true
+						tr := ui.NewTesterWith(a.view, 720, 640, ui.TesterOptions{Dark: dark})
+						tr.SetLocale(locale)
+						tr.SetTitleBar(ui.TitleBar{Height: 38, Left: 80, Right: right})
+						tr.Frame()
+
+						showRect, okShow := tr.Find(msgs.RailContactsTitle())
+						backRect, okBack := tr.Find(backLabel)
+						if !okShow || !okBack {
+							t.Fatalf("720x640 collapsed %s missing controls: show=%v back(%q)=%v texts=%v", drawer, okShow, backLabel, okBack, tr.Texts())
+						}
+						if showRect.W != 32 || showRect.H != 32 || showRect.X < 80 || showRect.Y >= 56 {
+							t.Fatalf("720x640 collapsed %s toggle invalid: show=%+v", drawer, showRect)
+						}
+						if showRect.X+showRect.W > backRect.X {
+							t.Fatalf("720x640 collapsed %s toggle not BEFORE Back %q: show=%+v back=%+v", drawer, backLabel, showRect, backRect)
+						}
+						if right > 0 && backRect.Y < 38 && backRect.X+backRect.W > 720-right {
+							t.Fatalf("720x640 collapsed %s Back overlapped right native controls: back=%+v", drawer, backRect)
+						}
+					})
+				}
+			}
+		}
+	}
+}
+
+func TestCollapsedRailTopLeftToggleZeroTopStripAndNarrowDrawers(t *testing.T) {
+	assertCollapsedRailTopLeftToggleAndZeroTopStrip(t)
 }

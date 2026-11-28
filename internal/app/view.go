@@ -57,11 +57,6 @@ func (a *appModel) view(c *ui.Context) {
 		c.OnShortcut(0, ui.KeyEscape, func() { a.escapeTopLayer() })
 	}
 	ui.Column(c).Fill().LinearGradient(ui.LinearGradient{From: a.workTheme.ChromeFrom, To: a.workTheme.ChromeTo, Angle: 180}).Children(func() {
-		titleBarHeight := c.TitleBar().Height
-		if a.settingsOpen || c.TitleBar().Right == 0 && !a.mainPageActive() && !a.detailPageActive() && !a.railCollapsed && !a.avatarRailActive() {
-			titleBarHeight = 0
-		}
-		ui.Row(c).FillWidth().Height(titleBarHeight).Shrink(0).DragWindow()
 		ui.Box(c).FillWidth().Grow(1).MinHeight(0).Children(func() {
 			if a.settingsOpen {
 				a.settingsPage(c, t)
@@ -284,6 +279,9 @@ func (a *appModel) rail(c *ui.Context, t *ui.Theme) {
 
 func (a *appModel) avatarRail(c *ui.Context, t *ui.Theme) {
 	ui.Column(c).Width(avatarRailWidth).Shrink(0).FillHeight().Padding(4).Gap(4).Background(ui.Transparent).Children(func() {
+		if bar := c.TitleBar(); bar.Height > 0 && bar.Left > 0 {
+			ui.Row(c).FillWidth().Height(max(0, bar.Height-4)).Shrink(0).DragWindow()
+		}
 		addLabel := locales.In(c.Locale()).AvatarAddContact()
 		add := appTooltip(c, ui.Button(c, "").Label(addLabel).
 			MinWidth(32).MinHeight(32).Width(32).Height(32).Padding(0).Justify(ui.Center), addLabel)
@@ -680,7 +678,7 @@ func (a *appModel) connectionRecoveryNotice(c *ui.Context, t *ui.Theme, ct *cont
 func (a *appModel) main(c *ui.Context, t *ui.Theme) {
 	ct := a.selectedContact()
 	msgs := locales.In(c.Locale())
-	ui.Column(c).Grow(1).MinWidth(0).FillHeight().Margin(4).Background(a.workTheme.Reading).Border(1, t.Border).Radius(16).Clip().Children(func() {
+	ui.Column(c).Grow(1).MinWidth(0).MinHeight(0).AlignSelf(ui.Stretch).Margin(4).Background(a.workTheme.Reading).Border(1, t.Border).Radius(16).Clip().Children(func() {
 		if browser := a.priorChats; browser != nil && browser.contact == ct {
 			a.productConversationsView(c, t, browser)
 			return
@@ -751,8 +749,15 @@ func (a *appModel) header(c *ui.Context, t *ui.Theme, ct *contact, visual botSta
 	if ct.isBuiltin() && a.hideBuiltinArchitect {
 		a.bindBotRowMenu(header, ct.ID, msgs)
 	}
+	winW := a.windowContentWidth(c)
+	rowStartX, rowEndX := a.mainHeaderBounds(winW)
+	leftSafe, rightSafe := windowControlInsets(c, rowStartX, rowEndX, winW)
 	header.Children(func() {
-		ui.Row(c).FillWidth().MinWidth(0).Padding(8, 16).AlignItems(ui.Center).Gap(8).Children(func() {
+		ui.Row(c).FillWidth().MinWidth(0).MinHeight(max(float32(48), c.TitleBar().Height)).
+			Padding(8, max(16, rightSafe), 8, max(16, leftSafe)).AlignItems(ui.Center).Gap(8).DragWindow().Children(func() {
+			if a.railCollapsed {
+				a.showContactsButton(c, t)
+			}
 			c.Key(ct.ID)
 			botStatusAvatar(c, t, ct, 28, visual, t.Background)
 			ui.Column(c).Grow(1).MinWidth(0).Gap(1).Children(func() {
@@ -778,9 +783,6 @@ func (a *appModel) header(c *ui.Context, t *ui.Theme, ct *contact, visual botSta
 				}
 			}
 			a.botOverviewButton(c, t, ct, visual, msgs)
-			if a.railCollapsed {
-				a.showContactsButton(c, t)
-			}
 		})
 	})
 }
@@ -863,15 +865,9 @@ func (a *appModel) chat(c *ui.Context, t *ui.Theme, state connectionViewState, s
 					}
 					chatMessageRow(c, t, messages, dividers, i, func() { a.message(c, t, ct, messages[i], i == readIndex) })
 				}).Label(locales.In(c.Locale()).ConversationMessagesLabel()).FillHeight().FillWidth().MaxWidth(conversationMaxWidth).Padding(16, 16, 32)
-			})
-		}
-		if rows > 0 && !ct.list.AtEnd() {
-			ui.Row(c).Key("back-to-latest").Justify(ui.Center).Children(func() {
-				back := secondaryButton(c, locales.In(c.Locale()).BackToLatest())
-				back.OnClick(func() {
-					ct.list.ScrollToEnd()
-					a.focusComposer = true
-				})
+				if !ct.list.AtEnd() {
+					a.backToLatestButton(c, t, ct)
+				}
 			})
 		}
 		a.conversationActivities(c, t, ct)
@@ -882,6 +878,45 @@ func (a *appModel) chat(c *ui.Context, t *ui.Theme, state connectionViewState, s
 				a.composer(c, t, state, showConnectionSettings)
 			})
 		})
+	})
+}
+
+func (a *appModel) backToLatestButton(c *ui.Context, t *ui.Theme, ct *contact) {
+	label := locales.In(c.Locale()).BackToLatest()
+	back := appTooltip(c, ui.Button(c, "").Key("back-to-latest").Label(label), label).
+		Attach(ui.AnchorBottom, ui.AnchorBottom).Bottom(8).Size(32, 32).MinWidth(32).MinHeight(32).
+		Shrink(0).Padding(0).Center().Radius(0).Background(ui.Transparent).Border(0, ui.Transparent).FocusRing(false)
+	theme.TransitionControl(back, t).Draw(func(p *ui.Painter, r ui.Rect) {
+		fill, drawBorder := a.workTheme.ComposerSurface, a.workTheme.InputBorder
+		if !back.IsDisabled() {
+			switch {
+			case back.Pressed():
+				fill = t.SurfacePressed
+			case back.Hovered():
+				fill = t.SurfaceHover
+				drawBorder = drawBorder.Mix(t.Text, .24)
+			}
+			if back.Focused() {
+				drawBorder = t.Focus
+			}
+			if !back.Pressed() {
+				shadow := ui.RGBA(0, 0, 0, .10)
+				if t.Dark {
+					shadow = ui.RGBA(0, 0, 0, .30)
+				}
+				p.Shadow(r, 16, 0, 2, 8, 0, shadow)
+			}
+		}
+		theme.PaintPreferenceFace(p, r, 16, 2, fill, drawBorder)
+	}).DrawOver(func(p *ui.Painter, r ui.Rect) {
+		if back.FocusVisible() && !back.IsDisabled() {
+			theme.DrawFocusRing(p, r, 16, 2, t)
+		}
+	})
+	back.Children(func() { ui.Icon(c, backToLatestIcon).Size(16, 16).Shrink(0).TextColor(t.Text) })
+	back.OnClick(func() {
+		ct.list.ScrollToEnd()
+		a.focusComposer = true
 	})
 }
 

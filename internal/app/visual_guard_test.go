@@ -2578,3 +2578,8 @@ func TestVisualGuardOrchestrationAndTimeline(t *testing.T) {
 func TestVisualGuardComposerPlusAlignment(t *testing.T) {
 	assertComposerPlusAlignmentAndChrome(t)
 }
+
+func TestVisualGuardFloatingBackToLatestAndCollapsedRail(t *testing.T) {
+	assertFloatingBackToLatestOverlay(t)
+	assertCollapsedRailTopLeftToggleAndZeroTopStrip(t)
+}

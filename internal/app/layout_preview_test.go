@@ -5,10 +5,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
+	"github.com/HeimaoLST/Nagi/internal/pi"
 	"github.com/HeimaoLST/Nagi/locales"
 )
 
@@ -244,5 +247,285 @@ func TestWorkbenchRoleScenesKeepActionsReachable(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+func TestPreviewFloatingBackAndCollapsedRail(t *testing.T) {
+	dir := os.Getenv("NAGI_PREVIEW_DIR")
+	if dir == "" {
+		t.Skip("set NAGI_PREVIEW_DIR to write floating Back-to-latest and collapsed rail previews")
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	longLine := strings.Repeat("Wide continuous assistant prose occupying the full reading bubble width behind the overlay control. ", 2)
+	longBody := strings.Join([]string{longLine, longLine, longLine, longLine, longLine, longLine}, "\n")
+	seedLongTranscript := func(ct *contact) {
+		ct.Messages = make([]*message, 0, 36)
+		for i := 0; i < 36; i++ {
+			ct.Messages = append(ct.Messages, &message{
+				Key:  fmt.Sprintf("prev-scroll-%02d", i),
+				Kind: msgContact,
+				Text: fmt.Sprintf("Message %02d\n%s", i, longBody),
+			})
+		}
+	}
+	scrollUp := func(ct *contact, tr *ui.Tester, msgs locales.Messages) {
+		vp, _ := tr.Find(msgs.ConversationMessagesLabel())
+		for i := 0; i < 3 && ct.list.AtEnd(); i++ {
+			tr.Scroll(vp.X+vp.W/2, vp.Y+vp.H/2, 0, -640)
+			tr.Frame()
+		}
+	}
+
+	for _, shot := range []struct {
+		name, locale string
+		w, h         int
+		dark         bool
+		setup        func(*testing.T, *ui.Tester, *appModel, *contact, locales.Messages)
+	}{
+		{
+			name: "collapsed-scroll-en-light-1040x720.png", locale: "en", w: 1040, h: 720, dark: false,
+			setup: func(t *testing.T, tr *ui.Tester, a *appModel, ct *contact, msgs locales.Messages) {
+				seedLongTranscript(ct)
+				a.railCollapsed = true
+				tr.Frame()
+				scrollUp(ct, tr, msgs)
+			},
+		},
+		{
+			name: "compare-expanded-en-light-1040x720.png", locale: "en", w: 1040, h: 720, dark: false,
+			setup: func(t *testing.T, tr *ui.Tester, a *appModel, ct *contact, msgs locales.Messages) {
+				seedLongTranscript(ct)
+				a.railCollapsed = false
+				tr.Frame()
+				scrollUp(ct, tr, msgs)
+			},
+		},
+		{
+			name: "collapsed-scroll-zh-dark-1040x720.png", locale: "zh-Hans", w: 1040, h: 720, dark: true,
+			setup: func(t *testing.T, tr *ui.Tester, a *appModel, ct *contact, msgs locales.Messages) {
+				seedLongTranscript(ct)
+				a.railCollapsed = true
+				tr.Frame()
+				scrollUp(ct, tr, msgs)
+			},
+		},
+		{
+			name: "collapsed-scroll-en-dark-960x640.png", locale: "en", w: 960, h: 640, dark: true,
+			setup: func(t *testing.T, tr *ui.Tester, a *appModel, ct *contact, msgs locales.Messages) {
+				seedLongTranscript(ct)
+				a.railCollapsed = true
+				tr.Frame()
+				scrollUp(ct, tr, msgs)
+			},
+		},
+		{
+			name: "collapsed-scroll-zh-light-960x640.png", locale: "zh-Hans", w: 960, h: 640, dark: false,
+			setup: func(t *testing.T, tr *ui.Tester, a *appModel, ct *contact, msgs locales.Messages) {
+				seedLongTranscript(ct)
+				a.railCollapsed = true
+				tr.Frame()
+				scrollUp(ct, tr, msgs)
+			},
+		},
+		{
+			name: "collapsed-scroll-en-light-720x640.png", locale: "en", w: 720, h: 640, dark: false,
+			setup: func(t *testing.T, tr *ui.Tester, a *appModel, ct *contact, msgs locales.Messages) {
+				seedLongTranscript(ct)
+				a.railCollapsed = true
+				tr.Frame()
+				scrollUp(ct, tr, msgs)
+			},
+		},
+		{
+			name: "collapsed-scroll-zh-dark-720x640.png", locale: "zh-Hans", w: 720, h: 640, dark: true,
+			setup: func(t *testing.T, tr *ui.Tester, a *appModel, ct *contact, msgs locales.Messages) {
+				seedLongTranscript(ct)
+				a.railCollapsed = true
+				tr.Frame()
+				scrollUp(ct, tr, msgs)
+			},
+		},
+		{
+			name: "hover-back-en-light-1040x720.png", locale: "en", w: 1040, h: 720, dark: false,
+			setup: func(t *testing.T, tr *ui.Tester, a *appModel, ct *contact, msgs locales.Messages) {
+				seedLongTranscript(ct)
+				a.railCollapsed = true
+				tr.Frame()
+				scrollUp(ct, tr, msgs)
+				r, _ := tr.Find(msgs.BackToLatest())
+				tr.Move(1, 1)
+				tr.Move(r.X+16, r.Y+16)
+				tr.Advance(700 * time.Millisecond)
+				tr.Frame()
+			},
+		},
+		{
+			name: "hover-back-zh-dark-1040x720.png", locale: "zh-Hans", w: 1040, h: 720, dark: true,
+			setup: func(t *testing.T, tr *ui.Tester, a *appModel, ct *contact, msgs locales.Messages) {
+				seedLongTranscript(ct)
+				a.railCollapsed = true
+				tr.Frame()
+				scrollUp(ct, tr, msgs)
+				r, _ := tr.Find(msgs.BackToLatest())
+				tr.Move(1, 1)
+				tr.Move(r.X+16, r.Y+16)
+				tr.Advance(700 * time.Millisecond)
+				tr.Frame()
+			},
+		},
+		{
+			name: "hover-show-rail-en-light-1040x720.png", locale: "en", w: 1040, h: 720, dark: false,
+			setup: func(t *testing.T, tr *ui.Tester, a *appModel, ct *contact, msgs locales.Messages) {
+				a.railCollapsed = true
+				tr.Frame()
+				r, _ := tr.Find(msgs.RailContactsTitle())
+				tr.Move(1, 1)
+				tr.Move(r.X+16, r.Y+16)
+				tr.Advance(700 * time.Millisecond)
+				tr.Frame()
+			},
+		},
+		{
+			name: "focus-back-en-dark-1040x720.png", locale: "en", w: 1040, h: 720, dark: true,
+			setup: func(t *testing.T, tr *ui.Tester, a *appModel, ct *contact, msgs locales.Messages) {
+				seedLongTranscript(ct)
+				a.railCollapsed = true
+				tr.Frame()
+				scrollUp(ct, tr, msgs)
+				_ = tr.Click(msgs.ComposerLabel(ct.Name))
+				tr.Frame()
+				tr.Key(ui.Shift, ui.KeyTab)
+				tr.Frame()
+			},
+		},
+		{
+			name: "focus-show-rail-zh-light-1040x720.png", locale: "zh-Hans", w: 1040, h: 720, dark: false,
+			setup: func(t *testing.T, tr *ui.Tester, a *appModel, ct *contact, msgs locales.Messages) {
+				a.railCollapsed = true
+				tr.Frame()
+				_ = tr.Click(msgs.ComposerLabel(ct.Name))
+				tr.Frame()
+				for i := 0; i < 16 && !tr.Focused(msgs.RailContactsTitle()); i++ {
+					tr.Key(0, ui.KeyTab)
+					tr.Frame()
+				}
+			},
+		},
+		{
+			name: "avatar-rail-profile-en-light-960x640.png", locale: "en", w: 960, h: 640, dark: false,
+			setup: func(t *testing.T, tr *ui.Tester, a *appModel, ct *contact, msgs locales.Messages) {
+				seedLongTranscript(ct)
+				a.openContactProfile(ct.ID)
+				tr.Frame()
+			},
+		},
+		{
+			name: "avatar-rail-profile-zh-dark-960x640.png", locale: "zh-Hans", w: 960, h: 640, dark: true,
+			setup: func(t *testing.T, tr *ui.Tester, a *appModel, ct *contact, msgs locales.Messages) {
+				seedLongTranscript(ct)
+				a.openContactProfile(ct.ID)
+				tr.Frame()
+			},
+		},
+		{
+			name: "narrow-collapsed-profile-en-light-720x640.png", locale: "en", w: 720, h: 640, dark: false,
+			setup: func(t *testing.T, tr *ui.Tester, a *appModel, ct *contact, msgs locales.Messages) {
+				a.railCollapsed = true
+				a.openContactProfile(ct.ID)
+				tr.Frame()
+			},
+		},
+		{
+			name: "narrow-collapsed-source-chat-zh-dark-720x640.png", locale: "zh-Hans", w: 720, h: 640, dark: true,
+			setup: func(t *testing.T, tr *ui.Tester, a *appModel, ct *contact, msgs locales.Messages) {
+				a.railCollapsed = true
+				a.priorChats = &productConversationBrowser{
+					contact:    ct,
+					selectedID: "prior-preview",
+					ownerID:    ct.ID,
+					history: historyProjection{
+						messages: []*message{
+							{Key: "p-u", ID: 1, Kind: msgUser, Text: "请确认收起侧栏后的只读对话顶栏对齐。"},
+							{Key: "p-b", ID: 2, Kind: msgContact, Text: "顶部预留红绿灯空间，展开按钮位于返回之前。"},
+						},
+					},
+				}
+				tr.Frame()
+			},
+		},
+		{
+			name: "narrow-collapsed-sessions-en-dark-720x640.png", locale: "en", w: 720, h: 640, dark: true,
+			setup: func(t *testing.T, tr *ui.Tester, a *appModel, ct *contact, msgs locales.Messages) {
+				fx, ptySummary, pipeSummary := seedVisualSessionInspectorFixture(t)
+				fx.app.windowWidth = 720
+				fx.app.railCollapsed = true
+				fx.app.openBotSessions(fx.contact.ID, "header-overview:"+fx.contact.ID)
+				bot := fx.app.sessions.botSession(fx.contact.ID)
+				bot.items = []pi.ProductSessionSummary{ptySummary, pipeSummary}
+				bot.listLoading = false
+				t2 := ui.NewTesterWith(fx.app.view, 720, 640, ui.TesterOptions{Dark: true})
+				t2.SetLocale("en")
+				t2.SetFocused(true)
+				t2.SetTitleBar(ui.TitleBar{Height: 38, Left: 80})
+				t2.Frame()
+				writePreviewPNG(t, filepath.Join(dir, "narrow-collapsed-sessions-en-dark-720x640.png"), t2.Image())
+			},
+		},
+		{
+			name: "narrow-collapsed-background-work-zh-light-720x640.png", locale: "zh-Hans", w: 720, h: 640, dark: false,
+			setup: func(t *testing.T, tr *ui.Tester, a *appModel, ct *contact, msgs locales.Messages) {
+				fx := phase3SeededControlPlaneApp(t)
+				fx.app.windowWidth = 720
+				fx.app.railCollapsed = true
+				fx.app.openContactProfile(fx.contact.ID)
+				fx.app.backgroundWork.panel = &backgroundWorkPanel{
+					bot:    fx.contact,
+					opener: "header-overview:" + fx.contact.ID,
+				}
+				t2 := ui.NewTesterWith(fx.app.view, 720, 640, ui.TesterOptions{Dark: false})
+				t2.SetLocale("zh-Hans")
+				t2.SetFocused(true)
+				t2.SetTitleBar(ui.TitleBar{Height: 38, Left: 80})
+				t2.Frame()
+				writePreviewPNG(t, filepath.Join(dir, "narrow-collapsed-background-work-zh-light-720x640.png"), t2.Image())
+			},
+		},
+		{
+			name: "narrow-collapsed-scheduled-work-en-light-720x640.png", locale: "en", w: 720, h: 640, dark: false,
+			setup: func(t *testing.T, tr *ui.Tester, a *appModel, ct *contact, msgs locales.Messages) {
+				fx, _, _, _ := seedVisualScheduledWorkFixture(t)
+				fx.app.windowWidth = 720
+				fx.app.railCollapsed = true
+				fx.app.scheduledWorkBotID = fx.contact.ID
+				t2 := ui.NewTesterWith(fx.app.view, 720, 640, ui.TesterOptions{Dark: false})
+				t2.SetLocale("en")
+				t2.SetFocused(true)
+				t2.SetTitleBar(ui.TitleBar{Height: 38, Left: 80})
+				t2.Frame()
+				writePreviewPNG(t, filepath.Join(dir, "narrow-collapsed-scheduled-work-en-light-720x640.png"), t2.Image())
+			},
+		},
+	} {
+		if strings.HasPrefix(shot.name, "narrow-collapsed-sessions") ||
+			strings.HasPrefix(shot.name, "narrow-collapsed-background-work") ||
+			strings.HasPrefix(shot.name, "narrow-collapsed-scheduled-work") {
+			shot.setup(t, nil, nil, nil, locales.In(shot.locale))
+			continue
+		}
+		a, ct := appReadingTestApp(t)
+		a.windowWidth = shot.w
+		a.workspaceOpen = false
+		a.focusComposer = false
+		ct.Draft = "Keep draft across collapsed rail previews"
+		tr := ui.NewTesterWith(a.view, shot.w, shot.h, ui.TesterOptions{Dark: shot.dark})
+		tr.SetLocale(shot.locale)
+		tr.SetFocused(true)
+		tr.SetTitleBar(ui.TitleBar{Height: 38, Left: 80})
+		msgs := locales.In(shot.locale)
+		shot.setup(t, tr, a, ct, msgs)
+		writePreviewPNG(t, filepath.Join(dir, shot.name), tr.Image())
+		t.Logf("floating back preview path=%s", filepath.Join(dir, shot.name))
 	}
 }
