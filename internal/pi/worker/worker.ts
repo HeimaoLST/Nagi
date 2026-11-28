@@ -64,8 +64,8 @@ class Worker {
   readonly builtinCatalog: { supported: { name: string; description: string }[]; defaults: string[] };
   private readonly knownBuiltinTools: Set<string>;
   constructor(private stateDir: string, productPaths?: ProductProfilePaths) {
-    const definitions = [createReadToolDefinition, createBashToolDefinition, createEditToolDefinition, createWriteToolDefinition,
-      createGrepToolDefinition, createFindToolDefinition, createLsToolDefinition].map(factory => factory(stateDir));
+    const definitions = [createReadToolDefinition(stateDir), this.bashTool(stateDir), createEditToolDefinition(stateDir),
+      createWriteToolDefinition(stateDir), createGrepToolDefinition(stateDir), createFindToolDefinition(stateDir), createLsToolDefinition(stateDir)];
     this.builtinCatalog = { supported: definitions.map(({ name, description }) => ({ name, description })),
       defaults: definitions.slice(0, 4).map(({ name }) => name) };
     this.knownBuiltinTools = new Set(this.builtinCatalog.supported.map(tool => tool.name));
@@ -88,6 +88,15 @@ class Worker {
       process.once('SIGTERM', () => { process.exitCode = 143; void this.disconnect(false); });
       process.once('SIGINT', () => { process.exitCode = 130; void this.disconnect(false); });
     }
+  }
+  private bashTool(cwd: string): ToolDefinition {
+    const { renderCall, renderResult, ...definition } = createBashToolDefinition(cwd, {
+      exposeSessionEnvironment: false,
+      spawnHook: ({ command, cwd: runCwd, env }) => ({
+        command, cwd: runCwd, env: Object.fromEntries(Object.entries(env).filter(([key]) => !key.startsWith('PI_'))),
+      }),
+    });
+    return definition;
   }
   private response(id: string, result: object): Promise<void> {
     return this.writer.send({ v: 1, type: 'response', id, ok: true, result });
@@ -468,7 +477,8 @@ class Worker {
           ],
           ...(productPrompt ? { systemPrompt: params.instructions } : { appendSystemPrompt: params.instructions ? [params.instructions] : [] }) },
       });
-      const result = await createAgentSessionFromServices({ services, sessionManager: target.sessionManager, model, thinkingLevel: config.thinkingLevel ?? 'off', tools, customTools });
+      const result = await createAgentSessionFromServices({ services, sessionManager: target.sessionManager, model,
+        thinkingLevel: config.thinkingLevel ?? 'off', tools, customTools: [...customTools, ...(codingTools.includes('bash') ? [this.bashTool(target.cwd)] : [])] });
       return { ...result, services, diagnostics: services.diagnostics };
     }, { cwd, agentDir, sessionManager: manager });
     const context: Context = { binding, configuration: config, instructions: params.instructions, codingTools: params.codingTools, domainTools: params.domainTools,
