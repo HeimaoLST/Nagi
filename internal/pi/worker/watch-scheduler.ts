@@ -622,7 +622,7 @@ export class WatchScheduler {
 
   private async observeExecutable(artifact: Executable, definition: Extract<WatchPrecheck, { kind: 'executable' }>, cwd: string,
     output: ObservationStream, run: Run, timedOut: () => boolean): Promise<Observation> {
-    const root = mkdtempSync(join(realpathSync(tmpdir()), 'nagi-precheck-'));
+    const root = mkdtempSync(join(realpathSync(tmpdir()), 'xuhu-precheck-'));
     try {
       const scratch = join(root, 'scratch');
       const executable = join(root, 'observer');

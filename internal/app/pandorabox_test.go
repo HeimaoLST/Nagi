@@ -18,7 +18,7 @@ func pandoraBoxTestApp(t *testing.T) (*appModel, *contact, *contact) {
 	a := testApp(t)
 	pandora := &contact{
 		ID: "builtin:pandorabox", Name: "PandoraBox", Role: "Bot Architect",
-		Purpose:    "Design, create, and refine focused Nagi Bots through conversation.",
+		Purpose:    "Design, create, and refine focused Xuhu Bots through conversation.",
 		SystemKind: pi.SystemKindBotArchitect, ProfileRevision: 1, Loaded: true, Status: statusReady,
 	}
 	specialist := &contact{

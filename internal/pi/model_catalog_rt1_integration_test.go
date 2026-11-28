@@ -1304,7 +1304,7 @@ func TestPiProductRT1SQLiteV10MigrationV12RefusalAndIndependentRestore(t *testin
 		ProfilePath:     filepath.Join(v10Dir, "contacts.json"),
 		CredentialsPath: filepath.Join(v10Dir, "connection.json"),
 	}
-	v10DB := filepath.Join(v10Dir, "nagi.db")
+	v10DB := filepath.Join(v10Dir, "xuhu.db")
 	protocolJS := filepath.Join(filepath.Dir(workerPath), "protocol.js")
 
 	canonicalV10Bytes := runNodeModule(t, nodePath, `
@@ -1644,7 +1644,7 @@ db.close();
 			}
 			rp.shutdown(t, ctx)
 		}
-		schema := runNodeSQLite(t, nodePath, filepath.Join(destDir, "nagi.db"), `
+		schema := runNodeSQLite(t, nodePath, filepath.Join(destDir, "xuhu.db"), `
 const { DatabaseSync } = require('node:sqlite');
 const db = new DatabaseSync(process.argv[1]);
 const v = db.prepare('PRAGMA user_version').get().user_version;

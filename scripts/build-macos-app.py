@@ -17,7 +17,8 @@ import tempfile
 ROOT = Path(__file__).resolve().parent.parent
 WORKER = ROOT / "internal/pi/worker"
 PIN_PATH = ROOT / ".github/pi-runtime.json"
-BUNDLE_ID = "dev.nagi.desktop"
+ICON_PATH = ROOT / "assets/icons/AppIcon.icns"
+BUNDLE_ID = "dev.xuhu.desktop"
 MINIMUM_OS = "13.0"
 
 
@@ -62,7 +63,7 @@ def install_payload(payload: Path, destination: Path, pin: dict) -> dict:
     inputs.extend((PIN_PATH, ROOT / "assets/licenses/Pi-MIT.txt", ROOT / "scripts/build-pi-worker.py"))
     inputs.extend(ROOT / patch["path"] for patch in pin["pi"]["patches"])
     expected = {path.relative_to(ROOT).as_posix(): sha256(path) for path in inputs}
-    if manifest["nagi_source"]["inputs"] != expected:
+    if manifest["xuhu_source"]["inputs"] != expected:
         raise ValueError("worker inputs differ from this checkout")
     if manifest["entry"] != {"node": "bin/node", "worker": "dist/worker.js"}:
         raise ValueError("worker entry points differ from the app's Resources/pi layout")
@@ -77,8 +78,8 @@ def install_payload(payload: Path, destination: Path, pin: dict) -> dict:
         raise ValueError("installed worker bytes differ from the worker manifest")
     if files["bin/node"]["sha256"] != manifest["node"]["binary_sha256"]:
         raise ValueError("Node binary differs from its recorded runtime hash")
-    supervisor = destination / "bin/nagi-pty-supervisor"
-    if files["bin/nagi-pty-supervisor"]["sha256"] != manifest["supervisor"]["binary_sha256"]:
+    supervisor = destination / "bin/xuhu-pty-supervisor"
+    if files["bin/xuhu-pty-supervisor"]["sha256"] != manifest["supervisor"]["binary_sha256"]:
         raise ValueError("supervisor binary differs from its recorded hash")
     minimum_os(supervisor)
     subprocess.run(["/usr/bin/codesign", "--verify", "--strict", supervisor], check=True)
@@ -134,19 +135,22 @@ def build(destination: Path, payload: Path) -> dict:
     if source["status"]:
         raise ValueError("package builds require a clean committed source checkout")
     pin = json.loads(PIN_PATH.read_text())
+    if not ICON_PATH.is_file() or ICON_PATH.read_bytes()[:4] != b"icns":
+        raise ValueError("missing or invalid assets/icons/AppIcon.icns")
     version = (ROOT / "VERSION").read_text().strip()
     destination.mkdir(parents=True, exist_ok=False)
     with tempfile.TemporaryDirectory(prefix="assembly-", dir=destination) as staging:
-        app = Path(staging) / "Nagi.app"
+        app = Path(staging) / "Xuhu.app"
         contents = app / "Contents"
         resources = contents / "Resources"
         resources.mkdir(parents=True)
         worker_root = resources / "pi"
         runtime = install_payload(payload, worker_root, pin)
         shutil.copy2(PIN_PATH, resources / "pi-runtime.json")
-        gui = contents / "MacOS/Nagi"
+        shutil.copy2(ICON_PATH, resources / "AppIcon.icns")
+        gui = contents / "MacOS/Xuhu"
         gui.parent.mkdir()
-        command = [sys.executable, "scripts/gui-go.py", "build", "-mod=readonly", "-trimpath", "-buildvcs=true", "-o", str(gui), "./cmd/nagi"]
+        command = [sys.executable, "scripts/gui-go.py", "build", "-mod=readonly", "-trimpath", "-buildvcs=true", "-o", str(gui), "./cmd/xuhu"]
         build_env = {"GOOS": "darwin", "GOARCH": "arm64", "CGO_ENABLED": "0", "MACOSX_DEPLOYMENT_TARGET": MINIMUM_OS}
         with (destination / "build.log").open("w") as log:
             subprocess.run(command, cwd=ROOT, env={**os.environ, **build_env}, stdout=log, stderr=subprocess.STDOUT, check=True)
@@ -157,14 +161,15 @@ def build(destination: Path, payload: Path) -> dict:
         node = worker_root / "bin/node"
         worker = worker_root / "dist/worker.js"
         floors = {"gui": minimum_os(gui), "node": minimum_os(node),
-                  "supervisor": minimum_os(worker_root / "bin/nagi-pty-supervisor"), "bundle": MINIMUM_OS}
+                  "supervisor": minimum_os(worker_root / "bin/xuhu-pty-supervisor"), "bundle": MINIMUM_OS}
         plist = {
             "CFBundleDevelopmentRegion": "en",
-            "CFBundleDisplayName": "Nagi",
-            "CFBundleExecutable": "Nagi",
+            "CFBundleDisplayName": "Xuhu",
+            "CFBundleExecutable": "Xuhu",
+            "CFBundleIconFile": "AppIcon.icns",
             "CFBundleIdentifier": BUNDLE_ID,
             "CFBundleInfoDictionaryVersion": "6.0",
-            "CFBundleName": "Nagi",
+            "CFBundleName": "Xuhu",
             "CFBundlePackageType": "APPL",
             "CFBundleShortVersionString": version,
             "CFBundleVersion": version,
@@ -179,8 +184,8 @@ def build(destination: Path, payload: Path) -> dict:
         manifest = {
             "schema": 1,
             "version": version,
-            "nagi_source": source,
-            "bundle": {"identifier": BUNDLE_ID, "executable": "Contents/MacOS/Nagi", "minimum_os": MINIMUM_OS, "arch": "arm64"},
+            "xuhu_source": source,
+            "bundle": {"identifier": BUNDLE_ID, "executable": "Contents/MacOS/Xuhu", "icon": "Contents/Resources/AppIcon.icns", "icon_sha256": sha256(resources / "AppIcon.icns"), "minimum_os": MINIMUM_OS, "arch": "arm64"},
             "minimum_os": floors,
             "gui": {"build_info": build_info, "unsigned_sha256": sha256(gui)},
             "node": runtime["node"],
@@ -202,18 +207,18 @@ def build(destination: Path, payload: Path) -> dict:
         manifest["files"] = inventory(app)
         write_json(destination / "manifest.json", manifest)
         app.rename(destination / app.name)
-    return {"app": str(destination / "Nagi.app"), "manifest": str(destination / "manifest.json"), "commit": source["commit"], "cdhash": manifest["signature"]["cdhash"]}
+    return {"app": str(destination / "Xuhu.app"), "manifest": str(destination / "manifest.json"), "commit": source["commit"], "cdhash": manifest["signature"]["cdhash"]}
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Assemble and ad hoc sign a standalone macOS Nagi application.")
+    parser = argparse.ArgumentParser(description="Assemble and ad hoc sign a standalone macOS Xuhu application.")
     parser.add_argument("--payload", type=Path, required=True, help="External output of build-pi-worker.py")
-    parser.add_argument("--output", type=Path, required=True, help="New external directory for Nagi.app and its receipts")
+    parser.add_argument("--output", type=Path, required=True, help="New external directory for Xuhu.app and its receipts")
     args = parser.parse_args()
     try:
         print(json.dumps(build(args.output, args.payload), sort_keys=True))
     except (KeyError, OSError, ValueError, subprocess.CalledProcessError) as error:
-        print(f"Nagi macOS app build failed: {error}", file=sys.stderr)
+        print(f"Xuhu macOS app build failed: {error}", file=sys.stderr)
         return 1
     return 0
 

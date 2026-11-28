@@ -692,7 +692,7 @@ func TestPiProductActivityInspectionLiveTraceConversationAndACL(t *testing.T) {
 
 	proc.shutdown(t, ctx)
 
-	rev1SourceID := runNodeSQLite(t, opts.NodePath, filepath.Join(root, "nagi.db"), `
+	rev1SourceID := runNodeSQLite(t, opts.NodePath, filepath.Join(root, "xuhu.db"), `
 const { DatabaseSync } = require('node:sqlite');
 const db = new DatabaseSync(process.argv[1]);
 const row = db.prepare('SELECT source_id FROM connections WHERE revision = 1').get();
@@ -1088,7 +1088,7 @@ func TestPiProductActivityInspectionBackupMigrationAndRetention(t *testing.T) {
 	if err != nil || page1.NextCursor == nil || *page1.NextCursor == "" {
 		t.Fatalf("page1 trace cursor missing: %+v, %v", page1, err)
 	}
-	grantsInDB := runNodeSQLite(t, nodePath, filepath.Join(restoreRoot, "nagi.db"), `
+	grantsInDB := runNodeSQLite(t, nodePath, filepath.Join(restoreRoot, "xuhu.db"), `
 const { DatabaseSync } = require('node:sqlite');
 const db = new DatabaseSync(process.argv[1]);
 const row = db.prepare('SELECT granted_linked_activity_ids_json FROM activities WHERE activity_id = ?').get(JSON.stringify(process.argv[2]));
@@ -1174,7 +1174,7 @@ import(process.argv[2]).then(({ ProductSQLite }) => {
 
 	v3Root := t.TempDir()
 	v3Profile := filepath.Join(v3Root, "contacts.json")
-	v3DB := filepath.Join(v3Root, "nagi.db")
+	v3DB := filepath.Join(v3Root, "xuhu.db")
 	staleMirror := []byte(`{"version":1,"bots":[]}` + "\n")
 	if err := os.WriteFile(v3Profile, staleMirror, 0600); err != nil {
 		t.Fatal(err)

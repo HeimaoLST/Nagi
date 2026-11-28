@@ -3,16 +3,30 @@ package app
 import (
 	"log"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+
+	"github.com/HeimaoLST/Nagi/assets/icons"
 )
+
+func isBundledMacApp() bool {
+	executable, err := os.Executable()
+	if err != nil || executable == "" {
+		return false
+	}
+	if resolved, err := filepath.EvalSymlinks(executable); err == nil && resolved != "" {
+		executable = resolved
+	}
+	return strings.Contains(filepath.ToSlash(executable), ".app/Contents/MacOS/")
+}
 
 func Run() {
 	windowOptions := mygo.WindowOptions{
-		Title:         "Nagi",
+		Title:         "Xuhu",
 		TitleBarStyle: mygo.TitleBarHiddenInset,
 		Width:         1040,
 		Height:        720,
@@ -29,7 +43,7 @@ func Run() {
 		windowOptions.Width, windowOptions.Height = width, height
 		windowOptions.UseContentSize = true
 	}
-	mygo.App.SetName("Nagi")
+	mygo.App.SetName("Xuhu")
 	a, err := newProductRuntimeApp()
 	if err != nil {
 		a = newUnavailableApp(err)
@@ -42,6 +56,9 @@ func Run() {
 		a.refreshDockMenu()
 	})
 	mygo.App.WhenReady(func() {
+		if !isBundledMacApp() {
+			_ = mygo.App.Dock.SetIcon(icons.DockPNG)
+		}
 		windowOptions.Content = ui.View(a.nativeWindowView)
 		win := mygo.NewWindow(windowOptions)
 		a.win = win
@@ -55,7 +72,7 @@ func Run() {
 				a.windowWidth = w
 			}
 			if windowOptions.UseContentSize {
-				log.Printf("nagi native-content-size event=%s unit=DIP requested_width=%d requested_height=%d actual_width=%d actual_height=%d",
+				log.Printf("xuhu native-content-size event=%s unit=DIP requested_width=%d requested_height=%d actual_width=%d actual_height=%d",
 					event, windowOptions.Width, windowOptions.Height, w, h)
 			}
 		}

@@ -25,8 +25,8 @@ import (
 
 func TestPiAppProductConnectionStopAndWorkerLoss(t *testing.T) {
 	const (
-		key        = "nagi-product-loopback"
-		model      = "nagi-product-fixture"
+		key        = "xuhu-product-loopback"
+		model      = "xuhu-product-fixture"
 		firstInput = "Inventory the original workspace"
 		firstReply = "Original workspace inventoried"
 		stopInput  = "Check the original workspace again"

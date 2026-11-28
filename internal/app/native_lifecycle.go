@@ -106,7 +106,7 @@ func (a *appModel) refreshDockMenu() {
 func (a *appModel) buildDockMenu() *mygo.Menu {
 	state := a.currentDockMenuState()
 	msgs := locales.In(state.locale)
-	items := []*mygo.MenuItem{{ID: "open-nagi", Label: msgs.DockOpenNagi(), Disabled: state.closing, Click: func(*mygo.MenuItem, *mygo.Window) {
+	items := []*mygo.MenuItem{{ID: "open-xuhu", Label: msgs.DockOpenXuhu(), Disabled: state.closing, Click: func(*mygo.MenuItem, *mygo.Window) {
 		a.reopenWindow()
 	}}}
 	if state.draining && !state.closing {
@@ -169,7 +169,7 @@ func (a *appModel) drainSynchronouslyOnSessionEnding() {
 	a.stopProviderTimers()
 	if !a.quitReady {
 		if err := a.persist(); err != nil {
-			log.Printf("Nagi session end save: %s", a.connectionSafeMessage(err))
+			log.Printf("Xuhu session end save: %s", a.connectionSafeMessage(err))
 		}
 		if host := a.productHost(); host != nil {
 			deadline, cancel := context.WithTimeout(context.Background(), 4*time.Second)
@@ -184,7 +184,7 @@ func (a *appModel) drainSynchronouslyOnSessionEnding() {
 				outcome, _ = host.product.Kill(deadline)
 			}
 			if !outcome.Reaped {
-				log.Printf("Nagi session end could not confirm reaping worker %d", outcome.PID)
+				log.Printf("Xuhu session end could not confirm reaping worker %d", outcome.PID)
 			}
 		}
 	}

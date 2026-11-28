@@ -111,7 +111,7 @@ def main(argv: list[str]) -> int:
         )
 
     src = module_dir()
-    with tempfile.TemporaryDirectory(prefix="nagi-gui-go-") as td:
+    with tempfile.TemporaryDirectory(prefix="xuhu-gui-go-") as td:
         tmp = Path(td)
         module = tmp / "mygo"
         shutil.copytree(src, module)

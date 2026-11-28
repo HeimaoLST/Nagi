@@ -220,7 +220,7 @@ func testRuntimeModel(t *testing.T) (*appModel, *contact, *contact) {
 		t.Fatal(err)
 	}
 	bound := &contact{
-		ID: "bound", Name: "Nagi", Role: "Assistant",
+		ID: "bound", Name: "Xuhu", Role: "Assistant",
 		Purpose: "old purpose", Instructions: "old instructions", Workspace: "/old",
 		SessionID: "s1", Loaded: true, Draft: "keep me", Status: statusReady,
 		PiBinding: recoveryConversationBinding("bound", "/old", "s1"),

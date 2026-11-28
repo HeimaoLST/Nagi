@@ -1,4 +1,4 @@
-# Nagi code and UI standards
+# Xuhu code and UI standards
 
 Read this alongside [AGENTS.md](../AGENTS.md), [lessons.md](../lessons.md), [desktop design](design/desktop.md) and [UI checklist](design/ui-checklist.md) before modifying code or reviewing a PR.
 

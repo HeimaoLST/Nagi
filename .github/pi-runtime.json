@@ -14,9 +14,9 @@
     "version": "1.5.2",
     "declared_source_sha": "b4afdddf44e059c67ccf5097e5317d913521b470",
     "package_json": "internal/pi/worker/package.json",
-    "package_json_sha256": "bb8d6052c08f945af49a77f89f038085b3b652220daab872be50068f126638fb",
+    "package_json_sha256": "0d378414877c91b65b9c46c1ae710507086e8575e8e2f3062588b33c1de49b44",
     "lock_file": "internal/pi/worker/package-lock.json",
-    "lock_sha256": "64facdd6a566654244434bba414eea27ae4d3a452336ccdb24d73770f4804035",
+    "lock_sha256": "58ee1d30ffa0336435361003c0ef49bfe47437acc780e82a6efbb8bb59a0e52a",
     "packages": {
       "@earendil-works/pi-coding-agent": {
         "version": "1.5.2",

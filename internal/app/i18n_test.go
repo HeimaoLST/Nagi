@@ -618,7 +618,7 @@ func TestShellAndNewContactFollowLocale(t *testing.T) {
 	if last.Name != locales.In("zh-Hans").NewContactName(1) {
 		t.Fatalf("new contact name = %q, want the frame language", last.Name)
 	}
-	if demo.contacts[0].Name != "Nagi" {
+	if demo.contacts[0].Name != "Xuhu" {
 		t.Fatalf("existing contact name was rewritten: %q", demo.contacts[0].Name)
 	}
 }

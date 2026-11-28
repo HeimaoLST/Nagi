@@ -74,7 +74,7 @@ func TestLocalStateBeforeConnectionCreateSaveAndRestart(t *testing.T) {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	focusComposer(t, tr, "Composer for Nagi")
+	focusComposer(t, tr, "Composer for Xuhu")
 	tr.Type("Keep the first local draft")
 	tr.Frame()
 	if err := tr.Click(locales.In("en").AvatarAddContact()); err != nil {
@@ -242,7 +242,7 @@ func TestContactManagementSaveFailureRollsBackFieldsAndKeepsDraft(t *testing.T) 
 	if a.saveContactProfileDraftFor(bound.ID, draft, false) {
 		t.Fatal("save unexpectedly succeeded with an unusable store")
 	}
-	if bound.Name != "Nagi" || bound.Purpose != oldPurpose || bound.Workspace != oldWorkspace {
+	if bound.Name != "Xuhu" || bound.Purpose != oldPurpose || bound.Workspace != oldWorkspace {
 		t.Fatalf("failed save changed the contact: %+v", bound)
 	}
 	editor := a.profileEditorFor(bound.ID)
@@ -252,7 +252,7 @@ func TestContactManagementSaveFailureRollsBackFieldsAndKeepsDraft(t *testing.T) 
 	if editor.Status != "" {
 		t.Fatal("failed save reported success")
 	}
-	if a.store.State.Contacts[0].Name != "Nagi" {
+	if a.store.State.Contacts[0].Name != "Xuhu" {
 		t.Fatal("failed save left the store's in-memory snapshot changed")
 	}
 	if bound.Draft != "keep me" || bound.SessionID != sessionRef || !reflect.DeepEqual(bound.PiBinding, binding) {

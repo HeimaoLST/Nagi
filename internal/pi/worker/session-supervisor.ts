@@ -20,7 +20,7 @@ const maxRetainedSessions = 64;
 const maxActiveSessionsPerBot = 8;
 const maxActiveSessionsGlobal = 32;
 const maxArmedWatches = 32;
-const authPauseMessage = 'Do not enter passwords or secrets into Nagi chat/prompts; complete authentication externally or close this session.';
+const authPauseMessage = 'Do not enter passwords or secrets into Xuhu chat/prompts; complete authentication externally or close this session.';
 const authPrompt = /(?:password\s*:|passphrase[^\n]{0,80}:|enter\s+(?:a\s+)?pin\b)/i;
 const controlErrors = [null, 'auth_paused', 'input_closed', 'unsupported_operation', 'write_unknown'] as const;
 export const sessionSignals = ['SIGINT', 'SIGTERM', 'SIGHUP', 'SIGKILL'] as const;
@@ -36,7 +36,7 @@ type WatchKind = NonNullable<SessionWatchSummary['firedKind']>;
 const now = () => new Date().toISOString();
 
 export function supervisorPath(): string {
-  const bundled = fileURLToPath(new URL('../bin/nagi-pty-supervisor', import.meta.url));
+  const bundled = fileURLToPath(new URL('../bin/xuhu-pty-supervisor', import.meta.url));
   const path = statSync(bundled, { throwIfNoEntry: false }) ? bundled : process.env.NAGI_PTY_SUPERVISOR;
   if (!path || !isAbsolute(path) || !statSync(path, { throwIfNoEntry: false })?.isFile()) {
     throw new RequestError('exec_failed', 'The native session supervisor is unavailable');

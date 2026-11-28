@@ -45,7 +45,7 @@ type delegationProvider struct {
 }
 
 func (p *delegationProvider) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if p.requests.Add(1) > 40 || r.Method != http.MethodPost || r.URL.Path != "/v1/chat/completions" || r.Header.Get("Authorization") != "Bearer nagi-product-loopback" {
+	if p.requests.Add(1) > 40 || r.Method != http.MethodPost || r.URL.Path != "/v1/chat/completions" || r.Header.Get("Authorization") != "Bearer xuhu-product-loopback" {
 		p.t.Error("unexpected delegation provider request")
 		http.Error(w, "unexpected delegation provider request", http.StatusBadRequest)
 		return
@@ -98,7 +98,7 @@ func (p *delegationProvider) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/event-stream")
 	for _, choice := range []map[string]any{{"index": 0, "delta": delta, "finish_reason": nil}, {"index": 0, "delta": map[string]any{}, "finish_reason": finish}} {
-		chunk, _ := json.Marshal(map[string]any{"id": "delegation-loopback", "object": "chat.completion.chunk", "created": 1, "model": "nagi-product-fixture", "choices": []any{choice}})
+		chunk, _ := json.Marshal(map[string]any{"id": "delegation-loopback", "object": "chat.completion.chunk", "created": 1, "model": "xuhu-product-fixture", "choices": []any{choice}})
 		fmt.Fprintf(w, "data: %s\n\n", chunk)
 	}
 	io.WriteString(w, "data: [DONE]\n\n")

@@ -23,7 +23,7 @@ func TestContactStoreCreatesDefaultAndStableID(t *testing.T) {
 		t.Fatalf("contacts = %d", len(store.State.Contacts))
 	}
 	first := store.State.Contacts[0]
-	if first.Name != "Nagi" || first.SessionID != "" || first.Workspace != "/tmp/workspace" {
+	if first.Name != "Xuhu" || first.SessionID != "" || first.Workspace != "/tmp/workspace" {
 		t.Fatalf("default contact = %+v", first)
 	}
 	if store.State.Selected != first.ID {
@@ -45,7 +45,7 @@ func TestContactStoreRoundTripKeepsProductState(t *testing.T) {
 		t.Fatal(err)
 	}
 	contacts := []*contact{
-		{ID: "a", Name: "Nagi", Role: "Assistant", Purpose: "p", Instructions: "i", Workspace: "/work", SessionID: "s-1", PiBinding: recoveryConversationBinding("a", "/work", "s-1"), Draft: "draft a"},
+		{ID: "a", Name: "Xuhu", Role: "Assistant", Purpose: "p", Instructions: "i", Workspace: "/work", SessionID: "s-1", PiBinding: recoveryConversationBinding("a", "/work", "s-1"), Draft: "draft a"},
 		{ID: "b", Name: "New contact 2", Role: "Assistant", Draft: "draft b"},
 	}
 	if err := saveContacts(store, contacts, "b"); err != nil {
@@ -172,7 +172,7 @@ func TestStoreRecoveryAcceptsOrdinaryProducerCopies(t *testing.T) {
 			}
 			editor := newContactProfileEditor(contactProfileDraft(ct))
 			editor.Draft.Name = "Unsaved profile stays in memory"
-			output := filepath.Join(t.TempDir(), "Nagi-workbench-recovery.json")
+			output := filepath.Join(t.TempDir(), "Xuhu-workbench-recovery.json")
 			path, err := writeStoreRecoveryCopy(copy, output)
 			if err != nil || path != output || !bytes.Equal(recoverySavedBytes(t, output), original) || !bytes.Equal(recoverySavedBytes(t, guiStorePath()), original) || editor.Draft.Name != "Unsaved profile stays in memory" {
 				t.Fatalf("export changed saved/live state or bytes: %q %v", path, err)
@@ -299,7 +299,7 @@ func TestStoreRecoveryRejectsUnsupportedCopies(t *testing.T) {
 					original = append(original, []byte(" {}")...)
 				}
 				if extra == "invalid-utf8" {
-					original = bytes.Replace(original, []byte("Nagi"), []byte{0xff}, 1)
+					original = bytes.Replace(original, []byte("Xuhu"), []byte{0xff}, 1)
 				}
 				if err := os.WriteFile(path, original, 0600); err != nil {
 					t.Fatal(err)

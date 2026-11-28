@@ -27,7 +27,7 @@ const [
 ]);
 
 function setupStorage(t) {
-  const root = mkdtempSync(join(realpathSync(tmpdir()), 'nagi-orch-unit-'));
+  const root = mkdtempSync(join(realpathSync(tmpdir()), 'xuhu-orch-unit-'));
   const profileDir = join(root, 'profile');
   const workspace = join(root, 'workspace');
   mkdirSync(profileDir, { recursive: true });

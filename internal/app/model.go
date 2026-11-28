@@ -327,7 +327,7 @@ type appModel struct {
 }
 
 var cannedReplies = map[string][]string{
-	"nagi": {
+	"xuhu": {
 		"Noted — I kept the earlier MyGo scope in view while answering, and nothing earlier was rewritten.",
 		"That fits the current scope. I will treat it as the next check-in point rather than a new decision.",
 	},

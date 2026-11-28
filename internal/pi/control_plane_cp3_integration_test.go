@@ -1592,7 +1592,7 @@ func TestPiControlPlaneCP3CrashRecoveryEscalationExclusionAndV10Backup(t *testin
 	if err != nil || stDone.State != "needsAttention" || len(stDone.Executions) != 1 {
 		t.Fatalf("steered utility failure must NOT escalate: %+v, %v", stDone, err)
 	}
-	escDB := filepath.Join(escDir, "nagi.db")
+	escDB := filepath.Join(escDir, "xuhu.db")
 	escSQL := runNodeSQLite(t, nodePath, escDB, `
 const { DatabaseSync } = require('node:sqlite');
 const db = new DatabaseSync(process.argv[1]);
@@ -1624,7 +1624,7 @@ console.log(JSON.stringify({ trEsc, unEsc, stEsc, stMut }));
 		"context_tokens": 262144, "output_tokens": 4096, "working_directory": ws, "max_active_tasks": 2,
 		"sources": map[string]any{"src-v9": map[string]string{"api": "openai-chat-completions", "endpoint": provider.server.URL + "/v1", "api_key": secret}},
 	})
-	v9DB := filepath.Join(v9Dir, "nagi.db")
+	v9DB := filepath.Join(v9Dir, "xuhu.db")
 	runNodeSQLite(t, nodePath, v9DB, `
 const { createHash } = require('node:crypto');
 const { writeFileSync } = require('node:fs');
@@ -1640,7 +1640,7 @@ const profile = {
   activities: [{ activityId: 'act-v9', ownerBotId: 'bot-v9', originConversationId: 'conv-v9', revision: 1, state: 'completed', goal: 'Legacy v9 task', requirements: [], questions: [], materials: [], inputFiles: [], executionIds: ['exec-v9'], results: [], updatedAt: '2026-01-01T00:00:00.000Z' }],
   executions: [{ executionId: 'exec-v9', revision: 1, state: 'completed', operationId: 'op-v9', input: { revision: 0, text: 'Legacy v9 task', materials: [] }, retained: { id: 'exec-v9' } }],
   operations: [],
-  connections: [{ revision: 1, sourceId: 'src-v9', configuration: { wireApi: 'openai-completions', baseUrl: baseURL, model: 'nagi-local-integration', contextTokens: 262144, outputTokens: 4096, workingDirectory: ws, maxActiveTasks: 2 } }],
+  connections: [{ revision: 1, sourceId: 'src-v9', configuration: { wireApi: 'openai-completions', baseUrl: baseURL, model: 'xuhu-local-integration', contextTokens: 262144, outputTokens: 4096, workingDirectory: ws, maxActiveTasks: 2 } }],
   savedRevision: 1, appliedRevision: 1
 };
 const mirrorData = Buffer.from(canonical(profile) + '\n');
@@ -1830,13 +1830,13 @@ console.log(JSON.stringify({ v, bots }));
 	}
 
 	liveMirrorHash := cp2SHA256File(t, bkOpts.ProfilePath)
-	liveDBHash := cp2SHA256File(t, filepath.Join(bkDir, "nagi.db"))
+	liveDBHash := cp2SHA256File(t, filepath.Join(bkDir, "xuhu.db"))
 	backupPath := filepath.Join(root, "cp3-portable.json")
 	if _, err := bkProc.client.BackupProfile(ctx, backupPath); err != nil {
 		t.Fatalf("BackupProfile: %v", err)
 	}
-	if cp2SHA256File(t, bkOpts.ProfilePath) != liveMirrorHash || cp2SHA256File(t, filepath.Join(bkDir, "nagi.db")) != liveDBHash {
-		t.Fatal("BackupProfile altered live contacts.json or nagi.db bytes")
+	if cp2SHA256File(t, bkOpts.ProfilePath) != liveMirrorHash || cp2SHA256File(t, filepath.Join(bkDir, "xuhu.db")) != liveDBHash {
+		t.Fatal("BackupProfile altered live contacts.json or xuhu.db bytes")
 	}
 	backupRaw := productRead(t, backupPath)
 	if bytes.Contains(backupRaw, []byte(secret)) || bytes.Contains(backupRaw, []byte(lateSecret)) {
@@ -2002,7 +2002,7 @@ console.log(JSON.stringify({ v, bots }));
 	if provider.totalCalls.Load() != callsBeforeRestore {
 		t.Fatalf("independent restore across 2 reopens made provider calls: before=%d after=%d", callsBeforeRestore, provider.totalCalls.Load())
 	}
-	restoreSchema := runNodeSQLite(t, nodePath, filepath.Join(restoreDir, "nagi.db"), `
+	restoreSchema := runNodeSQLite(t, nodePath, filepath.Join(restoreDir, "xuhu.db"), `
 const { DatabaseSync } = require('node:sqlite');
 const db = new DatabaseSync(process.argv[1]);
 const v = db.prepare('PRAGMA user_version').get().user_version;

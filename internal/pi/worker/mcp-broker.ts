@@ -118,7 +118,7 @@ export class McpConnectionManager {
       : new OwnedHttp({ url: server.url, headers: { ...server.headers, ...credentials },
         fetch: (url, init) => fetch(url, { ...init, redirect: 'error', signal: init?.signal ?
           AbortSignal.any([init.signal, AbortSignal.timeout(connectMs)]) : AbortSignal.timeout(connectMs) }) });
-    const client = new McpClient({ name: 'Nagi', version: '1', requestTimeoutMs: connectMs });
+    const client = new McpClient({ name: 'Xuhu', version: '1', requestTimeoutMs: connectMs });
     const entry: Entry = { serverId: server.serverId, scopeKey, isolation: server.isolation, revision: server.revision, transport, client,
       refCount: 0, state: 'connecting', tools: this.connect(client, transport) };
     this.transports.add(entry);

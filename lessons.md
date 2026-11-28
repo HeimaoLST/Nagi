@@ -1,4 +1,4 @@
-# Nagi development lessons
+# Xuhu development lessons
 
 ## UI and Native Interaction
 
@@ -258,7 +258,7 @@
 
 **Cause or correction:** Providers hash prompts in strict `Tools -> System -> Messages` prefix order, and an asynchronous `memory.get` response expands the scrollable profile content height when loaded.
 
-**Prevention:** Sort all SDK and product tool definitions alphabetically, keep the static L0 Nagi Bot master template first before per-Bot L1 profile and thin L1.5 lasting rules, reload L1.5 only at cold idle boundaries, compaction or explicit user rule edits/approvals while preserving the same Pi transcript, and anchor Bot management (Archive/Restore) in a fixed footer outside the scrolling memory region.
+**Prevention:** Sort all SDK and product tool definitions alphabetically, keep the static L0 Xuhu Bot master template first before per-Bot L1 profile and thin L1.5 lasting rules, reload L1.5 only at cold idle boundaries, compaction or explicit user rule edits/approvals while preserving the same Pi transcript, and anchor Bot management (Archive/Restore) in a fixed footer outside the scrolling memory region.
 
 ## Pi, SDK, and Process Integration
 
@@ -490,11 +490,11 @@
 
 **Prevention:** Configure adapter compatibility explicitly for foreground sessions, never replace visible message objects or append synthetic messages in `context` handlers, and verify complete serialized outbound request bodies across both wire APIs rather than checking only extension arrays or `systemPrompt`.
 
-### Separate Pi steer continuation from Nagi escalation in tests
+### Separate Pi steer continuation from Xuhu escalation in tests
 
 **Problem:** Injecting a provider error while a queued steer was still pending caused a second provider request inside the same Pi SDK run during escalation verification, obscuring whether a durable replacement execution had been admitted.
 
-**Cause or correction:** Pi can continue the active SDK run to process a queued steering message after an assistant error, so raw provider request count and durable Nagi replacement execution count measure different mechanisms.
+**Cause or correction:** Pi can continue the active SDK run to process a queued steering message after an assistant error, so raw provider request count and durable Xuhu replacement execution count measure different mechanisms.
 
 **Prevention:** Trigger controlled provider failures after observing steer consumption when testing M4 escalation exclusion, and assert durable `activity.executions` count, routed models, and `activity_escalations` rows separately from raw HTTP request counts; also dispatch mock MCP HTTP stream probes by method before parsing request bodies.
 
@@ -558,7 +558,7 @@
 
 **Problem:** Hashing only the visible `64 KiB` output slice let tail-only output changes appear identical, running a Seatbelt `executable` precheck directly on the mutable workspace binary opened a TOCTOU swap window, and a `1000ms` cold Seatbelt fixture timeout timed out during isolated bundle launch under `-race`.
 
-**Cause or correction:** Visible excerpt truncation (`1024` bytes / `64 KiB` `truncated` flag) serves UI/LLM payload bounds whereas digest change detection needs incremental hashing up to the `1 MiB` safety ceiling; staging verified binary bytes (`O_NOFOLLOW`, SHA-256 check, `0500`) into an isolated scratch directory prevents swapped-binary execution while `nagi-pty-supervisor` preserves worker-crash reaping; and cold Seatbelt process setup under `-race` needs realistic fixture deadlines.
+**Cause or correction:** Visible excerpt truncation (`1024` bytes / `64 KiB` `truncated` flag) serves UI/LLM payload bounds whereas digest change detection needs incremental hashing up to the `1 MiB` safety ceiling; staging verified binary bytes (`O_NOFOLLOW`, SHA-256 check, `0500`) into an isolated scratch directory prevents swapped-binary execution while `xuhu-pty-supervisor` preserves worker-crash reaping; and cold Seatbelt process setup under `-race` needs realistic fixture deadlines.
 
 **Prevention:** Stage and digest-verify every `executable` precheck binary before entering Seatbelt, hash full redacted normalized output up to the hard safety cap together with `truncated` and exit status while capping stored excerpts separately, and give Seatbelt process fixtures `>= 3000ms` runtime headroom (`10000ms` under `-race` integration suites) while keeping user-configurable floors explicit.
 

@@ -11,7 +11,7 @@ import (
 
 func workspaceTestApp(t *testing.T) (*appModel, *contact) {
 	t.Helper()
-	ct := &contact{ID: "nagi", Name: "Nagi", Role: "Assistant", SessionID: "s1", PiBinding: recoveryConversationBinding("nagi", "/tmp", "s1"), Loaded: true}
+	ct := &contact{ID: "xuhu", Name: "Xuhu", Role: "Assistant", SessionID: "s1", PiBinding: recoveryConversationBinding("xuhu", "/tmp", "s1"), Loaded: true}
 	a := &appModel{
 		demo: false, runtimeStatus: runtimeStateReady, workspaceOpen: true,
 		windowWidth: 1040, contacts: []*contact{ct},

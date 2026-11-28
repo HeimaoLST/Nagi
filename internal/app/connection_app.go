@@ -115,7 +115,7 @@ func contactsFromStore(store *contactStore) []*contact {
 
 func placeholderContact(workDir string) *contact {
 	return &contact{
-		ID: newContactID(), Name: "Nagi", Role: "Assistant",
+		ID: newContactID(), Name: "Xuhu", Role: "Assistant",
 		Workspace: workDir, Status: statusReady, WorkLabel: "Preparing a reply",
 	}
 }

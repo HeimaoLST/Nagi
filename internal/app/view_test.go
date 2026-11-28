@@ -23,14 +23,14 @@ func TestViewRendersBothThemes(t *testing.T) {
 	a := testApp(t)
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	for _, want := range []string{"Nagi", "Mio", "Ren", "Send", "Settings"} {
+	for _, want := range []string{"Xuhu", "Mio", "Ren", "Send", "Settings"} {
 		if !tr.HasText(want) {
 			t.Fatalf("light frame is missing %q", want)
 		}
 	}
 	tr.SetDark(true)
 	tr.Frame()
-	if !tr.HasText("Nagi") {
+	if !tr.HasText("Xuhu") {
 		t.Fatal("dark frame should render the selected contact")
 	}
 	tr.SetDark(false)
@@ -48,7 +48,7 @@ func TestTitleBarKeepsNavigationOutsideNativeControls(t *testing.T) {
 					ct := a.selectedContact()
 					ct.Draft = "keep the titlebar draft"
 					msgs := locales.In("en")
-					labels := []string{"Composer for Nagi", msgs.ComposerAttach(), "Send"}
+					labels := []string{"Composer for Xuhu", msgs.ComposerAttach(), "Send"}
 					closeLabel := ""
 					switch scene {
 					case "collapsed":
@@ -98,11 +98,11 @@ func TestTitleBarChangesKeepComposerAndSettingsFocus(t *testing.T) {
 	tr.SetFocused(true)
 	bar := ui.TitleBar{Height: 38, Left: 80}
 	tr.SetTitleBar(bar)
-	focusComposer(t, tr, "Composer for Nagi")
+	focusComposer(t, tr, "Composer for Xuhu")
 	tr.Type("draft before fullscreen")
-	before, present := tr.Find("Composer for Nagi")
+	before, present := tr.Find("Composer for Xuhu")
 	tr.SetTitleBar(ui.TitleBar{})
-	after, ok := tr.Find("Composer for Nagi")
+	after, ok := tr.Find("Composer for Xuhu")
 	if !present || !ok || after.W <= 0 || after.H <= 0 {
 		t.Fatalf("composer geometry missing after native metrics changed: before=%+v after=%+v", before, after)
 	}
@@ -139,7 +139,7 @@ func TestMinimumWindowRenders(t *testing.T) {
 	a := testApp(t)
 	tr := ui.NewTester(a.view, 960, 640)
 	tr.Frame()
-	if !tr.HasText("Send") || !tr.HasText("Nagi") {
+	if !tr.HasText("Send") || !tr.HasText("Xuhu") {
 		t.Fatal("chat should render at the 960x640 minimum")
 	}
 	a.openSettingsTab(settingsTabAppearance, settingsSourceRail)
@@ -176,7 +176,7 @@ func TestComposerCompositionDoesNotSendUntilCommit(t *testing.T) {
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.SetFocused(true)
 	tr.Frame()
-	focusComposer(t, tr, "Composer for Nagi")
+	focusComposer(t, tr, "Composer for Xuhu")
 	before := len(a.selectedContact().Messages)
 	tr.Compose("你好 Saki", 4)
 	tr.Frame()
@@ -234,14 +234,14 @@ func TestDraftSwitchThroughTester(t *testing.T) {
 	if a.contacts[1].Draft != "draft for mio" {
 		t.Fatalf("Mio draft = %q", a.contacts[1].Draft)
 	}
-	if err := tr.Click(locales.In("en").AvatarContactLabel("Nagi")); err != nil {
+	if err := tr.Click(locales.In("en").AvatarContactLabel("Xuhu")); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
 	if a.selected != 0 {
-		t.Fatal("did not switch to Nagi")
+		t.Fatal("did not switch to Xuhu")
 	}
-	focusComposer(t, tr, "Composer for Nagi")
+	focusComposer(t, tr, "Composer for Xuhu")
 	tr.Type("saki draft")
 	tr.Frame()
 	if a.contacts[0].Draft != "saki draft" {
@@ -556,7 +556,7 @@ func TestLiveTaskStatesRenderWithoutWaitingConflict(t *testing.T) {
 }
 
 func TestLiveSendUnknownAfterDisconnectSaysRestart(t *testing.T) {
-	ct := &contact{ID: "bound", Name: "Nagi", SessionID: "s1", PiBinding: recoveryConversationBinding("bound", "/tmp", "s1"), Loaded: true, SendState: sendUnknown}
+	ct := &contact{ID: "bound", Name: "Xuhu", SessionID: "s1", PiBinding: recoveryConversationBinding("bound", "/tmp", "s1"), Loaded: true, SendState: sendUnknown}
 	a := &appModel{demo: false, runtimeStatus: runtimeStateExited, contacts: []*contact{ct}}
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
@@ -680,7 +680,7 @@ func TestToolFailureIsVisibleBeforeDetails(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			ct := &contact{ID: "nagi", Name: "Nagi", Role: "Assistant", Loaded: true}
+			ct := &contact{ID: "xuhu", Name: "Xuhu", Role: "Assistant", Loaded: true}
 			ct.Messages = []*message{{ID: 1, Kind: msgActivity, ToolName: "bash", ToolArgs: `{"command":"false"}`, ToolOutput: tc.output}}
 			a := &appModel{runtimeStatus: runtimeStateReady, windowWidth: 1040, contacts: []*contact{ct}}
 			tr := ui.NewTester(a.view, 1040, 720)
@@ -712,7 +712,7 @@ func TestContactRailControlsStayVisibleAtNarrowWidths(t *testing.T) {
 		if limit != defaultLeftPaneWidth {
 			t.Fatalf("%d rail width = %v", width, limit)
 		}
-		for _, removed := range []string{"Nagi", "Contact scope", "Active", "Archived", "All"} {
+		for _, removed := range []string{"Xuhu", "Contact scope", "Active", "Archived", "All"} {
 			if bounds, ok := tr.Find(removed); ok && bounds.W > 0 && bounds.H > 0 && bounds.X+bounds.W <= limit {
 				t.Fatalf("redundant sidebar control %q is still shown", removed)
 			}
@@ -745,7 +745,7 @@ func TestResponsiveComposerAt960WithLoadedSession(t *testing.T) {
 		t.Fatal("960 should use the avatar three-pane layout")
 	}
 	msgs := locales.In("en")
-	composer, ok := tr.Find("Composer for Nagi")
+	composer, ok := tr.Find("Composer for Xuhu")
 	if !ok || composer.W <= 0 || composer.W-4 < 440 {
 		t.Fatalf("960 loaded composer=%+v ok=%v content=%g", composer, ok, composer.W-4)
 	}
@@ -771,7 +771,7 @@ func TestResponsiveComposerAt960WithLoadedSession(t *testing.T) {
 	ct.ActiveTaskID = "responsive-loaded-task"
 	ct.Status = statusWorking
 	tr.Frame()
-	composer, ok = tr.Find("Composer for Nagi")
+	composer, ok = tr.Find("Composer for Xuhu")
 	if !ok || composer.W-4 < 440 {
 		t.Fatalf("960 Stop composer=%+v ok=%v content=%g", composer, ok, composer.W-4)
 	}
@@ -800,7 +800,7 @@ func TestComposerKeepsAttachAndPrimaryActionAtNarrowCenter(t *testing.T) {
 		t.Fatal("test setup must keep the three-pane center")
 	}
 	msgs := locales.In("en")
-	composer, ok := tr.Find("Composer for Nagi")
+	composer, ok := tr.Find("Composer for Xuhu")
 	if !ok || composer.W <= 0 {
 		t.Fatalf("composer bounds missing: %+v ok=%v", composer, ok)
 	}
@@ -828,7 +828,7 @@ func TestComposerKeepsAttachAndPrimaryActionAtNarrowCenter(t *testing.T) {
 	ct.ActiveTaskID = "conversation-task"
 	ct.Status = statusWorking
 	tr.Frame()
-	composer, ok = tr.Find("Composer for Nagi")
+	composer, ok = tr.Find("Composer for Xuhu")
 	if !ok || composer.W <= 0 {
 		t.Fatalf("composer bounds missing after stop switch: %+v ok=%v", composer, ok)
 	}
@@ -893,7 +893,7 @@ func TestPreviewComposerTypography(t *testing.T) {
 				}
 				return r
 			}
-			composer := visible("Composer for Nagi")
+			composer := visible("Composer for Xuhu")
 			attach := visible(msgs.ComposerAttach())
 			var primary ui.Rect
 			if sc.active {

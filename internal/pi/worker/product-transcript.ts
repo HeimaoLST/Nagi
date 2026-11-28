@@ -5,8 +5,8 @@ import { dirname, resolve } from 'node:path';
 import { parseSessionEntries, type SessionEntry } from '@earendil-works/pi-coding-agent';
 import { RequestError } from './protocol.js';
 
-export const bindingEntryType = 'nagi-context-v1';
-export const turnEntryType = 'nagi-turn-v1';
+export const bindingEntryType = 'xuhu-context-v1';
+export const turnEntryType = 'xuhu-turn-v1';
 const blockSize = 64 * 1024;
 const maxRecordBytes = 8 * 1024 * 1024;
 

@@ -83,7 +83,7 @@ func TestCustomThemeSettingsSelectReloadAndReturnKeepsWorkState(t *testing.T) {
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.SetFocused(true)
 	tr.Frame()
-	focusComposer(t, tr, "Composer for Nagi")
+	focusComposer(t, tr, "Composer for Xuhu")
 	tr.Key(ui.Cmd, ui.KeyComma)
 	tr.Frame()
 	if err := tr.Click(locales.In("en").ThemePaper()); err != nil {
@@ -125,8 +125,8 @@ func TestCustomThemeSettingsSelectReloadAndReturnKeepsWorkState(t *testing.T) {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if !tr.Focused("Composer for Nagi") || ct.Draft != "Keep my draft while changing themes" || ct.ActiveTaskID != "active-task" || ct.SessionID != "s1" {
-		t.Fatalf("theme settings changed focus/work state: focus=%v contact=%+v", tr.Focused("Composer for Nagi"), ct)
+	if !tr.Focused("Composer for Xuhu") || ct.Draft != "Keep my draft while changing themes" || ct.ActiveTaskID != "active-task" || ct.SessionID != "s1" {
+		t.Fatalf("theme settings changed focus/work state: focus=%v contact=%+v", tr.Focused("Composer for Xuhu"), ct)
 	}
 }
 
@@ -537,14 +537,14 @@ func TestSettingsPageCmdCommaReturnsToFocusedComposer(t *testing.T) {
 	a.focusComposer = true
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	if !tr.Focused("Composer for Nagi") {
+	if !tr.Focused("Composer for Xuhu") {
 		t.Fatal("composer did not receive initial focus")
 	}
 	tr.Type("settings")
 	if ct.Draft != "before settings" {
 		t.Fatalf("draft before Cmd+, = %q", ct.Draft)
 	}
-	if !tr.Focused("Composer for Nagi") {
+	if !tr.Focused("Composer for Xuhu") {
 		t.Fatal("typing lost composer focus before Cmd+,")
 	}
 	tr.Key(ui.Cmd, ui.KeyComma)
@@ -559,7 +559,7 @@ func TestSettingsPageCmdCommaReturnsToFocusedComposer(t *testing.T) {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if !tr.Focused("Composer for Nagi") {
+	if !tr.Focused("Composer for Xuhu") {
 		t.Fatalf("Back did not return focus to the composer: %v", tr.Texts())
 	}
 	tr.Type(" again")
@@ -919,7 +919,7 @@ func TestSettingsCmdCommaFromRemovedMarkdownLinkFallsBackOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if !tr.Focused("Composer for Nagi") {
+	if !tr.Focused("Composer for Xuhu") {
 		t.Fatalf("removed link did not fall back to the chat composer: %v", tr.Texts())
 	}
 	if a.markdownLinkFocus != (markdownLinkTarget{}) || a.linkReturnTarget != (markdownLinkTarget{}) {
@@ -928,7 +928,7 @@ func TestSettingsCmdCommaFromRemovedMarkdownLinkFallsBackOnce(t *testing.T) {
 	ct.Messages[0].Text = original
 	tr.Frame()
 	tr.Frame()
-	if !tr.Focused("Composer for Nagi") {
+	if !tr.Focused("Composer for Xuhu") {
 		t.Fatalf("restored old link stole focus from the composer: %v", tr.Texts())
 	}
 	if got := tr.OpenedURLs(); len(got) != 0 {
@@ -955,13 +955,13 @@ func TestSettingsCmdCommaFromReplacedMarkdownLinkDoesNotStealFocusWhenOldTargetR
 		t.Fatal(err)
 	}
 	tr.Frame()
-	if !tr.Focused("Composer for Nagi") {
+	if !tr.Focused("Composer for Xuhu") {
 		t.Fatalf("replaced link did not fall back to the chat composer: %v", tr.Texts())
 	}
 	ct.Messages[0].Text = original
 	tr.Frame()
 	tr.Frame()
-	if !tr.Focused("Composer for Nagi") {
+	if !tr.Focused("Composer for Xuhu") {
 		t.Fatalf("old link later reappeared and stole focus: %v", tr.Texts())
 	}
 	if a.linkReturnTarget != (markdownLinkTarget{}) || a.markdownLinkFocus != (markdownLinkTarget{}) {
@@ -1200,7 +1200,7 @@ func TestC8SaveRecoveryCopyEntryKeepsSavedAndUnsavedState(t *testing.T) {
 		t.Fatal(err)
 	}
 	tr.Frame()
-	focusComposer(t, tr, "Composer for Nagi")
+	focusComposer(t, tr, "Composer for Xuhu")
 	tr.Type("Saved local work for the recovery copy")
 	tr.Frame()
 	ct := a.selectedContact()
@@ -1279,7 +1279,7 @@ func TestC8SaveRecoveryCopyEntryKeepsSavedAndUnsavedState(t *testing.T) {
 	if a.dataRecovery.problem != "" || a.dataRecovery.output == "" || string(recoverySavedBytes(t, a.dataRecovery.output)) != string(saved) {
 		t.Fatal("GUI recovery copy did not export the captured saved bytes")
 	}
-	if filepath.Dir(a.dataRecovery.output) != folder || !strings.HasPrefix(filepath.Base(a.dataRecovery.output), "Nagi-workbench-recovery-") || !tr.HasText(locales.In("en").RecoveryCopySaved(a.dataRecovery.output)) {
+	if filepath.Dir(a.dataRecovery.output) != folder || !strings.HasPrefix(filepath.Base(a.dataRecovery.output), "Xuhu-workbench-recovery-") || !tr.HasText(locales.In("en").RecoveryCopySaved(a.dataRecovery.output)) {
 		t.Fatal("successful copy did not expose the actual chosen location")
 	}
 }

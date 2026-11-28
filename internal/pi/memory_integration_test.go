@@ -57,7 +57,7 @@ func TestPiProductMemorySQLiteV2ToV3IsolationExclusionAndCaps(t *testing.T) {
 		ProfilePath:     filepath.Join(profileDir, "contacts.json"),
 		CredentialsPath: filepath.Join(profileDir, "connection.json"),
 	}
-	dbPath := filepath.Join(profileDir, "nagi.db")
+	dbPath := filepath.Join(profileDir, "xuhu.db")
 	runNodeSQLite(t, opts.NodePath, dbPath, `
 const { createHash } = require('node:crypto');
 const { writeFileSync } = require('node:fs');
@@ -673,7 +673,7 @@ func TestPiProductMemoryToolsZeroCacheBustReloadAndConsolidation(t *testing.T) {
 	l0A := strings.Split(turn1Sys, "\n\nBot Identity\n")[0]
 	l0Reload := strings.Split(turn3ReloadSys, "\n\nBot Identity\n")[0]
 	l0B := strings.Split(botBReqs[0].system, "\n\nBot Identity\n")[0]
-	if l0A != l0Reload || l0A != l0B || !strings.HasPrefix(l0A, "You are a long-lived Nagi Bot teammate.") {
+	if l0A != l0Reload || l0A != l0B || !strings.HasPrefix(l0A, "You are a long-lived Xuhu Bot teammate.") {
 		t.Fatalf("L0 static prefix diverged across reload or Bots")
 	}
 	if strings.Contains(turn1Sys, "Lasting Rules:") || !strings.Contains(turn3ReloadSys, "Lasting Rules:") ||

@@ -25,11 +25,11 @@ import (
 
 type standaloneProvenance struct {
 	Schema     int `json:"schema"`
-	NagiSource struct {
+	XuhuSource struct {
 		Commit string            `json:"commit"`
 		Status []string          `json:"status"`
 		Inputs map[string]string `json:"inputs"`
-	} `json:"nagi_source"`
+	} `json:"xuhu_source"`
 	Bundle struct {
 		Identifier string `json:"identifier"`
 		Executable string `json:"executable"`
@@ -188,7 +188,7 @@ func TestPiPackageStandalone(t *testing.T) {
 
 	contents := filepath.Join(bundle, "Contents")
 	resources := filepath.Join(contents, "Resources")
-	app := filepath.Join(contents, "MacOS", "Nagi")
+	app := filepath.Join(contents, "MacOS", "Xuhu")
 	payload := filepath.Join(resources, "pi")
 	node := filepath.Join(payload, "bin", "node")
 	worker := filepath.Join(payload, "dist", "worker.js")
@@ -203,11 +203,11 @@ func TestPiPackageStandalone(t *testing.T) {
 	pinPath := filepath.Join(repoRoot, ".github", "pi-runtime.json")
 	standaloneReadJSON(t, pinPath, &pin)
 	source := standaloneCommand(t, ctx, "/usr/bin/git", "rev-parse", "HEAD")
-	if sealed.Schema != 1 || sealed.NagiSource.Commit != source || sealed.NagiSource.Status == nil || len(sealed.NagiSource.Status) != 0 ||
-		sealed.Bundle.Identifier != "dev.nagi.desktop" || sealed.Bundle.Executable != "Contents/MacOS/Nagi" || sealed.Bundle.MinimumOS != "13.0" {
+	if sealed.Schema != 1 || sealed.XuhuSource.Commit != source || sealed.XuhuSource.Status == nil || len(sealed.XuhuSource.Status) != 0 ||
+		sealed.Bundle.Identifier != "dev.xuhu.desktop" || sealed.Bundle.Executable != "Contents/MacOS/Xuhu" || sealed.Bundle.MinimumOS != "13.0" {
 		t.Fatalf("sealed bundle provenance disagrees with source %s: %+v", source, sealed)
 	}
-	if signed.Schema != sealed.Schema || signed.NagiSource.Commit != source || signed.NagiSource.Status == nil || len(signed.NagiSource.Status) != 0 ||
+	if signed.Schema != sealed.Schema || signed.XuhuSource.Commit != source || signed.XuhuSource.Status == nil || len(signed.XuhuSource.Status) != 0 ||
 		signed.Bundle != sealed.Bundle || signed.Node != sealed.Node || signed.Pi != sealed.Pi || signed.Runtime != sealed.Runtime || !maps.Equal(signed.Licenses, sealed.Licenses) {
 		t.Fatal("post-sign receipt disagrees with the signed bundle manifest")
 	}
@@ -227,7 +227,7 @@ func TestPiPackageStandalone(t *testing.T) {
 			t.Fatalf("signed file differs from its receipt: %s: %v", rel, err)
 		}
 	}
-	if len(runtime.NagiSource.Commit) != 40 || runtime.NagiSource.Status == nil || len(runtime.NagiSource.Status) != 0 || sealed.Runtime.ManifestSHA256 != standaloneDigest(t, workerManifest) ||
+	if len(runtime.XuhuSource.Commit) != 40 || runtime.XuhuSource.Status == nil || len(runtime.XuhuSource.Status) != 0 || sealed.Runtime.ManifestSHA256 != standaloneDigest(t, workerManifest) ||
 		sealed.Node.Version != pin.Node.Version || sealed.Node.ArchiveSHA256 != pin.Node.ArchiveSHA256 || sealed.Node != runtime.Node ||
 		sealed.Pi != pin.Pi || sealed.Pi != runtime.Pi || standaloneDigest(t, filepath.Join(payload, "package-lock.json")) != pin.Pi.LockSHA256 ||
 		sealed.Node.BinarySHA256 != standaloneDigest(t, node) || sealed.Runtime.WorkerSHA256 != standaloneDigest(t, worker) ||
@@ -235,7 +235,7 @@ func TestPiPackageStandalone(t *testing.T) {
 		t.Fatalf("sealed worker provenance disagrees with runtime or pin: sealed=%+v runtime=%+v pin=%+v", sealed, runtime, pin)
 	}
 	for _, path := range []string{"internal/pi/worker/worker.ts", "internal/pi/worker/product.ts", "internal/pi/worker/product-profile.ts", "internal/pi/worker/protocol.ts", "internal/pi/worker/package-lock.json"} {
-		if runtime.NagiSource.Inputs[path] != standaloneDigest(t, filepath.Join(repoRoot, path)) {
+		if runtime.XuhuSource.Inputs[path] != standaloneDigest(t, filepath.Join(repoRoot, path)) {
 			t.Fatalf("packaged worker source differs from the checkout: %s", path)
 		}
 	}
@@ -267,11 +267,11 @@ func TestPiPackageStandalone(t *testing.T) {
 	if preSign.Path != info.Path || !maps.Equal(sealedSettings, settings) || len(sealed.GUI.UnsignedSHA256) != sha256.Size*2 {
 		t.Fatal("signed executable build info disagrees with the sealed manifest")
 	}
-	if info.Path != "github.com/HeimaoLST/Nagi/cmd/nagi" || settings["vcs.revision"] != source || settings["vcs.modified"] != "false" || settings["GOOS"] != "darwin" || settings["GOARCH"] != "arm64" {
+	if info.Path != "github.com/HeimaoLST/Nagi/cmd/xuhu" || settings["vcs.revision"] != source || settings["vcs.modified"] != "false" || settings["GOOS"] != "darwin" || settings["GOARCH"] != "arm64" {
 		t.Fatalf("unexpected signed executable build info: %s", info)
 	}
 	for _, key := range []string{"CFBundleIdentifier", "CFBundleExecutable", "LSMinimumSystemVersion"} {
-		want := map[string]string{"CFBundleIdentifier": sealed.Bundle.Identifier, "CFBundleExecutable": "Nagi", "LSMinimumSystemVersion": sealed.Bundle.MinimumOS}[key]
+		want := map[string]string{"CFBundleIdentifier": sealed.Bundle.Identifier, "CFBundleExecutable": "Xuhu", "LSMinimumSystemVersion": sealed.Bundle.MinimumOS}[key]
 		if got := standaloneCommand(t, ctx, "/usr/bin/plutil", "-extract", key, "raw", "-o", "-", filepath.Join(contents, "Info.plist")); got != want {
 			t.Fatalf("Info.plist %s=%q, want %q", key, got, want)
 		}
@@ -340,7 +340,7 @@ func TestPiPackageStandalone(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if strings.Contains(string(data), "nagi native-content-size event=created") {
+			if strings.Contains(string(data), "xuhu native-content-size event=created") {
 				workerPID = standaloneWorkerPID(t, startup, pid, node+" "+worker)
 			}
 		}

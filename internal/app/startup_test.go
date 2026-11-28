@@ -141,7 +141,7 @@ func TestUnavailableStoreFallbackKeepsPathsAndFile(t *testing.T) {
 
 func TestRuntimePanelShowsPathsAndMetadata(t *testing.T) {
 	ct := &contact{
-		ID: "nagi", Name: "Nagi", Role: "Assistant",
+		ID: "xuhu", Name: "Xuhu", Role: "Assistant",
 		Workspace: "/tmp/contact-ws", SessionID: "session-1", Loaded: true,
 		SessionWorkingDir: "/tmp/session-ws", SessionModel: "model-x",
 		SessionAPI: "openai-chat-completions", SessionState: "running", Draft: "keep",
@@ -175,7 +175,7 @@ func TestRuntimePanelShowsPathsAndMetadata(t *testing.T) {
 }
 
 func TestConfigurationEntryKeepsGlobalSettingsUsable(t *testing.T) {
-	ct := &contact{ID: "nagi", Name: "Nagi", Role: "Assistant", Draft: "keep"}
+	ct := &contact{ID: "xuhu", Name: "Xuhu", Role: "Assistant", Draft: "keep"}
 	a := &appModel{
 		runtimeStatus: runtimeStateReady, storePath: "/tmp/contacts.json",
 		workDir:  "/tmp/work",
@@ -223,11 +223,11 @@ func TestConfigurationEntryKeepsGlobalSettingsUsable(t *testing.T) {
 }
 
 func TestStartupBannerKeepsComposerFocusAndDraft(t *testing.T) {
-	ct := &contact{ID: "nagi", Name: "Nagi", Role: "Assistant", Draft: "keep"}
+	ct := &contact{ID: "xuhu", Name: "Xuhu", Role: "Assistant", Draft: "keep"}
 	a := &appModel{
 		demo: false, runtimeStatus: runtimeStateFailed,
 		runtimeStage: "Runtime startup", runtimeErr: "Pi worker could not start.",
-		runtimeHint: "Check the installed Nagi app.",
+		runtimeHint: "Check the installed Xuhu app.",
 		contacts:    []*contact{ct},
 	}
 	tr := ui.NewTester(a.view, 1040, 720)
@@ -237,7 +237,7 @@ func TestStartupBannerKeepsComposerFocusAndDraft(t *testing.T) {
 	if !tr.HasText(msgs.DetailsAction()) || !tr.HasText(msgs.ConnectionRecoveryManagedHint()) || tr.HasText(a.runtimeErr) || tr.HasText(a.runtimeHint) {
 		t.Fatal("startup failure should show an actionable banner")
 	}
-	if err := tr.Click("Composer for Nagi"); err != nil {
+	if err := tr.Click("Composer for Xuhu"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
@@ -262,7 +262,7 @@ func TestStartupBannerKeepsComposerFocusAndDraft(t *testing.T) {
 		t.Fatal("startup details remained visible after closing")
 	}
 	if ct.Draft != "keep" || a.runtimeStatus != runtimeStateFailed || a.runtimeErr != "Pi worker could not start." ||
-		a.runtimeHint != "Check the installed Nagi app." || a.submissionInFlight != 0 {
+		a.runtimeHint != "Check the installed Xuhu app." || a.submissionInFlight != 0 {
 		t.Fatal("startup disclosure changed the draft or original failure facts")
 	}
 }

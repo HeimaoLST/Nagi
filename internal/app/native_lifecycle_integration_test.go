@@ -276,11 +276,11 @@ func prepareNativeLifecycleCase(t *testing.T, sessionEnding bool) {
 		w.view.SetLocale("zh-Hans")
 		w.view.Frame()
 		menu := *dockMenuPtr
-		openItem := findDockMenuItem(menu, "open-nagi")
+		openItem := findDockMenuItem(menu, "open-xuhu")
 		schedItem := findDockMenuItem(menu, "scheduled-work")
 		sessItem := findDockMenuItem(menu, "sessions")
 		zhMsgs := locales.In("zh-Hans")
-		if openItem == nil || openItem.Label != zhMsgs.DockOpenNagi() ||
+		if openItem == nil || openItem.Label != zhMsgs.DockOpenXuhu() ||
 			schedItem == nil || schedItem.Label != zhMsgs.SchedWorkTitle() ||
 			sessItem == nil || sessItem.Label != zhMsgs.SessionInspectTitle() {
 			checkErr = fmt.Sprintf("zh-Hans dock menu mismatch: open=%+v sched=%+v sess=%+v", openItem, schedItem, sessItem)

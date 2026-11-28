@@ -437,7 +437,7 @@ func TestPiProductModelRoutingPoolStickinessAndSafeEscalation(t *testing.T) {
 	var observedAdmissionMu sync.Mutex
 	var observedAdmission string
 	effectPath := filepath.Join(root, "effect")
-	dbPath := filepath.Join(sourceDir, "nagi.db")
+	dbPath := filepath.Join(sourceDir, "xuhu.db")
 
 	mcpSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet {
@@ -1261,7 +1261,7 @@ func TestPiProductModelRoutingDeletedProviderRevocationBackupAndMigration(t *tes
 	if err != nil || recovered.State != "needsAttention" || len(recovered.Executions) != 1 || recovered.Executions[0].State != "unknown" {
 		t.Fatalf("recovered paused activity = %+v, %v", recovered, err)
 	}
-	dbPath := filepath.Join(sourceDir, "nagi.db")
+	dbPath := filepath.Join(sourceDir, "xuhu.db")
 	admState := runNodeSQLite(t, nodePath, dbPath, `
 const { DatabaseSync } = require('node:sqlite');
 const db = new DatabaseSync(process.argv[1]);
@@ -1380,7 +1380,7 @@ console.log(row?.state ?? '');
 		backupPath,
 		opts.ProfilePath,
 		dbPath,
-		filepath.Join(sourceDir, "nagi.db-wal"),
+		filepath.Join(sourceDir, "xuhu.db-wal"),
 	} {
 		mcpAssertNoSecretBytes(t, checkPath, h.allSecrets())
 	}
@@ -1449,7 +1449,7 @@ console.log(row?.state ?? '');
 		t.Fatalf("independent restore/reopen triggered provider calls: before=%d after=%d", callsBeforeCrash, h.requestCount())
 	}
 
-	restoreDB := filepath.Join(restoreDir, "nagi.db")
+	restoreDB := filepath.Join(restoreDir, "xuhu.db")
 	restoreCheck := runNodeSQLite(t, nodePath, restoreDB, `
 const { DatabaseSync } = require('node:sqlite');
 const db = new DatabaseSync(process.argv[1]);

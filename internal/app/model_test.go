@@ -13,7 +13,7 @@ func testApp(t *testing.T) *appModel {
 		demo: true,
 		contacts: []*contact{
 			{
-				ID: "nagi", Name: "Nagi", Role: "Research partner",
+				ID: "xuhu", Name: "Xuhu", Role: "Research partner",
 				Purpose:      "Long-running product and research questions.",
 				Instructions: "Keep replies short and concrete.",
 				WorkLabel:    "Looking through this thread",
@@ -25,11 +25,11 @@ func testApp(t *testing.T) *appModel {
 					{ID: 5, Kind: msgContact, Text: "Profile edits affect later replies and leave saved messages intact.", Time: "9:44"},
 				},
 				History: []historyEntry{
-					{ID: "nagi-h1", Date: "Sep 27", From: "me", Text: "Let's settle the first scope for the MyGo desktop."},
-					{ID: "nagi-h2", Date: "Sep 27", From: "contact", Text: "Use Pi for execution and MyGo for the desktop. Each contact keeps its own profile and history."},
-					{ID: "nagi-h3", Date: "Oct 3", From: "me", Text: "So no shared memory between contacts yet."},
-					{ID: "nagi-h4", Date: "Oct 3", From: "contact", Text: "Right. Each contact keeps its own history. Revisit collaboration after the single-contact workflow is useful."},
-					{ID: "nagi-h5", Date: "Oct 5", From: "contact", Text: "Profile edits affect future replies; saved history stays intact."},
+					{ID: "xuhu-h1", Date: "Sep 27", From: "me", Text: "Let's settle the first scope for the MyGo desktop."},
+					{ID: "xuhu-h2", Date: "Sep 27", From: "contact", Text: "Use Pi for execution and MyGo for the desktop. Each contact keeps its own profile and history."},
+					{ID: "xuhu-h3", Date: "Oct 3", From: "me", Text: "So no shared memory between contacts yet."},
+					{ID: "xuhu-h4", Date: "Oct 3", From: "contact", Text: "Right. Each contact keeps its own history. Revisit collaboration after the single-contact workflow is useful."},
+					{ID: "xuhu-h5", Date: "Oct 5", From: "contact", Text: "Profile edits affect future replies; saved history stays intact."},
 				},
 			},
 			{
@@ -80,12 +80,12 @@ func TestDraftsAreScopedPerContact(t *testing.T) {
 	a.selectContact(1)
 	a.selectedContact().Draft = "draft for mio"
 	a.selectContact(0)
-	a.selectedContact().Draft = "草稿 for nagi"
+	a.selectedContact().Draft = "草稿 for xuhu"
 	if a.contacts[1].Draft != "draft for mio" {
 		t.Fatalf("Mio draft changed: %q", a.contacts[1].Draft)
 	}
-	if a.contacts[0].Draft != "草稿 for nagi" {
-		t.Fatalf("Nagi draft changed: %q", a.contacts[0].Draft)
+	if a.contacts[0].Draft != "草稿 for xuhu" {
+		t.Fatalf("Xuhu draft changed: %q", a.contacts[0].Draft)
 	}
 }
 
@@ -181,10 +181,10 @@ func TestConsecutiveDefaultContactsAreIsolated(t *testing.T) {
 // against the running app.
 func TestReplyStaysInOriginatingContact(t *testing.T) {
 	a := testApp(t)
-	nagi := a.contactByID("nagi")
+	xuhu := a.contactByID("xuhu")
 	mio := a.contactByID("mio")
-	nagiCount := len(nagi.Messages)
-	nagiLastID := nagi.Messages[nagiCount-1].ID
+	xuhuCount := len(xuhu.Messages)
+	xuhuLastID := xuhu.Messages[xuhuCount-1].ID
 	a.selectContact(1)
 	mio.Draft = "ping"
 	if !a.sendCurrent() {
@@ -196,11 +196,11 @@ func TestReplyStaysInOriginatingContact(t *testing.T) {
 	if mio.Messages[len(mio.Messages)-1].Kind != msgContact {
 		t.Fatal("reply must land in the originating contact")
 	}
-	if len(nagi.Messages) != nagiCount || nagi.Messages[nagiCount-1].ID != nagiLastID {
+	if len(xuhu.Messages) != xuhuCount || xuhu.Messages[xuhuCount-1].ID != xuhuLastID {
 		t.Fatal("another contact's messages must not change")
 	}
 	a.selectContact(0)
-	if len(a.selectedContact().Messages) != nagiCount {
+	if len(a.selectedContact().Messages) != xuhuCount {
 		t.Fatal("contacts must not share messages")
 	}
 }

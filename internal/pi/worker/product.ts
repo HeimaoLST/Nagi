@@ -329,7 +329,7 @@ function toolText(value: unknown, isError = false): ToolTextResult {
 }
 
 const architectProfile: BotProfile = {
-  name: 'PandoraBox', role: 'Bot Architect', purpose: 'Design, create, and refine focused Nagi Bots through conversation.',
+  name: 'PandoraBox', role: 'Bot Architect', purpose: 'Design, create, and refine focused Xuhu Bots through conversation.',
   instructions: '', workspace: '', codingTools: [],
   starterPrompts: ['Create a writing and editing Bot', 'Build a strict code review Bot', 'Audit and refine my existing Bot Team'],
 };

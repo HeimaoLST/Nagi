@@ -21,7 +21,7 @@ const [
 ]);
 
 function setupSessionStorage(t) {
-  const root = mkdtempSync(join(realpathSync(tmpdir()), 'nagi-session-unit-'));
+  const root = mkdtempSync(join(realpathSync(tmpdir()), 'xuhu-session-unit-'));
   const profileDir = join(root, 'profile');
   const workspace = join(root, 'workspace');
   mkdirSync(profileDir, { recursive: true });

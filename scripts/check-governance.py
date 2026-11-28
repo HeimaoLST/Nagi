@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Browserless CI guard for Nagi repository governance files, links, budgets, and lessons."""
+"""Browserless CI guard for Xuhu repository governance files, links, budgets, and lessons."""
 
 from __future__ import annotations
 

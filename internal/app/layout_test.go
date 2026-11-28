@@ -186,7 +186,7 @@ func TestResponsiveWorkbenchGeometryFirstSlice(t *testing.T) {
 				t.Fatalf("mode mismatch width=%d", tc.width)
 			}
 			if !tc.wantPage {
-				composer, ok := tr.Find("Composer for Nagi")
+				composer, ok := tr.Find("Composer for Xuhu")
 				if !ok || composer.W <= 0 {
 					t.Fatalf("composer missing at %d: %+v/%v", tc.width, composer, ok)
 				}
@@ -194,7 +194,7 @@ func TestResponsiveWorkbenchGeometryFirstSlice(t *testing.T) {
 				mainStart := float32(0)
 				if a.avatarRailActive() {
 					mainStart = avatarRailWidth + paneSeparatorWidth
-					avatar, avatarOK := tr.Find(locales.In("en").AvatarContactLabel("Nagi"))
+					avatar, avatarOK := tr.Find(locales.In("en").AvatarContactLabel("Xuhu"))
 					if !avatarOK || avatar.W <= 0 || avatar.X < 0 || avatar.X+avatar.W > avatarRailWidth {
 						t.Fatalf("avatar button rect=%+v ok=%v", avatar, avatarOK)
 					}
@@ -216,7 +216,7 @@ func TestResponsiveWorkbenchGeometryFirstSlice(t *testing.T) {
 					if composer.W-4 < 440 {
 						t.Fatalf("960 max pref editable content=%g, want >=440", composer.W-4)
 					}
-					focusComposer(t, tr, "Composer for Nagi")
+					focusComposer(t, tr, "Composer for Xuhu")
 					caret, caretOK := tr.TextCaret()
 					if !caretOK || caret.X < composer.X+2 || caret.X+caret.W > composer.X+composer.W-2 {
 						t.Fatalf("composer caret/content inset = caret=%+v ok=%v composer=%+v", caret, caretOK, composer)
@@ -227,7 +227,7 @@ func TestResponsiveWorkbenchGeometryFirstSlice(t *testing.T) {
 						t.Fatalf("960 composer did not accept typing: draft=%q", ct.Draft)
 					}
 				}
-			} else if tr.HasText("Composer for Nagi") {
+			} else if tr.HasText("Composer for Xuhu") {
 				t.Fatal("composer mounted on 899 detail page")
 			}
 		})
@@ -277,7 +277,7 @@ func TestResponsiveAvatarRailKeyboardAndStatus(t *testing.T) {
 			t.Fatalf("retired avatar badge %q still rendered: %v", retired, tr.Texts())
 		}
 	}
-	for _, label := range []string{locales.In("en").AvatarAddContact(), locales.In("en").AvatarContactLabel("Nagi"), locales.In("en").AvatarContactLabel("Waiting"), locales.In("en").AvatarContactLabel("Attention"), locales.In("en").AvatarContactLabel("Active"), "Settings"} {
+	for _, label := range []string{locales.In("en").AvatarAddContact(), locales.In("en").AvatarContactLabel("Xuhu"), locales.In("en").AvatarContactLabel("Waiting"), locales.In("en").AvatarContactLabel("Attention"), locales.In("en").AvatarContactLabel("Active"), "Settings"} {
 		if r, ok := tr.Find(label); !ok || r.X < 0 || r.X+r.W > avatarRailWidth {
 			t.Fatalf("avatar rail control %q rect=%+v ok=%v", label, r, ok)
 		}
@@ -285,12 +285,12 @@ func TestResponsiveAvatarRailKeyboardAndStatus(t *testing.T) {
 	saki.Draft = "draft-saki"
 	waiting.Draft = "draft-waiting"
 	attention.Draft = "draft-attention"
-	if err := tr.Click(locales.In("en").AvatarContactLabel("Nagi")); err != nil {
+	if err := tr.Click(locales.In("en").AvatarContactLabel("Xuhu")); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
 	if a.selectedContact() != saki || saki.Draft != "draft-saki" || !a.detailIs(detailProfile) {
-		t.Fatalf("select Nagi = selected=%q draft=%q detail=%q", a.selectedID(), saki.Draft, a.activeDetail())
+		t.Fatalf("select Xuhu = selected=%q draft=%q detail=%q", a.selectedID(), saki.Draft, a.activeDetail())
 	}
 	if texts := strings.Join(tr.Texts(), "\n"); !strings.Contains(texts, locales.In("en").BotStatusReplying()) {
 		t.Fatalf("replying avatar status not rendered: %v", tr.Texts())
@@ -327,7 +327,7 @@ func TestResponsiveAvatarRailKeyboardAndStatus(t *testing.T) {
 	}
 
 	activeLabel := locales.In("en").AvatarContactLabel("Active")
-	sakiLabel := locales.In("en").AvatarContactLabel("Nagi")
+	sakiLabel := locales.In("en").AvatarContactLabel("Xuhu")
 	tr.Key(0, ui.KeyTab)
 	tr.Frame()
 	if !tr.Focused(activeLabel) {
@@ -369,13 +369,13 @@ func TestResponsiveManualHideAndWideDrag(t *testing.T) {
 			a.rightPaneWidth = 440
 			tr := ui.NewTester(a.view, tc.width, 640)
 			tr.Frame()
-			if _, ok := tr.Find(locales.In("en").AvatarContactLabel("Nagi")); ok {
+			if _, ok := tr.Find(locales.In("en").AvatarContactLabel("Xuhu")); ok {
 				t.Fatal("manual hide still mounted an avatar")
 			}
 			if a.avatarRailActive() || a.effectiveRailWidth() != 0 || a.effectiveDetailWidth() < tc.wantDetailMin {
 				t.Fatalf("%d hidden geometry avatar=%v rail=%v detail=%v", tc.width, a.avatarRailActive(), a.effectiveRailWidth(), a.effectiveDetailWidth())
 			}
-			composer, ok := tr.Find("Composer for Nagi")
+			composer, ok := tr.Find("Composer for Xuhu")
 			if !ok || composer.W-4 < 440 {
 				t.Fatalf("%d hidden composer=%+v ok=%v content=%g", tc.width, composer, ok, composer.W-4)
 			}
@@ -393,7 +393,7 @@ func TestResponsiveManualHideAndWideDrag(t *testing.T) {
 			} else if a.avatarRailActive() {
 				t.Fatal("manual Contacts restored avatar rail at full-rail width")
 			}
-			contactLabel := locales.In("en").AvatarContactLabel("Nagi")
+			contactLabel := locales.In("en").AvatarContactLabel("Xuhu")
 			addLabel := locales.In("en").AvatarAddContact()
 			if _, ok := tr.Find(contactLabel); !ok {
 				t.Fatal("restored rail lacks its contact")
@@ -471,13 +471,13 @@ func TestResponsiveClosedDetailKeepsFullRailAndNoAutoOpen(t *testing.T) {
 			a.workspaceOpen = false
 			tr := ui.NewTester(a.view, width, 640)
 			tr.Frame()
-			if a.avatarRailActive() || a.detailPageActive() || !tr.HasText(locales.In("en").AvatarContactLabel("Nagi")) {
+			if a.avatarRailActive() || a.detailPageActive() || !tr.HasText(locales.In("en").AvatarContactLabel("Xuhu")) {
 				t.Fatalf("closed detail at %d mounted avatar/page or lost full rail", width)
 			}
 			if tr.HasText("Close profile") {
 				t.Fatalf("closed detail at %d rendered a detail close", width)
 			}
-			if r, ok := tr.Find("Composer for Nagi"); !ok || r.W-4 < 440 {
+			if r, ok := tr.Find("Composer for Xuhu"); !ok || r.W-4 < 440 {
 				t.Fatalf("closed detail composer at %d = %+v ok=%v", width, r, ok)
 			}
 			a.windowWidth = 1180
@@ -486,7 +486,7 @@ func TestResponsiveClosedDetailKeepsFullRailAndNoAutoOpen(t *testing.T) {
 			if a.workspaceOpen || a.avatarRailActive() {
 				t.Fatalf("resize opened detail at %d", width)
 			}
-			if !tr.HasText(locales.In("en").AvatarContactLabel("Nagi")) {
+			if !tr.HasText(locales.In("en").AvatarContactLabel("Xuhu")) {
 				t.Fatal("closed resize lost full rail")
 			}
 		})
@@ -531,7 +531,7 @@ func TestLayoutOverlayBelow900ClosesWithEscape(t *testing.T) {
 		}
 		tr.Key(0, ui.KeyEscape)
 		tr.Frame()
-		if a.workspaceOpen || !tr.HasText("Composer for Nagi") {
+		if a.workspaceOpen || !tr.HasText("Composer for Xuhu") {
 			t.Fatalf("%d Escape did not return to chat: %v", width, tr.Texts())
 		}
 	}
@@ -566,8 +566,8 @@ func TestResponsivePseudoExpandedSettingsLabel(t *testing.T) {
 	tr.Frame()
 	enAdd := locales.In("en").AvatarAddContact()
 	xaAdd := locales.In("en-XA").AvatarAddContact()
-	enContact := locales.In("en").AvatarContactLabel("Nagi")
-	xaContact := locales.In("en-XA").AvatarContactLabel("Nagi")
+	enContact := locales.In("en").AvatarContactLabel("Xuhu")
+	xaContact := locales.In("en-XA").AvatarContactLabel("Xuhu")
 	if xaAdd == enAdd || len(xaAdd) <= len(enAdd) || xaContact == enContact || len(xaContact) <= len(enContact) {
 		t.Fatalf("en-XA avatar labels did not expand: add %q/%q contact %q/%q", enAdd, xaAdd, enContact, xaContact)
 	}

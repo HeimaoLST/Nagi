@@ -214,7 +214,7 @@ func bg2WaitPrecheckPID(t *testing.T, ctx context.Context, scratchBase string, e
 		}
 		for _, entry := range entries {
 			name := entry.Name()
-			if !strings.HasPrefix(name, "nagi-precheck-") {
+			if !strings.HasPrefix(name, "xuhu-precheck-") {
 				continue
 			}
 			if _, ok := existing[name]; ok {
@@ -368,7 +368,7 @@ func TestPiProductBG2StandingGrantsWatchesSchedulesAndEventInbox(t *testing.T) {
 		CredentialsPath: filepath.Join(profileDir, "connection.json"),
 		FreshProfile:    true,
 	}
-	dbPath := filepath.Join(profileDir, "nagi.db")
+	dbPath := filepath.Join(profileDir, "xuhu.db")
 	proc := startCP1Process(t, opts)
 	_ = proc.open(t, ctx)
 
@@ -1300,7 +1300,7 @@ console.log(JSON.stringify(inspectProductRecovery(JSON.parse(readFileSync(proces
 		NodePath: nodePath, WorkerPath: workerPath,
 		StateDir: filepath.Join(restoreDir, "pi"), ProfilePath: restoreProfile, CredentialsPath: filepath.Join(restoreDir, "connection.json"),
 	}
-	restoreDB := filepath.Join(restoreDir, "nagi.db")
+	restoreDB := filepath.Join(restoreDir, "xuhu.db")
 	for round := 0; round < 2; round++ {
 		rProc := startCP1Process(t, restoreOpts)
 		_ = rProc.open(t, ctx)
@@ -1574,7 +1574,7 @@ console.log(JSON.stringify({ stage, unk }));
 		}
 		mProc.shutdown(t, ctx)
 
-		mDB := filepath.Join(mDir, "nagi.db")
+		mDB := filepath.Join(mDir, "xuhu.db")
 		dropSQL := "DROP TABLE orchestration_admissions; DROP TABLE conversation_notices; DROP TABLE conversation_timelines; DROP TABLE orchestration_decisions; DROP TABLE orchestration_runs; DROP TABLE orchestration_checkpoints; DROP TABLE orchestration_backoff; DROP TABLE queued_conversation_sends; DROP TABLE bot_event_inbox; DROP TABLE orchestration_mandates; DELETE FROM meta WHERE key GLOB 'orchestration_operation:*'; ALTER TABLE activities DROP COLUMN origin_mandate_id; DROP TABLE bot_event_batches; DROP TABLE watch_occurrences; DROP TABLE runtime_watches; DROP TABLE watch_grants; DELETE FROM meta WHERE key GLOB 'watch_operation:*'; PRAGMA user_version = 12;"
 		if fromVer == 11 {
 			dropSQL = "DROP TABLE orchestration_admissions; DROP TABLE conversation_notices; DROP TABLE conversation_timelines; DROP TABLE orchestration_decisions; DROP TABLE orchestration_runs; DROP TABLE orchestration_checkpoints; DROP TABLE orchestration_backoff; DROP TABLE queued_conversation_sends; DROP TABLE bot_event_inbox; DROP TABLE orchestration_mandates; DELETE FROM meta WHERE key GLOB 'orchestration_operation:*'; ALTER TABLE activities DROP COLUMN origin_mandate_id; DROP TABLE bot_event_batches; DROP TABLE watch_occurrences; DROP TABLE runtime_watches; DROP TABLE watch_grants; DELETE FROM meta WHERE key GLOB 'watch_operation:*'; DROP TABLE runtime_watch_occurrences; DROP TABLE session_watches; DROP TABLE runtime_sessions; DELETE FROM meta WHERE key = 'runtime_session_epoch'; PRAGMA user_version = 11;"
@@ -1654,7 +1654,7 @@ console.log(JSON.stringify({ v, bots }));
 	txSchedRes, _ := pi.DecodeWatchMutationResult(txSchedReceipt)
 	txProc.shutdown(t, ctx)
 
-	txDB := filepath.Join(txDir, "nagi.db")
+	txDB := filepath.Join(txDir, "xuhu.db")
 	runNodeSQLite(t, nodePath, txDB, `
 const { DatabaseSync } = require('node:sqlite');
 const db = new DatabaseSync(process.argv[1]);

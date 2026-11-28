@@ -118,7 +118,7 @@ func TestPiProductSQLiteSavedKeyAndInitialInstructions(t *testing.T) {
 		}},
 	})
 
-	dbPath := filepath.Join(root, "nagi.db")
+	dbPath := filepath.Join(root, "xuhu.db")
 	proc := startProductProcess(t, opts)
 	opened := proc.open(t, ctx)
 	if len(opened.Snapshot.Bots) != 1 || opened.Snapshot.Bots[0].BotID != "legacy-bot" {
@@ -131,10 +131,10 @@ func TestPiProductSQLiteSavedKeyAndInitialInstructions(t *testing.T) {
 
 	info, err := os.Stat(dbPath)
 	if err != nil {
-		t.Fatalf("nagi.db not created: %v", err)
+		t.Fatalf("xuhu.db not created: %v", err)
 	}
 	if mode := info.Mode().Perm(); mode != 0o600 {
-		t.Fatalf("nagi.db permissions = %o, want 0600", mode)
+		t.Fatalf("xuhu.db permissions = %o, want 0600", mode)
 	}
 	inspectJSON := runNodeSQLite(t, opts.NodePath, dbPath, `
 const { DatabaseSync } = require('node:sqlite');
@@ -270,7 +270,7 @@ console.log(JSON.stringify({ mode, version, fkCount: fk.length, digest }));
 	}
 	mu.Unlock()
 	expectedBoundary := "Default working directory: " + workspace + ". Do not modify or write files outside this directory unless the user explicitly asks."
-	idxL0 := strings.Index(firstSys, "You are a long-lived Nagi Bot teammate.")
+	idxL0 := strings.Index(firstSys, "You are a long-lived Xuhu Bot teammate.")
 	idxIM := strings.Index(firstSys, "<<<NEXT>>>")
 	idxIdentity := strings.Index(firstSys, "Bot Identity\nName: Cedar")
 	idxPurpose := strings.Index(firstSys, "Purpose:\nTrack releases")
@@ -340,7 +340,7 @@ console.log(JSON.stringify({ mode, version, fkCount: fk.length, digest }));
 	mu.Lock()
 	thirdSys := capturedSystems[len(capturedSystems)-1]
 	mu.Unlock()
-	if !strings.HasPrefix(thirdSys, "You are a long-lived Nagi Bot teammate.") || !strings.Contains(thirdSys, "Bot Identity\nName: Cedar Prime") ||
+	if !strings.HasPrefix(thirdSys, "You are a long-lived Xuhu Bot teammate.") || !strings.Contains(thirdSys, "Bot Identity\nName: Cedar Prime") ||
 		!strings.Contains(thirdSys, "Purpose:\nReview PRs") || !strings.Contains(thirdSys, "Behavior Instructions:\nVerify invariants.") || !strings.Contains(thirdSys, expectedBoundary) {
 		t.Fatalf("new conversation did not compose updated instructions: %q", thirdSys)
 	}

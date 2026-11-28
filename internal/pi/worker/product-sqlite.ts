@@ -341,7 +341,7 @@ export class ProductSQLite {
   constructor(private readonly profilePath: string, private readonly credentialsPath: string, private readonly skills?: BotSkills, private readonly vault?: McpVault) {
     const directory = dirname(profilePath);
     mkdirSync(directory, { recursive: true, mode: 0o700 });
-    this.databasePath = basename(profilePath) === 'contacts.json' ? join(directory, 'nagi.db') : `${profilePath}.sqlite`;
+    this.databasePath = basename(profilePath) === 'contacts.json' ? join(directory, 'xuhu.db') : `${profilePath}.sqlite`;
     this.db = new DatabaseSync(this.databasePath);
     try {
       try { chmodSync(this.databasePath, 0o600); } catch {}

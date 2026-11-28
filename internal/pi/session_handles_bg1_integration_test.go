@@ -313,7 +313,7 @@ func TestPiProductBG1SessionHandlesSupervisorAndWatch(t *testing.T) {
 	defer cancel()
 
 	nodePath, workerPath := mcpRequirePinnedWorker(t)
-	supervisorBin := filepath.Join(filepath.Dir(filepath.Dir(nodePath)), "bin", "nagi-pty-supervisor")
+	supervisorBin := filepath.Join(filepath.Dir(filepath.Dir(nodePath)), "bin", "xuhu-pty-supervisor")
 	if info, err := os.Stat(supervisorBin); err != nil || info.Mode()&0o111 == 0 {
 		t.Fatalf("missing executable bundled supervisor %s: %v", supervisorBin, err)
 	}
@@ -1208,7 +1208,7 @@ func TestPiProductBG1SessionHandlesSupervisorAndWatch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	dbPath := filepath.Join(profileDir, "nagi.db")
+	dbPath := filepath.Join(profileDir, "xuhu.db")
 	survivalJSON := runNodeSQLite(t, nodePath, dbPath, `
 const { DatabaseSync } = require('node:sqlite');
 const db = new DatabaseSync(process.argv[1]);
@@ -1361,7 +1361,7 @@ db.close();
 	if provider.calls.Load() != callsBeforeBackup {
 		t.Fatalf("backup/restore triggered provider calls: before=%d after=%d", callsBeforeBackup, provider.calls.Load())
 	}
-	restoreCheck := runNodeSQLite(t, nodePath, filepath.Join(restoreDir, "nagi.db"), `
+	restoreCheck := runNodeSQLite(t, nodePath, filepath.Join(restoreDir, "xuhu.db"), `
 const { DatabaseSync } = require('node:sqlite');
 const db = new DatabaseSync(process.argv[1]);
 const v = db.prepare('PRAGMA user_version').get().user_version;
@@ -1545,7 +1545,7 @@ console.log(JSON.stringify({ occ, adm, exec, fk }));
 	}
 	staleSum := sha256.Sum256(staleMirror)
 	staleDigest := hex.EncodeToString(staleSum[:])
-	migDB := filepath.Join(migDir, "nagi.db")
+	migDB := filepath.Join(migDir, "xuhu.db")
 	runNodeSQLite(t, nodePath, migDB, `
 const { DatabaseSync } = require('node:sqlite');
 const db = new DatabaseSync(process.argv[1]);

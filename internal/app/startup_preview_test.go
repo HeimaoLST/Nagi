@@ -29,10 +29,10 @@ func TestPreviewStartupDiagnostics(t *testing.T) {
 			runtimeStage:    "Connection configuration",
 			runtimeErrKind:  runtimeNoticeConnectionRequired,
 			runtimeHintKind: startupHintEnterConnection,
-			storePath:       "/Users/you/Library/Application Support/Nagi/contacts.json",
-			workDir:         "/Users/you/Workspace/nagi-run",
+			storePath:       "/Users/you/Library/Application Support/Xuhu/contacts.json",
+			workDir:         "/Users/you/Workspace/xuhu-run",
 			contacts: []*contact{{
-				ID: "nagi", Name: "Nagi", Role: "Assistant",
+				ID: "xuhu", Name: "Xuhu", Role: "Assistant",
 				Draft: "Keep this draft while I fix configuration.",
 			}},
 		}

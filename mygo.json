@@ -1,4 +1,5 @@
 {
+  "icon": "assets/icons/app-icon.png",
   "i18n": {
     "dir": "locales",
     "source": "en"

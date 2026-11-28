@@ -204,7 +204,7 @@ export class BotSkills {
     const base = source === 'workspace' ? workspace : homedir();
     try {
       const anchor = realpathSync(base);
-      const candidates = source === 'workspace' ? ['.nagi', '.agents'] : ['.agents'];
+      const candidates = source === 'workspace' ? ['.xuhu', '.agents'] : ['.agents'];
       return candidates.flatMap(name => {
         try {
           const declared = join(anchor, name, 'skills');

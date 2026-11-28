@@ -92,7 +92,7 @@ func newUnavailableApp(err error) *appModel {
 		workspaceOpen:   false,
 		contacts: []*contact{{
 			ID:        newContactID(),
-			Name:      "Nagi",
+			Name:      "Xuhu",
 			Role:      "Assistant",
 			Status:    statusAttention,
 			WorkLabel: "Preparing a reply",
@@ -112,7 +112,7 @@ func guiStorePath() string {
 		home, _ := os.UserHomeDir()
 		dir = filepath.Join(home, ".config")
 	}
-	return filepath.Join(dir, "Nagi", "contacts.json")
+	return filepath.Join(dir, "Xuhu", "contacts.json")
 }
 
 func guiWorkDir() string {

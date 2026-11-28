@@ -1,6 +1,6 @@
-# Nagi Subsystem Reference Index
+# Xuhu Subsystem Reference Index
 
-> Single source of truth for how Nagi is architected and behaves today.
+> Single source of truth for how Xuhu is architected and behaves today.
 
 ## Rules for Subsystem Docs
 
@@ -20,7 +20,7 @@
 | Pi Runtime & Product Protocol | [Product Protocol](../design/product-protocol.md), [Pi Integration](../design/pi-integration.md), [Glossary](../design/glossary.md) | `internal/pi/`, `internal/pi/sessions.go`, `internal/pi/watches.go`, `internal/pi/orchestration.go`, `internal/pi/worker/`, `internal/pi/worker/session-supervisor.ts`, `internal/pi/worker/pty-supervisor.c`, `internal/pi/worker/watch-scheduler.ts`, `internal/pi/worker/orchestration-runtime.ts` | Go/TypeScript JSONL RPC boundary, receipts, events, owned worker, native session supervisor, Seatbelt watch scheduler, and private `OrchestrationActor` runtime |
 | Profile Store, Materials & Recovery | [Product Protocol](../design/product-protocol.md#current-profile-admission), [Desktop Requirements](../requirements/desktop.md#v1) | `internal/store/`, `internal/materials/`, `internal/connection/config.go` | SQLite WAL profile store, backups, no-replay admission, reference integrity |
 | Capabilities (Skills & MCP) | [Desktop Design](../design/desktop.md), [RFC-0001](../rfcs/0001-multi-brain-and-capabilities.md) | `internal/app/capabilities_ui.go`, `internal/app/bot_capabilities_view.go`, `internal/pi/skills.go` | Skill library, executable skill approval digests, MCP server pools & bindings |
-| Packaging, Signing & CI Gates | [Pi Integration](../design/pi-integration.md), [CI Workflow](../../.github/workflows/ci.yml) | `scripts/build-pi-worker.py`, `scripts/build-macos-app.py`, `scripts/gui-go.py`, `.github/pi-runtime.json`, `bin/nagi-pty-supervisor` | Pinned Node + Pi worker payload, deterministic native helper signing, ad-hoc signed standalone `Nagi.app`, required CI checks |
+| Packaging, Signing & CI Gates | [Pi Integration](../design/pi-integration.md), [CI Workflow](../../.github/workflows/ci.yml) | `scripts/build-pi-worker.py`, `scripts/build-macos-app.py`, `scripts/gui-go.py`, `.github/pi-runtime.json`, `assets/icons/AppIcon.icns`, `bin/xuhu-pty-supervisor` | Pinned Node + Pi worker payload, deterministic native helper signing, ad-hoc signed standalone `Xuhu.app`, required CI checks |
 
 ---
 

@@ -609,7 +609,7 @@ func (a *appModel) chooseDataRecovery(restore bool) {
 	s.token++
 	s.choosing = true
 	s.action = "copy"
-	s.filename = "Nagi-workbench-recovery-" + time.Now().Format("20060102-150405") + ".json"
+	s.filename = "Xuhu-workbench-recovery-" + time.Now().Format("20060102-150405") + ".json"
 	msgs := locales.In(a.uiLocale)
 	pick := a.chooseFolder
 	opts := mygo.OpenDialogOptions{Parent: a.win, Directory: true, Title: msgs.RecoveryCopyFolderTitle(), ButtonLabel: msgs.SaveRecoveryCopyAction()}

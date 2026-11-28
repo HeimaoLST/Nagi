@@ -32,7 +32,7 @@ const [
 function setupHarness(t, initialNow) {
   const previousClockFile = process.env.NAGI_TEST_CLOCK_FILE;
   delete process.env.NAGI_TEST_CLOCK_FILE;
-  const root = mkdtempSync(join(realpathSync(tmpdir()), 'nagi-watch-unit-'));
+  const root = mkdtempSync(join(realpathSync(tmpdir()), 'xuhu-watch-unit-'));
   const profileDir = join(root, 'profile');
   const workspace = join(root, 'workspace');
   mkdirSync(profileDir, { recursive: true });

@@ -363,7 +363,7 @@ func TestPiProductQuoteSpeechActRedactionAndBackup(t *testing.T) {
 		}
 		if i == 0 {
 			l0 = parts[0]
-			if !strings.HasPrefix(l0, "You are a long-lived Nagi Bot teammate.") ||
+			if !strings.HasPrefix(l0, "You are a long-lived Xuhu Bot teammate.") ||
 				!strings.Contains(l0, "Default to a single concise bubble whenever you are expressing one complete thought.") ||
 				!strings.Contains(l0, "Only split into 2 (rarely 3) bubbles with <<<NEXT>>>") ||
 				strings.Contains(l0, workspace) || strings.Contains(l0, "Cedar") {
@@ -477,7 +477,7 @@ func TestPiProductQuoteSpeechActRedactionAndBackup(t *testing.T) {
 	}
 	restored2.shutdown(t, ctx)
 
-	for _, dbFile := range []string{filepath.Join(root, "nagi.db"), filepath.Join(restoreRoot, "nagi.db")} {
+	for _, dbFile := range []string{filepath.Join(root, "xuhu.db"), filepath.Join(restoreRoot, "xuhu.db")} {
 		schema := runNodeSQLite(t, nodePath, dbFile, `
 const { DatabaseSync } = require('node:sqlite');
 const db = new DatabaseSync(process.argv[1]);

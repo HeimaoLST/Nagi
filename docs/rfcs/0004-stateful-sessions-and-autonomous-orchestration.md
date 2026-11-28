@@ -18,13 +18,13 @@
 
 ## Problem Statement & Domain-Agnostic Principle
 
-Nagi's shipped backend covers foreground chat and single-shot delegated `Activity` execution, leaving two structural runtime gaps plus one superseded framing in [RFC-0002](0002-bot-activity-control-plane.md):
+Xuhu's shipped backend covers foreground chat and single-shot delegated `Activity` execution, leaving two structural runtime gaps plus one superseded framing in [RFC-0002](0002-bot-activity-control-plane.md):
 
 1. **Tools Are Stateless Single-Turn Invocations**: Current tools (`bash`, `skill_exec`, MCP `callTool`) run synchronously within one LLM turn, hold an active provider slot while blocking, and exit before returning. Multi-turn workflows needing a persistent interactive process, REPL, stream, or child session cannot hold a live handle across turns.
 2. **All Turns Require Foreground Human Triggers**: Bots stay dormant without a foreground user send. There is no unified runtime substrate to wait asynchronously without consuming provider concurrency (process exit, stream output match, delayed timer, or state-diff schedule) and enqueue durable wakeup events when warranted.
 3. **Retiring Passive-Only Orchestration Framing**: Users expect an authorized Bot holding an open goal to **continue collaborating, operating stateful handles, delegating/monitoring background work, and waking across multi-hour or overnight spans even when the human steps away or closes the window**. Cost is controlled by running autonomous wakes on a **bounded, compact orchestration context** and selecting efficient models (`utility` via [RFC-0003](0003-model-catalog-and-smart-routing.md)), **not** by banning unprompted LLM calls or halting when the user is away.
 
-**Scenario Independence Rule**: Remote administration protocols, external CI tools, and multi-agent CLIs are downstream emergent use cases. Core Nagi schemas, SQLite tables, RPCs, model tools, and acceptance fixtures contain **no** service names, remote protocol fields, or specialized CLI assumptions—only three orthogonal general runtime primitives.
+**Scenario Independence Rule**: Remote administration protocols, external CI tools, and multi-agent CLIs are downstream emergent use cases. Core Xuhu schemas, SQLite tables, RPCs, model tools, and acceptance fixtures contain **no** service names, remote protocol fields, or specialized CLI assumptions—only three orthogonal general runtime primitives.
 
 ---
 
@@ -72,7 +72,7 @@ Layer 3 · Supervised Stateful Handles & Async Event / Schedule Substrate
 - **Same Supervisor Contract for Both `pty` and `pipe` Modes**:
   - Run **both** `mode: "pty"` (interleaved stream) and `mode: "pipe"` (separate `stdout`/`stderr` channel labels) under a surviving supervisor reachable over a private, versioned, length-bounded control channel separate from data bytes and worker JSONL (`FD_CLOEXEC` across child `exec`).
   - Pass an **exclusive worker ownership channel**: when Node dies (`SIGKILL`/crash), supervisor detects EOF on the ownership channel, closes child input, terminates the supervised process tree, drains bounded output before deadline, and reaps direct children.
-  - Record helper source, compiler/SDK metadata, target arch, minimum macOS, and binary digest in packaging receipts; nest-sign the helper before signing `Nagi.app` in `build-macos-app.py`; validate helper path resolution strictly from the packaged bundle without `PATH`.
+  - Record helper source, compiler/SDK metadata, target arch, minimum macOS, and binary digest in packaging receipts; nest-sign the helper before signing `Xuhu.app` in `build-macos-app.py`; validate helper path resolution strictly from the packaged bundle without `PATH`.
   - Document the supervised process-tree boundary honestly (group signaling alone cannot contain grandchildren that intentionally detach; report actual leader/descendant reaper status rather than claiming unconditional cleanup beyond OS process-group/supervisor ownership).
 
 ### 1.2 Operations, Authorization & Crash Safety
@@ -130,7 +130,7 @@ Layer 3 · Supervised Stateful Handles & Async Event / Schedule Substrate
 
 ### 3.1 Dedicated `OrchestrationActor` (Isolating Public Conversations)
 
-- Add a third explicit variant **`OrchestrationActor`** alongside Foreground `Conversation` and Background `Activity` (keeping existing foreground draft clearing, memory log triggers, `nagi-turn-v1` user transcript rules, and current-user-turn relay tools strictly untouched):
+- Add a third explicit variant **`OrchestrationActor`** alongside Foreground `Conversation` and Background `Activity` (keeping existing foreground draft clearing, memory log triggers, `xuhu-turn-v1` user transcript rules, and current-user-turn relay tools strictly untouched):
   - Keyed by `(botId, mandateId, generation, runId, batchId)`, strictly **partitioned per goal/mandate** (never merging distinct permissions, destinations, or target conversations under one shared Bot prompt).
   - Own a dedicated orchestration admission ledger reusing M4's authoritative `execution_mutation_admissions` validation rules (zero silent bypasses, zero fake foreground `executions` rows).
 - **Compact Bounded `SessionManager.inMemory` Execution**:
@@ -145,7 +145,7 @@ Layer 3 · Supervised Stateful Handles & Async Event / Schedule Substrate
 ### 3.2 Draft-Safe Product Timeline Notices (`conversation_notify`) & Native Close Split
 
 - **Why Product Timeline Notices Instead of `Pi sendCustomMessage`**:
-  - Offline inspection of Pi SDK `1.5.2` proved `sendCustomMessage(..., { triggerTurn: false })` stores an entry converted to role `user` in the provider payload while missing `nagi-turn-v1` public transcript projection (`custom_message` alters provider message roles without rendering as intended).
+  - Offline inspection of Pi SDK `1.5.2` proved `sendCustomMessage(..., { triggerTurn: false })` stores an entry converted to role `user` in the provider payload while missing `xuhu-turn-v1` public transcript projection (`custom_message` alters provider message roles without rendering as intended).
   - **Contract**: `conversation_notify` writes a durable **product-owned timeline record** (`provenance: "orchestration"`, immutable target `conversationId` captured at mandate/watch creation, redacted bounded summary, verified source entity refs, deduplicated by `(sourceRunId, factDigest)`):
     - Works even on empty Conversations lacking a Pi session file; stays absent from foreground provider context unless explicitly quoted or inspected; never alters `Draft.text`, `Draft.materials`, `Draft.quote`, or `Draft.revision`.
     - Serialized per Conversation against foreground `conversation.send`: earlier notice takes a pre-send timeline anchor; concurrent notice created after an admitted send settles anchors strictly **after** that send settles (or at its recorded `unknown`/failed boundary) in commit sequence.

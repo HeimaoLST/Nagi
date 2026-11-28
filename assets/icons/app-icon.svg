@@ -1,0 +1,60 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <filter id="app-shadow" x="40" y="52" width="944" height="944" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="12" stdDeviation="12" flood-color="#121410" flood-opacity="0.22"/>
+    </filter>
+    <linearGradient id="bg-xuan" x1="512" y1="100" x2="512" y2="924" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FBF9F1"/>
+      <stop offset="100%" stop-color="#EAE5D3"/>
+    </linearGradient>
+    <linearGradient id="lower-basalt" x1="313.36" y1="438.43" x2="710.64" y2="791.57" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#2D302C"/>
+      <stop offset="55%" stop-color="#2D302C"/>
+      <stop offset="100%" stop-color="#191B18"/>
+    </linearGradient>
+    <linearGradient id="upper-terracotta" x1="460.5" y1="210.36" x2="688.57" y2="445.79" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#E4542E"/>
+      <stop offset="55%" stop-color="#E4542E"/>
+      <stop offset="100%" stop-color="#AC3617"/>
+    </linearGradient>
+    <clipPath id="squircle-clip">
+      <rect x="100" y="100" width="824" height="824" rx="185.4"/>
+    </clipPath>
+    <clipPath id="lower-clip">
+      <path d="M180.93 615 L225.07 489.93 L416.36 438.43 L673.86 467.86 L828.36 570.86 L843.07 710.64 L732.71 791.57 L269.21 791.57 L180.93 718 Z"/>
+    </clipPath>
+    <clipPath id="upper-clip">
+      <path d="M386.93 320.71 L475.21 217.71 L659.14 210.36 L762.14 298.64 L740.07 409 L607.64 445.79 L423.71 423.71 Z"/>
+    </clipPath>
+  </defs>
+  <g filter="url(#app-shadow)">
+    <rect x="100" y="100" width="824" height="824" rx="185.4" fill="url(#bg-xuan)"/>
+  </g>
+  <g clip-path="url(#squircle-clip)">
+    <rect x="103.5" y="103.5" width="817" height="817" rx="181.9" stroke="#FFFFFF" stroke-opacity="0.88" stroke-width="7"/>
+    <rect x="103" y="103" width="818" height="818" rx="182.4" stroke="#181915" stroke-opacity="0.13" stroke-width="6"/>
+    <ellipse cx="519.36" cy="802.61" rx="301.64" ry="33.11" fill="#141612" fill-opacity="0.16"/>
+    <path d="M180.93 615 L225.07 489.93 L416.36 438.43 L673.86 467.86 L828.36 570.86 L843.07 710.64 L732.71 791.57 L269.21 791.57 L180.93 718 Z" fill="url(#lower-basalt)"/>
+    <g clip-path="url(#lower-clip)">
+      <path d="M225.07 489.93 L416.36 438.43 L673.86 467.86 L556.14 556.14 L298.64 563.5 Z" fill="#4A4F48" fill-opacity="0.62"/>
+      <path d="M644.43 475.21 L828.36 570.86 L843.07 710.64 L732.71 791.57 L497.29 791.57 L600.29 644.43 Z" fill="#191B18" fill-opacity="0.72"/>
+      <path d="M232.43 493.61 L416.36 444.31 L666.5 471.54" stroke="#FFFFFF" stroke-opacity="0.22" stroke-width="10.3" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="291.29" cy="688.57" r="9.56" fill="#5A6058" fill-opacity="0.42"/>
+      <circle cx="651.79" cy="681.21" r="11.04" fill="#5A6058" fill-opacity="0.42"/>
+      <circle cx="453.14" cy="519.36" r="7.36" fill="#E5E1D2" fill-opacity="0.24"/>
+      <circle cx="710.64" cy="600.29" r="8.09" fill="#5A6058" fill-opacity="0.42"/>
+      <path d="M409 449.46 Q578.21 493.61 740.07 478.89 Q681.21 523.04 475.21 504.64 Z" fill="#0C0E0C" fill-opacity="0.34"/>
+    </g>
+    <rect x="367.06" y="599.55" width="47.09" height="67.69" rx="23.54" fill="#FFFDF4"/>
+    <rect x="514.21" y="599.55" width="47.09" height="67.69" rx="23.54" fill="#FFFDF4"/>
+    <path d="M386.93 320.71 L475.21 217.71 L659.14 210.36 L762.14 298.64 L740.07 409 L607.64 445.79 L423.71 423.71 Z" fill="url(#upper-terracotta)"/>
+    <g clip-path="url(#upper-clip)">
+      <path d="M386.93 320.71 L475.21 217.71 L659.14 210.36 L600.29 298.64 L438.43 320.71 Z" fill="#F6805B" fill-opacity="0.64"/>
+      <path d="M659.14 210.36 L762.14 298.64 L740.07 409 L607.64 445.79 L600.29 320.71 Z" fill="#AC3617" fill-opacity="0.68"/>
+      <path d="M401.64 317.04 L478.89 225.07 L651.79 217.71" stroke="#FFFFFF" stroke-opacity="0.30" stroke-width="9.56" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="453.14" cy="379.57" r="7.36" fill="#B33B1A" fill-opacity="0.38"/>
+      <circle cx="681.21" cy="350.14" r="8.09" fill="#B33B1A" fill-opacity="0.38"/>
+      <circle cx="556.14" cy="254.5" r="6.62" fill="#FFD2BF" fill-opacity="0.28"/>
+    </g>
+  </g>
+</svg>

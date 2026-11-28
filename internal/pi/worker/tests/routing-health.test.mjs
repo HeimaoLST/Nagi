@@ -475,7 +475,7 @@ test('model catalog supplement fallback avoids identity/capability leakage and p
 });
 
 test('compiled worker strips PI_* environment variables from bash child processes while keeping non-PI_* vars', async t => {
-  const root = mkdtempSync(join(realpathSync(tmpdir()), 'nagi-pi-env-'));
+  const root = mkdtempSync(join(realpathSync(tmpdir()), 'xuhu-pi-env-'));
   const stateDir = join(root, 'state');
   const cwd = join(root, 'work');
   mkdirSync(cwd, { recursive: true });
@@ -678,7 +678,7 @@ test('bot-template v2 enforces voice presets, empty purpose omission, legacy col
     cwd: '/work',
     foreground: true,
   });
-  assert.equal(defaultPrompt.startsWith(botTemplate.NAGI_BOT_MASTER_TEMPLATE), true);
+  assert.equal(defaultPrompt.startsWith(botTemplate.XUHU_BOT_MASTER_TEMPLATE), true);
   assert.equal(defaultPrompt.includes(`Default Voice: ${voice}`), true);
   assert.equal(defaultPrompt.includes('Purpose:'), false);
   assert.equal(defaultPrompt.includes('Behavior Instructions:'), false);
@@ -710,7 +710,7 @@ test('bot-template v2 enforces voice presets, empty purpose omission, legacy col
       lastingRules: '- Rule 1',
       capturedInstructions: legacy,
     });
-    assert.equal(upgraded.startsWith(botTemplate.NAGI_BOT_MASTER_TEMPLATE), true);
+    assert.equal(upgraded.startsWith(botTemplate.XUHU_BOT_MASTER_TEMPLATE), true);
     assert.equal(upgraded.includes('Name: Atlas'), true);
     assert.equal(upgraded.includes('<available_skills>\ns1\n</available_skills>'), true);
     assert.equal(upgraded.includes('Lasting Rules:\n- Rule 1'), true);
@@ -741,8 +741,8 @@ test('bot-template v2 enforces voice presets, empty purpose omission, legacy col
     cwd: '/work',
     lastingRules: '- Escalate P0',
   });
-  assert.equal(orchPrompt.startsWith('You are a long-lived Nagi Bot teammate.'), true);
-  assert.equal(botTemplate.isNagiBotSystemPrompt(orchPrompt), true);
+  assert.equal(orchPrompt.startsWith('You are a long-lived Xuhu Bot teammate.'), true);
+  assert.equal(botTemplate.isXuhuBotSystemPrompt(orchPrompt), true);
   assert.equal(orchPrompt.includes('<<<NEXT>>>'), false);
   assert.equal(orchPrompt.includes('activity_delegate'), false);
   assert.equal(orchPrompt.includes('orchestration_finish'), true);
