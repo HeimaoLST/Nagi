@@ -1563,3 +1563,167 @@ func TestPreviewOrchestrationAndTimeline(t *testing.T) {
 		t.Logf("bg3b preview path=%s width=%d height=%d locale=%s dark=%v", path, shot.w, shot.h, shot.locale, shot.dark)
 	}
 }
+
+func TestPreviewComposerPlusAlign(t *testing.T) {
+	dir := os.Getenv("NAGI_PREVIEW_DIR")
+	if dir == "" {
+		t.Skip("set NAGI_PREVIEW_DIR to write the composer plus alignment previews")
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, shot := range []struct {
+		name, locale string
+		w, h         int
+		dark         bool
+		setup        func(*appModel, *contact, *ui.Tester)
+	}{
+		{
+			name: "composer-empty-en-light-1040x720.png", locale: "en", w: 1040, h: 720, dark: false,
+			setup: func(a *appModel, ct *contact, tr *ui.Tester) {
+				tr.SetFocused(false)
+				tr.Move(-1, -1)
+				tr.Frame()
+			},
+		},
+		{
+			name: "composer-empty-zh-dark-1040x720.png", locale: "zh-Hans", w: 1040, h: 720, dark: true,
+			setup: func(a *appModel, ct *contact, tr *ui.Tester) {
+				tr.SetFocused(false)
+				tr.Move(-1, -1)
+				tr.Frame()
+			},
+		},
+		{
+			name: "composer-empty-zh-light-720x640.png", locale: "zh-Hans", w: 720, h: 640, dark: false,
+			setup: func(a *appModel, ct *contact, tr *ui.Tester) {
+				tr.SetFocused(false)
+				tr.Move(-1, -1)
+				tr.Frame()
+			},
+		},
+		{
+			name: "composer-empty-en-dark-720x640.png", locale: "en", w: 720, h: 640, dark: true,
+			setup: func(a *appModel, ct *contact, tr *ui.Tester) {
+				tr.SetFocused(false)
+				tr.Move(-1, -1)
+				tr.Frame()
+			},
+		},
+		{
+			name: "composer-hover-plus-en-light-1040x720.png", locale: "en", w: 1040, h: 720, dark: false,
+			setup: func(a *appModel, ct *contact, tr *ui.Tester) {
+				tr.SetFocused(true)
+				tr.Frame()
+				showPreviewTooltip(t, tr, locales.In("en").ComposerAttach())
+			},
+		},
+		{
+			name: "composer-hover-plus-zh-dark-1040x720.png", locale: "zh-Hans", w: 1040, h: 720, dark: true,
+			setup: func(a *appModel, ct *contact, tr *ui.Tester) {
+				tr.SetFocused(true)
+				tr.Frame()
+				showPreviewTooltip(t, tr, locales.In("zh-Hans").ComposerAttach())
+			},
+		},
+		{
+			name: "composer-quote-materials-en-light-960x640.png", locale: "en", w: 960, h: 640, dark: false,
+			setup: func(a *appModel, ct *contact, tr *ui.Tester) {
+				ct.DraftQuote = &pi.ProductQuote{
+					MessageID:  "q-preview",
+					Sender:     "bot",
+					AuthorName: ct.Name,
+					Text:       "Align the borderless plus icon optically with placeholder text, quote strip, and chips.",
+				}
+				if _, err := ct.Context.AddSnippet("Design notes", "Composer spacing spec"); err != nil {
+					t.Fatal(err)
+				}
+				if _, err := ct.Context.AddSnippet("UI checklist", "V-CP-01 alignment"); err != nil {
+					t.Fatal(err)
+				}
+				a.openContactProfile(ct.ID)
+				tr.SetFocused(false)
+				tr.Move(-1, -1)
+				tr.Frame()
+			},
+		},
+		{
+			name: "composer-quote-materials-zh-dark-960x640.png", locale: "zh-Hans", w: 960, h: 640, dark: true,
+			setup: func(a *appModel, ct *contact, tr *ui.Tester) {
+				ct.DraftQuote = &pi.ProductQuote{
+					MessageID:  "q-preview",
+					Sender:     "bot",
+					AuthorName: ct.Name,
+					Text:       "将无边框加号图标与上方占位文字、引用条和资料芯片光学左对齐。",
+				}
+				if _, err := ct.Context.AddSnippet("设计规范", "输入框边距与对齐细节"); err != nil {
+					t.Fatal(err)
+				}
+				if _, err := ct.Context.AddSnippet("验收清单", "V-CP-01 无边框与对齐"); err != nil {
+					t.Fatal(err)
+				}
+				a.openContactProfile(ct.ID)
+				tr.SetFocused(false)
+				tr.Move(-1, -1)
+				tr.Frame()
+			},
+		},
+		{
+			name: "composer-quote-materials-popover-zh-light-720x640.png", locale: "zh-Hans", w: 720, h: 640, dark: false,
+			setup: func(a *appModel, ct *contact, tr *ui.Tester) {
+				ct.DraftQuote = &pi.ProductQuote{
+					MessageID:  "q-preview",
+					Sender:     "bot",
+					AuthorName: ct.Name,
+					Text:       "点击加号后上方弹出主题菜单，按钮保持 26 × 26 柔和底色。",
+				}
+				if _, err := ct.Context.AddSnippet("附件清单", "对齐验证材料"); err != nil {
+					t.Fatal(err)
+				}
+				if _, err := ct.Context.AddSnippet("构建日志", "离线检查结果"); err != nil {
+					t.Fatal(err)
+				}
+				tr.SetFocused(true)
+				tr.Frame()
+				if err := tr.Click(locales.In("zh-Hans").ComposerAttach()); err != nil {
+					t.Fatal(err)
+				}
+				tr.Advance(theme.ControlTransition.Duration)
+				tr.Frame()
+			},
+		},
+		{
+			name: "composer-focus-ring-en-dark-1040x720.png", locale: "en", w: 1040, h: 720, dark: true,
+			setup: func(a *appModel, ct *contact, tr *ui.Tester) {
+				tr.SetFocused(true)
+				tr.Move(-1, -1)
+				tr.Frame()
+				_ = tr.Click(locales.In("en").ComposerLabel(ct.Name))
+				tr.Frame()
+				for i := 0; i < 24 && !tr.Focused(locales.In("en").ComposerAttach()); i++ {
+					tr.Key(0, ui.KeyTab)
+					tr.Frame()
+				}
+				tr.Key(0, ui.KeyEnter)
+				tr.Frame()
+				tr.Key(0, ui.KeyEscape)
+				tr.Advance(theme.ControlTransition.Duration)
+				tr.Frame()
+			},
+		},
+	} {
+		a, ct := workspaceTestApp(t)
+		a.windowWidth = shot.w
+		a.workspaceOpen = false
+		a.focusComposer = false
+		ct.SessionID = "composer-plus-preview"
+		ct.Draft = ""
+		ct.Context.Items = nil
+		tr := ui.NewTesterWith(a.view, shot.w, shot.h, ui.TesterOptions{Dark: shot.dark})
+		tr.SetLocale(shot.locale)
+		shot.setup(a, ct, tr)
+		path := filepath.Join(dir, shot.name)
+		writePreviewPNG(t, path, tr.Image())
+		t.Logf("composer plus preview path=%s width=%d height=%d locale=%s dark=%v", path, shot.w, shot.h, shot.locale, shot.dark)
+	}
+}

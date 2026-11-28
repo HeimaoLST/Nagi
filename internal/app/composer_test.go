@@ -3,6 +3,8 @@ package app
 import (
 	"errors"
 	"fmt"
+	"image"
+	"math"
 	"os"
 	"path/filepath"
 	"testing"
@@ -11,6 +13,8 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"github.com/HeimaoLST/Nagi/internal/materials"
+	"github.com/HeimaoLST/Nagi/internal/pi"
+	"github.com/HeimaoLST/Nagi/internal/theme"
 	"github.com/HeimaoLST/Nagi/locales"
 )
 
@@ -499,4 +503,287 @@ func TestComposerFrostedModalsLifecycleAndFocus(t *testing.T) {
 	if a.composerMaterial != nil {
 		t.Fatal("Bot switch did not auto-close composer material modal")
 	}
+}
+
+func assertComposerPlusAlignmentAndChrome(t *testing.T) {
+	t.Helper()
+	pxDist := func(a, b [4]uint8) int {
+		abs := func(v int) int {
+			if v < 0 {
+				return -v
+			}
+			return v
+		}
+		return abs(int(a[0])-int(b[0])) + abs(int(a[1])-int(b[1])) + abs(int(a[2])-int(b[2]))
+	}
+	rgbaOf := func(c ui.Color) [4]uint8 {
+		return [4]uint8{c.R, c.G, c.B, c.A}
+	}
+	imgRGBA := func(img image.Image, x, y int) [4]uint8 {
+		p := img.(*image.RGBA).RGBAAt(x, y)
+		return [4]uint8{p.R, p.G, p.B, p.A}
+	}
+
+	for _, locale := range []string{"en", "zh-Hans"} {
+		msgs := locales.In(locale)
+		for _, dark := range []bool{false, true} {
+			wb := theme.ResolveWorkbenchTheme(dark)
+			surf := rgbaOf(wb.ComposerSurface)
+			hover := rgbaOf(theme.StrongHoverFill(wb.Theme))
+			chipBg := rgbaOf(wb.ComposerChipBg)
+			for _, size := range [][2]int{{1040, 720}, {720, 640}} {
+				w, h := size[0], size[1]
+				t.Run(fmt.Sprintf("%s-dark%t-%dx%d", locale, dark, w, h), func(t *testing.T) {
+					a, ct := taskContextApp(t)
+					a.windowWidth = w
+					a.workspaceOpen = false
+					a.focusComposer = false
+					ct.Draft = ""
+					ct.DraftQuote = nil
+					ct.Context.Items = nil
+
+					tr := ui.NewTesterWith(a.view, w, h, ui.TesterOptions{Dark: dark})
+					tr.SetLocale(locale)
+					tr.SetFocused(false)
+					tr.Move(-1, -1)
+					tr.Frame()
+
+					if _, hasCaret := tr.TextCaret(); hasCaret {
+						t.Fatal("unfocused composer unexpectedly painted active text caret")
+					}
+
+					input, okInput := tr.Find(msgs.ComposerLabel(ct.Name))
+					bar, okBar := tr.Find(msgs.ComposerTools())
+					attach, okAttach := tr.Find(msgs.ComposerAttach())
+					send, okSend := tr.Find(msgs.SendAction())
+					if !okInput || !okBar || !okAttach || !okSend {
+						t.Fatalf("composer controls missing: input=%v bar=%v attach=%v send=%v", okInput, okBar, okAttach, okSend)
+					}
+					if bar.H != 32 || attach.W != 32 || attach.H != 32 || send.W != 32 || send.H != 32 {
+						t.Fatalf("composer toolbar hit sizes invalid: bar=%+v attach=%+v send=%+v", bar, attach, send)
+					}
+					if attach.Y != bar.Y || send.Y != bar.Y || math.Abs(float64(attach.X-input.X)) > 0.5 {
+						t.Fatalf("composer toolbar row alignment invalid: input=%+v bar=%+v attach=%+v send=%+v", input, bar, attach, send)
+					}
+
+					img := tr.Image()
+					if img.Bounds().Dx() != w || img.Bounds().Dy() != h {
+						t.Fatalf("unexpected render size %dx%d, want %dx%d", img.Bounds().Dx(), img.Bounds().Dy(), w, h)
+					}
+
+					ax, ay, aw, ah := int(attach.X), int(attach.Y), int(attach.W), int(attach.H)
+					for _, d := range []int{6, 12, 16, 20, 25} {
+						for _, pt := range [][2]int{
+							{ax, ay + d},
+							{ax + aw - 1, ay + d},
+							{ax + d, ay},
+							{ax + d, ay + ah - 1},
+						} {
+							if got := imgRGBA(img, pt[0], pt[1]); pxDist(got, surf) > 4 {
+								t.Fatalf("resting attach outer perimeter (%d,%d) not borderless ComposerSurface: got=%v want=%v", pt[0], pt[1], got, surf)
+							}
+						}
+					}
+					for _, pt := range [][2]int{
+						{ax + 16, ay + 4},
+						{ax + 16, ay + 27},
+						{ax + 4, ay + 16},
+						{ax + 27, ay + 16},
+						{ax + 6, ay + 6},
+						{ax + 25, ay + 6},
+						{ax + 6, ay + 25},
+						{ax + 25, ay + 25},
+					} {
+						if got := imgRGBA(img, pt[0], pt[1]); pxDist(got, surf) > 4 {
+							t.Fatalf("resting attach inset face (%d,%d) has visible box/border: got=%v want=%v", pt[0], pt[1], got, surf)
+						}
+					}
+
+					textLeftX := -1
+					for x := int(input.X); x < int(input.X+input.W) && textLeftX < 0; x++ {
+						for y := int(input.Y) + 1; y < int(input.Y+input.H)-1; y++ {
+							if pxDist(imgRGBA(img, x, y), surf) >= 24 {
+								textLeftX = x
+								break
+							}
+						}
+					}
+					plusLeftX := -1
+					for x := ax; x < ax+aw && plusLeftX < 0; x++ {
+						for y := ay; y < ay+ah; y++ {
+							if pxDist(imgRGBA(img, x, y), surf) >= 24 {
+								plusLeftX = x
+								break
+							}
+						}
+					}
+					if textLeftX < 0 || plusLeftX < 0 {
+						t.Fatalf("failed to detect rendered ink pixels: textLeftX=%d plusLeftX=%d", textLeftX, plusLeftX)
+					}
+					deltaX := plusLeftX - textLeftX
+					if deltaX < 0 {
+						deltaX = -deltaX
+					}
+					if deltaX > 2 {
+						t.Fatalf("optical left misalignment: plusLeftX=%d textLeftX=%d (delta=%d > 2; attach=%+v input=%+v)", plusLeftX, textLeftX, deltaX, attach, input)
+					}
+
+					tr.SetFocused(true)
+					tr.Move(attach.X+16, attach.Y+16)
+					tr.Advance(theme.ControlTransition.Duration)
+					tr.Frame()
+					hoverImg := tr.Image()
+					for _, pt := range [][2]int{
+						{ax + 16, ay + 5},
+						{ax + 16, ay + 26},
+						{ax + 5, ay + 16},
+						{ax + 26, ay + 16},
+					} {
+						got := imgRGBA(hoverImg, pt[0], pt[1])
+						if pxDist(got, surf) < 30 || pxDist(got, hover) > 8 {
+							t.Fatalf("hovered attach inset 26x26 face (%d,%d) mismatch: got=%v surf=%v wantHover=%v", pt[0], pt[1], got, surf, hover)
+						}
+					}
+					for _, pt := range [][2]int{
+						{ax + 16, ay + 1},
+						{ax + 16, ay + 30},
+						{ax + 1, ay + 16},
+						{ax + 30, ay + 16},
+					} {
+						if got := imgRGBA(hoverImg, pt[0], pt[1]); pxDist(got, surf) > 4 {
+							t.Fatalf("hovered attach outer edge (%d,%d) should remain unshaded outside 26x26 face: got=%v want=%v", pt[0], pt[1], got, surf)
+						}
+					}
+
+					attach, _ = tr.Find(msgs.ComposerAttach())
+					tr.ClickAt(attach.X+1, attach.Y+1)
+					tr.Frame()
+					if !a.composerAttachMenuOpen || !tr.HasText(msgs.ComposerAttachFile()) || !tr.HasText(msgs.ComposerAddTextNote()) {
+						t.Fatalf("edge click (%g,%g) did not open attach popover: open=%v texts=%v", attach.X+1, attach.Y+1, a.composerAttachMenuOpen, tr.Texts())
+					}
+					tr.Key(0, ui.KeyEscape)
+					tr.Frame()
+					if a.composerAttachMenuOpen || !tr.Focused(msgs.ComposerAttach()) {
+						t.Fatalf("Escape did not dismiss popover and restore focus to attach: open=%v focused=%v", a.composerAttachMenuOpen, tr.Focused(msgs.ComposerAttach()))
+					}
+
+					tr.Move(-1, -1)
+					if err := tr.Click(msgs.ComposerLabel(ct.Name)); err != nil {
+						t.Fatal(err)
+					}
+					tr.Frame()
+					for i := 0; i < 24 && !tr.Focused(msgs.ComposerAttach()); i++ {
+						tr.Key(0, ui.KeyTab)
+						tr.Frame()
+					}
+					if !tr.Focused(msgs.ComposerAttach()) {
+						t.Fatalf("Tab did not reach attach control: texts=%v", tr.Texts())
+					}
+					tr.Key(0, ui.KeyEnter)
+					tr.Frame()
+					if !a.composerAttachMenuOpen {
+						t.Fatal("Enter on focused attach control did not open attach popover")
+					}
+					tr.Key(0, ui.KeyEscape)
+					tr.Advance(theme.ControlTransition.Duration)
+					tr.Frame()
+					if a.composerAttachMenuOpen || !tr.Focused(msgs.ComposerAttach()) {
+						t.Fatalf("Escape after keyboard open did not restore attach focus: open=%v focused=%v", a.composerAttachMenuOpen, tr.Focused(msgs.ComposerAttach()))
+					}
+
+					ringImg := tr.Image()
+					var foundLeftRing, foundBottomRing bool
+					for x := ax - 4; x <= ax+2; x++ {
+						if pxDist(imgRGBA(ringImg, x, ay+16), surf) >= 80 {
+							foundLeftRing = true
+							break
+						}
+					}
+					for y := ay + ah - 2; y <= ay+ah+4; y++ {
+						if pxDist(imgRGBA(ringImg, ax+16, y), surf) >= 80 {
+							foundBottomRing = true
+							break
+						}
+					}
+					if !foundLeftRing || !foundBottomRing {
+						t.Fatalf("focused attach control missing DS 2.1 focus ring around 26x26 face: left=%v bottom=%v", foundLeftRing, foundBottomRing)
+					}
+
+					if err := tr.Click(msgs.ComposerLabel(ct.Name)); err != nil {
+						t.Fatal(err)
+					}
+					tr.Frame()
+					caret, hasCaret := tr.TextCaret()
+					inputAfter, _ := tr.Find(msgs.ComposerLabel(ct.Name))
+					if !hasCaret || math.Abs(float64(caret.X-(inputAfter.X+12))) > 1.5 {
+						t.Fatalf("focused composer caret inset mismatch: has=%v caret=%+v input=%+v wantX=%.1f", hasCaret, caret, inputAfter, inputAfter.X+12)
+					}
+
+					ct.DraftQuote = &pi.ProductQuote{
+						MessageID:  "q-align",
+						Sender:     "bot",
+						AuthorName: ct.Name,
+						Text:       "Confirm optical alignment across quote and material strips.",
+					}
+					if _, err := ct.Context.AddSnippet("Design spec", "Spec body"); err != nil {
+						t.Fatal(err)
+					}
+					tr.SetFocused(false)
+					tr.Move(-1, -1)
+					tr.Advance(theme.ControlTransition.Duration)
+					tr.Frame()
+
+					inputNow, okIn := tr.Find(msgs.ComposerLabel(ct.Name))
+					chip, okChip := tr.Find("Design spec")
+					quoteRemove, okQuoteRemove := tr.Find(msgs.QuoteRemove())
+					if !okIn || !okChip || !okQuoteRemove {
+						t.Fatalf("quote/chip controls missing: input=%v chip=%v quoteRemove=%v", okIn, okChip, okQuoteRemove)
+					}
+					if chip.X < inputNow.X+6 || chip.X+chip.W > inputNow.X+inputNow.W-1 {
+						t.Fatalf("material chip strip not aligned with composer insets: chip=%+v input=%+v", chip, inputNow)
+					}
+					if quoteRemove.X+quoteRemove.W > inputNow.X+inputNow.W-2 {
+						t.Fatalf("quote remove button overflows composer right inset: quoteRemove=%+v input=%+v", quoteRemove, inputNow)
+					}
+					quoteImg := tr.Image()
+					qy := int(quoteRemove.Y + quoteRemove.H/2)
+					quoteLeftX, quoteRightX := -1, -1
+					for x := int(inputNow.X) - 2; x <= int(inputNow.X+inputNow.W)+12; x++ {
+						if pxDist(imgRGBA(quoteImg, x, qy), chipBg) <= 6 {
+							if quoteLeftX < 0 {
+								quoteLeftX = x
+							}
+							quoteRightX = x
+						}
+					}
+					if quoteLeftX < 0 || quoteRightX < 0 {
+						t.Fatalf("failed to detect composerQuote chip background at y=%d", qy)
+					}
+					wantLeft := int(inputNow.X) + 8
+					wantRight := int(inputNow.X+inputNow.W) - 2
+					if quoteLeftX < wantLeft-2 || quoteLeftX > wantLeft+2 || quoteRightX > wantRight+1 || quoteRightX < wantRight-4 {
+						t.Fatalf("composerQuote bounds [%d..%d] misaligned with input insets [%d..%d]", quoteLeftX, quoteRightX, wantLeft, wantRight)
+					}
+				})
+			}
+
+			t.Run(fmt.Sprintf("%s-dark%t-960x640-profile", locale, dark), func(t *testing.T) {
+				a, ct := workspaceTestApp(t)
+				a.windowWidth = 960
+				a.rightPaneWidth = 440
+				a.openContactProfile(ct.ID)
+				tr := ui.NewTesterWith(a.view, 960, 640, ui.TesterOptions{Dark: dark})
+				tr.SetLocale(locale)
+				tr.Frame()
+				comp, okComp := tr.Find(msgs.ComposerLabel(ct.Name))
+				if !okComp || comp.W-14 < 440 {
+					t.Fatalf("960x640 profile net editable composer width = %.1f DIP, want >= 440 (comp=%+v)", comp.W-14, comp)
+				}
+			})
+		}
+	}
+}
+
+func TestComposerBorderlessPlusOpticalAlignmentAndRowInsets(t *testing.T) {
+	assertComposerPlusAlignmentAndChrome(t)
 }
