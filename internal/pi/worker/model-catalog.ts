@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import type { Model } from '@earendil-works/pi-ai';
-import type { ModelRole, ProviderInput, ThinkingLevel } from './model-router.js';
+import type { ModelRole, ProviderInput, ProviderTestInput, ThinkingLevel } from './model-router.js';
 
 export type CostTier = 'free' | 'low' | 'mid' | 'high' | 'flagship_pro' | 'unknown';
 type Capabilities = { reasoning: boolean; thinkingLevelMap: NonNullable<Model<'openai-completions'>['thinkingLevelMap']>;
@@ -59,7 +59,7 @@ function channelCost(price: Builtin['cost'] | undefined, wire: string, source?: 
   return 'unknown';
 }
 
-export function modelSupply(account: ProviderInput, id: string, legacyDefault = false) {
+export function modelSupply(account: ProviderInput | ProviderTestInput, id: string, legacyDefault = false) {
   const endpoint = new URL(account.baseUrl).href.replace(/\/+$/, '').replace(/^https:\/\/api\.deepseek\.com\/v1$/, 'https://api.deepseek.com');
   const source = ambiguousEndpoints.has(endpoint) ? undefined : endpointSources.get(endpoint);
   const exact = source ? routeModels.get(key(endpoint, account.wireApi, id)) : undefined;
@@ -102,7 +102,7 @@ export function modelSupply(account: ProviderInput, id: string, legacyDefault = 
   return { id, canonicalId, isChat, toolCall, reasoning, tier, priceProtected, recommended, contextTokens, outputTokens, family, supported, capabilities };
 }
 
-export function describeModel(account: ProviderInput, id: string) {
+export function describeModel(account: ProviderInput | ProviderTestInput, id: string) {
   const { family, supported, capabilities, ...view } = modelSupply(account, id);
   return view;
 }

@@ -45,6 +45,9 @@ func TestProviderCatalogEmbeddedOrderAndMetadata(t *testing.T) {
 	}
 
 	for _, preset := range cat.Presets {
+		if preset.DefaultModel != "" {
+			t.Fatalf("built-in preset %q unexpectedly hardcoded DefaultModel %q", preset.ID, preset.DefaultModel)
+		}
 		if len(preset.IconSVG) == 0 || !strings.Contains(string(preset.IconSVG), "<svg") {
 			t.Fatalf("preset %q missing valid SVG bytes", preset.ID)
 		}

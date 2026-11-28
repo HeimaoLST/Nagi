@@ -104,8 +104,19 @@ func TestProviderSettingsUnifiedTwoTabsZeroAccountV2ImportAndOffline(t *testing.
 			if !empty.providers.adding || empty.providers.editor == nil {
 				t.Fatalf("preset %q did not open provider config modal", tc.click)
 			}
-			if empty.providers.editor.BaseURL != tc.wantURL || empty.providers.editor.WireAPI != tc.wantWire {
-				t.Fatalf("preset %q set url=%q wire=%q, want %q/%q", tc.click, empty.providers.editor.BaseURL, empty.providers.editor.WireAPI, tc.wantURL, tc.wantWire)
+			if empty.providers.editor.BaseURL != tc.wantURL || empty.providers.editor.WireAPI != tc.wantWire ||
+				empty.providers.editor.DefaultModel != "" || len(empty.providers.editor.Models) != 0 {
+				t.Fatalf("preset %q set url=%q wire=%q defaultModel=%q models=%v, want %q/%q empty default",
+					tc.click, empty.providers.editor.BaseURL, empty.providers.editor.WireAPI,
+					empty.providers.editor.DefaultModel, empty.providers.editor.Models, tc.wantURL, tc.wantWire)
+			}
+			for _, hardcoded := range []string{"deepseek-chat", "gpt-5", "qwen3:8b"} {
+				if tr.HasText(hardcoded) {
+					t.Fatalf("preset %q modal leaked removed hardcoded model %q: %v", tc.click, hardcoded, tr.Texts())
+				}
+			}
+			if !tr.HasText(msgs.ProviderFetchModels()) || !tr.HasText(msgs.ProviderFetchModelsHint()) || tr.HasText(msgs.ProviderTestSync()) {
+				t.Fatalf("preset %q before-fetch controls mismatch: %v", tc.click, tr.Texts())
 			}
 			if tc.click == "OpenAI" {
 				empty.providers.editor.APIKey = syntheticKey
@@ -853,4 +864,100 @@ func TestProviderRoutingHelpersHealthNotesAndThemeSwitch(t *testing.T) {
 			t.Fatalf("providerDirectoryButton did not snap on first Light->Dark frame: got=%v want=%v", got, want)
 		}
 	})
+}
+
+func TestProviderLiveModelsInputAutoAddAndPreferredDiscovery(t *testing.T) {
+	msgs := locales.In("en")
+	yes, no := true, false
+
+	ed := newProviderDraft()
+	ed.Name = "DeepSeek"
+	ed.BaseURL = "https://api.deepseek.com/v1"
+	ed.APIKey = "sk-live-models-test"
+	ed.DefaultModel = ""
+	if _, ok := ed.input(false); ok || ed.fields["Model"] != connection.ValidationRequired {
+		t.Fatalf("save input with empty DefaultModel should fail Model required: ok=%v fields=%+v", ok, ed.fields)
+	}
+	probeParams, ok := ed.inputFor(false, false)
+	if !ok || probeParams.Account.DefaultModel != "" || ed.fields["Model"] != "" {
+		t.Fatalf("probe inputFor(false, false) should allow empty DefaultModel and clear Model error: ok=%v acc=%+v fields=%+v", ok, probeParams.Account, ed.fields)
+	}
+
+	a := providerUITestApp(t, pi.ProductProviderList{Policy: pi.ProductRoutingBalanced})
+	a.windowWidth = 1040
+	a.openProviderPreset(pi.ProductProviderList{Policy: pi.ProductRoutingBalanced}, "deepseek")
+	a.providers.editor.fields = map[string]string{"Model": connection.ValidationRequired}
+	a.providers.editor.modelInput = "deepseek-v4-chat"
+	tr := ui.NewTester(a.view, 1040, 720)
+	tr.SetLocale("en")
+	tr.Frame()
+	if _, ok := tr.Find(msgs.ProviderAddModel()); !ok {
+		a.providers.detailScroll.Y = 300
+		tr.Frame()
+	}
+	if err := tr.Click(msgs.ProviderAddModel()); err != nil {
+		t.Fatalf("click Add model: %v", err)
+	}
+	tr.Frame()
+	if a.providers.editor.DefaultModel != "deepseek-v4-chat" ||
+		!slices.Equal(a.providers.editor.Models, []string{"deepseek-v4-chat"}) ||
+		a.providers.editor.fields["Model"] != "" {
+		t.Fatalf("adding first manual model did not auto-populate DefaultModel: model=%q models=%v fields=%+v",
+			a.providers.editor.DefaultModel, a.providers.editor.Models, a.providers.editor.fields)
+	}
+	if !tr.HasText(msgs.ProviderTestSync()) || tr.HasText(msgs.ProviderFetchModels()) {
+		t.Fatalf("adding first manual model did not switch button to Test & sync: %v", tr.Texts())
+	}
+	a.providers.editor.modelInput = "deepseek-v4-reasoner"
+	if err := tr.Click(msgs.ProviderAddModel()); err != nil {
+		t.Fatalf("click Add second model: %v", err)
+	}
+	tr.Frame()
+	if a.providers.editor.DefaultModel != "deepseek-v4-chat" || len(a.providers.editor.Models) != 2 {
+		t.Fatalf("adding second model overwrote explicit DefaultModel: %q %v", a.providers.editor.DefaultModel, a.providers.editor.Models)
+	}
+
+	if got := preferredDiscoveredModel(pi.ProductProviderTestResult{
+		DiscoveredModels: []pi.ProductDiscoveredModel{
+			{ID: "text-embedding-3-small", IsChat: &no},
+			{ID: "gpt-5.4-pro", IsChat: &yes, PriceProtected: true},
+			{ID: "gpt-4o-mini", IsChat: &yes},
+			{ID: "o3-pro-bad", IsChat: &yes, Recommended: true, PriceProtected: true},
+			{ID: "gpt-5.4", IsChat: &yes, Recommended: true},
+		},
+	}); got != "gpt-5.4" {
+		t.Fatalf("preferredDiscoveredModel recommended selection = %q, want gpt-5.4", got)
+	}
+	if got := preferredDiscoveredModel(pi.ProductProviderTestResult{
+		DiscoveredModels: []pi.ProductDiscoveredModel{
+			{ID: "text-embedding-3-small", IsChat: &no},
+			{ID: "gpt-5.4-pro", IsChat: &yes, PriceProtected: true},
+			{ID: "custom-unknown"},
+			{ID: "standard-chat", IsChat: &yes},
+		},
+	}); got != "standard-chat" {
+		t.Fatalf("preferredDiscoveredModel non-recommended chat vs custom/pro = %q, want standard-chat", got)
+	}
+	if got := preferredDiscoveredModel(pi.ProductProviderTestResult{
+		DiscoveredModels: []pi.ProductDiscoveredModel{
+			{ID: "embed-1", IsChat: &no},
+			{ID: "custom-a"},
+			{ID: "custom-b"},
+		},
+	}); got != "custom-a" {
+		t.Fatalf("preferredDiscoveredModel unknown IsChat fallback = %q, want custom-a", got)
+	}
+	if got := preferredDiscoveredModel(pi.ProductProviderTestResult{
+		DiscoveredModels: []pi.ProductDiscoveredModel{
+			{ID: "embed-1", IsChat: &no},
+			{ID: "gpt-5.4-pro", IsChat: &yes, PriceProtected: true},
+		},
+	}); got != "gpt-5.4-pro" {
+		t.Fatalf("preferredDiscoveredModel price-protected last-resort = %q, want gpt-5.4-pro", got)
+	}
+	if got := preferredDiscoveredModel(pi.ProductProviderTestResult{
+		Models: []string{"  ", "fallback-id"},
+	}); got != "fallback-id" {
+		t.Fatalf("preferredDiscoveredModel Models slice fallback = %q, want fallback-id", got)
+	}
 }

@@ -175,14 +175,29 @@ globalThis.fetch = (input, init) => {
 
 	w.click("OpenAI")
 	w.wait(func() bool { return w.app.providers.adding && w.app.providers.editor != nil })
-	w.frame(func() {
+	var openAIErr string
+	w.pump.do(func() {
 		ed := w.app.providers.editor
+		if ed.DefaultModel != "" || len(ed.Models) != 0 {
+			openAIErr = fmt.Sprintf("OpenAI preset unexpectedly prefilled models: default=%q models=%v", ed.DefaultModel, ed.Models)
+			return
+		}
+		if w.view.HasText("gpt-5") || !w.view.HasText(msgs.ProviderFetchModels()) || !w.view.HasText(msgs.ProviderFetchModelsHint()) || w.view.HasText(msgs.ProviderTestSync()) {
+			openAIErr = fmt.Sprintf("OpenAI before-fetch UI state mismatch: %v", w.view.Texts())
+			return
+		}
 		ed.Name = "Studio gateway"
 		ed.APIKey = apiKey
+		w.view.Frame()
 	})
+	if openAIErr != "" {
+		t.Fatal(openAIErr)
+	}
 	w.click(msgs.ProviderTestAccount("Studio gateway"))
 	w.wait(func() bool {
-		return !w.app.providerBusy() && w.app.providers.editor != nil && w.app.providers.editor.tested && len(w.app.providers.editor.Models) == 128
+		return !w.app.providerBusy() && w.app.providers.editor != nil && w.app.providers.editor.tested &&
+			len(w.app.providers.editor.Models) == 128 && w.app.providers.editor.DefaultModel != "" &&
+			w.view.HasText(msgs.ProviderTestSync()) && !w.view.HasText(msgs.ProviderFetchModels())
 	})
 
 	mu.Lock()
@@ -192,9 +207,14 @@ globalThis.fetch = (input, init) => {
 		t.Fatalf("expected 1 /v1/models discovery request, got %d", gotModelsProbe)
 	}
 	var editorModels []string
+	var autoPickedModel string
 	w.pump.do(func() {
 		editorModels = slices.Clone(w.app.providers.editor.Models)
+		autoPickedModel = w.app.providers.editor.DefaultModel
 	})
+	if !slices.Contains([]string{"gpt-4o", "gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano", "o3"}, autoPickedModel) {
+		t.Fatalf("empty-default discovery auto-selected unexpected model %q (pro/non-chat forbidden)", autoPickedModel)
+	}
 	if len(editorModels) != 128 {
 		t.Fatalf("unchanged editor discovery cap = %d, want 128", len(editorModels))
 	}
@@ -237,11 +257,21 @@ globalThis.fetch = (input, init) => {
 
 	w.click("Ollama")
 	w.wait(func() bool { return w.app.providers.adding && w.app.providers.editor != nil })
-	w.frame(func() {
+	var ollamaErr string
+	w.pump.do(func() {
 		ed := w.app.providers.editor
+		if ed.DefaultModel != "" || len(ed.Models) != 0 || w.view.HasText("qwen3:8b") {
+			ollamaErr = fmt.Sprintf("Ollama preset unexpectedly prefilled models: default=%q models=%v", ed.DefaultModel, ed.Models)
+			return
+		}
+		ed.DefaultModel = "qwen3:8b"
 		ed.Enabled = false
 		ed.APIKey = "local-ollama-token"
+		w.view.Frame()
 	})
+	if ollamaErr != "" {
+		t.Fatal(ollamaErr)
+	}
 	w.click(msgs.ProviderSave())
 	w.wait(func() bool {
 		return !w.app.providerBusy() && !w.app.providers.adding && len(w.app.productHost().productProviders.Accounts) == 2 && w.app.productProvidersPending()
@@ -597,9 +627,30 @@ globalThis.fetch = (input, init) => {
 
 		clickScrolled(t, w, "DeepSeek")
 		w.wait(func() bool { return w.app.providers.adding && w.app.providers.first != nil })
-		w.frame(func() { w.app.dismissProviderDialog() })
+		var dsCheckErr string
+		w.pump.do(func() {
+			e := w.app.providers.first
+			if e.DefaultModel != "" || len(e.Models) != 0 || w.view.HasText("deepseek-chat") || !w.view.HasText(msgs.ProviderFetchModels()) {
+				dsCheckErr = fmt.Sprintf("DeepSeek preset unexpectedly prefilled models: default=%q models=%v texts=%v", e.DefaultModel, e.Models, w.view.Texts())
+			}
+			w.app.dismissProviderDialog()
+			w.view.Frame()
+		})
+		if dsCheckErr != "" {
+			t.Fatal(dsCheckErr)
+		}
 		clickScrolled(t, w, "OpenAI")
 		w.wait(func() bool { return w.app.providers.adding && w.app.providers.first != nil })
+		var oaiCheckErr string
+		w.pump.do(func() {
+			e := w.app.providers.first
+			if e.DefaultModel != "" || len(e.Models) != 0 || w.view.HasText("gpt-5") {
+				oaiCheckErr = fmt.Sprintf("OpenAI preset unexpectedly prefilled models: default=%q models=%v", e.DefaultModel, e.Models)
+			}
+		})
+		if oaiCheckErr != "" {
+			t.Fatal(oaiCheckErr)
+		}
 		typeInput(t, w, msgs.ConnectionFieldAPIKey(), rtKey)
 		w.frame(func() { w.app.dismissProviderDialog() })
 		clickScrolled(t, w, "OpenAI")
@@ -609,20 +660,31 @@ globalThis.fetch = (input, init) => {
 			}
 		})
 		typeInput(t, w, msgs.FieldName(), "Studio gateway")
-		typeInput(t, w, msgs.ProviderDefaultModel(), "gpt-4o")
 		clickScrolled(t, w, msgs.ProviderTestAccount("Studio gateway"))
 		w.wait(func() bool {
-			return !w.app.providerBusy() && w.app.providers.first != nil && w.app.providers.first.tested
+			return !w.app.providerBusy() && w.app.providers.first != nil && w.app.providers.first.tested &&
+				w.app.providers.first.DefaultModel != "" && w.view.HasText(msgs.ProviderTestSync())
 		})
-		w.frame(func() {
+		var discoveredErr string
+		w.pump.do(func() {
 			e := w.app.providers.first
+			if e.DefaultModel == "gpt-5.4-pro" || e.DefaultModel == "text-embedding-3-small" {
+				discoveredErr = fmt.Sprintf("discovery auto-picked protected/non-chat model %q", e.DefaultModel)
+				return
+			}
 			ready := e.discoveredModel("gpt-4o")
 			protected := e.discoveredModel("gpt-5.4-pro")
 			embedding := e.discoveredModel("text-embedding-3-small")
 			if ready.ToolCall == nil || !*ready.ToolCall || !ready.Recommended || !protected.PriceProtected || embedding.IsChat == nil || *embedding.IsChat || len(e.discovered) != 4 || e.EnabledModels != nil {
-				t.Errorf("discovered capability metadata mismatch: %+v", e.discovered)
+				discoveredErr = fmt.Sprintf("discovered capability metadata mismatch: %+v", e.discovered)
+				return
 			}
+			e.DefaultModel = "gpt-4o"
+			w.view.Frame()
 		})
+		if discoveredErr != "" {
+			t.Fatal(discoveredErr)
+		}
 		clickScrolled(t, w, msgs.ProviderSaveApply())
 		w.wait(func() bool {
 			return !w.app.providerBusy() && !w.app.providers.adding && !w.app.productProvidersPending() && len(w.app.productHost().productProviders.Accounts) == 1

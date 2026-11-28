@@ -466,6 +466,14 @@
 
 **Prevention:** Project the full pinned upstream inventory for every supported OpenAI-compatible provider with deterministic allowlists, compile and validate family regexes case-insensitively, test both same-account and cross-account canonical siblings plus mixed-case Pro SKUs and endpoint repoints with fresh overrides, and keep an unchanged-editor 200+ ID discovery integration gate green.
 
+### Avoid static default models in built-in provider presets
+
+**Problem:** Built-in presets prefilled model IDs that could be unavailable on the configured endpoint.
+
+**Cause or correction:** Preset defaults were shipped with the app, while model availability depends on the provider and credential used for discovery.
+
+**Prevention:** Leave built-in defaults empty and allow `/models` discovery before save. Prefer a discovered chat model or accept a manually entered ID. Require a default for saved accounts and for connection probes when discovery is unavailable. Call validation explicitly in collection callbacks so the array index cannot enable probe-only validation.
+
 ### Distinguish caller cancellation from SDK cleanup aborts and transport failures from semantic escalation
 
 **Problem:** An interrupted HTTP 200 model stream can look like a local fetch abort because Pi's OpenAI SDK cancels its internal `AbortController` during stream cleanup, and older utility-escalation fixtures triggered HTTP 5xx provider errors that conflict with the zero-transport-replay rule.

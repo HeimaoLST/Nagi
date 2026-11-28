@@ -1511,6 +1511,7 @@
   "providerMoveDown": "Move down",
   "providerReorderFailed": "Could not reorder providers",
   "providerDefaultModel": "Default model",
+  "providerDefaultModelPlaceholder": "Fetched automatically or enter a model ID",
   "providerModelPool": "Model pool",
   "providerAutomaticPoolHint": "Test & sync to see automatic choices, or select each model to set the pool yourself",
   "providerPickDefault": "Choose default model",
@@ -1640,6 +1641,8 @@
     }
   },
   "providerTestSync": "Test & sync",
+  "providerFetchModels": "Fetch models",
+  "providerFetchModelsHint": "Fetch models to load the latest list from this provider, or add a model ID below.",
   "providerTestDiscover": "Test & discover",
   "providerMoreModels": "+{count} more",
   "@providerMoreModels": {

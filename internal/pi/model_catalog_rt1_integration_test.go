@@ -1665,3 +1665,139 @@ console.log(JSON.stringify({ v, fk }));
 	}
 	h.assertClean()
 }
+
+func TestPiProductModelCatalogEmptyDefaultDiscoveryAndNoProbeFallback(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+
+	nodePath, workerPath := mcpRequirePinnedWorker(t)
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	const secret = "rt1-empty-default-secret"
+	var (
+		mu             sync.Mutex
+		modelsStatus   = http.StatusOK
+		completionHits int
+		modelsHits     int
+	)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer "+secret {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		if r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/models") {
+			mu.Lock()
+			status := modelsStatus
+			modelsHits++
+			mu.Unlock()
+			if status != http.StatusOK {
+				http.Error(w, "discovery disabled", status)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"data": []map[string]string{
+					{"id": "text-embedding-3-small"},
+					{"id": "gpt-5.4-pro"},
+					{"id": "gpt-4o"},
+					{"id": "gpt-5.4-mini"},
+				},
+			})
+			return
+		}
+		if strings.HasSuffix(r.URL.Path, "/chat/completions") || strings.HasSuffix(r.URL.Path, "/responses") {
+			mu.Lock()
+			completionHits++
+			mu.Unlock()
+		}
+		http.Error(w, "unexpected completion call", http.StatusInternalServerError)
+	}))
+	t.Cleanup(server.Close)
+
+	offsiteLog := filepath.Join(root, "offsite.log")
+	preloadPath := filepath.Join(root, "empty-default-preload.mjs")
+	preload := fmt.Sprintf(`import { appendFileSync } from 'node:fs';
+const orig = globalThis.fetch;
+const targetBase = %q;
+const offsiteLog = %q;
+globalThis.fetch = (input, init) => {
+  const url = new URL(input instanceof Request ? input.url : String(input));
+  if (url.hostname === '127.0.0.1' || url.hostname === 'localhost') return orig(input, init);
+  if (url.hostname === 'api.openai.com') {
+    const dest = new URL(targetBase + '/' + url.hostname + url.pathname + url.search);
+    return orig(input instanceof Request ? new Request(dest, input) : dest, init);
+  }
+  appendFileSync(offsiteLog, url.origin + '\n');
+  throw new Error('Blocked external fetch: ' + url.origin);
+};
+`, server.URL, offsiteLog)
+	if err := os.WriteFile(preloadPath, []byte(preload), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("NODE_OPTIONS", "--import="+preloadPath)
+
+	proc := startProductProcess(t, pi.ProductOptions{
+		NodePath:        nodePath,
+		WorkerPath:      workerPath,
+		StateDir:        filepath.Join(root, "pi"),
+		ProfilePath:     filepath.Join(root, "contacts.json"),
+		CredentialsPath: filepath.Join(root, "connection.json"),
+		FreshProfile:    true,
+	})
+	_ = proc.open(t, ctx)
+	defer proc.shutdown(t, ctx)
+
+	emptyAcc := rt1Account("prov-empty-default", "https://api.openai.com/v1", pi.OpenAIResponses, "")
+	okRes, err := proc.client.TestProvider(ctx, pi.ProductProviderTestParams{Account: emptyAcc, APIKey: secret})
+	if err != nil || !okRes.OK || len(okRes.Models) != 4 || len(okRes.DiscoveredModels) != 4 {
+		t.Fatalf("empty DefaultModel discovery failed: %+v, err=%v", okRes, err)
+	}
+	if !okRes.DiscoveredModels[0].Recommended {
+		t.Fatalf("expected recommended chat model first: %+v", okRes.DiscoveredModels)
+	}
+
+	for _, status := range []int{http.StatusNotFound, http.StatusMethodNotAllowed, http.StatusNotImplemented} {
+		mu.Lock()
+		modelsStatus = status
+		mu.Unlock()
+		failRes, err := proc.client.TestProvider(ctx, pi.ProductProviderTestParams{Account: emptyAcc, APIKey: secret})
+		if err != nil || failRes.OK || !strings.Contains(strings.ToLower(failRes.Error), "enter a default model") {
+			t.Fatalf("HTTP %d discovery failure with empty DefaultModel mismatch: %+v, err=%v", status, failRes, err)
+		}
+	}
+
+	spaceAcc := rt1Account("prov-space-default", "https://api.openai.com/v1", pi.OpenAIResponses, "   ")
+	if _, err := proc.client.TestProvider(ctx, pi.ProductProviderTestParams{Account: spaceAcc, APIKey: secret}); err == nil {
+		t.Fatal("expected whitespace-only DefaultModel on provider.test to fail")
+	} else {
+		var remote *pi.RemoteError
+		if !errors.As(err, &remote) || remote.Code != "invalid_params" {
+			t.Fatalf("whitespace DefaultModel err = %v, want invalid_params", err)
+		}
+	}
+	if _, err := proc.client.SaveProvider(ctx, pi.ProductProviderSaveParams{
+		ProductProviderTestParams: pi.ProductProviderTestParams{Account: emptyAcc, APIKey: secret},
+		OperationID:               "op-save-empty-default",
+	}); err == nil {
+		t.Fatal("expected empty DefaultModel on provider.save to fail")
+	} else {
+		var remote *pi.RemoteError
+		if !errors.As(err, &remote) || remote.Code != "invalid_params" {
+			t.Fatalf("empty DefaultModel provider.save err = %v, want invalid_params", err)
+		}
+	}
+
+	mu.Lock()
+	gotModels := modelsHits
+	gotCompletions := completionHits
+	mu.Unlock()
+	if gotModels != 4 || gotCompletions != 0 {
+		t.Fatalf("unexpected probe request counts: models=%d completions=%d", gotModels, gotCompletions)
+	}
+	if data, err := os.ReadFile(offsiteLog); err == nil && len(data) > 0 {
+		t.Fatalf("unexpected offsite network calls: %s", string(data))
+	}
+}

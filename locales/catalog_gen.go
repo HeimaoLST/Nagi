@@ -9548,6 +9548,18 @@ func (msgs Messages) ProviderDefaultModel() string {
 	return Catalog.Format(msgs.locale, "providerDefaultModel", nil)
 }
 
+// ProviderDefaultModelPlaceholder says "Fetched automatically or enter a model ID"
+// in the language the app shows.
+func ProviderDefaultModelPlaceholder() string {
+	return In(i18n.Locale()).ProviderDefaultModelPlaceholder()
+}
+
+// ProviderDefaultModelPlaceholder says "Fetched automatically or enter a model ID"
+// in the language of msgs.
+func (msgs Messages) ProviderDefaultModelPlaceholder() string {
+	return Catalog.Format(msgs.locale, "providerDefaultModelPlaceholder", nil)
+}
+
 // ProviderModelPool says "Model pool"
 // in the language the app shows.
 func ProviderModelPool() string { return In(i18n.Locale()).ProviderModelPool() }
@@ -10114,6 +10126,26 @@ func ProviderTestSync() string { return In(i18n.Locale()).ProviderTestSync() }
 // in the language of msgs.
 func (msgs Messages) ProviderTestSync() string {
 	return Catalog.Format(msgs.locale, "providerTestSync", nil)
+}
+
+// ProviderFetchModels says "Fetch models"
+// in the language the app shows.
+func ProviderFetchModels() string { return In(i18n.Locale()).ProviderFetchModels() }
+
+// ProviderFetchModels says "Fetch models"
+// in the language of msgs.
+func (msgs Messages) ProviderFetchModels() string {
+	return Catalog.Format(msgs.locale, "providerFetchModels", nil)
+}
+
+// ProviderFetchModelsHint says "Fetch models to load the latest list from this provider, or add a model ID below."
+// in the language the app shows.
+func ProviderFetchModelsHint() string { return In(i18n.Locale()).ProviderFetchModelsHint() }
+
+// ProviderFetchModelsHint says "Fetch models to load the latest list from this provider, or add a model ID below."
+// in the language of msgs.
+func (msgs Messages) ProviderFetchModelsHint() string {
+	return Catalog.Format(msgs.locale, "providerFetchModelsHint", nil)
 }
 
 // ProviderTestDiscover says "Test & discover"
