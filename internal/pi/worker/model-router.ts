@@ -45,6 +45,7 @@ const providerFields = { providerId, name: key, wireApi, baseUrl: Type.String({ 
 export const privateProviderAccount = Type.Object({ ...providerFields, credentialSourceId: key }, strict);
 export const providerInput = Type.Object({ ...providerFields, enabledModels: Type.Optional(modelList), fallbackOnly: Type.Optional(Type.Boolean()),
   modelOverrides: Type.Optional(Type.Array(modelOverride, { maxItems: 128 })) }, strict);
+export const providerTestInput = Type.Object({ ...providerInput.properties, defaultModel: Type.String({ maxLength: 256 }) }, strict);
 export const providerAccount = Type.Object({ ...providerInput.properties, credentialSourceId: key }, strict);
 export const providerAccountView = Type.Object({ ...providerAccount.properties, priority: Type.Optional(count),
   credentialStatus: Type.Union([Type.Literal('ok'), Type.Literal('credential_missing')]),
@@ -77,6 +78,7 @@ export const escalationSchema = Type.Object({ activityId: key, priorExecutionId:
   fromRole: Type.Literal('utility'), toRole: Type.Union([Type.Literal('coding'), Type.Literal('reasoning')]), at: key }, strict);
 
 export type ProviderInput = Static<typeof providerInput>;
+export type ProviderTestInput = Static<typeof providerTestInput>;
 export type ProviderAccount = Static<typeof providerAccount>;
 export type RoutingPolicy = Static<typeof policySchema>;
 export type ModelRole = Static<typeof roleSchema>;
@@ -121,8 +123,10 @@ export function providerEndpoint(baseUrl: string): URL | undefined {
   if (url && (url.protocol === 'http:' || url.protocol === 'https:') && !url.username && !url.password && !url.search && !url.hash) return url;
 }
 
-export function validProvider(account: ProviderInput): boolean {
-  const models = new Set([account.defaultModel, ...account.models ?? [], ...account.enabledModels ?? []]);
+export function validProvider(account: ProviderInput | ProviderTestInput, allowEmptyDefault = false): boolean {
+  const hasDefault = account.defaultModel.length > 0;
+  if ((!allowEmptyDefault && !account.defaultModel.trim()) || (allowEmptyDefault && hasDefault && !account.defaultModel.trim())) return false;
+  const models = new Set([...(hasDefault ? [account.defaultModel] : []), ...account.models ?? [], ...account.enabledModels ?? []]);
   const overrides = account.modelOverrides ?? [];
   return !!providerEndpoint(account.baseUrl) && !!account.name.trim() && [...models].every(model => !!model.trim()) &&
     account.contextTokens - account.outputTokens >= 4 && new Set(overrides.map(row => row.id)).size === overrides.length &&

@@ -177,6 +177,10 @@ test('model router validates endpoints, pins, captured compatibility, and role f
   assert.equal(modelRouter.validProvider({ ...custom, modelOverrides: [{ id: 'custom-model', isChat: false, toolCall: true }] }), false);
   assert.equal(modelRouter.validProvider({ ...custom, modelOverrides: [{ id: 'custom-model', contextTokens: 100, outputTokens: 97 }] }), false);
   assert.equal(modelRouter.validProvider({ ...custom, modelOverrides: [{ id: 'custom-model', isChat: true, toolCall: true }] }), true);
+  assert.equal(modelRouter.validProvider({ ...custom, defaultModel: '', models: [], enabledModels: undefined }, true), true);
+  assert.equal(modelRouter.validProvider({ ...custom, defaultModel: '   ' }, true), false);
+  assert.equal(modelRouter.validProvider({ ...custom, defaultModel: '' }), false);
+  assert.equal([custom, { ...custom, providerId: 'p-2', credentialSourceId: 'c-2', defaultModel: '' }].every(acc => modelRouter.validProvider(acc)), false);
 
   const primary = openAiAccount({ providerId: 'p1', credentialSourceId: 'c1', models: ['gpt-5', 'gpt-4o-mini'] });
   const secondary = openAiAccount({ providerId: 'p2', credentialSourceId: 'c2', name: 'OpenAI Backup', models: ['gpt-5'] });

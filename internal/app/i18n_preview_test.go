@@ -769,6 +769,16 @@ func TestPreviewProvidersDS2(t *testing.T) {
 	generalApp := providerUITestApp(t, visualGuardSeededPool())
 	generalApp.openSettingsTab(settingsTabAppearance, settingsSourceRail)
 	writeShot("ds2-general-toggle-zh-light-1040x720.png", generalApp, 1040, 720, "zh-Hans", false)
+
+	presetDark := providerUITestApp(t, pi.ProductProviderList{Policy: pi.ProductRoutingBalanced})
+	presetDark.uiLocale = "zh-Hans"
+	presetDark.openProviderPreset(pi.ProductProviderList{Policy: pi.ProductRoutingBalanced}, "deepseek")
+	writeShot("ds2-providers-preset-deepseek-zh-dark-1040x720.png", presetDark, 1040, 720, "zh-Hans", true)
+
+	presetLight := providerUITestApp(t, pi.ProductProviderList{Policy: pi.ProductRoutingBalanced})
+	presetLight.uiLocale = "en"
+	presetLight.openProviderPreset(pi.ProductProviderList{Policy: pi.ProductRoutingBalanced}, "deepseek")
+	writeShot("ds2-providers-preset-deepseek-en-light-720x640.png", presetLight, 720, 640, "en", false)
 }
 
 func TestPreviewCapabilitiesProfileDS2(t *testing.T) {

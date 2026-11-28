@@ -435,6 +435,10 @@ func (e *providerEditor) localWithoutKey() bool {
 }
 
 func (e *providerEditor) input(keepKey bool) (pi.ProductProviderTestParams, bool) {
+	return e.inputFor(keepKey, true)
+}
+
+func (e *providerEditor) inputFor(keepKey, requireModel bool) (pi.ProductProviderTestParams, bool) {
 	account := e.ProductProviderAccount
 	if !e.modelsChanged {
 		account.EnabledModels = nil
@@ -445,12 +449,15 @@ func (e *providerEditor) input(keepKey bool) (pi.ProductProviderTestParams, bool
 	account.Name, account.DefaultModel = strings.TrimSpace(account.Name), strings.TrimSpace(account.DefaultModel)
 	key := strings.TrimSpace(e.APIKey)
 	fields := make(map[string]string)
-	for field, value := range map[string]string{"Name": account.Name, "Model": account.DefaultModel} {
-		if value == "" {
-			fields[field] = connection.ValidationRequired
-		} else if utf16Length(value) > 256 {
-			fields[field] = "name-length"
-		}
+	if account.Name == "" {
+		fields["Name"] = connection.ValidationRequired
+	} else if utf16Length(account.Name) > 256 {
+		fields["Name"] = "name-length"
+	}
+	if account.DefaultModel == "" && requireModel {
+		fields["Model"] = connection.ValidationRequired
+	} else if utf16Length(account.DefaultModel) > 256 {
+		fields["Model"] = "name-length"
 	}
 	if reason := connection.ValidateEndpoint(account.BaseURL); reason != "" {
 		fields["Endpoint"] = reason
@@ -504,6 +511,40 @@ func utf16Length(text string) int {
 	return length
 }
 
+func preferredDiscoveredModel(result pi.ProductProviderTestResult) string {
+	var preferred string
+	bestRank := 0
+	for _, model := range result.DiscoveredModels {
+		id := strings.TrimSpace(model.ID)
+		if id == "" || model.IsChat != nil && !*model.IsChat {
+			continue
+		}
+		rank := 1
+		if !model.PriceProtected {
+			switch {
+			case model.Recommended:
+				return id
+			case model.IsChat != nil:
+				rank = 3
+			default:
+				rank = 2
+			}
+		}
+		if rank > bestRank {
+			preferred, bestRank = id, rank
+		}
+	}
+	if preferred != "" {
+		return preferred
+	}
+	for _, model := range result.Models {
+		if id := strings.TrimSpace(model); id != "" {
+			return id
+		}
+	}
+	return ""
+}
+
 func (a *appModel) testProvider(params pi.ProductProviderTestParams, editor *providerEditor) {
 	var result pi.ProductProviderTestResult
 	a.runProviderRPC(true, func(ctx context.Context, client *pi.ProductClient) error {
@@ -525,6 +566,12 @@ func (a *appModel) testProvider(params pi.ProductProviderTestParams, editor *pro
 				}
 				if !slices.Contains(editor.Models, id) {
 					editor.Models = append(editor.Models, id)
+				}
+			}
+			if strings.TrimSpace(editor.DefaultModel) == "" {
+				if picked := preferredDiscoveredModel(result); picked != "" {
+					editor.DefaultModel = picked
+					delete(editor.fields, "Model")
 				}
 			}
 		} else {
@@ -1062,7 +1109,7 @@ func (a *appModel) configuredProviderRow(c *ui.Context, t *ui.Theme, msgs locale
 
 func (a *appModel) providerTestButton(c *ui.Context, label, accessible string, editor *providerEditor, keepKey, blocked bool) {
 	secondaryButton(c, label).Label(accessible).MinHeight(32).Disabled(blocked).OnClick(func() {
-		if params, ok := editor.input(keepKey); ok {
+		if params, ok := editor.inputFor(keepKey, false); ok {
 			a.testProvider(params, editor)
 		}
 	})
@@ -1193,7 +1240,7 @@ func (a *appModel) providerModels(c *ui.Context, t *ui.Theme, msgs locales.Messa
 	models := providerModelIDs(editor.ProductProviderAccount)
 	providerFormRow(c, t, msgs.ProviderDefaultModel(), func() {
 		ui.Row(c).FillWidth().MinWidth(0).Wrap().Gap(8).AlignItems(ui.Center).Children(func() {
-			a.providerInput(c, editor, "Model", msgs.ProviderDefaultModel(), "", &editor.DefaultModel, false, blocked).Basis(128).Grow(1)
+			a.providerInput(c, editor, "Model", msgs.ProviderDefaultModel(), msgs.ProviderDefaultModelPlaceholder(), &editor.DefaultModel, false, blocked).Basis(128).Grow(1)
 			if len(models) > 1 {
 				options := make([]theme.SelectOption, 0, len(models))
 				for _, id := range models {
@@ -1218,7 +1265,11 @@ func (a *appModel) providerModels(c *ui.Context, t *ui.Theme, msgs locales.Messa
 			secondaryButton(c, msgs.ProviderSelectNone()).Disabled(blocked || len(models) == 0).OnClick(func() {
 				editor.setEnabledModels([]string{})
 			})
-			a.providerTestButton(c, msgs.ProviderTestSync(), msgs.ProviderTestAccount(name), editor, keepKey, blocked)
+			label := msgs.ProviderTestSync()
+			if len(models) == 0 {
+				label = msgs.ProviderFetchModels()
+			}
+			a.providerTestButton(c, label, msgs.ProviderTestAccount(name), editor, keepKey, blocked)
 			if editor.probe.kind == "tested" {
 				editor.probe.render(c, t)
 			}
@@ -1226,29 +1277,35 @@ func (a *appModel) providerModels(c *ui.Context, t *ui.Theme, msgs locales.Messa
 		if editor.probe.kind != "tested" {
 			editor.probe.render(c, t)
 		}
-		ui.Row(c).FillWidth().MinWidth(0).Wrap().Gap(6).Children(func() {
-			for _, id := range models {
-				c.Key("provider-model-" + id)
-				model := editor.discoveredModel(id)
-				label := id
-				if id == editor.DefaultModel {
-					label = "★ " + id
-				}
-				enabled := slices.Contains(active, id)
-				pill := theme.TagPill(c, label, providerTokenBadge(model.ContextTokens), enabled, true, blocked || !enabled && len(active) >= 128).
-					Label(msgs.ProviderToggleModel(id))
-				appTooltip(c, pill, providerModelHints(msgs, model))
-				pill.OnClick(func() {
-					next := slices.Clone(active)
-					if index := slices.Index(next, id); index >= 0 {
-						next = slices.Delete(next, index, index+1)
-					} else {
-						next = append(next, id)
-					}
-					editor.setEnabledModels(next)
-				})
+		if len(models) == 0 {
+			if editor.probe.kind == "" {
+				ui.Text(c, msgs.ProviderFetchModelsHint()).FillWidth().MinWidth(0).FontSize(typeMeta).FixedLineHeight(lineMeta).TextColor(t.TextMuted)
 			}
-		})
+		} else {
+			ui.Row(c).FillWidth().MinWidth(0).Wrap().Gap(6).Children(func() {
+				for _, id := range models {
+					c.Key("provider-model-" + id)
+					model := editor.discoveredModel(id)
+					label := id
+					if id == editor.DefaultModel {
+						label = "★ " + id
+					}
+					enabled := slices.Contains(active, id)
+					pill := theme.TagPill(c, label, providerTokenBadge(model.ContextTokens), enabled, true, blocked || !enabled && len(active) >= 128).
+						Label(msgs.ProviderToggleModel(id))
+					appTooltip(c, pill, providerModelHints(msgs, model))
+					pill.OnClick(func() {
+						next := slices.Clone(active)
+						if index := slices.Index(next, id); index >= 0 {
+							next = slices.Delete(next, index, index+1)
+						} else {
+							next = append(next, id)
+						}
+						editor.setEnabledModels(next)
+					})
+				}
+			})
+		}
 		ui.Row(c).FillWidth().MinWidth(0).Wrap().AlignItems(ui.Center).Gap(8).Children(func() {
 			a.providerInput(c, editor, "ModelInput", msgs.ProviderAddModelPlaceholder(), msgs.ProviderAddModelPlaceholder(), &editor.modelInput, false, blocked).
 				Basis(160).Grow(1)
@@ -1262,6 +1319,10 @@ func (a *appModel) providerModels(c *ui.Context, t *ui.Theme, msgs locales.Messa
 					return
 				}
 				editor.Models = append(editor.Models, id)
+				if strings.TrimSpace(editor.DefaultModel) == "" {
+					editor.DefaultModel = id
+					delete(editor.fields, "Model")
+				}
 				if editor.EnabledModels != nil && len(active) < 128 {
 					editor.setEnabledModels(append(slices.Clone(active), id))
 				}

@@ -5,7 +5,7 @@ import { SYSTEM_KIND_BOT_ARCHITECT } from './bot-template.js';
 import { memoryChangedSchema, memoryDate, memoryRuleSchema, memorySearchLimit, memorySearchQuery, memoryText,
   pendingLearningSchema, workLogSchema } from './bot-memory.js';
 import { activityRouting, discoveredModel, modelCapabilities, overridesPatchSchema, overridesSchema, policySchema, providerAccountView,
-  providerInput, roleStatusSchema, routeSchema, thinkingSchema } from './model-router.js';
+  providerInput, providerTestInput, roleStatusSchema, routeSchema, thinkingSchema } from './model-router.js';
 
 export const MAX_FRAME = 8 * 1024 * 1024;
 export const id = Type.String({ minLength: 1 });
@@ -513,7 +513,7 @@ export const productCommands = Type.Union([
   Type.Object({ method: Type.Literal('connection.save'), params: Type.Object({ configuration: connectionSchema, operationId: id }) }),
   Type.Object({ method: Type.Literal('connection.apply'), params: Type.Object({ savedRevision: revision, operationId: id }) }),
   Type.Object({ method: Type.Literal('provider.list'), params: Type.Object({}, mcpStrict) }),
-  Type.Object({ method: Type.Literal('provider.test'), params: Type.Object({ account: providerInput, apiKey: Type.Optional(Type.String()) }, mcpStrict) }),
+  Type.Object({ method: Type.Literal('provider.test'), params: Type.Object({ account: providerTestInput, apiKey: Type.Optional(Type.String()) }, mcpStrict) }),
   Type.Object({ method: Type.Literal('provider.save'), params: Type.Object({ account: providerInput, apiKey: Type.Optional(Type.String()), operationId: id }, mcpStrict) }),
   Type.Object({ method: Type.Literal('provider.delete'), params: Type.Object({ providerId: providerInput.properties.providerId, operationId: id }, mcpStrict) }),
   Type.Object({ method: Type.Literal('provider.reorder'), params: Type.Object({ providerIds: Type.Array(providerInput.properties.providerId,

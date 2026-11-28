@@ -675,7 +675,7 @@ export function readPrivateConnection(path: string): PrivateConnection | undefin
   const v3 = Type.Object({ version: Type.Literal(3), ...Type.Partial(legacy).properties, sources: Type.Optional(sources),
     publicationId: Type.Optional(recoveryID), accounts: Type.Array(Type.Object({ ...privateProviderAccount.properties, apiKey: recoveryID }, strict)) });
   if (Value.Check(v2, data)) return data;
-  if (Value.Check(v3, data) && data.accounts.every(validProvider) &&
+  if (Value.Check(v3, data) && data.accounts.every(account => validProvider(account)) &&
       new Set(data.accounts.map(row => row.credentialSourceId)).size === data.accounts.length) return { ...data, sources: data.sources ?? {} };
   throw new RequestError('connection_unavailable', 'The private connection file is not a supported credential store');
 }

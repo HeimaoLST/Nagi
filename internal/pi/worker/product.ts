@@ -41,7 +41,7 @@ import { clipEncodedText, clipUTF8, projectionRedactor } from './product-redacto
 import { loadSkillInstallation, SkillSandbox } from './skill-sandbox.js';
 import { activityRole, activityRouting, capturedCompatible, endpointFingerprint, providerCacheTtlMs, providerEndpoint, publicRoute,
   resolveRole, roles, validatePin, validProvider, type ActivityRouting, type CapturedRoute, type ModelRole, type ProviderAccount,
-  type RoleStatus, type RouteRequirements, type RoutingOverrides, type RoutingPolicy } from './model-router.js';
+  type ProviderInput, type RoleStatus, type RouteRequirements, type RoutingOverrides, type RoutingPolicy } from './model-router.js';
 import { RouteHealth, type ProviderAttempt } from './route-health.js';
 import { compareModelIds, describeModel, modelSupply } from './model-catalog.js';
 import { approvedPreferences, parseNomination, renderWhiteboard, steerEnvelope, triageDomain, validateQuestionFields,
@@ -718,7 +718,7 @@ export class Product {
   }
 
   private async testProvider({ account, apiKey }: ProductParams<'provider.test'>) {
-    if (!validProvider(account)) stateError('invalid_params', 'The Provider requires an HTTP(S) endpoint and valid model limits');
+    if (!validProvider(account, true)) stateError('invalid_params', 'The Provider requires an HTTP(S) endpoint and valid model limits');
     const previous = this.profile.providerAccounts?.find(row => row.providerId === account.providerId);
     const key = apiKey?.trim() ? apiKey : previous?.baseUrl === account.baseUrl && previous.wireApi === account.wireApi ? this.providerKey(previous) : undefined;
     if (!key) stateError('credential_unavailable', 'The Provider credential is unavailable');
@@ -755,18 +755,23 @@ export class Product {
       }
       await response.body?.cancel();
       if (response.status !== 404 && response.status !== 405 && response.status !== 501) stateError('provider_test_failed', `The Provider rejected the probe (HTTP ${response.status})`);
-      const supply = modelSupply(account, account.defaultModel, true);
+      const probeModel = account.defaultModel.trim();
+      if (!probeModel) {
+        stateError('provider_test_failed', 'The Provider does not expose model discovery; enter a default model to test the connection');
+      }
+      const candidate: ProviderInput = { ...account, defaultModel: probeModel };
+      const supply = modelSupply(candidate, probeModel, true);
       if (supply.isChat !== true || supply.priceProtected || supply.contextTokens <= supply.outputTokens || !supply.supported.includes('off')) {
         stateError('provider_test_failed', 'The Provider does not expose discovery and its default model is unavailable for a connection probe');
       }
       const effective = this.profile.providerEffectiveAccounts?.find(row => row.enabled && row.providerId === account.providerId &&
-        endpointFingerprint(row) === endpointFingerprint(account) && this.providerKey(row) === key);
-      const route = effective && validatePin([effective], { mode: 'route', providerId: effective.providerId, model: account.defaultModel }) &&
-        { ...effective, resolvedModel: account.defaultModel };
+        endpointFingerprint(row) === endpointFingerprint(candidate) && this.providerKey(row) === key);
+      const route = effective && validatePin([effective], { mode: 'route', providerId: effective.providerId, model: probeModel }) &&
+        { ...effective, resolvedModel: probeModel };
       const release = route && this.routeHealth.claim(route);
       if (route && !release) stateError('provider_test_failed', 'The effective Provider route is cooling down');
       try {
-        await this.engine.test({ wireApi: account.wireApi, baseUrl: account.baseUrl, model: account.defaultModel, apiKey: key,
+        await this.engine.test({ wireApi: candidate.wireApi, baseUrl: candidate.baseUrl, model: probeModel, apiKey: key,
           contextTokens: supply.contextTokens, outputTokens: supply.outputTokens, capabilities: supply.capabilities,
           workingDirectory: this.stateDir, maxActiveTasks: 1 }, route ? () => this.routeHealth.begin(route.credentialSourceId, route,
           () => this.providerKey(route) === key, true) : undefined);
