@@ -294,7 +294,7 @@ func (p *cp2Provider) serve(w http.ResponseWriter, r *http.Request) {
 		p.recordProblem(fmt.Sprintf("tools not sorted: %v", tools))
 	}
 	sysJoined := strings.Join(sysParts, "\n")
-	isTriage := strings.Contains(sysJoined, "Nagi preference triage.")
+	isTriage := strings.Contains(sysJoined, "Xuhu preference triage.")
 	isActivity := slices.Contains(tools, "activity_ask")
 	switch {
 	case isTriage:
@@ -1744,7 +1744,7 @@ func TestPiControlPlaneCP2TriageAuthorityRacesAndSecurity(t *testing.T) {
 		CredentialsPath: filepath.Join(root, "connection.json"),
 		FreshProfile:    true,
 	}
-	dbPath := filepath.Join(root, "nagi.db")
+	dbPath := filepath.Join(root, "xuhu.db")
 	proc := startCP1Process(t, opts)
 	_ = proc.open(t, ctx)
 	cp2ConfigureConnection(t, ctx, proc.client, pi.OpenAICompletions, provider.server.URL+"/v1", secret, ws, 2)
@@ -2700,7 +2700,7 @@ func TestPiControlPlaneCP2RecoveryMigrationAndPortableRestore(t *testing.T) {
 		len(recCrAct.Questions) != 1 || recCrAct.Questions[0].State != "open" {
 		t.Fatalf("triage_pending crash recovery mismatch: %+v, %v", recCrAct, err)
 	}
-	if att, auto, ok := cp2TriageAccounting(t, nodePath, filepath.Join(crashDir, "nagi.db"), crAct.ActivityID); !ok || att != 1 || auto != 0 {
+	if att, auto, ok := cp2TriageAccounting(t, nodePath, filepath.Join(crashDir, "xuhu.db"), crAct.ActivityID); !ok || att != 1 || auto != 0 {
 		t.Fatalf("triage_pending recovery accounting = (%d,%d,%v), want (1,0,true)", att, auto, ok)
 	}
 	reCrash.shutdown(t, ctx)
@@ -2756,7 +2756,7 @@ func TestPiControlPlaneCP2RecoveryMigrationAndPortableRestore(t *testing.T) {
 		}
 		seedProc.shutdown(t, ctx)
 
-		bDB := filepath.Join(bDir, "nagi.db")
+		bDB := filepath.Join(bDir, "xuhu.db")
 		runNodeSQLite(t, nodePath, bDB, `
 const { createHash } = require('node:crypto');
 const { readFileSync, writeFileSync } = require('node:fs');
@@ -2817,7 +2817,7 @@ db.close();
 		"context_tokens": 262144, "output_tokens": 4096, "working_directory": ws, "max_active_tasks": 2,
 		"sources": map[string]any{"src-v8": map[string]string{"api": "openai-chat-completions", "endpoint": provider.server.URL + "/v1", "api_key": secret}},
 	})
-	v8DB := filepath.Join(v8Dir, "nagi.db")
+	v8DB := filepath.Join(v8Dir, "xuhu.db")
 	runNodeSQLite(t, nodePath, v8DB, `
 const { createHash } = require('node:crypto');
 const { writeFileSync } = require('node:fs');
@@ -2833,7 +2833,7 @@ const profile = {
   activities: [{ activityId: 'act-v8', ownerBotId: 'bot-v8', originConversationId: 'conv-v8', revision: 1, state: 'completed', goal: 'Legacy v8 task', requirements: [], questions: [], materials: [], inputFiles: [], executionIds: ['exec-v8'], results: [] }],
   executions: [{ executionId: 'exec-v8', revision: 1, state: 'completed', operationId: 'op-v8', input: { revision: 0, text: 'Legacy v8 task', materials: [] }, retained: { id: 'exec-v8' } }],
   operations: [],
-  connections: [{ revision: 1, sourceId: 'src-v8', configuration: { wireApi: 'openai-completions', baseUrl: baseURL, model: 'nagi-local-integration', contextTokens: 262144, outputTokens: 4096, workingDirectory: ws, maxActiveTasks: 2 } }],
+  connections: [{ revision: 1, sourceId: 'src-v8', configuration: { wireApi: 'openai-completions', baseUrl: baseURL, model: 'xuhu-local-integration', contextTokens: 262144, outputTokens: 4096, workingDirectory: ws, maxActiveTasks: 2 } }],
   savedRevision: 1, appliedRevision: 1
 };
 const mirrorData = Buffer.from(canonical(profile) + '\n');
@@ -2996,13 +2996,13 @@ console.log(JSON.stringify({ v, bots }));
 	}
 
 	liveMirrorHash := cp2SHA256File(t, portOpts.ProfilePath)
-	liveDBHash := cp2SHA256File(t, filepath.Join(portDir, "nagi.db"))
+	liveDBHash := cp2SHA256File(t, filepath.Join(portDir, "xuhu.db"))
 	backupPath := filepath.Join(root, "cp2-portable.json")
 	if _, err := portProc.client.BackupProfile(ctx, backupPath); err != nil {
 		t.Fatalf("BackupProfile: %v", err)
 	}
-	if cp2SHA256File(t, portOpts.ProfilePath) != liveMirrorHash || cp2SHA256File(t, filepath.Join(portDir, "nagi.db")) != liveDBHash {
-		t.Fatal("BackupProfile mutated live contacts.json or nagi.db bytes")
+	if cp2SHA256File(t, portOpts.ProfilePath) != liveMirrorHash || cp2SHA256File(t, filepath.Join(portDir, "xuhu.db")) != liveDBHash {
+		t.Fatal("BackupProfile mutated live contacts.json or xuhu.db bytes")
 	}
 	backupRaw := productRead(t, backupPath)
 	if bytes.Contains(backupRaw, []byte(secret)) {
@@ -3052,10 +3052,10 @@ console.log(JSON.stringify({ v, bots }));
 	if provider.totalCalls.Load() != callsBeforeRestore {
 		t.Fatalf("independent restore across 2 reopens triggered provider calls: before=%d after=%d", callsBeforeRestore, provider.totalCalls.Load())
 	}
-	if att, auto, ok := cp2TriageAccounting(t, nodePath, filepath.Join(restoreDir, "nagi.db"), pAct.ActivityID); !ok || att != 1 || auto != 1 {
+	if att, auto, ok := cp2TriageAccounting(t, nodePath, filepath.Join(restoreDir, "xuhu.db"), pAct.ActivityID); !ok || att != 1 || auto != 1 {
 		t.Fatalf("restored triage accounting = (%d,%d,%v), want (1,1,true)", att, auto, ok)
 	}
-	restoreSchema := runNodeSQLite(t, nodePath, filepath.Join(restoreDir, "nagi.db"), `
+	restoreSchema := runNodeSQLite(t, nodePath, filepath.Join(restoreDir, "xuhu.db"), `
 const { DatabaseSync } = require('node:sqlite');
 const db = new DatabaseSync(process.argv[1]);
 const v = db.prepare('PRAGMA user_version').get().user_version;

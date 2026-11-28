@@ -25,7 +25,7 @@ func appearanceThemeDirectory(directory string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(configDir, "Nagi", "themes"), nil
+	return filepath.Join(configDir, "Xuhu", "themes"), nil
 }
 
 func (a *appModel) reloadAppearanceThemes() {

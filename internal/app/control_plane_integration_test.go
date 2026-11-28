@@ -169,7 +169,7 @@ func (p *cpProvider) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			"id":      "cp-loopback",
 			"object":  "chat.completion.chunk",
 			"created": 1,
-			"model":   "nagi-product-fixture",
+			"model":   "xuhu-product-fixture",
 			"choices": []any{choice},
 		})
 		fmt.Fprintf(w, "data: %s\n\n", chunk)

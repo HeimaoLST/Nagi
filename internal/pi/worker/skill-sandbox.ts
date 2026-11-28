@@ -107,7 +107,7 @@ export function loadSkillInstallation(profileDir: string): string {
 }
 
 function stageBundle(bundle: SkillBundle, scope: Scope): Stage {
-  const root = mkdtempSync(join(realpathSync(tmpdir()), 'nagi-skill-'));
+  const root = mkdtempSync(join(realpathSync(tmpdir()), 'xuhu-skill-'));
   const tree = join(root, 'tree');
   const scratch = join(root, 'scratch');
   try {
@@ -168,7 +168,7 @@ export class SkillSandbox {
   }
 
   private async enforce(node: string): Promise<boolean> {
-    const root = mkdtempSync(join(realpathSync(tmpdir()), 'nagi-seatbelt-'));
+    const root = mkdtempSync(join(realpathSync(tmpdir()), 'xuhu-seatbelt-'));
     try {
       const tree = join(root, 'tree');
       const scratch = join(root, 'scratch');

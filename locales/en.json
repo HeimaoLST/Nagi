@@ -211,7 +211,7 @@
   "@connectionRecoveryManagedTitle": {
     "description": "The recovery title for a managed saved connection that could not start."
   },
-  "connectionRecoveryManagedHint": "Nagi could not start the connection.",
+  "connectionRecoveryManagedHint": "Xuhu could not start the connection.",
   "@connectionRecoveryManagedHint": {
     "description": "The recovery hint for a managed saved connection that could not start."
   },
@@ -221,47 +221,47 @@
   },
   "taskStatusArchived": "Archived",
   "@taskStatusArchived": {
-    "description": "Nagi taskStatusArchived UI copy."
+    "description": "Xuhu taskStatusArchived UI copy."
   },
   "taskStatusCompleted": "Done",
   "@taskStatusCompleted": {
-    "description": "Nagi taskStatusCompleted UI copy."
+    "description": "Xuhu taskStatusCompleted UI copy."
   },
   "taskStatusCanceled": "Canceled",
   "@taskStatusCanceled": {
-    "description": "Nagi taskStatusCanceled UI copy."
+    "description": "Xuhu taskStatusCanceled UI copy."
   },
   "taskStatusNeedsAttention": "Needs attention",
   "@taskStatusNeedsAttention": {
-    "description": "Nagi taskStatusNeedsAttention UI copy."
+    "description": "Xuhu taskStatusNeedsAttention UI copy."
   },
   "taskStatusWaiting": "Waiting for you",
   "@taskStatusWaiting": {
-    "description": "Nagi taskStatusWaiting UI copy."
+    "description": "Xuhu taskStatusWaiting UI copy."
   },
   "taskStatusInProgress": "In progress",
   "@taskStatusInProgress": {
-    "description": "Nagi taskStatusInProgress UI copy."
+    "description": "Xuhu taskStatusInProgress UI copy."
   },
   "taskStatusNotStarted": "Not started",
   "@taskStatusNotStarted": {
-    "description": "Nagi taskStatusNotStarted UI copy."
+    "description": "Xuhu taskStatusNotStarted UI copy."
   },
   "taskRunNeedsAttention": "Run needs attention",
   "@taskRunNeedsAttention": {
-    "description": "Nagi taskRunNeedsAttention UI copy."
+    "description": "Xuhu taskRunNeedsAttention UI copy."
   },
   "taskRailAttention": "Needs attention\n{name}",
   "@taskRailAttention": {
-    "description": "Nagi taskRailAttention UI copy."
+    "description": "Xuhu taskRailAttention UI copy."
   },
   "taskRailWaiting": "Waiting for you\n{name}",
   "@taskRailWaiting": {
-    "description": "Nagi taskRailWaiting UI copy."
+    "description": "Xuhu taskRailWaiting UI copy."
   },
   "taskRailInProgress": "In progress\n{name}",
   "@taskRailInProgress": {
-    "description": "Nagi taskRailInProgress UI copy."
+    "description": "Xuhu taskRailInProgress UI copy."
   },
   "searchContacts": "Search Bots",
   "@searchContacts": {
@@ -373,7 +373,7 @@
       }
     }
   },
-  "pandoraBoxPurpose": "Design, create, and refine focused Nagi Bots through conversation.",
+  "pandoraBoxPurpose": "Design, create, and refine focused Xuhu Bots through conversation.",
   "pandoraBoxStarterWriting": "Create a writing and editing Bot",
   "pandoraBoxStarterCodeReview": "Build a strict code review Bot",
   "pandoraBoxStarterAudit": "Audit and refine my existing Bot Team",
@@ -468,7 +468,7 @@
   "sendingState": "Sending…",
   "sendAcceptedState": "Accepted; waiting for the runtime to start.",
   "sendUnknownState": "Delivery is unconfirmed. Choose Reload to check the task and history. Nothing will be resent by Reload.",
-  "sendDisconnectedState": "The connection was lost and the result is unconfirmed. Save or copy any unsaved text before quitting. Reopen Nagi and check history before sending again; reopening does not resend work.",
+  "sendDisconnectedState": "The connection was lost and the result is unconfirmed. Save or copy any unsaved text before quitting. Reopen Xuhu and check history before sending again; reopening does not resend work.",
   "reloadAction": "Reload",
   "historyReadFailed": "Could not read this saved message.",
   "profilePurpose": "Purpose",
@@ -519,7 +519,7 @@
   "settingsOpenConnection": "Open connection & model",
   "connectionDirectorySection": "Workspace",
   "settingsUnsavedChanges": "Unsaved changes.",
-  "settingsBuiltinManagedError": "Save and Apply a managed Nagi connection before customizing built-in tools.",
+  "settingsBuiltinManagedError": "Save and Apply a managed Xuhu connection before customizing built-in tools.",
   "settingsRetrySave": "Retry save",
   "appearanceStatusApplied": "Applied.",
   "appearanceStatusPreview": "Applied for this preview; the fixture is not persisted.",
@@ -619,7 +619,7 @@
   "runtimeSessionAPILine": "Session API: {api}",
   "runtimeSessionAPIUnknown": "Session API: unknown until the runtime session is loaded",
   "runtimeSessionModelLine": "Session model: {model}",
-  "runtimeConnectionManagedNote": "Connection settings are managed by Nagi; the runtime reads its endpoint, model and key from that saved connection.",
+  "runtimeConnectionManagedNote": "Connection settings are managed by Xuhu; the runtime reads its endpoint, model and key from that saved connection.",
   "runtimeValueNotConfigured": "not configured",
   "runtimeValueUnknown": "unknown",
   "runtimeSessionNotCreated": "not created until the first message",
@@ -699,9 +699,9 @@
   "startupHintFixConnection": "Fix the saved values in Connection settings, then save and apply.",
   "startupHintEnterConnection": "Enter a connection, model and working directory, then save and apply.",
   "startupHintFixThenApply": "Fix Connection settings, then save and apply.",
-  "startupHintRestartUnconfirmed": "Restart Nagi; delivery or result may be unconfirmed. No automatic retry.",
-  "startupHintRestartReload": "Restart Nagi and reload history. Accepted work may be unconfirmed; no automatic retry.",
-  "startupHintExistingStore": "Nagi left the existing file untouched and did not create a replacement store. Fix the file or its permissions at {path}, then restart Nagi. Drafts cannot be persisted while the local store is unavailable.",
+  "startupHintRestartUnconfirmed": "Restart Xuhu; delivery or result may be unconfirmed. No automatic retry.",
+  "startupHintRestartReload": "Restart Xuhu and reload history. Accepted work may be unconfirmed; no automatic retry.",
+  "startupHintExistingStore": "Xuhu left the existing file untouched and did not create a replacement store. Fix the file or its permissions at {path}, then restart Xuhu. Drafts cannot be persisted while the local store is unavailable.",
   "builtinNone": "none",
   "builtinListUnavailable": "The built-in tool list is not available from Runtime yet. Retry before changing the selection.",
   "builtinToolUnavailable": "Built-in tool {name} is not available from Runtime.",
@@ -1069,7 +1069,7 @@
   "issueSendAlreadyFinished": "The task already finished; waiting for its final state.",
   "issueSendCancelAlready": "Cancellation already requested.",
   "issueSendCancelFailed": "Cancel failed: {detail}",
-  "issueSendReloadDisconnected": "Runtime disconnected; restart Nagi to reload history.",
+  "issueSendReloadDisconnected": "Runtime disconnected; restart Xuhu to reload history.",
   "issueSendUncertain": "A previous message may have been sent; delivery was not confirmed before restart. Reload history to verify. No automatic retry.",
   "issueSendAnswerStopping": "Waiting for your answer; stopping the current run.",
   "issueAnswerSaved": "Answer saved. Delivery has not been confirmed.",
@@ -1206,7 +1206,7 @@
     }
   },
   "workFolderChoose": "Choose folder…",
-  "recoveryProviderDenied": "The provider rejected this request ({status}). Check the API key and model access in Connection & model, then choose Test. Testing may incur provider charges. Nagi will not retry the task automatically.",
+  "recoveryProviderDenied": "The provider rejected this request ({status}). Check the API key and model access in Connection & model, then choose Test. Testing may incur provider charges. Xuhu will not retry the task automatically.",
   "@recoveryProviderDenied": {
     "description": "Recovery guidance for an existing exact HTTP authentication classification.",
     "placeholders": {
@@ -1215,14 +1215,14 @@
       }
     }
   },
-  "recoveryModelRequestFailed": "The model request failed. Check the API key, endpoint and model in Connection & model, then choose Test. Testing may incur provider charges. Nagi will not retry the task automatically.",
+  "recoveryModelRequestFailed": "The model request failed. Check the API key, endpoint and model in Connection & model, then choose Test. Testing may incur provider charges. Xuhu will not retry the task automatically.",
   "recoveryRunFailed": "The run failed. Open Details to see what happened. For connection problems, choose Test in Connection & model. Testing may incur provider charges and leaves the run unchanged.",
   "recoveryTechnicalDetailsHint": "Technical details may mention developer settings. Use Settings and the recovery actions for normal setup.",
-  "recoveryRuntimeStartFailed": "Nagi could not start its runtime. Open Details to see the error and check the work folder in Connection & model.",
+  "recoveryRuntimeStartFailed": "Xuhu could not start its runtime. Open Details to see the error and check the work folder in Connection & model.",
   "recoveryLocalSaveFailed": "Local changes are not saved. Keep this window open. Choose Retry save for local autosave, or Save changes for profile edits.",
-  "recoveryLocalDataUnavailable": "Local Bots and tasks are unavailable. Nagi has not replaced existing data. Choose a compatible recovery copy if you have one. Without a compatible copy, Nagi cannot restore this workbench data.",
+  "recoveryLocalDataUnavailable": "Local Bots and tasks are unavailable. Xuhu has not replaced existing data. Choose a compatible recovery copy if you have one. Without a compatible copy, Xuhu cannot restore this workbench data.",
   "recoveryRequestFailed": "The request could not be completed. Review its details before trying again. Nothing is retried automatically.",
-  "recoveryTaskAssociationMissing": "Nagi has no verified record of which task to check. Review the existing run details and history before continuing; nothing will be resent automatically.",
+  "recoveryTaskAssociationMissing": "Xuhu has no verified record of which task to check. Review the existing run details and history before continuing; nothing will be resent automatically.",
   "themeImportAction": "Import theme…",
   "themeImportTitle": "Choose a downloaded theme",
   "themeImportFilter": "JSON theme files",
@@ -1293,11 +1293,11 @@
   "@recoveryCopyFolderTitle": {
     "description": "C8 workbench recovery GUI: recoveryCopyFolderTitle."
   },
-  "recoveryChooseFileTitle": "Choose a compatible Nagi recovery copy",
+  "recoveryChooseFileTitle": "Choose a compatible Xuhu recovery copy",
   "@recoveryChooseFileTitle": {
     "description": "C8 workbench recovery GUI: recoveryChooseFileTitle."
   },
-  "recoveryCopyFilter": "Nagi recovery copy (JSON)",
+  "recoveryCopyFilter": "Xuhu recovery copy (JSON)",
   "@recoveryCopyFilter": {
     "description": "C8 workbench recovery GUI: recoveryCopyFilter."
   },
@@ -1343,7 +1343,7 @@
   "@recoveryInspectFailed": {
     "description": "C8 workbench recovery GUI: recoveryInspectFailed."
   },
-  "recoveryCopyUnusable": "This version cannot safely use this recovery copy. Your files are unchanged. Choose another compatible Nagi copy.",
+  "recoveryCopyUnusable": "This version cannot safely use this recovery copy. Your files are unchanged. Choose another compatible Xuhu copy.",
   "@recoveryCopyUnusable": {
     "description": "C8 workbench recovery GUI: recoveryCopyUnusable."
   },
@@ -1351,11 +1351,11 @@
   "@recoveryNotInstalled": {
     "description": "C8 workbench recovery GUI: recoveryNotInstalled."
   },
-  "recoveryInstalled": "Restored and paused on disk, but not loaded in this window. This workbench still cannot save or run work. Quit Nagi, then reopen normally to load the restored records. Chat history and work files may still be unavailable. Before quitting, copy any unsaved text you need somewhere safe; this window cannot save it.",
+  "recoveryInstalled": "Restored and paused on disk, but not loaded in this window. This workbench still cannot save or run work. Quit Xuhu, then reopen normally to load the restored records. Chat history and work files may still be unavailable. Before quitting, copy any unsaved text you need somewhere safe; this window cannot save it.",
   "@recoveryInstalled": {
     "description": "C8 workbench recovery GUI: recoveryInstalled."
   },
-  "recoveryUnconfirmed": "Installation result needs checking. Nagi cannot confirm the replaced file. Do not repeat or roll back this operation automatically. The current window remains unable to save or run work; keep the listed locations and Details. Before quitting, copy any unsaved text you need somewhere safe; this window cannot save it.",
+  "recoveryUnconfirmed": "Installation result needs checking. Xuhu cannot confirm the replaced file. Do not repeat or roll back this operation automatically. The current window remains unable to save or run work; keep the listed locations and Details. Before quitting, copy any unsaved text you need somewhere safe; this window cannot save it.",
   "@recoveryUnconfirmed": {
     "description": "C8 workbench recovery GUI: recoveryUnconfirmed."
   },
@@ -1367,7 +1367,7 @@
   "@recoveryShowArchive": {
     "description": "C8 workbench recovery GUI: recoveryShowArchive."
   },
-  "recoveryQuitAction": "Quit Nagi",
+  "recoveryQuitAction": "Quit Xuhu",
   "@recoveryQuitAction": {
     "description": "C8 workbench recovery GUI: recoveryQuitAction."
   },
@@ -2001,7 +2001,7 @@
   "sessionInspectAuthPaused": "Waiting for external authentication",
   "sessionInspectAuthPrompt": "The process asked for authentication.",
   "sessionInspectCanonicalNoEcho": "The process is waiting for hidden terminal input.",
-  "sessionInspectAuthAction": "Complete authentication outside Nagi or kill this session.",
+  "sessionInspectAuthAction": "Complete authentication outside Xuhu or kill this session.",
   "sessionInspectWatches": "Watches",
   "sessionInspectNoWatches": "No watches for this run.",
   "sessionInspectArmed": "Armed",
@@ -2053,7 +2053,7 @@
       }
     }
   },
-  "dockOpenNagi": "Open Nagi",
+  "dockOpenXuhu": "Open Xuhu",
   "messageReadStatus": "Read",
   "sendQueuedState": "Queued — waiting for an open runtime slot…",
   "sendQueuedPosition": "Queued (#{position}) — waiting for an open runtime slot…",

@@ -23,7 +23,7 @@ func taskContextApp(t *testing.T) (*appModel, *contact) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ct := &contact{ID: "nagi-context", Name: "Nagi", Role: "Assistant", SessionID: "s1", PiBinding: recoveryConversationBinding("nagi-context", "/tmp", "s1"), Loaded: true}
+	ct := &contact{ID: "xuhu-context", Name: "Xuhu", Role: "Assistant", SessionID: "s1", PiBinding: recoveryConversationBinding("xuhu-context", "/tmp", "s1"), Loaded: true}
 	a := &appModel{
 		store: store, runtimeStatus: runtimeStateReady, workspaceOpen: true,
 		windowWidth: 1040, contacts: []*contact{ct}, selected: 0,
@@ -86,7 +86,7 @@ func TestTaskContextAppAndReadOnlyChatCopy(t *testing.T) {
 	a.openConversationTaskContext()
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	for _, want := range []string{locales.In("en").TaskContextTitle(), "Chat: Nagi", "Conversation notes", locales.In("en").CloseTaskContext()} {
+	for _, want := range []string{locales.In("en").TaskContextTitle(), "Chat: Xuhu", "Conversation notes", locales.In("en").CloseTaskContext()} {
 		if !tr.HasText(want) {
 			t.Fatalf("conversation modal missing %q: %v", want, tr.Texts())
 		}

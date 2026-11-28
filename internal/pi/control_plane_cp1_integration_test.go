@@ -812,10 +812,10 @@ func TestPiProductCP1ActivityParityCapturedCwdAndSkillApprovalCard(t *testing.T)
 	gotMemSearch := botBMemorySearchJSON
 	mu.Unlock()
 
-	if !strings.HasPrefix(gotBotASys, "You are a long-lived Nagi Bot teammate.") || !strings.Contains(gotBotASys, "Use activity_delegate") {
+	if !strings.HasPrefix(gotBotASys, "You are a long-lived Xuhu Bot teammate.") || !strings.Contains(gotBotASys, "Use activity_delegate") {
 		t.Fatalf("foreground BotA prompt missing line-1 anchor or conversationGuidance: %q", gotBotASys)
 	}
-	if !strings.HasPrefix(gotBotBSys, "You are a long-lived Nagi Bot teammate.") {
+	if !strings.HasPrefix(gotBotBSys, "You are a long-lived Xuhu Bot teammate.") {
 		t.Fatalf("Activity prompt lost line-1 anchor: %q", gotBotBSys)
 	}
 	if strings.Contains(gotBotBSys, "Use activity_delegate") || strings.Contains(gotBotBSys, "PandoraBox") {
@@ -851,7 +851,7 @@ func TestPiProductCP1ActivityParityCapturedCwdAndSkillApprovalCard(t *testing.T)
 		t.Fatalf("Activity memory_search_log scoping failed: %s", gotMemSearch)
 	}
 
-	dbPath := filepath.Join(root, "nagi.db")
+	dbPath := filepath.Join(root, "xuhu.db")
 	skillTestClass := runNodeSQLite(t, nodePath, dbPath, `
 const { DatabaseSync } = require('node:sqlite');
 const db = new DatabaseSync(process.argv[1]);
@@ -1582,7 +1582,7 @@ func TestPiProductCP1ProgressBoundedInspectionOverflowAndResultRead(t *testing.T
 	bigExecID = liveDetail.Executions[0].ExecutionID
 	mu.Unlock()
 
-	dbPath := filepath.Join(root, "nagi.db")
+	dbPath := filepath.Join(root, "xuhu.db")
 	progAdmission := runNodeSQLite(t, nodePath, dbPath, `
 const { DatabaseSync } = require('node:sqlite');
 const db = new DatabaseSync(process.argv[1]);
@@ -1803,10 +1803,10 @@ console.log(JSON.stringify({ classes, kinds }));
 		t.Helper()
 		lines := []any{
 			map[string]any{"type": "session", "version": 3, "id": "imp-sess", "timestamp": "2026-01-01T00:00:00.000Z", "cwd": ws},
-			map[string]any{"type": "custom", "id": "e1", "parentId": nil, "timestamp": "2026-01-01T00:00:01.000Z", "customType": "nagi-context-v1", "data": sessionBindingData{
+			map[string]any{"type": "custom", "id": "e1", "parentId": nil, "timestamp": "2026-01-01T00:00:01.000Z", "customType": "xuhu-context-v1", "data": sessionBindingData{
 				ContextID: "ctx-imp-act", BotID: "bot-imp", Purpose: "activity", ActivityID: "act-imp", SelectionRevision: 1, CWD: ws,
 			}},
-			map[string]any{"type": "custom", "id": "e2", "parentId": "e1", "timestamp": "2026-01-01T00:00:02.000Z", "customType": "nagi-turn-v1", "data": map[string]any{
+			map[string]any{"type": "custom", "id": "e2", "parentId": "e1", "timestamp": "2026-01-01T00:00:02.000Z", "customType": "xuhu-turn-v1", "data": map[string]any{
 				"runId": "run-imp-1", "text": "Imported prompt", "correlation": map[string]any{"executionId": "exec-imp-1"},
 			}},
 			map[string]any{"type": "message", "id": "e3", "parentId": "e2", "timestamp": "2026-01-01T00:00:03.000Z", "message": map[string]any{
@@ -2310,7 +2310,7 @@ func TestPiProductCP1LifecycleAckCloseV7MigrationPreUpgradePrefixAndBackupRestor
 	cp1ConfigureConnection(t, ctx, procReopen.client, provider.server.URL+"/v1", preSecret, ws)
 
 	mirrorBeforeBackup := productRead(t, opts.ProfilePath)
-	dbHashBeforeBackup := cp1FileSHA256(t, filepath.Join(root, "nagi.db"))
+	dbHashBeforeBackup := cp1FileSHA256(t, filepath.Join(root, "xuhu.db"))
 	backupPath := filepath.Join(root, "cp1-backup.json")
 	if _, err := procReopen.client.BackupProfile(ctx, backupPath); err != nil {
 		t.Fatalf("BackupProfile = %v", err)
@@ -2318,8 +2318,8 @@ func TestPiProductCP1LifecycleAckCloseV7MigrationPreUpgradePrefixAndBackupRestor
 	if !bytes.Equal(productRead(t, opts.ProfilePath), mirrorBeforeBackup) {
 		t.Fatal("BackupProfile mutated live contacts.json mirror")
 	}
-	if cp1FileSHA256(t, filepath.Join(root, "nagi.db")) != dbHashBeforeBackup {
-		t.Fatal("BackupProfile mutated live nagi.db")
+	if cp1FileSHA256(t, filepath.Join(root, "xuhu.db")) != dbHashBeforeBackup {
+		t.Fatal("BackupProfile mutated live xuhu.db")
 	}
 	backupInfo, err := os.Stat(backupPath)
 	if err != nil || backupInfo.Mode().Perm() != 0o600 {
@@ -2388,7 +2388,7 @@ func TestPiProductCP1LifecycleAckCloseV7MigrationPreUpgradePrefixAndBackupRestor
 		t.Fatalf("independent restore across 2 reopens made provider calls: before=%d after=%d", callsBeforeRestore, provider.calls.Load())
 	}
 
-	restoreDB := filepath.Join(restoreRoot, "nagi.db")
+	restoreDB := filepath.Join(restoreRoot, "xuhu.db")
 	restoreSQLite := runNodeSQLite(t, nodePath, restoreDB, `
 const { DatabaseSync } = require('node:sqlite');
 const db = new DatabaseSync(process.argv[1]);
@@ -2421,7 +2421,7 @@ console.log(JSON.stringify({ v, fk }));
 		t.Fatal(err)
 	}
 	v7SessionFile := filepath.Join(v7Sessions, "pre-upgrade-conv.jsonl")
-	preUpgradeL0L1 := "You are a long-lived Nagi Bot teammate. Help with your assigned job and carry useful context across the conversation.\n" +
+	preUpgradeL0L1 := "You are a long-lived Xuhu Bot teammate. Help with your assigned job and carry useful context across the conversation.\n" +
 		"Speak like a calm, sharp colleague in real-time chat. Skip stock greetings, filler, and unnecessary recaps. Default to a single concise bubble whenever you are expressing one complete thought.\n" +
 		"Avoid Markdown headings, horizontal rules, tables, and essay-style summaries unless requested. Keep large code blocks and long documents out of chat bubbles. When asked to write a file, use the available tools and briefly report the result.\n" +
 		"Only split into 2 (rarely 3) bubbles with <<<NEXT>>> on its own line when switching communicative intent—such as main answer/code followed by a brief side note or caveat, conclusion followed by a follow-up question, or switching to a separate topic. Never split a single sentence, a continuous explanation, or an intro line from its code block/list. Omit <<<NEXT>>> for one bubble and keep it out of code fences and inline code.\n" +
@@ -2449,14 +2449,14 @@ console.log(JSON.stringify({ v, fk }));
 	}
 	v7SessLines := []any{
 		map[string]any{"type": "session", "version": 3, "id": "v7-sess", "timestamp": "2025-01-01T00:00:00.000Z", "cwd": ws},
-		map[string]any{"type": "custom", "id": "b1", "parentId": nil, "timestamp": "2025-01-01T00:00:01.000Z", "customType": "nagi-context-v1", "data": v7ContextBinding{
+		map[string]any{"type": "custom", "id": "b1", "parentId": nil, "timestamp": "2025-01-01T00:00:01.000Z", "customType": "xuhu-context-v1", "data": v7ContextBinding{
 			ContextID: "ctx-v7", BotID: "bot-v7", Purpose: "conversation", SelectionRevision: 1, CWD: ws,
 		}},
-		map[string]any{"type": "custom", "id": "c1", "parentId": "b1", "timestamp": "2025-01-01T00:00:02.000Z", "customType": "nagi-configuration-v1", "data": v7ConfigData{
+		map[string]any{"type": "custom", "id": "c1", "parentId": "b1", "timestamp": "2025-01-01T00:00:02.000Z", "customType": "xuhu-configuration-v1", "data": v7ConfigData{
 			WireAPI: "openai-completions", BaseURL: provider.server.URL + "/v1", Model: productModel,
 			ContextTokens: 262144, OutputTokens: 4096, CredentialSource: "src-v7",
 		}},
-		map[string]any{"type": "custom", "id": "t1", "parentId": "c1", "timestamp": "2025-01-01T00:00:03.000Z", "customType": "nagi-turn-v1", "data": map[string]any{
+		map[string]any{"type": "custom", "id": "t1", "parentId": "c1", "timestamp": "2025-01-01T00:00:03.000Z", "customType": "xuhu-turn-v1", "data": map[string]any{
 			"runId": "run-v7-0", "text": "Hello v7", "context": []any{}, "materials": []any{},
 		}},
 	}
@@ -2482,7 +2482,7 @@ console.log(JSON.stringify({ v, fk }));
 		"context_tokens": 262144, "output_tokens": 4096, "working_directory": ws, "max_active_tasks": 4,
 		"sources": map[string]any{"src-v7": map[string]string{"api": "openai-chat-completions", "endpoint": provider.server.URL + "/v1", "api_key": primarySecret}},
 	})
-	v7DB := filepath.Join(v7Root, "nagi.db")
+	v7DB := filepath.Join(v7Root, "xuhu.db")
 	runNodeSQLite(t, nodePath, v7DB, `
 const { createHash } = require('node:crypto');
 const { writeFileSync } = require('node:fs');
@@ -2498,7 +2498,7 @@ const profile = {
   activities: [{ activityId: 'act-v7', ownerBotId: 'bot-v7', originConversationId: 'conv-v7', revision: 1, state: 'needsAttention', goal: 'Historical v7 task', requirements: [], questions: [], materials: [], inputFiles: [], executionIds: ['exec-v7'], results: [] }],
   executions: [{ executionId: 'exec-v7', revision: 1, state: 'completed', operationId: 'op-v7', input: { revision: 0, text: 'Historical v7 task', materials: [] }, retained: { id: 'exec-v7' } }],
   operations: [],
-  connections: [{ revision: 1, sourceId: 'src-v7', configuration: { wireApi: 'openai-completions', baseUrl: baseURL, model: 'nagi-local-integration', contextTokens: 262144, outputTokens: 4096, workingDirectory: ws, maxActiveTasks: 4 } }],
+  connections: [{ revision: 1, sourceId: 'src-v7', configuration: { wireApi: 'openai-completions', baseUrl: baseURL, model: 'xuhu-local-integration', contextTokens: 262144, outputTokens: 4096, workingDirectory: ws, maxActiveTasks: 4 } }],
   savedRevision: 1, appliedRevision: 1,
   memory: { rules: [{ ruleId: 'rule-v7', botId: 'bot-v7', text: 'Old v7 rule', source: 'manual', createdAt: '2025-01-01T00:00:00.000Z', updatedAt: '2025-01-01T00:00:00.000Z' }], workLogs: [], pendingLearnings: [], meta: [{ botId: 'bot-v7', rulesRevision: 1, forceReload: false, lastTurnAt: '2025-01-01T00:00:00.000Z' }] },
 };

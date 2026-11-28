@@ -1457,8 +1457,8 @@ func TestPiProductMcpVaultExclusionBackupRestoreAndMigration(t *testing.T) {
 	for _, checkPath := range []string{
 		backupPath,
 		opts.ProfilePath,
-		filepath.Join(sourceDir, "nagi.db"),
-		filepath.Join(sourceDir, "nagi.db-wal"),
+		filepath.Join(sourceDir, "xuhu.db"),
+		filepath.Join(sourceDir, "xuhu.db-wal"),
 	} {
 		mcpAssertNoSecretBytes(t, checkPath, allSecrets)
 	}
@@ -1480,7 +1480,7 @@ func TestPiProductMcpVaultExclusionBackupRestoreAndMigration(t *testing.T) {
 	if err := os.MkdirAll(tamperedDir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"contacts.json", "nagi.db", "connection.json", "mcp-secrets.json"} {
+	for _, name := range []string{"contacts.json", "xuhu.db", "connection.json", "mcp-secrets.json"} {
 		data := productRead(t, filepath.Join(sourceDir, name))
 		mode := os.FileMode(0o600)
 		if name == "mcp-secrets.json" {
@@ -1617,10 +1617,10 @@ func TestPiProductMcpVaultExclusionBackupRestoreAndMigration(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(migDir, "contacts.json"), legacyMirror, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(migDir, "nagi.db"), productRead(t, filepath.Join(preDir, "nagi.db")), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(migDir, "xuhu.db"), productRead(t, filepath.Join(preDir, "xuhu.db")), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	migDB := filepath.Join(migDir, "nagi.db")
+	migDB := filepath.Join(migDir, "xuhu.db")
 	runNodeSQLite(t, nodePath, migDB, `
 const { DatabaseSync } = require('node:sqlite');
 const db = new DatabaseSync(process.argv[1]);

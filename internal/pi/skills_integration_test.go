@@ -138,10 +138,10 @@ func TestPiProductSkillsPresetsCatalogAndSecurity(t *testing.T) {
 	t.Setenv("HOME", home)
 
 	wsSkill := "---\nname: Workspace Guide\ndescription: Read only workspace guide\n---\n" + workspaceBody + "\n"
-	writeSkillFile(t, filepath.Join(workspace, ".nagi", "skills", "ws-guide", "SKILL.md"), wsSkill)
+	writeSkillFile(t, filepath.Join(workspace, ".xuhu", "skills", "ws-guide", "SKILL.md"), wsSkill)
 	outsidePath := filepath.Join(root, "outside", "SKILL.md")
 	writeSkillFile(t, outsidePath, "---\nname: Escaped\ndescription: Outside workspace\n---\nESCAPED_BODY\n")
-	escapePath := filepath.Join(workspace, ".nagi", "skills", "escape", "SKILL.md")
+	escapePath := filepath.Join(workspace, ".xuhu", "skills", "escape", "SKILL.md")
 	if err := os.MkdirAll(filepath.Dir(escapePath), 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -527,7 +527,7 @@ func TestPiProductSkillsPresetsCatalogAndSecurity(t *testing.T) {
 		}
 		if l0Prefix == "" {
 			l0Prefix = parts[0]
-			if !strings.HasPrefix(l0Prefix, "You are a long-lived Nagi Bot teammate.") || strings.Contains(l0Prefix, "<available_skills>") {
+			if !strings.HasPrefix(l0Prefix, "You are a long-lived Xuhu Bot teammate.") || strings.Contains(l0Prefix, "<available_skills>") {
 				t.Fatalf("L0 prefix mutated or leaked skills: %q", l0Prefix)
 			}
 		} else if parts[0] != l0Prefix {
@@ -637,7 +637,7 @@ func TestPiProductSkillsRPCBackupAndRestore(t *testing.T) {
 	}
 	t.Setenv("HOME", home)
 
-	wsSkillPath := filepath.Join(workspace, ".nagi", "skills", "ws-only", "SKILL.md")
+	wsSkillPath := filepath.Join(workspace, ".xuhu", "skills", "ws-only", "SKILL.md")
 	wsSkillText := "---\nname: Workspace Only\ndescription: External workspace mount\n---\nWS_ONLY_BODY\n"
 	writeSkillFile(t, wsSkillPath, wsSkillText)
 	localSkillPath := filepath.Join(home, ".agents", "skills", "local-only", "SKILL.md")
@@ -806,7 +806,7 @@ func TestPiProductSkillsRPCBackupAndRestore(t *testing.T) {
 			sawSaved, sawDeleted, sawPromoted, sawPref, skillEvents)
 	}
 
-	schemaCheck := runNodeSQLite(t, nodePath, filepath.Join(root, "nagi.db"), `
+	schemaCheck := runNodeSQLite(t, nodePath, filepath.Join(root, "xuhu.db"), `
 const { DatabaseSync } = require('node:sqlite');
 const db = new DatabaseSync(process.argv[1]);
 const v = db.prepare('PRAGMA user_version').get().user_version;

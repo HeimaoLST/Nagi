@@ -61,7 +61,7 @@ export function publicConversationMessage(entry: SessionEntry): Message | undefi
   const base = { messageId: entry.id, timestamp: entry.timestamp };
   if (entry.type === 'custom' && entry.customType === turnEntryType) {
     const turn = entry.data as { text: string; materials?: Material[]; context?: { name: string; text: string }[]; quote?: unknown };
-    const materials = turn.materials ?? (turn.context ?? []).filter(item => !item.name.startsWith('nagi.issue_tools.')).map((item, index) => ({ id: `${entry.id}:${index}`, revision: 0, name: item.name, text: item.text }));
+    const materials = turn.materials ?? (turn.context ?? []).filter(item => !item.name.startsWith('xuhu.issue_tools.')).map((item, index) => ({ id: `${entry.id}:${index}`, revision: 0, name: item.name, text: item.text }));
     const quote = Value.Check(productQuote, turn.quote) && hasCanonicalQuoteText(turn.quote) ? turn.quote : undefined;
     return { ...base, role: 'user' as const, text: turn.text, materials, ...(quote ? { quote } : {}) };
   }

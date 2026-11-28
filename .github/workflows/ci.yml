@@ -37,24 +37,24 @@ jobs:
         run: test -z "$(gofmt -l .)"
       - name: Governance guard
         run: python3 scripts/check-governance.py --strict .
-      - name: Nagi vet, tests and independent build
+      - name: Xuhu vet, tests and independent build
         env:
           CGO_ENABLED: '0'
           NAGI_TEST_ONLINE: '0'
         run: |
           python3 scripts/gui-go.py vet ./...
-          python3 scripts/gui-go.py test ./cmd/nagi ./internal/app ./internal/connection ./internal/locale ./internal/markdown ./internal/materials ./internal/pi ./internal/store ./internal/theme ./locales -count=1
+          python3 scripts/gui-go.py test ./cmd/xuhu ./assets/icons ./internal/app ./internal/connection ./internal/locale ./internal/markdown ./internal/materials ./internal/pi ./internal/store ./internal/theme ./locales -count=1
           python3 scripts/gui-go.py test github.com/egoist/mygo/ui -run '^(TestSplitReleaseBeforeFrame|TestTextAreaDragReleaseBeforeFrame)$' -count=1 -v
-          GOARCH=arm64 python3 scripts/gui-go.py build -trimpath -mod=readonly -buildvcs=true -o "$RUNNER_TEMP/Nagi" ./cmd/nagi
+          GOARCH=arm64 python3 scripts/gui-go.py build -trimpath -mod=readonly -buildvcs=true -o "$RUNNER_TEMP/Xuhu" ./cmd/xuhu
       - name: Headless previews
         id: headless-previews
         if: ${{ !cancelled() && steps.gui-python.outcome == 'success' }}
-        run: python3 scripts/capture-ui-review.py "$RUNNER_TEMP/nagi-previews"
+        run: python3 scripts/capture-ui-review.py "$RUNNER_TEMP/xuhu-previews"
       - uses: actions/upload-artifact@v7
         if: ${{ !cancelled() && (steps.headless-previews.outcome == 'success' || steps.headless-previews.outcome == 'failure') }}
         with:
-          name: nagi-headless-previews
-          path: ${{ runner.temp }}/nagi-previews/
+          name: xuhu-headless-previews
+          path: ${{ runner.temp }}/xuhu-previews/
           if-no-files-found: error
   pi-integration:
     runs-on: macos-15
@@ -99,7 +99,7 @@ jobs:
           "$NAGI_TEST_NODE" --test internal/pi/worker/tests/*.test.mjs
           python3 scripts/gui-go.py test -v ./internal/pi -run TestWorkerDomainUnits -count=1
       - name: Assemble signed standalone app
-        run: python3 scripts/build-macos-app.py --payload "$RUNNER_TEMP/pi-payload" --output "$RUNNER_TEMP/nagi-app"
+        run: python3 scripts/build-macos-app.py --payload "$RUNNER_TEMP/pi-payload" --output "$RUNNER_TEMP/xuhu-app"
       - name: Pi process and product integration
         timeout-minutes: 25
         env:
@@ -107,31 +107,31 @@ jobs:
           NAGI_TEST_ONLINE: '0'
           NAGI_TEST_NODE: ${{ runner.temp }}/pi-payload/bin/node
           NAGI_TEST_WORKER: ${{ runner.temp }}/pi-payload/dist/worker.js
-          NAGI_TEST_APP_BUNDLE: ${{ runner.temp }}/nagi-app/Nagi.app
-          NAGI_PREVIEW_DIR: ${{ runner.temp }}/nagi-pi-previews
-          NAGI_ACTIVITY_EVIDENCE_DIR: ${{ runner.temp }}/nagi-pi-previews
+          NAGI_TEST_APP_BUNDLE: ${{ runner.temp }}/xuhu-app/Xuhu.app
+          NAGI_PREVIEW_DIR: ${{ runner.temp }}/xuhu-pi-previews
+          NAGI_ACTIVITY_EVIDENCE_DIR: ${{ runner.temp }}/xuhu-pi-previews
         run: |
           mkdir -p "$NAGI_PREVIEW_DIR"
           set -o pipefail
           selector=$(python3 scripts/check-pi-results.py --selector)
           python3 scripts/gui-go.py test -tags=integration -race -timeout=20m -json -count=1 ./internal/pi ./internal/app \
             -run "$selector" \
-            | tee "$RUNNER_TEMP/nagi-pi-results.jsonl"
+            | tee "$RUNNER_TEMP/xuhu-pi-results.jsonl"
       - name: Require actual Pi core and product scenarios
         if: always()
-        run: python3 scripts/check-pi-results.py "$RUNNER_TEMP/nagi-pi-results.jsonl"
+        run: python3 scripts/check-pi-results.py "$RUNNER_TEMP/xuhu-pi-results.jsonl"
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: nagi-pi-integration-${{ github.event.pull_request.head.sha || github.sha }}
+          name: xuhu-pi-integration-${{ github.event.pull_request.head.sha || github.sha }}
           path: |
-            ${{ runner.temp }}/nagi-pi-results.jsonl
+            ${{ runner.temp }}/xuhu-pi-results.jsonl
             ${{ runner.temp }}/node-runtime/manifest.json
             ${{ runner.temp }}/pi-payload/manifest.json
             ${{ runner.temp }}/pi-payload/build.log
-            ${{ runner.temp }}/nagi-app/build.log
-            ${{ runner.temp }}/nagi-app/manifest.json
-            ${{ runner.temp }}/nagi-pi-previews/*.png
+            ${{ runner.temp }}/xuhu-app/build.log
+            ${{ runner.temp }}/xuhu-app/manifest.json
+            ${{ runner.temp }}/xuhu-pi-previews/*.png
           if-no-files-found: error
   ci-required:
     if: always()

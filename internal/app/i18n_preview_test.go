@@ -160,9 +160,9 @@ func TestPreviewI18nFinalMatrix(t *testing.T) {
 				return a
 			},
 			want: func(msgs locales.Messages) []string {
-				return []string{msgs.ConnectionStatusConnecting(), msgs.ConnectionRecoveryConnectingHint(), msgs.EmptyNoMessages(), msgs.ComposerLabel("Nagi")}
+				return []string{msgs.ConnectionStatusConnecting(), msgs.ConnectionRecoveryConnectingHint(), msgs.EmptyNoMessages(), msgs.ComposerLabel("Xuhu")}
 			},
-			fit: func(msgs locales.Messages) []string { return []string{msgs.ComposerLabel("Nagi")} },
+			fit: func(msgs locales.Messages) []string { return []string{msgs.ComposerLabel("Xuhu")} },
 		},
 		{
 			name: "config-failure", width: 1040, height: 720,
@@ -180,7 +180,7 @@ func TestPreviewI18nFinalMatrix(t *testing.T) {
 				return []string{msgs.ConnectionStatusSetupNeeded(), msgs.ConnectionRecoverySetupHint()}
 			},
 			fit: func(msgs locales.Messages) []string {
-				return []string{msgs.ComposerLabel("Nagi"), msgs.ConfigurationDetails()}
+				return []string{msgs.ComposerLabel("Xuhu"), msgs.ConfigurationDetails()}
 			},
 		},
 		{
@@ -250,13 +250,13 @@ func TestPreviewI18nFinalMatrix(t *testing.T) {
 				a.runtimeStatus = runtimeStateFailed
 				a.runtimeStage = "Runtime startup"
 				a.runtimeErr = "Pi worker could not start."
-				a.storePath = "/Users/you/Library/Application Support/Nagi/contacts.json"
-				a.workDir = "/Users/you/Workspace/nagi-run"
+				a.storePath = "/Users/you/Library/Application Support/Xuhu/contacts.json"
+				a.workDir = "/Users/you/Workspace/xuhu-run"
 				a.openAdvancedSettings()
 				return a
 			},
 			want: func(msgs locales.Messages) []string {
-				return []string{msgs.SettingsAdvanced(), msgs.SettingsStartupSection(), msgs.SettingsHideRuntimeDetails(), msgs.RuntimeStoreLine("/Users/you/Library/Application Support/Nagi/contacts.json")}
+				return []string{msgs.SettingsAdvanced(), msgs.SettingsStartupSection(), msgs.SettingsHideRuntimeDetails(), msgs.RuntimeStoreLine("/Users/you/Library/Application Support/Xuhu/contacts.json")}
 			},
 			fit: settingsFit,
 		},
@@ -1268,7 +1268,7 @@ func TestPreviewScheduledWork(t *testing.T) {
 		s.viewGeneration = fxRec.app.folderChoiceGeneration
 		s.owner = fxRec.app.selectedContact()
 		s.copy = &storeRecoveryCopy{
-			Path:           "/tmp/nagi-backup.profile",
+			Path:           "/tmp/xuhu-backup.profile",
 			Contacts:       2,
 			Issues:         1,
 			Timers:         1,
@@ -1532,7 +1532,7 @@ func TestPreviewOrchestrationAndTimeline(t *testing.T) {
 				s.owner = ct
 				s.scopeOpen = true
 				s.copy = &storeRecoveryCopy{
-					Path: "/Documents/Nagi.backup.json", Contacts: 2, Issues: 1,
+					Path: "/Documents/Xuhu.backup.json", Contacts: 2, Issues: 1,
 					Timers: 1, Schedules: 1, DormantWatches: 2,
 					DormantMandates: 3, Decisions: 2, Notices: 4, ModifiedAt: time.Now(),
 				}

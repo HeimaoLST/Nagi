@@ -12,13 +12,13 @@ Review every change that affects the visible interface or user interaction. Use 
 Run from the root of the clean frozen checkout. Long local captures use the owned HC execution procedure in [AGENTS.md](../../AGENTS.md). Choose an unused output path outside the checkout.
 
 ```sh
-python3 scripts/capture-ui-review.py "$TMPDIR/nagi-ui-review" \
+python3 scripts/capture-ui-review.py "$TMPDIR/xuhu-ui-review" \
   --test TestPreviewSettingsPage --test TestPreviewMarkdownLinks
 ```
 
 The default `TestPreviewImages` capture covers chat, a new Bot and global Settings. For targeted review, use `TestPreviewSettingsPage`, `TestPreviewContactProfile`, `TestPreviewConnectionSettings`, `TestPreviewMarkdownLinks`, `TestPreviewI18nSelectedSlice` or `TestPreviewInputStates`. Inspect the fixture and record the scenes actually captured. Use the native checklist for persisted history, independent activities and their results.
 
-The command uses the existing MyGo test wrapper, writes original PNGs and raw logs, and records the commit, selected tests, test outcomes and image dimensions and hashes in `capture.json`. PNG dimensions are pixel dimensions. Record logical size and scale from the fixture or native window in the review. The CI GUI job also publishes this capture for the candidate when setup succeeds, including available evidence from failed captures. Find the originals and logs under the `nagi-headless-previews` artifact. Capture status reports the preview command and available files. The reviewer records the visual verdict separately.
+The command uses the existing MyGo test wrapper, writes original PNGs and raw logs, and records the commit, selected tests, test outcomes and image dimensions and hashes in `capture.json`. PNG dimensions are pixel dimensions. Record logical size and scale from the fixture or native window in the review. The CI GUI job also publishes this capture for the candidate when setup succeeds, including available evidence from failed captures. Find the originals and logs under the `xuhu-headless-previews` artifact. Capture status reports the preview command and available files. The reviewer records the visual verdict separately.
 
 ## Review record
 

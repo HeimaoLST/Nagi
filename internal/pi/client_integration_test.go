@@ -120,8 +120,8 @@ func startPiProcess(t *testing.T, ctx context.Context, stateDir, endpoint string
 		t.Fatalf("actual process identity=%+v", h.ready)
 	}
 	if _, err := client.Configure(ctx, pi.ConfigureParams{
-		WireAPI: pi.OpenAICompletions, BaseURL: endpoint + "/v1", APIKey: "nagi-loopback-only",
-		Model: "nagi-local-integration", ContextTokens: 65536, OutputTokens: 4096,
+		WireAPI: pi.OpenAICompletions, BaseURL: endpoint + "/v1", APIKey: "xuhu-loopback-only",
+		Model: "xuhu-local-integration", ContextTokens: 65536, OutputTokens: 4096,
 		CredentialSource: "qa-process-connection",
 	}); err != nil {
 		t.Fatal(err)
@@ -215,7 +215,7 @@ func (p *piLocalProvider) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	p.mu.Lock()
 	p.requests++
 	p.mu.Unlock()
-	if r.Method != http.MethodPost || r.URL.Path != "/v1/chat/completions" || r.Header.Get("Authorization") != "Bearer nagi-loopback-only" {
+	if r.Method != http.MethodPost || r.URL.Path != "/v1/chat/completions" || r.Header.Get("Authorization") != "Bearer xuhu-loopback-only" {
 		p.fail(w, "unexpected loopback route or authorization")
 		return
 	}
@@ -299,7 +299,7 @@ func piChatResponse(w http.ResponseWriter, text, tool, id, args string) {
 		delta["content"] = text
 	}
 	for _, choice := range []map[string]any{{"index": 0, "delta": delta, "finish_reason": nil}, {"index": 0, "delta": map[string]any{}, "finish_reason": finish}} {
-		chunk, _ := json.Marshal(map[string]any{"id": "local-response", "object": "chat.completion.chunk", "created": 1, "model": "nagi-local-integration", "choices": []any{choice}})
+		chunk, _ := json.Marshal(map[string]any{"id": "local-response", "object": "chat.completion.chunk", "created": 1, "model": "xuhu-local-integration", "choices": []any{choice}})
 		fmt.Fprintf(w, "data: %s\n\n", chunk)
 	}
 	fmt.Fprint(w, "data: [DONE]\n\n")
@@ -843,7 +843,7 @@ input.on('line', line => {
   const request = JSON.parse(line);
   record({ kind: 'request', ...request });
   if (request.method === 'initialize') {
-    reply(request.id, { protocolVersion: request.params.protocolVersion, capabilities: { tools: {} }, serverInfo: { name: 'nagi-stdio-fixture', version: '1' } });
+    reply(request.id, { protocolVersion: request.params.protocolVersion, capabilities: { tools: {} }, serverInfo: { name: 'xuhu-stdio-fixture', version: '1' } });
   } else if (request.method === 'tools/list') {
     reply(request.id, { tools: [{ name: 'echo', description: 'Return a correlated fixture receipt.', inputSchema: { type: 'object', properties: { value: { type: 'string' } }, required: ['value'], additionalProperties: false } }] });
   } else if (request.method === 'tools/call') {
@@ -883,7 +883,7 @@ process.on('exit', code => record({ kind: 'exit', code }));
 			providerProblems = append(providerProblems, problem)
 			http.Error(w, problem, 400)
 		}
-		if r.Method != "POST" || r.URL.Path != "/v1/chat/completions" || r.Header.Get("Authorization") != "Bearer nagi-loopback-only" {
+		if r.Method != "POST" || r.URL.Path != "/v1/chat/completions" || r.Header.Get("Authorization") != "Bearer xuhu-loopback-only" {
 			fail("unexpected model route/auth")
 			return
 		}
@@ -1016,9 +1016,9 @@ process.on('exit', code => record({ kind: 'exit', code }));
 				fail("initialize missing version/id")
 				return
 			}
-			sessions[r.URL.Path] = fmt.Sprintf("nagi-%s-%d", strings.TrimPrefix(r.URL.Path, "/"), ledger[request.Method])
+			sessions[r.URL.Path] = fmt.Sprintf("xuhu-%s-%d", strings.TrimPrefix(r.URL.Path, "/"), ledger[request.Method])
 			w.Header().Set("Mcp-Session-Id", sessions[r.URL.Path])
-			result = map[string]any{"protocolVersion": request.Params.ProtocolVersion, "capabilities": map[string]any{"tools": map[string]any{}}, "serverInfo": map[string]string{"name": "nagi-http-fixture", "version": "1"}}
+			result = map[string]any{"protocolVersion": request.Params.ProtocolVersion, "capabilities": map[string]any{"tools": map[string]any{}}, "serverInfo": map[string]string{"name": "xuhu-http-fixture", "version": "1"}}
 		case "notifications/initialized":
 			w.WriteHeader(http.StatusAccepted)
 			return

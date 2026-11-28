@@ -23,7 +23,7 @@ import (
 func TestPiAppCapabilitiesSkillsMcpProfileAndM3Approval(t *testing.T) {
 	const (
 		mcpAuthHeader = "Bearer sk-cap-mcp-loopback-777"
-		chatKey       = "nagi-product-loopback"
+		chatKey       = "xuhu-product-loopback"
 		activityID    = "act-cap-m3"
 		activityGoal  = "Execute private case script"
 		scriptSource  = "export default async function(input, ctx) {\n  return { workspace: ctx.workspace };\n}\n"
@@ -177,7 +177,7 @@ func TestPiAppCapabilitiesSkillsMcpProfileAndM3Approval(t *testing.T) {
 			} {
 				chunk, _ := json.Marshal(map[string]any{
 					"id": "cap-loopback", "object": "chat.completion.chunk", "created": 1,
-					"model": "nagi-product-fixture", "choices": []any{choice},
+					"model": "xuhu-product-fixture", "choices": []any{choice},
 				})
 				fmt.Fprintf(w, "data: %s\n\n", chunk)
 			}
@@ -191,7 +191,7 @@ func TestPiAppCapabilitiesSkillsMcpProfileAndM3Approval(t *testing.T) {
 	isolateConnectionApp(t, root, payload)
 	if err := saveConnectionConfig(connectionConfigPath(guiStorePath()), connectionConfig{
 		API: connectionAPIChatCompletions, Endpoint: server.URL + "/v1", APIKey: chatKey,
-		Model: "nagi-product-fixture", ContextTokens: 65536, OutputTokens: 4096, WorkingDirectory: root, MaxActiveTasks: 3,
+		Model: "xuhu-product-fixture", ContextTokens: 65536, OutputTokens: 4096, WorkingDirectory: root, MaxActiveTasks: 3,
 	}); err != nil {
 		t.Fatal(err)
 	}

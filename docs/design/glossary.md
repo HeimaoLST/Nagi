@@ -1,6 +1,6 @@
-# Nagi Domain Glossary & Naming Standard
+# Xuhu Domain Glossary & Naming Standard
 
-This document is the single authoritative domain vocabulary for Nagi across product requirements, SQLite storage, Go/TypeScript wire RPCs, events, and model tool schemas.
+This document is the single authoritative domain vocabulary for Xuhu across product requirements, SQLite storage, Go/TypeScript wire RPCs, events, and model tool schemas.
 
 ## Canonical Entities
 
@@ -34,7 +34,7 @@ This document is the single authoritative domain vocabulary for Nagi across prod
 
 The term `issue` was an early storage name for **Activity** and is retired as a product concept.
 
-- **Allowed read-only historical scope**: Legacy `issue` fields remain strictly confined to read-only historical admission and transcript readers — specifically the v10 `contacts.json` decoder (`internal/store/store.go`, `internal/pi/worker/product-profile.ts`), retained v1 import metadata, and historical Pi transcript readers (`readImportedActivityResult` and `nagi.issue_tools.*` filtering in `internal/pi/worker/product.ts`).
+- **Allowed read-only historical scope**: Legacy `issue` fields remain strictly confined to read-only historical admission and transcript readers — specifically the v10 `contacts.json` decoder (`internal/store/store.go`, `internal/pi/worker/product-profile.ts`), retained v1 import metadata, and historical Pi transcript readers (`readImportedActivityResult` and `xuhu.issue_tools.*` filtering in `internal/pi/worker/product.ts`).
 - **Migration status ([RFC-0001](../rfcs/0001-multi-brain-and-capabilities.md))**:
   - **M0a (Shipped)**: Live model tools use `activity_delegate`, `activity_list`, `activity_get(activity_id)`, `activity_action(activity_id)`, `activity_ask`, and `activity_trace_read` with zero dual live aliases.
   - **M0b (Shipped)**: Live Go runtime types, fields, and files under `internal/app/` are normalized to `Activity` (`activities.go`, `activity_results.go`, `activity_supplement_view.go`, `activity_tool_views.go`), unused pre-Pi `IssueToolDefinitions` / forwarding DTOs are retired from `internal/store/tool_contract.go`, and v10 legacy `StoredIssue` admission & recovery remain intact.

@@ -53,7 +53,7 @@ func TestPiProductPandoraBoxSQLiteV1ToV2EnsureAndArchiveDenial(t *testing.T) {
 		ProfilePath:     filepath.Join(profileDir, "contacts.json"),
 		CredentialsPath: filepath.Join(profileDir, "connection.json"),
 	}
-	dbPath := filepath.Join(profileDir, "nagi.db")
+	dbPath := filepath.Join(profileDir, "xuhu.db")
 	runNodeSQLite(t, opts.NodePath, dbPath, `
 const { createHash } = require('node:crypto');
 const { writeFileSync } = require('node:fs');
@@ -559,7 +559,7 @@ func TestPiProductPandoraBoxKVCachingToolsAndMutations(t *testing.T) {
 		if isActivity {
 			if actL0Prefix == "" {
 				actL0Prefix = parts[0]
-				if !strings.HasPrefix(actL0Prefix, "You are a long-lived Nagi Bot teammate.") || strings.Contains(actL0Prefix, "PandoraBox") || strings.Contains(actL0Prefix, workspace) || strings.Contains(actL0Prefix, "Use activity_delegate") {
+				if !strings.HasPrefix(actL0Prefix, "You are a long-lived Xuhu Bot teammate.") || strings.Contains(actL0Prefix, "PandoraBox") || strings.Contains(actL0Prefix, workspace) || strings.Contains(actL0Prefix, "Use activity_delegate") {
 					t.Fatalf("Activity L0 prefix is not static or leaked foreground/dynamic content: %q", actL0Prefix)
 				}
 			} else if parts[0] != actL0Prefix {
@@ -568,7 +568,7 @@ func TestPiProductPandoraBoxKVCachingToolsAndMutations(t *testing.T) {
 		} else {
 			if convL0Prefix == "" {
 				convL0Prefix = parts[0]
-				if !strings.HasPrefix(convL0Prefix, "You are a long-lived Nagi Bot teammate.") || strings.Contains(convL0Prefix, "PandoraBox") || strings.Contains(convL0Prefix, workspace) || !strings.Contains(convL0Prefix, "Use activity_delegate") {
+				if !strings.HasPrefix(convL0Prefix, "You are a long-lived Xuhu Bot teammate.") || strings.Contains(convL0Prefix, "PandoraBox") || strings.Contains(convL0Prefix, workspace) || !strings.Contains(convL0Prefix, "Use activity_delegate") {
 					t.Fatalf("Conversation L0 prefix is not static or missing foreground guidance: %q", convL0Prefix)
 				}
 			} else if parts[0] != convL0Prefix {
@@ -598,7 +598,7 @@ func TestPiProductPandoraBoxKVCachingToolsAndMutations(t *testing.T) {
 					t.Fatalf("PandoraBox request[%d] exposed coding tool %q: %v", idx, coding, req.tools)
 				}
 			}
-			if !strings.Contains(req.system, "You are PandoraBox, Nagi's built-in Bot Architect.") {
+			if !strings.Contains(req.system, "You are PandoraBox, Xuhu's built-in Bot Architect.") {
 				t.Fatalf("PandoraBox request[%d] missing Architect instructions", idx)
 			}
 			if pandoraTools == nil {
@@ -608,7 +608,7 @@ func TestPiProductPandoraBoxKVCachingToolsAndMutations(t *testing.T) {
 			}
 		} else {
 			ordinaryChecked = true
-			if strings.Contains(req.system, "You are PandoraBox, Nagi's built-in Bot Architect.") {
+			if strings.Contains(req.system, "You are PandoraBox, Xuhu's built-in Bot Architect.") {
 				t.Fatalf("ordinary Bot request[%d] leaked Architect instructions", idx)
 			}
 			for _, forbidden := range []string{"bot_create", "bot_inspect_team", "bot_update"} {
@@ -814,7 +814,7 @@ func TestPiProductPandoraBoxStarterPromptsAndVisibility(t *testing.T) {
 		t.Fatalf("bot_inspect_team starter_prompts mismatch: id=%q payload=%s", targetID, inspected)
 	}
 
-	dbPath := filepath.Join(root, "profile", "nagi.db")
+	dbPath := filepath.Join(root, "profile", "xuhu.db")
 	version := runNodeSQLite(t, opts.NodePath, dbPath, `
 const { DatabaseSync } = require('node:sqlite');
 const db = new DatabaseSync(process.argv[1]);

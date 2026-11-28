@@ -774,7 +774,7 @@ func TestProviderRoutingHelpersHealthNotesAndThemeSwitch(t *testing.T) {
 	ed.DefaultModel = "qwen3:8b"
 	ed.noKey = true
 	params, ok := ed.input(false)
-	if !ok || params.APIKey != "nagi-loopback" {
+	if !ok || params.APIKey != "xuhu-loopback" {
 		t.Fatalf("loopback noKey editor input = ok:%v key:%q fields:%+v", ok, params.APIKey, ed.fields)
 	}
 	ed.Name = strings.Repeat("a", 257)

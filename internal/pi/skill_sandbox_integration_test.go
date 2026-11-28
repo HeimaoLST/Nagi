@@ -616,7 +616,7 @@ func TestPiProductSkillSandboxIsolationMediatedBrokerAndHotSwap(t *testing.T) {
 		"protected": []string{
 			filepath.Join(sourceDir, "connection.json"),
 			filepath.Join(sourceDir, "mcp-secrets.json"),
-			filepath.Join(sourceDir, "nagi.db"),
+			filepath.Join(sourceDir, "xuhu.db"),
 			filepath.Join(sourceDir, "contacts.json"),
 			filepath.Join(sourceDir, ".skill-installation"),
 			aliasSecret,
@@ -1318,8 +1318,8 @@ func TestPiProductSkillSandboxFailClosedReapingBackupRestoreAndMigration(t *test
 	if err := os.WriteFile(filepath.Join(migDir, "contacts.json"), restoredMirror, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	migDB := filepath.Join(migDir, "nagi.db")
-	if err := os.WriteFile(migDB, productRead(t, filepath.Join(restoreDir, "nagi.db")), 0o600); err != nil {
+	migDB := filepath.Join(migDir, "xuhu.db")
+	if err := os.WriteFile(migDB, productRead(t, filepath.Join(restoreDir, "xuhu.db")), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	runNodeSQLite(t, nodePath, migDB, `

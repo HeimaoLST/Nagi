@@ -41,7 +41,7 @@ var defaultSessionInspectionCopy = sessionInspectionCopy{
 	"hostDisconnected": "The session host is disconnected. Available history is read-only.",
 	"earlierOutput":    "Earlier output", "laterOutput": "Later output", "latestOutput": "Latest output", "newOutput": "New output is available.",
 	"authPaused": "Waiting for external authentication", "auth_prompt": "The process asked for authentication.",
-	"canonical_no_echo": "The process is waiting for hidden terminal input.", "authAction": "Complete authentication outside Nagi or kill this session.",
+	"canonical_no_echo": "The process is waiting for hidden terminal input.", "authAction": "Complete authentication outside Xuhu or kill this session.",
 	"watches": "Watches", "noWatches": "No watches for this run.", "armed": "Armed", "fired": "Fired", "cancelled": "Cancelled", "target_lost": "Target lost",
 	"conditions": "Conditions", "exit": "Process exit", "match": "Text match", "idle": "Idle", "timeout": "Timeout",
 	"matchLiteral": "Match text", "idleTime": "Idle threshold", "timeoutTime": "Timeout", "milliseconds": "%s ms", "firedKind": "Triggered by", "matchedExcerpt": "Matched output",

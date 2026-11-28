@@ -84,7 +84,7 @@ func (p *piAppProvider) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	p.requests++
 	p.bodies = append(p.bodies, append(json.RawMessage(nil), body...))
 	step := p.step
-	if err == nil && (r.Method != http.MethodPost || r.URL.Path != "/v1/chat/completions" || r.Header.Get("Authorization") != "Bearer nagi-product-loopback" || request.Model != "nagi-product-fixture" || !request.Stream || len(request.Messages) == 0) {
+	if err == nil && (r.Method != http.MethodPost || r.URL.Path != "/v1/chat/completions" || r.Header.Get("Authorization") != "Bearer xuhu-product-loopback" || request.Model != "xuhu-product-fixture" || !request.Stream || len(request.Messages) == 0) {
 		err = errors.New("unexpected loopback route, authorization, model or message shape")
 	}
 	if err == nil && (p.requests > p.limit || p.calls == nil || step > len(p.calls)) {
@@ -144,7 +144,7 @@ func (p *piAppProvider) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/event-stream")
 	for _, choice := range []map[string]any{{"index": 0, "delta": delta, "finish_reason": nil}, {"index": 0, "delta": map[string]any{}, "finish_reason": finish}} {
-		chunk, _ := json.Marshal(map[string]any{"id": "product-loopback", "object": "chat.completion.chunk", "created": 1, "model": "nagi-product-fixture", "choices": []any{choice}})
+		chunk, _ := json.Marshal(map[string]any{"id": "product-loopback", "object": "chat.completion.chunk", "created": 1, "model": "xuhu-product-fixture", "choices": []any{choice}})
 		fmt.Fprintf(w, "data: %s\n\n", chunk)
 	}
 	fmt.Fprint(w, "data: [DONE]\n\n")
@@ -257,7 +257,7 @@ func TestPiAppProductConnectionSaveAndApplyRefusal(t *testing.T) {
 		t.Fatalf("expected legacy v2 profile to start with 0 provider accounts: %+v", before)
 	}
 	const model = "revised-fixture-model"
-	const apiKey = "nagi-product-loopback"
+	const apiKey = "xuhu-product-loopback"
 	enterField(msg.FieldName(), "Studio "+apiKey)
 	enterField(msg.ProviderDefaultModel(), model)
 	enterField(msg.ConnectionFieldAPIKey(), apiKey)

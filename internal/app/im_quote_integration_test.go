@@ -30,9 +30,9 @@ func TestPiAppIMQuotePersistSendRecallAndReopen(t *testing.T) {
 	root := prepareProductWorkbench(t, provider)
 	if err := writeProfileJSON(guiStorePath(), storedState{
 		Version:  contactStoreVersion,
-		Selected: "nagi",
+		Selected: "xuhu",
 		Contacts: []storedContact{
-			{ID: "nagi", Name: "Nagi", Workspace: root, Draft: turn1Prompt},
+			{ID: "xuhu", Name: "Xuhu", Workspace: root, Draft: turn1Prompt},
 		},
 	}); err != nil {
 		t.Fatal(err)
@@ -40,11 +40,11 @@ func TestPiAppIMQuotePersistSendRecallAndReopen(t *testing.T) {
 
 	msgs := locales.In("en")
 	w := openProductWorkbench(t)
-	nagi := w.app.contactByID("nagi")
-	w.wait(func() bool { return w.app.selectedContact() == nagi && nagi.Loaded })
+	xuhu := w.app.contactByID("xuhu")
+	w.wait(func() bool { return w.app.selectedContact() == xuhu && xuhu.Loaded })
 	w.click(msgs.SendAction())
 	w.wait(func() bool {
-		return provider.count() == 1 && nagi.SendState == sendIdle && nagi.Status != statusWorking
+		return provider.count() == 1 && xuhu.SendState == sendIdle && xuhu.Status != statusWorking
 	})
 	w.frame(func() { w.view.Advance(450 * time.Millisecond) })
 	w.wait(func() bool { return w.view.HasText(turn1B0) && w.view.HasText(turn1B1) })
@@ -64,13 +64,13 @@ func TestPiAppIMQuotePersistSendRecallAndReopen(t *testing.T) {
 		t.Fatalf("choose Quote on Bubble 1: %v", menuErr)
 	}
 
-	conv, err := w.client.GetConversation(ctx, nagi.SessionID)
+	conv, err := w.client.GetConversation(ctx, xuhu.SessionID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if conv.Draft == nil || conv.Draft.Quote == nil || conv.Draft.Quote.BubbleIndex == nil ||
 		*conv.Draft.Quote.BubbleIndex != 1 || conv.Draft.Quote.Sender != "bot" ||
-		conv.Draft.Quote.AuthorName != "Nagi" || conv.Draft.Quote.Text != turn1B1 {
+		conv.Draft.Quote.AuthorName != "Xuhu" || conv.Draft.Quote.Text != turn1B1 {
 		t.Fatalf("persisted draft quote mismatch: %+v", conv.Draft)
 	}
 	quotedMsgID := conv.Draft.Quote.MessageID
@@ -84,19 +84,19 @@ func TestPiAppIMQuotePersistSendRecallAndReopen(t *testing.T) {
 		t.Fatal(err)
 	}
 	w2 := openProductWorkbench(t)
-	nagi2 := w2.app.contactByID("nagi")
+	xuhu2 := w2.app.contactByID("xuhu")
 	w2.wait(func() bool {
-		return w2.app.selectedContact() == nagi2 && nagi2.Loaded &&
-			nagi2.DraftQuote != nil && nagi2.DraftQuote.BubbleIndex != nil && *nagi2.DraftQuote.BubbleIndex == 1 &&
-			w2.view.HasText(msgs.QuoteReplyingTo("Nagi"))
+		return w2.app.selectedContact() == xuhu2 && xuhu2.Loaded &&
+			xuhu2.DraftQuote != nil && xuhu2.DraftQuote.BubbleIndex != nil && *xuhu2.DraftQuote.BubbleIndex == 1 &&
+			w2.view.HasText(msgs.QuoteReplyingTo("Xuhu"))
 	})
 
-	w2.click(msgs.ComposerLabel("Nagi"))
+	w2.click(msgs.ComposerLabel("Xuhu"))
 	w2.frame(func() { w2.view.Type(turn2Prompt) })
 	w2.click(msgs.SendAction())
 	w2.wait(func() bool {
-		return provider.count() == 2 && nagi2.SendState == sendIdle && nagi2.Status != statusWorking &&
-			nagi2.DraftQuote == nil
+		return provider.count() == 2 && xuhu2.SendState == sendIdle && xuhu2.Status != statusWorking &&
+			xuhu2.DraftQuote == nil
 	})
 	w2.frame(func() { w2.view.Advance(450 * time.Millisecond) })
 	w2.wait(func() bool { return w2.view.HasText(turn2Reply) })
@@ -117,7 +117,7 @@ func TestPiAppIMQuotePersistSendRecallAndReopen(t *testing.T) {
 
 	w2.pump.do(func() {
 		var found bool
-		for _, m := range nagi2.Messages {
+		for _, m := range xuhu2.Messages {
 			if m.Kind == msgUser && m.Text == turn2Prompt {
 				found = true
 				if m.Quote == nil || m.Quote.BubbleIndex == nil || *m.Quote.BubbleIndex != 1 {
@@ -136,11 +136,11 @@ func TestPiAppIMQuotePersistSendRecallAndReopen(t *testing.T) {
 	w2.shutdown(ctx)
 
 	w3 := openProductWorkbench(t)
-	nagi3 := w3.app.contactByID("nagi")
+	xuhu3 := w3.app.contactByID("xuhu")
 	w3.wait(func() bool {
-		return w3.app.selectedContact() == nagi3 && nagi3.Loaded &&
+		return w3.app.selectedContact() == xuhu3 && xuhu3.Loaded &&
 			w3.view.HasText(turn1B0) && w3.view.HasText(turn1B1) &&
-			w3.view.HasText(turn2Prompt) && w3.view.HasText(msgs.QuoteJump("Nagi"))
+			w3.view.HasText(turn2Prompt) && w3.view.HasText(msgs.QuoteJump("Xuhu"))
 	})
 
 	w3.frame(func() { w3.view.SetDark(true) })
@@ -159,11 +159,11 @@ func TestPiAppIMQuotePersistSendRecallAndReopen(t *testing.T) {
 		t.Fatalf("reopened source bubbles missing: ok0=%v ok1=%v", ok0, ok1)
 	}
 
-	w3.click(msgs.QuoteJump("Nagi"))
+	w3.click(msgs.QuoteJump("Xuhu"))
 	var during, after *image.RGBA
 	var gotRecall, clearedRecall quoteRecall
 	w3.pump.do(func() {
-		gotRecall = nagi3.recall
+		gotRecall = xuhu3.recall
 		during = cloneRGBA(w3.view.Image())
 	})
 	if gotRecall.messageID != quotedMsgID || gotRecall.bubble != 1 {
@@ -171,7 +171,7 @@ func TestPiAppIMQuotePersistSendRecallAndReopen(t *testing.T) {
 	}
 	w3.frame(func() { w3.view.Advance(1700 * time.Millisecond) })
 	w3.pump.do(func() {
-		clearedRecall = nagi3.recall
+		clearedRecall = xuhu3.recall
 		after = cloneRGBA(w3.view.Image())
 	})
 	if clearedRecall != (quoteRecall{}) {

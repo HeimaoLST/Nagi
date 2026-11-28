@@ -1,4 +1,4 @@
-# Nagi v1 桌面设计
+# Xuhu v1 桌面设计
 
 产品范围由 v1 用户操作定义。本文规定现有 MyGo 桌面的布局、视觉角色和交互。按检查单和评审流程验证实际界面。对象归属和持久化行为由产品协议定义。[v1 用户操作](../requirements/desktop.md#v1) · [产品协议](product-protocol.md) · [UI 检查单](ui-checklist.md) · [UI review](ui-review.md)
 

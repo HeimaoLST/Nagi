@@ -339,7 +339,7 @@ func (c *Client) call(ctx context.Context, method string, params, result any) er
 		return &CommandError{Method: method, Delivery: NotSent, Err: err}
 	}
 	c.nextID++
-	id := "nagi-" + strconv.FormatUint(c.nextID, 10)
+	id := "xuhu-" + strconv.FormatUint(c.nextID, 10)
 	pending := &pendingRequest{method: method, response: make(chan response, 1)}
 	c.pending[id] = pending
 	c.issued[id] = true

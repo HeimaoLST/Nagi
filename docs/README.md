@@ -1,6 +1,6 @@
-# Nagi Documentation
+# Xuhu Documentation
 
-This directory holds Nagi's product requirements, implemented design contracts, and forward-looking architecture RFCs.
+This directory holds Xuhu's product requirements, implemented design contracts, and forward-looking architecture RFCs.
 
 ## Documentation Map
 

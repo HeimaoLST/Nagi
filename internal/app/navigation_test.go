@@ -28,7 +28,7 @@ func TestResizeDoesNotStealSettingsFocus(t *testing.T) {
 	if !a.settingsOpen || !tr.Focused("← Back to workbench") {
 		t.Fatalf("resize stole Settings focus: settings=%v texts=%v", a.settingsOpen, tr.Texts())
 	}
-	if tr.HasText("Composer for Nagi") || tr.HasText(locales.In("en").AvatarAddContact()) {
+	if tr.HasText("Composer for Xuhu") || tr.HasText(locales.In("en").AvatarAddContact()) {
 		t.Fatal("Settings resize mounted the workbench background")
 	}
 }

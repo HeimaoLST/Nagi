@@ -23,8 +23,8 @@ const (
 	productCedar  = "contact-cedar"
 	productCopper = "contact-copper"
 	productSource = "qa-process-connection"
-	productKey    = "nagi-loopback-only"
-	productModel  = "nagi-local-integration"
+	productKey    = "xuhu-loopback-only"
+	productModel  = "xuhu-local-integration"
 )
 
 type productProvider struct {

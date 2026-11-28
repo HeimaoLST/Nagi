@@ -722,13 +722,13 @@ func (msgs Messages) ConnectionRecoveryManagedTitle() string {
 	return Catalog.Format(msgs.locale, "connectionRecoveryManagedTitle", nil)
 }
 
-// ConnectionRecoveryManagedHint says "Nagi could not start the connection."
+// ConnectionRecoveryManagedHint says "Xuhu could not start the connection."
 // in the language the app shows.
 //
 // The recovery hint for a managed saved connection that could not start.
 func ConnectionRecoveryManagedHint() string { return In(i18n.Locale()).ConnectionRecoveryManagedHint() }
 
-// ConnectionRecoveryManagedHint says "Nagi could not start the connection."
+// ConnectionRecoveryManagedHint says "Xuhu could not start the connection."
 // in the language of msgs.
 //
 // The recovery hint for a managed saved connection that could not start.
@@ -755,13 +755,13 @@ func (msgs Messages) ConnectionRecoveryConnectingHint() string {
 // TaskStatusArchived says "Archived"
 // in the language the app shows.
 //
-// Nagi taskStatusArchived UI copy.
+// Xuhu taskStatusArchived UI copy.
 func TaskStatusArchived() string { return In(i18n.Locale()).TaskStatusArchived() }
 
 // TaskStatusArchived says "Archived"
 // in the language of msgs.
 //
-// Nagi taskStatusArchived UI copy.
+// Xuhu taskStatusArchived UI copy.
 func (msgs Messages) TaskStatusArchived() string {
 	return Catalog.Format(msgs.locale, "taskStatusArchived", nil)
 }
@@ -769,13 +769,13 @@ func (msgs Messages) TaskStatusArchived() string {
 // TaskStatusCompleted says "Done"
 // in the language the app shows.
 //
-// Nagi taskStatusCompleted UI copy.
+// Xuhu taskStatusCompleted UI copy.
 func TaskStatusCompleted() string { return In(i18n.Locale()).TaskStatusCompleted() }
 
 // TaskStatusCompleted says "Done"
 // in the language of msgs.
 //
-// Nagi taskStatusCompleted UI copy.
+// Xuhu taskStatusCompleted UI copy.
 func (msgs Messages) TaskStatusCompleted() string {
 	return Catalog.Format(msgs.locale, "taskStatusCompleted", nil)
 }
@@ -783,13 +783,13 @@ func (msgs Messages) TaskStatusCompleted() string {
 // TaskStatusCanceled says "Canceled"
 // in the language the app shows.
 //
-// Nagi taskStatusCanceled UI copy.
+// Xuhu taskStatusCanceled UI copy.
 func TaskStatusCanceled() string { return In(i18n.Locale()).TaskStatusCanceled() }
 
 // TaskStatusCanceled says "Canceled"
 // in the language of msgs.
 //
-// Nagi taskStatusCanceled UI copy.
+// Xuhu taskStatusCanceled UI copy.
 func (msgs Messages) TaskStatusCanceled() string {
 	return Catalog.Format(msgs.locale, "taskStatusCanceled", nil)
 }
@@ -797,13 +797,13 @@ func (msgs Messages) TaskStatusCanceled() string {
 // TaskStatusNeedsAttention says "Needs attention"
 // in the language the app shows.
 //
-// Nagi taskStatusNeedsAttention UI copy.
+// Xuhu taskStatusNeedsAttention UI copy.
 func TaskStatusNeedsAttention() string { return In(i18n.Locale()).TaskStatusNeedsAttention() }
 
 // TaskStatusNeedsAttention says "Needs attention"
 // in the language of msgs.
 //
-// Nagi taskStatusNeedsAttention UI copy.
+// Xuhu taskStatusNeedsAttention UI copy.
 func (msgs Messages) TaskStatusNeedsAttention() string {
 	return Catalog.Format(msgs.locale, "taskStatusNeedsAttention", nil)
 }
@@ -811,13 +811,13 @@ func (msgs Messages) TaskStatusNeedsAttention() string {
 // TaskStatusWaiting says "Waiting for you"
 // in the language the app shows.
 //
-// Nagi taskStatusWaiting UI copy.
+// Xuhu taskStatusWaiting UI copy.
 func TaskStatusWaiting() string { return In(i18n.Locale()).TaskStatusWaiting() }
 
 // TaskStatusWaiting says "Waiting for you"
 // in the language of msgs.
 //
-// Nagi taskStatusWaiting UI copy.
+// Xuhu taskStatusWaiting UI copy.
 func (msgs Messages) TaskStatusWaiting() string {
 	return Catalog.Format(msgs.locale, "taskStatusWaiting", nil)
 }
@@ -825,13 +825,13 @@ func (msgs Messages) TaskStatusWaiting() string {
 // TaskStatusInProgress says "In progress"
 // in the language the app shows.
 //
-// Nagi taskStatusInProgress UI copy.
+// Xuhu taskStatusInProgress UI copy.
 func TaskStatusInProgress() string { return In(i18n.Locale()).TaskStatusInProgress() }
 
 // TaskStatusInProgress says "In progress"
 // in the language of msgs.
 //
-// Nagi taskStatusInProgress UI copy.
+// Xuhu taskStatusInProgress UI copy.
 func (msgs Messages) TaskStatusInProgress() string {
 	return Catalog.Format(msgs.locale, "taskStatusInProgress", nil)
 }
@@ -839,13 +839,13 @@ func (msgs Messages) TaskStatusInProgress() string {
 // TaskStatusNotStarted says "Not started"
 // in the language the app shows.
 //
-// Nagi taskStatusNotStarted UI copy.
+// Xuhu taskStatusNotStarted UI copy.
 func TaskStatusNotStarted() string { return In(i18n.Locale()).TaskStatusNotStarted() }
 
 // TaskStatusNotStarted says "Not started"
 // in the language of msgs.
 //
-// Nagi taskStatusNotStarted UI copy.
+// Xuhu taskStatusNotStarted UI copy.
 func (msgs Messages) TaskStatusNotStarted() string {
 	return Catalog.Format(msgs.locale, "taskStatusNotStarted", nil)
 }
@@ -853,13 +853,13 @@ func (msgs Messages) TaskStatusNotStarted() string {
 // TaskRunNeedsAttention says "Run needs attention"
 // in the language the app shows.
 //
-// Nagi taskRunNeedsAttention UI copy.
+// Xuhu taskRunNeedsAttention UI copy.
 func TaskRunNeedsAttention() string { return In(i18n.Locale()).TaskRunNeedsAttention() }
 
 // TaskRunNeedsAttention says "Run needs attention"
 // in the language of msgs.
 //
-// Nagi taskRunNeedsAttention UI copy.
+// Xuhu taskRunNeedsAttention UI copy.
 func (msgs Messages) TaskRunNeedsAttention() string {
 	return Catalog.Format(msgs.locale, "taskRunNeedsAttention", nil)
 }
@@ -867,13 +867,13 @@ func (msgs Messages) TaskRunNeedsAttention() string {
 // TaskRailAttention says "Needs attention\n{name}"
 // in the language the app shows.
 //
-// Nagi taskRailAttention UI copy.
+// Xuhu taskRailAttention UI copy.
 func TaskRailAttention(name string) string { return In(i18n.Locale()).TaskRailAttention(name) }
 
 // TaskRailAttention says "Needs attention\n{name}"
 // in the language of msgs.
 //
-// Nagi taskRailAttention UI copy.
+// Xuhu taskRailAttention UI copy.
 func (msgs Messages) TaskRailAttention(name string) string {
 	return Catalog.Format(msgs.locale, "taskRailAttention", map[string]any{"name": name})
 }
@@ -881,13 +881,13 @@ func (msgs Messages) TaskRailAttention(name string) string {
 // TaskRailWaiting says "Waiting for you\n{name}"
 // in the language the app shows.
 //
-// Nagi taskRailWaiting UI copy.
+// Xuhu taskRailWaiting UI copy.
 func TaskRailWaiting(name string) string { return In(i18n.Locale()).TaskRailWaiting(name) }
 
 // TaskRailWaiting says "Waiting for you\n{name}"
 // in the language of msgs.
 //
-// Nagi taskRailWaiting UI copy.
+// Xuhu taskRailWaiting UI copy.
 func (msgs Messages) TaskRailWaiting(name string) string {
 	return Catalog.Format(msgs.locale, "taskRailWaiting", map[string]any{"name": name})
 }
@@ -895,13 +895,13 @@ func (msgs Messages) TaskRailWaiting(name string) string {
 // TaskRailInProgress says "In progress\n{name}"
 // in the language the app shows.
 //
-// Nagi taskRailInProgress UI copy.
+// Xuhu taskRailInProgress UI copy.
 func TaskRailInProgress(name string) string { return In(i18n.Locale()).TaskRailInProgress(name) }
 
 // TaskRailInProgress says "In progress\n{name}"
 // in the language of msgs.
 //
-// Nagi taskRailInProgress UI copy.
+// Xuhu taskRailInProgress UI copy.
 func (msgs Messages) TaskRailInProgress(name string) string {
 	return Catalog.Format(msgs.locale, "taskRailInProgress", map[string]any{"name": name})
 }
@@ -1408,11 +1408,11 @@ func (msgs Messages) StarterHelpWithPurpose(purpose string) string {
 	return Catalog.Format(msgs.locale, "starterHelpWithPurpose", map[string]any{"purpose": purpose})
 }
 
-// PandoraBoxPurpose says "Design, create, and refine focused Nagi Bots through conversation."
+// PandoraBoxPurpose says "Design, create, and refine focused Xuhu Bots through conversation."
 // in the language the app shows.
 func PandoraBoxPurpose() string { return In(i18n.Locale()).PandoraBoxPurpose() }
 
-// PandoraBoxPurpose says "Design, create, and refine focused Nagi Bots through conversation."
+// PandoraBoxPurpose says "Design, create, and refine focused Xuhu Bots through conversation."
 // in the language of msgs.
 func (msgs Messages) PandoraBoxPurpose() string {
 	return Catalog.Format(msgs.locale, "pandoraBoxPurpose", nil)
@@ -2150,11 +2150,11 @@ func (msgs Messages) SendUnknownState() string {
 	return Catalog.Format(msgs.locale, "sendUnknownState", nil)
 }
 
-// SendDisconnectedState says "The connection was lost and the result is unconfirmed. Save or copy any unsaved text before quitting. Reopen Nagi and…"
+// SendDisconnectedState says "The connection was lost and the result is unconfirmed. Save or copy any unsaved text before quitting. Reopen Xuhu and…"
 // in the language the app shows.
 func SendDisconnectedState() string { return In(i18n.Locale()).SendDisconnectedState() }
 
-// SendDisconnectedState says "The connection was lost and the result is unconfirmed. Save or copy any unsaved text before quitting. Reopen Nagi and…"
+// SendDisconnectedState says "The connection was lost and the result is unconfirmed. Save or copy any unsaved text before quitting. Reopen Xuhu and…"
 // in the language of msgs.
 func (msgs Messages) SendDisconnectedState() string {
 	return Catalog.Format(msgs.locale, "sendDisconnectedState", nil)
@@ -2594,11 +2594,11 @@ func (msgs Messages) SettingsUnsavedChanges() string {
 	return Catalog.Format(msgs.locale, "settingsUnsavedChanges", nil)
 }
 
-// SettingsBuiltinManagedError says "Save and Apply a managed Nagi connection before customizing built-in tools."
+// SettingsBuiltinManagedError says "Save and Apply a managed Xuhu connection before customizing built-in tools."
 // in the language the app shows.
 func SettingsBuiltinManagedError() string { return In(i18n.Locale()).SettingsBuiltinManagedError() }
 
-// SettingsBuiltinManagedError says "Save and Apply a managed Nagi connection before customizing built-in tools."
+// SettingsBuiltinManagedError says "Save and Apply a managed Xuhu connection before customizing built-in tools."
 // in the language of msgs.
 func (msgs Messages) SettingsBuiltinManagedError() string {
 	return Catalog.Format(msgs.locale, "settingsBuiltinManagedError", nil)
@@ -3526,11 +3526,11 @@ func (msgs Messages) RuntimeSessionModelLine(model string) string {
 	return Catalog.Format(msgs.locale, "runtimeSessionModelLine", map[string]any{"model": model})
 }
 
-// RuntimeConnectionManagedNote says "Connection settings are managed by Nagi; the runtime reads its endpoint, model and key from that saved connection."
+// RuntimeConnectionManagedNote says "Connection settings are managed by Xuhu; the runtime reads its endpoint, model and key from that saved connection."
 // in the language the app shows.
 func RuntimeConnectionManagedNote() string { return In(i18n.Locale()).RuntimeConnectionManagedNote() }
 
-// RuntimeConnectionManagedNote says "Connection settings are managed by Nagi; the runtime reads its endpoint, model and key from that saved connection."
+// RuntimeConnectionManagedNote says "Connection settings are managed by Xuhu; the runtime reads its endpoint, model and key from that saved connection."
 // in the language of msgs.
 func (msgs Messages) RuntimeConnectionManagedNote() string {
 	return Catalog.Format(msgs.locale, "runtimeConnectionManagedNote", nil)
@@ -4022,33 +4022,33 @@ func (msgs Messages) StartupHintFixThenApply() string {
 	return Catalog.Format(msgs.locale, "startupHintFixThenApply", nil)
 }
 
-// StartupHintRestartUnconfirmed says "Restart Nagi; delivery or result may be unconfirmed. No automatic retry."
+// StartupHintRestartUnconfirmed says "Restart Xuhu; delivery or result may be unconfirmed. No automatic retry."
 // in the language the app shows.
 func StartupHintRestartUnconfirmed() string { return In(i18n.Locale()).StartupHintRestartUnconfirmed() }
 
-// StartupHintRestartUnconfirmed says "Restart Nagi; delivery or result may be unconfirmed. No automatic retry."
+// StartupHintRestartUnconfirmed says "Restart Xuhu; delivery or result may be unconfirmed. No automatic retry."
 // in the language of msgs.
 func (msgs Messages) StartupHintRestartUnconfirmed() string {
 	return Catalog.Format(msgs.locale, "startupHintRestartUnconfirmed", nil)
 }
 
-// StartupHintRestartReload says "Restart Nagi and reload history. Accepted work may be unconfirmed; no automatic retry."
+// StartupHintRestartReload says "Restart Xuhu and reload history. Accepted work may be unconfirmed; no automatic retry."
 // in the language the app shows.
 func StartupHintRestartReload() string { return In(i18n.Locale()).StartupHintRestartReload() }
 
-// StartupHintRestartReload says "Restart Nagi and reload history. Accepted work may be unconfirmed; no automatic retry."
+// StartupHintRestartReload says "Restart Xuhu and reload history. Accepted work may be unconfirmed; no automatic retry."
 // in the language of msgs.
 func (msgs Messages) StartupHintRestartReload() string {
 	return Catalog.Format(msgs.locale, "startupHintRestartReload", nil)
 }
 
-// StartupHintExistingStore says "Nagi left the existing file untouched and did not create a replacement store. Fix the file or its permissions at {pat…"
+// StartupHintExistingStore says "Xuhu left the existing file untouched and did not create a replacement store. Fix the file or its permissions at {pat…"
 // in the language the app shows.
 func StartupHintExistingStore(path string) string {
 	return In(i18n.Locale()).StartupHintExistingStore(path)
 }
 
-// StartupHintExistingStore says "Nagi left the existing file untouched and did not create a replacement store. Fix the file or its permissions at {pat…"
+// StartupHintExistingStore says "Xuhu left the existing file untouched and did not create a replacement store. Fix the file or its permissions at {pat…"
 // in the language of msgs.
 func (msgs Messages) StartupHintExistingStore(path string) string {
 	return Catalog.Format(msgs.locale, "startupHintExistingStore", map[string]any{"path": path})
@@ -7624,11 +7624,11 @@ func (msgs Messages) IssueSendCancelFailed(detail string) string {
 	return Catalog.Format(msgs.locale, "issueSendCancelFailed", map[string]any{"detail": detail})
 }
 
-// IssueSendReloadDisconnected says "Runtime disconnected; restart Nagi to reload history."
+// IssueSendReloadDisconnected says "Runtime disconnected; restart Xuhu to reload history."
 // in the language the app shows.
 func IssueSendReloadDisconnected() string { return In(i18n.Locale()).IssueSendReloadDisconnected() }
 
-// IssueSendReloadDisconnected says "Runtime disconnected; restart Nagi to reload history."
+// IssueSendReloadDisconnected says "Runtime disconnected; restart Xuhu to reload history."
 // in the language of msgs.
 func (msgs Messages) IssueSendReloadDisconnected() string {
 	return Catalog.Format(msgs.locale, "issueSendReloadDisconnected", nil)
@@ -8232,11 +8232,11 @@ func (msgs Messages) RecoveryTechnicalDetailsHint() string {
 	return Catalog.Format(msgs.locale, "recoveryTechnicalDetailsHint", nil)
 }
 
-// RecoveryRuntimeStartFailed says "Nagi could not start its runtime. Open Details to see the error and check the work folder in Connection & model."
+// RecoveryRuntimeStartFailed says "Xuhu could not start its runtime. Open Details to see the error and check the work folder in Connection & model."
 // in the language the app shows.
 func RecoveryRuntimeStartFailed() string { return In(i18n.Locale()).RecoveryRuntimeStartFailed() }
 
-// RecoveryRuntimeStartFailed says "Nagi could not start its runtime. Open Details to see the error and check the work folder in Connection & model."
+// RecoveryRuntimeStartFailed says "Xuhu could not start its runtime. Open Details to see the error and check the work folder in Connection & model."
 // in the language of msgs.
 func (msgs Messages) RecoveryRuntimeStartFailed() string {
 	return Catalog.Format(msgs.locale, "recoveryRuntimeStartFailed", nil)
@@ -8252,11 +8252,11 @@ func (msgs Messages) RecoveryLocalSaveFailed() string {
 	return Catalog.Format(msgs.locale, "recoveryLocalSaveFailed", nil)
 }
 
-// RecoveryLocalDataUnavailable says "Local Bots and tasks are unavailable. Nagi has not replaced existing data. Choose a compatible recovery copy if you h…"
+// RecoveryLocalDataUnavailable says "Local Bots and tasks are unavailable. Xuhu has not replaced existing data. Choose a compatible recovery copy if you h…"
 // in the language the app shows.
 func RecoveryLocalDataUnavailable() string { return In(i18n.Locale()).RecoveryLocalDataUnavailable() }
 
-// RecoveryLocalDataUnavailable says "Local Bots and tasks are unavailable. Nagi has not replaced existing data. Choose a compatible recovery copy if you h…"
+// RecoveryLocalDataUnavailable says "Local Bots and tasks are unavailable. Xuhu has not replaced existing data. Choose a compatible recovery copy if you h…"
 // in the language of msgs.
 func (msgs Messages) RecoveryLocalDataUnavailable() string {
 	return Catalog.Format(msgs.locale, "recoveryLocalDataUnavailable", nil)
@@ -8272,13 +8272,13 @@ func (msgs Messages) RecoveryRequestFailed() string {
 	return Catalog.Format(msgs.locale, "recoveryRequestFailed", nil)
 }
 
-// RecoveryTaskAssociationMissing says "Nagi has no verified record of which task to check. Review the existing run details and history before continuing; no…"
+// RecoveryTaskAssociationMissing says "Xuhu has no verified record of which task to check. Review the existing run details and history before continuing; no…"
 // in the language the app shows.
 func RecoveryTaskAssociationMissing() string {
 	return In(i18n.Locale()).RecoveryTaskAssociationMissing()
 }
 
-// RecoveryTaskAssociationMissing says "Nagi has no verified record of which task to check. Review the existing run details and history before continuing; no…"
+// RecoveryTaskAssociationMissing says "Xuhu has no verified record of which task to check. Review the existing run details and history before continuing; no…"
 // in the language of msgs.
 func (msgs Messages) RecoveryTaskAssociationMissing() string {
 	return Catalog.Format(msgs.locale, "recoveryTaskAssociationMissing", nil)
@@ -8574,13 +8574,13 @@ func (msgs Messages) RecoveryCopyFolderTitle() string {
 	return Catalog.Format(msgs.locale, "recoveryCopyFolderTitle", nil)
 }
 
-// RecoveryChooseFileTitle says "Choose a compatible Nagi recovery copy"
+// RecoveryChooseFileTitle says "Choose a compatible Xuhu recovery copy"
 // in the language the app shows.
 //
 // C8 workbench recovery GUI: recoveryChooseFileTitle.
 func RecoveryChooseFileTitle() string { return In(i18n.Locale()).RecoveryChooseFileTitle() }
 
-// RecoveryChooseFileTitle says "Choose a compatible Nagi recovery copy"
+// RecoveryChooseFileTitle says "Choose a compatible Xuhu recovery copy"
 // in the language of msgs.
 //
 // C8 workbench recovery GUI: recoveryChooseFileTitle.
@@ -8588,13 +8588,13 @@ func (msgs Messages) RecoveryChooseFileTitle() string {
 	return Catalog.Format(msgs.locale, "recoveryChooseFileTitle", nil)
 }
 
-// RecoveryCopyFilter says "Nagi recovery copy (JSON)"
+// RecoveryCopyFilter says "Xuhu recovery copy (JSON)"
 // in the language the app shows.
 //
 // C8 workbench recovery GUI: recoveryCopyFilter.
 func RecoveryCopyFilter() string { return In(i18n.Locale()).RecoveryCopyFilter() }
 
-// RecoveryCopyFilter says "Nagi recovery copy (JSON)"
+// RecoveryCopyFilter says "Xuhu recovery copy (JSON)"
 // in the language of msgs.
 //
 // C8 workbench recovery GUI: recoveryCopyFilter.
@@ -8716,13 +8716,13 @@ func (msgs Messages) RecoveryInspectFailed() string {
 	return Catalog.Format(msgs.locale, "recoveryInspectFailed", nil)
 }
 
-// RecoveryCopyUnusable says "This version cannot safely use this recovery copy. Your files are unchanged. Choose another compatible Nagi copy."
+// RecoveryCopyUnusable says "This version cannot safely use this recovery copy. Your files are unchanged. Choose another compatible Xuhu copy."
 // in the language the app shows.
 //
 // C8 workbench recovery GUI: recoveryCopyUnusable.
 func RecoveryCopyUnusable() string { return In(i18n.Locale()).RecoveryCopyUnusable() }
 
-// RecoveryCopyUnusable says "This version cannot safely use this recovery copy. Your files are unchanged. Choose another compatible Nagi copy."
+// RecoveryCopyUnusable says "This version cannot safely use this recovery copy. Your files are unchanged. Choose another compatible Xuhu copy."
 // in the language of msgs.
 //
 // C8 workbench recovery GUI: recoveryCopyUnusable.
@@ -8744,13 +8744,13 @@ func (msgs Messages) RecoveryNotInstalled() string {
 	return Catalog.Format(msgs.locale, "recoveryNotInstalled", nil)
 }
 
-// RecoveryInstalled says "Restored and paused on disk, but not loaded in this window. This workbench still cannot save or run work. Quit Nagi, …"
+// RecoveryInstalled says "Restored and paused on disk, but not loaded in this window. This workbench still cannot save or run work. Quit Xuhu, …"
 // in the language the app shows.
 //
 // C8 workbench recovery GUI: recoveryInstalled.
 func RecoveryInstalled() string { return In(i18n.Locale()).RecoveryInstalled() }
 
-// RecoveryInstalled says "Restored and paused on disk, but not loaded in this window. This workbench still cannot save or run work. Quit Nagi, …"
+// RecoveryInstalled says "Restored and paused on disk, but not loaded in this window. This workbench still cannot save or run work. Quit Xuhu, …"
 // in the language of msgs.
 //
 // C8 workbench recovery GUI: recoveryInstalled.
@@ -8758,13 +8758,13 @@ func (msgs Messages) RecoveryInstalled() string {
 	return Catalog.Format(msgs.locale, "recoveryInstalled", nil)
 }
 
-// RecoveryUnconfirmed says "Installation result needs checking. Nagi cannot confirm the replaced file. Do not repeat or roll back this operation …"
+// RecoveryUnconfirmed says "Installation result needs checking. Xuhu cannot confirm the replaced file. Do not repeat or roll back this operation …"
 // in the language the app shows.
 //
 // C8 workbench recovery GUI: recoveryUnconfirmed.
 func RecoveryUnconfirmed() string { return In(i18n.Locale()).RecoveryUnconfirmed() }
 
-// RecoveryUnconfirmed says "Installation result needs checking. Nagi cannot confirm the replaced file. Do not repeat or roll back this operation …"
+// RecoveryUnconfirmed says "Installation result needs checking. Xuhu cannot confirm the replaced file. Do not repeat or roll back this operation …"
 // in the language of msgs.
 //
 // C8 workbench recovery GUI: recoveryUnconfirmed.
@@ -8800,13 +8800,13 @@ func (msgs Messages) RecoveryShowArchive() string {
 	return Catalog.Format(msgs.locale, "recoveryShowArchive", nil)
 }
 
-// RecoveryQuitAction says "Quit Nagi"
+// RecoveryQuitAction says "Quit Xuhu"
 // in the language the app shows.
 //
 // C8 workbench recovery GUI: recoveryQuitAction.
 func RecoveryQuitAction() string { return In(i18n.Locale()).RecoveryQuitAction() }
 
-// RecoveryQuitAction says "Quit Nagi"
+// RecoveryQuitAction says "Quit Xuhu"
 // in the language of msgs.
 //
 // C8 workbench recovery GUI: recoveryQuitAction.
@@ -12664,11 +12664,11 @@ func (msgs Messages) SessionInspectCanonicalNoEcho() string {
 	return Catalog.Format(msgs.locale, "sessionInspectCanonicalNoEcho", nil)
 }
 
-// SessionInspectAuthAction says "Complete authentication outside Nagi or kill this session."
+// SessionInspectAuthAction says "Complete authentication outside Xuhu or kill this session."
 // in the language the app shows.
 func SessionInspectAuthAction() string { return In(i18n.Locale()).SessionInspectAuthAction() }
 
-// SessionInspectAuthAction says "Complete authentication outside Nagi or kill this session."
+// SessionInspectAuthAction says "Complete authentication outside Xuhu or kill this session."
 // in the language of msgs.
 func (msgs Messages) SessionInspectAuthAction() string {
 	return Catalog.Format(msgs.locale, "sessionInspectAuthAction", nil)
@@ -13062,14 +13062,14 @@ func (msgs Messages) RecoveryPreviewWatchCounts(timers int, schedules int, dorma
 	return Catalog.Format(msgs.locale, "recoveryPreviewWatchCounts", map[string]any{"timers": timers, "schedules": schedules, "dormant": dormant})
 }
 
-// DockOpenNagi says "Open Nagi"
+// DockOpenXuhu says "Open Xuhu"
 // in the language the app shows.
-func DockOpenNagi() string { return In(i18n.Locale()).DockOpenNagi() }
+func DockOpenXuhu() string { return In(i18n.Locale()).DockOpenXuhu() }
 
-// DockOpenNagi says "Open Nagi"
+// DockOpenXuhu says "Open Xuhu"
 // in the language of msgs.
-func (msgs Messages) DockOpenNagi() string {
-	return Catalog.Format(msgs.locale, "dockOpenNagi", nil)
+func (msgs Messages) DockOpenXuhu() string {
+	return Catalog.Format(msgs.locale, "dockOpenXuhu", nil)
 }
 
 // MessageReadStatus says "Read"

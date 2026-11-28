@@ -85,7 +85,7 @@ func TestCreateIssueRequiresGoalAndPersistsBeforeAnyRun(t *testing.T) {
 }
 
 func TestCreateIssueFailureKeepsExistingIssues(t *testing.T) {
-	ct := &contact{ID: "c1", Name: "Nagi", Draft: "unsent chat"}
+	ct := &contact{ID: "c1", Name: "Xuhu", Draft: "unsent chat"}
 	a := &appModel{store: &contactStore{Path: t.TempDir()}, contacts: []*contact{ct}}
 	if _, err := a.createActivityFor(ct, "Implement login", "SMS required"); err == nil {
 		t.Fatal("createActivityFor unexpectedly succeeded with a failing store")

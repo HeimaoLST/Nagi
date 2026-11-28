@@ -145,7 +145,7 @@ func TestBotRailSecondaryClickTargetsNonselectedBot(t *testing.T) {
 				t.Fatal(err)
 			}
 			tr.Frame()
-			if second.Name != "Saved second Bot" || first.Name != "Nagi" || app.selectedContact() != first {
+			if second.Name != "Saved second Bot" || first.Name != "Xuhu" || app.selectedContact() != first {
 				t.Fatalf("profile save targeted the wrong Bot: first=%q second=%q selected=%q", first.Name, second.Name, app.selectedID())
 			}
 			if err := tr.Click(msgs.ProfileClose()); err != nil {

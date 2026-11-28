@@ -466,7 +466,7 @@ func (e *providerEditor) inputFor(keepKey, requireModel bool) (pi.ProductProvide
 	}
 	if key == "" && !keepKey {
 		if fields["Endpoint"] == "" && e.localWithoutKey() {
-			key = "nagi-loopback"
+			key = "xuhu-loopback"
 		} else {
 			fields["APIKey"] = connection.ValidationRequired
 		}

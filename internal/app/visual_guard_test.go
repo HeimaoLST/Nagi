@@ -1751,7 +1751,7 @@ func seedVisualSessionInspectorFixture(t *testing.T) (phase3SeededControlPlane, 
 		Revision:             4,
 		Label:                "PTY build console",
 		CommandSummary:       "/bin/zsh -lc 'make verify'",
-		Cwd:                  "/tmp/nagi-workspace",
+		Cwd:                  "/tmp/xuhu-workspace",
 		Mode:                 pi.ProductSessionPTY,
 		Cols:                 visualIntPtr(120),
 		Rows:                 visualIntPtr(36),
@@ -1786,7 +1786,7 @@ func seedVisualSessionInspectorFixture(t *testing.T) (phase3SeededControlPlane, 
 		Revision:             6,
 		Label:                "Pipe test runner",
 		CommandSummary:       "node scripts/run-suite.mjs",
-		Cwd:                  "/tmp/nagi-workspace",
+		Cwd:                  "/tmp/xuhu-workspace",
 		Mode:                 pi.ProductSessionPipe,
 		State:                pi.ProductSessionExited,
 		ExitCode:             visualIntPtr(0),
@@ -2026,7 +2026,7 @@ func seedVisualScheduledWorkFixture(t *testing.T) (phase3SeededControlPlane, pi.
 		Executable:        "/usr/bin/true",
 		ExecutableDigest:  "sha256:4f8d22e91c",
 		AllowedArgs:       []string{"--check"},
-		CanonicalCWD:      "/tmp/nagi-workspace",
+		CanonicalCWD:      "/tmp/xuhu-workspace",
 		WorkspaceRead:     true,
 		MinCadenceSeconds: 60,
 		MaxTimeoutMS:      5000,
@@ -2214,7 +2214,7 @@ func TestVisualGuardScheduledWork(t *testing.T) {
 					s.viewGeneration = fx.app.folderChoiceGeneration
 					s.owner = fx.app.selectedContact()
 					s.copy = &storeRecoveryCopy{
-						Path:           "/tmp/nagi-backup.profile",
+						Path:           "/tmp/xuhu-backup.profile",
 						Contacts:       2,
 						Issues:         1,
 						Timers:         1,
@@ -2552,7 +2552,7 @@ func TestVisualGuardOrchestrationAndTimeline(t *testing.T) {
 					s.owner = ct
 					s.scopeOpen = true
 					s.copy = &storeRecoveryCopy{
-						Path: "/Documents/Nagi.backup.json", Contacts: 2, Issues: 1,
+						Path: "/Documents/Xuhu.backup.json", Contacts: 2, Issues: 1,
 						Timers: 1, Schedules: 1, DormantWatches: 2,
 						DormantMandates: 3, Decisions: 2, Notices: 4, ModifiedAt: time.Now(),
 					}

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Capture headless UI review evidence from a frozen Nagi checkout."""
+"""Capture headless UI review evidence from a frozen Xuhu checkout."""
 
 import argparse
 import hashlib

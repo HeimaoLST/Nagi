@@ -94,11 +94,11 @@ def build(output: Path, runtime: Path) -> dict:
     dependency_command = [npm, "ci", "--ignore-scripts", "--no-audit", "--no-fund"]
     patch_commands = [["/usr/bin/patch", "--batch", "--forward", "--fuzz=0", "-p1", "-i", str(ROOT / patch["path"])] for patch in patches]
     compile_command = [str(node), str(compiler), "--project", str(build_source / "tsconfig.json"), "--noEmit", "false", "--outDir", str(output / "dist")]
-    supervisor = output / "bin" / "nagi-pty-supervisor"
+    supervisor = output / "bin" / "xuhu-pty-supervisor"
     native_flags = ["-std=c11", "-O2", "-Wall", "-Wextra", "-Werror", "-arch", "arm64",
                     "-mmacosx-version-min=13.0", "-fno-ident"]
     native_compile = ["/usr/bin/xcrun", "clang", *native_flags, "pty-supervisor.c", "-o", str(supervisor)]
-    native_sign = ["/usr/bin/codesign", "--force", "--sign", "-", "--identifier", "dev.nagi.pty-supervisor", "--timestamp=none", str(supervisor)]
+    native_sign = ["/usr/bin/codesign", "--force", "--sign", "-", "--identifier", "dev.xuhu.pty-supervisor", "--timestamp=none", str(supervisor)]
     native_verify = ["/usr/bin/codesign", "--verify", "--strict", str(supervisor)]
     native_compiler = subprocess.check_output(["/usr/bin/xcrun", "clang", "--version"], text=True).strip()
     catalog_command = [str(node), str(output / "dist" / "model-catalog-build.js")]
@@ -164,7 +164,7 @@ def build(output: Path, runtime: Path) -> dict:
     git_status = subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT, text=True).splitlines()
     manifest = {
         "schema": 1,
-        "nagi_source": {"commit": git_head, "status": git_status, "inputs": before},
+        "xuhu_source": {"commit": git_head, "status": git_status, "inputs": before},
         "pi": pin["pi"],
         "node": {**pin["node"], "input_receipt_sha256": sha256(receipt_path), "binary_sha256": sha256(node)},
         "commands": [[part.replace(str(output) + os.sep, "${OUTPUT}/").replace(str(ROOT) + os.sep, "${SOURCE}/")
@@ -172,9 +172,9 @@ def build(output: Path, runtime: Path) -> dict:
         "command_cwds": [".", *(str(path.relative_to(output)) for path in package_roots), ".", ".", ".", *([build_source.name] * 3)],
         "catalog": {"path": "dist/model-catalog.json", "sha256": files["dist/model-catalog.json"]["sha256"], "inputs": catalog_before},
         "compilation": compilation,
-        "supervisor": {"compiler": native_compiler, "sdk": native_sdk[1], "path": "bin/nagi-pty-supervisor",
+        "supervisor": {"compiler": native_compiler, "sdk": native_sdk[1], "path": "bin/xuhu-pty-supervisor",
                        "arch": "arm64", "minimum_os": "13.0",
-                       "binary_sha256": files["bin/nagi-pty-supervisor"]["sha256"]},
+                       "binary_sha256": files["bin/xuhu-pty-supervisor"]["sha256"]},
         "entry": {"node": "bin/node", "worker": "dist/worker.js"},
         "files": files,
         "limits": "Ad-hoc signed native helper; native app, real-provider and product-data acceptance are separate. The reused Node receipt records its original Pi inputs; this manifest separately binds the current worker inputs."

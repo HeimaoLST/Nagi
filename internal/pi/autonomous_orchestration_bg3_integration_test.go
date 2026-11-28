@@ -640,7 +640,7 @@ func TestPiProductBG3AutonomousOrchestrationTimelineAndPriority(t *testing.T) {
 	t.Setenv("NAGI_ORCHESTRATION_BACKOFF_BASE_MS", "60000")
 	t.Setenv("NAGI_ORCHESTRATION_BACKOFF_MAX_MS", "180000")
 
-	providerKey := "nagi-bg3-fixture-segment-24681"
+	providerKey := "xuhu-bg3-fixture-segment-24681"
 	provider := newBG3ProviderHarness(t, providerKey)
 	mainOpts := pi.ProductOptions{
 		NodePath:        nodePath,
@@ -1010,7 +1010,7 @@ func TestPiProductBG3AutonomousOrchestrationTimelineAndPriority(t *testing.T) {
 	if progress.Metrics.TotalWakes != 5 || progress.Metrics.BackoffDelayMS != 0 || progress.Generation <= 1 {
 		t.Fatalf("sibling progress/rotation mismatch: %+v", progress)
 	}
-	ckptRow := runNodeSQLite(t, nodePath, filepath.Join(mainDir, "nagi.db"), fmt.Sprintf(`
+	ckptRow := runNodeSQLite(t, nodePath, filepath.Join(mainDir, "xuhu.db"), fmt.Sprintf(`
 const { DatabaseSync } = require('node:sqlite');
 const db = new DatabaseSync(process.argv[1]);
 const row = db.prepare('SELECT generation, working_summary FROM orchestration_checkpoints WHERE mandate_id = ?').get(JSON.stringify(%q));
@@ -1657,7 +1657,7 @@ console.log(JSON.stringify(inspectProductRecovery(JSON.parse(readFileSync(proces
 	})
 	mProc.shutdown(t, ctx)
 
-	migDB := filepath.Join(migDir, "nagi.db")
+	migDB := filepath.Join(migDir, "xuhu.db")
 	downgradeV13 := `
 CREATE TABLE bot_event_inbox_v13 (
   event_id TEXT PRIMARY KEY, owner_bot_id TEXT NOT NULL REFERENCES bots(bot_id) DEFERRABLE INITIALLY DEFERRED,

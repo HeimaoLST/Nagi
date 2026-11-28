@@ -37,7 +37,7 @@ func TestComposerSurfaceHeightLayoutAndRetiredChrome(t *testing.T) {
 					t.Fatalf("railWidth = %g, want 272", a.railWidth())
 				}
 				msgs := locales.In(locale)
-				input, ok := tr.Find(msgs.ComposerLabel("Nagi"))
+				input, ok := tr.Find(msgs.ComposerLabel("Xuhu"))
 				bar, barOK := tr.Find(msgs.ComposerTools())
 				attach, attachOK := tr.Find(msgs.ComposerAttach())
 				send, sendOK := tr.Find(msgs.SendAction())
@@ -290,7 +290,7 @@ func TestComposerFileDropMixedBatchWrapAndShutdownGuard(t *testing.T) {
 	tr.SetFocused(true)
 	tr.Frame()
 
-	inputRect, ok := tr.Find(msgs.ComposerLabel("Nagi"))
+	inputRect, ok := tr.Find(msgs.ComposerLabel("Xuhu"))
 	if !ok {
 		t.Fatal("composer input missing")
 	}
@@ -307,7 +307,7 @@ func TestComposerFileDropMixedBatchWrapAndShutdownGuard(t *testing.T) {
 		t.Fatalf("directory drop error = %v, want ErrRead", ct.Context.ActionError)
 	}
 	chipRect, chipOK := tr.Find("plan.txt")
-	inputAfter, _ := tr.Find(msgs.ComposerLabel("Nagi"))
+	inputAfter, _ := tr.Find(msgs.ComposerLabel("Xuhu"))
 	if !chipOK || chipRect.Y+chipRect.H > inputAfter.Y+4 {
 		t.Fatalf("chip strip was not positioned above textarea: chip=%+v input=%+v", chipRect, inputAfter)
 	}
@@ -339,7 +339,7 @@ func TestComposerFileDropMixedBatchWrapAndShutdownGuard(t *testing.T) {
 	a.beginShutdown()
 	tr.Frame()
 	beforeCount := ct.Context.Count()
-	inputRect, _ = tr.Find(msgs.ComposerLabel("Nagi"))
+	inputRect, _ = tr.Find(msgs.ComposerLabel("Xuhu"))
 	if tr.DropFiles(inputRect.X+inputRect.W/2, inputRect.Y+inputRect.H/2, utf8Path) || ct.Context.Count() != beforeCount {
 		t.Fatal("shutdown composer accepted dropped files")
 	}

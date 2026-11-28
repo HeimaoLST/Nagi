@@ -145,7 +145,7 @@ func OpenContactStore(path, defaultWorkspace string) (*ContactStore, error) {
 			Version: ContactStoreVersion,
 			Contacts: []StoredContact{{
 				ID:        NewContactID(),
-				Name:      "Nagi",
+				Name:      "Xuhu",
 				Role:      "Assistant",
 				Workspace: defaultWorkspace,
 				UpdatedAt: NowMillis(),
@@ -957,7 +957,7 @@ func RestoreStoreRecoveryCopyWithRename(copy *StoreRecoveryCopy, target *StoreRe
 		paused = append(paused, '\n')
 	}
 	dir := filepath.Dir(target.path)
-	archive, err := os.CreateTemp(dir, "nagi-unreadable-*.json")
+	archive, err := os.CreateTemp(dir, "xuhu-unreadable-*.json")
 	if err != nil {
 		return result, err
 	}

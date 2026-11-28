@@ -1003,7 +1003,7 @@ func TestPiProductRT2PinsOverridesHotPrecedenceAndRestore(t *testing.T) {
 	if s := ev.waitSettled(t, ctx, proc, recSt1.Execution.ExecutionID); s.State != "completed" {
 		t.Fatalf("HOT_AUTO_1 settled = %+v", s)
 	}
-	dbPath := filepath.Join(srcDir, "nagi.db")
+	dbPath := filepath.Join(srcDir, "xuhu.db")
 	sessionBeforePin := runNodeSQLite(t, nodePath, dbPath, `
 const { DatabaseSync } = require('node:sqlite');
 const db = new DatabaseSync(process.argv[1]);
@@ -1167,7 +1167,7 @@ console.log(JSON.parse(row.binding_json).sessionRef);
 	if _, err := proc.client.BackupProfile(ctx, backupPath); err != nil {
 		t.Fatal(err)
 	}
-	for _, checkPath := range []string{backupPath, opts.ProfilePath, dbPath, filepath.Join(srcDir, "nagi.db-wal")} {
+	for _, checkPath := range []string{backupPath, opts.ProfilePath, dbPath, filepath.Join(srcDir, "xuhu.db-wal")} {
 		mcpAssertNoSecretBytes(t, checkPath, allSecrets)
 	}
 	var v3Conn struct {
@@ -1245,7 +1245,7 @@ console.log(JSON.parse(row.binding_json).sessionRef);
 	if mock.countAll() != postsBeforeRestore {
 		t.Fatalf("credential-free restore/reopen emitted %d provider calls, want 0", mock.countAll()-postsBeforeRestore)
 	}
-	schemaCheck := runNodeSQLite(t, nodePath, filepath.Join(restoreDir, "nagi.db"), `
+	schemaCheck := runNodeSQLite(t, nodePath, filepath.Join(restoreDir, "xuhu.db"), `
 const { DatabaseSync } = require('node:sqlite');
 const db = new DatabaseSync(process.argv[1]);
 const v = db.prepare('PRAGMA user_version').get().user_version;

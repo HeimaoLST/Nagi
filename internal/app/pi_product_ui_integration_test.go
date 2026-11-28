@@ -47,8 +47,8 @@ func prepareProductWorkbench(t *testing.T, provider http.Handler) string {
 	server := httptest.NewServer(provider)
 	t.Cleanup(server.Close)
 	config := connectionConfig{
-		API: connectionAPIChatCompletions, Endpoint: server.URL + "/v1", APIKey: "nagi-product-loopback",
-		Model: "nagi-product-fixture", ContextTokens: 65536, OutputTokens: 4096, WorkingDirectory: root, MaxActiveTasks: 3,
+		API: connectionAPIChatCompletions, Endpoint: server.URL + "/v1", APIKey: "xuhu-product-loopback",
+		Model: "xuhu-product-fixture", ContextTokens: 65536, OutputTokens: 4096, WorkingDirectory: root, MaxActiveTasks: 3,
 	}
 	if err := saveConnectionConfig(connectionConfigPath(guiStorePath()), config); err != nil {
 		t.Fatal(err)
@@ -461,7 +461,7 @@ func TestPiAppConcurrentActivities(t *testing.T) {
 	configuration.Model = "unapplied-fixture-model"
 	savedConnection, err := w.client.SaveConnection(ctx, pi.ProductConnectionSaveParams{
 		OperationID:   "save-while-activity-held",
-		Configuration: pi.ProductConnectionInput{ProductConnectionSettings: configuration, APIKey: "nagi-product-loopback"},
+		Configuration: pi.ProductConnectionInput{ProductConnectionSettings: configuration, APIKey: "xuhu-product-loopback"},
 	})
 	if err != nil || savedConnection.SavedRevision == nil || *savedConnection.SavedRevision == *connection.EffectiveRevision {
 		t.Fatalf("save separate connection revision: %+v, %v", savedConnection, err)
@@ -795,7 +795,7 @@ func TestPiAppSettingsBackupRestore(t *testing.T) {
 	}
 	w.wait(func() bool { return w.view.HasText(msg.RecoveryCopySaved(safeDiagnostic(backup))) })
 	captured := read(backup)
-	if !bytes.Equal(read(profile), original) || !bytes.Equal(read(private), credentials) || bytes.Contains(captured, []byte("nagi-product-loopback")) {
+	if !bytes.Equal(read(profile), original) || !bytes.Equal(read(private), credentials) || bytes.Contains(captured, []byte("xuhu-product-loopback")) {
 		t.Fatal("backup changed saved data or included private credentials")
 	}
 	w.shutdown(ctx)

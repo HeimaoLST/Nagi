@@ -9,7 +9,7 @@ import (
 
 func composerTextArea(t *testing.T, tr *ui.Tester) ui.Rect {
 	t.Helper()
-	r, ok := tr.Find("Composer for Nagi")
+	r, ok := tr.Find("Composer for Xuhu")
 	if !ok || r.W <= 20 || r.H <= 20 {
 		t.Fatalf("composer bounds = %+v ok=%v", r, ok)
 	}
@@ -61,7 +61,7 @@ func TestComposerPointerAndKeyboardSelection(t *testing.T) {
 			}
 
 			tr.SetClipboard("")
-			if err := tr.Click("Composer for Nagi"); err != nil {
+			if err := tr.Click("Composer for Xuhu"); err != nil {
 				t.Fatal(err)
 			}
 			tr.Frame()
@@ -86,7 +86,7 @@ func TestComposerShiftArrowSelectsWithoutSending(t *testing.T) {
 	beforeMsgs := len(ct.Messages)
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	if err := tr.Click("Composer for Nagi"); err != nil {
+	if err := tr.Click("Composer for Xuhu"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
@@ -107,7 +107,7 @@ func TestComposerMultilinePasteDoesNotSend(t *testing.T) {
 	payload := "第一行\n第二行\nthird line"
 	tr := ui.NewTester(a.view, 1040, 720)
 	tr.Frame()
-	if err := tr.Click("Composer for Nagi"); err != nil {
+	if err := tr.Click("Composer for Xuhu"); err != nil {
 		t.Fatal(err)
 	}
 	tr.Frame()
