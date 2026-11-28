@@ -250,3 +250,146 @@ func TestBotRowPopoverMenuActionsOnFullAndCompactRails(t *testing.T) {
 		})
 	}
 }
+
+func TestCreateBotVoiceSelectorPresetsNeutralRandomRetryAndTabOrder(t *testing.T) {
+	root := t.TempDir()
+	isolateConnectionApp(t, root, "")
+	a, err := newRuntimeApp()
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.windowWidth = 1040
+	a.closeSettings()
+	tr := ui.NewTester(a.view, 1040, 720)
+	tr.SetLocale("en")
+	tr.SetFocused(true)
+	tr.Frame()
+	msgs := locales.In("en")
+
+	if err := tr.Click(msgs.AvatarAddContact()); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if a.createBot == nil || a.createBot.voice != "random" {
+		t.Fatalf("createBot default voice = %+v, want random", a.createBot)
+	}
+	for _, want := range []string{msgs.CreateBotVoice(), msgs.CreateBotVoiceRandom(), msgs.CreateBotVoiceHint()} {
+		if !tr.HasText(want) {
+			t.Fatalf("Create Bot dialog missing voice UI %q: %v", want, tr.Texts())
+		}
+	}
+
+	if err := tr.Click(msgs.FieldNameAccessible()); err != nil {
+		t.Fatal(err)
+	}
+	tr.Key(ui.Cmd, ui.KeyA)
+	tr.Type("Random Retry Bot")
+	tr.Frame()
+	tr.Key(0, ui.KeyTab)
+	tr.Frame()
+	if !tr.Focused(msgs.FieldPurposeAccessible()) {
+		t.Fatalf("Name -> single Tab did not land on Purpose: %v", tr.Texts())
+	}
+	tr.Type("Verify retry persistence")
+	tr.Frame()
+
+	if err := os.MkdirAll(a.storePath, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := tr.Click(msgs.CreateBotAction()); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if a.createBot == nil || !a.createBot.failed || a.createBot.operationID == "" || a.createBot.resolvedVoice == "" {
+		t.Fatalf("failed createBot did not retain opID/resolvedVoice: %+v", a.createBot)
+	}
+	wantOpID := a.createBot.operationID
+	wantVoice := a.createBot.resolvedVoice
+	wantInstruction := botVoiceInstruction(msgs, wantVoice)
+	if wantInstruction == "" {
+		t.Fatalf("resolved random voice %q produced empty instruction", wantVoice)
+	}
+
+	if err := tr.Click(msgs.CreateBotAction()); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if a.createBot == nil || a.createBot.operationID != wantOpID || a.createBot.resolvedVoice != wantVoice {
+		t.Fatalf("repeated failed retry rotated operationID or resolvedVoice: got (%q, %q), want (%q, %q)",
+			a.createBot.operationID, a.createBot.resolvedVoice, wantOpID, wantVoice)
+	}
+
+	if err := os.Remove(a.storePath); err != nil {
+		t.Fatal(err)
+	}
+	if err := tr.Click(msgs.CreateBotAction()); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if a.createBot != nil {
+		t.Fatalf("retry after unblocking did not close createBot: %+v", a.createBot)
+	}
+	randomCreated := a.selectedContact()
+	if randomCreated.Instructions != wantInstruction {
+		t.Fatalf("retried random Bot instructions = %q, want %q", randomCreated.Instructions, wantInstruction)
+	}
+
+	if err := tr.Click(msgs.AvatarAddContact()); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if err := tr.Click(msgs.FieldNameAccessible()); err != nil {
+		t.Fatal(err)
+	}
+	tr.Key(ui.Cmd, ui.KeyA)
+	tr.Type("Warm Bot")
+	tr.Frame()
+	if err := tr.Click(msgs.CreateBotVoiceRandom()); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if err := tr.Click(msgs.CreateBotVoiceWarm()); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if a.createBot.voice != "warm" {
+		t.Fatalf("voice selector did not pick warm: %q", a.createBot.voice)
+	}
+	if err := tr.Click(msgs.CreateBotAction()); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if got := a.selectedContact().Instructions; got != msgs.CreateBotVoiceInstructionWarm() {
+		t.Fatalf("warm Bot instructions = %q, want %q", got, msgs.CreateBotVoiceInstructionWarm())
+	}
+
+	if err := tr.Click(msgs.AvatarAddContact()); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if err := tr.Click(msgs.FieldNameAccessible()); err != nil {
+		t.Fatal(err)
+	}
+	tr.Key(ui.Cmd, ui.KeyA)
+	tr.Type("Neutral Bot")
+	tr.Frame()
+	if err := tr.Click(msgs.CreateBotVoiceRandom()); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if err := tr.Click(msgs.CreateBotVoiceNone()); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	if a.createBot.voice != "none" {
+		t.Fatalf("voice selector did not pick none: %q", a.createBot.voice)
+	}
+	if err := tr.Click(msgs.CreateBotAction()); err != nil {
+		t.Fatal(err)
+	}
+	tr.Frame()
+	neutral := a.selectedContact()
+	if neutral.Name != "Neutral Bot" || neutral.Instructions != "" {
+		t.Fatalf("none voice Bot mismatch: name=%q instructions=%q", neutral.Name, neutral.Instructions)
+	}
+}

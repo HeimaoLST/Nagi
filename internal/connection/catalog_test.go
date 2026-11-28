@@ -70,6 +70,34 @@ func TestProviderCatalogEmbeddedOrderAndMetadata(t *testing.T) {
 	if _, ok := cat.PresetByID("does-not-exist"); ok {
 		t.Fatal("PresetByID matched nonexistent ID")
 	}
+
+	wantCeilings := map[string][2]int{
+		"ollama":     {1048576, 65536},
+		"lmstudio":   {1048576, 65536},
+		"custom":     {2097152, 393216},
+		"openai":     {1050000, 131072},
+		"google":     {1048576, 65536},
+		"deepseek":   {1048576, 393216},
+		"xai":        {2097152, 131072},
+		"moonshot":   {262144, 65536},
+		"zhipu":      {204800, 131072},
+		"minimax":    {1048576, 131072},
+		"volcengine": {262144, 65536},
+		"qwen":       {1048576, 65536},
+		"openrouter": {2097152, 393216},
+	}
+	for _, preset := range cat.Presets {
+		want, ok := wantCeilings[preset.ID]
+		if !ok {
+			t.Fatalf("missing expected ceiling entry for preset %q", preset.ID)
+		}
+		if preset.ContextTokens != want[0] || preset.OutputTokens != want[1] {
+			t.Fatalf("preset %q limits = %d/%d, want %d/%d", preset.ID, preset.ContextTokens, preset.OutputTokens, want[0], want[1])
+		}
+		if preset.ContextTokens < 204800 || preset.OutputTokens < 65536 {
+			t.Fatalf("preset %q limits below raised floor: %d/%d", preset.ID, preset.ContextTokens, preset.OutputTokens)
+		}
+	}
 }
 
 func TestProviderCatalogLocalizedTextResolveAndMatchAccount(t *testing.T) {
