@@ -17,6 +17,7 @@ import tempfile
 ROOT = Path(__file__).resolve().parent.parent
 WORKER = ROOT / "internal/pi/worker"
 PIN_PATH = ROOT / ".github/pi-runtime.json"
+ICON_PATH = ROOT / "assets/icons/AppIcon.icns"
 BUNDLE_ID = "dev.nagi.desktop"
 MINIMUM_OS = "13.0"
 
@@ -134,6 +135,8 @@ def build(destination: Path, payload: Path) -> dict:
     if source["status"]:
         raise ValueError("package builds require a clean committed source checkout")
     pin = json.loads(PIN_PATH.read_text())
+    if not ICON_PATH.is_file() or ICON_PATH.read_bytes()[:4] != b"icns":
+        raise ValueError("missing or invalid assets/icons/AppIcon.icns")
     version = (ROOT / "VERSION").read_text().strip()
     destination.mkdir(parents=True, exist_ok=False)
     with tempfile.TemporaryDirectory(prefix="assembly-", dir=destination) as staging:
@@ -144,6 +147,7 @@ def build(destination: Path, payload: Path) -> dict:
         worker_root = resources / "pi"
         runtime = install_payload(payload, worker_root, pin)
         shutil.copy2(PIN_PATH, resources / "pi-runtime.json")
+        shutil.copy2(ICON_PATH, resources / "AppIcon.icns")
         gui = contents / "MacOS/Nagi"
         gui.parent.mkdir()
         command = [sys.executable, "scripts/gui-go.py", "build", "-mod=readonly", "-trimpath", "-buildvcs=true", "-o", str(gui), "./cmd/nagi"]
@@ -162,6 +166,7 @@ def build(destination: Path, payload: Path) -> dict:
             "CFBundleDevelopmentRegion": "en",
             "CFBundleDisplayName": "Nagi",
             "CFBundleExecutable": "Nagi",
+            "CFBundleIconFile": "AppIcon.icns",
             "CFBundleIdentifier": BUNDLE_ID,
             "CFBundleInfoDictionaryVersion": "6.0",
             "CFBundleName": "Nagi",
@@ -180,7 +185,7 @@ def build(destination: Path, payload: Path) -> dict:
             "schema": 1,
             "version": version,
             "nagi_source": source,
-            "bundle": {"identifier": BUNDLE_ID, "executable": "Contents/MacOS/Nagi", "minimum_os": MINIMUM_OS, "arch": "arm64"},
+            "bundle": {"identifier": BUNDLE_ID, "executable": "Contents/MacOS/Nagi", "icon": "Contents/Resources/AppIcon.icns", "icon_sha256": sha256(resources / "AppIcon.icns"), "minimum_os": MINIMUM_OS, "arch": "arm64"},
             "minimum_os": floors,
             "gui": {"build_info": build_info, "unsigned_sha256": sha256(gui)},
             "node": runtime["node"],
